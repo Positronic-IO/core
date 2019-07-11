@@ -41,6 +41,7 @@
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <DocumentLayoutManager.hxx>
+#include <DocumentRedlineManager.hxx>
 #include <ndindex.hxx>
 
 SwLayVout     *SwRootFrame::s_pVout = nullptr;
@@ -49,13 +50,13 @@ bool           SwRootFrame::s_isNoVirDev = false;
 
 SwCache *SwFrame::mpCache = nullptr;
 
-long FirstMinusSecond( long nFirst, long nSecond )
+static long FirstMinusSecond( long nFirst, long nSecond )
     { return nFirst - nSecond; }
-long SecondMinusFirst( long nFirst, long nSecond )
+static long SecondMinusFirst( long nFirst, long nSecond )
     { return nSecond - nFirst; }
-long SwIncrement( long nA, long nAdd )
+static long SwIncrement( long nA, long nAdd )
     { return nA + nAdd; }
-long SwDecrement( long nA, long nSub )
+static long SwDecrement( long nA, long nSub )
     { return nA - nSub; }
 
 static SwRectFnCollection aHorizontal = {
@@ -228,7 +229,7 @@ SwRectFn fnRectVert = &aVertical;
 SwRectFn fnRectVertL2R = &aVerticalLeftToRight;
 
 // #i65250#
-sal_uInt32 SwFrame::mnLastFrameId=0;
+sal_uInt32 SwFrameAreaDefinition::mnLastFrameId=0;
 
 
 void FrameInit()
@@ -318,9 +319,8 @@ void SwRootFrame::DeRegisterShell( SwViewShell *pSh )
         mpWaitingCurrShell = nullptr;
 
     // Remove references
-    for ( SwCurrShells::iterator it = mpCurrShells->begin(); it != mpCurrShells->end(); ++it )
+    for ( CurrShell *pC : *mpCurrShells )
     {
-        CurrShell *pC = *it;
         if (pC->pPrev == pSh)
             pC->pPrev = nullptr;
     }
@@ -328,7 +328,7 @@ void SwRootFrame::DeRegisterShell( SwViewShell *pSh )
 
 void InitCurrShells( SwRootFrame *pRoot )
 {
-    pRoot->mpCurrShells = new SwCurrShells;
+    pRoot->mpCurrShells.reset( new SwCurrShells );
 }
 
 /*
@@ -354,14 +354,13 @@ SwRootFrame::SwRootFrame( SwFrameFormat *pFormat, SwViewShell * pSh ) :
     mbIsNewLayout( true ),
     mbCallbackActionEnabled ( false ),
     mbLayoutFreezed ( false ),
+    mbHideRedlines(pFormat->GetDoc()->GetDocumentRedlineManager().IsHideRedlines()),
     mnBrowseWidth(MIN_BROWSE_WIDTH),
     mpTurbo( nullptr ),
     mpLastPage( nullptr ),
     mpCurrShell( pSh ),
     mpWaitingCurrShell( nullptr ),
-    mpCurrShells(nullptr),
     mpDrawPage( nullptr ),
-    mpDestroy( nullptr ),
     mnPhyPageNums( 0 ),
     mnAccessibleShells( 0 )
 {
@@ -471,7 +470,7 @@ void SwRootFrame::DestroyImpl()
 
     if(pBlink)
         pBlink->FrameDelete( this );
-    SwFrameFormat *pRegisteredInNonConst = static_cast<SwFrameFormat*>(GetRegisteredInNonConst());
+    SwFrameFormat *pRegisteredInNonConst = static_cast<SwFrameFormat*>(GetDep());
     if ( pRegisteredInNonConst )
     {
         SwDoc *pDoc = pRegisteredInNonConst->GetDoc();
@@ -481,15 +480,13 @@ void SwRootFrame::DestroyImpl()
         pDoc->GetDocumentLayoutManager().ClearSwLayouterEntries();
     }
 
-    delete mpDestroy;
-    mpDestroy = nullptr;
+    mpDestroy.reset();
 
     // Remove references
-    for ( SwCurrShells::iterator it = mpCurrShells->begin(); it != mpCurrShells->end(); ++it )
-        (*it)->pRoot = nullptr;
+    for ( auto& rpCurrShell : *mpCurrShells )
+        rpCurrShell->pRoot = nullptr;
 
-    delete mpCurrShells;
-    mpCurrShells = nullptr;
+    mpCurrShells.reset();
 
     // Some accessible shells are left => problems on second SwFrame::Destroy call
     assert(0 == mnAccessibleShells);

@@ -38,11 +38,8 @@ namespace {
             if ( xModel.is() )
             {
                 const css::uno::Reference< css::document::XUndoManagerSupplier > xSuppUndo( xModel, css::uno::UNO_QUERY_THROW );
-                if ( xSuppUndo.is() )
-                {
-                    const css::uno::Reference< css::document::XUndoManager > xUndoManager( xSuppUndo->getUndoManager(), css::uno::UNO_QUERY_THROW );
-                    return xUndoManager;
-                }
+                const css::uno::Reference< css::document::XUndoManager > xUndoManager( xSuppUndo->getUndoManager(), css::uno::UNO_QUERY_THROW );
+                return xUndoManager;
             }
         }
 
@@ -114,19 +111,13 @@ void PageOrientationControl::ExecuteOrientationChange( const bool bLandscape )
 
     const SfxPoolItem* pItem;
     SfxViewFrame::Current()->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, pItem);
-    SvxSizeItem* pSizeItem = static_cast<SvxSizeItem*>(pItem->Clone());
-    if ( pSizeItem )
-        mpPageSizeItem.reset( pSizeItem );
+    mpPageSizeItem.reset( static_cast<SvxSizeItem*>(pItem->Clone()) );
 
     SfxViewFrame::Current()->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_LRSPACE, pItem);
-    SvxLongLRSpaceItem* pLRItem = static_cast<SvxLongLRSpaceItem*>(pItem->Clone());
-    if ( pLRItem )
-        mpPageLRMarginItem.reset( pLRItem );
+    mpPageLRMarginItem.reset( static_cast<SvxLongLRSpaceItem*>(pItem->Clone()) );
 
     SfxViewFrame::Current()->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_ULSPACE, pItem);
-    SvxLongULSpaceItem* pULItem = static_cast<SvxLongULSpaceItem*>(pItem->Clone());
-    if ( pULItem )
-        mpPageULMarginItem.reset( pULItem );
+    mpPageULMarginItem.reset( static_cast<SvxLongULSpaceItem*>(pItem->Clone()) );
 
     {
         // set new page orientation

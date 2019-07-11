@@ -47,11 +47,11 @@ static std::set<std::pair<std::string,std::string> > childToParentClassSet; // c
 static std::map<std::string,std::string> definitionMap;  // className -> filename
 
 class MergeClasses:
-    public RecursiveASTVisitor<MergeClasses>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<MergeClasses>
 {
 public:
     explicit MergeClasses(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override
     {
@@ -148,7 +148,7 @@ bool MergeClasses::VisitCXXRecordDecl(const CXXRecordDecl* decl)
     }
     if (decl->isThisDeclarationADefinition())
     {
-        SourceLocation spellingLocation = compiler.getSourceManager().getSpellingLoc(decl->getCanonicalDecl()->getLocStart());
+        SourceLocation spellingLocation = compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(decl));
         std::string filename = compiler.getSourceManager().getFilename(spellingLocation);
         filename = filename.substr(strlen(SRCDIR));
         std::string s = decl->getQualifiedNameAsString();

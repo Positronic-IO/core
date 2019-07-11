@@ -20,6 +20,7 @@
 #include <ooxformulaparser.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <osl/diagnose.h>
 #include <cppuhelper/supportsservice.hxx>
@@ -32,8 +33,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::sheet;
 using namespace ::com::sun::star::table;
 using namespace ::com::sun::star::uno;
-
-using ::rtl::OUString;
 
 class OOXMLFormulaParserImpl : private FormulaFinalizer
 {

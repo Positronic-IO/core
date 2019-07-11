@@ -42,8 +42,6 @@
 #include <unotools/syslocaleoptions.hxx>
 #include <unotools/configitem.hxx>
 #include <sfx2/objsh.hxx>
-#include <comphelper/string.hxx>
-#include <comphelper/types.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <svtools/langtab.hxx>
 #include <unotools/localfilehelper.hxx>
@@ -66,6 +64,7 @@
 #include <unotools/saveopt.hxx>
 #include <unotools/searchopt.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <officecfg/Setup.hxx>
 #include <comphelper/configuration.hxx>
@@ -260,6 +259,7 @@ OfaMiscTabPage::OfaMiscTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
     : SfxTabPage(pParent, "OptGeneralPage", "cui/ui/optgeneralpage.ui", &rSet)
 {
     get(m_pExtHelpCB, "exthelp");
+    get(m_pPopUpNoHelpCB,"popupnohelp");
     if (!lcl_HasSystemFilePicker())
         get<VclContainer>("filedlgframe")->Hide();
 #if ! ENABLE_GTK
@@ -324,6 +324,7 @@ void OfaMiscTabPage::dispose()
     m_pCollectUsageInfo.clear();
     m_pQuickStarterFrame.clear();
     m_pQuickLaunchCB.clear();
+    m_pPopUpNoHelpCB.clear();
     SfxTabPage::dispose();
 }
 
@@ -338,7 +339,10 @@ bool OfaMiscTabPage::FillItemSet( SfxItemSet* rSet )
     std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
 
     SvtHelpOptions aHelpOptions;
-    if ( m_pExtHelpCB->IsChecked() != (m_pExtHelpCB->GetSavedValue() == TRISTATE_TRUE) )
+    if ( m_pPopUpNoHelpCB->IsValueChangedFromSaved() )
+        aHelpOptions.SetOfflineHelpPopUp( m_pPopUpNoHelpCB->IsChecked() );
+
+    if ( m_pExtHelpCB->IsValueChangedFromSaved() )
         aHelpOptions.SetExtendedHelp( m_pExtHelpCB->IsChecked() );
 
     if ( m_pFileDlgCB->IsValueChangedFromSaved() )
@@ -392,7 +396,8 @@ void OfaMiscTabPage::Reset( const SfxItemSet* rSet )
     SvtHelpOptions aHelpOptions;
     m_pExtHelpCB->Check( aHelpOptions.IsHelpTips() && aHelpOptions.IsExtendedHelp() );
     m_pExtHelpCB->SaveValue();
-
+    m_pPopUpNoHelpCB->Check( aHelpOptions.IsOfflineHelpPopUp() );
+    m_pPopUpNoHelpCB->SaveValue();
     SvtMiscOptions aMiscOpt;
     m_pFileDlgCB->Check( !aMiscOpt.UseSystemFileDialog() );
     m_pFileDlgCB->SaveValue();
@@ -521,7 +526,7 @@ CanvasSettings::CanvasSettings() :
 bool CanvasSettings::IsHardwareAccelerationAvailable() const
 {
 #if HAVE_FEATURE_OPENGL
-    if( OpenGLWrapper::isVCLOpenGLEnabled() )
+    if (OpenGLWrapper::isVCLOpenGLEnabled() && Application::GetToolkitName() != "gtk3")
         mbHWAccelAvailable = false;
 
     else
@@ -610,6 +615,11 @@ void CanvasSettings::EnabledHardwareAcceleration( bool _bEnabled ) const
 
 // class OfaViewTabPage --------------------------------------------------
 
+static bool DisplayNameCompareLessThan(const vcl::IconThemeInfo& rInfo1, const vcl::IconThemeInfo& rInfo2)
+{
+    return rInfo1.GetDisplayName().compareTo(rInfo2.GetDisplayName()) < 0;
+}
+
 OfaViewTabPage::OfaViewTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
     : SfxTabPage(pParent, "OptViewPage", "cui/ui/optviewpage.ui", &rSet)
     , nSizeLB_InitialSelection(0)
@@ -659,11 +669,14 @@ OfaViewTabPage::OfaViewTabPage(vcl::Window* pParent, const SfxItemSet& rSet)
 
 #endif
 
+    m_pForceOpenGL->SetToggleHdl(LINK(this, OfaViewTabPage, OnForceOpenGLToggled));
+
     // Set known icon themes
     OUString sAutoStr( m_pIconStyleLB->GetEntry( 0 ) );
     m_pIconStyleLB->Clear();
     StyleSettings aStyleSettings = Application::GetSettings().GetStyleSettings();
     mInstalledIconThemes = aStyleSettings.GetInstalledIconThemes();
+    std::sort(mInstalledIconThemes.begin(), mInstalledIconThemes.end(), DisplayNameCompareLessThan);
 
     // Start with the automatically chosen icon theme
     OUString autoThemeId = aStyleSettings.GetAutomaticallyChosenIconTheme();
@@ -699,12 +712,9 @@ OfaViewTabPage::~OfaViewTabPage()
 
 void OfaViewTabPage::dispose()
 {
-    delete mpDrawinglayerOpt;
-    mpDrawinglayerOpt = nullptr;
-    delete pCanvasSettings;
-    pCanvasSettings = nullptr;
-    delete pAppearanceCfg;
-    pAppearanceCfg = nullptr;
+    mpDrawinglayerOpt.reset();
+    pCanvasSettings.reset();
+    pAppearanceCfg.reset();
     m_pIconSizeLB.clear();
     m_pSidebarIconSizeLB.clear();
     m_pNotebookbarIconSizeLB.clear();
@@ -735,6 +745,13 @@ IMPL_LINK_NOARG( OfaViewTabPage, OnAntialiasingToggled, CheckBox&, void )
     m_pAAPointLimit->Enable( bAAEnabled );
 }
 #endif
+
+IMPL_LINK_NOARG(OfaViewTabPage, OnForceOpenGLToggled, CheckBox&, void)
+{
+    if (m_pForceOpenGL->IsChecked())
+        // Ignoring the opengl blacklist implies that opengl is on.
+        m_pUseOpenGL->Check();
+}
 
 VclPtr<SfxTabPage> OfaViewTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet )
 {
@@ -941,9 +958,10 @@ bool OfaViewTabPage::FillItemSet( SfxItemSet* )
         m_pForceOpenGL->IsValueChangedFromSaved())
     {
         SolarMutexGuard aGuard;
-        svtools::executeRestartDialog(
-            comphelper::getProcessComponentContext(), nullptr,
-            svtools::RESTART_REASON_OPENGL);
+        if( svtools::executeRestartDialog(
+                comphelper::getProcessComponentContext(), nullptr,
+                svtools::RESTART_REASON_OPENGL))
+            GetParentDialog()->EndDialog(RET_OK);
     }
 
     return bModified;
@@ -1277,8 +1295,7 @@ OfaLanguagesTabPage::~OfaLanguagesTabPage()
 
 void OfaLanguagesTabPage::dispose()
 {
-    delete pLangConfig;
-    pLangConfig = nullptr;
+    pLangConfig.reset();
     m_pUserInterfaceLB.clear();
     m_pLocaleSettingFT.clear();
     m_pLocaleSettingLB.clear();
@@ -1303,14 +1320,14 @@ VclPtr<SfxTabPage> OfaLanguagesTabPage::Create( TabPageParent pParent, const Sfx
     return VclPtr<OfaLanguagesTabPage>::Create(pParent.pParent, *rAttrSet);
 }
 
-static void lcl_UpdateAndDelete(SfxVoidItem* pInvalidItems[], SfxBoolItem* pBoolItems[], sal_uInt16 nCount)
+static void lcl_Update(std::unique_ptr<SfxVoidItem> pInvalidItems[], std::unique_ptr<SfxBoolItem> pBoolItems[], sal_uInt16 nCount)
 {
     SfxViewFrame* pCurrentFrm = SfxViewFrame::Current();
     SfxViewFrame* pViewFrm = SfxViewFrame::GetFirst();
     while(pViewFrm)
     {
         SfxBindings& rBind = pViewFrm->GetBindings();
-        for(sal_Int16 i = 0; i < nCount; i++)
+        for(sal_uInt16 i = 0; i < nCount; i++)
         {
             if(pCurrentFrm == pViewFrm)
                 rBind.InvalidateAll(false);
@@ -1318,11 +1335,6 @@ static void lcl_UpdateAndDelete(SfxVoidItem* pInvalidItems[], SfxBoolItem* pBool
             rBind.SetState( *pBoolItems[i] );
         }
         pViewFrm = SfxViewFrame::GetNext(*pViewFrm);
-    }
-    for(sal_Int16 i = 0; i < nCount; i++)
-    {
-        delete pInvalidItems[i];
-        delete pBoolItems[i] ;
     }
 }
 
@@ -1381,9 +1393,10 @@ bool OfaLanguagesTabPage::FillItemSet( SfxItemSet* rSet )
             Reference< XChangesBatch >(xProp, UNO_QUERY_THROW)->commitChanges();
             // display info
             SolarMutexGuard aGuard;
-            svtools::executeRestartDialog(
-                comphelper::getProcessComponentContext(), GetFrameWeld(),
-                svtools::RESTART_REASON_LANGUAGE_CHANGE);
+            if (svtools::executeRestartDialog(
+                    comphelper::getProcessComponentContext(), GetFrameWeld(),
+                    svtools::RESTART_REASON_LANGUAGE_CHANGE))
+                GetParentDialog()->EndDialog(RET_OK);
 
             // tell quickstarter to stop being a veto listener
 
@@ -1523,15 +1536,15 @@ bool OfaLanguagesTabPage::FillItemSet( SfxItemSet* rSet )
         //iterate over all bindings to invalidate vertical text direction
         const sal_uInt16 STATE_COUNT = 2;
 
-        SfxBoolItem* pBoolItems[STATE_COUNT];
-        pBoolItems[0] = new SfxBoolItem(SID_VERTICALTEXT_STATE, false);
-        pBoolItems[1] = new SfxBoolItem(SID_TEXT_FITTOSIZE_VERTICAL, false);
+        std::unique_ptr<SfxBoolItem> pBoolItems[STATE_COUNT];
+        pBoolItems[0].reset(new SfxBoolItem(SID_VERTICALTEXT_STATE, false));
+        pBoolItems[1].reset(new SfxBoolItem(SID_TEXT_FITTOSIZE_VERTICAL, false));
 
-        SfxVoidItem* pInvalidItems[STATE_COUNT];
-        pInvalidItems[0] = new SfxVoidItem(SID_VERTICALTEXT_STATE);
-        pInvalidItems[1] = new SfxVoidItem(SID_TEXT_FITTOSIZE_VERTICAL);
+        std::unique_ptr<SfxVoidItem> pInvalidItems[STATE_COUNT];
+        pInvalidItems[0].reset(new SfxVoidItem(SID_VERTICALTEXT_STATE));
+        pInvalidItems[1].reset(new SfxVoidItem(SID_TEXT_FITTOSIZE_VERTICAL));
 
-        lcl_UpdateAndDelete(pInvalidItems, pBoolItems, STATE_COUNT);
+        lcl_Update(pInvalidItems, pBoolItems, STATE_COUNT);
     }
 
     if ( m_pCTLSupportCB->IsValueChangedFromSaved() )
@@ -1543,11 +1556,11 @@ bool OfaLanguagesTabPage::FillItemSet( SfxItemSet* rSet )
         pLangConfig->aLanguageOptions.SetCTLFontEnabled( m_pCTLSupportCB->IsChecked() );
 
         const sal_uInt16 STATE_COUNT = 1;
-        SfxBoolItem* pBoolItems[STATE_COUNT];
-        pBoolItems[0] = new SfxBoolItem(SID_CTLFONT_STATE, false);
-        SfxVoidItem* pInvalidItems[STATE_COUNT];
-        pInvalidItems[0] = new SfxVoidItem(SID_CTLFONT_STATE);
-        lcl_UpdateAndDelete(pInvalidItems, pBoolItems, STATE_COUNT);
+        std::unique_ptr<SfxBoolItem> pBoolItems[STATE_COUNT];
+        pBoolItems[0].reset(new SfxBoolItem(SID_CTLFONT_STATE, false));
+        std::unique_ptr<SfxVoidItem> pInvalidItems[STATE_COUNT];
+        pInvalidItems[0].reset(new SfxVoidItem(SID_CTLFONT_STATE));
+        lcl_Update(pInvalidItems, pBoolItems, STATE_COUNT);
     }
 
     if ( pLangConfig->aSysLocaleOptions.IsModified() )
@@ -1774,16 +1787,13 @@ IMPL_LINK( OfaLanguagesTabPage, LocaleSettingHdl, ListBox&, rListBox, void )
         SupportHdl( m_pAsianSupportCB );
     }
 
-    const NfCurrencyEntry* pCurr = &SvNumberFormatter::GetCurrencyEntry(
+    const NfCurrencyEntry& rCurr = SvNumberFormatter::GetCurrencyEntry(
             (eLang == LANGUAGE_USER_SYSTEM_CONFIG) ? MsLangId::getSystemLanguage() : eLang);
     sal_Int32 nPos = m_pCurrencyLB->GetEntryPos( nullptr );
-    if (pCurr)
-    {
-        // Update the "Default ..." currency.
-        m_pCurrencyLB->RemoveEntry( nPos );
-        OUString aDefaultCurr = m_sSystemDefaultString + " - " + pCurr->GetBankSymbol();
-        nPos = m_pCurrencyLB->InsertEntry( aDefaultCurr );
-    }
+    // Update the "Default ..." currency.
+    m_pCurrencyLB->RemoveEntry(nPos);
+    OUString aDefaultCurr = m_sSystemDefaultString + " - " + rCurr.GetBankSymbol();
+    nPos = m_pCurrencyLB->InsertEntry(aDefaultCurr);
     m_pCurrencyLB->SelectEntryPos( nPos );
 
     // obtain corresponding locale data

@@ -30,9 +30,11 @@
 #include <editeng/colritem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/zforlist.hxx>
+#include <comphelper/doublecheckedinit.hxx>
 #include <comphelper/processfactory.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/misccfg.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <fmtpdsc.hxx>
@@ -51,6 +53,7 @@
 #include <IDocumentStylePoolAccess.hxx>
 #include <rootfrm.hxx>
 #include <pagefrm.hxx>
+#include <txtfrm.hxx>
 #include <hints.hxx>
 #include <ndtxt.hxx>
 #include <pam.hxx>
@@ -102,6 +105,11 @@ static bool lcl_RstAttr( const SwNodePtr& rpNd, void* pArgs )
 {
     const sw::DocumentContentOperationsManager::ParaRstFormat* pPara = static_cast<sw::DocumentContentOperationsManager::ParaRstFormat*>(pArgs);
     SwContentNode* pNode = rpNd->GetContentNode();
+    if (pPara->pLayout && pPara->pLayout->IsHideRedlines()
+        && pNode && pNode->GetRedlineMergeFlag() == SwNode::Merge::Hidden)
+    {
+        return true;
+    }
     if( pNode && pNode->HasSwAttrSet() )
     {
         const bool bLocked = pNode->IsModifyLocked();
@@ -223,18 +231,20 @@ static bool lcl_RstAttr( const SwNodePtr& rpNd, void* pArgs )
     return true;
 }
 
-void SwDoc::RstTextAttrs(const SwPaM &rRg, bool bInclRefToxMark, bool bExactRange )
+void SwDoc::RstTextAttrs(const SwPaM &rRg, bool bInclRefToxMark,
+        bool bExactRange, SwRootFrame const*const pLayout)
 {
     SwHistory* pHst = nullptr;
     SwDataChanged aTmp( rRg );
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoResetAttr* pUndo = new SwUndoResetAttr( rRg, RES_CHRFMT );
+        std::unique_ptr<SwUndoResetAttr> pUndo(new SwUndoResetAttr( rRg, RES_CHRFMT ));
         pHst = &pUndo->GetHistory();
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
     }
     const SwPosition *pStt = rRg.Start(), *pEnd = rRg.End();
-    sw::DocumentContentOperationsManager::ParaRstFormat aPara( pStt, pEnd, pHst );
+    sw::DocumentContentOperationsManager::ParaRstFormat aPara(
+            pStt, pEnd, pHst, nullptr, pLayout );
     aPara.bInclRefToxMark = bInclRefToxMark;
     aPara.bExactRange = bExactRange;
     GetNodes().ForEach( pStt->nNode.GetIndex(), pEnd->nNode.GetIndex()+1,
@@ -245,7 +255,8 @@ void SwDoc::RstTextAttrs(const SwPaM &rRg, bool bInclRefToxMark, bool bExactRang
 void SwDoc::ResetAttrs( const SwPaM &rRg,
                         bool bTextAttr,
                         const std::set<sal_uInt16> &rAttrs,
-                        const bool bSendDataChangedEvents )
+                        const bool bSendDataChangedEvents,
+                        SwRootFrame const*const pLayout)
 {
     SwPaM* pPam = const_cast<SwPaM*>(&rRg);
     if( !bTextAttr && !rAttrs.empty() && RES_TXTATR_END > *(rAttrs.begin()) )
@@ -306,18 +317,19 @@ void SwDoc::ResetAttrs( const SwPaM &rRg,
     SwHistory* pHst = nullptr;
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoResetAttr* pUndo = new SwUndoResetAttr( rRg,
-            bTextAttr ? sal_uInt16(RES_CONDTXTFMTCOLL) : sal_uInt16(RES_TXTFMTCOLL) );
+        std::unique_ptr<SwUndoResetAttr> pUndo(new SwUndoResetAttr( rRg,
+            bTextAttr ? sal_uInt16(RES_CONDTXTFMTCOLL) : sal_uInt16(RES_TXTFMTCOLL) ));
         if( !rAttrs.empty() )
         {
             pUndo->SetAttrs( rAttrs );
         }
         pHst = &pUndo->GetHistory();
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
     }
 
     const SwPosition *pStt = pPam->Start(), *pEnd = pPam->End();
-    sw::DocumentContentOperationsManager::ParaRstFormat aPara( pStt, pEnd, pHst );
+    sw::DocumentContentOperationsManager::ParaRstFormat aPara(
+            pStt, pEnd, pHst, nullptr, pLayout);
 
     // mst: not including META here; it seems attrs with CH_TXTATR are omitted
     sal_uInt16 const aResetableSetRange[] {
@@ -496,9 +508,9 @@ void SwDoc::SetAttr( const SfxItemSet& rSet, SwFormat& rFormat )
 void SwDoc::ResetAttrAtFormat( const sal_uInt16 nWhichId,
                                SwFormat& rChangedFormat )
 {
-    SwUndo *const pUndo = (GetIDocumentUndoRedo().DoesUndo())
-        ?   new SwUndoFormatResetAttr( rChangedFormat, nWhichId )
-        :   nullptr;
+    std::unique_ptr<SwUndo> pUndo;
+    if (GetIDocumentUndoRedo().DoesUndo())
+        pUndo.reset(new SwUndoFormatResetAttr( rChangedFormat, nWhichId ));
 
     const bool bAttrReset = rChangedFormat.ResetFormatAttr( nWhichId );
 
@@ -506,13 +518,11 @@ void SwDoc::ResetAttrAtFormat( const sal_uInt16 nWhichId,
     {
         if ( pUndo )
         {
-            GetIDocumentUndoRedo().AppendUndo( pUndo );
+            GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
         }
 
         getIDocumentState().SetModified();
     }
-    else
-        delete pUndo;
 }
 
 static bool lcl_SetNewDefTabStops( SwTwips nOldWidth, SwTwips nNewWidth,
@@ -568,29 +578,29 @@ void SwDoc::SetDefault( const SfxItemSet& rSet )
 
         if (isCHRATR(nWhich) || isTXTATR(nWhich))
         {
-            aCallMod.Add( mpDfltTextFormatColl );
-            aCallMod.Add( mpDfltCharFormat );
+            aCallMod.Add( mpDfltTextFormatColl.get() );
+            aCallMod.Add( mpDfltCharFormat.get() );
             bCheckSdrDflt = nullptr != pSdrPool;
         }
         else if ( isPARATR(nWhich) ||
                   isPARATR_LIST(nWhich) )
         {
-            aCallMod.Add( mpDfltTextFormatColl );
+            aCallMod.Add( mpDfltTextFormatColl.get() );
             bCheckSdrDflt = nullptr != pSdrPool;
         }
         else if (isGRFATR(nWhich))
         {
-            aCallMod.Add( mpDfltGrfFormatColl );
+            aCallMod.Add( mpDfltGrfFormatColl.get() );
         }
         else if (isFRMATR(nWhich) || isDrawingLayerAttribute(nWhich) )
         {
-            aCallMod.Add( mpDfltGrfFormatColl );
-            aCallMod.Add( mpDfltTextFormatColl );
-            aCallMod.Add( mpDfltFrameFormat );
+            aCallMod.Add( mpDfltGrfFormatColl.get() );
+            aCallMod.Add( mpDfltTextFormatColl.get() );
+            aCallMod.Add( mpDfltFrameFormat.get() );
         }
         else if (isBOXATR(nWhich))
         {
-            aCallMod.Add( mpDfltFrameFormat );
+            aCallMod.Add( mpDfltFrameFormat.get() );
         }
 
         // also copy the defaults
@@ -602,10 +612,9 @@ void SwDoc::SetDefault( const SfxItemSet& rSet )
                 0 != (nEdtWhich = pSdrPool->GetWhich( nSlotId )) &&
                 nSlotId != nEdtWhich )
             {
-                SfxPoolItem* pCpy = pItem->Clone();
+                std::unique_ptr<SfxPoolItem> pCpy(pItem->Clone());
                 pCpy->SetWhich( nEdtWhich );
                 pSdrPool->SetPoolDefaultItem( *pCpy );
-                delete pCpy;
             }
         }
 
@@ -618,7 +627,7 @@ void SwDoc::SetDefault( const SfxItemSet& rSet )
     {
         if (GetIDocumentUndoRedo().DoesUndo())
         {
-            GetIDocumentUndoRedo().AppendUndo( new SwUndoDefaultAttr( aOld, this ) );
+            GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoDefaultAttr>( aOld, this ) );
         }
 
         const SfxPoolItem* pTmpItem;
@@ -644,7 +653,7 @@ void SwDoc::SetDefault( const SfxItemSet& rSet )
             aOld.ClearItem( RES_PARATR_TABSTOP );
             if( bChg )
             {
-                SwFormatChg aChgFormat( mpDfltCharFormat );
+                SwFormatChg aChgFormat( mpDfltCharFormat.get() );
                 // notify the frames
                 aCallMod.ModifyNotification( &aChgFormat, &aChgFormat );
             }
@@ -683,10 +692,8 @@ void SwDoc::DelCharFormat(size_t nFormat, bool bBroadcast)
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo =
-            new SwUndoCharFormatDelete(pDel, this);
-
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoCharFormatDelete>(pDel, this));
     }
 
     delete (*mpCharFormatTable)[nFormat];
@@ -722,9 +729,8 @@ void SwDoc::DelFrameFormat( SwFrameFormat *pFormat, bool bBroadcast )
 
             if (GetIDocumentUndoRedo().DoesUndo())
             {
-                SwUndo * pUndo = new SwUndoFrameFormatDelete(pFormat, this);
-
-                GetIDocumentUndoRedo().AppendUndo(pUndo);
+                GetIDocumentUndoRedo().AppendUndo(
+                    o3tl::make_unique<SwUndoFrameFormatDelete>(pFormat, this));
             }
 
             mpFrameFormatTable->erase( pFormat );
@@ -833,9 +839,8 @@ SwFrameFormat *SwDoc::MakeFrameFormat(const OUString &rFormatName,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo = new SwUndoFrameFormatCreate(pFormat, pDerivedFrom, this);
-
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoFrameFormatCreate>(pFormat, pDerivedFrom, this));
     }
 
     if (bBroadcast)
@@ -867,9 +872,8 @@ SwCharFormat *SwDoc::MakeCharFormat( const OUString &rFormatName,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo = new SwUndoCharFormatCreate(pFormat, pDerivedFrom, this);
-
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoCharFormatCreate>(pFormat, pDerivedFrom, this));
     }
 
     if (bBroadcast)
@@ -903,9 +907,9 @@ SwTextFormatColl* SwDoc::MakeTextFormatColl( const OUString &rFormatName,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo = new SwUndoTextFormatCollCreate(pFormatColl, pDerivedFrom,
-                                                    this);
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoTextFormatCollCreate>(pFormatColl, pDerivedFrom,
+                                                    this));
     }
 
     if (bBroadcast)
@@ -937,9 +941,9 @@ SwConditionTextFormatColl* SwDoc::MakeCondTextFormatColl( const OUString &rForma
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo = new SwUndoCondTextFormatCollCreate(pFormatColl, pDerivedFrom,
-                                                        this);
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoCondTextFormatCollCreate>(pFormatColl, pDerivedFrom,
+                                                        this));
     }
 
     if (bBroadcast)
@@ -968,7 +972,7 @@ void SwDoc::DelTextFormatColl(size_t nFormatColl, bool bBroadcast)
 
     // Who has the to-be-deleted as their Next?
     SwTextFormatColl *pDel = (*mpTextFormatCollTable)[nFormatColl];
-    if( mpDfltTextFormatColl == pDel )
+    if( mpDfltTextFormatColl.get() == pDel )
         return;     // never delete default!
 
     if (bBroadcast)
@@ -977,17 +981,17 @@ void SwDoc::DelTextFormatColl(size_t nFormatColl, bool bBroadcast)
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoTextFormatCollDelete * pUndo;
+        std::unique_ptr<SwUndoTextFormatCollDelete> pUndo;
         if (RES_CONDTXTFMTCOLL == pDel->Which())
         {
-            pUndo = new SwUndoCondTextFormatCollDelete(pDel, this);
+            pUndo.reset(new SwUndoCondTextFormatCollDelete(pDel, this));
         }
         else
         {
-            pUndo = new SwUndoTextFormatCollDelete(pDel, this);
+            pUndo.reset(new SwUndoTextFormatCollDelete(pDel, this));
         }
 
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
     }
 
     // Remove the FormatColl
@@ -1014,6 +1018,18 @@ static bool lcl_SetTextFormatColl( const SwNodePtr& rpNode, void* pArgs )
         return true;
 
     sw::DocumentContentOperationsManager::ParaRstFormat* pPara = static_cast<sw::DocumentContentOperationsManager::ParaRstFormat*>(pArgs);
+
+    if (pPara->pLayout && pPara->pLayout->IsHideRedlines())
+    {
+        if (pCNd->GetRedlineMergeFlag() == SwNode::Merge::Hidden)
+        {
+            return true;
+        }
+        if (pCNd->IsTextNode())
+        {
+            pCNd = sw::GetParaPropsNode(*pPara->pLayout, SwNodeIndex(*pCNd));
+        }
+    }
 
     SwTextFormatColl* pFormat = static_cast<SwTextFormatColl*>(pPara->pFormatColl);
     if ( pPara->bReset )
@@ -1077,7 +1093,8 @@ static bool lcl_SetTextFormatColl( const SwNodePtr& rpNode, void* pArgs )
 bool SwDoc::SetTextFormatColl(const SwPaM &rRg,
                           SwTextFormatColl *pFormat,
                           const bool bReset,
-                          const bool bResetListAttrs)
+                          const bool bResetListAttrs,
+                          SwRootFrame const*const pLayout)
 {
     SwDataChanged aTmp( rRg );
     const SwPosition *pStt = rRg.Start(), *pEnd = rRg.End();
@@ -1086,14 +1103,15 @@ bool SwDoc::SetTextFormatColl(const SwPaM &rRg,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoFormatColl* pUndo = new SwUndoFormatColl( rRg, pFormat,
+        std::unique_ptr<SwUndoFormatColl> pUndo(new SwUndoFormatColl( rRg, pFormat,
                                                   bReset,
-                                                  bResetListAttrs );
+                                                  bResetListAttrs ));
         pHst = pUndo->GetHistory();
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
     }
 
-    sw::DocumentContentOperationsManager::ParaRstFormat aPara( pStt, pEnd, pHst );
+    sw::DocumentContentOperationsManager::ParaRstFormat aPara(
+            pStt, pEnd, pHst, nullptr, pLayout);
     aPara.pFormatColl = pFormat;
     aPara.bReset = bReset;
     // #i62675#
@@ -1171,7 +1189,7 @@ SwTextFormatColl* SwDoc::CopyTextColl( const SwTextFormatColl& rColl )
         return pNewColl;
 
     // search for the "parent" first
-    SwTextFormatColl* pParent = mpDfltTextFormatColl;
+    SwTextFormatColl* pParent = mpDfltTextFormatColl.get();
     if( pParent != rColl.DerivedFrom() )
         pParent = CopyTextColl( *static_cast<SwTextFormatColl*>(rColl.DerivedFrom()) );
 
@@ -1238,7 +1256,7 @@ SwGrfFormatColl* SwDoc::CopyGrfColl( const SwGrfFormatColl& rColl )
         return pNewColl;
 
      // Search for the "parent" first
-    SwGrfFormatColl* pParent = mpDfltGrfFormatColl;
+    SwGrfFormatColl* pParent = mpDfltGrfFormatColl.get();
     if( pParent != rColl.DerivedFrom() )
         pParent = CopyGrfColl( *static_cast<SwGrfFormatColl*>(rColl.DerivedFrom()) );
 
@@ -1358,13 +1376,13 @@ void SwDoc::CopyPageDescHeaderFooterImpl( bool bCpyHeader,
         return ;
 
     // The header only contains the reference to the format from the other document!
-    SfxPoolItem* pNewItem = pItem->Clone();
+    std::unique_ptr<SfxPoolItem> pNewItem(pItem->Clone());
 
     SwFrameFormat* pOldFormat;
     if( bCpyHeader )
-         pOldFormat = static_cast<SwFormatHeader*>(pNewItem)->GetHeaderFormat();
+         pOldFormat = static_cast<SwFormatHeader*>(pNewItem.get())->GetHeaderFormat();
     else
-         pOldFormat = static_cast<SwFormatFooter*>(pNewItem)->GetFooterFormat();
+         pOldFormat = static_cast<SwFormatFooter*>(pNewItem.get())->GetFooterFormat();
 
     if( pOldFormat )
     {
@@ -1396,12 +1414,11 @@ void SwDoc::CopyPageDescHeaderFooterImpl( bool bCpyHeader,
                 pNewFormat->ResetFormatAttr( RES_CNTNT );
         }
         if( bCpyHeader )
-            static_cast<SwFormatHeader*>(pNewItem)->RegisterToFormat(*pNewFormat);
+            static_cast<SwFormatHeader*>(pNewItem.get())->RegisterToFormat(*pNewFormat);
         else
-            static_cast<SwFormatFooter*>(pNewItem)->RegisterToFormat(*pNewFormat);
+            static_cast<SwFormatFooter*>(pNewItem.get())->RegisterToFormat(*pNewFormat);
         rDestFormat.SetFormatAttr( *pNewItem );
     }
-    delete pNewItem;
 }
 
 void SwDoc::CopyPageDesc( const SwPageDesc& rSrcDesc, SwPageDesc& rDstDesc,
@@ -1622,15 +1639,16 @@ SwFormat* SwDoc::FindFormatByName( const SwFormatsBase& rFormatArr,
     return pFnd;
 }
 
-void SwDoc::MoveLeftMargin( const SwPaM& rPam, bool bRight, bool bModulus )
+void SwDoc::MoveLeftMargin(const SwPaM& rPam, bool bRight, bool bModulus,
+        SwRootFrame const*const pLayout)
 {
     SwHistory* pHistory = nullptr;
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoMoveLeftMargin* pUndo = new SwUndoMoveLeftMargin( rPam, bRight,
-                                                                bModulus );
+        std::unique_ptr<SwUndoMoveLeftMargin> pUndo(new SwUndoMoveLeftMargin( rPam, bRight,
+                                                                bModulus ));
         pHistory = &pUndo->GetHistory();
-        GetIDocumentUndoRedo().AppendUndo( pUndo );
+        GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
     }
 
     const SvxTabStopItem& rTabItem = GetDefault( RES_PARATR_TABSTOP );
@@ -1642,6 +1660,7 @@ void SwDoc::MoveLeftMargin( const SwPaM& rPam, bool bRight, bool bModulus )
         SwTextNode* pTNd = aIdx.GetNode().GetTextNode();
         if( pTNd )
         {
+            pTNd = sw::GetParaPropsNode(*pLayout, aIdx);
             SvxLRSpaceItem aLS( static_cast<const SvxLRSpaceItem&>(pTNd->SwContentNode::GetAttr( RES_LR_SPACE )) );
 
             // #i93873# See also lcl_MergeListLevelIndentAsLRSpaceItem in thints.cxx
@@ -1677,6 +1696,7 @@ void SwDoc::MoveLeftMargin( const SwPaM& rPam, bool bRight, bool bModulus )
 
             SwRegHistory aRegH( pTNd, *pTNd, pHistory );
             pTNd->SetAttr( aLS );
+            aIdx = *sw::GetFirstAndLastNode(*pLayout, aIdx).second;
         }
         ++aIdx;
     }
@@ -1692,7 +1712,7 @@ bool SwDoc::DontExpandFormat( const SwPosition& rPos, bool bFlag )
         bRet = pTextNd->DontExpandFormat( rPos.nContent, bFlag );
         if( bRet && GetIDocumentUndoRedo().DoesUndo() )
         {
-            GetIDocumentUndoRedo().AppendUndo( new SwUndoDontExpandFormat(rPos) );
+            GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoDontExpandFormat>(rPos) );
         }
     }
     return bRet;
@@ -1700,28 +1720,29 @@ bool SwDoc::DontExpandFormat( const SwPosition& rPos, bool bFlag )
 
 SwTableBoxFormat* SwDoc::MakeTableBoxFormat()
 {
-    SwTableBoxFormat* pFormat = new SwTableBoxFormat( GetAttrPool(), mpDfltFrameFormat );
+    SwTableBoxFormat* pFormat = new SwTableBoxFormat( GetAttrPool(), mpDfltFrameFormat.get() );
     getIDocumentState().SetModified();
     return pFormat;
 }
 
 SwTableLineFormat* SwDoc::MakeTableLineFormat()
 {
-    SwTableLineFormat* pFormat = new SwTableLineFormat( GetAttrPool(), mpDfltFrameFormat );
+    SwTableLineFormat* pFormat = new SwTableLineFormat( GetAttrPool(), mpDfltFrameFormat.get() );
     getIDocumentState().SetModified();
     return pFormat;
 }
 
-void SwDoc::CreateNumberFormatter()
+void SwDoc::EnsureNumberFormatter()
 {
-    OSL_ENSURE( !mpNumberFormatter, "is already there" );
-
-    LanguageType eLang = LANGUAGE_SYSTEM;
-
-    mpNumberFormatter = new SvNumberFormatter( comphelper::getProcessComponentContext(), eLang );
-    mpNumberFormatter->SetEvalDateFormat( NF_EVALDATEFORMAT_FORMAT_INTL );
-    if (!utl::ConfigManager::IsFuzzing())
-        mpNumberFormatter->SetYear2000(static_cast<sal_uInt16>(::utl::MiscCfg().GetYear2000()));
+    comphelper::doubleCheckedInit(mpNumberFormatter, []()
+    {
+        LanguageType eLang = LANGUAGE_SYSTEM;
+        SvNumberFormatter* pRet = new SvNumberFormatter(comphelper::getProcessComponentContext(), eLang);
+        pRet->SetEvalDateFormat( NF_EVALDATEFORMAT_FORMAT_INTL );
+        if (!utl::ConfigManager::IsFuzzing())
+            pRet->SetYear2000(static_cast<sal_uInt16>(::utl::MiscCfg().GetYear2000()));
+        return pRet;
+    });
 }
 
 SwTableNumFormatMerge::SwTableNumFormatMerge( const SwDoc& rSrc, SwDoc& rDest )
@@ -1730,7 +1751,10 @@ SwTableNumFormatMerge::SwTableNumFormatMerge( const SwDoc& rSrc, SwDoc& rDest )
     // a different Doc -> Number formatter needs to be merged
     SvNumberFormatter* pN;
     if( &rSrc != &rDest && nullptr != ( pN = const_cast<SwDoc&>(rSrc).GetNumberFormatter( false ) ))
-        ( pNFormat = rDest.GetNumberFormatter())->MergeFormatter( *pN );
+    {
+        pNFormat = rDest.GetNumberFormatter();
+        pNFormat->MergeFormatter( *pN );
+    }
 
     if( &rSrc != &rDest )
         static_cast<SwGetRefFieldType*>(rSrc.getIDocumentFieldsAccess().GetSysFieldType( SwFieldIds::GetRef ))->
@@ -1784,6 +1808,9 @@ void SwDoc::SetTextFormatCollByAutoFormat( const SwPosition& rPos, sal_uInt16 nP
     {
         aPam.SetMark();
         aPam.GetMark()->nContent.Assign(pTNd, pTNd->GetText().getLength());
+        // sw_redlinehide: don't need layout currently because the only caller
+        // passes in the properties node
+        assert(static_cast<SwTextFrame const*>(pTNd->getLayoutFrame(nullptr))->GetTextNodeForParaProps() == pTNd);
         getIDocumentContentOperations().InsertItemSet( aPam, *pSet );
     }
 }
@@ -1825,7 +1852,7 @@ void SwDoc::SetFormatItemByAutoFormat( const SwPaM& rPam, const SfxItemSet& rSet
     }
     whichIds.push_back(0);
     SfxItemSet currentSet(GetAttrPool(), &whichIds[0]);
-    pTNd->GetAttr(currentSet, nEnd, nEnd);
+    pTNd->GetParaAttr(currentSet, nEnd, nEnd);
     for (size_t i = 0; whichIds[i]; i += 2)
     {   // yuk - want to explicitly set the pool defaults too :-/
         currentSet.Put(currentSet.Get(whichIds[i]));
@@ -1870,9 +1897,8 @@ void SwDoc::ChgFormat(SwFormat & rFormat, const SfxItemSet & rSet)
             }
         }
 
-        SwUndo * pUndo = new SwUndoFormatAttr(aOldSet, rFormat, /*bSaveDrawPt*/true);
-
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoFormatAttr>(aOldSet, rFormat, /*bSaveDrawPt*/true));
     }
 
     rFormat.SetFormatAttr(rSet);
@@ -1885,20 +1911,20 @@ void SwDoc::RenameFormat(SwFormat & rFormat, const OUString & sNewName,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo * pUndo = nullptr;
+        std::unique_ptr<SwUndo> pUndo;
 
         switch (rFormat.Which())
         {
         case RES_CHRFMT:
-            pUndo = new SwUndoRenameCharFormat(rFormat.GetName(), sNewName, this);
+            pUndo.reset(new SwUndoRenameCharFormat(rFormat.GetName(), sNewName, this));
             eFamily = SfxStyleFamily::Char;
             break;
         case RES_TXTFMTCOLL:
-            pUndo = new SwUndoRenameFormatColl(rFormat.GetName(), sNewName, this);
+            pUndo.reset(new SwUndoRenameFormatColl(rFormat.GetName(), sNewName, this));
             eFamily = SfxStyleFamily::Para;
             break;
         case RES_FRMFMT:
-            pUndo = new SwUndoRenameFrameFormat(rFormat.GetName(), sNewName, this);
+            pUndo.reset(new SwUndoRenameFrameFormat(rFormat.GetName(), sNewName, this));
             eFamily = SfxStyleFamily::Frame;
             break;
 
@@ -1908,7 +1934,7 @@ void SwDoc::RenameFormat(SwFormat & rFormat, const OUString & sNewName,
 
         if (pUndo)
         {
-            GetIDocumentUndoRedo().AppendUndo(pUndo);
+            GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
         }
     }
 

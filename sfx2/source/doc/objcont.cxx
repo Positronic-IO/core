@@ -35,7 +35,6 @@
 #include <svl/eitem.hxx>
 #include <svl/urihelper.hxx>
 #include <svl/ctloptions.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <unotools/securityoptions.hxx>
 #include <svtools/sfxecode.hxx>
@@ -43,6 +42,7 @@
 #include <tools/datetime.hxx>
 #include <rtl/uri.hxx>
 #include <math.h>
+#include <sal/log.hxx>
 
 #include <unotools/saveopt.hxx>
 #include <unotools/useroptions.hxx>

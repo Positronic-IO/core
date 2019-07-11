@@ -20,6 +20,7 @@
 #include <tools/stream.hxx>
 #include <tools/tenccvt.hxx>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <basic/sbx.hxx>
 #include <sb.hxx>
 #include <string.h>
@@ -67,13 +68,13 @@ void SbiImage::Clear()
     bError     = false;
 }
 
-bool SbiGood( SvStream const & r )
+static bool SbiGood( SvStream const & r )
 {
     return r.good();
 }
 
 // Open Record
-sal_uInt64 SbiOpenRecord( SvStream& r, FileOffset nSignature, sal_uInt16 nElem )
+static sal_uInt64 SbiOpenRecord( SvStream& r, FileOffset nSignature, sal_uInt16 nElem )
 {
     sal_uInt64 nPos = r.Tell();
     r.WriteUInt16( static_cast<sal_uInt16>( nSignature ) )
@@ -82,7 +83,7 @@ sal_uInt64 SbiOpenRecord( SvStream& r, FileOffset nSignature, sal_uInt16 nElem )
 }
 
 // Close Record
-void SbiCloseRecord( SvStream& r, sal_uInt64 nOff )
+static void SbiCloseRecord( SvStream& r, sal_uInt64 nOff )
 {
     sal_uInt64 nPos = r.Tell();
     r.Seek( nOff + 2 );
@@ -464,7 +465,7 @@ bool SbiImage::Save( SvStream& r, sal_uInt32 nVer )
 
                     SbxProperty* pTypeElem = static_cast< SbxProperty* > ( pTypeMembers->Get(j) );
 
-                    OUString aElemName = pTypeElem->GetName();
+                    const OUString& aElemName = pTypeElem->GetName();
                     r.WriteUniOrByteString( aElemName, eCharSet );
 
                     SbxDataType dataType =   pTypeElem->GetType();

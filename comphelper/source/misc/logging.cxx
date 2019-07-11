@@ -72,12 +72,6 @@ namespace comphelper
     {
     }
 
-
-    EventLogger::~EventLogger()
-    {
-    }
-
-
     bool EventLogger::isLoggable( const sal_Int32 _nLogLevel ) const
     {
         if ( !m_pImpl->isValid() )
@@ -95,6 +89,11 @@ namespace comphelper
         return false;
     }
 
+    const css::uno::Reference<css::logging::XLogger> EventLogger::getLogger()
+    {
+        return m_pImpl->getLogger();
+    }
+
 
     namespace
     {
@@ -110,7 +109,7 @@ namespace comphelper
     }
 
 
-    bool EventLogger::impl_log( const sal_Int32 _nLogLevel,
+    void EventLogger::impl_log( const sal_Int32 _nLogLevel,
         const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage,
         const OptionalString& _rArgument1, const OptionalString& _rArgument2,
         const OptionalString& _rArgument3, const OptionalString& _rArgument4,
@@ -157,8 +156,6 @@ namespace comphelper
         {
             OSL_FAIL( "EventLogger::impl_log: caught an exception!" );
         }
-
-        return false;
     }
 } // namespace comphelper
 

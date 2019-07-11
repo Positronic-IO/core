@@ -25,6 +25,7 @@
 #include <fontsubset.hxx>
 
 #include <vcl/strhelper.hxx>
+#include <sal/log.hxx>
 
 typedef sal_uInt8 U8;
 typedef sal_uInt16 U16;
@@ -270,7 +271,7 @@ public:
     explicit CffSubsetterContext( const U8* pBasePtr, int nBaseLen);
 
     bool    initialCffRead();
-    bool    emitAsType1( class Type1Emitter&,
+    void    emitAsType1( class Type1Emitter&,
                 const sal_GlyphId* pGlyphIds, const U8* pEncoding,
                 GlyphWidth* pGlyphWidths, int nGlyphCount, FontSubsetInfo& );
 
@@ -1590,7 +1591,7 @@ public:
     char*       mpPtr;
 
     char        maSubsetName[256];
-    bool        mbPfbSubset;
+    bool const  mbPfbSubset;
     int         mnHexLineCol;
 };
 
@@ -1640,8 +1641,7 @@ void Type1Emitter::updateLen( int nTellPos, size_t nLength)
     if (fseek( mpFileOut, nTellPos, SEEK_SET) != 0)
         return;
     fwrite(cData, 1, sizeof(cData), mpFileOut);
-    if( nCurrPos >= 0)
-        (void)fseek(mpFileOut, nCurrPos, SEEK_SET);
+    (void)fseek(mpFileOut, nCurrPos, SEEK_SET);
 }
 
 inline size_t Type1Emitter::emitRawData(const char* pData, size_t nLength) const
@@ -1702,7 +1702,7 @@ void Type1Emitter::emitAllCrypted()
 // #i110387# quick-and-dirty double->ascii conversion
 // needed because sprintf/ecvt/etc. alone are too localized (LC_NUMERIC)
 // also strip off trailing zeros in fraction while we are at it
-inline int dbl2str( char* pOut, double fVal)
+static int dbl2str( char* pOut, double fVal)
 {
     const int nLen = psp::getValueOfDouble( pOut, fVal, 6);
     return nLen;
@@ -1732,7 +1732,7 @@ void Type1Emitter::emitValVector( const char* pLineHead, const char* pLineTail,
     mpPtr += sprintf( mpPtr, "%s", pLineTail);
 }
 
-bool CffSubsetterContext::emitAsType1( Type1Emitter& rEmitter,
+void CffSubsetterContext::emitAsType1( Type1Emitter& rEmitter,
     const sal_GlyphId* pReqGlyphIds, const U8* pReqEncoding,
     GlyphWidth* pGlyphWidths, int nGlyphCount, FontSubsetInfo& rFSInfo)
 {
@@ -2001,7 +2001,7 @@ bool CffSubsetterContext::emitAsType1( Type1Emitter& rEmitter,
         "0000000000000000000000000000000000000000000000000000000000000000\n"
         "cleartomark\n"
         "\x80\x03";
-     if( rEmitter.mbPfbSubset)
+    if( rEmitter.mbPfbSubset)
         rEmitter.emitRawData( aPfxFooter, sizeof(aPfxFooter)-1);
     else
         rEmitter.emitRawData( aPfxFooter+6, sizeof(aPfxFooter)-9);
@@ -2027,8 +2027,6 @@ bool CffSubsetterContext::emitAsType1( Type1Emitter& rEmitter,
 
     rFSInfo.m_nFontType = rEmitter.mbPfbSubset ? FontType::TYPE1_PFB : FontType::TYPE1_PFA;
     rFSInfo.m_aPSName   = OUString( rEmitter.maSubsetName, strlen(rEmitter.maSubsetName), RTL_TEXTENCODING_UTF8 );
-
-    return true;
 }
 
 bool FontSubsetInfo::CreateFontSubsetFromCff( GlyphWidth* pOutGlyphWidths )
@@ -2043,10 +2041,10 @@ bool FontSubsetInfo::CreateFontSubsetFromCff( GlyphWidth* pOutGlyphWidths )
     const bool bPfbSubset(mnReqFontTypeMask & FontType::TYPE1_PFB);
     Type1Emitter aType1Emitter( mpOutFile, bPfbSubset);
     aType1Emitter.setSubsetName( mpReqFontName);
-    bRC = aCff.emitAsType1( aType1Emitter,
+    aCff.emitAsType1( aType1Emitter,
         mpReqGlyphIds, mpReqEncodedIds,
         pOutGlyphWidths, mnReqGlyphCount, *this);
-    return bRC;
+    return true;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -35,8 +35,9 @@
 
 #include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/sequence.hxx>
 #include <cppuhelper/bootstrap.hxx>
+#include <cppuhelper/exc_hlp.hxx>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
@@ -256,7 +257,9 @@ static bool impl_checkDependencies( const uno::Reference< uno::XComponentContext
     catch ( const ucb::CommandFailedException & ) { return true; }
     catch ( const ucb::CommandAbortedException & ) { return true; }
     catch ( const lang::IllegalArgumentException & e ) {
-        throw uno::RuntimeException( e.Message, e.Context );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( e.Message,
+                        e.Context, anyEx );
     }
 
 #ifdef DEBUG
@@ -423,9 +426,12 @@ void Desktop::SynchronizeExtensionRepositories(bool bCleanedExtensionCache, Desk
                 silent->getInteractionHandler());
 #endif
     } else {
-        // reinstallDeployedExtensions above already calls syncRepositories
-        // internally:
-        dp_misc::syncRepositories(false, silent);
+        // reinstallDeployedExtensions above already calls syncRepositories internally
+
+        // Force syncing repositories on startup. There are cases where the extension
+        // registration becomes invalid which leads to extensions not starting up, although
+        // installed and active. Syncing extension repos on startup fixes that.
+        dp_misc::syncRepositories(/*force=*/true, silent);
     }
 }
 

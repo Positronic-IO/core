@@ -37,6 +37,7 @@
 #include <officecfg/Office/Common.hxx>
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/streamwrap.hxx>
 
@@ -224,8 +225,6 @@ GtkSalPrinter::StartJob(
     m_xImpl->m_pPrinter = aDialog.getPrinter();
     m_xImpl->m_pSettings = aDialog.getSettings();
 
-    bool bCollate = false;
-
     //To-Do proper name, watch for encodings
     sFileName = OString("/tmp/hacking.ps");
     m_xImpl->m_sSpoolFile = sFileName;
@@ -234,7 +233,7 @@ GtkSalPrinter::StartJob(
 
     //To-Do, swap ps/pdf for gtk_printer_accepts_ps()/gtk_printer_accepts_pdf() ?
 
-    return impl_doJob(&aFileName, i_rJobName, i_rAppName, io_pSetupData, bCollate, io_rController);
+    return impl_doJob(&aFileName, i_rJobName, i_rAppName, io_pSetupData, /*bCollate*/false, io_rController);
 }
 
 bool
@@ -474,7 +473,7 @@ GtkPrintDialog::impl_initCustomTab()
                     const int nLen = aHelpIds.getLength();
                     aHelpTexts.realloc(nLen);
                     for (int j = 0; j != nLen; ++j)
-                        aHelpTexts[j] = pHelp->GetHelpText(aHelpIds[j], nullptr);
+                        aHelpTexts[j] = pHelp->GetHelpText(aHelpIds[j], static_cast<weld::Widget*>(nullptr));
                 }
                 else // fallback
                     aHelpTexts = aHelpIds;
@@ -757,10 +756,9 @@ GtkPrintDialog::impl_initPrintContent(uno::Sequence<sal_Bool> const& i_rDisabled
 void
 GtkPrintDialog::impl_checkOptionalControlDependencies()
 {
-    for (std::map<GtkWidget*, OUString>::iterator it = m_aControlToPropertyMap.begin();
-         it != m_aControlToPropertyMap.end(); ++it)
+    for (auto& rEntry : m_aControlToPropertyMap)
     {
-        gtk_widget_set_sensitive(it->first, m_rController.isUIOptionEnabled(it->second));
+        gtk_widget_set_sensitive(rEntry.first, m_rController.isUIOptionEnabled(rEntry.second));
     }
 }
 

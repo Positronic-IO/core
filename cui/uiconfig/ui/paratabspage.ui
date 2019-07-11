@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.18.3 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="cui">
   <requires lib="gtk+" version="3.18"/>
-  <requires lib="LibreOffice" version="1.0"/>
+  <object class="GtkTreeStore" id="liststore1">
+    <columns>
+      <!-- column-name text -->
+      <column type="gchararray"/>
+      <!-- column-name id -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
   <object class="GtkAdjustment" id="adjustment1">
     <property name="lower">-56</property>
     <property name="upper">56</property>
@@ -32,12 +39,73 @@
             <property name="top_padding">6</property>
             <property name="left_padding">12</property>
             <child>
-              <object class="VclComboBoxNumeric" id="ED_TABPOS:0cm">
+              <object class="GtkGrid" id="tabgrid">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="hexpand">True</property>
                 <property name="vexpand">True</property>
-                <property name="dropdown">False</property>
-                <property name="adjustment">adjustment1</property>
+                <property name="row_spacing">3</property>
+                <child>
+                  <object class="GtkScrolledWindow">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="shadow_type">in</property>
+                    <child>
+                      <object class="GtkTreeView" id="LB_TABPOS">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="vexpand">True</property>
+                        <property name="model">liststore1</property>
+                        <property name="headers_visible">False</property>
+                        <property name="headers_clickable">False</property>
+                        <property name="search_column">0</property>
+                        <property name="show_expanders">False</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection" id="treeview-selection1"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn1">
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext1"/>
+                              <attributes>
+                                <attribute name="text">0</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left_attach">0</property>
+                    <property name="top_attach">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="ED_TABPOS">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="activates_default">True</property>
+                    <property name="hexpand">True</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">0</property>
+                    <property name="top_attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkSpinButton" id="SP_TABPOS">
+                    <property name="can_focus">False</property>
+                    <property name="adjustment">adjustment1</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">0</property>
+                    <property name="top_attach">0</property>
+                  </packing>
+                </child>
               </object>
             </child>
           </object>
@@ -83,7 +151,7 @@
                   <object class="GtkRadioButton" id="radiobuttonBTN_TABTYPE_DECIMAL">
                     <property name="label" translatable="yes" context="paratabspage|radiobuttonBTN_TABTYPE_DECIMAL">Deci_mal</property>
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
@@ -98,7 +166,7 @@
                 <child>
                   <object class="GtkEntry" id="entryED_TABTYPE_DECCHAR">
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
                     <property name="width_chars">1</property>
                   </object>
                   <packing>
@@ -107,7 +175,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="cuilo-TabWin_Impl" id="drawingareaWIN_TABLEFT">
+                  <object class="GtkDrawingArea" id="drawingareaWIN_TABLEFT">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </object>
@@ -117,7 +185,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="cuilo-TabWin_Impl" id="drawingareaWIN_TABRIGHT">
+                  <object class="GtkDrawingArea" id="drawingareaWIN_TABRIGHT">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </object>
@@ -127,7 +195,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="cuilo-TabWin_Impl" id="drawingareaWIN_TABCENTER">
+                  <object class="GtkDrawingArea" id="drawingareaWIN_TABCENTER">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </object>
@@ -137,7 +205,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="cuilo-TabWin_Impl" id="drawingareaWIN_TABDECIMAL">
+                  <object class="GtkDrawingArea" id="drawingareaWIN_TABDECIMAL">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                   </object>
@@ -154,13 +222,12 @@
                     <child>
                       <object class="GtkRadioButton" id="radiobuttonBTN_TABTYPE_LEFT">
                         <property name="label" translatable="yes" context="paratabspage|radiobuttonBTN_TABTYPE_LEFT">_Left</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
                         <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="active">True</property>
                         <property name="draw_indicator">True</property>
-                        <property name="group">radiobuttonST_LEFTTAB_ASIAN</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -171,12 +238,12 @@
                     <child>
                       <object class="GtkRadioButton" id="radiobuttonST_LEFTTAB_ASIAN">
                         <property name="label" translatable="yes" context="paratabspage|radiobuttonST_LEFTTAB_ASIAN">_Left/Top</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
                         <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="draw_indicator">True</property>
-                        <property name="group">radiobuttonBTN_TABTYPE_RIGHT</property>
+                        <property name="group">radiobuttonBTN_TABTYPE_LEFT</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -198,12 +265,12 @@
                     <child>
                       <object class="GtkRadioButton" id="radiobuttonBTN_TABTYPE_RIGHT">
                         <property name="label" translatable="yes" context="paratabspage|radiobuttonBTN_TABTYPE_RIGHT">Righ_t</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
                         <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="draw_indicator">True</property>
-                        <property name="group">radiobuttonST_RIGHTTAB_ASIAN</property>
+                        <property name="group">radiobuttonBTN_TABTYPE_LEFT</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -214,12 +281,12 @@
                     <child>
                       <object class="GtkRadioButton" id="radiobuttonST_RIGHTTAB_ASIAN">
                         <property name="label" translatable="yes" context="paratabspage|radiobuttonST_RIGHTTAB_ASIAN">Righ_t/Bottom</property>
-                        <property name="can_focus">False</property>
+                        <property name="can_focus">True</property>
                         <property name="receives_default">False</property>
                         <property name="use_underline">True</property>
                         <property name="xalign">0</property>
                         <property name="draw_indicator">True</property>
-                        <property name="group">radiobuttonBTN_TABTYPE_CENTER</property>
+                        <property name="group">radiobuttonBTN_TABTYPE_LEFT</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -237,12 +304,12 @@
                   <object class="GtkRadioButton" id="radiobuttonBTN_TABTYPE_CENTER">
                     <property name="label" translatable="yes" context="paratabspage|radiobuttonBTN_TABTYPE_CENTER">C_entered</property>
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">radiobuttonBTN_TABTYPE_DECIMAL</property>
+                    <property name="group">radiobuttonBTN_TABTYPE_LEFT</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -319,8 +386,8 @@
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
+                    <property name="active">True</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">radiobuttonBTN_FILLCHAR_POINTS</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -330,14 +397,14 @@
                 </child>
                 <child>
                   <object class="GtkRadioButton" id="radiobuttonBTN_FILLCHAR_POINTS">
-                    <property name="label" translatable="no" context="paratabspage|radiobuttonBTN_FILLCHAR_POINTS">_........</property>
+                    <property name="label" context="paratabspage|radiobuttonBTN_FILLCHAR_POINTS">_........</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">radiobuttonBTN_FILLCHAR_DASHLINE</property>
+                    <property name="group">radiobuttonBTN_FILLCHAR_NO</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -347,14 +414,14 @@
                 </child>
                 <child>
                   <object class="GtkRadioButton" id="radiobuttonBTN_FILLCHAR_DASHLINE">
-                    <property name="label" translatable="no" context="paratabspage|radiobuttonBTN_FILLCHAR_DASHLINE">_--------</property>
+                    <property name="label" context="paratabspage|radiobuttonBTN_FILLCHAR_DASHLINE">_--------</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">radiobuttonBTN_FILLCHAR_UNDERSCORE</property>
+                    <property name="group">radiobuttonBTN_FILLCHAR_NO</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -364,14 +431,14 @@
                 </child>
                 <child>
                   <object class="GtkRadioButton" id="radiobuttonBTN_FILLCHAR_UNDERSCORE">
-                    <property name="label" translatable="no" context="paratabspage|radiobuttonBTN_FILLCHAR_UNDERSCORE">______</property>
+                    <property name="label" context="paratabspage|radiobuttonBTN_FILLCHAR_UNDERSCORE">______</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">False</property>
                     <property name="use_underline">True</property>
                     <property name="xalign">0</property>
                     <property name="draw_indicator">True</property>
-                    <property name="group">radiobuttonBTN_FILLCHAR_OTHER</property>
+                    <property name="group">radiobuttonBTN_FILLCHAR_NO</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
@@ -446,7 +513,7 @@
           <object class="GtkButton" id="buttonBTN_NEW">
             <property name="label">gtk-new</property>
             <property name="visible">True</property>
-            <property name="can_focus">False</property>
+            <property name="can_focus">True</property>
             <property name="receives_default">True</property>
             <property name="use_stock">True</property>
           </object>
@@ -460,7 +527,7 @@
           <object class="GtkButton" id="buttonBTN_DELALL">
             <property name="label" translatable="yes" context="paratabspage|buttonBTN_DELALL">Delete _all</property>
             <property name="visible">True</property>
-            <property name="can_focus">False</property>
+            <property name="can_focus">True</property>
             <property name="receives_default">True</property>
             <property name="use_underline">True</property>
           </object>
@@ -474,7 +541,7 @@
           <object class="GtkButton" id="buttonBTN_DEL">
             <property name="label">gtk-delete</property>
             <property name="visible">True</property>
-            <property name="can_focus">False</property>
+            <property name="can_focus">True</property>
             <property name="receives_default">True</property>
             <property name="use_stock">True</property>
           </object>

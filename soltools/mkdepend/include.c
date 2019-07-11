@@ -30,17 +30,17 @@ in this Software without prior written authorization from the X Consortium.
 
 #include "def.h"
 #include <string.h>
+#include <assert.h>
 
-void remove_dotdot( char * );
-int isdot( char const * );
-int isdotdot( char const * );
-int issymbolic(char * dir, char * component);
-int exists_path(struct IncludesCollection*, char*);
+static void remove_dotdot( char * );
+static int isdot( char const * );
+static int isdotdot( char const * );
+static int issymbolic(char * dir, char * component);
+static int exists_path(struct IncludesCollection*, char*);
 
-
-extern struct inclist inclist[ MAXFILES ];
-extern char *includedirs[ ];
-extern char *notdotdot[ ];
+#ifdef S_IFLNK
+static char *notdotdot[ MAXDIRS ];
+#endif
 
 struct inclist *inc_path(char *file, char *include, boolean dot, struct IncludesCollection *incCollection)
 {
@@ -243,7 +243,17 @@ int issymbolic(char *dir, char *component)
     struct stat st;
     char    buf[ BUFSIZ ], **pp;
 
-    sprintf(buf, "%s%s%s", dir, *dir ? "/" : "", component);
+#if defined __GNUC__ && __GNUC__ == 8 && __GNUC_MINOR__ == 2 && !defined __clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    // silence "‘snprintf’ output may be truncated before the last format character"
+#endif
+    int n = snprintf(buf, BUFSIZ, "%s%s%s", dir, *dir ? "/" : "", component);
+#if defined __GNUC__ && __GNUC__ == 8 && __GNUC_MINOR__ == 2 && !defined __clang__
+#pragma GCC diagnostic pop
+#endif
+    assert(n < BUFSIZ);
+    (void) n;
     for (pp=notdotdot; *pp; pp++)
         if (strcmp(*pp, buf) == 0)
             return TRUE;

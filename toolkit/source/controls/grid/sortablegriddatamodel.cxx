@@ -375,13 +375,10 @@ void lcl_clear( STLCONTAINER& i_container )
 
     void lcl_decrementValuesGreaterThan( ::std::vector< ::sal_Int32 > & io_indexMap, sal_Int32 const i_threshold )
     {
-        for (   ::std::vector< ::sal_Int32 >::iterator loop = io_indexMap.begin();
-                loop != io_indexMap.end();
-                ++loop
-            )
+        for ( auto& rIndex : io_indexMap )
         {
-            if ( *loop >= i_threshold )
-                --*loop;
+            if ( rIndex >= i_threshold )
+                --rIndex;
         }
     }
 
@@ -552,7 +549,8 @@ void lcl_clear( STLCONTAINER& i_container )
 
             // get predicate object
             ::std::unique_ptr< ::comphelper::IKeyPredicateLess > const pPredicate( ::comphelper::getStandardLessPredicate( dataType, m_collator ) );
-            ENSURE_OR_RETURN_FALSE( pPredicate.get(), "SortableGridDataModel::impl_reIndex_nothrow: no sortable data found!" );
+            ENSURE_OR_RETURN_FALSE(
+                pPredicate, "SortableGridDataModel::impl_reIndex_nothrow: no sortable data found!");
 
             // then sort
             CellDataLessComparison const aComparator( aColumnData, *pPredicate, i_sortAscending );

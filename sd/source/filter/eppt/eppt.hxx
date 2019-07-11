@@ -23,58 +23,24 @@
 #include <vector>
 #include "escherex.hxx"
 #include <sal/types.h>
-#include <sot/storage.hxx>
-#include <vcl/graph.hxx>
-#include <unotools/fontcvt.hxx>
-#include "pptexanimations.hxx"
 #include "pptexsoundcollection.hxx"
 
 #include "text.hxx"
 
-#include <vcl/mapmod.hxx>
-#include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/drawing/FillStyle.hpp>
-#include <com/sun/star/drawing/LineStyle.hpp>
-#include <com/sun/star/drawing/DashStyle.hpp>
-#include <com/sun/star/drawing/HatchStyle.hpp>
-#include <com/sun/star/drawing/LineEndType.hpp>
-#include <com/sun/star/drawing/Alignment.hpp>
-#include <com/sun/star/drawing/TextAdjust.hpp>
-#include <com/sun/star/drawing/CircleKind.hpp>
-#include <com/sun/star/drawing/PolygonKind.hpp>
-#include <com/sun/star/drawing/PolygonFlags.hpp>
-#include <com/sun/star/drawing/XUniversalShapeDescriptor.hpp>
-#include <com/sun/star/drawing/XShapeGrouper.hpp>
-#include <com/sun/star/text/XSimpleText.hpp>
-#include <com/sun/star/drawing/XConnectorShape.hpp>
-#include <com/sun/star/drawing/BezierPoint.hpp>
-#include <com/sun/star/drawing/Hatch.hpp>
-#include <com/sun/star/drawing/LineDash.hpp>
-#include <com/sun/star/drawing/PolyPolygonBezierCoords.hpp>
-#include <com/sun/star/drawing/XMasterPageTarget.hpp>
-#include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
-#include <com/sun/star/drawing/XMasterPagesSupplier.hpp>
-#include <com/sun/star/awt/XGraphics.hpp>
-#include <com/sun/star/task/XStatusIndicatorSupplier.hpp>
 #include <com/sun/star/presentation/AnimationEffect.hpp>
 #include <com/sun/star/presentation/ClickAction.hpp>
-#include <com/sun/star/text/XTextFieldsSupplier.hpp>
-#include <com/sun/star/text/XTextField.hpp>
-#include <com/sun/star/container/XNamed.hpp>
-#include <com/sun/star/awt/FontDescriptor.hpp>
-#include <com/sun/star/container/XIndexContainer.hpp>
-#include <com/sun/star/awt/XControlModel.hpp>
-#include <com/sun/star/style/TabStop.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/beans/XPropertyState.hpp>
-#include <com/sun/star/beans/XPropertySetInfo.hpp>
-#include <com/sun/star/awt/FontFamily.hpp>
-#include <com/sun/star/awt/FontPitch.hpp>
-#include <com/sun/star/awt/CharSet.hpp>
-#include <com/sun/star/text/WritingMode.hpp>
-#include <com/sun/star/lang/Locale.hpp>
 
 #include "epptbase.hxx"
+
+namespace com { namespace sun { namespace star { namespace awt { class XControlModel; } } } }
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySet; } } } }
+namespace com { namespace sun { namespace star { namespace beans { struct PropertyValue; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XShape; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
+namespace com { namespace sun { namespace star { namespace task { class XStatusIndicator; } } } }
+namespace com { namespace sun { namespace star { namespace text { class XSimpleText; } } } }
+
+class SotStorage;
 
 #define EPP_MAINMASTER_PERSIST_KEY      0x80010000
 #define EPP_MAINNOTESMASTER_PERSIST_KEY 0x80020000
@@ -97,8 +63,8 @@
 
 struct EPPTHyperlink
 {
-    OUString    aURL;
-    sal_uInt32  nType;      // bit 0-7 : type       ( 1: click action to a slide )
+    OUString const    aURL;
+    sal_uInt32 const  nType;      // bit 0-7 : type       ( 1: click action to a slide )
                             //                      ( 2: hyperlink url )
                             // bit 8-23: index
                             // bit 31  : hyperlink is attached to a shape
@@ -115,8 +81,8 @@ enum PPTExOleObjEntryType
 
 struct PPTExOleObjEntry
 {
-    PPTExOleObjEntryType    eType;
-    sal_uInt32              nOfsA; ///< offset to the EPP_ExOleObjAtom in mpExEmbed (set at creation)
+    PPTExOleObjEntryType const    eType;
+    sal_uInt32 const              nOfsA; ///< offset to the EPP_ExOleObjAtom in mpExEmbed (set at creation)
     sal_uInt32              nOfsB; ///< offset to the EPP_ExOleObjStg
 
     css::uno::Reference< css::awt::XControlModel >    xControlModel;
@@ -146,7 +112,7 @@ public:
 struct CellBorder;
 class PPTWriter final : public PPTWriterBase, public PPTExBulletProvider
 {
-        sal_uInt32                      mnCnvrtFlags;
+        sal_uInt32 const                mnCnvrtFlags;
         bool                        mbStatus;
         sal_uInt32                      mnStatMaxValue;
         sal_uInt32                      mnLatestStatValue;
@@ -201,7 +167,7 @@ class PPTWriter final : public PPTWriterBase, public PPTExBulletProvider
 
     private:
 
-        bool                ImplCreateDocumentSummaryInformation();
+        void                ImplCreateDocumentSummaryInformation();
         bool                ImplCreateCurrentUserStream();
         static void         ImplCreateHeaderFooterStrings( SvStream& rOut,
                                 css::uno::Reference< css::beans::XPropertySet > const & rXPagePropSet );
@@ -214,7 +180,7 @@ class PPTWriter final : public PPTWriterBase, public PPTExBulletProvider
         void                ImplWriteBackground( css::uno::Reference< css::beans::XPropertySet > const & rXBackgroundPropSet );
         void                ImplWriteVBA();
         void                ImplWriteOLE();
-        bool                ImplWriteAtomEnding();
+        void                ImplWriteAtomEnding();
 
         void                ImplFlipBoundingBox( EscherPropertyContainer& rPropOpt );
         bool                ImplGetText();

@@ -34,6 +34,8 @@
 #include <com/sun/star/script/ModuleType.hpp>
 #include <com/sun/star/script/XLibraryContainerPassword.hpp>
 #include <com/sun/star/frame/XLayoutManager.hpp>
+#include <svl/srchdefs.hxx>
+#include <sal/log.hxx>
 #include <sfx2/childwin.hxx>
 #include <sfx2/docfac.hxx>
 #include <sfx2/dinfdlg.hxx>
@@ -153,13 +155,11 @@ void Shell::ExecuteSearch( SfxRequest& rReq )
                 {
                     // search other modules...
                     bool bChangeCurWindow = false;
-                    WindowTableIt it;
-                    for (it = aWindowTable.begin(); it != aWindowTable.end(); ++it)
-                        if (it->second == pCurWin)
-                            break;
-                    if (it != aWindowTable.end())
+                    auto it = std::find_if(aWindowTable.cbegin(), aWindowTable.cend(),
+                                           [this](const WindowTable::value_type& item) { return item.second == pCurWin; });
+                    if (it != aWindowTable.cend())
                         ++it;
-                    BaseWindow* pWin = it != aWindowTable.end() ? it->second.get() : nullptr;
+                    BaseWindow* pWin = it != aWindowTable.cend() ? it->second.get() : nullptr;
 
                     bool bSearchedFromStart = false;
                     while ( !nFound && !bCanceled && ( pWin || !bSearchedFromStart ) )
@@ -176,8 +176,8 @@ void Shell::ExecuteSearch( SfxRequest& rReq )
                             xQueryBox->set_default_response(RET_YES);
                             if (xQueryBox->run() == RET_YES)
                             {
-                                it = aWindowTable.begin();
-                                if ( it != aWindowTable.end() )
+                                it = aWindowTable.cbegin();
+                                if ( it != aWindowTable.cend() )
                                     pWin = it->second;
                                 bSearchedFromStart = true;
                             }
@@ -201,9 +201,9 @@ void Shell::ExecuteSearch( SfxRequest& rReq )
                         }
                         if ( pWin && ( pWin != pCurWin ) )
                         {
-                            if ( it != aWindowTable.end() )
+                            if ( it != aWindowTable.cend() )
                                 ++it;
-                            pWin = it != aWindowTable.end() ? it->second.get() : nullptr;
+                            pWin = it != aWindowTable.cend() ? it->second.get() : nullptr;
                         }
                         else
                             pWin = nullptr;
@@ -331,7 +331,7 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
         break;
         case SID_BASICIDE_CHOOSEMACRO:
         {
-            ChooseMacro( nullptr );
+            ChooseMacro(rReq.GetFrameWeld(), nullptr);
         }
         break;
         case SID_BASICIDE_CREATEMACRO:
@@ -417,7 +417,7 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
                     bool bRenameOk = false;
                     if (ModulWindow* pModWin = dynamic_cast<ModulWindow*>(pWin.get()))
                     {
-                        OUString aLibName = pModWin->GetLibName();
+                        const OUString& aLibName = pModWin->GetLibName();
                         ScriptDocument aDocument( pWin->GetDocument() );
 
                         if (RenameModule(pModWin->GetFrameWeld(), aDocument, aLibName, aOldName, aNewName))
@@ -626,20 +626,20 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
             const SfxStringItem* pDocumentItem = rReq.GetArg<SfxStringItem>(SID_BASICIDE_ARG_DOCUMENT);
             if ( pDocumentItem )
             {
-                OUString sDocumentCaption = pDocumentItem->GetValue();
+                const OUString& sDocumentCaption = pDocumentItem->GetValue();
                 if ( !sDocumentCaption.isEmpty() )
                     pDocument.reset( new ScriptDocument( ScriptDocument::getDocumentWithURLOrCaption( sDocumentCaption ) ) );
             }
 
             const SfxUnoAnyItem* pDocModelItem = rReq.GetArg<SfxUnoAnyItem>(SID_BASICIDE_ARG_DOCUMENT_MODEL);
-            if ( !pDocument.get() && pDocModelItem )
+            if (!pDocument && pDocModelItem)
             {
                 uno::Reference< frame::XModel > xModel( pDocModelItem->GetValue(), UNO_QUERY );
                 if ( xModel.is() )
                     pDocument.reset( new ScriptDocument( xModel ) );
             }
 
-            if ( !pDocument.get() )
+            if (!pDocument)
                 break;
 
             const SfxStringItem* pLibNameItem = rReq.GetArg<SfxStringItem>(SID_BASICIDE_ARG_LIBNAME);
@@ -652,7 +652,7 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
             const SfxStringItem* pNameItem = rReq.GetArg<SfxStringItem>(SID_BASICIDE_ARG_NAME);
             if ( pNameItem )
             {
-                OUString aName( pNameItem->GetValue() );
+                const OUString& aName( pNameItem->GetValue() );
                 OUString aModType( "Module" );
                 OUString aType( aModType );
                 const SfxStringItem* pTypeItem = rReq.GetArg<SfxStringItem>(SID_BASICIDE_ARG_TYPE);
@@ -1243,11 +1243,10 @@ VclPtr<BaseWindow> Shell::FindWindow(
 
 bool Shell::CallBasicErrorHdl( StarBASIC const * pBasic )
 {
-    bool bRet = false;
     VclPtr<ModulWindow> pModWin = ShowActiveModuleWindow( pBasic );
     if ( pModWin )
-        bRet = pModWin->BasicErrorHdl( pBasic );
-    return bRet;
+        pModWin->BasicErrorHdl( pBasic );
+    return false;
 }
 
 BasicDebugFlags Shell::CallBasicBreakHdl( StarBASIC const * pBasic )
@@ -1298,7 +1297,7 @@ VclPtr<ModulWindow> Shell::ShowActiveModuleWindow( StarBASIC const * pBasic )
             if (BasicManager* pBasMgr = FindBasicManager(pLib))
             {
                 ScriptDocument aDocument( ScriptDocument::getDocumentForBasicManager( pBasMgr ) );
-                OUString aLibName = pLib->GetName();
+                const OUString& aLibName = pLib->GetName();
                 pWin = FindBasWin( aDocument, aLibName, pActiveModule->GetName(), true );
                 DBG_ASSERT( pWin, "Error/Step-Hdl: Window was not created/found!" );
                 SetCurLib( aDocument, aLibName );

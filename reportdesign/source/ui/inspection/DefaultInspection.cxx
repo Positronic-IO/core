@@ -94,33 +94,13 @@ namespace rptui
 
     Sequence< Any > SAL_CALL DefaultComponentInspectorModel::getHandlerFactories()
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
-
         // service names for all our handlers
-        const struct
-        {
-            const sal_Char* serviceName;
-        } aFactories[] = {
-
-            { "com.sun.star.report.inspection.ReportComponentHandler"},
-            { "com.sun.star.form.inspection.EditPropertyHandler"},
-            { "com.sun.star.report.inspection.DataProviderHandler"},
-            { "com.sun.star.report.inspection.GeometryHandler"}
-
-            // generic virtual edit properties
-
+        return Sequence<Any> {
+            Any(OUString( "com.sun.star.report.inspection.ReportComponentHandler")),
+            Any(OUString( "com.sun.star.form.inspection.EditPropertyHandler")),
+            Any(OUString( "com.sun.star.report.inspection.DataProviderHandler")),
+            Any(OUString( "com.sun.star.report.inspection.GeometryHandler"))
         };
-
-        const size_t nFactories = SAL_N_ELEMENTS( aFactories );
-        Sequence< Any > aReturn( nFactories );
-        Any* pReturn = aReturn.getArray();
-        for (const auto& rFactory : aFactories)
-        {
-            *pReturn++ <<= OUString::createFromAscii( rFactory.serviceName );
-        }
-
-        return aReturn;
     }
 
     sal_Bool SAL_CALL DefaultComponentInspectorModel::getHasHelpSection()
@@ -199,7 +179,7 @@ namespace rptui
         {
             const sal_Char* programmaticName;
             const char* uiNameResId;
-            OString    helpId;
+            OString const helpId;
         } aCategories[] = {
             { "General",    RID_STR_PROPPAGE_DEFAULT,   HID_RPT_PROPDLG_TAB_GENERAL },
             { "Data",       RID_STR_PROPPAGE_DATA,      HID_RPT_PROPDLG_TAB_DATA },

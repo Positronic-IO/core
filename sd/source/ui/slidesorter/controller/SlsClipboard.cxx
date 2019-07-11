@@ -422,7 +422,7 @@ void Clipboard::CreateSlideTransferable (
         model::SharedPageDescriptor pDescriptor (aSelectedPages.GetNextElement());
         if ( ! pDescriptor || pDescriptor->GetPage()==nullptr)
             continue;
-        Bitmap aPreview (pPreviewCache->GetPreviewBitmap(pDescriptor->GetPage(), false));
+        BitmapEx aPreview (pPreviewCache->GetPreviewBitmap(pDescriptor->GetPage(), false));
         aRepresentatives.emplace_back(
             aPreview,
             pDescriptor->HasState(model::PageDescriptor::ST_Excluded));
@@ -533,7 +533,7 @@ std::shared_ptr<SdTransferable::UserData> Clipboard::CreateTransferableUserData 
         model::SharedPageDescriptor pDescriptor (rSlideSorter.GetModel().GetPageDescriptor((nPageIndex-1)/2));
         if ( ! pDescriptor || pDescriptor->GetPage()==nullptr)
             break;
-        Bitmap aPreview (pPreviewCache->GetPreviewBitmap(pDescriptor->GetPage(), false));
+        BitmapEx aPreview (pPreviewCache->GetPreviewBitmap(pDescriptor->GetPage(), false));
         aRepresentatives.emplace_back(
                 aPreview,
                 pDescriptor->HasState(model::PageDescriptor::ST_Excluded));
@@ -892,7 +892,7 @@ sal_Int8 Clipboard::ExecuteOrAcceptShapeDrop (
     if (mrSlideSorter.GetViewShell() != nullptr)
         pDrawViewShell = std::dynamic_pointer_cast<DrawViewShell>(
             mrSlideSorter.GetViewShell()->GetViewShellBase().GetMainViewShell());
-    if (pDrawViewShell.get() != nullptr
+    if (pDrawViewShell != nullptr
         && (pDrawViewShell->GetShellType() == ViewShell::ST_IMPRESS
             || pDrawViewShell->GetShellType() == ViewShell::ST_DRAW))
     {

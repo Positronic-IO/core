@@ -41,8 +41,9 @@
 #include <o3tl/typed_flags_set.hxx>
 #include <svl/languageoptions.hxx>
 #include <vcl/errcode.hxx>
-#include <boost/optional.hpp>
 #include <functional>
+
+namespace boost { template <class T> class optional; }
 
 namespace com { namespace sun { namespace star {
   namespace linguistic2 {
@@ -62,7 +63,7 @@ struct SpellPortion;
 typedef std::vector<SpellPortion> SpellPortions;
 }
 
-namespace svl { class IUndoManager; }
+class SfxUndoManager;
 namespace basegfx { class B2DPolyPolygon; }
 namespace editeng {
     struct MisspellRanges;
@@ -337,8 +338,8 @@ public:
 
     void            ShowParagraph( sal_Int32 nParagraph, bool bShow );
 
-    ::svl::IUndoManager& GetUndoManager();
-    ::svl::IUndoManager* SetUndoManager(::svl::IUndoManager* pNew);
+    SfxUndoManager& GetUndoManager();
+    SfxUndoManager* SetUndoManager(SfxUndoManager* pNew);
     void            UndoActionStart( sal_uInt16 nId );
     void            UndoActionStart(sal_uInt16 nId, const ESelection& rSel);
     void            UndoActionEnd();
@@ -622,9 +623,6 @@ public:
     sal_Int32 GetOverflowingLineNum() const;
     void ClearOverflowingParaNum();
     bool IsPageOverflow();
-
-    // tdf#115639 compatibility flag
-    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
 };
 
 #endif // INCLUDED_EDITENG_EDITENG_HXX

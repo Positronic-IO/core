@@ -19,7 +19,7 @@ $(eval $(call gb_Library_set_include,epoxy,\
 	$$(INCLUDE) \
 ))
 
-# epoxy is riddled with warnings... let's spare use
+# epoxy is riddled with warnings... let's spare us
 # the pointless spamming
 $(eval $(call gb_Library_add_cxxflags,epoxy,\
 	-w \
@@ -44,7 +44,7 @@ $(eval $(call gb_Library_add_generated_cobjects,epoxy,\
 	UnpackedTarball/epoxy/src/dispatch_wgl \
 	UnpackedTarball/epoxy/src/wgl_generated_dispatch \
 ))
-else ifneq ($(filter IOS MACOSX,$(OS)),)
+else ifneq ($(filter iOS MACOSX,$(OS)),)
 # nothing
 else ifeq ($(OS),ANDROID)
 $(eval $(call gb_Library_add_generated_cobjects,epoxy,\

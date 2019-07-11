@@ -33,6 +33,7 @@
 #include <strings.hrc>
 
 #include <unotools/textsearch.hxx>
+#include <sal/log.hxx>
 
 using namespace connectivity::mork;
 using namespace connectivity;
@@ -40,7 +41,7 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::sdbc;
 
 
-extern
+static
 std::vector<bool> entryMatchedByExpression(MQueryHelper* _aQuery, MQueryExpression const * _aExpr, MQueryHelperResultEntry* entry);
 
 MQueryHelperResultEntry::MQueryHelperResultEntry()
@@ -123,22 +124,6 @@ sal_Int32 MQueryHelper::getResultCount() const
     return result;
 }
 
-
-bool MQueryHelper::checkRowAvailable( sal_Int32 nDBRow )
-{
-/*
-    while (!queryComplete() && getResultCount() <= (sal_uInt32)nDBRow)
-    {
-        if ( !m_aQueryHelper->waitForRow( nDBRow ) ) {
-            m_aError = m_aQueryHelper->getError();
-            return sal_False;
-        }
-    }
-*/
-    return getResultCount() > nDBRow;
-}
-
-
 bool MQueryHelper::getRowValue( ORowSetValue& rValue, sal_Int32 nDBRow,const OUString& aDBColumnName, sal_Int32 nType )
 {
     MQueryHelperResultEntry* pResEntry = getByIndex( nDBRow );
@@ -192,12 +177,12 @@ sal_Int32 MQueryHelper::executeQuery(OConnection* xConnection, MQueryExpression 
         std::string listTable = oStringTable.getStr();
         pMork->getRecordKeysForListTable(listTable, listRecords);
     }
-    MorkTableMap::Map::iterator tableIter;
+
     MorkTableMap *Tables = pMork->getTables( 0x80 );
     if (!Tables)
         return -1;
+
     MorkRowMap *Rows = nullptr;
-    MorkRowMap::Map::const_iterator rowIter;
 
     // Iterate all tables
     for (auto & table : Tables->map)
@@ -266,7 +251,7 @@ std::vector<bool> entryMatchedByExpression(MQueryHelper* _aQuery, MQueryExpressi
             if (bRequiresValue)
             {
                 SAL_INFO("connectivity.mork", "Value = " << evStr->getValue() );
-                OUString searchedValue = evStr->getValue();
+                const OUString& searchedValue = evStr->getValue();
                 if (evStr->getCond() == MQueryOp::Is) {
                     SAL_INFO("connectivity.mork", "MQueryOp::Is; done");
                     resultVector.push_back(currentValue == searchedValue);
@@ -316,15 +301,14 @@ std::vector<bool> entryMatchedByExpression(MQueryHelper* _aQuery, MQueryExpressi
                     result = result || elem;
                 }
                 resultVector.push_back(result);
-            } else if (condition == MQueryExpression::AND) {
+            } else {
+                assert(condition == MQueryExpression::AND && "only OR or AND should exist");
                 bool result = true;
                 for (auto const& elem : subquery_result)
                 {
                     result = result && elem;
                 }
                 resultVector.push_back(result);
-            } else {
-                OSL_FAIL("Unknown Expression Type");
             }
         }
         else {

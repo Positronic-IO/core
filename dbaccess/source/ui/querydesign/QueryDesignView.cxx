@@ -37,7 +37,6 @@
 #include <strings.hxx>
 #include <unotools/configmgr.hxx>
 #include <comphelper/string.hxx>
-#include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbexception.hxx>
 #include <com/sun/star/i18n/XLocaleData.hpp>
@@ -335,7 +334,7 @@ namespace
                 bBrace = true;
                 _rJoin = _rJoin.replaceAt(_rJoin.getLength()-1,1,OUString(' '));
             }
-            (_rJoin += C_AND) += BuildJoinCriteria(_xConnection,&pData->GetConnLineDataList(),pData);
+            _rJoin += C_AND + BuildJoinCriteria(_xConnection,&pData->GetConnLineDataList(),pData);
             if(bBrace)
                 _rJoin += ")";
             _pEntryConn->SetVisited(true);
@@ -456,10 +455,9 @@ namespace
         }
         return BuildJoin(_xConnection, rRh, BuildTable(_xConnection,pLh), &data);
     }
-    typedef std::set<OUString> tableNames_t;
     void addConnectionTableNames( const Reference< XConnection>& _xConnection,
                                   const OQueryTableConnection* const pEntryConn,
-                                  tableNames_t &_rTableNames )
+                                  std::set<OUString> &_rTableNames )
     {
             // insert tables into table list to avoid double entries
             const OQueryTableWindow* const pEntryTabFrom = static_cast<OQueryTableWindow*>(pEntryConn->GetSourceWin());
@@ -471,7 +469,7 @@ namespace
                         OQueryTableConnection* pEntryConn,
                         OQueryTableWindow const * pEntryTabTo,
                         OUString &aJoin,
-                        tableNames_t &_rTableNames)
+                        std::set<OUString> &_rTableNames)
     {
         OQueryTableConnectionData* pEntryConnData = static_cast<OQueryTableConnectionData*>(pEntryConn->GetData().get());
         if ( pEntryConnData->GetJoinType() == INNER_JOIN && !pEntryConnData->isNatural() )
@@ -737,7 +735,7 @@ namespace
                             // only show the messagebox the first time
                             if (!bCritsOnAsterikWarning)
                             {
-                                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView ? _pView->GetFrameWeld() : nullptr,
+                                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView->GetFrameWeld(),
                                                                           VclMessageType::Warning, VclButtonsType::Ok,
                                                                           DBA_RES(STR_QRY_CRITERIA_ON_ASTERISK)));
                                 xBox->run();
@@ -770,7 +768,7 @@ namespace
                             OUString aErrorMsg;
                             Reference<XPropertySet> xColumn;
                             std::unique_ptr< ::connectivity::OSQLParseNode> pParseNode(_pView->getPredicateTreeFromEntry(field,aCriteria,aErrorMsg,xColumn));
-                            if (pParseNode.get())
+                            if (pParseNode)
                             {
                                 if (bMulti && !(field->isOtherFunction() || (aFieldName.toChar() == '*')))
                                     pParseNode->replaceNodeValue(field->GetAlias(),aFieldName);
@@ -800,7 +798,7 @@ namespace
                             OUString aErrorMsg;
                             Reference<XPropertySet> xColumn;
                             std::unique_ptr< ::connectivity::OSQLParseNode> pParseNode( _pView->getPredicateTreeFromEntry(field,aCriteria,aErrorMsg,xColumn));
-                            if (pParseNode.get())
+                            if (pParseNode)
                             {
                                 if (bMulti && !(field->isOtherFunction() || (aFieldName.toChar() == '*')))
                                     pParseNode->replaceNodeValue(field->GetAlias(),aFieldName);
@@ -893,7 +891,7 @@ namespace
                         // only show the  MessageBox the first time
                         if (!bCritsOnAsterikWarning)
                         {
-                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView ? _pView->GetFrameWeld() : nullptr,
+                            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(_pView->GetFrameWeld(),
                                                                       VclMessageType::Warning, VclButtonsType::Ok,
                                                                       DBA_RES(STR_QRY_ORDERBY_ON_ASTERISK)));
                             xBox->run();
@@ -974,7 +972,7 @@ namespace
     }
     void searchAndAppendName(const Reference< XConnection>& _xConnection,
                              const OQueryTableWindow* _pTableWindow,
-                             tableNames_t& _rTableNames,
+                             std::set<OUString>& _rTableNames,
                              OUString& _rsTableListStr
                              )
     {
@@ -993,7 +991,7 @@ namespace
 
         OUString aTableListStr;
         // used to avoid putting a table twice in FROM clause
-        tableNames_t aTableNames;
+        std::set<OUString> aTableNames;
 
         // generate outer join clause in from
         if(!rConnList.empty())
@@ -1127,7 +1125,7 @@ namespace
                         OUString aErrorMsg;
                         Reference<XPropertySet> xColumn;
                         std::unique_ptr< ::connectivity::OSQLParseNode> pParseNode(_pView->getPredicateTreeFromEntry(field,aTmp,aErrorMsg,xColumn));
-                        if (pParseNode.get())
+                        if (pParseNode)
                         {
                             OUString sGroupBy;
                             pParseNode->getChild(0)->parseNodeToStr(    sGroupBy,
@@ -2407,7 +2405,7 @@ namespace
     }
 }
 
-// end of anonymouse namespace
+// end of anonymous namespace
 
 OQueryDesignView::OQueryDesignView( OQueryContainerWindow* _pParent,
                                     OQueryController& _rController,
@@ -2816,7 +2814,7 @@ OUString OQueryDesignView::getStatement()
         const sal_Int64 nLimit = rController.getLimit();
         if( nLimit != -1 )
         {
-            aSqlCmd.append( " LIMIT " + OUString::number(nLimit) );
+            aSqlCmd.append( " LIMIT " ).append( OUString::number(nLimit) );
         }
     }
 
@@ -2826,7 +2824,7 @@ OUString OQueryDesignView::getStatement()
         ::connectivity::OSQLParser& rParser( rController.getParser() );
         OUString sErrorMessage;
         std::unique_ptr<OSQLParseNode> pParseNode( rParser.parseTree( sErrorMessage, sSQL, true ) );
-        if ( pParseNode.get() )
+        if (pParseNode)
         {
             OSQLParseNode* pNode = pParseNode->getChild(3)->getChild(1);
             if ( pNode->count() > 1 )
@@ -2925,7 +2923,7 @@ OSQLParseNode* OQueryDesignView::getPredicateTreeFromEntry(const OTableFieldDesc
         if ( sFunction.isEmpty() )
             sFunction = pEntry->GetField();
 
-        if (comphelper::string::getTokenCount(sFunction, '(') > 1)
+        if (sFunction.indexOf('(')>=0) // sFunctions has at least 2 tokens
             sFunction = sFunction.getToken(0,'('); // this should be the name of the function
 
         sal_Int32 nType = ::connectivity::OSQLParser::getFunctionReturnType(sFunction,&rParser.getContext());
@@ -2936,7 +2934,7 @@ OSQLParseNode* OQueryDesignView::getPredicateTreeFromEntry(const OTableFieldDesc
             sSql += "SELECT * FROM x WHERE " + pEntry->GetField() + _sCriteria;
             std::unique_ptr<OSQLParseNode> pParseNode( rParser.parseTree( _rsErrorMessage, sSql, true ) );
             nType = DataType::DOUBLE;
-            if ( pParseNode.get() )
+            if (pParseNode)
             {
                 OSQLParseNode* pColumnRef = pParseNode->getByRule(OSQLParseNode::column_ref);
                 if ( pColumnRef )
@@ -3374,7 +3372,7 @@ void OQueryDesignView::fillFunctionInfo(  const ::connectivity::OSQLParseNode* p
                 nDataType = DataType::FLOAT;
             else if ( SQL_ISTOKEN(pCastTarget, REAL) )
                 nDataType = DataType::REAL;
-           else if ( SQL_ISTOKEN(pCastTarget, DOUBLE) )
+            else if ( SQL_ISTOKEN(pCastTarget, DOUBLE) )
                 nDataType = DataType::DOUBLE;
             else if ( SQL_ISTOKEN(pCastTarget, BOOLEAN) )
                 nDataType = DataType::BOOLEAN;

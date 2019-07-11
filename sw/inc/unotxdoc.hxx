@@ -55,6 +55,7 @@
 #include <com/sun/star/text/XFlatParagraphIteratorProvider.hpp>
 #include <com/sun/star/document/XDocumentLanguages.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
+#include <o3tl/deleter.hxx>
 #include <rtl/ref.hxx>
 #include <svx/fmdmod.hxx>
 #include <editeng/UnoForbiddenCharsTable.hxx>
@@ -133,7 +134,7 @@ private:
     class Impl;
     ::sw::UnoImplPtr<Impl> m_pImpl;
 
-    std::deque<UnoActionContext*> aActionArr;
+    std::deque<std::unique_ptr<UnoActionContext, o3tl::default_delete<UnoActionContext>>> maActionArr;
 
     const SfxItemPropertySet* pPropSet;
 
@@ -174,8 +175,8 @@ private:
     SfxViewFrame*                                   m_pHiddenViewFrame;
     rtl::Reference<SwXDocumentPropertyHelper>       mxPropertyHelper;
 
-    SwPrintUIOptions *                              m_pPrintUIOptions;
-    SwRenderData *                                  m_pRenderData;
+    std::unique_ptr<SwPrintUIOptions>               m_pPrintUIOptions;
+    std::unique_ptr<SwRenderData>                   m_pRenderData;
 
     void                    GetNumberFormatter();
 
@@ -544,7 +545,7 @@ class SwXOutlineTarget : public cppu::WeakImplHelper
 >
 {
     const SfxItemPropertySet*   pPropSet;
-    OUString                      sOutlineText;
+    OUString const              sOutlineText;
 
 public:
     SwXOutlineTarget(const OUString& rOutlineText);
@@ -596,8 +597,8 @@ public:
 // After printing the view options are restored
 class SwViewOptionAdjust_Impl
 {
-    SwViewShell *     m_pShell;
-    SwViewOption    m_aOldViewOptions;
+    SwViewShell *      m_pShell;
+    SwViewOption const m_aOldViewOptions;
 public:
     SwViewOptionAdjust_Impl( SwViewShell& rSh, const SwViewOption &rViewOptions );
     ~SwViewOptionAdjust_Impl();

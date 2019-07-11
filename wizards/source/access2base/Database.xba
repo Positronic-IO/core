@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
-<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Database" script:language="StarBasic">REM =======================================================================================================================
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Database" script:language="StarBasic">
+REM =======================================================================================================================
 REM ===					The Access2Base library is a part of the LibreOffice project.									===
 REM ===					Full documentation is available on http://www.access2base.com									===
 REM =======================================================================================================================
@@ -21,6 +22,7 @@ Private	Title					As String
 Private	Document				As Object				&apos;	com.sun.star.comp.dba.ODatabaseDocument	or SwXTextDocument or ScModelObj
 Private	Connection				As Object				&apos;	com.sun.star.sdbc.drivers.OConnectionWrapper or com.sun.star.sdbc.XConnection
 Private	URL						As String
+Private Location				As String				&apos;	Different from URL for registered databases
 Private _ReadOnly				As Boolean
 Private	MetaData				As Object				&apos;	interface XDatabaseMetaData
 Private _RDBMS					As Integer				&apos;	DBMS constants
@@ -32,7 +34,7 @@ Private _ColumnTypesAlias()		As Variant				&apos;	To what should a field whose o
 Private _BinaryStream			As Boolean				&apos;	False = binary fields must NOT be streamed f.i. via ReadAllBytes or WriteAllBytes
 Private	Form					As Object				&apos;	com.sun.star.form.XForm
 Private FormName				As String
-Private RecordsetMax			As Integer
+Private RecordsetMax			As Long					&apos;	To make unique names in Collection below (See bug # 121342)
 Private	RecordsetsColl			As Object				&apos;	Collection of active recordsets
 
 REM -----------------------------------------------------------------------------------------------------------------------
@@ -226,8 +228,11 @@ Const cstThisSub = &quot;Database.Close&quot;
 	mClose = False
 	If _DbConnect &lt;&gt; DBCONNECTANY Then Goto Error_NotApplicable
 
-	Connection.close()
-	Connection.dispose()
+	With Connection
+		If Utils._hasUNOMethod(Connection, &quot;flush&quot;) Then .flush
+		.close()
+		.dispose()
+	End With
 	Set Connection = Nothing
 	mClose = True
 
@@ -1134,6 +1139,7 @@ Dim sExpr As String				&apos;For inclusion of aggregate function
 Dim sTempField As String		&apos;Random temporary field in SQL expression
 
 Dim sTarget as String, sWhere As String, sOrderBy As String, sLimit As String
+Dim sProductName As String
 
     vResult = Null
 
@@ -1143,7 +1149,14 @@ Dim sTarget as String, sWhere As String, sOrderBy As String, sLimit As String
 	If pvOrderClause &lt;&gt; &quot;&quot; Then sOrderBy = &quot; ORDER BY &quot; &amp; pvOrderClause Else sOrderBy = &quot;&quot;
 	sLimit = &quot;&quot;
 
-	Select Case UCase(MetaData.getDatabaseProductName())
+&apos;	Workaround for https://bugs.documentfoundation.org/show_bug.cgi?id=118767
+&apos;	awaiting solution for https://bugs.documentfoundation.org/show_bug.cgi?id=118809
+	sProductName = UCase(MetaData.getDatabaseProductName())
+	If sProductName = &quot;&quot; Then
+		If MetaData.URL = &quot;sdbc:embedded:firebird&quot; Or Left(MetaData.URL, 13) = &quot;sdbc:firebird&quot; Then sProductName = &quot;FIREBIRD&quot;
+	End If
+
+	Select Case sProductName
 		Case &quot;MYSQL&quot;, &quot;SQLITE&quot;
 			If psFunction = &quot;&quot; Then
 				sTarget = psExpr
@@ -1152,6 +1165,9 @@ Dim sTarget as String, sWhere As String, sOrderBy As String, sLimit As String
 				sTarget = UCase(psFunction) &amp; &quot;(&quot; &amp; psExpr &amp; &quot;)&quot;
 			End If
 			sSql = &quot;SELECT &quot; &amp; sTarget &amp; &quot; AS &quot; &amp; sTempField &amp; &quot; FROM &quot; &amp; psDomain &amp;  sWhere &amp; sOrderBy &amp; sLimit
+		Case &quot;FIREBIRD&quot;
+			If psFunction = &quot;&quot; Then sTarget = &quot;FIRST 1 &quot; &amp; psExpr Else sTarget = UCase(psFunction) &amp; &quot;(&quot; &amp; psExpr &amp; &quot;)&quot;
+			sSql = &quot;SELECT &quot; &amp; sTarget &amp; &quot; AS &quot; &amp; sTempField &amp; &quot; FROM &quot; &amp; psDomain &amp; sWhere &amp; sOrderBy
 		Case Else		&apos;	Standard syntax - Includes HSQLDB
 			If psFunction = &quot;&quot; Then sTarget = &quot;TOP 1 &quot; &amp; psExpr Else sTarget = UCase(psFunction) &amp; &quot;(&quot; &amp; psExpr &amp; &quot;)&quot;
 			sSql = &quot;SELECT &quot; &amp; sTarget &amp; &quot; AS &quot; &amp; sTempField &amp; &quot; FROM &quot; &amp; psDomain &amp; sWhere &amp; sOrderBy
@@ -1166,8 +1182,8 @@ Dim sTarget as String, sWhere As String, sOrderBy As String, sLimit As String
 	    sSql = _ReplaceSquareBrackets(sSql)		&apos;Substitute [] by quote string
 		Set oResult = .executeQuery(sSql)
 	    If Not IsNull(oResult) And Not IsEmpty(oResult) Then
-   				If Not oResult.next() Then Goto Exit_Function
-       		    vResult = Utils._getResultSetColumnValue(oResult, 1, True)		&apos;	Force return of binary field
+			If Not oResult.next() Then Goto Exit_Function
+			vResult = Utils._getResultSetColumnValue(oResult, 1, True)		&apos;	Force return of binary field
     	End If
    	End With
 
@@ -1279,9 +1295,9 @@ Const cstSQLITE = &quot;SQLite&quot;
 				_RDBMS = DBMS_HSQLDB2
 				_ColumnTypesAlias = Array(0, -5, -3, -7, 2004, 16, 1, 2005, 91, 3, 0, 8, 8, 4, -3, 12, 2, 0, 0, 8, 0, 5, 0, 0, 92, 93, -6, -3, 12)
 				_BinaryStream = True
-			Case .URL = cstFirebird
+			Case .URL = cstFirebird		&apos;	Only embedded 3.0
 				_RDBMS = DBMS_FIREBIRD
-				_ColumnTypesAlias = Array(0, -5, 2004, 16, 2004, 16, 1, 12, 91, 8, 0, 8, 6, 4, 2004, 12, 8, 0, 0, 8, 0, 5, 0, 0, 92, 93, 4, 2004, 12)
+				_ColumnTypesAlias = Array(0, -5, -2, 16, 2004, 16, 1, 2005, 91, 3, 0, 8, 6, 4, -4, 2005, 2, 0, 0, 8, 0, 5, 0, 0, 92, 93, 4, 2004, 12)
 				_BinaryStream = True
 			Case Len(sProduct) &gt; Len(cstMSAccess2007) And Left(sProduct, Len(cstMSAccess2007)) = cstMSAccess2007
 				_RDBMS = DBMS_MSACCESS2007
@@ -1443,7 +1459,9 @@ Const cstMaxRows = 200
 					If Not vFieldsBin(i) Then
 						If bDataArray Then vDataCell = pvData(i, j) Else vDataCell = vData(i, j)
 						If vDataCell Is Nothing Then vDataCell = Null		&apos;	Necessary because Null object has not a VarType = vbNull
-						If IsDate(vDataCell) And VarType(vDataCell) = vbString Then vDataCell = CDate(vDataCell)
+						If VarType(vDataCell) = vbString Then	&apos;	Null string gives IsDate = True !
+							If Len(vDataCell) &gt; 0 And IsDate(vDataCell) Then vDataCell = CDate(vDataCell)
+						End If
 						Select Case VarType(vDataCell)
 							Case vbEmpty, vbNull
 								vTdClass() = _AddArray(vTdClass, &quot;null&quot;)
@@ -1548,7 +1566,7 @@ Dim i As Integer, l As Long
 
 	lCurrentChar = 1
 	sOutput = &quot;&quot;
-	
+
 	Do While lCurrentChar &lt;= Len(psString)
 		&apos;	Where is next closest pattern ?
 		lPattern = Len(psString) + 1

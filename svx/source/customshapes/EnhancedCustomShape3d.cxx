@@ -82,8 +82,8 @@ void GetRotateAngle( const SdrCustomShapeGeometryItem& rItem, double& rAngleX, d
         rAngleX = 0.0;
         rAngleY = 0.0;
     }
-    rAngleX *= F_PI180;
-    rAngleY *= F_PI180;
+    rAngleX = basegfx::deg2rad(rAngleX);
+    rAngleY = basegfx::deg2rad(rAngleY);
 }
 
 void GetSkew( const SdrCustomShapeGeometryItem& rItem, double& rSkewAmount, double& rSkewAngle )
@@ -95,7 +95,7 @@ void GetSkew( const SdrCustomShapeGeometryItem& rItem, double& rSkewAmount, doub
         rSkewAmount = 50;
         rSkewAngle = -135;
     }
-    rSkewAngle *= F_PI180;
+    rSkewAngle = basegfx::deg2rad(rSkewAngle);
 }
 
 void GetExtrusionDepth( const SdrCustomShapeGeometryItem& rItem, const double* pMap, double& rBackwardDepth, double& rForwardDepth )
@@ -182,7 +182,6 @@ EnhancedCustomShape3d::Transformation2D::Transformation2D(
     , eProjectionMode( drawing::ProjectionMode_PARALLEL )
     , fSkewAngle(0.0)
     , fSkew(0.0)
-    , fZScreen(0.0)
     , fOriginX(0.0)
     , fOriginY(0.0)
     , pMap( pM )
@@ -238,7 +237,7 @@ Point EnhancedCustomShape3d::Transformation2D::Transform2D( const basegfx::B3DPo
     {
         double fX = rPoint3D.getX() - fOriginX;
         double fY = rPoint3D.getY() - fOriginY;
-        double f = ( fZScreen - fViewPoint.getZ() ) / ( rPoint3D.getZ() - fViewPoint.getZ() );
+        double f = ( - fViewPoint.getZ() ) / ( rPoint3D.getZ() - fViewPoint.getZ() );
         aPoint2D.setX( static_cast<sal_Int32>(( fX - fViewPoint.getX() ) * f + fViewPoint.getX() + fOriginX ) );
         aPoint2D.setY( static_cast<sal_Int32>(( fY - fViewPoint.getY() ) * f + fViewPoint.getY() + fOriginY ) );
     }
@@ -531,7 +530,7 @@ SdrObject* EnhancedCustomShape3d::Create3DObject(
                             p3DObj->SetMergedItem(XFillBitmapItem(OUString(), Graphic(aFillBmp)));
                         }
                     }
-                    pScene->Insert3DObj( p3DObj );
+                    pScene->InsertObject( p3DObj );
                     p3DObj = new E3dExtrudeObj(
                         rSdrObjCustomShape.getSdrModelFromSdrObject(),
                         a3DDefaultAttr,
@@ -544,7 +543,7 @@ SdrObject* EnhancedCustomShape3d::Create3DObject(
                     p3DObj->SetMergedItem( XFillStyleItem( drawing::FillStyle_SOLID ) );
                     p3DObj->SetMergedItem( Svx3DCloseFrontItem( false ) );
                     p3DObj->SetMergedItem( Svx3DCloseBackItem( false ) );
-                    pScene->Insert3DObj( p3DObj );
+                    pScene->InsertObject( p3DObj );
 
                     // #i122777# depth 0 is okay for planes when using double-sided
                     p3DObj = new E3dExtrudeObj(
@@ -573,7 +572,7 @@ SdrObject* EnhancedCustomShape3d::Create3DObject(
                     p3DObj->SetMergedItem( Svx3DCloseFrontItem( false ) );
                     p3DObj->SetMergedItem( Svx3DCloseBackItem( false ) );
                 }
-                pScene->Insert3DObj( p3DObj );
+                pScene->InsertObject( p3DObj );
                 bSceneHasObjects = true;
             }
         }
@@ -613,7 +612,7 @@ SdrObject* EnhancedCustomShape3d::Create3DObject(
 
             double fXRotate, fYRotate;
             GetRotateAngle( rGeometryItem, fXRotate, fYRotate );
-            double fZRotate(rSdrObjCustomShape.GetObjectRotation() * F_PI180);
+            double fZRotate(basegfx::deg2rad(rSdrObjCustomShape.GetObjectRotation()));
             if ( fZRotate != 0.0 )
                 aNewTransform.rotate( 0.0, 0.0, fZRotate );
             if ( bIsMirroredX )
@@ -742,7 +741,7 @@ SdrObject* EnhancedCustomShape3d::Create3DObject(
             for (std::vector< E3dCompoundObject* >::iterator aObjectListIter( aPlaceholderObjectList.begin() ); aObjectListIter != aPlaceholderObjectList.end(); )
             {
                 E3dCompoundObject* pTemp(*aObjectListIter++);
-                pScene->Remove3DObj( pTemp );
+                pScene->RemoveObject( pTemp->GetOrdNum() );
                 // always use SdrObject::Free(...) for SdrObjects (!)
                 SdrObject* pTemp2(pTemp);
                 SdrObject::Free(pTemp2);
@@ -789,7 +788,7 @@ tools::Rectangle EnhancedCustomShape3d::CalculateNewSnapRect(
 
     double fXRotate, fYRotate;
     GetRotateAngle( rGeometryItem, fXRotate, fYRotate );
-    double fZRotate(rSdrObjCustomShape.GetObjectRotation() * F_PI180);
+    double fZRotate(basegfx::deg2rad(rSdrObjCustomShape.GetObjectRotation()));
 
     // rotating bound volume
     basegfx::B3DHomMatrix aMatrix;

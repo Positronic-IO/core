@@ -28,9 +28,11 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/sheet/ExternalLinkInfo.hpp>
 #include <com/sun/star/sheet/ExternalLinkType.hpp>
-#include <comphelper/string.hxx>
 #include <sfx2/objsh.hxx>
 #include <tools/urlobj.hxx>
+#include <sal/log.hxx>
+#include <rtl/character.hxx>
+#include <unotools/charclass.hxx>
 
 using namespace css;
 
@@ -491,7 +493,7 @@ const sal_Unicode* ScRange::Parse_XL_Header(
         if (*p == '\'')
         {
             p = parseQuotedName(p, rExternDocName);
-            if (!*p || *p != ']' || rExternDocName.isEmpty())
+            if (*p != ']' || rExternDocName.isEmpty())
             {
                 rExternDocName.clear();
                 return start;
@@ -523,7 +525,7 @@ const sal_Unicode* ScRange::Parse_XL_Header(
         // But, more sickness comes with MOOXML as there may be
         // '[1]Sheet 4'!$A$1  where [1] is the external doc's index.
         p = parseQuotedName(p, rExternDocName);
-        if (!*p || *p != '!')
+        if (*p != '!')
         {
             rExternDocName.clear();
             return start;
@@ -695,7 +697,7 @@ static const sal_Unicode* lcl_r1c1_get_col( const sal_Unicode* p,
     return pEnd;
 }
 
-static inline const sal_Unicode* lcl_r1c1_get_row(
+static const sal_Unicode* lcl_r1c1_get_row(
                                     const sal_Unicode* p,
                                     const ScAddress::Details& rDetails,
                                     ScAddress* pAddr, ScRefFlags* nFlags )
@@ -791,14 +793,14 @@ static ScRefFlags lcl_ScRange_Parse_XL_R1C1( ScRange& r,
                 applyStartToEndFlags(nFlags);
                 r.aEnd.SetRow( r.aStart.Row() );
             }
-            else
+            else // pTmp != nullptr
             {
                 // Full row range successfully parsed.
                 applyStartToEndFlags(nFlags, nFlags2);
                 p = pTmp;
             }
 
-            if (p && p[0] != 0)
+            if (p[0] != 0)
             {
                 // any trailing invalid character must invalidate the whole address.
                 nFlags &= ~ScRefFlags(ScRefFlags::VALID | ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -827,7 +829,7 @@ static ScRefFlags lcl_ScRange_Parse_XL_R1C1( ScRange& r,
         {
             // single cell reference
 
-            if (p && p[0] != 0)
+            if (p[0] != 0)
             {
                 // any trailing invalid character must invalidate the whole address.
                 nFlags &= ~ScRefFlags(ScRefFlags::VALID | ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID);
@@ -836,11 +838,12 @@ static ScRefFlags lcl_ScRange_Parse_XL_R1C1( ScRange& r,
 
             return bOnlyAcceptSingle ? nFlags : ScRefFlags::ZERO;
         }
+        assert(pTmp);
         p = pTmp;
 
         // double reference
 
-        if (p && p[0] != 0)
+        if (p[0] != 0)
         {
             // any trailing invalid character must invalidate the whole range.
             nFlags &= ~ScRefFlags(ScRefFlags::VALID | ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -862,13 +865,13 @@ static ScRefFlags lcl_ScRange_Parse_XL_R1C1( ScRange& r,
             applyStartToEndFlags(nFlags);
             r.aEnd.SetCol( r.aStart.Col() );
         }
-        else
+        else // pTmp != nullptr
         {
             applyStartToEndFlags(nFlags, nFlags2);
             p = pTmp;
         }
 
-        if (p && p[0] != 0)
+        if (p[0] != 0)
         {
             // any trailing invalid character must invalidate the whole address.
             nFlags &= ~ScRefFlags(ScRefFlags::VALID | ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -888,7 +891,7 @@ static ScRefFlags lcl_ScRange_Parse_XL_R1C1( ScRange& r,
     return nBailOutFlags;
 }
 
-static inline const sal_Unicode* lcl_a1_get_col( const sal_Unicode* p,
+static const sal_Unicode* lcl_a1_get_col( const sal_Unicode* p,
                                                  ScAddress* pAddr,
                                                  ScRefFlags* nFlags,
                                                  const OUString* pErrRef )
@@ -924,7 +927,7 @@ static inline const sal_Unicode* lcl_a1_get_col( const sal_Unicode* p,
     return p;
 }
 
-static inline const sal_Unicode* lcl_a1_get_row( const sal_Unicode* p,
+static const sal_Unicode* lcl_a1_get_row( const sal_Unicode* p,
                                                  ScAddress* pAddr,
                                                  ScRefFlags* nFlags,
                                                  const OUString* pErrRef )
@@ -961,7 +964,7 @@ static bool isValidSingleton( ScRefFlags nFlags, ScRefFlags nFlags2 )
 {
     bool bCols = (nFlags & ScRefFlags::COL_VALID) && ((nFlags & ScRefFlags::COL2_VALID) || (nFlags2 & ScRefFlags::COL_VALID));
     bool bRows = (nFlags & ScRefFlags::ROW_VALID) && ((nFlags & ScRefFlags::ROW2_VALID) || (nFlags2 & ScRefFlags::ROW_VALID));
-    return (bCols && !bRows) || (!bCols && bRows);
+    return bCols != bRows;
 }
 
 static ScRefFlags lcl_ScRange_Parse_XL_A1( ScRange& r,
@@ -1879,7 +1882,7 @@ void ScRange::ParseRows( const OUString& rStr,
     }
 }
 
-template<typename T > static inline void lcl_ScColToAlpha( T& rBuf, SCCOL nCol )
+template<typename T > static void lcl_ScColToAlpha( T& rBuf, SCCOL nCol )
 {
     if (nCol < 26*26)
     {
@@ -1910,21 +1913,21 @@ void ScColToAlpha( OUStringBuffer& rBuf, SCCOL nCol)
     lcl_ScColToAlpha(rBuf, nCol);
 }
 
-template <typename T > static inline void lcl_a1_append_c ( T &rString, int nCol, bool bIsAbs )
+template <typename T > static void lcl_a1_append_c ( T &rString, int nCol, bool bIsAbs )
 {
     if( bIsAbs )
         rString.append("$");
     lcl_ScColToAlpha( rString, sal::static_int_cast<SCCOL>(nCol) );
 }
 
-template <typename T > static inline void lcl_a1_append_r ( T &rString, sal_Int32 nRow, bool bIsAbs )
+template <typename T > static void lcl_a1_append_r ( T &rString, sal_Int32 nRow, bool bIsAbs )
 {
     if ( bIsAbs )
         rString.append("$");
     rString.append( nRow + 1 );
 }
 
-template <typename T > static inline void lcl_r1c1_append_c ( T &rString, sal_Int32 nCol, bool bIsAbs,
+template <typename T > static void lcl_r1c1_append_c ( T &rString, sal_Int32 nCol, bool bIsAbs,
                                        const ScAddress::Details& rDetails )
 {
     rString.append("C");
@@ -1941,7 +1944,7 @@ template <typename T > static inline void lcl_r1c1_append_c ( T &rString, sal_In
     }
 }
 
-template <typename T > static inline void lcl_r1c1_append_r ( T &rString, sal_Int32 nRow, bool bIsAbs,
+template <typename T > static void lcl_r1c1_append_r ( T &rString, sal_Int32 nRow, bool bIsAbs,
                                        const ScAddress::Details& rDetails )
 {
     rString.append("R");
@@ -1984,17 +1987,17 @@ static OUString getFileNameFromDoc( const ScDocument* pDoc )
 }
 
 
-static inline void lcl_string_append(OUStringBuffer &rString, const OUString &sString)
+static void lcl_string_append(OUStringBuffer &rString, const OUString &sString)
 {
     rString.append(sString);
 }
 
-static inline void lcl_string_append(OStringBuffer &rString, const OUString &sString)
+static void lcl_string_append(OStringBuffer &rString, const OUString &sString)
 {
     rString.append(OUStringToOString( sString, RTL_TEXTENCODING_UTF8  ));
 }
 
-template<typename T > inline void lcl_Format( T& r, SCTAB nTab, SCROW nRow, SCCOL nCol, ScRefFlags nFlags,
+template<typename T > static void lcl_Format( T& r, SCTAB nTab, SCROW nRow, SCCOL nCol, ScRefFlags nFlags,
                                   const ScDocument* pDoc,
                                   const ScAddress::Details& rDetails)
 {
@@ -2154,7 +2157,7 @@ static void lcl_ScRange_Format_XL_Header( OUStringBuffer& rString, const ScRange
                 {
                     if (!aDocName.isEmpty())
                     {
-                        rString.append("'[").append(aDocName).append("]").append(aTabName.copy(1));
+                        rString.append("'[").append(aDocName).append("]").appendCopy(aTabName, 1);
                     }
                     else
                     {
@@ -2182,11 +2185,11 @@ static void lcl_ScRange_Format_XL_Header( OUStringBuffer& rString, const ScRange
 }
 
 // helpers used in ScRange::Format
-static inline bool lcl_ColAbsFlagDiffer(const ScRefFlags nFlags)
+static bool lcl_ColAbsFlagDiffer(const ScRefFlags nFlags)
 {
     return static_cast<bool>(nFlags & ScRefFlags::COL_ABS) != static_cast<bool>(nFlags & ScRefFlags::COL2_ABS);
 }
-static inline bool lcl_RowAbsFlagDiffer(const ScRefFlags nFlags)
+static bool lcl_RowAbsFlagDiffer(const ScRefFlags nFlags)
 {
     return static_cast<bool>(nFlags & ScRefFlags::ROW_ABS) != static_cast<bool>(nFlags & ScRefFlags::ROW2_ABS);
 }

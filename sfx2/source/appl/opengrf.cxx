@@ -36,8 +36,9 @@
 #include <com/sun/star/ui/dialogs/XFilterManager.hpp>
 #include <o3tl/any.hxx>
 #include <svl/urihelper.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <sot/formats.hxx>
+#include <vcl/button.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
@@ -46,6 +47,7 @@
 #include <sfx2/opengrf.hxx>
 #include <sfx2/strings.hrc>
 #include <sfx2/sfxresid.hxx>
+#include <osl/diagnose.h>
 
 
 using namespace ::com::sun::star;
@@ -54,7 +56,7 @@ using namespace ::com::sun::star::ui::dialogs;
 using namespace ::com::sun::star::uno;
 using namespace ::cppu;
 
-const char* SvxOpenGrfErr2ResId( ErrCode err )
+static const char* SvxOpenGrfErr2ResId( ErrCode err )
 {
     if (err == ERRCODE_GRFILTER_OPENERROR)
         return RID_SVXSTR_GRFILTER_OPENERROR;
@@ -281,7 +283,7 @@ void SvxOpenGraphicDialog::SetDetectedFilter(const OUString& rStr)
     mpImpl->sDetectedFilter = rStr;
 }
 
-Reference<ui::dialogs::XFilePickerControlAccess> SvxOpenGraphicDialog::GetFilePickerControlAccess()
+Reference<ui::dialogs::XFilePickerControlAccess> const & SvxOpenGraphicDialog::GetFilePickerControlAccess()
 {
     return mpImpl->xCtrlAcc;
 }

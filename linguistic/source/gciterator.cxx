@@ -44,8 +44,10 @@
 #include <com/sun/star/text/XFlatParagraphIterator.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/lang/XSingleComponentFactory.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <osl/conditn.hxx>
 #include <osl/thread.hxx>
 #include <cppuhelper/implementationentry.hxx>
@@ -55,6 +57,7 @@
 #include <i18nlangtag/languagetag.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <tools/debug.hxx>
 
 #include <deque>
 #include <map>
@@ -217,11 +220,15 @@ static sal_Int32 lcl_BacktraceWhiteSpaces( const OUString &rText, sal_Int32 nSta
 }
 
 
-extern "C" void lcl_workerfunc (void * gci)
+extern "C" {
+
+static void lcl_workerfunc (void * gci)
 {
     osl_setThreadName("GrammarCheckingIterator");
 
     static_cast<GrammarCheckingIterator*>(gci)->DequeueAndCheck();
+}
+
 }
 
 static lang::Locale lcl_GetPrimaryLanguageOfSentence(
@@ -230,6 +237,50 @@ static lang::Locale lcl_GetPrimaryLanguageOfSentence(
 {
     //get the language of the first word
     return xFlatPara->getLanguageOfText( nStartIndex, 1 );
+}
+
+
+LngXStringKeyMap::LngXStringKeyMap() {}
+
+void SAL_CALL LngXStringKeyMap::insertValue(const OUString& aKey, const css::uno::Any& aValue)
+{
+    std::map<OUString, css::uno::Any>::const_iterator aIter = maMap.find(aKey);
+    if (aIter != maMap.end())
+        throw css::container::ElementExistException();
+
+    maMap[aKey] = aValue;
+}
+
+css::uno::Any SAL_CALL LngXStringKeyMap::getValue(const OUString& aKey)
+{
+    std::map<OUString, css::uno::Any>::const_iterator aIter = maMap.find(aKey);
+    if (aIter == maMap.end())
+        throw css::container::NoSuchElementException();
+
+    return (*aIter).second;
+}
+
+sal_Bool SAL_CALL LngXStringKeyMap::hasValue(const OUString& aKey)
+{
+    return maMap.find(aKey) != maMap.end();
+}
+
+::sal_Int32 SAL_CALL LngXStringKeyMap::getCount() { return maMap.size(); }
+
+OUString SAL_CALL LngXStringKeyMap::getKeyByIndex(::sal_Int32 nIndex)
+{
+    if (static_cast<sal_uInt32>(nIndex) >= maMap.size())
+        throw css::lang::IndexOutOfBoundsException();
+
+    return OUString();
+}
+
+css::uno::Any SAL_CALL LngXStringKeyMap::getValueByIndex(::sal_Int32 nIndex)
+{
+    if (static_cast<sal_uInt32>(nIndex) >= maMap.size())
+        throw css::lang::IndexOutOfBoundsException();
+
+    return css::uno::Any();
 }
 
 
@@ -382,6 +433,24 @@ void GrammarCheckingIterator::ProcessResult(
                     // differently for example. But no special handling right now.
                     if (rDesc.nType == text::TextMarkupType::SPELLCHECK)
                         rDesc.nType = text::TextMarkupType::PROOFREADING;
+
+                    uno::Reference< container::XStringKeyMap > xKeyMap(
+                        new LngXStringKeyMap());
+                    for( const beans::PropertyValue& rProperty : rError.aProperties )
+                    {
+                        if ( rProperty.Name == "LineColor" )
+                        {
+                            xKeyMap->insertValue(rProperty.Name,
+                                                 rProperty.Value);
+                            rDesc.xMarkupInfoContainer = xKeyMap;
+                        }
+                        else if ( rProperty.Name == "LineType" )
+                        {
+                            xKeyMap->insertValue(rProperty.Name,
+                                                 rProperty.Value);
+                            rDesc.xMarkupInfoContainer = xKeyMap;
+                        }
+                    }
                 }
 
                 // at pos nErrors -> sentence markup

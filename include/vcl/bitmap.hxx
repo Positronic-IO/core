@@ -20,7 +20,6 @@
 #ifndef INCLUDED_VCL_BITMAP_HXX
 #define INCLUDED_VCL_BITMAP_HXX
 
-#include <tools/link.hxx>
 #include <tools/solar.h>
 #include <vcl/checksum.hxx>
 #include <vcl/dllapi.h>
@@ -28,8 +27,11 @@
 #include <vcl/region.hxx>
 #include <vcl/scopedbitmapaccess.hxx>
 #include <o3tl/typed_flags_set.hxx>
+#include <memory>
 
 class Color;
+
+template <typename Arg, typename Ret> class Link;
 
 enum class BmpMirrorFlags
 {
@@ -93,15 +95,10 @@ class   BitmapInfoAccess;
 class   BitmapReadAccess;
 class   BitmapWriteAccess;
 class   BitmapPalette;
-class   Color;
 class   GDIMetaFile;
 class   AlphaMask;
 class   OutputDevice;
 class   SalBitmap;
-namespace vcl
-{
-    class Kernel;
-}
 
 struct BitmapSystemData
 {
@@ -124,7 +121,7 @@ public:
                             Bitmap();
                             Bitmap( const Bitmap& rBitmap );
                             Bitmap( const Size& rSizePixel, sal_uInt16 nBitCount, const BitmapPalette* pPal = nullptr );
-    explicit                Bitmap( SalBitmap* pSalBitmap );
+    explicit                Bitmap( std::shared_ptr<SalBitmap> const & xSalBitmap );
     virtual                 ~Bitmap();
 
     Bitmap&                 operator=( const Bitmap& rBitmap );

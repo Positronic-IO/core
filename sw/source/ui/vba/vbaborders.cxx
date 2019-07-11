@@ -45,7 +45,7 @@ class SwVbaBorder : public SwVbaBorder_Base
 {
 private:
     uno::Reference< beans::XPropertySet > m_xProps;
-    sal_Int32 m_LineType;
+    sal_Int32 const m_LineType;
     void setBorderLine( table::BorderLine const & rBorderLine )
     {
         table::TableBorder aTableBorder;
@@ -231,7 +231,7 @@ class RangeBorders : public RangeBorders_Base
 private:
     uno::Reference< table::XCellRange > m_xRange;
     uno::Reference< uno::XComponentContext > m_xContext;
-    VbaPalette m_Palette;
+    VbaPalette const m_Palette;
     sal_Int32 getTableIndex( sal_Int32 nConst )
     {
         // okay return position of the index in the table
@@ -275,7 +275,7 @@ public:
     }
 };
 
-uno::Reference< container::XIndexAccess >
+static uno::Reference< container::XIndexAccess >
 rangeToBorderIndexAccess( const uno::Reference< table::XCellRange >& xRange,  const uno::Reference< uno::XComponentContext > & xContext, VbaPalette const & rPalette )
 {
     return new RangeBorders( xRange, xContext, rPalette );

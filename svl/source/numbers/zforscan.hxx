@@ -148,13 +148,13 @@ public:
     void ReplaceBooleanEquivalent( OUString& rString );
 
     void SetConvertMode(LanguageType eTmpLge, LanguageType eNewLge,
-            bool bSystemToSystem = false, bool bForExcelExport = false)
+            bool bSystemToSystem, bool bConvertDateOrder)
     {
         bConvertMode = true;
         eNewLnge = eNewLge;
         eTmpLnge = eTmpLge;
         bConvertSystemToSystem = bSystemToSystem;
-        mbConvertForExcelExport = bForExcelExport;
+        mbConvertDateOrder = bConvertDateOrder;
     }
     // Only changes the bool variable, in order to temporarily pause the convert mode
     void SetConvertMode(bool bMode) { bConvertMode = bMode; }
@@ -213,7 +213,7 @@ private: // Private section
     static const OUString sErrStr;              // String for error output
 
     bool bConvertMode;                          // Set in the convert mode
-    bool mbConvertForExcelExport;               // Set in the convert mode whether to convert for Excel export
+    bool mbConvertDateOrder;                    // Set in the convert mode whether to convert date particles order
 
     LanguageType eNewLnge;                      // Language/country which the scanned string is converted to (for Excel filter)
     LanguageType eTmpLnge;                      // Language/country which the scanned string is converted from (for Excel filter)
@@ -247,8 +247,15 @@ private: // Private section
     short PreviousType( sal_uInt16 i ) const;   // Returns type before position skips EMPTY
     bool IsLastBlankBeforeFrac(sal_uInt16 i) const; // True <=> there won't be a ' ' until the '/'
     void Reset();                               // Reset all variables before starting the analysis
-    short GetKeyWord( const OUString& sSymbol,  // Determine keyword at nPos
-                      sal_Int32 nPos ) const;   // Return 0 <=> not found
+
+    /** Determine keyword at nPos.
+        @param  rbFoundEnglish set if English instead of locale's keyword
+                found, never cleared, thus init with false.
+        @return 0 if not found, else keyword enumeration.
+     */
+    short GetKeyWord( const OUString& sSymbol,
+                      sal_Int32 nPos,
+                      bool& rbFoundEnglish ) const;
 
     bool IsAmbiguousE( short nKey ) const  // whether nKey is ambiguous E of NF_KEY_E/NF_KEY_EC
         {

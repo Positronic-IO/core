@@ -33,8 +33,13 @@
 #include <sfx2/printer.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <unotools/transliterationwrapper.hxx>
+#include <rtl/character.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <unicode/uchar.h>
+#include <unicode/regex.h>
+#include <i18nlangtag/mslangid.hxx>
 
 #include <patattr.hxx>
 #include <global.hxx>
@@ -58,6 +63,7 @@
 #include <tokenarray.hxx>
 #include <compare.hxx>
 
+#include <com/sun/star/util/SearchResult.hpp>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <comphelper/string.hxx>
@@ -71,9 +77,6 @@
 #include <limits>
 
 static const sal_uInt64 n2power48 = SAL_CONST_UINT64( 281474976710656); // 2^48
-
-IMPL_FIXEDMEMPOOL_NEWDEL( ScTokenStack )
-IMPL_FIXEDMEMPOOL_NEWDEL( ScInterpreter )
 
 ScCalcConfig *ScInterpreter::mpGlobalConfig = nullptr;
 
@@ -713,10 +716,44 @@ bool ScInterpreter::JumpMatrix( short nStackLevel )
                     }
                 }
                 break;
+                case svExternalSingleRef:
+                {
+                    ScExternalRefCache::TokenRef pToken;
+                    PopExternalSingleRef(pToken);
+                    if (nGlobalError != FormulaError::NONE)
+                    {
+                        pJumpMatrix->PutResultDouble( CreateDoubleError( nGlobalError), nC, nR );
+                        nGlobalError = FormulaError::NONE;
+                    }
+                    else
+                    {
+                        switch (pToken->GetType())
+                        {
+                            case svDouble:
+                                pJumpMatrix->PutResultDouble( pToken->GetDouble(), nC, nR );
+                            break;
+                            case svString:
+                                pJumpMatrix->PutResultString( pToken->GetString(), nC, nR );
+                            break;
+                            case svEmptyCell:
+                                pJumpMatrix->PutResultEmpty( nC, nR );
+                            break;
+                            default:
+                                // svError was already handled (set by
+                                // PopExternalSingleRef()) with nGlobalError
+                                // above.
+                                assert(!"unhandled svExternalSingleRef case");
+                                pJumpMatrix->PutResultDouble( CreateDoubleError(
+                                            FormulaError::UnknownStackVariable), nC, nR );
+                        }
+                    }
+                }
+                break;
+                case svExternalDoubleRef:
                 case svMatrix:
                 {   // match matrix offsets
                     double fVal;
-                    ScMatrixRef pMat = PopMatrix();
+                    ScMatrixRef pMat = GetMatrix();
                     if ( nGlobalError != FormulaError::NONE )
                     {
                         fVal = CreateDoubleError( nGlobalError );
@@ -800,8 +837,10 @@ bool ScInterpreter::JumpMatrix( short nStackLevel )
     {   // We're done with it, throw away jump matrix, keep result.
         // For an intermediate result of Reference use the array of references
         // if there are more than one reference and the current ForceArray
-        // context is not ForceArray or related, suppressed, ...,
-        // else (also for a final result of Reference) use the matrix.
+        // context is not ForceArray or suppressed. Note that also
+        // ReferenceOrRefArray forces the array of references as result if
+        // there is more than one reference.
+        // Else (also for a final result of Reference) use the matrix.
         // Treat the result of a jump command as final and use the matrix (see
         // tdf#115493 for why).
         ParamClass eParamClass;
@@ -1699,7 +1738,40 @@ void ScInterpreter::ScPi()
 
 void ScInterpreter::ScRandom()
 {
-    PushDouble(::comphelper::rng::uniform_real_distribution());
+    if (bMatrixFormula)
+    {
+        SCCOL nCols = 0;
+        SCROW nRows = 0;
+        if(pMyFormulaCell)
+            pMyFormulaCell->GetMatColsRows( nCols, nRows);
+        // ScViewFunc::EnterMatrix() might be asking for
+        // ScFormulaCell::GetResultDimensions(), which here are none so create
+        // a 1x1 matrix at least which exactly is the case when EnterMatrix()
+        // asks for a not selected range.
+        if (nCols == 0)
+            nCols = 1;
+        if (nRows == 0)
+            nRows = 1;
+        ScMatrixRef pResMat = GetNewMat( static_cast<SCSIZE>(nCols), static_cast<SCSIZE>(nRows));
+        if (!pResMat)
+            PushError( FormulaError::MatrixSize);
+        else
+        {
+            for (SCCOL i=0; i < nCols; ++i)
+            {
+                for (SCROW j=0; j < nRows; ++j)
+                {
+                    pResMat->PutDouble( comphelper::rng::uniform_real_distribution(),
+                            static_cast<SCSIZE>(i), static_cast<SCSIZE>(j));
+                }
+            }
+            PushMatrix( pResMat);
+        }
+    }
+    else
+    {
+        PushDouble( comphelper::rng::uniform_real_distribution());
+    }
 }
 
 void ScInterpreter::ScTrue()
@@ -1716,12 +1788,12 @@ void ScInterpreter::ScFalse()
 
 void ScInterpreter::ScDeg()
 {
-    PushDouble((GetDouble() / F_PI) * 180.0);
+    PushDouble(basegfx::rad2deg(GetDouble()));
 }
 
 void ScInterpreter::ScRad()
 {
-    PushDouble(GetDouble() * (F_PI / 180));
+    PushDouble(basegfx::deg2rad(GetDouble()));
 }
 
 void ScInterpreter::ScSin()
@@ -2054,6 +2126,10 @@ void ScInterpreter::ScType()
                             nType = 1;
                     }
                     break;
+                    case CELLTYPE_NONE:
+                        // always 1, s. tdf#73078
+                        nType = 1;
+                        break;
                     case CELLTYPE_FORMULA :
                         nType = 8;
                         break;
@@ -2100,12 +2176,12 @@ void ScInterpreter::ScType()
     PushInt( nType );
 }
 
-static inline bool lcl_FormatHasNegColor( const SvNumberformat* pFormat )
+static bool lcl_FormatHasNegColor( const SvNumberformat* pFormat )
 {
     return pFormat && pFormat->GetColor( 1 );
 }
 
-static inline bool lcl_FormatHasOpenPar( const SvNumberformat* pFormat )
+static bool lcl_FormatHasOpenPar( const SvNumberformat* pFormat )
 {
     return pFormat && (pFormat->GetFormatstring().indexOf('(') != -1);
 }
@@ -2625,6 +2701,52 @@ void ScInterpreter::ScIsFormula()
     switch ( GetStackType() )
     {
         case svDoubleRef :
+            if (IsInArrayContext())
+            {
+                SCCOL nCol1, nCol2;
+                SCROW nRow1, nRow2;
+                SCTAB nTab1, nTab2;
+                PopDoubleRef( nCol1, nRow1, nTab1, nCol2, nRow2, nTab2);
+                if (nGlobalError != FormulaError::NONE)
+                {
+                    PushError( nGlobalError);
+                    return;
+                }
+                if (nTab1 != nTab2)
+                {
+                    PushIllegalArgument();
+                    return;
+                }
+
+                ScMatrixRef pResMat = GetNewMat( static_cast<SCSIZE>(nCol2 - nCol1 + 1),
+                        static_cast<SCSIZE>(nRow2 - nRow1 + 1), true);
+                if (!pResMat)
+                {
+                    PushError( FormulaError::MatrixSize);
+                    return;
+                }
+
+                /* TODO: we really should have a gap-aware cell iterator. */
+                SCSIZE i=0, j=0;
+                ScAddress aAdr( 0, 0, nTab1);
+                for (SCCOL nCol = nCol1; nCol <= nCol2; ++nCol)
+                {
+                    aAdr.SetCol(nCol);
+                    for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
+                    {
+                        aAdr.SetRow(nRow);
+                        ScRefCellValue aCell(*pDok, aAdr);
+                        pResMat->PutBoolean( (aCell.meType == CELLTYPE_FORMULA), i,j);
+                        ++j;
+                    }
+                    ++i;
+                    j = 0;
+                }
+
+                PushMatrix( pResMat);
+                return;
+            }
+        SAL_FALLTHROUGH;
         case svSingleRef :
         {
             ScAddress aAdr;
@@ -2647,7 +2769,7 @@ void ScInterpreter::ScFormula()
     switch ( GetStackType() )
     {
         case svDoubleRef :
-            if (bMatrixFormula)
+            if (IsInArrayContext())
             {
                 SCCOL nCol1, nCol2;
                 SCROW nRow1, nRow2;
@@ -3326,7 +3448,7 @@ void ScInterpreter::ScNumberValue()
 }
 
 //2do: this should be a proper unicode string method
-static inline bool lcl_ScInterpreter_IsPrintable( sal_Unicode c )
+static bool lcl_ScInterpreter_IsPrintable( sal_Unicode c )
 {
     return 0x20 <= c && c != 0x7f;
 }
@@ -3388,29 +3510,27 @@ void ScInterpreter::ScChar()
 
 static OUString lcl_convertIntoHalfWidth( const OUString & rStr )
 {
-    static bool bFirstASCCall = true;
-    static utl::TransliterationWrapper aTrans( ::comphelper::getProcessComponentContext(), TransliterationFlags::NONE );
-
-    if( bFirstASCCall )
-    {
-        aTrans.loadModuleByImplName( "FULLWIDTH_HALFWIDTH_LIKE_ASC", LANGUAGE_SYSTEM );
-        bFirstASCCall = false;
-    }
-
+    // Make the initialization thread-safe. Since another function needs to be called, move it all to another
+    // function and thread-safely initialize a static reference in this function.
+    auto init = []() -> utl::TransliterationWrapper&
+        {
+        static utl::TransliterationWrapper trans( ::comphelper::getProcessComponentContext(), TransliterationFlags::NONE );
+        trans.loadModuleByImplName( "FULLWIDTH_HALFWIDTH_LIKE_ASC", LANGUAGE_SYSTEM );
+        return trans;
+        };
+    static utl::TransliterationWrapper& aTrans( init());
     return aTrans.transliterate( rStr, 0, sal_uInt16( rStr.getLength() ) );
 }
 
 static OUString lcl_convertIntoFullWidth( const OUString & rStr )
 {
-    static bool bFirstJISCall = true;
-    static utl::TransliterationWrapper aTrans( ::comphelper::getProcessComponentContext(), TransliterationFlags::NONE );
-
-    if( bFirstJISCall )
-    {
-        aTrans.loadModuleByImplName( "HALFWIDTH_FULLWIDTH_LIKE_JIS", LANGUAGE_SYSTEM );
-        bFirstJISCall = false;
-    }
-
+    auto init = []() -> utl::TransliterationWrapper&
+        {
+        static utl::TransliterationWrapper trans( ::comphelper::getProcessComponentContext(), TransliterationFlags::NONE );
+        trans.loadModuleByImplName( "HALFWIDTH_FULLWIDTH_LIKE_JIS", LANGUAGE_SYSTEM );
+        return trans;
+        };
+    static utl::TransliterationWrapper& aTrans( init());
     return aTrans.transliterate( rStr, 0, sal_uInt16( rStr.getLength() ) );
 }
 
@@ -3563,6 +3683,7 @@ void ScInterpreter::ScMin( bool bTextAsZero )
                 FormulaError nErr = FormulaError::NONE;
                 PopDoubleRef( aRange, nParamCount, nRefInList);
                 ScValueIterator aValIter( pDok, aRange, mnSubTotalFlags, bTextAsZero );
+                aValIter.SetInterpreterContext( &mrContext );
                 if (aValIter.GetFirst(nVal, nErr))
                 {
                     if (nMin > nVal)
@@ -3720,6 +3841,7 @@ void ScInterpreter::ScMax( bool bTextAsZero )
                 FormulaError nErr = FormulaError::NONE;
                 PopDoubleRef( aRange, nParamCount, nRefInList);
                 ScValueIterator aValIter( pDok, aRange, mnSubTotalFlags, bTextAsZero );
+                aValIter.SetInterpreterContext( &mrContext );
                 if (aValIter.GetFirst(nVal, nErr))
                 {
                     if (nMax < nVal)
@@ -4258,15 +4380,16 @@ void ScInterpreter::ScColumn()
     sal_uInt8 nParamCount = GetByte();
     if ( MustHaveParamCount( nParamCount, 0, 1 ) )
     {
-        double nVal = 0;
+        double nVal = 0.0;
         if (nParamCount == 0)
         {
             nVal = aPos.Col() + 1;
             if (bMatrixFormula)
             {
-                SCCOL nCols;
-                SCROW nRows;
-                pMyFormulaCell->GetMatColsRows( nCols, nRows);
+                SCCOL nCols = 0;
+                SCROW nRows = 0;
+                if (pMyFormulaCell)
+                    pMyFormulaCell->GetMatColsRows( nCols, nRows);
                 if (nCols == 0)
                 {
                     // Happens if called via ScViewFunc::EnterMatrix()
@@ -4297,15 +4420,40 @@ void ScInterpreter::ScColumn()
                     nVal = static_cast<double>(nCol1 + 1);
                 }
                 break;
+                case svExternalSingleRef :
+                {
+                    sal_uInt16 nFileId;
+                    OUString aTabName;
+                    ScSingleRefData aRef;
+                    PopExternalSingleRef( nFileId, aTabName, aRef );
+                    ScAddress aAbsRef = aRef.toAbs( aPos );
+                    nVal = static_cast<double>( aAbsRef.Col() + 1 );
+                }
+                break;
+
                 case svDoubleRef :
+                case svExternalDoubleRef :
                 {
                     SCCOL nCol1;
-                    SCROW nRow1;
-                    SCTAB nTab1;
                     SCCOL nCol2;
-                    SCROW nRow2;
-                    SCTAB nTab2;
-                    PopDoubleRef( nCol1, nRow1, nTab1, nCol2, nRow2, nTab2 );
+                    if ( GetStackType() == svDoubleRef )
+                    {
+                        SCROW nRow1;
+                        SCTAB nTab1;
+                        SCROW nRow2;
+                        SCTAB nTab2;
+                        PopDoubleRef( nCol1, nRow1, nTab1, nCol2, nRow2, nTab2 );
+                    }
+                    else
+                    {
+                        sal_uInt16 nFileId;
+                        OUString aTabName;
+                        ScComplexRefData aRef;
+                        PopExternalDoubleRef( nFileId, aTabName, aRef );
+                        ScRange aAbs = aRef.toAbs( aPos );
+                        nCol1 = aAbs.aStart.Col();
+                        nCol2 = aAbs.aEnd.Col();
+                    }
                     if (nCol2 > nCol1)
                     {
                         ScMatrixRef pResMat = GetNewMat(
@@ -4318,8 +4466,6 @@ void ScInterpreter::ScColumn()
                             PushMatrix(pResMat);
                             return;
                         }
-                        else
-                            nVal = 0.0;
                     }
                     else
                         nVal = static_cast<double>(nCol1 + 1);
@@ -4327,7 +4473,6 @@ void ScInterpreter::ScColumn()
                 break;
                 default:
                     SetError( FormulaError::IllegalParameter );
-                    nVal = 0.0;
             }
         }
         PushDouble( nVal );
@@ -4339,15 +4484,16 @@ void ScInterpreter::ScRow()
     sal_uInt8 nParamCount = GetByte();
     if ( MustHaveParamCount( nParamCount, 0, 1 ) )
     {
-        double nVal = 0;
+        double nVal = 0.0;
         if (nParamCount == 0)
         {
             nVal = aPos.Row() + 1;
             if (bMatrixFormula)
             {
-                SCCOL nCols;
-                SCROW nRows;
-                pMyFormulaCell->GetMatColsRows( nCols, nRows);
+                SCCOL nCols = 0;
+                SCROW nRows = 0;
+                if (pMyFormulaCell)
+                    pMyFormulaCell->GetMatColsRows( nCols, nRows);
                 if (nRows == 0)
                 {
                     // Happens if called via ScViewFunc::EnterMatrix()
@@ -4378,15 +4524,39 @@ void ScInterpreter::ScRow()
                     nVal = static_cast<double>(nRow1 + 1);
                 }
                 break;
-                case svDoubleRef :
+                case svExternalSingleRef :
                 {
-                    SCCOL nCol1;
+                    sal_uInt16 nFileId;
+                    OUString aTabName;
+                    ScSingleRefData aRef;
+                    PopExternalSingleRef( nFileId, aTabName, aRef );
+                    ScAddress aAbsRef = aRef.toAbs( aPos );
+                    nVal = static_cast<double>( aAbsRef.Row() + 1 );
+                }
+                break;
+                case svDoubleRef :
+                case svExternalDoubleRef :
+                {
                     SCROW nRow1;
-                    SCTAB nTab1;
-                    SCCOL nCol2;
                     SCROW nRow2;
-                    SCTAB nTab2;
-                    PopDoubleRef( nCol1, nRow1, nTab1, nCol2, nRow2, nTab2 );
+                    if ( GetStackType() == svDoubleRef )
+                    {
+                        SCCOL nCol1;
+                        SCTAB nTab1;
+                        SCCOL nCol2;
+                        SCTAB nTab2;
+                        PopDoubleRef( nCol1, nRow1, nTab1, nCol2, nRow2, nTab2 );
+                    }
+                    else
+                    {
+                        sal_uInt16 nFileId;
+                        OUString aTabName;
+                        ScComplexRefData aRef;
+                        PopExternalDoubleRef( nFileId, aTabName, aRef );
+                        ScRange aAbs = aRef.toAbs( aPos );
+                        nRow1 = aAbs.aStart.Row();
+                        nRow2 = aAbs.aEnd.Row();
+                    }
                     if (nRow2 > nRow1)
                     {
                         ScMatrixRef pResMat = GetNewMat( 1,
@@ -4399,8 +4569,6 @@ void ScInterpreter::ScRow()
                             PushMatrix(pResMat);
                             return;
                         }
-                        else
-                            nVal = 0.0;
                     }
                     else
                         nVal = static_cast<double>(nRow1 + 1);
@@ -4408,7 +4576,6 @@ void ScInterpreter::ScRow()
                 break;
                 default:
                     SetError( FormulaError::IllegalParameter );
-                    nVal = 0.0;
             }
         }
         PushDouble( nVal );
@@ -4514,7 +4681,7 @@ public:
 
 private:
     const ScMatrix& mrMat;
-    bool mbColVec;
+    bool const mbColVec;
 };
 
 /** returns -1 when the matrix value is smaller than the query value, 0 when
@@ -5579,6 +5746,7 @@ void ScInterpreter::ScCountIf()
                 }
                 break;
                 default:
+                    PopError(); // Propagate it further
                     PushIllegalParameter();
                     return ;
             }
@@ -5672,7 +5840,61 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
     sal_uInt8 nParamCount = GetByte();
     sal_uInt8 nQueryCount = nParamCount / 2;
 
-    std::vector<sal_uInt32> vConditions;
+    std::vector<sal_uInt32>& vConditions = mrContext.maConditions;
+    // vConditions is cached, although it is clear'ed after every cell is interpreted,
+    // if the SUMIFS/COUNTIFS are part of a matrix formula, then that is not enough because
+    // with a single InterpretTail() call it results in evaluation of all the cells in the
+    // matrix formula.
+    vConditions.clear();
+
+    SCCOL nStartColDiff = 0;
+    SCCOL nEndColDiff = 0;
+    SCROW nStartRowDiff = 0;
+    SCROW nEndRowDiff = 0;
+    bool bRangeReduce = false;
+
+    // Range-reduce optimization
+    if (nParamCount % 2) // Not COUNTIFS
+    {
+        bool bHasDoubleRefCriteriaRanges = true;
+        // Do not attempt main-range reduce if any of the criteria-ranges are not double-refs.
+        for (sal_uInt16 nParamIdx = 2; nParamIdx < nParamCount; nParamIdx += 2 )
+        {
+            const formula::FormulaToken* pCriteriaRangeToken = pStack[ sp-nParamIdx ];
+            if (pCriteriaRangeToken->GetType() != svDoubleRef )
+            {
+                bHasDoubleRefCriteriaRanges = false;
+                break;
+            }
+        }
+
+        // Probe the main range token, and try if we can shrink the range without altering results.
+        const formula::FormulaToken* pMainRangeToken = pStack[ sp-nParamCount ];
+        if (pMainRangeToken->GetType() == svDoubleRef && bHasDoubleRefCriteriaRanges)
+        {
+            const ScComplexRefData* pRefData = pMainRangeToken->GetDoubleRef();
+            if (!pRefData->IsDeleted())
+            {
+                ScRange aMainRange, aSubRange;
+                DoubleRefToRange( *pRefData, aMainRange);
+
+                if (aMainRange.aStart.Tab() == aMainRange.aEnd.Tab())
+                {
+                    // Shrink the range to actual data content.
+                    aSubRange = aMainRange;
+                    pDok->GetDataAreaSubrange(aSubRange);
+
+                    nStartColDiff = aSubRange.aStart.Col() - aMainRange.aStart.Col();
+                    nStartRowDiff = aSubRange.aStart.Row() - aMainRange.aStart.Row();
+
+                    nEndColDiff = aSubRange.aEnd.Col() - aMainRange.aEnd.Col();
+                    nEndRowDiff = aSubRange.aEnd.Row() - aMainRange.aEnd.Row();
+                    bRangeReduce = nStartColDiff || nStartRowDiff || nEndColDiff || nEndRowDiff;
+                }
+            }
+        }
+    }
+
     double fVal = 0.0;
     SCCOL nDimensionCols = 0;
     SCROW nDimensionRows = 0;
@@ -5853,6 +6075,15 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
             {
                 PushError( FormulaError::IllegalArgument);
                 return;
+            }
+
+            if (bRangeReduce)
+            {
+                nCol1 += nStartColDiff;
+                nRow1 += nStartRowDiff;
+
+                nCol2 += nEndColDiff;
+                nRow2 += nEndRowDiff;
             }
 
             // All reference ranges must be of same dimension and size.
@@ -6067,7 +6298,23 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
                         nMainTab2 = 0;
                     }
                 break;
+                // Treat a scalar value as 1x1 matrix.
+                case svDouble:
+                    pMainMatrix = GetNewMat(1,1);
+                    nMainCol1 = nMainCol2 = 0;
+                    nMainRow1 = nMainRow2 = 0;
+                    nMainTab1 = nMainTab2 = 0;
+                    pMainMatrix->PutDouble( GetDouble(), 0, 0);
+                break;
+                case svString:
+                    pMainMatrix = GetNewMat(1,1);
+                    nMainCol1 = nMainCol2 = 0;
+                    nMainRow1 = nMainRow2 = 0;
+                    nMainTab1 = nMainTab2 = 0;
+                    pMainMatrix->PutString( GetString(), 0, 0);
+                break;
                 default:
+                    PopError();
                     PushError( FormulaError::IllegalParameter);
                     return;
             }
@@ -6075,6 +6322,15 @@ void ScInterpreter::IterateParametersIfs( double(*ResultFunc)( const sc::ParamIf
             {
                 PushError( FormulaError::IllegalArgument);
                 return;
+            }
+
+            if (bRangeReduce)
+            {
+                nMainCol1 += nStartColDiff;
+                nMainRow1 += nStartRowDiff;
+
+                nMainCol2 += nEndColDiff;
+                nMainRow2 += nEndRowDiff;
             }
 
             // All reference ranges must be of same dimension and size.
@@ -6577,27 +6833,76 @@ void ScInterpreter::ScLookup()
         // Do not propagate errors from matrix while copying to vector.
         pDataMat->SetErrorInterpreter( nullptr);
 
+        // Excel has an undocumented behaviour in that it seems to internally
+        // sort an interim array (i.e. error values specifically #DIV/0! are
+        // sorted to the end) or ignore error values that makes these "get last
+        // non-empty" searches work, e.g. =LOOKUP(2,1/NOT(ISBLANK(A:A)),A:A)
+        // see tdf#117016
+        // Instead of sorting a million entries of which mostly only a bunch of
+        // rows are filled and moving error values to the end which most are
+        // already anyway, assume the matrix to be sorted except error values
+        // and omit the coded DoubleError values.
+        // Do this only for a numeric matrix (that includes errors coded as
+        // doubles), which covers the case in question.
+        /* TODO: it's unclear whether this really matches Excel behaviour in
+         * all constellations or if there are cases that include unsorted error
+         * values and thus yield arbitrary binary search results or something
+         * different or whether there are cases where error values are also
+         * omitted from mixed numeric/string arrays or if it's not an interim
+         * matrix but a cell range reference instead. */
+        const bool bOmitErrorValues = (eDataArrayType == svMatrix && pDataMat->IsNumeric());
+
         // In case of non-vector matrix, only search the first row or column.
         ScMatrixRef pDataMat2;
-        if (bVertical)
+        std::vector<SCCOLROW> vIndex;
+        if (bOmitErrorValues)
         {
-            ScMatrixRef pTempMat = GetNewMat(1, nR);
-            for (SCSIZE i = 0; i < nR; ++i)
-                if (pDataMat->IsValue(0, i))
-                    pTempMat->PutDouble(pDataMat->GetDouble(0, i), 0, i);
+            std::vector<double> vArray;
+            VectorMatrixAccessor aMatAcc(*pDataMat, bVertical);
+            const SCSIZE nElements = aMatAcc.GetElementCount();
+            for (SCSIZE i=0; i < nElements; ++i)
+            {
+                const double fVal = aMatAcc.GetDouble(i);
+                if (rtl::math::isFinite(fVal))
+                {
+                    vArray.push_back(fVal);
+                    vIndex.push_back(i);
+                }
+            }
+            if (vArray.empty())
+            {
+                PushNA();
+                return;
+            }
+            const size_t nElems = vArray.size();
+            if (nElems == nElements)
+            {
+                // No error value omitted, use as is.
+                pDataMat2 = pDataMat;
+                std::vector<SCCOLROW>().swap( vIndex);
+            }
+            else
+            {
+                nLenMajor = nElems;
+                if (bVertical)
+                {
+                    ScMatrixRef pTempMat = GetNewMat( 1, nElems);
+                    pTempMat->PutDoubleVector( vArray, 0, 0);
+                    pDataMat2 = pTempMat;
+                }
                 else
-                    pTempMat->PutString(pDataMat->GetString(0, i), 0, i);
-            pDataMat2 = pTempMat;
+                {
+                    ScMatrixRef pTempMat = GetNewMat( nElems, 1);
+                    for (size_t i=0; i < nElems; ++i)
+                        pTempMat->PutDouble( vArray[i], i, 0);
+                    pDataMat2 = pTempMat;
+                }
+            }
         }
         else
         {
-            ScMatrixRef pTempMat = GetNewMat(nC, 1);
-            for (SCSIZE i = 0; i < nC; ++i)
-                if (pDataMat->IsValue(i, 0))
-                    pTempMat->PutDouble(pDataMat->GetDouble(i, 0), i, 0);
-                else
-                    pTempMat->PutString(pDataMat->GetString(i, 0), i, 0);
-            pDataMat2 = pTempMat;
+            // Just use as is with the VectorMatrixAccessor.
+            pDataMat2 = pDataMat;
         }
 
         // Do not propagate errors from matrix while searching.
@@ -6661,6 +6966,9 @@ void ScInterpreter::ScLookup()
 
         if (bFound)
         {
+            if (!vIndex.empty())
+                nDelta = vIndex[nDelta];
+
             VectorMatrixAccessor aMatAcc(*pDataMat, bVertical);
             SCCOLROW i = nDelta;
             SCSIZE n = aMatAcc.GetElementCount();
@@ -7348,7 +7656,7 @@ std::unique_ptr<ScDBQueryParamBase> ScInterpreter::GetDBParams( bool& rMissingFi
     {
         // First, get the query criteria range.
         ::std::unique_ptr<ScDBRangeBase> pQueryRef( PopDBDoubleRef() );
-        if (!pQueryRef.get())
+        if (!pQueryRef)
             return nullptr;
 
         bool    bByVal = true;
@@ -7410,7 +7718,7 @@ std::unique_ptr<ScDBQueryParamBase> ScInterpreter::GetDBParams( bool& rMissingFi
 
         unique_ptr<ScDBRangeBase> pDBRef( PopDBDoubleRef() );
 
-        if (nGlobalError != FormulaError::NONE || !pDBRef.get())
+        if (nGlobalError != FormulaError::NONE || !pDBRef)
             return nullptr;
 
         if ( bRangeFake )
@@ -7442,7 +7750,7 @@ std::unique_ptr<ScDBQueryParamBase> ScInterpreter::GetDBParams( bool& rMissingFi
 
         unique_ptr<ScDBQueryParamBase> pParam( pDBRef->createQueryParam(pQueryRef.get()) );
 
-        if (pParam.get())
+        if (pParam)
         {
             // An allowed missing field parameter sets the result field
             // to any of the query fields, just to be able to return
@@ -7481,14 +7789,14 @@ void ScInterpreter::DBIterator( ScIterFunc eFunc )
     sal_uLong nCount = 0;
     bool bMissingField = false;
     unique_ptr<ScDBQueryParamBase> pQueryParam( GetDBParams(bMissingField) );
-    if (pQueryParam.get())
+    if (pQueryParam)
     {
         if (!pQueryParam->IsValidFieldIndex())
         {
             SetError(FormulaError::NoValue);
             return;
         }
-        ScDBQueryDataIterator aValIter(pDok, mrContext, pQueryParam.release());
+        ScDBQueryDataIterator aValIter(pDok, mrContext, std::move(pQueryParam));
         ScDBQueryDataIterator::Value aValue;
         if ( aValIter.GetFirst(aValue) && aValue.mnError == FormulaError::NONE )
         {
@@ -7556,7 +7864,7 @@ void ScInterpreter::ScDBCount()
 {
     bool bMissingField = true;
     unique_ptr<ScDBQueryParamBase> pQueryParam( GetDBParams(bMissingField) );
-    if (pQueryParam.get())
+    if (pQueryParam)
     {
         sal_uLong nCount = 0;
         if ( bMissingField && pQueryParam->GetType() == ScDBQueryParamBase::INTERNAL )
@@ -7592,7 +7900,7 @@ void ScInterpreter::ScDBCount()
                 SetError(FormulaError::NoValue);
                 return;
             }
-            ScDBQueryDataIterator aValIter( pDok, mrContext, pQueryParam.release());
+            ScDBQueryDataIterator aValIter( pDok, mrContext, std::move(pQueryParam));
             ScDBQueryDataIterator::Value aValue;
             if ( aValIter.GetFirst(aValue) && aValue.mnError == FormulaError::NONE )
             {
@@ -7614,7 +7922,7 @@ void ScInterpreter::ScDBCount2()
 {
     bool bMissingField = true;
     unique_ptr<ScDBQueryParamBase> pQueryParam( GetDBParams(bMissingField) );
-    if (pQueryParam.get())
+    if (pQueryParam)
     {
         if (!pQueryParam->IsValidFieldIndex())
         {
@@ -7623,7 +7931,7 @@ void ScInterpreter::ScDBCount2()
         }
         sal_uLong nCount = 0;
         pQueryParam->mbSkipString = false;
-        ScDBQueryDataIterator aValIter( pDok, mrContext, pQueryParam.release());
+        ScDBQueryDataIterator aValIter( pDok, mrContext, std::move(pQueryParam));
         ScDBQueryDataIterator::Value aValue;
         if ( aValIter.GetFirst(aValue) && aValue.mnError == FormulaError::NONE )
         {
@@ -7670,14 +7978,14 @@ void ScInterpreter::GetDBStVarParams( double& rVal, double& rValCount )
     double fSum    = 0.0;
     bool bMissingField = false;
     unique_ptr<ScDBQueryParamBase> pQueryParam( GetDBParams(bMissingField) );
-    if (pQueryParam.get())
+    if (pQueryParam)
     {
         if (!pQueryParam->IsValidFieldIndex())
         {
             SetError(FormulaError::NoValue);
             return;
         }
-        ScDBQueryDataIterator aValIter(pDok, mrContext, pQueryParam.release());
+        ScDBQueryDataIterator aValIter(pDok, mrContext, std::move(pQueryParam));
         ScDBQueryDataIterator::Value aValue;
         if (aValIter.GetFirst(aValue) && aValue.mnError == FormulaError::NONE)
         {
@@ -7912,7 +8220,7 @@ void ScInterpreter::ScAddressFunc()
         sTabStr = GetString().getString();
 
     FormulaGrammar::AddressConvention eConv = FormulaGrammar::CONV_OOO;      // default
-    if( nParamCount >= 4 && 0.0 == ::rtl::math::approxFloor( GetDoubleWithDefault( 1.0)))
+    if (nParamCount >= 4 && 0.0 == GetDoubleWithDefault( 1.0))
         eConv = FormulaGrammar::CONV_XL_R1C1;
     else
     {
@@ -8470,15 +8778,13 @@ void ScInterpreter::ScReplace()
     if ( MustHaveParamCount( GetByte(), 4 ) )
     {
         OUString aNewStr = GetString().getString();
-        double fCount = GetStringPositionArgument();
-        double fPos   = GetStringPositionArgument();
+        sal_Int32 nCount = GetStringPositionArgument();
+        sal_Int32 nPos   = GetStringPositionArgument();
         OUString aOldStr = GetString().getString();
-        if (fPos < 1.0 || fCount < 0.0)
+        if (nPos < 1 || nCount < 0)
             PushIllegalArgument();
         else
         {
-            sal_Int32 nCount = static_cast<sal_Int32>(fCount);
-            sal_Int32 nPos   = static_cast<sal_Int32>(fPos);
             sal_Int32 nLen   = aOldStr.getLength();
             if (nPos > nLen + 1)
                 nPos = nLen + 1;
@@ -8613,14 +8919,12 @@ void ScInterpreter::ScLeft()
         sal_Int32 n;
         if (nParamCount == 2)
         {
-            double nVal = GetStringPositionArgument();
-            if (nVal < 0.0)
+            n = GetStringPositionArgument();
+            if (n < 0)
             {
                 PushIllegalArgument();
                 return ;
             }
-            else
-                n = static_cast<sal_Int32>(nVal);
         }
         else
             n = 1;
@@ -8635,8 +8939,8 @@ void ScInterpreter::ScLeft()
 }
 
 typedef struct {
-    UBlockCode from;
-    UBlockCode to;
+    UBlockCode const from;
+    UBlockCode const to;
 } UBlockScript;
 
 static const UBlockScript scriptList[] = {
@@ -8649,7 +8953,7 @@ static const UBlockScript scriptList[] = {
     {UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B, UBLOCK_CJK_COMPATIBILITY_IDEOGRAPHS_SUPPLEMENT},
     {UBLOCK_CJK_STROKES, UBLOCK_CJK_STROKES}
 };
-bool IsDBCS(sal_Unicode currentChar)
+static bool IsDBCS(sal_Unicode currentChar)
 {
     // for the locale of ja-JP, character U+0x005c and U+0x20ac should be ScriptType::Asian
     if( (currentChar == 0x005c || currentChar == 0x20ac) &&
@@ -8664,7 +8968,7 @@ bool IsDBCS(sal_Unicode currentChar)
     bRet = (i < SAL_N_ELEMENTS(scriptList) && block >= scriptList[i].from);
     return bRet;
 }
-sal_Int32 lcl_getLengthB( const OUString &str, sal_Int32 nPos )
+static sal_Int32 lcl_getLengthB( const OUString &str, sal_Int32 nPos )
 {
     sal_Int32 index = 0;
     sal_Int32 length = 0;
@@ -8678,7 +8982,7 @@ sal_Int32 lcl_getLengthB( const OUString &str, sal_Int32 nPos )
     }
     return length;
 }
-sal_Int32 getLengthB(const OUString &str)
+static sal_Int32 getLengthB(const OUString &str)
 {
     if(str.isEmpty())
         return 0;
@@ -8689,7 +8993,7 @@ void ScInterpreter::ScLenB()
 {
     PushDouble( getLengthB(GetString().getString()) );
 }
-OUString lcl_RightB(const OUString &rStr, sal_Int32 n)
+static OUString lcl_RightB(const OUString &rStr, sal_Int32 n)
 {
     if( n < getLengthB(rStr) )
     {
@@ -8725,14 +9029,12 @@ void ScInterpreter::ScRightB()
         sal_Int32 n;
         if (nParamCount == 2)
         {
-            double nVal = GetStringPositionArgument();
-            if ( nVal < 0.0 )
+            n = GetStringPositionArgument();
+            if (n < 0)
             {
                 PushIllegalArgument();
                 return ;
             }
-            else
-                n = static_cast<sal_Int32>(nVal);
         }
         else
             n = 1;
@@ -8740,7 +9042,7 @@ void ScInterpreter::ScRightB()
         PushString( aStr );
     }
 }
-OUString lcl_LeftB(const OUString &rStr, sal_Int32 n)
+static OUString lcl_LeftB(const OUString &rStr, sal_Int32 n)
 {
     if( n < getLengthB(rStr) )
     {
@@ -8776,14 +9078,12 @@ void ScInterpreter::ScLeftB()
         sal_Int32 n;
         if (nParamCount == 2)
         {
-            double nVal = GetStringPositionArgument();
-            if ( nVal < 0.0 )
+            n = GetStringPositionArgument();
+            if (n < 0)
             {
                 PushIllegalArgument();
                 return ;
             }
-            else
-                n = static_cast<sal_Int32>(nVal);
         }
         else
             n = 1;
@@ -8795,16 +9095,16 @@ void ScInterpreter::ScMidB()
 {
     if ( MustHaveParamCount( GetByte(), 3 ) )
     {
-        double fCnt    = GetStringPositionArgument();
-        double fAnfang = GetStringPositionArgument();
+        const sal_Int32 nCount = GetStringPositionArgument();
+        const sal_Int32 nStart = GetStringPositionArgument();
         OUString aStr = GetString().getString();
-        if (fAnfang < 1.0 || fCnt < 0.0)
+        if (nStart < 1 || nCount < 0)
             PushIllegalArgument();
         else
         {
 
-            aStr = lcl_LeftB(aStr, static_cast<sal_Int32>(fAnfang) + static_cast<sal_Int32>(fCnt) - 1);
-            sal_Int32 nCnt = getLengthB(aStr) - static_cast<sal_Int32>(fAnfang) + 1;
+            aStr = lcl_LeftB(aStr, nStart + nCount - 1);
+            sal_Int32 nCnt = getLengthB(aStr) - nStart + 1;
             aStr = lcl_RightB(aStr, std::max<sal_Int32>(nCnt,0));
             PushString(aStr);
         }
@@ -8815,19 +9115,19 @@ void ScInterpreter::ScReplaceB()
 {
     if ( MustHaveParamCount( GetByte(), 4 ) )
     {
-        OUString aNewStr = GetString().getString();
-        double fCount    = GetStringPositionArgument();
-        double fPos      = GetStringPositionArgument();
-        OUString aOldStr = GetString().getString();
-        int nLen         = getLengthB( aOldStr );
-        if ( fPos < 1.0 || fPos > nLen || fCount < 0.0 || fPos + fCount -1 > nLen )
+        OUString aNewStr       = GetString().getString();
+        const sal_Int32 nCount = GetStringPositionArgument();
+        const sal_Int32 nPos   = GetStringPositionArgument();
+        OUString aOldStr       = GetString().getString();
+        int nLen               = getLengthB( aOldStr );
+        if (nPos < 1.0 || nPos > nLen || nCount < 0.0 || nPos + nCount -1 > nLen)
             PushIllegalArgument();
         else
         {
-            // REPLACEB(aOldStr;fPos;fCount;aNewStr) is the same as
-            // LEFTB(aOldStr;fPos-1) & aNewStr & RIGHT(aOldStr;LENB(aOldStr)-(fPos - 1)-fCount)
-            OUString aStr1 = lcl_LeftB( aOldStr, fPos - 1 );
-            OUString aStr3 = lcl_RightB( aOldStr, nLen - fPos - fCount + 1);
+            // REPLACEB(aOldStr;nPos;nCount;aNewStr) is the same as
+            // LEFTB(aOldStr;nPos-1) & aNewStr & RIGHT(aOldStr;LENB(aOldStr)-(nPos - 1)-nCount)
+            OUString aStr1 = lcl_LeftB( aOldStr, nPos - 1 );
+            OUString aStr3 = lcl_RightB( aOldStr, nLen - nPos - nCount + 1);
 
             PushString( aStr1 + aNewStr + aStr3 );
         }
@@ -8921,14 +9221,12 @@ void ScInterpreter::ScRight()
         sal_Int32 n;
         if (nParamCount == 2)
         {
-            double nVal = GetStringPositionArgument();
-            if (nVal < 0.0)
+            n = GetStringPositionArgument();
+            if (n < 0)
             {
                 PushIllegalArgument();
                 return ;
             }
-            else
-                n = static_cast<sal_Int32>(nVal);
         }
         else
             n = 1;
@@ -8956,21 +9254,21 @@ void ScInterpreter::ScSearch()
     sal_uInt8 nParamCount = GetByte();
     if ( MustHaveParamCount( nParamCount, 2, 3 ) )
     {
-        double fCnt;
+        sal_Int32 nStart;
         if (nParamCount == 3)
         {
-            fCnt = GetStringPositionArgument();
-            if( fCnt < 1 )
+            nStart = GetStringPositionArgument();
+            if( nStart < 1 )
             {
                 PushIllegalArgument();
                 return;
             }
         }
         else
-            fCnt = 1.0;
+            nStart = 1;
         OUString sStr = GetString().getString();
         OUString SearchStr = GetString().getString();
-        sal_Int32 nPos = fCnt - 1;
+        sal_Int32 nPos = nStart - 1;
         sal_Int32 nEndPos = sStr.getLength();
         if( nPos >= nEndPos )
             PushNoValue();
@@ -8997,12 +9295,206 @@ void ScInterpreter::ScSearch()
     }
 }
 
+void ScInterpreter::ScRegex()
+{
+    const sal_uInt8 nParamCount = GetByte();
+    if (!MustHaveParamCount( nParamCount, 2, 4))
+        return;
+
+    // Flags are supported only for replacement, search match flags can be
+    // individually and much more flexible set in the regular expression
+    // pattern using (?ismwx-ismwx)
+    bool bGlobalReplacement = false;
+    sal_Int32 nOccurrence = 1;  // default first occurrence, if any
+    if (nParamCount == 4)
+    {
+        // Argument can be either string or double.
+        double fOccurrence;
+        svl::SharedString aFlagsString;
+        bool bDouble;
+        if (!IsMissing())
+            bDouble = GetDoubleOrString( fOccurrence, aFlagsString);
+        else
+        {
+            // For an omitted argument keep the default.
+            PopError();
+            bDouble = true;
+            fOccurrence = nOccurrence;
+        }
+        if (nGlobalError != FormulaError::NONE)
+        {
+            PushError( nGlobalError);
+            return;
+        }
+        if (bDouble)
+        {
+            if (!CheckStringPositionArgument( fOccurrence))
+            {
+                PushError( FormulaError::IllegalArgument);
+                return;
+            }
+            nOccurrence = static_cast<sal_Int32>(fOccurrence);
+        }
+        else
+        {
+            const OUString aFlags( aFlagsString.getString());
+            // Empty flags string is valid => no flag set.
+            if (aFlags.getLength() > 1)
+            {
+                // Only one flag supported.
+                PushIllegalArgument();
+                return;
+            }
+            if (aFlags.getLength() == 1)
+            {
+                if (aFlags.indexOf('g') >= 0)
+                    bGlobalReplacement = true;
+                else
+                {
+                    // Unsupported flag.
+                    PushIllegalArgument();
+                    return;
+                }
+            }
+        }
+    }
+
+    bool bReplacement = false;
+    OUString aReplacement;
+    if (nParamCount >= 3)
+    {
+        // A missing argument is not an empty string to replace the match.
+        // nOccurrence==0 forces no replacement, so simply discard the
+        // argument.
+        if (IsMissing() || nOccurrence == 0)
+            PopError();
+        else
+        {
+            aReplacement = GetString().getString();
+            bReplacement = true;
+        }
+    }
+    // If bGlobalReplacement==true and bReplacement==false then
+    // bGlobalReplacement is silently ignored.
+
+    OUString aExpression = GetString().getString();
+    OUString aText = GetString().getString();
+
+    if (nGlobalError != FormulaError::NONE)
+    {
+        PushError( nGlobalError);
+        return;
+    }
+
+    // 0-th match or replacement is none, return original string early.
+    if (nOccurrence == 0)
+    {
+        PushString( aText);
+        return;
+    }
+
+    const icu::UnicodeString aIcuExpression(
+            reinterpret_cast<const UChar*>(aExpression.getStr()), aExpression.getLength());
+    UErrorCode status = U_ZERO_ERROR;
+    icu::RegexMatcher aRegexMatcher( aIcuExpression, 0, status);
+    if (U_FAILURE(status))
+    {
+        // Invalid regex.
+        PushIllegalArgument();
+        return;
+    }
+    // Guard against pathological patterns, limit steps of engine, see
+    // https://ssl.icu-project.org/apiref/icu4c/classicu_1_1RegexMatcher.html#a6ebcfcab4fe6a38678c0291643a03a00
+    aRegexMatcher.setTimeLimit( 23*1000, status);
+
+    const icu::UnicodeString aIcuText( reinterpret_cast<const UChar*>(aText.getStr()), aText.getLength());
+    aRegexMatcher.reset( aIcuText);
+
+    if (!bReplacement)
+    {
+        // Find n-th occurrence.
+        sal_Int32 nCount = 0;
+#if (U_ICU_VERSION_MAJOR_NUM < 55)
+        int32_t nStartPos = 0;
+        while (aRegexMatcher.find(nStartPos, status) && U_SUCCESS(status) && ++nCount < nOccurrence)
+#else
+        while (aRegexMatcher.find(status) && U_SUCCESS(status) && ++nCount < nOccurrence)
+#endif
+            ;
+        if (U_FAILURE(status))
+        {
+            // Some error.
+            PushIllegalArgument();
+            return;
+        }
+        // n-th match found?
+        if (nCount != nOccurrence)
+        {
+            PushError( FormulaError::NotAvailable);
+            return;
+        }
+        // Extract matched text.
+        icu::UnicodeString aMatch( aRegexMatcher.group( status));
+        if (U_FAILURE(status))
+        {
+            // Some error.
+            PushIllegalArgument();
+            return;
+        }
+        OUString aResult( reinterpret_cast<const sal_Unicode*>(aMatch.getBuffer()), aMatch.length());
+        PushString( aResult);
+        return;
+    }
+
+    const icu::UnicodeString aIcuReplacement(
+            reinterpret_cast<const UChar*>(aReplacement.getStr()), aReplacement.getLength());
+    icu::UnicodeString aReplaced;
+    if (bGlobalReplacement)
+        // Replace all occurrences of match with replacement.
+        aReplaced = aRegexMatcher.replaceAll( aIcuReplacement, status);
+    else if (nOccurrence == 1)
+        // Replace first occurrence of match with replacement.
+        aReplaced = aRegexMatcher.replaceFirst( aIcuReplacement, status);
+    else
+    {
+        // Replace n-th occurrence of match with replacement.
+        sal_Int32 nCount = 0;
+#if (U_ICU_VERSION_MAJOR_NUM < 55)
+        int32_t nStartPos = 0;
+        while (aRegexMatcher.find(nStartPos, status) && U_SUCCESS(status))
+#else
+        while (aRegexMatcher.find(status) && U_SUCCESS(status))
+#endif
+        {
+            // XXX NOTE: After several RegexMatcher::find() the
+            // RegexMatcher::appendReplacement() still starts at the
+            // beginning (or after the last appendReplacement() position
+            // which is none here) and copies the original text up to the
+            // current found match and then replaces the found match.
+            if (++nCount == nOccurrence)
+            {
+                aRegexMatcher.appendReplacement( aReplaced, aIcuReplacement, status);
+                break;
+            }
+        }
+        aRegexMatcher.appendTail( aReplaced);
+    }
+    if (U_FAILURE(status))
+    {
+        // Some error, e.g. extraneous $1 without group.
+        PushIllegalArgument();
+        return;
+    }
+    OUString aResult( reinterpret_cast<const sal_Unicode*>(aReplaced.getBuffer()), aReplaced.length());
+    PushString( aResult);
+}
+
 void ScInterpreter::ScMid()
 {
     if ( MustHaveParamCount( GetByte(), 3 ) )
     {
-        sal_Int32 nSubLen = static_cast<sal_Int32>(GetStringPositionArgument());
-        sal_Int32 nStart  = static_cast<sal_Int32>(GetStringPositionArgument());
+        const sal_Int32 nSubLen = GetStringPositionArgument();
+        const sal_Int32 nStart  = GetStringPositionArgument();
         OUString aStr = GetString().getString();
         if ( nStart < 1 || nSubLen < 0 )
             PushIllegalArgument();
@@ -9109,14 +9601,12 @@ void ScInterpreter::ScSubstitute()
         sal_Int32 nCnt;
         if (nParamCount == 4)
         {
-            double fCnt = GetStringPositionArgument();
-            if( fCnt < 1 )
+            nCnt = GetStringPositionArgument();
+            if (nCnt < 1)
             {
                 PushIllegalArgument();
                 return;
             }
-            else
-                nCnt = static_cast<sal_Int32>(fCnt);
         }
         else
             nCnt = 0;
@@ -9158,22 +9648,21 @@ void ScInterpreter::ScRept()
 {
     if ( MustHaveParamCount( GetByte(), 2 ) )
     {
-        double fCnt = GetStringPositionArgument();
+        sal_Int32 nCnt = GetStringPositionArgument();
         OUString aStr = GetString().getString();
-        if ( fCnt < 0.0 )
+        if (nCnt < 0)
             PushIllegalArgument();
-        else if ( fCnt * aStr.getLength() > SAL_MAX_UINT16 )
+        else if (static_cast<double>(nCnt) * aStr.getLength() > kScInterpreterMaxStrLen)
         {
             PushError( FormulaError::StringOverflow );
         }
-        else if ( fCnt == 0.0 )
+        else if (nCnt == 0)
             PushString( EMPTY_OUSTRING );
         else
         {
             const sal_Int32 nLen = aStr.getLength();
-            sal_Int32 n = static_cast<sal_Int32>(fCnt);
-            OUStringBuffer aRes(n*nLen);
-            while( n-- )
+            OUStringBuffer aRes(nCnt*nLen);
+            while( nCnt-- )
                 aRes.append(aStr);
             PushString( aRes.makeStringAndClear() );
         }
@@ -9187,7 +9676,10 @@ void ScInterpreter::ScConcat()
     while( nParamCount-- > 0)
     {
         OUString aStr = GetString().getString();
-        aRes = aStr + aRes;
+        if (CheckStringResultLen( aRes, aStr))
+            aRes = aStr + aRes;
+        else
+            break;
     }
     PushString( aRes );
 }
@@ -9441,7 +9933,7 @@ bool ScInterpreter::LookupQueryWithCache( ScAddress & o_rResultPos,
     {
         ScRange aLookupRange( rParam.nCol1, rParam.nRow1, rParam.nTab,
                 rParam.nCol2, rParam.nRow2, rParam.nTab);
-        ScLookupCache& rCache = pDok->GetLookupCache( aLookupRange);
+        ScLookupCache& rCache = pDok->GetLookupCache( aLookupRange, &mrContext );
         ScLookupCache::QueryCriteria aCriteria( rEntry);
         ScLookupCache::Result eCacheResult = rCache.lookup( o_rResultPos,
                 aCriteria, aPos);

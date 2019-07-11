@@ -20,6 +20,8 @@
 #include "richtextimplcontrol.hxx"
 #include "textattributelistener.hxx"
 #include "richtextengine.hxx"
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <editeng/editeng.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/eeitem.hxx>
@@ -34,6 +36,7 @@
 #include <vcl/window.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #define EMPTY_PAPER_SIZE    0x7FFFFFFF
 
@@ -48,7 +51,6 @@ namespace frm
         ,m_pVScroll             ( nullptr                )
         ,m_pScrollCorner        ( nullptr                )
         ,m_pEngine              ( _pEngine            )
-        ,m_pView                ( nullptr                )
         ,m_pTextAttrListener    ( _pTextAttrListener  )
         ,m_pSelectionListener   ( _pSelectionListener )
         ,m_bHasEverBeenShown    ( false               )
@@ -225,10 +227,9 @@ namespace frm
         WhichId nNormalizedWhichId = _rScriptSetItem.GetItemSet().GetPool()->GetWhich( _rScriptSetItem.Which() );
         if ( pNormalizedItem )
         {
-            SfxPoolItem* pProperWhich = pNormalizedItem->Clone();
+            std::unique_ptr<SfxPoolItem> pProperWhich(pNormalizedItem->Clone());
             pProperWhich->SetWhich( nNormalizedWhichId );
             _rScriptSetItem.GetItemSet().Put( *pProperWhich );
-            DELETEZ( pProperWhich );
         }
         else
             _rScriptSetItem.GetItemSet().InvalidateItem( nNormalizedWhichId );
@@ -552,7 +553,7 @@ namespace frm
         }
     }
 
-    long RichTextControlImpl::HandleCommand( const CommandEvent& _rEvent )
+    bool RichTextControlImpl::HandleCommand( const CommandEvent& _rEvent )
     {
         if (  ( _rEvent.GetCommand() == CommandEventId::Wheel )
            || ( _rEvent.GetCommand() == CommandEventId::StartAutoScroll )
@@ -560,9 +561,9 @@ namespace frm
            )
         {
             m_pAntiImpl->HandleScrollCommand( _rEvent, m_pHScroll, m_pVScroll );
-            return 1;
+            return true;
         }
-        return 0;
+        return false;
     }
 
 

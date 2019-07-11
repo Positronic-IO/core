@@ -20,6 +20,7 @@
 #include <fuchar.hxx>
 #include <svx/dialogs.hrc>
 #include <sfx2/viewfrm.hxx>
+#include <sfx2/sfxdlg.hxx>
 
 #include <editeng/editdata.hxx>
 #include <svx/svxids.hrc>
@@ -67,44 +68,36 @@ void FuChar::DoExecute( SfxRequest& rReq )
         SfxItemSet aEditAttr( mpDoc->GetPool() );
         mpView->GetAttributes( aEditAttr );
 
-        SfxItemSet aNewAttr(mpViewShell->GetPool(), svl::Items<EE_ITEMS_START, EE_ITEMS_END>{});
+        SfxItemSet aNewAttr(mpViewShell->GetPool(), svl::Items<XATTR_FILLSTYLE, XATTR_FILLCOLOR, EE_ITEMS_START, EE_ITEMS_END>{});
         aNewAttr.Put( aEditAttr, false );
 
         SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSdTabCharDialog(mpViewShell->GetActiveWindow(), &aNewAttr, mpDoc->GetDocSh() ) : nullptr);
-        sal_uInt16 nResult = RET_CANCEL;
-        if( pDlg )
+        ScopedVclPtr<SfxAbstractTabDialog> pDlg( pFact->CreateSdTabCharDialog(mpViewShell->GetFrameWeld(), &aNewAttr, mpDoc->GetDocSh() ) );
+        if (rReq.GetSlot() == SID_CHAR_DLG_EFFECT)
         {
-            if (rReq.GetSlot() == SID_CHAR_DLG_EFFECT)
-            {
-                pDlg->SetCurPageId("RID_SVXPAGE_CHAR_EFFECTS");
-            }
-
-            nResult = pDlg->Execute();
-
-            if( nResult == RET_OK )
-            {
-                const SfxItemSet* pOutputSet = pDlg->GetOutputItemSet();
-                SfxItemSet aOtherSet( *pOutputSet );
-
-                // and now the reverse process
-                const SvxBrushItem* pBrushItem = aOtherSet.GetItem<SvxBrushItem>( SID_ATTR_BRUSH_CHAR );
-
-                if ( pBrushItem )
-                {
-                    SvxBackgroundColorItem aBackColorItem( pBrushItem->GetColor(), EE_CHAR_BKGCOLOR );
-                    aOtherSet.ClearItem( SID_ATTR_BRUSH_CHAR );
-                    aOtherSet.Put( aBackColorItem );
-                }
-
-                rReq.Done( aOtherSet );
-                pArgs = rReq.GetArgs();
-            }
+            pDlg->SetCurPageId("RID_SVXPAGE_CHAR_EFFECTS");
         }
+
+        sal_uInt16 nResult = pDlg->Execute();
+
         if( nResult != RET_OK )
-        {
             return;
+
+        const SfxItemSet* pOutputSet = pDlg->GetOutputItemSet();
+        SfxItemSet aOtherSet( *pOutputSet );
+
+        // and now the reverse process
+        const SvxBrushItem* pBrushItem = aOtherSet.GetItem<SvxBrushItem>( SID_ATTR_BRUSH_CHAR );
+
+        if ( pBrushItem )
+        {
+            SvxBackgroundColorItem aBackColorItem( pBrushItem->GetColor(), EE_CHAR_BKGCOLOR );
+            aOtherSet.ClearItem( SID_ATTR_BRUSH_CHAR );
+            aOtherSet.Put( aBackColorItem );
         }
+
+        rReq.Done( aOtherSet );
+        pArgs = rReq.GetArgs();
     }
     mpView->SetAttributes(*pArgs);
 

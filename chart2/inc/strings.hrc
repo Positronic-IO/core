@@ -19,7 +19,7 @@
 #ifndef CHART_STRINGS_HRC
 #define CHART_STRINGS_HRC
 
-#define NC_(Context, String) (Context "\004" u8##String)
+#define NC_(Context, String) reinterpret_cast<char const *>(Context "\004" u8##String)
 
 #define STR_DLG_CHART_WIZARD                        NC_("STR_DLG_CHART_WIZARD", "Chart Wizard")
 #define STR_DLG_SMOOTH_LINE_PROPERTIES              NC_("STR_DLG_SMOOTH_LINE_PROPERTIES", "Smooth Lines")
@@ -184,8 +184,6 @@
 #define STR_FILLED                                  NC_("STR_FILLED", "Filled")
 #define STR_TYPE_BUBBLE                             NC_("STR_TYPE_BUBBLE", "Bubble")
 #define STR_BUBBLE_1                                NC_("STR_BUBBLE_1", "Bubble Chart")
-#define STR_TYPE_GL3D_BAR                           NC_("STR_TYPE_GL3D_BAR", "GL3D Bar")
-#define STR_GL3D_BAR                                NC_("STR_GL3D_BAR", "GL3D Bar Chart")
 
 #define STR_INVALID_NUMBER                          NC_("STR_INVALID_NUMBER", "Numbers are required. Check your input.")
 #define STR_STEP_GT_ZERO                            NC_("STR_STEP_GT_ZERO", "The major interval requires a positive number. Check your input.")

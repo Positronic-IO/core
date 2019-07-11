@@ -28,6 +28,7 @@
 #include <basegfx/matrix/b3dhommatrix.hxx>
 #include <basegfx/numeric/ftools.hxx>
 #include <com/sun/star/drawing/DoubleSequence.hpp>
+#include <com/sun/star/drawing/PolyPolygonShape3D.hpp>
 
 // predefines
 #define nMinSegments sal_uInt32(1)
@@ -45,7 +46,7 @@ namespace basegfx
 
             for(sal_uInt32 a(0); a < nPolygonCount; a++)
             {
-                B3DPolygon aCandidate = rCandidate.getB3DPolygon(a);
+                const B3DPolygon& aCandidate = rCandidate.getB3DPolygon(a);
                 aRetval.expand(getRange(aCandidate));
             }
 
@@ -223,7 +224,7 @@ namespace basegfx
 
         // helper for getting the 3D Point from given cartesian coordinates. fHor is defined from
         // [F_PI2 .. -F_PI2], fVer from [0.0 .. F_2PI]
-        inline B3DPoint getPointFromCartesian(double fHor, double fVer)
+        static B3DPoint getPointFromCartesian(double fHor, double fVer)
         {
             const double fCosVer(cos(fVer));
             return B3DPoint(fCosVer * cos(fHor), sin(fVer), fCosVer * -sin(fHor));
@@ -469,7 +470,7 @@ namespace basegfx
 
                 for(sal_uInt32 a(0); a < nPolygonCount; a++)
                 {
-                    const B3DPolygon aPolygon(rCandidate.getB3DPolygon(a));
+                    const B3DPolygon& aPolygon(rCandidate.getB3DPolygon(a));
                     const bool bInside(isInside(aPolygon, rPoint, false/*bWithBorder*/));
 
                     if(bInside)
@@ -549,7 +550,7 @@ namespace basegfx
 
                 for(sal_uInt32 a(0); a < nPolygonCount; a++)
                 {
-                    const basegfx::B3DPolygon aPoly(rPolyPolygonSource.getB3DPolygon(a));
+                    const basegfx::B3DPolygon& aPoly(rPolyPolygonSource.getB3DPolygon(a));
                     const sal_uInt32 nPointCount(aPoly.count());
 
                     if(nPointCount)

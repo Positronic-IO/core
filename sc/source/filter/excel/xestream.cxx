@@ -28,11 +28,13 @@
 #include <rtl/random.h>
 #include <sax/fshelper.hxx>
 #include <unotools/streamwrap.hxx>
+#include <sot/storage.hxx>
 
 #include <docuno.hxx>
 #include <xestream.hxx>
 #include <xladdress.hxx>
 #include <xlstring.hxx>
+#include <xltools.hxx>
 #include <xeroot.hxx>
 #include <xestyle.hxx>
 #include <xcl97rec.hxx>
@@ -44,6 +46,7 @@
 #include <refreshtimerprotector.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
+#include <root.hxx>
 
 #include <docsh.hxx>
 #include <viewdata.hxx>
@@ -459,7 +462,7 @@ XclExpBiff8Encrypter::XclExpBiff8Encrypter( const XclExpRoot& rRoot ) :
     Sequence< NamedValue > aEncryptionData = rRoot.GetEncryptionData();
     if( !aEncryptionData.hasElements() )
         // Empty password.  Get the default biff8 password.
-        aEncryptionData = rRoot.GenerateDefaultEncryptionData();
+        aEncryptionData = XclExpRoot::GenerateDefaultEncryptionData();
     Init( aEncryptionData );
 }
 
@@ -887,15 +890,15 @@ sax_fastparser::FSHelperPtr XclXmlUtils::WriteFontData( sax_fastparser::FSHelper
     const char* pUnderline = lcl_GetUnderlineStyle( rFontData.GetScUnderline(), bHaveUnderline );
     const char* pVertAlign = lcl_ToVerticalAlignmentRun( rFontData.GetScEscapement(), bHaveVertAlign );
 
-    lcl_WriteValue( pStream, XML_b,          rFontData.mnWeight > 400 ? ToPsz( rFontData.mnWeight > 400 ) : nullptr );
-    lcl_WriteValue( pStream, XML_i,          rFontData.mbItalic ? ToPsz( rFontData.mbItalic ) : nullptr );
-    lcl_WriteValue( pStream, XML_strike,     rFontData.mbStrikeout ? ToPsz( rFontData.mbStrikeout ) : nullptr );
+    lcl_WriteValue( pStream, XML_b,          rFontData.mnWeight > 400 ? ToPsz( true ) : nullptr );
+    lcl_WriteValue( pStream, XML_i,          rFontData.mbItalic       ? ToPsz( true ) : nullptr );
+    lcl_WriteValue( pStream, XML_strike,     rFontData.mbStrikeout    ? ToPsz( true ) : nullptr );
     // OOXTODO: lcl_WriteValue( rStream, XML_condense, );    // mac compatibility setting
     // OOXTODO: lcl_WriteValue( rStream, XML_extend, );      // compatibility setting
-    lcl_WriteValue( pStream, XML_outline,    rFontData.mbOutline ? ToPsz( rFontData.mbOutline ) : nullptr );
-    lcl_WriteValue( pStream, XML_shadow,     rFontData.mbShadow ? ToPsz( rFontData.mbShadow ) : nullptr );
-    lcl_WriteValue( pStream, XML_u,          bHaveUnderline ? pUnderline : nullptr );
-    lcl_WriteValue( pStream, XML_vertAlign,  bHaveVertAlign ? pVertAlign : nullptr );
+    lcl_WriteValue( pStream, XML_outline,    rFontData.mbOutline      ? ToPsz( true ) : nullptr );
+    lcl_WriteValue( pStream, XML_shadow,     rFontData.mbShadow       ? ToPsz( true ) : nullptr );
+    lcl_WriteValue( pStream, XML_u,          bHaveUnderline           ? pUnderline    : nullptr );
+    lcl_WriteValue( pStream, XML_vertAlign,  bHaveVertAlign           ? pVertAlign    : nullptr );
     lcl_WriteValue( pStream, XML_sz,         OString::number( rFontData.mnHeight / 20.0 ).getStr() );  // Twips->Pt
     if( rFontData.maColor != Color( 0xFF, 0xFF, 0xFF, 0xFF ) )
         pStream->singleElement( XML_color,
@@ -1086,7 +1089,7 @@ bool XclExpXmlStream::exportDocument()
     PushStream( CreateOutputStream( workbook, workbook,
                                     uno::Reference <XOutputStream>(),
                                     pWorkbookContentType,
-                                    rtl::OUStringToOString(oox::getRelationship(Relationship::OFFICEDOCUMENT), RTL_TEXTENCODING_UTF8).getStr() ) );
+                                    OUStringToOString(oox::getRelationship(Relationship::OFFICEDOCUMENT), RTL_TEXTENCODING_UTF8).getStr() ) );
 
     if (mbExportVBA)
     {

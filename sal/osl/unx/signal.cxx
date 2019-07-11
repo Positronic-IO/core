@@ -56,6 +56,7 @@
 #include <osl/signal.h>
 #include <osl/process.h>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <sal/macros.h>
 #include <rtl/bootstrap.h>
 #include <rtl/digest.h>
@@ -77,7 +78,7 @@ extern "C" using Handler1 = void (*)(int);
 extern "C" using Handler2 = void (*)(int, siginfo_t *, void *);
 struct SignalAction
 {
-    int Signal;
+    int const Signal;
     int Action;
     Handler1 Handler;
     bool siginfo; // Handler's type is Handler2
@@ -315,7 +316,10 @@ bool onDeInitSignal()
 
     /* Initialize the rest of the signals */
     for (int i = NoSignals - 1; i >= 0; i--)
-        if (Signals[i].Action != ACT_SYSTEM)
+        if (Signals[i].Action != ACT_SYSTEM
+            && ((bSetSEGVHandler || Signals[i].Signal != SIGSEGV)
+                && (bSetWINCHHandler || Signals[i].Signal != SIGWINCH)
+                && (bSetILLHandler || Signals[i].Signal != SIGILL)))
         {
             if (Signals[i].siginfo) {
                 act.sa_sigaction = reinterpret_cast<Handler2>(

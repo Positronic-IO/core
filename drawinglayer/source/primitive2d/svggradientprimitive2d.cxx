@@ -404,14 +404,11 @@ namespace drawinglayer
                     aUnitGradientToObject.rotate(atan2(aVector.getY(), aVector.getX()));
                     aUnitGradientToObject.translate(getStart().getX(), getStart().getY());
 
-                    if(!getGradientTransform().isIdentity())
-                    {
-                        aUnitGradientToObject = getGradientTransform() * aUnitGradientToObject;
-                    }
+                    aUnitGradientToObject *= getGradientTransform();
 
                     // create full transform from unit gradient coordinates to object coordinates
                     // including the SvgGradient transformation
-                    aUnitGradientToObject = aObjectTransform * aUnitGradientToObject;
+                    aUnitGradientToObject *= aObjectTransform;
                 }
                 else
                 {
@@ -424,10 +421,7 @@ namespace drawinglayer
                     aUnitGradientToObject.rotate(atan2(aVector.getY(), aVector.getX()));
                     aUnitGradientToObject.translate(aStart.getX(), aStart.getY());
 
-                    if(!getGradientTransform().isIdentity())
-                    {
-                        aUnitGradientToObject = getGradientTransform() * aUnitGradientToObject;
-                    }
+                    aUnitGradientToObject *= getGradientTransform();
                 }
 
                 // create inverse from it
@@ -757,10 +751,7 @@ namespace drawinglayer
                     aUnitGradientToObject.scale(fRadius, fRadius);
                     aUnitGradientToObject.translate(aStart.getX(), aStart.getY());
 
-                    if(!getGradientTransform().isIdentity())
-                    {
-                        aUnitGradientToObject = getGradientTransform() * aUnitGradientToObject;
-                    }
+                    aUnitGradientToObject *= getGradientTransform();
                 }
 
                 // create inverse from it
@@ -915,14 +906,21 @@ namespace drawinglayer
                 // use color distance and discrete lengths to calculate step count
                 const sal_uInt32 nSteps(calculateStepsForSvgGradient(getColorA(), getColorB(), fDelta, fDiscreteUnit));
 
+                // tdf#117949 Use a small amount of discrete overlap at the edges. Usually this
+                // should be exactly 0.0 and 1.0, but there were cases when this gets clipped
+                // against the mask polygon which got numerically problematic.
+                // This change is unnecessary in that respect, but avoids that numerical havoc
+                // by at the same time doing no real harm AFAIK
+                // TTTT: Remove again when clipping is fixed (!)
+
                 // prepare polygon in needed width at start position (with discrete overlap)
                 const basegfx::B2DPolygon aPolygon(
                     basegfx::utils::createPolygonFromRect(
                         basegfx::B2DRange(
                             getOffsetA() - fDiscreteUnit,
-                            0.0,
+                            -0.0001, // TTTT -> should be 0.0, see comment above
                             getOffsetA() + (fDelta / nSteps) + fDiscreteUnit,
-                            1.0)));
+                            1.0001))); // TTTT -> should be 1.0, see comment above
 
                 // prepare loop (inside to outside, [0.0 .. 1.0[)
                 double fUnitScale(0.0);
@@ -1043,8 +1041,7 @@ namespace drawinglayer
             maColorA(aColorA),
             maColorB(aColorB),
             mfScaleA(fScaleA),
-            mfScaleB(fScaleB),
-            mpTranslate(nullptr)
+            mfScaleB(fScaleB)
         {
             // check and evtl. set translations
             if(!rTranslateA.equal(rTranslateB))
@@ -1076,8 +1073,7 @@ namespace drawinglayer
             maColorA(aColorA),
             maColorB(aColorB),
             mfScaleA(fScaleA),
-            mfScaleB(fScaleB),
-            mpTranslate(nullptr)
+            mfScaleB(fScaleB)
         {
             // scale A and B have to be positive
             mfScaleA = std::max(mfScaleA, 0.0);

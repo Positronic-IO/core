@@ -28,7 +28,7 @@
 namespace {
 
 class UnusedFieldsRemove:
-    public RecursiveASTVisitor<UnusedFieldsRemove>, public loplugin::RewritePlugin
+    public loplugin::FilteringRewritePlugin<UnusedFieldsRemove>
 {
 public:
     explicit UnusedFieldsRemove(loplugin::InstantiationData const & data);
@@ -52,7 +52,7 @@ size_t getFilesize(const char* filename)
     return st.st_size;
 }
 
-UnusedFieldsRemove::UnusedFieldsRemove(loplugin::InstantiationData const & data): RewritePlugin(data)
+UnusedFieldsRemove::UnusedFieldsRemove(loplugin::InstantiationData const & data): FilteringRewritePlugin(data)
 {
     static const char sInputFile[] = SRCDIR "/result.txt";
     mmapFilesize = getFilesize(sInputFile);
@@ -119,7 +119,7 @@ bool UnusedFieldsRemove::VisitFieldDecl( const FieldDecl* fieldDecl )
         report(
             DiagnosticsEngine::Warning,
             "Could not remove unused field (" + niceName(fieldDecl) + ")",
-            fieldDecl->getLocStart())
+            compat::getBeginLoc(fieldDecl))
           << fieldDecl->getSourceRange();
     }
     return true;

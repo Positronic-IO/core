@@ -25,9 +25,10 @@
 #include <string.h>
 
 #include <osl/diagnose.h>
-#include <osl/file.h>
+#include <osl/file.hxx>
 #include <osl/module.h>
 #include <osl/thread.h>
+#include <rtl/alloc.h>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.h>
 #include <sal/log.hxx>
@@ -99,6 +100,26 @@ oslProcessError bootstrap_getExecutableFile(rtl_uString ** ppFileURL)
      * any */
     void * addr = dlsym (RTLD_DEFAULT, "JNI_OnLoad");
 #else
+#if defined __linux
+    // The below code looking for "main" with dlsym() will typically
+    // fail, as there is little reason for "main" to be exported, in
+    // the dlsym() sense, from an executable. But Linux has
+    // /proc/self/exe, try using that.
+    char buf[PATH_MAX];
+    int rc = readlink("/proc/self/exe", buf, sizeof(buf));
+    if (rc > 0 && rc < PATH_MAX)
+    {
+        buf[rc] = '\0';
+        OUString path = OUString::fromUtf8(buf);
+        OUString fileURL;
+        if (osl::File::getFileURLFromSystemPath(path, fileURL) == osl::File::E_None)
+        {
+            rtl_uString_acquire(fileURL.pData);
+            *ppFileURL = fileURL.pData;
+            return osl_Process_E_None;
+        }
+    }
+#endif
     /* Determine address of "main()" function. */
     void * addr = dlsym (RTLD_DEFAULT, "main");
 #endif
@@ -203,7 +224,7 @@ void SAL_CALL osl_setCommandArgs (int argc, char ** argv)
                 /* see @ osl_getExecutableFile(). */
                 if (rtl_ustr_indexOfChar (rtl_uString_getStr(ppArgs[0]), '/') == -1)
                 {
-                    const rtl::OUString PATH ("PATH");
+                    const OUString PATH ("PATH");
 
                     rtl_uString * pSearchPath = nullptr;
                     osl_getEnvironment (PATH.pData, &pSearchPath);

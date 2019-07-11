@@ -69,8 +69,8 @@ Iterator::Iterator (Iterator&& rIterator)
 {
 }
 
-Iterator::Iterator (IteratorImplBase* pObject)
-    : mxIterator(pObject)
+Iterator::Iterator (std::unique_ptr<IteratorImplBase> pObject)
+    : mxIterator(std::move(pObject))
 {
 }
 
@@ -207,7 +207,7 @@ Iterator OutlinerContainer::CreateSelectionIterator (
                 break;
         }
 
-    return Iterator (new SelectionIteratorImpl (
+    return Iterator (o3tl::make_unique<SelectionIteratorImpl> (
         rObjectList, nObjectIndex, pDocument, rpViewShell, bDirectionIsForward));
 }
 
@@ -271,7 +271,7 @@ Iterator OutlinerContainer::CreateDocumentIterator (
         ePageKind, eEditMode, bDirectionIsForward, aLocation);
 
     return Iterator (
-        new DocumentIteratorImpl (nPageIndex, ePageKind, eEditMode,
+        o3tl::make_unique<DocumentIteratorImpl> (nPageIndex, ePageKind, eEditMode,
             pDocument, rpViewShell, bDirectionIsForward));
 }
 
@@ -516,8 +516,7 @@ ViewIteratorImpl::ViewIteratorImpl (
     bool bDirectionIsForward)
     : IteratorImplBase (pDocument, rpViewShellWeak, bDirectionIsForward),
       mbPageChangeOccurred(false),
-      mpPage(nullptr),
-      mpObjectIterator(nullptr)
+      mpPage(nullptr)
 {
     SetPage (nPageIndex);
 }
@@ -531,8 +530,7 @@ ViewIteratorImpl::ViewIteratorImpl (
     EditMode eEditMode)
     : IteratorImplBase (pDocument, rpViewShellWeak, bDirectionIsForward, ePageKind, eEditMode),
       mbPageChangeOccurred(false),
-      mpPage(nullptr),
-      mpObjectIterator(nullptr)
+      mpPage(nullptr)
 {
     SetPage (nPageIndex);
 }
@@ -553,7 +551,7 @@ IteratorImplBase* ViewIteratorImpl::Clone (IteratorImplBase* pObject) const
 
     if (mpObjectIterator != nullptr)
     {
-        pIterator->mpObjectIterator = new SdrObjListIter(*mpPage, SdrIterMode::DeepNoGroups, !mbDirectionIsForward);
+        pIterator->mpObjectIterator.reset( new SdrObjListIter(mpPage, SdrIterMode::DeepNoGroups, !mbDirectionIsForward) );
 
         // No direct way to set the object iterator to the current object.
         pIterator->maPosition.mxObject.reset(nullptr);
@@ -561,7 +559,7 @@ IteratorImplBase* ViewIteratorImpl::Clone (IteratorImplBase* pObject) const
             pIterator->maPosition.mxObject.reset(pIterator->mpObjectIterator->Next());
     }
     else
-        pIterator->mpObjectIterator = nullptr;
+        pIterator->mpObjectIterator.reset();
 
     return pIterator;
 }
@@ -598,7 +596,7 @@ void ViewIteratorImpl::GotoNextText()
             SetPage (maPosition.mnPageIndex-1);
 
         if (mpPage != nullptr)
-            mpObjectIterator = new SdrObjListIter(*mpPage, SdrIterMode::DeepNoGroups, !mbDirectionIsForward);
+            mpObjectIterator.reset( new SdrObjListIter(mpPage, SdrIterMode::DeepNoGroups, !mbDirectionIsForward) );
         if (mpObjectIterator!=nullptr && mpObjectIterator->IsMore())
             maPosition.mxObject.reset(mpObjectIterator->Next());
         else
@@ -650,9 +648,9 @@ void ViewIteratorImpl::SetPage (sal_Int32 nPageIndex)
 
     // Set up object list iterator.
     if (mpPage != nullptr)
-        mpObjectIterator = new SdrObjListIter(*mpPage, SdrIterMode::DeepNoGroups, ! mbDirectionIsForward);
+        mpObjectIterator.reset( new SdrObjListIter(mpPage, SdrIterMode::DeepNoGroups, ! mbDirectionIsForward) );
     else
-        mpObjectIterator = nullptr;
+        mpObjectIterator.reset();
 
     // Get object pointer.
     if (mpObjectIterator!=nullptr && mpObjectIterator->IsMore())
@@ -675,11 +673,10 @@ void ViewIteratorImpl::Reverse()
     IteratorImplBase::Reverse ();
 
     // Create reversed object list iterator.
-    delete mpObjectIterator;
     if (mpPage != nullptr)
-        mpObjectIterator = new SdrObjListIter(*mpPage, SdrIterMode::DeepNoGroups, ! mbDirectionIsForward);
+        mpObjectIterator.reset( new SdrObjListIter(mpPage, SdrIterMode::DeepNoGroups, ! mbDirectionIsForward) );
     else
-        mpObjectIterator = nullptr;
+        mpObjectIterator.reset();
 
     // Move iterator to the current object.
     ::tools::WeakReference<SdrObject> xObject = maPosition.mxObject;

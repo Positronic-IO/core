@@ -23,6 +23,7 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <cppuhelper/queryinterface.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include "owriteablestream.hxx"
 #include "xstorage.hxx"
@@ -36,7 +37,6 @@ OInputCompStream::OInputCompStream( OWriteStream_Impl& aImpl,
 : m_pImpl( &aImpl )
 , m_xMutex( m_pImpl->m_xMutex )
 , m_xStream( xStream )
-, m_pInterfaceContainer( nullptr )
 , m_aProperties( aProps )
 , m_bDisposed( false )
 , m_nStorageType( nStorageType )
@@ -54,7 +54,6 @@ OInputCompStream::OInputCompStream( uno::Reference < io::XInputStream > const & 
 : m_pImpl( nullptr )
 , m_xMutex( new comphelper::RefCountedMutex )
 , m_xStream( xStream )
-, m_pInterfaceContainer( nullptr )
 , m_aProperties( aProps )
 , m_bDisposed( false )
 , m_nStorageType( nStorageType )

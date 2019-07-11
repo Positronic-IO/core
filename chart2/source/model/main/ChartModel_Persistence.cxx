@@ -40,11 +40,11 @@
 #include <com/sun/star/embed/StorageFactory.hpp>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
-#include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/io/TempFile.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 #include <com/sun/star/chart2/data/XPivotTableDataProvider.hpp>
 
@@ -53,10 +53,9 @@
 #include <vcl/cvtgrf.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
-#include <comphelper/sequence.hxx>
-#include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 
@@ -130,7 +129,6 @@ Reference< embed::XStorage > lcl_createStorage(
         aStorageArgs[2] <<= rMediaDescriptor;
         xStorage.set(
             xStorageFact->createInstanceWithArguments( aStorageArgs ), uno::UNO_QUERY_THROW );
-        OSL_ENSURE( xStorage.is(), "No Storage" );
     }
     catch(const css::ucb::ContentCreationException&)
     {
@@ -616,13 +614,11 @@ void ChartModel::impl_loadGraphics(
                             ::utl::UcbStreamHelper::CreateStream(
                                 xElementStream, true ) );
 
-                        if( apIStm.get() )
+                        if (apIStm)
                         {
                             Graphic aGraphic;
 
-                            if( !GraphicConverter::Import(
-                                    *apIStm.get(),
-                                    aGraphic ) )
+                            if (!GraphicConverter::Import(*apIStm, aGraphic))
                             {
                                 m_aGraphicObjectVector.emplace_back(aGraphic );
                             }

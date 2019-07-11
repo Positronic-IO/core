@@ -19,16 +19,19 @@
 
 #include "ManifestWriter.hxx"
 #include "ManifestExport.hxx"
+#include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/io/XActiveDataSource.hpp>
 #include <com/sun/star/xml/sax/Writer.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/xml/sax/SAXException.hpp>
 
 #include <osl/diagnose.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -63,12 +66,14 @@ void SAL_CALL ManifestWriter::writeManifestSequence( const Reference< XOutputStr
     }
     catch( SAXException& )
     {
-        throw RuntimeException( THROW_WHERE );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( THROW_WHERE,
+                        nullptr, anyEx );
     }
 }
 
 // Component methods
-Reference < XInterface > ManifestWriter_createInstance( Reference< XMultiServiceFactory > const & rServiceFactory )
+static Reference < XInterface > ManifestWriter_createInstance( Reference< XMultiServiceFactory > const & rServiceFactory )
 {
     return *new ManifestWriter( comphelper::getComponentContext(rServiceFactory) );
 }

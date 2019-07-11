@@ -47,7 +47,9 @@
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/task/InteractionClassification.hpp>
 #include <com/sun/star/task/XInteractionApprove.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/XInteractionReplaceExistingData.hpp>
 #include <com/sun/star/ucb/NameClashResolveRequest.hpp>
 #include <com/sun/star/ucb/XContentAccess.hpp>
@@ -332,7 +334,7 @@ void BackendImpl::packageRemoved(OUString const & url, OUString const & /*mediaT
         m_xRootRegistry->packageRemoved(item.first, item.second);
     }
 
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->removeEntry(url);
 }
 
@@ -418,7 +420,7 @@ Reference<deployment::XPackage> BackendImpl::bindPackage_(
 void BackendImpl::addDataToDb(
     OUString const & url, ExtensionBackendDb::Data const & data)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->addEntry(url, data);
 }
 
@@ -426,14 +428,14 @@ ExtensionBackendDb::Data BackendImpl::readDataFromDb(
     OUString const & url)
 {
     ExtensionBackendDb::Data data;
-    if (m_backendDb.get())
+    if (m_backendDb)
         data = m_backendDb->getEntry(url);
     return data;
 }
 
 void BackendImpl::revokeEntryFromDb(OUString const & url)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->revokeEntry(url);
 }
 
@@ -1027,11 +1029,9 @@ void BackendImpl::PackageImpl::exportTo(
                 Reference<ucb::XContentAccess>(
                     xResultSet, UNO_QUERY_THROW )->queryContent(),
                 xCmdEnv, getMyBackend()->getComponentContext() );
-            if (! destFolderContent.transferContent(
+            destFolderContent.transferContent(
                     subContent, ::ucbhelper::InsertOperation::Copy,
-                    OUString(), ucb::NameClash::OVERWRITE ))
-                throw RuntimeException( "UCB transferContent() failed!",
-                                        static_cast<OWeakObject *>(this) );
+                    OUString(), ucb::NameClash::OVERWRITE );
             progress.update( Any() ); // animating progress bar
         }
     }
@@ -1131,12 +1131,10 @@ void BackendImpl::PackageImpl::exportTo(
                 return;
             }
 
-            if (metainfFolderContent.transferContent(
+            metainfFolderContent.transferContent(
                   manifestContent, ::ucbhelper::InsertOperation::Copy,
-                  OUString(), ucb::NameClash::OVERWRITE ))
-            {
-                bSuccess = true;
-            }
+                  OUString(), ucb::NameClash::OVERWRITE );
+            bSuccess = true;
         }
         catch (const css::ucb::ContentCreationException &e)
         {
@@ -1279,7 +1277,7 @@ Sequence< Reference<deployment::XPackage> > BackendImpl::PackageImpl::getBundle(
     return *pBundle;
 }
 
-inline bool isBundle_( OUString const & mediaType )
+bool isBundle_( OUString const & mediaType )
 {
     // xxx todo: additional parsing?
     return !mediaType.isEmpty() &&
@@ -1472,7 +1470,7 @@ void BackendImpl::PackageImpl::scanBundle(
             // patch description:
             std::vector<sal_Int8> bytes( readFile( descrFileContent ) );
             OUStringBuffer buf;
-            if ( bytes.size() )
+            if ( !bytes.empty() )
             {
                 buf.append( OUString( reinterpret_cast<sal_Char const *>(
                                           bytes.data() ),

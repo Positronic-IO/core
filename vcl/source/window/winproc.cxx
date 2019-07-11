@@ -19,6 +19,7 @@
 
 #include <tools/debug.hxx>
 #include <tools/time.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/localedatawrapper.hxx>
 
@@ -447,7 +448,7 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
             // change immediately to the copy mode
             const MouseSettings& rMSettings = pMouseDownWin->GetSettings().GetMouseSettings();
             if ( (nCode & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE)) ==
-                 (rMSettings.GetStartDragCode() & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE)) )
+                 (MouseSettings::GetStartDragCode() & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE)) )
             {
                 if ( !pMouseDownWin->ImplGetFrameData()->mbStartDragCalled )
                 {
@@ -534,11 +535,8 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
                 pWinFrameData->mpMouseMoveWin = nullptr;
                 pWinFrameData->mbInMouseMove = false;
 
-                if ( pChild )
-                {
-                    if ( pChild->IsDisposed() )
-                        pChild = nullptr;
-                }
+                if ( pChild && pChild->IsDisposed() )
+                    pChild = nullptr;
                 if ( pMouseMoveWin->IsDisposed() )
                     return true;
             }
@@ -588,7 +586,7 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
                     pChild->ImplGetFrameData()->mnFirstMouseY      = nMouseY;
                     pChild->ImplGetFrameData()->mnFirstMouseCode   = nCode;
                     pChild->ImplGetFrameData()->mbStartDragCalled  = (nCode & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE)) !=
-                                                                     (rMSettings.GetStartDragCode() & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE));
+                                                                     (MouseSettings::GetStartDragCode() & (MOUSE_LEFT | MOUSE_RIGHT | MOUSE_MIDDLE));
                 }
                 pChild->ImplGetFrameData()->mnMouseDownTime = nMsgTime;
             }
@@ -765,9 +763,8 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
         else
         {
             // ContextMenu
-            const MouseSettings& rMSettings = pChild->GetSettings().GetMouseSettings();
-            if ( (nCode == rMSettings.GetContextMenuCode()) &&
-                 (nClicks == rMSettings.GetContextMenuClicks()) )
+            if ( (nCode == MouseSettings::GetContextMenuCode()) &&
+                 (nClicks == MouseSettings::GetContextMenuClicks()) )
             {
                 bool bContextMenu = (nSVEvent == MouseNotifyEvent::MOUSEBUTTONDOWN);
                 if ( bContextMenu )
@@ -820,6 +817,13 @@ static vcl::Window* ImplGetKeyInputWindow( vcl::Window* pWindow )
             if (static_cast<FloatingWindow *>(pChild)->GrabsFocus())
                 break;
         }
+        else if (pChild->ImplGetWindowImpl()->mbDockWin)
+        {
+            vcl::Window* pParent = pChild->GetWindow(GetWindowType::RealParent);
+            if (pParent && pParent->ImplGetWindowImpl()->mbFloatWin &&
+                static_cast<FloatingWindow *>(pParent)->GrabsFocus())
+                break;
+        }
         pChild = pChild->GetParent();
     }
 
@@ -828,7 +832,7 @@ static vcl::Window* ImplGetKeyInputWindow( vcl::Window* pWindow )
 
     pChild = pChild->ImplGetWindowImpl()->mpFrameData->mpFocusWin;
 
-    // no child - than no input
+    // no child - then no input
     if ( !pChild )
         return nullptr;
 
@@ -1076,7 +1080,7 @@ static bool ImplHandleKey( vcl::Window* pWindow, MouseNotifyEvent nSVEvent,
     }
 
     // #105591# send keyinput to parent if we are a floating window and the key was not processed yet
-    if( !bRet && pWindow->ImplGetWindowImpl()->mbFloatWin && pWindow->GetParent() && (pWindow->ImplGetWindowImpl()->mpFrame != pWindow->GetParent()->ImplGetWindowImpl()->mpFrame) )
+    if( !bRet && pWindow->ImplGetWindowImpl() && pWindow->ImplGetWindowImpl()->mbFloatWin && pWindow->GetParent() && (pWindow->ImplGetWindowImpl()->mpFrame != pWindow->GetParent()->ImplGetWindowImpl()->mpFrame) )
     {
         pChild = pWindow->GetParent();
 
@@ -1311,7 +1315,7 @@ class HandleGestureEventBase
 protected:
     ImplSVData* m_pSVData;
     VclPtr<vcl::Window> m_pWindow;
-    Point m_aMousePos;
+    Point const m_aMousePos;
 
 public:
     HandleGestureEventBase(vcl::Window *pWindow, const Point &rMousePos)
@@ -1508,9 +1512,9 @@ private:
     CommandSwipeData m_aSwipeData;
 public:
     HandleSwipeEvent(vcl::Window *pWindow, const SalSwipeEvent& rEvt)
-        : HandleGestureEvent(pWindow, Point(rEvt.mnX, rEvt.mnY))
+        : HandleGestureEvent(pWindow, Point(rEvt.mnX, rEvt.mnY)),
+          m_aSwipeData(rEvt.mnVelocityX)
     {
-        m_aSwipeData = CommandSwipeData(rEvt.mnVelocityX);
     }
     virtual bool CallCommand(vcl::Window *pWindow, const Point &/*rMousePos*/) override
     {
@@ -1530,9 +1534,9 @@ private:
     CommandLongPressData m_aLongPressData;
 public:
     HandleLongPressEvent(vcl::Window *pWindow, const SalLongPressEvent& rEvt)
-        : HandleGestureEvent(pWindow, Point(rEvt.mnX, rEvt.mnY))
+        : HandleGestureEvent(pWindow, Point(rEvt.mnX, rEvt.mnY)),
+          m_aLongPressData(rEvt.mnX, rEvt.mnY)
     {
-        m_aLongPressData = CommandLongPressData(rEvt.mnX, rEvt.mnY);
     }
     virtual bool CallCommand(vcl::Window *pWindow, const Point &/*rMousePos*/) override
     {
@@ -1765,19 +1769,15 @@ IMPL_LINK_NOARG(vcl::Window, ImplAsyncFocusHdl, void*, void)
                     pFocusWin->ImplGetWindowImpl()->mpCursor->ImplHide();
 
                 // call the Deactivate
-                vcl::Window* pOldFocusWindow = pFocusWin;
-                if ( pOldFocusWindow )
-                {
-                    vcl::Window* pOldOverlapWindow = pOldFocusWindow->ImplGetFirstOverlapWindow();
-                    vcl::Window* pOldRealWindow = pOldOverlapWindow->ImplGetWindow();
+                vcl::Window* pOldOverlapWindow = pFocusWin->ImplGetFirstOverlapWindow();
+                vcl::Window* pOldRealWindow = pOldOverlapWindow->ImplGetWindow();
 
-                    pOldOverlapWindow->ImplGetWindowImpl()->mbActive = false;
-                    pOldOverlapWindow->Deactivate();
-                    if ( pOldRealWindow != pOldOverlapWindow )
-                    {
-                        pOldRealWindow->ImplGetWindowImpl()->mbActive = false;
-                        pOldRealWindow->Deactivate();
-                    }
+                pOldOverlapWindow->ImplGetWindowImpl()->mbActive = false;
+                pOldOverlapWindow->Deactivate();
+                if ( pOldRealWindow != pOldOverlapWindow )
+                {
+                    pOldRealWindow->ImplGetWindowImpl()->mbActive = false;
+                    pOldRealWindow->Deactivate();
                 }
 
                 // TrackingMode is ended in ImplHandleLoseFocus
@@ -1843,6 +1843,11 @@ static void ImplHandleLoseFocus( vcl::Window* pWindow )
     vcl::Window* pFocusWin = pWindow->ImplGetWindowImpl()->mpFrameData->mpFocusWin;
     if ( pFocusWin && pFocusWin->ImplGetWindowImpl()->mpCursor )
         pFocusWin->ImplGetWindowImpl()->mpCursor->ImplHide();
+
+    // Make sure that no menu is visible when a toplevel window loses focus.
+    VclPtr<FloatingWindow> pFirstFloat = pSVData->maWinData.mpFirstFloat;
+    if (pFirstFloat && !pWindow->GetParent())
+        pFirstFloat->EndPopupMode(FloatWinPopupEndFlags::Cancel | FloatWinPopupEndFlags::CloseAll);
 }
 
 struct DelayedCloseEvent
@@ -1865,7 +1870,7 @@ static void DelayedCloseEventLink( void* pCEvent, void* )
     delete pEv;
 }
 
-void ImplHandleClose( vcl::Window* pWindow )
+static void ImplHandleClose( vcl::Window* pWindow )
 {
     ImplSVData* pSVData = ImplGetSVData();
 
@@ -1960,7 +1965,7 @@ static MouseEventModifiers ImplGetMouseButtonMode( SalMouseEvent const * pEvent 
     return nMode;
 }
 
-inline bool ImplHandleSalMouseLeave( vcl::Window* pWindow, SalMouseEvent const * pEvent )
+static bool ImplHandleSalMouseLeave( vcl::Window* pWindow, SalMouseEvent const * pEvent )
 {
     return ImplHandleMouseEvent( pWindow, MouseNotifyEvent::MOUSEMOVE, true,
                                  pEvent->mnX, pEvent->mnY,
@@ -1968,7 +1973,7 @@ inline bool ImplHandleSalMouseLeave( vcl::Window* pWindow, SalMouseEvent const *
                                  ImplGetMouseMoveMode( pEvent ) );
 }
 
-inline bool ImplHandleSalMouseMove( vcl::Window* pWindow, SalMouseEvent const * pEvent )
+static bool ImplHandleSalMouseMove( vcl::Window* pWindow, SalMouseEvent const * pEvent )
 {
     return ImplHandleMouseEvent( pWindow, MouseNotifyEvent::MOUSEMOVE, false,
                                  pEvent->mnX, pEvent->mnY,
@@ -1976,7 +1981,7 @@ inline bool ImplHandleSalMouseMove( vcl::Window* pWindow, SalMouseEvent const * 
                                  ImplGetMouseMoveMode( pEvent ) );
 }
 
-inline bool ImplHandleSalMouseButtonDown( vcl::Window* pWindow, SalMouseEvent const * pEvent )
+static bool ImplHandleSalMouseButtonDown( vcl::Window* pWindow, SalMouseEvent const * pEvent )
 {
     return ImplHandleMouseEvent( pWindow, MouseNotifyEvent::MOUSEBUTTONDOWN, false,
                                  pEvent->mnX, pEvent->mnY,
@@ -1989,7 +1994,7 @@ inline bool ImplHandleSalMouseButtonDown( vcl::Window* pWindow, SalMouseEvent co
                                  ImplGetMouseButtonMode( pEvent ) );
 }
 
-inline bool ImplHandleSalMouseButtonUp( vcl::Window* pWindow, SalMouseEvent const * pEvent )
+static bool ImplHandleSalMouseButtonUp( vcl::Window* pWindow, SalMouseEvent const * pEvent )
 {
     return ImplHandleMouseEvent( pWindow, MouseNotifyEvent::MOUSEBUTTONUP, false,
                                  pEvent->mnX, pEvent->mnY,
@@ -2021,10 +2026,12 @@ static bool ImplHandleMenuEvent( vcl::Window const * pWindow, SalMenuEvent* pEve
             switch( nEvent )
             {
                 case SalEvent::MenuActivate:
-                    bRet = pMenuBar->HandleMenuActivateEvent( static_cast<Menu*>(pEvent->mpMenu) );
+                    pMenuBar->HandleMenuActivateEvent( static_cast<Menu*>(pEvent->mpMenu) );
+                    bRet = true;
                     break;
                 case SalEvent::MenuDeactivate:
-                    bRet = pMenuBar->HandleMenuDeActivateEvent( static_cast<Menu*>(pEvent->mpMenu) );
+                    pMenuBar->HandleMenuDeActivateEvent( static_cast<Menu*>(pEvent->mpMenu) );
+                    bRet = true;
                     break;
                 case SalEvent::MenuHighlight:
                     bRet = pMenuBar->HandleMenuHighlightEvent( static_cast<Menu*>(pEvent->mpMenu), pEvent->mnId );

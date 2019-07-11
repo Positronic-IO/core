@@ -24,7 +24,6 @@
 #include <tools/helpers.hxx>
 #include <sot/formats.hxx>
 #include <sot/storage.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/localfilehelper.hxx>
 #include <svl/style.hxx>
@@ -63,156 +62,34 @@
 #include <drawinglayer/primitive2d/objectinfoprimitive2d.hxx>
 #include <memory>
 #include <vcl/GraphicLoader.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::io;
 
-const Graphic ImpLoadLinkedGraphic( const OUString& aFileName, const OUString& aReferer, const OUString& aFilterName )
-{
-    Graphic aGraphic;
-
-    SfxMedium aMed( aFileName, aReferer, StreamMode::STD_READ );
-    aMed.Download();
-
-    SvStream* pInStrm = aMed.GetInStream();
-    if ( pInStrm )
-    {
-        pInStrm->Seek( STREAM_SEEK_TO_BEGIN );
-        GraphicFilter& rGF = GraphicFilter::GetGraphicFilter();
-
-        const sal_uInt16 nFilter = !aFilterName.isEmpty() && rGF.GetImportFormatCount()
-            ? rGF.GetImportFormatNumber( aFilterName )
-            : GRFILTER_FORMAT_DONTKNOW;
-
-        css::uno::Sequence< css::beans::PropertyValue > aFilterData( 1 );
-
-        // TODO: Room for improvement:
-        // As this is a linked graphic the GfxLink is not needed if saving/loading our own format.
-        // But this link is required by some filters to access the native graphic (PDF export/MS export),
-        // there we should create a new service to provide this data if needed
-        aFilterData[ 0 ].Name = "CreateNativeLink";
-        aFilterData[ 0 ].Value <<= true;
-
-        // #i123042# for e.g SVG the path is needed, so hand it over here. I have no real idea
-        // what consequences this may have; maybe this is not handed over by purpose here. Not
-        // handing it over means that any GraphicFormat that internally needs a path as base
-        // to interpret included links may fail.
-        // Alternatively the path may be set at the result after this call when it is known
-        // that it is a SVG graphic, but only because no one yet tried to interpret it.
-        rGF.ImportGraphic( aGraphic, aFileName, *pInStrm, nFilter, nullptr, GraphicFilterImportFlags::NONE, &aFilterData );
-    }
-    aGraphic.setOriginURL(aFileName);
-    return aGraphic;
-}
-
-class SdrGraphicUpdater;
 class SdrGraphicLink : public sfx2::SvBaseLink
 {
     SdrGrafObj&         rGrafObj;
-    SdrGraphicUpdater*  pGraphicUpdater;
 
 public:
     explicit            SdrGraphicLink(SdrGrafObj& rObj);
-    virtual             ~SdrGraphicLink() override;
 
     virtual void        Closed() override;
 
     virtual ::sfx2::SvBaseLink::UpdateResult DataChanged(
         const OUString& rMimeType, const css::uno::Any & rValue ) override;
-    void                DataChanged( const Graphic& rGraphic );
 
     void                Connect() { GetRealObject(); }
-    void                UpdateAsynchron();
-    void                RemoveGraphicUpdater();
 
     const OUString& getReferer() const { return rGrafObj.aReferer; }
 };
 
-class SdrGraphicUpdater : public ::osl::Thread
-{
-public:
-    SdrGraphicUpdater( const OUString& rFileName, const OUString& rFilterName, SdrGraphicLink& );
-
-    void Terminate();
-
-    bool GraphicLinkChanged( const OUString& rFileName ){ return maFileName != rFileName;    };
-
-protected:
-
-    /** is called from the inherited create method and acts as the
-        main function of this thread.
-    */
-    virtual void SAL_CALL run() override;
-
-    /** Called after the thread is terminated via the terminate
-        method.  Used to kill the thread by calling delete on this.
-    */
-    virtual void SAL_CALL onTerminated() override;
-
-private:
-
-    const OUString  maFileName;
-    const OUString  maFilterName;
-    SdrGraphicLink& mrGraphicLink;
-
-    volatile bool   mbIsTerminated;
-};
-
-SdrGraphicUpdater::SdrGraphicUpdater( const OUString& rFileName, const OUString& rFilterName, SdrGraphicLink& rGraphicLink )
-: maFileName( rFileName )
-, maFilterName( rFilterName )
-, mrGraphicLink( rGraphicLink )
-, mbIsTerminated( false )
-{
-    create();
-}
-
-void SdrGraphicUpdater::Terminate()
-{
-    mbIsTerminated = true;
-}
-
-void SAL_CALL SdrGraphicUpdater::onTerminated()
-{
-    delete this;
-}
-
-void SAL_CALL SdrGraphicUpdater::run()
-{
-    osl_setThreadName("SdrGraphicUpdater");
-
-    Graphic aGraphic( ImpLoadLinkedGraphic( maFileName, mrGraphicLink.getReferer(), maFilterName ) );
-    SolarMutexGuard aSolarGuard;
-    if ( !mbIsTerminated )
-    {
-        mrGraphicLink.DataChanged( aGraphic );
-        mrGraphicLink.RemoveGraphicUpdater();
-    }
-}
-
 SdrGraphicLink::SdrGraphicLink(SdrGrafObj& rObj)
 : ::sfx2::SvBaseLink( ::SfxLinkUpdateMode::ONCALL, SotClipboardFormatId::SVXB )
 , rGrafObj( rObj )
-, pGraphicUpdater( nullptr )
 {
     SetSynchron( false );
-}
-
-SdrGraphicLink::~SdrGraphicLink()
-{
-    if ( pGraphicUpdater )
-        pGraphicUpdater->Terminate();
-}
-
-void SdrGraphicLink::DataChanged( const Graphic& rGraphic )
-{
-    rGrafObj.ImpSetLinkedGraphic( rGraphic );
-}
-
-void SdrGraphicLink::RemoveGraphicUpdater()
-{
-    pGraphicUpdater = nullptr;
 }
 
 ::sfx2::SvBaseLink::UpdateResult SdrGraphicLink::DataChanged(
@@ -226,7 +103,7 @@ void SdrGraphicLink::RemoveGraphicUpdater()
         sfx2::LinkManager::GetDisplayNames( this, nullptr, &rGrafObj.aFileName, nullptr, &rGrafObj.aFilterName );
 
         Graphic aGraphic;
-        if( sfx2::LinkManager::GetGraphicFromAny( rMimeType, rValue, aGraphic ))
+        if (sfx2::LinkManager::GetGraphicFromAny(rMimeType, rValue, getReferer(), aGraphic, nullptr))
         {
             rGrafObj.ImpSetLinkedGraphic(aGraphic);
         }
@@ -248,34 +125,17 @@ void SdrGraphicLink::Closed()
     SvBaseLink::Closed();
 }
 
-void SdrGraphicLink::UpdateAsynchron()
+std::unique_ptr<sdr::properties::BaseProperties> SdrGrafObj::CreateObjectSpecificProperties()
 {
-    if( GetObj() )
-    {
-        if ( pGraphicUpdater )
-        {
-            if ( pGraphicUpdater->GraphicLinkChanged( rGrafObj.GetFileName() ) )
-            {
-                pGraphicUpdater->Terminate();
-                pGraphicUpdater = new SdrGraphicUpdater( rGrafObj.GetFileName(), rGrafObj.GetFilterName(), *this );
-            }
-        }
-        else
-            pGraphicUpdater = new SdrGraphicUpdater( rGrafObj.GetFileName(), rGrafObj.GetFilterName(), *this );
-    }
-}
-
-sdr::properties::BaseProperties* SdrGrafObj::CreateObjectSpecificProperties()
-{
-    return new sdr::properties::GraphicProperties(*this);
+    return o3tl::make_unique<sdr::properties::GraphicProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrGrafObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrGrafObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfGraphic(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfGraphic>(*this);
 }
 
 // check if SVG and if try to get ObjectInfoPrimitive2D and extract info
@@ -333,6 +193,7 @@ SdrGrafObj::SdrGrafObj(SdrModel& rSdrModel)
     ,mbIsSignatureLine(false)
     ,mbIsSignatureLineShowSignDate(true)
     ,mbIsSignatureLineCanAddComment(false)
+    ,mbSignatureLineIsSigned(false)
 {
     onGraphicChanged();
 
@@ -343,7 +204,6 @@ SdrGrafObj::SdrGrafObj(SdrModel& rSdrModel)
 
     // #i25616#
     mbLineIsOutsideGeometry = true;
-    mbInsidePaint = false;
 
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = false;
@@ -360,6 +220,7 @@ SdrGrafObj::SdrGrafObj(
     ,mbIsSignatureLine(false)
     ,mbIsSignatureLineShowSignDate(true)
     ,mbIsSignatureLineCanAddComment(false)
+    ,mbSignatureLineIsSigned(false)
 {
     onGraphicChanged();
 
@@ -370,7 +231,6 @@ SdrGrafObj::SdrGrafObj(
 
     // #i25616#
     mbLineIsOutsideGeometry = true;
-    mbInsidePaint = false;
 
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = false;
@@ -386,6 +246,7 @@ SdrGrafObj::SdrGrafObj(
     ,mbIsSignatureLine(false)
     ,mbIsSignatureLineShowSignDate(true)
     ,mbIsSignatureLineCanAddComment(false)
+    ,mbSignatureLineIsSigned(false)
 {
     onGraphicChanged();
 
@@ -396,7 +257,6 @@ SdrGrafObj::SdrGrafObj(
 
     // #i25616#
     mbLineIsOutsideGeometry = true;
-    mbInsidePaint = false;
 
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = false;
@@ -421,7 +281,7 @@ const GraphicObject& SdrGrafObj::GetGraphicObject(bool bForceSwapIn) const
 {
     if (bForceSwapIn)
         ForceSwapIn();
-    return *mpGraphicObject.get();
+    return *mpGraphicObject;
 }
 
 const GraphicObject* SdrGrafObj::GetReplacementGraphicObject() const
@@ -434,7 +294,7 @@ const GraphicObject* SdrGrafObj::GetReplacementGraphicObject() const
         {
             const_cast< SdrGrafObj* >(this)->mpReplacementGraphicObject.reset(new GraphicObject(rVectorGraphicDataPtr->getReplacement()));
         }
-        else if (mpGraphicObject->GetGraphic().getPdfData().hasElements() ||
+        else if (mpGraphicObject->GetGraphic().hasPdfData() ||
                  mpGraphicObject->GetGraphic().GetType() == GraphicType::GdiMetafile)
         {
             // Replacement graphic for PDF and metafiles is just the bitmap.
@@ -543,12 +403,6 @@ bool SdrGrafObj::IsAnimated() const
 bool SdrGrafObj::IsEPS() const
 {
     return mpGraphicObject->IsEPS();
-}
-
-// TODO Remove
-bool SdrGrafObj::IsSwappedOut() const
-{
-    return false;
 }
 
 MapMode SdrGrafObj::GetGrafPrefMapMode() const
@@ -689,23 +543,6 @@ void SdrGrafObj::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
 sal_uInt16 SdrGrafObj::GetObjIdentifier() const
 {
     return sal_uInt16( OBJ_GRAF );
-}
-
-/* The graphic of the GraphicLink will be loaded. If it is called with
-   bAsynchron = true then the graphic will be set later via DataChanged
-*/
-bool SdrGrafObj::ImpUpdateGraphicLink( bool bAsynchron ) const
-{
-    bool bRet = false;
-    if( pGraphicLink )
-    {
-        if ( bAsynchron )
-            pGraphicLink->UpdateAsynchron();
-        else
-            pGraphicLink->DataChanged( ImpLoadLinkedGraphic( aFileName, aReferer, aFilterName ) );
-        bRet = true;
-    }
-    return bRet;
 }
 
 void SdrGrafObj::ImpSetLinkedGraphic( const Graphic& rGraphic )
@@ -885,7 +722,6 @@ SdrGrafObj& SdrGrafObj::operator=( const SdrGrafObj& rObj )
         return *this;
     SdrRectObj::operator=( rObj );
 
-    mpGraphicObject->SetGraphic( rObj.GetGraphic(), &rObj.GetGraphicObject() );
     aFileName = rObj.aFileName;
     aFilterName = rObj.aFilterName;
     bMirrored = rObj.bMirrored;
@@ -898,7 +734,12 @@ SdrGrafObj& SdrGrafObj::operator=( const SdrGrafObj& rObj )
     maSignatureLineSigningInstructions = rObj.maSignatureLineSigningInstructions;
     mbIsSignatureLineShowSignDate = rObj.mbIsSignatureLineShowSignDate;
     mbIsSignatureLineCanAddComment = rObj.mbIsSignatureLineCanAddComment;
+    mbSignatureLineIsSigned = false;
     mpSignatureLineUnsignedGraphic = rObj.mpSignatureLineUnsignedGraphic;
+    if (mbIsSignatureLine && rObj.mpSignatureLineUnsignedGraphic)
+        mpGraphicObject->SetGraphic(rObj.mpSignatureLineUnsignedGraphic);
+    else
+        mpGraphicObject->SetGraphic( rObj.GetGraphic(), &rObj.GetGraphicObject() );
 
     if( rObj.IsLinkedGraphic() )
     {
@@ -909,40 +750,17 @@ SdrGrafObj& SdrGrafObj::operator=( const SdrGrafObj& rObj )
     return *this;
 }
 
-basegfx::B2DPolyPolygon SdrGrafObj::TakeXorPoly() const
-{
-    if(mbInsidePaint)
-    {
-        basegfx::B2DPolyPolygon aRetval;
-
-        // take grown rectangle
-        const sal_Int32 nHalfLineWidth(ImpGetLineWdt() / 2);
-        const tools::Rectangle aGrownRect(
-            maRect.Left() - nHalfLineWidth,
-            maRect.Top() - nHalfLineWidth,
-            maRect.Right() + nHalfLineWidth,
-            maRect.Bottom() + nHalfLineWidth);
-
-        XPolygon aXPoly(ImpCalcXPoly(aGrownRect, GetEckenradius()));
-        aRetval.append(aXPoly.getB2DPolygon());
-
-        return aRetval;
-    }
-    else
-    {
-        // call parent
-        return SdrRectObj::TakeXorPoly();
-    }
-}
-
 sal_uInt32 SdrGrafObj::GetHdlCount() const
 {
     return 8L;
 }
 
-SdrHdl* SdrGrafObj::GetHdl(sal_uInt32 nHdlNum) const
+void SdrGrafObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    return SdrRectObj::GetHdl( nHdlNum + 1 );
+    SdrHdlList tempList(nullptr);
+    SdrRectObj::AddToHdlList( tempList );
+    tempList.RemoveHdl(0);
+    tempList.MoveTo(rHdlList);
 }
 
 void SdrGrafObj::NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact)
@@ -981,10 +799,10 @@ void SdrGrafObj::RestGeoData(const SdrObjGeoData& rGeo)
     bMirrored=rGGeo.bMirrored;
 }
 
-void SdrGrafObj::SetPage( SdrPage* pNewPage )
+void SdrGrafObj::handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage)
 {
-    bool bRemove = pNewPage == nullptr && pPage != nullptr;
-    bool bInsert = pNewPage != nullptr && pPage == nullptr;
+    const bool bRemove(pNewPage == nullptr && pOldPage != nullptr);
+    const bool bInsert(pNewPage != nullptr && pOldPage == nullptr);
 
     if( bRemove )
     {
@@ -996,30 +814,13 @@ void SdrGrafObj::SetPage( SdrPage* pNewPage )
             ImpDeregisterLink();
     }
 
-    if(!GetStyleSheet() && pNewPage)
-    {
-        // #i119287# Set default StyleSheet for SdrGrafObj here, it is different from 'Default'. This
-        // needs to be done before the style 'Default' is set from the :SetModel() call which is triggered
-        // from the following :SetPage().
-        // TTTT: Needs to be moved in branch aw080 due to having a SdrModel from the beginning, is at this
-        // place for convenience currently (works in both versions, is not in the way)
-        SfxStyleSheet* pSheet(pNewPage->getSdrModelFromSdrPage().GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj());
-
-        if(pSheet)
-        {
-            SetStyleSheet(pSheet, false);
-        }
-        else
-        {
-            SetMergedItem(XFillStyleItem(drawing::FillStyle_NONE));
-            SetMergedItem(XLineStyleItem(drawing::LineStyle_NONE));
-        }
-    }
-
-    SdrRectObj::SetPage( pNewPage );
+    // call parent
+    SdrRectObj::handlePageChange(pOldPage, pNewPage);
 
     if (!aFileName.isEmpty() && bInsert)
+    {
         ImpRegisterLink();
+    }
 }
 
 void SdrGrafObj::StartAnimation()
@@ -1082,6 +883,21 @@ GDIMetaFile SdrGrafObj::GetMetaFile(GraphicType &rGraphicType) const
         return GetTransformedGraphic(SdrGrafObjTransformsAttrs::COLOR|SdrGrafObjTransformsAttrs::MIRROR).GetGDIMetaFile();
     }
     return GDIMetaFile();
+}
+
+bool SdrGrafObj::isEmbeddedPdfData() const
+{
+   return mpGraphicObject->GetGraphic().hasPdfData();
+}
+
+std::shared_ptr<uno::Sequence<sal_Int8>> const & SdrGrafObj::getEmbeddedPdfData() const
+{
+   return mpGraphicObject->GetGraphic().getPdfData();
+}
+
+sal_Int32 SdrGrafObj::getEmbeddedPageNumber() const
+{
+   return mpGraphicObject->GetGraphic().getPageNumber();
 }
 
 SdrObject* SdrGrafObj::DoConvertToPolyObj(bool bBezier, bool bAddText ) const
@@ -1415,7 +1231,7 @@ void SdrGrafObj::addCropHandles(SdrHdlList& rTarget) const
             }
 
             rTarget.AddHdl(
-                new SdrCropViewHdl(
+                o3tl::make_unique<SdrCropViewHdl>(
                     aMatrixForCropViewHdl,
                     GetGraphicObject().GetGraphic(),
                     fCropLeft,
@@ -1428,21 +1244,21 @@ void SdrGrafObj::addCropHandles(SdrHdlList& rTarget) const
     basegfx::B2DPoint aPos;
 
     aPos = aMatrix * basegfx::B2DPoint(0.0, 0.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::UpperLeft, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::UpperLeft, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(0.5, 0.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Upper, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Upper, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(1.0, 0.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::UpperRight, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::UpperRight, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(0.0, 0.5);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Left , fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Left , fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(1.0, 0.5);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Right, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Right, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(0.0, 1.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::LowerLeft, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::LowerLeft, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(0.5, 1.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Lower, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::Lower, fShearX, fRotate));
     aPos = aMatrix * basegfx::B2DPoint(1.0, 1.0);
-    rTarget.AddHdl(new SdrCropHdl(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::LowerRight, fShearX, fRotate));
+    rTarget.AddHdl(o3tl::make_unique<SdrCropHdl>(Point(basegfx::fround(aPos.getX()), basegfx::fround(aPos.getY())), SdrHdlKind::LowerRight, fShearX, fRotate));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

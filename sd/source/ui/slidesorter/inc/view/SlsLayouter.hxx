@@ -20,17 +20,15 @@
 #ifndef INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_VIEW_SLSLAYOUTER_HXX
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_VIEW_SLSLAYOUTER_HXX
 
-#include <SlideSorter.hxx>
-#include <view/SlsPageObjectLayouter.hxx>
-#include <view/SlsTheme.hxx>
+#include <vcl/vclptr.hxx>
+#include <tools/gen.hxx>
 #include <sal/types.h>
-#include <tools/fract.hxx>
-#include <vcl/mapmod.hxx>
 #include <memory>
-#include <vector>
-#include <utility>
 
-class Size;
+namespace sd { class Window; }
+namespace sd { namespace slidesorter { namespace model { class SlideSorterModel; } } }
+namespace sd { namespace slidesorter { namespace view { class PageObjectLayouter; } } }
+namespace sd { namespace slidesorter { namespace view { class Theme; } } }
 
 namespace sd { namespace slidesorter { namespace view {
 
@@ -45,7 +43,7 @@ class InsertPosition;
     5.) Borders around every page object.
     6.) Vertical and horizontal borders between enclosing page and outer
         page objects.
-    From these it calculates various output values:
+    From these, it calculates various output values:
     1.) The width of page objects.
     2.) The number of columns.
     3.) The size of the enclosing page.

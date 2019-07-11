@@ -28,9 +28,10 @@
 #include <vcl/weld.hxx>
 #include <svl/SfxBroadcaster.hxx>
 #include <svl/lstner.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/galmisc.hxx>
+#include <memory>
 #include <vector>
 
 class SotStorage;
@@ -51,8 +52,6 @@ struct GalleryObject
     OUString        maPath;
 };
 
-
-typedef ::std::vector< GalleryObject* > GalleryObjectList;
 
 class GalleryThemeEntry;
 class SgaObject;
@@ -77,11 +76,11 @@ class SVX_DLLPUBLIC GalleryTheme : public SfxBroadcaster
 
 private:
 
-    GalleryObjectList           aObjectList;
+    ::std::vector< std::unique_ptr<GalleryObject> > aObjectList;
     OUString                    m_aDestDir;
     bool                        m_bDestDirRelative;
     tools::SvRef<SotStorage>    aSvDrawStorageRef;
-    Gallery*                    pParent;
+    Gallery* const              pParent;
     GalleryThemeEntry*          pThm;
     sal_uInt32                  mnThemeLockCount;
     sal_uInt32                  mnBroadcasterLockCount;
@@ -90,17 +89,17 @@ private:
     bool                        bAbortActualize;
 
     SAL_DLLPRIVATE void         ImplCreateSvDrawStorage();
-    SgaObject*                  ImplReadSgaObject( GalleryObject const * pEntry );
+    std::unique_ptr<SgaObject>  ImplReadSgaObject( GalleryObject const * pEntry );
     SAL_DLLPRIVATE bool         ImplWriteSgaObject(const SgaObject& rObj, sal_uInt32 nPos, GalleryObject* pExistentEntry);
     SAL_DLLPRIVATE void         ImplWrite();
     SAL_DLLPRIVATE const GalleryObject* ImplGetGalleryObject(sal_uInt32 nPos) const
-                                { return ( nPos < aObjectList.size() ) ? aObjectList[ nPos ] : nullptr; }
+                                { return aObjectList[ nPos ].get(); }
     const GalleryObject*        ImplGetGalleryObject( const INetURLObject& rURL );
 
     SAL_DLLPRIVATE sal_uInt32   ImplGetGalleryObjectPos( const GalleryObject* pObj ) const
                                 {
                                     for (sal_uInt32 i = 0, n = aObjectList.size(); i < n; ++i)
-                                        if ( pObj == aObjectList[ i ] )
+                                        if ( pObj == aObjectList[ i ].get() )
                                             return i;
                                     return SAL_MAX_UINT32;
                                 }
@@ -122,8 +121,7 @@ public:
 
     SAL_DLLPRIVATE sal_uInt32   GetObjectCount() const { return aObjectList.size(); }
 
-    SgaObject*                  AcquireObject(sal_uInt32 nPos);
-    static void                 ReleaseObject(SgaObject* pObj);
+    std::unique_ptr<SgaObject>  AcquireObject(sal_uInt32 nPos);
 
     bool                        InsertObject(const SgaObject& rObj, sal_uInt32 nPos = SAL_MAX_UINT32);
     void                        RemoveObject(sal_uInt32 nPos);
@@ -138,6 +136,7 @@ public:
     SAL_DLLPRIVATE const INetURLObject& GetThmURL() const;
     const INetURLObject&        GetSdgURL() const;
     SAL_DLLPRIVATE const INetURLObject& GetSdvURL() const;
+    SAL_DLLPRIVATE const INetURLObject& GetStrURL() const;
 
     sal_uInt32                  GetId() const;
     SAL_DLLPRIVATE void         SetId( sal_uInt32 nNewId, bool bResetThemeName );
@@ -205,7 +204,7 @@ public:
 
     SAL_DLLPRIVATE SvStream&    WriteData( SvStream& rOut ) const;
     SAL_DLLPRIVATE SvStream&    ReadData( SvStream& rIn );
-    static void                 InsertAllThemes(weld::ComboBoxText& rListBox);
+    static void                 InsertAllThemes(weld::ComboBox& rListBox);
 
     // for buffering PreviewBitmaps and strings for object and path
     SAL_DLLPRIVATE void GetPreviewBitmapExAndStrings(sal_uInt32 nPos, BitmapEx& rBitmapEx, Size& rSize, OUString& rTitle, OUString& rPath) const;

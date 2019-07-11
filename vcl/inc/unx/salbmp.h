@@ -158,8 +158,8 @@ private:
 
     Pixmap          maPixmap;
     SalTwoRect      maTwoRect;
-    long            mnDepth;
-    SalX11Screen    mnXScreen;
+    long const            mnDepth;
+    SalX11Screen const    mnXScreen;
 
     static void     ImplDraw(
                         Drawable aSrcDrawable,
@@ -211,14 +211,12 @@ public:
 };
 
 
-struct ImplBmpObj;
+class X11SalBitmap;
 
 class ImplSalBitmapCache
 {
 private:
-    typedef ::std::list< ImplBmpObj* > BmpList_impl;
-
-    BmpList_impl    maBmpList;
+    std::vector<X11SalBitmap*>  maBmpList;
 
 public:
 

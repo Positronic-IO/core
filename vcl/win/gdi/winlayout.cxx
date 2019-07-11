@@ -20,8 +20,11 @@
 #include <memory>
 #include <osl/module.h>
 #include <osl/file.h>
+#include <sal/log.hxx>
 
 #include <comphelper/windowserrorstring.hxx>
+#include <comphelper/scopeguard.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <opengl/texture.hxx>
 #include <opengl/win/gdiimpl.hxx>
@@ -47,17 +50,35 @@
 #include <shlwapi.h>
 #include <winver.h>
 
-GlobalGlyphCache * GlobalGlyphCache::get() {
-    SalData * data = GetSalData();
-    if (!data->m_pGlobalGlyphCache) {
-        data->m_pGlobalGlyphCache.reset(new GlobalGlyphCache);
-    }
-    return data->m_pGlobalGlyphCache.get();
+GlobalOpenGLGlyphCache * GlobalOpenGLGlyphCache::get()
+{
+    SalData *data = GetSalData();
+    if (!data->m_pGlobalOpenGLGlyphCache)
+        data->m_pGlobalOpenGLGlyphCache.reset(new GlobalOpenGLGlyphCache);
+    return data->m_pGlobalOpenGLGlyphCache.get();
 }
 
-bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& rGraphics)
+bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, HFONT hFont, int nGlyphIndex,
+                                        SalGraphics& rGraphics, const GenericSalLayout& rLayout)
 {
     OpenGLGlyphDrawElement aElement;
+
+    ScopedHDC aHDC(CreateCompatibleDC(hDC));
+
+    if (!aHDC)
+    {
+        SAL_WARN("vcl.gdi", "CreateCompatibleDC failed: " << WindowsErrorString(GetLastError()));
+        return false;
+    }
+
+    const HFONT hOrigFont = static_cast<HFONT>(SelectObject(aHDC.get(), hFont));
+    if (hOrigFont == nullptr)
+    {
+        SAL_WARN("vcl.gdi", "SelectObject failed: " << WindowsErrorString(GetLastError()));
+        return false;
+    }
+    const ::comphelper::ScopeGuard aHFONTrestoreScopeGuard(
+        [&aHDC,hOrigFont]() { SelectFont(aHDC.get(), hOrigFont); });
 
     // For now we assume DWrite is present and we won't bother with fallback paths.
     D2DWriteTextOutRenderer * pTxt = dynamic_cast<D2DWriteTextOutRenderer *>(&TextOutRenderer::get(true));
@@ -66,11 +87,12 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
 
     pTxt->changeTextAntiAliasMode(D2DTextAntiAliasMode::AntiAliased);
 
-    if (!pTxt->BindFont(hDC))
+    if (!pTxt->BindFont(aHDC.get()))
     {
         SAL_WARN("vcl.gdi", "Binding of font failed. The font might not be supported by DirectWrite.");
         return false;
     }
+    const ::comphelper::ScopeGuard aFontReleaseScopeGuard([&pTxt]() { pTxt->ReleaseFont(); });
 
     std::vector<WORD> aGlyphIndices(1);
     aGlyphIndices[0] = nGlyphIndex;
@@ -96,10 +118,11 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
     std::vector<float> aGlyphAdv(1);   // offsets between glyphs
     std::vector<DWRITE_GLYPH_OFFSET> aGlyphOffset(1, DWRITE_GLYPH_OFFSET{0.0f, 0.0f});
     std::vector<int> aEnds(1); // end of each glyph box
+    float fHScale = getHScale();
     float totWidth = 0;
     {
         int overhang = aInkBoxes[0].Left();
-        int blackWidth = aInkBoxes[0].getWidth(); // width of non-AA pixels
+        int blackWidth = aInkBoxes[0].getWidth() * fHScale; // width of non-AA pixels
         aElement.maLeftOverhangs = overhang;
 
         aGlyphAdv[0] = blackWidth + aElement.getExtraSpace();
@@ -114,21 +137,10 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
 
     UINT nPos = 0;
 
-    // FIXME: really I don't get why 'vertical' makes any difference [!] what does it mean !?
-    if (aElement.mbVertical)
-    {
-        aElement.maLocation.SetLeft(0);
-        aElement.maLocation.SetRight(nBitmapWidth);
-        aElement.maLocation.SetTop(nPos);
-        aElement.maLocation.SetBottom( nPos + aGlyphAdv[0] + aElement.maLeftOverhangs );
-    }
-    else
-    {
-        aElement.maLocation.SetLeft(nPos);
-        aElement.maLocation.SetRight(aEnds[0]);
-        aElement.maLocation.SetTop(0);
-        aElement.maLocation.SetBottom( bounds.getHeight() + aElement.getExtraSpace() );
-    }
+    aElement.maLocation.SetLeft(nPos);
+    aElement.maLocation.SetRight(aEnds[0]);
+    aElement.maLocation.SetTop(0);
+    aElement.maLocation.SetBottom(bounds.getHeight() + aElement.getExtraSpace());
     nPos = aEnds[0];
 
     OpenGLCompatibleDC aDC(rGraphics, 0, 0, nBitmapWidth, nBitmapHeight);
@@ -143,14 +155,11 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
 
     ID2D1SolidColorBrush* pBrush = nullptr;
     if (!SUCCEEDED(pRT->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &pBrush)))
-    {
-        pTxt->ReleaseFont();
         return false;
-    }
 
     D2D1_POINT_2F baseline = {
-        aElement.getExtraOffset(),
-        aElement.getExtraOffset() + aElement.mnBaselineOffset
+        static_cast<FLOAT>(aElement.getExtraOffset()),
+        static_cast<FLOAT>(aElement.getExtraOffset() + aElement.mnBaselineOffset)
     };
 
     DWRITE_GLYPH_RUN glyphs = {
@@ -164,6 +173,7 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
         0
     };
 
+    WinFontTransformGuard aTransformGuard(pRT, fHScale, rLayout, baseline);
     pRT->BeginDraw();
     pRT->DrawGlyphRun(baseline, &glyphs, pBrush);
     HRESULT hResult = pRT->EndDraw();
@@ -182,14 +192,12 @@ bool WinFontInstance::CacheGlyphToAtlas(HDC hDC, int nGlyphIndex, SalGraphics& r
         return false;
     }
 
-    pTxt->ReleaseFont();
-
-    if (!GlyphCache::ReserveTextureSpace(aElement, nBitmapWidth, nBitmapHeight))
+    if (!OpenGLGlyphCache::ReserveTextureSpace(aElement, nBitmapWidth, nBitmapHeight))
         return false;
     if (!aDC.copyToTexture(aElement.maTexture))
         return false;
 
-    maGlyphCache.PutDrawElementInCache(aElement, nGlyphIndex);
+    maOpenGLGlyphCache.PutDrawElementInCache(aElement, nGlyphIndex);
 
     return true;
 }
@@ -258,7 +266,7 @@ bool ExTextOutRenderer::operator ()(GenericSalLayout const &rLayout,
     const GlyphItem* pGlyph;
     while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))
     {
-        WORD glyphWStr[] = { pGlyph->maGlyphId };
+        WORD glyphWStr[] = { pGlyph->m_aGlyphId };
         if (hAltFont && pGlyph->IsVertical() == bUseAltFont)
         {
             bUseAltFont = !bUseAltFont;
@@ -289,23 +297,22 @@ std::unique_ptr<SalLayout> WinSalGraphics::GetTextLayout(ImplLayoutArgs& /*rArgs
 
     assert(mpWinFontEntry[nFallbackLevel]->GetFontFace());
 
-    mpWinFontEntry[nFallbackLevel]->SetHDC(getHDC());
-    GenericSalLayout *aLayout = new GenericSalLayout(*mpWinFontEntry[nFallbackLevel]);
-    return std::unique_ptr<SalLayout>(aLayout);
+    mpWinFontEntry[nFallbackLevel]->SetGraphics(this);
+    return o3tl::make_unique<GenericSalLayout>(*mpWinFontEntry[nFallbackLevel]);
 }
 
-LogicalFontInstance * WinSalGraphics::GetWinFontEntry(int const nFallbackLevel)
-{
-    return mpWinFontEntry[nFallbackLevel];
-}
-
-WinFontInstance::WinFontInstance(const PhysicalFontFace& rPFF, const FontSelectPattern& rFSP)
+WinFontInstance::WinFontInstance(const WinFontFace& rPFF, const FontSelectPattern& rFSP)
     : LogicalFontInstance(rPFF, rFSP)
+    , m_pGraphics(nullptr)
+    , m_hFont(nullptr)
+    , m_fScale(1.0f)
 {
 }
 
 WinFontInstance::~WinFontInstance()
 {
+    if (m_hFont)
+        ::DeleteFont(m_hFont);
 }
 
 bool WinFontInstance::hasHScale() const
@@ -316,12 +323,26 @@ bool WinFontInstance::hasHScale() const
     return nWidth != nHeight;
 }
 
+float WinFontInstance::getHScale() const
+{
+    const FontSelectPattern& rPattern = GetFontSelectPattern();
+    int nHeight(rPattern.mnHeight);
+    if (!nHeight)
+        return 1.0;
+    float nWidth(rPattern.mnWidth ? rPattern.mnWidth * GetAverageWidthFactor() : nHeight);
+    return nWidth / nHeight;
+}
+
 static hb_blob_t* getFontTable(hb_face_t* /*face*/, hb_tag_t nTableTag, void* pUserData)
 {
     sal_uLong nLength = 0;
     unsigned char* pBuffer = nullptr;
-    HFONT hFont = static_cast<HFONT>(pUserData);
-    HDC hDC = GetDC(nullptr);
+    WinFontInstance* pFont = static_cast<WinFontInstance*>(pUserData);
+    HDC hDC = pFont->GetGraphics()->getHDC();
+    HFONT hFont = pFont->GetHFONT();
+    assert(hDC);
+    assert(hFont);
+
     HGDIOBJ hOrigFont = SelectObject(hDC, hFont);
     nLength = ::GetFontData(hDC, OSL_NETDWORD(nTableTag), 0, nullptr, 0);
     if (nLength > 0 && nLength != GDI_ERROR)
@@ -330,7 +351,6 @@ static hb_blob_t* getFontTable(hb_face_t* /*face*/, hb_tag_t nTableTag, void* pU
         ::GetFontData(hDC, OSL_NETDWORD(nTableTag), 0, pBuffer, nLength);
     }
     SelectObject(hDC, hOrigFont);
-    ReleaseDC(nullptr, hDC);
 
     hb_blob_t* pBlob = nullptr;
     if (pBuffer != nullptr)
@@ -341,9 +361,8 @@ static hb_blob_t* getFontTable(hb_face_t* /*face*/, hb_tag_t nTableTag, void* pU
 
 hb_font_t* WinFontInstance::ImplInitHbFont()
 {
-    assert(m_hDC);
-    m_hFont = static_cast<HFONT>(GetCurrentObject(m_hDC, OBJ_FONT));
-    hb_font_t* pHbFont = InitHbFont(hb_face_create_for_tables(getFontTable, m_hFont, nullptr));
+    assert(m_pGraphics);
+    hb_font_t* pHbFont = InitHbFont(hb_face_create_for_tables(getFontTable, this, nullptr));
 
     // Calculate the AverageWidthFactor, see LogicalFontInstance::GetScale().
     if (GetFontSelectPattern().mnWidth)
@@ -359,11 +378,12 @@ hb_font_t* WinFontInstance::ImplInitHbFont()
         aLogFont.lfWidth = 0;
 
         // Get the font metrics.
+        HDC hDC = m_pGraphics->getHDC();
         HFONT hNewFont = CreateFontIndirectW(&aLogFont);
-        HFONT hOldFont = static_cast<HFONT>(SelectObject(m_hDC, hNewFont));
+        HGDIOBJ hOrigFont = SelectObject(hDC, hNewFont);
         TEXTMETRICW aFontMetric;
-        GetTextMetricsW(m_hDC, &aFontMetric);
-        SelectObject(m_hDC, hOldFont);
+        GetTextMetricsW(hDC, &aFontMetric);
+        SelectObject(hDC, hOrigFont);
         DeleteObject(hNewFont);
 
         SetAverageWidthFactor(nUPEM / aFontMetric.tmAveCharWidth);
@@ -372,12 +392,14 @@ hb_font_t* WinFontInstance::ImplInitHbFont()
     return pHbFont;
 }
 
-void WinFontInstance::SetHDC(const HDC hDC)
+void WinFontInstance::SetGraphics(WinSalGraphics *pGraphics)
 {
-    if (m_hDC == hDC)
+    m_pGraphics = pGraphics;
+    if (m_hFont)
         return;
-    ReleaseHbFont();
-    m_hDC = hDC;
+    HFONT hOrigFont;
+    m_hFont = m_pGraphics->ImplDoSetFont(GetFontSelectPattern(), GetFontFace(), m_fScale, hOrigFont);
+    SelectObject(m_pGraphics->getHDC(), hOrigFont);
 }
 
 bool WinSalGraphics::CacheGlyphs(const GenericSalLayout& rLayout)
@@ -386,17 +408,22 @@ bool WinSalGraphics::CacheGlyphs(const GenericSalLayout& rLayout)
     if (!bDoGlyphCaching)
         return false;
 
+    if (rLayout.GetOrientation())
+        // Our caching is incomplete, skip it for non-horizontal text.
+        return false;
+
     HDC hDC = getHDC();
     WinFontInstance& rFont = *static_cast<WinFontInstance*>(&rLayout.GetFont());
+    HFONT hFONT = rFont.GetHFONT();
 
     int nStart = 0;
     Point aPos(0, 0);
     const GlyphItem* pGlyph;
     while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))
     {
-        if (!rFont.GetGlyphCache().IsGlyphCached(pGlyph->maGlyphId))
+        if (!rFont.GetOpenGLGlyphCache().IsGlyphCached(pGlyph->m_aGlyphId))
         {
-            if (!rFont.CacheGlyphToAtlas(hDC, pGlyph->maGlyphId, *this))
+            if (!rFont.CacheGlyphToAtlas(hDC, hFONT, pGlyph->m_aGlyphId, *this, rLayout))
                 return false;
         }
     }
@@ -409,7 +436,7 @@ bool WinSalGraphics::DrawCachedGlyphs(const GenericSalLayout& rLayout)
     HDC hDC = getHDC();
 
     tools::Rectangle aRect;
-    rLayout.GetBoundRect(*this, aRect);
+    rLayout.GetBoundRect(aRect);
 
     COLORREF color = GetTextColor(hDC);
     Color salColor = Color(GetRValue(color), GetGValue(color), GetBValue(color));
@@ -425,7 +452,7 @@ bool WinSalGraphics::DrawCachedGlyphs(const GenericSalLayout& rLayout)
     const GlyphItem* pGlyph;
     while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))
     {
-        OpenGLGlyphDrawElement& rElement(rFont.GetGlyphCache().GetDrawElement(pGlyph->maGlyphId));
+        OpenGLGlyphDrawElement& rElement(rFont.GetOpenGLGlyphCache().GetDrawElement(pGlyph->m_aGlyphId));
         OpenGLTexture& rTexture = rElement.maTexture;
 
         if (!rTexture)
@@ -453,25 +480,23 @@ void WinSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
 {
     HDC hDC = getHDC();
 
-    HFONT hFont = static_cast<const WinFontInstance*>(&rLayout.GetFont())->GetHFONT();
-    HGDIOBJ hOrigFont = SelectObject(hDC, hFont);
-
-    // Our DirectWrite renderer is incomplete, skip it for non-horizontal or
-    // stretched text.
-    bool bForceGDI = rLayout.GetOrientation() || static_cast<const WinFontInstance*>(&rLayout.GetFont())->hasHScale();
-
+    const WinFontInstance* pWinFont = static_cast<const WinFontInstance*>(&rLayout.GetFont());
+    const HFONT hLayoutFont = pWinFont->GetHFONT();
     bool bUseOpenGL = OpenGLHelper::isVCLOpenGLEnabled() && !mbPrinter;
+
+    // Our DirectWrite renderer is incomplete, skip it for vertical text where glyphs are not
+    // rotated.
+    bool bForceGDI = rLayout.GetFont().GetFontSelectPattern().mbVertical;
+
     if (!bUseOpenGL)
     {
         // no OpenGL, just classic rendering
+        const HFONT hOrigFont = ::SelectFont(hDC, hLayoutFont);
         DrawTextLayout(rLayout, hDC, false);
+        ::SelectFont(hDC, hOrigFont);
     }
-    else if (!bForceGDI && CacheGlyphs(rLayout) &&
-             DrawCachedGlyphs(rLayout))
-    {
-        // Nothing
-    }
-    else
+    // if we can't draw the cached OpenGL glyphs, try to draw a full OpenGL layout
+    else if (bForceGDI || !CacheGlyphs(rLayout) || !DrawCachedGlyphs(rLayout))
     {
         // We have to render the text to a hidden texture, and draw it.
         //
@@ -503,7 +528,7 @@ void WinSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
         // switch to that if it performs well.
 
         tools::Rectangle aRect;
-        rLayout.GetBoundRect(*this, aRect);
+        rLayout.GetBoundRect(aRect);
 
         WinOpenGLSalGraphicsImpl *pImpl = dynamic_cast<WinOpenGLSalGraphicsImpl*>(mpImpl.get());
 
@@ -521,7 +546,7 @@ void WinSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
 
             // setup the hidden DC with black color and white background, we will
             // use the result of the text drawing later as a mask only
-            HFONT hOFont = ::SelectFont(aDC.getCompatibleHDC(), hFont);
+            const HFONT hOrigFont = ::SelectFont(aDC.getCompatibleHDC(), hLayoutFont);
 
             ::SetTextColor(aDC.getCompatibleHDC(), RGB(0, 0, 0));
             ::SetBkColor(aDC.getCompatibleHDC(), RGB(255, 255, 255));
@@ -539,13 +564,11 @@ void WinSalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
             if (xTexture)
                 pImpl->DrawMask(*xTexture, salColor, aDC.getTwoRect());
 
-            ::SelectFont(aDC.getCompatibleHDC(), hOFont);
+            ::SelectFont(aDC.getCompatibleHDC(), hOrigFont);
 
             pImpl->PostDraw();
         }
     }
-
-    SelectObject(hDC, hOrigFont);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

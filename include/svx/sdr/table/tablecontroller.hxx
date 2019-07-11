@@ -72,11 +72,11 @@ public:
     SVX_DLLPRIVATE void onInsert( sal_uInt16 nSId, const SfxItemSet* pArgs = nullptr );
     SVX_DLLPRIVATE void onDelete( sal_uInt16 nSId );
     SVX_DLLPRIVATE void onSelect( sal_uInt16 nSId );
-    SVX_DLLPRIVATE void onFormatTable( SfxRequest const & rReq );
+    SVX_DLLPRIVATE void onFormatTable(const SfxRequest& rReq);
     SVX_DLLPRIVATE void MergeMarkedCells();
-    SVX_DLLPRIVATE void SplitMarkedCells();
-    SVX_DLLPRIVATE void DistributeColumns();
-    SVX_DLLPRIVATE void DistributeRows();
+    SVX_DLLPRIVATE void SplitMarkedCells(const SfxRequest& rReq);
+    SVX_DLLPRIVATE void DistributeColumns( const bool bOptimize, const bool bMinimize );
+    SVX_DLLPRIVATE void DistributeRows( const bool bOptimize, const bool bMinimize );
     SVX_DLLPRIVATE void SetVertical( sal_uInt16 nSId );
 
     SVX_DLLPRIVATE static rtl::Reference< sdr::SelectionController > create(
@@ -124,8 +124,8 @@ public:
     bool isColumnHeader();
     sdr::table::SdrTableObj* GetTableObj() { return mxTableObj.get(); }
 private:
-    SvxTableController(SvxTableController &) = delete;
-    void operator =(SvxTableController &) = delete;
+    SvxTableController(SvxTableController const &) = delete;
+    SvxTableController& operator =(SvxTableController const &) = delete;
 
     // internals
     enum class TblAction

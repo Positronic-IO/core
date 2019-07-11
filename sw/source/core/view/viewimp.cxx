@@ -35,11 +35,13 @@
 #include <pagepreviewlayout.hxx>
 #include <svx/svdundo.hxx>
 #include <comphelper/lok.hxx>
+#include <sal/log.hxx>
 #include <IDocumentLayoutAccess.hxx>
 #include <IDocumentDrawModelAccess.hxx>
 #include <IDocumentDeviceAccess.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <drawdoc.hxx>
+#include <prevwpage.hxx>
 
 void SwViewShellImp::Init( const SwViewOption *pNewOpt )
 {
@@ -87,18 +89,15 @@ void SwViewShellImp::Init( const SwViewOption *pNewOpt )
 /// CTor for the core internals
 SwViewShellImp::SwViewShellImp( SwViewShell *pParent ) :
     m_pShell( pParent ),
-    m_pDrawView( nullptr ),
     m_pSdrPageView( nullptr ),
     m_pFirstVisiblePage( nullptr ),
     m_pLayAction( nullptr ),
     m_pIdleAct( nullptr ),
-    m_pAccessibleMap( nullptr ),
     m_bFirstPageInvalid( true ),
     m_bResetHdlHiddenPaint( false ),
     m_bSmoothUpdate( false ),
     m_bStopSmooth( false ),
-    m_nRestoreActions( 0 ),
-    m_pPagePreviewLayout( nullptr )
+    m_nRestoreActions( 0 )
 {
 }
 
@@ -106,13 +105,13 @@ SwViewShellImp::~SwViewShellImp()
 {
     m_pAccessibleMap.reset();
 
-    delete m_pPagePreviewLayout;
+    m_pPagePreviewLayout.reset();
 
     // Make sure HideSdrPage is also executed after ShowSdrPage.
     if( m_pDrawView )
          m_pDrawView->HideSdrPage();
 
-    delete m_pDrawView;
+    m_pDrawView.reset();
 
     DelRegion();
 
@@ -227,10 +226,10 @@ void SwViewShellImp::MakeDrawView()
                 pOutDevForDrawView = GetShell()->GetOut();
             }
 
-            m_pDrawView = new SwDrawView(
+            m_pDrawView.reset( new SwDrawView(
                 *this,
                 *rIDDMA.GetOrCreateDrawModel(),
-                pOutDevForDrawView);
+                pOutDevForDrawView) );
         }
 
         GetDrawView()->SetActiveLayer("Heaven");
@@ -286,7 +285,7 @@ void SwViewShellImp::InitPagePreviewLayout()
 {
     OSL_ENSURE( m_pShell->GetLayout(), "no layout - page preview layout can not be created.");
     if ( m_pShell->GetLayout() )
-        m_pPagePreviewLayout = new SwPagePreviewLayout( *m_pShell, *(m_pShell->GetLayout()) );
+        m_pPagePreviewLayout.reset( new SwPagePreviewLayout( *m_pShell, *(m_pShell->GetLayout()) ) );
 }
 
 void SwViewShellImp::UpdateAccessible()
@@ -432,7 +431,7 @@ void SwViewShellImp::InvalidateAccessibleParaAttrs_( const SwTextFrame& rTextFra
     }
 }
 
-void SwViewShellImp::UpdateAccessiblePreview( const std::vector<PreviewPage*>& _rPreviewPages,
+void SwViewShellImp::UpdateAccessiblePreview( const std::vector<std::unique_ptr<PreviewPage>>& _rPreviewPages,
                                          const Fraction&  _rScale,
                                          const SwPageFrame* _pSelectedPageFrame,
                                          const Size&      _rPreviewWinSize )

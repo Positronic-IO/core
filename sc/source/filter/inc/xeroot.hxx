@@ -20,13 +20,13 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_XEROOT_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_XEROOT_HXX
 
-#include <com/sun/star/beans/NamedValue.hpp>
-
 #include "xlroot.hxx"
 #include <compiler.hxx>
 #include <memory>
 
 // Forward declarations of objects in public use ==============================
+
+namespace com { namespace sun { namespace star { namespace beans { struct NamedValue; } } } }
 
 class XclExpRecordBase;
 class XclExpString;
@@ -177,7 +177,7 @@ public:
 
     static css::uno::Sequence< css::beans::NamedValue > GenerateEncryptionData( const OUString& aPass );
     css::uno::Sequence< css::beans::NamedValue > GetEncryptionData() const;
-    css::uno::Sequence< css::beans::NamedValue > GenerateDefaultEncryptionData() const;
+    static css::uno::Sequence< css::beans::NamedValue > GenerateDefaultEncryptionData();
 
 private:
 

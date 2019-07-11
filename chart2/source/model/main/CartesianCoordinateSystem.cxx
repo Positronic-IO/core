@@ -27,6 +27,8 @@ using ::com::sun::star::uno::RuntimeException;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
 namespace
 {
 

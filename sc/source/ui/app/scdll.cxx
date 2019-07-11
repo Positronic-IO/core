@@ -33,7 +33,6 @@
 #include <sfx2/app.hxx>
 #include <avmedia/mediaplayer.hxx>
 #include <avmedia/mediatoolbox.hxx>
-#include <comphelper/types.hxx>
 #include <svx/ParaLineSpacingPopup.hxx>
 #include <svx/TextCharacterSpacingPopup.hxx>
 #include <svx/TextUnderlinePopup.hxx>
@@ -63,6 +62,7 @@
 #include <graphsh.hxx>
 #include <mediash.hxx>
 #include <pgbrksh.hxx>
+#include <scdll.hxx>
 
 #include <docpool.hxx>
 #include <appoptio.hxx>
@@ -112,6 +112,11 @@
 OUString ScResId(const char* pId)
 {
     return Translate::get(pId, SC_MOD()->GetResLocale());
+}
+
+OUString ScResId(const char* pId, int nCardinality)
+{
+    return Translate::nget(pId, nCardinality, SC_MOD()->GetResLocale());
 }
 
 void ScDLL::Init()

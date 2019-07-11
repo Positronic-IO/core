@@ -19,6 +19,7 @@
 
 #include <sal/config.h>
 
+#include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <unotools/fontcvt.hxx>
 #include <unotools/fontdefs.hxx>
@@ -1135,7 +1136,7 @@ StarSymbolToMSMultiFontImpl::StarSymbolToMSMultiFontImpl()
     };
 
     //In order of preference
-    const ConvertTable aConservativeTable[] =
+    static const ConvertTable aConservativeTable[] =
     {
         {Symbol,         aAdobeSymbolTab},
         {Wingdings,      aWingDingsTab},
@@ -1173,7 +1174,7 @@ StarSymbolToMSMultiFontImpl::StarSymbolToMSMultiFontImpl()
     }
 
     //In order of preference
-    const ExtendedConvertTable aAgressiveTable[] =
+    static const ExtendedConvertTable aAgressiveTable[] =
     {
         ExtendedConvertTable(Symbol, aSymbolExtraTab2,
             sizeof(aSymbolExtraTab2)),
@@ -1201,7 +1202,7 @@ StarSymbolToMSMultiFontImpl::StarSymbolToMSMultiFontImpl()
     }
 }
 
-const char *SymbolFontToString(int nResult)
+static const char *SymbolFontToString(int nResult)
 {
     const char * const *ppName = aSymbolNames;
     int nI = Symbol;
@@ -1388,7 +1389,7 @@ FontToSubsFontConverter CreateFontToSubsFontConverter( const OUString& rOrgName,
 
     if ( nFlags & FontToSubsFontFlags::IMPORT )
     {
-        int nEntries = 2; // only StarMath+StarBats
+        const int nEntries = 2; // only StarMath+StarBats
         for( int i = 0; i < nEntries; ++i )
         {
             const RecodeTable& r = aStarSymbolRecodeTable[i];

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <tools/stream.hxx>
 #include <tools/vcompat.hxx>
 #include <tools/helpers.hxx>
@@ -107,13 +108,13 @@ meta_action_name(MetaActionType nMetaAction)
 #endif
 }
 
-inline void ImplScalePoint( Point& rPt, double fScaleX, double fScaleY )
+void ImplScalePoint( Point& rPt, double fScaleX, double fScaleY )
 {
     rPt.setX( FRound( fScaleX * rPt.X() ) );
     rPt.setY( FRound( fScaleY * rPt.Y() ) );
 }
 
-inline void ImplScaleRect( tools::Rectangle& rRect, double fScaleX, double fScaleY )
+void ImplScaleRect( tools::Rectangle& rRect, double fScaleX, double fScaleY )
 {
     Point aTL( rRect.TopLeft() );
     Point aBR( rRect.BottomRight() );
@@ -125,13 +126,13 @@ inline void ImplScaleRect( tools::Rectangle& rRect, double fScaleX, double fScal
     rRect.Justify();
 }
 
-inline void ImplScalePoly( tools::Polygon& rPoly, double fScaleX, double fScaleY )
+void ImplScalePoly( tools::Polygon& rPoly, double fScaleX, double fScaleY )
 {
     for( sal_uInt16 i = 0, nCount = rPoly.GetSize(); i < nCount; i++ )
         ImplScalePoint( rPoly[ i ], fScaleX, fScaleY );
 }
 
-inline void ImplScaleLineInfo( LineInfo& rLineInfo, double fScaleX, double fScaleY )
+void ImplScaleLineInfo( LineInfo& rLineInfo, double fScaleX, double fScaleY )
 {
     if( !rLineInfo.IsDefault() )
     {
@@ -1055,7 +1056,6 @@ void MetaTextAction::Read( SvStream& rIStm, ImplMetaReadData* pData )
 
 MetaTextArrayAction::MetaTextArrayAction() :
     MetaAction  ( MetaActionType::TEXTARRAY ),
-    mpDXAry     ( nullptr ),
     mnIndex     ( 0 ),
     mnLen       ( 0 )
 {}

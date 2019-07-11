@@ -45,6 +45,7 @@
 #include <cppuhelper/implbase.hxx>
 
 #include <rtl/digest.h>
+#include <sal/log.hxx>
 #include <memory>
 
 using namespace vcl;
@@ -180,8 +181,7 @@ void PDFWriterImpl::implWriteBitmapEx( const Point& i_rPoint, const Size& i_rSiz
                 aTemp.SetCompressMode( aTemp.GetCompressMode() | SvStreamCompressFlags::ZBITMAP );
                 aTemp.SetVersion( SOFFICE_FILEFORMAT_40 );  // sj: up from version 40 our bitmap stream operator
                 WriteDIBBitmapEx(aBitmapEx, aTemp); // is capable of zlib stream compression
-                aTemp.Seek( STREAM_SEEK_TO_END );
-                nZippedFileSize = aTemp.Tell();
+                nZippedFileSize = aTemp.TellEnd();
             }
             if ( aBitmapEx.IsTransparent() )
             {
@@ -265,7 +265,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
         pDummyVDev->EnableOutput( false );
         pDummyVDev->SetMapMode( i_rMtf.GetPrefMapMode() );
     }
-    GDIMetaFile aMtf( i_rMtf );
+    const GDIMetaFile& aMtf( i_rMtf );
 
     for( sal_uInt32 i = 0, nCount = aMtf.GetActionSize(); i < nCount; )
     {
@@ -506,7 +506,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
                 case MetaActionType::EPS:
                 {
                     const MetaEPSAction*    pA = static_cast<const MetaEPSAction*>(pAction);
-                    const GDIMetaFile       aSubstitute( pA->GetSubstitute() );
+                    const GDIMetaFile&      aSubstitute( pA->GetSubstitute() );
 
                     m_rOuterFace.Push();
                     pDummyVDev->Push();
@@ -591,7 +591,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
                                 bSkipSequence = true;
                                 if ( aStartArrow.Count() || aEndArrow.Count() )
                                     bSkipSequence = false;
-                                if ( aDashArray.size() && ( fStrokeWidth != 0.0 ) && ( fTransparency == 0.0 ) )
+                                if ( !aDashArray.empty() && ( fStrokeWidth != 0.0 ) && ( fTransparency == 0.0 ) )
                                     bSkipSequence = false;
                                 if ( bSkipSequence )
                                 {
@@ -822,7 +822,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
                 case MetaActionType::BMPEX:
                 {
                     const MetaBmpExAction*  pA = static_cast<const MetaBmpExAction*>(pAction);
-                    BitmapEx aBitmapEx( pA->GetBitmapEx() );
+                    const BitmapEx& aBitmapEx( pA->GetBitmapEx() );
                     Size aSize( OutputDevice::LogicToLogic( aBitmapEx.GetPrefSize(),
                             aBitmapEx.GetPrefMapMode(), pDummyVDev->GetMapMode() ) );
                     Graphic aGraphic = i_pOutDevData ? i_pOutDevData->GetCurrentGraphic() : Graphic();
@@ -902,7 +902,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
                             m_rOuterFace.SetClipRegion( basegfx::B2DPolyPolygon() );
                         else
                         {
-                            vcl::Region aReg( pA->GetRegion() );
+                            const vcl::Region& aReg( pA->GetRegion() );
                             m_rOuterFace.SetClipRegion( aReg.GetAsB2DPolyPolygon() );
                         }
                     }
@@ -921,7 +921,7 @@ void PDFWriterImpl::playMetafile( const GDIMetaFile& i_rMtf, vcl::PDFExtOutDevDa
                 case MetaActionType::ISECTREGIONCLIPREGION:
                 {
                     const MetaISectRegionClipRegionAction* pA = static_cast<const MetaISectRegionClipRegionAction*>(pAction);
-                    vcl::Region aReg( pA->GetRegion() );
+                    const vcl::Region& aReg( pA->GetRegion() );
                     m_rOuterFace.IntersectClipRegion( aReg.GetAsB2DPolyPolygon() );
                 }
                 break;
@@ -1149,21 +1149,6 @@ EncHashTransporter* EncHashTransporter::getEncHashTransporter( const uno::Refere
     return pResult;
 }
 
-bool PDFWriterImpl::checkEncryptionBufferSize( sal_Int32 newSize )
-{
-    if( m_nEncryptionBufferSize < newSize )
-    {
-        /* reallocate the buffer, the used function allocate as rtl_allocateMemory
-        if the pointer parameter is NULL */
-        m_pEncryptionBuffer = static_cast<sal_uInt8*>(rtl_reallocateMemory( m_pEncryptionBuffer, newSize ));
-        if( m_pEncryptionBuffer )
-            m_nEncryptionBufferSize = newSize;
-        else
-            m_nEncryptionBufferSize = 0;
-    }
-    return ( m_nEncryptionBufferSize != 0 );
-}
-
 void PDFWriterImpl::checkAndEnableStreamEncryption( sal_Int32 nObject )
 {
     if( m_aContext.Encryption.Encrypt() )
@@ -1208,8 +1193,7 @@ void PDFWriterImpl::enableStringEncryption( sal_Int32 nObject )
 2. build the encryption key following algorithms described in the PDF specification
  */
 uno::Reference< beans::XMaterialHolder > PDFWriterImpl::initEncryption( const OUString& i_rOwnerPassword,
-                                                                        const OUString& i_rUserPassword,
-                                                                        bool b128Bit
+                                                                        const OUString& i_rUserPassword
                                                                         )
 {
     uno::Reference< beans::XMaterialHolder > xResult;
@@ -1222,11 +1206,8 @@ uno::Reference< beans::XMaterialHolder > PDFWriterImpl::initEncryption( const OU
         sal_uInt8 aPadUPW[ENCRYPTED_PWD_SIZE], aPadOPW[ENCRYPTED_PWD_SIZE];
         padPassword( i_rOwnerPassword.isEmpty() ? i_rUserPassword : i_rOwnerPassword, aPadOPW );
         padPassword( i_rUserPassword, aPadUPW );
-        sal_Int32 nKeyLength = SECUR_40BIT_KEY;
-        if( b128Bit )
-            nKeyLength = SECUR_128BIT_KEY;
 
-        if( computeODictionaryValue( aPadOPW, aPadUPW, pTransporter->getOValue(), nKeyLength ) )
+        if( computeODictionaryValue( aPadOPW, aPadUPW, pTransporter->getOValue(), SECUR_128BIT_KEY ) )
         {
             pTransporter->getUDigest()->update(aPadUPW, ENCRYPTED_PWD_SIZE);
         }
@@ -1272,17 +1253,14 @@ sal_Int32 PDFWriterImpl::computeAccessPermissions( const vcl::PDFWriter::PDFEncr
     according to the table 3.15, pdf v 1.4 */
     sal_Int32 nAccessPermissions = 0xfffff0c0;
 
-    /* check permissions for 40 bit security case */
+    o_rKeyLength = SECUR_128BIT_KEY;
+    o_rRC4KeyLength = 16; // for this value see PDF spec v 1.4, algorithm 3.1 step 4, where n is 16,
+                          // thus maximum permitted value is 16
+
     nAccessPermissions |= ( i_rProperties.CanPrintTheDocument ) ?  1 << 2 : 0;
     nAccessPermissions |= ( i_rProperties.CanModifyTheContent ) ? 1 << 3 : 0;
     nAccessPermissions |= ( i_rProperties.CanCopyOrExtract ) ?   1 << 4 : 0;
     nAccessPermissions |= ( i_rProperties.CanAddOrModify ) ? 1 << 5 : 0;
-    o_rKeyLength = SECUR_40BIT_KEY;
-    o_rRC4KeyLength = SECUR_40BIT_KEY+5; // for this value see PDF spec v 1.4, algorithm 3.1 step 4, where n is 5
-
-    o_rKeyLength = SECUR_128BIT_KEY;
-    o_rRC4KeyLength = 16; // for this value see PDF spec v 1.4, algorithm 3.1 step 4, where n is 16, thus maximum
-    // permitted value is 16
     nAccessPermissions |= ( i_rProperties.CanFillInteractive ) ?         1 << 8 : 0;
     nAccessPermissions |= ( i_rProperties.CanExtractForAccessibility ) ? 1 << 9 : 0;
     nAccessPermissions |= ( i_rProperties.CanAssemble ) ?                1 << 10 : 0;
@@ -1410,29 +1388,40 @@ bool PDFWriterImpl::computeODictionaryValue( const sal_uInt8* i_pPaddedOwnerPass
         //Step 4, the key is in nMD5Sum
         //step 5 already done, data is in i_pPaddedUserPassword
         //step 6
-        rtl_cipher_initARCFOUR( aCipher, rtl_Cipher_DirectionEncode,
-                                 nMD5Sum.data(), i_nKeyLength , nullptr, 0 );
-        // encrypt the user password using the key set above
-        rtl_cipher_encodeARCFOUR( aCipher, i_pPaddedUserPassword, ENCRYPTED_PWD_SIZE, // the data to be encrypted
-                                  &io_rOValue[0], sal_Int32(io_rOValue.size()) ); //encrypted data
-        //Step 7, only if 128 bit
-        if( i_nKeyLength == SECUR_128BIT_KEY )
+        if (rtl_cipher_initARCFOUR( aCipher, rtl_Cipher_DirectionEncode,
+                                    nMD5Sum.data(), i_nKeyLength , nullptr, 0 )
+            == rtl_Cipher_E_None)
         {
-            sal_uInt32 i, y;
-            sal_uInt8 nLocalKey[ SECUR_128BIT_KEY ]; // 16 = 128 bit key
-
-            for( i = 1; i <= 19; i++ ) // do it 19 times, start with 1
+            // encrypt the user password using the key set above
+            rtl_cipher_encodeARCFOUR( aCipher, i_pPaddedUserPassword, ENCRYPTED_PWD_SIZE, // the data to be encrypted
+                                      &io_rOValue[0], sal_Int32(io_rOValue.size()) ); //encrypted data
+            //Step 7, only if 128 bit
+            if( i_nKeyLength == SECUR_128BIT_KEY )
             {
-                for( y = 0; y < sizeof( nLocalKey ); y++ )
-                    nLocalKey[y] = static_cast<sal_uInt8>( nMD5Sum[y] ^ i );
+                sal_uInt32 i;
+                size_t y;
+                sal_uInt8 nLocalKey[ SECUR_128BIT_KEY ]; // 16 = 128 bit key
 
-                rtl_cipher_initARCFOUR( aCipher, rtl_Cipher_DirectionEncode,
-                                        nLocalKey, SECUR_128BIT_KEY, nullptr, 0 ); //destination data area, on init can be NULL
-                rtl_cipher_encodeARCFOUR( aCipher, &io_rOValue[0], sal_Int32(io_rOValue.size()), // the data to be encrypted
-                                          &io_rOValue[0], sal_Int32(io_rOValue.size()) ); // encrypted data, can be the same as the input, encrypt "in place"
-                //step 8, store in class data member
+                for( i = 1; i <= 19; i++ ) // do it 19 times, start with 1
+                {
+                    for( y = 0; y < sizeof( nLocalKey ); y++ )
+                        nLocalKey[y] = static_cast<sal_uInt8>( nMD5Sum[y] ^ i );
+
+                    if (rtl_cipher_initARCFOUR( aCipher, rtl_Cipher_DirectionEncode,
+                                                nLocalKey, SECUR_128BIT_KEY, nullptr, 0 ) //destination data area, on init can be NULL
+                        != rtl_Cipher_E_None)
+                    {
+                        bSuccess = false;
+                        break;
+                    }
+                    rtl_cipher_encodeARCFOUR( aCipher, &io_rOValue[0], sal_Int32(io_rOValue.size()), // the data to be encrypted
+                                              &io_rOValue[0], sal_Int32(io_rOValue.size()) ); // encrypted data, can be the same as the input, encrypt "in place"
+                    //step 8, store in class data member
+                }
             }
         }
+        else
+            bSuccess = false;
     }
     else
         bSuccess = false;
@@ -1484,7 +1473,8 @@ bool PDFWriterImpl::computeUDictionaryValue( EncHashTransporter* i_pTransporter,
             rtl_cipher_encodeARCFOUR( aCipher, nMD5Sum.data(), nMD5Sum.size(), // the data to be encrypted
                                       &io_rProperties.UValue[0], SECUR_128BIT_KEY ); //encrypted data, stored in class data member
             //step 5
-            sal_uInt32 i, y;
+            sal_uInt32 i;
+            size_t y;
             sal_uInt8 nLocalKey[SECUR_128BIT_KEY];
 
             for( i = 1; i <= 19; i++ ) // do it 19 times, start with 1
@@ -1555,12 +1545,12 @@ static const long setRun[256] =
     4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 8, /* 0xf0 - 0xff */
 };
 
-inline bool isSet( const Scanline i_pLine, long i_nIndex )
+static bool isSet( const Scanline i_pLine, long i_nIndex )
 {
     return (i_pLine[ i_nIndex/8 ] & (0x80 >> (i_nIndex&7))) != 0;
 }
 
-long findBitRunImpl( const Scanline i_pLine, long i_nStartIndex, long i_nW, bool i_bSet )
+static long findBitRunImpl( const Scanline i_pLine, long i_nStartIndex, long i_nW, bool i_bSet )
 {
     long nIndex = i_nStartIndex;
     if( nIndex < i_nW )
@@ -1623,7 +1613,7 @@ long findBitRunImpl( const Scanline i_pLine, long i_nStartIndex, long i_nW, bool
     return std::min(nIndex, i_nW);
 }
 
-long findBitRun(const Scanline i_pLine, long i_nStartIndex, long i_nW, bool i_bSet)
+static long findBitRun(const Scanline i_pLine, long i_nStartIndex, long i_nW, bool i_bSet)
 {
     if (i_nStartIndex < 0)
         return i_nW;
@@ -1631,7 +1621,7 @@ long findBitRun(const Scanline i_pLine, long i_nStartIndex, long i_nW, bool i_bS
     return findBitRunImpl(i_pLine, i_nStartIndex, i_nW, i_bSet);
 }
 
-long findBitRun(const Scanline i_pLine, long i_nStartIndex, long i_nW)
+static long findBitRun(const Scanline i_pLine, long i_nStartIndex, long i_nW)
 {
     if (i_nStartIndex < 0)
         return i_nW;
@@ -1678,9 +1668,9 @@ void PDFWriterImpl::putG4Bits( sal_uInt32 i_nLength, sal_uInt32 i_nCode, BitStre
 
 struct PixelCode
 {
-    sal_uInt32      mnEncodedPixels;
-    sal_uInt32      mnCodeBits;
-    sal_uInt32      mnCode;
+    sal_uInt32 const      mnEncodedPixels;
+    sal_uInt32 const      mnCodeBits;
+    sal_uInt32 const      mnCode;
 };
 
 static const PixelCode WhitePixelCodes[] =
@@ -1932,8 +1922,9 @@ void PDFWriterImpl::writeG4Stream( BitmapReadAccess const * i_pBitmap )
     BitStreamState aBitState;
 
     // the first reference line is virtual and completely empty
-    const Scanline pFirstRefLine = static_cast<Scanline>(rtl_allocateZeroMemory( nW/8 + 1 ));
-    Scanline pRefLine = pFirstRefLine;
+    std::unique_ptr<sal_uInt8[]> pFirstRefLine(new  sal_uInt8[nW/8 + 1]);
+    memset(pFirstRefLine.get(), 0, nW/8 + 1);
+    Scanline pRefLine = pFirstRefLine.get();
     for( long nY = 0; nY < nH; nY++ )
     {
         const Scanline pCurLine = i_pBitmap->GetScanline( nY );
@@ -1952,8 +1943,8 @@ void PDFWriterImpl::writeG4Stream( BitmapReadAccess const * i_pBitmap )
                 {   // vertical coding
                     static const struct
                     {
-                        sal_uInt32 mnCodeBits;
-                        sal_uInt32 mnCode;
+                        sal_uInt32 const mnCodeBits;
+                        sal_uInt32 const mnCode;
                     } VerticalCodes[7] = {
                         { 7, 0x03 },    // 0000 011
                         { 6, 0x03 },    // 0000 11
@@ -2006,8 +1997,6 @@ void PDFWriterImpl::writeG4Stream( BitmapReadAccess const * i_pBitmap )
         writeBuffer( &aBitState.getByte(), 1 );
         aBitState.flush();
     }
-
-    rtl_freeMemory( pFirstRefLine );
 }
 
 static bool lcl_canUsePDFAxialShading(const Gradient& rGradient) {

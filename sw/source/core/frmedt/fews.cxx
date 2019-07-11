@@ -93,7 +93,8 @@ const SwRect& SwFEShell::GetAnyCurRect( CurRectType eType, const Point* pPt,
             Point aPt( *pPt );
             GetLayout()->GetCursorOfst( &aPos, aPt );
             SwContentNode *pNd = aPos.nNode.GetNode().GetContentNode();
-            pFrame = pNd->getLayoutFrame( GetLayout(), pPt );
+            std::pair<Point, bool> const tmp(*pPt, true);
+            pFrame = pNd->getLayoutFrame(GetLayout(), nullptr, &tmp);
         }
         else
         {
@@ -232,7 +233,8 @@ FrameTypeFlags SwFEShell::GetFrameType( const Point *pPt, bool bStopAtFly ) cons
         Point aPt( *pPt );
         GetLayout()->GetCursorOfst( &aPos, aPt );
         SwContentNode *pNd = aPos.nNode.GetNode().GetContentNode();
-        pFrame = pNd->getLayoutFrame( GetLayout(), pPt );
+        std::pair<Point, bool> const tmp(*pPt, true);
+        pFrame = pNd->getLayoutFrame(GetLayout(), nullptr, &tmp);
     }
     else
         pFrame = GetCurrFrame( false );
@@ -240,7 +242,8 @@ FrameTypeFlags SwFEShell::GetFrameType( const Point *pPt, bool bStopAtFly ) cons
     {
         switch ( pFrame->GetType() )
         {
-            case SwFrameType::Column:    if( pFrame->GetUpper()->IsSctFrame() )
+            case SwFrameType::Column:
+                                if( pFrame->GetUpper()->IsSctFrame() )
                                 {
                                     // Check, if isn't not only a single column
                                     // from a section with footnotes at the end.
@@ -252,17 +255,20 @@ FrameTypeFlags SwFEShell::GetFrameType( const Point *pPt, bool bStopAtFly ) cons
                                 else // only pages and frame columns
                                     nReturn |= FrameTypeFlags::COLUMN;
                                 break;
-            case SwFrameType::Page:      nReturn |= FrameTypeFlags::PAGE;
+            case SwFrameType::Page:
+                                nReturn |= FrameTypeFlags::PAGE;
                                 if( static_cast<const SwPageFrame*>(pFrame)->IsFootnotePage() )
                                     nReturn |= FrameTypeFlags::FTNPAGE;
                                 break;
             case SwFrameType::Header:    nReturn |= FrameTypeFlags::HEADER;      break;
             case SwFrameType::Footer:    nReturn |= FrameTypeFlags::FOOTER;      break;
-            case SwFrameType::Body:      if( pFrame->GetUpper()->IsPageFrame() ) // not for ColumnFrames
+            case SwFrameType::Body:
+                                if( pFrame->GetUpper()->IsPageFrame() ) // not for ColumnFrames
                                     nReturn |= FrameTypeFlags::BODY;
                                 break;
             case SwFrameType::Ftn:       nReturn |= FrameTypeFlags::FOOTNOTE;    break;
-            case SwFrameType::Fly:       if( static_cast<const SwFlyFrame*>(pFrame)->IsFlyLayFrame() )
+            case SwFrameType::Fly:
+                                if( static_cast<const SwFlyFrame*>(pFrame)->IsFlyLayFrame() )
                                     nReturn |= FrameTypeFlags::FLY_FREE;
                                 else if ( static_cast<const SwFlyFrame*>(pFrame)->IsFlyAtContentFrame() )
                                     nReturn |= FrameTypeFlags::FLY_ATCNT;
@@ -345,7 +351,8 @@ static void lcl_SetAPageOffset( sal_uInt16 nOffset, SwPageFrame* pPage, SwFEShel
         pThis->GetDoc()->SetAttr( aDesc, *pFrame->FindTabFrame()->GetFormat() );
     else
     {
-        pThis->GetDoc()->getIDocumentContentOperations().InsertPoolItem( *pThis->GetCursor(), aDesc );
+        pThis->GetDoc()->getIDocumentContentOperations().InsertPoolItem(
+            *pThis->GetCursor(), aDesc, SetAttrMode::DEFAULT, pThis->GetLayout());
     }
 
     pThis->EndAllAction();
@@ -369,7 +376,7 @@ void SwFEShell::SetPageOffset( sal_uInt16 nOffset )
         {
             if ( pFlow->IsInTab() )
                 pFlow = pFlow->FindTabFrame();
-            const SwFormatPageDesc& rPgDesc = pFlow->GetAttrSet()->GetPageDesc();
+            const SwFormatPageDesc& rPgDesc = pFlow->GetPageDescItem();
             if ( rPgDesc.GetNumOffset() )
             {
                 pDocLayout->SetVirtPageNum( true );
@@ -391,7 +398,7 @@ sal_uInt16 SwFEShell::GetPageOffset() const
         {
             if ( pFlow->IsInTab() )
                 pFlow = pFlow->FindTabFrame();
-            ::boost::optional<sal_uInt16> oNumOffset = pFlow->GetAttrSet()->GetPageDesc().GetNumOffset();
+            ::boost::optional<sal_uInt16> oNumOffset = pFlow->GetPageDescItem().GetNumOffset();
             if ( oNumOffset )
                 return oNumOffset.get();
         }
@@ -1004,7 +1011,7 @@ void SwFEShell::CalcBoundRect( SwRect& _orRect,
                     else
                     {
                         // No content position provided. Thus, use a default one.
-                        SwPosition aDefaultContentPos( *(pTextFrame->GetTextNode()) );
+                        SwPosition aDefaultContentPos(*(pTextFrame->GetTextNodeFirst()));
                         pTextFrame->GetAutoPos( aChRect, aDefaultContentPos );
                     }
                     nTop = aRectFnSet.GetBottom(aChRect);
@@ -1018,7 +1025,7 @@ void SwFEShell::CalcBoundRect( SwRect& _orRect,
                     else
                     {
                         // No content position provided. Thus, use a default one.
-                        SwPosition aDefaultContentPos( *(pTextFrame->GetTextNode()) );
+                        SwPosition aDefaultContentPos(*(pTextFrame->GetTextNodeFirst()));
                         pTextFrame->GetTopOfLine( nTop, aDefaultContentPos );
                     }
                 }
@@ -1048,7 +1055,7 @@ void SwFEShell::CalcBoundRect( SwRect& _orRect,
                 else
                 {
                     // No content position provided. Thus, use a default one.
-                    SwPosition aDefaultContentPos( *(pTextFrame->GetTextNode()) );
+                    SwPosition aDefaultContentPos(*(pTextFrame->GetTextNodeFirst()));
                     pTextFrame->GetAutoPos( aChRect, aDefaultContentPos );
                 }
                 nLeft = aRectFnSet.GetLeft(aChRect);

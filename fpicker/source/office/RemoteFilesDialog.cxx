@@ -179,7 +179,6 @@ RemoteFilesDialog::RemoteFilesDialog( vcl::Window* pParent, PickerFlags nBits )
     , m_xMasterPasswd( PasswordContainer::create( m_xContext ) )
     , m_nWidth( 0 )
     , m_nHeight( 0 )
-    , m_pCurrentAsyncAction( nullptr )
     , m_pSplitter( nullptr )
     , m_pFileView( nullptr )
     , m_pContainer( nullptr )
@@ -406,7 +405,7 @@ void RemoteFilesDialog::Show()
     }
 }
 
-OUString lcl_GetServiceType( const ServicePtr& pService )
+static OUString lcl_GetServiceType( const ServicePtr& pService )
 {
     INetProtocol aProtocol = pService->GetUrlObject().GetProtocol();
     switch( aProtocol )
@@ -561,7 +560,7 @@ void RemoteFilesDialog::AddFilter( const OUString& rFilter, const OUString& rTyp
 }
 
 
-FileViewResult RemoteFilesDialog::OpenURL( OUString const & sURL )
+void RemoteFilesDialog::OpenURL( OUString const & sURL )
 {
     if( m_pFileView )
     {
@@ -604,14 +603,12 @@ FileViewResult RemoteFilesDialog::OpenURL( OUString const & sURL )
             ErrorHandler::HandleError( ERRCODE_IO_NOTEXISTS );
 
             EnableControls();
-            return eFailure;
+            return;
         }
 
         SetPointer( PointerStyle::Arrow );
         EnableChildPointerOverwrite( false );
     }
-
-    return eFailure;
 }
 
 void RemoteFilesDialog::AddFileExtension()
@@ -1420,7 +1417,7 @@ std::vector<OUString> RemoteFilesDialog::GetPathList() const
         pEntry = m_pFileView->NextSelected( pEntry );
     }
 
-    if( aList.size() == 0 && !m_sPath.isEmpty() )
+    if( aList.empty() && !m_sPath.isEmpty() )
         aList.push_back( m_sPath );
 
     return aList;

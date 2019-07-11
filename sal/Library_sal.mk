@@ -23,10 +23,7 @@ $(eval $(call gb_Library_add_defs,sal,\
 	$(if $(filter FUZZERS,$(BUILD_TYPE)), \
 		-DFORCE_DEFAULT_SIGNAL \
 	) \
-	$(if $(filter SYS_ALLOC,$(ALLOC))$(filter-out XTRUE,X$(ENABLE_RUNTIME_OPTIMIZATIONS)), \
-		-DFORCE_SYSALLOC \
-	) \
-	$(if $(filter IOS,$(OS)), \
+	$(if $(filter iOS,$(OS)), \
 		-DNO_CHILD_PROCESSES \
 	) \
 	-DSAL_DLLIMPLEMENTATION \
@@ -123,7 +120,7 @@ $(eval $(call gb_Library_add_exception_objects,sal,\
 	sal/textenc/unichars \
 ))
 
-ifeq ($(OS),IOS)
+ifeq ($(OS),iOS)
 $(eval $(call gb_Library_add_cxxflags,sal,\
     $(gb_OBJCXXFLAGS) \
 ))
@@ -179,25 +176,26 @@ $(eval $(call gb_Library_add_exception_objects,sal,\
 	sal/osl/unx/security \
 	sal/osl/unx/signal \
 	sal/osl/unx/socket \
-	sal/osl/unx/system \
 	sal/osl/unx/tempfile \
 	sal/osl/unx/thread \
 	sal/osl/unx/time \
-	$(if $(filter-out ANDROID IOS,$(OS)), sal/osl/unx/salinit) \
+	$(if $(filter-out ANDROID iOS,$(OS)), sal/osl/unx/salinit) \
 ))
 
-# Note that the uunxapi.mm file just includes the uunxapi.cxx one
+# Note that the uunxapi.mm file just includes the uunxapi.cxx one. Ditto for system.mm
 ifeq ($(OS),MACOSX)
 $(eval $(call gb_Library_add_objcxxobjects,sal,\
 	sal/osl/unx/uunxapi \
+	sal/osl/unx/system \
 ))
 else
 $(eval $(call gb_Library_add_exception_objects,sal,\
 	sal/osl/unx/uunxapi \
+	sal/osl/unx/system \
 ))
 endif
 
-ifneq ($(filter MACOSX IOS,$(OS)),)
+ifneq ($(filter MACOSX iOS,$(OS)),)
 $(eval $(call gb_Library_add_exception_objects,sal,\
 	sal/osl/unx/osxlocale \
 ))
@@ -255,5 +253,13 @@ $(eval $(call gb_Library_add_exception_objects,sal,\
 ))
 
 endif # ifneq ($(OS),WNT)
+
+ifeq ($(ENABLE_CIPHER_OPENSSL_BACKEND),TRUE)
+$(eval $(call gb_Library_add_defs,sal,-DLIBO_CIPHER_OPENSSL_BACKEND))
+$(eval $(call gb_Library_use_externals,sal, \
+    openssl \
+    openssl_headers \
+))
+endif
 
 # vim: set noet sw=4 ts=4:

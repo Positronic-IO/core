@@ -21,6 +21,7 @@
 #include "levdis.hxx"
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/i18n/BreakIterator.hpp>
 #include <com/sun/star/i18n/UnicodeType.hpp>
@@ -103,10 +104,6 @@ bool isSimpleRegexTrans( TransliterationFlags n )
 
 TextSearch::TextSearch(const Reference < XComponentContext > & rxContext)
         : m_xContext( rxContext )
-        , pJumpTable( nullptr )
-        , pJumpTable2( nullptr )
-        , pRegexMatcher( nullptr )
-        , pWLD( nullptr )
 {
     SearchOptions2 aOpt;
     aOpt.AlgorithmType2 = SearchAlgorithms2::ABSOLUTE;
@@ -290,7 +287,7 @@ void TextSearch::setOptions( const SearchOptions& rOptions )
     setOptions2( aOptions2);
 }
 
-sal_Int32 FindPosInSeq_Impl( const Sequence <sal_Int32>& rOff, sal_Int32 nPos )
+static sal_Int32 FindPosInSeq_Impl( const Sequence <sal_Int32>& rOff, sal_Int32 nPos )
 {
     sal_Int32 nRet = 0, nEnd = rOff.getLength();
     while( nRet < nEnd && nPos > rOff[ nRet ] ) ++nRet;
@@ -1554,7 +1551,7 @@ TextSearch::getSupportedServiceNames()
     return aRet;
 }
 
-css::uno::Reference< css::uno::XInterface >
+static css::uno::Reference< css::uno::XInterface >
 TextSearch_CreateInstance(
         const css::uno::Reference<
         css::lang::XMultiServiceFactory >& rxMSF )

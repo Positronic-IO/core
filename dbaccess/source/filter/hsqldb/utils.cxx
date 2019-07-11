@@ -22,9 +22,72 @@
 #include <comphelper/processfactory.hxx>
 #include <connectivity/dbexception.hxx>
 
+#include <sal/log.hxx>
+
 #include "utils.hxx"
 
 using namespace dbahsql;
+
+namespace
+{
+int getHexValue(sal_Unicode c)
+{
+    if (c >= '0' && c <= '9')
+    {
+        return c - '0';
+    }
+    else if (c >= 'A' && c <= 'F')
+    {
+        return c - 'A' + 10;
+    }
+    else if (c >= 'a' && c <= 'f')
+    {
+        return c - 'a' + 10;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+} // unnamed namespace
+
+//Convert ascii escaped unicode to utf-8
+OUString utils::convertToUTF8(const OString& original)
+{
+    OUString res = OStringToOUString(original, RTL_TEXTENCODING_UTF8);
+    for (sal_Int32 i = 0;;)
+    {
+        i = res.indexOf("\\u", i);
+        if (i == -1)
+        {
+            break;
+        }
+        i += 2;
+        if (res.getLength() - i >= 4)
+        {
+            bool escape = true;
+            sal_Unicode c = 0;
+            for (sal_Int32 j = 0; j != 4; ++j)
+            {
+                auto const n = getHexValue(res[i + j]);
+                if (n == -1)
+                {
+                    escape = false;
+                    break;
+                }
+                c = (c << 4) | n;
+            }
+            if (escape)
+            {
+                i -= 2;
+                res = res.replaceAt(i, 6, OUString(c));
+                ++i;
+            }
+        }
+    }
+    return res;
+}
 
 OUString utils::getTableNameFromStmt(const OUString& sSql)
 {
@@ -38,6 +101,22 @@ OUString utils::getTableNameFromStmt(const OUString& sSql)
         ++wordIter;
     if (*wordIter == "TABLE")
         ++wordIter;
+
+    // it may contain spaces if it's put into apostrophes.
+    if (wordIter->indexOf("\"") >= 0)
+    {
+        sal_Int32 nAposBegin = sSql.indexOf("\"");
+        sal_Int32 nAposEnd = nAposBegin;
+        bool bProperEndAposFound = false;
+        while (!bProperEndAposFound)
+        {
+            nAposEnd = sSql.indexOf("\"", nAposEnd + 1);
+            if (sSql[nAposEnd - 1] != u'\\')
+                bProperEndAposFound = true;
+        }
+        OUString result = sSql.copy(nAposBegin, nAposEnd - nAposBegin + 1);
+        return result;
+    }
 
     // next word is the table's name
     // it might stuck together with the column definitions.

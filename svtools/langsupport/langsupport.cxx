@@ -9,6 +9,7 @@
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <i18nlangtag/languagetag.hxx>
@@ -17,6 +18,7 @@
 #include <tools/extendapplicationenvironment.hxx>
 #include <vcl/svapp.hxx>
 #include <iostream>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 

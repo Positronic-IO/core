@@ -20,7 +20,7 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_GLOSSARY_HXX
 
 #include <vcl/edit.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svx/stddlg.hxx>
 
 #include <vcl/button.hxx>
@@ -103,10 +103,10 @@ class SwGlossaryDlg : public SvxStandardDialog
     VclPtr<PushButton>     m_pBibBtn;
     VclPtr<PushButton>     m_pPathBtn;
 
-    OUString        sReadonlyPath;
+    OUString const        sReadonlyPath;
 
     css::uno::Reference< css::text::XAutoTextContainer2 > m_xAutoText;
-    SwOneExampleFrame*  pExampleFrame;
+    std::unique_ptr<SwOneExampleFrame>  pExampleFrame;
 
     SwGlossaryHdl*  pGlossaryHdl;
 

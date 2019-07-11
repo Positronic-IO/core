@@ -158,7 +158,6 @@ namespace accessibility
         sal_Int16       GetDepth( sal_Int32 ) const override { return -1; }
         bool            SetDepth( sal_Int32, sal_Int16 ) override { return true; }
 
-        tools::Rectangle       GetVisArea() const override { return tools::Rectangle(); }
         Point           LogicToPixel( const Point& rPoint, const MapMode& /*rMapMode*/ ) const override { return rPoint; }
         Point           PixelToLogic( const Point& rPoint, const MapMode& /*rMapMode*/ ) const override { return rPoint; }
 
@@ -226,7 +225,7 @@ namespace accessibility
         if( !mbEditSourceEmpty )
         {
             // deregister as listener
-            if( mpEditSource.get() )
+            if (mpEditSource)
                 EndListening( mpEditSource->GetBroadcaster() );
         }
         else
@@ -237,7 +236,7 @@ namespace accessibility
 
     SvxTextForwarder* AccessibleEmptyEditSource::GetTextForwarder()
     {
-        if( !mpEditSource.get() )
+        if (!mpEditSource)
             return nullptr;
 
         return mpEditSource->GetTextForwarder();
@@ -245,7 +244,7 @@ namespace accessibility
 
     SvxViewForwarder* AccessibleEmptyEditSource::GetViewForwarder()
     {
-        if( !mpEditSource.get() )
+        if (!mpEditSource)
             return nullptr;
 
         return mpEditSource->GetViewForwarder();
@@ -268,7 +267,7 @@ namespace accessibility
 
     SvxEditViewForwarder* AccessibleEmptyEditSource::GetEditViewForwarder( bool bCreate )
     {
-        if( !mpEditSource.get() )
+        if (!mpEditSource)
             return nullptr;
 
         // switch edit source, if not yet done
@@ -280,7 +279,7 @@ namespace accessibility
 
     std::unique_ptr<SvxEditSource> AccessibleEmptyEditSource::Clone() const
     {
-        if( !mpEditSource.get() )
+        if (!mpEditSource)
             return nullptr;
 
         return mpEditSource->Clone();
@@ -288,7 +287,7 @@ namespace accessibility
 
     void AccessibleEmptyEditSource::UpdateData()
     {
-        if( mpEditSource.get() )
+        if (mpEditSource)
             mpEditSource->UpdateData();
     }
 

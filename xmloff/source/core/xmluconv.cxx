@@ -24,6 +24,7 @@
 #include <com/sun/star/util/Date.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <xmloff/xmlement.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <rtl/math.hxx>
@@ -133,25 +134,25 @@ sal_Int16 SvXMLUnitConverter::GetMeasureUnit(FieldUnit const nFieldUnit)
     sal_Int16 eUnit = util::MeasureUnit::INCH;
     switch( nFieldUnit )
     {
-    case FUNIT_MM:
+    case FieldUnit::MM:
         eUnit = util::MeasureUnit::MM;
         break;
-    case FUNIT_CM:
-    case FUNIT_M:
-    case FUNIT_KM:
+    case FieldUnit::CM:
+    case FieldUnit::M:
+    case FieldUnit::KM:
         eUnit = util::MeasureUnit::CM;
         break;
-    case FUNIT_TWIP:
+    case FieldUnit::TWIP:
         eUnit = util::MeasureUnit::TWIP;
         break;
-    case FUNIT_POINT:
-    case FUNIT_PICA:
+    case FieldUnit::POINT:
+    case FieldUnit::PICA:
         eUnit = util::MeasureUnit::POINT;
         break;
-    case FUNIT_100TH_MM:
+    case FieldUnit::MM_100TH:
         eUnit = util::MeasureUnit::MM_100TH;
         break;
-    case FUNIT_INCH:
+    case FieldUnit::INCH:
         eUnit = util::MeasureUnit::INCH;
         break;
     default:
@@ -318,61 +319,12 @@ void SvXMLUnitConverter::convertDateTime( OUStringBuffer& rBuffer,
         bool bAddTimeIf0AM )
 {
     double fValue = fDateTime;
-    sal_Int32 nValue = static_cast <sal_Int32> (::rtl::math::approxFloor (fValue));
+    const sal_Int32 nDays = static_cast <sal_Int32> (::rtl::math::approxFloor (fValue));
     Date aDate (aTempNullDate.Day, aTempNullDate.Month, aTempNullDate.Year);
-    aDate.AddDays( nValue);
-    fValue -= nValue;
-    double fCount;
-    if (nValue > 0)
-         fCount = ::rtl::math::approxFloor (log10(static_cast<double>(nValue))) + 1;
-    else if (nValue < 0)
-         fCount = ::rtl::math::approxFloor (log10(static_cast<double>(nValue * -1))) + 1;
-    else
-        fCount = 0.0;
-    sal_Int16 nCount = sal_Int16(fCount);
-    bool bHasTime(false);
-    double fHoursValue = 0;
-    double fMinsValue = 0;
-    double fSecsValue = 0;
-    double f100SecsValue = 0;
-    if (fValue > 0.0)
-    {
-        bHasTime = true;
-        fValue *= 24;
-        fHoursValue = ::rtl::math::approxFloor (fValue);
-        fValue -= fHoursValue;
-        fValue *= 60;
-        fMinsValue = ::rtl::math::approxFloor (fValue);
-        fValue -= fMinsValue;
-        fValue *= 60;
-        fSecsValue = ::rtl::math::approxFloor (fValue);
-        fValue -= fSecsValue;
-        if (fValue > 0.0)
-            f100SecsValue = ::rtl::math::round( fValue, XML_MAXDIGITSCOUNT_TIME - nCount);
-        else
-            f100SecsValue = 0.0;
+    aDate.AddDays( nDays);
+    fValue -= nDays;
+    const bool bHasTime = (fValue > 0.0);
 
-        if (f100SecsValue == 1.0)
-        {
-            f100SecsValue = 0.0;
-            fSecsValue += 1.0;
-        }
-        if (fSecsValue >= 60.0)
-        {
-            fSecsValue -= 60.0;
-            fMinsValue += 1.0;
-        }
-        if (fMinsValue >= 60.0)
-        {
-            fMinsValue -= 60.0;
-            fHoursValue += 1.0;
-        }
-        if (fHoursValue >= 24.0)
-        {
-            fHoursValue -= 24.0;
-            aDate.AddDays(1);
-        }
-    }
     sal_Int16 nTempYear = aDate.GetYear();
     assert(nTempYear != 0);
     if (nTempYear < 0)
@@ -399,29 +351,49 @@ void SvXMLUnitConverter::convertDateTime( OUStringBuffer& rBuffer,
     if (nTemp < 10)
         rBuffer.append( '0');
     rBuffer.append( sal_Int32( nTemp));
-    if(bHasTime || bAddTimeIf0AM)
+    if (bHasTime || bAddTimeIf0AM)
     {
+        double fCount;
+        if (nDays > 0)
+            fCount = ::rtl::math::approxFloor (log10(static_cast<double>(nDays))) + 1;
+        else if (nDays < 0)
+            fCount = ::rtl::math::approxFloor (log10(static_cast<double>(nDays * -1))) + 1;
+        else
+            fCount = 0.0;
+        const int nDigits = sal_Int16(fCount) + 4;  // +4 for *86400 in seconds
+        const int nFractionDecimals = std::max( XML_MAXDIGITSCOUNT_TIME - nDigits, 0);
+
+        sal_uInt16 nHour, nMinute, nSecond;
+        double fFractionOfSecond;
+        // Pass the original date+time value for proper scaling and rounding.
+        tools::Time::GetClock( fDateTime, nHour, nMinute, nSecond, fFractionOfSecond, nFractionDecimals);
+
         rBuffer.append( 'T');
-        if (fHoursValue < 10)
+        if (nHour < 10)
             rBuffer.append( '0');
-        rBuffer.append( sal_Int32( fHoursValue));
+        rBuffer.append( sal_Int32( nHour));
         rBuffer.append( ':');
-        if (fMinsValue < 10)
+        if (nMinute < 10)
             rBuffer.append( '0');
-        rBuffer.append( sal_Int32( fMinsValue));
+        rBuffer.append( sal_Int32( nMinute));
         rBuffer.append( ':');
-        if (fSecsValue < 10)
+        if (nSecond < 10)
             rBuffer.append( '0');
-        rBuffer.append( sal_Int32( fSecsValue));
-        if (f100SecsValue > 0.0)
+        rBuffer.append( sal_Int32( nSecond));
+        if (nFractionDecimals)
         {
-            OUString a100th( ::rtl::math::doubleToUString( fValue,
+            // nFractionDecimals+1 to not round up what GetClock() carefully
+            // truncated.
+            OUString aFraction( ::rtl::math::doubleToUString( fFractionOfSecond,
                         rtl_math_StringFormat_F,
-                        XML_MAXDIGITSCOUNT_TIME - nCount, '.', true));
-            if ( a100th.getLength() > 2 )
+                        nFractionDecimals + 1, '.', true));
+            const sal_Int32 nLen = aFraction.getLength();
+            if ( nLen > 2 )
             {
+                // Truncate nFractionDecimals+1 digit if it was not rounded to zero.
+                const sal_Int32 nCount = nLen - 2 - static_cast<int>(nLen > nFractionDecimals + 2);
                 rBuffer.append( '.');
-                rBuffer.append( a100th.copy( 2 ) );     // strip 0.
+                rBuffer.appendCopy( aFraction, 2, nCount);     // strip 0.
             }
         }
     }

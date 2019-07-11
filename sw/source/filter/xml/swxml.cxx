@@ -35,6 +35,7 @@
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/ucb/InteractiveAugmentedIOException.hpp>
 #include <com/sun/star/xml/sax/XFastParser.hpp>
+#include <officecfg/Office/Common.hxx>
 #include <o3tl/any.hxx>
 #include <vcl/errinf.hxx>
 #include <sfx2/docfile.hxx>
@@ -47,7 +48,9 @@
 #include <svx/xmleohlp.hxx>
 #include <comphelper/fileformat.h>
 #include <comphelper/genericpropertyset.hxx>
+#include <comphelper/propertysetinfo.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <sfx2/frame.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <swerror.h>
@@ -58,6 +61,7 @@
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentDrawModelAccess.hxx>
 #include <IDocumentRedlineAccess.hxx>
+#include <DocumentRedlineManager.hxx>
 #include <docary.hxx>
 #include <docsh.hxx>
 #include <unotextrange.hxx>
@@ -121,9 +125,9 @@ XMLReader::XMLReader()
 {
 }
 
-int XMLReader::GetReaderType()
+SwReaderType XMLReader::GetReaderType()
 {
-    return SW_STORAGE_READER;
+    return SwReaderType::Storage;
 }
 
 namespace
@@ -440,14 +444,14 @@ static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs(SwDoc& _rDoc)
         const SdrPage& rSdrPage( *(_rDoc.getIDocumentDrawModelAccess().GetDrawModel()->GetPage( 0 )) );
 
         // iterate recursive with group objects over all shapes on the draw page
-        SdrObjListIter aIter( rSdrPage );
+        SdrObjListIter aIter( &rSdrPage );
         while( aIter.IsMore() )
         {
             SdrOle2Obj* pOle2Obj = dynamic_cast< SdrOle2Obj* >( aIter.Next() );
             if( pOle2Obj )
             {
                 // found an ole2 shape
-                SdrObjList* pObjList = pOle2Obj->getParentOfSdrObject();
+                SdrObjList* pObjList = pOle2Obj->getParentSdrObjListFromSdrObject();
 
                 // get its graphic
                 Graphic aGraphic;
@@ -791,8 +795,10 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
         {
             const uno::Reference<rdf::XDocumentMetadataAccess> xDMA(xModelComp,
                 uno::UNO_QUERY_THROW);
+            const uno::Reference<frame::XModel> xModel(xModelComp,
+                uno::UNO_QUERY_THROW);
             const uno::Reference<rdf::XURI> xBaseURI( ::sfx2::createBaseURI(
-                xContext, xStorage, rBaseURL, StreamPath) );
+                xContext, xModel, rBaseURL, StreamPath) );
             const uno::Reference<task::XInteractionHandler> xHandler(
                 pDocSh->GetMedium()->GetInteractionHandler() );
             xDMA->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
@@ -850,15 +856,16 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
            aFilterArgs, rName, true );
 
     if( !(IsOrganizerMode() || IsBlockMode() || m_bInsertMode ||
-          m_aOption.IsFormatsOnly() ) )
+          m_aOption.IsFormatsOnly() ||
+            // sw_redlinehide: disable layout cache for now
+          !*o3tl::doAccess<bool>(xInfoSet->getPropertyValue(sShowChanges))))
     {
         try
         {
             uno::Reference < io::XStream > xStm = xStorage->openStreamElement( "layout-cache", embed::ElementModes::READ );
-            SvStream* pStrm2 = utl::UcbStreamHelper::CreateStream( xStm );
+            std::unique_ptr<SvStream> pStrm2 = utl::UcbStreamHelper::CreateStream( xStm );
             if( !pStrm2->GetError() )
                 rDoc.ReadLayoutCache( *pStrm2 );
-            delete pStrm2;
         }
         catch (const uno::Exception&)
         {
@@ -899,7 +906,8 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
     // tdf#83260 ensure that the first call of CompressRedlines after loading
     // the document is a no-op by calling it now
     rDoc.getIDocumentRedlineAccess().CompressRedlines();
-    rDoc.getIDocumentRedlineAccess().SetRedlineFlags(  nRedlineFlags );
+    // can't set it on the layout or view shell because it doesn't exist yet
+    rDoc.GetDocumentRedlineManager().SetHideRedlines(!(nRedlineFlags & RedlineFlags::ShowDelete));
 
     lcl_EnsureValidPam( rPaM ); // move Pam into valid content
 

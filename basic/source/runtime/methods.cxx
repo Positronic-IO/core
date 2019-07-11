@@ -42,12 +42,14 @@
 #include <i18nlangtag/lang.h>
 #include <rtl/string.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 #include <runtime.hxx>
 #include <sbunoobj.hxx>
 #include <osl/file.hxx>
 #include <errobject.hxx>
 
+#include <comphelper/string.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 
@@ -55,9 +57,11 @@
 #include <com/sun/star/util/DateTime.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/Locale.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
 #include <com/sun/star/script/XErrorQuery.hpp>
 #include <ooo/vba/XHelperInterface.hpp>
+#include <ooo/vba/VbTriState.hpp>
 #include <com/sun/star/bridge/oleautomation/XAutomationObject.hpp>
 #include <memory>
 #include <random>
@@ -136,7 +140,7 @@ static const CharClass& GetCharClass()
     return aCharClass;
 }
 
-static inline bool isFolder( FileStatus::Type aType )
+static bool isFolder( FileStatus::Type aType )
 {
     return ( aType == FileStatus::Directory || aType == FileStatus::Volume );
 }
@@ -323,7 +327,7 @@ void SbRtl_Asc(StarBASIC *, SbxArray & rPar, bool)
     }
 }
 
-void implChr( SbxArray& rPar, bool bChrW )
+static void implChr( SbxArray& rPar, bool bChrW )
 {
     if ( rPar.Count() < 2 )
     {
@@ -456,7 +460,7 @@ void SbRtl_ChDrive(StarBASIC *, SbxArray & rPar, bool)
 // Implementation of StepRENAME with UCB
 void implStepRenameUCB( const OUString& aSource, const OUString& aDest )
 {
-    uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+    const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
     if( xSFI.is() )
     {
         try
@@ -504,7 +508,7 @@ void SbRtl_FileCopy(StarBASIC *, SbxArray & rPar, bool)
         OUString aDest = rPar.Get(2)->GetOUString();
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -539,7 +543,7 @@ void SbRtl_Kill(StarBASIC *, SbxArray & rPar, bool)
 
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 OUString aFullPath = getFullPath( aFileSpec );
@@ -589,7 +593,7 @@ void SbRtl_MkDir(StarBASIC * pBasic, SbxArray & rPar, bool bWrite)
                 pPar->Insert( pParam.get(), pPar->Count() );
                 SbRtl_CurDir( pBasic, *pPar, bWrite );
 
-                rtl::OUString sCurPathURL;
+                OUString sCurPathURL;
                 File::getFileURLFromSystemPath( pPar->Get(0)->GetOUString(), sCurPathURL );
 
                 aURLObj.SetURL( sCurPathURL );
@@ -600,7 +604,7 @@ void SbRtl_MkDir(StarBASIC * pBasic, SbxArray & rPar, bool bWrite)
 
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -627,7 +631,7 @@ void SbRtl_MkDir(StarBASIC * pBasic, SbxArray & rPar, bool bWrite)
 
 // In OSL only empty directories can be deleted
 // so we have to delete all files recursively
-void implRemoveDirRecursive( const OUString& aDirPath )
+static void implRemoveDirRecursive( const OUString& aDirPath )
 {
     DirectoryItem aItem;
     FileBase::RC nRet = DirectoryItem::get( aDirPath, aItem );
@@ -696,7 +700,7 @@ void SbRtl_RmDir(StarBASIC *, SbxArray & rPar, bool)
         OUString aPath = rPar.Get(1)->GetOUString();
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -770,7 +774,7 @@ void SbRtl_FileLen(StarBASIC *, SbxArray & rPar, bool)
         sal_Int32 nLen = 0;
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -1155,26 +1159,22 @@ void SbRtl_Mid(StarBASIC *, SbxArray & rPar, bool bWrite)
                 sal_Int32 nReplaceLen;
                 if( bWriteNoLenParam )
                 {
-                    nReplaceLen = nReplaceStrLen;
+                    nReplaceLen = nArgLen - nStartPos;
                 }
                 else
                 {
                     nReplaceLen = nLen;
-                    if( nReplaceLen < 0 || nReplaceLen > nReplaceStrLen )
+                    if( nReplaceLen < 0 || nReplaceLen > nArgLen - nStartPos )
                     {
-                        nReplaceLen = nReplaceStrLen;
+                        nReplaceLen = nArgLen - nStartPos;
                     }
                 }
 
-                sal_Int32 nReplaceEndPos = nStartPos + nReplaceLen;
-                if( nReplaceEndPos > nArgLen )
-                {
-                    nReplaceLen -= (nReplaceEndPos - nArgLen);
-                }
                 OUStringBuffer aResultStr = aArgStr;
                 sal_Int32 nErase = nReplaceLen;
                 aResultStr.remove( nStartPos, nErase );
-                aResultStr.insert( nStartPos, aReplaceStr.getStr(), nReplaceLen);
+                aResultStr.insert(
+                    nStartPos, aReplaceStr.getStr(), std::min(nReplaceLen, nReplaceStrLen));
 
                 rPar.Get(1)->PutString( aResultStr.makeStringAndClear() );
             }
@@ -2224,13 +2224,12 @@ void SbRtl_Second(StarBASIC *, SbxArray & rPar, bool)
 
 double Now_Impl()
 {
-    Date aDate( Date::SYSTEM );
-    tools::Time aTime( tools::Time::SYSTEM );
-    double aSerial = static_cast<double>(GetDayDiff( aDate ));
-    long nSeconds = aTime.GetHour();
+    DateTime aDateTime( DateTime::SYSTEM );
+    double aSerial = static_cast<double>(GetDayDiff( aDateTime ));
+    long nSeconds = aDateTime.GetHour();
     nSeconds *= 3600;
-    nSeconds += aTime.GetMin() * 60;
-    nSeconds += aTime.GetSec();
+    nSeconds += aDateTime.GetMin() * 60;
+    nSeconds += aDateTime.GetSec();
     double nDays = static_cast<double>(nSeconds) / (24.0*3600.0);
     aSerial += nDays;
     return aSerial;
@@ -2367,8 +2366,7 @@ void SbRtl_IsObject(StarBASIC *, SbxArray & rPar, bool)
         bool bObject = pVar->IsObject();
         SbxBase* pObj = (bObject ? pVar->GetObject() : nullptr);
 
-        SbUnoClass* pUnoClass;
-        if( pObj &&  ( pUnoClass=dynamic_cast<SbUnoClass*>( pObj) ) != nullptr  )
+        if( auto pUnoClass = dynamic_cast<SbUnoClass*>( pObj) )
         {
             bObject = pUnoClass->getUnoClass().is();
         }
@@ -2519,15 +2517,15 @@ void SbRtl_IsMissing(StarBASIC *, SbxArray & rPar, bool)
 }
 
 // Function looks for wildcards, removes them and always returns the pure path
-OUString implSetupWildcard( const OUString& rFileParam, SbiRTLData* pRTLData )
+static OUString implSetupWildcard(const OUString& rFileParam, SbiRTLData& rRTLData)
 {
     static sal_Char cDelim1 = '/';
     static sal_Char cDelim2 = '\\';
     static sal_Char cWild1 = '*';
     static sal_Char cWild2 = '?';
 
-    pRTLData->pWildCard.reset();
-    pRTLData->sFullNameToBeChecked.clear();
+    rRTLData.pWildCard.reset();
+    rRTLData.sFullNameToBeChecked.clear();
 
     OUString aFileParam = rFileParam;
     sal_Int32 nLastWild = aFileParam.lastIndexOf( cWild1 );
@@ -2556,7 +2554,7 @@ OUString implSetupWildcard( const OUString& rFileParam, SbiRTLData* pRTLData )
         OUString aPathStr = getFullPath( aFileParam );
         if( nLastDelim != aFileParam.getLength() - 1 )
         {
-            pRTLData->sFullNameToBeChecked = aPathStr;
+            rRTLData.sFullNameToBeChecked = aPathStr;
         }
         return aPathStr;
     }
@@ -2580,24 +2578,24 @@ OUString implSetupWildcard( const OUString& rFileParam, SbiRTLData* pRTLData )
     // invalid anyway because it was not accepted by OSL before
     if (aPureFileName != "*")
     {
-        pRTLData->pWildCard = o3tl::make_unique<WildCard>( aPureFileName );
+        rRTLData.pWildCard = o3tl::make_unique<WildCard>(aPureFileName);
     }
     return aPathStr;
 }
 
-inline bool implCheckWildcard( const OUString& rName, SbiRTLData const * pRTLData )
+static bool implCheckWildcard(const OUString& rName, SbiRTLData const& rRTLData)
 {
     bool bMatch = true;
 
-    if( pRTLData->pWildCard )
+    if (rRTLData.pWildCard)
     {
-        bMatch = pRTLData->pWildCard->Matches( rName );
+        bMatch = rRTLData.pWildCard->Matches(rName);
     }
     return bMatch;
 }
 
 
-bool isRootDir( const OUString& aDirURLStr )
+static bool isRootDir( const OUString& aDirURLStr )
 {
     INetURLObject aDirURLObj( aDirURLStr );
     bool bRoot = false;
@@ -2639,25 +2637,19 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
     }
     else
     {
-        SbiRTLData* pRTLData = GetSbData()->pInst->GetRTLData();
+        SbiRTLData& rRTLData = GetSbData()->pInst->GetRTLData();
 
-        // #34645: can also be called from the URL line via 'macro: Dir'
-        // there's no pRTLDate existing in that case and the method must be left
-        if( !pRTLData )
-        {
-            return;
-        }
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 if ( nParCount >= 2 )
                 {
                     OUString aFileParam = rPar.Get(1)->GetOUString();
 
-                    OUString aFileURLStr = implSetupWildcard( aFileParam, pRTLData );
-                    if( !pRTLData->sFullNameToBeChecked.isEmpty())
+                    OUString aFileURLStr = implSetupWildcard(aFileParam, rRTLData);
+                    if (!rRTLData.sFullNameToBeChecked.isEmpty())
                     {
                         bool bExists = false;
                         try { bExists = xSFI->exists( aFileURLStr ); }
@@ -2691,16 +2683,17 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                         SbAttributes nFlags = SbAttributes::NONE;
                         if ( nParCount > 2 )
                         {
-                            pRTLData->nDirFlags = nFlags = static_cast<SbAttributes>(rPar.Get(2)->GetInteger());
+                            rRTLData.nDirFlags = nFlags
+                                = static_cast<SbAttributes>(rPar.Get(2)->GetInteger());
                         }
                         else
                         {
-                            pRTLData->nDirFlags = SbAttributes::NONE;
+                            rRTLData.nDirFlags = SbAttributes::NONE;
                         }
                         // Read directory
                         bool bIncludeFolders = bool(nFlags & SbAttributes::DIRECTORY);
-                        pRTLData->aDirSeq = xSFI->getFolderContents( aDirURLStr, bIncludeFolders );
-                        pRTLData->nCurDirPos = 0;
+                        rRTLData.aDirSeq = xSFI->getFolderContents(aDirURLStr, bIncludeFolders);
+                        rRTLData.nCurDirPos = 0;
 
                         // #78651 Add "." and ".." directories for VB compatibility
                         if( bIncludeFolders )
@@ -2713,7 +2706,7 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                             // returned "." and for -1 ".."
                             if( !bRoot )
                             {
-                                pRTLData->nCurDirPos = -2;
+                                rRTLData.nCurDirPos = -2;
                             }
                         }
                     }
@@ -2723,35 +2716,36 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                 }
 
 
-                if( pRTLData->aDirSeq.getLength() > 0 )
+                if (rRTLData.aDirSeq.getLength() > 0)
                 {
-                    bool bFolderFlag = bool(pRTLData->nDirFlags & SbAttributes::DIRECTORY);
+                    bool bFolderFlag = bool(rRTLData.nDirFlags & SbAttributes::DIRECTORY);
 
                     SbiInstance* pInst = GetSbData()->pInst;
                     bool bCompatibility = ( pInst && pInst->IsCompatibility() );
                     for( ;; )
                     {
-                        if( pRTLData->nCurDirPos < 0 )
+                        if (rRTLData.nCurDirPos < 0)
                         {
-                            if( pRTLData->nCurDirPos == -2 )
+                            if (rRTLData.nCurDirPos == -2)
                             {
                                 aPath = ".";
                             }
-                            else if( pRTLData->nCurDirPos == -1 )
+                            else if (rRTLData.nCurDirPos == -1)
                             {
                                 aPath = "..";
                             }
-                            pRTLData->nCurDirPos++;
+                            rRTLData.nCurDirPos++;
                         }
-                        else if( pRTLData->nCurDirPos >= pRTLData->aDirSeq.getLength() )
+                        else if (rRTLData.nCurDirPos >= rRTLData.aDirSeq.getLength())
                         {
-                            pRTLData->aDirSeq.realloc( 0 );
+                            rRTLData.aDirSeq.realloc(0);
                             aPath.clear();
                             break;
                         }
                         else
                         {
-                            OUString aFile = pRTLData->aDirSeq.getConstArray()[pRTLData->nCurDirPos++];
+                            OUString aFile
+                                = rRTLData.aDirSeq.getConstArray()[rRTLData.nCurDirPos++];
 
                             if( bCompatibility )
                             {
@@ -2782,7 +2776,7 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                                                   INetURLObject::DecodeMechanism::WithCharset );
                         }
 
-                        bool bMatch = implCheckWildcard( aPath, pRTLData );
+                        bool bMatch = implCheckWildcard(aPath, rRTLData);
                         if( !bMatch )
                         {
                             continue;
@@ -2800,31 +2794,32 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
             {
                 OUString aFileParam = rPar.Get(1)->GetOUString();
 
-                OUString aDirURL = implSetupWildcard( aFileParam, pRTLData );
+                OUString aDirURL = implSetupWildcard(aFileParam, rRTLData);
 
                 SbAttributes nFlags = SbAttributes::NONE;
                 if ( nParCount > 2 )
                 {
-                    pRTLData->nDirFlags = nFlags = static_cast<SbAttributes>( rPar.Get(2)->GetInteger() );
+                    rRTLData.nDirFlags = nFlags
+                        = static_cast<SbAttributes>(rPar.Get(2)->GetInteger());
                 }
                 else
                 {
-                    pRTLData->nDirFlags = SbAttributes::NONE;
+                    rRTLData.nDirFlags = SbAttributes::NONE;
                 }
 
                 // Read directory
                 bool bIncludeFolders = bool(nFlags & SbAttributes::DIRECTORY);
-                pRTLData->pDir = o3tl::make_unique<Directory>( aDirURL );
-                FileBase::RC nRet = pRTLData->pDir->open();
+                rRTLData.pDir = o3tl::make_unique<Directory>(aDirURL);
+                FileBase::RC nRet = rRTLData.pDir->open();
                 if( nRet != FileBase::E_None )
                 {
-                    pRTLData->pDir.reset();
+                    rRTLData.pDir.reset();
                     rPar.Get(0)->PutString( OUString() );
                     return;
                 }
 
                 // #86950 Add "." and ".." directories for VB compatibility
-                pRTLData->nCurDirPos = 0;
+                rRTLData.nCurDirPos = 0;
                 if( bIncludeFolders )
                 {
                     bool bRoot = isRootDir( aDirURL );
@@ -2835,36 +2830,36 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                     // returned "." and for -1 ".."
                     if( !bRoot )
                     {
-                        pRTLData->nCurDirPos = -2;
+                        rRTLData.nCurDirPos = -2;
                     }
                 }
 
             }
 
-            if( pRTLData->pDir )
+            if (rRTLData.pDir)
             {
-                bool bFolderFlag = bool(pRTLData->nDirFlags & SbAttributes::DIRECTORY);
+                bool bFolderFlag = bool(rRTLData.nDirFlags & SbAttributes::DIRECTORY);
                 for( ;; )
                 {
-                    if( pRTLData->nCurDirPos < 0 )
+                    if (rRTLData.nCurDirPos < 0)
                     {
-                        if( pRTLData->nCurDirPos == -2 )
+                        if (rRTLData.nCurDirPos == -2)
                         {
                             aPath = ".";
                         }
-                        else if( pRTLData->nCurDirPos == -1 )
+                        else if (rRTLData.nCurDirPos == -1)
                         {
                             aPath = "..";
                         }
-                        pRTLData->nCurDirPos++;
+                        rRTLData.nCurDirPos++;
                     }
                     else
                     {
                         DirectoryItem aItem;
-                        FileBase::RC nRet = pRTLData->pDir->getNextItem( aItem );
+                        FileBase::RC nRet = rRTLData.pDir->getNextItem(aItem);
                         if( nRet != FileBase::E_None )
                         {
-                            pRTLData->pDir.reset();
+                            rRTLData.pDir.reset();
                             aPath.clear();
                             break;
                         }
@@ -2892,7 +2887,7 @@ void SbRtl_Dir(StarBASIC *, SbxArray & rPar, bool)
                         aPath = aFileStatus.getFileName();
                     }
 
-                    bool bMatch = implCheckWildcard( aPath, pRTLData );
+                    bool bMatch = implCheckWildcard(aPath, rRTLData);
                     if( !bMatch )
                     {
                         continue;
@@ -2944,7 +2939,7 @@ void SbRtl_GetAttr(StarBASIC * pBasic, SbxArray & rPar, bool bWrite)
 
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -3023,7 +3018,7 @@ void SbRtl_FileDateTime(StarBASIC *, SbxArray & rPar, bool)
         Date aDate( Date::EMPTY );
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -3040,43 +3035,70 @@ void SbRtl_FileDateTime(StarBASIC *, SbxArray & rPar, bool)
         }
         else
         {
-            DirectoryItem aItem;
-            DirectoryItem::get( getFullPath( aPath ), aItem );
-            FileStatus aFileStatus( osl_FileStatus_Mask_ModifyTime );
-            aItem.getFileStatus( aFileStatus );
-            TimeValue aTimeVal = aFileStatus.getModifyTime();
-            oslDateTime aDT;
-            osl_getDateTimeFromTimeValue( &aTimeVal, &aDT );
+            bool bSuccess = false;
+            do
+            {
+                DirectoryItem aItem;
+                if (DirectoryItem::get( getFullPath( aPath ), aItem ) != FileBase::E_None)
+                    break;
 
-            aTime = tools::Time( aDT.Hours, aDT.Minutes, aDT.Seconds, aDT.NanoSeconds );
-            aDate = Date( aDT.Day, aDT.Month, aDT.Year );
+                FileStatus aFileStatus( osl_FileStatus_Mask_ModifyTime );
+                if (aItem.getFileStatus( aFileStatus ) != FileBase::E_None)
+                    break;
+
+                TimeValue aTimeVal = aFileStatus.getModifyTime();
+                oslDateTime aDT;
+                if (!osl_getDateTimeFromTimeValue( &aTimeVal, &aDT ))
+                    // Strictly spoken this is not an i/o error but some other failure.
+                    break;
+
+                aTime = tools::Time( aDT.Hours, aDT.Minutes, aDT.Seconds, aDT.NanoSeconds );
+                aDate = Date( aDT.Day, aDT.Month, aDT.Year );
+                bSuccess = true;
+            }
+            while(false);
+
+            if (!bSuccess)
+                StarBASIC::Error( ERRCODE_IO_GENERAL );
         }
 
-        double fSerial = static_cast<double>(GetDayDiff( aDate ));
-        long nSeconds = aTime.GetHour();
-        nSeconds *= 3600;
-        nSeconds += aTime.GetMin() * 60;
-        nSeconds += aTime.GetSec();
-        double nDays = static_cast<double>(nSeconds) / (24.0*3600.0);
-        fSerial += nDays;
-
-        Color* pCol;
-
-        std::shared_ptr<SvNumberFormatter> pFormatter;
-        sal_uInt32 nIndex;
-        if( GetSbData()->pInst )
+        // An empty date shall not result in a formatted null-date (1899-12-30
+        // or 1900-01-01) or even worse -0001-12-03 or some such due to how
+        // GetDayDiff() treats things. There should be an error set in this
+        // case anyway because of a missing file or other error above, but.. so
+        // do not even bother to use the number formatter.
+        OUString aRes;
+        if (aDate.IsEmpty())
         {
-            pFormatter = GetSbData()->pInst->GetNumberFormatter();
-            nIndex = GetSbData()->pInst->GetStdDateTimeIdx();
+            aRes = "0000-00-00 00:00:00";
         }
         else
         {
-            sal_uInt32 n;
-            pFormatter = SbiInstance::PrepareNumberFormatter( n, n, nIndex );
-        }
+            double fSerial = static_cast<double>(GetDayDiff( aDate ));
+            long nSeconds = aTime.GetHour();
+            nSeconds *= 3600;
+            nSeconds += aTime.GetMin() * 60;
+            nSeconds += aTime.GetSec();
+            double nDays = static_cast<double>(nSeconds) / (24.0*3600.0);
+            fSerial += nDays;
 
-        OUString aRes;
-        pFormatter->GetOutputString( fSerial, nIndex, aRes, &pCol );
+            Color* pCol;
+
+            std::shared_ptr<SvNumberFormatter> pFormatter;
+            sal_uInt32 nIndex;
+            if( GetSbData()->pInst )
+            {
+                pFormatter = GetSbData()->pInst->GetNumberFormatter();
+                nIndex = GetSbData()->pInst->GetStdDateTimeIdx();
+            }
+            else
+            {
+                sal_uInt32 n;
+                pFormatter = SbiInstance::PrepareNumberFormatter( n, n, nIndex );
+            }
+
+            pFormatter->GetOutputString( fSerial, nIndex, aRes, &pCol );
+        }
         rPar.Get(0)->PutString( aRes );
     }
 }
@@ -3215,9 +3237,7 @@ void SbRtl_Lof(StarBASIC *, SbxArray & rPar, bool)
             return;
         }
         SvStream* pSvStrm = pSbStrm->GetStrm();
-        sal_uInt64 const nOldPos = pSvStrm->Tell();
-        sal_uInt64 const nLen = pSvStrm->Seek( STREAM_SEEK_TO_END );
-        pSvStrm->Seek( nOldPos );
+        sal_uInt64 const nLen = pSvStrm->TellEnd();
         rPar.Get(0)->PutLong( static_cast<sal_Int32>(nLen) );
     }
 }
@@ -3292,6 +3312,133 @@ void SbRtl_Format(StarBASIC *, SbxArray & rPar, bool)
         }
         rPar.Get(0)->PutString( aResult );
     }
+}
+
+// https://msdn.microsoft.com/en-us/vba/language-reference-vba/articles/formatnumber-function
+void SbRtl_FormatNumber(StarBASIC*, SbxArray& rPar, bool)
+{
+    const sal_uInt16 nArgCount = rPar.Count();
+    if (nArgCount < 2 || nArgCount > 6)
+    {
+        StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+        return;
+    }
+
+    // The UI locale never changes -> we can use static value here
+    static const LocaleDataWrapper localeData(Application::GetSettings().GetUILanguageTag());
+    sal_Int16 nNumDigitsAfterDecimal = -1;
+    if (nArgCount > 2 && !rPar.Get(2)->IsEmpty())
+    {
+        nNumDigitsAfterDecimal = rPar.Get(2)->GetInteger();
+        if (nNumDigitsAfterDecimal < -1)
+        {
+            StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+            return;
+        }
+        else if (nNumDigitsAfterDecimal > 255)
+            nNumDigitsAfterDecimal %= 256;
+    }
+    if (nNumDigitsAfterDecimal == -1)
+        nNumDigitsAfterDecimal = LocaleDataWrapper::getNumDigits();
+
+    bool bIncludeLeadingDigit = LocaleDataWrapper::isNumLeadingZero();
+    if (nArgCount > 3 && !rPar.Get(3)->IsEmpty())
+    {
+        switch (rPar.Get(3)->GetInteger())
+        {
+            case ooo::vba::VbTriState::vbFalse:
+                bIncludeLeadingDigit = false;
+                break;
+            case ooo::vba::VbTriState::vbTrue:
+                bIncludeLeadingDigit = true;
+                break;
+            case ooo::vba::VbTriState::vbUseDefault:
+                // do nothing;
+                break;
+            default:
+                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+                return;
+        }
+    }
+
+    bool bUseParensForNegativeNumbers = false;
+    if (nArgCount > 4 && !rPar.Get(4)->IsEmpty())
+    {
+        switch (rPar.Get(4)->GetInteger())
+        {
+            case ooo::vba::VbTriState::vbFalse:
+            case ooo::vba::VbTriState::vbUseDefault:
+                // do nothing
+                break;
+            case ooo::vba::VbTriState::vbTrue:
+                bUseParensForNegativeNumbers = true;
+                break;
+            default:
+                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+                return;
+        }
+    }
+
+    bool bGroupDigits = false;
+    if (nArgCount > 5 && !rPar.Get(5)->IsEmpty())
+    {
+        switch (rPar.Get(5)->GetInteger())
+        {
+            case ooo::vba::VbTriState::vbFalse:
+            case ooo::vba::VbTriState::vbUseDefault:
+                // do nothing
+                break;
+            case ooo::vba::VbTriState::vbTrue:
+                bGroupDigits = true;
+                break;
+            default:
+                StarBASIC::Error(ERRCODE_BASIC_BAD_ARGUMENT);
+                return;
+        }
+    }
+
+    double fVal = rPar.Get(1)->GetDouble();
+    const bool bNegative = fVal < 0;
+    if (bNegative)
+        fVal = fabs(fVal); // Always work with non-negatives, to easily handle leading zero
+
+    static const sal_Unicode decSep = localeData.getNumDecimalSep().toChar();
+    OUString aResult = rtl::math::doubleToUString(
+        fVal, rtl_math_StringFormat_F, nNumDigitsAfterDecimal, decSep,
+        bGroupDigits ? localeData.getDigitGrouping().getConstArray() : nullptr,
+        localeData.getNumThousandSep().toChar());
+
+    if (!bIncludeLeadingDigit && aResult.getLength() > 1 && aResult.startsWith("0"))
+        aResult = aResult.copy(1);
+
+    if (nNumDigitsAfterDecimal > 0)
+    {
+        sal_Int32 nActualDigits = nNumDigitsAfterDecimal;
+        const sal_Int32 nSepPos = aResult.indexOf(decSep);
+        if (nSepPos == -1)
+            nActualDigits = 0;
+        else
+            nActualDigits = aResult.getLength() - nSepPos - 1;
+
+        // VBA allows up to 255 digits; rtl::math::doubleToUString outputs up to 15 digits
+        // for ~small numbers, so pad them as appropriate.
+        if (nActualDigits < nNumDigitsAfterDecimal)
+        {
+            OUStringBuffer sBuf;
+            comphelper::string::padToLength(sBuf, nNumDigitsAfterDecimal - nActualDigits, '0');
+            aResult += sBuf;
+        }
+    }
+
+    if (bNegative)
+    {
+        if (bUseParensForNegativeNumbers)
+            aResult = "(" + aResult + ")";
+        else
+            aResult = "-" + aResult;
+    }
+
+    rPar.Get(0)->PutString(aResult);
 }
 
 namespace {
@@ -3596,7 +3743,7 @@ OUString getBasicTypeName( SbxDataType eType )
     return OUString::createFromAscii(pTypeNames[nPos]);
 }
 
-OUString getObjectTypeName( SbxVariable* pVar )
+static OUString getObjectTypeName( SbxVariable* pVar )
 {
     OUString sRet( "Object" );
     if ( pVar )
@@ -4192,7 +4339,7 @@ void SbRtl_SavePicture(StarBASIC *, SbxArray & rPar, bool)
     if (SbStdPicture *pPicture = dynamic_cast<SbStdPicture*>(pObj))
     {
         SvFileStream aOStream( rPar.Get(2)->GetOUString(), StreamMode::WRITE | StreamMode::TRUNC );
-        Graphic aGraphic = pPicture->GetGraphic();
+        const Graphic& aGraphic = pPicture->GetGraphic();
         WriteGraphic( aOStream, aGraphic );
     }
 }
@@ -4340,7 +4487,7 @@ void SbRtl_SetAttr(StarBASIC *, SbxArray & rPar, bool)
 
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -4411,7 +4558,7 @@ void SbRtl_FileExists(StarBASIC *, SbxArray & rPar, bool)
 
         if( hasUno() )
         {
-            uno::Reference< ucb::XSimpleFileAccess3 > xSFI = getFileAccess();
+            const uno::Reference< ucb::XSimpleFileAccess3 >& xSFI = getFileAccess();
             if( xSFI.is() )
             {
                 try
@@ -4463,7 +4610,7 @@ void SbRtl_Partition(StarBASIC *, SbxArray & rPar, bool)
     // of the Partition function with several values of Number, the resulting text
     // will be handled properly during any subsequent sort operation.
 
-    // calculate the  maximun number of characters before lowervalue and uppervalue
+    // calculate the maximum number of characters before lowervalue and uppervalue
     OUString aBeforeStart = OUString::number( nStart - 1 );
     OUString aAfterStop = OUString::number( nStop + 1 );
     sal_Int32 nLen1 = aBeforeStart.getLength();

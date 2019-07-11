@@ -24,7 +24,6 @@
 #include "queryparam.hxx"
 #include "subtotalparam.hxx"
 
-#include <com/sun/star/sheet/TableFilterField.hpp>
 #include <com/sun/star/sheet/GeneralFunction.hpp>
 #include <com/sun/star/sheet/XCellRangeReferrer.hpp>
 #include <com/sun/star/sheet/XSheetFilterDescriptor.hpp>
@@ -49,6 +48,10 @@
 #include <svl/lstner.hxx>
 
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace sheet { struct TableFilterField2; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct TableFilterField3; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct TableFilterField; } } } }
 
 class ScDBData;
 class ScDocShell;
@@ -111,7 +114,7 @@ class ScSubTotalDescriptorBase : public cppu::WeakImplHelper<
                                         css::lang::XServiceInfo >
 {
 private:
-    SfxItemPropertySet      aPropSet;
+    SfxItemPropertySet const aPropSet;
 
     ScSubTotalFieldObj*     GetObjectByIndex_Impl(sal_uInt16 nIndex);
 
@@ -280,7 +283,7 @@ class ScFilterDescriptorBase : public cppu::WeakImplHelper<
                                public SfxListener
 {
 private:
-    SfxItemPropertySet      aPropSet;
+    SfxItemPropertySet const aPropSet;
     ScDocShell*             pDocSh;
 
 public:
@@ -402,11 +405,11 @@ class ScDatabaseRangeObj : public cppu::WeakImplHelper<
 private:
     ScDocShell*             pDocShell;
     OUString                aName;
-    SfxItemPropertySet      aPropSet;
+    SfxItemPropertySet const aPropSet;
     std::vector< css::uno::Reference< css::util::XRefreshListener > >
                             aRefreshListeners;
-    bool                    bIsUnnamed;
-    SCTAB                   aTab;
+    bool const              bIsUnnamed;
+    SCTAB const             aTab;
 
 private:
     ScDBData*               GetDBData_Impl() const;

@@ -27,6 +27,7 @@
 #include <com/sun/star/xsd/WhiteSpaceTreatment.hpp>
 #include <tools/datetime.hxx>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 
 namespace xforms
@@ -227,7 +228,7 @@ namespace xforms
             }
 
             // let it match the string
-            if ( !lcl_matchString( *m_pPatternMatcher.get(), _rValue ) )
+            if (!lcl_matchString(*m_pPatternMatcher, _rValue))
                 return RID_STR_XFORMS_PATTERN_DOESNT_MATCH;
         }
 

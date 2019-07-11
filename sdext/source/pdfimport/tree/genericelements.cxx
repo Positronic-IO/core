@@ -28,6 +28,7 @@
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/range/b2drange.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 namespace pdfi
 {
@@ -264,36 +265,6 @@ void PageElement::visitedBy( ElementTreeVisitor&                          rVisit
      rVisitor.visit(*this, rParentIt);
 }
 
-void PageElement::updateParagraphGeometry( Element* pEle )
-{
-    // update geometry of children
-    for( auto it = pEle->Children.begin();
-         it != pEle->Children.end(); ++it )
-    {
-        updateParagraphGeometry( it->get() );
-    }
-    // if this is a paragraph itself, then update according to children geometry
-    if( dynamic_cast<ParagraphElement*>(pEle) )
-    {
-        for( auto it = pEle->Children.begin();
-             it != pEle->Children.end(); ++it )
-        {
-            Element* pChild = nullptr;
-            TextElement* pText = dynamic_cast<TextElement*>(it->get());
-            if( pText )
-                pChild = pText;
-            else
-            {
-                ParagraphElement* pPara = dynamic_cast<ParagraphElement*>(it->get());
-                if( pPara )
-                    pChild = pPara;
-            }
-            if( pChild )
-                pEle->updateGeometryWith( pChild );
-        }
-    }
-}
-
 bool PageElement::resolveHyperlink( const std::list<std::unique_ptr<Element>>::iterator& link_it, std::list<std::unique_ptr<Element>>& rElements )
 {
     HyperlinkElement* pLink = dynamic_cast<HyperlinkElement*>(link_it->get());
@@ -447,7 +418,6 @@ void PageElement::resolveUnderlines( PDFIProcessor const & rProc )
             auto next_it = poly_it;
             ++next_it;
             Children.erase( poly_it );
-            delete pPoly;
             poly_it = next_it;
         }
         else

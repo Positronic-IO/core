@@ -23,12 +23,14 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <com/sun/star/embed/NoVisualAreaSizeException.hpp>
 #include <com/sun/star/embed/EmbedStates.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
+#include <osl/diagnose.h>
 #include <comphelper/classids.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/docfac.hxx>
@@ -48,7 +50,7 @@
 
 using namespace ::com::sun::star;
 
-SvGlobalName GetEmbeddedVersion( const SvGlobalName& aAppName )
+static SvGlobalName GetEmbeddedVersion( const SvGlobalName& aAppName )
 {
     if ( aAppName == SvGlobalName( SO3_SM_CLASSID_60 ) )
             return SvGlobalName( SO3_SM_OLE_EMBED_CLASSID_8 );
@@ -66,7 +68,7 @@ SvGlobalName GetEmbeddedVersion( const SvGlobalName& aAppName )
     return SvGlobalName();
 }
 
-OUString GetStorageType( const SvGlobalName& aEmbName )
+static OUString GetStorageType( const SvGlobalName& aEmbName )
 {
     if ( aEmbName == SvGlobalName( SO3_SM_OLE_EMBED_CLASSID_8 ) )
         return OUString( "LibreOffice.MathDocument.1" );
@@ -83,7 +85,7 @@ OUString GetStorageType( const SvGlobalName& aEmbName )
     return OUString();
 }
 
-bool UseOldMSExport()
+static bool UseOldMSExport()
 {
     uno::Reference< lang::XMultiServiceFactory > xProvider(
         configuration::theDefaultProvider::get(
@@ -135,7 +137,7 @@ void SvxMSExportOLEObjects::ExportOLEObject( svt::EmbeddedObjectRef const & rObj
                 sal_uInt8 b8, b9, b10, b11, b12, b13, b14, b15;
             }
             aGlNmIds[4];
-        } aArr[] = {
+        } const aArr[] = {
             { OLE_STARMATH_2_MATHTYPE, "MathType 3.x",
                 {{SO3_SM_CLASSID_60}, {SO3_SM_CLASSID_50},
                  {SO3_SM_CLASSID_40}, {SO3_SM_CLASSID_30 }}},

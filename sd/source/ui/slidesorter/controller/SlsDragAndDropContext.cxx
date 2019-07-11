@@ -33,8 +33,10 @@
 #include <controller/SlsTransferableData.hxx>
 #include <DrawDocShell.hxx>
 #include <drawdoc.hxx>
+#include <Window.hxx>
 #include <app.hrc>
 #include <sdtreelb.hxx>
+#include <sdmod.hxx>
 #include <sfx2/bindings.hxx>
 
 namespace sd { namespace slidesorter { namespace controller {
@@ -64,7 +66,7 @@ DragAndDropContext::DragAndDropContext (SlideSorter& rSlideSorter)
 
 DragAndDropContext::~DragAndDropContext() COVERITY_NOEXCEPT_FALSE
 {
-    SetTargetSlideSorter (Point(0,0));
+    SetTargetSlideSorter();
 }
 
 void DragAndDropContext::Dispose()
@@ -109,8 +111,7 @@ void DragAndDropContext::UpdatePosition (
     }
 }
 
-void DragAndDropContext::SetTargetSlideSorter(
-    const Point& rMousePosition)
+void DragAndDropContext::SetTargetSlideSorter()
 {
     if (mpTargetSlideSorter != nullptr)
     {
@@ -120,16 +121,6 @@ void DragAndDropContext::SetTargetSlideSorter(
     }
 
     mpTargetSlideSorter = nullptr;
-
-    if (mpTargetSlideSorter != nullptr)
-    {
-        mpTargetSlideSorter->GetController().GetInsertionIndicatorHandler()->Start(
-            false/*bIsOverSourceView*/);
-        mpTargetSlideSorter->GetController().GetInsertionIndicatorHandler()->UpdatePosition(
-            rMousePosition,
-            InsertionIndicatorHandler::UnknownMode);
-
-    }
 }
 
 } } } // end of namespace ::sd::slidesorter::controller

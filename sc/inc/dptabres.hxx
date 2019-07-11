@@ -23,11 +23,11 @@
 #include "global.hxx"
 #include "dpfilteredcache.hxx"
 #include "calcmacros.hxx"
+#include "dpitemdata.hxx"
+#include "subtotal.hxx"
 
-#include <com/sun/star/sheet/MemberResult.hpp>
-#include <com/sun/star/sheet/DataResult.hpp>
 #include <com/sun/star/sheet/DataPilotFieldOrientation.hpp>
-#include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/sheet/DataPilotFieldReference.hpp>
 
 #include <map>
 #include <unordered_map>
@@ -35,9 +35,9 @@
 #include <memory>
 #include <vector>
 
-namespace com { namespace sun { namespace star { namespace sheet {
-    struct DataPilotFieldReference;
-} } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct DataResult; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct MemberResult; } } } }
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Sequence; } } } }
 
 class ScDPSource;
 class ScDPDimension;
@@ -47,7 +47,6 @@ class ScDPResultMember;
 class ScDPResultVisibilityData;
 
 struct ScDPValue;
-class ScDPItemData;
 struct ScDPResultFilterContext;
 
 /**
@@ -59,8 +58,8 @@ class ScDPInitState
 public:
     struct Member
     {
-        long mnSrcIndex;
-        SCROW mnNameIndex;
+        long const mnSrcIndex;
+        SCROW const mnNameIndex;
 
         Member(long nSrcIndex, SCROW nNameIndex);
     };
@@ -124,8 +123,8 @@ public:
     void    RemoveRowIndex();
 
 private:
-    ScDPResultMember*   pColResRoot;
-    ScDPResultMember*   pRowResRoot;
+    ScDPResultMember* const   pColResRoot;
+    ScDPResultMember* const   pRowResRoot;
 
     mutable IndexArray maColVisible;
     mutable IndexArray maColSorted;
@@ -136,7 +135,7 @@ private:
 struct ScDPRelativePos
 {
     long    nBasePos;       // simple count, without sort order applied
-    long    nDirection;
+    long const    nDirection;
 
     ScDPRelativePos( long nBase, long nDir );
 };
@@ -146,23 +145,24 @@ struct ScDPRelativePos
 
 //  Possible values for the nCount member:
 //  (greater than 0 counts the collected values)
-const long SC_DPAGG_EMPTY        =  0;  // empty during data collection
-const long SC_DPAGG_DATA_ERROR   = -1;  // error during data collection
-const long SC_DPAGG_RESULT_EMPTY = -2;  // empty result calculated
-const long SC_DPAGG_RESULT_VALID = -3;  // valid result calculated
-const long SC_DPAGG_RESULT_ERROR = -4;  // error in calculated result
+const sal_Int64 SC_DPAGG_EMPTY        =  0;  // empty during data collection
+const sal_Int64 SC_DPAGG_DATA_ERROR   = -1;  // error during data collection
+const sal_Int64 SC_DPAGG_RESULT_EMPTY = -2;  // empty result calculated
+const sal_Int64 SC_DPAGG_RESULT_VALID = -3;  // valid result calculated
+const sal_Int64 SC_DPAGG_RESULT_ERROR = -4;  // error in calculated result
 
 class ScDPAggData
 {
 private:
+    WelfordRunner   maWelford;
     double          fVal;
     double          fAux;
-    long            nCount;
+    sal_Int64       nCount;
     std::unique_ptr<ScDPAggData> pChild;
     std::vector<double> mSortedValues;
 
 public:
-            ScDPAggData() : fVal(0.0), fAux(0.0), nCount(SC_DPAGG_EMPTY), pChild(nullptr) {}
+            ScDPAggData() : fVal(0.0), fAux(0.0), nCount(SC_DPAGG_EMPTY) {}
 
     void    Update( const ScDPValue& rNext, ScSubTotalFunc eFunc, const ScDPSubTotalState& rSubState );
     void    Calculate( ScSubTotalFunc eFunc, const ScDPSubTotalState& rSubState );
@@ -217,11 +217,6 @@ class ScDPDataMember;
 #define SC_DPMEASURE_ALL    -1
 #define SC_DPMEASURE_ANY    -2
 
-struct MemberHashIndexFunc
-{
-    size_t operator() (SCROW rDataIndex) const { return rDataIndex; }
-};
-
 struct ScDPParentDimData
 {
     const SCROW                     mnOrder;                //! Ref
@@ -233,15 +228,13 @@ struct ScDPParentDimData
     ScDPParentDimData(SCROW nIndex, const ScDPDimension* pDim, const ScDPLevel* pLev, const ScDPMember* pMember);
 };
 
-typedef std::unordered_map < SCROW, ScDPParentDimData *, MemberHashIndexFunc>  DimMemberHash;
-
 class ResultMembers final
 {
-    DimMemberHash      maMemberHash;
+    std::unordered_map<SCROW, ScDPParentDimData> maMemberHash;
     bool mbHasHideDetailsMember;
 public:
-    ScDPParentDimData* FindMember( SCROW nIndex ) const;
-    void                             InsertMember(  ScDPParentDimData* pNew );
+    const ScDPParentDimData* FindMember( SCROW nIndex ) const;
+    void InsertMember( ScDPParentDimData const & rNew );
     bool IsHasHideDetailsMembers() const { return mbHasHideDetailsMember; }
     void SetHasHideDetailsMembers( bool b ) { mbHasHideDetailsMember = b; }
     ResultMembers();
@@ -254,7 +247,7 @@ private:
     const ::std::vector<ScDPDimension*>& mppDim;
     const ::std::vector<ScDPLevel*>& mppLev;
 
-    bool mbRow:1;
+    bool const mbRow:1;
     bool mbInitChild:1;
     bool mbAllChildren:1;
 public:
@@ -292,7 +285,7 @@ class ScDPResultData
     bool                    bDataAtRow:1;
 
     //! add "displayed values" settings
-    mutable std::vector<ResultMembers*> maDimMembers;
+    mutable std::vector<std::unique_ptr<ResultMembers>> maDimMembers;
 public:
     ScDPResultData( ScDPSource& rSrc );
     ~ScDPResultData();
@@ -328,7 +321,7 @@ public:
     bool                HasCommonElement( SCROW nFirstDataId, long nFirstIndex,
                                           const ScDPItemData& rSecondData, long nSecondIndex ) const;
 
-    ResultMembers* GetDimResultMembers(long nDim, const ScDPDimension* pDim, ScDPLevel* pLevel) const;
+    ResultMembers&      GetDimResultMembers(long nDim, const ScDPDimension* pDim, ScDPLevel* pLevel) const;
 
     const ScDPSource& GetSource() const { return mrSource;}
 };
@@ -337,11 +330,11 @@ class ScDPResultMember
 {
 private:
     const ScDPResultData*   pResultData;
-    ScDPParentDimData        aParentDimData;
+    ScDPParentDimData const        aParentDimData;
     std::unique_ptr<ScDPResultDimension>  pChildDimension;
     std::unique_ptr<ScDPDataMember>       pDataRoot;
     bool                    bHasElements:1;
-    bool                    bForceSubTotal:1;
+    bool const              bForceSubTotal:1;
     bool                    bHasHiddenDetails:1;
     bool                    bInitialized:1;
     bool                    bAutoHidden:1;
@@ -613,7 +606,7 @@ class ScDPDataDimension
 private:
     const ScDPResultData*       pResultData;
     const ScDPResultDimension* pResultDimension;  // column
-    ScDPDataMembers     maMembers;
+    std::vector<std::unique_ptr<ScDPDataMember>> maMembers;
     bool bIsDataLayout;      //! or ptr to IntDimension?
 
 public:

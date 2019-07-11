@@ -67,6 +67,8 @@
 #include <unx/salobj.h>
 #include <unx/sm.hxx>
 #include <unx/wmadaptor.hxx>
+#include <unx/x11/xrender_peer.hxx>
+#include <unx/glyphcache.hxx>
 
 #include <vcl/opengl/OpenGLHelper.hxx>
 
@@ -83,21 +85,21 @@ typedef unsigned long Pixel;
 using namespace vcl_sal;
 
 #ifdef DBG_UTIL
-inline const char *Null( const char *p ) { return p ? p : ""; }
-inline const char *GetEnv( const char *p ) { return Null( getenv( p ) ); }
-inline const char *KeyStr( KeySym n ) { return Null( XKeysymToString( n ) ); }
+static const char *Null( const char *p ) { return p ? p : ""; }
+static const char *GetEnv( const char *p ) { return Null( getenv( p ) ); }
+static const char *KeyStr( KeySym n ) { return Null( XKeysymToString( n ) ); }
 
-inline const char *GetAtomName( Display *d, Atom a )
+static const char *GetAtomName( Display *d, Atom a )
 { return Null( XGetAtomName( d, a ) ); }
 
-inline double Hypothenuse( long w, long h )
+static double Hypothenuse( long w, long h )
 { return sqrt( static_cast<double>((w*w)+(h*h)) ); }
 #endif
 
-inline int ColorDiff( int r, int g, int b )
+static int ColorDiff( int r, int g, int b )
 { return (r*r)+(g*g)+(b*b); }
 
-inline int ColorDiff( Color c1, int r, int g, int b )
+static int ColorDiff( Color c1, int r, int g, int b )
 { return ColorDiff( static_cast<int>(c1.GetRed())-r,
                     static_cast<int>(c1.GetGreen())-g,
                     static_cast<int>(c1.GetBlue())-b ); }
@@ -156,24 +158,21 @@ extern "C" srv_vendor_t
 sal_GetServerVendor( Display *p_display )
 {
     typedef struct {
-        srv_vendor_t    e_vendor;   // vendor as enum
-        const char      *p_name;    // vendor name as returned by VendorString()
-        unsigned int    n_len;  // number of chars to compare
+        srv_vendor_t  e_vendor; // vendor as enum
+        const char*   p_name;   // vendor name as returned by VendorString()
+        unsigned int  n_len;    // number of chars to compare
     } vendor_t;
 
-    const vendor_t p_vendorlist[] = {
+    static const vendor_t vendorlist[] = {
         { vendor_sun,         "Sun Microsystems, Inc.",          10 },
-        // always the last entry: vendor_none to indicate eol
-        { vendor_none,        nullptr,                               0 },
     };
 
     // handle regular server vendors
     char     *p_name   = ServerVendor( p_display );
-    vendor_t *p_vendor;
-    for (p_vendor = const_cast<vendor_t*>(p_vendorlist); p_vendor->e_vendor != vendor_none; p_vendor++)
+    for (auto const & vendor : vendorlist)
     {
-        if ( strncmp (p_name, p_vendor->p_name, p_vendor->n_len) == 0 )
-            return p_vendor->e_vendor;
+        if ( strncmp (p_name, vendor.p_name, vendor.n_len) == 0 )
+            return vendor.e_vendor;
     }
 
     // vendor not found in list
@@ -283,7 +282,6 @@ SalDisplay::SalDisplay( Display *display ) :
         nShiftKeySym_( 0 ),
         nCtrlKeySym_( 0 ),
         nMod1KeySym_( 0 ),
-        m_pWMAdaptor( nullptr ),
         m_bXinerama( false ),
         m_bUseRandRWrapper( true ),
         m_nLastUserEventTime( CurrentTime )
@@ -323,7 +321,28 @@ void SalDisplay::doDestruct()
 
     m_pWMAdaptor.reset();
     X11SalBitmap::ImplDestroyCache();
-    X11SalGraphics::releaseGlyphPeer();
+
+    if (ImplGetSVData())
+    {
+        SalDisplay* pSalDisp = vcl_sal::getSalDisplay(pData);
+        Display* const pX11Disp = pSalDisp->GetDisplay();
+        int nMaxScreens = pSalDisp->GetXScreenCount();
+        XRenderPeer& rRenderPeer = XRenderPeer::GetInstance();
+
+        for (int i = 0; i < nMaxScreens; i++)
+        {
+            SalDisplay::RenderEntryMap& rMap = pSalDisp->GetRenderEntries(SalX11Screen(i));
+            for (auto const& elem : rMap)
+            {
+                if (elem.second.m_aPixmap)
+                    ::XFreePixmap(pX11Disp, elem.second.m_aPixmap);
+                if (elem.second.m_aPicture)
+                    rRenderPeer.FreePicture(elem.second.m_aPicture);
+            }
+            rMap.clear();
+        }
+    }
+    GlyphCache::GetInstance().ClearFontCache();
 
     if( IsDisplay() )
     {
@@ -766,7 +785,7 @@ OUString SalDisplay::GetKeyNameFromKeySym( KeySym nKeySym ) const
     return aRet;
 }
 
-inline KeySym sal_XModifier2Keysym( Display         *pDisplay,
+static KeySym sal_XModifier2Keysym( Display         *pDisplay,
                                     XModifierKeymap const *pXModMap,
                                     int              n )
 {
@@ -1494,6 +1513,9 @@ KeySym SalDisplay::GetKeySym( XKeyEvent        *pEvent,
 }
 
 // Pointer
+static unsigned char nullmask_bits[] = { 0x00, 0x00, 0x00, 0x00 };
+static unsigned char nullcurs_bits[] = { 0x00, 0x00, 0x00, 0x00 };
+
 #define MAKE_BITMAP( name ) \
     XCreateBitmapFromData( pDisp_, \
                            DefaultRootWindow( pDisp_ ), \
@@ -2435,11 +2457,6 @@ SalVisual::SalVisual( const XVisualInfo* pXVI )
     }
 }
 
-SalVisual::~SalVisual()
-{
-    if( -1 == screen && VisualID(-1) == visualid ) delete visual;
-}
-
 // Converts the order of bytes of a Pixel into bytes of a Color
 // This is not reversible for the 6 XXXA
 
@@ -2608,8 +2625,8 @@ SalColormap::SalColormap( sal_uInt16 nDepth )
                                &aVI ) )
         {
             aVI.visual          = new Visual;
-            aVI.visualid        = VisualID(0); // beware of temporary destructor below
-            aVI.screen          = 0;
+            aVI.visualid        = VisualID(-1);
+            aVI.screen          = -1;
             aVI.depth           = nDepth;
             aVI.c_class         = TrueColor;
             if( 24 == nDepth ) // 888
@@ -2661,13 +2678,18 @@ SalColormap::SalColormap( sal_uInt16 nDepth )
             aVI.visual->map_entries     = aVI.colormap_size;
 
             m_aVisual = SalVisual( &aVI );
-            // give ownership of constructed Visual() to m_aVisual
-            // see SalVisual destructor
-            m_aVisual.visualid        = VisualID(-1);
-            m_aVisual.screen          = -1;
+            m_aVisualOwnership.owner = true;
         }
         else
             m_aVisual = SalVisual( &aVI );
+    }
+}
+
+SalColormap::~SalColormap()
+{
+    if (m_aVisualOwnership.owner)
+    {
+        delete m_aVisual.visual;
     }
 }
 

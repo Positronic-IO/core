@@ -20,14 +20,9 @@
 #ifndef INCLUDED_SD_INC_TEXTAPI_HXX
 #define INCLUDED_SD_INC_TEXTAPI_HXX
 
-#include <editeng/unoedsrc.hxx>
 #include <editeng/unotext.hxx>
-#include <editeng/eeitem.hxx>
 #include <rtl/ref.hxx>
 #include <editeng/outliner.hxx>
-#include <editeng/unoprnms.hxx>
-#include <editeng/unoforou.hxx>
-#include <editeng/unoipset.hxx>
 
 class SdDrawDocument;
 
@@ -45,15 +40,15 @@ public:
     /// @throws css::uno::RuntimeException
     void dispose();
 
-    OutlinerParaObject* CreateText();
+    std::unique_ptr<OutlinerParaObject> CreateText();
     void                SetText( OutlinerParaObject const & rText );
     OUString            GetText();
 
     static TextApiObject* getImplementation( const css::uno::Reference< css::text::XText >& );
 
 private:
-    TextAPIEditSource*  mpSource;
-    TextApiObject( TextAPIEditSource* pEditSource );
+    std::unique_ptr<TextAPIEditSource>  mpSource;
+    TextApiObject( std::unique_ptr<TextAPIEditSource> pEditSource );
 };
 
 } // namespace sd

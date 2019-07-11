@@ -30,12 +30,10 @@
 
 #include <limits.h>
 
-namespace vcl { class Window; }
 namespace weld { class Window; }
 
 class ErrorHandler;
 class ErrorContext;
-class ErrorStringFactory;
 class ErrorInfo;
 class DynamicErrorInfo;
 class ImplDynamicErrorInfo;
@@ -146,10 +144,10 @@ public:
 
     ErrCode const &         GetErrorCode() const { return nUserId; }
 
-    static ErrorInfo*       GetErrorInfo(ErrCode);
+    static std::unique_ptr<ErrorInfo> GetErrorInfo(ErrCode);
 
 private:
-    ErrCode                 nUserId;
+    ErrCode const           nUserId;
 };
 
 class SAL_WARN_UNUSED VCL_DLLPUBLIC DynamicErrorInfo : public ErrorInfo
@@ -178,7 +176,7 @@ public:
     const OUString&         GetErrorString() const { return aString; }
 
 private:
-    OUString                aString;
+    OUString const          aString;
 
 };
 
@@ -193,8 +191,8 @@ public:
     const OUString& GetArg2() const { return aArg2; }
 
 private:
-    OUString aArg1;
-    OUString aArg2;
+    OUString const aArg1;
+    OUString const aArg2;
 
 };
 

@@ -496,7 +496,7 @@ void StringHelper::appendEncString( OUStringBuffer& rStr, const OUString& rData,
             if( (nBeg == 0) && (nIdx == nEnd) )
                 rStr.append( rData );
             else
-                rStr.append( rData.copy( nBeg, nIdx - nBeg ) );
+                rStr.appendCopy( rData, nBeg, nIdx - nBeg );
         }
         // append characters to be encoded
         while( (nIdx < nEnd) && (rData[ nIdx ] < 0x20) )
@@ -562,7 +562,7 @@ OUString lclTrimQuotedStringList( const OUString& rStr )
             {
                 // seek to next quote character and add text portion to token buffer
                 sal_Int32 nEnd = lclIndexOf( rStr, OOX_DUMP_CFG_QUOTE, nPos );
-                aToken.append( rStr.copy( nPos, nEnd - nPos ) );
+                aToken.appendCopy( rStr, nPos, nEnd - nPos );
                 // process literal quotes
                 while( (nEnd + 1 < nLen) && (rStr[ nEnd ] == OOX_DUMP_CFG_QUOTE) && (rStr[ nEnd + 1 ] == OOX_DUMP_CFG_QUOTE) )
                 {
@@ -585,7 +585,7 @@ OUString lclTrimQuotedStringList( const OUString& rStr )
         {
             // find list separator, add token text to buffer
             sal_Int32 nEnd = lclIndexOf( rStr, OOX_DUMP_CFG_LISTSEP, nPos );
-            aBuffer.append( rStr.copy( nPos, nEnd - nPos ) );
+            aBuffer.appendCopy( rStr,  nPos, nEnd - nPos );
             if( nEnd < nLen )
                 aBuffer.append( OOX_DUMP_LF );
             // set current position behind list separator
@@ -682,7 +682,7 @@ bool StringHelper::convertFromDec( sal_Int64& ornData, const OUString& rData )
         sal_Unicode cChar = rData[ nPos ];
         if( (cChar < '0') || (cChar > '9') )
             return false;
-        (ornData *= 10) += (cChar - '0');
+        ornData = (ornData * 10) + (cChar - '0');
     }
     if( bNeg )
         ornData *= -1;
@@ -703,7 +703,7 @@ bool StringHelper::convertFromHex( sal_Int64& ornData, const OUString& rData )
             cChar -= ('a' - 10);
         else
             return false;
-        (ornData <<= 4) += cChar;
+        ornData = (ornData << 4) + cChar;
     }
     return true;
 }
@@ -1383,12 +1383,6 @@ void SharedConfigData::createUnitConverter( const OUString& rData )
             }
         }
     }
-}
-
-Config::Config( const Config& rParent ) :
-    Base()  // c'tor needs to be called explicitly to avoid compiler warning
-{
-    *this = rParent;
 }
 
 Config::Config( const sal_Char* pcEnvVar, const FilterBase& rFilter )

@@ -18,6 +18,7 @@
  */
 
 
+#include <comphelper/DisableInteractionHelper.hxx>
 #include <comphelper/documentinfo.hxx>
 
 #include <cppuhelper/implementationentry.hxx>
@@ -41,6 +42,7 @@
 #include <com/sun/star/script/provider/ScriptFrameworkErrorType.hpp>
 
 #include <util/MiscUtils.hxx>
+#include <sal/log.hxx>
 
 #include "ActiveMSPList.hxx"
 #include "MasterScriptProvider.hxx"
@@ -55,7 +57,7 @@ using namespace ::sf_misc;
 namespace func_provider
 {
 
-bool endsWith( const OUString& target, const OUString& item )
+static bool endsWith( const OUString& target, const OUString& item )
 {
     sal_Int32 index = target.indexOf( item );
     return index != -1  &&
@@ -69,7 +71,7 @@ bool endsWith( const OUString& target, const OUString& item )
 
 MasterScriptProvider::MasterScriptProvider( const Reference< XComponentContext > & xContext ):
         m_xContext( xContext ), m_bIsValid( false ), m_bInitialised( false ),
-        m_bIsPkgMSP( false ), m_pPCache( nullptr )
+        m_bIsPkgMSP( false )
 {
     ENSURE_OR_THROW( m_xContext.is(), "MasterScriptProvider::MasterScriptProvider: No context available\n" );
     m_xMgr = m_xContext->getServiceManager();
@@ -396,8 +398,6 @@ MasterScriptProvider::getName()
 Sequence< Reference< browse::XBrowseNode > > SAL_CALL
 MasterScriptProvider::getChildNodes()
 {
-    if ( !providerCache() )
-        throw RuntimeException( "MasterScriptProvider::getAllProviders, cache not initialised" );
     Sequence< Reference< provider::XScriptProvider > > providers = providerCache()->getAllProviders();
 
     sal_Int32 size = providers.getLength();
@@ -449,6 +449,50 @@ MasterScriptProvider::parseLocationName( const OUString& location )
     return temp;
 }
 
+namespace
+{
+template <typename Proc> bool FindProviderAndApply(ProviderCache& rCache, Proc p)
+{
+    auto pass = [&rCache, &p]() -> bool
+    {
+        bool bResult = false;
+        for (auto& rProv : rCache.getAllProviders())
+        {
+            Reference<container::XNameContainer> xCont(rProv, UNO_QUERY);
+            if (!xCont.is())
+            {
+                continue;
+            }
+            try
+            {
+                bResult = p(xCont);
+                if (bResult)
+                    break;
+            }
+            catch (Exception& e)
+            {
+                SAL_INFO("scripting.provider", "ignoring " << e);
+            }
+        }
+        return bResult;
+    };
+    bool bSuccess = false;
+    // 1. Try to perform the operation without trying to enable JVM (if disabled)
+    // This allows us to avoid useless user interaction in case when other provider
+    // (not JVM) actually handles the operation.
+    {
+        css::uno::ContextLayer layer(
+            new comphelper::NoEnableJavaInteractionContext(css::uno::getCurrentContext()));
+        bSuccess = pass();
+    }
+    // 2. Now retry asking to enable JVM in case we didn't succeed first time
+    if (!bSuccess)
+    {
+        bSuccess = pass();
+    }
+    return bSuccess;
+}
+} // namespace
 
 // Register Package
 void SAL_CALL
@@ -480,35 +524,12 @@ MasterScriptProvider::insertByName( const OUString& aName, const Any& aElement )
         // TODO for library package parse the language, for the moment will try
         // to get each provider to process the new Package, the first one the succeeds
         // will terminate processing
-        if ( !providerCache() )
-        {
-            throw RuntimeException(
-                "insertByName cannot instantiate "
-                "child script providers." );
-        }
-        Sequence < Reference< provider::XScriptProvider > > xSProviders =
-            providerCache()->getAllProviders();
-        sal_Int32 index = 0;
-
-        for ( ; index < xSProviders.getLength(); index++ )
-        {
-            Reference< container::XNameContainer > xCont( xSProviders[ index ], UNO_QUERY );
-            if ( !xCont.is() )
-            {
-                continue;
-            }
-            try
-            {
-                xCont->insertByName( aName, aElement );
-                break;
-            }
-            catch ( Exception& e )
-            {
-                SAL_INFO("scripting.provider", "ignoring " << e);
-            }
-
-        }
-        if ( index == xSProviders.getLength() )
+        const bool bSuccess = FindProviderAndApply(
+            *providerCache(), [&aName, &aElement](Reference<container::XNameContainer>& xCont) {
+                xCont->insertByName(aName, aElement);
+                return true;
+            });
+        if (!bSuccess)
         {
             // No script providers could process the package
             throw lang::IllegalArgumentException( "Failed to register package for " + aName,
@@ -531,9 +552,9 @@ MasterScriptProvider::removeByName( const OUString& Name )
 
         Reference< container::XNameContainer > xCont( m_xMSPPkg, UNO_QUERY_THROW );
         xCont->removeByName( Name );
-   }
-   else
-   {
+    }
+    else
+    {
         if ( Name.isEmpty() )
         {
             throw lang::IllegalArgumentException( "Name not set!!",
@@ -542,34 +563,12 @@ MasterScriptProvider::removeByName( const OUString& Name )
         // TODO for Script library package url parse the language,
         // for the moment will just try to get each provider to process remove/revoke
         // request, the first one the succeeds will terminate processing
-
-        if ( !providerCache() )
-        {
-            throw RuntimeException(
-                "removeByName() cannot instantiate "
-                "child script providers." );
-        }
-        Sequence < Reference< provider::XScriptProvider > > xSProviders =
-            providerCache()->getAllProviders();
-        sal_Int32 index = 0;
-        for ( ; index < xSProviders.getLength(); index++ )
-        {
-            Reference< container::XNameContainer > xCont( xSProviders[ index ], UNO_QUERY );
-            if ( !xCont.is() )
-            {
-                continue;
-            }
-            try
-            {
-                xCont->removeByName( Name );
-                break;
-            }
-            catch ( Exception& )
-            {
-            }
-
-        }
-        if ( index == xSProviders.getLength() )
+        const bool bSuccess = FindProviderAndApply(
+            *providerCache(), [&Name](Reference<container::XNameContainer>& xCont) {
+                xCont->removeByName(Name);
+                return true;
+            });
+        if (!bSuccess)
         {
             // No script providers could process the package
             throw lang::IllegalArgumentException( "Failed to revoke package for " + Name,
@@ -612,9 +611,9 @@ MasterScriptProvider::hasByName( const OUString& aName )
             throw RuntimeException( "PackageMasterScriptProvider is unitialised" );
         }
 
-   }
-   else
-   {
+    }
+    else
+    {
         if ( aName.isEmpty() )
         {
             throw lang::IllegalArgumentException( "Name not set!!",
@@ -624,35 +623,10 @@ MasterScriptProvider::hasByName( const OUString& aName )
         // for the moment will just try to get each provider to see if the
         // package exists in any provider, first one that succeed will
         // terminate the loop
-
-        if ( !providerCache() )
-        {
-            throw RuntimeException(
-                "removeByName() cannot instantiate "
-                "child script providers." );
-        }
-        Sequence < Reference< provider::XScriptProvider > > xSProviders =
-            providerCache()->getAllProviders();
-        for ( sal_Int32 index = 0; index < xSProviders.getLength(); index++ )
-        {
-            Reference< container::XNameContainer > xCont( xSProviders[ index ], UNO_QUERY );
-            if ( !xCont.is() )
-            {
-                continue;
-            }
-            try
-            {
-                result = xCont->hasByName( aName );
-                if ( result )
-                {
-                    break;
-                }
-            }
-            catch ( Exception& )
-            {
-            }
-
-        }
+        result = FindProviderAndApply(
+            *providerCache(), [&aName](Reference<container::XNameContainer>& xCont) {
+                return xCont->hasByName(aName);
+            });
     }
     return result;
 }
@@ -708,14 +682,14 @@ Sequence< OUString > SAL_CALL MasterScriptProvider::getSupportedServiceNames( )
 namespace scripting_runtimemgr
 {
 
-Reference< XInterface > sp_create(
+static Reference< XInterface > sp_create(
     const Reference< XComponentContext > & xCompC )
 {
     return static_cast<cppu::OWeakObject *>(new ::func_provider::MasterScriptProvider( xCompC ));
 }
 
 
-Sequence< OUString > sp_getSupportedServiceNames( )
+static Sequence< OUString > sp_getSupportedServiceNames( )
 {
     OUString names[3];
 
@@ -727,20 +701,20 @@ Sequence< OUString > sp_getSupportedServiceNames( )
 }
 
 
-OUString sp_getImplementationName( )
+static OUString sp_getImplementationName( )
 {
     return OUString( "com.sun.star.script.provider.MasterScriptProvider"  );
 }
 
 // ***** registration or ScriptingFrameworkURIHelper
-Reference< XInterface > urihelper_create(
+static Reference< XInterface > urihelper_create(
     const Reference< XComponentContext > & xCompC )
 {
     return static_cast<cppu::OWeakObject *>(
         new ::func_provider::ScriptingFrameworkURIHelper( xCompC ));
 }
 
-Sequence< OUString > urihelper_getSupportedServiceNames( )
+static Sequence< OUString > urihelper_getSupportedServiceNames( )
 {
     OUString serviceNameList[] = {
         OUString(
@@ -752,7 +726,7 @@ Sequence< OUString > urihelper_getSupportedServiceNames( )
     return serviceNames;
 }
 
-OUString urihelper_getImplementationName( )
+static OUString urihelper_getImplementationName( )
 {
     return OUString(
         "com.sun.star.script.provider.ScriptURIHelper");

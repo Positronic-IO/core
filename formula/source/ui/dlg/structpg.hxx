@@ -21,17 +21,16 @@
 #define INCLUDED_FORMULA_SOURCE_UI_DLG_STRUCTPG_HXX
 
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <svtools/svmedit.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/tabctrl.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <formula/IFunctionDescription.hxx>
 
 namespace formula
 {
 
-class IFormulaToken;
+class FormulaToken;
 class StructListBox : public SvTreeListBox
 {
 private:
@@ -51,7 +50,7 @@ public:
                         const Image& rEntryImg,
                         SvTreeListEntry* pParent,
                         sal_uLong nPos,
-                        const IFormulaToken* pToken );
+                        const FormulaToken* pToken );
 
     void            SetActiveFlag(bool bFlag);
     bool            GetActiveFlag() { return bActiveFlag;}
@@ -69,13 +68,13 @@ private:
     Image           maImgEnd;
     Image           maImgError;
 
-    const IFormulaToken* pSelectedToken;
+    const FormulaToken* pSelectedToken;
 
     DECL_LINK( SelectHdl, SvTreeListBox*, void );
 
     using Window::GetParent;
 
-    const IFormulaToken* GetFunctionEntry(SvTreeListEntry* pEntry);
+    const FormulaToken* GetFunctionEntry(SvTreeListEntry* pEntry);
 
 public:
 
@@ -85,7 +84,7 @@ public:
 
     void            ClearStruct();
     SvTreeListEntry* InsertEntry(const OUString& rText, SvTreeListEntry* pParent,
-                                sal_uInt16 nFlag, sal_uLong nPos, const IFormulaToken* pScToken);
+                                sal_uInt16 nFlag, sal_uLong nPos, const FormulaToken* pScToken);
 
     OUString        GetEntryText(SvTreeListEntry* pEntry) const;
 

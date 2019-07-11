@@ -22,7 +22,6 @@
 
 #include "anyrefdg.hxx"
 #include <rangelst.hxx>
-#include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
 
 #include <unordered_map>
@@ -67,7 +66,7 @@ private:
 
     typedef std::unordered_map< OUString, ScRange > NameRangeMap;
     NameRangeMap    aRangeMap;
-    ScViewData*     pViewData;
+    ScViewData* const     pViewData;
     ScDocument*     pDoc;
     VclPtr<formula::RefEdit>       pEdActive;
     bool            bDlgLostFocus;

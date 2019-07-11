@@ -161,7 +161,7 @@ void SwUndoFormatAttr::UndoImpl(::sw::UndoRedoContext & rContext)
     // OD 2004-10-26 #i35443#
     // Important note: <Undo(..)> also called by <ReDo(..)>
 
-    if ( !m_pOldSet.get() || !m_pFormat || !IsFormatInDoc( &rContext.GetDoc() ))
+    if (!m_pOldSet || !m_pFormat || !IsFormatInDoc(&rContext.GetDoc()))
         return;
 
     // #i35443# - If anchor attribute has been successful
@@ -290,7 +290,7 @@ void SwUndoFormatAttr::RedoImpl(::sw::UndoRedoContext & rContext)
 
 void SwUndoFormatAttr::RepeatImpl(::sw::RepeatContext & rContext)
 {
-    if ( !m_pOldSet.get() )
+    if (!m_pOldSet)
         return;
 
     SwDoc & rDoc(rContext.GetDoc());
@@ -535,14 +535,16 @@ SwUndoFormatResetAttr::~SwUndoFormatResetAttr()
 
 void SwUndoFormatResetAttr::UndoImpl(::sw::UndoRedoContext &)
 {
-    if ( m_pOldItem.get() ) {
+    if (m_pOldItem)
+    {
         m_pChangedFormat->SetFormatAttr( *m_pOldItem );
     }
 }
 
 void SwUndoFormatResetAttr::RedoImpl(::sw::UndoRedoContext &)
 {
-    if ( m_pOldItem.get() ) {
+    if (m_pOldItem)
+    {
         m_pChangedFormat->ResetFormatAttr( m_nWhichId );
     }
 }
@@ -726,7 +728,8 @@ void SwUndoAttr::UndoImpl(::sw::UndoRedoContext & rContext)
             // remove all format redlines, will be recreated if needed
             SetPaM(aPam);
             pDoc->getIDocumentRedlineAccess().DeleteRedline(aPam, false, nsRedlineType_t::REDLINE_FORMAT);
-            if ( m_pRedlineSaveData.get() ) {
+            if (m_pRedlineSaveData)
+            {
                 SetSaveData( *pDoc, *m_pRedlineSaveData );
             }
         }
@@ -849,7 +852,8 @@ SwUndoDefaultAttr::~SwUndoDefaultAttr()
 void SwUndoDefaultAttr::UndoImpl(::sw::UndoRedoContext & rContext)
 {
     SwDoc & rDoc = rContext.GetDoc();
-    if ( m_pOldSet.get() ) {
+    if (m_pOldSet)
+    {
         SwUndoFormatAttrHelper aTmp(
             *rDoc.GetDfltTextFormatColl() );
         rDoc.SetDefault( *m_pOldSet );
@@ -859,11 +863,12 @@ void SwUndoDefaultAttr::UndoImpl(::sw::UndoRedoContext & rContext)
             m_pOldSet = std::move(aTmp.GetUndo()->m_pOldSet);
         }
     }
-    if ( m_pTabStop.get() ) {
-        SvxTabStopItem* pOld = static_cast<SvxTabStopItem*>(
-                                   rDoc.GetDefault( RES_PARATR_TABSTOP ).Clone() );
+    if (m_pTabStop)
+    {
+        std::unique_ptr<SvxTabStopItem> pOld(static_cast<SvxTabStopItem*>(
+                                   rDoc.GetDefault( RES_PARATR_TABSTOP ).Clone() ));
         rDoc.SetDefault( *m_pTabStop );
-        m_pTabStop.reset( pOld );
+        m_pTabStop = std::move( pOld );
     }
 }
 
@@ -914,11 +919,10 @@ void SwUndoMoveLeftMargin::RepeatImpl(::sw::RepeatContext & rContext)
 
 SwUndoChangeFootNote::SwUndoChangeFootNote(
     const SwPaM& rRange, const OUString& rText,
-    sal_uInt16 nNum, bool bIsEndNote )
+        bool const bIsEndNote)
     : SwUndo( SwUndoId::CHGFTN, rRange.GetDoc() ), SwUndRng( rRange )
     , m_pHistory( new SwHistory() )
     , m_Text( rText )
-    , m_nNumber( nNum )
     , m_bEndNote( bIsEndNote )
 {
 }
@@ -943,14 +947,14 @@ void SwUndoChangeFootNote::RedoImpl(::sw::UndoRedoContext & rContext)
 {
     SwDoc & rDoc( rContext.GetDoc() );
     SwPaM & rPaM = AddUndoRedoPaM(rContext);
-    rDoc.SetCurFootnote(rPaM, m_Text, m_nNumber, m_bEndNote);
+    rDoc.SetCurFootnote(rPaM, m_Text, m_bEndNote);
     SetPaM(rPaM);
 }
 
 void SwUndoChangeFootNote::RepeatImpl(::sw::RepeatContext & rContext)
 {
     SwDoc & rDoc = rContext.GetDoc();
-    rDoc.SetCurFootnote( rContext.GetRepeatPaM(), m_Text, m_nNumber, m_bEndNote );
+    rDoc.SetCurFootnote(rContext.GetRepeatPaM(), m_Text, m_bEndNote);
 }
 
 SwUndoFootNoteInfo::SwUndoFootNoteInfo( const SwFootnoteInfo &rInfo, const SwDoc* pDoc )

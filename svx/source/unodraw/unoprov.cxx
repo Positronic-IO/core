@@ -50,7 +50,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans::PropertyAttribute;
 using ::com::sun::star::drawing::TextVerticalAdjust;
 
-SfxItemPropertyMapEntry const * ImplGetSvxShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aShapePropertyMap_Impl[] =
     {
@@ -73,7 +73,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxShapePropertyMap()
     return aShapePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxTextShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxTextShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aTextShapePropertyMap_Impl[] =
     {
@@ -96,7 +96,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxTextShapePropertyMap()
     return aTextShapePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxConnectorPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxConnectorPropertyMap()
 {
     static SfxItemPropertyMapEntry const aConnectorPropertyMap_Impl[] =
     {
@@ -120,7 +120,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxConnectorPropertyMap()
     return aConnectorPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxDimensioningPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxDimensioningPropertyMap()
 {
     static SfxItemPropertyMapEntry const aDimensioningPropertyMap_Impl[] =
     {
@@ -144,7 +144,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxDimensioningPropertyMap()
     return aDimensioningPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxCirclePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxCirclePropertyMap()
 {
     static SfxItemPropertyMapEntry const aCirclePropertyMap_Impl[] =
     {
@@ -168,13 +168,14 @@ SfxItemPropertyMapEntry const * ImplGetSvxCirclePropertyMap()
     return aCirclePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxPolyPolygonPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxPolyPolygonPropertyMap()
 {
     static SfxItemPropertyMapEntry const aPolyPolygonPropertyMap_Impl[] =
     {
         { OUString("Geometry"), OWN_ATTR_BASE_GEOMETRY, cppu::UnoType<css::drawing::PointSequenceSequence>::get(), 0, 0 },
         SPECIAL_POLYGON_PROPERTIES
         SPECIAL_POLYPOLYGON_PROPERTIES
+        SPECIAL_POLYPOLYGONBEZIER_PROPERTIES
         FILL_PROPERTIES
         LINE_PROPERTIES
         LINE_PROPERTIES_START_END
@@ -193,32 +194,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxPolyPolygonPropertyMap()
     return aPolyPolygonPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxPolyPolygonBezierPropertyMap()
-{
-    static SfxItemPropertyMapEntry const aPolyPolygonBezierPropertyMap_Impl[] =
-    {
-        { OUString("Geometry"), OWN_ATTR_BASE_GEOMETRY, cppu::UnoType<css::drawing::PolyPolygonBezierCoords>::get(), 0, 0 },
-        SPECIAL_POLYGON_PROPERTIES
-        SPECIAL_POLYPOLYGONBEZIER_PROPERTIES
-        FILL_PROPERTIES
-        LINE_PROPERTIES
-        LINE_PROPERTIES_START_END
-        SHAPE_DESCRIPTOR_PROPERTIES
-        MISC_OBJ_PROPERTIES
-        LINKTARGET_PROPERTIES
-        SHADOW_PROPERTIES
-        TEXT_PROPERTIES
-        // #FontWork#
-        FONTWORK_PROPERTIES
-        { OUString("UserDefinedAttributes"), SDRATTR_XMLATTRIBUTES, cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
-        { OUString("ParaUserDefinedAttributes"), EE_PARA_XMLATTRIBS, cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
-        { OUString(), 0, css::uno::Type(), 0, 0 }
-    };
-
-    return aPolyPolygonBezierPropertyMap_Impl;
-}
-
-SfxItemPropertyMapEntry const * ImplGetSvxGraphicObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxGraphicObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const aGraphicObjectPropertyMap_Impl[] =
     {
@@ -249,7 +225,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxGraphicObjectPropertyMap()
     return aGraphicObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DSceneObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DSceneObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DSceneObjectPropertyMap_Impl[] =
     {
@@ -267,7 +243,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DSceneObjectPropertyMap()
     return a3DSceneObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DCubeObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DCubeObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DCubeObjectPropertyMap_Impl[] =
     {
@@ -288,7 +264,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DCubeObjectPropertyMap()
     return a3DCubeObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DSphereObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DSphereObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DSphereObjectPropertyMap_Impl[] =
     {
@@ -308,7 +284,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DSphereObjectPropertyMap()
     return a3DSphereObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DLatheObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DLatheObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DLatheObjectPropertyMap_Impl[] =
     {
@@ -334,7 +310,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DLatheObjectPropertyMap()
     return a3DLatheObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DExtrudeObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DExtrudeObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DExtrudeObjectPropertyMap_Impl[] =
     {
@@ -360,7 +336,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DExtrudeObjectPropertyMap()
     return a3DExtrudeObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvx3DPolygonObjectPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvx3DPolygonObjectPropertyMap()
 {
     static SfxItemPropertyMapEntry const a3DPolygonObjectPropertyMap_Impl[] =
     {
@@ -381,7 +357,7 @@ SfxItemPropertyMapEntry const * ImplGetSvx3DPolygonObjectPropertyMap()
     return a3DPolygonObjectPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxAllPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxAllPropertyMap()
 {
     static SfxItemPropertyMapEntry const aAllPropertyMap_Impl[] =
     {
@@ -423,7 +399,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxAllPropertyMap()
     return aAllPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxGroupPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxGroupPropertyMap()
 {
     static SfxItemPropertyMapEntry const aGroupPropertyMap_Impl[] =
     {
@@ -436,7 +412,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxGroupPropertyMap()
     return aGroupPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxOle2PropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxOle2PropertyMap()
 {
     static SfxItemPropertyMapEntry const aOle2PropertyMap_Impl[] =
     {
@@ -469,7 +445,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxOle2PropertyMap()
     return aOle2PropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxPluginPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxPluginPropertyMap()
 {
     static SfxItemPropertyMapEntry const aPluginPropertyMap_Impl[] =
     {
@@ -490,6 +466,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxPluginPropertyMap()
         { OUString("LinkURL"),                  OWN_ATTR_OLE_LINKURL        , cppu::UnoType<OUString>::get(), 0, 0 },
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT), OWN_ATTR_BOUNDRECT,            cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
         { OUString("VisibleArea"),              OWN_ATTR_OLE_VISAREA        , cppu::UnoType<css::awt::Rectangle>::get(), 0, 0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         // #i68101#
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
@@ -499,7 +476,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxPluginPropertyMap()
     return aPluginPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxFramePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxFramePropertyMap()
 {
     //TODO/LATER: new properties for ScrollingMode and DefaultBorder
     static SfxItemPropertyMapEntry const aFramePropertyMap_Impl[] =
@@ -524,6 +501,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxFramePropertyMap()
         { OUString("LinkURL"),                  OWN_ATTR_OLE_LINKURL        , cppu::UnoType<OUString>::get(), 0, 0 },
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT), OWN_ATTR_BOUNDRECT,            cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
         { OUString("VisibleArea"),              OWN_ATTR_OLE_VISAREA        , cppu::UnoType<css::awt::Rectangle>::get(), 0, 0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         // #i68101#
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
@@ -533,7 +511,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxFramePropertyMap()
     return aFramePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxAppletPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxAppletPropertyMap()
 {
     static SfxItemPropertyMapEntry const aAppletPropertyMap_Impl[] =
     {
@@ -557,6 +535,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxAppletPropertyMap()
         { OUString("LinkURL"),                  OWN_ATTR_OLE_LINKURL        , cppu::UnoType<OUString>::get(), 0, 0 },
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT), OWN_ATTR_BOUNDRECT,            cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
         { OUString("VisibleArea"),              OWN_ATTR_OLE_VISAREA        , cppu::UnoType<css::awt::Rectangle>::get(), 0, 0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         // #i68101#
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
@@ -566,7 +545,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxAppletPropertyMap()
     return aAppletPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxControlShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxControlShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aControlPropertyMap_Impl[] =
     {
@@ -610,6 +589,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxControlShapePropertyMap()
         { OUString("UserDefinedAttributes"),        SDRATTR_XMLATTRIBUTES,      cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
         {OUString("ParaUserDefinedAttributes"),         EE_PARA_XMLATTRIBS,     cppu::UnoType<css::container::XNameContainer>::get(),        0,     0},
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT), OWN_ATTR_BOUNDRECT,            cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         // #i68101#
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
@@ -623,7 +603,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxControlShapePropertyMap()
     return aControlPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxPageShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxPageShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aPageShapePropertyMap_Impl[] =
     {
@@ -646,7 +626,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxPageShapePropertyMap()
     return aPageShapePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxCaptionPropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxCaptionPropertyMap()
 {
     static SfxItemPropertyMapEntry const aCaptionPropertyMap_Impl[] =
     {
@@ -680,7 +660,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxCaptionPropertyMap()
     return aCaptionPropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxCustomShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxCustomShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aCustomShapePropertyMap_Impl[] =
     {
@@ -703,7 +683,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxCustomShapePropertyMap()
     return aCustomShapePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxMediaShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxMediaShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const aMediaShapePropertyMap_Impl[] =
     {
@@ -722,6 +702,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxMediaShapePropertyMap()
         { OUString(UNO_NAME_MISC_OBJ_MOVEPROTECT), SDRATTR_OBJMOVEPROTECT, cppu::UnoType<bool>::get(),0, 0},
         { OUString(UNO_NAME_MISC_OBJ_SIZEPROTECT), SDRATTR_OBJSIZEPROTECT, cppu::UnoType<bool>::get(),0, 0},
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT), OWN_ATTR_BOUNDRECT, cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         // #i68101#
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
@@ -735,7 +716,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxMediaShapePropertyMap()
     return aMediaShapePropertyMap_Impl;
 }
 
-SfxItemPropertyMapEntry const * ImplGetSvxTableShapePropertyMap()
+static SfxItemPropertyMapEntry const * ImplGetSvxTableShapePropertyMap()
 {
     static SfxItemPropertyMapEntry const  aTableShapePropertyMap_Impl[] =
     {
@@ -748,7 +729,8 @@ SfxItemPropertyMapEntry const * ImplGetSvxTableShapePropertyMap()
         { OUString(UNO_NAME_MISC_OBJ_MOVEPROTECT),  SDRATTR_OBJMOVEPROTECT, cppu::UnoType<bool>::get(),0, 0},
         { OUString(UNO_NAME_MISC_OBJ_SIZEPROTECT),  SDRATTR_OBJSIZEPROTECT, cppu::UnoType<bool>::get(),0, 0},
         { OUString(UNO_NAME_MISC_OBJ_BOUNDRECT),    OWN_ATTR_BOUNDRECT, cppu::UnoType<css::awt::Rectangle>::get(), css::beans::PropertyAttribute::READONLY, 0},
-        { OUString(UNO_NAME_MISC_OBJ_NAME),         SDRATTR_OBJECTNAME, cppu::UnoType<rtl::OUString>::get(),    0,      0},
+        { OUString(UNO_NAME_MISC_OBJ_NAME),         SDRATTR_OBJECTNAME, cppu::UnoType<OUString>::get(),    0,      0},
+        { OUString("UINameSingular"),               OWN_ATTR_UINAME_SINGULAR        , ::cppu::UnoType<OUString>::get(),    css::beans::PropertyAttribute::READONLY,   0},
         { OUString(UNO_NAME_MISC_OBJ_TITLE),        OWN_ATTR_MISC_OBJ_TITLE         , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString(UNO_NAME_MISC_OBJ_DESCRIPTION),  OWN_ATTR_MISC_OBJ_DESCRIPTION   , cppu::UnoType<OUString>::get(),    0,  0},
         { OUString("Model"),                        OWN_ATTR_OLEMODEL               , cppu::UnoType<css::table::XTable>::get(), css::beans::PropertyAttribute::READONLY, 0},
@@ -766,7 +748,7 @@ SfxItemPropertyMapEntry const * ImplGetSvxTableShapePropertyMap()
     return aTableShapePropertyMap_Impl;
 }
 
-comphelper::PropertyMapEntry const * ImplGetSvxDrawingDefaultsPropertyMap()
+static comphelper::PropertyMapEntry const * ImplGetSvxDrawingDefaultsPropertyMap()
 {
     static comphelper::PropertyMapEntry const aSvxDrawingDefaultsPropertyMap_Impl[] =
     {
@@ -786,7 +768,7 @@ comphelper::PropertyMapEntry const * ImplGetSvxDrawingDefaultsPropertyMap()
     return aSvxDrawingDefaultsPropertyMap_Impl;
 }
 
-comphelper::PropertyMapEntry const * ImplGetAdditionalWriterDrawingDefaultsPropertyMap()
+static comphelper::PropertyMapEntry const * ImplGetAdditionalWriterDrawingDefaultsPropertyMap()
 {
     static comphelper::PropertyMapEntry const aSvxAdditionalDefaultsPropertyMap_Impl[] =
     {
@@ -916,7 +898,6 @@ const SfxItemPropertyMapEntry* SvxUnoPropertyMapProvider::GetMap(sal_uInt16 nPro
             case SVXMAP_DIMENSIONING: aMapArr[SVXMAP_DIMENSIONING]=ImplGetSvxDimensioningPropertyMap(); break;
             case SVXMAP_CIRCLE: aMapArr[SVXMAP_CIRCLE]=ImplGetSvxCirclePropertyMap(); break;
             case SVXMAP_POLYPOLYGON: aMapArr[SVXMAP_POLYPOLYGON]=ImplGetSvxPolyPolygonPropertyMap(); break;
-            case SVXMAP_POLYPOLYGONBEZIER: aMapArr[SVXMAP_POLYPOLYGONBEZIER]=ImplGetSvxPolyPolygonBezierPropertyMap(); break;
             case SVXMAP_GRAPHICOBJECT: aMapArr[SVXMAP_GRAPHICOBJECT]=ImplGetSvxGraphicObjectPropertyMap(); break;
             case SVXMAP_3DSCENEOBJECT: aMapArr[SVXMAP_3DSCENEOBJECT]=ImplGetSvx3DSceneObjectPropertyMap(); break;
             case SVXMAP_3DCUBEOBJECT: aMapArr[SVXMAP_3DCUBEOBJECT]=ImplGetSvx3DCubeObjectPropertyMap(); break;
@@ -985,18 +966,18 @@ bool SvxMeasureUnitToFieldUnit( const short eApi, FieldUnit& eVcl ) throw()
 {
     switch( eApi )
     {
-    case util::MeasureUnit::MM:         eVcl = FUNIT_MM;        break;
-    case util::MeasureUnit::CM:         eVcl = FUNIT_CM;        break;
-    case util::MeasureUnit::M:          eVcl = FUNIT_M;         break;
-    case util::MeasureUnit::KM:         eVcl = FUNIT_KM;        break;
-    case util::MeasureUnit::TWIP:       eVcl = FUNIT_TWIP;      break;
-    case util::MeasureUnit::POINT:      eVcl = FUNIT_POINT;     break;
-    case util::MeasureUnit::PICA:       eVcl = FUNIT_PICA;      break;
-    case util::MeasureUnit::INCH:       eVcl = FUNIT_INCH;      break;
-    case util::MeasureUnit::FOOT:       eVcl = FUNIT_FOOT;      break;
-    case util::MeasureUnit::MILE:       eVcl = FUNIT_MILE;      break;
-    case util::MeasureUnit::PERCENT:    eVcl = FUNIT_PERCENT;   break;
-    case util::MeasureUnit::MM_100TH:   eVcl = FUNIT_100TH_MM;  break;
+    case util::MeasureUnit::MM:         eVcl = FieldUnit::MM;        break;
+    case util::MeasureUnit::CM:         eVcl = FieldUnit::CM;        break;
+    case util::MeasureUnit::M:          eVcl = FieldUnit::M;         break;
+    case util::MeasureUnit::KM:         eVcl = FieldUnit::KM;        break;
+    case util::MeasureUnit::TWIP:       eVcl = FieldUnit::TWIP;      break;
+    case util::MeasureUnit::POINT:      eVcl = FieldUnit::POINT;     break;
+    case util::MeasureUnit::PICA:       eVcl = FieldUnit::PICA;      break;
+    case util::MeasureUnit::INCH:       eVcl = FieldUnit::INCH;      break;
+    case util::MeasureUnit::FOOT:       eVcl = FieldUnit::FOOT;      break;
+    case util::MeasureUnit::MILE:       eVcl = FieldUnit::MILE;      break;
+    case util::MeasureUnit::PERCENT:    eVcl = FieldUnit::PERCENT;   break;
+    case util::MeasureUnit::MM_100TH:   eVcl = FieldUnit::MM_100TH;  break;
     default:
         return false;
     }
@@ -1011,18 +992,18 @@ bool SvxFieldUnitToMeasureUnit( const FieldUnit eVcl, short& eApi ) throw()
 {
     switch( eVcl )
     {
-    case FUNIT_MM:          eApi = util::MeasureUnit::MM;       break;
-    case FUNIT_CM:          eApi = util::MeasureUnit::CM;       break;
-    case FUNIT_M:           eApi = util::MeasureUnit::M;        break;
-    case FUNIT_KM:          eApi = util::MeasureUnit::KM;       break;
-    case FUNIT_TWIP:        eApi = util::MeasureUnit::TWIP;     break;
-    case FUNIT_POINT:       eApi = util::MeasureUnit::POINT;    break;
-    case FUNIT_PICA:        eApi = util::MeasureUnit::PICA;     break;
-    case FUNIT_INCH:        eApi = util::MeasureUnit::INCH;     break;
-    case FUNIT_FOOT:        eApi = util::MeasureUnit::FOOT;     break;
-    case FUNIT_MILE:        eApi = util::MeasureUnit::MILE;     break;
-    case FUNIT_PERCENT:     eApi = util::MeasureUnit::PERCENT;  break;
-    case FUNIT_100TH_MM:    eApi = util::MeasureUnit::MM_100TH; break;
+    case FieldUnit::MM:          eApi = util::MeasureUnit::MM;       break;
+    case FieldUnit::CM:          eApi = util::MeasureUnit::CM;       break;
+    case FieldUnit::M:           eApi = util::MeasureUnit::M;        break;
+    case FieldUnit::KM:          eApi = util::MeasureUnit::KM;       break;
+    case FieldUnit::TWIP:        eApi = util::MeasureUnit::TWIP;     break;
+    case FieldUnit::POINT:       eApi = util::MeasureUnit::POINT;    break;
+    case FieldUnit::PICA:        eApi = util::MeasureUnit::PICA;     break;
+    case FieldUnit::INCH:        eApi = util::MeasureUnit::INCH;     break;
+    case FieldUnit::FOOT:        eApi = util::MeasureUnit::FOOT;     break;
+    case FieldUnit::MILE:        eApi = util::MeasureUnit::MILE;     break;
+    case FieldUnit::PERCENT:     eApi = util::MeasureUnit::PERCENT;  break;
+    case FieldUnit::MM_100TH:    eApi = util::MeasureUnit::MM_100TH; break;
     default:
         return false;
     }
@@ -1492,7 +1473,7 @@ static const char* RID_SVXSTR_TRASNGR[] =
     RID_SVXSTR_TRASNGR0
 };
 
-bool SvxUnoGetResourceRanges( const sal_uInt16 nWhich, const char**& pApiResIds, const char**& pIntResIds, int& nCount ) throw()
+static bool SvxUnoGetResourceRanges( const sal_uInt16 nWhich, const char**& pApiResIds, const char**& pIntResIds, int& nCount ) throw()
 {
     switch( nWhich )
     {
@@ -1539,7 +1520,7 @@ bool SvxUnoGetResourceRanges( const sal_uInt16 nWhich, const char**& pApiResIds,
 }
 
 /// @throws std::exception
-bool SvxUnoConvertResourceString(const char **pSourceResIds, const char** pDestResIds, int nCount, OUString& rString, bool bToApi)
+static bool SvxUnoConvertResourceString(const char **pSourceResIds, const char** pDestResIds, int nCount, OUString& rString, bool bToApi)
 {
     // first, calculate the search string length without an optional number after the name
     sal_Int32 nLength = rString.getLength();
@@ -1605,12 +1586,12 @@ static const char* SvxUnoColorNameDefResId[] =
     RID_SVXSTR_COLOR_BLUE_DEF,
     RID_SVXSTR_COLOR_GREEN_DEF,
     RID_SVXSTR_COLOR_RED_DEF,
+    RID_SVXSTR_COLOR_MAGENTA_DEF,
     RID_SVXSTR_COLOR_GREY_DEF,
     RID_SVXSTR_COLOR_YELLOWGREEN_DEF,
     RID_SVXSTR_COLOR_YELLOW_DEF,
     RID_SVXSTR_COLOR_WHITE_DEF,
     RID_SVXSTR_COLOR_ORANGE_DEF,
-    RID_SVXSTR_COLOR_VIOLET_DEF,
     RID_SVXSTR_COLOR_BORDEAUX_DEF,
     RID_SVXSTR_COLOR_PALE_YELLOW_DEF,
     RID_SVXSTR_COLOR_PALE_GREEN_DEF,
@@ -1633,7 +1614,7 @@ static const char* SvxUnoColorNameDefResId[] =
     RID_SVXSTR_COLOR_LIGHTORANGE_DEF,
     RID_SVXSTR_COLOR_LIGHTBRICK_DEF,
     RID_SVXSTR_COLOR_LIGHTRED_DEF,
-    RID_SVXSTR_COLOR_LIGHTVIOLET_DEF,
+    RID_SVXSTR_COLOR_LIGHTMAGENTA_DEF,
     RID_SVXSTR_COLOR_LIGHTPURPLE_DEF,
     RID_SVXSTR_COLOR_LIGHTINDIGO_DEF,
     RID_SVXSTR_COLOR_LIGHTBLUE_DEF,
@@ -1646,13 +1627,14 @@ static const char* SvxUnoColorNameDefResId[] =
     RID_SVXSTR_COLOR_DARKORANGE_DEF,
     RID_SVXSTR_COLOR_DARKBRICK_DEF,
     RID_SVXSTR_COLOR_DARKRED_DEF,
-    RID_SVXSTR_COLOR_DARKVIOLET1_DEF,
+    RID_SVXSTR_COLOR_DARKMAGENTA_DEF,
     RID_SVXSTR_COLOR_DARKPURPLE_DEF,
     RID_SVXSTR_COLOR_DARKINDIGO_DEF,
     RID_SVXSTR_COLOR_DARKBLUE_DEF,
     RID_SVXSTR_COLOR_DARKTEAL_DEF,
     RID_SVXSTR_COLOR_DARKGREEN_DEF,
     RID_SVXSTR_COLOR_DARKLIME_DEF,
+    RID_SVXSTR_COLOR_VIOLET_DEF,
     RID_SVXSTR_COLOR_VIOLET_OUG_DEF,
     RID_SVXSTR_COLOR_BLUE_OUG_DEF,
     RID_SVXSTR_COLOR_AZURE_OUG_DEF,
@@ -1662,7 +1644,6 @@ static const char* SvxUnoColorNameDefResId[] =
     RID_SVXSTR_COLOR_ORANGE_OUG_DEF,
     RID_SVXSTR_COLOR_RED_OUG_DEF,
     RID_SVXSTR_COLOR_ROSE_OUG_DEF,
-    RID_SVXSTR_COLOR_MAGENTA_DEF,
     RID_SVXSTR_COLOR_AZURE_DEF,
     RID_SVXSTR_COLOR_CYAN_DEF,
     RID_SVXSTR_COLOR_SPRINGGREEN_DEF,
@@ -1693,12 +1674,12 @@ static const char* SvxUnoColorNameResId[] =
     RID_SVXSTR_COLOR_BLUE,
     RID_SVXSTR_COLOR_GREEN,
     RID_SVXSTR_COLOR_RED,
+    RID_SVXSTR_COLOR_MAGENTA,
     RID_SVXSTR_COLOR_GREY,
     RID_SVXSTR_COLOR_YELLOWGREEN,
     RID_SVXSTR_COLOR_YELLOW,
     RID_SVXSTR_COLOR_WHITE,
     RID_SVXSTR_COLOR_ORANGE,
-    RID_SVXSTR_COLOR_VIOLET,
     RID_SVXSTR_COLOR_BORDEAUX,
     RID_SVXSTR_COLOR_PALE_YELLOW,
     RID_SVXSTR_COLOR_PALE_GREEN,
@@ -1721,7 +1702,7 @@ static const char* SvxUnoColorNameResId[] =
     RID_SVXSTR_COLOR_LIGHTORANGE,
     RID_SVXSTR_COLOR_LIGHTBRICK,
     RID_SVXSTR_COLOR_LIGHTRED,
-    RID_SVXSTR_COLOR_LIGHTVIOLET,
+    RID_SVXSTR_COLOR_LIGHTMAGENTA,
     RID_SVXSTR_COLOR_LIGHTPURPLE,
     RID_SVXSTR_COLOR_LIGHTINDIGO,
     RID_SVXSTR_COLOR_LIGHTBLUE,
@@ -1734,13 +1715,14 @@ static const char* SvxUnoColorNameResId[] =
     RID_SVXSTR_COLOR_DARKORANGE,
     RID_SVXSTR_COLOR_DARKBRICK,
     RID_SVXSTR_COLOR_DARKRED,
-    RID_SVXSTR_COLOR_DARKVIOLET1,
+    RID_SVXSTR_COLOR_DARKMAGENTA,
     RID_SVXSTR_COLOR_DARKPURPLE,
     RID_SVXSTR_COLOR_DARKINDIGO,
     RID_SVXSTR_COLOR_DARKBLUE,
     RID_SVXSTR_COLOR_DARKTEAL,
     RID_SVXSTR_COLOR_DARKGREEN,
     RID_SVXSTR_COLOR_DARKLIME,
+    RID_SVXSTR_COLOR_VIOLET,
     RID_SVXSTR_COLOR_VIOLET_OUG,
     RID_SVXSTR_COLOR_BLUE_OUG,
     RID_SVXSTR_COLOR_AZURE_OUG,
@@ -1750,7 +1732,6 @@ static const char* SvxUnoColorNameResId[] =
     RID_SVXSTR_COLOR_ORANGE_OUG,
     RID_SVXSTR_COLOR_RED_OUG,
     RID_SVXSTR_COLOR_ROSE_OUG,
-    RID_SVXSTR_COLOR_MAGENTA,
     RID_SVXSTR_COLOR_AZURE,
     RID_SVXSTR_COLOR_CYAN,
     RID_SVXSTR_COLOR_SPRINGGREEN,
@@ -1774,7 +1755,7 @@ static const char* SvxUnoColorNameResId[] =
 };
 
 /// @throws std::exception
-bool SvxUnoConvertResourceStringBuiltIn(const char** pSourceResIds, const char** pDestResIds, int nCount, OUString& rString, bool bToApi)
+static bool SvxUnoConvertResourceStringBuiltIn(const char** pSourceResIds, const char** pDestResIds, int nCount, OUString& rString, bool bToApi)
 {
     //We replace e.g. "Gray 10%" with the translation of Gray, but we shouldn't
     //replace "Red Hat 1" with the translation of Red :-)

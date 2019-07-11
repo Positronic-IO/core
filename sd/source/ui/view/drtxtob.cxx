@@ -54,6 +54,7 @@
 #include <app.hrc>
 
 #include <drawdoc.hxx>
+#include <DrawDocShell.hxx>
 #include <DrawViewShell.hxx>
 #include <OutlineViewShell.hxx>
 #include <ViewShellBase.hxx>
@@ -268,8 +269,7 @@ void TextObjectBar::GetAttrState( SfxItemSet& rSet )
 
                     bool bOutlineViewSh = dynamic_cast< const OutlineViewShell *>( mpViewShell ) !=  nullptr;
 
-                    if (pOLV &&
-                        ( pOLV->GetOutliner()->GetMode() == OutlinerMode::OutlineObject || bOutlineViewSh ) )
+                    if (pOLV)
                     {
                         // Outliner at outline-mode
                         ::Outliner* pOutl = pOLV->GetOutliner();
@@ -474,23 +474,35 @@ void TextObjectBar::GetAttrState( SfxItemSet& rSet )
         }
 
         // paragraph justification
-        SvxLRSpaceItem aLR = aAttrSet.Get( EE_PARA_LRSPACE );
+        const SvxLRSpaceItem& aLR = aAttrSet.Get( EE_PARA_LRSPACE );
         rSet.Put(aLR);
         SvxAdjust eAdj = aAttrSet.Get( EE_PARA_JUST ).GetAdjust();
         switch( eAdj )
         {
             case SvxAdjust::Left:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_LEFT, true ) );
-            break;
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_CENTER, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_RIGHT, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_BLOCK, false ) );
+                break;
             case SvxAdjust::Center:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_CENTER, true ) );
-            break;
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_LEFT, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_RIGHT, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_BLOCK, false ) );
+                break;
             case SvxAdjust::Right:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_RIGHT, true ) );
-            break;
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_CENTER, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_LEFT, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_BLOCK, false ) );
+                break;
             case SvxAdjust::Block:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_BLOCK, true ) );
-            break;
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_CENTER, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_RIGHT, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_ADJUST_LEFT, false ) );
+                break;
             default:
             break;
         }
@@ -567,12 +579,18 @@ void TextObjectBar::GetAttrState( SfxItemSet& rSet )
         {
             case 100:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_10, true ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_15, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_20, false ) );
             break;
             case 150:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_15, true ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_10, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_20, false ) );
             break;
             case 200:
                 rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_20, true ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_10, false ) );
+                rSet.Put( SfxBoolItem( SID_ATTR_PARA_LINESPACE_15, false ) );
             break;
         }
     }

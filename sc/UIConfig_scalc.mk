@@ -18,7 +18,6 @@ $(eval $(call gb_UIConfig_add_popupmenufiles,modules/scalc,\
 	sc/uiconfig/scalc/popupmenu/audit \
 	sc/uiconfig/scalc/popupmenu/cell \
 	sc/uiconfig/scalc/popupmenu/celledit \
-	sc/uiconfig/scalc/popupmenu/chart \
 	sc/uiconfig/scalc/popupmenu/colheader \
 	sc/uiconfig/scalc/popupmenu/column_operations \
 	sc/uiconfig/scalc/popupmenu/conditional \
@@ -150,12 +149,19 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/leftheaderdialog \
 	sc/uiconfig/scalc/ui/namerangesdialog \
 	sc/uiconfig/scalc/ui/notebookbar \
+	sc/uiconfig/scalc/ui/notebookbar_compact \
 	sc/uiconfig/scalc/ui/notebookbar_groups \
 	sc/uiconfig/scalc/ui/notebookbar_groupedbar_full \
 	sc/uiconfig/scalc/ui/notebookbar_groupedbar_compact \
 	sc/uiconfig/scalc/ui/managenamesdialog \
 	sc/uiconfig/scalc/ui/mergecellsdialog \
 	sc/uiconfig/scalc/ui/mergecolumnentry \
+	sc/uiconfig/scalc/ui/texttransformationentry \
+	sc/uiconfig/scalc/ui/sorttransformationentry \
+	sc/uiconfig/scalc/ui/aggregatefunctionentry \
+	sc/uiconfig/scalc/ui/numbertransformationentry \
+	sc/uiconfig/scalc/ui/replacenulltransformationentry \
+	sc/uiconfig/scalc/ui/datetimetransformationentry \
 	sc/uiconfig/scalc/ui/movecopysheet \
 	sc/uiconfig/scalc/ui/movingaveragedialog \
 	sc/uiconfig/scalc/ui/multipleoperationsdialog \

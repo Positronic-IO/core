@@ -10,11 +10,9 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_XML_XMLMAPPINGI_HXX
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLMAPPINGI_HXX
 
-#include <xmloff/xmlictxt.hxx>
-#include <xmloff/xmlimp.hxx>
-
-#include "xmlimprt.hxx"
 #include "importcontext.hxx"
+
+namespace sax_fastparser { class FastAttributeList; }
 
 class ScXMLMappingsContext : public ScXMLImportContext
 {
@@ -38,6 +36,10 @@ public:
                         const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList );
 
     virtual ~ScXMLMappingContext() override;
+
+    virtual css::uno::Reference<css::xml::sax::XFastContextHandler> SAL_CALL createFastChildContext(
+        sal_Int32 nElement,
+        const css::uno::Reference<css::xml::sax::XFastAttributeList>& xAttrList) override;
 };
 
 

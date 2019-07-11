@@ -90,7 +90,7 @@ private:
     /** the owner frame of this component. */
     css::uno::Reference< css::frame::XFrame > m_xFrame;
 
-    osl::Mutex m_aTypeProviderMutex;
+    Size m_aInitialWindowMinSize;
 
 public:
 
@@ -233,38 +233,25 @@ void SAL_CALL BackingComp::release()
 
 css::uno::Sequence< css::uno::Type > SAL_CALL BackingComp::getTypes()
 {
-    static ::cppu::OTypeCollection* pTypeCollection = nullptr;
-    if (!pTypeCollection)
-    {
-        /* GLOBAL SAFE { */
-        ::osl::MutexGuard aGlobalLock(m_aTypeProviderMutex);
-        // Control these pointer again ... it can be, that another instance will be faster then this one!
-        if (!pTypeCollection)
-        {
-            /* LOCAL SAFE { */
-            SolarMutexGuard aGuard;
-            css::uno::Reference< css::lang::XTypeProvider > xProvider(m_xWindow, css::uno::UNO_QUERY);
+    static cppu::OTypeCollection aTypeCollection = [this]() {
+        SolarMutexGuard aGuard;
+        css::uno::Reference<css::lang::XTypeProvider> xProvider(m_xWindow, css::uno::UNO_QUERY);
 
-            css::uno::Sequence< css::uno::Type > lWindowTypes;
-            if (xProvider.is())
-                lWindowTypes = xProvider->getTypes();
+        css::uno::Sequence<css::uno::Type> lWindowTypes;
+        if (xProvider.is())
+            lWindowTypes = xProvider->getTypes();
 
-            static ::cppu::OTypeCollection aTypeCollection(
-                    cppu::UnoType<css::lang::XInitialization>::get(),
-                    cppu::UnoType<css::lang::XTypeProvider>::get(),
-                    cppu::UnoType<css::lang::XServiceInfo>::get(),
-                    cppu::UnoType<css::frame::XController>::get(),
-                    cppu::UnoType<css::lang::XComponent>::get(),
-                    cppu::UnoType<css::frame::XDispatchProvider>::get(),
-                    cppu::UnoType<css::frame::XDispatch>::get(),
-                    lWindowTypes);
+        return cppu::OTypeCollection(
+            cppu::UnoType<css::lang::XInitialization>::get(),
+            cppu::UnoType<css::lang::XTypeProvider>::get(),
+            cppu::UnoType<css::lang::XServiceInfo>::get(),
+            cppu::UnoType<css::frame::XController>::get(),
+            cppu::UnoType<css::lang::XComponent>::get(),
+            cppu::UnoType<css::frame::XDispatchProvider>::get(),
+            cppu::UnoType<css::frame::XDispatch>::get(), lWindowTypes);
+    }();
 
-            pTypeCollection = &aTypeCollection;
-            /* } LOCAL SAFE */
-        }
-        /* } GLOBAL SAFE */
-    }
-    return pTypeCollection->getTypes();
+    return aTypeCollection.getTypes();
 }
 
 
@@ -425,6 +412,12 @@ void SAL_CALL BackingComp::attachFrame( /*IN*/ const css::uno::Reference< css::f
         if( pMenu )
             nMenuHeight = pMenu->GetSizePixel().Height();
 
+        m_aInitialWindowMinSize = pParent->GetMinOutputSizePixel();
+        if (!m_aInitialWindowMinSize.Width())
+            m_aInitialWindowMinSize.AdjustWidth(1);
+        if (!m_aInitialWindowMinSize.Height())
+            m_aInitialWindowMinSize.AdjustHeight(1);
+
         pParent->SetMinOutputSizePixel(
             Size(
                 pBack->get_width_request(),
@@ -573,9 +566,12 @@ void SAL_CALL BackingComp::dispose()
     {
         css::uno::Reference< css::awt::XWindow > xParentWindow = m_xFrame->getContainerWindow();
         VclPtr< WorkWindow > pParent = static_cast<WorkWindow*>(VCLUnoHelper::GetWindow(xParentWindow).get());
-
-        // hide NotebookBar
-        sfx2::SfxNotebookBar::CloseMethod(static_cast<SystemWindow*>(pParent));
+        if (pParent)
+        {
+            pParent->SetMinOutputSizePixel(m_aInitialWindowMinSize);
+            // hide NotebookBar
+            sfx2::SfxNotebookBar::CloseMethod(static_cast<SystemWindow*>(pParent));
+        }
     }
 
     // stop listening at the window

@@ -21,8 +21,9 @@
 
 #include <ObjectIdentifier.hxx>
 #include <sfx2/tabdlg.hxx>
-#include <svx/dlgctrl.hxx>
-#include <com/sun/star/util/XNumberFormatsSupplier.hpp>
+
+namespace com { namespace sun { namespace star { namespace util { class XNumberFormatsSupplier; } } } }
+class Graphic;
 
 namespace chart
 {
@@ -103,38 +104,33 @@ private:
 
 class ViewElementListProvider;
 
-class SchAttribTabDlg : public SfxTabDialog
+class SchAttribTabDlg : public SfxTabDialogController
 {
 private:
-    sal_uInt16                   nDlgType;
-
     const ObjectPropertiesDialogParameter * const        m_pParameter;
     const ViewElementListProvider* const                 m_pViewElementListProvider;
     SvNumberFormatter* m_pNumberFormatter;
 
-    SfxItemSet*     m_pSymbolShapeProperties;
-    Graphic*        m_pAutoSymbolGraphic;
+    std::unique_ptr<SfxItemSet>     m_pSymbolShapeProperties;
+    std::unique_ptr<Graphic>        m_pAutoSymbolGraphic;
 
     double          m_fAxisMinorStepWidthForErrorBarDecimals;
     bool            m_bOKPressed;
 
-    virtual void PageCreated(sal_uInt16 nId, SfxTabPage& rPage) override;
+    DECL_LINK(OKPressed, weld::Button&, void);
 
-    Link<Button*,void> m_aOriginalOKClickHdl;
-    DECL_LINK( OKPressed, Button*, void );
+    virtual void PageCreated(const OString& rId, SfxTabPage& rPage) override;
 
 public:
-    SchAttribTabDlg(vcl::Window* pParent, const SfxItemSet* pAttr,
+    SchAttribTabDlg(weld::Window* pParent, const SfxItemSet* pAttr,
                     const ObjectPropertiesDialogParameter* pDialogParameter,
                     const ViewElementListProvider* pViewElementListProvider,
                     const css::uno::Reference< css::util::XNumberFormatsSupplier >& xNumberFormatsSupplier );
     virtual ~SchAttribTabDlg() override;
-    virtual void dispose() override;
 
     //pSymbolShapeProperties: Properties to be set on the symbollist shapes
     //pAutoSymbolGraphic: Graphic to be shown if AutoSymbol gets selected
-    //this class takes ownership over both parameter
-    void setSymbolInformation( SfxItemSet* pSymbolShapeProperties, Graphic* pAutoSymbolGraphic );
+    void setSymbolInformation( std::unique_ptr<SfxItemSet> pSymbolShapeProperties, std::unique_ptr<Graphic> pAutoSymbolGraphic );
 
     void SetAxisMinorStepWidthForErrorBarDecimals( double fMinorStepWidth );
 

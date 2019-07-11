@@ -28,8 +28,6 @@
 
 #include <osl/mutex.hxx>
 
-#include <rtl/string.hxx>
-#include <rtl/instance.hxx>
 #include <memory>
 
 
@@ -37,7 +35,7 @@ namespace comphelper
 {
 
 
-    /** factory factory declaration
+    /** factory declaration
     */
     typedef css::uno::Reference< css::lang::XSingleComponentFactory > (*FactoryInstantiation)
     (
@@ -53,13 +51,13 @@ namespace comphelper
     struct COMPHELPER_DLLPUBLIC ComponentDescription
     {
         /// the implementation name of the component
-        OUString                                     sImplementationName;
+        OUString const                               sImplementationName;
         /// the services supported by the component implementation
-        css::uno::Sequence< OUString >               aSupportedServices;
+        css::uno::Sequence< OUString > const         aSupportedServices;
         /// the function to create an instance of the component
-        ::cppu::ComponentFactoryFunc                 pComponentCreationFunc;
+        ::cppu::ComponentFactoryFunc const           pComponentCreationFunc;
         /// the function to create a factory for the component (usually <code>::cppu::createSingleComponentFactory</code>)
-        FactoryInstantiation                         pFactoryCreationFunc;
+        FactoryInstantiation const                   pFactoryCreationFunc;
 
         ComponentDescription(
                 const OUString& _rImplementationName,

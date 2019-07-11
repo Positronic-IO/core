@@ -35,6 +35,7 @@
 #include <ColorChanger.hxx>
 #include <RptObject.hxx>
 #include <EndMarker.hxx>
+#include <sal/log.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/unoshape.hxx>
 #include <vcl/svapp.hxx>
@@ -53,7 +54,7 @@ namespace rptui
 using namespace ::com::sun::star;
 using namespace ::comphelper;
 
-bool lcl_getNewRectSize(const tools::Rectangle& _aObjRect,long& _nXMov, long& _nYMov,SdrObject const * _pObj,SdrView const * _pView, ControlModification _nControlModification)
+static bool lcl_getNewRectSize(const tools::Rectangle& _aObjRect,long& _nXMov, long& _nYMov,SdrObject const * _pObj,SdrView const * _pView, ControlModification _nControlModification)
 {
     bool bMoveAllowed = _nXMov != 0 || _nYMov != 0;
     if ( bMoveAllowed )
@@ -76,7 +77,7 @@ bool lcl_getNewRectSize(const tools::Rectangle& _aObjRect,long& _nXMov, long& _n
             }
             if (dynamic_cast<OUnoObject const *>(_pObj) != nullptr || dynamic_cast<OOle2Obj const *>(_pObj) != nullptr)
             {
-                pOverlappedObj = isOver(aNewRect,*_pObj->GetPage(),*_pView,true,_pObj);
+                pOverlappedObj = isOver(aNewRect,*_pObj->getSdrPageFromSdrObject(),*_pView,true,_pObj);
                 if ( pOverlappedObj && _pObj != pOverlappedObj )
                 {
                     tools::Rectangle aOverlappingRect = pOverlappedObj->GetSnapRect();
@@ -203,8 +204,7 @@ void OViewsWindow::impl_resizeSectionWindow(OSectionWindow& _rSectionWindow,Poin
     {
         aSectionSize.setHeight( nMinHeight );
     }
-    const StyleSettings& rSettings = GetSettings().GetStyleSettings();
-    aSectionSize.AdjustHeight(static_cast<long>(rSettings.GetSplitSize() * static_cast<double>(_rSectionWindow.GetMapMode().GetScaleY())) );
+    aSectionSize.AdjustHeight(static_cast<long>(StyleSettings::GetSplitSize() * static_cast<double>(_rSectionWindow.GetMapMode().GetScaleY())) );
 
     if ( _bSet )
         _rSectionWindow.SetPosSizePixel(_rStartPoint,aSectionSize);
@@ -715,7 +715,7 @@ void OViewsWindow::collectBoundResizeRect(const TRectangleMap& _rSortRectangles,
                 {
                     bOnlyOnce = true;
                     OReportSection* pReportSection = aRectIter->second.second->getReportSection();
-                    const uno::Reference< report::XSection> xSection = pReportSection->getSection();
+                    const uno::Reference< report::XSection>& xSection = pReportSection->getSection();
                     try
                     {
                         uno::Reference<report::XReportDefinition> xReportDefinition = xSection->getReportDefinition();
@@ -956,7 +956,7 @@ namespace
     class ApplySectionViewAction
     {
     private:
-        SectionViewAction   m_eAction;
+        SectionViewAction const m_eAction;
 
     public:
         explicit ApplySectionViewAction()
@@ -1400,11 +1400,8 @@ void OViewsWindow::MovAction(const Point& _aPnt,const OSectionView* _pSection, b
     {
         OReportSection& rReportSection = (*aIter)->getReportSection();
         SdrHdl* pCurrentHdl = rReportSection.getSectionView().GetDragHdl();
-        if ( pCurrentHdl )
-        {
-            if ( aRealMousePos.Y() > 0 )
-                aRealMousePos = _aPnt + pCurrentHdl->GetPos() - aHdlPos;
-        }
+        if ( pCurrentHdl && aRealMousePos.Y() > 0 )
+            aRealMousePos = _aPnt + pCurrentHdl->GetPos() - aHdlPos;
         rReportSection.getSectionView().MovAction ( aRealMousePos );
         const long nSectionHeight = (*aIter)->PixelToLogic((*aIter)->GetOutputSizePixel()).Height();
         aRealMousePos.AdjustY( -nSectionHeight );

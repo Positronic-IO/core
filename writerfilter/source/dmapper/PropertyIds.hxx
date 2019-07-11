@@ -128,6 +128,7 @@ enum PropertyIds
         ,PROP_FOOTER_TEXT
         ,PROP_FOOTER_TEXT_LEFT
         ,PROP_FOOTNOTE_COUNTING
+        ,PROP_FOOTNOTE_LINE_ADJUST
         ,PROP_FORMAT
         ,PROP_FULL_NAME
         ,PROP_GAMMA
@@ -216,6 +217,7 @@ enum PropertyIds
         ,PROP_PARENT_NUMBERING
         ,PROP_POSITION_AND_SPACE_MODE
         ,PROP_POSITION_PROTECTED
+        ,PROP_IS_PROTECTED
         ,PROP_PREFIX
         ,PROP_PRINTER_PAPER_TRAY_INDEX
         ,PROP_REDLINE_AUTHOR
@@ -351,6 +353,7 @@ enum PropertyIds
         ,PROP_RUBY_TEXT
         ,PROP_RUBY_ADJUST
         ,PROP_RUBY_POSITION
+        ,PROP_LAYOUT_IN_CELL
     };
 
 //Returns the UNO string equivalent to eId.

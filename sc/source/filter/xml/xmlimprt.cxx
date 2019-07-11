@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <svl/zforlist.hxx>
 #include <sal/macros.h>
@@ -57,6 +58,7 @@
 #include "xmlstyli.hxx"
 #include <ViewSettingsSequenceDefines.hxx>
 
+#include <compiler.hxx>
 #include <patattr.hxx>
 
 #include "XMLConverter.hxx"
@@ -76,6 +78,9 @@
 #include "pivotsource.hxx"
 #include <unonames.hxx>
 #include <numformat.hxx>
+#include <sizedev.hxx>
+#include <scdll.hxx>
+#include "xmlstyle.hxx"
 
 #include <comphelper/base64.hxx>
 #include <comphelper/extract.hxx>
@@ -94,6 +99,7 @@
 #include <com/sun/star/sheet/XLabelRanges.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/sheet/XSheetCellRangeContainer.hpp>
 
 #include <memory>
 #include <utility>
@@ -657,35 +663,17 @@ SvXMLImportContext *ScXMLImport::CreateFastContext( sal_Int32 nElement,
     return pContext;
 }
 
+static constexpr OUStringLiteral gsNumberFormat(SC_UNONAME_NUMFMT);
+static constexpr OUStringLiteral gsLocale(SC_LOCALE);
+static constexpr OUStringLiteral gsCellStyle(SC_UNONAME_CELLSTYL);
+
 ScXMLImport::ScXMLImport(
     const css::uno::Reference< css::uno::XComponentContext >& rContext,
     OUString const & implementationName, SvXMLImportFlags nImportFlag)
 :   SvXMLImport( rContext, implementationName, nImportFlag ),
     pDoc( nullptr ),
-    pChangeTrackingImportHelper(nullptr),
-    pStylesImportHelper(nullptr),
-    sNumberFormat(SC_UNONAME_NUMFMT),
-    sLocale(SC_LOCALE),
-    sCellStyle(SC_UNONAME_CELLSTYL),
-    pDocElemTokenMap( nullptr ),
-    pContentValidationElemTokenMap( nullptr ),
-    pContentValidationMessageElemTokenMap( nullptr ),
-    pTableElemTokenMap( nullptr ),
-    pTableRowsElemTokenMap( nullptr ),
-    pTableRowElemTokenMap( nullptr ),
-    pTableRowAttrTokenMap( nullptr ),
-    pTableRowCellElemTokenMap( nullptr ),
-    pTableRowCellAttrTokenMap( nullptr ),
-    pTableAnnotationAttrTokenMap( nullptr ),
     mpPostProcessData(nullptr),
     aTables(*this),
-    m_pMyNamedExpressions(nullptr),
-    pMyLabelRanges(nullptr),
-    pValidations(nullptr),
-    pDetectiveOpArray(nullptr),
-    pSolarMutexGuard(nullptr),
-    pNumberFormatAttributesExportHelper(nullptr),
-    pStyleNumberFormats(nullptr),
     sPrevStyleName(),
     sPrevCurrency(),
     nSolarMutexLocked(0),
@@ -1088,23 +1076,20 @@ void ScXMLImport::SetViewSettings(const uno::Sequence<beans::PropertyValue>& aVi
                 SetChangeTrackingViewSettings(aChangeProps);
         }
     }
-    if (nHeight && nWidth)
+    if (nHeight && nWidth && GetModel().is())
     {
-        if (GetModel().is())
+        ScModelObj* pDocObj(ScModelObj::getImplementation( GetModel() ));
+        if (pDocObj)
         {
-            ScModelObj* pDocObj(ScModelObj::getImplementation( GetModel() ));
-            if (pDocObj)
+            SfxObjectShell* pEmbeddedObj = pDocObj->GetEmbeddedObject();
+            if (pEmbeddedObj)
             {
-                SfxObjectShell* pEmbeddedObj = pDocObj->GetEmbeddedObject();
-                if (pEmbeddedObj)
-                {
-                    tools::Rectangle aRect;
-                    aRect.setX( nLeft );
-                    aRect.setY( nTop );
-                    aRect.setWidth( nWidth );
-                    aRect.setHeight( nHeight );
-                    pEmbeddedObj->SetVisArea(aRect);
-                }
+                tools::Rectangle aRect;
+                aRect.setX( nLeft );
+                aRect.setY( nTop );
+                aRect.setWidth( nWidth );
+                aRect.setHeight( nHeight );
+                pEmbeddedObj->SetVisArea(aRect);
             }
         }
     }
@@ -1184,7 +1169,7 @@ sal_Int32 ScXMLImport::SetCurrencySymbol(const sal_Int32 nKey, const OUString& r
                 if (xProperties.is())
                 {
                     lang::Locale aLocale;
-                    if (GetDocument() && (xProperties->getPropertyValue(sLocale) >>= aLocale))
+                    if (GetDocument() && (xProperties->getPropertyValue(gsLocale) >>= aLocale))
                     {
                         {
                             ScXMLImport::MutexGuard aGuard(*this);
@@ -1284,7 +1269,7 @@ void ScXMLImport::SetType(const uno::Reference <beans::XPropertySet>& rPropertie
     if ((nCellType != util::NumberFormat::TEXT) && (nCellType != util::NumberFormat::UNDEFINED))
     {
         if (rNumberFormat == -1)
-            rProperties->getPropertyValue( sNumberFormat ) >>= rNumberFormat;
+            rProperties->getPropertyValue( gsNumberFormat ) >>= rNumberFormat;
         OSL_ENSURE(rNumberFormat != -1, "no NumberFormat");
         bool bIsStandard;
         // sCurrentCurrency may be the ISO code abbreviation if the currency
@@ -1293,12 +1278,18 @@ void ScXMLImport::SetType(const uno::Reference <beans::XPropertySet>& rPropertie
         sal_Int32 nCurrentCellType(
             GetNumberFormatAttributesExportHelper()->GetCellType(
                 rNumberFormat, sCurrentCurrency, bIsStandard) & ~util::NumberFormat::DEFINED);
-        if ((nCellType != nCurrentCellType) && !((nCellType == util::NumberFormat::NUMBER &&
-            ((nCurrentCellType == util::NumberFormat::SCIENTIFIC) ||
-            (nCurrentCellType == util::NumberFormat::FRACTION) ||
-            (nCurrentCellType == util::NumberFormat::LOGICAL) ||
-            (nCurrentCellType == 0))) || (nCurrentCellType == util::NumberFormat::TEXT)) && !((nCellType == util::NumberFormat::DATETIME) &&
-            (nCurrentCellType == util::NumberFormat::DATE)))
+        // If the (numeric) cell type (number, currency, date, time, boolean)
+        // is different from the format type then for some combinations we may
+        // have to apply a format, e.g. in case the generator deduced format
+        // from type and did not apply a format but we don't keep a dedicated
+        // type internally. Specifically this is necessary if the cell type is
+        // not number but the format type is (i.e. General). Currency cells
+        // need extra attention, see calls of ScXMLImport::IsCurrencySymbol()
+        // and description within there and ScXMLImport::SetCurrencySymbol().
+        if ((nCellType != nCurrentCellType) &&
+                (nCellType != util::NumberFormat::NUMBER) &&
+                (nCellType != util::NumberFormat::TEXT) &&
+                (bIsStandard || (nCellType == util::NumberFormat::CURRENCY)))
         {
             if (!xNumberFormats.is())
             {
@@ -1316,18 +1307,18 @@ void ScXMLImport::SetType(const uno::Reference <beans::XPropertySet>& rPropertie
                         if (nCellType != util::NumberFormat::CURRENCY)
                         {
                             lang::Locale aLocale;
-                            if ( xNumberFormatProperties->getPropertyValue(sLocale) >>= aLocale )
+                            if ( xNumberFormatProperties->getPropertyValue(gsLocale) >>= aLocale )
                             {
                                 if (!xNumberFormatTypes.is())
                                     xNumberFormatTypes.set(uno::Reference <util::XNumberFormatTypes>(xNumberFormats, uno::UNO_QUERY));
-                                rProperties->setPropertyValue( sNumberFormat, uno::makeAny(xNumberFormatTypes->getStandardFormat(nCellType, aLocale)) );
+                                rProperties->setPropertyValue( gsNumberFormat, uno::makeAny(xNumberFormatTypes->getStandardFormat(nCellType, aLocale)) );
                             }
                         }
                         else if (!rCurrency.isEmpty() && !sCurrentCurrency.isEmpty())
                         {
                             if (sCurrentCurrency != rCurrency)
                                 if (!IsCurrencySymbol(rNumberFormat, sCurrentCurrency, rCurrency))
-                                    rProperties->setPropertyValue( sNumberFormat, uno::makeAny(SetCurrencySymbol(rNumberFormat, rCurrency)));
+                                    rProperties->setPropertyValue( gsNumberFormat, uno::makeAny(SetCurrencySymbol(rNumberFormat, rCurrency)));
                         }
                     }
                 }
@@ -1341,7 +1332,7 @@ void ScXMLImport::SetType(const uno::Reference <beans::XPropertySet>& rPropertie
         {
             if ((nCellType == util::NumberFormat::CURRENCY) && !rCurrency.isEmpty() && !sCurrentCurrency.isEmpty() &&
                 sCurrentCurrency != rCurrency && !IsCurrencySymbol(rNumberFormat, sCurrentCurrency, rCurrency))
-                rProperties->setPropertyValue( sNumberFormat, uno::makeAny(SetCurrencySymbol(rNumberFormat, rCurrency)));
+                rProperties->setPropertyValue( gsNumberFormat, uno::makeAny(SetCurrencySymbol(rNumberFormat, rCurrency)));
         }
     }
 }
@@ -1409,7 +1400,7 @@ void ScXMLImport::SetStyleToRanges()
             }
             else
             {
-                xProperties->setPropertyValue(sCellStyle, uno::makeAny(GetStyleDisplayName( XML_STYLE_FAMILY_TABLE_CELL, sPrevStyleName )));
+                xProperties->setPropertyValue(gsCellStyle, uno::makeAny(GetStyleDisplayName( XML_STYLE_FAMILY_TABLE_CELL, sPrevStyleName )));
                 sal_Int32 nNumberFormat(GetStyleNumberFormats()->GetStyleNumberFormat(sPrevStyleName));
                 bool bInsert(nNumberFormat == -1);
                 SetType(xProperties, nNumberFormat, nPrevCellType, sPrevCurrency);
@@ -1638,7 +1629,7 @@ namespace {
 
 class RangeNameInserter
 {
-    ScDocument* mpDoc;
+    ScDocument* const mpDoc;
     ScRangeName& mrRangeName;
 
 public:
@@ -1803,6 +1794,26 @@ void SAL_CALL ScXMLImport::endDocument()
                     pDoc->SetStreamValid( nTab, true );
             }
         }
+
+        // There are rows with optimal height which need to be updated
+        if (pDoc && !maRecalcRowRanges.empty())
+        {
+            bool bLockHeight = pDoc->IsAdjustHeightLocked();
+            if (bLockHeight)
+            {
+                pDoc->UnlockAdjustHeight();
+            }
+
+            ScSizeDeviceProvider aProv(static_cast<ScDocShell*>(pDoc->GetDocumentShell()));
+            ScDocRowHeightUpdater aUpdater(*pDoc, aProv.GetDevice(), aProv.GetPPTX(), aProv.GetPPTY(), &maRecalcRowRanges);
+            aUpdater.update();
+
+            if (bLockHeight)
+            {
+                pDoc->LockAdjustHeight();
+            }
+        }
+
         aTables.FixupOLEs();
     }
     if (GetModel().is())
@@ -1991,8 +2002,8 @@ const ScXMLEditAttributeMap& ScXMLImport::GetEditAttributeMap() const
 
 void ScXMLImport::NotifyEmbeddedFontRead()
 {
-    if ( pDoc )
-        pDoc->SetIsUsingEmbededFonts( true );
+    if (pDoc)
+        pDoc->SetEmbedFonts(true);
 }
 
 ScMyImpDetectiveOpArray* ScXMLImport::GetDetectiveOpArray()

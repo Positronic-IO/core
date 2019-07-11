@@ -37,7 +37,7 @@ class SwOutlineTabDialog;
 
 class SwNumPositionTabPage : public SfxTabPage
 {
-    SwNumRule*          pActNum;
+    std::unique_ptr<SwNumRule> pActNum;
     SwNumRule*          pSaveNum;
     SwWrtShell*         pWrtSh;
 
@@ -48,6 +48,8 @@ class SwNumPositionTabPage : public SfxTabPage
     bool                bPreset             : 1;
     bool                bInInintControl     : 1;  // work around modify-error; should be resolved from 391 on
     bool                bLabelAlignmentPosAndSpaceModeActive;
+
+    NumberingPreview  m_aPreviewWIN;
 
     std::unique_ptr<weld::TreeView> m_xLevelLB;
     std::unique_ptr<weld::Widget> m_xPositionFrame;
@@ -62,28 +64,28 @@ class SwNumPositionTabPage : public SfxTabPage
     std::unique_ptr<weld::Label> m_xDistNumFT;
     std::unique_ptr<weld::MetricSpinButton> m_xDistNumMF;
     std::unique_ptr<weld::Label> m_xAlignFT;
-    std::unique_ptr<weld::ComboBoxText> m_xAlignLB;
+    std::unique_ptr<weld::ComboBox> m_xAlignLB;
 
     // new set of controls shown for numbering rules containing list level
     // attributes in SvxNumberFormat::SvxNumPositionAndSpaceMode == LABEL_ALIGNMENT
     std::unique_ptr<weld::Label> m_xLabelFollowedByFT;
-    std::unique_ptr<weld::ComboBoxText> m_xLabelFollowedByLB;
+    std::unique_ptr<weld::ComboBox> m_xLabelFollowedByLB;
     std::unique_ptr<weld::Label> m_xListtabFT;
     std::unique_ptr<weld::MetricSpinButton> m_xListtabMF;
     std::unique_ptr<weld::Label> m_xAlign2FT;
-    std::unique_ptr<weld::ComboBoxText> m_xAlign2LB;
+    std::unique_ptr<weld::ComboBox> m_xAlign2LB;
     std::unique_ptr<weld::Label> m_xAlignedAtFT;
     std::unique_ptr<weld::MetricSpinButton> m_xAlignedAtMF;
     std::unique_ptr<weld::Label> m_xIndentAtFT;
     std::unique_ptr<weld::MetricSpinButton> m_xIndentAtMF;
     std::unique_ptr<weld::Button> m_xStandardPB;
-    std::unique_ptr<SwNumberingPreview> m_xPreviewWIN;
+    std::unique_ptr<weld::CustomWeld> m_xPreviewWIN;
 
 
     void                InitControls();
 
     DECL_LINK(LevelHdl, weld::TreeView&, void);
-    DECL_LINK(EditModifyHdl, weld::ComboBoxText&, void);
+    DECL_LINK(EditModifyHdl, weld::ComboBox&, void);
     DECL_LINK(DistanceHdl, weld::MetricSpinButton&, void);
     DECL_LINK(RelativeHdl, weld::ToggleButton&, void);
     DECL_LINK(StandardHdl, weld::Button&, void);
@@ -91,7 +93,7 @@ class SwNumPositionTabPage : public SfxTabPage
     void InitPosAndSpaceMode();
     void ShowControlsDependingOnPosAndSpaceMode();
 
-    DECL_LINK(LabelFollowedByHdl_Impl, weld::ComboBoxText&, void);
+    DECL_LINK(LabelFollowedByHdl_Impl, weld::ComboBox&, void);
     DECL_LINK(ListtabPosHdl_Impl, weld::MetricSpinButton&, void);
     DECL_LINK(AlignAtHdl_Impl, weld::MetricSpinButton&, void);
     DECL_LINK(IndentAtHdl_Impl, weld::MetricSpinButton&, void);
@@ -119,27 +121,26 @@ public:
     void                SetModified();
 #else
     void                SetModified()
-                            {   bModified = true;
-                                m_xPreviewWIN->SetLevel(nActNumLvl);
-                                m_xPreviewWIN->queue_draw();
-                            }
+    {
+        bModified = true;
+        m_aPreviewWIN.SetLevel(nActNumLvl);
+        m_aPreviewWIN.Invalidate();
+    }
 #endif
 };
 
-class SwSvxNumBulletTabDialog final : public SfxTabDialog
+class SwSvxNumBulletTabDialog final : public SfxTabDialogController
 {
     SwWrtShell&         rWrtSh;
-    sal_uInt16 m_nSingleNumPageId;
-    sal_uInt16 m_nBulletPageId;
-    sal_uInt16 m_nOptionsPageId;
-    sal_uInt16 m_nPositionPageId;
 
     virtual short   Ok() override;
-    virtual void    PageCreated(sal_uInt16 nPageId, SfxTabPage& rPage) override;
-    DECL_LINK(RemoveNumberingHdl, Button*, void);
+    virtual void    PageCreated(const OString& rPageId, SfxTabPage& rPage) override;
+    DECL_LINK(RemoveNumberingHdl, weld::Button&, void);
+
+    std::unique_ptr<weld::ComboBox> m_xDummyCombo;
 
 public:
-    SwSvxNumBulletTabDialog(vcl::Window* pParent,
+    SwSvxNumBulletTabDialog(weld::Window* pParent,
                     const SfxItemSet* pSwItemSet,
                     SwWrtShell &);
     virtual ~SwSvxNumBulletTabDialog() override;

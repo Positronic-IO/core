@@ -25,13 +25,13 @@
 #include <vcl/GraphicObject.hxx>
 #include <vector>
 #include <set>
+#include <unordered_map>
 #include <utility>
 #include <com/sun/star/document/XGraphicObjectResolver.hpp>
 #include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/document/XBinaryStreamResolver.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <svx/svxdllapi.h>
-#include <unordered_map>
 
 enum class SvXMLGraphicHelperMode
 {
@@ -58,6 +58,7 @@ private:
 
     std::unordered_map<OUString, css::uno::Reference<css::graphic::XGraphic>> maGraphicObjects;
     std::unordered_map<Graphic, std::pair<OUString, OUString>> maExportGraphics;
+    std::unordered_map<void*, std::pair<OUString, OUString>> maExportPdf;
 
     SvXMLGraphicHelperMode      meCreateMode;
     OUString                    maOutputMimeType;
@@ -89,8 +90,7 @@ public:
                                 SvXMLGraphicHelper( SvXMLGraphicHelperMode eCreateMode );
 
     static rtl::Reference<SvXMLGraphicHelper> Create( const css::uno::Reference < css::embed::XStorage >& rXMLStorage,
-                                        SvXMLGraphicHelperMode eCreateMode,
-                                        const OUString& rGraphicMimeType = OUString() );
+                                        SvXMLGraphicHelperMode eCreateMode );
     static rtl::Reference<SvXMLGraphicHelper>  Create( SvXMLGraphicHelperMode eCreateMode,
                                         const OUString& rMimeType = OUString() );
 

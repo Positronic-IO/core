@@ -27,9 +27,13 @@
 #include <DrawDocShell.hxx>
 #include <SlideSorterViewShell.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <filedlg.hxx>
+#include <sdmod.hxx>
+#include <optsitem.hxx>
 #include "PageMarginUtils.hxx"
 #include <strings.hrc>
+#include <pageformatpanel.hrc>
 #include "DocumentHelper.hxx"
 #include "MasterPagesSelector.hxx"
 #include <DrawViewShell.hxx>
@@ -112,7 +116,8 @@ SlideBackground::SlideBackground(
     mpGradientItem(),
     mpHatchItem(),
     mpBitmapItem(),
-    mbEditModeChangePending(false),
+    mbSwitchModeToNormal(false),
+    mbSwitchModeToMaster(false),
     mxFrame(rxFrame),
     maContext(),
     maDrawOtherContext(vcl::EnumContext::Application::Draw, vcl::EnumContext::Context::DrawPage),
@@ -149,6 +154,27 @@ SlideBackground::SlideBackground(
     get(mpEditMaster, "masterslidebutton");
     get(mpMasterLabel, "masterlabel");
     get(mpMarginSelectBox, "marginLB");
+
+    ::sd::DrawDocShell* pDocSh = dynamic_cast<::sd::DrawDocShell*>( SfxObjectShell::Current() );
+    SdDrawDocument* pDoc = pDocSh ? pDocSh->GetDoc() : nullptr;
+    if (pDoc)
+    {
+        SdOptions* pOptions = SD_MOD()->GetSdOptions(pDoc->GetDocumentType());
+        if (pOptions)
+        {
+            FieldUnit eMetric = static_cast<FieldUnit>(pOptions->GetMetric());
+            if (IsInch(eMetric))
+            {
+                for (size_t i = 0; i < SAL_N_ELEMENTS(RID_PAGEFORMATPANEL_MARGINS_INCH); ++i)
+                    mpMarginSelectBox->InsertEntry(SdResId(RID_PAGEFORMATPANEL_MARGINS_INCH[i]));
+                }
+            else
+            {
+                for (size_t i = 0; i < SAL_N_ELEMENTS(RID_PAGEFORMATPANEL_MARGINS_CM); ++i)
+                    mpMarginSelectBox->InsertEntry(SdResId(RID_PAGEFORMATPANEL_MARGINS_CM[i]));
+            }
+        }
+    }
 
     maCustomEntry = get<FixedText>("customlabel")->GetText();
 
@@ -243,11 +269,11 @@ void SlideBackground::HandleContextChange(
             mpMasterSlide->Disable();
             mpDspMasterBackground->Disable();
             mpDspMasterObjects->Disable();
-            mpFillStyle->Show();
-            mpBackgroundLabel->Show();
+            mpFillStyle->Hide();
+            mpBackgroundLabel->Hide();
             mpInsertImage->Show();
         }
-        else if ( maContext == maImpressHandoutContext )
+        else if ( maContext == maImpressHandoutContext  || maContext == maImpressNotesContext )
         {
             mpCloseMaster->Hide();
             mpEditMaster->Hide();
@@ -269,17 +295,7 @@ void SlideBackground::HandleContextChange(
             mpBackgroundLabel->Show();
             mpInsertImage->Show();
         }
-        else if (maContext == maImpressNotesContext)
-        {
-            mpCloseMaster->Hide();
-            mpEditMaster->Hide();
-            mpMasterSlide->Disable();
-            mpDspMasterBackground->Disable();
-            mpDspMasterObjects->Disable();
-            mpFillStyle->Show();
-            mpBackgroundLabel->Show();
-            mpInsertImage->Hide();
-        }
+
         // Need to do a relayouting, otherwise the panel size is not updated after show / hide controls
         sfx2::sidebar::Panel* pPanel = dynamic_cast<sfx2::sidebar::Panel*>(GetParent());
         if(pPanel)
@@ -288,6 +304,18 @@ void SlideBackground::HandleContextChange(
     else if ( IsDraw() )
     {
         mpMasterLabel->SetText(SdResId(STR_MASTERPAGE_LABEL));
+
+        if (maContext == maDrawOtherContext)
+        {
+            mpEditMaster->Hide();
+            mpFillStyle->Show();
+            mpBackgroundLabel->Show();
+        }
+        else if (maContext == maDrawMasterContext)
+        {
+            mpFillStyle->Hide();
+            mpBackgroundLabel->Hide();
+        }
     }
 }
 
@@ -295,7 +323,7 @@ void SlideBackground::Update()
 {
     eFillStyle nPos = static_cast<eFillStyle>(mpFillStyle->GetSelectedEntryPos());
 
-    if(maContext == maImpressHandoutContext)
+    if(maContext != maImpressOtherContext && maContext != maDrawOtherContext)
         nPos = NONE;
 
     SfxObjectShell* pSh = SfxObjectShell::Current();
@@ -478,38 +506,31 @@ IMPL_LINK(SlideBackground, EventMultiplexerListener,
             populateMasterSlideDropdown();
             break;
         case EventMultiplexerEventId::EditModeNormal:
+            mbSwitchModeToNormal = true;
+            break;
         case EventMultiplexerEventId::EditModeMaster:
-            mbEditModeChangePending = true;
+            mbSwitchModeToMaster = true;
             break;
         case EventMultiplexerEventId::EditViewSelection:
         case EventMultiplexerEventId::EndTextEdit:
         {
-            if (mbEditModeChangePending)
+            if ( mbSwitchModeToMaster )
             {
-                ViewShell* pMainViewShell = mrBase.GetMainViewShell().get();
-
-                if (pMainViewShell)
-                {
-                    DrawViewShell* pDrawViewShell = static_cast<DrawViewShell*>(pMainViewShell);
-                    EditMode eMode = pDrawViewShell->GetEditMode();
-
-                    if ( eMode == EditMode::MasterPage)
-                    {
-                        if( IsImpress() )
-                            SetPanelTitle(SdResId(STR_MASTERSLIDE_NAME));
-                        else
-                            SetPanelTitle(SdResId(STR_MASTERPAGE_NAME));
-                    }
-                    else // EditMode::Page
-                    {
-                        if( IsImpress() )
-                            SetPanelTitle(SdResId(STR_SLIDE_NAME));
-                        else
-                            SetPanelTitle(SdResId(STR_PAGE_NAME));
-                    }
-                }
-                mbEditModeChangePending = false;
+                if( IsImpress() )
+                    SetPanelTitle(SdResId(STR_MASTERSLIDE_NAME));
+                else
+                    SetPanelTitle(SdResId(STR_MASTERPAGE_NAME));
+                mbSwitchModeToMaster = false;
             }
+            else if ( mbSwitchModeToNormal )
+            {
+                if( IsImpress() )
+                    SetPanelTitle(SdResId(STR_SLIDE_NAME));
+                else
+                    SetPanelTitle(SdResId(STR_PAGE_NAME));
+                mbSwitchModeToNormal = false;
+            }
+
         }
         break;
         case EventMultiplexerEventId::CurrentPageChanged:

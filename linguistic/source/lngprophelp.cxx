@@ -20,6 +20,7 @@
 
 #include <tools/debug.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/linguistic2/LinguServiceEvent.hpp>
 #include <com/sun/star/linguistic2/LinguServiceEventFlags.hpp>
@@ -583,8 +584,6 @@ bool PropertyHelper_Hyphen::propertyChange_Impl( const PropertyChangeEvent& rEvt
 
     if (!bRes  &&  GetPropSet().is()  &&  rEvt.Source == GetPropSet())
     {
-        sal_Int16 nLngSvcFlags = LinguServiceEventFlags::HYPHENATE_AGAIN;
-
         sal_Int16   *pnVal = nullptr;
         switch (rEvt.PropertyHandle)
         {
@@ -600,11 +599,8 @@ bool PropertyHelper_Hyphen::propertyChange_Impl( const PropertyChangeEvent& rEvt
         bRes = (pnVal != nullptr);
         if (bRes)
         {
-            if (nLngSvcFlags)
-            {
-                LinguServiceEvent aEvt( GetEvtObj(), nLngSvcFlags );
-                LaunchEvent( aEvt );
-            }
+            LinguServiceEvent aEvt(GetEvtObj(), LinguServiceEventFlags::HYPHENATE_AGAIN);
+            LaunchEvent(aEvt);
         }
     }
 

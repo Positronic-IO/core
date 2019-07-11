@@ -34,8 +34,6 @@
 
 #include <ucbhelper/content.hxx>
 
-#include <comphelper/storagehelper.hxx>
-
 using namespace ::com::sun::star;
 
 namespace avmedia
@@ -71,6 +69,11 @@ bool MediaItem::GetPresentation( SfxItemPresentation, MapUnit, MapUnit, OUString
 bool MediaItem::PutValue( const css::uno::Any&, sal_uInt8 )
 {
   return false;
+}
+
+AVMediaSetMask MediaItem::getMaskSet() const
+{
+    return AVMediaSetMask::NONE;
 }
 
 SfxPoolItem* MediaItem::CreateDefault()

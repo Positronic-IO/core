@@ -49,7 +49,7 @@ void lcl_resolveCharEntities(OUString & aLocalString)
         OSL_ENSURE(ch,"Configuration path contains '&' that is not part of a valid character escape");
         if (ch)
         {
-            aResult.append(aLocalString.copy(nStart,nEscapePos-nStart)).append(ch);
+            aResult.appendCopy(aLocalString, nStart,nEscapePos-nStart).append(ch);
 
             sal_Int32 nEscapeEnd=aLocalString.indexOf(';',nEscapePos);
             nStart = nEscapeEnd+1;
@@ -62,7 +62,7 @@ void lcl_resolveCharEntities(OUString & aLocalString)
     }
     while ( nEscapePos > 0);
 
-    aResult.append(aLocalString.copy(nStart));
+    aResult.appendCopy(aLocalString, nStart);
 
     aLocalString = aResult.makeStringAndClear();
 }
@@ -178,8 +178,7 @@ OUString extractFirstFromConfigurationPath(OUString const& _sInPath, OUString* _
 }
 
 // find the position after the prefix in the nested path
-static inline
-sal_Int32 lcl_findPrefixEnd(OUString const& _sNestedPath, OUString const& _sPrefixPath)
+static sal_Int32 lcl_findPrefixEnd(OUString const& _sNestedPath, OUString const& _sPrefixPath)
 {
     // TODO: currently handles only exact prefix matches
     sal_Int32 nPrefixLength = _sPrefixPath.getLength();

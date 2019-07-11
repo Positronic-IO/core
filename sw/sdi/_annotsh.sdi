@@ -96,6 +96,13 @@ interface _Annotation
         DisableFlags="SfxDisableFlags::SwOnProtectedCursor";
     ]
 
+    SID_PASTE_UNFORMATTED
+    [
+        ExecMethod = ExecClpbrd ;
+        StateMethod = StateClpbrd ;
+        DisableFlags="SfxDisableFlags::SwOnProtectedCursor";
+    ]
+
     SID_PASTE_SPECIAL  // api:
     [
         StateMethod = StateClpbrd ;
@@ -461,7 +468,7 @@ interface _Annotation
         ExecMethod = ExecSearch ;
         DisableFlags="SfxDisableFlags::SwOnProtectedCursor";
     ]
-      // ab hier Export = FALSE;
+      // from here on Export = FALSE;
     FID_SEARCH_ON // status()
     [
         ExecMethod = ExecSearch ;

@@ -27,6 +27,7 @@
 #include <vcl/window.hxx>
 #include <vcl/svapp.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <editeng/flditem.hxx>
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Reference.hxx>
@@ -34,6 +35,7 @@
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <com/sun/star/i18n/Boundary.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleTextType.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -82,7 +84,7 @@ using namespace ::com::sun::star::accessibility;
 
 namespace accessibility
 {
-    const SvxItemPropertySet* ImplGetSvxCharAndParaPropertiesSet()
+    static const SvxItemPropertySet* ImplGetSvxCharAndParaPropertiesSet()
     {
         // PropertyMap for character and paragraph properties
         static const SfxItemPropertyMapEntry aPropMap[] =
@@ -924,14 +926,10 @@ namespace accessibility
             sal_Int32 reeBegin = ree.aPosition.nIndex + nAllFieldLen;
             sal_Int32 reeEnd = reeBegin + ree.aCurrentText.getLength();
             nAllFieldLen += (ree.aCurrentText.getLength() - 1);
-            if (reeBegin > nIndex)
-            {
+            if (nIndex < reeBegin)
                 break;
-            }
-            if (nIndex >= reeBegin && nIndex < reeEnd)
-            {
+            if (nIndex < reeEnd)
                 return GetFieldTypeNameFromField(ree);
-            }
         }
         return OUString();
     }
@@ -1233,7 +1231,8 @@ namespace accessibility
             bool bIsDirectVal = false;
             for (auto const& rRunAttrib : aRunAttribs)
             {
-                if ((bIsDirectVal = rRes.Name == rRunAttrib.Name))
+                bIsDirectVal = rRes.Name == rRunAttrib.Name;
+                if (bIsDirectVal)
                     break;
             }
             rRes.Handle = -1;
@@ -1581,13 +1580,11 @@ namespace accessibility
             reeBegin = ree.aPosition.nIndex + nAllFieldLen;
             reeEnd = reeBegin + ree.aCurrentText.getLength();
             nAllFieldLen += (ree.aCurrentText.getLength() - 1);
-            if( reeBegin > nIndex )
-            {
+            if (nIndex < reeBegin)
                 break;
-            }
             if (!ree.pFieldItem)
                 continue;
-            if (nIndex >= reeBegin && nIndex < reeEnd)
+            if (nIndex < reeEnd)
             {
                 if (ree.pFieldItem->GetField()->GetClassId() != text::textfield::Type::URL)
                 {

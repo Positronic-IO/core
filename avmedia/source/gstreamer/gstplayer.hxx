@@ -95,11 +95,14 @@ private:
     bool                    mbLooping;
     bool                    mbInitialized;
 
+    void*                   mpDisplay;
     long                    mnWindowID;
     GstVideoOverlay*        mpXOverlay;
     gint64                  mnDuration;
     int                     mnWidth;
     int                     mnHeight;
+
+    css::awt::Rectangle     maArea;     // Area of the player window.
 
     guint                   mnWatchID;
     bool                    mbWatchID;

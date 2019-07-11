@@ -116,9 +116,9 @@ struct BridgeRuntimeError
 struct rtl_mem
 {
     inline static void * operator new ( size_t nSize )
-        { return rtl_allocateMemory( nSize ); }
+        { return std::malloc( nSize ); }
     inline static void operator delete ( void * mem )
-        { if (mem) rtl_freeMemory( mem ); }
+        { std::free( mem ); }
     inline static void * operator new ( size_t, void * mem )
         { return mem; }
     inline static void operator delete ( void *, void * )
@@ -129,7 +129,7 @@ struct rtl_mem
 
 inline std::unique_ptr< rtl_mem > rtl_mem::allocate( std::size_t bytes )
 {
-    void * p = rtl_allocateMemory( bytes );
+    void * p = std::malloc( bytes );
     if (0 == p)
         throw BridgeRuntimeError("out of memory!" );
     return std::unique_ptr< rtl_mem >( (rtl_mem *)p );
@@ -140,8 +140,8 @@ class TypeDescr
 {
     typelib_TypeDescription * m_td;
 
-    TypeDescr( TypeDescr & ) = delete;
-    void operator = ( TypeDescr ) = delete;
+    TypeDescr( TypeDescr const & ) = delete;
+    TypeDescr& operator = ( TypeDescr const & ) = delete;
 
 public:
     inline explicit TypeDescr( typelib_TypeDescriptionReference * td_ref );

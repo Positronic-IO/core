@@ -31,6 +31,7 @@
 #include <sax/tools/converter.hxx>
 #include <osl/diagnose.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/util/Date.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
@@ -112,14 +113,11 @@ namespace xmloff
         OUString sValue;
 
         // loop through all the properties which are yet to be exported
-        for (   StringSet::const_iterator aProperty = m_aRemainingProps.begin();
-                aProperty != m_aRemainingProps.end();
-                ++aProperty
-            )
+        for ( const auto& rProperty : m_aRemainingProps )
         {
-            DBG_CHECK_PROPERTY_NO_TYPE(*aProperty);
+            DBG_CHECK_PROPERTY_NO_TYPE(rProperty);
 
-            if ( !shouldExportProperty( *aProperty ) )
+            if ( !shouldExportProperty( rProperty ) )
                 continue;
 
             // now that we have the first sub-tag we need the form:properties element
@@ -127,10 +125,10 @@ namespace xmloff
                 pPropertiesTag = o3tl::make_unique<SvXMLElementExport>(m_rContext.getGlobalContext(), XML_NAMESPACE_FORM, token::XML_PROPERTIES, true, true);
 
             // add the name attribute
-            AddAttribute(XML_NAMESPACE_FORM, token::XML_PROPERTY_NAME, *aProperty);
+            AddAttribute(XML_NAMESPACE_FORM, token::XML_PROPERTY_NAME, rProperty);
 
             // get the value
-            aValue = m_xProps->getPropertyValue(*aProperty);
+            aValue = m_xProps->getPropertyValue(rProperty);
 
             // the type to export
             Type aExportType;
@@ -149,7 +147,7 @@ namespace xmloff
             if ( bIsEmptyValue )
             {
                 css::beans::Property aPropDesc;
-                aPropDesc = m_xPropertyInfo->getPropertyByName( *aProperty );
+                aPropDesc = m_xPropertyInfo->getPropertyByName( rProperty );
                 aExportType = aPropDesc.Type;
             }
             token::XMLTokenEnum eValueType = implGetPropertyXMLType( aExportType );
@@ -483,7 +481,7 @@ namespace xmloff
         Sequence< OUString > aItems;
         m_xProps->getPropertyValue( _rPropertyName ) >>= aItems;
 
-        OUString sFinalList;
+        OUStringBuffer sFinalList;
 
         // unfortunately the OUString can't append single sal_Unicode characters ...
         const OUString sQuote(&_aQuoteCharacter, 1);
@@ -503,17 +501,17 @@ namespace xmloff
                 "OPropertyExport::exportStringSequenceAttribute: there is an item which contains the quote character!");
 
             if (bQuote)
-                sFinalList += sQuote;
-            sFinalList += *pItems;
+                sFinalList.append(sQuote);
+            sFinalList.append(*pItems);
             if (bQuote)
-                sFinalList += sQuote;
+                sFinalList.append(sQuote);
 
             if (pItems != pLastElement)
-                sFinalList += sSeparator;
+                sFinalList.append(sSeparator);
         }
 
         if (!sFinalList.isEmpty())
-            AddAttribute(_nAttributeNamespaceKey, _pAttributeName, sFinalList);
+            AddAttribute(_nAttributeNamespaceKey, _pAttributeName, sFinalList.makeStringAndClear());
 
         exportedProperty( _rPropertyName );
     }

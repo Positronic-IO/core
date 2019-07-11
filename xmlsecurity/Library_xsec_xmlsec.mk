@@ -65,7 +65,6 @@ $(eval $(call gb_Library_add_exception_objects,xsec_xmlsec,\
 	xmlsecurity/source/xmlsec/xmlelementwrapper_xmlsecimpl \
 	xmlsecurity/source/xmlsec/xmlsec_init \
 	xmlsecurity/source/xmlsec/xmlstreamio \
-	xmlsecurity/source/xmlsec/xsec_xmlsec \
 	xmlsecurity/source/xmlsec/nss/ciphercontext \
 	xmlsecurity/source/xmlsec/nss/digestcontext \
 	xmlsecurity/source/xmlsec/nss/nssinitializer \
@@ -91,13 +90,14 @@ $(eval $(call gb_Library_add_defs,xsec_xmlsec,\
 ))
 
 $(eval $(call gb_Library_add_libs,xsec_xmlsec,\
-	$(call gb_UnpackedTarball_get_dir,xmlsec)/win32/binaries/libxmlsec-mscrypto.lib \
+	$(call gb_UnpackedTarball_get_dir,xmlsec)/win32/binaries/libxmlsec-mscng.lib \
 	$(call gb_UnpackedTarball_get_dir,xmlsec)/win32/binaries/libxmlsec.lib \
 ))
 
 $(eval $(call gb_Library_use_system_win32_libs,xsec_xmlsec,\
 	crypt32 \
 	advapi32 \
+	ncrypt \
 ))
 
 $(eval $(call gb_Library_add_exception_objects,xsec_xmlsec,\

@@ -25,6 +25,7 @@
 
 #include <comphelper/flagguard.hxx>
 
+#include <sal/log.hxx>
 #include <hintids.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/styledlg.hxx>
@@ -319,7 +320,7 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
                 sParent = static_cast<const SfxStringItem*>(pItem)->GetValue();
 
             if (sName.isEmpty() && m_xBasePool.get())
-                sName = SfxStyleDialog::GenerateUnusedName(*m_xBasePool);
+                sName = SfxStyleDialogController::GenerateUnusedName(*m_xBasePool);
 
             Edit(sName, sParent, nFamily, nMask, true, OString(), nullptr, &rReq, nSlot);
         }
@@ -381,10 +382,10 @@ void SwDocShell::ExecStyleSheet( SfxRequest& rReq )
                 {
                     case SID_STYLE_NEW_BY_EXAMPLE:
                     {
-                        VclPtrInstance<SfxNewStyleDlg> pDlg( nullptr, *GetStyleSheetPool());
-                        if(RET_OK == pDlg->Execute())
+                        SfxNewStyleDlg aDlg(GetView()->GetViewFrame()->GetWindow().GetFrameWeld(), *GetStyleSheetPool());
+                        if (aDlg.run() == RET_OK)
                         {
-                            aParam = pDlg->GetName();
+                            aParam = aDlg.GetName();
                             rReq.AppendItem(SfxStringItem(nSlot, aParam));
                         }
                     }
@@ -563,12 +564,12 @@ public:
     }
 private:
     SwDocShell &m_rDocSh;
-    bool m_bNew;
+    bool const m_bNew;
     rtl::Reference< SwDocStyleSheet > m_xTmp;
-    SfxStyleFamily m_nFamily;
+    SfxStyleFamily const m_nFamily;
     VclPtr<SfxAbstractApplyTabDialog> m_pDlg;
     rtl::Reference< SfxStyleSheetBasePool > m_xBasePool;
-    bool m_bModified;
+    bool const m_bModified;
 };
 
 IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
@@ -629,7 +630,7 @@ IMPL_LINK_NOARG(ApplyStyle, ApplyHdl, LinkParamNone*, void)
         pView->InvalidateRulerPos();
 
     if( m_bNew )
-        m_xBasePool->Broadcast( SfxStyleSheetHint( SfxHintId::StyleSheetCreated, *m_xTmp.get() ) );
+        m_xBasePool->Broadcast(SfxStyleSheetHint(SfxHintId::StyleSheetCreated, *m_xTmp));
 
     pDoc->getIDocumentState().SetModified();
     if( !m_bModified )
@@ -817,10 +818,8 @@ void SwDocShell::Edit(
         FieldUnit eMetric = ::GetDfltMetric(0 != (HTMLMODE_ON&nHtmlMode));
         SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric)));
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        assert( pFact );
-        ScopedVclPtr<SfxAbstractApplyTabDialog> pDlg(pFact->CreateTemplateDialog(&GetView()->GetViewFrame()->GetWindow(),
+        ScopedVclPtr<SfxAbstractApplyTabDialog> pDlg(pFact->CreateTemplateDialog(GetView()->GetViewFrame()->GetWindow().GetFrameWeld(),
                                                     *(xTmp.get()), nFamily, sPage, pCurrShell, bNew));
-        assert( pDlg );
         std::shared_ptr<ApplyStyle> pApplyStyleHelper(new ApplyStyle(*this, bNew, xTmp, nFamily, pDlg.get(), m_xBasePool, bModified));
         pDlg->SetApplyHdl(LINK(pApplyStyleHelper.get(), ApplyStyle, ApplyHdl));
 
@@ -831,7 +830,7 @@ void SwDocShell::Edit(
             pReq->Ignore(); // the 'old' request is not relevant any more
         }
 
-        pDlg->StartExecuteAsync([=](sal_Int32 nResult){
+        pDlg->StartExecuteAsync([bModified, bNew, nFamily, nSlot, nNewStyleUndoId, pApplyStyleHelper, pRequest, xTmp, this](sal_Int32 nResult){
             if (RET_OK == nResult)
                 pApplyStyleHelper->apply();
 
@@ -885,7 +884,7 @@ void SwDocShell::Edit(
             m_pView->InvalidateRulerPos();
 
         if( bNew )
-            m_xBasePool->Broadcast( SfxStyleSheetHint( SfxHintId::StyleSheetCreated, *xTmp.get() ) );
+            m_xBasePool->Broadcast(SfxStyleSheetHint(SfxHintId::StyleSheetCreated, *xTmp));
 
         m_xDoc->getIDocumentState().SetModified();
         if( !bModified )        // Bug 57028

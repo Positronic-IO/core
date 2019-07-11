@@ -22,10 +22,7 @@
 
 #include <unotools/configitem.hxx>
 #include <sfx2/module.hxx>
-#include <sfx2/app.hxx>
-#include <sfx2/sfxsids.hrc>
 #include <svx/optgrid.hxx>
-#include <svx/dlgutil.hxx>
 #include <sddllapi.h>
 #include <memory>
 
@@ -50,6 +47,11 @@ public:
 
     SdOptionsItem( const SdOptionsGeneric& rParent, const OUString& rSubTree );
     virtual ~SdOptionsItem() override;
+
+    SdOptionsItem(SdOptionsItem const &) = default;
+    SdOptionsItem(SdOptionsItem &&) = default;
+    SdOptionsItem & operator =(SdOptionsItem const &) = delete; // due to ConfigItem
+    SdOptionsItem & operator =(SdOptionsItem &&) = delete; // due to ConfigItem
 
     virtual void            Notify( const css::uno::Sequence<OUString>& aPropertyNames) override;
 

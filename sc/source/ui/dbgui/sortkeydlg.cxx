@@ -15,15 +15,10 @@
 ScSortKeyItem::ScSortKeyItem(weld::Container* pParent)
     : m_xBuilder(Application::CreateBuilder(pParent, "modules/scalc/ui/sortkey.ui"))
     , m_xFrame(m_xBuilder->weld_frame("SortKeyFrame", true))
-    , m_xLbSort(m_xBuilder->weld_combo_box_text("sortlb"))
+    , m_xLbSort(m_xBuilder->weld_combo_box("sortlb"))
     , m_xBtnUp(m_xBuilder->weld_radio_button("up"))
     , m_xBtnDown(m_xBuilder->weld_radio_button("down"))
 {
-}
-
-long ScSortKeyItem::getItemHeight() const
-{
-    return m_xFrame->get_preferred_size().Height();
 }
 
 void ScSortKeyItem::DisableField()
@@ -39,8 +34,6 @@ void ScSortKeyItem::EnableField()
 ScSortKeyWindow::ScSortKeyWindow(weld::Container* pBox)
     : m_pBox(pBox)
 {
-    ScSortKeyItem aTemp(m_pBox);
-    m_nItemHeight = aTemp.getItemHeight();
 }
 
 ScSortKeyWindow::~ScSortKeyWindow()

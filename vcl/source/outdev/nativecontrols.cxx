@@ -22,6 +22,8 @@
 #include <vcl/outdev.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/window.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <vcl/salnativewidgets.hxx>
 #include <vcl/pdfextoutdevdata.hxx>
@@ -49,6 +51,8 @@ static bool EnableNativeWidget( const OutputDevice& i_rDevice )
             }
         }
 
+    case OUTDEV_PDF:
+        SAL_FALLTHROUGH;
     case OUTDEV_VIRDEV:
     {
         const vcl::ExtOutDevData* pOutDevData( i_rDevice.GetExtOutDevData() );
@@ -159,9 +163,8 @@ bool OutputDevice::IsNativeControlSupported( ControlType nType, ControlPart nPar
     if( !EnableNativeWidget( *this ) )
         return false;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return false;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return false;
 
     return mpGraphics->IsNativeControlSupported(nType, nPart);
 }
@@ -175,9 +178,8 @@ bool OutputDevice::HitTestNativeScrollbar(
     if( !EnableNativeWidget( *this ) )
         return false;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return false;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return false;
 
     Point aWinOffs( mnOutOffX, mnOutOffY );
     tools::Rectangle screenRegion( rControlRegion );
@@ -279,9 +281,8 @@ bool OutputDevice::DrawNativeControl( ControlType nType,
         return false;
 
     // make sure the current clip region is initialized correctly
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return false;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return false;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -322,9 +323,8 @@ bool OutputDevice::GetNativeControlRegion(  ControlType nType,
     if( !EnableNativeWidget( *this ) )
         return false;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return false;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return false;
 
     // Convert the coordinates from relative to Window-absolute, so we draw
     // in the correct place in platform code

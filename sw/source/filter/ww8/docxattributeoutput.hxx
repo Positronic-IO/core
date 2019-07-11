@@ -66,6 +66,7 @@ enum DocxColBreakStatus
 {
     COLBRK_NONE,
     COLBRK_POSTPONE,
+    COLBRK_WRITEANDPOSTPONE,
     COLBRK_WRITE
 };
 
@@ -84,7 +85,6 @@ struct OutputBorderOptions
     sal_Int32           tag = 0;
     bool                bUseStartEnd = false;
     bool                bWriteTag = true;
-    bool                bWriteInsideHV = false;
     bool                bWriteDistance = false;
     SvxShadowLocation   aShadowLocation = SvxShadowLocation::NONE;
     std::shared_ptr<editeng::WordBorderDistances> pDistances;
@@ -268,7 +268,7 @@ public:
     virtual void SectionBreak( sal_uInt8 nC, const WW8_SepInfo* pSectionInfo = nullptr ) override;
 
     // preserve DOCX page vertical alignment
-    virtual void TextVerticalAdjustment( const css::drawing::TextVerticalAdjust ) SAL_OVERRIDE;
+    virtual void TextVerticalAdjustment( const css::drawing::TextVerticalAdjust ) override;
 
     /// Start of the section properties.
     virtual void StartSection() override;
@@ -354,6 +354,8 @@ public:
     /// End possibly opened paragraph sdt block.
     void EndParaSdtBlock();
 
+    void WriteFloatingTable(ww8::Frame const* pParentFrame);
+
 private:
     /// Initialize the structures where we are going to collect some of the paragraph properties.
     ///
@@ -392,14 +394,11 @@ private:
     void WriteOLE2Obj( const SdrObject* pSdrObj, SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* pFlyFrameFormat);
     bool WriteOLEChart( const SdrObject* pSdrObj, const Size& rSize );
     bool WriteOLEMath( const SwOLENode& rNode );
-    bool PostponeOLE( SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* pFlyFrameFormat );
+    void PostponeOLE( SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* pFlyFrameFormat );
     void WriteOLE( SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* rFlyFrameFormat );
 
     void WriteActiveXControl(const SdrObject* pObject, const SwFrameFormat& rFrameFormat, bool bInsideRun);
     bool ExportAsActiveXControl(const SdrObject* pObject) const;
-
-    /// checks whether the current component is a diagram
-    static bool IsDiagram (const SdrObject* sdrObject);
 
     void InitTableHelper( ww8::WW8TableNodeInfoInner::Pointer_t const & pTableTextNodeInfoInner );
     void StartTable( ww8::WW8TableNodeInfoInner::Pointer_t const & pTableTextNodeInfoInner );
@@ -826,6 +825,7 @@ private:
     bool m_bPostponedPageBreak;
 
     std::vector<ww8::Frame> m_aFramesOfParagraph;
+    std::set<const SwFrameFormat*> m_aFloatingTablesOfParagraph;
     sal_Int32 m_nTextFrameLevel;
 
     // close of hyperlink needed
@@ -841,13 +841,11 @@ private:
 
     struct PostponedGraphic
     {
-        PostponedGraphic( const SwGrfNode* n, Size s, const SwFlyFrameFormat* pOLEFrameFormat, SwOLENode* pOLENode, const SdrObject* sObj )
-            : grfNode( n ), size( s ), mOLEFrameFormat( pOLEFrameFormat ), mOLENode( pOLENode ), pSdrObj(sObj) {};
+        PostponedGraphic( const SwGrfNode* n, Size s, const SdrObject* sObj )
+            : grfNode( n ), size( s ), pSdrObj(sObj) {};
 
         const SwGrfNode* grfNode;
-        Size size;
-        const SwFlyFrameFormat* mOLEFrameFormat;
-        SwOLENode* mOLENode;
+        Size const size;
         const SdrObject* pSdrObj;
     };
     std::unique_ptr< std::vector<PostponedGraphic> > m_pPostponedGraphic;
@@ -880,8 +878,7 @@ private:
     std::vector<const SwOLENode*> m_aPostponedMaths;
     /// count charts consistently for unit tests
     unsigned int m_nChartCount;
-    const SdrObject* m_postponedChart;
-    Size m_postponedChartSize;
+    std::vector<std::pair<const SdrObject*, Size>> m_aPostponedCharts;
     std::vector<const SdrObject*> m_aPostponedFormControls;
     std::vector<PostponedDrawing> m_aPostponedActiveXControls;
     const SwField* pendingPlaceholder;

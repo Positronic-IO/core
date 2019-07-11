@@ -22,6 +22,7 @@
 #include <tools/urlobj.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <unotools/pathoptions.hxx>
@@ -48,6 +49,7 @@
 #include <com/sun/star/io/TempFile.hpp>
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/NameClash.hpp>
 #include <com/sun/star/ucb/NameClashException.hpp>
 #include <com/sun/star/ucb/TransferInfo.hpp>
@@ -133,7 +135,7 @@ class WaitWindow_Impl : public WorkWindow
 {
     tools::Rectangle     maRect;
     OUString      maText;
-    const DrawTextFlags mnTextStyle = DrawTextFlags::Center | DrawTextFlags::VCenter | DrawTextFlags::WordBreak | DrawTextFlags::MultiLine;
+    static constexpr DrawTextFlags gnTextStyle = DrawTextFlags::Center | DrawTextFlags::VCenter | DrawTextFlags::WordBreak | DrawTextFlags::MultiLine;
 
 public:
     WaitWindow_Impl();
@@ -200,7 +202,7 @@ class SfxDocTplService_Impl
     bool                        needsUpdate();
     OUString                    getLongName( const OUString& rShortName );
     bool                    setTitleForURL( const OUString& rURL, const OUString& aTitle );
-    bool                    getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle );
+    void                    getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle );
 
     bool                    addEntry( Content& rParentFolder,
                                           const OUString& rTitle,
@@ -475,7 +477,7 @@ void SfxDocTplService_Impl::getDefaultLocale()
         ::osl::MutexGuard aGuard( maMutex );
         if ( !mbLocaleSet )
         {
-            maLocale = LanguageTag::convertToLocale( utl::ConfigManager::getLocale(), false);
+            maLocale = LanguageTag::convertToLocale( utl::ConfigManager::getUILocale(), false);
             mbLocaleSet = true;
         }
     }
@@ -641,7 +643,7 @@ bool SfxDocTplService_Impl::setTitleForURL( const OUString& rURL, const OUString
 }
 
 
-bool SfxDocTplService_Impl::getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle )
+void SfxDocTplService_Impl::getTitleFromURL( const OUString& rURL, OUString& aTitle, OUString& aType, bool& bDocHasTitle )
 {
     bDocHasTitle = false;
 
@@ -682,8 +684,6 @@ bool SfxDocTplService_Impl::getTitleFromURL( const OUString& rURL, OUString& aTi
     }
     else
         bDocHasTitle = true;
-
-    return true;
 }
 
 
@@ -1908,8 +1908,7 @@ bool SfxDocTplService_Impl::addTemplate( const OUString& rGroupName,
     OUString aTitle, aType;
 
     bool bDocHasTitle = false;
-    if( !getTitleFromURL( rSourceURL, aTitle, aType, bDocHasTitle ) )
-        return false;
+    getTitleFromURL( rSourceURL, aTitle, aType, bDocHasTitle );
 
     INetURLObject   aSourceObj( rSourceURL );
     if ( rTemplateName == aTitle )
@@ -1957,12 +1956,11 @@ bool SfxDocTplService_Impl::addTemplate( const OUString& rGroupName,
     // transfer source file
     try
     {
-        if( ! aTargetGroup.transferContent( aSourceContent,
-                                                InsertOperation::Copy,
-                                                aNewTemplateTargetName,
-                                                NameClash::OVERWRITE,
-                                                aType ) )
-            return false;
+        aTargetGroup.transferContent( aSourceContent,
+                                      InsertOperation::Copy,
+                                      aNewTemplateTargetName,
+                                      NameClash::OVERWRITE,
+                                      aType );
 
         // allow to edit the added template
         Content aResultContent;
@@ -2285,7 +2283,7 @@ WaitWindow_Impl::WaitWindow_Impl() : WorkWindow(nullptr, WB_BORDER | WB_3DLOOK)
 {
     tools::Rectangle aRect = tools::Rectangle(0, 0, 300, 30000);
     maText = SfxResId(RID_CNT_STR_WAITING);
-    maRect = GetTextRect(aRect, maText, mnTextStyle);
+    maRect = GetTextRect(aRect, maText, gnTextStyle);
     aRect = maRect;
     aRect.AdjustRight(2 * X_OFFSET );
     aRect.AdjustBottom(2 * Y_OFFSET );
@@ -2312,7 +2310,7 @@ void  WaitWindow_Impl::dispose()
 
 void WaitWindow_Impl::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*rRect*/)
 {
-    rRenderContext.DrawText(maRect, maText, mnTextStyle);
+    rRenderContext.DrawText(maRect, maText, gnTextStyle);
 }
 
 void SfxDocTplService_Impl::addHierGroup( GroupList_Impl& rList,
@@ -2366,11 +2364,7 @@ void SfxDocTplService_Impl::addHierGroup( GroupList_Impl& rList,
                     OUString aTmpTitle;
 
                     bool bDocHasTitle = false;
-                    if( !getTitleFromURL( aTargetDir, aTmpTitle, aType, bDocHasTitle ) )
-                    {
-                        SAL_WARN( "sfx.doc", "addHierGroup(): template of alien format" );
-                        continue;
-                    }
+                    getTitleFromURL( aTargetDir, aTmpTitle, aType, bDocHasTitle );
 
                     if ( !aType.isEmpty() )
                         bUpdateType = true;
@@ -2462,8 +2456,7 @@ void SfxDocTplService_Impl::addFsysGroup( GroupList_Impl& rList,
                     continue;
 
                 bool bDocHasTitle = false;
-                if( !getTitleFromURL( aTargetURL, aChildTitle, aType, bDocHasTitle ) )
-                    continue;
+                getTitleFromURL( aTargetURL, aChildTitle, aType, bDocHasTitle );
 
                 pGroup->addEntry( aChildTitle, aTargetURL, aType, OUString() );
             }

@@ -123,7 +123,7 @@ void SbRtl_CallByName(StarBASIC *, SbxArray & rPar, bool)
     SbxObject* pObj = nullptr;
     if( pObjVar )
         pObj = dynamic_cast<SbxObject*>( pObjVar );
-    if( !pObj && pObjVar && dynamic_cast<const SbxVariable*>( pObjVar) != nullptr )
+    if( !pObj && dynamic_cast<const SbxVariable*>( pObjVar) )
     {
         SbxBase* pObjVarObj = static_cast<SbxVariable*>(pObjVar)->GetObject();
         pObj = dynamic_cast<SbxObject*>( pObjVarObj );
@@ -864,7 +864,7 @@ void SbRtl_FindPropertyObject(StarBASIC *, SbxArray & rPar, bool)
     {
         pObj = dynamic_cast<SbxObject*>( pObjVar );
     }
-    if( !pObj && pObjVar && dynamic_cast<const SbxVariable*>( pObjVar) != nullptr )
+    if( !pObj && dynamic_cast<const SbxVariable*>( pObjVar) )
     {
         SbxBase* pObjVarObj = static_cast<SbxVariable*>(pObjVar)->GetObject();
         pObj = dynamic_cast<SbxObject*>( pObjVarObj );
@@ -1127,7 +1127,7 @@ static bool lcl_WriteReadSbxArray( SbxDimArray& rArr, SvStream* pStrm,
     return true;
 }
 
-void PutGet( SbxArray& rPar, bool bPut )
+static void PutGet( SbxArray& rPar, bool bPut )
 {
     if ( rPar.Count() != 4 )
     {
@@ -1550,20 +1550,20 @@ void SbRtl_Join(StarBASIC *, SbxArray & rPar, bool)
         {
             aDelim = " ";
         }
-        OUString aRetStr;
+        OUStringBuffer aRetStr;
         short nLower, nUpper;
         pArr->GetDim( 1, nLower, nUpper );
         short aIdx[1];
         for (aIdx[0] = nLower; aIdx[0] <= nUpper; ++aIdx[0])
         {
             OUString aStr = pArr->Get(aIdx)->GetOUString();
-            aRetStr += aStr;
+            aRetStr.append(aStr);
             if (aIdx[0] != nUpper)
             {
-                aRetStr += aDelim;
+                aRetStr.append(aDelim);
             }
         }
-        rPar.Get(0)->PutString( aRetStr );
+        rPar.Get(0)->PutString( aRetStr.makeStringAndClear() );
     }
     else
     {
@@ -1671,7 +1671,7 @@ void SbRtl_MonthName(StarBASIC *, SbxArray & rPar, bool)
         return;
     }
 
-    Reference< XCalendar4 > xCalendar = getLocaleCalendar();
+    const Reference< XCalendar4 >& xCalendar = getLocaleCalendar();
     if( !xCalendar.is() )
     {
         StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
@@ -1708,7 +1708,7 @@ void SbRtl_WeekdayName(StarBASIC *, SbxArray & rPar, bool)
         return;
     }
 
-    Reference< XCalendar4 > xCalendar = getLocaleCalendar();
+    const Reference< XCalendar4 >& xCalendar = getLocaleCalendar();
     if( !xCalendar.is() )
     {
         StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
@@ -1802,7 +1802,7 @@ struct IntervalInfo
     bool        mbSimple;
 };
 
-IntervalInfo const * getIntervalInfo( const OUString& rStringCode )
+static IntervalInfo const * getIntervalInfo( const OUString& rStringCode )
 {
     static IntervalInfo const aIntervalTable[] =
     {
@@ -1828,7 +1828,7 @@ IntervalInfo const * getIntervalInfo( const OUString& rStringCode )
     return nullptr;
 }
 
-inline void implGetDayMonthYear( sal_Int16& rnYear, sal_Int16& rnMonth, sal_Int16& rnDay, double dDate )
+static void implGetDayMonthYear( sal_Int16& rnYear, sal_Int16& rnMonth, sal_Int16& rnDay, double dDate )
 {
     rnDay   = implGetDateDay( dDate );
     rnMonth = implGetDateMonth( dDate );
@@ -1840,7 +1840,7 @@ inline void implGetDayMonthYear( sal_Int16& rnYear, sal_Int16& rnMonth, sal_Int1
     @return the year number, truncated if necessary and in that case also
             rMonth and rDay adjusted.
  */
-inline sal_Int16 limitDate( sal_Int32 n32Year, sal_Int16& rMonth, sal_Int16& rDay )
+static sal_Int16 limitDate( sal_Int32 n32Year, sal_Int16& rMonth, sal_Int16& rDay )
 {
     if( n32Year > SAL_MAX_INT16 )
     {
@@ -1957,7 +1957,7 @@ void SbRtl_DateAdd(StarBASIC *, SbxArray & rPar, bool)
     rPar.Get(0)->PutDate( dNewDate );
 }
 
-inline double RoundImpl( double d )
+static double RoundImpl( double d )
 {
     return ( d >= 0 ) ? floor( d + 0.5 ) : -floor( -d + 0.5 );
 }
@@ -2042,7 +2042,7 @@ void SbRtl_DateDiff(StarBASIC *, SbxArray & rPar, bool)
                     }
                     if( nFirstDay == 0 )
                     {
-                        Reference< XCalendar4 > xCalendar = getLocaleCalendar();
+                        const Reference< XCalendar4 >& xCalendar = getLocaleCalendar();
                         if( !xCalendar.is() )
                         {
                             StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
@@ -2087,7 +2087,7 @@ void SbRtl_DateDiff(StarBASIC *, SbxArray & rPar, bool)
     rPar.Get(0)->PutDouble( dRet );
 }
 
-double implGetDateOfFirstDayInFirstWeek
+static double implGetDateOfFirstDayInFirstWeek
     ( sal_Int16 nYear, sal_Int16& nFirstDay, sal_Int16& nFirstWeek, bool* pbError = nullptr )
 {
     ErrCode nError = ERRCODE_NONE;
@@ -2292,7 +2292,7 @@ void SbRtl_FormatDateTime(StarBASIC *, SbxArray & rPar, bool)
         }
     }
 
-    Reference< XCalendar4 > xCalendar = getLocaleCalendar();
+    const Reference< XCalendar4 >& xCalendar = getLocaleCalendar();
     if( !xCalendar.is() )
     {
         StarBASIC::Error( ERRCODE_BASIC_INTERNAL_ERROR );
@@ -2438,7 +2438,7 @@ void SbRtl_Round(StarBASIC *, SbxArray & rPar, bool)
     rPar.Get(0)->PutDouble( dRes );
 }
 
-void CallFunctionAccessFunction( const Sequence< Any >& aArgs, const OUString& sFuncName, SbxVariable* pRet )
+static void CallFunctionAccessFunction( const Sequence< Any >& aArgs, const OUString& sFuncName, SbxVariable* pRet )
 {
     static Reference< XFunctionAccess > xFunc;
     try
@@ -3053,7 +3053,7 @@ sal_Int16 implGetWeekDay( double aDate, bool bFirstDayParam, sal_Int16 nFirstDay
         }
         if( nFirstDay == 0 )
         {
-            Reference< XCalendar4 > xCalendar = getLocaleCalendar();
+            const Reference< XCalendar4 >& xCalendar = getLocaleCalendar();
             if( !xCalendar.is() )
             {
 #if HAVE_FEATURE_SCRIPTING

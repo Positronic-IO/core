@@ -20,22 +20,19 @@
 #ifndef INCLUDED_CUI_SOURCE_INC_CUIGRFFLT_HXX
 #define INCLUDED_CUI_SOURCE_INC_CUIGRFFLT_HXX
 
-#include <vcl/fixed.hxx>
-#include <vcl/field.hxx>
-#include <vcl/button.hxx>
-#include <vcl/timer.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/group.hxx>
 #include <tools/helpers.hxx>
 #include <vcl/GraphicObject.hxx>
+#include <vcl/timer.hxx>
 #include <svx/graphctl.hxx>
 #include <svx/dlgctrl.hxx>
 #include <svx/rectenum.hxx>
 
-class GraphicPreviewWindow : public Control
+class CuiGraphicPreviewWindow : public weld::CustomWidgetController
 {
 private:
     const Graphic* mpOrigGraphic;
+    Size maOrigGraphicSizePixel;
+    Size maOutputSizePixel;
     Link<LinkParamNone*,void>    maModifyHdl;
     Graphic   maScaledOrig;
     Graphic   maPreview;
@@ -44,17 +41,18 @@ private:
 
     virtual void Paint(vcl::RenderContext& rRenderContext, const ::tools::Rectangle& rRect) override;
     virtual void Resize() override;
-    virtual Size GetOptimalSize() const override;
 
     void ScaleImageToFit();
 
 public:
-
-    GraphicPreviewWindow(vcl::Window* pParent, WinBits nStyle);
+    CuiGraphicPreviewWindow();
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
     void init(const Graphic* pOrigGraphic, const Link<LinkParamNone*,void>& rLink)
     {
         mpOrigGraphic = pOrigGraphic;
         maModifyHdl = rLink;
+        maOrigGraphicSizePixel = GetDrawingArea()->get_ref_device().LogicToPixel(mpOrigGraphic->GetPrefSize(),
+                                                                                 mpOrigGraphic->GetPrefMapMode());
         ScaleImageToFit();
     }
 
@@ -62,112 +60,96 @@ public:
     const Graphic&  GetScaledOriginal() const { return maScaledOrig; }
     double          GetScaleX() const { return mfScaleX; }
     double          GetScaleY() const { return mfScaleY; }
+    const Size&     GetGraphicSizePixel() const { return maOrigGraphicSizePixel; }
 };
 
-class GraphicFilterDialog : public ModalDialog
+class GraphicFilterDialog : public weld::GenericDialogController
 {
 private:
 
     Timer           maTimer;
     Link<LinkParamNone*,void> maModifyHdl;
-    Size            maSizePixel;
     bool            bIsBitmap;
 
     DECL_LINK( ImplPreviewTimeoutHdl, Timer *, void );
     DECL_LINK( ImplModifyHdl, LinkParamNone*, void);
 
 protected:
-    VclPtr<GraphicPreviewWindow>  mpPreview;
+    CuiGraphicPreviewWindow  maPreview;
+    std::unique_ptr<weld::CustomWeld> mxPreview;
 
     const Link<LinkParamNone*,void>&   GetModifyHdl() const { return maModifyHdl; }
-    const Size&     GetGraphicSizePixel() const { return maSizePixel; }
+    const Size& GetGraphicSizePixel() const { return maPreview.GetGraphicSizePixel(); }
 
 public:
 
-    GraphicFilterDialog(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, const Graphic& rGraphic);
-    virtual ~GraphicFilterDialog() override;
-    virtual void dispose() override;
-
-    virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) = 0;
+    GraphicFilterDialog(weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID, const Graphic& rGraphic);
+    virtual Graphic GetFilteredGraphic(const Graphic& rGraphic, double fScaleX, double fScaleY) = 0;
 };
 
 class GraphicFilterSmooth : public GraphicFilterDialog
 {
 private:
-    VclPtr<NumericField>   mpMtrRadius;
-    DECL_LINK(EditModifyHdl, Edit&, void);
+    std::unique_ptr<weld::SpinButton> mxMtrRadius;
+    DECL_LINK(EditModifyHdl, weld::SpinButton&, void);
 
 public:
 
-    GraphicFilterSmooth( vcl::Window* pParent, const Graphic& rGraphic, double nRadius);
-    virtual ~GraphicFilterSmooth() override;
-    virtual void dispose() override;
-
+    GraphicFilterSmooth(weld::Window* pParent, const Graphic& rGraphic, double nRadius);
     virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
 };
 
 class GraphicFilterMosaic : public GraphicFilterDialog
 {
 private:
-    VclPtr<MetricField>    mpMtrWidth;
-    VclPtr<MetricField>    mpMtrHeight;
-    VclPtr<CheckBox>       mpCbxEdges;
-    DECL_LINK(CheckBoxModifyHdl, CheckBox&, void);
-    DECL_LINK(EditModifyHdl, Edit&, void);
+    std::unique_ptr<weld::MetricSpinButton> mxMtrWidth;
+    std::unique_ptr<weld::MetricSpinButton> mxMtrHeight;
+    std::unique_ptr<weld::CheckButton> mxCbxEdges;
+    DECL_LINK(CheckBoxModifyHdl, weld::ToggleButton&, void);
+    DECL_LINK(EditModifyHdl, weld::MetricSpinButton&, void);
 public:
 
-    GraphicFilterMosaic(vcl::Window* pParent, const Graphic& rGraphic,
+    GraphicFilterMosaic(weld::Window* pParent, const Graphic& rGraphic,
         sal_uInt16 nTileWidth, sal_uInt16 nTileHeight, bool bEnhanceEdges);
-    virtual ~GraphicFilterMosaic() override;
-    virtual void dispose() override;
 
     virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
-    bool            IsEnhanceEdges() const { return mpCbxEdges->IsChecked(); }
+    bool            IsEnhanceEdges() const { return mxCbxEdges->get_active(); }
 };
 
 class GraphicFilterSolarize : public GraphicFilterDialog
 {
 private:
-    VclPtr<MetricField>    mpMtrThreshold;
-    VclPtr<CheckBox>       mpCbxInvert;
-    DECL_LINK(CheckBoxModifyHdl, CheckBox&, void);
-    DECL_LINK(EditModifyHdl, Edit&, void);
+    std::unique_ptr<weld::MetricSpinButton> mxMtrThreshold;
+    std::unique_ptr<weld::CheckButton> mxCbxInvert;
+    DECL_LINK(CheckBoxModifyHdl, weld::ToggleButton&, void);
+    DECL_LINK(EditModifyHdl, weld::MetricSpinButton&, void);
 
 public:
-
-    GraphicFilterSolarize( vcl::Window* pParent, const Graphic& rGraphic,
-                                           sal_uInt8 nGreyThreshold, bool bInvert );
-    virtual ~GraphicFilterSolarize() override;
-    virtual void dispose() override;
-
-    virtual Graphic     GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
-    bool            IsInvert() const { return mpCbxInvert->IsChecked(); }
+    GraphicFilterSolarize(weld::Window* pParent, const Graphic& rGraphic,
+                          sal_uInt8 nGreyThreshold, bool bInvert);
+    virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
+    bool            IsInvert() const { return mxCbxInvert->get_active(); }
 };
 
 class GraphicFilterSepia : public GraphicFilterDialog
 {
 private:
-    VclPtr<MetricField>    mpMtrSepia;
-    DECL_LINK(EditModifyHdl, Edit&, void);
+    std::unique_ptr<weld::MetricSpinButton> mxMtrSepia;
+    DECL_LINK(EditModifyHdl, weld::MetricSpinButton&, void);
 public:
-    GraphicFilterSepia( vcl::Window* pParent, const Graphic& rGraphic,
-                        sal_uInt16 nSepiaPercent );
-    virtual ~GraphicFilterSepia() override;
-    virtual void dispose() override;
+    GraphicFilterSepia(weld::Window* pParent, const Graphic& rGraphic,
+                       sal_uInt16 nSepiaPercent);
     virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
 };
 
 class GraphicFilterPoster : public GraphicFilterDialog
 {
 private:
-    VclPtr<NumericField>   mpNumPoster;
-    DECL_LINK(EditModifyHdl, Edit&, void);
+    std::unique_ptr<weld::SpinButton> mxNumPoster;
+    DECL_LINK(EditModifyHdl, weld::SpinButton&, void);
 public:
-    GraphicFilterPoster( vcl::Window* pParent, const Graphic& rGraphic,
-                         sal_uInt16 nPosterColorCount );
-    virtual ~GraphicFilterPoster() override;
-    virtual void dispose() override;
-
+    GraphicFilterPoster(weld::Window* pParent, const Graphic& rGraphic,
+                        sal_uInt16 nPosterColorCount);
     virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
 };
 
@@ -175,11 +157,13 @@ class EmbossControl : public SvxRectCtl
 {
 private:
     Link<LinkParamNone*, void> maModifyHdl;
-    virtual void    MouseButtonDown( const MouseEvent& rEvt ) override;
-    virtual Size    GetOptimalSize() const override;
+    virtual void MouseButtonDown( const MouseEvent& rEvt ) override;
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
 public:
-    EmbossControl(vcl::Window* pParent)
-        : SvxRectCtl(pParent) {}
+    EmbossControl()
+        : SvxRectCtl(nullptr)
+    {
+    }
 
     void            SetModifyHdl( const Link<LinkParamNone*,void>& rHdl ) { maModifyHdl = rHdl; }
 };
@@ -187,14 +171,14 @@ public:
 class GraphicFilterEmboss : public GraphicFilterDialog
 {
 private:
-    VclPtr<EmbossControl>  mpCtlLight;
+    EmbossControl  maCtlLight;
+    std::unique_ptr<weld::CustomWeld> mxCtlLight;
 public:
-    GraphicFilterEmboss( vcl::Window* pParent, const Graphic& rGraphic,
-                         RectPoint eLightSource );
+    GraphicFilterEmboss(weld::Window* pParent, const Graphic& rGraphic,
+                        RectPoint eLightSource);
     virtual ~GraphicFilterEmboss() override;
-    virtual void dispose() override;
 
-    virtual Graphic GetFilteredGraphic( const Graphic& rGraphic, double fScaleX, double fScaleY ) override;
+    virtual Graphic GetFilteredGraphic(const Graphic& rGraphic, double fScaleX, double fScaleY) override;
 };
 
 #endif

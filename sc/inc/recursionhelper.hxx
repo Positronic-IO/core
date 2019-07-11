@@ -23,14 +23,15 @@
 #include "formularesult.hxx"
 
 #include <list>
+#include <vector>
 #include <stack>
 
 class ScFormulaCell;
 
 struct ScFormulaRecursionEntry
 {
-    ScFormulaCell*  pCell;
-    bool            bOldRunning;
+    ScFormulaCell* const  pCell;
+    bool const            bOldRunning;
     ScFormulaResult aPreviousResult;
     ScFormulaRecursionEntry(
         ScFormulaCell* p, bool bR, const ScFormulaResult & rRes ) :
@@ -44,16 +45,21 @@ typedef ::std::list< ScFormulaRecursionEntry > ScFormulaRecursionList;
 class ScRecursionHelper
 {
     typedef ::std::stack< ScFormulaCell* >  ScRecursionInIterationStack;
+    typedef ::std::vector< ScFormulaCell* > ScFGList;
     ScFormulaRecursionList              aRecursionFormulas;
     ScFormulaRecursionList::iterator    aInsertPos;
     ScFormulaRecursionList::iterator    aLastIterationStart;
     ScRecursionInIterationStack         aRecursionInIterationStack;
+    ScFGList                            aFGList;
     sal_uInt16                              nRecursionCount;
     sal_uInt16                              nIteration;
+    // Count of ScFormulaCell::CheckComputeDependencies in current call-stack.
+    sal_uInt16                              nDependencyComputationLevel;
     bool                                bInRecursionReturn;
     bool                                bDoingRecursion;
     bool                                bInIterationReturn;
     bool                                bConverging;
+    std::vector< ScFormulaCell* >       aTemporaryGroupCells;
 
     void Init();
     void ResetIteration();
@@ -64,6 +70,9 @@ public:
     sal_uInt16  GetRecursionCount() const       { return nRecursionCount; }
     void    IncRecursionCount()             { ++nRecursionCount; }
     void    DecRecursionCount()             { --nRecursionCount; }
+    sal_uInt16 GetDepComputeLevel()         { return nDependencyComputationLevel; }
+    void    IncDepComputeLevel()            { ++nDependencyComputationLevel; }
+    void    DecDepComputeLevel()            { --nDependencyComputationLevel; }
     /// A pure recursion return, no iteration.
     bool    IsInRecursionReturn() const     { return bInRecursionReturn &&
         !bInIterationReturn; }
@@ -94,6 +103,37 @@ public:
     ScRecursionInIterationStack&    GetRecursionInIterationStack()  { return aRecursionInIterationStack; }
 
     void Clear();
+
+    /** Detects a simple cycle involving formula-groups and singleton formula-cells. */
+    bool PushFormulaGroup(ScFormulaCell* pCell);
+    void PopFormulaGroup();
+    bool AnyParentFGInCycle();
+
+    void AddTemporaryGroupCell(ScFormulaCell* cell);
+    void CleanTemporaryGroupCells();
+};
+
+/** A class to wrap ScRecursionHelper::PushFormulaGroup(),
+    ScRecursionHelper::PopFormulaGroup() and make these calls
+    exception safe. */
+class ScFormulaGroupCycleCheckGuard
+{
+    ScRecursionHelper& mrRecHelper;
+    bool mbShouldPop;
+public:
+    ScFormulaGroupCycleCheckGuard() = delete;
+    ScFormulaGroupCycleCheckGuard(ScRecursionHelper& rRecursionHelper, ScFormulaCell* pCell);
+    ~ScFormulaGroupCycleCheckGuard();
+
+};
+
+class ScFormulaGroupDependencyComputeGuard
+{
+    ScRecursionHelper& mrRecHelper;
+public:
+    ScFormulaGroupDependencyComputeGuard() = delete;
+    ScFormulaGroupDependencyComputeGuard(ScRecursionHelper& rRecursionHelper);
+    ~ScFormulaGroupDependencyComputeGuard();
 };
 
 #endif // INCLUDED_SC_INC_RECURSIONHELPER_HXX

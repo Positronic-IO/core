@@ -12,6 +12,7 @@
 #define INCLUDED_VCL_BITMAPGAUSSIANSEPARABLEBLURFILTER_HXX
 
 #include <vcl/BitmapFilter.hxx>
+#include <vector>
 
 class BitmapEx;
 
@@ -30,19 +31,20 @@ public:
         Separable Blur implementation uses 2x separable 1D convolution
         to process the image.
     */
-    virtual BitmapEx execute(BitmapEx const& rBitmapEx) override;
+    virtual BitmapEx execute(BitmapEx const& rBitmapEx) const override;
 
 private:
-    double mfRadius;
+    double const mfRadius;
 
-    bool convolutionPass(Bitmap& rBitmap, Bitmap& aNewBitmap, BitmapReadAccess const* pReadAcc,
-                         int aNumberOfContributions, const double* pWeights, int const* pPixels,
-                         const int* pCount);
+    static bool convolutionPass(Bitmap& rBitmap, Bitmap& aNewBitmap,
+                                BitmapReadAccess const* pReadAcc, int aNumberOfContributions,
+                                const double* pWeights, int const* pPixels, const int* pCount);
 
-    static double* makeBlurKernel(const double radius, int& rows);
+    static std::vector<double> makeBlurKernel(const double radius, int& rows);
     static void blurContributions(const int aSize, const int aNumberOfContributions,
-                                  const double* pBlurVector, double*& pWeights, int*& pPixels,
-                                  int*& pCount);
+                                  const std::vector<double>& rBlurVector,
+                                  std::vector<double>& rWeights, std::vector<int>& rPixels,
+                                  std::vector<int>& rCounts);
 };
 
 #endif

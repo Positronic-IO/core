@@ -26,6 +26,7 @@
 #include <brdcst.hxx>
 #include <rangenam.hxx>
 #include <sc.hrc>
+#include <unotools/charclass.hxx>
 
 using namespace formula;
 
@@ -229,7 +230,7 @@ void ScServerObject::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
             bDataChanged = true;
         else if (const ScAreaChangedHint *pChgHint = dynamic_cast<const ScAreaChangedHint*>(&rHint))      // position of broadcaster changed
         {
-            ScRange aNewRange = pChgHint->GetRange();
+            const ScRange& aNewRange = pChgHint->GetRange();
             if ( aRange != aNewRange )
             {
                 bRefreshListener = true;

@@ -23,13 +23,9 @@
 
 #include <sal/log.hxx>
 #include <vcl/font.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/combobox.hxx>
-#include <vcl/lstbox.hxx>
 #include <vcl/weld.hxx>
 #include <tools/fract.hxx>
 #include <deque>
-
 
 inline long SmPtsTo100th_mm(long nNumPts)
     // returns the length (in 100th of mm) that corresponds to the length
@@ -137,12 +133,12 @@ public:
 class SmFontPickListBox final : public SmFontPickList
 {
 private:
-    std::unique_ptr<weld::ComboBoxText> m_xWidget;
+    std::unique_ptr<weld::ComboBox> m_xWidget;
 
-    DECL_LINK(SelectHdl, weld::ComboBoxText&, void);
+    DECL_LINK(SelectHdl, weld::ComboBox&, void);
 
 public:
-    SmFontPickListBox(weld::ComboBoxText* pWidget);
+    SmFontPickListBox(std::unique_ptr<weld::ComboBox> pWidget);
     SmFontPickListBox& operator = (const SmFontPickList& rList);
     virtual void    Insert(const vcl::Font &rFont) override;
 };

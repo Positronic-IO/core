@@ -20,6 +20,8 @@
 #include <config_features.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <cassert>
 #include <cstdlib>
@@ -29,7 +31,6 @@
 
 #include <compiler.hxx>
 #include <document.hxx>
-#include <globalnames.hxx>
 #include <cellvalue.hxx>
 #include <interpre.hxx>
 #include <macromgr.hxx>
@@ -52,11 +53,8 @@
 #include <editeng/editobj.hxx>
 #include <tools/cpuid.hxx>
 #include <formula/errorcodes.hxx>
-#include <formula/vectortoken.hxx>
 #include <svl/intitem.hxx>
 #include <o3tl/make_unique.hxx>
-#include <rtl/strbuf.hxx>
-#include <officecfg/Office/Calc.hxx>
 #include <formulagroup.hxx>
 #include <listenercontext.hxx>
 #include <types.hxx>
@@ -68,6 +66,7 @@
 #include <listenerqueryids.hxx>
 #include <grouparealistener.hxx>
 #include <formulalogger.hxx>
+#include <com/sun/star/sheet/FormulaLanguage.hpp>
 
 #if HAVE_FEATURE_OPENCL
 #include <opencl/openclwrapper.hxx>
@@ -75,10 +74,9 @@
 
 #include <memory>
 #include <map>
+#include <vector>
 
 using namespace formula;
-
-IMPL_FIXEDMEMPOOL_NEWDEL( ScFormulaCell )
 
 #define DEBUG_CALCULATION 0
 #if DEBUG_CALCULATION
@@ -158,10 +156,10 @@ static struct DebugCalculation
             mvPos.back().maResult = rtl::math::doubleToUString( fVal, rtl_math_StringFormat_G, 2, '.', true);
     }
 
-    void storeResultError( const sal_uInt16& nErr )
+    void storeResultError( FormulaError nErr )
     {
         if (mbActive && !mvPos.empty())
-            mvPos.back().maResult = "Err:" + OUString::number( nErr);
+            mvPos.back().maResult = "Err:" + OUString::number( int( nErr ));
     }
 
     void enterGroup()
@@ -230,8 +228,6 @@ namespace {
 // Allow for a year's calendar (366).
 const sal_uInt16 MAXRECURSION = 400;
 
-using std::deque;
-
 typedef SCCOLROW(*DimensionSelector)(const ScAddress&, const ScSingleRefData&);
 
 SCCOLROW lcl_GetCol(const ScAddress& rPos, const ScSingleRefData& rData)
@@ -286,11 +282,11 @@ lcl_checkRangeDimensions(
 bool
 lcl_checkRangeDimensions(
     const ScAddress& rPos,
-    const deque<formula::FormulaToken*>::const_iterator& rBegin,
-    const deque<formula::FormulaToken*>::const_iterator& rEnd,
+    const std::vector<formula::FormulaToken*>::const_iterator& rBegin,
+    const std::vector<formula::FormulaToken*>::const_iterator& rEnd,
     bool& bCol, bool& bRow, bool& bTab)
 {
-    deque<formula::FormulaToken*>::const_iterator aCur(rBegin);
+    std::vector<formula::FormulaToken*>::const_iterator aCur(rBegin);
     ++aCur;
     const SingleDoubleRefProvider aRef(**rBegin);
     bool bOk(false);
@@ -314,8 +310,8 @@ lcl_checkRangeDimensions(
 
 class LessByReference
 {
-    ScAddress maPos;
-    DimensionSelector maFunc;
+    ScAddress const maPos;
+    DimensionSelector const maFunc;
 public:
     LessByReference(const ScAddress& rPos, const DimensionSelector& rFunc) :
         maPos(rPos), maFunc(rFunc) {}
@@ -335,8 +331,8 @@ public:
  */
 class AdjacentByReference
 {
-    ScAddress maPos;
-    DimensionSelector maFunc;
+    ScAddress const maPos;
+    DimensionSelector const maFunc;
 public:
     AdjacentByReference(const ScAddress& rPos, DimensionSelector aFunc) :
         maPos(rPos), maFunc(aFunc) {}
@@ -351,12 +347,11 @@ public:
 
 bool
 lcl_checkIfAdjacent(
-    const ScAddress& rPos, const deque<formula::FormulaToken*>& rReferences, const DimensionSelector aWhich)
+    const ScAddress& rPos, const std::vector<formula::FormulaToken*>& rReferences, const DimensionSelector aWhich)
 {
-    typedef deque<formula::FormulaToken*>::const_iterator Iter;
-    Iter aBegin(rReferences.begin());
-    Iter aEnd(rReferences.end());
-    Iter aBegin1(aBegin);
+    auto aBegin(rReferences.cbegin());
+    auto aEnd(rReferences.cend());
+    auto aBegin1(aBegin);
     ++aBegin1;
     --aEnd;
     return std::equal(aBegin, aEnd, aBegin1, AdjacentByReference(rPos, aWhich));
@@ -364,7 +359,7 @@ lcl_checkIfAdjacent(
 
 void
 lcl_fillRangeFromRefList(
-    const ScAddress& aPos, const deque<formula::FormulaToken*>& rReferences, ScRange& rRange)
+    const ScAddress& aPos, const std::vector<formula::FormulaToken*>& rReferences, ScRange& rRange)
 {
     const ScSingleRefData aStart(
             SingleDoubleRefProvider(*rReferences.front()).Ref1);
@@ -376,7 +371,7 @@ lcl_fillRangeFromRefList(
 
 bool
 lcl_refListFormsOneRange(
-        const ScAddress& rPos, deque<formula::FormulaToken*>& rReferences,
+        const ScAddress& rPos, std::vector<formula::FormulaToken*>& rReferences,
         ScRange& rRange)
 {
     if (rReferences.size() == 1)
@@ -471,7 +466,7 @@ void adjustDBRange(formula::FormulaToken* pToken, ScDocument& rNewDoc, const ScD
     if (!pNewDBData)
     {
         pNewDBData = new ScDBData(*pDBData);
-        bool ins = aNewNamedDBs.insert(pNewDBData);
+        bool ins = aNewNamedDBs.insert(std::unique_ptr<ScDBData>(pNewDBData));
         assert(ins); (void)ins;
     }
     pToken->SetIndex(pNewDBData->GetIndex());
@@ -479,9 +474,9 @@ void adjustDBRange(formula::FormulaToken* pToken, ScDocument& rNewDoc, const ScD
 
 struct AreaListenerKey
 {
-    ScRange maRange;
-    bool mbStartFixed;
-    bool mbEndFixed;
+    ScRange const maRange;
+    bool const mbStartFixed;
+    bool const mbEndFixed;
 
     AreaListenerKey( const ScRange& rRange, bool bStartFixed, bool bEndFixed ) :
         maRange(rRange), mbStartFixed(bStartFixed), mbEndFixed(bEndFixed) {}
@@ -528,6 +523,7 @@ ScFormulaCellGroup::ScFormulaCellGroup() :
     mnFormatType(SvNumFormatType::NUMBER),
     mbInvariant(false),
     mbSubTotal(false),
+    mbPartOfCycle(false),
     meCalcState(sc::GroupCalcEnabled)
 {
 }
@@ -549,6 +545,7 @@ void ScFormulaCellGroup::setCode( ScTokenArray* pCode )
 {
     delete mpCode;
     mpCode = pCode; // takes ownership of the token array.
+    mpCode->Finalize(); // Reduce memory usage if needed.
     mbInvariant = mpCode->IsInvariant();
     mpCode->GenHash();
 }
@@ -561,7 +558,8 @@ void ScFormulaCellGroup::compileCode(
 
     if (mpCode->GetLen() && mpCode->GetCodeError() == FormulaError::NONE && !mpCode->GetCodeLen())
     {
-        ScCompiler aComp(&rDoc, rPos, *mpCode, eGram);
+        bool bMatrixFormula = mpTopCell->GetMatrixFlag() != ScMatrixMode::NONE;
+        ScCompiler aComp(&rDoc, rPos, *mpCode, eGram, true, bMatrixFormula);
         mbSubTotal = aComp.CompileTokenArray();
         mnFormatType = aComp.GetNumFormatType();
     }
@@ -604,6 +602,23 @@ void ScFormulaCellGroup::endAllGroupListening( ScDocument& rDoc )
 }
 
 ScFormulaCell::ScFormulaCell( ScDocument* pDoc, const ScAddress& rPos ) :
+    bDirty(false),
+    bTableOpDirty(false),
+    bChanged(false),
+    bRunning(false),
+    bCompile(false),
+    bSubTotal(false),
+    bIsIterCell(false),
+    bInChangeTrack(false),
+    bNeedListening(false),
+    mbNeedsNumberFormat(false),
+    mbAllowNumberFormatChange(false),
+    mbPostponedDirty(false),
+    mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag(ScMatrixMode::NONE),
+    nSeenInIteration(0),
+    nFormatType(SvNumFormatType::NUMBER),
     eTempGrammar(formula::FormulaGrammar::GRAM_DEFAULT),
     pCode(new ScTokenArray),
     pDocument(pDoc),
@@ -611,22 +626,6 @@ ScFormulaCell::ScFormulaCell( ScDocument* pDoc, const ScAddress& rPos ) :
     pNext(nullptr),
     pPreviousTrack(nullptr),
     pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType(SvNumFormatType::NUMBER),
-    cMatrixFlag(ScMatrixMode::NONE),
-    bDirty(false),
-    bChanged(false),
-    bRunning(false),
-    bCompile(false),
-    bSubTotal(false),
-    bIsIterCell(false),
-    bInChangeTrack(false),
-    bTableOpDirty(false),
-    bNeedListening(false),
-    mbNeedsNumberFormat(false),
-    mbAllowNumberFormatChange(false),
-    mbPostponedDirty(false),
-    mbIsExtRef(false),
     aPos(rPos)
 {
 }
@@ -635,6 +634,23 @@ ScFormulaCell::ScFormulaCell( ScDocument* pDoc, const ScAddress& rPos,
                               const OUString& rFormula,
                               const FormulaGrammar::Grammar eGrammar,
                               ScMatrixMode cMatInd ) :
+    bDirty( true ), // -> Because of the use of the Auto Pilot Function was: cMatInd != 0
+    bTableOpDirty( false ),
+    bChanged( false ),
+    bRunning( false ),
+    bCompile( false ),
+    bSubTotal( false ),
+    bIsIterCell( false ),
+    bInChangeTrack( false ),
+    bNeedListening( false ),
+    mbNeedsNumberFormat( false ),
+    mbAllowNumberFormatChange(false),
+    mbPostponedDirty(false),
+    mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag ( cMatInd ),
+    nSeenInIteration(0),
+    nFormatType ( SvNumFormatType::NUMBER ),
     eTempGrammar( eGrammar),
     pCode( nullptr ),
     pDocument( pDoc ),
@@ -642,22 +658,6 @@ ScFormulaCell::ScFormulaCell( ScDocument* pDoc, const ScAddress& rPos,
     pNext(nullptr),
     pPreviousTrack(nullptr),
     pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType ( SvNumFormatType::NUMBER ),
-    cMatrixFlag ( cMatInd ),
-    bDirty( true ), // -> Because of the use of the Auto Pilot Function was: cMatInd != 0
-    bChanged( false ),
-    bRunning( false ),
-    bCompile( false ),
-    bSubTotal( false ),
-    bIsIterCell( false ),
-    bInChangeTrack( false ),
-    bTableOpDirty( false ),
-    bNeedListening( false ),
-    mbNeedsNumberFormat( false ),
-    mbAllowNumberFormatChange(false),
-    mbPostponedDirty(false),
-    mbIsExtRef(false),
     aPos(rPos)
 {
     Compile( rFormula, true, eGrammar );    // bNoListening, Insert does that
@@ -669,6 +669,23 @@ ScFormulaCell::ScFormulaCell( ScDocument* pDoc, const ScAddress& rPos,
 ScFormulaCell::ScFormulaCell(
     ScDocument* pDoc, const ScAddress& rPos, ScTokenArray* pArray,
     const FormulaGrammar::Grammar eGrammar, ScMatrixMode cMatInd ) :
+    bDirty( true ),
+    bTableOpDirty( false ),
+    bChanged( false ),
+    bRunning( false ),
+    bCompile( false ),
+    bSubTotal( false ),
+    bIsIterCell( false ),
+    bInChangeTrack( false ),
+    bNeedListening( false ),
+    mbNeedsNumberFormat( false ),
+    mbAllowNumberFormatChange(false),
+    mbPostponedDirty(false),
+    mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag ( cMatInd ),
+    nSeenInIteration(0),
+    nFormatType ( SvNumFormatType::NUMBER ),
     eTempGrammar( eGrammar),
     pCode(pArray),
     pDocument( pDoc ),
@@ -676,30 +693,16 @@ ScFormulaCell::ScFormulaCell(
     pNext(nullptr),
     pPreviousTrack(nullptr),
     pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType ( SvNumFormatType::NUMBER ),
-    cMatrixFlag ( cMatInd ),
-    bDirty( true ),
-    bChanged( false ),
-    bRunning( false ),
-    bCompile( false ),
-    bSubTotal( false ),
-    bIsIterCell( false ),
-    bInChangeTrack( false ),
-    bTableOpDirty( false ),
-    bNeedListening( false ),
-    mbNeedsNumberFormat( false ),
-    mbAllowNumberFormatChange(false),
-    mbPostponedDirty(false),
-    mbIsExtRef(false),
     aPos(rPos)
 {
     assert(pArray); // Never pass a NULL pointer here.
 
+    pCode->Finalize(); // Reduce memory usage if needed.
+
     // Generate RPN token array.
     if (pCode->GetLen() && pCode->GetCodeError() == FormulaError::NONE && !pCode->GetCodeLen())
     {
-        ScCompiler aComp( pDocument, aPos, *pCode, eTempGrammar);
+        ScCompiler aComp( pDocument, aPos, *pCode, eTempGrammar, true, cMatrixFlag != ScMatrixMode::NONE );
         bSubTotal = aComp.CompileTokenArray();
         nFormatType = aComp.GetNumFormatType();
     }
@@ -718,35 +721,36 @@ ScFormulaCell::ScFormulaCell(
 ScFormulaCell::ScFormulaCell(
     ScDocument* pDoc, const ScAddress& rPos, const ScTokenArray& rArray,
     const FormulaGrammar::Grammar eGrammar, ScMatrixMode cMatInd ) :
-    eTempGrammar( eGrammar),
-    pCode(new ScTokenArray(rArray)),
-    pDocument( pDoc ),
-    pPrevious(nullptr),
-    pNext(nullptr),
-    pPreviousTrack(nullptr),
-    pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType ( SvNumFormatType::NUMBER ),
-    cMatrixFlag ( cMatInd ),
     bDirty( true ),
+    bTableOpDirty( false ),
     bChanged( false ),
     bRunning( false ),
     bCompile( false ),
     bSubTotal( false ),
     bIsIterCell( false ),
     bInChangeTrack( false ),
-    bTableOpDirty( false ),
     bNeedListening( false ),
     mbNeedsNumberFormat( false ),
     mbAllowNumberFormatChange(false),
     mbPostponedDirty(false),
     mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag ( cMatInd ),
+    nSeenInIteration(0),
+    nFormatType ( SvNumFormatType::NUMBER ),
+    eTempGrammar( eGrammar),
+    pCode(new ScTokenArray(rArray)), // also implicitly does Finalize() on the array
+    pDocument( pDoc ),
+    pPrevious(nullptr),
+    pNext(nullptr),
+    pPreviousTrack(nullptr),
+    pNextTrack(nullptr),
     aPos(rPos)
 {
     // RPN array generation
     if( pCode->GetLen() && pCode->GetCodeError() == FormulaError::NONE && !pCode->GetCodeLen() )
     {
-        ScCompiler aComp( pDocument, aPos, *pCode, eTempGrammar);
+        ScCompiler aComp( pDocument, aPos, *pCode, eTempGrammar, true, cMatrixFlag != ScMatrixMode::NONE );
         bSubTotal = aComp.CompileTokenArray();
         nFormatType = aComp.GetNumFormatType();
     }
@@ -766,6 +770,23 @@ ScFormulaCell::ScFormulaCell(
     ScDocument* pDoc, const ScAddress& rPos, const ScFormulaCellGroupRef& xGroup,
     const FormulaGrammar::Grammar eGrammar, ScMatrixMode cInd ) :
     mxGroup(xGroup),
+    bDirty(true),
+    bTableOpDirty( false ),
+    bChanged( false ),
+    bRunning( false ),
+    bCompile( false ),
+    bSubTotal(xGroup->mbSubTotal),
+    bIsIterCell( false ),
+    bInChangeTrack( false ),
+    bNeedListening( false ),
+    mbNeedsNumberFormat( false ),
+    mbAllowNumberFormatChange(false),
+    mbPostponedDirty(false),
+    mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag ( cInd ),
+    nSeenInIteration(0),
+    nFormatType(xGroup->mnFormatType),
     eTempGrammar( eGrammar),
     pCode(xGroup->mpCode ? xGroup->mpCode : new ScTokenArray),
     pDocument( pDoc ),
@@ -773,22 +794,6 @@ ScFormulaCell::ScFormulaCell(
     pNext(nullptr),
     pPreviousTrack(nullptr),
     pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType(xGroup->mnFormatType),
-    cMatrixFlag ( cInd ),
-    bDirty(true),
-    bChanged( false ),
-    bRunning( false ),
-    bCompile( false ),
-    bSubTotal(xGroup->mbSubTotal),
-    bIsIterCell( false ),
-    bInChangeTrack( false ),
-    bTableOpDirty( false ),
-    bNeedListening( false ),
-    mbNeedsNumberFormat( false ),
-    mbAllowNumberFormatChange(false),
-    mbPostponedDirty(false),
-    mbIsExtRef(false),
     aPos(rPos)
 {
     if (bSubTotal)
@@ -797,6 +802,23 @@ ScFormulaCell::ScFormulaCell(
 
 ScFormulaCell::ScFormulaCell(const ScFormulaCell& rCell, ScDocument& rDoc, const ScAddress& rPos, ScCloneFlags nCloneFlags) :
     SvtListener(),
+    bDirty( rCell.bDirty ),
+    bTableOpDirty( false ),
+    bChanged( rCell.bChanged ),
+    bRunning( false ),
+    bCompile( rCell.bCompile ),
+    bSubTotal( rCell.bSubTotal ),
+    bIsIterCell( false ),
+    bInChangeTrack( false ),
+    bNeedListening( false ),
+    mbNeedsNumberFormat( rCell.mbNeedsNumberFormat ),
+    mbAllowNumberFormatChange(false),
+    mbPostponedDirty(false),
+    mbIsExtRef(false),
+    mbSeenInPath(false),
+    cMatrixFlag ( rCell.cMatrixFlag ),
+    nSeenInIteration(0),
+    nFormatType( rCell.nFormatType ),
     aResult( rCell.aResult ),
     eTempGrammar( rCell.eTempGrammar),
     pDocument( &rDoc ),
@@ -804,22 +826,6 @@ ScFormulaCell::ScFormulaCell(const ScFormulaCell& rCell, ScDocument& rDoc, const
     pNext(nullptr),
     pPreviousTrack(nullptr),
     pNextTrack(nullptr),
-    nSeenInIteration(0),
-    nFormatType( rCell.nFormatType ),
-    cMatrixFlag ( rCell.cMatrixFlag ),
-    bDirty( rCell.bDirty ),
-    bChanged( rCell.bChanged ),
-    bRunning( false ),
-    bCompile( rCell.bCompile ),
-    bSubTotal( rCell.bSubTotal ),
-    bIsIterCell( false ),
-    bInChangeTrack( false ),
-    bTableOpDirty( false ),
-    bNeedListening( false ),
-    mbNeedsNumberFormat( false ),
-    mbAllowNumberFormatChange(false),
-    mbPostponedDirty(false),
-    mbIsExtRef(false),
     aPos(rPos)
 {
     pCode = rCell.pCode->Clone();
@@ -987,12 +993,12 @@ void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
 
             if (pCell)
             {
-                pCell->GetFormula( rBuffer, eGrammar);
+                pCell->GetFormula( rBuffer, eGrammar, pContext );
                 return;
             }
             else
             {
-                ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, pContext );
+                ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, false, false, pContext );
                 aComp.CreateStringFromTokenArray( rBuffer );
             }
         }
@@ -1003,7 +1009,7 @@ void ScFormulaCell::GetFormula( OUStringBuffer& rBuffer,
     }
     else
     {
-        ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, pContext );
+        ScCompiler aComp( pDocument, aPos, *pCode, eGrammar, false, false, pContext );
         aComp.CreateStringFromTokenArray( rBuffer );
     }
 
@@ -1030,7 +1036,7 @@ OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt, const ScInt
     {
         ScTokenArray aCode;
         aCode.AddToken( FormulaErrorToken( pCode->GetCodeError()));
-        ScCompiler aComp(rCxt, aPos, aCode, pContext);
+        ScCompiler aComp(rCxt, aPos, aCode, false, false, pContext);
         aComp.CreateStringFromTokenArray(aBuf);
         return aBuf.makeStringAndClear();
     }
@@ -1057,7 +1063,7 @@ OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt, const ScInt
             }
             else
             {
-                ScCompiler aComp(rCxt, aPos, *pCode, pContext);
+                ScCompiler aComp(rCxt, aPos, *pCode, false, false, pContext);
                 aComp.CreateStringFromTokenArray(aBuf);
             }
         }
@@ -1068,7 +1074,7 @@ OUString ScFormulaCell::GetFormula( sc::CompileFormulaContext& rCxt, const ScInt
     }
     else
     {
-        ScCompiler aComp(rCxt, aPos, *pCode, pContext);
+        ScCompiler aComp(rCxt, aPos, *pCode, false, false, pContext);
         aComp.CreateStringFromTokenArray(aBuf);
     }
 
@@ -1198,7 +1204,7 @@ void ScFormulaCell::CompileTokenArray( bool bNoListening )
 
         if( !bNoListening && pCode->GetCodeLen() )
             EndListeningTo( pDocument );
-        ScCompiler aComp(pDocument, aPos, *pCode, pDocument->GetGrammar());
+        ScCompiler aComp(pDocument, aPos, *pCode, pDocument->GetGrammar(), true, cMatrixFlag != ScMatrixMode::NONE);
         bSubTotal = aComp.CompileTokenArray();
         if( pCode->GetCodeError() == FormulaError::NONE )
         {
@@ -1238,7 +1244,7 @@ void ScFormulaCell::CompileTokenArray( sc::CompileFormulaContext& rCxt, bool bNo
 
         if( !bNoListening && pCode->GetCodeLen() )
             EndListeningTo( pDocument );
-        ScCompiler aComp(rCxt, aPos, *pCode);
+        ScCompiler aComp(rCxt, aPos, *pCode, true, cMatrixFlag != ScMatrixMode::NONE);
         bSubTotal = aComp.CompileTokenArray();
         if( pCode->GetCodeError() == FormulaError::NONE )
         {
@@ -1276,7 +1282,7 @@ void ScFormulaCell::CompileXML( sc::CompileFormulaContext& rCxt, ScProgress& rPr
     if (bWasInFormulaTree)
         pDocument->RemoveFromFormulaTree( this);
     rCxt.setGrammar(eTempGrammar);
-    ScCompiler aComp(rCxt, aPos, *pCode);
+    ScCompiler aComp(rCxt, aPos, *pCode, true, cMatrixFlag != ScMatrixMode::NONE);
     OUString aFormula, aFormulaNmsp;
     aComp.CreateStringFromXMLTokenArray( aFormula, aFormulaNmsp );
     pDocument->DecXMLImportedFormulaCount( aFormula.getLength() );
@@ -1365,8 +1371,7 @@ void ScFormulaCell::CompileXML( sc::CompileFormulaContext& rCxt, ScProgress& rPr
     pDocument->CheckLinkFormulaNeedingCheck(*pCode);
 
     //volatile cells must be added here for import
-    if( pCode->IsRecalcModeAlways() || pCode->IsRecalcModeForced() ||
-        pCode->IsRecalcModeOnLoad() || pCode->IsRecalcModeOnLoadOnce() )
+    if( !pCode->IsRecalcModeNormal() || pCode->IsRecalcModeForced())
     {
         // During load, only those cells that are marked explicitly dirty get
         // recalculated.  So we need to set it dirty here.
@@ -1394,7 +1399,7 @@ void ScFormulaCell::CalcAfterLoad( sc::CompileFormulaContext& rCxt, bool bStartL
     // The RPN array is not created when a Calc 3.0-Doc has been read as the Range Names exist until now.
     if( pCode->GetLen() && !pCode->GetCodeLen() && pCode->GetCodeError() == FormulaError::NONE )
     {
-        ScCompiler aComp(rCxt, aPos, *pCode);
+        ScCompiler aComp(rCxt, aPos, *pCode, true, cMatrixFlag != ScMatrixMode::NONE);
         bSubTotal = aComp.CompileTokenArray();
         nFormatType = aComp.GetNumFormatType();
         bDirty = true;
@@ -1417,7 +1422,7 @@ void ScFormulaCell::CalcAfterLoad( sc::CompileFormulaContext& rCxt, bool bStartL
 
     // DoubleRefs for binary operators were always a Matrix before version v5.0.
     // Now this is only the case when in an array formula, otherwise it's an implicit intersection
-    if ( pDocument->GetSrcVersion() < SC_MATRIX_DOUBLEREF &&
+    if ( ScDocument::GetSrcVersion() < SC_MATRIX_DOUBLEREF &&
             GetMatrixFlag() == ScMatrixMode::NONE && pCode->HasMatrixDoubleRefOps() )
     {
         cMatrixFlag = ScMatrixMode::Formula;
@@ -1452,8 +1457,15 @@ class RecursionCounter
 {
     ScRecursionHelper&  rRec;
     bool                bStackedInIteration;
+#ifdef DBG_UTIL
+    const ScFormulaCell* cell;
+#endif
 public:
-    RecursionCounter( ScRecursionHelper& r, ScFormulaCell* p ) : rRec(r)
+    RecursionCounter( ScRecursionHelper& r, ScFormulaCell* p )
+        : rRec(r)
+#ifdef DBG_UTIL
+        , cell(p)
+#endif
     {
         bStackedInIteration = rRec.IsDoingIteration();
         if (bStackedInIteration)
@@ -1464,14 +1476,58 @@ public:
     {
         rRec.DecRecursionCount();
         if (bStackedInIteration)
+        {
+#ifdef DBG_UTIL
+            assert(rRec.GetRecursionInIterationStack().top() == cell);
+#endif
             rRec.GetRecursionInIterationStack().pop();
+        }
     }
 };
-}
+
+// Forced calculation: OpenCL and threads require formula groups, so force even single cells to be a "group".
+// Remove the group again at the end, since there are some places throughout the code
+// that do not handle well groups with just 1 cell. Remove the groups only when the recursion level
+// reaches 0 again (groups contain some info such as disabling threading because of cycles, so removing
+// a group immediately would remove the info), for this reason affected cells are stored in the recursion
+// helper.
+struct TemporaryCellGroupMaker
+{
+    TemporaryCellGroupMaker( ScFormulaCell* cell, bool enable )
+        : mCell( cell )
+        , mEnabled( enable )
+    {
+        if( mEnabled && mCell->GetCellGroup() == nullptr )
+        {
+            mCell->CreateCellGroup( 1, false );
+            mCell->GetDocument()->GetRecursionHelper().AddTemporaryGroupCell( mCell );
+        }
+    }
+    ~TemporaryCellGroupMaker()
+    {
+        if( mEnabled )
+            mCell->GetDocument()->GetRecursionHelper().CleanTemporaryGroupCells();
+    }
+    ScFormulaCell* mCell;
+    const bool mEnabled;
+};
+
+} // namespace
 
 void ScFormulaCell::Interpret()
 {
     ScRecursionHelper& rRecursionHelper = pDocument->GetRecursionHelper();
+
+    static ForceCalculationType forceType = ScCalcConfig::getForceCalculationType();
+    TemporaryCellGroupMaker cellGroupMaker( this, forceType != ForceCalculationNone && forceType != ForceCalculationCore );
+
+    ScFormulaCell* pTopCell = mxGroup ? mxGroup->mpTopCell : this;
+
+    if (pTopCell->mbSeenInPath && rRecursionHelper.GetDepComputeLevel())
+    {
+        ScFormulaGroupCycleCheckGuard aCycleCheckGuard(rRecursionHelper, pTopCell);
+        return;
+    }
 
 #if DEBUG_CALCULATION
     static bool bDebugCalculationInit = true;
@@ -1527,16 +1583,33 @@ void ScFormulaCell::Interpret()
     else
     {
         pDocument->IncInterpretLevel();
+
 #if DEBUG_CALCULATION
         aDC.enterGroup();
-        bool bGroupInterpreted = InterpretFormulaGroup();
-        aDC.leaveGroup();
-        if (!bGroupInterpreted)
-            InterpretTail( pDocument->GetNonThreadedContext(), SCITP_NORMAL);
-#else
-        if (!InterpretFormulaGroup())
-            InterpretTail( pDocument->GetNonThreadedContext(), SCITP_NORMAL);
 #endif
+        bool bPartOfCycleBefore = mxGroup && mxGroup->mbPartOfCycle;
+        bool bGroupInterpreted = InterpretFormulaGroup();
+        bool bPartOfCycleAfter = mxGroup && mxGroup->mbPartOfCycle;
+
+#if DEBUG_CALCULATION
+        aDC.leaveGroup();
+#endif
+        if (!bGroupInterpreted)
+        {
+            // Dependency calc inside InterpretFormulaGroup() failed due to
+            // detection of a cycle and there are parent FG's in the cycle.
+            // Skip InterpretTail() in such cases, only run InterpretTail for the "cycle-starting" FG
+            if (!bPartOfCycleBefore && bPartOfCycleAfter && rRecursionHelper.AnyParentFGInCycle())
+            {
+                pDocument->DecInterpretLevel();
+                return;
+            }
+
+            ScFormulaGroupCycleCheckGuard aCycleCheckGuard(rRecursionHelper, this);
+            ScInterpreterContextGetterGuard aContextGetterGuard(*pDocument, pDocument->GetFormatTable());
+            InterpretTail( *aContextGetterGuard.GetInterpreterContext(), SCITP_NORMAL);
+        }
+
         pDocument->DecInterpretLevel();
     }
 
@@ -1597,19 +1670,33 @@ void ScFormulaCell::Interpret()
                 else
                 {
                     bResumeIteration = false;
-                    // Close circle once.
-                    pDocument->IncInterpretLevel();
-                    rRecursionHelper.GetList().back().pCell->InterpretTail( pDocument->GetNonThreadedContext(),
-                                                                            SCITP_CLOSE_ITERATION_CIRCLE);
-                    pDocument->DecInterpretLevel();
+                    // Close circle once. If 'this' is self-referencing only
+                    // (e.g. counter or self-adder) then it is already
+                    // implicitly closed.
+                    /* TODO: does this even make sense anymore? The last cell
+                     * added above with rRecursionHelper.Insert() should always
+                     * be 'this', shouldn't it? */
+                    ScFormulaCell* pLastCell = nullptr;
+                    if (rRecursionHelper.GetList().size() > 1 &&
+                            ((pLastCell = rRecursionHelper.GetList().back().pCell) != this))
+                    {
+                        pDocument->IncInterpretLevel();
+                        ScInterpreterContextGetterGuard aContextGetterGuard(*pDocument, pDocument->GetFormatTable());
+                        pLastCell->InterpretTail(
+                            *aContextGetterGuard.GetInterpreterContext(), SCITP_CLOSE_ITERATION_CIRCLE);
+                        pDocument->DecInterpretLevel();
+                    }
                     // Start at 1, init things.
                     rRecursionHelper.StartIteration();
-                    // Mark all cells being in iteration.
+                    // Mark all cells being in iteration. Reset results to
+                    // original values, formula cells have been interpreted
+                    // already, discard that step.
                     for (ScFormulaRecursionList::const_iterator aIter(
                                 rRecursionHelper.GetIterationStart()); aIter !=
                             rRecursionHelper.GetIterationEnd(); ++aIter)
                     {
                         ScFormulaCell* pIterCell = (*aIter).pCell;
+                        pIterCell->aResult = (*aIter).aPreviousResult;
                         pIterCell->bIsIterCell = true;
                     }
                 }
@@ -1618,7 +1705,8 @@ void ScFormulaCell::Interpret()
                 for ( ; rRecursionHelper.GetIteration() <= nIterMax && !rDone;
                         rRecursionHelper.IncIteration())
                 {
-                    rDone = true;
+                    rDone = false;
+                    bool bFirst = true;
                     for ( ScFormulaRecursionList::iterator aIter(
                                 rRecursionHelper.GetIterationStart()); aIter !=
                             rRecursionHelper.GetIterationEnd() &&
@@ -1631,10 +1719,19 @@ void ScFormulaCell::Interpret()
                         {
                             (*aIter).aPreviousResult = pIterCell->aResult;
                             pDocument->IncInterpretLevel();
-                            pIterCell->InterpretTail( pDocument->GetNonThreadedContext(), SCITP_FROM_ITERATION);
+                            ScInterpreterContextGetterGuard aContextGetterGuard(*pDocument, pDocument->GetFormatTable());
+                            pIterCell->InterpretTail( *aContextGetterGuard.GetInterpreterContext(), SCITP_FROM_ITERATION);
                             pDocument->DecInterpretLevel();
                         }
-                        rDone = rDone && !pIterCell->IsDirtyOrInTableOpDirty();
+                        if (bFirst)
+                        {
+                            rDone = !pIterCell->IsDirtyOrInTableOpDirty();
+                            bFirst = false;
+                        }
+                        else if (rDone)
+                        {
+                            rDone = !pIterCell->IsDirtyOrInTableOpDirty();
+                        }
                     }
                     if (rRecursionHelper.IsInReturn())
                     {
@@ -1669,12 +1766,26 @@ void ScFormulaCell::Interpret()
                             pIterCell->bIsIterCell = false;
                             pIterCell->nSeenInIteration = 0;
                             pIterCell->bRunning = (*aIter).bOldRunning;
+                            pIterCell->ResetDirty();
+                            // The difference to Excel is that Excel does not
+                            // produce an error for non-convergence thus a
+                            // delta of 0.001 still works to execute the
+                            // maximum number of iterations and display the
+                            // results no matter if the result anywhere reached
+                            // near delta, but also never indicates whether the
+                            // result actually makes sense in case of
+                            // non-counter context. Calc does check the delta
+                            // in every case. If we wanted to support what
+                            // Excel does then add another option "indicate
+                            // non-convergence error" (default on) and execute
+                            // the following block only if set.
+#if 1
                             // If one cell didn't converge, all cells of this
                             // circular dependency don't, no matter whether
                             // single cells did.
-                            pIterCell->ResetDirty();
                             pIterCell->aResult.SetResultError( FormulaError::NoConvergence);
                             pIterCell->bChanged = true;
+#endif
                         }
                     }
                     // End this iteration and remove entries.
@@ -1703,7 +1814,8 @@ void ScFormulaCell::Interpret()
                         if (pCell->IsDirtyOrInTableOpDirty())
                         {
                             pDocument->IncInterpretLevel();
-                            pCell->InterpretTail( pDocument->GetNonThreadedContext(), SCITP_NORMAL);
+                            ScInterpreterContextGetterGuard aContextGetterGuard(*pDocument, pDocument->GetFormatTable());
+                            pCell->InterpretTail( *aContextGetterGuard.GetInterpreterContext(), SCITP_NORMAL);
                             pDocument->DecInterpretLevel();
                             if (!pCell->IsDirtyOrInTableOpDirty() && !pCell->IsIterCell())
                                 pCell->bRunning = (*aIter).bOldRunning;
@@ -1728,7 +1840,8 @@ void ScFormulaCell::Interpret()
     }
 
 #if DEBUG_CALCULATION
-    if (sal_uInt16 nErr = aResult.GetResultError())
+    FormulaError nErr = aResult.GetResultError();
+    if (nErr != FormulaError::NONE)
         aDC.storeResultError( nErr);
     else if (aResult.IsValue())
         aDC.storeResult( aResult.GetDouble());
@@ -1737,21 +1850,12 @@ void ScFormulaCell::Interpret()
 #endif
 }
 
-namespace {
-class StackCleaner
-{
-    std::unique_ptr<ScInterpreter>  pInt;
-    public:
-    StackCleaner( ScInterpreter* pI )
-        : pInt(pI)
-        {}
-};
-}
-
 void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTailParameter eTailParam )
 {
     RecursionCounter aRecursionCounter( pDocument->GetRecursionHelper(), this);
-    nSeenInIteration = pDocument->GetRecursionHelper().GetIteration();
+    // TODO If this cell is not an iteration cell, add it to the list of iteration cells?
+    if(bIsIterCell)
+        nSeenInIteration = pDocument->GetRecursionHelper().GetIteration();
     if( !pCode->GetCodeLen() && pCode->GetCodeError() == FormulaError::NONE )
     {
         // #i11719# no RPN and no error and no token code but result string present
@@ -1775,8 +1879,7 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
 
     if( pCode->GetCodeLen() && pDocument )
     {
-        ScInterpreter* pInterpreter = new ScInterpreter( this, pDocument, rContext, aPos, *pCode );
-        StackCleaner aStackCleaner(pInterpreter);
+        std::unique_ptr<ScInterpreter> pInterpreter(new ScInterpreter( this, pDocument, rContext, aPos, *pCode ));
         FormulaError nOldErrCode = aResult.GetResultError();
         if ( nSeenInIteration == 0 )
         {   // Only the first time
@@ -1996,7 +2099,16 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
             if (bSetFormat && (bForceNumberFormat || ((nFormatIndex % SV_COUNTRY_LANGUAGE_OFFSET) != 0)))
             {
                 // set number format explicitly
-                pDocument->SetNumberFormat( aPos, nFormatIndex );
+                if (!pDocument->IsThreadedGroupCalcInProgress())
+                    pDocument->SetNumberFormat( aPos, nFormatIndex );
+                else
+                {
+                    // SetNumberFormat() is not thread-safe (modifies ScAttrArray), delay the work
+                    // to the main thread. Since thread calculations operate on formula groups,
+                    // it's enough to store just the row.
+                    DelayedSetNumberFormat data = { aPos.Row(), nFormatIndex };
+                    rContext.maDelayedSetNumberFormat.push_back( data );
+                }
                 bChanged = true;
             }
 
@@ -2095,7 +2207,7 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
             // a changed result must still reset the stream flag
             pDocument->SetStreamValid(aPos.Tab(), false, true);
         }
-        if ( !pDocument->mbThreadedGroupCalcInProgress && !pCode->IsRecalcModeAlways() )
+        if ( !pDocument->IsThreadedGroupCalcInProgress() && !pCode->IsRecalcModeAlways() )
             pDocument->RemoveFromFormulaTree( this );
 
         //  FORCED cells also immediately tested for validity (start macro possibly)
@@ -2114,7 +2226,7 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
         }
 
         // Reschedule slows the whole thing down considerably, thus only execute on percent change
-        if (!pDocument->mbThreadedGroupCalcInProgress)
+        if (!pDocument->IsThreadedGroupCalcInProgress())
         {
             ScProgress *pProgress = ScProgress::GetInterpretProgress();
             if (pProgress && pProgress->Enabled())
@@ -2169,8 +2281,7 @@ void ScFormulaCell::HandleStuffAfterParallelCalculation()
         if ( !pCode->IsRecalcModeAlways() )
             pDocument->RemoveFromFormulaTree( this );
 
-        ScInterpreter* pInterpreter = new ScInterpreter( this, pDocument, pDocument->GetNonThreadedContext(), aPos, *pCode );
-        StackCleaner aStackCleaner(pInterpreter);
+        std::unique_ptr<ScInterpreter> pInterpreter(new ScInterpreter( this, pDocument, pDocument->GetNonThreadedContext(), aPos, *pCode ));
 
         switch (pInterpreter->GetVolatileType())
         {
@@ -2399,7 +2510,10 @@ void ScFormulaCell::SetDirtyVar()
     bDirty = true;
     mbPostponedDirty = false;
     if (mxGroup && mxGroup->meCalcState == sc::GroupCalcRunning)
+    {
         mxGroup->meCalcState = sc::GroupCalcEnabled;
+        mxGroup->mbPartOfCycle = false;
+    }
 
     // mark the sheet of this cell to be calculated
     //#FIXME do we need to revert this remnant of old fake vba events? pDocument->AddCalculateTable( aPos.Tab() );
@@ -2439,11 +2553,6 @@ void ScFormulaCell::SetTableOpDirty()
     }
 }
 
-bool ScFormulaCell::IsDirtyOrInTableOpDirty() const
-{
-    return bDirty || (bTableOpDirty && pDocument->IsInInterpreterTableOp());
-}
-
 void ScFormulaCell::SetResultDouble( double n )
 {
     aResult.SetDouble(n);
@@ -2457,6 +2566,11 @@ void ScFormulaCell::SetResultToken( const formula::FormulaToken* pToken )
 svl::SharedString ScFormulaCell::GetResultString() const
 {
     return aResult.GetString();
+}
+
+bool ScFormulaCell::HasHybridStringResult() const
+{
+    return aResult.GetType() == formula::svHybridCell && !aResult.GetString().isEmpty();
 }
 
 void ScFormulaCell::SetResultMatrix( SCCOL nCols, SCROW nRows, const ScConstMatrixRef& pMat, const formula::FormulaToken* pUL )
@@ -2567,23 +2681,6 @@ bool ScFormulaCell::IsMultilineResult()
     if (!IsValue())
         return aResult.IsMultiline();
     return false;
-}
-
-bool ScFormulaCell::NeedsInterpret() const
-{
-    if (!IsDirtyOrInTableOpDirty())
-        return false;
-
-    return (pDocument->GetAutoCalc() || (cMatrixFlag != ScMatrixMode::NONE));
-}
-
-void ScFormulaCell::MaybeInterpret()
-{
-    if (NeedsInterpret())
-    {
-        assert(!pDocument->mbThreadedGroupCalcInProgress);
-        Interpret();
-    }
 }
 
 bool ScFormulaCell::IsHyperLinkCell() const
@@ -2910,7 +3007,7 @@ ScFormulaCell::HasRefListExpressibleAsOneReference(ScRange& rRange) const
     {
         // Collect all consecutive references, starting by the one
         // already found
-        std::deque<formula::FormulaToken*> aReferences;
+        std::vector<formula::FormulaToken*> aReferences;
         aReferences.push_back(pFirstReference);
         FormulaToken* pToken(aIter.NextRPN());
         FormulaToken* pFunction(nullptr);
@@ -3050,7 +3147,7 @@ bool checkCompileColRowName(
         }
         break;
         case URM_MOVE:
-        {   // Recomplie for Move/D&D when ColRowName was moved or this Cell
+        {   // Recompile for Move/D&D when ColRowName was moved or this Cell
             // points to one and was moved.
             bool bMoved = (aPos != aOldPos);
             if (bMoved)
@@ -3675,11 +3772,8 @@ void ScFormulaCell::UpdateTranspose( const ScRange& rSource, const ScAddress& rD
         if( t->GetOpCode() == ocName )
         {
             const ScRangeData* pName = pDocument->FindRangeNameBySheetAndIndex( t->GetSheet(), t->GetIndex());
-            if (pName)
-            {
-                if (pName->IsModified())
-                    bRefChanged = true;
-            }
+            if (pName && pName->IsModified())
+                bRefChanged = true;
         }
         else if( t->GetType() != svIndex )
         {
@@ -3730,11 +3824,8 @@ void ScFormulaCell::UpdateGrow( const ScRange& rArea, SCCOL nGrowX, SCROW nGrowY
         if( t->GetOpCode() == ocName )
         {
             const ScRangeData* pName = pDocument->FindRangeNameBySheetAndIndex( t->GetSheet(), t->GetIndex());
-            if (pName)
-            {
-                if (pName->IsModified())
-                    bRefChanged = true;
-            }
+            if (pName && pName->IsModified())
+                bRefChanged = true;
         }
         else if( t->GetType() != svIndex )
         {
@@ -4044,6 +4135,39 @@ ScFormulaCell::CompareState ScFormulaCell::CompareByTokenArray( const ScFormulaC
 
         switch (pThisTok->GetType())
         {
+            // ScCompiler::HandleIIOpCode() may optimize some refs only in RPN code,
+            // resulting in identical RPN references that could lead to creating
+            // a formula group from formulas that should not be merged into a group,
+            // so check also the formula itself.
+            case formula::svSingleRef:
+            {
+                // Single cell reference.
+                const ScSingleRefData& rRef = *pThisTok->GetSingleRef();
+                if (rRef != *pOtherTok->GetSingleRef())
+                    return NotEqual;
+
+                if (rRef.IsRowRel())
+                    bInvariant = false;
+            }
+            break;
+            case formula::svDoubleRef:
+            {
+                // Range reference.
+                const ScSingleRefData& rRef1 = *pThisTok->GetSingleRef();
+                const ScSingleRefData& rRef2 = *pThisTok->GetSingleRef2();
+                if (rRef1 != *pOtherTok->GetSingleRef())
+                    return NotEqual;
+
+                if (rRef2 != *pOtherTok->GetSingleRef2())
+                    return NotEqual;
+
+                if (rRef1.IsRowRel())
+                    bInvariant = false;
+
+                if (rRef2.IsRowRel())
+                    bInvariant = false;
+            }
+            break;
             // All index tokens are names. Different categories already had
             // different OpCode values.
             case formula::svIndex:
@@ -4106,41 +4230,53 @@ struct ScDependantsCalculator
 {
     ScDocument& mrDoc;
     const ScTokenArray& mrCode;
+    const ScFormulaCellGroupRef& mxGroup;
     const SCROW mnLen;
     const ScAddress& mrPos;
+    const bool mFromFirstRow;
 
-    ScDependantsCalculator(ScDocument& rDoc, const ScTokenArray& rCode, const ScFormulaCell& rCell, const ScAddress& rPos) :
+    ScDependantsCalculator(ScDocument& rDoc, const ScTokenArray& rCode, const ScFormulaCell& rCell,
+            const ScAddress& rPos, bool fromFirstRow) :
         mrDoc(rDoc),
         mrCode(rCode),
-        mnLen(rCell.GetCellGroup()->mnLength),
-        mrPos(rPos)
+        mxGroup(rCell.GetCellGroup()),
+        mnLen(mxGroup->mnLength),
+        mrPos(rPos),
+        // ScColumn::FetchVectorRefArray() always fetches data from row 0, even if the data is used
+        // only from further rows. This data fetching could also lead to Interpret() calls, so
+        // in OpenCL mode the formula in practice depends on those cells too.
+        mFromFirstRow(fromFirstRow)
     {
     }
 
     // FIXME: copy-pasted from ScGroupTokenConverter. factor out somewhere else
+    // (note already modified a bit, mFromFirstRow)
 
     // I think what this function does is to check whether the relative row reference nRelRow points
     // to a row that is inside the range of rows covered by the formula group.
 
     bool isSelfReferenceRelative(const ScAddress& rRefPos, SCROW nRelRow)
     {
-        if (rRefPos.Col() != mrPos.Col())
+        if (rRefPos.Col() != mrPos.Col() || rRefPos.Tab() != mrPos.Tab())
             return false;
 
         SCROW nEndRow = mrPos.Row() + mnLen - 1;
 
-        if (nRelRow < 0)
+        if (nRelRow <= 0)
         {
             SCROW nTest = nEndRow;
             nTest += nRelRow;
             if (nTest >= mrPos.Row())
                 return true;
         }
-        else if (nRelRow > 0)
+        else
         {
             SCROW nTest = mrPos.Row(); // top row.
             nTest += nRelRow;
             if (nTest <= nEndRow)
+                return true;
+            // If pointing below the formula, it's always included if going from first row.
+            if (mFromFirstRow)
                 return true;
         }
 
@@ -4154,7 +4290,7 @@ struct ScDependantsCalculator
 
     bool isSelfReferenceAbsolute(const ScAddress& rRefPos)
     {
-        if (rRefPos.Col() != mrPos.Col())
+        if (rRefPos.Col() != mrPos.Col() || rRefPos.Tab() != mrPos.Tab())
             return false;
 
         SCROW nEndRow = mrPos.Row() + mnLen - 1;
@@ -4162,7 +4298,8 @@ struct ScDependantsCalculator
         if (rRefPos.Row() < mrPos.Row())
             return false;
 
-        if (rRefPos.Row() > nEndRow)
+        // If pointing below the formula, it's always included if going from first row.
+        if (rRefPos.Row() > nEndRow && !mFromFirstRow)
             return false;
 
         return true;
@@ -4173,8 +4310,11 @@ struct ScDependantsCalculator
     //        isSelfReference[Absolute|Relative]() on both the start and end of the double ref
     bool isDoubleRefSpanGroupRange(const ScRange& rAbs, bool bIsRef1RowRel, bool bIsRef2RowRel)
     {
-        if (rAbs.aStart.Col() > mrPos.Col() || rAbs.aEnd.Col() < mrPos.Col())
+        if (rAbs.aStart.Col() > mrPos.Col() || rAbs.aEnd.Col() < mrPos.Col()
+            || rAbs.aStart.Tab() > mrPos.Tab() || rAbs.aEnd.Tab() < mrPos.Tab())
+        {
             return false;
+        }
 
         SCROW nStartRow    = mrPos.Row();
         SCROW nEndRow      = nStartRow + mnLen - 1;
@@ -4193,6 +4333,11 @@ struct ScDependantsCalculator
 
         if (!bIsRef2RowRel &&
             nRefStartRow <= nStartRow && nRefEndRow >= nEndRow)
+            return true;
+
+        // If going from first row, the referenced range must be entirely above the formula,
+        // otherwise the formula would be included.
+        if (mFromFirstRow && nRefEndRow >= nStartRow)
             return true;
 
         return false;
@@ -4226,13 +4371,35 @@ struct ScDependantsCalculator
         // Partially from ScGroupTokenConverter::convert in sc/source/core/data/grouptokenconverter.cxx
 
         ScRangeList aRangeList;
-        for (auto p: mrCode.RPNTokens())
+        bool bHasSelfReferences = false;
+
+        bool bInDocShellRecalc = mrDoc.IsInDocShellRecalc();
+
+        FormulaToken** pRPNArray = mrCode.GetCode();
+        sal_uInt16 nCodeLen = mrCode.GetCodeLen();
+        for (sal_Int32 nTokenIdx = nCodeLen-1; nTokenIdx >= 0; --nTokenIdx)
         {
+            auto p = pRPNArray[nTokenIdx];
+            if (!bInDocShellRecalc)
+            {
+                // The dependency evaluator evaluates all arguments of IF/IFS/SWITCH irrespective
+                // of the result of the condition expression.
+                // This is a perf problem if we *don't* intent on recalc'ing all dirty cells
+                // in the document. So lets disable threading and stop dependency evaluation if
+                // the call did not originate from ScDocShell::DoRecalc()/ScDocShell::DoHardRecalc()
+                // for formulae with IF/IFS/SWITCH
+                OpCode nOpCode = p->GetOpCode();
+                if (nOpCode == ocIf || nOpCode == ocIfs_MS || nOpCode == ocSwitch_MS)
+                    return false;
+            }
+
             switch (p->GetType())
             {
             case svSingleRef:
                 {
                     ScSingleRefData aRef = *p->GetSingleRef(); // =Sheet1!A1
+                    if( aRef.IsDeleted())
+                        return false;
                     ScAddress aRefPos = aRef.toAbs(mrPos);
 
                     if (!mrDoc.TableExists(aRefPos.Tab()))
@@ -4241,20 +4408,13 @@ struct ScDependantsCalculator
                     if (aRef.IsRowRel())
                     {
                         if (isSelfReferenceRelative(aRefPos, aRef.Row()))
-                            return false;
+                        {
+                            bHasSelfReferences = true;
+                            continue;
+                        }
 
                         // Trim data array length to actual data range.
                         SCROW nTrimLen = trimLength(aRefPos.Tab(), aRefPos.Col(), aRefPos.Col(), aRefPos.Row(), mnLen);
-                        // Fetch double array guarantees that the length of the
-                        // returned array equals or greater than the requested
-                        // length.
-
-                        formula::VectorRefArray aArray;
-                        if (nTrimLen)
-                            aArray = mrDoc.FetchVectorRefArray(aRefPos, nTrimLen);
-
-                        if (!aArray.isValid())
-                            return false;
 
                         aRangeList.Join(ScRange(aRefPos.Col(), aRefPos.Row(), aRefPos.Tab(),
                                                 aRefPos.Col(), aRefPos.Row() + nTrimLen - 1, aRefPos.Tab()));
@@ -4262,7 +4422,10 @@ struct ScDependantsCalculator
                     else
                     {
                         if (isSelfReferenceAbsolute(aRefPos))
-                            return false;
+                        {
+                            bHasSelfReferences = true;
+                            continue;
+                        }
 
                         aRangeList.Join(ScRange(aRefPos.Col(), aRefPos.Row(), aRefPos.Tab()));
                     }
@@ -4271,6 +4434,8 @@ struct ScDependantsCalculator
             case svDoubleRef:
                 {
                     ScComplexRefData aRef = *p->GetDoubleRef();
+                    if( aRef.IsDeleted())
+                        return false;
                     ScRange aAbs = aRef.toAbs(mrPos);
 
                     // Multiple sheet
@@ -4282,22 +4447,37 @@ struct ScDependantsCalculator
                     if (bIsRef1RowRel)
                     {
                         if (isSelfReferenceRelative(aAbs.aStart, aRef.Ref1.Row()))
-                            return false;
+                        {
+                            bHasSelfReferences = true;
+                            continue;
+                        }
                     }
                     else if (isSelfReferenceAbsolute(aAbs.aStart))
-                        return false;
+                    {
+                        bHasSelfReferences = true;
+                        continue;
+                    }
 
                     bool bIsRef2RowRel = aRef.Ref2.IsRowRel();
                     if (bIsRef2RowRel)
                     {
                         if (isSelfReferenceRelative(aAbs.aEnd, aRef.Ref2.Row()))
-                            return false;
+                        {
+                            bHasSelfReferences = true;
+                            continue;
+                        }
                     }
                     else if (isSelfReferenceAbsolute(aAbs.aEnd))
-                        return false;
+                    {
+                        bHasSelfReferences = true;
+                        continue;
+                    }
 
                     if (isDoubleRefSpanGroupRange(aAbs, bIsRef1RowRel, bIsRef2RowRel))
-                        return false;
+                    {
+                        bHasSelfReferences = true;
+                        continue;
+                    }
 
                     // Row reference is relative.
                     bool bAbsLast = !aRef.Ref2.IsRowRel();
@@ -4326,18 +4506,28 @@ struct ScDependantsCalculator
             }
         }
 
+        // Compute dependencies irrespective of the presence of any self references.
+        // These dependencies would get computed via InterpretTail anyway when we disable group calc, so lets do it now.
+        // The advantage is that the FG's get marked for cycles early if present, and can avoid lots of complications.
         for (size_t i = 0; i < aRangeList.size(); ++i)
         {
             const ScRange & rRange = aRangeList[i];
             assert(rRange.aStart.Tab() == rRange.aEnd.Tab());
             for (auto nCol = rRange.aStart.Col(); nCol <= rRange.aEnd.Col(); nCol++)
             {
-                if (!mrDoc.HandleRefArrayForParallelism(ScAddress(nCol, rRange.aStart.Row(), rRange.aStart.Tab()),
-                                                        rRange.aEnd.Row() - rRange.aStart.Row() + 1))
+                SCROW nStartRow = rRange.aStart.Row();
+                SCROW nLength = rRange.aEnd.Row() - rRange.aStart.Row() + 1;
+                if( mFromFirstRow )
+                {   // include also all previous rows
+                    nLength += nStartRow;
+                    nStartRow = 0;
+                }
+                if (!mrDoc.HandleRefArrayForParallelism(ScAddress(nCol, nStartRow, rRange.aStart.Tab()),
+                                                        nLength, mxGroup))
                     return false;
             }
         }
-        return true;
+        return !bHasSelfReferences;
     }
 };
 
@@ -4347,13 +4537,11 @@ bool ScFormulaCell::InterpretFormulaGroup()
         return false;
 
     auto aScope = sc::FormulaLogger::get().enterGroup(*pDocument, *this);
+    ScRecursionHelper& rRecursionHelper = pDocument->GetRecursionHelper();
 
-    if (pDocument->GetRecursionHelper().GetRecursionCount())
+    if (mxGroup->mbPartOfCycle)
     {
-        // Do not attempt to interpret a group when calculations are already
-        // running, otherwise we may run into a circular reference hell. See
-        // tdf#95748
-        aScope.addMessage("group calc disabled during recursive calculation.");
+        aScope.addMessage("This formula-group is part of a cycle");
         return false;
     }
 
@@ -4363,11 +4551,12 @@ bool ScFormulaCell::InterpretFormulaGroup()
         return false;
     }
 
-    static const bool bThreadingProhibited = std::getenv("SC_NO_THREADED_CALCULATION");
-
-    // To temporarily use threading for sc unit tests regardless of the size of the formula group,
-    // add the condition !std::getenv("LO_TESTNAME") below (with &&)
-    if (GetWeight() < ScInterpreter::GetGlobalConfig().mnOpenCLMinimumFormulaGroupSize)
+    // Use SC_TEST_CALCULATION=opencl/threads to force calculation e.g. for unittests
+    static ForceCalculationType forceType = ScCalcConfig::getForceCalculationType();
+    if (forceType == ForceCalculationCore
+        || ( GetWeight() < ScInterpreter::GetGlobalConfig().mnOpenCLMinimumFormulaGroupSize
+            && forceType != ForceCalculationOpenCL
+            && forceType != ForceCalculationThreads))
     {
         mxGroup->meCalcState = sc::GroupCalcDisabled;
         aScope.addGroupSizeThresholdMessage(*this);
@@ -4381,32 +4570,106 @@ bool ScFormulaCell::InterpretFormulaGroup()
         return false;
     }
 
+    if( forceType != ForceCalculationNone )
+    {
+        // ScConditionEntry::Interpret() creates a temporary cell and interprets it
+        // without it actually being in the document at the specified position.
+        // That would confuse opencl/threading code, as they refer to the cell group
+        // also using the position. This is normally not triggered (single cells
+        // are normally not in a cell group), but if forced, check for this explicitly.
+        if( pDocument->GetFormulaCell( aPos ) != this )
+        {
+            mxGroup->meCalcState = sc::GroupCalcDisabled;
+            aScope.addMessage("cell not in document");
+            return false;
+        }
+    }
+
     // Guard against endless recursion of Interpret() calls, for this to work
     // ScFormulaCell::InterpretFormulaGroup() must never be called through
     // anything else than ScFormulaCell::Interpret(), same as
     // ScFormulaCell::InterpretTail()
-    RecursionCounter aRecursionCounter( pDocument->GetRecursionHelper(), this);
+    RecursionCounter aRecursionCounter( rRecursionHelper, this);
 
-    if (!bThreadingProhibited && !ScCalcConfig::isOpenCLEnabled() &&
-        pCode->IsEnabledForThreading() &&
-        ScCalcConfig::isThreadingEnabled())
+    bool bDependencyComputed = false;
+    bool bDependencyCheckFailed = false;
+
+    // Preference order: First try OpenCL, then threading.
+    if( InterpretFormulaGroupOpenCL(aScope, bDependencyComputed, bDependencyCheckFailed))
+        return true;
+
+    if( InterpretFormulaGroupThreading(aScope, bDependencyComputed, bDependencyCheckFailed))
+        return true;
+
+    return false;
+}
+
+bool ScFormulaCell::CheckComputeDependencies(sc::FormulaLogger::GroupScope& rScope, bool fromFirstRow)
+{
+    ScRecursionHelper& rRecursionHelper = pDocument->GetRecursionHelper();
+    // iterate over code in the formula ...
+    // ensure all input is pre-calculated -
+    // to avoid writing during the calculation
+
+    bool bOKToParallelize = false;
     {
-        // iterate over code in the formula ...
-        // ensure all input is pre-calculated -
-        // to avoid writing during the calculation
-        ScDependantsCalculator aCalculator(*pDocument, *pCode, *this, mxGroup->mpTopCell->aPos);
-
-        // Disable or hugely enlarge subset for S/W group
-        // threading interpreter
-
-        if (!aCalculator.DoIt())
+        ScFormulaGroupCycleCheckGuard aCycleCheckGuard(rRecursionHelper, this);
+        if (mxGroup->mbPartOfCycle)
         {
             mxGroup->meCalcState = sc::GroupCalcDisabled;
-            aScope.addMessage("could not do new dependencies calculation thing");
+            rScope.addMessage("found circular formula-group dependencies");
             return false;
         }
 
-        static bool bHyperThreadingActive = tools::cpuid::hasHyperThreading();
+        ScFormulaGroupDependencyComputeGuard aDepComputeGuard(rRecursionHelper);
+        ScDependantsCalculator aCalculator(*pDocument, *pCode, *this, mxGroup->mpTopCell->aPos, fromFirstRow);
+        bOKToParallelize = aCalculator.DoIt();
+    }
+
+    if (rRecursionHelper.IsInRecursionReturn())
+    {
+        mxGroup->meCalcState = sc::GroupCalcDisabled;
+        rScope.addMessage("Recursion limit reached, cannot thread this formula group now");
+        return false;
+    }
+
+    if (mxGroup->mbPartOfCycle)
+    {
+        mxGroup->meCalcState = sc::GroupCalcDisabled;
+        rScope.addMessage("found circular formula-group dependencies");
+        return false;
+    }
+
+    if (!bOKToParallelize)
+    {
+        mxGroup->meCalcState = sc::GroupCalcDisabled;
+        rScope.addMessage("could not do new dependencies calculation thing");
+        return false;
+    }
+
+    return true;
+}
+
+// To be called only from InterpretFormulaGroup().
+bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope& aScope,
+                                                   bool& bDependencyComputed,
+                                                   bool& bDependencyCheckFailed)
+{
+    static const bool bThreadingProhibited = std::getenv("SC_NO_THREADED_CALCULATION");
+    if (!bDependencyCheckFailed && !bThreadingProhibited &&
+        pCode->IsEnabledForThreading() &&
+        ScCalcConfig::isThreadingEnabled())
+    {
+        if(!bDependencyComputed && !CheckComputeDependencies(aScope))
+        {
+            bDependencyComputed = true;
+            bDependencyCheckFailed = true;
+            return false;
+        }
+
+        bDependencyComputed = true;
+
+        const static bool bHyperThreadingActive = tools::cpuid::hasHyperThreading();
 
         // Then do the threaded calculation
 
@@ -4416,23 +4679,23 @@ bool ScFormulaCell::InterpretFormulaGroup()
             const unsigned mnThisThread;
             const unsigned mnThreadsTotal;
             ScDocument* mpDocument;
-            SvNumberFormatter* mpFormatter;
+            ScInterpreterContext* mpContext;
             const ScAddress& mrTopPos;
-            SCROW mnLength;
+            SCROW const mnLength;
 
         public:
             Executor(const std::shared_ptr<comphelper::ThreadTaskTag>& rTag,
                      unsigned nThisThread,
                      unsigned nThreadsTotal,
                      ScDocument* pDocument2,
-                     SvNumberFormatter* pFormatter,
+                     ScInterpreterContext* pContext,
                      const ScAddress& rTopPos,
                      SCROW nLength) :
                 comphelper::ThreadTask(rTag),
                 mnThisThread(nThisThread),
                 mnThreadsTotal(nThreadsTotal),
                 mpDocument(pDocument2),
-                mpFormatter(pFormatter),
+                mpContext(pContext),
                 mrTopPos(rTopPos),
                 mnLength(nLength)
             {
@@ -4440,10 +4703,8 @@ bool ScFormulaCell::InterpretFormulaGroup()
 
             virtual void doWork() override
             {
-                ScInterpreterContext aContext(*mpDocument, mpFormatter);
-
-                auto aNonThreadedData = mpDocument->CalculateInColumnInThread(aContext, mrTopPos, mnLength, mnThisThread, mnThreadsTotal);
-                aNonThreadedData.MergeBackIntoNonThreadedData(mpDocument->maNonThreaded);
+                mpDocument->CalculateInColumnInThread(*mpContext, mrTopPos, mnLength, mnThisThread, mnThreadsTotal);
+                ScDocumentThreadSpecific::MergeBackIntoNonThreadedData(mpDocument->maNonThreaded);
             }
 
         };
@@ -4457,24 +4718,34 @@ bool ScFormulaCell::InterpretFormulaGroup()
             nThreadCount /= 2;
 
         SAL_INFO("sc.threaded", "Running " << nThreadCount << " threads");
-
         {
-            assert(!pDocument->mbThreadedGroupCalcInProgress);
-            pDocument->mbThreadedGroupCalcInProgress = true;
+            assert(!pDocument->IsThreadedGroupCalcInProgress());
+            pDocument->SetThreadedGroupCalcInProgress(true);
 
             ScMutationDisable aGuard(pDocument, ScMutationGuardFlags::CORE);
 
             // Start nThreadCount new threads
             std::shared_ptr<comphelper::ThreadTaskTag> aTag = comphelper::ThreadPool::createThreadTaskTag();
+            ScThreadedInterpreterContextGetterGuard aContextGetterGuard(nThreadCount, *pDocument, pNonThreadedFormatter);
+            ScInterpreterContext* context = nullptr;
             for (int i = 0; i < nThreadCount; ++i)
             {
-                rThreadPool.pushTask(new Executor(aTag, i, nThreadCount, pDocument, pNonThreadedFormatter, mxGroup->mpTopCell->aPos, mxGroup->mnLength));
+                context = aContextGetterGuard.GetInterpreterContextForThreadIdx(i);
+                ScDocument::SetupFromNonThreadedContext(*context, i);
+                rThreadPool.pushTask(o3tl::make_unique<Executor>(aTag, i, nThreadCount, pDocument, context, mxGroup->mpTopCell->aPos, mxGroup->mnLength));
             }
 
             SAL_INFO("sc.threaded", "Joining threads");
             rThreadPool.waitUntilDone(aTag);
 
-            pDocument->mbThreadedGroupCalcInProgress = false;
+            pDocument->SetThreadedGroupCalcInProgress(false);
+
+            for (int i = 0; i < nThreadCount; ++i)
+            {
+                context = aContextGetterGuard.GetInterpreterContextForThreadIdx(i);
+                // This is intentionally done in this main thread in order to avoid locking.
+                pDocument->MergeBackIntoNonThreadedContext(*context, i);
+            }
 
             SAL_INFO("sc.threaded", "Done");
         }
@@ -4484,6 +4755,14 @@ bool ScFormulaCell::InterpretFormulaGroup()
         return true;
     }
 
+    return false;
+}
+
+// To be called only from InterpretFormulaGroup().
+bool ScFormulaCell::InterpretFormulaGroupOpenCL(sc::FormulaLogger::GroupScope& aScope,
+                                                bool& bDependencyComputed,
+                                                bool& bDependencyCheckFailed)
+{
     bool bCanVectorize = pCode->IsEnabledForOpenCL();
     switch (pCode->GetVectorState())
     {
@@ -4514,11 +4793,27 @@ bool ScFormulaCell::InterpretFormulaGroup()
     if (!bCanVectorize)
         return false;
 
-    if (!ScCalcConfig::isOpenCLEnabled() && !ScCalcConfig::isSwInterpreterEnabled())
+    if (!ScCalcConfig::isOpenCLEnabled())
     {
-        aScope.addMessage("opencl not enabled and sw interpreter not enabled");
+        aScope.addMessage("opencl not enabled");
         return false;
     }
+
+    // TableOp does tricks with using a cell with different values, just bail out.
+    if(pDocument->IsInInterpreterTableOp())
+        return false;
+
+    if (bDependencyCheckFailed)
+        return false;
+
+    if(!bDependencyComputed && !CheckComputeDependencies(aScope, true))
+    {
+        bDependencyComputed = true;
+        bDependencyCheckFailed = true;
+        return false;
+    }
+
+    bDependencyComputed = true;
 
     // TODO : Disable invariant formula group interpretation for now in order
     // to get implicit intersection to work.
@@ -4566,9 +4861,26 @@ bool ScFormulaCell::InterpretFormulaGroup()
 
         ScTokenArray aCode;
         ScGroupTokenConverter aConverter(aCode, *pDocument, *this, xGroup->mpTopCell->aPos);
-        if (!aConverter.convert(*pCode, aScope))
+        // TODO avoid this extra compilation
+        ScCompiler aComp( pDocument, xGroup->mpTopCell->aPos, *pCode, formula::FormulaGrammar::GRAM_UNSPECIFIED, true, cMatrixFlag != ScMatrixMode::NONE );
+        aComp.CompileTokenArray();
+        if (aComp.HasUnhandledPossibleImplicitIntersections() || !aConverter.convert(*pCode, aScope))
         {
-            SAL_INFO("sc.opencl", "conversion of group " << this << " failed, disabling");
+            if(aComp.HasUnhandledPossibleImplicitIntersections())
+            {
+                SAL_INFO("sc.opencl", "group " << xGroup->mpTopCell->aPos << " has unhandled implicit intersections, disabling");
+#ifdef DBG_UTIL
+                for( const OpCode opcode : aComp.UnhandledPossibleImplicitIntersectionsOpCodes())
+                {
+                    SAL_INFO("sc.opencl", "unhandled implicit intersection opcode "
+                        << formula::FormulaCompiler().GetOpCodeMap(com::sun::star::sheet::FormulaLanguage::ENGLISH)->getSymbol(opcode)
+                        << "(" << int(opcode) << ")");
+                }
+#endif
+            }
+            else
+                SAL_INFO("sc.opencl", "conversion of group " << xGroup->mpTopCell->aPos << " failed, disabling");
+
             mxGroup->meCalcState = sc::GroupCalcDisabled;
 
             // Undo the hack above
@@ -4591,7 +4903,8 @@ bool ScFormulaCell::InterpretFormulaGroup()
         if (pInterpreter == nullptr ||
             !pInterpreter->interpret(*pDocument, xGroup->mpTopCell->aPos, xGroup, aCode))
         {
-            SAL_INFO("sc.opencl", "interpreting group " << mxGroup << " (state " << static_cast<int>(mxGroup->meCalcState) << ") failed, disabling");
+            SAL_INFO("sc.opencl", "interpreting group " << mxGroup->mpTopCell->aPos
+                << " (state " << static_cast<int>(mxGroup->meCalcState) << ") failed, disabling");
             mxGroup->meCalcState = sc::GroupCalcDisabled;
 
             // Undo the hack above
@@ -4661,7 +4974,7 @@ bool ScFormulaCell::InterpretInvariantFormulaGroup()
             }
         }
 
-        ScCompiler aComp(pDocument, aPos, aCode, pDocument->GetGrammar());
+        ScCompiler aComp(pDocument, aPos, aCode, pDocument->GetGrammar(), true, cMatrixFlag != ScMatrixMode::NONE);
         aComp.CompileTokenArray(); // Create RPN token array.
         ScInterpreter aInterpreter(this, pDocument, pDocument->GetNonThreadedContext(), aPos, aCode);
         aInterpreter.Interpret();

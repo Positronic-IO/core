@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <o3tl/safeint.hxx>
 #include <svl/itemiter.hxx>
@@ -44,6 +45,21 @@
 #include <flyfrms.hxx>
 #include <sortedobjs.hxx>
 #include <hints.hxx>
+
+namespace
+{
+/**
+ * Performs the correct type of position invalidation depending on if we're in
+ * CalcContent().
+ */
+void InvalidateFramePos(SwFrame* pFrame, bool bInCalcContent)
+{
+    if (bInCalcContent)
+        pFrame->InvalidatePos_();
+    else
+        pFrame->InvalidatePos();
+}
+}
 
 SwSectionFrame::SwSectionFrame( SwSection &rSect, SwFrame* pSib )
     : SwLayoutFrame( rSect.GetFormat(), pSib )
@@ -407,14 +423,11 @@ void SwSectionFrame::Paste( SwFrame* pParent, SwFrame* pSibling )
     if( nFrameHeight )
         pParent->Grow( nFrameHeight );
 
-    if ( GetPrev() )
+    if ( GetPrev() && !IsFollow() )
     {
-        if ( !IsFollow() )
-        {
-            GetPrev()->InvalidateSize();
-            if ( GetPrev()->IsContentFrame() )
-                GetPrev()->InvalidatePage( pPage );
-        }
+        GetPrev()->InvalidateSize();
+        if ( GetPrev()->IsContentFrame() )
+            GetPrev()->InvalidatePage( pPage );
     }
 }
 
@@ -578,15 +591,22 @@ static SwContentFrame* lcl_GetNextContentFrame( const SwLayoutFrame* pLay, bool 
         const SwFrame *p = nullptr;
         bool bGoingFwdOrBwd = false;
 
-        bool bGoingDown = !bGoingUp && ( nullptr !=  ( p = pFrame->IsLayoutFrame() ? static_cast<const SwLayoutFrame*>(pFrame)->Lower() : nullptr ) );
+        bool bGoingDown = !bGoingUp && pFrame->IsLayoutFrame();
+        if (bGoingDown)
+        {
+            p = static_cast<const SwLayoutFrame*>(pFrame)->Lower();
+            bGoingDown = nullptr != p;
+        }
         if ( !bGoingDown )
         {
-            bGoingFwdOrBwd = ( nullptr != ( p = pFrame->IsFlyFrame() ?
-                                          ( bFwd ? static_cast<const SwFlyFrame*>(pFrame)->GetNextLink() : static_cast<const SwFlyFrame*>(pFrame)->GetPrevLink() ) :
-                                          ( bFwd ? pFrame->GetNext() :pFrame->GetPrev() ) ) );
+            p = pFrame->IsFlyFrame() ?
+                ( bFwd ? static_cast<const SwFlyFrame*>(pFrame)->GetNextLink() : static_cast<const SwFlyFrame*>(pFrame)->GetPrevLink() ) :
+                ( bFwd ? pFrame->GetNext() :pFrame->GetPrev() );
+            bGoingFwdOrBwd = nullptr != p;
             if ( !bGoingFwdOrBwd )
             {
-                bGoingUp = (nullptr != (p = pFrame->GetUpper() ) );
+                p = pFrame->GetUpper();
+                bGoingUp = nullptr != p;
                 if ( !bGoingUp )
                     return nullptr;
             }
@@ -620,7 +640,21 @@ namespace
             return true;
 
         // The frame is in a table, see if the table is in a section.
-        return !pFrame->FindTabFrame()->IsInSct();
+        bool bRet = !pFrame->FindTabFrame()->IsInSct();
+
+        if (bRet)
+        {
+            // Don't try to split if the frame itself is a section frame with
+            // multiple columns.
+            if (pFrame->IsSctFrame())
+            {
+                const SwFrame* pLower = pFrame->GetLower();
+                if (pLower && pLower->IsColumnFrame())
+                    bRet = false;
+            }
+        }
+
+        return bRet;
     }
 }
 
@@ -1751,8 +1785,11 @@ SwLayoutFrame *SwFrame::GetNextSctLeaf( MakePageType eMakePage )
                 if (parents.size() >= 2 &&
                     parents[0]->IsBodyFrame() && parents[1]->IsColumnFrame())
                 {   // this only inserts section frame - remove column
-                    assert(parents[2]->IsSctFrame());
-                    std::advance(iter, +2);
+                    assert(parents[2]->IsSctFrame() || IsSctFrame());
+                    if (parents[2]->IsSctFrame())
+                        std::advance(iter, +2);
+                    else
+                        pTmp = pTmp->GetUpper();
                 }
                 else if (IsBodyFrame() && parents.size() >= 1
                          && parents[0]->IsColumnFrame())
@@ -2198,15 +2235,20 @@ SwTwips SwSectionFrame::Grow_( SwTwips nDist, bool bTst )
                 }
                 if( GetNext() )
                 {
+                    // Own height changed, need to invalidate the position of
+                    // next frames.
                     SwFrame *pFrame = GetNext();
                     while( pFrame && pFrame->IsSctFrame() && !static_cast<SwSectionFrame*>(pFrame)->GetSection() )
+                    {
+                        // Invalidate all in-between frames, otherwise position
+                        // calculation (which only looks back to one relative
+                        // frame) will have an incorrect result.
+                        InvalidateFramePos(pFrame, bInCalcContent);
                         pFrame = pFrame->GetNext();
+                    }
                     if( pFrame )
                     {
-                        if( bInCalcContent )
-                            pFrame->InvalidatePos_();
-                        else
-                            pFrame->InvalidatePos();
+                        InvalidateFramePos(pFrame, bInCalcContent);
                     }
                 }
                 // #i28701# - Due to the new object positioning
@@ -2556,7 +2598,7 @@ void SwSectionFrame::SwClientNotify( const SwModify& rMod, const SfxHint& rHint 
     // #i117863#
     const SwSectionFrameMoveAndDeleteHint* pHint =
                     dynamic_cast<const SwSectionFrameMoveAndDeleteHint*>(&rHint);
-    if ( pHint && pHint->GetId() == SfxHintId::Dying && &rMod == GetRegisteredIn() )
+    if (pHint && pHint->GetId() == SfxHintId::Dying && &rMod == GetDep())
     {
         SwSectionFrame::MoveContentAndDelete( this, pHint->IsSaveContent() );
     }
@@ -2806,7 +2848,7 @@ void SwSectionFrame::CalcFootnoteContent()
 void SwRootFrame::InsertEmptySct( SwSectionFrame* pDel )
 {
     if( !mpDestroy )
-        mpDestroy = new SwDestroyList;
+        mpDestroy.reset( new SwDestroyList );
     mpDestroy->insert( pDel );
 }
 
@@ -2837,7 +2879,7 @@ void SwRootFrame::DeleteEmptySct_()
             }
         }
         else {
-            OSL_ENSURE( pSect->GetSection(), "DeleteEmptySct: Halbtoter SectionFrame?!" );
+            OSL_ENSURE( pSect->GetSection(), "DeleteEmptySct: Half-dead SectionFrame?!" );
         }
     }
 }

@@ -42,11 +42,13 @@
 #include <com/sun/star/packages/manifest/ManifestWriter.hpp>
 #include <com/sun/star/packages/manifest/ManifestReader.hpp>
 #include <com/sun/star/ucb/InteractiveIOException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 #include <memory>
 #include <rtl/digest.h>
 #include <osl/diagnose.h>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <tools/ref.hxx>
 #include <tools/debug.hxx>
 #include <unotools/streamhelper.hxx>
@@ -86,7 +88,7 @@ class FileStreamWrapper_Impl : public FileInputStreamWrapper_Base
 protected:
     ::osl::Mutex    m_aMutex;
     OUString        m_aURL;
-    SvStream*       m_pSvStream;
+    std::unique_ptr<SvStream> m_pSvStream;
 
 public:
     explicit FileStreamWrapper_Impl(const OUString& rName);
@@ -109,7 +111,6 @@ protected:
 
 FileStreamWrapper_Impl::FileStreamWrapper_Impl( const OUString& rName )
     : m_aURL( rName )
-    , m_pSvStream(nullptr)
 {
     // if no URL is provided the stream is empty
 }
@@ -119,7 +120,7 @@ FileStreamWrapper_Impl::~FileStreamWrapper_Impl()
 {
     if ( m_pSvStream )
     {
-        delete m_pSvStream;
+        m_pSvStream.reset();
 #if OSL_DEBUG_LEVEL > 0
         --nOpenFiles;
 #endif
@@ -203,17 +204,10 @@ sal_Int32 SAL_CALL FileStreamWrapper_Impl::available()
     ::osl::MutexGuard aGuard( m_aMutex );
     checkConnected();
 
-    sal_uInt32 nPos = m_pSvStream->Tell();
+    sal_Int64 nAvailable = m_pSvStream->remainingSize();
     checkError();
 
-    m_pSvStream->Seek(STREAM_SEEK_TO_END);
-    checkError();
-
-    sal_Int32 nAvailable = static_cast<sal_Int32>(m_pSvStream->Tell()) - nPos;
-    m_pSvStream->Seek(nPos);
-    checkError();
-
-    return nAvailable;
+    return std::min<sal_Int64>(SAL_MAX_INT32, nAvailable);
 }
 
 
@@ -224,7 +218,7 @@ void SAL_CALL FileStreamWrapper_Impl::closeInput()
 
     ::osl::MutexGuard aGuard( m_aMutex );
     checkConnected();
-    DELETEZ( m_pSvStream );
+    m_pSvStream.reset();
 #if OSL_DEBUG_LEVEL > 0
     --nOpenFiles;
 #endif
@@ -268,16 +262,11 @@ sal_Int64 SAL_CALL FileStreamWrapper_Impl::getLength(  )
     ::osl::MutexGuard aGuard( m_aMutex );
     checkConnected();
 
-    sal_uInt32 nCurrentPos = m_pSvStream->Tell();
     checkError();
 
-    m_pSvStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 nEndPos = m_pSvStream->Tell();
-    m_pSvStream->Seek(nCurrentPos);
+    sal_Int64 nEndPos = m_pSvStream->TellEnd();
 
-    checkError();
-
-    return static_cast<sal_Int64>(nEndPos);
+    return nEndPos;
 }
 
 
@@ -309,7 +298,7 @@ void FileStreamWrapper_Impl::checkError()
 #define COMMIT_RESULT_NOTHING_TO_DO     1
 #define COMMIT_RESULT_SUCCESS           2
 
-SotClipboardFormatId GetFormatId_Impl( const SvGlobalName& aName )
+static SotClipboardFormatId GetFormatId_Impl( const SvGlobalName& aName )
 {
     if ( aName == SvGlobalName( SO3_SW_CLASSID_60 ) )
         return SotClipboardFormatId::STARWRITER_60;
@@ -341,7 +330,7 @@ SotClipboardFormatId GetFormatId_Impl( const SvGlobalName& aName )
 }
 
 
-SvGlobalName GetClassId_Impl( SotClipboardFormatId nFormat )
+static SvGlobalName GetClassId_Impl( SotClipboardFormatId nFormat )
 {
     switch ( nFormat )
     {
@@ -411,10 +400,10 @@ public:
     OUString                    m_aURL;         // the full path name to create the content
     OUString                    m_aContentType;
     OUString                    m_aOriginalContentType;
-    OString                     m_aKey;
+    OString const               m_aKey;
     ::ucbhelper::Content*       m_pContent;     // the content that provides the data
     Reference<XInputStream>     m_rSource;      // the stream covering the original data of the content
-    SvStream*                   m_pStream;      // the stream worked on; for readonly streams it is the original stream of the content
+    std::unique_ptr<SvStream>   m_pStream;      // the stream worked on; for readonly streams it is the original stream of the content
                                                 // for read/write streams it's a copy into a temporary file
     OUString                    m_aTempURL;     // URL of this temporary stream
     ErrCode                     m_nError;
@@ -422,7 +411,7 @@ public:
     bool                        m_bSourceRead;  // Source still contains useful information
     bool                        m_bModified;    // only modified streams will be sent to the original content
     bool                        m_bCommited;    // sending the streams is coordinated by the root storage of the package
-    bool                        m_bDirect;      // the storage and its streams are opened in direct mode; for UCBStorages
+    bool const                  m_bDirect;      // the storage and its streams are opened in direct mode; for UCBStorages
                                                 // this means that the root storage does an autocommit when its external
                                                 // reference is destroyed
     bool                        m_bIsOLEStorage;// an OLEStorage on a UCBStorageStream makes this an Autocommit-stream
@@ -472,7 +461,7 @@ public:
     ErrCode                     m_nError;
     StreamMode                  m_nMode;        // open mode ( read/write/trunc/nocreate/sharing )
     bool                        m_bCommited;    // sending the streams is coordinated by the root storage of the package
-    bool                        m_bDirect;      // the storage and its streams are opened in direct mode; for UCBStorages
+    bool const                  m_bDirect;      // the storage and its streams are opened in direct mode; for UCBStorages
                                                 // this means that the root storage does an autocommit when its external
                                                 // reference is destroyed
     bool                        m_bIsRoot;      // marks this storage as root storages that manages all commits and reverts
@@ -484,7 +473,7 @@ public:
 
     UCBStorageElementList_Impl  m_aChildrenList;
 
-    bool                        m_bRepairPackage;
+    bool const                  m_bRepairPackage;
     Reference< XProgressHandler > m_xProgressHandler;
 
                                 UCBStorage_Impl( const ::ucbhelper::Content&, const OUString&, StreamMode, UCBStorage*, bool,
@@ -494,7 +483,7 @@ public:
                                 UCBStorage_Impl( SvStream&, UCBStorage*, bool );
     void                        Init();
     sal_Int16                   Commit();
-    bool                        Revert();
+    void                        Revert();
     bool                        Insert( ::ucbhelper::Content *pContent );
     UCBStorage_Impl*            OpenStorage( UCBStorageElement_Impl* pElement, StreamMode nMode, bool bDirect );
     void                        OpenStream( UCBStorageElement_Impl*, StreamMode, bool );
@@ -535,7 +524,7 @@ struct UCBStorageElement_Impl
 {
     OUString                    m_aName;        // the actual URL relative to the root "folder"
     OUString                    m_aOriginalName;// the original name in the content
-    sal_uLong                   m_nSize;
+    sal_uLong const             m_nSize;
     bool                        m_bIsFolder;    // Only true when it is a UCBStorage !
     bool                        m_bIsStorage;   // Also true when it is an OLEStorage !
     bool                        m_bIsRemoved;   // element will be removed on commit
@@ -628,7 +617,6 @@ UCBStorageStream_Impl::UCBStorageStream_Impl( const OUString& rName, StreamMode 
     : m_pAntiImpl( pStream )
     , m_aURL( rName )
     , m_pContent( nullptr )
-    , m_pStream( nullptr )
     , m_nError( ERRCODE_NONE )
     , m_nMode( nMode )
     , m_bSourceRead( !( nMode & StreamMode::TRUNC ) )
@@ -672,7 +660,7 @@ UCBStorageStream_Impl::~UCBStorageStream_Impl()
     if( m_rSource.is() )
         m_rSource.clear();
 
-    delete m_pStream;
+    m_pStream.reset();
 
     if (!m_aTempURL.isEmpty())
         osl::File::remove(m_aTempURL);
@@ -745,7 +733,7 @@ bool UCBStorageStream_Impl::Init()
         }
         else
         {
-            // if the new file is edited than no source exist
+            // if the new file is edited then no source exist
             m_bSourceRead = false;
                 //SetError( SVSTREAM_CANNOT_MAKE );
         }
@@ -1175,7 +1163,7 @@ void UCBStorageStream_Impl::Free()
 #endif
 
     m_rSource.clear();
-    DELETEZ( m_pStream );
+    m_pStream.reset();
 }
 
 void UCBStorageStream_Impl::PrepareCachedForReopen( StreamMode nMode )
@@ -1520,8 +1508,7 @@ UCBStorage_Impl::UCBStorage_Impl( const OUString& rName, StreamMode nMode, UCBSt
         if ( m_nMode & StreamMode::WRITE )
         {
             // the root storage opens the package, so make sure that there is any
-            SvStream* pStream = ::utl::UcbStreamHelper::CreateStream( aName, StreamMode::STD_READWRITE, m_pTempFile != nullptr /* bFileExists */ );
-            delete pStream;
+            ::utl::UcbStreamHelper::CreateStream( aName, StreamMode::STD_READWRITE, m_pTempFile != nullptr /* bFileExists */ );
         }
     }
     else
@@ -1832,7 +1819,7 @@ sal_Int32 UCBStorage_Impl::GetObjectCount()
     return nCount;
 }
 
-OUString Find_Impl( const Sequence < Sequence < PropertyValue > >& rSequence, const OUString& rPath )
+static OUString Find_Impl( const Sequence < Sequence < PropertyValue > >& rSequence, const OUString& rPath )
 {
     bool bFound = false;
     for ( sal_Int32 nSeqs=0; nSeqs<rSequence.getLength(); nSeqs++ )
@@ -2211,7 +2198,7 @@ sal_Int16 UCBStorage_Impl::Commit()
                 catch (const CommandAbortedException&)
                 {
                     // how to tell the content : forget all changes ?!
-                    // or should we assume that the content does it by itself because he throwed an exception ?!
+                    // or should we assume that the content does it by itself because he threw an exception ?!
                     // any command wasn't executed successfully - not specified
                     SetError( ERRCODE_IO_GENERAL );
                     return COMMIT_RESULT_FAILURE;
@@ -2219,7 +2206,7 @@ sal_Int16 UCBStorage_Impl::Commit()
                 catch (const RuntimeException&)
                 {
                     // how to tell the content : forget all changes ?!
-                    // or should we assume that the content does it by itself because he throwed an exception ?!
+                    // or should we assume that the content does it by itself because he threw an exception ?!
                     // any other error - not specified
                     SetError( ERRCODE_IO_GENERAL );
                     return COMMIT_RESULT_FAILURE;
@@ -2242,7 +2229,7 @@ sal_Int16 UCBStorage_Impl::Commit()
                 catch (const Exception&)
                 {
                     // how to tell the content : forget all changes ?!
-                    // or should we assume that the content does it by itself because he throwed an exception ?!
+                    // or should we assume that the content does it by itself because he threw an exception ?!
                     // any other error - not specified
                     SetError( ERRCODE_IO_GENERAL );
                     return COMMIT_RESULT_FAILURE;
@@ -2277,7 +2264,7 @@ sal_Int16 UCBStorage_Impl::Commit()
     return nRet;
 }
 
-bool UCBStorage_Impl::Revert()
+void UCBStorage_Impl::Revert()
 {
     for ( size_t i = 0; i < m_aChildrenList.size(); )
     {
@@ -2303,7 +2290,6 @@ bool UCBStorage_Impl::Revert()
             ++i;
         }
     }
-    return true;
 }
 
 const OUString& UCBStorage::GetName() const
@@ -2549,7 +2535,8 @@ bool UCBStorage::Commit()
 
 bool UCBStorage::Revert()
 {
-    return pImp->Revert();
+    pImp->Revert();
+    return true;
 }
 
 BaseStorageStream* UCBStorage::OpenStream( const OUString& rEleName, StreamMode nMode, bool bDirect )
@@ -2883,8 +2870,7 @@ bool UCBStorage::IsStorageFile( SvStream* pFile )
         return false;
 
     sal_uInt64 nPos = pFile->Tell();
-    pFile->Seek( STREAM_SEEK_TO_END );
-    if ( pFile->Tell() < 4 )
+    if ( pFile->TellEnd() < 4 )
         return false;
 
     pFile->Seek(0);
@@ -2913,8 +2899,7 @@ OUString UCBStorage::GetLinkedFile( SvStream &rStream )
 {
     OUString aString;
     sal_uInt64 nPos = rStream.Tell();
-    rStream.Seek( STREAM_SEEK_TO_END );
-    if ( !rStream.Tell() )
+    if ( !rStream.TellEnd() )
         return aString;
 
     rStream.Seek(0);

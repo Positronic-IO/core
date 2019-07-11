@@ -21,6 +21,7 @@
 #include <o3tl/safeint.hxx>
 #include <tools/poly.hxx>
 #include <tools/fract.hxx>
+#include <sal/log.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/dibtools.hxx>
 #include <vcl/virdev.hxx>
@@ -35,7 +36,7 @@ class FilterConfigItem;
 enum PenStyle { PEN_NULL, PEN_SOLID, PEN_DOT, PEN_DASH, PEN_DASHDOT };
 
 
-// -----------------------------Feld-Typen-------------------------------
+// -----------------------------Field Types-------------------------------
 
 #define BegDocumnMagic 0xA8A8 /* Begin Document */
 #define EndDocumnMagic 0xA8A9 /* End Document   */
@@ -64,7 +65,7 @@ enum PenStyle { PEN_NULL, PEN_SOLID, PEN_DOT, PEN_DASH, PEN_DASHDOT };
 #define MapCodFntMagic 0x8AAB /* Map Coded Font    */
 #define MapDatResMagic 0xC3AB /* Map Data Resource */
 
-// -----------------------------Order-Typen-------------------------------
+// -----------------------------Order Types-------------------------------
 
 #define GOrdGivArc 0xC6   /* 1 Arc at given position   */
 #define GOrdCurArc 0x86   /* 1 Arc at current position */

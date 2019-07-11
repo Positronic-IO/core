@@ -180,7 +180,7 @@ bool JobData::getStreamBuffer( void*& pData, sal_uInt32& bytes )
 
     // success
     bytes = static_cast<sal_uInt32>(aStream.Tell());
-    pData = rtl_allocateMemory( bytes );
+    pData = std::malloc( bytes );
     memcpy( pData, aStream.GetData(), bytes );
     return true;
 }
@@ -278,8 +278,9 @@ bool JobData::constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, Jo
                     nBytes = aStream.ReadBytes(aRemain.data(), nBytes);
                     if (nBytes)
                     {
+                        aRemain.resize(nBytes+1);
                         aRemain[nBytes] = 0;
-                        rJobData.m_aContext.rebuildFromStreamBuffer(aRemain.data(), nBytes);
+                        rJobData.m_aContext.rebuildFromStreamBuffer(aRemain);
                         bContext = true;
                     }
                 }

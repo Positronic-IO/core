@@ -105,27 +105,9 @@ namespace basegfx
             return std::max(fVal, 0.00001);
     }
 
-    /** clamp given value against given minimum and maximum values
-    */
-    template <class T> inline const T& clamp(const T& value, const T& minimum, const T& maximum)
-    {
-        if(value < minimum)
-        {
-            return minimum;
-        }
-        else if(value > maximum)
-        {
-            return maximum;
-        }
-        else
-        {
-            return value;
-        }
-    }
-
     /** Convert value from degrees to radians
      */
-    inline double deg2rad( double v )
+    constexpr double deg2rad( double v )
     {
         // divide first, to get exact values for v being a multiple of
         // 90 degrees
@@ -134,7 +116,7 @@ namespace basegfx
 
     /** Convert value radians to degrees
      */
-    inline double rad2deg( double v )
+    constexpr double rad2deg( double v )
     {
         // divide first, to get exact values for v being a multiple of
         // pi/2

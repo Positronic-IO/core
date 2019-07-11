@@ -11,8 +11,9 @@
 #ifndef INCLUDED_OOX_CRYPTO_STANDARD2007ENGINE_HXX
 #define INCLUDED_OOX_CRYPTO_STANDARD2007ENGINE_HXX
 
-#include <filter/msfilter/mscodec.hxx>
+#include <oox/dllapi.h>
 #include <oox/crypto/CryptoEngine.hxx>
+#include <filter/msfilter/mscodec.hxx>
 #include <rtl/digest.h>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
@@ -25,7 +26,7 @@ namespace oox {
 namespace oox {
 namespace core {
 
-class Standard2007Engine : public CryptoEngine
+class OOX_DLLPUBLIC Standard2007Engine : public CryptoEngine
 {
     msfilter::StandardEncryptionInfo mInfo;
 
@@ -35,21 +36,23 @@ class Standard2007Engine : public CryptoEngine
 public:
     Standard2007Engine() = default;
 
-    msfilter::StandardEncryptionInfo& getInfo() { return mInfo;}
+    bool readEncryptionInfo(css::uno::Reference<css::io::XInputStream> & rxInputStream) override;
 
-    virtual bool generateEncryptionKey(const OUString& rPassword) override;
-
-    virtual void writeEncryptionInfo(
-                    const OUString& rPassword,
-                    BinaryXOutputStream& rStream) override;
+    virtual bool generateEncryptionKey(OUString const & rPassword) override;
 
     virtual bool decrypt(
                     BinaryXInputStream& aInputStream,
                     BinaryXOutputStream& aOutputStream) override;
 
-    virtual void encrypt(
-                    BinaryXInputStream& aInputStream,
-                    BinaryXOutputStream& aOutputStream) override;
+    bool checkDataIntegrity() override;
+
+    void encrypt(css::uno::Reference<css::io::XInputStream>&  rxInputStream,
+                 css::uno::Reference<css::io::XOutputStream>& rxOutputStream,
+                 sal_uInt32 nSize) override;
+
+    virtual void writeEncryptionInfo(BinaryXOutputStream& rStream) override;
+
+    virtual bool setupEncryption(OUString const & rPassword) override;
 
 };
 

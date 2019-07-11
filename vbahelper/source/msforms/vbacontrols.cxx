@@ -31,6 +31,7 @@
 
 #include "vbacontrols.hxx"
 #include "vbacontrol.hxx"
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <ooo/vba/XControlProvider.hpp>
 #include <unordered_map>
@@ -147,8 +148,8 @@ class ControlsEnumWrapper : public EnumerationHelper_BASE
     uno::Reference<container::XIndexAccess > m_xIndexAccess;
     uno::Reference<awt::XControl > m_xDlg;
     uno::Reference< frame::XModel > m_xModel;
-    double mfOffsetX;
-    double mfOffsetY;
+    double const mfOffsetX;
+    double const mfOffsetY;
     sal_Int32 nIndex;
 
 public:
@@ -269,8 +270,7 @@ uno::Any SAL_CALL ScVbaControls::Add( const uno::Any& Object, const uno::Any& St
             sal_Int32 nInd = 0;
             while( xDialogContainer->hasByName( aNewName ) && (nInd < SAL_MAX_INT32) )
             {
-                aNewName = aComServiceName;
-                aNewName += OUString::number( nInd++ );
+                aNewName = aComServiceName + OUString::number( nInd++ );
             }
         }
 
@@ -410,11 +410,12 @@ uno::Any SAL_CALL ScVbaControls::Add( const uno::Any& Object, const uno::Any& St
     {
         throw;
     }
-    catch (const uno::Exception& e)
+    catch (const uno::Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetRuntimeException( "Can not create AXControl!",
                 uno::Reference< uno::XInterface >(),
-                uno::makeAny( e ) );
+                anyEx );
     }
 
     return aResult;

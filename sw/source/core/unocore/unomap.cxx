@@ -306,7 +306,8 @@ const SfxItemPropertyMapEntry* SwUnoPropertyMapProvider::GetPropertyMapEntries(s
                     { OUString(UNO_NAME_OPAQUE), RES_OPAQUE,             cppu::UnoType<bool>::get(),            PROPERTY_NONE, 0},
                     { OUString(UNO_NAME_ANCHOR_POSITION), FN_ANCHOR_POSITION,    cppu::UnoType<css::awt::Point>::get(),    PropertyAttribute::READONLY, 0},
                     // #i26791#
-                    { OUString(UNO_NAME_IS_FOLLOWING_TEXT_FLOW), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, 0},
+                    { OUString(UNO_NAME_IS_FOLLOWING_TEXT_FLOW), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, MID_FOLLOW_TEXT_FLOW},
+                    { OUString(UNO_NAME_IS_LAYOUT_IN_CELL), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, MID_FTF_LAYOUT_IN_CELL},
                     // #i28701#
                     { OUString(UNO_NAME_WRAP_INFLUENCE_ON_POSITION), RES_WRAP_INFLUENCE_ON_OBJPOS, cppu::UnoType<sal_Int8>::get(), PROPERTY_NONE, MID_WRAP_INFLUENCE},
                     // #i28749#
@@ -328,7 +329,7 @@ const SfxItemPropertyMapEntry* SwUnoPropertyMapProvider::GetPropertyMapEntries(s
                                     cppu::UnoType<css::awt::Point>::get(),
                                     PropertyAttribute::READONLY, 0},
                     // #i71182#
-                    // missing map entry for property <PageToogle>
+                    // missing map entry for property <PageToggle>
                     { OUString(UNO_NAME_PAGE_TOGGLE), RES_HORI_ORIENT,      cppu::UnoType<bool>::get(),         PROPERTY_NONE ,MID_HORIORIENT_PAGETOGGLE },
                     { OUString(UNO_NAME_RELATIVE_HEIGHT), RES_FRM_SIZE,     cppu::UnoType<sal_Int16>::get()  ,         PROPERTY_NONE, MID_FRMSIZE_REL_HEIGHT },
                     { OUString(UNO_NAME_RELATIVE_HEIGHT_RELATION), RES_FRM_SIZE, cppu::UnoType<sal_Int16>::get(),      PROPERTY_NONE, MID_FRMSIZE_REL_HEIGHT_RELATION },
@@ -683,7 +684,7 @@ const SfxItemPropertyMapEntry* SwUnoPropertyMapProvider::GetPropertyMapEntries(s
             {
                 static SfxItemPropertyMapEntry const aLinkTargetMap_Impl[] =
                 {
-                    { OUString(UNO_LINK_DISPLAY_BITMAP), 0,     cppu::UnoType<css::awt::XBitmap>::get(), PropertyAttribute::READONLY, 0xff},
+                    { OUString(UNO_LINK_DISPLAY_BITMAP), 0,     cppu::UnoType<css::awt::XBitmap>::get(), PropertyAttribute::READONLY, 0xbf},
                     { OUString(UNO_LINK_DISPLAY_NAME), 0,   cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xbf},
                     { OUString(), 0, css::uno::Type(), 0, 0 }
                 };

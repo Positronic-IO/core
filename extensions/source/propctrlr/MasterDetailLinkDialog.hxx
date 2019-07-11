@@ -18,6 +18,8 @@
  */
 #ifndef INCLUDED_EXTENSIONS_SOURCE_PROPCTRLR_MASTERDETAILLINKDIALOG_HXX
 #define INCLUDED_EXTENSIONS_SOURCE_PROPCTRLR_MASTERDETAILLINKDIALOG_HXX
+
+#include <comphelper/proparrhlp.hxx>
 #include <svtools/genericunodialog.hxx>
 #include "modulepcr.hxx"
 
@@ -58,7 +60,7 @@ namespace pcr
         virtual ::cppu::IPropertyArrayHelper* createArrayHelper( ) const override;
 
         // OGenericUnoDialog overridables
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
         virtual void implInitialize(const css::uno::Any& _rValue) override;
 
         css::uno::Reference< css::beans::XPropertySet> m_xDetail;

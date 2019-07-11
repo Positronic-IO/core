@@ -81,7 +81,7 @@ java_util_Properties::java_util_Properties( ): java_lang_Object( nullptr, nullpt
     if( !t.pEnv )
         return;
     // Turn off Java-Call for the constructor
-    // Initialize temperary Variables
+    // Initialize temporary Variables
     static const char * const cSignature = "()V";
     jobject tempObj;
     static jmethodID mID(nullptr);
@@ -119,6 +119,11 @@ java_util_Properties* connectivity::createStringPropertyArray(const Sequence< Pr
             &&  pBegin->Name != "SystemProperties"
             &&  pBegin->Name != "CharSet"
             &&  pBegin->Name != "AppendTableAliasName"
+            &&  pBegin->Name != "AppendTableAliasInSelect"
+            &&  pBegin->Name != "DisplayVersionColumns"
+            &&  pBegin->Name != "GeneratedValues"
+            &&  pBegin->Name != "UseIndexDirectionKeyword"
+            &&  pBegin->Name != "UseKeywordAsBeforeAlias"
             &&  pBegin->Name != "AddIndexAppendix"
             &&  pBegin->Name != "FormsCheckRequiredFields"
             &&  pBegin->Name != "GenerateASBeforeCorrelationName"
@@ -206,7 +211,7 @@ jobject connectivity::createByteInputStream(const css::uno::Reference< css::io::
     if( !t.pEnv || !x.is() )
         return nullptr;
     // Turn off Java-Call for the constructor
-    // Initialize temperary variables
+    // Initialize temporary variables
     jclass clazz = java_lang_Object::findMyClass("java/io/ByteArrayInputStream");
     static jmethodID mID(nullptr);
     if  ( !mID )
@@ -233,7 +238,7 @@ jobject connectivity::createCharArrayReader(const css::uno::Reference< css::io::
     if( !t.pEnv || !x.is() )
         return nullptr;
     // Turn off Java-Call for the constructor
-    // Initialize temperary Variables
+    // Initialize temporary Variables
     jclass clazz = java_lang_Object::findMyClass("java/io/CharArrayReader");
     static jmethodID mID(nullptr);
     if  ( !mID )

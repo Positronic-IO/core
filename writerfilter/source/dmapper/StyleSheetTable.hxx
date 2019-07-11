@@ -47,15 +47,16 @@ enum StyleType
     STYLE_TYPE_TABLE,
     STYLE_TYPE_LIST
 };
+class StyleSheetTable;
+typedef tools::SvRef<StyleSheetTable> StyleSheetTablePtr;
 
 struct StyleSheetTable_Impl;
-class StyleSheetEntry
+class StyleSheetEntry : public virtual SvRefBase
 {
     std::vector<css::beans::PropertyValue> m_aInteropGrabBag;
 public:
     OUString sStyleIdentifierD;   // WW8 name
     bool            bIsDefaultStyle;
-    bool            bIsChapterNumbering;  //LO built-in Chapter Numbering "Outline" list style
     bool            bInvalidHeight;
     bool            bHasUPE; //universal property expansion
     StyleType       nStyleTypeCode; //sgc
@@ -72,11 +73,14 @@ public:
     css::beans::PropertyValue GetInteropGrabBag(); ///< Used for table styles, has a name.
     css::beans::PropertyValues GetInteropGrabBagSeq(); ///< Used for existing styles, just a list of properties.
 
+    // Get all properties, merged with the all of the parent's properties
+    PropertyMapPtr GetMergedInheritedProperties(const StyleSheetTablePtr& pStyleSheetTable);
+
     StyleSheetEntry();
-    virtual ~StyleSheetEntry();
+    virtual ~StyleSheetEntry() override;
 };
 
-typedef std::shared_ptr<StyleSheetEntry> StyleSheetEntryPtr;
+typedef tools::SvRef<StyleSheetEntry> StyleSheetEntryPtr;
 
 class DomainMapper;
 class StyleSheetTable :
@@ -93,15 +97,16 @@ public:
     const StyleSheetEntryPtr FindStyleSheetByISTD(const OUString& sIndex);
     const StyleSheetEntryPtr FindStyleSheetByConvertedStyleName(const OUString& rIndex);
     const StyleSheetEntryPtr FindDefaultParaStyle();
-    // returns the parent of the one with the given name - if empty the parent of the current style sheet is returned
-    const StyleSheetEntryPtr FindParentStyleSheet(const OUString& sBaseStyle);
 
     OUString ConvertStyleName( const OUString& rWWName, bool bExtendedSearch = false );
 
     OUString getOrCreateCharStyle( PropertyValueVector_t& rCharProperties, bool bAlwaysCreate );
 
+    PropertyMapPtr const & GetDefaultParaProps();
     /// Returns the default character properties.
     PropertyMapPtr const & GetDefaultCharProps();
+
+    const StyleSheetEntryPtr GetCurrentEntry();
 
 private:
     // Properties
@@ -113,7 +118,6 @@ private:
 
     void applyDefaults(bool bParaProperties);
 };
-typedef std::shared_ptr< StyleSheetTable >    StyleSheetTablePtr;
 
 
 class TableStyleSheetEntry :

@@ -19,6 +19,7 @@
 
 #include <memory>
 #include "KeySet.hxx"
+#include <sal/log.hxx>
 #include <core_resource.hxx>
 #include <strings.hrc>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -85,7 +86,7 @@ namespace
         }
     }
 
-    template < typename T > inline void tryDispose( Reference<T> &r )
+    template < typename T > void tryDispose( Reference<T> &r )
     {
         try
         {
@@ -222,11 +223,11 @@ namespace
             fullName = tblName + "." + colName;
         if ( _rValue.isNull() )
         {
-            o_buf.append(fullName + " IS NULL ");
+            o_buf.append(fullName).append(" IS NULL ");
         }
         else
         {
-            o_buf.append(fullName + " = ? ");
+            o_buf.append(fullName).append(" = ? ");
         }
     }
 }
@@ -333,7 +334,7 @@ void OKeySet::ensureStatement( )
 {
     // do we already have a statement for the current combination of NULLness
     // of key & foreign columns?
-    FilterColumnsNULL_t FilterColumnsNULL;
+    std::vector<bool> FilterColumnsNULL;
     FilterColumnsNULL.reserve(m_aKeyIter->second.first->get().size());
     for (auto const& elem : m_aKeyIter->second.first->get())
         FilterColumnsNULL.push_back(elem.isNull());
@@ -502,7 +503,7 @@ void OKeySet::updateRow(const ORowSetRow& _rInsertRow ,const ORowSetRow& _rOrigi
         }
         if((_rInsertRow->get())[columnName.second.nPosition].isModified())
         {
-            aSql.append(::dbtools::quoteName( aQuote,columnName.second.sRealName) + aPara);
+            aSql.append(::dbtools::quoteName( aQuote,columnName.second.sRealName)).append(aPara);
         }
         ++i;
     }
@@ -519,7 +520,7 @@ void OKeySet::updateRow(const ORowSetRow& _rInsertRow ,const ORowSetRow& _rOrigi
         aSql.append(" WHERE ");
         if(!sKeyCondition.isEmpty() && !sIndexCondition.isEmpty())
         {
-            aSql.append(sKeyCondition.makeStringAndClear() + sIndexCondition.makeStringAndClear());
+            aSql.append(sKeyCondition.makeStringAndClear()).append(sIndexCondition.makeStringAndClear());
         }
         else if(!sKeyCondition.isEmpty())
         {
@@ -617,7 +618,7 @@ void OKeySet::insertRow( const ORowSetRow& _rInsertRow,const connectivity::OSQLT
             {
                 bRefetch = std::find(m_aFilterColumns.begin(),m_aFilterColumns.end(),columnName.second.sRealName) == m_aFilterColumns.end();
             }
-            aSql.append(::dbtools::quoteName( aQuote,columnName.second.sRealName) + ",");
+            aSql.append(::dbtools::quoteName( aQuote,columnName.second.sRealName)).append(",");
             aValues.append("?,");
             bModified = true;
         }
@@ -714,10 +715,8 @@ void OKeySet::executeInsert( const ORowSetRow& _rInsertRow,const OUString& i_sSQ
     if ( i_sTableName.isEmpty() && !bAutoValuesFetched && m_bInserted )
     {
         // first check if all key column values were set
-        const OUString sMax(" MAX(");
-        const OUString sMaxEnd("),");
         const OUString sQuote = getIdentifierQuoteString();
-        OUString sMaxStmt;
+        OUStringBuffer sMaxStmt;
         auto aEnd = m_pKeyColumnNames->end();
         for (auto const& autoColumn : m_aAutoColumns)
         {
@@ -725,14 +724,14 @@ void OKeySet::executeInsert( const ORowSetRow& _rInsertRow,const OUString& i_sSQ
             SelectColumnsMetaData::const_iterator aFind = m_pKeyColumnNames->find(autoColumn);
             if ( aFind != aEnd )
             {
-                sMaxStmt += sMax + ::dbtools::quoteName( sQuote,aFind->second.sRealName) + sMaxEnd;
+                sMaxStmt.append(" MAX(").append(::dbtools::quoteName( sQuote,aFind->second.sRealName)).append("),");
             }
         }
 
         if(!sMaxStmt.isEmpty())
         {
-            sMaxStmt = sMaxStmt.replaceAt(sMaxStmt.getLength()-1,1," ");
-            OUString sStmt = "SELECT " + sMaxStmt + "FROM ";
+            sMaxStmt[sMaxStmt.getLength()-1] = ' ';
+            OUString sStmt = "SELECT " + sMaxStmt.makeStringAndClear() + "FROM ";
             OUString sCatalog,sSchema,sTable;
             ::dbtools::qualifiedNameComponents(m_xConnection->getMetaData(),m_sUpdateTableName,sCatalog,sSchema,sTable,::dbtools::EComposeRule::InDataManipulation);
             sStmt += ::dbtools::composeTableNameForSelect( m_xConnection, sCatalog, sSchema, sTable );
@@ -810,7 +809,8 @@ void OKeySet::copyRowValue(const ORowSetRow& _rInsertRow, ORowSetRow const & _rK
         aValue.setSigned(m_aSignedFlags[parameterName.second.nPosition-1]);
         if ( (_rInsertRow->get())[parameterName.second.nPosition] != aValue )
         {
-            rtl::Reference<ORowSetValueVector> aCopy(new ORowSetValueVector(*m_aParameterValueForCache.get()));
+            rtl::Reference<ORowSetValueVector> aCopy(
+                new ORowSetValueVector(*m_aParameterValueForCache));
             (aCopy->get())[i] = (_rInsertRow->get())[parameterName.second.nPosition];
             m_aUpdatedParameter[i_nBookmark] = aCopy;
             bChanged = true;

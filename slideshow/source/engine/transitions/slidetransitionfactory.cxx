@@ -18,6 +18,7 @@
  */
 
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/utils/canvastools.hxx>
@@ -25,8 +26,6 @@
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 
 #include <cppcanvas/basegfxfactory.hxx>
-
-#include <comphelper/make_shared_from_uno.hxx>
 
 #include <com/sun/star/rendering/XIntegerBitmap.hpp>
 #include <com/sun/star/rendering/IntegerBitmapLayout.hpp>
@@ -258,8 +257,8 @@ private:
     // bool
     bool mbSuccess;
 
-    sal_Int16 mnTransitionType;
-    sal_Int16 mnTransitionSubType;
+    sal_Int16 const mnTransitionType;
+    sal_Int16 const mnTransitionSubType;
 
     uno::Reference<presentation::XTransitionFactory> mxFactory;
 };
@@ -475,7 +474,7 @@ public:
         double                                     t ) override;
 
 private:
-    RGBColor maFadeColor;
+    RGBColor const maFadeColor;
 };
 
 void CutSlideChange::prepareForRun(
@@ -675,7 +674,7 @@ NumberAnimationSharedPtr createPushWipeTransition(
     const SoundPlayerSharedPtr&                     pSoundPlayer )
 {
     boost::optional<SlideSharedPtr> leavingSlide; // no bitmap
-    if (leavingSlide_ && (*leavingSlide_).get() != nullptr)
+    if (leavingSlide_ && *leavingSlide_ != nullptr)
     {
         // opt: only page, if we've an
         // actual slide to move out here. We
@@ -1073,7 +1072,7 @@ NumberAnimationSharedPtr TransitionFactory::createSlideTransition(
                                 if (pLeavingSlide) {
                                     // only generate, if fade
                                     // effect really needs it.
-                                    leavingSlide.reset( pLeavingSlide );
+                                    leavingSlide = pLeavingSlide;
                                 }
                                 aFadeColor = rTransitionFadeColor;
                                 break;

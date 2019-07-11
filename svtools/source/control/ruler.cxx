@@ -23,6 +23,7 @@
 #include <tools/poly.hxx>
 #include <vcl/i18nhelp.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include <svtools/ruler.hxx>
 #include <svtools/svtresid.hxx>
@@ -60,6 +61,37 @@ using namespace ::com::sun::star::accessibility;
 #define RULER_UNIT_CHAR     9
 #define RULER_UNIT_LINE    10
 #define RULER_UNIT_COUNT   11
+
+namespace
+{
+/**
+ * Pre-calculates glyph items for rText on rRenderContext. Subsequent calls
+ * avoid the calculation and just return a pointer to rTextGlyphs.
+ */
+SalLayoutGlyphs* lcl_GetRulerTextGlyphs(vcl::RenderContext& rRenderContext, const OUString& rText,
+                                        SalLayoutGlyphs& rTextGlyphs)
+{
+    if (rTextGlyphs.IsValid())
+        // Use pre-calculated result.
+        return &rTextGlyphs;
+
+    // Calculate glyph items.
+
+    std::unique_ptr<SalLayout> pLayout = rRenderContext.ImplLayout(
+        rText, 0, rText.getLength(), Point(0, 0), 0, nullptr, SalLayoutFlags::GlyphItemsOnly);
+    if (!pLayout)
+        return nullptr;
+
+    const SalLayoutGlyphs* pGlyphs = pLayout->GetGlyphs();
+    if (!pGlyphs)
+        return nullptr;
+
+    // Remember the calculation result.
+    rTextGlyphs = *pGlyphs;
+
+    return &rTextGlyphs;
+}
+}
 
 class ImplRulerData
 {
@@ -166,7 +198,6 @@ void Ruler::ImplInit( WinBits nWinBits )
     mnVirWidth      = 0;                    // width or height from VirtualDevice
     mnVirHeight     = 0;                    // height of width from VirtualDevice
     mnDragPos       = 0;                    // Drag-Position (Null point)
-    mnUpdateEvtId   = nullptr;                    // Update event was not sent yet
     mnDragAryPos    = 0;                    // Drag-Array-Index
     mnDragSize      = RulerDragSize::Move;  // Did size change at dragging
     mnDragModifier  = 0;                    // Modifier key at dragging
@@ -187,7 +218,7 @@ void Ruler::ImplInit( WinBits nWinBits )
 
     // Initialize Units
     mnUnitIndex     = RULER_UNIT_CM;
-    meUnit          = FUNIT_CM;
+    meUnit          = FieldUnit::CM;
     maZoom          = Fraction( 1, 1 );
 
     // Recalculate border widths
@@ -255,8 +286,6 @@ Ruler::~Ruler()
 
 void Ruler::dispose()
 {
-    if ( mnUpdateEvtId )
-        Application::RemoveUserEvent( mnUpdateEvtId );
     mpSaveData.reset();
     mpDragData.reset();
     mxAccContext.clear();
@@ -310,7 +339,9 @@ void Ruler::ImplVDrawRect(vcl::RenderContext& rRenderContext, long nX1, long nY1
 void Ruler::ImplVDrawText(vcl::RenderContext& rRenderContext, long nX, long nY, const OUString& rText, long nMin, long nMax)
 {
     tools::Rectangle aRect;
-    rRenderContext.GetTextBoundRect(aRect, rText);
+    SalLayoutGlyphs* pTextLayout
+        = lcl_GetRulerTextGlyphs(rRenderContext, rText, maTextGlyphs[rText]);
+    rRenderContext.GetTextBoundRect(aRect, rText, 0, 0, -1, 0, nullptr, pTextLayout);
 
     long nShiftX = ( aRect.GetWidth() / 2 ) + aRect.Left();
     long nShiftY = ( aRect.GetHeight() / 2 ) + aRect.Top();
@@ -318,9 +349,11 @@ void Ruler::ImplVDrawText(vcl::RenderContext& rRenderContext, long nX, long nY, 
     if ( (nX > -RULER_CLIP) && (nX < mnVirWidth + RULER_CLIP) && ( nX < nMax - nShiftX ) && ( nX > nMin + nShiftX ) )
     {
         if ( mnWinStyle & WB_HORZ )
-            rRenderContext.DrawText(Point(nX - nShiftX, nY - nShiftY), rText);
+            rRenderContext.DrawText(Point(nX - nShiftX, nY - nShiftY), rText, 0, -1, nullptr,
+                                    nullptr, pTextLayout);
         else
-            rRenderContext.DrawText(Point(nY - nShiftX, nX - nShiftY), rText);
+            rRenderContext.DrawText(Point(nY - nShiftX, nX - nShiftY), rText, 0, -1, nullptr,
+                                    nullptr, pTextLayout);
     }
 }
 
@@ -767,7 +800,7 @@ void Ruler::ImplDrawIndents(vcl::RenderContext& rRenderContext, long nMin, long 
                 }
             }
             bool bIsHit = false;
-            if(mxCurrentHitTest.get() != nullptr && mxCurrentHitTest->eType == RulerType::Indent)
+            if (mxCurrentHitTest != nullptr && mxCurrentHitTest->eType == RulerType::Indent)
             {
                 bIsHit = mxCurrentHitTest->nAryPos == j;
             }
@@ -1960,7 +1993,7 @@ void Ruler::MouseMove( const MouseEvent& rMEvt )
 
     if (ImplHitTest( rMEvt.GetPosPixel(), mxCurrentHitTest.get() ))
     {
-        maHoverSelection = *mxCurrentHitTest.get();
+        maHoverSelection = *mxCurrentHitTest;
 
         if (mxCurrentHitTest->bSize)
         {
@@ -1992,7 +2025,7 @@ void Ruler::MouseMove( const MouseEvent& rMEvt )
         }
     }
 
-    if (mxPreviousHitTest.get() != nullptr && mxPreviousHitTest->eType != mxCurrentHitTest->eType)
+    if (mxPreviousHitTest != nullptr && mxPreviousHitTest->eType != mxCurrentHitTest->eType)
     {
         mbFormat = true;
     }
@@ -2351,37 +2384,37 @@ void Ruler::SetUnit( FieldUnit eNewUnit )
     meUnit = eNewUnit;
     switch ( meUnit )
     {
-        case FUNIT_MM:
+        case FieldUnit::MM:
             mnUnitIndex = RULER_UNIT_MM;
             break;
-        case FUNIT_CM:
+        case FieldUnit::CM:
             mnUnitIndex = RULER_UNIT_CM;
             break;
-        case FUNIT_M:
+        case FieldUnit::M:
             mnUnitIndex = RULER_UNIT_M;
             break;
-        case FUNIT_KM:
+        case FieldUnit::KM:
             mnUnitIndex = RULER_UNIT_KM;
             break;
-        case FUNIT_INCH:
+        case FieldUnit::INCH:
             mnUnitIndex = RULER_UNIT_INCH;
             break;
-        case FUNIT_FOOT:
+        case FieldUnit::FOOT:
             mnUnitIndex = RULER_UNIT_FOOT;
             break;
-        case FUNIT_MILE:
+        case FieldUnit::MILE:
             mnUnitIndex = RULER_UNIT_MILE;
             break;
-        case FUNIT_POINT:
+        case FieldUnit::POINT:
             mnUnitIndex = RULER_UNIT_POINT;
             break;
-        case FUNIT_PICA:
+        case FieldUnit::PICA:
             mnUnitIndex = RULER_UNIT_PICA;
             break;
-        case FUNIT_CHAR:
+        case FieldUnit::CHAR:
             mnUnitIndex = RULER_UNIT_CHAR;
             break;
-        case FUNIT_LINE:
+        case FieldUnit::LINE:
             mnUnitIndex = RULER_UNIT_LINE;
             break;
         default:
@@ -2480,8 +2513,7 @@ void Ruler::SetLines( sal_uInt32 aLineArraySize, const RulerLine* pLineArray )
         const RulerLine* pAry2 = pLineArray;
         while ( i )
         {
-            if ( (aItr1->nPos   != pAry2->nPos)   ||
-                 (aItr1->nStyle != pAry2->nStyle) )
+            if ( aItr1->nPos   != pAry2->nPos )
                 break;
             ++aItr1;
             ++pAry2;

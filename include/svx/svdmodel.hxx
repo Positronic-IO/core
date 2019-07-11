@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SVX_SVDMODEL_HXX
 #define INCLUDED_SVX_SVDMODEL_HXX
 
+#include <functional>
 #include <memory>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <cppuhelper/weakref.hxx>
@@ -48,6 +49,11 @@ class OutputDevice;
 
 #include <rtl/ref.hxx>
 #include <deque>
+
+#ifdef DBG_UTIL
+// SdrObjectLifetimeWatchDog
+#include <unordered_set>
+#endif
 
 #define DEGREE_CHAR u'\x00B0'   /* U+00B0 DEGREE SIGN */
 
@@ -123,7 +129,7 @@ enum class SdrHintKind
 class SVX_DLLPUBLIC SdrHint: public SfxHint
 {
 private:
-    SdrHintKind                             meHint;
+    SdrHintKind const                       meHint;
     const SdrObject*                        mpObj;
     const SdrPage*                          mpPage;
 
@@ -138,16 +144,47 @@ public:
     SdrHintKind      GetKind() const { return meHint;}
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  SdrModel
+//      DlgEdModel
+//      FmFormModel
+//          ScDrawLayer
+//          SdDrawDocument
+//          SwDrawModel
+//      OReportModel
 
 struct SdrModelImpl;
 
 class SVX_DLLPUBLIC SdrModel : public SfxBroadcaster, public virtual tools::WeakBase
 {
+private:
+#ifdef DBG_UTIL
+    // SdrObjectLifetimeWatchDog:
+    // Use maAllIncarnatedObjects to keep track of all SdrObjects incarnated using this SdrModel
+    // (what is now possible after the paradigm change that a SdrObject stays at a single SdrModel
+    // for it's whole lifetime).
+    // The two methods are exclusive, debug-only, only-accessible-by SdrObject accesses to else
+    // hidden/non-existing maAllIncarnatedObjects.
+    // SdrObject::SdrObject uses impAddIncarnatedSdrObjectToSdrModel, while SdrObject::~SdrObject
+    // uses impRemoveIncarnatedSdrObjectToSdrModel.
+    // There are two places which may trigger SAL_WARN warnings:
+    // - impRemoveIncarnatedSdrObjectToSdrModel when the to-be-removed SdrObject is not member of SdrModel
+    // - SdrModel::~SdrModel after all SdrObjects *should* be cleaned-up.
+    // SdrModel::~SdrModel will also - for convenience - Free the non-deleted SdrObjects if there
+    // are any.
+    // Using std::unordered_set will use quasi constant access times, so this watchdog will not
+    // be expensive. Nonetheless, only use with debug code. It may be seductive to use this in
+    // product code, too, especially if it will indeed trigger - but its intention is clearly
+    // to find/identify MemoryLeaks caused by SdrObjects
+    friend void impAddIncarnatedSdrObjectToSdrModel(const SdrObject& rSdrObject, SdrModel& rSdrModel);
+    friend void impRemoveIncarnatedSdrObjectToSdrModel(const SdrObject& rSdrObject, SdrModel& rSdrModel);
+    std::unordered_set< const SdrObject* >  maAllIncarnatedObjects;
+#endif
 protected:
     std::vector<SdrPage*> maMaPag;     // master pages
     std::vector<SdrPage*> maPages;
-    Link<SdrUndoAction*,void>  aUndoLink;  // link to a NotifyUndo-Handler
-    OUString       aTablePath;
+    std::function<void(std::unique_ptr<SdrUndoAction>)> aUndoLink;  // link to a NotifyUndo-Handler
     Size           aMaxObjSize; // e.g. for auto-growing text
     Fraction       aObjUnit;   // description of the coordinate units for ClipBoard, Drag&Drop, ...
     MapUnit        eObjUnit;   // see above
@@ -176,7 +213,6 @@ protected:
     sal_uInt16          nUndoLevel;                   // undo nesting
     bool                bMyPool:1;        // to clean up pMyPool from 303a
     bool                mbUndoEnabled:1;  // If false no undo is recorded or we are during the execution of an undo action
-    bool                bExtColorTable:1; // For no own ColorTable
     bool                mbChanged:1;
     bool                bPagNumsDirty:1;
     bool                bMPgNumsDirty:1;
@@ -235,9 +271,12 @@ private:
     SVX_DLLPRIVATE void ImpSetOutlinerDefaults( SdrOutliner* pOutliner, bool bInit = false );
     SVX_DLLPRIVATE void ImpReformatAllTextObjects();
     SVX_DLLPRIVATE void ImpReformatAllEdgeObjects();
-    SVX_DLLPRIVATE void ImpCreateTables();
-    SVX_DLLPRIVATE void ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* pPers, bool bUseExtColorTable);
+    SVX_DLLPRIVATE void ImpCreateTables(bool bDisablePropertyFiles);
 
+    SVX_DLLPRIVATE void ImpCtor(
+        SfxItemPool* pPool,
+        ::comphelper::IEmbeddedHelper* pPers,
+        bool bDisablePropertyFiles);
 
     // this is a weak reference to a possible living api wrapper for this model
     css::uno::Reference< css::uno::XInterface > mxUnoModel;
@@ -256,9 +295,13 @@ public:
     // if you want to use symbol objects inherited from SdrAttrObj.
     // If, however, you use objects inheriting from SdrObject you are free
     // to chose a pool of your liking.
-    explicit SdrModel();
-    explicit SdrModel(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* pPers);
-    explicit SdrModel(const OUString& rPath, SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* pPers, bool bUseExtColorTable);
+    //
+    // tdf#118731 a bDisablePropertyFiles of true will disable ability to load
+    // XPropertyFiles describing defaults. Useful for UI preview widgets
+    explicit SdrModel(
+        SfxItemPool* pPool = nullptr,
+        ::comphelper::IEmbeddedHelper* pPers = nullptr,
+        bool bDisablePropertyFiles = false);
     virtual ~SdrModel() override;
     void ClearModel(bool bCalledFromDestructor);
 
@@ -458,7 +501,7 @@ public:
     void BegUndo(const OUString& rComment); // open Undo group
     void BegUndo(const OUString& rComment, const OUString& rObjDescr, SdrRepeatFunc eFunc); // open Undo group
     void EndUndo();                       // close Undo group
-    void AddUndo(SdrUndoAction* pUndo);
+    void AddUndo(std::unique_ptr<SdrUndoAction> pUndo);
     sal_uInt16 GetUndoBracketLevel() const                       { return nUndoLevel; }
     // only after the first BegUndo or before the last EndUndo:
     void SetUndoComment(const OUString& rComment);
@@ -480,7 +523,7 @@ public:
     //   void NotifyUndoActionHdl(SfxUndoAction* pUndoAction);
     // When calling the handler ownership is transferred;
     // The UndoAction belongs to the Handler, not the SdrModel.
-    void        SetNotifyUndoActionHdl(const Link<SdrUndoAction*,void>& rLink)  { aUndoLink=rLink; }
+    void        SetNotifyUndoActionHdl(const std::function<void(std::unique_ptr<SdrUndoAction>)>& rLink)  { aUndoLink=rLink; }
 
     /** application can set its own undo manager, BegUndo, EndUndo and AddUndoAction
         calls are routed to this interface if given */
@@ -545,14 +588,10 @@ public:
     void SetAnchoredTextOverflowLegacy(bool bEnabled);
     bool IsAnchoredTextOverflowLegacy() const;
 
-    // tdf#115639 compatibility flag
-    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
-    bool IsHoriAlignIgnoreTrailingWhitespace() const;
-
     void ReformatAllTextObjects();
 
     std::unique_ptr<SdrOutliner> createOutliner( OutlinerMode nOutlinerMode );
-    void disposeOutliner( SdrOutliner* pOutliner );
+    void disposeOutliner( std::unique_ptr<SdrOutliner> pOutliner );
 
     bool IsWriter() const { return !bMyPool; }
 

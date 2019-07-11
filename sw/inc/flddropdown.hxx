@@ -90,14 +90,14 @@ class SW_DLLPUBLIC SwDropDownField : public SwField
 
        @return the expanded value of the field
     */
-    virtual OUString Expand() const override;
+    virtual OUString ExpandImpl(SwRootFrame const* pLayout) const override;
 
     /**
        Creates a copy of this field.
 
        @return the copy of this field
     */
-    virtual SwField * Copy() const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
 public:
     /**

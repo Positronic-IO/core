@@ -21,20 +21,15 @@
 
 #include <sal/config.h>
 
-#include <cstddef>
-#include <functional>
 #include <vector>
-#include <utility>
 
-#include <osl/diagnose.h>
-#include <osl/mutex.hxx>
-#include <rtl/alloc.h>
-#include <com/sun/star/uno/Sequence.hxx>
-#include <com/sun/star/uno/XInterface.hpp>
 #include <com/sun/star/lang/EventObject.hpp>
 
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <comphelper/comphelperdllapi.h>
+
+namespace com { namespace sun { namespace star { namespace uno { class XInterface; } } } }
+namespace osl { class Mutex; }
 
 /** */ //for docpp
 namespace comphelper
@@ -105,14 +100,12 @@ public:
 
 private:
     OInterfaceContainerHelper2 & rCont;
-    bool                         bIsList;
+    bool const                   bIsList;
     detail::element_alias2       aData;
     sal_Int32                    nRemain;
 
-    OInterfaceIteratorHelper2( const OInterfaceIteratorHelper2 & )
-        SAL_DELETED_FUNCTION;
-    OInterfaceIteratorHelper2 &  operator = ( const OInterfaceIteratorHelper2 & )
-        SAL_DELETED_FUNCTION;
+    OInterfaceIteratorHelper2( const OInterfaceIteratorHelper2 & ) = delete;
+    OInterfaceIteratorHelper2 &  operator = ( const OInterfaceIteratorHelper2 & ) = delete;
 };
 
 
@@ -125,16 +118,6 @@ private:
 class COMPHELPER_DLLPUBLIC OInterfaceContainerHelper2
 {
 public:
-    // these are here to force memory de/allocation to sal lib.
-    static void * operator new( size_t nSize )
-        { return ::rtl_allocateMemory( nSize ); }
-    static void operator delete( void * pMem )
-        { ::rtl_freeMemory( pMem ); }
-    static void * operator new( size_t, void * pMem )
-        { return pMem; }
-    static void operator delete( void *, void * )
-        {}
-
     /**
        Create an interface container.
 
@@ -186,7 +169,7 @@ public:
     sal_Int32 removeInterface( const css::uno::Reference< css::uno::XInterface > & rxIFace );
     /**
       Call disposing on all object in the container that
-      support XEventListener. Than clear the container.
+      support XEventListener. Then clear the container.
      */
     void disposeAndClear( const css::lang::EventObject & rEvt );
     /**
@@ -245,10 +228,8 @@ friend class OInterfaceIteratorHelper2;
     /** TRUE -> aData.pAsVector is of type Sequence< XInterfaceSequence >. */
     bool                    bIsList;
 
-    OInterfaceContainerHelper2( const OInterfaceContainerHelper2 & )
-        SAL_DELETED_FUNCTION;
-    OInterfaceContainerHelper2 & operator = ( const OInterfaceContainerHelper2 & )
-        SAL_DELETED_FUNCTION;
+    OInterfaceContainerHelper2( const OInterfaceContainerHelper2 & ) = delete;
+    OInterfaceContainerHelper2 & operator = ( const OInterfaceContainerHelper2 & ) = delete;
 
     /*
       Duplicate content of the container and release the old one without destroying.
@@ -262,8 +243,8 @@ private:
     {
     private:
         typedef void ( SAL_CALL ListenerT::*NotificationMethod )( const EventT& );
-        NotificationMethod  m_pMethod;
-        const EventT&       m_rEvent;
+        NotificationMethod const m_pMethod;
+        const EventT&            m_rEvent;
     public:
         NotifySingleListener( NotificationMethod method, const EventT& event ) : m_pMethod( method ), m_rEvent( event ) { }
 

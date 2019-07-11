@@ -20,6 +20,7 @@
 #include <formel.hxx>
 
 #include <o3tl/make_unique.hxx>
+#include <osl/diagnose.h>
 
 ScRangeListTabs::ScRangeListTabs()
 {
@@ -150,8 +151,7 @@ const ScRange* ScRangeListTabs::Next ()
 
 ConverterBase::ConverterBase( svl::SharedStringPool& rSPool, sal_uInt16 nNewBuffer ) :
     aPool(rSPool),
-    aEingPos( 0, 0, 0 ),
-    eStatus( ConvErr::OK )
+    aEingPos( 0, 0, 0 )
 {
     OSL_ENSURE( nNewBuffer > 0, "ConverterBase::ConverterBase - nNewBuffer == 0!" );
     pBuffer.reset( new sal_Char[ nNewBuffer ] );
@@ -163,7 +163,6 @@ ConverterBase::~ConverterBase()
 
 void ConverterBase::Reset()
 {
-    eStatus = ConvErr::OK;
     aPool.Reset();
     aStack.Reset();
 }

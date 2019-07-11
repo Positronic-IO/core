@@ -27,6 +27,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <svl/lstner.hxx>
 #include "document.hxx"
+#include <svl/itemprop.hxx>
 
 class ScDocOptions;
 
@@ -59,8 +60,8 @@ class ScFunctionAccess : public cppu::WeakImplHelper<
 {
 private:
     ScTempDocCache  aDocCache;
-    ScDocOptions*   pOptions;
-    SfxItemPropertyMap aPropertyMap;
+    std::unique_ptr<ScDocOptions> pOptions;
+    SfxItemPropertyMap const aPropertyMap;
     bool            mbArray;
     bool            mbValid;
 

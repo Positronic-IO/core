@@ -25,7 +25,7 @@ class ScUndoCut;
 class FormulaGrammarSwitch
 {
     ScDocument* mpDoc;
-    formula::FormulaGrammar::Grammar meOldGrammar;
+    formula::FormulaGrammar::Grammar const meOldGrammar;
 public:
     FormulaGrammarSwitch(ScDocument* pDoc, formula::FormulaGrammar::Grammar eGrammar);
     ~FormulaGrammarSwitch();
@@ -50,7 +50,7 @@ public:
     static void copyToClip(ScDocument* pSrcDoc, const ScRange& rRange, ScDocument* pClipDoc);
     static void pasteFromClip(ScDocument* pDestDoc, const ScRange& rDestRange, ScDocument* pClipDoc);
     static void pasteOneCellFromClip(ScDocument* pDestDoc, const ScRange& rDestRange, ScDocument* pClipDoc, InsertDeleteFlags eFlags = InsertDeleteFlags::ALL);
-    static ScUndoPaste* createUndoPaste(ScDocShell& rDocSh, const ScRange& rRange, ScDocument* pUndoDoc);
+    static ScUndoPaste* createUndoPaste(ScDocShell& rDocSh, const ScRange& rRange, ScDocumentUniquePtr pUndoDoc);
 
     /**
      * Enable or disable expand reference options which controls how
@@ -117,6 +117,7 @@ public:
     void testRangeList();
     void testMarkData();
     void testInput();
+    void testColumnIterator();
     void testDocStatistics();
     void testRowForHeight();
 
@@ -143,7 +144,11 @@ public:
     void testFormulaRefData();
     void testFormulaCompiler();
     void testFormulaCompilerJumpReordering();
-    void testFormulaCompilerImplicitIntersection();
+    void testFormulaCompilerImplicitIntersection2Param();
+    void testFormulaCompilerImplicitIntersection1ParamNoChange();
+    void testFormulaCompilerImplicitIntersection1ParamWithChange();
+    void testFormulaCompilerImplicitIntersection1NoGroup();
+    void testFormulaCompilerImplicitIntersectionOperators();
     void testFormulaRefUpdate();
     void testFormulaRefUpdateRange();
     void testFormulaRefUpdateSheets();
@@ -401,6 +406,10 @@ public:
     void testSharedFormulaUnshareAreaListeners();
     void testSharedFormulaListenerDeleteArea();
     void testSharedFormulaUpdateOnReplacement();
+    void testSharedFormulaDeleteTopCell();
+    void testSharedFormulaCutCopyMoveIntoRef();
+    void testSharedFormulaCutCopyMoveWithRef();
+    void testSharedFormulaCutCopyMoveWithinRun();
     void testFormulaPosition();
     void testFormulaWizardSubformula();
 
@@ -472,6 +481,7 @@ public:
     void testNoteDeleteCol();
     void testNoteLifeCycle();
     void testNoteCopyPaste();
+    void testNoteContainsNotesInRange();
     void testAreasWithNotes();
     void testAnchoredRotatedShape();
     void testCellTextWidth();
@@ -518,6 +528,8 @@ public:
     void testCondFormatUndoList();
     void testMultipleSingleCellCondFormatCopyPaste();
     void testDeduplicateMultipleCondFormats();
+    void testCondFormatListenToOwnRange();
+    void testCondFormatVolatileFunctionRecalc();
 
     void testImportStream();
     void testDeleteContents();
@@ -554,6 +566,7 @@ public:
     CPPUNIT_TEST(testRangeList);
     CPPUNIT_TEST(testMarkData);
     CPPUNIT_TEST(testInput);
+    CPPUNIT_TEST(testColumnIterator);
     CPPUNIT_TEST(testDocStatistics);
     CPPUNIT_TEST(testRowForHeight);
     CPPUNIT_TEST(testDataEntries);
@@ -568,7 +581,11 @@ public:
     CPPUNIT_TEST(testFormulaRefData);
     CPPUNIT_TEST(testFormulaCompiler);
     CPPUNIT_TEST(testFormulaCompilerJumpReordering);
-    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection2Param);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection1ParamNoChange);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection1ParamWithChange);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersection1NoGroup);
+    CPPUNIT_TEST(testFormulaCompilerImplicitIntersectionOperators);
     CPPUNIT_TEST(testFormulaRefUpdate);
     CPPUNIT_TEST(testFormulaRefUpdateRange);
     CPPUNIT_TEST(testFormulaRefUpdateSheets);
@@ -742,6 +759,10 @@ public:
     CPPUNIT_TEST(testSharedFormulaUnshareAreaListeners);
     CPPUNIT_TEST(testSharedFormulaListenerDeleteArea);
     CPPUNIT_TEST(testSharedFormulaUpdateOnReplacement);
+    CPPUNIT_TEST(testSharedFormulaDeleteTopCell);
+    CPPUNIT_TEST(testSharedFormulaCutCopyMoveIntoRef);
+    CPPUNIT_TEST(testSharedFormulaCutCopyMoveWithRef);
+    CPPUNIT_TEST(testSharedFormulaCutCopyMoveWithinRun);
     CPPUNIT_TEST(testFormulaPosition);
     CPPUNIT_TEST(testFormulaWizardSubformula);
     CPPUNIT_TEST(testMixData);
@@ -780,6 +801,7 @@ public:
     CPPUNIT_TEST(testNoteDeleteCol);
     CPPUNIT_TEST(testNoteLifeCycle);
     CPPUNIT_TEST(testNoteCopyPaste);
+    CPPUNIT_TEST(testNoteContainsNotesInRange);
     CPPUNIT_TEST(testAreasWithNotes);
     CPPUNIT_TEST(testAnchoredRotatedShape);
     CPPUNIT_TEST(testCellTextWidth);
@@ -803,6 +825,7 @@ public:
     CPPUNIT_TEST(testCondFormatUndoList);
     CPPUNIT_TEST(testMultipleSingleCellCondFormatCopyPaste);
     CPPUNIT_TEST(testDeduplicateMultipleCondFormats);
+    CPPUNIT_TEST(testCondFormatVolatileFunctionRecalc);
     CPPUNIT_TEST(testIconSet);
     CPPUNIT_TEST(testDataBarLengthAutomaticAxis);
     CPPUNIT_TEST(testDataBarLengthMiddleAxis);

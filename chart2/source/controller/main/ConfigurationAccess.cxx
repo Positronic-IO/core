@@ -21,6 +21,7 @@
 
 #include <unotools/syslocale.hxx>
 #include <unotools/configitem.hxx>
+#include <unotools/localedatawrapper.hxx>
 #include <rtl/instance.hxx>
 
 namespace chart
@@ -61,7 +62,7 @@ void CalcConfigItem::Notify( const uno::Sequence<OUString>& ) {}
 
 FieldUnit CalcConfigItem::getFieldUnit()
 {
-    FieldUnit eResult( FUNIT_CM );
+    FieldUnit eResult( FieldUnit::CM );
 
     uno::Sequence< OUString > aNames( 1 );
     if( lcl_IsMetric() )

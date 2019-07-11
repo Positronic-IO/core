@@ -20,6 +20,7 @@
 #include <config_features.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #if HAVE_FEATURE_MACOSX_SANDBOX
 #include <sys/stat.h>
@@ -115,28 +116,31 @@ TaskManager::MyProperty::~MyProperty()
 
 #include "filinl.hxx"
 
+        // Default properties
+
+static const OUStringLiteral Title( "Title" );
+static const OUStringLiteral CasePreservingURL( "CasePreservingURL" );
+static const OUStringLiteral IsDocument( "IsDocument" );
+static const OUStringLiteral IsFolder( "IsFolder" );
+static const OUStringLiteral DateModified( "DateModified" );
+static const OUStringLiteral Size( "Size" );
+static const OUStringLiteral IsVolume( "IsVolume" );
+static const OUStringLiteral IsRemoveable( "IsRemoveable" );
+static const OUStringLiteral IsRemote( "IsRemote" );
+static const OUStringLiteral IsCompactDisc( "IsCompactDisc" );
+static const OUStringLiteral IsFloppy( "IsFloppy" );
+static const OUStringLiteral IsHidden( "IsHidden" );
+static const OUStringLiteral ContentType( "ContentType" );
+static const OUStringLiteral IsReadOnly( "IsReadOnly" );
+static const OUStringLiteral CreatableContentsInfo( "CreatableContentsInfo" );
+const OUStringLiteral TaskManager::FolderContentType( "application/vnd.sun.staroffice.fsys-folder" );
+const OUStringLiteral TaskManager::FileContentType( "application/vnd.sun.staroffice.fsys-file" );
+
 TaskManager::TaskManager( const uno::Reference< uno::XComponentContext >& rxContext,
               FileProvider* pProvider, bool bWithConfig )
     : m_nCommandId( 0 ),
       m_pProvider( pProvider ),
       m_xContext( rxContext ),
-      Title( "Title" ),
-      CasePreservingURL( "CasePreservingURL" ),
-      IsDocument( "IsDocument" ),
-      IsFolder( "IsFolder" ),
-      DateModified( "DateModified" ),
-      Size( "Size" ),
-      IsVolume( "IsVolume" ),
-      IsRemoveable( "IsRemoveable" ),
-      IsRemote( "IsRemote" ),
-      IsCompactDisc( "IsCompactDisc" ),
-      IsFloppy( "IsFloppy" ),
-      IsHidden( "IsHidden" ),
-      ContentType( "ContentType" ),
-      IsReadOnly( "IsReadOnly" ),
-      CreatableContentsInfo( "CreatableContentsInfo" ),
-      FolderContentType( "application/vnd.sun.staroffice.fsys-folder" ),
-      FileContentType( "application/vnd.sun.staroffice.fsys-file" ),
       m_sCommandInfo( 9 )
 {
     // Title
@@ -508,11 +512,10 @@ TaskManager::registerNotifier( const OUString& aUnqPath, Notifier* pNotifier )
 
     std::vector< Notifier* >& nlist = *( it->second.notifier );
 
-    std::vector<Notifier*>::iterator it1 = nlist.begin();
-    while( it1 != nlist.end() )               // Every "Notifier" only once
+    std::vector<Notifier*>::iterator it1 = std::find(nlist.begin(), nlist.end(), pNotifier);
+    if( it1 != nlist.end() )               // Every "Notifier" only once
     {
-        if( *it1 == pNotifier ) return;
-        ++it1;
+        return;
     }
     nlist.push_back( pNotifier );
 }
@@ -2615,9 +2618,8 @@ TaskManager::getContentDeletedEventListeners( const OUString& aName )
     return listeners;
 }
 
-
-void
-TaskManager::notifyInsert( std::vector< std::unique_ptr<ContentEventNotifier> > listeners, const OUString& aChildName )
+void TaskManager::notifyInsert(const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners,
+                               const OUString& aChildName)
 {
     for (const auto & l : listeners )
     {
@@ -2625,9 +2627,8 @@ TaskManager::notifyInsert( std::vector< std::unique_ptr<ContentEventNotifier> > 
     }
 }
 
-
-void
-TaskManager::notifyContentDeleted( std::vector< std::unique_ptr< ContentEventNotifier> > listeners )
+void TaskManager::notifyContentDeleted(
+    const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners)
 {
     for( auto const & l : listeners )
     {
@@ -2635,10 +2636,8 @@ TaskManager::notifyContentDeleted( std::vector< std::unique_ptr< ContentEventNot
     }
 }
 
-
-void
-TaskManager::notifyContentRemoved( std::vector< std::unique_ptr<ContentEventNotifier> > listeners,
-                             const OUString& aChildName )
+void TaskManager::notifyContentRemoved(
+    const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners, const OUString& aChildName)
 {
     for( auto const & l : listeners )
     {
@@ -2668,10 +2667,9 @@ TaskManager::getPropertySetListeners( const OUString& aName )
     return listeners;
 }
 
-
-void
-TaskManager::notifyPropertyAdded( std::vector< std::unique_ptr< PropertySetInfoChangeNotifier > > listeners,
-                            const OUString& aPropertyName )
+void TaskManager::notifyPropertyAdded(
+    const std::vector<std::unique_ptr<PropertySetInfoChangeNotifier>>& listeners,
+    const OUString& aPropertyName)
 {
     for( auto const & l : listeners )
     {
@@ -2679,10 +2677,9 @@ TaskManager::notifyPropertyAdded( std::vector< std::unique_ptr< PropertySetInfoC
     }
 }
 
-
-void
-TaskManager::notifyPropertyRemoved( std::vector< std::unique_ptr< PropertySetInfoChangeNotifier > > listeners,
-                              const OUString& aPropertyName )
+void TaskManager::notifyPropertyRemoved(
+    const std::vector<std::unique_ptr<PropertySetInfoChangeNotifier>>& listeners,
+    const OUString& aPropertyName)
 {
     for( auto const & l : listeners )
     {
@@ -2763,11 +2760,9 @@ TaskManager::getContentExchangedEventListeners( const OUString& aOldPrefix,
                 // However, these may be in status BaseContent::Deleted
                 if( copyList != nullptr )
                 {
-                    std::vector< Notifier* >::iterator copyIt = copyList->begin();
-                    while( copyIt != copyList->end() )
+                    for( const auto& rCopyPtr : *copyList )
                     {
-                        itnew->second.notifier->push_back( *copyIt );
-                        ++copyIt;
+                        itnew->second.notifier->push_back( rCopyPtr );
                     }
                 }
             }
@@ -2777,9 +2772,8 @@ TaskManager::getContentExchangedEventListeners( const OUString& aOldPrefix,
     return aVector;
 }
 
-
-void
-TaskManager::notifyContentExchanged( std::vector< std::unique_ptr< ContentEventNotifier > > listeners_vec )
+void TaskManager::notifyContentExchanged(
+    const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners_vec)
 {
     for( auto & l : listeners_vec)
     {
@@ -2809,9 +2803,9 @@ TaskManager::getPropertyChangeNotifier( const OUString& aName )
     return listeners;
 }
 
-
-void TaskManager::notifyPropertyChanges( std::vector< std::unique_ptr< PropertyChangeNotifier > > listeners,
-                                            const uno::Sequence< beans::PropertyChangeEvent >& seqChanged )
+void TaskManager::notifyPropertyChanges(
+    const std::vector<std::unique_ptr<PropertyChangeNotifier>>& listeners,
+    const uno::Sequence<beans::PropertyChangeEvent>& seqChanged)
 {
     for( auto const & l : listeners )
     {

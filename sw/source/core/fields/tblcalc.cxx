@@ -63,15 +63,15 @@ SwTableField::SwTableField( SwTableFieldType* pInitType, const OUString& rFormel
     sExpand = "0";
 }
 
-SwField* SwTableField::Copy() const
+std::unique_ptr<SwField> SwTableField::Copy() const
 {
-    SwTableField* pTmp = new SwTableField( static_cast<SwTableFieldType*>(GetTyp()),
-                                        SwTableFormula::GetFormula(), nSubType, GetFormat() );
+    std::unique_ptr<SwTableField> pTmp(new SwTableField( static_cast<SwTableFieldType*>(GetTyp()),
+                                        SwTableFormula::GetFormula(), nSubType, GetFormat() ));
     pTmp->sExpand     = sExpand;
     pTmp->SwValueField::SetValue(GetValue());
     pTmp->SwTableFormula::operator=( *this );
     pTmp->SetAutomaticLanguage(IsAutomaticLanguage());
-    return pTmp;
+    return std::unique_ptr<SwField>(pTmp.release());
 }
 
 OUString SwTableField::GetFieldName() const
@@ -108,7 +108,7 @@ OUString SwTableField::GetCommand()
         : OUString();
 }
 
-OUString SwTableField::Expand() const
+OUString SwTableField::ExpandImpl(SwRootFrame const*const) const
 {
     if (nSubType & nsSwExtendedSubType::SUB_CMD)
     {
@@ -160,7 +160,7 @@ bool SwTableField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
             sal_uInt16 nOldSubType = nSubType;
             SwTableField* pThis = const_cast<SwTableField*>(this);
             pThis->nSubType |= nsSwExtendedSubType::SUB_CMD;
-            rAny <<= Expand();
+            rAny <<= ExpandImpl(nullptr);
             pThis->nSubType = nOldSubType;
         }
         break;

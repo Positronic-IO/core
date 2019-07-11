@@ -32,10 +32,10 @@
 #include <comphelper/propertysethelper.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/weakagg.hxx>
 #include <rtl/ref.hxx>
 #include <svl/itemprop.hxx>
 #include <vcl/GraphicObject.hxx>
-#include <comphelper/servicehelper.hxx>
 
 #define UNOGRAPHIC_DEVICE           1
 #define UNOGRAPHIC_DESTINATIONRECT  2

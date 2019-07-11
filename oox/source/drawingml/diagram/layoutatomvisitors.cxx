@@ -21,6 +21,8 @@
 
 #include <drawingml/customshapeproperties.hxx>
 
+#include <sal/log.hxx>
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::xml::sax;
@@ -46,10 +48,19 @@ void ShapeCreationVisitor::visit(AlgAtom& rAtom)
 
 void ShapeCreationVisitor::visit(ForEachAtom& rAtom)
 {
+    if (rAtom.iterator().mnAxis == XML_followSib)
+    {
+        // If the axis is the follow sibling, then the last atom should not be
+        // visited.
+        if (mnCurrIdx + mnCurrStep >= mnCurrCnt)
+            return;
+    }
+
     const std::vector<LayoutAtomPtr>& rChildren=rAtom.getChildren();
 
     sal_Int32 nChildren=1;
-    if( rAtom.iterator().mnPtType == XML_node )
+    // Approximate the non-assistant type with the node type.
+    if (rAtom.iterator().mnPtType == XML_node || rAtom.iterator().mnPtType == XML_nonAsst)
     {
         // count child data nodes - check all child Atoms for "name"
         // attribute that is contained in diagram's
@@ -65,7 +76,11 @@ void ShapeCreationVisitor::visit(ForEachAtom& rAtom)
         rAtom.iterator().mnCnt==-1 ? nChildren : rAtom.iterator().mnCnt);
 
     const sal_Int32 nOldIdx=mnCurrIdx;
+    const sal_Int32 nOldStep = mnCurrStep;
+    const sal_Int32 nOldCnt = mnCurrCnt;
     const sal_Int32 nStep=rAtom.iterator().mnStep;
+    mnCurrStep = nStep;
+    mnCurrCnt = nCnt;
     for( mnCurrIdx=0; mnCurrIdx<nCnt && nStep>0; mnCurrIdx+=nStep )
     {
         // TODO there is likely some conditions
@@ -75,6 +90,8 @@ void ShapeCreationVisitor::visit(ForEachAtom& rAtom)
 
     // and restore idx
     mnCurrIdx = nOldIdx;
+    mnCurrStep = nOldStep;
+    mnCurrCnt = nOldCnt;
 }
 
 void ShapeCreationVisitor::visit(ConditionAtom& rAtom)
@@ -116,6 +133,8 @@ void ShapeCreationVisitor::visit(LayoutNode& rAtom)
         if (rAtom.setupShape(pShape, pNewNode))
         {
             pShape->setInternalName(rAtom.getName());
+            if (AlgAtomPtr pAlgAtom = rAtom.getAlgAtom())
+                pShape->setAspectRatio(pAlgAtom->getAspectRatio());
             rAtom.addNodeShape(pShape);
         }
     }
@@ -136,6 +155,8 @@ void ShapeCreationVisitor::visit(LayoutNode& rAtom)
             if (rAtom.setupShape(pShape, pNewNode))
             {
                 pShape->setInternalName(rAtom.getName());
+                if (AlgAtomPtr pAlgAtom = rAtom.getAlgAtom())
+                    pShape->setAspectRatio(pAlgAtom->getAspectRatio());
                 pCurrParent->addChild(pShape);
                 pCurrParent = pShape;
                 rAtom.addNodeShape(pShape);
@@ -218,11 +239,14 @@ void ShapeTemplateVisitor::visit(ShapeAtom& rAtom)
         return;
     }
 
-    ShapePtr pCurrShape(rAtom.getShapeTemplate());
+    const ShapePtr& pCurrShape(rAtom.getShapeTemplate());
 
     // TODO(F3): cloned shape shares all properties by reference,
     // don't change them!
     mpShape.reset(new Shape(pCurrShape));
+    // Fill properties have to be changed as sometimes only the presentation node contains the blip
+    // fill, unshare those.
+    mpShape->cloneFillProperties();
 }
 
 void ShapeLayoutingVisitor::defaultVisit(LayoutAtom const & rAtom)
@@ -235,7 +259,7 @@ void ShapeLayoutingVisitor::defaultVisit(LayoutAtom const & rAtom)
 void ShapeLayoutingVisitor::visit(ConstraintAtom& rAtom)
 {
     if (meLookFor == CONSTRAINT)
-        rAtom.parseConstraint(maConstraints);
+        rAtom.parseConstraint(maConstraints, /*bRequireForName=*/true);
 }
 
 void ShapeLayoutingVisitor::visit(AlgAtom& rAtom)
@@ -267,14 +291,18 @@ void ShapeLayoutingVisitor::visit(LayoutNode& rAtom)
     if (meLookFor != LAYOUT_NODE)
         return;
 
+    size_t nParentConstraintsNumber = maConstraints.size();
+
     // process alg atoms first, nested layout nodes afterwards
     meLookFor = CONSTRAINT;
     defaultVisit(rAtom);
     meLookFor = ALGORITHM;
     defaultVisit(rAtom);
-    maConstraints.clear();
     meLookFor = LAYOUT_NODE;
     defaultVisit(rAtom);
+
+    // delete added constraints, keep parent constraints
+    maConstraints.erase(maConstraints.begin() + nParentConstraintsNumber, maConstraints.end());
 }
 
 void ShapeLayoutingVisitor::visit(ShapeAtom& /*rAtom*/)

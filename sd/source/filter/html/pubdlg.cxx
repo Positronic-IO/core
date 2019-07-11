@@ -77,6 +77,10 @@ const char* const aPageHelpIds[NOOFPAGES] =
     HID_SD_HTMLEXPORT_PAGE6
 };
 
+static SvStream& operator >> (SvStream& rIn, SdPublishingDesign& rDesign);
+
+static SvStream& WriteSdPublishingDesign(SvStream& rOut, const SdPublishingDesign& rDesign);
+
 // This class has all the settings for the HTML-export autopilot
 class SdPublishingDesign
 {
@@ -1060,36 +1064,36 @@ IMPL_LINK_NOARG(SdPublishingDlg, ButtonsHdl, ValueSet*, void)
 // Fill the SfxItemSet with the settings of the dialog
 IMPL_LINK( SdPublishingDlg, ColorHdl, Button *, pButton, void)
 {
-    SvColorDialog aDlg(this);
+    SvColorDialog aDlg;
 
     if(pButton == pPage6_Back)
     {
         aDlg.SetColor( m_aBackColor );
-        if(aDlg.Execute() == RET_OK )
+        if(aDlg.Execute(GetFrameWeld()) == RET_OK )
             m_aBackColor = aDlg.GetColor();
     }
     else if(pButton == pPage6_Text)
     {
         aDlg.SetColor( m_aTextColor );
-        if(aDlg.Execute() == RET_OK )
+        if(aDlg.Execute(GetFrameWeld()) == RET_OK )
             m_aTextColor = aDlg.GetColor();
     }
     else if(pButton == pPage6_Link)
     {
         aDlg.SetColor( m_aLinkColor );
-        if(aDlg.Execute() == RET_OK )
+        if(aDlg.Execute(GetFrameWeld()) == RET_OK )
             m_aLinkColor = aDlg.GetColor();
     }
     else if(pButton == pPage6_VLink)
     {
         aDlg.SetColor( m_aVLinkColor );
-        if(aDlg.Execute() == RET_OK )
+        if(aDlg.Execute(GetFrameWeld()) == RET_OK )
             m_aVLinkColor = aDlg.GetColor();
     }
     else if(pButton == pPage6_ALink)
     {
         aDlg.SetColor( m_aALinkColor );
-        if(aDlg.Execute() == RET_OK )
+        if(aDlg.Execute(GetFrameWeld()) == RET_OK )
             m_aALinkColor = aDlg.GetColor();
     }
 
@@ -1314,7 +1318,7 @@ void SdPublishingDlg::UpdatePage()
  */
 void SdPublishingDlg::LoadPreviewButtons()
 {
-    if( mpButtonSet.get() )
+    if (mpButtonSet)
     {
         const int nButtonCount = 8;
         static const char *pButtonNames[nButtonCount] =
@@ -1514,11 +1518,9 @@ void SdPublishingDlg::Load()
 
     // check if file exists, SfxMedium shows an errorbox else
     {
-        SvStream* pIStm = ::utl::UcbStreamHelper::CreateStream( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ );
+        std::unique_ptr<SvStream> pIStm = ::utl::UcbStreamHelper::CreateStream( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ );
 
         bool bOk = pIStm && ( pIStm->GetError() == ERRCODE_NONE);
-
-        delete pIStm;
 
         if( !bOk )
             return;

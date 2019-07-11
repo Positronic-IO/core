@@ -42,7 +42,7 @@ uno::Reference< uno::XInterface > OFormattedField::create(uno::Reference< uno::X
     return *(new OFormattedField(xContext));
 }
 
-uno::Sequence< OUString > lcl_getFormattedFieldOptionals()
+static uno::Sequence< OUString > lcl_getFormattedFieldOptionals()
 {
     OUString pProps[] = { OUString(PROPERTY_MASTERFIELDS),OUString(PROPERTY_DETAILFIELDS) };
     return uno::Sequence< OUString >(pProps,SAL_N_ELEMENTS(pProps));
@@ -216,16 +216,13 @@ uno::Reference< util::XCloneable > SAL_CALL OFormattedField::createClone(  )
     uno::Reference< report::XReportComponent> xSource = this;
     uno::Reference< report::XFormattedField> xSet(cloneObject(xSource,m_aProps.aComponent.m_xFactory,SERVICE_FORMATTEDFIELD),uno::UNO_QUERY_THROW);
 
-    if ( xSet.is() )
+    ::std::vector< uno::Reference< report::XFormatCondition> >::const_iterator aIter = m_aProps.m_aFormatConditions.begin();
+    ::std::vector< uno::Reference< report::XFormatCondition> >::const_iterator aEnd  = m_aProps.m_aFormatConditions.end();
+    for (sal_Int32 i = 0; aIter != aEnd; ++aIter,++i)
     {
-        ::std::vector< uno::Reference< report::XFormatCondition> >::const_iterator aIter = m_aProps.m_aFormatConditions.begin();
-        ::std::vector< uno::Reference< report::XFormatCondition> >::const_iterator aEnd  = m_aProps.m_aFormatConditions.end();
-        for (sal_Int32 i = 0; aIter != aEnd; ++aIter,++i)
-        {
-            uno::Reference< report::XFormatCondition > xCond = xSet->createFormatCondition();
-            ::comphelper::copyProperties(aIter->get(),xCond.get());
-            xSet->insertByIndex(i,uno::makeAny(xCond));
-        }
+        uno::Reference< report::XFormatCondition > xCond = xSet->createFormatCondition();
+        ::comphelper::copyProperties(aIter->get(),xCond.get());
+        xSet->insertByIndex(i,uno::makeAny(xCond));
     }
     return xSet.get();
 }

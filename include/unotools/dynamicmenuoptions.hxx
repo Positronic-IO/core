@@ -21,11 +21,12 @@
 
 #include <unotools/unotoolsdllapi.h>
 #include <sal/types.h>
-#include <osl/mutex.hxx>
 #include <com/sun/star/uno/Sequence.h>
-#include <com/sun/star/beans/PropertyValue.hpp>
 #include <unotools/options.hxx>
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace beans { struct PropertyValue; } } } }
+namespace osl { class Mutex; }
 
 /*-************************************************************************************************************
     @descr          The method GetList() returns a list of property values.
@@ -69,7 +70,7 @@ class SAL_WARN_UNUSED UNOTOOLS_DLLPUBLIC SvtDynamicMenuOptions : public utl::det
         /*-****************************************************************************************************
             @short      return complete specified list
             @descr      Call it to get all entries of an dynamic menu.
-                        We return a list of all nodes with his names and properties.
+                        We return a list of all nodes with its names and properties.
             @param      "eMenu" select right menu.
             @return     A list of menu items is returned.
 

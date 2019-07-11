@@ -217,7 +217,7 @@ private:
     typedef std::shared_ptr< ContextStack > ContextStackRef;
 
     ContextStackRef     mxContextStack;     ///< Stack of all processed elements.
-    size_t              mnRootStackSize;    ///< Stack size on construction time.
+    size_t const        mnRootStackSize;    ///< Stack size on construction time.
 
 protected:
     bool                mbEnableTrimSpace;  ///< True = trim whitespace in characters().
@@ -228,6 +228,11 @@ class OOX_DLLPUBLIC ContextHandler2 : public ContextHandler, public ContextHandl
 public:
     explicit            ContextHandler2( ContextHandler2Helper const & rParent );
     virtual             ~ContextHandler2() override;
+
+    ContextHandler2(ContextHandler2 const &) = default;
+    ContextHandler2(ContextHandler2 &&) = default;
+    ContextHandler2 & operator =(ContextHandler2 const &) = delete; // due to ContextHandler
+    ContextHandler2 & operator =(ContextHandler2 &&) = delete; // due to ContextHandler
 
     // resolve ambiguity from base classes
     virtual void SAL_CALL acquire() throw() override { ContextHandler::acquire(); }

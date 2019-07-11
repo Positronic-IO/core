@@ -32,9 +32,9 @@ class SwFieldPortion : public SwExpandPortion
     friend class SwTextFormatter;
 protected:
     OUString  m_aExpand;          // The expanded field
-    SwFont  *m_pFont;              // For multi-line fields
-    sal_Int32 m_nNextOffset;      // Offset of the follow in the original string
-    sal_Int32 m_nNextScriptChg;
+    std::unique_ptr<SwFont> m_pFont;  // For multi-line fields
+    TextFrameIndex m_nNextOffset;  // Offset of the follow in the original string
+    TextFrameIndex m_nNextScriptChg;
     sal_uInt16  m_nViewWidth;     // Screen width for empty fields
     bool m_bFollow : 1;           // 2nd or later part of a field
     bool m_bLeft : 1;             // Used by SwNumberPortion
@@ -47,13 +47,13 @@ protected:
     const bool m_bPlaceHolder : 1;
     bool m_bNoLength : 1;       // HACK for meta suffix (no CH_TXTATR)
 
-    void SetFont( SwFont *pNew ) { m_pFont = pNew; }
+    void SetFont( std::unique_ptr<SwFont> pNew ) { m_pFont = std::move(pNew); }
     bool IsNoLength() const  { return m_bNoLength; }
     void SetNoLength()       { m_bNoLength = true; }
 
 public:
     SwFieldPortion( const SwFieldPortion& rField );
-    SwFieldPortion( const OUString &rExpand, SwFont *pFnt = nullptr, bool bPlaceHolder = false );
+    SwFieldPortion( const OUString &rExpand, std::unique_ptr<SwFont> pFnt = nullptr, bool bPlaceHolder = false );
     virtual ~SwFieldPortion() override;
 
     sal_uInt16 m_nAttrFieldType;
@@ -61,7 +61,7 @@ public:
     void CheckScript( const SwTextSizeInfo &rInf );
     bool HasFont() const { return nullptr != m_pFont; }
     // #i89179# - made public
-    const SwFont *GetFont() const { return m_pFont; }
+    const SwFont *GetFont() const { return m_pFont.get(); }
 
     const OUString& GetExp() const { return m_aExpand; }
     virtual bool GetExpText( const SwTextSizeInfo &rInf, OUString &rText ) const override;
@@ -88,8 +88,8 @@ public:
     bool HasFollow() const { return m_bHasFollow; }
     void SetHasFollow( bool bNew ) { m_bHasFollow = bNew; }
 
-    sal_Int32 GetNextOffset() const { return m_nNextOffset; }
-    void SetNextOffset( sal_Int32 nNew ) { m_nNextOffset = nNew; }
+    TextFrameIndex GetNextOffset() const { return m_nNextOffset; }
+    void SetNextOffset(TextFrameIndex nNew) { m_nNextOffset = nNew; }
 
     // Field cloner for SplitGlue
     virtual SwFieldPortion *Clone( const OUString &rExpand ) const;
@@ -107,9 +107,9 @@ public:
 class SwHiddenPortion : public SwFieldPortion
 {
 public:
-    SwHiddenPortion( const OUString &rExpand, SwFont *pFntL = nullptr )
-         : SwFieldPortion( rExpand, pFntL )
-        { SetLen(1); SetWhichPor( POR_HIDDEN ); }
+    SwHiddenPortion( const OUString &rExpand, std::unique_ptr<SwFont> pFntL = nullptr )
+         : SwFieldPortion( rExpand, std::move(pFntL) )
+        { SetLen(TextFrameIndex(1)); SetWhichPor( POR_HIDDEN ); }
     virtual void Paint( const SwTextPaintInfo &rInf ) const override;
     virtual bool GetExpText( const SwTextSizeInfo &rInf, OUString &rText ) const override;
 
@@ -121,18 +121,18 @@ class SwNumberPortion : public SwFieldPortion
 {
 protected:
     sal_uInt16  nFixWidth;      // See Glues
-    sal_uInt16  nMinDist;       // Minimal distance to the text
-    bool    mbLabelAlignmentPosAndSpaceModeActive;
+    sal_uInt16 const  nMinDist;       // Minimal distance to the text
+    bool const    mbLabelAlignmentPosAndSpaceModeActive;
 
 public:
     SwNumberPortion( const OUString &rExpand,
-                     SwFont *pFnt,
+                     std::unique_ptr<SwFont> pFnt,
                      const bool bLeft,
                      const bool bCenter,
                      const sal_uInt16 nMinDst,
                      const bool bLabelAlignmentPosAndSpaceModeActive );
     virtual void Paint( const SwTextPaintInfo &rInf ) const override;
-    virtual sal_Int32 GetCursorOfst( const sal_uInt16 nOfst ) const override;
+    virtual TextFrameIndex GetCursorOfst(sal_uInt16 nOfst) const override;
     virtual bool Format( SwTextFormatInfo &rInf ) override;
 
     // Field cloner for SplitGlue
@@ -145,7 +145,7 @@ class SwBulletPortion : public SwNumberPortion
 public:
     SwBulletPortion( const sal_Unicode cCh,
                      const OUString& rBulletFollowedBy,
-                     SwFont *pFnt,
+                     std::unique_ptr<SwFont> pFnt,
                      const bool bLeft,
                      const bool bCenter,
                      const sal_uInt16 nMinDst,
@@ -154,7 +154,7 @@ public:
 
 class SwGrfNumPortion : public SwNumberPortion
 {
-    SvxBrushItem* pBrush;
+    std::unique_ptr<SvxBrushItem> pBrush;
     long            nId;    // For StopAnimation
     SwTwips         nYPos;  // _Always_ contains the current RelPos
     SwTwips         nGrfHeight;
@@ -162,6 +162,7 @@ class SwGrfNumPortion : public SwNumberPortion
 public:
     SwGrfNumPortion( const OUString& rGraphicFollowedBy,
                      const SvxBrushItem* pGrfBrush,
+                     OUString const & referer,
                      const SwFormatVertOrient* pGrfOrient,
                      const Size& rGrfSize,
                      const bool bLeft,

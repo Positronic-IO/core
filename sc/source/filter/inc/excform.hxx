@@ -22,6 +22,7 @@
 
 #include "xlformula.hxx"
 #include "xiroot.hxx"
+#include "xltools.hxx"
 #include "formel.hxx"
 
 #include <vector>
@@ -37,7 +38,7 @@ protected:
 
     static const sal_uInt16 nRowMask;
 
-    XclFunctionProvider maFuncProv;
+    XclFunctionProvider const maFuncProv;
     const XclBiff       meBiff;
 
     void                DoMulArgs( DefTokenId eId, sal_uInt8 nNumArgs );
@@ -47,18 +48,18 @@ protected:
 public:
     ExcelToSc( XclImpRoot& rRoot );
     virtual             ~ExcelToSc() override;
-    virtual ConvErr     Convert( const ScTokenArray*&, XclImpStream& rStrm, std::size_t nFormulaLen,
+    virtual ConvErr     Convert( std::unique_ptr<ScTokenArray>&, XclImpStream& rStrm, std::size_t nFormulaLen,
                                  bool bAllowArrays, const FORMULA_TYPE eFT = FT_CellFormula ) override;
 
     virtual ConvErr     Convert( ScRangeListTabs&, XclImpStream& rStrm, std::size_t nFormulaLen, SCTAB nTab, const FORMULA_TYPE eFT = FT_CellFormula ) override;
 
-    virtual void        ConvertExternName( const ScTokenArray*& rpArray, XclImpStream& rStrm, std::size_t nFormulaLen,
+    virtual void        ConvertExternName( std::unique_ptr<ScTokenArray>& rpArray, XclImpStream& rStrm, std::size_t nFormulaLen,
                                            const OUString& rUrl, const ::std::vector<OUString>& rTabNames );
 
     virtual void        GetAbsRefs( ScRangeList& rRangeList, XclImpStream& rStrm, std::size_t nLen );
 
-    void                GetDummy( const ScTokenArray*& );
-    const ScTokenArray* GetBoolErr( XclBoolError );
+    std::unique_ptr<ScTokenArray> GetDummy();
+    std::unique_ptr<ScTokenArray> GetBoolErr( XclBoolError );
 
     static bool ReadSharedFormulaPosition( XclImpStream& rStrm, SCCOL& rCol, SCROW& rRow );
     const ScTokenArray* GetSharedFormula( const ScAddress& rRefPos ) const;
@@ -121,11 +122,11 @@ public:
     ExcelToSc8( XclImpRoot& rRoot );
     virtual             ~ExcelToSc8() override;
 
-    virtual ConvErr     Convert( const ScTokenArray*& rpTokArray, XclImpStream& rStrm, std::size_t nFormulaLen, bool bAllowArrays, const FORMULA_TYPE eFT = FT_CellFormula ) override;
+    virtual ConvErr     Convert( std::unique_ptr<ScTokenArray>& rpTokArray, XclImpStream& rStrm, std::size_t nFormulaLen, bool bAllowArrays, const FORMULA_TYPE eFT = FT_CellFormula ) override;
 
     virtual ConvErr     Convert( ScRangeListTabs&, XclImpStream& rStrm, std::size_t nFormulaLen, SCTAB nTab, const FORMULA_TYPE eFT = FT_CellFormula ) override;
 
-    virtual void        ConvertExternName( const ScTokenArray*& rpArray, XclImpStream& rStrm, std::size_t nFormulaLen,
+    virtual void        ConvertExternName( std::unique_ptr<ScTokenArray>& rpArray, XclImpStream& rStrm, std::size_t nFormulaLen,
                                            const OUString& rUrl, const ::std::vector<OUString>& rTabNames ) override;
 
     static inline bool  IsComplRowRange( const sal_uInt16 nRow1, const sal_uInt16 nRow2 );

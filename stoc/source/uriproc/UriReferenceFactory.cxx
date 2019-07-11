@@ -39,6 +39,7 @@
 #include <com/sun/star/uri/XUriReference.hpp>
 #include <com/sun/star/uri/XUriReferenceFactory.hpp>
 #include <com/sun/star/uri/XUriSchemeParser.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/weak.hxx>
@@ -210,10 +211,8 @@ css::uno::Reference< css::uri::XUriReference > parseGeneric(
         scheme, isHierarchical, hasAuthority, authority, path, hasQuery, query);
 }
 
-typedef std::vector< sal_Int32 > Segments;
-
 void processSegments(
-    Segments & segments,
+    std::vector<sal_Int32> & segments,
     css::uno::Reference< css::uri::XUriReference > const & uriReference,
     bool base, bool processSpecialSegments)
 {
@@ -350,11 +349,12 @@ css::uno::Reference< css::uri::XUriReference > Factory::parse(
                     serviceName, m_context);
             } catch (css::uno::RuntimeException &) {
                 throw;
-            } catch (const css::uno::Exception & e) {
+            } catch (const css::uno::Exception &) {
+                css::uno::Any anyEx = cppu::getCaughtException();
                 throw css::lang::WrappedTargetRuntimeException(
                     "creating service " + serviceName,
                     static_cast< cppu::OWeakObject * >(this),
-                    css::uno::makeAny(e)); //TODO: preserve type of e
+                    anyEx);
             }
             if (service.is()) {
                 parser.set( service, css::uno::UNO_QUERY_THROW);
@@ -404,7 +404,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
             abs.append(baseUriReference->getAuthority());
         }
         if (uriReference->hasRelativePath()) {
-            Segments segments;
+            std::vector<sal_Int32> segments;
             processSegments(
                 segments, baseUriReference, true, processSpecialBaseSegments);
             processSegments(segments, uriReference, false, true);
@@ -418,12 +418,11 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
             if (slash) {
                 abs.append('/');
             }
-            for (Segments::iterator i(segments.begin()); i != segments.end();
-                 ++i)
+            for (auto& i : segments)
             {
-                if (*i < -1) {
+                if (i < -1) {
                     OUString segment(
-                        baseUriReference->getPathSegment(-(*i + 2)));
+                        baseUriReference->getPathSegment(-(i + 2)));
                     if (!segment.isEmpty() || segments.size() > 1) {
                         if (!slash) {
                             abs.append('/');
@@ -432,8 +431,8 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
                         slash = true;
                         abs.append('/');
                     }
-                } else if (*i > 1) {
-                    OUString segment(uriReference->getPathSegment(*i - 2));
+                } else if (i > 1) {
+                    OUString segment(uriReference->getPathSegment(i - 2));
                     if (!segment.isEmpty() || segments.size() > 1) {
                         if (!slash) {
                             abs.append('/');
@@ -441,7 +440,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
                         abs.append(segment);
                         slash = false;
                     }
-                } else if (*i == 0) {
+                } else if (i == 0) {
                     if (segments.size() > 1 && !slash) {
                         abs.append('/');
                     }
@@ -455,7 +454,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
                             abs.append('/');
                         }
                         abs.append("..");
-                        slash = *i < 0;
+                        slash = i < 0;
                         if (slash) {
                             abs.append('/');
                         }

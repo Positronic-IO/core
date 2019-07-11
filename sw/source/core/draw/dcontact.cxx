@@ -71,6 +71,8 @@
 #include <calbck.hxx>
 #include <algorithm>
 #include <txtfly.hxx>
+#include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
@@ -175,7 +177,7 @@ SwRect GetBoundRectOfAnchoredObj( const SdrObject* pObj )
 SwContact* GetUserCall( const SdrObject* pObj )
 {
     SdrObject *pTmp;
-    while ( !pObj->GetUserCall() && nullptr != (pTmp = pObj->GetUpGroup()) )
+    while ( !pObj->GetUserCall() && nullptr != (pTmp = pObj->getParentSdrObjectFromSdrObject()) )
         pObj = pTmp;
     assert((!pObj->GetUserCall() || nullptr != dynamic_cast<const SwContact*>(pObj->GetUserCall())) &&
             "<::GetUserCall(..)> - wrong type of found object user call." );
@@ -347,14 +349,6 @@ void SwContact::MoveObjToLayer( const bool _bToVisible,
     }
 }
 
-// some virtual helper methods for information
-// about the object (Writer fly frame resp. drawing object)
-
-const SwIndex& SwContact::GetContentAnchorIndex() const
-{
-    return GetContentAnchor().nContent;
-}
-
 /// get minimum order number of anchored objects handled by with contact
 sal_uInt32 SwContact::GetMinOrdNum() const
 {
@@ -484,8 +478,8 @@ SwFlyDrawContact::~SwFlyDrawContact()
     if ( mpMasterObj )
     {
         mpMasterObj->SetUserCall( nullptr );
-        if ( mpMasterObj->GetPage() )
-            mpMasterObj->GetPage()->RemoveObject( mpMasterObj->GetOrdNum() );
+        if ( mpMasterObj->getSdrPageFromSdrObject() )
+            mpMasterObj->getSdrPageFromSdrObject()->RemoveObject( mpMasterObj->GetOrdNum() );
     }
 }
 
@@ -531,7 +525,7 @@ SwVirtFlyDrawObj* SwFlyDrawContact::CreateNewRef(SwFlyFrame* pFly, SwFlyFrameFor
     // After creating the first Reference the Masters are removed from the
     // List and are not important anymore.
     SdrPage* pPg(nullptr);
-    if(nullptr != (pPg = pContact->GetMaster()->GetPage()))
+    if(nullptr != (pPg = pContact->GetMaster()->getSdrPageFromSdrObject()))
     {
         const size_t nOrdNum = pContact->GetMaster()->GetOrdNum();
         pPg->ReplaceObject(pDrawObj, nOrdNum);
@@ -1008,8 +1002,8 @@ class NestedUserCallHdl
 {
     private:
         SwDrawContact* mpDrawContact;
-        bool mbParentUserCallActive;
-        SdrUserCallType meParentUserCallEventType;
+        bool const mbParentUserCallActive;
+        SdrUserCallType const meParentUserCallEventType;
 
     public:
         NestedUserCallHdl( SwDrawContact* _pDrawContact,
@@ -1074,7 +1068,7 @@ class NestedUserCallHdl
 };
 
 /// Notify the format's textbox that it should reconsider its position / size.
-void lcl_textBoxSizeNotify(SwFrameFormat* pFormat)
+static void lcl_textBoxSizeNotify(SwFrameFormat* pFormat)
 {
     if (SwTextBoxHelper::isTextBox(pFormat, RES_DRAWFRMFMT))
     {
@@ -1231,12 +1225,12 @@ void SwDrawContact::Changed_( const SdrObject& rObj,
                 // If drawing object is a member of a group, the adjustment
                 // of the positioning and the alignment attributes has to
                 // be done for the top group object.
-                if ( rObj.GetUpGroup() )
+                if ( rObj.getParentSdrObjectFromSdrObject() )
                 {
-                    const SdrObject* pGroupObj = rObj.GetUpGroup();
-                    while ( pGroupObj->GetUpGroup() )
+                    const SdrObject* pGroupObj = rObj.getParentSdrObjectFromSdrObject();
+                    while ( pGroupObj->getParentSdrObjectFromSdrObject() )
                     {
-                        pGroupObj = pGroupObj->GetUpGroup();
+                        pGroupObj = pGroupObj->getParentSdrObjectFromSdrObject();
                     }
                     // use geometry of drawing object
                     aObjRect = pGroupObj->GetSnapRect();
@@ -1710,16 +1704,17 @@ void SwDrawContact::DisconnectObjFromLayout( SdrObject* _pDrawObj )
 }
 
 static SwTextFrame* lcl_GetFlyInContentAnchor( SwTextFrame* _pProposedAnchorFrame,
-                                   const sal_Int32 _nTextOfs )
+                                   SwPosition const& rAnchorPos)
 {
     SwTextFrame* pAct = _pProposedAnchorFrame;
     SwTextFrame* pTmp;
+    TextFrameIndex const nTextOffset(_pProposedAnchorFrame->MapModelToViewPos(rAnchorPos));
     do
     {
         pTmp = pAct;
         pAct = pTmp->GetFollow();
     }
-    while( pAct && _nTextOfs >= pAct->GetOfst() );
+    while (pAct && nTextOffset >= pAct->GetOfst());
     return pTmp;
 }
 
@@ -1802,7 +1797,7 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                     {
                         SwNodeIndex aIdx( pAnch->GetContentAnchor()->nNode );
                         SwContentNode* pCNd = pDrawFrameFormat->GetDoc()->GetNodes().GoNext( &aIdx );
-                        if ( SwIterator<SwFrame,SwContentNode>( *pCNd ).First() )
+                        if (SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti>(*pCNd).First())
                             pModify = pCNd;
                         else
                         {
@@ -1835,7 +1830,7 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                     break;
                 }
 
-                SwIterator<SwFrame,SwModify> aIter( *pModify );
+                SwIterator<SwFrame, SwModify, sw::IteratorMode::UnwrapMulti> aIter(*pModify);
                 SwFrame* pAnchorFrameOfMaster = nullptr;
                 for( SwFrame *pFrame = aIter.First(); pFrame; pFrame = aIter.Next() )
                 {
@@ -1843,10 +1838,16 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                     // (1) proposed anchor frame isn't a follow and
                     // (2) drawing object isn't a control object to be anchored
                     //     in header/footer.
-                    const bool bAdd = ( !pFrame->IsContentFrame() ||
+                    bool bAdd = ( !pFrame->IsContentFrame() ||
                                         !static_cast<SwContentFrame*>(pFrame)->IsFollow() ) &&
                                       ( !::CheckControlLayer( GetMaster() ) ||
                                         !pFrame->FindFooterOrHeader() );
+
+                    if (bAdd && RndStdIds::FLY_AT_FLY != pAnch->GetAnchorId())
+                    {
+                        assert(pFrame->IsTextFrame());
+                        bAdd = IsAnchoredObjShown(*static_cast<SwTextFrame*>(pFrame), *pAnch);
+                    }
 
                     if( bAdd )
                     {
@@ -1862,7 +1863,7 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                         {
                             pFrame = lcl_GetFlyInContentAnchor(
                                         static_cast<SwTextFrame*>(pFrame),
-                                        pAnch->GetContentAnchor()->nContent.GetIndex() );
+                                        *pAnch->GetContentAnchor());
                         }
 
                         if ( !pAnchorFrameOfMaster )
@@ -2049,7 +2050,7 @@ namespace sdr
     namespace contact
     {
         /// recursively collect primitive data from given VOC with given offset
-        void impAddPrimitivesFromGroup(const ViewObjectContact& rVOC, const basegfx::B2DHomMatrix& rOffsetMatrix, const DisplayInfo& rDisplayInfo, drawinglayer::primitive2d::Primitive2DContainer& rxTarget)
+        static void impAddPrimitivesFromGroup(const ViewObjectContact& rVOC, const basegfx::B2DHomMatrix& rOffsetMatrix, const DisplayInfo& rDisplayInfo, drawinglayer::primitive2d::Primitive2DContainer& rxTarget)
         {
             const sal_uInt32 nSubHierarchyCount(rVOC.GetViewContact().GetObjectCount());
 
@@ -2156,9 +2157,9 @@ namespace sdr
 } // end of namespace sdr
 
 /// implementation of class <SwDrawVirtObj>
-sdr::contact::ViewContact* SwDrawVirtObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SwDrawVirtObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::VCOfDrawVirtObj(*this);
+    return o3tl::make_unique<sdr::contact::VCOfDrawVirtObj>(*this);
 }
 
 SwDrawVirtObj::SwDrawVirtObj(
@@ -2231,14 +2232,14 @@ void SwDrawVirtObj::AddToDrawingPage()
     // insert 'virtual' drawing object into page, set layer and user call.
     SdrPage* pDrawPg;
     // #i27030# - apply order number of referenced object
-    if ( nullptr != ( pDrawPg = pOrgMasterSdrObj->GetPage() ) )
+    if ( nullptr != ( pDrawPg = pOrgMasterSdrObj->getSdrPageFromSdrObject() ) )
     {
         // #i27030# - apply order number of referenced object
         pDrawPg->InsertObject( this, GetReferencedObj().GetOrdNum() );
     }
     else
     {
-        pDrawPg = GetPage();
+        pDrawPg = getSdrPageFromSdrObject();
         if ( pDrawPg )
         {
             pDrawPg->SetObjectOrdNum( GetOrdNumDirect(),
@@ -2255,9 +2256,9 @@ void SwDrawVirtObj::AddToDrawingPage()
 void SwDrawVirtObj::RemoveFromDrawingPage()
 {
     SetUserCall( nullptr );
-    if ( GetPage() )
+    if ( getSdrPageFromSdrObject() )
     {
-        GetPage()->RemoveObject( GetOrdNum() );
+        getSdrPageFromSdrObject()->RemoveObject( GetOrdNum() );
     }
 }
 
@@ -2265,7 +2266,7 @@ void SwDrawVirtObj::RemoveFromDrawingPage()
 bool SwDrawVirtObj::IsConnected() const
 {
     bool bRetVal = GetAnchorFrame() &&
-                   ( GetPage() && GetUserCall() );
+                   ( getSdrPageFromSdrObject() && GetUserCall() );
 
     return bRetVal;
 }
@@ -2338,21 +2339,19 @@ basegfx::B2DPolyPolygon SwDrawVirtObj::TakeContour() const
     return aRetval;
 }
 
-SdrHdl* SwDrawVirtObj::GetHdl(sal_uInt32 nHdlNum) const
+void SwDrawVirtObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    SdrHdl* pHdl = rRefObj.GetHdl(nHdlNum);
+    SdrHdlList tmpList(nullptr);
+    rRefObj.AddToHdlList(tmpList);
 
-    if(pHdl)
+    size_t cnt = tmpList.GetHdlCount();
+    for(size_t i=0; i < cnt; ++i)
     {
+        SdrHdl* pHdl = tmpList.GetHdl(i);
         Point aP(pHdl->GetPos() + GetOffset());
         pHdl->SetPos(aP);
     }
-    else
-    {
-        OSL_ENSURE(false, "Got no SdrHdl(!)");
-    }
-
-    return pHdl;
+    tmpList.MoveTo(rHdlList);
 }
 
 void SwDrawVirtObj::NbcMove(const Size& rSiz)

@@ -30,6 +30,7 @@
 #include <dbfld.hxx>
 #include <docsh.hxx>
 #include <pam.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star::uno;
 
@@ -72,8 +73,6 @@ SwUndoFieldFromDoc::SwUndoFieldFromDoc(const SwPosition & rPos,
 
 SwUndoFieldFromDoc::~SwUndoFieldFromDoc()
 {
-    delete pOldField;
-    delete pNewField;
 }
 
 void SwUndoFieldFromDoc::UndoImpl(::sw::UndoRedoContext &)

@@ -52,6 +52,7 @@
 
 #include <guisaveas.hxx>
 
+#include <sal/log.hxx>
 #include <unotools/pathoptions.hxx>
 #include <svl/itemset.hxx>
 #include <svl/eitem.hxx>
@@ -64,6 +65,7 @@
 #include <tools/urlobj.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/mimeconfighelper.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/window.hxx>
@@ -75,6 +77,7 @@
 #include <sfx2/sfxresid.hxx>
 #include <sfx2/docfilt.hxx>
 #include <sfx2/filedlghelper.hxx>
+#include <sfx2/asyncfunc.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/request.hxx>
@@ -82,7 +85,6 @@
 #include <alienwarn.hxx>
 
 #include <sfx2/docmacromode.hxx>
-#include <comphelper/interaction.hxx>
 #include <com/sun/star/task/ErrorCodeRequest.hpp>
 #include <rtl/ref.hxx>
 #include <framework/interaction.hxx>
@@ -215,7 +217,7 @@ class DocumentSettingsGuard
     bool m_bPreserveReadOnly;
     bool m_bReadOnlySupported;
 
-    bool m_bRestoreSettings;
+    bool const m_bRestoreSettings;
 public:
     DocumentSettingsGuard( const uno::Reference< frame::XModel >& xModel, bool bReadOnly, bool bRestore )
     : m_bPreserveReadOnly( false )
@@ -334,7 +336,7 @@ public:
                                 const css::uno::Sequence< OUString >& rBlackList
                                 );
 
-    bool ShowDocumentInfoDialog();
+    bool ShowDocumentInfoDialog(const std::function< void () >&);
 
     static OUString GetRecommendedExtension( const OUString& aTypeName );
     OUString GetRecommendedDir( const OUString& aSuggestedDir );
@@ -349,33 +351,10 @@ ModelData_Impl::ModelData_Impl( SfxStoringHelper& aOwner,
                                 const uno::Sequence< beans::PropertyValue >& aMediaDescr )
 : m_pOwner( &aOwner )
 , m_xModel( xModel )
-, m_pDocumentPropsHM( nullptr )
-, m_pModulePropsHM( nullptr )
 , m_aMediaDescrHM( aMediaDescr )
 , m_bRecommendReadOnly( false )
 {
     CheckInteractionHandler();
-    try
-    {
-        uno::Reference< lang::XComponent > xCurrentComponent = frame::Desktop::create( comphelper::getProcessComponentContext() )->getCurrentComponent();
-        if (aOwner.GetModuleManager()->identify(xCurrentComponent) == "com.sun.star.chart2.ChartDocument")
-        {
-            // let us switch the model and set the xStorable and
-            // XStorable2 to the old model.
-            // This is an ugly hack because we have no SfxObjectShell for chart2 yet.
-            // We need SfxObjectShell for the heavy work around ODF document creation
-            // because chart2 only writes the basic stream out.
-            // In future in might make sense to implement a full scale object shell in
-            // chart2 and make chart2 an own program.
-            m_xModel.set(xCurrentComponent, uno::UNO_QUERY_THROW );
-            m_xStorable.set(xModel, uno::UNO_QUERY_THROW );
-            m_xStorable2.set(xModel, uno::UNO_QUERY_THROW );
-        }
-    }
-    catch(...)
-    {
-        // we don't want to pass on any errors;
-    }
 }
 
 
@@ -870,7 +849,6 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
 
     SfxFilterFlags nMust = getMustFlags( nStoreMode );
     SfxFilterFlags nDont = getDontFlags( nStoreMode );
-    sfx2::FileDialogHelper::Context eCtxt = sfx2::FileDialogHelper::UNKNOWN_CONTEXT;
     vcl::Window* pWin = SfxStoringHelper::GetModelWindow( m_xModel );
     weld::Window* pFrameWin = pWin ? pWin->GetFrameWeld() : nullptr;
     if ( ( nStoreMode & EXPORT_REQUESTED ) && !( nStoreMode & WIDEEXPORT_REQUESTED ) )
@@ -896,6 +874,7 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
             pFileDlg.reset(new sfx2::FileDialogHelper( aDialogMode, aDialogFlags, aDocServiceName, nDialog, nMust, nDont, rStandardDir, rBlackList, pFrameWin ));
         }
 
+        sfx2::FileDialogHelper::Context eCtxt = sfx2::FileDialogHelper::UNKNOWN_CONTEXT;
         if ( aDocServiceName == "com.sun.star.drawing.DrawingDocument" )
             eCtxt = sfx2::FileDialogHelper::SD_EXPORT;
         else if ( aDocServiceName == "com.sun.star.presentation.PresentationDocument" )
@@ -1102,7 +1081,7 @@ bool ModelData_Impl::OutputFileDialog( sal_Int16 nStoreMode,
 }
 
 
-bool ModelData_Impl::ShowDocumentInfoDialog()
+bool ModelData_Impl::ShowDocumentInfoDialog(const std::function< void () >& aFunc)
 {
     bool bDialogUsed = false;
 
@@ -1125,7 +1104,11 @@ bool ModelData_Impl::ShowDocumentInfoDialog()
                                                                                 0 );
                     if ( xDispatch.is() )
                     {
-                        xDispatch->dispatch( aURL, uno::Sequence< beans::PropertyValue >() );
+                        uno::Sequence< beans::PropertyValue > aProperties(1);
+                        uno::Reference< lang::XUnoTunnel > aAsyncFunc(new AsyncFunc(aFunc));
+                        aProperties[0].Name = "AsyncFunc";
+                        aProperties[0].Value <<= aAsyncFunc;
+                        xDispatch->dispatch( aURL, aProperties );
                         bDialogUsed = true;
                     }
                 }
@@ -1301,6 +1284,21 @@ uno::Reference< css::frame::XModuleManager2 > const & SfxStoringHelper::GetModul
     return m_xModuleManager;
 }
 
+namespace
+{
+    void LaunchPDFViewer(const INetURLObject& rURL)
+    {
+        // Launch PDF viewer
+        FilterConfigItem aItem( "Office.Common/Filter/PDF/Export/" );
+        bool aViewPDF = aItem.ReadBool( "ViewPDFAfterExport", false );
+
+        if ( aViewPDF )
+        {
+            uno::Reference<XSystemShellExecute> xSystemShellExecute(SystemShellExecute::create(::comphelper::getProcessComponentContext()));
+            xSystemShellExecute->execute(rURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), "", SystemShellExecuteFlags::URIS_ONLY);
+        }
+    }
+}
 
 bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xModel,
                                             const OUString& aSlotName,
@@ -1394,7 +1392,8 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
            || SignatureState::NOTVALIDATED == nDocumentSignatureState
            || SignatureState::PARTIAL_OK == nDocumentSignatureState)
         {
-            std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(nullptr,
+            vcl::Window* pWin = SfxStoringHelper::GetModelWindow( xModel );
+            std::unique_ptr<weld::MessageDialog> xMessageBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
                                                              VclMessageType::Question, VclButtonsType::YesNo, SfxResId(RID_SVXSTR_XMLSEC_QUERY_LOSINGSIGNATURE)));
             if (xMessageBox->run() != RET_YES)
             {
@@ -1631,34 +1630,38 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
         uno::Reference<document::XDocumentProperties> xOldDocProps(
             xCloneable->createClone(), uno::UNO_QUERY_THROW);
 
+        std::function< void () > aFunc = [xModel, xOldDocProps, nStoreMode, aURL, aArgsSequence]() {
+            SfxStoringHelper aStoringHelper;
+            ModelData_Impl aModel(aStoringHelper, xModel, aArgsSequence );
+
+            try
+            {
+                if ( nStoreMode & EXPORT_REQUESTED )
+                    aModel.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
+                else
+                    aModel.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
+            }
+            catch( const uno::Exception& )
+            {
+            }
+
+            if ( nStoreMode & EXPORT_REQUESTED )
+            {
+                SfxStoringHelper::SetDocInfoState(aModel.GetModel(), xOldDocProps);
+            }
+
+            // Launch PDF viewer
+            if (nStoreMode & PDFEXPORT_REQUESTED)
+                LaunchPDFViewer(aURL);
+
+        };
+
         // use dispatch API to show document info dialog
-        if ( aModelData.ShowDocumentInfoDialog() )
+        if ( aModelData.ShowDocumentInfoDialog(aFunc) )
             bDialogUsed = true;
         else
         {
             OSL_FAIL( "Can't execute document info dialog!" );
-        }
-
-        try {
-            // Document properties can contain streams that should be freed before storing
-            aModelData.FreeDocumentProps();
-            if ( nStoreMode & EXPORT_REQUESTED )
-                aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
-            else
-                aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
-        }
-        catch( const uno::Exception& )
-        {
-            if ( nStoreMode & EXPORT_REQUESTED )
-            {
-                SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
-            }
-            throw;
-        }
-
-        if ( nStoreMode & EXPORT_REQUESTED )
-        {
-            SetDocInfoState(aModelData.GetModel(), xOldDocProps, true);
         }
     }
     else
@@ -1672,19 +1675,10 @@ bool SfxStoringHelper::GUIStoreModel( const uno::Reference< frame::XModel >& xMo
             aModelData.GetStorable()->storeToURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
         else
             aModelData.GetStorable()->storeAsURL( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), aArgsSequence );
-    }
 
-    // Launch PDF viewer
-    if ( nStoreMode & PDFEXPORT_REQUESTED )
-    {
-        FilterConfigItem aItem( "Office.Common/Filter/PDF/Export/" );
-        bool aViewPDF = aItem.ReadBool( "ViewPDFAfterExport", false );
-
-        if ( aViewPDF )
-        {
-            uno::Reference<XSystemShellExecute> xSystemShellExecute(SystemShellExecute::create( ::comphelper::getProcessComponentContext() ) );
-            xSystemShellExecute->execute( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), "", SystemShellExecuteFlags::URIS_ONLY );
-        }
+        // Launch PDF viewer
+        if (nStoreMode & PDFEXPORT_REQUESTED)
+            LaunchPDFViewer(aURL);
     }
 
     return bDialogUsed;
@@ -1723,8 +1717,7 @@ bool SfxStoringHelper::CheckFilterOptionsAppearance(
 // static
 void SfxStoringHelper::SetDocInfoState(
         const uno::Reference< frame::XModel >& xModel,
-        const uno::Reference< document::XDocumentProperties>& i_xOldDocProps,
-        bool bNoModify )
+        const uno::Reference< document::XDocumentProperties>& i_xOldDocProps )
 {
     uno::Reference<document::XDocumentPropertiesSupplier> const
         xModelDocPropsSupplier(xModel, uno::UNO_QUERY_THROW);
@@ -1734,10 +1727,10 @@ void SfxStoringHelper::SetDocInfoState(
             i_xOldDocProps->getUserDefinedProperties(), uno::UNO_QUERY_THROW);
 
     uno::Reference< util::XModifiable > xModifiable( xModel, uno::UNO_QUERY );
-    if ( bNoModify && !xModifiable.is() )
+    if ( !xModifiable.is() )
         throw uno::RuntimeException();
 
-    bool bIsModified = bNoModify && xModifiable->isModified();
+    bool bIsModified = xModifiable->isModified();
 
     try
     {
@@ -1794,7 +1787,7 @@ void SfxStoringHelper::SetDocInfoState(
     }
 
     // set the modified flag back if required
-    if ( (bNoModify && bIsModified) != bool(xModifiable->isModified()) )
+    if ( bIsModified != bool(xModifiable->isModified()) )
         xModifiable->setModified( bIsModified );
 }
 

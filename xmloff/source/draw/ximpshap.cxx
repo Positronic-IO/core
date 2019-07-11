@@ -20,6 +20,7 @@
 #include <cassert>
 
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/document/XEventsSupplier.hpp>
 #include <com/sun/star/container/XNameReplace.hpp>
 #include <com/sun/star/presentation/ClickAction.hpp>
@@ -81,6 +82,7 @@
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+#include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/vector/b2dvector.hxx>
 #include <o3tl/safeint.hxx>
@@ -619,7 +621,7 @@ void SdXMLShapeContext::SetStyle( bool bSupportsStyle /* = true */)
             OUString aStyleName = maDrawStyleName;
             uno::Reference< style::XStyle > xStyle;
 
-            if( pStyle && dynamic_cast<const XMLShapeStyleContext*>( pStyle ) !=  nullptr)
+            if( dynamic_cast<const XMLShapeStyleContext*>( pStyle ) )
             {
                 pDocStyle = const_cast<XMLShapeStyleContext*>(dynamic_cast<const XMLShapeStyleContext*>( pStyle ) );
 
@@ -695,17 +697,21 @@ void SdXMLShapeContext::SetStyle( bool bSupportsStyle /* = true */)
                 }
             }
 
+            // Writer shapes: if this one has a TextBox, set it here. We need to do it before
+            // pDocStyle->FillPropertySet, because setting some properties depend on the format
+            // having RES_CNTNT attribute (e.g., UNO_NAME_TEXT_(LEFT|RIGHT|UPPER|LOWER)DIST; see
+            // SwTextBoxHelper::syncProperty, which indirectly calls SwTextBoxHelper::isTextBox)
+            uno::Reference<beans::XPropertySetInfo> xPropertySetInfo
+                = xPropSet->getPropertySetInfo();
+            if (xPropertySetInfo->hasPropertyByName("TextBox"))
+                xPropSet->setPropertyValue("TextBox", uno::makeAny(mbTextBox));
+
             // if this is an auto style, set its properties
             if(bAutoStyle && pDocStyle)
             {
                 // set PropertySet on object
                 pDocStyle->FillPropertySet(xPropSet);
             }
-
-            // Writer shapes: if this one has a TextBox, set it here.
-            uno::Reference<beans::XPropertySetInfo> xPropertySetInfo = xPropSet->getPropertySetInfo();
-            if (xPropertySetInfo->hasPropertyByName("TextBox"))
-                xPropSet->setPropertyValue("TextBox", uno::makeAny(mbTextBox));
 
         } while(false);
 
@@ -3331,23 +3337,17 @@ void SdXMLFrameShapeContext::removeGraphicFromImportContext(const SvXMLImportCon
         {
             uno::Reference< container::XChild > xChild(pSdXMLGraphicObjectShapeContext->getShape(), uno::UNO_QUERY_THROW);
 
-            if(xChild.is())
+            uno::Reference< drawing::XShapes > xParent(xChild->getParent(), uno::UNO_QUERY_THROW);
+
+            // remove from parent
+            xParent->remove(pSdXMLGraphicObjectShapeContext->getShape());
+
+            // dispose
+            uno::Reference< lang::XComponent > xComp(pSdXMLGraphicObjectShapeContext->getShape(), UNO_QUERY);
+
+            if(xComp.is())
             {
-                uno::Reference< drawing::XShapes > xParent(xChild->getParent(), uno::UNO_QUERY_THROW);
-
-                if(xParent.is())
-                {
-                    // remove from parent
-                    xParent->remove(pSdXMLGraphicObjectShapeContext->getShape());
-
-                    // dispose
-                    uno::Reference< lang::XComponent > xComp(pSdXMLGraphicObjectShapeContext->getShape(), UNO_QUERY);
-
-                    if(xComp.is())
-                    {
-                        xComp->dispose();
-                    }
-                }
+                xComp->dispose();
             }
         }
         catch( uno::Exception& )
@@ -3403,10 +3403,7 @@ OUString SdXMLFrameShapeContext::getGraphicPackageURLFromImportContext(const SvX
         {
             const uno::Reference< beans::XPropertySet > xPropSet(pSdXMLGraphicObjectShapeContext->getShape(), uno::UNO_QUERY_THROW);
 
-            if (xPropSet.is())
-            {
-                xPropSet->getPropertyValue("GraphicStreamURL") >>= aRetval;
-            }
+            xPropSet->getPropertyValue("GraphicStreamURL") >>= aRetval;
         }
         catch( uno::Exception& )
         {
@@ -3516,6 +3513,19 @@ SvXMLImportContextRef SdXMLFrameShapeContext::CreateChildContext( sal_uInt16 nPr
             if (xPropSet.is())
             {
                 xContext = new XMLImageMapContext(GetImport(), nPrefix, rLocalName, xPropSet);
+            }
+        }
+    }
+    else if ((XML_NAMESPACE_LO_EXT == nPrefix) && IsXMLToken(rLocalName, XML_SIGNATURELINE))
+    {
+        SdXMLShapeContext* pSContext = dynamic_cast<SdXMLShapeContext*>(mxImplContext.get());
+        if (pSContext)
+        {
+            uno::Reference<beans::XPropertySet> xPropSet(pSContext->getShape(), uno::UNO_QUERY);
+            if (xPropSet.is())
+            {
+                xContext = new SignatureLineContext(GetImport(), nPrefix, rLocalName, xAttrList,
+                                                    pSContext->getShape());
             }
         }
     }
@@ -3753,15 +3763,9 @@ void SdXMLCustomShapeContext::EndElement()
 
             //fdo#84043 overwrite the property if it already exists, otherwise append it
             beans::PropertyValue* pItem;
-            std::vector< beans::PropertyValue >::iterator aI(maCustomShapeGeometry.begin());
-            std::vector< beans::PropertyValue >::iterator aE(maCustomShapeGeometry.end());
-            while (aI != aE)
-            {
-                if (aI->Name == sName)
-                    break;
-                ++aI;
-            }
-            if (aI != aE)
+            auto aI = std::find_if(maCustomShapeGeometry.begin(), maCustomShapeGeometry.end(),
+                [&sName](beans::PropertyValue& rValue) { return rValue.Name == sName; });
+            if (aI != maCustomShapeGeometry.end())
             {
                 beans::PropertyValue& rItem = *aI;
                 pItem = &rItem;
@@ -3890,19 +3894,16 @@ void SdXMLTableShapeContext::StartElement( const css::uno::Reference< css::xml::
 
         uno::Reference< beans::XPropertySet > xProps(mxShape, uno::UNO_QUERY);
 
-        if(bIsPresShape)
+        if(bIsPresShape && xProps.is())
         {
-            if(xProps.is())
+            uno::Reference< beans::XPropertySetInfo > xPropsInfo( xProps->getPropertySetInfo() );
+            if( xPropsInfo.is() )
             {
-                uno::Reference< beans::XPropertySetInfo > xPropsInfo( xProps->getPropertySetInfo() );
-                if( xPropsInfo.is() )
-                {
-                    if( !mbIsPlaceholder && xPropsInfo->hasPropertyByName("IsEmptyPresentationObject"))
-                        xProps->setPropertyValue("IsEmptyPresentationObject", css::uno::Any(false) );
+                if( !mbIsPlaceholder && xPropsInfo->hasPropertyByName("IsEmptyPresentationObject"))
+                    xProps->setPropertyValue("IsEmptyPresentationObject", css::uno::Any(false) );
 
-                    if( mbIsUserTransformed && xPropsInfo->hasPropertyByName("IsPlaceholderDependent"))
-                        xProps->setPropertyValue("IsPlaceholderDependent", css::uno::Any(false) );
-                }
+                if( mbIsUserTransformed && xPropsInfo->hasPropertyByName("IsPlaceholderDependent"))
+                    xProps->setPropertyValue("IsPlaceholderDependent", css::uno::Any(false) );
             }
         }
 

@@ -34,8 +34,8 @@ class SbiScanner
 {
     OUString   aBuf;             // input buffer
     OUString   aLine;
-    const sal_Unicode* pLine;
-    const sal_Unicode* pSaveLine;
+    sal_Int32 nLineIdx;
+    sal_Int32 nSaveLineIdx;
     StarBASIC* pBasic;                  // instance for error callbacks
 
     void scanAlphanumeric();
@@ -67,7 +67,6 @@ protected:
     void   GenError( ErrCode );
 public:
     SbiScanner( const OUString&, StarBASIC* = nullptr );
-   ~SbiScanner();
 
     void  EnableErrors()            { bError = false; }
     bool  IsHash()                  { return bHash;   }
@@ -80,8 +79,8 @@ public:
     sal_Int32 GetCol1()             { return nCol1;   }
     void  SetCol1( sal_Int32 n )    { nCol1 = n;      }
     StarBASIC* GetBasic()           { return pBasic;  }
-    void  SaveLine()            { pSaveLine = pLine; }
-    void  RestoreLine()         { pLine = pSaveLine; }
+    void  SaveLine()                { nSaveLineIdx = nLineIdx; }
+    void  RestoreLine()             { nLineIdx = nSaveLineIdx; }
     void  LockColumn();
     void  UnlockColumn();
     bool  DoesColonFollow();

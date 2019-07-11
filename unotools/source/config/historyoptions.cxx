@@ -30,6 +30,7 @@
 
 #include "itemholder1.hxx"
 
+#include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -37,6 +38,7 @@
 #include <comphelper/configurationhelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <tools/diagnose_ex.h>
+#include <boost/optional.hpp>
 
 using namespace ::std;
 using namespace ::utl;
@@ -536,13 +538,6 @@ SvtHistoryOptions::~SvtHistoryOptions()
     MutexGuard aGuard(theHistoryOptionsMutex::get());
 
     m_pImpl.reset();
-}
-
-sal_uInt32 SvtHistoryOptions::GetSize( EHistoryType eHistory ) const
-{
-    MutexGuard aGuard(theHistoryOptionsMutex::get());
-
-    return m_pImpl->GetCapacity(eHistory);
 }
 
 void SvtHistoryOptions::Clear( EHistoryType eHistory )

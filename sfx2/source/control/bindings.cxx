@@ -71,9 +71,9 @@ typedef std::unordered_map< sal_uInt16, bool > InvalidateSlotMap;
 
 struct SfxFoundCache_Impl
 {
-    sal_uInt16      nWhichId;  // If available: Which-Id, else: nSlotId
-    const SfxSlot*  pSlot;     // Pointer to <Master-Slot>
-    SfxStateCache&  rCache;    // Pointer to StatusCache
+    sal_uInt16 const nWhichId;  // If available: Which-Id, else: nSlotId
+    const SfxSlot*   pSlot;     // Pointer to <Master-Slot>
+    SfxStateCache&   rCache;    // Pointer to StatusCache
 
     SfxFoundCache_Impl(sal_uInt16 nW, const SfxSlot *pS, SfxStateCache& rC)
         : nWhichId(nW)
@@ -112,7 +112,7 @@ public:
     css::uno::Reference< css::frame::XDispatchProvider >  xProv;
     SfxWorkWindow*          pWorkWin;
     SfxBindings*            pSubBindings;
-    std::vector<SfxStateCache *> pCaches;   // One cache for each binding
+    std::vector<std::unique_ptr<SfxStateCache>> pCaches; // One cache for each binding
     std::size_t             nCachedFunc1;   // index for the last one called
     std::size_t             nCachedFunc2;   // index for the second last called
     std::size_t             nMsgPos;        // Message-Position relative the one to be updated
@@ -181,8 +181,7 @@ SfxBindings::~SfxBindings()
     DeleteControllers_Impl();
 
     // Delete Caches
-    for (auto const& cache : pImpl->pCaches)
-        delete cache;
+    pImpl->pCaches.clear();
 
     DELETEZ( pImpl->pWorkWin );
 }
@@ -196,7 +195,7 @@ void SfxBindings::DeleteControllers_Impl()
     for ( nCache = 0; nCache < nCount; ++nCache )
     {
         // Remember were you are
-        SfxStateCache *pCache = pImpl->pCaches[nCache];
+        SfxStateCache *pCache = pImpl->pCaches[nCache].get();
         sal_uInt16 nSlotId = pCache->GetId();
 
         // Re-align, because the cache may have been reduced
@@ -215,7 +214,7 @@ void SfxBindings::DeleteControllers_Impl()
     for ( nCache = pImpl->pCaches.size(); nCache > 0; --nCache )
     {
         // Get Cache via css::sdbcx::Index
-        SfxStateCache *pCache = pImpl->pCaches[ nCache-1 ];
+        SfxStateCache *pCache = pImpl->pCaches[ nCache-1 ].get();
 
         // unbind all controllers in the cache
         SfxControllerItem *pNext;
@@ -230,9 +229,7 @@ void SfxBindings::DeleteControllers_Impl()
             pCache->GetInternalController()->UnBind();
 
         // Delete Cache
-        if( nCache-1 < pImpl->pCaches.size() )
-            delete pImpl->pCaches[nCache-1];
-        pImpl->pCaches.erase(pImpl->pCaches.begin()+ nCache - 1);
+        pImpl->pCaches.erase(pImpl->pCaches.begin() + nCache - 1);
     }
 }
 
@@ -242,7 +239,7 @@ void SfxBindings::HidePopups( bool bHide )
     // Hide SfxChildWindows
     DBG_ASSERT( pDispatcher, "HidePopups not allowed without dispatcher" );
     if ( pImpl->pWorkWin )
-        pImpl->pWorkWin->HidePopups_Impl( bHide, true );
+        pImpl->pWorkWin->HidePopups_Impl( bHide );
 }
 
 void SfxBindings::Update_Impl(SfxStateCache& rCache /*The up to date SfxStatusCache*/)
@@ -278,7 +275,7 @@ void SfxBindings::Update_Impl(SfxStateCache& rCache /*The up to date SfxStatusCa
                 SfxItemState eState = pSet->GetItemState(nWhich, true, &pItem);
                 if ( eState == SfxItemState::DEFAULT && SfxItemPool::IsWhich(nWhich) )
                     pItem = &pSet->Get(nWhich);
-                UpdateControllers_Impl( aFound[nPos], pItem, eState );
+                UpdateControllers_Impl( rFound, pItem, eState );
             }
             bUpdated = true;
         }
@@ -498,7 +495,7 @@ SfxStateCache* SfxBindings::GetStateCache
     {
         if ( pPos )
             *pPos = nPos;
-        return pImpl->pCaches[nPos];
+        return pImpl->pCaches[nPos].get();
     }
     return nullptr;
 }
@@ -527,7 +524,7 @@ void SfxBindings::InvalidateAll
     pImpl->bMsgDirty = pImpl->bMsgDirty || pImpl->bAllMsgDirty || bWithMsg;
     pImpl->bAllDirty = true;
 
-    for (SfxStateCache* pCache : pImpl->pCaches)
+    for (std::unique_ptr<SfxStateCache>& pCache : pImpl->pCaches)
         pCache->Invalidate(bWithMsg);
 
     pImpl->nMsgPos = 0;
@@ -570,7 +567,7 @@ void SfxBindings::Invalidate
           n = GetSlotPos(*pIds, n) )
     {
         // If SID is ever bound, then invalidate the cache
-        SfxStateCache *pCache = pImpl->pCaches[n];
+        SfxStateCache *pCache = pImpl->pCaches[n].get();
         if ( pCache->GetId() == *pIds )
             pCache->Invalidate(false);
 
@@ -626,7 +623,7 @@ void SfxBindings::InvalidateShell
     sal_uInt16 nLevel = pDispatcher->GetShellLevel(rSh);
     if ( nLevel != USHRT_MAX )
     {
-        for (SfxStateCache* pCache : pImpl->pCaches)
+        for (std::unique_ptr<SfxStateCache>& pCache : pImpl->pCaches)
         {
             const SfxSlotServer *pMsgServer =
                 pCache->GetSlotServer(*pDispatcher, pImpl->xProv);
@@ -798,8 +795,7 @@ void SfxBindings::Register_Impl( SfxControllerItem& rItem, bool bInternal )
     if ( nPos >= pImpl->pCaches.size() ||
          pImpl->pCaches[nPos]->GetId() != nId )
     {
-        SfxStateCache* pCache = new SfxStateCache(nId);
-        pImpl->pCaches.insert( pImpl->pCaches.begin() + nPos, pCache );
+        pImpl->pCaches.insert( pImpl->pCaches.begin() + nPos, o3tl::make_unique<SfxStateCache>(nId) );
         DBG_ASSERT( nPos == 0 ||
                     pImpl->pCaches[nPos]->GetId() >
                         pImpl->pCaches[nPos-1]->GetId(), "" );
@@ -830,7 +826,7 @@ void SfxBindings::Release( SfxControllerItem& rItem )
     // find the bound function
     sal_uInt16 nId = rItem.GetId();
     std::size_t nPos = GetSlotPos(nId);
-    SfxStateCache* pCache = (nPos < pImpl->pCaches.size()) ? pImpl->pCaches[nPos] : nullptr;
+    SfxStateCache* pCache = (nPos < pImpl->pCaches.size()) ? pImpl->pCaches[nPos].get() : nullptr;
     if ( pCache && pCache->GetId() == nId )
     {
         if ( pCache->GetInternalController() == &rItem )
@@ -925,14 +921,15 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
 
         // cache binds to an external dispatch provider
         sal_Int16 eRet = pCache->Dispatch( aReq.GetArgs(), nCallMode == SfxCallMode::SYNCHRON );
-        SfxPoolItem *pPool;
+        std::unique_ptr<SfxPoolItem> pPool;
         if ( eRet == css::frame::DispatchResultState::DONTKNOW )
-            pPool = new SfxVoidItem( nId );
+            pPool.reset( new SfxVoidItem( nId ) );
         else
-            pPool = new SfxBoolItem( nId, eRet == css::frame::DispatchResultState::SUCCESS);
+            pPool.reset( new SfxBoolItem( nId, eRet == css::frame::DispatchResultState::SUCCESS) );
 
-        DeleteItemOnIdle( pPool );
-        return pPool;
+        auto pTemp = pPool.get();
+        DeleteItemOnIdle( std::move(pPool) );
+        return pTemp;
     }
 
     // slot is handled internally by SfxDispatcher
@@ -976,9 +973,9 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
     const SfxPoolItem* pRet = aReq.GetReturnValue();
     if ( !pRet )
     {
-        SfxPoolItem *pVoid = new SfxVoidItem( nId );
-        DeleteItemOnIdle( pVoid );
-        pRet = pVoid;
+        std::unique_ptr<SfxPoolItem> pVoid(new SfxVoidItem( nId ));
+        pRet = pVoid.get();
+        DeleteItemOnIdle( std::move(pVoid) );
     }
 
     return pRet;
@@ -1017,20 +1014,18 @@ void SfxBindings::Execute_Impl( SfxRequest& aReq, const SfxSlot* pSlot, SfxShell
                 {
                     // we can toggle Bools
                     bool bOldValue = pOldBoolItem->GetValue();
-                    SfxBoolItem *pNewItem = static_cast<SfxBoolItem*>(pOldItem->Clone());
+                    std::unique_ptr<SfxBoolItem> pNewItem(static_cast<SfxBoolItem*>(pOldItem->Clone()));
                     pNewItem->SetValue( !bOldValue );
                     aReq.AppendItem( *pNewItem );
-                    delete pNewItem;
                 }
                 else if ( dynamic_cast< const SfxEnumItemInterface *>( pOldItem ) !=  nullptr &&
                         static_cast<const SfxEnumItemInterface *>(pOldItem)->HasBoolValue())
                 {
                     // and Enums with Bool-Interface
-                    SfxEnumItemInterface *pNewItem =
-                        static_cast<SfxEnumItemInterface*>(pOldItem->Clone());
+                    std::unique_ptr<SfxEnumItemInterface> pNewItem(
+                        static_cast<SfxEnumItemInterface*>(pOldItem->Clone()));
                     pNewItem->SetBoolValue(!static_cast<const SfxEnumItemInterface *>(pOldItem)->GetBoolValue());
                     aReq.AppendItem( *pNewItem );
-                    delete pNewItem;
                 }
                 else {
                     OSL_FAIL( "Toggle only for Enums and Bools allowed" );
@@ -1039,27 +1034,26 @@ void SfxBindings::Execute_Impl( SfxRequest& aReq, const SfxSlot* pSlot, SfxShell
             else if ( SfxItemState::DONTCARE == eState )
             {
                 // Create one Status-Item for each Factory
-                SfxPoolItem *pNewItem = pSlot->GetType()->CreateItem();
+                std::unique_ptr<SfxPoolItem> pNewItem = pSlot->GetType()->CreateItem();
                 DBG_ASSERT( pNewItem, "Toggle to slot without ItemFactory" );
                 pNewItem->SetWhich( nWhich );
 
-                if ( dynamic_cast< const SfxBoolItem *>( pNewItem ) !=  nullptr )
+                if ( auto pNewBoolItem = dynamic_cast<SfxBoolItem *>( pNewItem.get() ) )
                 {
                   // we can toggle Bools
-                    static_cast<SfxBoolItem*>(pNewItem)->SetValue( true );
+                    pNewBoolItem->SetValue( true );
                     aReq.AppendItem( *pNewItem );
                 }
-                else if ( dynamic_cast< const SfxEnumItemInterface *>( pNewItem ) !=  nullptr &&
-                        static_cast<SfxEnumItemInterface *>(pNewItem)->HasBoolValue())
+                else if ( dynamic_cast< const SfxEnumItemInterface *>( pNewItem.get() ) !=  nullptr &&
+                        static_cast<SfxEnumItemInterface *>(pNewItem.get())->HasBoolValue())
                 {
                     // and Enums with Bool-Interface
-                    static_cast<SfxEnumItemInterface*>(pNewItem)->SetBoolValue(true);
+                    static_cast<SfxEnumItemInterface*>(pNewItem.get())->SetBoolValue(true);
                     aReq.AppendItem( *pNewItem );
                 }
                 else {
                     OSL_FAIL( "Toggle only for Enums and Bools allowed" );
                 }
-                delete pNewItem;
             }
             else {
                 OSL_FAIL( "suspicious Toggle-Slot" );
@@ -1088,7 +1082,7 @@ void SfxBindings::UpdateSlotServer_Impl()
             pImpl->bContextChanged = true;
     }
 
-    for (SfxStateCache* pCache : pImpl->pCaches)
+    for (std::unique_ptr<SfxStateCache>& pCache : pImpl->pCaches)
     {
         //GetSlotServer can modify pImpl->pCaches
         pCache->GetSlotServer(*pDispatcher, pImpl->xProv);
@@ -1269,7 +1263,7 @@ bool SfxBindings::NextJob_Impl(Timer const * pTimer)
     pImpl->aAutoTimer.SetTimeout(TIMEOUT_UPDATING);
 
     // at least 10 loops and further if more jobs are available but no input
-    bool bPreEmptive = pTimer && !pSfxApp->Get_Impl()->nInReschedule;
+    bool bPreEmptive = pTimer;
     sal_uInt16 nLoops = 10;
     pImpl->bInNextJob = true;
     const std::size_t nCount = pImpl->pCaches.size();
@@ -1279,7 +1273,7 @@ bool SfxBindings::NextJob_Impl(Timer const * pTimer)
         bool bJobDone = false;
         while ( !bJobDone )
         {
-            SfxStateCache* pCache = pImpl->pCaches[pImpl->nMsgPos];
+            SfxStateCache* pCache = pImpl->pCaches[pImpl->nMsgPos].get();
             DBG_ASSERT( pCache, "invalid SfxStateCache-position in job queue" );
             bool bWasDirty = pCache->IsControllerDirty();
             if ( bWasDirty )
@@ -1397,14 +1391,13 @@ void SfxBindings::LeaveRegistrations( const char *pFile, int nLine )
             for ( sal_uInt16 nCache = pImpl->pCaches.size(); nCache > 0; --nCache )
             {
                 // Get Cache via css::sdbcx::Index
-                SfxStateCache *pCache = pImpl->pCaches[nCache-1];
+                SfxStateCache *pCache = pImpl->pCaches[nCache-1].get();
 
                 // No interested Controller present
                 if ( pCache->GetItemLink() == nullptr && !pCache->GetInternalController() )
                 {
                     // Remove Cache. Safety: first remove and then delete
                     pImpl->pCaches.erase(pImpl->pCaches.begin() + nCache - 1);
-                    delete pCache;
                 }
             }
         }
@@ -1570,7 +1563,7 @@ SfxItemState SfxBindings::QueryState( sal_uInt16 nSlot, std::unique_ptr<SfxPoolI
                 else
                 {
                     css::uno::Any aAny = xBind->GetStatus().State;
-                    css::uno::Type aType = aAny.getValueType();
+                    const css::uno::Type& aType = aAny.getValueType();
 
                     if ( aType == cppu::UnoType<bool>::get() )
                     {

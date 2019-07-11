@@ -124,14 +124,14 @@ enum BreakType
  */
 class HeaderFooterContext
 {
-    bool m_bTextInserted;
+    bool const m_bTextInserted;
 public:
     explicit HeaderFooterContext(bool bTextInserted);
     bool getTextInserted();
 };
 
 /// field stack element
-class FieldContext
+class FieldContext : public virtual SvRefBase
 {
     bool m_bFieldCommandCompleted;
     css::uno::Reference<css::text::XTextRange> m_xStartRange;
@@ -159,7 +159,7 @@ class FieldContext
 
 public:
     explicit FieldContext(css::uno::Reference<css::text::XTextRange> const& xStart);
-    ~FieldContext();
+    ~FieldContext() override;
 
     const css::uno::Reference<css::text::XTextRange>& GetStartRange() const { return m_xStartRange; }
 
@@ -240,7 +240,7 @@ struct AnchoredContext
     }
 };
 
-typedef std::shared_ptr<FieldContext>  FieldContextPtr;
+typedef tools::SvRef<FieldContext>  FieldContextPtr;
 
 /*-------------------------------------------------------------------------
     extended tab stop struct
@@ -264,7 +264,7 @@ struct DeletableTabStop : public css::style::TabStop
 /// helper to remember bookmark start position
 struct BookmarkInsertPosition
 {
-    bool                                                                    m_bIsStartOfText;
+    bool const                                                       m_bIsStartOfText;
     OUString                                                         m_sBookmarkName;
     css::uno::Reference<css::text::XTextRange> m_xTextRange;
     BookmarkInsertPosition(bool bIsStartOfText, const OUString& rName, css::uno::Reference<css::text::XTextRange> const& xTextRange):
@@ -276,8 +276,8 @@ struct BookmarkInsertPosition
 
 struct PermInsertPosition
 {
-    bool        m_bIsStartOfText;
-    sal_Int32   m_Id;
+    bool const        m_bIsStartOfText;
+    sal_Int32 const   m_Id;
     OUString    m_Ed;
     OUString    m_EdGrp;
 
@@ -360,9 +360,9 @@ struct FloatingTableInfo
 {
     css::uno::Reference<css::text::XTextRange> m_xStart;
     css::uno::Reference<css::text::XTextRange> m_xEnd;
-    css::uno::Sequence<css::beans::PropertyValue> m_aFrameProperties;
-    sal_Int32 m_nTableWidth;
-    sal_Int32 m_nTableWidthType;
+    css::uno::Sequence<css::beans::PropertyValue> const m_aFrameProperties;
+    sal_Int32 const m_nTableWidth;
+    sal_Int32 const m_nTableWidthType;
     /// Break type of the section that contains this table.
     sal_Int32 m_nBreakType = -1;
 
@@ -405,9 +405,9 @@ public:
     typedef std::map < sal_Int32, PermInsertPosition >    PermMap_t;
 
 private:
-    SourceDocumentType                                                              m_eDocumentType;
+    SourceDocumentType const                                                        m_eDocumentType;
     DomainMapper&                                                                   m_rDMapper;
-    SvtSaveOptions                                                                  m_aSaveOpt;
+    SvtSaveOptions const                                                            m_aSaveOpt;
     OUString m_aBaseUrl;
     css::uno::Reference<css::text::XTextDocument> m_xTextDocument;
     css::uno::Reference<css::beans::XPropertySet> m_xDocumentSettings;
@@ -454,8 +454,8 @@ private:
     SymbolData                                                                      m_aSymbolData;
 
     // TableManagers are stacked: one for each stream to avoid any confusion
-    std::stack< std::shared_ptr< DomainMapperTableManager > > m_aTableManagers;
-    std::shared_ptr<DomainMapperTableHandler> m_pTableHandler;
+    std::stack< tools::SvRef< DomainMapperTableManager > > m_aTableManagers;
+    tools::SvRef<DomainMapperTableHandler> m_pTableHandler;
 
     //each context needs a stack of currently used attributes
     std::stack<PropertyMapPtr>  m_aPropertyStacks[NUMBER_OF_CONTEXTS];
@@ -475,9 +475,15 @@ private:
 
     ::std::vector<DeletableTabStop> m_aCurrentTabStops;
     OUString                        m_sCurrentParaStyleName; //highly inaccurate. Overwritten by "overlapping" paragraphs like comments, flys.
+    OUString                        m_sDefaultParaStyleName; //caches the ConvertedStyleName of the default paragraph style
     bool                            m_bInStyleSheetImport; //in import of fonts, styles, lists or lfos
     bool                            m_bInAnyTableImport; //in import of fonts, styles, lists or lfos
-    bool                            m_bInHeaderFooterImport;
+    enum class HeaderFooterImportState
+    {
+        none,
+        header,
+        footer,
+    }                               m_eInHeaderFooterImport;
     bool                            m_bDiscardHeaderFooter;
     bool                            m_bInFootOrEndnote;
     /// Did we get a <w:separator/> for this footnote already?
@@ -499,6 +505,8 @@ private:
     RedlineParamsPtr                m_currentRedline;
     RedlineParamsPtr                m_pParaMarkerRedline;
     bool                            m_bIsParaMarkerChange;
+    // redline data of the terminating run, if it's a moveFrom deletion
+    RedlineParamsPtr                m_pParaMarkerRedlineMoveFrom;
 
     /// If the current paragraph has any runs.
     bool                            m_bParaChanged;
@@ -536,11 +544,12 @@ private:
     SmartTagHandler m_aSmartTagHandler;
 
     css::uno::Reference<css::text::XTextRange> m_xGlossaryEntryStart;
+    css::uno::Reference<css::text::XTextRange> m_xStdEntryStart;
 
 public:
     css::uno::Reference<css::text::XTextRange> m_xInsertTextRange;
 private:
-    bool m_bIsNewDoc;
+    bool const m_bIsNewDoc;
 public:
     DomainMapper_Impl(
             DomainMapper& rDMapper,
@@ -567,7 +576,7 @@ public:
     }
     void SetDocumentSettingsProperty( const OUString& rPropName, const css::uno::Any& rValue );
 
-    static void CreateRedline(css::uno::Reference<css::text::XTextRange> const& xRange, const RedlineParamsPtr& pRedline);
+    void CreateRedline(css::uno::Reference<css::text::XTextRange> const& xRange, const RedlineParamsPtr& pRedline);
 
     void CheckParaMarkerRedline(css::uno::Reference<css::text::XTextRange> const& xRange);
 
@@ -593,13 +602,16 @@ public:
     void SetIsLastSectionGroup( bool bIsLast );
     bool GetIsLastSectionGroup() { return m_bIsLastSectionGroup;}
     void SetIsFirstParagraphInSection( bool bIsFirst );
-    bool GetIsFirstParagraphInSection() { return m_bIsFirstParaInSection;}
+    bool GetIsFirstParagraphInSection();
     void SetIsFirstParagraphInShape(bool bIsFirst);
     bool GetIsFirstParagraphInShape() { return m_bIsFirstParaInShape; }
     void SetIsDummyParaAddedForTableInSection( bool bIsAdded );
     bool GetIsDummyParaAddedForTableInSection() { return m_bDummyParaAddedForTableInSection;}
+
+    /// Track if a textframe has been inserted into this section
     void SetIsTextFrameInserted( bool bIsInserted );
     bool GetIsTextFrameInserted() { return m_bTextFrameInserted;}
+
     void SetIsPreviousParagraphFramed( bool bIsFramed ) { m_bIsPreviousParagraphFramed = bIsFramed; }
     bool GetIsPreviousParagraphFramed() { return m_bIsPreviousParagraphFramed; }
     void SetParaSectpr(bool bParaSectpr);
@@ -625,10 +637,10 @@ public:
     void setParaSdtEndDeferred(bool bParaSdtEndDeferred);
     bool isParaSdtEndDeferred();
 
-    void finishParagraph( const PropertyMapPtr& pPropertyMap );
+    void finishParagraph( const PropertyMapPtr& pPropertyMap, const bool bRemove = false);
     void appendTextPortion( const OUString& rString, const PropertyMapPtr& pPropertyMap );
     void appendTextContent(const css::uno::Reference<css::text::XTextContent>&, const css::uno::Sequence<css::beans::PropertyValue>&);
-    void appendOLE( const OUString& rStreamName, const OLEHandlerPtr& pOleHandler );
+    void appendOLE( const OUString& rStreamName, const std::shared_ptr<OLEHandler>& pOleHandler );
     void appendStarMath( const Value& v );
     css::uno::Reference<css::beans::XPropertySet> appendTextSectionAfter(css::uno::Reference<css::text::XTextRange> const & xBefore);
 
@@ -659,27 +671,27 @@ public:
     FontTablePtr const & GetFontTable()
     {
         if(!m_pFontTable)
-            m_pFontTable.reset(new FontTable());
+            m_pFontTable = new FontTable();
          return m_pFontTable;
     }
     StyleSheetTablePtr const & GetStyleSheetTable()
     {
         if(!m_pStyleSheetTable)
-            m_pStyleSheetTable.reset(new StyleSheetTable( m_rDMapper, m_xTextDocument, m_bIsNewDoc ));
+            m_pStyleSheetTable = new StyleSheetTable( m_rDMapper, m_xTextDocument, m_bIsNewDoc );
         return m_pStyleSheetTable;
     }
     ListsManager::Pointer const & GetListTable();
     ThemeTablePtr const & GetThemeTable()
     {
         if(!m_pThemeTable)
-            m_pThemeTable.reset( new ThemeTable );
+            m_pThemeTable = new ThemeTable;
         return m_pThemeTable;
     }
 
     SettingsTablePtr const & GetSettingsTable()
     {
         if( !m_pSettingsTable )
-            m_pSettingsTable.reset(new SettingsTable(m_rDMapper));
+            m_pSettingsTable = new SettingsTable(m_rDMapper);
         return m_pSettingsTable;
     }
 
@@ -694,8 +706,11 @@ public:
 
     void            SetCurrentParaStyleName(const OUString& sStringValue) {m_sCurrentParaStyleName = sStringValue;}
     const OUString  GetCurrentParaStyleName();
+    const OUString  GetDefaultParaStyleName();
 
     css::uno::Any GetPropertyFromStyleSheet(PropertyIds eId);
+    // get property first from the given context, or secondly from its stylesheet
+    css::uno::Any GetAnyProperty(PropertyIds eId, const PropertyMapPtr& rContext);
     void        SetStyleSheetImport( bool bSet ) { m_bInStyleSheetImport = bSet;}
     bool        IsStyleSheetImport()const { return m_bInStyleSheetImport;}
     void        SetAnyTableImport( bool bSet ) { m_bInAnyTableImport = bSet;}
@@ -714,7 +729,8 @@ public:
     void PushPageFooter(SectionPropertyMap::PageType eType);
 
     void PopPageHeaderFooter();
-    bool IsInHeaderFooter() const { return m_bInHeaderFooterImport; }
+    bool IsInHeaderFooter() const { return m_eInHeaderFooterImport != HeaderFooterImportState::none; }
+    bool IsInFooter() const { return m_eInHeaderFooterImport == HeaderFooterImportState::footer; }
 
     bool IsInTOC() const { return m_bStartTOC; }
 
@@ -782,6 +798,10 @@ public:
     /// The end of field is reached (cFieldEnd appeared) - the command might still be open.
     void PopFieldContext();
 
+    /// Returns title of the TOC placed in paragraph(s) before TOC field inside STD-frame
+    OUString extractTocTitle();
+    css::uno::Reference<css::beans::XPropertySet> createSectionForRange(css::uno::Reference< css::text::XTextRange > xStart, css::uno::Reference< css::text::XTextRange > xEnd, const OUString & sObjectType, bool stepLeft);
+
     void SetBookmarkName( const OUString& rBookmarkName );
     void StartOrEndBookmark( const OUString& rId );
 
@@ -800,13 +820,13 @@ public:
 
     DomainMapperTableManager& getTableManager()
     {
-        std::shared_ptr< DomainMapperTableManager > pMngr = m_aTableManagers.top();
+        tools::SvRef< DomainMapperTableManager > pMngr = m_aTableManagers.top();
         return *pMngr.get( );
     }
 
     void appendTableManager( )
     {
-        std::shared_ptr<DomainMapperTableManager> pMngr(new DomainMapperTableManager());
+        tools::SvRef<DomainMapperTableManager> pMngr(new DomainMapperTableManager());
         m_aTableManagers.push( pMngr );
     }
 
@@ -901,7 +921,7 @@ public:
     /// If we're inside <w:rPr>, inside <w:style w:type="table">
     bool m_bInTableStyleRunProps;
 
-    std::shared_ptr<SdtHelper> m_pSdtHelper;
+    tools::SvRef<SdtHelper> m_pSdtHelper;
 
     /// Document background color, applied to every page style.
     boost::optional<sal_Int32> m_oBackgroundColor;
@@ -988,6 +1008,9 @@ private:
     css::uno::Reference<css::beans::XPropertySet> m_xPreviousParagraph;
     /// Current paragraph has automatic before spacing.
     bool m_bParaAutoBefore;
+    /// Current paragraph in a table is first paragraph of a cell
+    bool m_bFirstParagraphInCell;
+    bool m_bSaveFirstParagraphInCell;
 };
 
 } //namespace dmapper

@@ -124,10 +124,10 @@ void ScSpellDialogChildWindow::Reset()
             SCROW nOldRow = rCursor.Row();
             SCCOL nNewCol = mpViewData->GetCurX();
             SCROW nNewRow = mpViewData->GetCurY();
-            mpDocShell->GetUndoManager()->AddUndoAction( new ScUndoConversion(
+            mpDocShell->GetUndoManager()->AddUndoAction( o3tl::make_unique<ScUndoConversion>(
                 mpDocShell, mpViewData->GetMarkData(),
-                nOldCol, nOldRow, nTab, mxUndoDoc.release(),
-                nNewCol, nNewRow, nTab, mxRedoDoc.release(),
+                nOldCol, nOldRow, nTab, std::move(mxUndoDoc),
+                nNewCol, nNewRow, nTab, std::move(mxRedoDoc),
                 ScConversionParam( SC_CONVERSION_SPELLCHECK ) ) );
 
             sc::SetFormulaDirtyContext aCxt;
@@ -258,7 +258,8 @@ void ScSpellDialogChildWindow::Init()
 
 bool ScSpellDialogChildWindow::IsSelectionChanged()
 {
-    if( !mxOldRangeList.get() || !mpViewShell || (mpViewShell != dynamic_cast<ScTabViewShell*>( SfxViewShell::Current() ))  )
+    if (!mxOldRangeList || !mpViewShell
+        || (mpViewShell != dynamic_cast<ScTabViewShell*>(SfxViewShell::Current())))
         return true;
 
     if( EditView* pEditView = mpViewData->GetSpellingView() )

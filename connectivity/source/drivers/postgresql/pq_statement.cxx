@@ -389,7 +389,7 @@ static std::vector< OUString > lookupKeys(
 //                 printf( "\n" );
             }
         }
-        if( ! ret.size() )
+        if( ret.empty() )
         {
             if (isLog(pSettings, LogLevel::Info))
             {
@@ -465,7 +465,6 @@ bool executePostgresCommand( const OString & cmd, struct CommandData *data )
         // belonging to the primary key are in the result set, allow updateable result sets
         // otherwise, don't
         OUString table, schema;
-        std::vector< OUString > sourceTableKeys;
         std::vector< OString > vec;
         tokenizeSQL( cmd, vec );
         OUString sourceTable =
@@ -478,7 +477,7 @@ bool executePostgresCommand( const OString & cmd, struct CommandData *data )
             OString aReason;
             if( sourceTable.getLength() )
             {
-                sourceTableKeys = lookupKeys(
+                std::vector< OUString > sourceTableKeys = lookupKeys(
                     pSettings->tables.is() ?
                            pSettings->tables : data->tableSupplier->getTables() ,
                     sourceTable,
@@ -499,7 +498,7 @@ bool executePostgresCommand( const OString & cmd, struct CommandData *data )
                     }
                 }
 
-                if( sourceTableKeys.size() && i == static_cast<int>(sourceTableKeys.size()) )
+                if( !sourceTableKeys.empty() && i == static_cast<int>(sourceTableKeys.size()) )
                 {
                     *(data->pLastResultset) =
                         UpdateableResultSet::createFromPGResultSet(
@@ -515,7 +514,7 @@ bool executePostgresCommand( const OString & cmd, struct CommandData *data )
                     buf.append( "." );
                     aReason = buf.makeStringAndClear();
                 }
-                else if( sourceTableKeys.size() )
+                else if( !sourceTableKeys.empty() )
                 {
                     OStringBuffer buf( 128 );
                     buf.append( "can't support updateable resultset for table " );
@@ -939,6 +938,15 @@ sal_Int32 Statement::getUpdateCount(  )
 
 sal_Bool Statement::getMoreResults(  )
 {
+    // The PostgreSQL C interface always returns a single result,
+    // so we will never have multiple ones.
+    // Implicitly close the open resultset (if any) as per spec,
+    // and setup to signal "no more result, neither as resultset,
+    // nor as update count".
+    Reference< XCloseable > lastResultSetHolder = m_lastResultset;
+    if( lastResultSetHolder.is() )
+        lastResultSetHolder->close();
+    m_multipleResultUpdateCount = -1;
     return false;
 }
 

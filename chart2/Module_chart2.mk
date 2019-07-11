@@ -14,18 +14,12 @@ $(eval $(call gb_Module_add_targets,chart2,\
     Library_chartcore \
 	UIConfig_chart2 \
 ))
-ifeq ($(ENABLE_HEADLESS),)
-$(eval $(call gb_Module_add_targets,chart2,\
-     Library_chartopengl \
-     Package_opengl \
- ))
-endif
 
 $(eval $(call gb_Module_add_l10n_targets,chart2,\
 	AllLangMoTarget_chart \
 ))
 
-ifneq ($(OS),IOS)
+ifneq ($(OS),iOS)
 $(eval $(call gb_Module_add_check_targets,chart2,\
 	CppunitTest_chart2_common_functors \
 ))

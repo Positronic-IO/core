@@ -23,21 +23,21 @@
 #include <memory>
 #include "ViewShell.hxx"
 #include "tools/AsynchronousCall.hxx"
-#include <sfx2/viewfac.hxx>
-#include <sfx2/viewsh.hxx>
 #include "TabControl.hxx"
+#include <glob.hxx>
 #include <pres.hxx>
-#include <svx/sidebar/SelectionChangeHandler.hxx>
-#include <com/sun/star/lang/XEventListener.hpp>
-#include <com/sun/star/scanner/XScannerManager2.hpp>
 #include <unotools/caserotate.hxx>
 #include <unotools/options.hxx>
+#include <sddllapi.h>
+
+namespace svx { namespace sidebar { class SelectionChangeHandler; } }
+namespace com { namespace sun { namespace star { namespace lang { class XEventListener; } } } }
+namespace com { namespace sun { namespace star { namespace scanner { class XScannerManager2; } } } }
 
 class Outliner;
 class SdPage;
 class SdStyleSheet;
 class SdrExternalToolEdit;
-class DrawDocShell;
 class TabBar;
 class SdrObject;
 class SdrPageView;
@@ -116,6 +116,8 @@ public:
     virtual void    MouseButtonUp(const MouseEvent& rMEvt, ::sd::Window* pWin) override;
     virtual void    MouseButtonDown(const MouseEvent& rMEvt, ::sd::Window* pWin) override;
     virtual void    Command(const CommandEvent& rCEvt, ::sd::Window* pWin) override;
+    bool            IsMouseButtonDown() { return mbMouseButtonDown; }
+    bool            IsMouseSelecting() { return mbMouseSelecting; }
 
     virtual void    Resize() override;
 
@@ -287,8 +289,8 @@ public:
     virtual sal_Int8    ExecuteDrop( const ExecuteDropEvent& rEvt, DropTargetHelper& rTargetHelper,
                                     ::sd::Window* pTargetWindow, sal_uInt16 nPage, SdrLayerID nLayer ) override;
 
-    virtual void    WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >&, bool bBrowse ) override;
-    virtual void    ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >&, bool bBrowse ) override;
+    virtual void    WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& ) override;
+    virtual void    ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& ) override;
 
     virtual void    VisAreaChanged(const ::tools::Rectangle& rRect) override;
 
@@ -337,7 +339,7 @@ public:
 
     /** Return a pointer to the tab control for layers.
     */
-    LayerTabBar* GetLayerTabControl();
+    SD_DLLPUBLIC LayerTabBar* GetLayerTabControl(); // export for unit test
 
     /** Renames the given slide using an SvxNameDialog
 
@@ -445,6 +447,8 @@ private:
     css::uno::Reference< css::lang::XEventListener >      mxScannerListener;
     rtl::Reference<TransferableClipboardListener>         mxClipEvtLstnr;
     bool                                                  mbPastePossible;
+    bool                                                  mbMouseButtonDown;
+    bool                                                  mbMouseSelecting;
 
     virtual void Notify (SfxBroadcaster& rBC, const SfxHint& rHint) override;
 

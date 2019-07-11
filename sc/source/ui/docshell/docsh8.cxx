@@ -24,11 +24,14 @@
 #include <svl/converter.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
-#include <comphelper/string.hxx>
 #include <comphelper/types.hxx>
 #include <ucbhelper/content.hxx>
 #include <svx/txenctab.hxx>
 #include <unotools/sharedunocomponent.hxx>
+#include <unotools/charclass.hxx>
+#include <rtl/character.hxx>
+#include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/sdb/CommandType.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
@@ -118,8 +121,7 @@ namespace
 
         // get connection
 
-        OUString aConnUrl("sdbc:dbase:");
-        aConnUrl += aPath;
+        const OUString aConnUrl{"sdbc:dbase:" + aPath};
 
         // sdbc:dbase is based on the css.sdbc.FILEConnectionProperties UNOIDL service, so we can
         // transport the raw rtl_TextEncoding value instead of having to translate it into a IANA
@@ -378,10 +380,10 @@ ErrCode ScDocShell::DBaseImport( const OUString& rFullFileName, rtl_TextEncoding
                     break;
             }
 
-            aDocument.SetString( static_cast<SCCOL>(i), 0, 0, aHeader );
+            m_aDocument.SetString( static_cast<SCCOL>(i), 0, 0, aHeader );
         }
 
-        lcl_setScalesToColumns(aDocument, aScales);
+        lcl_setScalesToColumns(m_aDocument, aScales);
 
         SCROW nRow = 1;     // 0 is column titles
         bool bEnd = false;
@@ -394,7 +396,7 @@ ErrCode ScDocShell::DBaseImport( const OUString& rFullFileName, rtl_TextEncoding
                 for (i=0; i<nColCount; i++)
                 {
                     ScDatabaseDocUtil::StrData aStrData;
-                    ScDatabaseDocUtil::PutData( &aDocument, nCol, nRow, 0,
+                    ScDatabaseDocUtil::PutData( &m_aDocument, nCol, nRow, 0,
                                                 xRow, i+1, pTypeArr[i], false,
                                                 &aStrData );
 
@@ -468,20 +470,18 @@ void lcl_GetColumnTypes(
         sal_Int32 nPrecision = 0;
         sal_Int32 nDbType = sdbc::DataType::SQLNULL;
         OUString aFieldName;
-        OUString aString;
 
         // Fieldname[,Type[,Width[,Prec]]]
         // Type etc.: L; D; C[,W]; N[,W[,P]]
         if ( bHasFieldNames )
         {
-            aString = rDoc.GetString(nCol, nFirstRow, nTab);
-            aString = aString.toAsciiUpperCase();
-            sal_Int32 nToken = comphelper::string::getTokenCount(aString, ',');
-            if ( nToken > 1 )
+            OUString aString {rDoc.GetString(nCol, nFirstRow, nTab).toAsciiUpperCase()};
+            sal_Int32 nIdx {0};
+            aFieldName = aString.getToken( 0, ',', nIdx);
+            if ( nIdx>0 )
             {
-                aFieldName = aString.getToken( 0, ',' );
                 aString = aString.replaceAll(" ", "");
-                switch ( aString.getToken( 1, ',' )[0] )
+                switch ( aString.getToken( 0, ',', nIdx )[0] )
                 {
                     case 'L' :
                         nDbType = sdbc::DataType::BIT;
@@ -512,12 +512,12 @@ void lcl_GetColumnTypes(
                         bTypeDefined = true;
                         break;
                 }
-                if ( bTypeDefined && !nFieldLen && nToken > 2 )
+                if ( bTypeDefined && !nFieldLen && nIdx>0 )
                 {
-                    nFieldLen = aString.getToken( 2, ',' ).toInt32();
-                    if ( !bPrecDefined && nToken > 3 )
+                    nFieldLen = aString.getToken( 0, ',', nIdx ).toInt32();
+                    if ( !bPrecDefined && nIdx>0 )
                     {
-                        OUString aTmp( aString.getToken( 3, ',' ) );
+                        OUString aTmp( aString.getToken( 0, ',', nIdx ) );
                         if ( CharClass::isAsciiNumeric(aTmp) )
                         {
                             nPrecision = aTmp.toInt32();
@@ -528,8 +528,6 @@ void lcl_GetColumnTypes(
                     }
                 }
             }
-            else
-                aFieldName = aString;
 
             // Check field name and generate valid field name if necessary.
             // First character has to be alphabetical, subsequent characters
@@ -539,16 +537,16 @@ void lcl_GetColumnTypes(
             // No duplicated names.
             if ( !rtl::isAsciiAlpha(aFieldName[0]) )
                 aFieldName = "N" + aFieldName;
-            OUString aTmpStr;
+            OUStringBuffer aTmpStr;
             sal_Unicode c;
             for ( const sal_Unicode* p = aFieldName.getStr(); ( c = *p ) != 0; p++ )
             {
                 if ( rtl::isAsciiAlpha(c) || rtl::isAsciiDigit(c) || c == '_' )
-                    aTmpStr += OUStringLiteral1(c);
+                    aTmpStr.append(c);
                 else
-                    aTmpStr += "_";
+                    aTmpStr.append("_");
             }
-            aFieldName = aTmpStr;
+            aFieldName = aTmpStr.makeStringAndClear();
             if ( aFieldName.getLength() > 10 )
                 aFieldName = aFieldName.copy(0,  10);
 
@@ -562,8 +560,7 @@ void lcl_GetColumnTypes(
                     OUString aVarPart = OUString::number( nSub );
                     if ( aFixPart.getLength() + aVarPart.getLength() > 10 )
                         aFixPart = aFixPart.copy( 0, 10 - aVarPart.getLength() );
-                    aFieldName = aFixPart;
-                    aFieldName += aVarPart;
+                    aFieldName = aFixPart + aVarPart;
                 } while (!aFieldNames.insert(aFieldName).second);
             }
         }
@@ -710,7 +707,7 @@ void lcl_GetColumnTypes(
     }
 }
 
-inline void lcl_getLongVarCharEditString( OUString& rString,
+void lcl_getLongVarCharEditString( OUString& rString,
         const ScRefCellValue& rCell, ScFieldEditEngine& rEditEngine )
 {
     if (!rCell.mpEditText)
@@ -720,7 +717,7 @@ inline void lcl_getLongVarCharEditString( OUString& rString,
     rString = rEditEngine.GetText( LINEEND_CRLF );
 }
 
-inline void lcl_getLongVarCharString(
+void lcl_getLongVarCharString(
     OUString& rString, ScDocument& rDoc, SCCOL nCol, SCROW nRow, SCTAB nTab, SvNumberFormatter& rNumFmt )
 {
     Color* pColor;
@@ -751,20 +748,20 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
     SCCOL nFirstCol, nLastCol;
     SCROW  nFirstRow, nLastRow;
     SCTAB nTab = GetSaveTab();
-    aDocument.GetDataStart( nTab, nFirstCol, nFirstRow );
-    aDocument.GetCellArea( nTab, nLastCol, nLastRow );
+    m_aDocument.GetDataStart( nTab, nFirstCol, nFirstRow );
+    m_aDocument.GetCellArea( nTab, nLastCol, nLastRow );
     if ( nFirstCol > nLastCol )
         nFirstCol = nLastCol;
     if ( nFirstRow > nLastRow )
         nFirstRow = nLastRow;
     ScProgress aProgress( this, ScResId( STR_SAVE_DOC ),
                                                     nLastRow - nFirstRow, true );
-    SvNumberFormatter* pNumFmt = aDocument.GetFormatTable();
+    SvNumberFormatter* pNumFmt = m_aDocument.GetFormatTable();
 
     bool bHasFieldNames = true;
     for ( SCCOL nDocCol = nFirstCol; nDocCol <= nLastCol && bHasFieldNames; nDocCol++ )
     {   // only Strings in first row => are field names
-        if ( !aDocument.HasStringData( nDocCol, nFirstRow, nTab ) )
+        if ( !m_aDocument.HasStringData( nDocCol, nFirstRow, nTab ) )
             bHasFieldNames = false;
     }
 
@@ -781,7 +778,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                         bHasMemo, eCharSet );
     // also needed for exception catch
     SCROW nDocRow = 0;
-    ScFieldEditEngine aEditEngine(&aDocument, aDocument.GetEditPool());
+    ScFieldEditEngine aEditEngine(&m_aDocument, m_aDocument.GetEditPool());
     OUString aString;
     OUString aTabName;
 
@@ -908,7 +905,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                 {
                     case sdbc::DataType::LONGVARCHAR:
                     {
-                        ScRefCellValue aCell(aDocument, ScAddress(nDocCol, nDocRow, nTab));
+                        ScRefCellValue aCell(m_aDocument, ScAddress(nDocCol, nDocRow, nTab));
                         if (!aCell.isEmpty())
                         {
                             if (aCell.meType == CELLTYPE_EDIT)
@@ -918,7 +915,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                             else
                             {
                                 lcl_getLongVarCharString(
-                                    aString, aDocument, nDocCol, nDocRow, nTab, *pNumFmt);
+                                    aString, m_aDocument, nDocCol, nDocRow, nTab, *pNumFmt);
                             }
                             xRowUpdate->updateString( nCol+1, aString );
                         }
@@ -928,7 +925,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                     break;
 
                     case sdbc::DataType::VARCHAR:
-                        aString = aDocument.GetString(nDocCol, nDocRow, nTab);
+                        aString = m_aDocument.GetString(nDocCol, nDocRow, nTab);
                         xRowUpdate->updateString( nCol+1, aString );
                         if ( nErr == ERRCODE_NONE && pColLengths[nCol] < aString.getLength() )
                             nErr = SCWARN_EXPORT_DATALOST;
@@ -936,16 +933,16 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
 
                     case sdbc::DataType::DATE:
                         {
-                            aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
+                            m_aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
                             // differentiate between 0 with value and 0 no-value
                             bool bIsNull = (fVal == 0.0);
                             if ( bIsNull )
-                                bIsNull = !aDocument.HasValueData( nDocCol, nDocRow, nTab );
+                                bIsNull = !m_aDocument.HasValueData( nDocCol, nDocRow, nTab );
                             if ( bIsNull )
                             {
                                 xRowUpdate->updateNull( nCol+1 );
                                 if ( nErr == ERRCODE_NONE &&
-                                        aDocument.HasStringData( nDocCol, nDocRow, nTab ) )
+                                        m_aDocument.HasStringData( nDocCol, nDocRow, nTab ) )
                                     nErr = SCWARN_EXPORT_DATALOST;
                             }
                             else
@@ -959,9 +956,9 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
 
                     case sdbc::DataType::DECIMAL:
                     case sdbc::DataType::BIT:
-                        aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
+                        m_aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
                         if ( fVal == 0.0 && nErr == ERRCODE_NONE &&
-                                            aDocument.HasStringData( nDocCol, nDocRow, nTab ) )
+                                            m_aDocument.HasStringData( nDocCol, nDocRow, nTab ) )
                             nErr = SCWARN_EXPORT_DATALOST;
                         if ( pColTypes[nCol] == sdbc::DataType::BIT )
                             xRowUpdate->updateBoolean( nCol+1, ( fVal != 0.0 ) );
@@ -973,7 +970,7 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                         OSL_FAIL( "ScDocShell::DBaseExport: unknown FieldType" );
                         if ( nErr == ERRCODE_NONE )
                             nErr = SCWARN_EXPORT_DATALOST;
-                        aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
+                        m_aDocument.GetValue( nDocCol, nDocRow, nTab, fVal );
                         xRowUpdate->updateDouble( nCol+1, fVal );
                 }
             }
@@ -1001,11 +998,11 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
             // SQL error 22001: String length exceeds field width (after encoding).
             bool bEncErr = (nError == 22018);
             bool bIsOctetTextEncoding = rtl_isOctetTextEncoding( eCharSet);
-            OSL_ENSURE( !bEncErr || bIsOctetTextEncoding, "ScDocShell::DBaseExport: encoding error and not an octect textencoding");
+            OSL_ENSURE( !bEncErr || bIsOctetTextEncoding, "ScDocShell::DBaseExport: encoding error and not an octet textencoding");
             SCCOL nDocCol = nFirstCol;
             const sal_Int32* pColTypes = aColTypes.getConstArray();
             const sal_Int32* pColLengths = aColLengths.getConstArray();
-            ScHorizontalCellIterator aIter( &aDocument, nTab, nFirstCol,
+            ScHorizontalCellIterator aIter( &m_aDocument, nTab, nFirstCol,
                     nDocRow, nLastCol, nDocRow);
             ScRefCellValue* pCell = nullptr;
             bool bTest = true;
@@ -1020,12 +1017,12 @@ ErrCode ScDocShell::DBaseExport( const OUString& rFullFileName, rtl_TextEncoding
                                 lcl_getLongVarCharEditString(aString, *pCell, aEditEngine);
                             else
                                 lcl_getLongVarCharString(
-                                    aString, aDocument, nDocCol, nDocRow, nTab, *pNumFmt);
+                                    aString, m_aDocument, nDocCol, nDocRow, nTab, *pNumFmt);
                         }
                         break;
 
                     case sdbc::DataType::VARCHAR:
-                        aString = aDocument.GetString(nDocCol, nDocRow, nTab);
+                        aString = m_aDocument.GetString(nDocCol, nDocRow, nTab);
                         break;
 
                     // NOTE: length of DECIMAL fields doesn't need to be

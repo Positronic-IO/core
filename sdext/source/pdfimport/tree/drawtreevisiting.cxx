@@ -479,7 +479,7 @@ void DrawXmlOptimizer::visit( PageElement& elem, const std::list< std::unique_pt
 
     // FIXME: until hyperlinks and font effects are adjusted for
     // geometrical search handle them before sorting
-    m_rProcessor.sortElements( &elem );
+    PDFIProcessor::sortElements( &elem );
 
     // find paragraphs in text
     ParagraphElement* pCurPara = nullptr;
@@ -648,7 +648,7 @@ void DrawXmlOptimizer::visit( PageElement& elem, const std::list< std::unique_pt
     elem.applyToChildren(*this);
 }
 
-bool isSpaces(TextElement* pTextElem)
+static bool isSpaces(TextElement* pTextElem)
 {
     for (sal_Int32 i = 0; i != pTextElem->Text.getLength(); ++i) {
         if (pTextElem->Text[i] != ' ') {
@@ -658,7 +658,7 @@ bool isSpaces(TextElement* pTextElem)
     return true;
 }
 
-bool notTransformed(const GraphicsContext& GC)
+static bool notTransformed(const GraphicsContext& GC)
 {
     return
         rtl::math::approxEqual(GC.Transformation.get(0,0), 100.00) &&
@@ -718,7 +718,7 @@ void DrawXmlOptimizer::optimizeTextElements(Element& rParent)
                 {
                     pCur->updateGeometryWith( pNext );
                     // append text to current element
-                        pCur->Text.append( pNext->Text.getStr(), pNext->Text.getLength() );
+                        pCur->Text.append( pNext->Text );
 
                         str = pCur->Text.getStr();
                     for(int i=0; i< str.getLength(); i++)
@@ -822,7 +822,7 @@ void DrawXmlFinalizer::visit( HyperlinkElement&, const std::list< std::unique_pt
 {
 }
 
-void SetFontsizeProperties(PropertyMap& props, double fontSize)
+static void SetFontsizeProperties(PropertyMap& props, double fontSize)
 {
     OUStringBuffer aBuf(32);
     aBuf.append(fontSize * 72 / PDFI_OUTDEV_RESOLUTION);

@@ -35,10 +35,10 @@
 #include <rtl/ref.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/svapp.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
-#include <svtools/viewdataentry.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
+#include <vcl/viewdataentry.hxx>
+#include <vcl/svlbitm.hxx>
 
 #include <map>
 #include <o3tl/make_unique.hxx>
@@ -140,7 +140,6 @@ TreeControlPeer::TreeControlPeer()
     , mbIsRootDisplayed(false)
     , mpTreeImpl( nullptr )
     , mnEditLock( 0 )
-    , mpTreeNodeMap( nullptr )
 {
 }
 
@@ -1055,13 +1054,13 @@ void TreeControlPeer::updateChildNodes( UnoTreeListBoxImpl const & rTree, const 
             updateEntry( pCurrentChild );
         }
 
-        pCurrentChild = dynamic_cast< UnoTreeListEntry* >( SvTreeListBox::NextSibling( pCurrentChild ) );
+        pCurrentChild = dynamic_cast< UnoTreeListEntry* >( pCurrentChild->NextSibling() );
     }
 
     // check if we have entries without nodes left, we need to remove them
     while( pCurrentChild )
     {
-        UnoTreeListEntry* pNextChild = dynamic_cast< UnoTreeListEntry* >( SvTreeListBox::NextSibling( pCurrentChild ) );
+        UnoTreeListEntry* pNextChild = dynamic_cast< UnoTreeListEntry* >( pCurrentChild->NextSibling() );
         rTree.GetModel()->Remove( pCurrentChild );
         pCurrentChild = pNextChild;
     }

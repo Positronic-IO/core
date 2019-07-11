@@ -11,7 +11,6 @@
 #define INCLUDED_SC_SOURCE_UI_INC_NAMEMGRTABLE_HXX
 
 #include <svtools/simptabl.hxx>
-#include <vcl/ctrl.hxx>
 
 #include <address.hxx>
 
@@ -44,7 +43,7 @@ public:
     };
 
 private:
-    OUString maGlobalString;
+    OUString const maGlobalString;
 
     // should be const because we should not modify it here
     const std::map<OUString, std::unique_ptr<ScRangeName>>& m_RangeMap;

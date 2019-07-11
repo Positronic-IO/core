@@ -22,6 +22,7 @@
 
 #include <vcl/salbtype.hxx>
 #include <vcl/sysdata.hxx>
+#include <sal/log.hxx>
 
 #include <unx/pixmap.hxx>
 #include <unx/salunx.h>
@@ -31,7 +32,7 @@
 #include <unx/salvd.h>
 #include <unx/x11/x11gdiimpl.h>
 #include <unx/x11/xlimits.hxx>
-#include "xrender_peer.hxx"
+#include <unx/x11/xrender_peer.hxx>
 #include <salframe.hxx>
 
 #include <unx/printergfx.hxx>
@@ -79,21 +80,21 @@ void X11SalGraphics::CopyScreenArea( Display* pDisplay,
 
 void X11SalGraphics::FillPixmapFromScreen( X11Pixmap* pPixmap, int nX, int nY )
 {
-    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl.get());
+    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl);
     rImpl.FillPixmapFromScreen( pPixmap, nX, nY );
 }
 
 bool X11SalGraphics::RenderPixmapToScreen( X11Pixmap* pPixmap, X11Pixmap* pMask, int nX, int nY )
 {
     SAL_INFO( "vcl", "RenderPixmapToScreen" );
-    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl.get());
+    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl);
     return rImpl.RenderPixmapToScreen( pPixmap, pMask, nX, nY );
 }
 
 bool X11SalGraphics::TryRenderCachedNativeControl(ControlCacheKey& rControlCacheKey, int nX, int nY)
 {
     SAL_INFO( "vcl", "TryRenderCachedNativeControl" );
-    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl.get());
+    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl);
     return rImpl.TryRenderCachedNativeControl(rControlCacheKey, nX, nY);
 }
 
@@ -101,7 +102,7 @@ bool X11SalGraphics::RenderAndCacheNativeControl(X11Pixmap* pPixmap, X11Pixmap* 
                                                  ControlCacheKey& rControlCacheKey)
 {
     SAL_INFO( "vcl", "RenderAndCachePixmap" );
-    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl.get());
+    X11GraphicsImpl& rImpl = dynamic_cast<X11GraphicsImpl&>(*mxImpl);
     return rImpl.RenderAndCacheNativeControl(pPixmap, pMask, nX, nY, rControlCacheKey);
 }
 
@@ -233,7 +234,7 @@ void X11SalGraphics::drawMask( const SalTwoRect& rPosAry,
     mxImpl->drawMask( rPosAry, rSalBitmap, nMaskColor );
 }
 
-SalBitmap *X11SalGraphics::getBitmap( long nX, long nY, long nDX, long nDY )
+std::shared_ptr<SalBitmap> X11SalGraphics::getBitmap( long nX, long nY, long nDX, long nDY )
 {
     return mxImpl->getBitmap( nX, nY, nDX, nDY );
 }

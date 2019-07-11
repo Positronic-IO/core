@@ -33,6 +33,7 @@
 
 #include <rtl/ustring.h>
 
+#include <osl/diagnose.h>
 #include <osl/module.h>
 #include <o3tl/char16_t2wchar_t.hxx>
 
@@ -199,12 +200,8 @@ void SalData::initNWF()
 // ********************************************************
 void SalData::deInitNWF()
 {
-    ThemeMap::iterator iter = aThemeMap.begin();
-    while( iter != aThemeMap.end() )
-    {
-        vsAPI.CloseThemeData(iter->second);
-        ++iter;
-    }
+    for( auto& rEntry : aThemeMap )
+        vsAPI.CloseThemeData(rEntry.second);
     aThemeMap.clear();
 }
 
@@ -343,7 +340,7 @@ bool WinSalGraphics::hitTestNativeControl( ControlType,
     return FALSE;
 }
 
-bool ImplDrawTheme( HTHEME hTheme, HDC hDC, int iPart, int iState, RECT rc, const OUString& aStr)
+static bool ImplDrawTheme( HTHEME hTheme, HDC hDC, int iPart, int iState, RECT rc, const OUString& aStr)
 {
     HRESULT hr = vsAPI.DrawThemeBackground( hTheme, hDC, iPart, iState, &rc, nullptr);
 
@@ -359,7 +356,7 @@ bool ImplDrawTheme( HTHEME hTheme, HDC hDC, int iPart, int iState, RECT rc, cons
     return (hr == S_OK);
 }
 
-tools::Rectangle ImplGetThemeRect( HTHEME hTheme, HDC hDC, int iPart, int iState, const tools::Rectangle& /* aRect */, THEMESIZE eTS = TS_TRUE )
+static tools::Rectangle ImplGetThemeRect( HTHEME hTheme, HDC hDC, int iPart, int iState, const tools::Rectangle& /* aRect */, THEMESIZE eTS = TS_TRUE )
 {
     SIZE aSz;
     HRESULT hr = vsAPI.GetThemePartSize( hTheme, hDC, iPart, iState, nullptr, eTS, &aSz ); // TS_TRUE returns optimal size
@@ -371,7 +368,7 @@ tools::Rectangle ImplGetThemeRect( HTHEME hTheme, HDC hDC, int iPart, int iState
 
 // Helper functions
 
-void ImplConvertSpinbuttonValues( ControlPart nControlPart, const ControlState& rState, const tools::Rectangle& rRect,
+static void ImplConvertSpinbuttonValues( ControlPart nControlPart, const ControlState& rState, const tools::Rectangle& rRect,
                                  int* pLunaPart, int *pLunaState, RECT *pRect )
 {
     if( nControlPart == ControlPart::ButtonDown )
@@ -506,24 +503,27 @@ static tools::Rectangle GetMenuPopupMarkRegion(const ImplControlValue& rValue)
 {
     tools::Rectangle aRet;
 
-    const MenupopupValue& rMVal(static_cast<const MenupopupValue&>(rValue));
-    aRet.SetTop(rMVal.maItemRect.Top());
-    aRet.SetBottom(rMVal.maItemRect.Bottom() + 1); // see below in drawNativeControl
+    auto pMVal = dynamic_cast<const MenupopupValue*>(&rValue);
+    if (!pMVal)
+        return aRet;
+
+    aRet.SetTop(pMVal->maItemRect.Top());
+    aRet.SetBottom(pMVal->maItemRect.Bottom() + 1); // see below in drawNativeControl
     if (AllSettings::GetLayoutRTL())
     {
-        aRet.SetRight(rMVal.maItemRect.Right() + 1);
-        aRet.SetLeft(aRet.Right() - (rMVal.getNumericVal() - rMVal.maItemRect.Left()));
+        aRet.SetRight(pMVal->maItemRect.Right() + 1);
+        aRet.SetLeft(aRet.Right() - (pMVal->getNumericVal() - pMVal->maItemRect.Left()));
     }
     else
     {
-        aRet.SetRight(rMVal.getNumericVal());
-        aRet.SetLeft(rMVal.maItemRect.Left());
+        aRet.SetRight(pMVal->getNumericVal());
+        aRet.SetLeft(pMVal->maItemRect.Left());
     }
 
     return aRet;
 }
 
-bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
+static bool ImplDrawNativeControl( HDC hDC, HTHEME hTheme, RECT rc,
                             ControlType nType,
                             ControlPart nPart,
                             ControlState nState,
@@ -1183,9 +1183,13 @@ bool WinSalGraphics::drawNativeControl( ControlType nType,
 
     if (pImpl && nType == ControlType::MenuPopup && (nPart == ControlPart::MenuItemCheckMark || nPart == ControlPart::MenuItemRadioMark))
     {
-        cacheRect = GetMenuPopupMarkRegion(aValue);
-        buttonRect = cacheRect;
-        keySize = cacheRect.GetSize();
+        tools::Rectangle aRectangle = GetMenuPopupMarkRegion(aValue);
+        if (!aRectangle.IsEmpty())
+        {
+            cacheRect = GetMenuPopupMarkRegion(aValue);
+            buttonRect = cacheRect;
+            keySize = cacheRect.GetSize();
+        }
     }
 
 

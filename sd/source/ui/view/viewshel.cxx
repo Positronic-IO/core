@@ -28,6 +28,7 @@
 #include <DrawController.hxx>
 #include <LayerTabBar.hxx>
 
+#include <sal/log.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
@@ -87,6 +88,7 @@
 #include <editeng/editeng.hxx>
 #include <svl/poolitem.hxx>
 #include <strings.hxx>
+#include <sdmod.hxx>
 #include <AccessibleDocumentViewBase.hxx>
 
 using namespace ::com::sun::star;
@@ -100,15 +102,10 @@ class ViewShellObjectBarFactory
 {
 public:
     explicit ViewShellObjectBarFactory (::sd::ViewShell& rViewShell);
-    virtual ~ViewShellObjectBarFactory() override;
     virtual SfxShell* CreateShell( ::sd::ShellId nId ) override;
     virtual void ReleaseShell (SfxShell* pShell) override;
 private:
     ::sd::ViewShell& mrViewShell;
-    /** This cache holds the already created object bars.
-    */
-    typedef ::std::map< ::sd::ShellId,SfxShell*> ShellCache;
-    ShellCache maShellCache;
 };
 
 } // end of anonymous namespace
@@ -402,13 +399,10 @@ bool ViewShell::KeyInput(const KeyEvent& rKEvt, ::sd::Window* pWin)
     if(pWin)
         SetActiveWindow(pWin);
 
-    if(!bReturn)
-    {
-        // give key input first to SfxViewShell to give CTRL+Key
-        // (e.g. CTRL+SHIFT+'+', to front) priority.
-        OSL_ASSERT (GetViewShell()!=nullptr);
-        bReturn = GetViewShell()->KeyInput(rKEvt);
-    }
+    // give key input first to SfxViewShell to give CTRL+Key
+    // (e.g. CTRL+SHIFT+'+', to front) priority.
+    OSL_ASSERT(GetViewShell() != nullptr);
+    bReturn = GetViewShell()->KeyInput(rKEvt);
 
     const size_t OriCount = GetView()->GetMarkedObjectList().GetMarkCount();
     if(!bReturn)
@@ -611,7 +605,7 @@ void ViewShell::MouseMove(const MouseEvent& rMEvt, ::sd::Window* pWin)
         {
             std::shared_ptr<ViewShell::Implementation::ToolBarManagerLock> pLock(
                 mpImpl->mpUpdateLockForMouse);
-            if (pLock.get() != nullptr)
+            if (pLock != nullptr)
                 pLock->Release();
         }
     }
@@ -668,7 +662,7 @@ void ViewShell::MouseButtonUp(const MouseEvent& rMEvt, ::sd::Window* pWin)
     {
         std::shared_ptr<ViewShell::Implementation::ToolBarManagerLock> pLock(
             mpImpl->mpUpdateLockForMouse);
-        if (pLock.get() != nullptr)
+        if (pLock != nullptr)
             pLock->Release();
     }
 }
@@ -1122,7 +1116,7 @@ void ViewShell::UpdatePreview (SdPage*, bool )
     // useful is still done.
 }
 
-::svl::IUndoManager* ViewShell::ImpGetUndoManager() const
+SfxUndoManager* ViewShell::ImpGetUndoManager() const
 {
     const ViewShell* pMainViewShell = GetViewShellBase().GetMainViewShell().get();
 
@@ -1159,7 +1153,7 @@ void ViewShell::UpdatePreview (SdPage*, bool )
 
 void ViewShell::ImpGetUndoStrings(SfxItemSet &rSet) const
 {
-    ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+    SfxUndoManager* pUndoManager = ImpGetUndoManager();
     if(pUndoManager)
     {
         sal_uInt16 nCount(pUndoManager->GetUndoActionCount());
@@ -1167,7 +1161,7 @@ void ViewShell::ImpGetUndoStrings(SfxItemSet &rSet) const
         {
             // prepare list
             std::vector<OUString> aStringList;
-
+            aStringList.reserve(nCount);
             for (sal_uInt16 a = 0; a < nCount; ++a)
             {
                 // generate one String in list per undo step
@@ -1186,7 +1180,7 @@ void ViewShell::ImpGetUndoStrings(SfxItemSet &rSet) const
 
 void ViewShell::ImpGetRedoStrings(SfxItemSet &rSet) const
 {
-    ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+    SfxUndoManager* pUndoManager = ImpGetUndoManager();
     if(pUndoManager)
     {
         sal_uInt16 nCount(pUndoManager->GetRedoActionCount());
@@ -1194,9 +1188,8 @@ void ViewShell::ImpGetRedoStrings(SfxItemSet &rSet) const
         {
             // prepare list
             ::std::vector< OUString > aStringList;
-            sal_uInt16 a;
-
-            for( a = 0; a < nCount; a++)
+            aStringList.reserve(nCount);
+            for(sal_uInt16 a = 0; a < nCount; a++)
                 // generate one String in list per undo step
                 aStringList.push_back( pUndoManager->GetRedoActionComment(a) );
 
@@ -1212,10 +1205,13 @@ void ViewShell::ImpGetRedoStrings(SfxItemSet &rSet) const
 
 class KeepSlideSorterInSyncWithPageChanges
 {
-    sd::slidesorter::view::SlideSorterView::DrawLock m_aDrawLock;
-    sd::slidesorter::controller::SlideSorterController::ModelChangeLock m_aModelLock;
-    sd::slidesorter::controller::PageSelector::UpdateLock m_aUpdateLock;
-    sd::slidesorter::controller::SelectionObserver::Context m_aContext;
+    sd::slidesorter::view::SlideSorterView::DrawLock const m_aDrawLock;
+    sd::slidesorter::controller::SlideSorterController::ModelChangeLock const m_aModelLock;
+    sd::slidesorter::controller::PageSelector::UpdateLock const m_aUpdateLock;
+    sd::slidesorter::controller::SelectionObserver::Context const m_aContext;
+
+    KeepSlideSorterInSyncWithPageChanges& operator=(const KeepSlideSorterInSyncWithPageChanges&) = delete;
+    KeepSlideSorterInSyncWithPageChanges(const KeepSlideSorterInSyncWithPageChanges&) = delete;
 
 public:
     explicit KeepSlideSorterInSyncWithPageChanges(sd::slidesorter::SlideSorter const & rSlideSorter)
@@ -1237,7 +1233,7 @@ void ViewShell::ImpSidUndo(SfxRequest& rReq)
     if (pSlideSorterViewShell)
         xWatcher.reset(new KeepSlideSorterInSyncWithPageChanges(pSlideSorterViewShell->GetSlideSorter()));
 
-    ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+    SfxUndoManager* pUndoManager = ImpGetUndoManager();
     sal_uInt16 nNumber(1);
     const SfxItemSet* pReqArgs = rReq.GetArgs();
     bool bRepair = false;
@@ -1261,7 +1257,7 @@ void ViewShell::ImpSidUndo(SfxRequest& rReq)
         {
             if (comphelper::LibreOfficeKit::isActive() && !bRepair)
             {
-                // If an other view created the first undo action, prevent redoing it from this view.
+                // If another view created the first undo action, prevent redoing it from this view.
                 const SfxUndoAction* pAction = pUndoManager->GetUndoAction();
                 if (pAction->GetViewShellId() != GetViewShellBase().GetViewShellId())
                 {
@@ -1306,7 +1302,7 @@ void ViewShell::ImpSidRedo(SfxRequest& rReq)
     if (pSlideSorterViewShell)
         xWatcher.reset(new KeepSlideSorterInSyncWithPageChanges(pSlideSorterViewShell->GetSlideSorter()));
 
-    ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+    SfxUndoManager* pUndoManager = ImpGetUndoManager();
     sal_uInt16 nNumber(1);
     const SfxItemSet* pReqArgs = rReq.GetArgs();
     bool bRepair = false;
@@ -1329,7 +1325,7 @@ void ViewShell::ImpSidRedo(SfxRequest& rReq)
         {
             if (comphelper::LibreOfficeKit::isActive() && !bRepair)
             {
-                // If an other view created the first undo action, prevent redoing it from this view.
+                // If another view created the first undo action, prevent redoing it from this view.
                 const SfxUndoAction* pAction = pUndoManager->GetRedoAction();
                 if (pAction->GetViewShellId() != GetViewShellBase().GetViewShellId())
                 {
@@ -1636,64 +1632,48 @@ ViewShellObjectBarFactory::ViewShellObjectBarFactory (
 {
 }
 
-ViewShellObjectBarFactory::~ViewShellObjectBarFactory()
-{
-    for (ShellCache::iterator aI(maShellCache.begin());
-         aI!=maShellCache.end();
-         ++aI)
-    {
-        delete aI->second;
-    }
-}
-
 SfxShell* ViewShellObjectBarFactory::CreateShell( ::sd::ShellId nId )
 {
     SfxShell* pShell = nullptr;
 
-    ShellCache::iterator aI (maShellCache.find(nId));
-    if (aI == maShellCache.end() || aI->second==nullptr)
+    ::sd::View* pView = mrViewShell.GetView();
+    switch (nId)
     {
-        ::sd::View* pView = mrViewShell.GetView();
-        switch (nId)
-        {
-            case ToolbarId::Bezier_Toolbox_Sd:
-                pShell = new ::sd::BezierObjectBar(&mrViewShell, pView);
-                break;
+        case ToolbarId::Bezier_Toolbox_Sd:
+            pShell = new ::sd::BezierObjectBar(&mrViewShell, pView);
+            break;
 
-            case ToolbarId::Draw_Text_Toolbox_Sd:
-                pShell = new ::sd::TextObjectBar(
-                    &mrViewShell, mrViewShell.GetDoc()->GetPool(), pView);
-                break;
+        case ToolbarId::Draw_Text_Toolbox_Sd:
+            pShell = new ::sd::TextObjectBar(
+                &mrViewShell, mrViewShell.GetDoc()->GetPool(), pView);
+            break;
 
-            case ToolbarId::Draw_Graf_Toolbox:
-                pShell = new ::sd::GraphicObjectBar(&mrViewShell, pView);
-                break;
+        case ToolbarId::Draw_Graf_Toolbox:
+            pShell = new ::sd::GraphicObjectBar(&mrViewShell, pView);
+            break;
 
-            case ToolbarId::Draw_Media_Toolbox:
-                pShell = new ::sd::MediaObjectBar(&mrViewShell, pView);
-                break;
+        case ToolbarId::Draw_Media_Toolbox:
+            pShell = new ::sd::MediaObjectBar(&mrViewShell, pView);
+            break;
 
-            case ToolbarId::Draw_Table_Toolbox:
-                pShell = ::sd::ui::table::CreateTableObjectBar( mrViewShell, pView );
-                break;
+        case ToolbarId::Draw_Table_Toolbox:
+            pShell = ::sd::ui::table::CreateTableObjectBar( mrViewShell, pView );
+            break;
 
-            case ToolbarId::Svx_Extrusion_Bar:
-                pShell = new svx::ExtrusionBar(
-                    &mrViewShell.GetViewShellBase());
-                break;
+        case ToolbarId::Svx_Extrusion_Bar:
+            pShell = new svx::ExtrusionBar(
+                &mrViewShell.GetViewShellBase());
+            break;
 
-            case ToolbarId::Svx_Fontwork_Bar:
-                pShell = new svx::FontworkBar(
-                    &mrViewShell.GetViewShellBase());
-                break;
+         case ToolbarId::Svx_Fontwork_Bar:
+            pShell = new svx::FontworkBar(
+                &mrViewShell.GetViewShellBase());
+            break;
 
-            default:
-                pShell = nullptr;
-                break;
-        }
+        default:
+            pShell = nullptr;
+            break;
     }
-    else
-        pShell = aI->second;
 
     return pShell;
 }

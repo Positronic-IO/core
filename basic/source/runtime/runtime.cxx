@@ -43,6 +43,7 @@
 #include <rtl/instance.hxx>
 #include <rtl/math.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <rtl/character.hxx>
 
 #include <svl/zforlist.hxx>
 
@@ -231,11 +232,11 @@ SbiRuntime::pStep2 SbiRuntime::aStep2[] = {// all opcodes with two operands
     &SbiRuntime::StepFIND,      // load (+StringID+Typ)
     &SbiRuntime::StepELEM,          // load element (+StringID+Typ)
     &SbiRuntime::StepPARAM,     // Parameter (+Offset+Typ)
-    // Verzweigen
+    // branches
     &SbiRuntime::StepCALL,      // Declare-Call (+StringID+Typ)
     &SbiRuntime::StepCALLC,     // CDecl-Declare-Call (+StringID+Typ)
     &SbiRuntime::StepCASEIS,        // Case-Test (+Test-Opcode+False-Target)
-    // Verwaltung
+    // management
     &SbiRuntime::StepSTMNT,         // beginning of a statement (+Line+Col)
     // E/A
     &SbiRuntime::StepOPEN,          // (+StreamMode+Flags)
@@ -438,12 +439,12 @@ std::shared_ptr<SvNumberFormatter> SbiInstance::PrepareNumberFormatter( sal_uInt
     }
     OUString aStr( aDateStr );      // PutandConvertEntry() modifies string!
     pNumberFormatter->PutandConvertEntry( aStr, nCheckPos, nType,
-        rnStdDateIdx, LANGUAGE_ENGLISH_US, eLangType );
+        rnStdDateIdx, LANGUAGE_ENGLISH_US, eLangType, true);
     nCheckPos = 0;
     aDateStr += " HH:MM:SS";
     aStr = aDateStr;
     pNumberFormatter->PutandConvertEntry( aStr, nCheckPos, nType,
-        rnStdDateTimeIdx, LANGUAGE_ENGLISH_US, eLangType );
+        rnStdDateTimeIdx, LANGUAGE_ENGLISH_US, eLangType, true);
     return pNumberFormatter;
 }
 
@@ -1568,7 +1569,7 @@ void SbiRuntime::StepGET()
 }
 
 // #67607 copy Uno-Structs
-inline bool checkUnoStructCopy( bool bVBA, SbxVariableRef const & refVal, SbxVariableRef const & refVar )
+static bool checkUnoStructCopy( bool bVBA, SbxVariableRef const & refVal, SbxVariableRef const & refVar )
 {
     SbxDataType eVarType = refVar->GetType();
     SbxDataType eValType = refVal->GetType();
@@ -1818,7 +1819,7 @@ void SbiRuntime::StepSET_Impl( SbxVariableRef& refVal, SbxVariableRef& refVar, b
             // LHS try determine if a default prop exists
             // again like in StepPUT (see there too ) we are tweaking the
             // heuristics again for when to assign an object reference or
-            // use default memebers if they exists
+            // use default members if they exist
             // #FIXME we really need to get to the bottom of this mess
             bool bObjAssign = false;
             if ( refVar->GetType() == SbxOBJECT )
@@ -2051,7 +2052,7 @@ void SbiRuntime::StepRSET()
         }
         else
         {
-            aNewStr.append(aRefValString.copy(0, nVarStrLen));
+            aNewStr.appendCopy(aRefValString, 0, nVarStrLen);
         }
         refVar->PutString(aNewStr.makeStringAndClear());
 
@@ -2081,7 +2082,7 @@ void SbiRuntime::StepDIM()
 }
 
 // #56204 swap out DIM-functionality into a help method (step0.cxx)
-void SbiRuntime::DimImpl( SbxVariableRef refVar )
+void SbiRuntime::DimImpl(const SbxVariableRef& refVar)
 {
     // If refDim then this DIM statement is terminating a ReDIM and
     // previous StepERASE_CLEAR for an array, the following actions have
@@ -2155,7 +2156,7 @@ void SbiRuntime::StepREDIM()
 
 
 // Helper function for StepREDIMP
-void implCopyDimArray( SbxDimArray* pNewArray, SbxDimArray* pOldArray, short nMaxDimIndex,
+static void implCopyDimArray( SbxDimArray* pNewArray, SbxDimArray* pOldArray, short nMaxDimIndex,
     short nActualDim, sal_Int32* pActualIndices, sal_Int32* pLowerBounds, sal_Int32* pUpperBounds )
 {
     sal_Int32& ri = pActualIndices[nActualDim];
@@ -2884,7 +2885,7 @@ void SbiRuntime::StepPAD( sal_uInt32 nOp1 )
 void SbiRuntime::StepJUMP( sal_uInt32 nOp1 )
 {
 #ifdef DBG_UTIL
-    // #QUESTION shouln't this be
+    // #QUESTION shouldn't this be
     // if( (sal_uInt8*)( nOp1+pImagGetCode() ) >= pImg->GetCodeSize() )
     if( nOp1 >= pImg->GetCodeSize() )
         StarBASIC::FatalError( ERRCODE_BASIC_INTERNAL_ERROR );
@@ -3155,7 +3156,7 @@ bool SbiRuntime::implIsClass( SbxObject const * pObj, const OUString& aClass )
             bRet = aClass.equalsIgnoreAsciiCase( "object" );
         if( !bRet )
         {
-            OUString aObjClass = pObj->GetClassName();
+            const OUString& aObjClass = pObj->GetClassName();
             SbModule* pClassMod = GetSbData()->pClassFac->FindClass( aObjClass );
             if( pClassMod && pClassMod->pClassData )
             {
@@ -3203,11 +3204,8 @@ bool SbiRuntime::checkClass_Impl( const SbxVariableRef& refVal,
                     bOk = checkUnoObjectType(*pUnoObj, aClass);
                 else
                     bOk = false;
-                if ( !bOk )
-                {
-                    if( bRaiseErrors )
-                        Error( ERRCODE_BASIC_INVALID_USAGE_OBJECT );
-                }
+                if ( !bOk && bRaiseErrors )
+                    Error( ERRCODE_BASIC_INVALID_USAGE_OBJECT );
             }
             else
             {
@@ -3221,12 +3219,9 @@ bool SbiRuntime::checkClass_Impl( const SbxVariableRef& refVal,
     }
     else
     {
-        if ( !bVBAEnabled )
-        {
-            if( bRaiseErrors )
-                Error( ERRCODE_BASIC_NEEDS_OBJECT );
-            bOk = false;
-        }
+        if( bRaiseErrors )
+            Error( ERRCODE_BASIC_NEEDS_OBJECT );
+        bOk = false;
     }
     return bOk;
 }
@@ -3336,12 +3331,9 @@ SbxVariable* SbiRuntime::FindElement( SbxObject* pObj, sal_uInt32 nOp1, sal_uInt
         }
         if( bLocal )
         {
-            if ( bStatic )
+            if ( bStatic && pMeth )
             {
-                if ( pMeth )
-                {
-                    pElem = pMeth->GetStatics()->Find( aName, SbxClassType::DontCare );
-                }
+                pElem = pMeth->GetStatics()->Find( aName, SbxClassType::DontCare );
             }
 
             if ( !pElem )
@@ -4282,7 +4274,7 @@ void SbiRuntime::StepDCREATE_REDIMP( sal_uInt32 nOp1, sal_uInt32 nOp2 )
 
 
 // Helper function for StepDCREATE_IMPL / bRedimp = true
-void implCopyDimArray_DCREATE( SbxDimArray* pNewArray, SbxDimArray* pOldArray, short nMaxDimIndex,
+static void implCopyDimArray_DCREATE( SbxDimArray* pNewArray, SbxDimArray* pOldArray, short nMaxDimIndex,
     short nActualDim, sal_Int32* pActualIndices, sal_Int32* pLowerBounds, sal_Int32* pUpperBounds )
 {
     sal_Int32& ri = pActualIndices[nActualDim];
@@ -4323,12 +4315,11 @@ void SbiRuntime::StepDCREATE_IMPL( sal_uInt32 nOp1, sal_uInt32 nOp2 )
         sal_Int32 nTotalSize = 0;
 
         // must be a one-dimensional array
-        sal_Int32 nLower, nUpper, nSize;
-        sal_Int32 i;
-        for( i = 0 ; i < nDims ; i++ )
+        sal_Int32 nLower, nUpper;
+        for( sal_Int32 i = 0 ; i < nDims ; ++i )
         {
             pArray->GetDim32( i+1, nLower, nUpper );
-            nSize = nUpper - nLower + 1;
+            sal_Int32 nSize = nUpper - nLower + 1;
             if( i == 0 )
             {
                 nTotalSize = nSize;
@@ -4341,7 +4332,7 @@ void SbiRuntime::StepDCREATE_IMPL( sal_uInt32 nOp1, sal_uInt32 nOp2 )
 
         // create objects and insert them into the array
         OUString aClass( pImg->GetString( static_cast<short>( nOp2 ) ) );
-        for( i = 0 ; i < nTotalSize ; i++ )
+        for( sal_Int32 i = 0 ; i < nTotalSize ; ++i )
         {
             SbxObject *pClassObj = SbxBase::CreateObject( aClass );
             if( !pClassObj )

@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <memory>
@@ -56,9 +57,9 @@ using namespace ::com::sun::star;
 
 class SwHTMLTableLayoutConstraints
 {
-    sal_uInt16 nRow;                    // start row
-    sal_uInt16 nCol;                    // start column
-    sal_uInt16 nColSpan;                // the column's COLSPAN
+    sal_uInt16 const nRow;                    // start row
+    sal_uInt16 const nCol;                    // start column
+    sal_uInt16 const nColSpan;                // the column's COLSPAN
 
     std::unique_ptr<SwHTMLTableLayoutConstraints> pNext;        // the next constraint
 
@@ -114,7 +115,6 @@ SwHTMLTableLayoutColumn::SwHTMLTableLayoutColumn( sal_uInt16 nWidth,
 SwHTMLTableLayoutConstraints::SwHTMLTableLayoutConstraints(
     sal_uLong nMin, sal_uLong nMax, sal_uInt16 nRw, sal_uInt16 nColumn, sal_uInt16 nColSp ):
     nRow( nRw ), nCol( nColumn ), nColSpan( nColSp ),
-    pNext( nullptr ),
     nMinNoAlign( nMin ), nMaxNoAlign( nMax )
 {}
 
@@ -392,9 +392,9 @@ const SwStartNode *SwHTMLTableLayout::GetAnyBoxStartNode() const
     const SwTableBox* pBox = m_pSwTable->GetTabLines()[0]->GetTabBoxes()[0];
     while( nullptr == (pBoxSttNd = pBox->GetSttNd()) )
     {
-        OSL_ENSURE( pBox->GetTabLines().size() > 0,
+        OSL_ENSURE( !pBox->GetTabLines().empty(),
                 "Box without start node and lines" );
-        OSL_ENSURE( pBox->GetTabLines().front()->GetTabBoxes().size() > 0,
+        OSL_ENSURE( !pBox->GetTabLines().front()->GetTabBoxes().empty(),
                 "Line without boxes" );
         pBox = pBox->GetTabLines().front()->GetTabBoxes().front();
     }
@@ -1026,20 +1026,17 @@ void SwHTMLTableLayout::AutoLayoutPass1()
                     pColumn->SetMax( pColumn->GetMin() );
             }
             // and divide by the quotient
-            SAL_WARN_IF(nQuotMax != ULONG_MAX && !nQuotMax, "sw.core", "Where did the relative columns go?");
+            SAL_WARN_IF(!nQuotMax, "sw.core", "Where did the relative columns go?");
             for (i = 0; i < m_nCols; ++i)
             {
                 SwHTMLTableLayoutColumn *pColumn = GetColumn( i );
                 if (pColumn->IsRelWidthOption() && pColumn->GetWidthOption() && nQuotMax)
                 {
-                    if( pColumn->GetWidthOption() )
-                    {
-                        pColumn->SetMax( pColumn->GetMax() / nQuotMax );
-                        OSL_ENSURE( pColumn->GetMax() >= pColumn->GetMin(),
-                                "Minimum width is one column bigger than maximum" );
-                        if( pColumn->GetMax() < pColumn->GetMin() )
-                            pColumn->SetMax( pColumn->GetMin() );
-                    }
+                    pColumn->SetMax( pColumn->GetMax() / nQuotMax );
+                    OSL_ENSURE( pColumn->GetMax() >= pColumn->GetMin(),
+                            "Minimum width is one column bigger than maximum" );
+                    if( pColumn->GetMax() < pColumn->GetMin() )
+                        pColumn->SetMax( pColumn->GetMin() );
                 }
                 m_nMax += pColumn->GetMax();
             }

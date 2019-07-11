@@ -128,7 +128,7 @@ public:
 
     // Event must be destroyed, when Frame is destroyed
     // When Event is called, SalInstance::Yield() must be returned
-    virtual bool            PostEvent(ImplSVEvent* pData) = 0;
+    virtual bool            PostEvent(std::unique_ptr<ImplSVEvent> pData) = 0;
 
     virtual void            SetTitle( const OUString& rTitle ) = 0;
     virtual void            SetIcon( sal_uInt16 nIcon ) = 0;
@@ -159,6 +159,7 @@ public:
     SAL_WARN_UNUSED_RESULT
     virtual bool            GetWindowState( SalFrameState* pState ) = 0;
     virtual void            ShowFullScreen( bool bFullScreen, sal_Int32 nDisplay ) = 0;
+    virtual void            PositionByToolkit( const tools::Rectangle&, FloatWinPopupFlags ) {};
 
     // Enable/Disable ScreenSaver, SystemAgents, ...
     virtual void            StartPresentation( bool bStart ) = 0;
@@ -239,6 +240,11 @@ public:
     {
     }
 
+    virtual bool            GetModal() const
+    {
+        return false;
+    }
+
     // return true to indicate tooltips are shown natively, false otherwise
     virtual bool            ShowTooltip(const OUString& /*rHelpText*/, const tools::Rectangle& /*rHelpArea*/)
     {
@@ -246,13 +252,13 @@ public:
     }
 
     // return !0 to indicate popovers are shown natively, 0 otherwise
-    virtual void*           ShowPopover(const OUString& /*rHelpText*/, const tools::Rectangle& /*rHelpArea*/, QuickHelpFlags /*nFlags*/)
+    virtual void*           ShowPopover(const OUString& /*rHelpText*/, vcl::Window* /*pParent*/, const tools::Rectangle& /*rHelpArea*/, QuickHelpFlags /*nFlags*/)
     {
         return nullptr;
     }
 
     // return true to indicate popovers are shown natively, false otherwise
-    virtual bool            UpdatePopover(void* /*nId*/, const OUString& /*rHelpText*/, const tools::Rectangle& /*rHelpArea*/)
+    virtual bool            UpdatePopover(void* /*nId*/, const OUString& /*rHelpText*/, vcl::Window* /*pParent*/, const tools::Rectangle& /*rHelpArea*/)
     {
         return false;
     }

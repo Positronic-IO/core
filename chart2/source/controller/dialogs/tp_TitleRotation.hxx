@@ -21,9 +21,15 @@
 
 #include <sfx2/tabdlg.hxx>
 #include <svx/dialcontrol.hxx>
-#include <svx/orienthelper.hxx>
-#include <vcl/fixed.hxx>
-#include <TextDirectionListBox.hxx>
+
+namespace chart { class TextDirectionListBox; }
+namespace weld {
+    class CheckButton;
+    class CustomWeld;
+    class Label;
+    class SpinButton;
+    class ToggleButton;
+}
 
 namespace chart
 {
@@ -31,17 +37,19 @@ namespace chart
 class SchAlignmentTabPage : public SfxTabPage
 {
 private:
-    VclPtr<svx::DialControl>        m_pCtrlDial;
-    VclPtr<FixedText>               m_pFtRotate;
-    VclPtr<NumericField>            m_pNfRotate;
-    VclPtr<TriStateBox>             m_pCbStacked;
-    svx::OrientationHelper*  m_pOrientHlp;
-    VclPtr<FixedText>               m_pFtTextDirection;
-    VclPtr<TextDirectionListBox>    m_pLbTextDirection;
-    VclPtr<FixedText>               m_pFtABCD;
+    svx::SvxDialControl m_aCtrlDial;
+    std::unique_ptr<weld::Label> m_xFtRotate;
+    std::unique_ptr<weld::SpinButton> m_xNfRotate;
+    std::unique_ptr<weld::CheckButton> m_xCbStacked;
+    std::unique_ptr<weld::Label> m_xFtTextDirection;
+    std::unique_ptr<weld::Label> m_xFtABCD;
+    std::unique_ptr<TextDirectionListBox> m_xLbTextDirection;
+    std::unique_ptr<weld::CustomWeld> m_xCtrlDial;
+
+    DECL_LINK(StackedToggleHdl, weld::ToggleButton&, void);
 
 public:
-    SchAlignmentTabPage(vcl::Window* pParent, const SfxItemSet& rInAttrs, bool bWithRotation = true);
+    SchAlignmentTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs, bool bWithRotation = true);
     virtual ~SchAlignmentTabPage() override;
     virtual void dispose() override;
 

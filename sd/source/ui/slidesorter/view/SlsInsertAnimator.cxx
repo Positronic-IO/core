@@ -24,6 +24,8 @@
 #include <view/SlsLayouter.hxx>
 #include <model/SlideSorterModel.hxx>
 #include <model/SlsPageEnumerationProvider.hxx>
+#include <SlideSorter.hxx>
+#include <Window.hxx>
 
 #include <memory>
 #include <set>
@@ -39,10 +41,10 @@ class AnimatorAccess
 public:
     virtual void AddRun (const std::shared_ptr<PageObjectRun>& rRun) = 0;
     virtual void RemoveRun (const std::shared_ptr<PageObjectRun>& rRun) = 0;
-    virtual model::SlideSorterModel& GetModel (void) const = 0;
-    virtual view::SlideSorterView& GetView (void) const = 0;
-    virtual std::shared_ptr<controller::Animator> GetAnimator (void) = 0;
-    virtual VclPtr<sd::Window> GetContentWindow (void) = 0;
+    virtual model::SlideSorterModel& GetModel () const = 0;
+    virtual view::SlideSorterView& GetView () const = 0;
+    virtual std::shared_ptr<controller::Animator> GetAnimator () = 0;
+    virtual VclPtr<sd::Window> GetContentWindow () = 0;
 
 protected:
     ~AnimatorAccess() COVERITY_NOEXCEPT_FALSE {}
@@ -68,14 +70,14 @@ public:
     void ResetOffsets (const controller::Animator::AnimationMode eMode);
 
     /// Index of the row or column that this run represents.
-    sal_Int32 mnRunIndex;
+    sal_Int32 const mnRunIndex;
     /// The index at which to make place for the insertion indicator (-1 for
     /// no indicator).
     sal_Int32 mnLocalInsertIndex;
     /// Index of the first page in the run.
-    sal_Int32 mnStartIndex;
+    sal_Int32 const mnStartIndex;
     /// Index of the last page in the run.
-    sal_Int32 mnEndIndex;
+    sal_Int32 const mnEndIndex;
     /// Offset of each item in the run at the start of the current animation.
     ::std::vector<Point> maStartOffset;
     /// Target offset of each item in the run at the end of the current animation.
@@ -95,7 +97,7 @@ public:
 private:
     controller::Animator::AnimationId mnAnimationId;
     AnimatorAccess& mrAnimatorAccess;
-    ::std::function<double (double)> maAccelerationFunction;
+    ::std::function<double (double)> const maAccelerationFunction;
 
     void RestartAnimation();
 };
@@ -190,11 +192,8 @@ void InsertAnimator::Implementation::SetInsertPosition (
 
     // When the new insert position is in a different run then move the page
     // objects in the old run to their default positions.
-    if (pOldRun != pCurrentRun)
-    {
-        if (pOldRun)
-            pOldRun->ResetOffsets(eMode);
-    }
+    if (pOldRun != pCurrentRun && pOldRun)
+        pOldRun->ResetOffsets(eMode);
 
     if (pCurrentRun)
     {

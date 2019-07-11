@@ -22,15 +22,16 @@
 #include <FillProperties.hxx>
 #include <UserDefinedProperties.hxx>
 #include <PropertyHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 
 #include <com/sun/star/drawing/LineStyle.hpp>
-#include <rtl/uuid.h>
-#include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <vector>
 #include <algorithm>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 
@@ -117,7 +118,7 @@ PageBackground::PageBackground() :
 
 PageBackground::PageBackground( const PageBackground & rOther ) :
         MutexContainer(),
-        impl::PageBackground_Base(),
+        impl::PageBackground_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {}

@@ -21,7 +21,6 @@
 
 #include <sfx2/app.hxx>
 #include <sfx2/tabdlg.hxx>
-#include <vcl/group.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/combobox.hxx>
@@ -29,7 +28,7 @@
 #include <vcl/lstbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <svtools/inettbc.hxx>

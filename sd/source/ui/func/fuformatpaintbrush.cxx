@@ -26,6 +26,7 @@
 #include <svx/globl3d.hxx>
 #include <svx/svxids.hrc>
 #include <svx/svdotable.hxx>
+#include <svx/svdundo.hxx>
 #include <editeng/outliner.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/editeng.hxx>
@@ -227,7 +228,7 @@ void FuFormatPaintBrush::Deactivate()
 
 bool FuFormatPaintBrush::HasContentForThisType( SdrInventor nObjectInventor, sal_uInt16 nObjectIdentifier ) const
 {
-    if( mxItemSet.get() == nullptr )
+    if (mxItemSet == nullptr)
         return false;
     if( !mpView || (!SdrObjEditView::SupportsFormatPaintbrush( nObjectInventor, nObjectIdentifier) ) )
         return false;

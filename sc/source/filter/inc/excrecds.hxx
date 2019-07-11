@@ -22,22 +22,11 @@
 
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
-#include <svl/zforlist.hxx>
-#include <tools/solar.h>
 #include <tools/color.hxx>
-#include <vcl/vclenum.hxx>
 
-#include <olinetab.hxx>
-#include <filter.hxx>
-#include <rangelst.hxx>
 #include "xerecord.hxx"
 #include "xeroot.hxx"
-#include "xeformula.hxx"
-#include "xestring.hxx"
-#include "root.hxx"
 #include "excdefs.hxx"
-#include <memory>
-#include <vector>
 
 //------------------------------------------------------------------ Forwards -
 
@@ -186,7 +175,7 @@ class XclExpProtection : public XclExpBoolRecord
 
 class XclExpSheetProtection : public XclExpProtection
 {
-    SCTAB                   mnTab;
+    SCTAB const             mnTab;
     public:
         XclExpSheetProtection(bool bValue, SCTAB nTab);
     virtual void            SaveXml( XclExpXmlStream& rStrm ) override;
@@ -249,7 +238,7 @@ protected:
     sal_uInt64              m_nStrPos;
     sal_uInt64              m_nOwnPos;    // Position after # and Len
     sal_uInt16              nGrbit;
-    SCTAB                   nTab;
+    SCTAB const             nTab;
 
                             ExcBundlesheetBase();
 
@@ -321,10 +310,10 @@ public:
     virtual void SaveXml( XclExpXmlStream& rStrm ) override;
 
 private:
-    SCTAB mnScTab;
+    SCTAB const mnScTab;
     XclExpFilterManager* mpManager;
-    bool mbFitToPage;
-    Color maTabColor;
+    bool const mbFitToPage;
+    Color const maTabColor;
 };
 
 class XclExpFiltermode : public XclExpEmptyRecord
@@ -342,7 +331,7 @@ public:
     SCCOL        GetColCount() const { return static_cast< SCCOL >( GetValue() ); }
 
 private:
-    ScAddress           maStartPos;
+    ScAddress const         maStartPos;
 };
 
 class ExcFilterCondition
@@ -393,7 +382,7 @@ public:
 
     bool                    HasCondition() const;
     bool                    AddEntry( const ScQueryEntry& rEntry );
-    bool                    AddMultiValueEntry( const ScQueryEntry& rEntry );
+    void                    AddMultiValueEntry( const ScQueryEntry& rEntry );
 
     virtual void            SaveXml( XclExpXmlStream& rStrm ) override;
 };

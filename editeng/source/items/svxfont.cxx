@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/print.hxx>
 #include <tools/gen.hxx>
@@ -27,6 +26,7 @@
 #include <com/sun/star/i18n/KCharacterType.hpp>
 #include <editeng/svxfont.hxx>
 #include <editeng/escapementitem.hxx>
+#include <sal/log.hxx>
 
 SvxFont::SvxFont()
 {

@@ -39,8 +39,9 @@
 #include <com/sun/star/sdb/CommandType.hpp>
 
 #include <comphelper/basicio.hxx>
-#include <comphelper/listenernotification.hxx>
+#include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/formattedcolumnvalue.hxx>
 #include <connectivity/dbconversion.hxx>
@@ -48,6 +49,7 @@
 #include <o3tl/any.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <unotools/sharedunocomponent.hxx>
 #include <vcl/svapp.hxx>
 
@@ -462,15 +464,14 @@ namespace frm
         // #i27024#
         const Any* pSelectSequenceValue = nullptr;
 
-        const OUString* pSelectedItemsPos = ::std::find_if(
-            _rPropertyNames.begin(), _rPropertyNames.end(),
-             [](OUString const & s) { return s == PROPERTY_SELECT_SEQ; }
+        const OUString* pSelectedItemsPos = std::find(
+            _rPropertyNames.begin(), _rPropertyNames.end(), PROPERTY_SELECT_SEQ
         );
-        const OUString* pStringItemListPos = ::std::find_if(
+        auto aStringItemListExists = std::any_of(
             _rPropertyNames.begin(), _rPropertyNames.end(),
              [](OUString const & s) { return s == PROPERTY_STRINGITEMLIST; }
         );
-        if ( ( pSelectedItemsPos != _rPropertyNames.end() ) && ( pStringItemListPos != _rPropertyNames.end() ) )
+        if ( ( pSelectedItemsPos != _rPropertyNames.end() ) && aStringItemListExists )
         {
             // both properties are present
             // -> remember the value for the select sequence
@@ -748,7 +749,7 @@ namespace frm
         {
             sal_Int16 nBoundColumn( 0 );
             m_aBoundColumn >>= nBoundColumn;
-            aBoundColumn.reset( nBoundColumn );
+            aBoundColumn = nBoundColumn;
         }
 
         ::utl::SharedUNOComponent< XResultSet > xListCursor;
@@ -781,7 +782,7 @@ namespace frm
                         Reference<XPropertySet> xFieldAsSet(xFieldsByIndex->getByIndex( *aBoundColumn ),UNO_QUERY);
                         assert(xFieldAsSet.is());
                         xFieldAsSet->getPropertyValue(PROPERTY_NAME) >>= aBoundFieldName;
-                        aBoundColumn.reset( 1 );
+                        aBoundColumn = 1;
 
                         xFieldAsSet.set(xFieldsByIndex->getByIndex(0),UNO_QUERY);
                         xFieldAsSet->getPropertyValue(PROPERTY_NAME) >>= aFieldName;

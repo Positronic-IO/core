@@ -56,7 +56,7 @@ using namespace ::com::sun::star;
 using namespace svt;
 using namespace ::comphelper;
 
-    void lcl_addToList_throw( ComboBoxControl& _rListBox, ::std::vector<ColumnInfo>& o_aColumnList,const uno::Reference< container::XNameAccess>& i_xColumns )
+    static void lcl_addToList_throw( ComboBoxControl& _rListBox, ::std::vector<ColumnInfo>& o_aColumnList,const uno::Reference< container::XNameAccess>& i_xColumns )
     {
         uno::Sequence< OUString > aEntries = i_xColumns->getElementNames();
         const OUString* pEntries = aEntries.getConstArray();
@@ -695,7 +695,7 @@ void OFieldExpressionControl::Command(const CommandEvent& rEvt)
                 return;
             }
 
-            sal_uInt16 nColId = GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X());
+            sal_uInt16 nColId = GetColumnId(GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X()));
 
             if ( nColId == HANDLE_ID )
             {
@@ -803,7 +803,6 @@ OGroupsSortingDialog::OGroupsSortingDialog(vcl::Window* _pParent, bool _bReadOnl
     : FloatingWindow(_pParent, "FloatingSort", "modules/dbreport/ui/floatingsort.ui")
     , OPropertyChangeListener(m_aMutex)
     , m_pController(_pController)
-    , m_pCurrentGroupListener(nullptr)
     , m_xGroups(m_pController->getReportDefinition()->getGroups())
     , m_bReadOnly(_bReadOnly)
 {
@@ -1117,7 +1116,7 @@ void OGroupsSortingDialog::displayGroup(const uno::Reference<report::XGroup>& _x
         case sdbc::DataType::TIMESTAMP:
             {
                 const char* aIds[] = { STR_RPT_YEAR, STR_RPT_QUARTER,STR_RPT_MONTH,STR_RPT_WEEK,STR_RPT_DAY,STR_RPT_HOUR,STR_RPT_MINUTE };
-                for (sal_uInt16 i = 0; i < SAL_N_ELEMENTS(aIds); ++i)
+                for (size_t i = 0; i < SAL_N_ELEMENTS(aIds); ++i)
                 {
                     m_pGroupOnLst->InsertEntry(RptResId(aIds[i]));
                     m_pGroupOnLst->SetEntryData(i+1,reinterpret_cast<void*>(i+2));

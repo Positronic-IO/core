@@ -36,6 +36,7 @@
 #include <editeng/fhgtitem.hxx>
 #include <editeng/editids.hrc>
 #include <svx/svxids.hrc>
+#include <osl/diagnose.h>
 
 namespace frm
 {
@@ -43,7 +44,6 @@ namespace frm
     RichTextControl::RichTextControl( RichTextEngine* _pEngine, vcl::Window* _pParent, WinBits _nStyle,
         ITextAttributeListener* _pTextAttribListener, ITextSelectionListener* _pSelectionListener )
         :Control( _pParent, implInitStyle( _nStyle ) )
-        ,m_pImpl( nullptr )
     {
         implInit( _pEngine, _pTextAttribListener, _pSelectionListener );
     }
@@ -221,12 +221,12 @@ namespace frm
                     )
                 {
                     bool bLoad = KEY_F11 == nCode;
-                    struct
+                    static struct
                     {
                         const sal_Char* pDescription;
                         const sal_Char* pExtension;
                         EETextFormat    eFormat;
-                    } aExportFormats[] =
+                    } const aExportFormats[] =
                     {
                         { "OASIS OpenDocument (*.xml)", "*.xml", EETextFormat::Xml },
                         { "HyperText Markup Language (*.html)", "*.html", EETextFormat::Html },
@@ -246,7 +246,7 @@ namespace frm
                     if ( nResult == ERRCODE_NONE )
                     {
                         OUString sFileName = aFP.GetPath();
-                        SvStream* pStream = ::utl::UcbStreamHelper::CreateStream(
+                        std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream(
                             sFileName, ( bLoad ? StreamMode::READ : StreamMode::WRITE | StreamMode::TRUNC ) | StreamMode::SHARE_DENYALL
                         );
                         if ( pStream )
@@ -272,7 +272,6 @@ namespace frm
                                 getEngine().Write( *pStream, eFormat );
                             }
                         }
-                        DELETEZ( pStream );
                     }
                     return true;   // handled
                 }

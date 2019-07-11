@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <set>
 #include <vector>
@@ -44,7 +45,7 @@ private:
     virtual rtl::Reference< MapCursor > createCursor() const override;
 
     std::vector< rtl::Reference< Provider > > providers_;
-    OUString name_;
+    OUString const name_;
 };
 
 std::vector< OUString > AggregatingModule::getMemberNames() const {
@@ -76,7 +77,7 @@ private:
     void findCursor();
 
     std::vector< rtl::Reference< Provider > > providers_;
-    OUString name_;
+    OUString const name_;
     std::vector< rtl::Reference< Provider > >::iterator iterator_;
     rtl::Reference< MapCursor > cursor_;
     std::set< OUString > seen_;
@@ -173,7 +174,7 @@ rtl::Reference< Provider > Manager::addProvider(OUString const & uri) {
     return p;
 }
 
-rtl::Reference< Entity > Manager::findEntity(rtl::OUString const & name) const {
+rtl::Reference< Entity > Manager::findEntity(OUString const & name) const {
     //TODO: caching? (here or in cppuhelper::TypeManager?)
     osl::MutexGuard g(mutex_);
     for (auto & i: providers_) {
@@ -185,7 +186,7 @@ rtl::Reference< Entity > Manager::findEntity(rtl::OUString const & name) const {
     return rtl::Reference< Entity >();
 }
 
-rtl::Reference< MapCursor > Manager::createCursor(rtl::OUString const & name)
+rtl::Reference< MapCursor > Manager::createCursor(OUString const & name)
     const
 {
     return new AggregatingCursor(providers_, name);

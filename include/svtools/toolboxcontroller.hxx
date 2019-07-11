@@ -34,7 +34,6 @@
 #include <cppuhelper/interfacecontainer.hxx>
 #include <comphelper/broadcasthelper.hxx>
 #include <comphelper/proparrhlp.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/propertycontainer.hxx>
 #include <cppuhelper/propshlp.hxx>
 #include <tools/link.hxx>
@@ -128,7 +127,7 @@ class SVT_DLLPUBLIC ToolboxController :
             Listener( const css::util::URL& rURL, const css::uno::Reference< css::frame::XDispatch >& rDispatch ) :
                 aURL( rURL ), xDispatch( rDispatch ) {}
 
-            css::util::URL aURL;
+            css::util::URL const aURL;
             css::uno::Reference< css::frame::XDispatch > xDispatch;
         };
 

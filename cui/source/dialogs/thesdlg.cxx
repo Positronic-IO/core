@@ -24,10 +24,10 @@
 
 #include <svl/lngmisc.hxx>
 #include <vcl/graphicfilter.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
-#include <svtools/viewdataentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
+#include <vcl/viewdataentry.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/builderfactory.hxx>
@@ -441,7 +441,6 @@ SvxThesaurusDialog::SvxThesaurusDialog(
     LanguageType nLanguage)
     : SvxStandardDialog(pParent, "ThesaurusDialog", "cui/ui/thesaurus.ui")
     , m_aErrStr(CuiResId(RID_SVXSTR_ERR_TEXTNOTFOUND))
-    , xThesaurus(nullptr)
     , aLookUpText()
     , nLookUpLanguage(LANGUAGE_NONE)
     , m_bWordFound(false)

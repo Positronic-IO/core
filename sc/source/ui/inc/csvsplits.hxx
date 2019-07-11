@@ -34,10 +34,9 @@ class ScCsvSplits
 {
 private:
     typedef ::std::vector< sal_Int32 >      ScSplitVector;
-    typedef ScSplitVector::iterator         iterator;
     typedef ScSplitVector::const_iterator   const_iterator;
 
-    ScSplitVector               maVec;          /// The split containter.
+    ScSplitVector               maVec;          /// The split container.
 
 public:
     // *** access by position *** ---------------------------------------------

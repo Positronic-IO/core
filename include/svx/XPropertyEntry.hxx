@@ -21,7 +21,7 @@
 
 #include <rtl/ustring.hxx>
 #include <svx/svxdllapi.h>
-#include <vcl/bitmap.hxx>
+#include <vcl/bitmapex.hxx>
 
 
 // class XPropertyEntry
@@ -30,19 +30,24 @@ class SVX_DLLPUBLIC XPropertyEntry
 {
 private:
     OUString maPropEntryName;
-    Bitmap   maUiBitmap;
+    BitmapEx maUiBitmap;
 
 protected:
     XPropertyEntry(const OUString& rPropEntryName);
-    XPropertyEntry(const XPropertyEntry& rOther);
+
+    XPropertyEntry(XPropertyEntry const &) = default;
+    XPropertyEntry(XPropertyEntry &&) = default;
 
 public:
     virtual ~XPropertyEntry();
 
+    XPropertyEntry & operator =(XPropertyEntry const &) = default;
+    XPropertyEntry & operator =(XPropertyEntry &&) = default;
+
     void SetName(const OUString& rPropEntryName) { maPropEntryName = rPropEntryName; }
     const OUString& GetName() const { return maPropEntryName; }
-    void SetUiBitmap(const Bitmap& rUiBitmap) { maUiBitmap = rUiBitmap; }
-    const Bitmap& GetUiBitmap() const { return maUiBitmap; }
+    void SetUiBitmap(const BitmapEx& rUiBitmap) { maUiBitmap = rUiBitmap; }
+    const BitmapEx& GetUiBitmap() const { return maUiBitmap; }
 };
 
 #endif // INCLUDED_SVX_XPROPERTYENTRY_HXX

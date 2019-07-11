@@ -45,6 +45,7 @@
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/reflection/InvocationTargetException.hpp>
 #include <com/sun/star/uno/RuntimeException.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -128,7 +129,7 @@ struct AdapterImpl
 {
     oslInterlockedCount         m_nRef;
     FactoryImpl *               m_pFactory;
-    void *                      m_key; // map key
+    void * const                m_key; // map key
     uno_Interface *             m_pReceiver; // XInvocation receiver
 
     std::vector<InterfaceAdapterImpl>  m_vInterfaces;
@@ -207,7 +208,7 @@ inline void AdapterImpl::release()
 }
 
 
-static inline void constructRuntimeException(
+static void constructRuntimeException(
     uno_Any * pExc, const OUString & rMsg )
 {
     RuntimeException exc( rMsg );
@@ -217,7 +218,7 @@ static inline void constructRuntimeException(
 }
 
 
-static inline bool type_equals(
+static bool type_equals(
     typelib_TypeDescriptionReference * pType1,
     typelib_TypeDescriptionReference * pType2 )
 {
@@ -754,7 +755,7 @@ FactoryImpl::~FactoryImpl()
 }
 
 
-static inline AdapterImpl * lookup_adapter(
+static AdapterImpl * lookup_adapter(
     t_ptr_set ** pp_adapter_set,
     t_ptr_map & map, void * key, Sequence< Type > const & rTypes )
 {

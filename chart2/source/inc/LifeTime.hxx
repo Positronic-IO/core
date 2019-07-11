@@ -21,14 +21,13 @@
 
 #include <osl/mutex.hxx>
 #include <osl/conditn.hxx>
-#include <com/sun/star/uno/Exception.hpp>
-#include <cppuhelper/interfacecontainer.hxx>
-#include <com/sun/star/util/CloseVetoException.hpp>
-#include <com/sun/star/util/XCloseListener.hpp>
-#include <com/sun/star/util/XCloseable.hpp>
-#include <com/sun/star/lang/XComponent.hpp>
-#include <cppuhelper/weakref.hxx>
+#include <cppuhelper/interfacecontainer.h>
 #include "charttoolsdllapi.hxx"
+
+namespace com { namespace sun { namespace star { namespace lang { class XComponent; } } } }
+namespace com { namespace sun { namespace star { namespace util { class CloseVetoException; } } } }
+namespace com { namespace sun { namespace star { namespace util { class XCloseListener; } } } }
+namespace com { namespace sun { namespace star { namespace util { class XCloseable; } } } }
 
 namespace apphelper
 {
@@ -93,7 +92,7 @@ OOO_DLLPUBLIC_CHARTTOOLS    bool    impl_isDisposedOrClosed( bool bAssert=true )
 /// @throws css::uno::Exception
 OOO_DLLPUBLIC_CHARTTOOLS    bool    g_close_startTryClose(bool bDeliverOwnership);
 /// @throws css::util::CloseVetoException
-OOO_DLLPUBLIC_CHARTTOOLS    bool    g_close_isNeedToCancelLongLastingCalls( bool bDeliverOwnership, css::util::CloseVetoException const & ex );
+OOO_DLLPUBLIC_CHARTTOOLS    void    g_close_isNeedToCancelLongLastingCalls( bool bDeliverOwnership, css::util::CloseVetoException const & ex );
 OOO_DLLPUBLIC_CHARTTOOLS    void    g_close_endTryClose(bool bDeliverOwnership );
 OOO_DLLPUBLIC_CHARTTOOLS    void    g_close_endTryClose_doClose();
 /// @throws css::uno::RuntimeException
@@ -142,7 +141,7 @@ if it should do so.
     //mutex is acquired, call is registered
     {
         //you might access some private members here
-        //but than you need to protect access to these members always like this
+        //but then you need to protect access to these members always like this
         //never call to the outside here
     }
 

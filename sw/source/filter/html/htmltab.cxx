@@ -35,6 +35,7 @@
 #include <svtools/htmlkywd.hxx>
 #include <svl/urihelper.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <dcontact.hxx>
 #include <fmtornt.hxx>
@@ -49,6 +50,7 @@
 #include <pam.hxx>
 #include <doc.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <IDocumentMarkAccess.hxx>
 #include <ndtxt.hxx>
 #include <shellio.hxx>
 #include <poolfmt.hxx>
@@ -62,6 +64,8 @@
 #include <numrule.hxx>
 #include <txtftn.hxx>
 #include <itabenum.hxx>
+#include <tblafmt.hxx>
+#include <SwStyleNameMapper.hxx>
 
 #define NETSCAPE_DFLT_BORDER 1
 #define NETSCAPE_DFLT_CELLSPACING 2
@@ -69,7 +73,7 @@
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star;
 
-static HTMLOptionEnum<sal_Int16> aHTMLTableVAlignTable[] =
+static HTMLOptionEnum<sal_Int16> const aHTMLTableVAlignTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_VA_top,     text::VertOrientation::NONE       },
     { OOO_STRING_SVTOOLS_HTML_VA_middle,  text::VertOrientation::CENTER     },
@@ -115,8 +119,8 @@ class HTMLTableContext
     SwFrameFormat *pFrameFormat;        // the Fly frame::Frame, containing the table
     std::unique_ptr<SwPosition> pPos;   // position behind the table
 
-    size_t nContextStAttrMin;
-    size_t nContextStMin;
+    size_t const nContextStAttrMin;
+    size_t const nContextStMin;
 
     bool    bRestartPRE : 1;
     bool    bRestartXMP : 1;
@@ -376,8 +380,8 @@ class HTMLTable
     OUString m_aClass;
     OUString m_aDir;
 
-    SdrObjects *m_pResizeDrawObjects;// SDR objects
-    std::vector<sal_uInt16> *m_pDrawObjectPrcWidths;   // column of draw object and its rel. width
+    std::unique_ptr<SdrObjects> m_pResizeDrawObjects;// SDR objects
+    std::unique_ptr<std::vector<sal_uInt16>> m_pDrawObjectPrcWidths;   // column of draw object and its rel. width
 
     HTMLTableRows m_aRows;         ///< table rows
     HTMLTableColumns m_aColumns;   ///< table columns
@@ -428,30 +432,30 @@ private:
     bool m_bInheritedRightBorder;
     bool m_bBordersSet;               // the border is set already
     bool m_bForceFrame;
-    bool m_bTableAdjustOfTag;         // comes nTableAdjust from <TABLE>?
+    bool const m_bTableAdjustOfTag;         // comes nTableAdjust from <TABLE>?
     sal_uInt32 m_nHeadlineRepeat;         // repeating rows
-    bool m_bIsParentHead;
+    bool const m_bIsParentHead;
     bool m_bHasParentSection;
-    bool m_bHasToFly;
-    bool m_bFixedCols;
+    bool const m_bHasToFly;
+    bool const m_bFixedCols;
     bool m_bColSpec;                  // where there COL(GROUP)-elements?
-    bool m_bPrcWidth;                 // width is declared in %
+    bool const m_bPrcWidth;                 // width is declared in %
 
     SwHTMLParser *m_pParser;          // the current parser
     std::unique_ptr<HTMLTableCnts> m_xParentContents;
 
-    HTMLTableContext *m_pContext;    // the context of the table
+    std::unique_ptr<HTMLTableContext> m_pContext;    // the context of the table
 
     std::shared_ptr<SwHTMLTableLayout> m_xLayoutInfo;
 
     // the following parameters are from the <TABLE>-Tag
-    sal_uInt16 m_nWidth;                  // width of the table
+    sal_uInt16 const m_nWidth;                  // width of the table
     sal_uInt16 m_nHeight;                 // absolute height of the table
-    SvxAdjust m_eTableAdjust;             // drawing::Alignment of the table
-    sal_Int16 m_eVertOrientation;         // Default vertical direction of the cells
+    SvxAdjust const m_eTableAdjust;             // drawing::Alignment of the table
+    sal_Int16 const m_eVertOrientation;         // Default vertical direction of the cells
     sal_uInt16 m_nBorder;                 // width of the external border
-    HTMLTableFrame m_eFrame;          // frame around the table
-    HTMLTableRules m_eRules;          // frame in the table
+    HTMLTableFrame const m_eFrame;          // frame around the table
+    HTMLTableRules const m_eRules;          // frame in the table
     bool m_bTopCaption;               // Caption of the table
 
     void InitCtor(const HTMLTableOptions& rOptions);
@@ -597,11 +601,11 @@ public:
 
     bool HasToFly() const { return m_bHasToFly; }
 
-    void SetTable( const SwStartNode *pStNd, HTMLTableContext *pCntxt,
+    void SetTable( const SwStartNode *pStNd, std::unique_ptr<HTMLTableContext> pCntxt,
                    sal_uInt16 nLeft, sal_uInt16 nRight,
                    const SwTable *pSwTab=nullptr, bool bFrcFrame=false );
 
-    HTMLTableContext *GetContext() const { return m_pContext; }
+    HTMLTableContext *GetContext() const { return m_pContext.get(); }
 
     const std::shared_ptr<SwHTMLTableLayout>& CreateLayoutInfo();
 
@@ -905,9 +909,6 @@ inline SwFrameFormat *HTMLTableColumn::GetFrameFormat( bool bBorderLine,
 
 void HTMLTable::InitCtor(const HTMLTableOptions& rOptions)
 {
-    m_pResizeDrawObjects = nullptr;
-    m_pDrawObjectPrcWidths = nullptr;
-
     m_nRows = 0;
     m_nCurrentRow = 0; m_nCurrentColumn = 0;
 
@@ -1055,14 +1056,24 @@ void SwHTMLParser::DeregisterHTMLTable(HTMLTable* pOld)
     m_aTables.erase(std::remove(m_aTables.begin(), m_aTables.end(), pOld));
 }
 
+SwDoc* SwHTMLParser::GetDoc() const
+{
+    return m_xDoc.get();
+}
+
+bool SwHTMLParser::IsReqIF() const
+{
+    return m_bReqIF;
+}
+
 HTMLTable::~HTMLTable()
 {
     m_pParser->DeregisterHTMLTable(this);
 
-    delete m_pResizeDrawObjects;
-    delete m_pDrawObjectPrcWidths;
+    m_pResizeDrawObjects.reset();
+    m_pDrawObjectPrcWidths.reset();
 
-    delete m_pContext;
+    m_pContext.reset();
 
     // pLayoutInfo has either already been deleted or is now owned by SwTable
 }
@@ -1455,6 +1466,25 @@ void HTMLTable::FixFrameFormat( SwTableBox *pBox,
             pFrameFormat->ResetFormatAttr( RES_BACKGROUND );
             pFrameFormat->ResetFormatAttr( RES_VERT_ORIENT );
             pFrameFormat->ResetFormatAttr( RES_BOXATR_FORMAT );
+        }
+
+        if (m_pParser->IsReqIF())
+        {
+            // ReqIF case, cells would have no formatting. Apply the default
+            // table autoformat on them, so imported and UI-created tables look
+            // the same.
+            SwTableAutoFormatTable& rTable = m_pParser->GetDoc()->GetTableStyles();
+            SwTableAutoFormat* pTableFormat = rTable.FindAutoFormat(
+                SwStyleNameMapper::GetUIName(RES_POOLTABSTYLE_DEFAULT, OUString()));
+            if (pTableFormat)
+            {
+                sal_uInt8 nPos = SwTableAutoFormat::CountPos(nCol, m_nCols, nRow, m_nRows);
+                pTableFormat->UpdateToSet(nPos,
+                                          const_cast<SfxItemSet&>(static_cast<SfxItemSet const&>(
+                                              pFrameFormat->GetAttrSet())),
+                                          SwTableAutoFormat::UPDATE_BOX,
+                                          pFrameFormat->GetDoc()->GetNumberFormatter());
+            }
         }
     }
     else
@@ -2249,7 +2279,7 @@ void HTMLTable::MakeTable( SwTableBox *pBox, sal_uInt16 nAbsAvail,
     OSL_ENSURE( m_nRows>0 && m_nCols>0 && m_nCurrentRow==m_nRows,
             "Was CloseTable not called?" );
 
-    OSL_ENSURE(m_xLayoutInfo.get() == nullptr, "Table already has layout info");
+    OSL_ENSURE(m_xLayoutInfo == nullptr, "Table already has layout info");
 
     // Calculate borders of the table and all contained tables
     SetBorders();
@@ -2435,13 +2465,13 @@ void HTMLTable::MakeTable( SwTableBox *pBox, sal_uInt16 nAbsAvail,
 
 }
 
-void HTMLTable::SetTable( const SwStartNode *pStNd, HTMLTableContext *pCntxt,
+void HTMLTable::SetTable( const SwStartNode *pStNd, std::unique_ptr<HTMLTableContext> pCntxt,
                           sal_uInt16 nLeft, sal_uInt16 nRight,
                           const SwTable *pSwTab, bool bFrcFrame )
 {
     m_pPrevStartNode = pStNd;
     m_pSwTable = pSwTab;
-    m_pContext = pCntxt;
+    m_pContext = std::move(pCntxt);
 
     m_nLeftMargin = nLeft;
     m_nRightMargin = nRight;
@@ -2452,11 +2482,11 @@ void HTMLTable::SetTable( const SwStartNode *pStNd, HTMLTableContext *pCntxt,
 void HTMLTable::RegisterDrawObject( SdrObject *pObj, sal_uInt8 nPrcWidth )
 {
     if( !m_pResizeDrawObjects )
-        m_pResizeDrawObjects = new SdrObjects;
+        m_pResizeDrawObjects.reset(new SdrObjects);
     m_pResizeDrawObjects->push_back( pObj );
 
     if( !m_pDrawObjectPrcWidths )
-        m_pDrawObjectPrcWidths = new std::vector<sal_uInt16>;
+        m_pDrawObjectPrcWidths.reset(new std::vector<sal_uInt16>);
     m_pDrawObjectPrcWidths->push_back( m_nCurrentRow );
     m_pDrawObjectPrcWidths->push_back( m_nCurrentColumn );
     m_pDrawObjectPrcWidths->push_back( static_cast<sal_uInt16>(nPrcWidth) );
@@ -2714,7 +2744,7 @@ SvxBrushItem* SwHTMLParser::CreateBrushItem( const Color *pColor,
     return pBrushItem;
 }
 
-class SectionSaveStruct : public SwPendingStackData
+class SectionSaveStruct : public SwPendingData
 {
     sal_uInt16 m_nBaseFontStMinSave, m_nFontStMinSave, m_nFontStHeadStartSave;
     sal_uInt16 m_nDefListDeepSave;
@@ -2785,8 +2815,7 @@ void SectionSaveStruct::Restore( SwHTMLParser& rParser )
     rParser.m_bNoParSpace = false;
     rParser.m_nOpenParaToken = HtmlTokenId::NONE;
 
-    if( !rParser.m_aParaAttrs.empty() )
-        rParser.m_aParaAttrs.clear();
+    rParser.m_aParaAttrs.clear();
 }
 
 class CellSaveStruct : public SectionSaveStruct
@@ -2807,10 +2836,9 @@ class CellSaveStruct : public SectionSaveStruct
     sal_uInt16 m_nRowSpan, m_nColSpan, m_nWidth, m_nHeight;
     sal_Int32 m_nNoBreakEndContentPos;     // Character index of a <NOBR>
 
-    SvxAdjust m_eAdjust;
     sal_Int16 m_eVertOri;
 
-    bool m_bHead : 1;
+    bool const m_bHead : 1;
     bool m_bPrcWidth : 1;
     bool m_bHasNumFormat : 1;
     bool m_bHasValue : 1;
@@ -2842,7 +2870,6 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
                                   bool bHd, bool bReadOpt ) :
     SectionSaveStruct( rParser ),
     m_pCurrCnts( nullptr ),
-    m_pNoBreakEndNodeIndex( nullptr ),
     m_nValue( 0.0 ),
     m_nNumFormat( 0 ),
     m_nRowSpan( 1 ),
@@ -2850,7 +2877,6 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
     m_nWidth( 0 ),
     m_nHeight( 0 ),
     m_nNoBreakEndContentPos( 0 ),
-    m_eAdjust( pCurTable->GetInheritedAdjust() ),
     m_eVertOri( pCurTable->GetInheritedVertOri() ),
     m_bHead( bHd ),
     m_bPrcWidth( false ),
@@ -2861,6 +2887,7 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
     m_bNoBreak( false )
 {
     OUString aNumFormat, aValue;
+    SvxAdjust eAdjust( pCurTable->GetInheritedAdjust() );
 
     if( bReadOpt )
     {
@@ -2890,7 +2917,7 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
                 }
                 break;
             case HtmlOptionId::ALIGN:
-                m_eAdjust = rOption.GetEnum( aHTMLPAlignTable, m_eAdjust );
+                eAdjust = rOption.GetEnum( aHTMLPAlignTable, eAdjust );
                 break;
             case HtmlOptionId::VALIGN:
                 m_eVertOri = rOption.GetEnum( aHTMLTableVAlignTable, m_eVertOri );
@@ -2972,8 +2999,8 @@ CellSaveStruct::CellSaveStruct( SwHTMLParser& rParser, HTMLTable const *pCurTabl
         nColl = RES_POOLCOLL_TABLE;
     }
     std::unique_ptr<HTMLAttrContext> xCntxt(new HTMLAttrContext(nToken, nColl, aEmptyOUStr, true));
-    if( SvxAdjust::End != m_eAdjust )
-        rParser.InsertAttr(&rParser.m_xAttrTab->pAdjust, SvxAdjustItem(m_eAdjust, RES_PARATR_ADJUST),
+    if( SvxAdjust::End != eAdjust )
+        rParser.InsertAttr(&rParser.m_xAttrTab->pAdjust, SvxAdjustItem(eAdjust, RES_PARATR_ADJUST),
                            xCntxt.get());
 
     if( SwHTMLParser::HasStyleOptions( m_aStyle, m_aId, m_aClass, &m_aLang, &m_aDir ) )
@@ -3134,10 +3161,10 @@ HTMLTableCnts *SwHTMLParser::InsertTableContents(
         while( pAttr )
         {
             OSL_ENSURE( !pAttr->GetPrev(), "Attribute has previous list" );
-            pAttr->nSttPara = rSttPara;
-            pAttr->nEndPara = rSttPara;
-            pAttr->nSttContent = nSttCnt;
-            pAttr->nEndContent = nSttCnt;
+            pAttr->m_nStartPara = rSttPara;
+            pAttr->m_nEndPara = rSttPara;
+            pAttr->m_nStartContent = nSttCnt;
+            pAttr->m_nEndContent = nSttCnt;
 
             pAttr = pAttr->GetNext();
         }
@@ -3160,7 +3187,7 @@ void SwHTMLParser::RegisterDrawObjectToTable( HTMLTable *pCurTable,
 void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                                    bool bHead )
 {
-    if( !IsParserWorking() && !m_pPendStack )
+    if( !IsParserWorking() && m_vPendingStack.empty() )
         return;
 
     ::comphelper::FlagRestorationGuard g(m_isInTableStructure, false);
@@ -3168,15 +3195,13 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
     bool bPending = false;
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        xSaveStruct.reset(static_cast<CellSaveStruct*>(m_pPendStack->pData));
+        xSaveStruct.reset(static_cast<CellSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        bPending = SvParserState::Error == eState && m_pPendStack != nullptr;
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        bPending = SvParserState::Error == eState && !m_vPendingStack.empty();
 
         SaveState( nToken );
     }
@@ -3334,17 +3359,16 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                 m_nFontStHeadStart = m_nFontStMin;
 
                 // The hard attributes on that paragraph are never gonna be invalid anymore
-                if( !m_aParaAttrs.empty() )
-                    m_aParaAttrs.clear();
+                m_aParaAttrs.clear();
             }
 
             // create a table context
-            HTMLTableContext *pTCntxt =
+            std::unique_ptr<HTMLTableContext> pTCntxt(
                         new HTMLTableContext( pSavePos, m_nContextStMin,
-                                               m_nContextStAttrMin );
+                                               m_nContextStAttrMin ) );
 
             // end all open attributes and open them again behind the table
-            HTMLAttrs *pPostIts = nullptr;
+            std::unique_ptr<std::deque<std::unique_ptr<HTMLAttr>>> pPostIts;
             if( !bForceFrame && (bTopTable || pCurTable->HasParentSection()) )
             {
                 SplitAttrTab(pTCntxt->xAttrTab, bTopTable);
@@ -3356,16 +3380,16 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                 if( (bTopTable && !bAppended) ||
                     (!bTopTable && !bParentLFStripped &&
                      !m_pPam->GetPoint()->nContent.GetIndex()) )
-                    pPostIts = new HTMLAttrs;
-                SetAttr( bTopTable, bTopTable, pPostIts );
+                    pPostIts.reset(new std::deque<std::unique_ptr<HTMLAttr>>);
+                SetAttr( bTopTable, bTopTable, pPostIts.get() );
             }
             else
             {
                 SaveAttrTab(pTCntxt->xAttrTab);
                 if( bTopTable && !bAppended )
                 {
-                    pPostIts = new HTMLAttrs;
-                    SetAttr( true, true, pPostIts );
+                    pPostIts.reset(new std::deque<std::unique_ptr<HTMLAttr>>);
+                    SetAttr( true, true, pPostIts.get() );
                 }
             }
             m_bNoParSpace = false;
@@ -3495,14 +3519,14 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                 if( !bAppended && pPostIts )
                 {
                     // set still-existing PostIts to the first paragraph of the table
-                    InsertAttrs( *pPostIts );
-                    delete pPostIts;
-                    pPostIts = nullptr;
+                    InsertAttrs( std::move(*pPostIts) );
+                    pPostIts.reset();
                 }
 
                 pTCntxt->SetTableNode( const_cast<SwTableNode *>(pNd->FindTableNode()) );
 
-                pCurTable->SetTable( pTCntxt->GetTableNode(), pTCntxt,
+                auto pTableNode = pTCntxt->GetTableNode();
+                pCurTable->SetTable( pTableNode, std::move(pTCntxt),
                                      nLeftSpace, nRightSpace,
                                      pSwTable, bForceFrame );
 
@@ -3524,9 +3548,8 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                     if( pPostIts )
                     {
                         // move still existing PostIts to the end of the current paragraph
-                        InsertAttrs( *pPostIts );
-                        delete pPostIts;
-                        pPostIts = nullptr;
+                        InsertAttrs( std::move(*pPostIts) );
+                        pPostIts.reset();
                     }
                 }
 
@@ -3534,7 +3557,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
                 const SwStartNode *pStNd = (m_xTable->m_bFirstCell ? pNd->FindTableNode()
                                                             : pNd->FindTableBoxStartNode() );
 
-                pCurTable->SetTable( pStNd, pTCntxt, nLeftSpace, nRightSpace );
+                pCurTable->SetTable( pStNd, std::move(pTCntxt), nLeftSpace, nRightSpace );
             }
 
             // Freeze the context stack, since there could be attributes set
@@ -3560,9 +3583,9 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
 
         nToken = FilterToken( nToken );
 
-        OSL_ENSURE( m_pPendStack || !m_bCallNextToken || xSaveStruct->IsInSection(),
+        OSL_ENSURE( !m_vPendingStack.empty() || !m_bCallNextToken || xSaveStruct->IsInSection(),
                 "Where is the section??" );
-        if( !m_pPendStack && m_bCallNextToken && xSaveStruct->IsInSection() )
+        if( m_vPendingStack.empty() && m_bCallNextToken && xSaveStruct->IsInSection() )
         {
             // Call NextToken directly (e.g. ignore the content of floating frames or applets)
             NextToken( nToken );
@@ -3590,7 +3613,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
             {
                 bool bHasToFly = false;
                 SvxAdjust eTabAdjust = SvxAdjust::End;
-                if( !m_pPendStack )
+                if( m_vPendingStack.empty() )
                 {
                     // only if we create a new table, but not if we're still
                     // reading in the table after a Pending
@@ -3744,7 +3767,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
             break;
         }
 
-        OSL_ENSURE( !bPending || !m_pPendStack,
+        OSL_ENSURE( !bPending || m_vPendingStack.empty(),
                 "SwHTMLParser::BuildTableCell: There is a PendStack again" );
         bPending = false;
         if( IsParserWorking() )
@@ -3756,9 +3779,9 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
 
     if( SvParserState::Pending == GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( bHead ? HtmlTokenId::TABLEHEADER_ON
-                                               : HtmlTokenId::TABLEDATA_ON, m_pPendStack );
-        m_pPendStack->pData = xSaveStruct.release();
+        m_vPendingStack.emplace_back( bHead ? HtmlTokenId::TABLEHEADER_ON
+                                            : HtmlTokenId::TABLEDATA_ON );
+        m_vPendingStack.back().pData = std::move(xSaveStruct);
 
         return;
     }
@@ -3852,7 +3875,7 @@ void SwHTMLParser::BuildTableCell( HTMLTable *pCurTable, bool bReadOptions,
     xSaveStruct.reset();
 }
 
-class RowSaveStruct : public SwPendingStackData
+class RowSaveStruct : public SwPendingData
 {
 public:
     SvxAdjust eAdjust;
@@ -3870,22 +3893,20 @@ void SwHTMLParser::BuildTableRow( HTMLTable *pCurTable, bool bReadOptions,
 {
     // <TR> was already read
 
-    if( !IsParserWorking() && !m_pPendStack )
+    if( !IsParserWorking() && m_vPendingStack.empty() )
         return;
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
     std::unique_ptr<RowSaveStruct> xSaveStruct;
 
     bool bPending = false;
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        xSaveStruct.reset(static_cast<RowSaveStruct*>(m_pPendStack->pData));
+        xSaveStruct.reset(static_cast<RowSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        bPending = SvParserState::Error == eState && m_pPendStack != nullptr;
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        bPending = SvParserState::Error == eState && !m_vPendingStack.empty();
 
         SaveState( nToken );
     }
@@ -3959,10 +3980,10 @@ void SwHTMLParser::BuildTableRow( HTMLTable *pCurTable, bool bReadOptions,
 
         nToken = FilterToken( nToken );
 
-        OSL_ENSURE( m_pPendStack || !m_bCallNextToken ||
+        OSL_ENSURE( !m_vPendingStack.empty() || !m_bCallNextToken ||
                 pCurTable->GetContext() || pCurTable->HasParentSection(),
                 "Where is the section??" );
-        if( !m_pPendStack && m_bCallNextToken &&
+        if( m_vPendingStack.empty() && m_bCallNextToken &&
             (pCurTable->GetContext() || pCurTable->HasParentSection()) )
         {
             /// Call NextToken directly (e.g. ignore the content of floating frames or applets)
@@ -4042,7 +4063,7 @@ void SwHTMLParser::BuildTableRow( HTMLTable *pCurTable, bool bReadOptions,
             break;
         }
 
-        OSL_ENSURE( !bPending || !m_pPendStack,
+        OSL_ENSURE( !bPending || m_vPendingStack.empty(),
                 "SwHTMLParser::BuildTableRow: There is a PendStack again" );
         bPending = false;
         if( IsParserWorking() )
@@ -4054,8 +4075,8 @@ void SwHTMLParser::BuildTableRow( HTMLTable *pCurTable, bool bReadOptions,
 
     if( SvParserState::Pending == GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( HtmlTokenId::TABLEROW_ON, m_pPendStack );
-        m_pPendStack->pData = xSaveStruct.release();
+        m_vPendingStack.emplace_back( HtmlTokenId::TABLEROW_ON );
+        m_vPendingStack.back().pData = std::move(xSaveStruct);
     }
     else
     {
@@ -4071,22 +4092,20 @@ void SwHTMLParser::BuildTableSection( HTMLTable *pCurTable,
                                       bool bHead )
 {
     // <THEAD>, <TBODY> resp. <TFOOT> were read already
-    if( !IsParserWorking() && !m_pPendStack )
+    if( !IsParserWorking() && m_vPendingStack.empty() )
         return;
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
     bool bPending = false;
     std::unique_ptr<RowSaveStruct> xSaveStruct;
 
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        xSaveStruct.reset(static_cast<RowSaveStruct*>(m_pPendStack->pData));
+        xSaveStruct.reset(static_cast<RowSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        bPending = SvParserState::Error == eState && m_pPendStack != nullptr;
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        bPending = SvParserState::Error == eState && !m_vPendingStack.empty();
 
         SaveState( nToken );
     }
@@ -4133,10 +4152,10 @@ void SwHTMLParser::BuildTableSection( HTMLTable *pCurTable,
 
         nToken = FilterToken( nToken );
 
-        OSL_ENSURE( m_pPendStack || !m_bCallNextToken ||
+        OSL_ENSURE( !m_vPendingStack.empty() || !m_bCallNextToken ||
                 pCurTable->GetContext() || pCurTable->HasParentSection(),
                 "Where is the section?" );
-        if( !m_pPendStack && m_bCallNextToken &&
+        if( m_vPendingStack.empty() && m_bCallNextToken &&
             (pCurTable->GetContext() || pCurTable->HasParentSection()) )
         {
             // Call NextToken directly (e.g. ignore the content of floating frames or applets)
@@ -4202,7 +4221,7 @@ void SwHTMLParser::BuildTableSection( HTMLTable *pCurTable,
             NextToken( nToken );
         }
 
-        OSL_ENSURE( !bPending || !m_pPendStack,
+        OSL_ENSURE( !bPending || m_vPendingStack.empty(),
                 "SwHTMLParser::BuildTableSection: There is a PendStack again" );
         bPending = false;
         if( IsParserWorking() )
@@ -4214,9 +4233,9 @@ void SwHTMLParser::BuildTableSection( HTMLTable *pCurTable,
 
     if( SvParserState::Pending == GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( bHead ? HtmlTokenId::THEAD_ON
-                                               : HtmlTokenId::TBODY_ON, m_pPendStack );
-        m_pPendStack->pData = xSaveStruct.release();
+        m_vPendingStack.emplace_back( bHead ? HtmlTokenId::THEAD_ON
+                                            : HtmlTokenId::TBODY_ON );
+        m_vPendingStack.back().pData = std::move(xSaveStruct);
     }
     else
     {
@@ -4227,7 +4246,7 @@ void SwHTMLParser::BuildTableSection( HTMLTable *pCurTable,
     // now we stand (perhaps) in front of <TBODY>,... or </TABLE>
 }
 
-struct TableColGrpSaveStruct : public SwPendingStackData
+struct TableColGrpSaveStruct : public SwPendingData
 {
     sal_uInt16 nColGrpSpan;
     sal_uInt16 nColGrpWidth;
@@ -4257,29 +4276,28 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
 {
     // <COLGROUP> was read already if bReadOptions is set
 
-    if( !IsParserWorking() && !m_pPendStack )
+    if( !IsParserWorking() && m_vPendingStack.empty() )
         return;
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
     bool bPending = false;
-    TableColGrpSaveStruct* pSaveStruct;
+    std::unique_ptr<TableColGrpSaveStruct> pSaveStruct;
 
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        pSaveStruct = static_cast<TableColGrpSaveStruct*>(m_pPendStack->pData);
+        pSaveStruct.reset(static_cast<TableColGrpSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        bPending = SvParserState::Error == eState && m_pPendStack != nullptr;
+
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        bPending = SvParserState::Error == eState && !m_vPendingStack.empty();
 
         SaveState( nToken );
     }
     else
     {
 
-        pSaveStruct = new TableColGrpSaveStruct;
+        pSaveStruct.reset(new TableColGrpSaveStruct);
         if( bReadOptions )
         {
             const HTMLOptions& rColGrpOptions = GetOptions();
@@ -4331,10 +4349,10 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
 
         nToken = FilterToken( nToken );
 
-        OSL_ENSURE( m_pPendStack || !m_bCallNextToken ||
+        OSL_ENSURE( !m_vPendingStack.empty() || !m_bCallNextToken ||
                 pCurTable->GetContext() || pCurTable->HasParentSection(),
                 "Where is the section?" );
-        if( !m_pPendStack && m_bCallNextToken &&
+        if( m_vPendingStack.empty() && m_bCallNextToken &&
             (pCurTable->GetContext() || pCurTable->HasParentSection()) )
         {
             // Call NextToken directly (e.g. ignore the content of floating frames or applets)
@@ -4424,7 +4442,7 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
             NextToken( nToken );
         }
 
-        OSL_ENSURE( !bPending || !m_pPendStack,
+        OSL_ENSURE( !bPending || m_vPendingStack.empty(),
                 "SwHTMLParser::BuildTableColGrp: There is a PendStack again" );
         bPending = false;
         if( IsParserWorking() )
@@ -4436,19 +4454,18 @@ void SwHTMLParser::BuildTableColGroup( HTMLTable *pCurTable,
 
     if( SvParserState::Pending == GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( HtmlTokenId::COL_ON, m_pPendStack );
-        m_pPendStack->pData = pSaveStruct;
+        m_vPendingStack.emplace_back( HtmlTokenId::COL_ON );
+        m_vPendingStack.back().pData = std::move(pSaveStruct);
     }
     else
     {
         pSaveStruct->CloseColGroup( pCurTable );
-        delete pSaveStruct;
     }
 }
 
 class CaptionSaveStruct : public SectionSaveStruct
 {
-    SwPosition aSavePos;
+    SwPosition const aSavePos;
     SwHTMLNumRuleInfo aNumRuleInfo; // valid numbering
 
 public:
@@ -4485,21 +4502,19 @@ void SwHTMLParser::BuildTableCaption( HTMLTable *pCurTable )
 {
     // <CAPTION> was read already
 
-    if( !IsParserWorking() && !m_pPendStack )
+    if( !IsParserWorking() && m_vPendingStack.empty() )
         return;
 
     HtmlTokenId nToken = HtmlTokenId::NONE;
     std::unique_ptr<CaptionSaveStruct> xSaveStruct;
 
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        xSaveStruct.reset(static_cast<CaptionSaveStruct*>(m_pPendStack->pData));
+        xSaveStruct.reset(static_cast<CaptionSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        OSL_ENSURE( !m_pPendStack, "Where does a PendStack coming from?" );
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        OSL_ENSURE( m_vPendingStack.empty(), "Where does a PendStack coming from?" );
 
         SaveState( nToken );
     }
@@ -4568,7 +4583,7 @@ void SwHTMLParser::BuildTableCaption( HTMLTable *pCurTable )
         switch( nToken )
         {
         case HtmlTokenId::TABLE_ON:
-            if( !m_pPendStack )
+            if( m_vPendingStack.empty() )
             {
                 xSaveStruct->m_xTable = m_xTable;
                 bool bHasToFly = xSaveStruct->m_xTable.get() != pCurTable;
@@ -4598,13 +4613,10 @@ void SwHTMLParser::BuildTableCaption( HTMLTable *pCurTable )
             bDone = true;
             break;
         default:
-            if( m_pPendStack )
+            if( !m_vPendingStack.empty() )
             {
-                SwPendingStack* pTmp = m_pPendStack->pNext;
-                delete m_pPendStack;
-                m_pPendStack = pTmp;
-
-                OSL_ENSURE( !pTmp, "Further it can't go!" );
+                m_vPendingStack.pop_back();
+                OSL_ENSURE( m_vPendingStack.empty(), "Further it can't go!" );
             }
 
             if( IsParserWorking() )
@@ -4621,8 +4633,8 @@ void SwHTMLParser::BuildTableCaption( HTMLTable *pCurTable )
 
     if( SvParserState::Pending==GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( HtmlTokenId::CAPTION_ON, m_pPendStack );
-        m_pPendStack->pData = xSaveStruct.release();
+        m_vPendingStack.emplace_back( HtmlTokenId::CAPTION_ON );
+        m_vPendingStack.back().pData = std::move(xSaveStruct);
         return;
     }
 
@@ -4666,7 +4678,7 @@ void SwHTMLParser::BuildTableCaption( HTMLTable *pCurTable )
     *m_pPam->GetPoint() = xSaveStruct->GetPos();
 }
 
-class TableSaveStruct : public SwPendingStackData
+class TableSaveStruct : public SwPendingData
 {
 public:
     std::shared_ptr<HTMLTable> m_xCurrentTable;
@@ -4707,7 +4719,7 @@ void TableSaveStruct::MakeTable( sal_uInt16 nWidth, SwPosition& rPos, SwDoc *pDo
             SwNodeIndex aIdx( *pTableNd->EndOfSectionNode(), 1 );
             OSL_ENSURE( aIdx.GetIndex() <= pTCntxt->GetPos()->nNode.GetIndex(),
                     "unexpected node for table layout" );
-            pTableNd->MakeFrames( &aIdx );
+            pTableNd->MakeOwnFrames(&aIdx);
         }
     }
 
@@ -4851,14 +4863,11 @@ namespace
 {
     class FrameDeleteWatch : public SwClient
     {
-        SwFrameFormat* m_pObjectFormat;
     public:
         FrameDeleteWatch(SwFrameFormat* pObjectFormat)
-            : m_pObjectFormat(pObjectFormat)
         {
-            if (m_pObjectFormat)
-                m_pObjectFormat->Add(this);
-
+            if (pObjectFormat)
+                pObjectFormat->Add(this);
         }
 
         virtual void SwClientNotify(const SwModify& rModify, const SfxHint& rHint) override
@@ -4887,8 +4896,8 @@ namespace
     class IndexInRange
     {
     private:
-        SwNodeIndex maStart;
-        SwNodeIndex maEnd;
+        SwNodeIndex const maStart;
+        SwNodeIndex const maEnd;
     public:
         explicit IndexInRange(const SwNodeIndex& rStart, const SwNodeIndex& rEnd)
             : maStart(rStart)
@@ -4903,7 +4912,7 @@ namespace
     };
 }
 
-void SwHTMLParser::ClearFootnotesInRange(const SwNodeIndex& rMkNdIdx, const SwNodeIndex& rPtNdIdx)
+void SwHTMLParser::ClearFootnotesMarksInRange(const SwNodeIndex& rMkNdIdx, const SwNodeIndex& rPtNdIdx)
 {
     //similarly for footnotes
     if (m_pFootEndNoteImpl)
@@ -4912,15 +4921,19 @@ void SwHTMLParser::ClearFootnotesInRange(const SwNodeIndex& rMkNdIdx, const SwNo
             m_pFootEndNoteImpl->aTextFootnotes.end(), IndexInRange(rMkNdIdx, rPtNdIdx)), m_pFootEndNoteImpl->aTextFootnotes.end());
         if (m_pFootEndNoteImpl->aTextFootnotes.empty())
         {
-            delete m_pFootEndNoteImpl;
-            m_pFootEndNoteImpl = nullptr;
+            m_pFootEndNoteImpl.reset();
         }
     }
 
     //follow DelFlyInRange pattern here
-    const bool bDelFwrd = rMkNdIdx.GetIndex() <= rPtNdIdx.GetIndex();
+    assert(rMkNdIdx.GetIndex() <= rPtNdIdx.GetIndex());
 
     SwDoc* pDoc = rMkNdIdx.GetNode().GetDoc();
+
+    //ofz#9733 drop bookmarks in this range
+    IDocumentMarkAccess* const pMarkAccess = pDoc->getIDocumentMarkAccess();
+    pMarkAccess->deleteMarks(rMkNdIdx, SwNodeIndex(rPtNdIdx, 1), nullptr, nullptr, nullptr);
+
     SwFrameFormats& rTable = *pDoc->GetSpzFrameFormats();
     for ( auto i = rTable.size(); i; )
     {
@@ -4930,9 +4943,7 @@ void SwHTMLParser::ClearFootnotesInRange(const SwNodeIndex& rMkNdIdx, const SwNo
         if (pAPos &&
             ((rAnch.GetAnchorId() == RndStdIds::FLY_AT_PARA) ||
              (rAnch.GetAnchorId() == RndStdIds::FLY_AT_CHAR)) &&
-            ( bDelFwrd
-                ? rMkNdIdx < pAPos->nNode && pAPos->nNode <= rPtNdIdx
-                : rPtNdIdx <= pAPos->nNode && pAPos->nNode < rMkNdIdx ))
+            ( rMkNdIdx < pAPos->nNode && pAPos->nNode <= rPtNdIdx ))
         {
             if( rPtNdIdx != pAPos->nNode )
             {
@@ -4941,7 +4952,7 @@ void SwHTMLParser::ClearFootnotesInRange(const SwNodeIndex& rMkNdIdx, const SwNo
                 // But only fly formats own their content, not draw formats.
                 if (rContent.GetContentIdx() && pFormat->Which() == RES_FLYFRMFMT)
                 {
-                    ClearFootnotesInRange(*rContent.GetContentIdx(),
+                    ClearFootnotesMarksInRange(*rContent.GetContentIdx(),
                                           SwNodeIndex(*rContent.GetContentIdx()->GetNode().EndOfSectionNode()));
                 }
             }
@@ -4958,7 +4969,7 @@ void SwHTMLParser::DeleteSection(SwStartNode* pSttNd)
 
     //similarly for footnotes
     SwNodeIndex aSttIdx(*pSttNd), aEndIdx(*pSttNd->EndOfSectionNode());
-    ClearFootnotesInRange(aSttIdx, aEndIdx);
+    ClearFootnotesMarksInRange(aSttIdx, aEndIdx);
 
     m_xDoc->getIDocumentContentOperations().DeleteSection(pSttNd);
 
@@ -4980,7 +4991,7 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
     if (aGuard.TooDeep())
         eState = SvParserState::Error;
 
-    if (!IsParserWorking() && !m_pPendStack)
+    if (!IsParserWorking() && m_vPendingStack.empty())
         return std::shared_ptr<HTMLTable>();
 
     ::comphelper::FlagRestorationGuard g(m_isInTableStructure, true);
@@ -4988,15 +4999,13 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
     bool bPending = false;
     std::unique_ptr<TableSaveStruct> xSaveStruct;
 
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
-        xSaveStruct.reset(static_cast<TableSaveStruct*>(m_pPendStack->pData));
+        xSaveStruct.reset(static_cast<TableSaveStruct*>(m_vPendingStack.back().pData.release()));
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        nToken = m_pPendStack ? m_pPendStack->nToken : GetSaveToken();
-        bPending = SvParserState::Error == eState && m_pPendStack != nullptr;
+        m_vPendingStack.pop_back();
+        nToken = !m_vPendingStack.empty() ? m_vPendingStack.back().nToken : GetSaveToken();
+        bPending = SvParserState::Error == eState && !m_vPendingStack.empty();
 
         SaveState( nToken );
     }
@@ -5034,10 +5043,10 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
 
         nToken = FilterToken( nToken );
 
-        OSL_ENSURE( m_pPendStack || !m_bCallNextToken ||
+        OSL_ENSURE( !m_vPendingStack.empty() || !m_bCallNextToken ||
                 xCurTable->GetContext() || xCurTable->HasParentSection(),
                 "Where is the section?" );
-        if( !m_pPendStack && m_bCallNextToken &&
+        if( m_vPendingStack.empty() && m_bCallNextToken &&
             (xCurTable->GetContext() || xCurTable->HasParentSection()) )
         {
             /// Call NextToken directly (e.g. ignore the content of floating frames or applets)
@@ -5103,7 +5112,7 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
             break;
         }
 
-        OSL_ENSURE( !bPending || !m_pPendStack,
+        OSL_ENSURE( !bPending || m_vPendingStack.empty(),
                 "SwHTMLParser::BuildTable: There is a PendStack again" );
         bPending = false;
         if( IsParserWorking() )
@@ -5115,8 +5124,8 @@ std::shared_ptr<HTMLTable> SwHTMLParser::BuildTable(SvxAdjust eParentAdjust,
 
     if( SvParserState::Pending == GetStatus() )
     {
-        m_pPendStack = new SwPendingStack( HtmlTokenId::TABLE_ON, m_pPendStack );
-        m_pPendStack->pData = xSaveStruct.release();
+        m_vPendingStack.emplace_back( HtmlTokenId::TABLE_ON );
+        m_vPendingStack.back().pData = std::move(xSaveStruct);
         return std::shared_ptr<HTMLTable>();
     }
 

@@ -45,10 +45,11 @@ enum class StatusBarItemBits {
     Flat            = 0x0020,
     AutoSize        = 0x0040,
     UserDraw        = 0x0080,
+    Mandatory       = 0x0100,
 };
 namespace o3tl
 {
-    template<> struct typed_flags<StatusBarItemBits> : is_typed_flags<StatusBarItemBits, 0x00ff> {};
+    template<> struct typed_flags<StatusBarItemBits> : is_typed_flags<StatusBarItemBits, 0x01ff> {};
 }
 
 #define STATUSBAR_APPEND            (sal_uInt16(0xFFFF))
@@ -74,7 +75,6 @@ private:
     sal_uInt16          mnCurItemId;
     sal_uInt16          mnPercent;
     sal_uInt16          mnPercentCount;
-    bool                mbVisibleItems;
     bool                mbFormat;
     bool                mbProgressMode;
     bool                mbInUserDraw;
@@ -127,8 +127,6 @@ public:
     void                ShowItem( sal_uInt16 nItemId );
     void                HideItem( sal_uInt16 nItemId );
     bool                IsItemVisible( sal_uInt16 nItemId ) const;
-
-    bool                AreItemsVisible() const { return mbVisibleItems; }
 
     void                RedrawItem( sal_uInt16 nItemId );
 

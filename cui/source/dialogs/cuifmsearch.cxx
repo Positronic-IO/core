@@ -76,7 +76,6 @@ FmSearchDialog::FmSearchDialog(vcl::Window* pParent, const OUString& sInitialTex
     ,m_sCancel( Button::GetStandardText( StandardButtonType::Cancel ) )
     ,m_pPreSearchFocus( nullptr )
     ,m_lnkContextSupplier(lnkContextSupplier)
-    ,m_pConfig( nullptr )
 {
     get(m_prbSearchForText,"rbSearchForText");
     get(m_prbSearchForNull,"rbSearchForNull");
@@ -142,8 +141,8 @@ FmSearchDialog::FmSearchDialog(vcl::Window* pParent, const OUString& sInitialTex
         m_plbForm->Hide();
     }
 
-    m_pSearchEngine = new FmSearchEngine(
-        ::comphelper::getProcessComponentContext(), fmscInitial.xCursor, fmscInitial.strUsedFields, fmscInitial.arrFields );
+    m_pSearchEngine.reset( new FmSearchEngine(
+        ::comphelper::getProcessComponentContext(), fmscInitial.xCursor, fmscInitial.strUsedFields, fmscInitial.arrFields ) );
     initCommon( fmscInitial.xCursor );
 
     if ( !fmscInitial.sFieldDisplayNames.isEmpty() )
@@ -168,11 +167,9 @@ void FmSearchDialog::dispose()
 
     SaveParams();
 
-    delete m_pConfig;
-    m_pConfig = nullptr;
+    m_pConfig.reset();
 
-    delete m_pSearchEngine;
-    m_pSearchEngine = nullptr;
+    m_pSearchEngine.reset();
 
     m_prbSearchForText.clear();
     m_prbSearchForNull.clear();
@@ -258,7 +255,7 @@ void FmSearchDialog::Init(const OUString& strVisibleFields, const OUString& sIni
     }
 
 
-    m_pConfig = new FmSearchConfigItem;
+    m_pConfig.reset( new FmSearchConfigItem );
     LoadParams();
 
     m_pcmbSearchText->SetText(sInitialText);
@@ -359,39 +356,30 @@ IMPL_LINK(FmSearchDialog, OnClickedSpecialSettings, Button*, pButton, void )
     if (m_ppbApproxSettings == pButton)
     {
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if (pFact)
+        ScopedVclPtr<AbstractSvxSearchSimilarityDialog> pDlg(pFact->CreateSvxSearchSimilarityDialog(GetFrameWeld(), m_pSearchEngine->GetLevRelaxed(), m_pSearchEngine->GetLevOther(),
+                    m_pSearchEngine->GetLevShorter(), m_pSearchEngine->GetLevLonger() ));
+        if (pDlg->Execute() == RET_OK)
         {
-            ScopedVclPtr<AbstractSvxSearchSimilarityDialog> pDlg(pFact->CreateSvxSearchSimilarityDialog(GetFrameWeld(), m_pSearchEngine->GetLevRelaxed(), m_pSearchEngine->GetLevOther(),
-                        m_pSearchEngine->GetLevShorter(), m_pSearchEngine->GetLevLonger() ));
-            DBG_ASSERT( pDlg, "FmSearchDialog, OnClickedSpecialSettings: could not load the dialog!" );
-            if (pDlg && pDlg->Execute() == RET_OK)
-            {
-                m_pSearchEngine->SetLevRelaxed( pDlg->IsRelaxed() );
-                m_pSearchEngine->SetLevOther( pDlg->GetOther() );
-                m_pSearchEngine->SetLevShorter(pDlg->GetShorter() );
-                m_pSearchEngine->SetLevLonger( pDlg->GetLonger() );
-            }
+            m_pSearchEngine->SetLevRelaxed( pDlg->IsRelaxed() );
+            m_pSearchEngine->SetLevOther( pDlg->GetOther() );
+            m_pSearchEngine->SetLevShorter(pDlg->GetShorter() );
+            m_pSearchEngine->SetLevLonger( pDlg->GetLonger() );
         }
     }
     else if (m_pSoundsLikeCJKSettings == pButton)
     {
         SfxItemSet aSet( SfxGetpApp()->GetPool() );
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if(pFact)
-        {
-            ScopedVclPtr<AbstractSvxJSearchOptionsDialog> aDlg(pFact->CreateSvxJSearchOptionsDialog( this, aSet, m_pSearchEngine->GetTransliterationFlags() ));
-            DBG_ASSERT(aDlg, "Dialog creation failed!");
-            aDlg->Execute();
+        ScopedVclPtr<AbstractSvxJSearchOptionsDialog> aDlg(pFact->CreateSvxJSearchOptionsDialog(GetFrameWeld(), aSet, m_pSearchEngine->GetTransliterationFlags() ));
+        aDlg->Execute();
 
+        TransliterationFlags nFlags = aDlg->GetTransliterationFlags();
+        m_pSearchEngine->SetTransliterationFlags(nFlags);
 
-            TransliterationFlags nFlags = aDlg->GetTransliterationFlags();
-            m_pSearchEngine->SetTransliterationFlags(nFlags);
-
-            m_pcbCase->Check(m_pSearchEngine->GetCaseSensitive());
-            OnCheckBoxToggled( *m_pcbCase );
-            m_pHalfFullFormsCJK->Check( !m_pSearchEngine->GetIgnoreWidthCJK() );
-            OnCheckBoxToggled( *m_pHalfFullFormsCJK );
-        }
+        m_pcbCase->Check(m_pSearchEngine->GetCaseSensitive());
+        OnCheckBoxToggled( *m_pcbCase );
+        m_pHalfFullFormsCJK->Check( !m_pSearchEngine->GetIgnoreWidthCJK() );
+        OnCheckBoxToggled( *m_pHalfFullFormsCJK );
     }
 }
 

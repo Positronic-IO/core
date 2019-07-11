@@ -15,6 +15,7 @@
 #include <rtl/digest.h>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <config_folders.h>
 #include <vcl/salbtype.hxx>
 #include <vcl/bitmapaccess.hxx>
@@ -103,8 +104,8 @@ OString& getShaderSource(const OUString& rFilename)
 }
 
 namespace {
-    int LogCompilerError(GLuint nId, const rtl::OUString &rDetail,
-                         const rtl::OUString &rName, bool bShaderNotProgram)
+    int LogCompilerError(GLuint nId, const OUString &rDetail,
+                         const OUString &rName, bool bShaderNotProgram)
     {
         OpenGLZone aZone;
 
@@ -247,14 +248,14 @@ namespace
 
         osl::Directory::create(url);
 
-        return rtl::OUStringToOString(url, RTL_TEXTENCODING_UTF8);
+        return OUStringToOString(url, RTL_TEXTENCODING_UTF8);
     }
 
 
     bool writeProgramBinary( const OString& rBinaryFileName,
                              const std::vector<sal_uInt8>& rBinary )
     {
-        osl::File aFile(rtl::OStringToOUString(rBinaryFileName, RTL_TEXTENCODING_UTF8));
+        osl::File aFile(OStringToOUString(rBinaryFileName, RTL_TEXTENCODING_UTF8));
         osl::FileBase::RC eStatus = aFile.open(
                 osl_File_OpenFlag_Write | osl_File_OpenFlag_Create );
 
@@ -283,7 +284,7 @@ namespace
     bool readProgramBinary( const OString& rBinaryFileName,
                             std::vector<sal_uInt8>& rBinary )
     {
-        osl::File aFile( rtl::OStringToOUString( rBinaryFileName, RTL_TEXTENCODING_UTF8 ) );
+        osl::File aFile( OStringToOUString( rBinaryFileName, RTL_TEXTENCODING_UTF8 ) );
         if(aFile.open( osl_File_OpenFlag_Read ) == osl::FileBase::E_None)
         {
             sal_uInt64 nSize = 0;
@@ -310,10 +311,10 @@ namespace
     {
         OString aFileName;
         aFileName += getCacheFolder();
-        aFileName += rtl::OUStringToOString( rVertexShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
-        aFileName += rtl::OUStringToOString( rFragmentShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
+        aFileName += OUStringToOString( rVertexShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
+        aFileName += OUStringToOString( rFragmentShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
         if (!rGeometryShaderName.isEmpty())
-            aFileName += rtl::OUStringToOString( rGeometryShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
+            aFileName += OUStringToOString( rGeometryShaderName, RTL_TEXTENCODING_UTF8 ) + "-";
         aFileName += rDigest + ".bin";
         return aFileName;
     }
@@ -373,7 +374,7 @@ namespace
     }
 }
 
-rtl::OString OpenGLHelper::GetDigest( const OUString& rVertexShaderName,
+OString OpenGLHelper::GetDigest( const OUString& rVertexShaderName,
                                       const OUString& rFragmentShaderName,
                                       const OString& rPreamble )
 {
@@ -534,30 +535,6 @@ GLint OpenGLHelper::LoadShaders(const OUString& rVertexShaderName,
     return LoadShaders(rVertexShaderName, rFragmentShaderName, OUString(), "", "");
 }
 
-void OpenGLHelper::ConvertBitmapExToRGBATextureBuffer(const BitmapEx& rBitmapEx, sal_uInt8* o_pRGBABuffer)
-{
-    long nBmpWidth = rBitmapEx.GetSizePixel().Width();
-    long nBmpHeight = rBitmapEx.GetSizePixel().Height();
-
-    Bitmap aBitmap (rBitmapEx.GetBitmap());
-    AlphaMask aAlpha (rBitmapEx.GetAlpha());
-    Bitmap::ScopedReadAccess pReadAccces( aBitmap );
-    AlphaMask::ScopedReadAccess pAlphaReadAccess( aAlpha );
-    size_t i = 0;
-    for (long ny = 0; ny < nBmpHeight; ny++)
-    {
-        Scanline pAScan = pAlphaReadAccess ? pAlphaReadAccess->GetScanline(ny) : nullptr;
-        for(long nx = 0; nx < nBmpWidth; nx++)
-        {
-            BitmapColor aCol = pReadAccces->GetColor( ny, nx );
-            o_pRGBABuffer[i++] = aCol.GetRed();
-            o_pRGBABuffer[i++] = aCol.GetGreen();
-            o_pRGBABuffer[i++] = aCol.GetBlue();
-            o_pRGBABuffer[i++] = pAScan ? 255 - *pAScan++ : 255;
-        }
-    }
-}
-
 void OpenGLHelper::renderToFile(long nWidth, long nHeight, const OUString& rFileName)
 {
     OpenGLZone aZone;
@@ -609,7 +586,7 @@ BitmapEx OpenGLHelper::ConvertBGRABufferToBitmapEx(const sal_uInt8* const pBuffe
 const char* OpenGLHelper::GLErrorString(GLenum errorCode)
 {
     static const struct {
-        GLenum code;
+        GLenum const code;
         const char *string;
     } errors[]=
     {
@@ -667,7 +644,7 @@ std::ostream& operator<<(std::ostream& rStrm, const glm::mat4& rMatrix)
 }
 
 void OpenGLHelper::createFramebuffer(long nWidth, long nHeight, GLuint& nFramebufferId,
-        GLuint& nRenderbufferDepthId, GLuint& nRenderbufferColorId, bool bRenderbuffer)
+        GLuint& nRenderbufferDepthId, GLuint& nRenderbufferColorId)
 {
     OpenGLZone aZone;
 
@@ -677,29 +654,18 @@ void OpenGLHelper::createFramebuffer(long nWidth, long nHeight, GLuint& nFramebu
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, nWidth, nHeight);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
-    if(bRenderbuffer)
-    {
-        // create a renderbuffer for color attachment
-        glGenRenderbuffers(1, &nRenderbufferColorId);
-        glBindRenderbuffer(GL_RENDERBUFFER, nRenderbufferColorId);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, nWidth, nHeight);
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-    }
-    else
-    {
-        glGenTextures(1, &nRenderbufferColorId);
-        glBindTexture(GL_TEXTURE_2D, nRenderbufferColorId);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nWidth, nHeight, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glBindTexture(GL_TEXTURE_2D, 0);
+    glGenTextures(1, &nRenderbufferColorId);
+    glBindTexture(GL_TEXTURE_2D, nRenderbufferColorId);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nWidth, nHeight, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                GL_TEXTURE_2D, nRenderbufferColorId, 0);
-    }
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D, nRenderbufferColorId, 0);
 
     // create a framebuffer object and attach renderbuffer
     glGenFramebuffers(1, &nFramebufferId);

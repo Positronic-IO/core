@@ -20,6 +20,7 @@
 #include <memory>
 #include "eschesdo.hxx"
 #include <o3tl/any.hxx>
+#include <sal/log.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/svdoashp.hxx>
@@ -71,7 +72,6 @@ ImplEESdrWriter::ImplEESdrWriter( EscherEx& rEx )
     , mpHostAppData(nullptr)
     , mbIsTitlePossible(false)
     , mpSdrPage( nullptr )
-    , mpSolverContainer( nullptr )
 {
 }
 
@@ -241,12 +241,9 @@ sal_uInt32 ImplEESdrWriter::ImplWriteShape( ImplEESdrObject& rObj,
         if ( InteractionInfo* pInteraction = mpHostAppData ? mpHostAppData->GetInteractionInfo():nullptr )
         {
             const std::unique_ptr< SvMemoryStream >& pMemStrm = pInteraction->getHyperlinkRecord();
-            if ( pMemStrm.get() )
+            if (pMemStrm)
             {
-                pMemStrm->ObjectOwnsMemory( false );
-                sal_uInt8 const * pBuf = static_cast<sal_uInt8 const *>(pMemStrm->GetData());
-                sal_uInt32 nSize = pMemStrm->Seek( STREAM_SEEK_TO_END );
-                aPropOpt.AddOpt( ESCHER_Prop_pihlShape, false, nSize, const_cast<sal_uInt8 *>(pBuf), nSize );
+                aPropOpt.AddOpt(ESCHER_Prop_pihlShape, false, 0, *pMemStrm);
             }
             aPropOpt.AddOpt( ESCHER_Prop_fPrint, 0x00080008 );
         }
@@ -820,11 +817,9 @@ sal_uInt32 ImplEESdrWriter::ImplEnterAdditionalTextGroup( const Reference< XShap
 }
 
 
-bool ImplEESdrWriter::ImplInitPageValues()
+void ImplEESdrWriter::ImplInitPageValues()
 {
     mbIsTitlePossible = true;       // With more than one title PowerPoint will fail.
-
-    return true;
 }
 
 void ImplEESdrWriter::ImplWritePage(
@@ -875,8 +870,7 @@ bool ImplEESdrWriter::ImplInitPage( const SdrPage& rPage )
         mXShapes.set( mXDrawPage, UNO_QUERY );
         if ( !mXShapes.is() )
             return false;
-        if ( !ImplInitPageValues() )    // ImplEESdrWriter
-            return false;
+        ImplInitPageValues();
         mpSdrPage = &rPage;
 
         mpSolverContainer.reset( new EscherSolverContainer );
@@ -899,8 +893,7 @@ bool ImplEESdrWriter::ImplInitUnoShapes( const Reference< XShapes >& rxShapes )
     mXDrawPage.clear();
     mXShapes = rxShapes;
 
-    if( !ImplInitPageValues() )    // ImplEESdrWriter
-        return false;
+    ImplInitPageValues();
 
     mpSolverContainer.reset( new EscherSolverContainer );
     return true;
@@ -1015,7 +1008,7 @@ ImplEESdrObject::ImplEESdrObject( ImplEESdrWriter& rEx,
     mbEmptyPresObj( false ),
     mbOOXML(bOOXML)
 {
-    SdrPage* pPage = rObj.GetPage();
+    SdrPage* pPage = rObj.getSdrPageFromSdrObject();
     DBG_ASSERT( pPage, "ImplEESdrObject::ImplEESdrObject: no SdrPage" );
     if( pPage && rEx.ImplInitPage( *pPage ) )
     {
@@ -1045,7 +1038,7 @@ ImplEESdrObject::~ImplEESdrObject()
 {
 }
 
-basegfx::B2DRange getUnrotatedGroupBoundRange(const Reference< XShape >& rxShape)
+static basegfx::B2DRange getUnrotatedGroupBoundRange(const Reference< XShape >& rxShape)
 {
     basegfx::B2DRange aRetval;
 

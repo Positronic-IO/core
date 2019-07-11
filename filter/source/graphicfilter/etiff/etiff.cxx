@@ -130,7 +130,6 @@ TIFFWriter::TIFFWriter(SvStream &rStream)
     , mnPalPos(0)
     , mnBitmapPos(0)
     , mnStripByteCountPos(0)
-    , pTable(nullptr)
     , pPrefix(nullptr)
     , nDataSize(0)
     , nClearCode(0)
@@ -190,7 +189,7 @@ bool TIFFWriter::WriteTIFF( const Graphic& rGraphic, FilterConfigItem const * pF
                 if ( ImplWriteHeader( aAnimation.Count() > 0 ) )
                 {
                     Size aDestMapSize( 300, 300 );
-                    const MapMode aMapMode( aBmp.GetPrefMapMode() );
+                    const MapMode& aMapMode( aBmp.GetPrefMapMode() );
                     if ( aMapMode.GetMapUnit() != MapUnit::MapPixel )
                     {
                         const Size aPrefSize( rGraphic.GetPrefSize() );
@@ -504,7 +503,8 @@ void TIFFWriter::StartCompression()
     for ( i = 0; i < 4096; i++)
     {
         pTable[ i ].pBrother = pTable[ i ].pFirstChild = nullptr;
-        pTable[ i ].nValue = static_cast<sal_uInt8>( pTable[ i ].nCode = i );
+        pTable[ i ].nCode = i;
+        pTable[ i ].nValue = static_cast<sal_uInt8>( i );
     }
 
     pPrefix = nullptr;

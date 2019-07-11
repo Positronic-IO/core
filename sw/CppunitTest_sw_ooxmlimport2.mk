@@ -39,6 +39,7 @@ $(eval $(call gb_CppunitTest_use_externals,sw_ooxmlimport2,\
 $(eval $(call gb_CppunitTest_set_include,sw_ooxmlimport2,\
     -I$(SRCDIR)/sw/inc \
     -I$(SRCDIR)/sw/source/core/inc \
+    -I$(SRCDIR)/sw/source/uibase/inc \
     -I$(SRCDIR)/sw/qa/extras/inc \
     $$(INCLUDE) \
 ))
@@ -55,7 +56,11 @@ $(eval $(call gb_CppunitTest_use_system_darwin_frameworks,sw_ooxmlimport2,\
 
 endif
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sw_ooxmlimport2))
+$(eval $(call gb_CppunitTest_use_api,sw_ooxmlimport2,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sw_ooxmlimport2))
 $(eval $(call gb_CppunitTest_use_vcl,sw_ooxmlimport2))
@@ -103,5 +108,9 @@ $(eval $(call gb_CppunitTest_use_components,sw_ooxmlimport2,\
 ))
 
 $(eval $(call gb_CppunitTest_use_configuration,sw_ooxmlimport2))
+
+# At least testTdf115094::Import (sw/qa/extras/ooxmlimport/ooxmlimport2.cxx) depends on TIFFReader
+# from Library_gie, which is loaded dynamically in vcl/source/filter/graphicfilter.cxx:
+$(call gb_CppunitTest_get_target,sw_ooxmlimport2): $(call gb_Library_get_target,gie)
 
 # vim: set noet sw=4 ts=4:

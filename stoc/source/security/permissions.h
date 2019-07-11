@@ -35,7 +35,7 @@ class Permission : public ::salhelper::SimpleReferenceObject
 public:
     ::rtl::Reference< Permission > m_next;
     // mode
-    enum t_type { ALL, RUNTIME, SOCKET, FILE } m_type;
+    enum t_type { ALL, RUNTIME, SOCKET, FILE } const m_type;
 
     Permission(
         t_type type,
@@ -66,9 +66,6 @@ class PermissionCollection
     ::rtl::Reference< Permission > m_head;
 public:
     PermissionCollection()
-        {}
-    PermissionCollection( PermissionCollection const & collection )
-        : m_head( collection.m_head )
         {}
     explicit PermissionCollection( ::rtl::Reference< Permission > const & single )
         : m_head( single )

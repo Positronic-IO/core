@@ -106,7 +106,7 @@ public:
 
     // helper api
 
-    bool startPreview(
+    void startPreview(
         const css::uno::Reference< css::drawing::XDrawPage >& xDrawPage,
         const css::uno::Reference< css::animations::XAnimationNode >& xAnimationNode );
 
@@ -190,7 +190,7 @@ private:
     SlideShow(const SlideShow&) = delete;
     SlideShow& operator=( const SlideShow& ) = delete;
 
-    SvxItemPropertySet  maPropSet;
+    SvxItemPropertySet const  maPropSet;
 
     rtl::Reference< SlideshowImpl > mxController;
     /** This flag is used together with mxController.is() to prevent

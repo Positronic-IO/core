@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 
@@ -59,6 +60,7 @@
 #include <strings.hrc>
 #include <svl/stritem.hxx>
 #include "xmlimp.hxx"
+#include "xmlimpit.hxx"
 #include "xmltexti.hxx"
 #include <list.hxx>
 #include <swdll.hxx>
@@ -358,7 +360,7 @@ void SwXMLDocStylesContext_Impl::EndElement()
 const SvXMLTokenMap& SwXMLImport::GetDocElemTokenMap()
 {
     if( !m_pDocElemTokenMap )
-        m_pDocElemTokenMap = new SvXMLTokenMap( aDocTokenMap );
+        m_pDocElemTokenMap.reset( new SvXMLTokenMap( aDocTokenMap ) );
 
     return *m_pDocElemTokenMap;
 }
@@ -414,10 +416,6 @@ SwXMLImport::SwXMLImport(
     const uno::Reference< uno::XComponentContext >& rContext,
     OUString const & implementationName, SvXMLImportFlags nImportFlags)
 :   SvXMLImport( rContext, implementationName, nImportFlags ),
-    m_pTableItemMapper( nullptr ),
-    m_pDocElemTokenMap( nullptr ),
-    m_pTableElemTokenMap( nullptr ),
-    m_pTableCellAttrTokenMap( nullptr ),
     m_nStyleFamilyMask( SfxStyleFamily::All ),
     m_bLoadDoc( true ),
     m_bInsert( false ),
@@ -436,9 +434,9 @@ SwXMLImport::~SwXMLImport() throw ()
         SAL_WARN("sw", "endDocument skipped, dropping shapes now to avoid dangling SvTextShapeImportHelper pointing to this");
         ClearShapeImport();
     }
-    delete m_pDocElemTokenMap;
-    delete m_pTableElemTokenMap;
-    delete m_pTableCellAttrTokenMap;
+    m_pDocElemTokenMap.reset();
+    m_pTableElemTokenMap.reset();
+    m_pTableCellAttrTokenMap.reset();
     FinitItemImport();
 }
 
@@ -1358,7 +1356,6 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
     aExcludeWhenNotLoadingUserSettings.insert("TabOverMargin");
     aExcludeWhenNotLoadingUserSettings.insert("PropLineSpacingShrinksFirstLine");
     aExcludeWhenNotLoadingUserSettings.insert("SubtractFlysAnchoredAtFlys");
-    aExcludeWhenNotLoadingUserSettings.insert("DisableOffPagePositioning");
 
     sal_Int32 nCount = aConfigProps.getLength();
     const PropertyValue* pValues = aConfigProps.getConstArray();
@@ -1390,9 +1387,10 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
     bool bClippedPictures = false;
     bool bBackgroundParaOverDrawings = false;
     bool bTabOverMargin = false;
+    bool bTabOverMarginValue = false;
     bool bPropLineSpacingShrinksFirstLine = false;
     bool bSubtractFlysAnchoredAtFlys = false;
-    bool bDisableOffPagePositioning = false;
+    bool bCollapseEmptyCellPara = false;
 
     const PropertyValue* currentDatabaseDataSource = nullptr;
     const PropertyValue* currentDatabaseCommand = nullptr;
@@ -1480,13 +1478,16 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
                 else if ( pValues->Name == "BackgroundParaOverDrawings" )
                     bBackgroundParaOverDrawings = true;
                 else if ( pValues->Name == "TabOverMargin" )
+                {
                     bTabOverMargin = true;
+                    pValues->Value >>= bTabOverMarginValue;
+                }
                 else if ( pValues->Name == "PropLineSpacingShrinksFirstLine" )
                     bPropLineSpacingShrinksFirstLine = true;
                 else if (pValues->Name == "SubtractFlysAnchoredAtFlys")
                     bSubtractFlysAnchoredAtFlys = true;
-                else if (pValues->Name == "DisableOffPagePositioning")
-                    bDisableOffPagePositioning = true;
+                else if (pValues->Name == "CollapseEmptyCellPara")
+                    bCollapseEmptyCellPara = true;
             }
             catch( Exception& )
             {
@@ -1641,14 +1642,22 @@ void SwXMLImport::SetConfigurationSettings(const Sequence < PropertyValue > & aC
     if ( !bTabOverMargin )
         xProps->setPropertyValue("TabOverMargin", makeAny( false ) );
 
+    if (bTabOverMarginValue)
+        // Let TabOverMargin imply the new default for
+        // PrinterIndependentLayout, knowing the first is set by Word import
+        // filters and Word defaults to our new default as well.
+        xProps->setPropertyValue(
+            "PrinterIndependentLayout",
+            uno::Any(static_cast<sal_Int16>(document::PrinterIndependentLayout::HIGH_RESOLUTION)));
+
     if (!bPropLineSpacingShrinksFirstLine)
         xProps->setPropertyValue("PropLineSpacingShrinksFirstLine", makeAny(false));
 
     if (!bSubtractFlysAnchoredAtFlys)
         xProps->setPropertyValue("SubtractFlysAnchoredAtFlys", makeAny(true));
 
-    if ( bDisableOffPagePositioning )
-        xProps->setPropertyValue("DisableOffPagePositioning", makeAny(true));
+    if (!bCollapseEmptyCellPara)
+        xProps->setPropertyValue("CollapseEmptyCellPara", makeAny(false));
 
     SwDoc *pDoc = getDoc();
     SfxPrinter *pPrinter = pDoc->getIDocumentDeviceAccess().getPrinter( false );
@@ -1892,16 +1901,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportDOCX(SvStream &rStream)
     {
         ret = xFilter->filter(aArgs);
     }
-    catch (const css::io::IOException&)
-    {
-    }
-    catch (const css::lang::IllegalArgumentException&)
-    {
-    }
-    catch (const css::lang::WrappedTargetRuntimeException&)
-    {
-    }
-    catch (const std::exception&)
+    catch (...)
     {
     }
     xDocSh->SetLoading(SfxLoadedFlags::ALL);

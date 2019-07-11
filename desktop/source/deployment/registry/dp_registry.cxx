@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <dp_shared.hxx>
 #include <dp_package.hxx>
@@ -34,6 +35,7 @@
 #include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/sequence.hxx>
 #include <ucbhelper/content.hxx>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/uno/DeploymentException.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -93,7 +95,7 @@ class PackageRegistryImpl : private MutexHolder, public t_helper
         Reference<deployment::XPackageRegistry> const & xBackend );
 
 protected:
-    inline void check();
+    void check();
     virtual void SAL_CALL disposing() override;
 
     virtual ~PackageRegistryImpl() override;
@@ -120,7 +122,7 @@ public:
 };
 
 
-inline void PackageRegistryImpl::check()
+void PackageRegistryImpl::check()
 {
     ::osl::MutexGuard guard( getMutex() );
     if (rBHelper.bInDispose || rBHelper.bDisposed) {
@@ -181,8 +183,7 @@ void PackageRegistryImpl::insertBackend(
     Reference<deployment::XPackageRegistry> const & xBackend )
 {
     m_allBackends.insert( xBackend );
-    typedef std::unordered_set<OUString> t_stringset;
-    t_stringset ambiguousFilters;
+    std::unordered_set<OUString> ambiguousFilters;
 
     const Sequence< Reference<deployment::XPackageTypeInfo> > packageTypes(
         xBackend->getSupportedPackageTypes() );

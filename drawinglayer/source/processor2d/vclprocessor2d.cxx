@@ -43,6 +43,7 @@
 #include <drawinglayer/primitive2d/pagepreviewprimitive2d.hxx>
 #include <tools/diagnose_ex.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/metric.hxx>
 #include <drawinglayer/primitive2d/textenumsprimitive2d.hxx>
 #include <drawinglayer/primitive2d/epsprimitive2d.hxx>
@@ -229,7 +230,7 @@ namespace drawinglayer
                     // create transformed integer DXArray in view coordinate system
                     std::vector< long > aTransformedDXArray;
 
-                    if(rTextCandidate.getDXArray().size())
+                    if(!rTextCandidate.getDXArray().empty())
                     {
                         aTransformedDXArray.reserve(rTextCandidate.getDXArray().size());
                         const basegfx::B2DVector aPixelVector(maCurrentTransformation * basegfx::B2DVector(1.0, 0.0));
@@ -261,7 +262,7 @@ namespace drawinglayer
                     sal_Int32 nPos = rTextCandidate.getTextPosition();
                     sal_Int32 nLen = rTextCandidate.getTextLength();
 
-                    long* pDXArray = aTransformedDXArray.size() ? &(aTransformedDXArray[0]) : nullptr ;
+                    long* pDXArray = !aTransformedDXArray.empty() ? &(aTransformedDXArray[0]) : nullptr ;
 
                     if ( rTextCandidate.isFilled() )
                     {
@@ -725,29 +726,32 @@ namespace drawinglayer
                         // back to old OutDev
                         mpOutputDevice = pLastOutputDevice;
 
-                        // draw mask
-                        if(getOptionsDrawinglayer().IsAntiAliasing())
+                        // if the mask fills the whole area we can skip
+                        // creating a transparent vd and filling it.
+                        if (!basegfx::utils::isRectangle(aMask))
                         {
-                            // with AA, use 8bit AlphaMask to get nice borders
-                            VirtualDevice& rTransparence = aBufferDevice.getTransparence();
-                            rTransparence.SetLineColor();
-                            rTransparence.SetFillColor(COL_BLACK);
-                            rTransparence.DrawPolyPolygon(aMask);
-
-                            // dump buffer to outdev
-                            aBufferDevice.paint();
+                            // draw mask
+                            if(getOptionsDrawinglayer().IsAntiAliasing())
+                            {
+                                // with AA, use 8bit AlphaMask to get nice borders
+                                VirtualDevice& rTransparence = aBufferDevice.getTransparence();
+                                rTransparence.SetLineColor();
+                                rTransparence.SetFillColor(COL_BLACK);
+                                rTransparence.DrawPolyPolygon(aMask);
+                            }
+                            else
+                            {
+                                // No AA, use 1bit mask
+                                VirtualDevice& rMask = aBufferDevice.getMask();
+                                rMask.SetLineColor();
+                                rMask.SetFillColor(COL_BLACK);
+                                rMask.DrawPolyPolygon(aMask);
+                            }
                         }
-                        else
-                        {
-                            // No AA, use 1bit mask
-                            VirtualDevice& rMask = aBufferDevice.getMask();
-                            rMask.SetLineColor();
-                            rMask.SetFillColor(COL_BLACK);
-                            rMask.DrawPolyPolygon(aMask);
 
-                            // dump buffer to outdev
-                            aBufferDevice.paint();
-                        }
+                        // dump buffer to outdev
+                        aBufferDevice.paint();
+
                     }
                 }
             }

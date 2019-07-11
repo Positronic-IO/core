@@ -22,9 +22,11 @@
 #include "StatementCommonBase.hxx"
 #include "Util.hxx"
 
+#include <sal/log.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <propertyids.hxx>
+#include <vcl/svapp.hxx>
 #include <TConnection.hxx>
 
 using namespace ::connectivity::firebird;
@@ -125,7 +127,7 @@ void OStatementCommonBase::prepareAndDescribeStatement(const OUString& sql,
                                                       XSQLDA*& pOutSqlda,
                                                       XSQLDA* pInSqlda)
 {
-    MutexGuard aGuard(m_aMutex);
+    SolarMutexGuard g; // tdf#122129
 
     freeStatementHandle();
 
@@ -385,10 +387,7 @@ short OStatementCommonBase::getSqlInfoItem(char aInfoItem)
 
 bool OStatementCommonBase::isDDLStatement()
 {
-    if (getSqlInfoItem(isc_info_sql_stmt_type) == isc_info_sql_stmt_ddl)
-        return true;
-    else
-        return false;
+    return getSqlInfoItem(isc_info_sql_stmt_type) == isc_info_sql_stmt_ddl;
 }
 
 sal_Int32 OStatementCommonBase::getStatementChangeCount()

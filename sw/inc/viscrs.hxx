@@ -21,6 +21,7 @@
 
 #include <config_features.h>
 
+#include <svx/sdr/overlay/overlayobject.hxx>
 #include <vcl/cursor.hxx>
 #include "swcrsr.hxx"
 #include "swrect.hxx"
@@ -59,7 +60,6 @@ public:
 
 // From here classes/methods for selections.
 
-namespace sdr { namespace overlay { class OverlayObject; }}
 namespace sw { namespace overlay { class OverlayRangesOutline; }}
 class MapMode;
 
@@ -74,15 +74,11 @@ class SwSelPaintRects : public SwRects
     const SwCursorShell* m_pCursorShell;
 
 #if HAVE_FEATURE_DESKTOP || defined(ANDROID)
-    sdr::overlay::OverlayObject*    m_pCursorOverlay;
-
-    // access to m_pCursorOverlay for swapContent
-    sdr::overlay::OverlayObject* getCursorOverlay() const { return m_pCursorOverlay; }
-    void setCursorOverlay(sdr::overlay::OverlayObject* pNew) { m_pCursorOverlay = pNew; }
+    std::unique_ptr<sdr::overlay::OverlayObject> m_pCursorOverlay;
 #endif
 
     bool m_bShowTextInputFieldOverlay;
-    sw::overlay::OverlayRangesOutline* m_pTextInputFieldOverlay;
+    std::unique_ptr<sw::overlay::OverlayRangesOutline> m_pTextInputFieldOverlay;
 
     void HighlightInputField();
 
@@ -114,7 +110,7 @@ public:
                                     long* pX = nullptr, long* pY = nullptr );
 };
 
-class SwShellCursor : public virtual SwCursor, public SwSelPaintRects
+class SW_DLLPUBLIC SwShellCursor : public virtual SwCursor, public SwSelPaintRects
 {
 private:
     // Document positions of start/end characters of a SSelection.
@@ -163,7 +159,10 @@ public:
 
     virtual bool IsReadOnlyAvailable() const override;
 
-    DECL_FIXEDMEMPOOL_NEWDEL( SwShellCursor )
+    SwShellCursor* GetNext()             { return dynamic_cast<SwShellCursor *>(GetNextInRing()); }
+    const SwShellCursor* GetNext() const { return dynamic_cast<SwShellCursor const *>(GetNextInRing()); }
+    SwShellCursor* GetPrev()             { return dynamic_cast<SwShellCursor *>(GetPrevInRing()); }
+    const SwShellCursor* GetPrev() const { return dynamic_cast<SwShellCursor const *>(GetPrevInRing()); }
 };
 
 class SwShellTableCursor : public virtual SwShellCursor, public virtual SwTableCursor
@@ -199,6 +198,10 @@ public:
     // true: Cursor can be set to this position.
     virtual bool IsAtValidPos( bool bPoint = true ) const override;
 
+    SwShellTableCursor* GetNext()             { return dynamic_cast<SwShellTableCursor *>(GetNextInRing()); }
+    const SwShellTableCursor* GetNext() const { return dynamic_cast<SwShellTableCursor const *>(GetNextInRing()); }
+    SwShellTableCursor* GetPrev()             { return dynamic_cast<SwShellTableCursor *>(GetPrevInRing()); }
+    const SwShellTableCursor* GetPrev() const { return dynamic_cast<SwShellTableCursor const *>(GetPrevInRing()); }
 };
 
 #endif // INCLUDED_SW_INC_VISCRS_HXX

@@ -51,6 +51,7 @@
 #include <svx/sdr/contact/viewcontact.hxx>
 #include <drawinglayer/processor2d/contourextractor2d.hxx>
 #include <drawinglayer/primitive2d/texthierarchyprimitive2d.hxx>
+#include <sal/log.hxx>
 
 
 SdrViewEvent::SdrViewEvent()
@@ -91,15 +92,15 @@ void SdrDropMarkerOverlay::ImplCreateOverlays(
     for(sal_uInt32 a(0); a < rView.PaintWindowCount(); a++)
     {
         SdrPaintWindow* pCandidate = rView.GetPaintWindow(a);
-        rtl::Reference< sdr::overlay::OverlayManager > xTargetOverlay = pCandidate->GetOverlayManager();
+        const rtl::Reference< sdr::overlay::OverlayManager >& xTargetOverlay = pCandidate->GetOverlayManager();
 
         if (xTargetOverlay.is())
         {
-            sdr::overlay::OverlayPolyPolygonStripedAndFilled* pNew = new sdr::overlay::OverlayPolyPolygonStripedAndFilled(
-                rLinePolyPolygon);
+            std::unique_ptr<sdr::overlay::OverlayPolyPolygonStripedAndFilled> pNew(new sdr::overlay::OverlayPolyPolygonStripedAndFilled(
+                rLinePolyPolygon));
 
             xTargetOverlay->add(*pNew);
-            maObjects.append(pNew);
+            maObjects.append(std::move(pNew));
         }
     }
 }
@@ -248,14 +249,9 @@ bool SdrView::Command(const CommandEvent& rCEvt, vcl::Window* pWin)
     return bRet;
 }
 
-bool SdrView::GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const
+void SdrView::GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const
 {
-    return SdrCreateView::GetAttributes(rTargetSet, bOnlyHardAttr);
-}
-
-SfxStyleSheet* SdrView::GetStyleSheet() const
-{
-    return SdrCreateView::GetStyleSheet();
+    SdrCreateView::GetAttributes(rTargetSet, bOnlyHardAttr);
 }
 
 SdrHitKind SdrView::PickAnything(const MouseEvent& rMEvt, SdrMouseEventKind nEventKind, SdrViewEvent& rVEvt) const
@@ -404,8 +400,7 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
         SdrObject* pMidObj=nullptr;
         if (pObj!=pHitObj)
         {
-            SdrObject* pObjTmp=nullptr;
-            pObjTmp=pHitObj->GetUpGroup();
+            SdrObject* pObjTmp=pHitObj->getParentSdrObjectFromSdrObject();
             if (pObjTmp==pObj) pObjTmp=nullptr;
             while (pObjTmp!=nullptr)
             {
@@ -414,7 +409,7 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
                     bMid=true;
                     pMidObj=pObjTmp;
                 }
-                pObjTmp=pObjTmp->GetUpGroup();
+                pObjTmp=pObjTmp->getParentSdrObjectFromSdrObject();
                 if (pObjTmp==pObj) pObjTmp=nullptr;
             }
         }
@@ -743,8 +738,8 @@ SdrHitKind SdrView::PickAnything(const Point& rLogicPos, SdrViewEvent& rVEvt) co
     rVEvt.eEvent=eEvent;
 #ifdef DGB_UTIL
     if (rVEvt.pRootObj!=NULL) {
-        if (rVEvt.pRootObj->getParentOfSdrObject()!=rVEvt.pPV->GetObjList()) {
-            OSL_FAIL("SdrView::PickAnything(): pRootObj->getParentOfSdrObject()!=pPV->GetObjList() !");
+        if (rVEvt.pRootObj->getParentSdrObjListFromSdrObject()!=rVEvt.pPV->GetObjList()) {
+            OSL_FAIL("SdrView::PickAnything(): pRootObj->getParentSdrObjListFromSdrObject()!=pPV->GetObjList() !");
         }
     }
 #endif
@@ -864,7 +859,8 @@ bool SdrView::DoMouseEvent(const SdrViewEvent& rVEvt)
         case SdrEventKind::MarkPoint: { // + (if applicable) BegDrag
             if (!rVEvt.bAddMark) UnmarkAllPoints();
             if (rVEvt.bPrevNextMark) {
-                bRet=MarkNextPoint();
+                MarkNextPoint();
+                bRet=false;
             } else {
                 bRet=MarkPoint(*rVEvt.pHdl,rVEvt.bUnmark);
             }
@@ -876,7 +872,8 @@ bool SdrView::DoMouseEvent(const SdrViewEvent& rVEvt)
         case SdrEventKind::MarkGluePoint: { // + (if applicable) BegDrag
             if (!rVEvt.bAddMark) UnmarkAllGluePoints();
             if (rVEvt.bPrevNextMark) {
-                bRet=MarkNextGluePoint();
+                MarkNextGluePoint();
+                bRet=false;
             } else {
                 bRet=MarkGluePoint(rVEvt.pObj,rVEvt.nGlueId,rVEvt.bUnmark);
             }
@@ -905,7 +902,8 @@ bool SdrView::DoMouseEvent(const SdrViewEvent& rVEvt)
             } else bRet=BegCreateObj(aLogicPos);
         } break;
         case SdrEventKind::BeginMacroObj: {
-            bRet=BegMacroObj(aLogicPos,mnHitTolLog,rVEvt.pObj,rVEvt.pPV,static_cast<vcl::Window*>(mpActualOutDev.get()));
+            BegMacroObj(aLogicPos,mnHitTolLog,rVEvt.pObj,rVEvt.pPV,static_cast<vcl::Window*>(mpActualOutDev.get()));
+            bRet=false;
         } break;
         case SdrEventKind::BeginTextEdit: {
             if (!IsObjMarked(rVEvt.pObj)) {
@@ -1428,7 +1426,8 @@ bool SdrView::BegMark(const Point& rPnt, bool bAddMark, bool bUnmark)
         return BegMarkPoints(rPnt,bUnmark);
     } else {
         if (!bAddMark) UnmarkAllObj();
-        return BegMarkObj(rPnt,bUnmark);
+        BegMarkObj(rPnt,bUnmark);
+        return true;
     }
 }
 

@@ -45,8 +45,6 @@ namespace svgio
 {
     namespace svgreader
     {
-        typedef ::std::vector< SvgNode* > SvgNodeVector;
-
         enum XmlSpace
         {
             XmlSpace_notset,
@@ -86,7 +84,7 @@ namespace svgio
         {
         private:
             /// basic data, Type, document we belong to and parent (if not root)
-            SVGToken                    maType;
+            SVGToken const              maType;
             SvgDocument&                mrDocument;
             const SvgNode*              mpParent;
             const SvgNode*              mpAlternativeParent;
@@ -113,6 +111,8 @@ namespace svgio
 
             /// possible local CssStyle, e.g. style="fill:red; stroke:red;"
             std::unique_ptr<SvgStyleAttributes>        mpLocalCssStyle;
+
+            mutable bool                mbDecomposing;
 
             // flag if maCssStyleVector is already computed (done only once)
             bool                        mbCssStyleVectorBuilt : 1;

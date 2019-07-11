@@ -39,9 +39,9 @@ namespace sw { namespace sidebarwindows {
 class ShadowPrimitive : public drawinglayer::primitive2d::DiscreteMetricDependentPrimitive2D
 {
 private:
-    basegfx::B2DPoint           maBasePosition;
-    basegfx::B2DPoint           maSecondPosition;
-    ShadowState                 maShadowState;
+    basegfx::B2DPoint const           maBasePosition;
+    basegfx::B2DPoint const           maSecondPosition;
+    ShadowState const                 maShadowState;
 
 protected:
     virtual void create2DDecomposition(
@@ -84,7 +84,7 @@ void ShadowPrimitive::create2DDecomposition(
                 0.0,
                 0.5,
                 0.5,
-                1800.0 * F_PI1800,
+                F_PI,
                 basegfx::BColor(230.0/255.0,230.0/255.0,230.0/255.0),
                 basegfx::BColor(180.0/255.0,180.0/255.0,180.0/255.0),
                 2);
@@ -103,7 +103,7 @@ void ShadowPrimitive::create2DDecomposition(
                 0.0,
                 0.5,
                 0.5,
-                1800.0 * F_PI1800,
+                F_PI,
                 basegfx::BColor(230.0/255.0,230.0/255.0,230.0/255.0),
                 basegfx::BColor(180.0/255.0,180.0/255.0,180.0/255.0),
                 4);
@@ -122,7 +122,7 @@ void ShadowPrimitive::create2DDecomposition(
                 0.0,
                 0.5,
                 0.5,
-                1800.0 * F_PI1800,
+                F_PI,
                 basegfx::BColor(230.0/255.0,230.0/255.0,230.0/255.0),
                 basegfx::BColor(83.0/255.0,83.0/255.0,83.0/255.0),
                 4);
@@ -156,40 +156,28 @@ bool ShadowPrimitive::operator==( const drawinglayer::primitive2d::BasePrimitive
 
 ImplPrimitive2DIDBlock(ShadowPrimitive, PRIMITIVE2D_ID_SWSIDEBARSHADOWPRIMITIVE)
 
-/* static */ ShadowOverlayObject* ShadowOverlayObject::CreateShadowOverlayObject( SwView const & rDocView )
+/* static */ std::unique_ptr<ShadowOverlayObject> ShadowOverlayObject::CreateShadowOverlayObject( SwView const & rDocView )
 {
-    ShadowOverlayObject* pShadowOverlayObject( nullptr );
+    std::unique_ptr<ShadowOverlayObject> pShadowOverlayObject;
 
     if ( rDocView.GetDrawView() )
     {
         SdrPaintWindow* pPaintWindow = rDocView.GetDrawView()->GetPaintWindow(0);
         if( pPaintWindow )
         {
-            rtl::Reference< sdr::overlay::OverlayManager > xOverlayManager = pPaintWindow->GetOverlayManager();
+            const rtl::Reference< sdr::overlay::OverlayManager >& xOverlayManager = pPaintWindow->GetOverlayManager();
 
             if ( xOverlayManager.is() )
             {
-                pShadowOverlayObject = new ShadowOverlayObject( basegfx::B2DPoint(0,0),
+                pShadowOverlayObject.reset( new ShadowOverlayObject( basegfx::B2DPoint(0,0),
                                                                 basegfx::B2DPoint(0,0),
-                                                                Color(0,0,0) );
+                                                                Color(0,0,0) ) );
                 xOverlayManager->add(*pShadowOverlayObject);
             }
         }
     }
 
     return pShadowOverlayObject;
-}
-
-/* static */ void ShadowOverlayObject::DestroyShadowOverlayObject( ShadowOverlayObject* pShadow )
-{
-    if ( pShadow )
-    {
-        if ( pShadow->getOverlayManager() )
-        {
-            pShadow->getOverlayManager()->remove(*pShadow);
-        }
-        delete pShadow;
-    }
 }
 
 ShadowOverlayObject::ShadowOverlayObject( const basegfx::B2DPoint& rBasePos,
@@ -203,6 +191,10 @@ ShadowOverlayObject::ShadowOverlayObject( const basegfx::B2DPoint& rBasePos,
 
 ShadowOverlayObject::~ShadowOverlayObject()
 {
+    if ( getOverlayManager() )
+    {
+        getOverlayManager()->remove(*this);
+    }
 }
 
 drawinglayer::primitive2d::Primitive2DContainer ShadowOverlayObject::createOverlayObjectPrimitive2DSequence()

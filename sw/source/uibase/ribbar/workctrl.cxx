@@ -18,7 +18,6 @@
  */
 
 #include <string>
-#include <comphelper/string.hxx>
 #include <i18nutil/unicode.hxx>
 #include <svl/eitem.hxx>
 #include <sfx2/htmlmode.hxx>
@@ -146,7 +145,6 @@ IMPL_STATIC_LINK(SwTbxAutoTextCtrl, PopupHdl, Menu*, pMenu, bool)
 
     SwGlossaryHdl* pGlosHdl = ::GetActiveView()->GetGlosHdl();
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
     ::GlossarySetActGroup fnSetActGroup = pFact->SetGlossaryActGroupFunc();
     if ( fnSetActGroup )
         (*fnSetActGroup)( sGroup );
@@ -184,7 +182,7 @@ static sal_uInt16 aNavigationInsertIds[ NAVI_ENTRIES ] =
     NID_NEXT
 };
 
-static OUStringLiteral aNavigationImgIds[ NAVI_ENTRIES ] =
+static OUStringLiteral const aNavigationImgIds[ NAVI_ENTRIES ] =
 {
     // -- first line
     RID_BMP_RIBBAR_TBL,
@@ -314,7 +312,7 @@ SwScrollNaviPopup::SwScrollNaviPopup(sal_uInt16 nId, const Reference< XFrame >& 
     m_pToolBox = VclPtr<SwScrollNaviToolBox>::Create(get<vcl::Window>("box"), this, 0);
     get(m_pInfoField, "label");
 
-    sal_uInt16 i;
+    size_t i;
 
     m_pToolBox->SetHelpId(HID_NAVI_VS);
     m_pToolBox->SetLineCount( 2 );
@@ -437,8 +435,8 @@ void SwScrollNaviPopup::statusChanged( const css::frame::FeatureStateEvent& rEve
 
 class SwZoomBox_Impl : public ComboBox
 {
-    sal_uInt16          nSlotId;
-    bool            bRelease;
+    sal_uInt16 const nSlotId;
+    bool             bRelease;
 
 public:
     SwZoomBox_Impl(
@@ -599,14 +597,14 @@ VclPtr<vcl::Window> SwPreviewZoomControl::CreateItemWindow( vcl::Window *pParent
 
 class SwJumpToSpecificBox_Impl : public NumericField
 {
-    sal_uInt16      nSlotId;
+    sal_uInt16 const nSlotId;
 
 public:
     SwJumpToSpecificBox_Impl(vcl::Window* pParent, sal_uInt16 nSlot);
 
 protected:
     void            Select();
-    virtual bool    EventNotify( NotifyEvent& rNEvt ) SAL_OVERRIDE;
+    virtual bool    EventNotify( NotifyEvent& rNEvt ) override;
 };
 
 SwJumpToSpecificBox_Impl::SwJumpToSpecificBox_Impl(vcl::Window* pParent, sal_uInt16 nSlot)
@@ -775,8 +773,7 @@ void NavElementBox_Impl::Select()
 void NavElementBox_Impl::Update()
 {
     sal_uInt16 nMoveType = SwView::GetMoveType();
-    sal_uInt16 i;
-    for ( i = 0; i < SAL_N_ELEMENTS( aNavigationInsertIds ); ++i )
+    for ( size_t i = 0; i < SAL_N_ELEMENTS( aNavigationInsertIds ); ++i )
     {
         if ( nMoveType == aNavigationInsertIds[i] )
         {
@@ -983,7 +980,7 @@ public:
     virtual void SAL_CALL statusChanged( const css::frame::FeatureStateEvent& rEvent ) override;
 
 private:
-    Type                     meType;
+    Type const                 meType;
 };
 
 PrevNextScrollToolboxController::PrevNextScrollToolboxController( const css::uno::Reference< css::uno::XComponentContext > & rxContext, Type eType )

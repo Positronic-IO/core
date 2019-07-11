@@ -83,7 +83,7 @@ public:
                                                const SfxItemSet& rSet );
     virtual void                Invalidate(sal_uInt16 nId = 0) override;
 
-    virtual SfxStyleFamilies*   CreateStyleFamilies() { return nullptr; }
+    virtual std::unique_ptr<SfxStyleFamilies> CreateStyleFamilies() { return nullptr; }
 
     static SfxModule*           GetActiveModule( SfxViewFrame* pFrame=nullptr );
     static FieldUnit            GetCurrentFieldUnit();
@@ -92,7 +92,7 @@ public:
         Effectively, this method looks up the SfxViewFrame belonging to the given XFrame, then the SfxModule belonging to
         the document in this frame, then this module's field unit.
 
-        Failures in any of those steps are reported as assertion in non-product builds, and then FUNIT_100TH_MM is returned.
+        Failures in any of those steps are reported as assertion in non-product builds, and then FieldUnit::MM_100TH is returned.
      */
     static FieldUnit            GetModuleFieldUnit( css::uno::Reference< css::frame::XFrame > const & i_frame );
     FieldUnit                   GetFieldUnit() const;

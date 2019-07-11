@@ -29,18 +29,19 @@
 #include <formula/compiler.hxx>
 #include <miscuno.hxx>
 #include <memory>
+#include <osl/diagnose.h>
 
 using namespace utl;
 using namespace com::sun::star::uno;
 
 //      ScAppOptions - Application Options
 
-ScAppOptions::ScAppOptions() : pLRUList( nullptr )
+ScAppOptions::ScAppOptions()
 {
     SetDefaults();
 }
 
-ScAppOptions::ScAppOptions( const ScAppOptions& rCpy ) : pLRUList( nullptr )
+ScAppOptions::ScAppOptions( const ScAppOptions& rCpy )
 {
     *this = rCpy;
 }
@@ -52,9 +53,9 @@ ScAppOptions::~ScAppOptions()
 void ScAppOptions::SetDefaults()
 {
     if ( ScOptionsUtil::IsMetricSystem() )
-        eMetric     = FUNIT_CM;             // default for countries with metric system
+        eMetric     = FieldUnit::CM;             // default for countries with metric system
     else
-        eMetric     = FUNIT_INCH;           // default for others
+        eMetric     = FieldUnit::INCH;           // default for others
 
     nZoom           = 100;
     eZoomType       = SvxZoomType::PERCENT;

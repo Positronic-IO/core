@@ -41,6 +41,7 @@
 #include "curl.hxx"
 #include <curl/easy.h>
 #include <comphelper/propertysequence.hxx>
+#include <o3tl/make_unique.hxx>
 #include <ucbhelper/cancelcommandexecution.hxx>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/fd_inputstream.hxx>
@@ -449,10 +450,9 @@ Any SAL_CALL FTPContent::execute( const Command& aCommand,
                     else if(xOutputStream.is()) {
                         Reference<XInputStream> xStream(
                             new ucbhelper::FdInputStream(m_aFTPURL.open()));
-                        Sequence<sal_Int8> byte_seq(4096);
-                        sal_Int32 n = 1000; // value does not matter here
                         for (;;) {
-                            n = xStream->readBytes(byte_seq,4096);
+                            Sequence<sal_Int8> byte_seq(4096);
+                            sal_Int32 n = xStream->readBytes(byte_seq, 4096);
                             if (n == 0) {
                                 break;
                             }
@@ -467,19 +467,6 @@ Any SAL_CALL FTPContent::execute( const Command& aCommand,
                             } catch(const IOException&) {
 
                             }
-                        }
-                        if(n) {
-                            Sequence<Any> seq(1);
-                            PropertyValue value;
-                            value.Name = "Uri";
-                            value.Handle = -1;
-                            value.Value <<= m_aFTPURL.ident(false,false);
-                            value.State = PropertyState_DIRECT_VALUE;
-                            seq[0] <<= value;
-                            ucbhelper::cancelCommandExecution(
-                                IOErrorCode_UNKNOWN,
-                                seq,
-                                Environment);
                         }
                     }
                     else {
@@ -499,7 +486,7 @@ Any SAL_CALL FTPContent::execute( const Command& aCommand,
                         = new DynamicResultSet(
                             m_xContext,
                             aOpenCommand,
-                            new ResultSetFactory(m_xContext,
+                            o3tl::make_unique<ResultSetFactory>(m_xContext,
                                                  m_xProvider.get(),
                                                  aOpenCommand.Properties,
                                                  resvec));
@@ -716,7 +703,7 @@ void FTPContent::insert(const InsertCommandArgument& aInsertCommand,
             }
 
             XInteractionRequestImpl request;
-            Reference<XInteractionRequest> xReq(request.getRequest());
+            const Reference<XInteractionRequest>& xReq(request.getRequest());
             xInt->handle(xReq);
             if (request.approved()) {
                 bReplace = true;

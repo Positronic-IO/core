@@ -21,13 +21,12 @@
 #define INCLUDED_FORMULA_SOURCE_UI_DLG_FUNCPAGE_HXX
 
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <svtools/svmedit.hxx>
 #include <vcl/tabpage.hxx>
 
 #include <vcl/tabctrl.hxx>
 #include <vcl/button.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
 #include <vector>
 

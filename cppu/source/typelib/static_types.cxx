@@ -35,9 +35,6 @@
 
 using namespace osl;
 
-using ::rtl::OUString;
-using ::rtl::OUStringBuffer;
-
 extern "C"
 {
 
@@ -72,7 +69,7 @@ struct AlignSize_Impl
 // the value of the maximal alignment
 static sal_Int32 nMaxAlignment = static_cast<sal_Int32>( reinterpret_cast<sal_Size>(&reinterpret_cast<AlignSize_Impl *>(16)->dDouble) - 16);
 
-static inline sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
+static sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
 {
     if( nRequestedAlignment > nMaxAlignment )
         nRequestedAlignment = nMaxAlignment;
@@ -82,7 +79,7 @@ static inline sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
 /**
  * Calculate the new size of the struktur.
  */
-static inline sal_Int32 newAlignedSize(
+static sal_Int32 newAlignedSize(
     sal_Int32 OldSize, sal_Int32 ElementSize, sal_Int32 NeededAlignment )
 {
     NeededAlignment = adjustAlignment( NeededAlignment );
@@ -96,7 +93,7 @@ namespace
 }
 
 // !for NOT REALLY WEAK TYPES only!
-static inline typelib_TypeDescriptionReference * igetTypeByName( rtl_uString const * pTypeName )
+static typelib_TypeDescriptionReference * igetTypeByName( rtl_uString const * pTypeName )
 {
     typelib_TypeDescriptionReference * pRef = nullptr;
     ::typelib_typedescriptionreference_getByName( &pRef, pTypeName );
@@ -439,7 +436,7 @@ void SAL_CALL typelib_static_interface_type_init(
     typelib_TypeDescriptionReference * pBaseType )
     SAL_THROW_EXTERN_C()
 {
-    // coverity[callee_ptr_arith]
+    // coverity[callee_ptr_arith] - not a bug
     typelib_static_mi_interface_type_init(
         ppRef, pTypeName, pBaseType == nullptr ? 0 : 1, &pBaseType);
 }

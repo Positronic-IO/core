@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_UI_INC_ACCESSIBLECELLBASE_HXX
 
 #include "AccessibleContextBase.hxx"
-#include <global.hxx>
 #include <address.hxx>
 #include <com/sun/star/accessibility/XAccessibleValue.hpp>
 #include <cppuhelper/implbase1.hxx>
@@ -114,7 +113,7 @@ protected:
 
     ScDocument* mpDoc;
 
-    sal_Int32 mnIndex;
+    sal_Int32 const mnIndex;
 
 private:
     virtual bool IsEditable(

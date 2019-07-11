@@ -19,18 +19,17 @@
 
 namespace
 {
-class SimplifyDynamicCast : public RecursiveASTVisitor<SimplifyDynamicCast>, public loplugin::Plugin
+class SimplifyDynamicCast : public loplugin::FilteringPlugin<SimplifyDynamicCast>
 {
 public:
     explicit SimplifyDynamicCast(loplugin::InstantiationData const& data)
-        : Plugin(data)
+        : FilteringPlugin(data)
     {
     }
 
     virtual void run() override
     {
-        //        StringRef fn( compiler.getSourceManager().getFileEntryForID(
-        //                          compiler.getSourceManager().getMainFileID())->getName() );
+        //        StringRef fn(handler.getMainFileName());
         //        if (loplugin::isSamePathname(fn, WORKDIR "/YaccTarget/unoidl/source/sourceprovider-parser.cxx"))
         //             return;
 
@@ -103,10 +102,12 @@ bool SimplifyDynamicCast::VisitCXXStaticCastExpr(CXXStaticCastExpr const* static
         return true;
     if (dynamicCastSubExprVec[idx] != subExprDecl->getDecl())
         return true;
-    report(DiagnosticsEngine::Warning, "simplify, use var in if", staticCastExpr->getLocStart())
+    report(DiagnosticsEngine::Warning, "simplify, use var in if",
+           compat::getBeginLoc(staticCastExpr))
         << staticCastExpr->getSourceRange();
     auto ifStmt = ifVec[idx];
-    report(DiagnosticsEngine::Note, "if here", ifStmt->getLocStart()) << ifStmt->getSourceRange();
+    report(DiagnosticsEngine::Note, "if here", compat::getBeginLoc(ifStmt))
+        << ifStmt->getSourceRange();
     return true;
 }
 

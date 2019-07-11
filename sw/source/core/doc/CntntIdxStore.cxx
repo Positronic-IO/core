@@ -35,9 +35,11 @@
 #include <redline.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <sal/types.h>
 #include <unocrsr.hxx>
 #include <edimp.hxx>
+#include <txtfrm.hxx>
 #include <memory>
 
 using namespace ::boost;
@@ -87,8 +89,8 @@ namespace
     struct PaMEntry
     {
         SwPaM* m_pPaM;
-        bool m_isMark;
-        sal_Int32 m_nContent;
+        bool const m_isMark;
+        sal_Int32 const m_nContent;
     };
     struct OffsetUpdater
     {
@@ -150,45 +152,57 @@ namespace
             SaveUnoCursors(pDoc, nNode, nContent);
             SaveShellCursors(pDoc, nNode, nContent);
         }
-        virtual void Restore(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nOffset=0, bool bAuto = false) override
+        virtual void Restore(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nOffset=0, bool bAuto = false, RestoreMode eMode = RestoreMode::All) override
         {
             SwContentNode* pCNd = pDoc->GetNodes()[ nNode ]->GetContentNode();
             updater_t aUpdater = OffsetUpdater(pCNd, nOffset);
-            RestoreBkmks(pDoc, aUpdater);
-            RestoreRedlines(pDoc, aUpdater);
-            RestoreFlys(pDoc, aUpdater, bAuto);
-            RestoreUnoCursors(aUpdater);
-            RestoreShellCursors(aUpdater);
+            if (eMode & RestoreMode::NonFlys)
+            {
+                RestoreBkmks(pDoc, aUpdater);
+                RestoreRedlines(pDoc, aUpdater);
+                RestoreUnoCursors(aUpdater);
+                RestoreShellCursors(aUpdater);
+            }
+            if (eMode & RestoreMode::Flys)
+            {
+                RestoreFlys(pDoc, aUpdater, bAuto);
+            }
         }
-        virtual void Restore(SwNode& rNd, sal_Int32 nLen, sal_Int32 nCorrLen) override
+        virtual void Restore(SwNode& rNd, sal_Int32 nLen, sal_Int32 nCorrLen, RestoreMode eMode = RestoreMode::All) override
         {
             SwContentNode* pCNd = rNd.GetContentNode();
             SwDoc* pDoc = rNd.GetDoc();
             updater_t aUpdater = LimitUpdater(pCNd, nLen, nCorrLen);
-            RestoreBkmks(pDoc, aUpdater);
-            RestoreRedlines(pDoc, aUpdater);
-            RestoreFlys(pDoc, aUpdater, false);
-            RestoreUnoCursors(aUpdater);
-            RestoreShellCursors(aUpdater);
+            if (eMode & RestoreMode::NonFlys)
+            {
+                RestoreBkmks(pDoc, aUpdater);
+                RestoreRedlines(pDoc, aUpdater);
+                RestoreUnoCursors(aUpdater);
+                RestoreShellCursors(aUpdater);
+            }
+            if (eMode & RestoreMode::Flys)
+            {
+                RestoreFlys(pDoc, aUpdater, false);
+            }
         }
 
         private:
-            inline void SaveBkmks(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
-            inline void RestoreBkmks(SwDoc* pDoc, updater_t const & rUpdater);
-            inline void SaveRedlines(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
-            inline void RestoreRedlines(SwDoc* pDoc, updater_t const & rUpdater);
-            inline void SaveFlys(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent, bool bSaveFlySplit);
-            inline void RestoreFlys(SwDoc* pDoc, updater_t const & rUpdater, bool bAuto);
-            inline void SaveUnoCursors(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
-            inline void RestoreUnoCursors(updater_t const & rUpdater);
-            inline void SaveShellCursors(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
-            inline void RestoreShellCursors(updater_t const & rUpdater);
+            void SaveBkmks(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
+            void RestoreBkmks(SwDoc* pDoc, updater_t const & rUpdater);
+            void SaveRedlines(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
+            void RestoreRedlines(SwDoc* pDoc, updater_t const & rUpdater);
+            void SaveFlys(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent, bool bSaveFlySplit);
+            void RestoreFlys(SwDoc* pDoc, updater_t const & rUpdater, bool bAuto);
+            void SaveUnoCursors(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
+            void RestoreUnoCursors(updater_t const & rUpdater);
+            void SaveShellCursors(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nContent);
+            void RestoreShellCursors(updater_t const & rUpdater);
             static const SwPosition& GetRightMarkPos(::sw::mark::IMark const * pMark, bool bOther)
                 { return bOther ? pMark->GetOtherMarkPos() : pMark->GetMarkPos(); };
             static void SetRightMarkPos(MarkBase* pMark, bool bOther, const SwPosition* const pPos)
                 { bOther ? pMark->SetOtherMarkPos(*pPos) : pMark->SetMarkPos(*pPos); };
     };
-    inline void lcl_ChkPaM( std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM, const bool bGetPoint, bool bSetMark)
+    void lcl_ChkPaM( std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM, const bool bGetPoint, bool bSetMark)
     {
         const SwPosition* pPos = &rPaM.GetBound(bGetPoint);
         if( pPos->nNode.GetIndex() == nNode && pPos->nContent.GetIndex() < nContent )
@@ -197,12 +211,12 @@ namespace
             rPaMEntries.push_back(aEntry);
         }
     }
-    inline void lcl_ChkPaMBoth( std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM)
+    void lcl_ChkPaMBoth( std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM)
     {
         lcl_ChkPaM(rPaMEntries, nNode, nContent, rPaM, true, true);
         lcl_ChkPaM(rPaMEntries, nNode, nContent, rPaM, false, false);
     }
-    inline void lcl_ChkUnoCrsrPaMBoth(std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM)
+    void lcl_ChkUnoCrsrPaMBoth(std::vector<PaMEntry>& rPaMEntries, const sal_uLong nNode, const sal_Int32 nContent, SwPaM& rPaM)
     {
         lcl_ChkPaM(rPaMEntries, nNode, nContent, rPaM, true, false);
         lcl_ChkPaM(rPaMEntries, nNode, nContent, rPaM, false, true);
@@ -233,7 +247,7 @@ void ContentIdxStoreImpl::SaveBkmks(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nCon
         {
             if(pBkmk->GetMarkPos().nContent.GetIndex() < nContent)
             {
-                const MarkEntry aEntry = { ppBkmk - pMarkAccess->getAllMarksBegin(), false, pBkmk->GetMarkPos().nContent.GetIndex() };
+                const MarkEntry aEntry = { static_cast<long>(ppBkmk - pMarkAccess->getAllMarksBegin()), false, pBkmk->GetMarkPos().nContent.GetIndex() };
                 m_aBkmkEntries.push_back(aEntry);
             }
             else // if a bookmark position is equal nContent, the other position
@@ -245,10 +259,10 @@ void ContentIdxStoreImpl::SaveBkmks(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nCon
         {
             if(bMarkPosEqual)
             { // the other position is before, the (main) position is equal
-                const MarkEntry aEntry = { ppBkmk - pMarkAccess->getAllMarksBegin(), false, pBkmk->GetMarkPos().nContent.GetIndex() };
+                const MarkEntry aEntry = { static_cast<long>(ppBkmk - pMarkAccess->getAllMarksBegin()), false, pBkmk->GetMarkPos().nContent.GetIndex() };
                 m_aBkmkEntries.push_back(aEntry);
             }
-            const MarkEntry aEntry = { ppBkmk - pMarkAccess->getAllMarksBegin(), true, pBkmk->GetOtherMarkPos().nContent.GetIndex() };
+            const MarkEntry aEntry = { static_cast<long>(ppBkmk - pMarkAccess->getAllMarksBegin()), true, pBkmk->GetOtherMarkPos().nContent.GetIndex() };
             m_aBkmkEntries.push_back(aEntry);
         }
     }
@@ -321,7 +335,10 @@ void ContentIdxStoreImpl::SaveFlys(SwDoc* pDoc, sal_uLong nNode, sal_Int32 nCont
     SwFrame* pFrame = pNode->getLayoutFrame( pDoc->getIDocumentLayoutAccess().GetCurrentLayout() );
     if( pFrame )
     {
-        if( !pFrame->GetDrawObjs() )
+        // sw_redlinehide: this looks like an invalid optimisation if merged,
+        // assuming that flys in deleted redlines should be saved here too.
+        if ((!pFrame->IsTextFrame() || !static_cast<SwTextFrame const*>(pFrame)->GetMergedPara())
+                && !pFrame->GetDrawObjs())
             return; // if we have a layout and no DrawObjs, we can skip this
     }
     MarkEntry aSave = { 0, false, 0 };

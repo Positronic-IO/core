@@ -22,7 +22,7 @@
 #include <sal/types.h>
 #include <sfx2/dockwin.hxx>
 #include <svl/lstner.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/valueset.hxx>
 #include <svx/SvxColorValueSet.hxx>
 #include <svx/xtable.hxx>
@@ -83,8 +83,6 @@ friend class SvxColorChildWindow;
 private:
     XColorListRef       pColorList;
     VclPtr<SvxColorValueSet_docking> aColorSet;
-    sal_uInt16          nLeftSlot;
-    sal_uInt16          nRightSlot;
     sal_uInt16          nCols;
     sal_uInt16          nLines;
     long                nCount;

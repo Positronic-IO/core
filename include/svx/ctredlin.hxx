@@ -24,10 +24,10 @@
 #include <sal/types.h>
 #include <svx/svxdllapi.h>
 #include <svtools/simptabl.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
 #include <tools/color.hxx>
 #include <tools/contnr.hxx>
 #include <tools/date.hxx>
@@ -41,6 +41,7 @@
 #include <vcl/vclptr.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/tabctrl.hxx>
+#include <memory>
 
 namespace utl {
     class SearchParam;
@@ -126,7 +127,7 @@ private:
     Color           maEntryColor;
     Image           maEntryImage;
     OUString        maEntryString;
-    utl::TextSearch* pCommentSearcher;
+    std::unique_ptr<utl::TextSearch> pCommentSearcher;
     Link<const SvSortData*,sal_Int32>  aColCompareLink;
 
 protected:

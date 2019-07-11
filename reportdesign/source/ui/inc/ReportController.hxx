@@ -49,7 +49,7 @@
 #include <comphelper/interfacecontainer2.hxx>
 #include <dbaccess/dbsubcomponentcontroller.hxx>
 #include <svl/lstner.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svx/svdedtv.hxx>
 #include <sfx2/zoomitem.hxx>
 
@@ -455,7 +455,7 @@ namespace rptui
 
         SfxUndoManager& getUndoManager() const;
         void            clearUndoManager() const;
-        void            addUndoAction( SfxUndoAction* i_pAction );
+        void            addUndoAction( std::unique_ptr<SfxUndoAction> i_pAction );
     };
 }
 #endif // INCLUDED_REPORTDESIGN_SOURCE_UI_INC_REPORTCONTROLLER_HXX

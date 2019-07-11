@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <osl/endian.h>
 #include <hintids.hxx>
 #include <svl/urihelper.hxx>
@@ -29,6 +28,7 @@
 #include <editsh.hxx>
 #include <edimp.hxx>
 #include <frmfmt.hxx>
+#include <rootfrm.hxx>
 #include <swundo.hxx>
 #include <ndtxt.hxx>
 #include <swtable.hxx>
@@ -117,7 +117,8 @@ sal_uInt16 SwEditShell::SaveGlossaryDoc( SwTextBlocks& rBlock,
             pCursor->GetPoint()->nContent.Assign( pContentNd, pContentNd->Len() );
 
         OUString sBuf;
-        if( GetSelectedText( sBuf, GETSELTXT_PARABRK_TO_ONLYCR ) && !sBuf.isEmpty() )
+        GetSelectedText( sBuf, ParaBreakType::ToOnlyCR );
+        if( !sBuf.isEmpty() )
             nRet = rBlock.PutText( rShortName, rName, sBuf );
     }
     else
@@ -248,21 +249,19 @@ bool SwEditShell::CopySelToDoc( SwDoc* pInsDoc )
 }
 
 /** Get text in a Selection
- *
- * @return false if the selected area is too big for being copied into the string buffer
  */
-bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
+void SwEditShell::GetSelectedText( OUString &rBuf, ParaBreakType nHndlParaBrk )
 {
     GetCursor();  // creates all cursors if needed
     if( IsSelOnePara() )
     {
         rBuf = GetSelText();
-        if( GETSELTXT_PARABRK_TO_BLANK == nHndlParaBrk )
+        if( ParaBreakType::ToBlank == nHndlParaBrk )
         {
             rBuf = rBuf.replaceAll("\x0a", " ");
         }
         else if( IsSelFullPara() &&
-            GETSELTXT_PARABRK_TO_ONLYCR != nHndlParaBrk )
+            ParaBreakType::ToOnlyCR != nHndlParaBrk )
         {
 #ifdef _WIN32
                 rBuf += "\015\012";
@@ -289,12 +288,12 @@ bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
 
             switch( nHndlParaBrk )
             {
-            case GETSELTXT_PARABRK_TO_BLANK:
+            case ParaBreakType::ToBlank:
                 xWrt->m_bASCII_ParaAsBlank = true;
                 xWrt->m_bASCII_NoLastLineEnd = true;
                 break;
 
-            case GETSELTXT_PARABRK_TO_ONLYCR:
+            case ParaBreakType::ToOnlyCR:
                 xWrt->m_bASCII_ParaAsCR = true;
                 xWrt->m_bASCII_NoLastLineEnd = true;
                 break;
@@ -305,12 +304,13 @@ bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
             aAsciiOpt.SetCharSet( RTL_TEXTENCODING_UCS2 );
             xWrt->SetAsciiOptions( aAsciiOpt );
             xWrt->m_bUCS2_WithStartChar = false;
+            xWrt->m_bHideDeleteRedlines = GetLayout()->IsHideRedlines();
 
             if ( ! aWriter.Write(xWrt).IsError() )
             {
                 aStream.WriteUInt16( '\0' );
 
-                const sal_Unicode *p = static_cast<sal_Unicode const *>(aStream.GetBuffer());
+                const sal_Unicode *p = static_cast<sal_Unicode const *>(aStream.GetData());
                 if (p)
                     rBuf = OUString(p);
                 else
@@ -327,8 +327,6 @@ bool SwEditShell::GetSelectedText( OUString &rBuf, int nHndlParaBrk )
             }
         }
     }
-
-    return true;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

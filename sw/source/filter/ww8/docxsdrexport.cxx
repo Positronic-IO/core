@@ -31,7 +31,6 @@
 #include <ndtxt.hxx>
 #include <txatbase.hxx>
 #include <fmtfsize.hxx>
-#include <drawdoc.hxx>
 #include <frmatr.hxx>
 #include "docxattributeoutput.hxx"
 #include "docxexportfilter.hxx"
@@ -40,6 +39,7 @@
 #include <comphelper/sequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <IDocumentDrawModelAccess.hxx>
 
@@ -118,6 +118,13 @@ void lclMovePositionWithRotation(awt::Point& aPos, const Size& rSize, sal_Int64 
     aPos.X += nXDiff;
     aPos.Y += nYDiff;
 }
+
+/// Determines if the anchor is inside a paragraph.
+bool IsAnchorTypeInsideParagraph(const ww8::Frame* pFrame)
+{
+    const SwFormatAnchor& rAnchor = pFrame->GetFrameFormat().GetAttrSet().GetAnchor();
+    return rAnchor.GetAnchorId() != RndStdIds::FLY_AT_PAGE;
+}
 }
 
 ExportDataSaveRestore::ExportDataSaveRestore(DocxExport& rExport, sal_uLong nStt, sal_uLong nEnd,
@@ -184,9 +191,10 @@ struct DocxSdrExport::Impl
     static bool isSupportedDMLShape(const uno::Reference<drawing::XShape>& xShape);
     /// Undo the text direction mangling done by the frame btLr handler in writerfilter::dmapper::DomainMapper::lcl_startCharacterGroup()
     bool checkFrameBtlr(SwNode* pStartNode, bool bDML);
+    oox::drawingml::DrawingML* getDrawingML() const { return m_pDrawingML; }
 };
 
-DocxSdrExport::DocxSdrExport(DocxExport& rExport, sax_fastparser::FSHelperPtr pSerializer,
+DocxSdrExport::DocxSdrExport(DocxExport& rExport, const sax_fastparser::FSHelperPtr& pSerializer,
                              oox::drawingml::DrawingML* pDrawingML)
     : m_pImpl(o3tl::make_unique<Impl>(*this, rExport, pSerializer, pDrawingML))
 {
@@ -337,6 +345,7 @@ void DocxSdrExport::startDMLAnchorInline(const SwFrameFormat* pFrameFormat, cons
         awt::Point aPos(pFrameFormat->GetHoriOrient().GetPos(),
                         pFrameFormat->GetVertOrient().GetPos());
         const SdrObject* pObj = pFrameFormat->FindRealSdrObject();
+        long nRotation = 0;
         if (pObj != nullptr)
         {
             // SdrObjects know their layer, consider that instead of the frame format.
@@ -347,21 +356,28 @@ void DocxSdrExport::startDMLAnchorInline(const SwFrameFormat* pFrameFormat, cons
                                     ->getIDocumentDrawModelAccess()
                                     .GetInvisibleHellId();
 
-            lclMovePositionWithRotation(aPos, rSize, pObj->GetRotateAngle());
+            nRotation = pObj->GetRotateAngle();
+            lclMovePositionWithRotation(aPos, rSize, nRotation);
         }
         attrList->add(XML_behindDoc, bOpaque ? "0" : "1");
+        // Extend distance with the effect extent if the shape is not rotated, which is the opposite
+        // of the mapping done at import time.
         // The type of dist* attributes is unsigned, so make sure no negative value is written.
-        sal_Int64 nDistT
-            = std::max(static_cast<sal_Int64>(0), TwipsToEMU(aULSpaceItem.GetUpper()) - nTopExt);
+        sal_Int64 nTopExtDist = nRotation ? 0 : nTopExt;
+        sal_Int64 nDistT = std::max(static_cast<sal_Int64>(0),
+                                    TwipsToEMU(aULSpaceItem.GetUpper()) - nTopExtDist);
         attrList->add(XML_distT, OString::number(nDistT).getStr());
-        sal_Int64 nDistB
-            = std::max(static_cast<sal_Int64>(0), TwipsToEMU(aULSpaceItem.GetLower()) - nBottomExt);
+        sal_Int64 nBottomExtDist = nRotation ? 0 : nBottomExt;
+        sal_Int64 nDistB = std::max(static_cast<sal_Int64>(0),
+                                    TwipsToEMU(aULSpaceItem.GetLower()) - nBottomExtDist);
         attrList->add(XML_distB, OString::number(nDistB).getStr());
-        sal_Int64 nDistL
-            = std::max(static_cast<sal_Int64>(0), TwipsToEMU(aLRSpaceItem.GetLeft()) - nLeftExt);
+        sal_Int64 nLeftExtDist = nRotation ? 0 : nLeftExt;
+        sal_Int64 nDistL = std::max(static_cast<sal_Int64>(0),
+                                    TwipsToEMU(aLRSpaceItem.GetLeft()) - nLeftExtDist);
         attrList->add(XML_distL, OString::number(nDistL).getStr());
-        sal_Int64 nDistR
-            = std::max(static_cast<sal_Int64>(0), TwipsToEMU(aLRSpaceItem.GetRight()) - nRightExt);
+        sal_Int64 nRightExtDist = nRotation ? 0 : nRightExt;
+        sal_Int64 nDistR = std::max(static_cast<sal_Int64>(0),
+                                    TwipsToEMU(aLRSpaceItem.GetRight()) - nRightExtDist);
         attrList->add(XML_distR, OString::number(nDistR).getStr());
         attrList->add(XML_simplePos, "0");
         attrList->add(XML_locked, "0");
@@ -654,7 +670,7 @@ void DocxSdrExport::startDMLAnchorInline(const SwFrameFormat* pFrameFormat, cons
         auto it = aGrabBag.find("EG_WrapType");
         if (it != aGrabBag.end())
         {
-            OUString sType = it->second.get<OUString>();
+            auto sType = it->second.get<OUString>();
             if (sType == "wrapTight")
                 nWrapToken = XML_wrapTight;
             else if (sType == "wrapThrough")
@@ -671,10 +687,8 @@ void DocxSdrExport::startDMLAnchorInline(const SwFrameFormat* pFrameFormat, cons
             {
                 m_pImpl->m_pSerializer->startElementNS(XML_wp, XML_wrapPolygon, XML_edited, "0",
                                                        FSEND);
-                drawing::PointSequenceSequence aSeqSeq
-                    = it->second.get<drawing::PointSequenceSequence>();
-                std::vector<awt::Point> aPoints(
-                    comphelper::sequenceToContainer<std::vector<awt::Point>>(aSeqSeq[0]));
+                auto aSeqSeq = it->second.get<drawing::PointSequenceSequence>();
+                auto aPoints(comphelper::sequenceToContainer<std::vector<awt::Point>>(aSeqSeq[0]));
                 for (auto i = aPoints.begin(); i != aPoints.end(); ++i)
                 {
                     awt::Point& rPoint = *i;
@@ -758,20 +772,6 @@ void DocxSdrExport::endDMLAnchorInline(const SwFrameFormat* pFrameFormat)
 
 void DocxSdrExport::writeVMLDrawing(const SdrObject* sdrObj, const SwFrameFormat& rFrameFormat)
 {
-    bool bSwapInPage = false;
-    if (!sdrObj->GetPage())
-    {
-        if (SdrModel* pModel
-            = m_pImpl->m_rExport.m_pDoc->getIDocumentDrawModelAccess().GetDrawModel())
-        {
-            if (SdrPage* pPage = pModel->GetPage(0))
-            {
-                bSwapInPage = true;
-                const_cast<SdrObject*>(sdrObj)->SetPage(pPage);
-            }
-        }
-    }
-
     m_pImpl->m_pSerializer->startElementNS(XML_w, XML_pict, FSEND);
     m_pImpl->m_pDrawingML->SetFS(m_pImpl->m_pSerializer);
     // See WinwordAnchoring::SetAnchoring(), these are not part of the SdrObject, have to be passed around manually.
@@ -782,12 +782,9 @@ void DocxSdrExport::writeVMLDrawing(const SdrObject* sdrObj, const SwFrameFormat
         *sdrObj, rHoriOri.GetHoriOrient(), rVertOri.GetVertOrient(), rHoriOri.GetRelationOrient(),
         rVertOri.GetRelationOrient(), true);
     m_pImpl->m_pSerializer->endElementNS(XML_w, XML_pict);
-
-    if (bSwapInPage)
-        const_cast<SdrObject*>(sdrObj)->SetPage(nullptr);
 }
 
-bool lcl_isLockedCanvas(const uno::Reference<drawing::XShape>& xShape)
+static bool lcl_isLockedCanvas(const uno::Reference<drawing::XShape>& xShape)
 {
     bool bRet = false;
     uno::Sequence<beans::PropertyValue> propList = lclGetProperty(xShape, "InteropGrabBag");
@@ -996,7 +993,7 @@ void DocxSdrExport::writeDMLAndVMLDrawing(const SdrObject* sdrObj,
 }
 
 // Converts ARGB transparency (0..255) to drawingml alpha (opposite, and 0..100000)
-OString lcl_ConvertTransparency(const Color& rColor)
+static OString lcl_ConvertTransparency(const Color& rColor)
 {
     if (rColor.GetTransparency() > 0)
     {
@@ -1060,289 +1057,19 @@ void DocxSdrExport::writeDMLEffectLst(const SwFrameFormat& rFrameFormat)
     m_pImpl->m_pSerializer->endElementNS(XML_a, XML_effectLst);
 }
 
-void DocxSdrExport::writeDiagramRels(const uno::Sequence<uno::Sequence<uno::Any>>& xRelSeq,
-                                     const uno::Reference<io::XOutputStream>& xOutStream,
-                                     const OUString& sGrabBagProperyName, int nAnchorId)
-{
-    // add image relationships of OOXData, OOXDiagram
-    OUString sType(oox::getRelationship(Relationship::IMAGE));
-    uno::Reference<xml::sax::XWriter> xWriter
-        = xml::sax::Writer::create(comphelper::getProcessComponentContext());
-    xWriter->setOutputStream(xOutStream);
-
-    // retrieve the relationships from Sequence
-    for (sal_Int32 j = 0; j < xRelSeq.getLength(); j++)
-    {
-        // diagramDataRelTuple[0] => RID,
-        // diagramDataRelTuple[1] => xInputStream
-        // diagramDataRelTuple[2] => extension
-        uno::Sequence<uno::Any> diagramDataRelTuple = xRelSeq[j];
-
-        OUString sRelId, sExtension;
-        diagramDataRelTuple[0] >>= sRelId;
-        diagramDataRelTuple[2] >>= sExtension;
-        OUString sContentType;
-        if (sExtension.equalsIgnoreAsciiCase(".WMF"))
-            sContentType = "image/x-wmf";
-        else
-            sContentType = "image/" + sExtension.copy(1);
-        sRelId = sRelId.copy(3);
-
-        StreamDataSequence dataSeq;
-        diagramDataRelTuple[1] >>= dataSeq;
-        uno::Reference<io::XInputStream> dataImagebin(
-            new ::comphelper::SequenceInputStream(dataSeq));
-
-        OUString sFragment("../media/");
-        //nAnchorId is used to make the name unique irrespective of the number of smart arts.
-        sFragment += sGrabBagProperyName + OUString::number(nAnchorId) + "_" + OUString::number(j)
-                     + sExtension;
-
-        PropertySet aProps(xOutStream);
-        aProps.setAnyProperty(PROP_RelId, uno::makeAny(sRelId.toInt32()));
-
-        m_pImpl->m_rExport.GetFilter().addRelation(xOutStream, sType, sFragment);
-
-        sFragment = sFragment.replaceFirst("..", "word");
-        uno::Reference<io::XOutputStream> xBinOutStream
-            = m_pImpl->m_rExport.GetFilter().openFragmentStream(sFragment, sContentType);
-
-        try
-        {
-            sal_Int32 nBufferSize = 512;
-            uno::Sequence<sal_Int8> aDataBuffer(nBufferSize);
-            sal_Int32 nRead;
-            do
-            {
-                nRead = dataImagebin->readBytes(aDataBuffer, nBufferSize);
-                if (nRead)
-                {
-                    if (nRead < nBufferSize)
-                    {
-                        nBufferSize = nRead;
-                        aDataBuffer.realloc(nRead);
-                    }
-                    xBinOutStream->writeBytes(aDataBuffer);
-                }
-            } while (nRead);
-            xBinOutStream->flush();
-        }
-        catch (const uno::Exception& rException)
-        {
-            SAL_WARN("sw.ww8", "DocxSdrExport::writeDiagramRels Failed to copy grabbaged Image: "
-                                   << rException);
-        }
-        dataImagebin->closeInput();
-    }
-}
-
 void DocxSdrExport::writeDiagram(const SdrObject* sdrObject, const SwFrameFormat& rFrameFormat,
-                                 int nAnchorId)
+                                 int nDiagramId)
 {
-    sax_fastparser::FSHelperPtr pFS = m_pImpl->m_pSerializer;
     uno::Reference<drawing::XShape> xShape(const_cast<SdrObject*>(sdrObject)->getUnoShape(),
                                            uno::UNO_QUERY);
-    uno::Reference<beans::XPropertySet> xPropSet(xShape, uno::UNO_QUERY);
-
-    uno::Reference<xml::dom::XDocument> dataDom;
-    uno::Reference<xml::dom::XDocument> layoutDom;
-    uno::Reference<xml::dom::XDocument> styleDom;
-    uno::Reference<xml::dom::XDocument> colorDom;
-    uno::Reference<xml::dom::XDocument> drawingDom;
-    uno::Sequence<uno::Sequence<uno::Any>> xDataRelSeq;
-    uno::Sequence<uno::Any> diagramDrawing;
-
-    // retrieve the doms from the GrabBag
-    uno::Sequence<beans::PropertyValue> propList;
-    xPropSet->getPropertyValue(UNO_NAME_MISC_OBJ_INTEROPGRABBAG) >>= propList;
-    for (sal_Int32 nProp = 0; nProp < propList.getLength(); ++nProp)
-    {
-        OUString propName = propList[nProp].Name;
-        if (propName == "OOXData")
-            propList[nProp].Value >>= dataDom;
-        else if (propName == "OOXLayout")
-            propList[nProp].Value >>= layoutDom;
-        else if (propName == "OOXStyle")
-            propList[nProp].Value >>= styleDom;
-        else if (propName == "OOXColor")
-            propList[nProp].Value >>= colorDom;
-        else if (propName == "OOXDrawing")
-        {
-            propList[nProp].Value >>= diagramDrawing;
-            diagramDrawing[0]
-                >>= drawingDom; // if there is OOXDrawing property then set drawingDom here only.
-        }
-        else if (propName == "OOXDiagramDataRels")
-            propList[nProp].Value >>= xDataRelSeq;
-    }
-
-    // check that we have the 4 mandatory XDocuments
-    // if not, there was an error importing and we won't output anything
-    if (!dataDom.is() || !layoutDom.is() || !styleDom.is() || !colorDom.is())
-        return;
 
     // write necessary tags to document.xml
     Size aSize(sdrObject->GetSnapRect().GetWidth(), sdrObject->GetSnapRect().GetHeight());
     startDMLAnchorInline(&rFrameFormat, aSize);
 
-    // generate an unique id
-    sax_fastparser::FastAttributeList* pDocPrAttrList
-        = sax_fastparser::FastSerializerHelper::createAttrList();
-    pDocPrAttrList->add(XML_id, OString::number(nAnchorId).getStr());
-    OUString sName = "Diagram" + OUString::number(nAnchorId);
-    pDocPrAttrList->add(XML_name, OUStringToOString(sName, RTL_TEXTENCODING_UTF8).getStr());
-    sax_fastparser::XFastAttributeListRef xDocPrAttrListRef(pDocPrAttrList);
-    pFS->singleElementNS(XML_wp, XML_docPr, xDocPrAttrListRef);
+    m_pImpl->getDrawingML()->WriteDiagram(xShape, nDiagramId);
 
-    sal_Int32 diagramCount;
-    diagramCount = nAnchorId;
-
-    pFS->singleElementNS(XML_wp, XML_cNvGraphicFramePr, FSEND);
-
-    pFS->startElementNS(
-        XML_a, XML_graphic, FSNS(XML_xmlns, XML_a),
-        OUStringToOString(m_pImpl->m_rExport.GetFilter().getNamespaceURL(OOX_NS(dml)),
-                          RTL_TEXTENCODING_UTF8)
-            .getStr(),
-        FSEND);
-
-    pFS->startElementNS(XML_a, XML_graphicData, XML_uri,
-                        "http://schemas.openxmlformats.org/drawingml/2006/diagram", FSEND);
-
-    // add data relation
-    OUString dataFileName = "diagrams/data" + OUString::number(diagramCount) + ".xml";
-    OString dataRelId = OUStringToOString(
-        m_pImpl->m_rExport.GetFilter().addRelation(
-            pFS->getOutputStream(), oox::getRelationship(Relationship::DIAGRAMDATA), dataFileName),
-        RTL_TEXTENCODING_UTF8);
-
-    // add layout relation
-    OUString layoutFileName = "diagrams/layout" + OUString::number(diagramCount) + ".xml";
-    OString layoutRelId
-        = OUStringToOString(m_pImpl->m_rExport.GetFilter().addRelation(
-                                pFS->getOutputStream(),
-                                oox::getRelationship(Relationship::DIAGRAMLAYOUT), layoutFileName),
-                            RTL_TEXTENCODING_UTF8);
-
-    // add style relation
-    OUString styleFileName = "diagrams/quickStyle" + OUString::number(diagramCount) + ".xml";
-    OString styleRelId = OUStringToOString(
-        m_pImpl->m_rExport.GetFilter().addRelation(
-            pFS->getOutputStream(), oox::getRelationship(Relationship::DIAGRAMQUICKSTYLE),
-            styleFileName),
-        RTL_TEXTENCODING_UTF8);
-
-    // add color relation
-    OUString colorFileName = "diagrams/colors" + OUString::number(diagramCount) + ".xml";
-    OString colorRelId
-        = OUStringToOString(m_pImpl->m_rExport.GetFilter().addRelation(
-                                pFS->getOutputStream(),
-                                oox::getRelationship(Relationship::DIAGRAMCOLORS), colorFileName),
-                            RTL_TEXTENCODING_UTF8);
-
-    OUString drawingFileName;
-    if (drawingDom.is())
-    {
-        // add drawing relation
-        drawingFileName = "diagrams/drawing" + OUString::number(diagramCount) + ".xml";
-        OUString drawingRelId = m_pImpl->m_rExport.GetFilter().addRelation(
-            pFS->getOutputStream(), oox::getRelationship(Relationship::DIAGRAMDRAWING),
-            drawingFileName);
-
-        // the data dom contains a reference to the drawing relation. We need to update it with the new generated
-        // relation value before writing the dom to a file
-
-        // Get the dsp:damaModelExt node from the dom
-        uno::Reference<xml::dom::XNodeList> nodeList = dataDom->getElementsByTagNameNS(
-            "http://schemas.microsoft.com/office/drawing/2008/diagram", "dataModelExt");
-
-        // There must be one element only so get it
-        uno::Reference<xml::dom::XNode> node = nodeList->item(0);
-
-        // Get the list of attributes of the node
-        uno::Reference<xml::dom::XNamedNodeMap> nodeMap = node->getAttributes();
-
-        // Get the node with the relId attribute and set its new value
-        uno::Reference<xml::dom::XNode> relIdNode = nodeMap->getNamedItem("relId");
-        relIdNode->setNodeValue(drawingRelId);
-    }
-
-    pFS->singleElementNS(
-        XML_dgm, XML_relIds, FSNS(XML_xmlns, XML_dgm),
-        OUStringToOString(m_pImpl->m_rExport.GetFilter().getNamespaceURL(OOX_NS(dmlDiagram)),
-                          RTL_TEXTENCODING_UTF8)
-            .getStr(),
-        FSNS(XML_xmlns, XML_r),
-        OUStringToOString(m_pImpl->m_rExport.GetFilter().getNamespaceURL(OOX_NS(officeRel)),
-                          RTL_TEXTENCODING_UTF8)
-            .getStr(),
-        FSNS(XML_r, XML_dm), dataRelId.getStr(), FSNS(XML_r, XML_lo), layoutRelId.getStr(),
-        FSNS(XML_r, XML_qs), styleRelId.getStr(), FSNS(XML_r, XML_cs), colorRelId.getStr(), FSEND);
-
-    pFS->endElementNS(XML_a, XML_graphicData);
-    pFS->endElementNS(XML_a, XML_graphic);
     endDMLAnchorInline(&rFrameFormat);
-
-    uno::Reference<xml::sax::XSAXSerializable> serializer;
-    uno::Reference<xml::sax::XWriter> writer
-        = xml::sax::Writer::create(comphelper::getProcessComponentContext());
-
-    // write data file
-    serializer.set(dataDom, uno::UNO_QUERY);
-    uno::Reference<io::XOutputStream> xDataOutputStream
-        = m_pImpl->m_rExport.GetFilter().openFragmentStream(
-            "word/" + dataFileName,
-            "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml");
-    writer->setOutputStream(xDataOutputStream);
-    serializer->serialize(uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),
-                          uno::Sequence<beans::StringPair>());
-
-    // write the associated Images and rels for data file
-    writeDiagramRels(xDataRelSeq, xDataOutputStream, "OOXDiagramDataRels", nAnchorId);
-
-    // write layout file
-    serializer.set(layoutDom, uno::UNO_QUERY);
-    writer->setOutputStream(m_pImpl->m_rExport.GetFilter().openFragmentStream(
-        "word/" + layoutFileName,
-        "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"));
-    serializer->serialize(uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),
-                          uno::Sequence<beans::StringPair>());
-
-    // write style file
-    serializer.set(styleDom, uno::UNO_QUERY);
-    writer->setOutputStream(m_pImpl->m_rExport.GetFilter().openFragmentStream(
-        "word/" + styleFileName,
-        "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"));
-    serializer->serialize(uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),
-                          uno::Sequence<beans::StringPair>());
-
-    // write color file
-    serializer.set(colorDom, uno::UNO_QUERY);
-    writer->setOutputStream(m_pImpl->m_rExport.GetFilter().openFragmentStream(
-        "word/" + colorFileName,
-        "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"));
-    serializer->serialize(uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),
-                          uno::Sequence<beans::StringPair>());
-
-    // write drawing file
-
-    if (drawingDom.is())
-    {
-        serializer.set(drawingDom, uno::UNO_QUERY);
-        uno::Reference<io::XOutputStream> xDrawingOutputStream
-            = m_pImpl->m_rExport.GetFilter().openFragmentStream(
-                "word/" + drawingFileName,
-                "application/vnd.ms-office.drawingml.diagramDrawing+xml");
-        writer->setOutputStream(xDrawingOutputStream);
-        serializer->serialize(
-            uno::Reference<xml::sax::XDocumentHandler>(writer, uno::UNO_QUERY_THROW),
-            uno::Sequence<beans::StringPair>());
-
-        // write the associated Images and rels for drawing file
-        uno::Sequence<uno::Sequence<uno::Any>> xDrawingRelSeq;
-        diagramDrawing[1] >>= xDrawingRelSeq;
-        writeDiagramRels(xDrawingRelSeq, xDrawingOutputStream, "OOXDiagramDrawingRels", nAnchorId);
-    }
 }
 
 void DocxSdrExport::writeOnlyTextOfFrame(ww8::Frame const* pParentFrame)
@@ -1413,7 +1140,7 @@ void DocxSdrExport::writeDMLTextFrame(ww8::Frame const* pParentFrame, int nAncho
                                       bool bTextBoxOnly)
 {
     bool bDMLAndVMLDrawingOpen = m_pImpl->m_bDMLAndVMLDrawingOpen;
-    m_pImpl->m_bDMLAndVMLDrawingOpen = true;
+    m_pImpl->m_bDMLAndVMLDrawingOpen = IsAnchorTypeInsideParagraph(pParentFrame);
 
     sax_fastparser::FSHelperPtr pFS = m_pImpl->m_pSerializer;
     const SwFrameFormat& rFrameFormat = pParentFrame->GetFrameFormat();
@@ -1534,28 +1261,25 @@ void DocxSdrExport::writeDMLTextFrame(ww8::Frame const* pParentFrame, int nAncho
     }
 
     //first, loop through ALL of the chained textboxes to identify a unique ID for each chain, and sequence number for each textbox in that chain.
-    std::map<OUString, MSWordExportBase::LinkedTextboxInfo>::iterator linkedTextboxesIter;
     if (!m_pImpl->m_rExport.m_bLinkedTextboxesHelperInitialized)
     {
         sal_Int32 nSeq = 0;
-        linkedTextboxesIter = m_pImpl->m_rExport.m_aLinkedTextboxesHelper.begin();
-        while (linkedTextboxesIter != m_pImpl->m_rExport.m_aLinkedTextboxesHelper.end())
+        for (auto& rEntry : m_pImpl->m_rExport.m_aLinkedTextboxesHelper)
         {
             //find the start of a textbox chain: has no PREVIOUS link, but does have NEXT link
-            if (linkedTextboxesIter->second.sPrevChain.isEmpty()
-                && !linkedTextboxesIter->second.sNextChain.isEmpty())
+            if (rEntry.second.sPrevChain.isEmpty() && !rEntry.second.sNextChain.isEmpty())
             {
                 //assign this chain a unique ID and start a new sequence
                 nSeq = 0;
-                linkedTextboxesIter->second.nId = ++m_pImpl->m_rExport.m_nLinkedTextboxesChainId;
-                linkedTextboxesIter->second.nSeq = nSeq;
+                rEntry.second.nId = ++m_pImpl->m_rExport.m_nLinkedTextboxesChainId;
+                rEntry.second.nSeq = nSeq;
 
-                OUString sCheckForBrokenChains = linkedTextboxesIter->first;
+                OUString sCheckForBrokenChains = rEntry.first;
 
                 //follow the chain and assign the same id, and incremental sequence numbers.
                 std::map<OUString, MSWordExportBase::LinkedTextboxInfo>::iterator followChainIter;
-                followChainIter = m_pImpl->m_rExport.m_aLinkedTextboxesHelper.find(
-                    linkedTextboxesIter->second.sNextChain);
+                followChainIter
+                    = m_pImpl->m_rExport.m_aLinkedTextboxesHelper.find(rEntry.second.sNextChain);
                 while (followChainIter != m_pImpl->m_rExport.m_aLinkedTextboxesHelper.end())
                 {
                     //verify that the NEXT textbox also points to me as the PREVIOUS.
@@ -1575,7 +1299,6 @@ void DocxSdrExport::writeDMLTextFrame(ww8::Frame const* pParentFrame, int nAncho
                         followChainIter->second.sNextChain);
                 }
             }
-            ++linkedTextboxesIter;
         }
         m_pImpl->m_rExport.m_bLinkedTextboxesHelperInitialized = true;
     }
@@ -1594,7 +1317,8 @@ void DocxSdrExport::writeDMLTextFrame(ww8::Frame const* pParentFrame, int nAncho
     }
 
     // second, check if THIS textbox is linked and then decide whether to write the tag txbx or linkedTxbx
-    linkedTextboxesIter = m_pImpl->m_rExport.m_aLinkedTextboxesHelper.find(sLinkChainName);
+    std::map<OUString, MSWordExportBase::LinkedTextboxInfo>::iterator linkedTextboxesIter
+        = m_pImpl->m_rExport.m_aLinkedTextboxesHelper.find(sLinkChainName);
     if (linkedTextboxesIter != m_pImpl->m_rExport.m_aLinkedTextboxesHelper.end())
     {
         if ((linkedTextboxesIter->second.nId != 0) && (linkedTextboxesIter->second.nSeq != 0))
@@ -1708,7 +1432,7 @@ void DocxSdrExport::writeDMLTextFrame(ww8::Frame const* pParentFrame, int nAncho
 void DocxSdrExport::writeVMLTextFrame(ww8::Frame const* pParentFrame, bool bTextBoxOnly)
 {
     bool bDMLAndVMLDrawingOpen = m_pImpl->m_bDMLAndVMLDrawingOpen;
-    m_pImpl->m_bDMLAndVMLDrawingOpen = true;
+    m_pImpl->m_bDMLAndVMLDrawingOpen = IsAnchorTypeInsideParagraph(pParentFrame);
 
     sax_fastparser::FSHelperPtr pFS = m_pImpl->m_pSerializer;
     const SwFrameFormat& rFrameFormat = pParentFrame->GetFrameFormat();

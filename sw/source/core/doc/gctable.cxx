@@ -18,14 +18,15 @@
  */
 
 #include <hintids.hxx>
-#include <editeng/boxitem.hxx>
 #include <tblrwcl.hxx>
 #include <swtblfmt.hxx>
 #include <algorithm>
+#include <editeng/boxitem.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::editeng;
 
-inline const SvxBorderLine* GetLineTB( const SvxBoxItem* pBox, bool bTop )
+static const SvxBorderLine* GetLineTB( const SvxBoxItem* pBox, bool bTop )
 {
     return bTop ? pBox->GetTop() : pBox->GetBottom();
 }
@@ -110,7 +111,7 @@ static sal_uInt16 lcl_FindEndPosOfBorder( const SwCollectTableLineBoxes& rCollTL
     return nLastPos;
 }
 
-static inline const SvxBorderLine* lcl_GCBorder_GetBorder( const SwTableBox& rBox,
+static const SvxBorderLine* lcl_GCBorder_GetBorder( const SwTableBox& rBox,
                                                 bool bTop,
                                                 const SfxPoolItem** ppItem )
 {
@@ -301,9 +302,8 @@ void sw_GC_Line_Border( const SwTableLine* pLine, SwGCLineBorder* pGCPara )
         } while( true );
     }
 
-    for( SwTableBoxes::const_iterator it = pLine->GetTabBoxes().begin();
-             it != pLine->GetTabBoxes().end(); ++it)
-        lcl_GC_Box_Border(*it, pGCPara );
+    for( const auto& rpBox : pLine->GetTabBoxes() )
+        lcl_GC_Box_Border(rpBox, pGCPara );
 
     ++pGCPara->nLinePos;
 }

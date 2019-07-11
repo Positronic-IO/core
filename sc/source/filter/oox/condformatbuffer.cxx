@@ -19,9 +19,11 @@
 
 #include <memory>
 #include <condformatbuffer.hxx>
+#include <formulaparser.hxx>
 
 #include <com/sun/star/sheet/ConditionOperator2.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <svl/intitem.hxx>
 #include <svl/sharedstringpool.hxx>
@@ -33,6 +35,7 @@
 #include <oox/token/properties.hxx>
 #include <oox/token/tokens.hxx>
 #include <addressconverter.hxx>
+#include <biffhelper.hxx>
 #include <stylesbuffer.hxx>
 #include <themebuffer.hxx>
 
@@ -42,6 +45,8 @@
 #include <docfunc.hxx>
 #include <tokenarray.hxx>
 #include <tokenuno.hxx>
+
+namespace oox { class AttributeList; }
 
 namespace oox {
 namespace xls {
@@ -301,8 +306,8 @@ void DataBarRule::importAttribs( const AttributeList& rAttribs )
 
 void DataBarRule::SetData( ScDataBarFormat* pFormat, ScDocument* pDoc, const ScAddress& rAddr )
 {
-    ScColorScaleEntry* pUpperEntry = ConvertToModel( *mpUpperLimit.get(), pDoc, rAddr);
-    ScColorScaleEntry* pLowerEntry = ConvertToModel( *mpLowerLimit.get(), pDoc, rAddr);
+    ScColorScaleEntry* pUpperEntry = ConvertToModel(*mpUpperLimit, pDoc, rAddr);
+    ScColorScaleEntry* pLowerEntry = ConvertToModel(*mpLowerLimit, pDoc, rAddr);
 
     mxFormat->mpUpperLimit.reset( pUpperEntry );
     mxFormat->mpLowerLimit.reset( pLowerEntry );
@@ -855,8 +860,8 @@ void CondFormatRule::finalizeImport()
         if( maModel.maFormulas.size() >= 2)
         {
             pTokenArray2.reset(new ScTokenArray());
-            ScTokenConversion::ConvertToTokenArray( rDoc, *pTokenArray2.get(), maModel.maFormulas[ 1 ] );
-            rDoc.CheckLinkFormulaNeedingCheck( *pTokenArray2.get());
+            ScTokenConversion::ConvertToTokenArray(rDoc, *pTokenArray2, maModel.maFormulas[1]);
+            rDoc.CheckLinkFormulaNeedingCheck(*pTokenArray2);
         }
 
         ScTokenArray aTokenArray;

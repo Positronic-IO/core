@@ -28,18 +28,19 @@
 #include <scresid.hxx>
 #include <global.hxx>
 #include <target.hxx>
+#include <columnspanset.hxx>
 
 #include <undoolk.hxx>
 
-#include <comphelper/lok.hxx>
 #include <sfx2/lokhelper.hxx>
+#include <svx/svdundo.hxx>
 
 /** Change column widths or row heights */
 ScUndoWidthOrHeight::ScUndoWidthOrHeight( ScDocShell* pNewDocShell,
                 const ScMarkData& rMark,
                 SCCOLROW nNewStart, SCTAB nNewStartTab, SCCOLROW nNewEnd, SCTAB nNewEndTab,
-                ScDocument* pNewUndoDoc, const std::vector<sc::ColRowSpan>& rRanges,
-                ScOutlineTable* pNewUndoTab,
+                ScDocumentUniquePtr pNewUndoDoc, const std::vector<sc::ColRowSpan>& rRanges,
+                std::unique_ptr<ScOutlineTable> pNewUndoTab,
                 ScSizeMode eNewMode, sal_uInt16 nNewSizeTwips, bool bNewWidth ) :
     ScSimpleUndo( pNewDocShell ),
     aMarkData( rMark ),
@@ -47,22 +48,21 @@ ScUndoWidthOrHeight::ScUndoWidthOrHeight( ScDocShell* pNewDocShell,
     nEnd( nNewEnd ),
     nStartTab( nNewStartTab ),
     nEndTab( nNewEndTab ),
-    pUndoDoc( pNewUndoDoc ),
-    pUndoTab( pNewUndoTab ),
+    pUndoDoc( std::move(pNewUndoDoc) ),
+    pUndoTab( std::move(pNewUndoTab) ),
     maRanges(rRanges),
     nNewSize( nNewSizeTwips ),
     bWidth( bNewWidth ),
-    eMode( eNewMode ),
-    pDrawUndo( nullptr )
+    eMode( eNewMode )
 {
-    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
+    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
 }
 
 ScUndoWidthOrHeight::~ScUndoWidthOrHeight()
 {
-    delete pUndoDoc;
-    delete pUndoTab;
-    DeleteSdrUndoAction( pDrawUndo );
+    pUndoDoc.reset();
+    pUndoTab.reset();
+    pDrawUndo.reset();
 }
 
 OUString ScUndoWidthOrHeight::GetComment() const
@@ -95,7 +95,7 @@ void ScUndoWidthOrHeight::Undo()
 
     //! outlines from all tables?
     if (pUndoTab)                                           // Outlines are included when saving ?
-        rDoc.SetOutlineTable( nStartTab, pUndoTab );
+        rDoc.SetOutlineTable( nStartTab, pUndoTab.get() );
 
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
     SCTAB nTabCount = rDoc.GetTableCount();
@@ -122,7 +122,7 @@ void ScUndoWidthOrHeight::Undo()
         }
     }
 
-    DoSdrUndoAction( pDrawUndo, &rDoc );
+    DoSdrUndoAction( pDrawUndo.get(), &rDoc );
 
     if (pViewShell)
     {

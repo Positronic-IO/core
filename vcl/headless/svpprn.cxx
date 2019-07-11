@@ -56,7 +56,7 @@ static OUString getPdfDir( const PrinterInfo& rInfo )
     return aDir;
 }
 
-inline int PtTo10Mu( int nPoints ) { return static_cast<int>((static_cast<double>(nPoints)*35.27777778)+0.5); }
+static int PtTo10Mu( int nPoints ) { return static_cast<int>((static_cast<double>(nPoints)*35.27777778)+0.5); }
 
 static void copyJobDataToJobSetup( ImplJobSetup* pJobSetup, JobData& rData )
 {
@@ -139,7 +139,7 @@ static void copyJobDataToJobSetup( ImplJobSetup* pJobSetup, JobData& rData )
 
     // copy the whole context
     if( pJobSetup->GetDriverData() )
-        rtl_freeMemory( const_cast<sal_uInt8*>(pJobSetup->GetDriverData()) );
+        std::free( const_cast<sal_uInt8*>(pJobSetup->GetDriverData()) );
 
     sal_uInt32 nBytes;
     void* pBuffer = nullptr;
@@ -188,18 +188,13 @@ void SvpSalInstance::DestroyInfoPrinter( SalInfoPrinter* pPrinter )
     delete pPrinter;
 }
 
-SalPrinter* SvpSalInstance::CreatePrinter( SalInfoPrinter* pInfoPrinter )
+std::unique_ptr<SalPrinter> SvpSalInstance::CreatePrinter( SalInfoPrinter* pInfoPrinter )
 {
     // create and initialize SalPrinter
     SvpSalPrinter* pPrinter = new SvpSalPrinter( pInfoPrinter );
     pPrinter->m_aJobData = static_cast<SvpSalInfoPrinter*>(pInfoPrinter)->m_aJobData;
 
-    return pPrinter;
-}
-
-void SvpSalInstance::DestroyPrinter( SalPrinter* pPrinter )
-{
-    delete pPrinter;
+    return std::unique_ptr<SalPrinter>(pPrinter);
 }
 
 void SvpSalInstance::GetPrinterQueueInfo( ImplPrnQueueList* pList )
@@ -218,12 +213,11 @@ void SvpSalInstance::GetPrinterQueueInfo( ImplPrnQueueList* pList )
     {
         const PrinterInfo& rInfo( rManager.getPrinterInfo(printer) );
         // create new entry
-        SalPrinterQueueInfo* pInfo = new SalPrinterQueueInfo;
+        std::unique_ptr<SalPrinterQueueInfo> pInfo(new SalPrinterQueueInfo);
         pInfo->maPrinterName    = printer;
         pInfo->maDriver         = rInfo.m_aDriverName;
         pInfo->maLocation       = rInfo.m_aLocation;
         pInfo->maComment        = rInfo.m_aComment;
-        pInfo->mpSysData        = nullptr;
 
         sal_Int32 nIndex = 0;
         while( nIndex != -1 )
@@ -236,13 +230,8 @@ void SvpSalInstance::GetPrinterQueueInfo( ImplPrnQueueList* pList )
             }
         }
 
-        pList->Add( pInfo );
+        pList->Add( std::move(pInfo) );
     }
-}
-
-void SvpSalInstance::DeletePrinterQueueInfo( SalPrinterQueueInfo* pInfo )
-{
-    delete pInfo;
 }
 
 void SvpSalInstance::GetPrinterQueueState( SalPrinterQueueInfo* )

@@ -20,7 +20,6 @@
 #define INCLUDED_SVL_ZFORMAT_HXX
 
 #include <svl/svldllapi.h>
-#include <i18nlangtag/mslangid.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/nfkeytab.hxx>
 #include <vector>
@@ -29,11 +28,12 @@ namespace utl {
     class DigitGroupingIterator;
 }
 
+namespace com { namespace sun { namespace star { namespace i18n { struct NativeNumberXmlAttributes2; } } } }
+
 class Color;
 
 class ImpSvNumberformatScan;            // format code string scanner
 class ImpSvNumberInputScan;             // input string scanner
-class SvNumberFormatter;
 
 enum SvNumberformatLimitOps
 {
@@ -64,7 +64,8 @@ struct ImpSvNumberformatInfo            // Struct for FormatInfo
 // eLang specifies the Locale to use.
 class SvNumberNatNum
 {
-    LanguageType    eLang;
+    OUString sParams;               // For [NatNum12 ordinal-number]-like syntax
+    LanguageType eLang;
     sal_uInt8            nNum;
     bool            bDBNum  :1;     // DBNum, to be converted to NatNum
     bool            bDate   :1;     // Used in date? (needed for DBNum/NatNum mapping)
@@ -90,6 +91,8 @@ public:
                         }
     bool            IsSet() const       { return bSet; }
     void            SetDate( bool bDateP )   { bDate = bDateP; }
+    void            SetParams(const OUString& s) { sParams = s; }
+    OUString const & GetParams() const { return sParams; }
 };
 
 class CharClass;
@@ -125,6 +128,7 @@ public:
     void SetNatNumNum( sal_uInt8 nNum, bool bDBNum ) { aNatNum.SetNum( nNum, bDBNum ); }
     void SetNatNumLang( LanguageType eLang ) { aNatNum.SetLang( eLang ); }
     void SetNatNumDate( bool bDate ) { aNatNum.SetDate( bDate ); }
+    void SetNatNumParams(const OUString& sParams) { aNatNum.SetParams(sParams); }
     const SvNumberNatNum& GetNatNum() const { return aNatNum; }
 
 private:
@@ -148,6 +152,7 @@ class SVL_DLLPUBLIC SvNumberformat
         };
 
         LanguageType meLanguage;
+        LanguageType meLanguageWithoutLocaleData;
         Substitute meSubstitute;
         sal_uInt8 mnNumeralShape;
         sal_uInt8 mnCalendarType;
@@ -156,6 +161,8 @@ class SVL_DLLPUBLIC SvNumberformat
 
         LocaleType();
         LocaleType(sal_uInt32 nRawCode);
+
+        bool isPlainLocale() const;
     };
 
 public:
@@ -218,7 +225,8 @@ public:
     // Build a format string of application defined keywords
     OUString GetMappedFormatstring( const NfKeywordTable& rKeywords,
                                     const LocaleDataWrapper& rLoc,
-                                    LanguageType nOriginalLang = LANGUAGE_DONTKNOW ) const;
+                                    LanguageType nOriginalLang = LANGUAGE_DONTKNOW,
+                                    bool bSystemLanguage = false ) const;
 
     void SetStarFormatSupport( bool b )         { bStarFlag = b; }
 
@@ -431,7 +439,7 @@ public:
 
     // rAttr.Number not empty if NatNum attributes are to be stored
     void GetNatNumXml(
-            css::i18n::NativeNumberXmlAttributes& rAttr,
+            css::i18n::NativeNumberXmlAttributes2& rAttr,
             sal_uInt16 nNumFor ) const;
 
     /** Switches to the first non-"gregorian" calendar, but only if the current
@@ -622,6 +630,7 @@ private:
 
     SVL_DLLPRIVATE bool ImpDecimalFill( OUStringBuffer& sStr,
                                  double& rNumber,
+                                 sal_Int32 nDecPos,
                                  sal_uInt16 j,
                                  sal_uInt16 nIx,
                                  bool bInteger );
@@ -690,9 +699,19 @@ private:
         return OUString::number(nVal);
     }
 
+    // Obtain the string of the fraction of second, without leading "0.",
+    // rounded to nFractionDecimals (or nFractionDecimals+1 if
+    // bAddOneRoundingDecimal==true but then truncated at nFractionDecimals,
+    // for use with the result of tools::Time::GetClock()) with the length of
+    // nFractionDecimals, unless nMinimumInputLineDecimals>0 is given for input
+    // line string where extra trailing "0" are discarded.
+    SVL_DLLPRIVATE sal_uInt16 ImpGetFractionOfSecondString( OUStringBuffer& rBuf, double fFractionOfSecond,
+            int nFractionDecimals, bool bAddOneRoundingDecimal, sal_uInt16 nIx, sal_uInt16 nMinimumInputLineDecimals );
+
     // transliterate according to NativeNumber
     SVL_DLLPRIVATE OUString impTransliterateImpl(const OUString& rStr, const SvNumberNatNum& rNum) const;
     SVL_DLLPRIVATE void impTransliterateImpl(OUStringBuffer& rStr, const SvNumberNatNum& rNum) const;
+    SVL_DLLPRIVATE OUString impTransliterateImpl(const OUString& rStr, const SvNumberNatNum& rNum, sal_uInt16 nDateKey) const;
 
     OUString impTransliterate(const OUString& rStr, const SvNumberNatNum& rNum) const
     {
@@ -706,6 +725,12 @@ private:
             impTransliterateImpl(rStr, rNum);
         }
     }
+
+    OUString impTransliterate(const OUString& rStr, const SvNumberNatNum& rNum, sal_uInt16 nDateKey) const
+    {
+        return rNum.IsComplete() ? impTransliterateImpl(rStr, rNum, nDateKey) : rStr;
+    }
+
 };
 
 #endif // INCLUDED_SVL_ZFORMAT_HXX

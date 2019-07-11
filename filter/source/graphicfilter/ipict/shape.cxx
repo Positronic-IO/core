@@ -38,7 +38,7 @@ Here, we choose:
 namespace PictReaderShapePrivate {
   /** returns an inside rectangle knowing the penSize in order to obtain the ``correct'' position
       when we draw a frame in wide length*/
-  tools::Rectangle contractRectangle(bool drawFrame, tools::Rectangle const &rect, Size const &pSize) {
+  static tools::Rectangle contractRectangle(bool drawFrame, tools::Rectangle const &rect, Size const &pSize) {
     if (!drawFrame) return rect;
     long penSize=(pSize.Width()+pSize.Height())/2;
     if (2*penSize > rect.Right()-rect.Left()) penSize = (rect.Right()-rect.Left()+1)/2;
@@ -51,7 +51,7 @@ namespace PictReaderShapePrivate {
 
 namespace PictReaderShape {
   //--------- draws a horizontal/vertical/small line (by creating a "rectangle/polygon")  ---------
-  bool drawLineHQ(VirtualDevice *dev, Point const &orig, Point const &dest, Size const &pSize) {
+  static bool drawLineHQ(VirtualDevice *dev, Point const &orig, Point const &dest, Size const &pSize) {
     long dir[2] = { dest.X()-orig.X(), dest.Y()-orig.Y() };
     bool vertic = dir[0] == 0;
     bool horiz = dir[1] == 0;
@@ -79,7 +79,7 @@ namespace PictReaderShape {
       long origPt[4][2] = { { orig.X(), orig.Y() }, { orig.X()+pSize.Width(), orig.Y() },
                { orig.X()+pSize.Width(), orig.Y()+pSize.Height() },
                { orig.X(), orig.Y()+pSize.Height() }};
-      long origAvoid = dir[0] > 0 ? (dir[1] > 0 ? 2 : 1) : (dir[1] > 0 ? 3 : 0);
+      int origAvoid = dir[0] > 0 ? (dir[1] > 0 ? 2 : 1) : (dir[1] > 0 ? 3 : 0);
       long destPt[4][2] = { { dest.X(), dest.Y() }, { dest.X()+pSize.Width(), dest.Y() },
                { dest.X()+pSize.Width(), dest.Y()+pSize.Height() },
                { dest.X(), dest.Y()+pSize.Height() }};
@@ -164,10 +164,9 @@ namespace PictReaderShape {
     tools::Rectangle arc = PictReaderShapePrivate::contractRectangle(drawFrame, orig, pSize);
     using namespace basegfx;
 
-    double const PI2 = M_PI/2.0;
     // pict angle are CW with 0 at twelve o'clock (with Y-axis inverted)...
-    double angl1 = angle1-PI2;
-    double angl2 = angle2-PI2;
+    double angl1 = angle1-M_PI_2;
+    double angl2 = angle2-M_PI_2;
     long const X[2] = { arc.Left(), arc.Right() };
     long const Y[2] = { arc.Top(), arc.Bottom() };
     B2DPoint center(0.5*(X[1]+X[0]), 0.5*(Y[1]+Y[0]));

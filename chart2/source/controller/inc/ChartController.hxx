@@ -25,34 +25,40 @@
 
 #include <svx/svdtypes.hxx>
 #include <vcl/timer.hxx>
-#include <vcl/event.hxx>
 
 #include <cppuhelper/implbase.hxx>
 
-#include <com/sun/star/accessibility/XAccessible.hpp>
-#include <com/sun/star/document/XUndoManager.hpp>
-#include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
-#include <com/sun/star/frame/XDispatch.hpp>
-#include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <com/sun/star/ui/XContextMenuInterception.hpp>
-#include <com/sun/star/uno/XWeak.hpp>
-#include <com/sun/star/util/XCloseListener.hpp>
-#include <com/sun/star/util/XCloseable.hpp>
-#include <com/sun/star/lang/XInitialization.hpp>
-#include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
-#include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <com/sun/star/util/XModifyListener.hpp>
 #include <com/sun/star/util/XModeChangeListener.hpp>
-#include <com/sun/star/awt/Point.hpp>
-#include <com/sun/star/awt/Size.hpp>
-#include <com/sun/star/util/XURLTransformer.hpp>
+#include <com/sun/star/util/XCloseListener.hpp>
+#include <com/sun/star/util/XModifyListener.hpp>
 #include <com/sun/star/frame/XLayoutManagerListener.hpp>
-#include <com/sun/star/frame/XLayoutManagerEventBroadcaster.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <memory>
 #include <set>
+
+namespace com { namespace sun { namespace star { namespace accessibility { class XAccessible; } } } }
+namespace com { namespace sun { namespace star { namespace accessibility { class XAccessibleContext; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XFocusListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XKeyListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XMouseListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XMouseMotionListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XPaintListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XWindow; } } } }
+namespace com { namespace sun { namespace star { namespace awt { class XWindowListener; } } } }
+namespace com { namespace sun { namespace star { namespace awt { struct Point; } } } }
+namespace com { namespace sun { namespace star { namespace document { class XUndoManager; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XController; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XDispatch; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XLayoutManagerEventBroadcaster; } } } }
+namespace com { namespace sun { namespace star { namespace lang { class XInitialization; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+namespace com { namespace sun { namespace star { namespace util { class XCloseable; } } } }
+namespace com { namespace sun { namespace star { namespace view { class XSelectionSupplier; } } } }
+
 
 class SdrModel;
 
@@ -326,7 +332,7 @@ public:
     void SetAndApplySelection(const css::uno::Reference<css::drawing::XShape>& rxShape);
     void StartTextEdit( const Point* pMousePixel = nullptr );
 
-    DECL_LINK( NotifyUndoActionHdl, SdrUndoAction*, void );
+    void NotifyUndoActionHdl( std::unique_ptr<SdrUndoAction> );
 
     css::uno::Reference<css::uno::XInterface> const & getChartView();
 
@@ -383,7 +389,7 @@ private:
     css::uno::Reference<css::awt::XWindow> m_xViewWindow;
     css::uno::Reference<css::uno::XInterface> m_xChartView;
     std::shared_ptr< DrawModelWrapper > m_pDrawModelWrapper;
-    DrawViewWrapper* m_pDrawViewWrapper;
+    std::unique_ptr<DrawViewWrapper> m_pDrawViewWrapper;
 
     Selection m_aSelection;
     SdrDragMode m_eDragMode;
@@ -412,7 +418,7 @@ private:
     rtl::Reference<svx::sidebar::SelectionChangeHandler> mpSelectionChangeHandler;
 
     bool impl_isDisposedOrSuspended() const;
-    ReferenceSizeProvider* impl_createReferenceSizeProvider();
+    std::unique_ptr<ReferenceSizeProvider> impl_createReferenceSizeProvider();
     void impl_adaptDataSeriesAutoResize();
 
     void impl_createDrawViewController();

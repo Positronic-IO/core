@@ -25,7 +25,7 @@ namespace rtftok
 using RTFSprmsImplBase = std::vector<std::pair<Id, RTFValue::Pointer_t>>;
 
 /// The payload of RTFSprms which is only copied on write.
-class RTFSprmsImpl : public RTFSprmsImplBase, public SvRefBase
+class RTFSprmsImpl : public RTFSprmsImplBase, public virtual SvRefBase
 {
 };
 
@@ -38,25 +38,33 @@ enum class RTFOverwrite
 };
 
 /// A list of RTFSprm with a copy constructor that performs a deep copy.
-class RTFSprms
+class RTFSprms : public virtual SvRefBase
 {
 public:
-    using Pointer_t = std::shared_ptr<RTFSprms>;
+    using Pointer_t = tools::SvRef<RTFSprms>;
     using Entry_t = std::pair<Id, RTFValue::Pointer_t>;
     using Iterator_t = std::vector<Entry_t>::iterator;
     using ReverseIterator_t = std::vector<Entry_t>::reverse_iterator;
     RTFSprms();
-    RTFSprms(const RTFSprms& rSprms);
-    ~RTFSprms();
+    ~RTFSprms() override;
+
+    RTFSprms(RTFSprms const&) = default;
+    RTFSprms(RTFSprms&&) = default;
+    RTFSprms& operator=(RTFSprms const&) = default;
+    RTFSprms& operator=(RTFSprms&&) = default;
+
     RTFValue::Pointer_t find(Id nKeyword, bool bFirst = true, bool bForWrite = false);
     /// Does the same as ->push_back(), except that it can overwrite or ignore existing entries.
-    void set(Id nKeyword, RTFValue::Pointer_t pValue, RTFOverwrite eOverwrite = RTFOverwrite::YES);
+    void set(Id nKeyword, const RTFValue::Pointer_t& pValue,
+             RTFOverwrite eOverwrite = RTFOverwrite::YES);
     bool erase(Id nKeyword);
     void eraseLast(Id nKeyword);
     /// Removes elements which are already in the reference set.
     /// Also insert default values to override attributes of style
     /// (yes, really; that's what Word does).
-    RTFSprms cloneAndDeduplicate(RTFSprms& rReference) const;
+    /// @param bImplicitPPr implicit dereference of top-level pPr SPRM
+    RTFSprms cloneAndDeduplicate(RTFSprms& rReference, Id nStyleType,
+                                 bool bImplicitPPr = false) const;
     /// Inserts default values to override attributes of pAbstract.
     void duplicateList(const RTFValue::Pointer_t& pAbstract);
     /// Removes duplicated values based on in-list properties.
@@ -79,7 +87,6 @@ class RTFSprm : public Sprm
 {
 public:
     RTFSprm(Id nKeyword, RTFValue::Pointer_t& pValue);
-    virtual ~RTFSprm() = default;
     sal_uInt32 getId() const override;
     Value::Pointer_t getValue() override;
     writerfilter::Reference<Properties>::Pointer_t getProps() override;
@@ -88,7 +95,7 @@ public:
     std::string toString() const override;
 #endif
 private:
-    Id m_nKeyword;
+    Id const m_nKeyword;
     RTFValue::Pointer_t& m_pValue;
 };
 } // namespace rtftok

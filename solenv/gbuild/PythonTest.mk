@@ -21,7 +21,7 @@ gb_PythonTest_EXECUTABLE_GDB := $(PYTHON_FOR_BUILD)
 gb_PythonTest_DEPS :=
 endif
 
-gb_PythonTest_COMMAND := $(gb_PythonTest_EXECUTABLE) -m unittest
+gb_PythonTest_COMMAND := $(gb_PythonTest_EXECUTABLE) -m org.libreoffice.unittest
 
 .PHONY : $(call gb_PythonTest_get_clean_target,%)
 $(call gb_PythonTest_get_clean_target,%) :
@@ -31,7 +31,10 @@ $(call gb_PythonTest_get_clean_target,%) :
 ifneq ($(DISABLE_PYTHON),TRUE)
 
 .PHONY : $(call gb_PythonTest_get_target,%)
-$(call gb_PythonTest_get_target,%) :| $(gb_PythonTest_DEPS)
+$(call gb_PythonTest_get_target,%) :\
+        $(call gb_Library_get_target,pyuno) \
+        $(if $(filter-out WNT,$(OS)),$(call gb_Library_get_target,pyuno_wrapper)) \
+        | $(gb_PythonTest_DEPS)
 ifneq ($(gb_SUPPRESS_TESTS),)
 	@true
 else
@@ -52,10 +55,10 @@ else
 		UserInstallation=$(call gb_Helper_make_url,$(dir $(call gb_PythonTest_get_target,$*))user) \
 		TestUserDir="$(call gb_Helper_make_url,$(dir $(call gb_PythonTest_get_target,$*)))" \
 		PYTHONDONTWRITEBYTECODE=1 \
-		$(if $(filter-out MACOSX WNT,$(OS_FOR_BUILD)),$(if $(ENABLE_HEADLESS),, \
+		$(if $(filter-out MACOSX WNT,$(OS_FOR_BUILD)),$(if $(DISABLE_GUI),, \
 			SAL_USE_VCLPLUGIN=svp \
 		)) \
-		$(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) \
+		$(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) $(gb_CppunitTest_RR) \
 			$(gb_PythonTest_COMMAND) \
 			$(if $(PYTHON_TEST_NAME),$(PYTHON_TEST_NAME),$(MODULES)) \
 		$(if $(gb_CppunitTest__interactive),, \

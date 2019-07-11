@@ -55,6 +55,7 @@
 #include <osl/mutex.hxx>
 #include <rtl/uuid.h>
 #include <rtl/process.h>
+#include <sal/log.hxx>
 #include <tools/link.hxx>
 #include <tools/fract.hxx>
 #include <tools/wintypes.hxx>
@@ -93,13 +94,13 @@
 #include <vcl/field.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/floatwin.hxx>
-#include <vcl/group.hxx>
+#include <vcl/toolkit/group.hxx>
 #include <vcl/scheduler.hxx>
 #include <vcl/imgctrl.hxx>
 #include <vcl/longcurr.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/menubtn.hxx>
-#include <vcl/morebtn.hxx>
+#include <vcl/toolkit/morebtn.hxx>
 #include <vcl/msgbox.hxx>
 #include <vcl/scrbar.hxx>
 #include <vcl/spin.hxx>
@@ -123,10 +124,10 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <comphelper/processfactory.hxx>
-#include <toolkit/awt/scrollabledialog.hxx>
 #include <comphelper/profilezone.hxx>
 
 #include <helper/msgbox.hxx>
+#include <helper/scrollabledialog.hxx>
 #include <helper/unowrapper.hxx>
 
 #if defined(_WIN32)
@@ -414,7 +415,7 @@ public:
         delete this;
     }
 
-    sal_Int32 m_nPauseMilliseconds;
+    sal_Int32 const m_nPauseMilliseconds;
 };
 
 class VCLXToolkitMutexHelper
@@ -438,8 +439,8 @@ class VCLXToolkit : public VCLXToolkitMutexHelper,
     ::comphelper::OInterfaceContainerHelper2 m_aTopWindowListeners;
     ::comphelper::OInterfaceContainerHelper2 m_aKeyHandlers;
     ::comphelper::OInterfaceContainerHelper2 m_aFocusListeners;
-    ::Link<VclSimpleEvent&,void> m_aEventListenerLink;
-    ::Link<VclWindowEvent&,bool> m_aKeyListenerLink;
+    ::Link<VclSimpleEvent&,void> const m_aEventListenerLink;
+    ::Link<VclWindowEvent&,bool> const m_aKeyListenerLink;
     bool m_bEventListener;
     bool m_bKeyListener;
 
@@ -686,87 +687,84 @@ std::pair<WinBits,MessBoxStyle> ImplGetWinBits( sal_uInt32 nComponentAttribs, Wi
 
 struct ComponentInfo
 {
-    const char*     pName;
+    OUStringLiteral sName;
     WindowType      nWinType;
 };
 
-static ComponentInfo aComponentInfos [] =
+static ComponentInfo const aComponentInfos [] =
 {
-    { "buttondialog",       WindowType::BUTTONDIALOG },
-    { "cancelbutton",       WindowType::CANCELBUTTON },
-    { "checkbox",           WindowType::CHECKBOX },
-    { "combobox",           WindowType::COMBOBOX },
-    { "control",            WindowType::CONTROL },
-    { "currencybox",        WindowType::CURRENCYBOX },
-    { "currencyfield",      WindowType::CURRENCYFIELD },
-    { "datebox",            WindowType::DATEBOX },
-    { "datefield",          WindowType::DATEFIELD },
-    { "dialog",             WindowType::DIALOG },
-    { "dockingarea",        WindowType::DOCKINGAREA },
-    { "dockingwindow",      WindowType::DOCKINGWINDOW },
-    { "edit",               WindowType::EDIT },
-    { "errorbox",           WindowType::ERRORBOX },
-    { "fixedbitmap",        WindowType::FIXEDBITMAP },
-    { "fixedimage",         WindowType::FIXEDIMAGE },
-    { "fixedline",          WindowType::FIXEDLINE },
-    { "fixedtext",          WindowType::FIXEDTEXT },
-    { "floatingwindow",     WindowType::FLOATINGWINDOW },
-    { "framewindow",        WindowType::TOOLKIT_FRAMEWINDOW },
-    { "groupbox",           WindowType::GROUPBOX },
-    { "frame",              WindowType::GROUPBOX },
-    { "helpbutton",         WindowType::HELPBUTTON },
-    { "imagebutton",        WindowType::IMAGEBUTTON },
-    { "infobox",            WindowType::INFOBOX },
-    { "listbox",            WindowType::LISTBOX },
-    { "longcurrencybox",    WindowType::LONGCURRENCYBOX },
-    { "longcurrencyfield",  WindowType::LONGCURRENCYFIELD },
-    { "menubutton",         WindowType::MENUBUTTON },
-    { "messbox",            WindowType::MESSBOX },
-    { "metricbox",          WindowType::METRICBOX },
-    { "metricfield",        WindowType::METRICFIELD },
-    { "modaldialog",        WindowType::MODALDIALOG },
-    { "modelessdialog",     WindowType::MODELESSDIALOG },
-    { "morebutton",         WindowType::MOREBUTTON },
-    { "multilineedit",      WindowType::MULTILINEEDIT },
-    { "multilistbox",       WindowType::MULTILISTBOX },
-    { "numericbox",         WindowType::NUMERICBOX },
-    { "numericfield",       WindowType::NUMERICFIELD },
-    { "okbutton",           WindowType::OKBUTTON },
-    { "patternbox",         WindowType::PATTERNBOX },
-    { "patternfield",       WindowType::PATTERNFIELD },
-    { "pushbutton",         WindowType::PUSHBUTTON },
-    { "querybox",           WindowType::QUERYBOX },
-    { "radiobutton",        WindowType::RADIOBUTTON },
-    { "scrollbar",          WindowType::SCROLLBAR },
-    { "scrollbarbox",       WindowType::SCROLLBARBOX },
-    { "animatedimages",     WindowType::CONTROL },
-    { "spinbutton",         WindowType::SPINBUTTON },
-    { "spinfield",          WindowType::SPINFIELD },
-    { "splitter",           WindowType::SPLITTER },
-    { "splitwindow",        WindowType::SPLITWINDOW },
-    { "statusbar",          WindowType::STATUSBAR },
-    { "systemchildwindow",  WindowType::TOOLKIT_SYSTEMCHILDWINDOW },
-    { "tabcontrol",         WindowType::TABCONTROL },
-    { "tabdialog",          WindowType::TABDIALOG },
-    { "tabpage",            WindowType::TABPAGE },
-    { "timebox",            WindowType::TIMEBOX },
-    { "timefield",          WindowType::TIMEFIELD },
-    { "toolbox",            WindowType::TOOLBOX },
-    { "tristatebox",        WindowType::TRISTATEBOX },
-    { "warningbox",         WindowType::WARNINGBOX },
-    { "window",             WindowType::WINDOW },
-    { "workwindow",         WindowType::WORKWINDOW },
-    { "tabpagecontainer",   WindowType::CONTROL },
-    { "tabpagemodel",       WindowType::TABPAGE }
+    { OUStringLiteral("animatedimages"),     WindowType::CONTROL },
+    { OUStringLiteral("buttondialog"),       WindowType::BUTTONDIALOG },
+    { OUStringLiteral("cancelbutton"),       WindowType::CANCELBUTTON },
+    { OUStringLiteral("checkbox"),           WindowType::CHECKBOX },
+    { OUStringLiteral("combobox"),           WindowType::COMBOBOX },
+    { OUStringLiteral("control"),            WindowType::CONTROL },
+    { OUStringLiteral("currencybox"),        WindowType::CURRENCYBOX },
+    { OUStringLiteral("currencyfield"),      WindowType::CURRENCYFIELD },
+    { OUStringLiteral("datebox"),            WindowType::DATEBOX },
+    { OUStringLiteral("datefield"),          WindowType::DATEFIELD },
+    { OUStringLiteral("dialog"),             WindowType::DIALOG },
+    { OUStringLiteral("dockingarea"),        WindowType::DOCKINGAREA },
+    { OUStringLiteral("dockingwindow"),      WindowType::DOCKINGWINDOW },
+    { OUStringLiteral("edit"),               WindowType::EDIT },
+    { OUStringLiteral("errorbox"),           WindowType::ERRORBOX },
+    { OUStringLiteral("fixedbitmap"),        WindowType::FIXEDBITMAP },
+    { OUStringLiteral("fixedimage"),         WindowType::FIXEDIMAGE },
+    { OUStringLiteral("fixedline"),          WindowType::FIXEDLINE },
+    { OUStringLiteral("fixedtext"),          WindowType::FIXEDTEXT },
+    { OUStringLiteral("floatingwindow"),     WindowType::FLOATINGWINDOW },
+    { OUStringLiteral("frame"),              WindowType::GROUPBOX },
+    { OUStringLiteral("framewindow"),        WindowType::TOOLKIT_FRAMEWINDOW },
+    { OUStringLiteral("groupbox"),           WindowType::GROUPBOX },
+    { OUStringLiteral("helpbutton"),         WindowType::HELPBUTTON },
+    { OUStringLiteral("imagebutton"),        WindowType::IMAGEBUTTON },
+    { OUStringLiteral("infobox"),            WindowType::INFOBOX },
+    { OUStringLiteral("listbox"),            WindowType::LISTBOX },
+    { OUStringLiteral("longcurrencybox"),    WindowType::LONGCURRENCYBOX },
+    { OUStringLiteral("longcurrencyfield"),  WindowType::LONGCURRENCYFIELD },
+    { OUStringLiteral("menubutton"),         WindowType::MENUBUTTON },
+    { OUStringLiteral("messbox"),            WindowType::MESSBOX },
+    { OUStringLiteral("metricbox"),          WindowType::METRICBOX },
+    { OUStringLiteral("metricfield"),        WindowType::METRICFIELD },
+    { OUStringLiteral("modaldialog"),        WindowType::MODALDIALOG },
+    { OUStringLiteral("modelessdialog"),     WindowType::MODELESSDIALOG },
+    { OUStringLiteral("morebutton"),         WindowType::MOREBUTTON },
+    { OUStringLiteral("multilineedit"),      WindowType::MULTILINEEDIT },
+    { OUStringLiteral("multilistbox"),       WindowType::MULTILISTBOX },
+    { OUStringLiteral("numericbox"),         WindowType::NUMERICBOX },
+    { OUStringLiteral("numericfield"),       WindowType::NUMERICFIELD },
+    { OUStringLiteral("okbutton"),           WindowType::OKBUTTON },
+    { OUStringLiteral("patternbox"),         WindowType::PATTERNBOX },
+    { OUStringLiteral("patternfield"),       WindowType::PATTERNFIELD },
+    { OUStringLiteral("pushbutton"),         WindowType::PUSHBUTTON },
+    { OUStringLiteral("querybox"),           WindowType::QUERYBOX },
+    { OUStringLiteral("radiobutton"),        WindowType::RADIOBUTTON },
+    { OUStringLiteral("scrollbar"),          WindowType::SCROLLBAR },
+    { OUStringLiteral("scrollbarbox"),       WindowType::SCROLLBARBOX },
+    { OUStringLiteral("spinbutton"),         WindowType::SPINBUTTON },
+    { OUStringLiteral("spinfield"),          WindowType::SPINFIELD },
+    { OUStringLiteral("splitter"),           WindowType::SPLITTER },
+    { OUStringLiteral("splitwindow"),        WindowType::SPLITWINDOW },
+    { OUStringLiteral("statusbar"),          WindowType::STATUSBAR },
+    { OUStringLiteral("systemchildwindow"),  WindowType::TOOLKIT_SYSTEMCHILDWINDOW },
+    { OUStringLiteral("tabcontrol"),         WindowType::TABCONTROL },
+    { OUStringLiteral("tabdialog"),          WindowType::TABDIALOG },
+    { OUStringLiteral("tabpage"),            WindowType::TABPAGE },
+    { OUStringLiteral("tabpagecontainer"),   WindowType::CONTROL },
+    { OUStringLiteral("tabpagemodel"),       WindowType::TABPAGE },
+    { OUStringLiteral("timebox"),            WindowType::TIMEBOX },
+    { OUStringLiteral("timefield"),          WindowType::TIMEFIELD },
+    { OUStringLiteral("toolbox"),            WindowType::TOOLBOX },
+    { OUStringLiteral("tristatebox"),        WindowType::TRISTATEBOX },
+    { OUStringLiteral("warningbox"),         WindowType::WARNINGBOX },
+    { OUStringLiteral("window"),             WindowType::WINDOW },
+    { OUStringLiteral("workwindow"),         WindowType::WORKWINDOW }
 };
 
-extern "C"
+bool ComponentInfoFindCompare( const ComponentInfo & lhs, const OUString & s)
 {
-static int ComponentInfoCompare( const void* pFirst, const void* pSecond)
-{
-    return strcmp( static_cast<ComponentInfo const *>(pFirst)->pName,
-                   static_cast<ComponentInfo const *>(pSecond)->pName );
-}
+    return rtl_ustr_ascii_compareIgnoreAsciiCase_WithLengths(s.pData->buffer, s.pData->length,
+                lhs.sName.data, lhs.sName.size) > 0;
 }
 
 WindowType ImplGetComponentType( const OUString& rServiceName )
@@ -774,35 +772,34 @@ WindowType ImplGetComponentType( const OUString& rServiceName )
     static bool bSorted = false;
     if( !bSorted )
     {
-        qsort(  static_cast<void*>(aComponentInfos),
-                SAL_N_ELEMENTS( aComponentInfos ),
-                sizeof( ComponentInfo ),
-                ComponentInfoCompare );
+        assert( std::is_sorted( std::begin(aComponentInfos), std::end(aComponentInfos),
+                    [](const ComponentInfo & lhs, const ComponentInfo & rhs) {
+                        return
+                            rtl_str_compare_WithLength(
+                                lhs.sName.data, lhs.sName.size, rhs.sName.data, rhs.sName.size)
+                            < 0;
+                    } ) );
         bSorted = true;
     }
 
-
-    ComponentInfo aSearch;
-    OString aServiceName(OUStringToOString(rServiceName, osl_getThreadTextEncoding()).toAsciiLowerCase());
-    if ( !aServiceName.isEmpty() )
-        aSearch.pName = aServiceName.getStr();
+    OUString sSearch;
+    if ( !rServiceName.isEmpty() )
+        sSearch = rServiceName;
     else
-        aSearch.pName = "window";
+        sSearch = "window";
 
-    ComponentInfo* pInf = static_cast<ComponentInfo*>(bsearch( &aSearch,
-                        static_cast<void*>(aComponentInfos),
-                        SAL_N_ELEMENTS( aComponentInfos ),
-                        sizeof( ComponentInfo ),
-                        ComponentInfoCompare ));
-
-    return pInf ? pInf->nWinType : WindowType::NONE;
+    auto it = std::lower_bound( std::begin(aComponentInfos), std::end(aComponentInfos), sSearch,
+                                ComponentInfoFindCompare );
+    if (it != std::end(aComponentInfos)  && !ComponentInfoFindCompare(*it, sSearch) )
+        return it->nWinType;
+    return WindowType::NONE;
 }
 
 struct MessageBoxTypeInfo
 {
-    css::awt::MessageBoxType eType;
+    css::awt::MessageBoxType const eType;
     const sal_Char          *pName;
-    sal_Int32                nLen;
+    sal_Int32 const          nLen;
 };
 
 static const MessageBoxTypeInfo aMessageBoxTypeInfo[] =
@@ -816,7 +813,7 @@ static const MessageBoxTypeInfo aMessageBoxTypeInfo[] =
 };
 
 bool lcl_convertMessageBoxType(
-    rtl::OUString &sType,
+    OUString &sType,
     css::awt::MessageBoxType eType )
 {
     const MessageBoxTypeInfo *pMap = aMessageBoxTypeInfo;
@@ -827,7 +824,7 @@ bool lcl_convertMessageBoxType(
         if ( pMap->eType == eType )
         {
             eVal = eType;
-            sType = rtl::OUString( pMap->pName, pMap->nLen, RTL_TEXTENCODING_ASCII_US );
+            sType = OUString( pMap->pName, pMap->nLen, RTL_TEXTENCODING_ASCII_US );
             break;
         }
         pMap++;
@@ -841,32 +838,14 @@ static bool                                 bInitedByVCLToolkit = false;
 
 osl::Mutex & getInitMutex()
 {
-    static osl::Mutex * pM;
-    if( !pM )
-    {
-        osl::Guard< osl::Mutex > aGuard( osl::Mutex::getGlobalMutex() );
-        if( !pM )
-        {
-            static osl::Mutex aMutex;
-            pM = &aMutex;
-        }
-    }
-    return *pM;
+    static osl::Mutex aMutex;
+    return aMutex;
 }
 
 osl::Condition & getInitCondition()
 {
-    static osl::Condition * pC = nullptr;
-    if( !pC )
-    {
-        osl::Guard< osl::Mutex > aGuard( osl::Mutex::getGlobalMutex() );
-        if( !pC )
-        {
-            static osl::Condition aCondition;
-            pC = &aCondition;
-        }
-    }
-    return *pC;
+    static osl::Condition aCondition;
+    return aCondition;
 }
 
 extern "C"
@@ -898,7 +877,7 @@ static void ToolkitWorkerFunction( void* pArgs )
     if( bInitedByVCLToolkit )
     {
         UnoWrapper* pUnoWrapper = new UnoWrapper( pTk );
-        Application::SetUnoWrapper( pUnoWrapper );
+        UnoWrapperBase::SetUnoWrapper( pUnoWrapper );
     }
     getInitCondition().set();
     if( bInitedByVCLToolkit )
@@ -1488,7 +1467,10 @@ vcl::Window* VCLXToolkit::ImplCreateWindow( VCLXWindow** ppNewComp,
                 if ( rDescriptor.WindowServiceName.equalsIgnoreAsciiCase(
                         "tabpagecontainer" ) )
                 {
-                    pNewWindow = VclPtr<TabControl>::Create( pParent, nWinBits );
+                    // TabControl has a special case for tabs without border: they are displayed
+                    // in a different way, so we need to ensure that this style is not set, so
+                    // we can guarantee normal tab behavior
+                    pNewWindow = VclPtr<TabControl>::Create( pParent, nWinBits & (~WB_NOBORDER));
                     *ppNewComp = new VCLXTabPageContainer;
                 }
                 else if ( aServiceName == "animatedimages" )
@@ -1760,7 +1742,7 @@ css::uno::Reference< css::awt::XMessageBox > SAL_CALL VCLXToolkit::createMessage
     if ( sal_Int32( aButtons & 0xffff0000L ) == css::awt::MessageBoxButtons::DEFAULT_BUTTON_IGNORE )
         nAddWinBits |= MessBoxStyle::DefaultIgnore;
 
-    rtl::OUString aType;
+    OUString aType;
     lcl_convertMessageBoxType( aType, eType );
 
     aDescriptor.Type              = css::awt::WindowClass_MODALTOP;

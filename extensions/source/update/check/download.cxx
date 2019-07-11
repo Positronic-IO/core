@@ -91,7 +91,7 @@ static void openFile( OutData& out )
 }
 
 
-static inline OString
+static OString
 getStringValue(const uno::Reference< container::XNameAccess >& xNameAccess, const OUString& aName)
 {
     OSL_ASSERT(xNameAccess->hasByName(aName));
@@ -101,7 +101,7 @@ getStringValue(const uno::Reference< container::XNameAccess >& xNameAccess, cons
 }
 
 
-static inline sal_Int32
+static sal_Int32
 getInt32Value(const uno::Reference< container::XNameAccess >& xNameAccess,
                     const OUString& aName)
 {
@@ -203,7 +203,7 @@ Download::getProxyForURL(const OUString& rURL, OString& rHost, sal_Int32& rPort)
 }
 
 
-bool curl_run(const OUString& rURL, OutData& out, const OString& aProxyHost, sal_Int32 nProxyPort)
+static bool curl_run(const OUString& rURL, OutData& out, const OString& aProxyHost, sal_Int32 nProxyPort)
 {
     /* Need to investigate further whether it is necessary to call
      * curl_global_init or not - leave it for now (as the ftp UCB content

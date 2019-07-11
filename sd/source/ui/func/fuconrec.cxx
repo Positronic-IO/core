@@ -59,6 +59,7 @@
 #include <Window.hxx>
 #include <stlpool.hxx>
 #include <drawdoc.hxx>
+#include <unokywds.hxx>
 
 #include <strings.hrc>
 
@@ -233,8 +234,7 @@ bool FuConstructRectangle::MouseButtonUp(const MouseEvent& rMEvt)
             if(SID_DRAW_MEASURELINE == nSlotId)
             {
                 SdrLayerAdmin& rAdmin = mpDoc->GetLayerAdmin();
-                OUString aStr(SdResId(STR_LAYER_MEASURELINES));
-                pObj->SetLayer(rAdmin.GetLayerID(aStr));
+                pObj->SetLayer(rAdmin.GetLayerID(sUNO_LayerName_measurelines));
             }
 
             // init text position when vertical caption object is created
@@ -493,15 +493,14 @@ void FuConstructRectangle::SetAttributes(SfxItemSet& rAttr, SdrObject* pObj)
         }
 
         SdrLayerAdmin& rAdmin = mpDoc->GetLayerAdmin();
-        OUString aStr(SdResId(STR_LAYER_MEASURELINES));
-        pObj->SetLayer(rAdmin.GetLayerID(aStr));
+        pObj->SetLayer(rAdmin.GetLayerID(sUNO_LayerName_measurelines));
     }
 }
 
 /**
  * set line starts and ends for the object to be created
  */
-::basegfx::B2DPolyPolygon getPolygon(const char* pResId, const SdrModel& rModel)
+static ::basegfx::B2DPolyPolygon getPolygon(const char* pResId, const SdrModel& rModel)
 {
     ::basegfx::B2DPolyPolygon aRetval;
     XLineEndListRef pLineEndList(rModel.GetLineEndList());
@@ -712,7 +711,7 @@ void FuConstructRectangle::SetLineEnds(SfxItemSet& rAttr, SdrObject const & rObj
     }
 }
 
-SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
 {
     DBG_ASSERT( (nID != SID_DRAW_FONTWORK) && (nID != SID_DRAW_FONTWORK_VERTICAL ), "FuConstRectangle::CreateDefaultObject can not create Fontwork shapes!" );
 
@@ -769,10 +768,10 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
     // case SID_CONNECTOR_LINES_CIRCLE_END:
     // case SID_CONNECTOR_LINES_CIRCLES:
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         mpView->getSdrModelFromSdrView(),
         mpView->GetCurrentObjInventor(),
-        mpView->GetCurrentObjIdentifier());
+        mpView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {
@@ -804,14 +803,14 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
             case SID_LINE_ARROW_SQUARE:
             case SID_LINE_SQUARE_ARROW:
             {
-                if( dynamic_cast< const SdrPathObj *>( pObj ) !=  nullptr)
+                if( auto pPathObj = dynamic_cast<SdrPathObj *>( pObj.get() ) )
                 {
                     sal_Int32 nYMiddle((aRect.Top() + aRect.Bottom()) / 2);
 
                     ::basegfx::B2DPolygon aB2DPolygon;
                     aB2DPolygon.append(::basegfx::B2DPoint(aStart.X(), nYMiddle));
                     aB2DPolygon.append(::basegfx::B2DPoint(aEnd.X(), nYMiddle));
-                    static_cast<SdrPathObj*>(pObj)->SetPathPoly(::basegfx::B2DPolyPolygon(aB2DPolygon));
+                    pPathObj->SetPathPoly(::basegfx::B2DPolyPolygon(aB2DPolygon));
                 }
                 else
                 {
@@ -823,7 +822,7 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
 
             case SID_DRAW_MEASURELINE:
             {
-                if( auto pMeasureObj = dynamic_cast< SdrMeasureObj *>( pObj ) )
+                if( auto pMeasureObj = dynamic_cast< SdrMeasureObj *>( pObj.get() ) )
                 {
                     sal_Int32 nYMiddle((aRect.Top() + aRect.Bottom()) / 2);
                     pMeasureObj->SetPoint(Point(aStart.X(), nYMiddle), 0);
@@ -866,7 +865,7 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
             case SID_CONNECTOR_LINES_CIRCLE_END:
             case SID_CONNECTOR_LINES_CIRCLES:
             {
-                if( auto pEdgeObj = dynamic_cast< SdrEdgeObj *>( pObj ) )
+                if( auto pEdgeObj = dynamic_cast< SdrEdgeObj *>( pObj.get() ) )
                 {
                     pEdgeObj->SetTailPoint(false, aStart);
                     pEdgeObj->SetTailPoint(true, aEnd);
@@ -881,11 +880,11 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
             case SID_DRAW_CAPTION:
             case SID_DRAW_CAPTION_VERTICAL:
             {
-                if( auto pCaptionObj = dynamic_cast< SdrCaptionObj *>( pObj ) )
+                if( auto pCaptionObj = dynamic_cast< SdrCaptionObj *>( pObj.get() ) )
                 {
                     bool bIsVertical(SID_DRAW_CAPTION_VERTICAL == nID);
 
-                    static_cast<SdrTextObj*>(pObj)->SetVerticalWriting(bIsVertical);
+                    pCaptionObj->SetVerticalWriting(bIsVertical);
 
                     if(bIsVertical)
                     {
@@ -918,8 +917,8 @@ SdrObject* FuConstructRectangle::CreateDefaultObject(const sal_uInt16 nID, const
         }
 
         SfxItemSet aAttr(mpDoc->GetPool());
-        SetStyleSheet(aAttr, pObj);
-        SetAttributes(aAttr, pObj);
+        SetStyleSheet(aAttr, pObj.get());
+        SetAttributes(aAttr, pObj.get());
         SetLineEnds(aAttr, *pObj);
         pObj->SetMergedItemSet(aAttr);
     }

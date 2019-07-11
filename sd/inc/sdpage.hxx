@@ -24,15 +24,12 @@
 #include <com/sun/star/presentation/FadeEffect.hpp>
 #include <com/sun/star/office/XAnnotation.hpp>
 
-#include <functional>
-#include <list>
 #include <memory>
 #include <vector>
 #include <editeng/flditem.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/fmpage.hxx>
 #include <xmloff/autolayout.hxx>
-#include "fadedef.h"
 #include "diadef.h"
 #include "pres.hxx"
 #include "shapelist.hxx"
@@ -199,7 +196,6 @@ public:
 
     /** Also override ReplaceObject methods to realize when
     objects are removed with this mechanism instead of RemoveObject*/
-    virtual SdrObject* NbcReplaceObject(SdrObject* pNewObj, size_t nObjNum) override;
     virtual SdrObject* ReplaceObject(SdrObject* pNewObj, size_t nObjNum) override;
 
     void        SetObjText(SdrTextObj* pObj, SdrOutliner* pOutliner, PresObjKind eObjKind, const OUString& rStr );
@@ -317,6 +313,9 @@ public:
     /** removes all custom animations for the given shape */
     void removeAnimations( const SdrObject* pObj );
 
+    /** Notify that the object has been renamed and the animation effects has to update. */
+    void notifyObjectRenamed(const SdrObject* pObj);
+
     /** Set the name of the page and broadcast a model change.
     */
     void SetName (const OUString& rName);
@@ -384,7 +383,7 @@ private:
     bool mbIsPrecious;
 
     // page id of this page
-    sal_uInt16 mnPageId;
+    sal_uInt16 const mnPageId;
 
     /** clone the animations from this and set them to rTargetPage
      *  TTTT: Order is strange, should be the other way around by

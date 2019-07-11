@@ -31,6 +31,7 @@
 #include <IDocumentDrawModelAccess.hxx>
 #include <com/sun/star/style/TabStop.hpp>
 #include <basegfx/matrix/b2dhommatrix.hxx>
+#include <vcl/outdev.hxx>
 
 #include <memory>
 
@@ -51,6 +52,8 @@ class Color;
 class SwBorderAttrs;
 class SwCache;
 class SvxBrushItem;
+class SvxFormatBreakItem;
+class SwFormatPageDesc;
 class SwSelectionList;
 struct SwPosition;
 struct SwCursorMoveState;
@@ -140,6 +143,11 @@ private:
     bool mbFrameAreaSizeValid       : 1;
     bool mbFramePrintAreaValid      : 1;
 
+    // #i65250#
+    // frame ID is now in general available - used for layout loop control
+    static sal_uInt32 mnLastFrameId;
+    const  sal_uInt32 mnFrameId;
+
 protected:
     // write access to mb*Valid flags
     void setFrameAreaPositionValid(bool bNew);
@@ -157,6 +165,9 @@ public:
 
     // syntactic sugar: test whole FrameAreaDefinition
     bool isFrameAreaDefinitionValid() const { return isFrameAreaPositionValid() && isFrameAreaSizeValid() && isFramePrintAreaValid(); }
+
+    // #i65250#
+    sal_uInt32 GetFrameId() const { return mnFrameId; }
 
     // read accesses to FrameArea definitions - only const access allowed.
     // Do *not* const_cast results, it is necessary to track changes. use
@@ -271,7 +282,7 @@ public:
     void adaptFrameAreasToTransformations();
 
     // Modify current definitions by applying the given transformation
-    void transform(const basegfx::B2DHomMatrix aTransform);
+    void transform(const basegfx::B2DHomMatrix& aTransform);
 };
 
 /**
@@ -287,6 +298,7 @@ class SW_DLLPUBLIC SwFrame : public SwFrameAreaDefinition, public SwClient, publ
     friend class SwFlowFrame;
     friend class SwLayoutFrame;
     friend class SwLooping;
+    friend class SwDeletionChecker; // for GetDep()
 
     // voids lower during creation of a column
     friend SwFrame *SaveContent( SwLayoutFrame *, SwFrame* pStart );
@@ -302,15 +314,14 @@ class SW_DLLPUBLIC SwFrame : public SwFrameAreaDefinition, public SwClient, publ
     // cache for (border) attributes
     static SwCache *mpCache;
 
-    // #i65250#
-    // frame ID is now in general available - used for layout loop control
-    static sal_uInt32 mnLastFrameId;
-    const  sal_uInt32 mnFrameId;
-
     SwRootFrame   *mpRoot;
     SwLayoutFrame *mpUpper;
     SwFrame       *mpNext;
     SwFrame       *mpPrev;
+
+    // sw_redlinehide: hide these dangerous SwClient functions
+    using SwClient::GetRegisteredInNonConst;
+    using SwClient::GetRegisteredIn;
 
     SwFrame *FindNext_();
     SwFrame *FindPrev_();
@@ -440,6 +451,8 @@ protected:
     virtual SwTwips ShrinkFrame( SwTwips, bool bTst = false, bool bInfo = false ) = 0;
     virtual SwTwips GrowFrame  ( SwTwips, bool bTst = false, bool bInfo = false ) = 0;
 
+    /// use these so we can grep for SwFrame's GetRegisteredIn accesses
+    /// beware that SwTextFrame may return sw::WriterMultiListener
     SwModify        *GetDep()       { return GetRegisteredInNonConst(); }
     const SwModify  *GetDep() const { return GetRegisteredIn(); }
 
@@ -546,7 +559,7 @@ public:
                           const Color *pColor,
                           const SvxBorderLineStyle = SvxBorderLineStyle::SOLID ) const;
 
-    drawinglayer::processor2d::BaseProcessor2D * CreateProcessor2D( ) const;
+    std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> CreateProcessor2D( ) const;
     void ProcessPrimitives( const drawinglayer::primitive2d::Primitive2DContainer& rSequence ) const;
 
     // retouch, not in the area of the given Rect!
@@ -624,7 +637,11 @@ public:
 
     void ReinitializeFrameSizeAttrFlags();
 
+    /// WARNING: this may not return correct RES_PAGEDESC/RES_BREAK items for
+    /// SwTextFrame, use GetBreakItem()/GetPageDescItem() instead
     const SwAttrSet *GetAttrSet() const;
+    virtual const SvxFormatBreakItem& GetBreakItem() const;
+    virtual const SwFormatPageDesc& GetPageDescItem() const;
 
     bool HasFixSize() const { return mbFixSize; }
 
@@ -839,7 +856,7 @@ public:
     bool IsProtected() const;
 
     bool IsColLocked()  const { return mbColLocked; }
-    bool IsDeleteForbidden()  const { return mbForbidDelete; }
+    virtual bool IsDeleteForbidden() const { return mbForbidDelete; }
 
     /// this is the only way to delete a SwFrame instance
     static void DestroyFrame(SwFrame *const pFrame);
@@ -866,9 +883,6 @@ public:
     void MakeRightPos( const SwFrame*, const SwFrame*, bool );
     bool IsNeighbourFrame() const
         { return bool(GetType() & FRM_NEIGHBOUR); }
-
-    // #i65250#
-    sal_uInt32 GetFrameId() const { return mnFrameId; }
 
     // NEW TABLES
     // Some functions for covered/covering table cells. This way unnecessary

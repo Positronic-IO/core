@@ -21,9 +21,11 @@
 #include <unosection.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/text/SectionFileLink.hpp>
 
 #include <comphelper/interfacecontainer2.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <cmdid.h>
@@ -35,6 +37,7 @@
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/lnkbase.hxx>
 #include <osl/mutex.hxx>
+#include <osl/diagnose.h>
 #include <vcl/svapp.hxx>
 #include <fmtclds.hxx>
 #include <unotextrange.hxx>
@@ -363,35 +366,35 @@ SwXTextSection::attach(const uno::Reference< text::XTextRange > & xTextRange)
             RES_COL, RES_COL,
             RES_FTN_AT_TXTEND, RES_FRAMEDIR,
             RES_UNKNOWNATR_CONTAINER,RES_UNKNOWNATR_CONTAINER>{});
-    if (m_pImpl->m_pProps->m_pBrushItem.get())
+    if (m_pImpl->m_pProps->m_pBrushItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pBrushItem);
     }
-    if (m_pImpl->m_pProps->m_pColItem.get())
+    if (m_pImpl->m_pProps->m_pColItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pColItem);
     }
-    if (m_pImpl->m_pProps->m_pFootnoteItem.get())
+    if (m_pImpl->m_pProps->m_pFootnoteItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pFootnoteItem);
     }
-    if (m_pImpl->m_pProps->m_pEndItem.get())
+    if (m_pImpl->m_pProps->m_pEndItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pEndItem);
     }
-    if (m_pImpl->m_pProps->m_pXMLAttr.get())
+    if (m_pImpl->m_pProps->m_pXMLAttr)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pXMLAttr);
     }
-    if (m_pImpl->m_pProps->m_pNoBalanceItem.get())
+    if (m_pImpl->m_pProps->m_pNoBalanceItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pNoBalanceItem);
     }
-    if (m_pImpl->m_pProps->m_pFrameDirItem.get())
+    if (m_pImpl->m_pProps->m_pFrameDirItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pFrameDirItem);
     }
-    if (m_pImpl->m_pProps->m_pLRSpaceItem.get())
+    if (m_pImpl->m_pProps->m_pLRSpaceItem)
     {
         aSet.Put(*m_pImpl->m_pProps->m_pLRSpaceItem);
     }
@@ -826,7 +829,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     SfxPoolItem* pPutItem = nullptr;
                     if (RES_COL == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pColItem.get())
+                        if (!m_pProps->m_pColItem)
                         {
                             m_pProps->m_pColItem.reset(new SwFormatCol);
                         }
@@ -834,7 +837,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_BACKGROUND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pBrushItem.get())
+                        if (!m_pProps->m_pBrushItem)
                         {
                             m_pProps->m_pBrushItem.reset(
                                 new SvxBrushItem(RES_BACKGROUND));
@@ -843,7 +846,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_FTN_AT_TXTEND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pFootnoteItem.get())
+                        if (!m_pProps->m_pFootnoteItem)
                         {
                             m_pProps->m_pFootnoteItem.reset(new SwFormatFootnoteAtTextEnd);
                         }
@@ -851,7 +854,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_END_AT_TXTEND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pEndItem.get())
+                        if (!m_pProps->m_pEndItem)
                         {
                             m_pProps->m_pEndItem.reset(new SwFormatEndAtTextEnd);
                         }
@@ -859,7 +862,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_UNKNOWNATR_CONTAINER== pEntry->nWID)
                     {
-                        if (!m_pProps->m_pXMLAttr.get())
+                        if (!m_pProps->m_pXMLAttr)
                         {
                             m_pProps->m_pXMLAttr.reset(
                                 new SvXMLAttrContainerItem(
@@ -869,7 +872,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_COLUMNBALANCE== pEntry->nWID)
                     {
-                        if (!m_pProps->m_pNoBalanceItem.get())
+                        if (!m_pProps->m_pNoBalanceItem)
                         {
                             m_pProps->m_pNoBalanceItem.reset(
                                 new SwFormatNoBalancedColumns(true));
@@ -878,7 +881,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_FRAMEDIR == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pFrameDirItem.get())
+                        if (!m_pProps->m_pFrameDirItem)
                         {
                             m_pProps->m_pFrameDirItem.reset(
                                 new SvxFrameDirectionItem(
@@ -888,7 +891,7 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
                     }
                     else if (RES_LR_SPACE == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pLRSpaceItem.get())
+                        if (!m_pProps->m_pLRSpaceItem)
                         {
                             m_pProps->m_pLRSpaceItem.reset(
                                 new SvxLRSpaceItem( RES_LR_SPACE ));
@@ -1022,7 +1025,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                 }
                 else if (FILE_LINK_SECTION == pSect->GetType())
                 {
-                    const OUString sRet( pSect->GetLinkFileName() );
+                    const OUString& sRet( pSect->GetLinkFileName() );
                     sal_Int32 nIndex(0);
                     aLink.FileURL =
                         sRet.getToken(0, sfx2::cTokenSeparator, nIndex);
@@ -1167,7 +1170,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     const SfxPoolItem* pQueryItem = nullptr;
                     if (RES_COL == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pColItem.get())
+                        if (!m_pProps->m_pColItem)
                         {
                             m_pProps->m_pColItem.reset(new SwFormatCol);
                         }
@@ -1175,7 +1178,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_BACKGROUND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pBrushItem.get())
+                        if (!m_pProps->m_pBrushItem)
                         {
                             m_pProps->m_pBrushItem.reset(
                                 new SvxBrushItem(RES_BACKGROUND));
@@ -1184,7 +1187,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_FTN_AT_TXTEND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pFootnoteItem.get())
+                        if (!m_pProps->m_pFootnoteItem)
                         {
                             m_pProps->m_pFootnoteItem.reset(new SwFormatFootnoteAtTextEnd);
                         }
@@ -1192,7 +1195,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_END_AT_TXTEND == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pEndItem.get())
+                        if (!m_pProps->m_pEndItem)
                         {
                             m_pProps->m_pEndItem.reset(new SwFormatEndAtTextEnd);
                         }
@@ -1200,7 +1203,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_UNKNOWNATR_CONTAINER== pEntry->nWID)
                     {
-                        if (!m_pProps->m_pXMLAttr.get())
+                        if (!m_pProps->m_pXMLAttr)
                         {
                             m_pProps->m_pXMLAttr.reset(
                                 new SvXMLAttrContainerItem);
@@ -1209,7 +1212,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_COLUMNBALANCE== pEntry->nWID)
                     {
-                        if (!m_pProps->m_pNoBalanceItem.get())
+                        if (!m_pProps->m_pNoBalanceItem)
                         {
                             m_pProps->m_pNoBalanceItem.reset(
                                 new SwFormatNoBalancedColumns);
@@ -1218,7 +1221,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_FRAMEDIR == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pFrameDirItem.get())
+                        if (!m_pProps->m_pFrameDirItem)
                         {
                             m_pProps->m_pFrameDirItem.reset(
                                 new SvxFrameDirectionItem(
@@ -1228,7 +1231,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
                     }
                     else if (RES_LR_SPACE == pEntry->nWID)
                     {
-                        if (!m_pProps->m_pLRSpaceItem.get())
+                        if (!m_pProps->m_pLRSpaceItem)
                         {
                             m_pProps->m_pLRSpaceItem.reset(
                                 new SvxLRSpaceItem( RES_LR_SPACE ));
@@ -1261,13 +1264,15 @@ SwXTextSection::getPropertyValues(
     }
     catch (beans::UnknownPropertyException &)
     {
-        throw uno::RuntimeException("Unknown property exception caught",
-            static_cast<cppu::OWeakObject *>(this));
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw lang::WrappedTargetRuntimeException("Unknown property exception caught",
+                static_cast < cppu::OWeakObject * > ( this ), anyEx );
     }
     catch (lang::WrappedTargetException &)
     {
-        throw uno::RuntimeException("WrappedTargetException caught",
-            static_cast<cppu::OWeakObject *>(this));
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw lang::WrappedTargetRuntimeException("WrappedTargetException caught",
+                static_cast < cppu::OWeakObject * > ( this ), anyEx );
     }
 
     return aValues;
@@ -1398,7 +1403,7 @@ SwXTextSection::getPropertyStates(
                 {
                     if (RES_COL == pEntry->nWID)
                     {
-                        if (!m_pImpl->m_pProps->m_pColItem.get())
+                        if (!m_pImpl->m_pProps->m_pColItem)
                         {
                             pStates[i] = beans::PropertyState_DEFAULT_VALUE;
                         }
@@ -1409,7 +1414,7 @@ SwXTextSection::getPropertyStates(
                     }
                     else
                     {
-                        if (!m_pImpl->m_pProps->m_pBrushItem.get())
+                        if (!m_pImpl->m_pProps->m_pBrushItem)
                         {
                             pStates[i] = beans::PropertyState_DEFAULT_VALUE;
                         }

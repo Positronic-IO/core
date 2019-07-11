@@ -22,6 +22,7 @@
 #include <osl/conditn.hxx>
 #include <osl/mutex.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <cppu/Enterable.hxx>
 #include <cppu/helper/purpenv/Environment.hxx>
@@ -65,7 +66,7 @@ public:
     virtual void  v_enter() override;
     virtual void  v_leave() override;
 
-    virtual bool v_isValid(rtl::OUString * pReason) override;
+    virtual bool v_isValid(OUString * pReason) override;
 
     void innerDispatch();
     void outerDispatch(bool loop);
@@ -130,10 +131,8 @@ AffineBridge::AffineBridge()
       m_pCallee      (nullptr),
       m_pParam       (nullptr),
       m_innerThreadId(0),
-      m_pInnerThread (nullptr),
       m_enterCount   (0),
-      m_outerThreadId(0),
-      m_pOuterThread (nullptr)
+      m_outerThreadId(0)
 {
     SAL_INFO("cppu.affinebridge", "LIFE: AffineBridge::AffineBridge(uno_Environment * pEnv) -> " << this);
 }
@@ -312,7 +311,7 @@ void AffineBridge::v_leave()
     m_innerMutex.release();
 }
 
-bool AffineBridge::v_isValid(rtl::OUString * pReason)
+bool AffineBridge::v_isValid(OUString * pReason)
 {
     bool result = m_enterCount > 0;
     if (!result)

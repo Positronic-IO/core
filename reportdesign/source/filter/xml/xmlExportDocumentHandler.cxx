@@ -38,7 +38,7 @@ namespace rptxml
 using namespace ::com::sun::star;
 using namespace ::xmloff::token;
 
-void lcl_exportPrettyPrinting(const uno::Reference< xml::sax::XDocumentHandler >& _xDelegatee)
+static void lcl_exportPrettyPrinting(const uno::Reference< xml::sax::XDocumentHandler >& _xDelegatee)
 {
     SvtSaveOptions aSaveOpt;
     if ( aSaveOpt.IsPrettyPrinting() )
@@ -57,7 +57,7 @@ OUString lcl_createAttribute(const xmloff::token::XMLTokenEnum& _eNamespace,cons
     return sQName.makeStringAndClear();
 }
 
-void lcl_correctCellAddress(const OUString & _sName, const uno::Reference< xml::sax::XAttributeList > & xAttribs)
+static void lcl_correctCellAddress(const OUString & _sName, const uno::Reference< xml::sax::XAttributeList > & xAttribs)
 {
     SvXMLAttributeList* pList = SvXMLAttributeList::getImplementation(xAttribs);
     OUString sCellAddress = pList->getValueByName(_sName);
@@ -370,7 +370,6 @@ void ExportDocumentHandler::exportTableRows()
     pCellAtt->AddAttribute(sValueType, "string");
 
     bool bRemoveString = true;
-    OUString sFormula;
     const sal_Int32 nCount = m_aColumns.getLength();
     if ( m_nColumnCount > nCount )
     {
@@ -391,9 +390,7 @@ void ExportDocumentHandler::exportTableRows()
     }
     for(sal_Int32 i = 0; i < nCount ; ++i)
     {
-        sFormula = "field:[";
-        sFormula += m_aColumns[i];
-        sFormula += "]";
+        OUString sFormula = "field:[" + m_aColumns[i] + "]";
         SvXMLAttributeList* pList = new SvXMLAttributeList();
         uno::Reference< xml::sax::XAttributeList > xAttribs = pList;
         pList->AddAttribute(sFormulaAttrib,sFormula);

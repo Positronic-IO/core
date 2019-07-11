@@ -51,11 +51,12 @@
 #include <tabbgcolordlg.hxx>
 #include <textimportoptions.hxx>
 #include <sal/types.h>
+#include <sfx2/sfxdlg.hxx>
 
 namespace scui
 {
     static ScAbstractDialogFactory_Impl* pFactory=nullptr;
-    ScAbstractDialogFactory_Impl* GetFactory()
+    static ScAbstractDialogFactory_Impl* GetFactory()
     {
         if ( !pFactory )
             pFactory = new ScAbstractDialogFactory_Impl;

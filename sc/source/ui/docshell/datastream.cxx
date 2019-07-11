@@ -44,7 +44,7 @@ double datastream_get_time(DebugTime nIdx)
 
 namespace {
 
-inline double getNow()
+double getNow()
 {
     TimeValue now;
     osl_getSystemTime(&now);
@@ -54,7 +54,7 @@ inline double getNow()
 class CSVHandler
 {
     DataStream::Line& mrLine;
-    size_t mnColCount;
+    size_t const mnColCount;
     size_t mnCols;
     const char* mpLineHead;
 
@@ -96,7 +96,7 @@ namespace datastreams {
 class ReaderThread : public salhelper::Thread
 {
     std::unique_ptr<SvStream> mpStream;
-    size_t mnColCount;
+    size_t const mnColCount;
     bool mbTerminate;
     osl::Mutex maMtxTerminate;
 
@@ -280,7 +280,6 @@ DataStream::DataStream(ScDocShell *pShell, const OUString& rURL, const ScRange& 
     mbRunning(false),
     mbValuesInLine(false),
     mbRefreshOnEmptyLine(false),
-    mpLines(nullptr),
     mnLinesCount(0),
     mnLinesSinceRefresh(0),
     mfLastRefreshTime(0.0),

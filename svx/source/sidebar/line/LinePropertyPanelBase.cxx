@@ -55,7 +55,7 @@ const char UNO_SELECTWIDTH[] = ".uno:SelectWidth";
 namespace
 {
 
-void FillLineEndListBox(ListBox& rListBoxStart, ListBox& rListBoxEnd, const XLineEndList& rList, const Bitmap& rBitmapZero)
+void FillLineEndListBox(ListBox& rListBoxStart, ListBox& rListBoxEnd, const XLineEndList& rList, const BitmapEx& rBitmapZero)
 {
     const sal_uInt32 nCount(rList.Count());
     const OUString sNone(SvxResId(RID_SVXSTR_NONE));
@@ -69,12 +69,12 @@ void FillLineEndListBox(ListBox& rListBoxStart, ListBox& rListBoxEnd, const XLin
     for(sal_uInt32 i(0); i < nCount; i++)
     {
         const XLineEndEntry* pEntry = rList.GetLineEnd(i);
-        const Bitmap aBitmap = const_cast< XLineEndList& >(rList).GetUiBitmap(i);
+        const BitmapEx aBitmap = const_cast< XLineEndList& >(rList).GetUiBitmap(i);
 
         if(!aBitmap.IsEmpty())
         {
-            Bitmap aCopyStart(aBitmap);
-            Bitmap aCopyEnd(aBitmap);
+            BitmapEx aCopyStart(aBitmap);
+            BitmapEx aCopyEnd(aBitmap);
 
             const Size aBmpSize(aCopyStart.GetSizePixel());
             const tools::Rectangle aCropRectStart(Point(), Size(aBmpSize.Width() / 2, aBmpSize.Height()));
@@ -105,7 +105,7 @@ void FillLineEndListBox(ListBox& rListBoxStart, ListBox& rListBoxEnd, const XLin
 
         // take solid line bitmap and crop it to the size of
         // line cap entries
-        Bitmap aCopyZero( rBitmapZero );
+        BitmapEx aCopyZero( rBitmapZero );
         const tools::Rectangle aCropZero( Point(), aImgSize );
         aCopyZero.Crop( aCropZero );
 
@@ -140,11 +140,11 @@ void FillLineStyleListBox(ListBox& rListBox, const XDashList& rList)
     for(sal_uInt32 i(0); i < nCount; i++)
     {
         const XDashEntry* pEntry = rList.GetDash(i);
-        const Bitmap aBitmap = const_cast< XDashList& >(rList).GetUiBitmap(i);
+        const BitmapEx & rBitmap = const_cast< XDashList& >(rList).GetUiBitmap(i);
 
-        if(!aBitmap.IsEmpty())
+        if(!rBitmap.IsEmpty())
         {
-            rListBox.InsertEntry(pEntry->GetName(), Image(aBitmap));
+            rListBox.InsertEntry(pEntry->GetName(), Image(rBitmap));
         }
         else
         {
@@ -385,14 +385,11 @@ void LinePropertyPanelBase::updateLineStart(bool bDisabled, bool bSetOrDefault,
             mpLBStart->Enable();
     }
 
-    if(bSetOrDefault)
+    if(bSetOrDefault && pItem)
     {
-        if(pItem)
-        {
-            mpStartItem.reset(static_cast<XLineStartItem*>(pItem->Clone()));
-            SelectEndStyle(true);
-            return;
-        }
+        mpStartItem.reset(static_cast<XLineStartItem*>(pItem->Clone()));
+        SelectEndStyle(true);
+        return;
     }
 
     mpStartItem.reset(nullptr);
@@ -412,14 +409,11 @@ void LinePropertyPanelBase::updateLineEnd(bool bDisabled, bool bSetOrDefault,
             mpLBEnd->Enable();
     }
 
-    if(bSetOrDefault)
+    if(bSetOrDefault && pItem)
     {
-        if(pItem)
-        {
-            mpEndItem.reset(static_cast<XLineEndItem*>(pItem->Clone()));
-            SelectEndStyle(false);
-            return;
-        }
+        mpEndItem.reset(static_cast<XLineEndItem*>(pItem->Clone()));
+        SelectEndStyle(false);
+        return;
     }
 
     mpEndItem.reset(nullptr);
@@ -744,7 +738,7 @@ void  LinePropertyPanelBase::FillLineEndList()
 
         if (mxLineEndList.is())
         {
-            Bitmap aZeroBitmap;
+            BitmapEx aZeroBitmap;
 
             if (mxLineStyleList.is())
                 aZeroBitmap = mxLineStyleList->GetBitmapForUISolidLine();
@@ -785,14 +779,14 @@ void  LinePropertyPanelBase::FillLineStyleList()
 
 void LinePropertyPanelBase::SelectLineStyle()
 {
-    if( !mpStyleItem.get() || !mpDashItem.get() )
+    if (!mpStyleItem || !mpDashItem)
     {
         mpLBStyle->SetNoSelection();
         mpLBStyle->Disable();
         return;
     }
 
-    const drawing::LineStyle eXLS(mpStyleItem ? mpStyleItem->GetValue() : drawing::LineStyle_NONE);
+    const drawing::LineStyle eXLS(mpStyleItem->GetValue());
     bool bSelected(false);
 
     switch(eXLS)
@@ -804,7 +798,7 @@ void LinePropertyPanelBase::SelectLineStyle()
             bSelected = true;
             break;
         default:
-            if(mpDashItem && mxLineStyleList.is())
+            if(mxLineStyleList.is())
             {
                 const XDash& rDash = mpDashItem->GetDashValue();
                 for(long a(0);!bSelected &&  a < mxLineStyleList->Count(); a++)
@@ -833,14 +827,14 @@ void LinePropertyPanelBase::SelectEndStyle(bool bStart)
 
     if(bStart)
     {
-        if( !mpStartItem.get() )
+        if (!mpStartItem)
         {
             mpLBStart->SetNoSelection();
             mpLBStart->Disable();
             return;
         }
 
-        if (mpStartItem && mxLineEndList.is())
+        if (mxLineEndList.is())
         {
             const basegfx::B2DPolyPolygon& rItemPolygon = mpStartItem->GetLineStartValue();
             for(long a(0);!bSelected &&  a < mxLineEndList->Count(); a++)
@@ -862,14 +856,14 @@ void LinePropertyPanelBase::SelectEndStyle(bool bStart)
     }
     else
     {
-        if( !mpEndItem.get() )
+        if (!mpEndItem)
         {
             mpLBEnd->SetNoSelection();
             mpLBEnd->Disable();
             return;
         }
 
-        if (mpEndItem && mxLineEndList.is())
+        if (mxLineEndList.is())
         {
             const basegfx::B2DPolyPolygon& rItemPolygon = mpEndItem->GetLineEndValue();
             for(long a(0);!bSelected &&  a < mxLineEndList->Count(); a++)

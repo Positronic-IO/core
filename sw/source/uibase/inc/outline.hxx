@@ -53,7 +53,7 @@ class SwOutlineTabDialog final : public SfxTabDialogController
     std::unique_ptr<SwNumRule>  xNumRule;
     SwChapterNumRules*  pChapterNumRules;
 
-    bool                bModified : 1;
+    bool const          bModified : 1;
 
     std::unique_ptr<weld::MenuButton> m_xMenuButton;
 
@@ -78,36 +78,37 @@ public:
 
 class SwOutlineSettingsTabPage : public SfxTabPage
 {
-    OUString            aNoFormatName;
+    OUString const      aNoFormatName;
     OUString            aSaveCollNames[MAXLEVEL];
     SwWrtShell*         pSh;
     SwNumRule*          pNumRule;
     OUString*           pCollNames;
     sal_uInt16          nActLevel;
+    NumberingPreview  m_aPreviewWIN;
 
     std::unique_ptr<weld::TreeView> m_xLevelLB;
-    std::unique_ptr<weld::ComboBoxText> m_xCollBox;
-    std::unique_ptr<NumberingTypeListBox> m_xNumberBox;
-    std::unique_ptr<weld::ComboBoxText> m_xCharFormatLB;
+    std::unique_ptr<weld::ComboBox> m_xCollBox;
+    std::unique_ptr<SwNumberingTypeListBox> m_xNumberBox;
+    std::unique_ptr<weld::ComboBox> m_xCharFormatLB;
     std::unique_ptr<weld::Label> m_xAllLevelFT;
     std::unique_ptr<weld::SpinButton>  m_xAllLevelNF;
     std::unique_ptr<weld::Entry> m_xPrefixED;
     std::unique_ptr<weld::Entry> m_xSuffixED;
     std::unique_ptr<weld::SpinButton> m_xStartEdit;
-    std::unique_ptr<SwNumberingPreview> m_xPreviewWIN;
+    std::unique_ptr<weld::CustomWeld> m_xPreviewWIN;
 
     DECL_LINK( LevelHdl, weld::TreeView&, void );
     DECL_LINK( ToggleComplete, weld::SpinButton&, void );
-    DECL_LINK( CollSelect, weld::ComboBoxText&, void );
-    DECL_LINK( CollSelectGetFocus, weld::Widget&, void );
-    DECL_LINK( NumberSelect, weld::ComboBoxText&, void );
+    DECL_LINK( CollSelect, weld::ComboBox&, void );
+    void CollSave();
+    DECL_LINK( NumberSelect, weld::ComboBox&, void );
     DECL_LINK( DelimModify, weld::Entry&, void );
     DECL_LINK( StartModified, weld::SpinButton&, void );
-    DECL_LINK( CharFormatHdl, weld::ComboBoxText&, void );
+    DECL_LINK( CharFormatHdl, weld::ComboBox&, void );
 
     void    Update();
 
-    void    SetModified() { m_xPreviewWIN->queue_draw(); }
+    void    SetModified() { m_aPreviewWIN.Invalidate(); }
     void    CheckForStartValue_Impl(sal_uInt16 nNumberingType);
 
     using SfxTabPage::ActivatePage;
@@ -129,7 +130,7 @@ public:
     void SetNumRule(SwNumRule *pRule)
     {
         pNumRule = pRule;
-        m_xPreviewWIN->SetNumRule(pNumRule);
+        m_aPreviewWIN.SetNumRule(pNumRule);
     }
 };
 

@@ -128,10 +128,10 @@ namespace sdr
                             mpItemSet->Put(aNewSet);
                         }
 
-                        OutlinerParaObject* pTemp = pOutliner->CreateParaObject(0, nParaCount);
+                        std::unique_ptr<OutlinerParaObject> pTemp = pOutliner->CreateParaObject(0, nParaCount);
                         pOutliner->Clear();
 
-                        rObj.NbcSetOutlinerParaObjectForText(pTemp,pText);
+                        rObj.NbcSetOutlinerParaObjectForText(std::move(pTemp),pText);
                     }
                 }
             }
@@ -187,10 +187,10 @@ namespace sdr
                             ESelection aSelection( 0, 0, EE_PARA_ALL, EE_TEXTPOS_ALL);
                             rOutliner.RemoveAttribs(aSelection, true, 0);
 
-                            OutlinerParaObject* pTemp = rOutliner.CreateParaObject(0, nParaCount);
+                            std::unique_ptr<OutlinerParaObject> pTemp = rOutliner.CreateParaObject(0, nParaCount);
                             rOutliner.Clear();
 
-                            rObj.NbcSetOutlinerParaObjectForText( pTemp, pText );
+                            rObj.NbcSetOutlinerParaObjectForText( std::move(pTemp), pText );
                         }
                     }
                 }
@@ -232,12 +232,11 @@ namespace sdr
 
         void TextProperties::SetStyleSheet(SfxStyleSheet* pNewStyleSheet, bool bDontRemoveHardAttr)
         {
-            SdrTextObj& rObj = static_cast<SdrTextObj&>(GetSdrObject());
-
-            // call parent
+            // call parent (always first thing to do, may create the SfxItemSet)
             AttributeProperties::SetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
 
             // #i101556# StyleSheet has changed -> new version
+            SdrTextObj& rObj = static_cast<SdrTextObj&>(GetSdrObject());
             maVersion++;
 
             if(!rObj.IsLinkedText() )
@@ -338,9 +337,9 @@ namespace sdr
                             delete pTempSet;
                         }
 
-                        OutlinerParaObject* pTemp = rOutliner.CreateParaObject(0, nParaCount);
+                        std::unique_ptr<OutlinerParaObject> pTemp = rOutliner.CreateParaObject(0, nParaCount);
                         rOutliner.Clear();
-                        rObj.NbcSetOutlinerParaObjectForText(pTemp, pText);
+                        rObj.NbcSetOutlinerParaObjectForText(std::move(pTemp), pText);
                     }
                 }
             }
@@ -464,7 +463,7 @@ namespace sdr
                                                 {
                                                     const SvxFieldData* pData = pFieldItem->GetField();
 
-                                                    if(pData && dynamic_cast<const SvxURLField*>( pData) !=  nullptr)
+                                                    if(dynamic_cast<const SvxURLField*>( pData))
                                                     {
                                                         bHasURL = true;
                                                         break;
@@ -518,8 +517,8 @@ namespace sdr
 
                         if(bBurnIn)
                         {
-                            OutlinerParaObject* pTemp = pOutliner->CreateParaObject(0, nParaCount);
-                            rObj.NbcSetOutlinerParaObjectForText(pTemp,pText);
+                            std::unique_ptr<OutlinerParaObject> pTemp = pOutliner->CreateParaObject(0, nParaCount);
+                            rObj.NbcSetOutlinerParaObjectForText(std::move(pTemp),pText);
                         }
                     }
 
@@ -588,7 +587,7 @@ namespace sdr
                     if(pExtendedHint
                         && SfxHintId::StyleSheetModified == pExtendedHint->GetId())
                     {
-                        OUString aOldName(pExtendedHint->GetOldName());
+                        const OUString& aOldName(pExtendedHint->GetOldName());
                         OUString aNewName(pExtendedHint->GetStyleSheet()->GetName());
                         SfxStyleFamily eFamily = pExtendedHint->GetStyleSheet()->GetFamily();
 

@@ -22,9 +22,11 @@
 #include <com/sun/star/ui/ContextChangeEventMultiplexer.hpp>
 #include <com/sun/star/frame/ModuleManager.hpp>
 #include <osl/diagnose.h>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
+#include <sfx2/lokhelper.hxx>
+#include <sfx2/viewsh.hxx>
 
-using ::rtl::OUString;
 using namespace css;
 using namespace css::uno;
 
@@ -40,7 +42,7 @@ ContextChangeBroadcaster::~ContextChangeBroadcaster()
 {
 }
 
-void ContextChangeBroadcaster::Initialize (const ::rtl::OUString& rsContextName)
+void ContextChangeBroadcaster::Initialize (const OUString& rsContextName)
 {
     msContextName = rsContextName;
 }
@@ -71,8 +73,8 @@ bool ContextChangeBroadcaster::SetBroadcasterEnabled (const bool bIsEnabled)
 
 void ContextChangeBroadcaster::BroadcastContextChange (
     const css::uno::Reference<css::frame::XFrame>& rxFrame,
-    const ::rtl::OUString& rsModuleName,
-    const ::rtl::OUString& rsContextName)
+    const OUString& rsModuleName,
+    const OUString& rsContextName)
 {
     if ( ! mbIsBroadcasterEnabled)
         return;
@@ -85,6 +87,13 @@ void ContextChangeBroadcaster::BroadcastContextChange (
         // Frame is (probably) being deleted.  Broadcasting context
         // changes is not necessary anymore.
         return;
+    }
+
+    // notify the LOK too
+    if (comphelper::LibreOfficeKit::isActive())
+    {
+        if (SfxViewShell* pViewShell = SfxViewShell::Get(rxFrame->getController()))
+            SfxLokHelper::notifyContextChange(pViewShell, rsModuleName, rsContextName);
     }
 
     const css::ui::ContextChangeEventObject aEvent(

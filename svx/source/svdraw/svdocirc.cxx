@@ -49,10 +49,11 @@
 #include <svx/xlnstwit.hxx>
 #include <svx/xlnwtit.hxx>
 #include <svx/xpool.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star;
 
-Point GetAnglePnt(const tools::Rectangle& rR, long nAngle)
+static Point GetAnglePnt(const tools::Rectangle& rR, long nAngle)
 {
     Point aCenter(rR.Center());
     long nWdt=rR.Right()-rR.Left();
@@ -60,7 +61,7 @@ Point GetAnglePnt(const tools::Rectangle& rR, long nAngle)
     long nMaxRad=(std::max(nWdt,nHgt)+1) /2;
     double a;
     a=nAngle*nPi180;
-    Point aRetval(svx::Round(cos(a)*nMaxRad),-svx::Round(sin(a)*nMaxRad));
+    Point aRetval(FRound(cos(a)*nMaxRad),-FRound(sin(a)*nMaxRad));
     if (nWdt==0) aRetval.setX(0 );
     if (nHgt==0) aRetval.setY(0 );
     if (nWdt!=nHgt) {
@@ -91,17 +92,17 @@ Point GetAnglePnt(const tools::Rectangle& rR, long nAngle)
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrCircObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrCircObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::CircleProperties(*this);
+    return o3tl::make_unique<sdr::properties::CircleProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrCircObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrCircObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrCircObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrCircObj>(*this);
 }
 
 SdrCircObj::SdrCircObj(
@@ -136,8 +137,8 @@ SdrCircObj::SdrCircObj(
 :   SdrRectObj(rSdrModel, rRect)
 {
     long nAngleDif=nNewEndWink-nNewStartWink;
-    nStartAngle=NormAngle360(nNewStartWink);
-    nEndAngle=NormAngle360(nNewEndWink);
+    nStartAngle=NormAngle36000(nNewStartWink);
+    nEndAngle=NormAngle36000(nNewEndWink);
     if (nAngleDif==36000) nEndAngle+=nAngleDif; // full circle
     meCircleKind=eNewKind;
     bClosedObj=eNewKind!=OBJ_CARC;
@@ -405,83 +406,76 @@ sal_uInt32 SdrCircObj::GetHdlCount() const
     }
 }
 
-SdrHdl* SdrCircObj::GetHdl(sal_uInt32 nHdlNum) const
+void SdrCircObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    if (meCircleKind==OBJ_CIRC)
+    for (sal_uInt32 nHdlNum=(OBJ_CIRC==meCircleKind)?2:0; nHdlNum<=9; ++nHdlNum)
     {
-        nHdlNum += 2;
-    }
+        Point aPnt;
+        SdrHdlKind eLocalKind(SdrHdlKind::Move);
+        sal_uInt32 nPNum(0);
 
-    SdrHdl* pH = nullptr;
-    Point aPnt;
-    SdrHdlKind eLocalKind(SdrHdlKind::Move);
-    sal_uInt32 nPNum(0);
+        switch (nHdlNum)
+        {
+            case 0:
+                aPnt = GetAnglePnt(maRect,nStartAngle);
+                eLocalKind = SdrHdlKind::Circle;
+                nPNum = 1;
+                break;
+            case 1:
+                aPnt = GetAnglePnt(maRect,nEndAngle);
+                eLocalKind = SdrHdlKind::Circle;
+                nPNum = 2;
+                break;
+            case 2:
+                aPnt = maRect.TopLeft();
+                eLocalKind = SdrHdlKind::UpperLeft;
+                break;
+            case 3:
+                aPnt = maRect.TopCenter();
+                eLocalKind = SdrHdlKind::Upper;
+                break;
+            case 4:
+                aPnt = maRect.TopRight();
+                eLocalKind = SdrHdlKind::UpperRight;
+                break;
+            case 5:
+                aPnt = maRect.LeftCenter();
+                eLocalKind = SdrHdlKind::Left;
+                break;
+            case 6:
+                aPnt = maRect.RightCenter();
+                eLocalKind = SdrHdlKind::Right;
+                break;
+            case 7:
+                aPnt = maRect.BottomLeft();
+                eLocalKind = SdrHdlKind::LowerLeft;
+                break;
+            case 8:
+                aPnt = maRect.BottomCenter();
+                eLocalKind = SdrHdlKind::Lower;
+                break;
+            case 9:
+                aPnt = maRect.BottomRight();
+                eLocalKind = SdrHdlKind::LowerRight;
+                break;
+        }
 
-    switch (nHdlNum)
-    {
-        case 0:
-            aPnt = GetAnglePnt(maRect,nStartAngle);
-            eLocalKind = SdrHdlKind::Circle;
-            nPNum = 1;
-            break;
-        case 1:
-            aPnt = GetAnglePnt(maRect,nEndAngle);
-            eLocalKind = SdrHdlKind::Circle;
-            nPNum = 2;
-            break;
-        case 2:
-            aPnt = maRect.TopLeft();
-            eLocalKind = SdrHdlKind::UpperLeft;
-            break;
-        case 3:
-            aPnt = maRect.TopCenter();
-            eLocalKind = SdrHdlKind::Upper;
-            break;
-        case 4:
-            aPnt = maRect.TopRight();
-            eLocalKind = SdrHdlKind::UpperRight;
-            break;
-        case 5:
-            aPnt = maRect.LeftCenter();
-            eLocalKind = SdrHdlKind::Left;
-            break;
-        case 6:
-            aPnt = maRect.RightCenter();
-            eLocalKind = SdrHdlKind::Right;
-            break;
-        case 7:
-            aPnt = maRect.BottomLeft();
-            eLocalKind = SdrHdlKind::LowerLeft;
-            break;
-        case 8:
-            aPnt = maRect.BottomCenter();
-            eLocalKind = SdrHdlKind::Lower;
-            break;
-        case 9:
-            aPnt = maRect.BottomRight();
-            eLocalKind = SdrHdlKind::LowerRight;
-            break;
-    }
+        if (aGeo.nShearAngle)
+        {
+            ShearPoint(aPnt,maRect.TopLeft(),aGeo.nTan);
+        }
 
-    if (aGeo.nShearAngle)
-    {
-        ShearPoint(aPnt,maRect.TopLeft(),aGeo.nTan);
-    }
+        if (aGeo.nRotationAngle)
+        {
+            RotatePoint(aPnt,maRect.TopLeft(),aGeo.nSin,aGeo.nCos);
+        }
 
-    if (aGeo.nRotationAngle)
-    {
-        RotatePoint(aPnt,maRect.TopLeft(),aGeo.nSin,aGeo.nCos);
-    }
-
-    if (eLocalKind != SdrHdlKind::Move)
-    {
-        pH = new SdrHdl(aPnt,eLocalKind);
+        std::unique_ptr<SdrHdl> pH(new SdrHdl(aPnt,eLocalKind));
         pH->SetPointNum(nPNum);
         pH->SetObj(const_cast<SdrCircObj*>(this));
         pH->SetRotationAngle(aGeo.nRotationAngle);
+        rHdlList.AddHdl(std::move(pH));
     }
-
-    return pH;
 }
 
 
@@ -535,7 +529,7 @@ bool SdrCircObj::applySpecialDrag(SdrDragStat& rDrag)
             aPt.setX(BigMulDiv(aPt.X(),nHgt,nWdt) );
         }
 
-        long nAngle=NormAngle360(GetAngle(aPt));
+        long nAngle=NormAngle36000(GetAngle(aPt));
 
         if (rDrag.GetView() && rDrag.GetView()->IsAngleSnapEnabled())
         {
@@ -546,7 +540,7 @@ bool SdrCircObj::applySpecialDrag(SdrDragStat& rDrag)
                 nAngle+=nSA/2;
                 nAngle/=nSA;
                 nAngle*=nSA;
-                nAngle=NormAngle360(nAngle);
+                nAngle=NormAngle36000(nAngle);
             }
         }
 
@@ -648,14 +642,14 @@ void ImpCircUser::SetCreateParams(SdrDragStat const & rStat)
         } else {
             if (nWdt!=0) aP.setX(aP.X()*nHgt/nWdt );
         }
-        nStart=NormAngle360(GetAngle(aP));
+        nStart=NormAngle36000(GetAngle(aP));
         if (rStat.GetView()!=nullptr && rStat.GetView()->IsAngleSnapEnabled()) {
             long nSA=rStat.GetView()->GetSnapAngle();
             if (nSA!=0) { // angle snapping
                 nStart+=nSA/2;
                 nStart/=nSA;
                 nStart*=nSA;
-                nStart=NormAngle360(nStart);
+                nStart=NormAngle36000(nStart);
             }
         }
         aP1 = GetAnglePnt(aR,nStart);
@@ -669,14 +663,14 @@ void ImpCircUser::SetCreateParams(SdrDragStat const & rStat)
         } else {
             aP.setX(BigMulDiv(aP.X(),nHgt,nWdt) );
         }
-        nEnd=NormAngle360(GetAngle(aP));
+        nEnd=NormAngle36000(GetAngle(aP));
         if (rStat.GetView()!=nullptr && rStat.GetView()->IsAngleSnapEnabled()) {
             long nSA=rStat.GetView()->GetSnapAngle();
             if (nSA!=0) { // angle snapping
                 nEnd+=nSA/2;
                 nEnd/=nSA;
                 nEnd*=nSA;
-                nEnd=NormAngle360(nEnd);
+                nEnd=NormAngle36000(nEnd);
             }
         }
         aP2 = GetAnglePnt(aR,nEnd);
@@ -861,8 +855,8 @@ void SdrCircObj::NbcResize(const Point& rRef, const Fraction& xFact, const Fract
                 }
             }
             long nAngleDif=nE0-nS0;
-            nStartAngle=NormAngle360(nS0);
-            nEndAngle  =NormAngle360(nE0);
+            nStartAngle=NormAngle36000(nS0);
+            nEndAngle  =NormAngle36000(nE0);
             if (nAngleDif==36000) nEndAngle+=nAngleDif; // full circle
         }
     }
@@ -890,13 +884,13 @@ void SdrCircObj::NbcMirror(const Point& rRef1, const Point& rRef2)
         double a;
         // starting point
         a=nStartAngle*nPi180;
-        aTmpPt1=Point(svx::Round(cos(a)*nMaxRad),-svx::Round(sin(a)*nMaxRad));
+        aTmpPt1=Point(FRound(cos(a)*nMaxRad),-FRound(sin(a)*nMaxRad));
         if (nWdt==0) aTmpPt1.setX(0 );
         if (nHgt==0) aTmpPt1.setY(0 );
         aTmpPt1+=aCenter;
         // finishing point
         a=nEndAngle*nPi180;
-        aTmpPt2=Point(svx::Round(cos(a)*nMaxRad),-svx::Round(sin(a)*nMaxRad));
+        aTmpPt2=Point(FRound(cos(a)*nMaxRad),-FRound(sin(a)*nMaxRad));
         if (nWdt==0) aTmpPt2.setX(0 );
         if (nHgt==0) aTmpPt2.setY(0 );
         aTmpPt2+=aCenter;
@@ -930,8 +924,8 @@ void SdrCircObj::NbcMirror(const Point& rRef1, const Point& rRef2)
         nStartAngle=GetAngle(aTmpPt2);
         nEndAngle  =GetAngle(aTmpPt1);
         long nAngleDif=nEndAngle-nStartAngle;
-        nStartAngle=NormAngle360(nStartAngle);
-        nEndAngle  =NormAngle360(nEndAngle);
+        nStartAngle=NormAngle36000(nStartAngle);
+        nEndAngle  =NormAngle36000(nEndAngle);
         if (nAngleDif==36000) nEndAngle+=nAngleDif; // full circle
     }
     SetXPolyDirty();
@@ -961,7 +955,7 @@ void SdrCircObj::RestGeoData(const SdrObjGeoData& rGeo)
     ImpSetCircInfoToAttr();
 }
 
-void Union(tools::Rectangle& rR, const Point& rP)
+static void Union(tools::Rectangle& rR, const Point& rP)
 {
     if (rP.X()<rR.Left  ()) rR.SetLeft(rP.X() );
     if (rP.X()>rR.Right ()) rR.SetRight(rP.X() );
@@ -1008,7 +1002,7 @@ void SdrCircObj::TakeUnrotatedSnapRect(tools::Rectangle& rRect) const
         }
     }
     if (aGeo.nShearAngle!=0) {
-        long nDst=svx::Round((rRect.Bottom()-rRect.Top())*aGeo.nTan);
+        long nDst=FRound((rRect.Bottom()-rRect.Top())*aGeo.nTan);
         if (aGeo.nShearAngle>0) {
             Point aRef(rRect.TopLeft());
             rRect.AdjustLeft( -nDst );

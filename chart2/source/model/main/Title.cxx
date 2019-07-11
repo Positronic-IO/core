@@ -18,25 +18,25 @@
  */
 
 #include "Title.hxx"
-#include "FormattedString.hxx"
 #include <LinePropertiesHelper.hxx>
 #include <FillProperties.hxx>
 #include <ContainerHelper.hxx>
 #include <CloneHelper.hxx>
 #include <PropertyHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/chart2/RelativePosition.hpp>
 #include <com/sun/star/awt/Size.hpp>
-#include <rtl/uuid.h>
-#include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <vector>
 #include <algorithm>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans::PropertyAttribute;
@@ -235,7 +235,7 @@ Title::Title() :
 
 Title::Title( const Title & rOther ) :
         MutexContainer(),
-        impl::Title_Base(),
+        impl::Title_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
         m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {

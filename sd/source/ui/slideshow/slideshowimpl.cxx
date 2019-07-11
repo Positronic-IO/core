@@ -33,6 +33,7 @@
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XLayoutManager.hpp>
 #include <com/sun/star/presentation/SlideShow.hpp>
+#include <o3tl/clamp.hxx>
 #include <svl/aeitem.hxx>
 #include <svl/urihelper.hxx>
 
@@ -63,16 +64,19 @@
 #include <vcl/canvastools.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/scheduler.hxx>
 
 #include <comphelper/anytostring.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 #include <canvas/elapsedtime.hxx>
 #include <avmedia/mediawindow.hxx>
 #include <svtools/colrdlg.hxx>
 #include <RemoteServer.hxx>
 #include <customshowlist.hxx>
 #include <unopage.hxx>
+#include <sdpage.hxx>
 
 #define CM_SLIDES       21
 
@@ -151,7 +155,7 @@ private:
     bool isValidSlideNumber( sal_Int32 nSlideNumber ) const { return (nSlideNumber >= 0) && (nSlideNumber < mnSlideCount); }
 
 private:
-    Mode meMode;
+    Mode const meMode;
     sal_Int32 mnStartSlideNumber;
     std::vector< sal_Int32 > maSlideNumbers;
     std::vector< bool > maSlideVisible;
@@ -464,6 +468,10 @@ void AnimationSlideController::displayCurrentSlide( const Reference< XSlideShow 
     }
 }
 
+static constexpr OUStringLiteral gsOnClick( "OnClick" );
+static constexpr OUStringLiteral gsBookmark( "Bookmark" );
+static constexpr OUStringLiteral gsVerb( "Verb" );
+
 SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, ViewShell* pViewSh, ::sd::View* pView, SdDrawDocument* pDoc, vcl::Window* pParentWindow )
 : SlideshowImplBase( m_aMutex )
 , mxModel(pDoc->getUnoModel(),UNO_QUERY_THROW)
@@ -473,7 +481,6 @@ SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, 
 , mpDoc(pDoc)
 , mpParentWindow(pParentWindow)
 , mpShowWindow(nullptr)
-, mpTimeButton(nullptr)
 , mnRestoreSlide(0)
 , maPresSize( -1, -1 )
 , meAnimationMode(ANIMATIONMODE_SHOW)
@@ -490,9 +497,6 @@ SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, 
 , mnUserPaintColor( 0x80ff0000L )
 , mbUsePen(false)
 , mdUserPaintStrokeWidth ( 150.0 )
-, msOnClick( "OnClick" )
-, msBookmark( "Bookmark" )
-, msVerb( "Verb" )
 , mnEndShowEvent(nullptr)
 , mnContextMenuEvent(nullptr)
 , mxPresentation( xPresentation )
@@ -665,10 +669,6 @@ void SAL_CALL SlideshowImpl::disposing()
             mpViewShell->ShowUIControls(true);
         }
     }
-
-    if( mpTimeButton )
-        mpTimeButton->Hide();
-    mpTimeButton.disposeAndClear();
 
     if( mpShowWindow )
         mpShowWindow->Hide();
@@ -1254,11 +1254,11 @@ void SlideshowImpl::registerShapeEvents( Reference< XShapes > const & xShapes )
                 continue;
 
             Reference< XPropertySetInfo > xSetInfo( xSet->getPropertySetInfo() );
-            if( !xSetInfo.is() || !xSetInfo->hasPropertyByName( msOnClick ) )
+            if( !xSetInfo.is() || !xSetInfo->hasPropertyByName( gsOnClick ) )
                 continue;
 
             WrappedShapeEventImplPtr pEvent( new WrappedShapeEventImpl );
-            xSet->getPropertyValue( msOnClick ) >>= pEvent->meClickAction;
+            xSet->getPropertyValue( gsOnClick ) >>= pEvent->meClickAction;
 
             switch( pEvent->meClickAction )
             {
@@ -1269,8 +1269,8 @@ void SlideshowImpl::registerShapeEvents( Reference< XShapes > const & xShapes )
             case ClickAction_STOPPRESENTATION:
                 break;
             case ClickAction_BOOKMARK:
-                if( xSetInfo->hasPropertyByName( msBookmark ) )
-                    xSet->getPropertyValue( msBookmark ) >>= pEvent->maStrBookmark;
+                if( xSetInfo->hasPropertyByName( gsBookmark ) )
+                    xSet->getPropertyValue( gsBookmark ) >>= pEvent->maStrBookmark;
                 if( getSlideNumberForBookmark( pEvent->maStrBookmark ) == -1 )
                     continue;
                 break;
@@ -1278,12 +1278,12 @@ void SlideshowImpl::registerShapeEvents( Reference< XShapes > const & xShapes )
             case ClickAction_SOUND:
             case ClickAction_PROGRAM:
             case ClickAction_MACRO:
-                if( xSetInfo->hasPropertyByName( msBookmark ) )
-                    xSet->getPropertyValue( msBookmark ) >>= pEvent->maStrBookmark;
+                if( xSetInfo->hasPropertyByName( gsBookmark ) )
+                    xSet->getPropertyValue( gsBookmark ) >>= pEvent->maStrBookmark;
                 break;
             case ClickAction_VERB:
-                if( xSetInfo->hasPropertyByName( msVerb ) )
-                    xSet->getPropertyValue( msVerb ) >>= pEvent->mnVerb;
+                if( xSetInfo->hasPropertyByName( gsVerb ) )
+                    xSet->getPropertyValue( gsVerb ) >>= pEvent->mnVerb;
                 break;
             default:
                 continue; // skip all others
@@ -1556,8 +1556,8 @@ sal_Int32 SlideshowImpl::getSlideNumberForBookmark( const OUString& rStrBookmark
 
         if( pObj )
         {
-            nPgNum = pObj->GetPage()->GetPageNum();
-            bIsMasterPage = pObj->GetPage()->IsMasterPage();
+            nPgNum = pObj->getSdrPageFromSdrObject()->GetPageNum();
+            bIsMasterPage = pObj->getSdrPageFromSdrObject()->IsMasterPage();
         }
     }
 
@@ -1671,7 +1671,12 @@ void SlideshowImpl::updateSlideShow()
 
         if (mxShow.is() && (fUpdate >= 0.0))
         {
-            if (!::basegfx::fTools::equalZero(fUpdate))
+            if (::basegfx::fTools::equalZero(fUpdate))
+            {
+                // Make sure idle tasks don't starve when we don't have to wait.
+                Scheduler::ProcessEventsToIdle();
+            }
+            else
             {
                 // Avoid busy loop when the previous call to update()
                 // returns a small positive number but not 0 (which is
@@ -1682,7 +1687,7 @@ void SlideshowImpl::updateSlideShow()
                 const static sal_Int32 nMaximumFrameCount (60);
                 const static double nMinimumTimeout (1.0 / nMaximumFrameCount);
                 const static double nMaximumTimeout (4.0);
-                fUpdate = ::basegfx::clamp(fUpdate, nMinimumTimeout, nMaximumTimeout);
+                fUpdate = o3tl::clamp(fUpdate, nMinimumTimeout, nMaximumTimeout);
 
                 // Make sure that the maximum frame count has not been set
                 // too high (only then conversion to milliseconds and long
@@ -1919,7 +1924,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
 {
     mnContextMenuEvent = nullptr;
 
-    if( mpSlideController.get() == nullptr )
+    if (mpSlideController == nullptr)
         return;
 
     mbWasPaused = mbIsPaused;
@@ -2033,7 +2038,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
             }
 
             if (nWidth == mdUserPaintStrokeWidth)
-                pWidthMenu->CheckItem(pWidthMenu->GetItemId(OString::number(nWidth)));
+                pWidthMenu->CheckItem(OString::number(nWidth));
         }
     }
 
@@ -2100,10 +2105,10 @@ IMPL_LINK( SlideshowImpl, ContextMenuSelectHdl, Menu *, pMenu, bool )
     {
         //Open a color picker based on SvColorDialog
         ::Color aColor( mnUserPaintColor );
-        SvColorDialog aColorDlg( mpShowWindow);
+        SvColorDialog aColorDlg;
         aColorDlg.SetColor( aColor );
 
-        if (aColorDlg.Execute() )
+        if (aColorDlg.Execute(mpShowWindow->GetFrameWeld()))
         {
             aColor = aColorDlg.GetColor();
             setPenColor(sal_Int32(aColor));
@@ -2225,7 +2230,7 @@ void SlideshowImpl::createSlideList( bool bAll, const OUString& rPresSlide )
 
         // create animation slide controller
         AnimationSlideController::Mode eMode =
-            ( pCustomShow && pCustomShow->PagesVector().size() ) ? AnimationSlideController::CUSTOM :
+            ( pCustomShow && !pCustomShow->PagesVector().empty() ) ? AnimationSlideController::CUSTOM :
                 (bAll ? AnimationSlideController::ALL : AnimationSlideController::FROM);
 
         Reference< XDrawPagesSupplier > xDrawPages( mpDoc->getUnoModel(), UNO_QUERY_THROW );
@@ -2564,7 +2569,8 @@ sal_Int32 SAL_CALL SlideshowImpl::getCurrentSlideIndex()
 
 Reference< XDrawPage > SAL_CALL SlideshowImpl::getSlideByIndex(::sal_Int32 Index)
 {
-    if( (mpSlideController.get() == nullptr ) || (Index < 0) || (Index >= mpSlideController->getSlideIndexCount() ) )
+    if ((mpSlideController == nullptr) || (Index < 0)
+        || (Index >= mpSlideController->getSlideIndexCount()))
         throw IndexOutOfBoundsException();
 
     return mpSlideController->getSlideByNumber( mpSlideController->getSlideNumber( Index ) );

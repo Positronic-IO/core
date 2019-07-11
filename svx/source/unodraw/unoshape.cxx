@@ -79,13 +79,15 @@
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
-#include <basegfx/utils/unotools.hxx>
 #include "gluepts.hxx"
 #include "shapeimpl.hxx"
 #include <sal/log.hxx>
 
 #include <svx/lathe3d.hxx>
 #include <svx/extrud3d.hxx>
+#include <svx/sdr/contact/viewcontact.hxx>
+#include <drawinglayer/geometry/viewinformation2d.hxx>
+#include <drawinglayer/primitive2d/transformprimitive2d.hxx>
 
 #include <vcl/wmf.hxx>
 
@@ -189,19 +191,6 @@ SvxShape::SvxShape( SdrObject* pObject, const SfxItemPropertyMapEntry* pEntries,
 ,   mpPropSet(pPropertySet)
 ,   maPropMapEntries(pEntries)
 ,   mpSdrObjectWeakReference(pObject)
-,   mnLockCount(0)
-{
-    impl_construct();
-}
-
-
-SvxShape::SvxShape()
-:   maSize(100,100)
-,   mpImpl( new SvxShapeImpl( *this, maMutex ) )
-,   mbIsMultiPropertyCall(false)
-,   mpPropSet(getSvxMapProvider().GetPropertySet(SVXMAP_SHAPE, SdrObject::GetGlobalDrawObjectItemPool()))
-,   maPropMapEntries(getSvxMapProvider().GetMap(SVXMAP_SHAPE))
-,   mpSdrObjectWeakReference(nullptr)
 ,   mnLockCount(0)
 {
     impl_construct();
@@ -617,7 +606,7 @@ void SvxShape::ForceMetricTo100th_mm(basegfx::B2DHomMatrix& rB2DHomMatrix) const
     }
 }
 
-void SvxItemPropertySet_ObtainSettingsFromPropertySet(const SvxItemPropertySet& rPropSet,
+static void SvxItemPropertySet_ObtainSettingsFromPropertySet(const SvxItemPropertySet& rPropSet,
   SfxItemSet& rSet, const uno::Reference< beans::XPropertySet >& xSet, const SfxItemPropertyMap* pMap )
 {
     if(rPropSet.AreThereOwnUsrAnys())
@@ -691,48 +680,128 @@ uno::Any SvxShape::GetBitmap( bool bMetaFile /* = false */ ) const
     DBG_TESTSOLARMUTEX();
     uno::Any aAny;
 
-    if( !HasSdrObject() || !GetSdrObject()->IsInserted() || nullptr == GetSdrObject()->GetPage() )
-        return aAny;
-
-    ScopedVclPtrInstance< VirtualDevice > pVDev;
-    pVDev->SetMapMode(MapMode(MapUnit::Map100thMM));
-    SdrPage* pPage = GetSdrObject()->GetPage();
-
-    std::unique_ptr<E3dView> pView(
-        new E3dView(
-            GetSdrObject()->getSdrModelFromSdrObject(),
-            pVDev.get()));
-    pView->hideMarkHandles();
-    SdrPageView* pPageView = pView->ShowSdrPage(pPage);
-
-    SdrObject *pTempObj = GetSdrObject();
-    pView->MarkObj(pTempObj,pPageView);
-
-    tools::Rectangle aRect(pTempObj->GetCurrentBoundRect());
-    aRect.Justify();
-    Size aSize(aRect.GetSize());
-
-    GDIMetaFile aMtf( pView->GetMarkedObjMetaFile() );
-    if( bMetaFile )
+    if(!HasSdrObject() || nullptr == GetSdrObject()->getSdrPageFromSdrObject())
     {
-        SvMemoryStream aDestStrm( 65535, 65535 );
-        ConvertGDIMetaFileToWMF( aMtf, aDestStrm, nullptr, false );
+        return aAny;
+    }
+
+    // tdf#118662 Emulate old behaviour of XclObjComment (see there)
+    const SdrCaptionObj* pSdrCaptionObj(dynamic_cast<SdrCaptionObj*>(GetSdrObject()));
+    if(nullptr != pSdrCaptionObj && pSdrCaptionObj->isSuppressGetBitmap())
+    {
+        return aAny;
+    }
+
+    // tdf#119180 If we do not ask for Metafile and we access a SdrGrafObj,
+    // and content exists and is a Bitmap, take the shortcut.
+    // Do *not* do this for Metafile - as can be seen, requested in that case
+    // is a byte-sequence of a saved WMF format file (see below)
+    if(!bMetaFile)
+    {
+        const SdrGrafObj* pSdrGrafObj(dynamic_cast<SdrGrafObj*>(GetSdrObject()));
+
+        if(nullptr != pSdrGrafObj)
+        {
+           const Graphic& rGraphic(pSdrGrafObj->GetGraphic());
+
+            if(GraphicType::Bitmap == rGraphic.GetType())
+            {
+                Reference< awt::XBitmap > xBmp( rGraphic.GetXGraphic(), UNO_QUERY );
+                aAny <<= xBmp;
+
+                return aAny;
+            }
+        }
+    }
+
+    // tdf#118662 instead of creating an E3dView instance every time to paint
+    // a single SdrObject, use the existing SdrObject::SingleObjectPainter to
+    // use less resources and runtime
+    if(bMetaFile)
+    {
+        ScopedVclPtrInstance< VirtualDevice > pVDev;
+        const tools::Rectangle aBoundRect(GetSdrObject()->GetCurrentBoundRect());
+        GDIMetaFile aMtf;
+
+        pVDev->SetMapMode(MapMode(MapUnit::Map100thMM));
+        pVDev->EnableOutput(false);
+        aMtf.Record(pVDev);
+        GetSdrObject()->SingleObjectPainter(*pVDev.get());
+        aMtf.Stop();
+        aMtf.WindStart();
+        aMtf.Move(-aBoundRect.Left(), -aBoundRect.Top());
+        aMtf.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
+        aMtf.SetPrefSize(aBoundRect.GetSize());
+
+        SvMemoryStream aDestStrm(65535, 65535);
+
+        ConvertGDIMetaFileToWMF(
+            aMtf,
+            aDestStrm,
+            nullptr,
+            false);
+
         const uno::Sequence<sal_Int8> aSeq(
             static_cast< const sal_Int8* >(aDestStrm.GetData()),
             aDestStrm.GetEndOfData());
+
         aAny <<= aSeq;
     }
     else
     {
-        Graphic aGraph(aMtf);
-        aGraph.SetPrefSize(aSize);
-        aGraph.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
+        drawinglayer::primitive2d::Primitive2DContainer xPrimitives(
+            GetSdrObject()->GetViewContact().getViewIndependentPrimitive2DContainer());
 
-        Reference< awt::XBitmap > xBmp( aGraph.GetXGraphic(), UNO_QUERY );
-        aAny <<= xBmp;
+        if(!xPrimitives.empty())
+        {
+            const drawinglayer::geometry::ViewInformation2D aViewInformation2D;
+            basegfx::B2DRange aRange(
+                xPrimitives.getB2DRange(aViewInformation2D));
+
+            if(!aRange.isEmpty())
+            {
+                const MapUnit aSourceMapUnit(GetSdrObject()->getSdrModelFromSdrObject().GetScaleUnit());
+
+                if(MapUnit::Map100thMM != aSourceMapUnit)
+                {
+                    // tdf#119180 This is UNO API and thus works in 100th_mm,
+                    // so if the MapMode from the used SdrModel is *not* equal
+                    // to Map100thMM we need to embed the primitives to an adapting
+                    // homogen transformation for correct values
+                    const basegfx::B2DHomMatrix aMapTransform(
+                        OutputDevice::LogicToLogic(
+                            MapMode(aSourceMapUnit),
+                            MapMode(MapUnit::Map100thMM)));
+
+                    // Embed primitives to get them in 100th mm
+                    const drawinglayer::primitive2d::Primitive2DReference xEmbedRef(
+                        new drawinglayer::primitive2d::TransformPrimitive2D(
+                            aMapTransform,
+                            xPrimitives));
+
+                    xPrimitives = drawinglayer::primitive2d::Primitive2DContainer { xEmbedRef };
+
+                    // Update basegfx::B2DRange aRange, too. Here we have the
+                    // choice of transforming the existing value or get newly by
+                    // again using 'xPrimitives.getB2DRange(aViewInformation2D)'
+                    aRange.transform(aMapTransform);
+                }
+
+                const BitmapEx aBmp(
+                    convertPrimitive2DSequenceToBitmapEx(
+                        xPrimitives,
+                        aRange));
+
+                Graphic aGraph(aBmp);
+
+                aGraph.SetPrefSize(aBmp.GetPrefSize());
+                aGraph.SetPrefMapMode(aBmp.GetPrefMapMode());
+
+                Reference< awt::XBitmap > xBmp( aGraph.GetXGraphic(), UNO_QUERY );
+                aAny <<= xBmp;
+            }
+        }
     }
-
-    pView->UnmarkAll();
 
     return aAny;
 }
@@ -765,208 +834,137 @@ uno::Sequence< uno::Type > SvxShape::_getTypes()
     case E3D_EXTRUDEOBJ_ID|E3D_INVENTOR_FLAG:
     case E3D_POLYGONOBJ_ID|E3D_INVENTOR_FLAG:
     case OBJ_MEDIA:
+    case OBJ_TABLE:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 12 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                }
-            }
             return aTypeSequence;
         }
     // group shape
     case OBJ_GRUP:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                cppu::UnoType<drawing::XShapes>::get(),
+                cppu::UnoType<drawing::XShapeGroup>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 14 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XShapes>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XShapeGroup>::get();
-                }
-            }
             return aTypeSequence;
         }
     // connector shape
     case OBJ_EDGE:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                cppu::UnoType<drawing::XConnectorShape>::get(),
+                // from SvxUnoTextBase::getTypes()
+                cppu::UnoType<text::XTextAppend>::get(),
+                cppu::UnoType<text::XTextCopy>::get(),
+                cppu::UnoType<container::XEnumerationAccess>::get(),
+                cppu::UnoType<text::XTextRangeMover>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 17 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XConnectorShape>::get();
-                    // from SvxUnoTextBase::getTypes()
-                    *pTypes++ = cppu::UnoType<text::XTextAppend>::get();
-                    *pTypes++ = cppu::UnoType<text::XTextCopy>::get();
-                    *pTypes++ = cppu::UnoType<container::XEnumerationAccess>::get();
-                    *pTypes++ = cppu::UnoType<text::XTextRangeMover>::get();
-                }
-            }
             return aTypeSequence;
         }
     // control shape
     case OBJ_UNO:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                cppu::UnoType<drawing::XControlShape>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 13 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XControlShape>::get();
-                }
-            }
             return aTypeSequence;
         }
     // 3d scene shape
     case E3D_SCENE_ID|E3D_INVENTOR_FLAG:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                cppu::UnoType<drawing::XShapes>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 13 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XShapes>::get();
-                }
-            }
             return aTypeSequence;
         }
     case OBJ_CUSTOMSHAPE:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                // from SvxUnoTextBase::getTypes()
+                cppu::UnoType<text::XText>::get(),
+                cppu::UnoType<container::XEnumerationAccess>::get(),
+                cppu::UnoType<text::XTextRangeMover>::get(),
+                cppu::UnoType<drawing::XEnhancedCustomShapeDefaulter>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 16 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    // from SvxUnoTextBase::getTypes()
-                    *pTypes++ = cppu::UnoType<text::XText>::get();
-                    *pTypes++ = cppu::UnoType<container::XEnumerationAccess>::get();
-                    *pTypes++ = cppu::UnoType<text::XTextRangeMover>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XEnhancedCustomShapeDefaulter>::get();
-                }
-            }
             return aTypeSequence;
         }
     // shapes with text
@@ -985,42 +983,29 @@ uno::Sequence< uno::Type > SvxShape::_getTypes()
     case OBJ_GRAF:
     case OBJ_TEXT:
     case OBJ_CAPTION:
-    case OBJ_TABLE:
     case OBJ_OLE2: // #i118485# Moved to shapes with text
     default:
         {
-            static css::uno::Sequence< css::uno::Type > aTypeSequence;
+            static uno::Sequence<uno::Type> aTypeSequence{
+                cppu::UnoType<drawing::XShape>::get(),
+                cppu::UnoType<lang::XComponent>::get(),
+                cppu::UnoType<beans::XPropertySet>::get(),
+                cppu::UnoType<beans::XMultiPropertySet>::get(),
+                cppu::UnoType<beans::XPropertyState>::get(),
+                cppu::UnoType<beans::XMultiPropertyStates>::get(),
+                cppu::UnoType<drawing::XGluePointsSupplier>::get(),
+                cppu::UnoType<container::XChild>::get(),
+                cppu::UnoType<lang::XServiceInfo>::get(),
+                cppu::UnoType<lang::XTypeProvider>::get(),
+                cppu::UnoType<lang::XUnoTunnel>::get(),
+                cppu::UnoType<container::XNamed>::get(),
+                // from SvxUnoTextBase::getTypes()
+                cppu::UnoType<text::XTextAppend>::get(),
+                cppu::UnoType<text::XTextCopy>::get(),
+                cppu::UnoType<container::XEnumerationAccess>::get(),
+                cppu::UnoType<text::XTextRangeMover>::get(),
+            };
 
-            if( aTypeSequence.getLength() == 0 )
-            {
-                // Ready for multithreading; get global mutex for first call of this method only! see before
-                MutexGuard aGuard( osl::Mutex::getGlobalMutex() ) ;
-
-                // Control these pointer again ... it can be, that another instance will be faster then these!
-                if( aTypeSequence.getLength() == 0 )
-                {
-                    aTypeSequence.realloc( 16 );
-                    uno::Type* pTypes = aTypeSequence.getArray();
-
-                    *pTypes++ = cppu::UnoType<drawing::XShape>::get();
-                    *pTypes++ = cppu::UnoType<lang::XComponent>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertySet>::get();
-                    *pTypes++ = cppu::UnoType<beans::XPropertyState>::get();
-                    *pTypes++ = cppu::UnoType<beans::XMultiPropertyStates>::get();
-                    *pTypes++ = cppu::UnoType<drawing::XGluePointsSupplier>::get();
-                    *pTypes++ = cppu::UnoType<container::XChild>::get();
-                    *pTypes++ = cppu::UnoType<lang::XServiceInfo>::get();
-                    *pTypes++ = cppu::UnoType<lang::XTypeProvider>::get();
-                    *pTypes++ = cppu::UnoType<lang::XUnoTunnel>::get();
-                    *pTypes++ = cppu::UnoType<container::XNamed>::get();
-                    // from SvxUnoTextBase::getTypes()
-                    *pTypes++ = cppu::UnoType<text::XTextAppend>::get();
-                    *pTypes++ = cppu::UnoType<text::XTextCopy>::get();
-                    *pTypes++ = cppu::UnoType<container::XEnumerationAccess>::get();
-                    *pTypes++ = cppu::UnoType<text::XTextRangeMover>::get();
-                }
-            }
             return aTypeSequence;
         }
     }
@@ -1339,37 +1324,38 @@ void SAL_CALL SvxShape::dispose()
 
     if ( HasSdrObject() )
     {
-        EndListening( GetSdrObject()->getSdrModelFromSdrObject() );
+        SdrObject* pObject = GetSdrObject();
+
+        EndListening( pObject->getSdrModelFromSdrObject() );
         bool bFreeSdrObject = false;
 
-        if ( GetSdrObject()->IsInserted() && GetSdrObject()->GetPage() )
+        if ( pObject->IsInserted() && pObject->getSdrPageFromSdrObject() )
         {
             OSL_ENSURE( HasSdrObjectOwnership(), "SvxShape::dispose: is the below code correct?" );
                 // normally, we are allowed to free the SdrObject only if we have its ownership.
                 // Why isn't this checked here?
 
-            SdrPage* pPage = GetSdrObject()->GetPage();
+            SdrPage* pPage = pObject->getSdrPageFromSdrObject();
             // delete the SdrObject from the page
             const size_t nCount = pPage->GetObjCount();
             for ( size_t nNum = 0; nNum < nCount; ++nNum )
             {
-                if ( pPage->GetObj( nNum ) == GetSdrObject() )
+                if ( pPage->GetObj( nNum ) == pObject )
                 {
-                    OSL_VERIFY( pPage->RemoveObject( nNum ) == GetSdrObject() );
+                    OSL_VERIFY( pPage->RemoveObject( nNum ) == pObject );
                     bFreeSdrObject = true;
                     break;
                 }
             }
         }
 
-        GetSdrObject()->setUnoShape(nullptr);
+        pObject->setUnoShape(nullptr);
 
         if ( bFreeSdrObject )
         {
             // in case we have the ownership of the SdrObject, a Free
             // would do nothing. So ensure the ownership is reset.
             mpImpl->mbHasSdrObjectOwnership = false;
-            SdrObject* pObject = GetSdrObject();
             SdrObject::Free( pObject );
         }
     }
@@ -1686,7 +1672,11 @@ void SvxShape::_setPropertyValue( const OUString& rPropertyName, const uno::Any&
     {
         if( mpImpl->mpItemSet == nullptr )
         {
-            mpImpl->mpItemSet = GetSdrObject()->GetMergedItemSet().Clone();
+            mpImpl->mpItemSet.reset(new SfxItemSet( GetSdrObject()->getSdrModelFromSdrObject().GetItemPool(),  {{pMap->nWID, pMap->nWID}}));
+        }
+        else
+        {
+            mpImpl->mpItemSet->MergeRange(pMap->nWID, pMap->nWID);
         }
         pSet = mpImpl->mpItemSet.get();
     }
@@ -2054,7 +2044,7 @@ beans::PropertyState SvxShape::_getPropertyState( const OUString& PropertyName )
             case XATTR_FILLHATCH:
             case XATTR_LINEDASH:
                 {
-                    const NameOrIndex* pItem = rSet.GetItem<NameOrIndex>(static_cast<sal_uInt16>(pMap->nWID));
+                    const NameOrIndex* pItem = rSet.GetItem<NameOrIndex>(pMap->nWID);
                     if( ( pItem == nullptr ) || pItem->GetName().isEmpty() )
                         eState = beans::PropertyState_DEFAULT_VALUE;
                 }
@@ -2069,7 +2059,7 @@ beans::PropertyState SvxShape::_getPropertyState( const OUString& PropertyName )
             case XATTR_LINESTART:
             case XATTR_FILLFLOATTRANSPARENCE:
                 {
-                    const NameOrIndex* pItem = rSet.GetItem<NameOrIndex>(static_cast<sal_uInt16>(pMap->nWID));
+                    const NameOrIndex* pItem = rSet.GetItem<NameOrIndex>(pMap->nWID);
                     if ( pItem == nullptr )
                         eState = beans::PropertyState_DEFAULT_VALUE;
                 }
@@ -2151,7 +2141,7 @@ bool SvxShape::setPropertyValueImpl( const OUString&, const SfxItemPropertySimpl
         sal_Int32 nNewOrdNum = 0;
         if(rValue >>= nNewOrdNum)
         {
-            SdrObjList* pObjList = GetSdrObject()->getParentOfSdrObject();
+            SdrObjList* pObjList = GetSdrObject()->getParentSdrObjListFromSdrObject();
             if( pObjList )
             {
                 SdrObject* pCheck =
@@ -2729,7 +2719,7 @@ bool SvxShape::getPropertyValueImpl( const OUString&, const SfxItemPropertySimpl
                     // Reintroduction of fix for issue #i59051# (#i108851#)
                     ForceMetricTo100th_mm( aPolyPoly );
                     drawing::PolyPolygonBezierCoords aRetval;
-                    basegfx::unotools::b2DPolyPolygonToPolyPolygonBezier( aPolyPoly, aRetval);
+                    basegfx::utils::B2DPolyPolygonToUnoPolyPolygonBezierCoords( aPolyPoly, aRetval);
                     rValue <<= aRetval;
                     break;
                 }
@@ -2788,8 +2778,7 @@ bool SvxShape::getPropertyValueImpl( const OUString&, const SfxItemPropertySimpl
         SdrLayer* pLayer = GetSdrObject()->getSdrModelFromSdrObject().GetLayerAdmin().GetLayerPerID(GetSdrObject()->GetLayer());
         if( pLayer )
         {
-            OUString aName( pLayer->GetName() );
-            rValue <<= aName;
+            rValue <<= pLayer->GetName();
         }
         break;
     }
@@ -3090,7 +3079,8 @@ uno::Sequence<uno::Any> SvxShape::getPropertyDefaults(
     const uno::Sequence<OUString>& aPropertyNames )
 {
     ::std::vector<uno::Any> ret;
-    for ( sal_Int32 pos = 0; pos < aPropertyNames.getLength(); ++pos )
+    ret.reserve(aPropertyNames.getLength());
+    for (sal_Int32 pos = 0; pos < aPropertyNames.getLength(); ++pos)
         ret.push_back( getPropertyDefault( aPropertyNames[pos] ) );
     return uno::Sequence<uno::Any>( &ret[0], ret.size() );
 }
@@ -3738,28 +3728,47 @@ uno::Reference< container::XIndexContainer > SAL_CALL SvxShape::getGluePoints()
 uno::Reference<uno::XInterface> SAL_CALL SvxShape::getParent()
 {
     ::SolarMutexGuard aGuard;
+    const SdrObject* pSdrObject(GetSdrObject());
 
-    if( HasSdrObject() && GetSdrObject()->getParentOfSdrObject() )
+    if(nullptr != pSdrObject)
     {
-        SdrObjList* pObjList = GetSdrObject()->getParentOfSdrObject();
+        const SdrObjList* pParentSdrObjList(GetSdrObject()->getParentSdrObjListFromSdrObject());
 
-        switch (pObjList->GetListKind())
+        if(nullptr != pParentSdrObjList)
         {
-            case SdrObjListKind::GroupObj:
-                if (SdrObjGroup *pGroup = dynamic_cast<SdrObjGroup*>(pObjList->GetOwnerObj()))
-                    return pGroup->getUnoShape();
-                else if (E3dScene *pScene = dynamic_cast<E3dScene*>(pObjList->GetOwnerObj()))
-                    return pScene->getUnoShape();
-                break;
-            case SdrObjListKind::DrawPage:
-            case SdrObjListKind::MasterPage:
-                return dynamic_cast<SdrPage&>(*pObjList).getUnoPage();
-            default:
-                OSL_FAIL( "SvxShape::getParent(  ): unexpected SdrObjListKind" );
-                break;
+            // SdrObject is member of a SdrObjList. That may be a SdrObject
+            // (SdrObjGroup or E3dScene) or a SdrPage.
+            // Check for SdrObject first - using getSdrPageFromSdrObjList
+            // *will* get the SdrPage even when the SdrObject is deep buried
+            // in a construct of SdrObjGroup.
+            // We want to ask for the direct parent here...
+            SdrObject* pParentSdrObject(pParentSdrObjList->getSdrObjectFromSdrObjList());
+
+            if(nullptr != pParentSdrObject)
+            {
+                // SdrObject is member of a SdrObject-based Group (SdrObjGroup or E3dScene).
+                return pParentSdrObject->getUnoShape();
+            }
+            else
+            {
+                SdrPage* pParentSdrPage(pParentSdrObjList->getSdrPageFromSdrObjList());
+
+                if(nullptr != pParentSdrPage)
+                {
+                    // SdrObject is inserted to a SdrPage. Since
+                    // we checked for getSdrObjectFromSdrObjList first,
+                    // we can even say that it is directly member of that
+                    // SdrPage.
+                    return pParentSdrPage->getUnoPage();
+                }
+            }
+
+            // not member of any SdrObjList, no parent
+            OSL_FAIL( "SvxShape::getParent(  ): unexpected Parent SdrObjList" );
         }
     }
 
+    // no SdrObject, no parent
     return uno::Reference<uno::XInterface>();
 }
 

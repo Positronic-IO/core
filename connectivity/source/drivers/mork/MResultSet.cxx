@@ -22,6 +22,8 @@
 #include <com/sun/star/sdbc/ResultSetConcurrency.hpp>
 #include <com/sun/star/sdbcx/CompareBookmark.hpp>
 #include <connectivity/dbtools.hxx>
+#include <comphelper/types.hxx>
+#include <sal/log.hxx>
 
 #include <vector>
 #include <algorithm>
@@ -68,7 +70,6 @@ OResultSet::OResultSet(OCommonStatement* pStmt, const std::shared_ptr< connectiv
     ,OPropertySetHelper(OResultSet_BASE::rBHelper)
     ,m_pStatement(pStmt)
     ,m_xStatement(*pStmt)
-    ,m_xMetaData(nullptr)
     ,m_nRowPos(0)
     ,m_bWasNull(false)
     ,m_nResultSetType(ResultSetType::SCROLL_INSENSITIVE)
@@ -79,7 +80,6 @@ OResultSet::OResultSet(OCommonStatement* pStmt, const std::shared_ptr< connectiv
     ,m_CurrentRowCount(0)
     ,m_nParamIndex(0)
     ,m_bIsAlwaysFalseQuery(false)
-    ,m_pKeySet(nullptr)
     ,m_bIsReadOnly(TRISTATE_INDET)
 {
     //m_aQuery.setMaxNrOfReturns(pStmt->getOwnConnection()->getMaxResultRecords());
@@ -384,8 +384,7 @@ sal_Bool SAL_CALL OResultSet::isAfterLast(  )
     SAL_WARN("connectivity.mork", "OResultSet::isAfterLast() NOT IMPLEMENTED!");
     ResultSetEntryGuard aGuard( *this );
 
-//    return sal_True;
-    return m_nRowPos > currentRowCount() && MQueryHelper::queryComplete();
+    return m_nRowPos > currentRowCount();
 }
 
 sal_Bool SAL_CALL OResultSet::isFirst(  )
@@ -401,7 +400,7 @@ sal_Bool SAL_CALL OResultSet::isLast(  )
     ResultSetEntryGuard aGuard( *this );
 
 //    return sal_True;
-    return m_nRowPos == currentRowCount() && MQueryHelper::queryComplete();
+    return m_nRowPos == currentRowCount();
 }
 
 void SAL_CALL OResultSet::beforeFirst(  )
@@ -1124,8 +1123,6 @@ void OResultSet::executeQuery()
                     // query to the mozilla addressbooks has returned all
                     // values.
 
-                    OSL_ENSURE( MQueryHelper::queryComplete(), "Query not complete!!");
-
                     OSortIndex aSortIndex(eKeyType,m_aOrderbyAscending);
 
 #if OSL_DEBUG_LEVEL > 0
@@ -1305,25 +1302,8 @@ bool OResultSet::validRow( sal_uInt32 nRow)
 {
     sal_Int32  nNumberOfRecords = m_aQueryHelper.getResultCount();
 
-    while ( nRow > static_cast<sal_uInt32>(nNumberOfRecords) && !MQueryHelper::queryComplete() ) {
-            if (!m_aQueryHelper.checkRowAvailable( nRow ))
-            {
-                SAL_INFO(
-                    "connectivity.mork",
-                    "validRow(" << nRow << "): return False");
-                return false;
-            }
-
-            if ( m_aQueryHelper.hadError() )
-            {
-                m_pStatement->getOwnConnection()->throwSQLException( m_aQueryHelper.getError(), *this );
-            }
-
-            nNumberOfRecords = m_aQueryHelper.getResultCount();
-    }
-
     if (( nRow == 0 ) ||
-        ( nRow > static_cast<sal_uInt32>(nNumberOfRecords) && MQueryHelper::queryComplete()) ){
+        ( nRow > static_cast<sal_uInt32>(nNumberOfRecords)) ){
         SAL_INFO("connectivity.mork", "validRow(" << nRow << "): return False");
         return false;
     }

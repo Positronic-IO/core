@@ -20,6 +20,7 @@
 #include <svtools/imagemgr.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/image.hxx>
@@ -32,12 +33,13 @@
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/document/XTypeDetection.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <ucbhelper/content.hxx>
 #include <unotools/configmgr.hxx>
 #include <svtools/strings.hrc>
 #include <svtools/svtresid.hxx>
-#include <vcl/lazydelete.hxx>
 #include <bitmaps.hlst>
 #include <strings.hxx>
 
@@ -49,9 +51,9 @@
 struct SvtExtensionResIdMapping_Impl
 {
     const char* _pExt;
-    bool        _bExt;
+    bool const        _bExt;
     const char* pStrId;
-    SvImageId   _nImgId;
+    SvImageId const   _nImgId;
 };
 
 static SvtExtensionResIdMapping_Impl const ExtensionMap_Impl[] =
@@ -757,11 +759,11 @@ OUString SvFileInformationManager::GetDescription_Impl( const INetURLObject& rOb
     return sDescription;
 }
 
-OUString SvFileInformationManager::GetImageId(const INetURLObject& rObject, bool bBig)
+OUString SvFileInformationManager::GetImageId(const INetURLObject& rObject)
 {
     SvImageId nImage = GetImageId_Impl( rObject, true );
     DBG_ASSERT( nImage != SvImageId::NONE, "invalid ImageId" );
-    return GetImageNameFromList_Impl(nImage, bBig);
+    return GetImageNameFromList_Impl(nImage, /*bBig*/false);
 }
 
 Image SvFileInformationManager::GetImage( const INetURLObject& rObject, bool bBig )
@@ -769,6 +771,13 @@ Image SvFileInformationManager::GetImage( const INetURLObject& rObject, bool bBi
     SvImageId nImage = GetImageId_Impl( rObject, true );
     DBG_ASSERT( nImage != SvImageId::NONE, "invalid ImageId" );
     return GetImageFromList_Impl( nImage, bBig );
+}
+
+OUString SvFileInformationManager::GetFileImageId(const INetURLObject& rObject)
+{
+    SvImageId nImage = GetImageId_Impl( rObject, false );
+    DBG_ASSERT( nImage != SvImageId::NONE, "invalid ImageId" );
+    return GetImageNameFromList_Impl(nImage, /*bBig*/false);
 }
 
 Image SvFileInformationManager::GetFileImage( const INetURLObject& rObject )

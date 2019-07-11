@@ -206,11 +206,10 @@ sal_Int32 SAL_CALL OTempFileService::available(  )
 
     checkConnected();
 
-    sal_uInt32 const nAvailable =
-        static_cast<sal_uInt32>(mpStream->remainingSize());
+    sal_Int64 nAvailable = mpStream->remainingSize();
     checkError();
 
-    return nAvailable;
+    return std::min<sal_Int64>(SAL_MAX_INT32, nAvailable);
 }
 void SAL_CALL OTempFileService::closeInput(  )
 {
@@ -339,16 +338,11 @@ sal_Int64 SAL_CALL OTempFileService::getLength(  )
     ::osl::MutexGuard aGuard( maMutex );
     checkConnected();
 
-    sal_uInt32 nCurrentPos = mpStream->Tell();
     checkError();
 
-    mpStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 nEndPos = mpStream->Tell();
-    mpStream->Seek(nCurrentPos);
+    sal_Int64 nEndPos = mpStream->TellEnd();
 
-    checkError();
-
-    return static_cast<sal_Int64>(nEndPos);
+    return nEndPos;
 }
 
 // XStream

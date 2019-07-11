@@ -18,6 +18,7 @@
  */
 
 #include <sal/types.h>
+#include <sal/log.hxx>
 
 #include <services/desktop.hxx>
 #include <protocols.h>
@@ -63,8 +64,6 @@ namespace {
             can be used to get more information about this format. Further this
             class provides full access to the configuration data and following
             implementations will support some special query modes.
-
-    @author     as96863
 
     @docdate    10.03.2003 by as96863
 
@@ -265,11 +264,11 @@ void SAL_CALL SessionListener::initialize(const Sequence< Any  >& args)
 
 void SAL_CALL SessionListener::statusChanged(const frame::FeatureStateEvent& event)
 {
-   SAL_INFO("fwk.session", "SessionListener::statusChanged");
+    SAL_INFO("fwk.session", "SessionListener::statusChanged");
 
-   SAL_INFO("fwk.session.debug", "  ev.Feature = " << event.FeatureURL.Complete <<
-                                 ", ev.Descript = " << event.FeatureDescriptor);
-   if ( event.FeatureURL.Complete == "vnd.sun.star.autorecovery:/doSessionRestore" )
+    SAL_INFO("fwk.session.debug", "  ev.Feature = " << event.FeatureURL.Complete <<
+                                  ", ev.Descript = " << event.FeatureDescriptor);
+    if ( event.FeatureURL.Complete == "vnd.sun.star.autorecovery:/doSessionRestore" )
     {
         if (event.FeatureDescriptor == "update")
             m_bRestored = true; // a document was restored

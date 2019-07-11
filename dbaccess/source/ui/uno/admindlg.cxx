@@ -22,6 +22,7 @@
 #include "admindlg.hxx"
 #include <dbadmin.hxx>
 #include <comphelper/processfactory.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
 
 using namespace dbaui;
 
@@ -91,15 +92,15 @@ Reference<XPropertySetInfo>  SAL_CALL ODataSourcePropertyDialog::getPropertySetI
     return new ::cppu::OPropertyArrayHelper(aProps);
 }
 
-svt::OGenericUnoDialog::Dialog ODataSourcePropertyDialog::createDialog(vcl::Window* _pParent)
+svt::OGenericUnoDialog::Dialog ODataSourcePropertyDialog::createDialog(const css::uno::Reference<css::awt::XWindow>& rParent)
 {
-    VclPtrInstance<ODbAdminDialog> pDialog(_pParent, m_pDatasourceItems, m_aContext);
+    std::unique_ptr<ODbAdminDialog> xDialog(new ODbAdminDialog(Application::GetFrameWeld(rParent), m_pDatasourceItems.get(), m_aContext));
 
     // the initial selection
     if ( m_aInitialSelection.hasValue() )
-        pDialog->selectDataSource(m_aInitialSelection);
+        xDialog->selectDataSource(m_aInitialSelection);
 
-    return svt::OGenericUnoDialog::Dialog(pDialog);
+    return svt::OGenericUnoDialog::Dialog(std::move(xDialog));
 }
 
 }   // namespace dbaui

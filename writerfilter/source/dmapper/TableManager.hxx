@@ -25,6 +25,7 @@
 
 #include "PropertyMap.hxx"
 #include "TableData.hxx"
+#include "DomainMapperTableHandler.hxx"
 
 namespace writerfilter
 {
@@ -41,7 +42,7 @@ class DomainMapperTableHandler;
    table structure. The events have to be handles by a TableDataHandler.
 
  */
-class TableManager
+class TableManager : public virtual SvRefBase
 {
     class TableManagerState final
     {
@@ -107,7 +108,7 @@ class TableManager
 
         void resetCellProps()
         {
-            mpCellProps.reset();
+            mpCellProps.clear();
         }
 
         void setCellProps(TablePropertyMapPtr pProps)
@@ -122,7 +123,7 @@ class TableManager
 
         void resetRowProps()
         {
-            mpRowProps.reset();
+            mpRowProps.clear();
         }
 
         void setRowProps(TablePropertyMapPtr pProps)
@@ -138,7 +139,7 @@ class TableManager
         void resetTableProps()
         {
             if (mTableProps.size() > 0)
-                mTableProps.top().reset();
+                mTableProps.top().clear();
         }
 
         void setTableProps(TablePropertyMapPtr pProps)
@@ -249,7 +250,7 @@ protected:
     }
 
 private:
-    typedef std::shared_ptr< css::uno::Reference<css::text::XTextRange> > T_p;
+    typedef tools::SvRef< css::uno::Reference<css::text::XTextRange> > T_p;
 
     /**
        depth of the current cell
@@ -272,10 +273,12 @@ private:
     /// If this is a nested table, does it start at cell start?
     bool m_bTableStartsAtCellStart;
 
+    bool m_bCellLastParaAfterAutospacing;
+
     /**
        handler for resolveCurrentTable
      */
-    std::shared_ptr<DomainMapperTableHandler> mpTableDataHandler;
+    tools::SvRef<DomainMapperTableHandler> mpTableDataHandler;
 
     /**
        Set flag which indicates the current handle is in a cell.
@@ -352,14 +355,13 @@ protected:
 
 public:
     TableManager();
-    virtual ~TableManager(){}
 
     /**
        Set handler for resolveCurrentTable.
 
        @param pTableDataHandler     the handler
      */
-    void setHandler(const std::shared_ptr<DomainMapperTableHandler>& pTableDataHandler);
+    void setHandler(const tools::SvRef<DomainMapperTableHandler>& pTableDataHandler);
 
     /**
        Set the current handle.
@@ -442,14 +444,6 @@ public:
     virtual void cellProps(const TablePropertyMapPtr& pProps);
 
     /**
-       Handle properties of a certain cell in the current row.
-
-       @paran i        index of the cell in the current row
-       @param pProps   the properties
-     */
-    virtual void cellPropsByCell(unsigned int i, const TablePropertyMapPtr& pProps);
-
-    /**
        Handle properties of the current row.
 
        @param pProps   the properties
@@ -473,6 +467,8 @@ public:
 
 
     void setTableStartsAtCellStart(bool bTableStartsAtCellStart);
+    void setCellLastParaAfterAutospacing(bool bIsAfterAutospacing);
+    bool isCellLastParaAfterAutospacing() {return m_bCellLastParaAfterAutospacing;}
 };
 
 }

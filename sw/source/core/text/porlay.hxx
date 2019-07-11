@@ -36,16 +36,20 @@ class SwTextFormatter;
 
 class SwCharRange
 {
-    sal_Int32 nStart, nLen;
+private:
+    TextFrameIndex nStart;
+    TextFrameIndex nLen;
+
 public:
-    SwCharRange( const sal_Int32 nInitStart = 0,
-        const sal_Int32 nInitLen = 0): nStart( nInitStart ), nLen(nInitLen) {}
-    sal_Int32 &Start() { return nStart; }
-    const sal_Int32 &Start() const { return nStart; }
-    void LeftMove( sal_Int32 nNew )
+    SwCharRange(TextFrameIndex const nInitStart = TextFrameIndex(0),
+                TextFrameIndex const nInitLen = TextFrameIndex(0))
+        : nStart( nInitStart ), nLen(nInitLen) {}
+    TextFrameIndex      & Start()       { return nStart; }
+    TextFrameIndex const& Start() const { return nStart; }
+    void LeftMove(TextFrameIndex const nNew)
             { if ( nNew < nStart ) { nLen += nStart-nNew; nStart = nNew; } }
-    sal_Int32 &Len() { return nLen; }
-    const sal_Int32 &Len() const { return nLen; }
+    TextFrameIndex      & Len()       { return nLen; }
+    TextFrameIndex const& Len() const { return nLen; }
     bool operator<(const SwCharRange &rRange) const
                 { return nStart < rRange.nStart; }
     bool operator>(const SwCharRange &rRange) const
@@ -64,8 +68,6 @@ class SwRepaint : public SwRect
     SwTwips nRightOfst;
 public:
     SwRepaint() : SwRect(), nOfst( 0 ), nRightOfst( 0 ) {}
-    SwRepaint( const SwRepaint& rRep ) : SwRect( rRep ), nOfst( rRep.nOfst ),
-        nRightOfst( rRep.nRightOfst ) {}
 
     SwTwips GetOfst() const { return nOfst; }
     void   SetOfst( const SwTwips nNew ) { nOfst = nNew; }
@@ -79,8 +81,8 @@ class SwLineLayout : public SwTextPortion
 {
 private:
     SwLineLayout *m_pNext;                // The next Line
-    std::vector<long>* m_pLLSpaceAdd;     // Used for justified alignment
-    std::deque<sal_uInt16>* m_pKanaComp;  // Used for Kana compression
+    std::unique_ptr<std::vector<long>> m_pLLSpaceAdd;     // Used for justified alignment
+    std::unique_ptr<std::deque<sal_uInt16>> m_pKanaComp;  // Used for Kana compression
     sal_uInt16 m_nRealHeight;             // The height resulting from line spacing and register
     bool m_bFormatAdj : 1;
     bool m_bDummy     : 1;
@@ -98,6 +100,7 @@ private:
 
     SwTwips GetHangingMargin_() const;
 
+    void DeleteNext();
 public:
     // From SwLinePortion
     virtual SwLinePortion *Insert( SwLinePortion *pPortion ) override;
@@ -164,7 +167,7 @@ public:
     bool IsSpaceAdd() { return m_pLLSpaceAdd != nullptr; }
     void InitSpaceAdd();     // Creates pLLSpaceAdd if necessary
     void CreateSpaceAdd( const long nInit = 0 );
-    void FinishSpaceAdd() { delete m_pLLSpaceAdd; m_pLLSpaceAdd = nullptr; }
+    void FinishSpaceAdd() { m_pLLSpaceAdd.reset(); }
     sal_uInt16 GetLLSpaceAddCount() const { return sal::static_int_cast< sal_uInt16 >(m_pLLSpaceAdd->size()); }
     void SetLLSpaceAdd( long nNew, sal_uInt16 nIdx )
     {
@@ -175,12 +178,12 @@ public:
     }
     long GetLLSpaceAdd( sal_uInt16 nIdx ) { return (*m_pLLSpaceAdd)[ nIdx ]; }
     void RemoveFirstLLSpaceAdd() { m_pLLSpaceAdd->erase( m_pLLSpaceAdd->begin() ); }
-    std::vector<long>* GetpLLSpaceAdd() const { return m_pLLSpaceAdd; }
+    std::vector<long>* GetpLLSpaceAdd() const { return m_pLLSpaceAdd.get(); }
 
     // Stuff for Kana compression
-    void SetKanaComp( std::deque<sal_uInt16>* pNew ){ m_pKanaComp = pNew; }
-    void FinishKanaComp() { delete m_pKanaComp; m_pKanaComp = nullptr; }
-    std::deque<sal_uInt16>* GetpKanaComp() const { return m_pKanaComp; }
+    void SetKanaComp( std::unique_ptr<std::deque<sal_uInt16>> pNew ){ m_pKanaComp = std::move(pNew); }
+    void FinishKanaComp() { m_pKanaComp.reset(); }
+    std::deque<sal_uInt16>* GetpKanaComp() const { return m_pKanaComp.get(); }
     std::deque<sal_uInt16>& GetKanaComp() { return *m_pKanaComp; }
 
     /** determine ascent and descent for positioning of as-character anchored
@@ -221,8 +224,6 @@ public:
                            SwTwips& _orObjDescent,
                            const SwLinePortion* _pDontConsiderPortion = nullptr,
                            const bool _bNoFlyCntPorAndLinePor = false ) const;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwLineLayout)
 };
 
 /// Collection of SwLineLayout instances, represents the paragraph text in Writer layout.
@@ -234,6 +235,7 @@ class SwParaPortion : public SwLineLayout
     // Area that needs reformatting
     SwCharRange m_aReformat;
     SwScriptInfo m_aScriptInfo;
+
     // Fraction aZoom;
     long m_nDelta;
 
@@ -271,7 +273,7 @@ public:
     const SwScriptInfo& GetScriptInfo() const { return m_aScriptInfo; }
 
     // For SwTextFrame::Format: returns the paragraph's current length
-    sal_Int32 GetParLen() const;
+    TextFrameIndex GetParLen() const;
 
     // For Prepare()
     bool UpdateQuoVadis( const OUString &rQuo );
@@ -303,8 +305,6 @@ public:
     void SetErgoSumNum( const OUString &rErgo );
 
     const SwDropPortion *FindDropPortion() const;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwParaPortion)
 };
 
 inline void SwParaPortion::ResetPreps()
@@ -315,7 +315,7 @@ inline void SwParaPortion::ResetPreps()
 inline void SwParaPortion::FormatReset()
 {
     m_nDelta = 0;
-    m_aReformat = SwCharRange(0, COMPLETE_STRING);
+    m_aReformat = SwCharRange(TextFrameIndex(0), TextFrameIndex(COMPLETE_STRING));
     // bFlys needs to be retained in SwTextFrame::Format_() so that empty
     // paragraphs that needed to avoid Frames with no flow, reformat
     // when the Frame disappears from the Area

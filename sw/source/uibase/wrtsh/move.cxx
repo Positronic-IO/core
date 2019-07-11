@@ -21,6 +21,7 @@
 #include <wrtsh.hxx>
 #include <view.hxx>
 #include <viewopt.hxx>
+#include <drawbase.hxx>
 
 /**
    Always:
@@ -45,7 +46,8 @@ public:
     ShellMoveCursor( SwWrtShell* pWrtSh, bool bSel )
     {
         bAct = !pWrtSh->ActionPend() && (pWrtSh->GetFrameType(nullptr,false) & FrameTypeFlags::FLY_ANY);
-        ( pSh = pWrtSh )->MoveCursor( bSel );
+        pSh = pWrtSh;
+        pSh->MoveCursor( bSel );
         pWrtSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_HYPERLINK_GETLINK);
     }
     ~ShellMoveCursor() COVERITY_NOEXCEPT_FALSE
@@ -294,13 +296,13 @@ bool SwWrtShell::GoEnd(bool bKeepArea, const bool *pMoveTable)
            SwCursorShell::SttEndDoc(false);
 }
 
-bool SwWrtShell::SttDoc( bool bSelect )
+bool SwWrtShell::StartOfSection(bool const bSelect)
 {
     ShellMoveCursor aTmp( this, bSelect );
     return GoStart(false, nullptr, bSelect );
 }
 
-bool SwWrtShell::EndDoc( bool bSelect)
+bool SwWrtShell::EndOfSection(bool const bSelect)
 {
     ShellMoveCursor aTmp( this, bSelect );
     return GoEnd();
@@ -466,8 +468,8 @@ bool SwWrtShell::PushCursor(SwTwips lOffset, bool bSelect)
 
     // Position into the stack; bDiff indicates if there is a
     // difference between the old and the new cursor position.
-    m_pCursorStack = new CursorStack( bDiff, bIsFrameSel, aOldRect.Center(),
-                                lOffset, m_pCursorStack );
+    m_pCursorStack.reset( new CursorStack( bDiff, bIsFrameSel, aOldRect.Center(),
+                                lOffset, std::move(m_pCursorStack) ) );
     return !m_bDestOnStack && bDiff;
 }
 
@@ -507,9 +509,7 @@ bool SwWrtShell::PopCursor(bool bUpdate, bool bSelect)
             return false;
         }
     }
-    CursorStack *pTmp = m_pCursorStack;
-    m_pCursorStack = m_pCursorStack->pNext;
-    delete pTmp;
+    m_pCursorStack = std::move(m_pCursorStack->pNext);
     if( nullptr == m_pCursorStack )
     {
         m_ePageMove = MV_NO;
@@ -524,11 +524,7 @@ bool SwWrtShell::PopCursor(bool bUpdate, bool bSelect)
 void SwWrtShell::ResetCursorStack_()
 {
     while(m_pCursorStack)
-    {
-        CursorStack* const pTmp = m_pCursorStack->pNext;
-        delete m_pCursorStack;
-        m_pCursorStack = pTmp;
-    }
+        m_pCursorStack = std::move(m_pCursorStack->pNext);
     m_ePageMove = MV_NO;
     m_bDestOnStack = false;
 }
@@ -580,13 +576,14 @@ bool SwWrtShell::GotoPage(sal_uInt16 nPage, bool bRecord)
     return false;
 }
 
-void SwWrtShell::GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect )
+bool SwWrtShell::GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect )
 {
     ShellMoveCursor aTmp( this, bSelect );
     SwPosition aPos = *GetCursor()->GetPoint();
     bool bRet = SwCursorShell::GotoMark( pMark, true/*bStart*/ );
     if (bRet)
         m_aNavigationMgr.addEntry(aPos);
+    return bRet;
 }
 
 bool SwWrtShell::GotoFly( const OUString& rName, FlyCntType eType, bool bSelFrame )
@@ -631,13 +628,14 @@ bool SwWrtShell::GotoRegion( const OUString& rName )
     return bRet;
  }
 
-void SwWrtShell::GotoRefMark( const OUString& rRefMark, sal_uInt16 nSubType,
+bool SwWrtShell::GotoRefMark( const OUString& rRefMark, sal_uInt16 nSubType,
                                     sal_uInt16 nSeqNo )
 {
     SwPosition aPos = *GetCursor()->GetPoint();
     bool bRet = SwCursorShell::GotoRefMark(rRefMark, nSubType, nSeqNo);
     if (bRet)
         m_aNavigationMgr.addEntry(aPos);
+    return bRet;
 }
 
 bool SwWrtShell::GotoNextTOXBase( const OUString* pName )

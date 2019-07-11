@@ -23,9 +23,6 @@
 #include <sfx2/tabdlg.hxx>
 #include <vcl/field.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
-#include <svtools/ctrlbox.hxx>
-#include <svx/strarray.hxx>
 
 class ScViewOptions;
 class SvxColorListBox;
@@ -59,7 +56,7 @@ class ScTpContentOptions : public SfxTabPage
     VclPtr<CheckBox>        pTblRegCB;
     VclPtr<CheckBox>        pOutlineCB;
 
-    ScViewOptions*  pLocalOptions;
+    std::unique_ptr<ScViewOptions> pLocalOptions;
 
     void    InitGridOpt();
     DECL_LINK( GridHdl, ListBox&, void );

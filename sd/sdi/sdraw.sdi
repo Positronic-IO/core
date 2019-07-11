@@ -2435,23 +2435,6 @@ SfxBoolItem MasterPage SID_MASTERPAGE
     GroupId = SfxGroupId::View;
 ]
 
-SfxVoidItem MeasureAttributes SID_MEASURE_DLG
-()
-[
-    AutoUpdate = FALSE,
-    FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
-    GroupId = SfxGroupId::Format;
-]
-
 SfxVoidItem MirrorHorz SID_HORIZONTAL
 ()
 [
@@ -3299,7 +3282,7 @@ SfxVoidItem RenameLayer SID_RENAMELAYER
 ]
 
 SfxVoidItem RenamePage SID_RENAMEPAGE
-()
+(SfxStringItem Name SID_RENAMEPAGE)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -4090,7 +4073,75 @@ SfxBoolItem DisplayMasterObjects SID_DISPLAY_MASTER_OBJECTS
     GroupId = SfxGroupId::View;
 ]
 
+SfxVoidItem SetMinimalColumnWidth SID_TABLE_MINIMAL_COLUMN_WIDTH
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
+SfxVoidItem SetOptimalColumnWidth SID_TABLE_OPTIMAL_COLUMN_WIDTH
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
 SfxVoidItem DistributeColumns SID_TABLE_DISTRIBUTE_COLUMNS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
+SfxVoidItem SetMinimalRowHeight SID_TABLE_MINIMAL_ROW_HEIGHT
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
+SfxVoidItem SetOptimalRowHeight SID_TABLE_OPTIMAL_ROW_HEIGHT
 ()
 [
     AutoUpdate = FALSE,
@@ -4432,7 +4483,7 @@ SfxVoidItem NextPage SID_GO_TO_NEXT_PAGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4449,7 +4500,7 @@ SfxVoidItem PreviousPage SID_GO_TO_PREVIOUS_PAGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4466,7 +4517,7 @@ SfxVoidItem FirstPage SID_GO_TO_FIRST_PAGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4483,7 +4534,7 @@ SfxVoidItem LastPage SID_GO_TO_LAST_PAGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,

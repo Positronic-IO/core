@@ -58,11 +58,6 @@ struct SvXMLAttributeList_Impl
         vecAttribute.reserve(20);
     }
 
-    SvXMLAttributeList_Impl( const SvXMLAttributeList_Impl& r ) :
-            vecAttribute( r.vecAttribute )
-    {
-    }
-
     ::std::vector<struct SvXMLTagAttribute_Impl> vecAttribute;
     typedef ::std::vector<struct SvXMLTagAttribute_Impl>::size_type size_type;
 };
@@ -118,13 +113,12 @@ OUString SAL_CALL SvXMLAttributeList::getTypeByName( const OUString& )
 
 OUString SAL_CALL SvXMLAttributeList::getValueByName(const OUString& sName)
 {
-    ::std::vector<struct SvXMLTagAttribute_Impl>::iterator ii = m_pImpl->vecAttribute.begin();
+    auto ii = std::find_if(m_pImpl->vecAttribute.begin(), m_pImpl->vecAttribute.end(),
+        [&sName](struct SvXMLTagAttribute_Impl& rAttr) { return rAttr.sName == sName; });
 
-    for( ; ii != m_pImpl->vecAttribute.end() ; ++ii ) {
-        if( (*ii).sName == sName ) {
-            return (*ii).sValue;
-        }
-    }
+    if (ii != m_pImpl->vecAttribute.end())
+        return (*ii).sValue;
+
     return OUString();
 }
 
@@ -163,14 +157,11 @@ void SvXMLAttributeList::Clear()
 
 void SvXMLAttributeList::RemoveAttribute( const OUString& sName )
 {
-    ::std::vector<struct SvXMLTagAttribute_Impl>::iterator ii = m_pImpl->vecAttribute.begin();
+    auto ii = std::find_if(m_pImpl->vecAttribute.begin(), m_pImpl->vecAttribute.end(),
+        [&sName](struct SvXMLTagAttribute_Impl& rAttr) { return rAttr.sName == sName; });
 
-    for( ; ii != m_pImpl->vecAttribute.end() ; ++ii ) {
-        if( (*ii).sName == sName ) {
-            m_pImpl->vecAttribute.erase( ii );
-            break;
-        }
-    }
+    if (ii != m_pImpl->vecAttribute.end())
+        m_pImpl->vecAttribute.erase( ii );
 }
 
 void SvXMLAttributeList::AppendAttributeList( const uno::Reference< css::xml::sax::XAttributeList >  &r )
@@ -220,16 +211,12 @@ void SvXMLAttributeList::RenameAttributeByIndex( sal_Int16 i,
 
 sal_Int16 SvXMLAttributeList::GetIndexByName( const OUString& rName ) const
 {
-    ::std::vector<struct SvXMLTagAttribute_Impl>::iterator ii =
-        m_pImpl->vecAttribute.begin();
+    auto ii = std::find_if(m_pImpl->vecAttribute.begin(), m_pImpl->vecAttribute.end(),
+        [&rName](struct SvXMLTagAttribute_Impl& rAttr) { return rAttr.sName == rName; });
 
-    for( sal_Int16 nIndex=0; ii!=m_pImpl->vecAttribute.end(); ++ii, ++nIndex )
-    {
-        if( (*ii).sName == rName )
-        {
-            return nIndex;
-        }
-    }
+    if (ii != m_pImpl->vecAttribute.end())
+        return static_cast<sal_Int16>(std::distance(m_pImpl->vecAttribute.begin(), ii));
+
     return -1;
 }
 

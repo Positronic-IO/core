@@ -9,6 +9,7 @@
 
 #include <sfx2/lokcharthelper.hxx>
 
+#include <comphelper/lok.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <sfx2/ipclient.hxx>
 #include <sfx2/lokhelper.hxx>
@@ -30,12 +31,12 @@ using namespace com::sun::star;
 
 namespace {
 
-inline Point lcl_TwipsToHMM( const Point& rPoint )
+Point lcl_TwipsToHMM( const Point& rPoint )
 {
     return Point(convertTwipToMm100(rPoint.getX()), convertTwipToMm100(rPoint.getY()));
 }
 
-inline Size lcl_TwipsToHMM( const Size& rSize )
+Size lcl_TwipsToHMM( const Size& rSize )
 {
     return Size(convertTwipToMm100(rSize.getWidth()), convertTwipToMm100(rSize.getHeight()));
 }
@@ -44,24 +45,21 @@ inline Size lcl_TwipsToHMM( const Size& rSize )
 
 css::uno::Reference<css::frame::XController>& LokChartHelper::GetXController()
 {
-    if(!mxController.is() )
+    if(!mxController.is() && mpViewShell)
     {
-        if (mpViewShell)
+        SfxInPlaceClient* pIPClient = mpViewShell->GetIPClient();
+        if (pIPClient)
         {
-            SfxInPlaceClient* pIPClient = mpViewShell->GetIPClient();
-            if (pIPClient)
+            const css::uno::Reference< ::css::embed::XEmbeddedObject >& xEmbObj = pIPClient->GetObject();
+            if( xEmbObj.is() )
             {
-                css::uno::Reference< ::css::embed::XEmbeddedObject > xEmbObj = pIPClient->GetObject();
-                if( xEmbObj.is() )
+                ::css::uno::Reference< ::css::chart2::XChartDocument > xChart( xEmbObj->getComponent(), uno::UNO_QUERY );
+                if( xChart.is() )
                 {
-                    ::css::uno::Reference< ::css::chart2::XChartDocument > xChart( xEmbObj->getComponent(), uno::UNO_QUERY );
-                    if( xChart.is() )
+                    ::css::uno::Reference< ::css::frame::XController > xChartController = xChart->getCurrentController();
+                    if( xChartController.is() )
                     {
-                        ::css::uno::Reference< ::css::frame::XController > xChartController = xChart->getCurrentController();
-                        if( xChartController.is() )
-                        {
-                            mxController = xChartController;
-                        }
+                        mxController = xChartController;
                     }
                 }
             }
@@ -137,7 +135,7 @@ tools::Rectangle LokChartHelper::GetChartBoundingBox()
                 {
                     // In all cases, the following code fragment
                     // returns the chart bounding box in twips.
-                    MapMode aCWMapMode = pWindow->GetMapMode();
+                    const MapMode& aCWMapMode = pWindow->GetMapMode();
                     double fXScale( aCWMapMode.GetScaleX() );
                     double fYScale( aCWMapMode.GetScaleY() );
                     Point aOffset = pWindow->GetOffsetPixelFrom(*pRootWin);
@@ -177,12 +175,17 @@ bool LokChartHelper::Hit(const Point& aPos)
 
 bool LokChartHelper::HitAny(const Point& aPos)
 {
+    SfxViewShell* pCurView = SfxViewShell::Current();
+    int nPartForCurView = pCurView ? pCurView->getPart() : -1;
     SfxViewShell* pViewShell = SfxViewShell::GetFirst();
     while (pViewShell)
     {
-        LokChartHelper aChartHelper(pViewShell);
-        if (aChartHelper.Hit(aPos))
-            return true;
+        if (pViewShell->getPart() == nPartForCurView)
+        {
+            LokChartHelper aChartHelper(pViewShell);
+            if (aChartHelper.Hit(aPos))
+                return true;
+        }
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
     return false;
@@ -253,12 +256,17 @@ void LokChartHelper::PaintAllChartsOnTile(VirtualDevice& rDevice,
         aMapMode.SetScaleY(scaleY);
         rDevice.SetMapMode(aMapMode);
 
+        SfxViewShell* pCurView = SfxViewShell::Current();
+        int nPartForCurView = pCurView ? pCurView->getPart() : -1;
         tools::Rectangle aTileRect(Point(nTilePosX, nTilePosY), Size(nTileWidth, nTileHeight));
         SfxViewShell* pViewShell = SfxViewShell::GetFirst();
         while (pViewShell)
         {
-            LokChartHelper aChartHelper(pViewShell);
-            aChartHelper.PaintTile(rDevice, aTileRect);
+            if (pViewShell->getPart() == nPartForCurView)
+            {
+                LokChartHelper aChartHelper(pViewShell);
+                aChartHelper.PaintTile(rDevice, aTileRect);
+            }
             pViewShell = SfxViewShell::GetNext(*pViewShell);
         }
         rDevice.Pop();

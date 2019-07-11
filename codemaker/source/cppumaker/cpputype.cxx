@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <cassert>
@@ -735,9 +736,7 @@ OUString CppuType::getTypeClass(OUString const & name, bool cStyle)
                ? OUString("typelib_TypeClass_INTERFACE")
                : OUString("::css::uno::TypeClass_INTERFACE");
     case codemaker::UnoType::Sort::Typedef:
-        return getTypeClass(
-                   dynamic_cast<unoidl::TypedefEntity&>(*ent.get()).getType(),
-                   cStyle);
+        return getTypeClass(dynamic_cast<unoidl::TypedefEntity&>(*ent).getType(), cStyle);
     default:
         for (;;) {
             std::abort();
@@ -987,7 +986,7 @@ OUString CppuType::resolveOuterTypedefs(OUString const & name) const
         if (m_typeMgr->getSort(n, &ent) != codemaker::UnoType::Sort::Typedef) {
             return n;
         }
-        n = dynamic_cast<unoidl::TypedefEntity&>(*ent.get()).getType();
+        n = dynamic_cast<unoidl::TypedefEntity&>(*ent).getType();
     }
 }
 
@@ -1001,11 +1000,8 @@ OUString CppuType::resolveAllTypedefs(OUString const & name) const
             break;
         }
         sal_Int32 k2;
-        n = b2u(
-                codemaker::UnoType::decompose(
-                    u2b(dynamic_cast<unoidl::TypedefEntity&>(*ent.get()).
-                        getType()),
-                    &k2));
+        n = b2u(codemaker::UnoType::decompose(
+            u2b(dynamic_cast<unoidl::TypedefEntity&>(*ent).getType()), &k2));
         k1 += k2; //TODO: overflow
     }
     OUStringBuffer b;
@@ -1161,6 +1157,12 @@ void InterfaceType::dumpDeclaration(FileStream & out)
     }
     out << "\n{\npublic:\n";
     inc();
+    out << "#if defined LIBO_INTERNAL_ONLY\n"
+        << indent() << id_ << "() = default;\n"
+        << indent() << id_ << "(" << id_ << " const &) = default;\n"
+        << indent() << id_ << "(" << id_ << " &&) = default;\n"
+        << indent() << id_ << " & operator =(" << id_ << " const &) = default;\n"
+        << indent() << id_ << " & operator =(" << id_ << " &&) = default;\n#endif\n\n";
     dumpAttributes(out);
     dumpMethods(out);
     out << "\n" << indent()
@@ -3028,7 +3030,7 @@ void ExceptionType::dumpComprehensiveGetCppuType(FileStream & out)
 
 void ExceptionType::dumpDeclaration(FileStream & out)
 {
-    out << "\nclass CPPU_GCC_DLLPUBLIC_EXPORT " << id_;
+    out << "\nclass CPPU_GCC_DLLPUBLIC_EXPORT SAL_WARN_UNUSED " << id_;
     OUString base(entity_->getDirectBase());
     if (!base.isEmpty()) {
         out << " : public " << codemaker::cpp::scopedCppName(u2b(base));
@@ -3131,8 +3133,7 @@ sal_uInt32 ExceptionType::getTotalMemberCount(OUString const & base) const
         throw CannotDumpException(
             "exception type base " + base + " is not an exception type");
     }
-    unoidl::ExceptionTypeEntity& ent2(
-        dynamic_cast< unoidl::ExceptionTypeEntity&>(*ent.get()));
+    unoidl::ExceptionTypeEntity& ent2(dynamic_cast<unoidl::ExceptionTypeEntity&>(*ent));
     return getTotalMemberCount(ent2.getDirectBase())
            + ent2.getDirectMembers().size(); //TODO: overflow
 }

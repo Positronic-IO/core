@@ -33,8 +33,8 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboardNotifier.hpp>
 #include <cppuhelper/interfacecontainer.hxx>
 #include <sfx2/shell.hxx>
+#include <sfx2/viewfac.hxx>
 #include <tools/gen.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/IDialogRenderable.hxx>
 #include <vcl/errcode.hxx>
 #include <vcl/jobset.hxx>
@@ -64,7 +64,6 @@ class Printer;
 class SfxPrinter;
 class SfxProgress;
 class SfxFrameItem;
-class Dialog;
 class Menu;
 class NotifyEvent;
 class SfxInPlaceClient;
@@ -245,7 +244,7 @@ public:
     virtual SfxPrinter*         GetPrinter( bool bCreate = false );
     virtual sal_uInt16          SetPrinter( SfxPrinter *pNewPrinter, SfxPrinterChangeFlags nDiffFlags = SFX_PRINTER_ALL );
     virtual bool                HasPrintOptionsPage() const;
-    virtual VclPtr<SfxTabPage>  CreatePrintOptionsPage(weld::Container* pPage, const SfxItemSet &rOptions);
+    virtual VclPtr<SfxTabPage>  CreatePrintOptionsPage(TabPageParent pParent, const SfxItemSet &rOptions);
     Printer*                    GetActivePrinter() const;
 
     // Working set

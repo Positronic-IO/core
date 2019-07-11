@@ -8,6 +8,7 @@
  */
 #include "xltoolbar.hxx"
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <stdarg.h>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/document/IndexedPropertyValues.hpp>
@@ -263,8 +264,7 @@ bool ScTBC::ImportToolBarControl( ScCTBWrapper& rWrapper, const css::uno::Refere
     {
         std::vector< css::beans::PropertyValue > props;
         bool bBeginGroup = false;
-        if ( ! tbcd->ImportToolBarControl( helper, props, bBeginGroup, bIsMenuToolbar ) )
-            return false;
+        tbcd->ImportToolBarControl( helper, props, bBeginGroup, bIsMenuToolbar );
         TBCMenuSpecific* pMenu = tbcd->getMenuSpecific();
         if ( pMenu )
         {

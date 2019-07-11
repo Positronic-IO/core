@@ -31,7 +31,6 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <stringconstants.hxx>
 #include <connectivity/dbtools.hxx>
-#include <comphelper/sequence.hxx>
 #include <helpids.h>
 #include <RelationDesignView.hxx>
 #include <JoinController.hxx>
@@ -263,8 +262,9 @@ bool ORelationTableView::RemoveConnection(VclPtr<OTableConnection>& rConn, bool 
     ORelationTableConnectionData* pTabConnData = static_cast<ORelationTableConnectionData*>(rConn->GetData().get());
     try
     {
-        if ( m_bInRemove || pTabConnData->DropRelation())
-            return OJoinTableView::RemoveConnection(rConn, true);
+        if (!m_bInRemove)
+            pTabConnData->DropRelation();
+        return OJoinTableView::RemoveConnection(rConn, true);
     }
     catch(SQLException& e)
     {

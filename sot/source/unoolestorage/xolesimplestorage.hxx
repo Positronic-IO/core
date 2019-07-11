@@ -22,6 +22,8 @@
 
 #include <sal/config.h>
 
+#include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/io/XStream.hpp>
 #include <com/sun/star/embed/XOLESimpleStorage.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
@@ -44,7 +46,7 @@ class OLESimpleStorage : public cppu::WeakImplHelper<css::embed::XOLESimpleStora
 
     css::uno::Reference< css::io::XStream > m_xStream;
     css::uno::Reference< css::io::XStream > m_xTempStream;
-    SvStream* m_pStream;
+    std::unique_ptr<SvStream> m_pStream;
     BaseStorage* m_pStorage;
 
     ::comphelper::OInterfaceContainerHelper2* m_pListenersContainer; // list of listeners

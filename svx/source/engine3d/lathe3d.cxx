@@ -34,17 +34,18 @@
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
+#include <o3tl/make_unique.hxx>
 
 
 // DrawContact section
-sdr::contact::ViewContact* E3dLatheObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> E3dLatheObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfE3dLathe(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfE3dLathe>(*this);
 }
 
-sdr::properties::BaseProperties* E3dLatheObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> E3dLatheObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::E3dLatheProperties(*this);
+    return o3tl::make_unique<sdr::properties::E3dLatheProperties>(*this);
 }
 
 // Constructor from 3D polygon, scale is the conversion factor for the coordinates
@@ -186,12 +187,12 @@ bool E3dLatheObj::IsBreakObjPossible()
     return true;
 }
 
-SdrAttrObj* E3dLatheObj::GetBreakObj()
+std::unique_ptr<SdrAttrObj,SdrObjectFreeOp> E3dLatheObj::GetBreakObj()
 {
     // create PathObj
     basegfx::B3DPolyPolygon aLathePoly3D(basegfx::utils::createB3DPolyPolygonFromB2DPolyPolygon(maPolyPoly2D));
     basegfx::B2DPolyPolygon aTransPoly(TransformToScreenCoor(aLathePoly3D));
-    SdrPathObj* pPathObj = new SdrPathObj(getSdrModelFromSdrObject(), OBJ_PLIN, aTransPoly);
+    std::unique_ptr<SdrPathObj,SdrObjectFreeOp> pPathObj(new SdrPathObj(getSdrModelFromSdrObject(), OBJ_PLIN, aTransPoly));
 
     // Set Attribute
     SfxItemSet aSet(GetObjectItemSet());
@@ -201,7 +202,7 @@ SdrAttrObj* E3dLatheObj::GetBreakObj()
 
     pPathObj->SetMergedItemSet(aSet);
 
-    return pPathObj;
+    return std::unique_ptr<SdrAttrObj,SdrObjectFreeOp>(pPathObj.release());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

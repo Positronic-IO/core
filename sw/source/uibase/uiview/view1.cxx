@@ -103,7 +103,7 @@ void SwView::Activate(bool bMDIActivate)
             m_sSwViewData.clear();
         }
 
-        AttrChangedNotify(m_pWrtShell);
+        AttrChangedNotify(m_pWrtShell.get());
 
         // Initialize Fielddlg newly if necessary (e.g. for TYP_SETVAR)
         sal_uInt16 nId = SwFieldDlgWrapper::GetChildWindowId();
@@ -133,7 +133,7 @@ void SwView::Activate(bool bMDIActivate)
     }
     else
         // At least call the Notify (as a precaution because of the SlotFilter).
-        AttrChangedNotify(m_pWrtShell);
+        AttrChangedNotify(m_pWrtShell.get());
 
     SfxViewShell::Activate(bMDIActivate);
 }
@@ -182,7 +182,7 @@ void SwView::ExecFormatPaintbrush(SfxRequest const & rReq)
         m_pFormatClipboard->Copy( GetWrtShell(), GetPool(), bPersistentCopy );
 
         SwApplyTemplate aTemplate;
-        aTemplate.m_pFormatClipboard = m_pFormatClipboard;
+        aTemplate.m_pFormatClipboard = m_pFormatClipboard.get();
         GetEditWin().SetApplyTemplate(aTemplate);
     }
     GetViewFrame()->GetBindings().Invalidate(SID_FORMATPAINTBRUSH);

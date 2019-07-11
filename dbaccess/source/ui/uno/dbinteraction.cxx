@@ -37,6 +37,8 @@
 #include <CollectionView.hxx>
 #include <UITools.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequenceashashmap.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
 
 extern "C" void createRegistryInfo_OInteractionHandler()
 {
@@ -61,6 +63,12 @@ namespace dbaui
     {
         OSL_ENSURE( !m_bFallbackToGeneric,
             "BasicInteractionHandler::BasicInteractionHandler: enabling legacy behavior, there should be no clients of this anymore!" );
+    }
+
+    void SAL_CALL BasicInteractionHandler::initialize(const Sequence<Any>& rArgs)
+    {
+        comphelper::SequenceAsHashMap aMap(rArgs);
+        m_xParentWindow.set(aMap.getValue("Parent"), UNO_QUERY);
     }
 
     sal_Bool SAL_CALL BasicInteractionHandler::handleInteractionRequest( const Reference< XInteractionRequest >& i_rRequest )
@@ -124,8 +132,8 @@ namespace dbaui
             xParamCallback.set(_rContinuations[nParamPos], UNO_QUERY);
         OSL_ENSURE(xParamCallback.is(), "BasicInteractionHandler::implHandle(ParametersRequest): can't set the parameters without an appropriate interaction handler!s");
 
-        ScopedVclPtrInstance< OParameterDialog > aDlg(nullptr, _rParamRequest.Parameters, _rParamRequest.Connection, m_xContext);
-        sal_Int16 nResult = aDlg->Execute();
+        OParameterDialog aDlg(Application::GetFrameWeld(m_xParentWindow), _rParamRequest.Parameters, _rParamRequest.Connection, m_xContext);
+        sal_Int16 nResult = aDlg.run();
         try
         {
             switch (nResult)
@@ -133,7 +141,7 @@ namespace dbaui
                 case RET_OK:
                     if (xParamCallback.is())
                     {
-                        xParamCallback->setParameters(aDlg->getValues());
+                        xParamCallback->setParameters(aDlg.getValues());
                         xParamCallback->select();
                     }
                     break;
@@ -235,7 +243,7 @@ namespace dbaui
         if ( -1 != nApprovePos )
         {
             // ask whether it should be saved
-            nRet = ExecuteQuerySaveDocument(nullptr,_rDocuRequest.Name);
+            nRet = ExecuteQuerySaveDocument(Application::GetFrameWeld(m_xParentWindow), _rDocuRequest.Name);
         }
 
         if ( RET_CANCEL == nRet )

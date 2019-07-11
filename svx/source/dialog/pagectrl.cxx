@@ -36,34 +36,27 @@
 #define CELL_WIDTH      1600L
 #define CELL_HEIGHT      800L
 
-SvxPageWindow::SvxPageWindow(vcl::Window* pParent)
-: Window(pParent),
+SvxPageWindow::SvxPageWindow() :
     aWinSize(),
     aSize(),
-
     nTop(0),
     nBottom(0),
     nLeft(0),
     nRight(0),
-
     bResetBackground(false),
     bFrameDirection(false),
     nFrameDirection(SvxFrameDirection::Horizontal_LR_TB),
-
     nHdLeft(0),
     nHdRight(0),
     nHdDist(0),
     nHdHeight(0),
-
     nFtLeft(0),
     nFtRight(0),
     nFtDist(0),
     nFtHeight(0),
-
     maHeaderFillAttributes(),
     maFooterFillAttributes(),
     maPageFillAttributes(),
-
     bFooter(false),
     bHeader(false),
     bTable(false),
@@ -71,25 +64,17 @@ SvxPageWindow::SvxPageWindow(vcl::Window* pParent)
     bVert(false),
     eUsage(SvxPageUsage::All)
 {
-    // Count in Twips by default
-    SetMapMode(MapMode(MapUnit::MapTwip));
-    aWinSize = GetOptimalSize();
-    aWinSize.AdjustHeight( -4 );
-    aWinSize.AdjustWidth( -4 );
-
-    aWinSize = PixelToLogic(aWinSize);
-    SetBackground();
 }
 
 SvxPageWindow::~SvxPageWindow()
 {
-    disposeOnce();
 }
-
-VCL_BUILDER_FACTORY(SvxPageWindow)
 
 void SvxPageWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
 {
+    rRenderContext.Push(PushFlags::MAPMODE);
+    rRenderContext.SetMapMode(MapMode(MapUnit::MapTwip));
+
     Fraction aXScale(aWinSize.Width(), std::max(long(aSize.Width() * 2 + aSize.Width() / 8), 1L));
     Fraction aYScale(aWinSize.Height(), std::max(aSize.Height(), 1L));
     MapMode aMapMode(rRenderContext.GetMapMode());
@@ -105,7 +90,7 @@ void SvxPageWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
         aMapMode.SetScaleY(aXScale);
     }
     rRenderContext.SetMapMode(aMapMode);
-    Size aSz(rRenderContext.PixelToLogic(GetSizePixel()));
+    Size aSz(rRenderContext.PixelToLogic(GetOutputSizePixel()));
     long nYPos = (aSz.Height() - aSize.Height()) / 2;
 
     if (eUsage == SvxPageUsage::All)
@@ -122,7 +107,7 @@ void SvxPageWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
             aMapMode.SetScaleX(aX);
             aMapMode.SetScaleY(aY);
             rRenderContext.SetMapMode(aMapMode);
-            aSz = rRenderContext.PixelToLogic(GetSizePixel());
+            aSz = rRenderContext.PixelToLogic(GetOutputSizePixel());
             nYPos = (aSz.Height() - aSize.Height()) / 2;
             long nXPos = (aSz.Width() - aSize.Width()) / 2;
             DrawPage(rRenderContext, Point(nXPos,nYPos),true,true);
@@ -139,6 +124,7 @@ void SvxPageWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Recta
         DrawPage(rRenderContext, Point(aSize.Width() + aSize.Width() / 8, nYPos), true,
                  eUsage == SvxPageUsage::Right || eUsage == SvxPageUsage::All || eUsage == SvxPageUsage::Mirror);
     }
+    rRenderContext.Pop();
 }
 
 void SvxPageWindow::DrawPage(vcl::RenderContext& rRenderContext, const Point& rOrg, const bool bSecond, const bool bEnabled)
@@ -254,7 +240,7 @@ void SvxPageWindow::DrawPage(vcl::RenderContext& rRenderContext, const Point& rO
         {
         case SvxFrameDirection::Horizontal_LR_TB:
             aPos = aRect.TopLeft();
-            aPos.AdjustX(PixelToLogic(Point(1,1)).X() );
+            aPos.AdjustX(rRenderContext.PixelToLogic(Point(1,1)).X() );
             aMove.setY( 0 );
             cArrow = 0x2192;
             break;
@@ -282,7 +268,7 @@ void SvxPageWindow::DrawPage(vcl::RenderContext& rRenderContext, const Point& rO
         {
             OUString sDraw(sText.copy(i,1));
             long nHDiff = 0;
-            long nCharWidth = GetTextWidth(sDraw);
+            long nCharWidth = rRenderContext.GetTextWidth(sDraw);
             bool bHorizontal = 0 == aMove.Y();
             if (!bHorizontal)
             {
@@ -369,7 +355,7 @@ void SvxPageWindow::drawFillAttributes(vcl::RenderContext& rRenderContext,
         {
             const drawinglayer::primitive2d::Primitive2DReference xOutline(
                 new drawinglayer::primitive2d::PolygonHairlinePrimitive2D(
-                    basegfx::utils::createPolygonFromRect(aPaintRange), GetLineColor().getBColor()));
+                    basegfx::utils::createPolygonFromRect(aPaintRange), rRenderContext.GetLineColor().getBColor()));
 
             aSequence.push_back(xOutline);
         }
@@ -378,12 +364,11 @@ void SvxPageWindow::drawFillAttributes(vcl::RenderContext& rRenderContext,
         if (!aSequence.empty())
         {
             const drawinglayer::geometry::ViewInformation2D aViewInformation2D(
-                            basegfx::B2DHomMatrix(), GetViewTransformation(), aPaintRange, nullptr,
+                            basegfx::B2DHomMatrix(), rRenderContext.GetViewTransformation(), aPaintRange, nullptr,
                             0.0, css::uno::Sequence<css::beans::PropertyValue >());
 
-            std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> pProcessor;
-            pProcessor.reset(drawinglayer::processor2d::createProcessor2DFromOutputDevice(rRenderContext, aViewInformation2D));
-
+            std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> pProcessor(
+                drawinglayer::processor2d::createProcessor2DFromOutputDevice(rRenderContext, aViewInformation2D));
             if (pProcessor)
             {
                 pProcessor->process(aSequence);
@@ -408,9 +393,22 @@ void SvxPageWindow::ResetBackground()
     bResetBackground = true;
 }
 
-Size SvxPageWindow::GetOptimalSize() const
+void SvxPageWindow::SetDrawingArea(weld::DrawingArea* pDrawingArea)
 {
-    return LogicToPixel(Size(75, 46), MapMode(MapUnit::MapAppFont));
+    CustomWidgetController::SetDrawingArea(pDrawingArea);
+
+    OutputDevice& rRefDevice = pDrawingArea->get_ref_device();
+    // Count in Twips by default
+    rRefDevice.Push(PushFlags::MAPMODE);
+    rRefDevice.SetMapMode(MapMode(MapUnit::MapTwip));
+    aWinSize = rRefDevice.LogicToPixel(Size(75, 46), MapMode(MapUnit::MapAppFont));
+    pDrawingArea->set_size_request(aWinSize.Width(), aWinSize.Height());
+
+    aWinSize.AdjustHeight( -4 );
+    aWinSize.AdjustWidth( -4 );
+
+    aWinSize = rRefDevice.PixelToLogic(aWinSize);
+    rRefDevice.Pop();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

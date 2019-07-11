@@ -34,6 +34,7 @@
 #include <svx/svdpage.hxx>
 #include <svl/itemiter.hxx>
 #include <comphelper/sequenceashashmap.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/document/XActionLockable.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
@@ -84,6 +85,8 @@ void SwTextBoxHelper::create(SwFrameFormat* pShape)
     xPropertySet->setPropertyValue(UNO_NAME_FILL_TRANSPARENCE, uno::makeAny(sal_Int32(100)));
 
     xPropertySet->setPropertyValue(UNO_NAME_SIZE_TYPE, uno::makeAny(text::SizeType::FIX));
+
+    xPropertySet->setPropertyValue(UNO_NAME_SURROUND, uno::makeAny(text::WrapTextMode_THROUGH));
 
     uno::Reference<container::XNamed> xNamed(xTextFrame, uno::UNO_QUERY);
     xNamed->setName(pShape->GetDoc()->GetUniqueFrameName());
@@ -212,7 +215,7 @@ uno::Any SwTextBoxHelper::getByIndex(SdrPage const* pPage, sal_Int32 nIndex)
 
 sal_Int32 SwTextBoxHelper::getOrdNum(const SdrObject* pObject)
 {
-    if (const SdrPage* pPage = pObject->GetPage())
+    if (const SdrPage* pPage = pObject->getSdrPageFromSdrObject())
     {
         sal_Int32 nOrder = 0; // Current logical order.
         for (std::size_t i = 0; i < pPage->GetObjCount(); ++i)
@@ -255,7 +258,7 @@ SwFrameFormat* SwTextBoxHelper::getOtherTextBoxFormat(uno::Reference<drawing::XS
     return getOtherTextBoxFormat(pFormat, RES_DRAWFRMFMT);
 }
 
-template <typename T> void lcl_queryInterface(SwFrameFormat* pShape, uno::Any& rAny)
+template <typename T> static void lcl_queryInterface(SwFrameFormat* pShape, uno::Any& rAny)
 {
     if (SwFrameFormat* pFormat = SwTextBoxHelper::getOtherTextBoxFormat(pShape, RES_DRAWFRMFMT))
     {
@@ -601,21 +604,23 @@ void SwTextBoxHelper::restoreLinks(std::set<ZSortFly>& rOld, std::vector<SwFrame
                                    SavedLink& rSavedLinks, SavedContent& rResetContent)
 {
     std::size_t i = 0;
-    for (auto aSetIt = rOld.begin(); aSetIt != rOld.end(); ++aSetIt, ++i)
+    for (const auto& rIt : rOld)
     {
-        auto aTextBoxIt = rSavedLinks.find(aSetIt->GetFormat());
+        auto aTextBoxIt = rSavedLinks.find(rIt.GetFormat());
         if (aTextBoxIt != rSavedLinks.end())
         {
             std::size_t j = 0;
-            for (auto aSetJt = rOld.begin(); aSetJt != rOld.end(); ++aSetJt, ++j)
+            for (const auto& rJt : rOld)
             {
-                if (aSetJt->GetFormat() == aTextBoxIt->second)
+                if (rJt.GetFormat() == aTextBoxIt->second)
                     rNew[i]->SetFormatAttr(rNew[j]->GetContent());
+                ++j;
             }
         }
-        if (rResetContent.find(aSetIt->GetFormat()) != rResetContent.end())
-            const_cast<SwFrameFormat*>(aSetIt->GetFormat())
-                ->SetFormatAttr(rResetContent[aSetIt->GetFormat()]);
+        if (rResetContent.find(rIt.GetFormat()) != rResetContent.end())
+            const_cast<SwFrameFormat*>(rIt.GetFormat())
+                ->SetFormatAttr(rResetContent[rIt.GetFormat()]);
+        ++i;
     }
 }
 

@@ -21,6 +21,8 @@
 #include <vcl/image.hxx>
 #include <vcl/keycod.hxx>
 #include <vcl/menu.hxx>
+#include <vcl/vcllayout.hxx>
+#include <fontinstance.hxx>
 
 #include <com/sun/star/i18n/XCharacterClassification.hpp>
 
@@ -36,6 +38,7 @@ struct MenuItemData
     MenuItemBits    nBits;                  // MenuItem-Bits
     VclPtr<Menu>    pSubMenu;               // Pointer to SubMenu
     OUString        aText;                  // Menu-Text
+    SalLayoutGlyphs aTextGlyphs;            ///< Text layout of aText.
     OUString        aHelpText;              // Help-String
     OUString        aTipHelpText;           // TipHelp-String (eg, expanded filenames)
     OUString        aCommandStr;            // CommandString
@@ -52,9 +55,9 @@ struct MenuItemData
     bool            bIsTemporary;           // Temporary inserted ('No selection possible')
     bool            bHiddenOnGUI;
     Size            aSz;                    // only temporarily valid
-    OUString        aAccessibleName;        // accessible name
+    OUString const  aAccessibleName;        // accessible name
 
-    SalMenuItem*    pSalMenuItem;           // access to native menu
+    std::unique_ptr<SalMenuItem> pSalMenuItem; // access to native menu
 
     MenuItemData()
         : nId(0)
@@ -68,7 +71,6 @@ struct MenuItemData
         , bVisible(false)
         , bIsTemporary(false)
         , bHiddenOnGUI(false)
-        , pSalMenuItem(nullptr)
     {
     }
     MenuItemData( const OUString& rStr )
@@ -85,10 +87,13 @@ struct MenuItemData
         , bVisible(false)
         , bIsTemporary(false)
         , bHiddenOnGUI(false)
-        , pSalMenuItem(nullptr)
     {
     }
     ~MenuItemData();
+
+    /// Computes aText's text layout (glyphs), cached in aTextGlyphs.
+    SalLayoutGlyphs* GetTextGlyphs(OutputDevice* pOutputDevice);
+
     bool HasCheck() const
     {
         return bChecked || ( nBits & ( MenuItemBits::RADIOCHECK | MenuItemBits::CHECKABLE | MenuItemBits::AUTOCHECK ) );

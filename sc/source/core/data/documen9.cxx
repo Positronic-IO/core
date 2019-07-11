@@ -20,26 +20,20 @@
 #include <scitems.hxx>
 #include <editeng/eeitem.hxx>
 
-#include <sot/exchange.hxx>
 #include <editeng/autokernitem.hxx>
 #include <editeng/fontitem.hxx>
-#include <editeng/forbiddencharacterstable.hxx>
 #include <editeng/langitem.hxx>
 #include <osl/thread.h>
 #include <svl/asiancfg.hxx>
-#include <svx/svdetc.hxx>
 #include <svx/svditer.hxx>
-#include <svx/svdocapt.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/svdoole2.hxx>
-#include <svx/svdouno.hxx>
 #include <svx/svdpage.hxx>
 #include <svx/svdundo.hxx>
 #include <svx/xtable.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/printer.hxx>
-#include <unotools/saveopt.hxx>
-#include <unotools/pathoptions.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <document.hxx>
 #include <docoptio.hxx>
@@ -50,11 +44,8 @@
 #include <rechead.hxx>
 #include <poolhelp.hxx>
 #include <docpool.hxx>
-#include <detfunc.hxx>
 #include <editutil.hxx>
-#include <postit.hxx>
 #include <charthelper.hxx>
-#include <interpre.hxx>
 #include <conditio.hxx>
 #include <documentlinkmgr.hxx>
 
@@ -62,7 +53,7 @@ using namespace ::com::sun::star;
 
 SfxBroadcaster* ScDocument::GetDrawBroadcaster()
 {
-    return mpDrawLayer;
+    return mpDrawLayer.get();
 }
 
 void ScDocument::BeginDrawUndo()
@@ -80,18 +71,17 @@ void ScDocument::TransferDrawPage(ScDocument* pSrcDoc, SCTAB nSrcPos, SCTAB nDes
 
         if (pOldPage && pNewPage)
         {
-            SdrObjListIter aIter( *pOldPage, SdrIterMode::Flat );
+            SdrObjListIter aIter( pOldPage, SdrIterMode::Flat );
             SdrObject* pOldObject = aIter.Next();
             while (pOldObject)
             {
                 // Clone to target SdrModel
                 SdrObject* pNewObject(pOldObject->CloneSdrObject(*mpDrawLayer));
-                pNewObject->SetPage(pNewPage);
                 pNewObject->NbcMove(Size(0,0));
                 pNewPage->InsertObject( pNewObject );
 
                 if (mpDrawLayer->IsRecording())
-                    mpDrawLayer->AddCalcUndo( new SdrUndoInsertObj( *pNewObject ) );
+                    mpDrawLayer->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pNewObject ) );
 
                 pOldObject = aIter.Next();
             }
@@ -118,7 +108,7 @@ void ScDocument::InitDrawLayer( SfxObjectShell* pDocShell )
         OUString aName;
         if ( mpShell && !mpShell->IsLoading() )       // don't call GetTitle while loading
             aName = mpShell->GetTitle();
-        mpDrawLayer = new ScDrawLayer( this, aName );
+        mpDrawLayer.reset(new ScDrawLayer( this, aName ));
 
         sfx2::LinkManager* pMgr = GetDocLinkManager().getLinkManager(bAutoCalc);
         if (pMgr)
@@ -155,8 +145,7 @@ void ScDocument::InitDrawLayer( SfxObjectShell* pDocShell )
             mpDrawLayer->ScAddPage( nTab );     // always add page, with or without the table
             if (maTabs[nTab])
             {
-                OUString aTabName;
-                maTabs[nTab]->GetName(aTabName);
+                OUString aTabName = maTabs[nTab]->GetName();
                 mpDrawLayer->ScRenamePage( nTab, aTabName );
 
                 maTabs[nTab]->SetDrawPageSize(false,false);     // set the right size immediately
@@ -251,8 +240,7 @@ void ScDocument::DeleteDrawLayer()
             pLocalPool->SetSecondaryPool(nullptr);
         }
     }
-    delete mpDrawLayer;
-    mpDrawLayer = nullptr;
+    mpDrawLayer.reset();
 }
 
 bool ScDocument::DrawGetPrintArea( ScRange& rRange, bool bSetHor, bool bSetVer ) const
@@ -307,7 +295,7 @@ bool ScDocument::HasOLEObjectsInArea( const ScRange& rRange, const ScMarkData* p
             OSL_ENSURE(pPage,"Page ?");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+                SdrObjListIter aIter( pPage, SdrIterMode::Flat );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {
@@ -333,7 +321,7 @@ void ScDocument::StartAnimations( SCTAB nTab )
     if (!pPage)
         return;
 
-    SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+    SdrObjListIter aIter( pPage, SdrIterMode::Flat );
     SdrObject* pObject = aIter.Next();
     while (pObject)
     {
@@ -361,7 +349,7 @@ bool ScDocument::HasBackgroundDraw( SCTAB nTab, const tools::Rectangle& rMMRect 
 
     bool bFound = false;
 
-    SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+    SdrObjListIter aIter( pPage, SdrIterMode::Flat );
     SdrObject* pObject = aIter.Next();
     while (pObject && !bFound)
     {
@@ -386,7 +374,7 @@ bool ScDocument::HasAnyDraw( SCTAB nTab, const tools::Rectangle& rMMRect ) const
 
     bool bFound = false;
 
-    SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+    SdrObjListIter aIter( pPage, SdrIterMode::Flat );
     SdrObject* pObject = aIter.Next();
     while (pObject && !bFound)
     {
@@ -414,7 +402,7 @@ SdrObject* ScDocument::GetObjectAtPoint( SCTAB nTab, const Point& rPos )
         OSL_ENSURE(pPage,"Page ?");
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+            SdrObjListIter aIter( pPage, SdrIterMode::Flat );
             SdrObject* pObject = aIter.Next();
             while (pObject)
             {
@@ -512,10 +500,6 @@ void ScDocument::Clear( bool bFromDestructor )
         if (*it)
             (*it)->GetCondFormList()->clear();
 
-    it = maTabs.begin();
-    for (;it != maTabs.end(); ++it)
-        delete *it;
-
     maTabs.clear();
     pSelectionAttr.reset();
 
@@ -538,7 +522,7 @@ bool ScDocument::HasDetectiveObjects(SCTAB nTab) const
         OSL_ENSURE(pPage,"Page ?");
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
             SdrObject* pObject = aIter.Next();
             while (pObject && !bFound)
             {

@@ -54,6 +54,7 @@
 #include <svtools/embedtransfer.hxx>
 #include <DrawDocShell.hxx>
 #include <View.hxx>
+#include <sdmod.hxx>
 #include <sdpage.hxx>
 #include <drawview.hxx>
 #include <drawdoc.hxx>
@@ -75,17 +76,12 @@ constexpr sal_uInt32 SDTRANSFER_OBJECTTYPE_DRAWOLE   = 2;
 
 SdTransferable::SdTransferable( SdDrawDocument* pSrcDoc, ::sd::View* pWorkView, bool bInitOnGetData )
 :   mpPageDocShell( nullptr )
-,   mpOLEDataHelper( nullptr )
-,   mpObjDesc( nullptr )
 ,   mpSdView( pWorkView )
 ,   mpSdViewIntern( pWorkView )
 ,   mpSdDrawDocument( nullptr )
 ,   mpSdDrawDocumentIntern( nullptr )
 ,   mpSourceDoc( pSrcDoc )
 ,   mpVDev( nullptr )
-,   mpBookmark( nullptr )
-,   mpGraphic( nullptr )
-,   mpImageMap( nullptr )
 ,   mbInternalMove( false )
 ,   mbOwnDocument( false )
 ,   mbOwnView( false )
@@ -183,7 +179,7 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
 
             if (pUnoCtrl && SdrInventor::FmForm == pUnoCtrl->GetObjInventor())
             {
-                Reference< css::awt::XControlModel > xControlModel( pUnoCtrl->GetUnoControlModel() );
+                const Reference< css::awt::XControlModel >& xControlModel( pUnoCtrl->GetUnoControlModel() );
 
                 if( !xControlModel.is() )
                     return;
@@ -219,10 +215,8 @@ void SdTransferable::CreateObjectReplacement( SdrObject* pObj )
                 {
                     const SvxFieldData* pData = pField->GetField();
 
-                    if( pData && dynamic_cast< const SvxURLField *>( pData ) !=  nullptr )
+                    if( auto pURL = dynamic_cast< const SvxURLField *>( pData ) )
                     {
-                        const SvxURLField* pURL = static_cast<const SvxURLField*>(pData);
-
                         // #i63399# This special code identifies TextFrames which have just an URL
                         // as content and directly add this to the clipboard, probably to avoid adding
                         // an unnecessary DrawObject to the target where paste may take place. This is
@@ -273,7 +267,7 @@ void SdTransferable::CreateData()
 
         if( mpSourceDoc )
             mpSourceDoc->CreatingDataObj(this);
-        mpSdDrawDocumentIntern = static_cast<SdDrawDocument*>( mpSdView->GetMarkedObjModel() );
+        mpSdDrawDocumentIntern = static_cast<SdDrawDocument*>( mpSdView->CreateMarkedObjModel().release() );
         if( mpSourceDoc )
             mpSourceDoc->CreatingDataObj(nullptr);
 
@@ -303,7 +297,7 @@ void SdTransferable::CreateData()
         sal_Int32 nPos = aOldLayoutName.indexOf( SD_LT_SEPARATOR );
         if( nPos != -1 )
             aOldLayoutName = aOldLayoutName.copy( 0, nPos );
-        SdStyleSheetVector aCreatedSheets;
+        StyleSheetCopyResultVector aCreatedSheets;
         pNewStylePool->CopyLayoutSheets( aOldLayoutName, *pOldStylePool, aCreatedSheets );
     }
 
@@ -318,7 +312,8 @@ void SdTransferable::CreateData()
         {
             // #112978# need to use GetAllMarkedBoundRect instead of GetAllMarkedRect to get
             // fat lines correctly
-            Point   aOrigin( ( maVisArea = mpSdViewIntern->GetAllMarkedBoundRect() ).TopLeft() );
+            maVisArea = mpSdViewIntern->GetAllMarkedBoundRect();
+            Point   aOrigin( maVisArea.TopLeft() );
             Size    aVector( -aOrigin.X(), -aOrigin.Y() );
 
             for( size_t nObj = 0, nObjCount = pPage->GetObjCount(); nObj < nObjCount; ++nObj )
@@ -344,7 +339,7 @@ static bool lcl_HasOnlyControls( SdrModel* pModel )
         SdrPage* pPage = pModel->GetPage(0);
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
             SdrObject* pObj = aIter.Next();
             if ( pObj )
             {
@@ -495,7 +490,7 @@ bool SdTransferable::GetData( const DataFlavor& rFlavor, const OUString& rDestDo
             {
                 SdDrawDocument& rInternDoc = mpSdViewIntern->GetDoc();
                 rInternDoc.CreatingDataObj(this);
-                SdDrawDocument* pDoc = dynamic_cast< SdDrawDocument* >( mpSdViewIntern->GetMarkedObjModel() );
+                SdDrawDocument* pDoc = dynamic_cast< SdDrawDocument* >( mpSdViewIntern->CreateMarkedObjModel().release() );
                 rInternDoc.CreatingDataObj(nullptr);
 
                 bOK = SetObject( pDoc, SDTRANSFER_OBJECTTYPE_DRAWMODEL, rFlavor );
@@ -632,19 +627,19 @@ bool SdTransferable::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, void* 
                 pEmbObj->SetupStorage( xWorkStore, SOFFICE_FILEFORMAT_CURRENT, false );
                 // mba: no relative URLs for clipboard!
                 SfxMedium aMedium( xWorkStore, OUString() );
-                bRet = pEmbObj->DoSaveObjectAs( aMedium, false );
+                pEmbObj->DoSaveObjectAs( aMedium, false );
                 pEmbObj->DoSaveCompleted();
 
                 uno::Reference< embed::XTransactedObject > xTransact( xWorkStore, uno::UNO_QUERY );
                 if ( xTransact.is() )
                     xTransact->commit();
 
-                SvStream* pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
+                std::unique_ptr<SvStream> pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
                 if( pSrcStm )
                 {
                     rxOStm->SetBufferSize( 0xff00 );
                     rxOStm->WriteStream( *pSrcStm );
-                    delete pSrcStm;
+                    pSrcStm.reset();
                 }
 
                 bRet = true;
@@ -833,7 +828,7 @@ bool SdTransferable::SetTableRTF( SdDrawDocument* pModel )
             {
                 SvMemoryStream aMemStm( 65535, 65535 );
                 sdr::table::SdrTableObj::ExportAsRTF( aMemStm, *pTableObj );
-                return SetAny( Any( Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aMemStm.GetData() ), aMemStm.Seek( STREAM_SEEK_TO_END ) ) ) );
+                return SetAny( Any( Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aMemStm.GetData() ), aMemStm.TellEnd() ) ) );
             }
         }
     }

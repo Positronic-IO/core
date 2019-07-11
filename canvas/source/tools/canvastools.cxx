@@ -52,6 +52,7 @@
 #include <com/sun/star/util/Endianness.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/canvastools.hxx>
@@ -1308,6 +1309,17 @@ namespace canvas
                     p2ndOutDev->SetClipRegion( aClipRegion );
             }
         }
+
+        void extractExtraFontProperties(const uno::Sequence<beans::PropertyValue>& rExtraFontProperties,
+                        sal_uInt32 &rEmphasisMark)
+        {
+            for(sal_Int32 nIdx = 0; nIdx < rExtraFontProperties.getLength(); ++nIdx)
+            {
+                if (rExtraFontProperties[nIdx].Name == "EmphasisMark")
+                    rExtraFontProperties[0].Value >>= rEmphasisMark;
+            }
+        }
+
     } // namespace tools
 
 } // namespace canvas

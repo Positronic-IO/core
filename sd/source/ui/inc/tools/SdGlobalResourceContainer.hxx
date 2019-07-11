@@ -20,10 +20,12 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_TOOLS_SDGLOBALRESOURCECONTAINER_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_TOOLS_SDGLOBALRESOURCECONTAINER_HXX
 
-#include <sdmod.hxx>
 #include <memory>
-#include <o3tl/deleter.hxx>
-#include <com/sun/star/uno/XInterface.hpp>
+#include <sal/types.h>
+
+namespace com { namespace sun { namespace star { namespace uno { template <class interface_type> class Reference; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XInterface; } } } }
+namespace o3tl { template <typename T> struct default_delete; }
 
 namespace sd {
 
@@ -66,7 +68,7 @@ public:
 
         When in doubt, use the shared_ptr variant of this method.
     */
-    void AddResource (::std::unique_ptr<SdGlobalResource> && pResource);
+    void AddResource (::std::unique_ptr<SdGlobalResource> pResource);
 
     /** Add a resource to the container.  By using a shared_ptr and
         releasing it only when the SgGlobalResourceContainer is destroyed

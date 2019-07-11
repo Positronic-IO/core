@@ -39,7 +39,11 @@ $(eval $(call gb_Library_use_custom_headers,sw,\
 	sw/generated \
 ))
 
-$(eval $(call gb_Library_use_sdk_api,sw))
+$(eval $(call gb_Library_use_api,sw,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_Library_add_defs,sw,\
     -DSW_DLLIMPLEMENTATION \
@@ -484,6 +488,7 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/core/unocore/unotbl  \
     sw/source/core/unocore/unotext \
     sw/source/core/unocore/unotextmarkup \
+    sw/source/core/view/dialoghelp \
     sw/source/core/view/pagepreviewlayout \
     sw/source/core/view/printdata \
     sw/source/core/view/vdraw \

@@ -28,22 +28,22 @@
 namespace writerfilter {
 namespace dmapper {
 
-class FormControlHelper
+class FormControlHelper : public virtual SvRefBase
 {
 public:
-    typedef std::shared_ptr<FormControlHelper> Pointer_t;
+    typedef tools::SvRef<FormControlHelper> Pointer_t;
     FormControlHelper(FieldId eFieldId,
                       css::uno::Reference<css::text::XTextDocument> const& rTextDocument,
                       FFDataHandler::Pointer_t const & pFFData);
-    ~FormControlHelper();
+    ~FormControlHelper() override;
 
     void insertControl(css::uno::Reference<css::text::XTextRange> const& xTextRange);
     void processField(css::uno::Reference<css::text::XFormField> const& xFormField);
     bool hasFFDataHandler() const { return (m_pFFData != nullptr); }
 private:
-    FFDataHandler::Pointer_t m_pFFData;
+    FFDataHandler::Pointer_t const m_pFFData;
     struct FormControlHelper_Impl;
-    std::shared_ptr<FormControlHelper_Impl> m_pImpl;
+    tools::SvRef<FormControlHelper_Impl> m_pImpl;
 
     bool createCheckbox(css::uno::Reference<css::text::XTextRange> const& xTextRange,
                         const OUString & rControlName);

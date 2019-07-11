@@ -90,15 +90,8 @@ public:
     sal_uInt8 &GetProportionalHeight() { return nProp; }
     sal_uInt8  GetProportionalHeight() const { return nProp; }
 
-    SvxEscapementItem& operator=(const SvxEscapementItem& rEsc)
-        {
-            nEsc  = rEsc.GetEsc();
-            nProp = rEsc.GetProportionalHeight();
-            return *this;
-        }
-
     virtual sal_uInt16      GetValueCount() const override;
-    OUString                GetValueTextByPos( sal_uInt16 nPos ) const;
+    static OUString         GetValueTextByPos( sal_uInt16 nPos );
     virtual sal_uInt16      GetEnumValue() const override;
     virtual void            SetEnumValue( sal_uInt16 nNewVal ) override;
 };

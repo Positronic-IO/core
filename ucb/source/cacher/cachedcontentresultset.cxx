@@ -32,6 +32,8 @@
 #include <osl/diagnose.h>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <cppuhelper/queryinterface.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
 #include <memory>
 
 using namespace com::sun::star::beans;
@@ -122,9 +124,7 @@ template<typename T> T CachedContentResultSet::rowOriginGet(
 
 CachedContentResultSet::CCRS_Cache::CCRS_Cache(
     const Reference< XContentIdentifierMapping > & xMapping )
-    : m_pResult( nullptr )
-    , m_xContentIdentifierMapping( xMapping )
-    , m_pMappedReminder( nullptr )
+    : m_xContentIdentifierMapping( xMapping )
 {
 }
 
@@ -302,9 +302,12 @@ OUString const & CachedContentResultSet::CCRS_Cache
         }
         return *o3tl::doAccess<OUString>(getRowAny(nRow));
     }
-    catch(const SQLException&)
+    catch(const SQLException& ex)
     {
-        throw RuntimeException();
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                        css::uno::Reference< css::uno::XInterface >(),
+                        anyEx );
     }
 }
 
@@ -323,9 +326,12 @@ Reference< XContentIdentifier > CachedContentResultSet::CCRS_Cache
         }
         return *o3tl::doAccess<Reference<XContentIdentifier>>(getRowAny(nRow));
     }
-    catch(const SQLException&)
+    catch(const SQLException& ex)
     {
-        throw RuntimeException();
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                        css::uno::Reference< css::uno::XInterface >(),
+                        anyEx );
     }
 }
 
@@ -344,9 +350,12 @@ Reference< XContent > CachedContentResultSet::CCRS_Cache
         }
         return *o3tl::doAccess<Reference<XContent>>(getRowAny(nRow));
     }
-    catch (const SQLException&)
+    catch (const SQLException& ex)
     {
-        throw RuntimeException();
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                        css::uno::Reference< css::uno::XInterface >(),
+                        anyEx );
     }
 }
 
@@ -416,8 +425,7 @@ static const char g_sPropertyNameForFetchDirection[] = "FetchDirection";
 
 CCRS_PropertySetInfo::CCRS_PropertySetInfo(
         Reference< XPropertySetInfo > const & xInfo )
-        : m_pProperties( nullptr )
-        , m_nFetchSizePropertyHandle( -1 )
+        : m_nFetchSizePropertyHandle( -1 )
         , m_nFetchDirectionPropertyHandle( -1 )
 {
     //initialize list of properties:
@@ -476,11 +484,6 @@ CCRS_PropertySetInfo::CCRS_PropertySetInfo(
         rMyProp.Name = g_sPropertyNameForFetchDirection;
         rMyProp.Type = cppu::UnoType<sal_Bool>::get();
         rMyProp.Attributes = PropertyAttribute::BOUND | PropertyAttribute::MAYBEDEFAULT;
-
-        if( nFetchDirection != -1 )
-            m_nFetchDirectionPropertyHandle = (*pOrigProps)[nFetchDirection].Handle;
-        else
-            m_nFetchDirectionPropertyHandle = impl_getRemainedHandle();
 
         m_nFetchDirectionPropertyHandle = rMyProp.Handle;
     }
@@ -631,8 +634,6 @@ CachedContentResultSet::CachedContentResultSet(
                 : ContentResultSetWrapper( xOrigin )
 
                 , m_xContext( rxContext )
-                , m_xFetchProvider( nullptr )
-                , m_xFetchProviderForContentAccess( nullptr )
 
                 , m_xContentIdentifierMapping( xContentIdentifierMapping )
                 , m_nRow( 0 ) // Position is one-based. Zero means: before first element.
@@ -653,7 +654,6 @@ CachedContentResultSet::CachedContentResultSet(
                 , m_aCacheContentIdentifier( m_xContentIdentifierMapping )
                 , m_aCacheContent( m_xContentIdentifierMapping )
                 , m_bTriedToGetTypeConverter( false )
-                , m_xTypeConverter( nullptr )
 {
     m_xFetchProvider.set( m_xResultSetOrigin, UNO_QUERY );
     OSL_ENSURE( m_xFetchProvider.is(), "interface XFetchProvider is required" );
@@ -1522,7 +1522,7 @@ sal_Bool SAL_CALL CachedContentResultSet
 
         aGuard.reset();
         m_nRow = nNewRow;
-        m_bAfterLast = !bValid && nNewRow > 0;
+        m_bAfterLast = !bValid; // only nNewRow > 0 possible here
         return bValid;
     }
 }
@@ -1679,7 +1679,7 @@ sal_Bool SAL_CALL CachedContentResultSet
     if( m_nRow )
         return false;
     if( m_nKnownCount )
-        return !m_nRow;
+        return true;
     if( m_bFinalCount )
         return false;
 
@@ -1717,7 +1717,7 @@ sal_Bool SAL_CALL CachedContentResultSet
         if( m_nRow != 1 )
             return false;
         if( m_nKnownCount )
-            return m_nRow == 1;
+            return true;
         if( m_bFinalCount )
             return false;
 

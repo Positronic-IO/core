@@ -14,6 +14,7 @@
 #include <vcl/button.hxx>
 #include <vcl/dialog.hxx>
 #include <vcl/fixed.hxx>
+#include <vcl/help.hxx>
 #include <vcl/scrbar.hxx>
 #include <vcl/split.hxx>
 #include <vcl/svapp.hxx>
@@ -21,6 +22,7 @@
 #include <vcl/window.hxx>
 #include <vcl/vclptr.hxx>
 #include <vcl/IContext.hxx>
+#include <vcl/commandevent.hxx>
 #include <set>
 
 class VCL_DLLPUBLIC VclContainer : public vcl::Window,
@@ -563,14 +565,6 @@ public:
     virtual void Command(const CommandEvent& rCEvt) override;
 };
 
-enum class VclSizeGroupMode
-{
-    NONE,
-    Horizontal,
-    Vertical,
-    Both
-};
-
 class VCL_DLLPUBLIC VclSizeGroup
 {
 private:
@@ -627,6 +621,8 @@ private:
     Link<const KeyEvent&, bool> m_aKeyPressHdl;
     Link<const KeyEvent&, bool> m_aKeyReleaseHdl;
     Link<VclDrawingArea&, void> m_aStyleUpdatedHdl;
+    Link<const Point&, bool> m_aPopupMenuHdl;
+    Link<tools::Rectangle&, OUString> m_aQueryTooltipHdl;
 
     virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override
     {
@@ -677,6 +673,30 @@ private:
             Invalidate();
         }
     }
+    virtual void Command(const CommandEvent& rEvent) override
+    {
+        if (rEvent.GetCommand() == CommandEventId::ContextMenu && m_aPopupMenuHdl.Call(rEvent.GetMousePosPixel()))
+            return;
+        Control::Command(rEvent);
+    }
+    virtual void RequestHelp(const HelpEvent& rHelpEvent) override
+    {
+        if (rHelpEvent.GetMode() & (HelpEventMode::QUICK | HelpEventMode::BALLOON))
+        {
+            Point aPos(ScreenToOutputPixel(rHelpEvent.GetMousePosPixel()));
+            tools::Rectangle aHelpArea(aPos.X(), aPos.Y());
+            OUString sHelpTip = m_aQueryTooltipHdl.Call(aHelpArea);
+            if (sHelpTip.isEmpty())
+                return;
+            Point aPt = OutputToScreenPixel(aHelpArea.TopLeft());
+            aHelpArea.SetLeft(aPt.X());
+            aHelpArea.SetTop(aPt.Y());
+            aPt = OutputToScreenPixel(aHelpArea.BottomRight());
+            aHelpArea.SetRight(aPt.X());
+            aHelpArea.SetBottom(aPt.Y());
+            Help::ShowQuickHelp(this, aHelpArea, sHelpTip);
+        }
+    }
     virtual FactoryFunction GetUITestFactory() const override
     {
         if (m_pFactoryFunction)
@@ -690,6 +710,7 @@ public:
         , m_pFactoryFunction(nullptr)
         , m_pUserData(nullptr)
     {
+        SetBackground();
     }
     void SetUITestFactory(FactoryFunction pFactoryFunction, void* pUserData)
     {
@@ -732,6 +753,14 @@ public:
     {
         m_aStyleUpdatedHdl = rLink;
     }
+    void SetPopupMenuHdl(const Link<const Point&, bool>& rLink)
+    {
+        m_aPopupMenuHdl = rLink;
+    }
+    void SetQueryTooltipHdl(const Link<tools::Rectangle&, OUString>& rLink)
+    {
+        m_aQueryTooltipHdl = rLink;
+    }
 };
 
 //Get first window of a pTopLevel window as
@@ -739,21 +768,28 @@ public:
 //i.e. acts like pChild = pChild->GetWindow(GetWindowType::FirstChild);
 //in a flat hierarchy where dialogs only have one layer
 //of children
-VCL_DLLPUBLIC vcl::Window* firstLogicalChildOfParent(vcl::Window *pTopLevel);
+VCL_DLLPUBLIC vcl::Window* firstLogicalChildOfParent(const vcl::Window *pTopLevel);
+
+//Get last window of a pTopLevel window as
+//if any intermediate layout widgets didn't exist
+//i.e. acts like pChild = pChild->GetWindow(GetWindowType::LastChild);
+//in a flat hierarchy where dialogs only have one layer
+//of children
+VCL_DLLPUBLIC vcl::Window* lastLogicalChildOfParent(const vcl::Window *pTopLevel);
 
 //Get next window after pChild of a pTopLevel window as
 //if any intermediate layout widgets didn't exist
 //i.e. acts like pChild = pChild->GetWindow(GetWindowType::Next);
 //in a flat hierarchy where dialogs only have one layer
 //of children
-VCL_DLLPUBLIC vcl::Window* nextLogicalChildOfParent(vcl::Window *pTopLevel, vcl::Window *pChild);
+VCL_DLLPUBLIC vcl::Window* nextLogicalChildOfParent(const vcl::Window *pTopLevel, const vcl::Window *pChild);
 
 //Get previous window before pChild of a pTopLevel window as
 //if any intermediate layout widgets didn't exist
 //i.e. acts like pChild = pChild->GetWindow(GetWindowType::Prev);
 //in a flat hierarchy where dialogs only have one layer
 //of children
-VCL_DLLPUBLIC vcl::Window* prevLogicalChildOfParent(vcl::Window *pTopLevel, vcl::Window *pChild);
+VCL_DLLPUBLIC vcl::Window* prevLogicalChildOfParent(const vcl::Window *pTopLevel, const vcl::Window *pChild);
 
 //Returns true is the Window has a single child which is a container
 VCL_DLLPUBLIC bool isLayoutEnabled(const vcl::Window *pWindow);

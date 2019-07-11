@@ -33,7 +33,9 @@
 #include <oox/helper/propertyset.hxx>
 #include <oox/token/tokens.hxx>
 #include <addressconverter.hxx>
+#include <biffhelper.hxx>
 #include <externallinkbuffer.hxx>
+#include <formulabase.hxx>
 #include <formulaparser.hxx>
 #include <worksheetbuffer.hxx>
 #include <tokenarray.hxx>
@@ -55,11 +57,6 @@ const sal_uInt32 BIFF12_DEFNAME_FUNC        = 0x00000002;
 const sal_uInt32 BIFF12_DEFNAME_VBNAME      = 0x00000004;
 const sal_uInt32 BIFF12_DEFNAME_MACRO       = 0x00000008;
 const sal_uInt32 BIFF12_DEFNAME_BUILTIN     = 0x00000020;
-
-const sal_uInt16 BIFF_REFFLAG_COL1REL       = 0x0001;
-const sal_uInt16 BIFF_REFFLAG_ROW1REL       = 0x0002;
-const sal_uInt16 BIFF_REFFLAG_COL2REL       = 0x0004;
-const sal_uInt16 BIFF_REFFLAG_ROW2REL       = 0x0008;
 
 const OUStringLiteral spcOoxPrefix("_xlnm.");
 
@@ -128,53 +125,6 @@ OUString lclGetUpcaseModelName( const OUString& rModelName )
     return rModelName.toAsciiUpperCase();
 }
 
-void lclConvertRefFlags( sal_Int32& ornFlags, sal_Int32& ornAbsPos, sal_Int32& ornRelPos, sal_Int32 nBasePos, sal_Int32 nApiRelFlag, bool bRel )
-{
-    if( getFlag( ornFlags, nApiRelFlag ) && !bRel )
-    {
-        // convert relative to absolute
-        setFlag( ornFlags, nApiRelFlag, false );
-        ornAbsPos = nBasePos + ornRelPos;
-    }
-    else if( !getFlag( ornFlags, nApiRelFlag ) && bRel )
-    {
-        // convert absolute to relative
-        setFlag( ornFlags, nApiRelFlag, true );
-        ornRelPos = ornAbsPos - nBasePos;
-    }
-}
-
-void lclConvertSingleRefFlags( SingleReference& orApiRef, const ScAddress& rBaseAddr, bool bColRel, bool bRowRel )
-{
-    using namespace ::com::sun::star::sheet::ReferenceFlags;
-    lclConvertRefFlags(
-        orApiRef.Flags, orApiRef.Column, orApiRef.RelativeColumn,
-        sal_Int32( rBaseAddr.Col() ), COLUMN_RELATIVE, bColRel );
-    lclConvertRefFlags(
-        orApiRef.Flags, orApiRef.Row, orApiRef.RelativeRow,
-        rBaseAddr.Row(), ROW_RELATIVE, bRowRel );
-}
-
-Any lclConvertReference( const Any& rRefAny, const ScAddress& rBaseAddr, sal_uInt16 nRelFlags )
-{
-    if( rRefAny.has< SingleReference >() && !getFlag( nRelFlags, BIFF_REFFLAG_COL2REL ) && !getFlag( nRelFlags, BIFF_REFFLAG_ROW2REL ) )
-    {
-        SingleReference aApiRef;
-        rRefAny >>= aApiRef;
-        lclConvertSingleRefFlags( aApiRef, rBaseAddr, getFlag( nRelFlags, BIFF_REFFLAG_COL1REL ), getFlag( nRelFlags, BIFF_REFFLAG_ROW1REL ) );
-        return Any( aApiRef );
-    }
-    if( rRefAny.has< ComplexReference >() )
-    {
-        ComplexReference aApiRef;
-        rRefAny >>= aApiRef;
-        lclConvertSingleRefFlags( aApiRef.Reference1, rBaseAddr, getFlag( nRelFlags, BIFF_REFFLAG_COL1REL ), getFlag( nRelFlags, BIFF_REFFLAG_ROW1REL ) );
-        lclConvertSingleRefFlags( aApiRef.Reference2, rBaseAddr, getFlag( nRelFlags, BIFF_REFFLAG_COL2REL ), getFlag( nRelFlags, BIFF_REFFLAG_ROW2REL ) );
-        return Any( aApiRef );
-    }
-    return Any();
-}
-
 } // namespace
 
 DefinedNameModel::DefinedNameModel() :
@@ -197,34 +147,6 @@ const OUString& DefinedNameBase::getUpcaseModelName() const
     if( maUpModelName.isEmpty() )
         maUpModelName = lclGetUpcaseModelName( maModel.maName );
     return maUpModelName;
-}
-
-Any DefinedNameBase::getReference( const ScAddress& rBaseAddr ) const
-{
-    if( maRefAny.hasValue() && (maModel.maName.getLength() >= 2) && (maModel.maName[ 0 ] == '\x01') )
-    {
-        sal_Unicode cFlagsChar = getUpcaseModelName()[ 1 ];
-        if( ('A' <= cFlagsChar) && (cFlagsChar <= 'P') )
-        {
-            sal_uInt16 nRelFlags = static_cast< sal_uInt16 >( cFlagsChar - 'A' );
-            if( maRefAny.has< ExternalReference >() )
-            {
-                ExternalReference aApiExtRef;
-                maRefAny >>= aApiExtRef;
-                Any aRefAny = lclConvertReference( aApiExtRef.Reference, rBaseAddr, nRelFlags );
-                if( aRefAny.hasValue() )
-                {
-                    aApiExtRef.Reference = aRefAny;
-                    return Any( aApiExtRef );
-                }
-            }
-            else
-            {
-                return lclConvertReference( maRefAny, rBaseAddr, nRelFlags );
-            }
-        }
-    }
-    return Any();
 }
 
 DefinedName::DefinedName( const WorkbookHelper& rHelper ) :
@@ -353,7 +275,7 @@ void DefinedName::convertFormula( const css::uno::Sequence<css::sheet::ExternalL
 
     ScTokenArray* pTokenArray = mpScRangeData->GetCode();
     Sequence< FormulaToken > aFTokenSeq;
-    (void)ScTokenConversion::ConvertToTokenSequence( getScDocument(), aFTokenSeq, *pTokenArray );
+    ScTokenConversion::ConvertToTokenSequence( getScDocument(), aFTokenSeq, *pTokenArray );
     // set built-in names (print ranges, repeated titles, filter ranges)
     if( !isGlobalName() ) switch( mcBuiltinId )
     {

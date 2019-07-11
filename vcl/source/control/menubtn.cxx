@@ -50,7 +50,9 @@ void MenuButton::ExecuteMenu()
     {
         Point aPos(0, 1);
         tools::Rectangle aRect(aPos, aSize );
-        mnCurItemId = mpMenu->Execute(this, aRect, PopupMenuFlags::ExecuteDown);
+        mpMenu->Execute(this, aRect, PopupMenuFlags::ExecuteDown);
+        mnCurItemId = mpMenu->GetCurItemId();
+        msCurItemIdent = mpMenu->GetCurItemIdent();
     }
     else
     {
@@ -70,18 +72,46 @@ void MenuButton::ExecuteMenu()
     {
         Select();
         mnCurItemId = 0;
+        msCurItemIdent.clear();
     }
 }
 
-OString MenuButton::GetCurItemIdent() const
+void MenuButton::CancelMenu()
 {
-    return (mnCurItemId && mpMenu) ?
-        mpMenu->GetItemIdent(mnCurItemId) : OString();
+    if (!mpMenu && !mpFloatingWindow)
+        return;
+
+    if (mpMenu)
+    {
+        mpMenu->EndExecute();
+    }
+    else
+    {
+        if (mpFloatingWindow->GetType() == WindowType::FLOATINGWINDOW)
+            static_cast<FloatingWindow*>(mpFloatingWindow.get())->EndPopupMode();
+        else
+            vcl::Window::GetDockingManager()->EndPopupMode(mpFloatingWindow);
+    }
+}
+
+bool MenuButton::MenuShown() const
+{
+    if (!mpMenu && !mpFloatingWindow)
+        return false;
+
+    if (mpMenu)
+       return PopupMenu::GetActivePopupMenu() == mpMenu;
+    else
+    {
+        if (mpFloatingWindow->GetType() == WindowType::FLOATINGWINDOW)
+            return static_cast<const FloatingWindow*>(mpFloatingWindow.get())->IsInPopupMode();
+        else
+            return vcl::Window::GetDockingManager()->IsInPopupMode(mpFloatingWindow);
+    }
 }
 
 MenuButton::MenuButton( vcl::Window* pParent, WinBits nWinBits )
     : PushButton(WindowType::MENUBUTTON)
-    , mpMenuTimer(nullptr)
     , mnCurItemId(0)
     , mbDelayMenu(false)
 {
@@ -128,7 +158,7 @@ void MenuButton::MouseButtonDown( const MouseEvent& rMEvt )
                 mpMenuTimer->SetInvokeHandler( LINK( this, MenuButton, ImplMenuTimeoutHdl ) );
             }
 
-            mpMenuTimer->SetTimeout( GetSettings().GetMouseSettings().GetActionDelay() );
+            mpMenuTimer->SetTimeout( MouseSettings::GetActionDelay() );
             mpMenuTimer->Start();
 
             PushButton::MouseButtonDown( rMEvt );

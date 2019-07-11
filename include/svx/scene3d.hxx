@@ -59,13 +59,9 @@ class Imp3DDepthRemapper;
 
 class SVX_DLLPUBLIC E3dScene : public E3dObject, public SdrObjList
 {
-private:
-    // to allow sdr::properties::E3dSceneProperties access to StructureChanged()
-    friend class sdr::properties::E3dSceneProperties;
-
 protected:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
     // transformations
     B3dCamera                   aCameraSet;
@@ -78,14 +74,10 @@ protected:
 
     bool mbSkipSettingDirty : 1;
 
-    virtual void NewObjectInserted(const E3dObject* p3DObj) override;
-    virtual void StructureChanged() override;
-
     void RebuildLists();
 
     virtual void Notify(SfxBroadcaster &rBC, const SfxHint  &rHint) override;
 
-protected:
     void SetDefaultAttributes();
     void ImpCleanup3DDepthMapper();
 
@@ -95,10 +87,16 @@ protected:
 public:
     E3dScene(SdrModel& rSdrModel);
 
-    virtual void SetBoundRectDirty() override;
+    virtual void StructureChanged() override;
 
-    // access to cleanup of depth mapper
-    void Cleanup3DDepthMapper() { ImpCleanup3DDepthMapper(); }
+    // derived from SdrObjList
+    virtual SdrPage* getSdrPageFromSdrObjList() const override;
+    virtual SdrObject* getSdrObjectFromSdrObjList() const override;
+
+    // derived from SdrObject
+    virtual SdrObjList* getChildrenOfSdrObject() const override;
+
+    virtual void SetBoundRectDirty() override;
 
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
 
@@ -127,7 +125,7 @@ public:
                                                  const Fraction& rYFact) override;
     virtual void    RecalcSnapRect() override;
 
-    virtual E3dScene* GetScene() const override;
+    virtual E3dScene* getRootE3dSceneFromE3dObject() const override;
     void SetCamera(const Camera3D& rNewCamera);
     const Camera3D& GetCamera() const { return aCamera; }
     void removeAllNonSelectedObjects();
@@ -180,13 +178,13 @@ public:
     virtual SdrObject* RemoveObject(size_t nObjNum) override;
 
     // needed for group functionality
-    virtual void SetRectsDirty(bool bNotMyself = false) override;
+    virtual void SetRectsDirty(bool bNotMyself = false, bool bRecursive = true) override;
     virtual void NbcSetLayer(SdrLayerID nLayer) override;
-    virtual void setParentOfSdrObject(SdrObjList* pNewObjList) override;
-    virtual void SetPage(SdrPage* pNewPage) override;
+
+    // react on model/page change
+    virtual void handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage) override;
+
     virtual SdrObjList* GetSubList() const override;
-    void Insert3DObj(E3dObject* p3DObj);
-    void Remove3DObj(E3dObject const * p3DObj);
     virtual void SetTransformChanged() override;
 
 protected:

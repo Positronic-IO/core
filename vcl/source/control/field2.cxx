@@ -595,7 +595,7 @@ static bool ImplPatternProcessKeyInput( Edit* pEdit, const KeyEvent& rKEvt,
         }
         else if ( nKeyCode == KEY_INSERT )
         {
-            // you can only set InsertModus for a PatternField if the
+            // you can only set InsertMode for a PatternField if the
             // mask is equal at all input positions
             if ( !bSameMask )
             {
@@ -679,7 +679,7 @@ static bool ImplPatternProcessKeyInput( Edit* pEdit, const KeyEvent& rKEvt,
             {
                 // possibly extend string until cursor position
                 if ( aStr.getLength() < nNewPos )
-                    aStr.append( rLiteralMask.copy( aStr.getLength(), nNewPos-aStr.getLength() ));
+                    aStr.appendCopy( rLiteralMask, aStr.getLength(), nNewPos-aStr.getLength() );
                 if ( nNewPos < aStr.getLength() )
                     aStr.insert( cChar, nNewPos );
                 else if ( nNewPos < rEditMask.getLength() )
@@ -771,7 +771,8 @@ void PatternFormatter::ImplSetMask(const OString& rEditMask, const OUString& rLi
     }
 }
 
-PatternFormatter::PatternFormatter()
+PatternFormatter::PatternFormatter(Edit* pEdit)
+    : FormatterBase(pEdit)
 {
     mbSameMask          = true;
     mbInPattKeyInput    = false;
@@ -816,16 +817,16 @@ void PatternFormatter::Reformat()
     }
 }
 
-PatternField::PatternField( vcl::Window* pParent, WinBits nWinStyle ) :
-    SpinField( pParent, nWinStyle )
+PatternField::PatternField(vcl::Window* pParent, WinBits nWinStyle)
+    : SpinField(pParent, nWinStyle)
+    , PatternFormatter(this)
 {
-    SetField( this );
     Reformat();
 }
 
 void PatternField::dispose()
 {
-    PatternFormatter::SetField( nullptr );
+    ClearField();
     SpinField::dispose();
 }
 
@@ -868,16 +869,16 @@ void PatternField::Modify()
     SpinField::Modify();
 }
 
-PatternBox::PatternBox( vcl::Window* pParent, WinBits nWinStyle ) :
-    ComboBox( pParent, nWinStyle )
+PatternBox::PatternBox(vcl::Window* pParent, WinBits nWinStyle)
+    : ComboBox( pParent, nWinStyle )
+    , PatternFormatter(this)
 {
-    SetField( this );
     Reformat();
 }
 
 void PatternBox::dispose()
 {
-    PatternFormatter::SetField( nullptr );
+    ClearField();
     ComboBox::dispose();
 }
 
@@ -1115,11 +1116,11 @@ static bool ImplDateGetValue( const OUString& rStr, Date& rDate, ExtDateFieldFor
     return false;
 }
 
-bool DateFormatter::ImplDateReformat( const OUString& rStr, OUString& rOutStr )
+void DateFormatter::ImplDateReformat( const OUString& rStr, OUString& rOutStr )
 {
     Date aDate( Date::EMPTY );
     if ( !ImplDateGetValue( rStr, aDate, GetExtDateFormat(true), ImplGetLocaleDataWrapper(), GetCalendarWrapper() ) )
-        return true;
+        return;
 
     Date aTempDate = aDate;
     if ( aTempDate > GetMax() )
@@ -1128,8 +1129,6 @@ bool DateFormatter::ImplDateReformat( const OUString& rStr, OUString& rOutStr )
         aTempDate = GetMin();
 
     rOutStr = ImplGetDateAsText( aTempDate );
-
-    return true;
 }
 
 OUString DateFormatter::ImplGetDateAsText( const Date& rDate ) const
@@ -1411,7 +1410,8 @@ void DateFormatter::ImplInit()
     mnExtDateFormat     = ExtDateFieldFormat::SystemShort;
 }
 
-DateFormatter::DateFormatter() :
+DateFormatter::DateFormatter(Edit* pEdit) :
+    FormatterBase(pEdit),
     maFieldDate( 0 ),
     maLastDate( 0 ),
     maMin( 1, 1, 1900 ),
@@ -1423,12 +1423,6 @@ DateFormatter::DateFormatter() :
 
 DateFormatter::~DateFormatter()
 {
-}
-
-void DateFormatter::SetLocale( const css::lang::Locale& rLocale )
-{
-    mpCalendarWrapper.reset();
-    FormatterBase::SetLocale( rLocale );
 }
 
 CalendarWrapper& DateFormatter::GetCalendarWrapper() const
@@ -1670,9 +1664,7 @@ void DateFormatter::Reformat()
         return;
 
     OUString aStr;
-    bool bOK = ImplDateReformat( GetField()->GetText(), aStr );
-    if( !bOK )
-        return;
+    ImplDateReformat( GetField()->GetText(), aStr );
 
     if ( !aStr.isEmpty() )
     {
@@ -1712,10 +1704,10 @@ void DateFormatter::ExpandCentury( Date& rDate, sal_uInt16 nTwoDigitYearStart )
 
 DateField::DateField( vcl::Window* pParent, WinBits nWinStyle ) :
     SpinField( pParent, nWinStyle ),
+    DateFormatter(this),
     maFirst( GetMin() ),
     maLast( GetMax() )
 {
-    SetField( this );
     SetText( ImplGetLocaleDataWrapper().getDate( ImplGetFieldDate() ) );
     Reformat();
     ResetLastDate();
@@ -1723,7 +1715,7 @@ DateField::DateField( vcl::Window* pParent, WinBits nWinStyle ) :
 
 void DateField::dispose()
 {
-    DateFormatter::SetField( nullptr );
+    ClearField();
     SpinField::dispose();
 }
 
@@ -1782,7 +1774,7 @@ void DateField::DataChanged( const DataChangedEvent& rDCEvt )
 
     if ( (rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & (AllSettingsFlags::LOCALE|AllSettingsFlags::MISC)) )
     {
-        if ( IsDefaultLocale() && ( rDCEvt.GetFlags() & AllSettingsFlags::LOCALE ) )
+        if (rDCEvt.GetFlags() & AllSettingsFlags::LOCALE)
             ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
         ReformatAll();
     }
@@ -1818,17 +1810,17 @@ void DateField::Last()
     SpinField::Last();
 }
 
-DateBox::DateBox( vcl::Window* pParent, WinBits nWinStyle ) :
-    ComboBox( pParent, nWinStyle )
+DateBox::DateBox(vcl::Window* pParent, WinBits nWinStyle)
+    : ComboBox( pParent, nWinStyle )
+    , DateFormatter(this)
 {
-    SetField( this );
     SetText( ImplGetLocaleDataWrapper().getDate( ImplGetFieldDate() ) );
     Reformat();
 }
 
 void DateBox::dispose()
 {
-    DateFormatter::SetField( nullptr );
+    ClearField();
     ComboBox::dispose();
 }
 
@@ -1851,8 +1843,7 @@ void DateBox::DataChanged( const DataChangedEvent& rDCEvt )
 
     if ( (rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::LOCALE) )
     {
-        if ( IsDefaultLocale() )
-            ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
+        ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
         ReformatAll();
     }
 }
@@ -2157,11 +2148,11 @@ bool TimeFormatter::TextToTime(const OUString& rStr, tools::Time& rTime, TimeFie
     return true;
 }
 
-bool TimeFormatter::ImplTimeReformat( const OUString& rStr, OUString& rOutStr )
+void TimeFormatter::ImplTimeReformat( const OUString& rStr, OUString& rOutStr )
 {
     tools::Time aTime( 0, 0, 0 );
     if ( !TextToTime( rStr, aTime, GetFormat(), IsDuration(), ImplGetLocaleDataWrapper() ) )
-        return true;
+        return;
 
     tools::Time aTempTime = aTime;
     if ( aTempTime > GetMax() )
@@ -2207,8 +2198,6 @@ bool TimeFormatter::ImplTimeReformat( const OUString& rStr, OUString& rOutStr )
                 rOutStr += "PM"; // ImplGetLocaleDataWrapper().getTimePM();
         }
     }
-
-    return true;
 }
 
 bool TimeFormatter::ImplAllowMalformedInput() const
@@ -2316,7 +2305,8 @@ void TimeFormatter::ImplInit()
     mnTimeFormat    = TimeFormat::Hour24;  // Should become a ExtTimeFieldFormat in next implementation, merge with mbDuration and meFormat
 }
 
-TimeFormatter::TimeFormatter() :
+TimeFormatter::TimeFormatter(Edit* pEdit) :
+    FormatterBase(pEdit),
     maLastTime( 0, 0 ),
     maMin( 0, 0 ),
     maMax( 23, 59, 59, 999999999 ),
@@ -2507,9 +2497,7 @@ void TimeFormatter::Reformat()
         return;
 
     OUString aStr;
-    bool bOK = ImplTimeReformat( GetField()->GetText(), aStr );
-    if ( !bOK )
-        return;
+    ImplTimeReformat( GetField()->GetText(), aStr );
 
     if ( !aStr.isEmpty() )
     {
@@ -2522,17 +2510,17 @@ void TimeFormatter::Reformat()
 
 TimeField::TimeField( vcl::Window* pParent, WinBits nWinStyle ) :
     SpinField( pParent, nWinStyle ),
+    TimeFormatter(this),
     maFirst( GetMin() ),
     maLast( GetMax() )
 {
-    SetField( this );
     SetText( ImplGetLocaleDataWrapper().getTime( maFieldTime, false ) );
     Reformat();
 }
 
 void TimeField::dispose()
 {
-    TimeFormatter::SetField( nullptr );
+    ClearField();
     SpinField::dispose();
 }
 
@@ -2577,8 +2565,7 @@ void TimeField::DataChanged( const DataChangedEvent& rDCEvt )
 
     if ( (rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::LOCALE) )
     {
-        if ( IsDefaultLocale() )
-            ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
+        ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
         ReformatAll();
     }
 }
@@ -2639,17 +2626,17 @@ void TimeField::SetExtFormat( ExtTimeFieldFormat eFormat )
     ReformatAll();
 }
 
-TimeBox::TimeBox( vcl::Window* pParent, WinBits nWinStyle ) :
-    ComboBox( pParent, nWinStyle )
+TimeBox::TimeBox(vcl::Window* pParent, WinBits nWinStyle)
+    : ComboBox(pParent, nWinStyle)
+    , TimeFormatter(this)
 {
-    SetField( this );
     SetText( ImplGetLocaleDataWrapper().getTime( maFieldTime, false ) );
     Reformat();
 }
 
 void TimeBox::dispose()
 {
-    TimeFormatter::SetField( nullptr );
+    ClearField();
     ComboBox::dispose();
 }
 
@@ -2683,8 +2670,7 @@ void TimeBox::DataChanged( const DataChangedEvent& rDCEvt )
 
     if ( (rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::LOCALE) )
     {
-        if ( IsDefaultLocale() )
-            ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
+        ImplGetLocaleDataWrapper().setLanguageTag( GetSettings().GetLanguageTag() );
         ReformatAll();
     }
 }

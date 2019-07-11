@@ -14,6 +14,7 @@
 #include <officecfg/System.hxx>
 #include <org/freedesktop/PackageKit/SyncDbusSessionHelper.hpp>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <svtools/langhelp.hxx>
 #include <vcl/idle.hxx>
 #include <vcl/svapp.hxx>
@@ -67,7 +68,7 @@ static std::unique_ptr<Idle> xLangpackInstaller;
 
 class InstallLangpack : public Idle
 {
-    std::vector<OUString> m_aPackages;
+    std::vector<OUString> const m_aPackages;
 public:
     explicit InstallLangpack(const std::vector<OUString>& rPackages)
         : Idle("install langpack")

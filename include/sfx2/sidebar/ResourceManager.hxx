@@ -24,6 +24,7 @@
 #include <sfx2/sidebar/Context.hxx>
 #include <unotools/confignode.hxx>
 #include <com/sun/star/frame/XController.hpp>
+#include <map>
 #include <set>
 #include <svtools/miscopt.hxx>
 
@@ -102,10 +103,10 @@ private:
 
     typedef std::vector<std::shared_ptr<PanelDescriptor>> PanelContainer;
     PanelContainer maPanels;
-    mutable std::set<rtl::OUString> maProcessedApplications;
+    mutable std::set<OUString> maProcessedApplications;
     std::map<OUString, OUString> maLastActiveDecks;
 
-    SvtMiscOptions maMiscOptions;
+    SvtMiscOptions const maMiscOptions;
 
     void ReadDeckList();
     void ReadPanelList();

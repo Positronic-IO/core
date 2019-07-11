@@ -61,6 +61,8 @@ public:
 
     // Export
     void testPivotTableExportXLSX();
+    void testPivotTableExportXLSXSingleDataField();
+    void testPivotTableExportXLSXMultipleDataFields();
     void testPivotCacheExportXLSX();
     void testPivotTableXLSX();
     void testPivotTableTwoDataFieldsXLSX();
@@ -83,7 +85,9 @@ public:
     void testPivotTableOutlineModeXLSX();
     void testPivotTableDuplicatedMemberFilterXLSX();
     void testPivotTableTabularModeXLSX();
+    void testPivotTableDuplicateFields();
     void testTdf112106();
+    void testTdf123923();
 
     CPPUNIT_TEST_SUITE(ScPivotTableFiltersTest);
 
@@ -99,6 +103,8 @@ public:
     CPPUNIT_TEST(testTdf112501);
 
     CPPUNIT_TEST(testPivotTableExportXLSX);
+    CPPUNIT_TEST(testPivotTableExportXLSXSingleDataField);
+    CPPUNIT_TEST(testPivotTableExportXLSXMultipleDataFields);
     CPPUNIT_TEST(testPivotCacheExportXLSX);
     CPPUNIT_TEST(testPivotTableXLSX);
     CPPUNIT_TEST(testPivotTableTwoDataFieldsXLSX);
@@ -121,7 +127,9 @@ public:
     CPPUNIT_TEST(testPivotTableOutlineModeXLSX);
     CPPUNIT_TEST(testPivotTableDuplicatedMemberFilterXLSX);
     CPPUNIT_TEST(testPivotTableTabularModeXLSX);
+    CPPUNIT_TEST(testPivotTableDuplicateFields);
     CPPUNIT_TEST(testTdf112106);
+    CPPUNIT_TEST(testTdf123923);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -153,7 +161,7 @@ void ScPivotTableFiltersTest::tearDown()
 
 void ScPivotTableFiltersTest::registerNamespaces(xmlXPathContextPtr& pXmlXPathCtx)
 {
-    struct
+    static const struct
     {
         xmlChar* pPrefix;
         xmlChar* pURI;
@@ -751,6 +759,58 @@ void ScPivotTableFiltersTest::testPivotTableExportXLSX()
     assertXPath(pTable, "/x:pivotTableDefinition/x:pivotFields/x:pivotField[3]/x:items/x:item", 4);
     assertXPath(pTable, "/x:pivotTableDefinition/x:pivotFields/x:pivotField[3]/x:items/x:item[3]",
                 "h", "1");
+}
+
+void ScPivotTableFiltersTest::testPivotTableExportXLSXSingleDataField()
+{
+    ScDocShellRef xShell = loadDoc("tdf123421_1datafield.", FORMAT_ODS);
+    CPPUNIT_ASSERT(xShell.is());
+
+    std::shared_ptr<utl::TempFile> pXPathFile
+        = ScBootstrapFixture::exportTo(&(*xShell), FORMAT_XLSX);
+    xmlDocPtr pTable
+        = XPathHelper::parseExport(pXPathFile, m_xSFactory, "xl/pivotTables/pivotTable1.xml");
+    CPPUNIT_ASSERT(pTable);
+
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "ref", "A3:B6");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstHeaderRow", "1");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstDataRow", "1");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstDataCol", "1");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:dataFields", "count", "1");
+
+    // There should not be any colFields tag, before the fix there used to be a singleton with
+    // <field x="-2"/> as child node.
+    assertXPath(pTable, "/x:pivotTableDefinition/x:colFields", 0);
+
+    xShell->DoClose();
+}
+
+void ScPivotTableFiltersTest::testPivotTableExportXLSXMultipleDataFields()
+{
+    ScDocShellRef xShell = loadDoc("tdf123421_2datafields.", FORMAT_ODS);
+    CPPUNIT_ASSERT(xShell.is());
+
+    std::shared_ptr<utl::TempFile> pXPathFile
+        = ScBootstrapFixture::exportTo(&(*xShell), FORMAT_XLSX);
+    xmlDocPtr pTable
+        = XPathHelper::parseExport(pXPathFile, m_xSFactory, "xl/pivotTables/pivotTable1.xml");
+    CPPUNIT_ASSERT(pTable);
+
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "ref", "A1:C6");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstHeaderRow", "1");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstDataRow", "2");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:location", "firstDataCol", "1");
+
+    assertXPath(pTable, "/x:pivotTableDefinition/x:dataFields", "count", "2");
+
+    // There should be a single colFields tag with sole child node
+    // <field x="-2"/>.
+    assertXPath(pTable, "/x:pivotTableDefinition/x:colFields", 1);
+    assertXPath(pTable, "/x:pivotTableDefinition/x:colFields", "count", "1");
+    assertXPath(pTable, "/x:pivotTableDefinition/x:colFields/x:field", 1);
+    assertXPath(pTable, "/x:pivotTableDefinition/x:colFields/x:field", "x", "-2");
+
+    xShell->DoClose();
 }
 
 void ScPivotTableFiltersTest::testPivotCacheExportXLSX()
@@ -2286,6 +2346,28 @@ void ScPivotTableFiltersTest::testPivotTableTabularModeXLSX()
     assertXPath(pTable, "/x:pivotTableDefinition/x:pivotFields/x:pivotField[1]", "outline", "0");
 }
 
+void ScPivotTableFiltersTest::testPivotTableDuplicateFields()
+{
+    ScDocShellRef xShell = loadDoc("caseinsensitive-duplicate-fields.", FORMAT_ODS);
+    CPPUNIT_ASSERT(xShell.is());
+
+    std::shared_ptr<utl::TempFile> pXPathFile
+        = ScBootstrapFixture::exportTo(&(*xShell), FORMAT_XLSX);
+    xmlDocPtr pCacheDef
+        = XPathHelper::parseExport(pXPathFile, m_xSFactory, "xl/pivotCache/pivotCacheDefinition1.xml");
+    CPPUNIT_ASSERT(pCacheDef);
+
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields", "count", "6");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[1]", "name", "ID");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[2]", "name", "Name");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[3]", "name", "Score");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[4]", "name", "Method");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[5]", "name", "method2");
+    assertXPath(pCacheDef, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[6]", "name", "Method3");
+
+    xShell->DoClose();
+}
+
 void ScPivotTableFiltersTest::testTdf112106()
 {
     ScDocShellRef xDocSh = loadDoc("tdf112106.", FORMAT_XLSX);
@@ -2313,6 +2395,23 @@ void ScPivotTableFiltersTest::testTdf112106()
     CPPUNIT_ASSERT_EQUAL(ScResId(STR_PIVOT_DATA), (*pLayoutName));
 
     xDocSh->DoClose();
+}
+
+void ScPivotTableFiltersTest::testTdf123923()
+{
+    // tdf#123923: Excel fails when it finds "Err:504" instead of "#REF!" in pivot table cache
+
+    ScDocShellRef xShell = loadDoc("pivot-table-err-in-cache.", FORMAT_ODS);
+    CPPUNIT_ASSERT(xShell.is());
+
+    std::shared_ptr<utl::TempFile> pXPathFile
+        = ScBootstrapFixture::exportTo(&(*xShell), FORMAT_XLSX);
+    xmlDocPtr pTable = XPathHelper::parseExport(pXPathFile, m_xSFactory,
+                                                "xl/pivotCache/pivotCacheDefinition1.xml");
+    CPPUNIT_ASSERT(pTable);
+
+    assertXPath(pTable, "/x:pivotCacheDefinition/x:cacheFields/x:cacheField[1]/x:sharedItems/x:e",
+                "v", "#REF!");
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(ScPivotTableFiltersTest);

@@ -281,25 +281,36 @@ void ScInterpreter:: ScLCM()
     }
 }
 
+void ScInterpreter::MakeMatNew(ScMatrixRef& rMat, SCSIZE nC, SCSIZE nR)
+{
+    rMat->SetErrorInterpreter( this);
+    // A temporary matrix is mutable and ScMatrix::CloneIfConst() returns the
+    // very matrix.
+    rMat->SetMutable();
+    SCSIZE nCols, nRows;
+    rMat->GetDimensions( nCols, nRows);
+    if ( nCols != nC || nRows != nR )
+    {   // arbitrary limit of elements exceeded
+        SetError( FormulaError::MatrixSize);
+        rMat.reset();
+    }
+}
+
 ScMatrixRef ScInterpreter::GetNewMat(SCSIZE nC, SCSIZE nR, bool bEmpty)
 {
     ScMatrixRef pMat;
     if (bEmpty)
-        pMat = new ScFullMatrix(nC, nR);
+        pMat = new ScMatrix(nC, nR);
     else
-        pMat = new ScFullMatrix(nC, nR, 0.0);
+        pMat = new ScMatrix(nC, nR, 0.0);
+    MakeMatNew(pMat, nC, nR);
+    return pMat;
+}
 
-    pMat->SetErrorInterpreter( this);
-    // A temporary matrix is mutable and ScMatrix::CloneIfConst() returns the
-    // very matrix.
-    pMat->SetMutable();
-    SCSIZE nCols, nRows;
-    pMat->GetDimensions( nCols, nRows);
-    if ( nCols != nC || nRows != nR )
-    {   // arbitrary limit of elements exceeded
-        SetError( FormulaError::MatrixSize);
-        pMat.reset();
-    }
+ScMatrixRef ScInterpreter::GetNewMat(SCSIZE nC, SCSIZE nR, const std::vector<double>& rValues)
+{
+    ScMatrixRef pMat(new ScMatrix(nC, nR, rValues));
+    MakeMatNew(pMat, nC, nR);
     return pMat;
 }
 
@@ -1027,7 +1038,7 @@ void ScInterpreter::ScMatTrans()
     For a row or column vector to be replicated the larger matrix dimension is
     returned, else the smaller dimension.
  */
-static inline SCSIZE lcl_GetMinExtent( SCSIZE n1, SCSIZE n2 )
+static SCSIZE lcl_GetMinExtent( SCSIZE n1, SCSIZE n2 )
 {
     if (n1 == 1)
         return n2;
@@ -1118,15 +1129,16 @@ ScMatrixRef ScInterpreter::MatConcat(const ScMatrixRef& pMat1, const ScMatrixRef
     return xResMat;
 }
 
-// for DATE, TIME, DATETIME
+// for DATE, TIME, DATETIME, DURATION
 static void lcl_GetDiffDateTimeFmtType( SvNumFormatType& nFuncFmt, SvNumFormatType nFmt1, SvNumFormatType nFmt2 )
 {
     if ( nFmt1 != SvNumFormatType::UNDEFINED || nFmt2 != SvNumFormatType::UNDEFINED )
     {
         if ( nFmt1 == nFmt2 )
         {
-            if ( nFmt1 == SvNumFormatType::TIME || nFmt1 == SvNumFormatType::DATETIME )
-                nFuncFmt = SvNumFormatType::TIME;   // times result in time
+            if ( nFmt1 == SvNumFormatType::TIME || nFmt1 == SvNumFormatType::DATETIME
+                    || nFmt1 == SvNumFormatType::DURATION )
+                nFuncFmt = SvNumFormatType::DURATION;   // times result in time duration
             // else: nothing special, number (date - date := days)
         }
         else if ( nFmt1 == SvNumFormatType::UNDEFINED )
@@ -1170,6 +1182,7 @@ void ScInterpreter::CalculateAddSub(bool _bSub)
             case SvNumFormatType::DATE :
             case SvNumFormatType::TIME :
             case SvNumFormatType::DATETIME :
+            case SvNumFormatType::DURATION :
                 nFmt2 = nCurFmtType;
             break;
             case SvNumFormatType::CURRENCY :
@@ -1192,6 +1205,7 @@ void ScInterpreter::CalculateAddSub(bool _bSub)
             case SvNumFormatType::DATE :
             case SvNumFormatType::TIME :
             case SvNumFormatType::DATETIME :
+            case SvNumFormatType::DURATION :
                 nFmt1 = nCurFmtType;
             break;
             case SvNumFormatType::CURRENCY :
@@ -1733,10 +1747,8 @@ void ScInterpreter::ScSumXMY2()
     if ( !MustHaveParamCount( GetByte(), 2 ) )
         return;
 
-    ScMatrixRef pMat1 = nullptr;
-    ScMatrixRef pMat2 = nullptr;
-    pMat2 = GetMatrix();
-    pMat1 = GetMatrix();
+    ScMatrixRef pMat2 = GetMatrix();
+    ScMatrixRef pMat1 = GetMatrix();
     if (!pMat2 || !pMat1)
     {
         PushIllegalParameter();
@@ -1863,8 +1875,11 @@ double lcl_GetColumnMaximumNorm(const ScMatrixRef& pMatA, SCSIZE nC, SCSIZE nR, 
 {
     double fNorm = 0.0;
     for (SCSIZE row=nR; row<nN; row++)
-        if (fNorm < fabs(pMatA->GetDouble(nC,row)))
-            fNorm = fabs(pMatA->GetDouble(nC,row));
+    {
+        double fVal = fabs(pMatA->GetDouble(nC,row));
+        if (fNorm < fVal)
+            fNorm = fVal;
+    }
     return fNorm;
 }
 
@@ -1874,8 +1889,11 @@ double lcl_TGetColumnMaximumNorm(const ScMatrixRef& pMatA, SCSIZE nR, SCSIZE nC,
 {
     double fNorm = 0.0;
     for (SCSIZE col=nC; col<nN; col++)
-        if (fNorm < fabs(pMatA->GetDouble(col,nR)))
-            fNorm = fabs(pMatA->GetDouble(col,nR));
+    {
+        double fVal = fabs(pMatA->GetDouble(col,nR));
+        if (fNorm < fVal)
+            fNorm = fVal;
+    }
     return fNorm;
 }
 

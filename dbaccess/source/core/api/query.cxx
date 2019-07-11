@@ -28,8 +28,6 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <comphelper/propagg.hxx>
-#include <comphelper/sequence.hxx>
 
 #include <com/sun/star/sdbc/XConnection.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
@@ -75,7 +73,6 @@ OQuery::OQuery( const Reference< XPropertySet >& _rxCommandDefinition
     ,ODataSettings(OContentHelper::rBHelper,true)
     ,m_xCommandDefinition(_rxCommandDefinition)
     ,m_xConnection(_rxConn)
-    ,m_pColumnMediator( nullptr )
     ,m_pWarnings( nullptr )
     ,m_eDoingCurrently(NONE)
 {

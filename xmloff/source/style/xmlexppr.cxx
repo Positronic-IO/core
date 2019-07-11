@@ -25,6 +25,8 @@
 #include <com/sun/star/beans/XTolerantMultiPropertySet.hpp>
 #include <com/sun/star/beans/TolerantPropertySetResultType.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <cppuhelper/weakref.hxx>
+#include <osl/diagnose.h>
 #include <list>
 #include <map>
 
@@ -53,15 +55,15 @@ namespace {
 
 struct XMLPropTokens_Impl
 {
-    sal_uInt16 nType;
-    XMLTokenEnum eToken;
+    sal_uInt16 const nType;
+    XMLTokenEnum const eToken;
 };
 
 const sal_uInt16 MAX_PROP_TYPES =
     (XML_TYPE_PROP_END >> XML_TYPE_PROP_SHIFT) -
     (XML_TYPE_PROP_START >> XML_TYPE_PROP_SHIFT);
 
-XMLPropTokens_Impl aPropTokens[MAX_PROP_TYPES] =
+XMLPropTokens_Impl const aPropTokens[MAX_PROP_TYPES] =
 {
     ENTRY(CHART),
     ENTRY(GRAPHIC),
@@ -179,7 +181,6 @@ class FilterPropertiesInfo_Impl
 {
     sal_uInt32                              nCount;
     FilterPropertyInfoList_Impl             aPropInfos;
-    FilterPropertyInfoList_Impl::iterator   aLastItr;
 
     std::unique_ptr<Sequence<OUString>>     pApiNames;
 
@@ -198,10 +199,8 @@ public:
 
 FilterPropertiesInfo_Impl::FilterPropertiesInfo_Impl() :
     nCount(0),
-    aPropInfos(),
-    pApiNames( nullptr )
+    aPropInfos()
 {
-    aLastItr = aPropInfos.begin();
 }
 
 void FilterPropertiesInfo_Impl::AddProperty(
@@ -489,19 +488,13 @@ void FilterPropertiesInfo_Impl::FillPropertyStateArray(
 
 struct SvXMLExportPropertyMapper::Impl
 {
-    typedef std::map<css::uno::Reference<css::beans::XPropertySetInfo>, FilterPropertiesInfo_Impl*> CacheType;
+    typedef std::map<css::uno::Reference<css::beans::XPropertySetInfo>, std::unique_ptr<FilterPropertiesInfo_Impl>> CacheType;
     CacheType maCache;
 
     rtl::Reference<SvXMLExportPropertyMapper> mxNextMapper;
     rtl::Reference<XMLPropertySetMapper> mxPropMapper;
 
     OUString maStyleName;
-
-    ~Impl()
-    {
-        for (auto const& itemCache : maCache)
-            delete itemCache.second;
-    }
 };
 
 // ctor/dtor , class SvXMLExportPropertyMapper
@@ -575,7 +568,7 @@ vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
 
     Impl::CacheType::iterator aIter = mpImpl->maCache.find(xInfo);
     if (aIter != mpImpl->maCache.end())
-        pFilterInfo = (*aIter).second;
+        pFilterInfo = (*aIter).second.get();
 
     bool bDelInfo = false;
     if( !pFilterInfo )
@@ -610,7 +603,7 @@ vector<XMLPropertyState> SvXMLExportPropertyMapper::Filter_(
         xInfo = xWeakInfo;
         if( xInfo.is() )
         {
-            mpImpl->maCache.emplace(xInfo, pFilterInfo);
+            mpImpl->maCache.emplace(xInfo, std::unique_ptr<FilterPropertiesInfo_Impl>(pFilterInfo));
         }
         else
             bDelInfo = true;
@@ -945,7 +938,7 @@ void SvXMLExportPropertyMapper::_exportXML(
                                 sPrefix = pNamespaceMap->GetPrefixByKey( nKey );
                             }
                             // In any case, the attribute name has to be adapted.
-                            sNameBuffer.append( sPrefix + ":" + pAttribName->copy( nColonPos+1 ) );
+                            sNameBuffer.append(sPrefix).append(":").appendCopy(*pAttribName, nColonPos+1 );
                             sAttribName = sNameBuffer.makeStringAndClear();
                         }
 
@@ -957,7 +950,7 @@ void SvXMLExportPropertyMapper::_exportXML(
                                 pNamespaceMap = pNewNamespaceMap;
                             }
                             pNewNamespaceMap->Add( sPrefix, sNamespace );
-                            sNameBuffer.append( GetXMLToken(XML_XMLNS) + ":" + sPrefix );
+                            sNameBuffer.append( GetXMLToken(XML_XMLNS) ).append( ":" ).append( sPrefix );
                             rAttrList.AddAttribute( sNameBuffer.makeStringAndClear(),
                                                     sNamespace );
                         }
@@ -1007,13 +1000,9 @@ void SvXMLExportPropertyMapper::exportElementItems(
         SvXmlExportFlags nFlags,
         const std::vector<sal_uInt16>& rIndexArray ) const
 {
-    const sal_uInt16 nCount = rIndexArray.size();
-
     bool bItemsExported = false;
-    for( sal_uInt16 nIndex = 0; nIndex < nCount; nIndex++ )
+    for (const sal_uInt16 nElement : rIndexArray)
     {
-        const sal_uInt16 nElement = rIndexArray[nIndex];
-
         OSL_ENSURE( 0 != (mpImpl->mxPropMapper->GetEntryFlags(
                 rProperties[nElement].mnIndex ) & MID_FLAG_ELEMENT_ITEM_EXPORT),
                 "wrong mid flag!" );

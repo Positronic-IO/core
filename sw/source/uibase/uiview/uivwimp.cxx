@@ -53,8 +53,6 @@ SwView_Impl::SwView_Impl(SwView* pShell)
     : mxXTextView()
     , pView(pShell)
     , eShellMode(ShellMode::Text)
-    , m_pDocInserter(nullptr)
-    , m_pRequest(nullptr)
     , m_nParam(0)
     , m_bSelectObject(false)
     , m_bEditingPositionSet(false)
@@ -87,8 +85,8 @@ SwView_Impl::~SwView_Impl()
 #if HAVE_FEATURE_DBCONNECTIVITY
     xConfigItem.reset();
 #endif
-    delete m_pDocInserter;
-    delete m_pRequest;
+    m_pDocInserter.reset();
+    m_pRequest.reset();
 }
 
 void SwView_Impl::SetShellMode(ShellMode eSet)
@@ -228,14 +226,11 @@ void SwView_Impl::AddTransferable(SwTransferable& rTransferable)
     rTransferable.m_refCount++;
     {
         // Remove previously added, but no longer existing weak references.
-        for (auto it = mxTransferables.begin(); it != mxTransferables.end();)
-        {
-            uno::Reference<lang::XUnoTunnel> xTunnel(it->get(), uno::UNO_QUERY);
-            if (!xTunnel.is())
-                it = mxTransferables.erase(it);
-            else
-                ++it;
-        }
+        mxTransferables.erase(std::remove_if(mxTransferables.begin(), mxTransferables.end(),
+            [](const css::uno::WeakReference<css::lang::XUnoTunnel>& rTunnel) {
+                uno::Reference<lang::XUnoTunnel> xTunnel(rTunnel.get(), uno::UNO_QUERY);
+                return !xTunnel.is();
+            }), mxTransferables.end());
 
         mxTransferables.emplace_back(uno::Reference<lang::XUnoTunnel>(&rTransferable));
     }
@@ -261,20 +256,18 @@ void SwView_Impl::StartDocumentInserter(
             break;
     }
 
-    delete m_pDocInserter;
-    m_pDocInserter = new ::sfx2::DocumentInserter(pView->GetFrameWeld(), rFactory, mode);
+    m_pDocInserter.reset(new ::sfx2::DocumentInserter(pView->GetFrameWeld(), rFactory, mode));
     m_pDocInserter->StartExecuteModal( rEndDialogHdl );
 }
 
-SfxMedium* SwView_Impl::CreateMedium()
+std::unique_ptr<SfxMedium> SwView_Impl::CreateMedium()
 {
     return m_pDocInserter->CreateMedium();
 }
 
 void SwView_Impl::InitRequest( const SfxRequest& rRequest )
 {
-    delete m_pRequest;
-    m_pRequest = new SfxRequest( rRequest );
+    m_pRequest.reset(new SfxRequest( rRequest ));
 }
 
 SwScannerEventListener::~SwScannerEventListener()

@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <config_features.h>
+
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/request.hxx>
@@ -132,6 +134,7 @@ void SwFieldEditDlg::Init()
 
         // Traveling only when more than one field
         pSh->StartAction();
+        pSh->ClearMark();
         pSh->CreateCursor();
 
         bool bMove = rMgr.GoNext();
@@ -189,10 +192,12 @@ VclPtr<SfxTabPage> SwFieldEditDlg::CreatePage(sal_uInt16 nGroup)
                 pTabPage = SwFieldDokInfPage::Create(get_content_area(), pSet);
                 break;
             }
+#if HAVE_FEATURE_DBCONNECTIVITY
         case GRP_DB:
             pTabPage = SwFieldDBPage::Create(get_content_area(), nullptr);
             static_cast<SwFieldDBPage*>(pTabPage.get())->SetWrtShell(*pSh);
             break;
+#endif
         case GRP_VAR:
             pTabPage = SwFieldVarPage::Create(get_content_area(), nullptr);
             break;
@@ -327,10 +332,9 @@ IMPL_LINK_NOARG(SwFieldEditDlg, AddressHdl, Button*, void)
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
     ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSwAddressAbstractDlg(this, aSet));
-    assert(pDlg && "Dialog creation failed!");
     if (RET_OK == pDlg->Execute())
     {
-        pSh->UpdateFields( *pCurField );
+        pSh->UpdateOneField(*pCurField);
     }
 }
 

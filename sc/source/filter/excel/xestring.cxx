@@ -21,10 +21,12 @@
 #include <cassert>
 
 #include <osl/diagnose.h>
+#include <tools/solar.h>
 #include <xlstyle.hxx>
 #include <xestyle.hxx>
 #include <xestream.hxx>
 #include <xestring.hxx>
+#include <oox/token/tokens.hxx>
 
 using namespace ::oox;
 
@@ -81,13 +83,13 @@ sal_uInt16 lclHashVector( const ::std::vector< Type >& rVec, const ValueHasher& 
     sal_uInt32 nHash = rVec.size();
     typedef typename ::std::vector< Type >::const_iterator CIT;
     for( CIT aIt = rVec.begin(), aEnd = rVec.end(); aIt != aEnd; ++aIt )
-        (nHash *= 31) += rHasher( *aIt );
+        nHash = (nHash * 31) + rHasher( *aIt );
     return static_cast< sal_uInt16 >( nHash ^ (nHash >> 16) );
 }
 
 /** Calculates a hash value from a vector. Uses XclDirectHasher to hash the vector elements. */
 template< typename Type >
-inline sal_uInt16 lclHashVector( const ::std::vector< Type >& rVec )
+sal_uInt16 lclHashVector( const ::std::vector< Type >& rVec )
 {
     return lclHashVector( rVec, XclDirectHasher< Type >() );
 }

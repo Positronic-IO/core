@@ -45,9 +45,7 @@
 
 SwPagePreviewLayout::SwPagePreviewLayout( SwViewShell& _rParentViewShell,
                                           const SwRootFrame& _rLayoutRootFrame )
-    : mnXFree ( 4*142 ),
-      mnYFree ( 4*142 ),
-      mrParentViewShell( _rParentViewShell ),
+    : mrParentViewShell( _rParentViewShell ),
       mrLayoutRootFrame ( _rLayoutRootFrame )
 {
     Clear_();
@@ -107,12 +105,6 @@ void SwPagePreviewLayout::ClearPreviewLayoutSizes()
 
 void SwPagePreviewLayout::ClearPreviewPageData()
 {
-    for ( std::vector<PreviewPage*>::iterator aPageDelIter = maPreviewPages.begin();
-          aPageDelIter != maPreviewPages.end();
-          ++aPageDelIter )
-    {
-        delete *aPageDelIter;
-    }
     maPreviewPages.clear();
 }
 
@@ -143,12 +135,12 @@ void SwPagePreviewLayout::CalcPreviewLayoutSizes()
         pPage = static_cast<const SwPageFrame*>(pPage->GetNext());
     }
     // calculate and set column width and row height
-    mnColWidth = maMaxPageSize.Width() + mnXFree;
-    mnRowHeight = maMaxPageSize.Height() + mnYFree;
+    mnColWidth = maMaxPageSize.Width() + gnXFree;
+    mnRowHeight = maMaxPageSize.Height() + gnYFree;
 
     // calculate and set preview layout width and height
-    mnPreviewLayoutWidth = mnCols * mnColWidth + mnXFree;
-    mnPreviewLayoutHeight = mnRows * mnRowHeight + mnYFree;
+    mnPreviewLayoutWidth = mnCols * mnColWidth + gnXFree;
+    mnPreviewLayoutHeight = mnRows * mnRowHeight + gnYFree;
 
     // calculate document rectangle in preview layout
     {
@@ -161,7 +153,7 @@ void SwPagePreviewLayout::CalcPreviewLayoutSizes()
         // use method <GetRowOfPage(..)>.
         const sal_uInt16 nDocRows = GetRowOfPage( mnPages );
         aDocSize.setHeight( nDocRows * maMaxPageSize.Height() +
-                            (nDocRows+1) * mnYFree );
+                            (nDocRows+1) * gnYFree );
         maPreviewDocRect.SetPos( Point( 0, 0 ) );
         maPreviewDocRect.SetSize( aDocSize );
     }
@@ -402,9 +394,9 @@ bool SwPagePreviewLayout::Prepare( const sal_uInt16 _nProposedStartPageNum,
         mnPaintStartRow = nRowOfProposed;
         // page offset
         maPaintStartPageOffset.setX(
-                (rProposedStartPos.X() % mnColWidth) - mnXFree );
+                (rProposedStartPos.X() % mnColWidth) - gnXFree );
         maPaintStartPageOffset.setY(
-                (rProposedStartPos.Y() % mnRowHeight) - mnYFree );
+                (rProposedStartPos.Y() % mnRowHeight) - gnYFree );
         // virtual preview document offset.
         maPaintPreviewDocOffset = rProposedStartPos;
     }
@@ -549,13 +541,13 @@ void SwPagePreviewLayout::CalcPreviewPages()
         if ( maPaintStartPageOffset != Point( -1, -1 ) )
             aInitialPaintOffset = Point(0,0) - maPaintStartPageOffset;
         else
-            aInitialPaintOffset = Point( mnXFree, mnYFree );
+            aInitialPaintOffset = Point( gnXFree, gnYFree );
     }
     else {
         if ( maPaintStartPageOffset != Point( -1, -1 ) )
             aInitialPaintOffset = Point(0 + ((SwPagePreviewLayout::mnCols-1)*mnColWidth),0) - maPaintStartPageOffset;
         else
-            aInitialPaintOffset = Point( mnXFree + ((SwPagePreviewLayout::mnCols-1)*mnColWidth), mnYFree );
+            aInitialPaintOffset = Point( gnXFree + ((SwPagePreviewLayout::mnCols-1)*mnColWidth), gnYFree );
     }
     aInitialPaintOffset += maAdditionalPaintOffset;
 
@@ -582,12 +574,12 @@ void SwPagePreviewLayout::CalcPreviewPages()
         if ( nCurrCol < mnPaintStartCol )
         {
             // calculate data of unvisible page needed for accessibility
-            PreviewPage* pPreviewPage = new PreviewPage;
+            std::unique_ptr<PreviewPage> pPreviewPage(new PreviewPage);
             Point aCurrAccOffset = aCurrPaintOffset -
                            Point( (mnPaintStartCol-nCurrCol) * mnColWidth, 0 );
-            CalcPreviewDataForPage( *pPage, aCurrAccOffset, pPreviewPage );
+            CalcPreviewDataForPage( *pPage, aCurrAccOffset, pPreviewPage.get() );
             pPreviewPage->bVisible = false;
-            maPreviewPages.push_back( pPreviewPage );
+            maPreviewPages.push_back( std::move(pPreviewPage) );
             // continue with next page and next column
             pPage = static_cast<const SwPageFrame*>(pPage->GetNext());
             ++nCurrCol;
@@ -611,18 +603,18 @@ void SwPagePreviewLayout::CalcPreviewPages()
             }
 
             // calculate data of visible page
-            PreviewPage* pPreviewPage = new PreviewPage;
-            CalcPreviewDataForPage( *pPage, aCurrPaintOffset, pPreviewPage );
+            std::unique_ptr<PreviewPage> pPreviewPage(new PreviewPage);
+            CalcPreviewDataForPage( *pPage, aCurrPaintOffset, pPreviewPage.get() );
             pPreviewPage->bVisible = true;
-            maPreviewPages.push_back( pPreviewPage );
+            maPreviewPages.push_back( std::move(pPreviewPage) );
         }
         else
         {
             // calculate data of unvisible page needed for accessibility
-            PreviewPage* pPreviewPage = new PreviewPage;
-            CalcPreviewDataForPage( *pPage, aCurrPaintOffset, pPreviewPage );
+            std::unique_ptr<PreviewPage> pPreviewPage(new PreviewPage);
+            CalcPreviewDataForPage( *pPage, aCurrPaintOffset, pPreviewPage.get() );
             pPreviewPage->bVisible = false;
-            maPreviewPages.push_back( pPreviewPage );
+            maPreviewPages.push_back( std::move(pPreviewPage) );
         }
 
         // prepare data for next loop
@@ -882,7 +874,7 @@ struct PreviewPosInsidePagePred
     explicit PreviewPosInsidePagePred(const Point& rPreviewPos)
         : mnPreviewPos( rPreviewPos )
     {}
-    bool operator() ( const PreviewPage* _pPreviewPage )
+    bool operator() ( const std::unique_ptr<PreviewPage> & _pPreviewPage )
     {
         if ( _pPreviewPage->bVisible )
         {
@@ -904,7 +896,7 @@ bool SwPagePreviewLayout::IsPreviewPosInDocPreviewPage( const Point&  rPreviewPo
     _obPosInEmptyPage = false;
     _onPageNum = 0;
 
-    std::vector<PreviewPage*>::const_iterator aFoundPreviewPageIter =
+    auto aFoundPreviewPageIter =
             std::find_if( maPreviewPages.begin(), maPreviewPages.end(),
                           PreviewPosInsidePagePred( rPreviewPos ) );
 
@@ -933,7 +925,7 @@ SwTwips SwPagePreviewLayout::GetWinPagesScrollAmount(
     SwTwips nScrollAmount;
     if ( mbDoesLayoutRowsFitIntoWindow )
     {
-        nScrollAmount = (mnPreviewLayoutHeight - mnYFree) * _nWinPagesToScroll;
+        nScrollAmount = (mnPreviewLayoutHeight - gnYFree) * _nWinPagesToScroll;
     }
     else
         nScrollAmount = _nWinPagesToScroll * maPaintedPreviewDocRect.GetHeight();
@@ -954,7 +946,7 @@ SwTwips SwPagePreviewLayout::GetWinPagesScrollAmount(
         }
         else
         {
-            while ( (maPaintedPreviewDocRect.Top() + nScrollAmount + mnYFree) >= maPreviewDocRect.GetHeight() )
+            while ( (maPaintedPreviewDocRect.Top() + nScrollAmount + gnYFree) >= maPreviewDocRect.GetHeight() )
             {
                 nScrollAmount -= mnRowHeight;
             }
@@ -1024,7 +1016,7 @@ bool SwPagePreviewLayout::Paint(vcl::RenderContext& rRenderContext, const tools:
     OutputDevice* pOutputDev = &rRenderContext;
 
     // prepare paint
-    if ( maPreviewPages.size() > 0 )
+    if ( !maPreviewPages.empty() )
     {
         mrParentViewShell.Imp()->m_bFirstPageInvalid = false;
         mrParentViewShell.Imp()->m_pFirstVisiblePage =
@@ -1035,14 +1027,12 @@ bool SwPagePreviewLayout::Paint(vcl::RenderContext& rRenderContext, const tools:
     {
         SwRegionRects aPreviewBackgrdRegion(rOutRect);
         // calculate preview background rectangles
-        for ( std::vector<PreviewPage*>::const_iterator aPageIter = maPreviewPages.begin();
-              aPageIter != maPreviewPages.end();
-              ++aPageIter )
+        for ( auto & rpPreviewPage : maPreviewPages )
         {
-            if ( (*aPageIter)->bVisible )
+            if ( rpPreviewPage->bVisible )
             {
                 aPreviewBackgrdRegion -=
-                        SwRect( (*aPageIter)->aPreviewWinPos, (*aPageIter)->aPageSize );
+                        SwRect( rpPreviewPage->aPreviewWinPos, rpPreviewPage->aPageSize );
             }
         }
         // paint preview background rectangles
@@ -1057,20 +1047,18 @@ bool SwPagePreviewLayout::Paint(vcl::RenderContext& rRenderContext, const tools:
 
     const vcl::Font& rEmptyPgFont = SwPageFrame::GetEmptyPageFont();
 
-    for ( std::vector<PreviewPage*>::const_iterator aPageIter = maPreviewPages.begin();
-          aPageIter != maPreviewPages.end();
-          ++aPageIter )
+    for ( auto & rpPreviewPage : maPreviewPages )
     {
-        if ( !(*aPageIter)->bVisible )
+        if ( !rpPreviewPage->bVisible )
             continue;
 
-        tools::Rectangle aPageRect( (*aPageIter)->aLogicPos, (*aPageIter)->aPageSize );
-        aMapMode.SetOrigin( (*aPageIter)->aMapOffset );
+        tools::Rectangle aPageRect( rpPreviewPage->aLogicPos, rpPreviewPage->aPageSize );
+        aMapMode.SetOrigin( rpPreviewPage->aMapOffset );
         pOutputDev->SetMapMode( aMapMode );
         tools::Rectangle aPxPaintRect = pOutputDev->LogicToPixel( aPageRect );
         if ( aPxOutRect.IsOver( aPxPaintRect) )
         {
-            const SwPageFrame* pPage = (*aPageIter)->pPage;
+            const SwPageFrame* pPage = rpPreviewPage->pPage;
 
             if (pPage->IsEmptyPage())
             {
@@ -1130,7 +1118,7 @@ bool SwPagePreviewLayout::Paint(vcl::RenderContext& rRenderContext, const tools:
 
             if (pPage->GetPhyPageNum() == mnSelectedPageNum)
             {
-                PaintSelectMarkAtPage(rRenderContext, *aPageIter);
+                PaintSelectMarkAtPage(rRenderContext, rpPreviewPage.get());
             }
         }
     }
@@ -1178,7 +1166,7 @@ void SwPagePreviewLayout::Repaint( const tools::Rectangle& rInvalidCoreRect ) co
     // environment and parameter ok
 
     // prepare paint
-    if ( maPreviewPages.size() > 0 )
+    if ( !maPreviewPages.empty() )
     {
         mrParentViewShell.Imp()->m_bFirstPageInvalid = false;
         mrParentViewShell.Imp()->m_pFirstVisiblePage =
@@ -1186,21 +1174,19 @@ void SwPagePreviewLayout::Repaint( const tools::Rectangle& rInvalidCoreRect ) co
     }
 
     // invalidate visible pages, which overlap the invalid core rectangle
-    for ( std::vector<PreviewPage*>::const_iterator aPageIter = maPreviewPages.begin();
-          aPageIter != maPreviewPages.end();
-          ++aPageIter )
+    for ( auto & rpPreviewPage : maPreviewPages )
     {
-        if ( !(*aPageIter)->bVisible )
+        if ( !rpPreviewPage->bVisible )
             continue;
 
-        tools::Rectangle aPageRect( (*aPageIter)->aLogicPos, (*aPageIter)->aPageSize );
+        tools::Rectangle aPageRect( rpPreviewPage->aLogicPos, rpPreviewPage->aPageSize );
         if ( rInvalidCoreRect.IsOver( aPageRect ) )
         {
             aPageRect.Intersection(rInvalidCoreRect);
             tools::Rectangle aInvalidPreviewRect = aPageRect;
             aInvalidPreviewRect.SetPos( aInvalidPreviewRect.TopLeft() -
-                                      (*aPageIter)->aLogicPos +
-                                      (*aPageIter)->aPreviewWinPos );
+                                      rpPreviewPage->aLogicPos +
+                                      rpPreviewPage->aPreviewWinPos );
             mrParentViewShell.GetWin()->Invalidate( aInvalidPreviewRect );
         }
     }
@@ -1326,7 +1312,7 @@ struct EqualsPageNumPred
     explicit EqualsPageNumPred(const sal_uInt16 _nPageNum)
         : mnPageNum( _nPageNum )
     {}
-    bool operator() ( const PreviewPage* _pPreviewPage )
+    bool operator() ( const std::unique_ptr<PreviewPage> & _pPreviewPage )
     {
         return _pPreviewPage->pPage->GetPhyPageNum() == mnPageNum;
     }
@@ -1334,14 +1320,14 @@ struct EqualsPageNumPred
 
 const PreviewPage* SwPagePreviewLayout::GetPreviewPageByPageNum( const sal_uInt16 _nPageNum ) const
 {
-    std::vector<PreviewPage*>::const_iterator aFoundPreviewPageIter =
+    auto aFoundPreviewPageIter =
             std::find_if( maPreviewPages.begin(), maPreviewPages.end(),
                           EqualsPageNumPred( _nPageNum ) );
 
     if ( aFoundPreviewPageIter == maPreviewPages.end() )
         return nullptr;
 
-    return (*aFoundPreviewPageIter);
+    return aFoundPreviewPageIter->get();
 }
 
 /** determine row the page with the given number is in

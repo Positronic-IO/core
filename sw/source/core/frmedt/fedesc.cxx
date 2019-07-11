@@ -26,6 +26,8 @@
 #include <pagefrm.hxx>
 #include <rootfrm.hxx>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <pam.hxx>
 #include <fmtpdsc.hxx>
 #include <pagedesc.hxx>
@@ -66,7 +68,7 @@ void SwFEShell::ChgCurPageDesc( const SwPageDesc& rDesc )
         {
             if ( pFlow->IsInTab() )
                 pFlow = pFlow->FindTabFrame();
-            const SwFormatPageDesc& rPgDesc = pFlow->GetAttrSet()->GetPageDesc();
+            const SwFormatPageDesc& rPgDesc = pFlow->GetPageDescItem();
             if( rPgDesc.GetPageDesc() )
             {
                 // we found the culprit
@@ -96,8 +98,12 @@ void SwFEShell::ChgCurPageDesc( const SwPageDesc& rDesc )
         GetDoc()->SetAttr( aNew, *const_cast<SwFormat*>(static_cast<SwFormat const *>(pFlow->FindTabFrame()->GetFormat())) );
     else
     {
-        SwPaM aPaM( *static_cast<const SwContentFrame*>(pFlow)->GetNode() );
-        GetDoc()->getIDocumentContentOperations().InsertPoolItem( aPaM, aNew );
+        assert(pFlow->IsContentFrame());
+        SwPaM aPaM( pFlow->IsTextFrame()
+            ? *static_cast<SwTextFrame const*>(pFlow)->GetTextNodeFirst() // first, for PAGEDESC
+            : *static_cast<const SwNoTextFrame*>(pFlow)->GetNode() );
+        GetDoc()->getIDocumentContentOperations().InsertPoolItem(
+                aPaM, aNew, SetAttrMode::DEFAULT, GetLayout());
     }
     EndAllActionAndCall();
 }
@@ -182,19 +188,20 @@ const SwPageDesc* SwFEShell::GetSelectedPageDescs() const
     const SwFrame* pMkFrame, *pPtFrame;
     const SwPageDesc* pFnd, *pRetDesc = reinterpret_cast<SwPageDesc*>(sal_IntPtr(-1));
     const Point aNulPt;
+    std::pair<Point, bool> const tmp(aNulPt, false);
 
     for(SwPaM& rPaM : GetCursor()->GetRingContainer())
     {
 
         if( nullptr != (pCNd = rPaM.GetContentNode() ) &&
-            nullptr != ( pPtFrame = pCNd->getLayoutFrame( GetLayout(), &aNulPt, nullptr, false )) )
+            nullptr != (pPtFrame = pCNd->getLayoutFrame(GetLayout(), nullptr, &tmp)))
             pPtFrame = pPtFrame->FindPageFrame();
         else
             pPtFrame = nullptr;
 
         if( rPaM.HasMark() &&
             nullptr != (pCNd = rPaM.GetContentNode( false ) ) &&
-            nullptr != ( pMkFrame = pCNd->getLayoutFrame( GetLayout(), &aNulPt, nullptr, false )) )
+            nullptr != (pMkFrame = pCNd->getLayoutFrame(GetLayout(), nullptr, &tmp)))
             pMkFrame = pMkFrame->FindPageFrame();
         else
             pMkFrame = pPtFrame;

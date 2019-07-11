@@ -40,7 +40,6 @@
 #include <com/sun/star/xml/dom/XDocument.hpp>
 #include <com/sun/star/style/BreakType.hpp>
 #include <unotools/tempfile.hxx>
-#include <comphelper/sequenceashashmap.hxx>
 #include <com/sun/star/text/XDocumentIndex.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegment.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegmentCommand.hpp>
@@ -338,6 +337,15 @@ DECLARE_OOXMLEXPORT_TEST(testCalendar2, "calendar2.docx")
 
     // Table borders were also missing
     assertXPath(pXmlStyles, "/w:styles/w:style[@w:styleId='Calendar2']/w:tblPr/w:tblBorders/w:insideV", "themeTint", "99");
+}
+
+DECLARE_OOXMLEXPORT_TEST(testCalendar3, "calendar3.docx")
+{
+    // TableStyle:firstRow (for header rows 1 and 2) color and size overrides document rPrDefault
+    uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A2"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0x5B9BD5), getProperty<sal_Int32>(getRun(xCell,1), "CharColor"));
+    CPPUNIT_ASSERT_EQUAL(16.f, getProperty<float>(getRun(xCell,1), "CharHeight"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTcBorders, "testTcBorders.docx")
@@ -989,7 +997,7 @@ DECLARE_OOXMLEXPORT_TEST(testFileOpenInputOutputError,"floatingtbl_with_formula.
       assertXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:pPr/w:pStyle", "val", "Normal");
 
     // let's also assert that the formula was exported properly
-    assertXPathContent(pXmlDoc, "//wps:txbx/w:txbxContent/w:tbl/w:tr/w:tc[2]/w:p/m:oMath/m:sSubSup/m:e/m:r/m:t", u"\u03C3");
+    assertXPathContent(pXmlDoc, "//w:tbl/w:tr/w:tc[2]/w:p/m:oMath/m:sSubSup/m:e/m:r/m:t", u"\u03C3");
 }
 
 #endif

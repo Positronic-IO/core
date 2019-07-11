@@ -22,6 +22,7 @@
 #include <connectivity/sdbcx/VCollection.hxx>
 #include "RowSetCache.hxx"
 #include <stringconstants.hxx>
+#include <sal/log.hxx>
 #include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
@@ -81,9 +82,7 @@ ORowSetBase::ORowSetBase( const Reference<XComponentContext>& _rContext, ::cppu:
     ,m_pMutex(_pMutex)
     ,m_pMySelf(nullptr)
     ,m_pCache(nullptr)
-    ,m_pColumns(nullptr)
     ,m_rBHelper(_rBHelper)
-    ,m_pEmptyCollection( nullptr )
     ,m_aContext( _rContext )
     ,m_nLastColumnIndex(-1)
     ,m_nDeletedPosition(-1)
@@ -990,7 +989,7 @@ sal_Bool SAL_CALL ORowSetBase::previous(  )
         bRet = m_pCache->previous();
         doCancelModification( );
 
-        // if m_bBeforeFirst is false and bRet is false than we stood on the first row
+        // if m_bBeforeFirst is false and bRet is false then we stood on the first row
         if(!m_bBeforeFirst || bRet)
         {
             // notification order
@@ -1232,11 +1231,13 @@ void ORowSetBase::positionCache( CursorMoveDirection _ePrepareForDirection )
     {
         if ( m_bBeforeFirst )
         {
-            bSuccess = m_pCache->beforeFirst();
+            m_pCache->beforeFirst();
+            bSuccess = true;
         }
         else if ( m_bAfterLast )
         {
-            bSuccess = m_pCache->afterLast();
+            m_pCache->afterLast();
+            bSuccess = true;
         }
         else
         {
@@ -1411,14 +1412,14 @@ void ORowSetNotifier::fire()
 
 std::vector<sal_Int32>& ORowSetNotifier::getChangedColumns() const
 {
-    OSL_ENSURE(m_pImpl.get(),"Illegal CTor call, use the other one!");
+    OSL_ENSURE(m_pImpl, "Illegal CTor call, use the other one!");
     return m_pImpl->aChangedColumns;
 }
 
 void ORowSetNotifier::firePropertyChange()
 {
-    OSL_ENSURE(m_pImpl.get(),"Illegal CTor call, use the other one!");
-    if( m_pImpl.get() )
+    OSL_ENSURE(m_pImpl, "Illegal CTor call, use the other one!");
+    if (m_pImpl)
     {
         for (auto const& changedColumn : m_pImpl->aChangedColumns)
         {

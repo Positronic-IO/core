@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -43,7 +44,7 @@
 
 using namespace ::com::sun::star;
 
-SvLockBytesRef MakeLockBytes_Impl( const OUString & rName, StreamMode nMode )
+static SvLockBytesRef MakeLockBytes_Impl( const OUString & rName, StreamMode nMode )
 {
     SvLockBytesRef xLB;
     if( !rName.isEmpty() )
@@ -176,19 +177,20 @@ void SotStorageStream::SetSize(sal_uInt64 const nNewSize)
 
 sal_uInt32 SotStorageStream::GetSize() const
 {
-    sal_uInt64 nPos = Tell();
-    const_cast<SotStorageStream *>(this)->Seek( STREAM_SEEK_TO_END );
-    sal_uInt64 nSize = Tell();
-    const_cast<SotStorageStream *>(this)->Seek( nPos );
+    sal_uInt64 nSize = const_cast<SotStorageStream*>(this)->TellEnd();
     return nSize;
 }
 
-sal_uInt64 SotStorageStream::remainingSize()
+sal_uInt64 SotStorageStream::TellEnd()
 {
-    if (pOwnStm)
-        return pOwnStm->GetSize() - Tell();
+    // Need to flush the buffer so we materialise the stream and return the correct answer
+    // otherwise we return a 0 value from StgEntry::GetSize
+    FlushBuffer(true);
 
-    return SvStream::remainingSize();
+    if (pOwnStm)
+        return pOwnStm->GetSize();
+
+    return SvStream::TellEnd();
 }
 
 void SotStorageStream::CopyTo( SotStorageStream * pDestStm )
@@ -304,7 +306,7 @@ void SotStorage::CreateStorage( bool bForceUCBStorage, StreamMode nMode )
         }
 
         // check the stream
-        m_pStorStm = ::utl::UcbStreamHelper::CreateStream( m_aName, nMode );
+        m_pStorStm = ::utl::UcbStreamHelper::CreateStream( m_aName, nMode ).release();
         if ( m_pStorStm && m_pStorStm->GetError() )
             DELETEZ( m_pStorStm );
 
@@ -456,10 +458,9 @@ SotStorage::~SotStorage()
         delete m_pStorStm;
 }
 
-SvMemoryStream * SotStorage::CreateMemoryStream()
+std::unique_ptr<SvMemoryStream> SotStorage::CreateMemoryStream()
 {
-    SvMemoryStream * pStm = nullptr;
-    pStm = new SvMemoryStream( 0x8000, 0x8000 );
+    std::unique_ptr<SvMemoryStream> pStm(new SvMemoryStream( 0x8000, 0x8000 ));
     tools::SvRef<SotStorage> aStg = new SotStorage( *pStm );
     if( CopyTo( aStg.get() ) )
     {
@@ -468,8 +469,7 @@ SvMemoryStream * SotStorage::CreateMemoryStream()
     else
     {
         aStg.clear(); // release storage beforehand
-        delete pStm;
-        pStm = nullptr;
+        pStm.reset();
     }
     return pStm;
 }
@@ -509,11 +509,8 @@ bool SotStorage::IsStorageFile( SvStream* pStream )
 
 const OUString & SotStorage::GetName() const
 {
-    if( m_aName.isEmpty() )
-    {
-        if( m_pOwnStg )
-            const_cast<SotStorage *>(this)->m_aName = m_pOwnStg->GetName();
-    }
+    if( m_aName.isEmpty() && m_pOwnStg )
+        const_cast<SotStorage *>(this)->m_aName = m_pOwnStg->GetName();
     return m_aName;
 }
 
@@ -730,7 +727,7 @@ SotStorage* SotStorage::OpenOLEStorage( const css::uno::Reference < css::embed::
     if ( nMode & StreamMode::NOCREATE )
         nEleMode |= embed::ElementModes::NOCREATE;
 
-    SvStream* pStream = nullptr;
+    std::unique_ptr<SvStream> pStream;
     try
     {
         uno::Reference < io::XStream > xStream = xStorage->openStreamElement( rEleName, nEleMode );
@@ -748,11 +745,11 @@ SotStorage* SotStorage::OpenOLEStorage( const css::uno::Reference < css::embed::
     catch ( uno::Exception& )
     {
         //TODO/LATER: ErrorHandling
-        pStream = new SvMemoryStream;
+        pStream.reset( new SvMemoryStream );
         pStream->SetError( ERRCODE_IO_GENERAL );
     }
 
-    return new SotStorage( pStream, true );
+    return new SotStorage( pStream.release(), true );
 }
 
 SotClipboardFormatId SotStorage::GetFormatID( const css::uno::Reference < css::embed::XStorage >& xStorage )

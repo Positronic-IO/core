@@ -19,12 +19,10 @@
 #ifndef INCLUDED_I18NUTIL_ONETOONEMAPPING_HXX
 #define INCLUDED_I18NUTIL_ONETOONEMAPPING_HXX
 
-#include <rtl/ustring.hxx>
 #include <i18nutil/i18nutildllapi.h>
+#include <memory>
 
 namespace i18nutil {
-
-class widthfolding;
 
 struct OneToOneMappingTable_t
 {
@@ -69,7 +67,7 @@ private:
     friend class widthfolding;
 
 public:
-    oneToOneMappingWithFlag( UnicodePairWithFlag *rpTableWF, const size_t rnSize, const UnicodePairFlag rnFlag );
+    oneToOneMappingWithFlag( UnicodePairWithFlag const *rpTableWF, const size_t rnSize, const UnicodePairFlag rnFlag );
     virtual ~oneToOneMappingWithFlag() override;
 
     // make index for fast search
@@ -78,9 +76,9 @@ public:
     // index search
     virtual sal_Unicode find( const sal_Unicode nKey ) const override;
 private:
-    UnicodePairWithFlag  *mpTableWF;
+    UnicodePairWithFlag const *mpTableWF;
     UnicodePairFlag       mnFlag;
-    UnicodePairWithFlag **mpIndex[256];
+    std::unique_ptr<UnicodePairWithFlag const *[]> mpIndex[256];
     bool                  mbHasIndex;
 };
 

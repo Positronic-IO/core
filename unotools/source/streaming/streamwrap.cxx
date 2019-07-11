@@ -43,6 +43,12 @@ OInputStreamWrapper::OInputStreamWrapper( SvStream* pStream, bool bOwner )
 {
 }
 
+OInputStreamWrapper::OInputStreamWrapper( std::unique_ptr<SvStream> pStream )
+                 :m_pSvStream( pStream.release() )
+                 ,m_bSvStreamOwner( true )
+{
+}
+
 OInputStreamWrapper::~OInputStreamWrapper()
 {
     if( m_bSvStreamOwner )
@@ -101,17 +107,10 @@ sal_Int32 SAL_CALL OInputStreamWrapper::available()
     ::osl::MutexGuard aGuard( m_aMutex );
     checkConnected();
 
-    sal_uInt32 nPos = m_pSvStream->Tell();
+    sal_Int64 nAvailable = m_pSvStream->remainingSize();
     checkError();
 
-    m_pSvStream->Seek(STREAM_SEEK_TO_END);
-    checkError();
-
-    sal_Int32 nAvailable = static_cast<sal_Int32>(m_pSvStream->Tell()) - nPos;
-    m_pSvStream->Seek(nPos);
-    checkError();
-
-    return nAvailable;
+    return std::min<sal_Int64>(SAL_MAX_INT32, nAvailable);
 }
 
 void SAL_CALL OInputStreamWrapper::closeInput()
@@ -178,16 +177,11 @@ sal_Int64 SAL_CALL OSeekableInputStreamWrapper::getLength(  )
     ::osl::MutexGuard aGuard( m_aMutex );
     checkConnected();
 
-    sal_uInt32 nCurrentPos = m_pSvStream->Tell();
     checkError();
 
-    m_pSvStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 nEndPos = m_pSvStream->Tell();
-    m_pSvStream->Seek(nCurrentPos);
+    sal_Int64 nEndPos = m_pSvStream->TellEnd();
 
-    checkError();
-
-    return static_cast<sal_Int64>(nEndPos);
+    return nEndPos;
 }
 
 //= OOutputStreamWrapper
@@ -269,16 +263,11 @@ sal_Int64 SAL_CALL OSeekableOutputStreamWrapper::getPosition(  )
 
 sal_Int64 SAL_CALL OSeekableOutputStreamWrapper::getLength(  )
 {
-    sal_uInt32 nCurrentPos = rStream.Tell();
     checkError();
 
-    rStream.Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 nEndPos = rStream.Tell();
-    rStream.Seek(nCurrentPos);
+    sal_Int64 nEndPos = rStream.TellEnd();
 
-    checkError();
-
-    return static_cast<sal_Int64>(nEndPos);
+    return nEndPos;
 }
 
 OStreamWrapper::~OStreamWrapper() = default;
@@ -286,6 +275,11 @@ OStreamWrapper::~OStreamWrapper() = default;
 OStreamWrapper::OStreamWrapper(SvStream& _rStream)
 {
     SetStream( &_rStream, false );
+}
+
+OStreamWrapper::OStreamWrapper(std::unique_ptr<SvStream> pStream)
+{
+    SetStream( pStream.release(), true );
 }
 
 css::uno::Reference< css::io::XInputStream > SAL_CALL OStreamWrapper::getInputStream(  )

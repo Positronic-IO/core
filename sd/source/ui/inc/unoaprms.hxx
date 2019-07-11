@@ -24,7 +24,6 @@
 #include <com/sun/star/presentation/AnimationSpeed.hpp>
 #include <com/sun/star/presentation/ClickAction.hpp>
 #include <sdundo.hxx>
-#include <svx/svdopath.hxx>
 #include <tools/color.hxx>
 
 class SdDrawDocument;
@@ -68,7 +67,7 @@ class SdAnimationPrmsUndoAction : public SdUndoAction
     sal_uInt16          nOldVerb;
     sal_uInt16          nNewVerb;
 
-    bool            bInfoCreated;
+    bool const            bInfoCreated;
 
 public:
     SdAnimationPrmsUndoAction(SdDrawDocument* pTheDoc, SdrObject* pObj,

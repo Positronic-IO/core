@@ -246,11 +246,14 @@ static const char* strListSqlKeyWords[] = {
 };
 
 
-extern "C" int compare_strings( const void *arg1, const void *arg2 )
+extern "C" {
+
+static int compare_strings( const void *arg1, const void *arg2 )
 {
     return strcmp( static_cast<char const *>(arg1), *static_cast<char * const *>(arg2) );
 }
 
+}
 
 namespace
 {
@@ -687,9 +690,9 @@ void SyntaxHighlighter::Tokenizer::getHighlightPortions(const OUString& rLine,
 
 
 SyntaxHighlighter::SyntaxHighlighter(HighlighterLanguage language):
-    eLanguage(language), m_tokenizer(new SyntaxHighlighter::Tokenizer(language))
+    m_tokenizer(new SyntaxHighlighter::Tokenizer(language))
 {
-    switch (eLanguage)
+    switch (language)
     {
         case HighlighterLanguage::Basic:
             m_tokenizer->setKeyWords( strListBasicKeyWords,

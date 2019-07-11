@@ -48,6 +48,7 @@
 
 #include <comphelper/processfactory.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <algorithm>
 #include <map>
 
@@ -140,7 +141,6 @@ static const SvXMLEnumMapEntry<SchXMLChartTypeEnum> aXMLChartClassMap[] =
     { XML_BAR,          XML_CHART_CLASS_BAR     },
     { XML_STOCK,        XML_CHART_CLASS_STOCK   },
     { XML_BUBBLE,       XML_CHART_CLASS_BUBBLE  },
-    { XML_GL3DBAR,      XML_CHART_CLASS_GL3DBAR },
     { XML_SURFACE,      XML_CHART_CLASS_BAR     }, //@todo change this if a surface chart is available
     { XML_ADD_IN,       XML_CHART_CLASS_ADDIN   },
     { XML_TOKEN_INVALID, XML_CHART_CLASS_UNKNOWN }
@@ -155,7 +155,7 @@ SchXMLChartTypeEnum GetChartTypeEnum( const OUString& rClassName )
 
 typedef std::map< OUString, OUString > tMakeStringStringMap;
 //static
-const tMakeStringStringMap& lcl_getChartTypeNameMap()
+static const tMakeStringStringMap& lcl_getChartTypeNameMap()
 {
     //shape property -- chart model object property
     static const tMakeStringStringMap g_aChartTypeNameMap{
@@ -178,9 +178,7 @@ const tMakeStringStringMap& lcl_getChartTypeNameMap()
         {"com.sun.star.chart.StockDiagram",
          "com.sun.star.chart2.CandleStickChartType"},
         {"com.sun.star.chart.BubbleDiagram",
-         "com.sun.star.chart2.BubbleChartType"},
-        {"com.sun.star.chart.GL3DBarDiagram",
-         "com.sun.star.chart2.GL3DBarChartType"}};
+         "com.sun.star.chart2.BubbleChartType"}};
     return g_aChartTypeNameMap;
 }
 
@@ -257,8 +255,6 @@ OUString GetChartTypeByClassName(
         else
             aResultBuffer.append("Column");
     }
-    else if (IsXMLToken(rClassName, XML_GL3DBAR))
-        aResultBuffer.append("GL3DBar");
     else
         bInternalType = false;
 
@@ -324,8 +320,6 @@ XMLTokenEnum getTokenByChartType(
             else if( (bUseOldNames && aServiceName == "Stock") ||
                      (!bUseOldNames && aServiceName == "CandleStick"))
                 eResult = XML_STOCK;
-            else if (aServiceName == "GL3DBar")
-                eResult = XML_GL3DBAR;
         }
     }
 
@@ -538,16 +532,14 @@ uno::Any getPropertyFromContext( const OUString& rPropertyName, const XMLPropSty
         return aRet;
     const ::std::vector< XMLPropertyState >& rProperties = pPropStyleContext->GetProperties();
     const rtl::Reference< XMLPropertySetMapper >& rMapper = pStylesCtxt->GetImportPropertyMapper( pPropStyleContext->GetFamily()/*XML_STYLE_FAMILY_SCH_CHART_ID*/ )->getPropertySetMapper();
-    ::std::vector< XMLPropertyState >::const_iterator aEnd( rProperties.end() );
-    ::std::vector< XMLPropertyState >::const_iterator aPropIter( rProperties.begin() );
-    for( aPropIter = rProperties.begin(); aPropIter != aEnd; ++aPropIter )
+    for( const auto& rProp : rProperties )
     {
-        sal_Int32 nIdx = aPropIter->mnIndex;
+        sal_Int32 nIdx = rProp.mnIndex;
         if( nIdx == -1 )
             continue;
         OUString aPropName = rMapper->GetEntryAPIName( nIdx );
         if(rPropertyName == aPropName)
-            return aPropIter->maValue;
+            return rProp.maValue;
     }
     return aRet;
 }
@@ -725,10 +717,9 @@ bool switchBackToDataProviderFromParent( const Reference< chart2::XChartDocument
 
     xDataReceiver->attachDataProvider( xDataProviderFromParent );
 
-    for( tSchXMLLSequencesPerIndex::const_iterator aLSeqIt( rLSequencesPerIndex.begin() );
-         aLSeqIt != rLSequencesPerIndex.end(); ++aLSeqIt )
+    for( const auto& rLSeq : rLSequencesPerIndex )
     {
-        Reference< chart2::data::XLabeledDataSequence > xLabeledSeq( aLSeqIt->second );
+        Reference< chart2::data::XLabeledDataSequence > xLabeledSeq( rLSeq.second );
         if( !xLabeledSeq.is() )
             continue;
         Reference< chart2::data::XDataSequence > xNewSeq;

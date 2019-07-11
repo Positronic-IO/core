@@ -20,9 +20,6 @@
 #include <sal/config.h>
 
 #include <com/sun/star/datatransfer/UnsupportedFlavorException.hpp>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
 #include "eeobj.hxx"
 #include <sot/exchange.hxx>
 #include <sot/formats.hxx>
@@ -58,14 +55,10 @@ uno::Any EditDataObject::getTransferData( const datatransfer::DataFlavor& rFlavo
         // 2) Don't have the old pool defaults and the StyleSheetPool here.
 
         SvMemoryStream* pStream = (nT == SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT ) ? &GetODFStream() : &GetRTFStream();
-        pStream->Seek( STREAM_SEEK_TO_END );
-        sal_Int32 nLen = pStream->Tell();
+        sal_Int32 nLen = pStream->TellEnd();
         if (nLen < 0) { abort(); }
-        pStream->Seek(0);
 
-        uno::Sequence< sal_Int8 > aSeq( nLen );
-        memcpy( aSeq.getArray(), pStream->GetData(), nLen );
-        aAny <<= aSeq;
+        aAny <<= uno::Sequence< sal_Int8 >( static_cast< const sal_Int8* >(pStream->GetData()), pStream->TellEnd() );
     }
     else
     {

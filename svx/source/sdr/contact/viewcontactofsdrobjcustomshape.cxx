@@ -125,22 +125,29 @@ namespace sdr
                 // Hack for calc, transform position of object according
                 // to current zoom so as objects relative position to grid
                 // appears stable
+                // TTTT: Need to check what *exactly* this is doing - in it's current
+                // form it's indeed pretty much a 'hack' as mentioned above and massively
+                // in the way for future changes...
                 const_cast< SdrObject* >( pSdrObjRepresentation )->SetGridOffset( aGridOff );
-                SdrObjListIter aIterator(*pSdrObjRepresentation);
 
-                while(aIterator.IsMore())
-                {
-                    SdrObject& rCandidate = *aIterator.Next();
-                    // apply offset to each part
-                    rCandidate.SetGridOffset( aGridOff );
-                    if(!b3DShape && dynamic_cast< E3dObject* >(&rCandidate))
-                    {
-                        b3DShape = true;
-                    }
-
-                    const drawinglayer::primitive2d::Primitive2DContainer xNew(rCandidate.GetViewContact().getViewIndependentPrimitive2DContainer());
-                    xGroup.insert(xGroup.end(), xNew.begin(), xNew.end());
-                }
+                // tdf#118498 The processing of SdrObjListIter for SdrIterMode::DeepNoGroups
+                // did change for 3D-Objects, it now correctly enters and iterates the
+                // SdrObjects in the E3dScene (same as for SdrObjGroup). This is more correct
+                // as the old version which just checked for dynamic_cast<const SdrObjGroup*>
+                // and *only* entered these, ignoring E3dScene as grouping-object.
+                // But how to fix that? Taking back the SdrObjListIter change would be easy, but
+                // not correct. After checking ViewContactOfE3dScene and ViewContactOfGroup
+                // I see that both traverse their children by themselves (on VC-Level,
+                // see createViewIndependentPrimitive2DSequence implementations and usage of
+                // GetObjectCount()). Thus in principle iterating here (esp. 'deep') seems to
+                // be wrong anyways, it might have even created wrong and double geometries
+                // (only with complex CustomShapes with multiple representation SdrObects and
+                // only visible when transparency involved, but runtime-expensive).
+                // Thus: Just do not iterate, will check behaviour deeply.
+                b3DShape = (nullptr != dynamic_cast< const E3dObject* >(pSdrObjRepresentation));
+                const drawinglayer::primitive2d::Primitive2DContainer xNew(
+                    pSdrObjRepresentation->GetViewContact().getViewIndependentPrimitive2DContainer());
+                xGroup.insert(xGroup.end(), xNew.begin(), xNew.end());
             }
 
             if(bHasText || !xGroup.empty())
@@ -166,7 +173,8 @@ namespace sdr
                     {
                         basegfx::B2DVector aTranslation(0.5, 0.5);
                         aTextBoxMatrix.translate( -aTranslation.getX(), -aTranslation.getY() );
-                        aTextBoxMatrix.rotate((360.0 - GetCustomShapeObj().GetExtraTextRotation(true)) * F_PI180);
+                        aTextBoxMatrix.rotate(basegfx::deg2rad(
+                            360.0 - GetCustomShapeObj().GetExtraTextRotation(true)));
                         aTextBoxMatrix.translate( aTranslation.getX(), aTranslation.getY() );
                     }
                     // give text object a size
@@ -192,7 +200,7 @@ namespace sdr
                                 ( aTextRange.getWidth() / 2 ) + ( aTextRange.getMinX() - aObjectRange.getMinimum().getX() ),
                                 ( aTextRange.getHeight() / 2 ) + ( aTextRange.getMinY() - aObjectRange.getMinimum().getY() ) );
                             aTextBoxMatrix.translate( -aTranslation.getX(), -aTranslation.getY() );
-                            aTextBoxMatrix.rotate((360.0 - fExtraTextRotation) * F_PI180);
+                            aTextBoxMatrix.rotate(basegfx::deg2rad(360.0 - fExtraTextRotation));
                             aTextBoxMatrix.translate( aTranslation.getX(), aTranslation.getY() );
                         }
 

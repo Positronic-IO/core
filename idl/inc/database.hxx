@@ -24,7 +24,6 @@
 #include "hash.hxx"
 #include "lex.hxx"
 #include <rtl/string.hxx>
-#include <tools/pstm.hxx>
 
 #include <rtl/ustring.hxx>
 #include <set>
@@ -45,13 +44,6 @@ public:
     const OString&  GetText() const { return aText; }
     void            SetText( const OString& rT ) { aText = rT; }
     bool            IsError() const { return nLine != 0; }
-    SvIdlError &    operator = ( const SvIdlError & rRef )
-                    {
-                        aText   = rRef.aText;
-                        nLine   = rRef.nLine;
-                        nColumn = rRef.nColumn;
-                        return *this;
-                    }
 };
 
 class SvParseException : public std::exception
@@ -70,7 +62,7 @@ class SvIdlDataBase
     OUString                    aExportFile;
     sal_uInt32                  nUniqueId;
     sal_uInt32                  nVerbosity;
-    StringList                  aIdFileList;
+    std::vector<OUString>       aIdFileList;
     std::unique_ptr<SvStringHashTable> pIdTable;
 
     SvRefMemberList<SvMetaType *>      aTypeList;

@@ -17,13 +17,12 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <sfx2/request.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/builderfactory.hxx>
-#include <svtools/headbar.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/treelistentry.hxx>
 #include <com/sun/star/text/XBookmarksSupplier.hpp>
 
 #include <swabstdlg.hxx>
@@ -146,15 +145,15 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, SelectionChangedHdl, SvTreeListBox*, void)
     if (!m_pBookmarksBox->HasFocus())
         return;
 
-    OUString sEditBoxText;
+    OUStringBuffer sEditBoxText;
     SvTreeListEntry* pSelected = m_pBookmarksBox->FirstSelected();
     for (sal_Int32 i = m_pBookmarksBox->GetSelectionCount(); i; i--)
     {
         sw::mark::IMark* pBookmark = static_cast<sw::mark::IMark*>(pSelected->GetUserData());
-        OUString sEntryName = pBookmark->GetName();
-        sEditBoxText = sEditBoxText + sEntryName;
+        const OUString& sEntryName = pBookmark->GetName();
+        sEditBoxText.append(sEntryName);
         if (i > 1)
-            sEditBoxText += ";";
+            sEditBoxText.append(";");
         pSelected = m_pBookmarksBox->NextSelected(pSelected);
     }
     if (m_pBookmarksBox->GetSelectionCount() > 0)
@@ -163,7 +162,7 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, SelectionChangedHdl, SvTreeListBox*, void)
         m_pGotoBtn->Enable(m_pBookmarksBox->GetSelectionCount() == 1);
         m_pRenameBtn->Enable(m_pBookmarksBox->GetSelectionCount() == 1);
         m_pDeleteBtn->Enable();
-        m_pEditBox->SetText(sEditBoxText);
+        m_pEditBox->SetText(sEditBoxText.makeStringAndClear());
     }
     else
     {
@@ -194,7 +193,6 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, RenameHdl, Button*, void)
     SwAbstractDialogFactory* pFact = swui::GetFactory();
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
     ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(pFact->CreateSwRenameXNamedDlg(GetFrameWeld(), xNamed, xNameAccess));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
     pDlg->SetForbiddenChars(BookmarkTable::aForbiddenChars + OUStringLiteral1(BookmarkTable::cSeparator));
 
     if (pDlg->Execute())
@@ -211,13 +209,20 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, RenameHdl, Button*, void)
 IMPL_LINK_NOARG(SwInsertBookmarkDlg, InsertHdl, Button*, void)
 {
     OUString sBookmark = m_pEditBox->GetText();
-    rSh.SetBookmark(vcl::KeyCode(), sBookmark);
+    rSh.SetBookmark2(vcl::KeyCode(), sBookmark, m_pHideCB->IsChecked(), m_pConditionED->GetText());
     rReq.AppendItem(SfxStringItem(FN_INSERT_BOOKMARK, sBookmark));
     rReq.Done();
     if (!rReq.IsDone())
         rReq.Ignore();
 
     EndDialog(RET_OK);
+}
+
+IMPL_LINK(SwInsertBookmarkDlg, ChangeHideHdl, Button *, pBox, void)
+{
+    bool bHide = static_cast<CheckBox*>(pBox)->IsChecked();
+    m_pConditionED->Enable(bHide);
+    m_pConditionFT->Enable(bHide);
 }
 
 void SwInsertBookmarkDlg::GotoSelectedBookmark()
@@ -305,6 +310,9 @@ SwInsertBookmarkDlg::SwInsertBookmarkDlg(vcl::Window* pParent, SwWrtShell& rS, S
     get(m_pDeleteBtn, "delete");
     get(m_pGotoBtn, "goto");
     get(m_pRenameBtn, "rename");
+    get(m_pHideCB, "hide");
+    get(m_pConditionFT, "condlabel");
+    get(m_pConditionED, "withcond");
 
     m_pBookmarksBox = VclPtr<BookmarkTable>::Create(*m_pBookmarksContainer);
 
@@ -316,6 +324,7 @@ SwInsertBookmarkDlg::SwInsertBookmarkDlg(vcl::Window* pParent, SwWrtShell& rS, S
     m_pDeleteBtn->SetClickHdl(LINK(this, SwInsertBookmarkDlg, DeleteHdl));
     m_pGotoBtn->SetClickHdl(LINK(this, SwInsertBookmarkDlg, GotoHdl));
     m_pRenameBtn->SetClickHdl(LINK(this, SwInsertBookmarkDlg, RenameHdl));
+    m_pHideCB->SetClickHdl(LINK(this, SwInsertBookmarkDlg, ChangeHideHdl));
 
     m_pDeleteBtn->Disable();
     m_pGotoBtn->Disable();
@@ -343,35 +352,43 @@ void SwInsertBookmarkDlg::dispose()
     m_pGotoBtn.clear();
     m_pEditBox.clear();
     m_pRenameBtn.clear();
+    m_pHideCB.clear();
+    m_pConditionFT.clear();
+    m_pConditionED.clear();
     SvxStandardDialog::dispose();
 }
 
 BookmarkTable::BookmarkTable(SvSimpleTableContainer& rParent) :
     SvSimpleTable(rParent, 0)
 {
-    static long nTabs[] = {0, 40, 150};
+    static long nTabs[] = { 0, 40, 150, 300, 340 };
 
     SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
     SetSelectionMode(SelectionMode::Multiple);
     InsertHeaderEntry(SwResId(STR_PAGE));
     InsertHeaderEntry(SwResId(STR_BOOKMARK_NAME));
     InsertHeaderEntry(SwResId(STR_BOOKMARK_TEXT));
+    InsertHeaderEntry(SwResId(STR_BOOKMARK_HIDDEN));
+    InsertHeaderEntry(SwResId(STR_BOOKMARK_CONDITION));
 
     rParent.SetTable(this);
 }
 
 void BookmarkTable::InsertBookmark(sw::mark::IMark* pMark)
 {
-    OUString sBookmarkNodeText = pMark->GetMarkStart().nNode.GetNode().GetTextNode()->GetText();
-    sal_Int32 nBookmarkNodeTextPos = pMark->GetMarkStart().nContent.GetIndex();
+    sw::mark::IBookmark* pBookmark = dynamic_cast<sw::mark::IBookmark*>(pMark);
+    assert(pBookmark);
+
+    OUString sBookmarkNodeText = pBookmark->GetMarkStart().nNode.GetNode().GetTextNode()->GetText();
+    sal_Int32 nBookmarkNodeTextPos = pBookmark->GetMarkStart().nContent.GetIndex();
     sal_Int32 nBookmarkTextLen = 0;
     bool bPulledAll = false;
     bool bPulling = false;
     static const sal_Int32 nMaxTextLen = 50;
 
-    if (pMark->IsExpanded())
+    if (pBookmark->IsExpanded())
     {
-        nBookmarkTextLen = pMark->GetMarkEnd().nContent.GetIndex() - nBookmarkNodeTextPos;
+        nBookmarkTextLen = pBookmark->GetMarkEnd().nContent.GetIndex() - nBookmarkNodeTextPos;
     }
     else
     {
@@ -392,8 +409,12 @@ void BookmarkTable::InsertBookmark(sw::mark::IMark* pMark)
     else if (bPulling && !bPulledAll)
         sBookmarkNodeText = "..." + sBookmarkNodeText;
 
+    OUString sHidden = "No";
+    if (pBookmark->IsHidden())
+        sHidden = "Yes";
+    const OUString& sHideCondition = pBookmark->GetHideCondition();
     OUString sPageNum = OUString::number(SwPaM(pMark->GetMarkStart()).GetPageNum());
-    OUString sColumnData = sPageNum + "\t" + pMark->GetName() + "\t" + sBookmarkNodeText;
+    OUString sColumnData = sPageNum + "\t" + pBookmark->GetName() + "\t" + sBookmarkNodeText + "\t" + sHidden + "\t" + sHideCondition;
     InsertEntryToColumn(sColumnData, TREELIST_APPEND, 0xffff, pMark);
 }
 
@@ -438,7 +459,7 @@ OUString BookmarkTable::GetNameProposal()
     while (pEntry)
     {
         sw::mark::IMark* pBookmark = static_cast<sw::mark::IMark*>(pEntry->GetUserData());
-        OUString sName = pBookmark->GetName();
+        const OUString& sName = pBookmark->GetName();
         sal_Int32 nIndex = 0;
         if (sName.getToken(0, ' ', nIndex) == sDefaultBookmarkName)
         {

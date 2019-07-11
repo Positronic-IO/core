@@ -29,6 +29,7 @@
 
 #include <rtl/ustrbuf.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/frame/ModuleManager.hpp>
 #include <com/sun/star/ui/XUpdateModel.hpp>
@@ -193,10 +194,9 @@ const ResourceManager::DeckContextDescriptorContainer& ResourceManager::GetMatch
 const ResourceManager::PanelContextDescriptorContainer& ResourceManager::GetMatchingPanels (
                                                             PanelContextDescriptorContainer& rPanelIds,
                                                             const Context& rContext,
-                                                            const OUString& rsDeckId,
+                                                            const OUString& sDeckId,
                                                             const Reference<frame::XController>& rxController)
 {
-    OUString sDeckId(rsDeckId);
     ReadLegacyAddons(rxController);
 
     std::multimap<sal_Int32, PanelContextDescriptor> aOrderedIds;

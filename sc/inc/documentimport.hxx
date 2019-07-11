@@ -12,6 +12,7 @@
 
 #include "scdllapi.h"
 #include "address.hxx"
+#include "attarray.hxx"
 
 #include <rtl/ustring.hxx>
 
@@ -21,7 +22,6 @@
 class EditTextObject;
 class ScDocument;
 class ScColumn;
-struct ScAttrEntry;
 class ScTokenArray;
 class ScFormulaCell;
 class ScStyleSheet;
@@ -125,8 +125,15 @@ public:
 
     void finalize();
 
+    /** Broadcast all formula cells that are marked with
+        FormulaTokenArray::IsRecalcModeMustAfterImport() for a subsequent
+        ScDocument::CalcFormulaTree().
+     */
+    void broadcastRecalcAfterImport();
+
 private:
     void initColumn(ScColumn& rCol);
+    static void broadcastRecalcAfterImportColumn(ScColumn& rCol);
 };
 
 #endif

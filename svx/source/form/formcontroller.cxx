@@ -68,10 +68,10 @@
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/propagg.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/flagguard.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
@@ -85,6 +85,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <iterator>
@@ -301,7 +302,7 @@ namespace
 
     bool lcl_isInputRequired( const Reference< XPropertySet >& _rxControlModel )
     {
-        bool bInputRequired = true;
+        bool bInputRequired = false;
         OSL_VERIFY( _rxControlModel->getPropertyValue( FM_PROP_INPUT_REQUIRED ) >>= bInputRequired );
         return bInputRequired;
     }
@@ -325,6 +326,7 @@ void ColumnInfoCache::deinitializeControls()
     {
         lcl_resetColumnControlInfo( *col );
     }
+    m_bControlsInitialized = false;
 }
 
 
@@ -1639,7 +1641,7 @@ void FormController::focusGained(const FocusEvent& e)
             )
         {
             // check the old control if the content is ok
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
             Reference< XBoundControl >  xLockingTest(m_xCurrentControl, UNO_QUERY);
             bool bControlIsLocked = xLockingTest.is() && xLockingTest->getLock();
             assert(!bControlIsLocked && "FormController::Gained: I'm modified and the current control is locked ? How this ?");
@@ -2488,7 +2490,7 @@ void FormController::insertControl(const Reference< XControl > & xControl)
     m_aControls.realloc(m_aControls.getLength() + 1);
     m_aControls.getArray()[m_aControls.getLength() - 1] = xControl;
 
-    if ( m_pColumnInfoCache.get() )
+    if (m_pColumnInfoCache)
         m_pColumnInfoCache->deinitializeControls();
 
     implControlInserted( xControl, m_bAttachEvents );
@@ -3709,8 +3711,8 @@ sal_Bool SAL_CALL FormController::approveRowChange(const RowChangeEvent& _rEvent
     if ( !lcl_shouldValidateRequiredFields_nothrow( _rEvent.Source ) )
         return true;
 
-    OSL_ENSURE( m_pColumnInfoCache.get(), "FormController::approveRowChange: no column infos!" );
-    if ( !m_pColumnInfoCache.get() )
+    OSL_ENSURE(m_pColumnInfoCache, "FormController::approveRowChange: no column infos!");
+    if (!m_pColumnInfoCache)
         return true;
 
     try
@@ -3722,8 +3724,6 @@ sal_Bool SAL_CALL FormController::approveRowChange(const RowChangeEvent& _rEvent
         for ( size_t col = 0; col < colCount; ++col )
         {
             const ColumnInfo& rColInfo = m_pColumnInfoCache->getColumnInfo( col );
-            if ( rColInfo.nNullable != ColumnValue::NO_NULLS )
-                continue;
 
             if ( rColInfo.bAutoIncrement )
                 continue;
@@ -3732,10 +3732,12 @@ sal_Bool SAL_CALL FormController::approveRowChange(const RowChangeEvent& _rEvent
                 continue;
 
             if ( !rColInfo.xFirstControlWithInputRequired.is() && !rColInfo.xFirstGridWithInputRequiredColumn.is() )
+            {
                 continue;
+            }
 
             // TODO: in case of binary fields, this "getString" below is extremely expensive
-            if ( !rColInfo.xColumn->getString().isEmpty() || !rColInfo.xColumn->wasNull() )
+            if ( !rColInfo.xColumn->wasNull() || !rColInfo.xColumn->getString().isEmpty() )
                 continue;
 
             OUString sMessage( SvxResId( RID_ERR_FIELDREQUIRED ) );
@@ -4204,7 +4206,8 @@ bool FormController::ensureInteractionHandler()
         return false;
     m_bAttemptedHandlerCreation = true;
 
-    m_xInteractionHandler = InteractionHandler::createWithParent(m_xComponentContext, nullptr);
+    m_xInteractionHandler = InteractionHandler::createWithParent(m_xComponentContext,
+                                                                 VCLUnoHelper::GetInterface(getDialogParentWindow()));
     return m_xInteractionHandler.is();
 }
 

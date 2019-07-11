@@ -42,7 +42,7 @@ private:
     friend class                SdrOutliner;
 
 protected:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     tools::Rectangle                   maSnapRect;
 
@@ -57,6 +57,10 @@ protected:
     virtual ~SdrAttrObj() override;
 
 public:
+    SdrAttrObj(SdrAttrObj const &) = delete; // due to SdrObject
+    SdrAttrObj(SdrAttrObj &&) = delete; // due to SdrObject
+    SdrAttrObj & operator =(SdrAttrObj const &) = default;
+    SdrAttrObj & operator =(SdrAttrObj &&) = default;
 
     // Detects if bFilledObj && Fill != FillNone
     bool HasFill() const;

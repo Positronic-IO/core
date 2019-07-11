@@ -23,14 +23,12 @@
 #include "sal/config.h"
 
 #include <cstddef>
-#include <exception>
 #include <utility>
 
 #include "com/sun/star/lang/XTypeProvider.hpp"
-#include "com/sun/star/uno/Any.hxx"
-#include "com/sun/star/uno/RuntimeException.hpp"
+#include "com/sun/star/uno/Any.h"
 #include "com/sun/star/uno/Sequence.hxx"
-#include "com/sun/star/uno/Type.hxx"
+#include "com/sun/star/uno/Type.h"
 #include "cppuhelper/implbase_ex.hxx"
 #include "cppuhelper/weak.hxx"
 #include "rtl/instance.hxx"
@@ -104,6 +102,11 @@ protected:
     virtual ~WeakImplHelper() override {}
 
 public:
+    WeakImplHelper(WeakImplHelper const &) = default;
+    WeakImplHelper(WeakImplHelper &&) = default;
+    WeakImplHelper & operator =(WeakImplHelper const &) = default;
+    WeakImplHelper & operator =(WeakImplHelper &&) = default;
+
     css::uno::Any SAL_CALL queryInterface(css::uno::Type const & aType) override
     { return WeakImplHelper_query(aType, cd::get(), this, this); }
 
@@ -152,6 +155,11 @@ protected:
     virtual ~ImplInheritanceHelper() {}
 
 public:
+    ImplInheritanceHelper(ImplInheritanceHelper const &) = default;
+    ImplInheritanceHelper(ImplInheritanceHelper &&) = default;
+    ImplInheritanceHelper & operator =(ImplInheritanceHelper const &) = default;
+    ImplInheritanceHelper & operator =(ImplInheritanceHelper &&) = default;
+
     css::uno::Any SAL_CALL queryInterface(css::uno::Type const & aType) override
     {
         css::uno::Any ret(ImplHelper_queryNoXInterface(aType, cd::get(), this));

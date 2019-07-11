@@ -22,6 +22,7 @@
 
 #include <svl/hint.hxx>
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 #include <dapiuno.hxx>
 #include <datauno.hxx>
@@ -48,6 +49,8 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/NullPointerException.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
+#include <com/sun/star/sheet/XDimensionsSupplier.hpp>
 #include <com/sun/star/sheet/XHierarchiesSupplier.hpp>
 #include <com/sun/star/sheet/XLevelsSupplier.hpp>
 #include <com/sun/star/sheet/XMembersSupplier.hpp>
@@ -63,6 +66,7 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 
 using namespace com::sun::star;
 using namespace com::sun::star::sheet;
@@ -159,7 +163,7 @@ const SfxItemPropertyMapEntry* lcl_GetDataPilotItemMap()
     return aDataPilotItemMap_Impl;
 }
 
-inline bool lclCheckValidDouble( double fValue, bool bAuto )
+bool lclCheckValidDouble( double fValue, bool bAuto )
 {
     return bAuto || ::rtl::math::isFinite( fValue );
 }
@@ -340,8 +344,7 @@ ScDataPilotTableObj* ScDataPilotTablesObj::GetObjectByIndex_Impl( sal_Int32 nInd
                 {
                     if ( nFound == nIndex )
                     {
-                        OUString aName = rDPObj.GetName();
-                        return new ScDataPilotTableObj( pDocShell, nTab, aName );
+                        return new ScDataPilotTableObj( pDocShell, nTab, rDPObj.GetName() );
                     }
                     ++nFound;
                 }
@@ -2534,7 +2537,7 @@ Reference< XDataPilotField > SAL_CALL ScDataPilotFieldObj::createNameGroup( cons
     ScDPObject* pDPObj = nullptr;
     if( ScDPSaveDimension* pDim = GetDPDimension( &pDPObj ) )
     {
-        OUString aDimName = pDim->GetName();
+        const OUString& aDimName = pDim->GetName();
 
         ScDPSaveData aSaveData = *pDPObj->GetSaveData();
         ScDPDimensionSaveData* pDimData = aSaveData.GetDimensionData();     // created if not there
@@ -2664,9 +2667,12 @@ Reference< XDataPilotField > SAL_CALL ScDataPilotFieldObj::createNameGroup( cons
             }
             catch (const container::NoSuchElementException&)
             {
+                css::uno::Any anyEx = cppu::getCaughtException();
                 SAL_WARN("sc.ui", "Cannot find field with that name: " + sNewDim + ".");
                 // Avoid throwing exception that's not specified in the method signature.
-                throw RuntimeException("Cannot find field with name \"" + sNewDim + "\"", static_cast<cppu::OWeakObject*>(this));
+                throw css::lang::WrappedTargetRuntimeException(
+                        "Cannot find field with name \"" + sNewDim + "\"",
+                        static_cast<cppu::OWeakObject*>(this), anyEx );
             }
         }
     }

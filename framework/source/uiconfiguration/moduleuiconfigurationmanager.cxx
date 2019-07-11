@@ -51,12 +51,14 @@
 
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/sequence.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/interfacecontainer.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <memory>
 
@@ -208,7 +210,6 @@ private:
     bool                                                      m_bDisposed;
     OUString                                                  m_aXMLPostfix;
     OUString                                                  m_aPropUIName;
-    OUString                                                  m_aPropResourceURL;
     OUString                                                  m_aModuleIdentifier;
     css::uno::Reference< css::embed::XTransactedObject >      m_xUserRootCommit;
     css::uno::Reference< css::uno::XComponentContext >        m_xContext;
@@ -827,14 +828,11 @@ void ModuleUIConfigurationManager::impl_Initialize()
 ModuleUIConfigurationManager::ModuleUIConfigurationManager(
         const Reference< XComponentContext >& xContext,
         const css::uno::Sequence< css::uno::Any >& aArguments)
-    : m_xDefaultConfigStorage( nullptr )
-    , m_xUserConfigStorage( nullptr )
-    , m_bReadOnly( true )
+    : m_bReadOnly( true )
     , m_bModified( false )
     , m_bDisposed( false )
     , m_aXMLPostfix( ".xml" )
     , m_aPropUIName( "UIName" )
-    , m_aPropResourceURL( "ResourceURL" )
     , m_xContext( xContext )
     , m_aListenerContainer( m_mutex )
 {
@@ -1022,12 +1020,12 @@ void SAL_CALL ModuleUIConfigurationManager::reset()
                     impl_resetElementTypeData( rUserElementType, rDefaultElementType, aRemoveEventNotifyContainer, aReplaceEventNotifyContainer );
                     rUserElementType.bModified = false;
                 }
-                catch (const Exception& e)
+                catch (const Exception&)
                 {
-                    css::uno::Any a(e);
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     throw css::lang::WrappedTargetRuntimeException(
                             "ModuleUIConfigurationManager::reset exception",
-                            css::uno::Reference<css::uno::XInterface>(*this), a);
+                            css::uno::Reference<css::uno::XInterface>(*this), anyEx);
                 }
             }
 
@@ -1078,7 +1076,7 @@ Sequence< Sequence< PropertyValue > > SAL_CALL ModuleUIConfigurationManager::get
         impl_fillSequenceWithElementTypeInfo( aUIElementInfoCollection, ElementType );
 
     Sequence< PropertyValue > aUIElementInfo( 2 );
-    aUIElementInfo[0].Name = m_aPropResourceURL;
+    aUIElementInfo[0].Name = "ResourceURL";
     aUIElementInfo[1].Name = m_aPropUIName;
 
     aElementInfoSeq.resize( aUIElementInfoCollection.size() );
@@ -1515,10 +1513,12 @@ void SAL_CALL ModuleUIConfigurationManager::reload()
             try
             {
                 UIElementType& rUserElementType    = m_aUIElements[LAYER_USERDEFINED][i];
-                UIElementType& rDefaultElementType = m_aUIElements[LAYER_DEFAULT][i];
 
                 if ( rUserElementType.bModified )
+                {
+                    UIElementType& rDefaultElementType = m_aUIElements[LAYER_DEFAULT][i];
                     impl_reloadElementTypeData( rUserElementType, rDefaultElementType, aRemoveNotifyContainer, aReplaceNotifyContainer );
+                }
             }
             catch ( const Exception& )
             {

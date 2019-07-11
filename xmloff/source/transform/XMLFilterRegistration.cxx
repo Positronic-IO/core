@@ -20,6 +20,7 @@
 #include <string.h>
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <cppuhelper/factory.hxx>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <osl/diagnose.h>
 
 #include "XMLFilterRegistration.hxx"
@@ -38,9 +39,9 @@ namespace
 
     struct ServiceDescriptor
     {
-        GetImplementationName       getImplementationName;
-        GetSupportedServiceNames    getSupportedServiceNames;
-        CreateInstance              createInstance;
+        GetImplementationName const    getImplementationName;
+        GetSupportedServiceNames const getSupportedServiceNames;
+        CreateInstance const           createInstance;
     };
 
     const ServiceDescriptor* getServiceDescriptors()

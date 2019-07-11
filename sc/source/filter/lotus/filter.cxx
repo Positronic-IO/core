@@ -30,11 +30,14 @@
 #include <root.hxx>
 #include <lotrange.hxx>
 #include <optab.h>
+#include <op.h>
 #include <scmem.h>
 #include <decl.h>
 #include <tool.h>
 #include <fprogressbar.hxx>
+#include <patattr.hxx>
 #include "lotfilter.hxx"
+#include <tools/stream.hxx>
 
 static ErrCode
 generate_Opcodes(LotusContext &rContext, SvStream& aStream,
@@ -74,8 +77,7 @@ generate_Opcodes(LotusContext &rContext, SvStream& aStream,
     }
 
     // #i76299# seems that SvStream::IsEof() does not work correctly
-    aStream.Seek( STREAM_SEEK_TO_END );
-    sal_uInt64 const nStrmSize = aStream.Tell();
+    sal_uInt64 const nStrmSize = aStream.TellEnd();
     aStream.Seek( STREAM_SEEK_TO_BEGIN );
     while (!rContext.bEOF && aStream.good() && (aStream.Tell() < nStrmSize))
     {
@@ -129,7 +131,7 @@ generate_Opcodes(LotusContext &rContext, SvStream& aStream,
     return nErr;
 }
 
-WKTYP ScanVersion(SvStream& aStream)
+static WKTYP ScanVersion(SvStream& aStream)
 {
     // PREC:    pWKFile:   pointer to open file
     // POST:    return:     type of file

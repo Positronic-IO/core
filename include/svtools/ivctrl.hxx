@@ -65,7 +65,7 @@ enum class SvxIconChoiceCtrlPositionMode
 
 class SvxIconChoiceCtrlEntry
 {
-    Image aImage;
+    Image const aImage;
 
     OUString aText;
     OUString aQuickHelpText;
@@ -264,7 +264,7 @@ public:
     // Re-calculation of cached view-data and invalidation of those in the view
     void                    InvalidateEntry( SvxIconChoiceCtrlEntry* pEntry );
 
-    // Entry is selectd, if the BoundRect is selected
+    // Entry is selected, if the BoundRect is selected
     SvxIconChoiceCtrlEntry* GetEntry( const Point& rPosPixel ) const;
 
     // sal_uLong is the position of the selected element in the list

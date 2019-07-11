@@ -64,6 +64,7 @@
 #include <window.h>
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <com/sun/star/uno/Exception.hpp>
 
 #include <svdata.hxx>
@@ -83,20 +84,20 @@
 
 using namespace vcl_sal;
 
-#define CLIENT_EVENTS           StructureNotifyMask \
-                                | SubstructureNotifyMask \
-                                | KeyPressMask \
-                                | KeyReleaseMask \
-                                | ButtonPressMask \
-                                | ButtonReleaseMask \
-                                | PointerMotionMask \
-                                | EnterWindowMask \
-                                | LeaveWindowMask \
-                                | FocusChangeMask \
-                                | ExposureMask \
-                                | VisibilityChangeMask \
-                                | PropertyChangeMask \
-                                | ColormapChangeMask
+static constexpr auto CLIENT_EVENTS = StructureNotifyMask
+                                | SubstructureNotifyMask
+                                | KeyPressMask
+                                | KeyReleaseMask
+                                | ButtonPressMask
+                                | ButtonReleaseMask
+                                | PointerMotionMask
+                                | EnterWindowMask
+                                | LeaveWindowMask
+                                | FocusChangeMask
+                                | ExposureMask
+                                | VisibilityChangeMask
+                                | PropertyChangeMask
+                                | ColormapChangeMask;
 
 static ::Window  hPresentationWindow = None, hPresFocusWindow = None;
 static ::std::list< ::Window > aPresentationReparentList;
@@ -1652,12 +1653,12 @@ void X11SalFrame::SetAlwaysOnTop( bool bOnTop )
     }
 }
 
-#define FRAMESTATE_MASK_GEOMETRY \
-     (WindowStateMask::X     | WindowStateMask::Y |   \
-      WindowStateMask::Width | WindowStateMask::Height)
-#define FRAMESTATE_MASK_MAXIMIZED_GEOMETRY \
-     (WindowStateMask::MaximizedX     | WindowStateMask::MaximizedY |   \
-      WindowStateMask::MaximizedWidth | WindowStateMask::MaximizedHeight)
+static constexpr auto FRAMESTATE_MASK_GEOMETRY =
+     WindowStateMask::X     | WindowStateMask::Y |
+     WindowStateMask::Width | WindowStateMask::Height;
+static constexpr auto FRAMESTATE_MASK_MAXIMIZED_GEOMETRY =
+     WindowStateMask::MaximizedX     | WindowStateMask::MaximizedY |
+     WindowStateMask::MaximizedWidth | WindowStateMask::MaximizedHeight;
 
 void X11SalFrame::SetWindowState( const SalFrameState *pState )
 {
@@ -2308,9 +2309,9 @@ X11SalFrame::HandleExtTextEvent (XClientMessageEvent const *pEvent)
 
 // PostEvent
 
-bool X11SalFrame::PostEvent(ImplSVEvent* pData)
+bool X11SalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    GetDisplay()->SendInternalEvent( this, pData );
+    GetDisplay()->SendInternalEvent( this, pData.release() );
     return true;
 }
 
@@ -2872,7 +2873,7 @@ struct KeyAlternate
     KeyAlternate( sal_uInt16 nKey, sal_Unicode nChar = 0 ) : nKeyCode( nKey ), nCharCode( nChar ) {}
 };
 
-inline KeyAlternate
+static KeyAlternate
 GetAlternateKeyCode( const sal_uInt16 nKeyCode )
 {
     KeyAlternate aAlternate;

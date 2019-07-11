@@ -58,7 +58,7 @@ endif
 # library (glibc), the NDK does offer the GNU C++ library as one of
 # the C++ libraries available, and we use it.
 #
-ifneq (,$(filter ANDROID DRAGONFLY FREEBSD IOS LINUX NETBSD OPENBSD,$(OS)))
+ifneq (,$(filter ANDROID DRAGONFLY FREEBSD iOS LINUX NETBSD OPENBSD,$(OS)))
 ifneq (,$(gb_ENABLE_DBGUTIL))
 liborcus_CPPFLAGS+=-D_GLIBCXX_DEBUG
 endif
@@ -114,8 +114,8 @@ $(call gb_ExternalProject_get_state_target,liborcus,build) :
 		   $(MAKE) \
 		$(if $(filter MACOSX,$(OS)),\
 			&& $(PERL) $(SRCDIR)/solenv/bin/macosx-change-install-names.pl shl OOO \
-				$(EXTERNAL_WORKDIR)/src/liborcus/.libs/liborcus-0.13.0.dylib \
-				$(EXTERNAL_WORKDIR)/src/parser/.libs/liborcus-parser-0.13.0.dylib \
+				$(EXTERNAL_WORKDIR)/src/liborcus/.libs/liborcus-0.14.0.dylib \
+				$(EXTERNAL_WORKDIR)/src/parser/.libs/liborcus-parser-0.14.0.dylib \
 		) \
 	)
 

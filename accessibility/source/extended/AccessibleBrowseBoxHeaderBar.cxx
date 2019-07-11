@@ -18,9 +18,7 @@
  */
 
 #include <extended/AccessibleBrowseBoxHeaderBar.hxx>
-#include <svtools/accessibletableprovider.hxx>
-#include <comphelper/servicehelper.hxx>
-
+#include <vcl/accessibletableprovider.hxx>
 
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
@@ -38,8 +36,8 @@ namespace accessibility {
 
 AccessibleBrowseBoxHeaderBar::AccessibleBrowseBoxHeaderBar(
         const Reference< XAccessible >& rxParent,
-        IAccessibleTableProvider&                      rBrowseBox,
-        AccessibleBrowseBoxObjType      eObjType ) :
+        vcl::IAccessibleTableProvider& rBrowseBox,
+        vcl::AccessibleBrowseBoxObjType eObjType ) :
     AccessibleBrowseBoxTableBase( rxParent, rBrowseBox,eObjType )
 {
     OSL_ENSURE( isRowBar() || isColumnBar(),
@@ -64,7 +62,7 @@ AccessibleBrowseBoxHeaderBar::getAccessibleChild( sal_Int32 nChildIndex )
 
 sal_Int32 SAL_CALL AccessibleBrowseBoxHeaderBar::getAccessibleIndexInParent()
 {
-    return isRowBar() ? BBINDEX_ROWHEADERBAR : BBINDEX_COLUMNHEADERBAR;
+    return isRowBar() ? vcl::BBINDEX_ROWHEADERBAR : vcl::BBINDEX_COLUMNHEADERBAR;
 }
 
 // XAccessibleComponent -------------------------------------------------------

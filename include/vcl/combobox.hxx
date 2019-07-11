@@ -90,7 +90,7 @@ public:
     virtual void    RemoveEntryAt(sal_Int32  nPos);
 
     void            Clear();
-
+    void            EnableSelectAll();
     sal_Int32       GetEntryPos( const OUString& rStr ) const;
     sal_Int32       GetEntryPos( const void* pData ) const;
     Image           GetEntryImage( sal_Int32  nPos ) const;
@@ -111,6 +111,11 @@ public:
 
     void            SetSeparatorPos( sal_Int32  n );
 
+    /**
+     * Adds a new separator at the given position n.
+     */
+    void            AddSeparator( sal_Int32 n );
+
     void            EnableAutocomplete( bool bEnable, bool bMatchCase = false );
     bool            IsAutocompleteEnabled() const;
 
@@ -121,7 +126,7 @@ public:
     const Link<ComboBox&,void>&   GetSelectHdl() const;
     void            SetDoubleClickHdl(const Link<ComboBox&,void>& rLink);
     const Link<ComboBox&,void>&   GetDoubleClickHdl() const;
-    void            SetEntryActivateHdl(const Link<Edit&,void>& rLink);
+    void            SetEntryActivateHdl(const Link<Edit&,bool>& rLink);
 
     Size            CalcMinimumSize() const override;
     virtual Size    GetOptimalSize() const override;
@@ -172,6 +177,8 @@ public:
     long GetIndexForPoint( const Point& rPoint, sal_Int32 & rPos ) const;
 
     void setMaxWidthChars(sal_Int32 nWidth);
+
+    void SetWidthInChars(sal_Int32 nWidthInChars);
 
     virtual bool set_property(const OString &rKey, const OUString &rValue) override;
 

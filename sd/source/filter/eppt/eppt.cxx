@@ -19,6 +19,7 @@
 
 #include "eppt.hxx"
 #include "epptdef.hxx"
+#include "pptexanimations.hxx"
 #include <o3tl/any.hxx>
 #include <tools/globname.hxx>
 #include <tools/poly.hxx>
@@ -36,6 +37,7 @@
 #include <svx/svdpage.hxx>
 #include <com/sun/star/view/PaperOrientation.hpp>
 #include <com/sun/star/view/PaperFormat.hpp>
+#include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/office/XAnnotation.hpp>
 #include <com/sun/star/office/XAnnotationAccess.hpp>
@@ -85,10 +87,6 @@ PPTWriter::PPTWriter( tools::SvRef<SotStorage> const & rSvStorage,
     mbFontIndependentLineSpacing( false ),
     mnTextSize( 0 ),
     mrStg                   ( rSvStorage ),
-    mpCurUserStrm           ( nullptr ),
-    mpStrm                  ( nullptr ),
-    mpPicStrm               ( nullptr ),
-    mpPptEscherEx           ( nullptr ),
     mnVBAOleOfs             ( 0 ),
     mpVBA                   ( pVBA ),
     mnExEmbed               ( 0 ),
@@ -158,16 +156,14 @@ void PPTWriter::exportPPTPost( )
 
     ImplWriteVBA();
 
-    if ( !ImplWriteAtomEnding() )
-        return;
+    ImplWriteAtomEnding();
 
-    if ( !ImplCreateDocumentSummaryInformation() )
-        return;
+    ImplCreateDocumentSummaryInformation();
 
     mbStatus = true;
 };
 
-void ImplExportComments( const uno::Reference< drawing::XDrawPage >& xPage, SvMemoryStream& rBinaryTagData10Atom );
+static void ImplExportComments( const uno::Reference< drawing::XDrawPage >& xPage, SvMemoryStream& rBinaryTagData10Atom );
 
 void PPTWriter::ImplWriteSlide( sal_uInt32 nPageNum, sal_uInt32 nMasterNum, sal_uInt16 nMode,
                                 bool bHasBackground, Reference< XPropertySet > const & aXBackgroundPropSet )
@@ -505,7 +501,7 @@ bool PPTWriter::ImplCreateCurrentUserStream()
     return true;
 };
 
-bool PPTWriter::ImplCreateDocumentSummaryInformation()
+void PPTWriter::ImplCreateDocumentSummaryInformation()
 {
     uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
         mXModel, uno::UNO_QUERY_THROW);
@@ -551,8 +547,6 @@ bool PPTWriter::ImplCreateDocumentSummaryInformation()
                     nullptr, &aGuidSeq, &aHyperSeq );
         }
     }
-
-    return true;
 }
 
 void PPTWriter::ImplWriteExtParaHeader( SvMemoryStream& rSt, sal_uInt32 nRef, sal_uInt32 nInstance, sal_uInt32 nSlideId )
@@ -1044,7 +1038,7 @@ bool PPTWriter::ImplCreateMainNotes()
 
 static OUString getInitials( const OUString& rName )
 {
-    OUString sInitials;
+    OUStringBuffer sInitials;
 
     const sal_Unicode * pStr = rName.getStr();
     sal_Int32 nLength = rName.getLength();
@@ -1060,7 +1054,7 @@ static OUString getInitials( const OUString& rName )
         // take letter
         if( nLength )
         {
-            sInitials += OUStringLiteral1( *pStr );
+            sInitials.append( *pStr );
             nLength--; pStr++;
         }
 
@@ -1071,7 +1065,7 @@ static OUString getInitials( const OUString& rName )
         }
     }
 
-    return sInitials;
+    return sInitials.makeStringAndClear();
 }
 
 void ImplExportComments( const uno::Reference< drawing::XDrawPage >& xPage, SvMemoryStream& rBinaryTagData10Atom )
@@ -1238,8 +1232,7 @@ void PPTWriter::ImplWriteVBA()
 {
     if ( mpVBA )
     {
-        mpVBA->Seek( STREAM_SEEK_TO_END );
-        sal_uInt32 nLen = mpVBA->Tell();
+        sal_uInt32 nLen = mpVBA->TellEnd();
         if ( nLen > 8 )
         {
             nLen -= 8;
@@ -1259,16 +1252,16 @@ void PPTWriter::ImplWriteOLE( )
     for ( auto it = maExOleObj.begin(); it != maExOleObj.end(); ++it )
     {
         PPTExOleObjEntry* pPtr = it->get();
-        SvMemoryStream* pStrm = nullptr;
+        std::unique_ptr<SvMemoryStream> pStrm;
         pPtr->nOfsB = mpStrm->Tell();
         switch ( pPtr->eType )
         {
             case NORMAL_OLE_OBJECT :
             {
                 SdrObject* pSdrObj = GetSdrObjectFromXShape( pPtr->xShape );
-                if ( pSdrObj && dynamic_cast<const SdrOle2Obj* >(pSdrObj) !=  nullptr )
+                if ( auto pSdrOle2Obj = dynamic_cast< SdrOle2Obj* >(pSdrObj) )
                 {
-                    ::uno::Reference < embed::XEmbeddedObject > xObj( static_cast<SdrOle2Obj*>(pSdrObj)->GetObjRef() );
+                    const ::uno::Reference < embed::XEmbeddedObject >& xObj( pSdrOle2Obj->GetObjRef() );
                     if( xObj.is() )
                     {
                         tools::SvRef<SotStorage> xTempStorage( new SotStorage( new SvMemoryStream(), true ) );
@@ -1322,7 +1315,7 @@ void PPTWriter::ImplWriteOLE( )
             aZCodec.BeginCompression();
             aZCodec.Compress( *pStrm, *mpStrm );
             aZCodec.EndCompression();
-            delete pStrm;
+            pStrm.reset();
             mpPptEscherEx->EndAtom( EPP_ExOleObjStg, 0, 1 );
         }
     }
@@ -1330,7 +1323,7 @@ void PPTWriter::ImplWriteOLE( )
 
 // write PersistantTable and UserEditAtom
 
-bool PPTWriter::ImplWriteAtomEnding()
+void PPTWriter::ImplWriteAtomEnding()
 {
 
 #define EPP_LastViewTypeSlideView   1
@@ -1434,8 +1427,6 @@ bool PPTWriter::ImplWriteAtomEnding()
            .WriteUInt32( nPersistEntrys )           // max persists written, Seed value for persist object id management
            .WriteInt16( EPP_LastViewTypeSlideView ) // last view type
            .WriteInt16( 0x12 );                     // padword
-
-    return true;
 }
 
 // - exported function -

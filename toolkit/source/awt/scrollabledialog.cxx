@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <toolkit/awt/scrollabledialog.hxx>
-#include <vcl/group.hxx>
+#include <helper/scrollabledialog.hxx>
 #include <vcl/settings.hxx>
 
 namespace toolkit

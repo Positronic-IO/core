@@ -19,22 +19,17 @@
 #ifndef INCLUDED_CHART2_INC_CHARTMODEL_HXX
 #define INCLUDED_CHART2_INC_CHARTMODEL_HXX
 
-#include <config_features.h>
-
 #include <LifeTime.hxx>
 
-#include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/frame/XStorable2.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
 #include <com/sun/star/util/XCloseable.hpp>
 #include <com/sun/star/util/XUpdatable.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XUndoManagerSupplier.hpp>
-#include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/embed/XVisualObject.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
@@ -42,22 +37,15 @@
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/chart2/data/XDataSource.hpp>
-#include <com/sun/star/chart2/XChartTypeTemplate.hpp>
-#include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/qa/XDumper.hpp>
-#include <com/sun/star/awt/XRequestCallback.hpp>
 
 // public API
-#include <com/sun/star/chart2/data/XDataProvider.hpp>
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
 
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/XTitled.hpp>
-#include <com/sun/star/chart2/X3DChartWindowProvider.hpp>
 
 #include <com/sun/star/frame/XLoadable.hpp>
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
-#include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/datatransfer/XTransferable.hpp>
 
 #include <osl/mutex.hxx>
@@ -68,8 +56,16 @@
 
 #include <memory>
 
+namespace com { namespace sun { namespace star { namespace awt { class XRequestCallback; } } } }
+namespace com { namespace sun { namespace star { namespace chart2 { class XChartTypeTemplate; } } } }
+namespace com { namespace sun { namespace star { namespace chart2 { namespace data { class XDataProvider; } } } } }
+namespace com { namespace sun { namespace star { namespace document { class XFilter; } } } }
+namespace com { namespace sun { namespace star { namespace embed { class XStorage; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XAggregation; } } } }
+
 class SvNumberFormatter;
-class OpenGLWindow;
 
 namespace chart
 {
@@ -101,7 +97,6 @@ typedef cppu::WeakImplHelper<
         ,css::document::XDocumentPropertiesSupplier
         ,css::chart2::data::XDataSource
         ,css::document::XUndoManagerSupplier
-        ,css::chart2::X3DChartWindowProvider
         ,css::util::XUpdatable
         ,css::qa::XDumper
         >
@@ -372,8 +367,6 @@ public:
 
     virtual void SAL_CALL createDefaultChart() override;
 
-    virtual sal_Bool SAL_CALL isOpenGLChart() override;
-
     // ____ XDataReceiver (public API) ____
     virtual void SAL_CALL
         attachDataProvider( const css::uno::Reference< css::chart2::data::XDataProvider >& xProvider ) override;
@@ -451,9 +444,6 @@ public:
     // ____ XDataSource ____ allows access to the currently used data and data ranges
     virtual css::uno::Sequence< css::uno::Reference< css::chart2::data::XLabeledDataSequence > > SAL_CALL getDataSequences() override;
 
-    // X3DChartWindowProvider
-    virtual void SAL_CALL setWindow( sal_uInt64 nWindowPtr ) override;
-
     // XUpdatable
     virtual void SAL_CALL update() override;
 
@@ -476,16 +466,9 @@ public:
 
     void removeDataProviders();
 
-#if HAVE_FEATURE_OPENGL
-    OpenGLWindow* getOpenGLWindow() { return mpOpenGLWindow;}
-#endif
-
 private:
     sal_Int32 mnStart;
     sal_Int32 mnEnd;
-#if HAVE_FEATURE_OPENGL
-    VclPtr<OpenGLWindow> mpOpenGLWindow;
-#endif
 };
 
 }  // namespace chart

@@ -73,7 +73,9 @@ private:
     // at least one subclass of SvpSalInstance (GTK3) that doesn't use them.
     friend class SvpSalInstance;
     // members for communication from main thread to non-main thread
+#ifndef IOS
     int                     m_FeedbackFDs[2];
+#endif
     osl::Condition          m_NonMainWaitingYieldCond;
     // members for communication from non-main thread to main thread
     bool                    m_bNoYieldLock = false; // accessed only on main thread
@@ -112,7 +114,7 @@ class VCL_DLLPUBLIC SvpSalInstance : public SalGenericInstance, public SalUserEv
 public:
     static SvpSalInstance*  s_pDefaultInstance;
 
-    SvpSalInstance( SalYieldMutex *pMutex );
+    SvpSalInstance( std::unique_ptr<SalYieldMutex> pMutex );
     virtual ~SvpSalInstance() override;
 
     void                    CloseWakeupPipe(bool log);
@@ -151,12 +153,10 @@ public:
     virtual SalInfoPrinter* CreateInfoPrinter( SalPrinterQueueInfo* pQueueInfo,
                                                ImplJobSetup* pSetupData ) override;
     virtual void            DestroyInfoPrinter( SalInfoPrinter* pPrinter ) override;
-    virtual SalPrinter*     CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
-    virtual void            DestroyPrinter( SalPrinter* pPrinter ) override;
+    virtual std::unique_ptr<SalPrinter> CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
 
     virtual void            GetPrinterQueueInfo( ImplPrnQueueList* pList ) override;
     virtual void            GetPrinterQueueState( SalPrinterQueueInfo* pInfo ) override;
-    virtual void            DeletePrinterQueueInfo( SalPrinterQueueInfo* pInfo ) override;
     virtual OUString        GetDefaultPrinter() override;
     virtual void            PostPrintersChanged() override;
 
@@ -165,7 +165,7 @@ public:
     // SalSystem
     virtual SalSystem*      CreateSalSystem() override;
     // SalBitmap
-    virtual SalBitmap*      CreateSalBitmap() override;
+    virtual std::shared_ptr<SalBitmap> CreateSalBitmap() override;
 
     // wait next event and dispatch
     // must returned by UserEvent (SalFrame::PostEvent)
@@ -174,9 +174,6 @@ public:
     virtual bool            AnyInput( VclInputFlags nType ) override;
     virtual bool            IsMainThread() const override;
     virtual void            updateMainThread() override;
-
-    // may return NULL to disable session management
-    virtual SalSession*     CreateSalSession() override;
 
     virtual OpenGLContext*  CreateOpenGLContext() override;
 
@@ -196,6 +193,8 @@ inline void SvpSalInstance::deregisterFrame( SalFrame* pFrame )
 {
     eraseFrame( pFrame );
 }
+
+VCL_DLLPUBLIC cairo_surface_t* get_underlying_cairo_surface(VirtualDevice& rDevice);
 
 #endif // INCLUDED_VCL_INC_HEADLESS_SVPINST_HXX
 

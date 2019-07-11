@@ -22,16 +22,14 @@
 
 #include <vcl/dialog.hxx>
 #include <svx/langbox.hxx>
+#include <tools/stream.hxx>
 
 #include "asciiopt.hxx"
 
 class Button;
 class CheckBox;
-class ComboBox;
 class Edit;
 class FixedText;
-class ListBox;
-class NumericField;
 class RadioButton;
 
 class ScCsvTableBox;
@@ -41,7 +39,7 @@ class ScImportAsciiDlg : public ModalDialog
 {
     SvStream*                   mpDatStream;
     sal_uLong                       mnStreamPos;
-    sal_uLong*                      mpRowPosArray;
+    std::unique_ptr<sal_uLong[]>    mpRowPosArray;
     sal_uLong                       mnRowPosCount;
 
     OUString               maPreviewLine[ CSV_PREVIEW_LINES ];
@@ -81,14 +79,13 @@ class ScImportAsciiDlg : public ModalDialog
 
     VclPtr<ScCsvTableBox>              mpTableBox;
 
-    OUString                    aColumnUser;
-    OUString                    aTextSepList;
     OUString                    maFieldSeparators;  // selected field separators
     sal_Unicode                 mcTextSep;
 
     rtl_TextEncoding            meCharSet;          /// Selected char set.
     bool                        mbCharSetSystem;    /// Is System char set selected?
-    ScImportAsciiCall           meCall;             /// How the dialog is called (see asciiopt.hxx)
+    ScImportAsciiCall const     meCall;             /// How the dialog is called (see asciiopt.hxx)
+    bool                        mbDetectSpaceSep;   /// Whether to detect a possible space separator.
 
 public:
                                 ScImportAsciiDlg(
@@ -111,7 +108,7 @@ private:
     /** Enables or disables all separator checkboxes and edit fields. */
     void                        SetupSeparatorCtrls();
 
-    bool                        GetLine( sal_uLong nLine, OUString &rText );
+    bool                        GetLine( sal_uLong nLine, OUString &rText, sal_Unicode& rcDetectSep );
     void                        UpdateVertical();
     inline bool                 Seek( sal_uLong nPos ); // synced to and from mnStreamPos
 

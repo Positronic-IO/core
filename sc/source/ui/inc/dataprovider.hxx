@@ -12,42 +12,30 @@
 
 #include <memory>
 #include <salhelper/thread.hxx>
-#include <tools/stream.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/ref.hxx>
-#include <address.hxx>
 #include <osl/mutex.hxx>
-#include <osl/conditn.hxx>
-#include <dbdata.hxx>
 #include <document.hxx>
-#include <vcl/idle.hxx>
 
-#include "docsh.hxx"
-#include <scdllapi.h>
-#include <datamapper.hxx>
 #include <rtl/strbuf.hxx>
 
-#include <queue>
 #include <vector>
 #include <map>
-
-#include <officecfg/Office/Calc.hxx>
 
 #include <orcus/csv_parser.hpp>
 
 class SvStream;
+class ScDBData;
 
 namespace sc {
 
-class DataProvider;
-class CSVDataProvider;
-class ScDBDataManager;
 class DataTransformation;
+class ExternalDataSource;
 
 class CSVFetchThread : public salhelper::Thread
 {
     ScDocument& mrDocument;
-    OUString maURL;
+    OUString const maURL;
 
     bool mbTerminate;
     osl::Mutex maMtxTerminate;
@@ -56,7 +44,7 @@ class CSVFetchThread : public salhelper::Thread
 
     std::vector<std::shared_ptr<sc::DataTransformation>> maDataTransformations;
 
-    std::function<void()> maImportFinishedHdl;
+    std::function<void()> const maImportFinishedHdl;
 
 
 public:
@@ -104,7 +92,7 @@ public:
 class CSVDataProvider : public DataProvider
 {
     rtl::Reference<CSVFetchThread> mxCSVFetchThread;
-    ScDocument* mpDocument;
+    ScDocument* const mpDocument;
     ScDocumentUniquePtr mpDoc;
 
     void Refresh();
@@ -135,7 +123,7 @@ class ScDBDataManager
     ScDocument* mpDoc;
 
 public:
-    ScDBDataManager(const OUString& rDBName, bool bAllowResize, ScDocument* pDoc);
+    ScDBDataManager(const OUString& rDBName, ScDocument* pDoc);
     ~ScDBDataManager();
 
     void SetDatabase(const OUString& rDBName);

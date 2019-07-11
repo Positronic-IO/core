@@ -33,6 +33,7 @@
 #include <com/sun/star/io/TempFile.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/frame/XLoadable.hpp>
@@ -43,10 +44,11 @@
 #include <com/sun/star/system/SystemShellExecute.hpp>
 #include <com/sun/star/system/SystemShellExecuteFlags.hpp>
 
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/interfacecontainer.h>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/mimeconfighelper.hxx>
-#include <comphelper/storagehelper.hxx>
+#include <sal/log.hxx>
 
 
 #include <targetstatecontrol.hxx>
@@ -382,14 +384,16 @@ bool OleEmbeddedObject::TryToConvertToOOo( const uno::Reference< io::XStream >& 
                         m_xParentStorage->removeElement( m_aEntryName );
                     m_xParentStorage->renameElement( aTmpStreamName, m_aEntryName );
                 }
-                catch ( const uno::Exception& )
+                catch ( const uno::Exception& ex )
                 {
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     try {
                         close( true );
                     } catch( const uno::Exception& ) {}
 
                     m_xParentStorage->dispose(); // ??? the storage has information loss, it should be closed without committing!
-                    throw uno::RuntimeException(); // the repairing is not possible
+                    throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                                    nullptr, anyEx ); // the repairing is not possible
                 }
             SAL_FALLTHROUGH;
             case 2:
@@ -398,13 +402,15 @@ bool OleEmbeddedObject::TryToConvertToOOo( const uno::Reference< io::XStream >& 
                     m_xObjectStream = m_xParentStorage->openStreamElement( m_aEntryName, m_bReadOnly ? embed::ElementModes::READ : embed::ElementModes::READWRITE );
                     m_nObjectState = embed::EmbedStates::LOADED;
                 }
-                catch( const uno::Exception& )
+                catch( const uno::Exception& ex )
                 {
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     try {
                         close( true );
                     } catch( const uno::Exception& ) {}
 
-                    throw uno::RuntimeException(); // the repairing is not possible
+                    throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                                    nullptr, anyEx ); // the repairing is not possible
                 }
                 SAL_FALLTHROUGH;
 
@@ -658,7 +664,7 @@ namespace
 {
     bool lcl_CopyStream(const uno::Reference<io::XInputStream>& xIn, const uno::Reference<io::XOutputStream>& xOut, sal_Int32 nMaxCopy = SAL_MAX_INT32)
     {
-        if (nMaxCopy == 0)
+        if (nMaxCopy <= 0)
             return false;
 
         const sal_Int32 nChunkSize = 4096;
@@ -697,7 +703,7 @@ namespace
 
         //various stream names that can contain the real document contents for
         //this object in a straightforward direct way
-        const OUStringLiteral aStreamNames[] =
+        static const OUStringLiteral aStreamNames[] =
         {
             "CONTENTS",
             "Package",
@@ -831,11 +837,8 @@ void SAL_CALL OleEmbeddedObject::doVerb( sal_Int32 nVerbID )
     uno::Reference< embed::XEmbeddedObject > xWrappedObject = m_xWrappedObject;
     if ( xWrappedObject.is() )
     {
-        // open content in the window not in-place
-        nVerbID = embed::EmbedVerbs::MS_OLEVERB_OPEN;
-
         // the object was converted to OOo embedded object, the current implementation is now only a wrapper
-        xWrappedObject->doVerb( nVerbID );
+        xWrappedObject->doVerb(embed::EmbedVerbs::MS_OLEVERB_OPEN); // open content in the window not in-place
         return;
     }
     // end wrapping related part ====================

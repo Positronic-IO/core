@@ -25,10 +25,13 @@
  *************************************************************************/
 #include <memory>
 #include <cppuhelper/interfacecontainer.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/ucb/ResultSetException.hpp>
 #include <ucbhelper/getcomponentcontext.hxx>
 #include <ucbhelper/resultset.hxx>
 #include <ucbhelper/resultsetmetadata.hxx>
+#include <ucbhelper/macros.hxx>
 
 using namespace com::sun::star;
 
@@ -39,8 +42,8 @@ namespace ucbhelper_impl
 struct PropertyInfo
 {
     const char* pName;
-    sal_Int32   nHandle;
-    sal_Int16   nAttributes;
+    sal_Int32 const   nHandle;
+    sal_Int16 const   nAttributes;
     const uno::Type& (*pGetCppuType)();
 };
 
@@ -140,7 +143,7 @@ struct ResultSet_Impl
     uno::Reference< css::ucb::XCommandEnvironment > m_xEnv;
     uno::Reference< beans::XPropertySetInfo >       m_xPropSetInfo;
     uno::Reference< sdbc::XResultSetMetaData >      m_xMetaData;
-    uno::Sequence< beans::Property >                m_aProperties;
+    uno::Sequence< beans::Property > const          m_aProperties;
     rtl::Reference< ResultSetDataSupplier >         m_xDataSupplier;
     osl::Mutex                          m_aMutex;
     std::unique_ptr<cppu::OInterfaceContainerHelper> m_pDisposeEventListeners;
@@ -165,8 +168,6 @@ inline ResultSet_Impl::ResultSet_Impl(
   m_xEnv( rxEnv ),
   m_aProperties( rProperties ),
   m_xDataSupplier( rDataSupplier ),
-  m_pDisposeEventListeners( nullptr ),
-  m_pPropertyChangeListeners( nullptr ),
   m_nPos( 0 ), // Position is one-based. Zero means: before first element.
   m_bWasNull( false ),
   m_bAfterLast( false )

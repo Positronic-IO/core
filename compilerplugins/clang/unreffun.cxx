@@ -51,14 +51,38 @@ Decl const * getPreviousNonFriendDecl(Decl const * decl) {
     }
 }
 
-class UnrefFun: public RecursiveASTVisitor<UnrefFun>, public loplugin::Plugin {
+bool isSpecialMemberFunction(FunctionDecl const * decl) {
+    if (auto const ctor = dyn_cast<CXXConstructorDecl>(decl)) {
+        return ctor->isDefaultConstructor() || ctor->isCopyOrMoveConstructor();
+    }
+    if (isa<CXXDestructorDecl>(decl)) {
+        return true;
+    }
+    if (auto const meth = dyn_cast<CXXMethodDecl>(decl)) {
+        return meth->isCopyAssignmentOperator() || meth->isMoveAssignmentOperator();
+    }
+    return false;
+}
+
+class UnrefFun: public loplugin::FilteringPlugin<UnrefFun> {
 public:
-    explicit UnrefFun(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit UnrefFun(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
 
+    bool TraverseFriendDecl(FriendDecl * decl) {
+        auto const old = friendFunction_;
+        friendFunction_ = dyn_cast_or_null<FunctionDecl>(decl->getFriendDecl());
+        auto const ret = RecursiveASTVisitor::TraverseFriendDecl(decl);
+        friendFunction_ = old;
+        return ret;
+    }
+
     bool VisitFunctionDecl(FunctionDecl const * decl);
+
+private:
+    FunctionDecl const * friendFunction_ = nullptr;
 };
 
 bool UnrefFun::VisitFunctionDecl(FunctionDecl const * decl) {
@@ -73,6 +97,13 @@ bool UnrefFun::VisitFunctionDecl(FunctionDecl const * decl) {
             || r->isDependentContext()))
     {
         return true;
+    }
+    if (decl == friendFunction_) {
+        if (auto const lex = dyn_cast<CXXRecordDecl>(decl->getLexicalDeclContext())) {
+            if (lex->isDependentContext()) {
+                return true;
+            }
+        }
     }
 
     if (!(decl->isThisDeclarationADefinition() || isFriendDecl(decl)
@@ -121,6 +152,14 @@ bool UnrefFun::VisitFunctionDecl(FunctionDecl const * decl) {
                 diag::warn_unused_function, decl->getLocation())
             < DiagnosticsEngine::Warning))
     {
+        return true;
+    }
+    if (canon->isExplicitlyDefaulted() && isSpecialMemberFunction(canon)) {
+        // If a special member function is explicitly defaulted on the first declaration, assume
+        // that its presence is always due to some interface design consideration, not to explicitly
+        // request a definition that might be worth to flag as unused (and C++20 may extend
+        // defaultability beyond special member functions to comparison operators, therefore
+        // explicitly check here for special member functions only):
         return true;
     }
     LinkageInfo info(canon->getLinkageAndVisibility());

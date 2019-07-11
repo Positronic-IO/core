@@ -20,6 +20,7 @@
 #include <com/sun/star/frame/XModel2.hpp>
 
 #include <com/sun/star/awt/Gradient.hpp>
+#include <com/sun/star/awt/PosSize.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
 #include <com/sun/star/drawing/XDrawPages.hpp>
@@ -46,13 +47,22 @@
 #include <controller/SlsClipboard.hxx>
 #include <controller/SlsPageSelector.hxx>
 #include <undo/undomanager.hxx>
-#include <DrawViewShell.hxx>
+#include <GraphicViewShell.hxx>
 #include <chrono>
+#include <sdpage.hxx>
+#include <comphelper/base64.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
+#include <LayerTabBar.hxx>
+#include <vcl/window.hxx>
+#include <vcl/event.hxx>
+#include <vcl/keycodes.hxx>
+
+
 
 using namespace ::com::sun::star;
 
 /// Impress miscellaneous tests.
-class SdMiscTest : public SdModelTestBase
+class SdMiscTest : public SdModelTestBaseXML
 {
 public:
     void testTdf96206();
@@ -61,6 +71,13 @@ public:
     void testTdf99396TextEdit();
     void testFillGradient();
     void testTdf44774();
+    void testTdf38225();
+    void testTdf101242_ODF();
+    void testTdf101242_settings();
+    void testTdf119392();
+    void testTdf67248();
+    void testTdf119956();
+    void testTdf120527();
 
     CPPUNIT_TEST_SUITE(SdMiscTest);
     CPPUNIT_TEST(testTdf96206);
@@ -69,7 +86,36 @@ public:
     CPPUNIT_TEST(testTdf99396TextEdit);
     CPPUNIT_TEST(testFillGradient);
     CPPUNIT_TEST(testTdf44774);
+    CPPUNIT_TEST(testTdf38225);
+    CPPUNIT_TEST(testTdf101242_ODF);
+    CPPUNIT_TEST(testTdf101242_settings);
+    CPPUNIT_TEST(testTdf119392);
+    CPPUNIT_TEST(testTdf67248);
+    CPPUNIT_TEST(testTdf119956);
+    CPPUNIT_TEST(testTdf120527);
     CPPUNIT_TEST_SUITE_END();
+
+virtual void registerNamespaces(xmlXPathContextPtr& pXmlXPathCtx) override
+    {
+        static const struct { char const * pPrefix; char const * pURI; } namespaces[] =
+        {
+            // ODF
+            { "config", "urn:oasis:names:tc:opendocument:xmlns:config:1.0"},
+            { "draw", "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" },
+            { "fo", "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" },
+            { "loext", "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" },
+            { "office", "urn:oasis:names:tc:opendocument:xmlns:office:1.0" },
+            { "style", "urn:oasis:names:tc:opendocument:xmlns:style:1.0" },
+            { "svg", "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" },
+            { "text", "urn:oasis:names:tc:opendocument:xmlns:text:1.0" },
+        };
+        for (size_t i = 0; i < SAL_N_ELEMENTS(namespaces); ++i)
+        {
+            xmlXPathRegisterNs(pXmlXPathCtx,
+                reinterpret_cast<xmlChar const *>(namespaces[i].pPrefix),
+                reinterpret_cast<xmlChar const *>(namespaces[i].pURI));
+        }
+    }
 
 private:
     sd::DrawDocShellRef Load(const OUString& rURL, sal_Int32 nFormat);
@@ -83,6 +129,17 @@ sd::DrawDocShellRef SdMiscTest::Load(const OUString& rURL, sal_Int32 nFormat)
     // create a frame
     uno::Reference< frame::XFrame > xTargetFrame = xDesktop->findFrame("_blank", 0);
     CPPUNIT_ASSERT(xTargetFrame.is());
+
+    // This ContainerWindow corresponds to the outermost window of a running LibreOffice.
+    // It needs a non-zero size and must be shown. Otherwise visible elements like the
+    // LayerTabBar in Draw have zero size and cannot get mouse events.
+    // The here used size is freely chosen.
+    uno::Reference<awt::XWindow> xContainerWindow = xTargetFrame->getContainerWindow();
+    CPPUNIT_ASSERT(xContainerWindow.is());
+    xContainerWindow->setPosSize(0, 0, 1024, 768, awt::PosSize::SIZE);
+    VclPtr<vcl::Window> pContainerWindow = VCLUnoHelper::GetWindow(xContainerWindow);
+    CPPUNIT_ASSERT(pContainerWindow);
+    pContainerWindow->Show(true);
 
     // 1. Open the document
     sd::DrawDocShellRef xDocSh = loadURL(rURL, nFormat);
@@ -103,16 +160,27 @@ sd::DrawDocShellRef SdMiscTest::Load(const OUString& rURL, sal_Int32 nFormat)
 
     sd::ViewShell *pViewShell = xDocSh->GetViewShell();
     CPPUNIT_ASSERT(pViewShell);
-    sd::slidesorter::SlideSorterViewShell* pSSVS = nullptr;
-    for (int i = 0; i < 1000; i++)
+
+    // Draw has no slidesorter, Impress never shows a LayerTabBar
+    if (sd::ViewShell::ST_DRAW == pViewShell->GetShellType())
     {
-        // Process all Tasks - slide sorter is created here
-        while (Scheduler::ProcessTaskScheduling());
-        if ((pSSVS = sd::slidesorter::SlideSorterViewShell::GetSlideSorter(pViewShell->GetViewShellBase())) != nullptr)
-            break;
-        osl::Thread::wait(std::chrono::milliseconds(100));
+        sd::LayerTabBar* pLayerTabBar = static_cast<sd::GraphicViewShell*>(pViewShell)->GetLayerTabControl();
+        CPPUNIT_ASSERT(pLayerTabBar);
+        pLayerTabBar->StateChanged(StateChangedType::InitShow);
     }
-    CPPUNIT_ASSERT(pSSVS);
+    else
+    {
+        sd::slidesorter::SlideSorterViewShell* pSSVS = nullptr;
+        for (int i = 0; i < 1000; i++)
+        {
+            // Process all Tasks - slide sorter is created here
+            while (Scheduler::ProcessTaskScheduling());
+            if ((pSSVS = sd::slidesorter::SlideSorterViewShell::GetSlideSorter(pViewShell->GetViewShellBase())) != nullptr)
+                break;
+            osl::Thread::wait(std::chrono::milliseconds(100));
+        }
+        CPPUNIT_ASSERT(pSSVS);
+    }
 
     return xDocSh;
 }
@@ -325,6 +393,275 @@ void SdMiscTest::testTdf44774()
     CPPUNIT_ASSERT(pStyle);
     // The parent set in StyleB used to reset, because parent style's msApiName was empty
     CPPUNIT_ASSERT_EQUAL(OUString("StyleA"), pStyle->GetParent());
+}
+
+void SdMiscTest::testTdf38225()
+{
+    sd::DrawDocShellRef xDocShRef = new sd::DrawDocShell(SfxObjectCreateMode::EMBEDDED, false,
+        DocumentType::Draw);
+    const uno::Reference<frame::XLoadable> xLoadable(xDocShRef->GetModel(), uno::UNO_QUERY_THROW);
+    xLoadable->initNew();
+    SfxStyleSheetBasePool* pSSPool = xDocShRef->GetStyleSheetPool();
+
+    // Create a new style with a name
+    pSSPool->Make("StyleWithName1", SfxStyleFamily::Para, SfxStyleSearchBits::UserDefined);
+
+    // Now save the file and reload
+    xDocShRef = saveAndReload(xDocShRef.get(), ODG);
+    pSSPool = xDocShRef->GetStyleSheetPool();
+
+    SfxStyleSheetBase* pStyle = pSSPool->Find("StyleWithName1", SfxStyleFamily::Para);
+    CPPUNIT_ASSERT(pStyle);
+
+    // Rename the style
+    CPPUNIT_ASSERT(pStyle->SetName("StyleWithName2"));
+
+    // Save the file and reload again
+    xDocShRef = saveAndReload(xDocShRef.get(), ODG);
+    pSSPool = xDocShRef->GetStyleSheetPool();
+
+    // The problem was that the style kept the old name upon reloading
+    pStyle = pSSPool->Find("StyleWithName1", SfxStyleFamily::Para);
+    CPPUNIT_ASSERT(!pStyle);
+    pStyle = pSSPool->Find("StyleWithName2", SfxStyleFamily::Para);
+    CPPUNIT_ASSERT(pStyle);
+}
+
+void SdMiscTest::testTdf120527()
+{
+    sd::DrawDocShellRef xDocShRef
+        = new sd::DrawDocShell(SfxObjectCreateMode::EMBEDDED, false, DocumentType::Draw);
+    uno::Reference<frame::XLoadable> xLoadable(xDocShRef->GetModel(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xLoadable.is());
+    xLoadable->initNew();
+
+    // Load a bitmap into the bitmap table.
+    uno::Reference<lang::XMultiServiceFactory> xFactory(xDocShRef->GetModel(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xFactory.is());
+    uno::Reference<container::XNameContainer> xBitmaps(
+        xFactory->createInstance("com.sun.star.drawing.BitmapTable"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xBitmaps.is());
+    OUString aGraphicURL = m_directories.getURLFromSrc("/sd/qa/unit/data/tdf120527.jpg");
+    xBitmaps->insertByName("test", uno::makeAny(aGraphicURL));
+
+    // Create a graphic.
+    uno::Reference<drawing::XShape> xShape(
+        xFactory->createInstance("com.sun.star.drawing.GraphicObjectShape"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xShape.is());
+    uno::Reference<beans::XPropertySet> xShapeProperySet(xShape, uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xShapeProperySet.is());
+    xShapeProperySet->setPropertyValue("GraphicURL", xBitmaps->getByName("test"));
+
+    // Insert it.
+    uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(xDocShRef->GetModel(),
+                                                                   uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xDrawPagesSupplier.is());
+    uno::Reference<drawing::XDrawPages> xDrawPages = xDrawPagesSupplier->getDrawPages();
+    CPPUNIT_ASSERT(xDrawPages.is());
+    uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPages->getByIndex(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xDrawPage.is());
+    // This failed with a lang.IllegalArgumentException.
+    xDrawPage->add(xShape);
+
+    // Verify that the graphic was actually consumed.
+    uno::Reference<graphic::XGraphic> xGraphic;
+    xShapeProperySet->getPropertyValue("Graphic") >>= xGraphic;
+    CPPUNIT_ASSERT(xGraphic.is());
+}
+
+/// Draw miscellaneous tests.
+
+void SdMiscTest::testTdf101242_ODF()
+{
+    // Loads a document, which has the visible/printable/locked information for layers
+    // only in the ODF attributes draw:display and draw:protected.
+    // The resaved document should still have the ODF attributes and in addition (at least in a
+    // transition period) the Visible, Printable and Locked items in settings.xml.
+
+    // loading and saving document
+    // "Load" is needed for to handle layers, simple "loadURL" does not work.
+    sd::DrawDocShellRef xDocShRef = Load(m_directories.getURLFromSrc("/sd/qa/unit/data/tdf101242_ODF.odg"), ODG);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load file.", xDocShRef.is());
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    save(xDocShRef.get(), getFormat(ODG), aTempFile );
+
+    // Verify, that the saved document still has the ODF attributes
+    xmlDocPtr pXmlDoc = parseExport(aTempFile, "styles.xml");
+    CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
+    const OString sPathStart("/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='measurelines' and @draw:display='printer']");
+
+    // Verify, that the saved document has got the items in settings.xml
+    xmlDocPtr pXmlDoc2 = parseExport(aTempFile, "settings.xml");
+    CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
+    const OString sPathStart2("/office:document-settings/office:settings/config:config-item-set[@config:name='ooo:view-settings']/config:config-item-map-indexed[@config:name='Views']/config:config-item-map-entry");
+    // Value is a bitfield with first Byte in order '* * * measurelines controls backgroundobjects background layout'
+    // The first three bits depend on initialization and may change. The values in file are Base64 encoded.
+    OUString sBase64;
+    uno::Sequence<sal_Int8> aDecodedSeq;
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item VisibleLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x0F, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F );
+
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='PrintableLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item PrintableLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x17, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F);
+
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item LockedLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x04, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F);
+
+    xDocShRef->DoClose();
+}
+
+void SdMiscTest::testTdf101242_settings()
+{
+    // Loads a document, which has the visible/printable/locked information for layers
+    // only in the items in settings.xml That is the case for all old documents.
+    // The resaved document should still have these items in settings.xml (at least in a
+    // transition period) and in addition the ODF attributes draw:display and draw:protected.
+
+    // loading and saving document
+    sd::DrawDocShellRef xDocShRef = Load(m_directories.getURLFromSrc("/sd/qa/unit/data/tdf101242_settings.odg"), ODG);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load file.", xDocShRef.is());
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    save(xDocShRef.get(), getFormat(ODG), aTempFile );
+
+    // Verify, that the saved document has the ODF attributes
+    xmlDocPtr pXmlDoc = parseExport(aTempFile, "styles.xml");
+    CPPUNIT_ASSERT_MESSAGE("Failed to get 'styles.xml'", pXmlDoc);
+    const OString sPathStart("/office:document-styles/office:master-styles/draw:layer-set/draw:layer");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='backgroundobjects' and @draw:protected='true']");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='controls' and @draw:display='screen']");
+    assertXPath(pXmlDoc, sPathStart + "[@draw:name='measurelines' and @draw:display='printer']");
+
+    // Verify, that the saved document still has the items in settings.xml
+    xmlDocPtr pXmlDoc2 = parseExport(aTempFile, "settings.xml");
+    CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc2);
+    const OString sPathStart2("/office:document-settings/office:settings/config:config-item-set[@config:name='ooo:view-settings']/config:config-item-map-indexed[@config:name='Views']/config:config-item-map-entry");
+    // Value is a bitfield with first Byte in order '* * * measurelines controls backgroundobjects background layout'
+    // The first three bits depend on initialization and may change. The values in file are Base64 encoded.
+    OUString sBase64;
+    uno::Sequence<sal_Int8> aDecodedSeq;
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='VisibleLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item VisibleLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x0F, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F );
+
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='PrintableLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item PrintableLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x17, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F);
+
+    sBase64 = getXPathContent(pXmlDoc2, sPathStart2 + "/config:config-item[@config:name='LockedLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item LockedLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x04, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0x1F);
+
+    xDocShRef->DoClose();
+}
+
+void SdMiscTest::testTdf119392()
+{
+    // Loads a document which has two user layers "V--" and "V-L". Inserts a new layer "-P-" between them.
+    // Checks, that the bitfields in the saved file have the bits in the correct order.
+
+    sd::DrawDocShellRef xDocShRef = Load(m_directories.getURLFromSrc("sd/qa/unit/data/tdf119392_InsertLayer.odg"), ODG);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load file.", xDocShRef.is());
+    // Insert layer "-P-", not visible, printable, not locked
+    SdrView* pView = xDocShRef -> GetViewShell()->GetView();
+    pView -> InsertNewLayer("-P-", 6); // 0..4 standard layer, 5 layer "V--"
+    SdrPageView* pPageView = pView -> GetSdrPageView();
+    pPageView -> SetLayerVisible("-P-", false);
+    pPageView -> SetLayerPrintable("-P-", true);
+    pPageView -> SetLayerLocked("-P-", false);
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    save(xDocShRef.get(), getFormat(ODG), aTempFile );
+
+    // Verify correct bit order in bitfield in the items in settings.xml
+    xmlDocPtr pXmlDoc = parseExport(aTempFile, "settings.xml");
+    CPPUNIT_ASSERT_MESSAGE("Failed to get 'settings.xml'", pXmlDoc);
+    const OString sPathStart("/office:document-settings/office:settings/config:config-item-set[@config:name='ooo:view-settings']/config:config-item-map-indexed[@config:name='Views']/config:config-item-map-entry");
+    // First Byte is in order 'V-L -P- V-- measurelines controls backgroundobjects background layout'
+    // Bits need to be: visible=10111111=0xbf=191 printable=01011111=0x5f=95 locked=10000000=0x80=128
+    // The values in file are Base64 encoded.
+    OUString sBase64;
+    uno::Sequence<sal_Int8> aDecodedSeq;
+    sBase64 = getXPathContent(pXmlDoc, sPathStart + "/config:config-item[@config:name='VisibleLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item VisibleLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0xbF, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0xff); // & 0xff forces unambiguous types for CPPUNIT_ASSERT_EQUAL
+
+    sBase64 = getXPathContent(pXmlDoc, sPathStart + "/config:config-item[@config:name='PrintableLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item PrintableLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x5f, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0xff);
+
+    sBase64 = getXPathContent(pXmlDoc, sPathStart + "/config:config-item[@config:name='LockedLayers']");
+    CPPUNIT_ASSERT_MESSAGE( "Item LockedLayers does not exists.", !sBase64.isEmpty());
+    comphelper::Base64::decode(aDecodedSeq, sBase64);
+    CPPUNIT_ASSERT_EQUAL( 0x80, static_cast<sal_uInt8>(aDecodedSeq[0]) & 0xff);
+
+    xDocShRef->DoClose();
+}
+
+void SdMiscTest::testTdf67248()
+{
+    // The document tdf67248.odg has been created with a German UI. It has a user layer named "Background".
+    // On opening the user layer must still exists. The error was, that it was merged into the standard
+    // layer "background".
+    sd::DrawDocShellRef xDocShRef = Load(m_directories.getURLFromSrc("sd/qa/unit/data/tdf67248.odg"), ODG);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load file.", xDocShRef.is());
+    SdrLayerAdmin& rLayerAdmin = xDocShRef->GetDoc()->GetLayerAdmin();
+    CPPUNIT_ASSERT_EQUAL( sal_uInt16(6), rLayerAdmin.GetLayerCount());
+
+    xDocShRef->DoClose();
+}
+
+void SdMiscTest::testTdf119956()
+{
+    sd::DrawDocShellRef xDocShRef = Load(m_directories.getURLFromSrc("sd/qa/unit/data/tdf119956.odg"), ODG);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load file.", xDocShRef.is());
+    sd::GraphicViewShell* pGraphicViewShell = static_cast<sd::GraphicViewShell*>(xDocShRef -> GetViewShell());
+    CPPUNIT_ASSERT(pGraphicViewShell);
+    sd::LayerTabBar* pLayerTabBar = pGraphicViewShell->GetLayerTabControl();
+    CPPUNIT_ASSERT(pLayerTabBar);
+
+    // Alt+Click sets a tab in edit mode, so that you can rename it.
+    // The error was, that Alt+Click on a tab, which was not the current tab, did not set the clicked tab
+    // as current tab. As a result, the entered text was applied to the wrong tab.
+
+    // The test document has the layer tabs "layout", "controls", "measurelines" and "Layer4" in this order
+    // The "pagePos" is 0, 1, 2, 3
+    // Make sure, that tab "layout" is the current tab.
+    MouseEvent aSyntheticMouseEvent;
+    if (pLayerTabBar->GetCurPagePos() != 0)
+    {
+        sal_uInt16 nIdOfTabPos0(pLayerTabBar->GetPageId(0));
+        tools::Rectangle aTabPos0Rect(pLayerTabBar->GetPageRect(nIdOfTabPos0));
+        aSyntheticMouseEvent = MouseEvent(aTabPos0Rect.Center(), 1, MouseEventModifiers::SYNTHETIC, MOUSE_LEFT, 0);
+        pLayerTabBar->MouseButtonDown(aSyntheticMouseEvent);
+    }
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(0), pLayerTabBar->GetCurPagePos());
+
+    // Alt+Click on tab "Layer4"
+    sal_uInt16 nIdOfTabPos3(pLayerTabBar->GetPageId(3));
+    tools::Rectangle aTabPos3Rect(pLayerTabBar->GetPageRect(nIdOfTabPos3));
+    aSyntheticMouseEvent = MouseEvent(aTabPos3Rect.Center(), 1, MouseEventModifiers::SYNTHETIC, MOUSE_LEFT, KEY_MOD2);
+    pLayerTabBar->MouseButtonDown(aSyntheticMouseEvent);
+
+    // Make sure, tab 3 is current tab now.
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(3), pLayerTabBar->GetCurPagePos());
+
+    xDocShRef->DoClose();
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdMiscTest);

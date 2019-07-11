@@ -22,6 +22,7 @@
 
 #include <boost/optional.hpp>
 
+#include <o3tl/safeint.hxx>
 #include <oox/vml/vmlshape.hxx>
 #include <vcl/wmf.hxx>
 #include <vcl/virdev.hxx>
@@ -52,6 +53,7 @@
 #include <com/sun/star/security/XDocumentDigitalSignatures.hpp>
 #include <rtl/math.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <svx/svdtrans.hxx>
 #include <oox/drawingml/shapepropertymap.hxx>
 #include <oox/helper/graphichelper.hxx>
@@ -201,8 +203,14 @@ awt::Rectangle ShapeType::getAbsRectangle() const
     if ( nHeight == 0 )
         nHeight = 1;
 
-    sal_Int32 nLeft = ConversionHelper::decodeMeasureToHmm( rGraphicHelper, maTypeModel.maLeft, 0, true, true )
-        + ConversionHelper::decodeMeasureToHmm( rGraphicHelper, maTypeModel.maMarginLeft, 0, true, true );
+    sal_Int32 nLeft;
+    if (o3tl::checked_add<sal_Int32>(ConversionHelper::decodeMeasureToHmm(rGraphicHelper, maTypeModel.maLeft, 0, true, true),
+                                     ConversionHelper::decodeMeasureToHmm(rGraphicHelper, maTypeModel.maMarginLeft, 0, true, true),
+                                     nLeft))
+    {
+        SAL_WARN("oox", "overflow in addition");
+        nLeft = 0;
+    }
     if (nLeft == 0 && maTypeModel.maPosition == "absolute")
         nLeft = 1;
 
@@ -358,7 +366,8 @@ Reference< XShape > ShapeBase::convertAndInsert( const Reference< XShapes >& rxS
                     sal_Int32 seqPos = sLinkChainName.indexOf("_s",idPos);
                     if (idPos < seqPos)
                     {
-                        id = sLinkChainName.copy(idPos+2,seqPos-idPos+2).toInt32();
+                        auto idPosEnd = idPos+2;
+                        id = sLinkChainName.copy(idPosEnd, seqPos - idPosEnd).toInt32();
                         seq = sLinkChainName.copy(seqPos+2).toInt32();
                     }
                 }
@@ -516,7 +525,8 @@ void ShapeBase::convertShapeProperties( const Reference< XShape >& rxShape ) con
         // And no LineColor property; individual borders can have colors and widths
         boost::optional<sal_Int32> oLineWidth;
         if (maTypeModel.maStrokeModel.moWeight.has())
-            oLineWidth.reset(ConversionHelper::decodeMeasureToHmm(rGraphicHelper, maTypeModel.maStrokeModel.moWeight.get(), 0, false, false));
+            oLineWidth = ConversionHelper::decodeMeasureToHmm(
+                rGraphicHelper, maTypeModel.maStrokeModel.moWeight.get(), 0, false, false);
         if (aPropMap.hasProperty(PROP_LineColor))
         {
             uno::Reference<beans::XPropertySet> xPropertySet(rxShape, uno::UNO_QUERY);
@@ -546,7 +556,7 @@ SimpleShape::SimpleShape( Drawing& rDrawing, const OUString& rService ) :
 {
 }
 
-void lcl_setSurround(PropertySet& rPropSet, const ShapeTypeModel& rTypeModel, const GraphicHelper& rGraphicHelper)
+static void lcl_setSurround(PropertySet& rPropSet, const ShapeTypeModel& rTypeModel, const GraphicHelper& rGraphicHelper)
 {
     OUString aWrapType = rTypeModel.moWrapType.get();
 
@@ -571,7 +581,7 @@ void lcl_setSurround(PropertySet& rPropSet, const ShapeTypeModel& rTypeModel, co
     rPropSet.setProperty(PROP_Surround, static_cast<sal_Int32>(nSurround));
 }
 
-void lcl_SetAnchorType(PropertySet& rPropSet, const ShapeTypeModel& rTypeModel, const GraphicHelper& rGraphicHelper)
+static void lcl_SetAnchorType(PropertySet& rPropSet, const ShapeTypeModel& rTypeModel, const GraphicHelper& rGraphicHelper)
 {
     if ( rTypeModel.maPosition == "absolute" )
     {
@@ -650,7 +660,7 @@ Reference< XShape > SimpleShape::implConvertAndInsert( const Reference< XShapes 
     boost::optional<sal_Int32> oRotation;
     bool bFlipX = false, bFlipY = false;
     if (!maTypeModel.maRotation.isEmpty())
-        oRotation.reset(ConversionHelper::decodeRotation(maTypeModel.maRotation));
+        oRotation = ConversionHelper::decodeRotation(maTypeModel.maRotation);
     if (!maTypeModel.maFlip.isEmpty())
     {
         if (maTypeModel.maFlip == "x")
@@ -1015,7 +1025,7 @@ Reference< XShape > BezierShape::implConvertAndInsert( const Reference< XShapes 
 {
     // If we have an 'x' in the last part of the path it means it is closed...
     sal_Int32 nPos = maShapeModel.maVmlPath.lastIndexOf(',');
-    if ( nPos != -1 && maShapeModel.maVmlPath.indexOf(nPos, 'x') != -1 )
+    if ( nPos != -1 && maShapeModel.maVmlPath.indexOf('x', nPos) != -1 )
     {
         const_cast<BezierShape*>( this )->setService( "com.sun.star.drawing.ClosedBezierShape" );
     }
@@ -1248,6 +1258,7 @@ Reference< XShape > ComplexShape::implConvertAndInsert( const Reference< XShapes
     if( getShapeModel().mbIsSignatureLine )
     {
         uno::Reference<graphic::XGraphic> xGraphic;
+        bool bIsSigned(false);
         try
         {
             // Get the document signatures
@@ -1271,6 +1282,7 @@ Reference< XShape > ComplexShape::implConvertAndInsert( const Reference< XShapes
                 // then the signature line is not digitally signed.
                 if (xSignatureInfo[i].SignatureLineId == getShapeModel().maSignatureId)
                 {
+                    bIsSigned = true;
                     if (xSignatureInfo[i].SignatureIsValid)
                     {
                         // Signature is valid, use the 'valid' image
@@ -1330,6 +1342,7 @@ Reference< XShape > ComplexShape::implConvertAndInsert( const Reference< XShapes
         xPropertySet->setPropertyValue(
             "SignatureLineCanAddComment",
             uno::makeAny(getShapeModel().mbSignatureLineCanAddComment));
+        xPropertySet->setPropertyValue("SignatureLineIsSigned", uno::makeAny(bIsSigned));
 
         if (!aGraphicPath.isEmpty())
         {

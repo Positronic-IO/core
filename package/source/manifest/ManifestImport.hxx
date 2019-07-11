@@ -36,8 +36,8 @@ typedef std::unordered_map< OUString, OUString > StringHashMap;
 
 struct ManifestScopeEntry
 {
-    OUString m_aConvertedName;
-    StringHashMap   m_aNamespaces;
+    OUString const m_aConvertedName;
+    StringHashMap const m_aNamespaces;
     bool            m_bValid;
 
     ManifestScopeEntry( const OUString& aConvertedName, const StringHashMap& aNamespaces )
@@ -61,67 +61,6 @@ class ManifestImport final : public cppu::WeakImplHelper < css::xml::sax::XDocum
     sal_Int32 nDerivedKeySize;
     ::std::vector < css::uno::Sequence < css::beans::PropertyValue > > & rManVector;
 
-    const OUString sFileEntryElement;
-    const OUString sEncryptionDataElement;
-    const OUString sAlgorithmElement;
-    const OUString sStartKeyAlgElement;
-    const OUString sKeyDerivationElement;
-
-    const OUString sMediaTypeAttribute;
-    const OUString sVersionAttribute;
-    const OUString sFullPathAttribute;
-    const OUString sSizeAttribute;
-    const OUString sSaltAttribute;
-    const OUString sInitialisationVectorAttribute;
-    const OUString sIterationCountAttribute;
-    const OUString sKeySizeAttribute;
-    const OUString sAlgorithmNameAttribute;
-    const OUString sStartKeyAlgNameAttribute;
-    const OUString sKeyDerivationNameAttribute;
-    const OUString sChecksumAttribute;
-    const OUString sChecksumTypeAttribute;
-
-    const OUString sKeyInfoElement;
-    const OUString sManifestKeyInfoElement;
-    const OUString sEncryptedKeyElement;
-    const OUString sEncryptionMethodElement;
-    const OUString sPgpDataElement;
-    const OUString sPgpKeyIDElement;
-    const OUString sPGPKeyPacketElement;
-    const OUString sAlgorithmAttribute;
-    const OUString sCipherDataElement;
-    const OUString sCipherValueElement;
-
-    const OUString sFullPathProperty;
-    const OUString sMediaTypeProperty;
-    const OUString sVersionProperty;
-    const OUString sIterationCountProperty;
-    const OUString sDerivedKeySizeProperty;
-    const OUString sSaltProperty;
-    const OUString sInitialisationVectorProperty;
-    const OUString sSizeProperty;
-    const OUString sDigestProperty;
-    const OUString sEncryptionAlgProperty;
-    const OUString sStartKeyAlgProperty;
-    const OUString sDigestAlgProperty;
-
-    const OUString sSHA256_URL_ODF12;
-    const OUString sSHA256_URL;
-    const OUString sSHA1_Name;
-    const OUString sSHA1_URL;
-
-    const OUString sSHA256_1k_URL;
-    const OUString sSHA1_1k_Name;
-    const OUString sSHA1_1k_URL;
-
-    const OUString sBlowfish_Name;
-    const OUString sBlowfish_URL;
-    const OUString sAES128_URL;
-    const OUString sAES192_URL;
-    const OUString sAES256_URL;
-
-    const OUString sPBKDF2_Name;
-    const OUString sPBKDF2_URL;
 
     OUString PushNameAndNamespaces( const OUString& aName,
                                            const css::uno::Reference< css::xml::sax::XAttributeList >& xAttribs,
@@ -152,12 +91,8 @@ private:
     void doKeyDerivation(StringHashMap &rConvertedAttribs);
     /// @throws css::uno::RuntimeException
     void doStartKeyAlg(StringHashMap &rConvertedAttribs);
-    void doKeyInfoEntry(StringHashMap &);
     void doEncryptedKey(StringHashMap &);
-    void doEncryptionMethod(StringHashMap &);
-    void doEncryptedKeyInfo(StringHashMap &);
-    void doEncryptedCipherData(StringHashMap &);
-    void doEncryptedPgpData(StringHashMap &);
+    void doEncryptionMethod(StringHashMap &, const OUString &);
     void doEncryptedCipherValue();
     void doEncryptedKeyId();
     void doEncryptedKeyPacket();

@@ -22,11 +22,11 @@
 
 #include <vector>
 #include <memory>
-#include "ftools.hxx"
-#include <scdllapi.h>
+#include <rtl/ustring.hxx>
 
 class SfxObjectShell;
 class ScProgress;
+class SvStream;
 
 const sal_Int32 SCF_INV_SEGMENT = -1;
 
@@ -155,7 +155,7 @@ private:
         typedef ::std::unique_ptr< ScfProgressBar > ScfProgressBarPtr;
 
         ScfProgressBarPtr   mxProgress;     /// Pointer to sub progress bar for this segment.
-        std::size_t         mnSize;         /// Size of this segment.
+        std::size_t const   mnSize;         /// Size of this segment.
         std::size_t         mnPos;          /// Current position of this segment.
 
         explicit            ScfProgressSegment( std::size_t nSize );
@@ -166,7 +166,7 @@ private:
     typedef std::vector< std::unique_ptr<ScfProgressSegment> > ScfSegmentList;
 
     ScfSegmentList      maSegments;         /// List of progress segments.
-    OUString            maText;             /// UI string for system progress.
+    OUString const      maText;             /// UI string for system progress.
 
     ScProgressPtr       mxSysProgress;      /// System progress bar.
     SfxObjectShell*     mpDocShell;         /// The document shell for the progress bar.

@@ -16,19 +16,23 @@
 
 struct FixedTexture;
 
-class VCL_PLUGIN_PUBLIC FixedTextureAtlasManager
+class FixedTextureAtlasManager final
 {
     std::vector<std::unique_ptr<FixedTexture>> maFixedTextures;
 
-    int mWidthFactor;
-    int mHeightFactor;
-    int mSubTextureSize;
+    int const mWidthFactor;
+    int const mHeightFactor;
+    int const mSubTextureSize;
 
     void CreateNewTexture();
+
+    FixedTextureAtlasManager( const FixedTextureAtlasManager& ) = delete;
+    FixedTextureAtlasManager& operator=( const FixedTextureAtlasManager& ) = delete;
 
 public:
     FixedTextureAtlasManager(int nWidthFactor, int nHeightFactor, int nTextureSize);
     ~FixedTextureAtlasManager();
+
     OpenGLTexture InsertBuffer(int nWidth, int nHeight, int nFormat, int nType, sal_uInt8 const * pData);
     OpenGLTexture Reserve(int nWidth, int nHeight);
 

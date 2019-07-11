@@ -26,11 +26,11 @@ using namespace com::sun::star::lang;
 
 namespace i18npool {
 
-OUString SAL_CALL
-ignoreSize_ja_JP::folding( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount, Sequence< sal_Int32 >& offset )
+OUString
+ignoreSize_ja_JP::foldingImpl( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount, Sequence< sal_Int32 >& offset, bool useOffset )
 {
     rtl::Reference< smallToLarge_ja_JP > t1(new smallToLarge_ja_JP);
-    return t1->transliterate(inStr, startPos, nCount, offset);
+    return t1->transliterateImpl(inStr, startPos, nCount, offset, useOffset);
 }
 
 
@@ -40,7 +40,7 @@ ignoreSize_ja_JP::transliterateRange( const OUString& str1, const OUString& str2
     rtl::Reference< smallToLarge_ja_JP > t1(new smallToLarge_ja_JP);
     rtl::Reference< largeToSmall_ja_JP > t2(new largeToSmall_ja_JP);
 
-    return transliteration_Ignore::transliterateRange(str1, str2, *t1.get(), *t2.get());
+    return transliteration_Ignore::transliterateRange(str1, str2, *t1, *t2);
 }
 
 sal_Unicode SAL_CALL

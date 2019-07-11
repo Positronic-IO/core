@@ -11,11 +11,13 @@
 #include <orcusinterface.hxx>
 #include <orcusxml.hxx>
 #include <document.hxx>
+#include <tokenarray.hxx>
 
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
 #include <ucbhelper/content.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <orcus/spreadsheet/import_interface.hpp>
 #include <orcus/xml_structure_tree.hpp>
@@ -23,6 +25,7 @@
 #include <orcus/orcus_xml.hpp>
 #include <orcus/global.hpp>
 #include <orcus/sax_parser_base.hpp>
+#include <orcus/stream.hpp>
 
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
 #include <comphelper/processfactory.hxx>
@@ -243,7 +246,7 @@ public:
 
 void ScOrcusXMLContextImpl::importXML(const ScOrcusImportXMLParam& rParam)
 {
-    ScOrcusFactory aFactory(mrDoc);
+    ScOrcusFactory aFactory(mrDoc, true);
     OString aSysPath = ScOrcusFiltersImpl::toSystemPath(maPath);
     const char* path = aSysPath.getStr();
     try
@@ -288,7 +291,10 @@ void ScOrcusXMLContextImpl::importXML(const ScOrcusImportXMLParam& rParam)
             }
         }
 
-        filter.read_file(path);
+        std::string content = orcus::load_file_content(path);
+        filter.read_stream(content.data(), content.size());
+
+        aFactory.finalize();
     }
     catch (const std::exception&)
     {

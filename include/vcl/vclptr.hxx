@@ -115,6 +115,10 @@ public:
         assert((!m_rInnerRef.get() || m_rInnerRef->isDisposed() || m_rInnerRef->getRefCount() > 1)
                 && "someone forgot to call dispose()");
     }
+    VclPtr(VclPtr const &) = default;
+    VclPtr(VclPtr &&) = default;
+    VclPtr & operator =(VclPtr const &) = default;
+    VclPtr & operator =(VclPtr &&) = default;
 #endif
 
     /**
@@ -126,7 +130,7 @@ public:
      *
      * @tparam reference_type must be a subclass of vcl::Window
      */
-    template<typename... Arg> static SAL_WARN_UNUSED_RESULT VclPtr< reference_type > Create(Arg &&... arg)
+    template<typename... Arg> SAL_WARN_UNUSED_RESULT static VclPtr< reference_type > Create(Arg &&... arg)
     {
         return VclPtr< reference_type >( new reference_type(std::forward<Arg>(arg)...), SAL_NO_ACQUIRE );
     }

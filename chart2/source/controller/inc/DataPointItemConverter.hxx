@@ -21,14 +21,16 @@
 
 #include "ItemConverter.hxx"
 #include "GraphicPropertyItemConverter.hxx"
+#include <com/sun/star/uno/Sequence.h>
 
-#include <com/sun/star/chart2/XDataSeries.hpp>
-#include <com/sun/star/awt/Size.hpp>
-#include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
 #include <tools/color.hxx>
 
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace awt { struct Size; } } } }
+namespace com { namespace sun { namespace star { namespace chart2 { class XDataSeries; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 class SdrModel;
 
@@ -67,7 +69,7 @@ protected:
     virtual bool ApplySpecialItem( sal_uInt16 nWhichId, const SfxItemSet & rItemSet ) override;
 
 private:
-    std::vector< ItemConverter * >    m_aConverters;
+    std::vector< std::unique_ptr<ItemConverter> > m_aConverters;
     bool                                m_bDataSeries;
     bool                                m_bOverwriteLabelsForAttributedDataPointsAlso;
     bool                                m_bUseSpecialFillColor;

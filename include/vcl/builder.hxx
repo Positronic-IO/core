@@ -11,7 +11,6 @@
 #define INCLUDED_VCL_BUILDER_HXX
 
 #include <typeinfo>
-#include <osl/module.hxx>
 #include <sal/log.hxx>
 #include <unotools/resmgr.hxx>
 #include <tools/fldunit.hxx>
@@ -23,18 +22,15 @@
 
 #include <memory>
 #include <map>
-#include <set>
-#include <stack>
 #include <vector>
 #ifdef check
 #  //some problem with MacOSX and a check define
 #  undef check
 #endif
 
-#include <com/sun/star/frame/XFrame.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
-
 class Button;
+class ComboBox;
+class FormattedField;
 class ListBox;
 class MessageDialog;
 class NumericFormatter;
@@ -42,12 +38,25 @@ class PopupMenu;
 class SalInstanceBuilder;
 class ScreenshotTest;
 class ScrollBar;
+class SvTabListBox;
 class Slider;
 class DateField;
 class TimeField;
 class VclExpander;
 class VclMultiLineEdit;
 namespace xmlreader { class XmlReader; }
+namespace com { namespace sun { namespace star { namespace frame { class XFrame; } } } }
+
+struct ComboBoxTextItem
+{
+    OUString m_sItem;
+    OString m_sId;
+    ComboBoxTextItem(const OUString& rItem, const OString& rId)
+        : m_sItem(rItem)
+        , m_sId(rId)
+    {
+    }
+};
 
 class VCL_DLLPUBLIC VclBuilder
 {
@@ -103,6 +112,9 @@ private:
     VclBuilder(const VclBuilder&) = delete;
     VclBuilder& operator=(const VclBuilder&) = delete;
 
+    // owner for ListBox/ComboBox UserData
+    std::vector<std::unique_ptr<OUString>> m_aUserData;
+
     //If the toplevel window has any properties which need to be set on it,
     //but the toplevel is the owner of the builder, then its ctor
     //has not been completed during the building, so properties for it
@@ -137,7 +149,7 @@ private:
 
     struct MenuAndId
     {
-        OString m_sID;
+        OString const m_sID;
         VclPtr<PopupMenu> m_pMenu;
         MenuAndId(const OString &rId, PopupMenu *pMenu);
         ~MenuAndId();
@@ -146,8 +158,8 @@ private:
 
     struct StringPair
     {
-        OString m_sID;
-        OString m_sValue;
+        OString const m_sID;
+        OString const m_sValue;
         StringPair(const OString &rId, const OString &rValue)
             : m_sID(rId)
             , m_sValue(rValue)
@@ -170,9 +182,9 @@ private:
 
     struct ButtonImageWidgetMap
     {
-        OString m_sID;
-        OUString m_sValue;
-        bool m_bRadio;
+        OString const m_sID;
+        OUString const m_sValue;
+        bool const m_bRadio;
         ButtonImageWidgetMap(const OString &rId, const OUString &rValue, bool bRadio)
             : m_sID(rId)
             , m_sValue(rValue)
@@ -188,9 +200,9 @@ private:
 
     struct ComboBoxModelMap
     {
-        OString m_sID;
-        OUString m_sValue;
-        sal_Int32 m_nActiveId;
+        OString const m_sID;
+        OUString const m_sValue;
+        sal_Int32 const m_nActiveId;
         ComboBoxModelMap(const OString &rId, const OUString &rValue, sal_Int32 nActiveId)
             : m_sID(rId)
             , m_sValue(rValue)
@@ -206,7 +218,9 @@ private:
     };
 
     const ListStore* get_model_by_name(const OString& sID) const;
-    static void     mungeModel(ListBox &rTarget, const ListStore &rStore, sal_uInt16 nActiveId);
+    void     mungeModel(ListBox &rTarget, const ListStore &rStore, sal_uInt16 nActiveId);
+    void     mungeModel(ComboBox &rTarget, const ListStore &rStore, sal_uInt16 nActiveId);
+    void     mungeModel(SvTabListBox &rTarget, const ListStore &rStore, sal_uInt16 nActiveId);
 
     typedef stringmap TextBuffer;
     const TextBuffer* get_buffer_by_name(const OString& sID) const;
@@ -217,6 +231,7 @@ private:
     const Adjustment* get_adjustment_by_name(const OString& sID) const;
 
     static void     mungeAdjustment(NumericFormatter &rTarget, const Adjustment &rAdjustment);
+    static void     mungeAdjustment(FormattedField &rTarget, const Adjustment &rAdjustment);
     static void     mungeAdjustment(DateField &rTarget, const Adjustment &rAdjustment);
     static void     mungeAdjustment(TimeField &rTarget, const Adjustment &rAdjustment);
     static void     mungeAdjustment(ScrollBar &rTarget, const Adjustment &rAdjustment);
@@ -253,6 +268,7 @@ private:
         std::map<OString, TextBuffer> m_aTextBuffers;
 
         std::vector<WidgetAdjustmentMap> m_aNumericFormatterAdjustmentMaps;
+        std::vector<WidgetAdjustmentMap> m_aFormattedFormatterAdjustmentMaps;
         std::vector<WidgetAdjustmentMap> m_aTimeFormatterAdjustmentMaps;
         std::vector<WidgetAdjustmentMap> m_aDateFormatterAdjustmentMaps;
         std::vector<WidgetAdjustmentMap> m_aScrollAdjustmentMaps;
@@ -286,12 +302,12 @@ private:
 
     OString     m_sID;
     OString     m_sHelpRoot;
-    ResHookProc m_pStringReplace;
+    ResHookProc const m_pStringReplace;
     VclPtr<vcl::Window> m_pParent;
     bool        m_bToplevelHasDeferredInit;
     bool        m_bToplevelHasDeferredProperties;
     bool        m_bToplevelParentFound;
-    bool        m_bLegacy;
+    bool const        m_bLegacy;
     std::unique_ptr<ParserState> m_pParserState;
 
     vcl::Window *get_by_name(const OString& sID);
@@ -306,7 +322,7 @@ private:
         bool    operator()(const vcl::Window *pA, const vcl::Window *pB) const;
 
     private:
-        VclBuilder *m_pBuilder;
+        VclBuilder * const m_pBuilder;
     };
 
     /// XFrame to be able to extract labels and other properties of the UNO commands (like of .uno:Bold).
@@ -324,6 +340,7 @@ private:
                     stringmap &rVec);
 
     void        connectNumericFormatterAdjustment(const OString &id, const OUString &rAdjustment);
+    void        connectFormattedFormatterAdjustment(const OString &id, const OUString &rAdjustment);
     void        connectTimeFormatterAdjustment(const OString &id, const OUString &rAdjustment);
     void        connectDateFormatterAdjustment(const OString &id, const OUString &rAdjustment);
 
@@ -343,7 +360,8 @@ private:
     void        applyPackingProperty(vcl::Window *pCurrent, vcl::Window *pParent, xmlreader::XmlReader &reader);
     void        collectProperty(xmlreader::XmlReader &reader, stringmap &rVec) const;
     static void collectPangoAttribute(xmlreader::XmlReader &reader, stringmap &rMap);
-    static void collectAtkAttribute(xmlreader::XmlReader &reader, stringmap &rMap);
+    static void collectAtkRelationAttribute(xmlreader::XmlReader &reader, stringmap &rMap);
+    static void collectAtkRoleAttribute(xmlreader::XmlReader &reader, stringmap &rMap);
     static void collectAccelerator(xmlreader::XmlReader &reader, accelmap &rMap);
 
     void        insertMenuObject(
@@ -357,11 +375,11 @@ private:
     void        handleMenuChild(PopupMenu *pParent, xmlreader::XmlReader &reader);
     void        handleMenuObject(PopupMenu *pParent, xmlreader::XmlReader &reader);
 
-    void        handleListStore(xmlreader::XmlReader &reader, const OString &rID);
+    void        handleListStore(xmlreader::XmlReader &reader, const OString &rID, const OString &rClass);
     void        handleRow(xmlreader::XmlReader &reader, const OString &rID);
     void        handleTabChild(vcl::Window *pParent, xmlreader::XmlReader &reader);
     void        handleMenu(xmlreader::XmlReader &reader, const OString &rID);
-    std::vector<OUString> handleItems(xmlreader::XmlReader &reader) const;
+    std::vector<ComboBoxTextItem> handleItems(xmlreader::XmlReader &reader) const;
 
     void        handleSizeGroup(xmlreader::XmlReader &reader);
 
@@ -400,6 +418,9 @@ namespace BuilderUtils
     //Helpers to retrofit all the existing code to the builder
     VCL_DLLPUBLIC void reorderWithinParent(std::vector< vcl::Window*>& rChilds, bool bIsButtonBox);
     VCL_DLLPUBLIC void reorderWithinParent(vcl::Window &rWindow, sal_uInt16 nNewPosition);
+
+    //Convert an accessibility role name to accessibility role number
+    VCL_DLLPUBLIC sal_Int16 getRoleFromName(const OString& roleName);
 }
 
 template <typename T>

@@ -20,9 +20,12 @@
 #ifndef INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSVISIBLEAREAMANAGER_HXX
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSVISIBLEAREAMANAGER_HXX
 
-#include <controller/SlsAnimator.hxx>
 #include <model/SlsSharedPageDescriptor.hxx>
 #include <boost/optional.hpp>
+#include <tools/gen.hxx>
+#include <vector>
+
+namespace sd { namespace slidesorter { class SlideSorter; } }
 
 namespace sd { namespace slidesorter { namespace controller {
 
@@ -73,12 +76,7 @@ private:
     */
     ::std::vector<::tools::Rectangle> maVisibleRequests;
 
-    /** Animation id for a scroll animation that sets the top
-        and left of the visible area to maRequestedVisibleTopLeft.
-    */
-    Animator::AnimationId mnScrollAnimationId;
     Point maRequestedVisibleTopLeft;
-    Animator::AnimationMode meRequestedAnimationMode;
     bool mbIsCurrentSlideTrackingActive;
     int  mnDisableCount;
 

@@ -43,7 +43,6 @@ BaseContainerControl::BaseContainerControl( const Reference< XComponentContext >
 
 BaseContainerControl::~BaseContainerControl()
 {
-    impl_cleanMemory();
 }
 
 //  XInterface
@@ -124,10 +123,6 @@ void SAL_CALL BaseContainerControl::createPeer( const   Reference< XToolkit >&  
         {
             seqControlList.getArray()[n]->createPeer( xToolkit, getPeer() );
         }
-
-        // activate new tab order
-        impl_activateTabControllers();
-
     }
 }
 
@@ -207,18 +202,17 @@ void SAL_CALL BaseContainerControl::addControl ( const OUString& rName, const Re
     pNewControl->xControl   = rControl;
 
     // and insert in list
-    maControlInfoList.push_back( pNewControl );
+    maControlInfoList.emplace_back( pNewControl );
 
     // initialize new control
     pNewControl->xControl->setContext       ( static_cast<OWeakObject*>(this)    );
     pNewControl->xControl->addEventListener ( static_cast< XEventListener* >( static_cast< XWindowListener* >( this ) ) );
 
-    // when container has a peer ...
+    // when container has a peer...
     if (getPeer().is())
     {
-        // .. then create a peer on child
+        // ... then create a peer on child
         pNewControl->xControl->createPeer ( getPeer()->getToolkit(), getPeer() );
-        impl_activateTabControllers ();
     }
 
     // Send message to all listener
@@ -257,7 +251,7 @@ void SAL_CALL BaseContainerControl::removeControl ( const Reference< XControl > 
         for ( size_t n = 0; n < nControls; n++ )
         {
             // Search for right control
-            IMPL_ControlInfo* pControl = maControlInfoList[ n ];
+            IMPL_ControlInfo* pControl = maControlInfoList[ n ].get();
             if ( rControl == pControl->xControl )
             {
                 //.is it found ... remove listener from control
@@ -265,10 +259,7 @@ void SAL_CALL BaseContainerControl::removeControl ( const Reference< XControl > 
                 pControl->xControl->setContext          ( Reference< XInterface >  ()   );
 
                 // ... free memory
-                delete pControl;
-                ::std::vector<IMPL_ControlInfo*>::iterator itr = maControlInfoList.begin();
-                ::std::advance(itr, n);
-                maControlInfoList.erase(itr);
+                maControlInfoList.erase(maControlInfoList.begin() + n);
 
                 // Send message to all other listener
                 OInterfaceContainerHelper * pInterfaceContainer = m_aListeners.getContainer( cppu::UnoType<XContainerListener>::get());
@@ -319,7 +310,7 @@ Reference< XControl > SAL_CALL BaseContainerControl::getControl ( const OUString
     // Search for right control
     for( size_t nCount = 0; nCount < nControls; ++nCount )
     {
-        IMPL_ControlInfo* pSearchControl = maControlInfoList[ nCount ];
+        IMPL_ControlInfo* pSearchControl = maControlInfoList[ nCount ].get();
 
         if ( pSearchControl->sName == rName )
         {
@@ -348,7 +339,7 @@ Sequence< Reference< XControl > > SAL_CALL BaseContainerControl::getControls ()
     // Copy controls to sequence
     for( nCount = 0; nCount < nControls; ++nCount )
     {
-        IMPL_ControlInfo* pCopyControl = maControlInfoList[ nCount ];
+        IMPL_ControlInfo* pCopyControl = maControlInfoList[ nCount ].get();
         pDestination [ nCount ] = pCopyControl->xControl;
     }
 
@@ -373,20 +364,16 @@ void SAL_CALL BaseContainerControl::setVisible ( sal_Bool bVisible )
 
 //  protected method
 
-WindowDescriptor* BaseContainerControl::impl_getWindowDescriptor ( const Reference< XWindowPeer > & rParentPeer )
+WindowDescriptor BaseContainerControl::impl_getWindowDescriptor ( const Reference< XWindowPeer > & rParentPeer )
 {
-    // - used from "createPeer()" to set the values of a WindowDescriptor!!!
-    // - if you will change the descriptor-values, you must override this virtual function
-    // - the caller must release the memory for this dynamical descriptor!!!
+    WindowDescriptor aDescriptor;
 
-    WindowDescriptor    *   aDescriptor = new WindowDescriptor;
-
-    aDescriptor->Type               = WindowClass_CONTAINER;
-    aDescriptor->WindowServiceName  = "window";
-    aDescriptor->ParentIndex        = -1;
-    aDescriptor->Parent             = rParentPeer;
-    aDescriptor->Bounds             = getPosSize ();
-    aDescriptor->WindowAttributes   = 0;
+    aDescriptor.Type               = WindowClass_CONTAINER;
+    aDescriptor.WindowServiceName  = "window";
+    aDescriptor.ParentIndex        = -1;
+    aDescriptor.Parent             = rParentPeer;
+    aDescriptor.Bounds             = getPosSize ();
+    aDescriptor.WindowAttributes   = 0;
 
     return aDescriptor;
 }
@@ -395,46 +382,6 @@ WindowDescriptor* BaseContainerControl::impl_getWindowDescriptor ( const Referen
 
 void BaseContainerControl::impl_paint ( sal_Int32 /*nX*/, sal_Int32 /*nY*/, const Reference< XGraphics > & /*rGraphics*/ )
 {
-}
-
-//  private method
-
-void BaseContainerControl::impl_activateTabControllers ()
-{
-    // Ready for multithreading
-    MutexGuard aGuard (m_aMutex);
-
-    sal_uInt32  nMaxCount   =   m_xTabControllerList.getLength ();
-    sal_uInt32  nCount      =   0;
-
-    for ( nCount = 0; nCount < nMaxCount; ++nCount )
-    {
-         m_xTabControllerList.getArray () [nCount]->setContainer        ( this  );
-         m_xTabControllerList.getArray () [nCount]->activateTabOrder    (       );
-    }
-}
-
-//  private method
-
-void BaseContainerControl::impl_cleanMemory ()
-{
-    // Get count of listitems.
-    size_t  nMaxCount   = maControlInfoList.size();
-    size_t  nCount      = 0;
-
-    // Delete all items.
-    for ( nCount = 0; nCount < nMaxCount; ++nCount )
-    {
-        // Delete every time first element of list!
-        // We count from 0 to MAX, where "MAX=count of items" BEFORE we delete some elements!
-        // If we use "GetObject ( nCount )" ... it can be, that we have an index greater then count of current elements!
-
-        IMPL_ControlInfo* pSearchControl = maControlInfoList[ nCount ];
-        delete pSearchControl;
-    }
-
-    // Delete list himself.
-    maControlInfoList.clear ();
 }
 
 } // namespace unocontrols

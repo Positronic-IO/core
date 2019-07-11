@@ -34,14 +34,14 @@ class SW_DLLPUBLIC SwGlossaryHdl
 
     SwGlossaries&   rStatGlossaries;
     OUString        aCurGrp;
-    SfxViewFrame*   pViewFrame;
+    SfxViewFrame* const pViewFrame;
     SwWrtShell*     pWrtShell;
     std::unique_ptr<SwTextBlocks>
                     pCurGrp;
 
-    SAL_DLLPRIVATE bool  Expand( const OUString& rShortName,
+    SAL_DLLPRIVATE bool  Expand(weld::Window* pParent, const OUString& rShortName,
                     SwGlossaries* pGlossaries,
-                    SwTextBlocks *pGlossary );
+                    std::unique_ptr<SwTextBlocks> pGlossary );
 
 public:
     void        GlossaryDlg();
@@ -70,7 +70,7 @@ public:
     bool    DelGlossary(const OUString&);
     bool    CopyToClipboard(SwWrtShell& rSh, const OUString& rShortName);
 
-    bool    ExpandGlossary();
+    bool    ExpandGlossary(weld::Window* pParent);
     bool    InsertGlossary(const OUString &rName);
 
     void    SetMacros(const OUString& rName,

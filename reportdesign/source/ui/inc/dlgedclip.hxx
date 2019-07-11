@@ -20,7 +20,7 @@
 #ifndef INCLUDED_REPORTDESIGN_SOURCE_UI_INC_DLGEDCLIP_HXX
 #define INCLUDED_REPORTDESIGN_SOURCE_UI_INC_DLGEDCLIP_HXX
 
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <com/sun/star/beans/NamedValue.hpp>
 
 namespace rptui
@@ -72,7 +72,7 @@ protected:
     virtual void        AddSupportedFormats() override;
     virtual bool GetData( const css::datatransfer::DataFlavor& rFlavor, const OUString& rDestDoc ) override;
 private:
-    TSectionElements    m_aCopyElements;
+    TSectionElements const m_aCopyElements;
 };
 }
 #endif // INCLUDED_REPORTDESIGN_SOURCE_UI_INC_DLGEDCLIP_HXX

@@ -27,8 +27,6 @@
 #include <com/sun/star/container/XIndexAccess.hpp>
 
 #include <svtools/valueset.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
 #include <svx/sidebar/PanelLayout.hxx>
 
@@ -98,15 +96,12 @@ private:
     css::uno::Reference< css::beans::XPropertySet > mxSelectedTable;
     css::uno::Reference< css::drawing::XDrawView > mxView;
     css::uno::Reference< css::container::XIndexAccess > mxTableFamily;
-
-    bool mbStyleSelected;
-    bool mbOptionsChanged;
 };
 
 class TableDesignPane : public PanelLayout
 {
 private:
-    TableDesignWidget aImpl;
+    TableDesignWidget const aImpl;
 public:
     TableDesignPane( vcl::Window* pParent, ViewShellBase& rBase )
         : PanelLayout(pParent, "TableDesignPanel",

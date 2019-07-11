@@ -21,6 +21,8 @@
 #include <TokenWriter.hxx>
 #include <com/sun/star/sdbc/XColumnLocate.hpp>
 #include <com/sun/star/sdbc/XResultSetMetaDataSupplier.hpp>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
@@ -99,8 +101,8 @@ bool ORowSetImportExport::Write()
 bool ORowSetImportExport::Read()
 {
     // check if there is any column to copy
-    if(std::find_if(m_aColumnMapping.begin(),m_aColumnMapping.end(),
-                        [](sal_Int32 n) { return n > 0; }) == m_aColumnMapping.end())
+    if(std::none_of(m_aColumnMapping.begin(),m_aColumnMapping.end(),
+                        [](sal_Int32 n) { return n > 0; }))
         return false;
     bool bContinue = true;
     if(m_aSelection.getLength())

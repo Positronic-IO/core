@@ -333,6 +333,12 @@ public:
     OUString GetTableTemplateCellSubName(const SwBoxAutoFormat& rBoxFormat) const;
     /// Returns a vector of indexes in aBoxAutoFormat array. Returned indexes points to cells which are mapped to a table-template.
     static const std::vector<sal_Int32>& GetTableTemplateMap();
+
+    /**
+     * Calculates the relevant position in the table autoformat for a given
+     * cell in a given table.
+     */
+    static sal_uInt8 CountPos(sal_uInt32 nCol, sal_uInt32 nCols, sal_uInt32 nRow, sal_uInt32 nRows);
 };
 
 class SW_DLLPUBLIC SwTableAutoFormatTable
@@ -370,16 +376,16 @@ public:
 
 class SwCellStyleDescriptor
 {
-    const std::pair<OUString, SwBoxAutoFormat*>& m_rCellStyleDesc;
+    const std::pair<OUString, std::unique_ptr<SwBoxAutoFormat>>& m_rCellStyleDesc;
 public:
-    SwCellStyleDescriptor(const std::pair<OUString, SwBoxAutoFormat*>& rCellStyleDesc) : m_rCellStyleDesc(rCellStyleDesc) { }
+    SwCellStyleDescriptor(const std::pair<OUString, std::unique_ptr<SwBoxAutoFormat>>& rCellStyleDesc) : m_rCellStyleDesc(rCellStyleDesc) { }
 
     const OUString&  GetName()   { return m_rCellStyleDesc.first; }
 };
 
 class SwCellStyleTable
 {
-    std::vector<std::pair<OUString, SwBoxAutoFormat*>> m_aCellStyles;
+    std::vector<std::pair<OUString, std::unique_ptr<SwBoxAutoFormat>>> m_aCellStyles;
 public:
     SwCellStyleTable();
     ~SwCellStyleTable();

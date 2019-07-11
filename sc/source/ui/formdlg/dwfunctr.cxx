@@ -35,6 +35,7 @@
 #include <tabvwsh.hxx>
 #include <appoptio.hxx>
 #include <compiler.hxx>
+#include <funcdesc.hxx>
 
 #include <dwfunctr.hxx>
 
@@ -189,7 +190,7 @@ void ScFunctionWin::SetDescription()
         aBuf.append(":\n\n");
         aBuf.append(pDesc->GetParamList());
         aBuf.append("\n\n");
-        aBuf.append(*pDesc->pFuncDesc);
+        aBuf.append(*pDesc->mxFuncDesc);
 
         aFiFuncDesc->SetText(aBuf.makeStringAndClear());
         aFiFuncDesc->StateChanged(StateChangedType::Text);
@@ -230,7 +231,7 @@ void ScFunctionWin::UpdateFunctionList()
         while ( pDesc )
         {
             aFuncList->SetEntryData(
-                aFuncList->InsertEntry( *(pDesc->pFuncName) ),
+                aFuncList->InsertEntry( *(pDesc->mxFuncName) ),
                 const_cast<ScFuncDesc *>(pDesc) );
             pDesc = pFuncMgr->Next();
         }
@@ -277,7 +278,7 @@ void ScFunctionWin::UpdateFunctionList()
 void ScFunctionWin::DoEnter()
 {
     OUString aFirstArgStr;
-    OUString aArgStr;
+    OUStringBuffer aArgStr;
     OUString aString=aFuncList->GetSelectedEntry();
     SfxViewShell* pCurSh = SfxViewShell::Current();
     nArgs=0;
@@ -327,11 +328,11 @@ void ScFunctionWin::DoEnter()
                     for ( sal_uInt16 nArg = 1;
                             nArg < nFix && !pDesc->pDefArgFlags[nArg].bOptional; nArg++ )
                     {
-                        aArgStr += "; ";
+                        aArgStr.append("; ");
                         OUString sTmp = pDesc->maDefArgNames[nArg];
                         sTmp = comphelper::string::strip(sTmp, ' ');
                         sTmp = sTmp.replaceAll(" ", "_");
-                        aArgStr += sTmp;
+                        aArgStr.append(sTmp);
                     }
                 }
             }
@@ -349,7 +350,7 @@ void ScFunctionWin::DoEnter()
                 if(nArgs>0)
                 {
                     pHdl->InsertFunction(aString);
-                    pEdView->InsertText(aArgStr,true);
+                    pEdView->InsertText(aArgStr.makeStringAndClear(),true);
                     ESelection  aESel=pEdView->GetSelection();
                     aESel.nEndPos = aESel.nStartPos + aFirstArgStr.getLength();
                     pEdView->SetSelection(aESel);

@@ -40,6 +40,7 @@
 #include <vcl/graphictools.hxx>
 #include <vcl/weld.hxx>
 #include <strings.hrc>
+#include <osl/diagnose.h>
 
 #include <math.h>
 #include <memory>
@@ -265,7 +266,6 @@ PSWriter::PSWriter()
     , maFont()
     , maLastFont()
     , nNextChrSetId(0)
-    , pTable(nullptr)
     , pPrefix(nullptr)
     , nDataSize(0)
     , nClearCode(0)
@@ -357,8 +357,7 @@ bool PSWriter::WritePS( const Graphic& rGraphic, SvStream& rTargetStream, Filter
 
         if ( nErrCode == ERRCODE_NONE )
         {
-            rTargetStream.Seek( STREAM_SEEK_TO_END );
-            nPSPosition = rTargetStream.Tell();
+            nPSPosition = rTargetStream.TellEnd();
             rTargetStream.Seek( nStreamPosition + 20 );
             rTargetStream.WriteUInt32( nPSPosition - 30 );  // size of tiff gfx
             rTargetStream.Seek( nPSPosition );
@@ -382,11 +381,11 @@ bool PSWriter::WritePS( const Graphic& rGraphic, SvStream& rTargetStream, Filter
     }
     else
     {
-        Bitmap aBmp( rGraphic.GetBitmap() );
+        BitmapEx aBmp( rGraphic.GetBitmapEx() );
         pAMTF.reset( new GDIMetaFile );
         ScopedVclPtrInstance< VirtualDevice > pTmpVDev;
         pAMTF->Record( pTmpVDev );
-        pTmpVDev->DrawBitmap( Point(), aBmp );
+        pTmpVDev->DrawBitmapEx( Point(), aBmp );
         pAMTF->Stop();
         pAMTF->SetPrefSize( aBmp.GetSizePixel() );
         pMTF = pAMTF.get();
@@ -478,7 +477,7 @@ void PSWriter::ImplWriteProlog( const Graphic* pPreview )
     if ( pPreview && aSizePoint.Width() && aSizePoint.Height() )
     {
         Size aSizeBitmap( ( aSizePoint.Width() + 7 ) & ~7, aSizePoint.Height() );
-        Bitmap aTmpBitmap( pPreview->GetBitmap() );
+        Bitmap aTmpBitmap( pPreview->GetBitmapEx().GetBitmap() );
         aTmpBitmap.Scale( aSizeBitmap, BmpScaleFlag::BestQuality );
         aTmpBitmap.Convert( BmpConversion::N1BitThreshold );
         BitmapReadAccess* pAcc = aTmpBitmap.AcquireReadAccess();
@@ -900,7 +899,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
             {
                 const MetaWallpaperAction* pA = static_cast<const MetaWallpaperAction*>(pMA);
                 tools::Rectangle   aRect = pA->GetRect();
-                Wallpaper   aWallpaper = pA->GetWallpaper();
+                const Wallpaper&   aWallpaper = pA->GetWallpaper();
 
                 if ( aWallpaper.IsBitmap() )
                 {
@@ -948,7 +947,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
             case MetaActionType::CLIPREGION:
             {
                 const MetaClipRegionAction* pA = static_cast<const MetaClipRegionAction*>(pMA);
-                vcl::Region aRegion( pA->GetRegion() );
+                const vcl::Region& aRegion( pA->GetRegion() );
                 ImplSetClipRegion( aRegion );
             }
             break;
@@ -956,7 +955,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
             case MetaActionType::ISECTREGIONCLIPREGION:
             {
                 const MetaISectRegionClipRegionAction* pA = static_cast<const MetaISectRegionClipRegionAction*>(pMA);
-                vcl::Region aRegion( pA->GetRegion() );
+                const vcl::Region& aRegion( pA->GetRegion() );
                 ImplSetClipRegion( aRegion );
             }
             break;
@@ -1262,7 +1261,7 @@ void PSWriter::ImplWriteActions( const GDIMetaFile& rMtf, VirtualDevice& rVDev )
                                 bSkipSequence = false;
                             if ( static_cast<sal_uInt32>(eJT) > 2 )
                                 bSkipSequence = false;
-                            if ( l_aDashArray.size() && ( fStrokeWidth != 0.0 ) )
+                            if ( !l_aDashArray.empty() && ( fStrokeWidth != 0.0 ) )
                                 bSkipSequence = false;
                             if ( bSkipSequence )
                             {
@@ -1674,11 +1673,8 @@ void PSWriter::ImplBmp( Bitmap const * pBitmap, Bitmap const * pMaskBitmap, cons
             bDoTrans = true;
             while (true)
             {
-                if ( mnLevel == 1 )
-                {
-                    if ( nHeight > 10 )
-                        nHeight = 8;
-                }
+                if ( mnLevel == 1 && nHeight > 10 )
+                    nHeight = 8;
                 aRect = tools::Rectangle( Point( 0, nHeightOrg - nHeightLeft ), Size( nWidth, nHeight ) );
                 aRegion = vcl::Region( pMaskBitmap->CreateRegion( COL_BLACK, aRect ) );
 
@@ -2512,7 +2508,8 @@ void PSWriter::StartCompression()
     for ( i = 0; i < 4096; i++ )
     {
         pTable[ i ].pBrother = pTable[ i ].pFirstChild = nullptr;
-        pTable[ i ].nValue = static_cast<sal_uInt8>( pTable[ i ].nCode = i );
+        pTable[ i ].nCode = i;
+        pTable[ i ].nValue = static_cast<sal_uInt8>( i );
     }
     pPrefix = nullptr;
     WriteBits( nClearCode, nCodeSize );

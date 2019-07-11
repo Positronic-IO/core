@@ -14,6 +14,7 @@
 #include <vcl/errinf.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <comphelper/processfactory.hxx>
 
@@ -62,7 +63,7 @@ test::BootstrapFixture::BootstrapFixture( bool bAssertOnDialog, bool bNeedUCB )
 extern "C"
 {
 
-void test_init_impl(bool bAssertOnDialog, bool bNeedUCB,
+static void test_init_impl(bool bAssertOnDialog, bool bNeedUCB,
         lang::XMultiServiceFactory * pSFactory)
 {
     if (bAssertOnDialog)
@@ -98,6 +99,12 @@ SAL_DLLPUBLIC_EXPORT void test_init(lang::XMultiServiceFactory *pFactory)
     catch (...) { abort(); }
 }
 
+// this is called from pyuno
+SAL_DLLPUBLIC_EXPORT void test_deinit()
+{
+    DeInitVCL();
+}
+
 } // extern "C"
 
 void test::BootstrapFixture::setUp()
@@ -122,7 +129,7 @@ OString loadFile(const OUString& rURL)
 {
     osl::File aFile(rURL);
     osl::FileBase::RC eStatus = aFile.open(osl_File_OpenFlag_Read);
-    CPPUNIT_ASSERT_EQUAL(eStatus, osl::FileBase::E_None);
+    CPPUNIT_ASSERT_EQUAL(osl::FileBase::E_None, eStatus);
     sal_uInt64 nSize;
     aFile.getSize(nSize);
     std::unique_ptr<char[]> aBytes(new char[nSize]);
@@ -137,7 +144,7 @@ OString loadFile(const OUString& rURL)
 }
 #endif
 
-void test::BootstrapFixture::validate(const OUString& rPath, test::ValidationFormat eFormat )
+void test::BootstrapFixture::validate(const OUString& rPath, test::ValidationFormat eFormat) const
 {
 #if HAVE_EXPORT_VALIDATION
     OUString var;
@@ -166,12 +173,25 @@ void test::BootstrapFixture::validate(const OUString& rPath, test::ValidationFor
     CPPUNIT_ASSERT_MESSAGE(
         OUString("empty get env var " + var).toUtf8().getStr(),
         !aValidator.isEmpty());
-    aValidator += " ";
+
+    if (eFormat == test::ODF)
+    {
+        // invoke without -e so that we know when something new is written
+        // in loext namespace that isn't yet in the custom schema
+        aValidator += " -M "
+            + m_directories.getPathFromSrc("/schema/libreoffice/OpenDocument-manifest-schema-v1.3+libreoffice.rng")
+            + " -D "
+            + m_directories.getPathFromSrc("/schema/libreoffice/OpenDocument-dsig-schema-v1.3+libreoffice.rng")
+            + " -O "
+            + m_directories.getPathFromSrc("/schema/libreoffice/OpenDocument-schema-v1.3+libreoffice.rng")
+            + " -m "
+            + m_directories.getPathFromSrc("/schema/mathml2/mathml2.xsd");
+    }
 
     utl::TempFile aOutput;
     aOutput.EnableKillingFile();
     OUString aOutputFile = aOutput.GetFileName();
-    OUString aCommand = aValidator + rPath + " > " + aOutputFile;
+    OUString aCommand = aValidator + " " + rPath + " > " + aOutputFile;
 
     int returnValue = system(OUStringToOString(aCommand, RTL_TEXTENCODING_UTF8).getStr());
     CPPUNIT_ASSERT_EQUAL_MESSAGE(

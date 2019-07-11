@@ -49,7 +49,6 @@ SwMailMergeWizard::SwMailMergeWizard(SwView& rView, std::shared_ptr<SwMailMergeC
         m_sAddressList(     SwResId( ST_ADDRESSLIST )),
         m_sGreetingsLine(   SwResId( ST_GREETINGSLINE   )),
         m_sLayout(          SwResId( ST_LAYOUT        )),
-        m_sFinish(          SwResId( ST_FINISH       )),
         m_nRestartPage( MM_DOCUMENTSELECTPAGE )
 {
     defaultButton(WizardButtonFlags::NEXT);
@@ -57,7 +56,7 @@ SwMailMergeWizard::SwMailMergeWizard(SwView& rView, std::shared_ptr<SwMailMergeC
 
     setTitleBase(SwResId( ST_MMWTITLE ) );
 
-    m_pFinish->SetText(m_sFinish);
+    m_pFinish->SetText(SwResId( ST_FINISH ));
     m_pNextPage->SetHelpId(HID_MM_NEXT_PAGE);
     m_pPrevPage->SetHelpId(HID_MM_PREV_PAGE);
 
@@ -94,7 +93,7 @@ VclPtr<TabPage> SwMailMergeWizard::createPage(WizardState _nState)
     switch(_nState)
     {
         case MM_DOCUMENTSELECTPAGE :
-            pRet = VclPtr<SwMailMergeDocSelectPage>::Create(this);
+            pRet = VclPtr<SwMailMergeDocSelectPage>::Create(this, TabPageParent(this));
 
             /* tdf#52986 Set help ID using SetRoadmapHelpId for all pages
             so that when by default the focus is on the left side pane of
@@ -103,7 +102,7 @@ VclPtr<TabPage> SwMailMergeWizard::createPage(WizardState _nState)
             SetRoadmapHelpId("modules/swriter/ui/mmselectpage/MMSelectPage");
         break;
         case MM_OUTPUTTYPETPAGE    :
-            pRet = VclPtr<SwMailMergeOutputTypePage>::Create(this);
+            pRet = VclPtr<SwMailMergeOutputTypePage>::Create(this, TabPageParent(this));
             SetRoadmapHelpId("modules/swriter/ui/mmoutputtypepage/MMOutputTypePage");
         break;
         case MM_ADDRESSBLOCKPAGE   :
@@ -111,7 +110,7 @@ VclPtr<TabPage> SwMailMergeWizard::createPage(WizardState _nState)
             SetRoadmapHelpId("modules/swriter/ui/mmaddressblockpage/MMAddressBlockPage");
         break;
         case MM_GREETINGSPAGE      :
-            pRet = VclPtr<SwMailMergeGreetingsPage>::Create(this);
+            pRet = VclPtr<SwMailMergeGreetingsPage>::Create(this, TabPageParent(this));
             SetRoadmapHelpId("modules/swriter/ui/mmsalutationpage/MMSalutationPage");
         break;
         case MM_LAYOUTPAGE         :
@@ -246,7 +245,7 @@ short SwMailMergeWizard::Execute()
     OSL_FAIL("SwMailMergeWizard cannot be executed via Dialog::Execute!\n"
                "It creates a thread (MailDispatcher instance) that will call"
                "back to VCL apartment => deadlock!\n"
-               "Use Dialog::StartExecuteModal to execute the dialog!" );
+               "Use Dialog::StartExecuteAsync to execute the dialog!" );
     return RET_CANCEL;
 }
 

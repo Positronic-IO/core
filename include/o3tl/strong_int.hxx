@@ -75,8 +75,7 @@ isInRange(T2 value) {
 /// Wrap up an integer type so that we prevent accidental conversion to other integer types.
 ///
 /// e.g.
-///   struct MyIntTag {};
-///   typedef o3tl::strong_int<unsigned, MyIntTag> MyInt;
+///   typedef o3tl::strong_int<unsigned, struct MyIntTag> MyInt;
 ///
 /// \param UNDERLYING_TYPE the underlying scalar type
 /// \param PHANTOM_TYPE    a type tag, used to distinguish this instantiation of the template
@@ -111,6 +110,10 @@ public:
     bool operator!=(strong_int const & other) const { return m_value != other.m_value; }
     strong_int& operator++() { ++m_value; return *this; }
     strong_int operator++(int) { UNDERLYING_TYPE nOldValue = m_value; ++m_value; return strong_int(nOldValue); }
+    strong_int& operator--() { --m_value; return *this; }
+    strong_int operator--(int) { UNDERLYING_TYPE nOldValue = m_value; --m_value; return strong_int(nOldValue); }
+    strong_int& operator+=(strong_int const & other) { m_value += other.m_value; return *this; }
+    strong_int& operator-=(strong_int const & other) { m_value -= other.m_value; return *this; }
 
     bool anyOf(strong_int v) const {
       return *this == v;
@@ -131,6 +134,11 @@ strong_int<UT,PT> operator+(strong_int<UT,PT> const & lhs, strong_int<UT,PT> con
     return strong_int<UT,PT>(lhs.get() + rhs.get());
 }
 
+template <typename UT, typename PT>
+strong_int<UT,PT> operator-(strong_int<UT,PT> const & lhs, strong_int<UT,PT> const & rhs)
+{
+    return strong_int<UT,PT>(lhs.get() - rhs.get());
+}
 
 }; // namespace o3tl
 

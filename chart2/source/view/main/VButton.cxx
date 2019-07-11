@@ -9,12 +9,15 @@
 
 #include "VButton.hxx"
 
-#include <AbstractShapeFactory.hxx>
+#include <ShapeFactory.hxx>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
+#include <com/sun/star/drawing/XShapes.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/drawing/TextVerticalAdjust.hpp>
 #include <com/sun/star/drawing/TextHorizontalAdjust.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 
 #include <memory>
 
@@ -27,10 +30,7 @@ namespace chart
 using namespace css;
 
 VButton::VButton()
-    : m_xShapeFactory(nullptr)
-    , m_xTarget(nullptr)
-    , m_xShape(nullptr)
-    , m_bShowArrow(true)
+    : m_bShowArrow(true)
     , m_nArrowColor(0x00000000)
     , m_nBGColor(0x00E6E6E6)
 {
@@ -92,7 +92,7 @@ uno::Reference<drawing::XShape> VButton::createTriangle(awt::Size aSize)
 
 void VButton::createShapes(const uno::Reference<beans::XPropertySet>& xTextProp)
 {
-    AbstractShapeFactory* pShapeFactory = AbstractShapeFactory::getOrCreateShapeFactory(m_xShapeFactory);
+    ShapeFactory* pShapeFactory = ShapeFactory::getOrCreateShapeFactory(m_xShapeFactory);
 
     std::unique_ptr<tNameSequence> pPropNames(new tNameSequence);
     std::unique_ptr<tAnySequence> pPropValues(new tAnySequence);

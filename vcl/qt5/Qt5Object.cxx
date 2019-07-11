@@ -17,27 +17,57 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Object.hxx"
+#include <Qt5Object.hxx>
+#include <Qt5Object.moc>
 
-#include "Qt5Frame.hxx"
+#include <Qt5Frame.hxx>
 
 #include <QtWidgets/QWidget>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QWindow>
 
 Qt5Object::Qt5Object(Qt5Frame* pParent, bool bShow)
     : m_pParent(pParent)
+    , m_pQWidget(nullptr)
+    , m_pQWindow(nullptr)
 {
     if (!m_pParent || !pParent->GetQWidget())
         return;
-    m_pQWidget.reset(new QWidget(pParent->GetQWidget()));
+
+    m_pQWindow = new QWindow;
+    m_pQWidget = QWidget::createWindowContainer(m_pQWindow, pParent->GetQWidget());
+
     if (bShow)
         m_pQWidget->show();
-}
 
-Qt5Object::~Qt5Object() {}
+    m_aSystemData.nSize = sizeof(SystemEnvData);
+    m_aSystemData.aShellWindow = reinterpret_cast<sal_IntPtr>(this);
+    //m_aSystemData.pSalFrame = this;
+    //m_aSystemData.pWidget = m_pQWidget;
+    //m_aSystemData.nScreen = m_nXScreen.getXScreen();
+    m_aSystemData.pToolkit = "qt5";
+    m_aSystemData.pPlatformName = "xcb";
+    const bool bWayland = QGuiApplication::platformName() == "wayland";
+    if (!bWayland)
+    {
+        m_aSystemData.pPlatformName = "xcb";
+        m_aSystemData.aWindow = m_pQWindow->winId(); // ID of the embedded window
+    }
+    else
+    {
+        m_aSystemData.pPlatformName = "wayland";
+        // TODO implement as needed for Wayland,
+        // s.a. commit c0d4f3ad3307c which did this for gtk3
+        // QPlatformNativeInterface* native = QGuiApplication::platformNativeInterface();
+        // m_aSystemData.pDisplay = native->nativeResourceForWindow("display", nullptr);
+        // m_aSystemData.aWindow = reinterpret_cast<unsigned long>(
+        //     native->nativeResourceForWindow("surface", m_pQWidget->windowHandle()));
+    }
+}
 
 void Qt5Object::ResetClipRegion()
 {
-    if (m_pQWidget.get())
+    if (m_pQWidget)
         m_pRegion = QRegion(m_pQWidget->geometry());
     else
         m_pRegion = QRegion();
@@ -52,11 +82,18 @@ void Qt5Object::UnionClipRegion(long nX, long nY, long nWidth, long nHeight)
 
 void Qt5Object::EndSetClipRegion()
 {
-    if (m_pQWidget.get())
+    if (m_pQWidget)
         m_pRegion = m_pRegion.intersected(m_pQWidget->geometry());
 }
 
-void Qt5Object::SetPosSize(long /*nX*/, long /*nY*/, long /*nWidth*/, long /*nHeight*/) {}
+void Qt5Object::SetPosSize(long nX, long nY, long nWidth, long nHeight)
+{
+    if (m_pQWidget)
+    {
+        m_pQWidget->move(nX, nY);
+        m_pQWidget->setFixedSize(nWidth, nHeight);
+    }
+}
 
 void Qt5Object::Show(bool bVisible)
 {
@@ -65,7 +102,5 @@ void Qt5Object::Show(bool bVisible)
 }
 
 void Qt5Object::SetForwardKey(bool /*bEnable*/) {}
-
-const SystemEnvData* Qt5Object::GetSystemData() const { return nullptr; }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

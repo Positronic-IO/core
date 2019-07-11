@@ -25,6 +25,7 @@
 #include "ConfigurationUpdater.hxx"
 
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/drawing/framework/XConfiguration.hpp>
 #include <com/sun/star/drawing/framework/ConfigurationChangeEvent.hpp>
@@ -151,7 +152,7 @@ void ChangeRequestQueueProcessor::ProcessOneEvent()
             SAL_INFO("sd.fwk", OSL_THIS_FUNC << ": All requests are processed");
             // The queue is empty so tell the ConfigurationManager to update
             // its state.
-            if (mpConfigurationUpdater.get() != nullptr)
+            if (mpConfigurationUpdater != nullptr)
             {
 #if DEBUG_SD_CONFIGURATION_TRACE
                 ConfigurationTracer::TraceConfiguration (

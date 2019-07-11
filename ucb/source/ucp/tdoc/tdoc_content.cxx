@@ -62,9 +62,11 @@
 #include <com/sun/star/ucb/XPersistentPropertySet.hpp>
 
 #include <comphelper/propertysequence.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/cancelcommandexecution.hxx>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/propertyvalueset.hxx>
+#include <ucbhelper/macros.hxx>
 
 #include "tdoc_content.hxx"
 #include "tdoc_resultset.hxx"
@@ -722,12 +724,9 @@ void Content::queryChildren( ContentRefList& rChildren )
 
     sal_Int32 nLen = aURL.getLength();
 
-    ::ucbhelper::ContentRefList::const_iterator it  = aAllContents.begin();
-    ::ucbhelper::ContentRefList::const_iterator end = aAllContents.end();
-
-    while ( it != end )
+    for ( const auto& rContent : aAllContents )
     {
-        ::ucbhelper::ContentImplHelperRef xChild = (*it);
+        ::ucbhelper::ContentImplHelperRef xChild = rContent;
         OUString aChildURL
             = xChild->getIdentifier()->getContentIdentifier();
 
@@ -746,7 +745,6 @@ void Content::queryChildren( ContentRefList& rChildren )
                         static_cast< Content * >( xChild.get() ) );
             }
         }
-        ++it;
     }
 }
 
@@ -794,12 +792,9 @@ bool Content::exchangeIdentity(
                 ContentRefList aChildren;
                 queryChildren( aChildren );
 
-                ContentRefList::const_iterator it  = aChildren.begin();
-                ContentRefList::const_iterator end = aChildren.end();
-
-                while ( it != end )
+                for ( const auto& rChild : aChildren )
                 {
-                    ContentRef xChild = (*it);
+                    ContentRef xChild = rChild;
 
                     // Create new content identifier for the child...
                     uno::Reference< ucb::XContentIdentifier > xOldChildId
@@ -816,8 +811,6 @@ bool Content::exchangeIdentity(
 
                     if ( !xChild->exchangeIdentity( xNewChildId ) )
                         return false;
-
-                    ++it;
                 }
             }
             return true;
@@ -1699,13 +1692,9 @@ void Content::destroy( bool bDeletePhysical,
         ContentRefList aChildren;
         queryChildren( aChildren );
 
-        ContentRefList::const_iterator it  = aChildren.begin();
-        ContentRefList::const_iterator end = aChildren.end();
-
-        while ( it != end )
+        for ( auto& rChild : aChildren )
         {
-            (*it)->destroy( bDeletePhysical, xEnv );
-            ++it;
+            rChild->destroy( bDeletePhysical, xEnv );
         }
     }
 }
@@ -1740,7 +1729,7 @@ Content::queryChildContent( const OUString & rRelativeChildUri )
     if ( !rRelativeChildUri.startsWith("/") )
         aBuf.append( rRelativeChildUri );
     else
-        aBuf.append( rRelativeChildUri.copy( 1 ) );
+        aBuf.appendCopy( rRelativeChildUri, 1 );
 
     uno::Reference< ucb::XContentIdentifier > xChildId
         = new ::ucbhelper::ContentIdentifier( aBuf.makeStringAndClear() );

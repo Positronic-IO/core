@@ -49,7 +49,7 @@ public:
 
     void ForceOutlinerParaObject( OutlinerMode nOutlMode );
 
-    virtual void SetOutlinerParaObject( OutlinerParaObject* pTextObject );
+    virtual void SetOutlinerParaObject( std::unique_ptr<OutlinerParaObject> pTextObject );
     OutlinerParaObject* GetOutlinerParaObject() const;
 
     void CheckPortionInfo( SdrOutliner& rOutliner );
@@ -64,7 +64,7 @@ public:
     SdrTextObj& GetObject() const { return mrObject; }
 
     /** returns the current OutlinerParaObject and removes it from this instance */
-    OutlinerParaObject* RemoveOutlinerParaObject();
+    std::unique_ptr<OutlinerParaObject> RemoveOutlinerParaObject();
 
     void dumpAsXml(struct _xmlTextWriter * pWriter) const;
 

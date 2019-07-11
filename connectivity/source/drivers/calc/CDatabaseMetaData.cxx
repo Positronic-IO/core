@@ -34,7 +34,6 @@
 #include <com/sun/star/sheet/XDatabaseRange.hpp>
 #include <FDatabaseMetaDataResultSet.hxx>
 #include <com/sun/star/lang/XUnoTunnel.hpp>
-#include <comphelper/types.hxx>
 
 using namespace connectivity::calc;
 using namespace connectivity::file;
@@ -75,9 +74,8 @@ static bool lcl_IsEmptyOrHidden( const Reference<XSpreadsheets>& xSheets, const 
         {
             bool bVisible;
             Any aVisAny = xProp->getPropertyValue("IsVisible");
-            if ( aVisAny >>= bVisible )
-                if (!bVisible)
-                    return true;                // hidden
+            if ( (aVisAny >>= bVisible) && !bVisible)
+                return true;                // hidden
         }
 
         //  use the same data area as in OCalcTable to test for empty table
@@ -169,7 +167,7 @@ Reference< XResultSet > SAL_CALL OCalcDatabaseMetaData::getTables(
     // get the sheet names from the document
 
     OCalcConnection::ODocHolder aDocHolder(static_cast<OCalcConnection*>(m_pConnection));
-    Reference<XSpreadsheetDocument> xDoc = aDocHolder.getDoc();
+    const Reference<XSpreadsheetDocument>& xDoc = aDocHolder.getDoc();
     if ( !xDoc.is() )
         throw SQLException();
     Reference<XSpreadsheets> xSheets = xDoc->getSheets();

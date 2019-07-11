@@ -18,12 +18,16 @@
  */
 
 #include <memory>
+#ifndef IOS
 #include <headless/svpgdi.hxx>
+#endif
 #include <headless/svpbmp.hxx>
 #include <headless/svpframe.hxx>
 #include <headless/svpcairotextrender.hxx>
+#include <headless/CustomWidgetDraw.hxx>
 #include <saldatabasic.hxx>
 
+#include <sal/log.hxx>
 #include <o3tl/safeint.hxx>
 #include <vcl/sysdata.hxx>
 #include <config_cairo_canvas.h>
@@ -34,8 +38,12 @@
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
-
-#include <cairo.h>
+#include <basegfx/matrix/b2dhommatrix.hxx>
+#include <basegfx/utils/systemdependentdata.hxx>
+#include <basegfx/matrix/b2dhommatrixtools.hxx>
+#include <comphelper/lok.hxx>
+#include <unx/gendata.hxx>
+#include <dlfcn.h>
 
 #if ENABLE_CAIRO_CANVAS
 #   if defined CAIRO_VERSION && CAIRO_VERSION < CAIRO_VERSION_ENCODE(1, 10, 0)
@@ -51,7 +59,13 @@ namespace
 
         cairo_clip_extents(cr, &x1, &y1, &x2, &y2);
 
-        return basegfx::B2DRange(x1, y1, x2, y2);
+        // support B2DRange::isEmpty()
+        if(0.0 != x1 || 0.0 != y1 || 0.0 != x2 || 0.0 != y2)
+        {
+            return basegfx::B2DRange(x1, y1, x2, y2);
+        }
+
+        return basegfx::B2DRange();
     }
 
     basegfx::B2DRange getFillDamage(cairo_t* cr)
@@ -60,7 +74,13 @@ namespace
 
         cairo_fill_extents(cr, &x1, &y1, &x2, &y2);
 
-        return basegfx::B2DRange(x1, y1, x2, y2);
+        // support B2DRange::isEmpty()
+        if(0.0 != x1 || 0.0 != y1 || 0.0 != x2 || 0.0 != y2)
+        {
+            return basegfx::B2DRange(x1, y1, x2, y2);
+        }
+
+        return basegfx::B2DRange();
     }
 
     basegfx::B2DRange getClippedFillDamage(cairo_t* cr)
@@ -76,7 +96,13 @@ namespace
 
         cairo_stroke_extents(cr, &x1, &y1, &x2, &y2);
 
-        return basegfx::B2DRange(x1, y1, x2, y2);
+        // support B2DRange::isEmpty()
+        if(0.0 != x1 || 0.0 != y1 || 0.0 != x2 || 0.0 != y2)
+        {
+            return basegfx::B2DRange(x1, y1, x2, y2);
+        }
+
+        return basegfx::B2DRange();
     }
 
     basegfx::B2DRange getClippedStrokeDamage(cairo_t* cr)
@@ -489,12 +515,12 @@ bool SvpSalGraphics::drawTransformedBitmap(
     return true;
 }
 
-void SvpSalGraphics::clipRegion(cairo_t* cr)
+void SvpSalGraphics::clipRegion(cairo_t* cr, const vcl::Region& rClipRegion)
 {
     RectangleVector aRectangles;
-    if (!m_aClipRegion.IsEmpty())
+    if (!rClipRegion.IsEmpty())
     {
-        m_aClipRegion.GetRegionRectangles(aRectangles);
+        rClipRegion.GetRegionRectangles(aRectangles);
     }
     if (!aRectangles.empty())
     {
@@ -506,38 +532,53 @@ void SvpSalGraphics::clipRegion(cairo_t* cr)
     }
 }
 
+void SvpSalGraphics::clipRegion(cairo_t* cr)
+{
+    SvpSalGraphics::clipRegion(cr, m_aClipRegion);
+}
+
 bool SvpSalGraphics::drawAlphaRect(long nX, long nY, long nWidth, long nHeight, sal_uInt8 nTransparency)
 {
+    const bool bHasFill(m_aFillColor != SALCOLOR_NONE);
+    const bool bHasLine(m_aLineColor != SALCOLOR_NONE);
+
+    if(!(bHasFill || bHasLine))
+    {
+        return true;
+    }
+
     cairo_t* cr = getCairoContext(false);
     clipRegion(cr);
 
-    const double fTransparency = (100 - nTransparency) * (1.0/100);
+    const double fTransparency = nTransparency * (1.0/100);
 
-    basegfx::B2DRange extents(0, 0, 0, 0);
+    // To make releaseCairoContext work, use empty extents
+    basegfx::B2DRange extents;
 
     cairo_rectangle(cr, nX, nY, nWidth, nHeight);
 
-    if (m_aFillColor != SALCOLOR_NONE)
+    if (bHasFill)
     {
-        cairo_set_source_rgba(cr, m_aFillColor.GetRed()/255.0,
-                                  m_aFillColor.GetGreen()/255.0,
-                                  m_aFillColor.GetBlue()/255.0,
-                                  fTransparency);
+        applyColor(cr, m_aFillColor, fTransparency);
 
-        if (m_aLineColor == SALCOLOR_NONE)
-            extents = getClippedFillDamage(cr);
+        // set FillDamage
+        extents = getClippedFillDamage(cr);
 
         cairo_fill_preserve(cr);
     }
 
-    if (m_aLineColor != SALCOLOR_NONE)
+    if (bHasLine)
     {
-        cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
-                                  m_aLineColor.GetGreen()/255.0,
-                                  m_aLineColor.GetBlue()/255.0,
-                                  fTransparency);
+        // PixelOffset used: Set PixelOffset as linear transformation
+        // Note: Was missing here - probably not by purpose (?)
+        cairo_matrix_t aMatrix;
+        cairo_matrix_init_translate(&aMatrix, 0.5, 0.5);
+        cairo_set_matrix(cr, &aMatrix);
 
-        extents = getClippedStrokeDamage(cr);
+        applyColor(cr, m_aLineColor, fTransparency);
+
+        // expand with possible StrokeDamage
+        extents.expand(getClippedStrokeDamage(cr));
 
         cairo_stroke_preserve(cr);
     }
@@ -555,6 +596,8 @@ SvpSalGraphics::SvpSalGraphics()
     , m_ePaintMode(PaintMode::Over)
     , m_aTextRenderImpl(*this)
 {
+    if (comphelper::LibreOfficeKit::isActive())
+        m_pWidgetDraw.reset(new vcl::CustomWidgetDraw(*this));
 }
 
 SvpSalGraphics::~SvpSalGraphics()
@@ -565,9 +608,7 @@ void SvpSalGraphics::setSurface(cairo_surface_t* pSurface, const basegfx::B2IVec
 {
     m_pSurface = pSurface;
     m_aFrameSize = rSize;
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-    cairo_surface_get_device_scale(pSurface, &m_fScale, nullptr);
-#endif
+    dl_cairo_surface_get_device_scale(pSurface, &m_fScale, nullptr);
     ResetClipRegion();
 }
 
@@ -619,7 +660,7 @@ void SvpSalGraphics::SetFillColor( Color nColor )
     m_aFillColor = nColor;
 }
 
-void SvpSalGraphics::SetXORMode(bool bSet )
+void SvpSalGraphics::SetXORMode(bool bSet, bool )
 {
     m_ePaintMode = bSet ? PaintMode::Xor : PaintMode::Over;
 }
@@ -673,7 +714,10 @@ void SvpSalGraphics::drawPixel( long nX, long nY, Color nColor )
     m_aLineColor = SALCOLOR_NONE;
     m_aFillColor = nColor;
 
-    drawPolyPolygon(basegfx::B2DPolyPolygon(aRect));
+    drawPolyPolygon(
+        basegfx::B2DHomMatrix(),
+        basegfx::B2DPolyPolygon(aRect),
+        0.0);
 
     m_aFillColor = aOrigFillColor;
     m_aLineColor = aOrigLineColor;
@@ -691,7 +735,12 @@ void SvpSalGraphics::drawRect( long nX, long nY, long nWidth, long nHeight )
     {
         basegfx::B2DPolygon aRect = basegfx::utils::createPolygonFromRect(basegfx::B2DRectangle(nX, nY, nX+nWidth, nY+nHeight));
         m_aFillColor = aOrigFillColor;
-        drawPolyPolygon(basegfx::B2DPolyPolygon(aRect));
+
+        drawPolyPolygon(
+            basegfx::B2DHomMatrix(),
+            basegfx::B2DPolyPolygon(aRect),
+            0.0);
+
         m_aFillColor = SALCOLOR_NONE;
     }
 
@@ -700,7 +749,12 @@ void SvpSalGraphics::drawRect( long nX, long nY, long nWidth, long nHeight )
         // need same -1 hack as X11SalGraphicsImpl::drawRect
         basegfx::B2DPolygon aRect = basegfx::utils::createPolygonFromRect(basegfx::B2DRectangle( nX, nY, nX+nWidth-1, nY+nHeight-1));
         m_aLineColor = aOrigLineColor;
-        drawPolyPolygon(basegfx::B2DPolyPolygon(aRect));
+
+        drawPolyPolygon(
+            basegfx::B2DHomMatrix(),
+            basegfx::B2DPolyPolygon(aRect),
+            0.0);
+
         m_aLineColor = SALCOLOR_NONE;
     }
 
@@ -716,8 +770,15 @@ void SvpSalGraphics::drawPolyLine(sal_uInt32 nPoints, const SalPoint* pPtAry)
         aPoly.setB2DPoint(i, basegfx::B2DPoint(pPtAry[i].mnX, pPtAry[i].mnY));
     aPoly.setClosed(false);
 
-    drawPolyLine(aPoly, 0.0, basegfx::B2DVector(1.0, 1.0), basegfx::B2DLineJoin::Miter,
-                 css::drawing::LineCap_BUTT, 15.0 * F_PI180 /*default*/);
+    drawPolyLine(
+        basegfx::B2DHomMatrix(),
+        aPoly,
+        0.0,
+        basegfx::B2DVector(1.0, 1.0),
+        basegfx::B2DLineJoin::Miter,
+        css::drawing::LineCap_BUTT,
+        basegfx::deg2rad(15.0) /*default*/,
+        false);
 }
 
 void SvpSalGraphics::drawPolygon(sal_uInt32 nPoints, const SalPoint* pPtAry)
@@ -727,7 +788,10 @@ void SvpSalGraphics::drawPolygon(sal_uInt32 nPoints, const SalPoint* pPtAry)
     for (sal_uInt32 i = 1; i < nPoints; ++i)
         aPoly.setB2DPoint(i, basegfx::B2DPoint(pPtAry[i].mnX, pPtAry[i].mnY));
 
-    drawPolyPolygon(basegfx::B2DPolyPolygon(aPoly));
+    drawPolyPolygon(
+        basegfx::B2DHomMatrix(),
+        basegfx::B2DPolyPolygon(aPoly),
+        0.0);
 }
 
 void SvpSalGraphics::drawPolyPolygon(sal_uInt32 nPoly,
@@ -750,25 +814,88 @@ void SvpSalGraphics::drawPolyPolygon(sal_uInt32 nPoly,
         }
     }
 
-    drawPolyPolygon(aPolyPoly);
+    drawPolyPolygon(
+        basegfx::B2DHomMatrix(),
+        aPolyPoly,
+        0.0);
 }
 
-static const basegfx::B2DPoint aHalfPointOfs(0.5, 0.5);
+static basegfx::B2DPoint impPixelSnap(
+    const basegfx::B2DPolygon& rPolygon,
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    basegfx::B2DHomMatrix& rObjectToDeviceInv,
+    sal_uInt32 nIndex)
+{
+    const sal_uInt32 nCount(rPolygon.count());
 
-static void AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rPolygon, bool bClosePath,
-                             bool bPixelSnap, bool bLineDraw)
+    // get the data
+    const basegfx::B2ITuple aPrevTuple(basegfx::fround(rObjectToDevice * rPolygon.getB2DPoint((nIndex + nCount - 1) % nCount)));
+    const basegfx::B2DPoint aCurrPoint(rObjectToDevice * rPolygon.getB2DPoint(nIndex));
+    const basegfx::B2ITuple aCurrTuple(basegfx::fround(aCurrPoint));
+    const basegfx::B2ITuple aNextTuple(basegfx::fround(rObjectToDevice * rPolygon.getB2DPoint((nIndex + 1) % nCount)));
+
+    // get the states
+    const bool bPrevVertical(aPrevTuple.getX() == aCurrTuple.getX());
+    const bool bNextVertical(aNextTuple.getX() == aCurrTuple.getX());
+    const bool bPrevHorizontal(aPrevTuple.getY() == aCurrTuple.getY());
+    const bool bNextHorizontal(aNextTuple.getY() == aCurrTuple.getY());
+    const bool bSnapX(bPrevVertical || bNextVertical);
+    const bool bSnapY(bPrevHorizontal || bNextHorizontal);
+
+    if(bSnapX || bSnapY)
+    {
+        basegfx::B2DPoint aSnappedPoint(
+            bSnapX ? aCurrTuple.getX() : aCurrPoint.getX(),
+            bSnapY ? aCurrTuple.getY() : aCurrPoint.getY());
+
+        if(rObjectToDeviceInv.isIdentity())
+        {
+            rObjectToDeviceInv = rObjectToDevice;
+            rObjectToDeviceInv.invert();
+        }
+
+        aSnappedPoint *= rObjectToDeviceInv;
+
+        return aSnappedPoint;
+    }
+
+    return rPolygon.getB2DPoint(nIndex);
+}
+
+// Remove bClosePath: Checked that the already used mechanism for Win using
+// Gdiplus already relies on rPolygon.isClosed(), so should be safe to replace
+// this.
+// For PixelSnap we need the ObjectToDevice transformation here now. Tis is a
+// special case relative to the also executed LineDraw-Offset of (0.5, 0.5) in
+// DeviceCoordinates: The LineDraw-Offset is applied *after* the snap, so we
+// need the ObjectToDevice transformation *without* that offset here to do the
+// same. The LineDraw-Offset will be applied by the callers using a linear
+// transformation for Cairo now
+// For support of PixelSnapHairline we also need the ObjectToDevice transformation
+// and a method (same as in gdiimpl.cxx for Win and Gdiplus). This is needed e.g.
+// for Chart-content visualization. CAUTION: It's not the same as PixelSnap (!)
+static void AddPolygonToPath(
+    cairo_t* cr,
+    const basegfx::B2DPolygon& rPolygon,
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    bool bPixelSnap,
+    bool bPixelSnapHairline)
 {
     // short circuit if there is nothing to do
-    const int nPointCount = rPolygon.count();
-    if( nPointCount <= 0 )
+    const sal_uInt32 nPointCount(rPolygon.count());
+
+    if(0 == nPointCount)
     {
         return;
     }
 
-    const bool bHasCurves = rPolygon.areControlPointsUsed();
+    const bool bHasCurves(rPolygon.areControlPointsUsed());
+    const bool bClosePath(rPolygon.isClosed());
+    const bool bObjectToDeviceUsed(!rObjectToDevice.isIdentity());
+    basegfx::B2DHomMatrix aObjectToDeviceInv;
     basegfx::B2DPoint aLast;
 
-    for( int nPointIdx = 0, nPrevIdx = 0;; nPrevIdx = nPointIdx++ )
+    for( sal_uInt32 nPointIdx = 0, nPrevIdx = 0;; nPrevIdx = nPointIdx++ )
     {
         int nClosedIdx = nPointIdx;
         if( nPointIdx >= nPointCount )
@@ -784,18 +911,39 @@ static void AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rPolygon, b
             }
         }
 
-        basegfx::B2DPoint aPoint = rPolygon.getB2DPoint( nClosedIdx );
+        basegfx::B2DPoint aPoint(rPolygon.getB2DPoint(nClosedIdx));
 
-        if( bPixelSnap)
+        if(bPixelSnap)
         {
             // snap device coordinates to full pixels
+            if(bObjectToDeviceUsed)
+            {
+                // go to DeviceCoordinates
+                aPoint *= rObjectToDevice;
+            }
+
+            // snap by rounding
             aPoint.setX( basegfx::fround( aPoint.getX() ) );
             aPoint.setY( basegfx::fround( aPoint.getY() ) );
+
+            if(bObjectToDeviceUsed)
+            {
+                if(aObjectToDeviceInv.isIdentity())
+                {
+                    aObjectToDeviceInv = rObjectToDevice;
+                    aObjectToDeviceInv.invert();
+                }
+
+                // go back to ObjectCoordinates
+                aPoint *= aObjectToDeviceInv;
+            }
         }
 
-        if( bLineDraw )
+        if(bPixelSnapHairline)
         {
-            aPoint += aHalfPointOfs;
+            // snap horizontal and vertical lines (mainly used in Chart for
+            // 'nicer' AAing)
+            aPoint = impPixelSnap(rPolygon, rObjectToDevice, aObjectToDeviceInv, nClosedIdx);
         }
 
         if( !nPointIdx )
@@ -806,7 +954,8 @@ static void AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rPolygon, b
             continue;
         }
 
-        bool bPendingCurve = false;
+        bool bPendingCurve(false);
+
         if( bHasCurves )
         {
             bPendingCurve = rPolygon.isNextControlPointUsed( nPrevIdx );
@@ -821,11 +970,6 @@ static void AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rPolygon, b
         {
             basegfx::B2DPoint aCP1 = rPolygon.getNextControlPoint( nPrevIdx );
             basegfx::B2DPoint aCP2 = rPolygon.getPrevControlPoint( nClosedIdx );
-            if( bLineDraw )
-            {
-                aCP1 += aHalfPointOfs;
-                aCP2 += aHalfPointOfs;
-            }
 
             // tdf#99165 if the control points are 'empty', create the mathematical
             // correct replacement ones to avoid problems with the graphical sub-system
@@ -857,14 +1001,28 @@ static void AddPolygonToPath(cairo_t* cr, const basegfx::B2DPolygon& rPolygon, b
 void SvpSalGraphics::drawLine( long nX1, long nY1, long nX2, long nY2 )
 {
     basegfx::B2DPolygon aPoly;
-    aPoly.append(basegfx::B2DPoint(nX1, nY1), 2);
-    aPoly.setB2DPoint(1, basegfx::B2DPoint(nX2, nY2));
-    aPoly.setClosed(false);
+
+    // PixelOffset used: To not mix with possible PixelSnap, cannot do
+    // directly on coordinates as tried before - despite being already 'snapped'
+    // due to being integer. If it would be directly added here, it would be
+    // 'snapped' again when !getAntiAliasB2DDraw(), losing the (0.5, 0.5) offset
+    aPoly.append(basegfx::B2DPoint(nX1, nY1));
+    aPoly.append(basegfx::B2DPoint(nX2, nY2));
 
     cairo_t* cr = getCairoContext(false);
     clipRegion(cr);
 
-    AddPolygonToPath(cr, aPoly, aPoly.isClosed(), !getAntiAliasB2DDraw(), true);
+    // PixelOffset used: Set PixelOffset as linear transformation
+    cairo_matrix_t aMatrix;
+    cairo_matrix_init_translate(&aMatrix, 0.5, 0.5);
+    cairo_set_matrix(cr, &aMatrix);
+
+    AddPolygonToPath(
+        cr,
+        aPoly,
+        basegfx::B2DHomMatrix(),
+        !getAntiAliasB2DDraw(),
+        false);
 
     applyColor(cr, m_aLineColor);
 
@@ -875,25 +1033,187 @@ void SvpSalGraphics::drawLine( long nX1, long nY1, long nX2, long nY2 )
     releaseCairoContext(cr, false, extents);
 }
 
+class SystemDependentData_CairoPath : public basegfx::SystemDependentData
+{
+private:
+    // the path data itself
+    cairo_path_t*       mpCairoPath;
+
+    // all other values the path data  is based on and
+    // need to be compared with to check for data validity
+    bool                mbNoJoin;
+    bool                mbAntiAliasB2DDraw;
+
+public:
+    SystemDependentData_CairoPath(
+        basegfx::SystemDependentDataManager& rSystemDependentDataManager,
+        cairo_path_t* pCairoPath,
+        bool bNoJoin,
+        bool bAntiAliasB2DDraw);
+    virtual ~SystemDependentData_CairoPath() override;
+
+    cairo_path_t* getCairoPath() { return mpCairoPath; }
+    bool getNoJoin() const { return mbNoJoin; }
+    bool getAntiAliasB2DDraw() const { return mbAntiAliasB2DDraw; }
+
+    virtual sal_Int64 estimateUsageInBytes() const override;
+};
+
+SystemDependentData_CairoPath::SystemDependentData_CairoPath(
+    basegfx::SystemDependentDataManager& rSystemDependentDataManager,
+    cairo_path_t* pCairoPath,
+    bool bNoJoin,
+    bool bAntiAliasB2DDraw)
+:   basegfx::SystemDependentData(rSystemDependentDataManager),
+    mpCairoPath(pCairoPath),
+    mbNoJoin(bNoJoin),
+    mbAntiAliasB2DDraw(bAntiAliasB2DDraw)
+{
+}
+
+SystemDependentData_CairoPath::~SystemDependentData_CairoPath()
+{
+    if(nullptr != mpCairoPath)
+    {
+        cairo_path_destroy(mpCairoPath);
+        mpCairoPath = nullptr;
+    }
+}
+
+sal_Int64 SystemDependentData_CairoPath::estimateUsageInBytes() const
+{
+    sal_Int64 nRetval(0);
+
+    if(nullptr != mpCairoPath)
+    {
+        // per node
+        // - num_data incarnations of
+        // - sizeof(cairo_path_data_t) which is a union of defines and point data
+        //   thus may 2 x sizeof(double)
+        nRetval = mpCairoPath->num_data * sizeof(cairo_path_data_t);
+    }
+
+    return nRetval;
+}
+
 bool SvpSalGraphics::drawPolyLine(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
     const basegfx::B2DPolygon& rPolyLine,
     double fTransparency,
     const basegfx::B2DVector& rLineWidths,
     basegfx::B2DLineJoin eLineJoin,
     css::drawing::LineCap eLineCap,
-    double fMiterMinimumAngle)
+    double fMiterMinimumAngle,
+    bool bPixelSnapHairline)
 {
     // short circuit if there is nothing to do
-    const int nPointCount = rPolyLine.count();
-    if (nPointCount <= 0)
+    if(0 == rPolyLine.count() || fTransparency < 0.0 || fTransparency >= 1.0)
     {
         return true;
     }
 
-    const bool bNoJoin = (basegfx::B2DLineJoin::NONE == eLineJoin && basegfx::fTools::more(rLineWidths.getX(), 0.0));
-
+    // Wrap call to static version of ::drawPolyLine by
+    // preparing/getting some local data and parameters
+    // due to usage in vcl/unx/generic/gdi/salgdi.cxx.
+    // This is mainly about extended handling of extents
+    // and the way destruction of CairoContext is handled
+    // due to current XOR stuff
     cairo_t* cr = getCairoContext(false);
+    basegfx::B2DRange aExtents;
     clipRegion(cr);
+
+    bool bRetval(
+        drawPolyLine(
+            cr,
+            &aExtents,
+            m_aLineColor,
+            getAntiAliasB2DDraw(),
+            rObjectToDevice,
+            rPolyLine,
+            fTransparency,
+            rLineWidths,
+            eLineJoin,
+            eLineCap,
+            fMiterMinimumAngle,
+            bPixelSnapHairline));
+
+    // if transformation has been applied, transform also extents (ranges)
+    // of damage so they can be correctly redrawn
+    aExtents.transform(rObjectToDevice);
+    releaseCairoContext(cr, false, aExtents);
+
+    return bRetval;
+}
+
+bool SvpSalGraphics::drawPolyLine(
+    cairo_t* cr,
+    basegfx::B2DRange* pExtents,
+    const Color& rLineColor,
+    bool bAntiAliasB2DDraw,
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolygon& rPolyLine,
+    double fTransparency,
+    const basegfx::B2DVector& rLineWidths,
+    basegfx::B2DLineJoin eLineJoin,
+    css::drawing::LineCap eLineCap,
+    double fMiterMinimumAngle,
+    bool bPixelSnapHairline)
+{
+    // short circuit if there is nothing to do
+    if(0 == rPolyLine.count() || fTransparency < 0.0 || fTransparency >= 1.0)
+    {
+        return true;
+    }
+
+    // need to check/handle LineWidth when ObjectToDevice transformation is used
+    basegfx::B2DVector aLineWidths(rLineWidths);
+    const bool bObjectToDeviceIsIdentity(rObjectToDevice.isIdentity());
+    const basegfx::B2DVector aDeviceLineWidths(bObjectToDeviceIsIdentity ? rLineWidths : rObjectToDevice * rLineWidths);
+    const bool bCorrectLineWidth(!bObjectToDeviceIsIdentity && aDeviceLineWidths.getX() < 1.0 && aLineWidths.getX() >= 1.0);
+
+    // on-demand inverse of ObjectToDevice transformation
+    basegfx::B2DHomMatrix aObjectToDeviceInv;
+
+    if(bCorrectLineWidth)
+    {
+        if(aObjectToDeviceInv.isIdentity())
+        {
+            aObjectToDeviceInv = rObjectToDevice;
+            aObjectToDeviceInv.invert();
+        }
+
+        // calculate-back logical LineWidth for a hairline
+        aLineWidths = aObjectToDeviceInv * basegfx::B2DVector(1.0, 1.0);
+    }
+
+    // PixelOffset used: Need to reflect in linear transformation
+    cairo_matrix_t aMatrix;
+
+    if(bObjectToDeviceIsIdentity)
+    {
+        // Set PixelOffset as requested
+        cairo_matrix_init_translate(&aMatrix, 0.5, 0.5);
+    }
+    else
+    {
+        // Prepare ObjectToDevice transformation. Take PixelOffset for Lines into
+        // account: Multiply from left to act in DeviceCoordinates
+        const basegfx::B2DHomMatrix aCombined(
+            basegfx::utils::createTranslateB2DHomMatrix(0.5, 0.5) * rObjectToDevice);
+        cairo_matrix_init(
+            &aMatrix,
+            aCombined.get( 0, 0 ),
+            aCombined.get( 1, 0 ),
+            aCombined.get( 0, 1 ),
+            aCombined.get( 1, 1 ),
+            aCombined.get( 0, 2 ),
+            aCombined.get( 1, 2 ));
+    }
+
+    // set linear transformation
+    cairo_set_matrix(cr, &aMatrix);
+
+    const bool bNoJoin((basegfx::B2DLineJoin::NONE == eLineJoin && basegfx::fTools::more(aLineWidths.getX(), 0.0)));
 
     // setup line attributes
     cairo_line_join_t eCairoLineJoin = CAIRO_LINE_JOIN_MITER;
@@ -936,54 +1256,95 @@ bool SvpSalGraphics::drawPolyLine(
         }
     }
 
-    cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
-                              m_aLineColor.GetGreen()/255.0,
-                              m_aLineColor.GetBlue()/255.0,
-                              1.0-fTransparency);
+    cairo_set_source_rgba(
+        cr,
+        rLineColor.GetRed()/255.0,
+        rLineColor.GetGreen()/255.0,
+        rLineColor.GetBlue()/255.0,
+        1.0-fTransparency);
 
     cairo_set_line_join(cr, eCairoLineJoin);
     cairo_set_line_cap(cr, eCairoLineCap);
-    cairo_set_line_width(cr, rLineWidths.getX());
+    cairo_set_line_width(cr, aLineWidths.getX());
     cairo_set_miter_limit(cr, fMiterLimit);
 
+    // try to access buffered data
+    std::shared_ptr<SystemDependentData_CairoPath> pSystemDependentData_CairoPath(
+        rPolyLine.getSystemDependentData<SystemDependentData_CairoPath>());
 
-    basegfx::B2DRange extents(0, 0, 0, 0);
-
-    if (!bNoJoin)
+    if(pSystemDependentData_CairoPath)
     {
-        AddPolygonToPath(cr, rPolyLine, rPolyLine.isClosed(), !getAntiAliasB2DDraw(), true);
-        extents = getClippedStrokeDamage(cr);
-        cairo_stroke(cr);
+        // check data validity
+        if(nullptr == pSystemDependentData_CairoPath->getCairoPath()
+            || pSystemDependentData_CairoPath->getNoJoin() != bNoJoin
+            || pSystemDependentData_CairoPath->getAntiAliasB2DDraw() != bAntiAliasB2DDraw)
+        {
+            // data invalid, forget
+            pSystemDependentData_CairoPath.reset();
+        }
+    }
+
+    if(pSystemDependentData_CairoPath)
+    {
+        // re-use data
+        cairo_append_path(cr, pSystemDependentData_CairoPath->getCairoPath());
     }
     else
     {
-        // emulate rendering::PathJoinType::NONE by painting single edges
-        const sal_uInt32 nEdgeCount(rPolyLine.isClosed() ? nPointCount : nPointCount - 1);
-        basegfx::B2DPolygon aEdge;
-        aEdge.append(rPolyLine.getB2DPoint(0));
-        aEdge.append(basegfx::B2DPoint(0.0, 0.0));
-
-        for (sal_uInt32 i = 0; i < nEdgeCount; ++i)
+        // create data
+        if (!bNoJoin)
         {
-            const sal_uInt32 nNextIndex((i + 1) % nPointCount);
-            aEdge.setB2DPoint(1, rPolyLine.getB2DPoint(nNextIndex));
-            aEdge.setNextControlPoint(0, rPolyLine.getNextControlPoint(i % nPointCount));
-            aEdge.setPrevControlPoint(1, rPolyLine.getPrevControlPoint(nNextIndex));
+            // PixelOffset now reflected in linear transformation used
+            AddPolygonToPath(
+                cr,
+                rPolyLine,
+                rObjectToDevice, // ObjectToDevice *without* LineDraw-Offset
+                !bAntiAliasB2DDraw,
+                bPixelSnapHairline);
+        }
+        else
+        {
+            const sal_uInt32 nPointCount(rPolyLine.count());
+            const sal_uInt32 nEdgeCount(rPolyLine.isClosed() ? nPointCount : nPointCount - 1);
+            basegfx::B2DPolygon aEdge;
 
-            AddPolygonToPath(cr, aEdge, false, !getAntiAliasB2DDraw(), true);
+            aEdge.append(rPolyLine.getB2DPoint(0));
+            aEdge.append(basegfx::B2DPoint(0.0, 0.0));
 
-            extents.expand(getStrokeDamage(cr));
+            for (sal_uInt32 i(0); i < nEdgeCount; i++)
+            {
+                const sal_uInt32 nNextIndex((i + 1) % nPointCount);
+                aEdge.setB2DPoint(1, rPolyLine.getB2DPoint(nNextIndex));
+                aEdge.setNextControlPoint(0, rPolyLine.getNextControlPoint(i));
+                aEdge.setPrevControlPoint(1, rPolyLine.getPrevControlPoint(nNextIndex));
 
-            cairo_stroke(cr);
+                // PixelOffset now reflected in linear transformation used
+                AddPolygonToPath(
+                    cr,
+                    aEdge,
+                    rObjectToDevice, // ObjectToDevice *without* LineDraw-Offset
+                    !bAntiAliasB2DDraw,
+                    bPixelSnapHairline);
 
-            // prepare next step
-            aEdge.setB2DPoint(0, aEdge.getB2DPoint(1));
+                // prepare next step
+                aEdge.setB2DPoint(0, aEdge.getB2DPoint(1));
+            }
         }
 
-        extents.intersect(getClipBox(cr));
+        // copy and add to buffering mechanism
+        pSystemDependentData_CairoPath = rPolyLine.addOrReplaceSystemDependentData<SystemDependentData_CairoPath>(
+            ImplGetSystemDependentDataManager(),
+            cairo_copy_path(cr),
+            bNoJoin,
+            bAntiAliasB2DDraw);
     }
 
-    releaseCairoContext(cr, false, extents);
+    // extract extents
+    if (pExtents)
+        *pExtents = getClippedStrokeDamage(cr);
+
+    // draw and consume
+    cairo_stroke(cr);
 
     return true;
 }
@@ -1013,60 +1374,114 @@ bool SvpSalGraphics::drawPolyPolygonBezier( sal_uInt32,
     return false;
 }
 
-void SvpSalGraphics::setupPolyPolygon(cairo_t* cr, const basegfx::B2DPolyPolygon& rPolyPoly)
+bool SvpSalGraphics::drawPolyPolygon(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolyPolygon& rPolyPolygon,
+    double fTransparency)
 {
+    const bool bHasFill(m_aFillColor != SALCOLOR_NONE);
+    const bool bHasLine(m_aLineColor != SALCOLOR_NONE);
+
+    if(0 == rPolyPolygon.count() || !(bHasFill || bHasLine) || fTransparency < 0.0 || fTransparency >= 1.0)
+    {
+        return true;
+    }
+
+    cairo_t* cr = getCairoContext(true);
     clipRegion(cr);
 
-    for (const auto & rPoly : rPolyPoly)
-        AddPolygonToPath(cr, rPoly, true, !getAntiAliasB2DDraw(), m_aLineColor != SALCOLOR_NONE);
-}
-
-bool SvpSalGraphics::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly, double fTransparency)
-{
-    cairo_t* cr = getCairoContext(true);
-
-    setupPolyPolygon(cr, rPolyPoly);
-
-    basegfx::B2DRange extents(0, 0, 0, 0);
-
-    if (m_aFillColor != SALCOLOR_NONE)
+    // Set full (Object-to-Device) transformation - if used
+    if(!rObjectToDevice.isIdentity())
     {
-        cairo_set_source_rgba(cr, m_aFillColor.GetRed()/255.0,
-                                  m_aFillColor.GetGreen()/255.0,
-                                  m_aFillColor.GetBlue()/255.0,
-                                  1.0-fTransparency);
+        cairo_matrix_t aMatrix;
 
-        if (m_aLineColor == SALCOLOR_NONE)
-            extents = getClippedFillDamage(cr);
+        cairo_matrix_init(
+            &aMatrix,
+            rObjectToDevice.get( 0, 0 ),
+            rObjectToDevice.get( 1, 0 ),
+            rObjectToDevice.get( 0, 1 ),
+            rObjectToDevice.get( 1, 1 ),
+            rObjectToDevice.get( 0, 2 ),
+            rObjectToDevice.get( 1, 2 ));
+        cairo_set_matrix(cr, &aMatrix);
+    }
+
+    // try to access buffered data
+    std::shared_ptr<SystemDependentData_CairoPath> pSystemDependentData_CairoPath(
+        rPolyPolygon.getSystemDependentData<SystemDependentData_CairoPath>());
+
+    if(pSystemDependentData_CairoPath)
+    {
+        // re-use data
+        cairo_append_path(cr, pSystemDependentData_CairoPath->getCairoPath());
+    }
+    else
+    {
+        // create data
+        for (const auto & rPoly : rPolyPolygon)
+        {
+            // PixelOffset used: Was dependent of 'm_aLineColor != SALCOLOR_NONE'
+            // Adapt setupPolyPolygon-users to set a linear transformation to achieve PixelOffset
+            AddPolygonToPath(
+                cr,
+                rPoly,
+                rObjectToDevice,
+                !getAntiAliasB2DDraw(),
+                false);
+        }
+
+        // copy and add to buffering mechanism
+        // for decisions how/what to buffer, see Note in WinSalGraphicsImpl::drawPolyPolygon
+        pSystemDependentData_CairoPath = rPolyPolygon.addOrReplaceSystemDependentData<SystemDependentData_CairoPath>(
+            ImplGetSystemDependentDataManager(),
+            cairo_copy_path(cr),
+            false,
+            false);
+    }
+
+    // To make releaseCairoContext work, use empty extents
+    basegfx::B2DRange extents;
+
+    if (bHasFill)
+    {
+        applyColor(cr, m_aFillColor, fTransparency);
+        // Get FillDamage (will be extended for LineDamage below)
+        extents = getClippedFillDamage(cr);
 
         cairo_fill_preserve(cr);
     }
 
-    if (m_aLineColor != SALCOLOR_NONE)
+    if (bHasLine)
     {
-        cairo_set_source_rgba(cr, m_aLineColor.GetRed()/255.0,
-                                  m_aLineColor.GetGreen()/255.0,
-                                  m_aLineColor.GetBlue()/255.0,
-                                  1.0-fTransparency);
+        // PixelOffset used: Set PixelOffset as linear transformation
+        cairo_matrix_t aMatrix;
+        cairo_matrix_init_translate(&aMatrix, 0.5, 0.5);
+        cairo_set_matrix(cr, &aMatrix);
 
-        extents = getClippedStrokeDamage(cr);
+        applyColor(cr, m_aLineColor, fTransparency);
+
+        // expand with possible StrokeDamage
+        extents.expand(getClippedStrokeDamage(cr));
 
         cairo_stroke_preserve(cr);
     }
 
+    // if transformation has been applied, transform also extents (ranges)
+    // of damage so they can be correctly redrawn
+    extents.transform(rObjectToDevice);
     releaseCairoContext(cr, true, extents);
 
     return true;
 }
 
-void SvpSalGraphics::applyColor(cairo_t *cr, Color aColor)
+void SvpSalGraphics::applyColor(cairo_t *cr, Color aColor, double fTransparency)
 {
     if (cairo_surface_get_content(m_pSurface) == CAIRO_CONTENT_COLOR_ALPHA)
     {
         cairo_set_source_rgba(cr, aColor.GetRed()/255.0,
                                   aColor.GetGreen()/255.0,
                                   aColor.GetBlue()/255.0,
-                                  1.0);
+                                  1.0 - fTransparency);
     }
     else
     {
@@ -1074,32 +1489,6 @@ void SvpSalGraphics::applyColor(cairo_t *cr, Color aColor)
         cairo_set_source_rgba(cr, 1, 1, 1, fSet);
         cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
     }
-}
-
-void SvpSalGraphics::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPoly)
-{
-    cairo_t* cr = getCairoContext(true);
-
-    setupPolyPolygon(cr, rPolyPoly);
-
-    basegfx::B2DRange extents(0, 0, 0, 0);
-
-    if (m_aFillColor != SALCOLOR_NONE)
-    {
-        applyColor(cr, m_aFillColor);
-        if (m_aLineColor == SALCOLOR_NONE)
-            extents = getClippedFillDamage(cr);
-        cairo_fill_preserve(cr);
-    }
-
-    if (m_aLineColor != SALCOLOR_NONE)
-    {
-        applyColor(cr, m_aLineColor);
-        extents = getClippedStrokeDamage(cr);
-        cairo_stroke_preserve(cr);
-    }
-
-    releaseCairoContext(cr, true, extents);
 }
 
 void SvpSalGraphics::copyArea( long nDestX,
@@ -1114,8 +1503,8 @@ void SvpSalGraphics::copyArea( long nDestX,
     copyBits(aTR, this);
 }
 
-static basegfx::B2DRange renderSource(cairo_t* cr, const SalTwoRect& rTR,
-                                          cairo_surface_t* source)
+static basegfx::B2DRange renderWithOperator(cairo_t* cr, const SalTwoRect& rTR,
+                                          cairo_surface_t* source, cairo_operator_t eOperator = CAIRO_OPERATOR_SOURCE)
 {
     cairo_rectangle(cr, rTR.mnDestX, rTR.mnDestY, rTR.mnDestWidth, rTR.mnDestHeight);
 
@@ -1140,22 +1529,33 @@ static basegfx::B2DRange renderSource(cairo_t* cr, const SalTwoRect& rTR,
         cairo_pattern_set_extend(sourcepattern, CAIRO_EXTEND_REPEAT);
         cairo_pattern_set_filter(sourcepattern, CAIRO_FILTER_NEAREST);
     }
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_set_operator(cr, eOperator);
     cairo_paint(cr);
     cairo_restore(cr);
 
     return extents;
 }
 
-void SvpSalGraphics::copySource( const SalTwoRect& rTR,
-                                 cairo_surface_t* source )
+static basegfx::B2DRange renderSource(cairo_t* cr, const SalTwoRect& rTR,
+                                          cairo_surface_t* source)
+{
+    return renderWithOperator(cr, rTR, source, CAIRO_OPERATOR_SOURCE);
+}
+
+void SvpSalGraphics::copyWithOperator( const SalTwoRect& rTR, cairo_surface_t* source,
+                                 cairo_operator_t eOp )
 {
     cairo_t* cr = getCairoContext(false);
     clipRegion(cr);
 
-    basegfx::B2DRange extents = renderSource(cr, rTR, source);
+    basegfx::B2DRange extents = renderWithOperator(cr, rTR, source, eOp);
 
     releaseCairoContext(cr, false, extents);
+}
+
+void SvpSalGraphics::copySource( const SalTwoRect& rTR, cairo_surface_t* source )
+{
+   copyWithOperator(rTR, source, CAIRO_OPERATOR_SOURCE);
 }
 
 void SvpSalGraphics::copyBits( const SalTwoRect& rTR,
@@ -1176,9 +1576,7 @@ void SvpSalGraphics::copyBits( const SalTwoRect& rTR,
                                             cairo_surface_get_content(m_pSurface),
                                             aTR.mnSrcWidth * m_fScale,
                                             aTR.mnSrcHeight * m_fScale);
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-        cairo_surface_set_device_scale(pCopy, m_fScale, m_fScale);
-#endif
+        dl_cairo_surface_set_device_scale(pCopy, m_fScale, m_fScale);
         cairo_t* cr = cairo_create(pCopy);
         cairo_set_source_surface(cr, source, -aTR.mnSrcX, -aTR.mnSrcY);
         cairo_rectangle(cr, 0, 0, aTR.mnSrcWidth, aTR.mnSrcHeight);
@@ -1204,6 +1602,13 @@ void SvpSalGraphics::drawBitmap(const SalTwoRect& rTR, const SalBitmap& rSourceB
     copySource(rTR, source);
 }
 
+void SvpSalGraphics::drawBitmap(const SalTwoRect& rTR, BitmapBuffer* pBuffer, cairo_operator_t eOp)
+{
+    cairo_surface_t* source = createCairoSurface( pBuffer );
+    copyWithOperator(rTR, source, eOp);
+    cairo_surface_destroy(source);
+}
+
 void SvpSalGraphics::drawBitmap( const SalTwoRect& rTR,
                                  const SalBitmap& rSourceBitmap,
                                  const SalBitmap& rTransparentBitmap )
@@ -1213,12 +1618,46 @@ void SvpSalGraphics::drawBitmap( const SalTwoRect& rTR,
 
 static sal_uInt8 unpremultiply(sal_uInt8 c, sal_uInt8 a)
 {
-    return (a > 0) ? (c * 255 + a / 2) / a : 0;
+    return (a == 0) ? 0 : (c * 255 + a / 2) / a;
 }
 
 static sal_uInt8 premultiply(sal_uInt8 c, sal_uInt8 a)
 {
     return (c * a + 127) / 255;
+}
+
+typedef sal_uInt8 (*lookup_table)[256];
+
+static lookup_table get_unpremultiply_table()
+{
+    static bool inited;
+    static sal_uInt8 unpremultiply_table[256][256];
+
+    if (!inited)
+    {
+        for (int a = 0; a < 256; ++a)
+            for (int c = 0; c < 256; ++c)
+                unpremultiply_table[a][c] = unpremultiply(c, a);
+        inited = true;
+    }
+
+    return unpremultiply_table;
+}
+
+static lookup_table get_premultiply_table()
+{
+    static bool inited;
+    static sal_uInt8 premultiply_table[256][256];
+
+    if (!inited)
+    {
+        for (int a = 0; a < 256; ++a)
+            for (int c = 0; c < 256; ++c)
+                premultiply_table[a][c] = premultiply(c, a);
+        inited = true;
+    }
+
+    return premultiply_table;
 }
 
 void SvpSalGraphics::drawMask( const SalTwoRect& rTR,
@@ -1228,17 +1667,24 @@ void SvpSalGraphics::drawMask( const SalTwoRect& rTR,
     /** creates an image from the given rectangle, replacing all black pixels
      *  with nMaskColor and make all other full transparent */
     SourceHelper aSurface(rSalBitmap, true); // The mask is argb32
+    if (!aSurface.getSurface())
+    {
+        SAL_WARN("vcl.gdi", "unsupported SvpSalGraphics::drawMask case");
+        return;
+    }
     sal_Int32 nStride;
     unsigned char *mask_data = aSurface.getBits(nStride);
-    for (sal_Int32 y = rTR.mnSrcY ; y < rTR.mnSrcY + rTR.mnSrcHeight; ++y)
+    lookup_table unpremultiply_table = get_unpremultiply_table();
+    for (long y = rTR.mnSrcY ; y < rTR.mnSrcY + rTR.mnSrcHeight; ++y)
     {
         unsigned char *row = mask_data + (nStride*y);
         unsigned char *data = row + (rTR.mnSrcX * 4);
-        for (sal_Int32 x = rTR.mnSrcX; x < rTR.mnSrcX + rTR.mnSrcWidth; ++x)
+        for (long x = rTR.mnSrcX; x < rTR.mnSrcX + rTR.mnSrcWidth; ++x)
         {
-            sal_uInt8 b = unpremultiply(data[SVP_CAIRO_BLUE], data[SVP_CAIRO_ALPHA]);
-            sal_uInt8 g = unpremultiply(data[SVP_CAIRO_GREEN], data[SVP_CAIRO_ALPHA]);
-            sal_uInt8 r = unpremultiply(data[SVP_CAIRO_RED], data[SVP_CAIRO_ALPHA]);
+            sal_uInt8 a = data[SVP_CAIRO_ALPHA];
+            sal_uInt8 b = unpremultiply_table[a][data[SVP_CAIRO_BLUE]];
+            sal_uInt8 g = unpremultiply_table[a][data[SVP_CAIRO_GREEN]];
+            sal_uInt8 r = unpremultiply_table[a][data[SVP_CAIRO_RED]];
             if (r == 0 && g == 0 && b == 0)
             {
                 data[0] = nMaskColor.GetBlue();
@@ -1283,9 +1729,9 @@ void SvpSalGraphics::drawMask( const SalTwoRect& rTR,
     releaseCairoContext(cr, false, extents);
 }
 
-SalBitmap* SvpSalGraphics::getBitmap( long nX, long nY, long nWidth, long nHeight )
+std::shared_ptr<SalBitmap> SvpSalGraphics::getBitmap( long nX, long nY, long nWidth, long nHeight )
 {
-    SvpSalBitmap* pBitmap = new SvpSalBitmap();
+    std::shared_ptr<SvpSalBitmap> pBitmap = std::make_shared<SvpSalBitmap>();
     BitmapPalette aPal;
     if (GetBitCount() == 1)
     {
@@ -1297,11 +1743,15 @@ SalBitmap* SvpSalGraphics::getBitmap( long nX, long nY, long nWidth, long nHeigh
     if (!pBitmap->Create(Size(nWidth, nHeight), GetBitCount(), aPal))
     {
         SAL_WARN("vcl.gdi", "SvpSalGraphics::getBitmap, cannot create bitmap");
-        delete pBitmap;
         return nullptr;
     }
 
     cairo_surface_t* target = SvpSalGraphics::createCairoSurface(pBitmap->GetBuffer());
+    if (!target)
+    {
+        SAL_WARN("vcl.gdi", "SvpSalGraphics::getBitmap, cannot create cairo surface");
+        return nullptr;
+    }
     cairo_t* cr = cairo_create(target);
 
     SalTwoRect aTR(nX, nY, nWidth, nHeight, 0, 0, nWidth, nHeight);
@@ -1332,10 +1782,12 @@ Color SvpSalGraphics::getPixel( long nX, long nY )
     cairo_destroy(cr);
 
     cairo_surface_flush(target);
+    lookup_table unpremultiply_table = get_unpremultiply_table();
     unsigned char *data = cairo_image_surface_get_data(target);
-    sal_uInt8 b = unpremultiply(data[SVP_CAIRO_BLUE], data[SVP_CAIRO_ALPHA]);
-    sal_uInt8 g = unpremultiply(data[SVP_CAIRO_GREEN], data[SVP_CAIRO_ALPHA]);
-    sal_uInt8 r = unpremultiply(data[SVP_CAIRO_RED], data[SVP_CAIRO_ALPHA]);
+    sal_uInt8 a = data[SVP_CAIRO_ALPHA];
+    sal_uInt8 b = unpremultiply_table[a][data[SVP_CAIRO_BLUE]];
+    sal_uInt8 g = unpremultiply_table[a][data[SVP_CAIRO_GREEN]];
+    sal_uInt8 r = unpremultiply_table[a][data[SVP_CAIRO_RED]];
     Color nRet = Color(r, g, b);
 
     cairo_surface_destroy(target);
@@ -1365,9 +1817,15 @@ void SvpSalGraphics::invert(const basegfx::B2DPolygon &rPoly, SalInvert nFlags)
     cairo_t* cr = getCairoContext(false);
     clipRegion(cr);
 
-    basegfx::B2DRange extents(0, 0, 0, 0);
+    // To make releaseCairoContext work, use empty extents
+    basegfx::B2DRange extents;
 
-    AddPolygonToPath(cr, rPoly, true, !getAntiAliasB2DDraw(), false);
+    AddPolygonToPath(
+        cr,
+        rPoly,
+        basegfx::B2DHomMatrix(),
+        !getAntiAliasB2DDraw(),
+        false);
 
     cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
 
@@ -1390,7 +1848,10 @@ void SvpSalGraphics::invert(const basegfx::B2DPolygon &rPoly, SalInvert nFlags)
         //see tdf#106577 under wayland, some pixel droppings seen, maybe we're
         //out by one somewhere, or cairo_stroke_extents is confused by
         //dashes/line width
-        extents.grow(1);
+        if(!extents.isEmpty())
+        {
+            extents.grow(1);
+        }
 
         cairo_stroke(cr);
     }
@@ -1408,9 +1869,7 @@ void SvpSalGraphics::invert(const basegfx::B2DPolygon &rPoly, SalInvert nFlags)
                                                                     extents.getWidth() * m_fScale,
                                                                     extents.getHeight() * m_fScale);
 
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-            cairo_surface_set_device_scale(surface, m_fScale, m_fScale);
-#endif
+            dl_cairo_surface_set_device_scale(surface, m_fScale, m_fScale);
             cairo_t* stipple_cr = cairo_create(surface);
             cairo_set_source_rgb(stipple_cr, 1.0, 1.0, 1.0);
             cairo_mask(stipple_cr, pattern);
@@ -1451,6 +1910,69 @@ bool SvpSalGraphics::drawEPS( long, long, long, long, void*, sal_uLong )
     return false;
 }
 
+/* Widget drawing */
+
+bool SvpSalGraphics::IsNativeControlSupported(ControlType eType, ControlPart ePart)
+{
+    if (hasWidgetDraw())
+        return m_pWidgetDraw->isNativeControlSupported(eType, ePart);
+
+    return false;
+}
+
+bool SvpSalGraphics::hitTestNativeControl(ControlType eType, ControlPart ePart,
+                                       const tools::Rectangle& rBoundingControlRegion,
+                                       const Point& rPosition, bool& rIsInside)
+{
+    if (hasWidgetDraw())
+    {
+        return m_pWidgetDraw->hitTestNativeControl(eType, ePart, rBoundingControlRegion, rPosition, rIsInside);
+    }
+
+    return false;
+}
+
+bool SvpSalGraphics::drawNativeControl(ControlType eType, ControlPart ePart,
+                                   const tools::Rectangle& rControlRegion,
+                                   ControlState eState, const ImplControlValue& aValue,
+                                   const OUString& aCaptions)
+{
+    if (hasWidgetDraw())
+    {
+        bool bReturn = m_pWidgetDraw->drawNativeControl(eType, ePart, rControlRegion,
+                                                        eState, aValue, aCaptions);
+        return bReturn;
+    }
+
+    return false;
+}
+
+bool SvpSalGraphics::getNativeControlRegion(ControlType eType, ControlPart ePart,
+                                         const tools::Rectangle& rBoundingControlRegion,
+                                         ControlState eState,
+                                         const ImplControlValue& aValue,
+                                         const OUString& aCaption,
+                                         tools::Rectangle& rNativeBoundingRegion,
+                                         tools::Rectangle& rNativeContentRegion)
+{
+    if (hasWidgetDraw())
+    {
+        return m_pWidgetDraw->getNativeControlRegion(eType, ePart, rBoundingControlRegion,
+                                                     eState, aValue, aCaption,
+                                                     rNativeBoundingRegion, rNativeContentRegion);
+    }
+
+    return false;
+}
+
+void SvpSalGraphics::updateSettings(AllSettings& rSettings)
+{
+    if (hasWidgetDraw())
+    {
+        m_pWidgetDraw->updateSettings(rSettings);
+    }
+}
+
 namespace
 {
     bool isCairoCompatible(const BitmapBuffer* pBuffer)
@@ -1482,6 +2004,11 @@ cairo_surface_t* SvpSalGraphics::createCairoSurface(const BitmapBuffer *pBuffer)
                                         nFormat,
                                         pBuffer->mnWidth, pBuffer->mnHeight,
                                         pBuffer->mnScanlineSize);
+    if (cairo_surface_status(target) != CAIRO_STATUS_SUCCESS)
+    {
+        cairo_surface_destroy(target);
+        return nullptr;
+    }
     return target;
 }
 
@@ -1496,9 +2023,7 @@ cairo_t* SvpSalGraphics::createTmpCompatibleCairoContext() const
             m_aFrameSize.getX() * m_fScale,
             m_aFrameSize.getY() * m_fScale);
 
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-    cairo_surface_set_device_scale(target, m_fScale, m_fScale);
-#endif
+    dl_cairo_surface_set_device_scale(target, m_fScale, m_fScale);
 
     return cairo_create(target);
 }
@@ -1514,6 +2039,11 @@ cairo_t* SvpSalGraphics::getCairoContext(bool bXorModeAllowed) const
     cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
     cairo_set_antialias(cr, getAntiAliasB2DDraw() ? CAIRO_ANTIALIAS_DEFAULT : CAIRO_ANTIALIAS_NONE);
     cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+    // ensure no linear transformation and no PathInfo in local cairo_path_t
+    cairo_identity_matrix(cr);
+    cairo_new_path(cr);
+
     return cr;
 }
 
@@ -1582,6 +2112,8 @@ void SvpSalGraphics::releaseCairoContext(cairo_t* cr, bool bXorModeAllowed, cons
         sal_Int32 nUnscaledExtentsRight = nExtentsRight * m_fScale;
         sal_Int32 nUnscaledExtentsTop = nExtentsTop * m_fScale;
         sal_Int32 nUnscaledExtentsBottom = nExtentsBottom * m_fScale;
+        lookup_table unpremultiply_table = get_unpremultiply_table();
+        lookup_table premultiply_table = get_premultiply_table();
         for (sal_Int32 y = nUnscaledExtentsTop; y < nUnscaledExtentsBottom; ++y)
         {
             unsigned char *true_row = target_surface_data + (nStride*y);
@@ -1590,15 +2122,17 @@ void SvpSalGraphics::releaseCairoContext(cairo_t* cr, bool bXorModeAllowed, cons
             unsigned char *xor_data = xor_row + (nUnscaledExtentsLeft * 4);
             for (sal_Int32 x = nUnscaledExtentsLeft; x < nUnscaledExtentsRight; ++x)
             {
-                sal_uInt8 b = unpremultiply(true_data[SVP_CAIRO_BLUE], true_data[SVP_CAIRO_ALPHA]) ^
-                              unpremultiply(xor_data[SVP_CAIRO_BLUE], xor_data[SVP_CAIRO_ALPHA]);
-                sal_uInt8 g = unpremultiply(true_data[SVP_CAIRO_GREEN], true_data[SVP_CAIRO_ALPHA]) ^
-                              unpremultiply(xor_data[SVP_CAIRO_GREEN], xor_data[SVP_CAIRO_ALPHA]);
-                sal_uInt8 r = unpremultiply(true_data[SVP_CAIRO_RED], true_data[SVP_CAIRO_ALPHA]) ^
-                              unpremultiply(xor_data[SVP_CAIRO_RED], xor_data[SVP_CAIRO_ALPHA]);
-                true_data[0] = premultiply(b, true_data[SVP_CAIRO_ALPHA]);
-                true_data[1] = premultiply(g, true_data[SVP_CAIRO_ALPHA]);
-                true_data[2] = premultiply(r, true_data[SVP_CAIRO_ALPHA]);
+                sal_uInt8 a = true_data[SVP_CAIRO_ALPHA];
+                sal_uInt8 xor_a = xor_data[SVP_CAIRO_ALPHA];
+                sal_uInt8 b = unpremultiply_table[a][true_data[SVP_CAIRO_BLUE]] ^
+                              unpremultiply_table[xor_a][xor_data[SVP_CAIRO_BLUE]];
+                sal_uInt8 g = unpremultiply_table[a][true_data[SVP_CAIRO_GREEN]] ^
+                              unpremultiply_table[xor_a][xor_data[SVP_CAIRO_GREEN]];
+                sal_uInt8 r = unpremultiply_table[a][true_data[SVP_CAIRO_RED]] ^
+                              unpremultiply_table[xor_a][xor_data[SVP_CAIRO_RED]];
+                true_data[SVP_CAIRO_BLUE] = premultiply_table[a][b];
+                true_data[SVP_CAIRO_GREEN] = premultiply_table[a][g];
+                true_data[SVP_CAIRO_RED] = premultiply_table[a][r];
                 true_data+=4;
                 xor_data+=4;
             }
@@ -1676,6 +2210,36 @@ bool SvpSalGraphics::supportsOperation(OutDevSupportType eType) const
             return true;
     }
     return false;
+}
+
+GlyphCache& SvpSalGraphics::getPlatformGlyphCache()
+{
+    GenericUnixSalData* const pSalData(GetGenericUnixSalData());
+    assert(pSalData);
+    return *pSalData->GetGlyphCache();
+}
+
+void dl_cairo_surface_set_device_scale(cairo_surface_t *surface, double x_scale, double y_scale)
+{
+    static auto func = reinterpret_cast<void(*)(cairo_surface_t*, double, double)>(
+        dlsym(nullptr, "cairo_surface_set_device_scale"));
+    if (func)
+        func(surface, x_scale, y_scale);
+}
+
+void dl_cairo_surface_get_device_scale(cairo_surface_t *surface, double* x_scale, double* y_scale)
+{
+    static auto func = reinterpret_cast<void(*)(cairo_surface_t*, double*, double*)>(
+        dlsym(nullptr, "cairo_surface_get_device_scale"));
+    if (func)
+        func(surface, x_scale, y_scale);
+    else
+    {
+        if (x_scale)
+            *x_scale = 1.0;
+        if (y_scale)
+            *y_scale = 1.0;
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

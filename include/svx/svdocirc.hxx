@@ -47,8 +47,8 @@ private:
     // only for SdrCircleAttributes
     SdrObjKind GetCircleKind() const { return meCircleKind; }
 
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     SdrObjKind                  meCircleKind;
     long                        nStartAngle;
@@ -109,7 +109,7 @@ public:
     virtual Point GetSnapPoint(sal_uInt32 i) const override;
 
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
+    virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // special drag methods
     virtual bool hasSpecialDrag() const override;

@@ -20,6 +20,7 @@
 #include "system.hxx"
 #include "readwrite_helper.hxx"
 #include "file_url.hxx"
+#include "unixerrnostring.hxx"
 
 #include <osl/diagnose.h>
 #include <osl/profile.h>
@@ -181,6 +182,7 @@ static oslProfile osl_psz_openProfile(const sal_Char *pszProfileName, oslProfile
     if (pProfile->m_pFile == nullptr)
         closeFileImpl(pFile,pProfile->m_Flags);
 
+    // coverity[leaked_storage] - pFile is not leaked
     return pProfile;
 }
 
@@ -333,7 +335,7 @@ static bool writeProfileImpl(osl_TFile* pFile)
 
     if ( !safeWrite(pFile->m_Handle, pFile->m_pWriteBuf, pFile->m_nWriteBufLen - pFile->m_nWriteBufFree) )
     {
-        SAL_INFO("sal.osl", "write failed " << strerror(errno));
+        SAL_INFO("sal.osl", "write failed: " << UnixErrnoString(errno));
         return false;
     }
 
@@ -927,7 +929,7 @@ static bool OslProfile_lockFile(const osl_TFile* pFile, osl_TLockMode eMode)
     if ( fcntl(pFile->m_Handle, F_SETLKW, &lock) == -1 && errno != ENOTSUP )
 #endif
     {
-        SAL_INFO("sal.osl", "fcntl returned -1 (" << strerror(errno) << ")");
+        SAL_INFO("sal.osl", "fcntl failed: " << UnixErrnoString(errno));
         return false;
     }
 
@@ -948,6 +950,15 @@ static osl_TFile* openFileImpl(const sal_Char* pszFilename, oslProfileOption Pro
     if (! bWriteable)
     {
         pFile->m_Handle = open(pszFilename, O_RDONLY);
+
+        if (pFile->m_Handle == -1)
+        {
+            int e = errno;
+            SAL_INFO("sal.file", "open(" << pszFilename << ",O_RDONLY): " << UnixErrnoString(e));
+        }
+        else
+            SAL_INFO("sal.file", "open(" << pszFilename << ",O_RDONLY) => " << pFile->m_Handle);
+
         /* mfe: argghh!!! do not check if the file could be opened */
         /*      default mode expects it that way!!!                 */
     }
@@ -956,9 +967,13 @@ static osl_TFile* openFileImpl(const sal_Char* pszFilename, oslProfileOption Pro
         if (((pFile->m_Handle = open(pszFilename, O_RDWR | O_CREAT | O_EXCL, DEFAULT_PMODE)) < 0) &&
             ((pFile->m_Handle = open(pszFilename, O_RDWR)) < 0))
         {
+            int e = errno;
+            SAL_INFO("sal.file", "open(" << pszFilename << ",...): " << UnixErrnoString(e));
             free(pFile);
             return nullptr;
         }
+        else
+            SAL_INFO("sal.file", "open(" << pszFilename << ",...) => " << pFile->m_Handle);
     }
 
     /* set close-on-exec flag */
@@ -1002,6 +1017,7 @@ static osl_TStamp closeFileImpl(osl_TFile* pFile, oslProfileOption Flags)
         }
 
         close(pFile->m_Handle);
+        SAL_INFO("sal.file", "close(" << pFile->m_Handle << ")");
         pFile->m_Handle = -1;
     }
 
@@ -1064,10 +1080,10 @@ static sal_Char* OslProfile_getLine(osl_TFile* pFile)
 
             if ((Max = read(pFile->m_Handle, &pFile->m_ReadBuf[Bytes], Free)) < 0)
             {
-                SAL_INFO("sal.osl", "read failed " << strerror(errno));
+                SAL_INFO("sal.osl", "read failed: " << UnixErrnoString(errno));
 
                 if( pLine )
-                    rtl_freeMemory( pLine );
+                    free( pLine );
                 pLine = nullptr;
                 break;
             }
@@ -1087,11 +1103,11 @@ static sal_Char* OslProfile_getLine(osl_TFile* pFile)
              pChr++);
 
         Max = pChr - pFile->m_pReadPtr;
-        pNewLine = static_cast<sal_Char*>(rtl_allocateMemory( nLineBytes + Max + 1 ));
+        pNewLine = static_cast<sal_Char*>(malloc( nLineBytes + Max + 1 ));
         if( pLine )
         {
             memcpy( pNewLine, pLine, nLineBytes );
-            rtl_freeMemory( pLine );
+            free( pLine );
         }
         memcpy(pNewLine+nLineBytes, pFile->m_pReadPtr, Max);
         nLineBytes += Max;
@@ -1545,7 +1561,7 @@ static bool loadProfile(osl_TFile* pFile, osl_TProfileImpl* pProfile)
     while ( ( pLine=OslProfile_getLine(pFile) ) != nullptr )
     {
         sal_Char* bWasAdded = addLine( pProfile, pLine );
-        rtl_freeMemory( pLine );
+        free( pLine );
         SAL_WARN_IF(!bWasAdded, "sal.osl", "addLine( pProfile, pLine ) ==> false");
         if ( ! bWasAdded )
             return false;
@@ -1709,8 +1725,27 @@ static bool osl_ProfileSwapProfileNames(osl_TProfileImpl* pProfile)
     unlink( pszBakFile );
 
     // Rename ini -> bak, then tmp -> ini:
-    return rename( pProfile->m_FileName, pszBakFile ) == 0
-        && rename( pszTmpFile, pProfile->m_FileName ) == 0;
+    bool result = rename( pProfile->m_FileName, pszBakFile ) == 0;
+    if (!result)
+    {
+        int e = errno;
+        SAL_INFO("sal.file", "rename(" << pProfile->m_FileName << "," << pszBakFile << "): " << UnixErrnoString(e));
+    }
+    else
+    {
+        SAL_INFO("sal.file", "rename(" << pProfile->m_FileName << "," << pszBakFile << "): OK");
+        result = rename( pszTmpFile, pProfile->m_FileName ) == 0;
+        if (!result)
+        {
+            int e = errno;
+            SAL_INFO("sal.file", "rename(" << pszTmpFile << "," << pProfile->m_FileName << "): " << UnixErrnoString(e));
+        }
+        else
+        {
+            SAL_INFO("sal.file", "rename(" << pszTmpFile << "," << pProfile->m_FileName << "): OK");
+        }
+    }
+    return result;
 }
 
 static void osl_ProfileGenerateExtension(const sal_Char* pszFileName, const sal_Char* pszExtension, sal_Char* pszTmpName, int BufferMaxLen)

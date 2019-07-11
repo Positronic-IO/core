@@ -15,14 +15,14 @@
 
 struct Encoder
 {
-    rtl_UnicodeToTextConverter m_aConverter;
+    rtl_UnicodeToTextConverter const m_aConverter;
     bool m_bCapable;
     const char *m_pEncoding;
     Encoder(rtl_TextEncoding nEncoding, const char *pEncoding)
-        : m_bCapable(true)
+        : m_aConverter(rtl_createUnicodeToTextConverter(nEncoding))
+        , m_bCapable(true)
         , m_pEncoding(pEncoding)
     {
-        m_aConverter = rtl_createUnicodeToTextConverter(nEncoding);
     }
     ~Encoder()
     {

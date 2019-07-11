@@ -43,12 +43,6 @@ long SwTextFrame::nMinPrtLine = 0;
 SwContourCache *pContourCache = nullptr;
 SwDropCapCache *pDropCapCache = nullptr;
 
-IMPL_FIXEDMEMPOOL_NEWDEL( SwTextLine )
-IMPL_FIXEDMEMPOOL_NEWDEL( SwParaPortion ) // Paragraphs
-IMPL_FIXEDMEMPOOL_NEWDEL( SwLineLayout ) // Lines
-IMPL_FIXEDMEMPOOL_NEWDEL( SwHolePortion ) // e.g. Blanks at the line end
-IMPL_FIXEDMEMPOOL_NEWDEL( SwTextPortion ) // Attribute change
-
 // Are ONLY used in init.cxx.
 // There we have extern void TextFinit()
 // and extern void TextInit_(...)
@@ -63,7 +57,6 @@ void TextInit_()
 #endif
     );
     SwTextFrame::SetTextCache( pTextCache );
-    pWaveCol = new Color(COL_GRAY);
     PROTOCOL_INIT
 }
 
@@ -74,7 +67,6 @@ void TextFinit()
     delete pSwFontCache;
     delete pFntCache;
     delete pBlink;
-    delete pWaveCol;
     delete pContourCache;
     SwDropPortion::DeleteDropCapCache();
 }

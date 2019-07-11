@@ -453,7 +453,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetFrameStylePropertyM
         { OUString(UNO_NAME_IS_AUTO_UPDATE), FN_UNO_IS_AUTO_UPDATE, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0},
         { OUString(UNO_NAME_DISPLAY_NAME), FN_UNO_DISPLAY_NAME, cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0},
         // #i18732#
-        { OUString(UNO_NAME_IS_FOLLOWING_TEXT_FLOW), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, 0},
+        { OUString(UNO_NAME_IS_FOLLOWING_TEXT_FLOW), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, MID_FOLLOW_TEXT_FLOW},
+        { OUString(UNO_NAME_IS_LAYOUT_IN_CELL), RES_FOLLOW_TEXT_FLOW,     cppu::UnoType<bool>::get(), PROPERTY_NONE, MID_FTF_LAYOUT_IN_CELL},
         // #i28701#
         { OUString(UNO_NAME_WRAP_INFLUENCE_ON_POSITION), RES_WRAP_INFLUENCE_ON_OBJPOS, cppu::UnoType<sal_Int8>::get(), PROPERTY_NONE, MID_WRAP_INFLUENCE},
         { OUString(UNO_NAME_WRITING_MODE), RES_FRAMEDIR, cppu::UnoType<sal_Int16>::get(), PROPERTY_NONE, 0 },
@@ -850,7 +851,7 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetGraphicPropertyMap(
         { OUString(UNO_NAME_REPLACEMENT_GRAPHIC), FN_UNO_REPLACEMENT_GRAPHIC, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0 },
         { OUString(UNO_NAME_GRAPHIC_FILTER), FN_UNO_GRAPHIC_FILTER,      cppu::UnoType<OUString>::get(), 0, 0 },
         { OUString(UNO_NAME_GRAPHIC), FN_UNO_GRAPHIC, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0 },
-        { OUString(UNO_NAME_GRAPHIC_URL), FN_UNO_GRAPHIC_URL, cppu::UnoType<OUString>::get(), 0, 0 },
+        { OUString(UNO_NAME_GRAPHIC_URL), FN_UNO_GRAPHIC_URL, cppu::UnoType<css::uno::Any>::get(), 0, 0 },
         { OUString(UNO_NAME_ACTUAL_SIZE), FN_UNO_ACTUAL_SIZE,    cppu::UnoType<css::awt::Size>::get(),  PropertyAttribute::READONLY, CONVERT_TWIPS},
         { OUString(UNO_NAME_CONTOUR_POLY_POLYGON), FN_PARAM_CONTOUR_PP, cppu::UnoType<css::drawing::PointSequenceSequence>::get(), PropertyAttribute::MAYBEVOID, 0 },
         { OUString(UNO_NAME_IS_PIXEL_CONTOUR), FN_UNO_IS_PIXEL_CONTOUR, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
@@ -899,6 +900,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetEmbeddedPropertyMap
         { OUString(UNO_NAME_COMPONENT),FN_UNO_COMPONENT, cppu::UnoType<css::lang::XComponent>::get(), PropertyAttribute::READONLY, 0},
         { OUString(UNO_NAME_EMBEDDED_OBJECT),FN_EMBEDDED_OBJECT, cppu::UnoType<css::embed::XEmbeddedObject>::get(), PROPERTY_NONE, 0},
         { OUString(UNO_NAME_DRAW_ASPECT),FN_UNO_DRAW_ASPECT, cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
+        { OUString(UNO_NAME_VISIBLE_AREA_WIDTH),FN_UNO_VISIBLE_AREA_WIDTH, cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
+        { OUString(UNO_NAME_VISIBLE_AREA_HEIGHT),FN_UNO_VISIBLE_AREA_HEIGHT, cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
         // added FillProperties for SW, same as FILL_PROPERTIES in svx
         // but need own defines in Writer due to later association of strings
         // and uno types (see loop at end of this method and definition of SW_PROP_NMID)
@@ -988,6 +991,8 @@ const SfxItemPropertyMapEntry*  SwUnoPropertyMapProvider::GetBookmarkPropertyMap
     {
         { OUString(UNO_LINK_DISPLAY_NAME), FN_PARAM_LINK_DISPLAY_NAME,  cppu::UnoType<OUString>::get(), PropertyAttribute::READONLY, 0xbf},
         COMMON_TEXT_CONTENT_PROPERTIES
+        { OUString(UNO_NAME_BOOKMARK_HIDDEN), FN_BOOKMARK_HIDDEN,  cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
+        { OUString(UNO_NAME_BOOKMARK_CONDITION), FN_BOOKMARK_CONDITION,  cppu::UnoType<OUString>::get(), PROPERTY_NONE, 0 },
         { OUString(), 0, css::uno::Type(), 0, 0 }
     };
 

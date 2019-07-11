@@ -90,7 +90,8 @@ enum SwViewSettingsPropertyHandles
     HANDLE_VIEWSET_VERT_RULER_METRIC,
     HANDLE_VIEWSET_SCROLLBAR_TIPS,
     HANDLE_VIEWSET_INLINECHANGES_TIPS,
-    HANDLE_VIEWSET_HIDE_WHITESPACE
+    HANDLE_VIEWSET_HIDE_WHITESPACE,
+    HANDLE_VIEWSET_USE_HEADERFOOTERMENU,
 };
 
 enum SwPrintSettingsPropertyHandles
@@ -126,6 +127,7 @@ static ChainablePropertySetInfo * lcl_createViewSettingsInfo()
         { OUString( "IsVertRulerRightAligned"),HANDLE_VIEWSET_VRULER_RIGHT         , cppu::UnoType<bool>::get(), PROPERTY_NONE},
         { OUString( "ShowContentTips" ),     HANDLE_VIEWSET_SHOW_CONTENT_TIPS      , cppu::UnoType<bool>::get(), PROPERTY_NONE},
         { OUString( "ShowInlineTooltips" ),  HANDLE_VIEWSET_INLINECHANGES_TIPS      , cppu::UnoType<bool>::get(), PROPERTY_NONE},
+        { OUString( "UseHeaderFooterMenu" ), HANDLE_VIEWSET_USE_HEADERFOOTERMENU , cppu::UnoType<bool>::get(), PROPERTY_NONE},
         { OUString( "RasterResolutionX"),    HANDLE_VIEWSET_RASTER_RESOLUTION_X,     cppu::UnoType<sal_Int32>::get(),     PROPERTY_NONE},
         { OUString( "RasterResolutionY"),    HANDLE_VIEWSET_RASTER_RESOLUTION_Y,     cppu::UnoType<sal_Int32>::get(),     PROPERTY_NONE},
         { OUString( "RasterSubdivisionX"),   HANDLE_VIEWSET_RASTER_SUBDIVISION_X,    cppu::UnoType<sal_Int32>::get(),     PROPERTY_NONE},
@@ -519,13 +521,12 @@ Sequence< OUString > SwXPrintSettings::getSupportedServiceNames()
 SwXViewSettings::SwXViewSettings(SwView* pVw)
     : ChainablePropertySet( lcl_createViewSettingsInfo (), &Application::GetSolarMutex() )
     , pView(pVw)
-    , mpViewOption(nullptr)
     , mpConstViewOption(nullptr)
     , bObjectValid(true)
     , mbApplyZoom(false)
-    , eHRulerUnit(FUNIT_CM)
+    , eHRulerUnit(FieldUnit::CM)
     , mbApplyHRulerMetric(false)
-    , eVRulerUnit(FUNIT_CM)
+    , eVRulerUnit(FieldUnit::CM)
     , mbApplyVRulerMetric(false)
 {
     // This property only exists if we have a view (ie, not at the module )
@@ -552,7 +553,7 @@ void SwXViewSettings::_preSetValues ()
     else
         pVOpt = SW_MOD()->GetViewOption(false);
 
-    mpViewOption = new SwViewOption (*pVOpt);
+    mpViewOption.reset( new SwViewOption (*pVOpt) );
     mbApplyZoom = false;
     if(pView)
         mpViewOption->SetStarOneSetting(true);
@@ -595,6 +596,7 @@ void SwXViewSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, c
         case  HANDLE_VIEWSET_IS_SNAP_TO_RASTER     : mpViewOption->SetSnap(*o3tl::doAccess<bool>(rValue)); break;
         case  HANDLE_VIEWSET_SCROLLBAR_TIPS        : mpViewOption->SetShowScrollBarTips(*o3tl::doAccess<bool>(rValue)); break;
         case  HANDLE_VIEWSET_INLINECHANGES_TIPS    : mpViewOption->SetShowInlineTooltips(*o3tl::doAccess<bool>(rValue)); break;
+        case  HANDLE_VIEWSET_USE_HEADERFOOTERMENU  : mpViewOption->SetUseHeaderFooterMenu(*o3tl::doAccess<bool>(rValue)); break;
         case  HANDLE_VIEWSET_RASTER_RESOLUTION_X   :
         {
             sal_Int32 nTmp = 0;
@@ -730,13 +732,13 @@ void SwXViewSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, c
         {
             sal_uInt16 nUnit;
             if( rValue >>= nUnit )
-                switch( nUnit )
+                switch (static_cast<FieldUnit>(nUnit))
                 {
-                case FUNIT_MM:
-                case FUNIT_CM:
-                case FUNIT_POINT:
-                case FUNIT_PICA:
-                case FUNIT_INCH:
+                case FieldUnit::MM:
+                case FieldUnit::CM:
+                case FieldUnit::POINT:
+                case FieldUnit::PICA:
+                case FieldUnit::INCH:
                     if( rInfo.mnHandle == HANDLE_VIEWSET_HORI_RULER_METRIC )
                     {
                         eHRulerUnit = static_cast<FieldUnit>(nUnit);
@@ -782,8 +784,7 @@ void SwXViewSettings::_postSetValues()
     SW_MOD()->ApplyUsrPref( *mpViewOption, pView, pView ? SvViewOpt::DestViewOnly
                                                   : SvViewOpt::DestText );
 
-    delete mpViewOption;
-    mpViewOption = nullptr;
+    mpViewOption.reset();
 }
 
 void SwXViewSettings::_preGetValues ()

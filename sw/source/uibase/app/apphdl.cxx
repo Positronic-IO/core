@@ -19,43 +19,23 @@
 
 #include <config_features.h>
 
-#include <hintids.hxx>
-
-#include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
 #include <comphelper/propertysequence.hxx>
-#include <osl/diagnose.h>
-#include <tools/link.hxx>
-#include <svl/urihelper.hxx>
-#include <unotools/pathoptions.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/event.hxx>
 #include <sfx2/objitem.hxx>
 #include <svx/dataaccessdescriptor.hxx>
-#include <svl/srchitem.hxx>
-#include <svtools/accessibilityoptions.hxx>
-#include <svtools/colorcfg.hxx>
 #include <svtools/restartdialog.hxx>
-#include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/isethint.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/fcontnr.hxx>
-#include <svl/stritem.hxx>
 #include <svl/ctloptions.hxx>
 #include <unotools/useroptions.hxx>
-#include <vcl/sysdata.hxx>
-#include <vcl/wrkwin.hxx>
-#include <svx/insctrl.hxx>
-#include <svx/selctrl.hxx>
 #include <com/sun/star/document/UpdateDocMode.hpp>
 #include <sfx2/docfile.hxx>
-#include <svx/xmlsecctrl.hxx>
-#include <navicfg.hxx>
-
 #include <sfx2/objface.hxx>
-#include <sfx2/app.hxx>
 
-#include <edtwin.hxx>
 #include <view.hxx>
 #include <pview.hxx>
 #include <srcview.hxx>
@@ -65,42 +45,31 @@
 #include <initui.hxx>
 #include <uitool.hxx>
 #include <swmodule.hxx>
-#include <wdocsh.hxx>
 #include <wview.hxx>
 #include <usrpref.hxx>
 #include <gloslst.hxx>
 #include <glosdoc.hxx>
 #include <doc.hxx>
-#include <IDocumentUndoRedo.hxx>
 #include <IDocumentLayoutAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
-#include <cfgitems.hxx>
 #include <prtopt.hxx>
 #include <modcfg.hxx>
-#include <globals.h>
-#include <app.hrc>
 #include <fontcfg.hxx>
 #include <barcfg.hxx>
+#include <navicfg.hxx>
 #include <uinums.hxx>
 #include <dbconfig.hxx>
 #include <mmconfigitem.hxx>
-#include <linguistic/lngprops.hxx>
-#include <editeng/unolingu.hxx>
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XChild.hpp>
-#include <com/sun/star/frame/XLayoutManager.hpp>
 #include <com/sun/star/sdbc/XConnection.hpp>
 #include <com/sun/star/sdb/TextConnectionSettings.hpp>
 #include <com/sun/star/sdbc/XDataSource.hpp>
 #include <org/freedesktop/PackageKit/SyncDbusSessionHelper.hpp>
 #include <swabstdlg.hxx>
-
-#include <vcl/status.hxx>
+#include <comphelper/dispatchcommand.hxx>
 
 #include <salhelper/simplereferenceobject.hxx>
 #include <rtl/ref.hxx>
-
-#include <unomid.h>
 
 using namespace ::com::sun::star;
 
@@ -187,7 +156,8 @@ void SwModule::StateOther(SfxItemSet &rSet)
                     xConfigItem = pView->GetMailMergeConfigItem();
                 if (!xConfigItem)
                     rSet.DisableItem(nWhich);
-                else
+                else if (xConfigItem->GetConnection().is()
+                         && !xConfigItem->GetConnection()->isClosed())
                 {
                     bool bFirst, bLast;
                     bool bValid = xConfigItem->IsResultSetFirstLast(bFirst, bLast);
@@ -216,12 +186,32 @@ void SwModule::StateOther(SfxItemSet &rSet)
             {
                 SwView* pView = ::GetActiveView();
                 std::shared_ptr<SwMailMergeConfigItem> xConfigItem;
+                bool bUnLockDispatcher = false;
+                SfxDispatcher* pDispatcher = nullptr;
                 if (pView)
+                {
                     xConfigItem = pView->EnsureMailMergeConfigItem();
+
+                    // tdf#121607 lock the dispatcher while processing
+                    // this request, and release it afterwards,
+                    // that means that if this request pops up a dialog
+                    // any other pending requests will be deferred
+                    // until this request is finished, i.e. they won't
+                    // be dispatched by the dispatcher timeout until
+                    // unlock is called, serializing the password dialogs
+                    pDispatcher = pView->GetViewFrame()->GetDispatcher();
+                    if (!pDispatcher->IsLocked())
+                    {
+                        pDispatcher->Lock(true);
+                        bUnLockDispatcher = true;
+                    }
+                }
 
                 // #i51949# hide e-Mail option if e-Mail is not supported
                 // #i63267# printing might be disabled
                 if (!xConfigItem ||
+                    !xConfigItem->GetConnection().is() ||
+                    xConfigItem->GetConnection()->isClosed() ||
                     !xConfigItem->GetResultSet().is() ||
                     xConfigItem->GetCurrentDBData().sDataSource.isEmpty() ||
                     xConfigItem->GetCurrentDBData().sCommand.isEmpty() ||
@@ -230,6 +220,9 @@ void SwModule::StateOther(SfxItemSet &rSet)
                 {
                     rSet.DisableItem(nWhich);
                 }
+
+                if (bUnLockDispatcher)
+                    pDispatcher->Lock(false);
             }
             break;
             default:
@@ -240,7 +233,7 @@ void SwModule::StateOther(SfxItemSet &rSet)
 }
 
 // start field dialog
-void NewXForms( SfxRequest& rReq ); // implementation: below
+static void NewXForms( SfxRequest& rReq ); // implementation: below
 
 std::shared_ptr<SwMailMergeConfigItem> SwView::EnsureMailMergeConfigItem(const SfxItemSet* pArgs)
 {
@@ -362,9 +355,7 @@ class SwMailMergeWizardExecutor : public salhelper::SimpleReferenceObject
     VclPtr<AbstractMailMergeWizard> m_pWizard;     // always owner
     VclPtr<AbstractMailMergeWizard> m_pWizardToDestroyInCallback;
 
-    bool                     m_bDestroyMMToolbarOnCancel;
-
-    DECL_LINK( EndDialogHdl, Dialog&, void );
+    void EndDialogHdl(sal_Int32 nResponse);
     DECL_LINK( DestroyDialogHdl, void*, void );
     DECL_LINK( DestroyWizardHdl, void*, void );
     DECL_LINK( CancelHdl, void*, void );
@@ -383,8 +374,7 @@ public:
 SwMailMergeWizardExecutor::SwMailMergeWizardExecutor()
     : m_pView( nullptr ),
       m_pView2Close( nullptr ),
-      m_pWizard( nullptr ),
-      m_bDestroyMMToolbarOnCancel( false )
+      m_pWizard( nullptr )
 {
 }
 
@@ -449,25 +439,6 @@ void SwMailMergeWizardExecutor::ExecuteMailMergeWizard( const SfxItemSet * pArgs
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
     m_pWizard = pFact->CreateMailMergeWizard(*m_pView, xMMConfig);
 
-    uno::Reference<beans::XPropertySet> xPropSet(m_pView->GetViewFrame()->GetFrame().GetFrameInterface(), uno::UNO_QUERY);
-    if (!xPropSet.is())
-        return;
-
-    uno::Reference<frame::XLayoutManager> xLayoutManager;
-    uno::Any aValue = xPropSet->getPropertyValue("LayoutManager");
-    aValue >>= xLayoutManager;
-    if (!xLayoutManager.is())
-        return;
-
-    const OUString sResourceURL( "private:resource/toolbar/mailmerge" );
-    uno::Reference<ui::XUIElement> xUIElement = xLayoutManager->getElement(sResourceURL);
-    if (!xUIElement.is())
-    {
-        // ensure the mail-merge toolbar is displayed and remember if it was before
-        m_bDestroyMMToolbarOnCancel = true;
-        xLayoutManager->createElement(sResourceURL);
-        xLayoutManager->showElement(sResourceURL);
-    }
     ExecuteWizard();
 }
 
@@ -483,6 +454,23 @@ void SwMailMergeWizardExecutor::ExecutionFinished()
         SwDBManager* pDbManager = pDoc->GetDBManager();
         if (pDbManager)
             pDbManager->CommitLastRegistrations();
+
+        // Show the toolbar
+        m_pView->ShowUIElement("private:resource/toolbar/mailmerge");
+
+        // Update Mail Merge controls
+        const sal_uInt16 slotIds[] = { FN_MAILMERGE_FIRST_ENTRY,
+                                       FN_MAILMERGE_PREV_ENTRY,
+                                       FN_MAILMERGE_NEXT_ENTRY,
+                                       FN_MAILMERGE_LAST_ENTRY,
+                                       FN_MAILMERGE_CURRENT_ENTRY,
+                                       FN_MAILMERGE_EXCLUDE_ENTRY,
+                                       FN_MAILMERGE_CREATE_DOCUMENTS,
+                                       FN_MAILMERGE_SAVE_DOCUMENTS,
+                                       FN_MAILMERGE_PRINT_DOCUMENTS,
+                                       FN_MAILMERGE_EMAIL_DOCUMENTS,
+                                       0 };
+        m_pView->GetViewFrame()->GetBindings().Invalidate(slotIds);
     }
 
     // release/destroy asynchronously
@@ -491,13 +479,13 @@ void SwMailMergeWizardExecutor::ExecutionFinished()
 
 void SwMailMergeWizardExecutor::ExecuteWizard()
 {
-    m_pWizard->StartExecuteModal(
-        LINK( this, SwMailMergeWizardExecutor, EndDialogHdl ) );
+    m_pWizard->StartExecuteAsync([this](sal_Int32 nResult){
+        EndDialogHdl(nResult);
+    });
 }
 
-IMPL_LINK_NOARG( SwMailMergeWizardExecutor, EndDialogHdl, Dialog&, void )
+void SwMailMergeWizardExecutor::EndDialogHdl(sal_Int32 nRet)
 {
-    long nRet = m_pWizard->GetResult();
     sal_uInt16 nRestartPage = m_pWizard->GetRestartPage();
 
     switch ( nRet )
@@ -516,6 +504,7 @@ IMPL_LINK_NOARG( SwMailMergeWizardExecutor, EndDialogHdl, Dialog&, void )
             std::shared_ptr<SwMailMergeConfigItem> xMMConfig = m_pView->GetMailMergeConfigItem();
             if (pNewView)
             {
+                pNewView->SetMailMergeConfigItem(xMMConfig);
                 m_pView = pNewView;
                 xMMConfig->DocumentReloaded();
                 //new source view!
@@ -640,19 +629,6 @@ IMPL_LINK_NOARG(SwMailMergeWizardExecutor, CancelHdl, void*, void)
         {
             auto pViewFrame(xMMConfig->GetSourceView()->GetViewFrame());
             pViewFrame->GetFrame().AppearWithUpdate();
-            uno::Reference<beans::XPropertySet> xPropSet(pViewFrame->GetFrame().GetFrameInterface(), uno::UNO_QUERY);
-            if (xPropSet.is() && m_bDestroyMMToolbarOnCancel)
-            {
-                // hide mailmerge toolbar if it hasn't been there before
-                uno::Reference<frame::XLayoutManager> xLayoutManager;
-                uno::Any aValue = xPropSet->getPropertyValue("LayoutManager");
-                aValue >>= xLayoutManager;
-                if (xLayoutManager.is())
-                {
-                    const OUString sResourceURL( "private:resource/toolbar/mailmerge" );
-                    xLayoutManager->destroyElement( sResourceURL );
-                }
-            }
         }
         xMMConfig->Commit();
     }
@@ -707,11 +683,11 @@ void SwModule::ExecOther(SfxRequest& rReq)
             FieldUnit eUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>(pItem)->GetValue());
             switch( eUnit )
             {
-                case FUNIT_MM:
-                case FUNIT_CM:
-                case FUNIT_INCH:
-                case FUNIT_PICA:
-                case FUNIT_POINT:
+                case FieldUnit::MM:
+                case FieldUnit::CM:
+                case FieldUnit::INCH:
+                case FieldUnit::PICA:
+                case FieldUnit::POINT:
                 {
                     SwView* pActView = ::GetActiveView();
                     bool bWebView = dynamic_cast<SwWebView*>( pActView ) !=  nullptr;
@@ -752,9 +728,12 @@ void SwModule::ExecOther(SfxRequest& rReq)
         case FN_MAILMERGE_CURRENT_ENTRY:
         {
             SwView* pView = ::GetActiveView();
-            std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
+            const std::shared_ptr<SwMailMergeConfigItem>& xConfigItem = pView->GetMailMergeConfigItem();
             if (!xConfigItem)
                 return;
+
+            const bool bHadConnection
+                = xConfigItem->GetConnection().is() && !xConfigItem->GetConnection()->isClosed();
 
             sal_Int32 nPos = xConfigItem->GetResultSetPosition();
             switch (nWhich)
@@ -793,6 +772,15 @@ void SwModule::ExecOther(SfxRequest& rReq)
             rBindings.Invalidate(FN_MAILMERGE_LAST_ENTRY);
             rBindings.Invalidate(FN_MAILMERGE_CURRENT_ENTRY);
             rBindings.Invalidate(FN_MAILMERGE_EXCLUDE_ENTRY);
+            if (!bHadConnection && xConfigItem->GetConnection().is()
+                && !xConfigItem->GetConnection()->isClosed())
+            {
+                // The connection has been activated. Update controls that were disabled
+                rBindings.Invalidate(FN_MAILMERGE_CREATE_DOCUMENTS);
+                rBindings.Invalidate(FN_MAILMERGE_SAVE_DOCUMENTS);
+                rBindings.Invalidate(FN_MAILMERGE_PRINT_DOCUMENTS);
+                rBindings.Invalidate(FN_MAILMERGE_EMAIL_DOCUMENTS);
+            }
             rBindings.Update();
         }
         break;
@@ -817,7 +805,7 @@ void SwModule::ExecOther(SfxRequest& rReq)
             {
                 case FN_MAILMERGE_SAVE_DOCUMENTS: pFact->ExecuteMMResultSaveDialog(rReq.GetFrameWeld()); break;
                 case FN_MAILMERGE_PRINT_DOCUMENTS: pFact->ExecuteMMResultPrintDialog(rReq.GetFrameWeld()); break;
-                case FN_MAILMERGE_EMAIL_DOCUMENTS: pFact->ExecuteMMResultEmailDialog(); break;
+                case FN_MAILMERGE_EMAIL_DOCUMENTS: pFact->ExecuteMMResultEmailDialog(rReq.GetFrameWeld()); break;
             }
         }
         break;
@@ -863,7 +851,7 @@ void SwModule::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                         bUpdateFields = false;
                     if(bUpdateFields)
                     {
-                        pWrtSh->UpdateInputFields();
+                        comphelper::dispatchCommand(".uno:UpdateInputFields", {});
 
                         // Are database fields contained?
                         // Get all used databases for the first time

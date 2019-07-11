@@ -20,8 +20,8 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_FUCONUNO_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_FUCONUNO_HXX
 
-#include <svl/itemset.hxx>
 #include "fuconstr.hxx"
+#include <rtl/ustring.hxx>
 
 enum class SdrInventor : sal_uInt32;
 
@@ -45,7 +45,7 @@ public:
     virtual void Activate() override;
     virtual void Deactivate() override;
 
-    virtual SdrObject* CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle) override;
+    virtual SdrObjectUniquePtr CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle) override;
 
 private:
     FuConstructUnoControl(

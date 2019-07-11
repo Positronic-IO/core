@@ -7,7 +7,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include "xmlimprt.hxx"
 #include "xmlmappingi.hxx"
+#include "xmltransformationi.hxx"
 
 #include <xmloff/xmltkmap.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -49,6 +51,11 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL ScXMLMappingsContext::c
         case XML_ELEMENT( CALC_EXT, XML_DATA_MAPPING ):
         {
             pContext = new ScXMLMappingContext( GetScImport(), pAttribList );
+        }
+        break;
+        case XML_ELEMENT( CALC_EXT, XML_DATA_TRANSFORMATIONS):
+        {
+             pContext = new ScXMLTransformationsContext( GetScImport() );
         }
         break;
     }
@@ -105,20 +112,41 @@ ScXMLMappingContext::ScXMLMappingContext( ScXMLImport& rImport,
     if (!aProvider.isEmpty())
     {
         ScDocument* pDoc = GetScImport().GetDocument();
-        ScDBData* pDBData = pDoc->GetDBCollection()->getNamedDBs().findByUpperName(ScGlobal::pCharClass->uppercase(aDBName));
-        if (pDBData)
-        {
-            auto& rDataMapper = pDoc->GetExternalDataMapper();
-            sc::ExternalDataSource aSource(aURL, aProvider, pDoc);
-            aSource.setID(aID);
-            aSource.setDBData(pDBData);
-            rDataMapper.insertDataSource(aSource);
-        }
+        auto& rDataMapper = pDoc->GetExternalDataMapper();
+        sc::ExternalDataSource aSource(aURL, aProvider, pDoc);
+        aSource.setID(aID);
+        aSource.setDBData(aDBName);
+        rDataMapper.insertDataSource(aSource);
     }
 }
 
 ScXMLMappingContext::~ScXMLMappingContext()
 {
+    ScDocument* pDoc = GetScImport().GetDocument();
+    auto& rDataMapper = pDoc->GetExternalDataMapper();
+    auto& rDataSources = rDataMapper.getDataSources();
+    if(!rDataSources.empty())
+        rDataSources[0].refresh(pDoc, true);
 }
 
+uno::Reference<xml::sax::XFastContextHandler>
+    SAL_CALL ScXMLMappingContext::createFastChildContext(
+        sal_Int32 nElement, const uno::Reference<xml::sax::XFastAttributeList>& /*xAttrList*/)
+{
+    SvXMLImportContext *pContext = nullptr;
+
+    switch( nElement )
+    {
+        case XML_ELEMENT( CALC_EXT, XML_DATA_TRANSFORMATIONS):
+        {
+             pContext = new ScXMLTransformationsContext( GetScImport() );
+        }
+        break;
+    }
+
+    if( !pContext )
+        pContext = new SvXMLImportContext( GetImport() );
+
+    return pContext;
+}
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

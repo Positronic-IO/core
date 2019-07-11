@@ -23,35 +23,33 @@
 #include <unotools/textsearch.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
-#include <svx/svdobj.hxx>
 #include <unotools/charclass.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <stdlib.h>
 #include <unotools/transliterationwrapper.hxx>
+#include <com/sun/star/i18n/KParseTokens.hpp>
+#include <com/sun/star/i18n/KParseType.hpp>
+#include <sal/log.hxx>
 
+#include <refdata.hxx>
 #include <table.hxx>
 #include <scitems.hxx>
-#include <attrib.hxx>
 #include <formulacell.hxx>
 #include <document.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <global.hxx>
 #include <stlpool.hxx>
-#include <compiler.hxx>
 #include <patattr.hxx>
 #include <subtotal.hxx>
 #include <docoptio.hxx>
 #include <markdata.hxx>
 #include <rangelst.hxx>
-#include <attarray.hxx>
 #include <userlist.hxx>
 #include <progress.hxx>
 #include <cellform.hxx>
-#include <postit.hxx>
 #include <queryparam.hxx>
 #include <queryentry.hxx>
-#include <segmenttree.hxx>
 #include <subtotalparam.hxx>
 #include <docpool.hxx>
 #include <cellvalue.hxx>
@@ -103,7 +101,7 @@ using namespace ::com::sun::star::i18n;
     @return Returns TRUE if a numeral element is found in a given string, or
     FALSE if no numeral element is found.
 */
-bool SplitString( const OUString &sWhole,
+static bool SplitString( const OUString &sWhole,
     OUString &sPrefix, OUString &sSuffix, double &fNum )
 {
     // Get prefix element, search for any digit and stop.
@@ -121,7 +119,7 @@ bool SplitString( const OUString &sWhole,
         return false;
 
     // Get numeral element
-    OUString sUser = ScGlobal::pLocaleData->getNumDecimalSep();
+    const OUString& sUser = ScGlobal::pLocaleData->getNumDecimalSep();
     ParseResult aPRNum = ScGlobal::pCharClass->parsePredefinedToken(
         KParseType::ANY_NUMBER, sWhole, nPos,
         KParseTokens::ANY_NUMBER, "", KParseTokens::ANY_NUMBER, sUser );
@@ -163,7 +161,7 @@ bool SplitString( const OUString &sWhole,
     @return Returns 1 if sInput1 is greater, 0 if sInput1 == sInput2, and -1 if
     sInput2 is greater.
 */
-short Compare( const OUString &sInput1, const OUString &sInput2,
+static short Compare( const OUString &sInput1, const OUString &sInput2,
                const bool bCaseSens, const ScUserListData* pData, const CollatorWrapper *pCW )
 {
     OUString sStr1( sInput1 ), sStr2( sInput2 ), sPre1, sSuf1, sPre2, sSuf2;
@@ -253,14 +251,14 @@ public:
         explicit Row( size_t nColSize ) : maCells(nColSize, Cell()), mbHidden(false), mbFiltered(false) {}
     };
 
-    typedef std::vector<Row*> RowsType;
+    typedef std::vector<Row> RowsType;
 
 private:
     std::unique_ptr<RowsType> mpRows; /// row-wise data table for sort by row operation.
 
     std::vector<std::unique_ptr<ScSortInfo[]>> mvppInfo;
     SCCOLROW        nStart;
-    SCCOLROW        mnLastIndex; /// index of last non-empty cell position.
+    SCCOLROW const  mnLastIndex; /// index of last non-empty cell position.
 
     std::vector<SCCOLROW> maOrderIndices;
     bool mbKeepQuery;
@@ -288,12 +286,6 @@ public:
 
         for (size_t i = 0; i < nCount; ++i)
             maOrderIndices.push_back(i+nStart);
-    }
-
-    ~ScSortInfoArray()
-    {
-        if (mpRows)
-            std::for_each(mpRows->begin(), mpRows->end(), std::default_delete<Row>());
     }
 
     void SetKeepQuery( bool b ) { mbKeepQuery = b; }
@@ -325,6 +317,8 @@ public:
      */
     void Swap( SCCOLROW nInd1, SCCOLROW nInd2 )
     {
+        if (nInd1 == nInd2) // avoid self-move-assign
+            return;
         SCSIZE n1 = static_cast<SCSIZE>(nInd1 - nStart);
         SCSIZE n2 = static_cast<SCSIZE>(nInd2 - nStart);
         for ( sal_uInt16 nSort = 0; nSort < static_cast<sal_uInt16>(mvppInfo.size()); nSort++ )
@@ -387,10 +381,7 @@ public:
     RowsType& InitDataRows( size_t nRowSize, size_t nColSize )
     {
         mpRows.reset(new RowsType);
-        mpRows->reserve(nRowSize);
-        for (size_t i = 0; i < nRowSize; ++i)
-            mpRows->push_back(new Row(nColSize));
-
+        mpRows->resize(nRowSize, Row(nColSize));
         return *mpRows;
     }
 
@@ -426,7 +417,7 @@ void initDataRows(
 
         for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
         {
-            ScSortInfoArray::Row& rRow = *rRows[nRow-nRow1];
+            ScSortInfoArray::Row& rRow = rRows[nRow-nRow1];
             ScSortInfoArray::Cell& rCell = rRow.maCells[nCol-nCol1];
             rCell.maCell = rCol.GetCellValue(aBlockPos, nRow);
             rCell.mpAttr = rCol.GetCellTextAttr(aBlockPos, nRow);
@@ -443,7 +434,7 @@ void initDataRows(
     {
         for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
         {
-            ScSortInfoArray::Row& rRow = *rRows[nRow-nRow1];
+            ScSortInfoArray::Row& rRow = rRows[nRow-nRow1];
             rRow.mbHidden = rTab.RowHidden(nRow);
             rRow.mbFiltered = rTab.RowFiltered(nRow);
         }
@@ -452,9 +443,9 @@ void initDataRows(
 
 }
 
-ScSortInfoArray* ScTable::CreateSortInfoArray( const sc::ReorderParam& rParam )
+std::unique_ptr<ScSortInfoArray> ScTable::CreateSortInfoArray( const sc::ReorderParam& rParam )
 {
-    ScSortInfoArray* pArray = nullptr;
+    std::unique_ptr<ScSortInfoArray> pArray;
 
     if (rParam.mbByRow)
     {
@@ -464,7 +455,7 @@ ScSortInfoArray* ScTable::CreateSortInfoArray( const sc::ReorderParam& rParam )
         SCCOL nCol1 = rParam.maSortRange.aStart.Col();
         SCCOL nCol2 = rParam.maSortRange.aEnd.Col();
 
-        pArray = new ScSortInfoArray(0, nRow1, nRow2);
+        pArray.reset(new ScSortInfoArray(0, nRow1, nRow2));
         pArray->SetKeepQuery(rParam.mbHiddenFiltered);
         pArray->SetUpdateRefs(rParam.mbUpdateRefs);
 
@@ -477,7 +468,7 @@ ScSortInfoArray* ScTable::CreateSortInfoArray( const sc::ReorderParam& rParam )
         SCCOLROW nCol1 = rParam.maSortRange.aStart.Col();
         SCCOLROW nCol2 = rParam.maSortRange.aEnd.Col();
 
-        pArray = new ScSortInfoArray(0, nCol1, nCol2);
+        pArray.reset(new ScSortInfoArray(0, nCol1, nCol2));
         pArray->SetKeepQuery(rParam.mbHiddenFiltered);
         pArray->SetUpdateRefs(rParam.mbUpdateRefs);
     }
@@ -485,14 +476,14 @@ ScSortInfoArray* ScTable::CreateSortInfoArray( const sc::ReorderParam& rParam )
     return pArray;
 }
 
-ScSortInfoArray* ScTable::CreateSortInfoArray(
+std::unique_ptr<ScSortInfoArray> ScTable::CreateSortInfoArray(
     const ScSortParam& rSortParam, SCCOLROW nInd1, SCCOLROW nInd2,
     bool bKeepQuery, bool bUpdateRefs )
 {
     sal_uInt16 nUsedSorts = 1;
     while ( nUsedSorts < rSortParam.GetSortKeyCount() && rSortParam.maKeyState[nUsedSorts].bDoSort )
         nUsedSorts++;
-    ScSortInfoArray* pArray = new ScSortInfoArray( nUsedSorts, nInd1, nInd2 );
+    std::unique_ptr<ScSortInfoArray> pArray(new ScSortInfoArray( nUsedSorts, nInd1, nInd2 ));
     pArray->SetKeepQuery(bKeepQuery);
     pArray->SetUpdateRefs(bUpdateRefs);
 
@@ -604,8 +595,8 @@ struct SortedRowFlags
 
 struct PatternSpan
 {
-    SCROW mnRow1;
-    SCROW mnRow2;
+    SCROW const mnRow1;
+    SCROW const mnRow2;
     const ScPatternAttr* mpPattern;
 
     PatternSpan( SCROW nRow1, SCROW nRow2, const ScPatternAttr* pPat ) :
@@ -652,7 +643,7 @@ namespace {
 template<typename Hint, typename ReorderMap, typename Index>
 class ReorderNotifier
 {
-    Hint maHint;
+    Hint const maHint;
 public:
     ReorderNotifier( const ReorderMap& rMap, SCTAB nTab, Index nPos1, Index nPos2 ) :
         maHint(rMap, nTab, nPos1, nPos2) {}
@@ -700,12 +691,12 @@ void fillSortedColumnArray(
 
     for (size_t i = 0; i < pRows->size(); ++i)
     {
-        ScSortInfoArray::Row* pRow = (*pRows)[i];
-        for (size_t j = 0; j < pRow->maCells.size(); ++j)
+        ScSortInfoArray::Row& rRow = (*pRows)[i];
+        for (size_t j = 0; j < rRow.maCells.size(); ++j)
         {
             ScAddress aCellPos(nCol1 + j, nRow1 + i, nTab);
 
-            ScSortInfoArray::Cell& rCell = pRow->maCells[j];
+            ScSortInfoArray::Cell& rCell = rRow.maCells[j];
 
             sc::CellStoreType& rCellStore = aSortedCols.at(j).get()->maCells;
             switch (rCell.maCell.meType)
@@ -799,8 +790,8 @@ void fillSortedColumnArray(
         {
             // Hidden and filtered flags are first converted to segments.
             SCROW nRow = nRow1 + i;
-            aRowFlags.setRowHidden(nRow, pRow->mbHidden);
-            aRowFlags.setRowFiltered(nRow, pRow->mbFiltered);
+            aRowFlags.setRowHidden(nRow, rRow.mbHidden);
+            aRowFlags.setRowFiltered(nRow, rRow.mbFiltered);
         }
 
         if (pProgress)
@@ -1941,15 +1932,14 @@ static void lcl_RemoveNumberFormat( ScTable* pTab, SCCOL nCol, SCROW nRow )
     }
 }
 
-// at least MSC needs this at linkage level to be able to use it in a template
-typedef struct lcl_ScTable_DoSubTotals_RowEntry
+struct RowEntry
 {
     sal_uInt16  nGroupNo;
     SCROW   nSubStartRow;
     SCROW   nDestRow;
     SCROW   nFuncStart;
     SCROW   nFuncEnd;
-} RowEntry;
+};
 
 
 static const char* lcl_GetSubTotalStrId(int id)
@@ -2011,7 +2001,6 @@ bool ScTable::DoSubTotals( ScSubTotalParam& rParam )
     bool bTestPrevSub = ( nLevelCount > 1 );
 
     OUString  aSubString;
-    OUString  aOutString;
 
     bool bIgnoreCase = !rParam.bCaseSens;
 
@@ -2117,7 +2106,7 @@ bool ScTable::DoSubTotals( ScSubTotalParam& rParam )
                         // collect formula positions
                         aRowVector.push_back( aRowEntry );
 
-                        aOutString = aSubString;
+                        OUString aOutString = aSubString;
                         if (aOutString.isEmpty())
                             aOutString = ScResId( STR_EMPTYDATA );
                         aOutString += " ";
@@ -2146,7 +2135,7 @@ bool ScTable::DoSubTotals( ScSubTotalParam& rParam )
         }
     }
 
-    if (aRowVector.size() > 0)
+    if (!aRowVector.empty())
     {
         // generate global total
         SCROW nGlobalStartRow = aRowVector[0].nSubStartRow;
@@ -2263,7 +2252,7 @@ class QueryEvaluator
     svl::SharedStringPool& mrStrPool;
     const ScTable& mrTab;
     const ScQueryParam& mrParam;
-    bool mpTestEqualCondition;
+    bool const mpTestEqualCondition;
     utl::TransliterationWrapper* mpTransliteration;
     CollatorWrapper* mpCollator;
     const bool mbMatchWholeCell;
@@ -2420,7 +2409,7 @@ public:
         {
             sal_uInt32 nNumFmt = pContext ? mrTab.GetNumberFormat(*pContext, ScAddress(nCol, nRow, mrTab.GetTab())) :
                 mrTab.GetNumberFormat(nCol, nRow);
-            SvNumberFormatter* pFormatter = pContext ? pContext->mpFormatter : mrDoc.GetFormatTable();
+            SvNumberFormatter* pFormatter = pContext ? pContext->GetFormatTable() : mrDoc.GetFormatTable();
             const SvNumberformat* pEntry = pFormatter->GetEntry(nNumFmt);
             if (pEntry)
             {
@@ -2473,70 +2462,81 @@ public:
         return std::pair<bool,bool>(bOk, bTestEqual);
     }
 
-    std::pair<bool,bool> compareByString(
+   std::pair<bool,bool> compareByString(
         ScRefCellValue& rCell, SCROW nRow, const ScQueryEntry& rEntry, const ScQueryEntry::Item& rItem,
         const ScInterpreterContext* pContext)
     {
-        bool bOk = false;
-        bool bTestEqual = false;
-        bool bMatchWholeCell = mbMatchWholeCell;
-        svl::SharedString aCellStr;
-        const svl::SharedString* pCellSharedStr = &aCellStr;
-        if (isPartialTextMatchOp(rEntry))
-            // may have to do partial textural comparison.
-            bMatchWholeCell = false;
-
         if (!rCell.isEmpty())
         {
             if (rCell.meType == CELLTYPE_FORMULA && rCell.mpFormula->GetErrCode() != FormulaError::NONE)
             {
                 // Error cell is evaluated as string (for now).
-                aCellStr = mrStrPool.intern(ScGlobal::GetErrorString(rCell.mpFormula->GetErrCode()));
+                const svl::SharedString aCellStr = mrStrPool.intern(ScGlobal::GetErrorString(rCell.mpFormula->GetErrCode()));
+                return compareByStringComparator(rEntry, rItem, &aCellStr, nullptr);
             }
             else if (rCell.meType == CELLTYPE_STRING)
-                pCellSharedStr = rCell.mpString;
+            {
+                return compareByStringComparator(rEntry, rItem, rCell.mpString, nullptr);
+            }
             else
             {
                 sal_uInt32 nFormat = pContext ? mrTab.GetNumberFormat( *pContext, ScAddress(static_cast<SCCOL>(rEntry.nField), nRow, mrTab.GetTab()) ) :
                     mrTab.GetNumberFormat( static_cast<SCCOL>(rEntry.nField), nRow );
                 OUString aStr;
-                SvNumberFormatter* pFormatter = pContext ? pContext->mpFormatter : mrDoc.GetFormatTable();
+                SvNumberFormatter* pFormatter = pContext ? pContext->GetFormatTable() : mrDoc.GetFormatTable();
                 ScCellFormat::GetInputString(rCell, nFormat, aStr, *pFormatter, &mrDoc);
-                aCellStr = mrStrPool.intern(aStr);
+                return compareByStringComparator(rEntry, rItem, nullptr, &aStr);
             }
         }
         else
         {
             OUString aStr;
             mrTab.GetInputString(static_cast<SCCOL>(rEntry.nField), nRow, aStr);
-            aCellStr = mrStrPool.intern(aStr);
+            return compareByStringComparator(rEntry, rItem, nullptr, &aStr);
         }
+    }
 
-        const svl::SharedString& rCellStr(*pCellSharedStr);
-        bool bRealWildOrRegExp = isRealWildOrRegExp(rEntry);
-        bool bTestWildOrRegExp = isTestWildOrRegExp(rEntry);
+    // Called from compareByString() method, where different sources of strings are checked.
+    // The value is placed inside one parameter: [pValueSource1] or [pValueSource2] but never in both.
+    std::pair<bool,bool> compareByStringComparator(const ScQueryEntry& rEntry, const ScQueryEntry::Item& rItem,
+        const svl::SharedString* pValueSource1, OUString * pValueSource2)
+    {
+        bool bOk = false;
+        bool bTestEqual = false;
+        bool bMatchWholeCell = mbMatchWholeCell;
+        if (isPartialTextMatchOp(rEntry))
+            // may have to do partial textural comparison.
+            bMatchWholeCell = false;
+
+        const bool bRealWildOrRegExp = isRealWildOrRegExp(rEntry);
+        const bool bTestWildOrRegExp = isTestWildOrRegExp(rEntry);
+
+        // [pValueSource1] or [pValueSource2] but never both of them or none of them
+        assert((pValueSource1 != nullptr) != (pValueSource2 != nullptr));
 
         if ( bRealWildOrRegExp || bTestWildOrRegExp )
         {
+            const OUString & rValue = pValueSource1 ? pValueSource1->getString() : *pValueSource2;
+
             sal_Int32 nStart = 0;
-            sal_Int32 nEnd   = rCellStr.getLength();
+            sal_Int32 nEnd   = rValue.getLength();
 
             // from 614 on, nEnd is behind the found text
             bool bMatch = false;
             if ( rEntry.eOp == SC_ENDS_WITH || rEntry.eOp == SC_DOES_NOT_END_WITH )
             {
                 nEnd = 0;
-                nStart = rCellStr.getLength();
+                nStart = rValue.getLength();
                 bMatch = rEntry.GetSearchTextPtr( mrParam.eSearchType, mrParam.bCaseSens, bMatchWholeCell )
-                    ->SearchBackward(rCellStr.getString(), &nStart, &nEnd);
+                    ->SearchBackward(rValue, &nStart, &nEnd);
             }
             else
             {
                 bMatch = rEntry.GetSearchTextPtr( mrParam.eSearchType, mrParam.bCaseSens, bMatchWholeCell )
-                    ->SearchForward(rCellStr.getString(), &nStart, &nEnd);
+                    ->SearchForward(rValue, &nStart, &nEnd);
             }
             if ( bMatch && bMatchWholeCell
-                    && (nStart != 0 || nEnd != rCellStr.getLength()) )
+                    && (nStart != 0 || nEnd != rValue.getLength()) )
                 bMatch = false;    // RegExp must match entire cell string
             if ( bRealWildOrRegExp )
             {
@@ -2557,10 +2557,10 @@ public:
                         bOk = !( bMatch && (nStart == 0) );
                         break;
                     case SC_ENDS_WITH:
-                        bOk = ( bMatch && (nEnd == rCellStr.getLength()) );
+                        bOk = ( bMatch && (nEnd == rValue.getLength()) );
                         break;
                     case SC_DOES_NOT_END_WITH:
-                        bOk = !( bMatch && (nEnd == rCellStr.getLength()) );
+                        bOk = !( bMatch && (nEnd == rValue.getLength()) );
                         break;
                     default:
                         {
@@ -2587,11 +2587,32 @@ public:
                 }
                 else if ( bMatchWholeCell )
                 {
-                    // Fast string equality check by comparing string identifiers.
-                    if (mrParam.bCaseSens)
-                        bOk = rCellStr.getData() == rItem.maString.getData();
-                    else
-                        bOk = rCellStr.getDataIgnoreCase() == rItem.maString.getDataIgnoreCase();
+                    if (pValueSource1)
+                    {
+                        // Fast string equality check by comparing string identifiers.
+                        if (mrParam.bCaseSens)
+                        {
+                            bOk = pValueSource1->getData() == rItem.maString.getData();
+                        }
+                        else
+                        {
+                            bOk = pValueSource1->getDataIgnoreCase() == rItem.maString.getDataIgnoreCase();
+                        }
+                    }
+                    else // if (pValueSource2)
+                    {
+                        if (mrParam.bCaseSens)
+                        {
+                            bOk = (*pValueSource2 == rItem.maString.getString());
+                        }
+                        else
+                        {
+                            // fallback
+                            const svl::SharedString rSource2(mrStrPool.intern(*pValueSource2));
+                            // Fast string equality check by comparing string identifiers.
+                            bOk = rSource2.getDataIgnoreCase() == rItem.maString.getDataIgnoreCase();
+                        }
+                    }
 
                     if ( rEntry.eOp == SC_NOT_EQUAL )
                         bOk = !bOk;
@@ -2603,12 +2624,15 @@ public:
 
                     if (!mbCaseSensitive)
                     { // Common case for vlookup etc.
+                        const svl::SharedString rSource(pValueSource1? *pValueSource1 : mrStrPool.intern(*pValueSource2));
+
                         const rtl_uString *pQuer = rItem.maString.getDataIgnoreCase();
-                        const rtl_uString *pCellStr = rCellStr.getDataIgnoreCase();
+                        const rtl_uString *pCellStr = rSource.getDataIgnoreCase();
+
                         assert(pQuer != nullptr);
                         assert(pCellStr != nullptr);
 
-                        sal_Int32 nIndex = (rEntry.eOp == SC_ENDS_WITH ||
+                        const sal_Int32 nIndex = (rEntry.eOp == SC_ENDS_WITH ||
                                             rEntry.eOp == SC_DOES_NOT_END_WITH) ?
                             (pCellStr->length - pQuer->length) : 0;
 
@@ -2631,18 +2655,19 @@ public:
                     }
                     else
                     {
-                        OUString aQueryStr = rItem.maString.getString();
+                        const OUString & rValue = pValueSource1 ? pValueSource1->getString() : *pValueSource2;
+                        const OUString aQueryStr = rItem.maString.getString();
                         const LanguageType nLang = ScGlobal::pSysLocale->GetLanguageTag().getLanguageType();
                         setupTransliteratorIfNeeded();
-                        OUString aCell( mpTransliteration->transliterate(
-                                            rCellStr.getString(), nLang, 0, rCellStr.getLength(),
+                        const OUString aCell( mpTransliteration->transliterate(
+                                            rValue, nLang, 0, rValue.getLength(),
                                             nullptr ) );
 
-                        OUString aQuer( mpTransliteration->transliterate(
+                        const OUString aQuer( mpTransliteration->transliterate(
                                             aQueryStr, nLang, 0, aQueryStr.getLength(),
                                             nullptr ) );
 
-                        sal_Int32 nIndex = (rEntry.eOp == SC_ENDS_WITH || rEntry.eOp == SC_DOES_NOT_END_WITH) ?
+                        const sal_Int32 nIndex = (rEntry.eOp == SC_ENDS_WITH || rEntry.eOp == SC_DOES_NOT_END_WITH) ?
                             (aCell.getLength() - aQuer.getLength()) : 0;
                         nStrPos = ((nIndex < 0) ? -1 : aCell.indexOf( aQuer, nIndex ));
                     }
@@ -2681,9 +2706,10 @@ public:
             }
             else
             {   // use collator here because data was probably sorted
+                const OUString & rValue = pValueSource1 ? pValueSource1->getString() : *pValueSource2;
                 setupCollatorIfNeeded();
                 sal_Int32 nCompare = mpCollator->compareString(
-                    rCellStr.getString(), rItem.maString.getString());
+                    rValue, rItem.maString.getString());
                 switch (rEntry.eOp)
                 {
                     case SC_LESS :
@@ -3275,12 +3301,12 @@ bool ScTable::CreateStarQuery(SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2
         if (nIndex > 0)
         {
             GetUpperCellString(nCol1, nRow, aCellStr);
-            if ( aCellStr == ScResId(STR_TABLE_UND) )
+            if ( aCellStr == ScResId(STR_TABLE_AND) )
             {
                 rEntry.eConnect = SC_AND;
                 bValid = true;
             }
-            else if ( aCellStr == ScResId(STR_TABLE_ODER) )
+            else if ( aCellStr == ScResId(STR_TABLE_OR) )
             {
                 rEntry.eConnect = SC_OR;
                 bValid = true;
@@ -3509,8 +3535,17 @@ sal_uLong ScTable::GetWeightedCount() const
     sal_uLong nCellCount = 0;
 
     for ( SCCOL nCol=0; nCol < aCol.size(); nCol++ )
-        if ( aCol[nCol].GetCellCount() )
-            nCellCount += aCol[nCol].GetWeightedCount();
+        nCellCount += aCol[nCol].GetWeightedCount();
+
+    return nCellCount;
+}
+
+sal_uLong ScTable::GetWeightedCount(SCROW nStartRow, SCROW nEndRow) const
+{
+    sal_uLong nCellCount = 0;
+
+    for ( SCCOL nCol=0; nCol < aCol.size(); nCol++ )
+        nCellCount += aCol[nCol].GetWeightedCount(nStartRow, nEndRow);
 
     return nCellCount;
 }

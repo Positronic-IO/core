@@ -239,7 +239,7 @@ bool needToSyncRepository(OUString const & name)
 
 
 namespace {
-inline OUString encodeForRcFile( OUString const & str )
+OUString encodeForRcFile( OUString const & str )
 {
     // escape $\{} (=> rtl bootstrap files)
     OUStringBuffer buf;
@@ -266,7 +266,7 @@ OUString makeURL( OUString const & baseURL, OUString const & relPath_ )
 {
     OUStringBuffer buf;
     if (baseURL.getLength() > 1 && baseURL[ baseURL.getLength() - 1 ] == '/')
-        buf.append( baseURL.copy( 0, baseURL.getLength() - 1 ) );
+        buf.appendCopy( baseURL, 0, baseURL.getLength() - 1 );
     else
         buf.append( baseURL );
     OUString relPath(relPath_);
@@ -375,7 +375,7 @@ bool office_is_running()
     else
     {
         OSL_FAIL("NOT osl_Process_E_None ");
-        //if osl_getExecutable file than we take the risk of creating a pipe
+        //if osl_getExecutable file then we take the risk of creating a pipe
         ret =  existsOfficePipe();
     }
     return ret;
@@ -465,14 +465,14 @@ Reference<XInterface> resolveUnoURL(
 }
 
 #ifdef _WIN32
-void writeConsoleWithStream(OUString const & sText, HANDLE stream)
+static void writeConsoleWithStream(OUString const & sText, HANDLE stream)
 {
     DWORD nWrittenChars = 0;
     WriteFile(stream, sText.getStr(),
         sText.getLength() * 2, &nWrittenChars, nullptr);
 }
 #else
-void writeConsoleWithStream(OUString const & sText, FILE * stream)
+static void writeConsoleWithStream(OUString const & sText, FILE * stream)
 {
     OString s = OUStringToOString(sText, osl_getThreadTextEncoding());
     fprintf(stream, "%s", s.getStr());

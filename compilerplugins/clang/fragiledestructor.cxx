@@ -22,11 +22,11 @@
 namespace {
 
 class FragileDestructor:
-    public RecursiveASTVisitor<FragileDestructor>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<FragileDestructor>
 {
 public:
     explicit FragileDestructor(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
 
@@ -47,8 +47,8 @@ bool FragileDestructor::TraverseCXXDestructorDecl(CXXDestructorDecl* pCXXDestruc
         return RecursiveASTVisitor::TraverseCXXDestructorDecl(pCXXDestructorDecl);
     }
     // ignore this for now, too tricky for me to work out
-    StringRef aFileName = compiler.getSourceManager().getFilename(
-            compiler.getSourceManager().getSpellingLoc(pCXXDestructorDecl->getLocStart()));
+    StringRef aFileName = getFileNameOfSpellingLoc(
+            compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(pCXXDestructorDecl)));
     if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/comphelper/")
         || loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/cppuhelper/")
         || loplugin::hasPathnamePrefix(aFileName, SRCDIR "/cppuhelper/")
@@ -80,27 +80,28 @@ bool FragileDestructor::VisitCXXMemberCallExpr(const CXXMemberCallExpr* callExpr
         return true;
     }
     // if we see an explicit call to its own method, that's OK
-    auto s1 = compiler.getSourceManager().getCharacterData(callExpr->getLocStart());
-    auto s2 = compiler.getSourceManager().getCharacterData(callExpr->getLocEnd());
+    auto s1 = compiler.getSourceManager().getCharacterData(compat::getBeginLoc(callExpr));
+    auto s2 = compiler.getSourceManager().getCharacterData(compat::getEndLoc(callExpr));
     std::string tok(s1, s2-s1);
     if (tok.find("::") != std::string::npos) {
         return true;
     }
     // e.g. osl/thread.hxx and cppuhelper/compbase.hxx
-    StringRef aFileName = compiler.getSourceManager().getFilename(compiler.getSourceManager().getSpellingLoc(methodDecl->getLocStart()));
+    StringRef aFileName = getFileNameOfSpellingLoc(
+        compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(methodDecl)));
     if (loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/osl/")
         || loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/comphelper/")
         || loplugin::hasPathnamePrefix(aFileName, SRCDIR "/include/cppuhelper/"))
         return true;
     report(
         DiagnosticsEngine::Warning,
-        "calling virtual method from destructor, either make the virtual method SAL_FINAL, or make this class SAL_FINAL",
-        callExpr->getLocStart())
+        "calling virtual method from destructor, either make the virtual method final, or make this class final",
+        compat::getBeginLoc(callExpr))
       << callExpr->getSourceRange();
     report(
         DiagnosticsEngine::Note,
         "callee method here",
-        methodDecl->getLocStart())
+        compat::getBeginLoc(methodDecl))
       << methodDecl->getSourceRange();
     return true;
 }

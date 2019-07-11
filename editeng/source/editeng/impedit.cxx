@@ -17,12 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
-#include <vcl/settings.hxx>
-
 #include "impedit.hxx"
+#include <sal/log.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/outliner.hxx>
@@ -36,7 +32,7 @@
 #include <com/sun/star/datatransfer/clipboard/XFlushableClipboard.hpp>
 #include <editeng/flditem.hxx>
 #include <svl/intitem.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <sot/exchange.hxx>
 #include <sot/formats.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -50,7 +46,7 @@ using namespace ::com::sun::star::linguistic2;
 
 #define SCRLRANGE   20  // Scroll 1/20 of the width/height, when in QueryDrop
 
-static inline void lcl_AllignToPixel( Point& rPoint, OutputDevice const * pOutDev, short nDiffX, short nDiffY )
+static void lcl_AllignToPixel( Point& rPoint, OutputDevice const * pOutDev, short nDiffX, short nDiffY )
 {
     rPoint = pOutDev->LogicToPixel( rPoint );
 
@@ -147,12 +143,17 @@ void ImpEditView::SetEditSelection( const EditSelection& rEditSelection )
             eNotifyType = EE_NOTIFY_TEXTVIEWSELECTIONCHANGED;
         }
         EENotify aNotify( eNotifyType );
-        pEditEngine->pImpEditEngine->CallNotify( aNotify );
+        pEditEngine->pImpEditEngine->GetNotifyHdl().Call( aNotify );
+    }
+    if(pEditEngine->pImpEditEngine->IsFormatted())
+    {
+        EENotify aNotify(EE_NOTIFY_PROCESSNOTIFICATIONS);
+        pEditEngine->pImpEditEngine->GetNotifyHdl().Call(aNotify);
     }
 }
 
 /// Translate absolute <-> relative twips: LOK wants absolute coordinates as output and gives absolute coordinates as input.
-void lcl_translateTwips(vcl::Window const & rParent, vcl::Window& rChild)
+static void lcl_translateTwips(vcl::Window const & rParent, vcl::Window& rChild)
 {
     // Don't translate if we already have a non-zero origin.
     // This prevents multiple translate calls that negate
@@ -450,7 +451,7 @@ void ImpEditView::DrawSelectionXOR( EditSelection aTmpSel, vcl::Region* pRegion,
 
             if (mpOtherShell)
             {
-                // An other shell wants to know about our existing selection.
+                // Another shell wants to know about our existing selection.
                 if (mpViewShell != mpOtherShell)
                     mpViewShell->NotifyOtherView(mpOtherShell, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRectangle);
             }
@@ -1107,7 +1108,7 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
             OString sRect = aRect.toString();
             if (mpOtherShell)
             {
-                // An other shell wants to know about our existing cursor.
+                // Another shell wants to know about our existing cursor.
                 if (mpViewShell != mpOtherShell)
                     mpViewShell->NotifyOtherView(mpOtherShell, LOK_CALLBACK_INVALIDATE_VIEW_CURSOR, "rectangle", sRect);
             }
@@ -1271,7 +1272,7 @@ Pair ImpEditView::Scroll( long ndX, long ndY, ScrollRangeCheck nRangeCheck )
         if ( pEditEngine->pImpEditEngine->GetNotifyHdl().IsSet() )
         {
             EENotify aNotify( EE_NOTIFY_TEXTVIEWSCROLLED );
-            pEditEngine->pImpEditEngine->CallNotify( aNotify );
+            pEditEngine->pImpEditEngine->GetNotifyHdl().Call( aNotify );
         }
     }
 
@@ -1562,11 +1563,9 @@ void ImpEditView::CutCopy( css::uno::Reference< css::datatransfer::clipboard::XC
 
         if (bCut)
         {
-            pEditEngine->pImpEditEngine->EnterBlockNotifications();
             pEditEngine->pImpEditEngine->UndoActionStart(EDITUNDO_CUT);
             DeleteSelected();
             pEditEngine->pImpEditEngine->UndoActionEnd();
-            pEditEngine->pImpEditEngine->LeaveBlockNotifications();
         }
     }
 }
@@ -1629,11 +1628,9 @@ void ImpEditView::Paste( css::uno::Reference< css::datatransfer::clipboard::XCli
         // Prevent notifications of paragraph inserts et al that would trigger
         // a11y to format content in a half-ready state when obtaining
         // paragraphs. Collect and broadcast when done instead.
-        pEditEngine->pImpEditEngine->EnterBlockNotifications();
         aSel = pEditEngine->InsertText(
             xDataObj, OUString(), aSel.Min(),
             bUseSpecial && pEditEngine->GetInternalEditStatus().AllowPasteSpecial());
-        pEditEngine->pImpEditEngine->LeaveBlockNotifications();
     }
 
     aPasteOrDropInfos.nEndPara = pEditEngine->GetEditDoc().GetPos( aSel.Max().GetNode() );

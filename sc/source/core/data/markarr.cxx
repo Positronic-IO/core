@@ -18,15 +18,14 @@
  */
 
 #include <markarr.hxx>
-#include <global.hxx>
 #include <address.hxx>
+#include <vector>
 
 #include <osl/diagnose.h>
 
 ScMarkArray::ScMarkArray() :
     nCount( 0 ),
-    nLimit( 0 ),
-    pData( nullptr )
+    nLimit( 0 )
 {
     // special case "no marks" with pData = NULL
 }
@@ -58,40 +57,41 @@ void ScMarkArray::Reset( bool bMarked, SCSIZE nNeeded )
     pData[0].bMarked = bMarked;
 }
 
+// Iterative implementation of Binary Search
 bool ScMarkArray::Search( SCROW nRow, SCSIZE& nIndex ) const
 {
-    long    nHi         = static_cast<long>(nCount) - 1;
-    long    i           = 0;
-    bool    bFound      = (nCount == 1);
     if (pData)
     {
-        long    nLo         = 0;
-        long    nStartRow   = 0;
-        while ( !bFound && nLo <= nHi )
+        assert(nCount > 0);
+        SCSIZE    nHi         = nCount - 1;
+        SCSIZE    nLo         = 0;
+
+        while ( nLo <= nHi )
         {
-            i = (nLo + nHi) / 2;
-            if (i > 0)
-                nStartRow = static_cast<long>(pData[i - 1].nRow);
+            SCSIZE i = (nLo + nHi) / 2;
+
+            if (pData[i].nRow < nRow)
+            {
+                // If [nRow] greater, ignore left half
+                nLo = i + 1;
+            }
+            else if ((i > 0) && (pData[i - 1].nRow >= nRow))
+            {
+                // If [nRow] is smaller, ignore right half
+                nHi = i - 1;
+            }
             else
-                nStartRow = -1;
-            long nEndRow = static_cast<long>(pData[i].nRow);
-            if (nEndRow < static_cast<long>(nRow))
-                nLo = ++i;
-            else
-                if (nStartRow >= static_cast<long>(nRow))
-                    nHi = --i;
-                else
-                    bFound = true;
+            {
+                // found
+                nIndex=i;
+                return true;
+            }
         }
     }
-    else
-        bFound = false;
 
-    if (bFound)
-        nIndex=static_cast<SCSIZE>(i);
-    else
-        nIndex=0;
-    return bFound;
+    // not found
+    nIndex=0;
+    return false;
 }
 
 bool ScMarkArray::GetMark( SCROW nRow ) const

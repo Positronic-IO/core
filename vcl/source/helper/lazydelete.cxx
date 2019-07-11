@@ -21,50 +21,17 @@
 #include <vcl/menu.hxx>
 #include <vcl/lazydelete.hxx>
 #include <svdata.hxx>
+#include <sal/log.hxx>
 
 namespace vcl {
-
-LazyDeletorBase::LazyDeletorBase()
-{
-}
-
-LazyDeletorBase::~LazyDeletorBase()
-{
-}
-
-// instantiate instance pointer for LazyDeletor<Window>
-LazyDeletor* LazyDeletor::s_pOneInstance = nullptr;
-
-// a list for all LazyeDeletor<T> singletons
-static std::vector< LazyDeletorBase* > lcl_aDeletors;
-
-void LazyDelete::addDeletor( LazyDeletorBase* i_pDel )
-{
-    lcl_aDeletors.push_back( i_pDel );
-}
-
-void LazyDelete::flush()
-{
-    DBG_TESTSOLARMUTEX(); // must be locked
-
-    unsigned int nCount = lcl_aDeletors.size();
-    for( unsigned int i = 0; i < nCount; i++ )
-        delete lcl_aDeletors[i];
-    lcl_aDeletors.clear();
-}
-
-// specialized is_less function for Window
-bool LazyDeletor::is_less( vcl::Window const * left, vcl::Window const * right )
-{
-    return left != right && right->IsChild( left, true );
-}
 
 DeleteOnDeinitBase::~DeleteOnDeinitBase()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( pSVData && pSVData->mpDeinitDeleteList != nullptr )
-        pSVData->mpDeinitDeleteList->erase(std::remove(pSVData->mpDeinitDeleteList->begin(), pSVData->mpDeinitDeleteList->end(), this),
-                                pSVData->mpDeinitDeleteList->end());
+    if( !pSVData )
+        return;
+    auto & rList = pSVData->maDeinitDeleteList;
+    rList.erase(std::remove(rList.begin(), rList.end(), this), rList.end());
 }
 
 void DeleteOnDeinitBase::addDeinitContainer( DeleteOnDeinitBase* i_pContainer )
@@ -75,23 +42,17 @@ void DeleteOnDeinitBase::addDeinitContainer( DeleteOnDeinitBase* i_pContainer )
     if( pSVData->mbDeInit )
         return;
 
-    if( pSVData->mpDeinitDeleteList == nullptr )
-        pSVData->mpDeinitDeleteList = new std::vector< DeleteOnDeinitBase* >;
-    pSVData->mpDeinitDeleteList->push_back( i_pContainer );
+    pSVData->maDeinitDeleteList.push_back( i_pContainer );
 }
 
 void DeleteOnDeinitBase::ImplDeleteOnDeInit()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( pSVData->mpDeinitDeleteList )
+    for (auto const& deinitDelete : pSVData->maDeinitDeleteList)
     {
-        for (auto const& deinitDelete : *(pSVData->mpDeinitDeleteList))
-        {
-            deinitDelete->doCleanup();
-        }
-        delete pSVData->mpDeinitDeleteList;
-        pSVData->mpDeinitDeleteList = nullptr;
+        deinitDelete->doCleanup();
     }
+    pSVData->maDeinitDeleteList.clear();
 }
 
 } // namespace vcl

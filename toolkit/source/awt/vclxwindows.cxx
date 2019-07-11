@@ -18,7 +18,7 @@
  */
 
 #include <toolkit/awt/vclxwindows.hxx>
-#include <toolkit/awt/scrollabledialog.hxx>
+#include <helper/scrollabledialog.hxx>
 #include <com/sun/star/awt/ScrollBarOrientation.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/graphic/XGraphicProvider.hpp>
@@ -38,6 +38,7 @@
 #include <com/sun/star/awt/XItemList.hpp>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/button.hxx>
 #include <vcl/graph.hxx>
@@ -55,8 +56,6 @@
 #include <vcl/tabctrl.hxx>
 #include <vcl/settings.hxx>
 #include <tools/diagnose_ex.h>
-
-#include <vcl/group.hxx>
 
 #include <helper/accessibilityclient.hxx>
 #include <helper/imagealign.hxx>
@@ -1319,7 +1318,7 @@ void VCLXRadioButton::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent 
 
 void VCLXRadioButton::ImplClickedOrToggled( bool bToggled )
 {
-    // In the formulars, RadioChecked is not enabled, call itemStateChanged only for click
+    // In the forms, RadioChecked is not enabled, call itemStateChanged only for click
     // In the dialog editor, RadioChecked is enabled, call itemStateChanged only for bToggled
     VclPtr< RadioButton > pRadioButton = GetAs< RadioButton >();
     if ( pRadioButton && ( pRadioButton->IsRadioCheckEnabled() == bToggled ) && ( bToggled || pRadioButton->IsStateChanged() ) && maItemListeners.getLength() )
@@ -6490,6 +6489,18 @@ css::uno::Reference< css::accessibility::XAccessibleContext > VCLXToolBox::Creat
     return getAccessibleFactory().createAccessibleContext( this );
 }
 
+VCLXHeaderBar::VCLXHeaderBar()
+{
+}
+
+VCLXHeaderBar::~VCLXHeaderBar()
+{
+}
+
+css::uno::Reference< css::accessibility::XAccessibleContext > VCLXHeaderBar::CreateAccessibleContext()
+{
+    return getAccessibleFactory().createAccessibleContext( this );
+}
 
 //  class VCLXFrame
 

@@ -19,7 +19,9 @@
 
 #include <dp_misc.h>
 #include <dp_persmap.h>
+#include <rtl/byteseq.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 using namespace ::rtl;
 

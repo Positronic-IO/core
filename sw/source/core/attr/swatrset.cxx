@@ -38,6 +38,7 @@
 #include <numrule.hxx>
 #include <pagedesc.hxx>
 #include <paratr.hxx>
+#include <osl/diagnose.h>
 #include <svl/whiter.hxx>
 #include <svx/xtable.hxx>
 
@@ -334,7 +335,7 @@ void SwAttrSet::CopyToModify( SwModify& rMod ) const
                 {
                     const SwList* pList = pSrcDoc->getIDocumentListsAccess().getListByName( sListId );
                     // copy list style, if needed
-                    const OUString sDefaultListStyleName =
+                    const OUString& sDefaultListStyleName =
                                             pList->GetDefaultListStyleName();
                     // #i92811#
                     const SwNumRule* pDstDocNumRule =
@@ -377,8 +378,7 @@ void SwAttrSet::CopyToModify( SwModify& rMod ) const
                                             RES_PAGEDESC, false, &pItem ) &&
                 nullptr != ( pPgDesc = static_cast<const SwFormatPageDesc*>(pItem)->GetPageDesc()) )
             {
-                if( !tmpSet )
-                    tmpSet.reset( new SfxItemSet( *this ));
+                tmpSet.reset(new SfxItemSet(*this));
 
                 SwPageDesc* pDstPgDesc = pDstDoc->FindPageDesc(pPgDesc->GetName());
                 if( !pDstPgDesc )

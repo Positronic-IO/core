@@ -36,12 +36,14 @@
 
 #include <rtl/ustrbuf.hxx>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/sdbc/SQLException.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <com/sun/star/sdbcx/Privilege.hpp>
 #include <com/sun/star/sdbcx/KeyType.hpp>
 #include <com/sun/star/sdbc/KeyRule.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 
 #include "pq_xtables.hxx"
 #include "pq_xviews.hxx"
@@ -133,7 +135,7 @@ void Tables::refresh()
             {
                 m_values.push_back( makeAny( prop ) );
                 OUStringBuffer buf( name.getLength() + schema.getLength() + 1);
-                buf.append( schema + "." + name );
+                buf.append( schema ).append( "." ).append( name );
                 map[ buf.makeStringAndClear() ] = tableIndex;
                 ++tableIndex;
             }
@@ -142,7 +144,9 @@ void Tables::refresh()
     }
     catch ( const css::sdbc::SQLException & e )
     {
-        throw RuntimeException( e.Message , e.Context );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( e.Message,
+                        e.Context, anyEx );
     }
 
     fire( RefreshedBroadcaster( *this ) );

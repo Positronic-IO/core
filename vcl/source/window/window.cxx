@@ -19,6 +19,7 @@
 
 #include <config_features.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 #include <sal/types.h>
 #include <vcl/salgtype.hxx>
@@ -37,7 +38,7 @@
 #include <vcl/button.hxx>
 #include <vcl/taskpanelist.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/unowrap.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/gdimtf.hxx>
 #include <vcl/lazydelete.hxx>
 #include <vcl/virdev.hxx>
@@ -85,20 +86,18 @@ using namespace ::com::sun::star::datatransfer::dnd;
 
 namespace vcl {
 
-Window::Window( WindowType nType ) :
-    mpWindowImpl(new WindowImpl( nType ))
+Window::Window( WindowType nType )
+    : OutputDevice(OUTDEV_WINDOW)
+    , mpWindowImpl(new WindowImpl( nType ))
 {
-    meOutDevType = OUTDEV_WINDOW;
-
     // true: this outdev will be mirrored if RTL window layout (UI mirroring) is globally active
     mbEnableRTL = AllSettings::GetLayoutRTL();
 }
 
-Window::Window( vcl::Window* pParent, WinBits nStyle ) :
-    mpWindowImpl(new WindowImpl( WindowType::WINDOW ))
+Window::Window( vcl::Window* pParent, WinBits nStyle )
+    : OutputDevice(OUTDEV_WINDOW)
+    , mpWindowImpl(new WindowImpl( WindowType::WINDOW ))
 {
-    meOutDevType = OUTDEV_WINDOW;
-
     // true: this outdev will be mirrored if RTL window layout (UI mirroring) is globally active
     mbEnableRTL = AllSettings::GetLayoutRTL();
 
@@ -224,7 +223,7 @@ void Window::dispose()
         }
     }
 
-    UnoWrapperBase* pWrapper = Application::GetUnoWrapper( false );
+    UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper( false );
     if ( pWrapper )
         pWrapper->WindowDestroyed( this );
 
@@ -570,8 +569,6 @@ void Window::dispose()
 
 Window::~Window()
 {
-    // FIXME: we should kill all LazyDeletor usage.
-    vcl::LazyDeletor::Undelete( this );
     disposeOnce();
 }
 
@@ -642,12 +639,11 @@ WindowImpl::WindowImpl( WindowType nType )
     mnExtendedStyle                     = WindowExtendedStyle::NONE; // extended style (init in ImplInitWindow)
     mnType                              = nType;                     // type
     mnGetFocusFlags                     = GetFocusFlags::NONE;       // Flags for GetFocus()-Call
-    mnWaitCount                         = 0;                         // Wait-Count (>1 == Warte-MousePointer)
+    mnWaitCount                         = 0;                         // Wait-Count (>1 == "wait" mouse pointer)
     mnPaintFlags                        = ImplPaintFlags::NONE;      // Flags for ImplCallPaint
     mnParentClipMode                    = ParentClipMode::NONE;      // Flags for Parent-ClipChildren-Mode
     mnActivateMode                      = ActivateModeFlags::NONE;   // Will be converted in System/Overlap-Windows
     mnDlgCtrlFlags                      = DialogControlFlags::NONE;  // DialogControl-Flags
-    mnLockCount                         = 0;                         // LockCount
     meAlwaysInputMode                   = AlwaysInputNone;           // neither AlwaysEnableInput nor AlwaysDisableInput called
     meHalign                            = VclAlign::Fill;
     meValign                            = VclAlign::Fill;
@@ -751,10 +747,8 @@ WindowImpl::~WindowImpl()
 }
 
 ImplWinData::ImplWinData() :
-    mpExtOldAttrAry(nullptr),
     mnCursorExtWidth(0),
     mbVertical(false),
-    mpCompositionCharRects(nullptr),
     mnCompositionCharRects(0),
     mnTrackFlags(ShowTrackFlags::NONE),
     mnIsTopWindow(sal_uInt16(~0)), // not initialized yet, 0/1 will indicate TopWindow (see IsTopWindow())
@@ -778,8 +772,8 @@ ImplFrameData::ImplFrameData( vcl::Window *pWindow )
     mpFocusWin         = nullptr;
     mpMouseMoveWin     = nullptr;
     mpMouseDownWin     = nullptr;
-    mpFontCollection   = pSVData->maGDIData.mpScreenFontList;
-    mpFontCache        = pSVData->maGDIData.mpScreenFontCache;
+    mxFontCollection   = pSVData->maGDIData.mxScreenFontList;
+    mxFontCache        = pSVData->maGDIData.mxScreenFontCache;
     mnFocusId          = nullptr;
     mnMouseMoveId      = nullptr;
     mnLastMouseX       = -1;
@@ -880,7 +874,7 @@ bool Window::AcquireGraphics() const
 
     if ( mpGraphics )
     {
-        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp) );
+        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp), RasterOp::Invert == meRasterOp );
         mpGraphics->setAntiAliasB2DDraw(bool(mnAntialiasing & AntialiasingFlags::EnableB2dDraw));
     }
 
@@ -1079,8 +1073,8 @@ void Window::ImplInit( vcl::Window* pParent, WinBits nStyle, SystemParentData* p
     mpWindowImpl->mpRealParent = pRealParent;
 
     // #99318: make sure fontcache and list is available before call to SetSettings
-    mpFontCollection      = mpWindowImpl->mpFrameData->mpFontCollection;
-    mpFontCache     = mpWindowImpl->mpFrameData->mpFontCache;
+    mxFontCollection = mpWindowImpl->mpFrameData->mxFontCollection;
+    mxFontCache = mpWindowImpl->mpFrameData->mxFontCache;
 
     if ( mpWindowImpl->mbFrame )
     {
@@ -1440,14 +1434,14 @@ void Window::ImplPosSizeWindow( long nX, long nY,
     long    nOldOutOffY     = mnOutOffY;
     long    nOldOutWidth    = mnOutWidth;
     long    nOldOutHeight   = mnOutHeight;
-    vcl::Region* pOverlapRegion  = nullptr;
-    vcl::Region* pOldRegion      = nullptr;
+    std::unique_ptr<vcl::Region> pOverlapRegion;
+    std::unique_ptr<vcl::Region> pOldRegion;
 
     if ( IsReallyVisible() )
     {
         tools::Rectangle aOldWinRect( Point( nOldOutOffX, nOldOutOffY ),
                                Size( nOldOutWidth, nOldOutHeight ) );
-        pOldRegion = new vcl::Region( aOldWinRect );
+        pOldRegion.reset( new vcl::Region( aOldWinRect ) );
         if ( mpWindowImpl->mbWinRegion )
             pOldRegion->Intersect( ImplPixelToDevicePixel( mpWindowImpl->maWinRegion ) );
 
@@ -1527,7 +1521,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
         {
             if ( bCopyBits && !pOverlapRegion )
             {
-                pOverlapRegion = new vcl::Region();
+                pOverlapRegion.reset( new vcl::Region() );
                 ImplCalcOverlapRegion( tools::Rectangle( Point( mnOutOffX, mnOutOffY ),
                                                   Size( mnOutWidth, mnOutHeight ) ),
                                        *pOverlapRegion, false, true );
@@ -1545,7 +1539,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
         {
             if ( bCopyBits && !pOverlapRegion )
             {
-                pOverlapRegion = new vcl::Region();
+                pOverlapRegion.reset( new vcl::Region() );
                 ImplCalcOverlapRegion( tools::Rectangle( Point( mnOutOffX, mnOutOffY ),
                                                   Size( mnOutWidth, mnOutHeight ) ),
                                        *pOverlapRegion, false, true );
@@ -1670,7 +1664,7 @@ void Window::ImplPosSizeWindow( long nX, long nY,
                             if ( !bInvalidate )
                             {
                                 if ( !pOverlapRegion->IsEmpty() )
-                                    ImplInvalidateFrameRegion( pOverlapRegion, InvalidateFlags::Children );
+                                    ImplInvalidateFrameRegion( pOverlapRegion.get(), InvalidateFlags::Children );
                             }
                         }
                         else
@@ -1716,9 +1710,6 @@ void Window::ImplPosSizeWindow( long nX, long nY,
         if ( bNewSize && mpWindowImpl->mpSysObj )
             mpWindowImpl->mpSysObj->SetPosSize( mnOutOffX, mnOutOffY, mnOutWidth, mnOutHeight );
     }
-
-    delete pOverlapRegion;
-    delete pOldRegion;
 }
 
 void Window::ImplNewInputContext()
@@ -1738,7 +1729,7 @@ void Window::ImplNewInputContext()
     SalInputContext         aNewContext;
     const vcl::Font&        rFont = rInputContext.GetFont();
     const OUString&         rFontName = rFont.GetFamilyName();
-    LogicalFontInstance*    pFontInstance = nullptr;
+    rtl::Reference<LogicalFontInstance> pFontInstance;
     aNewContext.mpFont = nullptr;
     if (!rFontName.isEmpty())
     {
@@ -1753,7 +1744,7 @@ void Window::ImplNewInputContext()
             else
                 aSize.setHeight( (12*pFocusWin->mnDPIY)/72 );
         }
-        pFontInstance = pFocusWin->mpFontCache->GetFontInstance( pFocusWin->mpFontCollection,
+        pFontInstance = pFocusWin->mxFontCache->GetFontInstance( pFocusWin->mxFontCollection.get(),
                          rFont, aSize, static_cast<float>(aSize.Height()) );
         if ( pFontInstance )
             aNewContext.mpFont = pFontInstance;
@@ -1761,21 +1752,12 @@ void Window::ImplNewInputContext()
     aNewContext.meLanguage  = rFont.GetLanguage();
     aNewContext.mnOptions   = rInputContext.GetOptions();
     pFocusWin->ImplGetFrame()->SetInputContext( &aNewContext );
-
-    if ( pFontInstance )
-        pFontInstance->Release();
 }
 
-void Window::doLazyDelete()
+void Window::SetParentToDefaultWindow()
 {
-    SystemWindow* pSysWin = dynamic_cast<SystemWindow*>(this);
-    DockingWindow* pDockWin = dynamic_cast<DockingWindow*>(this);
-    if( pSysWin || ( pDockWin && pDockWin->IsFloatingMode() ) )
-    {
-        Show( false );
-        SetParent( ImplGetDefaultWindow() );
-    }
-    vcl::LazyDeletor::Delete( this );
+    Show(false);
+    SetParent(ImplGetDefaultWindow());
 }
 
 KeyIndicatorState Window::GetIndicatorState() const
@@ -1847,7 +1829,10 @@ void Window::LoseFocus()
 
 void Window::SetHelpHdl(const Link<vcl::Window&, bool>& rLink)
 {
-    mpWindowImpl->maHelpRequestHdl = rLink;
+    if (mpWindowImpl) // may be called after dispose
+    {
+        mpWindowImpl->maHelpRequestHdl = rLink;
+    }
 }
 
 void Window::RequestHelp( const HelpEvent& rHEvt )
@@ -2053,7 +2038,7 @@ long Window::CalcTitleWidth() const
         long nTitleWidth = GetTextWidth( GetText() );
         const_cast<vcl::Window*>(this)->SetFont( aFont );
         nTitleWidth += rStyleSettings.GetTitleHeight() * 3;
-        nTitleWidth += rStyleSettings.GetBorderSize() * 2;
+        nTitleWidth += StyleSettings::GetBorderSize() * 2;
         nTitleWidth += 10;
         return nTitleWidth;
     }
@@ -2567,7 +2552,7 @@ void Window::EnableInput( bool bEnable, const vcl::Window* pExcludeWindow )
     EnableInput( bEnable );
 
     // pExecuteWindow is the first Overlap-Frame --> if this
-    // shouldn't be the case, than this must be changed in dialog.cxx
+    // shouldn't be the case, then this must be changed in dialog.cxx
     if( pExcludeWindow )
         pExcludeWindow = pExcludeWindow->ImplGetFirstOverlapWindow();
     vcl::Window* pSysWin = mpWindowImpl->mpFrameWindow->mpWindowImpl->mpFrameData->mpFirstOverlap;
@@ -2577,7 +2562,7 @@ void Window::EnableInput( bool bEnable, const vcl::Window* pExcludeWindow )
         if ( ImplGetFirstOverlapWindow()->ImplIsWindowOrChild( pSysWin, true ) )
         {
             // Is Window not in the exclude window path or not the
-            // exclude window, than change the status
+            // exclude window, then change the status
             if ( !pExcludeWindow || !pExcludeWindow->ImplIsWindowOrChild( pSysWin, true ) )
                 pSysWin->EnableInput( bEnable );
         }
@@ -2594,7 +2579,7 @@ void Window::EnableInput( bool bEnable, const vcl::Window* pExcludeWindow )
             if ( ImplGetFirstOverlapWindow()->ImplIsWindowOrChild( pFrameWin, true ) )
             {
                 // Is Window not in the exclude window path or not the
-                // exclude window, than change the status
+                // exclude window, then change the status
                 if ( !pExcludeWindow || !pExcludeWindow->ImplIsWindowOrChild( pFrameWin, true ) )
                     pFrameWin->EnableInput( bEnable );
             }
@@ -2612,7 +2597,7 @@ void Window::EnableInput( bool bEnable, const vcl::Window* pExcludeWindow )
             if ( ImplGetFirstOverlapWindow()->ImplIsWindowOrChild( elem, true ) )
             {
                 // Is Window not in the exclude window path or not the
-                // exclude window, than change the status
+                // exclude window, then change the status
                 if ( !pExcludeWindow || !pExcludeWindow->ImplIsWindowOrChild( elem, true ) )
                     elem->EnableInput( bEnable );
             }
@@ -2629,9 +2614,7 @@ void Window::AlwaysEnableInput( bool bAlways, bool bChild )
     if( bAlways && mpWindowImpl->meAlwaysInputMode != AlwaysInputEnabled )
     {
         mpWindowImpl->meAlwaysInputMode = AlwaysInputEnabled;
-
-        if ( bAlways )
-            EnableInput( true, false );
+        EnableInput(true, false);
     }
     else if( ! bAlways && mpWindowImpl->meAlwaysInputMode == AlwaysInputEnabled )
     {
@@ -2658,9 +2641,7 @@ void Window::AlwaysDisableInput( bool bAlways, bool bChild )
     if( bAlways && mpWindowImpl->meAlwaysInputMode != AlwaysInputDisabled )
     {
         mpWindowImpl->meAlwaysInputMode = AlwaysInputDisabled;
-
-        if ( bAlways )
-            EnableInput( false, false );
+        EnableInput(false, false);
     }
     else if( ! bAlways && mpWindowImpl->meAlwaysInputMode == AlwaysInputDisabled )
     {
@@ -3096,11 +3077,8 @@ const Wallpaper& Window::GetDisplayBackground() const
     // FIXME: fix issue 52349, need to fix this really in
     // all NWF enabled controls
     const ToolBox* pTB = dynamic_cast<const ToolBox*>(this);
-    if( pTB )
-    {
-        if( IsNativeWidgetEnabled() )
-            return pTB->ImplGetToolBoxPrivateData()->maDisplayBackground;
-    }
+    if( pTB && IsNativeWidgetEnabled() )
+        return pTB->ImplGetToolBoxPrivateData()->maDisplayBackground;
 
     if( !IsBackground() )
     {
@@ -3167,7 +3145,7 @@ Reference< css::awt::XWindowPeer > Window::GetComponentInterface( bool bCreate )
 {
     if ( !mpWindowImpl->mxWindowPeer.is() && bCreate )
     {
-        UnoWrapperBase* pWrapper = Application::GetUnoWrapper();
+        UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper();
         if ( pWrapper )
             mpWindowImpl->mxWindowPeer = pWrapper->GetWindowInterface( this );
     }
@@ -3176,7 +3154,7 @@ Reference< css::awt::XWindowPeer > Window::GetComponentInterface( bool bCreate )
 
 void Window::SetComponentInterface( Reference< css::awt::XWindowPeer > const & xIFace )
 {
-    UnoWrapperBase* pWrapper = Application::GetUnoWrapper();
+    UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper();
     SAL_WARN_IF( !pWrapper, "vcl.window", "SetComponentInterface: No Wrapper!" );
     if ( pWrapper )
         pWrapper->SetWindowInterface( this, xIFace );
@@ -3197,7 +3175,7 @@ LOKWindowsMap& GetLOKWindowsMap()
     if (!s_pLOKWindowsMap)
         s_pLOKWindowsMap.reset(new LOKWindowsMap);
 
-    return *s_pLOKWindowsMap.get();
+    return *s_pLOKWindowsMap;
 }
 
 }

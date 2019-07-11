@@ -24,7 +24,7 @@
 #include <types.hxx>
 #include "xladdress.hxx"
 #include "xiroot.hxx"
-#include "xistring.hxx"
+#include "xltools.hxx"
 #include <memory>
 #include <vector>
 
@@ -128,7 +128,6 @@ public:
 // Header/footer conversion ===================================================
 
 class EditEngine;
-class EditTextObject;
 class SfxItemSet;
 class SvxFieldItem;
 struct XclFontData;
@@ -240,7 +239,7 @@ private:
 private:
     EditEngine&         mrEE;               /// The header/footer edit engine.
     XclImpHFPortionInfoVec maInfos;         /// Edit engine text objects for all portions.
-    OUString            maCurrText;         /// Current text to insert into edit engine.
+    OUStringBuffer      maCurrText;         /// Current text to insert into edit engine.
     XclFontDataPtr      mxFontData;         /// Font data of current text.
     XclImpHFPortion     meCurrObj;          /// The current portion.
 };
@@ -338,7 +337,7 @@ public:
     explicit            XclImpCachedMatrix( XclImpStream& rStrm );
                         ~XclImpCachedMatrix();
 
-    /** Creates a new ScFullMatrix object and fills it with the contained values. */
+    /** Creates a new ScMatrix object and fills it with the contained values. */
     ScMatrixRef CreateScMatrix( svl::SharedStringPool& rPool ) const;
 
 private:

@@ -13,6 +13,7 @@
 #include <tokenarray.hxx>
 #include <interpre.hxx>
 #include <compiler.hxx>
+#include <sfx2/linkmgr.hxx>
 
 #define DISPLAY_LEN 15
 
@@ -28,7 +29,7 @@ ScSimpleFormulaCalculator::ScSimpleFormulaCalculator( ScDocument* pDoc, const Sc
     , mbMatrixFormula(bMatrixFormula)
 {
     // compile already here
-    ScCompiler aComp(mpDoc, maAddr, eGram);
+    ScCompiler aComp(mpDoc, maAddr, eGram, true, bMatrixFormula);
     mpCode.reset(aComp.CompileString(rFormula));
     if(mpCode->GetCodeError() == FormulaError::NONE && mpCode->GetLen())
         aComp.CompileTokenArray();
@@ -44,13 +45,13 @@ void ScSimpleFormulaCalculator::Calculate()
         return;
 
     mbCalculated = true;
-    ScInterpreter aInt(nullptr, mpDoc, mpDoc->GetNonThreadedContext(), maAddr, *mpCode.get());
+
+    ScInterpreter aInt(mpDoc->GetFormulaCell( maAddr ), mpDoc, mpDoc->GetNonThreadedContext(), maAddr, *mpCode);
+    if (mbMatrixFormula)
+        aInt.AssertFormulaMatrix();
 
     std::unique_ptr<sfx2::LinkManager> pNewLinkMgr( new sfx2::LinkManager(mpDoc->GetDocumentShell()) );
     aInt.SetLinkManager( pNewLinkMgr.get() );
-
-    if (mbMatrixFormula)
-        aInt.AssertFormulaMatrix();
 
     formula::StackVar aIntType = aInt.Interpret();
     if ( aIntType == formula::svMatrixCell )
@@ -93,6 +94,8 @@ bool ScSimpleFormulaCalculator::IsValue()
 
 bool ScSimpleFormulaCalculator::IsMatrix()
 {
+    Calculate();
+
     return mbMatrixResult;
 }
 

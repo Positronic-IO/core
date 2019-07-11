@@ -35,6 +35,7 @@
 #include <basic/sbuno.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/sharedstringpool.hxx>
+#include <unotools/charclass.hxx>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
@@ -65,6 +66,7 @@
 #include <doubleref.hxx>
 #include <queryparam.hxx>
 #include <tokenarray.hxx>
+#include <compiler.hxx>
 
 #include <math.h>
 #include <float.h>
@@ -91,7 +93,7 @@ void ScInterpreter::ReplaceCell( ScAddress& rPos )
     size_t ListSize = pDok->m_TableOpList.size();
     for ( size_t i = 0; i < ListSize; ++i )
     {
-        ScInterpreterTableOpParams *const pTOp = pDok->m_TableOpList[ i ].get();
+        ScInterpreterTableOpParams *const pTOp = pDok->m_TableOpList[ i ];
         if ( rPos == pTOp->aOld1 )
         {
             rPos = pTOp->aNew1;
@@ -114,7 +116,7 @@ bool ScInterpreter::IsTableOpInRange( const ScRange& rRange )
     size_t ListSize = pDok->m_TableOpList.size();
     for ( size_t i = 0; i < ListSize; ++i )
     {
-        ScInterpreterTableOpParams *const pTOp = pDok->m_TableOpList[ i ].get();
+        ScInterpreterTableOpParams *const pTOp = pDok->m_TableOpList[ i ];
         if ( rRange.In( pTOp->aOld1 ) )
             return true;
         if ( rRange.In( pTOp->aOld2 ) )
@@ -948,6 +950,12 @@ void ScInterpreter::DoubleRefToVars( const formula::FormulaToken* p,
     const ScComplexRefData& rCRef = *p->GetDoubleRef();
     SingleRefToVars( rCRef.Ref1, rCol1, rRow1, rTab1);
     SingleRefToVars( rCRef.Ref2, rCol2, rRow2, rTab2);
+    if (rCol2 < rCol1)
+        std::swap( rCol2, rCol1);
+    if (rRow2 < rRow1)
+        std::swap( rRow2, rRow1);
+    if (rTab2 < rTab1)
+        std::swap( rTab2, rTab1);
     if (!pDok->m_TableOpList.empty())
     {
         ScRange aRange( rCol1, rRow1, rTab1, rCol2, rRow2, rTab2 );
@@ -1482,13 +1490,14 @@ bool ScInterpreter::ConvertMatrixParameters()
                 {
                     formula::ParamClass eType = ScParameterClassification::GetParameterType( pCur, nParams - i);
                     if ( eType != formula::ParamClass::Reference &&
+                            eType != formula::ParamClass::ReferenceOrRefArray &&
                             eType != formula::ParamClass::ReferenceOrForceArray &&
                             // For scalar Value: convert to Array/JumpMatrix
                             // only if in array formula context, else (function
                             // has ForceArray or ReferenceOrForceArray
                             // parameter *somewhere else*) pick a normal
                             // position dependent implicit intersection later.
-                            (eType != formula::ParamClass::Value || bMatrixFormula || pCur->IsInForceArray()))
+                            (eType != formula::ParamClass::Value || IsInArrayContext()))
                     {
                         SCCOL nCol1, nCol2;
                         SCROW nRow1, nRow2;
@@ -1518,7 +1527,7 @@ bool ScInterpreter::ConvertMatrixParameters()
                 case svExternalDoubleRef:
                 {
                     formula::ParamClass eType = ScParameterClassification::GetParameterType( pCur, nParams - i);
-                    if (eType == formula::ParamClass::Array)
+                    if (eType == formula::ParamClass::Value || eType == formula::ParamClass::Array)
                     {
                         sal_uInt16 nFileId = p->GetIndex();
                         OUString aTabName = p->GetString().getString();
@@ -1534,6 +1543,15 @@ bool ScInterpreter::ConvertMatrixParameters()
                         ScMatrixRef pMat = pTemp->GetMatrix();
                         if (pMat)
                         {
+                            if (eType == formula::ParamClass::Value)
+                            {   // only if single value expected
+                                SCSIZE nC, nR;
+                                pMat->GetDimensions( nC, nR);
+                                if (nJumpCols < nC)
+                                    nJumpCols = nC;
+                                if (nJumpRows < nR)
+                                    nJumpRows = nR;
+                            }
                             formula::FormulaToken* pNew = new ScMatrixToken( pMat);
                             pNew->IncRef();
                             pStack[ sp - i ] = pNew;
@@ -1546,6 +1564,7 @@ bool ScInterpreter::ConvertMatrixParameters()
                 {
                     formula::ParamClass eType = ScParameterClassification::GetParameterType( pCur, nParams - i);
                     if ( eType != formula::ParamClass::Reference &&
+                            eType != formula::ParamClass::ReferenceOrRefArray &&
                             eType != formula::ParamClass::ReferenceOrForceArray &&
                             eType != formula::ParamClass::ForceArray)
                     {
@@ -1696,8 +1715,7 @@ void ScInterpreter::QueryMatrixType(const ScMatrixRef& xMat, SvNumFormatType& rR
             }
             else
             {
-                svl::SharedString aStr( nMatVal.GetString());
-                FormulaTokenRef xRes = new FormulaStringToken( aStr);
+                FormulaTokenRef xRes = new FormulaStringToken( nMatVal.GetString() );
                 PushTempToken( new ScMatrixFormulaCellToken(nCols, nRows, xMat, xRes.get()));
                 rRetTypeExpr = SvNumFormatType::TEXT;
             }
@@ -2004,56 +2022,8 @@ bool ScInterpreter::DoubleRefToPosSingleRef( const ScRange& rRange, ScAddress& r
         return bOk;
     }
 
-    SCCOL nMyCol = aPos.Col();
-    SCROW nMyRow = aPos.Row();
-    SCTAB nMyTab = aPos.Tab();
-    SCCOL nCol = 0;
-    SCROW nRow = 0;
-    SCTAB nTab;
-    nTab = rRange.aStart.Tab();
-    if ( rRange.aStart.Col() <= nMyCol && nMyCol <= rRange.aEnd.Col() )
-    {
-        nRow = rRange.aStart.Row();
-        if ( nRow == rRange.aEnd.Row() )
-        {
-            bOk = true;
-            nCol = nMyCol;
-        }
-        else if ( nTab != nMyTab && nTab == rRange.aEnd.Tab()
-                && rRange.aStart.Row() <= nMyRow && nMyRow <= rRange.aEnd.Row() )
-        {
-            bOk = true;
-            nCol = nMyCol;
-            nRow = nMyRow;
-        }
-    }
-    else if ( rRange.aStart.Row() <= nMyRow && nMyRow <= rRange.aEnd.Row() )
-    {
-        nCol = rRange.aStart.Col();
-        if ( nCol == rRange.aEnd.Col() )
-        {
-            bOk = true;
-            nRow = nMyRow;
-        }
-        else if ( nTab != nMyTab && nTab == rRange.aEnd.Tab()
-                && rRange.aStart.Col() <= nMyCol && nMyCol <= rRange.aEnd.Col() )
-        {
-            bOk = true;
-            nCol = nMyCol;
-            nRow = nMyRow;
-        }
-    }
-    if ( bOk )
-    {
-        if ( nTab == rRange.aEnd.Tab() )
-            ;   // all done
-        else if ( nTab <= nMyTab && nMyTab <= rRange.aEnd.Tab() )
-            nTab = nMyTab;
-        else
-            bOk = false;
-        if ( bOk )
-            rAdr.Set( nCol, nRow, nTab );
-    }
+    bOk = ScCompiler::DoubleRefToPosSingleRefScalarCase(rRange, rAdr, aPos);
+
     if ( !bOk )
         SetError( FormulaError::NoValue );
     return bOk;
@@ -2513,7 +2483,7 @@ void ScInterpreter::ScDBGet()
 {
     bool bMissingField = false;
     unique_ptr<ScDBQueryParamBase> pQueryParam( GetDBParams(bMissingField) );
-    if (!pQueryParam.get())
+    if (!pQueryParam)
     {
         // Failed to create query param.
         PushIllegalParameter();
@@ -2521,7 +2491,7 @@ void ScInterpreter::ScDBGet()
     }
 
     pQueryParam->mbSkipString = false;
-    ScDBQueryDataIterator aValIter(pDok, mrContext, pQueryParam.release());
+    ScDBQueryDataIterator aValIter(pDok, mrContext, std::move(pQueryParam));
     ScDBQueryDataIterator::Value aValue;
     if (!aValIter.GetFirst(aValue) || aValue.mnError != FormulaError::NONE)
     {
@@ -2692,8 +2662,7 @@ void ScInterpreter::ScExternal()
                 else
                 {
                     // enable asyncs after loading
-                    if ( rArr.IsRecalcModeNormal() )
-                        rArr.SetExclusiveRecalcModeOnLoad();
+                    rArr.AddRecalcMode( ScRecalcMode::ONLOAD_LENIENT );
                     // assure identical handler with identical call?
                     double nErg = 0.0;
                     ppParam[0] = &nErg;
@@ -3053,18 +3022,24 @@ void ScInterpreter::ScExternal()
 
             if ( aCall.HasVarRes() )                        // handle async functions
             {
-                if ( rArr.IsRecalcModeNormal() )
-                {
-                    rArr.SetExclusiveRecalcModeOnLoad();
-                }
+                rArr.AddRecalcMode( ScRecalcMode::ONLOAD_LENIENT );
                 uno::Reference<sheet::XVolatileResult> xRes = aCall.GetVarRes();
                 ScAddInListener* pLis = ScAddInListener::Get( xRes );
+                // In case there is no pMyFormulaCell, i.e. while interpreting
+                // temporarily from within the Function Wizard, try to obtain a
+                // valid result from an existing listener for that volatile, or
+                // create a new and hope for an immediate result. If none
+                // available that should lead to a void result and thus #N/A.
+                bool bTemporaryListener = false;
                 if ( !pLis )
                 {
                     pLis = ScAddInListener::CreateListener( xRes, pDok );
-                    pMyFormulaCell->StartListening( *pLis );
+                    if (pMyFormulaCell)
+                        pMyFormulaCell->StartListening( *pLis );
+                    else
+                        bTemporaryListener = true;
                 }
-                else
+                else if (pMyFormulaCell)
                 {
                     pMyFormulaCell->StartListening( *pLis );
                     if ( !pLis->HasDocument( pDok ) )
@@ -3074,6 +3049,20 @@ void ScInterpreter::ScExternal()
                 }
 
                 aCall.SetResult( pLis->GetResult() );       // use result from async
+
+                if (bTemporaryListener)
+                {
+                    try
+                    {
+                        // EventObject can be any, not evaluated by
+                        // ScAddInListener::disposing()
+                        css::lang::EventObject aEvent;
+                        pLis->disposing(aEvent);    // pLis is dead hereafter
+                    }
+                    catch (const uno::Exception&)
+                    {
+                    }
+                }
             }
 
             if ( aCall.GetErrCode() != FormulaError::NONE )
@@ -3082,8 +3071,7 @@ void ScInterpreter::ScExternal()
             }
             else if ( aCall.HasMatrix() )
             {
-                ScMatrixRef xMat = aCall.GetMatrix();
-                PushMatrix( xMat );
+                PushMatrix( aCall.GetMatrix() );
             }
             else if ( aCall.HasString() )
             {
@@ -3260,6 +3248,11 @@ void ScInterpreter::ScMacro()
     OSL_ENSURE(dynamic_cast<const StarBASIC *>(pObject) != nullptr, "No Basic found!");
     OUString aMacroStr = pObject->GetName() + "." + pModule->GetName() + "." + pMethod->GetName();
     OUString aBasicStr;
+    if (pRoot && bUseVBAObjects)
+    {
+        // just here to make sure the VBA objects when we run the macro during ODF import
+        pRoot->getVBAGlobals();
+    }
     if (pObject->GetParent())
     {
         aBasicStr = pObject->GetParent()->GetName();    // document BASIC
@@ -3573,21 +3566,6 @@ bool ScInterpreter::SetSbxVariable( SbxVariable* pVar, const ScAddress& rPos )
 
 #endif
 
-namespace {
-
-class FindByPointer
-{
-    const ScInterpreterTableOpParams* mpTableOp;
-public:
-    explicit FindByPointer(const ScInterpreterTableOpParams* p) : mpTableOp(p) {}
-    bool operator() (std::unique_ptr<ScInterpreterTableOpParams> const& val) const
-    {
-        return val.get() == mpTableOp;
-    }
-};
-
-}
-
 void ScInterpreter::ScTableOp()
 {
     sal_uInt8 nParamCount = GetByte();
@@ -3596,7 +3574,7 @@ void ScInterpreter::ScTableOp()
         PushIllegalParameter();
         return;
     }
-    ScInterpreterTableOpParams* pTableOp = new ScInterpreterTableOpParams;
+    std::unique_ptr<ScInterpreterTableOpParams> pTableOp(new ScInterpreterTableOpParams);
     if (nParamCount == 5)
     {
         PopSingleRef( pTableOp->aNew2 );
@@ -3607,8 +3585,7 @@ void ScInterpreter::ScTableOp()
     PopSingleRef( pTableOp->aFormulaPos );
 
     pTableOp->bValid = true;
-    pDok->m_TableOpList.push_back(
-            std::unique_ptr<ScInterpreterTableOpParams>(pTableOp));
+    pDok->m_TableOpList.push_back(pTableOp.get());
     pDok->IncInterpreterTableOpLevel();
 
     bool bReuseLastParams = (pDok->aLastTableOpParams == *pTableOp);
@@ -3649,10 +3626,9 @@ void ScInterpreter::ScTableOp()
     }
 
     auto const itr =
-        ::std::find_if(pDok->m_TableOpList.begin(), pDok->m_TableOpList.end(), FindByPointer(pTableOp));
+        ::std::find(pDok->m_TableOpList.begin(), pDok->m_TableOpList.end(), pTableOp.get());
     if (itr != pDok->m_TableOpList.end())
     {
-        pTableOp = itr->release();
         pDok->m_TableOpList.erase(itr);
     }
 
@@ -3685,7 +3661,7 @@ void ScInterpreter::ScTableOp()
     {
         (*iBroadcast2)->ResetTableOpDirtyVar();
     }
-    delete pTableOp;
+    pTableOp.reset();
 
     pDok->DecInterpreterTableOpLevel();
 }
@@ -3811,7 +3787,6 @@ ScInterpreter::ScInterpreter( ScFormulaCell* pCell, ScDocument* pDoc, ScInterpre
     , mpLinkManager(pDok->GetLinkManager())
     , mrStrPool(pDoc->GetSharedStringPool())
     , pJumpMatrix(nullptr)
-    , pTokenMatrixMap(nullptr)
     , pMyFormulaCell(pCell)
     , pFormatter(rContext.GetFormatTable())
     , pCur(nullptr)
@@ -4018,11 +3993,11 @@ StackVar ScInterpreter::Interpret()
                     eOp = ocNone;       // JumpMatrix created
                     nStackBase = sp;
                 }
-                else
+                else if (sp >= pCur->GetParamCount())
                     nStackBase = sp - pCur->GetParamCount();
+                else
+                    nStackBase = sp;    // underflow?!?
             }
-            if ( nStackBase > sp )
-                nStackBase = sp;        // underflow?!?
 
             switch( eOp )
             {
@@ -4275,6 +4250,7 @@ StackVar ScInterpreter::Interpret()
                 case ocMid              : ScMid();                      break;
                 case ocText             : ScText();                     break;
                 case ocSubstitute       : ScSubstitute();               break;
+                case ocRegex            : ScRegex();                    break;
                 case ocRept             : ScRept();                     break;
                 case ocConcat           : ScConcat();                   break;
                 case ocConcat_MS        : ScConcat_MS();                break;
@@ -4480,6 +4456,7 @@ StackVar ScInterpreter::Interpret()
                     case SvNumFormatType::DATE:
                     case SvNumFormatType::TIME:
                     case SvNumFormatType::DATETIME:
+                    case SvNumFormatType::DURATION:
                         nRetIndexExpr = nFuncFmtIndex;
                     break;
                     default:
@@ -4565,7 +4542,7 @@ StackVar ScInterpreter::Interpret()
             bForcedResultType = false;
     }
 
-    if( sp )
+    if (sp == 1)
     {
         pCur = pStack[ sp-1 ];
         if( pCur->GetOpCode() == ocPush )
@@ -4594,12 +4571,25 @@ StackVar ScInterpreter::Interpret()
                         // unnecessarily duplicate the information.
                         if (pCur->GetDoubleType() != 0)
                         {
-                            const double fVal = PopDouble();
+                            double fVal = PopDouble();
                             if (!bForcedResultType)
                             {
                                 if (nCurFmtType != nFuncFmtType)
                                     nRetIndexExpr = 0;  // carry format index only for matching type
                                 nRetTypeExpr = nFuncFmtType = nCurFmtType;
+                            }
+                            if (nRetTypeExpr == SvNumFormatType::DURATION)
+                            {
+                                // Round the duration in case a wall clock time
+                                // display format is used instead of a duration
+                                // format. To micro seconds which then catches
+                                // the converted hh:mm:ss.9999997 cases.
+                                if (fVal != 0.0)
+                                {
+                                    fVal *= 86400.0;
+                                    fVal = rtl::math::round( fVal, 6);
+                                    fVal /= 86400.0;
+                                }
                             }
                             PushTempToken( CreateFormulaDoubleToken( fVal));
                         }
@@ -4692,6 +4682,8 @@ StackVar ScInterpreter::Interpret()
         else
             SetError( FormulaError::UnknownStackVariable);
     }
+    else if (sp > 1)
+        SetError( FormulaError::OperatorExpected);
     else
         SetError( FormulaError::NoCode);
 
@@ -4707,6 +4699,11 @@ StackVar ScInterpreter::Interpret()
     }
     else
         nRetFmtType = SvNumFormatType::NUMBER;
+
+    // Currently (2019-05-06) nothing else can cope with a duration format
+    // type, change to time as it was before.
+    if (nRetFmtType == SvNumFormatType::DURATION)
+        nRetFmtType = SvNumFormatType::TIME;
 
     if (nGlobalError != FormulaError::NONE && GetStackType() != svError )
         PushError( nGlobalError);

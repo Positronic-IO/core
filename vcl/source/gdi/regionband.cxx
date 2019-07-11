@@ -21,6 +21,7 @@
 #include <tools/debug.hxx>
 #include <regionband.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 RegionBand::RegionBand()
 :   mpFirstBand(nullptr),
@@ -37,27 +38,29 @@ RegionBand::RegionBand(const RegionBand& rRef)
 
 RegionBand& RegionBand::operator=(const RegionBand& rRef)
 {
-    ImplRegionBand* pPrevBand = nullptr;
-    ImplRegionBand* pBand = rRef.mpFirstBand;
-
-    while(pBand)
+    if (this != &rRef)
     {
-        ImplRegionBand* pNewBand = new ImplRegionBand(*pBand);
+        ImplRegionBand* pPrevBand = nullptr;
+        ImplRegionBand* pBand = rRef.mpFirstBand;
 
-        // first element? -> set as first into the list
-        if(pBand == rRef.mpFirstBand)
+        while(pBand)
         {
-            mpFirstBand = pNewBand;
-        }
-        else
-        {
-            pPrevBand->mpNextBand = pNewBand;
-        }
+            ImplRegionBand* pNewBand = new ImplRegionBand(*pBand);
 
-        pPrevBand = pNewBand;
-        pBand = pBand->mpNextBand;
+            // first element? -> set as first into the list
+            if(pBand == rRef.mpFirstBand)
+            {
+                mpFirstBand = pNewBand;
+            }
+            else
+            {
+                pPrevBand->mpNextBand = pNewBand;
+            }
+
+            pPrevBand = pNewBand;
+            pBand = pBand->mpNextBand;
+        }
     }
-
     return *this;
 }
 
@@ -416,7 +419,7 @@ void RegionBand::CreateBandRange(long nYTop, long nYBottom)
     mpLastCheckedBand = mpFirstBand;
     ImplRegionBand* pBand = mpFirstBand;
 
-    for ( int i = nYTop; i <= nYBottom+1; i++ )
+    for ( long i = nYTop; i <= nYBottom+1; i++ )
     {
         // create new band
         ImplRegionBand* pNewBand = new ImplRegionBand( i, i );
@@ -647,11 +650,8 @@ bool RegionBand::OptimizeBandList()
         if ( pBand->mnYBottom < pBand->mnYTop )
             OSL_ENSURE(false, "RegionBand::OptimizeBandList(): YBottomBoundary < YTopBoundary" );
 
-        if ( pBand->mpNextBand )
-        {
-            if ( pBand->mnYBottom >= pBand->mpNextBand->mnYTop )
-                OSL_ENSURE(false, "RegionBand::OptimizeBandList(): overlapping bands in region!" );
-        }
+        if ( pBand->mpNextBand && pBand->mnYBottom >= pBand->mpNextBand->mnYTop )
+            OSL_ENSURE(false, "RegionBand::OptimizeBandList(): overlapping bands in region!" );
 
         pBand = pBand->mpNextBand;
     }

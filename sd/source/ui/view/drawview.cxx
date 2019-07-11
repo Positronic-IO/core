@@ -35,12 +35,14 @@
 #include <svl/itempool.hxx>
 #include <editeng/numitem.hxx>
 #include <svl/whiter.hxx>
+#include <sal/log.hxx>
 
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/objface.hxx>
 #include <stlsheet.hxx>
 
 #include <svx/svdoutl.hxx>
+#include <svx/svdundo.hxx>
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
 
@@ -85,7 +87,6 @@ DrawView::DrawView(
 :   ::sd::View(*pDocSh->GetDoc(), pOutDev, pShell)
     ,mpDocShell(pDocSh)
     ,mpDrawViewShell(pShell)
-    ,mpVDev(nullptr)
     ,mnPOCHSmph(0)
 {
     SetCurrentObj(OBJ_RECT);
@@ -93,7 +94,6 @@ DrawView::DrawView(
 
 DrawView::~DrawView()
 {
-    mpVDev.disposeAndClear();
 }
 
 /**
@@ -165,8 +165,8 @@ bool DrawView::SetAttributes(const SfxItemSet& rSet,
                     aTempSet.ClearInvalidItems();
 
                     // Undo-Action
-                    StyleSheetUndoAction* pAction = new StyleSheetUndoAction(&mrDoc, pSheet, &aTempSet);
-                    mpDocSh->GetUndoManager()->AddUndoAction(pAction);
+                    mpDocSh->GetUndoManager()->AddUndoAction(
+                        o3tl::make_unique<StyleSheetUndoAction>(&mrDoc, pSheet, &aTempSet));
 
                     pSheet->GetItemSet().Put(aTempSet);
                     pSheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -216,8 +216,8 @@ bool DrawView::SetAttributes(const SfxItemSet& rSet,
                             }
 
                             // Undo-Action
-                            StyleSheetUndoAction* pAction = new StyleSheetUndoAction(&mrDoc, pSheet, &aTempSet);
-                            mpDocSh->GetUndoManager()->AddUndoAction(pAction);
+                            mpDocSh->GetUndoManager()->AddUndoAction(
+                                o3tl::make_unique<StyleSheetUndoAction>(&mrDoc, pSheet, &aTempSet));
 
                             pSheet->GetItemSet().Put(aTempSet);
                             pSheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -292,8 +292,8 @@ bool DrawView::SetAttributes(const SfxItemSet& rSet,
                         aTempSet.ClearInvalidItems();
 
                         // Undo-Action
-                        StyleSheetUndoAction* pAction = new StyleSheetUndoAction(&mrDoc, pSheet, &aTempSet);
-                        mpDocSh->GetUndoManager()->AddUndoAction(pAction);
+                        mpDocSh->GetUndoManager()->AddUndoAction(
+                            o3tl::make_unique<StyleSheetUndoAction>(&mrDoc, pSheet, &aTempSet));
 
                         pSheet->GetItemSet().Put(aTempSet,false);
                         pSheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -335,8 +335,8 @@ bool DrawView::SetAttributes(const SfxItemSet& rSet,
                             aTempSet.ClearInvalidItems();
 
                             // Undo-Action
-                            StyleSheetUndoAction* pAction = new StyleSheetUndoAction(&mrDoc, pSheet, &aTempSet);
-                            mpDocSh->GetUndoManager()->AddUndoAction(pAction);
+                            mpDocSh->GetUndoManager()->AddUndoAction(
+                                o3tl::make_unique<StyleSheetUndoAction>(&mrDoc, pSheet, &aTempSet));
 
                             pSheet->GetItemSet().Set(aTempSet,false);
                             pSheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -460,11 +460,6 @@ bool DrawView::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAtt
 
 void DrawView::CompleteRedraw(OutputDevice* pOutDev, const vcl::Region& rReg, sdr::contact::ViewObjectContactRedirector* pRedirector /*=0*/)
 {
-    if( mpVDev )
-    {
-        mpVDev.disposeAndClear();
-    }
-
     bool bStandardPaint = true;
 
     SdDrawDocument* pDoc = mpDocShell->GetDoc();
@@ -540,7 +535,7 @@ void DrawView::DeleteMarked()
             SdrObject* pObj = aList.GetMark(nMark)->GetMarkedSdrObj();
             if( pObj && !pObj->IsEmptyPresObj() && pObj->GetUserCall() )
             {
-                pPage = static_cast< SdPage* >( pObj->GetPage() );
+                pPage = static_cast< SdPage* >( pObj->getSdrPageFromSdrObject() );
                 if (pPage)
                 {
                     PresObjKind ePresObjKind(pPage->GetPresObjKind(pObj));

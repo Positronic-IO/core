@@ -23,6 +23,7 @@
 #include <dbase/DIndex.hxx>
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <memory>
@@ -72,7 +73,6 @@ ONDXPage::ONDXPage(ODbaseIndex& rInd, sal_uInt32 nPos, ONDXPage* pParent)
     , nCount(0)
     , aParent(pParent)
     , rIndex(rInd)
-    , ppNodes(nullptr)
 {
     sal_uInt16 nT = rIndex.getHeader().db_maxkeys;
     ppNodes.reset( new ONDXNode[nT] );
@@ -374,7 +374,7 @@ void ONDXPage::ReleaseFull()
     }
 }
 
-bool ONDXPage::Delete(sal_uInt16 nNodePos)
+void ONDXPage::Delete(sal_uInt16 nNodePos)
 {
     if (IsLeaf())
     {
@@ -420,7 +420,6 @@ bool ONDXPage::Delete(sal_uInt16 nNodePos)
     else if (IsRoot())
         // make sure that the position of the root is kept
         rIndex.SetRootPos(nPagePos);
-    return true;
 }
 
 
@@ -480,7 +479,6 @@ void ONDXPage::Merge(sal_uInt16 nParentNodePos, const ONDXPagePtr& xPage)
     DBG_ASSERT(nParentNodePos != NODE_NOTFOUND, "Wrong index setup");
 
     /*  Merge 2 pages   */
-    ONDXNode aResultNode;
     sal_uInt16 nMaxNodes = rIndex.GetMaxNodes(),
            nMaxNodes_2 = nMaxNodes / 2;
 
@@ -894,7 +892,7 @@ SvStream& connectivity::dbase::WriteONDXPage(SvStream &rStream, const ONDXPage& 
     // Page doesn't exist yet
     std::size_t nSize = rPage.GetPagePos() + 1;
     nSize *= DINDEX_PAGE_SIZE;
-    if (nSize > rStream.Seek(STREAM_SEEK_TO_END))
+    if (nSize > rStream.TellEnd())
     {
         rStream.SetStreamSize(nSize);
         rStream.Seek(rPage.GetPagePos() * DINDEX_PAGE_SIZE);

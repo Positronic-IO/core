@@ -19,6 +19,7 @@
 
 #include <comphelper/string.hxx>
 #include <tools/bigint.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/event.hxx>
 #include <vcl/svapp.hxx>
@@ -116,7 +117,7 @@ bool ImplCurrencyGetValue( const OUString& rStr, BigInt& rValue,
     if ( nDecPos != -1 )
     {
         aStr1 = aStr.copy( 0, nDecPos );
-        aStr2.append(aStr.copy(nDecPos+1));
+        aStr2.appendCopy(aStr, nDecPos+1);
     }
     else
         aStr1 = aStr;
@@ -191,8 +192,8 @@ bool ImplCurrencyGetValue( const OUString& rStr, BigInt& rValue,
     if (aStr2.getLength() < nDecDigits)
         string::padToLength(aStr2, nDecDigits, '0');
 
+    aStr1.append(aStr2);
     aStr  = aStr1.makeStringAndClear();
-    aStr += aStr2.makeStringAndClear();
 
     // check range
     BigInt nValue( aStr );
@@ -211,7 +212,7 @@ bool ImplCurrencyGetValue( const OUString& rStr, BigInt& rValue,
 
 } // namespace
 
-inline bool ImplLongCurrencyGetValue( const OUString& rStr, BigInt& rValue,
+static bool ImplLongCurrencyGetValue( const OUString& rStr, BigInt& rValue,
                                       sal_uInt16 nDecDigits, const LocaleDataWrapper& rLocaleDataWrapper )
 {
     return ImplCurrencyGetValue( rStr, rValue, nDecDigits, rLocaleDataWrapper );
@@ -251,7 +252,8 @@ void LongCurrencyFormatter::ImpInit()
     SetDecimalDigits( 0 );
 }
 
-LongCurrencyFormatter::LongCurrencyFormatter()
+LongCurrencyFormatter::LongCurrencyFormatter(Edit* pEdit)
+    : FormatterBase(pEdit)
 {
     ImpInit();
 }
@@ -398,10 +400,10 @@ void ImplNewLongCurrencyFieldValue(LongCurrencyField* pField, const BigInt& rNew
     pField->Modify();
 }
 
-LongCurrencyField::LongCurrencyField( vcl::Window* pParent, WinBits nWinStyle ) :
-    SpinField( pParent, nWinStyle )
+LongCurrencyField::LongCurrencyField(vcl::Window* pParent, WinBits nWinStyle)
+    : SpinField( pParent, nWinStyle )
+    , LongCurrencyFormatter(this)
 {
-    SetField( this );
     mnSpinSize   = 1;
     mnFirst      = mnMin;
     mnLast       = mnMax;
@@ -466,10 +468,10 @@ void LongCurrencyField::Last()
     SpinField::Last();
 }
 
-LongCurrencyBox::LongCurrencyBox( vcl::Window* pParent, WinBits nWinStyle ) :
-    ComboBox( pParent, nWinStyle )
+LongCurrencyBox::LongCurrencyBox(vcl::Window* pParent, WinBits nWinStyle)
+    : ComboBox(pParent, nWinStyle)
+    , LongCurrencyFormatter(this)
 {
-    SetField( this );
     Reformat();
 }
 

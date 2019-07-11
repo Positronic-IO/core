@@ -20,6 +20,8 @@
 #include "WrappedCharacterHeightProperty.hxx"
 #include <RelativeSizeHelper.hxx>
 #include "ReferenceSizePropertyProvider.hxx"
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/beans/XPropertyState.hpp>
 #include <osl/diagnose.h>
 
 using namespace ::com::sun::star;
@@ -41,12 +43,12 @@ WrappedCharacterHeightProperty_Base::~WrappedCharacterHeightProperty_Base()
 {
 }
 
-void WrappedCharacterHeightProperty::addWrappedProperties( std::vector< WrappedProperty* >& rList
+void WrappedCharacterHeightProperty::addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
             , ReferenceSizePropertyProvider* pRefSizePropProvider  )
 {
-    rList.push_back( new WrappedCharacterHeightProperty( pRefSizePropProvider ) );
-    rList.push_back( new WrappedAsianCharacterHeightProperty( pRefSizePropProvider ) );
-    rList.push_back( new WrappedComplexCharacterHeightProperty( pRefSizePropProvider ) );
+    rList.emplace_back( new WrappedCharacterHeightProperty( pRefSizePropProvider ) );
+    rList.emplace_back( new WrappedAsianCharacterHeightProperty( pRefSizePropProvider ) );
+    rList.emplace_back( new WrappedComplexCharacterHeightProperty( pRefSizePropProvider ) );
 }
 
 void WrappedCharacterHeightProperty_Base::setPropertyValue( const Any& rOuterValue, const Reference< beans::XPropertySet >& xInnerPropertySet ) const

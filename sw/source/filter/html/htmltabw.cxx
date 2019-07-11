@@ -50,6 +50,7 @@
 #endif
 #include <rtl/strbuf.hxx>
 #include <sal/types.h>
+#include <osl/diagnose.h>
 
 #define MAX_DEPTH (3)
 
@@ -196,10 +197,9 @@ static bool lcl_TableBox_HasTabBorders( const SwTableBox* pBox, bool *pBorders )
 
     if( !pBox->GetSttNd() )
     {
-        for( SwTableLines::const_iterator it = pBox->GetTabLines().begin();
-                 it != pBox->GetTabLines().end(); ++it)
+        for( const auto& rpLine : pBox->GetTabLines() )
         {
-            if ( lcl_TableLine_HasTabBorders( *it, pBorders ) )
+            if ( lcl_TableLine_HasTabBorders( rpLine, pBorders ) )
                 break;
         }
     }
@@ -220,10 +220,9 @@ static bool lcl_TableLine_HasTabBorders( const SwTableLine* pLine, bool *pBorder
     if( *pBorders )
         return false;
 
-    for( SwTableBoxes::const_iterator it = pLine->GetTabBoxes().begin();
-             it != pLine->GetTabBoxes().end(); ++it)
+    for( const auto& rpBox : pLine->GetTabBoxes() )
     {
-        if ( lcl_TableBox_HasTabBorders( *it, pBorders ) )
+        if ( lcl_TableBox_HasTabBorders( rpBox, pBorders ) )
             break;
     }
     return !*pBorders;
@@ -500,7 +499,7 @@ void SwHTMLWrtTable::OutTableCells( SwHTMLWriter& rWrt,
                                     const SwWriteTableCells& rCells,
                                     const SvxBrushItem *pBrushItem ) const
 {
-    // If the line contains more the one cell and all cells have the some
+    // If the line contains more the one cell and all cells have the same
     // alignment, then output the VALIGN at the line instead of the cell.
     sal_Int16 eRowVertOri = text::VertOrientation::NONE;
     if( rCells.size() > 1 )
@@ -564,10 +563,10 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     // determine value of RULES
     bool bRowsHaveBorder = false;
     bool bRowsHaveBorderOnly = true;
-    SwWriteTableRow *pRow = m_aRows[0];
+    SwWriteTableRow *pRow = m_aRows[0].get();
     for( SwWriteTableRows::size_type nRow=1; nRow < m_aRows.size(); ++nRow )
     {
-        SwWriteTableRow *pNextRow = m_aRows[nRow];
+        SwWriteTableRow *pNextRow = m_aRows[nRow].get();
         bool bBorder = ( pRow->bBottomBorder || pNextRow->bTopBorder );
         bRowsHaveBorder |= bBorder;
         bRowsHaveBorderOnly &= bBorder;
@@ -587,10 +586,10 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
 
     bool bColsHaveBorder = false;
     bool bColsHaveBorderOnly = true;
-    SwWriteTableCol *pCol = m_aCols[0];
+    SwWriteTableCol *pCol = m_aCols[0].get();
     for( SwWriteTableCols::size_type nCol=1; nCol<m_aCols.size(); ++nCol )
     {
-        SwWriteTableCol *pNextCol = m_aCols[nCol];
+        SwWriteTableCol *pNextCol = m_aCols[nCol].get();
         bool bBorder = ( pCol->bRightBorder || pNextCol->bLeftBorder );
         bColsHaveBorder |= bBorder;
         bColsHaveBorderOnly &= bBorder;
@@ -736,7 +735,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
         {
             rWrt.OutNewLine(); // </COL> in new line
 
-            const SwWriteTableCol *pColumn = m_aCols[nCol];
+            const SwWriteTableCol *pColumn = m_aCols[nCol].get();
 
             HtmlWriter html(rWrt.Strm(), rWrt.maNamespace);
             html.start(OOO_STRING_SVTOOLS_HTML_col);
@@ -808,7 +807,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
 
     for( SwWriteTableRows::size_type nRow = 0; nRow < m_aRows.size(); ++nRow )
     {
-        const SwWriteTableRow *pRow2 = m_aRows[nRow];
+        const SwWriteTableRow *pRow2 = m_aRows[nRow].get();
 
         OutTableCells( rWrt, pRow2->GetCells(), pRow2->GetBackground() );
         if( !m_nCellSpacing && nRow < m_aRows.size()-1 && pRow2->bBottomBorder &&

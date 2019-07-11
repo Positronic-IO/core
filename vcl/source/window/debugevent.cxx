@@ -10,6 +10,7 @@
 #include <comphelper/random.hxx>
 #include <rtl/math.hxx>
 #include <rtl/string.hxx>
+#include <sal/log.hxx>
 #include <tools/time.hxx>
 #include <vcl/keycodes.hxx>
 #include <vcl/svapp.hxx>
@@ -136,10 +137,10 @@ void DebugEventInjector::InjectTextEvent()
     }
     else
     {
-        struct {
+        static struct {
             sal_uInt16 nCodeStart, nCodeEnd;
-            char       aCharStart;
-        } nTextCodes[] = {
+            char const aCharStart;
+        } const nTextCodes[] = {
             { KEY_0, KEY_9, '0' },
             { KEY_A, KEY_Z, 'a' }
         };
@@ -190,9 +191,9 @@ void DebugEventInjector::InjectKeyNavEdit()
 {
     vcl::Window *pWindow = ChooseWindow();
 
-    struct {
-        double     mnProb;
-        sal_uInt16 mnKey;
+    static struct {
+        double const     mnProb;
+        sal_uInt16 const mnKey;
     } const nWeights[] = {
         // edit / escape etc. - 50%
         { 0.20, KEY_SPACE },

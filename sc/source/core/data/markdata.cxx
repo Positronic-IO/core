@@ -198,7 +198,7 @@ SCTAB ScMarkData::GetSelectCount() const
 
 SCTAB ScMarkData::GetFirstSelected() const
 {
-    if (maTabMarked.size() > 0)
+    if (!maTabMarked.empty())
         return (*maTabMarked.begin());
 
     OSL_FAIL("GetFirstSelected: nothing selected");
@@ -207,7 +207,7 @@ SCTAB ScMarkData::GetFirstSelected() const
 
 SCTAB ScMarkData::GetLastSelected() const
 {
-    if (maTabMarked.size() > 0)
+    if (!maTabMarked.empty())
         return (*maTabMarked.rbegin());
 
     OSL_FAIL("GetLastSelected: nothing selected");
@@ -500,7 +500,7 @@ std::vector<sc::ColRowSpan> ScMarkData::GetMarkedColSpans() const
             while(false);
 
             // Merge marked.
-            itPos = aSpans.insert(itPos, aMarkRange.aStart.Col(), aMarkRange.aEnd.Col()+1, true).first;
+            aSpans.insert(itPos, aMarkRange.aStart.Col(), aMarkRange.aEnd.Col()+1, true);
 
             return sc::toSpanArray<SCCOLROW,sc::ColRowSpan>(aSpans);
         }
@@ -695,8 +695,12 @@ void ScMarkData::GetSelectionCover( ScRange& rRange )
                 pCurColMarkedRows.reset( new ScFlatBoolRowSegments() );
                 pCurColMarkedRows->setFalse( 0, MAXROW );
                 ScMultiSelIter aMultiIter( aMultiSel, nCol );
-                ScFlatBoolRowSegments::ForwardIterator aPrevItr ( pPrevColMarkedRows.get() ? *pPrevColMarkedRows : aNoRowsMarked ); // For finding left envelope
-                ScFlatBoolRowSegments::ForwardIterator aPrevItr1( pPrevColMarkedRows.get() ? *pPrevColMarkedRows : aNoRowsMarked ); // For finding right envelope
+                ScFlatBoolRowSegments::ForwardIterator aPrevItr(
+                    pPrevColMarkedRows ? *pPrevColMarkedRows
+                                       : aNoRowsMarked); // For finding left envelope
+                ScFlatBoolRowSegments::ForwardIterator aPrevItr1(
+                    pPrevColMarkedRows ? *pPrevColMarkedRows
+                                       : aNoRowsMarked); // For finding right envelope
                 SCROW nTopPrev = 0, nBottomPrev = 0; // For right envelope
                 while ( aMultiIter.Next( nTop, nBottom ) )
                 {
@@ -813,7 +817,8 @@ void ScMarkData::GetSelectionCover( ScRange& rRange )
                 bPrevColUnMarked = true;
                 SCROW nTopPrev = 0, nBottomPrev = 0;
                 bool bRangeMarked = false;
-                ScFlatBoolRowSegments::ForwardIterator aPrevItr( pPrevColMarkedRows.get() ? *pPrevColMarkedRows : aNoRowsMarked );
+                ScFlatBoolRowSegments::ForwardIterator aPrevItr(
+                    pPrevColMarkedRows ? *pPrevColMarkedRows : aNoRowsMarked);
                 while( nTopPrev <= MAXROW && nBottomPrev <= MAXROW )
                 {
                     const bool bHasValue = aPrevItr.getValue(nTopPrev, bRangeMarked);

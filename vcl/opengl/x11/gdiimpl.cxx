@@ -29,6 +29,7 @@
 
 #include <vcl/opengl/OpenGLContext.hxx>
 #include <vcl/opengl/OpenGLHelper.hxx>
+#include <sal/log.hxx>
 
 #include <o3tl/lru_map.hxx>
 #include <ControlCacheKey.hxx>
@@ -80,7 +81,7 @@ namespace
     {
     private:
         errorHandler oldErrorHandler;
-        Display* mdpy;
+        Display* const mdpy;
 
     public:
         TempErrorHandler(Display* dpy, errorHandler newErrorHandler)
@@ -116,7 +117,7 @@ namespace
         return 0;
     }
 
-    GLXFBConfig* getFBConfig(Display* dpy, Window win, int& nBestFBC, bool bUseDoubleBufferedRendering)
+    GLXFBConfig* getFBConfig(Display* dpy, Window win, int& nBestFBC)
     {
         OpenGLZone aZone;
 
@@ -148,9 +149,6 @@ namespace
             GLX_X_VISUAL_TYPE,      GLX_TRUE_COLOR,
             None
         };
-
-        if (!bUseDoubleBufferedRendering)
-            visual_attribs[1] = False;
 
         int fbCount = 0;
         GLXFBConfig* pFBC = glXChooseFBConfig( dpy,
@@ -259,7 +257,7 @@ SystemWindowData X11OpenGLContext::generateWinData(vcl::Window* pParent, bool /*
         return aWinData;
 
     int best_fbc = -1;
-    GLXFBConfig* pFBC = getFBConfig(dpy, win, best_fbc, true);
+    GLXFBConfig* pFBC = getFBConfig(dpy, win, best_fbc);
 
     if (!pFBC)
         return aWinData;
@@ -296,10 +294,12 @@ bool X11OpenGLContext::ImplInit()
     if (!g_vShareList.empty())
         pSharedCtx = g_vShareList.front();
 
-    if (glXCreateContextAttribsARB && !mbRequestLegacyContext)
+    //tdf#112166 for, e.g. VirtualBox GL, claiming OpenGL 2.1
+    static bool hasCreateContextAttribsARB = glXGetProcAddress(reinterpret_cast<const GLubyte*>("glXCreateContextAttribsARB")) != nullptr;
+    if (hasCreateContextAttribsARB && !mbRequestLegacyContext)
     {
         int best_fbc = -1;
-        GLXFBConfig* pFBC = getFBConfig(m_aGLWin.dpy, m_aGLWin.win, best_fbc, mbUseDoubleBufferedRendering);
+        GLXFBConfig* pFBC = getFBConfig(m_aGLWin.dpy, m_aGLWin.win, best_fbc);
 
         if (pFBC && best_fbc != -1)
         {
@@ -697,7 +697,7 @@ namespace
     }
 }
 
-bool X11OpenGLSalGraphicsImpl::RenderPixmap(X11Pixmap const * pPixmap, X11Pixmap const * pMask, int nX, int nY, TextureCombo& rCombo)
+void X11OpenGLSalGraphicsImpl::RenderPixmap(X11Pixmap const * pPixmap, X11Pixmap const * pMask, int nX, int nY, TextureCombo& rCombo)
 {
     const int aAttribs[] =
     {
@@ -764,8 +764,6 @@ bool X11OpenGLSalGraphicsImpl::RenderPixmap(X11Pixmap const * pPixmap, X11Pixmap
     PostDraw();
 
     CHECK_GL_ERROR();
-
-    return true;
 }
 
 bool X11OpenGLSalGraphicsImpl::RenderPixmapToScreen( X11Pixmap* pPixmap, X11Pixmap* pMask, int nX, int nY )
@@ -773,7 +771,8 @@ bool X11OpenGLSalGraphicsImpl::RenderPixmapToScreen( X11Pixmap* pPixmap, X11Pixm
     SAL_INFO( "vcl.opengl", "RenderPixmapToScreen (" << nX << " " << nY << ")" );
 
     TextureCombo aCombo;
-    return RenderPixmap(pPixmap, pMask, nX, nY, aCombo);
+    RenderPixmap(pPixmap, pMask, nX, nY, aCombo);
+    return true;
 }
 
 bool X11OpenGLSalGraphicsImpl::TryRenderCachedNativeControl(ControlCacheKey& rControlCacheKey, int nX, int nY)
@@ -811,9 +810,7 @@ bool X11OpenGLSalGraphicsImpl::RenderAndCacheNativeControl(X11Pixmap* pPixmap, X
                                                            ControlCacheKey& aControlCacheKey)
 {
     std::unique_ptr<TextureCombo> pCombo(new TextureCombo);
-    bool bResult = RenderPixmap(pPixmap, pMask, nX, nY, *pCombo);
-    if (!bResult)
-        return false;
+    RenderPixmap(pPixmap, pMask, nX, nY, *pCombo);
 
     if (!aControlCacheKey.canCacheControl())
         return true;
@@ -822,7 +819,7 @@ bool X11OpenGLSalGraphicsImpl::RenderAndCacheNativeControl(X11Pixmap* pPixmap, X
     if (gTextureCache.get())
         gTextureCache.get()->insert(std::move(pair));
 
-    return bResult;
+    return true;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

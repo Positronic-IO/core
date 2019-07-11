@@ -22,15 +22,11 @@
 
 #include <rtl/ustring.hxx>
 #include <vector>
-#include <xmloff/xmlimp.hxx>
 #include <xmloff/xmlictxt.hxx>
-#include <xmloff/maptype.hxx>
 #include <xmloff/prstylei.hxx>
 #include <xmloff/xmlimppr.hxx>
 #include <xmloff/XMLTextMasterPageContext.hxx>
-#include <xmloff/XMLTextMasterStylesContext.hxx>
 #include <xmloff/txtstyli.hxx>
-#include <com/sun/star/sheet/ConditionOperator.hpp>
 #include "xmlimprt.hxx"
 
 class ScConditionalFormat;
@@ -126,15 +122,11 @@ class XMLTableStylesContext : public SvXMLStylesContext
     css::uno::Reference< css::container::XNameContainer > xColumnStyles;
     css::uno::Reference< css::container::XNameContainer > xRowStyles;
     css::uno::Reference< css::container::XNameContainer > xTableStyles;
-    const OUString sCellStyleServiceName;
-    const OUString sColumnStyleServiceName;
-    const OUString sRowStyleServiceName;
-    const OUString sTableStyleServiceName;
     sal_Int32 nNumberFormatIndex;
     sal_Int32 nConditionalFormatIndex;
     sal_Int32 nCellStyleIndex;
     sal_Int32 nMasterPageNameIndex;
-    bool bAutoStyles;
+    bool const bAutoStyles;
 
     rtl::Reference < SvXMLImportPropertyMapper > xCellImpPropMapper;
     rtl::Reference < SvXMLImportPropertyMapper > xColumnImpPropMapper;
@@ -199,10 +191,6 @@ public:
     virtual ~ScXMLMasterStylesContext() override;
     virtual void EndElement() override;
 };
-
-namespace com { namespace sun { namespace star {
-    namespace style { class XStyle; }
-} } }
 
 class ScMasterPageContext : public XMLTextMasterPageContext
 {

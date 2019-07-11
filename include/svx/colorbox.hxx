@@ -12,10 +12,12 @@
 
 #include <memory>
 #include <vcl/menubtn.hxx>
+#include <vcl/weld.hxx>
 #include <svx/colorwindow.hxx>
 #include <sfx2/controlwrapper.hxx>
 
 class SvxColorListBox;
+class ColorListBox;
 
 class SvxListBoxColorWrapper
 {
@@ -40,7 +42,7 @@ private:
     sal_uInt16 m_nSlotId;
     bool m_bShowNoneButton;
     std::shared_ptr<PaletteManager> m_xPaletteManager;
-    BorderColorStatus m_aBorderColorStatus;
+    ColorStatus m_aColorStatus;
 
     DECL_LINK(MenuActivateHdl, MenuButton *, void);
     void Selected(const NamedColor& rNamedColor);
@@ -78,23 +80,74 @@ public:
     DECL_LINK(WindowEventListener, VclWindowEvent&, void);
 };
 
-/** A wrapper for SvxColorListBox. */
-class SVX_DLLPUBLIC SvxColorListBoxWrapper
-    : public sfx::SingleControlWrapper<SvxColorListBox, Color>
+class ListBoxColorWrapper
 {
-    /*  Note: cannot use 'const Color&' as template argument, because the
-        SvxColorListBox returns the color by value and not by reference,
-        therefore GetControlValue() must return a temporary object too. */
 public:
-    explicit SvxColorListBoxWrapper(SvxColorListBox& rListBox);
+    ListBoxColorWrapper(ColorListBox* pControl);
+    void operator()(const OUString& rCommand, const NamedColor& rColor);
+private:
+    ColorListBox* mpControl;
+};
 
-    virtual ~SvxColorListBoxWrapper() override;
+class SVX_DLLPUBLIC ColorListBox
+{
+private:
+    friend class ListBoxColorWrapper;
+    std::unique_ptr<ColorWindow> m_xColorWindow;
+    std::unique_ptr<weld::MenuButton> m_xButton;
+    weld::Window* const m_pTopLevel;
+    Link<ColorListBox&, void> m_aSelectedLink;
+    ListBoxColorWrapper m_aColorWrapper;
+    Color const m_aAutoDisplayColor;
+    Color m_aSaveColor;
+    NamedColor m_aSelectedColor;
+    sal_uInt16 m_nSlotId;
+    bool m_bShowNoneButton;
+    std::shared_ptr<PaletteManager> m_xPaletteManager;
+    ColorStatus m_aColorStatus;
 
-    virtual bool        IsControlDontKnow() const override;
-    virtual void        SetControlDontKnow( bool bSet ) override;
+    void Selected(const NamedColor& rNamedColor);
+    void createColorWindow();
+    void LockWidthRequest();
+    ColorWindow* getColorWindow() const;
+public:
+    ColorListBox(std::unique_ptr<weld::MenuButton> pControl, weld::Window* pWindow);
+    ~ColorListBox();
 
-    virtual Color       GetControlValue() const override;
-    virtual void        SetControlValue( Color aColor ) override;
+    void SetSelectHdl(const Link<ColorListBox&, void>& rLink)
+    {
+        m_aSelectedLink = rLink;
+    }
+
+    void SetSlotId(sal_uInt16 nSlotId, bool bShowNoneButton = false);
+
+    Color const & GetSelectEntryColor() const { return m_aSelectedColor.first; }
+    NamedColor const & GetSelectedEntry() const { return m_aSelectedColor; }
+
+    void SelectEntry(const Color& rColor);
+
+    void SetNoSelection() { getColorWindow()->SetNoSelection(); }
+    bool IsNoSelection() const { return getColorWindow()->IsNoSelection(); }
+
+    void ShowPreview(const NamedColor &rColor);
+    void EnsurePaletteManager();
+
+    void SaveValue() { m_aSaveColor = GetSelectEntryColor(); }
+    bool IsValueChangedFromSaved() const { return m_aSaveColor != GetSelectEntryColor(); }
+
+    void set_sensitive(bool sensitive) { m_xButton->set_sensitive(sensitive); }
+    bool get_sensitive() const { return m_xButton->get_sensitive(); }
+    void show() { m_xButton->show(); }
+    void hide() { m_xButton->hide(); }
+    void show(bool bShow)
+    {
+        if (bShow)
+            show();
+        else
+            hide();
+    }
+    void set_help_id(const OString& rHelpId) { m_xButton->set_help_id(rHelpId); }
+    weld::MenuButton& get_widget() { return *m_xButton; }
 };
 
 #endif

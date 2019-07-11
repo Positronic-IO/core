@@ -59,7 +59,7 @@ struct FragmentBaseData
     const OUString      maFragmentPath;
     css::uno::Reference< css::xml::sax::XLocator >
                         mxLocator;
-    RelationsRef        mxRelations;
+    RelationsRef const  mxRelations;
 
     explicit            FragmentBaseData(
                             XmlFilterBase& rFilter,
@@ -92,6 +92,11 @@ class OOX_DLLPUBLIC FragmentHandler : public FragmentHandler_BASE
 public:
     explicit            FragmentHandler( XmlFilterBase& rFilter, const OUString& rFragmentPath );
     virtual             ~FragmentHandler() override;
+
+    FragmentHandler(FragmentHandler const &) = default;
+    FragmentHandler(FragmentHandler &&) = default;
+    FragmentHandler & operator =(FragmentHandler const &) = delete; // due to ContextHandler
+    FragmentHandler & operator =(FragmentHandler &&) = delete; // due to ContextHandler
 
     /** Returns the com.sun.star.xml.sax.XFastContextHandler interface of this context. */
     css::uno::Reference< css::xml::sax::XFastContextHandler >

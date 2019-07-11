@@ -38,6 +38,8 @@
 #include <com/sun/star/sheet/XDataPilotField.hpp>
 #include <com/sun/star/sheet/XDataPilotTablesSupplier.hpp>
 #include <com/sun/star/sheet/XSheetOperation.hpp>
+#include <osl/diagnose.hxx>
+#include <sal/log.hxx>
 #include <oox/helper/binaryinputstream.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/containerhelper.hxx>
@@ -45,6 +47,7 @@
 #include <oox/token/properties.hxx>
 #include <oox/token/tokens.hxx>
 #include <addressconverter.hxx>
+#include <biffhelper.hxx>
 
 #include <dapiuno.hxx>
 #include <dpobject.hxx>
@@ -1290,7 +1293,7 @@ void PivotTable::finalizeFieldsImport()
     if (maFields.empty())
         return;
 
-    /* Check whether group fields are already imported for an other table
+    /* Check whether group fields are already imported for another table
        sharing the same groups. */
     ScDPObject* pDPObj = getDPObject();
     const ScDocument& rDoc = getDocImport().getDoc();

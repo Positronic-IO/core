@@ -19,16 +19,13 @@
 #ifndef INCLUDED_CHART2_SOURCE_INC_PROPERTYHELPER_HXX
 #define INCLUDED_CHART2_SOURCE_INC_PROPERTYHELPER_HXX
 
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/Property.hpp>
-#include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/uno/Any.hxx>
-#include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <comphelper/property.hxx>
 #include "charttoolsdllapi.hxx"
 
-#include <map>
 #include <unordered_map>
+
+namespace com { namespace sun { namespace star { namespace lang { class XMultiServiceFactory; } } } }
 
 namespace chart
 {

@@ -61,11 +61,11 @@ class SvxMacroTabPage_ : public SfxTabPage
     DECL_LINK( AssignDeleteHdl_Impl, Button *, void );
     DECL_LINK( DoubleClickHdl_Impl, SvTreeListBox*, bool );
 
-    static long GenericHandler_Impl( SvxMacroTabPage_* pThis, PushButton* pBtn );
+    static void GenericHandler_Impl( SvxMacroTabPage_* pThis, PushButton* pBtn );
 
     css::uno::Reference< css::container::XNameReplace > m_xAppEvents;
 protected:
-    SvxMacroTabPage_Impl*      mpImpl;
+    std::unique_ptr<SvxMacroTabPage_Impl> mpImpl;
     css::uno::Reference< css::container::XNameReplace > m_xDocEvents;
     css::uno::Reference< css::util::XModifiable > m_xModifiable;
     EventsHash m_appEventsHash;

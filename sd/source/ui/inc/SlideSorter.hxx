@@ -20,23 +20,20 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_SLIDESORTER_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_SLIDESORTER_HXX
 
-#include "fupoor.hxx"
-#include "Window.hxx"
-#include <com/sun/star/frame/XController.hpp>
 #include <cppuhelper/weakref.hxx>
-#include <sfx2/viewfrm.hxx>
 #include <vcl/scrbar.hxx>
 #include <sddllapi.h>
 #include <memory>
 
-class ScrollBar;
-class ScrollBarBox;
 namespace vcl { class Window; }
+namespace com { namespace sun { namespace star { namespace frame { class XController; } } } }
+namespace rtl { template <class reference_type> class Reference; }
 
 namespace sd {
 class ViewShell;
 class ViewShellBase;
 class Window;
+class FuPoor;
 }
 
 namespace sd { namespace slidesorter { namespace model {
@@ -169,7 +166,7 @@ public:
         const Point& rOffset,
         const Size& rSize);
 
-    bool RelocateToWindow (vcl::Window* pWindow);
+    void RelocateToWindow (vcl::Window* pWindow);
 
     /** Set the current function at the view shell or, when it is not
         present, set it at the content window.  This method supports the use
@@ -200,12 +197,6 @@ private:
         controller do exist.  Test their pointers when in doubt.
     */
     model::SlideSorterModel* CreateModel();
-
-    /** Create the controller for the view shell.  When called from the default
-        implementation of CreateModelViewController() then both the view and
-        the controller do exist.  Test their pointers when in doubt.
-    */
-    controller::SlideSorterController* CreateController();
 
     bool mbIsValid;
 

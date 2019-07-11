@@ -11,6 +11,7 @@ $(eval $(call gb_ExternalPackage_ExternalPackage,libnumbertext_numbertext,libnum
 
 $(eval $(call gb_ExternalPackage_add_unpacked_files,libnumbertext_numbertext,$(LIBO_SHARE_FOLDER)/numbertext,\
 	data/af.sor \
+	data/bg.sor \
 	data/ca.sor \
 	data/cs.sor \
 	data/da.sor \
@@ -19,14 +20,17 @@ $(eval $(call gb_ExternalPackage_add_unpacked_files,libnumbertext_numbertext,$(L
 	data/en.sor \
 	data/eo.sor \
 	data/es.sor \
+	data/et.sor \
 	data/fi.sor \
 	data/fr.sor \
 	data/fr.sor \
+	data/gl.sor \
 	data/he.sor \
 	data/hr.sor \
 	data/hu.sor \
 	data/Hung.sor \
 	data/id.sor \
+	data/is.sor \
 	data/it.sor \
 	data/ja.sor \
 	data/ko.sor \
@@ -34,6 +38,7 @@ $(eval $(call gb_ExternalPackage_add_unpacked_files,libnumbertext_numbertext,$(L
 	data/lt.sor \
 	data/lv.sor \
 	data/ms.sor \
+	data/no.sor \
 	data/nl.sor \
 	data/pl.sor \
 	data/pt.sor \
@@ -42,11 +47,13 @@ $(eval $(call gb_ExternalPackage_add_unpacked_files,libnumbertext_numbertext,$(L
 	data/ru.sor \
 	data/sh.sor \
 	data/sl.sor \
+	data/sq.sor \
 	data/sr.sor \
 	data/Suzhou.sor \
 	data/sv.sor \
 	data/th.sor \
 	data/tr.sor \
+	data/uk.sor \
 	data/vi.sor \
 	data/zh.sor \
 ))

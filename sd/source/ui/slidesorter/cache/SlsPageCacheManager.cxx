@@ -35,7 +35,7 @@ class CacheDescriptor
 {
 public:
     ::sd::slidesorter::cache::PageCacheManager::DocumentKey mpDocument;
-    Size maPreviewSize;
+    Size const maPreviewSize;
 
     CacheDescriptor(
         ::sd::slidesorter::cache::PageCacheManager::DocumentKey const & pDocument,
@@ -99,7 +99,7 @@ public:
     }
 
 private:
-    Size maPreferredSize;
+    Size const maPreferredSize;
 };
 
 } // end of anonymous namespace
@@ -168,7 +168,7 @@ std::shared_ptr<PageCacheManager> PageCacheManager::Instance()
     ::osl::MutexGuard aGuard (::osl::Mutex::getGlobalMutex());
 
     pInstance = mpInstance.lock();
-    if (pInstance.get() == nullptr)
+    if (pInstance == nullptr)
     {
         pInstance = std::shared_ptr<PageCacheManager>(
             new PageCacheManager(),
@@ -202,11 +202,11 @@ std::shared_ptr<BitmapCache> PageCacheManager::GetCache (
         pResult = iCache->second;
 
     // Look for the cache in the list of recently used caches.
-    if (pResult.get() == nullptr)
+    if (pResult == nullptr)
         pResult = GetRecentlyUsedCache(pDocument, rPreviewSize);
 
     // Create the cache when no suitable one does exist.
-    if (pResult.get() == nullptr)
+    if (pResult == nullptr)
         pResult.reset(new BitmapCache());
 
     // The cache may be newly created and thus empty or is old and may
@@ -215,8 +215,7 @@ std::shared_ptr<BitmapCache> PageCacheManager::GetCache (
     Recycle(pResult, pDocument,rPreviewSize);
 
     // Put the new (or old) cache into the container.
-    if (pResult.get() != nullptr)
-        mpPageCaches->emplace(aKey, pResult);
+    mpPageCaches->emplace(aKey, pResult);
 
     return pResult;
 }
@@ -280,7 +279,7 @@ std::shared_ptr<BitmapCache> PageCacheManager::ChangeSize (
 {
     std::shared_ptr<BitmapCache> pResult;
 
-    if (rpCache.get() != nullptr)
+    if (rpCache != nullptr)
     {
         // Look up the given cache in the list of active caches.
         PageCacheContainer::iterator iCacheToChange (::std::find_if(

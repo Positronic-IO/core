@@ -23,6 +23,7 @@
 #include <sfx2/request.hxx>
 #include <svx/svxids.hrc>
 
+#include <sal/log.hxx>
 #include <svx/fmshell.hxx>
 #include <sfx2/dispatch.hxx>
 #include <comphelper/lok.hxx>
@@ -58,6 +59,9 @@ void DrawViewShell::GotoBookmark(const OUString& rBookmark)
 
 void DrawViewShell::MakeVisible(const ::tools::Rectangle& rRect, vcl::Window& rWin)
 {
+    if ( (IsMouseButtonDown() && !IsMouseSelecting()) || SlideShow::IsRunning( GetViewShellBase() ) )
+        return;
+
     // tdf#98646 check if Rectangle which contains the bounds of the region to
     // be shown eventually contains values that cause overflows when processing
     // e.g. when calling GetWidth()
@@ -72,7 +76,8 @@ void DrawViewShell::MakeVisible(const ::tools::Rectangle& rRect, vcl::Window& rW
 
     // In older versions, if in X or Y the size of the object was
     // smaller than the visible area, the user-defined zoom was
-    // changed. This was decided to be a bug for 6.x, thus I developed a
+    // changed. This was decided to be a bug for
+    // StarOffice 6.x (Apr 2002), thus I developed a
     // version which instead handles X/Y bigger/smaller and visibility
     // questions separately
     const Size aLogicSize(rRect.GetSize());
@@ -90,7 +95,7 @@ void DrawViewShell::MakeVisible(const ::tools::Rectangle& rRect, vcl::Window& rW
         rWin.Pop();
     Size aVisAreaSize(aVisArea.GetSize());
 
-    if (!aVisArea.IsInside(rRect) && !SlideShow::IsRunning( GetViewShellBase() ) )
+    if ( !aVisArea.IsInside(rRect) )
     {
         // object is not entirely in visible area
         sal_Int32 nFreeSpaceX(aVisAreaSize.Width() - aLogicSize.Width());
@@ -133,7 +138,7 @@ void DrawViewShell::MakeVisible(const ::tools::Rectangle& rRect, vcl::Window& rW
             }
             else
             {
-                const long distRight(rRect.Right() - aNewPos.X() + aVisAreaSize.Width());
+                const long distRight(rRect.Right() - aNewPos.X() - aVisAreaSize.Width());
 
                 if(distRight > 0)
                 {
@@ -178,7 +183,7 @@ void DrawViewShell::MakeVisible(const ::tools::Rectangle& rRect, vcl::Window& rW
             }
             else
             {
-                const long distBottom(rRect.Bottom() - aNewPos.Y() + aVisAreaSize.Height());
+                const long distBottom(rRect.Bottom() - aNewPos.Y() - aVisAreaSize.Height());
 
                 if(distBottom > 0)
                 {

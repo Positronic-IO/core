@@ -46,6 +46,7 @@
 #include <com/sun/star/drawing/ShadingPattern.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 
+#include <osl/diagnose.h>
 #include <i18nutil/unicode.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <limits.h>
@@ -53,7 +54,6 @@
 #include <vcl/GraphicObject.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/fileformat.h>
-#include <comphelper/types.hxx>
 #include <svl/memberid.h>
 #include <svtools/borderhelper.hxx>
 #include <rtl/ustring.hxx>
@@ -85,6 +85,7 @@
 #include <editeng/editerr.hxx>
 #include <libxml/xmlwriter.h>
 #include <o3tl/enumrange.hxx>
+#include <o3tl/safeint.hxx>
 #include <vcl/GraphicLoader.hxx>
 
 using namespace ::editeng;
@@ -1128,10 +1129,10 @@ bool SvxShadowItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
         case MID_SHADOW_TRANSPARENCE:
         {
             sal_Int32 nTransparence = 0;
-            if (rVal >>= nTransparence)
+            if ((rVal >>= nTransparence) && !o3tl::checked_multiply<sal_Int32>(nTransparence, 255, nTransparence))
             {
                 Color aColor(aShadow.Color);
-                aColor.SetTransparency(rtl::math::round(float(nTransparence * 255) / 100));
+                aColor.SetTransparency(rtl::math::round(float(nTransparence) / 100));
                 aShadow.Color = sal_Int32(aColor);
             }
             break;
@@ -1344,17 +1345,16 @@ void SvxShadowItem::dumpAsXml(xmlTextWriterPtr pWriter) const
 SvxBoxItem::SvxBoxItem( const SvxBoxItem& rCpy ) :
 
     SfxPoolItem ( rCpy ),
+    pTop        ( rCpy.pTop     ? new SvxBorderLine( *rCpy.pTop )    : nullptr ),
+    pBottom     ( rCpy.pBottom  ? new SvxBorderLine( *rCpy.pBottom ) : nullptr ),
+    pLeft       ( rCpy.pLeft    ? new SvxBorderLine( *rCpy.pLeft )   : nullptr ),
+    pRight      ( rCpy.pRight   ? new SvxBorderLine( *rCpy.pRight )  : nullptr ),
     nTopDist    ( rCpy.nTopDist ),
     nBottomDist ( rCpy.nBottomDist ),
     nLeftDist   ( rCpy.nLeftDist ),
     nRightDist  ( rCpy.nRightDist ),
     bRemoveAdjCellBorder ( rCpy.bRemoveAdjCellBorder )
-
 {
-    pTop.reset(    rCpy.GetTop()     ? new SvxBorderLine( *rCpy.GetTop() )    : nullptr );
-    pBottom.reset( rCpy.GetBottom()  ? new SvxBorderLine( *rCpy.GetBottom() ) : nullptr );
-    pLeft.reset(   rCpy.GetLeft()    ? new SvxBorderLine( *rCpy.GetLeft() )   : nullptr );
-    pRight.reset(  rCpy.GetRight()   ? new SvxBorderLine( *rCpy.GetRight() )  : nullptr );
 }
 
 
@@ -1389,7 +1389,7 @@ SvxBoxItem& SvxBoxItem::operator=( const SvxBoxItem& rBox )
 }
 
 
-inline bool CmpBrdLn( const std::unique_ptr<SvxBorderLine> & pBrd1, const SvxBorderLine* pBrd2 )
+static bool CmpBrdLn( const std::unique_ptr<SvxBorderLine> & pBrd1, const SvxBorderLine* pBrd2 )
 {
     if( pBrd1.get() == pBrd2 )
         return true;
@@ -2241,8 +2241,6 @@ bool SvxBoxItem::HasBorder( bool bTreatPaddingAsBorder ) const
 
 SvxBoxInfoItem::SvxBoxInfoItem( const sal_uInt16 nId ) :
     SfxPoolItem( nId ),
-    pHori   ( nullptr ),
-    pVert   ( nullptr ),
     mbEnableHor( false ),
     mbEnableVer( false ),
     nDefDist( 0 )
@@ -2254,36 +2252,36 @@ SvxBoxInfoItem::SvxBoxInfoItem( const sal_uInt16 nId ) :
 
 SvxBoxInfoItem::SvxBoxInfoItem( const SvxBoxInfoItem& rCpy ) :
     SfxPoolItem( rCpy ),
+    pHori( rCpy.pHori ? new SvxBorderLine( *rCpy.pHori ) : nullptr ),
+    pVert( rCpy.pVert ? new SvxBorderLine( *rCpy.pVert ) : nullptr ),
     mbEnableHor( rCpy.mbEnableHor ),
-    mbEnableVer( rCpy.mbEnableVer )
+    mbEnableVer( rCpy.mbEnableVer ),
+    bDist( rCpy.bDist ),
+    bMinDist ( rCpy.bMinDist ),
+    nValidFlags( rCpy.nValidFlags ),
+    nDefDist( rCpy.nDefDist )
 {
-    pHori.reset( rCpy.GetHori() ? new SvxBorderLine( *rCpy.GetHori() ) : nullptr );
-    pVert.reset( rCpy.GetVert() ? new SvxBorderLine( *rCpy.GetVert() ) : nullptr );
-    bDist       = rCpy.IsDist();
-    bMinDist    = rCpy.IsMinDist();
-    nValidFlags = rCpy.nValidFlags;
-    nDefDist    = rCpy.GetDefDist();
 }
-
 
 SvxBoxInfoItem::~SvxBoxInfoItem()
 {
 }
 
-
 SvxBoxInfoItem &SvxBoxInfoItem::operator=( const SvxBoxInfoItem& rCpy )
 {
-    pHori.reset( rCpy.GetHori() ? new SvxBorderLine( *rCpy.GetHori() ) : nullptr );
-    pVert.reset( rCpy.GetVert() ? new SvxBorderLine( *rCpy.GetVert() ) : nullptr );
-    mbEnableHor = rCpy.mbEnableHor;
-    mbEnableVer = rCpy.mbEnableVer;
-    bDist       = rCpy.IsDist();
-    bMinDist    = rCpy.IsMinDist();
-    nValidFlags = rCpy.nValidFlags;
-    nDefDist    = rCpy.GetDefDist();
+    if (this != &rCpy)
+    {
+        pHori.reset( rCpy.GetHori() ? new SvxBorderLine( *rCpy.GetHori() ) : nullptr );
+        pVert.reset( rCpy.GetVert() ? new SvxBorderLine( *rCpy.GetVert() ) : nullptr );
+        mbEnableHor = rCpy.mbEnableHor;
+        mbEnableVer = rCpy.mbEnableVer;
+        bDist       = rCpy.IsDist();
+        bMinDist    = rCpy.IsMinDist();
+        nValidFlags = rCpy.nValidFlags;
+        nDefDist    = rCpy.GetDefDist();
+    }
     return *this;
 }
-
 
 bool SvxBoxInfoItem::operator==( const SfxPoolItem& rAttr ) const
 {
@@ -2732,7 +2730,7 @@ bool SvxFormatBreakItem::GetPresentation
     return true;
 }
 
-OUString SvxFormatBreakItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxFormatBreakItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_BREAK[] =
     {
@@ -2877,19 +2875,15 @@ bool SvxFormatKeepItem::GetPresentation
 
 
 SvxLineItem::SvxLineItem( const sal_uInt16 nId ) :
-
-    SfxPoolItem ( nId ),
-
-    pLine( nullptr )
+    SfxPoolItem ( nId )
 {
 }
 
 
 SvxLineItem::SvxLineItem( const SvxLineItem& rCpy ) :
-    SfxPoolItem ( rCpy )
+    SfxPoolItem ( rCpy ),
+    pLine(rCpy.pLine ? new SvxBorderLine( *rCpy.pLine ) : nullptr)
 {
-    if (rCpy.GetLine())
-        pLine.reset( new SvxBorderLine( *rCpy.GetLine() ) );
 }
 
 
@@ -3279,7 +3273,7 @@ sal_uInt16 SvxBrushItem::GetVersion( sal_uInt16 /*nFileVersion*/ ) const
 }
 
 
-static inline sal_Int8 lcl_PercentToTransparency(long nPercent)
+static sal_Int8 lcl_PercentToTransparency(long nPercent)
 {
     // 0xff must not be returned!
     return sal_Int8(nPercent ? (50 + 0xfe * nPercent) / 100 : 0);
@@ -3316,7 +3310,8 @@ bool SvxBrushItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
 
         case MID_GRAPHIC_URL:
         {
-            throw uno::RuntimeException("Getting from this property is not unsupported");
+            SAL_INFO("editeng.items", "Getting GraphicURL property is not supported");
+            return false;
         }
         break;
         case MID_GRAPHIC:
@@ -3806,14 +3801,6 @@ SvxFrameDirectionItem::SvxFrameDirectionItem( SvxFrameDirection nValue ,
 
 SvxFrameDirectionItem::~SvxFrameDirectionItem()
 {
-}
-
-
-bool SvxFrameDirectionItem::operator==( const SfxPoolItem& rCmp ) const
-{
-    assert(SfxPoolItem::operator==(rCmp));
-
-    return GetValue() == static_cast<const SvxFrameDirectionItem&>(rCmp).GetValue();
 }
 
 

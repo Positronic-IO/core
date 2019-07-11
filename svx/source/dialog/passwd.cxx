@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <svx/passwd.hxx>
@@ -62,7 +61,7 @@ IMPL_LINK_NOARG(SvxPasswordDialog, EditModifyHdl, weld::Entry&, void)
 }
 
 SvxPasswordDialog::SvxPasswordDialog(weld::Window* pParent, bool bDisableOldPassword)
-    : GenericDialogController(pParent, "svx/ui/passwd.ui", "PasswordDialog")
+    : SfxDialogController(pParent, "svx/ui/passwd.ui", "PasswordDialog")
     , m_aOldPasswdErrStr(SvxResId(RID_SVXSTR_ERR_OLD_PASSWD))
     , m_aRepeatPasswdErrStr(SvxResId(RID_SVXSTR_ERR_REPEAT_PASSWD ))
     , m_xOldFL(m_xBuilder->weld_label("oldpass"))

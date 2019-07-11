@@ -138,10 +138,6 @@ namespace svt
         ControlDependencyManager();
         ~ControlDependencyManager();
 
-        /** clears all dialog controllers previously added to the manager
-        */
-        void    clear();
-
         /** ensures that a given window is enabled or disabled, according to the check state
             of a given radio button
             @param _rRadio
@@ -154,18 +150,6 @@ namespace svt
         void    enableOnRadioCheck( RadioButton& _rRadio, vcl::Window& _rDependentWindow1, vcl::Window& _rDependentWindow2 );
         void    enableOnRadioCheck( RadioButton& _rRadio, vcl::Window& _rDependentWindow1, vcl::Window& _rDependentWindow2, vcl::Window& _rDependentWindow3 );
         void    enableOnRadioCheck( RadioButton& _rRadio, vcl::Window& _rDependentWindow1, vcl::Window& _rDependentWindow2, vcl::Window& _rDependentWindow3, vcl::Window& _rDependentWindow4, vcl::Window& _rDependentWindow5 );
-
-        /** ensures that a given window is enabled or disabled, according to the mark state
-            of a given check box
-            @param _rBox
-                denotes the check box whose mark state is to observe
-            @param _rDependentWindow
-                denotes the window which should be enabled when ->_rBox is marked, and
-                disabled when it's unmarked
-        */
-        void    enableOnCheckMark( CheckBox& _rBox, vcl::Window& _rDependentWindow );
-        void    enableOnCheckMark( CheckBox& _rBox, vcl::Window& _rDependentWindow1, vcl::Window& _rDependentWindow2 );
-        void    enableOnCheckMark( CheckBox& _rBox, vcl::Window& _rDependentWindow1, vcl::Window& _rDependentWindow2, vcl::Window& _rDependentWindow3, vcl::Window& _rDependentWindow4 );
 
         /** adds a non-standard controller whose functionality is not covered by the other methods
 
@@ -268,13 +252,6 @@ namespace svt
             :DialogController( _rButton,
                 PWindowEventFilter( new FilterForRadioOrCheckToggle( _rButton ) ),
                 PWindowOperator( new EnableOnCheck< RadioButton >( _rButton ) ) )
-        {
-        }
-
-        RadioDependentEnabler( CheckBox& _rBox )
-            :DialogController( _rBox,
-                PWindowEventFilter( new FilterForRadioOrCheckToggle( _rBox ) ),
-                PWindowOperator( new EnableOnCheck< CheckBox >( _rBox ) ) )
         {
         }
     };

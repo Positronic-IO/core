@@ -30,6 +30,7 @@
 #include <expfld.hxx>
 #include <pam.hxx>
 #include <cntfrm.hxx>
+#include <rootfrm.hxx>
 #include <tox.hxx>
 #include <txmsrt.hxx>
 #include <doctxm.hxx>
@@ -231,7 +232,8 @@ sal_IntPtr SwAuthorityFieldType::GetHandle(sal_uInt16 nPos)
     return 0;
 }
 
-sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
+sal_uInt16 SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle,
+        SwRootFrame const*const pLayout)
 {
     //find the field in a sorted array of handles,
 #if OSL_DEBUG_LEVEL > 0
@@ -241,7 +243,11 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
         DelSequenceArray();
     if(m_SequArr.empty())
     {
-        SwTOXSortTabBases aSortArr;
+        IDocumentRedlineAccess const& rIDRA(m_pDoc->getIDocumentRedlineAccess());
+        // sw_redlinehide: need 2 arrays because the sorting may be different,
+        // if multiple fields refer to the same entry and first one is deleted
+        std::vector<std::unique_ptr<SwTOXSortTabBase>> aSortArr;
+        std::vector<std::unique_ptr<SwTOXSortTabBase>> aSortArrRLHidden;
         SwIterator<SwFormatField,SwFieldType> aIter( *this );
 
         SwTOXInternational aIntl(m_eLanguage, SwTOIOptions::NONE, m_sSortAlgorithm);
@@ -268,16 +274,21 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
             //body the directly available text node will be used
             if(!pTextNode)
                 pTextNode = &rFieldTextNode;
-            if (!pTextNode->GetText().isEmpty() &&
-                pTextNode->getLayoutFrame( rDoc.getIDocumentLayoutAccess().GetCurrentLayout() ) &&
-                pTextNode->GetNodes().IsDocNodes() )
+            if (pTextNode->GetText().isEmpty()
+                || !pTextNode->getLayoutFrame(rDoc.getIDocumentLayoutAccess().GetCurrentLayout())
+                || !pTextNode->GetNodes().IsDocNodes())
+            {
+                continue;
+            }
+            auto const InsertImpl = [&aIntl, pTextNode, pFormatField]
+                (std::vector<std::unique_ptr<SwTOXSortTabBase>> & rSortArr)
             {
                 std::unique_ptr<SwTOXAuthority> pNew(
                     new SwTOXAuthority(*pTextNode, *pFormatField, aIntl));
 
-                for(SwTOXSortTabBases::size_type i = 0; i < aSortArr.size(); ++i)
+                for (size_t i = 0; i < rSortArr.size(); ++i)
                 {
-                    SwTOXSortTabBase* pOld = aSortArr[i];
+                    SwTOXSortTabBase* pOld = rSortArr[i].get();
                     if(*pOld == *pNew)
                     {
                         //only the first occurrence in the document
@@ -285,45 +296,50 @@ sal_uInt16  SwAuthorityFieldType::GetSequencePos(sal_IntPtr nHandle)
                         if(*pOld < *pNew)
                             pNew.reset();
                         else // remove the old content
-                        {
-                            aSortArr.erase(aSortArr.begin() + i);
-                            delete pOld;
-                        }
+                            rSortArr.erase(rSortArr.begin() + i);
                         break;
                     }
                 }
                 //if it still exists - insert at the correct position
                 if(pNew)
                 {
-                    SwTOXSortTabBases::size_type j {0};
+                    size_t j {0};
 
-                    while(j < aSortArr.size())
+                    while (j < rSortArr.size())
                     {
-                        SwTOXSortTabBase* pOld = aSortArr[j];
+                        SwTOXSortTabBase* pOld = rSortArr[j].get();
                         if(*pNew < *pOld)
                             break;
                         ++j;
                     }
-                    aSortArr.insert(aSortArr.begin() + j, pNew.release());
+                    rSortArr.insert(rSortArr.begin() + j, std::move(pNew));
                 }
+            };
+            InsertImpl(aSortArr);
+            if (!sw::IsFieldDeletedInModel(rIDRA, *pTextField))
+            {
+                InsertImpl(aSortArrRLHidden);
             }
         }
 
-        for(const auto *pBase : aSortArr)
+        for(auto & pBase : aSortArr)
         {
-            const SwTOXSortTabBase& rBase = *pBase;
-            SwFormatField& rFormatField = const_cast<SwTOXAuthority&>(static_cast<const SwTOXAuthority&>(rBase)).GetFieldFormat();
+            SwFormatField& rFormatField = static_cast<SwTOXAuthority&>(*pBase).GetFieldFormat();
             SwAuthorityField* pAField = static_cast<SwAuthorityField*>(rFormatField.GetField());
             m_SequArr.push_back(pAField->GetHandle());
         }
-        for (SwTOXSortTabBases::const_iterator it = aSortArr.begin(); it != aSortArr.end(); ++it)
-            delete *it;
-        aSortArr.clear();
+        for (auto & pBase : aSortArrRLHidden)
+        {
+            SwFormatField& rFormatField = static_cast<SwTOXAuthority&>(*pBase).GetFieldFormat();
+            SwAuthorityField* pAField = static_cast<SwAuthorityField*>(rFormatField.GetField());
+            m_SequArrRLHidden.push_back(pAField->GetHandle());
+        }
     }
     //find nHandle
-    for(std::vector<sal_IntPtr>::size_type i = 0; i < m_SequArr.size(); ++i)
+    auto const& rSequArr(pLayout && pLayout->IsHideRedlines() ? m_SequArrRLHidden : m_SequArr);
+    for (std::vector<sal_IntPtr>::size_type i = 0; i < rSequArr.size(); ++i)
     {
-        if(m_SequArr[i] == nHandle)
+        if (rSequArr[i] == nHandle)
         {
             return i + 1;
         }
@@ -496,17 +512,19 @@ void SwAuthorityFieldType::SetSortKeys(sal_uInt16 nKeyCount, SwTOXSortKey  const
 
 SwAuthorityField::SwAuthorityField( SwAuthorityFieldType* pInitType,
                                     const OUString& rFieldContents )
-    : SwField(pInitType),
-    m_nTempSequencePos( -1 )
+    : SwField(pInitType)
+    , m_nTempSequencePos( -1 )
+    , m_nTempSequencePosRLHidden( -1 )
 {
     m_nHandle = pInitType->AddField( rFieldContents );
 }
 
 SwAuthorityField::SwAuthorityField( SwAuthorityFieldType* pInitType,
                                                 sal_IntPtr nSetHandle )
-    : SwField( pInitType ),
-    m_nHandle( nSetHandle ),
-    m_nTempSequencePos( -1 )
+    : SwField( pInitType )
+    , m_nHandle( nSetHandle )
+    , m_nTempSequencePos( -1 )
+    , m_nTempSequencePosRLHidden( -1 )
 {
     pInitType->AddField( m_nHandle );
 }
@@ -516,12 +534,13 @@ SwAuthorityField::~SwAuthorityField()
     static_cast<SwAuthorityFieldType* >(GetTyp())->RemoveField(m_nHandle);
 }
 
-OUString SwAuthorityField::Expand() const
+OUString SwAuthorityField::ExpandImpl(SwRootFrame const*const pLayout) const
 {
-    return ConditionalExpandAuthIdentifier();
+    return ConditionalExpandAuthIdentifier(pLayout);
 }
 
-OUString SwAuthorityField::ConditionalExpandAuthIdentifier() const
+OUString SwAuthorityField::ConditionalExpandAuthIdentifier(
+        SwRootFrame const*const pLayout) const
 {
     SwAuthorityFieldType* pAuthType = static_cast<SwAuthorityFieldType*>(GetTyp());
     OUString sRet;
@@ -530,10 +549,12 @@ OUString SwAuthorityField::ConditionalExpandAuthIdentifier() const
 
     if( pAuthType->IsSequence() )
     {
+        sal_IntPtr & rnTempSequencePos(pLayout && pLayout->IsHideRedlines()
+                ? m_nTempSequencePosRLHidden : m_nTempSequencePos);
        if(!pAuthType->GetDoc()->getIDocumentFieldsAccess().IsExpFieldsLocked())
-           m_nTempSequencePos = pAuthType->GetSequencePos( m_nHandle );
-       if( m_nTempSequencePos >= 0 )
-           sRet += OUString::number( m_nTempSequencePos );
+            rnTempSequencePos = pAuthType->GetSequencePos(m_nHandle, pLayout);
+        if (0 <= rnTempSequencePos)
+            sRet += OUString::number(rnTempSequencePos);
     }
     else
     {
@@ -547,17 +568,20 @@ OUString SwAuthorityField::ConditionalExpandAuthIdentifier() const
     return sRet;
 }
 
-OUString SwAuthorityField::ExpandCitation(ToxAuthorityField eField) const
+OUString SwAuthorityField::ExpandCitation(ToxAuthorityField eField,
+        SwRootFrame const*const pLayout) const
 {
     SwAuthorityFieldType* pAuthType = static_cast<SwAuthorityFieldType*>(GetTyp());
     OUString sRet;
 
     if( pAuthType->IsSequence() )
     {
+        sal_IntPtr & rnTempSequencePos(pLayout && pLayout->IsHideRedlines()
+                ? m_nTempSequencePosRLHidden : m_nTempSequencePos);
        if(!pAuthType->GetDoc()->getIDocumentFieldsAccess().IsExpFieldsLocked())
-           m_nTempSequencePos = pAuthType->GetSequencePos( m_nHandle );
-       if( m_nTempSequencePos >= 0 )
-           sRet += OUString::number( m_nTempSequencePos );
+            rnTempSequencePos = pAuthType->GetSequencePos(m_nHandle, pLayout);
+        if (0 <= rnTempSequencePos)
+            sRet += OUString::number(rnTempSequencePos);
     }
     else
     {
@@ -569,10 +593,10 @@ OUString SwAuthorityField::ExpandCitation(ToxAuthorityField eField) const
     return sRet;
 }
 
-SwField* SwAuthorityField::Copy() const
+std::unique_ptr<SwField> SwAuthorityField::Copy() const
 {
     SwAuthorityFieldType* pAuthType = static_cast<SwAuthorityFieldType*>(GetTyp());
-    return new SwAuthorityField(pAuthType, m_nHandle);
+    return o3tl::make_unique<SwAuthorityField>(pAuthType, m_nHandle);
 }
 
 OUString SwAuthorityField::GetFieldText(ToxAuthorityField eField) const
@@ -641,7 +665,7 @@ bool    SwAuthorityField::QueryValue( Any& rAny, sal_uInt16 /*nWhichId*/ ) const
     for(int i = 0; i < AUTH_FIELD_END; ++i)
     {
         pValues[i].Name = OUString::createFromAscii(aFieldNames[i]);
-        const OUString sField = pAuthEntry->GetAuthorField(static_cast<ToxAuthorityField>(i));
+        const OUString& sField = pAuthEntry->GetAuthorField(static_cast<ToxAuthorityField>(i));
         if(i == AUTH_FIELD_AUTHORITY_TYPE)
             pValues[i].Value <<= sal_Int16(sField.toInt32());
         else

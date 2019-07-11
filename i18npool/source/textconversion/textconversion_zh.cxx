@@ -26,7 +26,6 @@
 #include <com/sun/star/linguistic2/ConversionDirection.hpp>
 #include <com/sun/star/linguistic2/ConversionDictionaryType.hpp>
 #include <com/sun/star/linguistic2/ConversionDictionaryList.hpp>
-#include <comphelper/string.hxx>
 #include <memory>
 
 using namespace com::sun::star::lang;
@@ -43,7 +42,7 @@ TextConversion_zh::TextConversion_zh( const Reference < XComponentContext >& xCo
     xCDL = ConversionDictionaryList::create(xContext);
 }
 
-sal_Unicode getOneCharConversion(sal_Unicode ch, const sal_Unicode* Data, const sal_uInt16* Index)
+static sal_Unicode getOneCharConversion(sal_Unicode ch, const sal_Unicode* Data, const sal_uInt16* Index)
 {
     if (Data && Index) {
         sal_Unicode address = Index[ch>>8];

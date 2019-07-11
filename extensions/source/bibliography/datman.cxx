@@ -49,12 +49,11 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <svl/urihelper.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/headbar.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/headbar.hxx>
 #include <vcl/dialog.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/edit.hxx>
 #include <tools/debug.hxx>
@@ -83,7 +82,7 @@ using namespace ::com::sun::star::form;
 using namespace ::com::sun::star::frame;
 using namespace ::com::sun::star::lang;
 
-Reference< XConnection > getConnection(const OUString& _rURL)
+static Reference< XConnection > getConnection(const OUString& _rURL)
 {
     // first get the sdb::DataSource corresponding to the url
     Reference< XDataSource >    xDataSource;
@@ -124,7 +123,7 @@ Reference< XConnection > getConnection(const OUString& _rURL)
     return xConn;
 }
 
-Reference< XConnection >    getConnection(const Reference< XInterface > & xRowSet)
+static Reference< XConnection >    getConnection(const Reference< XInterface > & xRowSet)
 {
     Reference< XConnection >    xConn;
     try
@@ -147,7 +146,7 @@ Reference< XConnection >    getConnection(const Reference< XInterface > & xRowSe
     return xConn;
 }
 
-Reference< XNameAccess >  getColumns(const Reference< XForm > & _rxForm)
+static Reference< XNameAccess >  getColumns(const Reference< XForm > & _rxForm)
 {
     Reference< XNameAccess >  xReturn;
     // check if the form is alive

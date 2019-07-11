@@ -19,7 +19,6 @@
 
 #include <sfx2/sfxsids.hrc>
 #include <browserids.hxx>
-#include <comphelper/types.hxx>
 #include <stringconstants.hxx>
 #include <connectivity/dbtools.hxx>
 #include <com/sun/star/container/XChild.hpp>
@@ -36,8 +35,6 @@
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <connectivity/dbexception.hxx>
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
-#include <comphelper/streamsection.hxx>
-#include <comphelper/seqstream.hxx>
 #include <com/sun/star/io/XActiveDataSource.hpp>
 #include <com/sun/star/io/XActiveDataSink.hpp>
 #include <sqlmessage.hxx>
@@ -184,7 +181,7 @@ void OJoinController::impl_onModifyChanged()
 void OJoinController::SaveTabWinPosSize(OTableWindow const * pTabWin, long nOffsetX, long nOffsetY)
 {
     // the data for the window
-    TTableWindowData::value_type pData = pTabWin->GetData();
+    const TTableWindowData::value_type& pData = pTabWin->GetData();
     OSL_ENSURE(pData != nullptr, "SaveTabWinPosSize : TabWin has no data !");
 
     // set Position & Size of data anew (with current window parameters)
@@ -223,7 +220,7 @@ FeatureState OJoinController::GetState(sal_uInt16 _nId) const
 
 AddTableDialogContext& OJoinController::impl_getDialogContext() const
 {
-    if ( !m_pDialogContext.get() )
+    if (!m_pDialogContext)
     {
         OJoinController* pNonConstThis = const_cast< OJoinController* >( this );
         pNonConstThis->m_pDialogContext.reset( new AddTableDialogContext( *pNonConstThis ) );

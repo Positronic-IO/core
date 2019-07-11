@@ -55,30 +55,6 @@ public:
                 && std::find(vBlacklist.begin(), vBlacklist.end(), filename) == vBlacklist.end());
     }
 
-    bool CjkNumberedListTestHelper(sal_Int16& rValue)
-    {
-        bool isNumber = false;
-        uno::Reference<text::XTextRange> xPara(getParagraph(1));
-        uno::Reference<beans::XPropertySet> properties(xPara, uno::UNO_QUERY);
-        properties->getPropertyValue("NumberingIsNumber") >>= isNumber;
-        if (!isNumber)
-            return false;
-        uno::Reference<container::XIndexAccess> xLevels(
-            properties->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
-        uno::Sequence<beans::PropertyValue> aPropertyValue;
-        xLevels->getByIndex(0) >>= aPropertyValue;
-        for (int j = 0; j < aPropertyValue.getLength(); ++j)
-        {
-            beans::PropertyValue aProp = aPropertyValue[j];
-            if (aProp.Name == "NumberingType")
-            {
-                rValue = aProp.Value.get<sal_Int16>();
-                return true;
-            }
-        }
-        return false;
-    }
-
     virtual void postLoad(const char* pFilename) override
     {
         if (OString(pFilename) == "tdf90421.fodt")
@@ -234,7 +210,7 @@ DECLARE_RTFEXPORT_TEST(testMathEqarray, "math-eqarray.rtf")
 {
     OUString aActual = getFormula(getRun(getParagraph(1), 1));
     OUString const aExpected(
-        "y = left lbrace stack { 0, x < 0 # 1, x = 0 # {x} ^ {2} , x > 0 } right none");
+        "y = left lbrace stack { 0 , x < 0 # 1 , x = 0 # {x} ^ {2} , x > 0 } right none");
     CPPUNIT_ASSERT_EQUAL(aExpected, aActual);
 }
 
@@ -778,7 +754,7 @@ DECLARE_RTFEXPORT_TEST(testTdf84832, "tdf84832.docx")
 {
     uno::Reference<table::XCell> xCell = getCell(getParagraphOrTable(2), "A1");
     // This was 0, as left padding wasn't exported.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(113)),
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(108)),
                          getProperty<sal_Int32>(xCell, "LeftBorderDistance"));
 }
 
@@ -904,78 +880,67 @@ DECLARE_RTFEXPORT_TEST(testFdo82858, "fdo82858.docx")
 
 DECLARE_RTFEXPORT_TEST(testCjklist12, "cjklist12.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::AIU_HALFWIDTH_JA, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist13, "cjklist13.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::IROHA_HALFWIDTH_JA, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist16, "cjklist16.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_TRADITIONAL_JA, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist20, "cjklist20.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::AIU_FULLWIDTH_JA, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist21, "cjklist21.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::IROHA_FULLWIDTH_JA, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist24, "cjklist24.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::HANGUL_SYLLABLE_KO, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist25, "cjklist25.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::HANGUL_JAMO_KO, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist30, "cjklist30.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::TIAN_GAN_ZH, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist31, "cjklist31.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::DI_ZI_ZH, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist34, "cjklist34.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_UPPER_ZH_TW, numFormat);
 }
 
 DECLARE_RTFEXPORT_TEST(testCjklist38, "cjklist38.rtf")
 {
-    sal_Int16 numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16 numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_UPPER_ZH, numFormat);
 }
 
@@ -1017,10 +982,13 @@ DECLARE_RTFEXPORT_TEST(testNumOverrideStart, "num-override-start.rtf")
 DECLARE_RTFEXPORT_TEST(testFdo82006, "fdo82006.rtf")
 {
     // These were 176 (100 twips), as \sbauto and \sbbefore were ignored.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
-                         getProperty<sal_Int32>(getParagraph(1), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(getParagraph(1), "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
                          getProperty<sal_Int32>(getParagraph(1), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaBottomMargin"));
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf104081, "tdf104081.rtf")
@@ -1124,6 +1092,8 @@ DECLARE_RTFEXPORT_TEST(testTdf94043, "tdf94043.rtf")
     // This was 0, the separator line was not visible due to 0 width.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2),
                          getProperty<sal_Int32>(xTextColumns, "SeparatorLineWidth"));
+
+    CPPUNIT_ASSERT_EQUAL(7, getParagraphs());
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf94377, "tdf94377.rtf")
@@ -1449,16 +1419,19 @@ DECLARE_RTFEXPORT_TEST(testTdf112507, "tdf112507.rtf")
     // First table's second row had 3 cells (so 2 separators).
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2), aSeparators.getLength());
     // This was 3333, i.e. the B2 cell was too narrow and the text needed 2 lines.
-    CPPUNIT_ASSERT_GREATER(5000, aSeparators[1].Position - aSeparators[0].Position);
+    CPPUNIT_ASSERT_GREATEREQUAL(5000, aSeparators[1].Position - aSeparators[0].Position);
 }
 
 DECLARE_RTFEXPORT_TEST(testTdf107480, "tdf107480.rtf")
 {
     // These were 176 (100 twips), as \htmautsp was parsed too late.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
-                         getProperty<sal_Int32>(getParagraph(1), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(getParagraph(1), "ParaTopMargin"));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
                          getProperty<sal_Int32>(getParagraph(1), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(convertTwipToMm100(280)),
+                         getProperty<sal_Int32>(getParagraph(2), "ParaBottomMargin"));
 }
 
 DECLARE_RTFEXPORT_TEST(testWatermark, "watermark.rtf")

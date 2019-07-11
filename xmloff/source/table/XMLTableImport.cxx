@@ -42,6 +42,7 @@
 #include "table.hxx"
 
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <memory>
 
@@ -78,10 +79,10 @@ private:
 
 struct MergeInfo
 {
-    sal_Int32 mnStartColumn;
-    sal_Int32 mnStartRow;
-    sal_Int32 mnEndColumn;
-    sal_Int32 mnEndRow;
+    sal_Int32 const mnStartColumn;
+    sal_Int32 const mnStartRow;
+    sal_Int32 const mnEndColumn;
+    sal_Int32 const mnEndRow;
 
     MergeInfo( sal_Int32 nStartColumn, sal_Int32 nStartRow, sal_Int32 nColumnSpan, sal_Int32 nRowSpan )
         : mnStartColumn( nStartColumn ), mnStartRow( nStartRow ), mnEndColumn( nStartColumn + nColumnSpan - 1 ), mnEndRow( nStartRow + nRowSpan - 1 ) {};
@@ -269,10 +270,10 @@ void XMLTableImport::insertTabletemplate(const OUString& rsStyleName, bool bOver
 
         std::shared_ptr<XMLTableTemplate> xT(it->second);
 
-        for (auto aStyleIter=xT->begin(); aStyleIter != xT->end(); ++aStyleIter) try
+        for (const auto& rStyle : *xT) try
         {
-            const OUString sPropName((*aStyleIter).first);
-            const OUString sStyleName((*aStyleIter).second);
+            const OUString sPropName(rStyle.first);
+            const OUString sStyleName(rStyle.second);
             // Internally unassigned cell styles are stored by display name.
             // However table-template elements reference cell styles by its encoded name.
             // This loop is looking for cell style by their encoded names.
@@ -322,17 +323,17 @@ void XMLTableImport::finishStyles()
 
         Reference< XSingleServiceFactory > xFactory( xTableFamily, UNO_QUERY_THROW );
 
-        for( XMLTableTemplateMap::iterator aTemplateIter( maTableTemplates.begin() ); aTemplateIter != maTableTemplates.end(); ++aTemplateIter ) try
+        for( const auto& rTemplate : maTableTemplates ) try
         {
-            const OUString sTemplateName( (*aTemplateIter).first );
+            const OUString sTemplateName( rTemplate.first );
             Reference< XNameReplace > xTemplate( xFactory->createInstance(), UNO_QUERY_THROW );
 
-            std::shared_ptr< XMLTableTemplate > xT( (*aTemplateIter).second );
+            std::shared_ptr< XMLTableTemplate > xT( rTemplate.second );
 
-            for( XMLTableTemplate::iterator aStyleIter( xT->begin() ); aStyleIter != xT->end(); ++aStyleIter ) try
+            for( const auto& rStyle : *xT ) try
             {
-                const OUString sPropName( (*aStyleIter).first );
-                const OUString sStyleName( (*aStyleIter).second );
+                const OUString sPropName( rStyle.first );
+                const OUString sStyleName( rStyle.second );
                 xTemplate->replaceByName( sPropName, xCellFamily->getByName( sStyleName ) );
             }
             catch( Exception& )
@@ -595,11 +596,8 @@ void XMLTableImportContext::EndElement()
 {
     if( !maMergeInfos.empty() )
     {
-        MergeInfoVector::iterator aIter( maMergeInfos.begin() );
-        while( aIter != maMergeInfos.end() )
+        for( const std::shared_ptr< MergeInfo >& xInfo : maMergeInfos )
         {
-            std::shared_ptr< MergeInfo > xInfo( (*aIter++) );
-
             if( xInfo.get() ) try
             {
                 Reference< XCellRange > xRange( mxTable->getCellRangeByPosition( xInfo->mnStartColumn, xInfo->mnStartRow, xInfo->mnEndColumn, xInfo->mnEndRow ) );

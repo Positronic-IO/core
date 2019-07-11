@@ -21,9 +21,10 @@
 #define INCLUDED_SC_SOURCE_UI_INC_SCUIIMOPTDLG_HXX
 
 #include <vcl/layout.hxx>
-#include "imoptdlg.hxx"
+#include <svx/txencbox.hxx>
 
 class ScDelimiterTable;
+class ScImportOptions;
 
 class ScImportOptionsDlg : public ModalDialog
 {
@@ -59,10 +60,10 @@ private:
     VclPtr<OKButton>           m_pBtnOk;
 
 
-    ScDelimiterTable*   pFieldSepTab;
-    ScDelimiterTable*   pTextSepTab;
+    std::unique_ptr<ScDelimiterTable> pFieldSepTab;
+    std::unique_ptr<ScDelimiterTable> pTextSepTab;
 
-    bool m_bIsAsciiImport;
+    bool const m_bIsAsciiImport;
 
 private:
     sal_uInt16 GetCodeFromCombo( const ComboBox& rEd ) const;

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -44,6 +44,7 @@
 #include <com/sun/star/embed/UseBackupException.hpp>
 #include <com/sun/star/embed/XOptimizedStorage.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/InteractiveIOException.hpp>
 #include <com/sun/star/ucb/UnsupportedDataSinkException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
@@ -93,6 +94,7 @@
 #include <svl/intitem.hxx>
 #include <svtools/svparser.hxx>
 #include <cppuhelper/weakref.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/streamwrap.hxx>
 
@@ -179,8 +181,10 @@ sal_uInt64 GetDefaultFileAttributes(const OUString& rURL)
     if (!comphelper::isFileUrl(rURL))
         return nRet;
 
+    // Make sure the file exists (and create it if not).
     osl::File aFile(rURL);
-    if (aFile.open(osl_File_OpenFlag_Create) != osl::File::E_None)
+    osl::File::RC nRes = aFile.open(osl_File_OpenFlag_Create);
+    if (nRes != osl::File::E_None && nRes != osl::File::E_EXIST)
         return nRet;
 
     aFile.close();
@@ -197,26 +201,38 @@ sal_uInt64 GetDefaultFileAttributes(const OUString& rURL)
     return nRet;
 }
 
-/// Determines if rURL is a non-hard-linked file:// URL.
-bool IsNotHardLinkedFile(const OUString& rURL)
+/// Determines if rURL is safe to move or not.
+bool IsFileMovable(const INetURLObject& rURL)
 {
-    if (!comphelper::isFileUrl(rURL))
+#ifdef MACOSX
+    (void)rURL;
+    // Hide extension macOS-specific file property would be lost.
+    return false;
+#else
+
+    if (rURL.GetProtocol() != INetProtocol::File)
+        // Not a file:// URL.
         return false;
 
 #ifdef UNX
-    OUString rPath;
-    if (osl::FileBase::getSystemPathFromFileURL(rURL, rPath) != osl::FileBase::E_None)
+    OUString sPath = rURL.getFSysPath(FSysStyle::Unix);
+    if (sPath.isEmpty())
         return false;
 
     struct stat buf;
-    if (stat(rPath.toUtf8().getStr(), &buf) != 0)
+    if (lstat(sPath.toUtf8().getStr(), &buf) != 0)
         return false;
 
-    if (buf.st_nlink > 1)
+    // Hardlink or symlink: osl::File::move() doesn't play with these nicely.
+    if (buf.st_nlink > 1 || S_ISLNK(buf.st_mode))
+        return false;
+#elif defined _WIN32
+    if (tools::IsMappedWebDAVPath(rURL))
         return false;
 #endif
 
     return true;
+#endif
 }
 
 } // anonymous namespace
@@ -260,10 +276,9 @@ public:
     std::shared_ptr<const SfxFilter> m_pFilter;
     std::shared_ptr<const SfxFilter> m_pCustomFilter;
 
-    SvStream* m_pInStream;
-    SvStream* m_pOutStream;
+    std::unique_ptr<SvStream> m_pInStream;
+    std::unique_ptr<SvStream> m_pOutStream;
 
-    std::shared_ptr<const SfxFilter> pOrigFilter;
     OUString    aOrigURL;
     DateTime         aExpireTime;
     SfxFrameWeakRef  wLoadTargetFrame;
@@ -329,14 +344,7 @@ SfxMedium_Impl::SfxMedium_Impl() :
     m_bRemote(false),
     m_bInputStreamIsReadOnly(false),
     m_bInCheckIn(false),
-    m_pSet(nullptr),
-    m_pURLObj(nullptr),
-    m_pFilter(nullptr),
-    m_pInStream(nullptr),
-    m_pOutStream(nullptr),
-    pOrigFilter( nullptr ),
     aExpireTime( DateTime( DateTime::SYSTEM ) + static_cast<sal_Int32>(10) ),
-    pTempFile( nullptr ),
     nLastStorageError( ERRCODE_NONE ),
     m_nSignatureState( SignatureState::NOSIGNATURES )
 {
@@ -533,20 +541,14 @@ bool SfxMedium::IsSkipImages()
     return pSkipImagesItem && pSkipImagesItem->GetValue() == "SkipImages";
 }
 
-OUString SfxMedium::GetConvertImagesFilter()
-{
-    const SfxStringItem* pConvertItem = GetItemSet()->GetItem<SfxStringItem>(SID_CONVERT_IMAGES);
-    return ( pConvertItem ? pConvertItem->GetValue() : OUString() );
-}
-
 SvStream* SfxMedium::GetInStream()
 {
     if ( pImpl->m_pInStream )
-        return pImpl->m_pInStream;
+        return pImpl->m_pInStream.get();
 
     if ( pImpl->pTempFile )
     {
-        pImpl->m_pInStream = new SvFileStream(pImpl->m_aName, pImpl->m_nStorOpenMode);
+        pImpl->m_pInStream.reset( new SvFileStream(pImpl->m_aName, pImpl->m_nStorOpenMode) );
 
         pImpl->m_eError = pImpl->m_pInStream->GetError();
 
@@ -554,11 +556,10 @@ SvStream* SfxMedium::GetInStream()
                     && ! pImpl->m_pInStream->IsWritable() )
         {
             pImpl->m_eError = ERRCODE_IO_ACCESSDENIED;
-            delete pImpl->m_pInStream;
-            pImpl->m_pInStream = nullptr;
+            pImpl->m_pInStream.reset();
         }
         else
-            return pImpl->m_pInStream;
+            return pImpl->m_pInStream.get();
     }
 
     GetMedium_Impl();
@@ -566,7 +567,7 @@ SvStream* SfxMedium::GetInStream()
     if ( GetError() )
         return nullptr;
 
-    return pImpl->m_pInStream;
+    return pImpl->m_pInStream.get();
 }
 
 
@@ -592,7 +593,7 @@ void SfxMedium::CloseInStream_Impl()
         return;
     }
 
-    DELETEZ( pImpl->m_pInStream );
+    pImpl->m_pInStream.reset();
     if ( pImpl->m_pSet )
         pImpl->m_pSet->ClearItem( SID_INPUTSTREAM );
 
@@ -634,21 +635,20 @@ SvStream* SfxMedium::GetOutStream()
             {
             // On Unix don't try to re-use XOutStream from xStream if that exists;
             // it causes fdo#59022 (fails opening files via SMB on Linux)
-                pImpl->m_pOutStream = new SvFileStream(
-                            pImpl->m_aName, StreamMode::STD_READWRITE);
+                pImpl->m_pOutStream.reset( new SvFileStream(
+                            pImpl->m_aName, StreamMode::STD_READWRITE) );
             }
             CloseStorage();
         }
     }
 
-    return pImpl->m_pOutStream;
+    return pImpl->m_pOutStream.get();
 }
 
 
-bool SfxMedium::CloseOutStream()
+void SfxMedium::CloseOutStream()
 {
     CloseOutStream_Impl();
-    return true;
 }
 
 void SfxMedium::CloseOutStream_Impl()
@@ -665,8 +665,7 @@ void SfxMedium::CloseOutStream_Impl()
                 CloseStorage();
         }
 
-        delete pImpl->m_pOutStream;
-        pImpl->m_pOutStream = nullptr;
+        pImpl->m_pOutStream.reset();
     }
 
     if ( !pImpl->m_pInStream )
@@ -758,7 +757,7 @@ bool SfxMedium::IsStorage()
     }
     else if ( GetInStream() )
     {
-        pImpl->bIsStorage = SotStorage::IsStorageFile( pImpl->m_pInStream ) && !SotStorage::IsOLEStorage( pImpl->m_pInStream );
+        pImpl->bIsStorage = SotStorage::IsStorageFile( pImpl->m_pInStream.get() ) && !SotStorage::IsOLEStorage( pImpl->m_pInStream.get() );
         if ( !pImpl->m_pInStream->GetError() && !pImpl->bIsStorage )
             pImpl->m_bTriedStorage = true;
     }
@@ -1547,10 +1546,10 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempIfNo )
             // The versions are numbered starting with 1, versions with
             // negative versions numbers are counted backwards from the
             // current version
-            short nVersion = pVersion ? pVersion->GetValue() : 0;
+            short nVersion = pVersion->GetValue();
             if ( nVersion<0 )
                 nVersion = static_cast<short>(pImpl->aVersions.getLength()) + nVersion;
-            else if ( nVersion )
+            else // nVersion > 0; pVersion->GetValue() != 0 was the condition to this block
                 nVersion--;
 
             util::RevisionTag& rTag = pImpl->aVersions[nVersion];
@@ -1568,7 +1567,7 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempIfNo )
                 {
                     // Unpack Stream  in TempDir
                     ::utl::TempFile aTempFile;
-                    OUString          aTmpName = aTempFile.GetURL();
+                    const OUString& aTmpName = aTempFile.GetURL();
                     SvFileStream    aTmpStream( aTmpName, SFX_STREAM_READWRITE );
 
                     pStream->ReadStream( aTmpStream );
@@ -1849,7 +1848,8 @@ void SfxMedium::TransactedTransferForFS_Impl( const INetURLObject& aSource,
                 OUString aDestMainURL = aDest.GetMainURL(INetURLObject::DecodeMechanism::NONE);
 
                 sal_uInt64 nAttributes = GetDefaultFileAttributes(aDestMainURL);
-                if (IsNotHardLinkedFile(aDestMainURL) && osl::File::move(aSourceMainURL, aDestMainURL) == osl::FileBase::E_None)
+                if (IsFileMovable(aDest)
+                    && osl::File::replace(aSourceMainURL, aDestMainURL) == osl::FileBase::E_None)
                 {
                     if (nAttributes)
                         // Adjust attributes, source might be created with
@@ -1909,14 +1909,14 @@ void SfxMedium::TransactedTransferForFS_Impl( const INetURLObject& aSource,
                 pImpl->m_eError = ERRCODE_IO_GENERAL;
             }
 
-               if ( bResult )
-               {
+            if ( bResult )
+            {
                 if ( pImpl->pTempFile )
                 {
                     pImpl->pTempFile->EnableKillingFile();
                     pImpl->pTempFile.reset();
                 }
-               }
+            }
             else if ( bTransactStarted )
             {
                 UseBackupToRestore_Impl( aOriginalContent, xDummyEnv );
@@ -2213,19 +2213,16 @@ void SfxMedium::Transfer_Impl()
                             sComment = pComments->GetValue( );
                     }
                     OUString sResultURL;
-                    bool isTransferOK = aTransferContent.transferContent(
+                    aTransferContent.transferContent(
                         aSourceContent, eOperation,
                         aFileName, nNameClash, aMimeType, bMajor, sComment,
                         &sResultURL, sObjectId );
 
-                    if ( !isTransferOK )
-                        pImpl->m_eError = ERRCODE_IO_GENERAL;
-                    else if ( !sResultURL.isEmpty( ) )  // Likely to happen only for checkin
+                    if ( !sResultURL.isEmpty( ) )  // Likely to happen only for checkin
                         SwitchDocumentToFile( sResultURL );
                     try
                     {
                         if ( GetURLObject().isAnyKnownWebDAVScheme() &&
-                             isTransferOK &&
                              eOperation == ::ucbhelper::InsertOperation::Copy )
                         {
                             // tdf#95272 try to re-issue a lock command when a new file is created.
@@ -2308,15 +2305,13 @@ void SfxMedium::DoInternalBackup_Impl( const ::ucbhelper::Content& aOriginalCont
         try
         {
             OUString sMimeType = pImpl->getFilterMimeType();
-            if( aBackupCont.transferContent( aOriginalContent,
+            aBackupCont.transferContent( aOriginalContent,
                                             ::ucbhelper::InsertOperation::Copy,
                                             aBackupName,
                                             NameClash::OVERWRITE,
-                                            sMimeType ) )
-            {
-                pImpl->m_aBackupURL = aBackObj.GetMainURL( INetURLObject::DecodeMechanism::NONE );
-                pImpl->m_bRemoveBackup = true;
-            }
+                                            sMimeType );
+            pImpl->m_aBackupURL = aBackObj.GetMainURL( INetURLObject::DecodeMechanism::NONE );
+            pImpl->m_bRemoveBackup = true;
         }
         catch( const Exception& )
         {}
@@ -2397,16 +2392,14 @@ void SfxMedium::DoBackup_Impl()
                 {
                     // do the transfer ( copy source file to backup dir )
                     OUString sMimeType = pImpl->getFilterMimeType();
-                    bSuccess = aContent.transferContent( aSourceContent,
+                    aContent.transferContent( aSourceContent,
                                                         ::ucbhelper::InsertOperation::Copy,
                                                         aFileName,
                                                         NameClash::OVERWRITE,
                                                         sMimeType );
-                    if( bSuccess )
-                    {
-                        pImpl->m_aBackupURL = aDest.GetMainURL( INetURLObject::DecodeMechanism::NONE );
-                        pImpl->m_bRemoveBackup = false;
-                    }
+                    pImpl->m_aBackupURL = aDest.GetMainURL( INetURLObject::DecodeMechanism::NONE );
+                    pImpl->m_bRemoveBackup = false;
+                    bSuccess = true;
                 }
                 catch ( const css::uno::Exception& )
                 {
@@ -2605,7 +2598,7 @@ void SfxMedium::GetMedium_Impl()
         if ( !GetError() && !pImpl->xStream.is() && !pImpl->xInputStream.is() )
             SetError(ERRCODE_IO_ACCESSDENIED);
 
-        if ( !GetError() )
+        if ( !GetError() && !pImpl->m_pInStream )
         {
             if ( pImpl->xStream.is() )
                 pImpl->m_pInStream = utl::UcbStreamHelper::CreateStream( pImpl->xStream );
@@ -2809,13 +2802,6 @@ const std::shared_ptr<const SfxFilter>& SfxMedium::GetFilter() const
 {
     return pImpl->m_pFilter;
 }
-
-
-std::shared_ptr<const SfxFilter> const & SfxMedium::GetOrigFilter() const
-{
-    return pImpl->pOrigFilter ? pImpl->pOrigFilter : pImpl->m_pFilter;
-}
-
 
 sal_uInt32 SfxMedium::CreatePasswordToModifyHash( const OUString& aPasswd, bool bWriter )
 {
@@ -3096,20 +3082,20 @@ void SfxMedium::CompleteReOpen()
     pImpl->bUseInteractionHandler = bUseInteractionHandler;
 }
 
-SfxMedium::SfxMedium(const OUString &rName, StreamMode nOpenMode, std::shared_ptr<const SfxFilter> pFilter, SfxItemSet *pInSet) :
+SfxMedium::SfxMedium(const OUString &rName, StreamMode nOpenMode, std::shared_ptr<const SfxFilter> pFilter, std::unique_ptr<SfxItemSet> pInSet) :
     pImpl(new SfxMedium_Impl)
 {
-    pImpl->m_pSet.reset( pInSet );
+    pImpl->m_pSet = std::move( pInSet );
     pImpl->m_pFilter = std::move(pFilter);
     pImpl->m_aLogicName = rName;
     pImpl->m_nStorOpenMode = nOpenMode;
     Init_Impl();
 }
 
-SfxMedium::SfxMedium(const OUString &rName, const OUString &rReferer, StreamMode nOpenMode, std::shared_ptr<const SfxFilter> pFilter, SfxItemSet *pInSet) :
+SfxMedium::SfxMedium(const OUString &rName, const OUString &rReferer, StreamMode nOpenMode, std::shared_ptr<const SfxFilter> pFilter, std::unique_ptr<SfxItemSet> pInSet) :
     pImpl(new SfxMedium_Impl)
 {
-    pImpl->m_pSet.reset( pInSet );
+    pImpl->m_pSet = std::move(pInSet);
     SfxItemSet * s = GetItemSet();
     if (s->GetItem(SID_REFERER) == nullptr) {
         s->Put(SfxStringItem(SID_REFERER, rReferer));
@@ -3520,6 +3506,11 @@ OUString GetLogicBase(std::unique_ptr<SfxMedium_Impl> const & pImpl)
 {
     OUString aLogicBase;
 
+// In a sandboxed environment we don't want to attempt to create temporary files in the same
+// directory where the user has selected an output file to be stored. The sandboxed process has
+// permission only to create the specifically named output file in that directory.
+#if !HAVE_FEATURE_MACOSX_SANDBOX
+
     if (comphelper::isFileUrl(pImpl->m_aLogicName) && !pImpl->m_pInStream)
     {
         // Try to create the temp file in the same directory when storing.
@@ -3534,6 +3525,8 @@ OUString GetLogicBase(std::unique_ptr<SfxMedium_Impl> const & pImpl)
     if (pImpl->m_bHasEmbeddedObjects)
         // Embedded objects would mean a special base, ignore that.
         aLogicBase.clear();
+
+#endif // !HAVE_FEATURE_MACOSX_SANDBOX
 
     return aLogicBase;
 }
@@ -3582,11 +3575,9 @@ void SfxMedium::CreateTempFile( bool bReplace )
                 {
                     ::ucbhelper::Content aTargetContent( aTmpURLObj.GetMainURL( INetURLObject::DecodeMechanism::NONE ), xComEnv, comphelper::getProcessComponentContext() );
                     OUString sMimeType = pImpl->getFilterMimeType();
-                    if ( aTargetContent.transferContent( pImpl->aContent, ::ucbhelper::InsertOperation::Copy, aFileName, NameClash::OVERWRITE, sMimeType ) )
-                    {
-                        SetWritableForUserOnly( aTmpURL );
-                        bTransferSuccess = true;
-                    }
+                    aTargetContent.transferContent( pImpl->aContent, ::ucbhelper::InsertOperation::Copy, aFileName, NameClash::OVERWRITE, sMimeType );
+                    SetWritableForUserOnly( aTmpURL );
+                    bTransferSuccess = true;
                 }
             }
             catch( const uno::Exception& )
@@ -3663,12 +3654,128 @@ void SfxMedium::CreateTempFileNoCopy()
     CloseStorage();
 }
 
-bool SfxMedium::SignContents_Impl(bool bSignScriptingContent,
-                                  bool bHasValidDocumentSignature,
+bool SfxMedium::SignDocumentContentUsingCertificate(bool bHasValidDocumentSignature,
+                                                    const Reference<XCertificate>& xCertificate)
+{
+    bool bChanges = false;
+
+    if (IsOpen() || GetError())
+    {
+        SAL_WARN("sfx.doc", "The medium must be closed by the signer!");
+        return bChanges;
+    }
+
+    // The component should know if there was a valid document signature, since
+    // it should show a warning in this case
+    OUString aODFVersion(comphelper::OStorageHelper::GetODFVersionFromStorage(GetStorage()));
+    uno::Reference< security::XDocumentDigitalSignatures > xSigner(
+        security::DocumentDigitalSignatures::createWithVersionAndValidSignature(
+            comphelper::getProcessComponentContext(), aODFVersion, bHasValidDocumentSignature ) );
+
+    uno::Reference< embed::XStorage > xWriteableZipStor;
+
+    // we can reuse the temporary file if there is one already
+    CreateTempFile( false );
+    GetMedium_Impl();
+
+    try
+    {
+        if ( !pImpl->xStream.is() )
+            throw uno::RuntimeException();
+
+        bool bODF = GetFilter()->IsOwnFormat();
+        try
+        {
+            xWriteableZipStor = ::comphelper::OStorageHelper::GetStorageOfFormatFromStream( ZIP_STORAGE_FORMAT_STRING, pImpl->xStream );
+        }
+        catch (const io::IOException& rException)
+        {
+            if (bODF)
+                SAL_WARN("sfx.doc", "ODF stream is not a zip storage: " << rException);
+        }
+
+        if ( !xWriteableZipStor.is() && bODF )
+            throw uno::RuntimeException();
+
+        uno::Reference< embed::XStorage > xMetaInf;
+        uno::Reference<container::XNameAccess> xNameAccess(xWriteableZipStor, uno::UNO_QUERY);
+        if (xNameAccess.is() && xNameAccess->hasByName("META-INF"))
+        {
+            xMetaInf = xWriteableZipStor->openStorageElement(
+                                            "META-INF",
+                                            embed::ElementModes::READWRITE );
+            if ( !xMetaInf.is() )
+                throw uno::RuntimeException();
+        }
+
+        {
+            if (xMetaInf.is())
+            {
+                // ODF.
+                uno::Reference< io::XStream > xStream;
+                if (GetFilter() && GetFilter()->IsOwnFormat())
+                    xStream.set(xMetaInf->openStreamElement(xSigner->getDocumentContentSignatureDefaultStreamName(), embed::ElementModes::READWRITE), uno::UNO_SET_THROW);
+
+                bool bSuccess = xSigner->signDocumentWithCertificate(xCertificate, GetZipStorageToSign_Impl(), xStream);
+
+                if (bSuccess)
+                {
+                    uno::Reference< embed::XTransactedObject > xTransact( xMetaInf, uno::UNO_QUERY_THROW );
+                    xTransact->commit();
+                    xTransact.set( xWriteableZipStor, uno::UNO_QUERY_THROW );
+                    xTransact->commit();
+
+                    // the temporary file has been written, commit it to the original file
+                    Commit();
+                    bChanges = true;
+                }
+            }
+            else if (xWriteableZipStor.is())
+            {
+                // OOXML.
+                uno::Reference<io::XStream> xStream;
+
+                    // We need read-write to be able to add the signature relation.
+                bool bSuccess =xSigner->signDocumentWithCertificate(
+                        xCertificate, GetZipStorageToSign_Impl(/*bReadOnly=*/false), xStream);
+
+                if (bSuccess)
+                {
+                    uno::Reference<embed::XTransactedObject> xTransact(xWriteableZipStor, uno::UNO_QUERY_THROW);
+                    xTransact->commit();
+
+                    // the temporary file has been written, commit it to the original file
+                    Commit();
+                    bChanges = true;
+                }
+            }
+            else
+            {
+                // Something not ZIP based: e.g. PDF.
+                std::unique_ptr<SvStream> pStream(utl::UcbStreamHelper::CreateStream(GetName(), StreamMode::READ | StreamMode::WRITE));
+                uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+                if (xSigner->signDocumentWithCertificate(xCertificate, uno::Reference<embed::XStorage>(), xStream))
+                    bChanges = true;
+            }
+        }
+    }
+    catch ( const uno::Exception& )
+    {
+        SAL_WARN( "sfx.doc", "Couldn't use signing functionality!" );
+    }
+
+    CloseAndRelease();
+
+    ResetError();
+
+    return bChanges;
+}
+
+bool SfxMedium::SignContents_Impl(bool bSignScriptingContent, bool bHasValidDocumentSignature,
                                   const OUString& aSignatureLineId,
-                                  const Reference<XCertificate> xCert,
-                                  const Reference<XGraphic> xValidGraphic,
-                                  const Reference<XGraphic> xInvalidGraphic,
+                                  const Reference<XCertificate>& xCert,
+                                  const Reference<XGraphic>& xValidGraphic,
+                                  const Reference<XGraphic>& xInvalidGraphic,
                                   const OUString& aComment)
 {
     bool bChanges = false;
@@ -3880,14 +3987,11 @@ OUString SfxMedium::CreateTempCopyWithExt( const OUString& aURL )
                     uno::Reference< css::ucb::XCommandEnvironment > xComEnv;
                     ::ucbhelper::Content aTargetContent( aDest.GetMainURL( INetURLObject::DecodeMechanism::NONE ), xComEnv, comphelper::getProcessComponentContext() );
                     ::ucbhelper::Content aSourceContent( aSource.GetMainURL( INetURLObject::DecodeMechanism::NONE ), xComEnv, comphelper::getProcessComponentContext() );
-                    if ( aTargetContent.transferContent( aSourceContent,
+                    aTargetContent.transferContent( aSourceContent,
                                                         ::ucbhelper::InsertOperation::Copy,
                                                         aFileName,
-                                                        NameClash::OVERWRITE ) )
-                    {
-                        // Success
-                        aResult = aNewTempFileURL;
-                    }
+                                                        NameClash::OVERWRITE );
+                    aResult = aNewTempFileURL;
                 }
                 catch( const uno::Exception& )
                 {}
@@ -4031,8 +4135,7 @@ bool SfxMedium::SwitchDocumentToFile( const OUString& aURL )
             try
             {
                 uno::Reference< io::XTruncate > xTruncate( pImpl->xStream, uno::UNO_QUERY_THROW );
-                if ( xTruncate.is() )
-                    xTruncate->truncate();
+                xTruncate->truncate();
                 if ( xOptStorage.is() )
                     xOptStorage->writeAndAttachToStream( pImpl->xStream );
                 pImpl->xStorage = xStorage;

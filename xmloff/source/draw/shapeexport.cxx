@@ -92,6 +92,7 @@
 
 #include <rtl/math.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <sax/tools/converter.hxx>
 
@@ -151,6 +152,27 @@ bool supportsText(XmlShapeType eShapeType)
 
 }
 
+static const OUStringLiteral gsZIndex( "ZOrder" );
+static const OUStringLiteral gsPrintable( "Printable" );
+static const OUStringLiteral gsVisible( "Visible" );
+static const OUStringLiteral gsModel( "Model" );
+static const OUStringLiteral gsStartShape( "StartShape" );
+static const OUStringLiteral gsEndShape( "EndShape" );
+static const OUStringLiteral gsOnClick( "OnClick" );
+static const OUStringLiteral gsEventType( "EventType" );
+static const OUStringLiteral gsPresentation( "Presentation" );
+static const OUStringLiteral gsMacroName( "MacroName" );
+static const OUStringLiteral gsScript( "Script" );
+static const OUStringLiteral gsLibrary( "Library" );
+static const OUStringLiteral gsClickAction( "ClickAction" );
+static const OUStringLiteral gsBookmark( "Bookmark" );
+static const OUStringLiteral gsEffect( "Effect" );
+static const OUStringLiteral gsPlayFull( "PlayFull" );
+static const OUStringLiteral gsVerb( "Verb" );
+static const OUStringLiteral gsSoundURL( "SoundURL" );
+static const OUStringLiteral gsSpeed( "Speed" );
+static const OUStringLiteral gsStarBasic( "StarBasic" );
+
 XMLShapeExport::XMLShapeExport(SvXMLExport& rExp,
                                 SvXMLExportPropertyMapper *pExtMapper )
 :   mrExport( rExp ),
@@ -158,27 +180,7 @@ XMLShapeExport::XMLShapeExport(SvXMLExport& rExp,
     maCurrentShapesIter(maShapesInfos.end()),
     mbExportLayer( false ),
     // #88546# init to sal_False
-    mbHandleProgressBar( false ),
-    msZIndex( "ZOrder" ),
-    msPrintable( "Printable" ),
-    msVisible( "Visible" ),
-    msModel( "Model" ),
-    msStartShape( "StartShape" ),
-    msEndShape( "EndShape" ),
-    msOnClick( "OnClick" ),
-    msEventType( "EventType" ),
-    msPresentation( "Presentation" ),
-    msMacroName( "MacroName" ),
-    msScript( "Script" ),
-    msLibrary( "Library" ),
-    msClickAction( "ClickAction" ),
-    msBookmark( "Bookmark" ),
-    msEffect( "Effect" ),
-    msPlayFull( "PlayFull" ),
-    msVerb( "Verb" ),
-    msSoundURL( "SoundURL" ),
-    msSpeed( "Speed" ),
-    msStarBasic( "StarBasic" )
+    mbHandleProgressBar( false )
 {
     // construct PropertyHandlerFactory
     mxSdPropHdlFactory = new XMLSdPropHdlFactory( mrExport.GetModel(), rExp );
@@ -273,7 +275,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
     sal_Int32 nZIndex = 0;
     uno::Reference< beans::XPropertySet > xPropSet(xShape, uno::UNO_QUERY);
     if( xPropSet.is() )
-        xPropSet->getPropertyValue(msZIndex) >>= nZIndex;
+        xPropSet->getPropertyValue(gsZIndex) >>= nZIndex;
 
     ImplXMLShapeExportInfoVector& aShapeInfoVector = (*maCurrentShapesIter).second;
 
@@ -435,14 +437,8 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
                 }
             }
 
-            std::vector< XMLPropertyState >::iterator aIter = aPropStates.begin();
-            std::vector< XMLPropertyState >::iterator aEnd = aPropStates.end();
-            while( aIter != aEnd )
-            {
-                if( aIter->mnIndex != -1 )
-                    nCount++;
-                ++aIter;
-            }
+            nCount = std::count_if(aPropStates.cbegin(), aPropStates.cend(),
+                [](const XMLPropertyState& rProp) { return rProp.mnIndex != -1; });
         }
 
         if(nCount == 0)
@@ -499,15 +495,8 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
                 }
             }
 
-            nCount = 0;
-            std::vector< XMLPropertyState >::iterator aIter = aPropStates.begin();
-            std::vector< XMLPropertyState >::iterator aEnd = aPropStates.end();
-            while( aIter != aEnd )
-            {
-                if( aIter->mnIndex != -1 )
-                    nCount++;
-                ++aIter;
-            }
+            nCount = std::count_if(aPropStates.cbegin(), aPropStates.cend(),
+                [](const XMLPropertyState& rProp) { return rProp.mnIndex != -1; });
 
             if( nCount )
             {
@@ -523,7 +512,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
 
     // prepare animation information if needed
     if( mxAnimationsExporter.is() )
-        mxAnimationsExporter->prepare( xShape );
+        XMLAnimationsExporter::prepare( xShape );
 
     // check for special shapes
 
@@ -534,11 +523,11 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
             uno::Reference< uno::XInterface > xConnection;
 
             // create shape ids for export later
-            xPropSet->getPropertyValue( msStartShape ) >>= xConnection;
+            xPropSet->getPropertyValue( gsStartShape ) >>= xConnection;
             if( xConnection.is() )
                 mrExport.getInterfaceToIdentifierMapper().registerReference( xConnection );
 
-            xPropSet->getPropertyValue( msEndShape ) >>= xConnection;
+            xPropSet->getPropertyValue( gsEndShape ) >>= xConnection;
             if( xConnection.is() )
                 mrExport.getInterfaceToIdentifierMapper().registerReference( xConnection );
             break;
@@ -548,7 +537,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
         {
             try
             {
-                uno::Reference< table::XColumnRowRange > xRange( xPropSet->getPropertyValue( msModel ), uno::UNO_QUERY_THROW );
+                uno::Reference< table::XColumnRowRange > xRange( xPropSet->getPropertyValue( gsModel ), uno::UNO_QUERY_THROW );
                 GetShapeTableExport()->collectTableAutoStyles( xRange );
             }
             catch(const uno::Exception&)
@@ -625,7 +614,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
             (eAction == presentation::ClickAction_BOOKMARK) )
         {
             OUString sURL;
-            xSet->getPropertyValue(msBookmark) >>= sURL;
+            xSet->getPropertyValue(gsBookmark) >>= sURL;
 
             if( !sURL.isEmpty() )
             {
@@ -642,7 +631,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
     }
 
     if( xSet.is() )
-        xSet->getPropertyValue(msZIndex) >>= nZIndex;
+        xSet->getPropertyValue(gsZIndex) >>= nZIndex;
 
     ImplXMLShapeExportInfoVector& aShapeInfoVector = (*maCurrentShapesIter).second;
 
@@ -761,8 +750,8 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
             bool bVisible = true;
             bool bPrintable = true;
 
-            xSet->getPropertyValue(msVisible) >>= bVisible;
-            xSet->getPropertyValue(msPrintable) >>= bPrintable;
+            xSet->getPropertyValue(gsVisible) >>= bVisible;
+            xSet->getPropertyValue(gsPrintable) >>= bPrintable;
 
             XMLTokenEnum eDisplayToken = XML_TOKEN_INVALID;
             const unsigned short nDisplay = (bVisible ? 2 : 0) | (bPrintable ? 1 : 0);
@@ -1613,58 +1602,58 @@ void XMLShapeExport::ImpExportEvents( const uno::Reference< drawing::XShape >& x
     OUString aStrBookmark;
 
     uno::Sequence< beans::PropertyValue > aClickProperties;
-    if( xEvents->hasByName( msOnClick ) && (xEvents->getByName( msOnClick ) >>= aClickProperties) )
+    if( xEvents->hasByName( gsOnClick ) && (xEvents->getByName( gsOnClick ) >>= aClickProperties) )
     {
         const beans::PropertyValue* pProperty = aClickProperties.getConstArray();
         const beans::PropertyValue* pPropertyEnd = pProperty + aClickProperties.getLength();
         for( ; pProperty != pPropertyEnd; ++pProperty )
         {
-            if( !( nFound & Found::CLICKEVENTTYPE ) && pProperty->Name == msEventType )
+            if( !( nFound & Found::CLICKEVENTTYPE ) && pProperty->Name == gsEventType )
             {
                 if( pProperty->Value >>= aClickEventType )
                     nFound |= Found::CLICKEVENTTYPE;
             }
-            else if( !( nFound & Found::CLICKACTION ) && pProperty->Name == msClickAction )
+            else if( !( nFound & Found::CLICKACTION ) && pProperty->Name == gsClickAction )
             {
                 if( pProperty->Value >>= eClickAction )
                     nFound |= Found::CLICKACTION;
             }
-            else if( !( nFound & Found::MACRO ) && ( pProperty->Name == msMacroName || pProperty->Name == msScript ) )
+            else if( !( nFound & Found::MACRO ) && ( pProperty->Name == gsMacroName || pProperty->Name == gsScript ) )
             {
                 if( pProperty->Value >>= aStrMacro )
                     nFound |= Found::MACRO;
             }
-            else if( !( nFound & Found::LIBRARY ) && pProperty->Name == msLibrary )
+            else if( !( nFound & Found::LIBRARY ) && pProperty->Name == gsLibrary )
             {
                 if( pProperty->Value >>= aStrLibrary )
                     nFound |= Found::LIBRARY;
             }
-            else if( !( nFound & Found::EFFECT ) && pProperty->Name == msEffect )
+            else if( !( nFound & Found::EFFECT ) && pProperty->Name == gsEffect )
             {
                 if( pProperty->Value >>= eEffect )
                     nFound |= Found::EFFECT;
             }
-            else if( !( nFound & Found::BOOKMARK ) && pProperty->Name == msBookmark )
+            else if( !( nFound & Found::BOOKMARK ) && pProperty->Name == gsBookmark )
             {
                 if( pProperty->Value >>= aStrBookmark )
                     nFound |= Found::BOOKMARK;
             }
-            else if( !( nFound & Found::SPEED ) && pProperty->Name == msSpeed )
+            else if( !( nFound & Found::SPEED ) && pProperty->Name == gsSpeed )
             {
                 if( pProperty->Value >>= eSpeed )
                     nFound |= Found::SPEED;
             }
-            else if( !( nFound & Found::SOUNDURL ) && pProperty->Name == msSoundURL )
+            else if( !( nFound & Found::SOUNDURL ) && pProperty->Name == gsSoundURL )
             {
                 if( pProperty->Value >>= aStrSoundURL )
                     nFound |= Found::SOUNDURL;
             }
-            else if( !( nFound & Found::PLAYFULL ) && pProperty->Name == msPlayFull )
+            else if( !( nFound & Found::PLAYFULL ) && pProperty->Name == gsPlayFull )
             {
                 if( pProperty->Value >>= bPlayFull )
                     nFound |= Found::PLAYFULL;
             }
-            else if( !( nFound & Found::VERB ) && pProperty->Name == msVerb )
+            else if( !( nFound & Found::VERB ) && pProperty->Name == gsVerb )
             {
                 if( pProperty->Value >>= nVerb )
                     nFound |= Found::VERB;
@@ -1674,7 +1663,7 @@ void XMLShapeExport::ImpExportEvents( const uno::Reference< drawing::XShape >& x
 
     // create the XML elements
 
-    if( aClickEventType == msPresentation )
+    if( aClickEventType == gsPresentation )
     {
         if( !(nFound & Found::CLICKACTION) || (eClickAction == presentation::ClickAction_NONE) )
             return;
@@ -1786,7 +1775,7 @@ void XMLShapeExport::ImpExportEvents( const uno::Reference< drawing::XShape >& x
             }
        }
     }
-    else if( aClickEventType == msStarBasic )
+    else if( aClickEventType == gsStarBasic )
     {
         if( nFound & Found::MACRO )
         {
@@ -1818,7 +1807,7 @@ void XMLShapeExport::ImpExportEvents( const uno::Reference< drawing::XShape >& x
             SvXMLElementExport aEventElemt(mrExport, XML_NAMESPACE_SCRIPT, XML_EVENT_LISTENER, true, true);
         }
     }
-    else if( aClickEventType == msScript )
+    else if( aClickEventType == gsScript )
     {
         if( nFound & Found::MACRO )
         {
@@ -2066,30 +2055,18 @@ void XMLShapeExport::ImpExportLineShape(
     if (auto pSourcePolyPolygon
             = o3tl::tryAccess<drawing::PointSequenceSequence>(aAny))
     {
-        drawing::PointSequence* pOuterSequence = const_cast<css::drawing::PointSequenceSequence *>(pSourcePolyPolygon)->getArray();
-        if(pOuterSequence)
+        if (pSourcePolyPolygon->getLength() > 0)
         {
-            drawing::PointSequence* pInnerSequence = pOuterSequence++;
-            if(pInnerSequence)
+            const drawing::PointSequence& rInnerSequence = (*pSourcePolyPolygon)[0];
+            if (rInnerSequence.getLength() > 0)
             {
-                awt::Point* pArray = pInnerSequence->getArray();
-                if(pArray)
-                {
-                    if(pInnerSequence->getLength() > 0)
-                    {
-                        aStart = awt::Point(
-                            pArray->X + aBasePosition.X,
-                            pArray->Y + aBasePosition.Y);
-                        pArray++;
-                    }
-
-                    if(pInnerSequence->getLength() > 1)
-                    {
-                        aEnd = awt::Point(
-                            pArray->X + aBasePosition.X,
-                            pArray->Y + aBasePosition.Y);
-                    }
-                }
+                const awt::Point& rPoint = rInnerSequence[0];
+                aStart = awt::Point(rPoint.X + aBasePosition.X, rPoint.Y + aBasePosition.Y);
+            }
+            if (rInnerSequence.getLength() > 1)
+            {
+                const awt::Point& rPoint = rInnerSequence[1];
+                aEnd = awt::Point(rPoint.X + aBasePosition.X, rPoint.Y + aBasePosition.Y);
             }
         }
     }
@@ -2266,7 +2243,7 @@ void XMLShapeExport::ImpExportPolygonShape(
         if(!aPolyPolygon.areControlPointsUsed() && 1 == aPolyPolygon.count())
         {
             // simple polygon shape, can be written as svg:points sequence
-            const basegfx::B2DPolygon aPolygon(aPolyPolygon.getB2DPolygon(0));
+            const basegfx::B2DPolygon& aPolygon(aPolyPolygon.getB2DPolygon(0));
             const OUString aPointString(basegfx::utils::exportToSvgPoints(aPolygon));
 
             // write point array
@@ -3693,18 +3670,15 @@ void XMLShapeExport::export3DLamps( const css::uno::Reference< css::beans::XProp
     const OUString aDirectionPropName("D3DSceneLightDirection");
     const OUString aLightOnPropName("D3DSceneLightOn");
 
-    OUString aPropName;
-    OUString aIndexStr;
     ::basegfx::B3DVector aLightDirection;
     drawing::Direction3D aLightDir;
     bool bLightOnOff = false;
     for(sal_Int32 nLamp = 1; nLamp <= 8; nLamp++)
     {
-        aIndexStr = OUString::number( nLamp );
+        OUString aIndexStr = OUString::number( nLamp );
 
         // lightcolor
-        aPropName = aColorPropName;
-        aPropName += aIndexStr;
+        OUString aPropName = aColorPropName + aIndexStr;
         sal_Int32 nLightColor = 0;
         xPropSet->getPropertyValue( aPropName ) >>= nLightColor;
         ::sax::Converter::convertColor(sStringBuffer, nLightColor);
@@ -3712,8 +3686,7 @@ void XMLShapeExport::export3DLamps( const css::uno::Reference< css::beans::XProp
         mrExport.AddAttribute(XML_NAMESPACE_DR3D, XML_DIFFUSE_COLOR, aStr);
 
         // lightdirection
-        aPropName = aDirectionPropName;
-        aPropName += aIndexStr;
+        aPropName = aDirectionPropName + aIndexStr;
         xPropSet->getPropertyValue(aPropName) >>= aLightDir;
         aLightDirection = ::basegfx::B3DVector(aLightDir.DirectionX, aLightDir.DirectionY, aLightDir.DirectionZ);
         SvXMLUnitConverter::convertB3DVector(sStringBuffer, aLightDirection);
@@ -3721,8 +3694,7 @@ void XMLShapeExport::export3DLamps( const css::uno::Reference< css::beans::XProp
         mrExport.AddAttribute(XML_NAMESPACE_DR3D, XML_DIRECTION, aStr);
 
         // lighton
-        aPropName = aLightOnPropName;
-        aPropName += aIndexStr;
+        aPropName = aLightOnPropName + aIndexStr;
         xPropSet->getPropertyValue(aPropName) >>= bLightOnOff;
         ::sax::Converter::convertBool(sStringBuffer, bLightOnOff);
         aStr = sStringBuffer.makeStringAndClear();
@@ -3742,7 +3714,7 @@ void XMLShapeExport::export3DLamps( const css::uno::Reference< css::beans::XProp
 // using namespace ::xmloff::EnhancedCustomShapeToken;
 
 
-void ExportParameter( OUStringBuffer& rStrBuffer, const css::drawing::EnhancedCustomShapeParameter& rParameter )
+static void ExportParameter( OUStringBuffer& rStrBuffer, const css::drawing::EnhancedCustomShapeParameter& rParameter )
 {
     if ( !rStrBuffer.isEmpty() )
         rStrBuffer.append( ' ' );
@@ -3761,7 +3733,7 @@ void ExportParameter( OUStringBuffer& rStrBuffer, const css::drawing::EnhancedCu
         {
             case css::drawing::EnhancedCustomShapeParameterType::EQUATION :
             {
-                rStrBuffer.append( "?f" + OUString::number( nValue ) );
+                rStrBuffer.append( "?f" ).append(OUString::number( nValue ) );
             }
             break;
 
@@ -3802,7 +3774,7 @@ void ExportParameter( OUStringBuffer& rStrBuffer, const css::drawing::EnhancedCu
     }
 }
 
-void ImpExportEquations( SvXMLExport& rExport, const uno::Sequence< OUString >& rEquations )
+static void ImpExportEquations( SvXMLExport& rExport, const uno::Sequence< OUString >& rEquations )
 {
     sal_Int32 i;
     for ( i = 0; i < rEquations.getLength(); i++ )
@@ -3828,7 +3800,7 @@ void ImpExportEquations( SvXMLExport& rExport, const uno::Sequence< OUString >& 
     }
 }
 
-void ImpExportHandles( SvXMLExport& rExport, const uno::Sequence< beans::PropertyValues >& rHandles )
+static void ImpExportHandles( SvXMLExport& rExport, const uno::Sequence< beans::PropertyValues >& rHandles )
 {
     sal_uInt32 i, j, nElements = rHandles.getLength();
     if ( nElements )
@@ -3972,7 +3944,7 @@ void ImpExportHandles( SvXMLExport& rExport, const uno::Sequence< beans::Propert
     }
 }
 
-void ImpExportEnhancedPath( SvXMLExport& rExport,
+static void ImpExportEnhancedPath( SvXMLExport& rExport,
                             const uno::Sequence< css::drawing::EnhancedCustomShapeParameterPair >& rCoordinates,
                             const uno::Sequence< css::drawing::EnhancedCustomShapeSegment >& rSegments,
                             bool bExtended = false )
@@ -4132,7 +4104,7 @@ void ImpExportEnhancedPath( SvXMLExport& rExport,
         ImpExportEnhancedPath( rExport, rCoordinates, rSegments, true );
 }
 
-void ImpExportEnhancedGeometry( SvXMLExport& rExport, const uno::Reference< beans::XPropertySet >& xPropSet )
+static void ImpExportEnhancedGeometry( SvXMLExport& rExport, const uno::Reference< beans::XPropertySet >& xPropSet )
 {
     bool bEquations = false;
     uno::Sequence< OUString > aEquations;
@@ -4599,6 +4571,11 @@ void ImpExportEnhancedGeometry( SvXMLExport& rExport, const uno::Reference< bean
                                 {
                                     case EAS_SubViewSize:
                                     {
+                                        // export draw:sub-view-size (do not export in ODF 1.2 or older)
+                                        if (rExport.getDefaultVersion() <= SvtSaveOptions::ODFVER_012)
+                                        {
+                                            continue;
+                                        }
                                         uno::Sequence< awt::Size > aSubViewSizes;
                                         rProp.Value >>= aSubViewSizes;
 
@@ -4884,7 +4861,7 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
                     }
                 }
 
-                uno::Reference< table::XColumnRowRange > xRange( xPropSet->getPropertyValue( msModel ), uno::UNO_QUERY_THROW );
+                uno::Reference< table::XColumnRowRange > xRange( xPropSet->getPropertyValue( gsModel ), uno::UNO_QUERY_THROW );
                 GetShapeTableExport()->exportTable( xRange );
             }
         }
@@ -4914,9 +4891,7 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
                     sal_Int32 nIndex = 0;
                     do
                     {
-                        sPictureName = "TablePreview";
-                        sPictureName += OUString::number( ++nIndex );
-                        sPictureName += ".svm";
+                        sPictureName = "TablePreview" + OUString::number( ++nIndex ) + ".svm";
                     }
                     while( xPictureStorage->hasByName( sPictureName ) );
 

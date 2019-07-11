@@ -23,10 +23,12 @@
 #include <RefreshListener.hxx>
 #include <sdbcoretools.hxx>
 #include <com/sun/star/sdbc/XRow.hpp>
+#include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <tools/wldcrd.hxx>
 #include <tools/diagnose_ex.h>
 #include <boost/optional.hpp>
+#include <sal/log.hxx>
 
 namespace dbaccess
 {
@@ -44,9 +46,9 @@ namespace dbaccess
     using namespace ::cppu;
     using namespace ::connectivity::sdbcx;
 
-/** creates a vector of WildCards and reduce the _rTableFilter of the length of WildsCards
+/** creates a vector of WildCards and reduce the _rTableFilter of the length of WildCards
 */
-sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector< WildCard >& _rOut)
+static sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector< WildCard >& _rOut)
 {
     // for wildcard search : remove all table filters which are a wildcard expression and build a WildCard
     // for them
@@ -73,7 +75,7 @@ sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector<
     return nShiftPos;
 }
 
-    bool lcl_isElementAllowed(  const OUString& _rName,
+    static bool lcl_isElementAllowed(  const OUString& _rName,
                                 const Sequence< OUString >& _rTableFilter,
                                 const std::vector< WildCard >& _rWCSearch )
     {
@@ -122,7 +124,7 @@ sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector<
     };
     typedef std::vector< TableInfo >    TableInfos;
 
-    void lcl_ensureComposedName( TableInfo& _io_tableInfo, const Reference< XDatabaseMetaData >& _metaData )
+    static void lcl_ensureComposedName( TableInfo& _io_tableInfo, const Reference< XDatabaseMetaData >& _metaData )
     {
         if ( !_metaData.is() )
             throw RuntimeException();
@@ -138,7 +140,7 @@ sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector<
         }
     }
 
-    void lcl_ensureType( TableInfo& _io_tableInfo, const Reference< XDatabaseMetaData >& _metaData, const Reference< XNameAccess >& _masterContainer )
+    static void lcl_ensureType( TableInfo& _io_tableInfo, const Reference< XDatabaseMetaData >& _metaData, const Reference< XNameAccess >& _masterContainer )
     {
         if ( !!_io_tableInfo.sType )
             return;
@@ -161,7 +163,7 @@ sal_Int32 createWildCardVector(Sequence< OUString >& _rTableFilter, std::vector<
         _io_tableInfo.sType = OptionalString( sTypeName );
     }
 
-    ::std::vector< OUString> lcl_filter( const TableInfos& _unfilteredTables,
+    static ::std::vector< OUString> lcl_filter( const TableInfos& _unfilteredTables,
         const Sequence< OUString >& _tableFilter, const Sequence< OUString >& _tableTypeFilter,
         const Reference< XDatabaseMetaData >& _metaData, const Reference< XNameAccess >& _masterContainer )
     {

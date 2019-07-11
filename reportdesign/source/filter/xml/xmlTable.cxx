@@ -45,7 +45,7 @@ namespace rptxml
     using namespace ::com::sun::star::xml::sax;
     using ::com::sun::star::xml::sax::XAttributeList;
 
-    sal_Int16 lcl_getForceNewPageOption(const OUString& _sValue)
+    static sal_Int16 lcl_getForceNewPageOption(const OUString& _sValue)
     {
         sal_Int16 nRet = report::ForceNewPage::NONE;
         const SvXMLEnumMapEntry<sal_Int16>* aXML_EnumMap = OXMLHelper::GetForceNewPageOptions();
@@ -250,7 +250,7 @@ void OXMLTable::EndElement()
                                     (*aCellIter)->setSize(awt::Size(nWidth,nHeight));
                                     (*aCellIter)->setPosition(awt::Point(nPosX,nPosY));
                                 }
-                                catch(beans::PropertyVetoException)
+                                catch(const beans::PropertyVetoException &)
                                 {
                                     OSL_FAIL("Could not set the correct position or size!");
                                 }

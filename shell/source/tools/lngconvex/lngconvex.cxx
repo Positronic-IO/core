@@ -72,10 +72,10 @@ void ShowUsage()
     std::cout << "-rcf Name of the resource file footer" << std::endl;
 }
 
-inline OUString OStringToOUString(const OString& str)
+OUString OStringToOUString(const OString& str)
 { return OStringToOUString(str, osl_getThreadTextEncoding()); }
 
-inline OString OUStringToOString(const OUString& str)
+OString OUStringToOString(const OUString& str)
 { return OUStringToOString(str, osl_getThreadTextEncoding()); }
 
 /** Get the directory where the module
@@ -143,10 +143,8 @@ public:
     }
 private:
     std::ios& m_IoStrm;
-    std::ios::iostate m_OldIos;
+    std::ios::iostate const m_OldIos;
 };
-
-typedef std::vector<std::string> string_container_t;
 
 class iso_lang_identifier
 {
@@ -201,7 +199,7 @@ class Substitutor
 {
 private:
     typedef std::map<std::string, std::string> replacement_table_t;
-    typedef std::map<std::string, replacement_table_t*> iso_lang_replacement_table_t;
+    typedef std::map<std::string, replacement_table_t> iso_lang_replacement_table_t;
 
 public:
     typedef iso_lang_replacement_table_t::iterator iterator;
@@ -217,17 +215,6 @@ public:
 
     Substitutor() {};
 
-    ~Substitutor()
-    {
-        iso_lang_replacement_table_t::iterator iter_end = iso_lang_replacement_table_.end();
-        iso_lang_replacement_table_t::iterator iter = iso_lang_replacement_table_.begin();
-
-        for( /* no init */; iter != iter_end; ++iter)
-            delete iter->second;
-
-        iso_lang_replacement_table_.clear();
-    }
-
     void set_language(const iso_lang_identifier& iso_lang)
     {
         active_iso_lang_ = iso_lang;
@@ -237,42 +224,26 @@ public:
     //its substitute else leave it unchanged
     void substitute(std::string& Text)
     {
-        replacement_table_t* prt = get_replacement_table(active_iso_lang_.make_std_string());
-        OSL_ASSERT(prt);
-        replacement_table_t::iterator iter = prt->find(Text);
-        if (iter != prt->end())
+        replacement_table_t& prt = get_replacement_table(active_iso_lang_.make_std_string());
+        replacement_table_t::iterator iter = prt.find(Text);
+        if (iter != prt.end())
             Text = iter->second;
     }
 
     void add_substitution(
         const std::string& Placeholder, const std::string& Substitute)
     {
-        replacement_table_t* prt = get_replacement_table(active_iso_lang_.make_std_string());
-        OSL_ASSERT(prt);
-        prt->insert(std::make_pair(Placeholder, Substitute));
+        replacement_table_t& prt = get_replacement_table(active_iso_lang_.make_std_string());
+        prt.insert(std::make_pair(Placeholder, Substitute));
     }
 
 
 private:
     // Return the replacement table for the iso lang id
     // create a new one if not already present
-    replacement_table_t* get_replacement_table(const std::string& iso_lang)
+    replacement_table_t& get_replacement_table(const std::string& iso_lang)
     {
-        iso_lang_replacement_table_t::iterator iter =
-            iso_lang_replacement_table_.find(iso_lang);
-
-        replacement_table_t* prt = nullptr;
-
-        if (iso_lang_replacement_table_.end() == iter)
-        {
-            prt = new replacement_table_t;
-            iso_lang_replacement_table_.insert(std::make_pair(iso_lang, prt));
-        }
-        else
-        {
-            prt = iter->second;
-        }
-        return prt;
+        return iso_lang_replacement_table_[iso_lang];
     }
 
 private:
@@ -371,7 +342,7 @@ void read_ulf_file(const std::string& FileName, Substitutor& Substitutor)
 
 void read_file(
     const std::string& fname,
-    string_container_t& string_container)
+    std::vector<std::string>& string_container)
 {
     std::ifstream file(fname.c_str());
     StreamExceptionsEnabler sexc(file);
@@ -459,7 +430,7 @@ void start_language_section(
     replace the all placeholder and append the
     result to the output file */
 void inflate_rc_template_to_file(
-    std::ostream& os, const string_container_t& rctmpl, Substitutor& substitutor)
+    std::ostream& os, const std::vector<std::string>& rctmpl, Substitutor& substitutor)
 {
     StreamExceptionsEnabler sexc(os);
 
@@ -472,15 +443,12 @@ void inflate_rc_template_to_file(
     {
         substitutor.set_language(iso_lang_identifier(iter->first));
 
-        string_container_t::const_iterator rct_iter = rctmpl.begin();
-        string_container_t::const_iterator rct_iter_end = rctmpl.end();
-
         if (!rctmpl.empty())
             start_language_section(oi, iso_lang_identifier(iter->first));
 
-        for ( /**/ ;rct_iter != rct_iter_end; ++rct_iter)
+        for ( auto& rct : rctmpl)
         {
-            std::istringstream iss(*rct_iter);
+            std::istringstream iss(rct);
             std::string line;
 
             while (iss)
@@ -535,7 +503,7 @@ SAL_IMPLEMENT_MAIN_WITH_ARGS(argc, argv)
         Substitutor substitutor;
         read_ulf_file(ULF_FILE(cmdline), substitutor);
 
-        string_container_t rc_tmpl;
+        std::vector<std::string> rc_tmpl;
         read_file(RC_TEMPLATE(cmdline), rc_tmpl);
 
         std::ofstream rc_file(RC_FILE(cmdline));

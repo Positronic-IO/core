@@ -23,14 +23,12 @@
 #include <vector>
 
 #include <sfx2/tabdlg.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/lstbox.hxx>
 #include <svx/langbox.hxx>
+#include <unotools/collatorwrapper.hxx>
+#include <svtools/collatorres.hxx>
 
 #include "sortkeydlg.hxx"
 
-#include <global.hxx>
 #include <address.hxx>
 #include <sortparam.hxx>
 
@@ -38,8 +36,6 @@
 #define SC_MAXFIELDS    MAXCOLCOUNT+1
 
 class ScViewData;
-class ScSortDlg;
-struct ScSortParam;
 
 // Sort Criteria
 
@@ -63,9 +59,9 @@ protected:
 private:
     Idle m_aIdle;
 
-    OUString            aStrUndefined;
-    OUString            aStrColumn;
-    OUString            aStrRow;
+    OUString const            aStrUndefined;
+    OUString const            aStrColumn;
+    OUString const            aStrRow;
 
     const sal_uInt16    nWhichSort;
     ScViewData*         pViewData;
@@ -90,15 +86,13 @@ private:
     void    SetLastSortKey( sal_uInt16 nItem );
 
     // Handler ------------------------
-    DECL_LINK(SelectHdl, weld::ComboBoxText&, void);
+    DECL_LINK(SelectHdl, weld::ComboBox&, void);
     DECL_LINK(ScrollToEndHdl, Timer*, void);
 };
 
 // Sort Options
 
 class ScDocument;
-class CollatorResource;
-class CollatorWrapper;
 
 class ScTabPageSortOptions : public SfxTabPage
 {
@@ -116,9 +110,9 @@ protected:
     virtual DeactivateRC   DeactivatePage  ( SfxItemSet* pSet ) override;
 
 private:
-    OUString            aStrRowLabel;
-    OUString            aStrColLabel;
-    OUString            aStrUndefined;
+    OUString const            aStrRowLabel;
+    OUString const            aStrColLabel;
+    OUString const            aStrUndefined;
 
     const sal_uInt16    nWhichSort;
     ScSortParam         aSortData;
@@ -134,13 +128,13 @@ private:
     std::unique_ptr<weld::CheckButton> m_xBtnFormats;
     std::unique_ptr<weld::CheckButton> m_xBtnNaturalSort;
     std::unique_ptr<weld::CheckButton> m_xBtnCopyResult;
-    std::unique_ptr<weld::ComboBoxText> m_xLbOutPos;
+    std::unique_ptr<weld::ComboBox> m_xLbOutPos;
     std::unique_ptr<weld::Entry> m_xEdOutPos;
     std::unique_ptr<weld::CheckButton> m_xBtnSortUser;
-    std::unique_ptr<weld::ComboBoxText> m_xLbSortUser;
+    std::unique_ptr<weld::ComboBox> m_xLbSortUser;
     std::unique_ptr<LanguageBox> m_xLbLanguage;
     std::unique_ptr<weld::Label> m_xFtAlgorithm;
-    std::unique_ptr<weld::ComboBoxText> m_xLbAlgorithm;
+    std::unique_ptr<weld::ComboBox> m_xLbAlgorithm;
     std::unique_ptr<weld::RadioButton> m_xBtnTopDown;
     std::unique_ptr<weld::RadioButton> m_xBtnLeftRight;
     std::unique_ptr<weld::CheckButton> m_xBtnIncComments;
@@ -152,11 +146,11 @@ private:
 
     // Handler ------------------------
     DECL_LINK( EnableHdl, weld::ToggleButton&, void );
-    DECL_LINK( SelOutPosHdl, weld::ComboBoxText&, void );
+    DECL_LINK( SelOutPosHdl, weld::ComboBox&, void );
     void EdOutPosModHdl();
     DECL_LINK( SortDirHdl, weld::ToggleButton&, void );
     void FillAlgor();
-    DECL_LINK( FillAlgorHdl, weld::ComboBoxText&, void );
+    DECL_LINK( FillAlgorHdl, weld::ComboBox&, void );
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_TPSORT_HXX

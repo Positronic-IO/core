@@ -7,6 +7,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include <tools/stream.hxx>
 #include <tools/XmlWalker.hxx>
 #include <o3tl/make_unique.hxx>
 
@@ -89,7 +90,7 @@ void XmlWalker::parent()
     mpImpl->mpStack.pop_back();
 }
 
-OString XmlWalker::attribute(OString sName)
+OString XmlWalker::attribute(const OString& sName)
 {
     xmlChar* xmlName = xmlCharStrdup(sName.getStr());
     xmlChar* xmlAttribute = xmlGetProp(mpImpl->mpCurrent, xmlName);

@@ -20,8 +20,10 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_MVTABDLG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_MVTABDLG_HXX
 
-#include <address.hxx>
+#include <types.hxx>
 #include <vcl/weld.hxx>
+
+class ScDocument;
 
 class ScMoveTableDlg : public weld::GenericDialogController
 {
@@ -61,7 +63,7 @@ private:
 
     std::unique_ptr<weld::RadioButton> m_xBtnMove;
     std::unique_ptr<weld::RadioButton> m_xBtnCopy;
-    std::unique_ptr<weld::ComboBoxText> m_xLbDoc;
+    std::unique_ptr<weld::ComboBox> m_xLbDoc;
     std::unique_ptr<weld::TreeView> m_xLbTable;
     std::unique_ptr<weld::Entry> m_xEdTabName;
     std::unique_ptr<weld::Label> m_xFtWarn;
@@ -73,7 +75,7 @@ private:
     void    Init            ();
     void    InitDocListBox  ();
     DECL_LINK(OkHdl, weld::Button&, void);
-    DECL_LINK(SelHdl, weld::ComboBoxText&, void);
+    DECL_LINK(SelHdl, weld::ComboBox&, void);
     DECL_LINK(CheckBtnHdl, weld::ToggleButton&, void);
     DECL_LINK(CheckNameHdl, weld::Entry&, void);
 };

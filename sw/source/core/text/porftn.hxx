@@ -26,7 +26,7 @@ class SwTextFootnote;
 
 class SwFootnotePortion : public SwFieldPortion
 {
-    SwTextFootnote *pFootnote;
+    SwTextFootnote * const pFootnote;
     sal_uInt16 nOrigHeight;
     // #i98418#
     bool mbPreferredScriptTypeSet;
@@ -50,8 +50,8 @@ public:
 class SwFootnoteNumPortion : public SwNumberPortion
 {
 public:
-    SwFootnoteNumPortion( const OUString &rExpand, SwFont *pFntL )
-         : SwNumberPortion( rExpand, pFntL, true, false, 0, false )
+    SwFootnoteNumPortion( const OUString &rExpand, std::unique_ptr<SwFont> pFntL )
+         : SwNumberPortion( rExpand, std::move(pFntL), true, false, 0, false )
          { SetWhichPor( POR_FTNNUM ); }
 };
 
@@ -79,7 +79,7 @@ class SwErgoSumPortion : public SwFieldPortion
 {
 public:
     SwErgoSumPortion( const OUString &rExp, const OUString& rStr );
-    virtual sal_Int32 GetCursorOfst( const sal_uInt16 nOfst ) const override;
+    virtual TextFrameIndex GetCursorOfst(sal_uInt16 nOfst) const override;
     virtual bool Format( SwTextFormatInfo &rInf ) override;
 
     // Field cloner for SplitGlue

@@ -8,6 +8,8 @@
  */
 #include <officecfg/Office/Common.hxx>
 #include "sdmodeltestbase.hxx"
+#include <sdpage.hxx>
+
 #include <Outliner.hxx>
 #include <svl/stritem.hxx>
 #include <editeng/editobj.hxx>
@@ -82,6 +84,7 @@ public:
     void testTdf97630();
     void testSwappedOutImageExport();
     void testOOoXMLAnimations();
+    void testBnc480256();
     void testUnknownAttributes();
     void testTdf80020();
     void testLinkedGraphicRT();
@@ -90,12 +93,17 @@ public:
     void testTransparentBackground();
     void testEmbeddedPdf();
     void testEmbeddedText();
+    void testTdf98477();
     void testAuthorField();
+    void testTdf50499();
     void testTdf100926();
     void testPageWithTransparentBackground();
     void testTextRotation();
     void testTdf115394PPT();
     void testBulletsAsImage();
+    void testTdf113818();
+    void testTdf119629();
+    void testTdf113822();
 
     CPPUNIT_TEST_SUITE(SdExportTest);
 
@@ -105,6 +113,7 @@ public:
     CPPUNIT_TEST(testTdf97630);
     CPPUNIT_TEST(testSwappedOutImageExport);
     CPPUNIT_TEST(testOOoXMLAnimations);
+    CPPUNIT_TEST(testBnc480256);
     CPPUNIT_TEST(testUnknownAttributes);
     CPPUNIT_TEST(testTdf80020);
     CPPUNIT_TEST(testLinkedGraphicRT);
@@ -113,18 +122,23 @@ public:
     CPPUNIT_TEST(testTransparentBackground);
     CPPUNIT_TEST(testEmbeddedPdf);
     CPPUNIT_TEST(testEmbeddedText);
+    CPPUNIT_TEST(testTdf98477);
     CPPUNIT_TEST(testAuthorField);
+    CPPUNIT_TEST(testTdf50499);
     CPPUNIT_TEST(testTdf100926);
     CPPUNIT_TEST(testPageWithTransparentBackground);
     CPPUNIT_TEST(testTextRotation);
     CPPUNIT_TEST(testTdf115394PPT);
     CPPUNIT_TEST(testBulletsAsImage);
+    CPPUNIT_TEST(testTdf113818);
+    CPPUNIT_TEST(testTdf119629);
+    CPPUNIT_TEST(testTdf113822);
 
     CPPUNIT_TEST_SUITE_END();
 
     virtual void registerNamespaces(xmlXPathContextPtr& pXmlXPathCtx) override
     {
-        struct { char const * pPrefix; char const * pURI; } namespaces[] =
+        static const struct { char const * pPrefix; char const * pURI; } namespaces[] =
         {
             // ODF
             { "anim", "urn:oasis:names:tc:opendocument:xmlns:animation:1.0" },
@@ -154,8 +168,8 @@ public:
 
 namespace
 {
-
-uno::Reference<awt::XBitmap> getBitmapFromTable(sd::DrawDocShellRef xDocShRef, OUString const & rName)
+uno::Reference<awt::XBitmap> getBitmapFromTable(const sd::DrawDocShellRef& xDocShRef,
+                                                OUString const& rName)
 {
     uno::Reference<awt::XBitmap> xBitmap;
 
@@ -517,6 +531,60 @@ void SdExportTest::testOOoXMLAnimations()
     assertXPath(pXmlDoc, "//anim:par", 223);
 }
 
+void SdExportTest::testBnc480256()
+{
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/pptx/bnc480256.pptx"), PPTX);
+    // In the document, there are two tables with table background properties.
+    // Make sure colors are set properly for individual cells.
+
+    // TODO: If you are working on improving table background support, expect
+    // this unit test to fail. In that case, feel free to change the numbers.
+
+    const SdrPage *pPage = GetPage( 1, xDocShRef );
+
+    sdr::table::SdrTableObj *pTableObj;
+    uno::Reference< table::XCellRange > xTable;
+    uno::Reference< beans::XPropertySet > xCell;
+    sal_Int32 nColor;
+    table::BorderLine2 aBorderLine;
+
+    pTableObj = dynamic_cast<sdr::table::SdrTableObj*>(pPage->GetObj(0));
+    CPPUNIT_ASSERT( pTableObj );
+    xTable.set(pTableObj->getTable(), uno::UNO_QUERY_THROW);
+
+    xCell.set(xTable->getCellByPosition(0, 0), uno::UNO_QUERY_THROW);
+    xCell->getPropertyValue("FillColor") >>= nColor;
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(10208238), nColor);
+    xCell->getPropertyValue("LeftBorder") >>= aBorderLine;
+    CPPUNIT_ASSERT_EQUAL(util::Color(5609427), aBorderLine.Color);
+
+    xCell.set(xTable->getCellByPosition(0, 1), uno::UNO_QUERY_THROW);
+    xCell->getPropertyValue("FillColor") >>= nColor;
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(13032959), nColor);
+    xCell->getPropertyValue("TopBorder") >>= aBorderLine;
+    CPPUNIT_ASSERT_EQUAL(util::Color(5609427), aBorderLine.Color);
+
+    pTableObj = dynamic_cast<sdr::table::SdrTableObj*>(pPage->GetObj(1));
+    CPPUNIT_ASSERT( pTableObj );
+    xTable.set(pTableObj->getTable(), uno::UNO_QUERY_THROW);
+
+    xCell.set(xTable->getCellByPosition(0, 0), uno::UNO_QUERY_THROW);
+    xCell->getPropertyValue("FillColor") >>= nColor;
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7056614), nColor);
+    xCell->getPropertyValue("LeftBorder") >>= aBorderLine;
+    CPPUNIT_ASSERT_EQUAL(util::Color(12505062), aBorderLine.Color);
+
+    xCell.set(xTable->getCellByPosition(0, 1), uno::UNO_QUERY_THROW);
+    xCell->getPropertyValue("FillColor") >>= nColor;
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4626400), nColor);
+
+    xCell.set(xTable->getCellByPosition(1, 0), uno::UNO_QUERY_THROW);
+    xCell->getPropertyValue("BottomBorder") >>= aBorderLine;
+    CPPUNIT_ASSERT_EQUAL(util::Color(COL_AUTO), aBorderLine.Color);
+
+    xDocShRef->DoClose();
+}
+
 void SdExportTest::testUnknownAttributes()
 {
     ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/unknown-attribute.fodp"), FODP);
@@ -787,6 +855,18 @@ void SdExportTest::testEmbeddedText()
     xShell->DoClose();
 }
 
+void SdExportTest::testTdf98477()
+{
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf98477grow.pptx"), PPTX);
+
+    xDocShRef = saveAndReload(xDocShRef.get(), ODP, &tempFile);
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "content.xml");
+    assertXPath(pXmlDoc, "//anim:animateTransform", "by", "0.5,0.5");
+    xDocShRef->DoClose();
+}
+
 void SdExportTest::testAuthorField()
 {
     ::sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("/sd/qa/unit/data/odp/author_fixed.odp"), ODP);
@@ -800,6 +880,21 @@ void SdExportTest::testAuthorField()
     bool bFixed = false;
     xPropSet->getPropertyValue("IsFixed") >>= bFixed;
     CPPUNIT_ASSERT_MESSAGE("Author field is not fixed", bFixed);
+
+    xDocShRef->DoClose();
+}
+
+void SdExportTest::testTdf50499()
+{
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf50499.pptx"), PPTX);
+
+    xDocShRef = saveAndReload(xDocShRef.get(), ODP, &tempFile);
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "content.xml");
+    assertXPath(pXmlDoc, "//anim:animate[1]", "from", "(-width/2)");
+    assertXPath(pXmlDoc, "//anim:animate[1]", "to", "(x)");
+    assertXPath(pXmlDoc, "//anim:animate[3]", "by", "(height/3+width*0.1)");
 
     xDocShRef->DoClose();
 }
@@ -944,17 +1039,125 @@ void SdExportTest::testBulletsAsImage()
         uno::Reference<container::XIndexAccess> xLevels(xPropSet->getPropertyValue("NumberingRules"), uno::UNO_QUERY_THROW);
         uno::Sequence<beans::PropertyValue> aProperties;
         xLevels->getByIndex(0) >>= aProperties; // 1st level
+
         uno::Reference<awt::XBitmap> xBitmap;
-        for (const beans::PropertyValue& rProperty : aProperties)
+        awt::Size aSize;
+        sal_Int16 nNumberingType = -1;
+
+        for (beans::PropertyValue const & rProperty : aProperties)
         {
-            if (rProperty.Name == "GraphicBitmap")
+            if (rProperty.Name == "NumberingType")
+            {
+                nNumberingType = rProperty.Value.get<sal_Int16>();
+            }
+            else if (rProperty.Name == "GraphicBitmap")
+            {
                 xBitmap = rProperty.Value.get<uno::Reference<awt::XBitmap>>();
+            }
+            else if (rProperty.Name == "GraphicSize")
+            {
+                aSize = rProperty.Value.get<awt::Size>();
+            }
         }
+
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), style::NumberingType::BITMAP, nNumberingType);
+
+        // Graphic Bitmap
         const OString sFailed = sFailedMessageBase + "No bitmap for the bullets";
         CPPUNIT_ASSERT_MESSAGE(sFailed.getStr(), xBitmap.is());
+        Graphic aGraphic(uno::Reference<graphic::XGraphic>(xBitmap, uno::UNO_QUERY));
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), GraphicType::Bitmap, aGraphic.GetType());
+        CPPUNIT_ASSERT_MESSAGE(sFailedMessageBase.getStr(), aGraphic.GetSizeBytes() > sal_uLong(0));
+
+        if (nExportFormat == ODP || nExportFormat == PPT)
+        {
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), 16L, aGraphic.GetSizePixel().Width());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), 16L, aGraphic.GetSizePixel().Height());
+        }
+        else // FIXME: what happened here
+        {
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), 64L, aGraphic.GetSizePixel().Width());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), 64L, aGraphic.GetSizePixel().Height());
+        }
+
+        // Graphic Size
+        if (nExportFormat == ODP)
+        {
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(500), aSize.Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(500), aSize.Height);
+
+        }
+        else if (nExportFormat == PPT) // seems like a conversion error
+        {
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(504), aSize.Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(504), aSize.Height);
+        }
+        else // FIXME: totally wrong
+        {
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(790), aSize.Width);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessageBase.getStr(), sal_Int32(790), aSize.Height);
+        }
 
         xDocShRef->DoClose();
     }
+}
+
+void SdExportTest::testTdf113822()
+{
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf113822underline.pptx"), PPTX);
+
+    // Was unable to export iterate container (tdf#99213).
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    // Was unable to import iterate container (tdf#113822).
+    xDocShRef = saveAndReload(xDocShRef.get(), ODP, &tempFile);
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "content.xml");
+
+    // IterateContainer was created as ParallelTimeContainer before, so
+    // the iterate type is not set too.
+    assertXPath(pXmlDoc, "//anim:iterate", "iterate-type", "by-letter");
+    // The target of the child animation nodes need to be in the iterate container.
+    assertXPath(pXmlDoc, "//anim:iterate", "targetElement", "id1");
+    assertXPath(pXmlDoc, "//anim:iterate/anim:set", "attributeName", "text-underline");
+    assertXPath(pXmlDoc, "//anim:iterate/anim:set", "to", "solid");
+
+    xDocShRef->DoClose();
+}
+
+void SdExportTest::testTdf113818()
+{
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/pptx/tdf113818-swivel.pptx"), PPTX);
+    xDocShRef = saveAndReload(xDocShRef.get(), PPT);
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    xDocShRef = saveAndReload(xDocShRef.get(), ODP, &tempFile);
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "content.xml");
+    assertXPath(pXmlDoc, "//anim:animate[1]", "formula", "width*sin(2.5*pi*$)");
+    assertXPath(pXmlDoc, "//anim:animate[1]", "values", "0;1");
+    xDocShRef->DoClose();
+}
+
+void SdExportTest::testTdf119629()
+{
+    utl::TempFile tempFile;
+    sd::DrawDocShellRef xDocShRef = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/ppt/tdf119629.ppt"), PPT);
+    xDocShRef = saveAndReload(xDocShRef.get(), PPT);
+    xDocShRef = saveAndReload(xDocShRef.get(), ODP, &tempFile);
+
+    xmlDocPtr pXmlDoc = parseExport(tempFile, "content.xml");
+
+    // MSO's effect node type Click parallel node, with group node, after group node
+    // were missing.
+    assertXPath(pXmlDoc, "//draw:page"
+            "/anim:par[@presentation:node-type='timing-root']"
+            "/anim:seq[@presentation:node-type='main-sequence']"
+            "/anim:par[@presentation:node-type='on-click']"
+            "/anim:par[@presentation:node-type='with-previous']"
+            "/anim:par[@presentation:node-type='on-click']"
+            "/anim:animate[@anim:formula='width*sin(2.5*pi*$)']", 1);
+    xDocShRef->DoClose();
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdExportTest);

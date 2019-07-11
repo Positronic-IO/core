@@ -17,10 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5VirtualDevice.hxx"
+#include <Qt5VirtualDevice.hxx>
 
-#include "Qt5Graphics.hxx"
-#include "Qt5Tools.hxx"
+#include <Qt5Graphics.hxx>
+#include <Qt5Tools.hxx>
 
 #include <QtGui/QImage>
 
@@ -29,8 +29,6 @@ Qt5VirtualDevice::Qt5VirtualDevice(DeviceFormat eFormat, double fScale)
     , m_fScale(fScale)
 {
 }
-
-Qt5VirtualDevice::~Qt5VirtualDevice() {}
 
 SalGraphics* Qt5VirtualDevice::AcquireGraphics()
 {
@@ -78,6 +76,7 @@ bool Qt5VirtualDevice::SetSizeUsingBuffer(long nNewDX, long nNewDY, sal_uInt8* p
             m_pImage.reset(new QImage(nNewDX, nNewDY, Qt5_DefaultFormat32));
     }
 
+    m_pImage->fill(Qt::transparent);
     m_pImage->setDevicePixelRatio(m_fScale);
 
     // update device in existing graphics

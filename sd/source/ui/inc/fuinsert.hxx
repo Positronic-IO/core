@@ -21,7 +21,6 @@
 #define INCLUDED_SD_SOURCE_UI_INC_FUINSERT_HXX
 
 #include "fupoor.hxx"
-#include <config_features.h>
 
 namespace sd {
 
@@ -45,7 +44,7 @@ private:
         SfxRequest& rReq,
         bool replaceExistingImage);
 
-    bool mbReplaceExistingImage;
+    bool const mbReplaceExistingImage;
 };
 
 /************************************************************************/

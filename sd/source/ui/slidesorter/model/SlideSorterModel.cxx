@@ -20,6 +20,7 @@
 #include <model/SlideSorterModel.hxx>
 
 #include <SlideSorter.hxx>
+#include <sal/log.hxx>
 #include <model/SlsPageDescriptor.hxx>
 #include <model/SlsPageEnumerationProvider.hxx>
 #include <controller/SlideSorterController.hxx>
@@ -321,7 +322,7 @@ void SlideSorterModel::ClearDescriptorList()
          iDescriptor!=iEnd;
          ++iDescriptor)
     {
-        if (iDescriptor->get() != nullptr)
+        if (*iDescriptor != nullptr)
         {
             if (iDescriptor->use_count() > 1)
             {

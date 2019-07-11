@@ -25,11 +25,8 @@
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleContext.hpp>
 #include <com/sun/star/accessibility/XAccessibleComponent.hpp>
-#include <com/sun/star/accessibility/XAccessibleSelection.hpp>
 #include <com/sun/star/accessibility/XAccessibleEventBroadcaster.hpp>
-#include <com/sun/star/awt/XFocusListener.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/DisposedException.hpp>
 
 class SdPage;
 
@@ -171,7 +168,7 @@ public:
 
 private:
     css::uno::Reference<css::accessibility::XAccessible> mxParent;
-    sal_uInt16 mnPageNumber;
+    sal_uInt16 const mnPageNumber;
     ::sd::slidesorter::SlideSorter& mrSlideSorter;
     sal_uInt32 mnClientId;
 

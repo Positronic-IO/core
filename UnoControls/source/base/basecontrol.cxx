@@ -265,11 +265,11 @@ void SAL_CALL BaseControl::createPeer(  const   Reference< XToolkit >&      xToo
     if ( !m_xPeer.is() )
     {
         // use method "BaseControl::getWindowDescriptor()" to change window attributes!
-        WindowDescriptor* pDescriptor = impl_getWindowDescriptor( xParentPeer );
+        WindowDescriptor aDescriptor = impl_getWindowDescriptor( xParentPeer );
 
         if ( m_bVisible )
         {
-            pDescriptor->WindowAttributes |= WindowAttribute::SHOW;
+            aDescriptor.WindowAttributes |= WindowAttribute::SHOW;
         }
 
         // very slow under remote conditions!
@@ -280,11 +280,8 @@ void SAL_CALL BaseControl::createPeer(  const   Reference< XToolkit >&      xToo
             // but first create well known toolkit, if it not exist
             xLocalToolkit.set( Toolkit::create(m_xComponentContext), UNO_QUERY_THROW );
         }
-        m_xPeer         = xLocalToolkit->createWindow( *pDescriptor );
+        m_xPeer         = xLocalToolkit->createWindow( aDescriptor );
         m_xPeerWindow.set( m_xPeer, UNO_QUERY );
-
-        // don't forget to release the memory!
-        delete pDescriptor;
 
         if ( m_xPeerWindow.is() )
         {
@@ -293,7 +290,7 @@ void SAL_CALL BaseControl::createPeer(  const   Reference< XToolkit >&      xToo
                 m_xMultiplexer->setPeer( m_xPeerWindow );
             }
 
-            // create new referenz to xgraphics for painting on a peer
+            // create new reference to xgraphics for painting on a peer
             // and add a paint listener
             Reference< XDevice > xDevice( m_xPeerWindow, UNO_QUERY );
 
@@ -700,22 +697,22 @@ void SAL_CALL BaseControl::windowHidden( const EventObject& /*aEvent*/ )
 
 //  protected method
 
-WindowDescriptor* BaseControl::impl_getWindowDescriptor( const Reference< XWindowPeer >& xParentPeer )
+WindowDescriptor BaseControl::impl_getWindowDescriptor( const Reference< XWindowPeer >& xParentPeer )
 {
     // - used from "createPeer()" to set the values of an css::awt::WindowDescriptor !!!
     // - if you will change the descriptor-values, you must override this virtual function
     // - the caller must release the memory for this dynamical descriptor !!!
 
-    WindowDescriptor* pDescriptor = new WindowDescriptor;
+    WindowDescriptor aDescriptor;
 
-    pDescriptor->Type               = WindowClass_SIMPLE;
-    pDescriptor->WindowServiceName  = "window";
-    pDescriptor->ParentIndex        = -1;
-    pDescriptor->Parent             = xParentPeer;
-    pDescriptor->Bounds             = getPosSize ();
-    pDescriptor->WindowAttributes   = 0;
+    aDescriptor.Type               = WindowClass_SIMPLE;
+    aDescriptor.WindowServiceName  = "window";
+    aDescriptor.ParentIndex        = -1;
+    aDescriptor.Parent             = xParentPeer;
+    aDescriptor.Bounds             = getPosSize ();
+    aDescriptor.WindowAttributes   = 0;
 
-    return pDescriptor;
+    return aDescriptor;
 }
 
 //  protected method

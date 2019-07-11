@@ -57,7 +57,7 @@ void FuText::StopEditMode()
     if ( pObject->GetLayer() == SC_LAYER_INTERN )
         pView->LockInternalLayer();
 
-    ScViewData& rViewData = pViewShell->GetViewData();
+    ScViewData& rViewData = rViewShell.GetViewData();
     ScDocument& rDoc = *rViewData.GetDocument();
     ScDrawLayer* pDrawLayer = rDoc.GetDrawLayer();
     OSL_ENSURE( pDrawLayer && (pDrawLayer == pDrDoc), "FuText::StopEditMode - missing or different drawing layers" );
@@ -72,7 +72,7 @@ void FuText::StopEditMode()
     }
 
     ScDocShell* pDocShell = rViewData.GetDocShell();
-    ::svl::IUndoManager* pUndoMgr = rDoc.IsUndoEnabled() ? pDocShell->GetUndoManager() : nullptr;
+    SfxUndoManager* pUndoMgr = rDoc.IsUndoEnabled() ? pDocShell->GetUndoManager() : nullptr;
     bool bNewNote = false;
     if( pNote && pUndoMgr )
     {
@@ -83,7 +83,7 @@ void FuText::StopEditMode()
         if(pCalcUndo)
         {
             const OUString aUndoStr = ScResId( STR_UNDO_EDITNOTE );
-            pUndoMgr->EnterListAction( aUndoStr, aUndoStr, 0, pViewShell->GetViewShellId() );
+            pUndoMgr->EnterListAction( aUndoStr, aUndoStr, 0, rViewShell.GetViewShellId() );
 
             /*  Note has been created before editing, if first undo action is
                 an insert action. Needed below to decide whether to drop the
@@ -92,9 +92,9 @@ void FuText::StopEditMode()
 
             // create a "insert note" undo action if needed
             if( bNewNote )
-                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, pNote->GetNoteData(), true, pCalcUndo.release() ) );
+                pUndoMgr->AddUndoAction( o3tl::make_unique<ScUndoReplaceNote>( *pDocShell, aNotePos, pNote->GetNoteData(), true, std::move(pCalcUndo) ) );
             else
-                pUndoMgr->AddUndoAction( pCalcUndo.release() );
+                pUndoMgr->AddUndoAction( std::move(pCalcUndo) );
         }
     }
 
@@ -112,7 +112,7 @@ void FuText::StopEditMode()
     /*SdrEndTextEditKind eResult =*/ pView->SdrEndTextEdit( pNote != nullptr );
 
     // or ScEndTextEdit (with drawview.hxx)
-    pViewShell->SetDrawTextUndo( nullptr );
+    rViewShell.SetDrawTextUndo( nullptr );
 
     vcl::Cursor* pCur = pWindow->GetCursor();
     if( pCur && pCur->IsVisible() )
@@ -143,7 +143,7 @@ void FuText::StopEditMode()
                 // delete note from document (removes caption, but does not delete it)
                 rDoc.ReleaseNote(aNotePos);
                 // create undo action for removed note
-                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, aNotePos, aNoteData, false, pDrawLayer->GetCalcUndo().release() ) );
+                pUndoMgr->AddUndoAction( o3tl::make_unique<ScUndoReplaceNote>( *pDocShell, aNotePos, aNoteData, false, pDrawLayer->GetCalcUndo() ) );
             }
             else
             {

@@ -25,6 +25,8 @@
 #include "impfontmetricdata.hxx"
 #include "salgdiimpl.hxx"
 #include "sallayout.hxx"
+#include <basegfx/matrix/b2dhommatrix.hxx>
+#include "WidgetDrawInterface.hxx"
 
 #include <config_cairo_canvas.h>
 
@@ -111,7 +113,7 @@ public:
     virtual void                SetFillColor( Color nColor ) = 0;
 
     // enable/disable XOR drawing
-    virtual void                SetXORMode( bool bSet ) = 0;
+    virtual void                SetXORMode( bool bSet, bool bInvertOnly ) = 0;
 
     // set line color for raster operations
     virtual void                SetROPLineColor( SalROPColor nROPColor ) = 0;
@@ -123,7 +125,7 @@ public:
     virtual void                SetTextColor( Color nColor ) = 0;
 
     // set the font
-    virtual void                SetFont( const FontSelectPattern*, int nFallbackLevel ) = 0;
+    virtual void                SetFont(LogicalFontInstance*, int nFallbackLevel) = 0;
 
     // release the fonts
     void                        ReleaseFonts() { SetFont( nullptr, 0 ); }
@@ -188,9 +190,6 @@ public:
                                     std::vector< sal_Int32 >& rWidths,
                                     Ucs2UIntMap& rUnicodeEnc ) = 0;
 
-    virtual bool                GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) = 0;
-    virtual bool                GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) = 0;
-
     virtual std::unique_ptr<SalLayout>
                                 GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) = 0;
     virtual void                DrawTextLayout( const GenericSalLayout& ) = 0;
@@ -211,8 +210,9 @@ public:
     void                        mirror( vcl::Region& rRgn, const OutputDevice *pOutDev ) const;
     void                        mirror( ImplControlValue&, const OutputDevice* ) const;
     basegfx::B2DPoint           mirror( const basegfx::B2DPoint& i_rPoint, const OutputDevice *pOutDev ) const;
-    basegfx::B2DPolygon         mirror( const basegfx::B2DPolygon& i_rPoly, const OutputDevice *pOutDev ) const;
     basegfx::B2DPolyPolygon     mirror( const basegfx::B2DPolyPolygon& i_rPoly, const OutputDevice *pOutDev ) const;
+    const basegfx::B2DHomMatrix& getMirror( const OutputDevice *pOutDev ) const;
+    basegfx::B2DHomMatrix       mirror( const basegfx::B2DHomMatrix& i_rMatrix, const OutputDevice *pOutDev ) const;
 
     // non virtual methods; these do possible coordinate mirroring and
     // then delegate to protected virtual methods
@@ -237,17 +237,20 @@ public:
                                     const OutputDevice *pOutDev );
 
     bool                        DrawPolyPolygon(
+                                    const basegfx::B2DHomMatrix& rObjectToDevice,
                                     const basegfx::B2DPolyPolygon &i_rPolyPolygon,
                                     double i_fTransparency,
                                     const OutputDevice *i_pOutDev);
 
     bool                        DrawPolyLine(
+                                    const basegfx::B2DHomMatrix& rObjectToDevice,
                                     const basegfx::B2DPolygon& i_rPolygon,
                                     double i_fTransparency,
                                     const basegfx::B2DVector& i_rLineWidth,
                                     basegfx::B2DLineJoin i_eLineJoin,
                                     css::drawing::LineCap i_eLineCap,
                                     double i_fMiterMinimumAngle,
+                                    bool bPixelSnapHairline,
                                     const OutputDevice* i_pOutDev);
 
     bool                        DrawPolyLineBezier(
@@ -306,7 +309,7 @@ public:
                                     Color nMaskColor,
                                     const OutputDevice *pOutDev );
 
-    SalBitmap*                  GetBitmap(
+    std::shared_ptr<SalBitmap>  GetBitmap(
                                     long nX, long nY,
                                     long nWidth, long nHeight,
                                     const OutputDevice *pOutDev );
@@ -455,15 +458,21 @@ protected:
     virtual void                drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry ) = 0;
 
     virtual void                drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, PCONSTSALPOINT* pPtAry ) = 0;
-    virtual bool                drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) = 0;
+
+    virtual bool                drawPolyPolygon(
+                                    const basegfx::B2DHomMatrix& rObjectToDevice,
+                                    const basegfx::B2DPolyPolygon&,
+                                    double fTransparency) = 0;
 
     virtual bool                drawPolyLine(
+                                    const basegfx::B2DHomMatrix& rObjectToDevice,
                                     const basegfx::B2DPolygon&,
                                     double fTransparency,
                                     const basegfx::B2DVector& rLineWidths,
                                     basegfx::B2DLineJoin,
                                     css::drawing::LineCap,
-                                    double fMiterMinimumAngle) = 0;
+                                    double fMiterMinimumAngle,
+                                    bool bPixelSnapHairline) = 0;
 
     virtual bool                drawPolyLineBezier(
                                     sal_uInt32 nPoints,
@@ -508,7 +517,7 @@ protected:
                                     const SalBitmap& rSalBitmap,
                                     Color nMaskColor ) = 0;
 
-    virtual SalBitmap*          getBitmap( long nX, long nY, long nWidth, long nHeight ) = 0;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) = 0;
 
     virtual Color               getPixel( long nX, long nY ) = 0;
 
@@ -646,10 +655,22 @@ protected:
 private:
     SalLayoutFlags              m_nLayout; //< 0: mirroring off, 1: mirror x-axis
 
+    // for buffering the Mirror-Matrix, see ::getMirror
+    basegfx::B2DHomMatrix       m_aLastMirror;
+    long                        m_aLastMirrorW;
+
 protected:
     /// flags which hold the SetAntialiasing() value from OutputDevice
     bool                        m_bAntiAliasB2DDraw : 1;
 
+    inline long GetDeviceWidth(const OutputDevice* pOutDev) const;
+
+    bool hasWidgetDraw()
+    {
+        return bool(m_pWidgetDraw);
+    }
+
+    std::unique_ptr<vcl::WidgetDrawInterface> m_pWidgetDraw;
 };
 
 #endif // INCLUDED_VCL_INC_SALGDI_HXX

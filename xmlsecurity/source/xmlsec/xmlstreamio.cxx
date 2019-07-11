@@ -22,30 +22,27 @@
  * Implementation of the I/O interfaces based on stream and URI binding
  */
 #include <xmlsec/xmlstreamio.hxx>
+#include <xmlsec/errorcallback.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/uri.hxx>
+#include <comphelper/scopeguard.hxx>
 
 #include <libxml/uri.h>
 #include <xmlsec-wrapper.h>
 
-#define XMLSTREAMIO_INITIALIZED 0x01
-#define XMLSTREAMIO_REGISTERED  0x02
-
-/* Global variables */
-/*-
- * Enable stream I/O or not.
- */
-static char enableXmlStreamIO = 0x00 ;
+static bool g_bInputCallbacksEnabled = false;
+static bool g_bInputCallbacksRegistered = false;
 
 static css::uno::Reference< css::xml::crypto::XUriBinding > m_xUriBinding ;
 
-extern "C"
-int xmlStreamMatch( const char* uri )
+extern "C" {
+
+static int xmlStreamMatch( const char* uri )
 {
     css::uno::Reference< css::io::XInputStream > xInputStream ;
 
-    if( ( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) &&
-        ( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) ) {
+    if (g_bInputCallbacksEnabled && g_bInputCallbacksRegistered)
+    {
         if( uri == nullptr || !m_xUriBinding.is() )
             return 0 ;
         //XMLSec first unescapes the uri and  calls this function. For example, we pass the Uri
@@ -71,13 +68,12 @@ int xmlStreamMatch( const char* uri )
         return 0 ;
 }
 
-extern "C"
-void* xmlStreamOpen( const char* uri )
+static void* xmlStreamOpen( const char* uri )
 {
     css::uno::Reference< css::io::XInputStream > xInputStream ;
 
-    if( ( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) &&
-        ( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) ) {
+    if (g_bInputCallbacksEnabled && g_bInputCallbacksRegistered)
+    {
         if( uri == nullptr || !m_xUriBinding.is() )
             return nullptr ;
 
@@ -105,16 +101,15 @@ void* xmlStreamOpen( const char* uri )
     return nullptr ;
 }
 
-extern "C"
-int xmlStreamRead( void* context, char* buffer, int len )
+static int xmlStreamRead( void* context, char* buffer, int len )
 {
     int numbers ;
     css::uno::Reference< css::io::XInputStream > xInputStream ;
     css::uno::Sequence< sal_Int8 > outSeqs( len ) ;
 
     numbers = 0 ;
-    if( ( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) &&
-        ( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) ) {
+    if (g_bInputCallbacksEnabled && g_bInputCallbacksRegistered)
+    {
         if( context != nullptr ) {
             xInputStream = static_cast<css::io::XInputStream*>(context);
             if( !xInputStream.is() )
@@ -130,11 +125,10 @@ int xmlStreamRead( void* context, char* buffer, int len )
     return numbers ;
 }
 
-extern "C"
-int xmlStreamClose( void * context )
+static int xmlStreamClose( void * context )
 {
-    if( ( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) &&
-        ( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) ) {
+    if (g_bInputCallbacksEnabled && g_bInputCallbacksRegistered)
+    {
         if( context != nullptr ) {
             css::io::XInputStream* pInputStream ;
             pInputStream = static_cast<css::io::XInputStream*>(context);
@@ -145,10 +139,12 @@ int xmlStreamClose( void * context )
     return 0 ;
 }
 
+}
+
 XSECXMLSEC_DLLPUBLIC int xmlEnableStreamInputCallbacks()
 {
-
-    if( !( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) ) {
+    if (!g_bInputCallbacksEnabled)
+    {
         //Register the callbacks into xmlSec
         //In order to make the xmlsec io finding the callbacks firstly,
         //I put the callbacks at the very beginning.
@@ -157,24 +153,51 @@ XSECXMLSEC_DLLPUBLIC int xmlEnableStreamInputCallbacks()
         //Notes: all none default callbacks will lose.
         xmlSecIOCleanupCallbacks() ;
 
-        //Register my classbacks.
-        int cbs = xmlSecIORegisterCallbacks(
-                    xmlStreamMatch,
-                    xmlStreamOpen,
-                    xmlStreamRead,
-                    xmlStreamClose ) ;
-        if( cbs < 0 ) {
-            return -1 ;
+        // Make sure that errors are reported via SAL_WARN().
+        setErrorRecorder();
+        comphelper::ScopeGuard g([] { clearErrorRecorder(); });
+
+        // Newer xmlsec wants the callback order in the opposite direction.
+        if (xmlSecCheckVersionExt(1, 2, 26, xmlSecCheckVersionABICompatible))
+        {
+            //Register the default callbacks.
+            //Notes: the error will cause xmlsec working problems.
+            int cbs = xmlSecIORegisterDefaultCallbacks() ;
+            if( cbs < 0 ) {
+                return -1 ;
+            }
+
+            //Register my classbacks.
+            cbs = xmlSecIORegisterCallbacks(
+                        xmlStreamMatch,
+                        xmlStreamOpen,
+                        xmlStreamRead,
+                        xmlStreamClose ) ;
+            if( cbs < 0 ) {
+                return -1 ;
+            }
+        }
+        else
+        {
+            //Register my classbacks.
+            int cbs = xmlSecIORegisterCallbacks(
+                        xmlStreamMatch,
+                        xmlStreamOpen,
+                        xmlStreamRead,
+                        xmlStreamClose ) ;
+            if( cbs < 0 ) {
+                return -1 ;
+            }
+
+            //Register the default callbacks.
+            //Notes: the error will cause xmlsec working problems.
+            cbs = xmlSecIORegisterDefaultCallbacks() ;
+            if( cbs < 0 ) {
+                return -1 ;
+            }
         }
 
-        //Register the default callbacks.
-        //Notes: the error will cause xmlsec working problems.
-        cbs = xmlSecIORegisterDefaultCallbacks() ;
-        if( cbs < 0 ) {
-            return -1 ;
-        }
-
-        enableXmlStreamIO |= XMLSTREAMIO_INITIALIZED ;
+        g_bInputCallbacksEnabled = true;
     }
 
     return 0 ;
@@ -183,14 +206,14 @@ XSECXMLSEC_DLLPUBLIC int xmlEnableStreamInputCallbacks()
 XSECXMLSEC_DLLPUBLIC int xmlRegisterStreamInputCallbacks(
     css::uno::Reference< css::xml::crypto::XUriBinding > const & aUriBinding
 ) {
-    if( !( enableXmlStreamIO & XMLSTREAMIO_INITIALIZED ) ) {
+    if (!g_bInputCallbacksEnabled)
+    {
         if( xmlEnableStreamInputCallbacks() < 0 )
             return -1 ;
     }
 
-    if( !( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) ) {
-        enableXmlStreamIO |= XMLSTREAMIO_REGISTERED ;
-    }
+    if (!g_bInputCallbacksRegistered)
+        g_bInputCallbacksRegistered = true;
 
     m_xUriBinding = aUriBinding ;
 
@@ -199,12 +222,13 @@ XSECXMLSEC_DLLPUBLIC int xmlRegisterStreamInputCallbacks(
 
 XSECXMLSEC_DLLPUBLIC int xmlUnregisterStreamInputCallbacks()
 {
-    if( enableXmlStreamIO & XMLSTREAMIO_REGISTERED ) {
+    if (g_bInputCallbacksRegistered)
+    {
         //Clear the uri-stream binding
         m_xUriBinding.clear() ;
 
         //disable the registered flag
-        enableXmlStreamIO &= ~XMLSTREAMIO_REGISTERED ;
+        g_bInputCallbacksRegistered = false;
     }
 
     return 0 ;
@@ -212,7 +236,7 @@ XSECXMLSEC_DLLPUBLIC int xmlUnregisterStreamInputCallbacks()
 
 XSECXMLSEC_DLLPUBLIC void xmlDisableStreamInputCallbacks() {
     xmlUnregisterStreamInputCallbacks() ;
-    enableXmlStreamIO &= ~XMLSTREAMIO_INITIALIZED ;
+    g_bInputCallbacksEnabled = false;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

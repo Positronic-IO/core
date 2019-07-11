@@ -19,7 +19,7 @@
 #ifndef INCLUDED_SW_INC_SWTABLE_HXX
 #define INCLUDED_SW_INC_SWTABLE_HXX
 
-#include <tools/mempool.hxx>
+#include <tools/solar.h>
 #include <tools/ref.hxx>
 #include "tblenum.hxx"
 #include "swtypes.hxx"
@@ -217,7 +217,7 @@ public:
     // SwSavRowSpan is the structure needed by Undo to undo the split operation
     // CleanUpRowSpan corrects the (top of the) second table and delivers the structure
     // for Undo
-    SwSaveRowSpan* CleanUpTopRowSpan( sal_uInt16 nSplitLine );
+    std::unique_ptr<SwSaveRowSpan> CleanUpTopRowSpan( sal_uInt16 nSplitLine );
     // RestoreRowSpan is called by Undo to restore the old row span values
     void RestoreRowSpan( const SwSaveRowSpan& );
     // CleanUpBottomRowSpan corrects the overhanging row spans at the end of the first table
@@ -284,7 +284,7 @@ public:
                     SwUndoTableCpyTable* pUndo );
     bool InsNewTable( const SwTable& rCpyTable, const SwSelBoxes&,
                       SwUndoTableCpyTable* pUndo );
-    // Copy headline of table (with content!) into an other one.
+    // Copy headline of table (with content!) into another one.
     void CopyHeadlineIntoTable( SwTableNode& rTableNd );
 
     // Get box, whose start index is set on nBoxStt.
@@ -329,9 +329,9 @@ public:
     void SetTableChgMode( TableChgMode eMode )  { m_eTableChgMode = eMode; }
 
     bool SetColWidth( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
-                        SwTwips nAbsDiff, SwTwips nRelDiff, SwUndo** ppUndo );
+                        SwTwips nAbsDiff, SwTwips nRelDiff, std::unique_ptr<SwUndo>* ppUndo );
     bool SetRowHeight( SwTableBox& rCurrentBox, TableChgWidthHeightType eType,
-                        SwTwips nAbsDiff, SwTwips nRelDiff, SwUndo** ppUndo );
+                        SwTwips nAbsDiff, SwTwips nRelDiff, std::unique_ptr<SwUndo>* ppUndo );
     void RegisterToFormat( SwFormat& rFormat );
 #ifdef DBG_UTIL
     void CheckConsistency() const;
@@ -470,8 +470,6 @@ public:
 
     // Loading of a document requires an actualization of cells with values
     void ActualiseValueBox();
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwTableBox)
 
     // Access on internal data - currently used for the NumFormatter.
     inline const Color* GetSaveUserColor()  const;

@@ -31,6 +31,7 @@
 #include <docary.hxx>
 #include <swmodule.hxx>
 #include "fldvar.hxx"
+#include "flddinf.hxx"
 #include <calc.hxx>
 #include <svl/zformat.hxx>
 #include <globals.hrc>
@@ -46,6 +47,7 @@ SwFieldVarPage::SwFieldVarPage(vcl::Window* pParent, const SfxItemSet *const pCo
     , bInit(true)
 {
     get(m_pTypeLB, "type");
+    FillFieldSelect(*m_pTypeLB);
     get(m_pSelection, "selectframe");
     get(m_pSelectionLB, "select");
     m_pSelectionLB->SetStyle(m_pSelectionLB->GetStyle() | WB_SORT);
@@ -57,6 +59,7 @@ SwFieldVarPage::SwFieldVarPage(vcl::Window* pParent, const SfxItemSet *const pCo
     get(m_pValueED, "value");
     get(m_pNumFormatLB, "numformat");
     get(m_pFormatLB, "format");
+    FillFieldSelect(*m_pFormatLB);
     get(m_pChapterLevelLB, "level");
     get(m_pInvisibleCB, "invisible");
     get(m_pSeparatorFT, "separatorft");
@@ -531,7 +534,7 @@ void SwFieldVarPage::SubTypeHdl(ListBox const * pBox)
                 if (IsFieldEdit() || pBox)    // only when interacting via mouse
                     m_pNameED->SetText(OUString());
 
-                if (nSelPos != 0 && nSelPos != LISTBOX_ENTRY_NOTFOUND)
+                if (nSelData != 0 && nSelData != SIZE_MAX)
                 {
                     bValue = true;      // SubType OFF - knows no Offset
                     if (GetCurField() && IsFieldEdit())
@@ -797,7 +800,7 @@ void SwFieldVarPage::FillFormatLB(sal_uInt16 nTypeId)
     {
         if (!nOldNumFormat && (nNumFormatSel = m_pNumFormatLB->GetEntryPos(sOldNumSel)) != LISTBOX_ENTRY_NOTFOUND)
             m_pNumFormatLB->SelectEntryPos(nNumFormatSel);
-        else if (nOldNumFormat && nOldNumFormat == NUMBERFORMAT_ENTRY_NOT_FOUND)
+        else if (nOldNumFormat == NUMBERFORMAT_ENTRY_NOT_FOUND)
             m_pNumFormatLB->SelectEntry(sOldSel);
     }
 

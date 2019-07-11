@@ -24,14 +24,17 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <o3tl/any.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
 #include <sal/macros.h>
 #include <string.h>
 #include <unotools/resmgr.hxx>
+#include <unotools/charclass.hxx>
 #include <algorithm>
 #include <cmath>
+#include <float.h>
 
 #define ADDIN_SERVICE               "com.sun.star.sheet.AddIn"
 #define MY_SERVICE                  "com.sun.star.sheet.addin.Analysis"
@@ -80,10 +83,6 @@ void AnalysisAddIn::InitData()
 }
 
 AnalysisAddIn::AnalysisAddIn( const uno::Reference< uno::XComponentContext >& xContext ) :
-    pDefLocales( nullptr ),
-    pFD( nullptr ),
-    pFactDoubles( nullptr ),
-    pCDL( nullptr ),
     aAnyConv( xContext )
 {
 }

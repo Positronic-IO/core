@@ -36,17 +36,18 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b3dpolygontools.hxx>
 #include <basegfx/polygon/b3dpolypolygontools.hxx>
+#include <o3tl/make_unique.hxx>
 
 
 // DrawContact section
-sdr::contact::ViewContact* E3dExtrudeObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> E3dExtrudeObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfE3dExtrude(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfE3dExtrude>(*this);
 }
 
-sdr::properties::BaseProperties* E3dExtrudeObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> E3dExtrudeObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::E3dExtrudeProperties(*this);
+    return o3tl::make_unique<sdr::properties::E3dExtrudeProperties>(*this);
 }
 
 // Constructor creates a two cover surface tools::PolyPolygon and (point-count 1) side
@@ -158,7 +159,7 @@ bool E3dExtrudeObj::IsBreakObjPossible()
     return true;
 }
 
-SdrAttrObj* E3dExtrudeObj::GetBreakObj()
+std::unique_ptr<SdrAttrObj,SdrObjectFreeOp> E3dExtrudeObj::GetBreakObj()
 {
     basegfx::B3DPolyPolygon aFrontSide;
     basegfx::B3DPolyPolygon aBackSide;
@@ -209,13 +210,13 @@ SdrAttrObj* E3dExtrudeObj::GetBreakObj()
     {
     // create PathObj
         basegfx::B2DPolyPolygon aPoly = TransformToScreenCoor(aBackSide);
-        SdrPathObj* pPathObj = new SdrPathObj(getSdrModelFromSdrObject(), OBJ_PLIN, aPoly);
+        std::unique_ptr<SdrPathObj,SdrObjectFreeOp> pPathObj(new SdrPathObj(getSdrModelFromSdrObject(), OBJ_PLIN, aPoly));
 
         SfxItemSet aSet(GetObjectItemSet());
         aSet.Put(XLineStyleItem(css::drawing::LineStyle_SOLID));
         pPathObj->SetMergedItemSet(aSet);
 
-        return pPathObj;
+        return std::unique_ptr<SdrAttrObj,SdrObjectFreeOp>(pPathObj.release());
     }
 
     return nullptr;

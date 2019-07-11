@@ -21,6 +21,7 @@
 
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <tools/debug.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -169,6 +170,13 @@ void XMLTextMarkImportContext::StartElement(
             m_sBookmarkName = "Unknown";
         }
         m_rHelper.pushFieldCtx( m_sBookmarkName, m_sFieldName );
+    }
+
+    if (IsXMLToken(GetLocalName(), XML_BOOKMARK_START))
+    {
+        const OUString sHidden    = xAttrList->getValueByName("loext:hidden");
+        const OUString sCondition = xAttrList->getValueByName("loext:condition");
+        m_rHelper.setBookmarkAttributes(m_sBookmarkName, sHidden == "true", sCondition);
     }
 }
 
@@ -345,6 +353,12 @@ void XMLTextMarkImportContext::EndElement()
                                         xMeta(xContent, UNO_QUERY);
                                     GetImport().GetRDFaImportHelper().AddRDFa(
                                         xMeta, xRDFaAttributes);
+                                }
+                                const Reference<XPropertySet> xPropertySet(xContent, UNO_QUERY);
+                                if (xPropertySet.is())
+                                {
+                                    xPropertySet->setPropertyValue("BookmarkHidden",    uno::Any(m_rHelper.getBookmarkHidden(m_sBookmarkName)));
+                                    xPropertySet->setPropertyValue("BookmarkCondition", uno::Any(m_rHelper.getBookmarkCondition(m_sBookmarkName)));
                                 }
                             }
 

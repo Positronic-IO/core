@@ -19,7 +19,6 @@
 
 #include <rangelst.hxx>
 
-#include <comphelper/string.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/weld.hxx>
@@ -283,7 +282,6 @@ void ScPrintAreasDlg::Impl_Reset()
     // printing area
 
     aStrRange.clear();
-    OUString aOne;
     const formula::FormulaGrammar::AddressConvention eConv = pDoc->GetAddressConvention();
     const sal_Unicode sep = ScCompiler::GetNativeSymbolChar(ocSep);
     sal_uInt16 nRangeCount = pDoc->GetPrintRangeCount( nCurTab );
@@ -294,8 +292,7 @@ void ScPrintAreasDlg::Impl_Reset()
         {
             if ( !aStrRange.isEmpty() )
                 aStrRange += OUStringLiteral1(sep);
-            aOne = pPrintRange->Format(ScRefFlags::RANGE_ABS, pDoc, eConv);
-            aStrRange += aOne;
+            aStrRange += pPrintRange->Format(ScRefFlags::RANGE_ABS, pDoc, eConv);
         }
     }
     pEdPrintArea->SetText( aStrRange );
@@ -356,16 +353,18 @@ bool ScPrintAreasDlg::Impl_CheckRefStrings()
 
         ScAddress aAddr;
         ScRange aRange;
-        sal_Int32 nSepCount = comphelper::string::getTokenCount(aStrPrintArea, sep);
-        for ( sal_Int32 i = 0; i < nSepCount && bPrintAreaOk; ++i )
+        for ( sal_Int32 nIdx = 0; nIdx >= 0; )
         {
-            OUString aOne = aStrPrintArea.getToken(i, sep);
+            const OUString aOne = aStrPrintArea.getToken(0, sep, nIdx);
             ScRefFlags nResult = aRange.Parse( aOne, pDoc, eConv );
             if ((nResult & nValidRange) != nValidRange)
             {
                 ScRefFlags nAddrResult = aAddr.Parse( aOne, pDoc, eConv );
                 if ((nAddrResult & nValidAddr) != nValidAddr)
+                {
                     bPrintAreaOk = false;
+                    break;
+                }
             }
         }
     }

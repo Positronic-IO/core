@@ -22,68 +22,56 @@
 #define INCLUDED_SVX_FONTWORKGALLERY_HXX
 
 #include <svx/svxdllapi.h>
-
-#include <vcl/fixed.hxx>
-#include <vcl/button.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/field.hxx>
-
 #include <svtools/valueset.hxx>
-
 #include <sfx2/tbxctrl.hxx>
-
+#include <vcl/weld.hxx>
 #include <vector>
 
 class FmFormModel;
 class SdrView;
-namespace vcl { class Window; }
 class SdrTextObj;
 class SdrObject;
 class SdrModel;
-
 class SfxBindings;
-
 
 namespace svx
 {
 
-class SAL_WARN_UNUSED FontworkCharacterSpacingDialog : public ModalDialog
+class SAL_WARN_UNUSED FontworkCharacterSpacingDialog : public weld::GenericDialogController
 {
-    VclPtr<MetricField> m_pMtrScale;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrScale;
 
 public:
-    FontworkCharacterSpacingDialog( vcl::Window* pParent, sal_Int32 nScale );
+    FontworkCharacterSpacingDialog(weld::Window* pParent, sal_Int32 nScale);
     virtual ~FontworkCharacterSpacingDialog() override;
-    virtual void dispose() override;
 
     sal_Int32 getScale() const;
 };
 
-class SAL_WARN_UNUSED SVX_DLLPUBLIC FontWorkGalleryDialog : public ModalDialog
+class SAL_WARN_UNUSED SVX_DLLPUBLIC FontWorkGalleryDialog : public weld::GenericDialogController
 {
-    VclPtr<ValueSet>    mpCtlFavorites;
-    VclPtr<OKButton>    mpOKButton;
-
     sal_uInt16          mnThemeId;
-
     SdrView*            mpSdrView;
-
-    DECL_LINK( DoubleClickFavoriteHdl, ValueSet*, void );
-    DECL_LINK( ClickOKHdl, Button*, void );
 
     SdrObject**         mppSdrObject;
     SdrModel*           mpDestModel;
+
+    std::vector<BitmapEx> maFavoritesHorizontal;
+
+    SvtValueSet maCtlFavorites;
+    std::unique_ptr<weld::CustomWeld> mxCtlFavorites;
+    std::unique_ptr<weld::Button> mxOKButton;
 
     void            initFavorites(sal_uInt16 nThemeId);
     void            insertSelectedFontwork();
     void            fillFavorites(sal_uInt16 nThemeId);
 
-    std::vector< BitmapEx> maFavoritesHorizontal;
+    DECL_LINK(DoubleClickFavoriteHdl, SvtValueSet*, void);
+    DECL_LINK(ClickOKHdl, weld::Button&, void );
 
 public:
-    FontWorkGalleryDialog( SdrView* pView, vcl::Window* pParent );
+    FontWorkGalleryDialog(weld::Window* pParent, SdrView* pView);
     virtual ~FontWorkGalleryDialog() override;
-    virtual void dispose() override;
 
     // SJ: if the SdrObject** is set, the SdrObject is not inserted into the page when executing the dialog
     void SetSdrObjectRef( SdrObject**, SdrModel* pModel );

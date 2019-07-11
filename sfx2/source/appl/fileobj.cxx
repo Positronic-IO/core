@@ -21,6 +21,7 @@
 #include <tools/urlobj.hxx>
 #include <tools/stream.hxx>
 #include <sot/formats.hxx>
+#include <sal/log.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <sfx2/lnkbase.hxx>
 #include <sfx2/app.hxx>
@@ -33,7 +34,6 @@
 #include <sfx2/docfac.hxx>
 #include <com/sun/star/document/XTypeDetection.hpp>
 #include <unotools/mediadescriptor.hxx>
-#include <comphelper/fileformat.h>
 #include <comphelper/processfactory.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/opengrf.hxx>
@@ -54,7 +54,6 @@ SvFileObject::SvFileObject()
     , bSynchron(false)
     , bLoadError(false)
     , bWaitForData(false)
-    , bInNewData(false)
     , bDataReady(false)
     , bClearMedium(false)
     , bStateChangeCalled(false)
@@ -169,7 +168,7 @@ bool SvFileObject::LoadFile_Impl()
 
     if( !bSynchron )
     {
-        bLoadAgain = bDataReady = bInNewData = false;
+        bLoadAgain = bDataReady = false;
         bWaitForData = true;
 
         tools::SvRef<SfxMedium> xTmpMed = xMed;
@@ -182,7 +181,7 @@ bool SvFileObject::LoadFile_Impl()
     }
 
     bWaitForData = true;
-    bDataReady = bInNewData = false;
+    bDataReady = false;
     xMed->Download();
     bLoadAgain = !xMed->IsRemote();
     bWaitForData = false;
@@ -201,7 +200,7 @@ bool SvFileObject::LoadFile_Impl()
         If the URL doesn't denote a valid (existent and accessible) file, the
         request is silently dropped.
 */
-OUString impl_getFilter( const OUString& _rURL )
+static OUString impl_getFilter( const OUString& _rURL )
 {
     OUString sFilter;
     if ( _rURL.isEmpty() )
@@ -326,7 +325,7 @@ IMPL_LINK_NOARG( SvFileObject, LoadGrfReady_Impl, void*, void )
     bLoadError = false;
     bWaitForData = false;
 
-    if( !bInNewData && !bDataReady )
+    if( !bDataReady )
     {
         // Graphic is finished, also send DataChanged from Status change
         bDataReady = true;

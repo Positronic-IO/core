@@ -37,7 +37,7 @@ class PopupWindowControllerImpl
 {
 public:
     PopupWindowControllerImpl();
-    ~PopupWindowControllerImpl();
+    ~PopupWindowControllerImpl() COVERITY_NOEXCEPT_FALSE;
 
     void SetPopupWindow( vcl::Window* pPopupWindow, ToolBox* pToolBox );
     void SetFloatingWindow();
@@ -52,7 +52,7 @@ PopupWindowControllerImpl::PopupWindowControllerImpl()
 {
 }
 
-PopupWindowControllerImpl::~PopupWindowControllerImpl()
+PopupWindowControllerImpl::~PopupWindowControllerImpl() COVERITY_NOEXCEPT_FALSE
 {
     SetPopupWindow(nullptr,nullptr);
     SetFloatingWindow();
@@ -79,6 +79,9 @@ void PopupWindowControllerImpl::SetFloatingWindow()
     if( mpFloatingWindow )
     {
         mpFloatingWindow->RemoveEventListener( LINK( this, PopupWindowControllerImpl, WindowEventListener ) );
+        // tdf#119390 reparent the window, so focus is restored
+        // to the last focused control of the application window.
+        mpFloatingWindow->SetParentToDefaultWindow();
         mpFloatingWindow.disposeAndClear();
     }
     mpFloatingWindow = mpPopupWindow;

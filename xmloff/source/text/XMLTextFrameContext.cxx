@@ -19,6 +19,7 @@
 
 #include <o3tl/make_unique.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <comphelper/base64.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
@@ -54,6 +55,7 @@
 #include <xmloff/attrlist.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+#include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/numeric/ftools.hxx>
@@ -83,10 +85,10 @@ typedef ::std::map < const OUString, OUString > ParamMap;
 
 class XMLTextFrameContextHyperlink_Impl
 {
-    OUString sHRef;
-    OUString sName;
-    OUString sTargetFrameName;
-    bool bMap;
+    OUString const sHRef;
+    OUString const sName;
+    OUString const sTargetFrameName;
+    bool const bMap;
 
 public:
 
@@ -173,7 +175,7 @@ XMLTextFrameParam_Impl::XMLTextFrameParam_Impl(
         sal_uInt16 nPrefix = GetImport().GetNamespaceMap().GetKeyByAttrName( rAttrName, &aLocalName );
         if ( XML_NAMESPACE_DRAW == nPrefix )
         {
-               if( IsXMLToken(aLocalName, XML_VALUE) )
+            if( IsXMLToken(aLocalName, XML_VALUE) )
             {
                 sValue = rValue;
                 bFoundValue=true;
@@ -339,8 +341,6 @@ class XMLTextFrameContext_Impl : public SvXMLImportContext
     OUString sHRef;
     OUString sFilterName;
     OUString sCode;
-    OUString sObject;
-    OUString sArchive;
     OUString sMimeType;
     OUString sFrameName;
     OUString sAppletName;
@@ -360,7 +360,7 @@ class XMLTextFrameContext_Impl : public SvXMLImportContext
     sal_Int16   nRelWidth;
     sal_Int16   nRelHeight;
 
-    sal_uInt16 nType;
+    sal_uInt16 const nType;
     css::text::TextContentAnchorType   eAnchorType;
 
     bool    bMayScript : 1;
@@ -548,8 +548,7 @@ void XMLTextFrameContext_Impl::Create()
             sal_Int32 i = 0;
             while( xTextImportHelper->HasFrameByName( sName ) )
             {
-                sName = sOldName;
-                sName += OUString::number( ++i );
+                sName = sOldName + OUString::number( ++i );
             }
             xNamed->setName( sName );
             if( sName != sOldName )
@@ -1069,10 +1068,8 @@ XMLTextFrameContext_Impl::XMLTextFrameContext_Impl(
             sCode = rValue;
             break;
         case XML_TOK_TEXT_FRAME_OBJECT:
-            sObject = rValue;
             break;
         case XML_TOK_TEXT_FRAME_ARCHIVE:
-            sArchive = rValue;
             break;
         case XML_TOK_TEXT_FRAME_MAY_SCRIPT:
             bMayScript = IsXMLToken( rValue, XML_TRUE );
@@ -1335,11 +1332,8 @@ bool XMLTextFrameContext::CreateIfNotThere( css::uno::Reference < css::beans::XP
 {
     SvXMLImportContext *pContext = m_xImplContext.get();
     XMLTextFrameContext_Impl *pImpl = dynamic_cast< XMLTextFrameContext_Impl*>( pContext );
-    if( pImpl )
-    {
-        if( pImpl->CreateIfNotThere() )
-            rPropSet = pImpl->GetPropSet();
-    }
+    if( pImpl && pImpl->CreateIfNotThere() )
+        rPropSet = pImpl->GetPropSet();
 
     return rPropSet.is();
 }

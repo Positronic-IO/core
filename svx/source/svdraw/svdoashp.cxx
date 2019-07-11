@@ -30,6 +30,7 @@
 #include <com/sun/star/drawing/PolyPolygonBezierCoords.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/awt/Rectangle.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/processfactory.hxx>
 #include <svl/urihelper.hxx>
 #include <com/sun/star/uno/Sequence.h>
@@ -81,8 +82,8 @@
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
-#include <basegfx/utils/unotools.hxx>
 #include <svdobjplusdata.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -204,7 +205,7 @@ static bool ImpVerticalSwitch( const SdrObjCustomShape& rCustoShape )
 
 // #i37011# create a clone with all attributes changed to shadow attributes
 // and translation executed, too.
-SdrObject* ImpCreateShadowObjectClone(const SdrObject& rOriginal, const SfxItemSet& rOriginalSet)
+static SdrObject* ImpCreateShadowObjectClone(const SdrObject& rOriginal, const SfxItemSet& rOriginalSet)
 {
     SdrObject* pRetval = nullptr;
     const bool bShadow(rOriginalSet.Get(SDRATTR_SHADOW).GetValue());
@@ -562,7 +563,7 @@ basegfx::B2DPolyPolygon SdrObjCustomShape::GetLineGeometry( const bool bBezierAl
         css::drawing::PolyPolygonBezierCoords aBezierCoords = xCustomShapeEngine->getLineGeometry();
         try
         {
-            aRetval = basegfx::unotools::polyPolygonBezierToB2DPolyPolygon( aBezierCoords );
+            aRetval = basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon( aBezierCoords );
             if ( !bBezierAllowed && aRetval.areControlPointsUsed())
             {
                 aRetval = basegfx::utils::adaptiveSubdivideByAngle(aRetval);
@@ -804,9 +805,9 @@ static void lcl_ShapePropertiesFromDFF( const SvxMSDffHandle* pData, css::beans:
     }
 }
 
-sdr::properties::BaseProperties* SdrObjCustomShape::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrObjCustomShape::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::CustomShapeProperties(*this);
+    return o3tl::make_unique<sdr::properties::CustomShapeProperties>(*this);
 }
 
 SdrObjCustomShape::SdrObjCustomShape(SdrModel& rSdrModel)
@@ -1727,7 +1728,7 @@ void SdrObjCustomShape::ImpCheckCustomGluePointsAreAdded()
                     sal_Int32 nXDiff = aBoundRect.Left() - maRect.Left();
                     sal_Int32 nYDiff = aBoundRect.Top() - maRect.Top();
 
-                    if (nShearAngle&&((bMirroredX&&!bMirroredY)||(bMirroredY&&!bMirroredX)))
+                    if (nShearAngle && bMirroredX != bMirroredY)
                     {
                         nShearAngle = -nShearAngle;
                         fTan = -fTan;
@@ -1741,7 +1742,8 @@ void SdrObjCustomShape::ImpCheckCustomGluePointsAreAdded()
                         if ( nShearAngle )
                             ShearPoint( aGlue, aRef, fTan );
 
-                        RotatePoint( aGlue, aRef, sin( fObjectRotation * F_PI180 ), cos( fObjectRotation * F_PI180 ) );
+                        RotatePoint(aGlue, aRef, sin(basegfx::deg2rad(fObjectRotation)),
+                                    cos(basegfx::deg2rad(fObjectRotation)));
                         if ( bMirroredX )
                             aGlue.setX( maRect.GetWidth() - aGlue.X() );
                         if ( bMirroredY )
@@ -1800,42 +1802,33 @@ SdrGluePointList* SdrObjCustomShape::ForceGluePointList()
 sal_uInt32 SdrObjCustomShape::GetHdlCount() const
 {
     const sal_uInt32 nBasicHdlCount(SdrTextObj::GetHdlCount());
-    std::vector< SdrCustomShapeInteraction > aInteractionHandles( GetInteractionHandles() );
-    return ( aInteractionHandles.size() + nBasicHdlCount );
+    return ( GetInteractionHandles().size() + nBasicHdlCount );
 }
 
-SdrHdl* SdrObjCustomShape::GetHdl( sal_uInt32 nHdlNum ) const
+void SdrObjCustomShape::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    SdrHdl* pH = nullptr;
-    const sal_uInt32 nBasicHdlCount(SdrTextObj::GetHdlCount());
+    SdrTextObj::AddToHdlList(rHdlList);
 
-    if ( nHdlNum < nBasicHdlCount )
-        pH = SdrTextObj::GetHdl( nHdlNum );
-    else
+    int nCustomShapeHdlNum = 0;
+    for (SdrCustomShapeInteraction const & rInteraction : GetInteractionHandles())
     {
-        std::vector< SdrCustomShapeInteraction > aInteractionHandles( GetInteractionHandles() );
-        const sal_uInt32 nCustomShapeHdlNum(nHdlNum - nBasicHdlCount);
-
-        if ( nCustomShapeHdlNum < aInteractionHandles.size() )
+        if ( rInteraction.xInteraction.is() )
         {
-            if ( aInteractionHandles[ nCustomShapeHdlNum ].xInteraction.is() )
+            try
             {
-                try
-                {
-                    css::awt::Point aPosition( aInteractionHandles[ nCustomShapeHdlNum ].xInteraction->getPosition() );
-                    pH = new SdrHdl( Point( aPosition.X, aPosition.Y ), SdrHdlKind::CustomShape1 );
-                    pH->SetPointNum( nCustomShapeHdlNum );
-                    pH->SetObj( const_cast<SdrObjCustomShape*>(this) );
-                }
-                catch ( const uno::RuntimeException& )
-                {
-                }
+                css::awt::Point aPosition( rInteraction.xInteraction->getPosition() );
+                std::unique_ptr<SdrHdl> pH(new SdrHdl( Point( aPosition.X, aPosition.Y ), SdrHdlKind::CustomShape1 ));
+                pH->SetPointNum( nCustomShapeHdlNum );
+                pH->SetObj( const_cast<SdrObjCustomShape*>(this) );
+                rHdlList.AddHdl(std::move(pH));
+            }
+            catch ( const uno::RuntimeException& )
+            {
             }
         }
+        ++nCustomShapeHdlNum;
     }
-    return pH;
 }
-
 
 bool SdrObjCustomShape::hasSpecialDrag() const
 {
@@ -2634,7 +2627,7 @@ void SdrObjCustomShape::TakeTextRect( SdrOutliner& rOutliner, tools::Rectangle& 
     // put text into the Outliner - if necessary the use the text from the EditOutliner
     OutlinerParaObject* pPara= GetOutlinerParaObject();
     if (pEdtOutl && !bNoEditText)
-        pPara=pEdtOutl->CreateParaObject();
+        pPara=pEdtOutl->CreateParaObject().release();
 
     if (pPara)
     {
@@ -2728,9 +2721,9 @@ void SdrObjCustomShape::TakeTextRect( SdrOutliner& rOutliner, tools::Rectangle& 
     rTextRect=tools::Rectangle(aTextPos,aTextSiz);
 }
 
-void SdrObjCustomShape::NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject)
+void SdrObjCustomShape::NbcSetOutlinerParaObject(std::unique_ptr<OutlinerParaObject> pTextObject)
 {
-    SdrTextObj::NbcSetOutlinerParaObject( pTextObject );
+    SdrTextObj::NbcSetOutlinerParaObject( std::move(pTextObject) );
     SetBoundRectDirty();
     SetRectsDirty(true);
     InvalidateRenderGeometry();
@@ -2836,11 +2829,12 @@ void SdrObjCustomShape::NbcSetStyleSheet( SfxStyleSheet* pNewStyleSheet, bool bD
     SdrObject::NbcSetStyleSheet( pNewStyleSheet, bDontRemoveHardAttr );
 }
 
-void SdrObjCustomShape::SetPage( SdrPage* pNewPage )
+void SdrObjCustomShape::handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage)
 {
-    SdrTextObj::SetPage( pNewPage );
+    // call parent
+    SdrTextObj::handlePageChange(pOldPage, pNewPage);
 
-    if( pNewPage )
+    if(nullptr != pNewPage)
     {
         // invalidating rectangles by SetRectsDirty is not sufficient,
         // AdjustTextFrameWidthAndHeight() also has to be made, both
@@ -2937,7 +2931,7 @@ void SdrObjCustomShape::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, 
         // #i123181# The fix for #121932# here was wrong, the trunk version does not correct the
         // mirrored shear values, neither at the object level, nor on the API or XML level. Taking
         // back the mirroring of the shear angle
-        aGeoStat.nShearAngle = FRound((atan(fShearX) / F_PI180) * 100.0);
+        aGeoStat.nShearAngle = FRound(basegfx::rad2deg(atan(fShearX)) * 100.0);
         aGeoStat.RecalcTan();
         Shear(Point(), aGeoStat.nShearAngle, aGeoStat.nTan, false);
     }
@@ -2950,7 +2944,7 @@ void SdrObjCustomShape::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, 
         // #i78696#
         // fRotate is mathematically correct, but aGeoStat.nRotationAngle is
         // mirrored -> mirror value here
-        aGeoStat.nRotationAngle = NormAngle360(FRound(-fRotate / F_PI18000));
+        aGeoStat.nRotationAngle = NormAngle36000(FRound(-fRotate / F_PI18000));
         aGeoStat.RecalcSinCos();
         Rotate(Point(), aGeoStat.nRotationAngle, aGeoStat.nSin, aGeoStat.nCos);
     }
@@ -2966,8 +2960,8 @@ void SdrObjCustomShape::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, 
 bool SdrObjCustomShape::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B2DPolyPolygon& /*rPolyPolygon*/) const
 {
     // get turn and shear
-    double fRotate = fObjectRotation * F_PI180;
-    double fShearX = (aGeo.nShearAngle / 100.0) * F_PI180;
+    double fRotate = basegfx::deg2rad(fObjectRotation);
+    double fShearX = basegfx::deg2rad(aGeo.nShearAngle / 100.0);
 
     // get aRect, this is the unrotated snaprect
     tools::Rectangle aRectangle(maRect);
@@ -3048,9 +3042,9 @@ bool SdrObjCustomShape::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegf
     return false;
 }
 
-sdr::contact::ViewContact* SdrObjCustomShape::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrObjCustomShape::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrObjCustomShape(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrObjCustomShape>(*this);
 }
 
 // #i33136#

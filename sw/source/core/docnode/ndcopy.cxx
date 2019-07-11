@@ -27,9 +27,10 @@
 #include <docary.hxx>
 #include <ddefld.hxx>
 #include <swddetbl.hxx>
-#include <svtools/fmtfield.hxx>
+#include <vcl/fmtfield.hxx>
 #include <ndindex.hxx>
 #include <vector>
+#include <osl/diagnose.h>
 
 
 #ifdef DBG_UTIL
@@ -44,7 +45,7 @@
 struct MapTableFrameFormat
 {
     const SwFrameFormat *pOld;
-    SwFrameFormat *pNew;
+    SwFrameFormat * const pNew;
     MapTableFrameFormat( const SwFrameFormat *pOldFormat, SwFrameFormat*pNewFormat )
         : pOld( pOldFormat ), pNew( pNewFormat )
     {}
@@ -52,7 +53,7 @@ struct MapTableFrameFormat
 
 typedef std::vector<MapTableFrameFormat> MapTableFrameFormats;
 
-SwContentNode* SwTextNode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) const
+SwContentNode* SwTextNode::MakeCopy(SwDoc* pDoc, const SwNodeIndex& rIdx, bool const bNewFrames) const
 {
     // the Copy-Textnode is the Node with the Text, the Copy-Attrnode is the
     // node with the collection and hard attributes. Normally is the same
@@ -75,7 +76,7 @@ SwContentNode* SwTextNode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) cons
     if( !pColl )
         pColl = pDoc->CopyTextColl( *GetTextColl() );
 
-    SwTextNode* pTextNd = pDoc->GetNodes().MakeTextNode( rIdx, pColl );
+    SwTextNode* pTextNd = pDoc->GetNodes().MakeTextNode(rIdx, pColl, bNewFrames);
 
     // METADATA: register copy
     pTextNd->RegisterAsCopyOf(*pCpyTextNd);
@@ -121,7 +122,7 @@ static bool lcl_SrchNew( const MapTableFrameFormat& rMap, SwFrameFormat** pPara 
 struct CopyTable
 {
     SwDoc* m_pDoc;
-    sal_uLong m_nOldTableSttIdx;
+    sal_uLong const m_nOldTableSttIdx;
     MapTableFrameFormats& m_rMapArr;
     SwTableLine* m_pInsLine;
     SwTableBox* m_pInsBox;
@@ -140,8 +141,8 @@ static void lcl_CopyTableLine( const SwTableLine* pLine, CopyTable* pCT );
 static void lcl_CopyTableBox( SwTableBox* pBox, CopyTable* pCT )
 {
     SwTableBoxFormat * pBoxFormat = static_cast<SwTableBoxFormat*>(pBox->GetFrameFormat());
-    for (MapTableFrameFormats::const_iterator it = pCT->m_rMapArr.begin(); it != pCT->m_rMapArr.end(); ++it)
-        if ( !lcl_SrchNew( *it, reinterpret_cast<SwFrameFormat**>(&pBoxFormat) ) )
+    for (const auto& rMap : pCT->m_rMapArr)
+        if ( !lcl_SrchNew( rMap, reinterpret_cast<SwFrameFormat**>(&pBoxFormat) ) )
             break;
 
     if (pBoxFormat == pBox->GetFrameFormat()) // Create a new one?
@@ -205,8 +206,8 @@ static void lcl_CopyTableBox( SwTableBox* pBox, CopyTable* pCT )
 static void lcl_CopyTableLine( const SwTableLine* pLine, CopyTable* pCT )
 {
     SwTableLineFormat * pLineFormat = static_cast<SwTableLineFormat*>(pLine->GetFrameFormat());
-    for (MapTableFrameFormats::const_iterator it = pCT->m_rMapArr.begin(); it != pCT->m_rMapArr.end(); ++it)
-        if ( !lcl_SrchNew( *it, reinterpret_cast<SwFrameFormat**>(&pLineFormat) ) )
+    for (const auto& rMap : pCT->m_rMapArr)
+        if ( !lcl_SrchNew( rMap, reinterpret_cast<SwFrameFormat**>(&pLineFormat) ) )
             break;
 
     if( pLineFormat == pLine->GetFrameFormat() ) // Create a new one?
@@ -228,9 +229,8 @@ static void lcl_CopyTableLine( const SwTableLine* pLine, CopyTable* pCT )
     }
 
     pCT->m_pInsLine = pNewLine;
-    for( SwTableBoxes::iterator it = const_cast<SwTableLine*>(pLine)->GetTabBoxes().begin();
-             it != const_cast<SwTableLine*>(pLine)->GetTabBoxes().end(); ++it)
-        lcl_CopyTableBox(*it, pCT );
+    for( auto& rpBox : const_cast<SwTableLine*>(pLine)->GetTabBoxes() )
+        lcl_CopyTableBox(rpBox, pCT);
 }
 
 SwTableNode* SwTableNode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) const
@@ -283,8 +283,8 @@ SwTableNode* SwTableNode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) const
         OSL_ENSURE( pDDEType, "unknown FieldType" );
 
         // Swap the table pointers in the node
-        SwDDETable* pNewTable = new SwDDETable( pTableNd->GetTable(), pDDEType );
-        pTableNd->SetNewTable( pNewTable, false );
+        std::unique_ptr<SwDDETable> pNewTable(new SwDDETable( pTableNd->GetTable(), pDDEType ));
+        pTableNd->SetNewTable( std::move(pNewTable), false );
     }
     // First copy the content of the tables, we will later assign the
     // boxes/lines and create the frames

@@ -30,6 +30,8 @@
 #include <sfx2/objsh.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/lstbox.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/useroptions.hxx>
 
@@ -64,6 +66,10 @@ ScHFEditPage::ScHFEditPage( vcl::Window*             pParent,
     m_pWndRight->SetLocation(Right);
 
     get(m_pLbDefined,"comboLB_DEFINED");
+    // tdf#114695 override natural size with a small value
+    // we expect this to get stretched to some larger but
+    // limited size based on surrounding widgets
+    m_pLbDefined->set_width_request(m_pLbDefined->approximate_digit_width() * 20);
 
     get(m_pBtnText,"buttonBTN_TEXT");
     get(m_pBtnTable,"buttonBTN_TABLE");
@@ -90,7 +96,7 @@ ScHFEditPage::ScHFEditPage( vcl::Window*             pParent,
     m_pBtnFile->SetPopupMenu(get_menu("popup"));
 
     m_pLbDefined->SetSelectHdl( LINK( this, ScHFEditPage, ListHdl_Impl ) );
-    m_pBtnFile->SetMenuHdl( LINK( this, ScHFEditPage, MenuHdl ) );
+    m_pBtnFile->SetSelectHdl( LINK( this, ScHFEditPage, MenuHdl ) );
     m_pBtnText->SetClickHdl( LINK( this, ScHFEditPage, ClickHdl ) );
     m_pBtnPage->SetClickHdl( LINK( this, ScHFEditPage, ClickHdl ) );
     m_pBtnLastPage->SetClickHdl( LINK( this, ScHFEditPage, ClickHdl ) );
@@ -369,7 +375,7 @@ void ScHFEditPage::SetSelectDefinedList()
                         if(pFieldItem)
                         {
                             const SvxFieldData* pField = pFieldItem->GetField();
-                            if(pField && dynamic_cast<const SvxTableField*>( pField) !=  nullptr)
+                            if(dynamic_cast<const SvxTableField*>( pField))
                             {
                                 eSelectEntry = eSheetEntry;
                                 bFound = true;
@@ -507,7 +513,7 @@ bool ScHFEditPage::IsPageEntry(EditEngine*pEngine, const EditTextObject* pTextOb
                     if(pFieldItem)
                     {
                         const SvxFieldData* pField = pFieldItem->GetField();
-                        if(pField && dynamic_cast<const SvxPageField*>( pField) !=  nullptr)
+                        if(dynamic_cast<const SvxPageField*>( pField))
                             bReturn = true;
                     }
                 }
@@ -529,7 +535,7 @@ bool ScHFEditPage::IsDateEntry(const EditTextObject* pTextObj)
         if(pFieldItem)
         {
             const SvxFieldData* pField = pFieldItem->GetField();
-            if(pField && dynamic_cast<const SvxDateField*>( pField) !=  nullptr)
+            if(dynamic_cast<const SvxDateField*>( pField))
                 bReturn = true;
         }
     }
@@ -545,9 +551,9 @@ bool ScHFEditPage::IsExtFileNameEntry(const EditTextObject* pTextObj)
     {
         const SvxFieldItem* pFieldItem = pTextObj->GetField();
         if(pFieldItem)
-    {
+        {
             const SvxFieldData* pField = pFieldItem->GetField();
-            if(pField && dynamic_cast<const SvxExtFileField*>( pField) !=  nullptr)
+            if(dynamic_cast<const SvxExtFileField*>( pField))
                 bReturn = true;
         }
     }
@@ -798,13 +804,12 @@ IMPL_LINK( ScHFEditPage, ClickHdl, Button*, pBtn, void )
     m_pEditFocus->GrabFocus();
 }
 
-IMPL_LINK( ScHFEditPage, MenuHdl, ScExtIButton&, rBtn, void )
+IMPL_LINK(ScHFEditPage, MenuHdl, MenuButton*, pBtn, void)
 {
     if (!m_pEditFocus)
         return;
 
-    SAL_WARN_IF(rBtn.GetSelected() == 0, "sc.ui", "nothing selected");
-    OString sSelectedId = rBtn.GetSelectedIdent();
+    OString sSelectedId = pBtn->GetCurItemIdent();
 
     if (sSelectedId == "title")
     {

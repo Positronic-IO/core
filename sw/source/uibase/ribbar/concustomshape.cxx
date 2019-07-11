@@ -119,8 +119,9 @@ void ConstCustomShape::SetAttributes( SdrObject* pObj )
                 if ( aObjList[ i ].equalsIgnoreAsciiCase( aCustomShape ) )
                 {
                     FmFormModel aFormModel;
-                    SfxItemPool& rPool = aFormModel.GetItemPool();
+                    SfxItemPool& rPool(aFormModel.GetItemPool());
                     rPool.FreezeIdRanges();
+
                     if ( GalleryExplorer::GetSdrObj( GALLERY_THEME_POWERPOINT, i, &aFormModel ) )
                     {
                         const SdrObject* pSourceObj = aFormModel.GetPage( 0 )->GetObj( 0 );
@@ -177,7 +178,7 @@ void ConstCustomShape::CreateDefaultObject()
         if ( rMarkList.GetMarkCount() == 1 )
         {
             SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
-            if ( pObj && dynamic_cast< const SdrObjCustomShape *>( pObj ) !=  nullptr )
+            if ( dynamic_cast< const SdrObjCustomShape *>( pObj ) )
                 SetAttributes( pObj );
         }
     }

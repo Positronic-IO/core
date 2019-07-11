@@ -24,6 +24,7 @@
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <vcl/builder.hxx>
+#include <vcl/commandevent.hxx>
 #include <helpids.h>
 
 using namespace ::dbaui;
@@ -103,7 +104,7 @@ void OTableRowView::Command(const CommandEvent& rEvt)
                 return;
             }
 
-            sal_uInt16 nColId = GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X());
+            sal_uInt16 nColId = GetColumnId(GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X()));
             long   nRow = GetRowAtYPosPixel(rEvt.GetMousePosPixel().Y());
 
             if ( nColId == HANDLE_ID )

@@ -37,6 +37,7 @@
 #include <sfx2/sfxsids.hrc>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
+#include <com/sun/star/frame/XTransientDocumentsDocumentContentFactory.hpp>
 #include <com/sun/star/xml/sax/InputSource.hpp>
 #include <com/sun/star/xml/sax/Parser.hpp>
 #include <com/sun/star/xml/sax/XFastParser.hpp>
@@ -56,6 +57,7 @@
 #include <comphelper/documentconstants.hxx>
 #include <svx/xmleohlp.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <unotools/saveopt.hxx>
 
 #include <document.hxx>
@@ -68,12 +70,14 @@
 #include <scerrors.hxx>
 #include "XMLExportSharedData.hxx"
 #include <docuno.hxx>
+#include <drwlayer.hxx>
 #include <sheetdata.hxx>
 #include "XMLCodeNameProvider.hxx"
 #include <docsh.hxx>
 #include <unonames.hxx>
 
 using namespace com::sun::star;
+using namespace css::uno;
 
 ScXMLImportWrapper::ScXMLImportWrapper( ScDocShell& rDocSh, SfxMedium* pM, const uno::Reference < embed::XStorage >& xStor ) :
     mrDocShell(rDocSh),
@@ -393,7 +397,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
             const uno::Reference< rdf::XDocumentMetadataAccess > xDMA(
                 xModel, uno::UNO_QUERY_THROW );
             const uno::Reference< rdf::XURI > xBaseURI(
-                ::sfx2::createBaseURI( xContext, xStorage, aBaseURL, aName ) );
+                ::sfx2::createBaseURI( xContext, xModel, aBaseURL, aName ) );
             uno::Reference<task::XInteractionHandler> xHandler =
                 mrDocShell.GetMedium()->GetInteractionHandler();
             xDMA->loadMetadataFromStorage( xStorage, xBaseURI, xHandler );
@@ -864,9 +868,6 @@ bool ScXMLImportWrapper::Export(bool bStylesOnly)
             SAL_INFO( "sc.filter", "meta export end" );
         }
 
-        uno::Reference< document::XEmbeddedObjectResolver > xObjectResolver;
-        rtl::Reference<SvXMLEmbeddedObjectHelper> xObjectHelper;
-
         uno::Reference<document::XGraphicStorageHandler> xGraphicStorageHandler;
         rtl::Reference<SvXMLGraphicHelper> xGraphicHelper;
 
@@ -876,11 +877,9 @@ bool ScXMLImportWrapper::Export(bool bStylesOnly)
             xGraphicStorageHandler = xGraphicHelper.get();
         }
 
-        if( pObjSh )
-        {
-            xObjectHelper = SvXMLEmbeddedObjectHelper::Create( xStorage, *pObjSh, SvXMLEmbeddedObjectHelperMode::Write );
-            xObjectResolver = xObjectHelper.get();
-        }
+        auto xObjectHelper = SvXMLEmbeddedObjectHelper::Create(
+            xStorage, *pObjSh, SvXMLEmbeddedObjectHelperMode::Write);
+        uno::Reference<document::XEmbeddedObjectResolver> xObjectResolver(xObjectHelper.get());
 
         // styles export
 

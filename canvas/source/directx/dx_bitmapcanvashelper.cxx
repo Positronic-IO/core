@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 
@@ -29,7 +30,6 @@
 #include <com/sun/star/rendering/PathJoinType.hpp>
 #include <com/sun/star/rendering/RepaintResult.hpp>
 #include <com/sun/star/rendering/TexturingMode.hpp>
-#include <comphelper/sequence.hxx>
 #include <rtl/math.hxx>
 #include <tools/diagnose_ex.h>
 
@@ -160,9 +160,6 @@ namespace dxcanvas
         ENSURE_OR_THROW( mpTarget,
                           "::dxcanvas::BitmapCanvasHelper::getData(): disposed" );
 
-        if( !mpTarget )
-            return uno::Sequence< sal_Int8 >();
-
         bitmapLayout = getMemoryLayout();
         return mpTarget->getData(bitmapLayout,rect);
     }
@@ -176,9 +173,6 @@ namespace dxcanvas
         ENSURE_OR_THROW( mpTarget,
                           "::dxcanvas::BitmapCanvasHelper::setData(): disposed" );
 
-        if( !mpTarget )
-            return;
-
         mpTarget->setData(data,bitmapLayout,rect);
     }
 
@@ -191,9 +185,6 @@ namespace dxcanvas
         ENSURE_OR_THROW( mpTarget,
                           "::dxcanvas::BitmapCanvasHelper::setPixel(): disposed" );
 
-        if( !mpTarget )
-            return;
-
         mpTarget->setPixel(color,bitmapLayout,pos);
     }
 
@@ -204,9 +195,6 @@ namespace dxcanvas
 
         ENSURE_OR_THROW( mpTarget,
                           "::dxcanvas::BitmapCanvasHelper::getPixel(): disposed" );
-
-        if( !mpTarget )
-            return uno::Sequence< sal_Int8 >();
 
         bitmapLayout = getMemoryLayout();
         return mpTarget->getPixel(bitmapLayout,pos);

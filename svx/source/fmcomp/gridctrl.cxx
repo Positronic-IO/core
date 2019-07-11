@@ -18,6 +18,7 @@
  */
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <helpids.h>
 #include <svx/gridctrl.hxx>
 #include <gridcell.hxx>
@@ -45,6 +46,7 @@
 #include <vcl/builder.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <svx/strings.hrc>
 
@@ -54,6 +56,7 @@
 #include <sdbdatacolumn.hxx>
 
 #include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/implbase.hxx>
 
 #include <algorithm>
@@ -77,14 +80,14 @@ using namespace com::sun::star::accessibility;
 
 #define ROWSTATUS(row) (!row.is() ? "NULL" : row->GetStatus() == GridRowStatus::Clean ? "CLEAN" : row->GetStatus() == GridRowStatus::Modified ? "MODIFIED" : row->GetStatus() == GridRowStatus::Deleted ? "DELETED" : "INVALID")
 
-#define DEFAULT_BROWSE_MODE             \
-              BrowserMode::COLUMNSELECTION   \
-            | BrowserMode::MULTISELECTION    \
-            | BrowserMode::KEEPHIGHLIGHT     \
-            | BrowserMode::TRACKING_TIPS     \
-            | BrowserMode::HLINES        \
-            | BrowserMode::VLINES        \
-            | BrowserMode::HEADERBAR_NEW     \
+static constexpr auto DEFAULT_BROWSE_MODE =
+              BrowserMode::COLUMNSELECTION
+            | BrowserMode::MULTISELECTION
+            | BrowserMode::KEEPHIGHLIGHT
+            | BrowserMode::TRACKING_TIPS
+            | BrowserMode::HLINES
+            | BrowserMode::VLINES
+            | BrowserMode::HEADERBAR_NEW;
 
 class RowSetEventListener : public ::cppu::WeakImplHelper<XRowsChangeListener>
 {
@@ -129,7 +132,7 @@ class GridFieldValueListener : protected ::comphelper::OPropertyChangeListener
     osl::Mutex                          m_aMutex;
     DbGridControl&                      m_rParent;
     rtl::Reference<::comphelper::OPropertyChangeMultiplexer> m_pRealListener;
-    sal_uInt16                          m_nId;
+    sal_uInt16 const                    m_nId;
     sal_Int16                           m_nSuspended;
     bool                                m_bDisposed : 1;
 
@@ -431,14 +434,9 @@ sal_uInt16 DbGridControl::NavigationBar::ArrangeControls()
     sal_uInt16      nX = 1;
     sal_uInt16      nY = 0;
 
-    // Is the font of this edit larger than the field?
-    if (m_aAbsolute->GetTextHeight() > nH)
     {
-        vcl::Font aApplFont (m_aAbsolute->GetFont());
-        const Size pointAbsoluteSize(m_aAbsolute->PixelToLogic( Size( 0, nH - 2 ), MapMode(MapUnit::MapPoint) ));
-        aApplFont.SetFontSize( pointAbsoluteSize );
+        vcl::Font aApplFont(GetSettings().GetStyleSettings().GetToolFont());
         m_aAbsolute->SetControlFont( aApplFont );
-
         aApplFont.SetTransparent( true );
         m_aRecordText->SetControlFont( aApplFont );
         m_aRecordOf->SetControlFont( aApplFont );
@@ -814,7 +812,7 @@ void DbGridControl::NavigationBar::StateChanged(StateChangedType nType)
             Fraction aZoom = GetZoom();
 
             // not all of these controls need to know the new zoom, but to be sure ...
-            vcl::Font aFont(GetSettings().GetStyleSettings().GetFieldFont());
+            vcl::Font aFont(GetSettings().GetStyleSettings().GetToolFont());
             if (IsControlFont())
                 aFont.Merge(GetControlFont());
 
@@ -859,7 +857,7 @@ DbGridRow::DbGridRow(CursorWrapper* pCur, bool bPaintCursor)
                 m_eStatus = (pCur->isAfterLast() || pCur->isBeforeFirst()) ? GridRowStatus::Invalid : GridRowStatus::Clean;
             else
             {
-                Reference< XPropertySet > xSet = pCur->getPropertySet();
+                const Reference< XPropertySet >& xSet = pCur->getPropertySet();
                 if (xSet.is())
                 {
                     m_bIsNew = ::comphelper::getBOOL(xSet->getPropertyValue(FM_PROP_ISNEW));
@@ -901,7 +899,7 @@ void DbGridRow::SetState(CursorWrapper* pCur, bool bPaintCursor)
             m_eStatus = GridRowStatus::Clean;
             if (!bPaintCursor)
             {
-                Reference< XPropertySet > xSet = pCur->getPropertySet();
+                const Reference< XPropertySet >& xSet = pCur->getPropertySet();
                 DBG_ASSERT(xSet.is(), "DbGridRow::SetState : invalid cursor !");
 
                 if (::comphelper::getBOOL(xSet->getPropertyValue(FM_PROP_ISMODIFIED)))
@@ -945,10 +943,7 @@ DbGridControl::DbGridControl(
             ,m_nAsynAdjustEvent(nullptr)
             ,m_pDataSourcePropListener(nullptr)
             ,m_pFieldListeners(nullptr)
-            ,m_pCursorDisposeListener(nullptr)
             ,m_pGridListener(nullptr)
-            ,m_pDataCursor(nullptr)
-            ,m_pSeekCursor(nullptr)
             ,m_nSeekPos(-1)
             ,m_nTotalCount(-1)
             ,m_aNullDate(::dbtools::DBTypeConversion::getStandardDate())
@@ -1115,7 +1110,7 @@ void DbGridControl::ImplInitWindow( const InitWindowFacet _eInitWhat )
     {
         if ( m_bNavigationBar )
         {
-            vcl::Font aFont = m_aBar->GetSettings().GetStyleSettings().GetFieldFont();
+            vcl::Font aFont = m_aBar->GetSettings().GetStyleSettings().GetToolFont();
             if ( IsControlFont() )
                 m_aBar->SetControlFont( GetControlFont() );
             else
@@ -2661,13 +2656,13 @@ sal_uInt32 DbGridControl::GetTotalCellWidth(long nRow, sal_uInt16 nColId)
         return GetDataWindow().GetTextWidth(GetCurrentRowCellText(pColumn,m_xPaintRow));
     }
     else
-        return 30;  // FIXME magic number for defaul cell width
+        return 30;  // FIXME magic number for default cell width
 }
 
 void DbGridControl::PreExecuteRowContextMenu(sal_uInt16 /*nRow*/, PopupMenu& rMenu)
 {
     bool bDelete = (m_nOptions & DbGridControlOptions::Delete) && GetSelectRowCount() && !IsCurrentAppending();
-    // if only a blank row is selected than do not delete
+    // if only a blank row is selected then do not delete
     bDelete = bDelete && !((m_nOptions & DbGridControlOptions::Insert) && GetSelectRowCount() == 1 && IsRowSelected(GetRowCount() - 1));
 
     rMenu.EnableItem(rMenu.GetItemId("delete"), bDelete);
@@ -2755,7 +2750,7 @@ void DbGridControl::StartDrag( sal_Int8 /*nAction*/, const Point& rPosPixel )
     if (!m_pSeekCursor || IsResizing())
         return;
 
-    sal_uInt16 nColId = GetColumnAtXPosPixel(rPosPixel.X());
+    sal_uInt16 nColId = GetColumnId(GetColumnAtXPosPixel(rPosPixel.X()));
     long   nRow = GetRowAtYPosPixel(rPosPixel.Y());
     if (nColId != HandleColumnId && nRow >= 0)
     {
@@ -2774,7 +2769,7 @@ bool DbGridControl::canCopyCellText(sal_Int32 _nRow, sal_uInt16 _nColId)
     return  (_nRow >= 0)
         &&  (_nRow < GetRowCount())
         &&  (_nColId != HandleColumnId)
-        &&  (_nColId <= ColCount());
+        &&  (GetModelColumnPos(_nColId) != GRID_COLUMN_NOT_FOUND);
 }
 
 void DbGridControl::copyCellText(sal_Int32 _nRow, sal_uInt16 _nColId)
@@ -2821,7 +2816,7 @@ void DbGridControl::Command(const CommandEvent& rEvt)
                 }
             }
 
-            sal_uInt16 nColId = GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X());
+            sal_uInt16 nColId = GetColumnId(GetColumnAtXPosPixel(rEvt.GetMousePosPixel().X()));
             long   nRow = GetRowAtYPosPixel(rEvt.GetMousePosPixel().Y());
 
             if (nColId == HandleColumnId)
@@ -3424,7 +3419,7 @@ void DbGridControl::implAdjustInSolarThread(bool _bRows)
 {
     SAL_INFO("svx.fmcomp", "DbGridControl::implAdjustInSolarThread");
     ::osl::MutexGuard aGuard(m_aAdjustSafety);
-    if (::osl::Thread::getCurrentIdentifier() != Application::GetMainThreadIdentifier())
+    if (!Application::IsMainThread())
     {
         m_nAsynAdjustEvent = PostUserEvent(LINK(this, DbGridControl, OnAsyncAdjust), reinterpret_cast< void* >( _bRows ), true);
         m_bPendingAdjustRows = _bRows;

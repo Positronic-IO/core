@@ -57,7 +57,7 @@ private:
     std::unique_ptr<TablePropertiesHandler>  m_pTablePropsHandler;
 
     TblStyleType                m_nType;
-    PropertyMapPtr              m_pProperties;
+    PropertyMapPtr const        m_pProperties;
     std::vector<css::beans::PropertyValue> m_aInteropGrabBag;
 
     // Properties
@@ -78,8 +78,6 @@ private:
 
     void resolveSprmProps(Sprm & rSprm);
 };
-
-typedef std::shared_ptr< TblStylePrHandler > TblStylePrHandlerPtr;
 
 }}
 

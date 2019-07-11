@@ -62,6 +62,7 @@
 #include <tools/diagnose_ex.h>
 #include <comphelper/extract.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 
@@ -485,14 +486,11 @@ namespace xmloff
 
                     // retrieve the values for all those properties
                     PropertyValues aValues;
-                    for (   PropertyDescriptionList::iterator desc = descriptions.begin();
-                            desc != descriptions.end();
-                            ++desc
-                        )
+                    for ( const auto& desc : descriptions )
                     {
                         // TODO: XMultiPropertySet?
-                        const Any propValue = m_xProps->getPropertyValue( (*desc)->propertyName );
-                        aValues[ (*desc)->propertyId ] = propValue;
+                        const Any propValue = m_xProps->getPropertyValue( desc->propertyName );
+                        aValues[ desc->propertyId ] = propValue;
                     }
 
                     // let the handler translate into an XML attribute value
@@ -837,7 +835,7 @@ namespace xmloff
                 OAttributeMetaData::getDatabaseAttributeNamespace(),
                 OAttributeMetaData::getDatabaseAttributeName( DAFlags::InputRequired ),
                 PROPERTY_INPUT_REQUIRED,
-                BoolAttrFlags::DefaultTrue
+                BoolAttrFlags::DefaultFalse | BoolAttrFlags::DefaultVoid
             );
             RESET_BIT( nIncludeDatabase, DAFlags::InputRequired );
         }

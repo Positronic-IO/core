@@ -9,9 +9,9 @@
 
 #include <math.h>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/random.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
@@ -51,7 +51,8 @@
 
 using namespace css;
 
-void drawBitmapCentered(tools::Rectangle const & rRect, Bitmap aBitmap, vcl::RenderContext& rRenderContext)
+static void drawBitmapCentered(tools::Rectangle const& rRect, const Bitmap& aBitmap,
+                        vcl::RenderContext& rRenderContext)
 {
     long nWidth = rRect.GetWidth();
     long nHeight = rRect.GetHeight();
@@ -66,7 +67,7 @@ void drawBitmapCentered(tools::Rectangle const & rRect, Bitmap aBitmap, vcl::Ren
     rRenderContext.DrawBitmap(aPoint, aBitmap);
 }
 
-void drawBitmapScaledAndCentered(tools::Rectangle const & rRect, Bitmap aBitmap, vcl::RenderContext& rRenderContext, BmpScaleFlag aFlag = BmpScaleFlag::Fast)
+static void drawBitmapScaledAndCentered(tools::Rectangle const & rRect, Bitmap aBitmap, vcl::RenderContext& rRenderContext, BmpScaleFlag aFlag = BmpScaleFlag::Fast)
 {
     long nWidth = rRect.GetWidth();
     long nHeight = rRect.GetHeight();
@@ -80,7 +81,7 @@ void drawBitmapScaledAndCentered(tools::Rectangle const & rRect, Bitmap aBitmap,
     drawBitmapCentered(rRect, aBitmap, rRenderContext);
 }
 
-void drawBackgroundRect(tools::Rectangle const & rRect, Color aColor, vcl::RenderContext& rRenderContext)
+static void drawBackgroundRect(tools::Rectangle const & rRect, Color aColor, vcl::RenderContext& rRenderContext)
 {
     rRenderContext.Push(PushFlags::LINECOLOR | PushFlags::FILLCOLOR);
     rRenderContext.SetFillColor(aColor);
@@ -89,7 +90,7 @@ void drawBackgroundRect(tools::Rectangle const & rRect, Color aColor, vcl::Rende
     rRenderContext.Pop();
 }
 
-void assertAndSetBackground(vcl::test::TestResult eResult, tools::Rectangle const & rRect, vcl::RenderContext& rRenderContext)
+static void assertAndSetBackground(vcl::test::TestResult eResult, tools::Rectangle const & rRect, vcl::RenderContext& rRenderContext)
 {
     if (eResult == vcl::test::TestResult::Passed)
         drawBackgroundRect(rRect, COL_GREEN, rRenderContext);
@@ -104,7 +105,7 @@ class VisualBackendTestWindow : public WorkWindow
 private:
     Timer maUpdateTimer;
     std::vector<std::chrono::high_resolution_clock::time_point> mTimePoints;
-    unsigned char mnNumberOfTests;
+    static constexpr unsigned char gnNumberOfTests = 6;
     unsigned char mnTest;
     bool mbAnimate;
     ScopedVclPtr<VirtualDevice> mpVDev;
@@ -112,9 +113,8 @@ private:
 public:
     VisualBackendTestWindow()
         : WorkWindow(nullptr, WB_APP | WB_STDWORK)
-        , mnNumberOfTests(6)
-        , mnTest(10 * mnNumberOfTests)
-        , mbAnimate(mnTest % mnNumberOfTests == mnNumberOfTests - 1)
+        , mnTest(10 * gnNumberOfTests)
+        , mbAnimate(mnTest % gnNumberOfTests == gnNumberOfTests - 1)
         , mpVDev(VclPtr<VirtualDevice>::Create())
     {
         maUpdateTimer.SetInvokeHandler(LINK(this, VisualBackendTestWindow, updateHdl));
@@ -144,7 +144,7 @@ public:
 
         if (nCode == KEY_BACKSPACE || nCode == KEY_SPACE)
         {
-            if (mnTest % mnNumberOfTests == mnNumberOfTests - 1)
+            if (mnTest % gnNumberOfTests == gnNumberOfTests - 1)
             {
                 mbAnimate = true;
                 maUpdateTimer.Start();
@@ -376,7 +376,7 @@ public:
 
     virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*rRect*/) override
     {
-        if (mnTest % mnNumberOfTests == mnNumberOfTests - 1)
+        if (mnTest % gnNumberOfTests == gnNumberOfTests - 1)
         {
             rRenderContext.SetBackground(Wallpaper(COL_GREEN));
 
@@ -417,8 +417,8 @@ public:
                 basegfx::B2DPolygon polygon;
                 for (double a=0.0; a<360.0; a+=0.5)
                 {
-                    double x = std::sin(a*M_PI / 180.0) * (b+1) * 20;
-                    double y = std::cos(a*M_PI / 180.0) * (b+1) * 20;
+                    double x = std::sin(basegfx::deg2rad(a)) * (b+1) * 20;
+                    double y = std::cos(basegfx::deg2rad(a)) * (b+1) * 20;
                     polygon.append(basegfx::B2DPoint(x + 200 + 500 * fTime, y + 200 + 500 * fTime));
                 }
                 polygon.setClosed(true);
@@ -448,23 +448,23 @@ public:
         tools::Rectangle aRectangle;
         size_t index = 0;
 
-        if (mnTest % mnNumberOfTests == 0)
+        if (mnTest % gnNumberOfTests == 0)
         {
             testRectangles(rRenderContext, nWidth, nHeight);
         }
-        else if (mnTest % mnNumberOfTests == 1)
+        else if (mnTest % gnNumberOfTests == 1)
         {
             testFilledRectangles(rRenderContext, nWidth, nHeight);
         }
-        else if (mnTest % mnNumberOfTests == 2)
+        else if (mnTest % gnNumberOfTests == 2)
         {
             testLines(rRenderContext, nWidth, nHeight);
         }
-        else if (mnTest % mnNumberOfTests == 3)
+        else if (mnTest % gnNumberOfTests == 3)
         {
             testBitmaps(rRenderContext, nWidth, nHeight);
         }
-        else if (mnTest % mnNumberOfTests == 4)
+        else if (mnTest % gnNumberOfTests == 4)
         {
             std::vector<tools::Rectangle> aRegions = setupRegions(3, 2, nWidth, nHeight);
 

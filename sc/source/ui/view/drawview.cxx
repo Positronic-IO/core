@@ -123,11 +123,7 @@ void ScDrawView::Construct()
 
 void ScDrawView::ImplClearCalcDropMarker()
 {
-    if(pDropMarker)
-    {
-        delete pDropMarker;
-        pDropMarker = nullptr;
-    }
+    pDropMarker.reset();
 }
 
 ScDrawView::~ScDrawView()
@@ -224,7 +220,7 @@ void ScDrawView::SetMarkedToLayer( SdrLayerID nLayerNo )
             SdrObject* pObj = rMark.GetMark(i)->GetMarkedSdrObj();
             if ( dynamic_cast<const SdrUnoObj*>( pObj) ==  nullptr && (pObj->GetLayer() != SC_LAYER_INTERN) )
             {
-                AddUndo( new SdrUndoObjectLayerChange( *pObj, pObj->GetLayer(), nLayerNo) );
+                AddUndo( o3tl::make_unique<SdrUndoObjectLayerChange>( *pObj, pObj->GetLayer(), nLayerNo) );
                 pObj->SetLayer( nLayerNo );
             }
         }
@@ -486,7 +482,7 @@ void ScDrawView::MarkListHasChanged()
     uno::Sequence< embed::VerbDescriptor > aVerbs;
     if ( pOle2Obj && !bOle )
     {
-        uno::Reference < embed::XEmbeddedObject > xObj = pOle2Obj->GetObjRef();
+        const uno::Reference < embed::XEmbeddedObject >& xObj = pOle2Obj->GetObjRef();
         OSL_ENSURE( xObj.is(), "SdrOle2Obj without ObjRef" );
         if (xObj.is())
             aVerbs = xObj->getSupportedVerbs();
@@ -655,7 +651,7 @@ SdrObject* ScDrawView::GetObjectByName(const OUString& rName)
             DBG_ASSERT(pPage,"Page ?");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {
@@ -677,7 +673,6 @@ void ScDrawView::SelectCurrentViewObject( const OUString& rName )
 {
     sal_uInt16 nObjectTab = 0;
     SdrObject* pFound = nullptr;
-    bool bUnMark = false;
     SfxObjectShell* pShell = pDoc->GetDocumentShell();
     if (pShell)
     {
@@ -689,7 +684,7 @@ void ScDrawView::SelectCurrentViewObject( const OUString& rName )
             DBG_ASSERT(pPage,"Page ?");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject && !pFound)
                 {
@@ -720,7 +715,7 @@ void ScDrawView::SelectCurrentViewObject( const OUString& rName )
                 SetLayerLocked( pLayer->GetName(), false );
         }
         SdrPageView* pPV = GetSdrPageView();
-        bUnMark = IsObjMarked(pFound);
+        const bool bUnMark = IsObjMarked(pFound);
         MarkObj( pFound, pPV, bUnMark);
     }
 }
@@ -743,7 +738,7 @@ bool ScDrawView::SelectObject( const OUString& rName )
             OSL_ENSURE(pPage,"Page ?");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject && !pFound)
                 {
@@ -857,7 +852,7 @@ void ScDrawView::DeleteMarked()
     {
         ScDrawLayer* pDrawLayer = pDoc->GetDrawLayer();
         ScDocShell* pDocShell = pViewData ? pViewData->GetDocShell() : nullptr;
-        ::svl::IUndoManager* pUndoMgr = pDocShell ? pDocShell->GetUndoManager() : nullptr;
+        SfxUndoManager* pUndoMgr = pDocShell ? pDocShell->GetUndoManager() : nullptr;
         bool bUndo = pDrawLayer && pDocShell && pUndoMgr && pDoc->IsUndoEnabled();
 
         // remove the cell note from document, we are its owner now
@@ -875,7 +870,7 @@ void ScDrawView::DeleteMarked()
             delete pNote;
             // add the undo action for the note
             if( bUndo )
-                pUndoMgr->AddUndoAction( new ScUndoReplaceNote( *pDocShell, pCaptData->maStart, aNoteData, false, pDrawLayer->GetCalcUndo().release() ) );
+                pUndoMgr->AddUndoAction( o3tl::make_unique<ScUndoReplaceNote>( *pDocShell, pCaptData->maStart, aNoteData, false, pDrawLayer->GetCalcUndo() ) );
             // repaint the cell to get rid of the note marker
             if( pDocShell )
                 pDocShell->PostPaintCell( pCaptData->maStart );
@@ -907,7 +902,7 @@ void ScDrawView::MarkDropObj( SdrObject* pObj )
 
         if(pDropMarkObj)
         {
-            pDropMarker = new SdrDropMarkerOverlay(*this, *pDropMarkObj);
+            pDropMarker.reset( new SdrDropMarkerOverlay(*this, *pDropMarkObj) );
         }
     }
 }
@@ -993,7 +988,7 @@ SdrObject* ScDrawView::ApplyGraphicToObject(
     }
     else if(rHitObject.IsClosedObj() && !dynamic_cast< SdrOle2Obj* >(&rHitObject))
     {
-        AddUndo(new SdrUndoAttrObj(rHitObject));
+        AddUndo(o3tl::make_unique<SdrUndoAttrObj>(rHitObject));
 
         SfxItemSet aSet(GetModel()->GetItemPool(), svl::Items<XATTR_FILLSTYLE, XATTR_FILLBITMAP>{});
 

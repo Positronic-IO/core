@@ -24,9 +24,6 @@ typedef std::map< OString, sal_uInt32 > mapType;
 class OOO_DLLPUBLIC_TEST ScreenshotTest : public test::BootstrapFixture, public unotest::MacrosTest
 {
 private:
-    /// the target directory for screenshots
-    OUString    m_aScreenshotDirectory;
-
     /// The current UI language
     OUString    maCurrentLanguage;
 
@@ -35,7 +32,7 @@ private:
 
 private:
     /// helpers
-    void implSaveScreenshot(const Bitmap& rScreenshot, const OString& rScreenshotId);
+    void implSaveScreenshot(const BitmapEx& rScreenshot, const OString& rScreenshotId);
     void saveScreenshot(VclAbstractDialog const & rDialog);
     void saveScreenshot(Dialog& rDialog);
 

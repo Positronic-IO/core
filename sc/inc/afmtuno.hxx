@@ -22,9 +22,8 @@
 
 #include <svl/itemprop.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/container/XNameReplace.hpp>
-#include <com/sun/star/container/XSet.hpp>
-#include <com/sun/star/container/XIndexReplace.hpp>
+#include <com/sun/star/container/XIndexAccess.hpp>
+#include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -91,7 +90,7 @@ class ScAutoFormatObj : public ::cppu::WeakImplHelper<
                             css::lang::XServiceInfo >
 {
 private:
-    SfxItemPropertySet      aPropSet;
+    SfxItemPropertySet const aPropSet;
     sal_uInt16              nFormatIndex;
 
     ScAutoFormatFieldObj*   GetObjectByIndex_Impl(sal_uInt16 nIndex);
@@ -100,7 +99,7 @@ public:
                             ScAutoFormatObj(sal_uInt16 nIndex);
     virtual                 ~ScAutoFormatObj() override;
 
-                            // per getImplementation gerufen:
+                            // called via getImplementation:
     bool                    IsInserted() const      { return nFormatIndex != SC_AFMTOBJ_INVALID; }
     void                    InitFormat( sal_uInt16 nNewIndex );
 
@@ -158,9 +157,9 @@ class ScAutoFormatFieldObj : public ::cppu::WeakImplHelper<
                                 css::lang::XServiceInfo >
 {
 private:
-    SfxItemPropertySet      aPropSet;
-    sal_uInt16              nFormatIndex;
-    sal_uInt16              nFieldIndex;
+    SfxItemPropertySet const      aPropSet;
+    sal_uInt16 const              nFormatIndex;
+    sal_uInt16 const              nFieldIndex;
 
 public:
                             ScAutoFormatFieldObj(sal_uInt16 nFormat, sal_uInt16 nField);

@@ -30,7 +30,7 @@
 #include <vcl/graphicfilter.hxx>
 #include <vcl/settings.hxx>
 
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <sfx2/docinsert.hxx>
 #include <sfx2/filedlghelper.hxx>
 
@@ -174,9 +174,7 @@ SwGlobalTree::SwGlobalTree(vcl::Window* pParent, SwNavigationPI* pDialog)
     , m_pActiveShell(nullptr)
     , m_pEmphasisEntry(nullptr)
     , m_pDDSource(nullptr)
-    , m_pSwGlblDocContents(nullptr)
     , m_pDocContent(nullptr)
-    , m_pDocInserter(nullptr)
     , m_bIsInternalDrag(false)
     , m_bLastEntryEmphasis(false)
 {
@@ -204,10 +202,8 @@ SwGlobalTree::~SwGlobalTree()
 
 void SwGlobalTree::dispose()
 {
-    delete m_pSwGlblDocContents;
-    m_pSwGlblDocContents = nullptr;
-    delete m_pDocInserter;
-    m_pDocInserter = nullptr;
+    m_pSwGlblDocContents.reset();
+    m_pDocInserter.reset();
     m_aUpdateTimer.Stop();
     m_xDialog.clear();
     SvTreeListBox::dispose();
@@ -274,7 +270,7 @@ sal_Int8 SwGlobalTree::ExecuteDrop( const ExecuteDropEvent& rEvt )
                     {
                         nEntryCount++;
                         nAbsContPos++;
-                        pCnt = (*pTempContents)[ nAbsContPos ];
+                        pCnt = (*pTempContents)[ nAbsContPos ].get();
                     }
                 }
             }
@@ -663,7 +659,7 @@ void SwGlobalTree::Display(bool bOnlyUpdateUserData)
         SvTreeListEntry* pEntry = First();
         for (size_t i = 0; i < nCount && pEntry; i++)
         {
-            SwGlblDocContent* pCont = (*m_pSwGlblDocContents)[i];
+            SwGlblDocContent* pCont = (*m_pSwGlblDocContents)[i].get();
             pEntry->SetUserData(pCont);
             pEntry = Next(pEntry);
             assert(pEntry || i == nCount - 1);
@@ -687,7 +683,7 @@ void SwGlobalTree::Display(bool bOnlyUpdateUserData)
         SvTreeListEntry* pSelEntry = nullptr;
         for( size_t i = 0; i < nCount; i++)
         {
-            SwGlblDocContent* pCont = (*m_pSwGlblDocContents)[i];
+            SwGlblDocContent* pCont = (*m_pSwGlblDocContents)[i].get();
             OUString sEntry;
             Image aImage;
             switch( pCont->GetType()  )
@@ -740,8 +736,7 @@ void SwGlobalTree::InsertRegion( const SwGlblDocContent* pCont, const OUString* 
     Sequence< OUString > aFileNames;
     if ( !pFileName )
     {
-        delete m_pDocInserter;
-        m_pDocInserter = new ::sfx2::DocumentInserter(GetFrameWeld(), "swriter", sfx2::DocumentInserter::Mode::InsertMulti);
+        m_pDocInserter.reset(new ::sfx2::DocumentInserter(GetFrameWeld(), "swriter", sfx2::DocumentInserter::Mode::InsertMulti));
         m_pDocInserter->StartExecuteModal( LINK( this, SwGlobalTree, DialogClosedHdl ) );
     }
     else if ( !pFileName->isEmpty() )
@@ -910,13 +905,11 @@ void    SwGlobalTree::ExecuteContextMenuAction( sal_uInt16 nSelectedPopupEntry )
                         FN_PARAM_TOX_TYPE, FN_PARAM_TOX_TYPE>{});
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact && "Dialog creation failed!");
                 ScopedVclPtr<AbstractMultiTOXTabDialog> pDlg(pFact->CreateMultiTOXTabDialog(
                                                         this, aSet,
                                                         *m_pActiveShell,
                                                         nullptr,
                                                         true));
-                assert(pDlg && "Dialog creation failed!");
                 if(RET_OK == pDlg->Execute())
                 {
                     SwTOXDescription&  rDesc = pDlg->GetTOXDescription(
@@ -1092,8 +1085,7 @@ void    SwGlobalTree::ExecCommand(const OUString &rCmd)
             }
             else if (rCmd == "up")
             {
-                if(nSource)
-                    bMove = 0 != nSource;
+                bMove = 0 != nSource;
                 nDest--;
             }
             if( bMove && m_pActiveShell->MoveGlobalDocContent(
@@ -1114,12 +1106,11 @@ bool    SwGlobalTree::Update(bool bHard)
         m_pActiveShell = pActView->GetWrtShellPtr();
         if(m_pActiveShell != pOldShell)
         {
-            delete m_pSwGlblDocContents;
-            m_pSwGlblDocContents = nullptr;
+            m_pSwGlblDocContents.reset();
         }
         if(!m_pSwGlblDocContents)
         {
-            m_pSwGlblDocContents = new SwGlblDocContents;
+            m_pSwGlblDocContents.reset(new SwGlblDocContents);
             bRet = true;
             m_pActiveShell->GetGlobalDocContent(*m_pSwGlblDocContents);
         }
@@ -1138,8 +1129,8 @@ bool    SwGlobalTree::Update(bool bHard)
             {
                 for(size_t i = 0; i < pTempContents->size() && !bCopy; i++)
                 {
-                    SwGlblDocContent* pLeft = (*pTempContents)[i];
-                    SwGlblDocContent* pRight = (*m_pSwGlblDocContents)[i];
+                    SwGlblDocContent* pLeft = (*pTempContents)[i].get();
+                    SwGlblDocContent* pRight = (*m_pSwGlblDocContents)[i].get();
                     GlobalDocContentType eType = pLeft->GetType();
                     SvTreeListEntry* pEntry = GetEntry(i);
                     OUString sTemp = GetEntryText(pEntry);
@@ -1161,10 +1152,7 @@ bool    SwGlobalTree::Update(bool bHard)
             }
             if(bCopy || bHard)
             {
-                m_pSwGlblDocContents->DeleteAndDestroyAll();
-                m_pSwGlblDocContents->insert( *pTempContents );
-                pTempContents->clear();
-
+                *m_pSwGlblDocContents = std::move( *pTempContents );
             }
         }
 
@@ -1173,7 +1161,7 @@ bool    SwGlobalTree::Update(bool bHard)
     {
         Clear();
         if(m_pSwGlblDocContents)
-            m_pSwGlblDocContents->DeleteAndDestroyAll();
+            m_pSwGlblDocContents->clear();
     }
     // FIXME: Implement a test for changes!
     return bRet;
@@ -1316,9 +1304,9 @@ void SwGlobalTree::InsertRegion( const SwGlblDocContent* _pContent, const Sequen
         SwGlblDocContent* pAnchorContent = nullptr;
         OSL_ENSURE(aTempContents.size() > (nAnchorContent + nFile), "invalid anchor content -> last insertion failed");
         if ( aTempContents.size() > (nAnchorContent + nFile) )
-            pAnchorContent = aTempContents[nAnchorContent + nFile];
+            pAnchorContent = aTempContents[nAnchorContent + nFile].get();
         else
-            pAnchorContent = aTempContents.back();
+            pAnchorContent = aTempContents.back().get();
         OUString sFileName(pFileNames[nFile]);
         INetURLObject aFileUrl;
         aFileUrl.SetSmartURL( sFileName );

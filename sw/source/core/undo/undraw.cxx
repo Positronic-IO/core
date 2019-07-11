@@ -45,6 +45,7 @@
 #include <dview.hxx>
 #include <rootfrm.hxx>
 #include <viewsh.hxx>
+#include <o3tl/make_unique.hxx>
 
 struct SwUndoGroupObjImpl
 {
@@ -55,7 +56,7 @@ struct SwUndoGroupObjImpl
 
 // Draw-Objecte
 
-IMPL_LINK( SwDoc, AddDrawUndo, SdrUndoAction *, pUndo, void )
+void SwDoc::AddDrawUndo( std::unique_ptr<SdrUndoAction> pUndo )
 {
     if (GetIDocumentUndoRedo().DoesUndo() &&
         GetIDocumentUndoRedo().DoesDrawUndo())
@@ -65,37 +66,33 @@ IMPL_LINK( SwDoc, AddDrawUndo, SdrUndoAction *, pUndo, void )
         if( pSh && pSh->HasDrawView() )
             pMarkList = &pSh->GetDrawView()->GetMarkedObjectList();
 
-        GetIDocumentUndoRedo().AppendUndo( new SwSdrUndo(pUndo, pMarkList, this) );
+        GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwSdrUndo>(std::move(pUndo), pMarkList, this) );
     }
-    else
-        delete pUndo;
 }
 
-SwSdrUndo::SwSdrUndo( SdrUndoAction* pUndo, const SdrMarkList* pMrkLst, const SwDoc* pDoc )
-    : SwUndo( SwUndoId::DRAWUNDO, pDoc ), pSdrUndo( pUndo )
+SwSdrUndo::SwSdrUndo( std::unique_ptr<SdrUndoAction> pUndo, const SdrMarkList* pMrkLst, const SwDoc* pDoc )
+    : SwUndo( SwUndoId::DRAWUNDO, pDoc ), pSdrUndo( std::move(pUndo) )
 {
     if( pMrkLst && pMrkLst->GetMarkCount() )
-        pMarkList = new SdrMarkList( *pMrkLst );
-    else
-        pMarkList = nullptr;
+        pMarkList.reset( new SdrMarkList( *pMrkLst ) );
 }
 
 SwSdrUndo::~SwSdrUndo()
 {
-    delete pSdrUndo;
-    delete pMarkList;
+    pSdrUndo.reset();
+    pMarkList.reset();
 }
 
 void SwSdrUndo::UndoImpl(::sw::UndoRedoContext & rContext)
 {
     pSdrUndo->Undo();
-    rContext.SetSelections(nullptr, pMarkList);
+    rContext.SetSelections(nullptr, pMarkList.get());
 }
 
 void SwSdrUndo::RedoImpl(::sw::UndoRedoContext & rContext)
 {
     pSdrUndo->Redo();
-    rContext.SetSelections(nullptr, pMarkList);
+    rContext.SetSelections(nullptr, pMarkList.get());
 }
 
 OUString SwSdrUndo::GetComment() const
@@ -478,10 +475,10 @@ void SwUndoDrawUnGroupConnectToLayout::AddFormatAndObj( SwDrawFrameFormat* pDraw
 }
 
 SwUndoDrawDelete::SwUndoDrawDelete( sal_uInt16 nCnt, const SwDoc* pDoc )
-    : SwUndo( SwUndoId::DRAWDELETE, pDoc ), nSize( nCnt ), bDelFormat( true )
+    : SwUndo( SwUndoId::DRAWDELETE, pDoc ), bDelFormat( true )
 {
-    pObjArr.reset( new SwUndoGroupObjImpl[ nSize ] );
-    pMarkLst = new SdrMarkList();
+    pObjArr.reset( new SwUndoGroupObjImpl[ nCnt ] );
+    pMarkLst.reset( new SdrMarkList() );
 }
 
 SwUndoDrawDelete::~SwUndoDrawDelete()
@@ -492,7 +489,6 @@ SwUndoDrawDelete::~SwUndoDrawDelete()
         for( size_t n = 0; n < pMarkLst->GetMarkCount(); ++n, ++pTmp )
             delete pTmp->pFormat;
     }
-    delete pMarkLst;
 }
 
 void SwUndoDrawDelete::UndoImpl(::sw::UndoRedoContext & rContext)
@@ -518,7 +514,7 @@ void SwUndoDrawDelete::UndoImpl(::sw::UndoRedoContext & rContext)
         if (pDrawFrameFormat)
             pDrawFrameFormat->PosAttrSet();
     }
-    rContext.SetSelections(nullptr, pMarkLst);
+    rContext.SetSelections(nullptr, pMarkLst.get());
 }
 
 void SwUndoDrawDelete::RedoImpl(::sw::UndoRedoContext & rContext)

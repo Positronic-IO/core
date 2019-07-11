@@ -43,8 +43,8 @@ sal_Bool RtfExportFilter::filter(const uno::Sequence<beans::PropertyValue>& aDes
     utl::MediaDescriptor aMediaDesc = aDescriptor;
     uno::Reference<io::XStream> xStream = aMediaDesc.getUnpackedValueOrDefault(
         utl::MediaDescriptor::PROP_STREAMFOROUTPUT(), uno::Reference<io::XStream>());
-    SvStream* pStream = utl::UcbStreamHelper::CreateStream(xStream, true);
-    m_aWriter.SetStream(pStream);
+    std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream(xStream, true);
+    m_aWriter.SetStream(pStream.get());
 
     // get SwDoc*
     uno::Reference<uno::XInterface> xIfc(m_xSrcDoc, uno::UNO_QUERY);
@@ -83,7 +83,6 @@ sal_Bool RtfExportFilter::filter(const uno::Sequence<beans::PropertyValue>& aDes
     // delete the pCurPam
     while (pCurPam->GetNext() != pCurPam.get())
         delete pCurPam->GetNext();
-    delete pStream;
 
     return true;
 }
@@ -97,17 +96,11 @@ void RtfExportFilter::setSourceDocument(const uno::Reference<lang::XComponent>& 
 
 // UNO helpers
 
-OUString RtfExport_getImplementationName() { return OUString(IMPL_NAME_RTFEXPORT); }
-
-uno::Sequence<OUString> RtfExport_getSupportedServiceNames() noexcept
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+com_sun_star_comp_Writer_RtfExport_get_implementation(uno::XComponentContext* pCtx,
+                                                      uno::Sequence<uno::Any> const& /*rSeq*/)
 {
-    return uno::Sequence<OUString>{ "com.sun.star.document.ExportFilter" };
-}
-
-uno::Reference<uno::XInterface>
-RtfExport_createInstance(const uno::Reference<uno::XComponentContext>& xCtx)
-{
-    return static_cast<cppu::OWeakObject*>(new RtfExportFilter(xCtx));
+    return cppu::acquire(new RtfExportFilter(pCtx));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

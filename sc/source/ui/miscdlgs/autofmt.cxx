@@ -31,6 +31,7 @@
 #include <editeng/wghtitem.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/zforlist.hxx>
+#include <svtools/scriptedtext.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -48,6 +49,7 @@
 #include <document.hxx>
 #include <docsh.hxx>
 #include <tabvwsh.hxx>
+#include <viewdata.hxx>
 
 #define FRAME_OFFSET 4
 
@@ -90,7 +92,7 @@ ScAutoFmtPreview::~ScAutoFmtPreview()
 
 void ScAutoFmtPreview::dispose()
 {
-    delete pNumFmt;
+    pNumFmt.reset();
     vcl::Window::dispose();
 }
 
@@ -450,7 +452,7 @@ void ScAutoFmtPreview::CalcCellArray( bool bFitWidthP )
     aPrvSize.setHeight( maArray.GetHeight() + 4 );
 }
 
-inline void lclSetStyleFromBorder( svx::frame::Style& rStyle, const ::editeng::SvxBorderLine* pBorder )
+static void lclSetStyleFromBorder( svx::frame::Style& rStyle, const ::editeng::SvxBorderLine* pBorder )
 {
     rStyle.Set( pBorder, 1.0 / TWIPS_PER_POINT, 5 );
 }

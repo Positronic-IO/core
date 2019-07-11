@@ -46,7 +46,7 @@ static bool lcl_IsURLButton( SdrObject* pObject )
     SdrUnoObj* pUnoCtrl = dynamic_cast<SdrUnoObj*>( pObject );
     if (pUnoCtrl && SdrInventor::FmForm == pUnoCtrl->GetObjInventor())
        {
-        uno::Reference<awt::XControlModel> xControlModel = pUnoCtrl->GetUnoControlModel();
+        const uno::Reference<awt::XControlModel>& xControlModel = pUnoCtrl->GetUnoControlModel();
         OSL_ENSURE( xControlModel.is(), "uno control without model" );
         if ( xControlModel.is() )
         {
@@ -273,11 +273,11 @@ void ScSelectionTransferObj::CreateCellData()
             }
             ScDrawLayer::SetGlobalDrawPersist( aDragShellRef.get() );
 
-            ScDocument* pClipDoc = new ScDocument( SCDOCMODE_CLIP );
+            ScDocumentUniquePtr pClipDoc(new ScDocument( SCDOCMODE_CLIP ));
             // bApi = sal_True -> no error messages
             // #i18364# bStopEdit = sal_False -> don't end edit mode
             // (this may be called from pasting into the edit line)
-            bool bCopied = rViewData.GetView()->CopyToClip( pClipDoc, false, true, true, false );
+            bool bCopied = rViewData.GetView()->CopyToClip( pClipDoc.get(), false, true, true, false );
 
             ScDrawLayer::SetGlobalDrawPersist(nullptr);
 
@@ -288,7 +288,7 @@ void ScSelectionTransferObj::CreateCellData()
                 aObjDesc.maDisplayName = pDocSh->GetMedium()->GetURLObject().GetURLNoPass();
                 // maSize is set in ScTransferObj ctor
 
-                rtl::Reference<ScTransferObj> pTransferObj = new ScTransferObj( pClipDoc, aObjDesc );
+                rtl::Reference<ScTransferObj> pTransferObj = new ScTransferObj( std::move(pClipDoc), aObjDesc );
 
                 // SetDragHandlePos is not used - there is no mouse position
                 //? pTransferObj->SetVisibleTab( nTab );
@@ -300,8 +300,6 @@ void ScSelectionTransferObj::CreateCellData()
 
                 mxCellData = pTransferObj;
             }
-            else
-                delete pClipDoc;
         }
     }
     OSL_ENSURE( mxCellData.is(), "can't create CellData" );
@@ -329,7 +327,7 @@ void ScSelectionTransferObj::CreateDrawData()
             }
 
             ScDrawLayer::SetGlobalDrawPersist( aDragShellRef.get() );
-            SdrModel* pModel = pDrawView->GetMarkedObjModel();
+            std::unique_ptr<SdrModel> pModel(pDrawView->CreateMarkedObjModel());
             ScDrawLayer::SetGlobalDrawPersist(nullptr);
 
             ScViewData& rViewData = pView->GetViewData();
@@ -340,7 +338,7 @@ void ScSelectionTransferObj::CreateDrawData()
             aObjDesc.maDisplayName = pDocSh->GetMedium()->GetURLObject().GetURLNoPass();
             // maSize is set in ScDrawTransferObj ctor
 
-            rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( pModel, pDocSh, aObjDesc );
+            rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( std::move(pModel), pDocSh, aObjDesc );
 
             SfxObjectShellRef aPersistRef( aDragShellRef.get() );
             pTransferObj->SetDrawPersist( aPersistRef );    // keep persist for ole objects alive

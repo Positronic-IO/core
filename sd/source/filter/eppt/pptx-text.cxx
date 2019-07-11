@@ -23,7 +23,9 @@
 #include <com/sun/star/awt/CharSet.hpp>
 #include <com/sun/star/awt/FontWeight.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
+#include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XIndexReplace.hpp>
 #include <com/sun/star/i18n/BreakIterator.hpp>
@@ -36,6 +38,7 @@
 #include <com/sun/star/style/LineSpacingMode.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/style/TabStop.hpp>
+#include <com/sun/star/graphic/XGraphic.hpp>
 
 #include <comphelper/processfactory.hxx>
 #include <editeng/svxenum.hxx>
@@ -46,6 +49,7 @@
 #include <sfx2/app.hxx>
 #include <svl/languageoptions.hxx>
 #include <oox/export/drawingml.hxx>
+#include <osl/diagnose.h>
 
 #include <vcl/settings.hxx>
 #include <vcl/metric.hxx>
@@ -70,8 +74,6 @@ PortionObj::PortionObj(const css::uno::Reference< css::beans::XPropertySet > & r
     , mnAsianOrComplexFont(0xffff)
     , mnTextSize(0)
     , mbLastPortion(true)
-    , mpText(nullptr)
-    , mpFieldEntry(nullptr)
 {
     mXPropSet = rXPropSet;
 
@@ -93,8 +95,6 @@ PortionObj::PortionObj(css::uno::Reference< css::text::XTextRange > & rXTextRang
     , mnAsianOrComplexFont(0xffff)
     , mnCharEscapement(0)
     , mbLastPortion(bLast)
-    , mpText(nullptr)
-    , mpFieldEntry(nullptr)
 {
     OUString aString( rXTextRange->getString() );
     OUString aURL;
@@ -117,7 +117,7 @@ PortionObj::PortionObj(css::uno::Reference< css::text::XTextRange > & rXTextRang
             nFieldType = ImplGetTextField( rXTextRange, mXPropSet, aURL );
         if ( nFieldType )
         {
-            mpFieldEntry = new FieldEntry( nFieldType, 0, mnTextSize );
+            mpFieldEntry.reset( new FieldEntry( nFieldType, 0, mnTextSize ) );
             if ( nFieldType >> 28 == 4 )
             {
                 mpFieldEntry->aRepresentation = aString;
@@ -138,7 +138,7 @@ PortionObj::PortionObj(css::uno::Reference< css::text::XTextRange > & rXTextRang
             mnTextSize = 1;
             if ( bLast )
                 mnTextSize++;
-            mpText = new sal_uInt16[ mnTextSize ];
+            mpText.reset( new sal_uInt16[ mnTextSize ] );
             mpText[ 0 ] = 0x2a;
         }
         else
@@ -152,7 +152,7 @@ PortionObj::PortionObj(css::uno::Reference< css::text::XTextRange > & rXTextRang
                 mnTextSize++;
                 bRTL_endingParen = true;
             }
-            mpText = new sal_uInt16[ mnTextSize ];
+            mpText.reset( new sal_uInt16[ mnTextSize ] );
             sal_uInt16 nChar;
             for ( sal_Int32 i = 0; i < aString.getLength(); i++ )
             {
@@ -258,7 +258,7 @@ void PortionObj::ImplGetPortionValues( FontCollection& rFontCollection, bool bGe
     sal_Int16 nScriptType = SvtLanguageOptions::FromSvtScriptTypeToI18N( SvtLanguageOptions::GetScriptTypeOfLanguage( Application::GetSettings().GetLanguageTag().getLanguageType() ) );
     if ( mpText && mnTextSize && xPPTBreakIter.is() )
     {
-        OUString sT( reinterpret_cast<sal_Unicode *>(mpText), mnTextSize );
+        OUString sT( reinterpret_cast<sal_Unicode *>(mpText.get()), mnTextSize );
         nScriptType = xPPTBreakIter->getScriptType( sT, 0 );
     }
     if ( nScriptType != css::i18n::ScriptType::COMPLEX )
@@ -437,8 +437,8 @@ void PortionObj::ImplGetPortionValues( FontCollection& rFontCollection, bool bGe
 
 void PortionObj::ImplClear()
 {
-    delete mpFieldEntry;
-    delete[] mpText;
+    mpFieldEntry.reset();
+    mpText.reset();
 }
 
 void PortionObj::ImplConstruct( const PortionObj& rPortionObj )
@@ -462,16 +462,12 @@ void PortionObj::ImplConstruct( const PortionObj& rPortionObj )
 
     if ( rPortionObj.mpText )
     {
-        mpText = new sal_uInt16[ mnTextSize ];
-        memcpy( mpText, rPortionObj.mpText, mnTextSize << 1 );
+        mpText.reset( new sal_uInt16[ mnTextSize ] );
+        memcpy( mpText.get(), rPortionObj.mpText.get(), mnTextSize << 1 );
     }
-    else
-        mpText = nullptr;
 
     if ( rPortionObj.mpFieldEntry )
-        mpFieldEntry = new FieldEntry( *( rPortionObj.mpFieldEntry ) );
-    else
-        mpFieldEntry = nullptr;
+        mpFieldEntry.reset( new FieldEntry( *( rPortionObj.mpFieldEntry ) ) );
 }
 
 sal_uInt32 PortionObj::ImplCalculateTextPositions( sal_uInt32 nCurrentTextPosition )
@@ -729,25 +725,15 @@ ParagraphObj::ParagraphObj(css::uno::Reference< css::text::XTextContent > const 
                     css::uno::Any aAny( aXTextPortionE->nextElement() );
                     if ( aAny >>= aXCursorText )
                     {
-                        PortionObj* pPortionObj = new PortionObj( aXCursorText, !aXTextPortionE->hasMoreElements(), rFontCollection );
+                        std::unique_ptr<PortionObj> pPortionObj(new PortionObj( aXCursorText, !aXTextPortionE->hasMoreElements(), rFontCollection ));
                         if ( pPortionObj->Count() )
-                            mvPortions.push_back( std::unique_ptr<PortionObj>(pPortionObj) );
-                        else
-                            delete pPortionObj;
+                            mvPortions.push_back( std::move(pPortionObj) );
                     }
                 }
             }
         }
         ImplGetParagraphValues( &rProv, true );
     }
-}
-
-ParagraphObj::ParagraphObj( const ParagraphObj& rObj )
-: PropStateValue()
-, SOParagraph()
-, mvPortions()
-{
-    ImplConstruct( rObj );
 }
 
 ParagraphObj::~ParagraphObj()
@@ -846,7 +832,10 @@ void ParagraphObj::ImplGetNumberingLevel( PPTExBulletProvider* pBuProv, sal_Int1
 
                     }
                     else if ( aPropName == "GraphicBitmap" )
-                        xGraphic = pPropValue[i].Value.get<uno::Reference<graphic::XGraphic>>();
+                    {
+                        auto xBitmap = pPropValue[i].Value.get<uno::Reference<awt::XBitmap>>();
+                        xGraphic.set(xBitmap, uno::UNO_QUERY);
+                    }
                     else if ( aPropName == "GraphicSize" )
                     {
                         if (auto aSize = o3tl::tryAccess<css::awt::Size>(pPropValue[i].Value))
@@ -1269,11 +1258,10 @@ struct ImplTextObj
 {
     sal_uInt32      mnTextSize;
     int             mnInstance;
-    std::vector<ParagraphObj*> maList;
+    std::vector<std::unique_ptr<ParagraphObj>> maList;
     bool        mbHasExtendedBullets;
 
     explicit ImplTextObj( int nInstance );
-    ~ImplTextObj();
 };
 
 ImplTextObj::ImplTextObj( int nInstance )
@@ -1282,12 +1270,6 @@ ImplTextObj::ImplTextObj( int nInstance )
     mnTextSize = 0;
     mnInstance = nInstance;
     mbHasExtendedBullets = false;
-}
-
-ImplTextObj::~ImplTextObj()
-{
-    for ( std::vector<ParagraphObj*>::const_iterator it = maList.begin(); it != maList.end(); ++it )
-        delete *it;
 }
 
 TextObj::TextObj( css::uno::Reference< css::text::XSimpleText > const & rXTextRef,
@@ -1310,9 +1292,9 @@ TextObj::TextObj( css::uno::Reference< css::text::XSimpleText > const & rXTextRe
                 {
                     if ( !aXTextParagraphE->hasMoreElements() )
                         aParaFlags.bLastParagraph = true;
-                    ParagraphObj* pPara = new ParagraphObj( aXParagraph, aParaFlags, rFontCollection, rProv );
+                    std::unique_ptr<ParagraphObj> pPara(new ParagraphObj( aXParagraph, aParaFlags, rFontCollection, rProv ));
                     mpImplTextObj->mbHasExtendedBullets |= pPara->bExtendedBulletsUsed;
-                    mpImplTextObj->maList.push_back( pPara );
+                    mpImplTextObj->maList.push_back( std::move(pPara) );
                     aParaFlags.bFirstParagraph = false;
                 }
             }
@@ -1330,7 +1312,7 @@ void TextObj::ImplCalculateTextPositions()
 
 ParagraphObj* TextObj::GetParagraph(int idx)
 {
-    return mpImplTextObj->maList[idx];
+    return mpImplTextObj->maList[idx].get();
 }
 
 sal_uInt32 TextObj::ParagraphCount() const

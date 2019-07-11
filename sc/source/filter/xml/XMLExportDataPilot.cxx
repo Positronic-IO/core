@@ -24,6 +24,7 @@
 #include <xmloff/nmspmap.hxx>
 #include <sax/tools/converter.hxx>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 #include "xmlexprt.hxx"
 #include "XMLConverter.hxx"
 #include <document.hxx>
@@ -492,6 +493,7 @@ void ScXMLExportDataPilot::WriteLevels(const ScDPSaveDimension* pDim)
         ::sax::Converter::convertBool(sBuffer, pDim->GetShowEmpty());
         rExport.AddAttribute(XML_NAMESPACE_TABLE, XML_SHOW_EMPTY, sBuffer.makeStringAndClear());
     }
+    if (rExport.getDefaultVersion() > SvtSaveOptions::ODFVER_012)
     {
         OUStringBuffer sBuffer;
         ::sax::Converter::convertBool(sBuffer, pDim->GetRepeatItemLabels());

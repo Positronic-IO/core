@@ -28,8 +28,8 @@
 #include "shellid.hxx"
 
 #include <svl/lstner.hxx>
-
 #include <sfx2/StyleManager.hxx>
+#include <o3tl/deleter.hxx>
 
 class SwDoc;
 class SfxDocumentInfoDialog;
@@ -41,6 +41,7 @@ class SwWrtShell;
 class SwFEShell;
 class Reader;
 class SwReader;
+typedef std::unique_ptr<SwReader, o3tl::default_delete<SwReader>> SwReaderPtr;
 class SwCursorShell;
 class SwSrcView;
 class SwPaM;
@@ -49,11 +50,14 @@ class IDocumentDeviceAccess;
 class IDocumentChartDataProviderAccess;
 class SwDocShell;
 class SwDrawModel;
+class SwViewShell;
 namespace svt
 {
 class EmbeddedObjectRef;
 }
 namespace com { namespace sun { namespace star { namespace frame { class XController; } } } }
+namespace ooo { namespace vba { class XSinkCaller; } }
+namespace ooo { namespace vba { namespace word { class XDocument; } } }
 
 // initialize DrawModel (in form of a SwDrawModel) and DocShell (in form of a SwDocShell)
 // as needed, one or both parameters may be zero
@@ -65,7 +69,7 @@ class SW_DLLPUBLIC SwDocShell
 {
     rtl::Reference< SwDoc >                 m_xDoc;      ///< Document.
     rtl::Reference< SfxStyleSheetBasePool > m_xBasePool; ///< Passing through for formats.
-    FontList*   m_pFontList;          ///< Current Fontlist.
+    std::unique_ptr<FontList> m_pFontList;          ///< Current Fontlist.
     bool        m_IsInUpdateFontList; ///< prevent nested calls of UpdateFontList
 
     std::unique_ptr<sfx2::StyleManager> m_pStyleManager;
@@ -78,13 +82,16 @@ class SW_DLLPUBLIC SwDocShell
     SwView*     m_pView;
     SwWrtShell* m_pWrtShell;
 
-    comphelper::EmbeddedObjectContainer* m_pOLEChildList;
+    std::unique_ptr<comphelper::EmbeddedObjectContainer> m_pOLEChildList;
     sal_Int16   m_nUpdateDocMode;   ///< contains the css::document::UpdateDocMode
     bool        m_IsATemplate;      ///< prevent nested calls of UpdateFontList
 
     bool m_IsRemovedInvisibleContent;
         ///< whether SID_MAIL_PREPAREEXPORT removed content that
         ///< SID_MAIL_EXPORT_FINISHED needs to restore
+
+    css::uno::Reference< ooo::vba::XSinkCaller > mxAutomationDocumentEventsCaller;
+    css::uno::Reference< ooo::vba::word::XDocument> mxAutomationDocumentObject;
 
     /// Methods for access to doc.
     SAL_DLLPRIVATE void                  AddLink();
@@ -181,7 +188,6 @@ public:
     virtual OutputDevice* GetDocumentRefDev() override;
     virtual void      OnDocumentPrinterChanged( Printer * pNewPrinter ) override;
 
-    virtual void            PrepareReload() override;
     virtual void            SetModified( bool = true ) override;
 
     /// Dispatcher
@@ -225,7 +231,7 @@ public:
                 { return const_cast<SwDocShell*>(this)->GetFEShell(); }
 
     /// For inserting document.
-    Reader* StartConvertFrom(SfxMedium& rMedium, SwReader** ppRdr,
+    Reader* StartConvertFrom(SfxMedium& rMedium, SwReaderPtr& rpRdr,
                             SwCursorShell const * pCursorSh = nullptr, SwPaM* pPaM = nullptr);
 
 #if defined(_WIN32)
@@ -309,6 +315,21 @@ public:
     virtual void    SetChangeRecording( bool bActivate ) override;
     virtual void    SetProtectionPassword( const OUString &rPassword ) override;
     virtual bool    GetProtectionHash( /*out*/ css::uno::Sequence< sal_Int8 > &rPasswordHash ) override;
+
+    void RegisterAutomationDocumentEventsCaller(css::uno::Reference< ooo::vba::XSinkCaller > const& xCaller);
+    void CallAutomationDocumentEventSinks(const OUString& Method, css::uno::Sequence< css::uno::Any >& Arguments);
+    void RegisterAutomationDocumentObject(css::uno::Reference< ooo::vba::word::XDocument > const& xDocument);
+
+    class LockAllViewsGuard
+    {
+        std::vector<SwViewShell*> m_aViewWasUnLocked;
+
+    public:
+        explicit LockAllViewsGuard(SwViewShell* pViewShell);
+        ~LockAllViewsGuard();
+    };
+    // Lock all unlocked views, and returns a guard object which unlocks those views when destructed
+    std::unique_ptr<LockAllViewsGuard> LockAllViews();
 };
 
 /** Find the right DocShell and create a new one:

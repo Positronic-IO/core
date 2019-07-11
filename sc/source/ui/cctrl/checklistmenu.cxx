@@ -26,15 +26,16 @@
 #include <vcl/decoview.hxx>
 #include <vcl/settings.hxx>
 #include <tools/wintypes.hxx>
+#include <unotools/charclass.hxx>
 
 #include <AccessibleFilterMenu.hxx>
 #include <AccessibleFilterTopWindow.hxx>
 
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleContext.hpp>
-#include <svtools/fmtfield.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/fmtfield.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <document.hxx>
 
 using namespace com::sun::star;
@@ -822,7 +823,7 @@ void ScMenuFloatingWindow::ensureSubMenuVisible(ScMenuFloatingWindow* pSubMenu)
 
 void ScMenuFloatingWindow::ensureSubMenuNotVisible()
 {
-    if (mnSelectedMenu <= maMenuItems.size() &&
+    if (mnSelectedMenu < maMenuItems.size() &&
         maMenuItems[mnSelectedMenu].mpSubMenuWin &&
         maMenuItems[mnSelectedMenu].mpSubMenuWin->IsVisible())
     {
@@ -882,9 +883,6 @@ ScCheckListMenuWindow::ScCheckListMenuWindow(vcl::Window* pParent, ScDocument* p
     maBtnUnselectSingle(VclPtr<ImageButton>::Create(this, 0)),
     maBtnOk(VclPtr<OKButton>::Create(this)),
     maBtnCancel(VclPtr<CancelButton>::Create(this)),
-    mpExtendedData(nullptr),
-    mpOKAction(nullptr),
-    mpPopupEndAction(nullptr),
     maWndSize(),
     mePrevToggleAllState(TRISTATE_INDET),
     maTabStops(this)
@@ -1538,7 +1536,7 @@ void ScTabStops::AddTabStop( vcl::Window* pWin )
 
 void ScTabStops::SetTabStop( vcl::Window* pWin )
 {
-    if ( !maControls.size() )
+    if ( maControls.empty() )
         return;
     ControlToPosMap::const_iterator aIter = maControlToPos.find( pWin );
     if ( aIter == maControlToPos.end() )
@@ -1557,7 +1555,7 @@ void ScTabStops::SetTabStop( vcl::Window* pWin )
 
 void ScTabStops::CycleFocus( bool bReverse )
 {
-    if (!maControls.size())
+    if (maControls.empty())
         return;
     if ( mnCurTabStop < maControls.size() )
     {
@@ -1610,7 +1608,7 @@ void ScTabStops::clear()
 }
 
 ScCheckListBox::ScCheckListBox( vcl::Window* pParent )
-    :  SvTreeListBox( pParent, 0 ), mpCheckButton( nullptr ), mbSeenMouseButtonDown( false )
+    :  SvTreeListBox( pParent, 0 ), mbSeenMouseButtonDown( false )
 {
     Init();
     set_id("check_list_box");
@@ -1625,15 +1623,15 @@ SvTreeListEntry* ScCheckListBox::FindEntry( SvTreeListEntry* pParent, const OUSt
         if ( sNode == GetEntryText( pEntry ) )
             return pEntry;
 
-        pEntry = pParent ? NextSibling( pEntry ) : GetEntry( ++nRootPos );
+        pEntry = pParent ? pEntry->NextSibling() : GetEntry( ++nRootPos );
     }
     return nullptr;
 }
 
 void ScCheckListBox::Init()
 {
-    mpCheckButton = new SvLBoxButtonData( this );
-    EnableCheckButton( mpCheckButton );
+    mpCheckButton.reset( new SvLBoxButtonData( this ) );
+    EnableCheckButton( mpCheckButton.get() );
     SetNodeDefaultImages();
 }
 
@@ -1711,7 +1709,7 @@ void ScCheckListBox::CheckAllChildren( SvTreeListEntry* pParent, bool bCheck )
     while ( pEntry )
     {
         CheckAllChildren( pEntry, bCheck );
-        pEntry = NextSibling( pEntry );
+        pEntry = pEntry->NextSibling();
     }
 }
 
@@ -1739,7 +1737,7 @@ void ScCheckListBox::CheckEntry( SvTreeListEntry* pParent, bool bCheck )
                     bChildChecked = true;
                     break;
                 }
-                pChild = NextSibling( pChild );
+                pChild = pChild->NextSibling();
             }
             SetCheckButtonState( pAncestor, bChildChecked ? SvButtonState::Checked : SvButtonState::Unchecked );
             pAncestor = GetParent(pAncestor);
@@ -1807,7 +1805,7 @@ void ScCheckListBox::CountCheckedEntries( SvTreeListEntry* pParent, sal_uLong& n
     while ( pEntry )
     {
         CountCheckedEntries( pEntry, nCount );
-        pEntry = NextSibling( pEntry );
+        pEntry = pEntry->NextSibling();
     }
 }
 
@@ -1948,7 +1946,7 @@ void ScCheckListMenuWindow::getResult(ResultType& rResult)
     {
         if ( maMembers[i].mbLeaf )
         {
-            OUString aLabel = maMembers[i].maName;
+            OUStringBuffer aLabel = maMembers[i].maName;
             if (aLabel.isEmpty())
                 aLabel = ScResId(STR_EMPTYDATA);
 
@@ -1959,9 +1957,9 @@ void ScCheckListMenuWindow::getResult(ResultType& rResult)
                     pParent && pParent->GetFirstItem( SvLBoxItemType::String);
                     pParent = pParent->GetParent())
             {
-                aLabel += ";" + maChecks->GetEntryText( pParent);
+                aLabel.append(";").append(maChecks->GetEntryText( pParent));
             }
-            bool bState = vCheckeds.find(aLabel) != vCheckeds.end();
+            bool bState = vCheckeds.find(aLabel.makeStringAndClear()) != vCheckeds.end();
 
             ResultEntry aResultEntry;
             aResultEntry.bValid = bState;
@@ -2011,9 +2009,9 @@ void ScCheckListMenuWindow::close(bool bOK)
     EndPopupMode();
 }
 
-void ScCheckListMenuWindow::setExtendedData(ExtendedData* p)
+void ScCheckListMenuWindow::setExtendedData(std::unique_ptr<ExtendedData> p)
 {
-    mpExtendedData.reset(p);
+    mpExtendedData = std::move(p);
 }
 
 ScCheckListMenuWindow::ExtendedData* ScCheckListMenuWindow::getExtendedData()

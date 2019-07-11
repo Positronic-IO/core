@@ -21,8 +21,7 @@
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CACHE_SLSPAGECACHE_HXX
 
 #include <cache/SlsCacheContext.hxx>
-#include <sal/types.h>
-#include <vcl/bitmap.hxx>
+#include <vcl/bitmapex.hxx>
 #include <memory>
 
 class Size;
@@ -103,15 +102,15 @@ public:
             Returns a bitmap that is either empty, contains a scaled (up or
             down) version or is the requested bitmap.
     */
-    Bitmap GetPreviewBitmap (
+    BitmapEx GetPreviewBitmap (
         const CacheKey aKey,
         const bool bResize);
 
-    Bitmap GetMarkedPreviewBitmap (
+    BitmapEx GetMarkedPreviewBitmap (
         const CacheKey aKey);
     void SetMarkedPreviewBitmap (
         const CacheKey aKey,
-        const Bitmap& rBitmap);
+        const BitmapEx& rBitmap);
 
     /** When the requested preview bitmap does not yet exist or is not
         up-to-date then the rendering of one is scheduled.  Otherwise this

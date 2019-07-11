@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/poly.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
@@ -34,6 +35,7 @@
 #include <vcl/salbtype.hxx>
 #include <win/salframe.h>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
+#include <basegfx/utils/systemdependentdata.hxx>
 
 #include <outdata.hxx>
 #include <win/salids.hrc>
@@ -333,7 +335,7 @@ void WinSalGraphicsImpl::copyBits( const SalTwoRect& rPosAry, SalGraphics* pSrcG
     }
 }
 
-void ImplCalcOutSideRgn( const RECT& rSrcRect,
+static void ImplCalcOutSideRgn( const RECT& rSrcRect,
                          int nLeft, int nTop, int nRight, int nBottom,
                          HRGN& rhInvalidateRgn )
 {
@@ -577,14 +579,14 @@ void ImplDrawBitmap( HDC hDC, const SalTwoRect& rPosAry, const WinSalBitmap& rSa
     {
         HGLOBAL     hDrawDIB;
         HBITMAP     hDrawDDB = rSalBitmap.ImplGethDDB();
-        WinSalBitmap*   pTmpSalBmp = nullptr;
+        std::unique_ptr<WinSalBitmap> xTmpSalBmp;
         bool        bPrintDDB = ( bPrinter && hDrawDDB );
 
         if( bPrintDDB )
         {
-            pTmpSalBmp = new WinSalBitmap;
-            pTmpSalBmp->Create( rSalBitmap, rSalBitmap.GetBitCount() );
-            hDrawDIB = pTmpSalBmp->ImplGethDIB();
+            xTmpSalBmp.reset(new WinSalBitmap);
+            xTmpSalBmp->Create( rSalBitmap, rSalBitmap.GetBitCount() );
+            hDrawDIB = xTmpSalBmp->ImplGethDIB();
         }
         else
             hDrawDIB = rSalBitmap.ImplGethDIB();
@@ -668,9 +670,6 @@ void ImplDrawBitmap( HDC hDC, const SalTwoRect& rPosAry, const WinSalBitmap& rSa
 
             ImplReleaseCachedDC( CACHED_HDC_DRAW );
         }
-
-        if( bPrintDDB )
-            delete pTmpSalBmp;
     }
 }
 
@@ -851,11 +850,11 @@ void WinSalGraphicsImpl::drawMask( const SalTwoRect& rPosAry,
     DeleteBrush( hMaskBrush );
 }
 
-SalBitmap* WinSalGraphicsImpl::getBitmap( long nX, long nY, long nDX, long nDY )
+std::shared_ptr<SalBitmap> WinSalGraphicsImpl::getBitmap( long nX, long nY, long nDX, long nDY )
 {
     SAL_WARN_IF( mrParent.isPrinter(), "vcl", "No ::GetBitmap() from printer possible!" );
 
-    WinSalBitmap* pSalBitmap = nullptr;
+    std::shared_ptr<WinSalBitmap> pSalBitmap;
 
     nDX = labs( nDX );
     nDY = labs( nDY );
@@ -870,12 +869,11 @@ SalBitmap* WinSalGraphicsImpl::getBitmap( long nX, long nY, long nDX, long nDY )
 
     if( bRet )
     {
-        pSalBitmap = new WinSalBitmap;
+        pSalBitmap = std::make_shared<WinSalBitmap>();
 
         if( !pSalBitmap->Create( hBmpBitmap, FALSE, FALSE ) )
         {
-            delete pSalBitmap;
-            pSalBitmap = nullptr;
+            pSalBitmap.reset();
         }
     }
     else
@@ -1084,9 +1082,9 @@ static bool containsOnlyHorizontalAndVerticalEdges(const basegfx::B2DPolyPolygon
         return false;
     }
 
-    for(sal_uInt32 a(0); a < rCandidate.count(); a++)
+    for(auto const& rPolygon : rCandidate)
     {
-        if(!containsOnlyHorizontalAndVerticalEdges(rCandidate.getB2DPolygon(a)))
+        if(!containsOnlyHorizontalAndVerticalEdges(rPolygon))
         {
             return false;
         }
@@ -1156,11 +1154,11 @@ bool WinSalGraphicsImpl::setClipRegion( const vcl::Region& i_rClip )
                 aExpand = basegfx::B2DHomMatrix(basegfx::utils::createSourceRangeTargetRangeTransform(aRangeS, aRangeT));
             }
 
-            for(sal_uInt32 a(0); a < nCount; a++)
+            for(auto const& rPolygon : aPolyPolygon)
             {
                 const basegfx::B2DPolygon aPoly(
                     basegfx::utils::adaptiveSubdivideByDistance(
-                        aPolyPolygon.getB2DPolygon(a),
+                        rPolygon,
                         1));
                 const sal_uInt32 nPoints(aPoly.count());
 
@@ -1546,7 +1544,7 @@ void WinSalGraphicsImpl::SetFillColor( Color nColor )
     mbStockBrush = bStockBrush;
 }
 
-void WinSalGraphicsImpl::SetXORMode( bool bSet)
+void WinSalGraphicsImpl::SetXORMode( bool bSet, bool )
 {
     mbXORMode = bSet;
     ::SetROP2( mrParent.getHDC(), bSet ? R2_XORPEN : R2_COPYPEN );
@@ -1823,27 +1821,83 @@ bool WinSalGraphicsImpl::drawPolyPolygonBezier( sal_uInt32 nPoly, const sal_uInt
     return bRet;
 }
 
-void impAddB2DPolygonToGDIPlusGraphicsPathReal(
+static basegfx::B2DPoint impPixelSnap(
+    const basegfx::B2DPolygon& rPolygon,
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    basegfx::B2DHomMatrix& rObjectToDeviceInv,
+    sal_uInt32 nIndex)
+{
+    const sal_uInt32 nCount(rPolygon.count());
+
+    // get the data
+    const basegfx::B2ITuple aPrevTuple(basegfx::fround(rObjectToDevice * rPolygon.getB2DPoint((nIndex + nCount - 1) % nCount)));
+    const basegfx::B2DPoint aCurrPoint(rObjectToDevice * rPolygon.getB2DPoint(nIndex));
+    const basegfx::B2ITuple aCurrTuple(basegfx::fround(aCurrPoint));
+    const basegfx::B2ITuple aNextTuple(basegfx::fround(rObjectToDevice * rPolygon.getB2DPoint((nIndex + 1) % nCount)));
+
+    // get the states
+    const bool bPrevVertical(aPrevTuple.getX() == aCurrTuple.getX());
+    const bool bNextVertical(aNextTuple.getX() == aCurrTuple.getX());
+    const bool bPrevHorizontal(aPrevTuple.getY() == aCurrTuple.getY());
+    const bool bNextHorizontal(aNextTuple.getY() == aCurrTuple.getY());
+    const bool bSnapX(bPrevVertical || bNextVertical);
+    const bool bSnapY(bPrevHorizontal || bNextHorizontal);
+
+    if(bSnapX || bSnapY)
+    {
+        basegfx::B2DPoint aSnappedPoint(
+            bSnapX ? aCurrTuple.getX() : aCurrPoint.getX(),
+            bSnapY ? aCurrTuple.getY() : aCurrPoint.getY());
+
+        if(rObjectToDeviceInv.isIdentity())
+        {
+            rObjectToDeviceInv = rObjectToDevice;
+            rObjectToDeviceInv.invert();
+        }
+
+        aSnappedPoint *= rObjectToDeviceInv;
+
+        return aSnappedPoint;
+    }
+
+    return rPolygon.getB2DPoint(nIndex);
+}
+
+static void impAddB2DPolygonToGDIPlusGraphicsPathReal(
     Gdiplus::GraphicsPath& rGraphicsPath,
     const basegfx::B2DPolygon& rPolygon,
-    bool bNoLineJoin)
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    bool bNoLineJoin,
+    bool bPixelSnapHairline)
 {
     sal_uInt32 nCount(rPolygon.count());
 
     if(nCount)
     {
         const sal_uInt32 nEdgeCount(rPolygon.isClosed() ? nCount : nCount - 1);
-        const bool bControls(rPolygon.areControlPointsUsed());
-        basegfx::B2DPoint aCurr(rPolygon.getB2DPoint(0));
 
         if(nEdgeCount)
         {
+            const bool bControls(rPolygon.areControlPointsUsed());
+            basegfx::B2DPoint aCurr(rPolygon.getB2DPoint(0));
+            basegfx::B2DHomMatrix aObjectToDeviceInv;
+
+            if(bPixelSnapHairline)
+            {
+                aCurr = impPixelSnap(rPolygon, rObjectToDevice, aObjectToDeviceInv, 0);
+            }
+
             for(sal_uInt32 a(0); a < nEdgeCount; a++)
             {
                 const sal_uInt32 nNextIndex((a + 1) % nCount);
-                const basegfx::B2DPoint aNext(rPolygon.getB2DPoint(nNextIndex));
+                basegfx::B2DPoint aNext(rPolygon.getB2DPoint(nNextIndex));
                 const bool b1stControlPointUsed(bControls && rPolygon.isNextControlPointUsed(a));
                 const bool b2ndControlPointUsed(bControls && rPolygon.isPrevControlPointUsed(nNextIndex));
+
+                if(bPixelSnapHairline)
+                {
+                    aNext = impPixelSnap(rPolygon, rObjectToDevice, aObjectToDeviceInv, nNextIndex);
+                }
 
                 if(b1stControlPointUsed || b2ndControlPointUsed)
                 {
@@ -1894,164 +1948,391 @@ void impAddB2DPolygonToGDIPlusGraphicsPathReal(
     }
 }
 
-bool WinSalGraphicsImpl::drawPolyPolygon( const basegfx::B2DPolyPolygon& rPolyPolygon, double fTransparency)
+class SystemDependentData_GraphicsPath : public basegfx::SystemDependentData
+{
+private:
+    // the path data itself
+    std::shared_ptr<Gdiplus::GraphicsPath>  mpGraphicsPath;
+
+    // all other values the triangulation is based on and
+    // need to be compared with to check for data validity
+    bool                                    mbNoLineJoin;
+
+public:
+    SystemDependentData_GraphicsPath(
+        basegfx::SystemDependentDataManager& rSystemDependentDataManager,
+        std::shared_ptr<Gdiplus::GraphicsPath>& rpGraphicsPath,
+        bool bNoLineJoin);
+
+    // read access to Gdiplus::GraphicsPath
+    std::shared_ptr<Gdiplus::GraphicsPath>& getGraphicsPath() { return mpGraphicsPath; }
+
+    // other data-validity access
+    bool getNoLineJoin() const { return mbNoLineJoin; }
+
+    virtual sal_Int64 estimateUsageInBytes() const override;
+};
+
+SystemDependentData_GraphicsPath::SystemDependentData_GraphicsPath(
+    basegfx::SystemDependentDataManager& rSystemDependentDataManager,
+    std::shared_ptr<Gdiplus::GraphicsPath>& rpGraphicsPath,
+    bool bNoLineJoin)
+:   basegfx::SystemDependentData(rSystemDependentDataManager),
+    mpGraphicsPath(rpGraphicsPath),
+    mbNoLineJoin(bNoLineJoin)
+{
+}
+
+sal_Int64 SystemDependentData_GraphicsPath::estimateUsageInBytes() const
+{
+    sal_Int64 nRetval(0);
+
+    if(mpGraphicsPath)
+    {
+        const INT nPointCount(mpGraphicsPath->GetPointCount());
+
+        if(0 != nPointCount)
+        {
+            // Each point has
+            // - 2 x sizeof(Gdiplus::REAL)
+            // - 1 byte (see GetPathTypes in docu)
+            nRetval = nPointCount * ((2 * sizeof(Gdiplus::REAL)) + 1);
+        }
+    }
+
+    return nRetval;
+}
+
+bool WinSalGraphicsImpl::drawPolyPolygon(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolyPolygon& rPolyPolygon,
+    double fTransparency)
 {
     const sal_uInt32 nCount(rPolyPolygon.count());
 
-    if(mbBrush && nCount && (fTransparency >= 0.0 && fTransparency < 1.0))
+    if(!mbBrush || 0 == nCount || fTransparency < 0.0 || fTransparency > 1.0)
     {
-        Gdiplus::Graphics aGraphics(mrParent.getHDC());
-        const sal_uInt8 aTrans(sal_uInt8(255) - static_cast<sal_uInt8>(basegfx::fround(fTransparency * 255.0)));
-        const Gdiplus::Color aTestColor(aTrans, maFillColor.GetRed(), maFillColor.GetGreen(), maFillColor.GetBlue());
-        const Gdiplus::SolidBrush aSolidBrush(aTestColor.GetValue());
-        Gdiplus::GraphicsPath aGraphicsPath(Gdiplus::FillModeAlternate);
+        return true;
+    }
+
+    Gdiplus::Graphics aGraphics(mrParent.getHDC());
+    const sal_uInt8 aTrans(sal_uInt8(255) - static_cast<sal_uInt8>(basegfx::fround(fTransparency * 255.0)));
+    const Gdiplus::Color aTestColor(aTrans, maFillColor.GetRed(), maFillColor.GetGreen(), maFillColor.GetBlue());
+    const Gdiplus::SolidBrush aSolidBrush(aTestColor.GetValue());
+
+    // Set full (Object-to-Device) transformation - if used
+    if(rObjectToDevice.isIdentity())
+    {
+        aGraphics.ResetTransform();
+    }
+    else
+    {
+        Gdiplus::Matrix aMatrix;
+
+        aMatrix.SetElements(
+            rObjectToDevice.get(0, 0),
+            rObjectToDevice.get(1, 0),
+            rObjectToDevice.get(0, 1),
+            rObjectToDevice.get(1, 1),
+            rObjectToDevice.get(0, 2),
+            rObjectToDevice.get(1, 2));
+        aGraphics.SetTransform(&aMatrix);
+    }
+
+    // prepare local instance of Gdiplus::GraphicsPath
+    std::shared_ptr<Gdiplus::GraphicsPath> pGraphicsPath;
+
+    // try to access buffered data
+    std::shared_ptr<SystemDependentData_GraphicsPath> pSystemDependentData_GraphicsPath(
+        rPolyPolygon.getSystemDependentData<SystemDependentData_GraphicsPath>());
+
+    if(pSystemDependentData_GraphicsPath)
+    {
+        // copy buffered data
+        pGraphicsPath = pSystemDependentData_GraphicsPath->getGraphicsPath();
+    }
+    else
+    {
+        // Note: In principle we could use the same buffered geometry at line
+        // and fill polygons. Checked that in a first try, used
+        // GraphicsPath::AddPath from Gdiplus combined with below used
+        // StartFigure/CloseFigure, worked well (thus the line-draw version
+        // may create non-closed partial Polygon data).
+        //
+        // But in current reality it gets not used due to e.g.
+        // SdrPathPrimitive2D::create2DDecomposition creating transformed
+        // line and fill polygon-primitives (what could be changed).
+        //
+        // There will probably be more hindrances here in other rendering paths
+        // which could all be found - intention to do this would be: Use more
+        // transformations, less modifications of B2DPolygons/B2DPolyPolygons.
+        //
+        // A fix for SdrPathPrimitive2D would be to create the sub-geometry
+        // and embed into a TransformPrimitive2D containing the transformation.
+        //
+        // A 2nd problem is that the NoLineJoin mode (basegfx::B2DLineJoin::NONE
+        // && rLineWidths > 0.0) creates polygon fill infos that are not reusable
+        // for the fill case (see ::drawPolyLine below) - thus we would need a
+        // bool and/or two system-dependent paths buffered - doable, but complicated.
+        //
+        // All in all: Make B2DPolyPolygon a SystemDependentDataProvider and buffer
+        // the whole to-be-filled PolyPolygon independent from evtl. line-polygon
+        // (at least for now...)
+
+        // create data
+        pGraphicsPath.reset(new Gdiplus::GraphicsPath());
 
         for(sal_uInt32 a(0); a < nCount; a++)
         {
             if(0 != a)
             {
                 // #i101491# not needed for first run
-                aGraphicsPath.StartFigure();
+                pGraphicsPath->StartFigure();
             }
 
-            impAddB2DPolygonToGDIPlusGraphicsPathReal(aGraphicsPath, rPolyPolygon.getB2DPolygon(a), false);
+            impAddB2DPolygonToGDIPlusGraphicsPathReal(
+                *pGraphicsPath,
+                rPolyPolygon.getB2DPolygon(a),
+                rObjectToDevice, // not used due to the two 'false' values below, but to not forget later
+                false,
+                false);
 
-            aGraphicsPath.CloseFigure();
+            pGraphicsPath->CloseFigure();
         }
 
-        if(mrParent.getAntiAliasB2DDraw())
-        {
-            aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        }
-        else
-        {
-            aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeNone);
-        }
-
-        if(mrParent.isPrinter())
-        {
-            // #i121591#
-            // Normally GdiPlus should not be used for printing at all since printers cannot
-            // print transparent filled polygon geometry and normally this does not happen
-            // since OutputDevice::RemoveTransparenciesFromMetaFile is used as preparation
-            // and no transparent parts should remain for printing. But this can be overridden
-            // by the user and thus happens. This call can only come (currently) from
-            // OutputDevice::DrawTransparent, see comments there with the same TaskID.
-            // If it is used, the mapping for the printer is wrong and needs to be corrected. I
-            // checked that there is *no* transformation set and estimated that a stable factor
-            // dependent of the printer's DPI is used. Create and set a transformation here to
-            // correct this.
-            const Gdiplus::REAL aDpiX(aGraphics.GetDpiX());
-            const Gdiplus::REAL aDpiY(aGraphics.GetDpiY());
-
-            aGraphics.ResetTransform();
-            aGraphics.ScaleTransform(Gdiplus::REAL(100.0) / aDpiX, Gdiplus::REAL(100.0) / aDpiY, Gdiplus::MatrixOrderAppend);
-        }
-
-        aGraphics.FillPath(&aSolidBrush, &aGraphicsPath);
+        // add to buffering mechanism
+        rPolyPolygon.addOrReplaceSystemDependentData<SystemDependentData_GraphicsPath>(
+            ImplGetSystemDependentDataManager(),
+            pGraphicsPath,
+            false);
     }
 
-     return true;
+    if(mrParent.getAntiAliasB2DDraw())
+    {
+        aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    }
+    else
+    {
+        aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeNone);
+    }
+
+    if(mrParent.isPrinter())
+    {
+        // #i121591#
+        // Normally GdiPlus should not be used for printing at all since printers cannot
+        // print transparent filled polygon geometry and normally this does not happen
+        // since OutputDevice::RemoveTransparenciesFromMetaFile is used as preparation
+        // and no transparent parts should remain for printing. But this can be overridden
+        // by the user and thus happens. This call can only come (currently) from
+        // OutputDevice::DrawTransparent, see comments there with the same TaskID.
+        // If it is used, the mapping for the printer is wrong and needs to be corrected. I
+        // checked that there is *no* transformation set and estimated that a stable factor
+        // dependent of the printer's DPI is used. Create and set a transformation here to
+        // correct this.
+        const Gdiplus::REAL aDpiX(aGraphics.GetDpiX());
+        const Gdiplus::REAL aDpiY(aGraphics.GetDpiY());
+
+        // Now the transformation maybe/is already used (see above), so do
+        // modify it without resetting to not destroy it.
+        // I double-checked with MS docu that Gdiplus::MatrixOrderAppend does what
+        // we need - in our notation, would be a multiply from left to execute
+        // current transform first and this scale last.
+        // I tried to trigger this code using Print from the menu and various
+        // targets, but got no hit, thus maybe obsolete anyways. If someone knows
+        // more, feel free to remove it.
+        // One more hint: This *may* also be needed now in ::drawPolyLine below
+        // since it also uses transformations now.
+        //
+        // aGraphics.ResetTransform();
+
+        aGraphics.ScaleTransform(
+            Gdiplus::REAL(100.0) / aDpiX,
+            Gdiplus::REAL(100.0) / aDpiY,
+            Gdiplus::MatrixOrderAppend);
+    }
+
+    // use created or buffered data
+    aGraphics.FillPath(
+        &aSolidBrush,
+        &(*pGraphicsPath));
+
+    return true;
 }
 
 bool WinSalGraphicsImpl::drawPolyLine(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
     const basegfx::B2DPolygon& rPolygon,
     double fTransparency,
     const basegfx::B2DVector& rLineWidths,
     basegfx::B2DLineJoin eLineJoin,
     css::drawing::LineCap eLineCap,
-    double fMiterMinimumAngle)
+    double fMiterMinimumAngle,
+    bool bPixelSnapHairline)
 {
-    const sal_uInt32 nCount(rPolygon.count());
-
-    if(mbPen && nCount)
+    if(!mbPen || 0 == rPolygon.count())
     {
-        Gdiplus::Graphics aGraphics(mrParent.getHDC());
-        const sal_uInt8 aTrans = static_cast<sal_uInt8>(basegfx::fround( 255 * (1.0 - fTransparency) ));
-        const Gdiplus::Color aTestColor(aTrans, maLineColor.GetRed(), maLineColor.GetGreen(), maLineColor.GetBlue());
-        Gdiplus::Pen aPen(aTestColor.GetValue(), Gdiplus::REAL(rLineWidths.getX()));
-        Gdiplus::GraphicsPath aGraphicsPath(Gdiplus::FillModeAlternate);
-        bool bNoLineJoin(false);
+        return true;
+    }
 
-        switch(eLineJoin)
+    Gdiplus::Graphics aGraphics(mrParent.getHDC());
+    const sal_uInt8 aTrans = static_cast<sal_uInt8>(basegfx::fround( 255 * (1.0 - fTransparency) ));
+    const Gdiplus::Color aTestColor(aTrans, maLineColor.GetRed(), maLineColor.GetGreen(), maLineColor.GetBlue());
+    Gdiplus::Pen aPen(aTestColor.GetValue(), Gdiplus::REAL(rLineWidths.getX()));
+    bool bNoLineJoin(false);
+
+    // Set full (Object-to-Device) transformation - if used
+    if(rObjectToDevice.isIdentity())
+    {
+        aGraphics.ResetTransform();
+    }
+    else
+    {
+        Gdiplus::Matrix aMatrix;
+
+        aMatrix.SetElements(
+            rObjectToDevice.get(0, 0),
+            rObjectToDevice.get(1, 0),
+            rObjectToDevice.get(0, 1),
+            rObjectToDevice.get(1, 1),
+            rObjectToDevice.get(0, 2),
+            rObjectToDevice.get(1, 2));
+        aGraphics.SetTransform(&aMatrix);
+    }
+
+    switch(eLineJoin)
+    {
+        case basegfx::B2DLineJoin::NONE :
         {
-            case basegfx::B2DLineJoin::NONE :
+            if(basegfx::fTools::more(rLineWidths.getX(), 0.0))
             {
-                if(basegfx::fTools::more(rLineWidths.getX(), 0.0))
-                {
-                    bNoLineJoin = true;
-                }
-                break;
+                bNoLineJoin = true;
             }
-            case basegfx::B2DLineJoin::Bevel :
-            {
-                aPen.SetLineJoin(Gdiplus::LineJoinBevel);
-                break;
-            }
-            case basegfx::B2DLineJoin::Miter :
-            {
-                const Gdiplus::REAL aMiterLimit(1.0/sin(fMiterMinimumAngle/2.0));
-
-                aPen.SetMiterLimit(aMiterLimit);
-                // tdf#99165 MS's LineJoinMiter creates non standard conform miter additional
-                // graphics, somewhere clipped in some distance from the edge point, dependent
-                // of MiterLimit. The more default-like option is LineJoinMiterClipped, so use
-                // that instead
-                aPen.SetLineJoin(Gdiplus::LineJoinMiterClipped);
-                break;
-            }
-            case basegfx::B2DLineJoin::Round :
-            {
-                aPen.SetLineJoin(Gdiplus::LineJoinRound);
-                break;
-            }
+            break;
         }
-
-        switch(eLineCap)
+        case basegfx::B2DLineJoin::Bevel :
         {
-            default: /*css::drawing::LineCap_BUTT*/
-            {
-                // nothing to do
-                break;
-            }
-            case css::drawing::LineCap_ROUND:
-            {
-                aPen.SetStartCap(Gdiplus::LineCapRound);
-                aPen.SetEndCap(Gdiplus::LineCapRound);
-                break;
-            }
-            case css::drawing::LineCap_SQUARE:
-            {
-                aPen.SetStartCap(Gdiplus::LineCapSquare);
-                aPen.SetEndCap(Gdiplus::LineCapSquare);
-                break;
-            }
+            aPen.SetLineJoin(Gdiplus::LineJoinBevel);
+            break;
         }
+        case basegfx::B2DLineJoin::Miter :
+        {
+            const Gdiplus::REAL aMiterLimit(1.0/sin(fMiterMinimumAngle/2.0));
 
-        impAddB2DPolygonToGDIPlusGraphicsPathReal(aGraphicsPath, rPolygon, bNoLineJoin);
+            aPen.SetMiterLimit(aMiterLimit);
+            // tdf#99165 MS's LineJoinMiter creates non standard conform miter additional
+            // graphics, somewhere clipped in some distance from the edge point, dependent
+            // of MiterLimit. The more default-like option is LineJoinMiterClipped, so use
+            // that instead
+            aPen.SetLineJoin(Gdiplus::LineJoinMiterClipped);
+            break;
+        }
+        case basegfx::B2DLineJoin::Round :
+        {
+            aPen.SetLineJoin(Gdiplus::LineJoinRound);
+            break;
+        }
+    }
+
+    switch(eLineCap)
+    {
+        default: /*css::drawing::LineCap_BUTT*/
+        {
+            // nothing to do
+            break;
+        }
+        case css::drawing::LineCap_ROUND:
+        {
+            aPen.SetStartCap(Gdiplus::LineCapRound);
+            aPen.SetEndCap(Gdiplus::LineCapRound);
+            break;
+        }
+        case css::drawing::LineCap_SQUARE:
+        {
+            aPen.SetStartCap(Gdiplus::LineCapSquare);
+            aPen.SetEndCap(Gdiplus::LineCapSquare);
+            break;
+        }
+    }
+
+    // prepare local instance of Gdiplus::GraphicsPath
+    std::shared_ptr<Gdiplus::GraphicsPath> pGraphicsPath;
+
+    // try to access buffered data
+    std::shared_ptr<SystemDependentData_GraphicsPath> pSystemDependentData_GraphicsPath(
+        rPolygon.getSystemDependentData<SystemDependentData_GraphicsPath>());
+
+    if(pSystemDependentData_GraphicsPath)
+    {
+        // check data validity
+        if(pSystemDependentData_GraphicsPath->getNoLineJoin() != bNoLineJoin)
+        {
+            // data invalid, forget
+            pSystemDependentData_GraphicsPath.reset();
+        }
+    }
+
+    if(pSystemDependentData_GraphicsPath)
+    {
+        // copy buffered data
+        pGraphicsPath = pSystemDependentData_GraphicsPath->getGraphicsPath();
+    }
+    else
+    {
+        // fill data of buffered data
+        pGraphicsPath.reset(new Gdiplus::GraphicsPath());
+
+        impAddB2DPolygonToGDIPlusGraphicsPathReal(
+            *pGraphicsPath,
+            rPolygon,
+            rObjectToDevice,
+            bNoLineJoin,
+            bPixelSnapHairline);
 
         if(rPolygon.isClosed() && !bNoLineJoin)
         {
             // #i101491# needed to create the correct line joins
-            aGraphicsPath.CloseFigure();
+            pGraphicsPath->CloseFigure();
         }
 
-        if(mrParent.getAntiAliasB2DDraw())
-        {
-            aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        }
-        else
-        {
-            aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeNone);
-        }
-
-        aGraphics.DrawPath(&aPen, &aGraphicsPath);
+        // add to buffering mechanism
+        rPolygon.addOrReplaceSystemDependentData<SystemDependentData_GraphicsPath>(
+            ImplGetSystemDependentDataManager(),
+            pGraphicsPath,
+            bNoLineJoin);
     }
+
+    if(mrParent.getAntiAliasB2DDraw())
+    {
+        aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    }
+    else
+    {
+        aGraphics.SetSmoothingMode(Gdiplus::SmoothingModeNone);
+    }
+
+    if(mrParent.isPrinter())
+    {
+        // tdf#122384 As metioned above in WinSalGraphicsImpl::drawPolyPolygon
+        // (look for 'One more hint: This *may* also be needed now in'...).
+        // See comments in same spot above *uregntly* before doing changes here,
+        // these comments are *still fully valid* at this place (!)
+        const Gdiplus::REAL aDpiX(aGraphics.GetDpiX());
+        const Gdiplus::REAL aDpiY(aGraphics.GetDpiY());
+
+        aGraphics.ScaleTransform(
+            Gdiplus::REAL(100.0) / aDpiX,
+            Gdiplus::REAL(100.0) / aDpiY,
+            Gdiplus::MatrixOrderAppend);
+    }
+
+    aGraphics.DrawPath(
+        &aPen,
+        &(*pGraphicsPath));
 
     return true;
 }
 
-void paintToGdiPlus(
+static void paintToGdiPlus(
     Gdiplus::Graphics& rGraphics,
     const SalTwoRect& rTR,
     Gdiplus::Bitmap& rBitmap)
@@ -2082,7 +2363,7 @@ void paintToGdiPlus(
         &aAttributes);
 }
 
-void setInterpolationMode(
+static void setInterpolationMode(
     Gdiplus::Graphics& rGraphics,
     long rSrcWidth,
     long rDestWidth,

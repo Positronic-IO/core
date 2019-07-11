@@ -21,8 +21,8 @@
 #include <sfx2/filedlghelper.hxx>
 #include <sfx2/app.hxx>
 #include <svl/aeitem.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/treelistentry.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/defaultoptions.hxx>
@@ -51,6 +51,7 @@
 #include "optHeaderTabListbox.hxx"
 #include <vcl/help.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace css;
 using namespace css::beans;
@@ -146,29 +147,28 @@ static OUString getCfgName_Impl( sal_uInt16 _nHandle )
 
 static OUString Convert_Impl( const OUString& rValue )
 {
-    OUString aReturn;
     if (rValue.isEmpty())
-        return aReturn;
+        return OUString();
 
     sal_Int32 nPos = 0;
-
+    OUStringBuffer aReturn;
     for (;;)
     {
         OUString aValue = rValue.getToken( 0, MULTIPATH_DELIMITER, nPos );
         INetURLObject aObj( aValue );
         if ( aObj.GetProtocol() == INetProtocol::File )
-            aReturn += aObj.PathToFileName();
+            aReturn.append(aObj.PathToFileName());
         if ( nPos < 0 )
             break;
-        aReturn += OUStringLiteral1(MULTIPATH_DELIMITER);
+        aReturn.append(MULTIPATH_DELIMITER);
     }
 
-    return aReturn;
+    return aReturn.makeStringAndClear();
 }
 
 // functions -------------------------------------------------------------
 
-bool IsMultiPath_Impl( const sal_uInt16 nIndex )
+static bool IsMultiPath_Impl( const sal_uInt16 nIndex )
 {
 #if OSL_DEBUG_LEVEL > 1
     return ( SvtPathOptions::PATH_AUTOCORRECT == nIndex ||
@@ -437,7 +437,8 @@ IMPL_LINK_NOARG(SvxPathTabPage, StandardHdl_Impl, Button*, void)
             }
             while ( nOldPos >= 0 );
 
-            OUString sUserPath, sWritablePath;
+            OUString sWritablePath;
+            OUStringBuffer sUserPath;
             if ( !sTemp.isEmpty() )
             {
                 sal_Int32 nNextPos = 0;
@@ -451,13 +452,13 @@ IMPL_LINK_NOARG(SvxPathTabPage, StandardHdl_Impl, Button*, void)
                         break;
                     }
                     if ( !sUserPath.isEmpty() )
-                        sUserPath += OUStringLiteral1(MULTIPATH_DELIMITER);
-                    sUserPath += sToken;
+                        sUserPath.append(MULTIPATH_DELIMITER);
+                    sUserPath.append(sToken);
                 }
             }
             pPathBox->SetEntryText( Convert_Impl( sTemp ), pEntry, 1 );
             pPathImpl->eState = SfxItemState::SET;
-            pPathImpl->sUserPath = sUserPath;
+            pPathImpl->sUserPath = sUserPath.makeStringAndClear();
             pPathImpl->sWritablePath = sWritablePath;
         }
         pEntry = pPathBox->NextSelected( pEntry );
@@ -555,57 +556,53 @@ IMPL_LINK_NOARG(SvxPathTabPage, PathHdl_Impl, Button*, void)
     if ( IsMultiPath_Impl( nPos ) )
     {
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if ( pFact )
+        ScopedVclPtr<AbstractSvxMultiPathDialog> pMultiDlg(
+            pFact->CreateSvxMultiPathDialog( this ));
+
+        OUString sPath( sUser );
+        if ( !sPath.isEmpty() )
+            sPath += OUStringLiteral1(MULTIPATH_DELIMITER);
+        sPath += sWritable;
+        pMultiDlg->SetPath( sPath );
+
+        const OUString sPathName = SvTabListBox::GetEntryText( pEntry, 0 );
+        const OUString sNewTitle = pImpl->m_sMultiPathDlg.replaceFirst( VAR_ONE, sPathName );
+        pMultiDlg->SetTitle( sNewTitle );
+
+        if ( pMultiDlg->Execute() == RET_OK && pEntry )
         {
-            ScopedVclPtr<AbstractSvxMultiPathDialog> pMultiDlg(
-                pFact->CreateSvxMultiPathDialog( this ));
-            DBG_ASSERT( pMultiDlg, "Dialog creation failed!" );
-
-            OUString sPath( sUser );
-            if ( !sPath.isEmpty() )
-                sPath += OUStringLiteral1(MULTIPATH_DELIMITER);
-            sPath += sWritable;
-            pMultiDlg->SetPath( sPath );
-
-            const OUString sPathName = SvTabListBox::GetEntryText( pEntry, 0 );
-            const OUString sNewTitle = pImpl->m_sMultiPathDlg.replaceFirst( VAR_ONE, sPathName );
-            pMultiDlg->SetTitle( sNewTitle );
-
-            if ( pMultiDlg->Execute() == RET_OK && pEntry )
+            sUser.clear();
+            sWritable.clear();
+            OUString sFullPath;
+            OUString sNewPath = pMultiDlg->GetPath();
+            if ( !sNewPath.isEmpty() )
             {
-                sUser.clear();
-                sWritable.clear();
-                OUString sFullPath;
-                OUString sNewPath = pMultiDlg->GetPath();
-                if ( !sNewPath.isEmpty() )
+                sal_Int32 nNextPos = 0;
+                for (;;)
                 {
-                    sal_Int32 nNextPos = 0;
-                    for (;;)
+                    const OUString sToken(sNewPath.getToken( 0, MULTIPATH_DELIMITER, nNextPos ));
+                    if ( nNextPos<0 )
                     {
-                        const OUString sToken(sNewPath.getToken( 0, MULTIPATH_DELIMITER, nNextPos ));
-                        if ( nNextPos<0 )
-                        {
-                            // Last token need a different handling
-                            sWritable = sToken;
-                            break;
-                        }
-                        if ( !sUser.isEmpty() )
-                            sUser += OUStringLiteral1(MULTIPATH_DELIMITER);
-                        sUser += sToken;
+                        // Last token need a different handling
+                        sWritable = sToken;
+                        break;
                     }
-                    sFullPath = sUser;
-                    if ( !sFullPath.isEmpty() )
-                        sFullPath += OUStringLiteral1(MULTIPATH_DELIMITER);
-                    sFullPath += sWritable;
+                    if ( !sUser.isEmpty() )
+                        sUser += OUStringLiteral1(MULTIPATH_DELIMITER);
+                    sUser += sToken;
                 }
-
-                pPathBox->SetEntryText( Convert_Impl( sFullPath ), pEntry, 1 );
-                // save modified flag
-                PathUserData_Impl* pPathImpl = static_cast<PathUserData_Impl*>(pEntry->GetUserData());
-                pPathImpl->eState = SfxItemState::SET;
-                pPathImpl->sUserPath = sUser;
-                pPathImpl->sWritablePath = sWritable;
+                sFullPath = sUser;
+                if ( !sFullPath.isEmpty() )
+                    sFullPath += OUStringLiteral1(MULTIPATH_DELIMITER);
+                sFullPath += sWritable;
             }
+
+            pPathBox->SetEntryText( Convert_Impl( sFullPath ), pEntry, 1 );
+            // save modified flag
+            PathUserData_Impl* pPathImpl = static_cast<PathUserData_Impl*>(pEntry->GetUserData());
+            pPathImpl->eState = SfxItemState::SET;
+            pPathImpl->sUserPath = sUser;
+            pPathImpl->sWritablePath = sWritable;
         }
     }
     else if (pEntry && !bPickFile)

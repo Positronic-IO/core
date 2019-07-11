@@ -35,6 +35,7 @@
 #include <comphelper/property.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
+#include <comphelper/types.hxx>
 
 #include <connectivity/dbtools.hxx>
 #include <com/sun/star/view/PaperFormat.hpp>
@@ -62,7 +63,6 @@
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/EmbedMapUnits.hpp>
-#include <comphelper/streamsection.hxx>
 #include <com/sun/star/awt/FontWeight.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
 #include <com/sun/star/awt/TextAlign.hpp>
@@ -435,13 +435,13 @@ FeatureState OReportController::GetState(sal_uInt16 _nId) const
                     ( _nId == SID_UNDO ) ? &SfxUndoManager::GetUndoActionCount : &SfxUndoManager::GetRedoActionCount;
 
                 SfxUndoManager& rUndoManager( getUndoManager() );
-                aReturn.bEnabled = ( rUndoManager.*retrieveCount )( ::svl::IUndoManager::TopLevel ) > 0;
+                aReturn.bEnabled = ( rUndoManager.*retrieveCount )( SfxUndoManager::TopLevel ) > 0;
                 if ( aReturn.bEnabled )
                 {
                     // TODO: add "Undo/Redo: prefix"
                     OUString ( SfxUndoManager::*retrieveComment )( size_t, bool const ) const =
                         ( _nId == SID_UNDO ) ? &SfxUndoManager::GetUndoActionComment : &SfxUndoManager::GetRedoActionComment;
-                    aReturn.sTitle = (rUndoManager.*retrieveComment)( 0, ::svl::IUndoManager::TopLevel );
+                    aReturn.sTitle = (rUndoManager.*retrieveComment)( 0, SfxUndoManager::TopLevel );
                 }
             }
             break;
@@ -592,7 +592,7 @@ FeatureState OReportController::GetState(sal_uInt16 _nId) const
             break;
         case SID_INSERT_DIAGRAM:
             aReturn.bEnabled = isEditable();
-            aReturn.bInvisible = optional< bool >(!m_bChartEnabled);
+            aReturn.bInvisible = !m_bChartEnabled;
             aReturn.bChecked = getDesignView()->GetInsertObj() == OBJ_OLE2;
             break;
         case SID_FM_FIXEDTEXT:
@@ -1040,7 +1040,7 @@ void OReportController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >
             {
                 OSectionView* pSectionView = getCurrentSectionView();
                 if ( pSectionView )
-                    pSectionView->DistributeMarkedObjects();
+                    pSectionView->DistributeMarkedObjects(getFrameWeld());
             }
             break;
         case SID_OBJECT_SMALLESTWIDTH:
@@ -1555,7 +1555,7 @@ void OReportController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >
                 if ( !aArgs.getLength() )
                 {
                     ODateTimeDialog aDlg(getFrameWeld(), getDesignView()->getCurrentSection(), this);
-                    aDlg.execute();
+                    aDlg.run();
                 }
                 else
                     createDateTime(aArgs);
@@ -1566,8 +1566,8 @@ void OReportController::Execute(sal_uInt16 _nId, const Sequence< PropertyValue >
             {
                 if ( !aArgs.getLength() )
                 {
-                    ScopedVclPtrInstance< OPageNumberDialog > aDlg(getView(),m_xReportDefinition,this);
-                    aDlg->Execute();
+                    OPageNumberDialog aDlg(getFrameWeld(), m_xReportDefinition, this);
+                    aDlg.run();
                 }
                 else
                     createPageNumber(aArgs);
@@ -2339,7 +2339,7 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
     };
 
     MeasurementSystem eSystem = SvtSysLocale().GetLocaleData().getMeasurementSystemEnum();
-    FieldUnit eUserMetric = MeasurementSystem::Metric == eSystem ? FUNIT_CM : FUNIT_INCH;
+    FieldUnit eUserMetric = MeasurementSystem::Metric == eSystem ? FieldUnit::CM : FieldUnit::INCH;
     static const sal_uInt16 pRanges[] =
     {
         RPTUI_ID_LRSPACE, XATTR_FILL_LAST,
@@ -2423,16 +2423,16 @@ void OReportController::openPageDialog(const uno::Reference<report::XSection>& _
         }
 
         {   // want the dialog to be destroyed before our set
-            ScopedVclPtrInstance<ORptPageDialog> aDlg(
-                getView(), pDescriptor.get(),_xSection.is()
+            ORptPageDialog aDlg(
+                getFrameWeld(), pDescriptor.get(),_xSection.is()
                            ? OUString("BackgroundDialog")
                            : OUString("PageDialog"));
-            if (RET_OK == aDlg->Execute())
+            if (aDlg.run() == RET_OK)
             {
 
                 // ItemSet->UNO
                 // UNO-properties
-                const SfxItemSet* pSet = aDlg->GetOutputItemSet();
+                const SfxItemSet* pSet = aDlg.GetOutputItemSet();
                 if ( _xSection.is() )
                 {
                     const SfxPoolItem* pItem;
@@ -3110,8 +3110,7 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
         pNewControl = SdrObjFactory::MakeNewObject(
             *m_aReportModel,
             SdrInventor::ReportDesign,
-            _nObjectId,
-            pSectionWindow->getReportSection().getPage());
+            _nObjectId);
         xShapeProp.set(pNewControl->getUnoShape(),uno::UNO_QUERY);
         OUString sCustomShapeType = getDesignView()->GetInsertObjString();
         if ( sCustomShapeType.isEmpty() )
@@ -3124,8 +3123,7 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
         pNewControl = SdrObjFactory::MakeNewObject(
             *m_aReportModel,
             SdrInventor::ReportDesign,
-            _nObjectId,
-            pSectionWindow->getReportSection().getPage());
+            _nObjectId);
 
         pNewControl->SetLogicRect(tools::Rectangle(3000,500,8000,5500)); // switch height and width
         xShapeProp.set(pNewControl->getUnoShape(),uno::UNO_QUERY_THROW);
@@ -3137,20 +3135,31 @@ void OReportController::createControl(const Sequence< PropertyValue >& _aArgs,co
     }
     else
     {
-        SdrUnoObj* pLabel( nullptr );
-        SdrUnoObj* pControl( nullptr );
-        FmFormView::createControlLabelPair( getDesignView()
-                            ,nLeftMargin,0
-                            ,nullptr,nullptr,_nObjectId,SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
-                         nullptr,pSectionWindow->getReportSection().getPage(),m_aReportModel.get(),
-                         pLabel,pControl);
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pLabel;
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pControl;
 
-        // always use SdrObject::Free(...) for SdrObjects (!)
-        SdrObject* pTemp(pLabel);
-        SdrObject::Free(pTemp);
+        FmFormView::createControlLabelPair(
+            getDesignView(),
+            nLeftMargin,
+            0,
+            nullptr,
+            nullptr,
+            _nObjectId,
+            SdrInventor::ReportDesign,
+            OBJ_DLG_FIXEDTEXT,
 
-        pNewControl = pControl;
-        OUnoObject* pObj = dynamic_cast<OUnoObject*>(pControl);
+            // tdf#118963 Need a SdrModel for SdrObject creation. Dereferencing
+            // m_aReportModel seems pretty safe, it's done in other places, initialized
+            // in impl_initialize and throws a RuntimeException if not existing.
+            *m_aReportModel,
+
+            pLabel,
+            pControl);
+
+        pLabel.reset();
+
+        pNewControl = pControl.release();
+        OUnoObject* pObj = dynamic_cast<OUnoObject*>(pNewControl);
         assert(pObj);
         if(pObj)
         {
@@ -3428,20 +3437,32 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
                 continue;
 
             Reference< XNumberFormats >  xNumberFormats(xSupplier->getNumberFormats());
-            SdrUnoObj* pControl[2];
-            pControl[0] = nullptr;
-            pControl[1] = nullptr;
+            std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pControl[2];
             const sal_Int32 nRightMargin = getStyleProperty<sal_Int32>(m_xReportDefinition,PROPERTY_RIGHTMARGIN);
             const sal_Int32 nPaperWidth = getStyleProperty<awt::Size>(m_xReportDefinition,PROPERTY_PAPERSIZE).Width - nRightMargin;
             OSectionView* pSectionViews[2];
             pSectionViews[0] = &pSectionWindow[1]->getReportSection().getSectionView();
             pSectionViews[1] = &pSectionWindow[0]->getReportSection().getSectionView();
+
             // find this in svx
-            FmFormView::createControlLabelPair( getDesignView()
-                ,nLeftMargin,0
-                ,xField,xNumberFormats,nOBJID,SdrInventor::ReportDesign,OBJ_DLG_FIXEDTEXT,
-                pSectionWindow[1]->getReportSection().getPage(),pSectionWindow[0]->getReportSection().getPage(),m_aReportModel.get(),
-                pControl[0],pControl[1]);
+            FmFormView::createControlLabelPair(
+                getDesignView(),
+                nLeftMargin,
+                0,
+                xField,
+                xNumberFormats,
+                nOBJID,
+                SdrInventor::ReportDesign,
+                OBJ_DLG_FIXEDTEXT,
+
+                // tdf#118963 Need a SdrModel for SdrObject creation. Dereferencing
+                // m_aReportModel seems pretty safe, it's done in other places, initialized
+                // in impl_initialize and throws a RuntimeException if not existing.
+                *m_aReportModel,
+
+                pControl[0],
+                pControl[1]);
+
             if ( pControl[0] && pControl[1] )
             {
                 SdrPageView* pPgViews[2];
@@ -3454,7 +3475,7 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
                     OUnoObject* pObjs[2];
                     for(i = 0; i < SAL_N_ELEMENTS(pControl); ++i)
                     {
-                        pObjs[i] = dynamic_cast<OUnoObject*>(pControl[i]);
+                        pObjs[i] = dynamic_cast<OUnoObject*>(pControl[i].get());
                         uno::Reference<beans::XPropertySet> xUnoProp(pObjs[i]->GetUnoControlModel(),uno::UNO_QUERY_THROW);
                         uno::Reference< report::XReportComponent> xShapeProp(pObjs[i]->getUnoShape(),uno::UNO_QUERY_THROW);
                         xUnoProp->setPropertyValue(PROPERTY_NAME,xShapeProp->getPropertyValue(PROPERTY_NAME));
@@ -3525,21 +3546,21 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
                         }
                         xShapePropLabel->setPosition(aPosLabel);
                     }
-                    OUnoObject* pObj = dynamic_cast<OUnoObject*>(pControl[0]);
+                    OUnoObject* pObj = dynamic_cast<OUnoObject*>(pControl[0].get());
                     uno::Reference< report::XFixedText> xShapeProp(pObj->getUnoShape(),uno::UNO_QUERY_THROW);
                     xShapeProp->setName(xShapeProp->getName() + sDefaultName );
 
                     for(i = 0; i < SAL_N_ELEMENTS(pControl); ++i) // insert controls
                     {
-                        correctOverlapping(pControl[i],pSectionWindow[1-i]->getReportSection());
+                        correctOverlapping(pControl[i].get(), pSectionWindow[1-i]->getReportSection());
                     }
 
                     if (!bLabelAboveTextField )
                     {
                         if ( pSectionViews[0] == pSectionViews[1] )
                         {
-                            tools::Rectangle aLabel = getRectangleFromControl(pControl[0]);
-                            tools::Rectangle aTextfield = getRectangleFromControl(pControl[1]);
+                            tools::Rectangle aLabel = getRectangleFromControl(pControl[0].get());
+                            tools::Rectangle aTextfield = getRectangleFromControl(pControl[1].get());
 
                             // create a Union of the given Label and Textfield
                             tools::Rectangle aLabelAndTextfield( aLabel );
@@ -3575,15 +3596,9 @@ void OReportController::addPairControls(const Sequence< PropertyValue >& aArgs)
                     }
                     }
                 }
-            }
-            else
-            {
-                for(SdrUnoObj* i : pControl)
-                {
-                    // always use SdrObject::Free(...) for SdrObjects (!)
-                    SdrObject* pTemp(i);
-                    SdrObject::Free(pTemp);
-                }
+                // not sure where the ownership of these passes too...
+                pControl[0].release();
+                pControl[1].release();
             }
         }
     }
@@ -3752,13 +3767,13 @@ void OReportController::switchReportSection(const sal_Int16 _nId)
             const OUString sUndoAction(RptResId(bSwitchOn ? RID_STR_UNDO_ADD_REPORTHEADERFOOTER : RID_STR_UNDO_REMOVE_REPORTHEADERFOOTER));
             pUndoContext.reset( new UndoContext( getUndoManager(), sUndoAction ) );
 
-            addUndoAction(new OReportSectionUndo(*(m_aReportModel),SID_REPORTHEADER_WITHOUT_UNDO
+            addUndoAction(o3tl::make_unique<OReportSectionUndo>(*(m_aReportModel),SID_REPORTHEADER_WITHOUT_UNDO
                                                             ,::std::mem_fn(&OReportHelper::getReportHeader)
                                                             ,m_xReportDefinition
                                                             ,bSwitchOn ? Inserted : Removed
                                                             ));
 
-            addUndoAction(new OReportSectionUndo(*(m_aReportModel),SID_REPORTFOOTER_WITHOUT_UNDO
+            addUndoAction(o3tl::make_unique<OReportSectionUndo>(*(m_aReportModel),SID_REPORTFOOTER_WITHOUT_UNDO
                                                             ,::std::mem_fn(&OReportHelper::getReportFooter)
                                                             ,m_xReportDefinition
                                                             ,bSwitchOn ? Inserted : Removed
@@ -3799,14 +3814,14 @@ void OReportController::switchPageSection(const sal_Int16 _nId)
             const OUString sUndoAction(RptResId(bSwitchOn ? RID_STR_UNDO_ADD_REPORTHEADERFOOTER : RID_STR_UNDO_REMOVE_REPORTHEADERFOOTER));
             pUndoContext.reset( new UndoContext( getUndoManager(), sUndoAction ) );
 
-            addUndoAction(new OReportSectionUndo(*m_aReportModel
+            addUndoAction(o3tl::make_unique<OReportSectionUndo>(*m_aReportModel
                                                             ,SID_PAGEHEADER_WITHOUT_UNDO
                                                             ,::std::mem_fn(&OReportHelper::getPageHeader)
                                                             ,m_xReportDefinition
                                                             ,bSwitchOn ? Inserted : Removed
                                                             ));
 
-            addUndoAction(new OReportSectionUndo(*m_aReportModel
+            addUndoAction(o3tl::make_unique<OReportSectionUndo>(*m_aReportModel
                                                             ,SID_PAGEFOOTER_WITHOUT_UNDO
                                                             ,::std::mem_fn(&OReportHelper::getPageFooter)
                                                             ,m_xReportDefinition
@@ -3853,7 +3868,7 @@ void OReportController::modifyGroup(const bool _bAppend, const Sequence< Propert
             rUndoEnv.AddElement( xGroup->getFunctions() );
         }
 
-        addUndoAction( new OGroupUndo(
+        addUndoAction( o3tl::make_unique<OGroupUndo>(
             *m_aReportModel,
             _bAppend ? RID_STR_UNDO_APPEND_GROUP : RID_STR_UNDO_REMOVE_GROUP,
             _bAppend ? Inserted : Removed,
@@ -3887,7 +3902,7 @@ void OReportController::createGroupSection(const bool _bUndo,const bool _bHeader
         {
             const OXUndoEnvironment::OUndoEnvLock aLock(m_aReportModel->GetUndoEnv());
             if ( _bUndo )
-                addUndoAction(new OGroupSectionUndo(*m_aReportModel
+                addUndoAction(o3tl::make_unique<OGroupSectionUndo>(*m_aReportModel
                                                                 ,_bHeader ? SID_GROUPHEADER_WITHOUT_UNDO : SID_GROUPFOOTER_WITHOUT_UNDO
                                                                 ,_bHeader ? ::std::mem_fn(&OGroupHelper::getHeader) : ::std::mem_fn(&OGroupHelper::getFooter)
                                                                 ,xGroup
@@ -4147,7 +4162,18 @@ bool OReportController::impl_setPropertyAtControls_throw(const char* pUndoResId,
     {
         const uno::Reference< beans::XPropertySet > xControlModel(*aIter,uno::UNO_QUERY);
         if ( xControlModel.is() )
-            xControlModel->setPropertyValue(_sProperty,_aValue);
+            // tdf#117795: some elements may have not some property
+            // eg class "OFixedLine" doesn't have property "CharFontName"
+            // so in this case, instead of crashing when selecting all and changing font
+            // just display a warning
+            try
+            {
+                xControlModel->setPropertyValue(_sProperty,_aValue);
+            }
+            catch(const UnknownPropertyException& e)
+            {
+                SAL_WARN("reportdesign", "UnknownPropertyException:" << e);
+            }
     }
 
     return !aSelection.empty();
@@ -4175,56 +4201,54 @@ OSectionWindow* OReportController::getSectionWindow(const css::uno::Reference< c
 void OReportController::openZoomDialog()
 {
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    if ( pFact )
+
+    static SfxItemInfo aItemInfos[] =
     {
-        static SfxItemInfo aItemInfos[] =
-        {
-            { SID_ATTR_ZOOM, true }
-        };
-        std::vector<SfxPoolItem*> pDefaults
-        {
-            new SvxZoomItem()
-        };
-        static const sal_uInt16 pRanges[] =
-        {
-            SID_ATTR_ZOOM,SID_ATTR_ZOOM,
-            0
-        };
-        SfxItemPool* pPool( new SfxItemPool("ZoomProperties", SID_ATTR_ZOOM,SID_ATTR_ZOOM, aItemInfos, &pDefaults) );
-        pPool->SetDefaultMetric( MapUnit::Map100thMM );    // ripped, don't understand why
-        pPool->FreezeIdRanges();                        // the same
-        try
-        {
-            ::std::unique_ptr<SfxItemSet> pDescriptor(new SfxItemSet(*pPool, pRanges));
-            // fill it
-            SvxZoomItem aZoomItem( m_eZoomType, m_nZoomValue, SID_ATTR_ZOOM );
-            aZoomItem.SetValueSet(SvxZoomEnableFlags::N100|SvxZoomEnableFlags::WHOLEPAGE|SvxZoomEnableFlags::PAGEWIDTH);
-            pDescriptor->Put(aZoomItem);
+        { SID_ATTR_ZOOM, true }
+    };
+    std::vector<SfxPoolItem*> pDefaults
+    {
+        new SvxZoomItem()
+    };
+    static const sal_uInt16 pRanges[] =
+    {
+        SID_ATTR_ZOOM,SID_ATTR_ZOOM,
+        0
+    };
+    SfxItemPool* pPool( new SfxItemPool("ZoomProperties", SID_ATTR_ZOOM,SID_ATTR_ZOOM, aItemInfos, &pDefaults) );
+    pPool->SetDefaultMetric( MapUnit::Map100thMM );    // ripped, don't understand why
+    pPool->FreezeIdRanges();                        // the same
+    try
+    {
+        ::std::unique_ptr<SfxItemSet> pDescriptor(new SfxItemSet(*pPool, pRanges));
+        // fill it
+        SvxZoomItem aZoomItem( m_eZoomType, m_nZoomValue, SID_ATTR_ZOOM );
+        aZoomItem.SetValueSet(SvxZoomEnableFlags::N100|SvxZoomEnableFlags::WHOLEPAGE|SvxZoomEnableFlags::PAGEWIDTH);
+        pDescriptor->Put(aZoomItem);
 
-            ScopedVclPtr<AbstractSvxZoomDialog> pDlg( pFact->CreateSvxZoomDialog(nullptr, *pDescriptor.get()) );
-            pDlg->SetLimits( 20, 400 );
-            bool bCancel = ( RET_CANCEL == pDlg->Execute() );
+        ScopedVclPtr<AbstractSvxZoomDialog> pDlg(pFact->CreateSvxZoomDialog(nullptr, *pDescriptor));
+        pDlg->SetLimits( 20, 400 );
+        bool bCancel = ( RET_CANCEL == pDlg->Execute() );
 
-            if ( !bCancel )
-            {
-                const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->Get( SID_ATTR_ZOOM );
-                m_eZoomType = rZoomItem.GetType();
-                m_nZoomValue = rZoomItem.GetValue();
-                if ( m_eZoomType != SvxZoomType::PERCENT )
-                    m_nZoomValue = getDesignView()->getZoomFactor( m_eZoomType );
+        if ( !bCancel )
+        {
+            const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->Get( SID_ATTR_ZOOM );
+            m_eZoomType = rZoomItem.GetType();
+            m_nZoomValue = rZoomItem.GetValue();
+            if ( m_eZoomType != SvxZoomType::PERCENT )
+                m_nZoomValue = getDesignView()->getZoomFactor( m_eZoomType );
 
-                impl_zoom_nothrow();
-            }
+            impl_zoom_nothrow();
         }
-        catch(const uno::Exception&)
-        {
-            DBG_UNHANDLED_EXCEPTION("reportdesign");
-        }
-        SfxItemPool::Free(pPool);
-
-        for (SfxPoolItem* pDefault : pDefaults)
-            delete pDefault;
     }
+    catch(const uno::Exception&)
+    {
+        DBG_UNHANDLED_EXCEPTION("reportdesign");
+    }
+    SfxItemPool::Free(pPool);
+
+    for (SfxPoolItem* pDefault : pDefaults)
+        delete pDefault;
 }
 
 
@@ -4334,9 +4358,9 @@ void OReportController::clearUndoManager() const
 }
 
 
-void OReportController::addUndoAction( SfxUndoAction* i_pAction )
+void OReportController::addUndoAction( std::unique_ptr<SfxUndoAction> i_pAction )
 {
-    getUndoManager().AddUndoAction( i_pAction );
+    getUndoManager().AddUndoAction( std::move(i_pAction) );
 
     InvalidateFeature( SID_UNDO );
     InvalidateFeature( SID_REDO );

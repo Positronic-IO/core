@@ -27,6 +27,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/printer.hxx>
 #include <tools/globname.hxx>
+#include <sal/log.hxx>
 #include <fmtfsize.hxx>
 #include <fmthdft.hxx>
 #include <fmtcntnt.hxx>
@@ -62,6 +63,7 @@
 #include <unotools/syslocale.hxx>
 #include <svx/swframetypes.hxx>
 #include <svx/svxids.hrc>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 
 using namespace com::sun::star;
 
@@ -388,8 +390,8 @@ void SwDoc::ChgPageDesc( size_t i, const SwPageDesc &rChged )
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo *const pUndo(new SwUndoPageDesc(rDesc, rChged, this));
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+                o3tl::make_unique<SwUndoPageDesc>(rDesc, rChged, this));
     }
     ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
 
@@ -422,7 +424,7 @@ void SwDoc::ChgPageDesc( size_t i, const SwPageDesc &rChged )
         {
             SwTextFootnote *pTextFootnote = rFootnoteIdxs[ nPos ];
             const SwFormatFootnote &rFootnote = pTextFootnote->GetFootnote();
-            pTextFootnote->SetNumber(rFootnote.GetNumber(), rFootnote.GetNumStr());
+            pTextFootnote->SetNumber(rFootnote.GetNumber(), rFootnote.GetNumberRLHidden(), rFootnote.GetNumStr());
         }
     }
 
@@ -629,8 +631,8 @@ void SwDoc::DelPageDesc( size_t i, bool bBroadcast )
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndo *const pUndo(new SwUndoPageDescDelete(rDel, this));
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoPageDescDelete>(rDel, this));
     }
 
     PreDelPageDesc(&rDel); // #i7983#
@@ -679,7 +681,7 @@ SwPageDesc* SwDoc::MakePageDesc(const OUString &rName, const SwPageDesc *pCpy,
 
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        GetIDocumentUndoRedo().AppendUndo(new SwUndoPageDescCreate(pNew, this));
+        GetIDocumentUndoRedo().AppendUndo(o3tl::make_unique<SwUndoPageDescCreate>(pNew, this));
     }
 
     getIDocumentState().SetModified();

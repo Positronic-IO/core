@@ -22,6 +22,7 @@
 #include <com/sun/star/xml/sax/SAXException.hpp>
 #include <ooxml/resourceids.hxx>
 #include <oox/token/namespaces.hxx>
+#include <sal/log.hxx>
 #include <comphelper/embeddedobjectcontainer.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <tools/globname.hxx>
@@ -66,7 +67,7 @@ OOXMLFastContextHandler::OOXMLFastContextHandler
   m_bTookChoice(false)
 {
     if (mpParserState.get() == nullptr)
-        mpParserState.reset(new OOXMLParserState());
+        mpParserState = new OOXMLParserState();
 
     mpParserState->incContextCount();
 }
@@ -86,7 +87,7 @@ OOXMLFastContextHandler::OOXMLFastContextHandler(OOXMLFastContextHandler * pCont
   m_bTookChoice(pContext->m_bTookChoice)
 {
     if (mpParserState.get() == nullptr)
-        mpParserState.reset(new OOXMLParserState());
+        mpParserState = new OOXMLParserState();
 
     mpParserState->incContextCount();
 }
@@ -143,7 +144,14 @@ void SAL_CALL OOXMLFastContextHandler::startFastElement
 (Token_t Element,
  const uno::Reference< xml::sax::XFastAttributeList > & Attribs)
 {
-    if (oox::getNamespace(Element) == static_cast<sal_Int32>(NMSP_mce))
+    // Set xml:space value early, to allow child contexts use it when dealing with strings.
+    if (Attribs && Attribs->hasAttribute(oox::NMSP_xml | oox::XML_space))
+    {
+        mbPreserveSpace = Attribs->getValue(oox::NMSP_xml | oox::XML_space) == "preserve";
+        mbPreserveSpaceSet = true;
+    }
+
+    if (oox::getNamespace(Element) == NMSP_mce)
         m_bDiscardChildren = prepareMceContext(Element, Attribs);
 
     else if (!m_bDiscardChildren)
@@ -294,12 +302,6 @@ Token_t OOXMLFastContextHandler::getToken() const
     return mnToken;
 }
 
-void OOXMLFastContextHandler::setParent
-(OOXMLFastContextHandler * pParent)
-{
-    mpParent = pParent;
-}
-
 void OOXMLFastContextHandler::sendTableDepth() const
 {
     if (mnTableDepth > 0)
@@ -314,7 +316,7 @@ void OOXMLFastContextHandler::sendTableDepth() const
             pProps->add(NS_ooxml::LN_inTbl, pVal, OOXMLProperty::SPRM);
         }
 
-        mpStream->props(pProps);
+        mpStream->props(pProps.get());
     }
 }
 
@@ -356,6 +358,10 @@ void OOXMLFastContextHandler::endCharacterGroup()
     }
 }
 
+void OOXMLFastContextHandler::pushBiDiEmbedLevel() {}
+
+void OOXMLFastContextHandler::popBiDiEmbedLevel() {}
+
 void OOXMLFastContextHandler::startParagraphGroup()
 {
     if (isForwardEvents())
@@ -394,7 +400,7 @@ void OOXMLFastContextHandler::startSdt()
     OOXMLPropertySet::Pointer_t pProps(new OOXMLPropertySet);
     OOXMLValue::Pointer_t pVal = OOXMLIntegerValue::Create(1);
     pProps->add(NS_ooxml::LN_CT_SdtBlock_sdtContent, pVal, OOXMLProperty::ATTRIBUTE);
-    mpStream->props(pProps);
+    mpStream->props(pProps.get());
 }
 
 void OOXMLFastContextHandler::endSdt()
@@ -402,7 +408,7 @@ void OOXMLFastContextHandler::endSdt()
     OOXMLPropertySet::Pointer_t pProps(new OOXMLPropertySet);
     OOXMLValue::Pointer_t pVal = OOXMLIntegerValue::Create(1);
     pProps->add(NS_ooxml::LN_CT_SdtBlock_sdtEndContent, pVal, OOXMLProperty::ATTRIBUTE);
-    mpStream->props(pProps);
+    mpStream->props(pProps.get());
 }
 
 void OOXMLFastContextHandler::startSectionGroup()
@@ -718,7 +724,7 @@ void OOXMLFastContextHandler::sendTableProperties()
 
 void OOXMLFastContextHandler::clearTableProps()
 {
-    mpParserState->setTableProperties(std::make_shared<OOXMLPropertySet>());
+    mpParserState->setTableProperties(new OOXMLPropertySet());
 }
 
 void OOXMLFastContextHandler::sendPropertiesWithId(Id nId)
@@ -727,12 +733,12 @@ void OOXMLFastContextHandler::sendPropertiesWithId(Id nId)
     OOXMLPropertySet::Pointer_t pPropertySet(new OOXMLPropertySet);
 
     pPropertySet->add(nId, pValue, OOXMLProperty::SPRM);
-    mpStream->props(pPropertySet);
+    mpStream->props(pPropertySet.get());
 }
 
 void OOXMLFastContextHandler::clearProps()
 {
-    setPropertySet(std::make_shared<OOXMLPropertySet>());
+    setPropertySet(new OOXMLPropertySet());
 }
 
 void OOXMLFastContextHandler::setDefaultBooleanValue()
@@ -882,6 +888,8 @@ bool OOXMLFastContextHandler::IsPreserveSpace() const
 {
     // xml:space attribute applies to all elements within the content of the element where it is specified,
     // unless overridden with another instance of the xml:space attribute
+    if (mbPreserveSpaceSet)
+        return mbPreserveSpace;
     if (mpParent)
         return mpParent->IsPreserveSpace();
     return false; // default value
@@ -894,9 +902,7 @@ bool OOXMLFastContextHandler::IsPreserveSpace() const
 OOXMLFastContextHandlerStream::OOXMLFastContextHandlerStream
 (OOXMLFastContextHandler * pContext)
 : OOXMLFastContextHandler(pContext),
-  mpPropertySetAttrs(new OOXMLPropertySet),
-  mbPreserveSpace(false),
-  mbPreserveSpaceSet(false)
+  mpPropertySetAttrs(new OOXMLPropertySet)
 {
 }
 
@@ -907,14 +913,7 @@ OOXMLFastContextHandlerStream::~OOXMLFastContextHandlerStream()
 void OOXMLFastContextHandlerStream::newProperty(Id nId,
                                                 const OOXMLValue::Pointer_t& pVal)
 {
-    if (nId == NS_ooxml::LN_CT_Text_space)
-    {
-        // Set <xml:space> value early, to allow
-        // child contexts use it when dealing with strings
-        mbPreserveSpace = pVal->getString() == "preserve";
-        mbPreserveSpaceSet = true;
-    }
-    else if (nId != 0x0)
+    if (nId != 0x0)
     {
         mpPropertySetAttrs->add(nId, pVal, OOXMLProperty::ATTRIBUTE);
     }
@@ -944,15 +943,6 @@ void OOXMLFastContextHandlerStream::handleHyperlink()
     aHyperlinkHandler.writetext();
 }
 
-bool OOXMLFastContextHandlerStream::IsPreserveSpace() const
-{
-    // xml:space attribute applies to all elements within the content of the element where it is specified,
-    // unless overridden with another instance of the xml:space attribute
-    if (mbPreserveSpaceSet)
-        return mbPreserveSpace;
-    return OOXMLFastContextHandler::IsPreserveSpace();
-}
-
 /*
   class OOXMLFastContextHandlerProperties
  */
@@ -980,7 +970,7 @@ void OOXMLFastContextHandlerProperties::lcl_endFastElement
         {
             if (isForwardEvents())
             {
-                mpStream->props(mpPropertySet);
+                mpStream->props(mpPropertySet.get());
             }
         }
         else
@@ -1108,15 +1098,6 @@ void OOXMLFastContextHandlerProperties::handleHyperlinkURL() {
     getPropertySet()->resolve(aHyperlinkURLHandler);
 }
 
-void OOXMLFastContextHandlerProperties::setParent
-(OOXMLFastContextHandler * pParent)
-{
-    OOXMLFastContextHandler::setParent(pParent);
-
-    if (mpParent->getResource() == STREAM)
-        mbResolve = true;
-}
-
 void OOXMLFastContextHandlerProperties::setPropertySet
 (const OOXMLPropertySet::Pointer_t& pPropertySet)
 {
@@ -1227,6 +1208,20 @@ void OOXMLFastContextHandlerValue::setDefaultStringValue()
         setValue(pValue);
     }
 }
+
+// ECMA-376-1:2016 17.3.2.8; https://www.unicode.org/reports/tr9/#Explicit_Directional_Embeddings
+void OOXMLFastContextHandlerValue::pushBiDiEmbedLevel()
+{
+    const bool bRtl
+        = mpValue.get() && mpValue.get()->getInt() == NS_ooxml::LN_Value_ST_Direction_rtl;
+    OOXMLFactory::characters(this, bRtl ? u"\u202B" : u"\u202A"); // RLE / LRE
+}
+
+void OOXMLFastContextHandlerValue::popBiDiEmbedLevel()
+{
+    OOXMLFactory::characters(this, u"\u202C"); // PDF (POP DIRECTIONAL FORMATTING)
+}
+
 /*
   class OOXMLFastContextHandlerTable
 */
@@ -1356,7 +1351,7 @@ void OOXMLFastContextHandlerTextTableCell::startCell()
             pProps->add(NS_ooxml::LN_tcStart, pVal, OOXMLProperty::SPRM);
         }
 
-        mpStream->props(pProps);
+        mpStream->props(pProps.get());
     }
 }
 
@@ -1382,7 +1377,7 @@ void OOXMLFastContextHandlerTextTableCell::endCell()
             pProps->add(NS_ooxml::LN_tcEnd, pVal, OOXMLProperty::SPRM);
         }
 
-        mpStream->props(pProps);
+        mpStream->props(pProps.get());
     }
 }
 
@@ -1432,7 +1427,7 @@ void OOXMLFastContextHandlerTextTableRow::endRow()
             pProps->add(NS_ooxml::LN_tblRow, pVal, OOXMLProperty::SPRM);
         }
 
-        mpStream->props(pProps);
+        mpStream->props(pProps.get());
     }
 
     startCharacterGroup();
@@ -1494,7 +1489,7 @@ void OOXMLFastContextHandlerTextTableRow::handleGridBefore( const OOXMLValue::Po
                 pProps->add(NS_ooxml::LN_tblCell, pVal, OOXMLProperty::SPRM);
             }
 
-            mpStream->props(pProps);
+            mpStream->props(pProps.get());
 
             // fake <w:tcBorders> with no border
             OOXMLPropertySet::Pointer_t pCellProps( new OOXMLPropertySet );
@@ -1892,7 +1887,7 @@ OOXMLFastContextHandlerWrapper::lcl_createFastChildContext
     // here until we need a more generic solution.
     bool bIsWrap = Element == static_cast<sal_Int32>(NMSP_vmlWord | XML_wrap);
     bool bIsSignatureLine = Element == static_cast<sal_Int32>(NMSP_vmlOffice | XML_signatureline);
-    bool bSkipImages = getDocument()->IsSkipImages() && oox::getNamespace(Element) == static_cast<sal_Int32>(NMSP_dml) &&
+    bool bSkipImages = getDocument()->IsSkipImages() && oox::getNamespace(Element) == NMSP_dml &&
         !((oox::getBaseToken(Element) == XML_linkedTxbx) || (oox::getBaseToken(Element) == XML_txbx));
 
     if ( bInNamespaces && ((!bIsWrap && !bIsSignatureLine) || dynamic_cast<OOXMLFastContextHandlerShape&>(*mpParent).isShapeSent()) )
@@ -2110,7 +2105,7 @@ void OOXMLFastContextHandlerMath::process()
         OOXMLPropertySet::Pointer_t pProps(new OOXMLPropertySet);
         OOXMLValue::Pointer_t pVal( new OOXMLStarMathValue( ref ));
         pProps->add(NS_ooxml::LN_starmath, pVal, OOXMLProperty::ATTRIBUTE);
-        mpStream->props( pProps );
+        mpStream->props( pProps.get() );
     }
 }
 

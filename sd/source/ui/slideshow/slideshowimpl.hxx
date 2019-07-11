@@ -233,8 +233,8 @@ public:
     void mouseButtonUp(const MouseEvent& rMEvt);
 
 private:
-    SlideshowImpl(SlideshowImpl &) = delete;
-    void operator =(SlideshowImpl &) = delete;
+    SlideshowImpl(SlideshowImpl const &) = delete;
+    void operator =(SlideshowImpl const &) = delete;
 
     virtual ~SlideshowImpl() override;
 
@@ -330,7 +330,6 @@ private:
 
     VclPtr<vcl::Window>    mpParentWindow;
     VclPtr<sd::ShowWindow>     mpShowWindow;
-    VclPtr<PushButton>     mpTimeButton;
 
     std::shared_ptr< AnimationSlideController > mpSlideController;
 
@@ -357,10 +356,6 @@ private:
     double          mdUserPaintStrokeWidth;
 
     WrappedShapeEventImplMap    maShapeEventMap;
-
-    OUString msOnClick;
-    OUString msBookmark;
-    OUString msVerb;
 
     css::uno::Reference< css::drawing::XDrawPage > mxPreviewDrawPage;
     css::uno::Reference< css::animations::XAnimationNode > mxPreviewAnimationNode;

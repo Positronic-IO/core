@@ -43,7 +43,6 @@
 #include <connectivity/CommonTools.hxx>
 #include "DriverSettings.hxx"
 #include <dbadmin.hxx>
-#include <comphelper/types.hxx>
 
 namespace dbaui
 {
@@ -55,45 +54,34 @@ namespace dbaui
     using namespace ::com::sun::star::container;
     using namespace ::dbtools;
 
-    OCommonBehaviourTabPage::OCommonBehaviourTabPage(vcl::Window* pParent, const OString& rId,
-        const OUString& rUIXMLDescription, const SfxItemSet& _rCoreAttrs,
+    OCommonBehaviourTabPage::OCommonBehaviourTabPage(TabPageParent pParent,
+        const OUString& rUIXMLDescription, const OString& rId, const SfxItemSet& rCoreAttrs,
         OCommonBehaviourTabPageFlags nControlFlags)
-
-        :OGenericAdministrationPage(pParent, rId, rUIXMLDescription, _rCoreAttrs)
-        ,m_pOptionsLabel(nullptr)
-        ,m_pOptions(nullptr)
-        ,m_pCharsetLabel(nullptr)
-        ,m_pCharset(nullptr)
-        ,m_pAutoRetrievingEnabled(nullptr)
-        ,m_pAutoIncrementLabel(nullptr)
-        ,m_pAutoIncrement(nullptr)
-        ,m_pAutoRetrievingLabel(nullptr)
-        ,m_pAutoRetrieving(nullptr)
-        ,m_nControlFlags(nControlFlags)
+        : OGenericAdministrationPage(pParent, rUIXMLDescription, rId, rCoreAttrs)
+        , m_nControlFlags(nControlFlags)
     {
-
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseOptions)
         {
-            m_pOptionsLabel = get<FixedText>("optionslabel");
-            m_pOptionsLabel->Show();
-            m_pOptions = get<Edit>("options");
-            m_pOptions->Show();
-            m_pOptions->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
+            m_xOptionsLabel = m_xBuilder->weld_label("optionslabel");
+            m_xOptionsLabel->show();
+            m_xOptions = m_xBuilder->weld_entry("options");
+            m_xOptions->show();
+            m_xOptions->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
         }
 
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseCharset)
         {
-            FixedText* pDataConvertLabel = get<FixedText>("charsetheader");
-            pDataConvertLabel->Show();
-            m_pCharsetLabel = get<FixedText>("charsetlabel");
-            m_pCharsetLabel->Show();
-            m_pCharset = get<CharSetListBox>("charset");
-            m_pCharset->Show();
-            m_pCharset->SetSelectHdl(LINK(this, OCommonBehaviourTabPage, CharsetSelectHdl));
+            m_xDataConvertLabel = m_xBuilder->weld_label("charsetheader");
+            m_xDataConvertLabel->show();
+            m_xCharsetLabel = m_xBuilder->weld_label("charsetlabel");
+            m_xCharsetLabel->show();
+            m_xCharset.reset(new CharSetListBox(m_xBuilder->weld_combo_box("charset")));
+            m_xCharset->show();
+            m_xCharset->connect_changed(LINK(this, OCommonBehaviourTabPage, CharsetSelectHdl));
         }
     }
 
-    IMPL_LINK_NOARG(OCommonBehaviourTabPage, CharsetSelectHdl, ListBox&, void)
+    IMPL_LINK_NOARG(OCommonBehaviourTabPage, CharsetSelectHdl, weld::ComboBox&, void)
     {
         callModifiedHdl();
     }
@@ -105,37 +93,30 @@ namespace dbaui
 
     void OCommonBehaviourTabPage::dispose()
     {
-        m_pOptionsLabel.disposeAndClear();
-        m_pOptions.disposeAndClear();
-        m_pCharsetLabel.disposeAndClear();
-        m_pCharset.disposeAndClear();
-        m_pAutoIncrementLabel.disposeAndClear();
-        m_pAutoIncrement.disposeAndClear();
-        m_pAutoRetrievingEnabled.disposeAndClear();
-        m_pAutoRetrievingLabel.disposeAndClear();
-        m_pAutoRetrieving.disposeAndClear();
+        m_xCharset.reset();
         OGenericAdministrationPage::dispose();
     }
 
-    void OCommonBehaviourTabPage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OCommonBehaviourTabPage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseOptions)
         {
-            _rControlList.push_back(new ODisableWrapper<FixedText>(m_pOptionsLabel));
+            _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xOptionsLabel.get()));
         }
 
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseCharset)
         {
-            _rControlList.push_back(new ODisableWrapper<FixedText>(m_pCharsetLabel));
+            _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xCharsetLabel.get()));
         }
     }
-    void OCommonBehaviourTabPage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+
+    void OCommonBehaviourTabPage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseOptions)
-            _rControlList.push_back(new OSaveValueWrapper<Edit>(m_pOptions));
+            _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::Entry>(m_xOptions.get()));
 
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseCharset)
-            _rControlList.push_back(new OSaveValueWrapper<ListBox>(m_pCharset));
+            _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xCharset->get_widget()));
     }
 
     void OCommonBehaviourTabPage::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
@@ -153,13 +134,13 @@ namespace dbaui
         {
             if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseOptions)
             {
-                m_pOptions->SetText(pOptionsItem->GetValue());
-                m_pOptions->ClearModifyFlag();
+                m_xOptions->set_text(pOptionsItem->GetValue());
+                m_xOptions->save_value();
             }
 
             if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseCharset)
             {
-                m_pCharset->SelectEntryByIanaName( pCharsetItem->GetValue() );
+                m_xCharset->SelectEntryByIanaName( pCharsetItem->GetValue() );
             }
         }
         OGenericAdministrationPage::implInitControls(_rSet, _bSaveValue);
@@ -171,12 +152,12 @@ namespace dbaui
 
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseOptions)
         {
-            fillString(*_rSet,m_pOptions,DSID_ADDITIONALOPTIONS,bChangedSomething);
+            fillString(*_rSet,m_xOptions.get(),DSID_ADDITIONALOPTIONS,bChangedSomething);
         }
 
         if (m_nControlFlags & OCommonBehaviourTabPageFlags::UseCharset)
         {
-            if ( m_pCharset->StoreSelectedCharSet( *_rSet, DSID_CHARSET ) )
+            if ( m_xCharset->StoreSelectedCharSet( *_rSet, DSID_CHARSET ) )
                 bChangedSomething = true;
         }
 
@@ -184,16 +165,15 @@ namespace dbaui
     }
 
     // ODbaseDetailsPage
-    ODbaseDetailsPage::ODbaseDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "DbasePage", "dbaccess/ui/dbasepage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset)
+    ODbaseDetailsPage::ODbaseDetailsPage(TabPageParent pParent, const SfxItemSet& _rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/dbasepage.ui", "DbasePage",
+                                    _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset)
+        , m_xShowDeleted(m_xBuilder->weld_check_button("showDelRowsCheckbutton"))
+        , m_xFT_Message(m_xBuilder->weld_label("specMessageLabel"))
+        , m_xIndexes(m_xBuilder->weld_button("indiciesButton"))
     {
-        get(m_pShowDeleted, "showDelRowsCheckbutton");
-        get(m_pFT_Message, "specMessageLabel");
-        get(m_pIndexes, "indiciesButton");
-        set_height_request(300);
-
-        m_pIndexes->SetClickHdl(LINK(this, ODbaseDetailsPage, OnButtonClicked));
-        m_pShowDeleted->SetClickHdl(LINK(this, ODbaseDetailsPage, OnButtonClicked));
+        m_xIndexes->connect_clicked(LINK(this, ODbaseDetailsPage, OnButtonClicked));
+        m_xShowDeleted->connect_clicked(LINK(this, ODbaseDetailsPage, OnButtonClicked));
     }
 
     ODbaseDetailsPage::~ODbaseDetailsPage()
@@ -201,17 +181,9 @@ namespace dbaui
         disposeOnce();
     }
 
-    void ODbaseDetailsPage::dispose()
+    VclPtr<SfxTabPage> ODriversSettings::CreateDbase(TabPageParent pParent, const SfxItemSet* _rAttrSet)
     {
-        m_pShowDeleted.clear();
-        m_pFT_Message.clear();
-        m_pIndexes.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
-    VclPtr<SfxTabPage> ODriversSettings::CreateDbase( TabPageParent pParent, const SfxItemSet* _rAttrSet )
-    {
-        return VclPtr<ODbaseDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<ODbaseDetailsPage>::Create(pParent, *_rAttrSet);
     }
 
     void ODbaseDetailsPage::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
@@ -232,8 +204,8 @@ namespace dbaui
 
         if ( bValid )
         {
-            m_pShowDeleted->Check( pDeletedItem->GetValue() );
-            m_pFT_Message->Show(m_pShowDeleted->IsChecked());
+            m_xShowDeleted->set_active(pDeletedItem->GetValue());
+            m_xFT_Message->show(m_xShowDeleted->get_active());
         }
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
@@ -243,43 +215,45 @@ namespace dbaui
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(_rSet);
 
-        fillBool(*_rSet,m_pShowDeleted,DSID_SHOWDELETEDROWS,bChangedSomething);
+        fillBool(*_rSet, m_xShowDeleted.get(), DSID_SHOWDELETEDROWS, false, bChangedSomething);
         return bChangedSomething;
     }
 
-    IMPL_LINK( ODbaseDetailsPage, OnButtonClicked, Button*, pButton, void )
+    IMPL_LINK(ODbaseDetailsPage, OnButtonClicked, weld::Button&, rButton, void)
     {
-        if (m_pIndexes == pButton)
+        if (m_xIndexes.get() == &rButton)
         {
-            ScopedVclPtrInstance< ODbaseIndexDialog > aIndexDialog(this, m_sDsn);
-            aIndexDialog->Execute();
+            ODbaseIndexDialog aIndexDialog(GetDialogFrameWeld(), m_sDsn);
+            aIndexDialog.run();
         }
         else
         {
-            m_pFT_Message->Show(m_pShowDeleted->IsChecked());
+            m_xFT_Message->show(m_xShowDeleted->get_active());
             // it was one of the checkboxes -> we count as modified from now on
             callModifiedHdl();
         }
     }
 
     // OAdoDetailsPage
-    OAdoDetailsPage::OAdoDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "AutoCharset", "dbaccess/ui/autocharsetpage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset )
+    OAdoDetailsPage::OAdoDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/autocharsetpage.ui", "AutoCharset",
+                                    rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset )
     {
 
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateAdo( TabPageParent pParent,   const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateAdo(TabPageParent pParent, const SfxItemSet* rAttrSet)
     {
-        return VclPtr<OAdoDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OAdoDetailsPage>::Create(pParent, *rAttrSet);
     }
 
     // OOdbcDetailsPage
-    OOdbcDetailsPage::OOdbcDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "ODBC", "dbaccess/ui/odbcpage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset | OCommonBehaviourTabPageFlags::UseOptions)
+    OOdbcDetailsPage::OOdbcDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/odbcpage.ui", "ODBC", rCoreAttrs,
+                                    OCommonBehaviourTabPageFlags::UseCharset | OCommonBehaviourTabPageFlags::UseOptions)
+        , m_xUseCatalog(m_xBuilder->weld_check_button("useCatalogCheckbutton"))
     {
-        get(m_pUseCatalog, "useCatalogCheckbutton");
-        m_pUseCatalog->SetToggleHdl( LINK(this, OGenericAdministrationPage, ControlModifiedCheckBoxHdl) );
+        m_xUseCatalog->connect_toggled(LINK(this, OGenericAdministrationPage, OnControlModifiedButtonClick));
     }
 
     OOdbcDetailsPage::~OOdbcDetailsPage()
@@ -287,21 +261,15 @@ namespace dbaui
         disposeOnce();
     }
 
-    void OOdbcDetailsPage::dispose()
+    VclPtr<SfxTabPage> ODriversSettings::CreateODBC(TabPageParent pParent, const SfxItemSet* pAttrSet)
     {
-        m_pUseCatalog.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
-    VclPtr<SfxTabPage> ODriversSettings::CreateODBC( TabPageParent pParent, const SfxItemSet* _rAttrSet )
-    {
-        return VclPtr<OOdbcDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OOdbcDetailsPage>::Create(pParent, *pAttrSet);
     }
 
     bool OOdbcDetailsPage::FillItemSet( SfxItemSet* _rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(_rSet);
-        fillBool(*_rSet,m_pUseCatalog,DSID_USECATALOG,bChangedSomething);
+        fillBool(*_rSet,m_xUseCatalog.get(),DSID_USECATALOG,false,bChangedSomething);
         return bChangedSomething;
     }
     void OOdbcDetailsPage::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
@@ -313,22 +281,21 @@ namespace dbaui
         const SfxBoolItem* pUseCatalogItem = _rSet.GetItem<SfxBoolItem>(DSID_USECATALOG);
 
         if ( bValid )
-            m_pUseCatalog->Check(pUseCatalogItem->GetValue());
+            m_xUseCatalog->set_active(pUseCatalogItem->GetValue());
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
     }
     // OOdbcDetailsPage
-    OUserDriverDetailsPage::OUserDriverDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        : OCommonBehaviourTabPage(pParent, "UserDetailsPage", "dbaccess/ui/userdetailspage.ui", _rCoreAttrs,
-            OCommonBehaviourTabPageFlags::UseCharset | OCommonBehaviourTabPageFlags::UseOptions)
+    OUserDriverDetailsPage::OUserDriverDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/userdetailspage.ui", "UserDetailsPage",
+                                    rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset | OCommonBehaviourTabPageFlags::UseOptions)
+        , m_xFTHostname(m_xBuilder->weld_label("hostnameft"))
+        , m_xEDHostname(m_xBuilder->weld_entry("hostname"))
+        , m_xPortNumber(m_xBuilder->weld_label("portnumberft"))
+        , m_xNFPortNumber(m_xBuilder->weld_spin_button("portnumber"))
+        , m_xUseCatalog(m_xBuilder->weld_check_button("usecatalog"))
     {
-        get(m_pFTHostname, "hostnameft");
-        get(m_pEDHostname, "hostname");
-        get(m_pPortNumber, "portnumberft");
-        get(m_pNFPortNumber, "portnumber");
-        m_pNFPortNumber->SetUseThousandSep(false);
-        get(m_pUseCatalog, "usecatalog");
-        m_pUseCatalog->SetToggleHdl( LINK(this, OGenericAdministrationPage, ControlModifiedCheckBoxHdl) );
+        m_xUseCatalog->connect_toggled(LINK(this, OGenericAdministrationPage, OnControlModifiedButtonClick));
     }
 
     OUserDriverDetailsPage::~OUserDriverDetailsPage()
@@ -336,43 +303,33 @@ namespace dbaui
         disposeOnce();
     }
 
-    void OUserDriverDetailsPage::dispose()
+    VclPtr<SfxTabPage> ODriversSettings::CreateUser(TabPageParent pParent, const SfxItemSet* pAttrSet)
     {
-        m_pFTHostname.clear();
-        m_pEDHostname.clear();
-        m_pPortNumber.clear();
-        m_pNFPortNumber.clear();
-        m_pUseCatalog.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
-    VclPtr<SfxTabPage> ODriversSettings::CreateUser( TabPageParent pParent, const SfxItemSet* _rAttrSet )
-    {
-        return VclPtr<OUserDriverDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OUserDriverDetailsPage>::Create(pParent, *pAttrSet);
     }
 
     bool OUserDriverDetailsPage::FillItemSet( SfxItemSet* _rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(_rSet);
 
-        fillInt32(*_rSet,m_pNFPortNumber,DSID_CONN_PORTNUMBER,bChangedSomething);
-        fillString(*_rSet,m_pEDHostname,DSID_CONN_HOSTNAME,bChangedSomething);
-        fillBool(*_rSet,m_pUseCatalog,DSID_USECATALOG,bChangedSomething);
+        fillInt32(*_rSet,m_xNFPortNumber.get(),DSID_CONN_PORTNUMBER,bChangedSomething);
+        fillString(*_rSet,m_xEDHostname.get(),DSID_CONN_HOSTNAME,bChangedSomething);
+        fillBool(*_rSet,m_xUseCatalog.get(),DSID_USECATALOG,false,bChangedSomething);
 
         return bChangedSomething;
     }
-    void OUserDriverDetailsPage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OUserDriverDetailsPage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillControls(_rControlList);
-        _rControlList.push_back(new OSaveValueWrapper<Edit>(m_pEDHostname));
-        _rControlList.push_back(new OSaveValueWrapper<CheckBox>(m_pUseCatalog));
-        _rControlList.push_back(new OSaveValueWrapper<NumericField>(m_pNFPortNumber));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::Entry>(m_xEDHostname.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::CheckButton>(m_xUseCatalog.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::SpinButton>(m_xNFPortNumber.get()));
     }
-    void OUserDriverDetailsPage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OUserDriverDetailsPage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillWindows(_rControlList);
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pFTHostname));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pPortNumber));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xFTHostname.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xPortNumber.get()));
     }
     void OUserDriverDetailsPage::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
     {
@@ -386,45 +343,45 @@ namespace dbaui
 
         if ( bValid )
         {
-            m_pEDHostname->SetText(pHostName->GetValue());
-            m_pEDHostname->ClearModifyFlag();
+            m_xEDHostname->set_text(pHostName->GetValue());
+            m_xEDHostname->save_value();
 
-            m_pNFPortNumber->SetValue(pPortNumber->GetValue());
-            m_pNFPortNumber->ClearModifyFlag();
+            m_xNFPortNumber->set_value(pPortNumber->GetValue());
+            m_xNFPortNumber->save_value();
 
-            m_pUseCatalog->Check(pUseCatalogItem->GetValue());
+            m_xUseCatalog->set_active(pUseCatalogItem->GetValue());
         }
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
     }
     // OMySQLODBCDetailsPage
-    OMySQLODBCDetailsPage::OMySQLODBCDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "AutoCharset", "dbaccess/ui/autocharsetpage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset )
+    OMySQLODBCDetailsPage::OMySQLODBCDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/autocharsetpage.ui", "AutoCharset",
+                                    rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset )
     {
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateMySQLODBC( TabPageParent pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateMySQLODBC(TabPageParent pParent, const SfxItemSet* pAttrSet)
     {
-        return VclPtr<OMySQLODBCDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OMySQLODBCDetailsPage>::Create(pParent, *pAttrSet);
     }
 
     // OMySQLJDBCDetailsPage
-    OGeneralSpecialJDBCDetailsPage::OGeneralSpecialJDBCDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs ,sal_uInt16 _nPortId, bool bShowSocket )
-        :OCommonBehaviourTabPage(pParent, "GeneralSpecialJDBCDetails", "dbaccess/ui/generalspecialjdbcdetailspage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset)
-        ,m_nPortId(_nPortId)
-        ,m_bUseClass(true)
+    OGeneralSpecialJDBCDetailsPage::OGeneralSpecialJDBCDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs ,sal_uInt16 _nPortId, bool bShowSocket)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/generalspecialjdbcdetailspage.ui", "GeneralSpecialJDBCDetails",
+                                    rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset)
+        , m_nPortId(_nPortId)
+        , m_bUseClass(true)
+        , m_xEDHostname(m_xBuilder->weld_entry("hostNameEntry"))
+        , m_xNFPortNumber(m_xBuilder->weld_spin_button("portNumberSpinbutton"))
+        , m_xFTSocket(m_xBuilder->weld_label("socketLabel"))
+        , m_xEDSocket(m_xBuilder->weld_entry("socketEntry"))
+        , m_xFTDriverClass(m_xBuilder->weld_label("driverClassLabel"))
+        , m_xEDDriverClass(m_xBuilder->weld_entry("jdbcDriverClassEntry"))
+        , m_xTestJavaDriver(m_xBuilder->weld_button("testDriverClassButton"))
     {
-        get(m_pEDHostname, "hostNameEntry");
-        get(m_pNFPortNumber, "portNumberSpinbutton");
-        m_pNFPortNumber->SetUseThousandSep(false);
-        get(m_pFTSocket, "socketLabel");
-        get(m_pEDSocket, "socketEntry");
-        get(m_pFTDriverClass, "driverClassLabel");
-        get(m_pEDDriverClass, "jdbcDriverClassEntry");
-        get(m_pTestJavaDriver, "testDriverClassButton");
-
-        const SfxStringItem* pUrlItem = _rCoreAttrs.GetItem<SfxStringItem>(DSID_CONNECTURL);
-        const DbuTypeCollectionItem* pTypesItem = _rCoreAttrs.GetItem<DbuTypeCollectionItem>(DSID_TYPECOLLECTION);
+        const SfxStringItem* pUrlItem = rCoreAttrs.GetItem<SfxStringItem>(DSID_CONNECTURL);
+        const DbuTypeCollectionItem* pTypesItem = rCoreAttrs.GetItem<DbuTypeCollectionItem>(DSID_TYPECOLLECTION);
         ::dbaccess::ODsnTypeCollection* pTypeCollection = pTypesItem ? pTypesItem->getCollection() : nullptr;
         if (pTypeCollection && pUrlItem && pUrlItem->GetValue().getLength() )
         {
@@ -432,24 +389,23 @@ namespace dbaui
         }
         if ( m_sDefaultJdbcDriverName.getLength() )
         {
-            m_pEDDriverClass->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-            m_pEDDriverClass->SetModifyHdl(LINK(this, OGeneralSpecialJDBCDetailsPage, OnControlEditModifyHdl));
-            m_pTestJavaDriver->SetClickHdl(LINK(this,OGeneralSpecialJDBCDetailsPage,OnTestJavaClickHdl));
+            m_xEDDriverClass->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
+            m_xTestJavaDriver->connect_clicked(LINK(this,OGeneralSpecialJDBCDetailsPage,OnTestJavaClickHdl));
         }
         else
         {
             m_bUseClass = false;
-            m_pFTDriverClass->Show(false);
-            m_pEDDriverClass->Show(false);
-            m_pTestJavaDriver->Show(false);
+            m_xFTDriverClass->show(false);
+            m_xEDDriverClass->show(false);
+            m_xTestJavaDriver->show(false);
         }
 
-        m_pFTSocket->Show(bShowSocket && !m_bUseClass);
-        m_pEDSocket->Show(bShowSocket && !m_bUseClass);
+        m_xFTSocket->show(bShowSocket && !m_bUseClass);
+        m_xEDSocket->show(bShowSocket && !m_bUseClass);
 
-        m_pEDHostname->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-        m_pNFPortNumber->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-        m_pEDSocket->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
+        m_xEDHostname->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
+        m_xNFPortNumber->connect_value_changed(LINK(this,OGenericAdministrationPage,OnControlSpinButtonModifyHdl));
+        m_xEDSocket->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
     }
 
     OGeneralSpecialJDBCDetailsPage::~OGeneralSpecialJDBCDetailsPage()
@@ -457,26 +413,14 @@ namespace dbaui
         disposeOnce();
     }
 
-    void OGeneralSpecialJDBCDetailsPage::dispose()
-    {
-        m_pEDHostname.clear();
-        m_pNFPortNumber.clear();
-        m_pFTSocket.clear();
-        m_pEDSocket.clear();
-        m_pFTDriverClass.clear();
-        m_pEDDriverClass.clear();
-        m_pTestJavaDriver.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
     bool OGeneralSpecialJDBCDetailsPage::FillItemSet( SfxItemSet* _rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(_rSet);
         if ( m_bUseClass )
-            fillString(*_rSet,m_pEDDriverClass,DSID_JDBCDRIVERCLASS,bChangedSomething);
-        fillString(*_rSet,m_pEDHostname,DSID_CONN_HOSTNAME,bChangedSomething);
-        fillString(*_rSet,m_pEDSocket,DSID_CONN_SOCKET,bChangedSomething);
-        fillInt32(*_rSet,m_pNFPortNumber,m_nPortId,bChangedSomething );
+            fillString(*_rSet,m_xEDDriverClass.get(),DSID_JDBCDRIVERCLASS,bChangedSomething);
+        fillString(*_rSet,m_xEDHostname.get(),DSID_CONN_HOSTNAME,bChangedSomething);
+        fillString(*_rSet,m_xEDSocket.get(),DSID_CONN_SOCKET,bChangedSomething);
+        fillInt32(*_rSet,m_xNFPortNumber.get(),m_nPortId,bChangedSomething );
 
         return bChangedSomething;
     }
@@ -495,30 +439,30 @@ namespace dbaui
         {
             if ( m_bUseClass )
             {
-                m_pEDDriverClass->SetText(pDrvItem->GetValue());
-                m_pEDDriverClass->ClearModifyFlag();
+                m_xEDDriverClass->set_text(pDrvItem->GetValue());
+                m_xEDDriverClass->save_value();
             }
 
-            m_pEDHostname->SetText(pHostName->GetValue());
-            m_pEDHostname->ClearModifyFlag();
+            m_xEDHostname->set_text(pHostName->GetValue());
+            m_xEDHostname->save_value();
 
-            m_pNFPortNumber->SetValue(pPortNumber->GetValue());
-            m_pNFPortNumber->ClearModifyFlag();
+            m_xNFPortNumber->set_value(pPortNumber->GetValue());
+            m_xNFPortNumber->save_value();
 
-            m_pEDSocket->SetText(pSocket->GetValue());
-            m_pEDSocket->ClearModifyFlag();
+            m_xEDSocket->set_text(pSocket->GetValue());
+            m_xEDSocket->save_value();
         }
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
 
         // to get the correct value when saveValue was called by base class
-        if ( m_bUseClass && m_pEDDriverClass->GetText().trim().isEmpty() )
+        if ( m_bUseClass && m_xEDDriverClass->get_text().trim().isEmpty() )
         {
-            m_pEDDriverClass->SetText(m_sDefaultJdbcDriverName);
-            m_pEDDriverClass->SetModifyFlag();
+            m_xEDDriverClass->set_text(m_sDefaultJdbcDriverName);
+            m_xEDDriverClass->save_value();
         }
     }
-    IMPL_LINK_NOARG(OGeneralSpecialJDBCDetailsPage, OnTestJavaClickHdl, Button*, void)
+    IMPL_LINK_NOARG(OGeneralSpecialJDBCDetailsPage, OnTestJavaClickHdl, weld::Button&, void)
     {
         OSL_ENSURE(m_pAdminDialog,"No Admin dialog set! ->GPF");
         OSL_ENSURE(m_bUseClass,"Who called me?");
@@ -527,12 +471,12 @@ namespace dbaui
 #if HAVE_FEATURE_JAVA
         try
         {
-            if ( !m_pEDDriverClass->GetText().trim().isEmpty() )
+            if (!m_xEDDriverClass->get_text().trim().isEmpty())
             {
 // TODO change jvmaccess
                 ::rtl::Reference< jvmaccess::VirtualMachine > xJVM = ::connectivity::getJavaVM( m_pAdminDialog->getORB() );
-                m_pEDDriverClass->SetText(m_pEDDriverClass->GetText().trim()); // fdo#68341
-                bSuccess = ::connectivity::existsJavaClassByName(xJVM,m_pEDDriverClass->GetText());
+                m_xEDDriverClass->set_text(m_xEDDriverClass->get_text().trim()); // fdo#68341
+                bSuccess = ::connectivity::existsJavaClassByName(xJVM,m_xEDDriverClass->get_text());
             }
         }
         catch(Exception&)
@@ -547,27 +491,25 @@ namespace dbaui
 
     void OGeneralSpecialJDBCDetailsPage::callModifiedHdl(void* pControl)
     {
-        if ( m_bUseClass && pControl == m_pEDDriverClass )
-            m_pTestJavaDriver->Enable( !m_pEDDriverClass->GetText().trim().isEmpty() );
+        if (m_bUseClass && pControl == m_xEDDriverClass.get())
+            m_xTestJavaDriver->set_sensitive(!m_xEDDriverClass->get_text().trim().isEmpty());
 
         // tell the listener we were modified
         OGenericAdministrationPage::callModifiedHdl();
     }
 
     // MySQLNativePage
-    MySQLNativePage::MySQLNativePage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "MysqlNativePage", "dbaccess/ui/mysqlnativepage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset )
-        ,m_aMySQLSettings       ( VclPtr<MySQLNativeSettings>::Create(*get<VclVBox>("MySQLSettingsContainer"), LINK(this,OGenericAdministrationPage,OnControlModified)) )
+    MySQLNativePage::MySQLNativePage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/mysqlnativepage.ui", "MysqlNativePage", rCoreAttrs, OCommonBehaviourTabPageFlags::UseCharset)
+        , m_xMySQLSettingsContainer(m_xBuilder->weld_widget("MySQLSettingsContainer"))
+        , m_aMySQLSettings(m_xMySQLSettingsContainer.get(), LINK(this,OGenericAdministrationPage,OnControlModified))
+        , m_xSeparator1(m_xBuilder->weld_label("connectionheader"))
+        , m_xSeparator2(m_xBuilder->weld_label("userheader"))
+        , m_xUserNameLabel(m_xBuilder->weld_label("usernamelabel"))
+        , m_xUserName(m_xBuilder->weld_entry("username"))
+        , m_xPasswordRequired(m_xBuilder->weld_check_button("passwordrequired"))
     {
-        get(m_pSeparator1, "connectionheader");
-        get(m_pSeparator2, "userheader");
-        get(m_pUserNameLabel, "usernamelabel");
-        get(m_pUserName, "username");
-        get(m_pPasswordRequired, "passwordrequired");
-
-        m_pUserName->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-
-        m_aMySQLSettings->Show();
+        m_xUserName->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
     }
 
     MySQLNativePage::~MySQLNativePage()
@@ -575,48 +517,38 @@ namespace dbaui
         disposeOnce();
     }
 
-    void MySQLNativePage::dispose()
-    {
-        m_aMySQLSettings.disposeAndClear();
-        m_pSeparator1.clear();
-        m_pSeparator2.clear();
-        m_pUserNameLabel.clear();
-        m_pUserName.clear();
-        m_pPasswordRequired.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
-    void MySQLNativePage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void MySQLNativePage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillControls( _rControlList );
-        m_aMySQLSettings->fillControls( _rControlList );
+        m_aMySQLSettings.fillControls( _rControlList );
 
-        _rControlList.push_back(new OSaveValueWrapper<Edit>(m_pUserName));
-        _rControlList.push_back(new OSaveValueWrapper<CheckBox>(m_pPasswordRequired));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::Entry>(m_xUserName.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::CheckButton>(m_xPasswordRequired.get()));
     }
-    void MySQLNativePage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+
+    void MySQLNativePage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillWindows( _rControlList );
-        m_aMySQLSettings->fillWindows( _rControlList);
+        m_aMySQLSettings.fillWindows( _rControlList);
 
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pSeparator1));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pSeparator2));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pUserNameLabel));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xSeparator1.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xSeparator2.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xUserNameLabel.get()));
     }
 
     bool MySQLNativePage::FillItemSet( SfxItemSet* _rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet( _rSet );
 
-        bChangedSomething |= m_aMySQLSettings->FillItemSet( _rSet );
+        bChangedSomething |= m_aMySQLSettings.FillItemSet( _rSet );
 
-        if ( m_pUserName->IsValueChangedFromSaved() )
+        if (m_xUserName->get_value_changed_from_saved())
         {
-            _rSet->Put( SfxStringItem( DSID_USER, m_pUserName->GetText() ) );
+            _rSet->Put( SfxStringItem( DSID_USER, m_xUserName->get_text() ) );
             _rSet->Put( SfxStringItem( DSID_PASSWORD, OUString()));
             bChangedSomething = true;
         }
-        fillBool(*_rSet,m_pPasswordRequired,DSID_PASSWORDREQUIRED,bChangedSomething);
+        fillBool(*_rSet,m_xPasswordRequired.get(),DSID_PASSWORDREQUIRED,false,bChangedSomething);
 
         return bChangedSomething;
     }
@@ -626,16 +558,16 @@ namespace dbaui
         bool bValid, bReadonly;
         getFlags(_rSet, bValid, bReadonly);
 
-        m_aMySQLSettings->implInitControls( _rSet );
+        m_aMySQLSettings.implInitControls( _rSet );
 
         const SfxStringItem* pUidItem = _rSet.GetItem<SfxStringItem>(DSID_USER);
         const SfxBoolItem* pAllowEmptyPwd = _rSet.GetItem<SfxBoolItem>(DSID_PASSWORDREQUIRED);
 
         if ( bValid )
         {
-            m_pUserName->SetText(pUidItem->GetValue());
-            m_pUserName->ClearModifyFlag();
-            m_pPasswordRequired->Check(pAllowEmptyPwd->GetValue());
+            m_xUserName->set_text(pUidItem->GetValue());
+            m_xUserName->save_value();
+            m_xPasswordRequired->set_active(pAllowEmptyPwd->GetValue());
         }
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
@@ -643,38 +575,35 @@ namespace dbaui
 
     VclPtr<SfxTabPage> ODriversSettings::CreateMySQLJDBC( TabPageParent pParent, const SfxItemSet* _rAttrSet )
     {
-        return VclPtr<OGeneralSpecialJDBCDetailsPage>::Create( pParent.pParent, *_rAttrSet,DSID_MYSQL_PORTNUMBER );
+        return VclPtr<OGeneralSpecialJDBCDetailsPage>::Create(pParent, *_rAttrSet,DSID_MYSQL_PORTNUMBER);
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateMySQLNATIVE( TabPageParent pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateMySQLNATIVE(TabPageParent pParent, const SfxItemSet* pAttrSet)
     {
-        return VclPtr<MySQLNativePage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<MySQLNativePage>::Create(pParent, *pAttrSet);
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateOracleJDBC( TabPageParent pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateOracleJDBC(TabPageParent pParent, const SfxItemSet* _rAttrSet)
     {
-        return VclPtr<OGeneralSpecialJDBCDetailsPage>::Create( pParent.pParent, *_rAttrSet,DSID_ORACLE_PORTNUMBER, false);
+        return VclPtr<OGeneralSpecialJDBCDetailsPage>::Create(pParent, *_rAttrSet,DSID_ORACLE_PORTNUMBER, false);
     }
 
     // OLDAPDetailsPage
-    OLDAPDetailsPage::OLDAPDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "LDAP", "dbaccess/ui/ldappage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::NONE)
+    OLDAPDetailsPage::OLDAPDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/ldappage.ui", "LDAP",
+                                    rCoreAttrs, OCommonBehaviourTabPageFlags::NONE)
+        , m_xETBaseDN(m_xBuilder->weld_entry("baseDNEntry"))
+        , m_xCBUseSSL(m_xBuilder->weld_check_button("useSSLCheckbutton"))
+        , m_xNFPortNumber(m_xBuilder->weld_spin_button("portNumberSpinbutton"))
+        , m_xNFRowCount(m_xBuilder->weld_spin_button("LDAPRowCountspinbutton"))
     {
-        get(m_pETBaseDN, "baseDNEntry");
-        get(m_pCBUseSSL, "useSSLCheckbutton");
-        get(m_pNFPortNumber, "portNumberSpinbutton");
-        m_pNFPortNumber->SetUseThousandSep(false);
-        get(m_pNFRowCount, "LDAPRowCountspinbutton");
+        m_xETBaseDN->connect_changed(LINK(this,OGenericAdministrationPage,OnControlEntryModifyHdl));
+        m_xNFPortNumber->connect_value_changed(LINK(this,OGenericAdministrationPage,OnControlSpinButtonModifyHdl));
+        m_xNFRowCount->connect_value_changed(LINK(this,OGenericAdministrationPage,OnControlSpinButtonModifyHdl));
 
-        m_pETBaseDN->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-        m_pCBUseSSL->SetToggleHdl( LINK(this, OGenericAdministrationPage, ControlModifiedCheckBoxHdl) );
-        m_pNFPortNumber->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-        m_pNFRowCount->SetModifyHdl(LINK(this,OGenericAdministrationPage,OnControlEditModifyHdl));
-
-        m_pNFRowCount->SetUseThousandSep(false);
         m_iNormalPort = 389;
         m_iSSLPort    = 636;
-        m_pCBUseSSL->SetClickHdl(LINK(this, OLDAPDetailsPage,OnCheckBoxClick));
+        m_xCBUseSSL->connect_toggled(LINK(this, OLDAPDetailsPage, OnCheckBoxClick));
     }
 
     OLDAPDetailsPage::~OLDAPDetailsPage()
@@ -682,45 +611,35 @@ namespace dbaui
         disposeOnce();
     }
 
-    void OLDAPDetailsPage::dispose()
+    VclPtr<SfxTabPage> ODriversSettings::CreateLDAP(TabPageParent pParent, const SfxItemSet* _rAttrSet)
     {
-        m_pETBaseDN.clear();
-        m_pCBUseSSL.clear();
-        m_pNFPortNumber.clear();
-        m_pNFRowCount.clear();
-        OCommonBehaviourTabPage::dispose();
-    }
-
-    VclPtr<SfxTabPage> ODriversSettings::CreateLDAP( TabPageParent pParent, const SfxItemSet* _rAttrSet )
-    {
-        return VclPtr<OLDAPDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OLDAPDetailsPage>::Create(pParent, *_rAttrSet);
     }
 
     bool OLDAPDetailsPage::FillItemSet( SfxItemSet* _rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(_rSet);
 
-        fillString(*_rSet,m_pETBaseDN,DSID_CONN_LDAP_BASEDN,bChangedSomething);
-        fillInt32(*_rSet,m_pNFPortNumber,DSID_CONN_LDAP_PORTNUMBER,bChangedSomething);
-        fillInt32(*_rSet,m_pNFRowCount,DSID_CONN_LDAP_ROWCOUNT,bChangedSomething);
-        fillBool(*_rSet,m_pCBUseSSL,DSID_CONN_LDAP_USESSL,bChangedSomething);
+        fillString(*_rSet,m_xETBaseDN.get(),DSID_CONN_LDAP_BASEDN,bChangedSomething);
+        fillInt32(*_rSet,m_xNFPortNumber.get(),DSID_CONN_LDAP_PORTNUMBER,bChangedSomething);
+        fillInt32(*_rSet,m_xNFRowCount.get(),DSID_CONN_LDAP_ROWCOUNT,bChangedSomething);
+        fillBool(*_rSet,m_xCBUseSSL.get(),DSID_CONN_LDAP_USESSL,false,bChangedSomething);
         return bChangedSomething;
     }
-    IMPL_LINK( OLDAPDetailsPage, OnCheckBoxClick, Button*, pCheckBox, void )
+
+    IMPL_LINK(OLDAPDetailsPage, OnCheckBoxClick, weld::ToggleButton&, rCheckBox, void)
     {
+        OnControlModifiedButtonClick(rCheckBox);
         callModifiedHdl();
-        if ( pCheckBox == m_pCBUseSSL)
+        if (m_xCBUseSSL->get_active())
         {
-            if ( m_pCBUseSSL->IsChecked() )
-            {
-                m_iNormalPort = static_cast<sal_Int32>(m_pNFPortNumber->GetValue());
-                m_pNFPortNumber->SetValue(m_iSSLPort);
-            }
-            else
-            {
-                m_iSSLPort = static_cast<sal_Int32>(m_pNFPortNumber->GetValue());
-                m_pNFPortNumber->SetValue(m_iNormalPort);
-            }
+            m_iNormalPort = m_xNFPortNumber->get_value();
+            m_xNFPortNumber->set_value(m_iSSLPort);
+        }
+        else
+        {
+            m_iSSLPort = m_xNFPortNumber->get_value();
+            m_xNFPortNumber->set_value(m_iNormalPort);
         }
     }
 
@@ -737,21 +656,20 @@ namespace dbaui
 
         if ( bValid )
         {
-            m_pETBaseDN->SetText(pBaseDN->GetValue());
-            m_pNFPortNumber->SetValue(pPortNumber->GetValue());
-            m_pNFRowCount->SetValue(pRowCount->GetValue());
-            m_pCBUseSSL->Check(pUseSSL->GetValue());
+            m_xETBaseDN->set_text(pBaseDN->GetValue());
+            m_xNFPortNumber->set_value(pPortNumber->GetValue());
+            m_xNFRowCount->set_value(pRowCount->GetValue());
+            m_xCBUseSSL->set_active(pUseSSL->GetValue());
         }
 
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
     }
 
     // OTextDetailsPage
-    OTextDetailsPage::OTextDetailsPage( vcl::Window* pParent, const SfxItemSet& _rCoreAttrs )
-        :OCommonBehaviourTabPage(pParent, "EmptyPage", "dbaccess/ui/emptypage.ui", _rCoreAttrs, OCommonBehaviourTabPageFlags::NONE)
+    OTextDetailsPage::OTextDetailsPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+        : OCommonBehaviourTabPage(pParent, "dbaccess/ui/emptypage.ui", "EmptyPage", rCoreAttrs, OCommonBehaviourTabPageFlags::NONE)
+        , m_xTextConnectionHelper(new OTextConnectionHelper(m_xContainer.get(), TC_EXTENSION | TC_HEADER | TC_SEPARATORS | TC_CHARSET))
     {
-
-        m_pTextConnectionHelper = VclPtr<OTextConnectionHelper>::Create( get<VclVBox>("EmptyPage"), TC_EXTENSION | TC_HEADER | TC_SEPARATORS | TC_CHARSET );
     }
 
     OTextDetailsPage::~OTextDetailsPage()
@@ -761,25 +679,25 @@ namespace dbaui
 
     void OTextDetailsPage::dispose()
     {
-        m_pTextConnectionHelper.disposeAndClear();
+        m_xTextConnectionHelper.reset();
         OCommonBehaviourTabPage::dispose();
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateText( TabPageParent pParent,  const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateText(TabPageParent pParent,  const SfxItemSet* pAttrSet)
     {
-        return VclPtr<OTextDetailsPage>::Create( pParent.pParent, *_rAttrSet );
+        return VclPtr<OTextDetailsPage>::Create(pParent, *pAttrSet);
     }
 
-    void OTextDetailsPage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OTextDetailsPage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillControls(_rControlList);
-        m_pTextConnectionHelper->fillControls(_rControlList);
+        m_xTextConnectionHelper->fillControls(_rControlList);
 
     }
-    void OTextDetailsPage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OTextDetailsPage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
         OCommonBehaviourTabPage::fillWindows(_rControlList);
-        m_pTextConnectionHelper->fillWindows(_rControlList);
+        m_xTextConnectionHelper->fillWindows(_rControlList);
 
     }
     void OTextDetailsPage::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
@@ -788,32 +706,32 @@ namespace dbaui
         bool bValid, bReadonly;
         getFlags(_rSet, bValid, bReadonly);
 
-        m_pTextConnectionHelper->implInitControls(_rSet, bValid);
+        m_xTextConnectionHelper->implInitControls(_rSet, bValid);
         OCommonBehaviourTabPage::implInitControls(_rSet, _bSaveValue);
     }
 
     bool OTextDetailsPage::FillItemSet( SfxItemSet* rSet )
     {
         bool bChangedSomething = OCommonBehaviourTabPage::FillItemSet(rSet);
-        bChangedSomething = m_pTextConnectionHelper->FillItemSet(*rSet, bChangedSomething);
+        bChangedSomething = m_xTextConnectionHelper->FillItemSet(*rSet, bChangedSomething);
         return bChangedSomething;
     }
 
     bool OTextDetailsPage::prepareLeave()
     {
-        return m_pTextConnectionHelper->prepareLeave();
+        return m_xTextConnectionHelper->prepareLeave();
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateGeneratedValuesPage( TabPageParent _pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateGeneratedValuesPage(TabPageParent pParent, const SfxItemSet* _rAttrSet)
     {
-        return VclPtr<GeneratedValuesPage>::Create( _pParent.pParent, *_rAttrSet );
+        return VclPtr<GeneratedValuesPage>::Create(pParent, *_rAttrSet);
     }
 
-    VclPtr<SfxTabPage> ODriversSettings::CreateSpecialSettingsPage( TabPageParent _pParent, const SfxItemSet* _rAttrSet )
+    VclPtr<SfxTabPage> ODriversSettings::CreateSpecialSettingsPage(TabPageParent pParent, const SfxItemSet* _rAttrSet)
     {
         OUString eType = ODbDataSourceAdministrationHelper::getDatasourceType( *_rAttrSet );
         DataSourceMetaData aMetaData( eType );
-        return VclPtr<SpecialSettingsPage>::Create( _pParent.pParent, *_rAttrSet, aMetaData );
+        return VclPtr<SpecialSettingsPage>::Create(pParent, *_rAttrSet, aMetaData);
     }
 }   // namespace dbaui
 

@@ -21,7 +21,6 @@
 #include <DataSeries.hxx>
 #include <DataSeriesHelper.hxx>
 #include <CommonConverters.hxx>
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/chart2/data/XDataSink.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <tools/diagnose_ex.h>
@@ -135,8 +134,7 @@ chart2::InterpretedData SAL_CALL BubbleDataInterpreter::interpretDataSource(
         }
         if( aYValuesVector.size() > nN )
             aNewData.push_back( aYValuesVector[nN] );
-        if( aSizeValuesVector.size() > nN )
-            aNewData.push_back( aSizeValuesVector[nN] );
+        aNewData.push_back(aSizeValuesVector[nN]);
 
         Reference< XDataSeries > xSeries;
         if( nSeriesIndex < aSeriesToReUse.getLength())

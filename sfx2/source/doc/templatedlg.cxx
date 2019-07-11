@@ -133,8 +133,8 @@ public:
 
 private:
 
-    OUString maKeyword;
-    FILTER_APPLICATION meApp;
+    OUString const maKeyword;
+    FILTER_APPLICATION const meApp;
 };
 
 /***
@@ -577,7 +577,7 @@ IMPL_LINK_NOARG(SfxTemplateManagerDlg, MoveClickHdl, Button*, void)
 
     if (aDlg.run() == RET_OK)
     {
-        OUString sCategory = aDlg.GetSelectedCategory();
+        const OUString& sCategory = aDlg.GetSelectedCategory();
         bool bIsNewCategory = aDlg.IsNewCategoryCreated();
         if(bIsNewCategory)
         {
@@ -616,7 +616,7 @@ IMPL_LINK_NOARG(SfxTemplateManagerDlg, ImportClickHdl, Button*, void)
 
     if (aDlg.run() == RET_OK)
     {
-        OUString sCategory = aDlg.GetSelectedCategory();
+        const OUString& sCategory = aDlg.GetSelectedCategory();
         bool bIsNewCategory = aDlg.IsNewCategoryCreated();
         if(bIsNewCategory)
         {
@@ -904,14 +904,14 @@ void SfxTemplateManagerDlg::OnTemplateImportCategory(const OUString& sCategory)
     // add filters of modules which are installed
     SvtModuleOptions aModuleOpt;
     if ( aModuleOpt.IsModuleInstalled( SvtModuleOptions::EModule::WRITER ) )
-        sFilterExt += "*.ott;*.stw;*.oth";
+        sFilterExt += "*.ott;*.stw;*.oth;*.dotx;*.dot";
 
     if ( aModuleOpt.IsModuleInstalled( SvtModuleOptions::EModule::CALC ) )
     {
         if ( !sFilterExt.isEmpty() )
             sFilterExt += ";";
 
-        sFilterExt += "*.ots;*.stc";
+        sFilterExt += "*.ots;*.stc;*.xltx;*.xlt";
     }
 
     if ( aModuleOpt.IsModuleInstalled( SvtModuleOptions::EModule::IMPRESS ) )
@@ -919,7 +919,7 @@ void SfxTemplateManagerDlg::OnTemplateImportCategory(const OUString& sCategory)
         if ( !sFilterExt.isEmpty() )
             sFilterExt += ";";
 
-        sFilterExt += "*.otp;*.sti";
+        sFilterExt += "*.otp;*.sti;*.pot;*.potx";
     }
 
     if ( aModuleOpt.IsModuleInstalled( SvtModuleOptions::EModule::DRAW ) )
@@ -1176,7 +1176,7 @@ void SfxTemplateManagerDlg::OnCategoryDelete()
 
     if (aDlg.run() == RET_OK)
     {
-        OUString sCategory = aDlg.GetSelectedCategory();
+        const OUString& sCategory = aDlg.GetSelectedCategory();
         std::unique_ptr<weld::MessageDialog> popupDlg(Application::CreateMessageDialog(GetFrameWeld(), VclMessageType::Question, VclButtonsType::YesNo,
                                                       SfxResId(STR_QMSG_SEL_FOLDER_DELETE)));
         if (popupDlg->run() != RET_YES)
@@ -1319,7 +1319,7 @@ static std::vector<OUString> lcl_getAllFactoryURLs ()
 //   Class SfxTemplateCategoryDialog --------------------------------------------------
 
 SfxTemplateCategoryDialog::SfxTemplateCategoryDialog(weld::Window* pParent)
-    : weld::GenericDialogController(pParent, "sfx/ui/templatecategorydlg.ui", "TemplatesCategoryDialog")
+    : GenericDialogController(pParent, "sfx/ui/templatecategorydlg.ui", "TemplatesCategoryDialog")
     , msSelectedCategory(OUString())
     , mbIsNewCategory(false)
     , mxLBCategory(m_xBuilder->weld_tree_view("categorylb"))
@@ -1328,6 +1328,7 @@ SfxTemplateCategoryDialog::SfxTemplateCategoryDialog(weld::Window* pParent)
     , mxCreateLabel(m_xBuilder->weld_label("create_label"))
     , mxOKButton(m_xBuilder->weld_button("ok"))
 {
+    mxLBCategory->append_text(SfxResId(STR_CATEGORY_NONE));
     mxNewCategoryEdit->connect_changed(LINK(this, SfxTemplateCategoryDialog, NewCategoryEditHdl));
     mxLBCategory->set_size_request(mxLBCategory->get_approximate_digit_width() * 32,
                                    mxLBCategory->get_height_rows(8));

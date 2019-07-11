@@ -22,6 +22,7 @@
 #include <com/sun/star/uno/Any.h>
 #include <osl/mutex.hxx>
 #include <osl/thread.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -50,6 +51,7 @@
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <com/sun/star/ucb/ContentInfo.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/InsertCommandArgument.hpp>
 #include <com/sun/star/ucb/NameClash.hpp>
 #include <com/sun/star/ucb/TransferInfo.hpp>
@@ -90,7 +92,6 @@ using namespace ::ucbhelper;
 #include <sfx2/fcontnr.hxx>
 #include <svtools/templatefoldercache.hxx>
 
-#include <comphelper/storagehelper.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <o3tl/make_unique.hxx>
 #include <memory>
@@ -112,7 +113,7 @@ class DocTempl_EntryData_Impl
 
     // the following member must be SfxObjectShellLock since it controls that SfxObjectShell lifetime by design
     // and users of this class expect it to be so.
-    SfxObjectShellLock  mxObjShell;
+    SfxObjectShellLock const  mxObjShell;
 
     OUString            maTitle;
     OUString            maOwnURL;

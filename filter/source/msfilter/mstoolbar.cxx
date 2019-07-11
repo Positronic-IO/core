@@ -8,6 +8,7 @@
  */
 #include <filter/msfilter/mstoolbar.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <stdarg.h>
 #include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/ui/XUIConfigurationManager.hpp>
@@ -106,7 +107,7 @@ CustomToolBarImportHelper::createCommandFromMacro( const OUString& sCmd )
 OUString CustomToolBarImportHelper::MSOCommandToOOCommand( sal_Int16 msoCmd )
 {
     OUString result;
-    if ( pMSOCmdConvertor.get() )
+    if (pMSOCmdConvertor)
         result = pMSOCmdConvertor->MSOCommandToOOCommand( msoCmd );
     return result;
 }
@@ -114,7 +115,7 @@ OUString CustomToolBarImportHelper::MSOCommandToOOCommand( sal_Int16 msoCmd )
 OUString CustomToolBarImportHelper::MSOTCIDToOOCommand( sal_Int16 msoTCID )
 {
     OUString result;
-    if ( pMSOCmdConvertor.get() )
+    if (pMSOCmdConvertor)
         result = pMSOCmdConvertor->MSOTCIDToOOCommand( msoTCID );
     return result;
 }
@@ -265,7 +266,7 @@ TBCMenuSpecific* TBCData::getMenuSpecific()
     TBCMenuSpecific* pMenu = dynamic_cast< TBCMenuSpecific* >( controlSpecificInfo.get() );
     return pMenu;
 }
-bool TBCData::ImportToolBarControl( CustomToolBarImportHelper& helper, std::vector< css::beans::PropertyValue >& props, bool& bBeginGroup, bool bIsMenuBar )
+void TBCData::ImportToolBarControl( CustomToolBarImportHelper& helper, std::vector< css::beans::PropertyValue >& props, bool& bBeginGroup, bool bIsMenuBar )
 {
     sal_uInt16  nStyle = 0;
     bBeginGroup = rHeader.isBeginGroup();
@@ -294,11 +295,19 @@ bool TBCData::ImportToolBarControl( CustomToolBarImportHelper& helper, std::vect
                 if ( !sCommand.isEmpty() )
                 {
                     BitmapEx aBitEx( pIcon->getBitMap() );
-                    if ( pSpecificInfo->getIconMask() )
-                         // according to the spec:
-                         // "the iconMask is white in all the areas in which the icon is
-                         // displayed as transparent and is black in all other areas."
-                         aBitEx = BitmapEx( aBitEx.GetBitmap(), pSpecificInfo->getIconMask()->getBitMap().CreateMask( COL_WHITE ) );
+                    TBCBitMap* pIconMask = pSpecificInfo->getIconMask();
+                    if (pIconMask)
+                    {
+                        Bitmap aMaskBase(pIconMask->getBitMap().GetBitmap());
+                        Size aMaskSize = aMaskBase.GetSizePixel();
+                        if (aMaskSize.Width() && aMaskSize.Height())
+                        {
+                            // according to the spec:
+                            // "the iconMask is white in all the areas in which the icon is
+                            // displayed as transparent and is black in all other areas."
+                            aBitEx = BitmapEx(aBitEx.GetBitmap(), aMaskBase.CreateMask(COL_WHITE));
+                        }
+                    }
 
                     Graphic aGraphic( aBitEx );
                     helper.addIcon( aGraphic.GetXGraphic(), sCommand );
@@ -327,7 +336,10 @@ bool TBCData::ImportToolBarControl( CustomToolBarImportHelper& helper, std::vect
 
         TBCMenuSpecific* pMenu = getMenuSpecific();
         if ( pMenu )
-            aProp.Value <<= sMenuBar += pMenu->Name(); // name of popup
+        {
+            sMenuBar += pMenu->Name();
+            aProp.Value <<= sMenuBar; // name of popup
+        }
         nStyle |= ui::ItemStyle::DROP_DOWN;
         props.push_back( aProp );
     }
@@ -350,7 +362,6 @@ bool TBCData::ImportToolBarControl( CustomToolBarImportHelper& helper, std::vect
     }
     aProp.Value <<= nStyle;
     props.push_back( aProp );
-    return true; // just ignore
 }
 
 #ifdef DEBUG_FILTER_MSTOOLBAR
@@ -720,7 +731,7 @@ bool TBCBitMap::Read( SvStream& rS)
     nOffSet = rS.Tell();
     rS.ReadInt32( cbDIB );
     // cbDIB = sizeOf(biHeader) + sizeOf(colors) + sizeOf(bitmapData) + 10
-    return ReadDIB(mBitMap, rS, false, true);
+    return ReadDIBBitmapEx(mBitMap, rS, false, true);
 }
 
 #ifdef DEBUG_FILTER_MSTOOLBAR

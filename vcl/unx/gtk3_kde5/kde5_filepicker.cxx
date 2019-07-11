@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <vcl/svapp.hxx>
+
 #include "kde5_filepicker.hxx"
 
 #include <KWindowSystem>
@@ -43,13 +45,10 @@ KDE5FilePicker::KDE5FilePicker(QObject* parent)
     , allowRemoteUrls(false)
 {
     _dialog->setSupportedSchemes({
-        QStringLiteral("file"),
-        QStringLiteral("ftp"),
-        QStringLiteral("http"),
-        QStringLiteral("https"),
-        QStringLiteral("webdav"),
-        QStringLiteral("webdavs"),
+        QStringLiteral("file"), QStringLiteral("ftp"), QStringLiteral("http"),
+        QStringLiteral("https"), QStringLiteral("webdav"), QStringLiteral("webdavs"),
         QStringLiteral("smb"),
+        QStringLiteral(""), // this makes removable devices shown
     });
 
     setMultiSelectionMode(false);
@@ -57,13 +56,22 @@ KDE5FilePicker::KDE5FilePicker(QObject* parent)
     connect(_dialog, &QFileDialog::filterSelected, this, &KDE5FilePicker::filterChanged);
     connect(_dialog, &QFileDialog::fileSelected, this, &KDE5FilePicker::selectionChanged);
 
-    qApp->installEventFilter(this);
+    setupCustomWidgets();
 }
 
 void KDE5FilePicker::enableFolderMode()
 {
     _dialog->setOption(QFileDialog::ShowDirsOnly, true);
-    _dialog->setFileMode(QFileDialog::Directory);
+    // Workaround for https://bugs.kde.org/show_bug.cgi?id=406464 :
+    // Don't set file mode to QFileDialog::Directory when native KDE Plasma 5
+    // file dialog is used, since clicking on directory "bar" inside directory "foo"
+    // and then confirming would return "foo" rather than "foo/bar";
+    // on the other hand, non-native file dialog needs 'QFileDialog::Directory'
+    // and doesn't allow folder selection otherwise
+    if (Application::GetDesktopEnvironment() != "KDE5")
+    {
+        _dialog->setFileMode(QFileDialog::Directory);
+    }
 }
 
 KDE5FilePicker::~KDE5FilePicker()
@@ -88,12 +96,18 @@ bool KDE5FilePicker::execute()
 
 void KDE5FilePicker::setMultiSelectionMode(bool multiSelect)
 {
+    if (_dialog->acceptMode() == QFileDialog::AcceptSave)
+        return;
+
     _dialog->setFileMode(multiSelect ? QFileDialog::ExistingFiles : QFileDialog::ExistingFile);
 }
 
-void KDE5FilePicker::setDefaultName(const QString& name) { _dialog->selectUrl(QUrl(name)); }
+void KDE5FilePicker::setDefaultName(const QString& name) { _dialog->selectFile(name); }
 
-void KDE5FilePicker::setDisplayDirectory(const QString& dir) { _dialog->selectUrl(QUrl(dir)); }
+void KDE5FilePicker::setDisplayDirectory(const QString& dir)
+{
+    _dialog->setDirectoryUrl(QUrl(dir));
+}
 
 QString KDE5FilePicker::getDisplayDirectory() const { return _dialog->directoryUrl().url(); }
 
@@ -226,6 +240,28 @@ void KDE5FilePicker::initialize(bool saveDialog)
 
 void KDE5FilePicker::setWinId(sal_uIntPtr winId) { _winId = winId; }
 
+void KDE5FilePicker::setupCustomWidgets()
+{
+    // When using the platform-native Plasma/KDE5 file picker, we currently rely on KFileWidget
+    // being present to add the custom controls visible (s. 'eventFilter' method).
+    // Since this doesn't work for other desktop environments, use a non-native
+    // dialog there in order not to lose the custom controls and insert the custom
+    // widget in the layout returned by QFileDialog::layout()
+    // (which returns nullptr for native file dialogs)
+    if (Application::GetDesktopEnvironment() == "KDE5")
+    {
+        qApp->installEventFilter(this);
+    }
+    else
+    {
+        _dialog->setOption(QFileDialog::DontUseNativeDialog);
+        QGridLayout* pLayout = static_cast<QGridLayout*>(_dialog->layout());
+        assert(pLayout);
+        const int row = pLayout->rowCount();
+        pLayout->addWidget(_extraControls, row, 1);
+    }
+}
+
 bool KDE5FilePicker::eventFilter(QObject* o, QEvent* e)
 {
     if (e->type() == QEvent::Show && o->isWidgetType())
@@ -235,7 +271,11 @@ bool KDE5FilePicker::eventFilter(QObject* o, QEvent* e)
         {
             KWindowSystem::setMainWindow(w, _winId);
             if (auto* fileWidget = w->findChild<KFileWidget*>({}, Qt::FindDirectChildrenOnly))
+            {
                 fileWidget->setCustomWidget(_extraControls);
+                // remove event filter again; the only purpose was to set the custom widget here
+                qApp->removeEventFilter(this);
+            }
         }
     }
     return QObject::eventFilter(o, e);

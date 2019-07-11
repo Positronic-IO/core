@@ -23,7 +23,6 @@
 #include <com/sun/star/packages/zip/ZipConstants.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
 #include <com/sun/star/ucb/XSimpleFileAccess3.hpp>
-#include <comphelper/storagehelper.hxx>
 
 #include <osl/diagnose.h>
 
@@ -193,7 +192,7 @@ void ZipOutputEntry::write( const Sequence< sal_Int8 >& rBuffer )
 
 void ZipOutputEntry::doDeflate()
 {
-    sal_Int32 nLength = m_aDeflater.doDeflateSegment(m_aDeflateBuffer, 0, m_aDeflateBuffer.getLength());
+    sal_Int32 nLength = m_aDeflater.doDeflateSegment(m_aDeflateBuffer, m_aDeflateBuffer.getLength());
 
     if ( nLength > 0 )
     {
@@ -234,7 +233,7 @@ void ZipOutputEntry::doDeflate()
         {
             m_xOutStream->writeBytes( aEncryptionBuffer );
 
-            // the sizes as well as checksum for encrypted streams is calculated hier
+            // the sizes as well as checksum for encrypted streams are calculated here
             m_pCurrentEntry->nCompressedSize += aEncryptionBuffer.getLength();
             m_pCurrentEntry->nSize = m_pCurrentEntry->nCompressedSize;
             m_aCRC.update( aEncryptionBuffer );

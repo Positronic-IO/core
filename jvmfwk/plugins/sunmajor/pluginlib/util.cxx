@@ -31,6 +31,7 @@
 #include <rtl/byteseq.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 #include <salhelper/linkhelper.hxx>
 #include <salhelper/thread.hxx>
 #include <memory>
@@ -113,11 +114,11 @@ char const *g_arSearchPaths[] = {
 namespace jfw_plugin
 {
 #if defined(_WIN32)
-bool getSDKInfoFromRegistry(vector<OUString> & vecHome);
-bool getJREInfoFromRegistry(vector<OUString>& vecJavaHome);
+static bool getSDKInfoFromRegistry(vector<OUString> & vecHome);
+static bool getJREInfoFromRegistry(vector<OUString>& vecJavaHome);
 #endif
 
-bool decodeOutput(const OString& s, OUString* out);
+static bool decodeOutput(const OString& s, OUString* out);
 
 
 namespace
@@ -127,10 +128,7 @@ bool addJREInfo(
     rtl::Reference<VendorBase> const & info,
     std::vector<rtl::Reference<VendorBase>> & infos)
 {
-    auto i(
-        std::find_if(
-            infos.begin(), infos.end(), InfoFindSame(info->getHome())));
-    if (i == infos.end()) {
+    if (std::none_of(infos.begin(), infos.end(), InfoFindSame(info->getHome()))) {
         infos.push_back(info);
         return true;
     } else {
@@ -570,7 +568,7 @@ bool decodeOutput(const OString& s, OUString* out)
 
 #if defined(_WIN32)
 
-bool getJavaInfoFromRegistry(const wchar_t* szRegKey,
+static bool getJavaInfoFromRegistry(const wchar_t* szRegKey,
                              vector<OUString>& vecJavaHome)
 {
     HKEY    hRoot;
@@ -652,7 +650,7 @@ bool getJREInfoFromRegistry(vector<OUString>& vecJavaHome)
     return getJavaInfoFromRegistry(HKEY_SUN_JRE, vecJavaHome);
 }
 
-void addJavaInfoFromWinReg(
+static void addJavaInfoFromWinReg(
     std::vector<rtl::Reference<VendorBase> > & allInfos,
     std::vector<rtl::Reference<VendorBase> > & addedInfos)
 {
@@ -735,9 +733,7 @@ void bubbleSortVersion(vector<rtl::Reference<VendorBase> >& vec)
             }
             if(nCmp == 1) // cur > next
             {
-                rtl::Reference<VendorBase> less = next;
-                vec.at(j-1)= cur;
-                vec.at(j)= less;
+                std::swap(vec.at(j-1), vec.at(j));
             }
         }
         ++cIter;
@@ -842,7 +838,7 @@ vector<OUString> getVectorFromCharArray(char const * const * ar, int size)
     In case of an error the returned string has the length 0.
     Otherwise the returned string is the "resolved" file URL.
  */
-OUString resolveDirPath(const OUString & path)
+static OUString resolveDirPath(const OUString & path)
 {
     OUString ret;
     salhelper::LinkResolver aResolver(osl_FileStatus_Mask_Type |
@@ -864,7 +860,7 @@ OUString resolveDirPath(const OUString & path)
 /** Checks if the path is a file. If it is a link to a file than
     it is resolved.
  */
-OUString resolveFilePath(const OUString & path)
+static OUString resolveFilePath(const OUString & path)
 {
     OUString ret;
     salhelper::LinkResolver aResolver(osl_FileStatus_Mask_Type |
@@ -891,9 +887,7 @@ rtl::Reference<VendorBase> getJREInfoByPath(
     static vector<OUString> vecBadPaths;
 
     static map<OUString, rtl::Reference<VendorBase> > mapJREs;
-    typedef map<OUString, rtl::Reference<VendorBase> >::const_iterator MapIt;
     OUString sFilePath;
-    typedef vector<OUString>::const_iterator cit_path;
     vector<pair<OUString, OUString> > props;
 
     OUString sResolvedDir = resolveDirPath(path);
@@ -908,7 +902,7 @@ rtl::Reference<VendorBase> getJREInfoByPath(
     //For example, a sun JDK contains <jdk>/bin/java and <jdk>/jre/bin/java.
     //When <jdk>/bin/java has been found then we need not find <jdk>/jre/bin/java.
     //Otherwise we would execute java two times for every JDK found.
-    MapIt entry2 = find_if(mapJREs.begin(), mapJREs.end(),
+    auto entry2 = find_if(mapJREs.cbegin(), mapJREs.cend(),
                            SameOrSubDirJREMap(sResolvedDir));
     if (entry2 != mapJREs.end())
     {
@@ -945,21 +939,21 @@ rtl::Reference<VendorBase> getJREInfoByPath(
             if (sFilePath.isEmpty())
             {
                 //The file path (to java exe) is not valid
-                cit_path ifull = find(vecBadPaths.begin(), vecBadPaths.end(), sFullPath);
-                if (ifull == vecBadPaths.end())
+                auto ifull = find(vecBadPaths.cbegin(), vecBadPaths.cend(), sFullPath);
+                if (ifull == vecBadPaths.cend())
                 {
                     vecBadPaths.push_back(sFullPath);
                 }
                 continue;
             }
 
-            cit_path ifile = find(vecBadPaths.begin(), vecBadPaths.end(), sFilePath);
-            if (ifile != vecBadPaths.end())
+            auto ifile = find(vecBadPaths.cbegin(), vecBadPaths.cend(), sFilePath);
+            if (ifile != vecBadPaths.cend())
             {
                 continue;
             }
 
-            MapIt entry =  mapJREs.find(sFilePath);
+            auto entry =  mapJREs.find(sFilePath);
             if (entry != mapJREs.end())
             {
                 JFW_TRACE2("JRE found again (detected before): " << sFilePath);
@@ -1037,6 +1031,7 @@ rtl::Reference<VendorBase> getJREInfoByPath(
         }
     }
 
+    auto knownVendor = false;
     if (!sVendorName.isEmpty())
     {
         //find the creator func for the respective vendor name
@@ -1048,9 +1043,15 @@ rtl::Reference<VendorBase> getJREInfoByPath(
             if (sNameMap == sVendorName)
             {
                 ret = createInstance(gVendorMap[c].createFunc, props);
+                knownVendor = true;
                 break;
             }
         }
+    }
+    // For unknown vendors, try SunInfo as fallback:
+    if (!knownVendor)
+    {
+        ret = createInstance(SunInfo::createInstance, props);
     }
     if (!ret.is())
     {

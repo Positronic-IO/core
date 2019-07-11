@@ -37,15 +37,14 @@
 #include <helpids.h>
 #include <algorithm>
 #include <svx/dialmgr.hxx>
+#include <tools/helpers.hxx>
 #include <vcl/settings.hxx>
 
 using namespace com::sun::star;
 
 Svx3DPreviewControl::Svx3DPreviewControl(vcl::Window* pParent, WinBits nStyle)
 :   Control(pParent, nStyle),
-    mpModel(nullptr),
     mpFmPage(nullptr),
-    mp3DView(nullptr),
     mpScene(nullptr),
     mp3DObj(nullptr),
     mnObjectType(SvxPreviewObjectType::SPHERE)
@@ -71,8 +70,8 @@ Svx3DPreviewControl::~Svx3DPreviewControl()
 
 void Svx3DPreviewControl::dispose()
 {
-    delete mp3DView;
-    delete mpModel;
+    mp3DView.reset();
+    mpModel.reset();
     Control::dispose();
 }
 
@@ -84,7 +83,7 @@ void Svx3DPreviewControl::Construct()
     SetMapMode(MapMode(MapUnit::Map100thMM));
 
     // Model
-    mpModel = new FmFormModel();
+    mpModel.reset(new FmFormModel());
     mpModel->GetItemPool().FreezeIdRanges();
 
     // Page
@@ -92,7 +91,7 @@ void Svx3DPreviewControl::Construct()
     mpModel->InsertPage( mpFmPage, 0 );
 
     // 3D View
-    mp3DView = new E3dView(*mpModel, this );
+    mp3DView.reset(new E3dView(*mpModel, this ));
     mp3DView->SetBufferedOutputAllowed(true);
     mp3DView->SetBufferedOverlayAllowed(true);
 
@@ -194,7 +193,7 @@ void Svx3DPreviewControl::SetObjectType(SvxPreviewObjectType nType)
         if( mp3DObj )
         {
             aSet.Put(mp3DObj->GetMergedItemSet());
-            mpScene->Remove3DObj( mp3DObj );
+            mpScene->RemoveObject( mp3DObj->GetOrdNum() );
             // always use SdrObject::Free(...) for SdrObjects (!)
             SdrObject* pTemp(mp3DObj);
             SdrObject::Free(pTemp);
@@ -225,7 +224,7 @@ void Svx3DPreviewControl::SetObjectType(SvxPreviewObjectType nType)
 
         if (mp3DObj)
         {
-            mpScene->Insert3DObj( mp3DObj );
+            mpScene->InsertObject( mp3DObj );
             mp3DObj->SetMergedItemSet(aSet);
         }
 
@@ -293,7 +292,7 @@ void Svx3DLightControl::Construct2()
             mp3DView->Get3DDefaultAttributes(),
             basegfx::B3DPoint(-fMaxExpansion, -fMaxExpansion, -fMaxExpansion),
             basegfx::B3DVector(2.0 * fMaxExpansion, 2.0 * fMaxExpansion, 2.0 * fMaxExpansion));
-        mpScene->Insert3DObj( mpExpansionObject );
+        mpScene->InsertObject( mpExpansionObject );
         SfxItemSet aSet(mpModel->GetItemPool());
         aSet.Put( XLineStyleItem( drawing::LineStyle_NONE ) );
         aSet.Put( XFillStyleItem( drawing::FillStyle_NONE ) );
@@ -315,7 +314,7 @@ void Svx3DLightControl::Construct2()
         mpLampBottomObject = new E3dPolygonObj(
             *mpModel,
             basegfx::B3DPolyPolygon(a3DCircle));
-        mpScene->Insert3DObj( mpLampBottomObject );
+        mpScene->InsertObject( mpLampBottomObject );
 
         // half circle with stand
         basegfx::B2DPolygon a2DHalfCircle;
@@ -329,7 +328,7 @@ void Svx3DLightControl::Construct2()
         mpLampShaftObject = new E3dPolygonObj(
             *mpModel,
             basegfx::B3DPolyPolygon(a3DHalfCircle));
-        mpScene->Insert3DObj( mpLampShaftObject );
+        mpScene->InsertObject( mpLampShaftObject );
 
         // initially invisible
         SfxItemSet aSet(mpModel->GetItemPool());
@@ -375,7 +374,7 @@ void Svx3DLightControl::ConstructLightObjects()
         // get rid of possible existing light object
         if(maLightObjects[a])
         {
-            mpScene->Remove3DObj(maLightObjects[a]);
+            mpScene->RemoveObject(maLightObjects[a]->GetOrdNum());
             // always use SdrObject::Free(...) for SdrObjects (!)
             SdrObject* pTemp(maLightObjects[a]);
             SdrObject::Free(pTemp);
@@ -395,7 +394,7 @@ void Svx3DLightControl::ConstructLightObjects()
                 mp3DView->Get3DDefaultAttributes(),
                 basegfx::B3DPoint( 0, 0, 0 ),
                 basegfx::B3DVector( fLampSize, fLampSize, fLampSize));
-            mpScene->Insert3DObj(pNewLight);
+            mpScene->InsertObject(pNewLight);
 
             basegfx::B3DHomMatrix aTransform;
             aTransform.translate(aDirection.getX(), aDirection.getY(), aDirection.getZ());
@@ -632,8 +631,8 @@ void Svx3DLightControl::Tracking( const TrackingEvent& rTEvt )
         {
             if(mbGeometrySelected)
             {
-                double fNewRotX = mfSaveActionStartVer - (static_cast<double>(aDeltaPos.Y()) * F_PI180);
-                double fNewRotY = mfSaveActionStartHor + (static_cast<double>(aDeltaPos.X()) * F_PI180);
+                double fNewRotX = mfSaveActionStartVer - basegfx::deg2rad(aDeltaPos.Y());
+                double fNewRotY = mfSaveActionStartHor + basegfx::deg2rad(aDeltaPos.X());
 
                 // cut horizontal
                 while(fNewRotY < 0.0)
@@ -671,15 +670,7 @@ void Svx3DLightControl::Tracking( const TrackingEvent& rTEvt )
                 double fNewPosVer = mfSaveActionStartVer - static_cast<double>(aDeltaPos.Y());
 
                 // cut horizontal
-                while(fNewPosHor < 0.0)
-                {
-                    fNewPosHor += 360.0;
-                }
-
-                while(fNewPosHor >= 360.0)
-                {
-                    fNewPosHor -= 360.0;
-                }
+                fNewPosHor = NormAngle360(fNewPosHor);
 
                 // cut vertical
                 if(fNewPosVer < -90.0)
@@ -738,15 +729,13 @@ void Svx3DLightControl::GetPosition(double& rHor, double& rVer)
     {
         basegfx::B3DVector aDirection(GetLightDirection(maSelectedLight));
         aDirection.normalize();
-        rHor = atan2(-aDirection.getX(), -aDirection.getZ()) + F_PI; // 0..2PI
-        rVer = atan2(aDirection.getY(), aDirection.getXZLength()); // -PI2..PI2
-        rHor /= F_PI180; // 0..360.0
-        rVer /= F_PI180; // -90.0..90.0
+        rHor = basegfx::rad2deg(atan2(-aDirection.getX(), -aDirection.getZ()) + F_PI); // 0..360.0
+        rVer = basegfx::rad2deg(atan2(aDirection.getY(), aDirection.getXZLength())); // -90.0..90.0
     }
     if(IsGeometrySelected())
     {
-        rHor = mfRotateY / F_PI180; // 0..360.0
-        rVer = mfRotateX / F_PI180; // -90.0..90.0
+        rHor = basegfx::rad2deg(mfRotateY); // 0..360.0
+        rVer = basegfx::rad2deg(mfRotateX); // -90.0..90.0
     }
 }
 
@@ -755,8 +744,8 @@ void Svx3DLightControl::SetPosition(double fHor, double fVer)
     if(IsSelectionValid())
     {
         // set selected light's direction
-        fHor = (fHor * F_PI180) - F_PI; // -PI..PI
-        fVer *= F_PI180; // -PI2..PI2
+        fHor = basegfx::deg2rad(fHor) - F_PI; // -PI..PI
+        fVer = basegfx::deg2rad(fVer); // -PI2..PI2
         basegfx::B3DVector aDirection(cos(fVer) * -sin(fHor), sin(fVer), cos(fVer) * -cos(fHor));
         aDirection.normalize();
 
@@ -789,8 +778,8 @@ void Svx3DLightControl::SetPosition(double fHor, double fVer)
     {
         if(mfRotateX != fVer || mfRotateY != fHor)
         {
-            mfRotateX = fVer * F_PI180;
-            mfRotateY = fHor * F_PI180;
+            mfRotateX = basegfx::deg2rad(fVer);
+            mfRotateY = basegfx::deg2rad(fHor);
 
             if(mp3DObj)
             {

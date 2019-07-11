@@ -18,6 +18,7 @@
  */
 
 #include <rtl/random.h>
+#include <sal/log.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/frame.hxx>
@@ -39,6 +40,9 @@
 #include <xeroot.hxx>
 #include <xepivotxml.hxx>
 #include <xedbdata.hxx>
+#include <xlcontent.hxx>
+#include <xlname.hxx>
+#include <xllink.hxx>
 
 #include <excrecds.hxx>
 #include <tabprotection.hxx>
@@ -350,13 +354,9 @@ uno::Sequence< beans::NamedValue > XclExpRoot::GetEncryptionData() const
     return aEncryptionData;
 }
 
-uno::Sequence< beans::NamedValue > XclExpRoot::GenerateDefaultEncryptionData() const
+uno::Sequence< beans::NamedValue > XclExpRoot::GenerateDefaultEncryptionData()
 {
-    uno::Sequence< beans::NamedValue > aEncryptionData;
-    if ( !GetDefaultPassword().isEmpty() )
-        aEncryptionData = GenerateEncryptionData( GetDefaultPassword() );
-
-    return aEncryptionData;
+    return GenerateEncryptionData( GetDefaultPassword() );
 }
 
 XclExpRootData::XclExpLinkMgrRef const & XclExpRoot::GetLocalLinkMgrRef() const

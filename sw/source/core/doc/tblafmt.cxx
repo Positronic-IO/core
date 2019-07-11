@@ -42,6 +42,7 @@
 #include <editsh.hxx>
 #include <fmtlsplt.hxx>
 #include <fmtrowsplt.hxx>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <vector>
@@ -816,9 +817,9 @@ void SwTableAutoFormat::UpdateToSet(sal_uInt8 nPos, SfxItemSet& rSet,
             {
                 std::unique_ptr<SfxPoolItem> pNewItem(rChg.GetHeight().CloneSetWhich(RES_CHRATR_CJK_FONTSIZE));
                 rSet.Put( *pNewItem);
-                pNewItem.reset(rChg.GetWeight().CloneSetWhich(RES_CHRATR_CJK_WEIGHT));
+                pNewItem = rChg.GetWeight().CloneSetWhich(RES_CHRATR_CJK_WEIGHT);
                 rSet.Put( *pNewItem);
-                pNewItem.reset(rChg.GetPosture().CloneSetWhich(RES_CHRATR_CJK_POSTURE));
+                pNewItem = rChg.GetPosture().CloneSetWhich(RES_CHRATR_CJK_POSTURE);
                 rSet.Put( *pNewItem);
             }
             // do not insert empty CTL font
@@ -834,9 +835,9 @@ void SwTableAutoFormat::UpdateToSet(sal_uInt8 nPos, SfxItemSet& rSet,
             {
                 std::unique_ptr<SfxPoolItem> pNewItem(rChg.GetHeight().CloneSetWhich(RES_CHRATR_CTL_FONTSIZE));
                 rSet.Put( *pNewItem);
-                pNewItem.reset(rChg.GetWeight().CloneSetWhich(RES_CHRATR_CTL_WEIGHT));
+                pNewItem = rChg.GetWeight().CloneSetWhich(RES_CHRATR_CTL_WEIGHT);
                 rSet.Put( *pNewItem);
-                pNewItem.reset(rChg.GetPosture().CloneSetWhich(RES_CHRATR_CTL_POSTURE));
+                pNewItem = rChg.GetPosture().CloneSetWhich(RES_CHRATR_CTL_POSTURE);
                 rSet.Put( *pNewItem);
             }
             rSet.Put( rChg.GetUnderline() );
@@ -929,11 +930,9 @@ void SwTableAutoFormat::StoreTableProperties(const SwTable &table)
         return;
 
     SwEditShell *pShell = pDoc->GetEditShell();
-    SwFormatRowSplit *pRowSplit = nullptr;
-    SwDoc::GetRowSplit(*pShell->getShellCursor(false), pRowSplit);
+    std::unique_ptr<SwFormatRowSplit> pRowSplit = SwDoc::GetRowSplit(*pShell->getShellCursor(false));
     m_bRowSplit = pRowSplit && pRowSplit->GetValue();
-    delete pRowSplit;
-    pRowSplit = nullptr;
+    pRowSplit.reset();
 
     const SfxItemSet &rSet = pFormat->GetAttrSet();
 
@@ -1137,6 +1136,16 @@ const std::vector<sal_Int32>& SwTableAutoFormat::GetTableTemplateMap()
     return *pTableTemplateMap;
 }
 
+sal_uInt8 SwTableAutoFormat::CountPos(sal_uInt32 nCol, sal_uInt32 nCols, sal_uInt32 nRow,
+                                      sal_uInt32 nRows)
+{
+    sal_uInt8 nRet = static_cast<sal_uInt8>(
+        !nRow ? 0 : ((nRow + 1 == nRows) ? 12 : (4 * (1 + ((nRow - 1) & 1)))));
+    nRet = nRet
+           + static_cast<sal_uInt8>(!nCol ? 0 : (nCol + 1 == nCols ? 3 : (1 + ((nCol - 1) & 1))));
+    return nRet;
+}
+
 struct SwTableAutoFormatTable::Impl
 {
     std::vector<std::unique_ptr<SwTableAutoFormat>> m_AutoFormats;
@@ -1177,14 +1186,12 @@ void SwTableAutoFormatTable::EraseAutoFormat(size_t const i)
 
 void SwTableAutoFormatTable::EraseAutoFormat(const OUString& rName)
 {
-    for (auto iter = m_pImpl->m_AutoFormats.begin();
-         iter != m_pImpl->m_AutoFormats.end(); ++iter)
+    auto iter = std::find_if(m_pImpl->m_AutoFormats.begin(), m_pImpl->m_AutoFormats.end(),
+        [&rName](const std::unique_ptr<SwTableAutoFormat>& rpFormat) { return rpFormat->GetName() == rName; });
+    if (iter != m_pImpl->m_AutoFormats.end())
     {
-        if ((*iter)->GetName() == rName)
-        {
-            m_pImpl->m_AutoFormats.erase(iter);
-            return;
-        }
+        m_pImpl->m_AutoFormats.erase(iter);
+        return;
     }
     SAL_INFO("sw.core", "SwTableAutoFormatTable::EraseAutoFormat, SwTableAutoFormat with given name not found");
 }
@@ -1199,16 +1206,13 @@ std::unique_ptr<SwTableAutoFormat> SwTableAutoFormatTable::ReleaseAutoFormat(siz
 
 std::unique_ptr<SwTableAutoFormat> SwTableAutoFormatTable::ReleaseAutoFormat(const OUString& rName)
 {
-    std::unique_ptr<SwTableAutoFormat> pRet(nullptr);
-    for (auto iter = m_pImpl->m_AutoFormats.begin();
-         iter != m_pImpl->m_AutoFormats.end(); ++iter)
+    std::unique_ptr<SwTableAutoFormat> pRet;
+    auto iter = std::find_if(m_pImpl->m_AutoFormats.begin(), m_pImpl->m_AutoFormats.end(),
+        [&rName](const std::unique_ptr<SwTableAutoFormat>& rpFormat) { return rpFormat->GetName() == rName; });
+    if (iter != m_pImpl->m_AutoFormats.end())
     {
-        if ((*iter)->GetName() == rName)
-        {
-            pRet = std::move(*iter);
-            m_pImpl->m_AutoFormats.erase(iter);
-            break;
-        }
+        pRet = std::move(*iter);
+        m_pImpl->m_AutoFormats.erase(iter);
     }
     return pRet;
 }
@@ -1394,8 +1398,6 @@ SwCellStyleTable::SwCellStyleTable()
 
 SwCellStyleTable::~SwCellStyleTable()
 {
-    for (size_t i=0; i < m_aCellStyles.size(); ++i)
-        delete m_aCellStyles[i].second;
 }
 
 size_t SwCellStyleTable::size() const
@@ -1405,9 +1407,6 @@ size_t SwCellStyleTable::size() const
 
 void SwCellStyleTable::clear()
 {
-    for (size_t i=0; i < m_aCellStyles.size(); ++i)
-        delete m_aCellStyles[i].second;
-
     m_aCellStyles.clear();
 }
 
@@ -1418,19 +1417,17 @@ SwCellStyleDescriptor SwCellStyleTable::operator[](size_t i) const
 
 void SwCellStyleTable::AddBoxFormat(const SwBoxAutoFormat& rBoxFormat, const OUString& sName)
 {
-    m_aCellStyles.emplace_back(sName, new SwBoxAutoFormat(rBoxFormat));
+    m_aCellStyles.emplace_back(sName, o3tl::make_unique<SwBoxAutoFormat>(rBoxFormat));
 }
 
 void SwCellStyleTable::RemoveBoxFormat(const OUString& sName)
 {
-    for (auto iter = m_aCellStyles.begin(); iter != m_aCellStyles.end(); ++iter)
+    auto iter = std::find_if(m_aCellStyles.begin(), m_aCellStyles.end(),
+        [&sName](const std::pair<OUString, std::unique_ptr<SwBoxAutoFormat>>& rStyle) { return rStyle.first == sName; });
+    if (iter != m_aCellStyles.end())
     {
-        if (iter->first == sName)
-        {
-            delete iter->second;
-            m_aCellStyles.erase(iter);
-            return;
-        }
+        m_aCellStyles.erase(iter);
+        return;
     }
     SAL_INFO("sw.core", "SwCellStyleTable::RemoveBoxFormat, format with given name doesn't exists");
 }
@@ -1439,7 +1436,7 @@ OUString SwCellStyleTable::GetBoxFormatName(const SwBoxAutoFormat& rBoxFormat) c
 {
     for (size_t i=0; i < m_aCellStyles.size(); ++i)
     {
-        if (m_aCellStyles[i].second == &rBoxFormat)
+        if (m_aCellStyles[i].second.get() == &rBoxFormat)
             return m_aCellStyles[i].first;
     }
 
@@ -1452,7 +1449,7 @@ SwBoxAutoFormat* SwCellStyleTable::GetBoxFormat(const OUString& sName) const
     for (size_t i=0; i < m_aCellStyles.size(); ++i)
     {
         if (m_aCellStyles[i].first == sName)
-            return m_aCellStyles[i].second;
+            return m_aCellStyles[i].second.get();
     }
 
     return nullptr;

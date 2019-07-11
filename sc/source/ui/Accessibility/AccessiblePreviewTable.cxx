@@ -40,7 +40,6 @@
 #include <svl/hint.hxx>
 #include <unotools/accessiblestatesethelper.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/servicehelper.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
@@ -51,8 +50,7 @@ ScAccessiblePreviewTable::ScAccessiblePreviewTable( const css::uno::Reference<cs
                             ScPreviewShell* pViewShell, sal_Int32 nIndex ) :
     ScAccessibleContextBase( rxParent, AccessibleRole::TABLE ),
     mpViewShell( pViewShell ),
-    mnIndex( nIndex ),
-    mpTableInfo( nullptr )
+    mnIndex( nIndex )
 {
     if (mpViewShell)
         mpViewShell->AddAccessibilityObject(*this);
@@ -77,8 +75,7 @@ void SAL_CALL ScAccessiblePreviewTable::disposing()
         mpViewShell = nullptr;
     }
 
-    if (mpTableInfo)
-        DELETEZ (mpTableInfo);
+    mpTableInfo.reset();
 
     ScAccessibleContextBase::disposing();
 }
@@ -92,7 +89,7 @@ void ScAccessiblePreviewTable::Notify( SfxBroadcaster& rBC, const SfxHint& rHint
     {
         //  column / row layout may change with any document change,
         //  so it must be invalidated
-        DELETEZ( mpTableInfo );
+        mpTableInfo.reset();
     }
     else if (nId == SfxHintId::ScAccVisAreaChanged)
     {
@@ -638,7 +635,7 @@ void ScAccessiblePreviewTable::FillTableInfo() const
             aOutputSize = pWindow->GetOutputSizePixel();
         tools::Rectangle aVisRect( Point(), aOutputSize );
 
-        mpTableInfo = new ScPreviewTableInfo;
+        mpTableInfo.reset( new ScPreviewTableInfo );
         mpViewShell->GetLocationData().GetTableInfo( aVisRect, *mpTableInfo );
     }
 }

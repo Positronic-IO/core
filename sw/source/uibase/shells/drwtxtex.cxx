@@ -54,7 +54,9 @@
 #include <svl/languageoptions.hxx>
 #include <editeng/flditem.hxx>
 #include <editeng/editstat.hxx>
+#include <svx/clipfmtitem.hxx>
 #include <svx/hlnkitem.hxx>
+#include <svx/svxdlg.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <svl/slstitm.hxx>
 #include <editeng/langitem.hxx>
@@ -350,10 +352,7 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
                 aDlgAttr.Put( SvxKerningItem(0, RES_CHRATR_KERNING) );
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact && "SwAbstractDialogFactory fail!");
-
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(pView->GetWindow(), *pView, aDlgAttr, SwCharDlgMode::Draw));
-                assert(pDlg && "Dialog creation failed!");
+                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(pView->GetFrameWeld(), *pView, aDlgAttr, SwCharDlgMode::Draw));
                 if (nSlot == SID_CHAR_DLG_EFFECT)
                 {
                     pDlg->SetCurPageId("fonteffects");
@@ -425,10 +424,7 @@ void SwDrawTextShell::Execute( SfxRequest &rReq )
                 aDlgAttr.Put( SvxOrphansItem( 0, RES_PARATR_ORPHANS ) );
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact && "SwAbstractDialogFactory fail!");
-
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwParaDlg( GetView().GetWindow(), GetView(), aDlgAttr, true ));
-                assert(pDlg && "Dialog creation failed!");
+                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwParaDlg(GetView().GetFrameWeld(), GetView(), aDlgAttr, true));
                 sal_uInt16 nRet = pDlg->Execute();
                 if(RET_OK == nRet)
                 {
@@ -612,7 +608,8 @@ void SwDrawTextShell::GetState(SfxItemSet& rSet)
         {
             case SID_LANGUAGE_STATUS://20412:
             {
-                nSlotId = SwLangHelper::GetLanguageStatus(pOLV,rSet);
+                SwLangHelper::GetLanguageStatus(pOLV,rSet);
+                nSlotId = 0;
                 break;
             }
 
@@ -675,7 +672,7 @@ ASK_ADJUST:
                 SfxItemState eState = aEditAttr.GetItemState(EE_PARA_SBL);
                 if( eState >= SfxItemState::DEFAULT )
                 {
-                    SvxLineSpacingItem aLR = aEditAttr.Get( EE_PARA_SBL );
+                    const SvxLineSpacingItem& aLR = aEditAttr.Get( EE_PARA_SBL );
                     rSet.Put(aLR);
                 }
                 else
@@ -1000,6 +997,54 @@ void SwDrawTextShell::ExecClpbrd(SfxRequest const &rReq)
             pOLV->PasteSpecial();
             break;
 
+        case SID_PASTE_UNFORMATTED:
+            pOLV->Paste();
+            break;
+
+        case SID_PASTE_SPECIAL:
+        {
+            SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
+            ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(GetView().GetEditWin().GetFrameWeld()));
+
+            pDlg->Insert(SotClipboardFormatId::STRING, OUString());
+            pDlg->Insert(SotClipboardFormatId::RTF, OUString());
+            pDlg->Insert(SotClipboardFormatId::RICHTEXT, OUString());
+
+            TransferableDataHelper aDataHelper(TransferableDataHelper::CreateFromSystemClipboard(&GetView().GetEditWin()));
+            SotClipboardFormatId nFormat = pDlg->GetFormat(aDataHelper.GetTransferable());
+
+            if (nFormat != SotClipboardFormatId::NONE)
+            {
+                if (nFormat == SotClipboardFormatId::STRING)
+                    pOLV->Paste();
+                else
+                    pOLV->PasteSpecial();
+            }
+
+            break;
+        }
+
+        case SID_CLIPBOARD_FORMAT_ITEMS:
+        {
+            SotClipboardFormatId nFormat = SotClipboardFormatId::NONE;
+            const SfxPoolItem* pItem;
+            if (rReq.GetArgs() && rReq.GetArgs()->GetItemState(nId, true, &pItem) == SfxItemState::SET)
+            {
+                if (const SfxUInt32Item* pUInt32Item = dynamic_cast<const SfxUInt32Item *>(pItem))
+                    nFormat = static_cast<SotClipboardFormatId>(pUInt32Item->GetValue());
+            }
+
+            if (nFormat != SotClipboardFormatId::NONE)
+            {
+                if (nFormat == SotClipboardFormatId::STRING)
+                    pOLV->Paste();
+                else
+                    pOLV->PasteSpecial();
+            }
+
+            break;
+        }
+
         default:
             OSL_FAIL("wrong dispatcher");
             return;
@@ -1016,6 +1061,11 @@ void SwDrawTextShell::StateClpbrd(SfxItemSet &rSet)
     const bool bCopy = (aSel.nStartPara != aSel.nEndPara) ||
         (aSel.nStartPos != aSel.nEndPos);
 
+    TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( &GetView().GetEditWin() ) );
+    const bool bPaste = aDataHelper.HasFormat( SotClipboardFormatId::STRING ) ||
+                        aDataHelper.HasFormat( SotClipboardFormatId::RTF ) ||
+                        aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT );
+
     SfxWhichIter aIter(rSet);
     sal_uInt16 nWhich = aIter.FirstWhich();
 
@@ -1030,21 +1080,28 @@ void SwDrawTextShell::StateClpbrd(SfxItemSet &rSet)
             break;
 
         case SID_PASTE:
-            {
-                TransferableDataHelper aDataHelper(
-                    TransferableDataHelper::CreateFromSystemClipboard( &GetView().GetEditWin() ) );
-
-                if( !aDataHelper.GetXTransferable().is()
-                    || !SwTransferable::IsPaste( GetShell(), aDataHelper ) )
-                {
-                    rSet.DisableItem( nWhich );
-                }
-            }
+        case SID_PASTE_UNFORMATTED:
+        case SID_PASTE_SPECIAL:
+            if( !bPaste )
+                rSet.DisableItem( nWhich );
             break;
 
-        case SID_PASTE_SPECIAL:
         case SID_CLIPBOARD_FORMAT_ITEMS:
-            rSet.DisableItem( nWhich );
+            if( bPaste )
+            {
+                SvxClipboardFormatItem aFormats( SID_CLIPBOARD_FORMAT_ITEMS );
+
+                if ( aDataHelper.HasFormat( SotClipboardFormatId::STRING ) )
+                    aFormats.AddClipbrdFormat( SotClipboardFormatId::STRING );
+                if ( aDataHelper.HasFormat( SotClipboardFormatId::RTF ) )
+                    aFormats.AddClipbrdFormat( SotClipboardFormatId::RTF );
+                if ( aDataHelper.HasFormat( SotClipboardFormatId::RICHTEXT ) )
+                    aFormats.AddClipbrdFormat( SotClipboardFormatId::RICHTEXT );
+
+                rSet.Put( aFormats );
+            }
+            else
+                rSet.DisableItem( nWhich );
             break;
         }
 

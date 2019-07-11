@@ -23,10 +23,10 @@
 #define ZBUFFER_DEPTH_RANGE         (double(256L * 256L * 256L))
 
 #include <basegfx/matrix/b3dhommatrix.hxx>
-#include <basegfx/range/b3drange.hxx>
 #include <tools/gen.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
-#include <basegfx/point/b2dpoint.hxx>
+#include <basegfx/point/b3dpoint.hxx>
+#include <basegfx/vector/b3dvector.hxx>
 #include <tools/toolsdllapi.h>
 
 /// Transformation sets for 3D output
@@ -58,10 +58,6 @@ private:
     double                mfBottomBound;
     double                mfTopBound;
 
-    // Near and far clipping planes
-    double                mfNearBound;
-    double                mfFarBound;
-
     // Aspect ratio of 3D transformation (Y / X)
     // default: 1:1 -> 1.0
     // Disable with value 0.0
@@ -83,6 +79,11 @@ private:
 public:
     B3dTransformationSet();
     virtual ~B3dTransformationSet();
+
+    B3dTransformationSet(B3dTransformationSet const &) = default;
+    B3dTransformationSet(B3dTransformationSet &&) = default;
+    B3dTransformationSet & operator =(B3dTransformationSet const &) = default;
+    B3dTransformationSet & operator =(B3dTransformationSet &&) = default;
 
     void Reset();
 
@@ -163,6 +164,11 @@ public:
     B3dViewport();
     virtual ~B3dViewport() override;
 
+    B3dViewport(B3dViewport const &) = default;
+    B3dViewport(B3dViewport &&) = default;
+    B3dViewport & operator =(B3dViewport const &) = default;
+    B3dViewport & operator =(B3dViewport &&) = default;
+
     void SetVUV(const basegfx::B3DVector& rNewVUV);
     void SetViewportValues(
         const basegfx::B3DPoint& rNewVRP,
@@ -188,14 +194,18 @@ public:
         double fFocLen = 35.0, double fBnkAng = 0.0);
     virtual ~B3dCamera() override;
 
+    B3dCamera(B3dCamera const &) = default;
+    B3dCamera(B3dCamera &&) = default;
+    B3dCamera & operator =(B3dCamera const &) = default;
+    B3dCamera & operator =(B3dCamera &&) = default;
+
 private:
     void CalcNewViewportValues();
-    bool CalcFocalLength();
+    void CalcFocalLength();
 
     virtual void DeviceRectangleChange() override;
 
     basegfx::B3DPoint       aPosition;
-    basegfx::B3DPoint       aCorrectedPosition;
     basegfx::B3DVector  aLookAt;
     double                  fFocalLength;
     double                  fBankAngle;

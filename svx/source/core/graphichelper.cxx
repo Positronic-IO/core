@@ -25,6 +25,7 @@
 #include <svx/dialmgr.hxx>
 #include <svx/graphichelper.hxx>
 #include <svx/strings.hrc>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
@@ -331,6 +332,13 @@ OUString GraphicHelper::ExportGraphic(weld::Window* pParent, const Graphic& rGra
                     return sPath;
                 }
             }
+            else
+            {
+                XOutBitmap::WriteGraphic( rGraphic, sPath, aFilter,
+                                            XOutFlags::DontExpandFilename |
+                                            XOutFlags::DontAddExtension |
+                                            XOutFlags::UseNativeIfPossible );
+            }
         }
     }
     return OUString();
@@ -344,7 +352,7 @@ void GraphicHelper::SaveShapeAsGraphic(weld::Window* pParent,  const Reference< 
         Reference< XPropertySet > xShapeSet( xShape, UNO_QUERY_THROW );
 
         SvtPathOptions aPathOpt;
-        OUString sGraphicPath( aPathOpt.GetGraphicPath() );
+        const OUString& sGraphicPath( aPathOpt.GetGraphicPath() );
 
         FileDialogHelper aDialogHelper(TemplateDescription::FILESAVE_AUTOEXTENSION, FileDialogFlags::NONE, pParent);
         Reference < XFilePicker3 > xFilePicker = aDialogHelper.GetFilePicker();
@@ -403,11 +411,8 @@ void GraphicHelper::SaveShapeAsGraphic(weld::Window* pParent,  const Reference< 
                 aDescriptor[1].Value <<= sPath;
 
                 Reference< XComponent > xSourceDocument( xShape, UNO_QUERY_THROW );
-                if ( xSourceDocument.is() )
-                {
-                    xGraphicExporter->setSourceDocument( xSourceDocument );
-                    xGraphicExporter->filter( aDescriptor );
-                }
+                xGraphicExporter->setSourceDocument( xSourceDocument );
+                xGraphicExporter->filter( aDescriptor );
             }
         }
     }

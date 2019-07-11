@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
-<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Field" script:language="StarBasic">REM =======================================================================================================================
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Field" script:language="StarBasic">
+REM =======================================================================================================================
 REM ===					The Access2Base library is a part of the LibreOffice project.									===
 REM ===					Full documentation is available on http://www.access2base.com									===
 REM =======================================================================================================================
@@ -703,7 +704,7 @@ Dim oParent As Object
 							End If
 						Case .CHAR, .VARCHAR, .LONGVARCHAR, .CLOB
 							If Not Utils._CheckArgument(pvValue, iArgNr, vbString, , False) Then Goto Trace_Error_Value
-							If Len(pvValue) &gt; _Precision Then Goto Trace_Error_Length
+							If _Precision &gt; 0 And Len(pvValue) &gt; _Precision Then Goto Trace_Error_Length
 							Column.updateString(pvValue)						&apos;	vbString
 						Case .DATE
 							If Not Utils._CheckArgument(pvValue, iArgNr, vbDate, , False) Then Goto Trace_Error_Value
@@ -775,7 +776,7 @@ Trace_Error_Updatable:
 	_PropertySet = False
 	Goto Exit_Function
 Trace_Error_Length:
-	TraceError(TRACEFATAL, ERROVERFLOW, Utils._CalledSub(), 0, , Array(lSize, &quot;AppendChunk&quot;))
+	TraceError(TRACEFATAL, ERROVERFLOW, Utils._CalledSub(), 0, , Array(Len(pvValue), &quot;AppendChunk&quot;))
 	_PropertySet = False
 	Goto Exit_Function
 Error_Function:

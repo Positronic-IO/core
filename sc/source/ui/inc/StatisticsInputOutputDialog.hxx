@@ -11,13 +11,11 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_STATISTICSINPUTOUTPUTDIALOG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_STATISTICSINPUTOUTPUTDIALOG_HXX
 
-#include <global.hxx>
 #include <address.hxx>
 #include "anyrefdg.hxx"
+#include "viewdata.hxx"
 
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
-#include <vcl/lstbox.hxx>
 
 class ScStatisticsInputOutputDialog : public ScAnyRefDlg
 {
@@ -57,13 +55,13 @@ protected:
     VclPtr<RadioButton>        mpGroupByRowsRadio;
 
     // Data
-    ScViewData*         mViewData;
-    ScDocument*         mDocument;
+    ScViewData* const         mViewData;
+    ScDocument* const         mDocument;
 
-    ScRange             mInputRange;
-    ScAddress::Details  mAddressDetails;
-    ScAddress           mOutputAddress;
-    GroupedBy           mGroupedBy;
+    ScRange                   mInputRange;
+    ScAddress::Details const  mAddressDetails;
+    ScAddress                 mOutputAddress;
+    GroupedBy                 mGroupedBy;
 
     static ScRangeList MakeColumnRangeList(SCTAB aTab, ScAddress const & aStart, ScAddress const & aEnd);
     static ScRangeList MakeRowRangeList(SCTAB aTab, ScAddress const & aStart, ScAddress const & aEnd);
@@ -73,8 +71,8 @@ private:
     VclPtr<OKButton>           mpButtonOk;
 
     VclPtr<formula::RefEdit>   mpActiveEdit;
-    ScAddress           mCurrentAddress;
-    bool                mDialogLostFocus;
+    ScAddress const            mCurrentAddress;
+    bool                       mDialogLostFocus;
 
     void Init();
     void GetRangeFromSelection();

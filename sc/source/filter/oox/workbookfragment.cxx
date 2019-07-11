@@ -23,6 +23,7 @@
 #include <oox/core/xmlfilterbase.hxx>
 #include <oox/drawingml/themefragmenthandler.hxx>
 #include <oox/helper/attributelist.hxx>
+#include <oox/helper/binaryinputstream.hxx>
 #include <oox/helper/progressbar.hxx>
 #include <oox/helper/propertyset.hxx>
 #include <oox/ole/olestorage.hxx>
@@ -49,12 +50,16 @@
 #include <sheetdatacontext.hxx>
 #include <extlstcontext.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <documentimport.hxx>
+#include <biffhelper.hxx>
 
 #include <document.hxx>
 #include <docsh.hxx>
 #include <calcconfig.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
+#include <scmod.hxx>
+#include <formulaopt.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/timer.hxx>
@@ -64,6 +69,8 @@
 #include <salhelper/thread.hxx>
 #include <comphelper/threadpool.hxx>
 #include <osl/conditn.hxx>
+#include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <queue>
@@ -325,7 +332,7 @@ void importSheetFragments( WorkbookFragment& rWorkbookHandler, SheetFragmentVect
          pProgress->setCustomRowProgress(
                      aProgressUpdater.wrapProgress(
                              pProgress->getRowProgress() ) );
-         rSharedPool.pushTask( new WorkerThread( pTag, rWorkbookHandler, it->second,
+         rSharedPool.pushTask( o3tl::make_unique<WorkerThread>( pTag, rWorkbookHandler, it->second,
                                            /* ref */ nSheetsLeft ) );
          nSheetsLeft++;
      }
@@ -523,7 +530,7 @@ private:
     std::unique_ptr<weld::CheckButton> m_xWarningOnBox;
 public:
     MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OString& rDialogId)
-        : weld::MessageDialogController(pParent, rUIFile, rDialogId, "ask")
+        : MessageDialogController(pParent, rUIFile, rDialogId, "ask")
         , m_xWarningOnBox(m_xBuilder->weld_check_button("ask"))
     {
     }
@@ -575,7 +582,12 @@ void WorkbookFragment::recalcFormulaCells()
     if (bHardRecalc)
         rDocSh.DoHardRecalc();
     else
-        rDoc.CalcFormulaTree(false, true, false);
+    {
+        getDocImport().broadcastRecalcAfterImport();
+        // Full ScDocument::CalcFormulaTree() of all dirty cells is not
+        // necessary here, the View will recalculate them in the visible area,
+        // or any other method accessing formula cell results.
+    }
 }
 
 // private --------------------------------------------------------------------

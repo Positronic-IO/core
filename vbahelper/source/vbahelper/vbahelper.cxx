@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column:100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -39,6 +39,7 @@
 
 #include <ooo/vba/msforms/XShape.hpp>
 
+#include <comphelper/automationinvokedzone.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <sfx2/objsh.hxx>
@@ -62,6 +63,7 @@
 #include <sfx2/viewsh.hxx>
 #include <math.h>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/window.hxx>
@@ -81,7 +83,7 @@ namespace vba
 namespace { const double factor =  2540.0 / 72.0; }
 
 // helper method to determine if the view ( calc ) is in print-preview mode
-bool isInPrintPreview( SfxViewFrame* pView )
+static bool isInPrintPreview( SfxViewFrame* pView )
 {
     sal_uInt16 nViewNo = SID_VIEWSHELL1 - SID_VIEWSHELL0;
     if ( pView->GetObjectShell()->GetFactory().GetViewFactoryCount() >
@@ -230,7 +232,7 @@ getCurrentDoc( const OUString& sKey )
 }
 
 /// @throws uno::RuntimeException
- uno::Reference< frame::XModel >
+static uno::Reference< frame::XModel >
 getCurrentDocCtx( const OUString& ctxName, const uno::Reference< uno::XComponentContext >& xContext )
 {
     uno::Reference< frame::XModel > xModel;
@@ -262,7 +264,13 @@ getCurrentExcelDoc( const uno::Reference< uno::XComponentContext >& xContext )
     }
     catch (const uno::Exception&)
     {
-        xModel = getThisExcelDoc( xContext );
+        try
+        {
+            xModel = getThisExcelDoc( xContext );
+        }
+        catch (const uno::Exception&)
+        {
+        }
     }
     return xModel;
 }
@@ -548,7 +556,7 @@ ContainerUtilities::FieldInList( const uno::Sequence< OUString >& SearchList, co
 
 }
 
-bool NeedEsc(sal_Unicode cCode)
+static bool NeedEsc(sal_Unicode cCode)
 {
     return OUString(".^$+\\|{}()").indexOf(cCode) != -1;
 }
@@ -716,12 +724,9 @@ void setCursorHelper( const uno::Reference< frame::XModel >& xModel, const Point
         }
     }
 
-    for (   ::std::vector< uno::Reference< frame::XController > >::const_iterator controller = aControllers.begin();
-            controller != aControllers.end();
-            ++controller
-        )
+    for ( const auto& rController : aControllers )
     {
-        const uno::Reference< frame::XFrame >      xFrame     ( (*controller)->getFrame(),       uno::UNO_SET_THROW   );
+        const uno::Reference< frame::XFrame >      xFrame     ( rController->getFrame(),         uno::UNO_SET_THROW   );
         const uno::Reference< awt::XWindow >       xWindow    ( xFrame->getContainerWindow(),    uno::UNO_SET_THROW   );
 
         VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
@@ -1116,6 +1121,12 @@ uno::Reference< XHelperInterface > getUnoDocModule( const OUString& aModName, Sf
     if ( pShell )
     {
         OUString sProj( "Standard" );
+        // GetBasicManager() causes a SolarMutex assertion failure in some use cases from
+        // Automation, at least when opening a Calc Document through ooo::vba::excel::
+        // XWorkbooks::Open(). Let's see if this check is a good way around that. It does seem that
+        // callers are prepared for this to return null?
+        if (comphelper::Automation::AutomationInvokedZone::isActive())
+            return xIf;
         BasicManager* pBasMgr = pShell->GetBasicManager();
         if ( pBasMgr && !pBasMgr->GetName().isEmpty() )
             sProj = pBasMgr->GetName();

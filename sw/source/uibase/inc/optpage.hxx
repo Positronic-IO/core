@@ -20,7 +20,6 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_OPTPAGE_HXX
 #include <sfx2/tabdlg.hxx>
 
-#include <vcl/group.hxx>
 #include <vcl/button.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/field.hxx>
@@ -76,7 +75,7 @@ public:
 // TabPage printer settings additions
 class SwAddPrinterTabPage : public SfxTabPage
 {
-    OUString sNone;
+    OUString const sNone;
     bool bAttrModified;
     bool bPreview;
 
@@ -102,10 +101,10 @@ class SwAddPrinterTabPage : public SfxTabPage
 
     std::unique_ptr<weld::CheckButton>  m_xPrintEmptyPagesCB;
     std::unique_ptr<weld::CheckButton>  m_xPaperFromSetupCB;
-    std::unique_ptr<weld::ComboBoxText> m_xFaxLB;
+    std::unique_ptr<weld::ComboBox> m_xFaxLB;
 
     DECL_LINK(AutoClickHdl, weld::ToggleButton&, void);
-    DECL_LINK(SelectHdl, weld::ComboBoxText&, void);
+    DECL_LINK(SelectHdl, weld::ComboBox&, void);
 
 public:
     SwAddPrinterTabPage(TabPageParent pParent, const SfxItemSet& rSet);
@@ -144,7 +143,7 @@ class SwStdFontTabPage : public SfxTabPage
     OUString m_sShellIndex;
 
     VclPtr<SfxPrinter> m_pPrt;
-    FontList* m_pFontList;
+    std::unique_ptr<FontList> m_pFontList;
     SwStdFontConfig* m_pFontConfig;
     SwWrtShell* m_pWrtShell;
     LanguageType m_eLanguage;
@@ -158,21 +157,17 @@ class SwStdFontTabPage : public SfxTabPage
     bool    m_bSetIdxDefault  :1;
 
     bool    m_bListHeightDefault    :1;
-    bool    m_bSetListHeightDefault :1;
     bool    m_bLabelHeightDefault   :1;
-    bool    m_bSetLabelHeightDefault :1;
     bool    m_bIndexHeightDefault     :1;
-    bool    m_bSetIndexHeightDefault  :1;
 
     sal_uInt8 m_nFontGroup; //fontcfg.hxx: FONT_GROUP_[STANDARD|CJK|CTL]
 
-    OUString m_sScriptWestern;
-    OUString m_sScriptAsian;
-    OUString m_sScriptComplex;
+    OUString const m_sScriptWestern;
+    OUString const m_sScriptAsian;
+    OUString const m_sScriptComplex;
 
     DECL_LINK(StandardHdl, Button*, void );
     DECL_LINK(ModifyHdl, Edit&, void );
-    DECL_LINK(ModifyHeightHdl, Edit&, void );
     DECL_LINK(LoseFocusHdl, Control&, void );
 
     SwStdFontTabPage(vcl::Window* pParent, const SfxItemSet& rSet);
@@ -277,7 +272,7 @@ class SwMarkPreview : public vcl::Window
     Size m_aInitialSize;
 
     Color m_aBgCol;    // background
-    Color m_aTransCol; // transparency
+    Color const m_aTransCol; // transparency
     Color m_aMarkCol;  // marks
     Color m_aLineCol;  // general lines
     Color m_aShadowCol; // shadow

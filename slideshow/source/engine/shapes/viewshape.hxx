@@ -99,10 +99,8 @@ namespace slideshow
                 This method enters animation mode on the associate
                 target view. The shape can be animated in parallel on
                 different views.
-
-                @return whether the mode change finished successfully.
              */
-            bool enterAnimationMode();
+            void enterAnimationMode();
 
             /** Notify the ViewShape that it is no longer animated
 
@@ -300,7 +298,7 @@ namespace slideshow
 
                 Needed for sprite creation
             */
-            ViewLayerSharedPtr                          mpViewLayer;
+            ViewLayerSharedPtr const                    mpViewLayer;
 
             /// A set of cached mtf/canvas combinations
             mutable RendererCacheVector                 maRenderers;

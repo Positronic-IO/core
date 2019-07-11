@@ -34,14 +34,13 @@ class XMLTextHeaderFooterContext: public SvXMLImportContext
 
     const OUString sOn;
     const OUString sShareContent;
-    const OUString sShareContentFirst;
     const OUString sText;
     const OUString sTextFirst;
     const OUString sTextLeft;
 
     bool    bInsertContent : 1;
-    bool    bLeft : 1;
-    bool    bFirst : 1;
+    bool const    bLeft : 1;
+    bool const    bFirst : 1;
 
 public:
 

@@ -23,6 +23,7 @@
 #include <scitems.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
+#include <svl/intitem.hxx>
 #include <svx/algitem.hxx>
 #include <svx/rotmodit.hxx>
 #include <svx/dlgutil.hxx>
@@ -121,14 +122,14 @@ void AlignmentPropertyPanel::Initialize()
     mpRefEdgeTop->SetClickHdl(aLink2);
     mpRefEdgeStd->SetClickHdl(aLink2);
 
-    mpMtrAngle->InsertValue(0, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(45, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(90, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(135, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(180, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(225, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(270, FUNIT_CUSTOM);
-    mpMtrAngle->InsertValue(315, FUNIT_CUSTOM);
+    mpMtrAngle->InsertValue(0, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(45, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(90, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(135, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(180, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(225, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(270, FieldUnit::CUSTOM);
+    mpMtrAngle->InsertValue(315, FieldUnit::CUSTOM);
     mpMtrAngle->SetDropDownLineCount(mpMtrAngle->GetEntryCount());
 }
 
@@ -265,7 +266,7 @@ void AlignmentPropertyPanel::NotifyItemUpdate(
     case SID_H_ALIGNCELL:
         {
             SvxCellHorJustify meHorAlignState = SvxCellHorJustify::Standard;
-            if(eState >= SfxItemState::DEFAULT && pState && dynamic_cast<const SvxHorJustifyItem*>( pState) !=  nullptr )
+            if(eState >= SfxItemState::DEFAULT && dynamic_cast<const SvxHorJustifyItem*>( pState) )
             {
                 const SvxHorJustifyItem* pItem = static_cast<const SvxHorJustifyItem*>(pState);
                 meHorAlignState = pItem->GetValue();
@@ -287,7 +288,7 @@ void AlignmentPropertyPanel::NotifyItemUpdate(
         }
         break;
     case SID_ATTR_ALIGN_INDENT:
-        if(eState >= SfxItemState::DEFAULT && pState && dynamic_cast<const SfxUInt16Item*>( pState) !=  nullptr )
+        if(eState >= SfxItemState::DEFAULT && dynamic_cast<const SfxUInt16Item*>( pState) )
         {
                 const SfxUInt16Item* pItem = static_cast<const SfxUInt16Item*>(pState);
                 sal_uInt16 nVal = pItem->GetValue();
@@ -300,7 +301,7 @@ void AlignmentPropertyPanel::NotifyItemUpdate(
         }
         break;
     case FID_MERGE_TOGGLE:
-        if(eState >= SfxItemState::DEFAULT && pState && dynamic_cast<const SfxBoolItem*>( pState) !=  nullptr )
+        if(eState >= SfxItemState::DEFAULT && dynamic_cast<const SfxBoolItem*>( pState) )
         {
             mpCBXMergeCell->Enable();
             const SfxBoolItem* pItem = static_cast<const SfxBoolItem*>(pState);
@@ -323,7 +324,7 @@ void AlignmentPropertyPanel::NotifyItemUpdate(
         else
         {
             mpCBXWrapText->Enable();
-            if(eState >= SfxItemState::DEFAULT && pState && dynamic_cast<const SfxBoolItem*>( pState) !=  nullptr )
+            if(eState >= SfxItemState::DEFAULT && dynamic_cast<const SfxBoolItem*>( pState) )
             {
                 mpCBXWrapText->EnableTriState(false);
                 const SfxBoolItem* pItem = static_cast<const SfxBoolItem*>(pState);

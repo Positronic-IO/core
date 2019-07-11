@@ -23,6 +23,7 @@
 
 #include <osl/conditn.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <tools/time.hxx>
 #include <comphelper/solarmutex.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
@@ -31,6 +32,7 @@
 #include <vcl/opengl/OpenGLHelper.hxx>
 #include <vcl/opengl/OpenGLContext.hxx>
 #include <vcl/timer.hxx>
+#include <vclpluginapi.h>
 
 #include <opengl/salbmp.hxx>
 #include <opengl/win/gdiimpl.hxx>
@@ -84,9 +86,9 @@ void SalAbort( const OUString& rErrorText, bool )
     }
 }
 
-LRESULT CALLBACK SalComWndProcW( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam );
+static LRESULT CALLBACK SalComWndProcW( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam );
 
-class SalYieldMutex : public comphelper::GenericSolarMutex
+class SalYieldMutex : public comphelper::SolarMutex
 {
 public: // for ImplSalYield() and ImplSalYieldMutexAcquireWithWait()
     osl::Condition            m_condition; /// for MsgWaitForMultipleObjects()
@@ -129,10 +131,10 @@ void SalYieldMutex::doAcquire( sal_uInt32 nLockCount )
     WinSalInstance* pInst = GetSalData()->mpInstance;
     if ( pInst && pInst->IsMainThread() )
     {
-        if ( pInst->mbNoYieldLock )
+        if ( pInst->m_nNoYieldLock )
             return;
         // tdf#96887 If this is the main thread, then we must wait for two things:
-        // - the mpSalYieldMutex being freed
+        // - the yield mutex being unlocked
         // - SendMessage() being triggered
         // This can nicely be done using MsgWaitForMultipleObjects. The 2nd one is
         // needed because if we don't reschedule, then we create deadlocks if a
@@ -154,16 +156,16 @@ void SalYieldMutex::doAcquire( sal_uInt32 nLockCount )
     ++m_nCount;
     --nLockCount;
 
-    comphelper::GenericSolarMutex::doAcquire( nLockCount );
+    comphelper::SolarMutex::doAcquire( nLockCount );
 }
 
 sal_uInt32 SalYieldMutex::doRelease( const bool bUnlockAll )
 {
     WinSalInstance* pInst = GetSalData()->mpInstance;
-    if ( pInst && pInst->mbNoYieldLock && pInst->IsMainThread() )
+    if ( pInst && pInst->m_nNoYieldLock && pInst->IsMainThread() )
         return 1;
 
-    sal_uInt32 nCount = comphelper::GenericSolarMutex::doRelease( bUnlockAll );
+    sal_uInt32 nCount = comphelper::SolarMutex::doRelease( bUnlockAll );
     // wake up ImplSalYieldMutexAcquireWithWait() after release
     if ( 0 == m_nCount )
         m_condition.set();
@@ -175,10 +177,10 @@ bool SalYieldMutex::tryToAcquire()
     WinSalInstance* pInst = GetSalData()->mpInstance;
     if ( pInst )
     {
-        if ( pInst->mbNoYieldLock && pInst->IsMainThread() )
+        if ( pInst->m_nNoYieldLock && pInst->IsMainThread() )
             return true;
         else
-            return comphelper::GenericSolarMutex::tryToAcquire();
+            return comphelper::SolarMutex::tryToAcquire();
     }
     else
         return false;
@@ -188,13 +190,13 @@ void ImplSalYieldMutexAcquireWithWait( sal_uInt32 nCount )
 {
     WinSalInstance* pInst = GetSalData()->mpInstance;
     if ( pInst )
-        pInst->mpSalYieldMutex->acquire( nCount );
+        pInst->GetYieldMutex()->acquire( nCount );
 }
 
 bool ImplSalYieldMutexTryToAcquire()
 {
     WinSalInstance* pInst = GetSalData()->mpInstance;
-    return pInst && pInst->mpSalYieldMutex->tryToAcquire();
+    return pInst && pInst->GetYieldMutex()->tryToAcquire();
 }
 
 void ImplSalYieldMutexRelease()
@@ -203,13 +205,13 @@ void ImplSalYieldMutexRelease()
     if ( pInst )
     {
         GdiFlush();
-        pInst->mpSalYieldMutex->release();
+        pInst->GetYieldMutex()->release();
     }
 }
 
 bool SalYieldMutex::IsCurrentThread() const
 {
-    if ( !GetSalData()->mpInstance->mbNoYieldLock )
+    if ( !GetSalData()->mpInstance->m_nNoYieldLock )
         // For the Windows backend, the LO identifier is the system thread ID
         return m_nThreadId == GetCurrentThreadId();
     else
@@ -298,55 +300,33 @@ SalData::SalData()
 
     SetSalData( this );
     initNWF();
+
+    CoInitialize(nullptr); // put main thread in Single Threaded Apartment (STA)
+    static Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
 }
 
 SalData::~SalData()
 {
     deInitNWF();
     SetSalData( nullptr );
-}
 
-void InitSalData()
-{
-    SalData* pSalData = new SalData;
-    CoInitialize(nullptr); // put main thread in Single Threaded Apartment (STA)
-
-    // init GDIPlus
-    static Gdiplus::GdiplusStartupInput gdiplusStartupInput;
-    Gdiplus::GdiplusStartup(&pSalData->gdiplusToken, &gdiplusStartupInput, nullptr);
-}
-
-void DeInitSalData()
-{
     CoUninitialize();
-    SalData* pSalData = GetSalData();
 
-    // deinit GDIPlus
-    if(pSalData)
-    {
-        Gdiplus::GdiplusShutdown(pSalData->gdiplusToken);
-    }
-
-    delete pSalData;
+    if (gdiplusToken)
+        Gdiplus::GdiplusShutdown(gdiplusToken);
 }
 
-void InitSalMain()
+extern "C" {
+VCLPLUG_WIN_PUBLIC SalInstance* create_SalInstance()
 {
-    // remember data, copied from WinMain
-    SalData* pData = GetSalData();
-    if ( pData )    // Im AppServer NULL
-    {
-        STARTUPINFOW aSI;
-        aSI.cb = sizeof( aSI );
-        GetStartupInfoW( &aSI );
-        pData->mhInst    = GetModuleHandleW( nullptr );
-        pData->mnCmdShow = aSI.wShowWindow;
-    }
-}
+    SalData* pSalData = new SalData();
 
-SalInstance* CreateSalInstance()
-{
-    SalData* pSalData = GetSalData();
+    STARTUPINFOW aSI;
+    aSI.cb = sizeof( aSI );
+    GetStartupInfoW( &aSI );
+    pSalData->mhInst = GetModuleHandleW( nullptr );
+    pSalData->mnCmdShow = aSI.wShowWindow;
 
     pSalData->mnAppThreadId = GetCurrentThreadId();
 
@@ -404,50 +384,22 @@ SalInstance* CreateSalInstance()
 
     return pInst;
 }
-
-void DestroySalInstance( SalInstance* pInst )
-{
-    SalData* pSalData = GetSalData();
-
-    //  (only one instance in this version !!!)
-
-    ImplFreeSalGDI();
-
-    // reset instance
-    if ( pSalData->mpInstance == pInst )
-        pSalData->mpInstance = nullptr;
-
-    delete pInst;
 }
 
 WinSalInstance::WinSalInstance()
-    : mhComWnd( nullptr )
-    , mbNoYieldLock( false )
+    : SalInstance(o3tl::make_unique<SalYieldMutex>())
+    , mhInst( nullptr )
+    , mhComWnd( nullptr )
+    , m_nNoYieldLock( 0 )
 {
-    mpSalYieldMutex = new SalYieldMutex();
-    mpSalYieldMutex->acquire();
+    ImplSVData* pSVData = ImplGetSVData();
+    pSVData->maAppData.mxToolkitName = OUString("win");
 }
 
 WinSalInstance::~WinSalInstance()
 {
-    mpSalYieldMutex->release();
-    delete mpSalYieldMutex;
+    ImplFreeSalGDI();
     DestroyWindow( mhComWnd );
-}
-
-comphelper::SolarMutex* WinSalInstance::GetYieldMutex()
-{
-    return mpSalYieldMutex;
-}
-
-sal_uInt32 WinSalInstance::ReleaseYieldMutexAll()
-{
-    return mpSalYieldMutex->release( true/*bUnlockAll*/ );
-}
-
-void WinSalInstance::AcquireYieldMutex( sal_uInt32 nCount )
-{
-    mpSalYieldMutex->acquire( nCount );
 }
 
 static LRESULT ImplSalDispatchMessage( const MSG* pMsg )
@@ -468,6 +420,11 @@ bool ImplSalYield( bool bWait, bool bHandleAllCurrentEvents )
     bool bWasMsg = false, bOneEvent = false, bWasTimeoutMsg = false;
     ImplSVData *const pSVData = ImplGetSVData();
     WinSalTimer* pTimer = static_cast<WinSalTimer*>( pSVData->maSchedCtx.mpSalTimer );
+    const bool bNoYieldLock = (GetSalData()->mpInstance->m_nNoYieldLock > 0);
+
+    assert( !bNoYieldLock );
+    if ( bNoYieldLock )
+        return false;
 
     sal_uInt32 nCurTicks = 0;
     if ( bHandleAllCurrentEvents )
@@ -562,27 +519,43 @@ bool WinSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
 
 #define CASE_NOYIELDLOCK( salmsg, function ) \
     case salmsg: \
-        assert( !pInst->mbNoYieldLock ); \
-        pInst->mbNoYieldLock = true; \
-        function; \
-        pInst->mbNoYieldLock = false; \
+        if (bIsOtherThreadMessage) \
+        { \
+            ++pInst->m_nNoYieldLock; \
+            function; \
+            --pInst->m_nNoYieldLock; \
+        } \
+        else \
+        { \
+            DBG_TESTSOLARMUTEX(); \
+            function; \
+        } \
         break;
 
 #define CASE_NOYIELDLOCK_RESULT( salmsg, function ) \
     case salmsg: \
-        assert( !pInst->mbNoYieldLock ); \
-        pInst->mbNoYieldLock = true; \
-        nRet = reinterpret_cast<LRESULT>( function ); \
-        pInst->mbNoYieldLock = false; \
+        if (bIsOtherThreadMessage) \
+        { \
+            ++pInst->m_nNoYieldLock; \
+            nRet = reinterpret_cast<LRESULT>( function ); \
+            --pInst->m_nNoYieldLock; \
+        } \
+        else \
+        { \
+            DBG_TESTSOLARMUTEX(); \
+            nRet = reinterpret_cast<LRESULT>( function ); \
+        } \
         break;
 
 LRESULT CALLBACK SalComWndProc( HWND, UINT nMsg, WPARAM wParam, LPARAM lParam, bool& rDef )
 {
+    const BOOL bIsOtherThreadMessage = InSendMessage();
     LRESULT nRet = 0;
     WinSalInstance *pInst = GetSalData()->mpInstance;
     WinSalTimer *const pTimer = static_cast<WinSalTimer*>( ImplGetSVData()->maSchedCtx.mpSalTimer );
 
-SAL_INFO("vcl.gdi.wndproc", "SalComWndProc(nMsg=" << nMsg << ", wParam=" << wParam << ", lParam=" << lParam << ")");
+    SAL_INFO("vcl.gdi.wndproc", "SalComWndProc(nMsg=" << nMsg << ", wParam=" << wParam
+                                << ", lParam=" << lParam << "); inSendMsg: " << bIsOtherThreadMessage);
 
     switch ( nMsg )
     {
@@ -639,12 +612,17 @@ SAL_INFO("vcl.gdi.wndproc", "SalComWndProc(nMsg=" << nMsg << ", wParam=" << wPar
 
         case SAL_MSG_TIMER_CALLBACK:
             assert( pTimer != nullptr );
-            nRet = static_cast<LRESULT>( pTimer->ImplHandleTimerEvent( wParam ) );
+            pTimer->ImplHandleTimerEvent( wParam );
             break;
 
         case WM_TIMER:
             assert( pTimer != nullptr );
-            nRet = static_cast<LRESULT>( pTimer->ImplHandle_WM_TIMER( wParam ) );
+            pTimer->ImplHandle_WM_TIMER( wParam );
+            break;
+
+        case SAL_MSG_FORCE_REAL_TIMER:
+            assert(pTimer != nullptr);
+            pTimer->SetForceRealTimer(true);
             break;
 
         case SAL_MSG_DUMMY:
@@ -986,23 +964,12 @@ SalTimer* WinSalInstance::CreateSalTimer()
     return new WinSalTimer();
 }
 
-SalBitmap* WinSalInstance::CreateSalBitmap()
+std::shared_ptr<SalBitmap> WinSalInstance::CreateSalBitmap()
 {
     if (OpenGLHelper::isVCLOpenGLEnabled())
-        return new OpenGLSalBitmap();
+        return std::make_shared<OpenGLSalBitmap>();
     else
-        return new WinSalBitmap();
-}
-
-const OUString& SalGetDesktopEnvironment()
-{
-    static OUString aDesktopEnvironment( "Windows" );
-    return aDesktopEnvironment;
-}
-
-SalSession* WinSalInstance::CreateSalSession()
-{
-    return nullptr;
+        return std::make_shared<WinSalBitmap>();
 }
 
 int WinSalInstance::WorkaroundExceptionHandlingInUSER32Lib(int, LPEXCEPTION_POINTERS pExceptionInfo)
@@ -1040,7 +1007,7 @@ OUString WinSalInstance::getOSVersion()
             dwCount = GetFileVersionInfoSizeW(szPath, nullptr);
             if (dwCount != 0)
             {
-                std::unique_ptr<char> ver(new char[dwCount]);
+                std::unique_ptr<char[]> ver(new char[dwCount]);
                 if (GetFileVersionInfoW(szPath, 0, dwCount, ver.get()) != FALSE)
                 {
                     void* pBlock = nullptr;

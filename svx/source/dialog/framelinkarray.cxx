@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <vcl/outdev.hxx>
 #include <drawinglayer/primitive2d/borderlineprimitive2d.hxx>
+#include <svx/sdr/primitive2d/sdrframeborderprimitive2d.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 
 namespace svx {
@@ -78,7 +79,6 @@ public:
     basegfx::B2DHomMatrix CreateCoordinateSystem(const Array& rArray, size_t nCol, size_t nRow, bool bExpandMerged) const;
 };
 
-typedef std::vector< long >     LongVec;
 typedef std::vector< Cell >     CellVec;
 
 basegfx::B2DHomMatrix Cell::CreateCoordinateSystem(const Array& rArray, size_t nCol, size_t nRow, bool bExpandMerged) const
@@ -148,16 +148,18 @@ void Cell::MirrorSelfX()
 }
 
 
-void lclRecalcCoordVec( LongVec& rCoords, const LongVec& rSizes )
+static void lclRecalcCoordVec( std::vector<long>& rCoords, const std::vector<long>& rSizes )
 {
     DBG_ASSERT( rCoords.size() == rSizes.size() + 1, "lclRecalcCoordVec - inconsistent vectors" );
-    LongVec::iterator aCIt = rCoords.begin();
-    LongVec::const_iterator aSIt = rSizes.begin(), aSEnd = rSizes.end();
-    for( ; aSIt != aSEnd; ++aCIt, ++aSIt )
-        *(aCIt + 1) = *aCIt + *aSIt;
+    auto aCIt = rCoords.begin();
+    for( const auto& rSize : rSizes )
+    {
+        *(aCIt + 1) = *aCIt + rSize;
+        ++aCIt;
+    }
 }
 
-void lclSetMergedRange( CellVec& rCells, size_t nWidth, size_t nFirstCol, size_t nFirstRow, size_t nLastCol, size_t nLastRow )
+static void lclSetMergedRange( CellVec& rCells, size_t nWidth, size_t nFirstCol, size_t nFirstRow, size_t nLastCol, size_t nLastRow )
 {
     for( size_t nCol = nFirstCol; nCol <= nLastCol; ++nCol )
     {
@@ -179,12 +181,12 @@ static const Cell OBJ_CELL_NONE;
 struct ArrayImpl
 {
     CellVec             maCells;
-    LongVec             maWidths;
-    LongVec             maHeights;
-    mutable LongVec     maXCoords;
-    mutable LongVec     maYCoords;
-    size_t              mnWidth;
-    size_t              mnHeight;
+    std::vector<long>   maWidths;
+    std::vector<long>   maHeights;
+    mutable std::vector<long>     maXCoords;
+    mutable std::vector<long>     maYCoords;
+    size_t const        mnWidth;
+    size_t const        mnHeight;
     size_t              mnFirstClipCol;
     size_t              mnFirstClipRow;
     size_t              mnLastClipCol;
@@ -917,26 +919,38 @@ void Array::MirrorSelfX()
 }
 
 // drawing
-void HelperCreateHorizontalEntry(
-    const Array& rArray, const Style& rStyle, size_t col, size_t row,
-    const basegfx::B2DPoint& rOrigin, const basegfx::B2DVector& rX, const basegfx::B2DVector& rY,
-    drawinglayer::primitive2d::Primitive2DContainer& rSequence,
-    bool bUpper, const Color* pForceColor)
+static void HelperCreateHorizontalEntry(
+    const Array& rArray,
+    const Style& rStyle,
+    size_t col,
+    size_t row,
+    const basegfx::B2DPoint& rOrigin,
+    const basegfx::B2DVector& rX,
+    const basegfx::B2DVector& rY,
+    drawinglayer::primitive2d::SdrFrameBorderDataVector& rData,
+    bool bUpper,
+    const Color* pForceColor)
 {
+    // prepare SdrFrameBorderData
+    rData.emplace_back(
+        bUpper ? rOrigin : basegfx::B2DPoint(rOrigin + rY),
+        rX,
+        rStyle,
+        pForceColor);
+    drawinglayer::primitive2d::SdrFrameBorderData& rInstance(rData.back());
+
     // get involved styles at start
     const Style& rStartFromTR(rArray.GetCellStyleBL( col, row - 1 ));
     const Style& rStartLFromT(rArray.GetCellStyleLeft( col, row - 1 ));
     const Style& rStartLFromL(rArray.GetCellStyleTop( col - 1, row ));
     const Style& rStartLFromB(rArray.GetCellStyleLeft( col, row ));
     const Style& rStartFromBR(rArray.GetCellStyleTL( col, row ));
-    StyleVectorTable aStart;
 
-    aStart.add(rStartFromTR, rX, rX - rY, false);
-    aStart.add(rStartLFromT, rX, -rY, true);
-    aStart.add(rStartLFromL, rX, -rX, true);
-    aStart.add(rStartLFromB, rX, rY, false);
-    aStart.add(rStartFromBR, rX, rX + rY, false);
-    aStart.sort();
+    rInstance.addSdrConnectStyleData(true, rStartFromTR, rX - rY, false);
+    rInstance.addSdrConnectStyleData(true, rStartLFromT, -rY, true);
+    rInstance.addSdrConnectStyleData(true, rStartLFromL, -rX, true);
+    rInstance.addSdrConnectStyleData(true, rStartLFromB, rY, false);
+    rInstance.addSdrConnectStyleData(true, rStartFromBR, rX + rY, false);
 
     // get involved styles at end
     const Style& rEndFromTL(rArray.GetCellStyleBR( col, row - 1 ));
@@ -944,47 +958,46 @@ void HelperCreateHorizontalEntry(
     const Style& rEndRFromR(rArray.GetCellStyleTop( col + 1, row ));
     const Style& rEndRFromB(rArray.GetCellStyleRight( col, row ));
     const Style& rEndFromBL(rArray.GetCellStyleTR( col, row ));
-    StyleVectorTable aEnd;
-    const basegfx::B2DVector aAxis(-rX);
 
-    aEnd.add(rEndFromTL, aAxis, aAxis - rY, true);
-    aEnd.add(rEndRFromT, aAxis, -rY, true);
-    aEnd.add(rEndRFromR, aAxis, rX, false);
-    aEnd.add(rEndRFromB, aAxis, rY, false);
-    aEnd.add(rEndFromBL, aAxis, rY - rX, true);
-    aEnd.sort();
-
-    CreateBorderPrimitives(
-        rSequence,
-        bUpper ? rOrigin : basegfx::B2DPoint(rOrigin + rY),
-        rX,
-        rStyle,
-        aStart,
-        aEnd,
-        pForceColor
-    );
+    rInstance.addSdrConnectStyleData(false, rEndFromTL, -rX - rY, true);
+    rInstance.addSdrConnectStyleData(false, rEndRFromT, -rY, true);
+    rInstance.addSdrConnectStyleData(false, rEndRFromR, rX, false);
+    rInstance.addSdrConnectStyleData(false, rEndRFromB, rY, false);
+    rInstance.addSdrConnectStyleData(false, rEndFromBL, rY - rX, true);
 }
 
-void HelperCreateVerticalEntry(
-    const Array& rArray, const Style& rStyle, size_t col, size_t row,
-    const basegfx::B2DPoint& rOrigin, const basegfx::B2DVector& rX, const basegfx::B2DVector& rY,
-    drawinglayer::primitive2d::Primitive2DContainer& rSequence,
-    bool bLeft, const Color* pForceColor)
+static void HelperCreateVerticalEntry(
+    const Array& rArray,
+    const Style& rStyle,
+    size_t col,
+    size_t row,
+    const basegfx::B2DPoint& rOrigin,
+    const basegfx::B2DVector& rX,
+    const basegfx::B2DVector& rY,
+    drawinglayer::primitive2d::SdrFrameBorderDataVector& rData,
+    bool bLeft,
+    const Color* pForceColor)
 {
+    // prepare SdrFrameBorderData
+    rData.emplace_back(
+        bLeft ? rOrigin : basegfx::B2DPoint(rOrigin + rX),
+        rY,
+        rStyle,
+        pForceColor);
+    drawinglayer::primitive2d::SdrFrameBorderData& rInstance(rData.back());
+
     // get involved styles at start
     const Style& rStartFromBL(rArray.GetCellStyleTR( col - 1, row ));
     const Style& rStartTFromL(rArray.GetCellStyleTop( col - 1, row ));
     const Style& rStartTFromT(rArray.GetCellStyleLeft( col, row - 1 ));
     const Style& rStartTFromR(rArray.GetCellStyleTop( col, row ));
     const Style& rStartFromBR(rArray.GetCellStyleTL( col, row ));
-    StyleVectorTable aStart;
 
-    aStart.add(rStartFromBR, rY, rX + rY, false);
-    aStart.add(rStartTFromR, rY, rX, false);
-    aStart.add(rStartTFromT, rY, -rY, true);
-    aStart.add(rStartTFromL, rY, -rX, true);
-    aStart.add(rStartFromBL, rY, rY - rX, true);
-    aStart.sort();
+    rInstance.addSdrConnectStyleData(true, rStartFromBR, rX + rY, false);
+    rInstance.addSdrConnectStyleData(true, rStartTFromR, rX, false);
+    rInstance.addSdrConnectStyleData(true, rStartTFromT, -rY, true);
+    rInstance.addSdrConnectStyleData(true, rStartTFromL, -rX, true);
+    rInstance.addSdrConnectStyleData(true, rStartFromBL, rY - rX, true);
 
     // get involved styles at end
     const Style& rEndFromTL(rArray.GetCellStyleBR( col - 1, row ));
@@ -992,67 +1005,12 @@ void HelperCreateVerticalEntry(
     const Style& rEndBFromB(rArray.GetCellStyleLeft( col, row + 1 ));
     const Style& rEndBFromR(rArray.GetCellStyleBottom( col, row ));
     const Style& rEndFromTR(rArray.GetCellStyleBL( col, row ));
-    StyleVectorTable aEnd;
-    const basegfx::B2DVector aAxis(-rY);
 
-    aEnd.add(rEndFromTR, aAxis, rX - rY, false);
-    aEnd.add(rEndBFromR, aAxis, rX, false);
-    aEnd.add(rEndBFromB, aAxis, rY, false);
-    aEnd.add(rEndBFromL, aAxis, -rX, true);
-    aEnd.add(rEndFromTL, aAxis, aAxis - rX, true);
-    aEnd.sort();
-
-    CreateBorderPrimitives(
-        rSequence,
-        bLeft ? rOrigin : basegfx::B2DPoint(rOrigin + rX),
-        rY,
-        rStyle,
-        aStart,
-        aEnd,
-        pForceColor
-    );
-}
-
-void HelperMergeInB2DPrimitiveArray(
-    const drawinglayer::primitive2d::Primitive2DContainer& rSource,
-    drawinglayer::primitive2d::Primitive2DContainer& rTarget)
-{
-    if(rSource.size() > 1)
-    {
-        drawinglayer::primitive2d::Primitive2DReference aCandidate;
-
-        for(const auto& a : rSource)
-        {
-            if(aCandidate.is())
-            {
-                const drawinglayer::primitive2d::Primitive2DReference aMerge(
-                    drawinglayer::primitive2d::tryMergeBorderLinePrimitive2D(aCandidate, a));
-
-                if(aMerge.is())
-                {
-                    aCandidate = aMerge;
-                }
-                else
-                {
-                    rTarget.append(aCandidate);
-                    aCandidate = a;
-                }
-            }
-            else
-            {
-                aCandidate = a;
-            }
-        }
-
-        if(aCandidate.is())
-        {
-            rTarget.append(aCandidate);
-        }
-    }
-    else
-    {
-        rTarget.append(rSource);
-    }
+    rInstance.addSdrConnectStyleData(false, rEndFromTR, rX - rY, false);
+    rInstance.addSdrConnectStyleData(false, rEndBFromR, rX, false);
+    rInstance.addSdrConnectStyleData(false, rEndBFromB, rY, false);
+    rInstance.addSdrConnectStyleData(false, rEndBFromL, -rX, true);
+    rInstance.addSdrConnectStyleData(false, rEndFromTL, -rY - rX, true);
 }
 
 drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
@@ -1083,10 +1041,9 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
     const size_t nStartCol(nFirstCol > 0 ? nFirstCol - 1 : nFirstCol);
     const size_t nEndCol(nLastCol < GetColCount() - 1 ? nLastCol + 1 : nLastCol);
 
-    // various primitive sequences to collect the different border types
-    drawinglayer::primitive2d::Primitive2DContainer aHorizontalSequence;
-    std::vector< drawinglayer::primitive2d::Primitive2DContainer > aVerticalSequences(nEndCol - nStartCol + 1);
-    drawinglayer::primitive2d::Primitive2DContainer aCrossSequence;
+    // prepare SdrFrameBorderDataVector
+    std::shared_ptr<drawinglayer::primitive2d::SdrFrameBorderDataVector> aData(
+        std::make_shared<drawinglayer::primitive2d::SdrFrameBorderDataVector>());
 
     // remember for which merged cells crossed lines were already created. To
     // do so, hold the size_t cell index in a set for fast check
@@ -1103,27 +1060,29 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
             basegfx::B2DVector aX(basegfx::utils::getColumn(aCoordinateSystem, 0));
             basegfx::B2DVector aY(basegfx::utils::getColumn(aCoordinateSystem, 1));
 
+            // get needed local values
+            basegfx::B2DPoint aOrigin(basegfx::utils::getColumn(aCoordinateSystem, 2));
+            const bool bOverlapX(rCell.mbOverlapX);
+            const bool bFirstCol(nCol == nFirstCol);
+
+            // handle rotation: If cell is rotated, handle lower/right edge inside
+            // this local geometry due to the created CoordinateSystem already representing
+            // the needed transformations.
+            const bool bRotated(rCell.IsRotated());
+
+            // Additionally avoid double-handling by suppressing handling when self not rotated,
+            // but above/left is rotated and thus already handled. Two directly connected
+            // rotated will paint/create both edges, they might be rotated differently.
+            const bool bSupressLeft(!bRotated && nCol > nFirstCol && CELL(nCol - 1, nRow).IsRotated());
+            const bool bSuppressAbove(!bRotated && nRow > nFirstRow && CELL(nCol, nRow - 1).IsRotated());
+
             if(!aX.equalZero() && !aY.equalZero())
             {
-                // get needed local values
-                basegfx::B2DPoint aOrigin(basegfx::utils::getColumn(aCoordinateSystem, 2));
-                const bool bOverlapX(rCell.mbOverlapX);
+                // additionally needed local values
                 const bool bOverlapY(rCell.mbOverlapY);
-                const bool bFirstCol(nCol == nFirstCol);
                 const bool bLastCol(nCol == nLastCol);
                 const bool bFirstRow(nRow == nFirstRow);
                 const bool bLastRow(nRow == nLastRow);
-
-                // handle rotation: If cell is rotated, handle lower/right edge inside
-                // this local geometry due to the created CoordinateSystem already representing
-                // the needed transformations.
-                const bool bRotated(rCell.IsRotated());
-
-                // Additionally avoid double-handling by suppressing handling when self not rotated,
-                // but above/left is rotated and thus already handled. Two directly connected
-                // rotated will paint/create both edges, they might be rotated differently.
-                const bool bSuppressAbove(!bRotated && nRow > nFirstRow && CELL(nCol, nRow - 1).IsRotated());
-                const bool bSupressLeft(!bRotated && nCol > nFirstCol && CELL(nCol - 1, nRow).IsRotated());
 
                 // create upper line for this Cell
                 if ((!bOverlapY         // true for first line in merged cells or cells
@@ -1136,7 +1095,7 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
 
                     if(rTop.IsUsed())
                     {
-                        HelperCreateHorizontalEntry(*this, rTop, nCol, nRow, aOrigin, aX, aY, aHorizontalSequence, true, pForceColor);
+                        HelperCreateHorizontalEntry(*this, rTop, nCol, nRow, aOrigin, aX, aY, *aData.get(), true, pForceColor);
                     }
                 }
 
@@ -1148,7 +1107,7 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
 
                     if(rBottom.IsUsed())
                     {
-                        HelperCreateHorizontalEntry(*this, rBottom, nCol, nRow + 1, aOrigin, aX, aY, aHorizontalSequence, false, pForceColor);
+                        HelperCreateHorizontalEntry(*this, rBottom, nCol, nRow + 1, aOrigin, aX, aY, *aData.get(), false, pForceColor);
                     }
                 }
 
@@ -1161,7 +1120,7 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
 
                     if(rLeft.IsUsed())
                     {
-                        HelperCreateVerticalEntry(*this, rLeft, nCol, nRow, aOrigin, aX, aY, aVerticalSequences[nCol - nStartCol], true, pForceColor);
+                        HelperCreateVerticalEntry(*this, rLeft, nCol, nRow, aOrigin, aX, aY, *aData.get(), true, pForceColor);
                     }
                 }
 
@@ -1173,7 +1132,7 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
 
                     if(rRight.IsUsed())
                     {
-                        HelperCreateVerticalEntry(*this, rRight, nCol + 1, nRow, aOrigin, aX, aY, aVerticalSequences[nCol - nStartCol], false, pForceColor);
+                        HelperCreateVerticalEntry(*this, rRight, nCol + 1, nRow, aOrigin, aX, aY, *aData.get(), false, pForceColor);
                     }
                 }
 
@@ -1214,86 +1173,88 @@ drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveRange(
                         if(rTLBR.IsUsed())
                         {
                             /// top-left and bottom-right Style Tables
+                            aData->emplace_back(
+                                aOrigin,
+                                aX + aY,
+                                rTLBR,
+                                pForceColor);
+                            drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+
                             /// Fill top-left Style Table
                             const Style& rTLFromRight(GetCellStyleTop(nCol, nRow));
                             const Style& rTLFromBottom(GetCellStyleLeft(nCol, nRow));
-                            StyleVectorTable aStart;
-                            const basegfx::B2DVector aAxisA(aX + aY);
 
-                            aStart.add(rTLFromRight, aAxisA, aX, false);
-                            aStart.add(rTLFromBottom, aAxisA, aY, false);
-                            aStart.sort();
+                            rInstance.addSdrConnectStyleData(true, rTLFromRight, aX, false);
+                            rInstance.addSdrConnectStyleData(true, rTLFromBottom, aY, false);
 
                             /// Fill bottom-right Style Table
                             const Style& rBRFromBottom(GetCellStyleRight(nCol, nRow));
                             const Style& rBRFromLeft(GetCellStyleBottom(nCol, nRow));
-                            StyleVectorTable aEnd;
-                            const basegfx::B2DVector aAxisB(-aX -aY);
 
-                            aEnd.add(rBRFromBottom, aAxisB, -aY, true);
-                            aEnd.add(rBRFromLeft, aAxisB, -aX, true);
-                            aEnd.sort();
-
-                            CreateBorderPrimitives(
-                                aCrossSequence,
-                                aOrigin,
-                                aX + aY,
-                                rTLBR,
-                                aStart,
-                                aEnd,
-                                pForceColor
-                            );
+                            rInstance.addSdrConnectStyleData(false, rBRFromBottom, -aY, true);
+                            rInstance.addSdrConnectStyleData(false, rBRFromLeft, -aX, true);
                         }
 
                         if(rBLTR.IsUsed())
                         {
                             /// bottom-left and top-right Style Tables
+                            aData->emplace_back(
+                                aOrigin + aY,
+                                aX - aY,
+                                rBLTR,
+                                pForceColor);
+                            drawinglayer::primitive2d::SdrFrameBorderData& rInstance(aData->back());
+
                             /// Fill bottom-left Style Table
                             const Style& rBLFromTop(GetCellStyleLeft(nCol, nRow));
                             const Style& rBLFromBottom(GetCellStyleBottom(nCol, nRow));
-                            StyleVectorTable aStart;
-                            const basegfx::B2DVector aAxisA(aX - aY);
 
-                            aStart.add(rBLFromTop, aAxisA, -aY, true);
-                            aStart.add(rBLFromBottom, aAxisA, aX, false);
-                            aStart.sort();
+                            rInstance.addSdrConnectStyleData(true, rBLFromTop, -aY, true);
+                            rInstance.addSdrConnectStyleData(true, rBLFromBottom, aX, false);
 
                             /// Fill top-right Style Table
                             const Style& rTRFromLeft(GetCellStyleTop(nCol, nRow));
                             const Style& rTRFromBottom(GetCellStyleRight(nCol, nRow));
-                            StyleVectorTable aEnd;
-                            const basegfx::B2DVector aAxisB(aY - aX);
 
-                            aEnd.add(rTRFromLeft, aAxisB, -aX, true);
-                            aEnd.add(rTRFromBottom, aAxisB, aY, false);
-                            aEnd.sort();
-
-                            CreateBorderPrimitives(
-                                aCrossSequence,
-                                aOrigin + aY,
-                                aX - aY,
-                                rBLTR,
-                                aStart,
-                                aEnd,
-                                pForceColor
-                            );
+                            rInstance.addSdrConnectStyleData(false, rTRFromLeft, -aX, true);
+                            rInstance.addSdrConnectStyleData(false, rTRFromBottom, aY, false);
                         }
+                    }
+                }
+            }
+            else
+            {
+                // create left line for this Cell
+                if ((!bOverlapX         // true for first column in merged cells or cells
+                    || bFirstCol)       // true for non_Calc usages of this tooling
+                    && !bSupressLeft)   // true when left is not rotated, so edge is already handled (see bRotated)
+                {
+                    const Style& rLeft(GetCellStyleLeft(nCol, nRow));
+
+                    if (rLeft.IsUsed())
+                    {
+                        HelperCreateVerticalEntry(*this, rLeft, nCol, nRow, aOrigin, aX, aY, *aData.get(), true, pForceColor);
                     }
                 }
             }
         }
     }
 
-    // to stay compatible, create order as it was formally. Also try to
-    // merge primitives as far as possible
-    HelperMergeInB2DPrimitiveArray(aHorizontalSequence, aCrossSequence);
+    // create instance of SdrFrameBorderPrimitive2D if
+    // SdrFrameBorderDataVector is used
+    drawinglayer::primitive2d::Primitive2DContainer aSequence;
 
-    for(const auto& aVert : aVerticalSequences)
+    if(!aData->empty())
     {
-        HelperMergeInB2DPrimitiveArray(aVert, aCrossSequence);
+        aSequence.append(
+            drawinglayer::primitive2d::Primitive2DReference(
+                new drawinglayer::primitive2d::SdrFrameBorderPrimitive2D(
+                    aData,
+                    true,       // try to merge results to have less primitivbes
+                    true)));    // force visualization to minimal one discrete unit (pixel)
     }
 
-    return aCrossSequence;
+    return aSequence;
 }
 
 drawinglayer::primitive2d::Primitive2DContainer Array::CreateB2DPrimitiveArray() const

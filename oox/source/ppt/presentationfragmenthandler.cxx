@@ -21,6 +21,7 @@
 #include <comphelper/sequenceashashmap.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <tools/multisel.hxx>
 
 #include <com/sun/star/drawing/XMasterPagesSupplier.hpp>
@@ -99,12 +100,12 @@ PresentationFragmentHandler::~PresentationFragmentHandler() throw()
 {
 }
 
-void ResolveTextFields( XmlFilterBase const & rFilter )
+static void ResolveTextFields( XmlFilterBase const & rFilter )
 {
     const oox::core::TextFieldStack& rTextFields = rFilter.getTextFieldStack();
     if ( !rTextFields.empty() )
     {
-        Reference< frame::XModel > xModel( rFilter.getModel() );
+        const Reference< frame::XModel >& xModel( rFilter.getModel() );
         for (auto const& textField : rTextFields)
         {
             const OUString sURL = "URL";
@@ -158,7 +159,8 @@ void ResolveTextFields( XmlFilterBase const & rFilter )
     }
 }
 
-void PresentationFragmentHandler::saveThemeToGrabBag(oox::drawingml::ThemePtr pThemePtr, const OUString& sTheme)
+void PresentationFragmentHandler::saveThemeToGrabBag(const oox::drawingml::ThemePtr& pThemePtr,
+                                                     sal_Int32 nThemeIdx)
 {
     if (!pThemePtr)
         return;
@@ -196,8 +198,11 @@ void PresentationFragmentHandler::saveThemeToGrabBag(oox::drawingml::ThemePtr pT
                     aCurrentTheme[nId].Value = rColor;
                 }
 
+
                 // add new theme to the sequence
-                aTheme[0].Name = sTheme;
+                // Export code uses the master slide's index to find the right theme
+                // so use the same index in the grabbag.
+                aTheme[0].Name = "ppt/theme/theme" + OUString::number(nThemeIdx) + ".xml";
                 const uno::Any& rCurrentTheme = makeAny(aCurrentTheme);
                 aTheme[0].Value = rCurrentTheme;
 
@@ -271,10 +276,17 @@ void PresentationFragmentHandler::importSlide(sal_uInt32 nSlide, bool bFirstPage
                         Reference< drawing::XMasterPagesSupplier > xMPS( xModel, uno::UNO_QUERY_THROW );
                         Reference< drawing::XDrawPages > xMasterPages( xMPS->getMasterPages(), uno::UNO_QUERY_THROW );
 
+                        sal_Int32 nIndex;
                         if( rFilter.getMasterPages().empty() )
-                            xMasterPages->getByIndex( 0 ) >>= xMasterPage;
+                        {
+                            nIndex = 0;
+                            xMasterPages->getByIndex( nIndex ) >>= xMasterPage;
+                        }
                         else
-                            xMasterPage = xMasterPages->insertNewByIndex( xMasterPages->getCount() );
+                        {
+                            nIndex = xMasterPages->getCount();
+                            xMasterPage = xMasterPages->insertNewByIndex( nIndex );
+                        }
 
                         pMasterPersistPtr = std::make_shared<SlidePersist>( rFilter, true, false, xMasterPage,
                             ShapePtr( new PPTShape( Master, "com.sun.star.drawing.GroupShape" ) ), mpTextListStyle );
@@ -304,7 +316,7 @@ void PresentationFragmentHandler::importSlide(sal_uInt32 nSlide, bool bFirstPage
                                         UNO_QUERY_THROW));
                                 rThemes[ aThemeFragmentPath ] = pThemePtr;
                                 pThemePtr->setFragment(xDoc);
-                                saveThemeToGrabBag(pThemePtr, aThemeFragmentPath);
+                                saveThemeToGrabBag(pThemePtr, nIndex + 1);
                             }
                             else
                             {

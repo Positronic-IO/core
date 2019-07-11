@@ -23,7 +23,6 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <comphelper/propstate.hxx>
 #include <comphelper/propertysetinfo.hxx>
-#include <comphelper/proparrhlp.hxx>
 #include <rtl/ref.hxx>
 #include <salhelper/simplereferenceobject.hxx>
 
@@ -182,7 +181,7 @@ private:
     typedef ::std::map< const sal_Int32, css::uno::Any >                                PropertyValueCache;
 
     PropertyArray                   m_aProperties;
-    cppu::IPropertyArrayHelper*     m_pProperties;
+    std::unique_ptr<cppu::IPropertyArrayHelper> m_pProperties;
     PropertyAccessors               m_aAccessors;
     PropertyValueCache              m_aCache;
 

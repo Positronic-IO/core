@@ -40,7 +40,7 @@
 #else
 #define dump_state( a, b, c, d ) ;
 #endif
-inline void dbg_msg( const char* pString, ... )
+static void dbg_msg( const char* pString, ... )
 {
 #if (OSL_DEBUG_LEVEL > 0) || defined DBG_UTIL
     va_list ap;
@@ -150,7 +150,6 @@ SANE_Status Sane::ControlOption( int nOption, SANE_Action nAction,
 }
 
 Sane::Sane() :
-        mppOptions( nullptr ),
         mnOptions( 0 ),
         mnDevice( -1 ),
         maHandle( nullptr )
@@ -272,7 +271,7 @@ void Sane::ReloadOptions()
 
     mnOptions = pOptions[ 0 ];
     if( static_cast<size_t>(pZero->size) > sizeof( SANE_Word ) )
-        fprintf( stderr, "driver returned numer of options with larger size tha SANE_Word !!!\n" );
+        fprintf( stderr, "driver returned number of options with larger size than SANE_Word!!!\n" );
     mppOptions.reset(new const SANE_Option_Descriptor*[ mnOptions ]);
     mppOptions[ 0 ] = pZero;
     for( int i = 1; i < mnOptions; i++ )
@@ -473,7 +472,7 @@ enum FrameStyleType {
 
 #define BYTE_BUFFER_SIZE 32768
 
-static inline sal_uInt8 ReadValue( FILE* fp, int depth )
+static sal_uInt8 ReadValue( FILE* fp, int depth )
 {
     if( depth == 16 )
     {
@@ -571,7 +570,7 @@ bool Sane::Start( BitmapTransporter& rBitmap )
     if( ( nOption = GetOptionByName( "resolution" ) ) != -1 )
         (void)GetOptionValue( nOption, fResl );
 
-    sal_uInt8* pBuffer = nullptr;
+    std::unique_ptr<sal_uInt8[]> pBuffer;
 
     SANE_Status nStatus = SANE_STATUS_GOOD;
 
@@ -637,7 +636,7 @@ bool Sane::Start( BitmapTransporter& rBitmap )
 #endif
             if( ! pBuffer )
             {
-                pBuffer = new sal_uInt8[ BYTE_BUFFER_SIZE < 4*aParams.bytes_per_line ? 4*aParams.bytes_per_line : BYTE_BUFFER_SIZE ];
+                pBuffer.reset(new sal_uInt8[ BYTE_BUFFER_SIZE < 4*aParams.bytes_per_line ? 4*aParams.bytes_per_line : BYTE_BUFFER_SIZE ]);
             }
 
             if( aParams.last_frame )
@@ -711,12 +710,12 @@ bool Sane::Start( BitmapTransporter& rBitmap )
                         fprintf( stderr, "Timeout on sane_read descriptor\n" );
                 }
                 nLen = 0;
-                nStatus = p_read( maHandle, pBuffer, BYTE_BUFFER_SIZE, &nLen );
+                nStatus = p_read( maHandle, pBuffer.get(), BYTE_BUFFER_SIZE, &nLen );
                 CheckConsistency( "sane_read" );
                 if( nLen && ( nStatus == SANE_STATUS_GOOD ||
                               nStatus == SANE_STATUS_EOF ) )
                 {
-                    bSuccess = (static_cast<size_t>(nLen) == fwrite( pBuffer, 1, nLen, pFrame ));
+                    bSuccess = (static_cast<size_t>(nLen) == fwrite( pBuffer.get(), 1, nLen, pFrame ));
                     if (!bSuccess)
                         break;
                 }
@@ -789,18 +788,22 @@ bool Sane::Start( BitmapTransporter& rBitmap )
 
             for (nLine = nHeight-1; nLine >= 0; --nLine)
             {
-                fseek( pFrame, nLine * aParams.bytes_per_line, SEEK_SET );
+                if (fseek(pFrame, nLine * aParams.bytes_per_line, SEEK_SET) == -1)
+                {
+                    bSuccess = false;
+                    break;
+                }
                 if( eType == FrameStyle_BW ||
                     ( eType == FrameStyle_Gray && aParams.depth == 8 )
                     )
                 {
-                    SANE_Int items_read = fread( pBuffer, 1, aParams.bytes_per_line, pFrame );
+                    SANE_Int items_read = fread( pBuffer.get(), 1, aParams.bytes_per_line, pFrame );
                     if (items_read != aParams.bytes_per_line)
                     {
                         SAL_WARN( "extensions.scanner", "short read, padding with zeros" );
-                        memset(pBuffer + items_read, 0, aParams.bytes_per_line - items_read);
+                        memset(pBuffer.get() + items_read, 0, aParams.bytes_per_line - items_read);
                     }
-                    aConverter.WriteBytes(pBuffer, aParams.bytes_per_line);
+                    aConverter.WriteBytes(pBuffer.get(), aParams.bytes_per_line);
                 }
                 else if( eType == FrameStyle_Gray )
                 {
@@ -849,9 +852,9 @@ bool Sane::Start( BitmapTransporter& rBitmap )
                         }
                     }
                 }
-                 int nGap = aConverter.Tell() & 3;
-                 if( nGap )
-                     aConverter.SeekRel( 4-nGap );
+                int nGap = aConverter.Tell() & 3;
+                if (nGap)
+                    aConverter.SeekRel( 4-nGap );
             }
             fclose( pFrame ); // deletes tmpfile
             if( eType != FrameStyle_Separated )
@@ -861,8 +864,7 @@ bool Sane::Start( BitmapTransporter& rBitmap )
             bSuccess = false;
     }
     // get stream length
-    aConverter.Seek( STREAM_SEEK_TO_END );
-    int nPos = aConverter.Tell();
+    int nPos = aConverter.TellEnd();
 
     aConverter.Seek( 2 );
     aConverter.WriteUInt32( nPos+1 );
@@ -877,8 +879,7 @@ bool Sane::Start( BitmapTransporter& rBitmap )
         p_cancel( maHandle );
         CheckConsistency( "sane_cancel" );
     }
-    if( pBuffer )
-        delete [] pBuffer;
+    pBuffer.reset();
 
     ReloadOptions();
 
@@ -979,9 +980,7 @@ OUString Sane::GetOptionUnitName( int n )
 bool Sane::ActivateButtonOption( int n )
 {
     SANE_Status nStatus = ControlOption( n, SANE_ACTION_SET_VALUE, nullptr );
-    if( nStatus != SANE_STATUS_GOOD )
-        return false;
-    return true;
+    return nStatus == SANE_STATUS_GOOD;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

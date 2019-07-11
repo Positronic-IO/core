@@ -21,8 +21,7 @@
 #include <com/sun/star/text/AutoTextContainer.hpp>
 #include <com/sun/star/text/XTextFieldsSupplier.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
-#include <comphelper/processfactory.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <swtypes.hxx>
 #include "labfmt.hxx"
 #include <unotools.hxx>
@@ -34,7 +33,6 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::uno;
-using namespace ::comphelper;
 
 void SwLabDlg::UpdateFieldInformation(uno::Reference< frame::XModel > const & xModel, const SwLabItem& rItem)
 {
@@ -43,7 +41,7 @@ void SwLabDlg::UpdateFieldInformation(uno::Reference< frame::XModel > const & xM
 
     static const struct SwLabItemMap {
         const char* pName;
-        OUString SwLabItem:: *pValue;
+        OUString SwLabItem:: * const pValue;
     }  aArr[] = {
         { "BC_PRIV_FIRSTNAME"  , &SwLabItem::m_aPrivFirstName },
         { "BC_PRIV_NAME"       , &SwLabItem::m_aPrivName },

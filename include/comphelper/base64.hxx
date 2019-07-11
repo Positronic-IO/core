@@ -23,9 +23,10 @@
 #include <comphelper/comphelperdllapi.h>
 
 #include <sal/types.h>
-#include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
-#include <com/sun/star/uno/Sequence.h>
+#include <rtl/strbuf.hxx>
+
+namespace com { namespace sun { namespace star { namespace uno { template <class E> class Sequence; } } } }
 
 namespace comphelper {
 
@@ -34,6 +35,8 @@ class COMPHELPER_DLLPUBLIC Base64
 public:
     /** encodes the given byte sequence into Base64 */
     static void encode(OUStringBuffer& aStrBuffer, const css::uno::Sequence<sal_Int8>& aPass);
+
+    static void encode(OStringBuffer& aStrBuffer, const css::uno::Sequence<sal_Int8>& aPass);
 
     // Decode a base 64 encoded string into a sequence of bytes. The first
     // version can be used for attribute values only, because it does not

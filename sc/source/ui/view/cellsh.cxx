@@ -447,7 +447,7 @@ static bool lcl_TestFormat( SvxClipboardFormatItem& rFormats, const Transferable
 void ScCellShell::GetPossibleClipboardFormats( SvxClipboardFormatItem& rFormats )
 {
     vcl::Window* pWin = GetViewData()->GetActiveWin();
-    bool bDraw = ScDrawTransferObj::GetOwnClipboard( pWin ) != nullptr;
+    bool bDraw = ScDrawTransferObj::GetOwnClipboard(ScTabViewShell::GetClipData(pWin)) != nullptr;
 
     TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( pWin ) );
 
@@ -478,10 +478,11 @@ void ScCellShell::GetPossibleClipboardFormats( SvxClipboardFormatItem& rFormats 
 
 //  insert, insert contents
 
-static bool lcl_IsCellPastePossible( const TransferableDataHelper& rData, vcl::Window* pWin )
+static bool lcl_IsCellPastePossible( const TransferableDataHelper& rData )
 {
     bool bPossible = false;
-    if ( ScTransferObj::GetOwnClipboard( pWin ) || ScDrawTransferObj::GetOwnClipboard( pWin ) )
+    css::uno::Reference< css::datatransfer::XTransferable2 > xTransferable(rData.GetXTransferable(), css::uno::UNO_QUERY);
+    if ( ScTransferObj::GetOwnClipboard(xTransferable) || ScDrawTransferObj::GetOwnClipboard(xTransferable) )
         bPossible = true;
     else
     {
@@ -520,7 +521,7 @@ bool ScCellShell::HasClipboardFormat( SotClipboardFormatId nFormatId )
 
 IMPL_LINK( ScCellShell, ClipboardChanged, TransferableDataHelper*, pDataHelper, void )
 {
-    bPastePossible = lcl_IsCellPastePossible( *pDataHelper, GetViewData()->GetActiveWin() );
+    bPastePossible = lcl_IsCellPastePossible( *pDataHelper );
 
     SfxBindings& rBindings = GetViewData()->GetBindings();
     rBindings.Invalidate( SID_PASTE );
@@ -555,7 +556,7 @@ bool checkDestRanges(ScViewData& rViewData)
     if (!pWin)
         return false;
 
-    ScTransferObj* pOwnClip = ScTransferObj::GetOwnClipboard(pWin);
+    const ScTransferObj* pOwnClip = ScTransferObj::GetOwnClipboard(ScTabViewShell::GetClipData(pWin));
     if (!pOwnClip)
         // If it's not a Calc document, we won't be picky.
         return true;
@@ -594,7 +595,7 @@ void ScCellShell::GetClipState( SfxItemSet& rSet )
 
         // get initial state
         TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( pWin ) );
-        bPastePossible = lcl_IsCellPastePossible( aDataHelper, pWin );
+        bPastePossible = lcl_IsCellPastePossible( aDataHelper );
     }
 
     bool bDisable = !bPastePossible;
@@ -706,14 +707,6 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                 rSet.Put( SfxInt16Item( nWhich, nTab+1 ) );
                 break;
 
-            case SID_RANGE_VALUE:
-                {
-                    double nValue;
-                    pDoc->GetValue( nPosX, nPosY, nTab, nValue );
-                    rSet.Put( ScDoubleItem( nWhich, nValue ) );
-                }
-                break;
-
             case SID_RANGE_FORMULA:
                 {
                     OUString aString;
@@ -776,9 +769,14 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                     nRow2 = aMarkRange.aEnd.Row();
                     if( nCol2 != nCol1 || nRow1 != nRow2 )
                     {
-                        OUString aStr = ScResId( STR_ROWCOL_SELCOUNT );
-                        aStr = aStr.replaceAll( "$1", OUString::number( nRow2 - nRow1 + 1 ));
-                        aStr = aStr.replaceAll( "$2", OUString::number( nCol2 - nCol1 + 1 ));
+                        const auto nRows = nRow2 - nRow1 + 1;
+                        const auto nCols = nCol2 - nCol1 + 1;
+                        const LocaleDataWrapper& rLocaleData = Application::GetSettings().GetUILocaleDataWrapper();
+                        OUString aRowArg = ScResId(STR_SELCOUNT_ROWARG, nRows).replaceAll("$1", rLocaleData.getNum(nRows, 0));
+                        OUString aColArg = ScResId(STR_SELCOUNT_COLARG, nCols).replaceAll("$1", rLocaleData.getNum(nCols, 0));
+                        OUString aStr = ScResId(STR_SELCOUNT);
+                        aStr = aStr.replaceAll("$1", aRowArg);
+                        aStr = aStr.replaceAll("$2", aColArg);
                         rSet.Put( SfxStringItem( nWhich, aStr ) );
                     }
                     else
@@ -812,11 +810,8 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                     {
                         FormulaError nErrCode = FormulaError::NONE;
                         ScFormulaCell* pCell = pDoc->GetFormulaCell(ScAddress(nPosX, nPosY, nTab));
-                        if (pCell)
-                        {
-                            if (!pCell->IsRunning())
-                                nErrCode = pCell->GetErrCode();
-                        }
+                        if (pCell && !pCell->IsRunning())
+                            nErrCode = pCell->GetErrCode();
 
                         OUString aFuncStr;
                         if ( pTabViewShell->GetFunction( aFuncStr, nErrCode ) )
@@ -871,28 +866,37 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                 break;
 
             case FID_INS_ROWBRK:
-                if ( nPosY==0 || (pDoc->HasRowBreak(nPosY, nTab) & ScBreakType::Manual) )
+                if ( nPosY==0 || (pDoc->HasRowBreak(nPosY, nTab) & ScBreakType::Manual) || pDoc->IsTabProtected(nTab) )
                     rSet.DisableItem( nWhich );
                 break;
 
             case FID_INS_COLBRK:
-                if ( nPosX==0 || (pDoc->HasColBreak(nPosX, nTab) & ScBreakType::Manual) )
+                if ( nPosX==0 || (pDoc->HasColBreak(nPosX, nTab) & ScBreakType::Manual) || pDoc->IsTabProtected(nTab) )
                     rSet.DisableItem( nWhich );
                 break;
 
             case FID_DEL_ROWBRK:
-                if ( nPosY==0 || !(pDoc->HasRowBreak(nPosY, nTab) & ScBreakType::Manual) )
+                if ( nPosY==0 || !(pDoc->HasRowBreak(nPosY, nTab) & ScBreakType::Manual) || pDoc->IsTabProtected(nTab) )
                     rSet.DisableItem( nWhich );
                 break;
 
             case FID_DEL_COLBRK:
-                if ( nPosX==0 || !(pDoc->HasColBreak(nPosX, nTab) & ScBreakType::Manual) )
+                if ( nPosX==0 || !(pDoc->HasColBreak(nPosX, nTab) & ScBreakType::Manual) || pDoc->IsTabProtected(nTab) )
                     rSet.DisableItem( nWhich );
                 break;
 
             case FID_FILL_TAB:
                 if ( nTabSelCount < 2 )
                     rSet.DisableItem( nWhich );
+                break;
+
+            case SID_INSERT_CURRENT_DATE:
+            case SID_INSERT_CURRENT_TIME:
+                {
+                    if ( pDoc->IsTabProtected(nTab) &&
+                            pDoc->HasAttrib(nPosX, nPosY, nTab, nPosX, nPosY, nTab, HasAttrFlags::Protected))
+                        rSet.DisableItem( nWhich );
+                }
                 break;
 
             case SID_SELECT_SCENARIO:
@@ -1227,7 +1231,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                         const SfxPoolItem* pItem = pDoc->GetAttr( nPosX, nPosY, nTab, ATTR_CONDITIONAL );
                         const ScCondFormatItem* pCondFormatItem = static_cast<const ScCondFormatItem*>(pItem);
 
-                        if ( !pCondFormatItem->GetCondFormatData().size() )
+                        if ( pCondFormatItem->GetCondFormatData().empty() )
                             rSet.DisableItem( nWhich );
                         else if ( pCondFormatItem->GetCondFormatData().size() == 1 )
                             rSet.DisableItem( SID_OPENDLG_CURRENTCONDFRMT_MANAGER );

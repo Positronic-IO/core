@@ -22,18 +22,16 @@
 
 #include <vector>
 #include <memory>
-#include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/uno/Reference.h>
+#include <com/sun/star/uno/Sequence.h>
 #include <com/sun/star/lang/XTypeProvider.hpp>
-#include <com/sun/star/sdbc/ColumnValue.hpp>
 #include <com/sun/star/sdbc/XResultSetMetaData.hpp>
 #include <cppuhelper/weak.hxx>
-#include <ucbhelper/macros.hxx>
 #include <ucbhelper/ucbhelperdllapi.h>
 
 namespace com { namespace sun { namespace star {
-    namespace lang  { class XMultiServiceFactory; }
     namespace beans { struct Property; }
+    namespace uno { class XComponentContext; }
 } } }
 
 namespace ucbhelper_impl {
@@ -54,9 +52,6 @@ struct ResultSetColumnData
     /** @see ResultSetMetaData::isCaseSensitive */
     bool        isCaseSensitive;
 
-    /** @see ResultSetMetaData::getColumnDisplaySize */
-    sal_Int32       columnDisplaySize;
-
     inline ResultSetColumnData();
 };
 
@@ -64,8 +59,7 @@ struct ResultSetColumnData
 //       may heavily depend on the behaviour of the default constructor.
 
 ResultSetColumnData::ResultSetColumnData()
-: isCaseSensitive( true ),
-  columnDisplaySize( 16 )
+: isCaseSensitive( true )
 {
 }
 

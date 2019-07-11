@@ -24,11 +24,11 @@ public:
     using Entries_t = std::map<int, writerfilter::Reference<Properties>::Pointer_t>;
     using Entry_t = std::pair<int, writerfilter::Reference<Properties>::Pointer_t>;
     explicit RTFReferenceTable(Entries_t aEntries);
-    virtual ~RTFReferenceTable();
+    ~RTFReferenceTable() override;
     void resolve(Table& rHandler) override;
 
 private:
-    Entries_t m_aEntries;
+    Entries_t const m_aEntries;
 };
 } // namespace rtftok
 } // namespace writerfilter

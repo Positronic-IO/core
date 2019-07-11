@@ -22,6 +22,7 @@
 
 #include <cppuhelper/implbase.hxx>
 #include <rtl/ustring.hxx>
+#include <osl/diagnose.h>
 #include <vcl/gdimtf.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/metric.hxx>
@@ -231,9 +232,9 @@ class SVGTextWriter final
     Reference<XTextRange>                       mrCurrentTextPortion;
     const GDIMetaFile*                          mpTextEmbeddedBitmapMtf;
     MapMode*                                    mpTargetMapMode;
-    SvXMLElementExport*                         mpTextShapeElem;
-    SvXMLElementExport*                         mpTextParagraphElem;
-    SvXMLElementExport*                         mpTextPositionElem;
+    std::unique_ptr<SvXMLElementExport>         mpTextShapeElem;
+    std::unique_ptr<SvXMLElementExport>         mpTextParagraphElem;
+    std::unique_ptr<SvXMLElementExport>         mpTextPositionElem;
     sal_Int32                                   mnLeftTextPortionLength;
     Point                                       maTextPos;
     long int                                    mnTextWidth;

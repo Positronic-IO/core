@@ -27,6 +27,7 @@
 #include <com/sun/star/util/Duration.hpp>
 #include <com/sun/star/util/Time.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <boost/optional.hpp>
 
 #include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
@@ -280,10 +281,11 @@ void Converter::convertMeasure( OUStringBuffer& rBuffer,
 
         return;
     }
+    sal_Int64 nValue(nMeasure); // extend to 64-bit first to avoid overflow
     // the sign is processed separately
-    if( nMeasure < 0 )
+    if (nValue < 0)
     {
-        nMeasure = -nMeasure;
+        nValue = -nValue;
         rBuffer.append( '-' );
     }
 
@@ -401,7 +403,6 @@ void Converter::convertMeasure( OUStringBuffer& rBuffer,
         break;
     }
 
-    sal_Int64 nValue = nMeasure;
     OSL_ENSURE(nValue <= SAL_MAX_INT64 / nMul, "convertMeasure: overflow");
     nValue *= nMul;
     nValue /= nDiv;
@@ -474,7 +475,7 @@ void Converter::convertMeasurePx( OUStringBuffer& rBuffer, sal_Int32 nValue )
     rBuffer.append( 'x' );
 }
 
-int lcl_gethex( int nChar )
+static int lcl_gethex( int nChar )
 {
     if( nChar >= '0' && nChar <= '9' )
         return nChar - '0';
@@ -669,7 +670,7 @@ bool Converter::convertAngle(sal_Int16& rAngle, OUString const& rString)
     }
     else if (-1 != rString.indexOf("rad"))
     {
-        nValue = (fValue * 180.0 / M_PI) * 10.0;
+        nValue = basegfx::rad2deg(fValue) * 10.0;
     }
     else // no explicit unit
     {
@@ -754,7 +755,7 @@ void Converter::convertDuration(OUStringBuffer& rBuffer,
         if ( aNS.getLength() > 2 )
         {
             rBuffer.append( '.');
-            rBuffer.append( aNS.copy( 2 ) );     // strip "0."
+            rBuffer.appendCopy( aNS, 2 );     // strip "0."
         }
     }
     rBuffer.append( 'S');
@@ -778,7 +779,7 @@ bool Converter::convertDuration(double& rfTime,
     if ( *(pStr++) != 'P' )            // duration must start with "P"
         return false;
 
-    OUString sDoubleStr;
+    OUStringBuffer sDoubleStr;
     bool bSuccess = true;
     bool bDone = false;
     bool bTimePart = false;
@@ -807,7 +808,7 @@ bool Converter::convertDuration(double& rfTime,
                 }
                 else
                 {
-                    sDoubleStr += OUStringLiteral1(c);
+                    sDoubleStr.append(c);
                 }
             }
         }
@@ -870,7 +871,7 @@ bool Converter::convertDuration(double& rfTime,
         double fHour = nHours;
         double fMin = nMins;
         double fSec = nSecs;
-        double fFraction = sDoubleStr.toDouble();
+        double fFraction = sDoubleStr.makeStringAndClear().toDouble();
         double fTempTime = fHour / 24;
         fTempTime += fMin / (24 * 60);
         fTempTime += fSec / (24 * 60 * 60);
@@ -994,7 +995,7 @@ readUnsignedNumber(const OUString & rString,
 
 static Result
 readUnsignedNumberMaxDigits(int maxDigits,
-                            const ::rtl::OUString & rString, sal_Int32 & io_rnPos,
+                            const OUString & rString, sal_Int32 & io_rnPos,
                             sal_Int32 & o_rNumber)
 {
     bool bOverflow(false);

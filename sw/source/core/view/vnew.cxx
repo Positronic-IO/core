@@ -18,6 +18,7 @@
  */
 
 #include <sfx2/printer.hxx>
+#include <sal/log.hxx>
 #include <doc.hxx>
 #include <IDocumentUndoRedo.hxx>
 #include <DocumentSettingManager.hxx>
@@ -54,7 +55,7 @@ void SwViewShell::Init( const SwViewOption *pNewOpt )
 
     if( !mpOpt )
     {
-        mpOpt = new SwViewOption;
+        mpOpt.reset(new SwViewOption);
 
         // ApplyViewOptions() does not need to be called
         if( pNewOpt )
@@ -84,7 +85,7 @@ void SwViewShell::Init( const SwViewOption *pNewOpt )
     SAL_INFO( "sw.core", "View::Init - before InitPrt" );
     OutputDevice* pPDFOut = nullptr;
 
-    if ( mpOut && mpOut->GetPDFWriter() )
+    if (mpOut && (OUTDEV_PDF == mpOut->GetOutDevType()))
         pPDFOut = mpOut;
 
     // Only setup the printer if we need one:
@@ -150,8 +151,6 @@ SwViewShell::SwViewShell( SwDoc& rDocument, vcl::Window *pWindow,
     mpOut( pOutput ? pOutput
                   : pWindow ? static_cast<OutputDevice*>(pWindow)
                             : static_cast<OutputDevice*>(rDocument.getIDocumentDeviceAccess().getPrinter( true ))),
-    mpTmpRef( nullptr ),
-    mpOpt( nullptr ),
     mpAccOptions( new SwAccessibilityOptions ),
     mbShowHeaderSeparator( false ),
     mbShowFooterSeparator( false ),
@@ -178,9 +177,9 @@ SwViewShell::SwViewShell( SwDoc& rDocument, vcl::Window *pWindow,
     // i#38810 Do not reset modified state of document,
     // if it's already been modified.
     const bool bIsDocModified( mxDoc->getIDocumentState().IsModified() );
-    pOutput = mpOut;
+    OutputDevice* pOrigOut = mpOut;
     Init( pNewOpt );    // may change the Outdev (InitPrt())
-    mpOut = pOutput;
+    mpOut = pOrigOut;
 
     // initialize print preview layout after layout
     // is created in <SwViewShell::Init(..)> - called above.
@@ -222,8 +221,6 @@ SwViewShell::SwViewShell( SwViewShell& rShell, vcl::Window *pWindow,
     mpOut( pOutput ? pOutput
                   : pWindow ? static_cast<OutputDevice*>(pWindow)
                             : static_cast<OutputDevice*>(rShell.GetDoc()->getIDocumentDeviceAccess().getPrinter( true ))),
-    mpTmpRef( nullptr ),
-    mpOpt( nullptr ),
     mpAccOptions( new SwAccessibilityOptions ),
     mbShowHeaderSeparator( false ),
     mbShowFooterSeparator( false ),
@@ -254,9 +251,9 @@ SwViewShell::SwViewShell( SwViewShell& rShell, vcl::Window *pWindow,
 
     bool bModified = mxDoc->getIDocumentState().IsModified();
 
-    pOutput = mpOut;
+    OutputDevice* pOrigOut = mpOut;
     Init( rShell.GetViewOptions() ); // might change Outdev (InitPrt())
-    mpOut = pOutput;
+    mpOut = pOrigOut;
 
     if ( mbPreview )
         mpImp->InitPagePreviewLayout();
@@ -282,7 +279,8 @@ SwViewShell::SwViewShell( SwViewShell& rShell, vcl::Window *pWindow,
 
 SwViewShell::~SwViewShell()
 {
-    IDocumentLayoutAccess * const pLayoutAccess = mxDoc.get() ? &mxDoc->getIDocumentLayoutAccess() : nullptr;
+    IDocumentLayoutAccess* const pLayoutAccess
+        = mxDoc ? &mxDoc->getIDocumentLayoutAccess() : nullptr;
 
     {
         SET_CURR_SHELL( this );
@@ -319,16 +317,15 @@ SwViewShell::~SwViewShell()
             GetDoc()->StopNumRuleAnimations( mpOut );
         }
 
-        delete mpImp; // Delete first, so that the LayoutViews are destroyed.
-        mpImp = nullptr;   // Set to zero, because ~SwFrame relies on it.
+        mpImp.reset();
 
-        if ( mxDoc.get() )
+        if (mxDoc)
         {
             if( mxDoc->getReferenceCount() > 1 )
                 GetLayout()->ResetNewLayout();
         }
 
-        delete mpOpt;
+        mpOpt.reset();
 
         // resize format cache.
         if ( SwTextFrame::GetTextCache()->GetCurMax() > 250 )
@@ -357,8 +354,7 @@ SwViewShell::~SwViewShell()
         }
     }
 
-    mpTmpRef.disposeAndClear();
-    delete mpAccOptions;
+    mpAccOptions.reset();
 }
 
 bool SwViewShell::HasDrawView() const
@@ -369,6 +365,11 @@ bool SwViewShell::HasDrawView() const
 void SwViewShell::MakeDrawView()
 {
     Imp()->MakeDrawView( );
+}
+
+bool SwViewShell::HasDrawViewDrag() const
+{
+    return Imp()->HasDrawView() && Imp()->GetDrawView()->IsDragObj();
 }
 
 SdrView* SwViewShell::GetDrawView()

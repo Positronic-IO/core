@@ -45,6 +45,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
+#include <sal/log.hxx>
 #include <sortedobjs.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <swserv.hxx>
@@ -118,7 +119,7 @@ namespace
             pMark);
     }
 
-    inline std::unique_ptr<SwPosition> lcl_PositionFromContentNode(
+    std::unique_ptr<SwPosition> lcl_PositionFromContentNode(
         SwContentNode * const pContentNode,
         const bool bAtEnd)
     {
@@ -131,7 +132,7 @@ namespace
     // else set it to the begin of the Node after rEnd, if there is one
     // else set it to the end of the node before rStt
     // else set it to the ContentNode of the Pos outside the Range
-    inline std::unique_ptr<SwPosition> lcl_FindExpelPosition(
+    std::unique_ptr<SwPosition> lcl_FindExpelPosition(
         const SwNodeIndex& rStt,
         const SwNodeIndex& rEnd,
         const SwPosition& rOtherPosition)
@@ -409,7 +410,7 @@ namespace sw { namespace mark
         switch(eType)
         {
             case IDocumentMarkAccess::MarkType::TEXT_FIELDMARK:
-                pMark = std::shared_ptr<IMark>(new TextFieldmark(rPaM));
+                pMark = std::shared_ptr<IMark>(new TextFieldmark(rPaM, rName));
                 break;
             case IDocumentMarkAccess::MarkType::CHECKBOX_FIELDMARK:
                 pMark = std::shared_ptr<IMark>(new CheckboxFieldmark(rPaM));
@@ -583,7 +584,7 @@ namespace sw { namespace mark
                 if (m_pDoc->GetIDocumentUndoRedo().DoesUndo())
                 {
                     m_pDoc->GetIDocumentUndoRedo().AppendUndo(
-                            new SwUndoRenameBookmark(sOldName, rNewName, m_pDoc));
+                            o3tl::make_unique<SwUndoRenameBookmark>(sOldName, rNewName, m_pDoc));
                 }
                 m_pDoc->getIDocumentState().SetModified();
             }
@@ -1133,7 +1134,7 @@ namespace sw { namespace mark
         OUString sTmp;
 
         // try the name "<rName>XXX" (where XXX is a number starting from 1) unless there is
-        // a unused name. Due to performance-reasons (especially in mailmerge-Szenarios) there
+        // a unused name. Due to performance-reasons (especially in mailmerge-scenarios) there
         // is a map m_aMarkBasenameMapUniqueOffset which holds the next possible offset (XXX) for
         // rName (so there is no need to test for nCnt-values smaller than the offset).
         sal_Int32 nCnt = 1;
@@ -1204,7 +1205,7 @@ void MarkManager::dumpAsXml(xmlTextWriterPtr pWriter) const
 
 namespace
 {
-    inline bool lcl_Greater( const SwPosition& rPos, const SwNodeIndex& rNdIdx, const SwIndex* pIdx )
+    bool lcl_Greater( const SwPosition& rPos, const SwNodeIndex& rNdIdx, const SwIndex* pIdx )
     {
         return rPos.nNode > rNdIdx || ( pIdx && rPos.nNode == rNdIdx && rPos.nContent > pIdx->GetIndex() );
     }

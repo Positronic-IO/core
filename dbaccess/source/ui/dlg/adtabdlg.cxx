@@ -22,7 +22,6 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <core_resource.hxx>
-#include <dbu_pageids.hxx>
 #include <dbu_dlg.hxx>
 #include <strings.hrc>
 #include <sfx2/sfxsids.hrc>
@@ -401,7 +400,7 @@ void OAddTableDlg::impl_switchTo( ObjectList _eList )
 
 void OAddTableDlg::Update()
 {
-    if ( !m_xCurrentList.get() )
+    if (!m_xCurrentList)
         impl_switchTo( Tables );
     else
         m_xCurrentList->updateTableObjectList( m_rContext.allowViews() );

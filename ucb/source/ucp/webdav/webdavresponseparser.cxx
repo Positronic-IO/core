@@ -23,13 +23,13 @@
 #include <com/sun/star/xml/sax/Parser.hpp>
 #include <com/sun/star/xml/sax/InputSource.hpp>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/seqstream.hxx>
 #include <com/sun/star/ucb/LockEntry.hpp>
 #include <com/sun/star/ucb/LockScope.hpp>
 #include <com/sun/star/ucb/LockType.hpp>
 #include <com/sun/star/ucb/Lock.hpp>
 #include <map>
 #include <unordered_map>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 

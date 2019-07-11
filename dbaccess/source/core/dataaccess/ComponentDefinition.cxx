@@ -22,7 +22,6 @@
 #include <stringconstants.hxx>
 
 #include <osl/diagnose.h>
-#include <comphelper/sequence.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <comphelper/property.hxx>
 #include <comphelper/propertysequence.hxx>
@@ -158,9 +157,10 @@ Sequence< OUString > SAL_CALL OComponentDefinition::getSupportedServiceNames()
 void SAL_CALL OComponentDefinition::disposing()
 {
     OContentHelper::disposing();
-    if ( m_xColumns.is() )
-        m_xColumns->disposing();
-    m_xColumns.clear();
+    if (m_pColumns)
+    {
+        m_pColumns->disposing();
+    }
     m_xColumnPropertyListener->clear();
     m_xColumnPropertyListener.clear();
 }
@@ -195,7 +195,7 @@ Reference< XNameAccess> OComponentDefinition::getColumns()
     ::osl::MutexGuard aGuard(m_aMutex);
     ::connectivity::checkDisposed(OContentHelper::rBHelper.bDisposed);
 
-    if ( !m_xColumns.is() )
+    if (!m_pColumns)
     {
         std::vector< OUString> aNames;
 
@@ -205,10 +205,11 @@ Reference< XNameAccess> OComponentDefinition::getColumns()
         for (auto const& definition : rDefinition)
             aNames.push_back(definition.first);
 
-        m_xColumns = new OColumns( *this, m_aMutex, true, aNames, this, nullptr, true, false, false );
-        m_xColumns->setParent( *this );
+        m_pColumns.reset(new OColumns(*this, m_aMutex, true, aNames, this, nullptr, true, false, false));
+        m_pColumns->setParent(*this);
     }
-    return m_xColumns.get();
+    // see OCollection::acquire
+    return m_pColumns.get();
 }
 
 OColumn* OComponentDefinition::createColumn(const OUString& _rName) const

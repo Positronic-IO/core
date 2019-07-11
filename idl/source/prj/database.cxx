@@ -46,7 +46,6 @@ SvIdlDataBase::SvIdlDataBase( const SvCommand& rCmd )
     : bExport( false )
     , nUniqueId( 0 )
     , nVerbosity( rCmd.nVerbosity )
-    , pIdTable( nullptr )
 {
     sSlotMapFile = rCmd.aSlotMapFile;
 }
@@ -285,7 +284,7 @@ SvMetaType * SvIdlDataBase::ReadKnownType( SvTokenStream & rInStm )
 
     if( rTok.IsIdentifier() )
     {
-        OString aName = rTok.GetString();
+        const OString& aName = rTok.GetString();
         for( const auto& aType : GetTypeList() )
         {
             if( aType->GetName() == aName )

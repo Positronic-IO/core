@@ -24,6 +24,7 @@
 #include <o3tl/make_unique.hxx>
 
 #include <tools/datetime.hxx>
+#include <sal/log.hxx>
 
 #include <xmloff/txtimp.hxx>
 #include <xmloff/xmlimp.hxx>
@@ -212,8 +213,7 @@ OUString XMLTextListsHelper::GenerateNewListId() const
         while ( mpProcessedLists->find( sNewListId ) != mpProcessedLists->end() )
         {
             ++nHitCount;
-            sNewListId = sTmpStr;
-            sNewListId += OUString::number( nHitCount );
+            sNewListId = sTmpStr + OUString::number( nHitCount );
         }
     }
 
@@ -292,7 +292,7 @@ void XMLTextListsHelper::PushListOnStack( const OUString& sListId,
 void XMLTextListsHelper::PopListFromStack()
 {
     if ( mpListStack &&
-         mpListStack->size() > 0 )
+         !mpListStack->empty() )
     {
         mpListStack->pop_back();
     }

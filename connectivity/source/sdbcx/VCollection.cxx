@@ -27,6 +27,7 @@
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/property.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <TConnection.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <strings.hrc>
@@ -103,7 +104,7 @@ namespace
 
         virtual void reFill(const ::std::vector< OUString> &_rVector) override
         {
-            OSL_ENSURE(!m_aNameMap.size(),"OCollection::reFill: collection isn't empty");
+            OSL_ENSURE(m_aNameMap.empty(),"OCollection::reFill: collection isn't empty");
             m_aElements.reserve(_rVector.size());
 
             for (auto const& elem : _rVector)
@@ -533,6 +534,7 @@ ObjectType OCollection::getObject(sal_Int32 _nIndex)
         }
         catch(const SQLException& e)
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             try
             {
                 dropImpl(_nIndex,false);
@@ -540,7 +542,7 @@ ObjectType OCollection::getObject(sal_Int32 _nIndex)
             catch(const Exception& )
             {
             }
-            throw WrappedTargetException(e.Message,static_cast<XTypeProvider*>(this),makeAny(e));
+            throw WrappedTargetException(e.Message,static_cast<XTypeProvider*>(this),anyEx);
         }
         m_pElements->setObject(_nIndex,xName);
     }

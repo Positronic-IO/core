@@ -23,10 +23,6 @@
 
 #include <comphelper/comphelperdllapi.h>
 
-#ifdef UNX
-#include <sys/resource.h>
-#endif
-
 #include <vector>
 #include <memory>
 
@@ -69,7 +65,6 @@ class COMPHELPER_DLLPUBLIC SyntaxHighlighter
 {
     class Tokenizer;
 
-    HighlighterLanguage eLanguage;
     std::unique_ptr<Tokenizer> m_tokenizer;
 
     SyntaxHighlighter(const SyntaxHighlighter&) = delete;

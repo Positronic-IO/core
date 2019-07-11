@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <osl/diagnose.h>
 #include <svtools/htmlout.hxx>
 #include <svtools/htmlkywd.hxx>
 #include <rtl/strbuf.hxx>
@@ -31,7 +32,7 @@
 #include "swhtml.hxx"
 #include "wrthtml.hxx"
 
-sal_Int32 lcl_html_getNextPart( OUString& rPart, const OUString& rContent,
+static sal_Int32 lcl_html_getNextPart( OUString& rPart, const OUString& rContent,
                              sal_Int32 nPos )
 {
     rPart = aEmptyOUStr;
@@ -73,7 +74,7 @@ sal_Int32 lcl_html_getNextPart( OUString& rPart, const OUString& rContent,
     return nPos;
 }
 
-sal_Int32 lcl_html_getEndNoteInfo( SwEndNoteInfo& rInfo,
+static sal_Int32 lcl_html_getEndNoteInfo( SwEndNoteInfo& rInfo,
                                     const OUString& rContent,
                                     bool bEndNote )
 {
@@ -173,7 +174,7 @@ void SwHTMLParser::InsertFootEndNote( const OUString& rName, bool bEndNote,
                                       bool bFixed )
 {
     if( !m_pFootEndNoteImpl )
-        m_pFootEndNoteImpl = new SwHTMLFootEndNote_Impl;
+        m_pFootEndNoteImpl.reset(new SwHTMLFootEndNote_Impl);
 
     m_pFootEndNoteImpl->sName = rName;
     if( m_pFootEndNoteImpl->sName.getLength() > 3 )
@@ -213,8 +214,7 @@ void SwHTMLParser::InsertFootEndNoteText()
 
 void SwHTMLParser::DeleteFootEndNoteImpl()
 {
-    delete m_pFootEndNoteImpl;
-    m_pFootEndNoteImpl = nullptr;
+    m_pFootEndNoteImpl.reset();
 }
 
 SwNodeIndex *SwHTMLParser::GetFootEndNoteSection( const OUString& rName )
@@ -234,8 +234,7 @@ SwNodeIndex *SwHTMLParser::GetFootEndNoteSection( const OUString& rName )
                 m_pFootEndNoteImpl->aTextFootnotes.erase( m_pFootEndNoteImpl->aTextFootnotes.begin() + i );
                 if (m_pFootEndNoteImpl->aTextFootnotes.empty())
                 {
-                    delete m_pFootEndNoteImpl;
-                    m_pFootEndNoteImpl = nullptr;
+                    m_pFootEndNoteImpl.reset();
                 }
 
                 break;
@@ -273,7 +272,7 @@ Writer& OutHTML_SwFormatFootnote( Writer& rWrt, const SfxPoolItem& rHt )
     }
 
     if( !rHTMLWrt.m_pFootEndNotes )
-        rHTMLWrt.m_pFootEndNotes = new std::vector<SwTextFootnote*>;
+        rHTMLWrt.m_pFootEndNotes.reset(new std::vector<SwTextFootnote*>);
     rHTMLWrt.m_pFootEndNotes->insert( rHTMLWrt.m_pFootEndNotes->begin() + nPos, pTextFootnote );
 
     OStringBuffer sOut;
@@ -295,7 +294,7 @@ Writer& OutHTML_SwFormatFootnote( Writer& rWrt, const SfxPoolItem& rHt )
     rWrt.Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
     HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_superscript );
 
-    HTMLOutFuncs::Out_String( rWrt.Strm(), rFormatFootnote.GetViewNumStr(*rWrt.m_pDoc),
+    HTMLOutFuncs::Out_String( rWrt.Strm(), rFormatFootnote.GetViewNumStr(*rWrt.m_pDoc, nullptr),
                                  rHTMLWrt.m_eDestEnc, &rHTMLWrt.m_aNonConvertableCharacters );
     HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_superscript, false );
     HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor, false );
@@ -381,8 +380,7 @@ void SwHTMLWriter::OutFootEndNotes()
             "SwHTMLWriter::OutFootEndNotes: Number of endnotes does not match" );
 #endif
 
-    delete m_pFootEndNotes;
-    m_pFootEndNotes = nullptr;
+    m_pFootEndNotes.reset();
     m_nFootNote = m_nEndNote = 0;
 }
 
@@ -396,7 +394,7 @@ OUString SwHTMLWriter::GetFootEndNoteSym( const SwFormatFootnote& rFormatFootnot
     OUString sRet;
     if( pInfo )
         sRet = pInfo->GetPrefix();
-    sRet += rFormatFootnote.GetViewNumStr( *m_pDoc );
+    sRet += rFormatFootnote.GetViewNumStr(*m_pDoc, nullptr);
     if( pInfo )
         sRet += pInfo->GetSuffix();
 
@@ -500,15 +498,15 @@ static void lcl_html_outFootEndNoteInfo( Writer& rWrt, OUString const *pParts,
 {
     SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
 
-    OUString aContent;
+    OUStringBuffer aContent;
     for( int i=0; i<nParts; ++i )
     {
         OUString aTmp( pParts[i] );
         aTmp = aTmp.replaceAll( "\\", "\\\\" );
         aTmp = aTmp.replaceAll( ";", "\\;" );
         if( i > 0 )
-            aContent += ";";
-        aContent += aTmp;
+            aContent.append(";");
+        aContent.append(aTmp);
     }
 
     rHTMLWrt.OutNewLine();
@@ -517,7 +515,7 @@ static void lcl_html_outFootEndNoteInfo( Writer& rWrt, OUString const *pParts,
         .append(OOO_STRING_SVTOOLS_HTML_O_name).append("=\"").append(pName)
         .append("\" ").append(OOO_STRING_SVTOOLS_HTML_O_content).append("=\"");
     rWrt.Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
-    HTMLOutFuncs::Out_String( rWrt.Strm(), aContent, rHTMLWrt.m_eDestEnc, &rHTMLWrt.m_aNonConvertableCharacters );
+    HTMLOutFuncs::Out_String( rWrt.Strm(), aContent.makeStringAndClear(), rHTMLWrt.m_eDestEnc, &rHTMLWrt.m_aNonConvertableCharacters );
     rWrt.Strm().WriteCharPtr( "\">" );
 }
 

@@ -87,7 +87,7 @@ uno::Reference< mail::XSmtpService > ConnectToSmtpServer(
         uno::Reference< mail::XMailService >&  rxInMailService,
         const OUString& rInMailServerPassword,
         const OUString& rOutMailServerPassword,
-        vcl::Window* pDialogParentWindow )
+        weld::Window* pDialogParentWindow )
 {
     uno::Reference< mail::XSmtpService > xSmtpServer;
     uno::Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
@@ -259,31 +259,11 @@ void SwAddressPreview::Clear()
     UpdateScrollBar();
 }
 
-void SwAddressPreview::ReplaceSelectedAddress(const OUString& rNew)
-{
-    pImpl->aAddresses[pImpl->nSelectedAddress] = rNew;
-    Invalidate();
-}
-
-void SwAddressPreview::RemoveSelectedAddress()
-{
-    pImpl->aAddresses.erase(pImpl->aAddresses.begin() + pImpl->nSelectedAddress);
-    if(pImpl->nSelectedAddress)
-        --pImpl->nSelectedAddress;
-    UpdateScrollBar();
-    Invalidate();
-}
-
 void SwAddressPreview::SetLayout(sal_uInt16 nRows, sal_uInt16 nColumns)
 {
     pImpl->nRows = nRows;
     pImpl->nColumns = nColumns;
     UpdateScrollBar();
-}
-
-void SwAddressPreview::EnableScrollBar()
-{
-    pImpl->bEnableScrollBar = true;
 }
 
 void SwAddressPreview::UpdateScrollBar()
@@ -464,7 +444,6 @@ OUString SwAddressPreview::FillData(
                                                 rConfigItem.GetCurrentDBData() );
     const OUString* pAssignment = aAssignment.getConstArray();
     const std::vector<std::pair<OUString, int>>& rDefHeaders = rConfigItem.GetDefaultAddressHeaders();
-    OUString sAddress(rAddress);
     OUString sNotAssigned = "<" + SwResId(STR_NOTASSIGNED) + ">";
 
     bool bIncludeCountry = rConfigItem.IsIncludeCountry();
@@ -480,8 +459,8 @@ OUString SwAddressPreview::FillData(
             sCountryColumn = aSpecialAssignment[MM_PART_COUNTRY];
     }
 
-    SwAddressIterator aIter(sAddress);
-    sAddress.clear();
+    SwAddressIterator aIter(rAddress);
+    OUStringBuffer sAddress;
     while(aIter.HasMore())
     {
         SwMergeAddressItem aItem = aIter.Next();
@@ -540,9 +519,235 @@ OUString SwAddressPreview::FillData(
             }
 
         }
-        sAddress += aItem.sText;
+        sAddress.append(aItem.sText);
     }
-    return sAddress;
+    return sAddress.makeStringAndClear();
+}
+
+AddressPreview::AddressPreview(std::unique_ptr<weld::ScrolledWindow> xWindow)
+    : pImpl(new SwAddressPreview_Impl())
+    , m_xVScrollBar(std::move(xWindow))
+{
+    m_xVScrollBar->set_user_managed_scrolling();
+    m_xVScrollBar->connect_vadjustment_changed(LINK(this, AddressPreview, ScrollHdl));
+}
+
+AddressPreview::~AddressPreview()
+{
+}
+
+IMPL_LINK_NOARG(AddressPreview, ScrollHdl, weld::ScrolledWindow&, void)
+{
+    Invalidate();
+}
+
+void AddressPreview::AddAddress(const OUString& rAddress)
+{
+    pImpl->aAddresses.push_back(rAddress);
+    UpdateScrollBar();
+}
+
+void AddressPreview::SetAddress(const OUString& rAddress)
+{
+    pImpl->aAddresses.clear();
+    pImpl->aAddresses.push_back(rAddress);
+    m_xVScrollBar->set_vpolicy(VclPolicyType::NEVER);
+    Invalidate();
+}
+
+sal_uInt16 AddressPreview::GetSelectedAddress()const
+{
+    OSL_ENSURE(pImpl->nSelectedAddress < pImpl->aAddresses.size(), "selection invalid");
+    return pImpl->nSelectedAddress;
+}
+
+void AddressPreview::SelectAddress(sal_uInt16 nSelect)
+{
+    OSL_ENSURE(pImpl->nSelectedAddress < pImpl->aAddresses.size(), "selection invalid");
+    pImpl->nSelectedAddress = nSelect;
+    // now make it visible..
+    sal_uInt16 nSelectRow = nSelect / pImpl->nColumns;
+    sal_uInt16 nStartRow = m_xVScrollBar->vadjustment_get_value();
+    if( (nSelectRow < nStartRow) || (nSelectRow >= (nStartRow + pImpl->nRows) ))
+        m_xVScrollBar->vadjustment_set_value(nSelectRow);
+}
+
+void AddressPreview::ReplaceSelectedAddress(const OUString& rNew)
+{
+    pImpl->aAddresses[pImpl->nSelectedAddress] = rNew;
+    Invalidate();
+}
+
+void AddressPreview::RemoveSelectedAddress()
+{
+    pImpl->aAddresses.erase(pImpl->aAddresses.begin() + pImpl->nSelectedAddress);
+    if(pImpl->nSelectedAddress)
+        --pImpl->nSelectedAddress;
+    UpdateScrollBar();
+    Invalidate();
+}
+
+void AddressPreview::SetLayout(sal_uInt16 nRows, sal_uInt16 nColumns)
+{
+    pImpl->nRows = nRows;
+    pImpl->nColumns = nColumns;
+    UpdateScrollBar();
+}
+
+void AddressPreview::EnableScrollBar()
+{
+    pImpl->bEnableScrollBar = true;
+}
+
+void AddressPreview::UpdateScrollBar()
+{
+    if (pImpl->nColumns)
+    {
+        sal_uInt16 nResultingRows = static_cast<sal_uInt16>(pImpl->aAddresses.size() + pImpl->nColumns - 1) / pImpl->nColumns;
+        ++nResultingRows;
+        auto nValue = m_xVScrollBar->vadjustment_get_value();
+        if (nValue > nResultingRows)
+            nValue = nResultingRows;
+        m_xVScrollBar->set_vpolicy(pImpl->bEnableScrollBar && nResultingRows > pImpl->nRows ? VclPolicyType::ALWAYS : VclPolicyType::NEVER);
+        m_xVScrollBar->vadjustment_configure(nValue, 0, nResultingRows, 1, 10, pImpl->nRows);
+    }
+}
+
+void AddressPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
+{
+    const StyleSettings& rSettings = rRenderContext.GetSettings().GetStyleSettings();
+    rRenderContext.SetFillColor(rSettings.GetWindowColor());
+    rRenderContext.SetLineColor(COL_TRANSPARENT);
+    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), GetOutputSizePixel()));
+    Color aPaintColor(IsEnabled() ? rSettings.GetWindowTextColor() : rSettings.GetDisableColor());
+    rRenderContext.SetLineColor(aPaintColor);
+    vcl::Font aFont(rRenderContext.GetFont());
+    aFont.SetColor(aPaintColor);
+    rRenderContext.SetFont(aFont);
+
+    Size aSize(GetOutputSizePixel());
+    sal_uInt16 nStartRow = 0;
+    if (m_xVScrollBar->get_vpolicy() != VclPolicyType::NEVER)
+    {
+        aSize.AdjustWidth(-m_xVScrollBar->get_vscroll_width());
+        nStartRow = m_xVScrollBar->vadjustment_get_value();
+    }
+    Size aPartSize(aSize.Width() / pImpl->nColumns,
+                   aSize.Height() / pImpl->nRows);
+    aPartSize.AdjustWidth( -2 );
+    aPartSize.AdjustHeight( -2 );
+
+    sal_uInt16 nAddress = nStartRow * pImpl->nColumns;
+    const sal_uInt16 nNumAddresses = static_cast<sal_uInt16>(pImpl->aAddresses.size());
+    for (sal_uInt16 nRow = 0; nRow < pImpl->nRows ; ++nRow)
+    {
+        for (sal_uInt16 nCol = 0; nCol < pImpl->nColumns; ++nCol)
+        {
+            if (nAddress >= nNumAddresses)
+                break;
+            Point aPos(nCol * aPartSize.Width(),
+                       nRow * aPartSize.Height());
+            aPos.Move(1, 1);
+            bool bIsSelected = nAddress == pImpl->nSelectedAddress;
+            if ((pImpl->nColumns * pImpl->nRows) == 1)
+                bIsSelected = false;
+            OUString adr(pImpl->aAddresses[nAddress]);
+            DrawText_Impl(rRenderContext, adr, aPos, aPartSize, bIsSelected);
+            ++nAddress;
+        }
+    }
+    rRenderContext.SetClipRegion();
+}
+
+void AddressPreview::MouseButtonDown( const MouseEvent& rMEvt )
+{
+    if (rMEvt.IsLeft() && pImpl->nRows && pImpl->nColumns)
+    {
+        //determine the selected address
+        const Point& rMousePos = rMEvt.GetPosPixel();
+        Size aSize(GetOutputSizePixel());
+        Size aPartSize( aSize.Width()/pImpl->nColumns, aSize.Height()/pImpl->nRows );
+        sal_uInt32 nRow = rMousePos.Y() / aPartSize.Height() ;
+        if (m_xVScrollBar->get_vpolicy() != VclPolicyType::NEVER)
+        {
+            nRow += m_xVScrollBar->vadjustment_get_value();
+        }
+        sal_uInt32 nCol = rMousePos.X() / aPartSize.Width();
+        sal_uInt32 nSelect = nRow * pImpl->nColumns + nCol;
+
+        if( nSelect < pImpl->aAddresses.size() &&
+                pImpl->nSelectedAddress != static_cast<sal_uInt16>(nSelect))
+        {
+            pImpl->nSelectedAddress = static_cast<sal_uInt16>(nSelect);
+        }
+        Invalidate();
+    }
+}
+
+bool AddressPreview::KeyInput( const KeyEvent& rKEvt )
+{
+    sal_uInt16 nKey = rKEvt.GetKeyCode().GetCode();
+    bool bHandled = false;
+    if (pImpl->nRows && pImpl->nColumns)
+    {
+        sal_uInt32 nSelectedRow = pImpl->nSelectedAddress / pImpl->nColumns;
+        sal_uInt32 nSelectedColumn = pImpl->nSelectedAddress - (nSelectedRow * pImpl->nColumns);
+        switch(nKey)
+        {
+            case KEY_UP:
+                if(nSelectedRow)
+                    --nSelectedRow;
+                bHandled = true;
+            break;
+            case KEY_DOWN:
+                if(pImpl->aAddresses.size() > sal_uInt32(pImpl->nSelectedAddress + pImpl->nColumns))
+                    ++nSelectedRow;
+                bHandled = true;
+            break;
+            case KEY_LEFT:
+                if(nSelectedColumn)
+                    --nSelectedColumn;
+                bHandled = true;
+            break;
+            case KEY_RIGHT:
+                if(nSelectedColumn < sal_uInt32(pImpl->nColumns - 1) &&
+                       pImpl->aAddresses.size() - 1 > pImpl->nSelectedAddress )
+                    ++nSelectedColumn;
+                bHandled = true;
+            break;
+        }
+        sal_uInt32 nSelect = nSelectedRow * pImpl->nColumns + nSelectedColumn;
+        if( nSelect < pImpl->aAddresses.size() &&
+                pImpl->nSelectedAddress != static_cast<sal_uInt16>(nSelect))
+        {
+            pImpl->nSelectedAddress = static_cast<sal_uInt16>(nSelect);
+            Invalidate();
+        }
+    }
+    return bHandled;
+}
+
+void AddressPreview::DrawText_Impl(vcl::RenderContext& rRenderContext, const OUString& rAddress,
+                                     const Point& rTopLeft, const Size& rSize, bool bIsSelected)
+{
+    rRenderContext.SetClipRegion(vcl::Region(tools::Rectangle(rTopLeft, rSize)));
+    if (bIsSelected)
+    {
+        //selection rectangle
+        rRenderContext.SetFillColor(COL_TRANSPARENT);
+        rRenderContext.DrawRect(tools::Rectangle(rTopLeft, rSize));
+    }
+    sal_Int32 nHeight = GetTextHeight();
+    Point aStart = rTopLeft;
+    //put it away from the border
+    aStart.Move(2, 2);
+    sal_Int32 nPos = 0;
+    do
+    {
+        rRenderContext.DrawText(aStart, rAddress.getToken(0, '\n', nPos));
+        aStart.AdjustY(nHeight );
+    }
+    while (nPos >= 0);
 }
 
 SwMergeAddressItem   SwAddressIterator::Next()
@@ -612,9 +817,9 @@ OUString SwAuthenticator::getPassword(  )
 {
     if(!m_aUserName.isEmpty() && m_aPassword.isEmpty() && m_pParentWindow)
     {
-       SfxPasswordDialog aPasswdDlg(m_pParentWindow->GetFrameWeld());
+       SfxPasswordDialog aPasswdDlg(m_pParentWindow);
        aPasswdDlg.SetMinLen(0);
-       if (RET_OK == aPasswdDlg.execute())
+       if (RET_OK == aPasswdDlg.run())
             m_aPassword = aPasswdDlg.GetPassword();
     }
     return m_aPassword;
@@ -695,8 +900,7 @@ uno::Any SwMailTransferable::getTransferData( const datatransfer::DataFlavor& /*
         SvStream* pStream = aMedium.GetInStream();
         if ( aMedium.GetErrorCode() == ERRCODE_NONE && pStream)
         {
-            pStream->Seek(STREAM_SEEK_TO_END);
-            aData.realloc(pStream->Tell());
+            aData.realloc(pStream->TellEnd());
             pStream->Seek(0);
             sal_Int8 * pData = aData.getArray();
             pStream->ReadBytes( pData, aData.getLength() );

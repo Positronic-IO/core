@@ -22,6 +22,7 @@
 
 #include <com/sun/star/i18n/ScriptType.hpp>
 
+#include <sal/log.hxx>
 #include <hintids.hxx>
 #include <o3tl/make_unique.hxx>
 #include <svl/eitem.hxx>
@@ -85,9 +86,9 @@ std::unique_ptr<SfxItemSet> SwModule::CreateItemSet( sal_uInt16 nId )
             pAppView = nullptr;
         if(pAppView)
         {
-        // if Text then no WebView and vice versa
             bool bWebView = dynamic_cast<SwWebView*>( pAppView ) !=  nullptr;
-            if( (bWebView &&  !bTextDialog) ||(!bWebView &&  bTextDialog))
+            // if Text then no WebView and vice versa
+            if (bWebView != bTextDialog)
             {
                 aViewOpt = *pAppView->GetWrtShell().GetViewOptions();
             }
@@ -137,12 +138,10 @@ std::unique_ptr<SfxItemSet> SwModule::CreateItemSet( sal_uInt16 nId )
             rWrtShell.GetDefault(RES_CHRATR_LANGUAGE).CloneSetWhich(SID_ATTR_LANGUAGE) );
         pRet->Put(*pNewItem);
 
-        pNewItem.reset(
-            rWrtShell.GetDefault(RES_CHRATR_CJK_LANGUAGE).CloneSetWhich(SID_ATTR_CHAR_CJK_LANGUAGE));
+        pNewItem = rWrtShell.GetDefault(RES_CHRATR_CJK_LANGUAGE).CloneSetWhich(SID_ATTR_CHAR_CJK_LANGUAGE);
         pRet->Put(*pNewItem);
 
-        pNewItem.reset(
-            rWrtShell.GetDefault(RES_CHRATR_CTL_LANGUAGE).CloneSetWhich(SID_ATTR_CHAR_CTL_LANGUAGE));
+        pNewItem = rWrtShell.GetDefault(RES_CHRATR_CTL_LANGUAGE).CloneSetWhich(SID_ATTR_CHAR_CTL_LANGUAGE);
         pRet->Put(*pNewItem);
     }
     else
@@ -428,7 +427,7 @@ VclPtr<SfxTabPage> SwModule::CreateTabPage( sal_uInt16 nId, TabPageParent pParen
         }
         case RID_SW_TP_HTML_OPTGRID_PAGE:
         case RID_SVXPAGE_GRID:
-            pRet = SvxGridTabPage::Create(pParent.pParent, rSet);
+            pRet = SvxGridTabPage::Create(pParent, rSet);
         break;
 
         case RID_SW_TP_STD_FONT:

@@ -128,18 +128,12 @@ static void removeAllSheets( const uno::Reference <sheet::XSpreadsheetDocument>&
         {
             uno::Reference< sheet::XSpreadsheet > xSheet(xIndex->getByIndex(i), uno::UNO_QUERY);
             uno::Reference< container::XNamed > xNamed( xSheet, uno::UNO_QUERY_THROW );
-            if (xNamed.is())
-            {
-                xNameContainer->removeByName(xNamed->getName());
-            }
+            xNameContainer->removeByName(xNamed->getName());
         }
 
         uno::Reference< sheet::XSpreadsheet > xSheet(xIndex->getByIndex(0), uno::UNO_QUERY);
         uno::Reference< container::XNamed > xNamed( xSheet, uno::UNO_QUERY_THROW );
-        if (xNamed.is())
-        {
-            xNamed->setName(aSheetName);
-        }
+        xNamed->setName(aSheetName);
     }
 }
 
@@ -159,10 +153,7 @@ openNewDoc(const OUString& aSheetName )
                 "_blank", 0,
                 uno::Sequence < css::beans::PropertyValue >() ) );
         uno::Reference <sheet::XSpreadsheetDocument> xSpreadDoc( xComponent, uno::UNO_QUERY_THROW );
-        if ( xSpreadDoc.is() )
-        {
-            removeAllSheets(xSpreadDoc,aSheetName);
-        }
+        removeAllSheets(xSpreadDoc,aSheetName);
         xModel.set(xSpreadDoc,uno::UNO_QUERY_THROW);
     }
     catch ( uno::Exception & /*e*/ )
@@ -604,18 +595,15 @@ ScVbaWorksheet::Delete()
 {
     uno::Reference <sheet::XSpreadsheetDocument> xSpreadDoc( getModel(), uno::UNO_QUERY_THROW );
     OUString aSheetName = getName();
-    if ( xSpreadDoc.is() )
+    SCTAB nTab = 0;
+    if (!ScVbaWorksheets::nameExists(xSpreadDoc, aSheetName, nTab ))
     {
-        SCTAB nTab = 0;
-        if (!ScVbaWorksheets::nameExists(xSpreadDoc, aSheetName, nTab ))
-        {
-            return;
-        }
-        uno::Reference<sheet::XSpreadsheets> xSheets = xSpreadDoc->getSheets();
-        uno::Reference<container::XNameContainer> xNameContainer(xSheets,uno::UNO_QUERY_THROW);
-        xNameContainer->removeByName(aSheetName);
-        mxSheet.clear();
+        return;
     }
+    uno::Reference<sheet::XSpreadsheets> xSheets = xSpreadDoc->getSheets();
+    uno::Reference<container::XNameContainer> xNameContainer(xSheets,uno::UNO_QUERY_THROW);
+    xNameContainer->removeByName(aSheetName);
+    mxSheet.clear();
 }
 
 uno::Reference< excel::XWorksheet >
@@ -821,16 +809,24 @@ ScVbaWorksheet::Shapes( const uno::Any& aIndex )
    return uno::makeAny( xVbaShapes );
 }
 
+uno::Any
+ScVbaWorksheet::getButtons( const uno::Any &rIndex, bool bOptionButtons )
+{
+    ::rtl::Reference< ScVbaSheetObjectsBase > &rxButtons = bOptionButtons ? mxButtons[0] : mxButtons[1];
+
+    if( !rxButtons.is() )
+        rxButtons.set( new ScVbaButtons( this, mxContext, mxModel, mxSheet, bOptionButtons ) );
+    else
+        rxButtons->collectShapes();
+    if( rIndex.hasValue() )
+        return rxButtons->Item( rIndex, uno::Any() );
+    return uno::Any( uno::Reference< XCollection >( rxButtons.get() ) );
+}
+
 uno::Any SAL_CALL
 ScVbaWorksheet::Buttons( const uno::Any& rIndex )
 {
-    if( !mxButtons.is() )
-        mxButtons.set( new ScVbaButtons( this, mxContext, mxModel, mxSheet ) );
-    else
-        mxButtons->collectShapes();
-    if( rIndex.hasValue() )
-        return mxButtons->Item( rIndex, uno::Any() );
-    return uno::Any( uno::Reference< XCollection >( mxButtons.get() ) );
+    return getButtons( rIndex, false );
 }
 
 uno::Any SAL_CALL
@@ -864,9 +860,9 @@ ScVbaWorksheet::ListBoxes( const uno::Any& /*rIndex*/ )
 }
 
 uno::Any SAL_CALL
-ScVbaWorksheet::OptionButtons( const uno::Any& /*rIndex*/ )
+ScVbaWorksheet::OptionButtons( const uno::Any& rIndex )
 {
-    throw uno::RuntimeException();
+    return getButtons( rIndex, true );
 }
 
 uno::Any SAL_CALL
@@ -888,11 +884,9 @@ ScVbaWorksheet::ShowDataForm( )
     ScTabViewShell* pTabViewShell = excel::getBestViewShell( xModel );
 
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
     ScopedVclPtr<AbstractScDataFormDlg> pDlg(pFact->CreateScDataFormDlg(pTabViewShell->GetDialogParent(),
                                                                         pTabViewShell));
-    OSL_ENSURE(pDlg, "Dialog create fail!");
 
     pDlg->Execute();
 }
@@ -1052,20 +1046,13 @@ ScVbaWorksheet::getSheetID()
 }
 
 void SAL_CALL
-ScVbaWorksheet::PrintOut( const uno::Any& From, const uno::Any& To, const uno::Any& Copies, const uno::Any& Preview, const uno::Any& ActivePrinter, const uno::Any& PrintToFile, const uno::Any& Collate, const uno::Any& PrToFileName, const uno::Any& IgnorePrintAreas )
+ScVbaWorksheet::PrintOut( const uno::Any& From, const uno::Any& To, const uno::Any& Copies, const uno::Any& Preview, const uno::Any& ActivePrinter, const uno::Any& PrintToFile, const uno::Any& Collate, const uno::Any& PrToFileName, const uno::Any& )
 {
     sal_Int32 nTo = 0;
     sal_Int32 nFrom = 0;
-    sal_Int16 nCopies = 1;
-    bool bCollate = false;
     bool bSelection = false;
-    bool bIgnorePrintAreas = false;
     From >>= nFrom;
     To >>= nTo;
-    Copies >>= nCopies;
-    IgnorePrintAreas >>= bIgnorePrintAreas;
-    if ( nCopies > 1 ) // Collate only useful when more that 1 copy
-        Collate >>= bCollate;
 
     if ( !( nFrom || nTo ) )
         bSelection = true;

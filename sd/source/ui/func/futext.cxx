@@ -337,9 +337,9 @@ bool FuText::MouseButtonDown(const MouseEvent& rMEvt)
                         if (bMarkChanges)
                             mpView->MarkObj(aVEvt.pRootObj, pPV);
 
-                        if (aVEvt.pObj && dynamic_cast< const SdrTextObj *>( aVEvt.pObj ) !=  nullptr)
+                        if (auto pSdrTextObj = dynamic_cast<SdrTextObj *>( aVEvt.pObj ))
                         {
-                            mxTextObj.reset( static_cast<SdrTextObj*>(aVEvt.pObj) );
+                            mxTextObj.reset( pSdrTextObj );
                         }
 
                         SetInEditMode(rMEvt, true);
@@ -669,14 +669,11 @@ bool FuText::MouseButtonUp(const MouseEvent& rMEvt)
             **************************************************************/
             SdrPageView* pPV;
             SdrObject* pObj = mpView->PickObj(aMDPos, mpView->getHitTolLog(), pPV, SdrSearchOptions::ALSOONMASTER | SdrSearchOptions::BEFOREMARK);
-            if (pObj)
+            if (pObj && pPV->IsObjMarkable(pObj))
             {
-                if (pPV->IsObjMarkable(pObj))
-                {
-                    mpView->UnmarkAllObj();
-                    mpView->MarkObj(pObj,pPV);
-                    return bReturn;
-                }
+                mpView->UnmarkAllObj();
+                mpView->MarkObj(pObj,pPV);
+                return bReturn;
             }
         }
     }
@@ -1017,7 +1014,7 @@ void FuText::Deactivate()
 void FuText::SetInEditMode(const MouseEvent& rMEvt, bool bQuickDrag)
 {
     SdrPageView* pPV = mpView->GetSdrPageView();
-    if( mxTextObj.is() && (mxTextObj->GetPage() == pPV->GetPage()) )
+    if( mxTextObj.is() && (mxTextObj->getSdrPageFromSdrObject() == pPV->GetPage()) )
     {
         mpView->SetCurrentObj(OBJ_TEXT);
 
@@ -1085,7 +1082,7 @@ void FuText::SetInEditMode(const MouseEvent& rMEvt, bool bQuickDrag)
                             const SdrPageWindow& rPageWindow = *pPV->GetPageWindow(b);
                             if (!rPageWindow.GetPaintWindow().OutputToWindow())
                                 continue;
-                            rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                            const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                             if (!xManager.is())
                                 continue;
                             xManager->flush();
@@ -1150,7 +1147,7 @@ void FuText::DeleteDefaultText()
 {
     if ( mxTextObj.is() && mxTextObj->IsEmptyPresObj() )
     {
-        SdPage* pPage = static_cast<SdPage*>( mxTextObj->GetPage() );
+        SdPage* pPage = static_cast<SdPage*>( mxTextObj->getSdrPageFromSdrObject() );
 
         if (pPage)
         {
@@ -1196,10 +1193,10 @@ bool FuText::RequestHelp(const HelpEvent& rHEvt)
         const SvxFieldItem* pFieldItem = pOLV->GetFieldUnderMousePointer();
         const SvxFieldData* pField = pFieldItem->GetField();
 
-        if (pField && dynamic_cast< const SvxURLField *>( pField ) !=  nullptr)
+        if (auto pURLField = dynamic_cast< const SvxURLField *>( pField ))
         {
             // URL-Field
-            aHelpText = INetURLObject::decode( static_cast<const SvxURLField*>(pField)->GetURL(), INetURLObject::DecodeMechanism::WithCharset );
+            aHelpText = INetURLObject::decode( pURLField->GetURL(), INetURLObject::DecodeMechanism::WithCharset );
         }
         if (!aHelpText.isEmpty())
         {
@@ -1209,11 +1206,13 @@ bool FuText::RequestHelp(const HelpEvent& rHEvt)
 
             if (Help::IsBalloonHelpEnabled())
             {
-                bReturn = Help::ShowBalloon( static_cast<vcl::Window*>(mpWindow), rHEvt.GetMousePosPixel(), aScreenRect, aHelpText);
+                Help::ShowBalloon( static_cast<vcl::Window*>(mpWindow), rHEvt.GetMousePosPixel(), aScreenRect, aHelpText);
+                bReturn = true;
             }
             else if (Help::IsQuickHelpEnabled())
             {
-                bReturn = Help::ShowQuickHelp( static_cast<vcl::Window*>(mpWindow), aScreenRect, aHelpText);
+                Help::ShowQuickHelp( static_cast<vcl::Window*>(mpWindow), aScreenRect, aHelpText);
+                bReturn = true;
             }
         }
     }
@@ -1253,9 +1252,9 @@ void FuText::ReceiveRequest(SfxRequest& rReq)
                 mpView->PickAnything(aMEvt, SdrMouseEventKind::BUTTONDOWN, aVEvt);
                 mpView->MarkObj(aVEvt.pRootObj, pPV);
 
-                if (aVEvt.pObj && dynamic_cast< SdrTextObj *>( aVEvt.pObj ) !=  nullptr)
+                if (auto pSdrTextObj = dynamic_cast< SdrTextObj *>( aVEvt.pObj ))
                 {
-                    mxTextObj.reset( static_cast< SdrTextObj* >( aVEvt.pObj ) );
+                    mxTextObj.reset( pSdrTextObj );
                 }
             }
         }
@@ -1286,7 +1285,7 @@ void FuText::ReceiveRequest(SfxRequest& rReq)
 
             && static_cast<const SfxUInt16Item&>( pArgs->Get(SID_TEXTEDIT)).GetValue() == 2)
         {
-            // selection wit double click -> do not allow QuickDrag
+            // selection with double click -> do not allow QuickDrag
             bQuickDrag = false;
         }
 
@@ -1302,17 +1301,17 @@ void FuText::DoubleClick(const MouseEvent& )
 /** Removed the insertion of default text and putting a new text
     object directly into edit mode.
 */
-SdrObject* FuText::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuText::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
 {
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj( SdrObjFactory::MakeNewObject(
         mpView->getSdrModelFromSdrView(),
         mpView->GetCurrentObjInventor(),
         mpView->GetCurrentObjIdentifier(),
-        nullptr);
+        nullptr) );
 
     if(pObj)
     {
-        if( auto pText = dynamic_cast< SdrTextObj *>( pObj ) )
+        if( auto pText = dynamic_cast< SdrTextObj *>( pObj.get() ) )
         {
             pText->SetLogicRect(rRectangle);
 

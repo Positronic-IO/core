@@ -26,7 +26,6 @@
 #include <com/sun/star/sdbc/KeyRule.hpp>
 #include <com/sun/star/sdbc/ProcedureResult.hpp>
 #include <com/sun/star/sdbc/IndexType.hpp>
-#include <comphelper/property.hxx>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/sdbc/ResultSetConcurrency.hpp>
 #include <com/sun/star/sdbc/ResultSetType.hpp>
@@ -56,7 +55,6 @@ ODatabaseMetaDataResultSet::ODatabaseMetaDataResultSet()
     :ODatabaseMetaDataResultSet_BASE(m_aMutex)
     ,::comphelper::OPropertyContainer(ODatabaseMetaDataResultSet_BASE::rBHelper)
     ,m_aStatement(nullptr)
-    ,m_xMetaData(nullptr)
     ,m_nColPos(0)
     ,m_bBOF(true)
     ,m_bEOF(true)
@@ -69,7 +67,6 @@ ODatabaseMetaDataResultSet::ODatabaseMetaDataResultSet( MetaDataResultSetType _e
     :ODatabaseMetaDataResultSet_BASE(m_aMutex)
     ,::comphelper::OPropertyContainer(ODatabaseMetaDataResultSet_BASE::rBHelper)
     ,m_aStatement(nullptr)
-    ,m_xMetaData(nullptr)
     ,m_nColPos(0)
     ,m_bBOF(true)
     ,m_bEOF(true)
@@ -874,7 +871,7 @@ void SAL_CALL ODatabaseMetaDataResultSet::initialize( const Sequence< Any >& _aA
     namespace connectivity
     {
         /// @throws Exception
-        Reference< XInterface > ODatabaseMetaDataResultSet_CreateInstance(const Reference< XComponentContext >& )
+        static Reference< XInterface > ODatabaseMetaDataResultSet_CreateInstance(const Reference< XComponentContext >& )
         {
             return *(new ODatabaseMetaDataResultSet());
         }
@@ -883,7 +880,7 @@ void SAL_CALL ODatabaseMetaDataResultSet::initialize( const Sequence< Any >& _aA
 
 namespace
 {
-    cppu::ImplementationEntry entries[] = {
+    cppu::ImplementationEntry const entries[] = {
         { &ODatabaseMetaDataResultSet_CreateInstance, &ODatabaseMetaDataResultSet::getImplementationName_Static, &ODatabaseMetaDataResultSet::getSupportedServiceNames_Static,
             &cppu::createSingleComponentFactory, nullptr, 0 },
         { &ParameterSubstitution::create, &ParameterSubstitution::getImplementationName_Static, &ParameterSubstitution::getSupportedServiceNames_Static,

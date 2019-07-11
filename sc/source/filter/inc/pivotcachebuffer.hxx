@@ -25,6 +25,9 @@
 #include <oox/helper/refvector.hxx>
 #include "workbookhelper.hxx"
 
+namespace oox { class AttributeList; }
+namespace oox { class SequenceInputStream; }
+
 namespace com { namespace sun { namespace star {
     namespace sheet { class XDataPilotField; }
 } } }
@@ -187,7 +190,7 @@ struct PCFieldGroupModel
 /** Helper struct for mapping original item names from/to group item names. */
 struct PivotCacheGroupItem
 {
-    OUString     maOrigName;
+    OUString const maOrigName;
     OUString     maGroupName;
 
     explicit     PivotCacheGroupItem( const OUString& rItemName ) :

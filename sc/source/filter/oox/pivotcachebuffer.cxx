@@ -29,8 +29,10 @@
 #include <com/sun/star/sheet/XDataPilotFieldGrouping.hpp>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <oox/core/filterbase.hxx>
 #include <oox/helper/attributelist.hxx>
+#include <oox/helper/binaryinputstream.hxx>
 #include <oox/helper/containerhelper.hxx>
 #include <oox/helper/propertyset.hxx>
 #include <oox/token/namespaces.hxx>
@@ -46,6 +48,9 @@
 #include <dpobject.hxx>
 #include <dpsave.hxx>
 #include <dpdimsave.hxx>
+#include <tools/datetime.hxx>
+#include <addressconverter.hxx>
+#include <biffhelper.hxx>
 
 namespace oox {
 namespace xls {
@@ -656,12 +661,10 @@ OUString PivotCacheField::createParentGroupField( const Reference< XDataPilotFie
     if( !xDPGrouping.is() ) return OUString();
 
     // map the group item indexes from maGroupItems to all item indexes from maDiscreteItems
-    typedef ::std::vector< sal_Int32 > GroupItemList;
-    typedef ::std::vector< GroupItemList > GroupItemMap;
-    GroupItemMap aItemMap( maGroupItems.size() );
+    std::vector< std::vector<sal_Int32> > aItemMap( maGroupItems.size() );
     for( IndexVector::const_iterator aBeg = maDiscreteItems.begin(), aIt = aBeg, aEnd = maDiscreteItems.end(); aIt != aEnd; ++aIt )
     {
-        if( GroupItemList* pItems = ContainerHelper::getVectorElementAccess( aItemMap, *aIt ) )
+        if( std::vector<sal_Int32>* pItems = ContainerHelper::getVectorElementAccess( aItemMap, *aIt ) )
         {
             if ( const PivotCacheItem* pItem = rBaseCacheField.getCacheItems().getCacheItem( aIt - aBeg ) )
             {
@@ -675,7 +678,7 @@ OUString PivotCacheField::createParentGroupField( const Reference< XDataPilotFie
 
     // process all groups
     Reference< XDataPilotField > xDPGroupField;
-    for( GroupItemMap::iterator aBeg = aItemMap.begin(), aIt = aBeg, aEnd = aItemMap.end(); aIt != aEnd; ++aIt )
+    for( auto aBeg = aItemMap.begin(), aIt = aBeg, aEnd = aItemMap.end(); aIt != aEnd; ++aIt )
     {
         SAL_WARN_IF( aIt->empty(), "sc", "PivotCacheField::createParentGroupField - item/group should not be empty" );
         if( !aIt->empty() )
@@ -688,8 +691,8 @@ OUString PivotCacheField::createParentGroupField( const Reference< XDataPilotFie
                 names as they are already grouped is used here to resolve the
                 item names. */
             ::std::vector< OUString > aMembers;
-            for( GroupItemList::iterator aBeg2 = aIt->begin(), aIt2 = aBeg2, aEnd2 = aIt->end(); aIt2 != aEnd2; ++aIt2 )
-                if( const PivotCacheGroupItem* pName = ContainerHelper::getVectorElement( orItemNames, *aIt2 ) )
+            for( auto i : *aIt )
+                if( const PivotCacheGroupItem* pName = ContainerHelper::getVectorElement( orItemNames, i ) )
                     if( ::std::find( aMembers.begin(), aMembers.end(), pName->maGroupName ) == aMembers.end() )
                         aMembers.push_back( pName->maGroupName );
 
@@ -756,8 +759,8 @@ OUString PivotCacheField::createParentGroupField( const Reference< XDataPilotFie
                         aPropSet.setProperty( PROP_GroupInfo, aGroupInfo );
                     }
                     // replace original item names in passed vector with group name
-                    for( GroupItemList::iterator aIt2 = aIt->begin(), aEnd2 = aIt->end(); aIt2 != aEnd2; ++aIt2 )
-                        if( PivotCacheGroupItem* pName = ContainerHelper::getVectorElementAccess( orItemNames, *aIt2 ) )
+                    for( auto i : *aIt )
+                        if( PivotCacheGroupItem* pName = ContainerHelper::getVectorElementAccess( orItemNames, i ) )
                             pName->maGroupName = aGroupName;
                 }
             }

@@ -20,15 +20,16 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_XISTYLE_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_XISTYLE_HXX
 
+#include <tools/solar.h>
 #include <vector>
 #include <memory>
-#include <tools/mempool.hxx>
 #include <rangelst.hxx>
-#include <patattr.hxx>
-#include "xladdress.hxx"
 #include "xlstyle.hxx"
 #include "xiroot.hxx"
 
+class ScPatternAttr;
+
+struct XclRange;
 struct ScAttrEntry;
 enum class SvxBoxItemLine;
 
@@ -524,8 +525,6 @@ private:
 /** Contains an (encoded) XF index for a range of rows in a single column. */
 class XclImpXFRange
 {
-    DECL_FIXEDMEMPOOL_NEWDEL( XclImpXFRange )
-
 public:
     SCROW               mnScRow1;       /// The first row of an equal-formatted range.
     SCROW               mnScRow2;       /// The last row of an equal-formatted range.

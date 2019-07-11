@@ -30,6 +30,7 @@
 #include <string.h>
 #include <ne_xml.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include "UCBDeadPropertyValue.hxx"
 #include <memory>
 
@@ -67,7 +68,9 @@ static const char aXMLEnd[] = "</value></ucbprop>";
 #define STATE_VALUE     (STATE_TOP + 2)
 
 
-extern "C" int UCBDeadPropertyValue_startelement_callback(
+extern "C" {
+
+static int UCBDeadPropertyValue_startelement_callback(
     void *,
     int parent,
     const char * /*nspace*/,
@@ -95,7 +98,7 @@ extern "C" int UCBDeadPropertyValue_startelement_callback(
 }
 
 
-extern "C" int UCBDeadPropertyValue_chardata_callback(
+static int UCBDeadPropertyValue_chardata_callback(
     void *userdata,
     int state,
     const char *buf,
@@ -124,7 +127,7 @@ extern "C" int UCBDeadPropertyValue_chardata_callback(
 }
 
 
-extern "C" int UCBDeadPropertyValue_endelement_callback(
+static int UCBDeadPropertyValue_endelement_callback(
     void *userdata,
     int state,
     const char *,
@@ -153,6 +156,7 @@ extern "C" int UCBDeadPropertyValue_endelement_callback(
     return 0; // zero to continue, non-zero to abort parsing
 }
 
+}
 
 static OUString encodeValue( const OUString & rValue )
 {

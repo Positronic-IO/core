@@ -92,6 +92,7 @@ class SfxDocumentInfoItem;
 #define SID_Q_AND_A                         (SID_SFX_START + 422)
 #define SID_DOCUMENTATION                   (SID_SFX_START + 423)
 #define SID_DONATION                        (SID_SFX_START + 424)
+#define SID_GETINVOLVED                     (SID_SFX_START + 425)
 #define SID_SHOW_LICENSE                    (SID_SFX_START + 1683)
 #define SID_SHOW_CREDITS                    (SID_SFX_START + 1711)
 
@@ -174,7 +175,7 @@ class SfxDocumentInfoItem;
 
 #define SID_CONTENTTYPE                     (SID_SFX_START + 1541)
 
-#define SID_SAVETO                          (SID_SFX_START + 1546)
+#define SID_SAVETO                          TypedWhichId<SfxBoolItem>(SID_SFX_START + 1546)
 
 #define SID_VERSION                         (SID_SFX_START + 1583)
 
@@ -251,8 +252,11 @@ class SfxDocumentInfoItem;
 #define SID_TOOLBAR_MODE                    (SID_SFX_START + 1728)
 #define SID_NO_FILE_SYNC                    (SID_SFX_START + 1729)
 #define SID_NO_THUMBNAIL                    (SID_SFX_START + 1730)
+// Used to export a temporary file for preview in Mail Merge Wizard, where saving the data source is
+// not required for preview, but interferes with not-yet-saved embedded data source for main document.
+#define SID_NO_EMBEDDED_DS                  TypedWhichId<SfxBoolItem>(SID_SFX_START + 1731)
 
-//      SID_SFX_free_START                  (SID_SFX_START + 1731)
+//      SID_SFX_free_START                  (SID_SFX_START + 1732)
 //      SID_SFX_free_END                    (SID_SFX_START + 3999)
 
 #define SID_OPEN_NEW_VIEW                   (SID_SFX_START + 520)
@@ -656,8 +660,6 @@ class SfxDocumentInfoItem;
 
 #define SID_RESTORE_EDITING_VIEW            (SID_SFX_START + 1663)
 
-#endif  // #ifndef INCLUDED_SFX2_SFXSIDS_HRC
-
 // SfxSecurityPage related stuff
 
 #define FN_EDIT2                (SID_SW_START + 1800)
@@ -681,5 +683,7 @@ class SfxDocumentInfoItem;
 #endif
 #define FID_CHG_RECORD          (EDIT_MENU_START + 18)
 #define SID_CHG_PROTECT         (SC_VIEW_START + 84)
+
+#endif  // #ifndef INCLUDED_SFX2_SFXSIDS_HRC
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -12,8 +12,10 @@
 #include <formulacell.hxx>
 #include <scmatrix.hxx>
 #include <rtl/strbuf.hxx>
+#include <rtl/character.hxx>
 #include <formula/errorcodes.hxx>
 #include <sfx2/bindings.hxx>
+#include <sfx2/linkmgr.hxx>
 #include <svtools/miscopt.hxx>
 #include <tools/urlobj.hxx>
 
@@ -47,7 +49,7 @@ void ScInterpreter::ScFilterXML()
         // In array/matrix context node elements' results are to be
         // subsequently stored. Check this before obtaining any argument from
         // the stack so the stack type can be used.
-        if (pJumpMatrix || bMatrixFormula || pCur->IsInForceArray())
+        if (pJumpMatrix || IsInArrayContext())
         {
             if (pJumpMatrix)
             {
@@ -174,7 +176,7 @@ void ScInterpreter::ScFilterXML()
                     {
                         if( nSize > nNode )
                         {
-                            rtl::OUString aResult;
+                            OUString aResult;
                             if(pNodeSet->nodeTab[nNode]->type == XML_NAMESPACE_DECL)
                             {
                                 xmlNsPtr ns = reinterpret_cast<xmlNsPtr>(pNodeSet->nodeTab[nNode]);
@@ -310,8 +312,7 @@ void ScInterpreter::ScWebservice()
         }
 
         // Need to reinterpret after loading (build links)
-        if (rArr.IsRecalcModeNormal())
-            rArr.SetExclusiveRecalcModeOnLoad();
+        rArr.AddRecalcMode( ScRecalcMode::ONLOAD_LENIENT );
 
         //  while the link is not evaluated, idle must be disabled (to avoid circular references)
         bool bOldEnabled = pDok->IsIdleEnabled();
@@ -360,6 +361,41 @@ void ScInterpreter::ScWebservice()
         //  check the value
         if (pLink->HasResult())
             PushString(pLink->GetResult());
+        else if (pDok->HasLinkFormulaNeedingCheck())
+        {
+            // If this formula cell is recalculated just after load and the
+            // expression is exactly WEBSERVICE("literal_URI") (i.e. no other
+            // calculation involved, not even a cell reference) and a cached
+            // result is set as hybrid string then use that as result value to
+            // prevent a #VALUE! result due to the "Automatic update of
+            // external links has been disabled."
+            // This will work only once, as the new formula cell result won't
+            // be a hybrid anymore.
+            /* TODO: the FormulaError::LinkFormulaNeedingCheck could be used as
+             * a signal for the formula cell to keep the hybrid string as
+             * result of the overall formula *iff* no higher prioritized
+             * ScRecalcMode than ONLOAD_LENIENT is present in the entire
+             * document (i.e. the formula result could not be influenced by an
+             * ONLOAD_MUST or ALWAYS recalc, necessary as we don't track
+             * interim results of subexpressions that could be compared), which
+             * also means to track setting ScRecalcMode somehow.. note this is
+             * just a vague idea so far and might or might not work. */
+            if (pMyFormulaCell && pMyFormulaCell->HasHybridStringResult())
+            {
+                if (pMyFormulaCell->GetCode()->GetCodeLen() == 2)
+                {
+                    formula::FormulaToken const * const * pRPN = pMyFormulaCell->GetCode()->GetCode();
+                    if (pRPN[0]->GetType() == formula::svString && pRPN[1]->GetOpCode() == ocWebservice)
+                        PushString( pMyFormulaCell->GetResultString());
+                    else
+                        PushError(FormulaError::LinkFormulaNeedingCheck);
+                }
+                else
+                    PushError(FormulaError::LinkFormulaNeedingCheck);
+            }
+            else
+                PushError(FormulaError::LinkFormulaNeedingCheck);
+        }
         else
             PushError(FormulaError::NoValue);
 
@@ -429,10 +465,7 @@ void ScInterpreter::ScDebugVar()
     }
 
     if (!MustHaveParamCount(GetByte(), 1))
-    {
-        PushIllegalParameter();
         return;
-    }
 
     rtl_uString* p = GetString().getDataIgnoreCase();
     if (!p)

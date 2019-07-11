@@ -103,7 +103,6 @@ static const SwFrameFormat *lcl_InsertBCText( SwWrtShell& rSh, const SwLabItem& 
     if(!rItem.m_bSynchron || !(nCol|nRow))
     {
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "Dialog creation failed!");
         ::GlossarySetActGroup fnSetActGroup = pFact->SetGlossaryActGroupFunc();
         if ( fnSetActGroup )
             (*fnSetActGroup)( rItem.m_sGlossaryGroup );
@@ -167,7 +166,6 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
     aSet.Put( aLabCfg.GetItem() );
 
     SwAbstractDialogFactory* pDialogFactory = SwAbstractDialogFactory::Create();
-    OSL_ENSURE(pDialogFactory, "SwAbstractDialogFactory fail!");
 
     ScopedVclPtr<AbstractSwLabDlg> pDlg(pDialogFactory->CreateSwLabDlg(rReq.GetFrameWeld(), aSet,
 #if HAVE_FEATURE_DBCONNECTIVITY
@@ -176,7 +174,6 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
                                                                             NULL,
 #endif
                                                                             bLabel));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
 
     if ( RET_OK != pDlg->Execute() )
         return;
@@ -324,12 +321,12 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
                             // if there is no content in the fly then
                             // don't leave the fly!!!
                             pSh->Push();
-                            pSh->SttDoc();
+                            pSh->StartOfSection();
                             bool bInFly = nullptr != pSh->WizardGetFly();
                             pSh->Pop(bInFly ? SwCursorShell::PopMode::DeleteStack : SwCursorShell::PopMode::DeleteCurrent);
 
                             if( bInFly )
-                                pSh->EndDoc(true);  // select all content
+                                pSh->EndOfSection(true); // select all content
                                                     // in the fly
                             else
                                 pSh->SetMark();     // set only the mark
@@ -349,8 +346,8 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
                         aSect.SetLinkFileName(sLinkName.makeStringAndClear());
                         aSect.SetProtectFlag(true);
                         pSh->Insert(".");   // Dummytext to allocate the Section
-                        pSh->SttDoc();
-                        pSh->EndDoc(true);  // Select everything in the frame
+                        pSh->StartOfSection();
+                        pSh->EndOfSection(true); // Select everything in the frame
                         pSh->InsertSection(aSect);
                     }
                     pSh->Pop(SwCursorShell::PopMode::DeleteCurrent);
@@ -384,6 +381,9 @@ void SwModule::InsertLab(SfxRequest& rReq, bool bLabel)
 
         if (pFirstFlyFormat)
             pSh->GotoFly(pFirstFlyFormat->GetName(), FLYCNTTYPE_ALL, false);
+
+        if (pSh->IsAnyDatabaseFieldInDoc())
+            pSh->GetView().ShowUIElement("private:resource/toolbar/mailmerge");
 
         pSh->EndAllAction();
         pSh->DoUndo();

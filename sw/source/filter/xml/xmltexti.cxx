@@ -27,6 +27,7 @@
 #include <com/sun/star/task/XInteractionHandler.hpp>
 #include <o3tl/any.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/classids.hxx>
 #include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <xmloff/prstylei.hxx>
@@ -71,9 +72,9 @@ using namespace xml::sax;
 struct XMLServiceMapEntry_Impl
 {
     const sal_Char *sFilterService;
-    sal_Int32      nFilterServiceLen;
+    sal_Int32 const nFilterServiceLen;
 
-    sal_uInt32  n1;
+    sal_uInt32 const n1;
     sal_uInt16  n2, n3;
     sal_uInt8   n4, n5, n6, n7, n8, n9, n10, n11;
 };
@@ -153,7 +154,7 @@ SwXMLTextImportHelper::SwXMLTextImportHelper(
     pRedlineHelper( nullptr )
 {
     uno::Reference<XPropertySet> xDocPropSet( rModel, UNO_QUERY );
-    pRedlineHelper = new XMLRedlineImportHelper(
+    pRedlineHelper = new XMLRedlineImportHelper(rImport,
         bInsertM || bBlockM, xDocPropSet, rInfoSet );
 }
 
@@ -931,16 +932,13 @@ void SwXMLTextImportHelper::endAppletOrPlugin(
             const sal_Int32 nCount = rParamMap.size();
             uno::Sequence< beans::PropertyValue > aCommandSequence( nCount );
 
-            std::map < const OUString, OUString > ::iterator aIter = rParamMap.begin();
-            std::map < const OUString, OUString > ::iterator aEnd = rParamMap.end();
             sal_Int32 nIndex=0;
-            while (aIter != aEnd )
+            for (const auto& rParam : rParamMap )
             {
-                aCommandSequence[nIndex].Name = (*aIter).first;
+                aCommandSequence[nIndex].Name = rParam.first;
                 aCommandSequence[nIndex].Handle = -1;
-                aCommandSequence[nIndex].Value <<= (*aIter).second;
+                aCommandSequence[nIndex].Value <<= rParam.second;
                 aCommandSequence[nIndex].State = beans::PropertyState_DIRECT_VALUE;
-                ++aIter;
                 ++nIndex;
             }
 

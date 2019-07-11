@@ -21,6 +21,7 @@
 #include <documentsignaturehelper.hxx>
 
 #include <algorithm>
+#include <functional>
 
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/io/IOException.hpp>
@@ -38,12 +39,15 @@
 #include <osl/diagnose.h>
 #include <rtl/ref.hxx>
 #include <rtl/uri.hxx>
+#include <sal/log.hxx>
+#include <svx/xoutbmp.hxx>
 #include <xmloff/attrlist.hxx>
 
 #include <xsecctl.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
+using namespace css::xml::sax;
 
 namespace
 {
@@ -78,7 +82,7 @@ int compareVersions(
 }
 }
 
-void ImplFillElementList(
+static void ImplFillElementList(
     std::vector< OUString >& rList, const Reference < css::embed::XStorage >& rxStore,
     const OUString& rRootStorageName, const bool bRecursive,
     const DocumentSignatureAlgorithm mode)
@@ -139,18 +143,9 @@ bool DocumentSignatureHelper::isODFPre_1_2(const OUString & sVersion)
 
 bool DocumentSignatureHelper::isOOo3_2_Signature(const SignatureInformation & sigInfo)
 {
-    bool bOOo3_2 = false;
-    typedef ::std::vector< SignatureReferenceInformation >::const_iterator CIT;
-    for (CIT i = sigInfo.vSignatureReferenceInfors.begin();
-        i < sigInfo.vSignatureReferenceInfors.end(); ++i)
-    {
-        if (i->ouURI == "META-INF/manifest.xml")
-        {
-            bOOo3_2 = true;
-            break;
-        }
-    }
-    return  bOOo3_2;
+    return std::any_of(sigInfo.vSignatureReferenceInfors.cbegin(),
+                       sigInfo.vSignatureReferenceInfors.cend(),
+                       [](const SignatureReferenceInformation& info) { return info.ouURI == "META-INF/manifest.xml"; });
 }
 
 DocumentSignatureAlgorithm
@@ -430,41 +425,25 @@ bool DocumentSignatureHelper::checkIfAllFilesAreSigned(
 {
     // Can only be valid if ALL streams are signed, which means real stream count == signed stream count
     unsigned int nRealCount = 0;
+    std::function<OUString(const OUString&)> fEncode = [](const OUString& rStr) { return rStr; };
+    if (alg == DocumentSignatureAlgorithm::OOo2)
+        //Comparing URIs is a difficult. Therefore we kind of normalize
+        //it before comparing. We assume that our URI do not have a leading "./"
+        //and fragments at the end (...#...)
+        fEncode = [](const OUString& rStr) {
+            return rtl::Uri::encode(rStr, rtl_UriCharClassPchar, rtl_UriEncodeCheckEscapes, RTL_TEXTENCODING_UTF8);
+        };
+
     for ( int i = sigInfo.vSignatureReferenceInfors.size(); i; )
     {
         const SignatureReferenceInformation& rInf = sigInfo.vSignatureReferenceInfors[--i];
         // There is also an extra entry of type SignatureReferenceType::SAMEDOCUMENT because of signature date.
         if ( ( rInf.nType == SignatureReferenceType::BINARYSTREAM ) || ( rInf.nType == SignatureReferenceType::XMLSTREAM ) )
         {
-            OUString sReferenceURI = rInf.ouURI;
-            if (alg == DocumentSignatureAlgorithm::OOo2)
-            {
-                //Comparing URIs is a difficult. Therefore we kind of normalize
-                //it before comparing. We assume that our URI do not have a leading "./"
-                //and fragments at the end (...#...)
-                sReferenceURI = ::rtl::Uri::encode(
-                    sReferenceURI, rtl_UriCharClassPchar,
-                    rtl_UriEncodeCheckEscapes, RTL_TEXTENCODING_UTF8);
-            }
-
             //find the file in the element list
-            typedef ::std::vector< OUString >::const_iterator CIT;
-            for (CIT aIter = sElementList.begin(); aIter != sElementList.end(); ++aIter)
-            {
-                OUString sElementListURI = *aIter;
-                if (alg == DocumentSignatureAlgorithm::OOo2)
-                {
-                    sElementListURI =
-                        ::rtl::Uri::encode(
-                        sElementListURI, rtl_UriCharClassPchar,
-                        rtl_UriEncodeCheckEscapes, RTL_TEXTENCODING_UTF8);
-                }
-                if (sElementListURI == sReferenceURI)
-                {
-                    nRealCount++;
-                    break;
-                }
-            }
+            if (std::any_of(sElementList.cbegin(), sElementList.cend(),
+                    [&fEncode, &rInf](const OUString& rElement) { return fEncode(rElement) == fEncode(rInf.ouURI); }))
+                nRealCount++;
         }
     }
     return  sElementList.size() == nRealCount;
@@ -477,7 +456,6 @@ bool DocumentSignatureHelper::checkIfAllFilesAreSigned(
 bool DocumentSignatureHelper::equalsReferenceUriManifestPath(
     const OUString & rUri, const OUString & rPath)
 {
-    bool retVal = false;
     //split up the uri and path into segments. Both are separated by '/'
     std::vector<OUString> vUriSegments;
     sal_Int32 nIndex = 0;
@@ -497,26 +475,17 @@ bool DocumentSignatureHelper::equalsReferenceUriManifestPath(
     }
     while (nIndex >= 0);
 
-    //Now compare each segment of the uri with its counterpart from the path
-    if (vUriSegments.size() == vPathSegments.size())
-    {
-        retVal = true;
-        typedef std::vector<OUString>::const_iterator CIT;
-        for (CIT i = vUriSegments.begin(), j = vPathSegments.begin();
-            i != vUriSegments.end(); ++i, ++j)
-        {
-            //Decode the uri segment, so that %20 becomes ' ', etc.
-            OUString sDecUri = ::rtl::Uri::decode(
-                *i, rtl_UriDecodeWithCharset,  RTL_TEXTENCODING_UTF8);
-            if (sDecUri != *j)
-            {
-                retVal = false;
-                break;
-            }
-        }
-    }
+    if (vUriSegments.size() != vPathSegments.size())
+        return false;
 
-    return retVal;
+    //Now compare each segment of the uri with its counterpart from the path
+    return std::equal(
+        vUriSegments.cbegin(), vUriSegments.cend(), vPathSegments.cbegin(),
+        [](const OUString& rUriSegment, const OUString& rPathSegment) {
+            //Decode the uri segment, so that %20 becomes ' ', etc.
+            OUString sDecUri = rtl::Uri::decode(rUriSegment, rtl_UriDecodeWithCharset,  RTL_TEXTENCODING_UTF8);
+            return sDecUri == rPathSegment;
+        });
 }
 
 OUString DocumentSignatureHelper::GetDocumentContentSignatureDefaultStreamName()
@@ -546,7 +515,7 @@ void DocumentSignatureHelper::writeDigestMethod(
 void DocumentSignatureHelper::writeSignedProperties(
     const uno::Reference<xml::sax::XDocumentHandler>& xDocumentHandler,
     const SignatureInformation& signatureInfo,
-    const OUString& sDate)
+    const OUString& sDate, const bool bWriteSignatureLineData)
 {
     {
         rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
@@ -584,6 +553,57 @@ void DocumentSignatureHelper::writeSignedProperties(
     xDocumentHandler->startElement("xd:SignaturePolicyImplied", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
     xDocumentHandler->endElement("xd:SignaturePolicyImplied");
     xDocumentHandler->endElement("xd:SignaturePolicyIdentifier");
+
+    if (bWriteSignatureLineData && !signatureInfo.ouSignatureLineId.isEmpty()
+        && signatureInfo.aValidSignatureImage.is() && signatureInfo.aInvalidSignatureImage.is())
+    {
+        rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
+        pAttributeList->AddAttribute(
+            "xmlns:loext", "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0");
+        xDocumentHandler->startElement(
+            "loext:SignatureLine",
+            Reference<XAttributeList>(pAttributeList.get()));
+
+        {
+            // Write SignatureLineId element
+            xDocumentHandler->startElement(
+                "loext:SignatureLineId",
+                Reference<XAttributeList>(new SvXMLAttributeList()));
+            xDocumentHandler->characters(signatureInfo.ouSignatureLineId);
+            xDocumentHandler->endElement("loext:SignatureLineId");
+        }
+
+        {
+            // Write SignatureLineValidImage element
+            xDocumentHandler->startElement(
+                "loext:SignatureLineValidImage",
+                Reference<XAttributeList>(new SvXMLAttributeList()));
+
+            OUString aGraphicInBase64;
+            Graphic aGraphic(signatureInfo.aValidSignatureImage);
+            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
+                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+
+            xDocumentHandler->characters(aGraphicInBase64);
+            xDocumentHandler->endElement("loext:SignatureLineValidImage");
+        }
+
+        {
+            // Write SignatureLineInvalidImage element
+            xDocumentHandler->startElement(
+                "loext:SignatureLineInvalidImage",
+                Reference<XAttributeList>(new SvXMLAttributeList()));
+            OUString aGraphicInBase64;
+            Graphic aGraphic(signatureInfo.aInvalidSignatureImage);
+            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
+                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+            xDocumentHandler->characters(aGraphicInBase64);
+            xDocumentHandler->endElement("loext:SignatureLineInvalidImage");
+        }
+
+        xDocumentHandler->endElement("loext:SignatureLine");
+    }
+
     xDocumentHandler->endElement("xd:SignedSignatureProperties");
 
     xDocumentHandler->endElement("xd:SignedProperties");

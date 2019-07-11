@@ -35,7 +35,7 @@
 SwSortUndoElement::~SwSortUndoElement()
 {
     // are there string pointers saved?
-    if( 0xffffffff != SORT_TXT_TBL.TXT.nKenn ) // Kenn(ung) = identifier
+    if( 0xffffffff != SORT_TXT_TBL.TXT.nID )
     {
         delete SORT_TXT_TBL.TBL.pSource;
         delete SORT_TXT_TBL.TBL.pTarget;
@@ -45,29 +45,28 @@ SwSortUndoElement::~SwSortUndoElement()
 SwUndoSort::SwUndoSort(const SwPaM& rRg, const SwSortOptions& rOpt)
     : SwUndo(SwUndoId::SORT_TXT, rRg.GetDoc())
     , SwUndRng(rRg)
-    , pUndoTableAttr(nullptr)
     , nTableNd(0)
 {
-    pSortOpt = new SwSortOptions(rOpt);
+    pSortOpt.reset( new SwSortOptions(rOpt) );
 }
 
 SwUndoSort::SwUndoSort( sal_uLong nStt, sal_uLong nEnd, const SwTableNode& rTableNd,
                         const SwSortOptions& rOpt, bool bSaveTable )
-    : SwUndo(SwUndoId::SORT_TBL, rTableNd.GetDoc()), pUndoTableAttr( nullptr )
+    : SwUndo(SwUndoId::SORT_TBL, rTableNd.GetDoc())
 {
     nSttNode = nStt;
     nEndNode = nEnd;
     nTableNd   = rTableNd.GetIndex();
 
-    pSortOpt = new SwSortOptions(rOpt);
+    pSortOpt.reset( new SwSortOptions(rOpt) );
     if( bSaveTable )
-        pUndoTableAttr = new SwUndoAttrTable( rTableNd );
+        pUndoTableAttr.reset( new SwUndoAttrTable( rTableNd ) );
 }
 
 SwUndoSort::~SwUndoSort()
 {
-    delete pSortOpt;
-    delete pUndoTableAttr;
+    pSortOpt.reset();
+    pUndoTableAttr.reset();
 }
 
 void SwUndoSort::UndoImpl(::sw::UndoRedoContext & rContext)
@@ -87,7 +86,7 @@ void SwUndoSort::UndoImpl(::sw::UndoRedoContext & rContext)
 
         // #i37739# A simple 'MakeFrames' after the node sorting
         // does not work if the table is inside a frame and has no prev/next.
-        SwNode2Layout aNode2Layout( *pTableNd );
+        SwNode2LayoutSaveUpperFrames aNode2Layout(*pTableNd);
 
         pTableNd->DelFrames();
         const SwTable& rTable = pTableNd->GetTable();
@@ -146,8 +145,8 @@ void SwUndoSort::UndoImpl(::sw::UndoRedoContext & rContext)
                 SwMoveFlags::DEFAULT);
         }
         // delete indices
-        for(SwUndoSortList::const_iterator it = aIdxList.begin(); it != aIdxList.end(); ++it)
-            delete *it;
+        for(auto& rpIdx : aIdxList)
+            delete rpIdx;
         aIdxList.clear();
         SetPaM(rPam, true);
     }
@@ -166,7 +165,7 @@ void SwUndoSort::RedoImpl(::sw::UndoRedoContext & rContext)
 
         // #i37739# A simple 'MakeFrames' after the node sorting
         // does not work if the table is inside a frame and has no prev/next.
-        SwNode2Layout aNode2Layout( *pTableNd );
+        SwNode2LayoutSaveUpperFrames aNode2Layout(*pTableNd);
 
         pTableNd->DelFrames();
         const SwTable& rTable = pTableNd->GetTable();
@@ -221,8 +220,8 @@ void SwUndoSort::RedoImpl(::sw::UndoRedoContext & rContext)
                 SwMoveFlags::DEFAULT);
         }
         // delete indices
-        for(SwUndoSortList::const_iterator it = aIdxList.begin(); it != aIdxList.end(); ++it)
-            delete *it;
+        for(auto& rpIdx : aIdxList)
+            delete rpIdx;
         aIdxList.clear();
         SetPaM(rPam, true);
         SwTextNode const*const pTNd = rPam.GetNode().GetTextNode();

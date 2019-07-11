@@ -41,6 +41,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/instance.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <oox/core/fastparser.hxx>
 #include <oox/core/fragmenthandler.hxx>
@@ -175,7 +176,6 @@ struct XmlFilterBaseImpl
     typedef RefMap< OUString, Relations > RelationsMap;
 
     FastParser                     maFastParser;
-    const OUString                 maBinSuffix;
     RelationsMap                   maRelationsMap;
     TextFieldStack                 maTextFieldStack;
     const NamespaceMap&            mrNamespaceMap;
@@ -184,8 +184,9 @@ struct XmlFilterBaseImpl
     explicit            XmlFilterBaseImpl();
 };
 
+static const OUStringLiteral gaBinSuffix( ".bin" );
+
 XmlFilterBaseImpl::XmlFilterBaseImpl() :
-    maBinSuffix( ".bin" ),
     mrNamespaceMap(StaticNamespaceMap::get())
 {
     // register XML namespaces
@@ -347,7 +348,7 @@ bool XmlFilterBase::importFragment( const rtl::Reference<FragmentHandler>& rxHan
         return false;
 
     // try to import binary streams (fragment extension must be '.bin')
-    if (aFragmentPath.endsWith(mxImpl->maBinSuffix))
+    if (aFragmentPath.endsWith(gaBinSuffix))
     {
         try
         {
@@ -419,7 +420,7 @@ Reference<XDocument> XmlFilterBase::importFragment( const OUString& aFragmentPat
         return xRet;
 
     // binary streams (fragment extension is '.bin') currently not supported
-    if (aFragmentPath.endsWith(mxImpl->maBinSuffix))
+    if (aFragmentPath.endsWith(gaBinSuffix))
         return xRet;
 
     // try to import XML stream
@@ -750,14 +751,25 @@ writeAppProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties >
 }
 
 static void
-writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties >& xProperties )
+writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties >& xProperties, bool bSecurityOptOpenReadOnly )
 {
     uno::Reference<beans::XPropertyAccess> xUserDefinedProperties( xProperties->getUserDefinedProperties(), uno::UNO_QUERY );
-    Sequence< PropertyValue > aprop( xUserDefinedProperties->getPropertyValues() );
-    sal_Int32 nbCustomProperties = aprop.getLength();
+    auto aprop = comphelper::sequenceToContainer< std::vector<beans::PropertyValue> >(xUserDefinedProperties->getPropertyValues());
+    sal_Int32 nbCustomProperties = aprop.size();
     // tdf#89791 : if no custom properties, no need to add docProps/custom.x
-    if (!nbCustomProperties)
+    // tdf#107690: except the case of read-only documents, because that
+    // is handled by the _MarkAsFinal custom property in MSO.
+    if (!nbCustomProperties && !bSecurityOptOpenReadOnly)
         return;
+
+    if (bSecurityOptOpenReadOnly)
+    {
+        PropertyValue aPropertyValue;
+        // MSO custom property for read-only documents
+        aPropertyValue.Name = "_MarkAsFinal";
+        aPropertyValue.Value <<= true;
+        aprop.push_back(aPropertyValue);
+    }
 
     rSelf.addRelation(
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
@@ -770,30 +782,30 @@ writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentPropertie
             FSNS( XML_xmlns, XML_vt ),  OUStringToOString(rSelf.getNamespaceURL(OOX_NS(officeDocPropsVT)), RTL_TEXTENCODING_UTF8).getStr(),
             FSEND );
 
-    for ( sal_Int32 n = 0; n < nbCustomProperties; ++n )
+    for (auto aIt = aprop.begin(); aIt != aprop.end(); ++aIt)
     {
-        if ( !aprop[n].Name.isEmpty() )
+        if ( !aIt->Name.isEmpty() )
         {
-            OString aName = OUStringToOString( aprop[n].Name, RTL_TEXTENCODING_ASCII_US );
+            OString aName = OUStringToOString( aIt->Name, RTL_TEXTENCODING_ASCII_US );
             // pid starts from 2 not from 1 as MS supports pid from 2
             pAppProps->startElement( XML_property ,
                 XML_fmtid,  "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
-                XML_pid,    OString::number(n + 2),
+                XML_pid,    OString::number((aIt - aprop.begin()) + 2),
                 XML_name,   aName,
                 FSEND);
 
-            switch ( aprop[n].Value.getValueTypeClass() )
+            switch ( aIt->Value.getValueTypeClass() )
             {
                 case TypeClass_STRING:
                 {
                     OUString aValue;
-                    aprop[n].Value >>= aValue;
-                     writeElement( pAppProps, FSNS( XML_vt, XML_lpwstr ), aValue );
+                    aIt->Value >>= aValue;
+                    writeElement( pAppProps, FSNS( XML_vt, XML_lpwstr ), aValue );
                 }
                 break;
                 case TypeClass_BOOLEAN:
                 {
-                    bool val = *o3tl::forceAccess<bool>(aprop[n].Value);
+                    bool val = *o3tl::forceAccess<bool>(aIt->Value);
                     writeElement( pAppProps, FSNS( XML_vt, XML_bool ), val ? 1 : 0);
                 }
                 break;
@@ -803,23 +815,23 @@ writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentPropertie
                     util::Date aDate;
                     util::Duration aDuration;
                     util::DateTime aDateTime;
-                    if ( ( aprop[n].Value ) >>= num )
+                    if ( ( aIt->Value ) >>= num )
                     {
                         writeElement( pAppProps, FSNS( XML_vt, XML_i4 ), num );
                     }
-                    else if ( ( aprop[n].Value ) >>= aDate )
+                    else if ( ( aIt->Value ) >>= aDate )
                     {
                         aDateTime = util::DateTime( 0, 0 , 0, 0, aDate.Year, aDate.Month, aDate.Day, true );
                         writeElement( pAppProps, FSNS( XML_vt, XML_filetime ), aDateTime);
                     }
-                    else if ( ( aprop[n].Value ) >>= aDuration )
+                    else if ( ( aIt->Value ) >>= aDuration )
                     {
                         OUStringBuffer buf;
                         ::sax::Converter::convertDuration( buf, aDuration );
                         OUString aDurationStr = buf.makeStringAndClear();
                         writeElement( pAppProps, FSNS( XML_vt, XML_lpwstr ), aDurationStr );
                     }
-                    else if ( ( aprop[n].Value ) >>= aDateTime )
+                    else if ( ( aIt->Value ) >>= aDateTime )
                             writeElement( pAppProps, FSNS( XML_vt, XML_filetime ), aDateTime );
                     else
                         //no other options
@@ -833,13 +845,13 @@ writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentPropertie
     pAppProps->endElement( XML_Properties );
 }
 
-void XmlFilterBase::exportDocumentProperties( const Reference< XDocumentProperties >& xProperties )
+void XmlFilterBase::exportDocumentProperties( const Reference< XDocumentProperties >& xProperties, bool bSecurityOptOpenReadOnly )
 {
     if( xProperties.is() )
     {
         writeCoreProperties( *this, xProperties );
         writeAppProperties( *this, xProperties );
-        writeCustomProperties( *this, xProperties );
+        writeCustomProperties( *this, xProperties, bSecurityOptOpenReadOnly );
     }
 }
 

@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_UI_INC_ACCESSIBLETABLEBASE_HXX
 
 #include "AccessibleContextBase.hxx"
-#include <global.hxx>
 #include <address.hxx>
 #include <com/sun/star/accessibility/XAccessibleTable.hpp>
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
@@ -226,7 +225,7 @@ public:
 
 protected:
     /// contains the range of the table, because it could be a subrange of the complete table
-    ScRange maRange;
+    ScRange const maRange;
 
     ScDocument* mpDoc;
 

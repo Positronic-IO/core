@@ -37,6 +37,8 @@
 #include <osl/diagnose.h>
 #include <rtl/uri.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <officecfg/Inet.hxx>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/propertyvalueset.hxx>
@@ -84,6 +86,8 @@
 #include <com/sun/star/ucb/XCommandInfo.hpp>
 #include <com/sun/star/ucb/XPersistentPropertySet.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
+#include <com/sun/star/ucb/ResultSetException.hpp>
+#include <ucbhelper/macros.hxx>
 
 #include "webdavcontent.hxx"
 #include "webdavprovider.hxx"
@@ -100,27 +104,19 @@ namespace
     // implement a GET to substitute HEAD, when HEAD not available
     void lcl_sendPartialGETRequest( bool &bError,
                                            DAVException &aLastException,
-                                           const std::vector< rtl::OUString >& rProps,
-                                           std::vector< rtl::OUString > &aHeaderNames,
+                                           const std::vector< OUString >& rProps,
+                                           std::vector< OUString > &aHeaderNames,
                                            const std::unique_ptr< DAVResourceAccess > &xResAccess,
                                            std::unique_ptr< ContentProperties > &xProps,
                                            const uno::Reference< ucb::XCommandEnvironment >& xEnv )
     {
-        bool bIsRequestSize = false;
         DAVResource aResource;
         DAVRequestHeaders aPartialGet;
         aPartialGet.emplace_back( OUString( "Range" ), // see <https://tools.ietf.org/html/rfc7233#section-3.1>
                                   OUString( "bytes=0-0" ) );
 
-        for ( std::vector< rtl::OUString >::const_iterator it = aHeaderNames.begin();
-              it != aHeaderNames.end(); ++it )
-        {
-            if ( *it == "Content-Length" )
-            {
-                bIsRequestSize = true;
-                break;
-            }
-        }
+        bool bIsRequestSize = std::any_of(aHeaderNames.begin(), aHeaderNames.end(),
+            [](const OUString& rHeaderName) { return rHeaderName == "Content-Length"; });
 
         if ( bIsRequestSize )
         {
@@ -139,17 +135,16 @@ namespace
                 // the ContentProperties maps "Content-Length" to the UCB "Size" property
                 // This would have an unrealistic value of 1 byte because we did only a partial GET
                 // Solution: if "Content-Range" is present, map it with UCB "Size" property
-                rtl::OUString aAcceptRanges, aContentRange, aContentLength;
+                OUString aAcceptRanges, aContentRange, aContentLength;
                 std::vector< DAVPropertyValue > &aResponseProps = aResource.properties;
-                for ( std::vector< DAVPropertyValue >::const_iterator it = aResponseProps.begin();
-                      it != aResponseProps.end(); ++it )
+                for ( const auto& rResponseProp : aResponseProps )
                 {
-                    if ( it->Name == "Accept-Ranges" )
-                        it->Value >>= aAcceptRanges;
-                    else if ( it->Name == "Content-Range" )
-                        it->Value >>= aContentRange;
-                    else if ( it->Name == "Content-Length" )
-                        it->Value >>= aContentLength;
+                    if ( rResponseProp.Name == "Accept-Ranges" )
+                        rResponseProp.Value >>= aAcceptRanges;
+                    else if ( rResponseProp.Name == "Content-Range" )
+                        rResponseProp.Value >>= aContentRange;
+                    else if ( rResponseProp.Name == "Content-Length" )
+                        rResponseProp.Value >>= aContentLength;
                 }
 
                 sal_Int64 nSize = 1;
@@ -174,25 +169,22 @@ namespace
                     sal_Int32 nSlash = aContentRange.lastIndexOf( '/' );
                     if ( nSlash != -1 )
                     {
-                        rtl::OUString aSize = aContentRange.copy( nSlash + 1 );
+                        OUString aSize = aContentRange.copy( nSlash + 1 );
                         // "*" means that the instance-length is unknown at the time when the response was generated
                         if ( aSize != "*" )
                         {
-                            for ( std::vector< DAVPropertyValue >::iterator it = aResponseProps.begin();
-                                  it != aResponseProps.end(); ++it )
+                            auto it = std::find_if(aResponseProps.begin(), aResponseProps.end(),
+                                [](const DAVPropertyValue& rProp) { return rProp.Name == "Content-Length"; });
+                            if (it != aResponseProps.end())
                             {
-                                if (it->Name == "Content-Length")
-                                {
-                                    it->Value <<= aSize;
-                                    break;
-                                }
+                                it->Value <<= aSize;
                             }
                         }
                     }
                 }
             }
 
-            if ( xProps.get() )
+            if (xProps)
                 xProps->addProperties(
                     rProps,
                     ContentProperties( aResource ) );
@@ -603,7 +595,7 @@ uno::Any SAL_CALL Content::execute(
             std::unique_ptr< DAVResourceAccess > xResAccess;
             {
                 osl::Guard< osl::Mutex > aGuard( m_aMutex );
-                xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+                xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
             }
             aStaticDAVOptionsCache.removeDAVOptions( xResAccess->getURL() );
             // clean cached value of PROPFIND property names
@@ -611,7 +603,7 @@ uno::Any SAL_CALL Content::execute(
             xResAccess->DESTROY( Environment );
             {
                 osl::Guard< osl::Mutex > aGuard( m_aMutex );
-                m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+                m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
             }
         }
         catch ( DAVException const & e )
@@ -805,12 +797,12 @@ void SAL_CALL Content::abort( sal_Int32 /*CommandId*/ )
         std::unique_ptr< DAVResourceAccess > xResAccess;
         {
             osl::MutexGuard aGuard( m_aMutex );
-            xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+            xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
         }
         xResAccess->abort();
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         }
     }
     catch ( DAVException const & )
@@ -887,7 +879,7 @@ void Content::addProperty( const ucb::PropertyCommandArgument& aCmdArg,
         std::unique_ptr< DAVResourceAccess > xResAccess;
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+            xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
         }
         aStaticDAVOptionsCache.removeDAVOptions( xResAccess->getURL() );
         // clean cached value of PROPFIND property names
@@ -896,7 +888,7 @@ void Content::addProperty( const ucb::PropertyCommandArgument& aCmdArg,
         xResAccess->PROPPATCH( aProppatchValues, xEnv );
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         }
 
         // Notify propertyset info change listeners.
@@ -977,7 +969,7 @@ void Content::removeProperty( const OUString& Name,
         std::unique_ptr< DAVResourceAccess > xResAccess;
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+            xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
         }
         aStaticDAVOptionsCache.removeDAVOptions( xResAccess->getURL() );
         // clean cached value of PROPFIND property names
@@ -986,7 +978,7 @@ void Content::removeProperty( const OUString& Name,
         xResAccess->PROPPATCH( aProppatchValues, xEnv );
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         }
 
         // Notify propertyset info change listeners.
@@ -1247,19 +1239,14 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
         // Append all standard UCB, DAV and HTTP properties.
         const std::unique_ptr< PropertyValueMap > & xProps = rData.getProperties();
 
-        PropertyValueMap::const_iterator it  = xProps->begin();
-        PropertyValueMap::const_iterator end = xProps->end();
-
         ContentProvider * pProvider
             = static_cast< ContentProvider * >( rProvider.get() );
         beans::Property aProp;
 
-        while ( it != end )
+        for ( const auto& rProp : *xProps )
         {
-            if ( pProvider->getProperty( (*it).first, aProp ) )
-                xRow->appendObject( aProp, (*it).second.value() );
-
-            ++it;
+            pProvider->getProperty( rProp.first, aProp );
+            xRow->appendObject( aProp, rProp.second.value() );
         }
 
         // Append all local Additional Properties.
@@ -1330,12 +1317,12 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
         aUnescapedTitle = NeonUri::unescape( m_aEscapedTitle );
         xIdentifier.set( m_xIdentifier );
         xProvider.set( m_xProvider.get() );
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
 
         // First, ask cache...
-        if ( m_xCachedProps.get() )
+        if (m_xCachedProps)
         {
-            xCachedProps.reset( new ContentProperties( *m_xCachedProps.get() ) );
+            xCachedProps.reset(new ContentProperties(*m_xCachedProps));
 
             std::vector< OUString > aMissingProps;
             if ( xCachedProps->containsAllNames( rProperties, aMissingProps ) )
@@ -1345,7 +1332,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
             }
 
             // use the cached ContentProperties instance
-            xProps.reset( new ContentProperties( *xCachedProps.get() ) );
+            xProps.reset(new ContentProperties(*xCachedProps));
         }
     }
 
@@ -1364,10 +1351,9 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
         {
             // cache lookup... getResourceType may fill the props cache via
             // PROPFIND!
-            if ( m_xCachedProps.get() )
+            if (m_xCachedProps)
             {
-                xCachedProps.reset(
-                    new ContentProperties( *m_xCachedProps.get() ) );
+                xCachedProps.reset(new ContentProperties(*m_xCachedProps));
 
                 std::vector< OUString > aMissingProps;
                 if ( xCachedProps->containsAllNames(
@@ -1379,7 +1365,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
                 }
 
                 // use the cached ContentProperties instance
-                xProps.reset( new ContentProperties( *xCachedProps.get() ) );
+                xProps.reset(new ContentProperties(*xCachedProps));
             }
 
             if ( !bHasAll )
@@ -1394,34 +1380,9 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
                 {
                     sal_Int32 nProps = 0;
                     sal_Int32 nCount = rProperties.getLength();
-                    for ( sal_Int32 n = 0; n < nCount; ++n )
+                    for ( sal_Int32 n = 0; n < nCount; ++n, ++nProps )
                     {
-                        const OUString & rName = rProperties[ n ].Name;
-
-                        std::vector< OUString >::const_iterator it
-                            = m_aFailedPropNames.begin();
-                        std::vector< OUString >::const_iterator end
-                            = m_aFailedPropNames.end();
-
-                        while ( it != end )
-                        {
-                            if ( *it == rName )
-                            {
-                                // the failed property in cache is the same as the requested one,
-                                // so add it to the requested properties list
-                                aProperties[ nProps ] = rProperties[ n ];
-                                nProps++;
-                                break;
-                            }
-
-                            ++it;
-                        }
-
-                        if ( it == end )
-                        {
-                            aProperties[ nProps ] = rProperties[ n ];
-                            nProps++;
-                        }
+                        aProperties[ nProps ] = rProperties[ n ];
                     }
 
                     aProperties.realloc( nProps );
@@ -1448,21 +1409,19 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
 #if defined SAL_LOG_INFO
                             {//debug
                                 // print received resources
-                                std::vector< DAVPropertyValue >::const_iterator it = resources[0].properties.begin();
-                                std::vector< DAVPropertyValue >::const_iterator end = resources[0].properties.end();
-                                while ( it != end )
+                                for ( const auto& rProp : resources[0].properties )
                                 {
                                     OUString aPropValue;
                                     bool    bValue;
                                     uno::Sequence< ucb::LockEntry > aSupportedLocks;
-                                    if( (*it).Value >>= aPropValue )
-                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << (*it).Name << ":" << aPropValue );
-                                    else if( (*it).Value >>= bValue )
-                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << (*it).Name << ":" <<
+                                    if( rProp.Value >>= aPropValue )
+                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << rProp.Name << ":" << aPropValue );
+                                    else if( rProp.Value >>= bValue )
+                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << rProp.Name << ":" <<
                                                   ( bValue ? "true" : "false" ) );
-                                    else if( (*it).Value >>= aSupportedLocks )
+                                    else if( rProp.Value >>= aSupportedLocks )
                                     {
-                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << (*it).Name << ":" );
+                                        SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getPropertyValues) - returned property: " << rProp.Name << ":" );
                                         for ( sal_Int32 n = 0; n < aSupportedLocks.getLength(); ++n )
                                         {
                                             SAL_INFO( "ucb.ucp.webdav","      scope: "
@@ -1471,11 +1430,10 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
                                                       << ( aSupportedLocks[ n ].Type != css::ucb::LockType_WRITE ? "" : "write" ) );
                                         }
                                     }
-                                    ++it;
                                 }
                             }
 #endif
-                            if ( xProps.get())
+                            if (xProps)
                                 xProps->addProperties(
                                     aPropNames,
                                     ContentProperties( resources[ 0 ] ));
@@ -1530,7 +1488,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
                     GetPropsUsingHeadRequest(resource, xResAccess, aHeaderNames, xEnv);
                     m_bDidGetOrHead = true;
 
-                    if (xProps.get())
+                    if (xProps)
                         xProps->addProperties(
                             aMissingProps,
                             ContentProperties(resource));
@@ -1637,7 +1595,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
         }
         else
         {
-            if ( !xProps.get() )
+            if (!xProps)
                 xProps.reset( new ContentProperties( aUnescapedTitle, false ) );
             else
                 xProps->addProperty(
@@ -1673,31 +1631,30 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
                 rProperties, aMissingProps ) )
     {
         //
-        for ( std::vector< rtl::OUString >::const_iterator it = aMissingProps.begin();
-              it != aMissingProps.end(); ++it )
+        for ( const auto& rProp : aMissingProps )
         {
             // For the time being only a couple of properties need to be added
-            if ( (*it) == "DateModified"  || (*it) == "DateCreated" )
+            if ( rProp == "DateModified"  || rProp == "DateCreated" )
             {
                 util::DateTime aDate;
                 xProps->addProperty(
-                    (*it),
+                    rProp,
                     uno::makeAny( aDate ),
                     true );
             }
             // If WebDAV didn't return the resource type, assume default
             // This happens e.g. for lists exported by SharePoint
-            else if ( (*it) == "IsFolder" )
+            else if ( rProp == "IsFolder" )
             {
                 xProps->addProperty(
-                    (*it),
+                    rProp,
                     uno::makeAny( false ),
                     true );
             }
-            else if ( (*it) == "IsDocument" )
+            else if ( rProp == "IsDocument" )
             {
                 xProps->addProperty(
-                    (*it),
+                    rProp,
                     uno::makeAny( true ),
                     true );
             }
@@ -1742,12 +1699,12 @@ uno::Reference< sdbc::XRow > Content::getPropertyValues(
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
 
-        if ( !m_xCachedProps.get() )
-            m_xCachedProps.reset( new CachableContentProperties( *xProps.get() ) );
+        if (!m_xCachedProps)
+            m_xCachedProps.reset(new CachableContentProperties(*xProps));
         else
-            m_xCachedProps->addProperties( *xProps.get() );
+            m_xCachedProps->addProperties(*xProps);
 
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         m_aEscapedTitle = NeonUri::escapeSegment( aUnescapedTitle );
     }
 
@@ -1770,7 +1727,7 @@ uno::Sequence< uno::Any > Content::setPropertyValues(
         xProvider.set( m_pProvider );
         xIdentifier.set( m_xIdentifier );
         bTransient = m_bTransient;
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
     }
 
     uno::Sequence< uno::Any > aRet( rValues.getLength() );
@@ -2030,21 +1987,14 @@ uno::Sequence< uno::Any > Content::setPropertyValues(
             aStaticDAVOptionsCache.removeDAVOptions( xResAccess->getURL() );
             xResAccess->PROPPATCH( aProppatchValues, xEnv );
 
-            std::vector< ProppatchValue >::const_iterator it
-                = aProppatchValues.begin();
-            std::vector< ProppatchValue >::const_iterator end
-                = aProppatchValues.end();
-
-            while ( it != end )
+            for ( const auto& rProppatchValue : aProppatchValues )
             {
-                aEvent.PropertyName = (*it).name;
+                aEvent.PropertyName = rProppatchValue.name;
                 aEvent.OldValue     = uno::Any(); // @@@ to expensive to obtain!
-                aEvent.NewValue     = (*it).value;
+                aEvent.NewValue     = rProppatchValue.value;
 
                 aChanges.getArray()[ nChanged ] = aEvent;
                 nChanged++;
-
-                ++it;
             }
         }
         catch ( DAVException const & e )
@@ -2146,7 +2096,7 @@ uno::Sequence< uno::Any > Content::setPropertyValues(
 
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
     }
 
     return aRet;
@@ -2228,8 +2178,7 @@ uno::Any Content::open(
                 {
                     osl::MutexGuard aGuard( m_aMutex );
 
-                    xResAccess.reset(
-                        new DAVResourceAccess( *m_xResAccess.get() ) );
+                    xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
                 }
 
                 xResAccess->setFlags( rArg.OpeningFlags );
@@ -2244,14 +2193,13 @@ uno::Any Content::open(
                     osl::MutexGuard aGuard( m_aMutex );
 
                     // cache headers.
-                    if ( !m_xCachedProps.get())
+                    if (!m_xCachedProps)
                         m_xCachedProps.reset(
                             new CachableContentProperties( ContentProperties( aResource ) ) );
                     else
                         m_xCachedProps->addProperties( ContentProperties( aResource ) );
 
-                    m_xResAccess.reset(
-                        new DAVResourceAccess( *xResAccess.get() ) );
+                    m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
                 }
             }
             catch ( DAVException const & e )
@@ -2273,8 +2221,7 @@ uno::Any Content::open(
                     {
                         osl::MutexGuard aGuard( m_aMutex );
 
-                        xResAccess.reset(
-                            new DAVResourceAccess( *m_xResAccess.get() ) );
+                        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
                     }
                     xResAccess->setFlags( rArg.OpeningFlags );
 
@@ -2308,15 +2255,14 @@ uno::Any Content::open(
                         osl::MutexGuard aGuard( m_aMutex );
 
                         // cache headers.
-                        if ( !m_xCachedProps.get())
+                        if (!m_xCachedProps)
                             m_xCachedProps.reset(
                                 new CachableContentProperties( ContentProperties( aResource ) ) );
                         else
                             m_xCachedProps->addProperties(
                                 aResource.properties );
 
-                        m_xResAccess.reset(
-                            new DAVResourceAccess( *xResAccess.get() ) );
+                        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
                     }
 
                     xDataSink->setInputStream( xIn );
@@ -2360,8 +2306,7 @@ void Content::post(
             std::unique_ptr< DAVResourceAccess > xResAccess;
             {
                 osl::MutexGuard aGuard( m_aMutex );
-                xResAccess.reset(
-                    new DAVResourceAccess( *m_xResAccess.get() ) );
+                xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
             }
 
             removeCachedPropertyNames( xResAccess->getURL() );
@@ -2373,8 +2318,7 @@ void Content::post(
 
             {
                  osl::MutexGuard aGuard( m_aMutex );
-                 m_xResAccess.reset(
-                     new DAVResourceAccess( *xResAccess.get() ) );
+                 m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
             }
 
             xSink->setInputStream( xResult );
@@ -2395,8 +2339,7 @@ void Content::post(
                 std::unique_ptr< DAVResourceAccess > xResAccess;
                 {
                     osl::MutexGuard aGuard( m_aMutex );
-                    xResAccess.reset(
-                        new DAVResourceAccess( *m_xResAccess.get() ) );
+                    xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
                 }
 
                 removeCachedPropertyNames( xResAccess->getURL() );
@@ -2408,8 +2351,7 @@ void Content::post(
 
                 {
                     osl::MutexGuard aGuard( m_aMutex );
-                    m_xResAccess.reset(
-                        new DAVResourceAccess( *xResAccess.get() ) );
+                    m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
                 }
             }
             catch ( DAVException const & e )
@@ -2453,12 +2395,9 @@ void Content::queryChildren( ContentRefList& rChildren )
 
     sal_Int32 nLen = aURL.getLength();
 
-    ::ucbhelper::ContentRefList::const_iterator it  = aAllContents.begin();
-    ::ucbhelper::ContentRefList::const_iterator end = aAllContents.end();
-
-    while ( it != end )
+    for ( const auto& rChild : aAllContents )
     {
-        ::ucbhelper::ContentImplHelperRef xChild = (*it);
+        ::ucbhelper::ContentImplHelperRef xChild = rChild;
         OUString aChildURL
             = xChild->getIdentifier()->getContentIdentifier();
 
@@ -2478,7 +2417,6 @@ void Content::queryChildren( ContentRefList& rChildren )
                             xChild.get() ) );
             }
         }
-        ++it;
     }
 }
 
@@ -2498,7 +2436,7 @@ void Content::insert(
         bTransient    = m_bTransient;
         bCollection   = m_bCollection;
         aEscapedTitle = m_aEscapedTitle;
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
     }
 
     // Check, if all required properties are present.
@@ -2660,8 +2598,7 @@ void Content::insert(
 
                         {
                             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-                            m_xResAccess.reset(
-                                new DAVResourceAccess( *xResAccess.get() ) );
+                            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
                         }
 
                         // Success!
@@ -2740,7 +2677,7 @@ void Content::insert(
 
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
     }
 }
 
@@ -2758,7 +2695,7 @@ void Content::transfer(
 
         xIdentifier.set( m_xIdentifier );
         xProvider.set( m_xProvider.get() );
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
     }
 
     NeonUri sourceURI( rArgs.SourceURL );
@@ -2994,7 +2931,7 @@ void Content::transfer(
 
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
     }
 }
 
@@ -3013,13 +2950,9 @@ void Content::destroy( bool bDeletePhysical )
     ::webdav_ucp::Content::ContentRefList aChildren;
     queryChildren( aChildren );
 
-    ContentRefList::const_iterator it  = aChildren.begin();
-    ContentRefList::const_iterator end = aChildren.end();
-
-    while ( it != end )
+    for ( auto& rChild : aChildren )
     {
-        (*it)->destroy( bDeletePhysical );
-        ++it;
+        rChild->destroy( bDeletePhysical );
     }
 }
 
@@ -3033,7 +2966,7 @@ Content::ResourceType Content::resourceTypeForLocks(
         osl::MutexGuard g(m_aMutex);
         //check if cache contains what we need, usually the first PROPFIND on the URI has supported lock
         std::unique_ptr< ContentProperties > xProps;
-        if ( m_xCachedProps.get() )
+        if (m_xCachedProps)
         {
             uno::Sequence< ucb::LockEntry > aSupportedLocks;
             if ( m_xCachedProps->getValue( DAVProperties::SUPPORTEDLOCK )
@@ -3102,16 +3035,13 @@ Content::ResourceType Content::resourceTypeForLocks(
                             // all returned properties are in
                             // resources.properties[n].Name/.Value
 
-                            std::vector< DAVPropertyValue >::iterator it;
-
-                            for ( it = resources[0].properties.begin();
-                                  it != resources[0].properties.end(); ++it)
+                            for ( const auto& rProp : resources[0].properties )
                             {
-                                if ( (*it).Name ==  DAVProperties::SUPPORTEDLOCK )
+                                if ( rProp.Name ==  DAVProperties::SUPPORTEDLOCK )
                                 {
                                     wasSupportedlockFound = true;
                                     uno::Sequence< ucb::LockEntry > aSupportedLocks;
-                                    if ( (*it).Value >>= aSupportedLocks )
+                                    if ( rProp.Value >>= aSupportedLocks )
                                     {
                                         for ( sal_Int32 n = 0; n < aSupportedLocks.getLength(); ++n )
                                         {
@@ -3139,7 +3069,7 @@ Content::ResourceType Content::resourceTypeForLocks(
                             // which supposedly means no lock for the resource (happens e.g. with SharePoint exported lists)
                             OUString sContentDisposition;
                             // First, check cached properties
-                            if (m_xCachedProps.get())
+                            if (m_xCachedProps)
                             {
                                 if ((m_xCachedProps->getValue("Content-Disposition") >>= sContentDisposition)
                                     && sContentDisposition.startsWithIgnoreAsciiCase("attachment"))
@@ -3245,12 +3175,12 @@ Content::ResourceType Content::resourceTypeForLocks(
     std::unique_ptr< DAVResourceAccess > xResAccess;
     {
         osl::MutexGuard aGuard( m_aMutex );
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
     }
     Content::ResourceType ret = resourceTypeForLocks( Environment, xResAccess );
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
     }
     return ret;
 }
@@ -3278,7 +3208,7 @@ void Content::lock(
         std::unique_ptr< DAVResourceAccess > xResAccess;
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+            xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
         }
 
         uno::Any aOwnerAny;
@@ -3301,7 +3231,7 @@ void Content::lock(
 
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         }
     }
     catch ( DAVException const & e )
@@ -3411,7 +3341,7 @@ void Content::unlock(
         std::unique_ptr< DAVResourceAccess > xResAccess;
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+            xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
         }
 
         // check if the target URL is a Class1 DAV
@@ -3431,7 +3361,7 @@ void Content::unlock(
 
         {
             osl::Guard< osl::Mutex > aGuard( m_aMutex );
-            m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+            m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
         }
     }
     catch ( DAVException const & e )
@@ -3509,12 +3439,9 @@ bool Content::exchangeIdentity(
             ContentRefList aChildren;
             queryChildren( aChildren );
 
-            ContentRefList::const_iterator it  = aChildren.begin();
-            ContentRefList::const_iterator end = aChildren.end();
-
-            while ( it != end )
+            for ( const auto& rChild : aChildren )
             {
-                ContentRef xChild = (*it);
+                ContentRef xChild = rChild;
 
                 // Create new content identifier for the child...
                 uno::Reference< ucb::XContentIdentifier >
@@ -3531,8 +3458,6 @@ bool Content::exchangeIdentity(
 
                 if ( !xChild->exchangeIdentity( xNewChildId ) )
                     return false;
-
-                ++it;
             }
             return true;
         }
@@ -3759,7 +3684,7 @@ Content::getBaseURI( const std::unique_ptr< DAVResourceAccess > & rResAccess )
     osl::Guard< osl::Mutex > aGuard( m_aMutex );
 
     // First, try to obtain value of response header "Content-Location".
-    if ( m_xCachedProps.get() )
+    if (m_xCachedProps)
     {
         OUString aLocation;
         m_xCachedProps->getValue( "Content-Location" ) >>= aLocation;
@@ -3836,21 +3761,19 @@ Content::ResourceType Content::getResourceType(
 #if defined SAL_LOG_INFO
                     {//debug
                         // print received resources
-                        std::vector< DAVPropertyValue >::const_iterator it = resources[0].properties.begin();
-                        std::vector< DAVPropertyValue >::const_iterator end = resources[0].properties.end();
-                        while ( it != end )
+                        for ( const auto& rProp : resources[0].properties )
                         {
                             OUString aPropValue;
                             bool    bValue;
                             uno::Sequence< ucb::LockEntry > aSupportedLocks;
-                            if((*it).Value >>= aPropValue )
-                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << (*it).Name << ":" << aPropValue );
-                            else if( (*it).Value >>= bValue )
-                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << (*it).Name << ":" <<
+                            if(rProp.Value >>= aPropValue )
+                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << rProp.Name << ":" << aPropValue );
+                            else if( rProp.Value >>= bValue )
+                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << rProp.Name << ":" <<
                                           ( bValue ? "true" : "false" ) );
-                            else if( (*it).Value >>= aSupportedLocks )
+                            else if( rProp.Value >>= aSupportedLocks )
                             {
-                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << (*it).Name << ":" );
+                                SAL_INFO( "ucb.ucp.webdav", "PROPFIND (getResourceType) - ret'd prop: " << rProp.Name << ":" );
                                 for ( sal_Int32 n = 0; n < aSupportedLocks.getLength(); ++n )
                                 {
                                     SAL_INFO( "ucb.ucp.webdav","PROPFIND (getResourceType) -       supportedlock[" << n <<"]: scope: "
@@ -3859,7 +3782,6 @@ Content::ResourceType Content::getResourceType(
                                               << ( aSupportedLocks[ n ].Type != css::ucb::LockType_WRITE ? "" : "write" ) );
                                 }
                             }
-                            ++it;
                         }
                     }
 #endif
@@ -3927,7 +3849,7 @@ Content::ResourceType Content::getResourceType(
                 {
                     // extract host name and connection port
                     NeonUri   theUri( rURL );
-                    OUString  aHostName  = theUri.GetHost();
+                    const OUString&  aHostName  = theUri.GetHost();
                     sal_Int32 nPort      = theUri.GetPort();
                     throw DAVException( DAVException::DAV_HTTP_TIMEOUT,
                                         NeonUri::makeConnectionEndPointString( aHostName,
@@ -3972,12 +3894,12 @@ Content::ResourceType Content::getResourceType(
     std::unique_ptr< DAVResourceAccess > xResAccess;
     {
         osl::MutexGuard aGuard( m_aMutex );
-        xResAccess.reset( new DAVResourceAccess( *m_xResAccess.get() ) );
+        xResAccess.reset(new DAVResourceAccess(*m_xResAccess));
     }
     Content::ResourceType const ret = getResourceType( xEnv, xResAccess );
     {
         osl::Guard< osl::Mutex > aGuard( m_aMutex );
-        m_xResAccess.reset( new DAVResourceAccess( *xResAccess.get() ) );
+        m_xResAccess.reset(new DAVResourceAccess(*xResAccess));
     }
     return ret;
 }
@@ -4243,7 +4165,7 @@ bool Content::isResourceAvailable( const css::uno::Reference< css::ucb::XCommand
                                   const std::unique_ptr< DAVResourceAccess > & rResAccess,
                                   DAVOptions& rDAVOptions )
 {
-    std::vector< rtl::OUString > aHeaderNames;
+    std::vector< OUString > aHeaderNames;
     DAVResource aResource;
 
     try

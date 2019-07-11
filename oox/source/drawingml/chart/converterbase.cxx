@@ -30,6 +30,7 @@
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <osl/diagnose.h>
 #include <basegfx/numeric/ftools.hxx>
 #include <oox/core/xmlfilterbase.hxx>
@@ -37,6 +38,7 @@
 #include <oox/token/properties.hxx>
 #include <oox/token/tokens.hxx>
 #include <comphelper/processfactory.hxx>
+
 
 namespace oox {
 namespace drawingml {
@@ -145,7 +147,7 @@ struct ConverterData
     XmlFilterBase&      mrFilter;
     ChartConverter&     mrConverter;
     Reference< XChartDocument > mxDoc;
-    awt::Size                maSize;
+    awt::Size const          maSize;
 
     explicit            ConverterData(
                             XmlFilterBase& rFilter,
@@ -348,7 +350,12 @@ bool LayoutConverter::calcAbsRectangle( awt::Rectangle& orRect ) const
 {
     if( !mrModel.mbAutoLayout )
     {
-        const awt::Size& rChartSize = getChartSize();
+        awt::Size rChartSize=getChartSize();
+        if( (rChartSize.Width < 0) || (rChartSize.Height < 0) )
+        {
+        rChartSize.Width = 16000;
+        rChartSize.Height = 9000;
+        }
         orRect.X = lclCalcPosition( rChartSize.Width,  mrModel.mfX, mrModel.mnXMode );
         orRect.Y = lclCalcPosition( rChartSize.Height, mrModel.mfY, mrModel.mnYMode );
         if( (orRect.X >= 0) && (orRect.Y >= 0) )
@@ -398,7 +405,7 @@ void LayoutConverter::convertFromModel( const Reference< XShape >& rxShape, doub
             // the call to XShape.getSize() may recalc the chart view
             awt::Size aShapeSize = rxShape->getSize();
             // rotated shapes need special handling...
-            double fSin = fabs( sin( fRotationAngle * F_PI180 ) );
+            double fSin = fabs( sin( basegfx::deg2rad(fRotationAngle) ) );
             // add part of height to X direction, if title is rotated down
             if( fRotationAngle > 180.0 )
                 aShapePos.X += static_cast< sal_Int32 >( fSin * aShapeSize.Height + 0.5 );

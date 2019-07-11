@@ -9,12 +9,6 @@
 
 #include "op_financial.hxx"
 
-#include <formulagroup.hxx>
-#include <document.hxx>
-#include <formulacell.hxx>
-#include <tokenarray.hxx>
-#include <compiler.hxx>
-#include <interpre.hxx>
 #include <formula/vectortoken.hxx>
 #include <sstream>
 
@@ -191,9 +185,9 @@ void OpDollarde::GenSlidingWindowFunction(
     ss << vSubArguments[1]->GenSlidingWindowDeclRef();
     ss<<"))\n\t\t";
     ss<<"fFrac = 0;\n\telse \n\t\t";
-    ss<<"fFrac = ";
+    ss<<"fFrac = (int)(";
     ss << vSubArguments[1]->GenSlidingWindowDeclRef();
-    ss<<";\n\t";
+    ss<<");\n\t";
     ss << "tmp = modf( dollar , &fInt );\n\t";
     ss << "tmp /= fFrac;\n\t";
     ss << "tmp *= pow( 10.0 , ceil( log10(fFrac ) ) );\n\t";
@@ -242,9 +236,9 @@ void OpDollarfr::GenSlidingWindowFunction(std::stringstream &ss,
     ss << vSubArguments[1]->GenSlidingWindowDeclRef();
     ss<<"))\n\t\t";
     ss<<"fFrac = 0;\n\telse \n\t\t";
-    ss<<"fFrac = ";
+    ss<<"fFrac = (int)(";
     ss << vSubArguments[1]->GenSlidingWindowDeclRef();
-    ss<<";\n\t";
+    ss<<");\n\t";
     ss << "tmp = modf( dollar , &fInt );\n\t";
     ss << "tmp *= fFrac;\n\t";
     ss << "tmp *= pow( 10.0 , -ceil( log10(fFrac ) ) );\n\t";
@@ -384,9 +378,8 @@ void OpINTRATE::GenSlidingWindowFunction(std::stringstream& ss,
         }
     }
     ss << "    int nNullDate = GetNullDate();\n";
-    ss << "    tmp = arg3 * pow(arg2,-1) - 1.0;\n";
-    ss << "    tmp = tmp * pow(GetYearDiff_new(nNullDate, (int)arg0,";
-    ss << " (int)arg1,(int)arg4),-1);\n";
+    ss << "    tmp = ((arg3 / arg2) - 1) / GetYearDiff_new(nNullDate, (int)arg0,";
+    ss << "             (int)arg1,(int)arg4);\n";
     ss << "    return tmp;\n";
     ss << "}";
 }
@@ -757,8 +750,11 @@ void OpMDuration::GenSlidingWindowFunction(std::stringstream& ss,
 void Fvschedule::GenSlidingWindowFunction(
     std::stringstream &ss, const std::string &sSymName, SubArguments &vSubArguments)
 {
+    CHECK_PARAMETER_COUNT( 2, 2 );
     FormulaToken* pCur = vSubArguments[1]->GetFormulaToken();
     assert(pCur);
+    if(vSubArguments[0]->GetFormulaToken()->GetType() != formula::svDoubleVectorRef)
+        throw Unhandled( __FILE__, __LINE__ );
     const formula::DoubleVectorRefToken* pCurDVR =
         static_cast<const formula::DoubleVectorRefToken *>(pCur);
     size_t nCurWindowSize = pCurDVR->GetRefRowSize();
@@ -2380,10 +2376,10 @@ void OpNPV::GenSlidingWindowFunction(std::stringstream &ss,
     //while (i-- > 1)
     for (size_t i = 1; i < vSubArguments.size(); i++)
     {
-      FormulaToken *pCur = vSubArguments[i]->GetFormulaToken();
-      assert(pCur);
-      if (pCur->GetType() == formula::svDoubleVectorRef)
-      {
+        FormulaToken *pCur = vSubArguments[i]->GetFormulaToken();
+        assert(pCur);
+        if (pCur->GetType() == formula::svDoubleVectorRef)
+        {
             const formula::DoubleVectorRefToken* pDVR =
             static_cast<const formula::DoubleVectorRefToken *>(pCur);
             size_t nCurWindowSize = pDVR->GetRefRowSize();
@@ -3549,7 +3545,7 @@ void OpAmordegrc::GenSlidingWindowFunction(std::stringstream &ss,
     FormulaToken *tmpCur3 = vSubArguments[3]->GetFormulaToken();
     FormulaToken *tmpCur4 = vSubArguments[4]->GetFormulaToken();
     FormulaToken *tmpCur5 = vSubArguments[5]->GetFormulaToken();
-    FormulaToken *tmpCur6 = vSubArguments[6]->GetFormulaToken();
+    FormulaToken *tmpCur6 = vSubArguments.size() < 7 ? nullptr : vSubArguments[6]->GetFormulaToken();
     if(tmpCur0->GetType() == formula::svSingleVectorRef)
     {
     const formula::SingleVectorRefToken*tmpCurDVR0= static_cast<const
@@ -3616,17 +3612,24 @@ void OpAmordegrc::GenSlidingWindowFunction(std::stringstream &ss,
     ss << "        fRate=";
     ss << vSubArguments[5]->GenSlidingWindowDeclRef();
     ss << ";\n";
-    if(tmpCur6->GetType() == formula::svSingleVectorRef)
+    if(tmpCur6 == nullptr)
     {
-    const formula::SingleVectorRefToken*tmpCurDVR6= static_cast<const
-    formula::SingleVectorRefToken *>(tmpCur6);
-    ss <<"    if(isnan(" <<vSubArguments[6]->GenSlidingWindowDeclRef();
-    ss <<")||(gid0 >="<<tmpCurDVR6->GetArrayLength()<<"))\n";
-    ss <<"        nBase = 0;\n    else\n";
+        ss << "        nBase = 0;\n";
     }
-    ss << "        nBase = (int)";
-    ss << vSubArguments[6]->GenSlidingWindowDeclRef();
-    ss << ";\n";
+    else
+    {
+        if(tmpCur6->GetType() == formula::svSingleVectorRef)
+        {
+            const formula::SingleVectorRefToken*tmpCurDVR6=
+                static_cast<const formula::SingleVectorRefToken *>(tmpCur6);
+            ss <<"    if(isnan(" <<vSubArguments[6]->GenSlidingWindowDeclRef();
+            ss <<")||(gid0 >="<<tmpCurDVR6->GetArrayLength()<<"))\n";
+            ss <<"        nBase = 0;\n    else\n";
+        }
+        ss << "        nBase = (int)";
+        ss << vSubArguments[6]->GenSlidingWindowDeclRef();
+        ss << ";\n";
+    }
     ss <<"    uint nPer = convert_int( fPer );\n";
     ss <<"    double fUsePer = 1.0 *pow( fRate,-1);\n";
     ss <<"    double fAmorCoeff;\n";
@@ -3697,7 +3700,7 @@ void OpAmorlinc::GenSlidingWindowFunction(std::stringstream &ss,
     FormulaToken *tmpCur3 = vSubArguments[3]->GetFormulaToken();
     FormulaToken *tmpCur4 = vSubArguments[4]->GetFormulaToken();
     FormulaToken *tmpCur5 = vSubArguments[5]->GetFormulaToken();
-    FormulaToken *tmpCur6 = vSubArguments[6]->GetFormulaToken();
+    FormulaToken *tmpCur6 = vSubArguments.size() < 7 ? nullptr : vSubArguments[6]->GetFormulaToken();
     if(tmpCur0->GetType() == formula::svSingleVectorRef)
     {
     const formula::SingleVectorRefToken*tmpCurDVR0= static_cast<const
@@ -3764,17 +3767,24 @@ void OpAmorlinc::GenSlidingWindowFunction(std::stringstream &ss,
     ss << "        fRate=";
     ss << vSubArguments[5]->GenSlidingWindowDeclRef();
     ss << ";\n";
-    if(tmpCur6->GetType() == formula::svSingleVectorRef)
+    if(tmpCur6 == nullptr)
     {
-    const formula::SingleVectorRefToken*tmpCurDVR6= static_cast<const
-    formula::SingleVectorRefToken *>(tmpCur6);
-    ss <<"    if(isnan(" <<vSubArguments[6]->GenSlidingWindowDeclRef();
-    ss <<")||(gid0 >="<<tmpCurDVR6->GetArrayLength()<<"))\n";
-    ss <<"        nBase = 0;\n    else\n";
+        ss << "        nBase = 0;\n";
     }
-    ss << "        nBase = (int)";
-    ss << vSubArguments[6]->GenSlidingWindowDeclRef();
-    ss << ";\n";
+    else
+    {
+        if(tmpCur6->GetType() == formula::svSingleVectorRef)
+        {
+            const formula::SingleVectorRefToken*tmpCurDVR6=
+                static_cast<const formula::SingleVectorRefToken *>(tmpCur6);
+            ss <<"    if(isnan(" <<vSubArguments[6]->GenSlidingWindowDeclRef();
+            ss <<")||(gid0 >="<<tmpCurDVR6->GetArrayLength()<<"))\n";
+            ss <<"        nBase = 0;\n    else\n";
+        }
+        ss << "        nBase = (int)";
+        ss << vSubArguments[6]->GenSlidingWindowDeclRef();
+        ss << ";\n";
+    }
     ss <<"    int  nPer = convert_int( fPer );\n";
     ss <<"    double fOneRate = fCost * fRate;\n";
     ss <<"    double fCostDelta = fCost - fRestVal;\n";
@@ -3906,6 +3916,7 @@ void OpReceived::GenSlidingWindowFunction(std::stringstream &ss,
 void OpYielddisc::GenSlidingWindowFunction(
     std::stringstream &ss, const std::string &sSymName, SubArguments &vSubArguments)
 {
+    CHECK_PARAMETER_COUNT(5,5);
     ss << "\ndouble " << sSymName;
     ss << "_"<< BinFuncName() <<"(";
     for (size_t i = 0; i < vSubArguments.size(); i++)
@@ -4003,6 +4014,8 @@ void OpYielddisc::GenSlidingWindowFunction(
     ss << vSubArguments[4]->GenSlidingWindowDeclRef();
     ss<<";\n\t";
 
+    ss<< "if(tmp002 <= 0 || tmp003 <= 0 || tmp000 >= tmp001 )\n";
+    ss<< "    return CreateDoubleError(IllegalArgument);\n";
     ss<< "tmp = (tmp003/tmp002)-1;\n\t";
     ss << "tmp /= GetYearFrac( GetNullDate(),tmp000,tmp001,tmp004);\n\t";
     ss << "return tmp;\n";

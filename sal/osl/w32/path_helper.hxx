@@ -61,7 +61,7 @@ namespace osl
  drive alone
 */
 
-inline void systemPathEnsureSeparator(/*inout*/ rtl::OUString& Path)
+inline void systemPathEnsureSeparator(/*inout*/ OUString& Path)
 {
     osl_systemPathEnsureSeparator(&Path.pData);
 }
@@ -71,12 +71,12 @@ inline void systemPathEnsureSeparator(/*inout*/ rtl::OUString& Path)
  if the path is not the root path '\'
 */
 
-inline void systemPathRemoveSeparator(/*inout*/ rtl::OUString& Path)
+inline void systemPathRemoveSeparator(/*inout*/ OUString& Path)
 {
     osl_systemPathRemoveSeparator(&Path.pData);
 }
 
-inline bool systemPathIsLogicalDrivePattern(/*in*/ const rtl::OUString& path)
+inline bool systemPathIsLogicalDrivePattern(/*in*/ const OUString& path)
 {
     return osl_systemPathIsLogicalDrivePattern(path.pData);
 }
@@ -93,7 +93,7 @@ class LongPathBuffer
 
 public:
     explicit LongPathBuffer( sal_uInt32 nCharNum )
-    : m_pBuffer( static_cast<T*>( rtl_allocateMemory( nCharNum * sizeof( T ) ) ) )
+    : m_pBuffer( static_cast<T*>( malloc( nCharNum * sizeof( T ) ) ) )
     , m_nCharNum( nCharNum )
     {
         OSL_ENSURE( m_pBuffer, "Can not allocate the buffer!" );
@@ -102,7 +102,7 @@ public:
     ~LongPathBuffer()
     {
         if ( m_pBuffer )
-            rtl_freeMemory( m_pBuffer );
+            free( m_pBuffer );
         m_pBuffer = nullptr;
     }
 

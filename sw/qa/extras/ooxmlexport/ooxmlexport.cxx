@@ -54,30 +54,6 @@ protected:
 
         return std::find(vWhitelist.begin(), vWhitelist.end(), filename) != vWhitelist.end();
     }
-protected:
-    bool CjkNumberedListTestHelper(sal_Int16 &nValue)
-    {
-        bool isNumber = false;
-        uno::Reference<text::XTextRange> xPara(getParagraph(1));
-        uno::Reference< beans::XPropertySet > properties( xPara, uno::UNO_QUERY);
-        properties->getPropertyValue("NumberingIsNumber") >>= isNumber;
-        if (!isNumber)
-            return false;
-        uno::Reference<container::XIndexAccess> xLevels( properties->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
-        uno::Sequence< beans::PropertyValue > aPropertyValue;
-        xLevels->getByIndex(0) >>= aPropertyValue;
-        for( int j = 0 ; j< aPropertyValue.getLength() ; ++j)
-        {
-            beans::PropertyValue aProp= aPropertyValue[j];
-            if (aProp.Name == "NumberingType")
-            {
-                nValue = aProp.Value.get<sal_Int16>();
-                return true;
-            }
-        }
-        return false;
-
-    }
 };
 
 DECLARE_OOXMLEXPORT_TEST(testfdo81381, "fdo81381.docx")
@@ -114,6 +90,53 @@ DECLARE_OOXMLEXPORT_TEST(testFooterBodyDistance, "footer-body-distance.docx")
         assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:br", 1);
 }
 
+// Check for correct header/footer with special first page with TOC inside:
+// - DECLARE_ODFEXPORT_TEST(testTdf118393, "tdf118393.odt")
+// - DECLARE_OOXMLEXPORT_TEST(testTdf118393, "tdf118393.odt")
+DECLARE_OOXMLEXPORT_TEST(testTdf118393, "tdf118393.odt")
+{
+    CPPUNIT_ASSERT_EQUAL( 7, getPages() );
+
+    // First page has no header/footer
+    {
+        xmlDocPtr pXmlDoc = parseLayoutDump();
+
+        // check first page
+        xmlXPathObjectPtr pXmlPage1Header = getXPathNode(pXmlDoc, "/root/page[1]/header");
+        CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlPage1Header->nodesetval));
+
+        xmlXPathObjectPtr pXmlPage1Footer = getXPathNode(pXmlDoc, "/root/page[1]/footer");
+        CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlPage1Footer->nodesetval));
+
+        // check second page in the same way
+        xmlXPathObjectPtr pXmlPage2Header = getXPathNode(pXmlDoc, "/root/page[2]/header");
+        CPPUNIT_ASSERT_EQUAL(1, xmlXPathNodeSetGetLength(pXmlPage2Header->nodesetval));
+
+        xmlXPathObjectPtr pXmlPage2Footer = getXPathNode(pXmlDoc, "/root/page[2]/footer");
+        CPPUNIT_ASSERT_EQUAL(1, xmlXPathNodeSetGetLength(pXmlPage2Footer->nodesetval));
+   }
+
+    // All other pages should have header/footer
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[2]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[2]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[3]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[3]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[4]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[4]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[5]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[5]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[6]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[6]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[7]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[7]/footer/txt/text()"));
+}
+
 DECLARE_OOXMLEXPORT_TEST(testfdo81031, "fdo81031.docx")
 {
     // vml image was not rendered
@@ -134,6 +157,8 @@ DECLARE_OOXMLEXPORT_TEST(testPlausableBorder, "plausable-border.docx")
     if (xmlDocPtr pXmlDoc = parseExport())
         // Page break was exported as section break, this was 0
         assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:br", 1);
+
+    CPPUNIT_ASSERT_EQUAL( 2, getPages() );
 }
 
 DECLARE_OOXMLEXPORT_TEST(testUnwantedSectionBreak, "unwanted-section-break.docx")
@@ -181,6 +206,8 @@ DECLARE_OOXMLEXPORT_TEST(testFirstHeaderFooter, "first-header-footer.docx")
     // Test import and export of a section's headerf/footerf properties.
     // (copied from a ww8export test, with doc converted to docx using Word)
 
+    CPPUNIT_ASSERT_EQUAL( 6, getPages() );
+
     // The document has 6 pages. Note that we don't test if 4 or just 2 page
     // styles are created, the point is that layout should be correct.
     CPPUNIT_ASSERT_EQUAL(OUString("First page header"),  parseDump("/root/page[1]/header/txt/text()"));
@@ -221,9 +248,9 @@ DECLARE_OOXMLEXPORT_TEST(testShapeInFloattable, "shape-in-floattable.docx")
     {
         // No nested drawingML w:txbxContent.
         assertXPath(pXmlDoc, "//mc:Choice//w:txbxContent//w:txbxContent", 0);
-        // Instead, make sure we have a separate shape and group shape:
-        assertXPath(pXmlDoc, "//mc:AlternateContent//mc:Choice[@Requires='wps']", 1);
+        // Instead, make sure we have a separate shape and a table
         assertXPath(pXmlDoc, "//mc:AlternateContent//mc:Choice[@Requires='wpg']", 1);
+        assertXPath(pXmlDoc, "/w:document/w:body/w:tbl", 1);
     }
 }
 
@@ -348,10 +375,13 @@ DECLARE_OOXMLEXPORT_TEST(testNumberingFont, "numbering-font.docx")
 
 DECLARE_OOXMLEXPORT_TEST(testTdf106541_noinheritChapterNumbering, "tdf106541_noinheritChapterNumbering.odt")
 {
-    // in LO, it appears that styles based on the Chapter Numbering style explicitly sets the
-    // numbering style/outline level to 0 by default, and prevents inheriting directly from "Outline" style.
+    // in LO, it appears that styles based on the Chapter Numbering style explicitly set the
+    // numbering style/outline level to 0 by default, and that LO prevents inheriting directly from "Outline" style.
     // Adding this preventative unit test to ensure that any fix for tdf106541 doesn't make incorrect assumptions.
-    CPPUNIT_ASSERT_EQUAL(OUString("Outline"), getProperty<OUString>(getParagraph(1), "NumberingStyleName"));
+
+//reverting tdf#76817 hard-codes the numbering style on the paragraph, preventing RT of "Outline" style
+//    CPPUNIT_ASSERT_EQUAL(OUString("Outline"), getProperty<OUString>(getParagraph(1), "NumberingStyleName"));
+
     OUString sPara3NumberingStyle = getProperty<OUString>(getParagraph(3), "NumberingStyleName");
     CPPUNIT_ASSERT_EQUAL(sPara3NumberingStyle, getProperty<OUString>(getParagraph(4), "NumberingStyleName"));
 
@@ -632,37 +662,50 @@ DECLARE_OOXMLEXPORT_TEST(testTableRtl, "table-rtl.docx")
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlCjklist30, "cjklist30.docx")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::TIAN_GAN_ZH, numFormat);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlCjklist31, "cjklist31.docx")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::DI_ZI_ZH, numFormat);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlCjklist34, "cjklist34.docx")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_UPPER_ZH_TW, numFormat);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlCjklist35, "cjklist35.docx")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_LOWER_ZH, numFormat);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlCjklist44, "cjklist44.docx")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_HANGUL_KO, numFormat);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testOoxmlTextNumberList, "text_number_list.docx")
+{
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
+    CPPUNIT_ASSERT_EQUAL(style::NumberingType::TEXT_NUMBER, numFormat);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testOoxmlTextCardinalList, "text_cardinal_list.docx")
+{
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
+    CPPUNIT_ASSERT_EQUAL(style::NumberingType::TEXT_CARDINAL, numFormat);
+}
+
+DECLARE_OOXMLEXPORT_TEST(testOoxmlTextOrdinalList, "text_ordinal_list.docx")
+{
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
+    CPPUNIT_ASSERT_EQUAL(style::NumberingType::TEXT_ORDINAL, numFormat);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testOoxmlNumListZHTW, "numlist-zhtw.odt")
@@ -719,7 +762,9 @@ DECLARE_OOXMLEXPORT_TEST(testOOxmlOutlineNumberTypes, "outline-number-types.odt"
 
 DECLARE_OOXMLEXPORT_TEST(testNumParentStyle, "num-parent-style.docx")
 {
-    CPPUNIT_ASSERT_EQUAL(OUString("Outline"), getProperty<OUString>(getParagraph(4), "NumberingStyleName"));
+//reverting tdf#76817 hard-codes the numbering style on the paragraph, preventing RT of "Outline" style
+//I think this unit test is wrong, but I will revert to its original claim.
+    CPPUNIT_ASSERT(getProperty<OUString>(getParagraph(4), "NumberingStyleName").startsWith("WWNum"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testNumOverrideLvltext, "num-override-lvltext.docx")
@@ -792,6 +837,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf89791, "tdf89791.docx")
         uno::Reference<packages::zip::XZipFileAccess2> xNameAccess = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory), maTempFile.GetURL());
         CPPUNIT_ASSERT_EQUAL(false, bool(xNameAccess->hasByName("docProps/custom.xml")));
     }
+
+    //tdf#102619 - setting FollowStyle with a not-yet-created style was failing. (Titre is created before Corps de texte).
+    uno::Reference< beans::XPropertySet > properties(getStyles("ParagraphStyles")->getByName("Titre"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Corps de texte"), getProperty<OUString>(properties, "FollowStyle"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf91261, "tdf91261.docx")
@@ -885,6 +934,17 @@ DECLARE_OOXMLEXPORT_TEST(testTdf106953, "tdf106953.docx")
     uno::Reference<container::XIndexAccess> xRules = getProperty< uno::Reference<container::XIndexAccess> >(getStyles("NumberingStyles")->getByName("WWNum1"), "NumberingRules");
     // This was -635, so the tab of the numbering expanded to a small value instead of matching Word's larger value.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), comphelper::SequenceAsHashMap(xRules->getByIndex(0))["FirstLineIndent"].get<sal_Int32>());
+}
+
+DECLARE_OOXMLEXPORT_TEST(testTdf115094v3, "tdf115094v3.docx")
+{
+    // floating table is now exported directly without surrounding frame
+    xmlDocPtr pXmlDoc = parseExport("word/document.xml");
+    if (!pXmlDoc)
+        return;
+
+    assertXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblpPr", "tblpX", "1996");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblpPr", "tblpY", "1064");
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

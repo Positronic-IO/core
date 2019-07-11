@@ -31,6 +31,7 @@
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Size.hpp>
+#include <com/sun/star/chart/XChartDocument.hpp>
 
 #include <set>
 #include <rtl/ustrbuf.h>
@@ -39,6 +40,7 @@
 #include <svx/svdocapt.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/editobj.hxx>
+#include <o3tl/make_unique.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <svtools/embedhlp.hxx>
@@ -49,11 +51,15 @@
 #include <postit.hxx>
 
 #include <fapihelper.hxx>
+#include <xcl97esc.hxx>
 #include <xechart.hxx>
 #include <xeformula.hxx>
+#include <xehelper.hxx>
 #include <xelink.hxx>
 #include <xename.hxx>
 #include <xestyle.hxx>
+#include <xllink.hxx>
+#include <xltools.hxx>
 #include <userdat.hxx>
 #include <drwlayer.hxx>
 #include <svl/itemset.hxx>
@@ -102,7 +108,7 @@ using namespace oox;
 namespace
 {
 
-inline long lcl_hmm2px(long nPixel)
+long lcl_hmm2px(long nPixel)
 {
     return static_cast<long>(nPixel*PIXEL_PER_INCH/1000.0/CM_PER_INCH + 0.5);
 }
@@ -401,7 +407,7 @@ XclExpImgData::XclExpImgData( const Graphic& rGraphic, sal_uInt16 nRecId ) :
 
 void XclExpImgData::Save( XclExpStream& rStrm )
 {
-    Bitmap aBmp = maGraphic.GetBitmap();
+    Bitmap aBmp = maGraphic.GetBitmapEx().GetBitmap();
     if( aBmp.GetBitCount() != 24 )
         aBmp.Convert( BmpConversion::N24Bit );
 
@@ -742,7 +748,7 @@ XclExpTbxControlObj::XclExpTbxControlObj( XclExpObjectManager& rRoot, Reference<
         /*  Be sure to construct the MSODRAWING record containing the
             ClientTextbox atom after the base OBJ's MSODRAWING record data is
             completed. */
-        pClientTextbox = new XclExpMsoDrawing( mrEscherEx );
+        pClientTextbox.reset( new XclExpMsoDrawing( mrEscherEx ) );
         mrEscherEx.AddAtom( 0, ESCHER_ClientTextbox );  // TXO record
         mrEscherEx.UpdateDffFragmentEnd();
 
@@ -755,7 +761,7 @@ XclExpTbxControlObj::XclExpTbxControlObj( XclExpObjectManager& rRoot, Reference<
                 nXclFont = GetFontBuffer().Insert( aFontData, EXC_COLOR_CTRLTEXT );
         }
 
-        pTxo = new XclTxo( aString, nXclFont );
+        pTxo.reset( new XclTxo( aString, nXclFont ) );
         pTxo->SetHorAlign( (mnObjType == EXC_OBJTYPE_BUTTON) ? EXC_OBJ_HOR_CENTER : EXC_OBJ_HOR_LEFT );
         pTxo->SetVerAlign( EXC_OBJ_VER_CENTER );
     }
@@ -1200,7 +1206,7 @@ XclExpNote::XclExpNote(const XclExpRoot& rRoot, const ScAddress& rScPos,
                 {
                     lcl_GetFromTo( rRoot, pCaption->GetLogicRect(), maScPos.Tab(), maCommentFrom, maCommentTo );
                     if( const OutlinerParaObject* pOPO = pCaption->GetOutlinerParaObject() )
-                        mnObjId = rRoot.GetObjectManager().AddObj( new XclObjComment( rRoot.GetObjectManager(), pCaption->GetLogicRect(), pOPO->GetTextObject(), pCaption, mbVisible, maScPos, maCommentFrom, maCommentTo ) );
+                        mnObjId = rRoot.GetObjectManager().AddObj( o3tl::make_unique<XclObjComment>( rRoot.GetObjectManager(), pCaption->GetLogicRect(), pOPO->GetTextObject(), pCaption, mbVisible, maScPos, maCommentFrom, maCommentTo ) );
 
                     SfxItemSet aItemSet = pCaption->GetMergedItemSet();
                     meTVA       = pCaption->GetTextVerticalAdjust();
@@ -1428,7 +1434,7 @@ void XclExpComments::SaveXml( XclExpXmlStream& rStrm )
             XclXmlUtils::GetStreamName( "../", "comments", mnTab + 1 ),
             rStrm.GetCurrentStream()->getOutputStream(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml",
-            rtl::OUStringToOString(oox::getRelationship(Relationship::COMMENTS), RTL_TEXTENCODING_UTF8).getStr());
+            OUStringToOString(oox::getRelationship(Relationship::COMMENTS), RTL_TEXTENCODING_UTF8).getStr());
     rStrm.PushStream( rComments );
 
     if( rStrm.getVersion() == oox::core::ISOIEC_29500_2008 )
@@ -1556,16 +1562,14 @@ bool XclExpObjectManager::HasObj() const
     return !mxObjList->empty();
 }
 
-sal_uInt16 XclExpObjectManager::AddObj( XclObj* pObjRec )
+sal_uInt16 XclExpObjectManager::AddObj( std::unique_ptr<XclObj> pObjRec )
 {
-    return mxObjList->Add( pObjRec );
+    return mxObjList->Add( std::move(pObjRec) );
 }
 
-XclObj* XclExpObjectManager::RemoveLastObj()
+std::unique_ptr<XclObj> XclExpObjectManager::RemoveLastObj()
 {
-    XclObj* pLastObj = mxObjList->back();
-    mxObjList->pop_back();
-    return pLastObj;
+    return mxObjList->pop_back();
 }
 
 void XclExpObjectManager::InitStream( bool bTempFile )
@@ -1576,7 +1580,7 @@ void XclExpObjectManager::InitStream( bool bTempFile )
         if( mxTempFile->IsValid() )
         {
             mxTempFile->EnableKillingFile();
-            mxDffStrm.reset( ::utl::UcbStreamHelper::CreateStream( mxTempFile->GetURL(), StreamMode::STD_READWRITE ) );
+            mxDffStrm = ::utl::UcbStreamHelper::CreateStream( mxTempFile->GetURL(), StreamMode::STD_READWRITE );
         }
     }
 

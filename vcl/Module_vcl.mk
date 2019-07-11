@@ -28,11 +28,11 @@ $(eval $(call gb_Module_add_targets,vcl,\
     $(if $(filter DESKTOP,$(BUILD_TYPE)), \
         StaticLibrary_vclmain \
 		$(if $(ENABLE_MACOSX_SANDBOX),, \
-			$(if $(ENABLE_HEADLESS),, \
+			$(if $(DISABLE_GUI),, \
 				Executable_ui-previewer)) \
 		$(if $(filter LINUX MACOSX SOLARIS WNT %BSD,$(OS)), \
 			Executable_outdevgrind \
-			$(if $(ENABLE_HEADLESS),, \
+			$(if $(DISABLE_GUI),, \
 				Executable_vcldemo \
 				Executable_icontest \
 				Executable_visualbackendtest \
@@ -42,7 +42,7 @@ $(eval $(call gb_Module_add_targets,vcl,\
 ifeq ($(CROSS_COMPILING)$(DISABLE_DYNLOADING),)
 
 $(eval $(call gb_Module_add_targets,vcl,\
-    $(if $(filter-out ANDROID IOS WNT,$(OS)), \
+    $(if $(filter-out ANDROID iOS WNT,$(OS)), \
         Executable_svdemo \
         Executable_fftester \
         Executable_svptest \
@@ -106,12 +106,14 @@ endif
 ifeq ($(OS),MACOSX)
 $(eval $(call gb_Module_add_targets,vcl,\
     Package_osxres \
+    Library_vclplug_osx \
 ))
 endif
 
 ifeq ($(OS),WNT)
 $(eval $(call gb_Module_add_targets,vcl,\
     WinResTarget_vcl \
+    Library_vclplug_win \
 ))
 endif
 
@@ -120,6 +122,12 @@ ifneq ($(ENABLE_QT5),)
 $(eval $(call gb_Module_add_targets,vcl,\
     CustomTarget_qt5_moc \
     Library_vclplug_qt5 \
+))
+endif
+ifneq ($(ENABLE_KDE5),)
+$(eval $(call gb_Module_add_targets,vcl,\
+    CustomTarget_kde5_moc \
+    Library_vclplug_kde5 \
 ))
 endif
 endif
@@ -192,6 +200,7 @@ $(eval $(call gb_Module_add_check_targets,vcl,\
 	CppunitTest_vcl_graphic_test \
 	CppunitTest_vcl_fontcharmap \
 	CppunitTest_vcl_font \
+	CppunitTest_vcl_fontfeature \
 	CppunitTest_vcl_fontmetric \
 	CppunitTest_vcl_complextext \
 	CppunitTest_vcl_filters_test \
@@ -217,7 +226,7 @@ $(eval $(call gb_Module_add_check_targets,vcl,\
 ))
 endif
 
-ifeq ($(ENABLE_HEADLESS),TRUE)
+ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Module_add_check_targets,vcl,\
 	CppunitTest_vcl_timer \
 ))
@@ -241,5 +250,11 @@ endif
 $(eval $(call gb_Module_add_screenshot_targets,vcl,\
     CppunitTest_vcl_dialogs_test \
 ))
+
+ifneq ($(DISPLAY),)
+$(eval $(call gb_Module_add_slowcheck_targets,vcl,\
+    CppunitTest_vcl_gen \
+))
+endif
 
 # vim: set noet sw=4 ts=4:

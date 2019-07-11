@@ -22,6 +22,8 @@
 
 #include <SwStyleNameMapper.hxx>
 #include <poolfmt.hxx>
+#include <strings.hrc>
+#include <swtypes.hxx>
 
 #ifdef _NEED_TO_DEBUG_MAPPING
 #include <stdlib.h>
@@ -62,7 +64,7 @@ NameToIdHash    *SwStyleNameMapper::s_pParaUIMap = nullptr,
 // SwTableEntry so we can pass the length to the String CTOR
 struct SwTableEntry
 {
-    sal_uInt8 nLength;
+    sal_uInt8 const nLength;
     const sal_Char *pChar;
 };
 
@@ -192,8 +194,8 @@ const struct SwTableEntry RegisterProgNameTable [] =
     ENTRY( "Contents 8" ),
     ENTRY( "Contents 9" ),
     ENTRY( "Contents 10" ),
-    ENTRY( "Illustration Index Heading" ),
-    ENTRY( "Illustration Index 1" ),
+    ENTRY( "Figure Index Heading" ),
+    ENTRY( "Figure Index 1" ),
     ENTRY( "Object index heading" ),
     ENTRY( "Object index 1" ),
     ENTRY( "Table index heading" ),
@@ -504,15 +506,15 @@ const NameToIdHash & SwStyleNameMapper::getHashTable ( SwGetPoolIdFromName eFlag
         sal_uInt16 nSize = std::accumulate( vIndexes.begin(), vIndexes.end(), 0, lcl_AccumulateIndexCount );
 
         NameToIdHash *pHash = new NameToIdHash( nSize );
-        for ( std::vector<NameArrayIndexTuple_t>::iterator entry = vIndexes.begin(); entry != vIndexes.end(); ++entry )
+        for ( const auto& rEntry : vIndexes )
         {
             // Get a pointer to the function which will populate pStrings
-            const std::vector<OUString>& (*pStringsFetchFunc)() = std::get<2>( *entry );
+            const std::vector<OUString>& (*pStringsFetchFunc)() = std::get<2>( rEntry );
             if ( pStringsFetchFunc )
             {
                 const std::vector<OUString>& rStrings = pStringsFetchFunc();
                 sal_uInt16 nIndex, nId;
-                for ( nIndex = 0, nId = std::get<0>( *entry ) ; nId < std::get<1>( *entry ) ; nId++, nIndex++ )
+                for ( nIndex = 0, nId = std::get<0>( rEntry ) ; nId < std::get<1>( rEntry ) ; nId++, nIndex++ )
                     (*pHash)[rStrings[nIndex]] = nId;
             }
         }
@@ -588,6 +590,9 @@ void SwStyleNameMapper::FillProgName(
         // If we aren't trying to disambiguate, then just do a normal fill
         fillNameFromId(nId, rFillName, true);
     }
+
+    if (eFlags == SwGetPoolIdFromName::ChrFmt && rName == SwResId(STR_POOLCOLL_STANDARD))
+        rFillName = "Standard";
 }
 
 // Get the UI name from the programmatic name in rName and put it into rFillName
@@ -595,11 +600,15 @@ void SwStyleNameMapper::FillUIName(
         const OUString& rName, OUString& rFillName,
         SwGetPoolIdFromName const eFlags)
 {
-    sal_uInt16 nId = GetPoolIdFromProgName ( rName, eFlags );
+    OUString aName = rName;
+    if (eFlags == SwGetPoolIdFromName::ChrFmt && rName == "Standard")
+        aName = SwResId(STR_POOLCOLL_STANDARD);
+
+    sal_uInt16 nId = GetPoolIdFromProgName ( aName, eFlags );
     if ( nId == USHRT_MAX )
     {
-        rFillName = rName;
-        // rName isn't in our Prog name table...check if it has a " (user)" suffix, if so remove it
+        rFillName = aName;
+        // aName isn't in our Prog name table...check if it has a " (user)" suffix, if so remove it
         lcl_CheckSuffixAndDelete ( rFillName );
     }
     else

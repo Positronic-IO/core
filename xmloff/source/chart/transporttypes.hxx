@@ -135,7 +135,7 @@ struct RegressionStyle
     css::uno::Reference<
                 css::beans::XPropertySet > m_xEquationProperties;
 
-    OUString msStyleName;
+    OUString const msStyleName;
 
     RegressionStyle(const css::uno::Reference<
                           css::chart2::XDataSeries >& xSeries,
@@ -179,7 +179,6 @@ struct DataRowPointStyle
                         , sal_Int32 nAttachedAxis = 0 ) :
             meType( eType ),
             m_xSeries( xSeries ),
-            m_xOldAPISeries( nullptr ),
             m_nPointIndex( nPointIndex ),
             m_nPointRepeat( nPointRepeat ),
             msStyleName( sStyleName ),

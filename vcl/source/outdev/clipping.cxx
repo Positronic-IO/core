@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <osl/diagnose.h>
 
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
@@ -78,9 +79,8 @@ bool OutputDevice::SelectClipRegion( const vcl::Region& rRegion, SalGraphics* pG
 
     if( !pGraphics )
     {
-        if( !mpGraphics )
-            if( !AcquireGraphics() )
-                return false;
+        if( !mpGraphics && !AcquireGraphics() )
+            return false;
         pGraphics = mpGraphics;
     }
 
@@ -153,8 +153,8 @@ void OutputDevice::InitClipRegion()
 
             // #102532# Respect output offset also for clip region
             vcl::Region aRegion( ImplPixelToDevicePixel( maRegion ) );
-            const bool bClipDeviceBounds( ! GetPDFWriter()
-                                          && GetOutDevType() != OUTDEV_PRINTER );
+            const bool bClipDeviceBounds((OUTDEV_PDF != GetOutDevType())
+                                          && (OUTDEV_PRINTER != GetOutDevType()));
             if( bClipDeviceBounds )
             {
                 // Perform actual rect clip against outdev

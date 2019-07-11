@@ -213,7 +213,7 @@ void recentUnoChanged( GtkWidget* pSelector, gpointer /* pItem */ )
 static void addToRecentUnoCommands(GtvApplicationWindow* pWindow, const std::string& rUnoCmd, std::string rArgs)
 {
     GtvMainToolbar* pToolbar = gtv_application_window_get_main_toolbar(pWindow);
-    rArgs.erase(std::find_if(rArgs.begin(), rArgs.end(), [](char ch) { return ch == '\n'; }));
+    rArgs.erase(std::find(rArgs.begin(), rArgs.end(), '\n'));
     const std::string rUnoCmdStr = rUnoCmd + " | " + rArgs;
 
 
@@ -330,7 +330,7 @@ void changeZoom( GtkWidget* pButton, gpointer /* pItem */ )
 
     if ( strcmp(sName, "zoom-in-symbolic") == 0)
     {
-        for ( unsigned int i = 0; i < SAL_N_ELEMENTS( fZooms ); i++ )
+        for ( size_t i = 0; i < SAL_N_ELEMENTS( fZooms ); i++ )
         {
             if ( fCurrentZoom < fZooms[i] )
             {
@@ -345,7 +345,7 @@ void changeZoom( GtkWidget* pButton, gpointer /* pItem */ )
     }
     else if ( strcmp(sName, "zoom-out-symbolic") == 0)
     {
-        for ( unsigned int i = 0; i < SAL_N_ELEMENTS( fZooms ); i++ )
+        for ( size_t i = 0; i < SAL_N_ELEMENTS( fZooms ); i++ )
         {
             if ( fCurrentZoom > fZooms[i] )
             {
@@ -354,15 +354,12 @@ void changeZoom( GtkWidget* pButton, gpointer /* pItem */ )
         }
     }
 
-    if ( fZoom != 0 )
+    if ( fZoom != 0 && window->lokdocview )
     {
-        if ( window->lokdocview )
-        {
-            lok_doc_view_set_zoom( LOK_DOC_VIEW(window->lokdocview), fZoom );
-            GdkRectangle aVisibleArea;
-            gtv_application_window_get_visible_area(window, &aVisibleArea);
-            lok_doc_view_set_visible_area(LOK_DOC_VIEW(window->lokdocview), &aVisibleArea);
-        }
+        lok_doc_view_set_zoom( LOK_DOC_VIEW(window->lokdocview), fZoom );
+        GdkRectangle aVisibleArea;
+        gtv_application_window_get_visible_area(window, &aVisibleArea);
+        lok_doc_view_set_visible_area(LOK_DOC_VIEW(window->lokdocview), &aVisibleArea);
     }
     const std::string aZoom = std::string("Zoom: ") + std::to_string(int(fZoom * 100)) + std::string("%");
     gtk_label_set_text(GTK_LABEL(window->zoomlabel), aZoom.c_str());

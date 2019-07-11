@@ -27,9 +27,9 @@
 #include <vcl/tabdlg.hxx>
 #include <vcl/tabpage.hxx>
 #include <svtools/simptabl.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <svtools/svmedit2.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
 #include <cppuhelper/implbase.hxx>
@@ -70,8 +70,8 @@
 #define RECOVERY_OPERATIONSTATE_UPDATE              "update"
 
 #define DLG_RET_UNKNOWN                                  -1
-#define DLG_RET_OK                                        1
-#define DLG_RET_CANCEL                                    0
+#define DLG_RET_OK                                      RET_OK
+#define DLG_RET_CANCEL                                  RET_CANCEL
 #define DLG_RET_OK_AUTOLUNCH                            101
 
 
@@ -146,6 +146,7 @@ struct TURLInfo
 
     /// standard icon
     Image StandardImage;
+    OUString StandardImageId;
 
     public:
 
@@ -213,7 +214,7 @@ class RecoveryCore : public ::cppu::WeakImplHelper< css::frame::XStatusListener 
                     on the core dispatch implementation, we must know,
                     which URL we have to use for deregistration!
          */
-        bool m_bListenForSaving;
+        bool const m_bListenForSaving;
 
 
     // native interface
@@ -485,9 +486,9 @@ class RecoveryDialog : public Dialog
         VclPtr<RecovDocList>   m_pFileListLB;
         VclPtr<PushButton>     m_pNextBtn;
         VclPtr<PushButton>     m_pCancelBtn;
-        OUString        m_aTitleRecoveryInProgress;
-        OUString        m_aRecoveryOnlyFinish;
-        OUString        m_aRecoveryOnlyFinishDescr;
+        OUString const        m_aTitleRecoveryInProgress;
+        OUString const        m_aRecoveryOnlyFinish;
+        OUString const        m_aRecoveryOnlyFinishDescr;
 
         RecoveryCore*   m_pCore;
         css::uno::Reference< css::task::XStatusIndicator > m_xProgress;
@@ -535,65 +536,58 @@ class RecoveryDialog : public Dialog
 };
 
 
-class BrokenRecoveryDialog : public ModalDialog
+class BrokenRecoveryDialog : public weld::GenericDialogController
 {
+// member
+private:
+    OUString m_sSavePath;
+    RecoveryCore*   m_pCore;
+    bool const        m_bBeforeRecovery;
+    bool        m_bExecutionNeeded;
 
-    // member
-    private:
-        VclPtr<ListBox>         m_pFileListLB;
-        VclPtr<Edit>            m_pSaveDirED;
-        VclPtr<PushButton>      m_pSaveDirBtn;
-        VclPtr<PushButton>      m_pOkBtn;
-        VclPtr<CancelButton>    m_pCancelBtn;
+    std::unique_ptr<weld::TreeView> m_xFileListLB;
+    std::unique_ptr<weld::Entry> m_xSaveDirED;
+    std::unique_ptr<weld::Button> m_xSaveDirBtn;
+    std::unique_ptr<weld::Button> m_xOkBtn;
+    std::unique_ptr<weld::Button> m_xCancelBtn;
 
-        OUString m_sSavePath;
-        RecoveryCore*   m_pCore;
-        bool        m_bBeforeRecovery;
-        bool        m_bExecutionNeeded;
+// interface
+public:
 
+    /** @short TODO */
+    BrokenRecoveryDialog(weld::Window* pParent,
+                         RecoveryCore* pCore,
+                         bool bBeforeRecovery);
+    virtual ~BrokenRecoveryDialog() override;
 
-    // interface
-    public:
-
-
-        /** @short TODO */
-        BrokenRecoveryDialog(vcl::Window*       pParent        ,
-                             RecoveryCore* pCore          ,
-                             bool      bBeforeRecovery);
-        virtual ~BrokenRecoveryDialog() override;
-        virtual void dispose() override;
-
-
-        /** @short TODO */
-        bool isExecutionNeeded();
+    /** @short TODO */
+    bool isExecutionNeeded();
 
 
-        /** @short TODO */
-        const OUString& getSaveDirURL();
+    /** @short TODO */
+    const OUString& getSaveDirURL();
 
 
-    // helper
-    private:
+// helper
+private:
+    /** @short TODO */
+    void impl_refresh();
 
 
-        /** @short TODO */
-        void impl_refresh();
+    /** @short TODO */
+    DECL_LINK(SaveButtonHdl, weld::Button&, void);
 
 
-        /** @short TODO */
-        DECL_LINK(SaveButtonHdl, Button*, void);
+    /** @short TODO */
+    DECL_LINK(OkButtonHdl, weld::Button&, void);
 
 
-        /** @short TODO */
-        DECL_LINK(OkButtonHdl, Button*, void);
+    /** @short TODO */
+    DECL_LINK(CancelButtonHdl, weld::Button&, void);
 
 
-        /** @short TODO */
-        DECL_LINK(CancelButtonHdl, Button*, void);
-
-
-        /** @short TODO */
-        void impl_askForSavePath();
+    /** @short TODO */
+    void impl_askForSavePath();
 };
     }
 }

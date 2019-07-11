@@ -20,40 +20,45 @@
 #ifndef INCLUDED_SW_INC_IDOCUMENTTIMERACCESS_HXX
 #define INCLUDED_SW_INC_IDOCUMENTTIMERACCESS_HXX
 
-/** Manipulate background jobs of the document. It starts with a mode of
- 'started' and a block count of 0.
+/**
+ * Handle the background jobs of a Writer document.
+ *
+ * Initially it's disabled and unblocked.
+ *
+ * Jobs include:
+ *  * grammar checking
+ *  * field updating
+ *  * document layouting
  */
 class IDocumentTimerAccess
 {
 public:
     /**
-    Set mode to 'start'.
-    */
+     * Start the idle task.
+     *
+     * Depends on the block count and various document states.
+     */
     virtual void StartIdling() = 0;
 
     /**
-    Set mode to 'stopped'.
-    */
+     * Stop idle processing.
+     */
     virtual void StopIdling() = 0;
 
     /**
-    Increment block count.
-    */
+     * Increment block count.
+     *
+     * Prevents further background idle processing.
+     * This doesn't guarantee the Idle task is not currently running!
+     */
     virtual void BlockIdling() = 0;
 
     /**
-    Decrement block count.
-    */
+     * Decrement block count.
+     *
+     * May re-start the idle task, if active.
+     */
     virtual void UnblockIdling() = 0;
-
-    /**
-    Do these jobs asynchronously: do grammar checking,
-    do layout, and update fields.
-    They will be delayed until mode is start AND block count == 0.
-    The implementation might delay them further, for example
-    it might wait until the application is idle.
-    */
-    virtual void StartBackgroundJobs() = 0;
 
     /**
      * Is the document ready to be processed?

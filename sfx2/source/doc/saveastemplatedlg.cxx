@@ -44,6 +44,7 @@ SfxSaveAsTemplateDialog::SfxSaveAsTemplateDialog(weld::Window* pParent, const un
     , mnRegionPos(0)
     , m_xModel(rModel)
 {
+    m_xLBCategory->append_text(SfxResId(STR_CATEGORY_NONE));
     initialize();
     SetCategoryLBEntries(msCategories);
 
@@ -117,7 +118,7 @@ void SfxSaveAsTemplateDialog::SetCategoryLBEntries(const std::vector<OUString>& 
     if (!rFolderNames.empty())
     {
         for (size_t i = 0, n = rFolderNames.size(); i < n; ++i)
-            m_xLBCategory->insert_text(rFolderNames[i], i+1);
+            m_xLBCategory->insert_text(i+1, rFolderNames[i]);
     }
     m_xLBCategory->select(0);
 }

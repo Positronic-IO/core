@@ -458,7 +458,9 @@ sal_Int32 SAL_CALL SvNumberFormatsObj::addNewConverted( const OUString& aFormat,
     sal_uInt32 nKey = 0;
     sal_Int32 nCheckPos = 0;
     SvNumFormatType nType = SvNumFormatType::ALL;
-    bool bOk = pFormatter->PutandConvertEntry( aFormStr, nCheckPos, nType, nKey, eLang, eNewLang );
+    // This is used also when reading OOXML documents, there's no indicator
+    // whether to convert date particle order as well, so don't. See tdf#119013
+    bool bOk = pFormatter->PutandConvertEntry( aFormStr, nCheckPos, nType, nKey, eLang, eNewLang, false);
     if (bOk || nKey > 0)
         nRet = nKey;
     else if (nCheckPos)
@@ -596,7 +598,6 @@ SvNumberFormatObj::~SvNumberFormatObj()
 
 uno::Reference<beans::XPropertySetInfo> SAL_CALL SvNumberFormatObj::getPropertySetInfo()
 {
-    ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
     static uno::Reference<beans::XPropertySetInfo> aRef =
         new SfxItemPropertySetInfo( lcl_GetNumberFormatPropertyMap() );
     return aRef;
@@ -806,7 +807,6 @@ SvNumberFormatSettingsObj::~SvNumberFormatSettingsObj()
 
 uno::Reference<beans::XPropertySetInfo> SAL_CALL SvNumberFormatSettingsObj::getPropertySetInfo()
 {
-    ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
     static uno::Reference<beans::XPropertySetInfo> aRef =
         new SfxItemPropertySetInfo( lcl_GetNumberSettingsPropertyMap() );
     return aRef;

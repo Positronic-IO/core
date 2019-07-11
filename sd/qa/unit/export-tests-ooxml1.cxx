@@ -101,6 +101,7 @@ public:
     void testTdf111884();
     void testTdf112633();
     void testCustomXml();
+    void testPictureTransparency();
 
     CPPUNIT_TEST_SUITE(SdOOXMLExportTest1);
 
@@ -131,12 +132,13 @@ public:
     CPPUNIT_TEST(testTdf111884);
     CPPUNIT_TEST(testTdf112633);
     CPPUNIT_TEST(testCustomXml);
+    CPPUNIT_TEST(testPictureTransparency);
 
     CPPUNIT_TEST_SUITE_END();
 
     virtual void registerNamespaces(xmlXPathContextPtr& pXmlXPathCtx) override
     {
-        struct { char const * pPrefix; char const * pURI; } namespaces[] =
+        static const struct { char const * pPrefix; char const * pURI; } namespaces[] =
         {
             // OOXML
             { "ContentType", "http://schemas.openxmlformats.org/package/2006/content-types" },
@@ -229,7 +231,7 @@ void SdOOXMLExportTest1::testBnc870233_2()
 
     // Second smart art has "dk2" font color (style)
     {
-        const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(2)); // FIXME should be 1, smartart import creates an additional empty group for some reason
+        const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(1));
         CPPUNIT_ASSERT(pObjGroup);
         const SdrTextObj *pObj = dynamic_cast<SdrTextObj *>(pObjGroup->GetSubList()->GetObj(0));
         checkFontAttributes<Color, SvxColorItem>( pObj, Color(0x1F497D) );
@@ -237,7 +239,7 @@ void SdOOXMLExportTest1::testBnc870233_2()
 
     // Third smart art has white font color (style)
     {
-        const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(4)); // FIXME should be 2, smartart import creates an additional empty group for some reason
+        const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(2));
         CPPUNIT_ASSERT(pObjGroup);
         const SdrTextObj *pObj = dynamic_cast<SdrTextObj *>(pObjGroup->GetSubList()->GetObj(0));
         checkFontAttributes<Color, SvxColorItem>(pObj, Color(0xffffff));
@@ -296,7 +298,7 @@ void SdOOXMLExportTest1::testN828390_5()
         const EditTextObject& aEdit = pTxtObj->GetOutlinerParaObject()->GetTextObject();
         const SvxNumBulletItem *pNumFmt = aEdit.GetPool()->GetItem2(EE_PARA_NUMBULLET, 5);
         CPPUNIT_ASSERT( pNumFmt );
-        CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's relative size is wrong!", pNumFmt->GetNumRule()->GetLevel(1).GetBulletRelSize(), sal_uInt16(75) ); // != 25
+        CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's relative size is wrong!", sal_uInt16(75), pNumFmt->GetNumRule()->GetLevel(1).GetBulletRelSize() ); // != 25
     }
 
     xDocShRef->DoClose();
@@ -374,12 +376,12 @@ void SdOOXMLExportTest1::testBnc880763()
     // First object in the background has blue background color
     const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(0));
     CPPUNIT_ASSERT(pObjGroup);
-    const SdrObject *pObj = pObjGroup->GetSubList()->GetObj(0);
+    const SdrObject *pObj = pObjGroup->GetSubList()->GetObj(1);
     CPPUNIT_ASSERT_MESSAGE( "no object", pObj != nullptr);
     CPPUNIT_ASSERT_EQUAL( Color(0x0000ff),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue());
 
     // Second object at the front has green background color
-    pObj = pPage->GetObj(2); // FIXME should be 1, smartart import creates an additional empty group for some reason
+    pObj = pPage->GetObj(1);
     CPPUNIT_ASSERT_MESSAGE( "no object", pObj != nullptr);
     CPPUNIT_ASSERT_EQUAL( Color(0x00ff00),(static_cast< const XColorItem& >(pObj->GetMergedItem(XATTR_FILLCOLOR))).GetColorValue());
 
@@ -396,7 +398,7 @@ void SdOOXMLExportTest1::testBnc862510_5()
     // Same as testBnc870237, but here we check the horizontal spacing
     const SdrObjGroup *pObjGroup = dynamic_cast<SdrObjGroup *>(pPage->GetObj(0));
     CPPUNIT_ASSERT(pObjGroup);
-    const SdrObject* pObj = pObjGroup->GetSubList()->GetObj(1);
+    const SdrObject* pObj = pObjGroup->GetSubList()->GetObj(2);
     CPPUNIT_ASSERT_MESSAGE( "no object", pObj != nullptr);
     CPPUNIT_ASSERT_EQUAL( sal_Int32(0), pObj->GetMergedItem(SDRATTR_TEXT_UPPERDIST).GetValue());
     CPPUNIT_ASSERT_EQUAL( sal_Int32(0), pObj->GetMergedItem(SDRATTR_TEXT_LOWERDIST).GetValue());
@@ -538,7 +540,7 @@ void SdOOXMLExportTest1::testBulletStartNumber()
     const EditTextObject& aEdit = pTxtObj->GetOutlinerParaObject()->GetTextObject();
     const SvxNumBulletItem *pNumFmt = aEdit.GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
     CPPUNIT_ASSERT(pNumFmt);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's start number is wrong!", sal_Int16(pNumFmt->GetNumRule()->GetLevel(0).GetStart()), sal_Int16(3) );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's start number is wrong!", sal_Int16(3), sal_Int16(pNumFmt->GetNumRule()->GetLevel(0).GetStart()) );
     xDocShRef->DoClose();
 }
 
@@ -663,8 +665,8 @@ void SdOOXMLExportTest1::testBulletMarginAndIndentation()
     const SvxNumBulletItem *pNumFmt = aEdit.GetParaAttribs(0).GetItem(EE_PARA_NUMBULLET);
     CPPUNIT_ASSERT(pNumFmt);
 
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's left margin is wrong!", short(1000),pNumFmt->GetNumRule()->GetLevel(0).GetAbsLSpace() ); // left margin is 0.79 cm
-    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's indentation is wrong!", sal_Int32(-998),sal_Int32(pNumFmt->GetNumRule()->GetLevel(0). GetFirstLineOffset()));
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's left margin is wrong!", sal_Int32(1000),pNumFmt->GetNumRule()->GetLevel(0).GetAbsLSpace() ); // left margin is 0.79 cm
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Bullet's indentation is wrong!", sal_Int32(-998),pNumFmt->GetNumRule()->GetLevel(0). GetFirstLineOffset());
 
     xDocShRef->DoClose();
 }
@@ -851,6 +853,30 @@ void SdOOXMLExportTest1::testCustomXml()
 
     std::shared_ptr<SvStream> pStream = parseExportStream(tempFile, "ddp/ddpfile.xen");
     CPPUNIT_ASSERT(pStream);
+}
+
+void SdOOXMLExportTest1::testPictureTransparency()
+{
+    // Load document and export it to a temporary file.
+    ::sd::DrawDocShellRef xDocShRef
+        = loadURL(m_directories.getURLFromSrc("sd/qa/unit/data/odp/image_transparency.odp"), ODP);
+    utl::TempFile tempFile;
+    xDocShRef = saveAndReload(xDocShRef.get(), PPTX, &tempFile);
+    uno::Reference<drawing::XDrawPagesSupplier> xDoc(xDocShRef->GetDoc()->getUnoModel(),
+                                                     uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xDoc.is());
+
+    uno::Reference<drawing::XDrawPage> xPage(xDoc->getDrawPages()->getByIndex(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xPage.is());
+
+    uno::Reference<beans::XPropertySet> xGraphicShape(getShape(0, xPage));
+    CPPUNIT_ASSERT(xGraphicShape.is());
+
+    sal_Int16 nTransparency = 0;
+    CPPUNIT_ASSERT(xGraphicShape->getPropertyValue("Transparency") >>= nTransparency);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int16>(51), nTransparency);
+
+    xDocShRef->DoClose();
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SdOOXMLExportTest1);

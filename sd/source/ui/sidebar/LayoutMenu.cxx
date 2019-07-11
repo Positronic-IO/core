@@ -26,9 +26,11 @@
 #include <glob.hxx>
 #include <helpids.h>
 #include <pres.hxx>
+#include <sdmod.hxx>
 
 #include <sdpage.hxx>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <bitmaps.hlst>
 #include <tools/SlotStateListener.hxx>
 #include <DrawController.hxx>
@@ -38,6 +40,7 @@
 #include <SlideSorterViewShell.hxx>
 #include <ViewShellBase.hxx>
 #include <sfx2/sidebar/Theme.hxx>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <sfx2/app.hxx>
@@ -69,8 +72,8 @@ struct snewfoil_value_info
 {
     const char* msBmpResId;
     const char* mpStrResId;
-    WritingMode meWritingMode;
-    AutoLayout maAutoLayout;
+    WritingMode const meWritingMode;
+    AutoLayout const maAutoLayout;
 };
 
 static const snewfoil_value_info notes[] =
@@ -128,7 +131,6 @@ LayoutMenu::LayoutMenu (
       DragSourceHelper(this),
       DropTargetHelper(this),
       mrBase(rViewShellBase),
-      mxListener(nullptr),
       mbIsMainViewChangePending(false),
       mxSidebar(rxSidebar),
       mbIsDisposed(false)
@@ -381,9 +383,8 @@ void LayoutMenu::AssignLayoutToSelectedSlides (AutoLayout aLayout)
             case ViewShell::ST_IMPRESS:
             {
                 DrawViewShell* pDrawViewShell = static_cast<DrawViewShell*>(pMainViewShell);
-                if (pDrawViewShell != nullptr)
-                    if (pDrawViewShell->GetEditMode() == EditMode::MasterPage)
-                        bMasterPageMode = true;
+                if (pDrawViewShell->GetEditMode() == EditMode::MasterPage)
+                    bMasterPageMode = true;
                 break;
             }
             default:
@@ -454,10 +455,8 @@ SfxRequest LayoutMenu::CreateRequest (
     do
     {
         SdrLayerAdmin& rLayerAdmin (mrBase.GetDocument()->GetLayerAdmin());
-        SdrLayerID aBackground (rLayerAdmin.GetLayerID(
-            SdResId(STR_LAYER_BCKGRND)));
-        SdrLayerID aBackgroundObject (rLayerAdmin.GetLayerID(
-            SdResId(STR_LAYER_BCKGRNDOBJ)));
+        SdrLayerID aBackground (rLayerAdmin.GetLayerID(sUNO_LayerName_background));
+        SdrLayerID aBackgroundObject (rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects));
         ViewShell* pViewShell = mrBase.GetMainViewShell().get();
         if (pViewShell == nullptr)
             break;

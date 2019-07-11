@@ -18,6 +18,7 @@
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <connectivity/dbexception.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <sal/log.hxx>
 
 using namespace ::connectivity::firebird;
 
@@ -75,7 +76,7 @@ void Blob::ensureBlobIsOpened()
         isc_info_blob_max_segment
     };
 
-    // Assuming a data (e.g. legth of blob) is maximum 64 bit.
+    // Assuming a data (e.g. length of blob) is maximum 64 bit.
     // That means we need 8 bytes for data + 2 for length of data + 1 for item
     // identifier for each item.
     char aResultBuffer[11 + 11];

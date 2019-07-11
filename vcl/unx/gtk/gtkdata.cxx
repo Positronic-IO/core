@@ -38,6 +38,7 @@
 #include <unx/geninst.h>
 #include <osl/thread.h>
 #include <osl/process.h>
+#include <sal/log.hxx>
 
 #include <unx/i18n_im.hxx>
 #include <unx/i18n_xkb.hxx>
@@ -54,7 +55,7 @@ using namespace vcl_sal;
  * class GtkSalDisplay                                         *
  ***************************************************************/
 extern "C" {
-GdkFilterReturn call_filterGdkEvent( GdkXEvent* sys_event,
+static GdkFilterReturn call_filterGdkEvent( GdkXEvent* sys_event,
                                      GdkEvent* /*event*/,
                                      gpointer data )
 {
@@ -102,13 +103,13 @@ GtkSalDisplay::~GtkSalDisplay()
 
 extern "C" {
 
-void signalScreenSizeChanged( GdkScreen* pScreen, gpointer data )
+static void signalScreenSizeChanged( GdkScreen* pScreen, gpointer data )
 {
     GtkSalDisplay* pDisp = static_cast<GtkSalDisplay*>(data);
     pDisp->screenSizeChanged( pScreen );
 }
 
-void signalMonitorsChanged( GdkScreen* pScreen, gpointer data )
+static void signalMonitorsChanged( GdkScreen* pScreen, gpointer data )
 {
     GtkSalDisplay* pDisp = static_cast<GtkSalDisplay*>(data);
     pDisp->monitorsChanged( pScreen );
@@ -244,6 +245,9 @@ GdkCursor* GtkSalDisplay::getFromXBM( const unsigned char *pBitmap,
             ( pBitmapPix, pMaskPix,
               &aBlack, &aWhite, nXHot, nYHot);
 }
+
+static unsigned char nullmask_bits[] = { 0x00, 0x00, 0x00, 0x00 };
+static unsigned char nullcurs_bits[] = { 0x00, 0x00, 0x00, 0x00 };
 
 #define MAKE_CURSOR( vcl_name, name ) \
     case vcl_name: \

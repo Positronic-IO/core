@@ -23,7 +23,7 @@
 #include <config_cairo_canvas.h>
 
 #include <gtk/gtk.h>
-#include <gdk/gdkx.h>
+#include "gtkbackend.hxx"
 #include <gdk/gdkkeysyms.h>
 
 #include <unx/gtk/gtkframe.hxx>
@@ -100,7 +100,7 @@ typedef void (*gtk_widget_path_iter_set_object_nameFunc)(GtkWidgetPath *, guint,
 
 class GtkSalGraphics : public SvpSalGraphics
 {
-    GtkSalFrame *mpFrame;
+    GtkSalFrame * const mpFrame;
 public:
     GtkSalGraphics( GtkSalFrame *pFrame, GtkWidget *pWindow );
     virtual bool        drawNativeControl( ControlType nType, ControlPart nPart,
@@ -115,6 +115,9 @@ public:
                                                     const OUString& rCaption,
                                                     tools::Rectangle &rNativeBoundingRegion,
                                                     tools::Rectangle &rNativeContentRegion ) override;
+
+    virtual void updateSettings(AllSettings& rSettings) override;
+
 #if ENABLE_CAIRO_CANVAS
 
     virtual bool        SupportsCairo() const override;
@@ -125,7 +128,6 @@ public:
 
     void WidgetQueueDraw() const;
 
-    void updateSettings( AllSettings& rSettings );
     static void refreshFontconfig( GtkSettings *pSettings );
     static void signalSettingsNotify( GObject*, GParamSpec *pSpec, gpointer );
 
@@ -136,7 +138,7 @@ public:
     GtkStyleContext* createOldContext(GtkControlPart ePart);
     GtkStyleContext* makeContext(GtkWidgetPath *pPath, GtkStyleContext *pParent);
 private:
-    GtkWidget       *mpWindow;
+    GtkWidget       * const mpWindow;
     static GtkStyleContext *mpWindowStyle;
     static GtkStyleContext *mpButtonStyle;
     static GtkStyleContext *mpLinkButtonStyle;
@@ -206,7 +208,7 @@ private:
 
     static tools::Rectangle NWGetScrollButtonRect( ControlPart nPart, tools::Rectangle aAreaRect );
     static tools::Rectangle NWGetSpinButtonRect( ControlPart nPart, tools::Rectangle aAreaRect);
-    static tools::Rectangle NWGetComboBoxButtonRect( ControlPart nPart, tools::Rectangle aAreaRect );
+    static tools::Rectangle NWGetComboBoxButtonRect(ControlType nType, ControlPart nPart, tools::Rectangle aAreaRect);
 
     static void PaintScrollbar(GtkStyleContext *context,
                         cairo_t *cr,
@@ -382,7 +384,7 @@ protected:
     bool NWPaintGTKSlider( ControlPart nPart,
                            const tools::Rectangle& rControlRectangle,
                            ControlState nState, const ImplControlValue& aValue );
-    bool NWPaintGTKListNode(
+    bool NWPaintGTKListNode( GdkDrawable* gdkDrawable,
                             const tools::Rectangle& rControlRectangle,
                             ControlState nState, const ImplControlValue& aValue );
 };

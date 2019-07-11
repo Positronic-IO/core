@@ -58,7 +58,11 @@ $(eval $(call gb_CppunitTest_set_include,sc_subsequent_export_test,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sc_subsequent_export_test))
+$(eval $(call gb_CppunitTest_use_api,sc_subsequent_export_test,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sc_subsequent_export_test))
 $(eval $(call gb_CppunitTest_use_vcl,sc_subsequent_export_test))
@@ -102,6 +106,7 @@ $(eval $(call gb_CppunitTest_use_components,sc_subsequent_export_test,\
     vcl/vcl.common \
     xmloff/util/xo \
     xmlsecurity/util/xmlsecurity \
+    emfio/emfio \
 ))
 
 $(eval $(call gb_CppunitTest_use_components,sc_subsequent_export_test,\
@@ -117,5 +122,7 @@ $(eval $(call gb_CppunitTest_use_configuration,sc_subsequent_export_test))
 $(eval $(call gb_CppunitTest_use_packages,sc_subsequent_export_test, \
     oox_generated \
 ))
+
+$(eval $(call gb_CppunitTest_use_more_fonts,subsequent_export_test))
 
 # vim: set noet sw=4 ts=4:

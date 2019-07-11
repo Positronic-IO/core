@@ -32,6 +32,7 @@
 #include <oox/helper/propertyset.hxx>
 #include <oox/token/properties.hxx>
 #include <stylesbuffer.hxx>
+#include <biffhelper.hxx>
 
 namespace oox {
 namespace xls {
@@ -48,7 +49,7 @@ const double MM100_PER_TWIP         = MM100_PER_POINT / 20.0;
 const double MM100_PER_EMU          = 1.0 / 360.0;
 
 /** Returns true, if the passed year is a leap year. */
-inline bool lclIsLeapYear( sal_Int32 nYear )
+bool lclIsLeapYear( sal_Int32 nYear )
 {
     return ((nYear % 4) == 0) && (((nYear % 100) != 0) || ((nYear % 400) == 0));
 }
@@ -131,7 +132,7 @@ void UnitConverter::finalizeImport()
         if( const oox::xls::Font* pDefFont = getStyles().getDefaultFont().get() )
         {
             // XDevice expects pixels in font descriptor, but font contains twips
-            FontDescriptor aDesc = pDefFont->getFontDescriptor();
+            const FontDescriptor& aDesc = pDefFont->getFontDescriptor();
             Reference< XFont > xFont = xDevice->getFont( aDesc );
             if( xFont.is() )
             {
@@ -215,14 +216,14 @@ util::DateTime UnitConverter::calcDateTimeFromSerial( double fSerial ) const
 
 sal_uInt8 UnitConverter::calcBiffErrorCode( const OUString& rErrorCode ) const
 {
-    OoxErrorCodeMap::const_iterator aIt = maOoxErrCodes.find( rErrorCode );
+    auto aIt = maOoxErrCodes.find( rErrorCode );
     return (aIt == maOoxErrCodes.end()) ? BIFF_ERR_NA : aIt->second;
 }
 
 OUString UnitConverter::calcErrorString( sal_uInt8 nErrorCode ) const
 {
-    OoxErrorCodeMap::const_iterator iFail( maOoxErrCodes.end());
-    for (OoxErrorCodeMap::const_iterator aIt( maOoxErrCodes.begin()); aIt != maOoxErrCodes.end(); ++aIt)
+    auto iFail( maOoxErrCodes.cend());
+    for (auto aIt( maOoxErrCodes.cbegin()); aIt != maOoxErrCodes.cend(); ++aIt)
     {
         if (aIt->second == nErrorCode)
             return aIt->first;

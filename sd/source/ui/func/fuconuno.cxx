@@ -18,6 +18,7 @@
  */
 
 #include <fuconuno.hxx>
+#include <rtl/ustring.hxx>
 #include <svl/aeitem.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -36,7 +37,7 @@
 #include <ViewShellBase.hxx>
 #include <ToolBarManager.hxx>
 #include <drawdoc.hxx>
-#include <sdresid.hxx>
+#include <unokywds.hxx>
 
 
 namespace sd {
@@ -121,7 +122,7 @@ void FuConstructUnoControl::Activate()
     mpWindow->SetPointer( aNewPointer );
 
     aOldLayer = mpView->GetActiveLayer();
-    mpView->SetActiveLayer( SdResId(STR_LAYER_CONTROLS) );
+    mpView->SetActiveLayer(sUNO_LayerName_controls);
 
     FuConstruct::Activate();
 }
@@ -133,14 +134,14 @@ void FuConstructUnoControl::Deactivate()
     mpWindow->SetPointer( aOldPointer );
 }
 
-SdrObject* FuConstructUnoControl::CreateDefaultObject(const sal_uInt16, const ::tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstructUnoControl::CreateDefaultObject(const sal_uInt16, const ::tools::Rectangle& rRectangle)
 {
     // case SID_FM_CREATE_CONTROL:
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         mpView->getSdrModelFromSdrView(),
         mpView->GetCurrentObjInventor(),
-        mpView->GetCurrentObjIdentifier());
+        mpView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {

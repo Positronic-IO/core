@@ -21,7 +21,6 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_DBINSDLG_HXX
 
 #include <vcl/button.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/layout.hxx>
@@ -78,10 +77,8 @@ struct SwInsDBColumn
     bool operator<( const SwInsDBColumn& rCmp ) const;
 };
 
-class SwInsDBColumns : public o3tl::sorted_vector<SwInsDBColumn*, o3tl::less_ptr_to<SwInsDBColumn> >
+class SwInsDBColumns : public o3tl::sorted_vector<std::unique_ptr<SwInsDBColumn>, o3tl::less_uniqueptr_to<SwInsDBColumn> >
 {
-public:
-    ~SwInsDBColumns() { DeleteAndDestroyAll(); }
 };
 
 class SwInsertDBColAutoPilot : public SfxModalDialog, public utl::ConfigItem
@@ -123,13 +120,13 @@ class SwInsertDBColAutoPilot : public SfxModalDialog, public utl::ConfigItem
     const SwDBData  aDBData;
 
     Link<ListBox&,void>    aOldNumFormatLnk;
-    OUString        sNoTmpl;
+    OUString const  sNoTmpl;
 
     SwView*         pView;
     std::unique_ptr<SwTableAutoFormat> m_xTAutoFormat;
 
-    SfxItemSet*     pTableSet;
-    SwTableRep*     pRep;
+    std::unique_ptr<SfxItemSet>  pTableSet;
+    std::unique_ptr<SwTableRep>  pRep;
     sal_Int32       nGBFormatLen;
 
     DECL_LINK( PageHdl, Button*, void );

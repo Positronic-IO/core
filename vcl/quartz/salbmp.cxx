@@ -18,11 +18,14 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <cstddef>
 #include <limits>
 
 #include <o3tl/make_shared.hxx>
+#include <o3tl/make_unique.hxx>
 #include <basegfx/vector/b2ivector.hxx>
 #include <tools/color.hxx>
 #include <vcl/bitmap.hxx>
@@ -45,45 +48,6 @@ static const unsigned long k16BitBlueColorMask  = 0x0000001f;
 static const unsigned long k32BitRedColorMask   = 0x00ff0000;
 static const unsigned long k32BitGreenColorMask = 0x0000ff00;
 static const unsigned long k32BitBlueColorMask  = 0x000000ff;
-
-#if defined IOS && defined DBG_UTIL
-
-#include <MobileCoreServices/UTCoreTypes.h>
-#include <ImageIO/ImageIO.h>
-
-static void writeImageToFile(CGImageRef image, const char *baseName)
-{
-    static bool bDoIt = getenv("DBG_WRITE_CGIMAGES");
-    if (!bDoIt)
-        return;
-
-    static int counter = 0;
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsDirectory = [paths objectAtIndex:0];
-    NSString *path = [NSString stringWithFormat:@"%@/%s.%d.png", documentsDirectory, baseName, counter++];
-    CFURLRef url = (CFURLRef)[NSURL fileURLWithPath:path];
-    CGImageDestinationRef destination = CGImageDestinationCreateWithURL(url, kUTTypePNG, 1, NULL);
-    CGImageDestinationAddImage(destination, image, nil);
-
-    if (!CGImageDestinationFinalize(destination))
-    {
-        NSLog(@"Failed to write image to %@", path);
-    }
-    else
-    {
-        SAL_DEBUG("--- saved image " << baseName << " to " << [path UTF8String]);
-    }
-
-    CFRelease(destination);
-}
-
-#define DBG_WRITE_IMAGE(image, name) writeImageToFile(image, name)
-
-#else
-
-#define DBG_WRITE_IMAGE(image, name) /* empty */
-
-#endif
 
 static bool isValidBitCount( sal_uInt16 nBitCount )
 {
@@ -347,7 +311,7 @@ namespace {
 class ImplPixelFormat
 {
 public:
-    static ImplPixelFormat* GetFormat( sal_uInt16 nBits, const BitmapPalette& rPalette );
+    static std::unique_ptr<ImplPixelFormat> GetFormat( sal_uInt16 nBits, const BitmapPalette& rPalette );
 
     virtual void StartLine( sal_uInt8* pLine ) = 0;
     virtual void SkipPixel( sal_uInt32 nPixel ) = 0;
@@ -438,13 +402,13 @@ class ImplPixelFormat8 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
-    const sal_uInt8 mnPaletteCount;
+    const sal_uInt16 mnPaletteCount;
 
 public:
     explicit ImplPixelFormat8( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
-        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
+        , mnPaletteCount(rPalette.GetEntryCount())
         {
         }
     virtual void StartLine( sal_uInt8* pLine ) override { pData = pLine; }
@@ -460,7 +424,7 @@ public:
             if(nIndex < mnPaletteCount)
                 return mrPalette[nIndex].GetColor();
             else
-                return Color(COL_BLACK);
+                return COL_BLACK;
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -473,7 +437,7 @@ class ImplPixelFormat4 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
-    const sal_uInt8 mnPaletteCount;
+    const sal_uInt16 mnPaletteCount;
     sal_uInt32 mnX;
     sal_uInt32 mnShift;
 
@@ -481,7 +445,7 @@ public:
     explicit ImplPixelFormat4( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
-        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
+        , mnPaletteCount(rPalette.GetEntryCount())
         , mnX(0)
         , mnShift(0)
         {
@@ -510,7 +474,7 @@ public:
             if(nIndex < mnPaletteCount)
                 return mrPalette[nIndex].GetColor();
             else
-                return Color(COL_BLACK);
+                return COL_BLACK;
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -526,14 +490,14 @@ class ImplPixelFormat1 : public ImplPixelFormat
 private:
     sal_uInt8* pData;
     const BitmapPalette& mrPalette;
-    const sal_uInt8 mnPaletteCount;
+    const sal_uInt16 mnPaletteCount;
     sal_uInt32 mnX;
 
 public:
     explicit ImplPixelFormat1( const BitmapPalette& rPalette )
         : pData(nullptr)
         , mrPalette(rPalette)
-        , mnPaletteCount(static_cast< sal_uInt8 >(rPalette.GetEntryCount()))
+        , mnPaletteCount(rPalette.GetEntryCount())
         , mnX(0)
         {
         }
@@ -555,7 +519,7 @@ public:
             if(nIndex < mnPaletteCount)
                 return mrPalette[nIndex].GetColor();
             else
-                return Color(COL_BLACK);
+                return COL_BLACK;
         }
     virtual void WritePixel( Color nColor ) override
         {
@@ -571,16 +535,16 @@ public:
         }
 };
 
-ImplPixelFormat* ImplPixelFormat::GetFormat( sal_uInt16 nBits, const BitmapPalette& rPalette )
+std::unique_ptr<ImplPixelFormat> ImplPixelFormat::GetFormat( sal_uInt16 nBits, const BitmapPalette& rPalette )
 {
     switch( nBits )
     {
-    case 1: return new ImplPixelFormat1( rPalette );
-    case 4: return new ImplPixelFormat4( rPalette );
-    case 8: return new ImplPixelFormat8( rPalette );
-    case 16: return new ImplPixelFormat16;
-    case 24: return new ImplPixelFormat24;
-    case 32: return new ImplPixelFormat32;
+    case 1: return o3tl::make_unique<ImplPixelFormat1>( rPalette );
+    case 4: return o3tl::make_unique<ImplPixelFormat4>( rPalette );
+    case 8: return o3tl::make_unique<ImplPixelFormat8>( rPalette );
+    case 16: return o3tl::make_unique<ImplPixelFormat16>();
+    case 24: return o3tl::make_unique<ImplPixelFormat24>();
+    case 32: return o3tl::make_unique<ImplPixelFormat32>();
     default:
         assert(false);
         return nullptr;
@@ -634,8 +598,8 @@ void QuartzSalBitmap::ConvertBitmapData( sal_uInt32 nWidth, sal_uInt32 nHeight,
     {
         // TODO: this implementation is for clarity, not for speed
 
-        ImplPixelFormat* pD = ImplPixelFormat::GetFormat( nDestBits, rDestPalette );
-        ImplPixelFormat* pS = ImplPixelFormat::GetFormat( nSrcBits, rSrcPalette );
+        std::unique_ptr<ImplPixelFormat> pD = ImplPixelFormat::GetFormat( nDestBits, rDestPalette );
+        std::unique_ptr<ImplPixelFormat> pS = ImplPixelFormat::GetFormat( nSrcBits, rSrcPalette );
 
         if( pD && pS )
         {
@@ -654,8 +618,6 @@ void QuartzSalBitmap::ConvertBitmapData( sal_uInt32 nWidth, sal_uInt32 nHeight,
                 pDestData += nDestBytesPerRow;
             }
         }
-        delete pS;
-        delete pD;
     }
 }
 
@@ -695,7 +657,7 @@ const aImplSalSysPalEntryAry[ 16 ] =
 { 0xFF, 0xFF, 0xFF }
 };
 
-const BitmapPalette& GetDefaultPalette( int mnBits, bool bMonochrome )
+static const BitmapPalette& GetDefaultPalette( int mnBits, bool bMonochrome )
 {
     if( bMonochrome )
         return Bitmap::GetGreyPalette( 1U << mnBits );
@@ -869,7 +831,7 @@ CGImageRef QuartzSalBitmap::CreateCroppedImage( int nX, int nY, int nNewWidth, i
 
 static void CFRTLFree(void* /*info*/, const void* data, size_t /*size*/)
 {
-    rtl_freeMemory( const_cast<void*>(data) );
+    std::free( const_cast<void*>(data) );
 }
 
 CGImageRef QuartzSalBitmap::CreateWithMask( const QuartzSalBitmap& rMask,
@@ -885,7 +847,6 @@ CGImageRef QuartzSalBitmap::CreateWithMask( const QuartzSalBitmap& rMask,
 
     // CGImageCreateWithMask() only likes masks or greyscale images => convert if needed
     // TODO: isolate in an extra method?
-    DBG_WRITE_IMAGE(xMask, "xMask");
     if( !CGImageIsMask(xMask) || rMask.GetBitCount() != 8)//(CGImageGetColorSpace(xMask) != GetSalData()->mxGraySpace) )
     {
         const CGRect xImageRect=CGRectMake( 0, 0, nWidth, nHeight );//the rect has no offset
@@ -893,7 +854,7 @@ CGImageRef QuartzSalBitmap::CreateWithMask( const QuartzSalBitmap& rMask,
         // create the alpha mask image fitting our image
         // TODO: is caching the full mask or the subimage mask worth it?
         int nMaskBytesPerRow = ((nWidth + 3) & ~3);
-        void* pMaskMem = rtl_allocateMemory( nMaskBytesPerRow * nHeight );
+        void* pMaskMem = std::malloc( nMaskBytesPerRow * nHeight );
         CGContextRef xMaskContext = CGBitmapContextCreate( pMaskMem,
             nWidth, nHeight, 8, nMaskBytesPerRow, GetSalData()->mxGraySpace, kCGImageAlphaNone );
         SAL_INFO("vcl.cg", "CGBitmapContextCreate(" << nWidth << "x" << nHeight << "x8," << nMaskBytesPerRow << ") = " << xMaskContext );
@@ -918,8 +879,6 @@ CGImageRef QuartzSalBitmap::CreateWithMask( const QuartzSalBitmap& rMask,
     // combine image and alpha mask
     CGImageRef xMaskedImage = CGImageCreateWithMask( xImage, xMask );
     SAL_INFO("vcl.cg", "CGImageCreateWithMask(" << xImage << "," << xMask << ") = " << xMaskedImage );
-    DBG_WRITE_IMAGE(xImage, "xImage");
-    DBG_WRITE_IMAGE(xMaskedImage, "xMaskedImage");
     SAL_INFO("vcl.cg", "CFRelease(" << xMask << ")" );
     CFRelease( xMask );
     SAL_INFO("vcl.cg", "CFRelease(" << xImage << ")" );
@@ -936,10 +895,10 @@ CGImageRef QuartzSalBitmap::CreateColorMask( int nX, int nY, int nWidth,
     if (m_pUserBuffer.get() && (nX + nWidth <= mnWidth) && (nY + nHeight <= mnHeight))
     {
         const sal_uInt32 nDestBytesPerRow = nWidth << 2;
-        sal_uInt32* pMaskBuffer = static_cast<sal_uInt32*>( rtl_allocateMemory( nHeight * nDestBytesPerRow ) );
-        sal_uInt32* pDest = pMaskBuffer;
+        std::unique_ptr<sal_uInt32[]> pMaskBuffer(new (std::nothrow) sal_uInt32[ nHeight * nDestBytesPerRow / 4] );
+        sal_uInt32* pDest = pMaskBuffer.get();
 
-        ImplPixelFormat* pSourcePixels = ImplPixelFormat::GetFormat( mnBits, maPalette );
+        std::unique_ptr<ImplPixelFormat> pSourcePixels = ImplPixelFormat::GetFormat( mnBits, maPalette );
 
         if( pMaskBuffer && pSourcePixels )
         {
@@ -966,17 +925,11 @@ CGImageRef QuartzSalBitmap::CreateColorMask( int nX, int nY, int nWidth,
                 pSource += mnBytesPerRow;
             }
 
-            CGDataProviderRef xDataProvider( CGDataProviderCreateWithData(nullptr, pMaskBuffer, nHeight * nDestBytesPerRow, &CFRTLFree) );
+            CGDataProviderRef xDataProvider( CGDataProviderCreateWithData(nullptr, pMaskBuffer.release(), nHeight * nDestBytesPerRow, &CFRTLFree) );
             xMask = CGImageCreate(nWidth, nHeight, 8, 32, nDestBytesPerRow, GetSalData()->mxRGBSpace, kCGImageAlphaPremultipliedFirst, xDataProvider, nullptr, true, kCGRenderingIntentDefault);
             SAL_INFO("vcl.cg", "CGImageCreate(" << nWidth << "x" << nHeight << "x8) = " << xMask );
             CFRelease(xDataProvider);
         }
-        else
-        {
-            free(pMaskBuffer);
-        }
-
-        delete pSourcePixels;
     }
     return xMask;
 }

@@ -62,8 +62,8 @@ class SW_DLLPUBLIC SwDBField : public SwValueField
     bool    bValidValue     : 1;
     bool    bInitialized    : 1;
 
-    virtual OUString    Expand() const override;
-    virtual SwField*    Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
 public:
     SwDBField(SwDBFieldType*, sal_uInt32 nFormat = 0);
@@ -164,8 +164,8 @@ public:
     SwDBNextSetField( SwDBNextSetFieldType*,
                       const OUString& rCond, const SwDBData& rDBData);
 
-    virtual OUString        Expand() const override;
-    virtual SwField*        Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
     void                    Evaluate(SwDoc const *);
     inline void             SetCondValid(bool bCond);
@@ -204,8 +204,8 @@ class SwDBNumSetField : public SwDBNameInfField
 public:
     SwDBNumSetField(SwDBNumSetFieldType*, const OUString& rCond, const OUString& rDBNum, const SwDBData& rDBData);
 
-    virtual OUString        Expand() const override;
-    virtual SwField*        Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
     inline bool             IsCondValid() const;
     inline void             SetCondValid(bool bCond);
@@ -247,8 +247,8 @@ class SW_DLLPUBLIC SwDBNameField : public SwDBNameInfField
 public:
     SwDBNameField(SwDBNameFieldType*, const SwDBData& rDBData);
 
-    virtual OUString Expand() const override;
-    virtual SwField* Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
     virtual bool        QueryValue( css::uno::Any& rVal, sal_uInt16 nWhich ) const override;
     virtual bool        PutValue( const css::uno::Any& rVal, sal_uInt16 nWhich ) override;
 };
@@ -269,8 +269,8 @@ class SW_DLLPUBLIC SwDBSetNumberField : public SwDBNameInfField
 public:
     SwDBSetNumberField(SwDBSetNumberFieldType*, const SwDBData& rDBData, sal_uInt32 nFormat = 0);
 
-    virtual OUString Expand() const override;
-    virtual         SwField* Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
     void            Evaluate(SwDoc const *);
 
     inline long     GetSetNumber() const;

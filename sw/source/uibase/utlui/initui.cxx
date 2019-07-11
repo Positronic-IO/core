@@ -45,94 +45,17 @@ static SwGlossaryList* pGlossaryList = nullptr;
 
 namespace
 {
-
-enum CachedStringID
-{
-    OldGrfCat,
-    OldTabCat,
-    OldFrameCat,
-    OldDrwCat,
-    CurrGlosGroup,
-    CachedStrings
-};
-
-OUString *StringCache[CachedStrings] = {nullptr};
-
-inline OUString GetCachedString(CachedStringID id)
-{
-    return StringCache[id] ? *StringCache[id] : OUString();
+OUString CurrGlosGroup;
 }
 
-inline void SetCachedString(CachedStringID id, const OUString& sStr)
+const OUString& GetCurrGlosGroup()
 {
-    if (StringCache[id])
-    {
-        *StringCache[id] = sStr;
-    }
-    else
-    {
-        StringCache[id] = new OUString(sStr);
-    }
-}
-
-void ClearStringCache()
-{
-    for (OUString* p : StringCache)
-    {
-        delete p;
-    }
-}
-
-}
-
-OUString GetOldGrfCat()
-{
-    return GetCachedString(OldGrfCat);
-}
-
-void SetOldGrfCat(const OUString& sStr)
-{
-    SetCachedString(OldGrfCat, sStr);
-}
-
-OUString GetOldTabCat()
-{
-    return GetCachedString(OldTabCat);
-}
-
-void SetOldTabCat(const OUString& sStr)
-{
-    SetCachedString(OldTabCat, sStr);
-}
-
-OUString GetOldFrameCat()
-{
-    return GetCachedString(OldFrameCat);
-}
-
-void SetOldFrameCat(const OUString& sStr)
-{
-    SetCachedString(OldFrameCat, sStr);
-}
-
-OUString GetOldDrwCat()
-{
-    return GetCachedString(OldDrwCat);
-}
-
-void SetOldDrwCat(const OUString& sStr)
-{
-    SetCachedString(OldDrwCat, sStr);
-}
-
-OUString GetCurrGlosGroup()
-{
-    return GetCachedString(CurrGlosGroup);
+    return CurrGlosGroup;
 }
 
 void SetCurrGlosGroup(const OUString& sStr)
 {
-    SetCachedString(CurrGlosGroup, sStr);
+    CurrGlosGroup = sStr;
 }
 
 namespace
@@ -156,7 +79,6 @@ void FinitUI()
 
     delete SwFieldType::s_pFieldNames;
 
-    ClearStringCache();
     delete pGlossaryList;
     delete pAuthFieldNameList;
     delete pAuthFieldTypeList;
@@ -214,7 +136,6 @@ ShellResource::ShellResource()
     aTOXCitationName(    SwResId(STR_TOX_CITATION)),
     aLinkCtrlClick(SwResId(STR_LINK_CTRL_CLICK)),
     aLinkClick(SwResId(STR_LINK_CLICK)),
-    pAutoFormatNameLst(nullptr),
     sPageDescFirstName(     SwResId(STR_PAGEDESC_FIRSTNAME)),
     sPageDescFollowName(    SwResId(STR_PAGEDESC_FOLLOWNAME)),
     sPageDescName(          SwResId(STR_PAGEDESC_NAME))

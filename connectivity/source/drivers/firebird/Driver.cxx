@@ -29,6 +29,7 @@
 #include <osl/file.hxx>
 #include <osl/process.h>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 #include <unotools/localfilehelper.hxx>
 
 using namespace com::sun::star;
@@ -135,9 +136,9 @@ void FirebirdDriver::disposing()
 }
 
 //----- static ServiceInfo ---------------------------------------------------
-rtl::OUString FirebirdDriver::getImplementationName_Static()
+OUString FirebirdDriver::getImplementationName_Static()
 {
-    return rtl::OUString("com.sun.star.comp.sdbc.firebird.Driver");
+    return OUString("com.sun.star.comp.sdbc.firebird.Driver");
 }
 
 Sequence< OUString > FirebirdDriver::getSupportedServiceNames_Static()
@@ -179,9 +180,6 @@ Reference< XConnection > SAL_CALL FirebirdDriver::connect(
     Connection* pCon = new Connection();
     Reference< XConnection > xCon = pCon;
     pCon->construct(url, info);
-
-    if (url == "sdbc:embedded:firebird")
-        pCon->setAutoCommit(true);
 
     m_xConnections.push_back(WeakReferenceHelper(*pCon));
 

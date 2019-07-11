@@ -28,11 +28,11 @@ using namespace com::sun::star::lang;
 
 namespace i18npool {
 
-OUString SAL_CALL
-ignoreWidth::folding( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount, Sequence< sal_Int32 >& offset )
+OUString
+ignoreWidth::foldingImpl( const OUString& inStr, sal_Int32 startPos, sal_Int32 nCount, Sequence< sal_Int32 >& offset, bool useOffset )
 {
     rtl::Reference< fullwidthToHalfwidth > t1(new fullwidthToHalfwidth);
-    return t1->transliterate(inStr, startPos, nCount, offset);
+    return t1->transliterateImpl(inStr, startPos, nCount, offset, useOffset);
 }
 
 Sequence< OUString > SAL_CALL
@@ -41,7 +41,7 @@ ignoreWidth::transliterateRange( const OUString& str1, const OUString& str2 )
     rtl::Reference< fullwidthToHalfwidth > t1(new fullwidthToHalfwidth);
     rtl::Reference< halfwidthToFullwidth > t2(new halfwidthToFullwidth);
 
-    return transliteration_Ignore::transliterateRange(str1, str2, *t1.get(), *t2.get());
+    return transliteration_Ignore::transliterateRange(str1, str2, *t1, *t2);
 }
 
 sal_Unicode SAL_CALL

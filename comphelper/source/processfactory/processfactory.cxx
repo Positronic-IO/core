@@ -23,6 +23,7 @@
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/DeploymentException.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 using namespace ::com::sun::star;
 using namespace com::sun::star::uno;
@@ -36,7 +37,7 @@ namespace comphelper
     This function preserves only that the xProcessFactory variable will not be create when
     the library is loaded.
 */
-Reference< XMultiServiceFactory > localProcessFactory( const Reference< XMultiServiceFactory >& xSMgr, bool bSet )
+static Reference< XMultiServiceFactory > localProcessFactory( const Reference< XMultiServiceFactory >& xSMgr, bool bSet )
 {
     Guard< Mutex > aGuard( Mutex::getGlobalMutex() );
 

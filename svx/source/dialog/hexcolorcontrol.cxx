@@ -18,129 +18,50 @@
  */
 
 #include <svx/hexcolorcontrol.hxx>
-
-HexColorControl::HexColorControl( vcl::Window* pParent, WinBits nStyle )
-    : Edit(pParent, nStyle)
-{
-    SetMaxTextLen( 6 );
-}
-
-VCL_BUILDER_FACTORY_ARGS(HexColorControl, WB_BORDER)
-
-void HexColorControl::SetColor(Color nColor)
-{
-    OUStringBuffer aBuffer;
-    sax::Converter::convertColor(aBuffer, nColor);
-    SetText(aBuffer.makeStringAndClear().copy(1));
-}
-
-Color HexColorControl::GetColor()
-{
-    sal_Int32 nColor = -1;
-
-    OUString aStr("#");
-    aStr += GetText();
-    sal_Int32 nLen = aStr.getLength();
-
-    if (nLen < 7)
-    {
-        static const sal_Char* const pNullStr = "000000";
-        aStr += OUString::createFromAscii( &pNullStr[nLen-1] );
-    }
-
-    sax::Converter::convertColor(nColor, aStr);
-
-    if (nColor == -1)
-        SetControlBackground(COL_RED);
-    else
-        SetControlBackground();
-
-    return Color(nColor);
-}
-
-bool HexColorControl::PreNotify( NotifyEvent& rNEvt )
-{
-    if ( (rNEvt.GetType() == MouseNotifyEvent::KEYINPUT) && !rNEvt.GetKeyEvent()->GetKeyCode().IsMod2() )
-    {
-        if ( ImplProcessKeyInput( *rNEvt.GetKeyEvent() ) )
-            return true;
-    }
-
-    return Edit::PreNotify( rNEvt );
-}
-
-void HexColorControl::Paste()
-{
-    css::uno::Reference<css::datatransfer::clipboard::XClipboard> aClipboard(GetClipboard());
-    if (aClipboard.is())
-    {
-        css::uno::Reference<css::datatransfer::XTransferable> xDataObj;
-
-        try
-        {
-            SolarMutexReleaser aReleaser;
-            xDataObj = aClipboard->getContents();
-        }
-        catch (const css::uno::Exception&)
-        {
-        }
-
-        if (xDataObj.is())
-        {
-            css::datatransfer::DataFlavor aFlavor;
-            SotExchange::GetFormatDataFlavor(SotClipboardFormatId::STRING, aFlavor);
-            try
-            {
-                css::uno::Any aData = xDataObj->getTransferData(aFlavor);
-                OUString aText;
-                aData >>= aText;
-
-                if( !aText.isEmpty() && aText.startsWith( "#" ) )
-                    aText = aText.copy(1);
-
-                if( aText.getLength() > 6 )
-                    aText = aText.copy( 0, 6 );
-
-                SetText(aText);
-            }
-            catch(const css::uno::Exception&)
-            {}
-        }
-    }
-}
-
-bool HexColorControl::ImplProcessKeyInput( const KeyEvent& rKEv )
-{
-    const vcl::KeyCode& rKeyCode = rKEv.GetKeyCode();
-
-    if( rKeyCode.GetGroup() == KEYGROUP_ALPHA && !rKeyCode.IsMod1() && !rKeyCode.IsMod2() )
-    {
-        if( (rKeyCode.GetCode() < KEY_A) || (rKeyCode.GetCode() > KEY_F) )
-            return true;
-    }
-    else if( rKeyCode.GetGroup() == KEYGROUP_NUM )
-    {
-        if( rKeyCode.IsShift() )
-            return true;
-    }
-    return false;
-}
+#include <rtl/character.hxx>
+#include <vcl/svapp.hxx>
 
 namespace weld {
 
-HexColorControl::HexColorControl(weld::Entry* pEntry)
-    : m_xEntry(pEntry)
+HexColorControl::HexColorControl(std::unique_ptr<weld::Entry> pEntry)
+    : m_xEntry(std::move(pEntry))
+    , m_nAsyncModifyEvent(nullptr)
 {
     m_xEntry->set_max_length(6);
     m_xEntry->set_width_chars(6);
     m_xEntry->connect_insert_text(LINK(this, HexColorControl, ImplProcessInputHdl));
+    m_xEntry->connect_changed(LINK(this, HexColorControl, ImplProcessModifyHdl));
+}
+
+HexColorControl::~HexColorControl()
+{
+    if (m_nAsyncModifyEvent)
+        Application::RemoveUserEvent(m_nAsyncModifyEvent);
+}
+
+IMPL_LINK_NOARG(HexColorControl, OnAsyncModifyHdl, void*, void)
+{
+    m_nAsyncModifyEvent = nullptr;
+    m_aModifyHdl.Call(*m_xEntry);
+}
+
+// tdf#123291 resend it async so it arrives after ImplProcessInputHdl has been
+// processed
+IMPL_LINK_NOARG(HexColorControl, ImplProcessModifyHdl, weld::Entry&, void)
+{
+    if (m_nAsyncModifyEvent)
+        Application::RemoveUserEvent(m_nAsyncModifyEvent);
+    m_nAsyncModifyEvent = Application::PostUserEvent(LINK(this, HexColorControl, OnAsyncModifyHdl));
 }
 
 void HexColorControl::SetColor(Color nColor)
 {
     OUStringBuffer aBuffer;
     sax::Converter::convertColor(aBuffer, nColor);
-    m_xEntry->set_text(aBuffer.makeStringAndClear().copy(1));
+    OUString sColor = aBuffer.makeStringAndClear().copy(1);
+    if (sColor == m_xEntry->get_text())
+        return;
+    m_xEntry->set_text(sColor);
 }
 
 Color HexColorControl::GetColor()
@@ -169,7 +90,7 @@ Color HexColorControl::GetColor()
     return Color(nColor);
 }
 
-IMPL_LINK(HexColorControl, ImplProcessInputHdl, OUString&, rTest, bool)
+IMPL_STATIC_LINK(HexColorControl, ImplProcessInputHdl, OUString&, rTest, bool)
 {
     const sal_Unicode* pTest = rTest.getStr();
     sal_Int32 nLen = rTest.getLength();

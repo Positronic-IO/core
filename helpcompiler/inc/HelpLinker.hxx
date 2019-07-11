@@ -56,14 +56,13 @@ public:
 
     HelpLinker()
         : bExtensionMode(false)
-        , m_pIndexerPreProcessor(nullptr)
         , m_bUseLangRoot(true)
         , m_bCreateIndex(true)
     {}
 
 private:
     Stringtable additionalFiles;
-    HashSet helpFiles;
+    std::vector<std::string> helpFiles;
     fs::path sourceRoot;
     fs::path compactStylesheet;
     fs::path embeddStylesheet;

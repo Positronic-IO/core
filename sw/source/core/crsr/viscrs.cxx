@@ -19,7 +19,6 @@
 
 #include <config_features.h>
 
-#include <vcl/dialog.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
@@ -142,7 +141,7 @@ void SwVisibleCursor::SetPosAndShow(SfxViewShell const * pViewShell)
         if( rNode.IsTextNode() )
         {
             const SwTextNode& rTNd = *rNode.GetTextNode();
-            const SwFrame* pFrame = rTNd.getLayoutFrame( m_pCursorShell->GetLayout(), nullptr, nullptr, false );
+            const SwFrame* pFrame = rTNd.getLayoutFrame(m_pCursorShell->GetLayout(), nullptr, nullptr);
             if ( pFrame )
             {
                 const SwScriptInfo* pSI = static_cast<const SwTextFrame*>(pFrame)->GetScriptInfo();
@@ -247,9 +246,7 @@ SwSelPaintRects::SwSelPaintRects( const SwCursorShell& rCSh )
     : SwRects()
     , m_pCursorShell( &rCSh )
 #if HAVE_FEATURE_DESKTOP
-    , m_pCursorOverlay(nullptr)
     , m_bShowTextInputFieldOverlay(true)
-    , m_pTextInputFieldOverlay(nullptr)
 #endif
 {
 }
@@ -265,34 +262,17 @@ void SwSelPaintRects::swapContent(SwSelPaintRects& rSwap)
 
 #if HAVE_FEATURE_DESKTOP
     // #i75172# also swap m_pCursorOverlay
-    sdr::overlay::OverlayObject* pTempOverlay = getCursorOverlay();
-    setCursorOverlay(rSwap.getCursorOverlay());
-    rSwap.setCursorOverlay(pTempOverlay);
-
-    const bool bTempShowTextInputFieldOverlay = m_bShowTextInputFieldOverlay;
-    m_bShowTextInputFieldOverlay = rSwap.m_bShowTextInputFieldOverlay;
-    rSwap.m_bShowTextInputFieldOverlay = bTempShowTextInputFieldOverlay;
-
-    sw::overlay::OverlayRangesOutline* pTempTextInputFieldOverlay = m_pTextInputFieldOverlay;
-    m_pTextInputFieldOverlay = rSwap.m_pTextInputFieldOverlay;
-    rSwap.m_pTextInputFieldOverlay = pTempTextInputFieldOverlay;
+    std::swap(m_pCursorOverlay, rSwap.m_pCursorOverlay);
+    std::swap(m_bShowTextInputFieldOverlay, rSwap.m_bShowTextInputFieldOverlay);
+    std::swap(m_pTextInputFieldOverlay, rSwap.m_pTextInputFieldOverlay);
 #endif
 }
 
 void SwSelPaintRects::Hide()
 {
 #if HAVE_FEATURE_DESKTOP
-    if (m_pCursorOverlay)
-    {
-        delete m_pCursorOverlay;
-        m_pCursorOverlay = nullptr;
-    }
-
-    if (m_pTextInputFieldOverlay != nullptr)
-    {
-        delete m_pTextInputFieldOverlay;
-        m_pTextInputFieldOverlay = nullptr;
-    }
+    m_pCursorOverlay.reset();
+    m_pTextInputFieldOverlay.reset();
 #endif
 
     SwRects::clear();
@@ -309,7 +289,10 @@ void SwSelPaintRects::Hide()
 static SwRect lcl_getLayoutRect(const Point& rPoint, const SwPosition& rPosition)
 {
     const SwContentNode* pNode = rPosition.nNode.GetNode().GetContentNode();
-    const SwContentFrame* pFrame = pNode->getLayoutFrame(pNode->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &rPoint, &rPosition);
+    std::pair<Point, bool> const tmp(rPoint, true);
+    const SwContentFrame* pFrame = pNode->getLayoutFrame(
+            pNode->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(),
+            &rPosition, &tmp);
     SwRect aRect;
     pFrame->GetCharRect(aRect, rPosition);
     return aRect;
@@ -335,7 +318,7 @@ void SwSelPaintRects::Show(std::vector<OString>* pSelectionRectangles)
 #if HAVE_FEATURE_DESKTOP
         // get new rects
         std::vector< basegfx::B2DRange > aNewRanges;
-
+        aNewRanges.reserve(size());
         for(size_type a = 0; a < size(); ++a)
         {
             const SwRect aNextRect((*this)[a]);
@@ -350,18 +333,17 @@ void SwSelPaintRects::Show(std::vector<OString>* pSelectionRectangles)
         {
             if(!aNewRanges.empty())
             {
-                static_cast<sdr::overlay::OverlaySelection*>(m_pCursorOverlay)->setRanges(aNewRanges);
+                static_cast<sdr::overlay::OverlaySelection*>(m_pCursorOverlay.get())->setRanges(aNewRanges);
             }
             else
             {
-                delete m_pCursorOverlay;
-                m_pCursorOverlay = nullptr;
+                m_pCursorOverlay.reset();
             }
         }
         else if(!empty())
         {
             SdrPaintWindow* pCandidate = pView->GetPaintWindow(0);
-            rtl::Reference< sdr::overlay::OverlayManager > xTargetOverlay = pCandidate->GetOverlayManager();
+            const rtl::Reference< sdr::overlay::OverlayManager >& xTargetOverlay = pCandidate->GetOverlayManager();
 
             if (xTargetOverlay.is())
             {
@@ -370,11 +352,11 @@ void SwSelPaintRects::Show(std::vector<OString>* pSelectionRectangles)
                 const Color aHighlight(aSvtOptionsDrawinglayer.getHilightColor());
 
                 // create correct selection
-                m_pCursorOverlay = new sdr::overlay::OverlaySelection(
+                m_pCursorOverlay.reset( new sdr::overlay::OverlaySelection(
                     sdr::overlay::OverlayType::Transparent,
                     aHighlight,
                     aNewRanges,
-                    true);
+                    true) );
 
                 xTargetOverlay->add(*m_pCursorOverlay);
             }
@@ -414,6 +396,7 @@ void SwSelPaintRects::Show(std::vector<OString>* pSelectionRectangles)
             }
 
             std::vector<OString> aRect;
+            aRect.reserve(size());
             for (size_type i = 0; i < size(); ++i)
             {
                 const SwRect& rRect = (*this)[i];
@@ -461,7 +444,7 @@ void SwSelPaintRects::HighlightInputField()
         }
     }
 
-    if ( aInputFieldRanges.size() > 0 )
+    if ( !aInputFieldRanges.empty() )
     {
         if (m_pTextInputFieldOverlay != nullptr)
         {
@@ -471,7 +454,7 @@ void SwSelPaintRects::HighlightInputField()
         {
             SdrView* pView = const_cast<SdrView*>(GetShell()->GetDrawView());
             SdrPaintWindow* pCandidate = pView->GetPaintWindow(0);
-            rtl::Reference<sdr::overlay::OverlayManager> xTargetOverlay = pCandidate->GetOverlayManager();
+            const rtl::Reference<sdr::overlay::OverlayManager>& xTargetOverlay = pCandidate->GetOverlayManager();
 
             if (xTargetOverlay.is())
             {
@@ -480,19 +463,15 @@ void SwSelPaintRects::HighlightInputField()
                 Color aHighlight(aSvtOptionsDrawinglayer.getHilightColor());
                 aHighlight.DecreaseLuminance( 128 );
 
-                m_pTextInputFieldOverlay = new sw::overlay::OverlayRangesOutline(
-                        aHighlight, aInputFieldRanges );
+                m_pTextInputFieldOverlay.reset( new sw::overlay::OverlayRangesOutline(
+                        aHighlight, aInputFieldRanges ) );
                 xTargetOverlay->add( *m_pTextInputFieldOverlay );
             }
         }
     }
     else
     {
-        if (m_pTextInputFieldOverlay != nullptr)
-        {
-            delete m_pTextInputFieldOverlay;
-            m_pTextInputFieldOverlay = nullptr;
-        }
+        m_pTextInputFieldOverlay.reset();
     }
 }
 
@@ -721,7 +700,8 @@ void SwShellCursor::SaveTableBoxContent( const SwPosition* pPos )
 bool SwShellCursor::UpDown( bool bUp, sal_uInt16 nCnt )
 {
     return SwCursor::UpDown( bUp, nCnt,
-                            &GetPtPos(), GetShell()->GetUpDownX() );
+                            &GetPtPos(), GetShell()->GetUpDownX(),
+                            *GetShell()->GetLayout());
 }
 
 // if <true> than the cursor can be set to the position.
@@ -806,7 +786,8 @@ void SwShellTableCursor::FillRects()
         if( !pCNd )
             continue;
 
-        SwFrame* pFrame = pCNd->getLayoutFrame( GetShell()->GetLayout(), &GetSttPos() );
+        std::pair<Point, bool> const tmp(GetSttPos(), true);
+        SwFrame* pFrame = pCNd->getLayoutFrame(GetShell()->GetLayout(), nullptr, &tmp);
         while( pFrame && !pFrame->IsCellFrame() )
             pFrame = pFrame->GetUpper();
 
@@ -855,7 +836,8 @@ bool SwShellTableCursor::IsInside( const Point& rPt ) const
         if( !pCNd )
             continue;
 
-        SwFrame* pFrame = pCNd->getLayoutFrame( GetShell()->GetLayout(), &GetPtPos() );
+        std::pair<Point, bool> const tmp(GetPtPos(), true);
+        SwFrame* pFrame = pCNd->getLayoutFrame(GetShell()->GetLayout(), nullptr, &tmp);
         while( pFrame && !pFrame->IsCellFrame() )
             pFrame = pFrame->GetUpper();
         OSL_ENSURE( pFrame, "Node not in a table" );

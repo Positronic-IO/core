@@ -48,13 +48,11 @@ LogicalFontInstance::LogicalFontInstance(const PhysicalFontFace& rFontFace, cons
     , mnOrientation( 0 )
     , mbInit( false )
     , mpFontCache( nullptr )
-    , mnRefCount( 1 )
     , m_aFontSelData(rFontSelData)
     , m_pHbFont(nullptr)
     , m_nAveWidthFactor(1.0f)
-    , m_pFontFace(&rFontFace)
+    , m_pFontFace(&const_cast<PhysicalFontFace&>(rFontFace))
 {
-    const_cast<FontSelectPattern*>(&m_aFontSelData)->mpFontInstance = this;
 }
 
 LogicalFontInstance::~LogicalFontInstance()
@@ -67,7 +65,7 @@ LogicalFontInstance::~LogicalFontInstance()
         hb_font_destroy(m_pHbFont);
 }
 
-hb_font_t* LogicalFontInstance::InitHbFont(hb_face_t* pHbFace) const
+hb_font_t* LogicalFontInstance::InitHbFont(hb_face_t* pHbFace)
 {
     assert(pHbFace);
     hb_font_t* pHbFont = hb_font_create(pHbFace);
@@ -115,27 +113,6 @@ void LogicalFontInstance::GetScale(double* nXScale, double* nYScale)
         *nXScale = nWidth / nUPEM;
 }
 
-void LogicalFontInstance::Acquire()
-{
-    assert(mnRefCount < std::numeric_limits<decltype(mnRefCount)>::max()
-        && "LogicalFontInstance::Release() - refcount overflow");
-    if (mpFontCache)
-        mpFontCache->Acquire(this);
-    else
-        ++mnRefCount;
-}
-
-void LogicalFontInstance::Release()
-{
-    assert(mnRefCount > 0 && "LogicalFontInstance::Release() - refcount underflow");
-
-    if (mpFontCache)
-        mpFontCache->Release(this);
-    else
-        if (--mnRefCount == 0)
-            delete this;
-}
-
 void LogicalFontInstance::AddFallbackForUnicode( sal_UCS4 cChar, FontWeight eWeight, const OUString& rFontName )
 {
     if( !mpUnicodeFallbackList )
@@ -165,5 +142,15 @@ void LogicalFontInstance::IgnoreFallbackForUnicode( sal_UCS4 cChar, FontWeight e
         mpUnicodeFallbackList->erase( it );
 }
 
+bool LogicalFontInstance::GetGlyphBoundRect(sal_GlyphId nID, tools::Rectangle &rRect, bool bVertical) const
+{
+    if (mpFontCache && mpFontCache->GetCachedGlyphBoundRect(this, nID, rRect))
+        return true;
+
+    bool res = ImplGetGlyphBoundRect(nID, rRect, bVertical);
+    if (mpFontCache && res)
+        mpFontCache->CacheGlyphBoundRect(this, nID, rRect);
+    return res;
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

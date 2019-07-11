@@ -25,10 +25,12 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <tools/solar.h>
 
 class SfxPoolItem;
 class SwTextNode;
 class SwFrame;
+class SwRootFrame;
 struct SwPosition;
 class SwTextField;
 class SwDoc;
@@ -54,20 +56,14 @@ struct SeqFieldLstElem
 
 class SW_DLLPUBLIC SwSeqFieldList
 {
-    std::vector<SeqFieldLstElem*> maData;
+    std::vector<SeqFieldLstElem> maData;
 public:
-    ~SwSeqFieldList()
-    {
-        for( std::vector<SeqFieldLstElem*>::const_iterator it = maData.begin(); it != maData.end(); ++it )
-            delete *it;
-    }
-
-    bool InsertSort(SeqFieldLstElem* pNew);
+    bool InsertSort(SeqFieldLstElem aNew);
     bool SeekEntry(const SeqFieldLstElem& rNew, size_t* pPos) const;
 
     size_t Count() { return maData.size(); }
-    SeqFieldLstElem* operator[](size_t nIndex) { return maData[nIndex]; }
-    const SeqFieldLstElem* operator[](size_t nIndex) const { return maData[nIndex]; }
+    SeqFieldLstElem& operator[](size_t nIndex) { return maData[nIndex]; }
+    const SeqFieldLstElem& operator[](size_t nIndex) const { return maData[nIndex]; }
     void Clear() { maData.clear(); }
 };
 
@@ -85,23 +81,29 @@ protected:
 
 class SW_DLLPUBLIC SwGetExpField : public SwFormulaField
 {
-    OUString        sExpand;
-    bool            bIsInBodyText;
-    sal_uInt16          nSubType;
+    double          m_fValueRLHidden; ///< SwValueField; hidden redlines
+    OUString        m_sExpand;
+    OUString        m_sExpandRLHidden; ///< hidden redlines
+    bool            m_bIsInBodyText;
+    sal_uInt16          m_nSubType;
 
-    bool            bLateInitialization; // #i82544#
+    bool            m_bLateInitialization; // #i82544#
 
-    virtual OUString            Expand() const override;
-    virtual SwField*            Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
+    using SwFormulaField::GetValue; // hide it, don't use
+    virtual void        SetValue(const double& rVal) override; // hide it
 
 public:
     SwGetExpField( SwGetExpFieldType*, const OUString& rFormel,
                    sal_uInt16 nSubType, sal_uLong nFormat);
 
-    virtual void                SetValue( const double& rVal ) override;
+    double      GetValue(SwRootFrame const* pLayout) const;
+    void        SetValue(const double& rVal, SwRootFrame const* pLayout);
+
     virtual void                SetLanguage(LanguageType nLng) override;
 
-    inline void                 ChgExpStr(const OUString& rExpand);
+    void                 ChgExpStr(const OUString& rExpand, SwRootFrame const* pLayout);
 
     /// Called by formatting.
     inline bool                 IsInBodyText() const;
@@ -126,30 +128,26 @@ public:
 
     static sal_Int32    GetReferenceTextPos( const SwFormatField& rFormat, SwDoc& rDoc, sal_Int32 nHint = 0);
     // #i82544#
-    void                SetLateInitialization() { bLateInitialization = true;}
+    void                SetLateInitialization() { m_bLateInitialization = true;}
 };
-
-inline void SwGetExpField::ChgExpStr(const OUString& rExpand)
-    { sExpand = rExpand;}
 
  /// Called by formatting.
 inline bool SwGetExpField::IsInBodyText() const
-    { return bIsInBodyText; }
+    { return m_bIsInBodyText; }
 
  /// Set by UpdateExpFields where node position is known.
 inline void SwGetExpField::ChgBodyTextFlag( bool bIsInBody )
-    { bIsInBodyText = bIsInBody; }
+    { m_bIsInBodyText = bIsInBody; }
 
 class SwSetExpField;
 
 class SW_DLLPUBLIC SwSetExpFieldType : public SwValueFieldType
 {
-    OUString sName;
-    const SwNode* pOutlChgNd;
-    OUString      sDelim;
-    sal_uInt16      nType;
-    sal_uInt8       nLevel;
-    bool        bDeleted;
+    OUString const m_sName;
+    OUString      m_sDelim;
+    sal_uInt16      m_nType;
+    sal_uInt8       m_nLevel;
+    bool        m_bDeleted;
 
 protected:
     virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew ) override;
@@ -166,27 +164,22 @@ public:
     void                    SetSeqFormat(sal_uLong nFormat);
     sal_uLong               GetSeqFormat();
 
-    bool                IsDeleted() const       { return bDeleted; }
-    void                    SetDeleted( bool b )    { bDeleted = b; }
+    bool                IsDeleted() const       { return m_bDeleted; }
+    void                    SetDeleted( bool b )    { m_bDeleted = b; }
 
     /// Overlay, because set-field takes care for its being updated by itself.
     inline const OUString&  GetSetRefName() const;
 
     void   SetSeqRefNo( SwSetExpField& rField );
 
-    size_t GetSeqFieldList( SwSeqFieldList& rList );
+    size_t GetSeqFieldList(SwSeqFieldList& rList, SwRootFrame const* pLayout);
 
     /// Number sequence fields chapterwise if required.
-    const OUString& GetDelimiter() const      { return sDelim; }
-    void SetDelimiter( const OUString& s )    { sDelim = s; }
-    sal_uInt8 GetOutlineLvl() const             { return nLevel; }
-    void SetOutlineLvl( sal_uInt8 n )           { nLevel = n; }
-    void SetChapter( SwSetExpField& rField, const SwNode& rNd );
-
-    /** Member only for SwDoc::UpdateExpField.
-     It is needed only at runtime of sequence field types! */
-    const SwNode* GetOutlineChgNd() const   { return pOutlChgNd; }
-    void SetOutlineChgNd( const SwNode* p ) { pOutlChgNd = p; }
+    const OUString& GetDelimiter() const      { return m_sDelim; }
+    void SetDelimiter( const OUString& s )    { m_sDelim = s; }
+    sal_uInt8 GetOutlineLvl() const             { return m_nLevel; }
+    void SetOutlineLvl( sal_uInt8 n )           { m_nLevel = n; }
+    void SetChapter(SwSetExpField& rField, const SwNode& rNd, SwRootFrame const* pLayout);
 
     virtual void        QueryValue( css::uno::Any& rVal, sal_uInt16 nWhich ) const override;
     virtual void        PutValue( const css::uno::Any& rVal, sal_uInt16 nWhich ) override;
@@ -194,27 +187,31 @@ public:
 
 inline void SwSetExpFieldType::SetType( sal_uInt16 nTyp )
 {
-        nType = nTyp;
-        EnableFormat( !(nType & (nsSwGetSetExpType::GSE_SEQ|nsSwGetSetExpType::GSE_STRING)));
+        m_nType = nTyp;
+        EnableFormat( !(m_nType & (nsSwGetSetExpType::GSE_SEQ|nsSwGetSetExpType::GSE_STRING)));
 }
 
 inline sal_uInt16 SwSetExpFieldType::GetType() const
-    { return nType;   }
+    { return m_nType;   }
 
 inline const OUString& SwSetExpFieldType::GetSetRefName() const
-    { return sName; }
+    { return m_sName; }
 
 class SW_DLLPUBLIC SwSetExpField : public SwFormulaField
 {
-    OUString        sExpand;
-    OUString        aPText;
-    bool            bInput;
-    sal_uInt16          nSeqNo;
-    sal_uInt16          nSubType;
+    double          m_fValueRLHidden; ///< SwValueField; hidden redlines
+    OUString        msExpand;
+    OUString        msExpandRLHidden; ///< hidden redlines
+    OUString        maPText;
+    bool            mbInput;
+    sal_uInt16          mnSeqNo;
+    sal_uInt16          mnSubType;
     SwFormatField * mpFormatField; /// pool item to which the SwSetExpField belongs
 
-    virtual OUString            Expand() const override;
-    virtual SwField*            Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
+    using SwFormulaField::GetValue; // hide it, don't use
+    virtual void        SetValue(const double& rVal) override; // hide it
 
 public:
     SwSetExpField(SwSetExpFieldType*, const OUString& rFormel, sal_uLong nFormat = 0);
@@ -222,11 +219,12 @@ public:
     void SetFormatField(SwFormatField & rFormatField);
     SwFormatField* GetFormatField() { return mpFormatField;}
 
-    virtual void                SetValue( const double& rVal ) override;
+    double      GetValue(SwRootFrame const* pLayout) const;
+    void        SetValue(const double& rVal, SwRootFrame const* pLayout);
 
-    inline const OUString&      GetExpStr() const;
+    const OUString&      GetExpStr(SwRootFrame const* pLayout) const;
 
-    inline void                 ChgExpStr( const OUString& rExpand );
+    void                 ChgExpStr(const OUString& rExpand, SwRootFrame const* pLayout);
 
     inline void                 SetPromptText(const OUString& rStr);
     inline const OUString&      GetPromptText() const;
@@ -242,8 +240,8 @@ public:
     inline bool                 IsSequenceField() const;
 
     /// Logical number, sequence fields.
-    void                 SetSeqNumber( sal_uInt16 n )    { nSeqNo = n; }
-    sal_uInt16           GetSeqNumber() const        { return nSeqNo; }
+    void                 SetSeqNumber( sal_uInt16 n )    { mnSeqNo = n; }
+    sal_uInt16           GetSeqNumber() const        { return mnSeqNo; }
 
     /// Query name only.
     virtual OUString       GetPar1()   const override;
@@ -255,54 +253,48 @@ public:
     virtual bool        PutValue( const css::uno::Any& rVal, sal_uInt16 nWhich ) override;
 };
 
-inline const OUString& SwSetExpField::GetExpStr() const
-    { return sExpand;       }
-
-inline void SwSetExpField::ChgExpStr( const OUString& rExpand )
-    { sExpand = rExpand;    }
-
 inline void  SwSetExpField::SetPromptText(const OUString& rStr)
-    { aPText = rStr;        }
+    { maPText = rStr;        }
 
 inline const OUString& SwSetExpField::GetPromptText() const
-    { return aPText;        }
+    { return maPText;        }
 
 inline void SwSetExpField::SetInputFlag(bool bInp)
-    { bInput = bInp; }
+    { mbInput = bInp; }
 
 inline bool SwSetExpField::GetInputFlag() const
-    { return bInput; }
+    { return mbInput; }
 
 inline bool SwSetExpField::IsSequenceField() const
     { return 0 != (nsSwGetSetExpType::GSE_SEQ & static_cast<SwSetExpFieldType*>(GetTyp())->GetType()); }
 
 class SwInputFieldType : public SwFieldType
 {
-    SwDoc* pDoc;
+    SwDoc* const mpDoc;
 public:
     SwInputFieldType( SwDoc* pDoc );
 
     virtual SwFieldType* Copy() const override;
 
-    SwDoc* GetDoc() const { return pDoc; }
+    SwDoc* GetDoc() const { return mpDoc; }
 };
 
 class SW_DLLPUBLIC SwInputField : public SwField
 {
-    mutable OUString aContent;
-    OUString aPText;
-    OUString aHelp;
-    OUString aToolTip;
-    sal_uInt16 nSubType;
-    bool mbIsFormField;
+    mutable OUString maContent;
+    OUString maPText;
+    OUString maHelp;
+    OUString maToolTip;
+    sal_uInt16 mnSubType;
+    bool const mbIsFormField;
 
     SwFormatField* mpFormatField; // attribute to which the <SwInputField> belongs to
 
-    virtual OUString        Expand() const override;
-    virtual SwField*        Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
     // Accessing Input Field's content
-    const OUString& getContent() const { return aContent;}
+    const OUString& getContent() const { return maContent;}
 
 public:
     /// Direct input via dialog; delete old value.
@@ -366,9 +358,9 @@ public:
     bool        BuildSortLst();
 
 private:
-    SwEditShell*                      pSh;
-    std::unique_ptr<SetGetExpFields>  pSrtLst;
-    std::set<const SwTextField*>      aTmpLst;
+    SwEditShell*                      mpSh;
+    std::unique_ptr<SetGetExpFields>  mpSrtLst;
+    std::set<const SwTextField*>      maTmpLst;
 };
 
  /// Implementation in tblcalc.cxx.
@@ -384,8 +376,8 @@ class SwTableField : public SwValueField, public SwTableFormula
     OUString      sExpand;
     sal_uInt16      nSubType;
 
-    virtual OUString    Expand() const override;
-    virtual SwField*    Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
     /// Search TextNode containing the field.
     virtual const SwNode* GetNodeOfFormula() const override;

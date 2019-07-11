@@ -34,6 +34,7 @@
 #include <osl/file.hxx>
 #include <rtl/bootstrap.hxx>
 #include <rtl/process.h>
+#include <sal/log.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
@@ -347,7 +348,7 @@ struct KeyAlternate
     KeyAlternate( sal_uInt16 nKey, sal_Unicode nChar = 0 ) : nKeyCode( nKey ), nCharCode( nChar ) {}
 };
 
-inline KeyAlternate
+static KeyAlternate
 GetAlternateKeyCode( const sal_uInt16 nKeyCode )
 {
     KeyAlternate aAlternate;
@@ -449,7 +450,6 @@ bool GtkSalFrame::doKeyCallback( guint state,
 
 GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
-    , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
     getDisplay()->registerFrame( this );
@@ -461,7 +461,6 @@ GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
 
 GtkSalFrame::GtkSalFrame( SystemParentData* pSysData )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
-    , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
     getDisplay()->registerFrame( this );
@@ -586,7 +585,7 @@ static const GActionEntry app_entries[] = {
   { "New", activate_uno, nullptr, nullptr, nullptr, {0} }
 };
 
-gboolean ensure_dbus_setup( gpointer data )
+static gboolean ensure_dbus_setup( gpointer data )
 {
     GtkSalFrame* pSalFrame = static_cast< GtkSalFrame* >( data );
     GdkWindow* gdkWindow = widget_get_window( pSalFrame->getWindow() );
@@ -876,6 +875,23 @@ void GtkSalFrame::resizeWindow( long nWidth, long nHeight )
         window_resize(nWidth, nHeight);
 }
 
+// tdf#124694 GtkFixed takes the max size of all its children as its
+// preferred size, causing it to not clip its child, but grow instead.
+
+static void
+ooo_fixed_size_request(GtkWidget*, GtkRequisition* req)
+{
+    req->width = 0;
+    req->height = 0;
+}
+
+static void
+ooo_fixed_class_init(GtkFixedClass *klass)
+{
+    GtkWidgetClass *widget_class = GTK_WIDGET_CLASS(klass);
+    widget_class->size_request = ooo_fixed_size_request;
+}
+
 /*
  * Always use a sub-class of GtkFixed we can tag for a11y. This allows us to
  * utilize GAIL for the toplevel window and toolkit implementation incl.
@@ -893,7 +909,7 @@ ooo_fixed_get_type()
             sizeof (GtkFixedClass),
             nullptr,      /* base init */
             nullptr,  /* base finalize */
-            nullptr,     /* class init */
+            reinterpret_cast<GClassInitFunc>(ooo_fixed_class_init), /* class init */
             nullptr, /* class finalize */
             nullptr,                      /* class data */
             sizeof (GtkFixed),         /* instance size */
@@ -1000,6 +1016,7 @@ void GtkSalFrame::InitCommon()
     m_aSystemData.pWidget       = m_pWindow;
     m_aSystemData.nScreen       = m_nXScreen.getXScreen();
     m_aSystemData.pToolkit      = "gtk2";
+    m_aSystemData.pPlatformName = "xcb";
 
     m_bGraphics = false;
     m_pGraphics = nullptr;
@@ -1336,9 +1353,9 @@ void GtkSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
     m_bGraphics = false;
 }
 
-bool GtkSalFrame::PostEvent(ImplSVEvent* pData)
+bool GtkSalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    getDisplay()->SendInternalEvent( this, pData );
+    getDisplay()->SendInternalEvent( this, pData.release() );
     return true;
 }
 
@@ -3112,7 +3129,7 @@ void GtkSalFrame::signalStyleSet( GtkWidget*, GtkStyle* pPrevious, gpointer fram
             bFontSettingsChanged = false;
         if (bFontSettingsChanged)
         {
-            pInstance->ResetLastSeenCairoFontOptions();
+            pInstance->ResetLastSeenCairoFontOptions(pCurrentCairoFontOptions);
             GtkSalFrame::getDisplay()->SendInternalEvent( pThis, nullptr, SalEvent::FontChanged );
         }
     }
@@ -3397,19 +3414,14 @@ bool GtkSalFrame::IMHandler::handleKeyEvent( GdkEventKey* pEvent )
 
         m_bPreeditJustChanged = false;
 
-        std::list<PreviousKeyPress>::iterator    iter     = m_aPrevKeyPresses.begin();
-        std::list<PreviousKeyPress>::iterator    iter_end = m_aPrevKeyPresses.end();
-        while (iter != iter_end)
+        auto iter = std::find(m_aPrevKeyPresses.begin(), m_aPrevKeyPresses.end(), pEvent);
+        // If we found a corresponding previous key press event, swallow the release
+        // and remove the earlier key press from our list
+        if (iter != m_aPrevKeyPresses.end())
         {
-            // If we found a corresponding previous key press event, swallow the release
-            // and remove the earlier key press from our list
-            if (*iter == pEvent)
-            {
-                m_aPrevKeyPresses.erase(iter);
-                m_nPrevKeyPresses--;
-                return true;
-            }
-            ++iter;
+            m_aPrevKeyPresses.erase(iter);
+            m_nPrevKeyPresses--;
+            return true;
         }
 
         if( bResult )
@@ -3646,7 +3658,7 @@ void GtkSalFrame::IMHandler::signalIMPreeditEnd( GtkIMContext*, gpointer im_hand
         pThis->updateIMSpotLocation();
 }
 
-uno::Reference<accessibility::XAccessibleEditableText>
+static uno::Reference<accessibility::XAccessibleEditableText>
     FindFocus(const uno::Reference< accessibility::XAccessibleContext >& xContext)
 {
     if (!xContext.is())
@@ -3665,6 +3677,13 @@ uno::Reference<accessibility::XAccessibleEditableText>
                 return uno::Reference< accessibility::XAccessibleEditableText >();
         }
     }
+
+    bool bSafeToIterate = true;
+    sal_Int32 nCount = xContext->getAccessibleChildCount();
+    if (nCount < 0 || nCount > SAL_MAX_UINT16 /* slow enough for anyone */)
+        bSafeToIterate = false;
+    if (!bSafeToIterate)
+        return uno::Reference< accessibility::XAccessibleEditableText >();
 
     for (sal_Int32 i = 0; i < xContext->getAccessibleChildCount(); ++i)
     {

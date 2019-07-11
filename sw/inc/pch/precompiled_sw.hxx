@@ -103,7 +103,6 @@
 #include <vcl/checksum.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/ctrl.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/dockwin.hxx>
 #include <vcl/edit.hxx>
@@ -467,8 +466,6 @@
 #include <svtools/htmlkywd.hxx>
 #include <svtools/htmlout.hxx>
 #include <svtools/htmltokn.h>
-#include <svtools/imap.hxx>
-#include <svtools/imapobj.hxx>
 #include <svtools/langtab.hxx>
 #include <svtools/svtdllapi.h>
 #include <svtools/valueset.hxx>
@@ -592,6 +589,8 @@
 #include <unotools/useroptions.hxx>
 #include <unotxdoc.hxx>
 #include <usrfld.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/imapobj.hxx>
 #include <viewopt.hxx>
 #include <viewsh.hxx>
 #include <viscrs.hxx>

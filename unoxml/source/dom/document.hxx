@@ -22,12 +22,14 @@
 
 #include <set>
 #include <memory>
+#include <map>
 
 #include <libxml/tree.h>
 
 #include <sal/types.h>
 
 #include <cppuhelper/implbase.hxx>
+#include <cppuhelper/weakref.hxx>
 
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/beans/StringPair.hpp>

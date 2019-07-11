@@ -28,6 +28,7 @@
 #include <services.h>
 #include <comphelper/interaction.hxx>
 #include <comphelper/lok.hxx>
+#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <framework/interaction.hxx>
 #include <comphelper/processfactory.hxx>
@@ -83,6 +84,7 @@
 #include <comphelper/configurationhelper.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/profilezone.hxx>
@@ -142,7 +144,7 @@ css::uno::Reference< css::lang::XComponent > LoadEnv::loadComponentFromURL(const
                                                                            const css::uno::Reference< css::uno::XComponentContext >&     xContext  ,
                                                                            const OUString&                                        sURL   ,
                                                                            const OUString&                                        sTarget,
-                                                                                 sal_Int32                                               nFlags ,
+                                                                                 sal_Int32                                               nSearchFlags ,
                                                                            const css::uno::Sequence< css::beans::PropertyValue >&        lArgs  )
 {
     css::uno::Reference< css::lang::XComponent > xComponent;
@@ -152,11 +154,18 @@ css::uno::Reference< css::lang::XComponent > LoadEnv::loadComponentFromURL(const
     {
         LoadEnv aEnv(xContext);
 
+        LoadEnvFeatures loadEnvFeatures = LoadEnvFeatures::WorkWithUI;
+        comphelper::NamedValueCollection aDescriptor( lArgs );
+        // tdf#118238 Only disable UI interaction when loading as hidden
+        if (aDescriptor.get("Hidden") == uno::Any(true) || Application::IsHeadlessModeEnabled())
+            loadEnvFeatures = LoadEnvFeatures::NONE;
+
         aEnv.initializeLoading(sURL,
                                lArgs,
                                css::uno::Reference< css::frame::XFrame >(xLoader, css::uno::UNO_QUERY),
                                sTarget,
-                               nFlags);
+                               nSearchFlags,
+                               loadEnvFeatures);
         aEnv.startLoading();
         aEnv.waitWhileLoading(); // wait for ever!
 
@@ -593,14 +602,14 @@ LoadEnv::EContentType LoadEnv::classifyContent(const OUString&                  
     //      a Filter) can be found, which supports
     //      this URL - it must be a loadable content.
     //      Because both items are registered for types
-    //      its enough to check for frame loaders only.
+    //      it's enough to check for frame loaders only.
     //      Mos of our filters are handled by our global
     //      default loader. But there exist some specialized
     //      loader, which does not work on top of filters!
     //      So it's not enough to search on the filter configuration.
     //      Further it's not enough to search for types!
     //      Because there exist some types, which are referenced by
-    //      other objects ... but not by filters nor frame loaders!
+    //      other objects... but not by filters nor frame loaders!
 
     OUString sPROP_TYPES(PROP_TYPES);
 
@@ -1027,8 +1036,8 @@ bool LoadEnv::impl_loadContent()
         }
         else
         {
-            sal_Int32 nFlags = m_nSearchFlags & ~css::frame::FrameSearchFlag::CREATE;
-            m_xTargetFrame   = m_xBaseFrame->findFrame(sTarget, nFlags);
+            sal_Int32 nSearchFlags = m_nSearchFlags & ~css::frame::FrameSearchFlag::CREATE;
+            m_xTargetFrame   = m_xBaseFrame->findFrame(sTarget, nSearchFlags);
             if (! m_xTargetFrame.is())
             {
                 if (! impl_furtherDocsAllowed())
@@ -1386,8 +1395,8 @@ bool LoadEnv::impl_isFrameAlreadyUsedForLoading(const css::uno::Reference< css::
     css::uno::Reference< css::document::XActionLockable > xLock(xFrame, css::uno::UNO_QUERY);
 
     // ? no lock interface ?
-    // Might its an external written frame implementation :-(
-    // Allowing using of it ... but it can fail if it's not synchronized with our processes !
+    // Maybe it's an external written frame implementation :-(
+    // Allowing using of it... but it can fail if it's not synchronized with our processes!
     if (!xLock.is())
         return false;
 

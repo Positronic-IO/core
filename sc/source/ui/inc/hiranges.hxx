@@ -21,13 +21,12 @@
 #define INCLUDED_SC_SOURCE_UI_INC_HIRANGES_HXX
 
 #include <tools/color.hxx>
-#include <global.hxx>
 #include <address.hxx>
 
 struct ScHighlightEntry
 {
-    ScRange     aRef;
-    Color       aColor;
+    ScRange const     aRef;
+    Color const       aColor;
 
     ScHighlightEntry( const ScRange& rR, const Color& rC ) :
         aRef(rR), aColor(rC) {}

@@ -30,6 +30,7 @@
 #include <xmloff/xmlnmspe.hxx>
 #include <editeng/xmlcnitm.hxx>
 #include <editeng/memberids.h>
+#include <osl/diagnose.h>
 
 #include <hintids.hxx>
 #include <unomid.h>
@@ -51,6 +52,7 @@
 #include <xmloff/xmlprhdl.hxx>
 #include "xmlithlp.hxx"
 #include <com/sun/star/uno/Any.hxx>
+#include <osl/diagnose.h>
 
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star;
@@ -83,7 +85,7 @@ void SvXMLImportItemMapper::importXML( SfxItemSet& rSet,
 {
     sal_Int16 nAttr = xAttrList->getLength();
 
-    SvXMLAttrContainerItem *pUnknownItem = nullptr;
+    std::unique_ptr<SvXMLAttrContainerItem> pUnknownItem;
     for( sal_Int16 i=0; i < nAttr; i++ )
     {
         const OUString& rAttrName = xAttrList->getNameByIndex( i );
@@ -117,7 +119,7 @@ void SvXMLImportItemMapper::importXML( SfxItemSet& rSet,
                 // do we have an item?
                 if(eState >= SfxItemState::DEFAULT && pItem)
                 {
-                    SfxPoolItem *pNewItem = pItem->Clone();
+                    std::unique_ptr<SfxPoolItem> pNewItem(pItem->Clone());
                     bool bPut = false;
 
                     if( 0 == (pEntry->nMemberId&MID_SW_FLAG_SPECIAL_ITEM_IMPORT) )
@@ -136,8 +138,6 @@ void SvXMLImportItemMapper::importXML( SfxItemSet& rSet,
 
                     if( bPut )
                         rSet.Put( *pNewItem );
-
-                    delete pNewItem;
                 }
                 else
                 {
@@ -158,16 +158,11 @@ void SvXMLImportItemMapper::importXML( SfxItemSet& rSet,
                 if( SfxItemState::SET == rSet.GetItemState( nUnknownWhich, true,
                                                        &pItem ) )
                 {
-                    SfxPoolItem *pNew = pItem->Clone();
-                    pUnknownItem = dynamic_cast<SvXMLAttrContainerItem*>( pNew  );
-                    OSL_ENSURE( pUnknownItem,
-                                "SvXMLAttrContainerItem expected" );
-                    if( !pUnknownItem )
-                        delete pNew;
+                    pUnknownItem.reset( static_cast<SvXMLAttrContainerItem*>( pItem->Clone() ) );
                 }
                 else
                 {
-                    pUnknownItem = new SvXMLAttrContainerItem( nUnknownWhich );
+                    pUnknownItem.reset( new SvXMLAttrContainerItem( nUnknownWhich ) );
                 }
             }
             if( pUnknownItem )
@@ -184,7 +179,6 @@ void SvXMLImportItemMapper::importXML( SfxItemSet& rSet,
     if( pUnknownItem )
     {
         rSet.Put( *pUnknownItem );
-        delete pUnknownItem;
     }
 
     finished(rSet, rUnitConverter);
@@ -224,32 +218,24 @@ SvXMLImportItemMapper::finished(SfxItemSet &, SvXMLUnitConverter const&) const
 
 struct BoxHolder
 {
-    SvxBorderLine* pTop;
-    SvxBorderLine* pBottom;
-    SvxBorderLine* pLeft;
-    SvxBorderLine* pRight;
+    std::unique_ptr<SvxBorderLine> pTop;
+    std::unique_ptr<SvxBorderLine> pBottom;
+    std::unique_ptr<SvxBorderLine> pLeft;
+    std::unique_ptr<SvxBorderLine> pRight;
 
     BoxHolder(BoxHolder const&) = delete;
     BoxHolder& operator=(BoxHolder const&) = delete;
 
     explicit BoxHolder(SvxBoxItem const & rBox)
     {
-        pTop    = rBox.GetTop() == nullptr ?
-            nullptr : new SvxBorderLine( *rBox.GetTop() );
-        pBottom = rBox.GetBottom() == nullptr ?
-            nullptr : new SvxBorderLine( *rBox.GetBottom() );
-        pLeft   = rBox.GetLeft() == nullptr ?
-            nullptr : new SvxBorderLine( *rBox.GetLeft() );
-        pRight  = rBox.GetRight() == nullptr ?
-            nullptr : new SvxBorderLine( *rBox.GetRight() );
-    }
-
-    ~BoxHolder()
-    {
-        delete pTop;
-        delete pBottom;
-        delete pLeft;
-        delete pRight;
+        if (rBox.GetTop())
+            pTop.reset(new SvxBorderLine( *rBox.GetTop() ));
+        if (rBox.GetBottom())
+            pBottom.reset(new SvxBorderLine( *rBox.GetBottom() ));
+        if (rBox.GetLeft())
+            pLeft.reset(new SvxBorderLine( *rBox.GetLeft() ));
+        if (rBox.GetRight())
+            pRight.reset(new SvxBorderLine( *rBox.GetRight() ));
     }
 };
 
@@ -576,10 +562,10 @@ bool SvXMLImportItemMapper::PutXMLValue(
                 break;
             }
 
-            rBox.SetLine( aBoxes.pTop,    SvxBoxItemLine::TOP    );
-            rBox.SetLine( aBoxes.pBottom, SvxBoxItemLine::BOTTOM );
-            rBox.SetLine( aBoxes.pLeft,   SvxBoxItemLine::LEFT   );
-            rBox.SetLine( aBoxes.pRight,  SvxBoxItemLine::RIGHT  );
+            rBox.SetLine( aBoxes.pTop.get(),    SvxBoxItemLine::TOP    );
+            rBox.SetLine( aBoxes.pBottom.get(), SvxBoxItemLine::BOTTOM );
+            rBox.SetLine( aBoxes.pLeft.get(),   SvxBoxItemLine::LEFT   );
+            rBox.SetLine( aBoxes.pRight.get(),  SvxBoxItemLine::RIGHT  );
 
             bOk = true;
         }

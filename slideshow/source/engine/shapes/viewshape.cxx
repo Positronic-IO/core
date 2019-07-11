@@ -17,12 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
 
+#include <o3tl/clamp.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <math.h>
 
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/rendering/XCanvas.hpp>
 #include <com/sun/star/rendering/XIntegerBitmap.hpp>
@@ -433,7 +436,7 @@ namespace slideshow
             if( mbForceUpdate || (nUpdateFlags & UpdateFlags::Alpha) )
             {
                 mpSprite->setAlpha( (pAttr && pAttr->isAlphaValid()) ?
-                                    ::basegfx::clamp(pAttr->getAlpha(),
+                                    o3tl::clamp(pAttr->getAlpha(),
                                                      0.0,
                                                      1.0) :
                                     1.0 );
@@ -554,7 +557,7 @@ namespace slideshow
             {
                 // setup clip poly
                 if( pAttr->isClipValid() )
-                    aClip.reset( pAttr->getClip() );
+                    aClip = pAttr->getClip();
 
                 // emulate global shape alpha by first rendering into
                 // a temp bitmap, and then to screen (this would have
@@ -814,12 +817,10 @@ namespace slideshow
                                        nYBorder );
         }
 
-        bool ViewShape::enterAnimationMode()
+        void ViewShape::enterAnimationMode()
         {
             mbForceUpdate   = true;
             mbAnimationMode = true;
-
-            return true;
         }
 
         void ViewShape::leaveAnimationMode()

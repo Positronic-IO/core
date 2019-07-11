@@ -53,6 +53,7 @@
 #include <vcl/graph.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <sot/exchange.hxx>
+#include <sot/storage.hxx>
 
 #include <svl/stritem.hxx>
 #include <svl/sharedstringpool.hxx>
@@ -83,6 +84,8 @@
 #include <xilink.hxx>
 #include <xiescher.hxx>
 #include <xipivot.hxx>
+#include <xistyle.hxx>
+#include <excdefs.hxx>
 
 #include <excform.hxx>
 #include <scextopt.hxx>
@@ -188,8 +191,8 @@ ImportExcel8::ImportExcel8( XclImpRootData& rImpData, SvStream& rStrm ) :
     ImportExcel( rImpData, rStrm )
 {
     // replace BIFF2-BIFF5 formula importer with BIFF8 formula importer
-    delete pFormConv;
-    pFormConv = pExcRoot->pFmlaConverter = new ExcelToSc8( GetRoot() );
+    pFormConv.reset(new ExcelToSc8( GetRoot() ));
+    pExcRoot->pFmlaConverter = pFormConv.get();
 }
 
 ImportExcel8::~ImportExcel8()
@@ -435,7 +438,7 @@ void ImportExcel8::PostDocLoad()
     ImportExcel::PostDocLoad();
 
     // check scenarios; Attention: This increases the table count of the document!!
-    if( !pD->IsClipboard() && maScenList.aEntries.size() )
+    if( !pD->IsClipboard() && !maScenList.aEntries.empty() )
     {
         pD->UpdateChartListenerCollection();    // references in charts must be updated
 

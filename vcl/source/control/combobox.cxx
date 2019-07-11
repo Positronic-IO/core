@@ -25,9 +25,11 @@
 #include <vcl/decoview.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/button.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/uitest/uiobject.hxx>
+#include <sal/log.hxx>
 
 #include <svdata.hxx>
 #include <listbox.hxx>
@@ -56,6 +58,7 @@ struct ComboBox::Impl
     bool                m_isSyntheticModify   : 1;
     bool                m_isMatchCase         : 1;
     sal_Int32           m_nMaxWidthChars;
+    sal_Int32           m_nWidthInChars;
     Link<ComboBox&,void>               m_SelectHdl;
     Link<ComboBox&,void>               m_DoubleClickHdl;
 
@@ -67,6 +70,7 @@ struct ComboBox::Impl
         , m_isSyntheticModify(false)
         , m_isMatchCase(false)
         , m_nMaxWidthChars(0)
+        , m_nWidthInChars(-1)
     {
     }
 
@@ -140,6 +144,7 @@ void ComboBox::Impl::ImplInitComboBoxData()
     m_isMatchCase       = false;
     m_cMultiSep         = ';';
     m_nMaxWidthChars    = -1;
+    m_nWidthInChars     = -1;
 }
 
 void ComboBox::ImplCalcEditHeight()
@@ -507,7 +512,10 @@ void ComboBox::EnableAutoSize( bool bAuto )
         }
     }
 }
-
+void ComboBox::EnableSelectAll()
+{
+    m_pImpl->m_pSubEdit->SetSelectAllSingleClick(true);
+}
 void ComboBox::EnableDDAutoWidth( bool b )
 {
     if (m_pImpl->m_pFloatWin)
@@ -991,7 +999,7 @@ void ComboBox::SetDoubleClickHdl(const Link<ComboBox&,void>& rLink) { m_pImpl->m
 
 const Link<ComboBox&,void>& ComboBox::GetDoubleClickHdl() const { return m_pImpl->m_DoubleClickHdl; }
 
-void ComboBox::SetEntryActivateHdl(const Link<Edit&,void>& rLink)
+void ComboBox::SetEntryActivateHdl(const Link<Edit&,bool>& rLink)
 {
     if (!m_pImpl->m_pSubEdit)
         return;
@@ -1045,7 +1053,11 @@ Size ComboBox::CalcMinimumSize() const
     else
     {
         aSz.setHeight( Edit::CalcMinimumSizeForText(GetText()).Height() );
-        aSz.setWidth( m_pImpl->m_pImplLB->GetMaxEntryWidth() );
+
+        if (m_pImpl->m_nWidthInChars!= -1)
+            aSz.setWidth(m_pImpl->m_nWidthInChars * approximate_digit_width());
+        else
+            aSz.setWidth(m_pImpl->m_pImplLB->GetMaxEntryWidth());
     }
 
     if (m_pImpl->m_nMaxWidthChars != -1)
@@ -1283,6 +1295,11 @@ void ComboBox::SetSeparatorPos( sal_Int32 n )
     m_pImpl->m_pImplLB->SetSeparatorPos( n );
 }
 
+void ComboBox::AddSeparator( sal_Int32 n )
+{
+    m_pImpl->m_pImplLB->AddSeparator( n );
+}
+
 void ComboBox::SetMRUEntries( const OUString& rEntries )
 {
     m_pImpl->m_pImplLB->SetMRUEntries( rEntries, ';' );
@@ -1495,6 +1512,15 @@ ComboBoxBounds ComboBox::Impl::calcComboBoxDropDownComponentBounds(
     return aBounds;
 }
 
+void ComboBox::SetWidthInChars(sal_Int32 nWidthInChars)
+{
+    if (nWidthInChars != m_pImpl->m_nWidthInChars)
+    {
+        m_pImpl->m_nWidthInChars = nWidthInChars;
+        queue_resize();
+    }
+}
+
 void ComboBox::setMaxWidthChars(sal_Int32 nWidth)
 {
     if (nWidth != m_pImpl->m_nMaxWidthChars)
@@ -1506,8 +1532,22 @@ void ComboBox::setMaxWidthChars(sal_Int32 nWidth)
 
 bool ComboBox::set_property(const OString &rKey, const OUString &rValue)
 {
-    if (rKey == "max-width-chars")
+    if (rKey == "width-chars")
+        SetWidthInChars(rValue.toInt32());
+    else if (rKey == "max-width-chars")
         setMaxWidthChars(rValue.toInt32());
+    else if (rKey == "can-focus")
+    {
+        // as far as I can see in Gtk, setting a ComboBox as can.focus means
+        // the focus gets stuck in it, so try here to behave like gtk does
+        // with the settings that work, i.e. can.focus of false doesn't
+        // set the hard WB_NOTABSTOP
+        WinBits nBits = GetStyle();
+        nBits &= ~(WB_TABSTOP|WB_NOTABSTOP);
+        if (toBool(rValue))
+            nBits |= WB_TABSTOP;
+        SetStyle(nBits);
+    }
     else
         return Control::set_property(rKey, rValue);
     return true;

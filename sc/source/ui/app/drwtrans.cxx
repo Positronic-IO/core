@@ -72,15 +72,13 @@ constexpr sal_uInt32 SCDRAWTRANS_TYPE_EMBOBJ    = 1;
 constexpr sal_uInt32 SCDRAWTRANS_TYPE_DRAWMODEL = 2;
 constexpr sal_uInt32 SCDRAWTRANS_TYPE_DOCUMENT  = 3;
 
-ScDrawTransferObj::ScDrawTransferObj( SdrModel* pClipModel, ScDocShell* pContainerShell,
+ScDrawTransferObj::ScDrawTransferObj( std::unique_ptr<SdrModel> pClipModel, ScDocShell* pContainerShell,
                                         const TransferableObjectDescriptor& rDesc ) :
-    m_pModel( pClipModel ),
+    m_pModel( std::move(pClipModel) ),
     m_aObjDesc( rDesc ),
-    m_pBookmark( nullptr ),
     m_bGraphic( false ),
     m_bGrIsBit( false ),
     m_bOleObj( false ),
-    m_pDragSourceView( nullptr ),
     m_nDragSourceFlags( ScDragSrc::Undefined ),
     m_bDragWasInternal( false ),
     maShellID(SfxObjectShell::CreateShellID(pContainerShell))
@@ -91,7 +89,7 @@ ScDrawTransferObj::ScDrawTransferObj( SdrModel* pClipModel, ScDocShell* pContain
     SdrPage* pPage = m_pModel->GetPage(0);
     if (pPage)
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         if (pObject && !aIter.Next())               // exactly one object?
         {
@@ -127,7 +125,7 @@ ScDrawTransferObj::ScDrawTransferObj( SdrModel* pClipModel, ScDocShell* pContain
             SdrUnoObj* pUnoCtrl = dynamic_cast<SdrUnoObj*>( pObject );
             if (pUnoCtrl && SdrInventor::FmForm == pUnoCtrl->GetObjInventor())
             {
-                uno::Reference<awt::XControlModel> xControlModel = pUnoCtrl->GetUnoControlModel();
+                const uno::Reference<awt::XControlModel>& xControlModel = pUnoCtrl->GetUnoControlModel();
                 OSL_ENSURE( xControlModel.is(), "uno control without model" );
                 if ( xControlModel.is() )
                 {
@@ -236,16 +234,18 @@ ScDrawTransferObj::~ScDrawTransferObj()
     m_pDragSourceView.reset();
 }
 
-ScDrawTransferObj* ScDrawTransferObj::GetOwnClipboard( vcl::Window* pWin )
+ScDrawTransferObj* ScDrawTransferObj::GetOwnClipboard(const uno::Reference<datatransfer::XTransferable2>& xTransferable)
 {
     ScDrawTransferObj* pObj = nullptr;
-    TransferableDataHelper aDataHelper( TransferableDataHelper::CreateFromSystemClipboard( pWin ) );
-    uno::Reference<XUnoTunnel> xTunnel( aDataHelper.GetTransferable(), uno::UNO_QUERY );
-    if ( xTunnel.is() )
+    if (xTransferable.is())
     {
-        sal_Int64 nHandle = xTunnel->getSomething( getUnoTunnelId() );
-        if ( nHandle )
-            pObj = dynamic_cast<ScDrawTransferObj*>(reinterpret_cast<TransferableHelper*>( static_cast<sal_IntPtr>(nHandle) ));
+        uno::Reference<XUnoTunnel> xTunnel( xTransferable, uno::UNO_QUERY );
+        if ( xTunnel.is() )
+        {
+            sal_Int64 nHandle = xTunnel->getSomething( getUnoTunnelId() );
+            if ( nHandle )
+                pObj = dynamic_cast<ScDrawTransferObj*>(reinterpret_cast<TransferableHelper*>( static_cast<sal_IntPtr>(nHandle) ));
+        }
     }
 
     return pObj;
@@ -260,7 +260,7 @@ static bool lcl_HasOnlyControls( SdrModel* pModel )
         SdrPage* pPage = pModel->GetPage(0);
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
             SdrObject* pObj = aIter.Next();
             if ( pObj )
             {
@@ -411,7 +411,7 @@ bool ScDrawTransferObj::GetData( const css::datatransfer::DataFlavor& rFlavor, c
             SdrPage* pPage = m_pModel->GetPage(0);
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+                SdrObjListIter aIter( pPage, SdrIterMode::Flat );
                 SdrObject* pObject = aIter.Next();
                 if (pObject && pObject->GetObjIdentifier() == OBJ_GRAF)
                 {
@@ -470,8 +470,8 @@ bool ScDrawTransferObj::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, voi
 
                 for(sal_uInt16 a(0); a < m_pModel->GetPageCount(); a++)
                 {
-                    const SdrPage* pPage = m_pModel->GetPage(a);
-                    SdrObjListIter aIter(*pPage, SdrIterMode::DeepNoGroups);
+                    const SdrPage* pPage(m_pModel->GetPage(a));
+                    SdrObjListIter aIter(pPage, SdrIterMode::DeepNoGroups);
 
                     while(aIter.IsMore())
                     {
@@ -563,12 +563,12 @@ bool ScDrawTransferObj::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, voi
                     if ( xTransact.is() )
                         xTransact->commit();
 
-                    SvStream* pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
+                    std::unique_ptr<SvStream> pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
                     if( pSrcStm )
                     {
                         rxOStm->SetBufferSize( 0xff00 );
                         rxOStm->WriteStream( *pSrcStm );
-                        delete pSrcStm;
+                        pSrcStm.reset();
                     }
 
                     xWorkStore->dispose();
@@ -669,7 +669,7 @@ SdrOle2Obj* ScDrawTransferObj::GetSingleObject()
     SdrPage* pPage = m_pModel->GetPage(0);
     if (pPage)
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         if (pObject && pObject->GetObjIdentifier() == OBJ_OLE2)
         {
@@ -729,7 +729,7 @@ void ScDrawTransferObj::InitDocShell()
         SdrPage* pPage = pDestModel->GetPage(0);
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
             SdrObject* pObject = aIter.Next();
             while (pObject)
             {

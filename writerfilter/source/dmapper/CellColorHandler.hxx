@@ -38,6 +38,7 @@ private:
     sal_Int32 m_nColor;
     sal_Int32 m_nFillColor;
     bool      m_bAutoFillColor;
+    bool      m_bFillSpecified;
     OutputFormat m_OutputFormat;
 
     OUString m_aInteropGrabBagName;
@@ -53,7 +54,7 @@ public:
     CellColorHandler( );
     virtual ~CellColorHandler() override;
 
-    ::std::shared_ptr<TablePropertyMap>            getProperties();
+    ::tools::SvRef<TablePropertyMap>            getProperties();
 
     void setOutputFormat( OutputFormat format ) { m_OutputFormat = format; }
 
@@ -62,7 +63,6 @@ public:
     void disableInteropGrabBag();
     bool isInteropGrabBagEnabled();
 };
-typedef std::shared_ptr< CellColorHandler >          CellColorHandlerPtr;
 }}
 
 #endif

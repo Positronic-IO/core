@@ -23,20 +23,20 @@
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
 #include <i18nlangtag/lang.h>
-#include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/lang/Locale.hpp>
-#include <com/sun/star/i18n/NumberFormatCode.hpp>
 #include <com/sun/star/util/NumberFormat.hpp>
-#include <com/sun/star/i18n/NumberFormatMapper.hpp>
 #include <unotools/localedatawrapper.hxx>
 #include <tools/link.hxx>
 #include <svl/ondemand.hxx>
 #include <svl/nfkeytab.hxx>
-#include <o3tl/typed_flags_set.hxx>
 
 #include <map>
 #include <memory>
 #include <set>
+
+namespace com { namespace sun { namespace star { namespace i18n { class XNumberFormatCode; } } } }
+namespace com { namespace sun { namespace star { namespace i18n { struct Currency; } } } }
+namespace com { namespace sun { namespace star { namespace i18n { struct NumberFormatCode; } } } }
+namespace o3tl { template <typename T> struct typed_flags; }
 
 class Date;
 class Color;
@@ -109,9 +109,14 @@ enum class SvNumFormatType : sal_Int16
          @since LibreOffice 5.1
       */
      EMPTY = css::util::NumberFormat::EMPTY, // 4096
+    /** @internal selects a time duration format.
+        8192 + TIME (4)
+        @since LibreOffice 6.2
+     */
+     DURATION = css::util::NumberFormat::DURATION, // 8196
 };
 namespace o3tl {
-    template<> struct typed_flags<SvNumFormatType> : is_typed_flags<SvNumFormatType, 0x1dff> {};
+    template<> struct typed_flags<SvNumFormatType> : is_typed_flags<SvNumFormatType, 0x3dff> {};
 }
 
 /** enum values for <method>SvNumberFormatter::GetFormatIndex</method>
@@ -176,7 +181,7 @@ enum NfIndexTableOffset
     NF_DATE_SYSTEM_SHORT = NF_DATE_START,   // 08.10.97
     NF_DATE_SYSTEM_LONG,                    // Wednesday, 8. October 1997
     NF_DATE_SYS_DDMMYY,                     // 08.10.97
-    NF_DATE_SYS_DDMMYYYY,                   // 08.10.1997
+    NF_DATE_SYS_DDMMYYYY,                   // 08.10.1997                   THE edit format, formatindex="21"
     NF_DATE_SYS_DMMMYY,                     // 8. Oct 97
     NF_DATE_SYS_DMMMYYYY,                   // 8. Oct 1997
     NF_DATE_DIN_DMMMYYYY,                   // 8. Oct. 1997                 DIN
@@ -189,7 +194,7 @@ enum NfIndexTableOffset
     NF_DATE_DIN_MMDD,                       // 10-08                        DIN
     NF_DATE_DIN_YYMMDD,                     // 97-10-08                     DIN
     NF_DATE_DIN_YYYYMMDD,                   // 1997-10-08                   DIN
-    NF_DATE_ISO_YYYYMMDD = NF_DATE_DIN_YYYYMMDD, // 1997-10-08              ISO clarify with name
+    NF_DATE_ISO_YYYYMMDD = NF_DATE_DIN_YYYYMMDD, // 1997-10-08              ISO clarify with name, formatindex="33"
     NF_DATE_SYS_MMYY,                       // 10.97
     NF_DATE_SYS_DDMMM,                      // 08.Oct
     NF_DATE_MMMM,                           // October
@@ -202,14 +207,14 @@ enum NfIndexTableOffset
     NF_TIME_HHMMSS,                         // HH:MM:SS
     NF_TIME_HHMMAMPM,                       // HH:MM AM/PM
     NF_TIME_HHMMSSAMPM,                     // HH:MM:SS AM/PM
-    NF_TIME_HH_MMSS,                        // [HH]:MM:SS
-    NF_TIME_MMSS00,                         // MM:SS,00
-    NF_TIME_HH_MMSS00,                      // [HH]:MM:SS,00
+    NF_TIME_HH_MMSS,                        // [HH]:MM:SS                   formatindex="43"
+    NF_TIME_MMSS00,                         // MM:SS,00                     formatindex="44"
+    NF_TIME_HH_MMSS00,                      // [HH]:MM:SS,00                formatindex="45"
     NF_TIME_END = NF_TIME_HH_MMSS00,
 
     NF_DATETIME_START,
     NF_DATETIME_SYSTEM_SHORT_HHMM = NF_DATETIME_START,  // 08.10.97 01:23
-    NF_DATETIME_SYS_DDMMYYYY_HHMMSS,        // 08.10.1997 01:23:45
+    NF_DATETIME_SYS_DDMMYYYY_HHMMSS,        // 08.10.1997 01:23:45          THE edit format, formatindex="47"
     NF_DATETIME_END = NF_DATETIME_SYS_DDMMYYYY_HHMMSS,
 
     NF_BOOLEAN,                             // BOOLEAN
@@ -227,7 +232,7 @@ enum NfIndexTableOffset
     // (NF_..._START and NF_..._END above) to fill its categories with builtin
     // formats, make new formats known to svx/source/items/numfmtsh.cxx
     // SvxNumberFormatShell::FillEListWithStd_Impl(), otherwise they will not
-    // be be listed at all. Yes that is ugly.
+    // be listed at all. Yes that is ugly.
 
     NF_FRACTION_3D = NF_INDEX_TABLE_LOCALE_DATA_DEFAULTS,    // # ???/???
     NF_FRACTION_2,                          // # ?/2
@@ -461,7 +466,7 @@ public:
     bool PutandConvertEntry( OUString& rString, sal_Int32& nCheckPos,
                              SvNumFormatType& nType, sal_uInt32& nKey,
                              LanguageType eLnge, LanguageType eNewLnge,
-                             bool bForExcelExport = false );
+                             bool bConvertDateOrder );
 
     /** Same as <method>PutandConvertEntry</method> but the format code string
          is considered to be of the System language/country eLnge and is

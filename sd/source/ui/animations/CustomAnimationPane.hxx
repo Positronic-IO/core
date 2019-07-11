@@ -21,7 +21,6 @@
 #define INCLUDED_SD_SOURCE_UI_ANIMATIONS_CUSTOMANIMATIONPANE_HXX
 
 #include <com/sun/star/drawing/XDrawView.hpp>
-#include <vcl/dialog.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/field.hxx>
 #include <svx/sidebar/PanelLayout.hxx>
@@ -89,6 +88,7 @@ public:
     virtual void onSelect() override;
     virtual void onDoubleClick() override;
     virtual void onContextMenu(const OString& rIdent) override;
+    virtual void onDragNDropComplete( CustomAnimationEffectPtr pEffectDragged, CustomAnimationEffectPtr pEffectInsertBefore ) override;
 
     // Window
     virtual void DataChanged (const DataChangedEvent& rEvent) override;
@@ -109,7 +109,7 @@ private:
     void moveSelection( bool bUp );
     void onPreview( bool bForcePreview );
 
-    STLPropertySet* createSelectionSet();
+    std::unique_ptr<STLPropertySet> createSelectionSet();
     void changeSelection( STLPropertySet const * pResultSet, STLPropertySet const * pOldSet );
 
     static css::uno::Any getProperty1Value( sal_Int32 nType, const CustomAnimationEffectPtr& pEffect );
@@ -136,39 +136,40 @@ private:
 
     const CustomAnimationPresets* mpCustomAnimationPresets;
 
-    VclPtr<PushButton> mpPBAddEffect;
-    VclPtr<PushButton> mpPBRemoveEffect;
-    VclPtr<FixedText>  mpFTEffect;
-    VclPtr<FixedText>  mpFTStart;
-    VclPtr<ListBox>    mpLBStart;
-    VclPtr<FixedText>  mpFTProperty;
-    VclPtr<VclHBox>    mpPlaceholderBox;
-    VclPtr<PropertyControl>    mpLBProperty;
-    VclPtr<PushButton> mpPBPropertyMore;
-    VclPtr<FixedText>  mpFTDuration;
+    // UI Elements
+    VclPtr<FixedText>   mpFTAnimation;
+    VclPtr<CustomAnimationList> mpCustomAnimationList;
+    VclPtr<PushButton>  mpPBAddEffect;
+    VclPtr<PushButton>  mpPBRemoveEffect;
+    VclPtr<PushButton>  mpPBMoveUp;
+    VclPtr<PushButton>  mpPBMoveDown;
+    VclPtr<FixedText>   mpFTCategory;
+    VclPtr<ListBox>     mpLBCategory;
+    VclPtr<FixedText>   mpFTEffect;
+    VclPtr<CategoryListBox> mpLBAnimation;
+    VclPtr<FixedText>   mpFTStart;
+    VclPtr<ListBox>     mpLBStart;
+    VclPtr<FixedText>   mpFTProperty;
+    VclPtr<PropertyControl> mpLBProperty;
+    VclPtr<VclHBox>     mpPlaceholderBox;
+    VclPtr<PushButton>  mpPBPropertyMore;
+    VclPtr<FixedText>   mpFTDuration;
     VclPtr<MetricBox>   mpCBXDuration;
     VclPtr<FixedText>   mpFTStartDelay;
     VclPtr<MetricField> mpMFStartDelay;
-    VclPtr<CustomAnimationList>    mpCustomAnimationList;
-    VclPtr<PushButton> mpPBMoveUp;
-    VclPtr<PushButton> mpPBMoveDown;
-    VclPtr<PushButton> mpPBPlay;
-    VclPtr<CheckBox>   mpCBAutoPreview;
-    VclPtr<FixedText> mpFTCategory;
-    VclPtr<ListBox>    mpLBCategory;
-    VclPtr<FixedText> mpFTAnimation;
-    VclPtr<CategoryListBox> mpLBAnimation;
+    VclPtr<CheckBox>    mpCBAutoPreview;
+    VclPtr<PushButton>  mpPBPlay;
 
     OUString    maStrModify;
     OUString    maStrProperty;
 
     sal_Int32   mnPropertyType;
-    sal_Int32   mnMotionPathPos;
+    static sal_Int32 const gnMotionPathPos = 3;
     sal_Int32   mnCurvePathPos;
     sal_Int32   mnPolygonPathPos;
     sal_Int32   mnFreeformPathPos;
 
-    bool        mbHorizontal;
+    bool const      mbHorizontal;
 
     EffectSequence  maListSelection;
     css::uno::Any   maViewSelection;
@@ -194,7 +195,7 @@ private:
     ScopeLock maSelectionLock;
 };
 
-void fillRepeatComboBox( ListBox* pBox );
+void fillRepeatComboBox(weld::ComboBox& rBox);
 
 }
 

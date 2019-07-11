@@ -45,6 +45,7 @@
 #include <svx/svdpagv.hxx>
 #include <svx/strings.hrc>
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 #include <algorithm>
 
 using namespace ::accessibility;
@@ -101,7 +102,7 @@ namespace
     }
 
     /// determines whether the given control is in alive mode
-    inline  bool    isAliveMode( const Reference< XControl >& _rxControl )
+    bool    isAliveMode( const Reference< XControl >& _rxControl )
     {
         OSL_PRECOND( _rxControl.is(), "AccessibleControlShape::isAliveMode: invalid control" );
         return _rxControl.is() && !_rxControl->isDesignMode();

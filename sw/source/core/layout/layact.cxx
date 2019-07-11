@@ -41,6 +41,7 @@
 #include <vcl/svapp.hxx>
 #include <editeng/opaqitem.hxx>
 #include <SwSmartTagMgr.hxx>
+#include <sal/log.hxx>
 
 #include <layact.hxx>
 #include <swwait.hxx>
@@ -57,6 +58,7 @@
 #include <acmplwrd.hxx>
 #include <sortedobjs.hxx>
 #include <objectformatter.hxx>
+#include <fntcache.hxx>
 #include <vector>
 
 // Save some typing work to avoid accessing destroyed pages.
@@ -78,7 +80,7 @@ void SwLayAction::CheckWaitCursor()
     if ( !m_pWait && IsWaitAllowed() && IsPaint() &&
          ((std::clock() - m_nStartTicks) * 1000 / CLOCKS_PER_SEC >= CLOCKS_PER_SEC/2) )
     {
-        m_pWait = new SwWait( *m_pRoot->GetFormat()->GetDoc()->GetDocShell(), true );
+        m_pWait.reset( new SwWait( *m_pRoot->GetFormat()->GetDoc()->GetDocShell(), true ) );
     }
 }
 
@@ -173,8 +175,8 @@ bool SwLayAction::PaintWithoutFlys( const SwRect &rRect, const SwContentFrame *p
     }
 
     bool bRetPaint = false;
-    for ( SwRects::const_iterator it = aTmp.begin(); it != aTmp.end(); ++it )
-        bRetPaint |= m_pImp->GetShell()->AddPaintRect( *it );
+    for ( const auto& rRegionRect : aTmp )
+        bRetPaint |= m_pImp->GetShell()->AddPaintRect( rRegionRect );
     return bRetPaint;
 }
 
@@ -250,7 +252,6 @@ SwLayAction::SwLayAction( SwRootFrame *pRt, SwViewShellImp *pI ) :
     m_pRoot( pRt ),
     m_pImp( pI ),
     m_pOptTab( nullptr ),
-    m_pWait( nullptr ),
     m_nPreInvaPage( USHRT_MAX ),
     m_nStartTicks( std::clock() ),
     m_nInputType( VclInputFlags::NONE ),
@@ -319,8 +320,7 @@ void SwLayAction::Action(OutputDevice* pRenderContext)
     //TurboMode? Hands-off during idle-format
     if ( IsPaint() && !IsIdle() && TurboAction() )
     {
-        delete m_pWait;
-        m_pWait = nullptr;
+        m_pWait.reset();
         m_pRoot->ResetTurboFlag();
         m_bActionInProgress = false;
         m_pRoot->DeleteEmptySct();
@@ -348,8 +348,7 @@ void SwLayAction::Action(OutputDevice* pRenderContext)
     }
     m_pRoot->DeleteEmptySct();
 
-    delete m_pWait;
-    m_pWait = nullptr;
+    m_pWait.reset();
 
     //Turbo-Action permitted again for all cases.
     m_pRoot->ResetTurboFlag();
@@ -444,21 +443,16 @@ void SwLayAction::InternalAction(OutputDevice* pRenderContext)
     sal_uInt16 nPercentPageNum = 0;
     while ( (pPage && !IsInterrupt()) || m_nCheckPageNum != USHRT_MAX )
     {
-        // nCheckPageNum is set to USHRT_MAX in this code path after we have
-        // checked the SwPageDescs and set tos the minimal changed SwPageDesc.
-        // We don't need to check the SwPageDescs without changes.
-        if ( (m_nCheckPageNum != USHRT_MAX) && (!pPage || pPage->GetPhyPageNum() >= m_nCheckPageNum) )
+        if (!pPage && m_nCheckPageNum != USHRT_MAX)
         {
-            if ( !pPage || pPage->GetPhyPageNum() > m_nCheckPageNum )
-            {
-                SwPageFrame *pPg = static_cast<SwPageFrame*>(m_pRoot->Lower());
-                while ( pPg && pPg->GetPhyPageNum() < m_nCheckPageNum )
-                    pPg = static_cast<SwPageFrame*>(pPg->GetNext());
-                if ( pPg )
-                    pPage = pPg;
-                if ( !pPage )
-                    break;
-            }
+            SwPageFrame *pPg = static_cast<SwPageFrame*>(m_pRoot->Lower());
+            while (pPg && pPg->GetPhyPageNum() < m_nCheckPageNum)
+                pPg = static_cast<SwPageFrame*>(pPg->GetNext());
+            if (pPg)
+                pPage = pPg;
+            if (!pPage)
+                break;
+
             SwPageFrame *pTmp = pPage->GetPrev() ?
                                         static_cast<SwPageFrame*>(pPage->GetPrev()) : pPage;
             SetCheckPages( true );
@@ -1567,9 +1561,11 @@ bool SwLayAction::FormatLayoutTab( SwTabFrame *pTab, bool bAddRect )
     // format lowers, only if table frame is valid
     if ( pTab->isFrameAreaDefinitionValid() )
     {
+        FlowFrameJoinLockGuard tabG(pTab); // tdf#124675 prevent Join() if pTab becomes empty
         SwLayoutFrame *pLow = static_cast<SwLayoutFrame*>(pTab->Lower());
         while ( pLow )
         {
+            SwFrameDeleteGuard rowG(pLow); // tdf#124675 prevent RemoveFollowFlowLine()
             bChanged |= FormatLayout( m_pImp->GetShell()->GetOut(), pLow, bAddRect );
             if ( IsAgain() )
                 return false;
@@ -1847,23 +1843,55 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
     if( !pCnt->IsTextFrame() )
         return false;
 
-    const SwTextNode* pTextNode = pCnt->GetNode()->GetTextNode();
+    SwTextFrame const*const pTextFrame(static_cast<SwTextFrame const*>(pCnt));
+    // sw_redlinehide: spell check only the nodes with visible content?
+    SwTextNode* pTextNode = const_cast<SwTextNode*>(pTextFrame->GetTextNodeForParaProps());
 
     bool bProcess = false;
-    switch ( eJob )
+    for (size_t i = 0; pTextNode; )
     {
-        case ONLINE_SPELLING :
-            bProcess = pTextNode->IsWrongDirty(); break;
-        case AUTOCOMPLETE_WORDS :
-            bProcess = pTextNode->IsAutoCompleteWordDirty(); break;
-        case WORD_COUNT :
-            bProcess = pTextNode->IsWordCountDirty(); break;
-        case SMART_TAGS :
-            bProcess = pTextNode->IsSmartTagDirty(); break;
+        switch ( eJob )
+        {
+            case ONLINE_SPELLING :
+                bProcess = pTextNode->IsWrongDirty(); break;
+            case AUTOCOMPLETE_WORDS :
+                bProcess = pTextNode->IsAutoCompleteWordDirty(); break;
+            case WORD_COUNT :
+                bProcess = pTextNode->IsWordCountDirty(); break;
+            case SMART_TAGS :
+                bProcess = pTextNode->IsSmartTagDirty(); break;
+        }
+        if (bProcess)
+        {
+            break;
+        }
+        if (sw::MergedPara const* pMerged = pTextFrame->GetMergedPara())
+        {
+            while (true)
+            {
+                ++i;
+                if (i < pMerged->extents.size())
+                {
+                    if (pMerged->extents[i].pNode != pTextNode)
+                    {
+                        pTextNode = pMerged->extents[i].pNode;
+                        break;
+                    }
+                }
+                else
+                {
+                    pTextNode = nullptr;
+                    break;
+                }
+            }
+        }
+        else
+            pTextNode = nullptr;
     }
 
     if( bProcess )
     {
+        assert(pTextNode);
         SwViewShell *pSh = pImp->GetShell();
         if( COMPLETE_STRING == nTextPos )
         {
@@ -1878,12 +1906,15 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
                 }
             }
         }
+        sal_Int32 const nPos((pContentNode && pTextNode == pContentNode)
+                ? nTextPos
+                : COMPLETE_STRING);
 
         switch ( eJob )
         {
             case ONLINE_SPELLING :
             {
-                SwRect aRepaint( const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pCnt))->AutoSpell_( pContentNode, nTextPos ) );
+                SwRect aRepaint( const_cast<SwTextFrame*>(pTextFrame)->AutoSpell_(*pTextNode, nPos) );
                 // PENDING should stop idle spell checking
                 bPageValid = bPageValid && (SwTextNode::WrongState::TODO != pTextNode->GetWrongDirty());
                 if ( aRepaint.HasArea() )
@@ -1893,7 +1924,7 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
                 break;
             }
             case AUTOCOMPLETE_WORDS :
-                const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pCnt))->CollectAutoCmplWrds( pContentNode, nTextPos );
+                const_cast<SwTextFrame*>(pTextFrame)->CollectAutoCmplWrds(*pTextNode, nPos);
                 // note: bPageValid remains true here even if the cursor
                 // position is skipped, so no PENDING state needed currently
                 if (Application::AnyInput(VCL_INPUT_ANY & VclInputFlags(~VclInputFlags::TIMER)))
@@ -1911,7 +1942,7 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
             case SMART_TAGS :
             {
                 try {
-                    const SwRect aRepaint( const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pCnt))->SmartTagScan() );
+                    const SwRect aRepaint( const_cast<SwTextFrame*>(pTextFrame)->SmartTagScan(*pTextNode) );
                     bPageValid = bPageValid && !pTextNode->IsSmartTagDirty();
                     if ( aRepaint.HasArea() )
                         pImp->GetShell()->InvalidateWindows( aRepaint );
@@ -2243,6 +2274,9 @@ SwLayIdle::SwLayIdle( SwRootFrame *pRt, SwViewShellImp *pI ) :
             pRoot->ResetIdleFormat();
             SfxObjectShell* pDocShell = pImp->GetShell()->GetDoc()->GetDocShell();
             pDocShell->Broadcast( SfxEventHint( SfxEventHintId::SwEventLayoutFinished, SwDocShell::GetEventName(STR_SW_EVENT_LAYOUT_FINISHED), pDocShell ) );
+            // Limit lifetime of the text glyphs cache to a single run of the
+            // layout.
+            SwClearFntCacheTextGlyphs();
         }
     }
 

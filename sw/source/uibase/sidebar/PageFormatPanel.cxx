@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <swtypes.hxx>
 #include <svl/intitem.hxx>
 #include <editeng/sizeitem.hxx>
@@ -24,6 +25,7 @@
 #include <svx/svxids.hrc>
 #include <svx/dlgutil.hxx>
 #include <svx/rulritem.hxx>
+#include <svx/svdtrans.hxx>
 #include "PageFormatPanel.hxx"
 #include "PageMarginUtils.hxx"
 #include <sfx2/sidebar/ControlFactory.hxx>
@@ -31,7 +33,9 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/objsh.hxx>
+#include <pageformatpanel.hrc>
 #include <cmdid.h>
+#include <uitool.hxx>
 #include <svtools/unitconv.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
 
@@ -74,6 +78,17 @@ PageFormatPanel::PageFormatPanel(
     get(mpPaperHeight, "paperheight");
     get(mpPaperOrientation, "paperorientation");
     get(mpMarginSelectBox, "marginLB");
+    FieldUnit eMetric = ::GetDfltMetric(false);
+    if (IsInch(eMetric))
+    {
+        for (size_t i = 0; i < SAL_N_ELEMENTS(RID_PAGEFORMATPANEL_MARGINS_INCH); ++i)
+            mpMarginSelectBox->InsertEntry(SwResId(RID_PAGEFORMATPANEL_MARGINS_INCH[i]));
+    }
+    else
+    {
+        for (size_t i = 0; i < SAL_N_ELEMENTS(RID_PAGEFORMATPANEL_MARGINS_CM); ++i)
+            mpMarginSelectBox->InsertEntry(SwResId(RID_PAGEFORMATPANEL_MARGINS_CM[i]));
+    }
     get(mpCustomEntry, "customlabel");
     Initialize();
 }
@@ -114,10 +129,10 @@ void PageFormatPanel::Initialize()
     aCustomEntry = mpCustomEntry->GetText();
 
     const SvtOptionsDrawinglayer aDrawinglayerOpt;
-    mpPaperWidth->SetMax(mpPaperWidth->Normalize(aDrawinglayerOpt.GetMaximumPaperWidth()), FUNIT_CM);
-    mpPaperWidth->SetLast(mpPaperWidth->Normalize(aDrawinglayerOpt.GetMaximumPaperWidth()), FUNIT_CM);
-    mpPaperHeight->SetMax(mpPaperHeight->Normalize(aDrawinglayerOpt.GetMaximumPaperHeight()), FUNIT_CM);
-    mpPaperHeight->SetLast(mpPaperHeight->Normalize(aDrawinglayerOpt.GetMaximumPaperHeight()), FUNIT_CM);
+    mpPaperWidth->SetMax(mpPaperWidth->Normalize(aDrawinglayerOpt.GetMaximumPaperWidth()), FieldUnit::CM);
+    mpPaperWidth->SetLast(mpPaperWidth->Normalize(aDrawinglayerOpt.GetMaximumPaperWidth()), FieldUnit::CM);
+    mpPaperHeight->SetMax(mpPaperHeight->Normalize(aDrawinglayerOpt.GetMaximumPaperHeight()), FieldUnit::CM);
+    mpPaperHeight->SetLast(mpPaperHeight->Normalize(aDrawinglayerOpt.GetMaximumPaperHeight()), FieldUnit::CM);
 
     mpPaperSizeBox->SetSelectHdl( LINK(this, PageFormatPanel, PaperFormatModifyHdl ));
     mpPaperOrientation->SetSelectHdl( LINK(this, PageFormatPanel, PaperFormatModifyHdl ));
@@ -151,8 +166,8 @@ void PageFormatPanel::NotifyItemUpdate(
             {
                 Size aPaperSize = pSizeItem->GetSize();
 
-                mpPaperWidth->SetValue( mpPaperWidth->Normalize( aPaperSize.Width() ), FUNIT_TWIP );
-                mpPaperHeight->SetValue( mpPaperHeight->Normalize( aPaperSize.Height() ), FUNIT_TWIP );
+                mpPaperWidth->SetValue( mpPaperWidth->Normalize( aPaperSize.Width() ), FieldUnit::TWIP );
+                mpPaperHeight->SetValue( mpPaperHeight->Normalize( aPaperSize.Height() ), FieldUnit::TWIP );
 
                 if(mpPaperOrientation->GetSelectedEntryPos() == 1)
                    Swap(aPaperSize);
@@ -177,7 +192,7 @@ void PageFormatPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE:
         {
             if ( eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast< const SvxPageItem *>( pState ) !=  nullptr )
+                 dynamic_cast< const SvxPageItem *>( pState ) )
             {
                 mpPageItem.reset( static_cast<SvxPageItem*>(pState->Clone()) );
                 if ( mpPageItem->IsLandscape() )
@@ -190,7 +205,7 @@ void PageFormatPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_LRSPACE:
         {
             if ( eState >= SfxItemState::DEFAULT &&
-             pState && dynamic_cast< const SvxLongLRSpaceItem *>( pState ) !=  nullptr )
+                 dynamic_cast< const SvxLongLRSpaceItem *>( pState ) )
             {
                 mpPageLRMarginItem.reset( static_cast<SvxLongLRSpaceItem*>(pState->Clone()) );
                 UpdateMarginBox();
@@ -200,7 +215,7 @@ void PageFormatPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_ULSPACE:
         {
             if ( eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast< const SvxLongULSpaceItem *>( pState ) !=  nullptr )
+                dynamic_cast< const SvxLongULSpaceItem *>( pState ) )
             {
                 mpPageULMarginItem.reset( static_cast<SvxLongULSpaceItem*>(pState->Clone()) );
                 UpdateMarginBox();
@@ -215,9 +230,14 @@ void PageFormatPanel::NotifyItemUpdate(
 IMPL_LINK_NOARG(PageFormatPanel, PaperFormatModifyHdl, ListBox&, void)
 {
     Paper ePaper = mpPaperSizeBox->GetSelection();
-    Size  aSize(SvxPaperInfo::GetPaperSize(ePaper, meUnit));
+    Size  aSize;
 
-    if(mpPaperOrientation->GetSelectedEntryPos() == 1)
+    if(ePaper!=PAPER_USER)
+       aSize = SvxPaperInfo::GetPaperSize(ePaper, meUnit);
+    else
+       aSize = Size(GetCoreValue( *mpPaperWidth, meUnit ), GetCoreValue( *mpPaperHeight, meUnit));
+
+    if(mpPaperOrientation->GetSelectedEntryPos() == 1 || ePaper==PAPER_USER)
         Swap(aSize);
 
     mpPageItem->SetLandscape(mpPaperOrientation->GetSelectedEntryPos() == 1);
@@ -282,7 +302,7 @@ IMPL_LINK_NOARG(PageFormatPanel, PaperModifyMarginHdl, ListBox&, void)
 
 FieldUnit PageFormatPanel::GetCurrentUnit( SfxItemState eState, const SfxPoolItem* pState )
 {
-    FieldUnit eUnit = FUNIT_NONE;
+    FieldUnit eUnit = FieldUnit::NONE;
 
     if ( pState && eState >= SfxItemState::DEFAULT )
         eUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>(pState)->GetValue());

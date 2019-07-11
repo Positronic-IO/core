@@ -10,16 +10,21 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_CONDFORMATDLGENTRY_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_CONDFORMATDLGENTRY_HXX
 
-#include <memory>
-#include <colorscale.hxx>
 #include <conditio.hxx>
 #include <formula/funcutl.hxx>
-
+#include <vcl/vclptr.hxx>
+#include <vcl/builder.hxx>
+#include <vcl/layout.hxx>
 #include <svl/lstner.hxx>
+#include <svx/fntctrl.hxx>
 
 class ScIconSetFrmtDataEntry;
 class ScCondFormatDlg;
 class SvxColorListBox;
+class ScColorScaleFormat;
+class ScDataBarFormat;
+class ScIconSetFormat;
+struct ScDataBarFormatData;
 
 namespace condformat {
 
@@ -53,7 +58,7 @@ private:
     VclPtr<FixedText> maFtCondNr;
     VclPtr<FixedText> maFtCondition;
 
-    OUString maStrCondition;
+    OUString const maStrCondition;
 protected:
     VclPtr<ListBox> maLbType;
 
@@ -74,6 +79,7 @@ public:
 
     virtual bool EventNotify( NotifyEvent& rNEvt ) override;
 
+    virtual void SetPos(const ScAddress& rPos) { maPos = rPos; };
     bool IsSelected() const { return mbActive;}
     void SetIndex(sal_Int32 nIndex);
     void SetHeight();
@@ -175,6 +181,9 @@ class ScColorScale2FrmtEntry : public ScCondFrmtEntry
     VclPtr<SvxColorListBox> maLbColMin;
     VclPtr<SvxColorListBox> maLbColMax;
 
+    VclPtr<FixedText> maFtMin;
+    VclPtr<FixedText> maFtMax;
+
     ScFormatEntry* createColorscaleEntry() const;
 
     virtual OUString GetExpressionString() override;
@@ -210,6 +219,9 @@ class ScColorScale3FrmtEntry : public ScCondFrmtEntry
     VclPtr<SvxColorListBox> maLbColMiddle;
     VclPtr<SvxColorListBox> maLbColMax;
 
+    VclPtr<FixedText> maFtMin;
+    VclPtr<FixedText> maFtMax;
+
     ScFormatEntry* createColorscaleEntry() const;
 
     virtual OUString GetExpressionString() override;
@@ -238,6 +250,9 @@ class ScDataBarFrmtEntry : public ScCondFrmtEntry
     VclPtr<Edit> maEdDataBarMax;
 
     VclPtr<PushButton> maBtOptions;
+
+    VclPtr<FixedText> maFtMin;
+    VclPtr<FixedText> maFtMax;
 
     std::unique_ptr<ScDataBarFormatData> mpDataBarData;
 

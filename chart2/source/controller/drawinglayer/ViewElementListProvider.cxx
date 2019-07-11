@@ -23,6 +23,8 @@
 #include <chartview/DataPointSymbolSupplier.hxx>
 #include <DrawViewWrapper.hxx>
 
+#include <com/sun/star/drawing/Direction3D.hpp>
+
 #include <svx/xtable.hxx>
 #include <svx/XPropertyTable.hxx>
 #include <svx/unofill.hxx>
@@ -41,6 +43,8 @@
 #include <svx/svdobj.hxx>
 #include <vcl/virdev.hxx>
 #include <svx/svdview.hxx>
+#include <svx/svdpage.hxx>
+#include <sal/log.hxx>
 
 namespace chart
 {
@@ -48,7 +52,6 @@ using namespace ::com::sun::star;
 
 ViewElementListProvider::ViewElementListProvider( DrawModelWrapper* pDrawModelWrapper )
                         : m_pDrawModelWrapper( pDrawModelWrapper )
-                        , m_pFontList(nullptr)
 {
 }
 
@@ -114,7 +117,7 @@ XPatternListRef   ViewElementListProvider::GetPatternList() const
 SdrObjList* ViewElementListProvider::GetSymbolList() const
 {
     SdrObjList* pSymbolList = nullptr;
-    uno::Reference< drawing::XShapes > xSymbols(nullptr);//@todo this keeps the first drawinglayer alive ...
+    uno::Reference< drawing::XShapes > xSymbols;//@todo this keeps the first drawinglayer alive ...
     try
     {
         if(!pSymbolList || !pSymbolList->GetObjCount())
@@ -156,12 +159,15 @@ Graphic ViewElementListProvider::GetSymbolGraphic( sal_Int32 nStandardSymbol, co
 
     ScopedVclPtrInstance< VirtualDevice > pVDev;
     pVDev->SetMapMode(MapMode(MapUnit::Map100thMM));
-    std::unique_ptr<SdrModel> pModel( new SdrModel );
+
+    std::unique_ptr<SdrModel> pModel(
+        new SdrModel());
+
     pModel->GetItemPool().FreezeIdRanges();
     SdrPage* pPage = new SdrPage( *pModel, false );
     pPage->SetSize(Size(1000,1000));
     pModel->InsertPage( pPage, 0 );
-    std::unique_ptr<SdrView> pView( new SdrView( *pModel.get(), pVDev ) );
+    std::unique_ptr<SdrView> pView(new SdrView(*pModel, pVDev));
     pView->hideMarkHandles();
     SdrPageView* pPageView = pView->ShowSdrPage(pPage);
 

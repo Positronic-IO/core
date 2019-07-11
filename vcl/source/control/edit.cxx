@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/lok.hxx>
-
 #include <vcl/IDialogRenderable.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/event.hxx>
@@ -57,10 +55,12 @@
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
+#include <comphelper/lok.hxx>
 
 #include <sot/exchange.hxx>
 #include <sot/formats.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 
 #include <vcl/unohelp.hxx>
 #include <vcl/unohelp2.hxx>
@@ -112,10 +112,10 @@ struct DDInfo
 
 struct Impl_IMEInfos
 {
-    OUString      aOldTextAfterStartPos;
+    OUString const aOldTextAfterStartPos;
     std::unique_ptr<ExtTextInputAttr[]>
                   pAttribs;
-    sal_Int32     nPos;
+    sal_Int32 const nPos;
     sal_Int32     nLen;
     bool          bCursor;
     bool          bWasCursorOverwrite;
@@ -128,7 +128,6 @@ struct Impl_IMEInfos
 
 Impl_IMEInfos::Impl_IMEInfos(sal_Int32 nP, const OUString& rOldTextAfterStartPos)
     : aOldTextAfterStartPos(rOldTextAfterStartPos),
-    pAttribs(nullptr),
     nPos(nP),
     nLen(0),
     bCursor(true),
@@ -193,16 +192,11 @@ bool Edit::set_property(const OString &rKey, const OUString &rValue)
     }
     else if (rKey == "editable")
     {
-        bool bReadOnly = !toBool(rValue);
-        SetReadOnly(bReadOnly);
-        //disable tab to traverse into readonly editables
-        WinBits nBits = GetStyle();
-        nBits &= ~(WB_TABSTOP|WB_NOTABSTOP);
-        if (!bReadOnly)
-            nBits |= WB_TABSTOP;
-        else
-            nBits |= WB_NOTABSTOP;
-        SetStyle(nBits);
+        SetReadOnly(!toBool(rValue));
+    }
+    else if (rKey == "overwrite-mode")
+    {
+        SetInsertMode(!toBool(rValue));
     }
     else if (rKey == "visibility")
     {
@@ -274,6 +268,7 @@ void Edit::ImplInitEditData()
     mbModified              = false;
     mbInternModified        = false;
     mbReadOnly              = false;
+    mbSelectAllSingleClick  = false;
     mbInsertMode            = true;
     mbClickedInSelection    = false;
     mbActivePopup           = false;
@@ -333,6 +328,7 @@ void Edit::ImplInit(vcl::Window* pParent, WinBits nStyle)
     SetCursor( new vcl::Cursor );
 
     SetPointer( Pointer( PointerStyle::Text ) );
+    ApplySettings(*this);
 
     uno::Reference< datatransfer::dnd::XDragGestureListener> xDGL( mxDnDListener, uno::UNO_QUERY );
     uno::Reference< datatransfer::dnd::XDragGestureRecognizer > xDGR = GetDragGestureRecognizer();
@@ -386,7 +382,7 @@ void Edit::ApplySettings(vcl::RenderContext& rRenderContext)
     Color aTextColor = rStyleSettings.GetFieldTextColor();
     ApplyControlForeground(rRenderContext, aTextColor);
 
-    if (ImplUseNativeBorder(rRenderContext, GetStyle()) || IsPaintTransparent())
+    if (ImplUseNativeBorder(rRenderContext, GetStyle()))
     {
         // Transparent background
         rRenderContext.SetBackground();
@@ -737,9 +733,10 @@ void Edit::ImplDelete( const Selection& rSelection, sal_uInt8 nDirection, sal_uI
         }
     }
 
-    maText.remove( static_cast<sal_Int32>(aSelection.Min()), static_cast<sal_Int32>(aSelection.Len()) );
-    maSelection.Min() = aSelection.Min();
-    maSelection.Max() = aSelection.Min();
+    const auto nSelectionMin = aSelection.Min();
+    maText.remove( static_cast<sal_Int32>(nSelectionMin), static_cast<sal_Int32>(aSelection.Len()) );
+    maSelection.Min() = nSelectionMin;
+    maSelection.Max() = nSelectionMin;
     ImplAlignAndPaint();
     mbInternModified = true;
 }
@@ -796,13 +793,19 @@ void Edit::ImplInsertText( const OUString& rStr, const Selection* pNewSel, bool 
     aSelection.Justify();
 
     OUString aNewText( ImplGetValidString( rStr ) );
-    ImplTruncateToMaxLen( aNewText, aSelection.Len() );
+
+    // as below, if there's no selection, but we're in overwrite mode and not beyond
+    // the end of the existing text then that's like a selection of 1
+    auto nSelectionLen = aSelection.Len();
+    if (!nSelectionLen && !mbInsertMode && aSelection.Max() < maText.getLength())
+        nSelectionLen = 1;
+    ImplTruncateToMaxLen( aNewText, nSelectionLen );
 
     ImplClearLayoutData();
 
     if ( aSelection.Len() )
         maText.remove( static_cast<sal_Int32>(aSelection.Min()), static_cast<sal_Int32>(aSelection.Len()) );
-    else if ( !mbInsertMode && (aSelection.Max() < maText.getLength()) )
+    else if (!mbInsertMode && aSelection.Max() < maText.getLength())
         maText.remove( static_cast<sal_Int32>(aSelection.Max()), 1 );
 
     // take care of input-sequence-checking now
@@ -994,7 +997,7 @@ void Edit::ImplClearBackground(vcl::RenderContext& rRenderContext, const tools::
     }
 }
 
-void Edit::ImplPaintBorder(vcl::RenderContext const & rRenderContext)
+void Edit::ImplPaintBorder(vcl::RenderContext& rRenderContext)
 {
     // this is not needed when double-buffering
     if (SupportsDoubleBuffering())
@@ -1051,7 +1054,17 @@ void Edit::ImplPaintBorder(vcl::RenderContext const & rRenderContext)
             }
             else
             {
-                pBorder->Paint(*pBorder, tools::Rectangle());
+                // For some mysterious reason, in headless/svp rendering,
+                // pBorder has bad clipping region (shows as 1x1@0,0),
+                // and therefore doesn't render anything at all.
+                // In the case that we know we're in headless/svp, we
+                // render directly on the current context (the edit control).
+                // But if we (the editbox) are part of a more complex control
+                // (e.g. spinbox), we render not (i.e. we let pBorder pretend).
+                if (!mbIsSubEdit && comphelper::LibreOfficeKit::isActive())
+                    pBorder->Paint(rRenderContext, tools::Rectangle());
+                else
+                    pBorder->Paint(*pBorder, tools::Rectangle());
             }
         }
     }
@@ -1670,8 +1683,7 @@ bool Edit::ImplHandleKeyEvent( const KeyEvent& rKEvt )
             case KEY_RETURN:
                 if (maActivateHdl.IsSet())
                 {
-                    maActivateHdl.Call(*this);
-                    bDone = true;
+                    bDone = maActivateHdl.Call(*this);
                 }
             break;
 
@@ -1845,7 +1857,11 @@ void Edit::GetFocus()
     else if ( !mbActivePopup )
     {
         maUndoText = maText.toString();
-
+        if(mbSelectAllSingleClick)
+        {
+            maSelection.Min() = 0;
+            maSelection.Max() = maText.getLength();
+        }
         SelectionOptions nSelOptions = GetSettings().GetStyleSettings().GetSelectionOptions();
         if ( !( GetStyle() & (WB_NOHIDESELECTION|WB_READONLY) )
                 && ( GetGetFocusFlags() & (GetFocusFlags::Init|GetFocusFlags::Tab|GetFocusFlags::CURSOR|GetFocusFlags::Mnemonic) ) )
@@ -2415,6 +2431,15 @@ void Edit::SetReadOnly( bool bReadOnly )
     }
 }
 
+void Edit::SetSelectAllSingleClick( bool bSelectAllSingleClick )
+{
+    if ( mbSelectAllSingleClick != bSelectAllSingleClick )
+    {
+        mbSelectAllSingleClick = bSelectAllSingleClick;
+        if ( mpSubEdit )
+            mpSubEdit->SetSelectAllSingleClick( bSelectAllSingleClick );
+    }
+}
 void Edit::SetInsertMode( bool bInsert )
 {
     if ( bInsert != mbInsertMode )

@@ -34,6 +34,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
+#include <sal/log.hxx>
 #include <vcl/canvastools.hxx>
 #include <implrenderer.hxx>
 #include "emfpregion.hxx"
@@ -47,12 +48,7 @@ namespace cppcanvas
     {
         EMFPRegion::EMFPRegion()
             : parts(0)
-            , combineMode(nullptr)
             , initialState(0)
-            , ix(0.0)
-            , iy(0.0)
-            , iw(0.0)
-            , ih(0.0)
         {
         }
 

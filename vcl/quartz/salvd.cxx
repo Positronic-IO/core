@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/sysdata.hxx>
@@ -28,7 +29,6 @@
 #include <osx/salframe.h>
 #else
 #include "headless/svpframe.hxx"
-#include "headless/svpgdi.hxx"
 #include "headless/svpinst.hxx"
 #include "headless/svpvd.hxx"
 #endif
@@ -182,7 +182,7 @@ void AquaSalVirtualDevice::Destroy()
     if( mxBitmapContext )
     {
         void* pRawData = CGBitmapContextGetData( mxBitmapContext );
-        rtl_freeMemory( pRawData );
+        std::free( pRawData );
         SAL_INFO( "vcl.cg",  "CGContextRelease(" << mxBitmapContext << ")" );
         CGContextRelease( mxBitmapContext );
         mxBitmapContext = nullptr;
@@ -207,7 +207,7 @@ void AquaSalVirtualDevice::ReleaseGraphics( SalGraphics* )
 bool AquaSalVirtualDevice::SetSize( long nDX, long nDY )
 {
     SAL_INFO( "vcl.virdev", "AquaSalVirtualDevice::SetSize() this=" << this <<
-              " (" << nDX << "x" << nDY << ") mbForeignContext=" << mbForeignContext );
+              " (" << nDX << "x" << nDY << ") mbForeignContext=" << (mbForeignContext ? "YES" : "NO"));
 
     if( mbForeignContext )
     {
@@ -235,13 +235,7 @@ bool AquaSalVirtualDevice::SetSize( long nDX, long nDY )
         mnBitmapDepth = 8;  // TODO: are 1bit vdevs worth it?
         const int nBytesPerRow = (mnBitmapDepth * nDX + 7) / 8;
 
-        void* pRawData = rtl_allocateMemory( nBytesPerRow * nDY );
-#ifdef DBG_UTIL
-        for (ssize_t i = 0; i < nBytesPerRow * nDY; i++)
-        {
-            static_cast<sal_uInt8*>(pRawData)[i] = (i & 0xFF);
-        }
-#endif
+        void* pRawData = std::malloc( nBytesPerRow * nDY );
         mxBitmapContext = CGBitmapContextCreate( pRawData, nDX, nDY,
                                                  mnBitmapDepth, nBytesPerRow,
                                                  GetSalData()->mxGraySpace, kCGImageAlphaNone );
@@ -269,22 +263,25 @@ bool AquaSalVirtualDevice::SetSize( long nDX, long nDY )
                 NSGraphicsContext* pNSContext = [NSGraphicsContext graphicsContextWithWindow: pNSWindow];
                 if( pNSContext )
                 {
+SAL_WNODEPRECATED_DECLARATIONS_PUSH // 'graphicsPort' is deprecated: first deprecated in macOS 10.14
                     xCGContext = static_cast<CGContextRef>([pNSContext graphicsPort]);
+SAL_WNODEPRECATED_DECLARATIONS_POP
                 }
             }
-            else
+            // At least on macOS 10.14 during CppunitTests (that have hidden windows), it happens
+            // that the above
+            //
+            //   [NSGraphicsContext graphicsContextWithWindow: pNSWindow]
+            //
+            // returns nil for unclear reasons; so use the below fallback even if there is a
+            // pNSWindow but obtaining a graphics context for it fails:
+            if (xCGContext == nullptr)
             {
                 // fall back to a bitmap context
                 mnBitmapDepth = 32;
 
                 const int nBytesPerRow = (mnBitmapDepth * nDX) / 8;
-                void* pRawData = rtl_allocateMemory( nBytesPerRow * nDY );
-#ifdef DBG_UTIL
-                for (ssize_t i = 0; i < nBytesPerRow * nDY; i++)
-                {
-                    static_cast<sal_uInt8*>(pRawData)[i] = (i & 0xFF);
-                }
-#endif
+                void* pRawData = std::malloc( nBytesPerRow * nDY );
                 mxBitmapContext = CGBitmapContextCreate( pRawData, nDX, nDY,
                                                          8, nBytesPerRow, GetSalData()->mxRGBSpace, kCGImageAlphaNoneSkipFirst );
                 SAL_INFO( "vcl.cg",  "CGBitmapContextCreate(" << nDX << "x" << nDY << "x32) = " << mxBitmapContext );
@@ -295,15 +292,9 @@ bool AquaSalVirtualDevice::SetSize( long nDX, long nDY )
         mnBitmapDepth = 32;
 
         const int nBytesPerRow = (mnBitmapDepth * nDX) / 8;
-        void* pRawData = rtl_allocateMemory( nBytesPerRow * nDY );
-#ifdef DBG_UTIL
-        for (ssize_t i = 0; i < nBytesPerRow * nDY; i++)
-        {
-            ((sal_uInt8*)pRawData)[i] = (i & 0xFF);
-        }
-#endif
+        void* pRawData = std::malloc( nBytesPerRow * nDY );
         mxBitmapContext = CGBitmapContextCreate( pRawData, nDX, nDY,
-                                                 8, nBytesPerRow, GetSalData()->mxRGBSpace, kCGImageAlphaNoneSkipFirst );
+                                                 8, nBytesPerRow, GetSalData()->mxRGBSpace, kCGImageAlphaNoneSkipFirst | kCGImageByteOrder32Little );
         SAL_INFO( "vcl.cg",  "CGBitmapContextCreate(" << nDX << "x" << nDY << "x32) = " << mxBitmapContext );
         xCGContext = mxBitmapContext;
 #endif

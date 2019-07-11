@@ -18,6 +18,7 @@
  */
 
 #include <tools/time.hxx>
+#include <sal/log.hxx>
 #include <vcl/event.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/dockwin.hxx>
@@ -25,7 +26,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
-#include <vcl/unowrap.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/settings.hxx>
 
 #include <svdata.hxx>
@@ -54,7 +55,7 @@ class ImplDockFloatWin : public FloatingWindow
 {
 private:
     VclPtr<DockingWindow> mpDockWin;
-    sal_uInt64      mnLastTicks;
+    sal_uInt64 const      mnLastTicks;
     Idle            maDockIdle;
     Point           maDockPos;
     tools::Rectangle       maDockRect;
@@ -531,6 +532,8 @@ bool DockingWindow::EventNotify( NotifyEvent& rNEvt )
                 if (!bDockingSupportCrippled && pMEvt->IsMod1() && (pMEvt->GetClicks() == 2) )
                 {
                     SetFloatingMode( !IsFloatingMode() );
+                    if ( IsFloatingMode() )
+                        ToTop( ToTopFlags::GrabFocusOnly );
                     return true;
                 }
                 else if ( pMEvt->GetClicks() == 1 )
@@ -560,6 +563,8 @@ bool DockingWindow::EventNotify( NotifyEvent& rNEvt )
                 rKey.IsShift() && rKey.IsMod1() && !bDockingSupportCrippled )
             {
                 SetFloatingMode( !IsFloatingMode() );
+                if ( IsFloatingMode() )
+                    ToTop( ToTopFlags::GrabFocusOnly );
                 return true;
             }
         }
@@ -586,12 +591,11 @@ void DockingWindow::EndDocking( const tools::Rectangle& rRect, bool bFloatMode )
 
     if ( !IsDockingCanceled() )
     {
-        bool bShow = false;
         if ( bFloatMode != IsFloatingMode() )
         {
-            Show( false, ShowFlags::NoFocusChange );
             SetFloatingMode( bFloatMode );
-            bShow = true;
+            if ( IsFloatingMode() )
+                ToTop( ToTopFlags::GrabFocusOnly );
             if ( bFloatMode && mpFloatWin )
                 mpFloatWin->SetPosSizePixel( rRect.TopLeft(), rRect.GetSize() );
         }
@@ -601,9 +605,6 @@ void DockingWindow::EndDocking( const tools::Rectangle& rRect, bool bFloatMode )
             aPos = GetParent()->ScreenToOutputPixel( aPos );
             Window::SetPosSizePixel( aPos, rRect.GetSize() );
         }
-
-        if ( bShow )
-            Show();
     }
     mbDocking = false;
     mbDockCanceled = bOrigDockCanceled;

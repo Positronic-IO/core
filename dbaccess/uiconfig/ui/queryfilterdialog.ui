@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.18.3 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="dba">
   <requires lib="gtk+" version="3.18"/>
   <object class="GtkDialog" id="QueryFilterDialog">
     <property name="can_focus">False</property>
     <property name="border_width">6</property>
     <property name="title" translatable="yes" context="queryfilterdialog|QueryFilterDialog">Standard Filter</property>
+    <property name="modal">True</property>
+    <property name="default_width">0</property>
+    <property name="default_height">0</property>
     <property name="type_hint">dialog</property>
+    <child>
+      <placeholder/>
+    </child>
     <child internal-child="vbox">
       <object class="GtkBox" id="dialog-vbox1">
         <property name="can_focus">False</property>
@@ -92,9 +98,8 @@
                       <object class="GtkLabel" id="label2">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="xalign">0</property>
                         <property name="label" translatable="yes" context="queryfilterdialog|label2">Operator</property>
-                        <property name="ellipsize">end</property>
+                        <property name="xalign">0</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -106,7 +111,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="queryfilterdialog|label5">Field name</property>
-                        <property name="ellipsize">end</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
@@ -118,7 +122,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="queryfilterdialog|label6">Condition</property>
-                        <property name="ellipsize">end</property>
                       </object>
                       <packing>
                         <property name="left_attach">2</property>
@@ -129,7 +132,7 @@
                       <object class="GtkComboBoxText" id="field1">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|field1">- none -</item>
                         </items>
@@ -144,6 +147,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|cond1">=</item>
                           <item translatable="yes" context="queryfilterdialog|cond1">&lt;&gt;</item>
@@ -166,7 +170,7 @@
                       <object class="GtkComboBoxText" id="field2">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|field2">- none -</item>
                         </items>
@@ -180,7 +184,7 @@
                       <object class="GtkComboBoxText" id="field3">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|field3">- none -</item>
                         </items>
@@ -195,6 +199,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
+                        <property name="active">0</property>
                       </object>
                       <packing>
                         <property name="left_attach">2</property>
@@ -206,6 +211,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
+                        <property name="active">0</property>
                       </object>
                       <packing>
                         <property name="left_attach">2</property>
@@ -217,7 +223,6 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="queryfilterdialog|label7">Value</property>
-                        <property name="ellipsize">end</property>
                       </object>
                       <packing>
                         <property name="left_attach">3</property>
@@ -228,6 +233,8 @@
                       <object class="GtkEntry" id="value1">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="activates_default">True</property>
                       </object>
                       <packing>
                         <property name="left_attach">3</property>
@@ -238,6 +245,8 @@
                       <object class="GtkEntry" id="value2">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="activates_default">True</property>
                       </object>
                       <packing>
                         <property name="left_attach">3</property>
@@ -248,6 +257,8 @@
                       <object class="GtkEntry" id="value3">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="activates_default">True</property>
                       </object>
                       <packing>
                         <property name="left_attach">3</property>
@@ -258,7 +269,7 @@
                       <object class="GtkComboBoxText" id="op2">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|op2">AND</item>
                           <item translatable="yes" context="queryfilterdialog|op2">OR</item>
@@ -273,7 +284,7 @@
                       <object class="GtkComboBoxText" id="op3">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="hexpand">True</property>
+                        <property name="active">0</property>
                         <items>
                           <item translatable="yes" context="queryfilterdialog|op3">AND</item>
                           <item translatable="yes" context="queryfilterdialog|op3">OR</item>

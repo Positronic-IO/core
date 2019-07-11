@@ -22,21 +22,19 @@
 
 #include <vector>
 #include <list>
-#include <set>
-#include <com/sun/star/sheet/XSpreadsheet.hpp>
-#include <com/sun/star/table/CellRangeAddress.hpp>
-#include <com/sun/star/table/XCell.hpp>
-#include <com/sun/star/text/XText.hpp>
-#include <com/sun/star/sheet/XSheetAnnotation.hpp>
-#include <com/sun/star/drawing/XShape.hpp>
-#include <global.hxx>
+#include <com/sun/star/table/CellContentType.hpp>
 #include <detfunc.hxx>
 #include <detdata.hxx>
-#include <postit.hxx>
 #include <cellvalue.hxx>
 
 #include <memory>
 
+namespace com { namespace sun { namespace star { namespace drawing { class XShape; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { class XSpreadsheet; } } } }
+namespace com { namespace sun { namespace star { namespace table { class XCellRange; } } } }
+namespace com { namespace sun { namespace star { namespace table { struct CellRangeAddress; } } } }
+
+class   ScPostIt;
 class   ScHorizontalCellIterator;
 struct  ScMyCell;
 class   ScXMLExport;
@@ -50,6 +48,11 @@ protected:
 public:
                                 ScMyIteratorBase();
     virtual                     ~ScMyIteratorBase();
+
+    ScMyIteratorBase(ScMyIteratorBase const &) = default;
+    ScMyIteratorBase(ScMyIteratorBase &&) = default;
+    ScMyIteratorBase & operator =(ScMyIteratorBase const &) = default;
+    ScMyIteratorBase & operator =(ScMyIteratorBase &&) = default;
 
     virtual void                SetCellData( ScMyCell& rMyCell ) = 0;
     virtual void                Sort() = 0;
@@ -157,7 +160,7 @@ struct ScMyAreaLink
     ScMyAreaLink() : nRefresh( 0 ) {}
 
     sal_Int32            GetColCount() const { return aDestRange.aEnd.Col() - aDestRange.aStart.Col() + 1; }
-    sal_Int32            GetRowCount() const { return aDestRange.aEnd.Row() - aDestRange.aStart.Col() + 1; }
+    sal_Int32            GetRowCount() const { return aDestRange.aEnd.Row() - aDestRange.aStart.Row() + 1; }
 
     bool                        Compare( const ScMyAreaLink& rAreaLink ) const;
     bool                        operator<(const ScMyAreaLink& rAreaLink ) const;
@@ -195,6 +198,12 @@ protected:
 public:
                                 ScMyEmptyDatabaseRangesContainer();
     virtual                     ~ScMyEmptyDatabaseRangesContainer() override;
+
+    ScMyEmptyDatabaseRangesContainer(ScMyEmptyDatabaseRangesContainer const &) = default;
+    ScMyEmptyDatabaseRangesContainer(ScMyEmptyDatabaseRangesContainer &&) = default;
+    ScMyEmptyDatabaseRangesContainer & operator =(ScMyEmptyDatabaseRangesContainer const &) = default;
+    ScMyEmptyDatabaseRangesContainer & operator =(ScMyEmptyDatabaseRangesContainer &&) = default;
+
     void                        AddNewEmptyDatabaseRange(const css::table::CellRangeAddress& aCellRangeAddress);
 
                                 using ScMyIteratorBase::UpdateAddress;
@@ -305,7 +314,6 @@ struct ScMyCell
     bool                        bHasAnnotation;
 
                                 ScMyCell();
-                                ~ScMyCell();
 };
 
 class ScMyNotEmptyCellsIterator

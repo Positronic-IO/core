@@ -46,15 +46,15 @@ class AsyncAccelExec : public cppu::WeakImplHelper<css::lang::XEventListener>
     private:
         css::uno::Reference<css::lang::XComponent> m_xFrame;
         css::uno::Reference< css::frame::XDispatch > m_xDispatch;
-        css::util::URL m_aURL;
+        css::util::URL const m_aURL;
         vcl::EventPoster m_aAsyncCallback;
     public:
 
         /** creates a new instance of this class, which can be used
             one times only!
 
-            This instance can be forced to execute it's internal set request
-            asynchronous. After that it deletes itself !
+            This instance can be forced to execute its internal set request
+            asynchronous. After that it deletes itself!
          */
         static AsyncAccelExec* createOneShotInstance(const css::uno::Reference<css::lang::XComponent>& xFrame,
                                                     const css::uno::Reference<css::frame::XDispatch>& xDispatch,

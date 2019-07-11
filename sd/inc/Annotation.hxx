@@ -21,6 +21,8 @@
 #define INCLUDED_SD_INC_ANNOTATION_HXX
 
 #include <sal/config.h>
+#include <sal/types.h>
+#include <memory>
 
 class SdPage;
 class SdrUndoAction;
@@ -28,6 +30,8 @@ class SdrUndoAction;
 namespace com { namespace sun { namespace star { namespace office {
     class XAnnotation;
 } } } }
+
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
 
 class SfxViewShell;
 
@@ -37,7 +41,7 @@ enum class CommentNotificationType { Add, Modify, Remove };
 
 void createAnnotation( css::uno::Reference< css::office::XAnnotation >& xAnnotation, SdPage* pPage );
 
-SdrUndoAction* CreateUndoInsertOrRemoveAnnotation( const css::uno::Reference< css::office::XAnnotation >& xAnnotation, bool bInsert );
+std::unique_ptr<SdrUndoAction> CreateUndoInsertOrRemoveAnnotation( const css::uno::Reference< css::office::XAnnotation >& xAnnotation, bool bInsert );
 
 void CreateChangeUndo(const css::uno::Reference< css::office::XAnnotation >& xAnnotation);
 

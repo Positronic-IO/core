@@ -30,6 +30,7 @@
 #include <cppuhelper/implementationentry.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <rtl/uri.hxx>
+#include <sal/log.hxx>
 #include <osl/process.h>
 #include <osl/file.hxx>
 #include <osl/mutex.hxx>
@@ -75,21 +76,13 @@ namespace basprov
 
     static Sequence< OUString > getSupportedServiceNames_BasicProviderImpl()
     {
-        static Sequence< OUString >* pNames = nullptr;
-        if ( !pNames )
-        {
-            ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-            if ( !pNames )
-            {
-                static Sequence< OUString > aNames(4);
-                aNames.getArray()[0] = "com.sun.star.script.provider.ScriptProviderForBasic";
-                aNames.getArray()[1] = "com.sun.star.script.provider.LanguageScriptProvider";
-                aNames.getArray()[2] = "com.sun.star.script.provider.ScriptProvider";
-                aNames.getArray()[3] = "com.sun.star.script.browse.BrowseNode";
-                pNames = &aNames;
-            }
-        }
-        return *pNames;
+        static Sequence< OUString > s_Names{
+            "com.sun.star.script.provider.ScriptProviderForBasic",
+            "com.sun.star.script.provider.LanguageScriptProvider",
+            "com.sun.star.script.provider.ScriptProvider",
+            "com.sun.star.script.browse.BrowseNode"};
+
+        return s_Names;
     }
 
 
@@ -99,8 +92,6 @@ namespace basprov
     BasicProviderImpl::BasicProviderImpl( const Reference< XComponentContext >& xContext )
         :m_pAppBasicManager( nullptr )
         ,m_pDocBasicManager( nullptr )
-        ,m_xLibContainerApp( nullptr )
-        ,m_xLibContainerDoc( nullptr )
         ,m_xContext( xContext )
         ,m_bIsAppScriptCtx( true )
         ,m_bIsUserCtx(true)
@@ -110,6 +101,8 @@ namespace basprov
 
     BasicProviderImpl::~BasicProviderImpl()
     {
+        SolarMutexGuard aGuard;
+        EndListeningAll();
     }
 
 
@@ -165,6 +158,17 @@ namespace basprov
         }
 
         return bIsShared;
+    }
+
+    // SfxListener
+    void BasicProviderImpl::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
+    {
+        if (auto pManager = dynamic_cast<const BasicManager*>(&rBC))
+            if (pManager == m_pAppBasicManager && rHint.GetId() == SfxHintId::Dying)
+            {
+                EndListening(*m_pAppBasicManager);
+                m_pAppBasicManager = nullptr;
+            }
     }
 
     // XServiceInfo
@@ -267,7 +271,11 @@ namespace basprov
 
         // TODO
         if ( !m_pAppBasicManager )
+        {
             m_pAppBasicManager = SfxApplication::GetBasicManager();
+            if (m_pAppBasicManager)
+                StartListening(*m_pAppBasicManager);
+        }
 
         if ( !m_xLibContainerApp.is() )
             m_xLibContainerApp.set( SfxGetpApp()->GetBasicContainer(), UNO_QUERY );
@@ -430,8 +438,8 @@ namespace basprov
                 bool bCreate = false;
                 if ( m_bIsAppScriptCtx )
                 {
-                    bool bShared = isLibraryShared( xLibContainer, pLibNames[i] );
-                    if ( ( m_bIsUserCtx && !bShared ) || ( !m_bIsUserCtx && bShared ) )
+                    const bool bShared = isLibraryShared( xLibContainer, pLibNames[i] );
+                    if (m_bIsUserCtx != bShared)
                         bCreate = true;
                 }
                 else
@@ -490,7 +498,7 @@ namespace basprov
     }
 
 
-    static struct ::cppu::ImplementationEntry s_component_entries [] =
+    static struct ::cppu::ImplementationEntry const s_component_entries [] =
     {
         {
             create_BasicProviderImpl, getImplementationName_BasicProviderImpl,

@@ -44,6 +44,7 @@
 #include <rtl/byteseq.hxx>
 #include <sfx2/app.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequence.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/localfilehelper.hxx>
 #include <unotools/mediadescriptor.hxx>
@@ -193,11 +194,11 @@ protected:
         xImporter->setTargetDocument(mxComponent);
         uno::Sequence<beans::PropertyValue> aDescriptor(3);
         aDescriptor[0].Name = "InputStream";
-        SvStream* pStream = utl::UcbStreamHelper::CreateStream(
+        std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream(
             m_directories.getURLFromSrc("/sw/qa/extras/") + aFilename,
             StreamMode::STD_READ);
         CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, pStream->GetError());
-        uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+        uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(std::move(pStream)));
         aDescriptor[0].Value <<= xStream;
         aDescriptor[1].Name = "InsertMode";
         aDescriptor[1].Value <<= true;
@@ -462,7 +463,7 @@ protected:
             // the xpath expression evaluated to a value, not a node
             CPPUNIT_ASSERT_EQUAL_MESSAGE(
                 "attr name should not be supplied when xpath evals to a value",
-                aAttribute.getLength(), sal_Int32(0));
+                sal_Int32(0), aAttribute.getLength());
             pXpathStrResult = xmlXPathCastToString(pXmlXpathObj);
             CPPUNIT_ASSERT_MESSAGE("xpath result cannot be cast to string",
                 pXpathStrResult);
@@ -576,6 +577,36 @@ protected:
         if( !content.isEmpty())
             CPPUNIT_ASSERT_EQUAL_MESSAGE( "paragraph does not have expected content", content, xParagraph->getString());
         return xParagraph;
+    }
+
+    sal_Int16 getNumberingTypeOfParagraph(int nPara)
+    {
+        sal_Int16 nNumberingType = -1;
+        uno::Reference<text::XTextRange> xPara(getParagraph(nPara));
+        uno::Reference< beans::XPropertySet > properties( xPara, uno::UNO_QUERY);
+        bool isNumber = false;
+        properties->getPropertyValue("NumberingIsNumber") >>= isNumber;
+        if (isNumber)
+        {
+            uno::Reference<container::XIndexAccess> xLevels( properties->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
+            sal_Int16 nNumberingLevel = -1;
+            properties->getPropertyValue("NumberingLevel") >>= nNumberingLevel;
+            if (nNumberingLevel >= 0 && nNumberingLevel < xLevels->getCount())
+            {
+                uno::Sequence< beans::PropertyValue > aPropertyValue;
+                xLevels->getByIndex(nNumberingLevel) >>= aPropertyValue;
+                for( int j = 0 ; j< aPropertyValue.getLength() ; ++j)
+                {
+                    beans::PropertyValue aProp= aPropertyValue[j];
+                    if (aProp.Name == "NumberingType")
+                    {
+                        nNumberingType = aProp.Value.get<sal_Int16>();
+                        break;
+                    }
+                }
+            }
+        }
+        return nNumberingType;
     }
 
     uno::Reference<text::XTextRange> getParagraphOfText(int number, uno::Reference<text::XText> const & xText, const OUString& content = OUString()) const
@@ -795,7 +826,8 @@ protected:
         {
             CPPUNIT_ASSERT_MESSAGE("Password set but not requested", xInteractionHandler->wasPasswordRequested());
         }
-        if (mustValidate(filename))
+        if (mustValidate(filename) || aFilterName == "writer8"
+                || aFilterName == "OpenDocument Text Flat XML")
         {
             if(aFilterName == "Office Open XML Text")
             {
@@ -805,7 +837,6 @@ protected:
             else if(aFilterName == "writer8"
                 || aFilterName == "OpenDocument Text Flat XML")
             {
-                // still a few validation errors
                 validate(maTempFile.GetFileName(), test::ODF);
             }
             else if(aFilterName == "MS Word 97")
@@ -837,6 +868,12 @@ protected:
         if (!maFilterOptions.isEmpty())
             aMediaDescriptor["FilterOptions"] <<= maFilterOptions;
         xStorable->storeToURL(rTempFile.GetURL(), aMediaDescriptor.getAsConstPropertyValueList());
+        // TODO: for now, validate only ODF here
+        if (aFilterName == "writer8"
+            || aFilterName == "OpenDocument Text Flat XML")
+        {
+            validate(rTempFile.GetFileName(), test::ODF);
+        }
     }
 
     void finish()
@@ -930,6 +967,7 @@ protected:
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("table"), BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:table:1.0"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("draw"), BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("fo"), BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"));
+        xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("config"), BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:config:1.0"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("xlink"), BAD_CAST("http://www.w3.org/1999/xlink"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("dc"), BAD_CAST("http://purl.org/dc/elements/1.1/"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("meta"), BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:meta:1.0"));
@@ -959,6 +997,8 @@ protected:
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("field"), BAD_CAST("urn:openoffice:names:experimental:ooo-ms-interop:xmlns:field:1.0"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("formx"), BAD_CAST("urn:openoffice:names:experimental:ooxml-odf-interop:xmlns:form:1.0"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("css3t"), BAD_CAST("http://www.w3.org/TR/css3-text/"));
+        // reqif-xhtml
+        xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("reqif-xhtml"), BAD_CAST("http://www.w3.org/1999/xhtml"));
     }
 };
 
@@ -989,7 +1029,10 @@ inline void assertBorderEqual(
 
 inline std::ostream& operator<<(std::ostream& rStrm, const Color& rColor)
 {
-    rStrm << "Color: R:" << static_cast<int>(rColor.GetRed()) << " G:" << static_cast<int>(rColor.GetGreen()) << " B: " << static_cast<int>(rColor.GetBlue());
+    rStrm << "Color: R:" << static_cast<int>(rColor.GetRed())
+          << " G:" << static_cast<int>(rColor.GetGreen())
+          << " B:" << static_cast<int>(rColor.GetBlue())
+          << " A:" << static_cast<int>(rColor.GetTransparency());
     return rStrm;
 }
 

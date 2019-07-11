@@ -20,6 +20,7 @@
 
 #include <tools/diagnose_ex.h>
 
+#include <sal/log.hxx>
 #include <comphelper/anytostring.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
@@ -42,7 +43,7 @@ namespace slideshow
                               "SlideAnimations::SlideAnimations(): Invalid SlideShowContext" );
         }
 
-        SlideAnimations::~SlideAnimations()
+        SlideAnimations::~SlideAnimations() COVERITY_NOEXCEPT_FALSE
         {
             if( mpRootNode )
             {

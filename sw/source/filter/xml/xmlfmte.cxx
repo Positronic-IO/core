@@ -37,6 +37,7 @@
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include "xmlexp.hxx"
 #include <SwStyleNameMapper.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::uno;
@@ -169,12 +170,16 @@ void SwXMLExport::ExportStyles_( bool bUsed )
     GetPageExport()->exportDefaultStyle();
 }
 
-void SwXMLExport::ExportAutoStyles_()
+void SwXMLExport::collectAutoStyles()
 {
+    SvXMLExport::collectAutoStyles();
+
+    if (mbAutoStylesCollected)
+        return;
+
     // The order in which styles are collected *MUST* be the same as
     // the order in which they are exported. Otherwise, caching will
     // fail.
-
     if( getExportFlags() & (SvXMLExportFlags::MASTERSTYLES|SvXMLExportFlags::CONTENT) )
     {
         if( !(getExportFlags() & SvXMLExportFlags::CONTENT) )
@@ -190,17 +195,10 @@ void SwXMLExport::ExportAutoStyles_()
     if( getExportFlags() & SvXMLExportFlags::MASTERSTYLES )
         GetPageExport()->collectAutoStyles( false );
 
-    // if we don't export styles (i.e. in content stream only, but not
-    // in single-stream case), then we can save ourselves a bit of
-    // work and memory by not collecting field masters
-    if( !(getExportFlags() & SvXMLExportFlags::STYLES) )
-        GetTextParagraphExport()->exportUsedDeclarations();
 
     // exported in ExportContent_
     if( getExportFlags() & SvXMLExportFlags::CONTENT )
     {
-        GetTextParagraphExport()->exportTrackedChanges( true );
-
         // collect form autostyle
         // (do this before collectTextAutoStyles, 'cause the shapes need the results of the work
         // done by examineForms)
@@ -213,6 +211,25 @@ void SwXMLExport::ExportAutoStyles_()
         }
 
         GetTextParagraphExport()->collectTextAutoStylesOptimized( m_bShowProgress );
+    }
+
+    mbAutoStylesCollected = true;
+}
+
+void SwXMLExport::ExportAutoStyles_()
+{
+    collectAutoStyles();
+
+    // if we don't export styles (i.e. in content stream only, but not
+    // in single-stream case), then we can save ourselves a bit of
+    // work and memory by not collecting field masters
+    if( !(getExportFlags() & SvXMLExportFlags::STYLES) )
+        GetTextParagraphExport()->exportUsedDeclarations();
+
+    // exported in ExportContent_
+    if( getExportFlags() & SvXMLExportFlags::CONTENT )
+    {
+        GetTextParagraphExport()->exportTrackedChanges( true );
     }
 
     GetTextParagraphExport()->exportTextAutoStyles();
@@ -274,20 +291,17 @@ void SwXMLAutoStylePoolP::exportStyleAttributes(
 
     if( XML_STYLE_FAMILY_TEXT_PARAGRAPH == nFamily )
     {
-        for( std::vector< XMLPropertyState >::const_iterator
-                    aProperty = rProperties.begin();
-             aProperty != rProperties.end();
-              ++aProperty )
+        for( const auto& rProperty : rProperties )
         {
-            if (aProperty->mnIndex != -1) // #i26762#
+            if (rProperty.mnIndex != -1) // #i26762#
             {
                 switch( rPropExp.getPropertySetMapper()->
-                        GetEntryContextId( aProperty->mnIndex ) )
+                        GetEntryContextId( rProperty.mnIndex ) )
                 {
                 case CTF_NUMBERINGSTYLENAME:
                     {
                         OUString sStyleName;
-                        aProperty->maValue >>= sStyleName;
+                        rProperty.maValue >>= sStyleName;
                         // #i70748# - export also empty list styles
                         if( !sStyleName.isEmpty() )
                         {
@@ -303,7 +317,7 @@ void SwXMLAutoStylePoolP::exportStyleAttributes(
                 case CTF_PAGEDESCNAME:
                     {
                         OUString sStyleName;
-                        aProperty->maValue >>= sStyleName;
+                        rProperty.maValue >>= sStyleName;
                         GetExport().AddAttribute( XML_NAMESPACE_STYLE,
                                       sMasterPageName,
                                       GetExport().EncodeStyleName( sStyleName ) );

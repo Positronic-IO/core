@@ -36,6 +36,7 @@
 #include <svx/dialogs.hrc>
 #include <vcl/svapp.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/chart2/XTitled.hpp>
 #include <svl/stritem.hxx>
 #include <editeng/fontitem.hxx>
 #include <memory>
@@ -58,7 +59,8 @@ void ChartController::StartTextEdit( const Point* pMousePixel )
     if(!pTextObj)
         return;
 
-    OSL_PRECOND( !m_pTextActionUndoGuard.get(), "ChartController::StartTextEdit: already have a TextUndoGuard!?" );
+    OSL_PRECOND(!m_pTextActionUndoGuard,
+                "ChartController::StartTextEdit: already have a TextUndoGuard!?");
     m_pTextActionUndoGuard.reset( new UndoGuard(
         SchResId( STR_ACTION_EDIT_TEXT ), m_xUndoManager ) );
     SdrOutliner* pOutliner = m_pDrawViewWrapper->getOutliner();
@@ -134,8 +136,8 @@ bool ChartController::EndTextEdit()
             TitleHelper::setCompleteString( aString, uno::Reference<
                 css::chart2::XTitle >::query( xPropSet ), m_xCC );
 
-            OSL_ENSURE( m_pTextActionUndoGuard.get(), "ChartController::EndTextEdit: no TextUndoGuard!" );
-            if ( m_pTextActionUndoGuard.get() )
+            OSL_ENSURE(m_pTextActionUndoGuard, "ChartController::EndTextEdit: no TextUndoGuard!");
+            if (m_pTextActionUndoGuard)
                 m_pTextActionUndoGuard->commit();
         }
         m_pTextActionUndoGuard.reset();
@@ -155,7 +157,6 @@ void ChartController::executeDispatch_InsertSpecialCharacter()
         StartTextEdit();
 
     SvxAbstractDialogFactory * pFact = SvxAbstractDialogFactory::Create();
-    OSL_ENSURE( pFact, "No dialog factory" );
 
     SfxAllItemSet aSet( m_pDrawModelWrapper->GetItemPool() );
     aSet.Put( SfxBoolItem( FN_PARAM_1, false ) );
@@ -167,8 +168,7 @@ void ChartController::executeDispatch_InsertSpecialCharacter()
     aSet.Put( SvxFontItem( aCurFont.GetFamilyType(), aCurFont.GetFamilyName(), aCurFont.GetStyleName(), aCurFont.GetPitch(), aCurFont.GetCharSet(), SID_ATTR_CHAR_FONT ) );
 
     vcl::Window* pWin = GetChartWindow();
-    ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(pWin ? pWin->GetFrameWeld() : nullptr, aSet, false));
-    OSL_ENSURE( pDlg, "Couldn't create SvxCharacterMap dialog" );
+    ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(pWin ? pWin->GetFrameWeld() : nullptr, aSet, nullptr));
     if( pDlg->Execute() == RET_OK )
     {
         const SfxItemSet* pSet = pDlg->GetOutputItemSet();
@@ -211,7 +211,7 @@ uno::Reference< css::accessibility::XAccessibleContext >
     ChartController::impl_createAccessibleTextContext()
 {
     uno::Reference< css::accessibility::XAccessibleContext > xResult(
-        new AccessibleTextHelper( m_pDrawViewWrapper ));
+        new AccessibleTextHelper( m_pDrawViewWrapper.get() ));
 
     return xResult;
 }

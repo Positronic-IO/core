@@ -18,10 +18,12 @@
  */
 
 #include <com/sun/star/i18n/ScriptType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <comphelper/string.hxx>
 #include <svtools/htmlkywd.hxx>
 #include <svtools/htmlout.hxx>
 #include <svtools/htmltokn.h>
+#include <osl/diagnose.h>
 #include <fmtfld.hxx>
 #include <doc.hxx>
 #include <breakit.hxx>
@@ -167,7 +169,7 @@ static Writer& OutHTML_SwField( Writer& rWrt, const SwField* pField,
 
                 switch( nSubType )
                 {
-                    case DI_TITEL:      pSubStr = OOO_STRING_SW_HTML_FS_title;  break;
+                    case DI_TITLE:      pSubStr = OOO_STRING_SW_HTML_FS_title;  break;
                     case DI_THEMA:      pSubStr = OOO_STRING_SW_HTML_FS_theme;  break;
                     case DI_KEYS:       pSubStr = OOO_STRING_SW_HTML_FS_keys;   break;
                     case DI_COMMENT:    pSubStr = OOO_STRING_SW_HTML_FS_comment; break;
@@ -306,7 +308,7 @@ static Writer& OutHTML_SwField( Writer& rWrt, const SwField* pField,
     }
 
     // output content of the field
-    OUString const sExpand( pField->ExpandField(true) );
+    OUString const sExpand( pField->ExpandField(true, nullptr) );
     bool bNeedsCJKProcessing = false;
     if( !sExpand.isEmpty() )
     {
@@ -331,7 +333,7 @@ static Writer& OutHTML_SwField( Writer& rWrt, const SwField* pField,
                                    RES_CHRATR_POSTURE, RES_CHRATR_POSTURE,
                                    RES_CHRATR_WEIGHT, RES_CHRATR_WEIGHT,
                                    RES_CHRATR_CJK_FONT, RES_CHRATR_CTL_WEIGHT>{} );
-        rTextNd.GetAttr( aScriptItemSet, nFieldPos, nFieldPos+1 );
+        rTextNd.GetParaAttr(aScriptItemSet, nFieldPos, nFieldPos+1);
 
         sal_uInt16 aWesternWhichIds[4] =
             { RES_CHRATR_FONT, RES_CHRATR_FONTSIZE,

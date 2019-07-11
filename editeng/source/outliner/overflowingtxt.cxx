@@ -18,6 +18,7 @@
  */
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <editeng/overflowingtxt.hxx>
 #include <editeng/outliner.hxx>
@@ -31,7 +32,7 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 
 
-OutlinerParaObject *TextChainingUtils::JuxtaposeParaObject(
+std::unique_ptr<OutlinerParaObject> TextChainingUtils::JuxtaposeParaObject(
         css::uno::Reference< css::datatransfer::XTransferable > const & xOverflowingContent,
         Outliner *pOutl,
         OutlinerParaObject const *pNextPObj)
@@ -66,7 +67,7 @@ OutlinerParaObject *TextChainingUtils::JuxtaposeParaObject(
     return pOutl->CreateParaObject();
 }
 
-OutlinerParaObject *TextChainingUtils::DeeplyMergeParaObject(
+std::unique_ptr<OutlinerParaObject> TextChainingUtils::DeeplyMergeParaObject(
         css::uno::Reference< css::datatransfer::XTransferable > const & xOverflowingContent,
         Outliner *pOutl,
         OutlinerParaObject const *pNextPObj)
@@ -125,7 +126,7 @@ bool NonOverflowingText::IsLastParaInterrupted() const
 }
 
 
-OutlinerParaObject *NonOverflowingText::RemoveOverflowingText(Outliner *pOutliner) const
+std::unique_ptr<OutlinerParaObject> NonOverflowingText::RemoveOverflowingText(Outliner *pOutliner) const
 {
     pOutliner->QuickDelete(maContentSel);
     SAL_INFO("editeng.chaining", "Deleting selection from (Para: " << maContentSel.nStartPara
@@ -144,12 +145,12 @@ ESelection NonOverflowingText::GetOverflowPointSel() const
 
 // The equivalent of ToParaObject for OverflowingText. Here we are prepending the overflowing text to the old dest box's text
 // XXX: In a sense a better name for OverflowingText and NonOverflowingText are respectively DestLinkText and SourceLinkText
-OutlinerParaObject *OverflowingText::JuxtaposeParaObject(Outliner *pOutl, OutlinerParaObject const *pNextPObj)
+std::unique_ptr<OutlinerParaObject> OverflowingText::JuxtaposeParaObject(Outliner *pOutl, OutlinerParaObject const *pNextPObj)
 {
     return TextChainingUtils::JuxtaposeParaObject(mxOverflowingContent, pOutl, pNextPObj);
 }
 
-OutlinerParaObject *OverflowingText::DeeplyMergeParaObject(Outliner *pOutl, OutlinerParaObject const *pNextPObj)
+std::unique_ptr<OutlinerParaObject> OverflowingText::DeeplyMergeParaObject(Outliner *pOutl, OutlinerParaObject const *pNextPObj)
 {
     return TextChainingUtils::DeeplyMergeParaObject(mxOverflowingContent, pOutl, pNextPObj);
 }
@@ -174,7 +175,7 @@ ESelection OFlowChainedText::GetOverflowPointSel() const
     return mpNonOverflowingTxt->GetOverflowPointSel();
 }
 
-OutlinerParaObject *OFlowChainedText::InsertOverflowingText(Outliner *pOutliner, OutlinerParaObject const *pTextToBeMerged)
+std::unique_ptr<OutlinerParaObject> OFlowChainedText::InsertOverflowingText(Outliner *pOutliner, OutlinerParaObject const *pTextToBeMerged)
 {
     // Just return the roughly merged paras for now
     if (mpOverflowingTxt == nullptr)
@@ -190,7 +191,7 @@ OutlinerParaObject *OFlowChainedText::InsertOverflowingText(Outliner *pOutliner,
 }
 
 
-OutlinerParaObject *OFlowChainedText::RemoveOverflowingText(Outliner *pOutliner)
+std::unique_ptr<OutlinerParaObject> OFlowChainedText::RemoveOverflowingText(Outliner *pOutliner)
 {
     if (mpNonOverflowingTxt == nullptr)
         return nullptr;
@@ -212,9 +213,9 @@ UFlowChainedText::UFlowChainedText(Outliner const *pOutl, bool bIsDeepMerge)
     mbIsDeepMerge = bIsDeepMerge;
 }
 
-OutlinerParaObject *UFlowChainedText::CreateMergedUnderflowParaObject(Outliner *pOutl, OutlinerParaObject const *pNextLinkWholeText)
+std::unique_ptr<OutlinerParaObject> UFlowChainedText::CreateMergedUnderflowParaObject(Outliner *pOutl, OutlinerParaObject const *pNextLinkWholeText)
 {
-    OutlinerParaObject *pNewText = nullptr;
+    std::unique_ptr<OutlinerParaObject> pNewText;
 
     if (mbIsDeepMerge) {
         SAL_INFO("editeng.chaining", "[TEXTCHAINFLOW - UF] Deep merging paras" );

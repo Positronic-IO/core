@@ -58,8 +58,8 @@ class JNI_context
     JNIEnv *         m_env;
     jobject          m_class_loader;
 
-    JNI_context( JNI_context & ) = delete;
-    void operator = ( JNI_context ) = delete;
+    JNI_context( JNI_context const & ) = delete;
+    JNI_context& operator = ( JNI_context const &) = delete;
 
     void java_exc_occurred() const;
 public:
@@ -121,8 +121,8 @@ class JNI_guarded_context
     : private ::jvmaccess::VirtualMachine::AttachGuard,
       public JNI_context
 {
-    JNI_guarded_context( JNI_guarded_context & ) = delete;
-    void operator = ( JNI_guarded_context ) = delete;
+    JNI_guarded_context( JNI_guarded_context const & ) = delete;
+    JNI_guarded_context& operator = ( JNI_guarded_context const &) = delete;
 
 public:
     explicit JNI_guarded_context(
@@ -205,9 +205,9 @@ inline JLocalAutoRef & JLocalAutoRef::operator = ( JLocalAutoRef & auto_ref )
 struct rtl_mem
 {
     static void * operator new ( size_t nSize )
-        { return rtl_allocateMemory( nSize ); }
+        { return std::malloc( nSize ); }
     static void operator delete ( void * mem )
-        { if (mem) rtl_freeMemory( mem ); }
+        { std::free( mem ); }
     static void * operator new ( size_t, void * mem )
         { return mem; }
     static void operator delete ( void *, void * )
@@ -218,7 +218,7 @@ struct rtl_mem
 
 inline rtl_mem * rtl_mem::allocate( std::size_t bytes )
 {
-    void * p = rtl_allocateMemory( bytes );
+    void * p = std::malloc( bytes );
     if (nullptr == p)
         throw BridgeRuntimeError( "out of memory!" );
     return static_cast<rtl_mem *>(p);
@@ -229,8 +229,8 @@ class TypeDescr
 {
     typelib_TypeDescription * m_td;
 
-    TypeDescr( TypeDescr & ) = delete;
-    void operator = ( TypeDescr ) = delete;
+    TypeDescr( TypeDescr const & ) = delete;
+    TypeDescr& operator = ( TypeDescr const & ) = delete;
 
 public:
     inline explicit TypeDescr( typelib_TypeDescriptionReference * td_ref );

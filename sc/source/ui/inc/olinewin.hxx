@@ -33,8 +33,8 @@ class ScOutlineWindow : public vcl::Window
 {
 private:
     ScViewData&                 mrViewData;         /// View data containing the document.
-    ScSplitPos                  meWhich;            /// Which area in split window.
-    bool                        mbHoriz;            /// true = Horizontal orientation.
+    ScSplitPos const            meWhich;            /// Which area in split window.
+    bool const                  mbHoriz;            /// true = Horizontal orientation.
     bool                        mbMirrorEntries;    /// true = mirror the order of entries (including header)
     bool                        mbMirrorLevels;     /// true = mirror the order of levels, including the border
 
@@ -47,7 +47,7 @@ private:
     size_t                      mnMTLevel;          /// Mouse tracking: Level of active button.
     size_t                      mnMTEntry;          /// Mouse tracking: Entry index of active button.
     bool                        mbMTActive;         /// Mouse tracking active?
-    bool                        mbMTPressed;        /// Mouse tracking: Button currently drawed pressed?
+    bool                        mbMTPressed;        /// Mouse tracking: Button currently drawn pressed?
 
     tools::Rectangle                   maFocusRect;        /// Focus rectangle on screen.
     size_t                      mnFocusLevel;       /// Level of focused button.

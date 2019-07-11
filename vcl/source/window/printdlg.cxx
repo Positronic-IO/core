@@ -41,6 +41,8 @@
 #include <unotools/localedatawrapper.hxx>
 
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -165,14 +167,14 @@ void PrintDialog::PrintPreviewWindow::Paint(vcl::RenderContext& rRenderContext, 
     }
     else
     {
-        Bitmap aPreviewBitmap(maPreviewBitmap);
+        BitmapEx aPreviewBitmap(maPreviewBitmap);
 
         // This explicit force-to-scale allows us to get the
         // mentioned best quality here. Unfortunately this is
         // currently not sure when using just ::DrawBitmap with
         // a defined size or ::DrawOutDev
         aPreviewBitmap.Scale(maPreviewSize, BmpScaleFlag::BestQuality);
-        rRenderContext.DrawBitmap(aOffset, aPreviewBitmap);
+        rRenderContext.DrawBitmapEx(aOffset, aPreviewBitmap);
     }
 
     tools::Rectangle aFrameRect(aOffset + Point(-1, -1), Size(maPreviewSize.Width() + 2, maPreviewSize.Height() + 2));
@@ -377,7 +379,7 @@ void PrintDialog::PrintPreviewWindow::preparePreviewBitmap()
     SetMapMode(MapMode(MapUnit::MapPixel));
     pPrerenderVDev->SetMapMode(MapMode(MapUnit::MapPixel));
 
-    maPreviewBitmap = pPrerenderVDev->GetBitmap(Point(0, 0), aVDevSize);
+    maPreviewBitmap = pPrerenderVDev->GetBitmapEx(Point(0, 0), aVDevSize);
 
     pPrerenderVDev->SetDrawMode( nOldDrawMode );
 }
@@ -522,11 +524,11 @@ void PrintDialog::NUpTabPage::initFromMultiPageSetup( const vcl::PrinterControll
 
     // setup field units for metric fields
     const LocaleDataWrapper& rLocWrap( mpPageMarginEdt->GetLocaleDataWrapper() );
-    FieldUnit eUnit = FUNIT_MM;
+    FieldUnit eUnit = FieldUnit::MM;
     sal_uInt16 nDigits = 0;
     if( rLocWrap.getMeasurementSystemEnum() == MeasurementSystem::US )
     {
-        eUnit = FUNIT_INCH;
+        eUnit = FieldUnit::INCH;
         nDigits = 2;
     }
     // set units
@@ -537,8 +539,10 @@ void PrintDialog::NUpTabPage::initFromMultiPageSetup( const vcl::PrinterControll
     mpPageMarginEdt->SetDecimalDigits( nDigits );
     mpSheetMarginEdt->SetDecimalDigits( nDigits );
 
-    mpSheetMarginEdt->SetValue( mpSheetMarginEdt->Normalize( i_rMPS.nLeftMargin ), FUNIT_100TH_MM );
-    mpPageMarginEdt->SetValue( mpPageMarginEdt->Normalize( i_rMPS.nHorizontalSpacing ), FUNIT_100TH_MM );
+    mpSheetMarginEdt->SetValue(mpSheetMarginEdt->Normalize(i_rMPS.nLeftMargin),
+                               FieldUnit::MM_100TH);
+    mpPageMarginEdt->SetValue(mpPageMarginEdt->Normalize(i_rMPS.nHorizontalSpacing),
+                              FieldUnit::MM_100TH);
     mpBorderCB->Check( i_rMPS.bDrawBorder );
     mpNupRowsEdt->SetValue( i_rMPS.nRows );
     mpNupColEdt->SetValue( i_rMPS.nColumns );
@@ -554,7 +558,7 @@ void PrintDialog::NUpTabPage::initFromMultiPageSetup( const vcl::PrinterControll
 PrintDialog::JobTabPage::JobTabPage( VclBuilder* pUIBuilder )
     : maCollateBmp(SV_PRINT_COLLATE_BMP)
     , maNoCollateBmp(SV_PRINT_NOCOLLATE_BMP)
-    , mnCollateUIMode(0)
+    , mbCollateAlwaysOff(false)
 {
     pUIBuilder->get(mpPrinters, "printers");
     pUIBuilder->get(mpStatusTxt, "status");
@@ -579,13 +583,13 @@ void PrintDialog::JobTabPage::readFromSettings()
                               "CollateBox" );
     if( aValue.equalsIgnoreAsciiCase("alwaysoff") )
     {
-        mnCollateUIMode = 1;
+        mbCollateAlwaysOff = true;
         mpCollateBox->Check( false );
         mpCollateBox->Enable( false );
     }
     else
     {
-        mnCollateUIMode = 0;
+        mbCollateAlwaysOff = false;
         aValue = pItem->getValue( "PrintDialog",
                                   "Collate" );
         mpCollateBox->Check( aValue.equalsIgnoreAsciiCase("true") );
@@ -644,7 +648,6 @@ namespace {
 
 PrintDialog::PrintDialog( vcl::Window* i_pParent, const std::shared_ptr<PrinterController>& i_rController )
     : ModalDialog(i_pParent, "PrintDialog", "vcl/ui/printdialog.ui")
-    , mpCustomOptionsUIBuilder(nullptr)
     , maPController( i_rController )
     , maNUpPage(m_pUIBuilder.get())
     , maJobPage(m_pUIBuilder.get())
@@ -684,10 +687,9 @@ PrintDialog::PrintDialog( vcl::Window* i_pParent, const std::shared_ptr<PrinterC
     // fill printer listbox
     std::vector< OUString > rQueues( Printer::GetPrinterQueues() );
     std::sort( rQueues.begin(), rQueues.end(), lcl_ListBoxCompare );
-    for( std::vector< OUString >::const_iterator it = rQueues.begin();
-         it != rQueues.end(); ++it )
+    for( const auto& rQueue : rQueues )
     {
-        maJobPage.mpPrinters->InsertEntry( *it );
+        maJobPage.mpPrinters->InsertEntry( rQueue );
     }
     // select current printer
     if( maJobPage.mpPrinters->GetEntryPos( maPController->getPrinter()->GetName() ) != LISTBOX_ENTRY_NOTFOUND )
@@ -723,6 +725,7 @@ PrintDialog::PrintDialog( vcl::Window* i_pParent, const std::shared_ptr<PrinterC
 
     // set a select handler
     maJobPage.mpPrinters->SetSelectHdl( LINK( this, PrintDialog, SelectHdl ) );
+    mpTabCtrl->SetActivatePageHdl( LINK( this, PrintDialog, ActivatePageHdl ) );
 
     // setup sizes for N-Up
     Size aNupSize( maPController->getPrinter()->PixelToLogic(
@@ -882,7 +885,7 @@ bool PrintDialog::isSingleJobs()
     return maOptionsPage.mpCollateSingleJobsBox->IsChecked();
 }
 
-void setHelpId( vcl::Window* i_pWindow, const Sequence< OUString >& i_rHelpIds, sal_Int32 i_nIndex )
+static void setHelpId( vcl::Window* i_pWindow, const Sequence< OUString >& i_rHelpIds, sal_Int32 i_nIndex )
 {
     if( i_nIndex >= 0 && i_nIndex < i_rHelpIds.getLength() )
         i_pWindow->SetHelpId( OUStringToOString( i_rHelpIds.getConstArray()[i_nIndex], RTL_TEXTENCODING_UTF8 ) );
@@ -1251,6 +1254,10 @@ void PrintDialog::setupOptionalUI()
         maNUpPage.mpPagesBoxTitleTxt->SetText( maNUpPage.mpPagesBtn->GetText() );
         maNUpPage.mpPagesBoxTitleTxt->Show();
         maNUpPage.mpPagesBtn->Show( false );
+
+        maNUpPage.mpPagesBoxTitleTxt->SetAccessibleRelationLabelFor(maNUpPage.mpNupPagesBox);
+        maNUpPage.mpNupPagesBox->SetAccessibleRelationLabeledBy(maNUpPage.mpPagesBoxTitleTxt);
+        maNUpPage.mpPagesBtn->SetAccessibleRelationLabelFor(nullptr);
     }
 
     // update enable states
@@ -1279,7 +1286,7 @@ void PrintDialog::DataChanged( const DataChangedEvent& i_rDCEvt )
 void PrintDialog::checkControlDependencies()
 {
     if( maJobPage.mpCopyCountField->GetValue() > 1 )
-        maJobPage.mpCollateBox->Enable( maJobPage.mnCollateUIMode == 0 );
+        maJobPage.mpCollateBox->Enable( !maJobPage.mbCollateAlwaysOff );
     else
         maJobPage.mpCollateBox->Enable( false );
 
@@ -1298,41 +1305,23 @@ void PrintDialog::checkControlDependencies()
 
 void PrintDialog::checkOptionalControlDependencies()
 {
-    for( auto it = maControlToPropertyMap.begin();
-         it != maControlToPropertyMap.end(); ++it )
+    for( const auto& rEntry : maControlToPropertyMap )
     {
-        bool bShouldbeEnabled = maPController->isUIOptionEnabled( it->second );
-        if( ! bShouldbeEnabled )
-        {
-            // enable controls that are directly attached to a dependency anyway
-            // if the normally disabled controls get modified, change the dependency
-            // so the control would be enabled
-            // example: in print range "Print All" is selected, "Page Range" is then of course
-            // not selected and the Edit for the Page Range would be disabled
-            // as a convenience we should enable the Edit anyway and automatically select
-            // "Page Range" instead of "Print All" if the Edit gets modified
-            if( maReverseDependencySet.find( it->second ) != maReverseDependencySet.end() )
-            {
-                OUString aDep( maPController->getDependency( it->second ) );
-                // if the dependency is at least enabled, then enable this control anyway
-                if( !aDep.isEmpty() && maPController->isUIOptionEnabled( aDep ) )
-                    bShouldbeEnabled = true;
-            }
-        }
+        bool bShouldbeEnabled = maPController->isUIOptionEnabled( rEntry.second );
 
-        if( bShouldbeEnabled && dynamic_cast<RadioButton*>(it->first.get()) )
+        if( bShouldbeEnabled && dynamic_cast<RadioButton*>(rEntry.first.get()) )
         {
-            auto r_it = maControlToNumValMap.find( it->first );
+            auto r_it = maControlToNumValMap.find( rEntry.first );
             if( r_it != maControlToNumValMap.end() )
             {
-                bShouldbeEnabled = maPController->isUIChoiceEnabled( it->second, r_it->second );
+                bShouldbeEnabled = maPController->isUIChoiceEnabled( rEntry.second, r_it->second );
             }
         }
 
-        bool bIsEnabled = it->first->IsEnabled();
+        bool bIsEnabled = rEntry.first->IsEnabled();
         // Enable does not do a change check first, so can be less cheap than expected
         if( bShouldbeEnabled != bIsEnabled )
-            it->first->Enable( bShouldbeEnabled );
+            rEntry.first->Enable( bShouldbeEnabled );
     }
 }
 
@@ -1342,10 +1331,10 @@ static OUString searchAndReplace( const OUString& i_rOrig, const char* i_pRepl, 
     if( nPos != -1 )
     {
         OUStringBuffer aBuf( i_rOrig.getLength() );
-        aBuf.append( i_rOrig.getStr(), nPos );
+        aBuf.appendCopy( i_rOrig, 0, nPos );
         aBuf.append( i_rRepl );
         if( nPos + i_nReplLen < i_rOrig.getLength() )
-            aBuf.append( i_rOrig.getStr() + nPos + i_nReplLen );
+            aBuf.appendCopy( i_rOrig, nPos + i_nReplLen );
         return aBuf.makeStringAndClear();
     }
     return i_rOrig;
@@ -1445,8 +1434,10 @@ void PrintDialog::updateNupFromPages()
     sal_IntPtr nPages = sal_IntPtr(maNUpPage.mpNupPagesBox->GetSelectedEntryData());
     int nRows   = int(maNUpPage.mpNupRowsEdt->GetValue());
     int nCols   = int(maNUpPage.mpNupColEdt->GetValue());
-    long nPageMargin  = maNUpPage.mpPageMarginEdt->Denormalize(maNUpPage.mpPageMarginEdt->GetValue( FUNIT_100TH_MM ));
-    long nSheetMargin = maNUpPage.mpSheetMarginEdt->Denormalize(maNUpPage.mpSheetMarginEdt->GetValue( FUNIT_100TH_MM ));
+    long nPageMargin = maNUpPage.mpPageMarginEdt->Denormalize(
+        maNUpPage.mpPageMarginEdt->GetValue(FieldUnit::MM_100TH));
+    long nSheetMargin = maNUpPage.mpSheetMarginEdt->Denormalize(
+        maNUpPage.mpSheetMarginEdt->GetValue(FieldUnit::MM_100TH));
     bool bCustom = false;
 
     if( nPages == 1 )
@@ -1511,8 +1502,8 @@ void PrintDialog::updateNupFromPages()
             nSheetMargin = nVertMax;
 
         maNUpPage.mpSheetMarginEdt->SetMax(
-                  maNUpPage.mpSheetMarginEdt->Normalize(
-                           std::min(nHorzMax, nVertMax) ), FUNIT_100TH_MM );
+            maNUpPage.mpSheetMarginEdt->Normalize(std::min(nHorzMax, nVertMax)),
+            FieldUnit::MM_100TH);
 
         // maximum page distance
         nHorzMax = (aSize.Width() - 2*nSheetMargin);
@@ -1528,14 +1519,16 @@ void PrintDialog::updateNupFromPages()
             nPageMargin = nVertMax;
 
         maNUpPage.mpPageMarginEdt->SetMax(
-                 maNUpPage.mpSheetMarginEdt->Normalize(
-                           std::min(nHorzMax, nVertMax ) ), FUNIT_100TH_MM );
+            maNUpPage.mpSheetMarginEdt->Normalize(std::min(nHorzMax, nVertMax)),
+            FieldUnit::MM_100TH);
     }
 
     maNUpPage.mpNupRowsEdt->SetValue( nRows );
     maNUpPage.mpNupColEdt->SetValue( nCols );
-    maNUpPage.mpPageMarginEdt->SetValue( maNUpPage.mpPageMarginEdt->Normalize( nPageMargin ), FUNIT_100TH_MM );
-    maNUpPage.mpSheetMarginEdt->SetValue( maNUpPage.mpSheetMarginEdt->Normalize( nSheetMargin ), FUNIT_100TH_MM );
+    maNUpPage.mpPageMarginEdt->SetValue(maNUpPage.mpPageMarginEdt->Normalize(nPageMargin),
+                                        FieldUnit::MM_100TH);
+    maNUpPage.mpSheetMarginEdt->SetValue(maNUpPage.mpSheetMarginEdt->Normalize(nSheetMargin),
+                                         FieldUnit::MM_100TH);
 
     maNUpPage.showAdvancedControls( bCustom );
 
@@ -1549,8 +1542,10 @@ void PrintDialog::updateNup()
 {
     int nRows         = int(maNUpPage.mpNupRowsEdt->GetValue());
     int nCols         = int(maNUpPage.mpNupColEdt->GetValue());
-    long nPageMargin  = maNUpPage.mpPageMarginEdt->Denormalize(maNUpPage.mpPageMarginEdt->GetValue( FUNIT_100TH_MM ));
-    long nSheetMargin = maNUpPage.mpSheetMarginEdt->Denormalize(maNUpPage.mpSheetMarginEdt->GetValue( FUNIT_100TH_MM ));
+    long nPageMargin = maNUpPage.mpPageMarginEdt->Denormalize(
+        maNUpPage.mpPageMarginEdt->GetValue(FieldUnit::MM_100TH));
+    long nSheetMargin = maNUpPage.mpSheetMarginEdt->Denormalize(
+        maNUpPage.mpSheetMarginEdt->GetValue(FieldUnit::MM_100TH));
 
     PrinterController::MultiPageSetup aMPS;
     aMPS.nRows         = nRows;
@@ -1748,6 +1743,14 @@ IMPL_LINK( PrintDialog, ModifyHdl, Edit&, rEdit, void )
                                makeAny( sal_Int32(maJobPage.mpCopyCountField->GetValue()) ) );
         maPController->setValue( "Collate",
                                makeAny( isCollate() ) );
+    }
+}
+
+IMPL_LINK( PrintDialog, ActivatePageHdl, TabControl *, pTabCtrl, void )
+{
+    const sal_uInt16 id = pTabCtrl->GetCurPageId();
+    if (pTabCtrl->GetPageName(id) == "optionstab" ) {
+        maOptionsPage.mpPapersizeFromSetup->Check( maPController->getPapersizeFromSetup() );
     }
 }
 

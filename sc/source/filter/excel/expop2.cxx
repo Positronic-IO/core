@@ -19,6 +19,7 @@
 
 #include <unotools/fltrcfg.hxx>
 
+#include <osl/diagnose.h>
 #include <sfx2/objsh.hxx>
 #include <sfx2/docinf.hxx>
 #include <filter/msfilter/svxmsbas.hxx>
@@ -39,6 +40,7 @@
 #include <filtopt.hxx>
 #include <xltools.hxx>
 #include <xelink.hxx>
+#include <xehelper.hxx>
 
 #include <officecfg/Office/Calc.hxx>
 

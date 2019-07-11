@@ -26,14 +26,13 @@
 #include <com/sun/star/frame/XSynchronousDispatch.hpp>
 
 #include <cppuhelper/implbase.hxx>
+#include <cppuhelper/weakref.hxx>
 
 namespace framework{
 
 /** @short      implements a dispatch object which can be used to load
                 non-visible components (by using the mechanism of ContentHandler)
                 or visible-components (by using the mechanism of FrameLoader).
-
-    @author     as96863
  */
 class LoadDispatcher : public  ::cppu::WeakImplHelper< css::frame::XNotifyingDispatch,          // => XDispatch => XInterface
                                                         css::frame::XSynchronousDispatch >

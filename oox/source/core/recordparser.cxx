@@ -107,7 +107,7 @@ private:
     typedef ::std::pair< RecordInfo, ContextHandlerRef >    ContextInfo;
     typedef ::std::vector< ContextInfo >                    ContextInfoVec;
 
-    FragmentHandlerRef  mxHandler;
+    FragmentHandlerRef const mxHandler;
     ContextInfoVec      maStack;
 };
 
@@ -157,7 +157,7 @@ void ContextStack::popContext()
 namespace {
 
 /** Reads a byte from the passed stream, returns true on success. */
-inline bool lclReadByte( sal_uInt8& ornByte, BinaryInputStream& rStrm )
+bool lclReadByte( sal_uInt8& ornByte, BinaryInputStream& rStrm )
 {
     return rStrm.readMemory( &ornByte, 1 ) == 1;
 }

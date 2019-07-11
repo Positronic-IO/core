@@ -547,8 +547,8 @@ DECLARE_SHELL_MAILMERGE_TEST(testTdf92623, "tdf92623.odt", "10-testing-addresses
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), pIDMA->getBookmarksCount());
     IDocumentMarkAccess::const_iterator_t mark = pIDMA->getAllMarksBegin();
     // and it's a TEXT_FIELDMARK
-    CPPUNIT_ASSERT_EQUAL( sal_Int32(IDocumentMarkAccess::GetType( **mark )),
-                          sal_Int32(IDocumentMarkAccess::MarkType::TEXT_FIELDMARK ) );
+    CPPUNIT_ASSERT_EQUAL( sal_Int32(IDocumentMarkAccess::MarkType::TEXT_FIELDMARK),
+                            sal_Int32(IDocumentMarkAccess::GetType( **mark )) );
     sal_uLong src_pos = (*mark)->GetMarkPos().nNode.GetIndex();
 
     // Get the size of the document in nodes
@@ -579,7 +579,7 @@ DECLARE_SHELL_MAILMERGE_TEST(testTdf92623, "tdf92623.odt", "10-testing-addresses
             countFieldMarks++;
         }
         else // see previous TODO
-            CPPUNIT_ASSERT_EQUAL( sal_Int32(markType), sal_Int32(IDocumentMarkAccess::MarkType::UNO_BOOKMARK) );
+            CPPUNIT_ASSERT_EQUAL( sal_Int32(IDocumentMarkAccess::MarkType::UNO_BOOKMARK), sal_Int32(markType) );
     }
     CPPUNIT_ASSERT_EQUAL(sal_Int32(10), countFieldMarks);
 }
@@ -676,6 +676,48 @@ DECLARE_FILE_MAILMERGE_TEST(testTdf102010, "empty.odt", "10-testing-addresses.od
     executeMailMerge( true );
     loadMailMergeDocument( 1 );
 }
+
+DECLARE_SHELL_MAILMERGE_TEST(testTdf118113, "tdf118113.odt", "tdf118113.ods", "testing-addresses")
+{
+    executeMailMerge();
+
+    // The document contains a text box anchored to the page and a conditionally hidden
+    // section that is only shown for one of the 4 recipients, namely the 3rd record.
+    // In case the hidden section is shown, the page count is 3 for a single data entry, otherwise 1.
+    // Previously, the page number was calculated incorrectly which led to the
+    // text box being anchored to the wrong page.
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxMMComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    // 3 documents with 1 page size each + 1 document with 3 pages
+    // + an additional page after each of the first 3 documents to make
+    // sure that each document starts on an odd page number
+    sal_uInt16 nPhysPages = pTextDoc->GetDocShell()->GetWrtShell()->GetPhyPageNum();
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(9), nPhysPages);
+
+    // verify that there is a text box for each data record
+    uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxMMComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xDraws(xDrawPageSupplier->getDrawPage(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), xDraws->getCount());
+
+    // verify the text box for each data record is anchored to the first page of the given data record's pages
+    std::vector<sal_uInt16> expectedPageNumbers {1, 3, 5, 9};
+    uno::Reference<beans::XPropertySet> xPropertySet;
+    for (sal_Int32 i = 0; i < xDraws->getCount(); i++)
+    {
+        xPropertySet.set(xDraws->getByIndex(i), uno::UNO_QUERY);
+
+        text::TextContentAnchorType nAnchorType;
+        CPPUNIT_ASSERT(xPropertySet->getPropertyValue( UNO_NAME_ANCHOR_TYPE ) >>= nAnchorType);
+        CPPUNIT_ASSERT_EQUAL( text::TextContentAnchorType_AT_PAGE, nAnchorType );
+
+        sal_uInt16 nAnchorPageNo = {};
+        CPPUNIT_ASSERT(xPropertySet->getPropertyValue( UNO_NAME_ANCHOR_PAGE_NO ) >>= nAnchorPageNo);
+
+        CPPUNIT_ASSERT_EQUAL(expectedPageNumbers.at(i), nAnchorPageNo);
+    }
+}
+
 
 namespace
 {
@@ -815,6 +857,229 @@ DECLARE_FILE_MAILMERGE_TEST(testEmptyValuesNewFODT, "tdf35798-new.fodt", "5-with
                 OUString::createFromAscii(pExpected), xPara->getString());
         }
         CPPUNIT_ASSERT_EQUAL(i, getParagraphs());
+    }
+}
+
+DECLARE_SHELL_MAILMERGE_TEST(testTdf118845, "tdf118845.fodt", "4_v01.ods", "Tabelle1")
+{
+    executeMailMerge();
+
+    // Both male and female greetings were shown, thus each page had 3 paragraphs
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxMMComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    sal_uInt16 nPhysPages = pTextDoc->GetDocShell()->GetWrtShell()->GetPhyPageNum();
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(7), nPhysPages); // 4 pages, each odd, and 3 blanks
+
+    uno::Reference<text::XTextDocument> xTextDocument(mxMMComponent, uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(8, getParagraphs(xTextDocument->getText()));
+
+    uno::Reference<text::XTextRange> xParagraph(getParagraphOrTable(1, xTextDocument->getText()),
+                                                uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Dear Mrs. Mustermann1,"), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(2, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(3, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Dear Mr. Mustermann2,"), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(4, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(5, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Dear Mrs. Mustermann3,"), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(6, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(7, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Dear Mr. Mustermann4,"), xParagraph->getString());
+
+    xParagraph.set(getParagraphOrTable(8, xTextDocument->getText()), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), xParagraph->getString());
+}
+
+DECLARE_SHELL_MAILMERGE_TEST(testTdf122156_shell, "linked-with-condition.odt", "5-with-blanks.ods",
+                             "names")
+{
+    // A document with a linked section hidden on an "empty field" condition
+    // For combined documents, hidden sections are removed completely
+    executeMailMerge();
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxMMComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    // 5 documents 1 page each, starting at odd page numbers => 9
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(9), pTextDoc->GetDocShell()->GetWrtShell()->GetPhyPageNum());
+    uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxMMComponent,
+                                                                  uno::UNO_QUERY_THROW);
+    uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                      uno::UNO_QUERY_THROW);
+    // 2 out of 5 dataset records have empty "Title" field => no sections in respective documents
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xSections->getCount());
+}
+
+DECLARE_FILE_MAILMERGE_TEST(testTdf122156_file, "linked-with-condition.odt", "5-with-blanks.ods",
+                            "names")
+{
+    // A document with a linked section hidden on an "empty field" condition
+    // For separate documents, the sections are hidden, but not removed
+    executeMailMerge();
+    {
+        loadMailMergeDocument(0);
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent,
+                                                                      uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                          uno::UNO_QUERY_THROW);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        // Record 1 has empty "Title" field => section is not shown
+        CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect, "IsCurrentlyVisible"));
+    }
+    {
+        loadMailMergeDocument(1);
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent,
+                                                                      uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                          uno::UNO_QUERY_THROW);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        // Record 2 has non-empty "Title" field => section is shown
+        CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect, "IsCurrentlyVisible"));
+    }
+    {
+        loadMailMergeDocument(2);
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent,
+                                                                      uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                          uno::UNO_QUERY_THROW);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        // Record 3 has non-empty "Title" field => section is shown
+        CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect, "IsCurrentlyVisible"));
+    }
+    {
+        loadMailMergeDocument(3);
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent,
+                                                                      uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                          uno::UNO_QUERY_THROW);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        // Record 4 has empty "Title" field => section is not shown
+        CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect, "IsCurrentlyVisible"));
+    }
+    {
+        loadMailMergeDocument(4);
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent,
+                                                                      uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(),
+                                                          uno::UNO_QUERY_THROW);
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        // Record 5 has non-empty "Title" field => section is shown
+        CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect, "IsCurrentlyVisible"));
+    }
+}
+
+DECLARE_SHELL_MAILMERGE_TEST(testTdf121168, "section_ps.odt", "4_v01.ods", "Tabelle1")
+{
+    // A document starting with a section on a page with non-default page style with header
+    executeMailMerge();
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxMMComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    // 4 documents 1 page each, starting at odd page numbers => 7
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(7), pTextDoc->GetDocShell()->GetWrtShell()->GetPhyPageNum());
+
+    SwDoc* pDocMM = pTextDoc->GetDocShell()->GetDoc();
+    sal_uLong nSizeMM = pDocMM->GetNodes().GetEndOfContent().GetIndex()
+                        - pDocMM->GetNodes().GetEndOfExtras().GetIndex() - 2;
+    CPPUNIT_ASSERT_EQUAL(sal_uLong(16), nSizeMM);
+
+    // All even pages should be empty, all sub-documents have one page
+    const SwRootFrame* pLayout = pDocMM->getIDocumentLayoutAccess().GetCurrentLayout();
+    const SwPageFrame* pPageFrm = static_cast<const SwPageFrame*>(pLayout->Lower());
+    while (pPageFrm)
+    {
+        sal_uInt16 nPageNum = pPageFrm->GetPhyPageNum();
+        bool bOdd = (1 == (nPageNum % 2));
+        CPPUNIT_ASSERT_EQUAL(!bOdd, pPageFrm->IsEmptyPage());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt16(bOdd ? 1 : 2), pPageFrm->GetVirtPageNum());
+        if (bOdd)
+        {
+            const SwPageDesc* pDesc = pPageFrm->GetPageDesc();
+            CPPUNIT_ASSERT_EQUAL(OUString("Teststyle" + OUString::number(nPageNum / 2 + 1)),
+                                 pDesc->GetName());
+        }
+        pPageFrm = static_cast<const SwPageFrame*>(pPageFrm->GetNext());
+    }
+}
+
+DECLARE_FILE_MAILMERGE_TEST(testTdf123057_file, "pagecounttest.ott", "db_pagecounttest.ods", "Sheet1")
+{
+    executeMailMerge(true);
+
+    for (int doc = 0; doc < 4; ++doc)
+    {
+        loadMailMergeDocument(doc);
+
+        // get document properties
+        uno::Reference<text::XTextSectionsSupplier> xSectionsSupplier(mxComponent, uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSections(xSectionsSupplier->getTextSections(), uno::UNO_QUERY_THROW);
+
+        CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xSections->getCount());
+        uno::Reference<beans::XPropertySet> xSect0(xSections->getByIndex(0), uno::UNO_QUERY_THROW);
+        uno::Reference<beans::XPropertySet> xSect1(xSections->getByIndex(1), uno::UNO_QUERY_THROW);
+
+        OUString sFieldPageCount;
+        uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
+        uno::Reference<container::XEnumerationAccess> xFieldsAccess(xTextFieldsSupplier->getTextFields());
+        uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
+
+        if (xFields.is())
+        {
+            while (xFields->hasMoreElements())
+            {
+                uno::Any aField = xFields->nextElement();
+                uno::Reference<lang::XServiceInfo> xServiceInfo(aField, uno::UNO_QUERY);
+                if (xServiceInfo->supportsService("com.sun.star.text.textfield.PageCount"))
+                {
+                    uno::Reference<text::XTextContent> xField(aField, uno::UNO_QUERY);
+                    sFieldPageCount = xField->getAnchor()->getString();
+                }
+            }
+        }
+
+        switch (doc)
+        {
+        case 0:
+            // both sections visible, page num is 2
+            CPPUNIT_ASSERT_EQUAL(2, getPages());
+            CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect0, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect1, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(OUString("2"), sFieldPageCount);
+            break;
+        case 1:
+            // second section hidden, page num is 1
+            CPPUNIT_ASSERT_EQUAL(1, getPages());
+            CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect0, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect1, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(OUString("1"), sFieldPageCount);
+            break;
+        case 2:
+            // first section hidden, page num is 1
+            CPPUNIT_ASSERT_EQUAL(1, getPages());
+            CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect0, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xSect1, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(OUString("1"), sFieldPageCount);
+            break;
+        case 3:
+            // both sections hidden, page num is 1
+            CPPUNIT_ASSERT_EQUAL(1, getPages());
+            CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect0, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xSect1, "IsCurrentlyVisible"));
+            CPPUNIT_ASSERT_EQUAL(OUString("1"), sFieldPageCount);
+            break;
+        }
     }
 }
 

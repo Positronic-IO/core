@@ -61,7 +61,7 @@ class HexEncoder : public ByteEncoder
 {
 private:
 
-    osl::File*      mpFile;
+    osl::File* const mpFile;
     sal_uInt32      mnColumn;
     sal_uInt32      mnOffset;
     sal_Char        mpFileBuffer[nBufferSize + 16];
@@ -127,7 +127,7 @@ class Ascii85Encoder : public ByteEncoder
 {
 private:
 
-    osl::File*      mpFile;
+    osl::File* const mpFile;
     sal_uInt32      mnByte;
     sal_uInt8       mpByteBuffer[4];
 
@@ -277,9 +277,9 @@ private:
     std::array<LZWCTreeNode, 4096>
                     mpTable;    // LZW compression data
     LZWCTreeNode*   mpPrefix;   // the compression is as same as the TIFF compression
-    sal_uInt16      mnDataSize;
-    sal_uInt16      mnClearCode;
-    sal_uInt16      mnEOICode;
+    static constexpr sal_uInt16 gnDataSize = 8;
+    static constexpr sal_uInt16 gnClearCode = 1 << gnDataSize;
+    static constexpr sal_uInt16 gnEOICode = gnClearCode + 1;
     sal_uInt16      mnTableSize;
     sal_uInt16      mnCodeSize;
     sal_uInt32      mnOffset;
@@ -296,18 +296,13 @@ public:
 };
 
 LZWEncoder::LZWEncoder(osl::File* pOutputFile) :
-        Ascii85Encoder (pOutputFile)
+        Ascii85Encoder (pOutputFile),
+        mpPrefix(nullptr),
+        mnTableSize(gnEOICode + 1),
+        mnCodeSize(gnDataSize + 1),
+        mnOffset(32),       // free bits in dwShift
+        mdwShift(0)
 {
-    mnDataSize  = 8;
-
-    mnClearCode = 1 << mnDataSize;
-    mnEOICode   = mnClearCode + 1;
-    mnTableSize = mnEOICode   + 1;
-    mnCodeSize  = mnDataSize  + 1;
-
-    mnOffset    = 32;   // free bits in dwShift
-    mdwShift    = 0;
-
     for (sal_uInt32 i = 0; i < 4096; i++)
     {
         mpTable[i].mpBrother    = nullptr;
@@ -316,9 +311,7 @@ LZWEncoder::LZWEncoder(osl::File* pOutputFile) :
         mpTable[i].mnValue      = static_cast<sal_uInt8>(mpTable[i].mnCode);
     }
 
-    mpPrefix = nullptr;
-
-    WriteBits( mnClearCode, mnCodeSize );
+    WriteBits( gnClearCode, mnCodeSize );
 }
 
 LZWEncoder::~LZWEncoder()
@@ -326,7 +319,7 @@ LZWEncoder::~LZWEncoder()
     if (mpPrefix)
         WriteBits (mpPrefix->mnCode, mnCodeSize);
 
-    WriteBits (mnEOICode, mnCodeSize);
+    WriteBits (gnEOICode, mnCodeSize);
 }
 
 void
@@ -374,13 +367,13 @@ LZWEncoder::EncodeByte (sal_uInt8 nByte )
 
             if (mnTableSize == 409)
             {
-                WriteBits (mnClearCode, mnCodeSize);
+                WriteBits (gnClearCode, mnCodeSize);
 
-                for (i = 0; i < mnClearCode; i++)
+                for (i = 0; i < gnClearCode; i++)
                     mpTable[i].mpFirstChild = nullptr;
 
-                mnCodeSize = mnDataSize + 1;
-                mnTableSize = mnEOICode + 1;
+                mnCodeSize = gnDataSize + 1;
+                mnTableSize = gnEOICode + 1;
             }
             else
             {

@@ -73,8 +73,6 @@ public:
                                     { return m_bSkipOverHiddenSections; }
     void SetSkipOverHiddenSections( bool bFlag )
                                     { m_bSkipOverHiddenSections = bFlag; }
-
-    DECL_FIXEDMEMPOOL_NEWDEL( SwUnoCursor )
 };
 
 class SwUnoTableCursor : public virtual SwUnoCursor, public virtual SwTableCursor
@@ -109,7 +107,6 @@ namespace sw
     {
         public:
             UnoCursorPointer()
-                : m_pCursor(nullptr)
            {}
             UnoCursorPointer(std::shared_ptr<SwUnoCursor> const & pCursor)
                 : m_pCursor(pCursor)
@@ -146,6 +143,10 @@ namespace sw
                 { return *get(); }
             UnoCursorPointer& operator=(UnoCursorPointer aOther)
             {
+                if (m_pCursor)
+                {
+                    EndListening(m_pCursor->m_aNotifier);
+                }
                 if(aOther.m_pCursor)
                     StartListening(aOther.m_pCursor->m_aNotifier);
                 m_pCursor = aOther.m_pCursor;
@@ -157,7 +158,7 @@ namespace sw
             {
                 if(pNew)
                     StartListening(pNew->m_aNotifier);
-                else if(m_pCursor)
+                if (m_pCursor)
                     EndListening(m_pCursor->m_aNotifier);
                 m_pCursor = pNew;
             }

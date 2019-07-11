@@ -69,17 +69,9 @@ std::unique_ptr<SfxHint> SvxEditSourceHelper::EENotification2Hint( EENotify cons
             case EE_NOTIFY_TEXTVIEWSELECTIONCHANGED:
                 return std::unique_ptr<SfxHint>( new SvxEditSourceHint( SfxHintId::EditSourceSelectionChanged ) );
 
-            case EE_NOTIFY_BLOCKNOTIFICATION_START:
-                return std::unique_ptr<SfxHint>( new TextHint( SfxHintId::TextBlockNotificationStart, 0 ) );
+            case EE_NOTIFY_PROCESSNOTIFICATIONS:
+                return std::unique_ptr<SfxHint>( new TextHint( SfxHintId::TextProcessNotifications ));
 
-            case EE_NOTIFY_BLOCKNOTIFICATION_END:
-                return std::unique_ptr<SfxHint>( new TextHint( SfxHintId::TextBlockNotificationEnd, 0 ) );
-
-            case EE_NOTIFY_INPUT_START:
-                return std::unique_ptr<SfxHint>( new TextHint( SfxHintId::TextInputStart, 0 ) );
-
-            case EE_NOTIFY_INPUT_END:
-                return std::unique_ptr<SfxHint>( new TextHint( SfxHintId::TextInputEnd, 0 ) );
             case EE_NOTIFY_TEXTVIEWSELECTIONCHANGED_ENDD_PARA:
                 return std::unique_ptr<SfxHint>( new SvxEditSourceHintEndPara );
             default:
@@ -91,7 +83,7 @@ std::unique_ptr<SfxHint> SvxEditSourceHelper::EENotification2Hint( EENotify cons
     return o3tl::make_unique<SfxHint>( );
 }
 
-bool SvxEditSourceHelper::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nEndIndex, const EditEngine& rEE, sal_Int32 nPara, sal_Int32 nIndex, bool bInCell )
+void SvxEditSourceHelper::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nEndIndex, const EditEngine& rEE, sal_Int32 nPara, sal_Int32 nIndex, bool bInCell )
 {
     // IA2 CWS introduced bInCell, but also did many other changes here.
     // Need to verify implementation with AT (IA2 and ATK)
@@ -242,8 +234,6 @@ bool SvxEditSourceHelper::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nE
         }
         nEndIndex += aEndPos.nIndex;
     }
-
-    return true;
 }
 
 Point SvxEditSourceHelper::EEToUserSpace( const Point& rPoint, const Size& rEESize, bool bIsVertical )

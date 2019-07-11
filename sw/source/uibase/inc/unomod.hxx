@@ -73,7 +73,7 @@ class SwXPrintSettings final : public comphelper::ChainablePropertySet
 {
     friend class SwXDocumentSettings;
 
-    SwXPrintSettingsType meType;
+    SwXPrintSettingsType const meType;
     SwPrintData * mpPrtOpt;
     SwDoc *mpDoc;
 
@@ -102,7 +102,7 @@ class SwXViewSettings final : public comphelper::ChainablePropertySet
     friend class SwXDocumentSettings;
 
     SwView*                     pView;
-    SwViewOption*       mpViewOption;
+    std::unique_ptr<SwViewOption> mpViewOption;
     const SwViewOption*         mpConstViewOption;
     bool                    bObjectValid:1, mbApplyZoom;
 

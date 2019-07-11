@@ -38,7 +38,6 @@
 #include <com/sun/star/rendering/PathJoinType.hpp>
 #include <com/sun/star/rendering/TextDirection.hpp>
 #include <com/sun/star/rendering/TexturingMode.hpp>
-#include <comphelper/sequence.hxx>
 #include <rtl/math.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/poly.hxx>
@@ -954,8 +953,8 @@ namespace vclcanvas
                             // output VDev content alpha-blended to
                             // target position.
                             const ::Point aEmptyPoint;
-                            Bitmap aContentBmp(
-                                pVDev->GetBitmap( aEmptyPoint,
+                            BitmapEx aContentBmp(
+                                pVDev->GetBitmapEx( aEmptyPoint,
                                                  pVDev->GetOutputSizePixel() ) );
 
                             sal_uInt8 nCol( static_cast< sal_uInt8 >(
@@ -963,7 +962,7 @@ namespace vclcanvas
                             AlphaMask aAlpha( pVDev->GetOutputSizePixel(),
                                               &nCol );
 
-                            BitmapEx aOutputBmpEx( aContentBmp, aAlpha );
+                            BitmapEx aOutputBmpEx( aContentBmp.GetBitmap(), aAlpha );
                             rOutDev.DrawBitmapEx( aPolygonDeviceRect.TopLeft(),
                                                   aOutputBmpEx );
 

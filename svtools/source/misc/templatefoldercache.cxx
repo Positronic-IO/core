@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <osl/file.hxx>
 #include <svtools/templatefoldercache.hxx>
@@ -25,6 +26,7 @@
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/ucb/XDynamicResultSet.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/XContentAccess.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/util/theOfficeInstallationDirectories.hpp>
@@ -58,7 +60,7 @@ namespace svt
     //= helpers
 
 
-    SvStream& WriteDateTime( SvStream& _rStorage, const util::DateTime& _rDate )
+    static SvStream& WriteDateTime( SvStream& _rStorage, const util::DateTime& _rDate )
     {
         sal_uInt16 hundredthSeconds = static_cast< sal_uInt16 >( _rDate.NanoSeconds / tools::Time::nanoPerCenti );
         _rStorage.WriteUInt16( hundredthSeconds );
@@ -74,7 +76,7 @@ namespace svt
     }
 
 
-    SvStream& operator >> ( SvStream& _rStorage, util::DateTime& _rDate )
+    static SvStream& operator >> ( SvStream& _rStorage, util::DateTime& _rDate )
     {
         sal_uInt16 hundredthSeconds;
         _rStorage.ReadUInt16( hundredthSeconds );
@@ -104,7 +106,7 @@ namespace svt
     public:
 
     private:
-        INetURLObject           m_aURL;
+        INetURLObject const           m_aURL;
         util::DateTime          m_aLastModified;    // date of last modification as reported by UCP
         TemplateFolderContent   m_aSubContents;     // sorted (by name) list of the children
 
@@ -216,7 +218,7 @@ namespace svt
             if ( _rLHS->getSubContents().size() != _rRHS->getSubContents().size() )
                 return false;
 
-            if ( _rLHS->getSubContents().size() )
+            if ( !_rLHS->getSubContents().empty() )
             {   // there are children
                 // -> compare them
                 ::std::pair< FolderIterator, FolderIterator > aFirstDifferent = ::std::mismatch(
@@ -381,7 +383,7 @@ namespace svt
         bool                            m_bNeedsUpdate : 1;
         bool                            m_bKnowState : 1;
         bool                            m_bValidCurrentState : 1;
-        bool                            m_bAutoStoreState : 1;
+        bool const                      m_bAutoStoreState : 1;
 
     public:
         explicit TemplateFolderCacheImpl( bool _bAutoStoreState );
@@ -415,8 +417,7 @@ namespace svt
 
 
     TemplateFolderCacheImpl::TemplateFolderCacheImpl( bool _bAutoStoreState )
-        :m_pCacheStream         ( nullptr )
-        ,m_bNeedsUpdate         ( true )
+        :m_bNeedsUpdate         ( true )
         ,m_bKnowState           ( false )
         ,m_bValidCurrentState   ( false )
         ,m_bAutoStoreState      ( _bAutoStoreState )
@@ -436,12 +437,10 @@ namespace svt
 
     sal_Int32 TemplateFolderCacheImpl::getMagicNumber()
     {
-        sal_Int32 nMagic = 0;
-        ( nMagic += sal_Int8('T') ) <<= 4;
-        ( nMagic += sal_Int8('D') ) <<= 4;
-        ( nMagic += sal_Int8('S') ) <<= 4;
-        ( nMagic += sal_Int8('C') ) <<= 0;
-        return nMagic;
+        return (sal_Int8('T') << 12)
+                | (sal_Int8('D') << 8)
+                | (sal_Int8('S') << 4)
+                | (sal_Int8('C'));
     }
 
 
@@ -702,8 +701,8 @@ namespace svt
         aStorageURL.Append( ".templdir.cache" );
 
         // open the stream
-        m_pCacheStream.reset( UcbStreamHelper::CreateStream( aStorageURL.GetMainURL( INetURLObject::DecodeMechanism::ToIUri ),
-            _bForRead ? StreamMode::READ | StreamMode::NOCREATE : StreamMode::WRITE | StreamMode::TRUNC ) );
+        m_pCacheStream = UcbStreamHelper::CreateStream( aStorageURL.GetMainURL( INetURLObject::DecodeMechanism::ToIUri ),
+            _bForRead ? StreamMode::READ | StreamMode::NOCREATE : StreamMode::WRITE | StreamMode::TRUNC );
         DBG_ASSERT( m_pCacheStream, "TemplateFolderCacheImpl::openCacheStream: could not open/create the cache stream!" );
         if ( m_pCacheStream && m_pCacheStream->GetErrorCode() )
         {

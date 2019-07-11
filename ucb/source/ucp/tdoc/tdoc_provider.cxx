@@ -34,7 +34,10 @@
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/contentidentifier.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
+#include <ucbhelper/macros.hxx>
 
 #include "tdoc_provider.hxx"
 #include "tdoc_content.hxx"
@@ -85,6 +88,7 @@ css::uno::Any SAL_CALL ContentProvider::queryInterface( const css::uno::Type & r
                                                static_cast< lang::XTypeProvider* >(this),
                                                static_cast< lang::XServiceInfo* >(this),
                                                static_cast< ucb::XContentProvider* >(this),
+                                               static_cast< frame::XTransientDocumentsDocumentContentIdentifierFactory* >(this),
                                                static_cast< frame::XTransientDocumentsDocumentContentFactory* >(this)
                                                );
     return aRet.hasValue() ? aRet : OWeakObject::queryInterface( rType );
@@ -93,10 +97,11 @@ css::uno::Any SAL_CALL ContentProvider::queryInterface( const css::uno::Type & r
 // XTypeProvider methods.
 
 
-XTYPEPROVIDER_IMPL_4( ContentProvider,
+XTYPEPROVIDER_IMPL_5( ContentProvider,
                       lang::XTypeProvider,
                       lang::XServiceInfo,
                       ucb::XContentProvider,
+                      frame::XTransientDocumentsDocumentContentIdentifierFactory,
                       frame::XTransientDocumentsDocumentContentFactory );
 
 
@@ -161,13 +166,11 @@ ContentProvider::queryContent(
 }
 
 
-// XTransientDocumentsDocumentContentFactory methods.
+// XTransientDocumentsDocumentContentIdentifierFactory methods.
 
-
-// virtual
-uno::Reference< ucb::XContent > SAL_CALL
-ContentProvider::createDocumentContent(
-        const uno::Reference< frame::XModel >& Model )
+uno::Reference<ucb::XContentIdentifier> SAL_CALL
+ContentProvider::createDocumentContentIdentifier(
+        uno::Reference<frame::XModel> const& xModel)
 {
     // model -> id -> content identifier -> queryContent
     if ( !m_xDocsMgr.is() )
@@ -178,7 +181,7 @@ ContentProvider::createDocumentContent(
             1 );
      }
 
-    OUString aDocId = tdoc_ucp::OfficeDocumentsManager::queryDocumentId( Model );
+    OUString aDocId = tdoc_ucp::OfficeDocumentsManager::queryDocumentId(xModel);
     if ( aDocId.isEmpty() )
     {
         throw lang::IllegalArgumentException(
@@ -193,6 +196,17 @@ ContentProvider::createDocumentContent(
 
     uno::Reference< ucb::XContentIdentifier > xId
         = new ::ucbhelper::ContentIdentifier( aBuffer.makeStringAndClear() );
+    return xId;
+}
+
+// XTransientDocumentsDocumentContentFactory methods.
+
+uno::Reference< ucb::XContent > SAL_CALL
+ContentProvider::createDocumentContent(
+        uno::Reference<frame::XModel> const& xModel)
+{
+    uno::Reference<ucb::XContentIdentifier> const xId(
+            createDocumentContentIdentifier(xModel));
 
     osl::MutexGuard aGuard( m_aMutex );
 
@@ -228,17 +242,14 @@ void ContentProvider::notifyDocumentClosed( const OUString & rDocId )
     ::ucbhelper::ContentRefList aAllContents;
     queryExistingContents( aAllContents );
 
-    ::ucbhelper::ContentRefList::const_iterator it  = aAllContents.begin();
-    ::ucbhelper::ContentRefList::const_iterator end = aAllContents.end();
-
     // Notify all content objects related to the closed doc.
 
     bool bFoundDocumentContent = false;
     rtl::Reference< Content > xRoot;
 
-    while ( it != end )
+    for ( const auto& rContent : aAllContents )
     {
-        Uri aUri( (*it)->getIdentifier()->getContentIdentifier() );
+        Uri aUri( rContent->getIdentifier()->getContentIdentifier() );
         OSL_ENSURE( aUri.isValid(),
                     "ContentProvider::notifyDocumentClosed - Invalid URI!" );
 
@@ -246,7 +257,7 @@ void ContentProvider::notifyDocumentClosed( const OUString & rDocId )
         {
             if ( aUri.isRoot() )
             {
-                xRoot = static_cast< Content * >( (*it).get() );
+                xRoot = static_cast< Content * >( rContent.get() );
             }
             else if ( aUri.isDocument() )
             {
@@ -265,12 +276,10 @@ void ContentProvider::notifyDocumentClosed( const OUString & rDocId )
         {
             // Inform content.
             rtl::Reference< Content > xContent
-                = static_cast< Content * >( (*it).get() );
+                = static_cast< Content * >( rContent.get() );
 
             xContent->notifyDocumentClosed();
         }
-
-        ++it;
     }
 
     if ( xRoot.is() )
@@ -291,28 +300,23 @@ void ContentProvider::notifyDocumentOpened( const OUString & rDocId )
     ::ucbhelper::ContentRefList aAllContents;
     queryExistingContents( aAllContents );
 
-    ::ucbhelper::ContentRefList::const_iterator it  = aAllContents.begin();
-    ::ucbhelper::ContentRefList::const_iterator end = aAllContents.end();
-
     // Find root content. If instantiated let it propagate document insertion.
 
-    while ( it != end )
+    for ( const auto& rContent : aAllContents )
     {
-        Uri aUri( (*it)->getIdentifier()->getContentIdentifier() );
+        Uri aUri( rContent->getIdentifier()->getContentIdentifier() );
         OSL_ENSURE( aUri.isValid(),
                     "ContentProvider::notifyDocumentOpened - Invalid URI!" );
 
         if ( aUri.isRoot() )
         {
             rtl::Reference< Content > xRoot
-                = static_cast< Content * >( (*it).get() );
+                = static_cast< Content * >( rContent.get() );
             xRoot->notifyChildInserted( rDocId );
 
             // Done.
             break;
         }
-
-        ++it;
     }
 }
 

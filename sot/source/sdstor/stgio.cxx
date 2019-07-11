@@ -26,6 +26,7 @@
 #include "stgio.hxx"
 #include <o3tl/safeint.hxx>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 
 #include <memory>
 
@@ -54,7 +55,7 @@ StgIo::~StgIo()
 
 bool StgIo::Load()
 {
-    if( m_pStrm )
+    if( GetStrm() )
     {
         if( m_aHdr.Load( *this ) )
         {
@@ -141,8 +142,8 @@ bool StgIo::CommitAll()
             m_aHdr.SetTOCStart( m_pTOC->GetStart() );
             if( m_aHdr.Store( *this ) )
             {
-                m_pStrm->Flush();
-                const ErrCode n = m_pStrm->GetError();
+                GetStrm()->Flush();
+                const ErrCode n = GetStrm()->GetError();
                 SetError( n );
 #ifdef DBG_UTIL
                 if( n==ERRCODE_NONE ) ValidateFATs();
@@ -210,8 +211,9 @@ FatError EasyFat::Mark( sal_Int32 nPage, sal_Int32 nCount, sal_Int32 nExpect )
 {
     if( nCount > 0 )
     {
-        --nCount /= GetPageSize();
-        nCount++;
+        --nCount;
+        nCount /= GetPageSize();
+        ++nCount;
     }
 
     sal_Int32 nCurPage = nPage;
@@ -369,9 +371,9 @@ FatError StgIo::ValidateFATs()
 {
     if( m_bFile )
     {
-        Validator *pV = new Validator( *this );
+        std::unique_ptr<Validator> pV(new Validator( *this ));
         bool bRet1 = !pV->IsError(), bRet2 = true ;
-        delete pV;
+        pV.reset();
 
         SvFileStream *pFileStrm = static_cast<SvFileStream *>( GetStrm() );
         if ( !pFileStrm )
@@ -382,9 +384,9 @@ FatError StgIo::ValidateFATs()
                       StreamMode::READ | StreamMode::SHARE_DENYNONE) &&
             aIo.Load() )
         {
-            pV = new Validator( aIo );
+            pV.reset(new Validator( aIo ));
             bRet2 = !pV->IsError();
-            delete pV;
+            pV.reset();
         }
 
         FatError nErr;

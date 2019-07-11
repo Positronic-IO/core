@@ -39,8 +39,8 @@ public:
     virtual void            SaveValues() override;
 
 private:
-                        ScFormEditData( const ScFormEditData& );
-//  const ScFormEditData& operator=( const ScFormEditData& r );
+    ScFormEditData(ScFormEditData const &) = delete;
+    void operator =(ScFormEditData const &) = delete;
 
     ScInputHandler*     pInputHandler;
     ScDocShell*         pScDocShell;

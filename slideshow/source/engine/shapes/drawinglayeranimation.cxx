@@ -27,6 +27,7 @@
 #include <cppuhelper/exc_hlp.hxx>
 
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/canvastools.hxx>
 #include <vcl/metaact.hxx>
@@ -63,13 +64,13 @@ namespace {
 
 class ScrollTextAnimNode
 {
-    sal_uInt32  mnDuration; // single duration
-    sal_uInt32  mnRepeat; // 0 -> endless
-    double      mfStart;
-    double      mfStop;
-    sal_uInt32  mnFrequency; // in ms
+    sal_uInt32 const  mnDuration; // single duration
+    sal_uInt32 const  mnRepeat; // 0 -> endless
+    double const      mfStart;
+    double const      mfStop;
+    sal_uInt32 const  mnFrequency; // in ms
     // forth and back change at mnRepeat%2:
-    bool        mbAlternate;
+    bool const        mbAlternate;
 
 public:
     ScrollTextAnimNode(
@@ -192,7 +193,7 @@ private:
     DrawShapeSharedPtr                          mpDrawShape;
     ShapeAttributeLayerHolder                   maShapeAttrLayer;
     GDIMetaFileSharedPtr                        mpMetaFile;
-    IntrinsicAnimationEventHandlerSharedPtr     mpListener;
+    IntrinsicAnimationEventHandlerSharedPtr const mpListener;
     canvas::tools::ElapsedTime                  maTimer;
     double                                      mfRotationAngle;
     bool                                        mbIsShapeAnimated;
@@ -648,7 +649,7 @@ void ActivityImpl::updateShapeAttributes(
         if( !::basegfx::fTools::equalZero( mfRotationAngle ))
         {
             maShapeAttrLayer.get()->setRotationAngle( mfRotationAngle );
-            double const fRotate = (mfRotationAngle * M_PI / 180.0);
+            double const fRotate = basegfx::deg2rad(mfRotationAngle);
             basegfx::B2DHomMatrix aTransform;
             // position:
             aTransform.rotate( fRotate );

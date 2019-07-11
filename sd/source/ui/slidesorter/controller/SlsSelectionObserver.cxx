@@ -27,6 +27,7 @@
 #include <model/SlsPageDescriptor.hxx>
 #include <svx/svdmodel.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 
 namespace sd { namespace slidesorter { namespace controller {
 
@@ -38,7 +39,7 @@ SelectionObserver::Context::Context (SlideSorter const & rSlideSorter)
         mpSelectionObserver->StartObservation();
 }
 
-SelectionObserver::Context::~Context()
+SelectionObserver::Context::~Context() COVERITY_NOEXCEPT_FALSE
 {
     if (mpSelectionObserver)
         mpSelectionObserver->EndObservation();

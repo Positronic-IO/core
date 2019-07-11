@@ -31,7 +31,6 @@
 
 #include <sot/storage.hxx>
 
-#include <comphelper/string.hxx>
 #include <comphelper/xmltools.hxx>
 
 #define USE_UTF8_CODEPAGE 0
@@ -101,7 +100,7 @@ VBACompressionChunk::VBACompressionChunk(SvStream& rCompressedStream, const sal_
 {
 }
 
-void setUInt16(sal_uInt8* pBuffer, size_t nPos, sal_uInt16 nVal)
+static void setUInt16(sal_uInt8* pBuffer, size_t nPos, sal_uInt16 nVal)
 {
     pBuffer[nPos] = nVal & 0xFF;
     pBuffer[nPos+1] = (nVal & 0xFF00) >> 8;
@@ -404,12 +403,7 @@ void VBAEncryption::writeVersionEnc()
 
 sal_uInt8 VBAEncryption::calculateProjKey(const OUString& rProjectKey)
 {
-    sal_uInt32 nProjKey = 0;
-        // use sal_uInt32 instead of sal_uInt8 to avoid miscompilation at least
-        // under "Microsoft (R) C/C++ Optimizing Compiler Version 18.00.31101
-        // for x64" with --enable-64-bit and non-debug, causing
-        // CppunitTest_oox_vba_encryption's TestVbaEncryption::testProjKey1 to
-        // fail with actual 53 vs. expected 223
+    sal_uInt8 nProjKey = 0;
     sal_Int32 n = rProjectKey.getLength();
     const sal_Unicode* pString = rProjectKey.getStr();
     for (sal_Int32 i = 0; i < n; ++i)

@@ -382,13 +382,12 @@ namespace chelp {
 
         typedef std::vector< css::uno::Reference< css::ucb::XContentIdentifier > > IdentSet;
         typedef std::vector< css::uno::Reference< css::sdbc::XRow > >              ItemSet;
-        typedef std::vector< OUString >                                                             PathSet;
 
         IdentSet                            m_aIdents;
         ItemSet                             m_aItems;
-        PathSet                             m_aPath;
+        std::vector<OUString>               m_aPath;
 
-        css::uno::Sequence< css::beans::Property >           m_sProperty;
+        css::uno::Sequence< css::beans::Property > const          m_sProperty;
 
         osl::Mutex                          m_aMutex;
         std::unique_ptr<comphelper::OInterfaceContainerHelper2>   m_pDisposeEventListeners;

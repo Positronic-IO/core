@@ -17,6 +17,9 @@
 #include <editutil.hxx>
 
 #include <TableFillingAndNavigationTools.hxx>
+#include <formulacell.hxx>
+#include <docfunc.hxx>
+#include <docsh.hxx>
 
 FormulaTemplate::FormulaTemplate(ScDocument* pDoc)
     : mpDoc(pDoc)
@@ -66,10 +69,10 @@ void FormulaTemplate::applyRange(const OUString& aVariable, const ScRange& aRang
     mTemplate = mTemplate.replaceAll(aVariable, aString);
 }
 
-void FormulaTemplate::applyRangeList(const OUString& aVariable, const ScRangeList& aRangeList)
+void FormulaTemplate::applyRangeList(const OUString& aVariable, const ScRangeList& aRangeList, sal_Unicode cDelimiter)
 {
     OUString aString;
-    aRangeList.Format(aString, ScRefFlags::RANGE_ABS_3D, mpDoc, mpDoc->GetAddressConvention());
+    aRangeList.Format(aString, ScRefFlags::RANGE_ABS_3D, mpDoc, mpDoc->GetAddressConvention(), cDelimiter);
     mTemplate = mTemplate.replaceAll(aVariable, aString);
 }
 
@@ -162,11 +165,15 @@ void AddressWalkerWriter::writeFormula(const OUString& aFormula)
             new ScFormulaCell(mpDocument, mCurrentAddress, aFormula, meGrammar), true);
 }
 
-void AddressWalkerWriter::writeMatrixFormula(const OUString& aFormula)
+void AddressWalkerWriter::writeMatrixFormula(const OUString& aFormula, SCCOL nCols, SCROW nRows)
 {
     ScRange aRange;
     aRange.aStart = mCurrentAddress;
     aRange.aEnd = mCurrentAddress;
+    if (nCols > 1)
+        aRange.aEnd.IncCol(nCols - 1);
+    if (nRows > 1)
+        aRange.aEnd.IncRow(nRows - 1);
     mpDocShell->GetDocFunc().EnterMatrix(aRange, nullptr, nullptr, aFormula, false, false, OUString(), meGrammar );
 }
 
@@ -199,7 +206,7 @@ void AddressWalkerWriter::writeValue(double aValue)
 
 // DataCellIterator
 
-DataCellIterator::DataCellIterator(ScRange aInputRange, bool aByColumn)
+DataCellIterator::DataCellIterator(const ScRange& aInputRange, bool aByColumn)
     : mInputRange(aInputRange)
     , mByColumn(aByColumn)
     , mCol(0)
@@ -278,9 +285,9 @@ sal_Int32 DataRangeIterator::index()
 
 // DataRangeByColumnIterator
 
-DataRangeByColumnIterator::DataRangeByColumnIterator(ScRange aInputRange) :
-    DataRangeIterator(aInputRange),
-    mCol(aInputRange.aStart.Col())
+DataRangeByColumnIterator::DataRangeByColumnIterator(const ScRange& aInputRange)
+    : DataRangeIterator(aInputRange)
+    , mCol(aInputRange.aStart.Col())
 {}
 
 bool DataRangeByColumnIterator::hasNext()
@@ -319,9 +326,9 @@ DataCellIterator DataRangeByColumnIterator::iterateCells()
 
 // DataRangeByRowIterator
 
-DataRangeByRowIterator::DataRangeByRowIterator(ScRange aInputRange) :
-    DataRangeIterator(aInputRange),
-    mRow(aInputRange.aStart.Row())
+DataRangeByRowIterator::DataRangeByRowIterator(const ScRange& aInputRange)
+    : DataRangeIterator(aInputRange)
+    , mRow(aInputRange.aStart.Row())
 {}
 
 bool DataRangeByRowIterator::hasNext()

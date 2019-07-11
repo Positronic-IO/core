@@ -26,6 +26,7 @@
 #include "TransformerActions.hxx"
 #include "TransformerBase.hxx"
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 // Used to parse Scripting Framework URLs
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
@@ -43,10 +44,10 @@ class XMLTransformerOASISEventMap_Impl:
                             NameHash_Impl, NameHash_Impl >
 {
 public:
-    explicit XMLTransformerOASISEventMap_Impl( XMLTransformerEventMapEntry *pInit );
+    explicit XMLTransformerOASISEventMap_Impl( XMLTransformerEventMapEntry const *pInit );
 };
 
-XMLTransformerOASISEventMap_Impl::XMLTransformerOASISEventMap_Impl( XMLTransformerEventMapEntry *pInit )
+XMLTransformerOASISEventMap_Impl::XMLTransformerOASISEventMap_Impl( XMLTransformerEventMapEntry const *pInit )
 {
     if( pInit )
     {
@@ -121,7 +122,7 @@ OUString XMLEventOASISTransformerContext::GetEventName(
         return (*aIter).second;
 }
 
-bool ParseURL(
+static bool ParseURL(
     const OUString& rAttrValue,
     OUString* pName, OUString* pLocation )
 {

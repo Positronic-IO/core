@@ -44,7 +44,7 @@ namespace svgio
             const sal_uInt32                mnMaxIndex;
             sal_uInt32                      mnIndex;
             basegfx::B2DCubicBezier         maCurrentSegment;
-            basegfx::B2DCubicBezierHelper*  mpB2DCubicBezierHelper;
+            std::unique_ptr<basegfx::B2DCubicBezierHelper> mpB2DCubicBezierHelper;
             double                          mfCurrentSegmentLength;
             double                          mfSegmentStartPosition;
 
@@ -72,21 +72,17 @@ namespace svgio
 
         void pathTextBreakupHelper::freeB2DCubicBezierHelper()
         {
-            if(mpB2DCubicBezierHelper)
-            {
-                delete mpB2DCubicBezierHelper;
-                mpB2DCubicBezierHelper = nullptr;
-            }
+            mpB2DCubicBezierHelper.reset();
         }
 
         basegfx::B2DCubicBezierHelper* pathTextBreakupHelper::getB2DCubicBezierHelper()
         {
             if(!mpB2DCubicBezierHelper && maCurrentSegment.isBezier())
             {
-                mpB2DCubicBezierHelper = new basegfx::B2DCubicBezierHelper(maCurrentSegment);
+                mpB2DCubicBezierHelper.reset(new basegfx::B2DCubicBezierHelper(maCurrentSegment));
             }
 
-            return mpB2DCubicBezierHelper;
+            return mpB2DCubicBezierHelper.get();
         }
 
         void pathTextBreakupHelper::advanceToPosition(double fNewPosition)
@@ -124,7 +120,6 @@ namespace svgio
             mnMaxIndex(rPolygon.isClosed() ? rPolygon.count() : rPolygon.count() - 1),
             mnIndex(0),
             maCurrentSegment(),
-            mpB2DCubicBezierHelper(nullptr),
             mfCurrentSegmentLength(0.0),
             mfSegmentStartPosition(0.0)
         {
@@ -423,7 +418,7 @@ namespace svgio
                                             fPosition,
                                             rTextStart);
 
-                                        const drawinglayer::primitive2d::Primitive2DContainer aResult(
+                                        const drawinglayer::primitive2d::Primitive2DContainer& aResult(
                                             aPathTextBreakupHelper.getResult());
 
                                         if(!aResult.empty())

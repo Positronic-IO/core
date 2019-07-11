@@ -23,16 +23,23 @@
 
 //= conversions UNO3.TimeClass <-> Tools.TimeClass (Date/Time/DateTime)
 #include <unotools/unotoolsdllapi.h>
-#include <com/sun/star/util/Date.hpp>
-#include <com/sun/star/util/Time.hpp>
-#include <com/sun/star/util/DateTime.hpp>
+#include <rtl/ustring.hxx>
+
+namespace com { namespace sun { namespace star { namespace util { struct Date; } } } }
+namespace com { namespace sun { namespace star { namespace util { struct DateTime; } } } }
+namespace com { namespace sun { namespace star { namespace util { struct Time; } } } }
 
 class Date;
-namespace tools { class Time; }
 class DateTime;
+class LocaleDataWrapper;
 
 namespace utl
 {
+    UNOTOOLS_DLLPUBLIC const LocaleDataWrapper& GetLocaleData();
+    UNOTOOLS_DLLPUBLIC DateTime GetDateTime(const css::util::DateTime& _rDT);
+    UNOTOOLS_DLLPUBLIC OUString GetDateTimeString(const css::util::DateTime& _rDT);
+    UNOTOOLS_DLLPUBLIC OUString GetDateTimeString(sal_Int32 _nDate, sal_Int32 _nTime);
+    UNOTOOLS_DLLPUBLIC OUString GetDateString(const css::util::DateTime& _rDT);
 
     UNOTOOLS_DLLPUBLIC void typeConvert(const Date& _rDate, css::util::Date& _rOut);
     UNOTOOLS_DLLPUBLIC void typeConvert(const css::util::Date& _rDate, Date& _rOut);
@@ -42,10 +49,10 @@ namespace utl
 
     UNOTOOLS_DLLPUBLIC void extractDate(const css::util::DateTime& _rDateTime, css::util::Date& _rOut);
 
-    UNOTOOLS_DLLPUBLIC ::rtl::OUString toISO8601(const css::util::DateTime& _rDateTime);
-    UNOTOOLS_DLLPUBLIC bool            ISO8601parseDateTime(const ::rtl::OUString &i_rIn, css::util::DateTime& o_rDateTime);
-    UNOTOOLS_DLLPUBLIC bool            ISO8601parseDate(const ::rtl::OUString &i_rIn, css::util::Date& o_rDate);
-    UNOTOOLS_DLLPUBLIC bool            ISO8601parseTime(const ::rtl::OUString &i_rIn, css::util::Time& o_Time);
+    UNOTOOLS_DLLPUBLIC OUString toISO8601(const css::util::DateTime& _rDateTime);
+    UNOTOOLS_DLLPUBLIC bool            ISO8601parseDateTime(const OUString &i_rIn, css::util::DateTime& o_rDateTime);
+    UNOTOOLS_DLLPUBLIC bool            ISO8601parseDate(const OUString &i_rIn, css::util::Date& o_rDate);
+    UNOTOOLS_DLLPUBLIC bool            ISO8601parseTime(const OUString &i_rIn, css::util::Time& o_Time);
 
 }   // namespace utl
 

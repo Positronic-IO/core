@@ -33,6 +33,7 @@
 
 #include "x509certificate_mscryptimpl.hxx"
 #include <comphelper/servicehelper.hxx>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <xmlsec-wrapper.h>
 #include "akmngr.hxx"
@@ -45,6 +46,7 @@
 #include <osl/nlsupport.h>
 #include <osl/process.h>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <svl/cryptosign.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::lang ;
@@ -91,7 +93,7 @@ CertErrorToString const arErrStrings[] =
     { 0x00080000, "CERT_TRUST_CTL_IS_NOT_VALID_FOR_USAGE"}
 };
 
-void traceTrustStatus(DWORD err)
+static void traceTrustStatus(DWORD err)
 {
     if (err == 0)
         SAL_INFO("xmlsecurity.xmlsec", "  " << arErrStrings[0].name);
@@ -279,7 +281,9 @@ static OUString get_system_name(const void *pvSystemStore,
     return o3tl::toU(ppwszSystemName);
 }
 
-extern "C" BOOL WINAPI cert_enum_physical_store_callback(const void *,
+extern "C" {
+
+static BOOL WINAPI cert_enum_physical_store_callback(const void *,
                                                          DWORD dwFlags,
                                                          LPCWSTR pwszStoreName,
                                                          PCERT_PHYSICAL_STORE_INFO,
@@ -294,7 +298,7 @@ extern "C" BOOL WINAPI cert_enum_physical_store_callback(const void *,
     return TRUE;
 }
 
-extern "C" BOOL WINAPI cert_enum_system_store_callback(const void *pvSystemStore,
+static BOOL WINAPI cert_enum_system_store_callback(const void *pvSystemStore,
                                                        DWORD dwFlags,
                                                        PCERT_SYSTEM_STORE_INFO,
                                                        void *,
@@ -315,6 +319,8 @@ extern "C" BOOL WINAPI cert_enum_system_store_callback(const void *pvSystemStore
         }
     }
     return TRUE;
+}
+
 }
 
 #endif
@@ -343,7 +349,7 @@ uno::Sequence< uno::Reference < XCertificate > > SecurityEnvironment_MSCryptImpl
     if( m_bEnableDefault ) {
         HCERTSTORE hSystemKeyStore ;
         DWORD      dwKeySpec;
-        HCRYPTPROV hCryptProv;
+        NCRYPT_KEY_HANDLE hCryptKey;
 
 #ifdef SAL_LOG_INFO
         CertEnumSystemStore(CERT_SYSTEM_STORE_CURRENT_USER, nullptr, nullptr, cert_enum_system_store_callback);
@@ -355,10 +361,12 @@ uno::Sequence< uno::Reference < XCertificate > > SecurityEnvironment_MSCryptImpl
             while (pCertContext)
             {
                 // for checking whether the certificate is a personal certificate or not.
+                DWORD dwFlags = CRYPT_ACQUIRE_COMPARE_KEY_FLAG | CRYPT_ACQUIRE_ONLY_NCRYPT_KEY_FLAG;
+                HCRYPTPROV_OR_NCRYPT_KEY_HANDLE* phCryptProvOrNCryptKey = &hCryptKey;
                 if(!(CryptAcquireCertificatePrivateKey(pCertContext,
-                        CRYPT_ACQUIRE_COMPARE_KEY_FLAG,
+                        dwFlags,
                         nullptr,
-                        &hCryptProv,
+                        phCryptProvOrNCryptKey,
                         &dwKeySpec,
                         nullptr)))
                 {
@@ -380,12 +388,12 @@ uno::Sequence< uno::Reference < XCertificate > > SecurityEnvironment_MSCryptImpl
 
     length = certsList.size() ;
     if( length != 0 ) {
-        int i ;
-        std::list< X509Certificate_MSCryptImpl* >::iterator xcertIt ;
+        int i = 0;
         uno::Sequence< uno::Reference< XCertificate > > certSeq( length ) ;
 
-        for( i = 0, xcertIt = certsList.begin(); xcertIt != certsList.end(); ++xcertIt, ++i ) {
-            certSeq[i] = *xcertIt ;
+        for( const auto& rXCert : certsList ) {
+            certSeq[i] = rXCert ;
+            ++i;
         }
 
         return certSeq ;
@@ -577,12 +585,12 @@ uno::Reference< XCertificate > SecurityEnvironment_MSCryptImpl::getCertificate( 
 
     }
 
-    if( cryptSerialNumber.pbData ) free( cryptSerialNumber.pbData ) ;
-    if( certInfo.Issuer.pbData ) free( certInfo.Issuer.pbData ) ;
+    free(cryptSerialNumber.pbData);
+    free(certInfo.Issuer.pbData);
 
     if( pCertContext != nullptr ) {
-        xcert = MswcryCertContextToXCert( pCertContext ) ;
-        if( pCertContext ) CertFreeCertificateContext( pCertContext ) ;
+        xcert = MswcryCertContextToXCert(pCertContext);
+        CertFreeCertificateContext(pCertContext);
     } else {
         xcert = nullptr ;
     }
@@ -727,14 +735,12 @@ uno::Reference< XCertificate > SecurityEnvironment_MSCryptImpl::createCertificat
 }
 
 uno::Reference< XCertificate > SecurityEnvironment_MSCryptImpl::createCertificateFromAscii( const OUString& asciiCertificate ) {
-    xmlChar* chCert ;
-    xmlSecSize certSize ;
 
     OString oscert = OUStringToOString( asciiCertificate , RTL_TEXTENCODING_ASCII_US ) ;
 
-    chCert = xmlStrndup( reinterpret_cast<const xmlChar*>(oscert.getStr()), static_cast<int>(oscert.getLength()) ) ;
+    xmlChar* chCert = xmlStrndup( reinterpret_cast<const xmlChar*>(oscert.getStr()), static_cast<int>(oscert.getLength()) ) ;
 
-    certSize = xmlSecBase64Decode( chCert, chCert, xmlStrlen( chCert ) ) ;
+    xmlSecSize certSize = xmlSecBase64Decode( chCert, chCert, xmlStrlen( chCert ) ) ;
 
     uno::Sequence< sal_Int8 > rawCert( certSize ) ;
     for( xmlSecSize i = 0 ; i < certSize ; i ++ )
@@ -746,12 +752,10 @@ uno::Reference< XCertificate > SecurityEnvironment_MSCryptImpl::createCertificat
 }
 
 
-HCERTSTORE getCertStoreForIntermediatCerts(
+static HCERTSTORE getCertStoreForIntermediatCerts(
     const uno::Sequence< uno::Reference< css::security::XCertificate > >& seqCerts)
 {
-    HCERTSTORE store = nullptr;
-    store = CertOpenStore(
-        CERT_STORE_PROV_MEMORY, 0, NULL, 0, nullptr);
+    HCERTSTORE store = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, NULL, 0, nullptr);
     if (store == nullptr)
         return nullptr;
 
@@ -968,18 +972,20 @@ sal_Int32 SecurityEnvironment_MSCryptImpl::getCertificateCharacters( const css::
     {
         BOOL    fCallerFreeProv ;
         DWORD   dwKeySpec ;
-        HCRYPTPROV  hProv ;
+        NCRYPT_KEY_HANDLE hKey = 0;
+        DWORD dwFlags = CRYPT_ACQUIRE_ONLY_NCRYPT_KEY_FLAG;
+        HCRYPTPROV_OR_NCRYPT_KEY_HANDLE* phCryptProvOrNCryptKey = &hKey;
         if( CryptAcquireCertificatePrivateKey( pCertContext ,
-                   0 ,
+                   dwFlags,
                    nullptr ,
-                   &hProv,
+                   phCryptProvOrNCryptKey,
                    &dwKeySpec,
                    &fCallerFreeProv )
         ) {
             characters |=  css::security::CertificateCharacters::HAS_PRIVATE_KEY ;
 
-            if( hProv != NULL && fCallerFreeProv )
-                CryptReleaseContext( hProv, 0 ) ;
+            if (hKey && fCallerFreeProv)
+                NCryptFreeObject(hKey);
         } else {
             characters &= ~ css::security::CertificateCharacters::HAS_PRIVATE_KEY ;
         }
@@ -1037,6 +1043,7 @@ xmlSecKeysMngrPtr SecurityEnvironment_MSCryptImpl::createKeysManager() {
                 m_hMySystemStore = nullptr;
                 throw uno::RuntimeException() ;
             }
+            m_hMySystemStore = nullptr;
         }
 
         //Add system root store into the keys manager.
@@ -1047,6 +1054,7 @@ xmlSecKeysMngrPtr SecurityEnvironment_MSCryptImpl::createKeysManager() {
                 m_hRootSystemStore = nullptr;
                 throw uno::RuntimeException() ;
             }
+            m_hRootSystemStore = nullptr;
         }
 
         //Add system trusted store into the keys manager.
@@ -1057,6 +1065,7 @@ xmlSecKeysMngrPtr SecurityEnvironment_MSCryptImpl::createKeysManager() {
                 m_hTrustSystemStore = nullptr;
                 throw uno::RuntimeException() ;
             }
+            m_hTrustSystemStore = nullptr;
         }
 
         //Add system CA store into the keys manager.
@@ -1067,6 +1076,7 @@ xmlSecKeysMngrPtr SecurityEnvironment_MSCryptImpl::createKeysManager() {
                 m_hCaSystemStore = nullptr;
                 throw uno::RuntimeException() ;
             }
+            m_hCaSystemStore = nullptr;
         }
     }
 

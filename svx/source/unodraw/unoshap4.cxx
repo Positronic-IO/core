@@ -18,11 +18,13 @@
  */
 
 #include <com/sun/star/util/XModifiable.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/XLinkageSupport.hpp>
 #include <com/sun/star/embed/NoVisualAreaSizeException.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
 #include <com/sun/star/task/XInteractionHandler.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 #include <vcl/virdev.hxx>
 #include <svx/svdoole2.hxx>
@@ -30,6 +32,7 @@
 #include <svx/svdpool.hxx>
 #include <comphelper/classids.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <sfx2/frmdescr.hxx>
 #include <vcl/svapp.hxx>
 
@@ -51,6 +54,7 @@
 #include <svx/svdview.hxx>
 #include <vcl/wmf.hxx>
 #include <svtools/embedhlp.hxx>
+#include <sal/log.hxx>
 
 #include <config_features.h>
 
@@ -156,8 +160,8 @@ bool SvxOle2Shape::setPropertyValueImpl( const OUString& rName, const SfxItemPro
             if( pOle )
             {
                 GraphicObject aGrafObj( xGraphic );
-                const Graphic aGraphic( aGrafObj.GetGraphic() );
-                pOle->SetGraphicToObj( aGraphic, OUString() );
+                const Graphic& aGraphic( aGrafObj.GetGraphic() );
+                pOle->SetGraphicToObj( aGraphic );
             }
             return true;
         }
@@ -422,7 +426,8 @@ bool SvxOle2Shape::createObject( const SvGlobalName &aClassName )
         }
 
         // connect the object after the visual area is set
-        SvxShape::setPropertyValue( UNO_NAME_OLE2_PERSISTNAME, Any( aTmpStr = aPersistName ) );
+        aTmpStr = aPersistName;
+        SvxShape::setPropertyValue( UNO_NAME_OLE2_PERSISTNAME, Any( aTmpStr ) );
 
         // the object is inserted during setting of PersistName property usually
         if( pOle2Obj->IsEmpty() )
@@ -536,7 +541,7 @@ const SvGlobalName SvxOle2Shape::GetClassName_Impl(OUString& rHexCLSID)
 
         if (rHexCLSID.isEmpty())
         {
-            uno::Reference < embed::XEmbeddedObject > xObj( pOle2Obj->GetObjRef() );
+            const uno::Reference < embed::XEmbeddedObject >& xObj( pOle2Obj->GetObjRef() );
             if ( xObj.is() )
             {
                 aClassName = SvGlobalName( xObj->getClassID() );
@@ -879,19 +884,21 @@ bool SvxMediaShape::setPropertyValueImpl( const OUString& rName, const SfxItemPr
                     pMedia->SetInputStream(xStream);
                 }
             }
-            catch (const css::ucb::ContentCreationException& e)
+            catch (const css::ucb::ContentCreationException&)
             {
+                css::uno::Any exc = cppu::getCaughtException();
                 throw css::lang::WrappedTargetException(
                         "ContentCreationException Setting InputStream!",
                         static_cast<OWeakObject *>(this),
-                        makeAny(e));
+                        exc);
             }
-            catch (const css::ucb::CommandFailedException& e)
+            catch (const css::ucb::CommandFailedException&)
             {
+                css::uno::Any anyEx = cppu::getCaughtException();
                 throw css::lang::WrappedTargetException(
                         "CommandFailedException Setting InputStream!",
                         static_cast<OWeakObject *>(this),
-                        makeAny(e));
+                        anyEx);
             }
 #endif
         break;
@@ -964,19 +971,19 @@ bool SvxMediaShape::getPropertyValueImpl( const OUString& rName, const SfxItemPr
                 {
                     rValue <<= pMedia->GetInputStream();
                 }
-                catch (const css::ucb::ContentCreationException& e)
+                catch (const css::ucb::ContentCreationException&)
                 {
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     throw css::lang::WrappedTargetException(
                             "ContentCreationException Getting InputStream!",
-                            static_cast < OWeakObject * > ( this ),
-                            makeAny( e ) );
+                            static_cast < OWeakObject * > ( this ), anyEx );
                 }
-                catch (const css::ucb::CommandFailedException& e)
+                catch (const css::ucb::CommandFailedException&)
                 {
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     throw css::lang::WrappedTargetException(
                             "CommandFailedException Getting InputStream!",
-                            static_cast < OWeakObject * > ( this ),
-                            makeAny( e ) );
+                            static_cast < OWeakObject * > ( this ), anyEx );
                 }
 
                 break;
@@ -1006,15 +1013,6 @@ bool SvxMediaShape::getPropertyValueImpl( const OUString& rName, const SfxItemPr
     {
         return SvxShape::getPropertyValueImpl( rName, pProperty, rValue );
     }
-}
-
-SvxDummyShapeContainer::SvxDummyShapeContainer(uno::Reference< drawing::XShapes > const & xObject):
-    m_xDummyObject(xObject)
-{
-}
-
-SvxDummyShapeContainer::~SvxDummyShapeContainer() throw()
-{
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

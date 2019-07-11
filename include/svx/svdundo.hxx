@@ -85,7 +85,7 @@ public:
 
 class SVX_DLLPUBLIC SdrUndoGroup final : public SdrUndoAction
 {
-    std::vector<SdrUndoAction*> aBuf;
+    std::vector<std::unique_ptr<SdrUndoAction>> maActions;
 
     // No expanded description of the Action (contains %O)
     OUString                    aComment;
@@ -97,10 +97,9 @@ public:
     SdrUndoGroup(SdrModel& rNewMod);
     virtual ~SdrUndoGroup() override;
 
-    void Clear();
-    sal_Int32 GetActionCount() const { return aBuf.size(); }
-    SdrUndoAction* GetAction(sal_Int32 nNum) const { return aBuf[nNum]; }
-    void AddAction(SdrUndoAction* pAct);
+    sal_Int32 GetActionCount() const { return maActions.size(); }
+    SdrUndoAction* GetAction(sal_Int32 nNum) const { return maActions[nNum].get(); }
+    void AddAction(std::unique_ptr<SdrUndoAction> pAct);
 
     void SetComment(const OUString& rStr) { aComment=rStr; }
     void SetObjDescription(const OUString& rStr) { aObjDescription=rStr; }
@@ -129,7 +128,7 @@ protected:
 
     void ImpTakeDescriptionStr(const char* pStrCacheID, OUString& rStr, bool bRepeat = false) const;
 
-    static SAL_WARN_UNUSED_RESULT OUString GetDescriptionStringForObject( const SdrObject& _rForObject, const char* pStrCacheID, bool bRepeat = false );
+    SAL_WARN_UNUSED_RESULT static OUString GetDescriptionStringForObject( const SdrObject& _rForObject, const char* pStrCacheID, bool bRepeat = false );
 
     // #94278# new method for evtl. PageChange at UNDO/REDO
     void ImpShowPageOfThisObject();
@@ -184,10 +183,9 @@ public:
 
 class SVX_DLLPUBLIC SdrUndoMoveObj final : public SdrUndoObj
 {
-    Size                        aDistance;     // Distance by which we move
+    Size const                        aDistance;     // Distance by which we move
 
 public:
-    SdrUndoMoveObj(SdrObject& rNewObj): SdrUndoObj(rNewObj) {}
     SdrUndoMoveObj(SdrObject& rNewObj, const Size& rDist): SdrUndoObj(rNewObj),aDistance(rDist) {}
     virtual ~SdrUndoMoveObj() override;
 
@@ -370,8 +368,8 @@ public:
 
 class SdrUndoObjOrdNum final : public SdrUndoObj
 {
-    sal_uInt32                      nOldOrdNum;
-    sal_uInt32                      nNewOrdNum;
+    sal_uInt32 const                      nOldOrdNum;
+    sal_uInt32 const                      nNewOrdNum;
 
 public:
     SdrUndoObjOrdNum(SdrObject& rNewObj, sal_uInt32 nOldOrdNum1, sal_uInt32 nNewOrdNum1);
@@ -387,8 +385,8 @@ public:
 
 class SVX_DLLPUBLIC SdrUndoObjectLayerChange final : public SdrUndoObj
 {
-    SdrLayerID                  maOldLayer;
-    SdrLayerID                  maNewLayer;
+    SdrLayerID const                  maOldLayer;
+    SdrLayerID const                  maNewLayer;
 
 public:
     SdrUndoObjectLayerChange(SdrObject& rObj, SdrLayerID aOldLayer, SdrLayerID aNewLayer);
@@ -406,7 +404,7 @@ protected:
                                 pNewText;
     bool                        bNewTextAvailable;
     bool                        bEmptyPresObj;
-    sal_Int32                   mnText;
+    sal_Int32 const             mnText;
 
 public:
     SdrUndoObjSetText(SdrObject& rNewObj, sal_Int32 nText );
@@ -468,9 +466,9 @@ private:
 class SdrUndoLayer : public SdrUndoAction
 {
 protected:
-    SdrLayer*                   pLayer;
+    SdrLayer* const             pLayer;
     SdrLayerAdmin*              pLayerAdmin;
-    sal_uInt16                      nNum;
+    sal_uInt16 const            nNum;
     bool                        bItsMine;
 
 protected:
@@ -511,26 +509,6 @@ public:
 
     virtual OUString GetComment() const override;
 };
-
-/**
- * Moving a Layer.
- * Create Action before the Move.
- */
-
-class SdrUndoMoveLayer : public SdrUndoLayer
-{
-    sal_uInt16                      nNewPos;
-
-public:
-    SdrUndoMoveLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel, sal_uInt16 nNewPos1)
-    :   SdrUndoLayer(nLayerNum,rNewLayerAdmin,rNewModel), nNewPos(nNewPos1) {}
-
-    virtual void Undo() override;
-    virtual void Redo() override;
-
-    virtual OUString GetComment() const override;
-};
-
 
 /*
  * Pages
@@ -646,8 +624,8 @@ public:
 
 class SVX_DLLPUBLIC SdrUndoSetPageNum final : public SdrUndoPage
 {
-    sal_uInt16                      nOldPageNum;
-    sal_uInt16                      nNewPageNum;
+    sal_uInt16 const                      nOldPageNum;
+    sal_uInt16 const                      nNewPageNum;
 
 public:
     SdrUndoSetPageNum(SdrPage& rNewPg, sal_uInt16 nOldPageNum1, sal_uInt16 nNewPageNum1)
@@ -672,8 +650,8 @@ public:
 class SdrUndoPageMasterPage : public SdrUndoPage
 {
 protected:
-    bool                        mbOldHadMasterPage;
-    SdrLayerIDSet                   maOldSet;
+    bool const                  mbOldHadMasterPage;
+    SdrLayerIDSet               maOldSet;
     sal_uInt16                  maOldMasterPageNumber;
 
 protected:
@@ -730,42 +708,40 @@ class SVX_DLLPUBLIC SdrUndoFactory
 public:
     // Shapes
     virtual ~SdrUndoFactory();
-    virtual SdrUndoAction* CreateUndoMoveObject( SdrObject& rObject );
-    virtual SdrUndoAction* CreateUndoMoveObject( SdrObject& rObject, const Size& rDist );
-    virtual SdrUndoAction* CreateUndoGeoObject( SdrObject& rObject );
-    virtual SdrUndoAction* CreateUndoAttrObject( SdrObject& rObject, bool bStyleSheet1 = false, bool bSaveText = false );
-    virtual SdrUndoAction* CreateUndoRemoveObject( SdrObject& rObject, bool bOrdNumDirect = false);
-    virtual SdrUndoAction* CreateUndoInsertObject( SdrObject& rObject, bool bOrdNumDirect = false);
-    virtual SdrUndoAction* CreateUndoDeleteObject( SdrObject& rObject, bool bOrdNumDirect = false);
-    virtual SdrUndoAction* CreateUndoNewObject( SdrObject& rObject, bool bOrdNumDirect = false);
-    virtual SdrUndoAction* CreateUndoCopyObject( SdrObject& rObject, bool bOrdNumDirect = false);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoMoveObject( SdrObject& rObject, const Size& rDist );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoGeoObject( SdrObject& rObject );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoAttrObject( SdrObject& rObject, bool bStyleSheet1 = false, bool bSaveText = false );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoRemoveObject( SdrObject& rObject, bool bOrdNumDirect = false);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoInsertObject( SdrObject& rObject, bool bOrdNumDirect = false);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoDeleteObject( SdrObject& rObject, bool bOrdNumDirect = false);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoNewObject( SdrObject& rObject, bool bOrdNumDirect = false);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoCopyObject( SdrObject& rObject, bool bOrdNumDirect = false);
 
-    virtual SdrUndoAction* CreateUndoObjectOrdNum( SdrObject& rObject, sal_uInt32 nOldOrdNum1, sal_uInt32 nNewOrdNum1);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoObjectOrdNum( SdrObject& rObject, sal_uInt32 nOldOrdNum1, sal_uInt32 nNewOrdNum1);
 
-    virtual SdrUndoAction* CreateUndoReplaceObject( SdrObject& rOldObject, SdrObject& rNewObject, bool bOrdNumDirect = false );
-    virtual SdrUndoAction* CreateUndoObjectLayerChange( SdrObject& rObject, SdrLayerID aOldLayer, SdrLayerID aNewLayer );
-    virtual SdrUndoAction* CreateUndoObjectSetText( SdrObject& rNewObj, sal_Int32 nText );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoReplaceObject( SdrObject& rOldObject, SdrObject& rNewObject, bool bOrdNumDirect = false );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoObjectLayerChange( SdrObject& rObject, SdrLayerID aOldLayer, SdrLayerID aNewLayer );
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoObjectSetText( SdrObject& rNewObj, sal_Int32 nText );
 
     // Implement Title/Description Elements UI for Writer text frames, graphics and embedded objects (#i73249#)
-    static SdrUndoAction* CreateUndoObjectStrAttr( SdrObject& rObject,
+    static std::unique_ptr<SdrUndoAction> CreateUndoObjectStrAttr( SdrObject& rObject,
                                                     SdrUndoObjStrAttr::ObjStrAttrType eObjStrAttrType,
                                                     const OUString& sOldStr,
                                                     const OUString& sNewStr );
 
     // Layer
-    virtual SdrUndoAction* CreateUndoNewLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel);
-    virtual SdrUndoAction* CreateUndoDeleteLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel);
-    virtual SdrUndoAction* CreateUndoMoveLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel, sal_uInt16 nNewPos1);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoNewLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoDeleteLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel);
 
     // Page
-    virtual SdrUndoAction* CreateUndoDeletePage(SdrPage& rPage);
-    virtual SdrUndoAction* CreateUndoNewPage(SdrPage& rPage);
-    virtual SdrUndoAction* CreateUndoCopyPage(SdrPage& rPage);
-    virtual SdrUndoAction* CreateUndoSetPageNum(SdrPage& rNewPg, sal_uInt16 nOldPageNum1, sal_uInt16 nNewPageNum1);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoDeletePage(SdrPage& rPage);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoNewPage(SdrPage& rPage);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoCopyPage(SdrPage& rPage);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoSetPageNum(SdrPage& rNewPg, sal_uInt16 nOldPageNum1, sal_uInt16 nNewPageNum1);
 
     // Master page
-    virtual SdrUndoAction* CreateUndoPageRemoveMasterPage(SdrPage& rChangedPage);
-    virtual SdrUndoAction* CreateUndoPageChangeMasterPage(SdrPage& rChangedPage);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoPageRemoveMasterPage(SdrPage& rChangedPage);
+    virtual std::unique_ptr<SdrUndoAction> CreateUndoPageChangeMasterPage(SdrPage& rChangedPage);
 };
 
 #endif // INCLUDED_SVX_SVDUNDO_HXX

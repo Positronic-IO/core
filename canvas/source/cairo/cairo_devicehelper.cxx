@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <basegfx/utils/canvastools.hxx>
 #include <basegfx/utils/unopolypolygon.hxx>
@@ -241,8 +242,8 @@ namespace cairocanvas
             const ::Point aEmptyPoint;
             bool bOldMap( mpRefDevice->IsMapModeEnabled() );
             mpRefDevice->EnableMapMode( false );
-            const ::Bitmap aTempBitmap(mpRefDevice->GetBitmap(aEmptyPoint, mpRefDevice->GetOutputSizePixel()));
-            WriteDIB(aTempBitmap, aStream, false, true);
+            const ::BitmapEx aTempBitmap(mpRefDevice->GetBitmapEx(aEmptyPoint, mpRefDevice->GetOutputSizePixel()));
+            WriteDIB(aTempBitmap, aStream, false);
             mpRefDevice->EnableMapMode( bOldMap );
 
             ++nFilePostfixCount;

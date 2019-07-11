@@ -23,6 +23,7 @@
 #include <undobase.hxx>
 #include <global.hxx>
 #include <undoblk.hxx>
+#include <columnspanset.hxx>
 
 #include <o3tl/make_unique.hxx>
 
@@ -75,7 +76,7 @@ ScDocumentUniquePtr DocFuncUtil::createDeleteContentsUndoDoc(
 }
 
 void DocFuncUtil::addDeleteContentsUndo(
-    svl::IUndoManager* pUndoMgr, ScDocShell* pDocSh, const ScMarkData& rMark,
+    SfxUndoManager* pUndoMgr, ScDocShell* pDocSh, const ScMarkData& rMark,
     const ScRange& rRange, ScDocumentUniquePtr&& pUndoDoc, InsertDeleteFlags nFlags,
     const std::shared_ptr<ScSimpleUndo::DataSpansType>& pSpans,
     bool bMulti, bool bDrawUndo )
@@ -85,7 +86,7 @@ void DocFuncUtil::addDeleteContentsUndo(
             pDocSh, rMark, rRange, std::move(pUndoDoc), bMulti, nFlags, bDrawUndo));
     pUndo->SetDataSpans(pSpans);
 
-    pUndoMgr->AddUndoAction(pUndo.release());
+    pUndoMgr->AddUndoAction(std::move(pUndo));
 }
 
 std::unique_ptr<ScSimpleUndo::DataSpansType> DocFuncUtil::getNonEmptyCellSpans(

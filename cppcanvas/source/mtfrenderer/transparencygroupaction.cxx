@@ -47,6 +47,7 @@
 #include <basegfx/tuple/b2dtuple.hxx>
 #include <basegfx/utils/canvastools.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
+#include <sal/log.hxx>
 
 #include "transparencygroupaction.hxx"
 #include <outdevstate.hxx>
@@ -119,7 +120,6 @@ namespace cppcanvas
                 // mxBufferBitmap content
                 CanvasSharedPtr                                     mpCanvas;
                 rendering::RenderState                              maState;
-                const double                                        mnAlpha;
             };
 
 
@@ -150,8 +150,7 @@ namespace cppcanvas
                 mxBufferBitmap(),
                 maLastTransformation(),
                 mpCanvas( rCanvas ),
-                maState(),
-                mnAlpha( 1.0 )
+                maState()
             {
                 tools::initRenderState(maState,rState);
                 implSetupTransform( maState, rDstPoint );
@@ -399,27 +398,10 @@ namespace cppcanvas
                 aLocalState.DeviceColor = maState.DeviceColor;
 #endif
 
-                if( ::rtl::math::approxEqual(mnAlpha, 1.0) )
-                {
-                    // no further alpha changes necessary -> draw directly
-                    mpCanvas->getUNOCanvas()->drawBitmap( mxBufferBitmap,
-                                                          mpCanvas->getViewState(),
-                                                          aLocalState );
-                }
-                else
-                {
-                    // add alpha modulation value to DeviceColor
-                    uno::Sequence<rendering::ARGBColor> aCols(1);
-                    aCols[0] = rendering::ARGBColor( mnAlpha, 1.0, 1.0, 1.0);
-                    aLocalState.DeviceColor =
-                        mpCanvas->getUNOCanvas()->getDevice()->getDeviceColorSpace()->convertFromARGB(
-                            aCols);
-
-                    mpCanvas->getUNOCanvas()->drawBitmapModulated( mxBufferBitmap,
-                                                                   mpCanvas->getViewState(),
-                                                                   aLocalState );
-                }
-
+                // no further alpha changes necessary -> draw directly
+                mpCanvas->getUNOCanvas()->drawBitmap( mxBufferBitmap,
+                                                      mpCanvas->getViewState(),
+                                                      aLocalState );
                 return true;
             }
 

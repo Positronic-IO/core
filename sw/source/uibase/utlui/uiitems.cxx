@@ -19,6 +19,7 @@
 
 #include <editeng/itemtype.hxx>
 #include <unosett.hxx>
+#include <osl/diagnose.h>
 
 #include <swtypes.hxx>
 #include <cmdid.h>
@@ -29,6 +30,7 @@
 #include <numrule.hxx>
 
 #include <editeng/eerdll.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;

@@ -3940,7 +3940,7 @@
      <table:table-cell office:value-type="float" office:value="4" calcext:value-type="float">
       <text:p>4</text:p>
      </table:table-cell>
-     <table:table-cell table:style-name="ce28" table:formula="of:=ROUND([.A12];12)=ROUND([.B6];12)" office:value-type="boolean" office:boolean-value="true" calcext:value-type="boolean">
+     <table:table-cell table:style-name="ce28" table:formula="of:=ROUND([.A6];12)=ROUND([.B6];12)" office:value-type="boolean" office:boolean-value="true" calcext:value-type="boolean">
       <text:p>TRUE</text:p>
      </table:table-cell>
      <table:table-cell table:style-name="ce32" table:formula="of:=FORMULA([.A6])" office:value-type="string" office:string-value="=SMALL(F1:F11,5)" calcext:value-type="string">
@@ -4155,12 +4155,18 @@
      <table:table-cell table:number-columns-repeated="2"/>
     </table:table-row>
     <table:table-row table:style-name="ro6">
-     <table:table-cell table:style-name="ce19" table:formula="of:=AVERAGE(SMALL([.F1:.F11];{5;2;3}))" office:value-type="float" office:value="4" calcext:value-type="float">
-      <text:p>4</text:p>
+     <table:table-cell table:style-name="ce19" table:formula="of:=AVERAGE(SMALL([.F1:.F11];{5;2;3}))" office:value-type="float" office:value="1" calcext:value-type="float">
+      <text:p>1</text:p>
      </table:table-cell>
-     <table:table-cell/>
-     <table:table-cell table:style-name="ce28"/>
-     <table:table-cell table:style-name="ce32"/>
+     <table:table-cell office:value-type="float" office:value="1" calcext:value-type="float">
+      <text:p>1</text:p>
+     </table:table-cell>
+     <table:table-cell table:style-name="ce25" table:formula="of:=ROUND([.A12];12)=ROUND([.B12];12)" office:value-type="boolean" office:boolean-value="true" calcext:value-type="boolean">
+      <text:p>TRUE</text:p>
+     </table:table-cell>
+     <table:table-cell table:style-name="ce32" table:formula="of:=FORMULA([.A12])" office:value-type="string" office:string-value="=AVERAGE(SMALL(F1:F11,{5,2,3}))" calcext:value-type="string">
+      <text:p>=AVERAGE(SMALL(F1:F11,{5,2,3}))</text:p>
+     </table:table-cell>
      <table:table-cell office:value-type="string" calcext:value-type="string">
       <text:p>AOO 32345</text:p>
      </table:table-cell>
@@ -4180,10 +4186,19 @@
      <table:table-cell table:style-name="ce27" table:number-columns-repeated="4"/>
      <table:table-cell table:number-columns-repeated="2"/>
     </table:table-row>
-    <table:table-row table:style-name="ro6">
-     <table:table-cell table:number-columns-repeated="2"/>
-     <table:table-cell table:style-name="ce28"/>
-     <table:table-cell table:style-name="ce32"/>
+    <table:table-row table:style-name="ro2">
+     <table:table-cell table:style-name="ce19" table:formula="of:=MDETERM(SMALL([.F1:.F11];{1;2|3;4}))" office:value-type="float" office:value="-13" calcext:value-type="float">
+      <text:p>-13</text:p>
+     </table:table-cell>
+     <table:table-cell office:value-type="float" office:value="-13" calcext:value-type="float">
+      <text:p>-13</text:p>
+     </table:table-cell>
+     <table:table-cell table:style-name="ce25" table:formula="of:=ROUND([.A13];12)=ROUND([.B13];12)" office:value-type="boolean" office:boolean-value="true" calcext:value-type="boolean">
+      <text:p>TRUE</text:p>
+     </table:table-cell>
+     <table:table-cell table:style-name="ce32" table:formula="of:=FORMULA([.A13])" office:value-type="string" office:string-value="=MDETERM(SMALL(F1:F11,{1,2;3,4}))" calcext:value-type="string">
+      <text:p>=MDETERM(SMALL(F1:F11,{1,2;3,4}))</text:p>
+     </table:table-cell>
      <table:table-cell table:number-columns-repeated="4"/>
      <table:table-cell office:value-type="float" office:value="900000012" calcext:value-type="float">
       <text:p>900000012</text:p>

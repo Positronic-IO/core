@@ -19,7 +19,6 @@
 
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <unotools/accessiblestatesethelper.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <ftnfrm.hxx>
@@ -55,7 +54,7 @@ SwAccessibleFootnote::SwAccessibleFootnote(
     if( pTextFootnote )
     {
         const SwDoc *pDoc = GetShell()->GetDoc();
-        sArg = pTextFootnote->GetFootnote().GetViewNumStr( *pDoc );
+        sArg = pTextFootnote->GetFootnote().GetViewNumStr(*pDoc, pFootnoteFrame->getRootFrame());
     }
 
     SetName(GetResource(pResId, &sArg));
@@ -81,7 +80,7 @@ OUString SAL_CALL SwAccessibleFootnote::getAccessibleDescription()
     if( pTextFootnote )
     {
         const SwDoc *pDoc = GetMap()->GetShell()->GetDoc();
-        sArg = pTextFootnote->GetFootnote().GetViewNumStr( *pDoc );
+        sArg = pTextFootnote->GetFootnote().GetViewNumStr(*pDoc, GetFrame()->getRootFrame());
     }
 
     return GetResource(pResId, &sArg);

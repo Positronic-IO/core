@@ -30,6 +30,7 @@
 #include <appdata.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/event.hxx>
+#include <sfxpicklist.hxx>
 #include <sfxtypes.hxx>
 #include <sfx2/doctempl.hxx>
 #include <arrdecl.hxx>
@@ -80,11 +81,7 @@ void SfxBasicManagerCreationListener::onBasicManagerCreated( const Reference< XM
 }
 
 SfxAppData_Impl::SfxAppData_Impl()
-    : pDdeService( nullptr )
-    , pDocTopics( nullptr )
-    , pTriggerTopic(nullptr)
-    , pDdeService2(nullptr)
-    , pFactArr(nullptr)
+    : pFactArr(nullptr)
     , pMatcher( nullptr )
     , m_pToolsErrorHdl(nullptr)
     , m_pSoErrorHdl(nullptr)
@@ -96,7 +93,6 @@ SfxAppData_Impl::SfxAppData_Impl()
     , pProgress(nullptr)
     , nDocModalMode(0)
     , nRescheduleLocks(0)
-    , nInReschedule(0)
     , m_xImeStatusWindow(new sfx2::appl::ImeStatusWindow(comphelper::getProcessComponentContext()))
     , pTbxCtrlFac(nullptr)
     , pStbCtrlFac(nullptr)

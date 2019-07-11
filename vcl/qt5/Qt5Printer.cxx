@@ -17,9 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Printer.hxx"
-
-bool Qt5InfoPrinter::Setup(weld::Window*, ImplJobSetup*) { return false; }
+#include <Qt5Printer.hxx>
 
 Qt5Printer::Qt5Printer(SalInfoPrinter* pInfoPrinter)
     : PspSalPrinter(pInfoPrinter)

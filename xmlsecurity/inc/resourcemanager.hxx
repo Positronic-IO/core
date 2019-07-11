@@ -21,38 +21,8 @@
 #define INCLUDED_XMLSECURITY_SOURCE_DIALOGS_RESOURCEMANAGER_HXX
 
 #include <unotools/resmgr.hxx>
-#include <tools/datetime.hxx>
-#include <com/sun/star/security/CertificateKind.hpp>
-#include <com/sun/star/util/DateTime.hpp>
-#include <com/sun/star/uno/Sequence.hxx>
 
-#include <vector>
-
-class FixedImage;
-class Control;
-class LocaleDataWrapper;
-
-namespace XmlSec
-{
-    const LocaleDataWrapper&    GetLocaleData();
-    DateTime        GetDateTime( const css::util::DateTime& _rDT );
-    OUString        GetDateTimeString( const css::util::DateTime& _rDT );
-    OUString        GetDateString( const css::util::DateTime& _rDT );
-    OUString        GetCertificateKind( const css::security::CertificateKind& rKind );
-
-    std::vector< std::pair< OUString, OUString> >
-        parseDN(const OUString& rRawString);
-    std::pair< OUString, OUString> GetDNForCertDetailsView(
-        const OUString & rRawString);
-    OUString        GetContentPart( const OUString& _rRawString );
-
-    OUString        GetHexString( const css::uno::Sequence< sal_Int8 >& _rSeq, const char* _pSep, sal_uInt16 _nLineBreak = 0xFFFF );
-}
-
-inline OUString XsResId(const char* pId)
-{
-    return Translate::get(pId, Translate::Create("xsc"));
-}
+inline OUString XsResId(const char* pId) { return Translate::get(pId, Translate::Create("xsc")); }
 
 #endif
 

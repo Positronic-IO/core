@@ -80,11 +80,11 @@ private:
     bool mbAdjustingTextFrameWidthAndHeight;
 
 protected:
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
     virtual void impl_setUnoShape(const css::uno::Reference<css::uno::XInterface>& rxUnoShape) override;
 
 public:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     // to allow sdr::properties::CustomShapeProperties access
     friend class sdr::properties::CustomShapeProperties;
@@ -220,11 +220,12 @@ public:
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
     virtual basegfx::B2DPolyPolygon TakeContour() const override;
 
-    virtual void NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject) override;
+    virtual void NbcSetOutlinerParaObject(std::unique_ptr<OutlinerParaObject> pTextObject) override;
 
     virtual SdrObject* DoConvertToPolyObj(bool bBezier, bool bAddText) const override;
 
-    virtual void SetPage( SdrPage* pNewPage ) override;
+    // react on model/page change
+    virtual void handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage) override;
 
     virtual SdrObjGeoData *NewGeoData() const override;
     virtual void SaveGeoData(SdrObjGeoData &rGeo) const override;
@@ -239,7 +240,7 @@ public:
     virtual SdrGluePointList* ForceGluePointList() override;
 
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl( sal_uInt32 nHdlNum ) const override;
+    virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // #i33136#
     static bool doConstructOrthogonal(const OUString& rName);

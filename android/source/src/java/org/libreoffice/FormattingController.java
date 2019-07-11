@@ -14,8 +14,10 @@ import android.provider.MediaStore;
 import android.support.design.widget.Snackbar;
 import android.support.v4.content.FileProvider;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.TextView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -51,6 +53,7 @@ class FormattingController implements View.OnClickListener {
         mContext.findViewById(R.id.button_italic).setOnClickListener(this);
         mContext.findViewById(R.id.button_strikethrough).setOnClickListener(this);
         mContext.findViewById(R.id.button_underlined).setOnClickListener(this);
+        mContext.findViewById(R.id.button_clearformatting).setOnClickListener(this);
 
         mContext.findViewById(R.id.button_align_left).setOnClickListener(this);
         mContext.findViewById(R.id.button_align_center).setOnClickListener(this);
@@ -60,6 +63,9 @@ class FormattingController implements View.OnClickListener {
         mContext.findViewById(R.id.button_insert_line).setOnClickListener(this);
         mContext.findViewById(R.id.button_insert_rect).setOnClickListener(this);
         mContext.findViewById(R.id.button_insert_picture).setOnClickListener(this);
+
+        mContext.findViewById(R.id.button_insert_table).setOnClickListener(this);
+        mContext.findViewById(R.id.button_delete_table).setOnClickListener(this);
 
         mContext.findViewById(R.id.button_font_shrink).setOnClickListener(this);
         mContext.findViewById(R.id.button_font_grow).setOnClickListener(this);
@@ -97,8 +103,11 @@ class FormattingController implements View.OnClickListener {
             case R.id.button_strikethrough:
                 LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:Strikeout"));
                 break;
+            case R.id.button_clearformatting:
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:ResetAttributes"));
+                break;
             case R.id.button_underlined:
-                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:Underline"));
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:UnderlineDouble"));
                 break;
             case R.id.button_align_left:
                 LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:LeftPara"));
@@ -132,6 +141,13 @@ class FormattingController implements View.OnClickListener {
                 break;
             case R.id.button_insert_picture:
                 insertPicture();
+                break;
+            case R.id.button_insert_table:
+                insertTable();
+                break;
+            case R.id.button_delete_table:
+                deleteTable();
+                break;
         }
     }
 
@@ -206,6 +222,159 @@ class FormattingController implements View.OnClickListener {
             }
         });
         builder.show();
+    }
+
+    private void insertTable() {
+        final AlertDialog.Builder insertTableBuilder = new AlertDialog.Builder(mContext);
+        insertTableBuilder.setTitle(R.string.insert_table);
+        LayoutInflater layoutInflater = mContext.getLayoutInflater();
+        View numberPicker = layoutInflater.inflate(R.layout.number_picker, null);
+        final int minValue = 1;
+        final int maxValue = 20;
+        TextView npRowPositive = numberPicker.findViewById(R.id.number_picker_rows_positive);
+        TextView npRowNegative = numberPicker.findViewById(R.id.number_picker_rows_negative);
+        TextView npColPositive = numberPicker.findViewById(R.id.number_picker_cols_positive);
+        TextView npColNegative = numberPicker.findViewById(R.id.number_picker_cols_negative);
+        final TextView npRowCount = numberPicker.findViewById(R.id.number_picker_row_count);
+        final TextView npColCount = numberPicker.findViewById(R.id.number_picker_col_count);
+
+        View.OnClickListener positiveButtonClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int rowCount = Integer.parseInt(npRowCount.getText().toString());
+                int colCount = Integer.parseInt(npColCount.getText().toString());
+                switch (v.getId()){
+                    case R.id.number_picker_rows_positive:
+                        if(rowCount < maxValue)
+                            npRowCount.setText(String.valueOf(++rowCount));
+                        break;
+                    case R.id.number_picker_cols_positive:
+                        if(colCount < maxValue)
+                            npColCount.setText(String.valueOf(++colCount));
+                        break;
+                }
+            }
+        };
+
+        View.OnClickListener negativeButtonClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int rowCount = Integer.parseInt(npRowCount.getText().toString());
+                int colCount = Integer.parseInt(npColCount.getText().toString());
+                switch (v.getId()){
+                    case R.id.number_picker_rows_negative:
+                        if(rowCount > minValue)
+                            npRowCount.setText(String.valueOf(--rowCount));
+                        break;
+                    case R.id.number_picker_cols_negative:
+                        if(colCount > minValue)
+                            npColCount.setText(String.valueOf(--colCount));
+                        break;
+                }
+            }
+        };
+
+        npRowPositive.setOnClickListener(positiveButtonClickListener);
+        npColPositive.setOnClickListener(positiveButtonClickListener);
+        npRowNegative.setOnClickListener(negativeButtonClickListener);
+        npColNegative.setOnClickListener(negativeButtonClickListener);
+
+        insertTableBuilder.setView(numberPicker);
+        insertTableBuilder.setNeutralButton(R.string.alert_cancel, null);
+        insertTableBuilder.setPositiveButton(R.string.alert_ok, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+
+                try {
+                    JSONObject cols = new JSONObject();
+                    cols.put("type", "long");
+                    cols.put("value", Integer.valueOf(npColCount.getText().toString()));
+                    JSONObject rows = new JSONObject();
+                    rows.put("type","long");
+                    rows.put("value",Integer.valueOf(npRowCount.getText().toString()));
+                    JSONObject params = new JSONObject();
+                    params.put("Columns", cols);
+                    params.put("Rows", rows);
+                    LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertTable",params.toString()));
+                    LibreOfficeMainActivity.setDocumentChanged(true);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        });
+
+        AlertDialog.Builder insertBuilder = new AlertDialog.Builder(mContext);
+        insertBuilder.setTitle(R.string.select_insert_options);
+        insertBuilder.setNeutralButton(R.string.alert_cancel, null);
+        final int[] selectedItem = new int[1];
+        insertBuilder.setSingleChoiceItems(mContext.getResources().getStringArray(R.array.insertrowscolumns), -1, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                selectedItem[0] = which;
+            }
+        });
+        insertBuilder.setPositiveButton(R.string.alert_ok, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (selectedItem[0]){
+                    case 0:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertRowsBefore"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 1:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertRowsAfter"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 2:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertColumnsBefore"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 3:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:InsertColumnsAfter"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 4:
+                        insertTableBuilder.show();
+                        break;
+
+                }
+            }
+        });
+        insertBuilder.show();
+    }
+
+    private void deleteTable() {
+        AlertDialog.Builder deleteBuilder = new AlertDialog.Builder(mContext);
+        deleteBuilder.setTitle(R.string.select_delete_options);
+        deleteBuilder.setNeutralButton(R.string.alert_cancel,null);
+        final int[] selectedItem = new int[1];
+        deleteBuilder.setSingleChoiceItems(mContext.getResources().getStringArray(R.array.deleterowcolumns), -1, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                selectedItem[0] = which;
+            }
+        });
+        deleteBuilder.setPositiveButton(R.string.alert_ok, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (selectedItem[0]){
+                    case 0:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:DeleteRows"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 1:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:DeleteColumns"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                    case 2:
+                        LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:DeleteTable"));
+                        LibreOfficeMainActivity.setDocumentChanged(true);
+                        break;
+                }
+            }
+        });
+        deleteBuilder.show();
     }
 
     private void sendImagePickingIntent() {

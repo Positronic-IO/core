@@ -17,10 +17,12 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Data.hxx"
+#include <Qt5Data.hxx>
 
 #include <QtGui/QCursor>
 #include <QtGui/QBitmap>
+
+#include <sal/log.hxx>
 
 #include <unx/x11_cursors/ase_curs.h>
 #include <unx/x11_cursors/ase_mask.h>
@@ -147,6 +149,8 @@
 #include <unx/x11_cursors/wsshow_curs.h>
 #include <unx/x11_cursors/wsshow_mask.h>
 
+#include <unx/glyphcache.hxx>
+
 Qt5Data::Qt5Data(SalInstance* pInstance)
     : GenericUnixSalData(SAL_DATA_QT5, pInstance)
 {
@@ -156,17 +160,15 @@ Qt5Data::Qt5Data(SalInstance* pInstance)
     pSVData->maNWFData.mbDockingAreaSeparateTB = true;
 }
 
+// outline dtor b/c of GlyphCache incomplete type
 Qt5Data::~Qt5Data() {}
 
 static QCursor* getQCursorFromXBM(const unsigned char* pBitmap, const unsigned char* pMask,
                                   int nWidth, int nHeight, int nXHot, int nYHot)
 {
-    QBitmap aPixmap;
-    aPixmap.loadFromData(pBitmap, nWidth * nHeight / 8, "XPM");
-    QBitmap aMask;
-    aMask.loadFromData(pMask, nWidth * nHeight / 8, "XPM");
-    aPixmap.setMask(aMask);
-    return new QCursor(aPixmap, nXHot, nYHot);
+    QBitmap aPixmap = QBitmap::fromData(QSize(nWidth, nHeight), pBitmap);
+    QBitmap aMask = QBitmap::fromData(QSize(nWidth, nHeight), pMask);
+    return new QCursor(aPixmap, aMask, nXHot, nYHot);
 }
 
 #define MAKE_CURSOR(vcl_name, name)                                                                \
@@ -202,12 +204,10 @@ QCursor& Qt5Data::getCursor(PointerStyle ePointerStyle)
             MAP_BUILTIN(PointerStyle::NESize, Qt::SizeBDiagCursor);
             MAP_BUILTIN(PointerStyle::SWSize, Qt::SizeBDiagCursor);
             MAP_BUILTIN(PointerStyle::SESize, Qt::SizeFDiagCursor);
-#if 0
-            MAP_BUILTIN( PointerStyle::WindowNSize, GDK_TOP_SIDE );
-            MAP_BUILTIN( PointerStyle::WindowSSize, GDK_BOTTOM_SIDE );
-            MAP_BUILTIN( PointerStyle::WindowWSize, GDK_LEFT_SIDE );
-            MAP_BUILTIN( PointerStyle::WindowESize, GDK_RIGHT_SIDE );
-#endif
+            MAP_BUILTIN(PointerStyle::WindowNSize, Qt::SizeVerCursor);
+            MAP_BUILTIN(PointerStyle::WindowSSize, Qt::SizeVerCursor);
+            MAP_BUILTIN(PointerStyle::WindowWSize, Qt::SizeHorCursor);
+            MAP_BUILTIN(PointerStyle::WindowESize, Qt::SizeHorCursor);
             MAP_BUILTIN(PointerStyle::WindowNWSize, Qt::SizeFDiagCursor);
             MAP_BUILTIN(PointerStyle::WindowNESize, Qt::SizeBDiagCursor);
             MAP_BUILTIN(PointerStyle::WindowSWSize, Qt::SizeBDiagCursor);
@@ -297,7 +297,8 @@ QCursor& Qt5Data::getCursor(PointerStyle ePointerStyle)
         if (!pCursor)
         {
             pCursor = new QCursor(Qt::ArrowCursor);
-            SAL_WARN("vcl.qt5", "pointer " << static_cast<int>(ePointerStyle) << "not implemented");
+            SAL_WARN("vcl.qt5",
+                     "pointer " << static_cast<int>(ePointerStyle) << " not implemented");
         }
 
         m_aCursors[ePointerStyle].reset(pCursor);
@@ -309,5 +310,14 @@ QCursor& Qt5Data::getCursor(PointerStyle ePointerStyle)
 void Qt5Data::ErrorTrapPush() {}
 
 bool Qt5Data::ErrorTrapPop(bool /*bIgnoreError*/) { return false; }
+
+bool Qt5Data::noNativeControls()
+{
+    static const bool bNoNative
+        = ((nullptr != getenv("SAL_VCL_QT5_NO_NATIVE")) && (nullptr != ImplGetSVData())
+           && ImplGetSVData()->maAppData.mxToolkitName
+           && ImplGetSVData()->maAppData.mxToolkitName->match("qt5"));
+    return bNoNative;
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

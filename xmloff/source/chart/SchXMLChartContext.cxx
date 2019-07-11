@@ -26,6 +26,7 @@
 #include "SchXMLSeries2Context.hxx"
 #include "SchXMLTools.hxx"
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/xmlement.hxx>
@@ -240,14 +241,14 @@ SchXMLChartContext::SchXMLChartContext( SchXMLImportHelper& rImpHelper,
 SchXMLChartContext::~SchXMLChartContext()
 {}
 
-bool lcl_hasServiceName(Reference<lang::XMultiServiceFactory> const & xFactory, OUString const & rServiceName)
+static bool lcl_hasServiceName(Reference<lang::XMultiServiceFactory> const & xFactory, OUString const & rServiceName)
 {
     const uno::Sequence<OUString> aServiceNames(xFactory->getAvailableServiceNames());
 
     return std::find(aServiceNames.begin(), aServiceNames.end(), rServiceName) != aServiceNames.end();
 }
 
-void lcl_setDataProvider(uno::Reference<chart2::XChartDocument> const & xChartDoc, OUString const & sDataPilotSource)
+static void lcl_setDataProvider(uno::Reference<chart2::XChartDocument> const & xChartDoc, OUString const & sDataPilotSource)
 {
     if (!xChartDoc.is())
         return;
@@ -444,7 +445,7 @@ namespace
 struct NewDonutSeries
 {
     css::uno::Reference< css::chart2::XDataSeries > m_xSeries;
-    OUString msStyleName;
+    OUString const msStyleName;
     sal_Int32 mnAttachedAxis;
 
     ::std::vector< OUString > m_aSeriesStyles;

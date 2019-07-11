@@ -19,6 +19,8 @@
 
 #include <drawingml/table/tableproperties.hxx>
 #include <drawingml/table/tablestylelist.hxx>
+#include <drawingml/textbody.hxx>
+#include <drawingml/textparagraph.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
 #include <com/sun/star/table/XTable.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -48,11 +50,8 @@ TableProperties::TableProperties()
 , mbBandCol( false )
 {
 }
-TableProperties::~TableProperties()
-{
-}
 
-void CreateTableRows( const uno::Reference< XTableRows >& xTableRows, const std::vector< TableRow >& rvTableRows )
+static void CreateTableRows( const uno::Reference< XTableRows >& xTableRows, const std::vector< TableRow >& rvTableRows )
 {
     if ( rvTableRows.size() > 1 )
         xTableRows->insertByIndex( 0, rvTableRows.size() - 1 );
@@ -67,7 +66,7 @@ void CreateTableRows( const uno::Reference< XTableRows >& xTableRows, const std:
     }
 }
 
-void CreateTableColumns( const Reference< XTableColumns >& xTableColumns, const std::vector< sal_Int32 >& rvTableGrid )
+static void CreateTableColumns( const Reference< XTableColumns >& xTableColumns, const std::vector< sal_Int32 >& rvTableGrid )
 {
     if ( rvTableGrid.size() > 1 )
         xTableColumns->insertByIndex( 0, rvTableGrid.size() - 1 );
@@ -81,7 +80,7 @@ void CreateTableColumns( const Reference< XTableColumns >& xTableColumns, const 
     }
 }
 
-void MergeCells( const uno::Reference< XTable >& xTable, sal_Int32 nCol, sal_Int32 nRow, sal_Int32 nColSpan, sal_Int32 nRowSpan )
+static void MergeCells( const uno::Reference< XTable >& xTable, sal_Int32 nCol, sal_Int32 nRow, sal_Int32 nColSpan, sal_Int32 nRowSpan )
 {
    if( xTable.is() ) try
    {
@@ -143,7 +142,7 @@ static void SetTableStyleProperties(TableStyle* &pTableStyle , sal_Int32 tblFill
     pTableStyle->getLastCol().getTextBoldStyle() = textBoldStyle;
 }
 
-TableStyle* CreateTableStyle(const OUString& styleId)
+static TableStyle* CreateTableStyle(const OUString& styleId)
 {
     TableStyle* pTableStyle = nullptr;
 
@@ -237,7 +236,7 @@ TableStyle* CreateTableStyle(const OUString& styleId)
     return pTableStyle;
 }
 
-const TableStyle& TableProperties::getUsedTableStyle( const ::oox::core::XmlFilterBase& rFilterBase, TableStyle*& rTableStyleToDelete )
+const TableStyle& TableProperties::getUsedTableStyle( const ::oox::core::XmlFilterBase& rFilterBase, std::unique_ptr<TableStyle>& rTableStyleToDelete )
 {
     ::oox::core::XmlFilterBase& rBase( const_cast< ::oox::core::XmlFilterBase& >( rFilterBase ) );
 
@@ -260,8 +259,8 @@ const TableStyle& TableProperties::getUsedTableStyle( const ::oox::core::XmlFilt
         //if the pptx just has table style id, but no table style content, we will create the table style ourselves
         if (!pTableStyle)
         {
-            rTableStyleToDelete = CreateTableStyle(aStyleId);
-            pTableStyle = rTableStyleToDelete;
+            rTableStyleToDelete.reset(CreateTableStyle(aStyleId));
+            pTableStyle = rTableStyleToDelete.get();
         }
     }
 
@@ -271,42 +270,131 @@ const TableStyle& TableProperties::getUsedTableStyle( const ::oox::core::XmlFilt
     return *pTableStyle;
 }
 
-void TableProperties::pushToPropSet( const ::oox::core::XmlFilterBase& rFilterBase,
-    const Reference < XPropertySet >& xPropSet, const TextListStylePtr& pMasterTextListStyle )
+void TableProperties::pushToPropSet(const ::oox::core::XmlFilterBase& rFilterBase,
+                                    const Reference<XPropertySet>& xPropSet,
+                                    const TextListStylePtr& pMasterTextListStyle)
 {
-    uno::Reference< XColumnRowRange > xColumnRowRange(
-         xPropSet->getPropertyValue("Model"), uno::UNO_QUERY_THROW );
+    uno::Reference<XColumnRowRange> xColumnRowRange(xPropSet->getPropertyValue("Model"),
+                                                    uno::UNO_QUERY_THROW);
 
-    CreateTableColumns( xColumnRowRange->getColumns(), mvTableGrid );
-    CreateTableRows( xColumnRowRange->getRows(), mvTableRows );
+    CreateTableColumns(xColumnRowRange->getColumns(), mvTableGrid);
+    CreateTableRows(xColumnRowRange->getRows(), mvTableRows);
 
-    TableStyle* pTableStyleToDelete = nullptr;
-    const TableStyle& rTableStyle( getUsedTableStyle( rFilterBase, pTableStyleToDelete ) );
+    std::unique_ptr<TableStyle> xTableStyleToDelete;
+    const TableStyle& rTableStyle(getUsedTableStyle(rFilterBase, xTableStyleToDelete));
     sal_Int32 nRow = 0;
-    for (auto & tableRow : mvTableRows)
+
+    for (auto& tableRow : mvTableRows)
     {
         sal_Int32 nColumn = 0;
-        for (auto & tableCell : tableRow.getTableCells())
-        {
-            TableCell& rTableCell(tableCell);
-            if ( !rTableCell.getvMerge() && !rTableCell.gethMerge() )
-            {
-                uno::Reference< XTable > xTable( xColumnRowRange, uno::UNO_QUERY_THROW );
-                if ( ( rTableCell.getRowSpan() > 1 ) || ( rTableCell.getGridSpan() > 1 ) )
-                    MergeCells( xTable, nColumn, nRow, rTableCell.getGridSpan(), rTableCell.getRowSpan() );
+        sal_Int32 nColumnSize = tableRow.getTableCells().size();
+        sal_Int32 nRemovedColumn = 0; //
 
-                Reference< XCellRange > xCellRange( xTable, UNO_QUERY_THROW );
-                rTableCell.pushToXCell( rFilterBase, pMasterTextListStyle, xCellRange->getCellByPosition( nColumn, nRow ), *this, rTableStyle,
-                    nColumn, tableRow.getTableCells().size()-1, nRow, mvTableRows.size()-1 );
+        for (sal_Int32 nColIndex = 0; nColIndex < nColumnSize; nColIndex++)
+        {
+            TableCell& rTableCell(tableRow.getTableCells().at(nColIndex));
+
+            if (!rTableCell.getvMerge() && !rTableCell.gethMerge())
+            {
+                uno::Reference<XTable> xTable(xColumnRowRange, uno::UNO_QUERY_THROW);
+                bool bMerged = false;
+
+                if ((rTableCell.getRowSpan() > 1) || (rTableCell.getGridSpan() > 1))
+                {
+                    MergeCells(xTable, nColumn, nRow, rTableCell.getGridSpan(),
+                               rTableCell.getRowSpan());
+
+                    if (rTableCell.getGridSpan() > 1)
+                    {
+                        nRemovedColumn = (rTableCell.getGridSpan() - 1);
+                        // MergeCells removes columns. Our loop does not know about those
+                        // removed columns and we skip handling those removed columns.
+                        nColIndex += nRemovedColumn;
+                        // It will adjust new column number after push current column's
+                        // props with pushToXCell.
+                        bMerged = true;
+                    }
+                }
+
+                Reference<XCellRange> xCellRange(xTable, UNO_QUERY_THROW);
+                Reference<XCell> xCell;
+
+                if (nRemovedColumn)
+                {
+                    try
+                    {
+                        xCell = xCellRange->getCellByPosition(nColumn, nRow);
+                    }
+                    // Exception can come from TableModel::getCellByPosition when a column
+                    // is removed while merging columns. So adjust again here.
+                    catch (Exception&)
+                    {
+                        xCell = xCellRange->getCellByPosition(nColumn - nRemovedColumn, nRow);
+                    }
+                }
+                else
+                    xCell = xCellRange->getCellByPosition(nColumn, nRow);
+
+                rTableCell.pushToXCell(rFilterBase, pMasterTextListStyle, xCell, *this, rTableStyle,
+                                       nColumn, tableRow.getTableCells().size() - 1, nRow,
+                                       mvTableRows.size() - 1);
+                if (bMerged)
+                    nColumn += nRemovedColumn;
             }
             ++nColumn;
         }
         ++nRow;
     }
 
-    delete pTableStyleToDelete;
+    xTableStyleToDelete.reset();
 }
 
+void TableProperties::pullFromTextBody(oox::drawingml::TextBodyPtr pTextBody, sal_Int32 nShapeWidth)
+{
+    // Create table grid and a single row.
+    sal_Int32 nNumCol = pTextBody->getTextProperties().mnNumCol;
+    std::vector<sal_Int32>& rTableGrid(getTableGrid());
+    sal_Int32 nColWidth = nShapeWidth / nNumCol;
+    for (sal_Int32 nCol = 0; nCol < nNumCol; ++nCol)
+        rTableGrid.push_back(nColWidth);
+    std::vector<drawingml::table::TableRow>& rTableRows(getTableRows());
+    rTableRows.emplace_back();
+    oox::drawingml::table::TableRow& rTableRow = rTableRows.back();
+    std::vector<oox::drawingml::table::TableCell>& rTableCells = rTableRow.getTableCells();
+
+    // Create the cells and distribute the paragraphs from pTextBody.
+    sal_Int32 nNumPara = pTextBody->getParagraphs().size();
+    sal_Int32 nParaPerCol = std::ceil(double(nNumPara) / nNumCol);
+    // Font scale of text body will be applied at a text run level.
+    sal_Int32 nFontScale = pTextBody->getTextProperties().mnFontScale;
+    size_t nPara = 0;
+    for (sal_Int32 nCol = 0; nCol < nNumCol; ++nCol)
+    {
+        rTableCells.emplace_back();
+        oox::drawingml::table::TableCell& rTableCell = rTableCells.back();
+        TextBodyPtr pCellTextBody(new TextBody);
+        rTableCell.setTextBody(pCellTextBody);
+
+        // Copy properties provided by <a:lstStyle>.
+        pCellTextBody->getTextListStyle() = pTextBody->getTextListStyle();
+
+        for (sal_Int32 nParaInCol = 0; nParaInCol < nParaPerCol; ++nParaInCol)
+        {
+            if (nPara < pTextBody->getParagraphs().size())
+            {
+                std::shared_ptr<oox::drawingml::TextParagraph> pParagraph
+                    = pTextBody->getParagraphs()[nPara];
+                if (nFontScale != 100000)
+                {
+                    for (auto& pRun : pParagraph->getRuns())
+                        pRun->getTextCharacterProperties().moFontScale = nFontScale;
+                }
+                pCellTextBody->appendParagraph(pParagraph);
+            }
+            ++nPara;
+        }
+    }
+}
 } } }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

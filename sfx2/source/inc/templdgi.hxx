@@ -31,7 +31,7 @@ class SfxTemplateControllerItem;
 #include <vcl/lstbox.hxx>
 #include <vcl/weld.hxx>
 #include <svl/lstner.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svl/eitem.hxx>
 
 #include <svl/style.hxx>
@@ -85,7 +85,6 @@ public:
     virtual bool EventNotify( NotifyEvent& rNEvt ) override;
 };
 
-typedef std::vector<OUString> ExpandedEntries_t;
 
 /** TreeListBox class for displaying the hierarchical view of the templates
 */
@@ -130,7 +129,7 @@ public:
     {
         return aStyle;
     }
-    void MakeExpanded_Impl(ExpandedEntries_t& rEntries) const;
+    void MakeExpanded_Impl(std::vector<OUString>& rEntries) const;
 
     virtual VclPtr<PopupMenu> CreateContextMenu() override;
 };
@@ -183,12 +182,12 @@ protected:
     std::unique_ptr<SfxStyleFamilies> pStyleFamilies;
     std::array<std::unique_ptr<SfxTemplateItem>, MAX_FAMILIES> pFamilyState;
     SfxStyleSheetBasePool* pStyleSheetPool;
-    VclPtr<StyleTreeListBox_Impl> pTreeBox;
     SfxObjectShell* pCurObjShell;
     css::uno::Reference<css::frame::XModuleManager2> xModuleManager;
     DeletionWatcher* m_pDeletionWatcher;
 
     VclPtr<SfxActionListBox> aFmtLb;
+    VclPtr<StyleTreeListBox_Impl> pTreeBox;
     VclPtr<CheckBox> aPreviewCheckbox;
     VclPtr<ListBox> aFilterLb;
 
@@ -270,7 +269,7 @@ protected:
     void Update_Impl();
     void UpdateFamily_Impl();
 
-    // In which FamilyState do I have to look , in order to get the
+    // In which FamilyState do I have to look, in order to get the
     // information of the ith Family in the pStyleFamilies.
     sal_uInt16 StyleNrToInfoOffset( sal_uInt16 i );
 

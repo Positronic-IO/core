@@ -20,15 +20,19 @@
 #include "ucblockbytes.hxx"
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <comphelper/processfactory.hxx>
 #include <salhelper/condition.hxx>
 #include <osl/thread.hxx>
 #include <osl/diagnose.h>
 #include <tools/urlobj.hxx>
+#include <tools/solar.h>
 #include <ucbhelper/interactionrequest.hxx>
 #include <com/sun/star/task/XInteractionAbort.hpp>
 #include <com/sun/star/ucb/InteractiveNetworkConnectException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/UnsupportedDataSinkException.hpp>
 #include <com/sun/star/ucb/InteractiveIOException.hpp>
 #include <com/sun/star/io/IOException.hpp>
@@ -339,10 +343,7 @@ public:
         const Reference< XStream >& aStream
     ) override;
 
-    virtual Reference<XStream> SAL_CALL
-    getStream (
-        void
-    ) override
+    virtual Reference<XStream> SAL_CALL getStream () override
     {
         osl::MutexGuard aGuard(m_aMutex);
         return m_xStream;
@@ -368,10 +369,7 @@ public:
         const Reference<XInputStream> &rxInputStream
     ) override;
 
-    virtual Reference<XInputStream> SAL_CALL
-    getInputStream (
-        void
-    ) override
+    virtual Reference<XInputStream> SAL_CALL getInputStream() override
     {
         osl::MutexGuard aGuard(m_aMutex);
         return m_xStream;
@@ -970,7 +968,6 @@ static bool UCBOpenContentSync_(
 
 UcbLockBytes::UcbLockBytes()
     : m_aExpireDate( DateTime::EMPTY )
-    , m_xInputStream (nullptr)
     , m_nError( ERRCODE_NONE )
     , m_bTerminated  (false)
     , m_bDontClose( false )
@@ -1242,10 +1239,9 @@ ErrCode UcbLockBytes::SetSize (sal_uInt64 const nNewSize)
     if ( nSize < nNewSize )
     {
         std::size_t nDiff = nNewSize-nSize, nCount=0;
-        sal_uInt8* pBuffer = new sal_uInt8[ nDiff ];
-        memset(pBuffer, 0, nDiff); // initialize for enhanced security
-        WriteAt( nSize, pBuffer, nDiff, &nCount );
-        delete[] pBuffer;
+        std::unique_ptr<sal_uInt8[]> pBuffer(new sal_uInt8[ nDiff ]);
+        memset(pBuffer.get(), 0, nDiff); // initialize for enhanced security
+        WriteAt( nSize, pBuffer.get(), nDiff, &nCount );
         if ( nCount != nDiff )
             return ERRCODE_IO_CANTWRITE;
     }

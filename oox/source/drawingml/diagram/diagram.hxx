@@ -73,7 +73,6 @@ struct Point
         mnMaxChildren(-1),
         mnPreferredChildren(-1),
         mnDirection(XML_norm),
-        mnHierarchyBranch(XML_std),
         mnResizeHandles(XML_rel),
         mnCustomAngle(-1),
         mnPercentageNeighbourWidth(-1),
@@ -118,7 +117,7 @@ struct Point
     sal_Int32     mnMaxChildren;
     sal_Int32     mnPreferredChildren;
     sal_Int32     mnDirection;
-    sal_Int32     mnHierarchyBranch;
+    OptValue<sal_Int32> moHierarchyBranch;
     sal_Int32     mnResizeHandles;
     sal_Int32     mnCustomAngle;
     sal_Int32     mnPercentageNeighbourWidth;
@@ -161,8 +160,14 @@ public:
     typedef std::map< OUString,
                       std::vector<dgm::Point*> >   PointsNameMap;
     typedef std::map< OUString, const dgm::Connection* > ConnectionNameMap;
+    struct SourceIdAndDepth
+    {
+        OUString msSourceId;
+        sal_Int32 mnDepth = 0;
+    };
+    /// Tracks connections: destination id -> {destination order, details} map.
     typedef std::map< OUString,
-                      std::vector<std::pair<OUString,sal_Int32> > > StringMap;
+                      std::map<sal_Int32, SourceIdAndDepth > > StringMap;
 
     DiagramData();
     FillPropertiesPtr & getFillProperties()

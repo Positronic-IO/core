@@ -28,11 +28,11 @@ Stmt const * lookThroughExprWithCleanups(Stmt const * stmt) {
 }
 
 class CommaOperator:
-    public RecursiveASTVisitor<CommaOperator>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<CommaOperator>
 {
 public:
     explicit CommaOperator(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override
     {
@@ -97,11 +97,11 @@ bool CommaOperator::VisitBinComma(const BinaryOperator* binaryOp)
     // winsock2.h (TODO: improve heuristic of determining that the whole
     // binaryOp is part of a single macro body expansion):
     if (compiler.getSourceManager().isMacroBodyExpansion(
-            binaryOp->getLocStart())
+            compat::getBeginLoc(binaryOp))
         && compiler.getSourceManager().isMacroBodyExpansion(
             binaryOp->getOperatorLoc())
         && compiler.getSourceManager().isMacroBodyExpansion(
-            binaryOp->getLocEnd())
+            compat::getEndLoc(binaryOp))
         && ignoreLocation(
             compiler.getSourceManager().getSpellingLoc(
                 binaryOp->getOperatorLoc())))

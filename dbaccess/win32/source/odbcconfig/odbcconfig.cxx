@@ -23,6 +23,7 @@
 #endif
 #include <windows.h>
 #include <sqlext.h>
+#include <comphelper/scopeguard.hxx>
 
 // the name of the library which contains the SQLManageDataSources function
 #define ODBC_UI_LIB_NAME    L"ODBCCP32.DLL"
@@ -31,7 +32,7 @@
 typedef SQLRETURN (SQL_API* TSQLManageDataSource) (SQLHWND hwndParent);
 
 // displays the error text for the last error (GetLastError), and returns this error value
-int displayLastError()
+static int displayLastError()
 {
     DWORD   dwError = GetLastError();
 
@@ -57,7 +58,7 @@ int displayLastError()
 
 /** registers the window class for our application's main window
 */
-BOOL registerWindowClass( HINSTANCE _hAppInstance )
+static BOOL registerWindowClass( HINSTANCE _hAppInstance )
 {
     WNDCLASSEXW wcx;
 
@@ -78,7 +79,7 @@ BOOL registerWindowClass( HINSTANCE _hAppInstance )
 }
 
 /// initializes the application instances
-HWND initInstance( HINSTANCE _hAppInstance )
+static HWND initInstance( HINSTANCE _hAppInstance )
 {
     HWND hWindow = CreateWindowW(
         L"ODBCConfigMainClass", // name of window class
@@ -113,6 +114,7 @@ extern "C" int APIENTRY wWinMain( HINSTANCE _hAppInstance, HINSTANCE, LPWSTR, in
         hModule = LoadLibraryExW( ODBC_UI_LIB_NAME, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH );
     if ( hModule == nullptr )
         return displayLastError();
+    comphelper::ScopeGuard hModuleReleaser([hModule]() { FreeLibrary(hModule); });
 
     FARPROC pManageDSProc = GetProcAddress( hModule, "SQLManageDataSources" );
     if ( pManageDSProc == nullptr )
@@ -121,8 +123,6 @@ extern "C" int APIENTRY wWinMain( HINSTANCE _hAppInstance, HINSTANCE, LPWSTR, in
     TSQLManageDataSource pManageDS = reinterpret_cast<TSQLManageDataSource>(pManageDSProc);
     if ( !( (*pManageDS)( hAppWindow ) ) )
         return displayLastError();
-
-    FreeLibrary( hModule );
 
     return 0;
 }

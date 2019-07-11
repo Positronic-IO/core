@@ -57,10 +57,10 @@ namespace chelp {
     {
     private:
 
-        OUString m_aStartId;
-        OUString m_aProgramSwitch;
-        OUString m_aTitle;
-        int m_nOrder;
+        OUString const m_aStartId;
+        OUString const m_aProgramSwitch;
+        OUString const m_aTitle;
+        int const m_nOrder;
 
     public:
 
@@ -233,7 +233,7 @@ namespace chelp {
         css::uno::Reference< css::lang::XMultiComponentFactory > m_xSMgr;
         css::uno::Reference< css::ucb::XSimpleFileAccess3 >      m_xSFA;
 
-        bool   m_bShowBasic;
+        bool const   m_bShowBasic;
 
         std::vector<char> m_vCustomCSSDoc;
         OUString m_aCSS;
@@ -257,16 +257,16 @@ namespace chelp {
 
         std::vector< OUString >    m_avModules;
 
-        typedef std::unordered_map< OUString,helpdatafileproxy::Hdf* >   DatabasesTable;
+        typedef std::unordered_map< OUString, std::unique_ptr<helpdatafileproxy::Hdf> >   DatabasesTable;
         DatabasesTable m_aDatabases;         // Language and module dependent databases
 
         typedef std::unordered_map< OUString,OUString > LangSetTable;
         LangSetTable m_aLangSet;   // Mapping to of lang-country to lang
 
-        typedef std::unordered_map< OUString,StaticModuleInformation* > ModInfoTable;
+        typedef std::unordered_map< OUString, std::unique_ptr<StaticModuleInformation> > ModInfoTable;
         ModInfoTable m_aModInfo;   // Module information
 
-        typedef std::unordered_map< OUString,KeywordInfo* > KeywordInfoTable;
+        typedef std::unordered_map< OUString, std::unique_ptr<KeywordInfo> > KeywordInfoTable;
         KeywordInfoTable m_aKeywordInfo;   // Module information
 
         typedef
@@ -387,7 +387,7 @@ namespace chelp {
             const css::uno::Reference< css::deployment::XPackage >& xPackage,
             OUString* o_pExtensionPath, OUString* o_pExtensionRegistryPath );
 
-        bool                                                                        m_bHelpText;
+        bool const                                                                        m_bHelpText;
 
     }; // end class DataBaseIterator
 

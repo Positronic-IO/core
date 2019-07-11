@@ -23,23 +23,35 @@
 #include <tools/diagnose_ex.h>
 #include <svtools/svtresid.hxx>
 #include <svtools/strings.hrc>
-
+#include <vcl/svapp.hxx>
+#include <stack>
 
 namespace svt
 {
-
-
     //= WizardPageImplData
-
     OWizardPage::OWizardPage(vcl::Window *pParent, const OString& rID,
         const OUString& rUIXMLDescription)
         : TabPage(pParent, rID, rUIXMLDescription)
     {
     }
 
+    OWizardPage::OWizardPage(TabPageParent pParent, const OUString& rUIXMLDescription, const OString& rID)
+        : TabPage(pParent.pPage ? Application::GetDefDialogParent() : pParent.pParent.get()) //just drag this along hidden in this scenario
+        , m_xBuilder(pParent.pPage ? Application::CreateBuilder(pParent.pPage, rUIXMLDescription)
+                                   : Application::CreateInterimBuilder(this, rUIXMLDescription))
+        , m_xContainer(m_xBuilder->weld_container(rID))
+    {
+    }
+
     OWizardPage::~OWizardPage()
     {
         disposeOnce();
+    }
+
+    void OWizardPage::dispose()
+    {
+        m_xBuilder.reset();
+        TabPage::dispose();
     }
 
     void OWizardPage::initializePage()
@@ -538,7 +550,7 @@ namespace svt
 
     bool OWizardMachine::travelPrevious()
     {
-        DBG_ASSERT(m_pImpl->aStateHistory.size() > 0, "OWizardMachine::travelPrevious: have no previous page!");
+        DBG_ASSERT(!m_pImpl->aStateHistory.empty(), "OWizardMachine::travelPrevious: have no previous page!");
 
         // allowed to leave the current page?
         if ( !prepareLeaveCurrentState( eTravelBackward ) )

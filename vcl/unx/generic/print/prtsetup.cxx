@@ -27,7 +27,7 @@
 
 using namespace psp;
 
-void RTSDialog::insertAllPPDValues(weld::ComboBoxText& rBox, const PPDParser* pParser, const PPDKey* pKey )
+void RTSDialog::insertAllPPDValues(weld::ComboBox& rBox, const PPDParser* pParser, const PPDKey* pKey )
 {
     if( ! pKey || ! pParser )
         return;
@@ -47,7 +47,7 @@ void RTSDialog::insertAllPPDValues(weld::ComboBoxText& rBox, const PPDParser* pP
         if( m_aJobData.m_aContext.checkConstraints( pKey, pValue ) )
         {
             if (nCurrentPos == -1)
-                rBox.insert(-1, sId, aOptionText);
+                rBox.append(sId, aOptionText);
         }
         else
         {
@@ -139,13 +139,13 @@ RTSPaperPage::RTSPaperPage(weld::Widget* pPage, RTSDialog* pDialog)
     , m_xContainer(m_xBuilder->weld_widget("PrinterPaperPage"))
     , m_xCbFromSetup(m_xBuilder->weld_check_button("papersizefromsetup"))
     , m_xPaperText(m_xBuilder->weld_label("paperft"))
-    , m_xPaperBox(m_xBuilder->weld_combo_box_text("paperlb"))
+    , m_xPaperBox(m_xBuilder->weld_combo_box("paperlb"))
     , m_xOrientText(m_xBuilder->weld_label("orientft"))
-    , m_xOrientBox(m_xBuilder->weld_combo_box_text("orientlb"))
+    , m_xOrientBox(m_xBuilder->weld_combo_box("orientlb"))
     , m_xDuplexText(m_xBuilder->weld_label("duplexft"))
-    , m_xDuplexBox(m_xBuilder->weld_combo_box_text("duplexlb"))
+    , m_xDuplexBox(m_xBuilder->weld_combo_box("duplexlb"))
     , m_xSlotText(m_xBuilder->weld_label("slotft"))
-    , m_xSlotBox(m_xBuilder->weld_combo_box_text("slotlb"))
+    , m_xSlotBox(m_xBuilder->weld_combo_box("slotlb"))
 {
     //PrinterPaperPage
     m_xPaperBox->connect_changed( LINK( this, RTSPaperPage, SelectHdl ) );
@@ -230,7 +230,7 @@ void RTSPaperPage::update()
     }
 }
 
-IMPL_LINK( RTSPaperPage, SelectHdl, weld::ComboBoxText&, rBox, void )
+IMPL_LINK( RTSPaperPage, SelectHdl, weld::ComboBox&, rBox, void )
 {
     const PPDKey* pKey = nullptr;
     if( &rBox == m_xPaperBox.get() )
@@ -284,9 +284,9 @@ RTSDevicePage::RTSDevicePage(weld::Widget* pPage, RTSDialog* pParent)
     , m_xPPDKeyBox(m_xBuilder->weld_tree_view("options"))
     , m_xPPDValueBox(m_xBuilder->weld_tree_view("values"))
     , m_xCustomEdit(m_xBuilder->weld_entry("custom"))
-    , m_xLevelBox(m_xBuilder->weld_combo_box_text("level"))
-    , m_xSpaceBox(m_xBuilder->weld_combo_box_text("colorspace"))
-    , m_xDepthBox(m_xBuilder->weld_combo_box_text("colordepth"))
+    , m_xLevelBox(m_xBuilder->weld_combo_box("level"))
+    , m_xSpaceBox(m_xBuilder->weld_combo_box("colorspace"))
+    , m_xDepthBox(m_xBuilder->weld_combo_box("colordepth"))
 {
     m_aReselectCustomIdle.SetInvokeHandler(LINK(this, RTSDevicePage, ImplHandleReselectHdl));
     m_aReselectCustomIdle.SetDebugName("RTSDevicePage m_aReselectCustomIdle");
@@ -329,7 +329,8 @@ RTSDevicePage::RTSDevicePage(weld::Widget* pPage, RTSDialog* pParent)
             || int(bAutoIsPDF) == m_pParent->m_aJobData.m_nPDFDevice);
 
     OUString sStr = m_xLevelBox->get_text(0);
-    m_xLevelBox->insert(0, m_xLevelBox->get_id(0), sStr.replaceAll("%s", bAutoIsPDF ? m_xLevelBox->get_text(5) : m_xLevelBox->get_text(1)));
+    OUString sId = m_xLevelBox->get_id(0);
+    m_xLevelBox->insert(0, sStr.replaceAll("%s", bAutoIsPDF ? m_xLevelBox->get_text(5) : m_xLevelBox->get_text(1)), &sId, nullptr, nullptr);
     m_xLevelBox->remove(1);
 
     for (int i = 0; i < m_xLevelBox->get_count(); ++i)
@@ -367,7 +368,7 @@ RTSDevicePage::RTSDevicePage(weld::Widget* pPage, RTSDialog* pParent)
                 pKey->getGroup() != "InstallableOptions")
             {
                 OUString aEntry( m_pParent->m_aJobData.m_pParser->translateKey( pKey->getKey() ) );
-                m_xPPDKeyBox->append(OUString::number(reinterpret_cast<sal_Int64>(pKey)), aEntry, "");
+                m_xPPDKeyBox->append(OUString::number(reinterpret_cast<sal_Int64>(pKey)), aEntry);
             }
         }
     }
@@ -467,7 +468,7 @@ void RTSDevicePage::FillValueBox( const PPDKey* pKey )
                 aEntry = VclResId(SV_PRINT_CUSTOM_TXT);
             else
                 aEntry = m_pParent->m_aJobData.m_pParser->translateOption( pKey->getKey(), pValue->m_aOption);
-            m_xPPDValueBox->append(OUString::number(reinterpret_cast<sal_Int64>(pValue)), aEntry, "");
+            m_xPPDValueBox->append(OUString::number(reinterpret_cast<sal_Int64>(pValue)), aEntry);
         }
     }
     pValue = m_pParent->m_aJobData.m_aContext.getValue( pKey );

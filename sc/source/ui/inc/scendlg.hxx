@@ -21,13 +21,10 @@
 #define INCLUDED_SC_SOURCE_UI_INC_SCENDLG_HXX
 
 #include <vcl/dialog.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
-#include <svtools/svmedit.hxx>
-#include <svtools/ctrlbox.hxx>
 
 enum class ScScenarioFlags;
+class Edit;
 
 class SvxColorListBox;
 
@@ -53,7 +50,7 @@ private:
     VclPtr<CheckBox>           m_pCbProtect;
     VclPtr<OKButton>           m_pBtnOk;
     const OUString      aDefScenarioName;
-    bool                bIsEdit;
+    bool const                bIsEdit;
 
     DECL_LINK( OkHdl, Button*, void);
     DECL_LINK( EnableHdl, Button*, void );

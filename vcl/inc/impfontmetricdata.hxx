@@ -23,6 +23,7 @@
 #include <vcl/dllapi.h>
 #include <tools/ref.hxx>
 #include "fontattributes.hxx"
+#include "sft.hxx"
 
 #include <vector>
 
@@ -96,8 +97,10 @@ public:
                                         int nUPEM);
 
 private:
+    bool            ShouldUseWinMetrics(vcl::TTGlobalFontInfo& rInfo);
+
     // font instance attributes from the font request
-    long            mnHeight;                   // Font size
+    long const      mnHeight;                   // Font size
     long            mnWidth;                    // Reference Width
     short           mnOrientation;              // Rotation in 1/10 degrees
 

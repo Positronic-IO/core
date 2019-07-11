@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <config_cairo_canvas.h>
 
@@ -16,13 +17,13 @@
 #include <unx/gtk/gtkdata.hxx>
 #include <unx/gtk/gtkinst.hxx>
 #include <unx/gtk/gtkgdi.hxx>
+#include <unx/gtk/gtkbackend.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/settings.hxx>
 #include <unx/fontmanager.hxx>
+#include <headless/CustomWidgetDraw.hxx>
+
 #include "cairo_gtk3_cairo.hxx"
-#if defined(GDK_WINDOWING_WAYLAND)
-#   include <gdk/gdkwayland.h>
-#endif
 #include <boost/optional.hpp>
 
 GtkStyleContext* GtkSalGraphics::mpWindowStyle = nullptr;
@@ -384,19 +385,37 @@ static GtkWidget* gTreeViewWidget;
 
 namespace
 {
-    void parent_styles_context_set_state(GtkStyleContext* context, GtkStateFlags flags)
+    void style_context_set_state(GtkStyleContext* context, GtkStateFlags flags)
     {
-        while ((context = gtk_style_context_get_parent(context)))
+        do
         {
             gtk_style_context_set_state(context, flags);
         }
+        while ((context = gtk_style_context_get_parent(context)));
     }
 
-    void style_context_set_state(GtkStyleContext* context, GtkStateFlags flags)
+    class StyleContextSave
     {
-        gtk_style_context_set_state(context, flags);
-        parent_styles_context_set_state(context, flags);
-    }
+    private:
+        std::vector<std::pair<GtkStyleContext*, GtkStateFlags>> m_aStates;
+    public:
+        void save(GtkStyleContext* context)
+        {
+            do
+            {
+                m_aStates.emplace_back(context, gtk_style_context_get_state(context));
+            }
+            while ((context = gtk_style_context_get_parent(context)));
+        }
+        void restore()
+        {
+            for (auto a = m_aStates.rbegin(); a != m_aStates.rend(); ++a)
+            {
+                gtk_style_context_set_state(a->first, a->second);
+            }
+            m_aStates.clear();
+        }
+    };
 
     tools::Rectangle render_common(GtkStyleContext *pContext, cairo_t *cr, const tools::Rectangle &rIn, GtkStateFlags flags)
     {
@@ -1147,14 +1166,17 @@ void GtkSalGraphics::PaintSpinButton(GtkStateFlags flags,
 
 #define FALLBACK_ARROW_SIZE 11 * 0.85
 
-tools::Rectangle GtkSalGraphics::NWGetComboBoxButtonRect(
+tools::Rectangle GtkSalGraphics::NWGetComboBoxButtonRect(ControlType nType,
                                                    ControlPart nPart,
                                                    tools::Rectangle aAreaRect )
 {
     tools::Rectangle    aButtonRect;
 
     GtkBorder padding;
-    gtk_style_context_get_padding( mpButtonStyle, gtk_style_context_get_state(mpButtonStyle), &padding);
+    if (nType == ControlType::Listbox)
+        gtk_style_context_get_padding(mpListboxButtonStyle, gtk_style_context_get_state(mpListboxButtonStyle), &padding);
+    else
+        gtk_style_context_get_padding(mpButtonStyle, gtk_style_context_get_state(mpButtonStyle), &padding);
 
     gint nArrowWidth = FALLBACK_ARROW_SIZE;
     if (gtk_check_version(3, 20, 0) == nullptr)
@@ -1207,7 +1229,7 @@ void GtkSalGraphics::PaintCombobox( GtkStateFlags flags, cairo_t *cr,
     // plus its actual draw rect excluding adornment
     areaRect = rControlRectangle;
 
-    buttonRect = NWGetComboBoxButtonRect( ControlPart::ButtonDown, areaRect );
+    buttonRect = NWGetComboBoxButtonRect(ControlType::Combobox, ControlPart::ButtonDown, areaRect);
 
     tools::Rectangle        aEditBoxRect( areaRect );
     aEditBoxRect.SetSize( Size( areaRect.GetWidth() - buttonRect.GetWidth(), aEditBoxRect.GetHeight() ) );
@@ -2163,10 +2185,92 @@ static gfloat getArrowSize(GtkStyleContext* context)
     return arrow_size;
 }
 
+namespace
+{
+    void draw_vertical_separator(GtkStyleContext *context, cairo_t *cr, const tools::Rectangle& rControlRegion)
+    {
+        long nX = 0;
+        long nY = 0;
+
+        const bool bNewStyle = gtk_check_version(3, 20, 0) == nullptr;
+
+        gint nSeparatorWidth = 1;
+
+        if (bNewStyle)
+        {
+            gtk_style_context_get(context,
+                gtk_style_context_get_state(context),
+                "min-width", &nSeparatorWidth, nullptr);
+        }
+
+        gint nHalfSeparatorWidth = nSeparatorWidth / 2;
+        gint nHalfRegionWidth = rControlRegion.GetWidth() / 2;
+
+        nX = nX + nHalfRegionWidth - nHalfSeparatorWidth;
+        nY = rControlRegion.GetHeight() > 5 ? 1 : 0;
+        int nHeight = rControlRegion.GetHeight() - (2 * nY);
+
+        if (bNewStyle)
+        {
+            gtk_render_background(context, cr, nX, nY, nSeparatorWidth, nHeight);
+            gtk_render_frame(context, cr, nX, nY, nSeparatorWidth, nHeight);
+        }
+        else
+        {
+            gtk_render_line(context, cr, nX, nY, nX, nY + nHeight);
+        }
+    }
+
+    void draw_horizontal_separator(GtkStyleContext *context, cairo_t *cr, const tools::Rectangle& rControlRegion)
+    {
+        long nX = 0;
+        long nY = 0;
+
+        const bool bNewStyle = gtk_check_version(3, 20, 0) == nullptr;
+
+        gint nSeparatorHeight = 1;
+
+        if (bNewStyle)
+        {
+            gtk_style_context_get(context,
+                gtk_style_context_get_state(context),
+                "min-height", &nSeparatorHeight, nullptr);
+        }
+
+        gint nHalfSeparatorHeight = nSeparatorHeight / 2;
+        gint nHalfRegionHeight = rControlRegion.GetHeight() / 2;
+
+        nY = nY + nHalfRegionHeight - nHalfSeparatorHeight;
+        nX = rControlRegion.GetWidth() > 5 ? 1 : 0;
+        int nWidth = rControlRegion.GetWidth() - (2 * nX);
+
+        if (bNewStyle)
+        {
+            gtk_render_background(context, cr, nX, nY, nWidth, nSeparatorHeight);
+            gtk_render_frame(context, cr, nX, nY, nWidth, nSeparatorHeight);
+        }
+        else
+        {
+            gtk_render_line(context, cr, nX, nY, nX + nWidth, nY);
+        }
+    }
+}
+
 bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, const tools::Rectangle& rControlRegion,
                                             ControlState nState, const ImplControlValue& rValue,
-                                            const OUString& )
+                                            const OUString& aCaptions)
 {
+    if (m_pWidgetDraw)
+    {
+        bool bReturn = SvpSalGraphics::drawNativeControl(nType, nPart, rControlRegion,
+                                                         nState, rValue, aCaptions);
+
+        if (bReturn && !rControlRegion.IsEmpty())
+            mpFrame->damaged(rControlRegion.Left(), rControlRegion.Top(), rControlRegion.GetWidth(), rControlRegion.GetHeight());
+
+        return bReturn;
+    }
+
     RenderType renderType = nPart == ControlPart::Focus ? RenderType::Focus : RenderType::BackgroundAndFrame;
     GtkStyleContext *context = nullptr;
     const gchar *styleClass = nullptr;
@@ -2406,6 +2510,8 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
     long nWidth = rControlRegion.GetWidth();
     long nHeight = rControlRegion.GetHeight();
 
+    StyleContextSave aContextState;
+    aContextState.save(context);
     style_context_set_state(context, flags);
 
     if (styleClass)
@@ -2440,41 +2546,14 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
         break;
     case RenderType::ToolbarSeparator:
     {
-        const bool bNewStyle = gtk_check_version(3, 20, 0) == nullptr;
-
-        gint nSeparatorWidth = 1;
-
-        if (bNewStyle)
-        {
-            gtk_style_context_get(context,
-                gtk_style_context_get_state(context),
-                "min-width", &nSeparatorWidth, nullptr);
-        }
-
-        gint nHalfSeparatorWidth = nSeparatorWidth / 2;
-        gint nHalfRegionWidth = rControlRegion.GetWidth() / 2;
-
-        nX = nX + nHalfRegionWidth - nHalfSeparatorWidth;
-        nWidth = nSeparatorWidth;
-        nY = rControlRegion.GetHeight() * 0.1;
-        nHeight = rControlRegion.GetHeight() - (2 * nY);
-
-        if (bNewStyle)
-        {
-            gtk_render_background(context, cr, nX, nY, nSeparatorWidth, nHeight);
-            gtk_render_frame(context, cr, nX, nY, nSeparatorWidth, nHeight);
-        }
-        else
-        {
-            gtk_render_line(context, cr, nX, nY, nX, nY + nHeight);
-        }
+        draw_vertical_separator(context, cr, rControlRegion);
         break;
     }
     case RenderType::Separator:
         if (nPart == ControlPart::SeparatorHorz)
-            gtk_render_line(context, cr, 0, nHeight / 2, nWidth - 1, nHeight / 2);
+            draw_horizontal_separator(context, cr, rControlRegion);
         else
-            gtk_render_line(context, cr, nWidth / 2, 0, nWidth / 2, nHeight - 1);
+            draw_vertical_separator(context, cr, rControlRegion);
         break;
     case RenderType::Arrow:
         gtk_render_arrow(context, cr,
@@ -2499,7 +2578,13 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
         break;
     case RenderType::Focus:
     {
-        if (nType != ControlType::Checkbox)
+        if (nType == ControlType::Checkbox ||
+            nType == ControlType::Radiobutton)
+        {
+            nX -= 2; nY -=2;
+            nHeight += 4; nWidth += 4;
+        }
+        else
         {
             GtkBorder border;
 
@@ -2561,6 +2646,7 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
     {
         gtk_style_context_remove_class(context, styleClass);
     }
+    aContextState.restore();
 
     cairo_destroy(cr); // unref
 
@@ -2570,7 +2656,7 @@ bool GtkSalGraphics::drawNativeControl( ControlType nType, ControlPart nPart, co
     return true;
 }
 
-tools::Rectangle GetWidgetSize(const tools::Rectangle& rControlRegion, GtkWidget* widget)
+static tools::Rectangle GetWidgetSize(const tools::Rectangle& rControlRegion, GtkWidget* widget)
 {
     GtkRequisition aReq;
     gtk_widget_get_preferred_size(widget, nullptr, &aReq);
@@ -2578,7 +2664,7 @@ tools::Rectangle GetWidgetSize(const tools::Rectangle& rControlRegion, GtkWidget
     return tools::Rectangle(rControlRegion.TopLeft(), Size(rControlRegion.GetWidth(), nHeight));
 }
 
-tools::Rectangle AdjustRectForTextBordersPadding(GtkStyleContext* pStyle, long nContentWidth, long nContentHeight, const tools::Rectangle& rControlRegion)
+static tools::Rectangle AdjustRectForTextBordersPadding(GtkStyleContext* pStyle, long nContentWidth, long nContentHeight, const tools::Rectangle& rControlRegion)
 {
     GtkBorder border;
     gtk_style_context_get_border(pStyle, gtk_style_context_get_state(pStyle), &border);
@@ -2597,10 +2683,17 @@ tools::Rectangle AdjustRectForTextBordersPadding(GtkStyleContext* pStyle, long n
     return aEditRect;
 }
 
-bool GtkSalGraphics::getNativeControlRegion( ControlType nType, ControlPart nPart, const tools::Rectangle& rControlRegion, ControlState,
-                                                const ImplControlValue& rValue, const OUString&,
+bool GtkSalGraphics::getNativeControlRegion( ControlType nType, ControlPart nPart, const tools::Rectangle& rControlRegion, ControlState eState,
+                                                const ImplControlValue& rValue, const OUString& aCaption,
                                                 tools::Rectangle &rNativeBoundingRegion, tools::Rectangle &rNativeContentRegion )
 {
+    if (hasWidgetDraw())
+    {
+        return m_pWidgetDraw->getNativeControlRegion(nType, nPart, rControlRegion,
+                                                     eState, rValue, aCaption,
+                                                     rNativeBoundingRegion, rNativeContentRegion);
+    }
+
     /* TODO: all this functions needs improvements */
     tools::Rectangle aEditRect = rControlRegion;
     gint indicator_size, indicator_spacing, point;
@@ -2695,12 +2788,12 @@ bool GtkSalGraphics::getNativeControlRegion( ControlType nType, ControlPart nPar
     else if ( (nType==ControlType::Combobox) &&
               ((nPart==ControlPart::ButtonDown) || (nPart==ControlPart::SubEdit)) )
     {
-        aEditRect = NWGetComboBoxButtonRect( nPart, rControlRegion );
+        aEditRect = NWGetComboBoxButtonRect(nType, nPart, rControlRegion);
     }
     else if ( (nType==ControlType::Listbox) &&
               ((nPart==ControlPart::ButtonDown) || (nPart==ControlPart::SubEdit)) )
     {
-        aEditRect = NWGetComboBoxButtonRect( nPart, rControlRegion );
+        aEditRect = NWGetComboBoxButtonRect(nType, nPart, rControlRegion);
     }
     else if (nType == ControlType::Editbox && nPart == ControlPart::Entire)
     {
@@ -2767,7 +2860,7 @@ bool GtkSalGraphics::getNativeControlRegion( ControlType nType, ControlPart nPar
 /************************************************************************
  * helper for GtkSalFrame
  ************************************************************************/
-static inline ::Color getColor( const GdkRGBA& rCol )
+static ::Color getColor( const GdkRGBA& rCol )
 {
     return ::Color( static_cast<int>(rCol.red * 0xFFFF) >> 8, static_cast<int>(rCol.green * 0xFFFF) >> 8, static_cast<int>(rCol.blue * 0xFFFF) >> 8 );
 }
@@ -2849,9 +2942,17 @@ vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale
     return aFont;
 }
 
-void GtkSalGraphics::updateSettings( AllSettings& rSettings )
+void GtkSalGraphics::updateSettings(AllSettings& rSettings)
 {
+    if (m_pWidgetDraw)
+    {
+        m_pWidgetDraw->updateSettings(rSettings);
+        return;
+    }
+
     GtkStyleContext* pStyle = gtk_widget_get_style_context( mpWindow );
+    StyleContextSave aContextState;
+    aContextState.save(pStyle);
     GtkSettings* pSettings = gtk_widget_get_settings( mpWindow );
     StyleSettings aStyleSet = rSettings.GetStyleSettings();
     GdkRGBA color;
@@ -2891,9 +2992,12 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
     aTextColor = getColor( text_color );
     aStyleSet.SetFieldRolloverTextColor( aTextColor );
 
+    aContextState.restore();
+
     // button mouse over colors
     {
         GdkRGBA normal_button_rollover_text_color, pressed_button_rollover_text_color;
+        aContextState.save(mpButtonStyle);
         style_context_set_state(mpButtonStyle, GTK_STATE_FLAG_PRELIGHT);
         gtk_style_context_get_color(mpButtonStyle, gtk_style_context_get_state(mpButtonStyle), &normal_button_rollover_text_color);
         aTextColor = getColor(normal_button_rollover_text_color);
@@ -2903,6 +3007,7 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
         aTextColor = getColor(pressed_button_rollover_text_color);
         style_context_set_state(mpButtonStyle, GTK_STATE_FLAG_NORMAL);
         aStyleSet.SetButtonPressedRolloverTextColor( aTextColor );
+        aContextState.restore();
     }
 
     // tooltip colors
@@ -2987,6 +3092,8 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
     aStyleSet.SetSkipDisabledInMenus( true );
     aStyleSet.SetPreferredContextMenuShortcuts( false );
 
+    aContextState.save(mpMenuItemLabelStyle);
+
     // menu colors
     style_context_set_state(mpMenuStyle, GTK_STATE_FLAG_NORMAL);
     gtk_style_context_get_background_color( mpMenuStyle, gtk_style_context_get_state(mpMenuStyle), &background_color );
@@ -3026,47 +3133,59 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
     ::Color aHighlightTextColor = getColor( color );
     aStyleSet.SetMenuHighlightTextColor( aHighlightTextColor );
 
+    aContextState.restore();
+
     // hyperlink colors
+    aContextState.save(mpLinkButtonStyle);
     style_context_set_state(mpLinkButtonStyle, GTK_STATE_FLAG_LINK);
     gtk_style_context_get_color(mpLinkButtonStyle, gtk_style_context_get_state(mpLinkButtonStyle), &text_color);
     aStyleSet.SetLinkColor(getColor(text_color));
     style_context_set_state(mpLinkButtonStyle, GTK_STATE_FLAG_VISITED);
     gtk_style_context_get_color(mpLinkButtonStyle, gtk_style_context_get_state(mpLinkButtonStyle), &text_color);
     aStyleSet.SetVisitedLinkColor(getColor(text_color));
+    aContextState.restore();
 
     {
         GtkStyleContext *pCStyle = mpNotebookHeaderTabsTabLabelStyle;
+        aContextState.save(pCStyle);
         style_context_set_state(pCStyle, GTK_STATE_FLAG_NORMAL);
         gtk_style_context_get_color(pCStyle, gtk_style_context_get_state(pCStyle), &text_color);
         aTextColor = getColor( text_color );
         aStyleSet.SetTabTextColor(aTextColor);
         aStyleSet.SetTabFont(getFont(mpNotebookHeaderTabsTabLabelStyle, rSettings.GetUILanguageTag().getLocale()));
+        aContextState.restore();
     }
 
     {
         GtkStyleContext *pCStyle = mpToolButtonStyle;
+        aContextState.save(pCStyle);
         style_context_set_state(pCStyle, GTK_STATE_FLAG_NORMAL);
         gtk_style_context_get_color(pCStyle, gtk_style_context_get_state(pCStyle), &text_color);
         aTextColor = getColor( text_color );
         aStyleSet.SetToolTextColor(aTextColor);
         aStyleSet.SetToolFont(getFont(mpToolButtonStyle, rSettings.GetUILanguageTag().getLocale()));
+        aContextState.restore();
     }
 
     // mouse over text colors
     {
         GtkStyleContext *pCStyle = mpNotebookHeaderTabsTabHoverLabelStyle;
+        aContextState.save(pCStyle);
         style_context_set_state(pCStyle, GTK_STATE_FLAG_PRELIGHT);
         gtk_style_context_get_color(pCStyle, gtk_style_context_get_state(pCStyle), &text_color);
         aTextColor = getColor( text_color );
         aStyleSet.SetTabRolloverTextColor(aTextColor);
+        aContextState.restore();
     }
 
     {
         GtkStyleContext *pCStyle = mpNotebookHeaderTabsTabActiveLabelStyle;
+        aContextState.save(pCStyle);
         style_context_set_state(pCStyle, ACTIVE_TAB());
         gtk_style_context_get_color(pCStyle, gtk_style_context_get_state(pCStyle), &text_color);
         aTextColor = getColor( text_color );
         aStyleSet.SetTabHighlightTextColor(aTextColor);
+        aContextState.restore();
     }
 
     // get cursor blink time
@@ -3079,7 +3198,7 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
         g_object_get( pSettings, "gtk-cursor-blink-time", &blink_time, nullptr );
         // set the blink_time if there is a setting and it is reasonable
         // else leave the default value
-        if( blink_time > 100 && blink_time != gint(STYLE_CURSOR_NOBLINKTIME) )
+        if( blink_time > 100 )
             aStyleSet.SetCursorBlinkTime( blink_time/2 );
     }
     else
@@ -3175,6 +3294,11 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
 
 bool GtkSalGraphics::IsNativeControlSupported( ControlType nType, ControlPart nPart )
 {
+    if (m_pWidgetDraw)
+    {
+        return m_pWidgetDraw->isNativeControlSupported(nType, nPart);
+    }
+
     switch(nType)
     {
         case ControlType::Pushbutton:
@@ -3335,7 +3459,7 @@ void GtkSalData::initNWF()
     //gnome#768128 for the car crash that is wayland
     //and floating dockable toolbars
     GdkDisplay *pDisplay = gdk_display_get_default();
-    if (GDK_IS_WAYLAND_DISPLAY(pDisplay))
+    if (DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay))
         pSVData->maNWFData.mbCanDetermineWindowPosition = false;
 #endif
 }

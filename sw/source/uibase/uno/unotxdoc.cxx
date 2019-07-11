@@ -24,6 +24,7 @@
 #include <comphelper/string.hxx>
 #include <AnnotationWin.hxx>
 #include <o3tl/any.hxx>
+#include <o3tl/make_unique.hxx>
 #include <osl/mutex.hxx>
 #include <vcl/commandevent.hxx>
 #include <vcl/image.hxx>
@@ -192,7 +193,7 @@ using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::document;
 using ::osl::FileBase;
 
-static SwPrintUIOptions * lcl_GetPrintUIOptions(
+static std::unique_ptr<SwPrintUIOptions> lcl_GetPrintUIOptions(
     SwDocShell * pDocShell,
     const SfxViewShell * pView )
 {
@@ -241,7 +242,7 @@ static SwPrintUIOptions * lcl_GetPrintUIOptions(
             pPage = static_cast<const SwPageFrame*>(pPage->GetNext());
         }
     }
-    return new SwPrintUIOptions( nCurrentPage, bWebDoc, bSwSrcView, bHasSelection, bHasPostIts, rPrintData );
+    return o3tl::make_unique<SwPrintUIOptions>( nCurrentPage, bWebDoc, bSwSrcView, bHasSelection, bHasPostIts, rPrintData );
 }
 
 static SwTextFormatColl *lcl_GetParaStyle(const OUString& rCollName, SwDoc* pDoc)
@@ -443,8 +444,6 @@ SwXTextDocument::SwXTextDocument(SwDocShell* pShell)
     mxLinkTargetSupplier(),
     mxXRedlines(),
     m_pHiddenViewFrame(nullptr),
-    m_pPrintUIOptions( nullptr ),
-    m_pRenderData( nullptr ),
     // #i117783#
     bApplyPagePrintSettingsFromXPagePrintable( false )
 {
@@ -465,7 +464,7 @@ SwXTextDocument::~SwXTextDocument()
         xNumFormatAgg->setDelegator(x0);
         xNumFormatAgg = nullptr;
     }
-    delete m_pPrintUIOptions;
+    m_pPrintUIOptions.reset();
     if (m_pRenderData && m_pRenderData->IsViewOptionAdjust())
     {   // rhbz#827695: this can happen if the last page is not printed
         // the SwViewShell has been deleted already by SwView::~SwView
@@ -473,7 +472,7 @@ SwXTextDocument::~SwXTextDocument()
         // something less insane that has its own view
         m_pRenderData->ViewOptionAdjustCrashPreventionKludge();
     }
-    delete m_pRenderData;
+    m_pRenderData.reset();
 }
 
 SwXDocumentPropertyHelper * SwXTextDocument::GetPropertyHelper ()
@@ -546,25 +545,22 @@ void SwXTextDocument::lockControllers()
     if(!IsValid())
         throw DisposedException("", static_cast< XTextDocument* >(this));
 
-    UnoActionContext* pContext = new UnoActionContext(pDocShell->GetDoc());
-    aActionArr.push_front(pContext);
+    maActionArr.emplace_front(new UnoActionContext(pDocShell->GetDoc()));
 }
 
 void SwXTextDocument::unlockControllers()
 {
     SolarMutexGuard aGuard;
-    if(aActionArr.empty())
+    if(maActionArr.empty())
         throw RuntimeException("Nothing to unlock");
 
-    UnoActionContext* pContext = aActionArr.front();
-    aActionArr.pop_front();
-    delete pContext;
+    maActionArr.pop_front();
 }
 
 sal_Bool SwXTextDocument::hasControllersLocked()
 {
     SolarMutexGuard aGuard;
-    return !aActionArr.empty();
+    return !maActionArr.empty();
 }
 
 Reference< frame::XController >  SwXTextDocument::getCurrentController()
@@ -629,6 +625,11 @@ void SwXTextDocument::dispose()
 
 void SwXTextDocument::close( sal_Bool bDeliverOwnership )
 {
+    if(pDocShell)
+    {
+        uno::Sequence< uno::Any > aArgs;
+        pDocShell->CallAutomationDocumentEventSinks( "Close", aArgs );
+    }
     SolarMutexGuard aGuard;
     if(IsValid() && m_pHiddenViewFrame)
         lcl_DisposeView( m_pHiddenViewFrame, pDocShell);
@@ -790,7 +791,7 @@ sal_Int32 SwXTextDocument::replaceAll(const Reference< util::XSearchDescriptor >
         pSearch->FillSearchItemSet(aSearch);
         pSearch->FillReplaceItemSet(aReplace);
         bool bCancel;
-        nResult = static_cast<sal_Int32>(pUnoCursor->Find( aSearch, !pSearch->m_bStyles,
+        nResult = static_cast<sal_Int32>(pUnoCursor->FindAttrs(aSearch, !pSearch->m_bStyles,
                     eStart, eEnd, bCancel,
                     static_cast<FindRanges>(eRanges),
                     !pSearch->m_sSearchText.isEmpty() ? &aSearchOpt : nullptr,
@@ -802,7 +803,7 @@ sal_Int32 SwXTextDocument::replaceAll(const Reference< util::XSearchDescriptor >
         SwTextFormatColl *pReplaceColl = lcl_GetParaStyle(pSearch->m_sReplaceText, pUnoCursor->GetDoc());
 
         bool bCancel;
-        nResult = pUnoCursor->Find( *pSearchColl,
+        nResult = pUnoCursor->FindFormat(*pSearchColl,
                     eStart, eEnd, bCancel,
                     static_cast<FindRanges>(eRanges), pReplaceColl );
 
@@ -811,7 +812,7 @@ sal_Int32 SwXTextDocument::replaceAll(const Reference< util::XSearchDescriptor >
     {
         //todo/mba: assuming that notes should be omitted
         bool bCancel;
-        nResult = pUnoCursor->Find( aSearchOpt, false/*bSearchInNotes*/,
+        nResult = pUnoCursor->Find_Text(aSearchOpt, false/*bSearchInNotes*/,
             eStart, eEnd, bCancel,
             static_cast<FindRanges>(eRanges),
             true );
@@ -919,7 +920,7 @@ SwUnoCursor* SwXTextDocument::FindAny(const Reference< util::XSearchDescriptor >
                     RES_FRMATR_BEGIN, RES_FRMATR_END - 1>{});
             pSearch->FillSearchItemSet(aSearch);
             bool bCancel;
-            nResult = static_cast<sal_Int32>(pUnoCursor->Find( aSearch, !pSearch->m_bStyles,
+            nResult = static_cast<sal_Int32>(pUnoCursor->FindAttrs(aSearch, !pSearch->m_bStyles,
                         eStart, eEnd, bCancel,
                         eRanges,
                         !pSearch->m_sSearchText.isEmpty() ? &aSearchOpt : nullptr ));
@@ -930,7 +931,7 @@ SwUnoCursor* SwXTextDocument::FindAny(const Reference< util::XSearchDescriptor >
             //pSearch->sReplaceText
             SwTextFormatColl *pReplaceColl = nullptr;
             bool bCancel;
-            nResult = static_cast<sal_Int32>(pUnoCursor->Find( *pSearchColl,
+            nResult = static_cast<sal_Int32>(pUnoCursor->FindFormat(*pSearchColl,
                         eStart, eEnd, bCancel,
                         eRanges, pReplaceColl ));
         }
@@ -938,7 +939,7 @@ SwUnoCursor* SwXTextDocument::FindAny(const Reference< util::XSearchDescriptor >
         {
             //todo/mba: assuming that notes should be omitted
             bool bCancel;
-            nResult = static_cast<sal_Int32>(pUnoCursor->Find( aSearchOpt, false/*bSearchInNotes*/,
+            nResult = static_cast<sal_Int32>(pUnoCursor->Find_Text(aSearchOpt, false/*bSearchInNotes*/,
                     eStart, eEnd, bCancel,
                     eRanges ));
         }
@@ -1065,7 +1066,7 @@ static sal_uInt32 lcl_Any_To_ULONG(const Any& rValue, bool& bException)
 static OUString lcl_CreateOutlineString( size_t nIndex,
             const SwOutlineNodes& rOutlineNodes, const SwNumRule* pOutlRule)
 {
-    OUString sEntry;
+    OUStringBuffer sEntry;
     const SwTextNode * pTextNd = rOutlineNodes[ nIndex ]->GetTextNode();
     SwNumberTree::tNumberVector aNumVector = pTextNd->GetNumberVector();
     if( pOutlRule && pTextNd->GetNumRule())
@@ -1076,12 +1077,12 @@ static OUString lcl_CreateOutlineString( size_t nIndex,
             long nVal = aNumVector[nLevel];
             nVal ++;
             nVal -= pOutlRule->Get(nLevel).GetStart();
-            sEntry += OUString::number( nVal );
-            sEntry += ".";
+            sEntry.append(OUString::number( nVal ));
+            sEntry.append(".");
         }
-    sEntry += rOutlineNodes[ nIndex ]->
-                    GetTextNode()->GetExpandText();
-    return sEntry;
+    sEntry.append( rOutlineNodes[ nIndex ]->
+                    GetTextNode()->GetExpandText(nullptr) );
+    return sEntry.makeStringAndClear();
 }
 
 void SwXTextDocument::setPagePrintSettings(const Sequence< beans::PropertyValue >& aSettings)
@@ -1142,7 +1143,7 @@ void SwXTextDocument::setPagePrintSettings(const Sequence< beans::PropertyValue 
         else if(sName == "IsLandscape")
         {
             auto b = o3tl::tryAccess<bool>(rVal);
-            bException = bool(b);
+            bException = !b;
             if (b)
             {
                 aData.SetLandscape(*b);
@@ -2440,14 +2441,13 @@ SwDoc * SwXTextDocument::GetRenderDoc(
             // the view shell should be SwView for documents PDF export.
             // for the page preview no selection should be possible
             // (the export dialog does not allow for this option)
-            if (rpView  &&  dynamic_cast< const SwView *>( rpView ) !=  nullptr)
+            if (auto pSwView = dynamic_cast<SwView *>( rpView ))
             {
                 if (!m_pRenderData)
                 {
                     OSL_FAIL("GetRenderDoc: no renderdata");
                     return nullptr;
                 }
-                SwView *const pSwView(static_cast<SwView *>(rpView));
                 SfxObjectShellLock xDocSh(m_pRenderData->GetTempDocShell());
                 if (!xDocSh.Is())
                 {
@@ -2514,7 +2514,7 @@ sal_Int32 SAL_CALL SwXTextDocument::getRendererCount(
     SfxViewShell *pView = GetRenderView( bIsSwSrcView, rxOptions, bIsPDFExport );
 
     if (!bIsSwSrcView && !m_pRenderData)
-        m_pRenderData = new SwRenderData;
+        m_pRenderData.reset(new SwRenderData);
     if (!m_pPrintUIOptions)
         m_pPrintUIOptions = lcl_GetPrintUIOptions( pDocShell, pView );
     bool bFormat = m_pPrintUIOptions->processPropertiesAndCheckFormat( rxOptions );
@@ -2594,7 +2594,7 @@ sal_Int32 SAL_CALL SwXTextDocument::getRendererCount(
             }
 
             m_pRenderData->MakeSwPrtOptions( pRenderDocShell,
-                    m_pPrintUIOptions, bIsPDFExport );
+                    m_pPrintUIOptions.get(), bIsPDFExport );
 
             if (pSwView)
             {
@@ -2621,25 +2621,25 @@ sal_Int32 SAL_CALL SwXTextDocument::getRendererCount(
             // since printing now also use the API for PDF export this option
             // should be set for printing as well ...
             pViewShell->SetPDFExportOption( true );
-            bool bOrigStatus = pRenderDocShell->IsEnableSetModified();
-            // check configuration: shall update of printing information in DocInfo set the document to "modified"?
-            bool bStateChanged = false;
-            if ( bOrigStatus && !SvtPrintWarningOptions().IsModifyDocumentOnPrintingAllowed() )
-            {
-                pRenderDocShell->EnableSetModified( false );
-                bStateChanged = true;
-            }
-
-            // #122919# Force field update before PDF export
-            pViewShell->SwViewShell::UpdateFields(true);
-            if( bStateChanged )
-                pRenderDocShell->EnableSetModified();
 
             // there is some redundancy between those two function calls, but right now
             // there is no time to sort this out.
             //TODO: check what exactly needs to be done and make just one function for that
             pViewShell->CalcLayout();
             pViewShell->CalcPagesForPrint( pViewShell->GetPageCount() );
+
+
+            // #122919# Force field update before PDF export, but after layout init (tdf#121962)
+            bool bStateChanged = false;
+            // check configuration: shall update of printing information in DocInfo set the document to "modified"?
+            if ( pRenderDocShell->IsEnableSetModified() && !SvtPrintWarningOptions().IsModifyDocumentOnPrintingAllowed() )
+            {
+                pRenderDocShell->EnableSetModified( false );
+                bStateChanged = true;
+            }
+            pViewShell->SwViewShell::UpdateFields(true);
+            if( bStateChanged )
+                pRenderDocShell->EnableSetModified();
 
             pViewShell->SetPDFExportOption( false );
 
@@ -2974,7 +2974,7 @@ void SAL_CALL SwXTextDocument::render(
     OSL_ENSURE( m_pRenderData, "data should have been created already in getRendererCount..." );
     OSL_ENSURE( m_pPrintUIOptions, "data should have been created already in getRendererCount..." );
     if (!bIsSwSrcView && !m_pRenderData)
-        m_pRenderData = new SwRenderData;
+        m_pRenderData.reset(new SwRenderData);
     if (!m_pPrintUIOptions)
         m_pPrintUIOptions = lcl_GetPrintUIOptions( pDocShell, pView );
     m_pPrintUIOptions->processProperties( rxOptions );
@@ -3007,18 +3007,13 @@ void SAL_CALL SwXTextDocument::render(
             {
                 // the view shell should be SwView for documents PDF export
                 // or SwPagePreview for PDF export of the page preview
-                //!! (check for SwView first as in GuessViewShell) !!
-                OSL_ENSURE( pView, "!! view missing !!" );
                 SwViewShell* pVwSh = nullptr;
-                if (pView)
-                {
-                    // TODO/mba: we really need a generic way to get the SwViewShell!
-                    SwView* pSwView = dynamic_cast<SwView*>( pView );
-                    if ( pSwView )
-                        pVwSh = pSwView->GetWrtShellPtr();
-                    else
-                        pVwSh = static_cast<SwPagePreview*>(pView)->GetViewShell();
-                }
+                // TODO/mba: we really need a generic way to get the SwViewShell!
+                const SwView* pSwView = dynamic_cast<const SwView*>(pView);
+                if (pSwView)
+                    pVwSh = pSwView->GetWrtShellPtr();
+                else
+                    pVwSh = static_cast<SwPagePreview*>(pView)->GetViewShell();
 
                 // get output device to use
                 VclPtr< OutputDevice > pOut = lcl_GetOutputDevice( *m_pPrintUIOptions );
@@ -3029,8 +3024,8 @@ void SAL_CALL SwXTextDocument::render(
                     const bool bFirstPage           = m_pPrintUIOptions->getBoolValue( "IsFirstPage" );
                     bool bIsSkipEmptyPages          = !m_pPrintUIOptions->IsPrintEmptyPages( bIsPDFExport );
 
-                    OSL_ENSURE(( dynamic_cast< const SwView *>( pView ) !=  nullptr &&  m_pRenderData->IsViewOptionAdjust())
-                            || (dynamic_cast< const SwView *>( pView ) ==  nullptr && !m_pRenderData->IsViewOptionAdjust()),
+                    OSL_ENSURE((pSwView && m_pRenderData->IsViewOptionAdjust())
+                            || (!pSwView && !m_pRenderData->IsViewOptionAdjust()),
                             "SwView / SwViewOptionAdjust_Impl availability mismatch" );
 
                     // since printing now also use the API for PDF export this option
@@ -3043,9 +3038,7 @@ void SAL_CALL SwXTextDocument::render(
                     // During this process, additional information required for tagging
                     // the pdf file are collected, which are evaulated during painting.
 
-                    SwWrtShell* pWrtShell = dynamic_cast< const SwView *>( pView ) !=  nullptr ?
-                                            static_cast<SwView*>(pView)->GetWrtShellPtr() :
-                                            nullptr;
+                    SwWrtShell* pWrtShell = pSwView ? pSwView->GetWrtShellPtr() : nullptr;
 
                     SwPrintData const& rSwPrtOptions =
                         *m_pRenderData->GetSwPrtOptions();
@@ -3102,8 +3095,8 @@ void SAL_CALL SwXTextDocument::render(
     }
     if( bLastPage )
     {
-        delete m_pRenderData;       m_pRenderData     = nullptr;
-        delete m_pPrintUIOptions;   m_pPrintUIOptions = nullptr;
+        m_pRenderData.reset();
+        m_pPrintUIOptions.reset();
     }
 }
 
@@ -3902,14 +3895,14 @@ uno::Sequence< lang::Locale > SAL_CALL SwXTextDocument::getDocumentLanguages(
     if (nMaxCount > 0)
     {
         sal_Int32 nCount = 0;
-        for (std::set< LanguageType >::const_iterator it = aAllLangs.begin(); it != aAllLangs.end(); ++it)
+        for (const auto& rLang : aAllLangs)
         {
             if (nCount >= nMaxCount)
                 break;
-            if (LANGUAGE_NONE != *it)
+            if (LANGUAGE_NONE != rLang)
             {
-                pLanguage[nCount] = LanguageTag::convertToLocale( *it );
-                pLanguage[nCount].Language = SvtLanguageTable::GetLanguageString( *it );
+                pLanguage[nCount] = LanguageTag::convertToLocale( rLang );
+                pLanguage[nCount].Language = SvtLanguageTable::GetLanguageString( rLang );
                 nCount += 1;
             }
         }

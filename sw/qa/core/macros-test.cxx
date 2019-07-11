@@ -160,7 +160,7 @@ void SwMacrosTest::testVba()
             OUString("vnd.sun.Star.script:Project.NewMacros.Macro1?language=Basic&location=document")
         }
     };
-    for ( sal_uInt32  i=0; i<SAL_N_ELEMENTS( testInfo ); ++i )
+    for ( size_t  i=0; i<SAL_N_ELEMENTS( testInfo ); ++i )
     {
         OUString aFileName;
         createFileURL(testInfo[i].sFileBaseName, "doc", aFileName);
@@ -406,7 +406,6 @@ void SwMacrosTest::testFdo68983()
     CPPUNIT_ASSERT_MESSAGE("Failed to load fdo68983.odt", xComponent.is());
 
     Reference< frame::XStorable > xDocStorable(xComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xDocStorable.is());
 
     utl::TempFile aTempFile;
     aTempFile.EnableKillingFile();
@@ -459,8 +458,6 @@ void SwMacrosTest::testFdo87530()
         xBasLibPwd->changeLibraryPassword("BarLibrary", "", "foo");
 
         Reference<frame::XStorable> xDocStorable(xComponent, UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xDocStorable.is());
-
         xDocStorable->storeAsURL(aTempFile.GetURL(), desc);
     }
 
@@ -481,7 +478,7 @@ void SwMacrosTest::testFdo87530()
         CPPUNIT_ASSERT(xBasLib->isLibraryLoaded("BarLibrary"));
         Reference<container::XNameContainer> xLibrary(xBasLib->getByName("BarLibrary"), UNO_QUERY);
         Any module(xLibrary->getByName("BarModule"));
-        CPPUNIT_ASSERT_EQUAL(module.get<OUString>(), OUString("Sub Main\nEnd Sub\n"));
+        CPPUNIT_ASSERT_EQUAL(OUString("Sub Main\nEnd Sub\n"), module.get<OUString>());
 
         // add a second module now - tdf#87530 happened here
         Reference<container::XNameContainer> xFooLib(xBasLib->createLibrary("FooLibrary"));
@@ -491,8 +488,6 @@ void SwMacrosTest::testFdo87530()
 
         // store again
         Reference<frame::XStorable> xDocStorable(xComponent, UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xDocStorable.is());
-
         xDocStorable->store();
     }
 
@@ -512,7 +507,7 @@ void SwMacrosTest::testFdo87530()
     CPPUNIT_ASSERT(xBasLib->isLibraryLoaded("FooLibrary"));
     Reference<container::XNameContainer> xLibrary(xBasLib->getByName("FooLibrary"), UNO_QUERY);
     Any module(xLibrary->getByName("FooModule"));
-    CPPUNIT_ASSERT_EQUAL(module.get<OUString>(), OUString("Sub Main\nEnd Sub\n"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Sub Main\nEnd Sub\n"), module.get<OUString>());
 
     // close
     Reference<util::XCloseable>(xComponent, UNO_QUERY_THROW)->close(false);
@@ -559,7 +554,7 @@ void SwMacrosTest::testFindReplace()
             '\\');
 
     // find newline on 1st paragraph
-    bool bFound = pPaM->Find(
+    bool bFound = pPaM->Find_Text(
             opts, false, SwDocPositions::Curr, SwDocPositions::End, bCancel, FindRanges::InBody);
     CPPUNIT_ASSERT(bFound);
     CPPUNIT_ASSERT(pPaM->HasMark());
@@ -567,7 +562,7 @@ void SwMacrosTest::testFindReplace()
 
     // now do another Find, inside the selection from the first Find
 //    opts.searchFlags = 71680;
-    bFound = pPaM->Find(
+    bFound = pPaM->Find_Text(
             opts, false, SwDocPositions::Curr, SwDocPositions::End, bCancel, FindRanges::InSel);
     CPPUNIT_ASSERT(bFound);
     CPPUNIT_ASSERT(pPaM->HasMark());
@@ -599,7 +594,7 @@ void SwMacrosTest::setUp()
     // which is a private symbol to us, gets called
     m_xWriterComponent =
         getMultiServiceFactory()->createInstance("com.sun.star.comp.Writer.TextDocument");
-    CPPUNIT_ASSERT_MESSAGE("no calc component!", m_xWriterComponent.is());
+    CPPUNIT_ASSERT_MESSAGE("no writer component!", m_xWriterComponent.is());
     mxDesktop = css::frame::Desktop::create( comphelper::getComponentContext(getMultiServiceFactory()) );
 }
 

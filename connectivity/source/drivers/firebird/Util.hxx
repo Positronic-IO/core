@@ -18,13 +18,10 @@
 #include <com/sun/star/sdbc/DataType.hpp>
 #include <com/sun/star/sdbc/SQLException.hpp>
 
-#include <vector>
-
 namespace connectivity
 {
     namespace firebird
     {
-        typedef std::vector< OString > OStringVector;
         // Type Blob has 2 subtypes values
         // 0 for BLOB, 1 for CLOB
         // see http://www.firebirdfaq.org/faq48/
@@ -69,7 +66,7 @@ public:
             OUString const & getCharacterSet() const { return m_sCharsetName; }
 
             sal_Int32 getSdbcType() const;
-            ::rtl::OUString getColumnTypeName() const;
+            OUString getColumnTypeName() const;
 
         };
 
@@ -99,7 +96,7 @@ public:
          * @throws css::sdbc::SQLException
          */
         void evaluateStatusVector(const ISC_STATUS_ARRAY& rStatusVector,
-                                  const ::rtl::OUString& aCause,
+                                  const OUString& aCause,
                                   const css::uno::Reference< css::uno::XInterface >& _rxContext);
 
         /**

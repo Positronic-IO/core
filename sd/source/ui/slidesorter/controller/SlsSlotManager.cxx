@@ -51,6 +51,7 @@
 #include <app.hrc>
 #include <strings.hrc>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <drawdoc.hxx>
 #include <DrawDocShell.hxx>
 #include <ViewShellBase.hxx>
@@ -64,6 +65,7 @@
 #include <unmodpg.hxx>
 #include <DrawViewShell.hxx>
 #include <sdabstdlg.hxx>
+#include <sdmod.hxx>
 
 #include <sfx2/request.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -254,14 +256,11 @@ void SlotManager::FuTemporary (SfxRequest& rRequest)
         case SID_PHOTOALBUM:
         {
             SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-            if (pFact)
-            {
-                vcl::Window* pWin = mrSlideSorter.GetContentWindow();
-                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSdPhotoAlbumDialog(
-                    pWin ? pWin->GetFrameWeld() : nullptr,
-                    pDocument));
-                pDlg->Execute();
-            }
+            vcl::Window* pWin = mrSlideSorter.GetContentWindow();
+            ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSdPhotoAlbumDialog(
+                pWin ? pWin->GetFrameWeld() : nullptr,
+                pDocument));
+            pDlg->Execute();
             rRequest.Done ();
         }
         break;
@@ -270,12 +269,8 @@ void SlotManager::FuTemporary (SfxRequest& rRequest)
         {
 #ifdef ENABLE_SDREMOTE
              SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-             if (pFact)
-             {
-                 ScopedVclPtr<VclAbstractDialog> pDlg( pFact->CreateRemoteDialog( mrSlideSorter.GetContentWindow() ) );
-                 if (pDlg)
-                     pDlg->Execute();
-             }
+             ScopedVclPtr<VclAbstractDialog> pDlg( pFact->CreateRemoteDialog( mrSlideSorter.GetContentWindow() ) );
+             pDlg->Execute();
 #endif
         }
         break;
@@ -367,7 +362,7 @@ void SlotManager::FuSupport (SfxRequest& rRequest)
             {
                 std::shared_ptr<DrawViewShell> pDrawViewShell (
                     std::dynamic_pointer_cast<DrawViewShell>(pBase->GetMainViewShell()));
-                if (pDrawViewShell.get() != nullptr)
+                if (pDrawViewShell != nullptr)
                     pDrawViewShell->FuSupport(rRequest);
             }
         }
@@ -560,10 +555,9 @@ void SlotManager::GetMenuState (SfxItemSet& rSet)
                         SdrTextObj* pTextObj = dynamic_cast< SdrTextObj* >( pObj );
                         if( pTextObj )
                         {
-                            OutlinerParaObject* pParaObj = pTextObj->GetEditOutlinerParaObject();
+                            std::unique_ptr<OutlinerParaObject> pParaObj = pTextObj->GetEditOutlinerParaObject();
                             if( pParaObj )
                             {
-                                delete pParaObj;
                                 bDisable = false;
                             }
                         }
@@ -713,7 +707,7 @@ void SlotManager::GetClipboardState ( SfxItemSet& rSet)
                 {
                     std::shared_ptr<DrawViewShell> pDrawViewShell (
                         std::dynamic_pointer_cast<DrawViewShell>(pBase->GetMainViewShell()));
-                    if (pDrawViewShell.get() != nullptr)
+                    if (pDrawViewShell != nullptr)
                     {
                         TransferableDataHelper aDataHelper (
                             TransferableDataHelper::CreateFromSystemClipboard(
@@ -879,31 +873,39 @@ void SlotManager::RenameSlide(const SfxRequest& rRequest)
         OUString aDescr( SdResId( STR_DESC_RENAMESLIDE ) );
         OUString aPageName = pSelectedPage->GetName();
 
-        SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        DBG_ASSERT(pFact, "Dialog creation failed!");
-        vcl::Window* pWin = mrSlideSorter.GetContentWindow();
-        ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(
-                pWin ? pWin->GetFrameWeld() : nullptr,
-                aPageName, aDescr));
-        DBG_ASSERT(aNameDlg, "Dialog creation failed!");
-        aNameDlg->SetText( aTitle );
-        aNameDlg->SetCheckNameHdl( LINK( this, SlotManager, RenameSlideHdl ), true );
-        aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
-
-        if( aNameDlg->Execute() == RET_OK )
+        if(rRequest.GetArgs())
         {
-            OUString aNewName;
-            aNameDlg->GetName( aNewName );
-            if (aNewName != aPageName)
-            {
-                bool bResult =
-                        RenameSlideFromDrawViewShell(
-                          pSelectedPage->GetPageNum()/2, aNewName );
-                DBG_ASSERT( bResult, "Couldn't rename slide" );
-            }
-        }
-        aNameDlg.disposeAndClear();
+           OUString aName;
+           aName = rRequest.GetArgs()->GetItem<const SfxStringItem>(SID_RENAMEPAGE)->GetValue();
 
+           bool bResult =  RenameSlideFromDrawViewShell(pSelectedPage->GetPageNum()/2, aName );
+           DBG_ASSERT( bResult, "Couldn't rename slide" );
+        }
+        else
+        {
+            SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
+            vcl::Window* pWin = mrSlideSorter.GetContentWindow();
+            ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(
+                    pWin ? pWin->GetFrameWeld() : nullptr,
+                    aPageName, aDescr));
+            aNameDlg->SetText( aTitle );
+            aNameDlg->SetCheckNameHdl( LINK( this, SlotManager, RenameSlideHdl ), true );
+            aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
+
+            if( aNameDlg->Execute() == RET_OK )
+            {
+                OUString aNewName;
+                aNameDlg->GetName( aNewName );
+                if (aNewName != aPageName)
+                {
+                    bool bResult =
+                            RenameSlideFromDrawViewShell(
+                              pSelectedPage->GetPageNum()/2, aNewName );
+                    DBG_ASSERT( bResult, "Couldn't rename slide" );
+                }
+            }
+            aNameDlg.disposeAndClear();
+        }
         // Tell the slide sorter about the name change (necessary for
         // accessibility.)
         mrSlideSorter.GetController().PageNameHasChanged(
@@ -936,7 +938,7 @@ bool SlotManager::RenameSlideFromDrawViewShell( sal_uInt16 nPageId, const OUStri
 
     SdPage* pPageToRename = nullptr;
 
-    ::svl::IUndoManager* pManager = pDocument->GetDocSh()->GetUndoManager();
+    SfxUndoManager* pManager = pDocument->GetDocSh()->GetUndoManager();
 
     if( mrSlideSorter.GetModel().GetEditMode() == EditMode::Page )
     {
@@ -950,16 +952,16 @@ bool SlotManager::RenameSlideFromDrawViewShell( sal_uInt16 nPageId, const OUStri
             // Undo
             SdPage* pUndoPage = pPageToRename;
             SdrLayerAdmin &  rLayerAdmin = pDocument->GetLayerAdmin();
-            SdrLayerID nBackground = rLayerAdmin.GetLayerID( SdResId( STR_LAYER_BCKGRND ) );
-            SdrLayerID nBgObj = rLayerAdmin.GetLayerID( SdResId( STR_LAYER_BCKGRNDOBJ ) );
+            SdrLayerID nBackground = rLayerAdmin.GetLayerID(sUNO_LayerName_background);
+            SdrLayerID nBgObj = rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects);
             SdrLayerIDSet aVisibleLayers = pPageToRename->TRG_GetMasterPageVisibleLayers();
 
             // (#67720#)
-            ModifyPageUndoAction* pAction = new ModifyPageUndoAction(
-                pDocument, pUndoPage, rName, pUndoPage->GetAutoLayout(),
-                aVisibleLayers.IsSet( nBackground ),
-                aVisibleLayers.IsSet( nBgObj ));
-            pManager->AddUndoAction( pAction );
+            pManager->AddUndoAction(
+                o3tl::make_unique<ModifyPageUndoAction>(
+                    pDocument, pUndoPage, rName, pUndoPage->GetAutoLayout(),
+                    aVisibleLayers.IsSet( nBackground ),
+                    aVisibleLayers.IsSet( nBgObj )));
 
             // rename
             pPageToRename->SetName( rName );
@@ -977,7 +979,7 @@ bool SlotManager::RenameSlideFromDrawViewShell( sal_uInt16 nPageId, const OUStri
         if (pPageToRename != nullptr)
         {
             const OUString aOldLayoutName( pPageToRename->GetLayoutName() );
-            pManager->AddUndoAction( new RenameLayoutTemplateUndoAction( pDocument, aOldLayoutName, rName ) );
+            pManager->AddUndoAction( o3tl::make_unique<RenameLayoutTemplateUndoAction>( pDocument, aOldLayoutName, rName ) );
             pDocument->RenameLayoutTemplate( aOldLayoutName, rName );
         }
     }

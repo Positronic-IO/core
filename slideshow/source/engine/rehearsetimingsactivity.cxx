@@ -28,6 +28,7 @@
 #include <cppcanvas/vclfactory.hxx>
 #include <cppcanvas/basegfxfactory.hxx>
 #include <basegfx/range/b2drange.hxx>
+#include <sal/log.hxx>
 
 #include <cppuhelper/exc_hlp.hxx>
 
@@ -102,7 +103,7 @@ public:
 private:
     ::canvas::tools::ElapsedTime    maTimer;
     double                          mnNextTime;
-    std::weak_ptr<Activity>       mpActivity;
+    std::weak_ptr<Activity> const   mpActivity;
     ActivitiesQueue&                mrActivityQueue;
 };
 

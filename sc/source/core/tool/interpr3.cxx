@@ -31,15 +31,20 @@
 #include <scmatrix.hxx>
 
 #include <math.h>
+#include <cassert>
 #include <memory>
+#include <set>
 #include <vector>
 #include <algorithm>
 #include <comphelper/random.hxx>
+#include <osl/diagnose.h>
 
 using ::std::vector;
 using namespace formula;
 
-#define MAX_COUNT_DOUBLE_FOR_SORT 100000
+/// Two columns of data should be sortable with GetSortArray() and QuickSort()
+// This is an arbitrary limit.
+#define MAX_COUNT_DOUBLE_FOR_SORT (MAXROWCOUNT * 2)
 
 const double ScInterpreter::fMaxGammaArgument = 171.624376956302;  // found experimental
 const double fMachEps = ::std::numeric_limits<double>::epsilon();
@@ -58,7 +63,7 @@ protected:
 //template< class T > double lcl_IterateInverse( const T& rFunction, double x0, double x1, bool& rConvError )
 
 /** u*w<0.0 fails for values near zero */
-static inline bool lcl_HasChangeOfSign( double u, double w )
+static bool lcl_HasChangeOfSign( double u, double w )
 {
     return (u < 0.0 && w > 0.0) || (u > 0.0 && w < 0.0);
 }
@@ -1243,7 +1248,7 @@ double ScInterpreter::GetBinomDistPMF(double x, double n, double p)
     }
 }
 
-double lcl_GetBinomDistRange(double n, double xs,double xe,
+static double lcl_GetBinomDistRange(double n, double xs,double xe,
             double fFactor /* q^n */, double p, double q)
 //preconditions: 0.0 <= xs < xe <= n; xs,xe,n integral although double
 {
@@ -1834,8 +1839,6 @@ static void lcl_PutFactorialElements( ::std::vector< double >& cn, double fLower
 
 /** Calculates a value of the hypergeometric distribution.
 
-    @author Kohei Yoshida <kohei@openoffice.org>
-
     @see #i47296#
 
     This function has an extra argument bCumulative,
@@ -1883,17 +1886,13 @@ void ScInterpreter::ScHypGeomDist( int nMinParamCount )
     for a fast calculation for large values which would otherwise cause an overflow
     in the intermediate values.
 
-    @author Kohei Yoshida <kohei@openoffice.org>
-
     @see #i47296#
-
  */
 double ScInterpreter::GetHypGeomDist( double x, double n, double M, double N )
 {
     const size_t nMaxArraySize = 500000; // arbitrary max array size
 
-    typedef ::std::vector< double > HypContainer;
-    HypContainer cnNumer, cnDenom;
+    std::vector<double> cnNumer, cnDenom;
 
     size_t nEstContainerSize = static_cast<size_t>( x + ::std::min( n, M ) );
     size_t nMaxSize = ::std::min( cnNumer.max_size(), nMaxArraySize );
@@ -2068,8 +2067,8 @@ double ScInterpreter::GetHypGeomDist( double x, double n, double M, double N )
 
     ::std::sort( cnNumer.begin(), cnNumer.end() );
     ::std::sort( cnDenom.begin(), cnDenom.end() );
-    HypContainer::reverse_iterator it1 = cnNumer.rbegin(), it1End = cnNumer.rend();
-    HypContainer::reverse_iterator it2 = cnDenom.rbegin(), it2End = cnDenom.rend();
+    auto it1 = cnNumer.rbegin(), it1End = cnNumer.rend();
+    auto it2 = cnDenom.rbegin(), it2End = cnDenom.rend();
 
     double fFactor = 1.0;
     for ( ; it1 != it1End || it2 != it2End; )
@@ -2247,7 +2246,7 @@ class ScTDistFunction : public ScDistFunc
 {
     ScInterpreter&  rInt;
     double          fp, fDF;
-    int             nT;
+    int const       nT;
 
 public:
             ScTDistFunction( ScInterpreter& rI, double fpVal, double fDFVal, int nType ) :
@@ -2440,6 +2439,8 @@ void ScInterpreter::ScConfidenceT()
         double alpha = GetDouble();
         if (sigma <= 0.0 || alpha <= 0.0 || alpha >= 1.0 || n < 1.0)
             PushIllegalArgument();
+        else if (n == 1.0) // for interoperability with Excel
+            PushError(FormulaError::DivisionByZero);
         else
             PushDouble( sigma * GetTInv( alpha, n - 1, 2 ) / sqrt( n ) );
     }
@@ -2560,6 +2561,11 @@ void ScInterpreter::ScZTest()
         if (nParamCount != 3)
         {
             sigma = (fSumSqr - fSum*fSum/rValCount)/(rValCount-1.0);
+            if (sigma == 0.0)
+            {
+                PushError(FormulaError::DivisionByZero);
+                return;
+            }
             PushDouble(0.5 - gauss((mue-x)/sqrt(sigma/rValCount)));
         }
         else
@@ -2743,12 +2749,12 @@ void ScInterpreter::ScFTest()
     aOp.emplace_back(new sc::op::Op(0.0, [](double& rAccum, double fVal){rAccum += fVal;}));
     aOp.emplace_back(new sc::op::Op(0.0, [](double& rAccum, double fVal){rAccum += fVal * fVal;}));
 
-    auto aVal1 = pMat1->Collect(false, aOp);
+    auto aVal1 = pMat1->Collect(aOp);
     fSum1 = aVal1[0].mfFirst + aVal1[0].mfRest;
     fSumSqr1 = aVal1[1].mfFirst + aVal1[1].mfRest;
     fCount1 = aVal1[2].mnCount;
 
-    auto aVal2 = pMat2->Collect(false, aOp);
+    auto aVal2 = pMat2->Collect(aOp);
     fSum2 = aVal2[0].mfFirst + aVal2[0].mfRest;
     fSumSqr2 = aVal2[1].mfFirst + aVal2[1].mfRest;
     fCount2 = aVal2[2].mnCount;
@@ -2865,8 +2871,10 @@ void ScInterpreter::ScKurt()
     if ( !CalculateSkew(fSum,fCount,vSum,values) )
         return;
 
-    if (fCount == 0.0)
+    // ODF 1.2 constraints: # of numbers >= 4
+    if (fCount < 4.0)
     {
+        // for interoperability with Excel
         PushError( FormulaError::DivisionByZero);
         return;
     }
@@ -3318,6 +3326,13 @@ void ScInterpreter::CalculateSkewOrSkewp( bool bSkewp )
     std::vector<double> values;
     if (!CalculateSkew( fSum, fCount, vSum, values))
         return;
+     // SKEW/SKEWP's constraints: they require at least three numbers
+    if (fCount < 3.0)
+    {
+        // for interoperability with Excel
+        PushError(FormulaError::DivisionByZero);
+        return;
+    }
 
     double fMean = fSum / fCount;
 
@@ -3374,8 +3389,7 @@ double ScInterpreter::GetMedian( vector<double> & rArray )
     {
         double fUp = *iMid;
         // Lower median.
-        iMid = rArray.begin() + nMid - 1;
-        ::std::nth_element( rArray.begin(), iMid, rArray.end());
+        iMid = ::std::max_element( rArray.begin(), rArray.begin() + nMid);
         return (fUp + *iMid) / 2;
     }
 }
@@ -3408,8 +3422,7 @@ double ScInterpreter::GetPercentile( vector<double> & rArray, double fPercentile
         {
             OSL_ENSURE(nIndex < nSize-1, "GetPercentile: wrong index(2)");
             double fVal = *iter;
-            iter = rArray.begin() + nIndex+1;
-            ::std::nth_element( rArray.begin(), iter, rArray.end());
+            iter = ::std::min_element( rArray.begin() + nIndex + 1, rArray.end());
             return fVal + fDiff * (*iter - fVal);
         }
     }
@@ -3440,8 +3453,7 @@ double ScInterpreter::GetPercentileExclusive( vector<double> & rArray, double fP
     {
         OSL_ENSURE(nIndex < nSize1, "GetPercentile: wrong index(2)");
         double fVal = *iter;
-        iter = rArray.begin() + nIndex + 1;
-        ::std::nth_element( rArray.begin(), iter, rArray.end());
+        iter = ::std::min_element( rArray.begin() + nIndex + 1, rArray.end());
         return fVal + fDiff * (*iter - fVal);
     }
 }
@@ -3626,28 +3638,72 @@ void ScInterpreter::CalculateSmallLarge(bool bSmall)
 {
     if ( !MustHaveParamCount( GetByte(), 2 )  )
         return;
-    double f = ::rtl::math::approxFloor(GetDouble());
-    if (f < 1.0)
+
+    SCSIZE nCol = 0, nRow = 0;
+    auto aArray = GetTopNumberArray(nCol, nRow);
+    auto aArraySize = aArray.size();
+    if (aArraySize == 0 || nGlobalError != FormulaError::NONE)
     {
-        PushIllegalArgument();
+        PushNoValue();
         return;
     }
-    SCSIZE k = static_cast<SCSIZE>(f);
+    assert(aArraySize == nCol * nRow);
+    for (double fArg : aArray)
+    {
+        double f = ::rtl::math::approxFloor(fArg);
+        if (f < 1.0)
+        {
+            PushIllegalArgument();
+            return;
+        }
+    }
+
+    std::vector<SCSIZE> aRankArray;
+    aRankArray.reserve(aArraySize);
+    std::transform(aArray.begin(), aArray.end(), std::back_inserter(aRankArray),
+                   [](double f) { return static_cast<SCSIZE>(f); });
+
+    auto itMaxRank = std::max_element(aRankArray.begin(), aRankArray.end());
+    assert(itMaxRank != aRankArray.end());
+    SCSIZE k = *itMaxRank;
+
     vector<double> aSortArray;
-    /* TODO: using nth_element() is best for one single value, but LARGE/SMALL
-     * actually are defined to return an array of values if an array of
-     * positions was passed, in which case, depending on the number of values,
-     * we may or will need a real sorted array again, see #i32345. */
     GetNumberSequenceArray(1, aSortArray, false );
     SCSIZE nSize = aSortArray.size();
     if (nSize == 0 || nGlobalError != FormulaError::NONE || nSize < k)
         PushNoValue();
-    else
+    else if (aArraySize == 1)
     {
-        // TODO: the sorted case for array: PushDouble( aSortArray[ bSmall ? k-1 : nSize-k ] );
         vector<double>::iterator iPos = aSortArray.begin() + (bSmall ? k-1 : nSize-k);
         ::std::nth_element( aSortArray.begin(), iPos, aSortArray.end());
         PushDouble( *iPos);
+    }
+    else
+    {
+        std::set<SCSIZE> aIndices;
+        for (SCSIZE n : aRankArray)
+            aIndices.insert(bSmall ? n-1 : nSize-n);
+        // We can spare sorting when the total number of ranks is small enough.
+        // Find only the elements at given indices if, arbitrarily, the index size is
+        // smaller than 1/3 of the haystack array's size; just sort it squarely, otherwise.
+        if (aIndices.size() < nSize/3)
+        {
+            auto itBegin = aSortArray.begin();
+            for (SCSIZE i : aIndices)
+            {
+                auto it = aSortArray.begin() + i;
+                std::nth_element(itBegin, it, aSortArray.end());
+                itBegin = ++it;
+            }
+        }
+        else
+            std::sort(aSortArray.begin(), aSortArray.end());
+
+        aArray.clear();
+        for (SCSIZE n : aRankArray)
+            aArray.push_back(aSortArray[bSmall ? n-1 : nSize-n]);
+        ScMatrixRef pResult = GetNewMat(nCol, nRow, aArray);
+        PushMatrix(pResult);
     }
 }
 
@@ -3783,6 +3839,91 @@ void ScInterpreter::ScTrimMean()
             fSum += aSortArray[i];
         PushDouble(fSum/static_cast<double>(nSize-2*nIndex));
     }
+}
+
+std::vector<double> ScInterpreter::GetTopNumberArray( SCSIZE& rCol, SCSIZE& rRow )
+{
+    std::vector<double> aArray;
+    switch (GetStackType())
+    {
+        case svDouble:
+            aArray.push_back(PopDouble());
+            rCol = rRow = 1;
+        break;
+        case svSingleRef:
+        {
+            ScAddress aAdr;
+            PopSingleRef(aAdr);
+            ScRefCellValue aCell(*pDok, aAdr);
+            if (aCell.hasNumeric())
+            {
+                aArray.push_back(GetCellValue(aAdr, aCell));
+                rCol = rRow = 1;
+            }
+        }
+        break;
+        case svDoubleRef:
+        {
+            ScRange aRange;
+            PopDoubleRef(aRange, true);
+            if (nGlobalError != FormulaError::NONE)
+                break;
+
+            // give up unless the start and end are in the same sheet
+            if (aRange.aStart.Tab() != aRange.aEnd.Tab())
+            {
+                SetError(FormulaError::IllegalParameter);
+                break;
+            }
+
+            // the range already is in order
+            assert(aRange.aStart.Col() <= aRange.aEnd.Col());
+            assert(aRange.aStart.Row() <= aRange.aEnd.Row());
+            rCol = aRange.aEnd.Col() - aRange.aStart.Col() + 1;
+            rRow = aRange.aEnd.Row() - aRange.aStart.Row() + 1;
+            aArray.reserve(rCol * rRow);
+
+            FormulaError nErr = FormulaError::NONE;
+            double fCellVal;
+            ScValueIterator aValIter(pDok, aRange, mnSubTotalFlags);
+            if (aValIter.GetFirst(fCellVal, nErr))
+            {
+                do
+                    aArray.push_back(fCellVal);
+                while (aValIter.GetNext(fCellVal, nErr) && nErr == FormulaError::NONE);
+            }
+            if (aArray.size() != rCol * rRow)
+            {
+                aArray.clear();
+                SetError(nErr);
+            }
+        }
+        break;
+        case svMatrix:
+        case svExternalSingleRef:
+        case svExternalDoubleRef:
+        {
+            ScMatrixRef pMat = GetMatrix();
+            if (!pMat)
+                break;
+
+            if (pMat->IsNumeric())
+            {
+                SCSIZE nCount = pMat->GetElementCount();
+                aArray.reserve(nCount);
+                for (SCSIZE i = 0; i < nCount; ++i)
+                    aArray.push_back(pMat->GetDouble(i));
+                pMat->GetDimensions(rCol, rRow);
+            }
+            else
+                SetError(FormulaError::IllegalParameter);
+        }
+        break;
+        default:
+            SetError(FormulaError::IllegalParameter);
+        break;
+    }
+    return aArray;
 }
 
 void ScInterpreter::GetNumberSequenceArray( sal_uInt8 nParamCount, vector<double>& rArray, bool bConvertTextInArray )

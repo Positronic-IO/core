@@ -102,21 +102,21 @@ template<class T> SfxPoolItem* createSfxPoolItem()
 }
 struct SfxType
 {
-    std::function<SfxPoolItem* ()> createSfxPoolItemFunc;
+    std::function<SfxPoolItem* ()> const createSfxPoolItemFunc;
     const std::type_info*   pType;
-    sal_uInt16          nAttribs;
+    sal_uInt16 const        nAttribs;
     SfxTypeAttrib   aAttrib[1]; // variable length
 
     const std::type_info* Type() const{return pType;}
-    SfxPoolItem*    CreateItem() const
-                    { return createSfxPoolItemFunc(); }
+    std::unique_ptr<SfxPoolItem> CreateItem() const
+                    { return std::unique_ptr<SfxPoolItem>(createSfxPoolItemFunc()); }
 };
 
 struct SfxType0
 {
-    std::function<SfxPoolItem* ()> createSfxPoolItemFunc;
-    const std::type_info*   pType;
-    sal_uInt16          nAttribs;
+    std::function<SfxPoolItem* ()> const createSfxPoolItemFunc;
+    const std::type_info*    pType;
+    sal_uInt16 const         nAttribs;
     const std::type_info*    Type() const { return pType;}
 };
 #define SFX_DECL_TYPE(n)    struct SfxType##n                   \
@@ -171,12 +171,12 @@ SFX_DECL_TYPE(23); // for SvxSearchItem
 
 struct SfxFormalArgument
 {
-    const SfxType*  pType;    // Type of the parameter (SfxPoolItem subclass)
-    const char*     pName;    // Name of the sParameters
-    sal_uInt16      nSlotId;  // Slot-Id for identification of the Parameters
+    const SfxType*   pType;    // Type of the parameter (SfxPoolItem subclass)
+    const char*      pName;    // Name of the sParameters
+    sal_uInt16 const nSlotId;  // Slot-Id for identification of the Parameters
 
-    SfxPoolItem*            CreateItem() const
-                            { return pType->createSfxPoolItemFunc(); }
+    std::unique_ptr<SfxPoolItem> CreateItem() const
+                            { return pType->CreateItem(); }
 };
 
 

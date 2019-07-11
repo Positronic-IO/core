@@ -95,7 +95,7 @@ ScChartObj* ScChartsObj::GetObjectByIndex_Impl(long nIndex) const
             if (pPage)
             {
                 long nPos = 0;
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {
@@ -188,7 +188,7 @@ void SAL_CALL ScChartsObj::addNewByName( const OUString& rName,
 
             Size aRectSize( aRect.Width, aRect.Height );
             if (aRectSize.Width() <= 0)
-                aRectSize.setWidth( 5000 );   // Default-Groesse
+                aRectSize.setWidth( 5000 );   // default size
 
             if (aRectSize.Height() <= 0)
                 aRectSize.setHeight( 5000 );
@@ -261,7 +261,7 @@ void SAL_CALL ScChartsObj::addNewByName( const OUString& rName,
             // ChartHelper::AdaptDefaultsForChart( xObj );
 
             pPage->InsertObject( pObj );
-            pModel->AddUndo( new SdrUndoInsertObj( *pObj ) );
+            pModel->AddUndo( o3tl::make_unique<SdrUndoInsertObj>( *pObj ) );
     }
 }
 
@@ -276,7 +276,7 @@ void SAL_CALL ScChartsObj::removeByName( const OUString& aName )
         ScDrawLayer* pModel = rDoc.GetDrawLayer();     // is not zero
         SdrPage* pPage = pModel->GetPage(static_cast<sal_uInt16>(nTab));    // is not zero
 
-        pModel->AddUndo( new SdrUndoDelObj( *pObj ) );
+        pModel->AddUndo( o3tl::make_unique<SdrUndoDelObj>( *pObj ) );
         pPage->RemoveObject( pObj->GetOrdNum() );
 
         //! Notify etc.???
@@ -307,7 +307,7 @@ sal_Int32 SAL_CALL ScChartsObj::getCount()
             OSL_ENSURE(pPage, "Page not found");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {
@@ -372,7 +372,7 @@ uno::Sequence<OUString> SAL_CALL ScChartsObj::getElementNames()
             OSL_ENSURE(pPage, "Page not found");
             if (pPage)
             {
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {
@@ -383,14 +383,14 @@ uno::Sequence<OUString> SAL_CALL ScChartsObj::getElementNames()
                         if ( xObj.is() )
                             aName = pDocShell->GetEmbeddedObjectContainer().GetEmbeddedObjectName( xObj );
 
-                        OSL_ENSURE(nPos<nCount, "huch, verzaehlt?");
+                        OSL_ENSURE(nPos<nCount, "oops, miscounted?");
                         pAry[nPos++] = aName;
                     }
                     pObject = aIter.Next();
                 }
             }
         }
-        OSL_ENSURE(nPos==nCount, "nanu, verzaehlt?");
+        OSL_ENSURE(nPos==nCount, "hey, miscounted?");
 
         return aSeq;
     }
@@ -508,7 +508,7 @@ void ScChartObj::Update_Impl( const ScRangeListRef& rRanges, bool bColHeaders, b
         if (bUndo)
         {
             pDocShell->GetUndoManager()->AddUndoAction(
-                new ScUndoChartData( pDocShell, aChartName, rRanges, bColHeaders, bRowHeaders, false ) );
+                o3tl::make_unique<ScUndoChartData>( pDocShell, aChartName, rRanges, bColHeaders, bRowHeaders, false ) );
         }
         rDoc.UpdateChartArea( aChartName, rRanges, bColHeaders, bRowHeaders, false );
     }

@@ -93,10 +93,10 @@ void sw::DropDownFieldDialog::Apply()
             m_rSh.StartAllAction();
 
             std::unique_ptr<SwDropDownField> const pCopy(
-                static_cast<SwDropDownField*>(m_pDropField->CopyField()));
+                static_cast<SwDropDownField*>(m_pDropField->CopyField().release()));
 
             pCopy->SetPar1(sSelect);
-            m_rSh.SwEditShell::UpdateFields(*pCopy);
+            m_rSh.SwEditShell::UpdateOneField(*pCopy);
 
             m_rSh.SetUndoNoResetModified();
             m_rSh.EndAllAction();
@@ -117,7 +117,7 @@ bool sw::DropDownFieldDialog::NextButtonPressed() const
 IMPL_LINK_NOARG(sw::DropDownFieldDialog, EditHdl, weld::Button&, void)
 {
     m_pPressedButton = m_xEditPB.get();
-    m_xDialog->response(RET_OK);
+    m_xDialog->response(RET_YES);
 }
 
 IMPL_LINK_NOARG(sw::DropDownFieldDialog, PrevHdl, weld::Button&, void)
@@ -134,6 +134,9 @@ IMPL_LINK_NOARG(sw::DropDownFieldDialog, NextHdl, weld::Button&, void)
 
 IMPL_LINK_NOARG(sw::DropDownFieldDialog, DoubleClickHdl, weld::TreeView&, void)
 {
+    // tdf#114144, when next is available make double-click accept and go to next field
+    if (m_xNextPB->get_visible() && m_xNextPB->get_sensitive())
+        m_pPressedButton = m_xNextPB.get();
     m_xDialog->response(RET_OK);
 }
 

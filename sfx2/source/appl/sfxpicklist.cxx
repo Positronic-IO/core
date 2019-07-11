@@ -62,19 +62,6 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::util;
 
 
-class StringLength : public ::cppu::WeakImplHelper< XStringWidth >
-{
-    public:
-        StringLength() {}
-
-        // XStringWidth
-        sal_Int32 SAL_CALL queryStringWidth( const OUString& aString ) override
-        {
-            return aString.getLength();
-        }
-};
-
-
 namespace
 {
     class thePickListMutex
@@ -83,9 +70,6 @@ namespace
 
 class SfxPickListImpl : public SfxListener
 {
-private:
-    css::uno::Reference< css::util::XStringWidth > m_xStringLength;
-
     /**
      * Adds the given document to the pick list (recent documents) if it satisfies
        certain requirements, e.g. being writable. Check implementation for requirement
@@ -94,7 +78,7 @@ private:
     static void         AddDocumentToPickList( SfxObjectShell* pDocShell );
 
 public:
-    SfxPickListImpl();
+    SfxPickListImpl(SfxApplication& rApp);
     virtual void Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
 };
 
@@ -127,7 +111,7 @@ void SfxPickListImpl::AddDocumentToPickList( SfxObjectShell* pDocSh )
 
     OUString  aTitle = pDocSh->GetTitle(SFX_TITLE_PICKLIST);
     OUString  aFilter;
-    std::shared_ptr<const SfxFilter> pFilter = pMed->GetOrigFilter();
+    std::shared_ptr<const SfxFilter> pFilter = pMed->GetFilter();
     if ( pFilter )
         aFilter = pFilter->GetFilterName();
 
@@ -177,26 +161,18 @@ void SfxPickListImpl::AddDocumentToPickList( SfxObjectShell* pDocSh )
                                                                  pFilter ? pFilter->GetServiceName() : OUString() );
 }
 
-SfxPickList::SfxPickList()
-    : mxImpl(new SfxPickListImpl())
+SfxPickList::SfxPickList(SfxApplication& rApp)
+    : mxImpl(new SfxPickListImpl(rApp))
 {
 }
 
 SfxPickList::~SfxPickList()
 {
-    std::unique_ptr<SolarMutexGuard> xGuard(comphelper::SolarMutex::get() ? new SolarMutexGuard : nullptr);
-    mxImpl.reset();
 }
 
-void SfxPickList::ensure()
+SfxPickListImpl::SfxPickListImpl(SfxApplication& rApp)
 {
-    static SfxPickList aUniqueInstance;
-}
-
-SfxPickListImpl::SfxPickListImpl()
-{
-    m_xStringLength = new StringLength;
-    StartListening( *SfxGetpApp() );
+    StartListening(rApp);
 }
 
 void SfxPickListImpl::Notify( SfxBroadcaster&, const SfxHint& rHint )

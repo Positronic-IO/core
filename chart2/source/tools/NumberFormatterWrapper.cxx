@@ -19,11 +19,11 @@
 
 #include <NumberFormatterWrapper.hxx>
 #include <svl/numuno.hxx>
-#include <svl/zformat.hxx>
+#include <svl/zforlist.hxx>
 #include <tools/color.hxx>
-#include <i18nlangtag/mslangid.hxx>
 #include <com/sun/star/util/Date.hpp>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 namespace chart
 {

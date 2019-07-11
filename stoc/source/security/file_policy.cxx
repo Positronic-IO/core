@@ -36,6 +36,7 @@
 #include <com/sun/star/security/RuntimePermission.hpp>
 #include <com/sun/star/io/FilePermission.hpp>
 #include <com/sun/star/connection/SocketPermission.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <unordered_map>
 
@@ -136,7 +137,7 @@ Sequence< Any > FilePolicy::getDefaultPermissions()
 
 class PolicyReader
 {
-    OUString m_fileName;
+    OUString const m_fileName;
     oslFileHandle m_file;
 
     sal_Int32 m_linepos;

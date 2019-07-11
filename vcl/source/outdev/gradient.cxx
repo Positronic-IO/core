@@ -249,7 +249,7 @@ void OutputDevice::DrawGradientToMetafile ( const tools::PolyPolygon& rPolyPoly,
 
 namespace
 {
-    inline sal_uInt8 GetGradientColorValue( long nValue )
+    sal_uInt8 GetGradientColorValue( long nValue )
     {
         if ( nValue < 0 )
             return 0;
@@ -455,7 +455,7 @@ void OutputDevice::DrawComplexGradient( const tools::Rectangle& rRect,
     assert(!is_double_buffered_window());
 
     // Determine if we output via Polygon or PolyPolygon
-    // For all rasteroperations other then Overpaint always use PolyPolygon,
+    // For all rasteroperations other than Overpaint always use PolyPolygon,
     // as we will get wrong results if we output multiple times on top of each other.
     // Also for printers always use PolyPolygon, as not all printers
     // can print polygons on top of each other.
@@ -521,7 +521,8 @@ void OutputDevice::DrawComplexGradient( const tools::Rectangle& rRect,
 
     if( xPolyPoly )
     {
-        xPolyPoly->Insert( aPoly = rRect );
+        aPoly = rRect;
+        xPolyPoly->Insert( aPoly );
         xPolyPoly->Insert( aPoly );
     }
     else
@@ -534,17 +535,22 @@ void OutputDevice::DrawComplexGradient( const tools::Rectangle& rRect,
         aExtRect.AdjustRight(1 );
         aExtRect.AdjustBottom(1 );
 
-        ImplDrawPolygon( aPoly = aExtRect, pClixPolyPoly );
+        aPoly = aExtRect;
+        ImplDrawPolygon( aPoly, pClixPolyPoly );
     }
 
-    // loop to output Polygone/PolyPolygone sequentially
+    // loop to output Polygon/PolyPolygon sequentially
     for( long i = 1; i < nSteps; i++ )
     {
         // calculate new Polygon
-        aRect.SetLeft( static_cast<long>( fScanLeft += fScanIncX ) );
-        aRect.SetTop( static_cast<long>( fScanTop += fScanIncY ) );
-        aRect.SetRight( static_cast<long>( fScanRight -= fScanIncX ) );
-        aRect.SetBottom( static_cast<long>( fScanBottom -= fScanIncY ) );
+        fScanLeft += fScanIncX;
+        aRect.SetLeft( static_cast<long>( fScanLeft ) );
+        fScanTop += fScanIncY;
+        aRect.SetTop( static_cast<long>( fScanTop ) );
+        fScanRight -= fScanIncX;
+        aRect.SetRight( static_cast<long>( fScanRight ) );
+        fScanBottom -= fScanIncY;
+        aRect.SetBottom( static_cast<long>( fScanBottom ) );
 
         if( ( aRect.GetWidth() < 2 ) || ( aRect.GetHeight() < 2 ) )
             break;
@@ -799,7 +805,7 @@ void OutputDevice::DrawComplexGradientToMetafile( const tools::Rectangle& rRect,
     assert(!is_double_buffered_window());
 
     // Determine if we output via Polygon or PolyPolygon
-    // For all rasteroperations other then Overpaint always use PolyPolygon,
+    // For all rasteroperations other than Overpaint always use PolyPolygon,
     // as we will get wrong results if we output multiple times on top of each other.
     // Also for printers always use PolyPolygon, as not all printers
     // can print polygons on top of each other.
@@ -863,17 +869,22 @@ void OutputDevice::DrawComplexGradientToMetafile( const tools::Rectangle& rRect,
 
     mpMetaFile->AddAction( new MetaFillColorAction( Color( nRed, nGreen, nBlue ), true ) );
 
-    xPolyPoly->Insert( aPoly = rRect );
+    aPoly = rRect;
+    xPolyPoly->Insert( aPoly );
     xPolyPoly->Insert( aPoly );
 
-    // loop to output Polygone/PolyPolygone sequentially
+    // loop to output Polygon/PolyPolygon sequentially
     for( long i = 1; i < nSteps; i++ )
     {
         // calculate new Polygon
-        aRect.SetLeft( static_cast<long>( fScanLeft += fScanIncX ) );
-        aRect.SetTop( static_cast<long>( fScanTop += fScanIncY ) );
-        aRect.SetRight( static_cast<long>( fScanRight -= fScanIncX ) );
-        aRect.SetBottom( static_cast<long>( fScanBottom -= fScanIncY ) );
+        fScanLeft += fScanIncX;
+        aRect.SetLeft( static_cast<long>( fScanLeft ) );
+        fScanTop += fScanIncY;
+        aRect.SetTop( static_cast<long>( fScanTop ) );
+        fScanRight -= fScanIncX;
+        aRect.SetRight( static_cast<long>( fScanRight ) );
+        fScanBottom -= fScanIncY;
+        aRect.SetBottom( static_cast<long>( fScanBottom ) );
 
         if( ( aRect.GetWidth() < 2 ) || ( aRect.GetHeight() < 2 ) )
             break;

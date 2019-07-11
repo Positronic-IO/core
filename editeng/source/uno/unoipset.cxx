@@ -21,12 +21,14 @@
 #include <svl/eitem.hxx>
 #include <svl/itemprop.hxx>
 #include <tools/helpers.hxx>
+#include <tools/debug.hxx>
 #include <editeng/unoipset.hxx>
 #include <editeng/editids.hrc>
 #include <editeng/editeng.hxx>
 #include <svl/itempool.hxx>
 #include <o3tl/any.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <algorithm>
 
 using namespace ::com::sun::star;
@@ -78,7 +80,7 @@ void SvxItemPropertySet::ClearAllUsrAny()
 }
 
 
-bool SvxUnoCheckForPositiveValue( const uno::Any& rVal )
+static bool SvxUnoCheckForPositiveValue( const uno::Any& rVal )
 {
     bool bConvert = true; // the default is that all metric items must be converted
     sal_Int32 nValue = 0;
@@ -100,7 +102,7 @@ uno::Any SvxItemPropertySet::getPropertyValue( const SfxItemPropertySimpleEntry*
     if( nullptr == pItem && pPool )
         pItem = &(pPool->GetDefaultItem( pMap->nWID ));
 
-    const MapUnit eMapUnit = pPool ? pPool->GetMetric(static_cast<sal_uInt16>(pMap->nWID)) : MapUnit::Map100thMM;
+    const MapUnit eMapUnit = pPool ? pPool->GetMetric(pMap->nWID) : MapUnit::Map100thMM;
     sal_uInt8 nMemberId = pMap->nMemberId;
     if( eMapUnit == MapUnit::Map100thMM )
         nMemberId &= (~CONVERT_TWIPS);
@@ -156,33 +158,28 @@ void SvxItemPropertySet::setPropertyValue( const SfxItemPropertySimpleEntry* pMa
         pItem = &pPool->GetDefaultItem( pMap->nWID );
     }
 
-    DBG_ASSERT( pItem, "Got no default for item!" );
-    if( pItem )
+    uno::Any aValue(rVal);
+
+    const MapUnit eMapUnit = pPool ? pPool->GetMetric(pMap->nWID) : MapUnit::Map100thMM;
+
+    // check for needed metric translation
+    if ((pMap->nMoreFlags & PropertyMoreFlags::METRIC_ITEM) && eMapUnit != MapUnit::Map100thMM)
     {
-        uno::Any aValue( rVal );
+        if (!bDontConvertNegativeValues || SvxUnoCheckForPositiveValue(aValue))
+            SvxUnoConvertFromMM(eMapUnit, aValue);
+    }
 
-        const MapUnit eMapUnit = pPool ? pPool->GetMetric(static_cast<sal_uInt16>(pMap->nWID)) : MapUnit::Map100thMM;
+    std::unique_ptr<SfxPoolItem> pNewItem(pItem->Clone());
 
-        // check for needed metric translation
-        if( (pMap->nMoreFlags & PropertyMoreFlags::METRIC_ITEM) && eMapUnit != MapUnit::Map100thMM )
-        {
-            if ( !bDontConvertNegativeValues || SvxUnoCheckForPositiveValue( aValue ) )
-                SvxUnoConvertFromMM( eMapUnit, aValue );
-        }
+    sal_uInt8 nMemberId = pMap->nMemberId;
+    if (eMapUnit == MapUnit::Map100thMM)
+        nMemberId &= (~CONVERT_TWIPS);
 
-        SfxPoolItem *pNewItem = pItem->Clone();
-
-        sal_uInt8 nMemberId = pMap->nMemberId;
-        if( eMapUnit == MapUnit::Map100thMM )
-            nMemberId &= (~CONVERT_TWIPS);
-
-        if( pNewItem->PutValue( aValue, nMemberId ) )
-        {
-            // Set new item in item set
-            pNewItem->SetWhich( pMap->nWID );
-            rSet.Put( *pNewItem );
-        }
-        delete pNewItem;
+    if (pNewItem->PutValue(aValue, nMemberId))
+    {
+        // Set new item in item set
+        pNewItem->SetWhich(pMap->nWID);
+        rSet.Put(*pNewItem);
     }
 }
 
@@ -195,7 +192,7 @@ uno::Any SvxItemPropertySet::getPropertyValue( const SfxItemPropertySimpleEntry*
         return *pUsrAny;
 
     // No UsrAny detected yet, generate Default entry and return this
-    const MapUnit eMapUnit = mrItemPool.GetMetric(static_cast<sal_uInt16>(pMap->nWID));
+    const MapUnit eMapUnit = mrItemPool.GetMetric(pMap->nWID);
     sal_uInt8 nMemberId = pMap->nMemberId;
     if( eMapUnit == MapUnit::Map100thMM )
         nMemberId &= (~CONVERT_TWIPS);
@@ -220,13 +217,10 @@ uno::Any SvxItemPropertySet::getPropertyValue( const SfxItemPropertySimpleEntry*
         }
     }
 
-    if( pMap->nMoreFlags & PropertyMoreFlags::METRIC_ITEM )
+    // check for needed metric translation
+    if(pMap->nMoreFlags & PropertyMoreFlags::METRIC_ITEM && eMapUnit != MapUnit::Map100thMM)
     {
-        // check for needed metric translation
-        if(pMap->nMoreFlags & PropertyMoreFlags::METRIC_ITEM && eMapUnit != MapUnit::Map100thMM)
-        {
-            SvxUnoConvertToMM( eMapUnit, aVal );
-        }
+        SvxUnoConvertToMM( eMapUnit, aVal );
     }
 
     if ( pMap->aType.getTypeClass() == uno::TypeClass_ENUM &&

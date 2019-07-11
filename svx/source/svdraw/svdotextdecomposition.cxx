@@ -54,6 +54,7 @@
 #include <editeng/editobj.hxx>
 #include <editeng/overflowingtxt.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 
@@ -89,7 +90,6 @@ namespace
         DECL_LINK(decomposeBlockBulletPrimitive, DrawBulletInfo*, void);
         DECL_LINK(decomposeStretchBulletPrimitive, DrawBulletInfo*, void);
 
-        static bool impIsUnderlineAbove(const vcl::Font& rFont);
         void impCreateTextPortionPrimitive(const DrawPortionInfo& rInfo);
         static drawinglayer::primitive2d::BasePrimitive2D* impCheckFieldPrimitive(drawinglayer::primitive2d::BasePrimitive2D* pPrimitive, const DrawPortionInfo& rInfo);
         void impFlushTextPortionPrimitivesToLinePrimitives();
@@ -150,22 +150,6 @@ namespace
 
         drawinglayer::primitive2d::Primitive2DContainer const & getPrimitive2DSequence();
     };
-
-    bool impTextBreakupHandler::impIsUnderlineAbove(const vcl::Font& rFont)
-    {
-        if(!rFont.IsVertical())
-        {
-            return false;
-        }
-
-        if((LANGUAGE_JAPANESE == rFont.GetLanguage()) || (LANGUAGE_JAPANESE == rFont.GetCJKContextLanguage()))
-        {
-            // the underline is right for Japanese only
-            return true;
-        }
-
-        return false;
-    }
 
     void impTextBreakupHandler::impCreateTextPortionPrimitive(const DrawPortionInfo& rInfo)
     {
@@ -288,7 +272,7 @@ namespace
 
             // check UnderlineAbove
             const bool bUnderlineAbove(
-                drawinglayer::primitive2d::TEXT_LINE_NONE != eFontLineStyle && impIsUnderlineAbove(rInfo.mrFont));
+                drawinglayer::primitive2d::TEXT_LINE_NONE != eFontLineStyle && rInfo.mrFont.IsUnderlineAbove());
 
             // prepare strikeout data
             const drawinglayer::primitive2d::TextStrikeout eTextStrikeout(
@@ -851,6 +835,37 @@ void SdrTextObj::impDecomposeAutoFitTextPrimitive(
     rTarget = aConverter.getPrimitive2DSequence();
 }
 
+// Resolves: fdo#35779 set background color of this shape as the editeng background if there
+// is one. Check the shape itself, then the host page, then that page's master page.
+void SdrObject::setSuitableOutlinerBg(::Outliner& rOutliner) const
+{
+    const SfxItemSet* pBackgroundFillSet = &GetObjectItemSet();
+
+    if (drawing::FillStyle_NONE == pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
+    {
+        SdrPage* pOwnerPage(getSdrPageFromSdrObject());
+        if (pOwnerPage)
+        {
+            pBackgroundFillSet = &pOwnerPage->getSdrPageProperties().GetItemSet();
+
+            if (drawing::FillStyle_NONE == pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
+            {
+                if (!pOwnerPage->IsMasterPage() && pOwnerPage->TRG_HasMasterPage())
+                {
+                    pBackgroundFillSet = &pOwnerPage->TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
+                }
+            }
+        }
+    }
+
+    if (drawing::FillStyle_NONE != pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
+    {
+        Color aColor(rOutliner.GetBackgroundColor());
+        GetDraftFillColor(*pBackgroundFillSet, aColor);
+        rOutliner.SetBackgroundColor(aColor);
+    }
+}
+
 void SdrTextObj::impDecomposeBlockTextPrimitive(
     drawinglayer::primitive2d::Primitive2DContainer& rTarget,
     const drawinglayer::primitive2d::SdrBlockTextPrimitive2D& rSdrBlockTextPrimitive,
@@ -881,35 +896,9 @@ void SdrTextObj::impDecomposeBlockTextPrimitive(
     rOutliner.SetMinAutoPaperSize(aNullSize);
     rOutliner.SetMaxAutoPaperSize(Size(1000000,1000000));
 
-    // Resolves: fdo#35779 set background color of this shape as the editeng background if there
-    // is one. Check the shape itself, then the host page, then that page's master page.
     // That color needs to be restored on leaving this method
     Color aOriginalBackColor(rOutliner.GetBackgroundColor());
-    const SfxItemSet* pBackgroundFillSet = &GetObjectItemSet();
-
-    if (drawing::FillStyle_NONE == pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
-    {
-        SdrPage *pOwnerPage = GetPage();
-        if (pOwnerPage)
-        {
-            pBackgroundFillSet = &pOwnerPage->getSdrPageProperties().GetItemSet();
-
-            if (drawing::FillStyle_NONE == pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
-            {
-                if (!pOwnerPage->IsMasterPage() && pOwnerPage->TRG_HasMasterPage())
-                {
-                    pBackgroundFillSet = &pOwnerPage->TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
-                }
-            }
-        }
-    }
-
-    if (drawing::FillStyle_NONE != pBackgroundFillSet->Get(XATTR_FILLSTYLE).GetValue())
-    {
-        Color aColor(rOutliner.GetBackgroundColor());
-        GetDraftFillColor(*pBackgroundFillSet, aColor);
-        rOutliner.SetBackgroundColor(aColor);
-    }
+    setSuitableOutlinerBg(rOutliner);
 
     // add one to rage sizes to get back to the old Rectangle and outliner measurements
     const sal_uInt32 nAnchorTextWidth(FRound(aAnchorTextRange.getWidth() + 1));
@@ -1232,7 +1221,7 @@ void SdrTextObj::impGetBlinkTextTiming(drawinglayer::animation::AnimationEntryLi
     }
 }
 
-void impCreateScrollTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, bool bForward, double fTimeFullPath, double fFrequency)
+static void impCreateScrollTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, bool bForward, double fTimeFullPath, double fFrequency)
 {
     bool bVisibleWhenStopped(rSet.Get(SDRATTR_TEXT_ANISTOPINSIDE).GetValue());
     bool bVisibleWhenStarted(rSet.Get(SDRATTR_TEXT_ANISTARTINSIDE).GetValue());
@@ -1263,7 +1252,7 @@ void impCreateScrollTiming(const SfxItemSet& rSet, drawinglayer::animation::Anim
     }
 }
 
-void impCreateAlternateTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, double fRelativeTextLength, bool bForward, double fTimeFullPath, double fFrequency)
+static void impCreateAlternateTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, double fRelativeTextLength, bool bForward, double fTimeFullPath, double fFrequency)
 {
     if(basegfx::fTools::more(fRelativeTextLength, 0.5))
     {
@@ -1331,7 +1320,7 @@ void impCreateAlternateTiming(const SfxItemSet& rSet, drawinglayer::animation::A
     }
 }
 
-void impCreateSlideTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, bool bForward, double fTimeFullPath, double fFrequency)
+static void impCreateSlideTiming(const SfxItemSet& rSet, drawinglayer::animation::AnimationEntryList& rAnimList, bool bForward, double fTimeFullPath, double fFrequency)
 {
     // move in from outside, start outside
     const double fStartPosition(bForward ? 0.0 : 1.0);
@@ -1438,16 +1427,19 @@ void SdrTextObj::impHandleChainingEventsDuringDecomposition(SdrOutliner &rOutlin
     TextChainFlow aTxtChainFlow(const_cast<SdrTextObj*>(this));
     bool bIsOverflow;
 
+#ifdef DBG_UTIL
     // Some debug output
-    size_t nObjCount = pPage->GetObjCount();
-    for (size_t i = 0; i < nObjCount; i++) {
-        SdrTextObj *pCurObj = static_cast<SdrTextObj *>(pPage->GetObj(i));
-
-        if (pCurObj == this) {
+    size_t nObjCount(getSdrPageFromSdrObject()->GetObjCount());
+    for (size_t i = 0; i < nObjCount; i++)
+    {
+        SdrTextObj* pCurObj(dynamic_cast< SdrTextObj* >(getSdrPageFromSdrObject()->GetObj(i)));
+        if(pCurObj == this)
+        {
             SAL_INFO("svx.chaining", "Working on TextBox " << i);
             break;
         }
     }
+#endif
 
     aTxtChainFlow.CheckForFlowEvents(&rOutliner);
 

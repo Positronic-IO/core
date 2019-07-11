@@ -52,11 +52,11 @@ using namespace ::com::sun::star;
 
 SdrPageWindow* SdrPageView::FindPageWindow(SdrPaintWindow& rPaintWindow) const
 {
-    for(SdrPageWindowVector::const_iterator a = maPageWindows.begin(); a != maPageWindows.end(); ++a)
+    for(auto & a : maPageWindows)
     {
-        if(&((*a)->GetPaintWindow()) == &rPaintWindow)
+        if(&(a->GetPaintWindow()) == &rPaintWindow)
         {
-            return *a;
+            return a.get();
         }
     }
 
@@ -65,16 +65,12 @@ SdrPageWindow* SdrPageView::FindPageWindow(SdrPaintWindow& rPaintWindow) const
 
 const SdrPageWindow* SdrPageView::FindPatchedPageWindow( const OutputDevice& _rOutDev ) const
 {
-    for (   SdrPageWindowVector::const_iterator loop = maPageWindows.begin();
-            loop != maPageWindows.end();
-            ++loop
-        )
+    for ( auto const & pPageWindow : maPageWindows )
     {
-        const SdrPageWindow& rPageWindow( *(*loop) );
-        const SdrPaintWindow& rPaintWindow( rPageWindow.GetOriginalPaintWindow() ? *rPageWindow.GetOriginalPaintWindow() : rPageWindow.GetPaintWindow() );
+        const SdrPaintWindow& rPaintWindow( pPageWindow->GetOriginalPaintWindow() ? *pPageWindow->GetOriginalPaintWindow() : pPageWindow->GetPaintWindow() );
         if ( &rPaintWindow.GetOutputDevice() == &_rOutDev )
         {
-            return &rPageWindow;
+            return pPageWindow.get();
         }
     }
 
@@ -83,11 +79,11 @@ const SdrPageWindow* SdrPageView::FindPatchedPageWindow( const OutputDevice& _rO
 
 SdrPageWindow* SdrPageView::FindPageWindow(const OutputDevice& rOutDev) const
 {
-    for(SdrPageWindowVector::const_iterator a = maPageWindows.begin(); a != maPageWindows.end(); ++a)
+    for ( auto const & pPageWindow : maPageWindows )
     {
-        if(&((*a)->GetPaintWindow().GetOutputDevice()) == &rOutDev)
+        if(&(pPageWindow->GetPaintWindow().GetOutputDevice()) == &rOutDev)
         {
-            return *a;
+            return pPageWindow.get();
         }
     }
 
@@ -96,39 +92,13 @@ SdrPageWindow* SdrPageView::FindPageWindow(const OutputDevice& rOutDev) const
 
 SdrPageWindow* SdrPageView::GetPageWindow(sal_uInt32 nIndex) const
 {
-    if(nIndex < maPageWindows.size())
-    {
-        return maPageWindows[nIndex];
-    }
-
-    return nullptr;
+    return maPageWindows[nIndex].get();
 }
 
 void SdrPageView::ClearPageWindows()
 {
-    for(SdrPageWindowVector::const_iterator a = maPageWindows.begin(); a != maPageWindows.end(); ++a)
-    {
-        delete *a;
-    }
-
     maPageWindows.clear();
 }
-
-SdrPageWindow* SdrPageView::RemovePageWindow(SdrPageWindow& rOld)
-{
-    const SdrPageWindowVector::iterator aFindResult = ::std::find(maPageWindows.begin(), maPageWindows.end(), &rOld);
-
-    if(aFindResult != maPageWindows.end())
-    {
-        // remember return value
-        SdrPageWindow* pSdrPageWindow = *aFindResult;
-        maPageWindows.erase(aFindResult);
-        return pSdrPageWindow;
-    }
-
-    return nullptr;
-}
-
 
 SdrPageView::SdrPageView(SdrPage* pPage1, SdrView& rNewView)
 :   mrView(rNewView),
@@ -144,10 +114,13 @@ SdrPageView::SdrPageView(SdrPage* pPage1, SdrView& rNewView)
         aPgOrg.setX(mpPage->GetLeftBorder() );
         aPgOrg.setY(mpPage->GetUpperBorder() );
     }
-    mbHasMarked = false;
+    // For example, in the case of charts, there is a LayerAdmin, but it has no valid values. Therefore
+    // a solution like pLayerAdmin->getVisibleLayersODF(aLayerVisi) is not possible. So use the
+    // generic SetAll() for now.
     aLayerVisi.SetAll();
     aLayerPrn.SetAll();
 
+    mbHasMarked = false;
     mbVisible = false;
     pCurrentList = nullptr;
     pCurrentGroup = nullptr;
@@ -161,27 +134,25 @@ SdrPageView::SdrPageView(SdrPage* pPage1, SdrView& rNewView)
 
 SdrPageView::~SdrPageView()
 {
-
-    // cleanup window vector
-    ClearPageWindows();
 }
 
 void SdrPageView::AddPaintWindowToPageView(SdrPaintWindow& rPaintWindow)
 {
     if(!FindPageWindow(rPaintWindow))
     {
-        maPageWindows.push_back(new SdrPageWindow(*this, rPaintWindow));
+        maPageWindows.emplace_back(new SdrPageWindow(*this, rPaintWindow));
     }
 }
 
 void SdrPageView::RemovePaintWindowFromPageView(SdrPaintWindow& rPaintWindow)
 {
-    SdrPageWindow* pCandidate = FindPageWindow(rPaintWindow);
-
-    if(pCandidate)
+    for(auto it = maPageWindows.begin(); it != maPageWindows.end(); ++it)
     {
-        pCandidate = RemovePageWindow(*pCandidate);
-        delete pCandidate;
+        if(&((*it)->GetPaintWindow()) == &rPaintWindow)
+        {
+            maPageWindows.erase(it);
+            break;
+        }
     }
 }
 
@@ -665,8 +636,12 @@ bool SdrPageView::IsObjMarkable(SdrObject const * pObj) const
             return true;
         }
     }
-    if (!pObj->Is3DObj() && pObj->GetPage()!=GetPage())
-        return false; // Obj suddenly in different Page
+    if (!pObj->Is3DObj() && pObj->getSdrPageFromSdrObject() != GetPage())
+    {
+        // Obj suddenly in different Page
+        return false;
+    }
+
     // the layer has to be visible and must not be locked
     SdrLayerID nL = pObj->GetLayer();
     if (!aLayerVisi.IsSet(nL))
@@ -813,7 +788,8 @@ bool SdrPageView::EnterGroup(SdrObject* pObj)
 
 void SdrPageView::LeaveOneGroup()
 {
-    if(!GetCurrentGroup())
+    SdrObject* pLastGroup = GetCurrentGroup();
+    if (!pLastGroup)
         return;
 
     bool bGlueInvalidate = GetView().ImpIsGlueVisible();
@@ -821,8 +797,7 @@ void SdrPageView::LeaveOneGroup()
     if(bGlueInvalidate)
         GetView().GlueInvalidate();
 
-    SdrObject* pLastGroup = GetCurrentGroup();
-    SdrObject* pParentGroup = GetCurrentGroup()->GetUpGroup();
+    SdrObject* pParentGroup = pLastGroup->getParentSdrObjectFromSdrObject();
     SdrObjList* pParentList = GetPage();
 
     if(pParentGroup)
@@ -835,9 +810,8 @@ void SdrPageView::LeaveOneGroup()
     SetCurrentGroupAndList(pParentGroup, pParentList);
 
     // select the group we just left
-    if(pLastGroup)
-        if(GetView().GetSdrPageView())
-            GetView().MarkObj(pLastGroup, GetView().GetSdrPageView());
+    if (GetView().GetSdrPageView())
+        GetView().MarkObj(pLastGroup, GetView().GetSdrPageView());
 
     GetView().AdjustMarkHdl();
 
@@ -850,14 +824,12 @@ void SdrPageView::LeaveOneGroup()
 
 void SdrPageView::LeaveAllGroup()
 {
-    if(GetCurrentGroup())
+    if (SdrObject* pLastGroup = GetCurrentGroup())
     {
         bool bGlueInvalidate = GetView().ImpIsGlueVisible();
 
         if(bGlueInvalidate)
             GetView().GlueInvalidate();
-
-        SdrObject* pLastGroup = GetCurrentGroup();
 
         // deselect everything
         GetView().UnmarkAll();
@@ -866,14 +838,11 @@ void SdrPageView::LeaveAllGroup()
         SetCurrentGroupAndList(nullptr, GetPage());
 
         // find and select uppermost group
-        if(pLastGroup)
-        {
-            while(pLastGroup->GetUpGroup())
-                pLastGroup = pLastGroup->GetUpGroup();
+        while (pLastGroup->getParentSdrObjectFromSdrObject())
+            pLastGroup = pLastGroup->getParentSdrObjectFromSdrObject();
 
-            if(GetView().GetSdrPageView())
-                GetView().MarkObj(pLastGroup, GetView().GetSdrPageView());
-        }
+        if (GetView().GetSdrPageView())
+            GetView().MarkObj(pLastGroup, GetView().GetSdrPageView());
 
         GetView().AdjustMarkHdl();
 
@@ -891,7 +860,7 @@ sal_uInt16 SdrPageView::GetEnteredLevel() const
     SdrObject* pGrp=GetCurrentGroup();
     while (pGrp!=nullptr) {
         nCount++;
-        pGrp=pGrp->GetUpGroup();
+        pGrp=pGrp->getParentSdrObjectFromSdrObject();
     }
     return nCount;
 }
@@ -901,10 +870,10 @@ void SdrPageView::CheckCurrentGroup()
     SdrObject* pGrp(GetCurrentGroup());
 
     while(nullptr != pGrp &&
-        (!pGrp->IsInserted() || nullptr == pGrp->getParentOfSdrObject() || nullptr == pGrp->GetPage()))
+        (!pGrp->IsInserted() || nullptr == pGrp->getParentSdrObjListFromSdrObject() || nullptr == pGrp->getSdrPageFromSdrObject()))
     {
         // anything outside of the borders?
-        pGrp = pGrp->GetUpGroup();
+        pGrp = pGrp->getParentSdrObjectFromSdrObject();
     }
 
     if(pGrp != GetCurrentGroup())

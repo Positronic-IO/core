@@ -21,6 +21,9 @@
 #define INCLUDED_SC_INC_SHEETEVENTS_HXX
 
 #include <rtl/ustring.hxx>
+#include <memory>
+
+namespace boost { template <class T> class optional; }
 
 enum class ScSheetEventId {
     FOCUS, UNFOCUS, SELECT, DOUBLECLICK, RIGHTCLICK, CHANGE, CALCULATE, COUNT,
@@ -29,7 +32,7 @@ enum class ScSheetEventId {
 
 class ScSheetEvents
 {
-    OUString** mpScriptNames;
+    std::unique_ptr<boost::optional<OUString>[]> mpScriptNames;
 
     void        Clear();
 

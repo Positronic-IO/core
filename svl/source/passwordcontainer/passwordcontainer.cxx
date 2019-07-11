@@ -30,12 +30,14 @@
 #include <com/sun/star/task/InteractionHandler.hpp>
 #include <com/sun/star/task/MasterPasswordRequest.hpp>
 #include <com/sun/star/task/NoMasterException.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <osl/diagnose.h>
 #include <rtl/character.hxx>
 #include <rtl/cipher.h>
 #include <rtl/digest.h>
 #include <rtl/byteseq.hxx>
+#include <rtl/ustrbuf.hxx>
 
 using namespace osl;
 using namespace utl;
@@ -48,12 +50,12 @@ using namespace com::sun::star::ucb;
 
 static OUString createIndex(const std::vector< OUString >& lines)
 {
-    OUString aResult;
+    OUStringBuffer aResult;
 
     for( size_t i = 0; i < lines.size(); i++ )
     {
         if( i )
-            aResult += "__";
+            aResult.append("__");
         OString line = OUStringToOString( lines[i], RTL_TEXTENCODING_UTF8 );
         const sal_Char* pLine = line.getStr();
 
@@ -61,19 +63,18 @@ static OUString createIndex(const std::vector< OUString >& lines)
         {
             if (rtl::isAsciiAlphanumeric(static_cast<unsigned char>(*pLine)))
             {
-                aResult += OUStringLiteral1(*pLine);
+                aResult.append(*pLine);
             }
             else
             {
-                aResult += "_"
-                        + OUString::number(  *pLine, 16 );
+                aResult.append("_").append( OUString::number(  *pLine, 16 ) );
             }
 
             pLine++;
         }
     }
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 
@@ -86,7 +87,7 @@ static std::vector< OUString > getInfoFromInd( const OUString& aInd )
     const sal_Char* pLine = line.getStr();
     do
     {
-        OUString newItem;
+        OUStringBuffer newItem;
         if( !aStart )
             pLine += 2;
         else
@@ -95,7 +96,7 @@ static std::vector< OUString > getInfoFromInd( const OUString& aInd )
         while( *pLine && !( pLine[0] == '_' && pLine[1] == '_' ))
             if( *pLine != '_' )
             {
-                newItem += OUStringLiteral1( *pLine );
+                newItem.append( *pLine );
                 pLine++;
             }
             else
@@ -115,11 +116,11 @@ static std::vector< OUString > getInfoFromInd( const OUString& aInd )
                     aNum += OUStringLiteral1( pLine[i] );
                 }
 
-                newItem += OUStringLiteral1( aNum.toUInt32( 16 ) );
+                newItem.append( OUStringLiteral1( aNum.toUInt32( 16 ) ) );
                 pLine += 3;
             }
 
-        aResult.push_back( newItem );
+        aResult.push_back( newItem.makeStringAndClear() );
     } while( pLine[0] == '_' && pLine[1] == '_' );
 
     if( *pLine )
@@ -368,8 +369,7 @@ void StorageItem::ImplCommit()
 }
 
 
-PasswordContainer::PasswordContainer( const Reference<XMultiServiceFactory>& xServiceFactory ):
-    m_pStorageFile( nullptr )
+PasswordContainer::PasswordContainer( const Reference<XMultiServiceFactory>& xServiceFactory )
 {
     // m_pStorageFile->Notify() can be called
     ::osl::MutexGuard aGuard( mMutex );
@@ -409,7 +409,7 @@ void SAL_CALL PasswordContainer::disposing( const EventObject& )
     }
 }
 
-std::vector< OUString > PasswordContainer::DecodePasswords( const OUString& aLine, const OUString& aMasterPasswd )
+std::vector< OUString > PasswordContainer::DecodePasswords( const OUString& aLine, const OUString& aMasterPasswd, css::task::PasswordRequestMode mode )
 {
     if( !aMasterPasswd.isEmpty() )
     {
@@ -455,7 +455,8 @@ std::vector< OUString > PasswordContainer::DecodePasswords( const OUString& aLin
 
     // problems with decoding
     OSL_FAIL( "Problem with decoding" );
-    throw RuntimeException("Can't decode!" );
+    throw css::task::NoMasterException(
+        "Can't decode!", css::uno::Reference<css::uno::XInterface>(), mode);
 }
 
 OUString PasswordContainer::EncodePasswords(const std::vector< OUString >& lines, const OUString& aMasterPasswd )
@@ -578,7 +579,7 @@ UserRecord PasswordContainer::CopyToUserRecord( const NamePassRecord& aRecord, b
     {
         try
         {
-            ::std::vector< OUString > aDecodedPasswords = DecodePasswords( aRecord.GetPersPasswords(), GetMasterPassword( aHandler ) );
+            ::std::vector< OUString > aDecodedPasswords = DecodePasswords( aRecord.GetPersPasswords(), GetMasterPassword( aHandler ), css::task::PasswordRequestMode_PASSWORD_ENTER );
             aPasswords.insert( aPasswords.end(), aDecodedPasswords.begin(), aDecodedPasswords.end() );
         }
         catch( NoMasterException& )
@@ -766,11 +767,11 @@ UrlRecord PasswordContainer::find(
 
 OUString PasswordContainer::GetDefaultMasterPassword()
 {
-    OUString aResult;
+    OUStringBuffer aResult;
     for ( sal_Int32 nInd = 0; nInd < RTL_DIGEST_LENGTH_MD5; nInd++ )
-        aResult += "aa";
+        aResult.append("aa");
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 OUString PasswordContainer::RequestPasswordFromUser( PasswordRequestMode aRMode, const uno::Reference< task::XInteractionHandler >& xHandler )
@@ -840,7 +841,7 @@ OUString const & PasswordContainer::GetMasterPassword( const Reference< XInterac
                     }
                     else
                     {
-                        std::vector< OUString > aRM( DecodePasswords( aEncodedMP, aPass ) );
+                        std::vector< OUString > aRM( DecodePasswords( aEncodedMP, aPass, aRMode ) );
                         if( aRM.empty() || aPass != aRM[0] )
                         {
                             bAskAgain = true;
@@ -997,7 +998,7 @@ Sequence< UrlRecord > SAL_CALL PasswordContainer::getAllPersistent( const Refere
             {
                 sal_Int32 oldLen = aUsers.getLength();
                 aUsers.realloc( oldLen + 1 );
-                aUsers[ oldLen ] = UserRecord( aNP.GetUserName(), comphelper::containerToSequence( DecodePasswords( aNP.GetPersPasswords(), GetMasterPassword( xHandler ) ) ) );
+                aUsers[ oldLen ] = UserRecord( aNP.GetUserName(), comphelper::containerToSequence( DecodePasswords( aNP.GetPersPasswords(), GetMasterPassword( xHandler ), css::task::PasswordRequestMode_PASSWORD_ENTER ) ) );
             }
 
         if( aUsers.getLength() )

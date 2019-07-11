@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_UI_INC_UNDOTAB_HXX
 
 #include "undobase.hxx"
-#include <formula/grammar.hxx>
 #include <tools/color.hxx>
 #include <tabbgcolor.hxx>
 
@@ -29,7 +28,6 @@
 #include <vector>
 
 class ScDocShell;
-class ScDocument;
 class SdrUndoAction;
 class ScPrintRangeSaver;
 class SdrObject;
@@ -55,11 +53,11 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    OUString        sNewName;
-    SdrUndoAction*  pDrawUndo;
-    sal_uLong       nEndChangeAction;
-    SCTAB           nTab;
-    bool            bAppend;
+    OUString const        sNewName;
+    std::unique_ptr<SdrUndoAction> pDrawUndo;
+    sal_uLong             nEndChangeAction;
+    SCTAB const           nTab;
+    bool const            bAppend;
 
     void            SetChangeTrack();
 };
@@ -82,11 +80,11 @@ public:
 
 private:
 
-    SdrUndoAction*  pDrawUndo;
+    std::unique_ptr<SdrUndoAction> pDrawUndo;
     std::vector<OUString>      aNameList;
-    sal_uLong           nStartChangeAction;
-    sal_uLong           nEndChangeAction;
-    SCTAB           nTab;
+    sal_uLong                  nStartChangeAction;
+    sal_uLong                  nEndChangeAction;
+    SCTAB const                nTab;
 
     void            SetChangeTrack();
 };
@@ -97,8 +95,8 @@ public:
                     ScUndoDeleteTab(
                             ScDocShell* pNewDocShell,
                             const std::vector<SCTAB> &theTabs,      //SCTAB nNewTab,
-                            ScDocument* pUndoDocument,
-                            ScRefUndoData* pRefData );
+                            ScDocumentUniquePtr pUndoDocument,
+                            std::unique_ptr<ScRefUndoData> pRefData );
     virtual         ~ScUndoDeleteTab() override;
 
     virtual void    Undo() override;
@@ -134,7 +132,7 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    SCTAB     nTab;
+    SCTAB const nTab;
     OUString  sOldName;
     OUString  sNewName;
 
@@ -146,10 +144,10 @@ class ScUndoMoveTab: public ScSimpleUndo
 public:
                     ScUndoMoveTab(
                         ScDocShell* pNewDocShell,
-                        ::std::vector<SCTAB>* pOldTabs,
-                        ::std::vector<SCTAB>* pNewTabs,
-                        ::std::vector< OUString>* pOldNames = nullptr,
-                        ::std::vector< OUString>* pNewNames = nullptr );
+                        std::unique_ptr<std::vector<SCTAB>> pOldTabs,
+                        std::unique_ptr<std::vector<SCTAB>> pNewTabs,
+                        std::unique_ptr<std::vector< OUString>> pOldNames = nullptr,
+                        std::unique_ptr<std::vector< OUString>> pNewNames = nullptr );
 
     virtual         ~ScUndoMoveTab() override;
 
@@ -161,10 +159,10 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    std::shared_ptr< ::std::vector<SCTAB> > mpOldTabs;
-    std::shared_ptr< ::std::vector<SCTAB> > mpNewTabs;
-    std::shared_ptr< ::std::vector< OUString> > mpOldNames;
-    std::shared_ptr< ::std::vector< OUString> > mpNewNames;
+    std::unique_ptr< ::std::vector<SCTAB> > mpOldTabs;
+    std::unique_ptr< ::std::vector<SCTAB> > mpNewTabs;
+    std::unique_ptr< ::std::vector< OUString> > mpOldNames;
+    std::unique_ptr< ::std::vector< OUString> > mpNewNames;
 
     void DoChange( bool bUndo ) const;
 };
@@ -174,9 +172,9 @@ class ScUndoCopyTab: public ScSimpleUndo
 public:
                     ScUndoCopyTab(
                         ScDocShell* pNewDocShell,
-                        ::std::vector<SCTAB>* pOldTabs,
-                        ::std::vector<SCTAB>* pNewTabs,
-                        ::std::vector< OUString>* pNewNames = nullptr );
+                        std::unique_ptr<std::vector<SCTAB>> pOldTabs,
+                        std::unique_ptr<std::vector<SCTAB>> pNewTabs,
+                        std::unique_ptr<std::vector< OUString>> pNewNames = nullptr );
 
     virtual         ~ScUndoCopyTab() override;
 
@@ -188,10 +186,10 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    std::shared_ptr< ::std::vector<SCTAB> > mpOldTabs;
-    std::shared_ptr< ::std::vector<SCTAB> > mpNewTabs;
-    std::shared_ptr< ::std::vector< OUString> > mpNewNames;
-    SdrUndoAction*  pDrawUndo;
+    std::unique_ptr< ::std::vector<SCTAB> > mpOldTabs;
+    std::unique_ptr< ::std::vector<SCTAB> > mpNewTabs;
+    std::unique_ptr< ::std::vector< OUString> > mpNewNames;
+    std::unique_ptr<SdrUndoAction> pDrawUndo;
 
     void DoChange() const;
 };
@@ -242,13 +240,13 @@ public:
 
 private:
     std::unique_ptr<ScMarkData> mpMarkData;
-    SCTAB       nSrcTab;
-    SCTAB       nDestTab;
-    OUString    aName;
-    OUString    aComment;
-    Color       aColor;
-    ScScenarioFlags nFlags;
-    SdrUndoAction* pDrawUndo;
+    SCTAB const       nSrcTab;
+    SCTAB const       nDestTab;
+    OUString const    aName;
+    OUString const    aComment;
+    Color const       aColor;
+    ScScenarioFlags const nFlags;
+    std::unique_ptr<SdrUndoAction> pDrawUndo;
 };
 
 class ScUndoImportTab : public ScSimpleUndo
@@ -267,10 +265,10 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    SCTAB       nTab;
-    SCTAB       nCount;
+    SCTAB const       nTab;
+    SCTAB const       nCount;
     ScDocumentUniquePtr xRedoDoc;
-    SdrUndoAction*  pDrawUndo;
+    std::unique_ptr<SdrUndoAction> pDrawUndo;
 
     void DoChange() const;
 };
@@ -291,7 +289,7 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    OUString    aDocName;
+    OUString const    aDocName;
     OUString    aFltName;
     OUString    aOptions;
     sal_uLong   nRefreshDelay;
@@ -323,8 +321,8 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    std::vector<SCTAB>  undoTabs;
-    bool                bShow;
+    std::vector<SCTAB> const  undoTabs;
+    bool const                bShow;
 
     void DoChange( bool bShow ) const;
 };
@@ -367,7 +365,7 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    SCTAB   mnTab;
+    SCTAB const   mnTab;
     ::std::unique_ptr<ScTableProtection> mpProtectSettings;
 
     void    DoProtect(bool bProtect);
@@ -377,7 +375,8 @@ class ScUndoPrintRange : public ScSimpleUndo
 {
 public:
                     ScUndoPrintRange( ScDocShell* pShell, SCTAB nNewTab,
-                                        ScPrintRangeSaver* pOld, ScPrintRangeSaver* pNew );
+                                      std::unique_ptr<ScPrintRangeSaver> pOld,
+                                      std::unique_ptr<ScPrintRangeSaver> pNew );
     virtual         ~ScUndoPrintRange() override;
 
     virtual void    Undo() override;
@@ -389,8 +388,8 @@ public:
 
 private:
     SCTAB               nTab;
-    ScPrintRangeSaver*  pOldRanges;
-    ScPrintRangeSaver*  pNewRanges;
+    std::unique_ptr<ScPrintRangeSaver> pOldRanges;
+    std::unique_ptr<ScPrintRangeSaver> pNewRanges;
 
     void DoChange( bool bUndo );
 };
@@ -415,15 +414,15 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    SCTAB       nTab;
-    OUString    aOldName;
-    OUString    aNewName;
-    OUString    aOldComment;
-    OUString    aNewComment;
-    Color       aOldColor;
-    Color       aNewColor;
-    ScScenarioFlags nOldFlags;
-    ScScenarioFlags nNewFlags;
+    SCTAB const       nTab;
+    OUString const    aOldName;
+    OUString const    aNewName;
+    OUString const    aOldComment;
+    OUString const    aNewComment;
+    Color const       aOldColor;
+    Color const       aNewColor;
+    ScScenarioFlags const nOldFlags;
+    ScScenarioFlags const nNewFlags;
 };
 
 class ScUndoRenameObject: public ScSimpleUndo
@@ -443,9 +442,9 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    OUString  aPersistName;       // to find object (works only for OLE objects)
-    OUString  aOldName;
-    OUString  aNewName;
+    OUString const  aPersistName;       // to find object (works only for OLE objects)
+    OUString const  aOldName;
+    OUString const  aNewName;
 
     SdrObject*  GetObject();
 };
@@ -464,8 +463,8 @@ public:
     virtual OUString GetComment() const override;
 
 private:
-    SCTAB   nTab;
-    bool    bRTL;
+    SCTAB const   nTab;
+    bool const    bRTL;
 
     void DoChange( bool bNew );
 };

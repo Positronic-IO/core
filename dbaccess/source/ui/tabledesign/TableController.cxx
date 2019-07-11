@@ -56,7 +56,6 @@
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/streamsection.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
@@ -962,7 +961,6 @@ bool OTableController::checkColumns(bool _bNew)
 void OTableController::alterColumns()
 {
     Reference<XColumnsSupplier> xColSup(m_xTable,UNO_QUERY_THROW);
-    OSL_ENSURE(xColSup.is(),"What happen here?!");
 
     Reference<XNameAccess> xColumns = xColSup->getColumns();
     Reference<XIndexAccess> xIdxColumns(xColumns,UNO_QUERY_THROW);

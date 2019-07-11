@@ -36,6 +36,7 @@
 #include <rtl/ref.hxx>
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <salhelper/simplereferenceobject.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
@@ -541,8 +542,7 @@ ErrCode call(
         break;
     case SbxBOOL:
         result.PutBool(
-            static_cast< sal_Bool >(
-                DllMgr_call32(proc.proc, address(stack), stack.size())));
+            bool(DllMgr_call32(proc.proc, address(stack), stack.size())));
         break;
     case SbxBYTE:
         result.PutByte(

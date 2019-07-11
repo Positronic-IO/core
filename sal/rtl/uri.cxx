@@ -38,7 +38,7 @@ std::size_t const nCharClassSize = 128;
 
 sal_Unicode const cEscapePrefix = 0x25; // '%'
 
-inline int getHexWeight(sal_uInt32 nUtf32)
+int getHexWeight(sal_uInt32 nUtf32)
 {
     return nUtf32 >= 0x30 && nUtf32 <= 0x39 ? // '0'--'9'
                static_cast< int >(nUtf32 - 0x30) :
@@ -49,12 +49,12 @@ inline int getHexWeight(sal_uInt32 nUtf32)
                -1; // not a hex digit
 }
 
-inline bool isValid(sal_Bool const * pCharClass, sal_uInt32 nUtf32)
+bool isValid(sal_Bool const * pCharClass, sal_uInt32 nUtf32)
 {
     return nUtf32 < nCharClassSize && pCharClass[nUtf32];
 }
 
-inline void writeUnicode(rtl_uString ** pBuffer, sal_Int32 * pCapacity,
+void writeUnicode(rtl_uString ** pBuffer, sal_Int32 * pCapacity,
                          sal_Unicode cChar)
 {
     rtl_uStringbuffer_insert(pBuffer, pCapacity, (*pBuffer)->length, &cChar, 1);
@@ -145,7 +145,7 @@ sal_uInt32 readUcs4(sal_Unicode const ** pBegin, sal_Unicode const * pEnd,
         }
         else
         {
-            rtl::OStringBuffer aBuf;
+            OStringBuffer aBuf;
             aBuf.append(static_cast< char >(nChar));
             rtl_TextToUnicodeConverter aConverter
                 = rtl_createTextToUnicodeConverter(eCharset);
@@ -339,10 +339,10 @@ struct Component
 
     bool isPresent() const { return pBegin != nullptr; }
 
-    inline sal_Int32 getLength() const;
+    sal_Int32 getLength() const;
 };
 
-inline sal_Int32 Component::getLength() const
+sal_Int32 Component::getLength() const
 {
     assert(isPresent()); // taking length of non-present component
     return static_cast< sal_Int32 >(pEnd - pBegin);
@@ -425,7 +425,7 @@ void parseUriRef(rtl_uString const * pUriRef, Components * pComponents)
 }
 
 void appendPath(
-    rtl::OUStringBuffer & buffer, sal_Int32 bufferStart, bool precedingSlash,
+    OUStringBuffer & buffer, sal_Int32 bufferStart, bool precedingSlash,
     sal_Unicode const * pathBegin, sal_Unicode const * pathEnd)
 {
     while (precedingSlash || pathBegin != pathEnd)
@@ -755,7 +755,7 @@ sal_Bool SAL_CALL rtl_uriConvertRelToAbs(rtl_uString * pBaseUriRef,
 {
     // Use the strict parser algorithm from RFC 3986, section 5.2, to turn the
     // relative URI into an absolute one:
-    rtl::OUStringBuffer aBuffer;
+    OUStringBuffer aBuffer;
     Components aRelComponents;
     parseUriRef(pRelUriRef, &aRelComponents);
 
@@ -788,8 +788,8 @@ sal_Bool SAL_CALL rtl_uriConvertRelToAbs(rtl_uString * pBaseUriRef,
         {
             rtl_uString_assign(
                 pException,
-                (rtl::OUString(
-                    "<" + rtl::OUString(pBaseUriRef)
+                (OUString(
+                    "<" + OUString(pBaseUriRef)
                     + "> does not start with a scheme component")
                  .pData));
             return false;

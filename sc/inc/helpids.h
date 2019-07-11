@@ -20,8 +20,6 @@
 #ifndef INCLUDED_SC_INC_HELPIDS_H
 #define INCLUDED_SC_INC_HELPIDS_H
 
-#include <svx/svxcommands.h>
-
 #define HID_INSWIN_POS                                          "SC_HID_INSWIN_POS"
 #define HID_INSWIN_CALC                                         "SC_HID_INSWIN_CALC"
 #define HID_INSWIN_CANCEL                                       "SC_HID_INSWIN_CANCEL"
@@ -579,6 +577,7 @@
 #define HID_FUNC_REPLACEB                                       "SC_HID_FUNC_REPLACEB"
 #define HID_FUNC_FINDB                                          "SC_HID_FUNC_FINDB"
 #define HID_FUNC_SEARCHB                                        "SC_HID_FUNC_SEARCHB"
+#define HID_FUNC_REGEX                                          "SC_HID_FUNC_REGEX"
 
 #endif
 

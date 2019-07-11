@@ -35,9 +35,9 @@
 #include <strings.hrc>
 #include <SwStyleNameMapper.hxx>
 
-short SwBreakDlg::execute()
+short SwBreakDlg::run()
 {
-    short nRet = m_xDialog->run();
+    short nRet = GenericDialogController::run();
     if (nRet == RET_OK)
     {
         nKind = 0;
@@ -52,7 +52,7 @@ short SwBreakDlg::execute()
             if (nPos != 0 && nPos != -1)
             {
                 m_aTemplate = m_xPageCollBox->get_active_text();
-                oPgNum = boost::none;
+                oPgNum.reset();
                 if (m_xPageNumBox->get_active())
                 {
                     oPgNum = static_cast<sal_uInt16>(m_xPageNumEdit->get_value());
@@ -68,7 +68,7 @@ IMPL_LINK_NOARG(SwBreakDlg, ToggleHdl, weld::ToggleButton&, void)
     CheckEnable();
 }
 
-IMPL_LINK_NOARG(SwBreakDlg, ChangeHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwBreakDlg, ChangeHdl, weld::ComboBox&, void)
 {
     CheckEnable();
 }
@@ -135,7 +135,7 @@ SwBreakDlg::SwBreakDlg(weld::Window *pParent, SwWrtShell &rS)
     , m_xColumnBtn(m_xBuilder->weld_radio_button("columnrb"))
     , m_xPageBtn(m_xBuilder->weld_radio_button("pagerb"))
     , m_xPageCollText(m_xBuilder->weld_label("styleft"))
-    , m_xPageCollBox(m_xBuilder->weld_combo_box_text("stylelb"))
+    , m_xPageCollBox(m_xBuilder->weld_combo_box("stylelb"))
     , m_xPageNumBox(m_xBuilder->weld_check_button("pagenumcb"))
     , m_xPageNumEdit(m_xBuilder->weld_spin_button("pagenumsb"))
     , m_xOkBtn(m_xBuilder->weld_button("ok"))

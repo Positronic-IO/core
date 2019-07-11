@@ -396,8 +396,8 @@
 #define SC_OPCODE_CELL              385
 #define SC_OPCODE_ISPMT             386
 #define SC_OPCODE_HYPERLINK         387
-#define SC_OPCODE_INDIRECT_XL       388     /* See also INDIRECT for OOO variant */
-#define SC_OPCODE_ADDRESS_XL        389     /* See also ADDRESS for OOO variant */
+// free: 388
+// free: 389
 #define SC_OPCODE_GET_PIVOT_DATA    390
 #define SC_OPCODE_EUROCONVERT       391
 #define SC_OPCODE_NUMBERVALUE       392
@@ -505,7 +505,8 @@
 #define SC_OPCODE_REPLACEB          494
 #define SC_OPCODE_FINDB             495
 #define SC_OPCODE_SEARCHB           496
-#define SC_OPCODE_STOP_2_PAR        497     /* last function with two or more parameters' OpCode + 1 */
+#define SC_OPCODE_REGEX             497
+#define SC_OPCODE_STOP_2_PAR        498     /* last function with two or more parameters' OpCode + 1 */
 
 #define SC_OPCODE_STOP_FUNCTION     SC_OPCODE_STOP_2_PAR            /* last function's OpCode + 1 */
 #define SC_OPCODE_LAST_OPCODE_ID    (SC_OPCODE_STOP_FUNCTION - 1)   /* last OpCode */

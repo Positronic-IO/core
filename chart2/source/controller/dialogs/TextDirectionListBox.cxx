@@ -27,20 +27,13 @@
 namespace chart
 {
 
-TextDirectionListBox::TextDirectionListBox( vcl::Window* pParent ) :
-    svx::FrameDirectionListBox( pParent, WB_BORDER | WB_TABSTOP | WB_DROPDOWN)
+TextDirectionListBox::TextDirectionListBox(std::unique_ptr<weld::ComboBox> pControl)
+    : svx::FrameDirectionListBox(std::move(pControl))
 {
-    InsertEntryValue( SchResId( STR_TEXT_DIRECTION_LTR ), SvxFrameDirection::Horizontal_LR_TB );
-    InsertEntryValue( SchResId( STR_TEXT_DIRECTION_RTL ), SvxFrameDirection::Horizontal_RL_TB );
-    InsertEntryValue( SchResId( STR_TEXT_DIRECTION_SUPER ), SvxFrameDirection::Environment );
-
-    if( !SvtLanguageOptions().IsCTLFontEnabled() )
-    {
-        Hide();
-    }
+    append(SvxFrameDirection::Horizontal_LR_TB, SchResId(STR_TEXT_DIRECTION_LTR));
+    append(SvxFrameDirection::Horizontal_RL_TB, SchResId(STR_TEXT_DIRECTION_RTL));
+    append(SvxFrameDirection::Environment, SchResId(STR_TEXT_DIRECTION_SUPER));
 }
-
-VCL_BUILDER_FACTORY(TextDirectionListBox)
 
 } //namespace chart
 

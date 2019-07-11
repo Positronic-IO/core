@@ -36,7 +36,7 @@
 
 namespace
 {
-    inline void set_file_type(const struct stat& file_stat, oslFileStatus* pStat)
+    void set_file_type(const struct stat& file_stat, oslFileStatus* pStat)
     {
         /* links to directories state also to be a directory */
        if (S_ISLNK(file_stat.st_mode))
@@ -57,7 +57,7 @@ namespace
        pStat->uValidFields |= osl_FileStatus_Mask_Type;
     }
 
-    inline void set_file_access_mask(const struct stat& file_stat, oslFileStatus* pStat)
+    void set_file_access_mask(const struct stat& file_stat, oslFileStatus* pStat)
     {
         // user permissions
         if (S_IRUSR & file_stat.st_mode)
@@ -99,7 +99,7 @@ namespace
        required on network file systems not using unix semantics (AFS, see
        fdo#43095).
     */
-    inline void set_file_access_rights(const rtl::OUString& file_path, oslFileStatus* pStat)
+    void set_file_access_rights(const OUString& file_path, oslFileStatus* pStat)
     {
         pStat->uValidFields |= osl_FileStatus_Mask_Attributes;
 
@@ -110,7 +110,7 @@ namespace
             pStat->uAttributes |= osl_File_Attribute_Executable;
     }
 
-    inline void set_file_hidden_status(const rtl::OUString& file_path, oslFileStatus* pStat)
+    void set_file_hidden_status(const OUString& file_path, oslFileStatus* pStat)
     {
         pStat->uAttributes   = osl::systemPathIsHiddenFileOrDirectoryEntry(file_path) ? osl_File_Attribute_Hidden : 0;
         pStat->uValidFields |= osl_FileStatus_Mask_Attributes;
@@ -118,8 +118,8 @@ namespace
 
     /* the set_file_access_rights must be called after set_file_hidden_status(...) and
        set_file_access_mask(...) because of the hack in set_file_access_rights(...) */
-    inline void set_file_attributes(
-        const rtl::OUString& file_path, const struct stat& file_stat, const sal_uInt32 uFieldMask, oslFileStatus* pStat)
+    void set_file_attributes(
+        const OUString& file_path, const struct stat& file_stat, const sal_uInt32 uFieldMask, oslFileStatus* pStat)
     {
         set_file_hidden_status(file_path, pStat);
         set_file_access_mask(file_stat, pStat);
@@ -130,21 +130,21 @@ namespace
             set_file_access_rights(file_path, pStat);
     }
 
-    inline void set_file_access_time(const struct stat& file_stat, oslFileStatus* pStat)
+    void set_file_access_time(const struct stat& file_stat, oslFileStatus* pStat)
     {
         pStat->aAccessTime.Seconds  = file_stat.st_atime;
         pStat->aAccessTime.Nanosec  = 0;
            pStat->uValidFields        |= osl_FileStatus_Mask_AccessTime;
     }
 
-    inline void set_file_modify_time(const struct stat& file_stat, oslFileStatus* pStat)
+    void set_file_modify_time(const struct stat& file_stat, oslFileStatus* pStat)
     {
         pStat->aModifyTime.Seconds  = file_stat.st_mtime;
         pStat->aModifyTime.Nanosec  = 0;
         pStat->uValidFields        |= osl_FileStatus_Mask_ModifyTime;
     }
 
-    inline void set_file_size(const struct stat& file_stat, oslFileStatus* pStat)
+    void set_file_size(const struct stat& file_stat, oslFileStatus* pStat)
     {
         if (S_ISREG(file_stat.st_mode))
            {
@@ -155,7 +155,7 @@ namespace
 
     /* we only need to call stat or lstat if one of the
        following flags is set */
-    inline bool is_stat_call_necessary(sal_uInt32 field_mask, oslFileType file_type)
+    bool is_stat_call_necessary(sal_uInt32 field_mask, oslFileType file_type)
     {
         return (
                 ((field_mask & osl_FileStatus_Mask_Type) && (file_type == osl_File_Type_Unknown)) ||
@@ -168,9 +168,9 @@ namespace
                 (field_mask & osl_FileStatus_Mask_Validate));
     }
 
-    inline oslFileError set_link_target_url(const rtl::OUString& file_path, oslFileStatus* pStat)
+    oslFileError set_link_target_url(const OUString& file_path, oslFileStatus* pStat)
     {
-        rtl::OUString link_target;
+        OUString link_target;
         if (!osl::realpath(file_path, link_target))
             return oslTranslateFileError(errno);
 
@@ -182,13 +182,13 @@ namespace
         return osl_File_E_None;
     }
 
-    inline oslFileError setup_osl_getFileStatus(
-        DirectoryItem_Impl * pImpl, oslFileStatus* pStat, rtl::OUString& file_path)
+    oslFileError setup_osl_getFileStatus(
+        DirectoryItem_Impl * pImpl, oslFileStatus* pStat, OUString& file_path)
     {
         if ((pImpl == nullptr) || (pStat == nullptr))
             return osl_File_E_INVAL;
 
-        file_path = rtl::OUString(pImpl->m_ustrFilePath);
+        file_path = OUString(pImpl->m_ustrFilePath);
         OSL_ASSERT(!file_path.isEmpty());
         if (file_path.isEmpty())
             return osl_File_E_INVAL;
@@ -203,7 +203,7 @@ oslFileError SAL_CALL osl_getFileStatus(oslDirectoryItem Item, oslFileStatus* pS
 {
     DirectoryItem_Impl * pImpl = static_cast< DirectoryItem_Impl* >(Item);
 
-    rtl::OUString file_path;
+    OUString file_path;
     oslFileError  osl_error = setup_osl_getFileStatus(pImpl, pStat, file_path);
     if (osl_error != osl_File_E_None)
         return osl_error;
@@ -432,8 +432,8 @@ SAL_CALL osl_identicalDirectoryItem( oslDirectoryItem a, oslDirectoryItem b)
 
     struct stat a_stat, b_stat;
 
-    if (osl::lstat(rtl::OUString(pA->m_ustrFilePath), a_stat) != 0 ||
-        osl::lstat(rtl::OUString(pB->m_ustrFilePath), b_stat) != 0)
+    if (osl::lstat(OUString(pA->m_ustrFilePath), a_stat) != 0 ||
+        osl::lstat(OUString(pB->m_ustrFilePath), b_stat) != 0)
         return false;
 
     return (a_stat.st_ino == b_stat.st_ino);

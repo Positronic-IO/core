@@ -273,7 +273,7 @@ Assembly ^ TypeEmitter::type_resolve(
     ::System::Object ^, ::System::ResolveEventArgs ^ args )
 {
     ::System::String ^ cts_name = args->Name;
-    ::System::Type ^ ret_type;
+    ::System::Type ^ ret_type = nullptr;
 
     iface_entry ^ entry = dynamic_cast< iface_entry ^ >(m_incomplete_ifaces[cts_name] );
     if (nullptr != entry)
@@ -660,7 +660,7 @@ Assembly ^ TypeEmitter::type_resolve(
     }
 
     //In case of an instantiated polymorphic struct we want to return a
-    //uno.PolymorphicType (inherits Type) rather then Type. This is neaded for constructing
+    //uno.PolymorphicType (inherits Type) rather than Type. This is needed for constructing
     //the service code. We can only do that if the struct is completed.
     if (m_generated_structs[cts_name])
     {
@@ -722,10 +722,12 @@ Assembly ^ TypeEmitter::type_resolve(
             array< ::System::Type^>^ base_interfaces =
                   gcnew array< ::System::Type^>( vecBaseTypes.size() );
 
-            typedef std::vector<Reference<reflection::XInterfaceTypeDescription2> >::const_iterator it;
             int index = 0;
-            for (it i = vecBaseTypes.begin(); i != vecBaseTypes.end(); ++i, ++index)
-                base_interfaces[ index ] = get_type( *i );
+            for (auto const & vecBaseType : vecBaseTypes)
+            {
+                base_interfaces[ index ] = get_type( vecBaseType );
+                ++index;
+            }
             type_builder = m_module_builder->DefineType(
                 cts_name, attr, nullptr, base_interfaces );
         }
@@ -824,7 +826,7 @@ Assembly ^ TypeEmitter::type_resolve(
     {
         for (int i = 0; i < seqBaseTypes.getLength(); i++)
         {
-            //make sure we get the interface rather then a typedef
+            //make sure we get the interface rather than a typedef
             Reference<reflection::XInterfaceTypeDescription2> aBaseType =
                 resolveInterfaceTypedef( seqBaseTypes[i]);
 

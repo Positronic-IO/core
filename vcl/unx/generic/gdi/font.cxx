@@ -55,7 +55,7 @@ X11SalGraphics::GetFontGC()
 
 void X11SalGraphics::DrawTextLayout(const GenericSalLayout& rLayout)
 {
-    mxTextRenderImpl->DrawTextLayout(rLayout);
+    mxTextRenderImpl->DrawTextLayout(rLayout, *this);
 }
 
 const FontCharMapRef X11SalGraphics::GetFontCharMap() const
@@ -69,8 +69,7 @@ bool X11SalGraphics::GetFontCapabilities(vcl::FontCapabilities &rGetImplFontCapa
 }
 
 // SalGraphics
-
-void X11SalGraphics::SetFont( const FontSelectPattern *pEntry, int nFallbackLevel )
+void X11SalGraphics::SetFont(LogicalFontInstance* pEntry, int nFallbackLevel)
 {
     mxTextRenderImpl->SetFont(pEntry, nFallbackLevel);
 }
@@ -104,17 +103,6 @@ void
 X11SalGraphics::GetFontMetric( ImplFontMetricDataRef &rxFontMetric, int nFallbackLevel )
 {
     mxTextRenderImpl->GetFontMetric(rxFontMetric, nFallbackLevel);
-}
-
-bool X11SalGraphics::GetGlyphBoundRect(const GlyphItem& rGlyph, tools::Rectangle& rRect)
-{
-    return mxTextRenderImpl->GetGlyphBoundRect(rGlyph, rRect);
-}
-
-bool X11SalGraphics::GetGlyphOutline(const GlyphItem& rGlyph,
-    basegfx::B2DPolyPolygon& rPolyPoly )
-{
-    return mxTextRenderImpl->GetGlyphOutline(rGlyph, rPolyPoly);
 }
 
 std::unique_ptr<SalLayout> X11SalGraphics::GetTextLayout( ImplLayoutArgs& rArgs, int nFallbackLevel )

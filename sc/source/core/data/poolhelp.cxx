@@ -20,6 +20,7 @@
 #include <comphelper/processfactory.hxx>
 #include <svl/zforlist.hxx>
 #include <editeng/editeng.hxx>
+#include <osl/diagnose.h>
 
 #include <poolhelp.hxx>
 #include <document.hxx>
@@ -27,8 +28,7 @@
 #include <stlpool.hxx>
 
 ScPoolHelper::ScPoolHelper( ScDocument* pSourceDoc )
-:pFormTable(nullptr)
-,pEditPool(nullptr)
+:pEditPool(nullptr)
 ,pEnginePool(nullptr)
 ,m_pSourceDoc(pSourceDoc)
 {

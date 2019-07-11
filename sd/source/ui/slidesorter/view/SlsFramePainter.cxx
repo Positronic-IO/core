@@ -20,6 +20,7 @@
 #include "SlsFramePainter.hxx"
 #include <vcl/outdev.hxx>
 #include <vcl/bitmapaccess.hxx>
+#include <osl/diagnose.h>
 
 namespace sd { namespace slidesorter { namespace view {
 
@@ -78,13 +79,7 @@ void FramePainter::AdaptColor (
     // Get the source color.
     if (maCenter.maBitmap.IsEmpty())
         return;
-    Bitmap aBitmap = maCenter.maBitmap.GetBitmap();
-    Bitmap::ScopedReadAccess pReadAccess(aBitmap);
-    if (!pReadAccess)
-        return;
-    const BitmapColor aBmpSourceColor = pReadAccess->GetColor(0,0);
-    const Color aSourceColor = aBmpSourceColor.GetColor();
-    pReadAccess.reset();
+    const Color aSourceColor = maCenter.maBitmap.GetPixelColor(0,0);
 
     // Erase the center bitmap.
     maCenter.maBitmap.SetEmpty();

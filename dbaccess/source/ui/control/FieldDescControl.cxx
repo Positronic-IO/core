@@ -37,7 +37,7 @@
 #include <svl/rngitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/numuno.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/util/NumberFormat.hpp>
 #include <com/sun/star/util/XNumberFormatPreviewer.hpp>
@@ -48,7 +48,7 @@
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <comphelper/numbers.hxx>
-#include <comphelper/string.hxx>
+#include <comphelper/types.hxx>
 #include <UITools.hxx>
 #include <strings.hrc>
 #include <osl/diagnose.h>
@@ -387,7 +387,7 @@ void OFieldDescControl::ScrollAllAggregates()
                                         , m_pTypeText, m_pAutoIncrementValueText};
         OSL_ENSURE(SAL_N_ELEMENTS(ppAggregates) == SAL_N_ELEMENTS(ppAggregatesText),"Lists are not identical!");
 
-        for (sal_uInt16 i=0; i<SAL_N_ELEMENTS(ppAggregates); ++i)
+        for (size_t i=0; i<SAL_N_ELEMENTS(ppAggregates); ++i)
             ScrollAggregate(ppAggregatesText[i],ppAggregates[i],nullptr,nDeltaX, nDeltaY);
 
         ScrollAggregate(pFormatText,pFormatSample,pFormat,nDeltaX, nDeltaY);
@@ -439,7 +439,7 @@ void OFieldDescControl::SetReadOnly( bool bReadOnly )
 
     OSL_ENSURE(SAL_N_ELEMENTS(ppAggregates) == SAL_N_ELEMENTS(ppAggregatesText),"Lists are not identical!");
 
-    for (sal_uInt16 i=0; i<SAL_N_ELEMENTS(ppAggregates); ++i)
+    for (size_t i=0; i<SAL_N_ELEMENTS(ppAggregates); ++i)
     {
         if ( ppAggregatesText[i] )
             ppAggregatesText[i]->Enable( !bReadOnly );
@@ -1085,9 +1085,7 @@ void OFieldDescControl::DisplayData(OFieldDescription* pFieldDescr )
         m_bAdded = true;
     }
 
-    TOTypeInfoSP pFieldType;
-    if( pFieldDescr )
-        pFieldType = pFieldDescr->getTypeInfo();
+    TOTypeInfoSP pFieldType(pFieldDescr->getTypeInfo());
 
     ActivateAggregate( tpColumnName );
     ActivateAggregate( tpType );
@@ -1237,19 +1235,17 @@ void OFieldDescControl::DisplayData(OFieldDescription* pFieldDescr )
         }
         m_pPreviousType = pFieldType;
     }
-    if(pFieldDescr)
+
+    if (pFieldDescr->IsPrimaryKey())
     {
-        if(pFieldDescr->IsPrimaryKey())
-        {
-            DeactivateAggregate( tpRequired );
-        }
-        else if ( !pAutoIncrement && pFieldType.get() )
-        {
-            if ( pFieldType->bNullable )
-                ActivateAggregate( tpRequired );
-            else
-                DeactivateAggregate( tpRequired );
-        }
+        DeactivateAggregate(tpRequired);
+    }
+    else if (!pAutoIncrement && pFieldType.get())
+    {
+        if (pFieldType->bNullable)
+            ActivateAggregate(tpRequired);
+        else
+            DeactivateAggregate(tpRequired);
     }
     // Initialize Controls
     if( pAutoIncrement )

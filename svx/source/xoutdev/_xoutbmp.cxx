@@ -18,8 +18,10 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <comphelper/base64.hxx>
+#include <comphelper/graphicmimetype.hxx>
 #include <tools/poly.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <vcl/virdev.hxx>
@@ -96,20 +98,9 @@ Graphic XOutBitmap::MirrorGraphic( const Graphic& rGraphic, const BmpMirrorFlags
         }
         else
         {
-            if( rGraphic.IsTransparent() )
-            {
-                BitmapEx aBmpEx( rGraphic.GetBitmapEx() );
-
-                aBmpEx.Mirror( nMirrorFlags );
-                aRetGraphic = aBmpEx;
-            }
-            else
-            {
-                Bitmap aBmp( rGraphic.GetBitmap() );
-
-                aBmp.Mirror( nMirrorFlags );
-                aRetGraphic = aBmp;
-            }
+            BitmapEx aBmp( rGraphic.GetBitmapEx() );
+            aBmp.Mirror( nMirrorFlags );
+            aRetGraphic = aBmp;
         }
     }
     else
@@ -184,7 +175,7 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
         }
 
         // Write PDF data in original form if possible.
-        if (rGraphic.getPdfData().hasElements() && rFilterName.equalsIgnoreAsciiCase("pdf"))
+        if (rGraphic.hasPdfData() && rFilterName.equalsIgnoreAsciiCase("pdf"))
         {
             if (!(nFlags & XOutFlags::DontAddExtension))
                 aURL.setExtension(rFilterName);
@@ -193,8 +184,8 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
             SfxMedium aMedium(aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), StreamMode::WRITE|StreamMode::SHARE_DENYNONE|StreamMode::TRUNC);
             if (SvStream* pOutStream = aMedium.GetOutStream())
             {
-                uno::Sequence<sal_Int8> aPdfData = rGraphic.getPdfData();
-                pOutStream->WriteBytes(aPdfData.getConstArray(), aPdfData.getLength());
+                const std::shared_ptr<uno::Sequence<sal_Int8>>& rPdfData = rGraphic.getPdfData();
+                pOutStream->WriteBytes(rPdfData->getConstArray(), rPdfData->getLength());
                 aMedium.Commit();
                 if (!aMedium.GetError())
                     nErr = ERRCODE_NONE;
@@ -322,10 +313,10 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
                             aGraphic = pVDev->GetBitmap( Point(), aSize );
                         }
                         else
-                            aGraphic = rGraphic.GetBitmap();
+                            aGraphic = rGraphic.GetBitmapEx();
                     }
                     else
-                        aGraphic = rGraphic.GetBitmap();
+                        aGraphic = rGraphic.GetBitmapEx();
                 }
 
                 // mirror?
@@ -339,7 +330,7 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
                     aGraphic = MirrorGraphic( aGraphic, nBmpMirrorFlags );
                 }
 
-                if( ( GRFILTER_FORMAT_NOTFOUND != nFilter ) && ( aGraphic.GetType() != GraphicType::NONE ) )
+                if (aGraphic.GetType() != GraphicType::NONE)
                 {
                     if( !(nFlags & XOutFlags::DontAddExtension) )
                         aURL.setExtension( aExt );
@@ -357,46 +348,49 @@ ErrCode XOutBitmap::WriteGraphic( const Graphic& rGraphic, OUString& rFileName,
     }
 }
 
-bool XOutBitmap::GraphicToBase64(const Graphic& rGraphic, OUString& rOUString, bool bAddPrefix)
+bool XOutBitmap::GraphicToBase64(const Graphic& rGraphic, OUString& rOUString, bool bAddPrefix,
+                                 ConvertDataFormat aTargetFormat)
 {
     SvMemoryStream aOStm;
-    OUString aMimeType;
     GfxLink aLink = rGraphic.GetGfxLink();
-    ConvertDataFormat aCvtType;
-    switch(  aLink.GetType() )
+
+    if (aTargetFormat == ConvertDataFormat::Unknown)
     {
-        case GfxLinkType::NativeJpg:
-            aCvtType = ConvertDataFormat::JPG;
-            aMimeType = "image/jpeg";
-            break;
-        case GfxLinkType::NativePng:
-            aCvtType = ConvertDataFormat::PNG;
-            aMimeType = "image/png";
-            break;
-        case GfxLinkType::NativeSvg:
-            aCvtType = ConvertDataFormat::SVG;
-            aMimeType = "image/svg+xml";
-            break;
-        default:
-            // save everything else (including gif) into png
-            aCvtType = ConvertDataFormat::PNG;
-            aMimeType = "image/png";
-            break;
+        switch (aLink.GetType())
+        {
+            case GfxLinkType::NativeJpg:
+                aTargetFormat = ConvertDataFormat::JPG;
+                break;
+            case GfxLinkType::NativePng:
+                aTargetFormat = ConvertDataFormat::PNG;
+                break;
+            case GfxLinkType::NativeSvg:
+                aTargetFormat = ConvertDataFormat::SVG;
+                break;
+            default:
+                // save everything else (including gif) into png
+                aTargetFormat = ConvertDataFormat::PNG;
+                break;
+        }
     }
-    ErrCode nErr = GraphicConverter::Export(aOStm,rGraphic,aCvtType);
+
+    ErrCode nErr = GraphicConverter::Export(aOStm,rGraphic,aTargetFormat);
     if ( nErr )
     {
         SAL_WARN("svx", "XOutBitmap::GraphicToBase64() invalid Graphic? error: " << nErr );
         return false;
     }
-    aOStm.Seek(STREAM_SEEK_TO_END);
-    css::uno::Sequence<sal_Int8> aOStmSeq( static_cast<sal_Int8 const *>(aOStm.GetData()),aOStm.Tell() );
+    css::uno::Sequence<sal_Int8> aOStmSeq( static_cast<sal_Int8 const *>(aOStm.GetData()),aOStm.TellEnd() );
     OUStringBuffer aStrBuffer;
     ::comphelper::Base64::encode(aStrBuffer,aOStmSeq);
     rOUString = aStrBuffer.makeStringAndClear();
 
     if (bAddPrefix)
+    {
+        OUString aMimeType
+            = comphelper::GraphicMimeTypeHelper::GetMimeTypeForConvertDataFormat(aTargetFormat);
         rOUString = aMimeType + ";base64," + rOUString;
+    }
 
     return true;
 }
@@ -471,18 +465,23 @@ Bitmap XOutBitmap::DetectEdges( const Bitmap& rBmp, const sal_uInt8 cThreshold )
                     {
                         nXTmp = nX;
 
-                        nSum1 = -( nSum2 = lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp++ ) );
+                        nSum2 = lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp++ );
+                        nSum1 = -nSum2;
                         nSum2 += static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead, nXTmp++ )) << 1;
-                        nSum1 += ( lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp ) );
+                        lGray = pReadAcc->GetIndexFromData( pScanlineRead, nXTmp );
+                        nSum1 += lGray;
                         nSum2 += lGray;
 
                         nSum1 += static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead1, nXTmp )) << 1;
-                        nSum1 -= static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead1, nXTmp -= 2 )) << 1;
+                        nXTmp -= 2;
+                        nSum1 -= static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead1, nXTmp )) << 1;
 
-                        nSum1 += ( lGray = -static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp++ )) );
+                        lGray = -static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp++ ));
+                        nSum1 += lGray;
                         nSum2 += lGray;
                         nSum2 -= static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp++ )) << 1;
-                        nSum1 += ( lGray = static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp )) );
+                        lGray = static_cast<long>(pReadAcc->GetIndexFromData( pScanlineRead2, nXTmp ));
+                        nSum1 += lGray;
                         nSum2 -= lGray;
 
                         if( ( nSum1 * nSum1 + nSum2 * nSum2 ) < lThres2 )
@@ -577,7 +576,7 @@ tools::Polygon XOutBitmap::GetContour( const Bitmap& rBmp, const XOutFlags nFlag
                             // this loop always breaks eventually as there is at least one pixel
                             while( true )
                             {
-                                // coverity[copy_paste_error] - this is correct nX, not nY
+                                // coverity[copy_paste_error : FALSE] - this is correct nX, not nY
                                 if( aBlack == pAcc->GetPixelFromData( pScanline, nX ) )
                                 {
                                     pPoints2[ nPolyPos ] = Point( nX, nY );

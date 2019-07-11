@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/numeric/ftools.hxx>
@@ -37,8 +38,10 @@
 #include <vcl/canvastools.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/BitmapMonochromeFilter.hxx>
+#include <vcl/opengl/OpenGLHelper.hxx>
 
 #include <canvas/canvastools.hxx>
+#include <config_features.h>
 
 #include "spritehelper.hxx"
 
@@ -129,7 +132,7 @@ namespace vclcanvas
 
             if( bNeedBitmapUpdate )
             {
-                Bitmap aBmp( mpBackBuffer->getOutDev().GetBitmap( aEmptyPoint,
+                BitmapEx aBmp( mpBackBuffer->getOutDev().GetBitmapEx( aEmptyPoint,
                                                                   aOutputSize ) );
 
                 if( isContentFullyOpaque() )
@@ -144,7 +147,7 @@ namespace vclcanvas
                 {
                     // sprite content might contain alpha, create
                     // BmpEx, then.
-                    Bitmap aMask( mpBackBufferMask->getOutDev().GetBitmap( aEmptyPoint,
+                    BitmapEx aMask( mpBackBufferMask->getOutDev().GetBitmapEx( aEmptyPoint,
                                                                            aOutputSize ) );
 
                     // bitmasks are much faster than alphamasks on some platforms
@@ -163,7 +166,7 @@ namespace vclcanvas
                     // Note: since we retrieved aBmp and aMask
                     // directly from an OutDev, it's already a
                     // 'display bitmap' on windows.
-                    maContent = BitmapEx( aBmp, aMask );
+                    maContent = BitmapEx( aBmp.GetBitmap(), aMask.GetBitmap() );
                 }
             }
 
@@ -182,8 +185,14 @@ namespace vclcanvas
 
             if( !bIdentityTransform )
             {
-                if( !::basegfx::fTools::equalZero( aTransform.get(0,1) ) ||
-                    !::basegfx::fTools::equalZero( aTransform.get(1,0) ) )
+                // Avoid the trick with the negative width in the OpenGL case,
+                // OutputDevice::DrawDeviceAlphaBitmap() doesn't like it.
+                if (!::basegfx::fTools::equalZero( aTransform.get(0,1) ) ||
+                    !::basegfx::fTools::equalZero( aTransform.get(1,0) )
+#if HAVE_FEATURE_UI
+                    || OpenGLHelper::isVCLOpenGLEnabled()
+#endif
+                   )
                 {
                     // "complex" transformation, employ affine
                     // transformator

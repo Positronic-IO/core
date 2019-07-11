@@ -732,9 +732,6 @@ public:
     // the RefCount is set to 1 to never 'delete' this static incarnation.
     ImplB3DPolygon()
     :   maPoints(0),
-        mpBColors(nullptr),
-        mpNormals(nullptr),
-        mpTextureCoordinates(nullptr),
         maPlaneNormal(::basegfx::B3DVector::getEmptyVector()),
         mbIsClosed(false),
         mbPlaneNormalValid(true)
@@ -744,9 +741,6 @@ public:
 
     ImplB3DPolygon(const ImplB3DPolygon& rToBeCopied)
     :   maPoints(rToBeCopied.maPoints),
-        mpBColors(nullptr),
-        mpNormals(nullptr),
-        mpTextureCoordinates(nullptr),
         maPlaneNormal(rToBeCopied.maPlaneNormal),
         mbIsClosed(rToBeCopied.mbIsClosed),
         mbPlaneNormalValid(rToBeCopied.mbPlaneNormalValid)
@@ -770,9 +764,6 @@ public:
 
     ImplB3DPolygon(const ImplB3DPolygon& rToBeCopied, sal_uInt32 nIndex, sal_uInt32 nCount)
     :   maPoints(rToBeCopied.maPoints, nIndex, nCount),
-        mpBColors(nullptr),
-        mpNormals(nullptr),
-        mpTextureCoordinates(nullptr),
         maPlaneNormal(::basegfx::B3DVector::getEmptyVector()),
         mbIsClosed(rToBeCopied.mbIsClosed),
         mbPlaneNormalValid(false)
@@ -1442,7 +1433,7 @@ namespace basegfx
         return mpPolygon->count();
     }
 
-    basegfx::B3DPoint B3DPolygon::getB3DPoint(sal_uInt32 nIndex) const
+    basegfx::B3DPoint const & B3DPolygon::getB3DPoint(sal_uInt32 nIndex) const
     {
         OSL_ENSURE(nIndex < mpPolygon->count(), "B3DPolygon access outside range (!)");
 
@@ -1457,7 +1448,7 @@ namespace basegfx
             mpPolygon->setPoint(nIndex, rValue);
     }
 
-    BColor B3DPolygon::getBColor(sal_uInt32 nIndex) const
+    BColor const & B3DPolygon::getBColor(sal_uInt32 nIndex) const
     {
         OSL_ENSURE(nIndex < mpPolygon->count(), "B3DPolygon access outside range (!)");
 
@@ -1488,7 +1479,7 @@ namespace basegfx
         return mpPolygon->getNormal();
     }
 
-    B3DVector B3DPolygon::getNormal(sal_uInt32 nIndex) const
+    B3DVector const & B3DPolygon::getNormal(sal_uInt32 nIndex) const
     {
         OSL_ENSURE(nIndex < mpPolygon->count(), "B3DPolygon access outside range (!)");
 
@@ -1520,7 +1511,7 @@ namespace basegfx
             mpPolygon->clearNormals();
     }
 
-    B2DPoint B3DPolygon::getTextureCoordinate(sal_uInt32 nIndex) const
+    B2DPoint const & B3DPolygon::getTextureCoordinate(sal_uInt32 nIndex) const
     {
         OSL_ENSURE(nIndex < mpPolygon->count(), "B3DPolygon access outside range (!)");
 

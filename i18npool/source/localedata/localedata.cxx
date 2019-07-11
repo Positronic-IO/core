@@ -318,7 +318,8 @@ static const struct {
     { "ar_QA",  lcl_DATA_OTHERS },
     { "ar_SY",  lcl_DATA_OTHERS },
     { "ar_YE",  lcl_DATA_OTHERS },
-    { "ilo_PH", lcl_DATA_OTHERS }
+    { "ilo_PH", lcl_DATA_OTHERS },
+    { "ha_Latn_NG",  lcl_DATA_OTHERS }
 };
 
 #else
@@ -481,11 +482,11 @@ public:
 
     oslGenericFunction getFunctionSymbolByName(
             const OUString& localeName, const sal_Char* pFunction,
-            LocaleDataLookupTableItem** pOutCachedItem );
+            std::unique_ptr<LocaleDataLookupTableItem>* pOutCachedItem );
 
 private:
     ::osl::Mutex maMutex;
-    ::std::vector< LocaleDataLookupTableItem* >  maLookupTable;
+    ::std::vector< LocaleDataLookupTableItem >  maLookupTable;
 };
 
 // from instance.hxx: Helper base class for a late-initialized
@@ -502,20 +503,14 @@ lcl_LookupTableHelper::lcl_LookupTableHelper()
 
 lcl_LookupTableHelper::~lcl_LookupTableHelper()
 {
-    std::vector<LocaleDataLookupTableItem*>::const_iterator aEnd(maLookupTable.end());
-    std::vector<LocaleDataLookupTableItem*>::iterator aIter(maLookupTable.begin());
-
-    for ( ; aIter != aEnd; ++aIter ) {
-        LocaleDataLookupTableItem* pItem = *aIter;
-        delete pItem->module;
-        delete pItem;
+    for ( LocaleDataLookupTableItem& item : maLookupTable ) {
+        delete item.module;
     }
-    maLookupTable.clear();
 }
 
 oslGenericFunction lcl_LookupTableHelper::getFunctionSymbolByName(
         const OUString& localeName, const sal_Char* pFunction,
-        LocaleDataLookupTableItem** pOutCachedItem )
+        std::unique_ptr<LocaleDataLookupTableItem>* pOutCachedItem )
 {
     OUString aFallback;
     bool bFallback = (localeName.indexOf( cUnder) < 0);
@@ -540,14 +535,14 @@ oslGenericFunction lcl_LookupTableHelper::getFunctionSymbolByName(
                         strlen(i.pLocale) + 1 + strlen(pFunction)));
             {
                 ::osl::MutexGuard aGuard( maMutex );
-                for (LocaleDataLookupTableItem* pCurrent : maLookupTable)
+                for (LocaleDataLookupTableItem & rCurrent : maLookupTable)
                 {
-                    if (pCurrent->dllName == i.pLib)
+                    if (rCurrent.dllName == i.pLib)
                     {
                         OSL_ASSERT( pOutCachedItem );
                         if( pOutCachedItem )
                         {
-                            (*pOutCachedItem) = new LocaleDataLookupTableItem( *pCurrent );
+                            (*pOutCachedItem).reset(new LocaleDataLookupTableItem( rCurrent ));
                             (*pOutCachedItem)->localeName = i.pLocale;
                             return (*pOutCachedItem)->module->getFunctionSymbol(
                                     aBuf.appendAscii( pFunction).append( cUnder).
@@ -570,12 +565,11 @@ oslGenericFunction lcl_LookupTableHelper::getFunctionSymbolByName(
             if ( module->loadRelative(&thisModule, aBuf.makeStringAndClear()) )
             {
                 ::osl::MutexGuard aGuard( maMutex );
-                LocaleDataLookupTableItem* pNewItem = new LocaleDataLookupTableItem(i.pLib, module, i.pLocale);
-                maLookupTable.push_back(pNewItem);
+                maLookupTable.emplace_back(i.pLib, module, i.pLocale);
                 OSL_ASSERT( pOutCachedItem );
                 if( pOutCachedItem )
                 {
-                    (*pOutCachedItem) = new LocaleDataLookupTableItem( *pNewItem );
+                    pOutCachedItem->reset(new LocaleDataLookupTableItem( maLookupTable.back() ));
                     return module->getFunctionSymbol(
                             aBuf.appendAscii(pFunction).append(cUnder).
                             appendAscii((*pOutCachedItem)->localeName).makeStringAndClear());
@@ -1359,7 +1353,7 @@ class OutlineNumbering : public cppu::WeakImplHelper < container::XIndexAccess >
     std::unique_ptr<const OutlineNumberingLevel_Impl[]> m_pOutlineLevels;
     sal_Int16                         m_nCount;
 public:
-    OutlineNumbering(const OutlineNumberingLevel_Impl* pOutlineLevels, int nLevels);
+    OutlineNumbering(std::unique_ptr<const OutlineNumberingLevel_Impl[]> pOutlineLevels, int nLevels);
 
     //XIndexAccess
     virtual sal_Int32 SAL_CALL getCount(  ) override;
@@ -1392,7 +1386,7 @@ LocaleDataImpl::getOutlineNumberingLevels( const lang::Locale& rLocale )
         {
             int j;
 
-            OutlineNumberingLevel_Impl* level = new OutlineNumberingLevel_Impl[ nLevels+1 ];
+            std::unique_ptr<OutlineNumberingLevel_Impl[]> level(new OutlineNumberingLevel_Impl[ nLevels+1 ]);
             sal_Unicode const *** pLevel = pStyle[i];
             for( j = 0;  j < nLevels;  j++ )
             {
@@ -1430,7 +1424,7 @@ LocaleDataImpl::getOutlineNumberingLevels( const lang::Locale& rLocale )
             level[j].nFirstLineOffset    = 0;
             level[j].sTransliteration.clear();
             level[j].nNatNum             = 0;
-            aRet[i] = new OutlineNumbering( level, nLevels );
+            aRet[i] = new OutlineNumbering( std::move(level), nLevels );
         }
         return aRet;
     }
@@ -1455,7 +1449,7 @@ oslGenericFunction LocaleDataImpl::getFunctionSymbol( const Locale& rLocale, con
     }
 
     oslGenericFunction pSymbol = nullptr;
-    LocaleDataLookupTableItem *pCachedItem = nullptr;
+    std::unique_ptr<LocaleDataLookupTableItem> pCachedItem;
 
     // Load function with name <func>_<lang>_<country> or <func>_<bcp47> and
     // fallbacks.
@@ -1482,8 +1476,8 @@ oslGenericFunction LocaleDataImpl::getFunctionSymbol( const Locale& rLocale, con
         throw RuntimeException();
 
     if (pCachedItem)
-        cachedItem.reset(pCachedItem);
-    if (cachedItem.get())
+        cachedItem = std::move(pCachedItem);
+    if (cachedItem)
         cachedItem->aLocale = rLocale;
 
     return pSymbol;
@@ -1500,15 +1494,11 @@ LocaleDataImpl::getAllInstalledLocaleNames()
 
         // Check if the locale is really available and not just in the table,
         // don't allow fall backs.
-        LocaleDataLookupTableItem *pCachedItem = nullptr;
+        std::unique_ptr<LocaleDataLookupTableItem> pCachedItem;
         if (lcl_LookupTableStatic::get().getFunctionSymbolByName( name, "getLocaleItem", &pCachedItem )) {
             if( pCachedItem )
-                cachedItem.reset( pCachedItem );
+                cachedItem = std::move( pCachedItem );
             seq[nInstalled++] = LanguageTag::convertToLocale( name.replace( cUnder, cHyphen), false);
-        }
-        else
-        {
-            delete pCachedItem;
         }
     }
     if ( nInstalled < nbOfLocales )
@@ -1522,8 +1512,8 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::style;
 using namespace ::com::sun::star::text;
 
-OutlineNumbering::OutlineNumbering(const OutlineNumberingLevel_Impl* pOutlnLevels, int nLevels) :
-    m_pOutlineLevels(pOutlnLevels),
+OutlineNumbering::OutlineNumbering(std::unique_ptr<const OutlineNumberingLevel_Impl[]> pOutlnLevels, int nLevels) :
+    m_pOutlineLevels(std::move(pOutlnLevels)),
     m_nCount(sal::static_int_cast<sal_Int16>(nLevels))
 {
 }

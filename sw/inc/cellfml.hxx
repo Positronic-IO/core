@@ -31,6 +31,7 @@ class SwCalc;
 class SwTableBox;
 class SwTableFormulaUpdate;
 class SwDoc;
+class SwRootFrame;
 
 class SwTableCalcPara
 {
@@ -38,11 +39,12 @@ class SwTableCalcPara
     sal_uInt16 m_nStackCount, m_nMaxSize;
 
 public:
+    SwRootFrame const*const m_pLayout; ///< layout to access text field results
     std::unique_ptr<SwTableSortBoxes> m_pBoxStack;  ///< stack for recognizing recursion
     SwCalc& m_rCalc;              ///< current Calculator
     const SwTable* m_pTable;        ///< current table
 
-    SwTableCalcPara( SwCalc& rCalculator, const SwTable& rTable );
+    SwTableCalcPara(SwCalc& rCalculator, const SwTable& rTable, SwRootFrame const* pLayout);
     ~SwTableCalcPara();
 
     bool CalcWithStackOverflow();
@@ -54,26 +56,26 @@ public:
 
 class SwTableFormula
 {
-typedef void (SwTableFormula:: *FnScanFormula)( const SwTable&, OUString&,
+typedef void (SwTableFormula:: *FnScanFormula)( const SwTable&, OUStringBuffer&,
                                                 OUString&, OUString*, void* ) const;
 
-    void BoxNmsToPtr( const SwTable&, OUString&, OUString&, OUString*,
+    void BoxNmsToPtr( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void PtrToBoxNms( const SwTable&, OUString&, OUString&, OUString*,
+    void PtrToBoxNms( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void RelNmsToBoxNms( const SwTable&, OUString&, OUString&, OUString*,
+    void RelNmsToBoxNms( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void RelBoxNmsToPtr( const SwTable&, OUString&, OUString&, OUString*,
+    void RelBoxNmsToPtr( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void BoxNmsToRelNm( const SwTable&, OUString&, OUString&, OUString*,
+    void BoxNmsToRelNm( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void MakeFormula_( const SwTable&, OUString&, OUString&, OUString*,
+    void MakeFormula_( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void GetFormulaBoxes( const SwTable&, OUString&, OUString&, OUString*,
+    void GetFormulaBoxes( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void HasValidBoxes_( const SwTable&, OUString&, OUString&, OUString*,
+    void HasValidBoxes_( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
-    void SplitMergeBoxNm_( const SwTable&, OUString&, OUString&, OUString*,
+    void SplitMergeBoxNm_( const SwTable&, OUStringBuffer&, OUString&, OUString*,
                         void* pPara ) const;
 
     static void GetBoxes( const SwTableBox& rStt, const SwTableBox& rEnd,
@@ -91,7 +93,7 @@ protected:
     bool        m_bValidValue;      ///< true: recalculate formula
 
     // find the node in which the formula is located
-    //  TextFeld    -> TextNode,
+    //  TextField   -> TextNode,
     //  BoxAttribut -> BoxStartNode
     // !!! every derived class must override this !!!
     virtual const SwNode* GetNodeOfFormula() const = 0;
@@ -109,6 +111,11 @@ protected:
 public:
 
     virtual ~SwTableFormula();
+
+    SwTableFormula(SwTableFormula const &) = default;
+    SwTableFormula(SwTableFormula &&) = default;
+    SwTableFormula & operator =(SwTableFormula const &) = default;
+    SwTableFormula & operator =(SwTableFormula &&) = default;
 
     /// create from the internal formula (for CORE) the external formula (for UI)
     void PtrToBoxNm( const SwTable* pTable );

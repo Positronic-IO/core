@@ -29,6 +29,7 @@
 #include "XMLTextListItemContext.hxx"
 #include "XMLTextListBlockContext.hxx"
 #include <txtlists.hxx>
+#include <sal/log.hxx>
 
 
 using namespace ::com::sun::star;
@@ -101,7 +102,6 @@ XMLTextListBlockContext::XMLTextListBlockContext(
         switch( rTokenMap.Get( nPrefix, aLocalName ) )
         {
         case XML_TOK_TEXT_LIST_BLOCK_XMLID:
-            sXmlId = rValue;
 //FIXME: there is no UNO API for lists
             // xml:id is also the list ID (#i92221#)
             if ( mnLevel == 0 ) // root <list> element
@@ -189,7 +189,7 @@ XMLTextListBlockContext::XMLTextListBlockContext(
         if ( bIsContinueNumberingAttributePresent && !mbRestartNumbering &&
              msContinueListId.isEmpty() )
         {
-            OUString Last( rTextListsHelper.GetLastProcessedListId() );
+            const OUString& Last( rTextListsHelper.GetLastProcessedListId() );
             if ( rTextListsHelper.GetListStyleOfLastProcessedList() == msListStyleName
                  && Last != msListId )
             {

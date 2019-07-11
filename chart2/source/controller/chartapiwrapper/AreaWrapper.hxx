@@ -25,8 +25,6 @@
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/chart2/XChartDocument.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <memory>
 
@@ -73,7 +71,7 @@ public:
 protected:
     // ____ WrappedPropertySet ____
     virtual const css::uno::Sequence< css::beans::Property >& getPropertySequence() override;
-    virtual const std::vector< WrappedProperty* > createWrappedProperties() override;
+    virtual std::vector< std::unique_ptr<WrappedProperty> > createWrappedProperties() override;
     virtual css::uno::Reference< css::beans::XPropertySet > getInnerPropertySet() override;
 
 private:

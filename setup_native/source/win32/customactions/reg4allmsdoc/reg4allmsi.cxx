@@ -132,7 +132,7 @@ static BOOL CheckExtensionInRegistry( LPCWSTR lpSubKey )
     return bRet;
 }
 
-bool GetMsiPropW( MSIHANDLE handle, LPCWSTR name, /*out*/std::wstring& value )
+static bool GetMsiPropW( MSIHANDLE handle, LPCWSTR name, /*out*/std::wstring& value )
 {
     DWORD sz = 0;
     LPWSTR dummy = const_cast<LPWSTR>(L"");
@@ -149,7 +149,7 @@ bool GetMsiPropW( MSIHANDLE handle, LPCWSTR name, /*out*/std::wstring& value )
     return false;
 }
 
-bool IsSetMsiPropW( MSIHANDLE handle, LPCWSTR name )
+static bool IsSetMsiPropW( MSIHANDLE handle, LPCWSTR name )
 {
     std::wstring val;
     GetMsiPropW( handle, name, val );
@@ -257,7 +257,7 @@ static void registerSomeExtensions( MSIHANDLE handle, const int nStart, const in
     }
 }
 
-extern "C" UINT __stdcall LookForRegisteredExtensions( MSIHANDLE handle )
+extern "C" __declspec(dllexport) UINT __stdcall LookForRegisteredExtensions( MSIHANDLE handle )
 {
     OutputDebugStringFormatW( L"LookForRegisteredExtensions: " );
 
@@ -358,7 +358,7 @@ extern "C" UINT __stdcall LookForRegisteredExtensions( MSIHANDLE handle )
     return ERROR_SUCCESS;
 }
 
-extern "C" UINT __stdcall RegisterSomeExtensions( MSIHANDLE handle )
+extern "C" __declspec(dllexport) UINT __stdcall RegisterSomeExtensions( MSIHANDLE handle )
 {
     OutputDebugStringFormatW( L"RegisterSomeExtensions: " );
 
@@ -412,7 +412,7 @@ extern "C" UINT __stdcall RegisterSomeExtensions( MSIHANDLE handle )
     return ERROR_SUCCESS;
 }
 
-extern "C" UINT __stdcall FindRegisteredExtensions( MSIHANDLE handle )
+extern "C" __declspec(dllexport) UINT __stdcall FindRegisteredExtensions( MSIHANDLE handle )
 {
     if ( IsSetMsiPropW( handle, L"FILETYPEDIALOGUSED" ) )
     {
@@ -501,7 +501,7 @@ static void restoreOldRegistration( LPCWSTR lpSubKey )
     }
 }
 
-extern "C" UINT __stdcall RestoreRegAllMSDoc( MSIHANDLE /*handle*/ )
+extern "C" __declspec(dllexport) UINT __stdcall RestoreRegAllMSDoc( MSIHANDLE /*handle*/ )
 {
     OutputDebugStringFormatW( L"RestoreRegAllMSDoc\n" );
 

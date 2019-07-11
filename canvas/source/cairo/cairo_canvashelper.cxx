@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <tuple>
@@ -693,7 +694,7 @@ namespace cairocanvas
 
         for( sal_uInt32 nPolygonIndex = 0; nPolygonIndex < aPolyPolygon.count(); nPolygonIndex++ )
         {
-            ::basegfx::B2DPolygon aPolygon( aPolyPolygon.getB2DPolygon( nPolygonIndex ) );
+            const ::basegfx::B2DPolygon& aPolygon( aPolyPolygon.getB2DPolygon( nPolygonIndex ) );
             const sal_uInt32 nPointCount( aPolygon.count() );
             // to correctly render closed curves, need to output first
             // point twice (so output one additional point)
@@ -830,7 +831,7 @@ namespace cairocanvas
             // emulate rendering::PathJoinType::NONE by painting single edges
             for(sal_uInt32 a(0); a < rPolyPoly.count(); a++)
             {
-                const basegfx::B2DPolygon aCandidate(rPolyPoly.getB2DPolygon(a));
+                const basegfx::B2DPolygon& aCandidate(rPolyPoly.getB2DPolygon(a));
                 const sal_uInt32 nPointCount(aCandidate.count());
 
                 if(nPointCount)
@@ -1085,7 +1086,7 @@ namespace cairocanvas
                                                                                        bool                             bHasAlpha )
     {
         SurfaceSharedPtr pSurface=pInputSurface;
-        uno::Reference< rendering::XCachedPrimitive > rv(nullptr);
+        uno::Reference< rendering::XCachedPrimitive > rv;
         geometry::IntegerSize2D aBitmapSize = rSize;
 
         if( mpCairo )

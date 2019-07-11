@@ -110,6 +110,9 @@ SvParserState OHTMLReader::CallParser()
     return m_bFoundTable ? eParseState : SvParserState::Error;
 }
 
+#if defined _MSC_VER
+#pragma warning(disable: 4702) // unreachable code, bug in MSVC2015
+#endif
 void OHTMLReader::NextToken( HtmlTokenId nToken )
 {
     if(m_bError || !m_nRows) // if there is an error or no more rows to check, return immediately
@@ -336,7 +339,7 @@ void OHTMLReader::TableFontOn(FontDescriptor& _rFont, Color &_rTextColor)
         case HtmlOptionId::FACE :
             {
                 const OUString& rFace = rOption.GetString();
-                OUString aFontName;
+                OUStringBuffer aFontName;
                 sal_Int32 nPos = 0;
                 while( nPos != -1 )
                 {
@@ -344,11 +347,11 @@ void OHTMLReader::TableFontOn(FontDescriptor& _rFont, Color &_rTextColor)
                     OUString aFName = rFace.getToken( 0, ',', nPos );
                     aFName = comphelper::string::strip(aFName, ' ');
                     if( !aFontName.isEmpty() )
-                        aFontName += ";";
-                    aFontName += aFName;
+                        aFontName.append(";");
+                    aFontName.append(aFName);
                 }
                 if ( !aFontName.isEmpty() )
-                    _rFont.Name = aFontName;
+                    _rFont.Name = aFontName.makeStringAndClear();
             }
             break;
         case HtmlOptionId::SIZE :

@@ -64,9 +64,9 @@ private:
 
     std::unique_ptr<weld::Button> m_xOKBtn;
 
-    OUString        maMinLenPwdStr;
-    OUString        maMinLenPwdStr1;
-    OUString        maEmptyPwdStr;
+    OUString const  maMinLenPwdStr;
+    OUString const  maMinLenPwdStr1;
+    OUString const  maEmptyPwdStr;
     OUString        maMainPwdStr;
     sal_uInt16      mnMinLen;
     SfxShowExtras  mnExtras;
@@ -80,7 +80,7 @@ private:
     void            SetPasswdText();
 
 public:
-    SfxPasswordDialog(weld::Window* pParent, const OUString* pGroupText = nullptr);
+    SfxPasswordDialog(weld::Widget* pParent, const OUString* pGroupText = nullptr);
 
     OUString GetUser() const
     {
@@ -125,7 +125,7 @@ public:
 
     void ShowMinLengthText(bool bShow);
 
-    short execute();
+    virtual short run() override;
 };
 
 #endif // INCLUDED_SFX2_PASSWD_HXX

@@ -176,7 +176,7 @@ void adjustSectionName(const uno::Reference< report::XGroup >& _xGroup,sal_Int32
 
 ::rtl::Reference< comphelper::OPropertyChangeMultiplexer> addStyleListener(const uno::Reference< report::XReportDefinition >& _xReportDefinition,::comphelper::OPropertyChangeListener* _pListener)
 {
-    ::rtl::Reference< comphelper::OPropertyChangeMultiplexer> pRet = nullptr;
+    ::rtl::Reference< comphelper::OPropertyChangeMultiplexer> pRet;
     if ( _xReportDefinition.is() )
     {
         uno::Reference<beans::XPropertySet> xPageStyle(getUsedStyle(_xReportDefinition),uno::UNO_QUERY);
@@ -532,8 +532,8 @@ namespace
             lcl_pushBack( _out_rProperties, PROPERTY_CHARCASEMAP, uno::makeAny( pFontItem->GetEnumValue() ) );
         }
         struct Items {
-                sal_uInt16 nWhich;
-                OUString sPropertyName;
+                sal_uInt16 const nWhich;
+                OUString const sPropertyName;
         };
         const Items pItems[] = { {ITEMID_LANGUAGE,OUString(PROPERTY_CHARLOCALE)}
                                 ,{ITEMID_LANGUAGE_ASIAN,OUString(PROPERTY_CHARLOCALEASIAN)}
@@ -710,16 +710,16 @@ bool openCharDialog( const uno::Reference<report::XReportControlFormat >& _rxRep
         lcl_CharPropertiesToItems( _rxReportControlFormat, *pDescriptor );
 
         {   // want the dialog to be destroyed before our set
-            ScopedVclPtrInstance< ORptPageDialog > aDlg(pParent, pDescriptor.get(), "CharDialog");
+            ORptPageDialog aDlg(Application::GetFrameWeld(_rxParentWindow), pDescriptor.get(), "CharDialog");
             uno::Reference< report::XShape > xShape( _rxReportControlFormat, uno::UNO_QUERY );
             if ( xShape.is() )
-                aDlg->RemoveTabPage("background");
-            bSuccess = ( RET_OK == aDlg->Execute() );
+                aDlg.RemoveTabPage("background");
+            bSuccess = aDlg.run() == RET_OK;
             if ( bSuccess )
             {
                 lcl_itemsToCharProperties( lcl_getReportControlFont( _rxReportControlFormat,WESTERN ),
                     lcl_getReportControlFont( _rxReportControlFormat,ASIAN ),
-                    lcl_getReportControlFont( _rxReportControlFormat,COMPLEX ), *aDlg->GetOutputItemSet(), _out_rNewValues );
+                    lcl_getReportControlFont( _rxReportControlFormat,COMPLEX ), *aDlg.GetOutputItemSet(), _out_rNewValues );
             }
         }
     }
@@ -743,7 +743,7 @@ bool openAreaDialog( const uno::Reference<report::XShape >& _xShape,const uno::R
 
     std::shared_ptr<rptui::OReportModel> pModel  = ::reportdesign::OReportDefinition::getSdrModel(_xShape->getSection()->getReportDefinition());
 
-    VclPtr<vcl::Window> pParent = VCLUnoHelper::GetWindow( _rxParentWindow );
+    weld::Window* pParent = Application::GetFrameWeld(_rxParentWindow);
 
     bool bSuccess = false;
     try
@@ -754,7 +754,7 @@ bool openAreaDialog( const uno::Reference<report::XShape >& _xShape,const uno::R
 
         {   // want the dialog to be destroyed before our set
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-            ScopedVclPtr<AbstractSvxAreaTabDialog> pDialog(pFact->CreateSvxAreaTabDialog( pParent,pDescriptor.get(),pModel.get(), true ));
+            ScopedVclPtr<AbstractSvxAreaTabDialog> pDialog(pFact->CreateSvxAreaTabDialog(pParent, pDescriptor.get(), pModel.get(), true));
             if ( RET_OK == pDialog->Execute() )
             {
                 bSuccess = true;
@@ -842,7 +842,7 @@ void notifySystemWindow(vcl::Window const * _pWindow, vcl::Window* _pToRegister,
 SdrObject* isOver(const tools::Rectangle& _rRect, SdrPage const & _rPage, SdrView const & _rView, bool _bAllObjects, SdrObject const * _pIgnore, sal_Int16 _nIgnoreType)
 {
     SdrObject* pOverlappedObj = nullptr;
-    SdrObjListIter aIter(_rPage,SdrIterMode::DeepNoGroups);
+    SdrObjListIter aIter(&_rPage,SdrIterMode::DeepNoGroups);
     SdrObject* pObjIter = nullptr;
 
     while( !pOverlappedObj && (pObjIter = aIter.Next()) != nullptr )
@@ -867,11 +867,11 @@ SdrObject* isOver(const tools::Rectangle& _rRect, SdrPage const & _rPage, SdrVie
     return pOverlappedObj;
 }
 
-bool checkArrayForOccurrence(SdrObject const * _pObjToCheck, SdrUnoObj* _pIgnore[], int _nListLength)
+static bool checkArrayForOccurrence(SdrObject const * _pObjToCheck, std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> _pIgnore[], int _nListLength)
 {
     for(int i=0;i<_nListLength;i++)
     {
-        SdrObject *pIgnore = _pIgnore[i];
+        SdrObject *pIgnore = _pIgnore[i].get();
         if (pIgnore == _pObjToCheck)
         {
             return true;
@@ -880,10 +880,10 @@ bool checkArrayForOccurrence(SdrObject const * _pObjToCheck, SdrUnoObj* _pIgnore
     return false;
 }
 
-SdrObject* isOver(const tools::Rectangle& _rRect,SdrPage const & _rPage,SdrView const & _rView,bool _bAllObjects, SdrUnoObj * _pIgnoreList[], int _nIgnoreListLength)
+SdrObject* isOver(const tools::Rectangle& _rRect,SdrPage const & _rPage,SdrView const & _rView,bool _bAllObjects, std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> _pIgnoreList[], int _nIgnoreListLength)
 {
     SdrObject* pOverlappedObj = nullptr;
-    SdrObjListIter aIter(_rPage,SdrIterMode::DeepNoGroups);
+    SdrObjListIter aIter(&_rPage,SdrIterMode::DeepNoGroups);
     SdrObject* pObjIter = nullptr;
 
     while( !pOverlappedObj && (pObjIter = aIter.Next()) != nullptr )
@@ -1023,7 +1023,7 @@ bool openDialogFormula_nothrow( OUString& _in_out_rFormula
 
             LanguageTag aLangTag(LANGUAGE_SYSTEM);
             CharClass aCC(_xContext, aLangTag);
-            svl::SharedStringPool aStringPool(&aCC);
+            svl::SharedStringPool aStringPool(aCC);
 
             ScopedVclPtrInstance<FormulaDialog> aDlg(
                 pParent, xServiceFactory, pFormulaManager,
@@ -1035,7 +1035,7 @@ bool openDialogFormula_nothrow( OUString& _in_out_rFormula
                 OUString sFormula = aDlg->getCurrentFormula();
                 if ( sFormula[0] == '=' )
                     _in_out_rFormula = "rpt:" + sFormula.copy(1);
-                 else
+                else
                     _in_out_rFormula = "rpt:" + sFormula;
             }
         }

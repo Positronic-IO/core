@@ -31,12 +31,13 @@ class SwPageDesc;
 class SvxTabStopItem;
 class SwWrtShell;
 class ListBox;
-namespace weld { class ComboBoxText; }
+namespace weld { class ComboBox; }
 class SwDocShell;
 class SwFrameFormat;
 class SwTabCols;
 class DateTime;
 class SfxViewFrame;
+class SwEditShell;
 
 // switch a metric
 SW_DLLPUBLIC void SetMetric(MetricFormatter& rCtrl, FieldUnit eUnit);
@@ -59,6 +60,17 @@ SW_DLLPUBLIC void ConvertAttrCharToGen(SfxItemSet& rSet);
  * @param[in]       rOrigSet    original itemset used as input for the dialog
 **/
 SW_DLLPUBLIC void ConvertAttrGenToChar(SfxItemSet& rSet, const SfxItemSet& rOrigSet);
+
+
+/**
+* Apply characeter background on the shell. Need to use this to hide the mixed
+* charachter background and character highlighting attribute, which were
+* added for MSO compatibility where there are two kind of character background.
+*
+* @param[in]       rBackgroundColor    the color to apply on the shell
+* @param[in,out]   rShell              the shell on which we apply the new attirbute
+**/
+SW_DLLPUBLIC void ApplyCharBackground(const Color& rBackgroundColor, SwWrtShell& rShell);
 
 // SfxItemSets <-> PageDesc
 void ItemSetToPageDesc( const SfxItemSet& rSet, SwPageDesc& rPageDesc );
@@ -87,11 +99,11 @@ void SetApplyCharUnit(bool bApplyChar, bool bWeb);
 
 // fill ListBox with all char style templates, except the standard ones
 SW_DLLPUBLIC void FillCharStyleListBox(ListBox& rToFill, SwDocShell* pDocSh, bool bSorted = false, bool bWithDefault = false);
-SW_DLLPUBLIC void FillCharStyleListBox(weld::ComboBoxText& rToFill, SwDocShell* pDocSh, bool bSorted = false, bool bWithDefault = false);
+SW_DLLPUBLIC void FillCharStyleListBox(weld::ComboBox& rToFill, SwDocShell* pDocSh, bool bSorted = false, bool bWithDefault = false);
 
 //inserts a string sorted into a ListBox,
 SW_DLLPUBLIC sal_Int32 InsertStringSorted(const OUString& rEntry, ListBox& rToFill, sal_Int32 nOffset);
-SW_DLLPUBLIC void InsertStringSorted(const OUString& rId, const OUString& rEntry, weld::ComboBoxText& rToFill, int nOffset);
+SW_DLLPUBLIC void InsertStringSorted(const OUString& rId, const OUString& rEntry, weld::ComboBox& rToFill, int nOffset);
 
 // Get table width and alignment
 SwTwips GetTableWidth( SwFrameFormat const * pFormat, SwTabCols const & rCols, sal_uInt16 *pPercent,

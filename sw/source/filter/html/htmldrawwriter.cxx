@@ -73,7 +73,7 @@ void SwHTMLWriter::GetEEAttrsFromDrwObj( SfxItemSet& rItemSet,
                                          const SdrObject *pObj )
 {
     // get the edit script::Engine attributes from object
-    SfxItemSet rObjItemSet = pObj->GetMergedItemSet();
+    const SfxItemSet& rObjItemSet = pObj->GetMergedItemSet();
 
     // iterate over Edit script::Engine attributes and convert them
     // into SW-Attrs resp. set default
@@ -114,10 +114,9 @@ void SwHTMLWriter::GetEEAttrsFromDrwObj( SfxItemSet& rItemSet,
                 pEEItem = &rObjItemSet.GetPool()->GetDefaultItem(nEEWhich);
 
             // now we clone the item with the which id of the writer
-            SfxPoolItem *pSwItem = pEEItem->Clone();
+            std::unique_ptr<SfxPoolItem> pSwItem(pEEItem->Clone());
             pSwItem->SetWhich( nSwWhich );
             rItemSet.Put( *pSwItem );
-            delete pSwItem;
         }
 
         nEEWhich = aIter.NextWhich();
@@ -220,7 +219,7 @@ Writer& OutHTML_DrawFrameFormatAsMarquee( Writer& rWrt,
     if( pTextObj->IsAutoGrowWidth() )
         aTwipSz.setWidth( 0 );
     // The height is at MS a minimum height, therefore we output the minimum
-    // height, if they exists. Because a minimum height MINFLY is coming with
+    // height, if they exist. Because a minimum height MINFLY is coming with
     // high probability from import, we aren't outputting it. You can't
     // do anything wrong, because every font is higher.
     if( pTextObj->IsAutoGrowHeight() )

@@ -59,8 +59,7 @@ namespace stoc_corefl
 {
 
 #ifdef TEST_LIST_CLASSES
-typedef std::vector< OUString > ClassNameVector;
-extern ClassNameVector g_aClassNames;
+extern std::vector<OUString> g_aClassNames;
 #endif
 
 
@@ -145,8 +144,8 @@ class IdlClassImpl
     rtl::Reference<IdlReflectionServiceImpl>
                                  m_xReflection;
 
-    OUString                    _aName;
-    css::uno::TypeClass         _eTypeClass;
+    OUString const               _aName;
+    css::uno::TypeClass const    _eTypeClass;
 
     typelib_TypeDescription *   _pTypeDescr;
 
@@ -214,7 +213,6 @@ public:
                            const OUString & rName, typelib_TypeClass eTypeClass,
                            typelib_TypeDescription * pTypeDescr )
         : IdlClassImpl( pReflection, rName, eTypeClass, pTypeDescr )
-        , _pSortedMemberInit( nullptr )
         , _nMethods( 0 )
         , _nAttributes( 0 )
         {}
@@ -250,7 +248,6 @@ public:
                           const OUString & rName, typelib_TypeClass eTypeClass,
                           typelib_TypeDescription * pTypeDescr )
         : IdlClassImpl( pReflection, rName, eTypeClass, pTypeDescr )
-        , _pFields( nullptr )
         {}
     virtual ~CompoundIdlClassImpl() override;
 
@@ -313,7 +310,6 @@ public:
                       const OUString & rName, typelib_TypeClass eTypeClass,
                       typelib_TypeDescription * pTypeDescr )
         : IdlClassImpl( pReflection, rName, eTypeClass, pTypeDescr )
-        , _pFields( nullptr )
         {}
     virtual ~EnumIdlClassImpl() override;
 
@@ -329,7 +325,7 @@ class IdlMemberImpl
 {
     rtl::Reference<IdlReflectionServiceImpl>
                                 m_xReflection;
-    OUString                    _aName;
+    OUString const              _aName;
 
     typelib_TypeDescription *   _pTypeDescr;
     typelib_TypeDescription *   _pDeclTypeDescr;

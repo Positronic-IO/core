@@ -36,7 +36,6 @@ class TableProperties
 public:
 
     TableProperties();
-    ~TableProperties();
 
     std::vector< sal_Int32 >&           getTableGrid() { return mvTableGrid; };
     std::vector< TableRow >&            getTableRows() { return mvTableRows; };
@@ -60,9 +59,12 @@ public:
         const css::uno::Reference < css::beans::XPropertySet > & xPropSet,
         const ::oox::drawingml::TextListStylePtr& pMasterTextListStyle );
 
+    /// Distributes text body with multiple columns in table cells.
+    void pullFromTextBody(oox::drawingml::TextBodyPtr pTextBody, sal_Int32 nShapeWidth);
+
 private:
 
-    const TableStyle&                   getUsedTableStyle(const ::oox::core::XmlFilterBase& rFilterBase, TableStyle*& rTableStyleToDelete);
+    const TableStyle&                   getUsedTableStyle(const ::oox::core::XmlFilterBase& rFilterBase, std::unique_ptr<TableStyle>& rTableStyleToDelete);
 
     OUString                            maStyleId;              // either StyleId is available
     std::shared_ptr< TableStyle >       mpTableStyle;           // or the complete TableStyle

@@ -57,6 +57,9 @@ class SettingsTable : public LoggedProperties, public LoggedTable
     /// What's the zoom factor set in percents?
     sal_Int16 GetZoomFactor() const;
 
+    /// Gets the type of the zoom.
+    sal_Int16 GetZoomType() const;
+
     /// What's the requested view? E.g. "web".
     Id GetView() const;
 
@@ -94,7 +97,7 @@ class SettingsTable : public LoggedProperties, public LoggedTable
     virtual void lcl_entry(int pos, writerfilter::Reference<Properties>::Pointer_t ref) override;
 
 };
-typedef std::shared_ptr< SettingsTable >          SettingsTablePtr;
+typedef tools::SvRef< SettingsTable >          SettingsTablePtr;
 }}
 
 #endif

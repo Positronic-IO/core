@@ -90,7 +90,7 @@ SvxTextAnimationPage::SvxTextAnimationPage(TabPageParent pPage, const SfxItemSet
     , m_aLeftState(TRISTATE_INDET)
     , m_aRightState(TRISTATE_INDET)
     , m_aDownState(TRISTATE_INDET)
-    , m_xLbEffect(m_xBuilder->weld_combo_box_text("LB_EFFECT"))
+    , m_xLbEffect(m_xBuilder->weld_combo_box("LB_EFFECT"))
     , m_xBoxDirection(m_xBuilder->weld_widget("boxDIRECTION"))
     , m_xBtnUp(m_xBuilder->weld_toggle_button("BTN_UP"))
     , m_xBtnLeft(m_xBuilder->weld_toggle_button("BTN_LEFT"))
@@ -103,9 +103,9 @@ SvxTextAnimationPage::SvxTextAnimationPage(TabPageParent pPage, const SfxItemSet
     , m_xTsbEndless(m_xBuilder->weld_check_button("TSB_ENDLESS"))
     , m_xNumFldCount(m_xBuilder->weld_spin_button("NUM_FLD_COUNT"))
     , m_xTsbPixel(m_xBuilder->weld_check_button("TSB_PIXEL"))
-    , m_xMtrFldAmount(m_xBuilder->weld_metric_spin_button("MTR_FLD_AMOUNT", FUNIT_PIXEL))
+    , m_xMtrFldAmount(m_xBuilder->weld_metric_spin_button("MTR_FLD_AMOUNT", FieldUnit::PIXEL))
     , m_xTsbAuto(m_xBuilder->weld_check_button("TSB_AUTO"))
-    , m_xMtrFldDelay(m_xBuilder->weld_metric_spin_button("MTR_FLD_DELAY", FUNIT_MILLISECOND))
+    , m_xMtrFldDelay(m_xBuilder->weld_metric_spin_button("MTR_FLD_DELAY", FieldUnit::MILLISECOND))
 {
     eFUnit = GetModuleFieldUnit( rInAttrs );
     SfxItemPool* pPool = rOutAttrs.GetPool();
@@ -143,31 +143,17 @@ void SvxTextAnimationPage::Reset( const SfxItemSet* rAttrs )
 
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANIKIND );
-    if( pItem )
-    {
-        eAniKind = static_cast<const SdrTextAniKindItem*>(pItem)->GetValue();
-        m_xLbEffect->set_active( sal::static_int_cast< sal_Int32 >(eAniKind) );
-    }
-    else
-        m_xLbEffect->set_active(-1);
+
+    eAniKind = static_cast<const SdrTextAniKindItem*>(pItem)->GetValue();
+    m_xLbEffect->set_active(sal::static_int_cast<sal_Int32>(eAniKind));
     m_xLbEffect->save_value();
 
     // animation direction
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANIDIRECTION );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANIDIRECTION );
-    if( pItem )
-    {
-        SdrTextAniDirection eValue = static_cast<const SdrTextAniDirectionItem*>(pItem)->GetValue();
-        SelectDirection( eValue );
-    }
-    else
-    {
-        m_xBtnUp->set_active( false );
-        m_xBtnLeft->set_active( false );
-        m_xBtnRight->set_active( false );
-        m_xBtnDown->set_active( false );
-    }
+
+    SelectDirection(static_cast<const SdrTextAniDirectionItem*>(pItem)->GetValue());
     m_aUpState = m_xBtnUp->get_state();
     m_aLeftState = m_xBtnLeft->get_state();
     m_aRightState = m_xBtnRight->get_state();
@@ -177,66 +163,46 @@ void SvxTextAnimationPage::Reset( const SfxItemSet* rAttrs )
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANISTARTINSIDE );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANISTARTINSIDE );
-    if( pItem )
-    {
-        m_xTsbStartInside->set_inconsistent(false);
-        bool bValue = static_cast<const SdrTextAniStartInsideItem*>(pItem)->GetValue();
-        if( bValue )
-            m_xTsbStartInside->set_state( TRISTATE_TRUE );
-        else
-            m_xTsbStartInside->set_state( TRISTATE_FALSE );
-    }
+
+    if (static_cast<const SdrTextAniStartInsideItem*>(pItem)->GetValue())
+        m_xTsbStartInside->set_state(TRISTATE_TRUE);
     else
-        m_xTsbStartInside->set_state( TRISTATE_INDET );
+        m_xTsbStartInside->set_state(TRISTATE_FALSE);
     m_xTsbStartInside->save_state();
 
     // Stop inside
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANISTOPINSIDE );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANISTOPINSIDE );
-    if( pItem )
-    {
-        m_xTsbStopInside->set_inconsistent(false);
-        bool bValue = static_cast<const SdrTextAniStopInsideItem*>(pItem)->GetValue();
-        if( bValue )
-            m_xTsbStopInside->set_state( TRISTATE_TRUE );
-        else
-            m_xTsbStopInside->set_state( TRISTATE_FALSE );
-    }
+
+    if (static_cast<const SdrTextAniStopInsideItem*>(pItem)->GetValue())
+        m_xTsbStopInside->set_state(TRISTATE_TRUE);
     else
-        m_xTsbStopInside->set_state( TRISTATE_INDET );
+        m_xTsbStopInside->set_state(TRISTATE_FALSE);
     m_xTsbStopInside->save_state();
 
     // quantity
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANICOUNT );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANICOUNT );
-    if( pItem )
+
+    long nValue = static_cast<long>(static_cast<const SdrTextAniCountItem*>(pItem)->GetValue());
+    m_xNumFldCount->set_value(nValue);
+    if (nValue == 0)
     {
-        m_xTsbEndless->set_inconsistent(false);
-        long nValue = static_cast<long>(static_cast<const SdrTextAniCountItem*>(pItem)->GetValue());
-        m_xNumFldCount->set_value(nValue);
-        if( nValue == 0 )
+        if (eAniKind == SdrTextAniKind::Slide)
         {
-            if( eAniKind == SdrTextAniKind::Slide )
-            {
-                m_xTsbEndless->set_state( TRISTATE_FALSE );
-                m_xTsbEndless->set_sensitive(false);
-            }
-            else
-            {
-                m_xTsbEndless->set_state( TRISTATE_TRUE );
-                m_xNumFldCount->set_text("");
-            }
+            m_xTsbEndless->set_state(TRISTATE_FALSE);
+            m_xTsbEndless->set_sensitive(false);
         }
         else
-            m_xTsbEndless->set_state( TRISTATE_FALSE );
+        {
+            m_xTsbEndless->set_state(TRISTATE_TRUE);
+            m_xNumFldCount->set_text("");
+        }
     }
     else
-    {
-        m_xNumFldCount->set_text("");
-        m_xTsbEndless->set_state( TRISTATE_INDET );
-    }
+        m_xTsbEndless->set_state(TRISTATE_FALSE);
     m_xTsbEndless->save_state();
     m_xNumFldCount->save_value();
 
@@ -244,24 +210,16 @@ void SvxTextAnimationPage::Reset( const SfxItemSet* rAttrs )
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANIDELAY );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANIDELAY );
-    if( pItem )
+
+    nValue = static_cast<long>(static_cast<const SdrTextAniDelayItem*>(pItem)->GetValue());
+    m_xMtrFldDelay->set_value(nValue, FieldUnit::NONE);
+    if (nValue == 0)
     {
-        m_xTsbAuto->set_inconsistent(false);
-        long nValue = static_cast<long>(static_cast<const SdrTextAniDelayItem*>(pItem)->GetValue());
-        m_xMtrFldDelay->set_value(nValue, FUNIT_NONE);
-        if( nValue == 0 )
-        {
-            m_xTsbAuto->set_state( TRISTATE_TRUE );
-            m_xMtrFldDelay->set_text("");
-        }
-        else
-            m_xTsbAuto->set_state( TRISTATE_FALSE );
+        m_xTsbAuto->set_state(TRISTATE_TRUE);
+        m_xMtrFldDelay->set_text("");
     }
     else
-    {
-        m_xMtrFldDelay->set_text("");
-        m_xTsbAuto->set_state( TRISTATE_INDET );
-    }
+        m_xTsbAuto->set_state(TRISTATE_FALSE);
     m_xTsbAuto->save_state();
     m_xMtrFldDelay->save_value();
 
@@ -269,40 +227,31 @@ void SvxTextAnimationPage::Reset( const SfxItemSet* rAttrs )
     pItem = GetItem( *rAttrs, SDRATTR_TEXT_ANIAMOUNT );
     if( !pItem )
         pItem = &pPool->GetDefaultItem( SDRATTR_TEXT_ANIAMOUNT );
-    if( pItem )
+
+    nValue = static_cast<long>(static_cast<const SdrTextAniAmountItem*>(pItem)->GetValue());
+    if (nValue <= 0)
     {
-        m_xTsbPixel->set_inconsistent(false);
-        long nValue = static_cast<long>(static_cast<const SdrTextAniAmountItem*>(pItem)->GetValue());
-        if( nValue <= 0 )
-        {
-            m_xTsbPixel->set_state( TRISTATE_TRUE );
-            nValue = -nValue;
-            if( nValue == 0 )
-                nValue++;
-            m_xMtrFldAmount->set_unit( FUNIT_CUSTOM );
-            m_xMtrFldAmount->set_digits(0);
+        m_xTsbPixel->set_state(TRISTATE_TRUE);
+        nValue = -nValue;
+        if (nValue == 0)
+            nValue++;
+        m_xMtrFldAmount->set_unit(FieldUnit::CUSTOM);
+        m_xMtrFldAmount->set_digits(0);
 
-            m_xMtrFldAmount->set_increments(1, 10, FUNIT_NONE);
-            m_xMtrFldAmount->set_range(1, 100, FUNIT_NONE);
-            m_xMtrFldAmount->set_value(nValue, FUNIT_NONE);
-        }
-        else
-        {
-            m_xTsbPixel->set_state( TRISTATE_FALSE );
-            m_xMtrFldAmount->set_unit( eFUnit );
-            m_xMtrFldAmount->set_digits(2);
-
-            m_xMtrFldAmount->set_increments(10, 100, FUNIT_NONE);
-            m_xMtrFldAmount->set_range(1, 10000, FUNIT_NONE);
-
-            SetMetricValue( *m_xMtrFldAmount, nValue, eUnit );
-        }
+        m_xMtrFldAmount->set_increments(1, 10, FieldUnit::NONE);
+        m_xMtrFldAmount->set_range(1, 100, FieldUnit::NONE);
+        m_xMtrFldAmount->set_value(nValue, FieldUnit::NONE);
     }
     else
     {
-        m_xMtrFldAmount->set_sensitive(false);
-        m_xMtrFldAmount->set_text("");
-        m_xTsbPixel->set_state( TRISTATE_INDET );
+        m_xTsbPixel->set_state(TRISTATE_FALSE);
+        m_xMtrFldAmount->set_unit(eFUnit);
+        m_xMtrFldAmount->set_digits(2);
+
+        m_xMtrFldAmount->set_increments(10, 100, FieldUnit::NONE);
+        m_xMtrFldAmount->set_range(1, 10000, FieldUnit::NONE);
+
+        SetMetricValue(*m_xMtrFldAmount, nValue, eUnit);
     }
     m_xTsbPixel->save_state();
     m_xMtrFldAmount->save_value();
@@ -391,7 +340,7 @@ bool SvxTextAnimationPage::FillItemSet( SfxItemSet* rAttrs)
         {
             if( m_xMtrFldDelay->get_value_changed_from_saved() )
             {
-                nValue = m_xMtrFldDelay->get_value(FUNIT_NONE);
+                nValue = m_xMtrFldDelay->get_value(FieldUnit::NONE);
                 bModified = true;
             }
         }
@@ -407,7 +356,7 @@ bool SvxTextAnimationPage::FillItemSet( SfxItemSet* rAttrs)
         sal_Int64 nValue = 0;
         if( eState == TRISTATE_TRUE )
         {
-            nValue = m_xMtrFldAmount->get_value(FUNIT_NONE);
+            nValue = m_xMtrFldAmount->get_value(FieldUnit::NONE);
             nValue = -nValue;
         }
         else
@@ -433,7 +382,7 @@ VclPtr<SfxTabPage> SvxTextAnimationPage::Create(TabPageParent pParent, const Sfx
     return VclPtr<SvxTextAnimationPage>::Create(pParent, *rAttrs);
 }
 
-IMPL_LINK_NOARG(SvxTextAnimationPage, SelectEffectHdl_Impl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SvxTextAnimationPage, SelectEffectHdl_Impl, weld::ComboBox&, void)
 {
     int nPos = m_xLbEffect->get_active();
     if (nPos != -1)
@@ -519,7 +468,7 @@ IMPL_LINK_NOARG(SvxTextAnimationPage, ClickAutoHdl_Impl, weld::Button&, void)
     else
     {
         m_xMtrFldDelay->set_sensitive(true);
-        m_xMtrFldDelay->set_value(m_xMtrFldDelay->get_value(FUNIT_NONE), FUNIT_NONE); //to-do
+        m_xMtrFldDelay->set_value(m_xMtrFldDelay->get_value(FieldUnit::NONE), FieldUnit::NONE); //to-do
     }
 }
 
@@ -528,27 +477,27 @@ IMPL_LINK_NOARG(SvxTextAnimationPage, ClickPixelHdl_Impl, weld::Button&, void)
     TriState eState = m_xTsbPixel->get_state();
     if (eState == TRISTATE_TRUE)
     {
-        int nValue = m_xMtrFldAmount->get_value(FUNIT_NONE) / 10;
+        int nValue = m_xMtrFldAmount->get_value(FieldUnit::NONE) / 10;
         m_xMtrFldAmount->set_sensitive(true);
-        m_xMtrFldAmount->set_unit(FUNIT_CUSTOM);
+        m_xMtrFldAmount->set_unit(FieldUnit::CUSTOM);
         m_xMtrFldAmount->set_digits(0);
 
-        m_xMtrFldAmount->set_increments(1, 10, FUNIT_NONE);
-        m_xMtrFldAmount->set_range(1, 100, FUNIT_NONE);
+        m_xMtrFldAmount->set_increments(1, 10, FieldUnit::NONE);
+        m_xMtrFldAmount->set_range(1, 100, FieldUnit::NONE);
 
-        m_xMtrFldAmount->set_value(nValue, FUNIT_NONE);
+        m_xMtrFldAmount->set_value(nValue, FieldUnit::NONE);
     }
     else if( eState == TRISTATE_FALSE )
     {
-        int nValue = m_xMtrFldAmount->get_value(FUNIT_NONE) * 10;
+        int nValue = m_xMtrFldAmount->get_value(FieldUnit::NONE) * 10;
         m_xMtrFldAmount->set_sensitive(true);
         m_xMtrFldAmount->set_unit(eFUnit);
         m_xMtrFldAmount->set_digits(2);
 
-        m_xMtrFldAmount->set_increments(10, 100, FUNIT_NONE);
-        m_xMtrFldAmount->set_range(1, 10000, FUNIT_NONE);
+        m_xMtrFldAmount->set_increments(10, 100, FieldUnit::NONE);
+        m_xMtrFldAmount->set_range(1, 10000, FieldUnit::NONE);
 
-        m_xMtrFldAmount->set_value(nValue, FUNIT_NONE);
+        m_xMtrFldAmount->set_value(nValue, FieldUnit::NONE);
     }
 }
 

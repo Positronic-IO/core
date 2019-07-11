@@ -8,6 +8,9 @@
  *
  */
 
+#include <sal/config.h>
+
+#include <o3tl/clamp.hxx>
 #include <vcl/bitmap.hxx>
 #include <vcl/bitmapex.hxx>
 #include <vcl/bitmapaccess.hxx>
@@ -15,7 +18,7 @@
 
 #include <bitmapwriteaccess.hxx>
 
-BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx)
+BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx) const
 {
     Bitmap aBitmap(rBitmapEx.GetBitmap());
 
@@ -40,8 +43,8 @@ BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx)
                 long nGrey11, nGrey12, nGrey13;
                 long nGrey21, nGrey22, nGrey23;
                 long nGrey31, nGrey32, nGrey33;
-                double fAzim = mnAzimuthAngle100 * 0.01 * F_PI180;
-                double fElev = mnElevationAngle100 * 0.01 * F_PI180;
+                double fAzim = basegfx::deg2rad(mnAzimuthAngle100 * 0.01);
+                double fElev = basegfx::deg2rad(mnElevationAngle100 * 0.01);
                 long* pHMap = new long[nWidth + 2];
                 long* pVMap = new long[nHeight + 2];
                 long nX, nY, nNx, nNy, nDotL;
@@ -50,7 +53,7 @@ BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx)
                 const long nLz = FRound(sin(fElev) * 255.0);
                 const auto nZ2 = ((6 * 255) / 4) * ((6 * 255) / 4);
                 const long nNzLz = ((6 * 255) / 4) * nLz;
-                const sal_uInt8 cLz = static_cast<sal_uInt8>(SAL_BOUND(nLz, 0, 255));
+                const sal_uInt8 cLz = static_cast<sal_uInt8>(o3tl::clamp(nLz, 0L, 255L));
 
                 // fill mapping tables
                 pHMap[0] = 0;
@@ -101,7 +104,7 @@ BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx)
                         {
                             const double fGrey
                                 = nDotL / sqrt(static_cast<double>(nNx * nNx + nNy * nNy + nZ2));
-                            aGrey.SetIndex(static_cast<sal_uInt8>(SAL_BOUND(fGrey, 0, 255)));
+                            aGrey.SetIndex(static_cast<sal_uInt8>(o3tl::clamp(fGrey, 0.0, 255.0)));
                         }
 
                         pWriteAcc->SetPixelOnData(pScanline, nX, aGrey);
@@ -145,7 +148,7 @@ BitmapEx BitmapEmbossGreyFilter::execute(BitmapEx const& rBitmapEx)
     }
 
     if (bRet)
-        return rBitmapEx;
+        return BitmapEx(aBitmap);
 
     return BitmapEx();
 }

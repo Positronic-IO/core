@@ -20,22 +20,15 @@
 #ifndef INCLUDED_SD_INC_OUTLINER_HXX
 #define INCLUDED_SD_INC_OUTLINER_HXX
 
-#include <svx/svdobj.hxx>
 #include <svx/svdoutl.hxx>
 #include "pres.hxx"
 #include "OutlinerIterator.hxx"
 #include <editeng/SpellPortions.hxx>
 #include <memory>
 
-class Dialog;
 class SdrObject;
 class SdrTextObj;
 class SdDrawDocument;
-
-namespace weld
-{
-class MessageDialog;
-}
 
 namespace sd {
 
@@ -47,12 +40,12 @@ class Window;
 struct SearchSelection
 {
     /// 0-based index of the page that has the selection.
-    int m_nPage;
+    int const m_nPage;
     /**
      * List of selection rectangles in twips -- multiple rectangles only in
      * case the selection spans over more layout lines.
      */
-    OString m_aRectangles;
+    OString const m_aRectangles;
 
     SearchSelection(int nPage, const OString& rRectangles);
 
@@ -521,12 +514,11 @@ private:
     */
     virtual bool SpellNextDocument() override;
 
-    /** Show the given message box and make it modal.  It is assumed that
-        the parent of the given dialog is NULL, i.e. the application
-        window.  This function makes sure that the otherwise non-modal
-        search dialog, if visible, is locked, too.
+    /** Find the right parent to use for a message. This function makes sure
+        that the otherwise non-modal search or spell dialogs, if visible, are
+        locked, too.
     */
-    sal_uInt16 ShowModalMessageBox(weld::MessageDialog& rMessageBox);
+    VclPtr<vcl::Window> GetMessageBoxParent();
 };
 
 #endif

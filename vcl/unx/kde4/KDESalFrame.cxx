@@ -41,6 +41,7 @@
 
 #include <vcl/font.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include <unx/fontmanager.hxx>
 
@@ -168,12 +169,6 @@ void KDESalFrame::UpdateSettings( AllSettings& rSettings )
     QPalette pal = QApplication::palette();
 
     style.SetToolbarIconSize( ToolbarIconSize::Large );
-
-    style.SetActiveColor(toColor(pal.color(QPalette::Active, QPalette::Window)));
-    style.SetDeactiveColor(toColor(pal.color(QPalette::Inactive, QPalette::Window)));
-
-    style.SetActiveTextColor(toColor(pal.color(QPalette::Active, QPalette::WindowText)));
-    style.SetDeactiveTextColor(toColor(pal.color(QPalette::Inactive, QPalette::WindowText)));
 
     // Font
     vcl::Font aFont = toFont( QApplication::font(), rSettings.GetUILanguageTag().getLocale() );

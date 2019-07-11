@@ -29,8 +29,6 @@
 #include <ooo/vba/excel/XlPasteType.hpp>
 #include <ooo/vba/excel/XlPasteSpecialOperation.hpp>
 
-#include <comphelper/proparrhlp.hxx>
-#include <comphelper/propertycontainer.hxx>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -82,8 +80,8 @@ class ScVbaRange : public ScVbaRange_BASE
     css::uno::Reference< ov::XCollection > m_Borders;
     css::uno::Reference< css::table::XCellRange > mxRange;
     css::uno::Reference< css::sheet::XSheetCellRangeContainer > mxRanges;
-    bool mbIsRows;
-    bool mbIsColumns;
+    bool const mbIsRows;
+    bool const mbIsColumns;
     css::uno::Reference< ov::excel::XValidation > m_xValidation;
     /// @throws css::uno::RuntimeException
     double getCalcColWidth(const css::table::CellRangeAddress&);

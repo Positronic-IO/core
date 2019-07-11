@@ -179,8 +179,8 @@ sal_uInt16 MSWordStyles::GetSlot( const SwFormat* pFormat ) const
 
 sal_uInt16 MSWordStyles::BuildGetSlot( const SwFormat& rFormat )
 {
-    sal_uInt16 nRet;
-    switch ( nRet = rFormat.GetPoolFormatId() )
+    sal_uInt16 nRet = rFormat.GetPoolFormatId();
+    switch ( nRet )
     {
         case RES_POOLCOLL_STANDARD:
             nRet = 0;
@@ -460,7 +460,8 @@ void MSWordStyles::SetStyleDefaults( const SwFormat& rFormat, bool bPap )
     // dynamic defaults
     const SfxItemPool& rPool = *rFormat.GetAttrSet().GetPool();
     for( n = nStt; n < nEnd; ++n )
-        aFlags[ n - RES_CHRATR_BEGIN ] = nullptr != rPool.GetPoolDefaultItem( n );
+        aFlags[ n - RES_CHRATR_BEGIN ] = nullptr != rPool.GetPoolDefaultItem( n )
+            || SfxItemState::SET == m_rExport.m_pDoc->GetDfltTextFormatColl()->GetItemState( n, false );
 
     // static defaults, that differs between WinWord and SO
     if( bPap )
@@ -891,10 +892,8 @@ std::vector< const wwFont* > wwFontHelper::AsVector() const
 {
     std::vector<const wwFont *> aFontList( maFonts.size() );
 
-    typedef std::map<wwFont, sal_uInt16>::const_iterator myiter;
-    myiter aEnd = maFonts.end();
-    for ( myiter aIter = maFonts.begin(); aIter != aEnd; ++aIter )
-        aFontList[aIter->second] = &aIter->first;
+    for ( const auto& aFont : maFonts )
+        aFontList[aFont.second] = &aFont.first;
 
     return aFontList;
 }
@@ -954,10 +953,9 @@ void WW8_WrPlc0::Append( sal_uLong nStartCpOrFc )
 
 void WW8_WrPlc0::Write( SvStream& rStrm )
 {
-    std::vector<sal_uLong>::const_iterator iter;
-    for( iter = aPos.begin(); iter != aPos.end(); ++iter )
+    for( const auto& rPos : aPos )
     {
-        rStrm.WriteUInt32(*iter);
+        rStrm.WriteUInt32(rPos);
     }
 }
 
@@ -977,7 +975,7 @@ MSWordSections::MSWordSections( MSWordExportBase& rExport )
     sal_uLong nRstLnNum =  pSet ? pSet->Get( RES_LINENUMBER ).GetStartValue() : 0;
 
     const SwTableNode* pTableNd = rExport.m_pCurPam->GetNode().FindTableNode();
-    const SwSectionNode* pSectNd;
+    const SwSectionNode* pSectNd = nullptr;
     if ( pTableNd )
     {
         pSet = &pTableNd->GetTable().GetFrameFormat()->GetAttrSet();
@@ -1001,6 +999,11 @@ MSWordSections::MSWordSections( MSWordExportBase& rExport )
             pFormat = pSectNd->GetSection().GetFormat();
     }
 
+    // tdf#118393: FILESAVE: DOCX Export loses header/footer
+    rExport.m_bFirstTOCNodeWithSection = pSectNd &&
+        (   TOX_HEADER_SECTION  == pSectNd->GetSection().GetType() ||
+            TOX_CONTENT_SECTION == pSectNd->GetSection().GetType()  );
+
     // Try to get page descriptor of the first node
     if ( pSet &&
          SfxItemState::SET == pSet->GetItemState( RES_PAGEDESC, true, &pI ) &&
@@ -1009,13 +1012,12 @@ MSWordSections::MSWordSections( MSWordExportBase& rExport )
         AppendSection( *static_cast<const SwFormatPageDesc*>(pI), *pNd, pFormat, nRstLnNum );
     }
     else
-        AppendSection( rExport.m_pCurrentPageDesc, pFormat, nRstLnNum );
+        AppendSection( rExport.m_pCurrentPageDesc, pFormat, nRstLnNum, /*bIsFirstParagraph=*/true );
 }
 
 WW8_WrPlcSepx::WW8_WrPlcSepx( MSWordExportBase& rExport )
     : MSWordSections( rExport )
     , m_bHeaderFooterWritten( false )
-    , pTextPos( nullptr )
 {
     // to be in sync with the AppendSection() call in the MSWordSections
     // constructor
@@ -1054,12 +1056,6 @@ sal_uInt16 MSWordSections::NumberOfColumns( const SwDoc &rDoc, const WW8_SepInfo
     const SwPageDesc* pPd = rInfo.pPageDesc;
     if ( !pPd )
         pPd = &rDoc.GetPageDesc( 0 );
-
-    if ( !pPd )
-    {
-        OSL_ENSURE( pPd, "totally impossible" );
-        return 1;
-    }
 
     const SfxItemSet &rSet = pPd->GetMaster().GetAttrSet();
     SfxItemSet aSet( *rSet.GetPool(), svl::Items<RES_COL, RES_COL>{} );
@@ -1255,10 +1251,9 @@ void MSWordSections::CheckForFacinPg( WW8Export& rWrt ) const
     // 2 values getting set
     //      Dop.fFacingPages            == Header and Footer different
     //      Dop.fSwapBordersFacingPgs   == mirrored borders
-    std::vector<WW8_SepInfo>::const_iterator iter = aSects.begin();
-    for( sal_uInt16 nEnde = 0; iter != aSects.end(); ++iter )
+    sal_uInt16 nEnde = 0;
+    for( const WW8_SepInfo& rSepInfo : aSects )
     {
-        const WW8_SepInfo& rSepInfo = *iter;
         if( !rSepInfo.pSectionFormat )
         {
             const SwPageDesc* pPd = rSepInfo.pPageDesc;
@@ -1530,9 +1525,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
     AttrOutput().SectFootnoteEndnotePr();
 
     // forms
-    bool formProtection = m_pDoc->getIDocumentSettingAccess().get( DocumentSettingId::PROTECT_FORM );
-    formProtection |= rSepInfo.IsProtected();
-    AttrOutput().SectionFormProtection( formProtection );
+    AttrOutput().SectionFormProtection( rSepInfo.IsProtected() );
 
     // line numbers
     const SwLineNumberInfo& rLnNumInfo = m_pDoc->GetLineNumberInfo();
@@ -1544,6 +1537,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
         */
     sal_uInt8 nBreakCode = 2;            // default start new page
     bool bOutPgDscSet = true, bLeftRightPgChain = false, bOutputStyleItemSet = false;
+    bool bEnsureHeaderFooterWritten = rSepInfo.pSectionFormat && rSepInfo.bIsFirstParagraph;
     const SwFrameFormat* pPdFormat = &pPd->GetMaster();
     if ( rSepInfo.pSectionFormat )
     {
@@ -1560,7 +1554,9 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
             }
         }
 
-        if ( reinterpret_cast<SwSectionFormat*>(sal_IntPtr(-1)) != rSepInfo.pSectionFormat )
+        if ( reinterpret_cast<SwSectionFormat*>(sal_IntPtr(-1)) == rSepInfo.pSectionFormat )
+            bEnsureHeaderFooterWritten |= !rSepInfo.pPDNd && GetExportFormat() != ExportFormat::RTF;
+        else
         {
             if ( nBreakCode == 0 )
                 bOutPgDscSet = false;
@@ -1722,7 +1718,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
         : &pPd->GetLeft();
 
     // Ensure that headers are written if section is first paragraph
-    if ( nBreakCode != 0 || ( rSepInfo.pSectionFormat && rSepInfo.bIsFirstParagraph ))
+    if ( nBreakCode != 0 || bEnsureHeaderFooterWritten )
     {
         if ( titlePage )
         {
@@ -1926,7 +1922,6 @@ void MSWordExportBase::WriteHeaderFooterText( const SwFormat& rFormat, bool bHea
 // WW8_WrPlcFootnoteEdn is the class for Footnotes and Endnotes
 
 WW8_WrPlcSubDoc::WW8_WrPlcSubDoc()
-    : pTextPos( nullptr )
 {
 }
 
@@ -2163,7 +2158,6 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
     OSL_ENSURE( aCps.size() + 2 == pTextPos->Count(), "WritePlc: DeSync" );
 
     std::vector<std::pair<OUString,OUString> > aStrArr;
-    typedef std::vector<std::pair<OUString,OUString> >::iterator myiter;
     WW8Fib& rFib = *rWrt.pFib;              // n+1-th CP-Pos according to the manual
     bool bWriteCP = true;
 
@@ -2193,7 +2187,7 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
 
                 //sort and remove duplicates
                 std::sort(aStrArr.begin(), aStrArr.end(),&lcl_AuthorComp);
-                myiter aIter = std::unique(aStrArr.begin(), aStrArr.end());
+                auto aIter = std::unique(aStrArr.begin(), aStrArr.end());
                 aStrArr.erase(aIter, aStrArr.end());
 
                 // Also sort the start and end positions. We need to reference
@@ -2223,7 +2217,7 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
                 rFib.m_lcbGrpStAtnOwners = nFcStart - rFib.m_fcGrpStAtnOwners;
 
                 // Commented text ranges
-                if( aRangeStartPos.size() > 0 )
+                if( !aRangeStartPos.empty() )
                 {
                     // Commented text ranges starting positions (Plcfbkf.aCP)
                     rFib.m_fcPlcfAtnbkf = nFcStart;
@@ -2307,7 +2301,7 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
                     // is it a writer or sdr - textbox?
                     const SdrObject* pObj = static_cast<SdrObject const *>(aContent[ i ]);
                     sal_Int32 nCnt = 1;
-                    if (pObj && dynamic_cast< const SdrTextObj *>( pObj ) ==  nullptr )
+                    if (dynamic_cast< const SdrTextObj *>( pObj ))
                     {
                         // find the "highest" SdrObject of this
                         const SwFrameFormat& rFormat = *::FindFrameFormat( pObj );
@@ -2376,7 +2370,7 @@ void WW8_WrPlcSubDoc::WriteGenericPlc( WW8Export& rWrt, sal_uInt8 nTTyp,
                 const WW8_Annotation& rAtn = *static_cast<const WW8_Annotation*>(aContent[i]);
 
                 //aStrArr is sorted
-                myiter aIter = std::lower_bound(aStrArr.begin(),
+                auto aIter = std::lower_bound(aStrArr.begin(),
                         aStrArr.end(), std::pair<OUString,OUString>(rAtn.msOwner,OUString()),
                         &lcl_AuthorComp);
                 OSL_ENSURE(aIter != aStrArr.end() && aIter->first == rAtn.msOwner,

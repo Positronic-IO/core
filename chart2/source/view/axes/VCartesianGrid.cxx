@@ -24,8 +24,11 @@
 #include <ObjectIdentifier.hxx>
 #include <CommonConverters.hxx>
 #include <AxisHelper.hxx>
+#include <VLineProperties.hxx>
 #include <com/sun/star/drawing/PointSequenceSequence.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
+#include <com/sun/star/chart2/XTransformation.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 
 #include <memory>
 #include <vector>
@@ -132,7 +135,7 @@ void GridLinePoints::update( double fScaledTickValue )
     P0[m_nDimensionIndex] = P1[m_nDimensionIndex] = P2[m_nDimensionIndex] = fScaledTickValue;
 }
 
-void addLine2D( drawing::PointSequenceSequence& rPoints, sal_Int32 nIndex
+static void addLine2D( drawing::PointSequenceSequence& rPoints, sal_Int32 nIndex
              , const GridLinePoints& rScaledLogicPoints
              , const Reference< XTransformation > & xTransformation
               )
@@ -147,7 +150,7 @@ void addLine2D( drawing::PointSequenceSequence& rPoints, sal_Int32 nIndex
     rPoints[nIndex][1].Y = static_cast<sal_Int32>(aPB.PositionY);
 }
 
-void addLine3D( drawing::PolyPolygonShape3D& rPoints, sal_Int32 nIndex
+static void addLine3D( drawing::PolyPolygonShape3D& rPoints, sal_Int32 nIndex
             , const GridLinePoints& rBasePoints
             , const Reference< XTransformation > & xTransformation )
 {
@@ -209,7 +212,7 @@ void VCartesianGrid::createShapes()
 
     //create all scaled tickmark values
     std::unique_ptr< TickFactory > apTickFactory( createTickFactory() );
-    TickFactory& aTickFactory = *apTickFactory.get();
+    TickFactory& aTickFactory = *apTickFactory;
     TickInfoArraysType aAllTickInfos;
     aTickFactory.getAllTicks( aAllTickInfos );
 
@@ -271,7 +274,7 @@ void VCartesianGrid::createShapes()
             aHandleLineProperties.LineStyle    <<= drawing::LineStyle_NONE;
             Reference< drawing::XShape > xHandleShape =
                 m_pShapeFactory->createLine2D( xTarget, aHandlesPoints, &aHandleLineProperties );
-            ::chart::AbstractShapeFactory::setShapeName( xHandleShape, "HandlesOnly" );
+            ::chart::ShapeFactory::setShapeName( xHandleShape, "HandlesOnly" );
         }
         else //if(2!=m_nDimension)
         {

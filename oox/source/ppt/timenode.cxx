@@ -66,6 +66,9 @@ namespace oox { namespace ppt {
             case AnimationNodeType::ANIMATE:
                 sServiceName = "com.sun.star.animations.Animate";
                 break;
+            case AnimationNodeType::ITERATE:
+                sServiceName = "com.sun.star.animations.IterateContainer";
+                break;
             case AnimationNodeType::ANIMATECOLOR:
                 sServiceName = "com.sun.star.animations.AnimateColor";
                 break;
@@ -194,9 +197,17 @@ namespace oox { namespace ppt {
     void TimeNode::addNode( const XmlFilterBase& rFilter, const Reference< XAnimationNode >& rxNode, const SlidePersistPtr & pSlide )
     {
         try {
-            OUString sServiceName = getServiceName( mnNodeType );
+            sal_Int16 nNodeType = mnNodeType;
+
+            if (mnNodeType == AnimationNodeType::PAR && maNodeProperties[NP_ITERATETYPE].hasValue())
+                nNodeType = AnimationNodeType::ITERATE;
+
+            OUString sServiceName = getServiceName(nNodeType);
+
             Reference< XAnimationNode > xNode = createAndInsert( rFilter, sServiceName, rxNode );
-            setNode( rFilter, xNode, pSlide );
+            if (!xNode)
+                return;
+            setNode(rFilter, xNode, pSlide, rxNode);
         }
         catch( const Exception& e )
         {
@@ -204,7 +215,7 @@ namespace oox { namespace ppt {
         }
     }
 
-    void TimeNode::setNode( const XmlFilterBase& rFilter, const Reference< XAnimationNode >& xNode, const SlidePersistPtr & pSlide )
+    void TimeNode::setNode(const XmlFilterBase& rFilter, const Reference< XAnimationNode >& xNode, const SlidePersistPtr & pSlide, const Reference<XAnimationNode>& xParent)
     {
         SAL_WARN_IF( !xNode.is(), "oox.ppt", "null node passed" );
 
@@ -227,7 +238,7 @@ namespace oox { namespace ppt {
             if( !maStCondList.empty() )
             {
                 Any aAny = AnimationCondition::convertList( pSlide, maStCondList );
-                 if( aAny.hasValue() )
+                if( aAny.hasValue() )
                 {
                     xNode->setBegin( aAny );
                 }
@@ -310,10 +321,20 @@ namespace oox { namespace ppt {
                             xAnimate->setBy( aValue );
                         break;
                     case NP_TARGET:
-                        if (xAnimate.is())
-                            xAnimate->setTarget(aValue);
-                        if (xCommand.is())
-                            xCommand->setTarget(aValue);
+
+                        if (xParent.is() && xParent->getType() == AnimationNodeType::ITERATE)
+                        {
+                            Reference<XIterateContainer> xParentContainer(xParent, UNO_QUERY);
+                            if (xParentContainer.is())
+                                xParentContainer->setTarget(aValue);
+                        }
+                        else
+                        {
+                            if (xAnimate.is())
+                                xAnimate->setTarget(aValue);
+                            if (xCommand.is())
+                                xCommand->setTarget(aValue);
+                        }
                         break;
                     case NP_SUBITEM:
                         if( xAnimate.is() )

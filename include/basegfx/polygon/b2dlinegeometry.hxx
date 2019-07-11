@@ -20,13 +20,12 @@
 #ifndef INCLUDED_BASEGFX_POLYGON_B2DLINEGEOMETRY_HXX
 #define INCLUDED_BASEGFX_POLYGON_B2DLINEGEOMETRY_HXX
 
-#include <sal/types.h>
 #include <basegfx/numeric/ftools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <com/sun/star/drawing/LineCap.hpp>
 #include <basegfx/basegfxdllapi.h>
-
+#include <basegfx/polygon/b2dpolygontriangulator.hxx>
 
 namespace basegfx
 {
@@ -124,6 +123,10 @@ namespace basegfx
             the usual fallback to bevel is used. Allowed range is cropped
             to [F_PI .. 0.01 * F_PI].
 
+            @param pTriangles
+            If given, the method will additionally add the created geometry as
+            B2DTriangle's
+
             @return
             The tools::PolyPolygon containing the geometry of the extended line by
             it's line width. Contains bezier segments and edge roundings as
@@ -134,9 +137,10 @@ namespace basegfx
             double fHalfLineWidth,
             B2DLineJoin eJoin,
             css::drawing::LineCap eCap,
-            double fMaxAllowedAngle = (12.5 * F_PI180),
+            double fMaxAllowedAngle = basegfx::deg2rad(12.5),
             double fMaxPartOfEdge = 0.4,
-            double fMiterMinimumAngle = (15.0 * F_PI180));
+            double fMiterMinimumAngle = basegfx::deg2rad(15.0),
+            basegfx::triangulator::B2DTriangleVector* pTriangles = nullptr);
 
     } // end of namespace utils
 } // end of namespace basegfx

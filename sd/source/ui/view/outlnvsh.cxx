@@ -24,6 +24,7 @@
 #include <app.hrc>
 #include <svx/hyperdlg.hxx>
 #include <svx/zoomslideritem.hxx>
+#include <svx/svdundo.hxx>
 
 #include <sfx2/infobar.hxx>
 #include <sfx2/objface.hxx>
@@ -43,6 +44,7 @@
 #include <vcl/scrbar.hxx>
 #include <vcl/settings.hxx>
 
+#include <sal/log.hxx>
 #include <svl/whiter.hxx>
 #include <editeng/editstat.hxx>
 #include <svl/itempool.hxx>
@@ -81,6 +83,8 @@
 #include <ViewShellBase.hxx>
 #include <ViewShellManager.hxx>
 #include <DrawController.hxx>
+#include <DrawDocShell.hxx>
+#include <OutlineView.hxx>
 #include <framework/FrameworkHelper.hxx>
 
 #include <memory>
@@ -184,7 +188,6 @@ OutlineViewShell::OutlineViewShell (
     vcl::Window* pParentWindow,
     FrameView* pFrameViewArgument)
     : ViewShell(pParentWindow, rViewShellBase),
-      pOlView(nullptr),
       pLastPage( nullptr ),
       bPastePossible(false),
       mbInitialized(false)
@@ -970,10 +973,9 @@ void OutlineViewShell::GetMenuState( SfxItemSet &rSet )
                         SdrTextObj* pTextObj = dynamic_cast< SdrTextObj* >( pObj );
                         if( pTextObj )
                         {
-                            OutlinerParaObject* pParaObj = pTextObj->GetEditOutlinerParaObject();
+                            std::unique_ptr<OutlinerParaObject> pParaObj = pTextObj->GetEditOutlinerParaObject();
                             if( pParaObj )
                             {
-                                delete pParaObj;
                                 bDisable = false;
                             }
                         }
@@ -1113,7 +1115,9 @@ bool OutlineViewShell::PrepareClose( bool bUI )
     if( !ViewShell::PrepareClose(bUI) )
         return false;
 
-    return pOlView == nullptr || pOlView->PrepareClose();
+    if (pOlView)
+        pOlView->PrepareClose();
+    return true;
 }
 
 /**
@@ -1592,15 +1596,17 @@ void OutlineViewShell::UpdateTitleObject( SdPage* pPage, Paragraph const * pPara
         }
 
         // if we have a title object and a text, set the text
-        OutlinerParaObject* pOPO = pTO ? rOutliner.CreateParaObject(rOutliner.GetAbsPos(pPara), 1) : nullptr;
+        std::unique_ptr<OutlinerParaObject> pOPO;
+        if (pTO)
+            pOPO = rOutliner.CreateParaObject(rOutliner.GetAbsPos(pPara), 1);
         if (pOPO)
         {
             pOPO->SetOutlinerMode( OutlinerMode::TitleObject );
+            assert(pTO);
             pOPO->SetVertical( pTO->IsVerticalWriting() );
             if( pTO->GetOutlinerParaObject() && (pOPO->GetTextObject() == pTO->GetOutlinerParaObject()->GetTextObject()) )
             {
                 // do nothing, same text already set
-                delete pOPO;
             }
             else
             {
@@ -1608,7 +1614,7 @@ void OutlineViewShell::UpdateTitleObject( SdPage* pPage, Paragraph const * pPara
                 if( !bNewObject && pOlView->isRecordingUndo() )
                     pOlView->AddUndo(GetDoc()->GetSdrUndoFactory().CreateUndoObjectSetText(*pTO,0));
 
-                pTO->SetOutlinerParaObject( pOPO );
+                pTO->SetOutlinerParaObject( std::move(pOPO) );
                 pTO->SetEmptyPresObj( false );
                 pTO->ActionChanged();
             }
@@ -1653,7 +1659,7 @@ void OutlineViewShell::UpdateOutlineObject( SdPage* pPage, Paragraph* pPara )
         return;
 
     ::Outliner&         rOutliner = pOlView->GetOutliner();
-    OutlinerParaObject* pOPO = nullptr;
+    std::unique_ptr<OutlinerParaObject> pOPO;
     SdrTextObj*         pTO  = nullptr;
 
     bool bNewObject = false;
@@ -1702,20 +1708,17 @@ void OutlineViewShell::UpdateOutlineObject( SdPage* pPage, Paragraph* pPara )
             if( pTO->GetOutlinerParaObject() && (pOPO->GetTextObject() == pTO->GetOutlinerParaObject()->GetTextObject()) )
             {
                 // do nothing, same text already set
-                delete pOPO;
             }
             else
             {
                 if( !bNewObject && pOlView->isRecordingUndo() )
                     pOlView->AddUndo(GetDoc()->GetSdrUndoFactory().CreateUndoObjectSetText(*pTO,0));
 
-                pTO->SetOutlinerParaObject( pOPO );
+                pTO->SetOutlinerParaObject( std::move(pOPO) );
                 pTO->SetEmptyPresObj( false );
                 pTO->ActionChanged();
             }
         }
-        else
-            delete pOPO;
     }
     else if( pTO )
     {
@@ -1806,18 +1809,18 @@ ErrCode OutlineViewShell::ReadRtf(SvStream& rInput)
     return bRet;
 }
 
-void OutlineViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool bBrowse )
+void OutlineViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     WriteFrameViewData();
 
-    ViewShell::WriteUserDataSequence( rSequence, bBrowse );
+    ViewShell::WriteUserDataSequence( rSequence );
 }
 
-void OutlineViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool bBrowse )
+void OutlineViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     WriteFrameViewData();
 
-    ViewShell::ReadUserDataSequence( rSequence, bBrowse );
+    ViewShell::ReadUserDataSequence( rSequence );
 
     ReadFrameViewData( mpFrameView );
 }

@@ -103,9 +103,6 @@ PNGWriterImpl::PNGWriterImpl( const BitmapEx& rBmpEx,
     , mnMaxChunkSize(0)
     , mbStatus(true)
     , mpMaskAccess(nullptr)
-    , mpDeflateInBuf(nullptr)
-    , mpPreviousScan(nullptr)
-    , mpCurrentScan(nullptr)
     , mnDeflateInSize(0)
     , mnWidth(0)
     , mnHeight(0)
@@ -119,10 +116,7 @@ PNGWriterImpl::PNGWriterImpl( const BitmapEx& rBmpEx,
     {
         Bitmap aBmp(rBmpEx.GetBitmap());
 
-        mnInterlaced = 0; // ( aBmp.GetSizePixel().Width() > 128 ) || ( aBmp.GetSizePixel().Height() > 128 ) ? 1 : 0; #i67236#
-
-        // #i67234# defaulting max chunk size to 256kb when using interlace mode
-        mnMaxChunkSize = mnInterlaced == 0 ? std::numeric_limits<sal_uInt32>::max() : 0x40000;
+        mnMaxChunkSize = std::numeric_limits<sal_uInt32>::max();
 
         if (pFilterData)
         {
@@ -285,8 +279,10 @@ bool PNGWriterImpl::Write(SvStream& rOStm)
 bool PNGWriterImpl::ImplWriteHeader()
 {
     ImplOpenChunk(PNGCHUNK_IHDR);
-    ImplWriteChunk(sal_uInt32(mnWidth =  mpAccess->Width()));
-    ImplWriteChunk(sal_uInt32(mnHeight = mpAccess->Height()));
+    mnWidth = mpAccess->Width();
+    ImplWriteChunk(sal_uInt32(mnWidth));
+    mnHeight = mpAccess->Height();
+    ImplWriteChunk(sal_uInt32(mnHeight));
 
     if (mnWidth && mnHeight && mnBitsPerPixel && mbStatus)
     {

@@ -21,11 +21,9 @@
 #define INCLUDED_VCL_DIALOG_HXX
 
 #include <memory>
-#include <tools/solar.h>
 #include <vcl/dllapi.h>
 #include <vcl/syswin.hxx>
 #include <vcl/vclptr.hxx>
-#include <vcl/IDialogRenderable.hxx>
 #include <vcl/abstdlg.hxx>
 
 struct DialogImpl;
@@ -53,8 +51,8 @@ private:
     bool            mbInClose;
     bool            mbModalMode;
     bool            mbPaintComplete;
-    bool            mbForceBorderWindow;
-    InitFlag        mnInitFlag; // used for deferred init
+    bool const      mbForceBorderWindow;
+    InitFlag const  mnInitFlag; // used for deferred init
 
     VclPtr<VclButtonBox> mpActionArea;
     VclPtr<VclBox>       mpContentArea;
@@ -129,7 +127,7 @@ public:
     // Screenshot interface
     virtual std::vector<OString> getAllPageUIXMLDescriptions() const;
     virtual bool selectPageByUIXMLDescription(const OString& rUIXMLDescription);
-    Bitmap createScreenshot();
+    BitmapEx createScreenshot();
 
     virtual short   Execute();
     bool            IsInExecute() const { return mbInExecute; }
@@ -138,17 +136,12 @@ public:
 
     virtual FactoryFunction GetUITestFactory() const override;
 
-    // Dialog::Execute replacement API
-public:
-    virtual void    StartExecuteModal( const Link<Dialog&,void>& rEndDialogHdl );
-    long            GetResult() const;
 private:
-    bool            ImplStartExecuteModal();
+    bool            ImplStartExecute();
     static void     ImplEndExecuteModal();
     void            ImplSetModalInputMode(bool bModal);
 public:
 
-    // FIXME: Need to remove old StartExecuteModal in favour of this one.
     /// Returns true if the dialog successfully starts
     bool StartExecuteAsync(const std::function<void(sal_Int32)> &rEndDialogFn)
     {
@@ -164,8 +157,11 @@ public:
     // Dialog::Execute replacement API
 
 
-    void            EndDialog( long nResult = 0 );
+    void            EndDialog( long nResult = RET_CANCEL );
     static void     EndAllDialogs( vcl::Window const * pParent );
+
+    // returns the most recent of the currently executing modal dialogs
+    static VclPtr<Dialog> GetMostRecentExecutingDialog();
 
     void            GetDrawWindowBorder( sal_Int32& rLeftBorder, sal_Int32& rTopBorder,
                                          sal_Int32& rRightBorder, sal_Int32& rBottomBorder ) const;
@@ -176,8 +172,14 @@ public:
     void            GrabFocusToFirstControl();
     virtual void    Resize() override;
 
+    void            Activate() override;
+
+
+    void            SetInstallLOKNotifierHdl(const Link<void*, vcl::ILibreOfficeKitNotifier*>& rLink);
+
     void            add_button(PushButton* pButton, int nResponse, bool bTransferOwnership);
     void            set_default_response(int nResponse);
+    int             get_default_response();
     vcl::Window*    get_widget_for_response(int nResponse);
 };
 
@@ -188,8 +190,6 @@ class VCL_DLLPUBLIC ModelessDialog : public Dialog
 
 public:
     explicit        ModelessDialog( vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, Dialog::InitFlag eFlag = Dialog::InitFlag::Default );
-
-    void            Activate() override;
 };
 
 class VCL_DLLPUBLIC ModalDialog : public Dialog

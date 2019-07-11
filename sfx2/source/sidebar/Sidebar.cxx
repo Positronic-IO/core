@@ -27,7 +27,7 @@ namespace sfx2 { namespace sidebar {
 
 void Sidebar::ShowPanel (
     const OUString& rsPanelId,
-    const css::uno::Reference<frame::XFrame>& rxFrame)
+    const css::uno::Reference<frame::XFrame>& rxFrame, bool bFocus)
 {
     SidebarController* pController = SidebarController::GetSidebarControllerForFrame(rxFrame);
     if (!pController)
@@ -45,28 +45,9 @@ void Sidebar::ShowPanel (
     // All that is not necessary for the current use cases so lets
     // keep it simple for the time being.
     pController->OpenThenSwitchToDeck(xPanelDescriptor->msDeckId);
-}
 
-void Sidebar::TogglePanel (
-    const OUString& rsPanelId,
-    const css::uno::Reference<frame::XFrame>& rxFrame)
-{
-    SidebarController* pController = SidebarController::GetSidebarControllerForFrame(rxFrame);
-    if (!pController)
-        return;
-
-    std::shared_ptr<PanelDescriptor> xPanelDescriptor = pController->GetResourceManager()->GetPanelDescriptor(rsPanelId);
-
-    if (!xPanelDescriptor)
-        return;
-
-    // This should be a lot more sophisticated:
-    // - Make the deck switching asynchronous
-    // - Make sure to use a context that really shows the panel
-
-    // All that is not necessary for the current use cases so lets
-    // keep it simple for the time being.
-    pController->OpenThenToggleDeck(xPanelDescriptor->msDeckId);
+    if (bFocus)
+        pController->GetFocusManager().GrabFocusPanel();
 }
 
 bool Sidebar::IsPanelVisible(

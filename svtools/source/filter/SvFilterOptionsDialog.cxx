@@ -69,6 +69,7 @@ class SvFilterOptionsDialog : public cppu::WeakImplHelper
     uno::Reference< lang::XComponent >
         mxSourceDocument;
 
+    css::uno::Reference<css::awt::XWindow> mxParent;
     OUString        maDialogTitle;
     FieldUnit       meFieldUnit;
     bool            mbExportSelection;
@@ -105,7 +106,7 @@ public:
 
 SvFilterOptionsDialog::SvFilterOptionsDialog( const uno::Reference< uno::XComponentContext >& rxContext ) :
     mxContext           ( rxContext ),
-    meFieldUnit         ( FUNIT_CM ),
+    meFieldUnit         ( FieldUnit::CM ),
     mbExportSelection   ( false ),
     mbGraphicsSource    ( true )
 {
@@ -123,8 +124,19 @@ void SAL_CALL SvFilterOptionsDialog::release() throw()
 }
 
 // XInitialization
-void SAL_CALL SvFilterOptionsDialog::initialize( const uno::Sequence< uno::Any > & )
+void SAL_CALL SvFilterOptionsDialog::initialize(const uno::Sequence<uno::Any>& rArguments)
 {
+    for(const uno::Any& rArgument : rArguments)
+    {
+        beans::PropertyValue aProperty;
+        if (rArgument >>= aProperty)
+        {
+            if( aProperty.Name == "ParentWindow" )
+            {
+                aProperty.Value >>= mxParent;
+            }
+        }
+    }
 }
 
 // XServiceInfo
@@ -222,12 +234,14 @@ sal_Int16 SvFilterOptionsDialog::execute()
         }
         if ( nFormat < nFilterCount )
         {
-            FltCallDialogParameter aFltCallDlgPara( Application::GetDefDialogParent(), meFieldUnit );
+            FltCallDialogParameter aFltCallDlgPara(Application::GetFrameWeld(mxParent), meFieldUnit);
             aFltCallDlgPara.aFilterData = maFilterDataSequence;
             aFltCallDlgPara.aFilterExt = aGraphicFilter.GetExportFormatShortName( nFormat );
             bool bIsPixelFormat( aGraphicFilter.IsExportPixelFormat( nFormat ) );
-            if ( ScopedVclPtrInstance<ExportDialog>( aFltCallDlgPara, mxContext, mxSourceDocument, mbExportSelection,
-                        bIsPixelFormat, mbGraphicsSource, xGraphic )->Execute() == RET_OK )
+
+            ExportDialog aDialog(aFltCallDlgPara, mxContext, mxSourceDocument, mbExportSelection,
+                        bIsPixelFormat, mbGraphicsSource, xGraphic);
+            if (aDialog.run() == RET_OK)
                 nRet = ui::dialogs::ExecutableDialogResults::OK;
 
             // taking the out parameter from the dialog
@@ -272,7 +286,8 @@ void SvFilterOptionsDialog::setSourceDocument( const uno::Reference< lang::XComp
             aPropertyName = "Metric";
         else
             aPropertyName = "NonMetric";
-        meFieldUnit = static_cast<FieldUnit>(aConfigItem.ReadInt32( aPropertyName, FUNIT_CM ));
+        meFieldUnit = static_cast<FieldUnit>(
+            aConfigItem.ReadInt32(aPropertyName, sal_Int32(FieldUnit::CM)));
     }
 }
 

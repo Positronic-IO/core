@@ -30,39 +30,30 @@ namespace cmis
     {
     }
 
-    bool DataSupplier::getData()
+    void DataSupplier::getData()
     {
         if ( mbCountFinal )
-            return true;
+            return;
 
         std::vector< uno::Reference< ucb::XContent > > aChildren = m_pChildrenProvider->getChildren( );
 
         // Loop over the results and filter them
-        for ( std::vector< uno::Reference< ucb::XContent > >::iterator it = aChildren.begin();
-                it != aChildren.end(); ++it )
+        for ( const auto& rChild : aChildren )
         {
-            OUString sContentType = ( *it )->getContentType( );
+            OUString sContentType = rChild->getContentType( );
             bool bIsFolder = sContentType != CMIS_FILE_TYPE;
             if ( ( mnOpenMode == ucb::OpenMode::FOLDERS && bIsFolder ) ||
                  ( mnOpenMode == ucb::OpenMode::DOCUMENTS && !bIsFolder ) ||
                  ( mnOpenMode == ucb::OpenMode::ALL ) )
             {
-                maResults.push_back( new ResultListEntry( *it ) );
+                maResults.emplace_back( rChild );
             }
         }
         mbCountFinal = true;
-
-        return true;
     }
 
     DataSupplier::~DataSupplier()
     {
-        while ( maResults.size( ) > 0 )
-        {
-            ResultListEntry* back = maResults.back( );
-            maResults.pop_back( );
-            delete back;
-        }
     }
 
     OUString DataSupplier::queryContentIdentifierString( sal_uInt32 nIndex )
@@ -82,7 +73,7 @@ namespace cmis
         if (!getResult(nIndex))
             return uno::Reference<ucb::XContent>();
 
-        return maResults[ nIndex ]->xContent;
+        return maResults[ nIndex ].xContent;
     }
 
     bool DataSupplier::getResult( sal_uInt32 nIndex )
@@ -90,10 +81,8 @@ namespace cmis
         if ( maResults.size() > nIndex ) // Result already present.
             return true;
 
-        if ( getData() && maResults.size() > nIndex )
-            return true;
-
-        return false;
+        getData();
+        return maResults.size() > nIndex;
     }
 
     sal_uInt32 DataSupplier::totalCount()
@@ -116,7 +105,7 @@ namespace cmis
     {
         if ( nIndex < maResults.size() )
         {
-            uno::Reference< sdbc::XRow > xRow = maResults[ nIndex ]->xRow;
+            uno::Reference< sdbc::XRow > xRow = maResults[ nIndex ].xRow;
             if ( xRow.is() )
             {
                 // Already cached.
@@ -143,7 +132,7 @@ namespace cmis
                     uno::Reference< sdbc::XRow > xRow;
                     if ( aResult >>= xRow )
                     {
-                        maResults[ nIndex ]->xRow = xRow;
+                        maResults[ nIndex ].xRow = xRow;
                         return xRow;
                     }
                 }
@@ -158,7 +147,7 @@ namespace cmis
     void DataSupplier::releasePropertyValues( sal_uInt32 nIndex )
     {
         if ( nIndex < maResults.size() )
-            maResults[ nIndex ]->xRow.clear();
+            maResults[ nIndex ].xRow.clear();
     }
 
     void DataSupplier::close()

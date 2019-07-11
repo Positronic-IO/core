@@ -25,7 +25,6 @@
 #include <dbu_dlg.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
-#include <dbu_pageids.hxx>
 #include <svl/itemset.hxx>
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
@@ -42,7 +41,6 @@
 #include "DriverSettings.hxx"
 #include <dbadmin.hxx>
 #include <comphelper/string.hxx>
-#include <comphelper/types.hxx>
 #include <com/sun/star/task/XInteractionHandler.hpp>
 #include <svl/filenotation.hxx>
 #include <unotools/localfilehelper.hxx>
@@ -53,62 +51,75 @@
 #include <unotools/pathoptions.hxx>
 #include <svtools/roadmapwizard.hxx>
 
+namespace
+{
+
+OUString lcl_getListEntry(const OUString& rStr, sal_Int32& rIdx)
+{
+    const OUString sTkn {rStr.getToken( 0, '\t', rIdx )};
+    if (rIdx>=0)
+    {
+        rIdx = rStr.indexOf('\t', rIdx);
+        if (rIdx>=0 && ++rIdx>=rStr.getLength())
+            rIdx = -1;
+    }
+    return sTkn;
+}
+
+}
+
 namespace dbaui
 {
 
-    OTextConnectionHelper::OTextConnectionHelper( vcl::Window* pParent, const short _nAvailableSections )
-        :TabPage(pParent, "TextPage", "dbaccess/ui/textpage.ui")
-        ,m_aFieldSeparatorList      (DBA_RES(STR_AUTOFIELDSEPARATORLIST))
-        ,m_aTextSeparatorList       (STR_AUTOTEXTSEPARATORLIST)
-        ,m_aTextNone                (DBA_RES(STR_AUTOTEXT_FIELD_SEP_NONE))
-        ,m_nAvailableSections( _nAvailableSections )
+    OTextConnectionHelper::OTextConnectionHelper(weld::Widget* pParent, const short _nAvailableSections)
+        : m_aFieldSeparatorList      (DBA_RES(STR_AUTOFIELDSEPARATORLIST))
+        , m_aTextSeparatorList       (STR_AUTOTEXTSEPARATORLIST)
+        , m_aTextNone                (DBA_RES(STR_AUTOTEXT_FIELD_SEP_NONE))
+        , m_nAvailableSections( _nAvailableSections )
+        , m_xBuilder(Application::CreateBuilder(pParent, "dbaccess/ui/textpage.ui"))
+        , m_xContainer(m_xBuilder->weld_widget("TextPage"))
+        , m_xExtensionHeader(m_xBuilder->weld_widget("extensionframe"))
+        , m_xAccessTextFiles(m_xBuilder->weld_radio_button("textfile"))
+        , m_xAccessCSVFiles(m_xBuilder->weld_radio_button("csvfile"))
+        , m_xAccessOtherFiles(m_xBuilder->weld_radio_button("custom"))
+        , m_xOwnExtension(m_xBuilder->weld_entry("extension"))
+        , m_xExtensionExample(m_xBuilder->weld_label("example"))
+        , m_xFormatHeader(m_xBuilder->weld_widget("formatframe"))
+        , m_xFieldSeparatorLabel(m_xBuilder->weld_label("fieldlabel"))
+        , m_xFieldSeparator(m_xBuilder->weld_combo_box("fieldseparator"))
+        , m_xTextSeparatorLabel(m_xBuilder->weld_label("textlabel"))
+        , m_xTextSeparator(m_xBuilder->weld_combo_box("textseparator"))
+        , m_xDecimalSeparatorLabel(m_xBuilder->weld_label("decimallabel"))
+        , m_xDecimalSeparator(m_xBuilder->weld_combo_box("decimalseparator"))
+        , m_xThousandsSeparatorLabel(m_xBuilder->weld_label("thousandslabel"))
+        , m_xThousandsSeparator(m_xBuilder->weld_combo_box("thousandsseparator"))
+        , m_xRowHeader(m_xBuilder->weld_check_button("containsheaders"))
+        , m_xCharSetHeader(m_xBuilder->weld_widget("charsetframe"))
+        , m_xCharSetLabel(m_xBuilder->weld_label("charsetlabel"))
+        , m_xCharSet(new CharSetListBox(m_xBuilder->weld_combo_box("charset")))
     {
-        get(m_pExtensionHeader, "extensionheader");
-        get(m_pAccessTextFiles, "textfile");
-        get(m_pAccessCSVFiles, "csvfile");
-        get(m_pAccessOtherFiles, "custom");
-        get(m_pOwnExtension, "extension");
-        get(m_pExtensionExample, "example");
-        get(m_pFormatHeader, "formatlabel");
-        get(m_pFieldSeparatorLabel, "fieldlabel");
-        get(m_pFieldSeparator, "fieldseparator");
-        get(m_pTextSeparatorLabel, "textlabel");
-        get(m_pTextSeparator, "textseparator");
-        get(m_pDecimalSeparatorLabel, "decimallabel");
-        get(m_pDecimalSeparator, "decimalseparator");
-        get(m_pThousandsSeparatorLabel, "thousandslabel");
-        get(m_pThousandsSeparator, "thousandsseparator");
-        get(m_pRowHeader, "containsheaders");
-        get(m_pCharSetHeader, "charsetheader");
-        get(m_pCharSetLabel, "charsetlabel");
-        get(m_pCharSet, "charset");
+        for(sal_Int32 nIdx {0}; nIdx>=0;)
+            m_xFieldSeparator->append_text( lcl_getListEntry(m_aFieldSeparatorList, nIdx) );
 
-        sal_Int32 nCnt = comphelper::string::getTokenCount(m_aFieldSeparatorList, '\t');
-        sal_Int32 i;
+        for(sal_Int32 nIdx {0}; nIdx>=0;)
+            m_xTextSeparator->append_text( lcl_getListEntry(m_aTextSeparatorList, nIdx) );
+        m_xTextSeparator->append_text(m_aTextNone);
 
-        for( i = 0 ; i < nCnt ; i += 2 )
-            m_pFieldSeparator->InsertEntry( m_aFieldSeparatorList.getToken( i, '\t' ) );
-
-        nCnt = comphelper::string::getTokenCount(m_aTextSeparatorList, '\t');
-        for( i=0 ; i<nCnt ; i+=2 )
-            m_pTextSeparator->InsertEntry( m_aTextSeparatorList.getToken( i, '\t' ) );
-        m_pTextSeparator->InsertEntry(m_aTextNone);
-
-        m_pOwnExtension->SetModifyHdl(LINK(this, OTextConnectionHelper, OnEditModified));
-        m_pAccessTextFiles->SetToggleHdl(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
-        m_pAccessCSVFiles->SetToggleHdl(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
-        m_pAccessOtherFiles->SetToggleHdl(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
-        m_pAccessCSVFiles->Check();
+        m_xOwnExtension->connect_changed(LINK(this, OTextConnectionHelper, OnEditModified));
+        m_xAccessTextFiles->connect_toggled(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
+        m_xAccessCSVFiles->connect_toggled(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
+        m_xAccessOtherFiles->connect_toggled(LINK(this, OTextConnectionHelper, OnSetExtensionHdl));
+        m_xAccessCSVFiles->set_active(true);
 
         struct SectionDescriptor
         {
             short   nFlag;
-            VclPtr<vcl::Window> pFirstControl;
+            weld::Widget* pFrame;
         } aSections[] = {
-            { TC_EXTENSION,     m_pExtensionHeader },
-            { TC_SEPARATORS,    m_pFormatHeader },
-            { TC_HEADER,        m_pRowHeader },
-            { TC_CHARSET,       m_pCharSetHeader },
+            { TC_EXTENSION,     m_xExtensionHeader.get() },
+            { TC_SEPARATORS,    m_xFormatHeader.get() },
+            { TC_HEADER,        m_xRowHeader.get() },
+            { TC_CHARSET,       m_xCharSetHeader.get() },
             { 0, nullptr }
         };
 
@@ -120,87 +131,45 @@ namespace dbaui
                 continue;
             }
 
-            vcl::Window* pThisSection = aSections[section].pFirstControl;
-            vcl::Window* pNextSection = aSections[section+1].pFirstControl;
-
             // hide all elements from this section
-            vcl::Window* pControl = pThisSection;
-            while ( ( pControl != pNextSection ) && pControl )
-            {
-                vcl::Window* pRealWindow = pControl->GetWindow( GetWindowType::Client );
-            #if OSL_DEBUG_LEVEL > 0
-                OUString sWindowText( pRealWindow->GetText() );
-                (void)sWindowText;
-            #endif
-                pRealWindow->Hide();
-                pControl = pControl->GetWindow( GetWindowType::Next );
-            }
+            aSections[section].pFrame->hide();
         }
 
-        Show();
+        m_xContainer->show();
     }
 
-    OTextConnectionHelper::~OTextConnectionHelper()
-    {
-        disposeOnce();
-    }
-
-    void OTextConnectionHelper::dispose()
-    {
-        m_pExtensionHeader.clear();
-        m_pAccessTextFiles.clear();
-        m_pAccessCSVFiles.clear();
-        m_pAccessOtherFiles.clear();
-        m_pOwnExtension.clear();
-        m_pExtensionExample.clear();
-        m_pFormatHeader.clear();
-        m_pFieldSeparatorLabel.clear();
-        m_pFieldSeparator.clear();
-        m_pTextSeparatorLabel.clear();
-        m_pTextSeparator.clear();
-        m_pDecimalSeparatorLabel.clear();
-        m_pDecimalSeparator.clear();
-        m_pThousandsSeparatorLabel.clear();
-        m_pThousandsSeparator.clear();
-        m_pRowHeader.clear();
-        m_pCharSetHeader.clear();
-        m_pCharSetLabel.clear();
-        m_pCharSet.clear();
-        TabPage::dispose();
-    }
-
-    IMPL_LINK_NOARG(OTextConnectionHelper, OnEditModified, Edit&, void)
+    IMPL_LINK_NOARG(OTextConnectionHelper, OnEditModified, weld::Entry&, void)
     {
         m_aGetExtensionHandler.Call(this);
     }
 
-    IMPL_LINK_NOARG(OTextConnectionHelper, OnSetExtensionHdl, RadioButton&, void)
+    IMPL_LINK_NOARG(OTextConnectionHelper, OnSetExtensionHdl, weld::ToggleButton&, void)
     {
-        bool bDoEnable = m_pAccessOtherFiles->IsChecked();
-        m_pOwnExtension->Enable(bDoEnable);
-        m_pExtensionExample->Enable(bDoEnable);
+        bool bDoEnable = m_xAccessOtherFiles->get_active();
+        m_xOwnExtension->set_sensitive(bDoEnable);
+        m_xExtensionExample->set_sensitive(bDoEnable);
         m_aGetExtensionHandler.Call(this);
     }
 
-    void OTextConnectionHelper::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OTextConnectionHelper::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back(new OSaveValueWrapper<ComboBox>(m_pFieldSeparator));
-        _rControlList.push_back(new OSaveValueWrapper<ComboBox>(m_pTextSeparator));
-        _rControlList.push_back(new OSaveValueWrapper<ComboBox>(m_pDecimalSeparator));
-        _rControlList.push_back(new OSaveValueWrapper<ComboBox>(m_pThousandsSeparator));
-        _rControlList.push_back(new OSaveValueWrapper<CheckBox>(m_pRowHeader));
-        _rControlList.push_back(new OSaveValueWrapper<ListBox>(m_pCharSet));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xFieldSeparator.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xTextSeparator.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xDecimalSeparator.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xThousandsSeparator.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::CheckButton>(m_xRowHeader.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::ComboBox>(m_xCharSet->get_widget()));
     }
 
-    void OTextConnectionHelper::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OTextConnectionHelper::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pFieldSeparatorLabel));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pTextSeparatorLabel));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pDecimalSeparatorLabel));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pThousandsSeparatorLabel));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pCharSetHeader));
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pCharSetLabel));
-        _rControlList.push_back(new ODisableWrapper<ListBox>(m_pCharSet));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xFieldSeparatorLabel.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xTextSeparatorLabel.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xDecimalSeparatorLabel.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xThousandsSeparatorLabel.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Widget>(m_xCharSetHeader.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xCharSetLabel.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::ComboBox>(m_xCharSet->get_widget()));
     }
 
     void OTextConnectionHelper::implInitControls(const SfxItemSet& _rSet, bool _bValid)
@@ -224,20 +193,20 @@ namespace dbaui
         if ( ( m_nAvailableSections & TC_HEADER ) != 0 )
         {
             const SfxBoolItem* pHdrItem = _rSet.GetItem<SfxBoolItem>(DSID_TEXTFILEHEADER);
-            m_pRowHeader->Check( pHdrItem->GetValue() );
+            m_xRowHeader->set_active(pHdrItem->GetValue());
         }
 
         if ( ( m_nAvailableSections & TC_SEPARATORS ) != 0 )
         {
-            SetSeparator( *m_pFieldSeparator, m_aFieldSeparatorList, pDelItem->GetValue() );
-            SetSeparator( *m_pTextSeparator, m_aTextSeparatorList, pStrItem->GetValue() );
-            m_pDecimalSeparator->SetText( pDecdelItem->GetValue() );
-            m_pThousandsSeparator->SetText( pThodelItem->GetValue() );
+            SetSeparator(*m_xFieldSeparator, m_aFieldSeparatorList, pDelItem->GetValue());
+            SetSeparator(*m_xTextSeparator, m_aTextSeparatorList, pStrItem->GetValue());
+            m_xDecimalSeparator->set_entry_text( pDecdelItem->GetValue() );
+            m_xThousandsSeparator->set_entry_text( pThodelItem->GetValue() );
         }
 
         if ( ( m_nAvailableSections & TC_CHARSET ) != 0 )
         {
-            m_pCharSet->SelectEntryByIanaName( pCharsetItem->GetValue() );
+            m_xCharSet->SelectEntryByIanaName( pCharsetItem->GetValue() );
         }
     }
 
@@ -245,75 +214,75 @@ namespace dbaui
     {
         OUString sExtension = GetExtension();
         OUString aErrorText;
-        Control* pErrorWin = nullptr;
-        OUString aDelText(m_pFieldSeparator->GetText());
+        weld::Widget* pErrorWin = nullptr;
+        OUString aDelText(m_xFieldSeparator->get_active_text());
         if(aDelText.isEmpty())
         {   // No FieldSeparator
             aErrorText = DBA_RES(STR_AUTODELIMITER_MISSING);
-            aErrorText = aErrorText.replaceFirst("#1",m_pFieldSeparatorLabel->GetText());
-            pErrorWin = m_pFieldSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xFieldSeparatorLabel->get_label());
+            pErrorWin = m_xFieldSeparator.get();
         }
-        else if (m_pDecimalSeparator->GetText().isEmpty())
+        else if (m_xDecimalSeparator->get_active_text().isEmpty())
         {   // No DecimalSeparator
             aErrorText = DBA_RES(STR_AUTODELIMITER_MISSING);
-            aErrorText = aErrorText.replaceFirst("#1",m_pDecimalSeparatorLabel->GetText());
-            pErrorWin = m_pDecimalSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xDecimalSeparatorLabel->get_label());
+            pErrorWin = m_xDecimalSeparator.get();
         }
-        else if (m_pTextSeparator->GetText() == m_pFieldSeparator->GetText())
+        else if (m_xTextSeparator->get_active_text() == m_xFieldSeparator->get_active_text())
         {   // Field and TextSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pTextSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pFieldSeparatorLabel->GetText());
-            pErrorWin = m_pTextSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xTextSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xFieldSeparatorLabel->get_label());
+            pErrorWin = m_xTextSeparator.get();
         }
-        else if (m_pDecimalSeparator->GetText() == m_pThousandsSeparator->GetText())
+        else if (m_xDecimalSeparator->get_active_text() == m_xThousandsSeparator->get_active_text())
         {   // Thousands and DecimalSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pDecimalSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pThousandsSeparatorLabel->GetText());
-            pErrorWin = m_pDecimalSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xDecimalSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xThousandsSeparatorLabel->get_label());
+            pErrorWin = m_xDecimalSeparator.get();
         }
-        else if (m_pFieldSeparator->GetText() == m_pThousandsSeparator->GetText())
+        else if (m_xFieldSeparator->get_active_text() == m_xThousandsSeparator->get_active_text())
         {   // Thousands and FieldSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pFieldSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pThousandsSeparatorLabel->GetText());
-            pErrorWin = m_pFieldSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xFieldSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xThousandsSeparatorLabel->get_label());
+            pErrorWin = m_xFieldSeparator.get();
         }
-        else if (m_pFieldSeparator->GetText() == m_pDecimalSeparator->GetText())
+        else if (m_xFieldSeparator->get_active_text() == m_xDecimalSeparator->get_active_text())
         {   // Tenner and FieldSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pFieldSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pDecimalSeparatorLabel->GetText());
-            pErrorWin = m_pFieldSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xFieldSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xDecimalSeparatorLabel->get_label());
+            pErrorWin = m_xFieldSeparator.get();
         }
-        else if (m_pTextSeparator->GetText() == m_pThousandsSeparator->GetText())
+        else if (m_xTextSeparator->get_active_text() == m_xThousandsSeparator->get_active_text())
         {   // Thousands and TextSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pTextSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pThousandsSeparatorLabel->GetText());
-            pErrorWin = m_pTextSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xTextSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xThousandsSeparatorLabel->get_label());
+            pErrorWin = m_xTextSeparator.get();
         }
-        else if (m_pTextSeparator->GetText() == m_pDecimalSeparator->GetText())
+        else if (m_xTextSeparator->get_active_text() == m_xDecimalSeparator->get_active_text())
         {   // Tenner and TextSeparator must not be the same
             aErrorText = DBA_RES(STR_AUTODELIMITER_MUST_DIFFER);
-            aErrorText = aErrorText.replaceFirst("#1",m_pTextSeparatorLabel->GetText());
-            aErrorText = aErrorText.replaceFirst("#2",m_pDecimalSeparatorLabel->GetText());
-            pErrorWin = m_pTextSeparator;
+            aErrorText = aErrorText.replaceFirst("#1",m_xTextSeparatorLabel->get_label());
+            aErrorText = aErrorText.replaceFirst("#2",m_xDecimalSeparatorLabel->get_label());
+            pErrorWin = m_xTextSeparator.get();
         }
         else if ((sExtension.indexOf('*') != -1) || (sExtension.indexOf('?') != -1))
         {
             aErrorText = DBA_RES(STR_AUTONO_WILDCARDS);
             aErrorText = aErrorText.replaceFirst("#1",sExtension);
-            pErrorWin = m_pOwnExtension;
+            pErrorWin = m_xOwnExtension.get();
         }
         else
             return true;
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr,
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xContainer.get(),
                                                   VclMessageType::Warning, VclButtonsType::Ok,
                                                   MnemonicGenerator::EraseAllMnemonicChars(aErrorText)));
         xBox->run();
-        pErrorWin->GrabFocus();
+        pErrorWin->grab_focus();
         return false;
     }
 
@@ -333,41 +302,41 @@ namespace dbaui
 
         if ( ( m_nAvailableSections & TC_HEADER ) != 0 )
         {
-            if( m_pRowHeader->IsValueChangedFromSaved() )
+            if (m_xRowHeader->get_state_changed_from_saved())
             {
-                rSet.Put(SfxBoolItem(DSID_TEXTFILEHEADER, m_pRowHeader->IsChecked()));
+                rSet.Put(SfxBoolItem(DSID_TEXTFILEHEADER, m_xRowHeader->get_active()));
                 bChangedSomething = true;
             }
         }
 
         if ( ( m_nAvailableSections & TC_SEPARATORS ) != 0 )
         {
-            if( m_pFieldSeparator->IsValueChangedFromSaved() )
+            if (m_xFieldSeparator->get_value_changed_from_saved())
             {
-                rSet.Put( SfxStringItem(DSID_FIELDDELIMITER, GetSeparator( *m_pFieldSeparator, m_aFieldSeparatorList) ) );
+                rSet.Put( SfxStringItem(DSID_FIELDDELIMITER, GetSeparator( *m_xFieldSeparator, m_aFieldSeparatorList) ) );
                 bChangedSomething = true;
             }
-            if( m_pTextSeparator->IsValueChangedFromSaved() )
+            if (m_xTextSeparator->get_value_changed_from_saved())
             {
-                rSet.Put( SfxStringItem(DSID_TEXTDELIMITER, GetSeparator( *m_pTextSeparator, m_aTextSeparatorList) ) );
+                rSet.Put( SfxStringItem(DSID_TEXTDELIMITER, GetSeparator( *m_xTextSeparator, m_aTextSeparatorList) ) );
                 bChangedSomething = true;
             }
 
-            if( m_pDecimalSeparator->IsValueChangedFromSaved() )
+            if (m_xDecimalSeparator->get_value_changed_from_saved())
             {
-                rSet.Put( SfxStringItem(DSID_DECIMALDELIMITER, m_pDecimalSeparator->GetText().copy(0, 1) ) );
+                rSet.Put( SfxStringItem(DSID_DECIMALDELIMITER, m_xDecimalSeparator->get_active_text().copy(0, 1) ) );
                 bChangedSomething = true;
             }
-            if( m_pThousandsSeparator->IsValueChangedFromSaved() )
+            if (m_xThousandsSeparator->get_value_changed_from_saved())
             {
-                rSet.Put( SfxStringItem(DSID_THOUSANDSDELIMITER, m_pThousandsSeparator->GetText().copy(0,1) ) );
+                rSet.Put( SfxStringItem(DSID_THOUSANDSDELIMITER, m_xThousandsSeparator->get_active_text().copy(0,1) ) );
                 bChangedSomething = true;
             }
         }
 
         if ( ( m_nAvailableSections & TC_CHARSET ) != 0 )
         {
-            if ( m_pCharSet->StoreSelectedCharSet( rSet, DSID_CHARSET ) )
+            if ( m_xCharSet->StoreSelectedCharSet( rSet, DSID_CHARSET ) )
                 bChangedSomething = true;
         }
 
@@ -377,72 +346,67 @@ namespace dbaui
     void OTextConnectionHelper::SetExtension(const OUString& _rVal)
     {
         if (_rVal == "txt")
-            m_pAccessTextFiles->Check();
+            m_xAccessTextFiles->set_active(true);
         else if (_rVal == "csv")
-            m_pAccessCSVFiles->Check();
+            m_xAccessCSVFiles->set_active(true);
         else
         {
-            m_pAccessOtherFiles->Check();
-            m_pExtensionExample->SetText(_rVal);
+            m_xAccessOtherFiles->set_active(true);
+            m_xExtensionExample->set_label(_rVal);
         }
     }
 
     OUString OTextConnectionHelper::GetExtension()
     {
         OUString sExtension;
-        if (m_pAccessTextFiles->IsChecked())
+        if (m_xAccessTextFiles->get_active())
             sExtension = "txt";
-        else if (m_pAccessCSVFiles->IsChecked())
+        else if (m_xAccessCSVFiles->get_active())
             sExtension = "csv";
         else
         {
-            sExtension = m_pOwnExtension->GetText();
+            sExtension = m_xOwnExtension->get_text();
             if ( sExtension.getToken(0,'.') == "*" )
                 sExtension = sExtension.copy(2);
         }
         return sExtension;
     }
 
-    OUString OTextConnectionHelper::GetSeparator( const ComboBox& rBox, const OUString& rList )
+    OUString OTextConnectionHelper::GetSeparator(const weld::ComboBox& rBox, const OUString& rList)
     {
         sal_Unicode const nTok = '\t';
-        sal_Int32 nPos(rBox.GetEntryPos( rBox.GetText() ));
+        int nPos(rBox.find_text(rBox.get_active_text()));
 
-        if( nPos == COMBOBOX_ENTRY_NOTFOUND )
-            return rBox.GetText().copy(0);
+        if (nPos == -1)
+            return rBox.get_active_text().copy(0);
 
-        if ( !( m_pTextSeparator == &rBox && nPos == (rBox.GetEntryCount()-1) ) )
+        if ( !( m_xTextSeparator.get() == &rBox && nPos == (rBox.get_count()-1) ) )
             return OUString(
                 static_cast< sal_Unicode >( rList.getToken((nPos*2)+1, nTok ).toInt32() ));
         // somewhat strange ... translates for instance an "32" into " "
         return OUString();
     }
 
-    void OTextConnectionHelper::SetSeparator( ComboBox& rBox, const OUString& rList, const OUString& rVal )
+    void OTextConnectionHelper::SetSeparator( weld::ComboBox& rBox, const OUString& rList, const OUString& rVal )
     {
-        char    nTok = '\t';
-        sal_Int32   nCnt = comphelper::string::getTokenCount(rList, nTok);
-        sal_Int32 i;
-
-        for( i=0 ; i<nCnt ; i+=2 )
+        if (rVal.getLength()==1)
         {
-            OUString  sTVal(
-                static_cast< sal_Unicode >( rList.getToken( (i+1), nTok ).toInt32() ));
-
-            if( sTVal == rVal )
+            const sal_Unicode nVal {rVal[0]};
+            for(sal_Int32 nIdx {0}; nIdx>=0;)
             {
-                rBox.SetText( rList.getToken( i, nTok ) );
-                break;
+                sal_Int32 nPrevIdx {nIdx};
+                if (static_cast<sal_Unicode>(rList.getToken(1, '\t', nIdx).toInt32()) == nVal)
+                {
+                    rBox.set_entry_text(rList.getToken(0, '\t', nPrevIdx));
+                    return;
+                }
             }
+            rBox.set_entry_text( rVal );
         }
-
-        if ( i >= nCnt )
-        {
-            if ( m_pTextSeparator == &rBox && rVal.isEmpty() )
-                rBox.SetText(m_aTextNone);
-            else
-                rBox.SetText( rVal.copy(0, 1) );
-        }
+        else if ( m_xTextSeparator.get() == &rBox && rVal.isEmpty() )
+            rBox.set_entry_text(m_aTextNone);
+        else
+            rBox.set_entry_text(rVal.copy(0, 1));
     }
 }
 

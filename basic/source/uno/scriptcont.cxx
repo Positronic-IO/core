@@ -34,12 +34,14 @@
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/task/ErrorCodeIOException.hpp>
 #include <com/sun/star/script/ModuleType.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <comphelper/storagehelper.hxx>
 #include <unotools/streamwrap.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <osl/thread.h>
 #include <rtl/digest.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 // For password functionality
 #include <tools/urlobj.hxx>
@@ -103,14 +105,12 @@ void SfxScriptLibraryContainer::setLibraryPassword( const OUString& rLibraryName
 
 // Ctor for service
 SfxScriptLibraryContainer::SfxScriptLibraryContainer()
-    :maScriptLanguage( "StarBasic"  )
 {
     // all initialisation has to be done
     // by calling XInitialization::initialize
 }
 
 SfxScriptLibraryContainer::SfxScriptLibraryContainer( const uno::Reference< embed::XStorage >& xStorage )
-    :maScriptLanguage( "StarBasic"  )
 {
     init( OUString(), xStorage );
 }
@@ -161,7 +161,7 @@ void SfxScriptLibraryContainer::writeLibraryElement( const Reference < XNameCont
 
     xmlscript::ModuleDescriptor aMod;
     aMod.aName = aElementName;
-    aMod.aLanguage = maScriptLanguage;
+    aMod.aLanguage = "StarBasic";
     Any aElement = xLib->getByName( aElementName );
     aElement >>= aMod.aCode;
 
@@ -335,14 +335,11 @@ void SfxScriptLibraryContainer::importFromOldStorage( const OUString& aFile )
     auto xStorage = tools::make_ref<SotStorage>( false, aFile );
     if( xStorage->GetError() == ERRCODE_NONE )
     {
-        BasicManager* pBasicManager = new BasicManager( *(xStorage.get()), aFile );
+        std::unique_ptr<BasicManager> pBasicManager(new BasicManager( *(xStorage.get()), aFile ));
 
         // Set info
         LibraryContainerInfo aInfo( this, nullptr, static_cast< OldBasicPassword* >( this ) );
         pBasicManager->SetLibraryContainerInfo( aInfo );
-
-        // Now the libraries should be copied to this SfxScriptLibraryContainer
-        BasicManager::LegacyDeleteBasicManager( pBasicManager );
     }
 }
 
@@ -535,7 +532,7 @@ void SAL_CALL SfxScriptLibraryContainer::changeLibraryPassword( const OUString& 
 }
 
 
-void setStreamKey( const uno::Reference< io::XStream >& xStream, const OUString& aPass )
+static void setStreamKey( const uno::Reference< io::XStream >& xStream, const OUString& aPass )
 {
     uno::Reference< embed::XEncryptionProtectedSource > xEncrStream( xStream, uno::UNO_QUERY );
     if ( xEncrStream.is() )

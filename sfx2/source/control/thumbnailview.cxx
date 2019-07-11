@@ -30,6 +30,7 @@
 #include <drawinglayer/processor2d/baseprocessor2d.hxx>
 #include <drawinglayer/processor2d/processorfromoutputdevice.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <vcl/decoview.hxx>
@@ -37,6 +38,7 @@
 #include <vcl/scrbar.hxx>
 #include <vcl/help.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -48,12 +50,13 @@ using namespace basegfx::utils;
 using namespace drawinglayer::attribute;
 using namespace drawinglayer::primitive2d;
 
+constexpr int gnFineness = 5;
+
 ThumbnailView::ThumbnailView (vcl::Window *pParent, WinBits nWinStyle)
     : Control( pParent, nWinStyle )
     , mpItemAttrs(new ThumbnailItemAttributes)
 {
     ImplInit();
-    mbIsTransientChildrenDisabled = false;
 }
 
 ThumbnailView::~ThumbnailView()
@@ -100,9 +103,9 @@ void ThumbnailView::MouseMove(const MouseEvent& rMEvt)
         SetQuickHelpText(aHelp);
 }
 
-void ThumbnailView::AppendItem(ThumbnailViewItem *pItem)
+void ThumbnailView::AppendItem(std::unique_ptr<ThumbnailViewItem> pItem)
 {
-    if (maFilterFunc(pItem))
+    if (maFilterFunc(pItem.get()))
     {
         // Save current start,end range, iterator might get invalidated
         size_t nSelStartPos = 0;
@@ -114,11 +117,11 @@ void ThumbnailView::AppendItem(ThumbnailViewItem *pItem)
             nSelStartPos = mpStartSelRange - mFilteredItemList.begin();
         }
 
-        mFilteredItemList.push_back(pItem);
+        mFilteredItemList.push_back(pItem.get());
         mpStartSelRange = pSelStartItem != nullptr ? mFilteredItemList.begin() + nSelStartPos : mFilteredItemList.end();
     }
 
-    mItemList.push_back(pItem);
+    mItemList.push_back(std::move(pItem));
 }
 
 void ThumbnailView::ImplInit()
@@ -129,7 +132,6 @@ void ThumbnailView::ImplInit()
     mnItemPadding = 0;
     mnVisLines = 0;
     mnLines = 0;
-    mnFineness = 5;
     mnFirstLine = 0;
     mnCols = 0;
     mbScroll = false;
@@ -158,7 +160,7 @@ void ThumbnailView::ImplDeleteItems()
 
     for ( size_t i = 0; i < n; ++i )
     {
-        ThumbnailViewItem *const pItem = mItemList[i];
+        ThumbnailViewItem *const pItem = mItemList[i].get();
 
         // deselect all current selected items and fire events
         if (pItem->isSelected())
@@ -173,11 +175,11 @@ void ThumbnailView::ImplDeleteItems()
         {
             css::uno::Any aOldAny, aNewAny;
 
-            aOldAny <<= pItem->GetAccessible( mbIsTransientChildrenDisabled );
+            aOldAny <<= pItem->GetAccessible( false );
             ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
         }
 
-        delete pItem;
+        mItemList[i].reset();
     }
 
     mItemList.clear();
@@ -223,7 +225,7 @@ void ThumbnailView::OnItemDblClicked (ThumbnailViewItem*)
 
 css::uno::Reference< css::accessibility::XAccessible > ThumbnailView::CreateAccessible()
 {
-    return new ThumbnailViewAcc( this, mbIsTransientChildrenDisabled );
+    return new ThumbnailViewAcc( this, false );
 }
 
 void ThumbnailView::CalculateItemPositions (bool bScrollBarUsed)
@@ -344,7 +346,7 @@ void ThumbnailView::CalculateItemPositions (bool bScrollBarUsed)
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aNewAny <<= pItem->GetAccessible( mbIsTransientChildrenDisabled );
+                    aNewAny <<= pItem->GetAccessible( false );
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 
@@ -372,7 +374,7 @@ void ThumbnailView::CalculateItemPositions (bool bScrollBarUsed)
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aOldAny <<= pItem->GetAccessible( mbIsTransientChildrenDisabled );
+                    aOldAny <<= pItem->GetAccessible( false );
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 
@@ -399,10 +401,10 @@ void ThumbnailView::CalculateItemPositions (bool bScrollBarUsed)
         Size aSize( nScrBarWidth, aWinSize.Height() );
 
         mpScrBar->SetPosSizePixel( aPos, aSize );
-        mpScrBar->SetRangeMax( (nCurCount+mnCols-1)*mnFineness/mnCols);
+        mpScrBar->SetRangeMax( (nCurCount+mnCols-1)*gnFineness/mnCols);
         mpScrBar->SetVisibleSize( mnVisLines );
         if (!bScrollBarUsed)
-            mpScrBar->SetThumbPos( static_cast<long>(mnFirstLine)*mnFineness );
+            mpScrBar->SetThumbPos( static_cast<long>(mnFirstLine)*gnFineness );
         long nPageSize = mnVisLines;
         if ( nPageSize < 1 )
             nPageSize = 1;
@@ -455,7 +457,7 @@ ThumbnailViewItem* ThumbnailView::ImplGetVisibleItem( sal_uInt16 nVisiblePos )
 
     for ( size_t n = 0; n < nItemCount; ++n )
     {
-        ThumbnailViewItem *const pItem = mItemList[n];
+        ThumbnailViewItem *const pItem = mItemList[n].get();
 
         if ( pItem->isVisible() && !nVisiblePos-- )
             return pItem;
@@ -847,7 +849,7 @@ void ThumbnailView::Paint(vcl::RenderContext& rRenderContext, const ::tools::Rec
     // draw items
     for (size_t i = 0; i < nItemCount; i++)
     {
-        ThumbnailViewItem *const pItem = mItemList[i];
+        ThumbnailViewItem *const pItem = mItemList[i].get();
 
         if (pItem->isVisible())
         {
@@ -869,7 +871,7 @@ void ThumbnailView::GetFocus()
             nSelected = i;
     }
 
-    if (nSelected == -1 && mItemList.size() > 0)
+    if (nSelected == -1 && !mItemList.empty())
     {
         SelectItem(1);
     }
@@ -1004,14 +1006,14 @@ void ThumbnailView::Clear()
         Invalidate();
 }
 
-void ThumbnailView::updateItems (const std::vector<ThumbnailViewItem*> &items)
+void ThumbnailView::updateItems (std::vector<std::unique_ptr<ThumbnailViewItem>> items)
 {
     ImplDeleteItems();
 
     // reset variables
     mnFirstLine     = 0;
 
-    mItemList = items;
+    mItemList = std::move(items);
 
     filterItems(maFilterFunc);
 }
@@ -1099,22 +1101,14 @@ void ThumbnailView::SelectItem( sal_uInt16 nItemId )
         if( ImplHasAccessibleListeners() )
         {
             // focus event (select)
-            ThumbnailViewItemAcc* pItemAcc = ThumbnailViewItemAcc::getImplementation( pItem->GetAccessible( mbIsTransientChildrenDisabled ) );
+            ThumbnailViewItemAcc* pItemAcc = ThumbnailViewItemAcc::getImplementation( pItem->GetAccessible( false ) );
 
             if( pItemAcc )
             {
                 css::uno::Any aOldAny, aNewAny;
-                if( !mbIsTransientChildrenDisabled )
-                {
-                    aNewAny <<= css::uno::Reference< css::uno::XInterface >(
-                        static_cast< ::cppu::OWeakObject* >( pItemAcc ));
-                    ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldAny, aNewAny );
-                }
-                else
-                {
-                    aNewAny <<= css::accessibility::AccessibleStateType::FOCUSED;
-                    pItemAcc->FireAccessibleEvent( css::accessibility::AccessibleEventId::STATE_CHANGED, aOldAny, aNewAny );
-                }
+                aNewAny <<= css::uno::Reference< css::uno::XInterface >(
+                    static_cast< ::cppu::OWeakObject* >( pItemAcc ));
+                ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldAny, aNewAny );
             }
 
             // selection event
@@ -1136,13 +1130,13 @@ bool ThumbnailView::IsItemSelected( sal_uInt16 nItemId ) const
 
 void ThumbnailView::deselectItems()
 {
-    for (ThumbnailViewItem* p : mItemList)
+    for (std::unique_ptr<ThumbnailViewItem>& p : mItemList)
     {
         if (p->isSelected())
         {
             p->setSelection(false);
 
-            maItemStateHdl.Call(p);
+            maItemStateHdl.Call(p.get());
         }
     }
 
@@ -1173,7 +1167,7 @@ void ThumbnailView::filterItems(const std::function<bool (const ThumbnailViewIte
 
     for (size_t i = 0, n = mItemList.size(); i < n; ++i)
     {
-        ThumbnailViewItem *const pItem = mItemList[i];
+        ThumbnailViewItem *const pItem = mItemList[i].get();
 
         if (maFilterFunc(pItem))
         {
@@ -1193,7 +1187,7 @@ void ThumbnailView::filterItems(const std::function<bool (const ThumbnailViewIte
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aOldAny <<= pItem->GetAccessible( mbIsTransientChildrenDisabled );
+                    aOldAny <<= pItem->GetAccessible( false );
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 

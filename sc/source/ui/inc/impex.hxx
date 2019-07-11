@@ -21,13 +21,12 @@
 #define INCLUDED_SC_SOURCE_UI_INC_IMPEX_HXX
 
 #include <o3tl/deleter.hxx>
-#include <sot/exchange.hxx>
-#include <global.hxx>
+#include <sot/formats.hxx>
 #include <address.hxx>
+#include <tools/stream.hxx>
 
 class ScDocShell;
 class ScDocument;
-class SvStream;
 class ScAsciiOptions;
 
 /**
@@ -55,14 +54,14 @@ class ScImportExport
     OUString    aNonConvertibleChars;
     OUString    maFilterOptions;
     sal_uLong   nSizeLimit;
-    SCROW       nMaxImportRow;
+    SCROW const nMaxImportRow;
     sal_Unicode cSep;                   // Separator
     sal_Unicode cStr;                   // String Delimiter
     bool        bFormulas;              // Formula in Text?
     bool        bIncludeFiltered;       // include filtered rows? (default true)
     bool        bAll;                   // no selection
     bool        bSingle;                // Single selection
-    bool        bUndo;                  // with Undo?
+    bool const  bUndo;                  // with Undo?
     bool        bOverflowRow;           // too many rows
     bool        bOverflowCol;           // too many columns
     bool        bOverflowCell;          // too much data for a cell
@@ -174,9 +173,20 @@ public:
 
     @param rFieldSeparators
     A list of characters that each may act as a field separator.
+    If rcDetectSep was 0 and a separator is detected then it is appended to
+    rFieldSeparators.
 
     @param cFieldQuote
     The quote character used.
+
+    @param rcDetectSep
+    If 0 then attempt to detect a possible space (blank) separator if
+    rFieldSeparators doesn't include it already. This can be necessary because
+    of the "accept broken misquoted CSV fields" feature that tries to ignore
+    trailing blanks after a quoted field and if no separator follows continues
+    to add content to the field assuming the single double quote was in error.
+    If this blank separator is detected it is added to rFieldSeparators and the
+    line is reread with the new separators
 
     check Stream::good() to detect IO problems during read
 
@@ -198,7 +208,7 @@ public:
 
   */
 SC_DLLPUBLIC OUString ReadCsvLine( SvStream &rStream, bool bEmbeddedLineBreak,
-        const OUString& rFieldSeparators, sal_Unicode cFieldQuote );
+        OUString& rFieldSeparators, sal_Unicode cFieldQuote, sal_Unicode& rcDetectSep );
 
 #endif
 

@@ -28,7 +28,6 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/frame/XModuleManager2.hpp>
 
-#include <comphelper/sequenceashashmap.hxx>
 #include <sfx2/signaturestate.hxx>
 
 
@@ -71,8 +70,7 @@ public:
 
     static void SetDocInfoState(
         const css::uno::Reference< css::frame::XModel >& xModel,
-        const css::uno::Reference< css::document::XDocumentProperties>& i_xOldDocInfo,
-        bool bNoModify );
+        const css::uno::Reference< css::document::XDocumentProperties>& i_xOldDocInfo );
 
     static bool WarnUnacceptableFormat(
                                     const css::uno::Reference< css::frame::XModel >& xModel,

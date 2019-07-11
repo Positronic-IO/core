@@ -43,9 +43,9 @@ public:
 
 class SwUndoFieldFromDoc : public SwUndoField
 {
-    SwField * pOldField, * pNewField;
-    SwMsgPoolItem * pHint;
-    bool bUpdate;
+    std::unique_ptr<SwField> pOldField, pNewField;
+    SwMsgPoolItem * const pHint;
+    bool const bUpdate;
 
     void DoImpl();
 
@@ -64,7 +64,7 @@ public:
 class SwUndoFieldFromAPI : public SwUndoField
 {
     css::uno::Any aOldVal, aNewVal;
-    sal_uInt16 nWhich;
+    sal_uInt16 const nWhich;
 
     void DoImpl();
 

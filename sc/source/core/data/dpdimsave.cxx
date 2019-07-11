@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <dpcache.hxx>
 #include <dpdimsave.hxx>
 #include <dpgroup.hxx>
 #include <dpobject.hxx>
@@ -30,7 +31,6 @@
 #include <rtl/math.hxx>
 #include <algorithm>
 
-#include <global.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 
@@ -141,10 +141,6 @@ ScDPSaveGroupDimension::ScDPSaveGroupDimension( const OUString& rSource, const O
     aGroupDimName( rName ),
     aDateInfo( rDateInfo ),
     nDatePart( nPart )
-{
-}
-
-ScDPSaveGroupDimension::~ScDPSaveGroupDimension()
 {
 }
 
@@ -275,7 +271,7 @@ bool ScDPSaveGroupDimension::IsInGroup(const ScDPItemData& rItem) const
 
 namespace {
 
-inline bool isInteger(double fValue)
+bool isInteger(double fValue)
 {
     return rtl::math::approxEqual(fValue, rtl::math::approxFloor(fValue));
 }
@@ -432,10 +428,6 @@ ScDPSaveNumGroupDimension::ScDPSaveNumGroupDimension( const OUString& rName, con
 {
 }
 
-ScDPSaveNumGroupDimension::~ScDPSaveNumGroupDimension()
-{
-}
-
 void ScDPSaveNumGroupDimension::AddToData( ScDPGroupTableData& rData ) const
 {
     long nSource = rData.GetDimensionIndex( aDimensionName );
@@ -570,14 +562,14 @@ namespace {
 
 struct ScDPSaveGroupDimNameFunc
 {
-    OUString       maDimName;
+    OUString const       maDimName;
     explicit     ScDPSaveGroupDimNameFunc( const OUString& rDimName ) : maDimName( rDimName ) {}
     bool         operator()( const ScDPSaveGroupDimension& rGroupDim ) const { return rGroupDim.GetGroupDimName() == maDimName; }
 };
 
 struct ScDPSaveGroupSourceNameFunc
 {
-    OUString       maSrcDimName;
+    OUString const       maSrcDimName;
     explicit     ScDPSaveGroupSourceNameFunc( const OUString& rSrcDimName ) : maSrcDimName( rSrcDimName ) {}
     bool         operator()( const ScDPSaveGroupDimension& rGroupDim ) const { return rGroupDim.GetSourceDimName() == maSrcDimName; }
 };
@@ -585,10 +577,6 @@ struct ScDPSaveGroupSourceNameFunc
 } // namespace
 
 ScDPDimensionSaveData::ScDPDimensionSaveData()
-{
-}
-
-ScDPDimensionSaveData::~ScDPDimensionSaveData()
 {
 }
 

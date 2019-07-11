@@ -95,9 +95,7 @@ struct SwXMLTableColumnCmpWidth_Impl
     }
 };
 
-class SwXMLTableColumns_Impl : public o3tl::sorted_vector<SwXMLTableColumn_Impl*, o3tl::less_ptr_to<SwXMLTableColumn_Impl> > {
-public:
-    ~SwXMLTableColumns_Impl() { DeleteAndDestroyAll(); }
+class SwXMLTableColumns_Impl : public o3tl::sorted_vector<std::unique_ptr<SwXMLTableColumn_Impl>, o3tl::less_uniqueptr_to<SwXMLTableColumn_Impl> > {
 };
 
 class SwXMLTableColumnsSortByWidth_Impl : public o3tl::sorted_vector<SwXMLTableColumn_Impl*, SwXMLTableColumnCmpWidth_Impl> {};
@@ -140,11 +138,10 @@ SwXMLTableLines_Impl::SwXMLTableLines_Impl( const SwTableLines& rLines ) :
             if( nBox < nBoxes-1U || nWidth==0 )
             {
                 nCPos = nCPos + SwWriteTable::GetBoxWidth( pBox );
-                SwXMLTableColumn_Impl *pCol =
-                    new SwXMLTableColumn_Impl( nCPos );
+                std::unique_ptr<SwXMLTableColumn_Impl> pCol(
+                    new SwXMLTableColumn_Impl( nCPos ));
 
-                if( !aCols.insert( pCol ).second )
-                    delete pCol;
+                aCols.insert( std::move(pCol) );
 
                 if( nBox==nBoxes-1U )
                 {
@@ -342,7 +339,7 @@ bool SwXMLTableFrameFormatsSort_Impl::AddCell( SwFrameFormat& rFrameFormat,
         return false;
 
     // order is: -/-/-/num,
-    //           -/-/box/-, --/-/box/num,
+    //           -/-/box/-, -/-/box/num,
     //           -/brush/-/-, -/brush/-/num, -/brush/box/-, -/brush/box/num,
     //           vert/-/-/-, vert/-/-/num, vert/-/box/-, ver/-/box/num,
     //           vert/brush/-/-, vert/brush/-/num, vert/brush/box/-,
@@ -485,7 +482,7 @@ class SwXMLTableInfo_Impl
     const SwTable *m_pTable;
     Reference<XTextSection> m_xBaseSection;
     bool m_bBaseSectionValid;
-    sal_uInt32 m_nPrefix;
+    sal_uInt32 const m_nPrefix;
 
 public:
 
@@ -569,7 +566,7 @@ void SwXMLExport::ExportTableLinesAutoStyles( const SwTableLines& rLines,
     // pass 1: calculate columns
     SwXMLTableLines_Impl *pLines = new SwXMLTableLines_Impl( rLines );
     if( !m_pTableLines )
-        m_pTableLines = new SwXMLTableLinesCache_Impl;
+        m_pTableLines.reset(new SwXMLTableLinesCache_Impl);
 
     m_pTableLines->push_back( pLines );
 
@@ -580,7 +577,7 @@ void SwXMLExport::ExportTableLinesAutoStyles( const SwTableLines& rLines,
         const size_t nColumns = rCols.size();
         for( size_t nColumn=0U; nColumn<nColumns; ++nColumn )
         {
-            SwXMLTableColumn_Impl *pColumn = rCols[nColumn];
+            SwXMLTableColumn_Impl *pColumn = rCols[nColumn].get();
 
             sal_uInt32 nOldCPos = nCPos;
             nCPos = pColumn->GetPos();
@@ -766,7 +763,7 @@ void SwXMLExport::ExportTableBox( const SwTableBox& rBox,
         const SwFrameFormat *pFrameFormat = rBox.GetFrameFormat();
         if( pFrameFormat )
         {
-            const OUString sName = pFrameFormat->GetName();
+            const OUString& sName = pFrameFormat->GetName();
             if( !sName.isEmpty() )
             {
                 AddAttribute( XML_NAMESPACE_TABLE, XML_STYLE_NAME, EncodeStyleName(sName) );
@@ -899,7 +896,7 @@ void SwXMLExport::ExportTableLine( const SwTableLine& rLine,
     const SwFrameFormat *pFrameFormat = rLine.GetFrameFormat();
     if( pFrameFormat )
     {
-        const OUString sName = pFrameFormat->GetName();
+        const OUString& sName = pFrameFormat->GetName();
         if( !sName.isEmpty() )
         {
             AddAttribute( XML_NAMESPACE_TABLE, XML_STYLE_NAME, EncodeStyleName(sName) );
@@ -995,22 +992,19 @@ void SwXMLExport::ExportTableLines( const SwTableLines& rLines,
     m_pTableLines->erase( it );
 
     if( m_pTableLines->empty() )
-    {
-        delete m_pTableLines ;
-        m_pTableLines = nullptr;
-    }
+        m_pTableLines.reset();
 
     // pass 2: export columns
     const SwXMLTableColumns_Impl& rCols = pLines->GetColumns();
     size_t nColumn = 0U;
     const size_t nColumns = rCols.size();
     sal_Int32 nColRep = 1;
-    SwXMLTableColumn_Impl *pColumn = (nColumns > 0) ? rCols[0U] : nullptr;
+    SwXMLTableColumn_Impl *pColumn = (nColumns > 0) ? rCols.front().get() : nullptr;
     while( pColumn )
     {
         nColumn++;
         SwXMLTableColumn_Impl *pNextColumn =
-            (nColumn < nColumns) ? rCols[nColumn] : nullptr;
+            (nColumn < nColumns) ? rCols[nColumn].get() : nullptr;
         if( pNextColumn &&
             pNextColumn->GetStyleName() == pColumn->GetStyleName() )
         {
@@ -1117,7 +1111,7 @@ void SwXMLExport::ExportTable( const SwTableNode& rTableNd )
                           pDDEFieldType->GetName() );
 
             // DDE command
-            const OUString sCmd = pDDEFieldType->GetCmd();
+            const OUString& sCmd = pDDEFieldType->GetCmd();
             AddAttribute( XML_NAMESPACE_OFFICE, XML_DDE_APPLICATION,
                           sCmd.getToken(0, sfx2::cTokenSeparator) );
             AddAttribute( XML_NAMESPACE_OFFICE, XML_DDE_ITEM,
@@ -1201,7 +1195,7 @@ void SwXMLExport::DeleteTableLines()
         for (SwXMLTableLines_Impl* p : *m_pTableLines)
             delete p;
         m_pTableLines->clear();
-        delete m_pTableLines;
+        m_pTableLines.reset();
     }
 }
 

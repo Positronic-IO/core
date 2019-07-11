@@ -26,6 +26,7 @@
 #include <svx/svdobj.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/ipclient.hxx>
+#include <sal/log.hxx>
 #include <drawdoc.hxx>
 #include <swwait.hxx>
 #include <swmodule.hxx>
@@ -83,6 +84,7 @@
 #include <svx/sdr/overlay/overlaymanager.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
+#include <prevwpage.hxx>
 
 #if !HAVE_FEATURE_DESKTOP
 #include <vcl/sysdata.hxx>
@@ -91,12 +93,24 @@
 bool SwViewShell::mbLstAct = false;
 ShellResource *SwViewShell::mpShellRes = nullptr;
 vcl::DeleteOnDeinit< VclPtr<vcl::Window> > SwViewShell::mpCareWindow(new VclPtr<vcl::Window>);
-vcl::DeleteOnDeinit<std::shared_ptr<weld::Dialog>> SwViewShell::mpCareDialog(new std::shared_ptr<weld::Dialog>);
+vcl::DeleteOnDeinit<std::shared_ptr<weld::Window>> SwViewShell::mpCareDialog(new std::shared_ptr<weld::Window>);
 
 static bool bInSizeNotify = false;
 
 
 using namespace ::com::sun::star;
+
+void SwViewShell::SetShowHeaderFooterSeparator( FrameControlType eControl, bool bShow ) {
+
+    //tdf#118621 - Optionally disable floating header/footer menu
+    if ( bShow )
+        bShow = GetViewOptions()->IsUseHeaderFooterMenu();
+
+    if ( eControl == Header )
+        mbShowHeaderSeparator = bShow;
+    else
+        mbShowFooterSeparator = bShow;
+}
 
 void SwViewShell::ToggleHeaderFooterEdit()
 {
@@ -311,7 +325,7 @@ void SwViewShell::ImplEndAction( const bool bIdleEnd )
             //JP 27.11.97: what hid the selection, must also Show it,
             //             else we get Paint errors!
             // e.g. additional mode, page half visible vertically, in the
-            // middle a selection and with an other cursor jump to left
+            // middle a selection and with another cursor jump to left
             // right border. Without ShowCursor the selection disappears.
             bool bShowCursor = pRegion && dynamic_cast<const SwCursorShell*>(this) !=  nullptr;
             if( bShowCursor )
@@ -418,8 +432,8 @@ void SwViewShell::ImplEndAction( const bool bIdleEnd )
                             DLPostPaint2(true);
                         }
                     }
-                    else
-                        lcl_PaintTransparentFormControls(*this, aRect); // i#107365
+
+                    lcl_PaintTransparentFormControls(*this, aRect); // i#107365
                 }
 
                 delete pRegion;
@@ -567,7 +581,7 @@ const SwRect& SwViewShell::VisArea() const
 
 void SwViewShell::MakeVisible( const SwRect &rRect )
 {
-    if ( !VisArea().IsInside( rRect ) || IsScrollMDI( this, rRect ) || GetCareWin(*this) || GetCareDialog() )
+    if ( !VisArea().IsInside( rRect ) || IsScrollMDI( this, rRect ) || GetCareWin() || GetCareDialog(*this) )
     {
         if ( !IsViewLocked() )
         {
@@ -595,19 +609,23 @@ void SwViewShell::MakeVisible( const SwRect &rRect )
     }
 }
 
-vcl::Window* SwViewShell::CareChildWin(SwViewShell const & rVSh)
+weld::Window* SwViewShell::CareChildWin(SwViewShell const & rVSh)
 {
-    if(rVSh.mpSfxViewShell)
-    {
+    if (!rVSh.mpSfxViewShell)
+        return nullptr;
 #if HAVE_FEATURE_DESKTOP
-        const sal_uInt16 nId = SvxSearchDialogWrapper::GetChildWindowId();
-        SfxViewFrame* pVFrame = rVSh.mpSfxViewShell->GetViewFrame();
-        const SfxChildWindow* pChWin = pVFrame->GetChildWindow( nId );
-        vcl::Window *pWin = pChWin ? pChWin->GetWindow() : nullptr;
-        if ( pWin && pWin->IsVisible() )
-            return pWin;
+    const sal_uInt16 nId = SvxSearchDialogWrapper::GetChildWindowId();
+    SfxViewFrame* pVFrame = rVSh.mpSfxViewShell->GetViewFrame();
+    SfxChildWindow* pChWin = pVFrame->GetChildWindow( nId );
+    if (!pChWin)
+        return nullptr;
+    weld::DialogController* pController = pChWin->GetController().get();
+    if (!pController)
+        return nullptr;
+    weld::Window* pWin = pController->getDialog();
+    if (pWin && pWin->get_visible())
+        return pWin;
 #endif
-    }
     return nullptr;
 }
 
@@ -680,8 +698,7 @@ bool SwViewShell::HasCharts() const
 
 void SwViewShell::LayoutIdle()
 {
-    if( !mpOpt->IsIdle() || !GetWin() ||
-        ( Imp()->HasDrawView() && Imp()->GetDrawView()->IsDragObj() ) )
+    if( !mpOpt->IsIdle() || !GetWin() || HasDrawViewDrag() )
         return;
 
     //No idle when printing is going on.
@@ -1734,7 +1751,7 @@ public:
             // Need to explicitly draw the overlay on m_pRef, since by default
             // they would be only drawn for m_pOriginalValue.
             SdrPaintWindow* pOldPaintWindow = m_pShell->Imp()->GetDrawView()->GetPaintWindow(0);
-            rtl::Reference<sdr::overlay::OverlayManager> xOldManager = pOldPaintWindow->GetOverlayManager();
+            const rtl::Reference<sdr::overlay::OverlayManager>& xOldManager = pOldPaintWindow->GetOverlayManager();
             if (xOldManager.is())
             {
                 if (SdrPaintWindow* pNewPaintWindow = m_pShell->Imp()->GetDrawView()->FindPaintWindow(*m_pRef))
@@ -1853,9 +1870,9 @@ void SwViewShell::Paint(vcl::RenderContext& rRenderContext, const tools::Rectang
             RectangleVector aRectangles;
             aRegion.GetRegionRectangles(aRectangles);
 
-            for(RectangleVector::const_iterator aRectIter(aRectangles.begin()); aRectIter != aRectangles.end(); ++aRectIter)
+            for(const auto& rRectangle : aRectangles)
             {
-                Imp()->AddPaintRect(*aRectIter);
+                Imp()->AddPaintRect(rRectangle);
             }
 
             //RegionHandle hHdl( aRegion.BeginEnumRects() );
@@ -2071,8 +2088,6 @@ OutputDevice& SwViewShell::GetRefDev() const
           GetViewOptions()->getBrowseMode() &&
          !GetViewOptions()->IsPrtFormat() )
         pTmpOut = GetWin();
-    else if ( mpTmpRef )
-        pTmpOut = mpTmpRef;
     else
         pTmpOut = GetDoc()->getIDocumentDeviceAccess().getReferenceDevice( true );
 
@@ -2489,7 +2504,7 @@ void SwViewShell::SetCareWin( vcl::Window* pNew )
     (*mpCareWindow.get()) = pNew;
 }
 
-void SwViewShell::SetCareDialog(const std::shared_ptr<weld::Dialog>& rNew)
+void SwViewShell::SetCareDialog(const std::shared_ptr<weld::Window>& rNew)
 {
     (*mpCareDialog.get()) = rNew;
 }

@@ -50,13 +50,13 @@ class DetailsContainer
     protected:
         void notifyChange( );
         DECL_LINK(ValueChangeHdl, weld::Entry&, void);
-        DECL_LINK(FormatPortHdl, weld::SpinButton&, void);
+        DECL_STATIC_LINK(DetailsContainer, FormatPortHdl, weld::SpinButton&, void);
 };
 
 class HostDetailsContainer : public DetailsContainer
 {
     private:
-        sal_uInt16 m_nDefaultPort;
+        sal_uInt16 const m_nDefaultPort;
         OUString m_sScheme;
         OUString m_sHost;
 
@@ -93,6 +93,9 @@ class DavDetailsContainer : public HostDetailsContainer
 
 class SmbDetailsContainer : public DetailsContainer
 {
+    private:
+        OUString m_sHost;
+
     public:
         SmbDetailsContainer(PlaceEditDialog* pDialog);
 
@@ -124,7 +127,7 @@ class CmisDetailsContainer : public DetailsContainer
     private:
         void selectRepository( );
         DECL_LINK ( RefreshReposHdl, weld::Button&, void );
-        DECL_LINK ( SelectRepoHdl, weld::ComboBoxText&, void );
+        DECL_LINK ( SelectRepoHdl, weld::ComboBox&, void );
 };
 
 #endif

@@ -27,50 +27,36 @@
 
 #include <sfx2/strings.hrc>
 
-// class SfxStyleDialog --------------------------------------------------
-
-SfxStyleDialog::SfxStyleDialog
-(
-    vcl::Window* pParent,           // Parent
-    const OUString& rID, const OUString& rUIXMLDescription,
-    SfxStyleSheetBase& rStyle  // stylesheet to be processed
-)
-
 /*  [Description]
 
     Constructor: Add Manage TabPage, set ExampleSet from style.
 */
-
-    : SfxTabDialog(pParent, rID, rUIXMLDescription,
-                  &rStyle.GetItemSet(), true)
-    , pStyle( &rStyle )
-
+SfxStyleDialogController::SfxStyleDialogController
+(
+    weld::Window* pParent,           // Parent
+    const OUString& rUIXMLDescription, const OString& rID,
+    SfxStyleSheetBase& rStyle  // stylesheet to be processed
+)
+    : SfxTabDialogController(pParent, rUIXMLDescription, rID, &rStyle.GetItemSet(), true)
+    , m_rStyle(rStyle)
 {
     // without ParentSupport suppress the standardButton
     if (!rStyle.HasParentSupport())
         RemoveStandardButton();
 
-    m_nOrganizerId = AddTabPage("organizer", SfxManageStyleSheetPage::Create, nullptr);
+    AddTabPage("organizer", SfxManageStyleSheetPage::Create, nullptr);
 
     // With new template always set the management page as the current page
-
-    if( rStyle.GetName().isEmpty() )
-        SetCurPageId(m_nOrganizerId);
+    if (rStyle.GetName().isEmpty())
+        SetCurPageId("organizer");
     else
     {
-        OUString sTxt = GetText() + ": " + rStyle.GetName();
-        SetText( sTxt );
+        OUString sTxt = m_xDialog->get_title() + ": " + rStyle.GetName();
+        m_xDialog->set_title(sTxt);
     }
-    delete m_pExampleSet; // in SfxTabDialog::Ctor() already created
-    m_pExampleSet = &pStyle->GetItemSet();
+    m_xExampleSet.reset(&m_rStyle.GetItemSet()); // in SfxTabDialog::Ctor() already created, reset will delete it
 
-    GetCancelButton().SetClickHdl( LINK(this, SfxStyleDialog, CancelHdl) );
-}
-
-
-SfxStyleDialog::~SfxStyleDialog()
-{
-    disposeOnce();
+    GetCancelButton().connect_clicked(LINK(this, SfxStyleDialogController, CancelHdl));
 }
 
 /*  [Description]
@@ -78,70 +64,60 @@ SfxStyleDialog::~SfxStyleDialog()
     Destructor: set ExampleSet to NULL, so that SfxTabDialog does not delete
     the Set from Style.
 */
-
-void SfxStyleDialog::dispose()
+SfxStyleDialogController::~SfxStyleDialogController()
 {
-    m_pExampleSet = nullptr;
-    pStyle = nullptr;
-    SfxTabDialog::dispose();
+    m_xExampleSet.release();
 }
-
-
-short SfxStyleDialog::Ok()
 
 /*  [Description]
 
     Override so that always RET_OK is returned.
 */
-
+short SfxStyleDialogController::Ok()
 {
-    SfxTabDialog::Ok();
+    SfxTabDialogController::Ok();
     return RET_OK;
 }
-
-
-IMPL_LINK_NOARG( SfxStyleDialog, CancelHdl, Button *, void )
 
 /*  [Description]
 
     If the dialogue was canceled, then all selected attributes must be reset
     again.
 */
-
+IMPL_LINK_NOARG(SfxStyleDialogController, CancelHdl, weld::Button&, void)
 {
-    SfxTabPage* pPage = GetTabPage(m_nOrganizerId);
+    SfxTabPage* pPage = GetTabPage("organizer");
 
     const SfxItemSet* pInSet = GetInputSetImpl();
-    SfxWhichIter aIter( *pInSet );
+    SfxWhichIter aIter(*pInSet);
     sal_uInt16 nWhich = aIter.FirstWhich();
 
-    while ( nWhich )
+    while (nWhich)
     {
-        SfxItemState eState = pInSet->GetItemState( nWhich, false );
+        SfxItemState eState = pInSet->GetItemState(nWhich, false);
 
-        if ( SfxItemState::DEFAULT == eState )
-            m_pExampleSet->ClearItem( nWhich );
+        if (SfxItemState::DEFAULT == eState)
+            m_xExampleSet->ClearItem(nWhich);
         else
-            m_pExampleSet->Put( pInSet->Get( nWhich ) );
+            m_xExampleSet->Put(pInSet->Get(nWhich));
         nWhich = aIter.NextWhich();
     }
 
-    if ( pPage )
-        pPage->Reset( GetInputSetImpl() );
-    EndDialog();
+    if (pPage)
+        pPage->Reset(GetInputSetImpl());
+
+    m_xDialog->response(RET_CANCEL);
 }
 
-OUString SfxStyleDialog::GenerateUnusedName(SfxStyleSheetBasePool &rPool)
+OUString SfxStyleDialogController::GenerateUnusedName(SfxStyleSheetBasePool &rPool)
 {
-    OUString aNoName(SfxResId(STR_NONAME));
-    sal_uInt16 nNo = 1;
-    OUString aNo(aNoName);
-    aNoName += OUString::number(nNo);
+    OUString aNo(SfxResId(STR_NONAME));
+    sal_uInt16 i = 1;
+    OUString aNoName = aNo + OUString::number(i);
     while (rPool.Find(aNoName))
     {
-        ++nNo;
-        aNoName = aNo;
-        aNoName += OUString::number(nNo);
+        ++i;
+        aNoName = aNo + OUString::number(i);
     }
     return aNoName;
 }

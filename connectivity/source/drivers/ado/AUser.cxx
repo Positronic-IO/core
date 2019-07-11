@@ -21,7 +21,6 @@
 #include <ado/ACatalog.hxx>
 #include <ado/AGroups.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/sequence.hxx>
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <ado/AConnection.hxx>
@@ -63,7 +62,7 @@ void OAdoUser::refreshGroups()
     if(m_pGroups)
         m_pGroups->reFill(aVector);
     else
-        m_pGroups = new OGroups(m_pCatalog,m_aMutex,aVector,aGroups,isCaseSensitive());
+        m_pGroups.reset(new OGroups(m_pCatalog, m_aMutex, aVector, aGroups, isCaseSensitive()));
 }
 
 Sequence< sal_Int8 > OAdoUser::getUnoTunnelImplementationId()

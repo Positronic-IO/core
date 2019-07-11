@@ -29,18 +29,15 @@
 #include <vcl/combobox.hxx>
 #include <vcl/scrbar.hxx>
 #include <vcl/window.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
-class Accelerator;
 class EditView;
 class ScAccessibleEditLineTextData;
 class ScEditEngineDefaulter;
 class ScInputBarGroup;
 class ScInputHandler;
-class ScRangeList;
 class ScTabViewShell;
 struct EENotify;
-struct ESelection;
 
 class ScTextWndBase : public vcl::Window
 {

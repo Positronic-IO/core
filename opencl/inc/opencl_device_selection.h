@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include <float.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -88,7 +89,7 @@ struct ds_device
 struct ds_profile
 {
     std::vector<ds_device> devices;
-    OString version;
+    OString const version;
 
     ds_profile(OString const & inVersion)
         : version(inVersion)

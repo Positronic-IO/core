@@ -181,13 +181,12 @@ class XMLSenderFieldImportContext : public XMLTextFieldImportContext
     sal_Int16 nSubType;         /// API subtype for ExtUser field
 
     const OUString sPropertyFixed;
-    const OUString sPropertyFieldSubType;
     const OUString sPropertyContent;
 
 protected:
     // variables for access in subclass
     bool bFixed;
-    sal_uInt16 nElementToken;   /// token for this element field
+    sal_uInt16 const nElementToken;   /// token for this element field
 
 public:
 
@@ -216,8 +215,6 @@ protected:
 class XMLAuthorFieldImportContext : public XMLSenderFieldImportContext
 {
     bool bAuthorFullName;
-    const OUString sServiceAuthor;
-    const OUString sPropertyAuthorFullName;
     const OUString sPropertyFixed;
     const OUString sPropertyContent;
 
@@ -246,8 +243,6 @@ protected:
 
 class XMLPlaceholderFieldImportContext : public XMLTextFieldImportContext
 {
-    const OUString sPropertyPlaceholderType;
-    const OUString sPropertyPlaceholder;
     const OUString sPropertyHint;
 
     OUString sDescription;
@@ -279,7 +274,6 @@ protected:
     const OUString sPropertyFixed;
     const OUString sPropertyDateTimeValue;
     const OUString sPropertyDateTime;
-    const OUString sPropertyAdjust;
     const OUString sPropertyIsDate;
     const OUString sPropertyIsFixedLanguage;
 
@@ -331,7 +325,6 @@ public:
 class XMLPageContinuationImportContext : public XMLTextFieldImportContext
 {
     const OUString sPropertySubType;
-    const OUString sPropertyUserText;
     const OUString sPropertyNumberingType;
 
     OUString sString;            /// continuation string
@@ -391,12 +384,6 @@ public:
 /** superclass for database fields: handle database and table names */
 class XMLDatabaseFieldImportContext : public XMLTextFieldImportContext
 {
-    const OUString sPropertyDataBaseName;
-    const OUString sPropertyDataBaseURL;
-    const OUString sPropertyTableName;
-    const OUString sPropertyDataCommandType;
-    const OUString sPropertyIsVisible;
-
     OUString sDatabaseName;
     OUString sDatabaseURL;
     OUString sTableName;
@@ -406,7 +393,7 @@ class XMLDatabaseFieldImportContext : public XMLTextFieldImportContext
 
     bool bDisplay;
     bool bDisplayOK;
-    bool bUseDisplay;
+    bool const bUseDisplay;
 
 protected:
     bool bDatabaseOK;
@@ -546,8 +533,8 @@ class XMLSimpleDocInfoImportContext : public XMLTextFieldImportContext
 
 protected:
     bool bFixed;
-    bool bHasAuthor;
-    bool bHasContent;
+    bool const bHasAuthor;
+    bool const bHasContent;
 
 public:
 
@@ -605,8 +592,6 @@ protected:
 /** import revision field (<text:editing-cycles>) */
 class XMLRevisionDocInfoImportContext : public XMLSimpleDocInfoImportContext
 {
-    const OUString sPropertyRevision;
-
 public:
 
     XMLRevisionDocInfoImportContext(SvXMLImport& rImport,
@@ -678,9 +663,6 @@ protected:
 class XMLConditionalTextImportContext : public XMLTextFieldImportContext
 {
     const OUString sPropertyCondition;
-    const OUString sPropertyTrueContent;
-    const OUString sPropertyFalseContent;
-    const OUString sPropertyIsConditionTrue;
     const OUString sPropertyCurrentPresentation;
 
     OUString sCondition;
@@ -794,9 +776,6 @@ protected:
 /** import chapter fields (<text:chapter>) */
 class XMLChapterImportContext : public XMLTextFieldImportContext
 {
-    const OUString sPropertyChapterFormat;
-    const OUString sPropertyLevel;
-
     sal_Int16 nFormat;
     sal_Int8 nLevel;
 
@@ -933,7 +912,7 @@ class XMLReferenceFieldImportContext : public XMLTextFieldImportContext
 {
     OUString sName;
     OUString sLanguage;
-    sal_uInt16 nElementToken;
+    sal_uInt16 const nElementToken;
     sal_Int16 nSource;
     sal_Int16 nType;
 
@@ -965,7 +944,7 @@ protected:
 /** import dde field declaration container (<text:dde-connection-decls>) */
 class XMLDdeFieldDeclsImportContext : public SvXMLImportContext
 {
-    SvXMLTokenMap aTokenMap;
+    SvXMLTokenMap const aTokenMap;
 
 public:
 
@@ -1000,7 +979,7 @@ public:
 class XMLDdeFieldImportContext : public XMLTextFieldImportContext
 {
     OUString sName;
-    OUString sPropertyContent;
+    OUString const sPropertyContent;
 
 public:
 
@@ -1128,7 +1107,7 @@ class XMLAnnotationImportContext : public XMLTextFieldImportContext
     css::uno::Reference < css::text::XTextCursor >  mxCursor;
     css::uno::Reference < css::text::XTextCursor >  mxOldCursor;
 
-    sal_uInt16 m_nToken;
+    sal_uInt16 const m_nToken;
 
 public:
 

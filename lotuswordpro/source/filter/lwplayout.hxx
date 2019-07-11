@@ -99,7 +99,6 @@ class LwpVirtualLayout : public LwpDLNFPVList
 public:
     LwpVirtualLayout(LwpObjectHeader const &objHdr, LwpSvStream* pStrm);
     virtual sal_uInt16 GetNumCols(){return 1;}
-    virtual double GetColWidth(sal_uInt16 nIndex);
     virtual double GetColGap(sal_uInt16 nIndex);
     virtual bool IsAutoGrow(){ return false;}
     virtual bool IsAutoGrowUp(){ return false;}
@@ -347,19 +346,11 @@ class LwpMiddleLayout : public LwpVirtualLayout
 public:
     LwpMiddleLayout( LwpObjectHeader const &objHdr, LwpSvStream* pStrm );
     virtual ~LwpMiddleLayout() override;
-    LwpLayoutGeometry* GetGeometry()
-    {
-        if (m_bGettingGeometry)
-            throw std::runtime_error("recursion in layout");
-        m_bGettingGeometry = true;
-        auto pRet = Geometry();
-        m_bGettingGeometry = false;
-        return pRet;
-    }
     double GetGeometryHeight();
     double GetGeometryWidth();
     LwpBorderStuff* GetBorderStuff();
     LwpBackgroundStuff* GetBackgroundStuff();
+    LwpLayoutGeometry* GetGeometry();
     enumXFTextDir GetTextDirection();
     XFBorders* GetXFBorders();
     LwpColor* GetBackColor();
@@ -402,7 +393,6 @@ protected:
     virtual bool IsAutoGrowDown() override;
 private:
     LwpObjectID m_BasedOnStyle;
-    LwpLayoutGeometry* Geometry();
 protected:
     enum
     {
@@ -422,6 +412,7 @@ protected:
     LwpObjectID     m_LayBackgroundStuff;
     LwpObjectID     m_LayExtBorderStuff;
     bool            m_bGettingGeometry;
+    bool            m_bGettingBackgroundStuff;
 public:
     LwpObjectID& GetContent() { return m_Content; }
     LwpTabOverride* GetTabOverride();
@@ -453,7 +444,6 @@ protected:
 public:
     LwpUseWhen* VirtualGetUseWhen() override;
     virtual sal_uInt16 GetNumCols() override;
-    virtual double GetColWidth(sal_uInt16 nIndex) override;
     virtual double GetColGap(sal_uInt16 nIndex) override;
     sal_uInt16 GetUsePage();
 public:

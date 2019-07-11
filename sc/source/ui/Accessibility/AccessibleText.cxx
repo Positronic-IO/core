@@ -49,23 +49,20 @@
 class ScViewForwarder : public SvxViewForwarder
 {
     ScTabViewShell*     mpViewShell;
-    ScAddress           maCellPos;
     ScSplitPos          meSplitPos;
 public:
-                        ScViewForwarder(ScTabViewShell* pViewShell, ScSplitPos eSplitPos, const ScAddress& rCell);
+                        ScViewForwarder(ScTabViewShell* pViewShell, ScSplitPos eSplitPos);
 
     virtual bool        IsValid() const override;
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 
     void                SetInvalid();
 };
 
-ScViewForwarder::ScViewForwarder(ScTabViewShell* pViewShell, ScSplitPos eSplitPos, const ScAddress& rCell)
+ScViewForwarder::ScViewForwarder(ScTabViewShell* pViewShell, ScSplitPos eSplitPos)
     :
     mpViewShell(pViewShell),
-    maCellPos(rCell),
     meSplitPos(eSplitPos)
 {
 }
@@ -73,34 +70,6 @@ ScViewForwarder::ScViewForwarder(ScTabViewShell* pViewShell, ScSplitPos eSplitPo
 bool ScViewForwarder::IsValid() const
 {
     return mpViewShell != nullptr;
-}
-
-tools::Rectangle ScViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpViewShell)
-    {
-        vcl::Window* pWindow = mpViewShell->GetWindowByPos(meSplitPos);
-        if (pWindow)
-        {
-            aVisArea.SetSize(pWindow->GetSizePixel());
-
-            ScHSplitPos eWhichH = ((meSplitPos == SC_SPLIT_TOPLEFT) || (meSplitPos == SC_SPLIT_BOTTOMLEFT)) ?
-                                    SC_SPLIT_LEFT : SC_SPLIT_RIGHT;
-            ScVSplitPos eWhichV = ((meSplitPos == SC_SPLIT_TOPLEFT) || (meSplitPos == SC_SPLIT_TOPRIGHT)) ?
-                                    SC_SPLIT_TOP : SC_SPLIT_BOTTOM;
-
-            Point aBaseCellPos(mpViewShell->GetViewData().GetScrPos(mpViewShell->GetViewData().GetPosX(eWhichH),
-                mpViewShell->GetViewData().GetPosY(eWhichV), meSplitPos, true));
-            Point aCellPos(mpViewShell->GetViewData().GetScrPos(maCellPos.Col(), maCellPos.Row(), meSplitPos, true));
-            aVisArea.SetPos(aCellPos - aBaseCellPos);
-        }
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 Point ScViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -148,7 +117,6 @@ public:
                                                    const EditView* _pEditView);
 
     virtual bool        IsValid() const override;
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 
@@ -166,24 +134,6 @@ ScEditObjectViewForwarder::ScEditObjectViewForwarder( vcl::Window* pWindow,
 bool ScEditObjectViewForwarder::IsValid() const
 {
     return (mpWindow != nullptr);
-}
-
-tools::Rectangle ScEditObjectViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpWindow)
-    {
-        tools::Rectangle aVisRect(mpWindow->GetWindowExtentsRelative(mpWindow->GetAccessibleParentWindow()));
-
-        aVisRect.SetPos(Point(0, 0));
-
-        aVisArea = aVisRect;
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 Point ScEditObjectViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -241,16 +191,10 @@ public:
     explicit            ScPreviewViewForwarder(ScPreviewShell* pViewShell);
 
     virtual bool        IsValid() const override;
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 
     void                SetInvalid();
-
-    tools::Rectangle GetVisRect() const;
-
-    // clips the VisArea and calculates with the negative coordinates
-    tools::Rectangle CorrectVisArea(const tools::Rectangle& rVisArea) const;
 };
 
 ScPreviewViewForwarder::ScPreviewViewForwarder(ScPreviewShell* pViewShell)
@@ -261,12 +205,6 @@ ScPreviewViewForwarder::ScPreviewViewForwarder(ScPreviewShell* pViewShell)
 bool ScPreviewViewForwarder::IsValid() const
 {
     return mpViewShell != nullptr;
-}
-
-tools::Rectangle ScPreviewViewForwarder::GetVisArea() const
-{
-    OSL_FAIL("should be implemented in an abrevated class");
-    return tools::Rectangle();
 }
 
 Point ScPreviewViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -316,192 +254,52 @@ void ScPreviewViewForwarder::SetInvalid()
     mpViewShell = nullptr;
 }
 
-tools::Rectangle ScPreviewViewForwarder::GetVisRect() const
-{
-    if ( mpViewShell )
-    {
-        Size aOutputSize;
-        vcl::Window* pWindow = mpViewShell->GetWindow();
-        if ( pWindow )
-            aOutputSize = pWindow->GetOutputSizePixel();
-        tools::Rectangle aVisRect( Point(), aOutputSize );
-        return aVisRect;
-    }
-    return tools::Rectangle();
-}
-
-tools::Rectangle ScPreviewViewForwarder::CorrectVisArea(const tools::Rectangle& rVisArea) const
-{
-    tools::Rectangle aVisArea(rVisArea);
-    Point aPos = aVisArea.TopLeft(); // get first the position to remember negative positions after clipping
-
-    vcl::Window* pWin = mpViewShell->GetWindow();
-    if (pWin)
-        aVisArea = pWin->GetWindowExtentsRelative(pWin).GetIntersection(aVisArea);
-
-    sal_Int32 nX(aPos.getX());
-    sal_Int32 nY(aPos.getY());
-
-    if (nX > 0)
-        nX = 0;
-    else if (nX < 0)
-        nX = -nX;
-    if (nY > 0)
-        nY = 0;
-    else if (nY < 0)
-        nY = -nY;
-    aVisArea.SetPos(Point(nX, nY));
-
-    return aVisArea;
-}
-
 class ScPreviewHeaderFooterViewForwarder : public ScPreviewViewForwarder
 {
-    bool            mbHeader;
 public:
-                        ScPreviewHeaderFooterViewForwarder(ScPreviewShell* pViewShell, bool bHeader);
-
-    virtual tools::Rectangle   GetVisArea() const override;
+                        ScPreviewHeaderFooterViewForwarder(ScPreviewShell* pViewShell);
 };
 
-ScPreviewHeaderFooterViewForwarder::ScPreviewHeaderFooterViewForwarder(ScPreviewShell* pViewShell, bool bHeader)
+ScPreviewHeaderFooterViewForwarder::ScPreviewHeaderFooterViewForwarder(ScPreviewShell* pViewShell)
     :
-    ScPreviewViewForwarder(pViewShell),
-    mbHeader(bHeader)
+    ScPreviewViewForwarder(pViewShell)
 {
-}
-
-tools::Rectangle ScPreviewHeaderFooterViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpViewShell)
-    {
-        const ScPreviewLocationData& rData = mpViewShell->GetLocationData();
-        if ( mbHeader )
-            rData.GetHeaderPosition( aVisArea );
-        else
-            rData.GetFooterPosition( aVisArea );
-
-        aVisArea = CorrectVisArea(aVisArea);
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 class ScPreviewCellViewForwarder : public ScPreviewViewForwarder
 {
-    ScAddress           maCellPos;
 public:
-                        ScPreviewCellViewForwarder(ScPreviewShell* pViewShell,
-                            const ScAddress& aCellPos);
-
-    virtual tools::Rectangle   GetVisArea() const override;
+                        ScPreviewCellViewForwarder(ScPreviewShell* pViewShell);
 };
 
-ScPreviewCellViewForwarder::ScPreviewCellViewForwarder(ScPreviewShell* pViewShell,
-                                                       const ScAddress& aCellPos)
+ScPreviewCellViewForwarder::ScPreviewCellViewForwarder(ScPreviewShell* pViewShell)
     :
-    ScPreviewViewForwarder(pViewShell),
-    maCellPos(aCellPos)
+    ScPreviewViewForwarder(pViewShell)
 {
-}
-
-tools::Rectangle ScPreviewCellViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpViewShell)
-    {
-        const ScPreviewLocationData& rData = mpViewShell->GetLocationData();
-        aVisArea = rData.GetCellOutputRect(maCellPos);
-
-        aVisArea = CorrectVisArea(aVisArea);
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 class ScPreviewHeaderCellViewForwarder : public ScPreviewViewForwarder
 {
-    ScAddress           maCellPos;
-    bool            mbColHeader;
 public:
-                        ScPreviewHeaderCellViewForwarder(ScPreviewShell* pViewShell,
-                            const ScAddress& aCellPos,
-                            bool bColHeader);
-
-    virtual tools::Rectangle   GetVisArea() const override;
+                        ScPreviewHeaderCellViewForwarder(ScPreviewShell* pViewShell);
 };
 
-ScPreviewHeaderCellViewForwarder::ScPreviewHeaderCellViewForwarder(ScPreviewShell* pViewShell,
-                                                                   const ScAddress& aCellPos,
-                                                                   bool bColHeader)
+ScPreviewHeaderCellViewForwarder::ScPreviewHeaderCellViewForwarder(ScPreviewShell* pViewShell)
     :
-    ScPreviewViewForwarder(pViewShell),
-    maCellPos(aCellPos),
-    mbColHeader(bColHeader)
+    ScPreviewViewForwarder(pViewShell)
 {
-}
-
-tools::Rectangle ScPreviewHeaderCellViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpViewShell)
-    {
-        const ScPreviewLocationData& rData = mpViewShell->GetLocationData();
-        aVisArea = rData.GetHeaderCellOutputRect(GetVisRect(), maCellPos, mbColHeader);
-
-        aVisArea = CorrectVisArea(aVisArea);
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 class ScPreviewNoteViewForwarder : public ScPreviewViewForwarder
 {
-    ScAddress           maCellPos;
-    bool            mbNoteMark;
 public:
-                        ScPreviewNoteViewForwarder(ScPreviewShell* pViewShell,
-                            const ScAddress& aCellPos,
-                            bool bNoteMark);
-
-    virtual tools::Rectangle   GetVisArea() const override;
+                        ScPreviewNoteViewForwarder(ScPreviewShell* pViewShell);
 };
 
-ScPreviewNoteViewForwarder::ScPreviewNoteViewForwarder(ScPreviewShell* pViewShell,
-                                                                   const ScAddress& aCellPos,
-                                                                   bool bNoteMark)
+ScPreviewNoteViewForwarder::ScPreviewNoteViewForwarder(ScPreviewShell* pViewShell)
     :
-    ScPreviewViewForwarder(pViewShell),
-    maCellPos(aCellPos),
-    mbNoteMark(bNoteMark)
+    ScPreviewViewForwarder(pViewShell)
 {
-}
-
-tools::Rectangle ScPreviewNoteViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (mpViewShell)
-    {
-        const ScPreviewLocationData& rData = mpViewShell->GetLocationData();
-        aVisArea = rData.GetNoteInRangeOutputRect(GetVisRect(), mbNoteMark, maCellPos);
-
-        aVisArea = CorrectVisArea(aVisArea);
-    }
-    else
-    {
-        OSL_FAIL("this ViewForwarder is not valid");
-    }
-    return aVisArea;
 }
 
 class ScEditViewForwarder : public SvxEditViewForwarder
@@ -512,7 +310,6 @@ public:
                         ScEditViewForwarder(EditView* pEditView, vcl::Window* pWin);
 
     virtual bool        IsValid() const override;
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual bool        GetSelection( ESelection& rSelection ) const override;
@@ -533,22 +330,6 @@ ScEditViewForwarder::ScEditViewForwarder(EditView* pEditView, vcl::Window* pWin)
 bool ScEditViewForwarder::IsValid() const
 {
     return mpWindow && mpEditView;
-}
-
-tools::Rectangle ScEditViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aVisArea;
-    if (IsValid() && mpEditView->GetEditEngine())
-    {
-        MapMode aMapMode(mpEditView->GetEditEngine()->GetRefMapMode());
-
-        aVisArea = mpWindow->LogicToPixel( mpEditView->GetVisArea(), aMapMode );
-    }
-    else
-    {
-        OSL_FAIL("this EditViewForwarder is no longer valid");
-    }
-    return aVisArea;
 }
 
 Point ScEditViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -831,13 +612,13 @@ SvxTextForwarder* ScAccessibleCellTextData::GetTextForwarder()
         pEditEngine->SetNotifyHdl( LINK(this, ScAccessibleCellTextData, NotifyHdl) );
     }
 
-    return pForwarder;
+    return pForwarder.get();
 }
 
 SvxViewForwarder* ScAccessibleCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder.reset(new ScViewForwarder(mpViewShell, meSplitPos, aCellPos));
+        mpViewForwarder.reset(new ScViewForwarder(mpViewShell, meSplitPos));
     return mpViewForwarder.get();
 }
 
@@ -851,8 +632,8 @@ IMPL_LINK(ScAccessibleTextData, NotifyHdl, EENotify&, aNotify, void)
 {
     ::std::unique_ptr< SfxHint > aHint = SvxEditSourceHelper::EENotification2Hint( &aNotify );
 
-    if( aHint.get() )
-        GetBroadcaster().Broadcast( *aHint.get() );
+    if (aHint)
+        GetBroadcaster().Broadcast(*aHint);
 }
 
 ScDocShell* ScAccessibleCellTextData::GetDocShell(ScTabViewShell* pViewShell)
@@ -865,11 +646,8 @@ ScDocShell* ScAccessibleCellTextData::GetDocShell(ScTabViewShell* pViewShell)
 
 ScAccessibleEditObjectTextData::ScAccessibleEditObjectTextData(EditView* pEditView, vcl::Window* pWin, bool isClone)
     :
-    mpViewForwarder(nullptr),
-    mpEditViewForwarder(nullptr),
     mpEditView(pEditView),
     mpEditEngine(pEditView ? pEditView->GetEditEngine() : nullptr),
-    mpForwarder(nullptr),
     mpWindow(pWin)
 {
     // If the object is cloned, do NOT add notify hdl.
@@ -953,8 +731,8 @@ IMPL_LINK(ScAccessibleEditObjectTextData, NotifyHdl, EENotify&, rNotify, void)
 {
     ::std::unique_ptr< SfxHint > aHint = SvxEditSourceHelper::EENotification2Hint( &rNotify );
 
-    if( aHint.get() )
-        GetBroadcaster().Broadcast( *aHint.get() );
+    if (aHint)
+        GetBroadcaster().Broadcast(*aHint);
 }
 
 ScAccessibleEditLineTextData::ScAccessibleEditLineTextData(EditView* pEditView, vcl::Window* pWin)
@@ -1133,7 +911,6 @@ void ScAccessibleEditLineTextData::EndEdit()
 ScAccessiblePreviewCellTextData::ScAccessiblePreviewCellTextData(ScPreviewShell* pViewShell,
                             const ScAddress& rP)
     : ScAccessibleCellBaseTextData(GetDocShell(pViewShell), rP),
-    mpViewForwarder(nullptr),
     mpViewShell(pViewShell)
 {
 }
@@ -1179,13 +956,13 @@ SvxTextForwarder* ScAccessiblePreviewCellTextData::GetTextForwarder()
     if (pEditEngine)
         pEditEngine->SetNotifyHdl( LINK(this, ScAccessiblePreviewCellTextData, NotifyHdl) );
 
-    return pForwarder;
+    return pForwarder.get();
 }
 
 SvxViewForwarder* ScAccessiblePreviewCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder.reset(new ScPreviewCellViewForwarder(mpViewShell, aCellPos));
+        mpViewForwarder.reset(new ScPreviewCellViewForwarder(mpViewShell));
     return mpViewForwarder.get();
 }
 
@@ -1202,7 +979,6 @@ ScDocShell* ScAccessiblePreviewCellTextData::GetDocShell(ScPreviewShell* pViewSh
 ScAccessiblePreviewHeaderCellTextData::ScAccessiblePreviewHeaderCellTextData(ScPreviewShell* pViewShell,
             const OUString& rText, const ScAddress& rP, bool bColHeader, bool bRowHeader)
     : ScAccessibleCellBaseTextData(GetDocShell(pViewShell), rP),
-    mpViewForwarder(nullptr),
     mpViewShell(pViewShell),
     maText(rText),
     mbColHeader(bColHeader),
@@ -1253,11 +1029,11 @@ SvxTextForwarder* ScAccessiblePreviewHeaderCellTextData::GetTextForwarder()
             pEditEngine->SetRefDevice(pDocShell->GetRefDevice());
         else
             pEditEngine->SetRefMapMode(MapMode(MapUnit::Map100thMM));
-        pForwarder = new SvxEditEngineForwarder(*pEditEngine);
+        pForwarder.reset( new SvxEditEngineForwarder(*pEditEngine) );
     }
 
     if (bDataValid)
-        return pForwarder;
+        return pForwarder.get();
 
     if (!maText.isEmpty())
     {
@@ -1280,13 +1056,13 @@ SvxTextForwarder* ScAccessiblePreviewHeaderCellTextData::GetTextForwarder()
 
     pEditEngine->SetNotifyHdl( LINK(this, ScAccessiblePreviewHeaderCellTextData, NotifyHdl) );
 
-    return pForwarder;
+    return pForwarder.get();
 }
 
 SvxViewForwarder* ScAccessiblePreviewHeaderCellTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder.reset(new ScPreviewHeaderCellViewForwarder(mpViewShell, aCellPos, mbColHeader));
+        mpViewForwarder.reset(new ScPreviewHeaderCellViewForwarder(mpViewShell));
     return mpViewForwarder.get();
 }
 
@@ -1299,15 +1075,12 @@ ScDocShell* ScAccessiblePreviewHeaderCellTextData::GetDocShell(ScPreviewShell* p
 }
 
 ScAccessibleHeaderTextData::ScAccessibleHeaderTextData(ScPreviewShell* pViewShell,
-                            const EditTextObject* pEditObj, bool bHeader, SvxAdjust eAdjust)
+                            const EditTextObject* pEditObj, SvxAdjust eAdjust)
     :
     mpViewForwarder(nullptr),
     mpViewShell(pViewShell),
-    mpEditEngine(nullptr),
-    mpForwarder(nullptr),
     mpDocSh(nullptr),
     mpEditObj(pEditObj),
-    mbHeader(bHeader),
     mbDataValid(false),
     meAdjust(eAdjust)
 {
@@ -1331,7 +1104,7 @@ ScAccessibleHeaderTextData::~ScAccessibleHeaderTextData()
 
 ScAccessibleTextData* ScAccessibleHeaderTextData::Clone() const
 {
-    return new ScAccessibleHeaderTextData(mpViewShell, mpEditObj, mbHeader, meAdjust);
+    return new ScAccessibleHeaderTextData(mpViewShell, mpEditObj, meAdjust);
 }
 
 void ScAccessibleHeaderTextData::Notify( SfxBroadcaster&, const SfxHint& rHint )
@@ -1366,9 +1139,9 @@ SvxTextForwarder* ScAccessibleHeaderTextData::GetTextForwarder()
         //  but for header/footer twips is needed, as in the PatternAttr:
         std::unique_ptr<SfxPoolItem> pNewItem(rPattern.GetItem(ATTR_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT));
         aDefaults.Put( *pNewItem );
-        pNewItem.reset(rPattern.GetItem(ATTR_CJK_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK));
+        pNewItem = rPattern.GetItem(ATTR_CJK_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK);
         aDefaults.Put( *pNewItem );
-        pNewItem.reset(rPattern.GetItem(ATTR_CTL_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL));
+        pNewItem = rPattern.GetItem(ATTR_CTL_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL);
         aDefaults.Put( *pNewItem );
         aDefaults.Put( SvxAdjustItem( meAdjust, EE_PARA_JUST ) );
         pHdrEngine->SetDefaults( aDefaults );
@@ -1407,7 +1180,7 @@ SvxTextForwarder* ScAccessibleHeaderTextData::GetTextForwarder()
 SvxViewForwarder* ScAccessibleHeaderTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder = new ScPreviewHeaderFooterViewForwarder(mpViewShell, mbHeader);
+        mpViewForwarder = new ScPreviewHeaderFooterViewForwarder(mpViewShell);
     return mpViewForwarder;
 }
 
@@ -1416,8 +1189,6 @@ ScAccessibleNoteTextData::ScAccessibleNoteTextData(ScPreviewShell* pViewShell,
     :
     mpViewForwarder(nullptr),
     mpViewShell(pViewShell),
-    mpEditEngine(nullptr),
-    mpForwarder(nullptr),
     mpDocSh(nullptr),
     msText(sText),
     maCellPos(aCellPos),
@@ -1439,7 +1210,7 @@ ScAccessibleNoteTextData::~ScAccessibleNoteTextData()
     if (mpEditEngine)
         mpEditEngine->SetNotifyHdl(Link<EENotify&,void>());
     mpEditEngine.reset();
-    delete mpForwarder;
+    mpForwarder.reset();
 }
 
 ScAccessibleTextData* ScAccessibleNoteTextData::Clone() const
@@ -1478,11 +1249,11 @@ SvxTextForwarder* ScAccessibleNoteTextData::GetTextForwarder()
             mpEditEngine->SetRefDevice(mpDocSh->GetRefDevice());
         else
             mpEditEngine->SetRefMapMode(MapMode(MapUnit::Map100thMM));
-        mpForwarder = new SvxEditEngineForwarder(*mpEditEngine);
+        mpForwarder.reset( new SvxEditEngineForwarder(*mpEditEngine) );
     }
 
     if (mbDataValid)
-        return mpForwarder;
+        return mpForwarder.get();
 
     if (!msText.isEmpty())
     {
@@ -1506,13 +1277,13 @@ SvxTextForwarder* ScAccessibleNoteTextData::GetTextForwarder()
 
     mpEditEngine->SetNotifyHdl( LINK(this, ScAccessibleNoteTextData, NotifyHdl) );
 
-    return mpForwarder;
+    return mpForwarder.get();
 }
 
 SvxViewForwarder* ScAccessibleNoteTextData::GetViewForwarder()
 {
     if (!mpViewForwarder)
-        mpViewForwarder = new ScPreviewNoteViewForwarder(mpViewShell, maCellPos, mbMarkNote);
+        mpViewForwarder = new ScPreviewNoteViewForwarder(mpViewShell);
     return mpViewForwarder;
 }
 
@@ -1520,22 +1291,19 @@ SvxViewForwarder* ScAccessibleNoteTextData::GetViewForwarder()
 
 class ScCsvViewForwarder : public SvxViewForwarder
 {
-    tools::Rectangle                   maBoundBox;
     VclPtr<vcl::Window>         mpWindow;
 
 public:
-    explicit                    ScCsvViewForwarder( vcl::Window* pWindow, const tools::Rectangle& rBoundBox );
+    explicit                    ScCsvViewForwarder( vcl::Window* pWindow );
 
     virtual bool                IsValid() const override;
-    virtual tools::Rectangle           GetVisArea() const override;
     virtual Point               LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point               PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 
     void                        SetInvalid();
 };
 
-ScCsvViewForwarder::ScCsvViewForwarder( vcl::Window* pWindow, const tools::Rectangle& rBoundBox ) :
-    maBoundBox( rBoundBox ),
+ScCsvViewForwarder::ScCsvViewForwarder( vcl::Window* pWindow ) :
     mpWindow( pWindow )
 {
 }
@@ -1543,11 +1311,6 @@ ScCsvViewForwarder::ScCsvViewForwarder( vcl::Window* pWindow, const tools::Recta
 bool ScCsvViewForwarder::IsValid() const
 {
     return mpWindow != nullptr;
-}
-
-tools::Rectangle ScCsvViewForwarder::GetVisArea() const
-{
-    return maBoundBox;
 }
 
 Point ScCsvViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
@@ -1569,11 +1332,10 @@ void ScCsvViewForwarder::SetInvalid()
 
 ScAccessibleCsvTextData::ScAccessibleCsvTextData(
         vcl::Window* pWindow, EditEngine* pEditEngine,
-        const OUString& rCellText, const tools::Rectangle& rBoundBox, const Size& rCellSize ) :
+        const OUString& rCellText, const Size& rCellSize ) :
     mpWindow( pWindow ),
     mpEditEngine( pEditEngine ),
     maCellText( rCellText ),
-    maBoundBox( rBoundBox ),
     maCellSize( rCellSize )
 {
 }
@@ -1596,7 +1358,7 @@ void ScAccessibleCsvTextData::Notify( SfxBroadcaster& rBC, const SfxHint& rHint 
 
 ScAccessibleTextData* ScAccessibleCsvTextData::Clone() const
 {
-    return new ScAccessibleCsvTextData( mpWindow, mpEditEngine, maCellText, maBoundBox, maCellSize );
+    return new ScAccessibleCsvTextData( mpWindow, mpEditEngine, maCellText, maCellSize );
 }
 
 SvxTextForwarder* ScAccessibleCsvTextData::GetTextForwarder()
@@ -1616,7 +1378,7 @@ SvxTextForwarder* ScAccessibleCsvTextData::GetTextForwarder()
 SvxViewForwarder* ScAccessibleCsvTextData::GetViewForwarder()
 {
     if( !mpViewForwarder.get() )
-        mpViewForwarder.reset( new ScCsvViewForwarder( mpWindow, maBoundBox ) );
+        mpViewForwarder.reset( new ScCsvViewForwarder( mpWindow ) );
     return mpViewForwarder.get();
 }
 

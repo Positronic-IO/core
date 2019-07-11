@@ -108,6 +108,15 @@ $(eval $(call gb_Library_use_externals,sd,\
 	icu_headers \
 ))
 
+ifneq ($(DBUS_HAVE_GLIB),)
+$(eval $(call gb_Library_add_defs,sd,\
+	$(DBUS_GLIB_CFLAGS) \
+))
+$(eval $(call gb_Library_add_libs,sd,\
+	$(DBUS_GLIB_LIBS) \
+))
+endif
+
 ifeq ($(OS),WNT)
 $(eval $(call gb_Library_use_system_win32_libs,sd,\
 	uuid \
@@ -154,6 +163,7 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/filter/html/buttonset \
 	sd/source/filter/html/htmlex \
 	sd/source/filter/html/sdhtmlfilter \
+	sd/source/filter/pdf/sdpdffilter \
 	sd/source/filter/sdfilter \
 	sd/source/filter/sdpptwrp \
 	sd/source/filter/xml/sdtransform \
@@ -171,7 +181,7 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/accessibility/AccessibleSlideSorterView \
 	sd/source/ui/accessibility/AccessibleViewForwarder \
 	sd/source/ui/accessibility/SdShapeTypes \
-    sd/source/ui/animations/CategoryListBox \
+	sd/source/ui/animations/CategoryListBox \
 	sd/source/ui/animations/CustomAnimationBox \
 	sd/source/ui/animations/CustomAnimationDialog \
 	sd/source/ui/animations/CustomAnimationList \
@@ -246,7 +256,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/framework/module/ImpressModule \
 	sd/source/ui/framework/module/ModuleController \
 	sd/source/ui/framework/module/PresentationModule \
-	sd/source/ui/framework/module/ResourceManager \
 	sd/source/ui/framework/module/ShellStackGuard \
 	sd/source/ui/framework/module/SlideSorterModule \
 	sd/source/ui/framework/module/ToolBarModule \

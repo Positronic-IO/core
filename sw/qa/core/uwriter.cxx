@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <test/bootstrapfixture.hxx>
 
 #include <com/sun/star/i18n/WordType.hpp>
@@ -34,6 +35,7 @@
 
 #include <breakit.hxx>
 #include <doc.hxx>
+#include <IDocumentUndoRedo.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <IDocumentStatistics.hxx>
@@ -288,7 +290,7 @@ void SwDocTest::testUserPerceivedCharCount()
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Surrogate Pair should be counted as single character", static_cast<sal_Int32>(1), nCount);
 }
 
-SwTextNode* getModelToViewTestDocument(SwDoc *pDoc)
+static SwTextNode* getModelToViewTestDocument(SwDoc *pDoc)
 {
     SwNodeIndex aIdx(pDoc->GetNodes().GetEndOfContent(), -1);
     SwPaM aPaM(aIdx);
@@ -333,7 +335,7 @@ SwTextNode* getModelToViewTestDocument(SwDoc *pDoc)
     return pTextNode;
 }
 
-SwTextNode* getModelToViewTestDocument2(SwDoc *pDoc)
+static SwTextNode* getModelToViewTestDocument2(SwDoc *pDoc)
 {
     getModelToViewTestDocument(pDoc);
 
@@ -361,7 +363,7 @@ void SwDocTest::testModelToViewHelperPassthrough()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::PassThrough);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr, ExpandMode::PassThrough);
     OUString sViewText = aModelToViewHelper.getViewText();
     OUString sModelText = pTextNode->GetText();
     CPPUNIT_ASSERT_EQUAL(sModelText, sViewText);
@@ -371,7 +373,8 @@ void SwDocTest::testModelToViewHelperExpandFieldsExpandFootnote()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields | ExpandMode::ExpandFootnote);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+            ExpandMode::ExpandFields | ExpandMode::ExpandFootnote);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
         OUString("AAAAA BBBBB foo CCCCC foo DDDDD"), sViewText);
@@ -381,7 +384,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsExpandFootnoteReplaceMode()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
             ExpandMode::ExpandFields | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
@@ -401,7 +404,7 @@ void SwDocTest::testModelToViewHelperExpandFields()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr, ExpandMode::ExpandFields);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
         OUString("AAAAA BBBBB  CCCCC  DDDDD"), sViewText);
@@ -411,7 +414,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsReplaceMode()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
         ExpandMode::ExpandFields | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(OUString("AAAAA BBBBB  CCCCC  DDDDD"),
@@ -426,7 +429,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideInvisible()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::HideInvisible);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr, ExpandMode::HideInvisible);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
         OUString("AAAAA CCCCC " + OUStringLiteral1(CH_TXTATR_BREAKWORD) + " DDDDD"),
@@ -437,7 +440,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideRedlined()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::HideDeletions);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr, ExpandMode::HideDeletions);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
         OUString("AAAABB " + OUStringLiteral1(CH_TXTATR_BREAKWORD) + " CCCCC " + OUStringLiteral1(CH_TXTATR_BREAKWORD) + " DDDDD"),
@@ -448,7 +451,8 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideInvisibleExpandFootnote()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::ExpandFootnote);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+        ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::ExpandFootnote);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(OUString("AAAAA CCCCC foo DDDDD"), sViewText);
 }
@@ -457,7 +461,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideInvisibleExpandFootnoteRepl
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
         ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
@@ -475,7 +479,8 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideHideRedlinedExpandFootnote(
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+        ExpandMode::ExpandFields | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
         OUString("AAAABB foo CCCCC foo DDDDD"), sViewText);
@@ -485,7 +490,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideHideRedlinedExpandFootnoteR
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
         ExpandMode::ExpandFields | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
@@ -505,7 +510,8 @@ void SwDocTest::testModelToViewHelperHideInvisibleHideRedlined()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::HideInvisible | ExpandMode::HideDeletions);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+        ExpandMode::HideInvisible | ExpandMode::HideDeletions);
     OUString sViewText = aModelToViewHelper.getViewText();
     OUStringBuffer aBuffer;
     aBuffer.append("AAAACCCCC ");
@@ -518,7 +524,8 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideInvisibleHideRedlinedExpand
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+        ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(OUString("AAAACCCCC foo DDDDD"), sViewText);
 }
@@ -527,7 +534,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsHideInvisibleHideRedlinedExpand
 {
     SwTextNode* pTextNode = getModelToViewTestDocument(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
         ExpandMode::ExpandFields | ExpandMode::HideInvisible | ExpandMode::HideDeletions | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(sViewText,
@@ -544,7 +551,8 @@ void SwDocTest::testModelToViewHelperExpandFieldsExpandFootnote2()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument2(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode, ExpandMode::ExpandFields | ExpandMode::ExpandFootnote);
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
+        ExpandMode::ExpandFields | ExpandMode::ExpandFootnote);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(OUString("AAAAABBBBBCCCCC"), sViewText);
 }
@@ -553,7 +561,7 @@ void SwDocTest::testModelToViewHelperExpandFieldsExpandFootnoteReplaceMode2()
 {
     SwTextNode* pTextNode = getModelToViewTestDocument2(m_pDoc);
 
-    ModelToViewHelper aModelToViewHelper(*pTextNode,
+    ModelToViewHelper aModelToViewHelper(*pTextNode, nullptr,
         ExpandMode::ExpandFields | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     OUString sViewText = aModelToViewHelper.getViewText();
     CPPUNIT_ASSERT_EQUAL(
@@ -748,7 +756,7 @@ void SwDocTest::testSwScanner()
         m_pDoc->getIDocumentContentOperations().InsertString(aPaM, aString);
         pTextNode = aPaM.GetNode().GetTextNode();
         pTextNode->CountWords(aDocStat, 0, pTextNode->Len());
-        CPPUNIT_ASSERT_EQUAL(aDocStat.nWord, static_cast<sal_uLong>(2));
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_uLong>(2), aDocStat.nWord);
 
         //turn on red-lining and show changes
         m_pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete|RedlineFlags::ShowInsert);
@@ -765,7 +773,7 @@ void SwDocTest::testSwScanner()
         aDocStat.Reset();
         pTextNode->SetWordCountDirty(true);
         pTextNode->CountWords(aDocStat, 0, pTextNode->Len()); //but word-counting the text should only count the non-deleted text
-        CPPUNIT_ASSERT_EQUAL(aDocStat.nWord, static_cast<sal_uLong>(1));
+        CPPUNIT_ASSERT_EQUAL(static_cast<sal_uLong>(1), aDocStat.nWord);
 
         pTextNode->SetWordCountDirty(true);
 
@@ -1040,11 +1048,19 @@ getRandomPosition(SwDoc *pDoc, int /* nOffset */)
 {
     const SwPosition aPos(pDoc->GetNodes().GetEndOfContent());
     size_t nNodes = aPos.nNode.GetNode().GetIndex() - aPos.nNode.GetNode().StartOfSectionIndex();
-    size_t n = comphelper::rng::uniform_size_distribution(0, nNodes);
+    // exclude body start/end node
+    size_t n = comphelper::rng::uniform_size_distribution(1, nNodes - 1);
     SwPaM pam(aPos);
     for (sal_uLong i = 0; i < n; ++i)
     {
         pam.Move(fnMoveBackward, GoInNode);
+    }
+    SwTextNode *const pTextNode(pam.GetPoint()->nNode.GetNode().GetTextNode());
+    assert(pTextNode);
+    int n2 = comphelper::rng::uniform_int_distribution(0, pTextNode->Len());
+    for (sal_Int32 i = 0; i < n2; ++i)
+    {
+        pam.Move(fnMoveBackward, GoInContent);
     }
     return *pam.GetPoint();
 }
@@ -1058,7 +1074,6 @@ void SwDocTest::randomTest()
         RedlineFlags::NONE,
         RedlineFlags::On | RedlineFlags::ShowMask,
         RedlineFlags::On | RedlineFlags::Ignore,
-        RedlineFlags::On | RedlineFlags::Ignore | RedlineFlags::ShowMask,
         RedlineFlags::On | RedlineFlags::ShowInsert,
         RedlineFlags::On | RedlineFlags::ShowDelete
     };
@@ -1068,6 +1083,7 @@ void SwDocTest::randomTest()
 
     for( size_t rlm = 0; rlm < SAL_N_ELEMENTS(modes); rlm++ )
     {
+        m_pDoc->GetIDocumentUndoRedo().DoUndo(true);
         m_pDoc->ClearDoc();
 
         // setup redlining
@@ -1076,15 +1092,31 @@ void SwDocTest::randomTest()
 
         for( int i = 0; i < 2000; i++ )
         {
-            SwCursor aCrs(getRandomPosition(m_pDoc, i/20), nullptr);
-            aCrs.SetMark();
+            std::shared_ptr<SwUnoCursor> pCrs(
+                m_pDoc->CreateUnoCursor(getRandomPosition(m_pDoc, i/20)));
 
             switch (getRand (i < 50 ? 3 : 6)) {
             // insert ops first
             case 0: {
-                if (!m_pDoc->getIDocumentContentOperations().InsertString(aCrs, getRandString())) {
-//                    fprintf (stderr, "failed to insert string !\n");
+                OUString const tmp(getRandString());
+                sal_Int32 current(0);
+                sal_Int32 nextBreak(tmp.indexOf('\n'));
+                do
+                {
+                    sal_Int32 const len((nextBreak == -1 ? tmp.getLength() : nextBreak - current));
+                    if (0 < len)
+                    {
+                        m_pDoc->getIDocumentContentOperations().InsertString(
+                            *pCrs, tmp.copy(current, len));
+                    }
+                    if (nextBreak != -1)
+                    {
+                        m_pDoc->getIDocumentContentOperations().SplitNode(*pCrs->GetPoint(), false);
+                        current = nextBreak + 1;
+                        nextBreak = tmp.indexOf('\n', current);
+                    }
                 }
+                while (nextBreak != -1);
                 break;
             }
             case 1:
@@ -1097,19 +1129,27 @@ void SwDocTest::randomTest()
 
             // movement / deletion ops later
             case 3: // deletion
+                pCrs->SetMark();
                 switch (getRand(6)) {
                 case 0:
-                    m_pDoc->getIDocumentContentOperations().DelFullPara(aCrs);
+                    *pCrs->GetMark() = getRandomPosition(m_pDoc, 42);
+                    m_pDoc->getIDocumentContentOperations().DelFullPara(*pCrs);
                     break;
                 case 1:
-                    m_pDoc->getIDocumentContentOperations().DeleteRange(aCrs);
+                    *pCrs->GetMark() = getRandomPosition(m_pDoc, 42);
+                    m_pDoc->getIDocumentContentOperations().DeleteRange(*pCrs);
                     break;
                 case 2:
-                    m_pDoc->getIDocumentContentOperations().DeleteAndJoin(aCrs, !!getRand(1));
+                    *pCrs->GetMark() = getRandomPosition(m_pDoc, 42);
+                    m_pDoc->getIDocumentContentOperations().DeleteAndJoin(*pCrs, !!getRand(1));
                     break;
                 case 3:
                 default:
-                    m_pDoc->getIDocumentContentOperations().Overwrite(aCrs, getRandString());
+                    OUString const tmp(getRandString());
+                    if (tmp.getLength())
+                    {
+                        m_pDoc->getIDocumentContentOperations().Overwrite(*pCrs, tmp);
+                    }
                     break;
                 }
                 break;
@@ -1122,7 +1162,7 @@ void SwDocTest::randomTest()
                            SwMoveFlags::REDLINES |
                            SwMoveFlags::NO_DELFRMS;
                 SwPosition aTo(getRandomPosition(m_pDoc, i/10));
-                m_pDoc->getIDocumentContentOperations().MoveRange(aCrs, aTo, nFlags);
+                m_pDoc->getIDocumentContentOperations().MoveRange(*pCrs, aTo, nFlags);
                 break;
             }
 
@@ -1717,24 +1757,24 @@ void SwDocTest::testIntrusiveRing()
     vRings.push_back(&aRing3);
     vRings.push_back(&aRing4);
     vRings.push_back(&aRing5);
-    CPPUNIT_ASSERT_EQUAL(aRing1.GetRingContainer().size(), static_cast<size_t>(1));
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aRing1.GetRingContainer().size());
     CPPUNIT_ASSERT(aRing1.lonely());
     CPPUNIT_ASSERT(aRing2.lonely());
     CPPUNIT_ASSERT(aRing3.lonely());
     aRing2.MoveTo(&aRing1);
     aRing3.MoveTo(&aRing1);
-    CPPUNIT_ASSERT_EQUAL(aRing1.GetRingContainer().size(), static_cast<size_t>(3));
-    CPPUNIT_ASSERT_EQUAL(aRing2.GetRingContainer().size(), static_cast<size_t>(3));
-    CPPUNIT_ASSERT_EQUAL(aRing3.GetRingContainer().size(), static_cast<size_t>(3));
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), aRing1.GetRingContainer().size());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), aRing2.GetRingContainer().size());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), aRing3.GetRingContainer().size());
     CPPUNIT_ASSERT(!aRing1.lonely());
     CPPUNIT_ASSERT(!aRing2.lonely());
     CPPUNIT_ASSERT(!aRing3.lonely());
     aRing5.MoveTo(&aRing4);
-    CPPUNIT_ASSERT_EQUAL(aRing4.GetRingContainer().size(), static_cast<size_t>(2));
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(2), aRing4.GetRingContainer().size());
     aRing4.GetRingContainer().merge(aRing1.GetRingContainer());
     for(TestRing* pRing : vRings)
     {
-        CPPUNIT_ASSERT_EQUAL(pRing->GetRingContainer().size(), static_cast<size_t>(5));
+        CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(5), pRing->GetRingContainer().size());
     }
     for(std::vector<TestRing*>::iterator ppRing = vRings.begin(); ppRing != vRings.end(); ++ppRing)
     {
@@ -1979,7 +2019,7 @@ void SwDocTest::test64kPageDescs()
 
 void SwDocTest::testTdf92308()
 {
-    CPPUNIT_ASSERT_EQUAL(m_pDoc->HasInvisibleContent(), false);
+    CPPUNIT_ASSERT_EQUAL(false, m_pDoc->HasInvisibleContent());
 }
 
 void SwDocTest::testTableCellComparison()

@@ -21,24 +21,25 @@
 #define INCLUDED_SC_INC_CHARTPOS_HXX
 
 #include "rangelst.hxx"
+#include <tools/solar.h>
 #include <memory>
 #include <map>
 
 // map of row number to ScAddress*
-typedef std::map<sal_uLong, ScAddress*> RowMap;
-// map of column number to RowMap*
-typedef std::map<sal_uLong, RowMap*>    ColumnMap;
+typedef std::map<sal_uLong, std::unique_ptr<ScAddress>> RowMap;
+// map of column number to RowMap
+typedef std::map<sal_uLong, RowMap>    ColumnMap;
 
 class ScChartPositionMap
 {
     friend class ScChartPositioner;
 
-            std::unique_ptr<ScAddress*[]> ppData;
-            std::unique_ptr<ScAddress*[]> ppColHeader;
-            std::unique_ptr<ScAddress*[]> ppRowHeader;
-            sal_uLong           nCount;
-            SCCOL               nColCount;
-            SCROW               nRowCount;
+            std::unique_ptr<std::unique_ptr<ScAddress>[]> ppData;
+            std::unique_ptr<std::unique_ptr<ScAddress>[]> ppColHeader;
+            std::unique_ptr<std::unique_ptr<ScAddress>[]> ppRowHeader;
+            sal_uLong const           nCount;
+            SCCOL const               nColCount;
+            SCROW const               nRowCount;
 
                                 ScChartPositionMap( SCCOL nChartCols, SCROW nChartRows,
                                     SCCOL nColAdd,      // header columns
@@ -64,7 +65,7 @@ public:
             const ScAddress*    GetPosition( sal_uLong nIndex ) const
                                     {
                                         if ( nIndex < nCount )
-                                            return ppData[ nIndex ];
+                                            return ppData[ nIndex ].get();
                                         return nullptr;
                                     }
 
@@ -72,19 +73,19 @@ public:
             const ScAddress*    GetPosition( SCCOL nChartCol, SCROW nChartRow ) const
                                     {
                                         if ( IsValid( nChartCol, nChartRow ) )
-                                            return ppData[ GetIndex( nChartCol, nChartRow ) ];
+                                            return ppData[ GetIndex( nChartCol, nChartRow ) ].get();
                                         return nullptr;
                                     }
             const ScAddress*    GetColHeaderPosition( SCCOL nChartCol ) const
                                     {
                                         if ( nChartCol < nColCount )
-                                            return ppColHeader[ nChartCol ];
+                                            return ppColHeader[ nChartCol ].get();
                                         return nullptr;
                                     }
             const ScAddress*    GetRowHeaderPosition( SCROW nChartRow ) const
                                     {
                                         if ( nChartRow < nRowCount )
-                                            return ppRowHeader[ nChartRow ];
+                                            return ppRowHeader[ nChartRow ].get();
                                         return nullptr;
                                     }
 };
@@ -102,7 +103,7 @@ class ScDocument;
 class ScChartPositioner final             // only parameter struct
 {
     ScRangeListRef  aRangeListRef;
-    ScDocument* pDocument;
+    ScDocument* const pDocument;
     std::unique_ptr<ScChartPositionMap> pPositionMap;
     ScChartGlue eGlue;
     SCCOL       nStartCol;

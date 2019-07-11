@@ -21,19 +21,18 @@
 #define INCLUDED_SC_INC_SCMOD_HXX
 
 #include "scdllapi.h"
-#include "scdll.hxx"
 #include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
 #include <svl/lstner.hxx>
+#include <sfx2/module.hxx>
 #include "global.hxx"
 #include "shellids.hxx"
 #include <unotools/options.hxx>
+#include <com/sun/star/uno/Reference.h>
 
-#include <algorithm>
 #include <vector>
 #include <map>
 #include <memory>
-#include <stack>
 
 class KeyEvent;
 class EditView;
@@ -43,6 +42,9 @@ class SvtCTLOptions;
 class SvtUserOptions;
 
 namespace svtools { class ColorConfig; }
+namespace ooo { namespace vba { class XSinkCaller; } }
+namespace com { namespace sun { namespace star { namespace uno { class Any; } } } }
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Sequence; } } } }
 
 class ScRange;
 class ScDocument;
@@ -77,26 +79,26 @@ class ScModule: public SfxModule, public SfxListener, public utl::ConfigurationL
 {
     Timer               m_aIdleTimer;
     Idle                m_aSpellIdle;
-    ScDragData*         m_pDragData;
+    std::unique_ptr<ScDragData> m_pDragData;
     ScSelectionTransferObj* m_pSelTransfer;
     ScMessagePool*      m_pMessagePool;
     // there is no global InputHandler anymore, each View has its own
     ScInputHandler*     m_pRefInputHandler;
-    ScViewCfg*          m_pViewCfg;
-    ScDocCfg*           m_pDocCfg;
-    ScAppCfg*           m_pAppCfg;
-    ScDefaultsCfg*      m_pDefaultsCfg;
-    ScFormulaCfg*       m_pFormulaCfg;
-    ScInputCfg*         m_pInputCfg;
-    ScPrintCfg*         m_pPrintCfg;
-    ScNavipiCfg*        m_pNavipiCfg;
-    ScAddInCfg*         m_pAddInCfg;
-    svtools::ColorConfig*   m_pColorConfig;
-    SvtAccessibilityOptions* m_pAccessOptions;
-    SvtCTLOptions*      m_pCTLOptions;
-    SvtUserOptions*     m_pUserOptions;
-    SfxErrorHandler*    m_pErrorHdl;
-    ScFormEditData*     m_pFormEditData;
+    std::unique_ptr<ScViewCfg>        m_pViewCfg;
+    std::unique_ptr<ScDocCfg>         m_pDocCfg;
+    std::unique_ptr<ScAppCfg>         m_pAppCfg;
+    std::unique_ptr<ScDefaultsCfg>    m_pDefaultsCfg;
+    std::unique_ptr<ScFormulaCfg>     m_pFormulaCfg;
+    std::unique_ptr<ScInputCfg>       m_pInputCfg;
+    std::unique_ptr<ScPrintCfg>       m_pPrintCfg;
+    std::unique_ptr<ScNavipiCfg>      m_pNavipiCfg;
+    std::unique_ptr<ScAddInCfg>       m_pAddInCfg;
+    std::unique_ptr<svtools::ColorConfig>    m_pColorConfig;
+    std::unique_ptr<SvtAccessibilityOptions> m_pAccessOptions;
+    std::unique_ptr<SvtCTLOptions>           m_pCTLOptions;
+    std::unique_ptr<SvtUserOptions>          m_pUserOptions;
+    std::unique_ptr<SfxErrorHandler>  m_pErrorHdl;
+    std::unique_ptr<ScFormEditData>   m_pFormEditData;
     sal_uInt16          m_nCurRefDlgId;
     bool                m_bIsWaterCan:1;
     bool                m_bIsInEditCommand:1;
@@ -105,6 +107,9 @@ class ScModule: public SfxModule, public SfxListener, public utl::ConfigurationL
     bool                m_bIsInSharedDocSaving:1;
 
     std::map<sal_uInt16, std::vector<VclPtr<vcl::Window> > > m_mapRefWindow;
+
+    css::uno::Reference< ooo::vba::XSinkCaller > mxAutomationApplicationEventsCaller;
+
 public:
                     SFX_DECL_INTERFACE(SCID_APP)
 
@@ -215,7 +220,7 @@ public:
 
     void                InitFormEditData();
     void                ClearFormEditData();
-    ScFormEditData*     GetFormEditData()       { return m_pFormEditData; }
+    ScFormEditData*     GetFormEditData()       { return m_pFormEditData.get(); }
 
     // input of reference:
     SC_DLLPUBLIC void   SetRefDialog( sal_uInt16 nId, bool bVis, SfxViewFrame* pViewFrm = nullptr );
@@ -233,7 +238,7 @@ public:
     virtual std::unique_ptr<SfxItemSet> CreateItemSet( sal_uInt16 nId ) override;
     virtual void         ApplyItemSet( sal_uInt16 nId, const SfxItemSet& rSet ) override;
     virtual VclPtr<SfxTabPage> CreateTabPage( sal_uInt16 nId, TabPageParent pParent, const SfxItemSet& rSet ) override;
-    virtual SfxStyleFamilies* CreateStyleFamilies() override;
+    virtual std::unique_ptr<SfxStyleFamilies> CreateStyleFamilies() override;
 
     void                SetInSharedDocLoading( bool bNew )  { m_bIsInSharedDocLoading = bNew; }
     bool                IsInSharedDocLoading() const        { return m_bIsInSharedDocLoading; }
@@ -243,6 +248,9 @@ public:
     SC_DLLPUBLIC void   RegisterRefWindow( sal_uInt16 nSlotId, vcl::Window *pWnd );
     SC_DLLPUBLIC void   UnregisterRefWindow( sal_uInt16 nSlotId, vcl::Window *pWnd );
     SC_DLLPUBLIC vcl::Window * Find1RefWindow( sal_uInt16 nSlotId, vcl::Window *pWndAncestor );
+
+    SC_DLLPUBLIC void RegisterAutomationApplicationEventsCaller(css::uno::Reference< ooo::vba::XSinkCaller > const& xCaller);
+    SC_DLLPUBLIC void CallAutomationApplicationEventSinks(const OUString& Method, css::uno::Sequence< css::uno::Any >& Arguments);
 };
 
 #define SC_MOD() ( static_cast<ScModule*>(SfxApplication::GetModule(SfxToolsModule::Calc)) )

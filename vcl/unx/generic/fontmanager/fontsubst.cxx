@@ -40,7 +40,7 @@ class FcGlyphFallbackSubstitution
 {
     // TODO: add a cache
 public:
-    bool FindFontSubstitute( FontSelectPattern&, OUString& rMissingCodes ) const override;
+    bool FindFontSubstitute(FontSelectPattern&, LogicalFontInstance* pLogicalFont, OUString& rMissingCodes) const override;
 };
 
 void SalGenericInstance::RegisterFontSubstitutors( PhysicalFontCollection* pFontCollection )
@@ -54,7 +54,7 @@ void SalGenericInstance::RegisterFontSubstitutors( PhysicalFontCollection* pFont
     pFontCollection->SetFallbackHook( &aSubstFallback );
 }
 
-static FontSelectPattern GetFcSubstitute(const FontSelectPattern &rFontSelData, OUString& rMissingCodes )
+static FontSelectPattern GetFcSubstitute(const FontSelectPattern &rFontSelData, OUString& rMissingCodes)
 {
     FontSelectPattern aSubstituted(rFontSelData);
     psp::PrintFontManager& rMgr = psp::PrintFontManager::get();
@@ -90,7 +90,7 @@ namespace
     };
 }
 
-bool FcPreMatchSubstitution::FindFontSubstitute( FontSelectPattern &rFontSelData ) const
+bool FcPreMatchSubstitution::FindFontSubstitute(FontSelectPattern &rFontSelData) const
 {
     // We don't actually want to talk to Fontconfig at all for symbol fonts
     if( rFontSelData.IsSymbolFont() )
@@ -110,7 +110,7 @@ bool FcPreMatchSubstitution::FindFontSubstitute( FontSelectPattern &rFontSelData
     if (itr != rCachedFontMap.end())
     {
         // Cached substitution
-        rFontSelData.copyAttributes(itr->second);
+        rFontSelData = itr->second;
         if (itr != rCachedFontMap.begin())
         {
             // MRU, move it to the front
@@ -155,7 +155,8 @@ bool FcPreMatchSubstitution::FindFontSubstitute( FontSelectPattern &rFontSelData
     return bHaveSubstitute;
 }
 
-bool FcGlyphFallbackSubstitution::FindFontSubstitute( FontSelectPattern& rFontSelData,
+bool FcGlyphFallbackSubstitution::FindFontSubstitute(FontSelectPattern& rFontSelData,
+    LogicalFontInstance* /*pLogicalFont*/,
     OUString& rMissingCodes ) const
 {
     // We don't actually want to talk to Fontconfig at all for symbol fonts

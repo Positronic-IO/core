@@ -161,12 +161,11 @@ void TrueTypeCreatorNewEmpty(sal_uInt32 tag, TrueTypeCreator **_this)
     *_this = ptr;
 }
 
-int AddTable(TrueTypeCreator *_this, TrueTypeTable *table)
+void AddTable(TrueTypeCreator *_this, TrueTypeTable *table)
 {
     if (table != nullptr) {
         listAppend(_this->tables, table);
     }
-    return SF_OK;
 }
 
 void RemoveTable(TrueTypeCreator *_this, sal_uInt32 tag)
@@ -193,14 +192,14 @@ void RemoveTable(TrueTypeCreator *_this, sal_uInt32 tag)
 
 static void ProcessTables(TrueTypeCreator *);
 
-int StreamToMemory(TrueTypeCreator *_this, sal_uInt8 **ptr, sal_uInt32 *length)
+SFErrCodes StreamToMemory(TrueTypeCreator *_this, sal_uInt8 **ptr, sal_uInt32 *length)
 {
     sal_uInt16 searchRange=1, entrySelector=0, rangeShift;
     sal_uInt32 s, offset, checkSumAdjustment = 0;
     sal_uInt32 *p;
     sal_uInt8 *head = nullptr;     /* saved pointer to the head table data for checkSumAdjustment calculation */
 
-    if (listIsEmpty(_this->tables)) return SF_TTFORMAT;
+    if (listIsEmpty(_this->tables)) return SFErrCodes::TtFormat;
 
     ProcessTables(_this);
 
@@ -269,29 +268,29 @@ int StreamToMemory(TrueTypeCreator *_this, sal_uInt8 **ptr, sal_uInt32 *length)
     *ptr = ttf;
     *length = s;
 
-    return SF_OK;
+    return SFErrCodes::Ok;
 }
 
-int StreamToFile(TrueTypeCreator *_this, const char* fname)
+SFErrCodes StreamToFile(TrueTypeCreator *_this, const char* fname)
 {
     sal_uInt8 *ptr;
     sal_uInt32 length;
-    int r;
+    SFErrCodes r;
     FILE* fd;
 
-    if ((r = StreamToMemory(_this, &ptr, &length)) != SF_OK) return r;
+    if ((r = StreamToMemory(_this, &ptr, &length)) != SFErrCodes::Ok) return r;
     if (fname && (fd = fopen(fname, "wb")) != nullptr)
     {
         if (fwrite(ptr, 1, length, fd) != length) {
-            r = SF_FILEIO;
+            r = SFErrCodes::FileIo;
         } else {
-            r = SF_OK;
+            r = SFErrCodes::Ok;
         }
         fclose(fd);
     }
     else
     {
-        r = SF_BADFILE;
+        r = SFErrCodes::BadFile;
     }
     free(ptr);
     return r;
@@ -480,7 +479,7 @@ static void TrueTypeTableDispose_post(TrueTypeTable *_this)
 static struct {
     sal_uInt32 tag;
     void (*f)(TrueTypeTable *);
-} vtable1[] =
+} const vtable1[] =
 {
     {0,      TrueTypeTableDispose_generic},
     {T_head, TrueTypeTableDispose_head},
@@ -801,7 +800,7 @@ static int GetRawData_post(TrueTypeTable *_this, sal_uInt8 **ptr, sal_uInt32 *le
 static struct {
     sal_uInt32 tag;
     int (*f)(TrueTypeTable *, sal_uInt8 **, sal_uInt32 *, sal_uInt32 *);
-} vtable2[] =
+} const vtable2[] =
 {
     {0,      GetRawData_generic},
     {T_head, GetRawData_head},
@@ -1048,8 +1047,6 @@ TrueTypeTable *TrueTypeTableNew_post(sal_uInt32 format,
 int GetRawData(TrueTypeTable *_this, sal_uInt8 **ptr, sal_uInt32 *len, sal_uInt32 *tag)
 {
     /* XXX do a binary search */
-    unsigned int i;
-
     assert(_this != nullptr);
     assert(ptr != nullptr);
     assert(len != nullptr);
@@ -1062,7 +1059,7 @@ int GetRawData(TrueTypeTable *_this, sal_uInt8 **ptr, sal_uInt32 *len, sal_uInt3
         _this->rawdata = nullptr;
     }
 
-    for(i=0; i < SAL_N_ELEMENTS(vtable2); i++) {
+    for(size_t i=0; i < SAL_N_ELEMENTS(vtable2); i++) {
         if (_this->tag == vtable2[i].tag) {
             return vtable2[i].f(_this, ptr, len, tag);
         }
@@ -1444,13 +1441,11 @@ extern "C"
     {
         vcl::TrueTypeTable *_this = static_cast<vcl::TrueTypeTable *>(arg);
         /* XXX do a binary search */
-        unsigned int i;
-
         assert(_this != nullptr);
 
         if (_this->rawdata) free(_this->rawdata);
 
-        for(i=0; i < SAL_N_ELEMENTS(vcl::vtable1); i++) {
+        for(size_t i=0; i < SAL_N_ELEMENTS(vcl::vtable1); i++) {
             if (_this->tag == vcl::vtable1[i].tag) {
                 vcl::vtable1[i].f(_this);
                 return;

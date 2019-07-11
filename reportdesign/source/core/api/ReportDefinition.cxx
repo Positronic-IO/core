@@ -88,12 +88,10 @@
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/genericpropertyset.hxx>
 #include <unotools/mediadescriptor.hxx>
-#include <comphelper/mimeconfighelper.hxx>
 #include <comphelper/namecontainer.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/numberedcollection.hxx>
 #include <comphelper/proparrhlp.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <comphelper/propertystatecontainer.hxx>
 #include <comphelper/seqstream.hxx>
@@ -107,6 +105,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/interfacecontainer.h>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/typeprovider.hxx>
 #include <dbaccess/dbaundomanager.hxx>
 #include <editeng/paperinf.hxx>
 #include <framework/titlehelper.hxx>
@@ -188,10 +187,9 @@
 namespace reportdesign
 {
     using namespace com::sun::star;
-    using namespace comphelper;
     using namespace rptui;
 
-void lcl_setModelReadOnly(const uno::Reference< embed::XStorage >& _xStorage,std::shared_ptr<rptui::OReportModel> const & _rModel)
+static void lcl_setModelReadOnly(const uno::Reference< embed::XStorage >& _xStorage,std::shared_ptr<rptui::OReportModel> const & _rModel)
 {
     uno::Reference<beans::XPropertySet> xProp(_xStorage,uno::UNO_QUERY);
     sal_Int32 nOpenMode = embed::ElementModes::READ;
@@ -200,7 +198,7 @@ void lcl_setModelReadOnly(const uno::Reference< embed::XStorage >& _xStorage,std
 
     _rModel->SetReadOnly((nOpenMode & embed::ElementModes::WRITE) != embed::ElementModes::WRITE);
 }
-void lcl_stripLoadArguments( utl::MediaDescriptor& _rDescriptor, uno::Sequence< beans::PropertyValue >& _rArgs )
+static void lcl_stripLoadArguments( utl::MediaDescriptor& _rDescriptor, uno::Sequence< beans::PropertyValue >& _rArgs )
 {
     _rDescriptor.erase( OUString( "StatusIndicator" ) );
     _rDescriptor.erase( OUString( "InteractionHandler" ) );
@@ -208,7 +206,7 @@ void lcl_stripLoadArguments( utl::MediaDescriptor& _rDescriptor, uno::Sequence< 
     _rDescriptor >> _rArgs;
 }
 
-void lcl_extractAndStartStatusIndicator( const utl::MediaDescriptor& _rDescriptor, uno::Reference< task::XStatusIndicator >& _rxStatusIndicator,
+static void lcl_extractAndStartStatusIndicator( const utl::MediaDescriptor& _rDescriptor, uno::Reference< task::XStatusIndicator >& _rxStatusIndicator,
     uno::Sequence< uno::Any >& _rCallArgs )
 {
     try
@@ -303,7 +301,7 @@ OStyle::OStyle()
     registerPropertyNoMember(SC_UNO_PAGE_FTRBACKCOL,  ++i,nBound, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny(COL_TRANSPARENT));
     registerPropertyNoMember(SC_UNO_PAGE_FTRGRFFILT,  ++i,nBound, cppu::UnoType<OUString>::get(), css::uno::Any(OUString()));
     registerPropertyNoMember(SC_UNO_PAGE_FTRGRFLOC,   ++i,nBound, cppu::UnoType<style::GraphicLocation>::get(), css::uno::Any(style::GraphicLocation_NONE));
-    registerPropertyNoMember(SC_UNO_PAGE_FTRGRF,      ++i,nBound, cppu::UnoType<graphic::XGraphic>::get(), css::uno::Any(uno::Reference<graphic::XGraphic>()));
+    registerPropertyNoMember(SC_UNO_PAGE_FTRGRF,      ++i,nBound|nMayBeVoid, cppu::UnoType<graphic::XGraphic>::get(), css::uno::Any(uno::Reference<graphic::XGraphic>()));
     registerPropertyNoMember(SC_UNO_PAGE_FTRBACKTRAN, ++i,nBound,cppu::UnoType<bool>::get(), css::uno::Any(true));
     registerPropertyNoMember(SC_UNO_PAGE_FTRBODYDIST, ++i,nBound, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny<sal_Int32>(0));
     registerPropertyNoMember(SC_UNO_PAGE_FTRBRDDIST,  ++i,nBound, cppu::UnoType<sal_Int32>::get(), css::uno::makeAny<sal_Int32>(0));
@@ -592,7 +590,7 @@ void OReportDefinition::init()
         m_pImpl->m_pReportModel->GetItemPool().FreezeIdRanges();
         m_pImpl->m_pReportModel->SetScaleUnit( MapUnit::Map100thMM );
         SdrLayerAdmin& rAdmin = m_pImpl->m_pReportModel->GetLayerAdmin();
-        rAdmin.NewStandardLayer(sal_uInt8(RPT_LAYER_FRONT));
+        rAdmin.NewLayer("front", sal_uInt8(RPT_LAYER_FRONT));
         rAdmin.NewLayer("back", sal_uInt8(RPT_LAYER_BACK));
         rAdmin.NewLayer("HiddenLayer", sal_uInt8(RPT_LAYER_HIDDEN));
 
@@ -706,7 +704,7 @@ uno::Sequence< OUString > SAL_CALL OReportDefinition::getSupportedServiceNames( 
         aSupported = m_aProps->m_xServiceInfo->getSupportedServiceNames();
 
     // append our own service, if necessary
-    if ( 0 == ::comphelper::findValue( aSupported, SERVICE_REPORTDEFINITION, true ).getLength() )
+    if ( ::comphelper::findValue( aSupported, SERVICE_REPORTDEFINITION ) == -1 )
     {
         sal_Int32 nLen = aSupported.getLength();
         aSupported.realloc( nLen + 1 );
@@ -1301,8 +1299,6 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
     uno::Sequence < beans::PropertyValue > aProps;
 
     // export sub streams for package, else full stream into a file
-    bool bErr = false;
-
     uno::Reference< beans::XPropertySet> xProp(_xStorageToSaveTo,uno::UNO_QUERY);
     if ( xProp.is() )
     {
@@ -1351,44 +1347,23 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
     aDelegatorArguments[nArgsLen++] <<= xObjectResolver;
 
     uno::Reference<XComponent> xCom(static_cast<OWeakObject*>(this),uno::UNO_QUERY);
-    if( !bErr )
-    {
-        xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("settings.xml")));
-        WriteThroughComponent(
-            xCom, "settings.xml",
-            "com.sun.star.comp.report.XMLSettingsExporter",
-            aDelegatorArguments, aProps, _xStorageToSaveTo );
-    }
+    // Try to write to settings.xml, meta.xml, and styles.xml; only really care about success of
+    // write to content.xml (keeping logic of commit 94ccba3eebc83b58e74e18f0e028c6a995ce6aa6)
+    xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("settings.xml")));
+    WriteThroughComponent(xCom, "settings.xml", "com.sun.star.comp.report.XMLSettingsExporter",
+                          aDelegatorArguments, aProps, _xStorageToSaveTo);
 
-    if( !bErr )
-    {
-        xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("meta.xml")));
-        WriteThroughComponent(
-            xCom, "meta.xml",
-            "com.sun.star.comp.report.XMLMetaExporter",
-            aDelegatorArguments, aProps, _xStorageToSaveTo );
-    }
+    xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("meta.xml")));
+    WriteThroughComponent(xCom, "meta.xml", "com.sun.star.comp.report.XMLMetaExporter",
+                          aDelegatorArguments, aProps, _xStorageToSaveTo);
 
-    if( !bErr )
-    {
-        xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("styles.xml")));
-        WriteThroughComponent(
-            xCom, "styles.xml",
-            "com.sun.star.comp.report.XMLStylesExporter",
-            aDelegatorArguments, aProps, _xStorageToSaveTo );
-    }
+    xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("styles.xml")));
+    WriteThroughComponent(xCom, "styles.xml", "com.sun.star.comp.report.XMLStylesExporter",
+                          aDelegatorArguments, aProps, _xStorageToSaveTo);
 
-    if ( !bErr )
-    {
-        xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("content.xml")));
-        if( !WriteThroughComponent(
-                xCom, "content.xml",
-                "com.sun.star.comp.report.ExportFilter",
-                aDelegatorArguments, aProps, _xStorageToSaveTo ) )
-        {
-            bErr = true;
-        }
-    }
+    xInfoSet->setPropertyValue("StreamName", uno::makeAny(OUString("content.xml")));
+    bool bOk = WriteThroughComponent(xCom, "content.xml", "com.sun.star.comp.report.ExportFilter",
+                                     aDelegatorArguments, aProps, _xStorageToSaveTo);
 
     uno::Any aImage;
     uno::Reference< embed::XVisualObject > xCurrentController(getCurrentController(),uno::UNO_QUERY);
@@ -1405,7 +1380,7 @@ void SAL_CALL OReportDefinition::storeToStorage( const uno::Reference< embed::XS
         m_pImpl->m_pObjectContainer->InsertGraphicStreamDirectly(xStream, "report", "image/png");
     }
 
-    if ( !bErr )
+    if (bOk)
     {
         bool bPersist = false;
         if ( _xStorageToSaveTo == m_pImpl->m_xStorage )
@@ -1647,12 +1622,15 @@ void SAL_CALL OReportDefinition::load( const uno::Sequence< beans::PropertyValue
         catch (const uno::Exception&)
         {
             if ( i == nLastOpenMode )
+            {
+                css::uno::Any anyEx = cppu::getCaughtException();
                 throw lang::WrappedTargetException(
                     "An error occurred while creating the document storage.",
                         // TODO: resource
                     *this,
-                    ::cppu::getCaughtException()
+                    anyEx
                 );
+            }
         }
     }
 
@@ -2261,7 +2239,7 @@ class OStylesHelper:
     typedef ::std::map< OUString, uno::Any  , ::comphelper::UStringMixLess> TStyleElements;
     TStyleElements                                  m_aElements;
     ::std::vector<TStyleElements::iterator>         m_aElementsPos;
-    uno::Type                                       m_aType;
+    uno::Type const                                 m_aType;
 
 protected:
     virtual ~OStylesHelper() override {}

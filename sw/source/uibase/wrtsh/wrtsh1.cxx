@@ -56,6 +56,7 @@
 #include <fmtftn.hxx>
 #include <fmthdft.hxx>
 #include <fmtpdsc.hxx>
+#include <txtfrm.hxx>
 #include <wdocsh.hxx>
 #include <basesh.hxx>
 #include <swmodule.hxx>
@@ -100,7 +101,6 @@
 #include <FrameControlsManager.hxx>
 
 #include <sfx2/msgpool.hxx>
-#include <comphelper/lok.hxx>
 #include <svtools/embedhlp.hxx>
 #include <memory>
 
@@ -114,7 +114,6 @@ using namespace com::sun::star;
         m_fnKillSel(&SwWrtShell::Ignore),\
         m_pModeStack(nullptr), \
         m_ePageMove(MV_NO),\
-        m_pCursorStack(nullptr),  \
         m_rView(rShell),\
         m_aNavigationMgr(*this), \
         m_bDestOnStack(false)
@@ -470,7 +469,7 @@ bool SwWrtShell::InsertOleObject( const svt::EmbeddedObjectRef& xRef, SwFlyFrame
         if( bStarMath )
         {
             OUString aMathData;
-            GetSelectedText( aMathData, GETSELTXT_PARABRK_TO_ONLYCR );
+            GetSelectedText( aMathData, ParaBreakType::ToOnlyCR );
 
             if( !aMathData.isEmpty() && svt::EmbeddedObjectRef::TryRunningState( xRef.GetObject() ) )
             {
@@ -1028,8 +1027,8 @@ void SwWrtShell::NumOrBulletOn(bool bNum)
                 // check, if text node at current cursor positioned is counted.
                 // If not, let it been counted. Then it has to be checked,
                 // of the outline numbering has to be activated or continued.
-                SwTextNode* pTextNode =
-                            GetCursor()->GetPoint()->nNode.GetNode().GetTextNode();
+                SwTextNode const*const pTextNode = sw::GetParaPropsNode(
+                        *GetLayout(), GetCursor()->GetPoint()->nNode);
                 if ( pTextNode && !pTextNode->IsCountedInList() )
                 {
                     // check, if numbering of the outline level of the paragraph
@@ -1124,7 +1123,7 @@ void SwWrtShell::NumOrBulletOn(bool bNum)
     {
         pNumRule = GetDoc()->SearchNumRule( *GetCursor()->GetPoint(),
                                             false, bNum, false, 0,
-                                            sContinuedListId );
+                                            sContinuedListId, GetLayout() );
         bContinueFoundNumRule = pNumRule != nullptr;
     }
 
@@ -1135,7 +1134,8 @@ void SwWrtShell::NumOrBulletOn(bool bNum)
         // do not change found numbering/bullet rule, if it should only be continued.
         if ( !bContinueFoundNumRule )
         {
-            SwTextNode * pTextNode = GetCursor()->GetPoint()->nNode.GetNode().GetTextNode();
+            SwTextNode const*const pTextNode = sw::GetParaPropsNode(
+                    *GetLayout(), GetCursor()->GetPoint()->nNode);
 
             if (pTextNode)
             {
@@ -1199,7 +1199,8 @@ void SwWrtShell::NumOrBulletOn(bool bNum)
             pChrFormat = GetCharFormatFromPool( RES_POOLCHR_BUL_LEVEL );
         }
 
-        const SwTextNode* pTextNode = GetCursor()->GetPoint()->nNode.GetNode().GetTextNode();
+        const SwTextNode *const pTextNode = sw::GetParaPropsNode(*GetLayout(),
+                GetCursor()->GetPoint()->nNode);
         const SwTwips nWidthOfTabs = pTextNode
                                      ? pTextNode->GetWidthOfLeadingTabs()
                                      : 0;
@@ -1274,7 +1275,7 @@ void SwWrtShell::NumOrBulletOn(bool bNum)
                     if (nLevel >= MAXLEVEL)
                         nLevel = MAXLEVEL - 1;
 
-                    const SwNumFormat aFormat( aNumRule.Get( nLevel ) );
+                    const SwNumFormat& aFormat( aNumRule.Get( nLevel ) );
                     if ( aFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
                     {
                         nIndentChange -= aFormat.GetIndentAt() + aFormat.GetFirstLineIndent();
@@ -1308,7 +1309,7 @@ void SwWrtShell::NumOrBulletOff()
             SwNumRule aNumRule(*pCurNumRule);
 
             SwTextNode * pTextNode =
-                GetCursor()->GetPoint()->nNode.GetNode().GetTextNode();
+                sw::GetParaPropsNode(*GetLayout(), GetCursor()->GetPoint()->nNode);
 
             if (pTextNode)
             {
@@ -1415,7 +1416,7 @@ SelectionType SwWrtShell::GetSelectionType() const
     if ( pNumRule )
     {
         const SwTextNode* pTextNd =
-            GetCursor()->GetPoint()->nNode.GetNode().GetTextNode();
+            sw::GetParaPropsNode(*GetLayout(), GetCursor()->GetPoint()->nNode);
 
         if ( pTextNd && pTextNd->IsInList() )
         {
@@ -1731,7 +1732,7 @@ OUString SwWrtShell::GetSelDescr() const
         }
         break;
     default:
-        if (mxDoc.get())
+        if (mxDoc)
             aResult = GetCursorDescr();
     }
 

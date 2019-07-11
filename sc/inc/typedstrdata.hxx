@@ -11,7 +11,6 @@
 #define INCLUDED_SC_INC_TYPEDSTRDATA_HXX
 
 #include <rtl/ustring.hxx>
-#include "scdllapi.h"
 
 #include <set>
 
@@ -65,8 +64,8 @@ private:
 
 class FindTypedStrData
 {
-    ScTypedStrData maVal;
-    bool mbCaseSens;
+    ScTypedStrData const maVal;
+    bool const mbCaseSens;
 public:
     FindTypedStrData(const ScTypedStrData& rVal, bool bCaseSens);
     bool operator() (const ScTypedStrData& r) const;

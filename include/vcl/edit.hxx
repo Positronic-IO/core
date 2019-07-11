@@ -22,7 +22,6 @@
 
 #include <vcl/ctrl.hxx>
 
-#include <functional>
 #include <memory>
 
 #include <o3tl/deleter.hxx>
@@ -88,6 +87,7 @@ private:
     sal_Int32           mnMaxWidthChars;
     sal_Unicode         mcEchoChar;
     bool                mbModified:1,
+                        mbSelectAllSingleClick:1,
                         mbInternModified:1,
                         mbReadOnly:1,
                         mbInsertMode:1,
@@ -99,7 +99,7 @@ private:
     Link<Edit&,void>    maModifyHdl;
     Link<Edit&,void>    maUpdateDataHdl;
     Link<Edit&,void>    maAutocompleteHdl;
-    Link<Edit&,void>    maActivateHdl;
+    Link<Edit&,bool>    maActivateHdl;
     std::unique_ptr<VclBuilder> mpUIBuilder;
 
     css::uno::Reference<css::i18n::XExtendedInputSequenceChecker> mxISC;
@@ -117,7 +117,7 @@ private:
     SAL_DLLPRIVATE void        ImplInsertText( const OUString& rStr, const Selection* pNewSelection = nullptr, bool bIsUserInput = false );
     SAL_DLLPRIVATE static OUString ImplGetValidString( const OUString& rString );
     SAL_DLLPRIVATE void        ImplClearBackground(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRectangle, long nXStart, long nXEnd);
-    SAL_DLLPRIVATE void        ImplPaintBorder(vcl::RenderContext const & rRenderContext);
+    SAL_DLLPRIVATE void        ImplPaintBorder(vcl::RenderContext& rRenderContext);
     SAL_DLLPRIVATE void        ImplShowCursor( bool bOnlyIfVisible = true );
     SAL_DLLPRIVATE void        ImplAlign();
     SAL_DLLPRIVATE void        ImplAlignAndPaint();
@@ -201,6 +201,9 @@ public:
     virtual void        SetReadOnly( bool bReadOnly = true );
     virtual bool        IsReadOnly() const { return mbReadOnly; }
 
+    void                SetSelectAllSingleClick( bool bSelectAllSingleClick );
+    bool                IsSelectAllSingleClick() const { return mbSelectAllSingleClick; }
+
     void                SetInsertMode( bool bInsert );
     bool                IsInsertMode() const;
 
@@ -208,6 +211,7 @@ public:
     virtual sal_Int32   GetMaxTextLen() const { return mnMaxTextLen; }
 
     void                SetWidthInChars(sal_Int32 nWidthInChars);
+    sal_Int32           GetWidthInChars() const { return mnWidthInChars; }
 
     void                setMaxWidthChars(sal_Int32 nWidth);
 
@@ -240,7 +244,7 @@ public:
     virtual const Link<Edit&,void>& GetModifyHdl() const { return maModifyHdl; }
     virtual void        SetUpdateDataHdl( const Link<Edit&,void>& rLink ) { maUpdateDataHdl = rLink; }
 
-    void                SetActivateHdl(const Link<Edit&,void>& rLink) { maActivateHdl = rLink; }
+    void                SetActivateHdl(const Link<Edit&,bool>& rLink) { maActivateHdl = rLink; }
 
     void                SetSubEdit( Edit* pEdit );
     Edit*               GetSubEdit() const { return mpSubEdit; }

@@ -32,6 +32,10 @@
 
 struct  BitmapBuffer;
 class   BitmapPalette;
+namespace vcl
+{
+    class Kernel;
+}
 
 class VCL_PLUGIN_PUBLIC OpenGLSalBitmap : public SalBitmap
 {
@@ -81,7 +85,7 @@ public:
 
 public:
 
-    bool            Create( const OpenGLTexture& rTex, long nX, long nY, long nWidth, long nHeight );
+    void            Create( const OpenGLTexture& rTex, long nX, long nY, long nWidth, long nHeight );
     OpenGLTexture&  GetTexture() const;
     const BitmapPalette& GetBitmapPalette() const { return maPalette; }
 

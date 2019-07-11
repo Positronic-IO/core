@@ -68,6 +68,7 @@ namespace com{ namespace sun{ namespace star{ namespace scanner{
 }}}}
 namespace com { namespace sun { namespace star { namespace linguistic2 { class XLanguageGuessing; } } } }
 namespace com { namespace sun { namespace star { namespace linguistic2 { class XLinguServiceEventListener; } } } }
+namespace ooo { namespace vba { class XSinkCaller; } }
 
 class SW_DLLPUBLIC SwModule final : public SfxModule, public SfxListener, public utl::ConfigurationListener
 {
@@ -90,7 +91,7 @@ class SW_DLLPUBLIC SwModule final : public SfxModule, public SfxListener, public
     SvtCTLOptions*      m_pCTLOptions;
     SvtUserOptions*     m_pUserOptions;
 
-    SfxErrorHandler*    m_pErrorHandler;
+    std::unique_ptr<SfxErrorHandler> m_pErrorHandler;
 
     SwAttrPool          *m_pAttrPool;
 
@@ -118,6 +119,8 @@ class SW_DLLPUBLIC SwModule final : public SfxModule, public SfxListener, public
     // Envelopes, labels.
     void                InsertEnv(SfxRequest&);
     void                InsertLab(SfxRequest&, bool bLabel);
+
+    css::uno::Reference< ooo::vba::XSinkCaller > mxAutomationApplicationEventsCaller;
 
 public:
     // public Data - used for internal Clipboard / Drag & Drop / XSelection
@@ -223,7 +226,7 @@ public:
     virtual std::unique_ptr<SfxItemSet> CreateItemSet( sal_uInt16 nId ) override;
     virtual void         ApplyItemSet( sal_uInt16 nId, const SfxItemSet& rSet ) override;
     virtual VclPtr<SfxTabPage> CreateTabPage( sal_uInt16 nId, TabPageParent pParent, const SfxItemSet& rSet ) override;
-    virtual SfxStyleFamilies* CreateStyleFamilies() override;
+    virtual std::unique_ptr<SfxStyleFamilies> CreateStyleFamilies() override;
 
     // Pool is created here and set at SfxShell.
     void    InitAttrPool();
@@ -234,22 +237,15 @@ public:
     static void  CheckSpellChanges( bool bOnlineSpelling,
                     bool bIsSpellWrongAgain, bool bIsSpellAllAgain, bool bSmartTags );
 
-    inline const css::uno::Reference< css::linguistic2::XLinguServiceEventListener >&
-            GetLngSvcEvtListener();
-    void    CreateLngSvcEvtListener();
-
     css::uno::Reference< css::scanner::XScannerManager2 > const &
             GetScannerManager();
 
     css::uno::Reference< css::linguistic2::XLanguageGuessing > const &
             GetLanguageGuesser();
-};
 
-inline const css::uno::Reference< css::linguistic2::XLinguServiceEventListener >&
-        SwModule::GetLngSvcEvtListener()
-{
-    return m_xLinguServiceEventListener;
-}
+    void RegisterAutomationApplicationEventsCaller(css::uno::Reference< ooo::vba::XSinkCaller > const& xCaller);
+    void CallAutomationApplicationEventSinks(const OUString& Method, css::uno::Sequence< css::uno::Any >& Arguments);
+};
 
 //    Access to SwModule, the View and the shell.
 

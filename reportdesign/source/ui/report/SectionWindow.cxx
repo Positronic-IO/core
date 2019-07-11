@@ -165,7 +165,10 @@ void OSectionWindow::_propertyChanged(const beans::PropertyChangeEvent& _rEvent)
     }
 }
 
-bool OSectionWindow::setReportSectionTitle(const uno::Reference< report::XReportDefinition>& _xReport,const char* pResId,::std::function<uno::Reference<report::XSection>(OReportHelper *)> _pGetSection, const ::std::function<bool(OReportHelper *)>& _pIsSectionOn)
+bool OSectionWindow::setReportSectionTitle(
+    const uno::Reference<report::XReportDefinition>& _xReport, const char* pResId,
+    const ::std::function<uno::Reference<report::XSection>(OReportHelper*)>& _pGetSection,
+    const ::std::function<bool(OReportHelper*)>& _pIsSectionOn)
 {
     OReportHelper aReportHelper(_xReport);
     const bool bRet = _pIsSectionOn(&aReportHelper) && _pGetSection(&aReportHelper) == m_aReportSection->getSection();
@@ -178,7 +181,10 @@ bool OSectionWindow::setReportSectionTitle(const uno::Reference< report::XReport
     return bRet;
 }
 
-bool OSectionWindow::setGroupSectionTitle(const uno::Reference< report::XGroup>& _xGroup,const char* pResId,::std::function<uno::Reference<report::XSection>(OGroupHelper *)> _pGetSection, const ::std::function<bool(OGroupHelper *)>& _pIsSectionOn)
+bool OSectionWindow::setGroupSectionTitle(
+    const uno::Reference<report::XGroup>& _xGroup, const char* pResId,
+    const ::std::function<uno::Reference<report::XSection>(OGroupHelper*)>& _pGetSection,
+    const ::std::function<bool(OGroupHelper*)>& _pIsSectionOn)
 {
     OGroupHelper aGroupHelper(_xGroup);
     const bool bRet = _pIsSectionOn(&aGroupHelper) && _pGetSection(&aGroupHelper) == m_aReportSection->getSection() ;
@@ -352,13 +358,13 @@ IMPL_LINK( OSectionWindow, SplitHdl, Splitter*, _pSplitter, void )
     m_aSplitter->SetSplitPosPixel(m_aSplitter->LogicToPixel(Size(0,nSplitPos)).Height());
 }
 
-void lcl_scroll(vcl::Window& _rWindow,const Point& _aDelta)
+static void lcl_scroll(vcl::Window& _rWindow,const Point& _aDelta)
 {
     _rWindow.Scroll(-_aDelta.X(),-_aDelta.Y());
     _rWindow.Invalidate(InvalidateFlags::Transparent);
 }
 
-void lcl_setOrigin(vcl::Window& _rWindow,long _nX, long _nY)
+static void lcl_setOrigin(vcl::Window& _rWindow,long _nX, long _nY)
 {
     MapMode aMap = _rWindow.GetMapMode();
     aMap.SetOrigin( Point(- _nX, - _nY));

@@ -181,6 +181,7 @@
 #define FN_SCROLL_NEXT          (FN_VIEW + 58)  /* uno:ScrollToNext */
 #define FN_VIEW_HIDE_WHITESPACE (FN_VIEW + 59)  /* Hide header, footer, and pagebreak */
 #define FN_SHOW_INLINETOOLTIPS  (FN_VIEW + 60)  /* Show tooltips for tracked changes */
+#define FN_USE_HEADERFOOTERMENU (FN_VIEW + 61)  /* Show advanced header/footer menu */
 
 // Region: Insert
 #define FN_INSERT_BOOKMARK      (FN_INSERT + 2 )  /* Bookmark */
@@ -598,6 +599,8 @@
 #define FN_UNO_HIDDEN                       (FN_EXTRA2 + 122)
 #define FN_UNO_STYLE_INTEROP_GRAB_BAG       (FN_EXTRA2 + 123)
 #define FN_UNO_TABLE_TEMPLATE_NAME          (FN_EXTRA2 + 124)
+#define FN_UNO_VISIBLE_AREA_WIDTH           (FN_EXTRA2 + 125)
+#define FN_UNO_VISIBLE_AREA_HEIGHT          (FN_EXTRA2 + 126)
 
 // Area: Help
 // Region: Traveling & Selection
@@ -781,6 +784,8 @@
 #define FN_SHAPE_ENDPOSITION_IN_HORI_L2R   (FN_PARAM2+26)
 #define FN_PARAM_PAM                    (FN_PARAM2+27) /* Point and Mark */
 #define FN_TEXT_BOX                     (FN_PARAM2+28) /* TextBox Property*/
+#define FN_BOOKMARK_HIDDEN              (FN_PARAM2+29) /* Hidden Property of bookmarks*/
+#define FN_BOOKMARK_CONDITION           (FN_PARAM2+30) /* Condition Property of bookmarks*/
 
 // Status: not more than 19!
 #define FN_STAT_PAGE                (FN_STAT + 1)

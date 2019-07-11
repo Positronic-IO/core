@@ -51,6 +51,7 @@
 #include <unometa.hxx>
 #include <docsh.hxx>
 #include <svl/zforlist.hxx>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 
@@ -156,7 +157,6 @@ SwFormatINetFormat::SwFormatINetFormat()
     , msINetFormatName()
     , msVisitedFormatName()
     , msHyperlinkName()
-    , mpMacroTable( nullptr )
     , mpTextAttr( nullptr )
     , mnINetFormatId( 0 )
     , mnVisitedFormatId( 0 )
@@ -169,7 +169,6 @@ SwFormatINetFormat::SwFormatINetFormat( const OUString& rURL, const OUString& rT
     , msINetFormatName()
     , msVisitedFormatName()
     , msHyperlinkName()
-    , mpMacroTable( nullptr )
     , mpTextAttr( nullptr )
     , mnINetFormatId( RES_POOLCHR_INET_NORMAL )
     , mnVisitedFormatId( RES_POOLCHR_INET_VISIT )
@@ -180,6 +179,7 @@ SwFormatINetFormat::SwFormatINetFormat( const OUString& rURL, const OUString& rT
 
 SwFormatINetFormat::SwFormatINetFormat( const SwFormatINetFormat& rAttr )
     : SfxPoolItem( RES_TXTATR_INETFMT )
+    , sw::BroadcasterMixin()
     , msURL( rAttr.GetValue() )
     , msTargetFrame( rAttr.msTargetFrame )
     , msINetFormatName( rAttr.msINetFormatName )
@@ -459,7 +459,7 @@ bool SwFormatRuby::QueryValue( uno::Any& rVal,
         break;
         case MID_RUBY_POSITION:
         {
-            rVal <<= static_cast<sal_uInt16>(m_nPosition);
+            rVal <<= m_nPosition;
         }
         break;
         default:
@@ -664,9 +664,7 @@ void Meta::NotifyChangeTextNode(SwTextNode *const pTextNode)
     }
     if (!pTextNode) // text node gone? invalidate UNO object!
     {
-        SwPtrMsgPoolItem aMsgHint( RES_REMOVE_UNO_OBJECT,
-            &static_cast<SwModify&>(*this) ); // cast to base class!
-        Modify(&aMsgHint, &aMsgHint);
+        GetNotifier().Broadcast(SfxHint(SfxHintId::Deinitializing));
     }
 }
 
@@ -674,9 +672,11 @@ void Meta::NotifyChangeTextNode(SwTextNode *const pTextNode)
 void Meta::Modify( const SfxPoolItem *pOld, const SfxPoolItem *pNew )
 {
     NotifyClients(pOld, pNew);
+    GetNotifier().Broadcast(SfxHint(SfxHintId::DataChanged));
     if (pOld && (RES_REMOVE_UNO_OBJECT == pOld->Which()))
     {   // invalidate cached uno object
         SetXMeta(uno::Reference<rdf::XMetadatable>(nullptr));
+        GetNotifier().Broadcast(SfxHint(SfxHintId::Deinitializing));
     }
 }
 

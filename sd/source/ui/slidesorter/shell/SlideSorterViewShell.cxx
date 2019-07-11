@@ -39,6 +39,7 @@
 #include <framework/FrameworkHelper.hxx>
 #include <ViewShellBase.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <app.hrc>
 #include <sdattr.hrc>
 #include <AccessibleSlideSorterView.hxx>
@@ -98,7 +99,7 @@ std::shared_ptr<SlideSorterViewShell> SlideSorterViewShell::Create (
         pViewShell.reset(
             new SlideSorterViewShell(pFrame,rViewShellBase,pParentWindow,pFrameViewArgument));
         pViewShell->Initialize();
-        if (pViewShell->mpSlideSorter.get() == nullptr)
+        if (pViewShell->mpSlideSorter == nullptr)
             pViewShell.reset();
     }
     catch(Exception&)
@@ -246,7 +247,7 @@ css::uno::Reference<css::accessibility::XAccessible>
 {
     // When the view is not set then the initialization is not yet complete
     // and we can not yet provide an accessibility object.
-    if (mpView == nullptr || mpSlideSorter.get() == nullptr)
+    if (mpView == nullptr || mpSlideSorter == nullptr)
         return nullptr;
 
     assert(mpSlideSorter.get()!=nullptr);
@@ -287,13 +288,13 @@ bool SlideSorterViewShell::RelocateToParentWindow (vcl::Window* pParentWindow)
     if ( ! mpSlideSorter)
         return false;
 
-    const bool bSuccess (mpSlideSorter->RelocateToWindow(pParentWindow));
+    mpSlideSorter->RelocateToWindow(pParentWindow);
     ReadFrameViewData(mpFrameView);
 
-    return bSuccess;
+    return true;
 }
 
-::svl::IUndoManager* SlideSorterViewShell::ImpGetUndoManager() const
+SfxUndoManager* SlideSorterViewShell::ImpGetUndoManager() const
 {
     SfxShell* pObjectBar = GetViewShellBase().GetViewShellManager()->GetTopShell();
     if (pObjectBar != nullptr)
@@ -328,7 +329,7 @@ SdPage* SlideSorterViewShell::GetActualPage()
     if ( ! IsMainViewShell())
     {
         std::shared_ptr<ViewShell> pMainViewShell = GetViewShellBase().GetMainViewShell();
-        if (pMainViewShell.get() != nullptr)
+        if (pMainViewShell != nullptr)
             pCurrentPage = pMainViewShell->GetActualPage();
     }
 
@@ -527,7 +528,7 @@ void SlideSorterViewShell::ReadFrameViewData (FrameView* pFrameView)
     if ( ! IsMainViewShell())
     {
         std::shared_ptr<ViewShell> pMainViewShell = GetViewShellBase().GetMainViewShell();
-        if (pMainViewShell.get() != nullptr)
+        if (pMainViewShell != nullptr)
             mpSlideSorter->GetController().GetCurrentSlideManager()->NotifyCurrentSlideChange(
                 pMainViewShell->getCurrentPage());
     }
@@ -552,7 +553,7 @@ void SlideSorterViewShell::WriteFrameViewData()
                 mpFrameView->SetSelectedPage((pActualPage->GetPageNum()- 1) / 2);
             // else
             // The slide sorter is not expected to switch the current page
-            // other then by double clicks.  That is handled separately.
+            // other than by double clicks.  That is handled separately.
         }
         else
         {

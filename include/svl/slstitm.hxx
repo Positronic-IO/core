@@ -23,8 +23,9 @@
 
 #include <svl/svldllapi.h>
 #include <svl/poolitem.hxx>
-#include <com/sun/star/uno/Sequence.h>
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace uno { template <class E> class Sequence; } } } }
 
 class SVL_DLLPUBLIC SfxStringListItem : public SfxPoolItem
 {
@@ -37,6 +38,11 @@ public:
     SfxStringListItem( sal_uInt16 nWhich, const std::vector<OUString> *pList=nullptr );
     SfxStringListItem( sal_uInt16 nWhich, SvStream& rStream );
     virtual ~SfxStringListItem() override;
+
+    SfxStringListItem(SfxStringListItem const &) = default;
+    SfxStringListItem(SfxStringListItem &&) = default;
+    SfxStringListItem & operator =(SfxStringListItem const &) = delete; // due to SfxPoolItem
+    SfxStringListItem & operator =(SfxStringListItem &&) = delete; // due to SfxPoolItem
 
     std::vector<OUString>&       GetList();
 

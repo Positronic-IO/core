@@ -26,6 +26,7 @@
 #include <rtl/bootstrap.hxx>
 #include <unotools/configpaths.hxx>
 #include <xmlreader/xmlreader.hxx>
+#include <osl/diagnose.h>
 
 #include <unomid.h>
 
@@ -33,7 +34,7 @@ using namespace utl;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
 
-static inline void lcl_assertEndingItem(xmlreader::XmlReader& reader)
+static void lcl_assertEndingItem(xmlreader::XmlReader& reader)
 {
     int nsId;
     xmlreader::Span name;
@@ -43,7 +44,7 @@ static inline void lcl_assertEndingItem(xmlreader::XmlReader& reader)
     (void) res;
 }
 
-static inline OUString lcl_getValue(xmlreader::XmlReader& reader,
+static OUString lcl_getValue(xmlreader::XmlReader& reader,
                                     const xmlreader::Span& span)
 {
     int nsId;
@@ -254,9 +255,8 @@ void    SwLabelConfig::FillLabels(const OUString& rManufacturer, SwLabRecs& rLab
 {
     if (m_aLabels.find(rManufacturer) == m_aLabels.end())
         return;
-    for (std::map<OUString, SwLabelMeasure>::iterator it = m_aLabels[rManufacturer].begin();
-            it != m_aLabels[rManufacturer].end(); ++it)
-        rLabArr.push_back( lcl_CreateSwLabRec(it->first, it->second.m_aMeasure, rManufacturer) );
+    for (const auto& rEntry : m_aLabels[rManufacturer])
+        rLabArr.push_back( lcl_CreateSwLabRec(rEntry.first, rEntry.second.m_aMeasure, rManufacturer) );
 }
 
 bool    SwLabelConfig::HasLabel(const OUString& rManufacturer, const OUString& rType)
@@ -307,8 +307,7 @@ void SwLabelConfig::SaveLabel( const OUString& rManufacturer,
         sFoundNode += OUString::number( nIndex );
         while ( lcl_Exists( sFoundNode, aLabels ) )
         {
-            sFoundNode = sPrefix;
-            sFoundNode += OUString::number(nIndex++);
+            sFoundNode = sPrefix + OUString::number(nIndex++);
         }
     }
     else

@@ -157,7 +157,8 @@ void SlidePersist::createXShapes( XmlFilterBase& rFilterBase )
             TimeNodePtr pNode(maTimeNodeList.front());
             OSL_ENSURE( pNode, "pNode" );
 
-            pNode->setNode( rFilterBase, xNode, pSlidePtr );
+            Reference<XAnimationNode> xDummy;
+            pNode->setNode(rFilterBase, xNode, pSlidePtr, xDummy);
         }
     }
 }
@@ -171,14 +172,14 @@ void SlidePersist::createBackground( const XmlFilterBase& rFilterBase )
 
         oox::drawingml::ShapePropertyIds aPropertyIds = oox::drawingml::ShapePropertyInfo::DEFAULT.mrPropertyIds;
         aPropertyIds[oox::drawingml::ShapeProperty::FillGradient] = PROP_FillGradientName;
-        oox::drawingml::ShapePropertyInfo aPropInfo( aPropertyIds, true, false, true, false );
+        oox::drawingml::ShapePropertyInfo aPropInfo( aPropertyIds, true, false, true, false, false );
         oox::drawingml::ShapePropertyMap aPropMap( rFilterBase.getModelObjectHelper(), aPropInfo );
         mpBackgroundPropertiesPtr->pushToPropMap( aPropMap, rFilterBase.getGraphicHelper(), 0, nPhClr );
         PropertySet( mxPage ).setProperty( PROP_Background, aPropMap.makePropertySet() );
     }
 }
 
-void setTextStyle( Reference< beans::XPropertySet > const & rxPropSet, const XmlFilterBase& rFilter,
+static void setTextStyle( Reference< beans::XPropertySet > const & rxPropSet, const XmlFilterBase& rFilter,
     oox::drawingml::TextListStylePtr const & pTextListStylePtr, int nLevel )
 {
     ::oox::drawingml::TextParagraphPropertiesPtr pTextParagraphPropertiesPtr( pTextListStylePtr->getListStyle()[ nLevel ] );
@@ -205,7 +206,7 @@ void SlidePersist::applyTextStyles( const XmlFilterBase& rFilterBase )
             Reference< container::XNameAccess > aXNameAccess( aXStyleFamiliesSupplier->getStyleFamilies() );
             Reference< container::XNamed > aXNamed( mxPage, UNO_QUERY_THROW );
 
-            if ( aXNameAccess.is() && aXNamed.is() )
+            if ( aXNameAccess.is() )
             {
                 oox::drawingml::TextListStylePtr pTextListStylePtr;
                 OUString aStyle;

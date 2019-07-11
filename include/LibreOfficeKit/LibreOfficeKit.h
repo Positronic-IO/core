@@ -309,6 +309,44 @@ struct _LibreOfficeKitDocumentClass
     /// @see lok::Document::getPartInfo().
     char* (*getPartInfo) (LibreOfficeKitDocument* pThis, int nPart);
 
+    /// Paints window with given id to the buffer with the give DPI scale
+    /// (every pixel is dpiscale-times larger).
+    /// @see lok::Document::paintWindow().
+    void (*paintWindowDPI) (LibreOfficeKitDocument* pThis, unsigned nWindowId,
+                            unsigned char* pBuffer,
+                            const int x, const int y,
+                            const int width, const int height,
+                            const double dpiscale);
+
+#ifdef IOS
+    /// @see lok::Document::paintTileToCGContext().
+    void (*paintTileToCGContext) (LibreOfficeKitDocument* pThis,
+                                  void* rCGContext,
+                                  const int nCanvasWidth,
+                                  const int nCanvasHeight,
+                                  const int nTilePosX,
+                                  const int nTilePosY,
+                                  const int nTileWidth,
+                                  const int nTileHeight);
+#endif // IOS
+
+// CERTIFICATE AND SIGNING
+
+    /// @see lok::Document::insertCertificate().
+    bool (*insertCertificate) (LibreOfficeKitDocument* pThis,
+                                const unsigned char* pCertificateBinary,
+                                const int nCertificateBinarySize,
+                                const unsigned char* pPrivateKeyBinary,
+                                const int nPrivateKeyBinarySize);
+
+    /// @see lok::Document::addCertificate().
+    bool (*addCertificate) (LibreOfficeKitDocument* pThis,
+                                const unsigned char* pCertificateBinary,
+                                const int nCertificateBinarySize);
+
+    /// @see lok::Document::getSignatureState().
+    int (*getSignatureState) (LibreOfficeKitDocument* pThis);
+
 #endif // defined LOK_USE_UNSTABLE_API || defined LIBO_INTERNAL_ONLY
 };
 

@@ -40,7 +40,7 @@ enum class SvMacroItemId : sal_uInt16;
 */
 struct SvEventDescription
 {
-    SvMacroItemId mnEvent;
+    SvMacroItemId const mnEvent;
     const sal_Char* mpEventName;
 };
 
@@ -206,8 +206,6 @@ class SVT_DLLPUBLIC SvDetachedEventDescriptor : public SvBaseEventDescriptor
 {
     // the macros; aMacros[i] is the value for aSupportedMacroItemIDs[i]
     std::vector<std::unique_ptr<SvxMacro>> aMacros;
-
-    const OUString sImplName;
 
 public:
 

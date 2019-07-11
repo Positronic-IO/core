@@ -58,16 +58,16 @@ const SvxPageUsage aArr[] =
 };
 
 
-sal_uInt16 PageUsageToPos_Impl( SvxPageUsage nUsage )
+static sal_uInt16 PageUsageToPos_Impl( SvxPageUsage nUsage )
 {
-    for ( sal_uInt16 i = 0; i < SAL_N_ELEMENTS(aArr); ++i )
+    for ( size_t i = 0; i < SAL_N_ELEMENTS(aArr); ++i )
         if ( aArr[i] == nUsage )
             return i;
     return 3;
 }
 
 
-SvxPageUsage PosToPageUsage_Impl( sal_uInt16 nPos )
+static SvxPageUsage PosToPageUsage_Impl( sal_uInt16 nPos )
 {
     if ( nPos >= SAL_N_ELEMENTS(aArr) )
         return SvxPageUsage::NONE;
@@ -331,7 +331,7 @@ void PageStylesPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_COLUMN:
         {
             if ( eState >= SfxItemState::DEFAULT &&
-                 pState && dynamic_cast< const SfxInt16Item *>( pState ) !=  nullptr )
+                 dynamic_cast< const SfxInt16Item *>( pState ) )
             {
                 mpPageColumnItem.reset( static_cast<SfxInt16Item*>(pState->Clone()) );
                 if(mpPageColumnItem->GetValue() <= 5)
@@ -352,7 +352,7 @@ void PageStylesPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE:
         {
             if( eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast< const SvxPageItem*>( pState ) !=  nullptr )
+                dynamic_cast< const SvxPageItem*>( pState ) )
             {
                 mpPageItem.reset( static_cast<SvxPageItem*>(pState->Clone()) );
                 SvxNumType eNumType = mpPageItem->GetNumType();

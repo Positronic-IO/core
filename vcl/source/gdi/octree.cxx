@@ -34,7 +34,7 @@ ImpNodeCache::ImpNodeCache( const sal_uLong nInitSize ) :
 
     for( sal_uLong i = 0; i < nSize; i++ )
     {
-        OctreeNode* pNewNode = new NODE;
+        OctreeNode* pNewNode = new OctreeNode;
 
         pNewNode->pNextInCache = pActNode;
         pActNode = pNewNode;
@@ -62,7 +62,7 @@ Octree::Octree(const BitmapReadAccess& rReadAcc, sal_uLong nColors)
 {
     sal_uLong nMax(nColors);
     pNodeCache.reset( new ImpNodeCache( nColors ) );
-    memset( pReduce, 0, ( OCTREE_BITS + 1 ) * sizeof( NODE* ) );
+    memset( pReduce, 0, ( OCTREE_BITS + 1 ) * sizeof( OctreeNode* ) );
 
     if( !!*pAcc )
     {
@@ -114,7 +114,7 @@ Octree::~Octree()
     pNodeCache.reset();
 }
 
-void Octree::ImplDeleteOctree( NODE** ppNode )
+void Octree::ImplDeleteOctree( OctreeNode** ppNode )
 {
     for (OctreeNode* i : (*ppNode)->pChild)
     {
@@ -126,7 +126,7 @@ void Octree::ImplDeleteOctree( NODE** ppNode )
     *ppNode = nullptr;
 }
 
-void Octree::ImplAdd( NODE** ppNode )
+void Octree::ImplAdd( OctreeNode** ppNode )
 {
     // possibly generate new nodes
     if( !*ppNode )
@@ -166,7 +166,7 @@ void Octree::ImplAdd( NODE** ppNode )
 void Octree::ImplReduce()
 {
     sal_uLong   i;
-    NODE*       pNode;
+    OctreeNode* pNode;
     sal_uLong   nRedSum = 0;
     sal_uLong   nGreenSum = 0;
     sal_uLong   nBlueSum = 0;
@@ -181,7 +181,7 @@ void Octree::ImplReduce()
     {
         if ( pNode->pChild[ i ] )
         {
-            NODE* pChild = pNode->pChild[ i ];
+            OctreeNode* pChild = pNode->pChild[ i ];
 
             nRedSum += pChild->nRed;
             nGreenSum += pChild->nGreen;
@@ -201,7 +201,7 @@ void Octree::ImplReduce()
     nLeafCount -= --nChildren;
 }
 
-void Octree::CreatePalette( NODE* pNode )
+void Octree::CreatePalette( OctreeNode* pNode )
 {
     if( pNode->bLeaf )
     {
@@ -216,7 +216,7 @@ void Octree::CreatePalette( NODE* pNode )
 
 }
 
-void Octree::GetPalIndex( NODE* pNode )
+void Octree::GetPalIndex( OctreeNode* pNode )
 {
     if ( pNode->bLeaf )
         nPalIndex = pNode->nPalIndex;
@@ -232,14 +232,13 @@ void Octree::GetPalIndex( NODE* pNode )
     }
 }
 
-InverseColorMap::InverseColorMap( const BitmapPalette& rPal ) :
-            nBits( 8 - OCTREE_BITS )
+InverseColorMap::InverseColorMap( const BitmapPalette& rPal )
 {
     const int     nColorMax = 1 << OCTREE_BITS;
-    const unsigned long xsqr = 1 << ( nBits << 1 );
+    const unsigned long xsqr = 1 << ( gnBits << 1 );
     const unsigned long xsqr2 = xsqr << 1;
     const int     nColors = rPal.GetEntryCount();
-    const long      x = 1 << nBits;
+    const long      x = 1 << gnBits;
     const long      x2 = x >> 1;
     sal_uLong           r, g, b;
     long            rxx, gxx, bxx;
@@ -258,12 +257,12 @@ InverseColorMap::InverseColorMap( const BitmapPalette& rPal ) :
         long bdist = cBlue - x2;
         rdist = rdist*rdist + gdist*gdist + bdist*bdist;
 
-        const long crinc = ( xsqr - ( cRed << nBits ) ) << 1;
-        const long cginc = ( xsqr - ( cGreen << nBits ) ) << 1;
-        const long cbinc = ( xsqr - ( cBlue << nBits ) ) << 1;
+        const long crinc = ( xsqr - ( cRed << gnBits ) ) << 1;
+        const long cginc = ( xsqr - ( cGreen << gnBits ) ) << 1;
+        const long cbinc = ( xsqr - ( cBlue << gnBits ) ) << 1;
 
-        sal_uLong* cdp = reinterpret_cast<sal_uLong*>(pBuffer);
-        sal_uInt8* crgbp = pMap;
+        sal_uLong* cdp = reinterpret_cast<sal_uLong*>(pBuffer.get());
+        sal_uInt8* crgbp = pMap.get();
 
         for( r = 0, rxx = crinc; r < nColorMax; rdist += rxx, r++, rxx += xsqr2 )
         {
@@ -282,8 +281,6 @@ InverseColorMap::InverseColorMap( const BitmapPalette& rPal ) :
 
 InverseColorMap::~InverseColorMap()
 {
-    rtl_freeMemory( pBuffer );
-    rtl_freeMemory( pMap );
 }
 
 void InverseColorMap::ImplCreateBuffers( const sal_uLong nMax )
@@ -291,11 +288,11 @@ void InverseColorMap::ImplCreateBuffers( const sal_uLong nMax )
     const sal_uLong nCount = nMax * nMax * nMax;
     const sal_uLong nSize = nCount * sizeof( sal_uLong );
 
-    pMap = static_cast<sal_uInt8*>(rtl_allocateMemory( nCount ));
-    memset( pMap, 0x00, nCount );
+    pMap.reset(new sal_uInt8[ nCount ]);
+    memset( pMap.get(), 0x00, nCount );
 
-    pBuffer = static_cast<sal_uInt8*>(rtl_allocateMemory( nSize ));
-    memset( pBuffer, 0xff, nSize );
+    pBuffer.reset(new sal_uInt8[ nSize ]);
+    memset( pBuffer.get(), 0xff, nSize );
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

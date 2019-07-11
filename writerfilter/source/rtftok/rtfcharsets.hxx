@@ -17,10 +17,10 @@ namespace rtftok
 /// RTF legacy charsets
 struct RTFEncoding
 {
-    int charset;
-    int codepage;
+    int const charset;
+    int const codepage;
 };
-extern RTFEncoding aRTFEncodings[];
+extern RTFEncoding const aRTFEncodings[];
 extern int nRTFEncodings;
 } // namespace rtftok
 } // namespace writerfilter

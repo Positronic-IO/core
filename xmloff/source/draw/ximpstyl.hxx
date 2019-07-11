@@ -68,7 +68,6 @@ public:
 
 class SdXMLPageMasterContext: public SvXMLStyleContext
 {
-    OUString               msName;
     rtl::Reference<SdXMLPageMasterStyleContext> mxPageMasterStyle;
 
     const SdXMLImport& GetSdImport() const { return static_cast<const SdXMLImport&>(GetImport()); }
@@ -93,10 +92,8 @@ public:
 
 class SdXMLMasterPageContext: public SdXMLGenericPageContext
 {
-    OUString               msPageMasterName;
     OUString               msName;
     OUString               msDisplayName;
-    OUString               msStyleName;
 
 public:
 
@@ -124,9 +121,6 @@ class SdXMLPresentationPlaceholderContext: public SvXMLImportContext
 {
     OUString               msName;
     sal_Int32                   mnX;
-    sal_Int32                   mnY;
-    sal_Int32                   mnWidth;
-    sal_Int32                   mnHeight;
 
     const SdXMLImport& GetSdImport() const { return static_cast<const SdXMLImport&>(GetImport()); }
     SdXMLImport& GetSdImport() { return static_cast<SdXMLImport&>(GetImport()); }
@@ -147,7 +141,6 @@ public:
 
 class SdXMLPresentationPageLayoutContext: public SvXMLStyleContext
 {
-    OUString               msName;
     std::vector< rtl::Reference< SdXMLPresentationPlaceholderContext > >
                            maList;
     sal_uInt16             mnTypeId;
@@ -176,7 +169,7 @@ public:
 class SdXMLStylesContext : public SvXMLStylesContext
 {
     rtl::Reference< SvXMLImportPropertyMapper > xPresImpPropMapper;
-    bool                    mbIsAutoStyle;
+    bool const                         mbIsAutoStyle;
     std::unique_ptr<SvXMLNumFmtHelper> mpNumFmtHelper;
     std::unique_ptr<SvNumberFormatter> mpNumFormatter;
 

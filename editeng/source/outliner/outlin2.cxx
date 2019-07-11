@@ -308,9 +308,9 @@ void Outliner::UndoActionEnd()
     pEditEngine->UndoActionEnd();
 }
 
-void Outliner::InsertUndo( EditUndo* pUndo )
+void Outliner::InsertUndo( std::unique_ptr<EditUndo> pUndo )
 {
-    pEditEngine->GetUndoManager().AddUndoAction( pUndo );
+    pEditEngine->GetUndoManager().AddUndoAction( std::move(pUndo) );
 }
 
 bool Outliner::IsInUndo()
@@ -356,11 +356,6 @@ bool Outliner::ConvertNextDocument()
 void Outliner::SetDefaultLanguage( LanguageType eLang )
 {
     pEditEngine->SetDefaultLanguage( eLang );
-}
-
-LanguageType Outliner::GetDefaultLanguage() const
-{
-    return pEditEngine->GetDefaultLanguage();
 }
 
 void Outliner::CompleteOnlineSpelling()

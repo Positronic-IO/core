@@ -502,7 +502,6 @@ void ScTabView::MarkCursor( SCCOL nCurX, SCROW nCurY, SCTAB nCurZ,
             SCROW nCurYOffset = 0;
             SCROW nBlockStartYOffset = 0;
             bool bBlockStartMerged = false;
-            const ScMergeAttr* pMergeAttr = nullptr;
             ScDocument* pDocument = aViewData.GetDocument();
 
             // The following block checks whether or not the "BlockStart" (anchor)
@@ -512,7 +511,7 @@ void ScTabView::MarkCursor( SCCOL nCurX, SCROW nCurY, SCTAB nCurZ,
             // selection is moving in the upperleft direction, the anchor cell will
             // move to the lower-right corner of the merged anchor cell, and so on.
 
-            pMergeAttr =
+            const ScMergeAttr* pMergeAttr =
                 pDocument->GetAttr( nBlockStartXOrig, nBlockStartYOrig, nTab, ATTR_MERGE );
             if ( pMergeAttr->IsMerged() )
             {
@@ -1446,7 +1445,7 @@ void ScTabView::ErrorMessage(const char* pGlobStrId)
 
 void ScTabView::UpdatePageBreakData( bool bForcePaint )
 {
-    ScPageBreakData* pNewData = nullptr;
+    std::unique_ptr<ScPageBreakData> pNewData;
 
     if (aViewData.IsPagebreakMode())
     {
@@ -1457,9 +1456,9 @@ void ScTabView::UpdatePageBreakData( bool bForcePaint )
         sal_uInt16 nCount = rDoc.GetPrintRangeCount(nTab);
         if (!nCount)
             nCount = 1;
-        pNewData = new ScPageBreakData(nCount);
+        pNewData.reset( new ScPageBreakData(nCount) );
 
-        ScPrintFunc aPrintFunc( pDocSh, pDocSh->GetPrinter(), nTab, 0,0,nullptr, nullptr, pNewData );
+        ScPrintFunc aPrintFunc( pDocSh, pDocSh->GetPrinter(), nTab, 0,0,nullptr, nullptr, pNewData.get() );
         // ScPrintFunc fills the PageBreakData in ctor
         if ( nCount > 1 )
         {
@@ -1472,8 +1471,7 @@ void ScTabView::UpdatePageBreakData( bool bForcePaint )
             PaintGrid();
     }
 
-    delete pPageBreakData;
-    pPageBreakData = pNewData;
+    pPageBreakData = std::move(pNewData);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -69,10 +69,13 @@ public:
     void testTdf86624(); // manually placed legends
     void testTdf105517();
     void testTdf106217();
+    void testTdf108021();
     void testAutoBackgroundXLSX();
     void testChartAreaStyleBackgroundXLSX();
+    void testChartHatchFillXLSX();
     void testAxisTextRotationXLSX();
     // void testTextCanOverlapXLSX(); // TODO : temporarily disabled.
+    void testTextBreakXLSX();
     void testNumberFormatsXLSX();
 
     void testTransparentBackground(OUString const & filename);
@@ -103,6 +106,7 @@ public:
     void testTdf109858(); // Pie chart label placement settings(XLSX)
 
     void testTdf111173();
+    void testTdf122226();
 
     void testInternalDataProvider();
 
@@ -110,6 +114,12 @@ public:
     void testTdf115107_2(); // import complex data point labels in cobo charts with multiple data series
 
     void testTdf116163();
+
+    void testTdf121205();
+
+    void testTdf114179();
+    void testTdf123504();
+    void testTdf122765();
 
     CPPUNIT_TEST_SUITE(Chart2ImportTest);
     CPPUNIT_TEST(Fdo60083);
@@ -142,10 +152,13 @@ public:
     CPPUNIT_TEST(testTdf86624);
     CPPUNIT_TEST(testTdf105517);
     CPPUNIT_TEST(testTdf106217);
+    CPPUNIT_TEST(testTdf108021);
     CPPUNIT_TEST(testAutoBackgroundXLSX);
     CPPUNIT_TEST(testChartAreaStyleBackgroundXLSX);
+    CPPUNIT_TEST(testChartHatchFillXLSX);
     CPPUNIT_TEST(testAxisTextRotationXLSX);
     // CPPUNIT_TEST(testTextCanOverlapXLSX); // TODO : temporarily disabled.
+    CPPUNIT_TEST(testTextBreakXLSX);
     CPPUNIT_TEST(testNumberFormatsXLSX);
     CPPUNIT_TEST(testAutoTitleDelDefaultValue2007XLSX);
     CPPUNIT_TEST(testAutoTitleDelDefaultValue2013XLSX);
@@ -167,6 +180,7 @@ public:
     CPPUNIT_TEST(testTdf90510);
     CPPUNIT_TEST(testTdf109858);
     CPPUNIT_TEST(testTdf111173);
+    CPPUNIT_TEST(testTdf122226);
 
     CPPUNIT_TEST(testInternalDataProvider);
 
@@ -175,15 +189,22 @@ public:
 
     CPPUNIT_TEST(testTdf116163);
 
+    CPPUNIT_TEST(testTdf121205);
+
+    CPPUNIT_TEST(testTdf114179);
+    CPPUNIT_TEST(testTdf123504);
+    CPPUNIT_TEST(testTdf122765);
+
     CPPUNIT_TEST_SUITE_END();
 
 private:
 
 };
 
-uno::Reference<drawing::XShape> getShapeByName(const uno::Reference<drawing::XShapes>& rShapes,
-    const OUString& rName,
-    std::function<bool(const uno::Reference<drawing::XShape>&)> pCondition = nullptr)
+static uno::Reference<drawing::XShape>
+getShapeByName(const uno::Reference<drawing::XShapes>& rShapes, const OUString& rName,
+               const std::function<bool(const uno::Reference<drawing::XShape>&)>& pCondition
+               = nullptr)
 {
     uno::Reference<container::XIndexAccess> XIndexAccess(rShapes, uno::UNO_QUERY);
     for (sal_Int32 i = 0; i < XIndexAccess->getCount(); ++i)
@@ -218,7 +239,6 @@ void Chart2ImportTest::Fdo60083()
     CPPUNIT_ASSERT( xDataSeries.is() );
 
     Reference< beans::XPropertySet > xPropSet( xDataSeries, UNO_QUERY_THROW );
-    CPPUNIT_ASSERT( xPropSet.is() );
 
     // test that y error bars are there
     Reference< beans::XPropertySet > xErrorBarYProps;
@@ -245,11 +265,11 @@ void Chart2ImportTest::Fdo60083()
         bool bVal;
         CPPUNIT_ASSERT(
             xErrorBarYProps->getPropertyValue("ShowPositiveError") >>= bVal);
-        CPPUNIT_ASSERT_EQUAL(bVal, true);
+        CPPUNIT_ASSERT_EQUAL(true, bVal);
 
         CPPUNIT_ASSERT(
             xErrorBarYProps->getPropertyValue("ShowNegativeError") >>= bVal);
-        CPPUNIT_ASSERT_EQUAL(bVal, true);
+        CPPUNIT_ASSERT_EQUAL(true, bVal);
     }
 
     // test that x error bars are not imported
@@ -268,7 +288,6 @@ void Chart2ImportTest::testErrorBarRange()
     CPPUNIT_ASSERT( xDataSeries.is() );
 
     Reference< beans::XPropertySet > xPropSet( xDataSeries, UNO_QUERY_THROW );
-    CPPUNIT_ASSERT( xPropSet.is() );
 
     // test that y error bars are there
     Reference< beans::XPropertySet > xErrorBarYProps;
@@ -285,7 +304,7 @@ void Chart2ImportTest::testErrorBarRange()
 
     OUString aRangePos;
     CPPUNIT_ASSERT(xErrorBarYProps->getPropertyValue("ErrorBarRangePositive") >>= aRangePos);
-    CPPUNIT_ASSERT_EQUAL(aRangePos, OUString("$Sheet1.$C$2:$C$4"));
+    CPPUNIT_ASSERT_EQUAL(OUString("$Sheet1.$C$2:$C$4"), aRangePos);
 }
 
 void Chart2ImportTest::testErrorBarFormatting()
@@ -298,7 +317,6 @@ void Chart2ImportTest::testErrorBarFormatting()
     CPPUNIT_ASSERT( xDataSeries.is() );
 
     Reference< beans::XPropertySet > xPropSet( xDataSeries, UNO_QUERY_THROW );
-    CPPUNIT_ASSERT( xPropSet.is() );
 
     // test that y error bars are there
     Reference< beans::XPropertySet > xErrorBarYProps;
@@ -350,11 +368,10 @@ void Chart2ImportTest::testSteppedLines()
     }
 }
 
-uno::Sequence < OUString > getChartColumnDescriptions( uno::Reference< chart::XChartDocument > const & xChart1Doc)
+static uno::Sequence < OUString > getChartColumnDescriptions( uno::Reference< chart::XChartDocument > const & xChart1Doc)
 {
     CPPUNIT_ASSERT(xChart1Doc.is());
     uno::Reference< chart::XChartDataArray > xChartData ( xChart1Doc->getData(), UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xChartData.is());
     uno::Sequence < OUString > seriesList = xChartData->getColumnDescriptions();
     return seriesList;
 }
@@ -690,13 +707,12 @@ void Chart2ImportTest::testBnc889755()
 {
     load("/chart2/qa/extras/data/pptx/", "bnc889755.pptx");
     uno::Reference<chart2::XChartDocument> xChartDoc(getChartDocFromDrawImpress(0, 6), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xChartDoc.is());
     CPPUNIT_ASSERT(xChartDoc->hasInternalDataProvider());
 
     uno::Reference< chart2::XInternalDataProvider > xDataProvider( xChartDoc->getDataProvider(), uno::UNO_QUERY_THROW );
     uno::Reference< chart::XChartDataArray > xChartDataArray(xDataProvider, uno::UNO_QUERY_THROW);
     uno::Sequence< OUString > aRowLabels = xChartDataArray->getRowDescriptions();
-    CPPUNIT_ASSERT_EQUAL( aRowLabels.getLength(), sal_Int32(16) );
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(16), aRowLabels.getLength());
     CPPUNIT_ASSERT_EQUAL(OUString("Oct-12"), aRowLabels[0]);
     CPPUNIT_ASSERT_EQUAL(OUString("Nov-12"), aRowLabels[1]);
     CPPUNIT_ASSERT_EQUAL(OUString("Dec-12"), aRowLabels[2]);
@@ -807,14 +823,14 @@ void Chart2ImportTest::testTdf105517()
     long lineColor;
     xPropSet1->getPropertyValue("Color") >>= lineColor;
     // incorrect line color was 0x4a7ebb due to not handling themeOverride
-    CPPUNIT_ASSERT_EQUAL(lineColor, long(0xeaa700));
+    CPPUNIT_ASSERT_EQUAL(long(0xeaa700), lineColor);
 
     Reference<beans::XPropertySet> xPropSet2(xDSContainer->getDataSeries()[1], uno::UNO_QUERY);
     CPPUNIT_ASSERT(xPropSet2.is());
 
     xPropSet2->getPropertyValue("Color") >>= lineColor;
     // incorrect line color was 0x98b855
-    CPPUNIT_ASSERT_EQUAL(lineColor, long(0x1e69a8));
+    CPPUNIT_ASSERT_EQUAL(long(0x1e69a8), lineColor);
 }
 
 void Chart2ImportTest::testTdf106217()
@@ -829,14 +845,32 @@ void Chart2ImportTest::testTdf106217()
     CPPUNIT_ASSERT(xCircle.is());
 
     uno::Reference<container::XNamed> xNamedShape(xCircle, uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(xNamedShape->getName(), OUString("Oval 1"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Oval 1"), xNamedShape->getName());
 
     awt::Point aPosition = xCircle->getPosition();
-    CPPUNIT_ASSERT_EQUAL(aPosition.X, sal_Int32(6870));
-    CPPUNIT_ASSERT_EQUAL(aPosition.Y, sal_Int32(7261));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6870), aPosition.X);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7261), aPosition.Y);
     awt::Size aSize = xCircle->getSize();
-    CPPUNIT_ASSERT_EQUAL(aSize.Width, sal_Int32(2701));
-    CPPUNIT_ASSERT_EQUAL(aSize.Height, sal_Int32(2700));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2701), aSize.Width);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2700), aSize.Height);
+}
+
+void Chart2ImportTest::testTdf108021()
+{
+    // Tdf108021 : To check TextBreak value is true.
+    load("/chart2/qa/extras/data/ods/", "tdf108021.ods");
+    uno::Reference< chart::XDiagram > mxDiagram;
+    uno::Reference< beans::XPropertySet > xAxisProp;
+    bool bTextBreak = false;
+    uno::Reference< chart::XChartDocument > xChartDoc ( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW);
+    mxDiagram.set(xChartDoc->getDiagram());
+    CPPUNIT_ASSERT(mxDiagram.is());
+    uno::Reference< chart::XAxisXSupplier > xAxisXSupp( mxDiagram, uno::UNO_QUERY );
+    CPPUNIT_ASSERT(xAxisXSupp.is());
+    xAxisProp = xAxisXSupp->getXAxis();
+    xAxisProp->getPropertyValue("TextBreak") >>= bTextBreak;
+    // Expected value of 'TextBreak' is true
+    CPPUNIT_ASSERT(bTextBreak);
 }
 
 void Chart2ImportTest::testTransparentBackground(OUString const & filename)
@@ -900,6 +934,48 @@ void Chart2ImportTest::testChartAreaStyleBackgroundXLSX()
         sal_Int32(0), nColor);
 }
 
+void Chart2ImportTest::testChartHatchFillXLSX()
+{
+    load("/chart2/qa/extras/data/xlsx/", "chart-hatch-fill.xlsx");
+    uno::Reference<chart2::XChartDocument> xChartDoc = getChartDocFromSheet(0, mxComponent);
+    CPPUNIT_ASSERT_MESSAGE("failed to load chart", xChartDoc.is());
+
+    // Check the chart background FillStyle is HATCH
+    Reference<beans::XPropertySet> xPropSet = xChartDoc->getPageBackground();
+    CPPUNIT_ASSERT(xPropSet.is());
+    drawing::FillStyle eStyle = xPropSet->getPropertyValue("FillStyle").get<drawing::FillStyle>();
+
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Chart background fill in this xlsx should be loaded as hatch fill.",
+        drawing::FillStyle_HATCH, eStyle);
+
+    // Check the FillBackground of chart background
+    bool bBackgroundFill = false;
+    xPropSet->getPropertyValue("FillBackground") >>= bBackgroundFill;
+    CPPUNIT_ASSERT(bBackgroundFill);
+
+    sal_Int32 nBackgroundColor;
+    xPropSet->getPropertyValue("FillColor") >>= nBackgroundColor;
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0xFFFFFF), nBackgroundColor);
+
+    // Check the datapoint has HatchName value
+    uno::Reference<chart2::XDataSeries> xDataSeries(getDataSeriesFromDoc(xChartDoc, 0));
+    CPPUNIT_ASSERT(xDataSeries.is());
+
+    uno::Reference<beans::XPropertySet> xPropertySet(xDataSeries->getDataPointByIndex(1), uno::UNO_QUERY_THROW);
+    OUString sHatchName;
+    xPropertySet->getPropertyValue("HatchName") >>= sHatchName;
+    CPPUNIT_ASSERT(!sHatchName.isEmpty());
+
+    // Check the FillBackground of datapoint
+    bool bBackgroundFillofDatapoint = false;
+    xPropertySet->getPropertyValue("FillBackground") >>= bBackgroundFillofDatapoint;
+    CPPUNIT_ASSERT(bBackgroundFillofDatapoint);
+
+    sal_Int32 nBackgroundColorofDatapoint;
+    xPropertySet->getPropertyValue("FillColor") >>= nBackgroundColorofDatapoint;
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0x00B050), nBackgroundColorofDatapoint);
+}
+
 void Chart2ImportTest::testAxisTextRotationXLSX()
 {
     load("/chart2/qa/extras/data/xlsx/", "axis-label-rotation.xlsx");
@@ -926,7 +1002,6 @@ void Chart2ImportTest::testTextCanOverlapXLSX()
     uno::Reference< beans::XPropertySet > xAxisProp;
     bool bTextCanOverlap = false;
     uno::Reference< chart::XChartDocument > xChartDoc ( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xChartDoc.is());
     mxDiagram.set(xChartDoc->getDiagram());
     CPPUNIT_ASSERT(mxDiagram.is());
     uno::Reference< chart::XAxisXSupplier > xAxisXSupp( mxDiagram, uno::UNO_QUERY );
@@ -937,6 +1012,25 @@ void Chart2ImportTest::testTextCanOverlapXLSX()
     CPPUNIT_ASSERT(bTextCanOverlap);
 }
 */
+
+void Chart2ImportTest::testTextBreakXLSX()
+{
+    // tdf#122091: To check textbreak value is true in case of 0° degree of Axis label rotation.
+    load("/chart2/qa/extras/data/xlsx/", "chart_label_text_break.xlsx");
+    uno::Reference< chart::XDiagram > mxDiagram;
+    uno::Reference< beans::XPropertySet > xAxisProp;
+    bool textBreak = false;
+    uno::Reference< chart::XChartDocument > xChartDoc ( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW);
+    CPPUNIT_ASSERT(xChartDoc.is());
+    mxDiagram.set(xChartDoc->getDiagram());
+    CPPUNIT_ASSERT(mxDiagram.is());
+    uno::Reference< chart::XAxisXSupplier > xAxisXSupp( mxDiagram, uno::UNO_QUERY );
+    CPPUNIT_ASSERT(xAxisXSupp.is());
+    xAxisProp = xAxisXSupp->getXAxis();
+    xAxisProp->getPropertyValue("TextBreak") >>= textBreak;
+    // Expected value of 'TextBreak' is true
+    CPPUNIT_ASSERT(textBreak);
+}
 
 void Chart2ImportTest::testNumberFormatsXLSX()
 {
@@ -1054,7 +1148,7 @@ void Chart2ImportTest::testSmoothDefaultValue2007XLSX()
 
     chart2::CurveStyle eCurveStyle;
     xPropSet->getPropertyValue("CurveStyle") >>= eCurveStyle;
-    CPPUNIT_ASSERT_EQUAL(eCurveStyle, chart2::CurveStyle_LINES);
+    CPPUNIT_ASSERT_EQUAL(chart2::CurveStyle_LINES, eCurveStyle);
 }
 
 void Chart2ImportTest::testSmoothDefaultValue2013XLSX()
@@ -1161,7 +1255,6 @@ void Chart2ImportTest::testPlotVisOnlyDefaultValue2013XLSX()
 {
     load("/chart2/qa/extras/data/xlsx/", "plotVisOnly.xlsx");
     uno::Reference< chart::XChartDocument > xChart1Doc ( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("failed to load chart", xChart1Doc.is());
     Reference<beans::XPropertySet> xPropSet(xChart1Doc->getDiagram(), uno::UNO_QUERY_THROW);
     uno::Any aAny = xPropSet->getPropertyValue("IncludeHiddenCells");
     CPPUNIT_ASSERT(aAny.hasValue());
@@ -1174,7 +1267,6 @@ void Chart2ImportTest::testRAngAxDefaultValue2013XLSX()
 {
     load("/chart2/qa/extras/data/xlsx/", "rAngAx.xlsx");
     uno::Reference< chart::XChartDocument > xChart1Doc ( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("failed to load chart", xChart1Doc.is());
     Reference<beans::XPropertySet> xPropSet(xChart1Doc->getDiagram(), uno::UNO_QUERY_THROW);
     uno::Any aAny = xPropSet->getPropertyValue("RightAngledAxes");
     CPPUNIT_ASSERT(aAny.hasValue());
@@ -1328,7 +1420,6 @@ void Chart2ImportTest::testTdf90510()
 {
     load("/chart2/qa/extras/data/xls/", "piechart_outside.xls");
     uno::Reference< chart::XChartDocument > xChart1Doc( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW );
-    CPPUNIT_ASSERT_MESSAGE( "failed to load chart", xChart1Doc.is() );
     Reference<beans::XPropertySet> xPropSet( xChart1Doc->getDiagram()->getDataPointProperties( 0, 0 ), uno::UNO_QUERY_THROW );
     uno::Any aAny = xPropSet->getPropertyValue( "LabelPlacement" );
     CPPUNIT_ASSERT( aAny.hasValue() );
@@ -1341,7 +1432,6 @@ void Chart2ImportTest::testTdf109858()
 {
     load("/chart2/qa/extras/data/xlsx/", "piechart_outside.xlsx");
     uno::Reference< chart::XChartDocument > xChart1Doc( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW );
-    CPPUNIT_ASSERT_MESSAGE( "failed to load chart", xChart1Doc.is() );
     Reference<beans::XPropertySet> xPropSet( xChart1Doc->getDiagram()->getDataPointProperties( 0, 0 ), uno::UNO_QUERY_THROW );
     uno::Any aAny = xPropSet->getPropertyValue( "LabelPlacement" );
     CPPUNIT_ASSERT( aAny.hasValue() );
@@ -1354,7 +1444,24 @@ void Chart2ImportTest::testTdf111173()
 {
     load("/chart2/qa/extras/data/xlsx/", "tdf111173.xlsx");
     uno::Reference< chart::XChartDocument > xChart1Doc( getChartCompFromSheet( 0, mxComponent ), UNO_QUERY_THROW );
-    CPPUNIT_ASSERT_MESSAGE( "failed to load chart", xChart1Doc.is() );
+}
+
+void Chart2ImportTest::testTdf122226()
+{
+    load( "/chart2/qa/extras/data/docx/", "testTdf122226.docx" );
+    uno::Reference< chart2::XChartDocument > xChartDoc ( getChartDocFromWriter(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT( xChartDoc.is() );
+
+    css::uno::Reference<chart2::XDiagram> xDiagram(xChartDoc->getFirstDiagram(), UNO_QUERY_THROW);
+    Reference<chart2::XDataSeries> xDataSeries = getDataSeriesFromDoc(xChartDoc, 0);
+    uno::Reference<beans::XPropertySet> xPropertySet(xDataSeries->getDataPointByIndex(0), uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT(xPropertySet.is());
+
+    uno::Any aAny = xPropertySet->getPropertyValue( "LabelSeparator" );
+    CPPUNIT_ASSERT( aAny.hasValue() );
+    OUString nLabelSeparator;
+    CPPUNIT_ASSERT( aAny >>= nLabelSeparator );
+    CPPUNIT_ASSERT_EQUAL_MESSAGE( "Data labels should be separated into new lines", OUString("\n"), nLabelSeparator );
 }
 
 void Chart2ImportTest::testTdf115107()
@@ -1556,7 +1663,6 @@ void Chart2ImportTest::testTdf116163()
     CPPUNIT_ASSERT(xXAxis.is());
 
     uno::Reference<container::XIndexAccess> xIndexAccess(xXAxis, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xIndexAccess.is());
 
     // Check text
     uno::Reference<text::XTextRange> xLabel0(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
@@ -1568,6 +1674,85 @@ void Chart2ImportTest::testTdf116163()
     CPPUNIT_ASSERT_EQUAL(OUString("Ccc"), xLabel2->getString());
     uno::Reference<text::XTextRange> xLabel3(xIndexAccess->getByIndex(3), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("Dddd..."), xLabel3->getString());
+}
+
+void Chart2ImportTest::testTdf121205()
+{
+    load("/chart2/qa/extras/data/pptx/", "tdf121205.pptx");
+    Reference<chart2::XChartDocument> xChartDoc(getChartDocFromDrawImpress(0, 0), uno::UNO_QUERY);
+
+    uno::Reference<chart2::XTitled> xTitled(xChartDoc, uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("chart doc does not have title", xTitled.is());
+    OUString aTitle = getTitleString(xTitled);
+
+    // We expect title splitted in 3 lines
+    CPPUNIT_ASSERT_EQUAL(OUString("Firstline\nSecondline\nThirdline"), aTitle);
+}
+
+void Chart2ImportTest::testTdf114179()
+{
+    load( "/chart2/qa/extras/data/docx/", "testTdf114179.docx" );
+    uno::Reference< chart2::XChartDocument > xChartDoc ( getChartDocFromWriter(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT( xChartDoc.is() );
+    css::uno::Reference<chart2::XDiagram> xDiagram;
+    xDiagram.set( xChartDoc->getFirstDiagram() );
+    CPPUNIT_ASSERT_MESSAGE( "There is a Diagram." , xDiagram.is() );
+    awt::Size aPage = getPageSize( xChartDoc );
+    awt::Size aSize = getSize( xDiagram,aPage );
+    CPPUNIT_ASSERT( aSize.Width > 0);
+    CPPUNIT_ASSERT( aSize.Height > 0);
+}
+
+void Chart2ImportTest::testTdf123504()
+{
+    load("/chart2/qa/extras/data/ods/", "pie_chart_100_and_0.ods");
+    Reference<chart::XChartDocument> xChartDoc(getChartDocFromSheet(0, mxComponent),
+        UNO_QUERY_THROW);
+
+    Reference<chart2::XChartDocument> xChartDoc2(xChartDoc, UNO_QUERY_THROW);
+    Reference<chart2::XChartType> xChartType(getChartTypeFromDoc(xChartDoc2, 0), UNO_SET_THROW);
+    auto aDataSeriesYValues = getDataSeriesYValuesFromChartType(xChartType);
+    CPPUNIT_ASSERT_EQUAL(size_t(1), aDataSeriesYValues.size());
+
+    Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(xChartDoc, UNO_QUERY_THROW);
+    Reference<drawing::XDrawPage> xDrawPage(xDrawPageSupplier->getDrawPage(), UNO_SET_THROW);
+    Reference<drawing::XShapes> xShapes(xDrawPage->getByIndex(0), UNO_QUERY_THROW);
+    Reference<drawing::XShape> xSeriesSlices(getShapeByName(xShapes, "CID/D=0:CS=0:CT=0:Series=0"),
+        UNO_SET_THROW);
+
+    Reference<container::XIndexAccess> xIndexAccess(xSeriesSlices, UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xIndexAccess->getCount());
+    Reference<drawing::XShape> xSlice(xIndexAccess->getByIndex(0), UNO_QUERY_THROW);
+
+    // Check size and position of the only slice in the chart (100%)
+    // In the regressed state, it used to be 0-sized at position 0,0
+    awt::Point aSlicePosition = xSlice->getPosition();
+    CPPUNIT_ASSERT_GREATER(sal_Int32(3000), aSlicePosition.X);
+    CPPUNIT_ASSERT_GREATER(sal_Int32(150), aSlicePosition.Y);
+    awt::Size aSliceSize = xSlice->getSize();
+    CPPUNIT_ASSERT_GREATER(sal_Int32(8500), aSliceSize.Height);
+    CPPUNIT_ASSERT_GREATER(sal_Int32(8500), aSliceSize.Width);
+}
+
+void Chart2ImportTest::testTdf122765()
+{
+    // The horizontal position of the slices was wrong.
+    load("/chart2/qa/extras/data/pptx/", "tdf122765.pptx");
+    Reference<chart::XChartDocument> xChartDoc(getChartDocFromDrawImpress(0, 0), UNO_QUERY);
+    Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(xChartDoc, UNO_QUERY_THROW);
+    Reference<drawing::XDrawPage> xDrawPage(xDrawPageSupplier->getDrawPage(), UNO_SET_THROW);
+    Reference<drawing::XShapes> xShapes(xDrawPage->getByIndex(0), UNO_QUERY_THROW);
+    Reference<drawing::XShape> xSeriesSlices(getShapeByName(xShapes, "CID/D=0:CS=0:CT=0:Series=0"),
+                                             UNO_SET_THROW);
+
+    Reference<container::XIndexAccess> xIndexAccess(xSeriesSlices, UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(9), xIndexAccess->getCount());
+    Reference<drawing::XShape> xSlice(xIndexAccess->getByIndex(0), UNO_QUERY_THROW);
+
+    // Check position of the first slice, all slices move together, so enough to check only one.
+    // Wrong poisition was around 5856.
+    awt::Point aSlicePosition = xSlice->getPosition();
+    CPPUNIT_ASSERT_GREATER(sal_Int32(7000), aSlicePosition.X);
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Chart2ImportTest);

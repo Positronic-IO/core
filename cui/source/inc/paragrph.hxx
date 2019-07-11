@@ -51,48 +51,52 @@ class SvxStdParagraphTabPage: public SfxTabPage
     static const sal_uInt16 pStdRanges[];
 
 private:
-    SvxStdParagraphTabPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SvxStdParagraphTabPage(TabPageParent pParent, const SfxItemSet& rSet);
 
-    // indention
-    VclPtr<SvxRelativeField>       m_pLeftIndent;
-
-    VclPtr<FixedText>              m_pRightLabel;
-    VclPtr<SvxRelativeField>       m_pRightIndent;
-
-    VclPtr<FixedText>              m_pFLineLabel;
-    VclPtr<SvxRelativeField>       m_pFLineIndent;
-    VclPtr<CheckBox>               m_pAutoCB;
-
-    // distance
-    VclPtr<SvxRelativeField>       m_pTopDist;
-    VclPtr<SvxRelativeField>       m_pBottomDist;
-    VclPtr<CheckBox>               m_pContextualCB;
-
-    // line spacing
-    VclPtr<ListBox>                m_pLineDist;
-    VclPtr<FixedText>              m_pLineDistAtLabel;
-    VclPtr<MetricField>            m_pLineDistAtPercentBox;
-    VclPtr<MetricField>            m_pLineDistAtMetricBox;
-    VclPtr<FixedText>              m_pAbsDist;
-    OUString                sAbsDist;
-    VclPtr<SvxParaPrevWindow>      m_pExampleWin;
-
-    // only writer
-    VclPtr<VclFrame>               m_pRegisterFL;
-    VclPtr<CheckBox>               m_pRegisterCB;
-
-    long                    nAbst;
     long                    nWidth;
     long                    nMinFixDist;
     bool                    bRelativeMode;
+    OUString                sAbsDist;
+
+    SvxParaPrevWindow m_aExampleWin;
+
+    // indention
+    std::unique_ptr<RelativeField> m_xLeftIndent;
+
+    std::unique_ptr<weld::Label> m_xRightLabel;
+    std::unique_ptr<RelativeField> m_xRightIndent;
+
+    std::unique_ptr<weld::Label> m_xFLineLabel;
+    std::unique_ptr<RelativeField> m_xFLineIndent;
+    std::unique_ptr<weld::CheckButton> m_xAutoCB;
+
+    // distance
+    std::unique_ptr<RelativeField> m_xTopDist;
+    std::unique_ptr<RelativeField> m_xBottomDist;
+    std::unique_ptr<weld::CheckButton> m_xContextualCB;
+
+    // line spacing
+    std::unique_ptr<weld::ComboBox> m_xLineDist;
+    std::unique_ptr<weld::MetricSpinButton> m_xLineDistAtPercentBox;
+    std::unique_ptr<weld::MetricSpinButton> m_xLineDistAtMetricBox;
+    std::unique_ptr<weld::Label> m_xLineDistAtLabel;
+    std::unique_ptr<weld::Label> m_xAbsDist;
+
+    // only writer
+    std::unique_ptr<weld::Widget> m_xRegisterFL;
+    std::unique_ptr<weld::CheckButton> m_xRegisterCB;
+
+    // preview
+    std::unique_ptr<weld::CustomWeld> m_xExampleWin;
 
     void                    SetLineSpacing_Impl( const SvxLineSpacingItem& rAttr );
     void                    Init_Impl();
     void                    UpdateExample_Impl();
+    void                    ELRLoseFocus();
 
-    DECL_LINK( LineDistHdl_Impl, ListBox&, void );
-    DECL_LINK( ModifyHdl_Impl, Edit&, void );
-    DECL_LINK( AutoHdl_Impl, Button*, void );
+    DECL_LINK(LineDistHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(ModifyHdl_Impl, weld::MetricSpinButton&, void);
+    DECL_LINK(AutoHdl_Impl, weld::ToggleButton&, void);
 
 protected:
     virtual void            ActivatePage( const SfxItemSet& rSet ) override;
@@ -101,9 +105,8 @@ protected:
 
 public:
     virtual ~SvxStdParagraphTabPage() override;
-    virtual void dispose() override;
 
-    DECL_LINK(ELRLoseFocusHdl, Control&, void);
+    DECL_LINK(ELRLoseFocusHdl, weld::MetricSpinButton&, void);
 
     static VclPtr<SfxTabPage>      Create( TabPageParent pParent, const SfxItemSet* rSet );
     static const sal_uInt16* GetRanges() { return pStdRanges; }
@@ -130,36 +133,38 @@ class SvxParaAlignTabPage : public SfxTabPage
     using TabPage::DeactivatePage;
     static const sal_uInt16 pAlignRanges[];
 
+    SvxParaPrevWindow m_aExampleWin;
+
     // alignment
-    VclPtr<RadioButton>             m_pLeft;
-    VclPtr<RadioButton>             m_pRight;
-    VclPtr<RadioButton>             m_pCenter;
-    VclPtr<RadioButton>             m_pJustify;
-    VclPtr<FixedText>               m_pLeftBottom;
-    VclPtr<FixedText>               m_pRightTop;
+    std::unique_ptr<weld::RadioButton> m_xLeft;
+    std::unique_ptr<weld::RadioButton> m_xRight;
+    std::unique_ptr<weld::RadioButton> m_xCenter;
+    std::unique_ptr<weld::RadioButton> m_xJustify;
+    std::unique_ptr<weld::Label> m_xLeftBottom;
+    std::unique_ptr<weld::Label> m_xRightTop;
 
-    VclPtr<FixedText>               m_pLastLineFT;
-    VclPtr<ListBox>                 m_pLastLineLB;
-    VclPtr<CheckBox>                m_pExpandCB;
+    std::unique_ptr<weld::Label> m_xLastLineFT;
+    std::unique_ptr<weld::ComboBox> m_xLastLineLB;
+    std::unique_ptr<weld::CheckButton> m_xExpandCB;
 
-    VclPtr<CheckBox>                m_pSnapToGridCB;
+    std::unique_ptr<weld::CheckButton> m_xSnapToGridCB;
 
     //preview
-    VclPtr<SvxParaPrevWindow>       m_pExampleWin;
+    std::unique_ptr<weld::CustomWeld> m_xExampleWin;
     //vertical alignment
-    VclPtr<VclFrame>                m_pVertAlignFL;
-    VclPtr<ListBox>                 m_pVertAlignLB;
+    std::unique_ptr<weld::Widget> m_xVertAlignFL;
+    std::unique_ptr<weld::ComboBox> m_xVertAlignLB;
 
-    VclPtr<VclFrame>                m_pPropertiesFL;
-    VclPtr<svx::FrameDirectionListBox>  m_pTextDirectionLB;
+    std::unique_ptr<weld::Widget> m_xPropertiesFL;
+    std::unique_ptr<svx::FrameDirectionListBox>  m_xTextDirectionLB;
 
-    DECL_LINK(AlignHdl_Impl, Button*, void);
-    DECL_LINK(LastLineHdl_Impl, ListBox&, void);
-    DECL_LINK(TextDirectionHdl_Impl, ListBox&, void);
+    DECL_LINK(AlignHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(LastLineHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(TextDirectionHdl_Impl, weld::ComboBox&, void);
 
     void                    UpdateExample_Impl();
 
-                            SvxParaAlignTabPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SvxParaAlignTabPage(TabPageParent pParent, const SfxItemSet& rSet);
 
 protected:
     virtual void            ActivatePage( const SfxItemSet& rSet ) override;
@@ -167,7 +172,6 @@ protected:
 
 public:
     virtual ~SvxParaAlignTabPage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage>      Create( TabPageParent pParent, const SfxItemSet* rSet );
     static const sal_uInt16* GetRanges() { return pAlignRanges; }
@@ -202,7 +206,6 @@ class SvxExtParagraphTabPage: public SfxTabPage
 
 public:
     virtual ~SvxExtParagraphTabPage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage>  Create( TabPageParent pParent,
                                 const SfxItemSet* rSet );
@@ -218,77 +221,90 @@ protected:
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
 
 private:
-                        SvxExtParagraphTabPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SvxExtParagraphTabPage(TabPageParent pParent, const SfxItemSet& rSet);
 
-    // hyphenation
-    VclPtr<TriStateBox>        m_pHyphenBox;
-    VclPtr<FixedText>          m_pBeforeText;
-    VclPtr<NumericField>       m_pExtHyphenBeforeBox;
-    VclPtr<FixedText>          m_pAfterText;
-    VclPtr<NumericField>       m_pExtHyphenAfterBox;
-    VclPtr<FixedText>          m_pMaxHyphenLabel;
-    VclPtr<NumericField>       m_pMaxHyphenEdit;
-
-    // pagebreak
-    VclPtr<TriStateBox>        m_pPageBreakBox;
-    VclPtr<FixedText>          m_pBreakTypeFT;
-    VclPtr<ListBox>            m_pBreakTypeLB;
-    VclPtr<FixedText>          m_pBreakPositionFT;
-    VclPtr<ListBox>            m_pBreakPositionLB;
-    VclPtr<TriStateBox>        m_pApplyCollBtn;
-    VclPtr<ListBox>            m_pApplyCollBox;
-    VclPtr<TriStateBox>        m_pPageNumBox;
-    VclPtr<NumericField>       m_pPagenumEdit;
-
-    // paragraph division
-    VclPtr<TriStateBox>        m_pKeepTogetherBox;
-    VclPtr<TriStateBox>        m_pKeepParaBox;
-
-    // orphan/widow
-    VclPtr<TriStateBox>        m_pOrphanBox;
-    VclPtr<NumericField>       m_pOrphanRowNo;
-    VclPtr<FixedText>          m_pOrphanRowLabel;
-
-    VclPtr<TriStateBox>        m_pWidowBox;
-    VclPtr<NumericField>       m_pWidowRowNo;
-    VclPtr<FixedText>          m_pWidowRowLabel;
+    weld::TriStateEnabled aHyphenState;
+    weld::TriStateEnabled aPageBreakState;
+    weld::TriStateEnabled aApplyCollState;
+    weld::TriStateEnabled aPageNumState;
+    weld::TriStateEnabled aKeepTogetherState;
+    weld::TriStateEnabled aKeepParaState;
+    weld::TriStateEnabled aOrphanState;
+    weld::TriStateEnabled aWidowState;
 
     bool                bPageBreak;
     bool                bHtmlMode;
-    sal_uInt16              nStdPos;
+    sal_uInt16          nStdPos;
 
-    DECL_LINK(PageBreakHdl_Impl, Button*, void);
-    DECL_LINK(KeepTogetherHdl_Impl, Button*, void);
-    DECL_LINK(WidowHdl_Impl, Button*, void);
-    DECL_LINK(OrphanHdl_Impl, Button*, void);
-    DECL_LINK(HyphenClickHdl_Impl, Button*, void);
-    DECL_LINK(ApplyCollClickHdl_Impl, Button*, void);
-    DECL_LINK( PageBreakPosHdl_Impl, ListBox&, void );
-    DECL_LINK( PageBreakTypeHdl_Impl, ListBox&, void );
-    DECL_LINK(PageNumBoxClickHdl_Impl, Button*, void);
+    // hyphenation
+    std::unique_ptr<weld::CheckButton> m_xHyphenBox;
+    std::unique_ptr<weld::Label> m_xBeforeText;
+    std::unique_ptr<weld::SpinButton> m_xExtHyphenBeforeBox;
+    std::unique_ptr<weld::Label> m_xAfterText;
+    std::unique_ptr<weld::SpinButton> m_xExtHyphenAfterBox;
+    std::unique_ptr<weld::Label> m_xMaxHyphenLabel;
+    std::unique_ptr<weld::SpinButton> m_xMaxHyphenEdit;
+
+    // pagebreak
+    std::unique_ptr<weld::CheckButton> m_xPageBreakBox;
+    std::unique_ptr<weld::Label> m_xBreakTypeFT;
+    std::unique_ptr<weld::ComboBox> m_xBreakTypeLB;
+    std::unique_ptr<weld::Label> m_xBreakPositionFT;
+    std::unique_ptr<weld::ComboBox> m_xBreakPositionLB;
+    std::unique_ptr<weld::CheckButton> m_xApplyCollBtn;
+    std::unique_ptr<weld::ComboBox> m_xApplyCollBox;
+    std::unique_ptr<weld::CheckButton> m_xPageNumBox;
+    std::unique_ptr<weld::SpinButton> m_xPagenumEdit;
+
+    // paragraph division
+    std::unique_ptr<weld::CheckButton> m_xKeepTogetherBox;
+    std::unique_ptr<weld::CheckButton> m_xKeepParaBox;
+
+    // orphan/widow
+    std::unique_ptr<weld::CheckButton> m_xOrphanBox;
+    std::unique_ptr<weld::SpinButton> m_xOrphanRowNo;
+    std::unique_ptr<weld::Label> m_xOrphanRowLabel;
+
+    std::unique_ptr<weld::CheckButton> m_xWidowBox;
+    std::unique_ptr<weld::SpinButton> m_xWidowRowNo;
+    std::unique_ptr<weld::Label> m_xWidowRowLabel;
+
+    void HyphenClickHdl();
+    void PageNumBoxClickHdl();
+    void ApplyCollClickHdl();
+    void PageBreakHdl();
+    void KeepTogetherHdl();
+    void OrphanHdl();
+    void WidowHdl();
+
+    DECL_LINK(PageBreakHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(KeepTogetherHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(WidowHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(OrphanHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(HyphenClickHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(ApplyCollClickHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(PageBreakPosHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(PageBreakTypeHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(PageNumBoxClickHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(KeepParaBoxClickHdl_Impl, weld::ToggleButton&, void);
 
     virtual void            PageCreated(const SfxAllItemSet& aSet) override;
 };
-
 
 class SvxAsianTabPage : public SfxTabPage
 {
     friend class VclPtr<SvxAsianTabPage>;
 
-    VclPtr<CheckBox>     m_pForbiddenRulesCB;
-    VclPtr<CheckBox>     m_pHangingPunctCB;
-    VclPtr<CheckBox>     m_pScriptSpaceCB;
+    std::unique_ptr<weld::CheckButton> m_xForbiddenRulesCB;
+    std::unique_ptr<weld::CheckButton> m_xHangingPunctCB;
+    std::unique_ptr<weld::CheckButton> m_xScriptSpaceCB;
 
-    SvxAsianTabPage( vcl::Window* pParent, const SfxItemSet& rSet );
-
-    DECL_STATIC_LINK( SvxAsianTabPage, ClickHdl_Impl, Button*, void );
+    SvxAsianTabPage(TabPageParent pParent, const SfxItemSet& rSet);
 
 public:
     virtual ~SvxAsianTabPage() override;
-    virtual void dispose() override;
 
-    static VclPtr<SfxTabPage>  Create( TabPageParent pParent,
-                                const SfxItemSet* rSet );
+    static VclPtr<SfxTabPage>  Create(TabPageParent pParent, const SfxItemSet* rSet);
     static const sal_uInt16*      GetRanges();
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;

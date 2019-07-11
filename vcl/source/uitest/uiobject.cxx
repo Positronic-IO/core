@@ -23,6 +23,7 @@
 #include <comphelper/string.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <iostream>
 #include <memory>
@@ -421,8 +422,15 @@ void addChildren(vcl::Window const * pParent, std::set<OUString>& rChildren)
 
 std::unique_ptr<UIObject> WindowUIObject::get_child(const OUString& rID)
 {
-    vcl::Window* pDialogParent = get_top_parent(mxWindow.get());
-    vcl::Window* pWindow = findChild(pDialogParent, rID);
+    // in a first step try the real children before moving to the top level parent
+    // This makes it easier to handle cases with the same ID as there is a way
+    // to resolve conflicts
+    vcl::Window* pWindow = findChild(mxWindow.get(), rID);
+    if (!pWindow)
+    {
+        vcl::Window* pDialogParent = get_top_parent(mxWindow.get());
+        pWindow = findChild(pDialogParent, rID);
+    }
 
     if (!pWindow)
         throw css::uno::RuntimeException("Could not find child with id: " + rID);
@@ -553,7 +561,16 @@ void ButtonUIObject::execute(const OUString& rAction,
         const StringMap& rParameters)
 {
     if (rAction == "CLICK")
+    {
+        //Click doesn't call toggle when it's a pushbutton tweaked to be a toggle-button
+        if (PushButton *pPushButton = (mxButton->GetStyle() & WB_TOGGLE) ? dynamic_cast<PushButton*>(mxButton.get()) : nullptr)
+        {
+            pPushButton->Check(!pPushButton->IsChecked());
+            pPushButton->Toggle();
+            return;
+        }
         mxButton->Click();
+    }
     else
         WindowUIObject::execute(rAction, rParameters);
 }
@@ -561,6 +578,17 @@ void ButtonUIObject::execute(const OUString& rAction,
 OUString ButtonUIObject::get_name() const
 {
     return OUString("ButtonUIObject");
+}
+
+OUString ButtonUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::ButtonClick)
+    {
+        return this->get_type() + " Action:CLICK Id:" + mxButton->get_id() + " Parent:" +
+            get_top_parent(mxButton)->get_id();
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
 }
 
 std::unique_ptr<UIObject> ButtonUIObject::create(vcl::Window* pWindow)
@@ -648,6 +676,12 @@ void EditUIObject::execute(const OUString& rAction,
             mxEdit->SetSelection(aSelection);
         }
     }
+    else if (rAction == "CLEAR")
+    {
+        mxEdit->SetText("");
+        mxEdit->UpdateData();
+        bHandled = true;
+    }
     else
     {
         bHandled = false;
@@ -665,6 +699,23 @@ StringMap EditUIObject::get_state()
     aMap["Text"] = mxEdit->GetText();
 
     return aMap;
+}
+
+OUString EditUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::EditSelectionChanged)
+    {
+        const Selection& rSelection  = mxEdit->GetSelection();
+        long nMin = rSelection.Min();
+        long nMax = rSelection.Max();
+        return this->get_type() + " Action:SELECT Id:" +
+                mxEdit->get_id() +
+                " Parent:" + get_top_parent(mxEdit)->get_id() +
+                " {\"FROM\": \"" + OUString::number(nMin) + "\", \"TO\": \"" +
+                OUString::number(nMax) + "\"}";
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
 }
 
 OUString EditUIObject::get_name() const
@@ -773,6 +824,17 @@ OUString CheckBoxUIObject::get_name() const
     return OUString("CheckBoxUIObject");
 }
 
+OUString CheckBoxUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::CheckboxToggle)
+    {
+        return this->get_type() + " Action:CLICK Id:" + mxCheckBox->get_id() + " Parent:" +
+            get_top_parent(mxCheckBox)->get_id();
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
+}
+
 std::unique_ptr<UIObject> CheckBoxUIObject::create(vcl::Window* pWindow)
 {
     CheckBox* pCheckBox = dynamic_cast<CheckBox*>(pWindow);
@@ -810,6 +872,17 @@ StringMap RadioButtonUIObject::get_state()
 OUString RadioButtonUIObject::get_name() const
 {
     return OUString("RadioButtonUIObject");
+}
+
+OUString RadioButtonUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::RadiobuttonToggle)
+    {
+        return this->get_type() + " Action:CLICK Id:" + mxRadioButton->get_id() + " Parent:" +
+            get_top_parent(mxRadioButton)->get_id();
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
 }
 
 std::unique_ptr<UIObject> RadioButtonUIObject::create(vcl::Window* pWindow)
@@ -911,7 +984,14 @@ OUString ListBoxUIObject::get_action(VclEventId nEvent) const
     if (nEvent == VclEventId::ListboxSelect)
     {
         sal_Int32 nPos = mxListBox->GetSelectedEntryPos();
-        return "Action on element: " + mxListBox->get_id() + " with action : SELECT and content {\"POS\": \"" + OUString::number(nPos) + "\"}";
+        return this->get_type() + " Action:SELECT Id:" + mxListBox->get_id() +
+            " Parent:" + get_top_parent(mxListBox)->get_id() +
+            " {\"POS\": \"" + OUString::number(nPos) + "\"}";
+    }
+    else if (nEvent == VclEventId::ListboxFocus)
+    {
+        return this->get_type() + " Action:FOCUS Id:" + mxListBox->get_id() +
+            " Parent:" + get_top_parent(mxListBox)->get_id();
     }
     else
         return WindowUIObject::get_action(nEvent);
@@ -975,6 +1055,20 @@ OUString ComboBoxUIObject::get_name() const
     return OUString("ComboBoxUIObject");
 }
 
+OUString ComboBoxUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::ComboboxSelect)
+    {
+        sal_Int32 nPos = mxComboBox->GetSelectedEntryPos();
+        return this->get_type() + " Action:SELECT Id:" +
+                mxComboBox->get_id() +
+                " Parent:" + get_top_parent(mxComboBox)->get_id() +
+                " {\"POS\": \"" + OUString::number(nPos) + "\"}";
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
+}
+
 std::unique_ptr<UIObject> ComboBoxUIObject::create(vcl::Window* pWindow)
 {
     ComboBox* pComboBox = dynamic_cast<ComboBox*>(pWindow);
@@ -997,11 +1091,11 @@ void SpinUIObject::execute(const OUString& rAction,
 {
     if (rAction == "UP")
     {
-        /* code */
+        mxSpinButton->Up();
     }
     else if (rAction == "DOWN")
     {
-        /* code */
+        mxSpinButton->Down();
     }
 }
 
@@ -1014,6 +1108,22 @@ StringMap SpinUIObject::get_state()
     aMap["Value"] = OUString::number(mxSpinButton->GetValue());
 
     return aMap;
+}
+
+OUString SpinUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::SpinbuttonUp)
+    {
+        return this->get_type() + " Action:UP Id:" + mxSpinButton->get_id() +
+            " Parent:" + get_top_parent(mxSpinButton)->get_id();
+    }
+    else if (nEvent == VclEventId::SpinbuttonDown)
+    {
+        return this->get_type() + " Action:DOWN Id:" + mxSpinButton->get_id() +
+            " Parent:" + get_top_parent(mxSpinButton)->get_id();
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
 }
 
 OUString SpinUIObject::get_name() const
@@ -1062,6 +1172,22 @@ StringMap SpinFieldUIObject::get_state()
     return aMap;
 }
 
+OUString SpinFieldUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::SpinfieldUp)
+    {
+        return this->get_type() + " Action:UP Id:" + mxSpinField->get_id() +
+            " Parent:" + get_top_parent(mxSpinField)->get_id();
+    }
+    else if (nEvent == VclEventId::SpinfieldDown)
+    {
+        return this->get_type() + " Action:DOWN Id:" + mxSpinField->get_id() +
+            " Parent:" + get_top_parent(mxSpinField)->get_id();
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
+}
+
 OUString SpinFieldUIObject::get_name() const
 {
     return OUString("SpinFieldUIObject");
@@ -1104,8 +1230,26 @@ void TabControlUIObject::execute(const OUString& rAction,
 StringMap TabControlUIObject::get_state()
 {
     StringMap aMap = WindowUIObject::get_state();
+    aMap["PageCount"] = OUString::number(mxTabControl->GetPageCount());
+
+    sal_uInt16 nPageId = mxTabControl->GetCurPageId();
+    aMap["CurrPageId"] = OUString::number(nPageId);
+    aMap["CurrPagePos"] = OUString::number(mxTabControl->GetPagePos(nPageId));
 
     return aMap;
+}
+
+OUString TabControlUIObject::get_action(VclEventId nEvent) const
+{
+    if (nEvent == VclEventId::TabpageActivate)
+    {
+        sal_Int32 nPageId = mxTabControl->GetCurPageId();
+        return this->get_type() + " Action:SELECT Id:" + mxTabControl->get_id() +
+            " Parent:" + get_top_parent(mxTabControl)->get_id() +
+            " {\"POS\": \"" + OUString::number(mxTabControl->GetPagePos(nPageId)) + "\"}";
+    }
+    else
+        return WindowUIObject::get_action(nEvent);
 }
 
 OUString TabControlUIObject::get_name() const

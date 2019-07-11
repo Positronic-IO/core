@@ -20,7 +20,14 @@
 #include "VAxisBase.hxx"
 #include <ShapeFactory.hxx>
 #include <CommonConverters.hxx>
+#include <ExplicitCategoriesProvider.hxx>
 #include "Tickmarks.hxx"
+#include <com/sun/star/drawing/XShapes.hpp>
+#include <com/sun/star/chart2/AxisType.hpp>
+#include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
+
+#include <osl/diagnose.h>
 
 #include <memory>
 
@@ -224,7 +231,7 @@ void VAxisBase::removeTextShapesFromTicks()
 
 void VAxisBase::updateUnscaledValuesAtTicks( TickIter& rIter )
 {
-    Reference< XScaling > xInverseScaling( nullptr );
+    Reference< XScaling > xInverseScaling;
     if( m_aScale.Scaling.is() )
         xInverseScaling = m_aScale.Scaling->getInverseScaling();
 

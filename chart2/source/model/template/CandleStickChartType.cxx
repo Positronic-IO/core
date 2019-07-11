@@ -20,10 +20,13 @@
 #include "CandleStickChartType.hxx"
 #include <PropertyHelper.hxx>
 #include <StockBar.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <servicenames_charttypes.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 

@@ -33,7 +33,6 @@
 
 using namespace css;
 using namespace css::uno;
-using ::rtl::OUString;
 
 namespace sfx2 { namespace sidebar {
 
@@ -128,7 +127,8 @@ Reference<frame::XToolbarController> ControllerFactory::CreateToolBoxController(
             const OUString sTooltip (vcl::CommandInfoProvider::GetTooltipForCommand(
                     rsCommandName,
                     rxFrame));
-            pToolBox->SetQuickHelpText(nItemId, sTooltip);
+            if (pToolBox->GetQuickHelpText(nItemId).isEmpty())
+                pToolBox->SetQuickHelpText(nItemId, sTooltip);
             pToolBox->EnableItem(nItemId);
         }
     }

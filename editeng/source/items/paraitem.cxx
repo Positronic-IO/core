@@ -26,7 +26,6 @@
 #include <comphelper/extract.hxx>
 #include <osl/diagnose.h>
 #include <unotools/syslocale.hxx>
-#include <comphelper/types.hxx>
 #include <tools/mapunit.hxx>
 #include <svl/itempool.hxx>
 #include <editeng/editrids.hrc>
@@ -44,6 +43,7 @@
 #include <editeng/paravertalignitem.hxx>
 #include <editeng/pgrditem.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <editeng/memberids.h>
 #include <editeng/editids.hrc>
 #include <editeng/itemtype.hxx>
@@ -372,7 +372,7 @@ sal_uInt16 SvxAdjustItem::GetValueCount() const
     return sal_uInt16(SvxAdjust::End);  // SvxAdjust::BlockLine + 1
 }
 
-OUString SvxAdjustItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxAdjustItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_ADJUST[] =
     {
@@ -535,12 +535,13 @@ bool SvxOrphansItem::GetPresentation
 // class SvxHyphenZoneItem -----------------------------------------------
 
 SvxHyphenZoneItem::SvxHyphenZoneItem( const bool bHyph, const sal_uInt16 nId ) :
-    SfxPoolItem( nId )
+    SfxPoolItem( nId ),
+    bHyphen(bHyph),
+    bPageEnd(true),
+    nMinLead(0),
+    nMinTrail(0),
+    nMaxHyphens(255)
 {
-    bHyphen = bHyph;
-    bPageEnd = true;
-    nMinLead = nMinTrail = 0;
-    nMaxHyphens = 255;
 }
 
 

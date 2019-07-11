@@ -26,6 +26,7 @@
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <unotools/accessiblestatesethelper.hxx>
@@ -100,29 +101,17 @@ vcl::Window *SwAccessibleContext::GetWindow()
 // get SwViewShell from accessibility map, and cast to cursor shell
 SwCursorShell* SwAccessibleContext::GetCursorShell()
 {
-    SwCursorShell* pCursorShell;
     SwViewShell* pViewShell = GetMap() ? GetMap()->GetShell() : nullptr;
     OSL_ENSURE( pViewShell, "no view shell" );
-    if( pViewShell && dynamic_cast<const SwCursorShell*>( pViewShell) !=  nullptr )
-        pCursorShell = static_cast<SwCursorShell*>( pViewShell );
-    else
-        pCursorShell = nullptr;
-
-    return pCursorShell;
+    return dynamic_cast<SwCursorShell*>( pViewShell);
 }
 
 const SwCursorShell* SwAccessibleContext::GetCursorShell() const
 {
     // just like non-const GetCursorShell
-    const SwCursorShell* pCursorShell;
     const SwViewShell* pViewShell = GetMap() ? GetMap()->GetShell() : nullptr;
     OSL_ENSURE( pViewShell, "no view shell" );
-    if( pViewShell && dynamic_cast<const SwCursorShell*>( pViewShell) !=  nullptr )
-        pCursorShell = static_cast<const SwCursorShell*>( pViewShell );
-    else
-        pCursorShell = nullptr;
-
-    return pCursorShell;
+    return dynamic_cast<const SwCursorShell*>( pViewShell);
 }
 
 enum class Action { NONE, SCROLLED, SCROLLED_WITHIN,
@@ -401,9 +390,8 @@ void SwAccessibleContext::DisposeChildren(const SwFrame *pFrame,
         const SwFrame* pLower = rLower.GetSwFrame();
         if( pLower )
         {
-            ::rtl::Reference< SwAccessibleContext > xAccImpl;
-            if( rLower.IsAccessible( GetShell()->IsPreview() ) )
-                xAccImpl = GetMap()->GetContextImpl( pLower, false );
+            // tdf#117601 dispose the darn thing if it ever was accessible
+            ::rtl::Reference<SwAccessibleContext> xAccImpl = GetMap()->GetContextImpl(pLower, false);
             if( xAccImpl.is() )
                 xAccImpl->Dispose( bRecursive );
             else
@@ -952,13 +940,12 @@ void SAL_CALL SwAccessibleContext::grabFocus()
         if( pCFrame && pCFrame->IsTextFrame() )
         {
             const SwTextFrame *pTextFrame = static_cast< const SwTextFrame * >( pCFrame );
-            const SwTextNode *pTextNd = pTextFrame->GetTextNode();
+            const SwTextNode *pTextNd = pTextFrame->GetTextNodeFirst();
+            assert(pTextNd); // can it actually be null? probably not=>simplify
             if( pTextNd )
             {
                 // create pam for selection
-                SwIndex aIndex( const_cast< SwTextNode * >( pTextNd ),
-                                pTextFrame->GetOfst() );
-                SwPosition aStartPos( *pTextNd, aIndex );
+                SwPosition const aStartPos(pTextFrame->MapViewToModelPos(pTextFrame->GetOfst()));
                 SwPaM aPaM( aStartPos );
 
                 // set PaM at cursor shell

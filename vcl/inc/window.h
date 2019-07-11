@@ -40,6 +40,7 @@ class VirtualDevice;
 class PhysicalFontCollection;
 class ImplFontCache;
 class VCLXWindow;
+class WindowStateData;
 class SalFrame;
 class SalObject;
 enum class MouseEventModifiers;
@@ -127,9 +128,9 @@ struct ImplFrameData
     VclPtr<vcl::Window> mpFocusWin;             //< focus window (is also set, when frame doesn't have the focus)
     VclPtr<vcl::Window> mpMouseMoveWin;         //< last window, where MouseMove() called
     VclPtr<vcl::Window> mpMouseDownWin;         //< last window, where MouseButtonDown() called
-    ::std::vector<VclPtr<vcl::Window> > maOwnerDrawList;    //< List of system windows with owner draw decoration
-    PhysicalFontCollection* mpFontCollection;   //< Font-List for this frame
-    ImplFontCache*      mpFontCache;            //< Font-Cache for this frame
+    std::vector<VclPtr<vcl::Window> > maOwnerDrawList;    //< List of system windows with owner draw decoration
+    std::shared_ptr<PhysicalFontCollection> mxFontCollection;   //< Font-List for this frame
+    std::shared_ptr<ImplFontCache> mxFontCache; //< Font-Cache for this frame
     sal_Int32           mnDPIX;                 //< Original Screen Resolution
     sal_Int32           mnDPIY;                 //< Original Screen Resolution
     ImplSVEvent *       mnFocusId;              //< FocusId for PostUserLink
@@ -290,7 +291,6 @@ public:
     ParentClipMode      mnParentClipMode;
     ActivateModeFlags   mnActivateMode;
     DialogControlFlags  mnDlgCtrlFlags;
-    sal_uInt16          mnLockCount;
     AlwaysInputMode     meAlwaysInputMode;
     VclAlign            meHalign;
     VclAlign            meValign;
@@ -414,6 +414,9 @@ bool ImplHandleMouseEvent( const VclPtr<vcl::Window>& xWindow, MouseNotifyEvent 
                            long nX, long nY, sal_uInt64 nMsgTime,
                            sal_uInt16 nCode, MouseEventModifiers nMode );
 void ImplHandleResize( vcl::Window* pWindow, long nNewWidth, long nNewHeight );
+
+VCL_DLLPUBLIC void ImplWindowStateFromStr(WindowStateData& rData, const OString& rStr);
+VCL_DLLPUBLIC OString ImplWindowStateToStr(const WindowStateData& rData);
 
 #endif // INCLUDED_VCL_INC_WINDOW_H
 

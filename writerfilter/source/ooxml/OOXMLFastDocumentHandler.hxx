@@ -77,14 +77,14 @@ public:
     void setIsSubstream( bool bSubstream );
 
 private:
-    OOXMLFastDocumentHandler(OOXMLFastDocumentHandler &) = delete;
-    void operator =(OOXMLFastDocumentHandler &) = delete;
+    OOXMLFastDocumentHandler(OOXMLFastDocumentHandler const &) = delete;
+    void operator =(OOXMLFastDocumentHandler const &) = delete;
 
     css::uno::Reference< css::uno::XComponentContext > m_xContext;
 
-    Stream * mpStream;
-    OOXMLDocumentImpl* mpDocument;
-    sal_Int32 mnXNoteId;
+    Stream * const mpStream;
+    OOXMLDocumentImpl* const mpDocument;
+    sal_Int32 const mnXNoteId;
     mutable rtl::Reference<OOXMLFastContextHandler> mxContextHandler;
     rtl::Reference<OOXMLFastContextHandler> const & getContextHandler() const;
 };

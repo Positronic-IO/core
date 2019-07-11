@@ -63,11 +63,11 @@ struct FormulaLogger::GroupScope::Impl
     FormulaLogger& mrLogger;
     const ScDocument& mrDoc;
 
-    OUString maPrefix;
+    OUString const maPrefix;
     std::vector<OUString> maMessages;
 
     bool mbCalcComplete;
-    bool mbOutputEnabled;
+    bool const mbOutputEnabled;
 
     Impl( FormulaLogger& rLogger, const OUString& rPrefix, const ScDocument& rDoc,
         const ScFormulaCell& rCell, bool bOutputEnabled ) :
@@ -269,8 +269,6 @@ FormulaLogger::FormulaLogger()
     writeAscii("---\n");
     writeAscii("OpenCL: ");
     writeAscii(ScCalcConfig::isOpenCLEnabled() ? "enabled\n" : "disabled\n");
-    writeAscii("Software Interpreter: ");
-    writeAscii(ScCalcConfig::isSwInterpreterEnabled() ? "enabled\n" : "disabled\n");
     writeAscii("---\n");
 
     sync();
@@ -302,7 +300,7 @@ void FormulaLogger::writeAscii( const char* s, size_t n )
 
 void FormulaLogger::write( const OUString& ou )
 {
-    OString s = rtl::OUStringToOString(ou, RTL_TEXTENCODING_UTF8).getStr();
+    OString s = OUStringToOString(ou, RTL_TEXTENCODING_UTF8).getStr();
     writeAscii(s.getStr(), s.getLength());
 }
 

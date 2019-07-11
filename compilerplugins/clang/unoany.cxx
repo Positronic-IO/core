@@ -12,10 +12,10 @@
 
 
 class UnoAny:
-    public RecursiveASTVisitor<UnoAny>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<UnoAny>
 {
 public:
-    explicit UnoAny(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit UnoAny(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     void run() override {
         TraverseDecl(compiler.getASTContext().getTranslationUnitDecl());
@@ -28,7 +28,8 @@ bool UnoAny::VisitCXXOperatorCallExpr(CXXOperatorCallExpr const * expr)
     if (ignoreLocation(expr)) {
         return true;
     }
-    StringRef aFileName = compiler.getSourceManager().getFilename(compiler.getSourceManager().getSpellingLoc(expr->getLocStart()));
+    StringRef aFileName = getFileNameOfSpellingLoc(
+            compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(expr)));
     if (loplugin::isSamePathname(aFileName, SRCDIR "/include/com/sun/star/uno/Any.hxx")) {
         return true;
     }

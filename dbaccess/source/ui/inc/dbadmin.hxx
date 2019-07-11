@@ -44,35 +44,29 @@ namespace dbaui
 class ODbDataSourceAdministrationHelper;
 /** tab dialog for administrating the office wide registered data sources
 */
-class ODbAdminDialog final : public SfxTabDialog , public IItemSetHelper, public IDatabaseSettingsDialog
+class ODbAdminDialog final : public SfxTabDialogController, public IItemSetHelper, public IDatabaseSettingsDialog
 {
 private:
-    std::stack< sal_Int32 > m_aCurrentDetailPages;  // ids of all currently enabled (type-dependent) detail pages
-
     std::unique_ptr<ODbDataSourceAdministrationHelper>  m_pImpl;
 
-    bool                m_bUIEnabled : 1;   /// <TRUE/> if the UI is enabled, false otherwise. Cannot be switched back to <TRUE/>, once it is <FALSE/>
-    sal_uInt16          m_nMainPageID;
+    OString             m_sMainPageID;
 
 public:
     /** ctor. The itemset given should have been created by <method>createItemSet</method> and should be destroyed
         after the dialog has been destroyed
     */
-    ODbAdminDialog(vcl::Window* pParent,
-        SfxItemSet const * _pItems,
-        const css::uno::Reference< css::uno::XComponentContext >& _rxORB
-        );
+    ODbAdminDialog(weld::Window* pParent, SfxItemSet const * _pItems,
+                   const css::uno::Reference< css::uno::XComponentContext >& _rxORB);
     virtual ~ODbAdminDialog() override;
-    virtual void dispose() override;
 
     /** create and return an item set for use with the dialog.
         @param      _pTypeCollection        pointer to an <type>ODatasourceMap</type>. May be NULL, in this case
                                             the pool will not contain a typecollection default.
     */
-    static SfxItemSet*  createItemSet(SfxItemSet*& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults, ::dbaccess::ODsnTypeCollection* _pTypeCollection);
+    static void createItemSet(std::unique_ptr<SfxItemSet>& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults, ::dbaccess::ODsnTypeCollection* _pTypeCollection);
     /** destroy and item set / item pool / pool defaults previously created by <method>createItemSet</method>
     */
-    static void         destroyItemSet(SfxItemSet*& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
+    static void destroyItemSet(std::unique_ptr<SfxItemSet>& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
 
     /** selects the DataSource
         @param  _rName
@@ -95,9 +89,9 @@ public:
 
 private:
     // adds a new detail page and remove all the old ones
-    void addDetailPage(sal_uInt16 _nPageId, const char* pTextId, CreateTabPage pCreateFunc);
+    void addDetailPage(const OString& rPageId, const char* pTextId, CreateTabPage pCreateFunc);
 
-    virtual void PageCreated(sal_uInt16 _nId, SfxTabPage& _rPage) override;
+    virtual void PageCreated(const OString& rId, SfxTabPage& _rPage) override;
     virtual short Ok() override;
 
     /// select a datasource with a given name, adjust the item set accordingly, and everything like that ..

@@ -21,6 +21,7 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_SHEETDATACONTEXT_HXX
 
 #include <memory>
+#include "addressconverter.hxx"
 #include "excelhandlers.hxx"
 #include "richstring.hxx"
 #include "sheetdatabuffer.hxx"
@@ -41,7 +42,7 @@ struct SheetDataContextBase
     SheetDataBuffer&    mrSheetData;        /// The sheet data buffer for cell content and formatting.
     CellModel           maCellData;         /// Position, contents, formatting of current imported cell.
     CellFormulaModel    maFmlaData;         /// Settings for a cell formula.
-    sal_Int16           mnSheet;            /// Index of the current sheet.
+    sal_Int16 const           mnSheet;            /// Index of the current sheet.
 
     explicit            SheetDataContextBase( const WorksheetHelper& rHelper );
     virtual             ~SheetDataContextBase();
@@ -58,7 +59,7 @@ class SheetDataContext : public WorksheetContextBase, private SheetDataContextBa
     // forms the inner loop for bulk data parsing, and for the
     // duration of this we can drop the solar mutex.
 #if MULTI_THREAD_SHEET_PARSING
-    SolarMutexReleaser aReleaser;
+    SolarMutexReleaser const aReleaser;
 #endif
 
 public:

@@ -20,16 +20,14 @@
 #include <attarray.hxx>
 #include <scitems.hxx>
 #include <o3tl/make_unique.hxx>
-#include <svx/algitem.hxx>
 #include <editeng/boxitem.hxx>
 #include <editeng/lineitem.hxx>
-#include <editeng/frmdiritem.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/editobj.hxx>
 #include <editeng/justifyitem.hxx>
+#include <osl/diagnose.h>
 #include <svl/poolcach.hxx>
-#include <editeng/fontitem.hxx>
-#include <unotools/fontcvt.hxx>
+#include <osl/diagnose.h>
 
 #include <global.hxx>
 #include <document.hxx>
@@ -38,15 +36,12 @@
 #include <stlsheet.hxx>
 #include <stlpool.hxx>
 #include <markarr.hxx>
-#include <rechead.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <segmenttree.hxx>
 #include <editdataarray.hxx>
-#include <formulacell.hxx>
 #include <cellvalue.hxx>
 #include <editutil.hxx>
-#include <rtl/strbuf.hxx>
 #include <memory>
 
 using ::editeng::SvxBorderLine;
@@ -190,6 +185,9 @@ bool ScAttrArray::Concat(SCSIZE nPos)
  * no attribute in a column => nCount==1, one attribute somewhere => nCount == 3
  * (ie. one run with no attribute + one attribute + another run with no attribute)
  * so a range of identical attributes is only one entry in ScAttrArray.
+ *
+ * Iterative implementation of Binary Search
+ * The same implementation was used inside ScMarkArray::Search().
  */
 
 bool ScAttrArray::Search( SCROW nRow, SCSIZE& nIndex ) const
@@ -201,33 +199,40 @@ bool ScAttrArray::Search( SCROW nRow, SCSIZE& nIndex ) const
         nIndex = it - mvData.begin();
     return it != mvData.end(); */
 
-    long nHi = static_cast<long>(mvData.size()) - 1;
-    long i = 0;
-    bool bFound = (mvData.size() == 1);
-    long nLo = 0;
-    long nStartRow = 0;
-    while ( !bFound && nLo <= nHi )
+    if (mvData.size() == 1)
     {
-        i = (nLo + nHi) / 2;
-        if (i > 0)
-            nStartRow = static_cast<long>(mvData[i - 1].nEndRow);
-        else
-            nStartRow = -1;
-        const long nEndRow = static_cast<long>(mvData[i].nEndRow);
-        if (nEndRow < static_cast<long>(nRow))
-            nLo = ++i;
-        else
-            if (nStartRow >= static_cast<long>(nRow))
-                nHi = --i;
-            else
-                bFound = true;
+        nIndex = 0;
+        return true;
     }
 
-    if (bFound)
-        nIndex=static_cast<SCSIZE>(i);
-    else
-        nIndex=0;
-    return bFound;
+    long nHi = static_cast<long>(mvData.size()) - 1;
+    long i = 0;
+    long nLo = 0;
+
+    while ( nLo <= nHi )
+    {
+        i = (nLo + nHi) / 2;
+
+        if (mvData[i].nEndRow < nRow)
+        {
+            // If [nRow] greater, ignore left half
+            nLo = i + 1;
+        }
+        else  if ((i > 0) && (mvData[i - 1].nEndRow >= nRow))
+        {
+            // If [nRow] is smaller, ignore right half
+            nHi = i - 1;
+        }
+        else
+        {
+            // found
+            nIndex=static_cast<SCSIZE>(i);
+            return true;
+        }
+    }
+
+    nIndex=0;
+    return false;
 }
 
 const ScPatternAttr* ScAttrArray::GetPattern( SCROW nRow ) const
@@ -298,11 +303,15 @@ void ScAttrArray::AddCondFormat( SCROW nStartRow, SCROW nEndRow, sal_uInt32 nInd
             std::vector< sal_uInt32 > aCondFormatData;
             if(pItem)
                 aCondFormatData = static_cast<const ScCondFormatItem*>(pItem)->GetCondFormatData();
-            aCondFormatData.push_back(nIndex);
+            if (std::find(aCondFormatData.begin(), aCondFormatData.end(), nIndex)
+                == aCondFormatData.end())
+            {
+                aCondFormatData.push_back(nIndex);
 
-            ScCondFormatItem aItem;
-            aItem.SetCondFormatData( aCondFormatData );
-            pNewPattern->GetItemSet().Put( aItem );
+                ScCondFormatItem aItem;
+                aItem.SetCondFormatData( aCondFormatData );
+                pNewPattern->GetItemSet().Put( aItem );
+            }
         }
         else
         {
@@ -513,7 +522,7 @@ void ScAttrArray::SetPatternArea(SCROW nStartRow, SCROW nEndRow, const ScPattern
                         ni++;
                         nInsert = ni;
                     }
-                    else if ( ni > 0 && mvData[ni-1].nEndRow == nStartRow - 1 )
+                    else if (mvData[ni - 1].nEndRow == nStartRow - 1)
                         nInsert = ni;
                 }
                 if ( ni > 0 && mvData[ni-1].pPattern == pPattern )
@@ -682,19 +691,23 @@ void ScAttrArray::ApplyStyleArea( SCROW nStartRow, SCROW nEndRow, const ScStyleS
 }
 
     // const cast, otherwise it will be too inefficient/complicated
-#define SET_LINECOLOR(dest,c)                    \
-    if ((dest))                                  \
-    {                                            \
-        const_cast<SvxBorderLine*>(dest)->SetColor((c)); \
+static void SetLineColor(SvxBorderLine const * dest, Color c)
+{
+    if (dest)
+    {
+        const_cast<SvxBorderLine*>(dest)->SetColor(c);
     }
+}
 
-#define SET_LINE(dest,src)                             \
-    if ((dest))                                        \
-    {                                                  \
-        SvxBorderLine* pCast = const_cast<SvxBorderLine*>(dest); \
-        pCast->SetBorderLineStyle( (src)->GetBorderLineStyle() ); \
-        pCast->SetWidth( (src)->GetWidth( ) );         \
+static void SetLine(const SvxBorderLine* dest, const SvxBorderLine* src)
+{
+    if (dest)
+    {
+        SvxBorderLine* pCast = const_cast<SvxBorderLine*>(dest);
+        pCast->SetBorderLineStyle( src->GetBorderLineStyle() );
+        pCast->SetWidth( src->GetWidth() );
     }
+}
 
 void ScAttrArray::ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
                                       const SvxBorderLine* pLine, bool bColorOnly )
@@ -731,9 +744,9 @@ void ScAttrArray::ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
                 SCROW           nY1 = nStart;
                 SCROW           nY2 = mvData[nPos].nEndRow;
 
-                SvxBoxItem*     pNewBoxItem = pBoxItem ? static_cast<SvxBoxItem*>(pBoxItem->Clone()) : nullptr;
-                SvxLineItem*    pNewTLBRItem = pTLBRItem ? static_cast<SvxLineItem*>(pTLBRItem->Clone()) : nullptr;
-                SvxLineItem*    pNewBLTRItem = pBLTRItem ? static_cast<SvxLineItem*>(pBLTRItem->Clone()) : nullptr;
+                std::unique_ptr<SvxBoxItem>  pNewBoxItem( pBoxItem ? static_cast<SvxBoxItem*>(pBoxItem->Clone()) : nullptr);
+                std::unique_ptr<SvxLineItem> pNewTLBRItem( pTLBRItem ? static_cast<SvxLineItem*>(pTLBRItem->Clone()) : nullptr);
+                std::unique_ptr<SvxLineItem> pNewBLTRItem(pBLTRItem ? static_cast<SvxLineItem*>(pBLTRItem->Clone()) : nullptr);
 
                 // fetch line and update attributes with parameters
 
@@ -758,29 +771,29 @@ void ScAttrArray::ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
                         Color aColor( pLine->GetColor() );
                         if( pNewBoxItem )
                         {
-                            SET_LINECOLOR( pNewBoxItem->GetTop(),    aColor );
-                            SET_LINECOLOR( pNewBoxItem->GetBottom(), aColor );
-                            SET_LINECOLOR( pNewBoxItem->GetLeft(),   aColor );
-                            SET_LINECOLOR( pNewBoxItem->GetRight(),   aColor );
+                            SetLineColor( pNewBoxItem->GetTop(),    aColor );
+                            SetLineColor( pNewBoxItem->GetBottom(), aColor );
+                            SetLineColor( pNewBoxItem->GetLeft(),   aColor );
+                            SetLineColor( pNewBoxItem->GetRight(),   aColor );
                         }
                         if( pNewTLBRItem )
-                            SET_LINECOLOR( pNewTLBRItem->GetLine(), aColor );
+                            SetLineColor( pNewTLBRItem->GetLine(), aColor );
                         if( pNewBLTRItem )
-                            SET_LINECOLOR( pNewBLTRItem->GetLine(), aColor );
+                            SetLineColor( pNewBLTRItem->GetLine(), aColor );
                     }
                     else
                     {
                         if( pNewBoxItem )
                         {
-                            SET_LINE( pNewBoxItem->GetTop(),    pLine );
-                            SET_LINE( pNewBoxItem->GetBottom(), pLine );
-                            SET_LINE( pNewBoxItem->GetLeft(),   pLine );
-                            SET_LINE( pNewBoxItem->GetRight(),   pLine );
+                            SetLine( pNewBoxItem->GetTop(),    pLine );
+                            SetLine( pNewBoxItem->GetBottom(), pLine );
+                            SetLine( pNewBoxItem->GetLeft(),   pLine );
+                            SetLine( pNewBoxItem->GetRight(),   pLine );
                         }
                         if( pNewTLBRItem )
-                            SET_LINE( pNewTLBRItem->GetLine(), pLine );
+                            SetLine( pNewTLBRItem->GetLine(), pLine );
                         if( pNewBLTRItem )
-                            SET_LINE( pNewBLTRItem->GetLine(), pLine );
+                            SetLine( pNewBLTRItem->GetLine(), pLine );
                     }
                 }
                 if( pNewBoxItem )   rNewSet.Put( *pNewBoxItem );
@@ -808,9 +821,6 @@ void ScAttrArray::ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
                     else
                         nPos++;
                 }
-                delete pNewBoxItem;
-                delete pNewTLBRItem;
-                delete pNewBLTRItem;
             }
             else
             {
@@ -821,9 +831,6 @@ void ScAttrArray::ApplyLineStyleArea( SCROW nStartRow, SCROW nEndRow,
         while ((nStart <= nEndRow) && (nPos < mvData.size()));
     }
 }
-
-#undef SET_LINECOLOR
-#undef SET_LINE
 
 void ScAttrArray::ApplyCacheArea( SCROW nStartRow, SCROW nEndRow, SfxItemPoolCache* pCache, ScEditDataArray* pDataArray, bool* const pIsChanged )
 {
@@ -1835,7 +1842,7 @@ bool ScAttrArray::IsStyleSheetUsed( const ScStyleSheet& rStyle ) const
         const ScStyleSheet* pStyle = pDocument->GetDefPattern()->GetStyleSheet();
         if ( pStyle )
         {
-            pStyle->SetUsage( ScStyleSheet::USED );
+            pStyle->SetUsage( ScStyleSheet::Usage::USED );
             if ( pStyle == &rStyle )
                 return true;
         }
@@ -1850,7 +1857,7 @@ bool ScAttrArray::IsStyleSheetUsed( const ScStyleSheet& rStyle ) const
         const ScStyleSheet* pStyle = mvData[nPos].pPattern->GetStyleSheet();
         if ( pStyle )
         {
-            pStyle->SetUsage( ScStyleSheet::USED );
+            pStyle->SetUsage( ScStyleSheet::Usage::USED );
             if ( pStyle == &rStyle )
             {
                 bIsUsed = true;

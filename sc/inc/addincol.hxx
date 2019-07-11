@@ -21,22 +21,22 @@
 #define INCLUDED_SC_INC_ADDINCOL_HXX
 
 #include <memory>
-#include "global.hxx"
-#include <com/sun/star/sheet/XVolatileResult.hpp>
-#include <com/sun/star/sheet/XAddIn.hpp>
-#include <com/sun/star/sheet/XResultListener.hpp>
-#include <com/sun/star/sheet/ResultEvent.hpp>
-#include <com/sun/star/container/XNameAccess.hpp>
-#include <com/sun/star/reflection/XIdlMethod.hpp>
+#include <com/sun/star/uno/Any.h>
+#include <com/sun/star/uno/Reference.h>
+#include <com/sun/star/uno/Sequence.h>
+#include <formula/errorcodes.hxx>
 #include <i18nlangtag/lang.h>
-#include <rtl/ustring.h>
 #include "scdllapi.h"
 #include <rtl/ustring.hxx>
-#include "scmatrix.hxx"
 
 #include "types.hxx"
 
+#include <vector>
 #include <unordered_map>
+
+namespace com { namespace sun { namespace star { namespace reflection { class XIdlMethod; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { class XVolatileResult; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XInterface; } } } }
 
 class SfxObjectShell;
 class ScUnoAddInFuncData;
@@ -81,19 +81,19 @@ public:
                         : maLocale( rLocale), maName( rName) { }
     };
 private:
-    OUString     aOriginalName;      ///< kept in formula
-    OUString     aLocalName;         ///< for display
-    OUString     aUpperName;         ///< for entering formulas
-    OUString     aUpperLocal;        ///< for entering formulas
-    OUString     aDescription;
+    OUString const     aOriginalName;      ///< kept in formula
+    OUString const     aLocalName;         ///< for display
+    OUString           aUpperName;         ///< for entering formulas
+    OUString           aUpperLocal;        ///< for entering formulas
+    OUString const     aDescription;
     css::uno::Reference< css::reflection::XIdlMethod> xFunction;
     css::uno::Any       aObject;
     long                nArgCount;
     std::unique_ptr<ScAddInArgDesc[]>
                         pArgDescs;
     long                nCallerPos;
-    sal_uInt16          nCategory;
-    OString             sHelpId;
+    sal_uInt16 const    nCategory;
+    OString const       sHelpId;
     mutable ::std::vector< LocalizedName > maCompNames;
     mutable bool        bCompInitialized;
 
@@ -135,10 +135,10 @@ class SC_DLLPUBLIC ScUnoAddInCollection
 {
 private:
     long                    nFuncCount;
-    ScUnoAddInFuncData**    ppFuncData;
-    ScAddInHashMap*         pExactHashMap;      ///< exact internal name
-    ScAddInHashMap*         pNameHashMap;       ///< internal name upper
-    ScAddInHashMap*         pLocalHashMap;      ///< localized name upper
+    std::unique_ptr<std::unique_ptr<ScUnoAddInFuncData>[]> ppFuncData;
+    std::unique_ptr<ScAddInHashMap>       pExactHashMap;      ///< exact internal name
+    std::unique_ptr<ScAddInHashMap>       pNameHashMap;       ///< internal name upper
+    std::unique_ptr<ScAddInHashMap>       pLocalHashMap;      ///< localized name upper
     bool                    bInitialized;
 
     void        Initialize();

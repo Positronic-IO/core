@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
@@ -45,6 +46,7 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
 #include <comphelper/genericpropertyset.hxx>
+#include <comphelper/propertysetinfo.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <xmloff/ProgressBarHelper.hxx>
 #include <sfx2/docfile.hxx>
@@ -112,7 +114,7 @@ void RptMLMasterStylesContext_Impl::EndElement()
 }
 
     /// read a component (file + filter version)
-ErrCode ReadThroughComponent(
+static ErrCode ReadThroughComponent(
     const uno::Reference<XInputStream>& xInputStream,
     const uno::Reference<XComponent>& xModelComponent,
     const uno::Reference<XComponentContext> & rContext,
@@ -175,7 +177,7 @@ ErrCode ReadThroughComponent(
 }
 
 /// read a component (storage version)
-ErrCode ReadThroughComponent(
+static ErrCode ReadThroughComponent(
     const uno::Reference< embed::XStorage >& xStorage,
     const uno::Reference<XComponent>& xModelComponent,
     const sal_Char* pStreamName,
@@ -443,9 +445,6 @@ bool ORptFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
     if ( bRet )
     {
         m_xReportDefinition.set(GetModel(),UNO_QUERY_THROW);
-        OSL_ENSURE(m_xReportDefinition.is(),"ReportDefinition is NULL!");
-        if ( !m_xReportDefinition.is() )
-            return false;
 
 #if OSL_DEBUG_LEVEL > 1
         uno::Reference < container::XNameAccess > xAccess( xStorage, uno::UNO_QUERY );
@@ -774,7 +773,7 @@ SvXMLImportContext *ORptFilter::CreateFastContext( sal_Int32 nElement,
 
 const SvXMLTokenMap& ORptFilter::GetDocElemTokenMap() const
 {
-    if ( !m_pDocElemTokenMap.get() )
+    if (!m_pDocElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -791,7 +790,7 @@ const SvXMLTokenMap& ORptFilter::GetDocElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetDocContentElemTokenMap() const
 {
-    if (!m_pDocContentElemTokenMap.get())
+    if (!m_pDocContentElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -809,21 +808,21 @@ const SvXMLTokenMap& ORptFilter::GetDocContentElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetReportElemTokenMap() const
 {
-    if ( !m_pReportElemTokenMap.get() )
+    if (!m_pReportElemTokenMap)
         m_pReportElemTokenMap.reset(OXMLHelper::GetReportElemTokenMap());
     return *m_pReportElemTokenMap;
 }
 
 const SvXMLTokenMap& ORptFilter::GetSubDocumentElemTokenMap() const
 {
-    if ( !m_pSubDocumentElemTokenMap.get() )
+    if (!m_pSubDocumentElemTokenMap)
         m_pSubDocumentElemTokenMap.reset(OXMLHelper::GetSubDocumentElemTokenMap());
     return *m_pSubDocumentElemTokenMap;
 }
 
 const SvXMLTokenMap& ORptFilter::GetFunctionElemTokenMap() const
 {
-    if ( !m_pFunctionElemTokenMap.get() )
+    if (!m_pFunctionElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -841,7 +840,7 @@ const SvXMLTokenMap& ORptFilter::GetFunctionElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetFormatElemTokenMap() const
 {
-    if ( !m_pFormatElemTokenMap.get() )
+    if (!m_pFormatElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -857,7 +856,7 @@ const SvXMLTokenMap& ORptFilter::GetFormatElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetGroupElemTokenMap() const
 {
-    if ( !m_pGroupElemTokenMap.get() )
+    if (!m_pGroupElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -883,7 +882,7 @@ const SvXMLTokenMap& ORptFilter::GetGroupElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetReportElementElemTokenMap() const
 {
-    if ( !m_pElemTokenMap.get() )
+    if (!m_pElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -901,7 +900,7 @@ const SvXMLTokenMap& ORptFilter::GetReportElementElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetControlElemTokenMap() const
 {
-    if ( !m_pControlElemTokenMap.get() )
+    if (!m_pControlElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -923,7 +922,7 @@ const SvXMLTokenMap& ORptFilter::GetControlElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetControlPropertyElemTokenMap() const
 {
-    if ( !m_pControlElemTokenMap.get() )
+    if (!m_pControlElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -945,7 +944,7 @@ const SvXMLTokenMap& ORptFilter::GetControlPropertyElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetComponentElemTokenMap() const
 {
-    if ( !m_pComponentElemTokenMap.get() )
+    if (!m_pComponentElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -961,7 +960,7 @@ const SvXMLTokenMap& ORptFilter::GetComponentElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetColumnTokenMap() const
 {
-    if ( !m_pColumnTokenMap.get() )
+    if (!m_pColumnTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -985,7 +984,7 @@ const SvXMLTokenMap& ORptFilter::GetColumnTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetSectionElemTokenMap() const
 {
-    if ( !m_pSectionElemTokenMap.get() )
+    if (!m_pSectionElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -1008,7 +1007,7 @@ const SvXMLTokenMap& ORptFilter::GetSectionElemTokenMap() const
 
 const SvXMLTokenMap& ORptFilter::GetCellElemTokenMap() const
 {
-    if ( !m_pCellElemTokenMap.get() )
+    if (!m_pCellElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -1077,14 +1076,10 @@ const OUString& ORptFilter::convertFormula(const OUString& _sFormula)
 void SAL_CALL ORptFilter::startDocument()
 {
     m_xReportDefinition.set(GetModel(),UNO_QUERY_THROW);
-    OSL_ENSURE(m_xReportDefinition.is(),"ReportDefinition is NULL!");
-    if ( m_xReportDefinition.is() )
-    {
-        m_pReportModel = reportdesign::OReportDefinition::getSdrModel(m_xReportDefinition);
-        OSL_ENSURE(m_pReportModel,"Report model is NULL!");
+    m_pReportModel = reportdesign::OReportDefinition::getSdrModel(m_xReportDefinition);
+    OSL_ENSURE(m_pReportModel,"Report model is NULL!");
 
-        SvXMLImport::startDocument();
-    }
+    SvXMLImport::startDocument();
 }
 
 void ORptFilter::endDocument()

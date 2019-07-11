@@ -59,7 +59,7 @@ SmGraphicAccessibleBaseClass;
 class SmGraphicAccessible final :
     public SmGraphicAccessibleBaseClass
 {
-    OUString                            aAccName;
+    OUString const                      aAccName;
     /// client id in the AccessibleEventNotifier queue
     sal_uInt32                          nClientId;
 
@@ -161,7 +161,6 @@ public:
     virtual             ~SmViewForwarder() override;
 
     virtual bool        IsValid() const override;
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 };
@@ -250,7 +249,6 @@ public:
 
     virtual bool        IsValid() const override;
 
-    virtual tools::Rectangle   GetVisArea() const override;
     virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
     virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 
@@ -302,7 +300,7 @@ SmEditAccessibleBaseClass;
 class SmEditAccessible :
     public SmEditAccessibleBaseClass
 {
-    OUString                                aAccName;
+    OUString const                          aAccName;
     std::unique_ptr<::accessibility::AccessibleTextHelper> pTextHelper;
     VclPtr<SmEditWindow>                    pWin;
 

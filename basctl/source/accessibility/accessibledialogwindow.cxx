@@ -49,7 +49,6 @@ using namespace ::comphelper;
 
 AccessibleDialogWindow::ChildDescriptor::ChildDescriptor( DlgEdObj* _pDlgEdObj )
     :pDlgEdObj( _pDlgEdObj )
-    ,rxAccessible( nullptr )
 {
 }
 
@@ -78,7 +77,6 @@ bool AccessibleDialogWindow::ChildDescriptor::operator<( const ChildDescriptor& 
 
 AccessibleDialogWindow::AccessibleDialogWindow (basctl::DialogWindow* pDialogWindow)
     : m_pDialogWindow(pDialogWindow)
-    , m_pDlgEditor(nullptr)
     , m_pDlgEdModel(nullptr)
 {
     if ( m_pDialogWindow )
@@ -110,9 +108,6 @@ AccessibleDialogWindow::~AccessibleDialogWindow()
 {
     if ( m_pDialogWindow )
         m_pDialogWindow->RemoveEventListener( LINK( this, AccessibleDialogWindow, WindowEventListener ) );
-
-    if ( m_pDlgEditor )
-        EndListening( *m_pDlgEditor );
 
     if ( m_pDlgEdModel )
         EndListening( *m_pDlgEdModel );
@@ -181,7 +176,7 @@ bool AccessibleDialogWindow::IsChildVisible( const ChildDescriptor& rDesc )
             const SdrLayer* pSdrLayer = rLayerAdmin.GetLayerPerID( nLayerId );
             if ( pSdrLayer )
             {
-                OUString aLayerName = pSdrLayer->GetName();
+                const OUString& aLayerName = pSdrLayer->GetName();
                 SdrView& rView = m_pDialogWindow->GetView();
                 if (rView.IsLayerVisible(aLayerName))
                 {
@@ -376,10 +371,6 @@ void AccessibleDialogWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindo
                 m_pDialogWindow->RemoveEventListener( LINK( this, AccessibleDialogWindow, WindowEventListener ) );
                 m_pDialogWindow = nullptr;
 
-                if ( m_pDlgEditor )
-                    EndListening( *m_pDlgEditor );
-                m_pDlgEditor = nullptr;
-
                 if ( m_pDlgEdModel )
                     EndListening( *m_pDlgEdModel );
                 m_pDlgEdModel = nullptr;
@@ -524,10 +515,6 @@ void AccessibleDialogWindow::disposing()
     {
         m_pDialogWindow->RemoveEventListener( LINK( this, AccessibleDialogWindow, WindowEventListener ) );
         m_pDialogWindow = nullptr;
-
-        if ( m_pDlgEditor )
-            EndListening( *m_pDlgEditor );
-        m_pDlgEditor = nullptr;
 
         if ( m_pDlgEdModel )
             EndListening( *m_pDlgEdModel );

@@ -111,7 +111,7 @@ size_t UndoManager::GetUndoActionCount(const bool bCurrentLevel) const
 
     if (!m_bRepair)
     {
-        // If an other view created the last undo action, prevent undoing it from this view.
+        // If another view created the last undo action, prevent undoing it from this view.
         ViewShellId nViewShellId = m_pView->GetViewShellId();
         if (pAction->GetViewShellId() != nViewShellId)
             nRet = 0;
@@ -135,7 +135,7 @@ size_t UndoManager::GetRedoActionCount(const bool bCurrentLevel) const
 
     if (m_pView && !m_bRepair)
     {
-        // If an other view created the first redo action, prevent redoing it from this view.
+        // If another view created the first redo action, prevent redoing it from this view.
         ViewShellId nViewShellId = m_pView->GetViewShellId();
         if (pAction->GetViewShellId() != nViewShellId)
             nRet = 0;
@@ -242,9 +242,9 @@ SwUndo* UndoManager::GetLastUndo()
     return dynamic_cast<SwUndo*>(pAction);
 }
 
-void UndoManager::AppendUndo(SwUndo *const pUndo)
+void UndoManager::AppendUndo(std::unique_ptr<SwUndo> pUndo)
 {
-    AddUndoAction(pUndo);
+    AddUndoAction(std::move(pUndo));
 }
 
 void UndoManager::ClearRedo()
@@ -367,7 +367,7 @@ UndoManager::GetLastUndoInfo(
 
     if (comphelper::LibreOfficeKit::isActive() && !m_bRepair)
     {
-        // If an other view created the undo action, prevent undoing it from this view.
+        // If another view created the undo action, prevent undoing it from this view.
         ViewShellId nViewShellId = pView ? pView->GetViewShellId() : m_pDocShell->GetView()->GetViewShellId();
         if (pAction->GetViewShellId() != nViewShellId)
         {
@@ -430,7 +430,7 @@ bool UndoManager::GetFirstRedoInfo(OUString *const o_pStr,
 
     if (comphelper::LibreOfficeKit::isActive() && !m_bRepair)
     {
-        // If an other view created the undo action, prevent redoing it from this view.
+        // If another view created the undo action, prevent redoing it from this view.
         ViewShellId nViewShellId = pView ? pView->GetViewShellId() : m_pDocShell->GetView()->GetViewShellId();
         if (pAction->GetViewShellId() != nViewShellId)
         {
@@ -509,11 +509,11 @@ SwUndo * UndoManager::RemoveLastUndo()
     return dynamic_cast<SwUndo *>(pLastUndo);
 }
 
-// svl::IUndoManager
+// SfxUndoManager
 
-void UndoManager::AddUndoAction(SfxUndoAction *pAction, bool bTryMerge)
+void UndoManager::AddUndoAction(std::unique_ptr<SfxUndoAction> pAction, bool bTryMerge)
 {
-    SwUndo *const pUndo( dynamic_cast<SwUndo *>(pAction) );
+    SwUndo *const pUndo( dynamic_cast<SwUndo *>(pAction.get()) );
     if (pUndo)
     {
         if (RedlineFlags::NONE == pUndo->GetRedlineFlags())
@@ -525,7 +525,7 @@ void UndoManager::AddUndoAction(SfxUndoAction *pAction, bool bTryMerge)
             pUndo->IgnoreRepeat();
         }
     }
-    SdrUndoManager::AddUndoAction(pAction, bTryMerge);
+    SdrUndoManager::AddUndoAction(std::move(pAction), bTryMerge);
     // if the undo nodes array is too large, delete some actions
     while (UNDO_ACTION_LIMIT < GetUndoNodes().Count())
     {

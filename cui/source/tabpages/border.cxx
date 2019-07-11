@@ -30,7 +30,7 @@
 #include <svx/xtable.hxx>
 #include <svx/drawitem.hxx>
 #include <editeng/boxitem.hxx>
-#include <editeng/shaditem.hxx>
+#include <editeng/lineitem.hxx>
 #include <border.hxx>
 #include <svx/dlgutil.hxx>
 #include <dialmgr.hxx>
@@ -42,10 +42,8 @@
 #include <svl/intitem.hxx>
 #include <svl/ilstitem.hxx>
 #include <svl/int64item.hxx>
-#include <sfx2/itemconnect.hxx>
 #include <sal/macros.h>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include "borderconn.hxx"
 
 using namespace ::editeng;
 using ::com::sun::star::uno::Reference;
@@ -79,11 +77,11 @@ const sal_uInt16 SvxBorderTabPage::pRanges[] =
     0
 };
 
-static void lcl_SetDecimalDigitsTo1(MetricField& rField)
+static void lcl_SetDecimalDigitsTo1(weld::MetricSpinButton& rField)
 {
-    sal_Int64 nMin = rField.Denormalize( rField.GetMin( FUNIT_TWIP ) );
-    rField.SetDecimalDigits(1);
-    rField.SetMin( rField.Normalize( nMin ), FUNIT_TWIP );
+    auto nMin = rField.denormalize(rField.get_min(FieldUnit::TWIP));
+    rField.set_digits(1);
+    rField.set_min(rField.normalize(nMin), FieldUnit::TWIP);
 }
 
 // number of preset images to show
@@ -92,52 +90,194 @@ const sal_uInt16 SVX_BORDER_PRESET_COUNT = 5;
 // number of shadow images to show
 const sal_uInt16 SVX_BORDER_SHADOW_COUNT = 5;
 
-SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCoreAttrs)
-    : SfxTabPage(pParent, "BorderPage", "cui/ui/borderpage.ui", &rCoreAttrs)
+ShadowControlsWrapper::ShadowControlsWrapper(SvtValueSet& rVsPos, weld::MetricSpinButton& rMfSize, ColorListBox& rLbColor)
+    : mrVsPos(rVsPos)
+    , mrMfSize(rMfSize)
+    , mrLbColor(rLbColor)
+{
+}
+
+SvxShadowItem ShadowControlsWrapper::GetControlValue(const SvxShadowItem& rItem) const
+{
+    SvxShadowItem aItem(rItem);
+    if (!mrVsPos.IsNoSelection())
+    {
+        switch (mrVsPos.GetSelectedItemId())
+        {
+            case 1:
+                aItem.SetLocation(SvxShadowLocation::NONE);
+                break;
+            case 2:
+                aItem.SetLocation(SvxShadowLocation::BottomRight);
+                break;
+            case 3:
+                aItem.SetLocation(SvxShadowLocation::TopRight);
+                break;
+            case 4:
+                aItem.SetLocation(SvxShadowLocation::BottomLeft);
+                break;
+            case 5:
+                aItem.SetLocation(SvxShadowLocation::TopLeft);
+                break;
+            default:
+                aItem.SetLocation(SvxShadowLocation::NONE);
+                break;
+        }
+    }
+    // Default value was saved; so don't change the aItem's width if the control
+    // has not changed its value, to avoid round-trip errors (like twip->cm->twip)
+    // E.g., initial 100 twip will become 0.18 cm, which will return as 102 twip
+    if (mrMfSize.get_value_changed_from_saved())
+        aItem.SetWidth(mrMfSize.denormalize(mrMfSize.get_value(FieldUnit::TWIP)));
+    if (!mrLbColor.IsNoSelection())
+        aItem.SetColor(mrLbColor.GetSelectEntryColor());
+    return aItem;
+}
+
+void ShadowControlsWrapper::SetControlValue(const SvxShadowItem& rItem)
+{
+    switch (rItem.GetLocation())
+    {
+        case SvxShadowLocation::NONE:
+            mrVsPos.SelectItem(1);
+            break;
+        case SvxShadowLocation::BottomRight:
+            mrVsPos.SelectItem(2);
+            break;
+        case SvxShadowLocation::TopRight:
+            mrVsPos.SelectItem(3);
+            break;
+        case SvxShadowLocation::BottomLeft:
+            mrVsPos.SelectItem(4);
+            break;
+        case SvxShadowLocation::TopLeft:
+            mrVsPos.SelectItem(5);
+            break;
+        default:
+            mrVsPos.SetNoSelection();
+            break;
+    }
+    mrVsPos.SaveValue();
+    mrMfSize.set_value(mrMfSize.normalize(rItem.GetWidth()), FieldUnit::TWIP);
+    mrMfSize.save_value();
+    mrLbColor.SelectEntry(rItem.GetColor());
+    mrLbColor.SaveValue();
+}
+
+bool ShadowControlsWrapper::get_value_changed_from_saved() const
+{
+    return mrVsPos.IsValueChangedFromSaved() ||
+           mrMfSize.get_value_changed_from_saved() ||
+           mrLbColor.IsValueChangedFromSaved();
+}
+
+void ShadowControlsWrapper::SetControlDontKnow()
+{
+    mrVsPos.SetNoSelection();
+    mrMfSize.set_text("");
+    mrLbColor.SetNoSelection();
+}
+
+MarginControlsWrapper::MarginControlsWrapper(weld::MetricSpinButton& rMfLeft, weld::MetricSpinButton& rMfRight,
+                                             weld::MetricSpinButton& rMfTop, weld::MetricSpinButton& rMfBottom)
+    : mrLeftWrp(rMfLeft)
+    , mrRightWrp(rMfRight)
+    , mrTopWrp(rMfTop)
+    , mrBottomWrp(rMfBottom)
+{
+}
+
+SvxMarginItem MarginControlsWrapper::GetControlValue(const SvxMarginItem &rItem) const
+{
+    SvxMarginItem aItem(rItem);
+    if (mrLeftWrp.get_sensitive())
+        aItem.SetLeftMargin(mrLeftWrp.denormalize(mrLeftWrp.get_value(FieldUnit::TWIP)));
+    if (mrRightWrp.get_sensitive())
+        aItem.SetRightMargin(mrRightWrp.denormalize(mrRightWrp.get_value(FieldUnit::TWIP)));
+    if (mrTopWrp.get_sensitive())
+        aItem.SetTopMargin(mrTopWrp.denormalize(mrTopWrp.get_value(FieldUnit::TWIP)));
+    if (mrBottomWrp.get_sensitive())
+        aItem.SetBottomMargin(mrBottomWrp.denormalize(mrBottomWrp.get_value(FieldUnit::TWIP)));
+    return aItem;
+}
+
+bool MarginControlsWrapper::get_value_changed_from_saved() const
+{
+    return mrLeftWrp.get_value_changed_from_saved() ||
+           mrRightWrp.get_value_changed_from_saved() ||
+           mrTopWrp.get_value_changed_from_saved() ||
+           mrBottomWrp.get_value_changed_from_saved();
+}
+
+void MarginControlsWrapper::SetControlValue(const SvxMarginItem& rItem)
+{
+    mrLeftWrp.set_value(mrLeftWrp.normalize(rItem.GetLeftMargin()), FieldUnit::TWIP);
+    mrRightWrp.set_value(mrRightWrp.normalize(rItem.GetRightMargin()), FieldUnit::TWIP);
+    mrTopWrp.set_value(mrTopWrp.normalize(rItem.GetTopMargin()), FieldUnit::TWIP);
+    mrBottomWrp.set_value(mrBottomWrp.normalize(rItem.GetBottomMargin()), FieldUnit::TWIP);
+    mrLeftWrp.save_value();
+    mrRightWrp.save_value();
+    mrTopWrp.save_value();
+    mrBottomWrp.save_value();
+}
+
+void MarginControlsWrapper::SetControlDontKnow()
+{
+    const OUString sEmpty;
+    mrLeftWrp.set_text(sEmpty);
+    mrRightWrp.set_text(sEmpty);
+    mrTopWrp.set_text(sEmpty);
+    mrBottomWrp.set_text(sEmpty);
+}
+
+SvxBorderTabPage::SvxBorderTabPage(TabPageParent pParent, const SfxItemSet& rCoreAttrs)
+    : SfxTabPage(pParent, "cui/ui/borderpage.ui", "BorderPage", &rCoreAttrs)
     , nMinValue(0)
     , nSWMode(SwBorderModes::NONE)
     , mnBoxSlot(SID_ATTR_BORDER_OUTER)
+    , mnShadowSlot(SID_ATTR_BORDER_SHADOW)
     , mbHorEnabled(false)
     , mbVerEnabled(false)
     , mbTLBREnabled(false)
     , mbBLTREnabled(false)
     , mbUseMarginItem(false)
-    , mbAllowPaddingWithoutBorders(true)
+    , mbLeftModified(false)
+    , mbRightModified(false)
+    , mbTopModified(false)
+    , mbBottomModified(false)
     , mbSync(true)
     , mbRemoveAdjacentCellBorders(false)
     , bIsCalcDoc(false)
+    , m_xWndPresets(new SvtValueSet(m_xBuilder->weld_scrolled_window("presetswin")))
+    , m_xWndPresetsWin(new weld::CustomWeld(*m_xBuilder, "presets", *m_xWndPresets))
+    , m_xUserDefFT(m_xBuilder->weld_label("userdefft"))
+    , m_xFrameSelWin(new weld::CustomWeld(*m_xBuilder, "framesel", m_aFrameSel))
+    , m_xLbLineStyle(new SvtLineListBox(m_xBuilder->weld_menu_button("linestylelb")))
+    , m_xLbLineColor(new ColorListBox(m_xBuilder->weld_menu_button("linecolorlb"), pParent.GetFrameWeld()))
+    , m_xLineWidthMF(m_xBuilder->weld_metric_spin_button("linewidthmf", FieldUnit::POINT))
+    , m_xSpacingFrame(m_xBuilder->weld_container("spacing"))
+    , m_xLeftFT(m_xBuilder->weld_label("leftft"))
+    , m_xLeftMF(m_xBuilder->weld_metric_spin_button("leftmf", FieldUnit::MM))
+    , m_xRightFT(m_xBuilder->weld_label("rightft"))
+    , m_xRightMF(m_xBuilder->weld_metric_spin_button("rightmf", FieldUnit::MM))
+    , m_xTopFT(m_xBuilder->weld_label("topft"))
+    , m_xTopMF(m_xBuilder->weld_metric_spin_button("topmf", FieldUnit::MM))
+    , m_xBottomFT(m_xBuilder->weld_label("bottomft"))
+    , m_xBottomMF(m_xBuilder->weld_metric_spin_button("bottommf", FieldUnit::MM))
+    , m_xSynchronizeCB(m_xBuilder->weld_check_button("sync"))
+    , m_xShadowFrame(m_xBuilder->weld_container("shadow"))
+    , m_xWndShadows(new SvtValueSet(m_xBuilder->weld_scrolled_window("shadowswin")))
+    , m_xWndShadowsWin(new weld::CustomWeld(*m_xBuilder, "shadows", *m_xWndShadows))
+    , m_xFtShadowSize(m_xBuilder->weld_label("distanceft"))
+    , m_xEdShadowSize(m_xBuilder->weld_metric_spin_button("distancemf", FieldUnit::MM))
+    , m_xFtShadowColor(m_xBuilder->weld_label("shadowcolorft"))
+    , m_xLbShadowColor(new ColorListBox(m_xBuilder->weld_menu_button("shadowcolorlb"), pParent.GetFrameWeld()))
+    , m_xPropertiesFrame(m_xBuilder->weld_container("properties"))
+    , m_xMergeWithNextCB(m_xBuilder->weld_check_button("mergewithnext"))
+    , m_xMergeAdjacentBordersCB(m_xBuilder->weld_check_button("mergeadjacent"))
+    , m_xRemoveAdjcentCellBordersCB(m_xBuilder->weld_check_button("rmadjcellborders"))
+    , m_xRemoveAdjcentCellBordersFT(m_xBuilder->weld_label("rmadjcellbordersft"))
 {
-    get(m_pWndPresets, "presets");
-    get(m_pUserDefFT, "userdefft");
-    get(m_pFrameSel, "framesel");
-    get(m_pLbLineStyle, "linestylelb");
-    get(m_pLbLineColor, "linecolorlb");
-    get(m_pLineWidthMF, "linewidthmf");
-
-    get(m_pSpacingFrame, "spacing");
-    get(m_pLeftFT, "leftft");
-    get(m_pLeftMF, "leftmf");
-    get(m_pRightFT, "rightft");
-    get(m_pRightMF, "rightmf");
-    get(m_pTopFT, "topft");
-    get(m_pTopMF, "topmf");
-    get(m_pBottomFT, "bottomft");
-    get(m_pBottomMF, "bottommf");
-    get(m_pSynchronizeCB, "sync");
-
-    get(m_pShadowFrame, "shadow");
-    get(m_pWndShadows, "shadows");
-    get(m_pFtShadowSize, "distanceft");
-    get(m_pEdShadowSize, "distancemf");
-    get(m_pFtShadowColor, "shadowcolorft");
-    get(m_pLbShadowColor, "shadowcolorlb");
-
-    get(m_pPropertiesFrame, "properties");
-    get(m_pMergeWithNextCB, "mergewithnext");
-    get(m_pMergeAdjacentBordersCB, "mergeadjacent");
-    get(m_pRemoveAdjcentCellBordersCB, "rmadjcellborders");
-    get(m_pRemoveAdjcentCellBordersFT, "rmadjcellbordersft");
-
     static const OUStringLiteral pnBorderImgIds[] =
     {
         RID_SVXBMP_CELL_NONE,
@@ -209,7 +349,7 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
     {
         // The caller specifies default line width.  Honor it.
         const SfxInt64Item* p = static_cast<const SfxInt64Item*>(pItem);
-        m_pLineWidthMF->SetValue(p->GetValue());
+        m_xLineWidthMF->set_value(p->GetValue(), FieldUnit::POINT);
     }
 
     // set metric
@@ -222,17 +362,17 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
         {
             //  #103396# the default value (1pt) can't be accurately represented in
             //  inches or pica with two decimals, so point is used instead.
-            case FUNIT_PICA:
-            case FUNIT_INCH:
-            case FUNIT_FOOT:
-            case FUNIT_MILE:
-                eFUnit = FUNIT_POINT;
+            case FieldUnit::PICA:
+            case FieldUnit::INCH:
+            case FieldUnit::FOOT:
+            case FieldUnit::MILE:
+                eFUnit = FieldUnit::POINT;
                 break;
 
-            case FUNIT_CM:
-            case FUNIT_M:
-            case FUNIT_KM:
-                eFUnit = FUNIT_MM;
+            case FieldUnit::CM:
+            case FieldUnit::M:
+            case FieldUnit::KM:
+                eFUnit = FieldUnit::MM;
                 break;
             default: ;//prevent warning
         }
@@ -241,15 +381,15 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
     {
         switch ( eFUnit )
         {
-            case FUNIT_M:
-            case FUNIT_KM:
-                eFUnit = FUNIT_MM;
+            case FieldUnit::M:
+            case FieldUnit::KM:
+                eFUnit = FieldUnit::MM;
                 break;
             default: ; //prevent warning
         }
     }
 
-    SetFieldUnit(*m_pEdShadowSize, eFUnit);
+    SetFieldUnit(*m_xEdShadowSize, eFUnit);
 
     sal_uInt16 nWhich = GetWhich( SID_ATTR_BORDER_INNER, false );
     bool bIsDontCare = true;
@@ -262,35 +402,35 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
 
         mbHorEnabled = pBoxInfo->IsHorEnabled();
         mbVerEnabled = pBoxInfo->IsVerEnabled();
-        mbTLBREnabled = sfx::ItemWrapperHelper::IsKnownItem( rCoreAttrs, SID_ATTR_BORDER_DIAG_TLBR );
-        mbBLTREnabled = sfx::ItemWrapperHelper::IsKnownItem( rCoreAttrs, SID_ATTR_BORDER_DIAG_BLTR );
+        mbTLBREnabled = rCoreAttrs.GetItemState(GetWhich(SID_ATTR_BORDER_DIAG_TLBR)) != SfxItemState::UNKNOWN;
+        mbBLTREnabled = rCoreAttrs.GetItemState(GetWhich(SID_ATTR_BORDER_DIAG_BLTR)) != SfxItemState::UNKNOWN;
 
         if(pBoxInfo->IsDist())
         {
-            SetFieldUnit(*m_pLeftMF, eFUnit);
-            SetFieldUnit(*m_pRightMF, eFUnit);
-            SetFieldUnit(*m_pTopMF, eFUnit);
-            SetFieldUnit(*m_pBottomMF, eFUnit);
-            m_pSynchronizeCB->SetClickHdl(LINK(this, SvxBorderTabPage, SyncHdl_Impl));
-            m_pLeftMF->SetModifyHdl(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
-            m_pRightMF->SetModifyHdl(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
-            m_pTopMF->SetModifyHdl(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
-            m_pBottomMF->SetModifyHdl(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
+            SetFieldUnit(*m_xLeftMF, eFUnit);
+            SetFieldUnit(*m_xRightMF, eFUnit);
+            SetFieldUnit(*m_xTopMF, eFUnit);
+            SetFieldUnit(*m_xBottomMF, eFUnit);
+            m_xSynchronizeCB->connect_toggled(LINK(this, SvxBorderTabPage, SyncHdl_Impl));
+            m_xLeftMF->connect_value_changed(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
+            m_xRightMF->connect_value_changed(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
+            m_xTopMF->connect_value_changed(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
+            m_xBottomMF->connect_value_changed(LINK(this, SvxBorderTabPage, ModifyDistanceHdl_Impl));
         }
         else
         {
-            m_pSpacingFrame->Hide();
+            m_xSpacingFrame->hide();
         }
         bIsDontCare = !pBoxInfo->IsValid( SvxBoxInfoItemValidFlags::DISABLE );
     }
-    if(!mbUseMarginItem && eFUnit == FUNIT_MM && MapUnit::MapTwip == rCoreAttrs.GetPool()->GetMetric( GetWhich( SID_ATTR_BORDER_INNER ) ))
+    if(!mbUseMarginItem && eFUnit == FieldUnit::MM && MapUnit::MapTwip == rCoreAttrs.GetPool()->GetMetric( GetWhich( SID_ATTR_BORDER_INNER ) ))
     {
         //#i91548# changing the number of decimal digits changes the minimum values, too
-        lcl_SetDecimalDigitsTo1(*m_pLeftMF);
-        lcl_SetDecimalDigitsTo1(*m_pRightMF);
-        lcl_SetDecimalDigitsTo1(*m_pTopMF);
-        lcl_SetDecimalDigitsTo1(*m_pBottomMF);
-        lcl_SetDecimalDigitsTo1(*m_pEdShadowSize);
+        lcl_SetDecimalDigitsTo1(*m_xLeftMF);
+        lcl_SetDecimalDigitsTo1(*m_xRightMF);
+        lcl_SetDecimalDigitsTo1(*m_xTopMF);
+        lcl_SetDecimalDigitsTo1(*m_xBottomMF);
+        lcl_SetDecimalDigitsTo1(*m_xEdShadowSize);
     }
 
     FrameSelFlags nFlags = FrameSelFlags::Outer;
@@ -304,20 +444,19 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
         nFlags |= FrameSelFlags::DiagonalBLTR;
     if( bIsDontCare )
         nFlags |= FrameSelFlags::DontCare;
-    m_pFrameSel->Initialize( nFlags );
+    m_aFrameSel.Initialize( nFlags );
 
-    m_pFrameSel->SetSelectHdl(LINK(this, SvxBorderTabPage, LinesChanged_Impl));
-    m_pLbLineStyle->SetSelectHdl( LINK( this, SvxBorderTabPage, SelStyleHdl_Impl ) );
-    m_pLbLineColor->SetSelectHdl( LINK( this, SvxBorderTabPage, SelColHdl_Impl ) );
-    m_pLineWidthMF->SetModifyHdl( LINK( this, SvxBorderTabPage, ModifyWidthHdl_Impl ) );
-    m_pWndPresets->SetSelectHdl( LINK( this, SvxBorderTabPage, SelPreHdl_Impl ) );
-    m_pWndShadows->SetSelectHdl( LINK( this, SvxBorderTabPage, SelSdwHdl_Impl ) );
+    m_aFrameSel.SetSelectHdl(LINK(this, SvxBorderTabPage, LinesChanged_Impl));
+    m_xLbLineStyle->SetSelectHdl( LINK( this, SvxBorderTabPage, SelStyleHdl_Impl ) );
+    m_xLbLineColor->SetSelectHdl( LINK( this, SvxBorderTabPage, SelColHdl_Impl ) );
+    m_xLineWidthMF->connect_value_changed( LINK( this, SvxBorderTabPage, ModifyWidthHdl_Impl ) );
+    m_xWndPresets->SetSelectHdl( LINK( this, SvxBorderTabPage, SelPreHdl_Impl ) );
+    m_xWndShadows->SetSelectHdl( LINK( this, SvxBorderTabPage, SelSdwHdl_Impl ) );
 
     FillValueSets();
     FillLineListBox_Impl();
 
     // connections
-    sal_uInt16 nShadowSlot = SID_ATTR_BORDER_SHADOW;
     if (rCoreAttrs.HasItem(GetWhich(SID_ATTR_CHAR_GRABBAG), &pItem))
     {
         const SfxGrabBagItem* pGrabBag = static_cast<const SfxGrabBagItem*>(pItem);
@@ -328,31 +467,25 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
             it->second >>= bDialogUseCharAttr;
             if (bDialogUseCharAttr)
             {
-                nShadowSlot = SID_ATTR_CHAR_SHADOW;
+                mnShadowSlot = SID_ATTR_CHAR_SHADOW;
                 mnBoxSlot = SID_ATTR_CHAR_BOX;
             }
         }
     }
-    bool bSupportsShadow = !SfxItemPool::IsSlot( GetWhich( nShadowSlot ) );
+
+    bool bSupportsShadow = !SfxItemPool::IsSlot(GetWhich(mnShadowSlot));
     if( bSupportsShadow )
-        AddItemConnection( svx::CreateShadowConnection( nShadowSlot, rCoreAttrs, *m_pWndShadows, *m_pEdShadowSize, *m_pLbShadowColor ) );
+        m_xShadowControls.reset(new ShadowControlsWrapper(*m_xWndShadows, *m_xEdShadowSize, *m_xLbShadowColor));
     else
         HideShadowControls();
 
-    if( mbUseMarginItem )
-        AddItemConnection( svx::CreateMarginConnection( rCoreAttrs, *m_pLeftMF, *m_pRightMF, *m_pTopMF, *m_pBottomMF ) );
-    if( m_pFrameSel->IsBorderEnabled( svx::FrameBorderType::TLBR ) )
-        AddItemConnection( svx::CreateFrameLineConnection( SID_ATTR_BORDER_DIAG_TLBR, *m_pFrameSel, svx::FrameBorderType::TLBR ) );
-    if( m_pFrameSel->IsBorderEnabled( svx::FrameBorderType::BLTR ) )
-        AddItemConnection( svx::CreateFrameLineConnection( SID_ATTR_BORDER_DIAG_BLTR, *m_pFrameSel, svx::FrameBorderType::BLTR ) );
-    // #i43593# - item connection doesn't work for Writer,
-    // because the Writer item sets contain these items
+    if (mbUseMarginItem)
+        m_xMarginControls.reset(new MarginControlsWrapper(*m_xLeftMF, *m_xRightMF, *m_xTopMF, *m_xBottomMF));
+
     // checkbox "Merge with next paragraph" only visible for Writer dialog format.paragraph
-    AddItemConnection( new sfx::CheckBoxConnection( SID_ATTR_BORDER_CONNECT, *m_pMergeWithNextCB, ItemConnFlags::NONE ) );
-    m_pMergeWithNextCB->Hide();
+    m_xMergeWithNextCB->hide();
     // checkbox "Merge adjacent line styles" only visible for Writer dialog format.table
-    AddItemConnection( new sfx::CheckBoxConnection( SID_SW_COLLAPSING_BORDERS, *m_pMergeAdjacentBordersCB, ItemConnFlags::NONE ) );
-    m_pMergeAdjacentBordersCB->Hide();
+    m_xMergeAdjacentBordersCB->hide();
 
     SfxObjectShell* pDocSh = SfxObjectShell::Current();
     if (pDocSh)
@@ -363,14 +496,14 @@ SvxBorderTabPage::SvxBorderTabPage(vcl::Window* pParent, const SfxItemSet& rCore
     }
     if( bIsCalcDoc )
     {
-        m_pRemoveAdjcentCellBordersCB->SetClickHdl(LINK(this, SvxBorderTabPage, RemoveAdjacentCellBorderHdl_Impl));
-        m_pRemoveAdjcentCellBordersCB->Show();
-        m_pRemoveAdjcentCellBordersCB->Enable( false );
+        m_xRemoveAdjcentCellBordersCB->connect_toggled(LINK(this, SvxBorderTabPage, RemoveAdjacentCellBorderHdl_Impl));
+        m_xRemoveAdjcentCellBordersCB->show();
+        m_xRemoveAdjcentCellBordersCB->set_sensitive(false);
     }
     else
     {
-        m_pRemoveAdjcentCellBordersCB->Hide();
-        m_pRemoveAdjcentCellBordersFT->Hide();
+        m_xRemoveAdjcentCellBordersCB->hide();
+        m_xRemoveAdjcentCellBordersFT->hide();
     }
 }
 
@@ -381,50 +514,31 @@ SvxBorderTabPage::~SvxBorderTabPage()
 
 void SvxBorderTabPage::dispose()
 {
-    m_pWndPresets.clear();
-    m_pUserDefFT.clear();
-    m_pFrameSel.clear();
-    m_pLbLineStyle.clear();
-    m_pLbLineColor.clear();
-    m_pLineWidthMF.clear();
-    m_pSpacingFrame.clear();
-    m_pLeftFT.clear();
-    m_pLeftMF.clear();
-    m_pRightFT.clear();
-    m_pRightMF.clear();
-    m_pTopFT.clear();
-    m_pTopMF.clear();
-    m_pBottomFT.clear();
-    m_pBottomMF.clear();
-    m_pSynchronizeCB.clear();
-    m_pShadowFrame.clear();
-    m_pWndShadows.clear();
-    m_pFtShadowSize.clear();
-    m_pEdShadowSize.clear();
-    m_pFtShadowColor.clear();
-    m_pLbShadowColor.clear();
-    m_pPropertiesFrame.clear();
-    m_pMergeWithNextCB.clear();
-    m_pMergeAdjacentBordersCB.clear();
-    m_pRemoveAdjcentCellBordersCB.clear();
-    m_pRemoveAdjcentCellBordersFT.clear();
+    m_xLbShadowColor.reset();
+    m_xWndShadowsWin.reset();
+    m_xWndShadows.reset();
+    m_xLbLineColor.reset();
+    m_xLbLineStyle.reset();
+    m_xFrameSelWin.reset();
+    m_xWndPresetsWin.reset();
+    m_xWndPresets.reset();
     SfxTabPage::dispose();
 }
 
 VclPtr<SfxTabPage> SvxBorderTabPage::Create( TabPageParent pParent,
                                              const SfxItemSet* rAttrSet )
 {
-    return VclPtr<SvxBorderTabPage>::Create( pParent.pParent, *rAttrSet );
+    return VclPtr<SvxBorderTabPage>::Create(pParent, *rAttrSet);
 }
 
 void SvxBorderTabPage::ResetFrameLine_Impl( svx::FrameBorderType eBorder, const SvxBorderLine* pCoreLine, bool bValid )
 {
-    if( m_pFrameSel->IsBorderEnabled( eBorder ) )
+    if( m_aFrameSel.IsBorderEnabled( eBorder ) )
     {
         if( bValid )
-            m_pFrameSel->ShowBorder( eBorder, pCoreLine );
+            m_aFrameSel.ShowBorder( eBorder, pCoreLine );
         else
-            m_pFrameSel->SetBorderDontCare( eBorder );
+            m_aFrameSel.SetBorderDontCare( eBorder );
     }
 }
 
@@ -437,10 +551,63 @@ bool SvxBorderTabPage::IsBorderLineStyleAllowed( SvxBorderLineStyle nStyle ) con
     return maUsedBorderStyles.count(nStyle) > 0;
 }
 
-
 void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
 {
-    SfxTabPage::Reset( rSet );
+    SfxItemPool* pPool = rSet->GetPool();
+
+    if (m_aFrameSel.IsBorderEnabled(svx::FrameBorderType::TLBR))
+    {
+        sal_uInt16 nBorderDiagId = pPool->GetWhich(SID_ATTR_BORDER_DIAG_TLBR);
+        if (const SvxLineItem* pLineItem = static_cast<const SvxLineItem*>(rSet->GetItem(nBorderDiagId)))
+            m_aFrameSel.ShowBorder(svx::FrameBorderType::TLBR, pLineItem->GetLine());
+        else
+            m_aFrameSel.SetBorderDontCare(svx::FrameBorderType::TLBR);
+    }
+
+    if (m_aFrameSel.IsBorderEnabled(svx::FrameBorderType::BLTR))
+    {
+        sal_uInt16 nBorderDiagId = pPool->GetWhich(SID_ATTR_BORDER_DIAG_BLTR);
+        if (const SvxLineItem* pLineItem = static_cast<const SvxLineItem*>(rSet->GetItem(nBorderDiagId)))
+            m_aFrameSel.ShowBorder(svx::FrameBorderType::BLTR, pLineItem->GetLine());
+        else
+            m_aFrameSel.SetBorderDontCare(svx::FrameBorderType::BLTR);
+    }
+
+    if (m_xShadowControls)
+    {
+        sal_uInt16 nShadowId = pPool->GetWhich(mnShadowSlot);
+        const SfxPoolItem* pItem = rSet->GetItem(nShadowId);
+        if (pItem)
+            m_xShadowControls->SetControlValue(*static_cast<const SvxShadowItem*>(pItem));
+        else
+            m_xShadowControls->SetControlDontKnow();
+    }
+
+    if (m_xMarginControls)
+    {
+        sal_uInt16 nAlignMarginId = pPool->GetWhich(SID_ATTR_ALIGN_MARGIN);
+        const SfxPoolItem* pItem = rSet->GetItem(nAlignMarginId);
+        if (pItem)
+            m_xMarginControls->SetControlValue(*static_cast<const SvxMarginItem*>(pItem));
+        else
+            m_xMarginControls->SetControlDontKnow();
+    }
+
+    sal_uInt16 nMergeAdjacentBordersId = pPool->GetWhich(SID_SW_COLLAPSING_BORDERS);
+    const SfxBoolItem *pMergeAdjacentBorders = static_cast<const SfxBoolItem*>(rSet->GetItem(nMergeAdjacentBordersId));
+    if (!pMergeAdjacentBorders)
+        m_xMergeAdjacentBordersCB->set_state(TRISTATE_INDET);
+    else
+        m_xMergeAdjacentBordersCB->set_active(pMergeAdjacentBorders->GetValue());
+    m_xMergeAdjacentBordersCB->save_state();
+
+    sal_uInt16 nMergeWithNextId = pPool->GetWhich(SID_ATTR_BORDER_CONNECT);
+    const SfxBoolItem *pMergeWithNext = static_cast<const SfxBoolItem*>(rSet->GetItem(nMergeWithNextId));
+    if (!pMergeWithNext)
+        m_xMergeWithNextCB->set_state(TRISTATE_INDET);
+    else
+        m_xMergeWithNextCB->set_active(pMergeWithNext->GetValue());
+    m_xMergeWithNextCB->save_state();
 
     const SvxBoxItem*       pBoxItem;
     const SvxBoxInfoItem*   pBoxInfoItem;
@@ -451,7 +618,7 @@ void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
 
     pBoxInfoItem = GetItem( *rSet, SID_ATTR_BORDER_INNER, false );
 
-    eCoreUnit = rSet->GetPool()->GetMetric( nWhichBox );
+    eCoreUnit = pPool->GetMetric( nWhichBox );
 
     if ( pBoxItem && pBoxInfoItem ) // -> Don't Care
     {
@@ -467,47 +634,35 @@ void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
 
         if( !mbUseMarginItem )
         {
-            if ( m_pLeftMF->IsVisible() )
+            if (m_xLeftMF->get_visible())
             {
-                SetMetricValue(*m_pLeftMF,    pBoxInfoItem->GetDefDist(), eCoreUnit);
-                SetMetricValue(*m_pRightMF,   pBoxInfoItem->GetDefDist(), eCoreUnit);
-                SetMetricValue(*m_pTopMF,     pBoxInfoItem->GetDefDist(), eCoreUnit);
-                SetMetricValue(*m_pBottomMF,  pBoxInfoItem->GetDefDist(), eCoreUnit);
+                SetMetricValue(*m_xLeftMF,    pBoxInfoItem->GetDefDist(), eCoreUnit);
+                SetMetricValue(*m_xRightMF,   pBoxInfoItem->GetDefDist(), eCoreUnit);
+                SetMetricValue(*m_xTopMF,     pBoxInfoItem->GetDefDist(), eCoreUnit);
+                SetMetricValue(*m_xBottomMF,  pBoxInfoItem->GetDefDist(), eCoreUnit);
 
-                nMinValue = static_cast<long>(m_pLeftMF->GetValue());
-
-                if ( pBoxInfoItem->IsMinDist() )
-                {
-                    m_pLeftMF->SetFirst( nMinValue );
-                    m_pRightMF->SetFirst( nMinValue );
-                    m_pTopMF->SetFirst( nMinValue );
-                    m_pBottomMF->SetFirst( nMinValue );
-                }
+                nMinValue = m_xLeftMF->get_value(FieldUnit::NONE);
 
                 if ( pBoxInfoItem->IsDist() )
                 {
                     if( rSet->GetItemState( nWhichBox ) >= SfxItemState::DEFAULT )
                     {
-                        bool bIsAnyBorderVisible = m_pFrameSel->IsAnyBorderVisible();
+                        bool bIsAnyBorderVisible = m_aFrameSel.IsAnyBorderVisible();
                         if( !bIsAnyBorderVisible || !pBoxInfoItem->IsMinDist() )
                         {
-                            m_pLeftMF->SetMin( 0 );
-                            m_pLeftMF->SetFirst( 0 );
-                            m_pRightMF->SetMin( 0 );
-                            m_pRightMF->SetFirst( 0 );
-                            m_pTopMF->SetMin( 0 );
-                            m_pTopMF->SetFirst( 0 );
-                            m_pBottomMF->SetMin( 0 );
-                            m_pBottomMF->SetFirst( 0 );
+                            m_xLeftMF->set_min(0, FieldUnit::NONE);
+                            m_xRightMF->set_min(0, FieldUnit::NONE);
+                            m_xTopMF->set_min(0, FieldUnit::NONE);
+                            m_xBottomMF->set_min(0, FieldUnit::NONE);
                         }
                         long nLeftDist = pBoxItem->GetDistance( SvxBoxItemLine::LEFT);
-                        SetMetricValue(*m_pLeftMF, nLeftDist, eCoreUnit);
+                        SetMetricValue(*m_xLeftMF, nLeftDist, eCoreUnit);
                         long nRightDist = pBoxItem->GetDistance( SvxBoxItemLine::RIGHT);
-                        SetMetricValue(*m_pRightMF, nRightDist, eCoreUnit);
+                        SetMetricValue(*m_xRightMF, nRightDist, eCoreUnit);
                         long nTopDist = pBoxItem->GetDistance( SvxBoxItemLine::TOP);
-                        SetMetricValue( *m_pTopMF, nTopDist, eCoreUnit );
+                        SetMetricValue( *m_xTopMF, nTopDist, eCoreUnit );
                         long nBottomDist = pBoxItem->GetDistance( SvxBoxItemLine::BOTTOM);
-                        SetMetricValue( *m_pBottomMF, nBottomDist, eCoreUnit );
+                        SetMetricValue( *m_xBottomMF, nBottomDist, eCoreUnit );
 
                         // if the distance is set with no active border line
                         // or it is null with an active border line
@@ -517,39 +672,38 @@ void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
                                     nDefDist != nRightDist ||
                                     nDefDist != nTopDist   ||
                                     nDefDist != nBottomDist);
-                        if ((pBoxItem->GetSmallestDistance() ||
-                                bIsAnyBorderVisible) && bDiffDist )
+                        if ((pBoxItem->GetSmallestDistance() || bIsAnyBorderVisible) && bDiffDist )
                         {
-                            m_pLeftMF->SetModifyFlag();
-                            m_pRightMF->SetModifyFlag();
-                            m_pTopMF->SetModifyFlag();
-                            m_pBottomMF->SetModifyFlag();
+                            mbLeftModified = true;
+                            mbRightModified = true;
+                            mbTopModified = true;
+                            mbBottomModified = true;
                         }
                     }
                     else
                     {
                         // #106224# different margins -> do not fill the edits
-                        m_pLeftMF->SetText( OUString() );
-                        m_pRightMF->SetText( OUString() );
-                        m_pTopMF->SetText( OUString() );
-                        m_pBottomMF->SetText( OUString() );
+                        m_xLeftMF->set_text( OUString() );
+                        m_xRightMF->set_text( OUString() );
+                        m_xTopMF->set_text( OUString() );
+                        m_xBottomMF->set_text( OUString() );
                     }
                 }
-                m_pLeftMF->SaveValue();
-                m_pRightMF->SaveValue();
-                m_pTopMF->SaveValue();
-                m_pBottomMF->SaveValue();
+                m_xLeftMF->save_value();
+                m_xRightMF->save_value();
+                m_xTopMF->save_value();
+                m_xBottomMF->save_value();
             }
         }
     }
     else
     {
         // avoid ResetFrameLine-calls:
-        m_pFrameSel->HideAllBorders();
+        m_aFrameSel.HideAllBorders();
     }
 
-    if( !m_pFrameSel->IsAnyBorderVisible() )
-        m_pFrameSel->DeselectAllBorders();
+    if( !m_aFrameSel.IsAnyBorderVisible() )
+        m_aFrameSel.DeselectAllBorders();
 
     // depict line (color) in controllers if unambiguous:
 
@@ -557,54 +711,54 @@ void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
         // Do all visible lines show the same line widths?
         long nWidth;
         SvxBorderLineStyle nStyle;
-        bool bWidthEq = m_pFrameSel->GetVisibleWidth( nWidth, nStyle );
+        bool bWidthEq = m_aFrameSel.GetVisibleWidth( nWidth, nStyle );
         if( bWidthEq )
         {
             // Determine the width first as some styles can be missing depending on it
             sal_Int64 nWidthPt =  static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
-                        sal_Int64( nWidth ), m_pLineWidthMF->GetDecimalDigits( ),
-                        MapUnit::MapTwip, m_pLineWidthMF->GetUnit() ));
-            m_pLineWidthMF->SetValue( nWidthPt );
-            m_pLbLineStyle->SetWidth( nWidth );
+                        sal_Int64( nWidth ), m_xLineWidthMF->get_digits(),
+                        MapUnit::MapTwip, FieldUnit::POINT ));
+            m_xLineWidthMF->set_value(nWidthPt, FieldUnit::POINT);
+            m_xLbLineStyle->SetWidth(nWidth);
 
             // then set the style
-            m_pLbLineStyle->SelectEntry( nStyle );
+            m_xLbLineStyle->SelectEntry( nStyle );
         }
         else
-            m_pLbLineStyle->SelectEntryPos( 1 );
+            m_xLbLineStyle->SelectEntry(SvxBorderLineStyle::SOLID);
 
         // Do all visible lines show the same line color?
         Color aColor;
-        bool bColorEq = m_pFrameSel->GetVisibleColor( aColor );
+        bool bColorEq = m_aFrameSel.GetVisibleColor( aColor );
         if( !bColorEq )
             aColor = COL_BLACK;
 
-        m_pLbLineColor->SelectEntry(aColor);
-        m_pLbLineStyle->SetColor(aColor);
+        m_xLbLineColor->SelectEntry(aColor);
+        m_xLbLineStyle->SetColor(GetTextColor());
 
         // Select all visible lines, if they are all equal.
         if( bWidthEq && bColorEq )
-            m_pFrameSel->SelectAllVisibleBorders();
+            m_aFrameSel.SelectAllVisibleBorders();
 
         // set the current style and color (caches style in control even if nothing is selected)
-        SelStyleHdl_Impl(*m_pLbLineStyle);
-        SelColHdl_Impl(*m_pLbLineColor);
+        SelStyleHdl_Impl(*m_xLbLineStyle);
+        SelColHdl_Impl(*m_xLbLineColor);
     }
 
-    bool bEnable = m_pWndShadows->GetSelectedItemId() > 1 ;
-    m_pFtShadowSize->Enable(bEnable);
-    m_pEdShadowSize->Enable(bEnable);
-    m_pFtShadowColor->Enable(bEnable);
-    m_pLbShadowColor->Enable(bEnable);
+    bool bEnable = m_xWndShadows->GetSelectedItemId() > 1 ;
+    m_xFtShadowSize->set_sensitive(bEnable);
+    m_xEdShadowSize->set_sensitive(bEnable);
+    m_xFtShadowColor->set_sensitive(bEnable);
+    m_xLbShadowColor->set_sensitive(bEnable);
 
-    m_pWndPresets->SetNoSelection();
+    m_xWndPresets->SetNoSelection();
 
     // - no line - should not be selected
 
-    if ( m_pLbLineStyle->GetSelectedEntryPos() == 0 )
+    if (m_xLbLineStyle->GetSelectEntryStyle() == SvxBorderLineStyle::NONE)
     {
-        m_pLbLineStyle->SelectEntryPos( 1 );
-        SelStyleHdl_Impl(*m_pLbLineStyle);
+        m_xLbLineStyle->SelectEntry(SvxBorderLineStyle::SOLID);
+        SelStyleHdl_Impl(*m_xLbLineStyle);
     }
 
     const SfxPoolItem* pItem;
@@ -617,39 +771,44 @@ void SvxBorderTabPage::Reset( const SfxItemSet* rSet )
         if(nHtmlMode & HTMLMODE_ON)
         {
             // there are no shadows in Html-mode and only complete borders
-            m_pShadowFrame->Disable();
+            m_xShadowFrame->set_sensitive(false);
 
             if( !(nSWMode & SwBorderModes::TABLE) )
             {
-                m_pUserDefFT->Disable();
-                m_pFrameSel->Disable();
-                m_pWndPresets->RemoveItem(3);
-                m_pWndPresets->RemoveItem(4);
-                m_pWndPresets->RemoveItem(5);
+                m_xUserDefFT->set_sensitive(false);
+                m_xFrameSelWin->set_sensitive(false);
+                m_xWndPresets->RemoveItem(3);
+                m_xWndPresets->RemoveItem(4);
+                m_xWndPresets->RemoveItem(5);
             }
         }
     }
 
     LinesChanged_Impl( nullptr );
-    if(m_pLeftMF->GetValue() == m_pRightMF->GetValue() && m_pTopMF->GetValue() == m_pBottomMF->GetValue() && m_pTopMF->GetValue() == m_pLeftMF->GetValue())
+    if (m_xLeftMF->get_value(FieldUnit::NONE) == m_xRightMF->get_value(FieldUnit::NONE) &&
+        m_xTopMF->get_value(FieldUnit::NONE) == m_xBottomMF->get_value(FieldUnit::NONE) &&
+        m_xTopMF->get_value(FieldUnit::NONE) == m_xLeftMF->get_value(FieldUnit::NONE))
+    {
         mbSync = true;
+    }
     else
         mbSync = false;
-    m_pSynchronizeCB->Check(mbSync);
+    m_xSynchronizeCB->set_active(mbSync);
 
     mbRemoveAdjacentCellBorders = false;
-    m_pRemoveAdjcentCellBordersCB->Check( false );
-    m_pRemoveAdjcentCellBordersCB->Enable( false );
+    m_xRemoveAdjcentCellBordersCB->set_active(false);
+    m_xRemoveAdjcentCellBordersCB->set_sensitive(false);
 }
 
 void SvxBorderTabPage::ChangesApplied()
 {
-    m_pLeftMF->SaveValue();
-    m_pRightMF->SaveValue();
-    m_pTopMF->SaveValue();
-    m_pBottomMF->SaveValue();
+    m_xLeftMF->save_value();
+    m_xRightMF->save_value();
+    m_xTopMF->save_value();
+    m_xBottomMF->save_value();
+    m_xMergeWithNextCB->save_state();
+    m_xMergeAdjacentBordersCB->save_state();
 }
-
 
 DeactivateRC SvxBorderTabPage::DeactivatePage( SfxItemSet* _pSet )
 {
@@ -659,14 +818,79 @@ DeactivateRC SvxBorderTabPage::DeactivatePage( SfxItemSet* _pSet )
     return DeactivateRC::LeavePage;
 }
 
-
 bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
 {
-    bool bAttrsChanged = SfxTabPage::FillItemSet( rCoreAttrs );
+    bool bAttrsChanged = false;
+
+    SfxItemPool* pPool = rCoreAttrs->GetPool();
+
+    if (m_aFrameSel.IsBorderEnabled(svx::FrameBorderType::TLBR))
+    {
+        sal_uInt16 nBorderDiagId = pPool->GetWhich(SID_ATTR_BORDER_DIAG_TLBR);
+        SvxLineItem aLineItem(*static_cast<const SvxLineItem*>(rCoreAttrs->GetItem(nBorderDiagId)));
+        aLineItem.SetLine(m_aFrameSel.GetFrameBorderStyle(svx::FrameBorderType::TLBR));
+        rCoreAttrs->Put(aLineItem);
+        bAttrsChanged = true;
+    }
+
+    if (m_aFrameSel.IsBorderEnabled(svx::FrameBorderType::BLTR))
+    {
+        sal_uInt16 nBorderDiagId = pPool->GetWhich(SID_ATTR_BORDER_DIAG_BLTR);
+        SvxLineItem aLineItem(*static_cast<const SvxLineItem*>(rCoreAttrs->GetItem(nBorderDiagId)));
+        aLineItem.SetLine(m_aFrameSel.GetFrameBorderStyle(svx::FrameBorderType::BLTR));
+        rCoreAttrs->Put(aLineItem);
+        bAttrsChanged = true;
+    }
+
+    if (m_xShadowControls && m_xShadowControls->get_value_changed_from_saved())
+    {
+        sal_uInt16 nShadowId = pPool->GetWhich(mnShadowSlot);
+        const SvxShadowItem& rOldShadowItem = *static_cast<const SvxShadowItem*>(rCoreAttrs->GetItem(nShadowId));
+        rCoreAttrs->Put(m_xShadowControls->GetControlValue(rOldShadowItem));
+        bAttrsChanged = true;
+    }
+
+    if (m_xMarginControls && m_xMarginControls->get_value_changed_from_saved())
+    {
+        sal_uInt16 nAlignMarginId = pPool->GetWhich(SID_ATTR_ALIGN_MARGIN);
+        const SvxMarginItem& rOldMarginItem = *static_cast<const SvxMarginItem*>(rCoreAttrs->GetItem(nAlignMarginId));
+        rCoreAttrs->Put(m_xMarginControls->GetControlValue(rOldMarginItem));
+        bAttrsChanged = true;
+    }
+
+    if (m_xMergeAdjacentBordersCB->get_state_changed_from_saved())
+    {
+        sal_uInt16 nMergeAdjacentBordersId = pPool->GetWhich(SID_SW_COLLAPSING_BORDERS);
+        auto nState = m_xMergeAdjacentBordersCB->get_state();
+        if (nState == TRISTATE_INDET)
+            rCoreAttrs->ClearItem(nMergeAdjacentBordersId);
+        else
+        {
+            std::unique_ptr<SfxBoolItem> xNewItem(static_cast<SfxBoolItem*>(rCoreAttrs->Get(nMergeAdjacentBordersId).Clone()));
+            xNewItem->SetValue(static_cast<bool>(nState));
+            rCoreAttrs->Put(*xNewItem);
+        }
+        bAttrsChanged = true;
+    }
+
+    if (m_xMergeWithNextCB->get_state_changed_from_saved())
+    {
+        sal_uInt16 nMergeWithNextId = pPool->GetWhich(SID_ATTR_BORDER_CONNECT);
+        auto nState = m_xMergeWithNextCB->get_state();
+        if (nState == TRISTATE_INDET)
+            rCoreAttrs->ClearItem(nMergeWithNextId);
+        else
+        {
+            std::unique_ptr<SfxBoolItem> xNewItem(static_cast<SfxBoolItem*>(rCoreAttrs->Get(nMergeWithNextId).Clone()));
+            xNewItem->SetValue(static_cast<bool>(nState));
+            rCoreAttrs->Put(*xNewItem);
+        }
+        bAttrsChanged = true;
+    }
 
     bool                  bPut          = true;
     sal_uInt16            nBoxWhich     = GetWhich( mnBoxSlot );
-    sal_uInt16            nBoxInfoWhich = rCoreAttrs->GetPool()->GetWhich( SID_ATTR_BORDER_INNER, false );
+    sal_uInt16            nBoxInfoWhich = pPool->GetWhich( SID_ATTR_BORDER_INNER, false );
     const SfxItemSet&     rOldSet       = GetItemSet();
     SvxBoxItem            aBoxItem      ( nBoxWhich );
     SvxBoxInfoItem        aBoxInfoItem  ( nBoxInfoWhich );
@@ -685,7 +909,7 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
                             };
 
     for (std::pair<svx::FrameBorderType,SvxBoxItemLine> const & i : eTypes1)
-        aBoxItem.SetLine( m_pFrameSel->GetFrameBorderStyle( i.first ), i.second );
+        aBoxItem.SetLine( m_aFrameSel.GetFrameBorderStyle( i.first ), i.second );
 
 
     aBoxItem.SetRemoveAdjacentCellBorder( mbRemoveAdjacentCellBorders );
@@ -696,7 +920,7 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
                                 { svx::FrameBorderType::Vertical,SvxBoxInfoItemLine::VERT }
                             };
     for (std::pair<svx::FrameBorderType,SvxBoxInfoItemLine> const & j : eTypes2)
-        aBoxInfoItem.SetLine( m_pFrameSel->GetFrameBorderStyle( j.first ), j.second );
+        aBoxInfoItem.SetLine( m_aFrameSel.GetFrameBorderStyle( j.first ), j.second );
 
     aBoxInfoItem.EnableHor( mbHorEnabled );
     aBoxInfoItem.EnableVer( mbVerEnabled );
@@ -704,7 +928,7 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
 
     // inner distance
 
-    if( m_pLeftMF->IsVisible() )
+    if (m_xLeftMF->get_visible())
     {
         // #i40405# enable distance controls for next dialog call
         aBoxInfoItem.SetDist( true );
@@ -712,48 +936,36 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
         if( !mbUseMarginItem )
         {
             // #106224# all edits empty: do nothing
-            if( !m_pLeftMF->GetText().isEmpty() || !m_pRightMF->GetText().isEmpty() ||
-                !m_pTopMF->GetText().isEmpty() || !m_pBottomMF->GetText().isEmpty() )
+            if( !m_xLeftMF->get_text().isEmpty() || !m_xRightMF->get_text().isEmpty() ||
+                !m_xTopMF->get_text().isEmpty() || !m_xBottomMF->get_text().isEmpty() )
             {
-                if ( mbAllowPaddingWithoutBorders
-                     || ((mbHorEnabled || mbVerEnabled || (nSWMode & SwBorderModes::TABLE)) &&
-                         (m_pLeftMF->IsModified()||m_pRightMF->IsModified()||
-                             m_pTopMF->IsModified()||m_pBottomMF->IsModified()) )
-                     || m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Top ) != svx::FrameBorderState::Hide
-                     || m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Bottom ) != svx::FrameBorderState::Hide
-                     || m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Left ) != svx::FrameBorderState::Hide
-                     || m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Right ) != svx::FrameBorderState::Hide )
+                const SvxBoxInfoItem* pOldBoxInfoItem = GetOldItem( *rCoreAttrs, SID_ATTR_BORDER_INNER );
+                if (
+                    !pOldBoxItem ||
+                    m_xLeftMF->get_value_changed_from_saved() ||
+                    m_xRightMF->get_value_changed_from_saved() ||
+                    m_xTopMF->get_value_changed_from_saved() ||
+                    m_xBottomMF->get_value_changed_from_saved() ||
+                    nMinValue == m_xLeftMF->get_value(FieldUnit::NONE) ||
+                    nMinValue == m_xRightMF->get_value(FieldUnit::NONE) ||
+                    nMinValue == m_xTopMF->get_value(FieldUnit::NONE) ||
+                    nMinValue == m_xBottomMF->get_value(FieldUnit::NONE) ||
+                    (pOldBoxInfoItem && !pOldBoxInfoItem->IsValid(SvxBoxInfoItemValidFlags::DISTANCE))
+                   )
                 {
-                    const SvxBoxInfoItem* pOldBoxInfoItem = GetOldItem( *rCoreAttrs, SID_ATTR_BORDER_INNER );
-                    if (
-                        !pOldBoxItem ||
-                        m_pLeftMF->IsValueChangedFromSaved() ||
-                        m_pRightMF->IsValueChangedFromSaved() ||
-                        m_pTopMF->IsValueChangedFromSaved() ||
-                        m_pBottomMF->IsValueChangedFromSaved() ||
-                        nMinValue == m_pLeftMF->GetValue() ||
-                        nMinValue == m_pRightMF->GetValue() ||
-                        nMinValue == m_pTopMF->GetValue() ||
-                        nMinValue == m_pBottomMF->GetValue() ||
-                        (pOldBoxInfoItem && !pOldBoxInfoItem->IsValid(SvxBoxInfoItemValidFlags::DISTANCE))
-                       )
-                    {
-                        aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_pLeftMF, eCoreUnit )), SvxBoxItemLine::LEFT  );
-                        aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_pRightMF, eCoreUnit )), SvxBoxItemLine::RIGHT );
-                        aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_pTopMF, eCoreUnit )), SvxBoxItemLine::TOP   );
-                        aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_pBottomMF, eCoreUnit )), SvxBoxItemLine::BOTTOM);
-                    }
-                    else
-                    {
-                        aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::LEFT ), SvxBoxItemLine::LEFT);
-                        aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::RIGHT),  SvxBoxItemLine::RIGHT);
-                        aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::TOP  ), SvxBoxItemLine::TOP);
-                        aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::BOTTOM), SvxBoxItemLine::BOTTOM);
-                    }
-                    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::DISTANCE );
+                    aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_xLeftMF, eCoreUnit )), SvxBoxItemLine::LEFT  );
+                    aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_xRightMF, eCoreUnit )), SvxBoxItemLine::RIGHT );
+                    aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_xTopMF, eCoreUnit )), SvxBoxItemLine::TOP   );
+                    aBoxItem.SetDistance( static_cast<sal_uInt16>(GetCoreValue(*m_xBottomMF, eCoreUnit )), SvxBoxItemLine::BOTTOM);
                 }
                 else
-                    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::DISTANCE, false );
+                {
+                    aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::LEFT ), SvxBoxItemLine::LEFT);
+                    aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::RIGHT),  SvxBoxItemLine::RIGHT);
+                    aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::TOP  ), SvxBoxItemLine::TOP);
+                    aBoxItem.SetDistance(pOldBoxItem->GetDistance(SvxBoxItemLine::BOTTOM), SvxBoxItemLine::BOTTOM);
+                }
+                aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::DISTANCE );
             }
         }
     }
@@ -761,12 +973,12 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
 
     // note Don't Care Status in the Info-Item:
 
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::TOP,    m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Top )    != svx::FrameBorderState::DontCare );
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::BOTTOM, m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Bottom ) != svx::FrameBorderState::DontCare );
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::LEFT,   m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Left )   != svx::FrameBorderState::DontCare );
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::RIGHT,  m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Right )  != svx::FrameBorderState::DontCare );
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::HORI,   m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Horizontal )    != svx::FrameBorderState::DontCare );
-    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::VERT,   m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Vertical )    != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::TOP,    m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Top )    != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::BOTTOM, m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Bottom ) != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::LEFT,   m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Left )   != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::RIGHT,  m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Right )  != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::HORI,   m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Horizontal )    != svx::FrameBorderState::DontCare );
+    aBoxInfoItem.SetValid( SvxBoxInfoItemValidFlags::VERT,   m_aFrameSel.GetFrameBorderState( svx::FrameBorderType::Vertical )    != svx::FrameBorderState::DontCare );
 
 
     // Put or Clear of the border?
@@ -813,7 +1025,7 @@ bool SvxBorderTabPage::FillItemSet( SfxItemSet* rCoreAttrs )
 
 void SvxBorderTabPage::HideShadowControls()
 {
-    m_pShadowFrame->Hide();
+    m_xShadowFrame->hide();
 }
 
 #define IID_PRE_CELL_NONE       1
@@ -838,7 +1050,7 @@ void SvxBorderTabPage::HideShadowControls()
 #define IID_PRE_TABLE_ALL       20
 #define IID_PRE_TABLE_OUTER2    21
 
-IMPL_LINK_NOARG(SvxBorderTabPage, SelPreHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBorderTabPage, SelPreHdl_Impl, SvtValueSet*, void)
 {
     const svx::FrameBorderState SHOW = svx::FrameBorderState::Show;
     const svx::FrameBorderState HIDE = svx::FrameBorderState::Hide;
@@ -871,11 +1083,11 @@ IMPL_LINK_NOARG(SvxBorderTabPage, SelPreHdl_Impl, ValueSet*, void)
     };
 
     // first hide and deselect all frame borders
-    m_pFrameSel->HideAllBorders();
-    m_pFrameSel->DeselectAllBorders();
+    m_aFrameSel.HideAllBorders();
+    m_aFrameSel.DeselectAllBorders();
 
     // Using image ID to find correct line in table above.
-    sal_uInt16 nLine = GetPresetImageId( m_pWndPresets->GetSelectedItemId() ) - 1;
+    sal_uInt16 nLine = GetPresetImageId( m_xWndPresets->GetSelectedItemId() ) - 1;
 
     // Apply all styles from the table
     for( int nBorder = 0; nBorder < svx::FRAMEBORDERTYPE_COUNT; ++nBorder )
@@ -883,77 +1095,69 @@ IMPL_LINK_NOARG(SvxBorderTabPage, SelPreHdl_Impl, ValueSet*, void)
         svx::FrameBorderType eBorder = svx::GetFrameBorderTypeFromIndex( nBorder );
         switch( ppeStates[ nLine ][ nBorder ] )
         {
-            case SHOW:  m_pFrameSel->SelectBorder( eBorder );      break;
+            case SHOW:  m_aFrameSel.SelectBorder( eBorder );      break;
             case HIDE:  /* nothing to do */                     break;
-            case DONT:  m_pFrameSel->SetBorderDontCare( eBorder ); break;
+            case DONT:  m_aFrameSel.SetBorderDontCare( eBorder ); break;
         }
     }
 
     // Show all lines that have been selected above
-    if( m_pFrameSel->IsAnyBorderSelected() )
+    if( m_aFrameSel.IsAnyBorderSelected() )
     {
         // any visible style, but "no-line" in line list box? -> use hair-line
-        if( (m_pLbLineStyle->GetSelectedEntryPos() == 0) || (m_pLbLineStyle->GetSelectedEntryPos() == LISTBOX_ENTRY_NOTFOUND) )
-            m_pLbLineStyle->SelectEntryPos( 1 );
+        if (m_xLbLineStyle->GetSelectEntryStyle() == SvxBorderLineStyle::NONE)
+            m_xLbLineStyle->SelectEntry(SvxBorderLineStyle::SOLID);
 
         // set current style to all previously selected lines
-        SelStyleHdl_Impl(*m_pLbLineStyle);
-        SelColHdl_Impl(*m_pLbLineColor);
+        SelStyleHdl_Impl(*m_xLbLineStyle);
+        SelColHdl_Impl(*m_xLbLineColor);
     }
 
     // Presets ValueSet does not show a selection (used as push buttons).
-    m_pWndPresets->SetNoSelection();
+    m_xWndPresets->SetNoSelection();
 
     LinesChanged_Impl( nullptr );
     UpdateRemoveAdjCellBorderCB( nLine + 1 );
 }
 
-
-IMPL_LINK_NOARG(SvxBorderTabPage, SelSdwHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBorderTabPage, SelSdwHdl_Impl, SvtValueSet*, void)
 {
-    bool bEnable = m_pWndShadows->GetSelectedItemId() > 1;
-    m_pFtShadowSize->Enable(bEnable);
-    m_pEdShadowSize->Enable(bEnable);
-    m_pFtShadowColor->Enable(bEnable);
-    m_pLbShadowColor->Enable(bEnable);
+    bool bEnable = m_xWndShadows->GetSelectedItemId() > 1;
+    m_xFtShadowSize->set_sensitive(bEnable);
+    m_xEdShadowSize->set_sensitive(bEnable);
+    m_xFtShadowColor->set_sensitive(bEnable);
+    m_xLbShadowColor->set_sensitive(bEnable);
 }
 
-IMPL_LINK(SvxBorderTabPage, SelColHdl_Impl, SvxColorListBox&, rColorBox, void)
+IMPL_LINK(SvxBorderTabPage, SelColHdl_Impl, ColorListBox&, rColorBox, void)
 {
     Color aColor = rColorBox.GetSelectEntryColor();
-    m_pFrameSel->SetColorToSelection(aColor);
-    if(aColor == COL_WHITE)
-      m_pLbLineStyle->SetColor(COL_BLACK);
-    else
-      m_pLbLineStyle->SetColor(aColor);
+    m_aFrameSel.SetColorToSelection(aColor);
 }
 
-IMPL_LINK_NOARG(SvxBorderTabPage, ModifyWidthHdl_Impl, Edit&, void)
+IMPL_LINK_NOARG(SvxBorderTabPage, ModifyWidthHdl_Impl, weld::MetricSpinButton&, void)
 {
-    sal_Int64 nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
-                m_pLineWidthMF->GetValue( ),
-                m_pLineWidthMF->GetDecimalDigits( ),
-                m_pLineWidthMF->GetUnit(), MapUnit::MapTwip ));
-    m_pLbLineStyle->SetWidth( nVal );
+    sal_Int64 nVal = m_xLineWidthMF->get_value(FieldUnit::NONE);
+    nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
+                nVal,
+                m_xLineWidthMF->get_digits(),
+                FieldUnit::POINT, MapUnit::MapTwip ));
+    m_xLbLineStyle->SetWidth( nVal );
 
-    m_pFrameSel->SetStyleToSelection( nVal,
-        m_pLbLineStyle->GetSelectEntryStyle() );
+    m_aFrameSel.SetStyleToSelection( nVal,
+        m_xLbLineStyle->GetSelectEntryStyle() );
 }
 
-
-IMPL_LINK( SvxBorderTabPage, SelStyleHdl_Impl, ListBox&, rLb, void )
+IMPL_LINK_NOARG(SvxBorderTabPage, SelStyleHdl_Impl, SvtLineListBox&, void)
 {
-    if (&rLb == m_pLbLineStyle)
-    {
-        sal_Int64 nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
-                    m_pLineWidthMF->GetValue( ),
-                    m_pLineWidthMF->GetDecimalDigits( ),
-                    m_pLineWidthMF->GetUnit(), MapUnit::MapTwip ));
-        m_pFrameSel->SetStyleToSelection ( nVal,
-            m_pLbLineStyle->GetSelectEntryStyle() );
-    }
+    sal_Int64 nVal = m_xLineWidthMF->get_value(FieldUnit::NONE);
+    nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
+                nVal,
+                m_xLineWidthMF->get_digits(),
+                FieldUnit::POINT, MapUnit::MapTwip ));
+    m_aFrameSel.SetStyleToSelection ( nVal,
+        m_xLbLineStyle->GetSelectEntryStyle() );
 }
-
 
 // ValueSet handling
 sal_uInt16 SvxBorderTabPage::GetPresetImageId( sal_uInt16 nValueSetIdx ) const
@@ -1025,27 +1229,28 @@ const char* SvxBorderTabPage::GetPresetStringId( sal_uInt16 nValueSetIdx ) const
 void SvxBorderTabPage::FillPresetVS()
 {
     // basic initialization of the ValueSet
-    m_pWndPresets->SetStyle( m_pWndPresets->GetStyle() | WB_ITEMBORDER | WB_DOUBLEBORDER );
-    m_pWndPresets->SetColCount( SVX_BORDER_PRESET_COUNT );
+    m_xWndPresets->SetStyle( m_xWndPresets->GetStyle() | WB_ITEMBORDER | WB_DOUBLEBORDER );
+    m_xWndPresets->SetColCount( SVX_BORDER_PRESET_COUNT );
 
     // insert images and help texts
     for( sal_uInt16 nVSIdx = 1; nVSIdx <= SVX_BORDER_PRESET_COUNT; ++nVSIdx )
     {
-        m_pWndPresets->InsertItem( nVSIdx );
-        m_pWndPresets->SetItemImage(nVSIdx, Image(m_aBorderImgVec[GetPresetImageId(nVSIdx) - 1]));
-        m_pWndPresets->SetItemText( nVSIdx, CuiResId( GetPresetStringId( nVSIdx ) ) );
+        m_xWndPresets->InsertItem( nVSIdx );
+        m_xWndPresets->SetItemImage(nVSIdx, Image(m_aBorderImgVec[GetPresetImageId(nVSIdx) - 1]));
+        m_xWndPresets->SetItemText( nVSIdx, CuiResId( GetPresetStringId( nVSIdx ) ) );
     }
 
     // show the control
-    m_pWndPresets->SetNoSelection();
-    m_pWndPresets->Show();
+    m_xWndPresets->SetNoSelection();
+    m_xWndPresets->SetOptimalSize();
+    m_xWndPresets->Show();
 }
 
 void SvxBorderTabPage::FillShadowVS()
 {
     // basic initialization of the ValueSet
-    m_pWndShadows->SetStyle( m_pWndShadows->GetStyle() | WB_ITEMBORDER | WB_DOUBLEBORDER );
-    m_pWndShadows->SetColCount( SVX_BORDER_SHADOW_COUNT );
+    m_xWndShadows->SetStyle( m_xWndShadows->GetStyle() | WB_ITEMBORDER | WB_DOUBLEBORDER );
+    m_xWndShadows->SetColCount( SVX_BORDER_SHADOW_COUNT );
 
     // string resource IDs for each image
     static const char* pnStrIds[ SVX_BORDER_SHADOW_COUNT ] =
@@ -1054,14 +1259,15 @@ void SvxBorderTabPage::FillShadowVS()
     // insert images and help texts
     for( sal_uInt16 nVSIdx = 1; nVSIdx <= SVX_BORDER_SHADOW_COUNT; ++nVSIdx )
     {
-        m_pWndShadows->InsertItem( nVSIdx );
-        m_pWndShadows->SetItemImage(nVSIdx, Image(m_aShadowImgVec[nVSIdx-1]));
-        m_pWndShadows->SetItemText( nVSIdx, CuiResId( pnStrIds[ nVSIdx - 1 ] ) );
+        m_xWndShadows->InsertItem( nVSIdx );
+        m_xWndShadows->SetItemImage(nVSIdx, Image(m_aShadowImgVec[nVSIdx-1]));
+        m_xWndShadows->SetItemText( nVSIdx, CuiResId( pnStrIds[ nVSIdx - 1 ] ) );
     }
 
     // show the control
-    m_pWndShadows->SelectItem( 1 );
-    m_pWndShadows->Show();
+    m_xWndShadows->SelectItem( 1 );
+    m_xWndShadows->SetOptimalSize();
+    m_xWndShadows->Show();
 }
 
 
@@ -1081,13 +1287,13 @@ void SvxBorderTabPage::FillLineListBox_Impl()
 {
     using namespace ::com::sun::star::table::BorderLineStyle;
 
-    struct {
+    static struct {
         SvxBorderLineStyle mnStyle;
         long mnMinWidth;
         LineListBox::ColorFunc mpColor1Fn;
         LineListBox::ColorFunc mpColor2Fn;
         LineListBox::ColorDistFunc mpColorDistFn;
-    } aLines[] = {
+    } const aLines[] = {
         // Simple lines
         { SvxBorderLineStyle::SOLID,        0, &sameColor, &sameColor, &sameDistColor },
         { SvxBorderLineStyle::DOTTED,       0, &sameColor, &sameColor, &sameDistColor },
@@ -1113,129 +1319,103 @@ void SvxBorderTabPage::FillLineListBox_Impl()
         { SvxBorderLineStyle::INSET,  10, &SvxBorderLine::darkColor, &SvxBorderLine::lightColor, &sameDistColor }
     };
 
-    m_pLbLineStyle->SetSourceUnit( FUNIT_TWIP );
-
-    m_pLbLineStyle->SetNone( SvxResId( RID_SVXSTR_NONE ) );
+    m_xLbLineStyle->SetSourceUnit( FieldUnit::TWIP );
 
     for (size_t i = 0; i < SAL_N_ELEMENTS(aLines); ++i)
     {
         if (!IsBorderLineStyleAllowed(aLines[i].mnStyle))
             continue;
 
-        m_pLbLineStyle->InsertEntry(
+        m_xLbLineStyle->InsertEntry(
             SvxBorderLine::getWidthImpl(aLines[i].mnStyle), aLines[i].mnStyle,
             aLines[i].mnMinWidth, aLines[i].mpColor1Fn, aLines[i].mpColor2Fn, aLines[i].mpColorDistFn);
     }
 
-    sal_Int64 nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(
-                m_pLineWidthMF->GetValue( ),
-                m_pLineWidthMF->GetDecimalDigits( ),
-                m_pLineWidthMF->GetUnit(), MapUnit::MapTwip ));
-    m_pLbLineStyle->SetWidth( nVal );
+    sal_Int64 nVal = m_xLineWidthMF->get_value(FieldUnit::NONE);
+    nVal = static_cast<sal_Int64>(MetricField::ConvertDoubleValue(nVal, m_xLineWidthMF->get_digits(),
+                                                                  m_xLineWidthMF->get_unit(), MapUnit::MapTwip));
+    m_xLbLineStyle->SetWidth( nVal );
 }
 
 
 IMPL_LINK_NOARG(SvxBorderTabPage, LinesChanged_Impl, LinkParamNone*, void)
 {
-    if(!mbUseMarginItem && m_pLeftMF->IsVisible())
+    if (!mbUseMarginItem && m_xLeftMF->get_visible())
     {
-        bool bLineSet = m_pFrameSel->IsAnyBorderVisible();
-        bool bMinAllowed = bool(nSWMode & (SwBorderModes::FRAME|SwBorderModes::TABLE));
-        bool bSpaceModified =   m_pLeftMF->IsModified()||
-                                m_pRightMF->IsModified()||
-                                m_pTopMF->IsModified()||
-                                m_pBottomMF->IsModified();
+        bool bLineSet = m_aFrameSel.IsAnyBorderVisible();
+        bool bSpaceModified =   mbLeftModified ||
+                                mbRightModified ||
+                                mbTopModified ||
+                                mbBottomModified;
 
         if(bLineSet)
         {
-            if(!bMinAllowed)
-            {
-                m_pLeftMF->SetFirst(nMinValue);
-                m_pRightMF->SetFirst(nMinValue);
-                m_pTopMF->SetFirst(nMinValue);
-                m_pBottomMF->SetFirst(nMinValue);
-            }
             if(!bSpaceModified)
             {
-                m_pLeftMF->SetValue(nMinValue);
-                m_pRightMF->SetValue(nMinValue);
-                m_pTopMF->SetValue(nMinValue);
-                m_pBottomMF->SetValue(nMinValue);
+                m_xLeftMF->set_value(nMinValue, FieldUnit::NONE);
+                m_xRightMF->set_value(nMinValue, FieldUnit::NONE);
+                m_xTopMF->set_value(nMinValue, FieldUnit::NONE);
+                m_xBottomMF->set_value(nMinValue, FieldUnit::NONE);
             }
         }
         else
         {
-            m_pLeftMF->SetMin(0);
-            m_pRightMF->SetMin(0);
-            m_pTopMF->SetMin(0);
-            m_pBottomMF->SetMin(0);
-            m_pLeftMF->SetFirst(0);
-            m_pRightMF->SetFirst(0);
-            m_pTopMF->SetFirst(0);
-            m_pBottomMF->SetFirst(0);
-            if(!bSpaceModified && !mbAllowPaddingWithoutBorders)
-            {
-                m_pLeftMF->SetValue(0);
-                m_pRightMF->SetValue(0);
-                m_pTopMF->SetValue(0);
-                m_pBottomMF->SetValue(0);
-            }
+            m_xLeftMF->set_min(0, FieldUnit::NONE);
+            m_xRightMF->set_min(0, FieldUnit::NONE);
+            m_xTopMF->set_min(0, FieldUnit::NONE);
+            m_xBottomMF->set_min(0, FieldUnit::NONE);
         }
         // for tables everything is allowed
         SvxBoxInfoItemValidFlags nValid = SvxBoxInfoItemValidFlags::TOP|SvxBoxInfoItemValidFlags::BOTTOM|SvxBoxInfoItemValidFlags::LEFT|SvxBoxInfoItemValidFlags::RIGHT;
 
-        // for other objects (paragraph, page, frame, character) the edit is disabled, if there's no border set
-        if(!(nSWMode & SwBorderModes::TABLE) && !mbAllowPaddingWithoutBorders)
-        {
-            if(bLineSet)
-            {
-                nValid  = (m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Top)    == svx::FrameBorderState::Show) ? SvxBoxInfoItemValidFlags::TOP : SvxBoxInfoItemValidFlags::NONE;
-                nValid |= (m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Bottom) == svx::FrameBorderState::Show) ? SvxBoxInfoItemValidFlags::BOTTOM : SvxBoxInfoItemValidFlags::NONE;
-                nValid |= (m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Left)   == svx::FrameBorderState::Show) ? SvxBoxInfoItemValidFlags::LEFT : SvxBoxInfoItemValidFlags::NONE;
-                nValid |= (m_pFrameSel->GetFrameBorderState( svx::FrameBorderType::Right ) == svx::FrameBorderState::Show) ? SvxBoxInfoItemValidFlags::RIGHT : SvxBoxInfoItemValidFlags::NONE;
-            }
-            else
-                nValid = SvxBoxInfoItemValidFlags::NONE;
-        }
-        m_pLeftFT->Enable( bool(nValid & SvxBoxInfoItemValidFlags::LEFT) );
-        m_pRightFT->Enable( bool(nValid & SvxBoxInfoItemValidFlags::RIGHT) );
-        m_pTopFT->Enable( bool(nValid & SvxBoxInfoItemValidFlags::TOP) );
-        m_pBottomFT->Enable( bool(nValid & SvxBoxInfoItemValidFlags::BOTTOM) );
-        m_pLeftMF->Enable( bool(nValid & SvxBoxInfoItemValidFlags::LEFT) );
-        m_pRightMF->Enable( bool(nValid & SvxBoxInfoItemValidFlags::RIGHT) );
-        m_pTopMF->Enable( bool(nValid & SvxBoxInfoItemValidFlags::TOP) );
-        m_pBottomMF->Enable( bool(nValid & SvxBoxInfoItemValidFlags::BOTTOM) );
-        m_pSynchronizeCB->Enable( m_pRightMF->IsEnabled() || m_pTopMF->IsEnabled() ||
-                               m_pBottomMF->IsEnabled() || m_pLeftMF->IsEnabled() );
+        m_xLeftFT->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::LEFT) );
+        m_xRightFT->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::RIGHT) );
+        m_xTopFT->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::TOP) );
+        m_xBottomFT->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::BOTTOM) );
+        m_xLeftMF->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::LEFT) );
+        m_xRightMF->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::RIGHT) );
+        m_xTopMF->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::TOP) );
+        m_xBottomMF->set_sensitive( bool(nValid & SvxBoxInfoItemValidFlags::BOTTOM) );
+        m_xSynchronizeCB->set_sensitive(m_xRightMF->get_sensitive() || m_xTopMF->get_sensitive() ||
+                                        m_xBottomMF->get_sensitive() || m_xLeftMF->get_sensitive());
     }
     UpdateRemoveAdjCellBorderCB( SAL_MAX_UINT16 );
 }
 
 
-IMPL_LINK( SvxBorderTabPage, ModifyDistanceHdl_Impl, Edit&, rField, void)
+IMPL_LINK( SvxBorderTabPage, ModifyDistanceHdl_Impl, weld::MetricSpinButton&, rField, void)
 {
-    if ( mbSync )
+    if (&rField == m_xLeftMF.get())
+        mbLeftModified = true;
+    else if (&rField == m_xRightMF.get())
+        mbRightModified = true;
+    else if (&rField == m_xTopMF.get())
+        mbTopModified = true;
+    else if (&rField == m_xBottomMF.get())
+        mbBottomModified = true;
+
+    if (mbSync)
     {
-        sal_Int64 nVal = static_cast<MetricField&>(rField).GetValue();
-        if(&rField != m_pLeftMF)
-            m_pLeftMF->SetValue(nVal);
-        if(&rField != m_pRightMF)
-            m_pRightMF->SetValue(nVal);
-        if(&rField != m_pTopMF)
-            m_pTopMF->SetValue(nVal);
-        if(&rField != m_pBottomMF)
-            m_pBottomMF->SetValue(nVal);
+        const auto nVal = rField.get_value(FieldUnit::NONE);
+        if (&rField != m_xLeftMF.get())
+            m_xLeftMF->set_value(nVal, FieldUnit::NONE);
+        if (&rField != m_xRightMF.get())
+            m_xRightMF->set_value(nVal, FieldUnit::NONE);
+        if (&rField != m_xTopMF.get())
+            m_xTopMF->set_value(nVal, FieldUnit::NONE);
+        if (&rField != m_xBottomMF.get())
+            m_xBottomMF->set_value(nVal, FieldUnit::NONE);
     }
 }
 
-IMPL_LINK( SvxBorderTabPage, SyncHdl_Impl, Button*, pBox, void)
+IMPL_LINK( SvxBorderTabPage, SyncHdl_Impl, weld::ToggleButton&, rBox, void)
 {
-    mbSync = static_cast<CheckBox*>(pBox)->IsChecked();
+    mbSync = rBox.get_active();
 }
 
-IMPL_LINK( SvxBorderTabPage, RemoveAdjacentCellBorderHdl_Impl, Button*, pBox, void)
+IMPL_LINK( SvxBorderTabPage, RemoveAdjacentCellBorderHdl_Impl, weld::ToggleButton&, rBox, void)
 {
-    mbRemoveAdjacentCellBorders = static_cast<CheckBox*>(pBox)->IsChecked();
+    mbRemoveAdjacentCellBorders = rBox.get_active();
 }
 
 void SvxBorderTabPage::UpdateRemoveAdjCellBorderCB( sal_uInt16 nPreset )
@@ -1262,11 +1442,11 @@ void SvxBorderTabPage::UpdateRemoveAdjCellBorderCB( sal_uInt16 nPreset )
 
     // Check if current selection involves deletion of at least one border
     bool bBorderDeletionReq = false;
-    for ( sal_uInt32 i=0; i < SAL_N_ELEMENTS( eTypes1 ); ++i )
+    for ( size_t i=0; i < SAL_N_ELEMENTS( eTypes1 ); ++i )
     {
         if( pOldBoxItem->GetLine( eTypes2[i] ) || !( pOldBoxInfoItem->IsValid( eTypes1[i].second ) ) )
         {
-            if( m_pFrameSel->GetFrameBorderState( eTypes1[i].first ) == svx::FrameBorderState::Hide )
+            if( m_aFrameSel.GetFrameBorderState( eTypes1[i].first ) == svx::FrameBorderState::Hide )
             {
                 bBorderDeletionReq = true;
                 break;
@@ -1277,12 +1457,12 @@ void SvxBorderTabPage::UpdateRemoveAdjCellBorderCB( sal_uInt16 nPreset )
     if( !bBorderDeletionReq && ( nPreset == IID_PRE_CELL_NONE || nPreset == IID_PRE_TABLE_NONE ) )
         bBorderDeletionReq = true;
 
-    m_pRemoveAdjcentCellBordersCB->Enable( bBorderDeletionReq );
+    m_xRemoveAdjcentCellBordersCB->set_sensitive(bBorderDeletionReq);
 
     if( !bBorderDeletionReq )
     {
         mbRemoveAdjacentCellBorders = false;
-        m_pRemoveAdjcentCellBordersCB->Check( false );
+        m_xRemoveAdjcentCellBordersCB->set_active(false);
     }
 }
 
@@ -1302,17 +1482,17 @@ void SvxBorderTabPage::PageCreated(const SfxAllItemSet& aSet)
     {
         nSWMode = static_cast<SwBorderModes>(pSWModeItem->GetValue());
         // #i43593#
-        // show checkbox <m_pMergeWithNextCB> for format.paragraph
+        // show checkbox <m_xMergeWithNextCB> for format.paragraph
         if ( nSWMode == SwBorderModes::PARA )
         {
-            m_pMergeWithNextCB->Show();
-            m_pPropertiesFrame->Show();
+            m_xMergeWithNextCB->show();
+            m_xPropertiesFrame->show();
         }
-        // show checkbox <m_pMergeAdjacentBordersCB> for format.paragraph
+        // show checkbox <m_xMergeAdjacentBordersCB> for format.paragraph
         else if ( nSWMode == SwBorderModes::TABLE )
         {
-            m_pMergeAdjacentBordersCB->Show();
-            m_pPropertiesFrame->Show();
+            m_xMergeAdjacentBordersCB->show();
+            m_xPropertiesFrame->show();
         }
     }
     if (pFlagItem)

@@ -36,6 +36,7 @@
 #include "hyperlinkcontext.hxx"
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
+#include <sal/log.hxx>
 
 using namespace oox::core;
 using namespace ::com::sun::star;
@@ -96,11 +97,13 @@ ContextHandlerRef ShapeContext::onCreateContext( sal_Int32 aElementToken, const 
     {
         if (!mpShapePtr->getTextBody())
             mpShapePtr->setTextBody( std::make_shared<TextBody>() );
-        return new TextBodyContext( *this, *mpShapePtr->getTextBody() );
+        return new TextBodyContext( *this, mpShapePtr );
     }
     case XML_txXfrm:
     {
-        mpShapePtr->getTextBody()->getTextProperties().moRotation = rAttribs.getInteger( XML_rot );
+        const TextBodyPtr& rShapePtr = mpShapePtr->getTextBody();
+        if (rShapePtr)
+            rShapePtr->getTextProperties().moRotation = rAttribs.getInteger( XML_rot );
         return nullptr;
     }
     case XML_cNvSpPr:
@@ -110,7 +113,7 @@ ContextHandlerRef ShapeContext::onCreateContext( sal_Int32 aElementToken, const 
     case XML_bodyPr:
         if (!mpShapePtr->getTextBody())
             mpShapePtr->setTextBody( std::make_shared<TextBody>() );
-        return new TextBodyPropertiesContext( *this, rAttribs, mpShapePtr->getTextBody()->getTextProperties() );
+        return new TextBodyPropertiesContext( *this, rAttribs, mpShapePtr );
         break;
     case XML_txbx:
         break;

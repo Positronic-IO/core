@@ -20,7 +20,7 @@
 #ifndef INCLUDED_SFX2_INC_STRINGS_HRC
 #define INCLUDED_SFX2_INC_STRINGS_HRC
 
-#define NC_(Context, String) (Context "\004" u8##String)
+#define NC_(Context, String) reinterpret_cast<char const *>(Context "\004" u8##String)
 
 #define STR_TEMPLATE_FILTER                     NC_("STR_TEMPLATE_FILTER", "Templates")
 #define STR_SAVEDOC                             NC_("STR_SAVEDOC", "~Save")
@@ -156,6 +156,7 @@
 #define STR_STANDARD                            NC_("STR_STANDARD", "Standard")
 #define RID_SVXSTR_FILELINK                     NC_("RID_SVXSTR_FILELINK", "Document")
 #define STR_NONE                                NC_("STR_NONE", "- None -")
+#define STR_CATEGORY_NONE                       NC_("saveastemplatedlg|categorylist", "None")
 #define RID_SVXSTR_GRAFIKLINK                   NC_("RID_SVXSTR_GRAFIKLINK", "Image")
 #define STR_SFX_FILTERNAME_ALL                  NC_("STR_SFX_FILTERNAME_ALL", "All files")
 #define STR_SFX_FILTERNAME_PDF                  NC_("STR_SFX_FILTERNAME_PDF", "PDF files")
@@ -209,7 +210,7 @@
 #define STR_ERROR_WRONG_CONFIRM                 NC_("STR_ERROR_WRONG_CONFIRM", "Faulty password confirmation")
 #define STR_PDF_EXPORT_SEND                     NC_("STR_PDF_EXPORT_SEND", "Send")
 #define STR_FONT_TABPAGE                        NC_("STR_FONT_TABPAGE", "Font")
-#define STR_PREVIEW_CHECKBOX                    NC_("STR_PREVIEW_CHECKBOX", "Show Previews")
+#define STR_PREVIEW_CHECKBOX                    NC_("STR_PREVIEW_CHECKBOX", "Show previews")
 
 #define STR_VIEWVERSIONCOMMENT                  NC_("STR_VIEWVERSIONCOMMENT", "View Version Comment")
 #define STR_NO_NAME_SET                         NC_("STR_NO_NAME_SET", "(no name set)")
@@ -243,6 +244,10 @@
 #define STR_QUERY_OPENASTEMPLATE_OPEN_BTN       NC_("STR_QUERY_OPENASTEMPLATE_OPEN_BTN", "~Open")
 #define STR_REPAIREDDOCUMENT                    NC_("STR_REPAIREDDOCUMENT", " (repaired document)")
 #define STR_NONCHECKEDOUT_DOCUMENT              NC_("STR_NONCHECKEDOUT_DOCUMENT", "This document is not checked out on the server.")
+#define STR_GET_INVOLVED_TEXT                   NC_("STR_GET_INVOLVED_TEXT", "Help us make %PRODUCTNAME even better!")
+#define STR_GET_INVOLVED_BUTTON                 NC_("STR_GET_INVOLVED_BUTTON", "Get involved")
+#define STR_GET_DONATE_TEXT                     NC_("STR_GET_DONATE_TEXT", "Your donations support our worldwide community.")
+#define STR_GET_DONATE_BUTTON                   NC_("STR_GET_DONATE_BUTTON", "Donate")
 #define STR_READONLY_DOCUMENT                   NC_("STR_READONLY_DOCUMENT", "This document is open in read-only mode.")
 #define STR_READONLY_PDF                        NC_("STR_READONLY_PDF", "This PDF is open in read-only mode to allow signing the existing file.")
 #define STR_CLASSIFIED_DOCUMENT                 NC_("STR_CLASSIFIED_DOCUMENT", "The classification label of this document is %1.")
@@ -258,6 +263,7 @@
 #define STR_SIGNATURE_INVALID                   NC_("STR_SIGNATURE_INVALID", "The signature was valid, but the document has been modified")
 #define STR_SIGNATURE_NOTVALIDATED              NC_("STR_SIGNATURE_NOTVALIDATED", "The signature is OK, but the certificate could not be validated.")
 #define STR_SIGNATURE_PARTIAL_OK                NC_("STR_SIGNATURE_PARTIAL_OK", "The signature is OK, but the document is only partially signed.")
+#define STR_SIGNATURE_NOTVALIDATED_PARTIAL_OK   NC_("STR_SIGNATURE_NOTVALIDATED_PARTIAL_OK", "The certificate could not be validated and the document is only partially signed.")
 #define STR_SIGNATURE_OK                        NC_("STR_SIGNATURE_OK", "This document is digitally signed and the signature is valid.")
 #define STR_SIGNATURE_SHOW                      NC_("STR_SIGNATURE_SHOW", "Show Signatures")
 

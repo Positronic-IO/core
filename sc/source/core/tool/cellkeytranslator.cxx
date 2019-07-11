@@ -18,6 +18,7 @@
  */
 
 #include <memory>
+#include <global.hxx>
 #include <cellkeytranslator.hxx>
 #include <comphelper/processfactory.hxx>
 #include <i18nlangtag/mslangid.hxx>
@@ -25,6 +26,7 @@
 #include <i18nutil/transliteration.hxx>
 #include <rtl/ustring.hxx>
 #include <unotools/syslocale.hxx>
+#include <com/sun/star/uno/Sequence.hxx>
 
 using ::com::sun::star::uno::Sequence;
 
@@ -156,7 +158,7 @@ static void lclMatchKeyword(OUString& rName, const ScCellKeywordHashMap& aMap,
 
 void ScCellKeywordTranslator::transKeyword(OUString& rName, const lang::Locale* pLocale, OpCode eOpCode)
 {
-    if ( !spInstance.get() )
+    if (!spInstance)
         spInstance.reset( new ScCellKeywordTranslator );
 
     LanguageType nLang = pLocale ?
@@ -181,7 +183,7 @@ struct TransItem
 {
     const sal_Unicode*  from;
     const sal_Char*     to;
-    OpCode              func;
+    OpCode const        func;
 };
 
 void ScCellKeywordTranslator::init()

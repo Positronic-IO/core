@@ -24,6 +24,7 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 
@@ -93,7 +94,7 @@ UnxSplashScreen::initialize( const css::uno::Sequence< css::uno::Any>& )
         OUString aNum;
         if ( aArg.startsWithIgnoreAsciiCase("--splash-pipe=", &aNum) )
         {
-            int fd = aNum.toInt32();
+            auto fd = aNum.toUInt32();
             m_pOutFd = fdopen( fd, "w" );
             SAL_INFO("desktop.splash", "Got argument '--splash-pipe=" << fd << " ('"
                 << aNum << "') ("

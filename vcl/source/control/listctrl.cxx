@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <vcl/commandevent.hxx>
 #include <vcl/listctrl.hxx>
 
 ListControl::ListControl(vcl::Window* pParent, WinBits nBits):
@@ -124,7 +125,7 @@ IMPL_LINK_NOARG( ListControl, ScrollHdl, ScrollBar*, void )
     DoScroll(mpScrollBar->GetDelta());
 }
 
-void ListControl::addEntry(VclPtr<Window> xEntry, sal_uInt32 nPos)
+void ListControl::addEntry(const VclPtr<Window>& xEntry, sal_uInt32 nPos)
 {
     xEntry->Show();
     if (nPos < maEntries.size())

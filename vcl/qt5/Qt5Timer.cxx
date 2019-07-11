@@ -17,36 +17,36 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Timer.hxx"
+#include <Qt5Timer.hxx>
 #include <Qt5Timer.moc>
 
 #include <QtWidgets/QApplication>
 #include <QtCore/QThread>
 
+#include <vcl/svapp.hxx>
+#include <sal/log.hxx>
+
 Qt5Timer::Qt5Timer()
 {
     m_aTimer.setSingleShot(true);
-    // run the timer itself in the main / creator thread
-    connect(&m_aTimer, SIGNAL(timeout()), this, SLOT(timeoutActivated()), Qt::QueuedConnection);
-    // QTimer::start() can be called only in its creator thread
-    connect(this, SIGNAL(startTimerSignal()), this, SLOT(startTimer()), Qt::QueuedConnection);
+    m_aTimer.setTimerType(Qt::PreciseTimer);
+    connect(&m_aTimer, SIGNAL(timeout()), this, SLOT(timeoutActivated()));
+    connect(this, SIGNAL(startTimerSignal(int)), this, SLOT(startTimer(int)));
+    connect(this, SIGNAL(stopTimerSignal()), this, SLOT(stopTimer()));
 }
 
-Qt5Timer::~Qt5Timer() {}
-
-void Qt5Timer::timeoutActivated() { CallCallback(); }
-
-void Qt5Timer::startTimer() { m_aTimer.start(); }
-
-void Qt5Timer::Start(sal_uIntPtr nMS)
+void Qt5Timer::timeoutActivated()
 {
-    m_aTimer.setInterval(nMS);
-    if (qApp->thread() == QThread::currentThread())
-        startTimer();
-    else
-        Q_EMIT startTimerSignal();
+    SolarMutexGuard aGuard;
+    CallCallback();
 }
 
-void Qt5Timer::Stop() { m_aTimer.stop(); }
+void Qt5Timer::startTimer(int nMS) { m_aTimer.start(nMS); }
+
+void Qt5Timer::Start(sal_uIntPtr nMS) { Q_EMIT startTimerSignal(nMS); }
+
+void Qt5Timer::stopTimer() { m_aTimer.stop(); }
+
+void Qt5Timer::Stop() { Q_EMIT stopTimerSignal(); }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

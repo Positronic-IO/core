@@ -32,6 +32,7 @@
 #include <com/sun/star/lang/ServiceNotRegisteredException.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/form/XForm.hpp>
 
@@ -39,10 +40,12 @@
 #include <comphelper/eventattachermgr.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <memory>
@@ -76,7 +79,7 @@ namespace
     }
 }
 
-bool
+static bool
 lcl_hasVbaEvents( const Sequence< ScriptEventDescriptor >& sEvents  )
 {
     for ( auto const& rDesc : sEvents )
@@ -87,7 +90,7 @@ lcl_hasVbaEvents( const Sequence< ScriptEventDescriptor >& sEvents  )
     return false;
 }
 
-Sequence< ScriptEventDescriptor >
+static Sequence< ScriptEventDescriptor >
 lcl_stripVbaEvents( const Sequence< ScriptEventDescriptor >& sEvents )
 {
     Sequence< ScriptEventDescriptor > sStripped( sEvents.getLength() );
@@ -913,7 +916,8 @@ void OInterfaceContainer::implReplaceByIndex( const sal_Int32 _nIndex, const Any
 
     // approve the new object
     std::unique_ptr< ElementDescription > aElementMetaData( createElementMetaData() );
-    DBG_ASSERT( aElementMetaData.get(), "OInterfaceContainer::implReplaceByIndex: createElementMetaData returned nonsense!" );
+    DBG_ASSERT(aElementMetaData,
+               "OInterfaceContainer::implReplaceByIndex: createElementMetaData returned nonsense!");
     {
         Reference< XPropertySet > xElementProps;
         _rNewElement >>= xElementProps;
@@ -953,27 +957,30 @@ void OInterfaceContainer::implReplaceByIndex( const sal_Int32 _nIndex, const Any
 
     // examine the new element
     OUString sName;
-    DBG_ASSERT( aElementMetaData.get()->xPropertySet.is(), "OInterfaceContainer::implReplaceByIndex: what did approveNewElement do?" );
+    DBG_ASSERT(aElementMetaData->xPropertySet.is(),
+               "OInterfaceContainer::implReplaceByIndex: what did approveNewElement do?");
 
-    aElementMetaData.get()->xPropertySet->getPropertyValue(PROPERTY_NAME) >>= sName;
-    aElementMetaData.get()->xPropertySet->addPropertyChangeListener(PROPERTY_NAME, this);
+    aElementMetaData->xPropertySet->getPropertyValue(PROPERTY_NAME) >>= sName;
+    aElementMetaData->xPropertySet->addPropertyChangeListener(PROPERTY_NAME, this);
 
     // insert the new one
-    m_aMap.insert( ::std::pair<const OUString, css::uno::Reference<css::uno::XInterface>  >( sName, aElementMetaData.get()->xInterface ) );
-    m_aItems[ _nIndex ] = aElementMetaData.get()->xInterface;
+    m_aMap.insert(::std::pair<const OUString, css::uno::Reference<css::uno::XInterface>>(
+        sName, aElementMetaData->xInterface));
+    m_aItems[_nIndex] = aElementMetaData->xInterface;
 
-    aElementMetaData.get()->xChild->setParent(static_cast<XContainer*>(this));
+    aElementMetaData->xChild->setParent(static_cast<XContainer*>(this));
 
     if ( m_xEventAttacher.is() )
     {
         m_xEventAttacher->insertEntry( _nIndex );
-        m_xEventAttacher->attach( _nIndex, aElementMetaData.get()->xInterface, makeAny( aElementMetaData.get()->xPropertySet ) );
+        m_xEventAttacher->attach(_nIndex, aElementMetaData->xInterface,
+                                 makeAny(aElementMetaData->xPropertySet));
     }
 
     ContainerEvent aReplaceEvent;
     aReplaceEvent.Source   = static_cast< XContainer* >( this );
     aReplaceEvent.Accessor <<= _nIndex;
-    aReplaceEvent.Element  = aElementMetaData.get()->xInterface->queryInterface( m_aElementType );
+    aReplaceEvent.Element = aElementMetaData->xInterface->queryInterface(m_aElementType);
     aReplaceEvent.ReplacedElement = xOldElement->queryInterface( m_aElementType );
 
     impl_replacedElement( aReplaceEvent, _rClearBeforeNotify );
@@ -1061,7 +1068,8 @@ void SAL_CALL OInterfaceContainer::insertByName(const OUString& _rName, const An
     Reference< XPropertySet > xElementProps;
 
     std::unique_ptr< ElementDescription > aElementMetaData( createElementMetaData() );
-    DBG_ASSERT( aElementMetaData.get(), "OInterfaceContainer::insertByName: createElementMetaData returned nonsense!" );
+    DBG_ASSERT(aElementMetaData,
+               "OInterfaceContainer::insertByName: createElementMetaData returned nonsense!");
 
     // ensure the correct name of the element
     try

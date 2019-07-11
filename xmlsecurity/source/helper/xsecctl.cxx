@@ -40,9 +40,8 @@
 #include <xmloff/attrlist.hxx>
 #include <rtl/math.hxx>
 #include <rtl/ref.hxx>
-#include <svx/xoutbmp.hxx>
+#include <sal/log.hxx>
 #include <unotools/datetime.hxx>
-#include <comphelper/ofopxmlhelper.hxx>
 #include <sax/tools/converter.hxx>
 #include "ooxmlsecexporter.hxx"
 #include <xmlsignaturehelper2.hxx>
@@ -662,6 +661,14 @@ void XSecController::exportSignature(
                     pAttributeList->AddAttribute(
                         "URI",
                         "#" + refInfor.ouURI);
+
+                    if (bXAdESCompliantIfODF && refInfor.ouURI == "idSignedProperties" && !refInfor.ouType.isEmpty())
+                    {
+                        // The reference which points to the SignedProperties
+                        // shall have this specific type.
+                        pAttributeList->AddAttribute("Type",
+                                                     refInfor.ouType);
+                    }
                 }
 
                 xDocumentHandler->startElement( "Reference", cssu::Reference< cssxs::XAttributeList > (pAttributeList) );
@@ -838,7 +845,7 @@ void XSecController::exportSignature(
 
                     OUStringBuffer buffer;
                     //If the xml signature was already contained in the document,
-                    //then we use the original date and time string, rather then the
+                    //then we use the original date and time string, rather than the
                     //converted one. This avoids writing a different string due to
                     //e.g. rounding issues and thus breaking the signature.
                     if (!signatureInfo.ouDateTime.isEmpty())
@@ -857,66 +864,6 @@ void XSecController::exportSignature(
                         "dc:date");
                 }
                 xDocumentHandler->endElement( "SignatureProperty" );
-
-                if (!signatureInfo.ouSignatureLineId.isEmpty()
-                    && signatureInfo.aValidSignatureImage.is()
-                    && signatureInfo.aInvalidSignatureImage.is())
-                {
-                    pAttributeList = new SvXMLAttributeList();
-                    pAttributeList->AddAttribute(
-                        "xmlns:loext",
-                        "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0");
-                    pAttributeList->AddAttribute("Target", "#" + signatureInfo.ouSignatureId);
-
-                    xDocumentHandler->startElement(
-                        "SignatureProperty",
-                        cssu::Reference<cssxs::XAttributeList>(pAttributeList));
-                    {
-                        xDocumentHandler->startElement(
-                            "loext:SignatureLine",
-                            cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
-
-                        {
-                            // Write SignatureLineId element
-                            xDocumentHandler->startElement(
-                                "loext:SignatureLineId",
-                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
-                            xDocumentHandler->characters(signatureInfo.ouSignatureLineId);
-                            xDocumentHandler->endElement("loext:SignatureLineId");
-                        }
-
-                        {
-                            // Write SignatureLineId element
-                            xDocumentHandler->startElement(
-                                "loext:SignatureLineValidImage",
-                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
-
-                            OUString aGraphicInBase64;
-                            Graphic aGraphic(signatureInfo.aValidSignatureImage);
-                            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
-                                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
-
-                            xDocumentHandler->characters(aGraphicInBase64);
-                            xDocumentHandler->endElement("loext:SignatureLineValidImage");
-                        }
-
-                        {
-                            // Write SignatureLineId element
-                            xDocumentHandler->startElement(
-                                "loext:SignatureLineInvalidImage",
-                                cssu::Reference<cssxs::XAttributeList>(new SvXMLAttributeList()));
-                            OUString aGraphicInBase64;
-                            Graphic aGraphic(signatureInfo.aInvalidSignatureImage);
-                            if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false))
-                                SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
-                            xDocumentHandler->characters(aGraphicInBase64);
-                            xDocumentHandler->endElement("loext:SignatureLineInvalidImage");
-                        }
-
-                        xDocumentHandler->endElement("loext:SignatureLine");
-                    }
-                    xDocumentHandler->endElement("SignatureProperty");
-                }
             }
 
             // Write signature description.
@@ -959,7 +906,7 @@ void XSecController::exportSignature(
                 xDocumentHandler->startElement(
                     "xd:QualifyingProperties",
                     cssu::Reference< cssxs::XAttributeList > (pAttributeList));
-                DocumentSignatureHelper::writeSignedProperties(xDocumentHandler, signatureInfo, sDate);
+                DocumentSignatureHelper::writeSignedProperties(xDocumentHandler, signatureInfo, sDate, true);
                 writeUnsignedProperties(xDocumentHandler, signatureInfo);
                 xDocumentHandler->endElement( "xd:QualifyingProperties" );
             }

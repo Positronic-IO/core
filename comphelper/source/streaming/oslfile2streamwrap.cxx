@@ -22,6 +22,7 @@
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <comphelper/oslfile2streamwrap.hxx>
+#include <osl/file.hxx>
 
 #include <algorithm>
 
@@ -120,8 +121,7 @@ sal_Int32 SAL_CALL OSLInputStreamWrapper::available()
     eError = m_pFile->setPos(osl_Pos_Absolut, nPos);
     if (eError != FileBase::E_None)
        throw css::io::NotConnectedException(OUString(),static_cast<css::uno::XWeak*>(this));
-    return sal::static_int_cast< sal_Int32 >(
-        std::max(nAvailable, sal::static_int_cast< sal_uInt64 >(SAL_MAX_INT32)));
+    return std::min<sal_Int64>(nAvailable, SAL_MAX_INT32);
 }
 
 

@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <dbu_reghelper.hxx>
-#include <dbu_pageids.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
 #include <stringconstants.hxx>
@@ -66,7 +65,9 @@
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/interfacecontainer2.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <svtools/genericunodialog.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <unotools/sharedunocomponent.hxx>
 #include <vcl/waitobj.hxx>
@@ -192,7 +193,7 @@ namespace dbaui
         virtual ~CopyTableWizard() override;
 
         // OGenericUnoDialog overridables
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
         virtual void executedDialog( sal_Int16 _nExecutionResult ) override;
 
     private:
@@ -1435,7 +1436,7 @@ OUString CopyTableWizard::impl_getServerSideCopyStatement_throw(const Reference<
         {
             if ( !sColumns.isEmpty() )
                 sColumns.append(",");
-            sColumns.append(sQuote + aDestColumnNames[rColumnPositionPair.second - 1] + sQuote);
+            sColumns.append(sQuote).append(aDestColumnNames[rColumnPositionPair.second - 1]).append(sQuote);
         }
     }
     const OUString sComposedTableName = ::dbtools::composeTableName( xDestMetaData, _xTable, ::dbtools::EComposeRule::InDataManipulation, true );
@@ -1508,13 +1509,13 @@ void SAL_CALL CopyTableWizard::initialize( const Sequence< Any >& _rArguments )
     return new ::cppu::OPropertyArrayHelper( aProps );
 }
 
-svt::OGenericUnoDialog::Dialog CopyTableWizard::createDialog( vcl::Window* _pParent )
+svt::OGenericUnoDialog::Dialog CopyTableWizard::createDialog(const css::uno::Reference<css::awt::XWindow>& rParent)
 {
     OSL_PRECOND( isInitialized(), "CopyTableWizard::createDialog: not initialized!" );
         // this should have been prevented in ::execute already
 
     VclPtrInstance<OCopyTableWizard> pWizard(
-        _pParent,
+        VCLUnoHelper::GetWindow(rParent),
         m_sDestinationTable,
         m_nOperation,
         *m_pSourceObject,

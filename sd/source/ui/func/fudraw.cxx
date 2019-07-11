@@ -32,7 +32,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/bindings.hxx>
 #include <svx/svdpagv.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imapobj.hxx>
 #include <svx/svxids.hrc>
 #include <svx/obj3d.hxx>
 #include <svx/scene3d.hxx>
@@ -520,7 +520,7 @@ void FuDraw::ForcePointer(const MouseEvent* pMEvt)
             {
                 // The goal of this request is show always the rotation arrow for 3D-objects at rotation mode
                 // Independent of the settings at Tools->Options->Draw "Objects always moveable"
-                // 2D-objects acquit in an other way. Otherwise, the rotation of 3d-objects around any axes
+                // 2D-objects acquit in another way. Otherwise, the rotation of 3d-objects around any axes
                 // wouldn't be possible per default.
                 const SdrMarkList& rMarkList = mpView->GetMarkedObjectList();
                 SdrObject* pObject = rMarkList.GetMark(0)->GetMarkedSdrObj();
@@ -764,6 +764,9 @@ bool FuDraw::RequestHelp(const HelpEvent& rHEvt)
     {
         bReturn = FuPoor::RequestHelp(rHEvt);
     }
+
+    if (!bReturn)
+       bReturn = mpView->RequestHelp(rHEvt);
 
     return bReturn;
 }

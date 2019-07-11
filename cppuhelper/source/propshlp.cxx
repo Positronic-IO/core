@@ -35,23 +35,21 @@ using namespace com::sun::star::beans;
 using namespace com::sun::star::lang;
 using namespace cppu;
 
-using ::rtl::OUString;
-
 namespace cppu {
 
 IPropertyArrayHelper::~IPropertyArrayHelper()
 {
 }
 
-inline const css::uno::Type & getPropertyTypeIdentifier( )
+static const css::uno::Type & getPropertyTypeIdentifier( )
 {
     return cppu::UnoType<XPropertyChangeListener>::get();
 }
-inline const css::uno::Type & getPropertiesTypeIdentifier()
+static const css::uno::Type & getPropertiesTypeIdentifier()
 {
     return cppu::UnoType<XPropertiesChangeListener>::get();
 }
-inline const css::uno::Type & getVetoableTypeIdentifier()
+static const css::uno::Type & getVetoableTypeIdentifier()
 {
     return cppu::UnoType<XVetoableChangeListener>::get();
 }
@@ -601,7 +599,7 @@ void OPropertySetHelper::fire
     sal_Int32 * pnHandles,
     const Any * pNewValues,
     const Any * pOldValues,
-    sal_Int32 nHandles, // These is the Count of the array
+    sal_Int32 nHandles, // This is the Count of the array
     sal_Bool bVetoable
 )
 {
@@ -758,11 +756,7 @@ void OPropertySetHelper::fire
 
         if( !bVetoable )
         {
-            OInterfaceContainerHelper * pCont = nullptr;
-            pCont = rBHelper.aLC.getContainer(
-                                getPropertiesTypeIdentifier(  )
-                                             );
-            if( pCont )
+            if (auto pCont = rBHelper.aLC.getContainer(getPropertiesTypeIdentifier()))
             {
                 // Here is a Bug, unbound properties are also fired
                 OInterfaceIteratorHelper aIt( *pCont );

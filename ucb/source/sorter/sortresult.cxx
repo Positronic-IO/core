@@ -71,7 +71,7 @@ struct SortListData
 {
     bool        mbModified;
     sal_IntPtr  mnCurPos;
-    sal_IntPtr  mnOldPos;
+    sal_IntPtr const  mnOldPos;
 
     explicit SortListData( sal_IntPtr nPos );
 };
@@ -1500,7 +1500,7 @@ void SortedResultSet::Move( sal_IntPtr nPos, sal_IntPtr nCount, sal_IntPtr nOffs
         }
     }
 
-    // finally put the remembered entries at there new location
+    // finally put the remembered entries at their new location
     nTo = nPos + nOffset;
     for ( i=0; i<nCount; i++ )
     {
@@ -1680,10 +1680,10 @@ void SortedResultSet::ResortNew( EventList* pList )
 
 
 SortListData::SortListData( sal_IntPtr nPos )
+    : mbModified(false)
+    , mnCurPos(nPos)
+    , mnOldPos(nPos)
 {
-    mbModified = false;
-    mnCurPos = nPos;
-    mnOldPos = nPos;
 };
 
 SortedEntryList::SortedEntryList()

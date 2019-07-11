@@ -21,6 +21,7 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include "oseekinstream.hxx"
 #include "owriteablestream.hxx"
@@ -52,23 +53,10 @@ OInputSeekStream::~OInputSeekStream()
 
 uno::Sequence< uno::Type > SAL_CALL OInputSeekStream::getTypes()
 {
-    static ::cppu::OTypeCollection* pTypeCollection = nullptr ;
+    static cppu::OTypeCollection aTypeCollection(cppu::UnoType<io::XSeekable>::get(),
+                                                   OInputCompStream::getTypes());
 
-    if ( pTypeCollection == nullptr )
-    {
-        ::osl::MutexGuard aGuard( m_xMutex->GetMutex() ) ;
-
-        if ( pTypeCollection == nullptr )
-        {
-            static ::cppu::OTypeCollection aTypeCollection(
-                    cppu::UnoType<io::XSeekable>::get(),
-                    OInputCompStream::getTypes() );
-
-            pTypeCollection = &aTypeCollection ;
-        }
-    }
-
-    return pTypeCollection->getTypes() ;
+    return aTypeCollection.getTypes();
 }
 
 uno::Any SAL_CALL OInputSeekStream::queryInterface( const uno::Type& rType )

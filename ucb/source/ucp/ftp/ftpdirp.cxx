@@ -29,7 +29,7 @@
 
 using namespace ftp;
 
-inline bool ascii_isWhitespace( sal_Unicode ch )
+static bool ascii_isWhitespace( sal_Unicode ch )
 {
     return ((ch <= 0x20) && ch);
 }
@@ -1219,7 +1219,7 @@ bool FTPDirectoryParser::parseUNIX_isTime (
  * checked for validity of the given day in the given month and year.
  *
  */
-bool FTPDirectoryParser::setYear (
+void FTPDirectoryParser::setYear (
     DateTime &rDateTime, sal_uInt16 nYear)
 {
     if (nYear < 100)
@@ -1249,7 +1249,6 @@ bool FTPDirectoryParser::setYear (
     }
 
     rDateTime.SetYear(nYear);
-    return true;
 }
 
 /*

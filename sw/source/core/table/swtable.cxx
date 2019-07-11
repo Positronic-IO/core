@@ -71,7 +71,7 @@ using namespace com::sun::star;
 
 #define COLFUZZY 20
 
-void ChgTextToNum( SwTableBox& rBox, const OUString& rText, const Color* pCol,
+static void ChgTextToNum( SwTableBox& rBox, const OUString& rText, const Color* pCol,
                     bool bChgAlign, sal_uLong nNdPos );
 
 inline const Color* SwTableBox::GetSaveUserColor() const
@@ -265,7 +265,7 @@ namespace
 {
 
 template<class T>
-inline T lcl_MulDiv64(sal_uInt64 nA, sal_uInt64 nM, sal_uInt64 nD)
+T lcl_MulDiv64(sal_uInt64 nA, sal_uInt64 nM, sal_uInt64 nD)
 {
     return static_cast<T>((nA*nM)/nD);
 }
@@ -1086,8 +1086,8 @@ static void lcl_CalcNewWidths( std::list<sal_uInt16> &rSpanPos, ChangeList& rCha
         if( pCurr != rChanges.end() && pCurr->first <= nPos &&
             pCurr->first != pCurr->second )
         {
-            while( pSpan != rSpanPos.end() && *pSpan < nCurr )
-                ++pSpan;
+            pSpan = std::find_if(pSpan, rSpanPos.end(),
+                [nCurr](const sal_uInt16 nSpan) { return nSpan >= nCurr; });
             if( pSpan != rSpanPos.end() && *pSpan == nCurr )
             {
                 aNewChanges.push_back( *pCurr );
@@ -1160,14 +1160,8 @@ static void lcl_CalcNewWidths( std::list<sal_uInt16> &rSpanPos, ChangeList& rCha
         }
     }
 
-    rChanges.clear();
-    ChangeList::iterator pCopy = aNewChanges.begin();
-    while( pCopy != aNewChanges.end() )
-        rChanges.push_back( *pCopy++ );
-    rSpanPos.clear();
-    std::list<sal_uInt16>::iterator pSpCopy = aNewSpanPos.begin();
-    while( pSpCopy != aNewSpanPos.end() )
-        rSpanPos.push_back( *pSpCopy++ );
+    rChanges.swap(aNewChanges);
+    rSpanPos.swap(aNewSpanPos);
 }
 
 void SwTable::NewSetTabCols( Parm &rParm, const SwTabCols &rNew,
@@ -1223,12 +1217,10 @@ void SwTable::NewSetTabCols( Parm &rParm, const SwTabCols &rNew,
         if( nCurr )
         {
             ChangeList aCopy;
-            ChangeList::iterator pCop = aOldNew.begin();
             sal_uInt16 nPos = 0;
-            while( pCop != aOldNew.end() )
+            for( const auto& rCop : aOldNew )
             {
-                aCopy.push_back( *pCop );
-                ++pCop;
+                aCopy.push_back( rCop );
                 aRowSpanPos.push_back( nPos++ );
             }
             lcl_CalcNewWidths( aRowSpanPos, aCopy, rLines[nCurr],
@@ -1247,12 +1239,10 @@ void SwTable::NewSetTabCols( Parm &rParm, const SwTabCols &rNew,
         if( nCurr+1 < static_cast<sal_uInt16>(rLines.size()) )
         {
             ChangeList aCopy;
-            ChangeList::iterator pCop = aOldNew.begin();
             sal_uInt16 nPos = 0;
-            while( pCop != aOldNew.end() )
+            for( const auto& rCop : aOldNew )
             {
-                aCopy.push_back( *pCop );
-                ++pCop;
+                aCopy.push_back( rCop );
                 aRowSpanPos.push_back( nPos++ );
             }
             lcl_CalcNewWidths( aRowSpanPos, aCopy, rLines[nCurr],
@@ -1698,7 +1688,7 @@ SwTableBoxFormat* SwTableBox::CheckBoxFormat( SwTableBoxFormat* pFormat )
             pNewFormat->LockModify();
             *pNewFormat = *pFormat;
 
-            // Remove values and formulars
+            // Remove values and formulas
             pNewFormat->ResetFormatAttr( RES_BOXATR_FORMULA, RES_BOXATR_VALUE );
             pNewFormat->UnlockModify();
 
@@ -1844,13 +1834,15 @@ OUString SwTableBox::GetName() const
         const SwTableLines* pLines = pLine->GetUpper()
                 ? &pLine->GetUpper()->GetTabLines() : &rTable.GetTabLines();
 
-        sTmp = OUString::number( nPos = pLines->GetPos( pLine ) + 1 );
+        nPos = pLines->GetPos( pLine ) + 1;
+        sTmp = OUString::number( nPos );
         if( !sNm.isEmpty() )
             sNm = sTmp + "." + sNm;
         else
             sNm = sTmp;
 
-        sTmp = OUString::number(( nPos = pBox->GetUpper()->GetBoxPos( pBox )) + 1 );
+        nPos = pBox->GetUpper()->GetBoxPos( pBox );
+        sTmp = OUString::number(nPos + 1);
         if( nullptr != ( pBox = pLine->GetUpper()) )
             sNm = sTmp + "." + sNm;
         else
@@ -1943,7 +1935,7 @@ void SwTable::SetHTMLTableLayout(std::shared_ptr<SwHTMLTableLayout> const& r)
     m_xHTMLLayout = r;
 }
 
-void ChgTextToNum( SwTableBox& rBox, const OUString& rText, const Color* pCol,
+static void ChgTextToNum( SwTableBox& rBox, const OUString& rText, const Color* pCol,
                     bool bChgAlign )
 {
     sal_uLong nNdPos = rBox.IsValidNumTextNd();
@@ -2075,7 +2067,7 @@ void ChgTextToNum( SwTableBox& rBox, const OUString& rText, const Color* pCol,
 
 }
 
-void ChgNumToText( SwTableBox& rBox, sal_uLong nFormat )
+static void ChgNumToText( SwTableBox& rBox, sal_uLong nFormat )
 {
     sal_uLong nNdPos = rBox.IsValidNumTextNd( false );
     if( ULONG_MAX == nNdPos )

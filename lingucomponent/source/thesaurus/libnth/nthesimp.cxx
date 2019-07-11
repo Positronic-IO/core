@@ -20,6 +20,7 @@
 #include <com/sun/star/uno/Reference.h>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/linguistic2/LinguServiceManager.hpp>
@@ -101,7 +102,7 @@ Sequence< Locale > SAL_CALL Thesaurus::getLocales()
 
     // this routine should return the locales supported by the installed
     // dictionaries.
-    if (!mvThesInfo.size())
+    if (mvThesInfo.empty())
     {
         SvtLinguConfig aLinguCfg;
 
@@ -471,7 +472,7 @@ Sequence < Reference < css::linguistic2::XMeaning > > SAL_CALL Thesaurus::queryM
 }
 
 /// @throws Exception
-Reference< XInterface > Thesaurus_CreateInstance(
+static Reference< XInterface > Thesaurus_CreateInstance(
             const Reference< XMultiServiceFactory > & /*rSMgr*/ )
 {
     Reference< XInterface > xService = static_cast<cppu::OWeakObject*>(new Thesaurus);

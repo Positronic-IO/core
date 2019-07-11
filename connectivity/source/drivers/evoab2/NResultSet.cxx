@@ -34,7 +34,6 @@
 #include <com/sun/star/sdbc/ResultSetConcurrency.hpp>
 #include <com/sun/star/sdbc/ResultSetType.hpp>
 
-#include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -43,9 +42,11 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <o3tl/make_unique.hxx>
 #include <rtl/string.hxx>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 #include <unotools/syslocale.hxx>
 #include <unotools/intlwrapper.hxx>
+#include <unotools/collatorwrapper.hxx>
 
 #include <cstring>
 #include <vector>
@@ -297,8 +298,9 @@ getValue( EContact* pContact, sal_Int32 nColumnNum, GType nType, GValue* pStackV
     return true;
 }
 
-extern "C"
-int CompareContacts( gconstpointer _lhs, gconstpointer _rhs, gpointer _userData )
+extern "C" {
+
+static int CompareContacts( gconstpointer _lhs, gconstpointer _rhs, gpointer _userData )
 {
     EContact* lhs = const_cast< gpointer >( _lhs );
     EContact* rhs = const_cast< gpointer >( _rhs );
@@ -353,6 +355,8 @@ int CompareContacts( gconstpointer _lhs, gconstpointer _rhs, gpointer _userData 
     }
 
     return 0;
+}
+
 }
 
 OString OEvoabVersionHelper::getUserName( EBook *pBook )
@@ -1020,7 +1024,7 @@ sal_Bool SAL_CALL OEvoabResultSet::previous(  )
         m_nIndex--;
         return true;
     }
-        else
+    else
         return false;
 }
 

@@ -51,6 +51,7 @@
 #include <libxml/xmlwriter.h>
 
 #include <unotools/saveopt.hxx>
+#include <osl/diagnose.h>
 
 #include <IDocumentListsAccess.hxx>
 #include <IDocumentStylePoolAccess.hxx>
@@ -326,10 +327,9 @@ void SwNumFormat::UpdateNumNodes( SwDoc* pDoc )
             {
                 SwNumRule::tTextNodeList aTextNodeList;
                 pRule->GetTextNodeList( aTextNodeList );
-                for ( SwNumRule::tTextNodeList::iterator aIter = aTextNodeList.begin();
-                      aIter != aTextNodeList.end(); ++aIter )
+                for ( auto& rpTextNode : aTextNodeList )
                 {
-                    lcl_SetRuleChgd( *(*aIter), i );
+                    lcl_SetRuleChgd( *rpTextNode, i );
                 }
                 bFnd = true;
                 break;
@@ -624,7 +624,7 @@ OUString SwNumRule::MakeNumString( const SwNumberTree::tNumberVector & rNumVecto
                                  SwNumRule::Extremities* pExtremities,
                                  LanguageType nLang ) const
 {
-    OUString aStr;
+    OUStringBuffer aStr;
 
     SwNumberTree::tNumberVector::size_type nLevel = rNumVector.size() - 1;
 
@@ -674,14 +674,14 @@ OUString SwNumRule::MakeNumString( const SwNumberTree::tNumberVector & rNumVecto
                 if( rNumVector[ i ] )
                 {
                     if( bOnlyArabic )
-                        aStr += OUString::number( rNumVector[ i ] );
+                        aStr.append(OUString::number( rNumVector[ i ] ));
                     else
-                        aStr += rNFormat.GetNumStr( rNumVector[ i ], aLocale );
+                        aStr.append(rNFormat.GetNumStr( rNumVector[ i ], aLocale ));
                 }
                 else
-                    aStr += "0";        // all 0 level are a 0
+                    aStr.append("0");        // all 0 level are a 0
                 if( i != nLevel && !aStr.isEmpty() )
-                    aStr += ".";
+                    aStr.append(".");
             }
 
             // The type doesn't have any number, so don't append
@@ -693,7 +693,8 @@ OUString SwNumRule::MakeNumString( const SwNumberTree::tNumberVector & rNumVecto
                 const OUString& sPrefix = rMyNFormat.GetPrefix();
                 const OUString& sSuffix = rMyNFormat.GetSuffix();
 
-                aStr = sPrefix + aStr + sSuffix;
+                aStr.insert(0, sPrefix);
+                aStr.append(sSuffix);
                 if ( pExtremities )
                 {
                     pExtremities->nPrefixChars = sPrefix.getLength();
@@ -703,7 +704,7 @@ OUString SwNumRule::MakeNumString( const SwNumberTree::tNumberVector & rNumVecto
         }
     }
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 OUString SwNumRule::MakeRefNumString( const SwNodeNum& rNodeNum,
@@ -858,10 +859,8 @@ void SwNumRule::SetInvalidRule(bool bFlag)
     if (bFlag)
     {
         std::set< SwList* > aLists;
-        tTextNodeList::iterator aIter;
-        for ( aIter = maTextNodeList.begin(); aIter != maTextNodeList.end(); ++aIter )
+        for ( const SwTextNode* pTextNode : maTextNodeList )
         {
-            const SwTextNode* pTextNode = *aIter;
             // #i111681# - applying patch from cmc
             SwList* pList = pTextNode->GetDoc()->getIDocumentListsAccess().getListByName( pTextNode->GetListId() );
             OSL_ENSURE( pList, "<SwNumRule::SetInvalidRule(..)> - list at which the text node is registered at does not exist. This is a serious issue.");
@@ -878,7 +877,7 @@ void SwNumRule::SetInvalidRule(bool bFlag)
 }
 
 /// change indent of all list levels by given difference
-void SwNumRule::ChangeIndent( const short nDiff )
+void SwNumRule::ChangeIndent( const sal_Int32 nDiff )
 {
     for ( sal_uInt16 i = 0; i < MAXLEVEL; ++i )
     {
@@ -888,7 +887,7 @@ void SwNumRule::ChangeIndent( const short nDiff )
                                         aTmpNumFormat.GetPositionAndSpaceMode() );
         if ( ePosAndSpaceMode == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
         {
-            short nNewIndent = nDiff +
+            auto nNewIndent = nDiff +
                                aTmpNumFormat.GetAbsLSpace();
             if ( nNewIndent < 0 )
             {
@@ -950,7 +949,7 @@ void SwNumRule::SetIndentOfFirstListLevelAndChangeOthers( const short nNewIndent
 {
     SwNumFormat aTmpNumFormat( Get(0) );
 
-    short nDiff( 0 );
+    sal_Int32 nDiff( 0 );
     const SvxNumberFormat::SvxNumPositionAndSpaceMode ePosAndSpaceMode(
                                         aTmpNumFormat.GetPositionAndSpaceMode() );
     if ( ePosAndSpaceMode == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
@@ -961,8 +960,7 @@ void SwNumRule::SetIndentOfFirstListLevelAndChangeOthers( const short nNewIndent
     }
     else if ( ePosAndSpaceMode == SvxNumberFormat::LABEL_ALIGNMENT )
     {
-        nDiff = static_cast<short>(nNewIndent
-                                   - aTmpNumFormat.GetIndentAt());
+        nDiff = nNewIndent - aTmpNumFormat.GetIndentAt();
     }
     if ( nDiff != 0  )
     {
@@ -973,10 +971,8 @@ void SwNumRule::SetIndentOfFirstListLevelAndChangeOthers( const short nNewIndent
 void SwNumRule::Validate()
 {
     std::set< SwList* > aLists;
-    tTextNodeList::iterator aIter;
-    for ( aIter = maTextNodeList.begin(); aIter != maTextNodeList.end(); ++aIter )
+    for ( const SwTextNode* pTextNode : maTextNodeList )
     {
-        const SwTextNode* pTextNode = *aIter;
         aLists.insert( pTextNode->GetDoc()->getIDocumentListsAccess().getListByName( pTextNode->GetListId() ) );
     }
     for ( auto aList : aLists )
@@ -1123,8 +1119,7 @@ namespace numfunc
           msFontname( OUString("OpenSymbol") ),
           mbUserDefinedFontname( false ),
           meFontWeight( WEIGHT_DONTKNOW ),
-          meFontItalic( ITALIC_NONE ),
-          mpFont( nullptr )
+          meFontItalic( ITALIC_NONE )
     {
         SetToDefault();
         LoadConfig();

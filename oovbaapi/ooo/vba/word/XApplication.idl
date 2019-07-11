@@ -24,21 +24,32 @@
 
 module ooo {  module vba {  module word {
 
-interface XDocument;
-interface XWindow;
-interface XSystem;
-interface XOptions;
-interface XSelection;
-interface XApplication : com::sun::star::uno::XInterface
+interface XApplication : XConnectable
 {
     [attribute, readonly] XDocument ActiveDocument;
     [attribute, readonly] XWindow ActiveWindow;
     [attribute, readonly] string Name;
-    [attribute, readonly] ooo::vba::word::XSystem System;
-    [attribute, readonly] ooo::vba::word::XOptions Options;
-    [attribute, readonly] ooo::vba::word::XSelection Selection;
+    [attribute, readonly] XSystem System;
+    [attribute, readonly] XOptions Options;
+    [attribute, readonly] XSelection Selection;
+    [attribute, readonly] XWordBasic WordBasic;
     [attribute] boolean DisplayAutoCompleteTips;
     [attribute] long EnableCancelKey;
+    [attribute] long WindowState;
+    [attribute] long Width;
+    [attribute] long Height;
+    [attribute] long Left;
+    [attribute] long Top;
+    // Setting this displays the string in a SAL_INFO message with tag
+    // extensions.olebridge. Provides a way to get a message from an
+    // Automation client into LibreOffice's debug output. Less
+    // disruptive than a MessageBox() in a VB6 client, for instance.
+    // And makes it possible to get merged debug output from both the client
+    // and LibreOffice in proper synchronized order.
+    //
+    // Actually write-only but there is no way to say that in UNO IDL.
+    // The getter just returns an empty string.
+    [attribute] string StatusBar;
 
     any CommandBars( [in] any Index );
     any Documents( [in] any Index );
@@ -46,6 +57,9 @@ interface XApplication : com::sun::star::uno::XInterface
     any Dialogs( [in] any Index );
     any ListGalleries( [in] any aIndex );
     float CentimetersToPoints([in] float Centimeters );
+    void ShowMe();
+    void Resize( [in] long Width, [in] long Height );
+    void Move( [in] long Left, [in] long Top );
 };
 
 }; }; };

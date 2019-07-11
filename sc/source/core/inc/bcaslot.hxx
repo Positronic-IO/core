@@ -20,19 +20,19 @@
 #ifndef INCLUDED_SC_SOURCE_CORE_INC_BCASLOT_HXX
 #define INCLUDED_SC_SOURCE_CORE_INC_BCASLOT_HXX
 
-#include <functional>
 #include <memory>
 #include <map>
-#include <set>
 #include <unordered_set>
 
 #include <svl/broadcast.hxx>
+#include <svl/hint.hxx>
+#include <tools/solar.h>
 
+#include <document.hxx>
 #include <global.hxx>
-#include <brdcst.hxx>
-#include <columnspanset.hxx>
 
-class ScBroadcastArea;
+namespace sc { class ColumnSpanSet; }
+class ScHint;
 
 namespace sc {
 
@@ -93,7 +93,7 @@ inline bool ScBroadcastArea::operator==( const ScBroadcastArea & rArea ) const
 
 struct ScBroadcastAreaEntry
 {
-    ScBroadcastArea* mpArea;
+    ScBroadcastArea* const mpArea;
     mutable bool     mbErasure;     ///< TRUE if marked for erasure in this set
 
     ScBroadcastAreaEntry( ScBroadcastArea* p ) : mpArea( p), mbErasure( false) {}
@@ -350,7 +350,7 @@ public:
 class ScBulkBroadcast
 {
     ScBroadcastAreaSlotMachine* pBASM;
-    SfxHintId                  mnHintId;
+    SfxHintId const             mnHintId;
 public:
     explicit ScBulkBroadcast( ScBroadcastAreaSlotMachine* p, SfxHintId nHintId ) :
         pBASM(p),

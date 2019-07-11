@@ -21,6 +21,7 @@
 #include <config_features.h>
 #include <config_java.h>
 #include <config_folders.h>
+#include <config_extensions.h>
 
 #include <sal/config.h>
 
@@ -98,6 +99,7 @@
 #include <officecfg/Setup.hxx>
 #include <osl/file.hxx>
 #include <osl/process.h>
+#include <rtl/byteseq.hxx>
 #include <rtl/uri.hxx>
 #include <unotools/pathoptions.hxx>
 #include <svtools/miscopt.hxx>
@@ -106,6 +108,7 @@
 #include <vcl/help.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
+#include <sfx2/flatpak.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/app.hxx>
 #include <sfx2/safemode.hxx>
@@ -370,6 +373,7 @@ void FatalError(const OUString& sMessage)
 
     OUString sTitle = sProductKey + " - Fatal Error";
     Application::ShowNativeErrorBox (sTitle, sMessage);
+    std::cerr << sTitle << ": " << sMessage << std::endl;
     _exit(EXITHELPER_FATAL_ERROR);
 }
 
@@ -876,9 +880,9 @@ void Desktop::HandleBootstrapErrors(
 
         OUString aDiagnosticMessage;
         if ( aBootstrapError == BE_USERINSTALL_NOTENOUGHDISKSPACE )
-            aDiagnosticMessage = DpResId(STR_BOOSTRAP_ERR_NOTENOUGHDISKSPACE);
+            aDiagnosticMessage = DpResId(STR_BOOTSTRAP_ERR_NOTENOUGHDISKSPACE);
         else
-            aDiagnosticMessage = DpResId(STR_BOOSTRAP_ERR_NOACCESSRIGHTS);
+            aDiagnosticMessage = DpResId(STR_BOOTSTRAP_ERR_NOACCESSRIGHTS);
         aDiagnosticMessage += aUserInstallationPath;
 
         FatalError(MakeStartupErrorMessage(aDiagnosticMessage));
@@ -1053,7 +1057,7 @@ void restartOnMac(bool passArguments) {
 
     std::unique_ptr<weld::MessageDialog> xRestartBox(Application::CreateMessageDialog(nullptr,
                                                      VclMessageType::Warning, VclButtonsType::Ok, aMessage));
-    xRestartBox->Execute();
+    xRestartBox->run();
 #else
     OUString execUrl;
     OSL_VERIFY(osl_getExecutableFile(&execUrl.pData) == osl_Process_E_None);
@@ -1254,7 +1258,7 @@ int Desktop::Main()
     CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
 
 #if HAVE_FEATURE_DESKTOP
-    OUString aUnknown( rCmdLineArgs.GetUnknown() );
+    const OUString& aUnknown( rCmdLineArgs.GetUnknown() );
     if ( !aUnknown.isEmpty() )
     {
         displayCmdlineHelp( aUnknown );
@@ -1397,7 +1401,7 @@ int Desktop::Main()
                 batch->commit();
 
                 // make sure the change is written to the configuration before we start the update
-                css::uno::Reference<css::util::XFlushable> xFlushable(css::configuration::theDefaultProvider::get(xContext), UNO_QUERY);;
+                css::uno::Reference<css::util::XFlushable> xFlushable(css::configuration::theDefaultProvider::get(xContext), UNO_QUERY);
                 xFlushable->flush();
                 // avoid the old oosplash staying around
                 CloseSplashScreen();
@@ -1683,13 +1687,6 @@ int Desktop::doShutdown()
     if ( pExecGlobals->bRestartRequested )
         SetRestartState();
 
-    if (pExecGlobals->xGlobalBroadcaster.is())
-    {
-        css::document::DocumentEvent aEvent;
-        aEvent.EventName = "OnCloseApp";
-        pExecGlobals->xGlobalBroadcaster->documentEventOccured(aEvent);
-    }
-
     // Restore old value
     const CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
     if ( rCmdLineArgs.IsHeadless() || rCmdLineArgs.IsEventTesting() )
@@ -1715,6 +1712,7 @@ int Desktop::doShutdown()
 
     // remove temp directory
     RemoveTemporaryDirectory();
+    flatpak::removeTemporaryHtmlDirectory();
 
     // flush evtl. configuration changes so that all config files in user
     // dir are written
@@ -1996,7 +1994,7 @@ void Desktop::OpenClients()
             OUString aHelpURL = "vnd.sun.star.help://"
                               + aHelpModule
                               + "/start?Language="
-                              + utl::ConfigManager::getLocale();
+                              + utl::ConfigManager::getUILocale();
 #if defined UNX
             aHelpURL += "&System=UNX";
 #elif defined WNT

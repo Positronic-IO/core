@@ -22,6 +22,7 @@
 #include <hsqldb/HDriver.hxx>
 #include <hsqldb/HConnection.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <connectivity/dbexception.hxx>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/sdbc/DriverManager.hpp>
@@ -45,9 +46,9 @@
 #include <osl/process.h>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <comphelper/types.hxx>
 #include <unotools/confignode.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <strings.hrc>
@@ -70,7 +71,6 @@ namespace connectivity
     using namespace css::lang;
     using namespace css::embed;
     using namespace css::io;
-    using namespace css::task;
     using namespace css::util;
     using namespace css::reflection;
 
@@ -258,7 +258,7 @@ namespace connectivity
                         if ( xStream.is() )
                         {
                             std::unique_ptr<SvStream> pStream( ::utl::UcbStreamHelper::CreateStream(xStream) );
-                            if ( pStream.get() )
+                            if (pStream)
                             {
                                 OString sLine;
                                 OString sVersionString;

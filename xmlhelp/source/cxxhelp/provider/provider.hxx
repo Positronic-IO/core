@@ -26,6 +26,8 @@
 #include <com/sun/star/container/XContainerListener.hpp>
 #include <com/sun/star/container/XContainer.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 namespace chelp {
 
@@ -117,7 +119,6 @@ namespace chelp {
 
     private:
         bool                           isInitialized;
-        OUString                       m_aScheme;
         std::unique_ptr<Databases>     m_pDatabases;
         css::uno::Reference<css::container::XContainer> m_xContainer;
 

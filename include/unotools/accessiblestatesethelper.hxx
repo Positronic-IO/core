@@ -22,13 +22,8 @@
 #include <unotools/unotoolsdllapi.h>
 
 #include <com/sun/star/accessibility/XAccessibleStateSet.hpp>
-#include <cppuhelper/weak.hxx>
-#include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XTypeProvider.hpp>
-#include <com/sun/star/lang/XServiceName.hpp>
 #include <osl/mutex.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <memory>
 
 class AccessibleStateSetHelperImpl;

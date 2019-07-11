@@ -27,6 +27,7 @@
 
 #include <map>
 
+class SvXMLImport;
 class RedlineInfo;
 class SwRedlineData;
 class SwDoc;
@@ -40,6 +41,8 @@ typedef std::map< OUString, RedlineInfo* > RedlineMapType;
 
 class XMLRedlineImportHelper final
 {
+    SvXMLImport & m_rImport;
+
     const OUString sInsertion;
     const OUString sDeletion;
     const OUString sFormatChange;
@@ -48,7 +51,7 @@ class XMLRedlineImportHelper final
 
     // if true, no redlines should be inserted into document
     // (This typically happen when a document is loaded in 'insert'-mode.)
-    bool bIgnoreRedlines;
+    bool const bIgnoreRedlines;
 
     // save information for saving and reconstruction of the redline mode
     css::uno::Reference<css::beans::XPropertySet> xModelPropertySet;
@@ -60,6 +63,7 @@ class XMLRedlineImportHelper final
 public:
 
     XMLRedlineImportHelper(
+        SvXMLImport & rImport,
         bool bIgnoreRedlines,       // ignore redlines mode
         // property sets of model + import info for saving + restoring the
         // redline mode

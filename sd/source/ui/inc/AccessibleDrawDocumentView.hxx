@@ -24,6 +24,9 @@
 
 #include <com/sun/star/accessibility/XAccessibleGroupPosition.hpp>
 
+namespace accessibility { class AccessiblePageShape; }
+namespace accessibility { class ChildrenManager; }
+
 namespace accessibility {
 
 /** This class makes draw documents in the general view modes
@@ -123,13 +126,13 @@ private:
     virtual void
         implSelect( sal_Int32 nAccessibleChildIndex, bool bSelect ) override;
 
-    ::sd::ViewShell* mpSdViewSh;
+    ::sd::ViewShell* const mpSdViewSh;
 
     /** This object manages the shapes of the represented draw page.  It is
         responsible to determine the visible shapes and create on demand the
         accessible objects representing them.
     */
-    ChildrenManager* mpChildrenManager;
+    std::unique_ptr<ChildrenManager> mpChildrenManager;
 
     // This method is called from the component helper base class while
     // disposing.

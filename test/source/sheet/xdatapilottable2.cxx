@@ -63,10 +63,9 @@ void XDataPilotTable2::testGetDrillDownData()
     buildDataFields(xDPTable);
     buildResultCells(xDPTable);
 
-    for (std::vector<table::CellAddress>::iterator itr = maResultCells.begin();
-             itr != maResultCells.end(); ++itr)
+    for (const auto& rResultCell : maResultCells)
     {
-        sheet::DataPilotTablePositionData aPosData = xDPTable->getPositionData(*itr);
+        sheet::DataPilotTablePositionData aPosData = xDPTable->getPositionData(rResultCell);
         Any aTempAny = aPosData.PositionData;
         sheet::DataPilotTableResultData aResData;
         CPPUNIT_ASSERT(aTempAny >>= aResData);
@@ -74,7 +73,7 @@ void XDataPilotTable2::testGetDrillDownData()
         sheet::DataResult aRes = aResData.Result;
         double nVal = aRes.Value;
 
-        Sequence< Sequence<Any> > aData = xDPTable->getDrillDownData(*itr);
+        Sequence< Sequence<Any> > aData = xDPTable->getDrillDownData(rResultCell);
         double sum = 0;
 
         if( aData.getLength() > 1 )
@@ -161,7 +160,6 @@ void XDataPilotTable2::testInsertDrillDownSheet()
         {
             CPPUNIT_ASSERT(aData.getLength() >= 2);
             uno::Reference< sheet::XSpreadsheet > xSheet(xIA->getByIndex(aAddr.Sheet),UNO_QUERY_THROW);
-            CPPUNIT_ASSERT(xSheet.is());
 
             checkDrillDownSheetContent(xSheet, aData);
 
@@ -249,7 +247,7 @@ table::CellAddress getLastUsedCellAddress( uno::Reference< sheet::XSpreadsheet >
 
 }
 
-bool XDataPilotTable2::checkDrillDownSheetContent(uno::Reference< sheet::XSpreadsheet > const & xSheet, const uno::Sequence< uno::Sequence< Any > >& aData)
+void XDataPilotTable2::checkDrillDownSheetContent(uno::Reference< sheet::XSpreadsheet > const & xSheet, const uno::Sequence< uno::Sequence< Any > >& aData)
 {
     table::CellAddress aLastCell = getLastUsedCellAddress(xSheet, 0, 0);
     CPPUNIT_ASSERT(aData.getLength() > 0);
@@ -272,7 +270,6 @@ bool XDataPilotTable2::checkDrillDownSheetContent(uno::Reference< sheet::XSpread
             CPPUNIT_ASSERT_EQUAL(aCell2, aCell1);
         }
     }
-    return true;
 }
 
 }

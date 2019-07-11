@@ -18,6 +18,7 @@
  */
 
 
+#include <sal/log.hxx>
 #include <vcl/event.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/svapp.hxx>
@@ -48,15 +49,11 @@ public:
     ImplData();
 
     VclPtr<VirtualDevice> mpVirDev;
-    long                mnItemBorderWidth;
-    bool                mbDrawItemFrames:1;
 };
 
 StatusBar::ImplData::ImplData()
 {
     mpVirDev = nullptr;
-    mbDrawItemFrames = false;
-    mnItemBorderWidth = 0;
 }
 
 struct ImplStatusItem
@@ -78,7 +75,7 @@ struct ImplStatusItem
     std::unique_ptr<SalLayout>          mxLayoutCache;
 };
 
-inline long ImplCalcProgressWidth( sal_uInt16 nMax, long nSize )
+static long ImplCalcProgressWidth( sal_uInt16 nMax, long nSize )
 {
     return ((nMax*(nSize+(nSize/2)))-(nSize/2)+(STATUSBAR_PRGS_OFFSET*2));
 }
@@ -104,7 +101,7 @@ static Point ImplGetItemTextPos( const Size& rRectSize, const Size& rTextSize,
 
 bool StatusBar::ImplIsItemUpdate()
 {
-    return !mbProgressMode && mbVisibleItems && IsReallyVisible() && IsUpdateMode();
+    return !mbProgressMode && IsReallyVisible() && IsUpdateMode();
 }
 
 void StatusBar::ImplInit( vcl::Window* pParent, WinBits nStyle )
@@ -121,7 +118,6 @@ void StatusBar::ImplInit( vcl::Window* pParent, WinBits nStyle )
     mpImplData->mpVirDev = VclPtr<VirtualDevice>::Create( *this );
     mnCurItemId     = 0;
     mbFormat        = true;
-    mbVisibleItems  = true;
     mbProgressMode  = false;
     mbInUserDraw    = false;
     mbAdjustHiDPI   = false;
@@ -217,22 +213,58 @@ void StatusBar::ImplFormat()
     long            nExtraWidth;
     long            nExtraWidth2;
     long            nX;
-    sal_uInt16          nAutoSizeItems = 0;
+    sal_uInt16      nAutoSizeItems;
+    bool            bChanged;
 
-    // sum up widths
-    mnItemsWidth = STATUSBAR_OFFSET_X;
-    long nOffset = 0;
-    for (auto & pItem : mvItemList) {
-        if ( pItem->mbVisible )
-        {
-            if ( pItem->mnBits & StatusBarItemBits::AutoSize ) {
-                nAutoSizeItems++;
+    do {
+        // sum up widths
+        nAutoSizeItems = 0;
+        mnItemsWidth = STATUSBAR_OFFSET_X;
+        bChanged = false;
+        long nOffset = 0;
+        for ( const auto & pItem : mvItemList ) {
+            if ( pItem->mbVisible )
+            {
+                if ( pItem->mnBits & StatusBarItemBits::AutoSize ) {
+                    nAutoSizeItems++;
+                }
+
+                mnItemsWidth += pItem->mnWidth + nOffset;
+                nOffset = pItem->mnOffset;
             }
-
-            mnItemsWidth += pItem->mnWidth + nOffset;
-            nOffset = pItem->mnOffset;
         }
-    }
+
+        if ( mnDX > 0 && mnDX < mnItemsWidth )
+        {
+            // Total width of items is more than available width
+            // Try to hide secondary elements, if any
+            for ( auto & pItem : mvItemList )
+            {
+                if ( pItem->mbVisible && !(pItem->mnBits & StatusBarItemBits::Mandatory) )
+                {
+                    pItem->mbVisible = false;
+                    bChanged = true;
+                    break;
+                }
+            }
+        }
+        else if ( mnDX > mnItemsWidth )
+        {
+            // Width of statusbar is sufficient.
+            // Try to restore hidden items, if any
+            for ( auto & pItem : mvItemList )
+            {
+                if ( !pItem->mbVisible &&
+                    !(pItem->mnBits & StatusBarItemBits::Mandatory) &&
+                    pItem->mnWidth + nOffset + mnItemsWidth < mnDX )
+                {
+                    pItem->mbVisible = true;
+                    bChanged = true;
+                    break;
+                }
+            }
+        }
+    } while ( bChanged );
 
     if ( GetStyle() & WB_RIGHT )
     {
@@ -287,15 +319,12 @@ tools::Rectangle StatusBar::ImplGetItemRectPos( sal_uInt16 nPos ) const
 {
     tools::Rectangle       aRect;
     ImplStatusItem* pItem = ( nPos < mvItemList.size() ) ? mvItemList[ nPos ].get() : nullptr;
-    if ( pItem )
+    if ( pItem && pItem->mbVisible )
     {
-        if ( pItem->mbVisible )
-        {
-            aRect.SetLeft( pItem->mnX );
-            aRect.SetRight( aRect.Left() + pItem->mnWidth + pItem->mnExtraWidth );
-            aRect.SetTop( STATUSBAR_OFFSET_Y );
-            aRect.SetBottom( mnCalcHeight - STATUSBAR_OFFSET_Y );
-        }
+        aRect.SetLeft( pItem->mnX );
+        aRect.SetRight( aRect.Left() + pItem->mnWidth + pItem->mnExtraWidth );
+        aRect.SetTop( STATUSBAR_OFFSET_Y );
+        aRect.SetBottom( mnCalcHeight - STATUSBAR_OFFSET_Y );
     }
 
     return aRect;
@@ -319,7 +348,7 @@ void StatusBar::ImplDrawText(vcl::RenderContext& rRenderContext)
     tools::Rectangle aTextRect;
     aTextRect.SetLeft( STATUSBAR_OFFSET_X + 1 );
     aTextRect.SetTop( mnTextY );
-    if (mbVisibleItems && (GetStyle() & WB_RIGHT))
+    if (GetStyle() & WB_RIGHT)
         aTextRect.SetRight( mnDX - mnItemsWidth - 1 );
     else
         aTextRect.SetRight( mnDX - 1 );
@@ -346,7 +375,7 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
 
     // compute output region
     ImplStatusItem* pItem = mvItemList[nPos].get();
-    long nW = mpImplData->mnItemBorderWidth + 1;
+    long nW = 1;
     tools::Rectangle aTextRect(aRect.Left() + nW, aRect.Top() + nW,
                         aRect.Right() - nW, aRect.Bottom() - nW);
 
@@ -371,7 +400,8 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
         pLayoutCache = pItem->mxLayoutCache.get();
     }
 
-    Size aTextSize(rRenderContext.GetTextWidth(pItem->maText,0,-1,nullptr,pLayoutCache), rRenderContext.GetTextHeight());
+    const SalLayoutGlyphs* pGlyphs = pLayoutCache ? pLayoutCache->GetGlyphs() : nullptr;
+    Size aTextSize(rRenderContext.GetTextWidth(pItem->maText,0,-1,nullptr,pGlyphs), rRenderContext.GetTextHeight());
 
     Point aTextPos = ImplGetItemTextPos(aTextRectSize, aTextSize, pItem->mnBits);
 
@@ -379,7 +409,9 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
     {
         mpImplData->mpVirDev->DrawText(
                     aTextPos,
-                    pItem->maText );
+                    pItem->maText,
+                    0, -1, nullptr, nullptr,
+                    pGlyphs );
     }
     else
     {
@@ -389,7 +421,7 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
                     aTextPos,
                     pItem->maText,
                     0, -1, nullptr, nullptr,
-                    pLayoutCache );
+                    pGlyphs );
     }
 
     // call DrawItem if necessary
@@ -416,23 +448,7 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
     else
         rRenderContext.SetClipRegion();
 
-    // show frame
-    if (mpImplData->mbDrawItemFrames)
-    {
-        if (!(pItem->mnBits & StatusBarItemBits::Flat))
-        {
-            DrawFrameStyle nStyle;
-
-            if (pItem->mnBits & StatusBarItemBits::In)
-                nStyle = DrawFrameStyle::In;
-            else
-                nStyle = DrawFrameStyle::Out;
-
-            DecorationView aDecoView(&rRenderContext);
-            aDecoView.DrawFrame(aRect, nStyle);
-        }
-    }
-    else if (nPos != ImplGetFirstVisiblePos())
+    if (nPos != ImplGetFirstVisiblePos())
     {
         // draw separator
         Point aFrom(aRect.TopLeft());
@@ -642,27 +658,24 @@ void StatusBar::MouseButtonDown( const MouseEvent& rMEvt )
     // trigger toolbox only for left mouse button
     if ( rMEvt.IsLeft() )
     {
-        if ( mbVisibleItems )
+        Point  aMousePos = rMEvt.GetPosPixel();
+
+        // search for clicked item
+        for ( size_t i = 0; i < mvItemList.size(); ++i )
         {
-            Point  aMousePos = rMEvt.GetPosPixel();
-
-            // search for clicked item
-            for ( size_t i = 0; i < mvItemList.size(); ++i )
+            ImplStatusItem* pItem = mvItemList[ i ].get();
+            // check item for being clicked
+            if ( ImplGetItemRectPos( sal_uInt16(i) ).IsInside( aMousePos ) )
             {
-                ImplStatusItem* pItem = mvItemList[ i ].get();
-                // check item for being clicked
-                if ( ImplGetItemRectPos( sal_uInt16(i) ).IsInside( aMousePos ) )
-                {
-                    mnCurItemId = pItem->mnId;
-                    if ( rMEvt.GetClicks() == 2 )
-                        DoubleClick();
-                    else
-                        Click();
-                    mnCurItemId = 0;
+                mnCurItemId = pItem->mnId;
+                if ( rMEvt.GetClicks() == 2 )
+                    DoubleClick();
+                else
+                    Click();
+                mnCurItemId = 0;
 
-                    // Item found
-                    return;
-                }
+                // Item found
+                return;
             }
         }
 
@@ -699,28 +712,26 @@ void StatusBar::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle
     else
     {
         // draw text
-        if (!mbVisibleItems || (GetStyle() & WB_RIGHT))
+        if (GetStyle() & WB_RIGHT)
             ImplDrawText(rRenderContext);
 
         // draw items
-        if (mbVisibleItems)
-        {
-            // Do offscreen only when we are not recording layout..
-            bool bOffscreen = !rRenderContext.ImplIsRecordLayout();
 
-            // tdf#94213 - un-necessary virtual-device in GL mode
-            // causes context switch & hence flicker during sizing.
+        // Do offscreen only when we are not recording layout..
+        bool bOffscreen = !rRenderContext.ImplIsRecordLayout();
+
+        // tdf#94213 - un-necessary virtual-device in GL mode
+        // causes context switch & hence flicker during sizing.
 #if HAVE_FEATURE_OPENGL
-            if( OpenGLWrapper::isVCLOpenGLEnabled() )
-                bOffscreen = false;
+        if( OpenGLWrapper::isVCLOpenGLEnabled() )
+            bOffscreen = false;
 #endif
 
-            if (!bOffscreen)
-                rRenderContext.Erase(rRect);
+        if (!bOffscreen)
+            rRenderContext.Erase(rRect);
 
-            for (sal_uInt16 i = 0; i < nItemCount; i++)
-                ImplDrawItem(rRenderContext, bOffscreen, i);
-        }
+        for (sal_uInt16 i = 0; i < nItemCount; i++)
+            ImplDrawItem(rRenderContext, bOffscreen, i);
     }
 
     // draw line at the top of the status bar (to visually distinguish it from
@@ -1040,7 +1051,7 @@ sal_uInt16 StatusBar::GetItemPos( sal_uInt16 nItemId ) const
 
 sal_uInt16 StatusBar::GetItemId( const Point& rPos ) const
 {
-    if ( AreItemsVisible() && !mbFormat )
+    if ( !mbFormat )
     {
         sal_uInt16 nItemCount = GetItemCount();
         sal_uInt16 nPos;
@@ -1060,14 +1071,14 @@ tools::Rectangle StatusBar::GetItemRect( sal_uInt16 nItemId ) const
 {
     tools::Rectangle aRect;
 
-    if ( AreItemsVisible() && !mbFormat )
+    if ( !mbFormat )
     {
         sal_uInt16 nPos = GetItemPos( nItemId );
         if ( nPos != STATUSBAR_ITEM_NOTFOUND )
         {
             // get rectangle and subtract frame
             aRect = ImplGetItemRectPos( nPos );
-            long nW = mpImplData->mnItemBorderWidth+1;
+            long nW = 1;
             aRect.AdjustTop(nW-1 );
             aRect.AdjustBottom( -(nW-1) );
             aRect.AdjustLeft(nW );
@@ -1089,7 +1100,7 @@ Point StatusBar::GetItemTextPos( sal_uInt16 nItemId ) const
             // get rectangle
             ImplStatusItem* pItem = mvItemList[ nPos ].get();
             tools::Rectangle aRect = ImplGetItemRectPos( nPos );
-            long nW = mpImplData->mnItemBorderWidth + 1;
+            long nW = 1;
             tools::Rectangle           aTextRect( aRect.Left()+nW, aRect.Top()+nW,
                                            aRect.Right()-nW, aRect.Bottom()-nW );
             Point aPos = ImplGetItemTextPos( aTextRect.GetSize(),
@@ -1153,7 +1164,11 @@ void StatusBar::SetItemText( sal_uInt16 nItemId, const OUString& rText )
             long nFudge = GetTextHeight()/4;
 
             std::unique_ptr<SalLayout> pSalLayout = ImplLayout(pItem->maText,0,-1);
-            long nWidth = GetTextWidth( pItem->maText,0,-1,nullptr,pSalLayout.get() ) + nFudge;
+            const SalLayoutGlyphs* pGlyphs = pSalLayout ? pSalLayout->GetGlyphs() : nullptr;
+            long nWidth = GetTextWidth( pItem->maText,0,-1,nullptr,pGlyphs ) + nFudge;
+
+            // Store the calculated layout.
+            pItem->mxLayoutCache = std::move(pSalLayout);
 
             if( (nWidth > pItem->mnWidth + STATUSBAR_OFFSET) ||
                 ((nWidth < pItem->mnWidth) && (mnDX - STATUSBAR_OFFSET) < mnItemsWidth  ))
@@ -1381,7 +1396,7 @@ void StatusBar::EndProgressMode()
 
 void StatusBar::SetText(const OUString& rText)
 {
-    if ((!mbVisibleItems || (GetStyle() & WB_RIGHT)) && !mbProgressMode && IsReallyVisible() && IsUpdateMode())
+    if ((GetStyle() & WB_RIGHT) && !mbProgressMode && IsReallyVisible() && IsUpdateMode())
     {
         if (mbFormat)
         {
@@ -1443,21 +1458,7 @@ Size StatusBar::CalcWindowSizePixel() const
         }
     }
 
-    if( mpImplData->mbDrawItemFrames &&
-        IsNativeControlSupported( ControlType::Frame, ControlPart::Border ) )
-    {
-        ImplControlValue aControlValue( static_cast<long>(DrawFrameFlags::NoDraw) );
-        tools::Rectangle aBound, aContent;
-        tools::Rectangle aNatRgn( Point( 0, 0 ), Size( 150, 50 ) );
-        if( GetNativeControlRegion(ControlType::Frame, ControlPart::Border,
-                    aNatRgn, ControlState::NONE, aControlValue, aBound, aContent) )
-        {
-            mpImplData->mnItemBorderWidth =
-                ( aBound.GetHeight() - aContent.GetHeight() ) / 2;
-        }
-    }
-
-    nCalcHeight = nMinHeight+nBarTextOffset + 2*mpImplData->mnItemBorderWidth;
+    nCalcHeight = nMinHeight+nBarTextOffset;
     if( nCalcHeight < nProgressHeight+2 )
         nCalcHeight = nProgressHeight+2;
 

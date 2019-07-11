@@ -32,24 +32,25 @@
 #include <svx/flagsdef.hxx>
 #include <editeng/flstitem.hxx>
 #include <sfx2/app.hxx>
+#include <osl/diagnose.h>
 
-ScAttrDlg::ScAttrDlg(vcl::Window* pParent, const SfxItemSet* pCellAttrs)
-    : SfxTabDialog(pParent, "FormatCellsDialog", "modules/scalc/ui/formatcellsdialog.ui", pCellAttrs)
+ScAttrDlg::ScAttrDlg(weld::Window* pParent, const SfxItemSet* pCellAttrs)
+    : SfxTabDialogController(pParent, "modules/scalc/ui/formatcellsdialog.ui",
+                             "FormatCellsDialog", pCellAttrs)
 {
-    SvtCJKOptions aCJKOptions;
     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
 
     OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_NUMBERFORMAT ), "GetTabPageCreatorFunc fail!");
-    m_nNumberPageId = AddTabPage( "numbers", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_NUMBERFORMAT ), nullptr );
+    AddTabPage( "numbers", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_NUMBERFORMAT ), nullptr );
     OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_NAME ), "GetTabPageCreatorFunc fail!");
-    m_nFontPageId = AddTabPage( "font", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_NAME ), nullptr );
+    AddTabPage( "font", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_NAME ), nullptr );
     OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_EFFECTS ), "GetTabPageCreatorFunc fail!");
     AddTabPage( "fonteffects", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_EFFECTS ), nullptr );
     OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_ALIGNMENT ), "GetTabPageCreatorFunc fail!");
     AddTabPage( "alignment", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_ALIGNMENT ),    nullptr );
 
-    if ( aCJKOptions.IsAsianTypographyEnabled() )
+    SvtCJKOptions aCJKOptions;
+    if (aCJKOptions.IsAsianTypographyEnabled())
     {
         OSL_ENSURE(pFact->GetTabPageCreatorFunc(RID_SVXPAGE_PARA_ASIAN), "GetTabPageCreatorFunc fail!");
         AddTabPage( "asiantypography",   pFact->GetTabPageCreatorFunc(RID_SVXPAGE_PARA_ASIAN),       nullptr );
@@ -58,8 +59,8 @@ ScAttrDlg::ScAttrDlg(vcl::Window* pParent, const SfxItemSet* pCellAttrs)
         RemoveTabPage( "asiantypography" );
     OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BORDER ), "GetTabPageCreatorFunc fail!");
     AddTabPage( "borders",      pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BORDER ),     nullptr );
-    OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BACKGROUND ), "GetTabPageCreatorFunc fail!");
-    AddTabPage( "background",  pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BACKGROUND ), nullptr );
+    OSL_ENSURE(pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), "GetTabPageCreatorFunc fail!");
+    AddTabPage( "background",  pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), nullptr );
     AddTabPage( "cellprotection" ,  ScTabPageProtection::Create,    nullptr );
 }
 
@@ -67,29 +68,25 @@ ScAttrDlg::~ScAttrDlg()
 {
 }
 
-void ScAttrDlg::PageCreated( sal_uInt16 nPageId, SfxTabPage& rTabPage )
+void ScAttrDlg::PageCreated(const OString& rPageId, SfxTabPage& rTabPage)
 {
     SfxObjectShell* pDocSh = SfxObjectShell::Current();
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
-    if (nPageId == m_nNumberPageId)
+    if (rPageId == "numbers")
     {
-        aSet.Put (SfxLinkItem( SID_LINK_TYPE, LINK( this, ScAttrDlg, OkHandler )));
         rTabPage.PageCreated(aSet);
     }
-    else if (nPageId == m_nFontPageId)
+    else if (rPageId == "font")
     {
         const SfxPoolItem* pInfoItem = pDocSh->GetItem( SID_ATTR_CHAR_FONTLIST );
-
-        OSL_ENSURE( pInfoItem, "FontListItem  not found :-(" );
-
+        assert(pInfoItem && "FontListItem  not found :-(");
         aSet.Put (SvxFontListItem(static_cast<const SvxFontListItem*>(pInfoItem)->GetFontList(), SID_ATTR_CHAR_FONTLIST ));
         rTabPage.PageCreated(aSet);
     }
-}
-
-IMPL_LINK_NOARG(ScAttrDlg, OkHandler, SfxPoolItem*, void)
-{
-    GetOKButton().GetClickHdl().Call( nullptr );
+    else if (rPageId == "background")
+    {
+        rTabPage.PageCreated(aSet);
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

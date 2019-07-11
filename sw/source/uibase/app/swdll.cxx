@@ -37,6 +37,7 @@
 #include <comphelper/unique_disposing_ptr.hxx>
 #include <comphelper/processfactory.hxx>
 
+#include <sal/log.hxx>
 #include <svx/fmobjfac.hxx>
 #include <svx/objfac3d.hxx>
 #include <editeng/acorrcfg.hxx>
@@ -167,7 +168,7 @@ SwDLL::~SwDLL() COVERITY_NOEXCEPT_FALSE
 sw::Filters & SwDLL::getFilters()
 {
     assert(filters_);
-    return *filters_.get();
+    return *filters_;
 }
 
 #ifndef DISABLE_DYNLOADING

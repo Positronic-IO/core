@@ -26,6 +26,7 @@
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <drawinglayer/primitive2d/polygonprimitive2d.hxx>
 #include <drawinglayer/primitive2d/hiddengeometryprimitive2d.hxx>
+#include <svgdocument.hxx>
 
 namespace svgio
 {
@@ -36,7 +37,6 @@ namespace svgio
             SvgNode* pParent)
         :   SvgNode(SVGTokenSvg, rDocument, pParent),
             maSvgStyleAttributes(*this),
-            mpViewBox(nullptr),
             maSvgAspectRatio(),
             maX(),
             maY(),
@@ -501,12 +501,12 @@ namespace svgio
                         basegfx::B2DRange aSvgCanvasRange; // viewport
                         double fW = 0.0; // dummy values
                         double fH = 0.0;
-                        if(getViewBox())
+                        if (const basegfx::B2DRange* pBox = getViewBox())
                         {
                             // SVG 1.1 defines in section 7.7 that a negative value for width or height
                             // in viewBox is an error and that 0.0 disables rendering
-                            const double fViewBoxWidth = getViewBox()->getWidth();
-                            const double fViewBoxHeight = getViewBox()->getHeight();
+                            const double fViewBoxWidth = pBox->getWidth();
+                            const double fViewBoxHeight = pBox->getHeight();
                             if(basegfx::fTools::more(fViewBoxWidth,0.0) && basegfx::fTools::more(fViewBoxHeight,0.0))
                             {
                                 // The intrinsic aspect ratio of the svg element is given by absolute values of svg width and svg height
@@ -542,14 +542,10 @@ namespace svgio
                                     // We get viewport >= content, therefore no clipping.
                                     bNeedsMapping = false;
 
-                                    const basegfx::B2DRange aChildRange(
-                                        aSequence.getB2DRange(
-                                            drawinglayer::geometry::ViewInformation2D()));
-
-                                    const double fChildWidth(getViewBox() ? getViewBox()->getWidth() : aChildRange.getWidth());
-                                    const double fChildHeight(getViewBox() ? getViewBox()->getHeight() : aChildRange.getHeight());
-                                    const double fLeft(getViewBox() ? getViewBox()->getMinX()  : aChildRange.getMinX());
-                                    const double fTop (getViewBox() ? getViewBox()->getMinY() : aChildRange.getMinY());
+                                    const double fChildWidth(pBox->getWidth());
+                                    const double fChildHeight(pBox->getHeight());
+                                    const double fLeft(pBox->getMinX());
+                                    const double fTop(pBox->getMinY());
                                     if ( fChildWidth / fViewBoxWidth > fChildHeight / fViewBoxHeight )
                                     {  // expand y
                                         fW = fChildWidth;
@@ -572,7 +568,7 @@ namespace svgio
                                     const SvgAspectRatio& rRatio = getSvgAspectRatio().isSet()? getSvgAspectRatio() : aRatioDefault;
 
                                     basegfx::B2DHomMatrix aViewBoxMapping;
-                                    aViewBoxMapping = rRatio.createMapping(aSvgCanvasRange, *getViewBox());
+                                    aViewBoxMapping = rRatio.createMapping(aSvgCanvasRange, *pBox);
                                     // no need to check ratio here for slice, the outermost Svg will
                                     // be clipped anyways (see below)
 
@@ -670,27 +666,64 @@ namespace svgio
 
                         if(!aSequence.empty())
                         {
-                            // embed in transform primitive to scale to 1/100th mm
-                            // where 1 inch == 25.4 mm to get from Svg coordinates (px) to
-                            // drawinglayer coordinates
-                            const double fScaleTo100thmm(25.4 * 100.0 / F_SVG_PIXEL_PER_INCH);
-                            const basegfx::B2DHomMatrix aTransform(
-                                basegfx::utils::createScaleB2DHomMatrix(
-                                    fScaleTo100thmm,
-                                    fScaleTo100thmm));
+                            // Another correction:
+                            // If no Width/Height is set (usually done in
+                            // <svg ... width="215.9mm" height="279.4mm" >) which
+                            // is the case for own-Impress-exports, assume that
+                            // the Units are already 100ThMM.
+                            // Maybe only for own-Impress-exports, thus may need to be
+                            // &&ed with getDocument().findSvgNodeById("ooo:meta_slides"),
+                            // but does not need to be.
+                            bool bEmbedInFinalTransformPxTo100ThMM(true);
 
-                            const drawinglayer::primitive2d::Primitive2DReference xTransform(
-                                new drawinglayer::primitive2d::TransformPrimitive2D(
-                                    aTransform,
-                                    aSequence));
+                            if(getDocument().findSvgNodeById("ooo:meta_slides")
+                                && !getWidth().isSet()
+                                && !getHeight().isSet())
+                            {
+                                bEmbedInFinalTransformPxTo100ThMM = false;
+                            }
 
-                            aSequence = drawinglayer::primitive2d::Primitive2DContainer { xTransform };
+                            if(bEmbedInFinalTransformPxTo100ThMM)
+                            {
+                                // embed in transform primitive to scale to 1/100th mm
+                                // where 1 inch == 25.4 mm to get from Svg coordinates (px) to
+                                // drawinglayer coordinates
+                                const double fScaleTo100thmm(25.4 * 100.0 / F_SVG_PIXEL_PER_INCH);
+                                const basegfx::B2DHomMatrix aTransform(
+                                    basegfx::utils::createScaleB2DHomMatrix(
+                                        fScaleTo100thmm,
+                                        fScaleTo100thmm));
+
+                                const drawinglayer::primitive2d::Primitive2DReference xTransform(
+                                    new drawinglayer::primitive2d::TransformPrimitive2D(
+                                        aTransform,
+                                        aSequence));
+
+                                aSequence = drawinglayer::primitive2d::Primitive2DContainer { xTransform };
+                            }
 
                             // append to result
                             rTarget.append(aSequence);
                         }
                     }
                 }
+            }
+
+            if(aSequence.empty() && !getParent() && getViewBox())
+            {
+                // tdf#118232 No geometry, Outermost SVG element and we have a ViewBox.
+                // Create a HiddenGeometry Primitive containing an expanded
+                // hairline geometry to have the size contained
+                const drawinglayer::primitive2d::Primitive2DReference xLine(
+                    new drawinglayer::primitive2d::PolygonHairlinePrimitive2D(
+                        basegfx::utils::createPolygonFromRect(
+                            *getViewBox()),
+                        basegfx::BColor(0.0, 0.0, 0.0)));
+                const drawinglayer::primitive2d::Primitive2DReference xHidden(
+                    new drawinglayer::primitive2d::HiddenGeometryPrimitive2D(
+                        drawinglayer::primitive2d::Primitive2DContainer { xLine }));
+
+                rTarget.push_back(xHidden);
             }
         }
 

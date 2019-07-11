@@ -11,8 +11,6 @@
 #ifndef INCLUDED_INCLUDE_VCL_BITMAPCOLORQUANTIZATIONFILTER_HXX
 #define INCLUDED_INCLUDE_VCL_BITMAPCOLORQUANTIZATIONFILTER_HXX
 
-#include <tools/color.hxx>
-
 #include <vcl/BitmapFilter.hxx>
 
 class VCL_DLLPUBLIC BitmapColorQuantizationFilter : public BitmapFilter
@@ -28,10 +26,10 @@ public:
     {
     }
 
-    virtual BitmapEx execute(BitmapEx const& rBitmapEx) override;
+    virtual BitmapEx execute(BitmapEx const& rBitmapEx) const override;
 
 private:
-    sal_uInt16 mnNewColorCount;
+    sal_uInt16 const mnNewColorCount;
 
     struct PopularColorCount
     {

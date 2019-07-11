@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <unotools/charclass.hxx>
 #include <editeng/unolingu.hxx>
 #include <wrtsh.hxx>
@@ -87,7 +86,7 @@ SwFieldInputDlg::SwFieldInputDlg(weld::Window *pParent, SwWrtShell &rS,
         CharClass aCC( LanguageTag( pSetField->GetLanguage() ));
         if( aCC.isNumeric( sFormula ))
         {
-            aStr = pSetField->ExpandField(true);
+            aStr = pSetField->ExpandField(true, rS.GetLayout());
         }
         else
             aStr = sFormula;
@@ -104,6 +103,10 @@ SwFieldInputDlg::SwFieldInputDlg(weld::Window *pParent, SwWrtShell &rS,
     if( !aStr.isEmpty() )
         m_xEditED->set_text(convertLineEnd(aStr, GetSystemLineEnd()));
     m_xEditED->grab_focus();
+
+    // preselect all text to allow quickly changing the content
+    if (bEnable)
+        m_xEditED->select_region(0, -1);
 }
 
 SwFieldInputDlg::~SwFieldInputDlg()
@@ -130,14 +133,14 @@ void SwFieldInputDlg::Apply()
         else if( aTmp != pInpField->GetPar1() )
         {
             pInpField->SetPar1(aTmp);
-            rSh.SwEditShell::UpdateFields(*pInpField);
+            rSh.SwEditShell::UpdateOneField(*pInpField);
             bModified = true;
         }
     }
     else if( aTmp != pSetField->GetPar2())
     {
         pSetField->SetPar2(aTmp);
-        rSh.SwEditShell::UpdateFields(*pSetField);
+        rSh.SwEditShell::UpdateOneField(*pSetField);
         bModified = true;
     }
 

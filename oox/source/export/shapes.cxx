@@ -20,6 +20,7 @@
 #include <sal/config.h>
 
 #include <config_global.h>
+#include <sal/log.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <filter/msfilter/util.hxx>
 #include <oox/core/xmlfilterbase.hxx>
@@ -76,12 +77,11 @@
 #include <com/sun/star/table/XMergeableCell.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/table/BorderLine2.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <tools/stream.hxx>
 #include <tools/globname.hxx>
 #include <comphelper/classids.hxx>
 #include <comphelper/propertysequence.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <sot/exchange.hxx>
 #include <utility>
@@ -233,7 +233,7 @@ static uno::Reference<io::XInputStream> lcl_StoreOwnAsOOXML(
         char const* pMediaType;
         char const* pProgID;
         char const* pSuffix;
-    } s_Mapping[] = {
+    } const s_Mapping[] = {
         { {SO3_SW_CLASSID_60}, "MS Word 2007 XML", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Word.Document.12", "docx" },
         { {SO3_SC_CLASSID_60}, "Calc MS Excel 2007 XML", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Excel.Sheet.12", "xlsx" },
         { {SO3_SIMPRESS_CLASSID_60}, "Impress MS PowerPoint 2007 XML", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "PowerPoint.Show.12", "pptx" },
@@ -368,9 +368,8 @@ ShapeExport::ShapeExport( sal_Int32 nXmlNamespace, FSHelperPtr pFS, ShapeHashMap
     , mnShapeIdMax( 1 )
     , mnPictureIdMax( 1 )
     , mnXmlNamespace( nXmlNamespace )
-    , maFraction( 1, 576 )
     , maMapModeSrc( MapUnit::Map100thMM )
-    , maMapModeDest( MapUnit::MapInch, Point(), maFraction, maFraction )
+    , maMapModeDest( MapUnit::MapInch, Point(), Fraction( 1, 576 ), Fraction( 1, 576 ) )
     , mpShapeMap( pShapeMap ? pShapeMap : &maShapeMap )
 {
     mpURLTransformer.reset(new URLTransformer);
@@ -634,7 +633,7 @@ static bool lcl_IsOnWhitelist(OUString const & rShapeType)
     return std::find(vWhitelist.begin(), vWhitelist.end(), rShapeType) != vWhitelist.end();
 }
 
-bool lcl_GetHandlePosition( sal_Int32 &nValue, const EnhancedCustomShapeParameter &rParam, Sequence< EnhancedCustomShapeAdjustmentValue > &rSeq)
+static bool lcl_GetHandlePosition( sal_Int32 &nValue, const EnhancedCustomShapeParameter &rParam, Sequence< EnhancedCustomShapeAdjustmentValue > &rSeq)
 {
     bool bAdj = false;
     if ( rParam.Value.getValueTypeClass() == TypeClass_DOUBLE )
@@ -668,7 +667,7 @@ bool lcl_GetHandlePosition( sal_Int32 &nValue, const EnhancedCustomShapeParamete
     return bAdj;
 }
 
-void lcl_AnalyzeHandles( const uno::Sequence<beans::PropertyValues> & rHandles,
+static void lcl_AnalyzeHandles( const uno::Sequence<beans::PropertyValues> & rHandles,
         std::vector< std::pair< sal_Int32, sal_Int32> > &rHandlePositionList,
         Sequence< EnhancedCustomShapeAdjustmentValue > &rSeq)
 {
@@ -707,12 +706,12 @@ void lcl_AnalyzeHandles( const uno::Sequence<beans::PropertyValues> & rHandles,
     }
 }
 
-void lcl_AppendAdjustmentValue( std::vector< std::pair< sal_Int32, sal_Int32> > &rAvList, sal_Int32 nAdjIdx, sal_Int32 nValue )
+static void lcl_AppendAdjustmentValue( std::vector< std::pair< sal_Int32, sal_Int32> > &rAvList, sal_Int32 nAdjIdx, sal_Int32 nValue )
 {
     rAvList.emplace_back( nAdjIdx , nValue );
 }
 
-sal_Int32 lcl_NormalizeAngle( sal_Int32 nAngle )
+static sal_Int32 lcl_NormalizeAngle( sal_Int32 nAngle )
 {
     nAngle = nAngle % 360;
     return nAngle < 0 ? ( nAngle + 360 ) : nAngle ;
@@ -744,6 +743,9 @@ ShapeExport& ShapeExport::WriteCustomShape( const Reference< XShape >& xShape )
 
     bool bFlipH = false;
     bool bFlipV = false;
+
+    // Avoid interference of preset type to the next shape
+    m_presetWarp = "";
 
     if( GETA( CustomShapeGeometry ) ) {
         SAL_INFO("oox.shape", "got custom shape geometry");
@@ -1001,14 +1003,16 @@ ShapeExport& ShapeExport::WriteCustomShape( const Reference< XShape >& xShape )
         if( nAdjustmentValuesIndex != -1 )
         {
             WritePresetShape( sPresetShape, eShapeType, bPredefinedHandlesUsed,
-                              0/*nAdjustmentsWhichNeedsToBeConverted*/, aGeometrySeq[ nAdjustmentValuesIndex ] );
+                              aGeometrySeq[ nAdjustmentValuesIndex ] );
         }
         else
             WritePresetShape( sPresetShape );
     }
     if( rXPropSet.is() )
     {
-        WriteFill( rXPropSet );
+        // Preset shape with text has no fill
+        if( m_presetWarp.isEmpty() || !m_presetWarp.startsWith( "text" ) || m_presetWarp == "textNoShape" )
+            WriteFill( rXPropSet );
         WriteOutline( rXPropSet );
         WriteShapeEffects( rXPropSet );
         WriteShape3DEffects( rXPropSet );
@@ -1748,68 +1752,44 @@ void ShapeExport::WriteTableCellProperties(const Reference< XPropertySet>& xCell
     mpFS->endElementNS( XML_a, XML_tcPr );
 }
 
+void ShapeExport::WriteBorderLine(const sal_Int32 XML_line, const BorderLine2& rBorderLine)
+{
+// While importing the table cell border line width, it converts EMU->Hmm then divided result by 2.
+// To get original value of LineWidth need to multiple by 2.
+    sal_Int32 nBorderWidth = rBorderLine.LineWidth;
+    nBorderWidth *= 2;
+    nBorderWidth = oox::drawingml::convertHmmToEmu( nBorderWidth );
+
+    if ( nBorderWidth > 0 )
+    {
+        mpFS->startElementNS( XML_a, XML_line, XML_w, I32S(nBorderWidth), FSEND );
+        if ( rBorderLine.Color == sal_Int32( COL_AUTO ) )
+            mpFS->singleElementNS( XML_a, XML_noFill, FSEND );
+        else
+            DrawingML::WriteSolidFill( ::Color(rBorderLine.Color) );
+        mpFS->endElementNS( XML_a, XML_line );
+    }
+}
+
 void ShapeExport::WriteTableCellBorders(const Reference< XPropertySet>& xCellPropSet)
 {
     BorderLine2 aBorderLine;
 
 // lnL - Left Border Line Properties of table cell
     xCellPropSet->getPropertyValue("LeftBorder") >>= aBorderLine;
-    sal_Int32 nLeftBorder = aBorderLine.LineWidth;
-    util::Color aLeftBorderColor = aBorderLine.Color;
-
-// While importing the table cell border line width, it converts EMU->Hmm then divided result by 2.
-// To get original value of LineWidth need to multiple by 2.
-    nLeftBorder = nLeftBorder*2;
-    nLeftBorder = oox::drawingml::convertHmmToEmu( nLeftBorder );
-
-    if(nLeftBorder > 0)
-    {
-        mpFS->startElementNS( XML_a, XML_lnL, XML_w, I32S(nLeftBorder), FSEND );
-        DrawingML::WriteSolidFill(::Color(aLeftBorderColor));
-        mpFS->endElementNS( XML_a, XML_lnL );
-    }
+    WriteBorderLine( XML_lnL, aBorderLine );
 
 // lnR - Right Border Line Properties of table cell
     xCellPropSet->getPropertyValue("RightBorder") >>= aBorderLine;
-    sal_Int32 nRightBorder = aBorderLine.LineWidth;
-    util::Color aRightBorderColor = aBorderLine.Color;
-    nRightBorder = nRightBorder * 2 ;
-    nRightBorder = oox::drawingml::convertHmmToEmu( nRightBorder );
-
-    if(nRightBorder > 0)
-    {
-        mpFS->startElementNS( XML_a, XML_lnR, XML_w, I32S(nRightBorder), FSEND);
-        DrawingML::WriteSolidFill(::Color(aRightBorderColor));
-        mpFS->endElementNS( XML_a, XML_lnR);
-    }
+    WriteBorderLine( XML_lnR, aBorderLine );
 
 // lnT - Top Border Line Properties of table cell
     xCellPropSet->getPropertyValue("TopBorder") >>= aBorderLine;
-    sal_Int32 nTopBorder = aBorderLine.LineWidth;
-    util::Color aTopBorderColor = aBorderLine.Color;
-    nTopBorder = nTopBorder * 2;
-    nTopBorder = oox::drawingml::convertHmmToEmu( nTopBorder );
-
-    if(nTopBorder > 0)
-    {
-        mpFS->startElementNS( XML_a, XML_lnT, XML_w, I32S(nTopBorder), FSEND);
-        DrawingML::WriteSolidFill(::Color(aTopBorderColor));
-        mpFS->endElementNS( XML_a, XML_lnT);
-    }
+    WriteBorderLine( XML_lnT, aBorderLine );
 
 // lnB - Bottom Border Line Properties of table cell
     xCellPropSet->getPropertyValue("BottomBorder") >>= aBorderLine;
-    sal_Int32 nBottomBorder = aBorderLine.LineWidth;
-    util::Color aBottomBorderColor = aBorderLine.Color;
-    nBottomBorder = nBottomBorder * 2;
-    nBottomBorder = oox::drawingml::convertHmmToEmu( nBottomBorder );
-
-    if(nBottomBorder > 0)
-    {
-        mpFS->startElementNS( XML_a, XML_lnB, XML_w, I32S(nBottomBorder), FSEND);
-        DrawingML::WriteSolidFill(::Color(aBottomBorderColor));
-        mpFS->endElementNS( XML_a, XML_lnB);
-    }
+    WriteBorderLine( XML_lnB, aBorderLine );
 }
 
 ShapeExport& ShapeExport::WriteTableShape( const Reference< XShape >& xShape )
@@ -2113,7 +2093,7 @@ ShapeExport& ShapeExport::WriteOLE2Shape( const Reference< XShape >& xShape )
     SdrObject* pSdrOLE2( GetSdrObjectFromXShape( xShape ) );
     // The spec doesn't allow <p:pic> here, but PowerPoint requires it.
     bool bEcma = mpFB->getVersion() == oox::core::ECMA_DIALECT;
-    if (pSdrOLE2 && dynamic_cast<const SdrOle2Obj*>( pSdrOLE2) != nullptr && bEcma)
+    if (dynamic_cast<const SdrOle2Obj*>( pSdrOLE2) && bEcma)
     {
         const Graphic* pGraphic = static_cast<SdrOle2Obj*>(pSdrOLE2)->GetGraphic();
         if (pGraphic)

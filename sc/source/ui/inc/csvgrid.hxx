@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_CSVGRID_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_CSVGRID_HXX
 
-#include <vcl/virdev.hxx>
 #include <vcl/menu.hxx>
 #include <unotools/options.hxx>
 
@@ -35,6 +34,7 @@ class EditEngine;
 class ScEditEngineDefaulter;
 class ScAsciiOptions;
 class ScAccessibleCsvControl;
+class VirtualDevice;
 
 const sal_uInt32 CSV_COLUMN_INVALID = CSV_VEC_NOTFOUND;
 
@@ -76,7 +76,7 @@ private:
     Color                       maSelectColor;      /// Header color of selected columns.
 
     ScEditEnginePtr             mpEditEngine;       /// For drawing cell texts.
-    vcl::Font                  maHeaderFont;       /// Font for column and row headers.
+    vcl::Font const             maHeaderFont;       /// Font for column and row headers.
     vcl::Font                   maMonoFont;         /// Monospace font for data cells.
     Size                        maWinSize;          /// Size of the control.
     Size                        maEdEngSize;        /// Paper size for edit engine.

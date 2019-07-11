@@ -170,7 +170,7 @@ class SW_DLLPUBLIC SwPagePreview: public SfxViewShell
     // to support keyboard the number of the page to go to can be set too
     sal_uInt16 m_nNewPage;
     // visible range
-    OUString m_sPageStr;
+    OUString const m_sPageStr;
     Size m_aDocSize;
     tools::Rectangle               m_aVisArea;
 
@@ -201,7 +201,7 @@ class SW_DLLPUBLIC SwPagePreview: public SfxViewShell
     SAL_DLLPRIVATE virtual SfxPrinter*     GetPrinter( bool bCreate = false ) override;
     SAL_DLLPRIVATE virtual sal_uInt16      SetPrinter( SfxPrinter *pNewPrinter, SfxPrinterChangeFlags nDiffFlags = SFX_PRINTER_ALL ) override;
     SAL_DLLPRIVATE virtual bool            HasPrintOptionsPage() const override;
-    SAL_DLLPRIVATE virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(weld::Container* pParent, const SfxItemSet &rOptions) override;
+    SAL_DLLPRIVATE virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(TabPageParent pParent, const SfxItemSet &rOptions) override;
 
     SAL_DLLPRIVATE void CalcAndSetBorderPixel( SvBorder &rToFill );
 

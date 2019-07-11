@@ -44,11 +44,11 @@ Expr const * lookThroughInitListExpr(Expr const * expr) {
 }
 
 class CastToVoid final:
-    public RecursiveASTVisitor<CastToVoid>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<CastToVoid>
 {
 public:
     explicit CastToVoid(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     bool TraverseCStyleCastExpr(CStyleCastExpr * expr) {
         auto const dre = checkCast(expr);
@@ -440,7 +440,7 @@ private:
             return nullptr;
         }
         if (compiler.getSourceManager().isMacroBodyExpansion(
-                expr->getLocStart()))
+                compat::getBeginLoc(expr)))
         {
             return nullptr;
         }
@@ -487,7 +487,7 @@ private:
         if (usage.firstConsumption != nullptr) {
             return;
         }
-        auto const loc = dre->getLocStart();
+        auto const loc = compat::getBeginLoc(dre);
         if (compiler.getSourceManager().isMacroArgExpansion(loc)
             && (compat::getImmediateMacroNameForDiagnostics(
                     loc, compiler.getSourceManager(), compiler.getLangOpts())

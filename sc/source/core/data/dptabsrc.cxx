@@ -27,20 +27,14 @@
 #include <o3tl/any.hxx>
 #include <osl/diagnose.h>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 #include <svl/itemprop.hxx>
-#include <svl/intitem.hxx>
 #include <vcl/svapp.hxx>
 
-#include <scitems.hxx>
-#include <document.hxx>
-#include <docpool.hxx>
-#include <patattr.hxx>
-#include <formulacell.hxx>
-
+#include <dpcache.hxx>
 #include <dptabres.hxx>
 #include <dptabdat.hxx>
 #include <global.hxx>
-#include <datauno.hxx>
 #include <miscuno.hxx>
 #include <unonames.hxx>
 #include <dpitemdata.hxx>
@@ -56,9 +50,8 @@
 #include <com/sun/star/sheet/DataPilotFieldGroupBy.hpp>
 #include <com/sun/star/sheet/DataPilotFieldAutoShowInfo.hpp>
 #include <com/sun/star/sheet/GeneralFunction2.hpp>
+#include <com/sun/star/sheet/TableFilterField.hpp>
 
-#include <comphelper/string.hxx>
-#include <unotools/collatorwrapper.hxx>
 #include <unotools/calendarwrapper.hxx>
 #include <com/sun/star/i18n/CalendarDisplayIndex.hpp>
 
@@ -1180,8 +1173,7 @@ void ScDPSource::DumpResults() const
 SC_IMPL_DUMMY_PROPERTY_LISTENER( ScDPSource )
 
 ScDPDimensions::ScDPDimensions( ScDPSource* pSrc ) :
-    pSource( pSrc ),
-    ppDims( nullptr )
+    pSource( pSrc )
 {
     //TODO: hold pSource
 
@@ -1297,7 +1289,6 @@ ScDPDimension::ScDPDimension( ScDPSource* pSrc, long nD ) :
     nFunction( ScGeneralFunction::SUM ),     // sum is default
     nSourceDim( -1 ),
     bHasSelectedPage( false ),
-    pSelectedData( nullptr ),
     mbHasHiddenMember(false)
 {
     //TODO: hold pSource
@@ -1632,8 +1623,7 @@ SC_IMPL_DUMMY_PROPERTY_LISTENER( ScDPDimension )
 
 ScDPHierarchies::ScDPHierarchies( ScDPSource* pSrc, long nD ) :
     pSource( pSrc ),
-    nDim( nD ),
-    ppHiers( nullptr )
+    nDim( nD )
 {
     //TODO: hold pSource
 }
@@ -1776,8 +1766,7 @@ void SAL_CALL ScDPHierarchy::setName( const OUString& /* rNewName */ )
 ScDPLevels::ScDPLevels( ScDPSource* pSrc, long nD, long nH ) :
     pSource( pSrc ),
     nDim( nD ),
-    nHier( nH ),
-    ppLevs( nullptr )
+    nHier( nH )
 {
     //TODO: hold pSource
 
@@ -1882,7 +1871,7 @@ ScDPLevel* ScDPLevels::getByIndex(long nIndex) const
 class ScDPGlobalMembersOrder
 {
     ScDPLevel&  rLevel;
-    bool        bAscending;
+    bool const  bAscending;
 
 public:
             ScDPGlobalMembersOrder( ScDPLevel& rLev, bool bAsc ) :
@@ -2370,7 +2359,7 @@ long ScDPMembers::getMinMembers() const
         {
             //  count only visible with details (default is true for both)
             const rtl::Reference<ScDPMember>& pMbr = *it;
-            if (!pMbr.get() || (pMbr->isVisible() && pMbr->getShowDetails()))
+            if (!pMbr || (pMbr->isVisible() && pMbr->getShowDetails()))
                 ++nVisCount;
         }
     }

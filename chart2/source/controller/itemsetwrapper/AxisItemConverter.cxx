@@ -22,6 +22,7 @@
 #include <CharacterPropertyItemConverter.hxx>
 #include <GraphicPropertyItemConverter.hxx>
 #include <chartview/ChartSfxItemIds.hxx>
+#include <chartview/ExplicitScaleValues.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
 #include "SchWhichPairs.hxx"
 #include <ChartModelHelper.hxx>
@@ -34,10 +35,13 @@
 #include <com/sun/star/chart/ChartAxisLabelPosition.hpp>
 #include <com/sun/star/chart/ChartAxisMarkPosition.hpp>
 #include <com/sun/star/chart/ChartAxisPosition.hpp>
+#include <com/sun/star/chart/TimeInterval.hpp>
 #include <com/sun/star/chart2/XAxis.hpp>
 #include <com/sun/star/chart2/AxisOrientation.hpp>
 #include <com/sun/star/chart2/AxisType.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
+#include <osl/diagnose.h>
 #include <o3tl/any.hxx>
 #include <svl/eitem.hxx>
 #include <svx/chrtitem.hxx>
@@ -143,7 +147,7 @@ bool AxisItemConverter::GetItemProperty( tWhichIdType nWhichId, tPropertyNameWit
     return true;
 }
 
-bool lcl_hasTimeIntervalValue( const uno::Any& rAny )
+static bool lcl_hasTimeIntervalValue( const uno::Any& rAny )
 {
     bool bRet = false;
     TimeInterval aValue;
@@ -435,19 +439,19 @@ void AxisItemConverter::FillSpecialItem( sal_uInt16 nWhichId, SfxItemSet & rOutI
     }
 }
 
-bool lcl_isDateAxis( const SfxItemSet & rItemSet )
+static bool lcl_isDateAxis( const SfxItemSet & rItemSet )
 {
     sal_Int32 nAxisType = rItemSet.Get( SCHATTR_AXISTYPE ).GetValue();//css::chart2::AxisType
     return (nAxisType == chart2::AxisType::DATE);
 }
 
-bool lcl_isAutoMajor( const SfxItemSet & rItemSet )
+static bool lcl_isAutoMajor( const SfxItemSet & rItemSet )
 {
     bool bRet = rItemSet.Get( SCHATTR_AXIS_AUTO_STEP_MAIN ).GetValue();
     return bRet;
 }
 
-bool lcl_isAutoMinor( const SfxItemSet & rItemSet )
+static bool lcl_isAutoMinor( const SfxItemSet & rItemSet )
 {
     bool bRet = rItemSet.Get( SCHATTR_AXIS_AUTO_STEP_HELP ).GetValue();
     return bRet;

@@ -301,8 +301,6 @@ enum RTFKeyword
     RTF_BRDRDASH,
     RTF_BRDRDASHD,
     RTF_BRDRDASHDD,
-    RTF_BRDRDASHDOT,
-    RTF_BRDRDASHDOTDOT,
     RTF_BRDRDASHDOTSTR,
     RTF_BRDRDASHSM,
     RTF_BRDRDB,
@@ -2003,7 +2001,7 @@ struct RTFSymbol
     bool operator<(const RTFSymbol& rOther) const;
 };
 
-extern RTFSymbol aRTFControlWords[];
+extern RTFSymbol const aRTFControlWords[];
 extern int nRTFControlWords;
 
 /// Represents an RTF Math Control Word
@@ -2015,7 +2013,7 @@ struct RTFMathSymbol
     bool operator<(const RTFMathSymbol& rOther) const;
 };
 
-extern RTFMathSymbol aRTFMathControlWords[];
+extern RTFMathSymbol const aRTFMathControlWords[];
 extern int nRTFMathControlWords;
 
 } // namespace rtftok

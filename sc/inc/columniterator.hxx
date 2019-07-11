@@ -22,7 +22,6 @@ struct ScRefCellValue;
 
 class ScColumnTextWidthIterator
 {
-    sc::CellTextAttrStoreType& mrCellTextAttrs;
     const size_t mnEnd;
     size_t mnCurPos;
     sc::CellTextAttrStoreType::iterator miBlockCur;
@@ -67,7 +66,8 @@ namespace sc {
 class ColumnIterator
 {
     CellStoreType::const_position_type maPos;
-    CellStoreType::const_position_type maPosEnd;
+    CellStoreType::const_position_type const maPosEnd;
+    bool mbComplete;
 
 public:
     ColumnIterator( const CellStoreType& rCells, SCROW nRow1, SCROW nRow2 );

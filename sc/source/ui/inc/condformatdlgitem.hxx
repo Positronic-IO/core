@@ -42,6 +42,11 @@ public:
 
     virtual ~ScCondFormatDlgItem() override;
 
+    ScCondFormatDlgItem(ScCondFormatDlgItem const &) = default;
+    ScCondFormatDlgItem(ScCondFormatDlgItem &&) = default;
+    ScCondFormatDlgItem & operator =(ScCondFormatDlgItem const &) = delete; // due to SfxPoolItem
+    ScCondFormatDlgItem & operator =(ScCondFormatDlgItem &&) = delete; // due to SfxPoolItem
+
     virtual bool operator==(const SfxPoolItem&) const override;
     virtual SfxPoolItem* Clone(SfxItemPool* pPool = nullptr) const override;
 
@@ -56,9 +61,9 @@ public:
 private:
 
     std::shared_ptr<ScConditionalFormatList> mpCondFormats;
-    sal_Int32 mnItem;
+    sal_Int32 const mnItem;
     condformat::dialog::ScCondFormatDialogType meDialogType;
-    bool mbManaged;
+    bool const mbManaged;
 };
 
 #endif

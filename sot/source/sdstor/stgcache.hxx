@@ -56,9 +56,9 @@ class StgCache
 
     void Erase( const rtl::Reference< StgPage >& ); // delete a cache element
     rtl::Reference< StgPage > Create( sal_Int32  ); // create a cached page
-protected:
     SvStream* m_pStrm;                        // physical stream
     bool  m_bMyStream;                        // true: delete stream in dtor
+protected:
     bool  m_bFile;                            // true: file stream
     sal_Int32 Page2Pos( sal_Int32 ) const;    // page address --> file position
 public:
@@ -100,7 +100,7 @@ class StgPage : public salhelper::SimpleReferenceObject
     const sal_Int32 mnPage;                // page index
     std::unique_ptr<sal_uInt8[]>
                     mpData;                // nSize bytes
-    short           mnSize;                // size of this page
+    short const     mnSize;                // size of this page
              StgPage( short nData, sal_Int32 nPage );
     virtual ~StgPage() override;
 public:

@@ -25,11 +25,11 @@
 #include <com/sun/star/text/FilenameDisplayFormat.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <com/sun/star/util/XUpdatable.hpp>
-#include <comphelper/string.hxx>
 #include <ooo/vba/word/WdFieldType.hpp>
 #include <swtypes.hxx>
 #include <basic/sberrors.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <sal/log.hxx>
 
 using namespace ::ooo::vba;
 using namespace ::com::sun::star;
@@ -74,7 +74,7 @@ SwVbaField::getServiceNames()
 class SwVbaReadFieldParams
 {
 private:
-    OUString aData;
+    OUString const aData;
     sal_Int32 nLen, nFnd, nNext, nSavPtr;
     OUString aFieldName;
 public:

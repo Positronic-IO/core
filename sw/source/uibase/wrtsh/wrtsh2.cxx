@@ -64,6 +64,7 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
 #include <sfx2/event.hxx>
+#include <sal/log.hxx>
 
 void SwWrtShell::Insert(SwField const &rField)
 {
@@ -255,9 +256,7 @@ bool SwWrtShell::StartInputFieldDlg(SwField* pField, bool bPrevButton, bool bNex
 {
 
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
     ScopedVclPtr<AbstractFieldInputDlg> pDlg(pFact->CreateFieldInputDlg(pParentWin, *this, pField, bPrevButton, bNextButton));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
 
     bool bRet;
 
@@ -283,10 +282,7 @@ bool SwWrtShell::StartDropDownFieldDlg(SwField* pField, bool bPrevButton, bool b
                                        weld::Window* pParentWin, SwWrtShell::FieldDialogPressedButton* pPressedButton)
 {
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
     ScopedVclPtr<AbstractDropDownFieldDialog> pDlg(pFact->CreateDropDownFieldDialog(pParentWin, *this, pField, bPrevButton, bNextButton));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
     const short nRet = pDlg->Execute();
 
     if (pPressedButton)
@@ -322,13 +318,11 @@ void SwWrtShell::InsertTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet)
 
 // Update directory - remove selection
 
-bool SwWrtShell::UpdateTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet)
+void SwWrtShell::UpdateTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet)
 {
-    bool bResult = false;
-
     if(CanInsert())
     {
-        bResult = SwEditShell::UpdateTableOf(rTOX, pSet);
+        SwEditShell::UpdateTableOf(rTOX, pSet);
 
         if (pSet == nullptr)
         {
@@ -339,8 +333,6 @@ bool SwWrtShell::UpdateTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet)
             }
         }
     }
-
-    return bResult;
 }
 
 // handler for click on the field given as parameter.
@@ -478,13 +470,9 @@ bool SwWrtShell::ClickToINetGrf( const Point& rDocPt, LoadUrlFlags nFilter )
     {
         bRet = true;
         // At first run the possibly set ObjectSelect Macro
-        const SvxMacro* pMac = &pFnd->GetMacro().GetMacro( SvMacroItemId::OnClick );
-        if( pMac )
-        {
-            SwCallMouseEvent aCallEvent;
-            aCallEvent.Set( EVENT_OBJECT_URLITEM, pFnd );
-            GetDoc()->CallEvent( SvMacroItemId::OnClick, aCallEvent );
-        }
+        SwCallMouseEvent aCallEvent;
+        aCallEvent.Set(EVENT_OBJECT_URLITEM, pFnd);
+        GetDoc()->CallEvent(SvMacroItemId::OnClick, aCallEvent);
 
         ::LoadURL(*this, sURL, nFilter, sTargetFrameName);
     }

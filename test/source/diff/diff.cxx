@@ -90,18 +90,17 @@ private:
     void cppunitAssertEqualDouble(const xmlNodePtr node, const xmlAttrPtr attr, double expected, double found, double delta);
 
     ToleranceContainer toleranceContainer;
-    xmlDocPtr xmlFile1;
-    xmlDocPtr xmlFile2;
+    xmlDocPtr const xmlFile1;
+    xmlDocPtr const xmlFile2;
     std::string fileName;
 };
 
 
 XMLDiff::XMLDiff( const char* pFileName, const char* pContent, int size, const char* pToleranceFile)
-    : fileName(pFileName)
+    : xmlFile1(xmlParseFile(pFileName))
+    , xmlFile2(xmlParseMemory(pContent, size))
+    , fileName(pFileName)
 {
-    xmlFile1 = xmlParseFile(pFileName);
-    xmlFile2 = xmlParseMemory(pContent, size);
-
     if(pToleranceFile)
     {
         xmlDocPtr xmlToleranceFile = xmlParseFile(pToleranceFile);

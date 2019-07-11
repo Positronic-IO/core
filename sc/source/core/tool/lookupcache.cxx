@@ -22,6 +22,8 @@
 #include <queryentry.hxx>
 #include <brdcst.hxx>
 
+#include <sal/log.hxx>
+
 ScLookupCache::QueryCriteria::QueryCriteria( const ScQueryEntry& rEntry ) :
     mfVal(0.0), mbAlloc(false), mbString(false)
 {
@@ -66,9 +68,10 @@ ScLookupCache::QueryCriteria::~QueryCriteria()
     deleteString();
 }
 
-ScLookupCache::ScLookupCache( ScDocument * pDoc, const ScRange & rRange ) :
+ScLookupCache::ScLookupCache( ScDocument * pDoc, const ScRange & rRange, ScLookupCacheMap & cacheMap ) :
     maRange( rRange),
-    mpDoc( pDoc)
+    mpDoc( pDoc),
+    mCacheMap(cacheMap)
 {
 }
 

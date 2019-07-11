@@ -22,6 +22,8 @@
   <menu:menuseparator/>
   <menu:menuitem menu:id=".uno:FontDialog"/>
   <menu:menuitem menu:id=".uno:ParagraphDialog"/>
-  <menu:menuitem menu:id=".uno:InsertCaptionDialog"/>
+  <menu:menuseparator/>
   <menu:menuitem menu:id=".uno:ThesaurusFromContext"/>
+  <menu:menuseparator/>
+  <menu:menuitem menu:id=".uno:ResetAttributes"/>
 </menu:menupopup>

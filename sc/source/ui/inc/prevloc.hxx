@@ -38,9 +38,6 @@
 #define SC_PREVIEW_RANGE_TAB    3
 
 class OutputDevice;
-namespace tools { class Rectangle; }
-class ScAddress;
-class ScRange;
 class ScDocument;
 struct ScPreviewLocationEntry;
 
@@ -92,7 +89,7 @@ public:
     typedef std::list<std::unique_ptr<ScPreviewLocationEntry>> Entries_t;
 private:
     VclPtr<OutputDevice> pWindow;
-    ScDocument* pDoc;
+    ScDocument* const pDoc;
     MapMode     aCellMapMode;
     MapMode     aDrawMapMode[SC_PREVIEW_MAXRANGES];
     tools::Rectangle   aDrawRectangle[SC_PREVIEW_MAXRANGES];

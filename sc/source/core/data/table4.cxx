@@ -19,20 +19,7 @@
 
 #include <scitems.hxx>
 #include <comphelper/string.hxx>
-#include <svx/algitem.hxx>
 #include <editeng/boxitem.hxx>
-#include <editeng/brushitem.hxx>
-#include <editeng/contouritem.hxx>
-#include <editeng/colritem.hxx>
-#include <editeng/crossedoutitem.hxx>
-#include <editeng/fhgtitem.hxx>
-#include <editeng/fontitem.hxx>
-#include <editeng/langitem.hxx>
-#include <editeng/postitem.hxx>
-#include <editeng/shdditem.hxx>
-#include <editeng/udlnitem.hxx>
-#include <editeng/wghtitem.hxx>
-#include <svx/rotmodit.hxx>
 #include <editeng/editobj.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/eeitem.hxx>
@@ -53,13 +40,10 @@
 #include <zforauto.hxx>
 #include <subtotal.hxx>
 #include <formula/errorcodes.hxx>
-#include <rangenam.hxx>
 #include <docpool.hxx>
 #include <progress.hxx>
-#include <segmenttree.hxx>
 #include <conditio.hxx>
 #include <editutil.hxx>
-#include <columnspanset.hxx>
 #include <listenercontext.hxx>
 
 #include <math.h>
@@ -155,14 +139,16 @@ void setSuffixCell(
     OUString aValue = lcl_ValueString(nValue, nDigits);
     if (!bIsOrdinalSuffix)
     {
-        rColumn.SetRawString(nRow, aValue += rSuffix);
+        aValue += rSuffix;
+        rColumn.SetRawString(nRow, aValue);
         return;
     }
 
     OUString aOrdinalSuffix = ScGlobal::GetOrdinalSuffix(nValue);
     if (eCellType != CELLTYPE_EDIT)
     {
-        rColumn.SetRawString(nRow, aValue += aOrdinalSuffix);
+        aValue += aOrdinalSuffix;
+        rColumn.SetRawString(nRow, aValue);
         return;
     }
 
@@ -611,7 +597,7 @@ void ScTable::FillAuto( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
         const ScPatternAttr* pSrcPattern = nullptr;
         const ScStyleSheet* pStyleSheet = nullptr;
         SCCOLROW nAtSrc = nISrcStart;
-        ScPatternAttr* pNewPattern = nullptr;
+        std::unique_ptr<ScPatternAttr> pNewPattern;
         bool bGetPattern = true;
         rInner = nIStart;
         while (true)        // #i53728# with "for (;;)" old solaris/x86 compiler mis-optimizes
@@ -620,7 +606,6 @@ void ScTable::FillAuto( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
             {
                 if ( bGetPattern )
                 {
-                    delete pNewPattern;
                     if (bVertical)      // rInner&:=nRow, rOuter&:=nCol
                         pSrcPattern = aCol[nCol].GetPattern(static_cast<SCROW>(nAtSrc));
                     else                // rInner&:=nCol, rOuter&:=nRow
@@ -632,13 +617,13 @@ void ScTable::FillAuto( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
                     if ( rSet.GetItemState(ATTR_MERGE, false) == SfxItemState::SET
                             || rSet.GetItemState(ATTR_MERGE_FLAG, false) == SfxItemState::SET )
                     {
-                        pNewPattern = new ScPatternAttr( *pSrcPattern );
+                        pNewPattern.reset( new ScPatternAttr( *pSrcPattern ));
                         SfxItemSet& rNewSet = pNewPattern->GetItemSet();
                         rNewSet.ClearItem(ATTR_MERGE);
                         rNewSet.ClearItem(ATTR_MERGE_FLAG);
                     }
                     else
-                        pNewPattern = nullptr;
+                        pNewPattern.reset();
                 }
 
                 const ScCondFormatItem& rCondFormatItem = pSrcPattern->GetItem(ATTR_CONDITIONAL);
@@ -728,7 +713,7 @@ void ScTable::FillAuto( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2,
             if (rInner == nIEnd) break;
             if (bPositive) ++rInner; else --rInner;
         }
-        delete pNewPattern;
+        pNewPattern.reset();
 
         //  Analyse
 

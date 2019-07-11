@@ -11,8 +11,8 @@
 #include "optHeaderTabListbox.hxx"
 
 #include <vcl/builderfactory.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
@@ -29,6 +29,7 @@
 #include <com/sun/star/util/SearchAlgorithms2.hpp>
 #include <unotools/textsearch.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <vector>
@@ -141,7 +142,7 @@ Size CuiCustomMultilineEdit::GetOptimalSize() const
 }
 
 CuiAboutConfigTabPage::CuiAboutConfigTabPage( vcl::Window* pParent/*, const SfxItemSet& rItemSet*/ ) :
-    ModelessDialog( pParent, "AboutConfig", "cui/ui/aboutconfigdialog.ui"),
+    ModalDialog( pParent, "AboutConfig", "cui/ui/aboutconfigdialog.ui"),
     m_pPrefCtrl( get<SvSimpleTableContainer>("preferences") ),
     m_pResetBtn( get<PushButton>("reset") ),
     m_pEditBtn( get<PushButton>("edit") ),
@@ -194,7 +195,7 @@ void CuiAboutConfigTabPage::dispose()
     m_pEditBtn.clear();
     m_pSearchBtn.clear();
     m_pSearchEdit.clear();
-    ModelessDialog::dispose();
+    ModalDialog::dispose();
 }
 
 void CuiAboutConfigTabPage::InsertEntry(const OUString& rPropertyPath, const OUString& rProp, const OUString& rStatus,
@@ -309,7 +310,7 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
             );
 
             OUString sType = aNode.getValueTypeName();
-            OUString sValue;
+            OUStringBuffer sValue;
 
             if (it != m_modifiedPrefBoxEntries.end())
                 sValue = static_cast< SvLBoxString& >( (*it)->GetItem(4) ).GetText();
@@ -346,9 +347,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += OUString::boolean( seq[j] );
+                            sValue.append(OUString::boolean( seq[j] ));
                         }
                     }
                     else if( sType == "[]byte" )
@@ -360,9 +361,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                                 static_cast<sal_uInt8>(seq[j]), 16 );
                             if( s.getLength() == 1 )
                             {
-                                sValue += "0";
+                                sValue.append("0");
                             }
-                            sValue += s.toAsciiUpperCase();
+                            sValue.append(s.toAsciiUpperCase());
                         }
                     }
                     else if( sType == "[][]byte" )
@@ -372,7 +373,7 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
                             for( sal_Int32 k = 0; k != seq[j].getLength(); ++k )
                             {
@@ -380,9 +381,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                                     static_cast<sal_uInt8>(seq[j][k]), 16 );
                                 if( s.getLength() == 1 )
                                 {
-                                    sValue += "0";
+                                    sValue.append("0");
                                 }
-                                sValue += s.toAsciiUpperCase();
+                                sValue.append(s.toAsciiUpperCase());
                             }
                         }
                     }
@@ -393,9 +394,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += OUString::number( seq[j] );
+                            sValue.append(OUString::number( seq[j] ));
                         }
                     }
                     else if( sType == "[]long" )
@@ -405,9 +406,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += OUString::number( seq[j] );
+                            sValue.append(OUString::number( seq[j] ));
                         }
                     }
                     else if( sType == "[]hyper" )
@@ -417,9 +418,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += OUString::number( seq[j] );
+                            sValue.append(OUString::number( seq[j] ));
                         }
                     }
                     else if( sType == "[]double" )
@@ -429,9 +430,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += OUString::number( seq[j] );
+                            sValue.append(OUString::number( seq[j] ));
                         }
                     }
                     else if( sType == "[]string" )
@@ -441,9 +442,9 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
                         {
                             if( j != 0 )
                             {
-                                sValue += ",";
+                                sValue.append(",");
                             }
-                            sValue += seq[j];
+                            sValue.append(seq[j]);
                         }
                     }
                     else
@@ -469,7 +470,7 @@ void CuiAboutConfigTabPage::FillItems(const Reference< XNameAccess >& xNameAcces
             for(int j = 1; j < lineage; ++j)
                 index = sPath.indexOf("/", index + 1);
 
-            InsertEntry(sPath, sPath.copy(index+1), seqItems[i], sType, sValue, pParentEntry, !bLoadAll);
+            InsertEntry(sPath, sPath.copy(index+1), seqItems[i], sType, sValue.makeStringAndClear(), pParentEntry, !bLoadAll);
         }
     }
 }
@@ -875,7 +876,7 @@ void CuiAboutConfigTabPage::InsertEntry( SvTreeListEntry *pEntry)
         OUString sParentName = sPath.copy(prevIndex+1, index - prevIndex - 1);
 
         bool hasEntry = false;
-        for(pParentEntry = m_pPrefBox->FirstChild(pGrandParentEntry); pParentEntry != nullptr; pParentEntry = SvTreeListBox::NextSibling(pParentEntry))
+        for(pParentEntry = m_pPrefBox->FirstChild(pGrandParentEntry); pParentEntry != nullptr; pParentEntry = pParentEntry->NextSibling())
             if(static_cast< SvLBoxString& >(pParentEntry->GetItem(1)).GetText() == sParentName)
             {
                 hasEntry = true;

@@ -74,12 +74,10 @@ public:
 void AquaBlinker::Blink( AquaSalFrame* pFrame, const tools::Rectangle& rRect, int nTimeout )
 {
     // prevent repeated paints from triggering themselves all the time
-    for( std::list< AquaBlinker* >::const_iterator it = pFrame->maBlinkers.begin();
-         it != pFrame->maBlinkers.end(); ++it )
-    {
-        if( (*it)->maInvalidateRect == rRect )
-            return;
-    }
+    auto isRepeated = std::any_of(pFrame->maBlinkers.begin(), pFrame->maBlinkers.end(),
+        [&rRect](AquaBlinker* pBlinker) { return pBlinker->maInvalidateRect == rRect; });
+    if( isRepeated )
+        return;
     AquaBlinker* pNew = new AquaBlinker( pFrame, rRect );
     pNew->SetTimeout( nTimeout );
     pNew->Start();
@@ -255,6 +253,8 @@ bool AquaSalGraphics::IsNativeControlSupported( ControlType nType, ControlPart n
             break;
 
         case ControlType::Tooltip: // ** TO DO
+            if (nPart == ControlPart::Entire)
+                return true;
             break;
 
         case ControlType::MenuPopup:
@@ -414,6 +414,21 @@ bool AquaSalGraphics::drawNativeControl(ControlType nType,
             aThemeBackgroundInfo.state = getState( nState );
             aThemeBackgroundInfo.kind = kThemeBrushDialogBackgroundActive;
             // FIXME: without this magical offset there is a 2 pixel black border on the right and bottom
+            rc.size.width += 2;
+            rc.size.height += 2;
+
+            HIThemeApplyBackground( &rc, &aThemeBackgroundInfo, mrContext, kHIThemeOrientationNormal);
+            CGContextFillRect( mrContext, rc );
+            bOK = true;
+        }
+        break;
+
+        case ControlType::Tooltip:
+        {
+            HIThemeBackgroundDrawInfo aThemeBackgroundInfo;
+            aThemeBackgroundInfo.version = 0;
+            aThemeBackgroundInfo.state = getState( nState );
+            aThemeBackgroundInfo.kind = kThemeBrushAlertBackgroundActive;
             rc.size.width += 2;
             rc.size.height += 2;
 

@@ -53,6 +53,11 @@ namespace cppcanvas
             explicit ImplCanvas( const css::uno::Reference< css::rendering::XCanvas >& rCanvas );
             virtual ~ImplCanvas() override;
 
+            ImplCanvas(ImplCanvas const &) = default;
+            ImplCanvas(ImplCanvas &&) = default;
+            ImplCanvas & operator =(ImplCanvas const &) = delete; // due to const mxCanvas
+            ImplCanvas & operator =(ImplCanvas &&) = delete; // due to const mxCanvas
+
             virtual void                             setTransformation( const ::basegfx::B2DHomMatrix& rMatrix ) override;
             virtual ::basegfx::B2DHomMatrix          getTransformation() const override;
 
@@ -69,12 +74,7 @@ namespace cppcanvas
 
             virtual css::rendering::ViewState        getViewState() const override;
 
-            // take compiler-provided default copy constructor
-            //ImplCanvas(const ImplCanvas&);
-
         private:
-            ImplCanvas& operator=( const ImplCanvas& ) = delete;
-
             mutable css::rendering::ViewState                    maViewState;
             boost::optional<basegfx::B2DPolyPolygon>             maClipPolyPolygon;
             const css::uno::Reference< css::rendering::XCanvas > mxCanvas;

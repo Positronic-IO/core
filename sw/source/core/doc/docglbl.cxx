@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <osl/diagnose.h>
 #include <hintids.hxx>
 #include <unotools/tempfile.hxx>
 #include <svl/urihelper.hxx>
@@ -84,7 +85,7 @@ bool SwDoc::GenerateHTMLDoc( const OUString& rPath,
 }
 
 // two helpers for outline mode
-SwNodePtr GetStartNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOutlineNodes::size_type* nOutl )
+static SwNodePtr GetStartNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOutlineNodes::size_type* nOutl )
 {
     SwNodePtr pNd;
 
@@ -97,7 +98,7 @@ SwNodePtr GetStartNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOu
     return nullptr;
 }
 
-SwNodePtr GetEndNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOutlineNodes::size_type* nOutl )
+static SwNodePtr GetEndNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOutlineNodes::size_type* nOutl )
 {
     SwNodePtr pNd;
 
@@ -117,7 +118,7 @@ SwNodePtr GetEndNode( SwOutlineNodes const * pOutlNds, int nOutlineLevel, SwOutl
 }
 
 // two helpers for collection mode
-SwNodePtr GetStartNode( const SwOutlineNodes* pOutlNds, const SwTextFormatColl* pSplitColl, SwOutlineNodes::size_type* nOutl )
+static SwNodePtr GetStartNode( const SwOutlineNodes* pOutlNds, const SwTextFormatColl* pSplitColl, SwOutlineNodes::size_type* nOutl )
 {
     SwNodePtr pNd;
     for( ; *nOutl < pOutlNds->size(); ++(*nOutl) )
@@ -130,7 +131,7 @@ SwNodePtr GetStartNode( const SwOutlineNodes* pOutlNds, const SwTextFormatColl* 
     return nullptr;
 }
 
-SwNodePtr GetEndNode( const SwOutlineNodes* pOutlNds, const SwTextFormatColl* pSplitColl, SwOutlineNodes::size_type* nOutl )
+static SwNodePtr GetEndNode( const SwOutlineNodes* pOutlNds, const SwTextFormatColl* pSplitColl, SwOutlineNodes::size_type* nOutl )
 {
     SwNodePtr pNd;
 
@@ -291,7 +292,7 @@ bool SwDoc::SplitDoc( sal_uInt16 eDocType, const OUString& rPath, bool bOutline,
                     OUString sTitle( xDocProps->getTitle() );
                     if (!sTitle.isEmpty())
                         sTitle += ": ";
-                    sTitle += pStartNd->GetTextNode()->GetExpandText();
+                    sTitle += pStartNd->GetTextNode()->GetExpandText(nullptr);
                     xDocProps->setTitle( sTitle );
 
                     // Replace template

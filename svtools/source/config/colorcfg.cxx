@@ -104,8 +104,6 @@ namespace {
 
 uno::Sequence< OUString> GetPropertyNames(const OUString& rScheme)
 {
-    uno::Sequence<OUString> aNames(2 * ColorConfigEntryCount);
-    OUString* pNames = aNames.getArray();
     struct ColorConfigEntryData_Impl
     {
         OUStringLiteral cName;
@@ -164,19 +162,19 @@ uno::Sequence< OUString> GetPropertyNames(const OUString& rScheme)
         { OUStringLiteral("/SQLParameter"),  false },
         { OUStringLiteral("/SQLComment"),  false }
     };
+
+    uno::Sequence<OUString> aNames(2 * ColorConfigEntryCount);
+    OUString* pNames = aNames.getArray();
     int nIndex = 0;
     OUString sBase = "ColorSchemes/"
                    + utl::wrapConfigurationElementName(rScheme);
-    const int nCount = ColorConfigEntryCount;
-    for(sal_Int32 i = 0; i < nCount; ++i)
+    for(sal_Int32 i = 0; i < ColorConfigEntryCount; ++i)
     {
         OUString sBaseName = sBase + cNames[i].cName;
-        pNames[nIndex] += sBaseName;
-        pNames[nIndex++] += "/Color";
+        pNames[nIndex++] = sBaseName + "/Color";
         if(cNames[i].bCanBeVisible)
         {
-            pNames[nIndex] += sBaseName;
-            pNames[nIndex++] += g_sIsVisible;
+            pNames[nIndex++] = sBaseName + g_sIsVisible;
         }
     }
     aNames.realloc(nIndex);
@@ -441,7 +439,7 @@ Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
         COL_GREEN, // CALCFORMULA
         COL_BLACK, // CALCTEXT
         COL_LIGHTGRAY, // CALCPROTECTEDBACKGROUND
-        COL_LIGHTGRAY, // DRAWGRID
+        COL_GRAY7, // DRAWGRID
         COL_GREEN, // BASICIDENTIFIER,
         COL_GRAY, // BASICCOMMENT,
         COL_LIGHTRED, // BASICNUMBER,
@@ -500,11 +498,8 @@ ColorConfigValue ColorConfig::GetColorValue(ColorConfigEntry eEntry, bool bSmart
     if (m_pImpl)
         aRet = m_pImpl->GetColorConfigValue(eEntry);
 
-    if (bSmart)
-    {
-        if(aRet.nColor == COL_AUTO)
-            aRet.nColor = ColorConfig::GetDefaultColor(eEntry);
-    }
+    if (bSmart && aRet.nColor == COL_AUTO)
+        aRet.nColor = ColorConfig::GetDefaultColor(eEntry);
 
     return aRet;
 }
@@ -540,7 +535,7 @@ void EditableColorConfig::AddScheme(const OUString& rScheme )
     m_pImpl->AddScheme(rScheme);
 }
 
-bool EditableColorConfig::LoadScheme(const OUString& rScheme )
+void EditableColorConfig::LoadScheme(const OUString& rScheme )
 {
     if(m_bModified)
         m_pImpl->SetModified();
@@ -550,7 +545,6 @@ bool EditableColorConfig::LoadScheme(const OUString& rScheme )
     m_pImpl->Load(rScheme);
     //the name of the loaded scheme has to be committed separately
     m_pImpl->CommitCurrentSchemeName();
-    return true;
 }
 
 const OUString& EditableColorConfig::GetCurrentSchemeName()const

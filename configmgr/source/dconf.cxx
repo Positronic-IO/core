@@ -25,6 +25,7 @@ extern "C" {
 
 #include <com/sun/star/uno/Sequence.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include "data.hxx"
 #include "dconf.hxx"
@@ -127,8 +128,8 @@ public:
     T * get() const { return object_; }
 
 private:
-    GObjectHolder(GObjectHolder &) = delete;
-    void operator =(GObjectHolder) = delete;
+    GObjectHolder(GObjectHolder const &) = delete;
+    GObjectHolder& operator =(GObjectHolder const &) = delete;
 
     T * object_;
 };
@@ -149,8 +150,8 @@ public:
     GVariant * get() const { return variant_; }
 
 private:
-    GVariantHolder(GVariantHolder &) = delete;
-    void operator =(GVariantHolder) = delete;
+    GVariantHolder(GVariantHolder const &) = delete;
+    GVariantHolder& operator =(GVariantHolder const &) = delete;
 
     void unref() {
         if (variant_ != nullptr) {
@@ -174,8 +175,8 @@ public:
     GVariantType * get() const { return type_; }
 
 private:
-    GVariantTypeHolder(GVariantTypeHolder &) = delete;
-    void operator =(GVariantTypeHolder) = delete;
+    GVariantTypeHolder(GVariantTypeHolder const &) = delete;
+    GVariantTypeHolder& operator =(GVariantTypeHolder const &) = delete;
 
     GVariantType * type_;
 };
@@ -189,8 +190,8 @@ public:
     gchar ** get() const { return array_; }
 
 private:
-    StringArrayHolder(StringArrayHolder &) = delete;
-    void operator =(StringArrayHolder) = delete;
+    StringArrayHolder(StringArrayHolder const &) = delete;
+    StringArrayHolder& operator =(StringArrayHolder const &) = delete;
 
     gchar ** array_;
 };
@@ -210,8 +211,8 @@ public:
     DConfChangeset * get() const { return changeset_; }
 
 private:
-    ChangesetHolder(ChangesetHolder &) = delete;
-    void operator =(ChangesetHolder) = delete;
+    ChangesetHolder(ChangesetHolder const &) = delete;
+    ChangesetHolder& operator =(ChangesetHolder const &) = delete;
 
     DConfChangeset * changeset_;
 };

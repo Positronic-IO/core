@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <deque>
 
@@ -183,9 +184,6 @@ IconThemeScanner::GetStandardIconThemePath()
     SvtPathOptions aPathOptions;
     return aPathOptions.GetIconsetPath();
 }
-
-IconThemeScanner::~IconThemeScanner()
-{}
 
 namespace
 {

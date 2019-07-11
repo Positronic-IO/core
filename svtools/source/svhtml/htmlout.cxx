@@ -26,11 +26,12 @@
 
 #include <svtools/htmlout.hxx>
 #include <svtools/htmlkywd.hxx>
-#include <svtools/imap.hxx>
-#include <svtools/imaprect.hxx>
-#include <svtools/imapcirc.hxx>
-#include <svtools/imappoly.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/imaprect.hxx>
+#include <vcl/imapcirc.hxx>
+#include <vcl/imappoly.hxx>
 #include <svl/urihelper.hxx>
+#include <rtl/character.hxx>
 
 #include <sstream>
 
@@ -465,7 +466,7 @@ static OString lcl_ConvertCharToHTML( sal_uInt32 c,
             // If the character could not be converted to the destination
             // character set, the UNICODE character is exported as character
             // entity.
-            // coverity[callee_ptr_arith]
+            // coverity[callee_ptr_arith] - its ok
             nLen = lcl_FlushContext(rContext, cBuffer, nFlags);
             sal_Char *pBuffer = cBuffer;
             while( nLen-- )
@@ -580,9 +581,12 @@ SvStream& HTMLOutFuncs::Out_Hex( SvStream& rStream, sal_uLong nHex, sal_uInt8 nL
 }
 
 
-SvStream& HTMLOutFuncs::Out_Color( SvStream& rStream, const Color& rColor )
+SvStream& HTMLOutFuncs::Out_Color( SvStream& rStream, const Color& rColor, bool bXHTML )
 {
-    rStream.WriteCharPtr( "\"#" );
+    rStream.WriteCharPtr( "\"" );
+    if (bXHTML)
+        rStream.WriteCharPtr( "color: " );
+    rStream.WriteCharPtr( "#" );
     if( rColor == COL_AUTO )
     {
         rStream.WriteCharPtr( "000000" );

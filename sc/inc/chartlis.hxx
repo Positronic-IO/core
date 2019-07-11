@@ -20,11 +20,9 @@
 #ifndef INCLUDED_SC_INC_CHARTLIS_HXX
 #define INCLUDED_SC_INC_CHARTLIS_HXX
 
-#include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
 #include <svl/listener.hxx>
 #include "rangelst.hxx"
-#include "token.hxx"
 #include "externalrefmgr.hxx"
 
 #include <memory>
@@ -33,10 +31,12 @@
 #include <unordered_set>
 #include <vector>
 
+namespace com { namespace sun { namespace star { namespace chart { class XChartData; } } } }
+namespace com { namespace sun { namespace star { namespace chart { class XChartDataChangeEventListener; } } } }
+
+class Timer;
 class ScDocument;
 class ScChartUnoData;
-#include <com/sun/star/chart/XChartData.hpp>
-#include <com/sun/star/chart/XChartDataChangeEventListener.hpp>
 
 class SC_DLLPUBLIC ScChartListener : public SvtListener
 {
@@ -64,7 +64,7 @@ private:
     std::unique_ptr<ExternalRefListener> mpExtRefListener;
     std::unique_ptr<std::vector<ScTokenRef> > mpTokens;
 
-    OUString maName;
+    OUString const maName;
     std::unique_ptr<ScChartUnoData> pUnoData;
     ScDocument*     mpDoc;
     bool            bUsed:1;  // for ScChartListenerCollection::FreeUnused
@@ -76,8 +76,8 @@ public:
     ScChartListener( const OUString& rName, ScDocument* pDoc,
                      const ScRangeListRef& rRangeListRef );
     ScChartListener( const OUString& rName, ScDocument* pDoc,
-                     ::std::vector<ScTokenRef>* pTokens );
-    ScChartListener( const ScChartListener& );
+                     std::unique_ptr<::std::vector<ScTokenRef>> pTokens );
+    ScChartListener( const ScChartListener& ) = delete;
     virtual ~ScChartListener() override;
 
     const OUString& GetName() const { return maName;}

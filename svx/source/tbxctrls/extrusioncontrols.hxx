@@ -21,12 +21,7 @@
 
 #include <svx/svxdllapi.h>
 
-#include <svtools/treelistbox.hxx>
-#include <vcl/button.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/field.hxx>
-#include <vcl/fixed.hxx>
-
+#include <vcl/treelistbox.hxx>
 #include <svtools/toolbarmenu.hxx>
 #include <svtools/popupwindowcontroller.hxx>
 #include <svtools/popupmenucontrollerbase.hxx>
@@ -71,8 +66,8 @@ private:
     VclPtr<ValueSet>        mpDirectionSet;
 
     Image       maImgDirection[9];
-    Image       maImgPerspective;
-    Image       maImgParallel;
+    Image const       maImgPerspective;
+    Image const       maImgParallel;
 
     DECL_LINK( SelectToolbarMenuHdl, ToolbarMenu*, void );
     DECL_LINK( SelectValueSetHdl, ValueSet*, void );
@@ -107,8 +102,6 @@ private:
     svt::ToolboxController& mrController;
     FieldUnit   meUnit;
     double      mfDepth;
-    const OUString msExtrusionDepth;
-    const OUString msMetricUnit;
 
     DECL_LINK( SelectHdl, ToolbarMenu*, void );
 
@@ -149,9 +142,9 @@ private:
     Image maImgLightingOn[9];
     Image maImgLightingPreview[9];
 
-    Image maImgBright;
-    Image maImgNormal;
-    Image maImgDim;
+    Image const maImgBright;
+    Image const maImgNormal;
+    Image const maImgDim;
 
     int     mnDirection;
     bool    mbDirectionEnabled;

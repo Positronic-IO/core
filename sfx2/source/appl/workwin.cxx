@@ -18,6 +18,7 @@
  */
 
 #include <config_features.h>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <sfx2/docfile.hxx>
@@ -54,13 +55,14 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <type_traits>
 #include <unordered_map>
+#include <sfx2/notebookbar/SfxNotebookBar.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
 struct ResIdToResName
 {
-    ToolbarId   eId;
+    ToolbarId const   eId;
     const char* pName;
 };
 
@@ -125,12 +127,13 @@ static const ResIdToResName pToolBarResToName[] =
 // Sort the Children according their alignment
 // The order corresponds to the enum SfxChildAlignment (->CHILDWIN.HXX).
 
+static constexpr OUStringLiteral g_aLayoutManagerPropName = "LayoutManager";
+
 // Help to make changes to the alignment compatible!
 LayoutManagerListener::LayoutManagerListener(
     SfxWorkWindow* pWrkWin ) :
     m_bHasFrame( false ),
-    m_pWrkWin( pWrkWin ),
-    m_aLayoutManagerPropName( "LayoutManager" )
+    m_pWrkWin( pWrkWin )
 {
 }
 
@@ -154,7 +157,7 @@ void LayoutManagerListener::setFrame( const css::uno::Reference< css::frame::XFr
             {
                 try
                 {
-                    Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+                    Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
                     aValue >>= xLayoutManager;
 
                     if ( xLayoutManager.is() )
@@ -218,7 +221,7 @@ void SAL_CALL LayoutManagerListener::dispose()
         {
             try
             {
-                css::uno::Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+                css::uno::Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
                 aValue >>= xLayoutManager;
 
                 // remove as listener from layout manager
@@ -336,20 +339,7 @@ static OUString GetResourceURLFromToolbarId(ToolbarId eId)
     return theFilledToolBarResIdToResourceURLMap::get().findURL(eId);
 }
 
-bool IsAppWorkWinToolbox_Impl( sal_uInt16 nPos )
-{
-    switch ( nPos )
-    {
-        case SFX_OBJECTBAR_APPLICATION :
-        case SFX_OBJECTBAR_MACRO:
-        case SFX_OBJECTBAR_FULLSCREEN:
-            return true;
-        default:
-            return false;
-    }
-}
-
-sal_uInt16 TbxMatch( sal_uInt16 nPos )
+static sal_uInt16 TbxMatch( sal_uInt16 nPos )
 {
     switch ( nPos )
     {
@@ -372,7 +362,7 @@ sal_uInt16 TbxMatch( sal_uInt16 nPos )
     }
 }
 
-sal_uInt16 ChildAlignValue(SfxChildAlignment eAlign)
+static sal_uInt16 ChildAlignValue(SfxChildAlignment eAlign)
 {
     sal_uInt16 ret = 17;
 
@@ -453,11 +443,13 @@ void SfxWorkWindow::Sort_Impl()
     bSorted = true;
 }
 
+static constexpr OUStringLiteral g_aStatusBarResName( "private:resource/statusbar/statusbar" );
+static constexpr OUStringLiteral g_aTbxTypeName( "private:resource/toolbar/" );
+static constexpr OUStringLiteral g_aProgressBarResName( "private:resource/progressbar/progressbar" );
 
 // constructor for workwin of a Frame
 
 SfxWorkWindow::SfxWorkWindow( vcl::Window *pWin, SfxFrame *pFrm, SfxFrame* pMaster ) :
-    pParent( nullptr ),
     pBindings(&pFrm->GetCurrentViewFrame()->GetBindings()),
     pWorkWin (pWin),
     pActiveChild( nullptr ),
@@ -476,10 +468,6 @@ SfxWorkWindow::SfxWorkWindow( vcl::Window *pWin, SfxFrame *pFrm, SfxFrame* pMast
     bShowStatusBar( sal_False ),
 #endif
     m_nLock( 0 ),
-    m_aStatusBarResName( "private:resource/statusbar/statusbar" ),
-    m_aLayoutManagerPropName( "LayoutManager" ),
-    m_aTbxTypeName( "private:resource/toolbar/" ),
-    m_aProgressBarResName( "private:resource/progressbar/progressbar" ),
     pMasterFrame( pMaster ),
     pFrame( pFrm )
 {
@@ -517,7 +505,7 @@ SfxWorkWindow::SfxWorkWindow( vcl::Window *pWin, SfxFrame *pFrm, SfxFrame* pMast
                             n == SFX_SPLITWINDOWS_RIGHT ? SfxChildAlignment::RIGHT :
                             n == SFX_SPLITWINDOWS_TOP ? SfxChildAlignment::TOP :
                                 SfxChildAlignment::BOTTOM );
-        VclPtr<SfxSplitWindow> pSplitWin = VclPtr<SfxSplitWindow>::Create(pWorkWin, eAlign, this, pParent==nullptr );
+        VclPtr<SfxSplitWindow> pSplitWin = VclPtr<SfxSplitWindow>::Create(pWorkWin, eAlign, this, true );
         pSplit[n] = pSplitWin;
     }
 
@@ -555,6 +543,7 @@ void SfxWorkWindow::Lock_Impl( bool bLock )
     if ( m_nLock<0 )
     {
         OSL_FAIL("Lock count underflow!");
+        assert(m_nLock >= 0);
         m_nLock = 0;
     }
 
@@ -583,9 +572,8 @@ void SfxWorkWindow::DeleteControllers_Impl()
     // Delete Child-Windows
     while(!aChildWins.empty())
     {
-        auto itr = aChildWins.begin();
-        SfxChildWin_Impl* pCW = *itr;
-        aChildWins.erase(itr);
+        std::unique_ptr<SfxChildWin_Impl> pCW = std::move(*aChildWins.begin());
+        aChildWins.erase(aChildWins.begin());
         SfxChildWindow *pChild = pCW->pWin;
         if (pChild)
         {
@@ -602,8 +590,6 @@ void SfxWorkWindow::DeleteControllers_Impl()
             pChild->Destroy();
         }
 
-        delete pCW;
-
         // ATTENTION: The array itself is cleared after this loop!!
         // Therefore we have to set every array entry to zero as it could be
         // accessed by calling pChild->Destroy().
@@ -618,7 +604,7 @@ void SfxWorkWindow::DeleteControllers_Impl()
     {
         try
         {
-            Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+            Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
             aValue >>= xLayoutManager;
         }
         catch ( Exception& )
@@ -673,11 +659,8 @@ void SfxWorkWindow::ArrangeChildren_Impl( bool bForce )
         return;
 
     SvBorder aBorder;
-    if ( nChildren )
-    {
-        if ( IsVisible_Impl() )
-            aBorder = Arrange_Impl();
-    }
+    if ( nChildren && IsVisible_Impl() )
+        aBorder = Arrange_Impl();
     // If the current application document contains a IPClient, then the
     // object through SetTopToolFramePixel has to be assigned the available
     // space. The object will then point to its UITools and sets the app border
@@ -869,7 +852,7 @@ SvBorder SfxWorkWindow::Arrange_Impl()
 
 bool SfxWorkWindow::PrepareClose_Impl()
 {
-    for (SfxChildWin_Impl* pCW : aChildWins)
+    for (std::unique_ptr<SfxChildWin_Impl> &pCW : aChildWins)
     {
         SfxChildWindow *pChild = pCW->pWin;
         if ( pChild && !pChild->QueryClose() )
@@ -878,7 +861,6 @@ bool SfxWorkWindow::PrepareClose_Impl()
 
     return true;
 }
-
 
 SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl( vcl::Window& rWindow,
                     SfxChildAlignment eAlign )
@@ -900,6 +882,19 @@ SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl( vcl::Window& rWindow,
     return aChildren.back();
 }
 
+SfxChild_Impl* SfxWorkWindow::RegisterChild_Impl(std::shared_ptr<SfxModelessDialogController>& rController,
+                    SfxChildAlignment eAlign )
+{
+    DBG_ASSERT( aChildren.size() < 255, "too many children" );
+    DBG_ASSERT( SfxChildAlignValid(eAlign), "invalid align" );
+
+    SfxChild_Impl *pChild = new SfxChild_Impl(rController, eAlign);
+
+    aChildren.push_back(pChild);
+    bSorted = false;
+    nChildren++;
+    return aChildren.back();
+}
 
 void SfxWorkWindow::ReleaseChild_Impl( vcl::Window& rWindow )
 {
@@ -925,6 +920,29 @@ void SfxWorkWindow::ReleaseChild_Impl( vcl::Window& rWindow )
     }
 }
 
+void SfxWorkWindow::ReleaseChild_Impl(SfxModelessDialogController& rController)
+{
+
+    SfxChild_Impl *pChild = nullptr;
+    decltype(aChildren)::size_type nPos;
+    for ( nPos = 0; nPos < aChildren.size(); ++nPos )
+    {
+        pChild = aChildren[nPos];
+        if (pChild && pChild->xController.get() == &rController)
+            break;
+    }
+
+    if ( nPos < aChildren.size() )
+    {
+        bSorted = false;
+        nChildren--;
+        aChildren.erase(aChildren.begin() + nPos);
+        delete pChild;
+    }
+    else {
+        OSL_FAIL( "releasing unregistered child" );
+    }
+}
 
 SfxChild_Impl* SfxWorkWindow::FindChild_Impl( const vcl::Window& rWindow ) const
 {
@@ -948,17 +966,19 @@ void SfxWorkWindow::ShowChildren_Impl()
 
     for (SfxChild_Impl* pCli : aChildren)
     {
+        if (!pCli)
+            continue;
         SfxChildWin_Impl* pCW = nullptr;
-        if ( pCli && pCli->pWin )
+        if (pCli->pWin || pCli->xController)
         {
             // We have to find the SfxChildWin_Impl to retrieve the
             // SFX_CHILDWIN flags that can influence visibility.
-            for (SfxChildWin_Impl* pCWin : aChildWins)
+            for (std::unique_ptr<SfxChildWin_Impl>& pCWin : aChildWins)
             {
                 SfxChild_Impl*    pChild  = pCWin->pCli;
                 if ( pChild == pCli )
                 {
-                    pCW = pCWin;
+                    pCW = pCWin.get();
                     break;
                 }
             }
@@ -976,12 +996,27 @@ void SfxWorkWindow::ShowChildren_Impl()
             if ( SfxChildVisibility::VISIBLE == (pCli->nVisible & SfxChildVisibility::VISIBLE) && bVisible )
             {
                 ShowFlags nFlags = pCli->bSetFocus ? ShowFlags::NONE : ShowFlags::NoFocusChange | ShowFlags::NoActivate;
-                pCli->pWin->Show(true, nFlags);
+                if (pCli->xController)
+                {
+                    if (!pCli->xController->getDialog()->get_visible())
+                    {
+                        weld::DialogController::runAsync(pCli->xController,
+                            [=](sal_Int32 /*nResult*/){ pCli->xController->Close(); });
+                    }
+                }
+                else
+                    pCli->pWin->Show(true, nFlags);
                 pCli->bSetFocus = false;
             }
             else
             {
-                pCli->pWin->Hide();
+                if (pCli->xController)
+                {
+                    if (pCli->xController->getDialog()->get_visible())
+                        pCli->xController->response(RET_CLOSE);
+                }
+                else
+                    pCli->pWin->Hide();
             }
         }
     }
@@ -993,11 +1028,14 @@ void SfxWorkWindow::HideChildren_Impl()
     for ( sal_uInt16 nPos = aChildren.size(); nPos > 0; --nPos )
     {
         SfxChild_Impl *pChild = aChildren[nPos-1];
-        if (pChild && pChild->pWin)
+        if (!pChild)
+            continue;
+        if (pChild->xController)
+            pChild->xController->response(RET_CLOSE);
+        else if (pChild->pWin)
             pChild->pWin->Hide();
     }
 }
-
 
 void SfxWorkWindow::ResetObjectBars_Impl()
 {
@@ -1008,16 +1046,9 @@ void SfxWorkWindow::ResetObjectBars_Impl()
         n->nId = 0;
 }
 
-void SfxWorkWindow::SetObjectBar_Impl(sal_uInt16 nPos, SfxVisibilityFlags nFlags, ToolbarId eId,
-            SfxInterface* pIFace)
+void SfxWorkWindow::SetObjectBar_Impl(sal_uInt16 nPos, SfxVisibilityFlags nFlags, ToolbarId eId)
 {
     DBG_ASSERT( nPos < SFX_OBJECTBAR_MAX, "object bar position overflow" );
-
-    if ( pParent && IsAppWorkWinToolbox_Impl( nPos ) )
-    {
-        pParent->SetObjectBar_Impl(nPos, nFlags, eId, pIFace);
-        return;
-    }
 
     SfxObjectBar_Impl aObjBar;
     aObjBar.eId = eId;
@@ -1057,31 +1088,10 @@ void SfxWorkWindow::UpdateObjectBars_Impl()
     if ( pFrame->IsClosing_Impl() )
         return;
 
-    SfxWorkWindow *pWork = pParent;
-    while ( pWork )
-    {
-        pWork->UpdateObjectBars_Impl2();
-        pWork = pWork->GetParent_Impl();
-    }
-
     UpdateObjectBars_Impl2();
 
     {
-        pWork = pParent;
-        while ( pWork )
-        {
-            pWork->ArrangeChildren_Impl();
-            pWork = pWork->GetParent_Impl();
-        }
-
         ArrangeChildren_Impl( false );
-
-        pWork = pParent;
-        while ( pWork )
-        {
-            pWork->ShowChildren_Impl();
-            pWork = pWork->GetParent_Impl();
-        }
 
         ShowChildren_Impl();
     }
@@ -1097,15 +1107,15 @@ Reference< css::task::XStatusIndicator > SfxWorkWindow::GetStatusIndicator()
 
     if ( xPropSet.is() )
     {
-        Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+        Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
         aValue >>= xLayoutManager;
         if ( xLayoutManager.is() )
         {
-            xLayoutManager->createElement( m_aProgressBarResName );
-            xLayoutManager->showElement( m_aProgressBarResName );
+            xLayoutManager->createElement( g_aProgressBarResName );
+            xLayoutManager->showElement( g_aProgressBarResName );
 
             Reference< css::ui::XUIElement > xProgressBar =
-                xLayoutManager->getElement( m_aProgressBarResName );
+                xLayoutManager->getElement( g_aProgressBarResName );
             if ( xProgressBar.is() )
             {
                 xStatusIndicator.set( xProgressBar->getRealInterface(), UNO_QUERY );
@@ -1162,7 +1172,7 @@ void SfxWorkWindow::UpdateObjectBars_Impl2()
 
     if ( xPropSet.is() )
     {
-        Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+        Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
         aValue >>= xLayoutManager;
     }
 
@@ -1194,17 +1204,15 @@ void SfxWorkWindow::UpdateObjectBars_Impl2()
 
         // Is a ToolBox required in this context ?
         bool bModesMatching = (nUpdateMode != SfxVisibilityFlags::Invisible) && ((nTbxMode & nUpdateMode) == nUpdateMode);
-        if ( bDestroy )
+        if ( bDestroy || sfx2::SfxNotebookBar::IsActive())
         {
-            OUString aTbxId( m_aTbxTypeName );
-            aTbxId += GetResourceURLFromToolbarId(eId);
+            OUString aTbxId = g_aTbxTypeName + GetResourceURLFromToolbarId(eId);
             xLayoutManager->destroyElement( aTbxId );
         }
         else if ( eId != ToolbarId::None && ( ( bModesMatching && !bIsFullScreen ) ||
                                 ( bIsFullScreen && bFullScreenTbx ) ) )
         {
-            OUString aTbxId( m_aTbxTypeName );
-            aTbxId += GetResourceURLFromToolbarId(eId);
+            OUString aTbxId = g_aTbxTypeName + GetResourceURLFromToolbarId(eId);
             if ( !IsDockingAllowed() && !xLayoutManager->isElementFloating( aTbxId ))
                 xLayoutManager->destroyElement( aTbxId );
             else
@@ -1217,8 +1225,7 @@ void SfxWorkWindow::UpdateObjectBars_Impl2()
         else if ( eId != ToolbarId::None )
         {
             // Delete the Toolbox at this Position if possible
-            OUString aTbxId( m_aTbxTypeName );
-            aTbxId += GetResourceURLFromToolbarId(eId);
+            OUString aTbxId = g_aTbxTypeName + GetResourceURLFromToolbarId(eId);
             xLayoutManager->destroyElement( aTbxId );
         }
     }
@@ -1246,7 +1253,7 @@ void SfxWorkWindow::UpdateChildWindows_Impl()
     for ( size_t n=0; n<aChildWins.size(); n++ )
     {
         // any current or in the context available Childwindows
-        SfxChildWin_Impl *pCW = aChildWins[n];
+        SfxChildWin_Impl *pCW = aChildWins[n].get();
         SfxChildWindow *pChildWin = pCW->pWin;
         bool bCreate = false;
         if ( pCW->nId && (pCW->aInfo.nFlags & SfxChildWindowFlags::ALWAYSAVAILABLE || IsVisible_Impl( pCW->nVisibility ) ) )
@@ -1279,11 +1286,8 @@ void SfxWorkWindow::UpdateChildWindows_Impl()
                 if ( bCreate )
                     CreateChildWin_Impl( pCW, false );
 
-                if ( !bAllChildrenVisible )
-                {
-                    if ( pCW->pCli )
-                        pCW->pCli->nVisible &= ~SfxChildVisibility::ACTIVE;
-                }
+                if ( !bAllChildrenVisible && pCW->pCli )
+                    pCW->pCli->nVisible &= ~SfxChildVisibility::ACTIVE;
             }
             else if ( pChildWin )
             {
@@ -1370,7 +1374,10 @@ void SfxWorkWindow::CreateChildWin_Impl( SfxChildWin_Impl *pCW, bool bSetFocus )
         {
             // The window is not docked or docked outside of one split windows
             // and must therefore be registered explicitly as a Child
-            pCW->pCli = RegisterChild_Impl(*(pChildWin->GetWindow()), pChildWin->GetAlignment());
+            if (pChildWin->GetController())
+                pCW->pCli = RegisterChild_Impl(pChildWin->GetController(), pChildWin->GetAlignment());
+            else
+                pCW->pCli = RegisterChild_Impl(*(pChildWin->GetWindow()), pChildWin->GetAlignment());
             pCW->pCli->nVisible = SfxChildVisibility::VISIBLE;
             if ( pChildWin->GetAlignment() != SfxChildAlignment::NOALIGNMENT && bIsFullScreen )
                 pCW->pCli->nVisible ^= SfxChildVisibility::ACTIVE;
@@ -1409,7 +1416,10 @@ void SfxWorkWindow::RemoveChildWin_Impl( SfxChildWin_Impl *pCW )
         // Child window is a direct child window and must therefore unregister
         // itself from the  WorkWindow
         pCW->pCli = nullptr;
-        ReleaseChild_Impl(*pChildWin->GetWindow());
+        if (pChildWin->GetController())
+            ReleaseChild_Impl(*pChildWin->GetController());
+        else
+            ReleaseChild_Impl(*pChildWin->GetWindow());
     }
     else
     {
@@ -1440,7 +1450,7 @@ void SfxWorkWindow::UpdateStatusBar_Impl()
     Reference< css::beans::XPropertySet > xPropSet( GetFrameInterface(), UNO_QUERY );
     Reference< css::frame::XLayoutManager > xLayoutManager;
 
-    Any aValue = xPropSet->getPropertyValue( m_aLayoutManagerPropName );
+    Any aValue = xPropSet->getPropertyValue( g_aLayoutManagerPropName );
     aValue >>= xLayoutManager;
 
     // No status bar, if no ID is required or when in FullScreenView or
@@ -1451,14 +1461,14 @@ void SfxWorkWindow::UpdateStatusBar_Impl()
         // Id has changed, thus create a suitable Statusbarmanager, this takes
         // over the  current status bar;
         if ( xLayoutManager.is() )
-            xLayoutManager->requestElement( m_aStatusBarResName );
+            xLayoutManager->requestElement( g_aStatusBarResName );
     }
     else
     {
         // Destroy the current StatusBar
         // The Manager only creates the Status bar, does not destroy it.
         if ( xLayoutManager.is() )
-            xLayoutManager->destroyElement( m_aStatusBarResName );
+            xLayoutManager->destroyElement( g_aStatusBarResName );
     }
 }
 
@@ -1479,21 +1489,30 @@ bool SfxWorkWindow::IsVisible_Impl()
 }
 
 
-void SfxWorkWindow::HidePopups_Impl(bool bHide, bool bParent, sal_uInt16 nId )
+void SfxWorkWindow::HidePopups_Impl(bool bHide, sal_uInt16 nId )
 {
-    for (SfxChildWin_Impl* i : aChildWins)
+    if (comphelper::LibreOfficeKit::isActive() && bHide)
+        return;
+
+    for (std::unique_ptr<SfxChildWin_Impl>& i : aChildWins)
     {
         SfxChildWindow *pCW = i->pWin;
         if (pCW && pCW->GetAlignment() == SfxChildAlignment::NOALIGNMENT && pCW->GetType() != nId)
         {
             vcl::Window *pWin = pCW->GetWindow();
             SfxChild_Impl *pChild = FindChild_Impl(*pWin);
+            if (!pChild)
+            {
+                SAL_WARN("sfx.appl", "missing SfxChild_Impl child!");
+                continue;
+            }
             if (bHide)
             {
                 pChild->nVisible &= ~SfxChildVisibility::ACTIVE;
                 pCW->Hide();
             }
-            else
+            else if ( !comphelper::LibreOfficeKit::isActive() ||
+                      SfxChildVisibility::ACTIVE != (pChild->nVisible & SfxChildVisibility::ACTIVE) )
             {
                 pChild->nVisible |= SfxChildVisibility::ACTIVE;
                 if ( SfxChildVisibility::VISIBLE == (pChild->nVisible & SfxChildVisibility::VISIBLE) )
@@ -1501,9 +1520,6 @@ void SfxWorkWindow::HidePopups_Impl(bool bHide, bool bParent, sal_uInt16 nId )
             }
         }
     }
-
-    if ( bParent && pParent )
-        pParent->HidePopups_Impl( bHide, bParent, nId );
 }
 
 
@@ -1516,9 +1532,9 @@ void SfxWorkWindow::ConfigChild_Impl(SfxChildIdentifier eChild,
     SfxChildWin_Impl *pCW = nullptr;
 
     // configure direct childwindow
-    for (SfxChildWin_Impl* i : aChildWins)
+    for (std::unique_ptr<SfxChildWin_Impl>& i : aChildWins)
     {
-        pCW = i;
+        pCW = i.get();
         SfxChildWindow *pChild = pCW->pWin;
         if ( pChild && (pChild->GetType() == nId ))
         {
@@ -1568,11 +1584,6 @@ void SfxWorkWindow::ConfigChild_Impl(SfxChildIdentifier eChild,
     }
 
     DBG_ASSERT( pCW, "Unknown window!" );
-    if ( !pCW && pParent )
-    {
-        pParent->ConfigChild_Impl( eChild, eConfig, nId );
-        return;
-    }
 
     if ( !bSorted )
         // windows may have been registered and released without an update until now
@@ -1582,8 +1593,7 @@ void SfxWorkWindow::ConfigChild_Impl(SfxChildIdentifier eChild,
     for ( n=0; n<aSortedList.size(); ++n )
     {
         SfxChild_Impl *pChild = aChildren[aSortedList[n]];
-        if ( pChild )
-            if ( pChild->pWin == pWin )
+        if ( pChild && pChild->pWin == pWin )
             break;
     }
 
@@ -1738,24 +1748,6 @@ void SfxWorkWindow::SetChildWindowVisible_Impl( sal_uInt32 lId, bool bEnabled, S
     sal_uInt16 nId = static_cast<sal_uInt16>( lId & 0xFFFF );
 
     SfxChildWin_Impl *pCW=nullptr;
-    SfxWorkWindow *pWork = pParent;
-
-    // Get the top parent, child windows are always registered at the
-    // task of the WorkWindow for example the frame or on AppWorkWindow
-    while ( pWork && pWork->pParent )
-        pWork = pWork->pParent;
-
-    if ( pWork )
-    {
-        // The Parent already known?
-        sal_uInt16 nCount = pWork->aChildWins.size();
-        for (sal_uInt16 n=0; n<nCount; n++)
-            if (pWork->aChildWins[n]->nSaveId == nId)
-            {
-                pCW = pWork->aChildWins[n];
-                break;
-            }
-    }
 
     if ( !pCW )
     {
@@ -1764,7 +1756,7 @@ void SfxWorkWindow::SetChildWindowVisible_Impl( sal_uInt32 lId, bool bEnabled, S
         for (sal_uInt16 n=0; n<nCount; n++)
             if (aChildWins[n]->nSaveId == nId)
             {
-                pCW = aChildWins[n];
+                pCW = aChildWins[n].get();
                 break;
             }
     }
@@ -1776,10 +1768,7 @@ void SfxWorkWindow::SetChildWindowVisible_Impl( sal_uInt32 lId, bool bEnabled, S
         pCW = new SfxChildWin_Impl( lId );
         pCW->nId = nId;
         InitializeChild_Impl( pCW );
-        if ( pWork && !( pCW->aInfo.nFlags & SfxChildWindowFlags::TASK ) )
-            pWork->aChildWins.push_back( pCW );
-        else
-            aChildWins.push_back( pCW );
+        aChildWins.push_back( std::unique_ptr<SfxChildWin_Impl>(pCW) );
     }
 
     pCW->nId = nId;
@@ -1803,7 +1792,7 @@ void SfxWorkWindow::ToggleChildWindow_Impl(sal_uInt16 nId, bool bSetFocus)
     if ( n<nCount )
     {
         // The Window is already known
-        SfxChildWin_Impl *pCW = aChildWins[n];
+        SfxChildWin_Impl *pCW = aChildWins[n].get();
         SfxChildWindow *pChild = pCW->pWin;
 
         bool bCreationAllowed( true );
@@ -1868,11 +1857,6 @@ void SfxWorkWindow::ToggleChildWindow_Impl(sal_uInt16 nId, bool bSetFocus)
 
         return;
     }
-    else if ( pParent )
-    {
-        pParent->ToggleChildWindow_Impl( nId, bSetFocus );
-        return;
-    }
 
 #ifdef DBG_UTIL
     nCount = aChildWins.size();
@@ -1902,13 +1886,10 @@ bool SfxWorkWindow::HasChildWindow_Impl(sal_uInt16 nId)
 
     if (n<nCount)
     {
-        SfxChildWin_Impl *pCW = aChildWins[n];
+        SfxChildWin_Impl *pCW = aChildWins[n].get();
         SfxChildWindow *pChild = pCW->pWin;
         return ( pChild && pCW->bCreate );
     }
-
-    if ( pParent )
-        return pParent->HasChildWindow_Impl( nId );
 
     return false;
 }
@@ -1916,24 +1897,6 @@ bool SfxWorkWindow::HasChildWindow_Impl(sal_uInt16 nId)
 bool SfxWorkWindow::IsFloating( sal_uInt16 nId )
 {
     SfxChildWin_Impl *pCW=nullptr;
-    SfxWorkWindow *pWork = pParent;
-
-    // Get the top parent, child windows are always registered at the
-    // task of the WorkWindow for example the frame or on AppWorkWindow
-    while ( pWork && pWork->pParent )
-        pWork = pWork->pParent;
-
-    if ( pWork )
-    {
-        // The Parent already known?
-        sal_uInt16 nCount = pWork->aChildWins.size();
-        for (sal_uInt16 n=0; n<nCount; n++)
-            if (pWork->aChildWins[n]->nSaveId == nId)
-            {
-                pCW = pWork->aChildWins[n];
-                break;
-            }
-    }
 
     if ( !pCW )
     {
@@ -1942,7 +1905,7 @@ bool SfxWorkWindow::IsFloating( sal_uInt16 nId )
         for (sal_uInt16 n=0; n<nCount; n++)
             if (aChildWins[n]->nSaveId == nId)
             {
-                pCW = aChildWins[n];
+                pCW = aChildWins[n].get();
                 break;
             }
     }
@@ -1956,10 +1919,7 @@ bool SfxWorkWindow::IsFloating( sal_uInt16 nId )
         pCW->nId = 0;
         pCW->nVisibility = SfxVisibilityFlags::Invisible;
         InitializeChild_Impl( pCW );
-        if ( pWork && !( pCW->aInfo.nFlags & SfxChildWindowFlags::TASK ) )
-            pWork->aChildWins.push_back( pCW );
-        else
-            aChildWins.push_back( pCW );
+        aChildWins.push_back( std::unique_ptr<SfxChildWin_Impl>(pCW) );
     }
 
     SfxChildAlignment eAlign;
@@ -1977,7 +1937,7 @@ bool SfxWorkWindow::KnowsChildWindow_Impl(sal_uInt16 nId)
     sal_uInt16 n;
     for (n=0; n<nCount; n++)
     {
-        pCW = aChildWins[n];
+        pCW = aChildWins[n].get();
         if ( pCW->nSaveId == nId)
              break;
     }
@@ -1988,8 +1948,6 @@ bool SfxWorkWindow::KnowsChildWindow_Impl(sal_uInt16 nId)
             return false;
         return pCW->bEnable;
     }
-    else if ( pParent )
-        return pParent->KnowsChildWindow_Impl( nId );
     else
         return false;
 }
@@ -1998,24 +1956,7 @@ bool SfxWorkWindow::KnowsChildWindow_Impl(sal_uInt16 nId)
 void SfxWorkWindow::SetChildWindow_Impl(sal_uInt16 nId, bool bOn, bool bSetFocus)
 {
     SfxChildWin_Impl *pCW=nullptr;
-    SfxWorkWindow *pWork = pParent;
-
-    // Get the top parent, child windows are always registered at the
-    // task of the WorkWindow for example the frame or on AppWorkWindow
-    while ( pWork && pWork->pParent )
-        pWork = pWork->pParent;
-
-    if ( pWork )
-    {
-        // The Parent already known?
-        sal_uInt16 nCount = pWork->aChildWins.size();
-        for (sal_uInt16 n=0; n<nCount; n++)
-            if (pWork->aChildWins[n]->nSaveId == nId)
-            {
-                pCW = pWork->aChildWins[n];
-                break;
-            }
-    }
+    SfxWorkWindow *pWork = nullptr;
 
     if ( !pCW )
     {
@@ -2024,7 +1965,7 @@ void SfxWorkWindow::SetChildWindow_Impl(sal_uInt16 nId, bool bOn, bool bSetFocus
         for (sal_uInt16 n=0; n<nCount; n++)
             if (aChildWins[n]->nSaveId == nId)
             {
-                pCW = aChildWins[n];
+                pCW = aChildWins[n].get();
                 pWork = this;
                 break;
             }
@@ -2038,7 +1979,7 @@ void SfxWorkWindow::SetChildWindow_Impl(sal_uInt16 nId, bool bOn, bool bSetFocus
         InitializeChild_Impl( pCW );
         if ( !pWork || pCW->aInfo.nFlags & SfxChildWindowFlags::TASK )
             pWork = this;
-        pWork->aChildWins.push_back( pCW );
+        pWork->aChildWins.push_back( std::unique_ptr<SfxChildWin_Impl>(pCW) );
     }
 
     if ( pCW->bCreate != bOn )
@@ -2053,7 +1994,7 @@ void SfxWorkWindow::ShowChildWindow_Impl(sal_uInt16 nId, bool bVisible, bool bSe
     sal_uInt16 n;
     for (n=0; n<nCount; n++)
     {
-        pCW = aChildWins[n];
+        pCW = aChildWins[n].get();
         if (pCW->nId == nId)
             break;
     }
@@ -2109,12 +2050,6 @@ void SfxWorkWindow::ShowChildWindow_Impl(sal_uInt16 nId, bool bVisible, bool bSe
         return;
     }
 
-    if ( pParent )
-    {
-        pParent->ShowChildWindow_Impl( nId, bVisible, bSetFocus );
-        return;
-    }
-
 #ifdef DBG_UTIL
     nCount = aChildWins.size();
     for (n=0; n<nCount; n++)
@@ -2143,15 +2078,13 @@ SfxChildWindow* SfxWorkWindow::GetChildWindow_Impl(sal_uInt16 nId)
 
     if (n<nCount)
         return aChildWins[n]->pWin;
-    else if ( pParent )
-        return pParent->GetChildWindow_Impl( nId );
     return nullptr;
 }
 
 
 void SfxWorkWindow::ResetChildWindows_Impl()
 {
-    for (SfxChildWin_Impl* pChildWin : aChildWins)
+    for (std::unique_ptr<SfxChildWin_Impl>& pChildWin : aChildWins)
     {
         pChildWin->nId = 0;
         pChildWin->bEnable = false;
@@ -2289,9 +2222,6 @@ SfxSplitWindow* SfxWorkWindow::GetSplitWindow_Impl( SfxChildAlignment eAlign )
 
 void SfxWorkWindow::MakeChildrenVisible_Impl( bool bVis )
 {
-    if ( pParent )
-        pParent->MakeChildrenVisible_Impl( bVis );
-
     bAllChildrenVisible = bVis;
     if ( bVis )
     {
@@ -2329,9 +2259,6 @@ bool SfxWorkWindow::IsAutoHideMode( const SfxSplitWindow *pSplitWin )
 
 void SfxWorkWindow::EndAutoShow_Impl( Point aPos )
 {
-    if ( pParent )
-        pParent->EndAutoShow_Impl( aPos );
-
     for (VclPtr<SfxSplitWindow> & p : pSplit)
     {
         if ( p && p->IsAutoHide(false) )
@@ -2348,9 +2275,6 @@ void SfxWorkWindow::ArrangeAutoHideWindows( SfxSplitWindow *pActSplitWin )
 {
     if ( m_nLock )
         return;
-
-    if ( pParent )
-        pParent->ArrangeAutoHideWindows( pActSplitWin );
 
     tools::Rectangle aArea( aUpperClientArea );
     for ( sal_uInt16 n=0; n<SFX_SPLITWINDOWS_MAX; n++ )
@@ -2517,9 +2441,13 @@ void SfxWorkWindow::DataChanged_Impl()
     sal_uInt16 nCount = aChildWins.size();
     for (n=0; n<nCount; n++)
     {
-        SfxChildWin_Impl*pCW = aChildWins[n];
-        if ( pCW && pCW->pWin )
-            pCW->pWin->GetWindow()->UpdateSettings( Application::GetSettings() );
+        SfxChildWin_Impl*pCW = aChildWins[n].get();
+        if (pCW && pCW->pWin)
+        {
+            // TODO does this really have any meaning ?
+            if (pCW->pWin->GetWindow())
+                pCW->pWin->GetWindow()->UpdateSettings(Application::GetSettings());
+        }
     }
 
     ArrangeChildren_Impl();

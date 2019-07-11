@@ -175,7 +175,7 @@ namespace rptxml
         }
     };
 
-void lcl_adjustColumnSpanOverRows(ORptExport::TSectionsGrid& _rGrid)
+static void lcl_adjustColumnSpanOverRows(ORptExport::TSectionsGrid& _rGrid)
 {
     ORptExport::TSectionsGrid::iterator aSectionIter = _rGrid.begin();
     ORptExport::TSectionsGrid::const_iterator aSectionEnd = _rGrid.end();
@@ -263,7 +263,6 @@ ORptExport::ORptExport(const Reference< XComponentContext >& _rxContext, OUStrin
     GetNamespaceMap_().Add( GetXMLToken(XML_NP_NUMBER), GetXMLToken(XML_N_NUMBER), XML_NAMESPACE_NUMBER );
 
     m_sTableStyle = GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_TABLE, GetXMLToken(XML_STYLE_NAME) );
-    m_sColumnStyle = GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_TABLE, GetXMLToken(XML_COLUMN) );
     m_sCellStyle = GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_REPORT, GetXMLToken(XML_STYLE_NAME) );
 
 
@@ -329,7 +328,6 @@ void ORptExport::exportFunctions(const Reference<XIndexAccess>& _xFunctions)
     for (sal_Int32 i = 0; i< nCount; ++i)
     {
         uno::Reference< report::XFunction> xFunction(_xFunctions->getByIndex(i),uno::UNO_QUERY_THROW);
-        OSL_ENSURE(xFunction.is(),"Function object is NULL!");
         exportFunction(xFunction);
     }
 }
@@ -479,7 +477,7 @@ void ORptExport::exportReportElement(const Reference<XReportControlModel>& _xRep
         exportComponent(_xReportElement.get());
 }
 
-void lcl_calculate(const ::std::vector<sal_Int32>& _aPosX,const ::std::vector<sal_Int32>& _aPosY,ORptExport::TGrid& _rColumns)
+static void lcl_calculate(const ::std::vector<sal_Int32>& _aPosX,const ::std::vector<sal_Int32>& _aPosY,ORptExport::TGrid& _rColumns)
 {
     sal_Int32 nCountX = _aPosX.size() - 1;
     sal_Int32 nCountY = _aPosY.size() - 1;
@@ -495,7 +493,7 @@ void lcl_calculate(const ::std::vector<sal_Int32>& _aPosX,const ::std::vector<sa
     }
 }
 
-void ORptExport::collectStyleNames(sal_Int32 _nFamily,const ::std::vector< sal_Int32>& _aSize, ORptExport::TStringVec& _rStyleNames)
+void ORptExport::collectStyleNames(sal_Int32 _nFamily,const ::std::vector< sal_Int32>& _aSize, std::vector<OUString>& _rStyleNames)
 {
     ::std::vector< XMLPropertyState > aPropertyStates;
     aPropertyStates.emplace_back(0);
@@ -572,9 +570,9 @@ void ORptExport::exportSectionAutoStyle(const Reference<XSection>& _xProp)
         ).first;
     lcl_calculate(aColumnPos,aRowPos,aInsert->second);
 
-    TGridStyleMap::iterator aPos = m_aColumnStyleNames.emplace(_xProp.get(),TStringVec()).first;
+    TGridStyleMap::iterator aPos = m_aColumnStyleNames.emplace(_xProp.get(),std::vector<OUString>()).first;
     collectStyleNames(XML_STYLE_FAMILY_TABLE_COLUMN,aColumnPos,aPos->second);
-    aPos = m_aRowStyleNames.emplace(_xProp.get(),TStringVec()).first;
+    aPos = m_aRowStyleNames.emplace(_xProp.get(),std::vector<OUString>()).first;
     collectStyleNames(XML_STYLE_FAMILY_TABLE_ROW,aRowPos,aPos->second);
 
     sal_Int32 x1 = 0;
@@ -739,11 +737,9 @@ void ORptExport::exportTableColumns(const Reference< XSection>& _xSection)
     if ( aColFind == m_aColumnStyleNames.end() )
         return;
 
-    TStringVec::const_iterator aColIter = aColFind->second.begin();
-    TStringVec::const_iterator aColEnd = aColFind->second.end();
-    for (; aColIter != aColEnd; ++aColIter)
+    for (auto& aCol : aColFind->second)
     {
-        AddAttribute( m_sTableStyle,*aColIter );
+        AddAttribute(m_sTableStyle, aCol);
         SvXMLElementExport aColumn(*this,XML_NAMESPACE_TABLE, XML_TABLE_COLUMN, true, true);
     }
 }
@@ -762,7 +758,7 @@ void ORptExport::exportContainer(const Reference< XSection>& _xSection)
     TGrid::const_iterator aRowEnd = aFind->second.end();
 
     TGridStyleMap::const_iterator aRowFind = m_aRowStyleNames.find(_xSection.get());
-    TStringVec::const_iterator aHeightIter = aRowFind->second.begin();
+    auto aHeightIter = aRowFind->second.cbegin();
     OSL_ENSURE(aRowFind->second.size() == aFind->second.size(),"Different count for rows");
 
     bool bShapeHandled = false;
@@ -1347,8 +1343,6 @@ SvXMLAutoStylePoolP* ORptExport::CreateAutoStylePool()
 void SAL_CALL ORptExport::setSourceDocument( const Reference< XComponent >& xDoc )
 {
     m_xReportDefinition.set(xDoc,UNO_QUERY_THROW);
-    OSL_ENSURE(m_xReportDefinition.is(),"DataSource is NULL!");
-
     SvXMLExport::setSourceDocument(xDoc);
 }
 

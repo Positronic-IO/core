@@ -1,1 +1,2 @@
-writerperfect/uiconfig/ui/exportepub.ui://GtkComboBoxText[@id='versionlb'] duplicate-mnemonic
+writerperfect/uiconfig/ui/exportepub.ui://GtkLabel[@id='generalft'] orphan-label
+writerperfect/uiconfig/ui/exportepub.ui://GtkLabel[@id='metadataft'] orphan-label

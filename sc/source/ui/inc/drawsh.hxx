@@ -22,8 +22,6 @@
 
 #include <sfx2/shell.hxx>
 #include <shellids.hxx>
-#include <sfx2/module.hxx>
-#include <svx/svdmark.hxx>
 #include <svx/svdtypes.hxx>
 #include <tools/link.hxx>
 #include <rtl/ref.hxx>
@@ -31,6 +29,10 @@
 class AbstractSvxObjectNameDialog;
 class ScViewData;
 class ScDrawView;
+class SdrMarkList;
+class SfxModule;
+class SdrObject;
+
 namespace svx { namespace sidebar {
 class SelectionChangeHandler;
 } }
@@ -78,10 +80,11 @@ public:
     void    ExecFormatPaintbrush(const SfxRequest& rReq);
     void    StateFormatPaintbrush(SfxItemSet& rSet);
 
-    void    ExecuteMacroAssign( SdrObject* pObj, vcl::Window* pWin );
+    void    ExecuteMacroAssign(SdrObject* pObj, weld::Window* pWin);
     void    ExecuteLineDlg( SfxRequest& rReq );
     void    ExecuteAreaDlg( SfxRequest& rReq );
     void    ExecuteTextAttrDlg( SfxRequest& rReq );
+    void    ExecuteMeasureDlg( SfxRequest& rReq );
 
     ScDrawView* GetDrawView();
 

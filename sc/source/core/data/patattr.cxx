@@ -22,7 +22,6 @@
 #include <scitems.hxx>
 #include <editeng/adjustitem.hxx>
 #include <o3tl/make_unique.hxx>
-#include <svx/algitem.hxx>
 #include <editeng/boxitem.hxx>
 #include <editeng/lineitem.hxx>
 #include <editeng/brushitem.hxx>
@@ -40,7 +39,6 @@
 #include <editeng/postitem.hxx>
 #include <svx/rotmodit.hxx>
 #include <editeng/scriptspaceitem.hxx>
-#include <editeng/scripttypeitem.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/shdditem.hxx>
 #include <editeng/udlnitem.hxx>
@@ -50,7 +48,6 @@
 #include <svl/intitem.hxx>
 #include <svl/zforlist.hxx>
 #include <vcl/outdev.hxx>
-#include <vcl/svapp.hxx>
 #include <tools/fract.hxx>
 
 #include <patattr.hxx>
@@ -61,7 +58,6 @@
 #include <global.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
-#include <conditio.hxx>
 #include <validat.hxx>
 #include <scmod.hxx>
 #include <fillinfo.hxx>
@@ -113,12 +109,12 @@ SfxPoolItem* ScPatternAttr::Clone( SfxItemPool *pPool ) const
     return pPattern;
 }
 
-inline bool StrCmp( const OUString* pStr1, const OUString* pStr2 )
+static bool StrCmp( const OUString* pStr1, const OUString* pStr2 )
 {
     return ( pStr1 ? ( pStr2 && ( *pStr1 == *pStr2 ) ) : ( pStr2 == nullptr ) );
 }
 
-inline bool EqualPatternSets( const SfxItemSet& rSet1, const SfxItemSet& rSet2 )
+static bool EqualPatternSets( const SfxItemSet& rSet1, const SfxItemSet& rSet2 )
 {
     // #i62090# The SfxItemSet in the SfxSetItem base class always has the same ranges
     // (single range from ATTR_PATTERN_START to ATTR_PATTERN_END), and the items are pooled,
@@ -759,14 +755,14 @@ void ScPatternAttr::GetFromEditItemSet( SfxItemSet& rDestSet, const SfxItemSet& 
     const SfxPoolItem* pItem;
 
     if (rEditSet.GetItemState(EE_CHAR_COLOR,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxColorItem(ATTR_FONT_COLOR) = *static_cast<const SvxColorItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxColorItem*>(pItem), ATTR_FONT_COLOR );
 
     if (rEditSet.GetItemState(EE_CHAR_FONTINFO,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxFontItem(ATTR_FONT) = *static_cast<const SvxFontItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxFontItem*>(pItem), ATTR_FONT );
     if (rEditSet.GetItemState(EE_CHAR_FONTINFO_CJK,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxFontItem(ATTR_CJK_FONT) = *static_cast<const SvxFontItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxFontItem*>(pItem), ATTR_CJK_FONT );
     if (rEditSet.GetItemState(EE_CHAR_FONTINFO_CTL,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxFontItem(ATTR_CTL_FONT) = *static_cast<const SvxFontItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxFontItem*>(pItem), ATTR_CTL_FONT );
 
     if (rEditSet.GetItemState(EE_CHAR_FONTHEIGHT,true,&pItem) == SfxItemState::SET)
         rDestSet.Put( SvxFontHeightItem( HMMToTwips( static_cast<const SvxFontHeightItem*>(pItem)->GetHeight() ),
@@ -790,9 +786,9 @@ void ScPatternAttr::GetFromEditItemSet( SfxItemSet& rDestSet, const SfxItemSet& 
 
     // SvxTextLineItem contains enum and color
     if (rEditSet.GetItemState(EE_CHAR_UNDERLINE,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxUnderlineItem(LINESTYLE_NONE,ATTR_FONT_UNDERLINE) = *static_cast<const SvxUnderlineItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxUnderlineItem*>(pItem), ATTR_FONT_UNDERLINE );
     if (rEditSet.GetItemState(EE_CHAR_OVERLINE,true,&pItem) == SfxItemState::SET)
-        rDestSet.Put( SvxOverlineItem(LINESTYLE_NONE,ATTR_FONT_OVERLINE) = *static_cast<const SvxOverlineItem*>(pItem) );
+        rDestSet.Put( *static_cast<const SvxOverlineItem*>(pItem), ATTR_FONT_OVERLINE );
     if (rEditSet.GetItemState(EE_CHAR_WLM,true,&pItem) == SfxItemState::SET)
         rDestSet.Put( SvxWordLineModeItem( static_cast<const SvxWordLineModeItem*>(pItem)->GetValue(),
                         ATTR_FONT_WORDLINE) );
@@ -1109,7 +1105,7 @@ bool ScPatternAttr::IsVisible() const
     return false;
 }
 
-inline bool OneEqual( const SfxItemSet& rSet1, const SfxItemSet& rSet2, sal_uInt16 nId )
+static bool OneEqual( const SfxItemSet& rSet1, const SfxItemSet& rSet2, sal_uInt16 nId )
 {
     const SfxPoolItem* pItem1 = &rSet1.Get(nId);
     const SfxPoolItem* pItem2 = &rSet2.Get(nId);
@@ -1173,7 +1169,7 @@ void ScPatternAttr::UpdateStyleSheet(const ScDocument* pDoc)
         //  Assumes that "Standard" is always the 1st entry!
         if (!pStyle)
         {
-            std::shared_ptr<SfxStyleSheetIterator> pIter = pDoc->GetStyleSheetPool()->CreateIterator( SfxStyleFamily::Para, SfxStyleSearchBits::All );
+            std::unique_ptr<SfxStyleSheetIterator> pIter = pDoc->GetStyleSheetPool()->CreateIterator( SfxStyleFamily::Para, SfxStyleSearchBits::All );
             pStyle = dynamic_cast< ScStyleSheet* >(pIter->First());
         }
 

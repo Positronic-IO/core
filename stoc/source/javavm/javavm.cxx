@@ -37,6 +37,7 @@
 #include <com/sun/star/lang/XEventListener.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <com/sun/star/lang/XSingleComponentFactory.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/registry/XSimpleRegistry.hpp>
@@ -69,6 +70,7 @@
 #include <rtl/ustring.hxx>
 #include <rtl/uri.hxx>
 #include <sal/types.h>
+#include <sal/log.hxx>
 #include <uno/current_context.hxx>
 #include <uno/environment.h>
 #include <jvmfwk/framework.hxx>
@@ -642,9 +644,10 @@ JavaVirtualMachine::initialize(css::uno::Sequence< css::uno::Any > const &
             try {
                 m_xUnoVirtualMachine = new jvmaccess::UnoVirtualMachine(vm, nullptr);
             } catch (jvmaccess::UnoVirtualMachine::CreationException &) {
-                throw css::uno::RuntimeException(
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException(
                     "jvmaccess::UnoVirtualMachine::CreationException",
-                    static_cast< cppu::OWeakObject * >(this));
+                    static_cast< cppu::OWeakObject * >(this), anyEx );
             }
         }
     }
@@ -709,7 +712,8 @@ JavaVirtualMachine::getJavaVM(css::uno::Sequence< sal_Int8 > const & rProcessId)
                             m_xContext);
         const std::vector<OUString> & props = aJvm.getProperties();
         std::vector<OUString> options;
-        for (auto const & i: props)
+        options.reserve(props.size());
+        for (auto const& i : props)
         {
             options.push_back(i.startsWith("-") ? i : "-D" + i);
         }
@@ -774,6 +778,13 @@ JavaVirtualMachine::getJavaVM(css::uno::Sequence< sal_Int8 > const & rProcessId)
         }
         case JFW_E_JAVA_DISABLED:
         {
+            bool bDontEnableJava = false;
+            auto xContext(css::uno::getCurrentContext());
+            if (xContext.is())
+                xContext->getValueByName("DontEnableJava") >>= bDontEnableJava;
+            if (bDontEnableJava)
+                return css::uno::Any();
+
             //QueryBox:
             //%PRODUCTNAME requires a Java runtime environment (JRE) to perform
             //this task. However, use of a JRE has been disabled. Do you want to
@@ -870,9 +881,10 @@ JavaVirtualMachine::getJavaVM(css::uno::Sequence< sal_Int8 > const & rProcessId)
             jvmaccess::VirtualMachine::AttachGuard guard(m_xVirtualMachine);
             setUpUnoVirtualMachine(guard.getEnvironment());
         } catch (jvmaccess::VirtualMachine::AttachGuard::CreationException &) {
-            throw css::uno::RuntimeException(
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
                 "jvmaccess::VirtualMachine::AttachGuard::CreationException occurred",
-                static_cast< cppu::OWeakObject * >(this));
+                static_cast< cppu::OWeakObject * >(this), anyEx );
         }
     }
     switch (returnType) {
@@ -961,10 +973,11 @@ void SAL_CALL JavaVirtualMachine::registerThread()
     }
     catch (jvmaccess::VirtualMachine::AttachGuard::CreationException &)
     {
-        throw css::uno::RuntimeException(
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
             "JavaVirtualMachine::registerThread: jvmaccess::"
             "VirtualMachine::AttachGuard::CreationException",
-            static_cast< cppu::OWeakObject * >(this));
+            static_cast< cppu::OWeakObject * >(this), anyEx );
     }
 }
 
@@ -1215,10 +1228,7 @@ void SAL_CALL JavaVirtualMachine::elementReplaced(
                     const jchar* jcharName= pJNIEnv->GetStringChars( jsClass, nullptr);
                     OUString sName(reinterpret_cast<sal_Unicode const *>(jcharName));
                     bool bIsSandbox;
-                    if ( sName == "com.sun.star.lib.sandbox.SandboxSecurity" )
-                        bIsSandbox= true;
-                    else
-                        bIsSandbox= false;
+                    bIsSandbox = sName == "com.sun.star.lib.sandbox.SandboxSecurity";
                     pJNIEnv->ReleaseStringChars( jsClass, jcharName);
 
                     if (bIsSandbox)
@@ -1234,9 +1244,10 @@ void SAL_CALL JavaVirtualMachine::elementReplaced(
         }
         catch (jvmaccess::VirtualMachine::AttachGuard::CreationException &)
         {
-            throw css::uno::RuntimeException(
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
                 "jvmaccess::VirtualMachine::AttachGuard::CreationException",
-                nullptr);
+                static_cast< cppu::OWeakObject * >(this), anyEx );
         }
     }
 }
@@ -1393,11 +1404,9 @@ void JavaVirtualMachine::setINetSettingsInVM(bool set_reset)
                 JVM jvm;
                 getINetPropsFromConfig( &jvm, m_xContext->getServiceManager(), m_xContext);
                 const ::std::vector< OUString> & Props = jvm.getProperties();
-                typedef ::std::vector< OUString >::const_iterator C_IT;
 
-                for( C_IT i= Props.begin(); i != Props.end(); ++i)
+                for( auto& prop : Props)
                 {
-                    OUString prop= *i;
                     sal_Int32 index= prop.indexOf( '=');
                     OUString propName= prop.copy( 0, index);
                     OUString propValue= prop.copy( index + 1);
@@ -1476,9 +1485,10 @@ void JavaVirtualMachine::setUpUnoVirtualMachine(JNIEnv * environment) {
     try {
         baseUrl = exp->expandMacros("$URE_INTERNAL_JAVA_DIR/");
     } catch (css::lang::IllegalArgumentException &) {
-        throw css::uno::RuntimeException(
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
             "css::lang::IllegalArgumentException",
-            static_cast< cppu::OWeakObject * >(this));
+            static_cast< cppu::OWeakObject * >(this), anyEx );
     }
     OUString classPath;
     try {
@@ -1576,9 +1586,10 @@ void JavaVirtualMachine::setUpUnoVirtualMachine(JNIEnv * environment) {
         m_xUnoVirtualMachine = new jvmaccess::UnoVirtualMachine(
             m_xVirtualMachine, cl2);
     } catch (jvmaccess::UnoVirtualMachine::CreationException &) {
-        throw css::uno::RuntimeException(
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
             "jvmaccess::UnoVirtualMachine::CreationException",
-            static_cast< cppu::OWeakObject * >(this));
+            static_cast< cppu::OWeakObject * >(this), anyEx );
     }
 }
 

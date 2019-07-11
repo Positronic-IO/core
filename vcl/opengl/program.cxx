@@ -45,8 +45,8 @@ OpenGLProgram::~OpenGLProgram()
 
 bool OpenGLProgram::Load( const OUString& rVertexShader,
                           const OUString& rFragmentShader,
-                          const rtl::OString& preamble,
-                          const rtl::OString& rDigest )
+                          const OString& preamble,
+                          const OString& rDigest )
 {
     mnId = OpenGLHelper::LoadShaders( rVertexShader, rFragmentShader, preamble, rDigest );
     return ( mnId != 0 );
@@ -67,7 +67,7 @@ void OpenGLProgram::Use()
     Reuse();
 }
 
-bool OpenGLProgram::Clean()
+void OpenGLProgram::Clean()
 {
     // unbind all textures
     for (OpenGLTexture& rTexture : maTextures)
@@ -89,8 +89,6 @@ bool OpenGLProgram::Clean()
         }
         mnEnabledAttribs = 0;
     }
-
-    return true;
 }
 
 bool OpenGLProgram::EnableVertexAttrib(GLuint& rAttrib, const OString& rName)

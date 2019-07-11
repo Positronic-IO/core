@@ -48,11 +48,13 @@
 #include <vcl/settings.hxx>
 #include <vcl/commandinfoprovider.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/window.hxx>
 #include <svtools/menuoptions.hxx>
 #include <unotools/cmdoptions.hxx>
 #include <svtools/miscopt.hxx>
+#include <unotools/collatorwrapper.hxx>
 
 //  Defines
 
@@ -84,14 +86,14 @@ struct ToolBarEntry
     const CollatorWrapper*  pCollatorWrapper;
 };
 
-bool CompareToolBarEntry( const ToolBarEntry& aOne, const ToolBarEntry& aTwo )
+static bool CompareToolBarEntry( const ToolBarEntry& aOne, const ToolBarEntry& aTwo )
 {
     sal_Int32 nComp = aOne.pCollatorWrapper->compareString( aOne.aUIName, aTwo.aUIName );
 
     return nComp < 0;
 }
 
-Reference< XLayoutManager > getLayoutManagerFromFrame( const Reference< XFrame >& rFrame )
+static Reference< XLayoutManager > getLayoutManagerFromFrame( const Reference< XFrame >& rFrame )
 {
     Reference< XPropertySet >   xPropSet( rFrame, UNO_QUERY );
     Reference< XLayoutManager > xLayoutManager;
@@ -121,11 +123,12 @@ DEFINE_XSERVICEINFO_MULTISERVICE_2      (   ToolbarsMenuController              
 
 DEFINE_INIT_SERVICE                     (   ToolbarsMenuController, {} )
 
+static constexpr OUStringLiteral g_aPropUIName( "UIName" );
+static constexpr OUStringLiteral g_aPropResourceURL( "ResourceURL" );
+
 ToolbarsMenuController::ToolbarsMenuController( const css::uno::Reference< css::uno::XComponentContext >& xContext ) :
     svt::PopupMenuControllerBase( xContext ),
     m_xContext( xContext ),
-    m_aPropUIName( "UIName" ),
-    m_aPropResourceURL( "ResourceURL" ),
     m_bResetActive( false ),
     m_aIntlWrapper(SvtSysLocale().GetUILanguageTag())
 {
@@ -259,8 +262,8 @@ Sequence< Sequence< css::beans::PropertyValue > > ToolbarsMenuController::getLay
     }
 
     Sequence< css::beans::PropertyValue > aTbSeq( 2 );
-    aTbSeq[0].Name = m_aPropUIName;
-    aTbSeq[1].Name = m_aPropResourceURL;
+    aTbSeq[0].Name = g_aPropUIName;
+    aTbSeq[1].Name = g_aPropResourceURL;
 
     Sequence< Sequence< css::beans::PropertyValue > > aSeq( aToolBarArray.size() );
     const sal_uInt32 nCount = aToolBarArray.size();
@@ -391,7 +394,7 @@ void ToolbarsMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu > co
 
             sal_Int32 n = aSortedTbs[i].aCommand.lastIndexOf( '/' );
             if (( n > 0 ) && (( n+1 ) < aSortedTbs[i].aCommand.getLength() ))
-                aStrBuf.append( aSortedTbs[i].aCommand.copy( n+1 ));
+                aStrBuf.appendCopy( aSortedTbs[i].aCommand, n+1 );
 
             OUString aCmd( aStrBuf.makeStringAndClear() );
 
@@ -663,7 +666,7 @@ void SAL_CALL ToolbarsMenuController::itemSelected( const css::awt::MenuEvent& r
                     if (( nIndex > 0 ) && (( nIndex+1 ) < aCmd.getLength() ))
                     {
                         OUStringBuffer aBuf( "private:resource/toolbar/" );
-                        aBuf.append( aCmd.copy( nIndex+1 ));
+                        aBuf.appendCopy( aCmd, nIndex+1 );
 
                         bool      bShow( !pVCLPopupMenu->IsItemChecked( rEvent.MenuId ));
                         OUString aToolBarResName( aBuf.makeStringAndClear() );

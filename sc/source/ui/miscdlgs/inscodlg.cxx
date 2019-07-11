@@ -28,7 +28,6 @@ InsertContentsFlags ScInsertContentsDlg::nPreviousChecks2 = InsertContentsFlags:
 sal_uInt16 ScInsertContentsDlg::nPreviousMoveMode = INS_NONE;   // enum InsCellCmd
 
 ScInsertContentsDlg::ScInsertContentsDlg(weld::Window* pParent,
-                                         InsertDeleteFlags nCheckDefaults,
                                          const OUString* pStrTitle )
     : GenericDialogController(pParent, "modules/scalc/ui/pastespecial.ui", "PasteSpecial")
     , bOtherDoc(false)
@@ -39,7 +38,6 @@ ScInsertContentsDlg::ScInsertContentsDlg(weld::Window* pParent,
     , bUsedShortCut(false)
     , nShortCutInsContentsCmdBits(InsertDeleteFlags::NONE )
     , bShortCutTranspose(false)
-    , nShortCutMoveMode(INS_NONE)
     , mxBtnInsAll(m_xBuilder->weld_check_button("paste_all"))
     , mxBtnInsStrings(m_xBuilder->weld_check_button("text"))
     , mxBtnInsNumbers(m_xBuilder->weld_check_button("numbers"))
@@ -65,13 +63,6 @@ ScInsertContentsDlg::ScInsertContentsDlg(weld::Window* pParent,
 {
     if (pStrTitle)
         m_xDialog->set_title(*pStrTitle);
-
-    if ( nCheckDefaults != InsertDeleteFlags::NONE )
-    {
-        ScInsertContentsDlg::nPreviousChecks = nCheckDefaults;
-        ScInsertContentsDlg::bPreviousAllCheck = false;
-        ScInsertContentsDlg::nPreviousChecks2 = InsertContentsFlags::NONE;
-    }
 
     mxBtnInsAll->set_active( ScInsertContentsDlg::bPreviousAllCheck );
     mxBtnInsStrings->set_active( bool(InsertDeleteFlags::STRING & ScInsertContentsDlg::nPreviousChecks) );
@@ -144,7 +135,7 @@ InsertDeleteFlags ScInsertContentsDlg::GetInsContentsCmdBits() const
 InsCellCmd ScInsertContentsDlg::GetMoveMode()
 {
     if (bUsedShortCut)
-        return nShortCutMoveMode;
+        return INS_NONE;
     if ( mxRbMoveDown->get_active() )
         return INS_CELLSDOWN;
     if ( mxRbMoveRight->get_active() )
@@ -299,7 +290,6 @@ IMPL_LINK(ScInsertContentsDlg, ShortCutHdl, weld::Button&, rBtn, void)
         bUsedShortCut = true;
         nShortCutInsContentsCmdBits = InsertDeleteFlags::STRING | InsertDeleteFlags::VALUE | InsertDeleteFlags::DATETIME;
         bShortCutTranspose = false;
-        nShortCutMoveMode = INS_NONE;
         m_xDialog->response(RET_OK);
     }
     else if (&rBtn == mxBtnShortCutPasteValuesFormats.get())
@@ -307,7 +297,6 @@ IMPL_LINK(ScInsertContentsDlg, ShortCutHdl, weld::Button&, rBtn, void)
         bUsedShortCut = true;
         nShortCutInsContentsCmdBits = InsertDeleteFlags::STRING | InsertDeleteFlags::VALUE | InsertDeleteFlags::DATETIME | InsertDeleteFlags::ATTRIB;
         bShortCutTranspose = false;
-        nShortCutMoveMode = INS_NONE;
         m_xDialog->response(RET_OK);
     }
     else if (&rBtn == mxBtnShortCutPasteTranspose.get())
@@ -315,7 +304,6 @@ IMPL_LINK(ScInsertContentsDlg, ShortCutHdl, weld::Button&, rBtn, void)
         bUsedShortCut = true;
         nShortCutInsContentsCmdBits = InsertDeleteFlags::ALL;
         bShortCutTranspose = true;
-        nShortCutMoveMode = INS_NONE;
         m_xDialog->response(RET_OK);
     }
 }

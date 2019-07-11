@@ -264,7 +264,6 @@ void LwpColumnInfo:: Read(LwpObjectStream *pStrm)
 LwpLayoutColumns::LwpLayoutColumns(LwpObjectHeader const & objHdr, LwpSvStream* pStrm)
     : LwpVirtualPiece(objHdr, pStrm)
     , m_nNumCols(0)
-    , m_pColumns(nullptr)
 {}
 
 LwpLayoutColumns::~LwpLayoutColumns()
@@ -285,15 +284,6 @@ void LwpLayoutColumns::Read()
         }
         m_pObjStrm->SkipExtra();
     }
-}
-
-double LwpLayoutColumns::GetColWidth(sal_uInt16 nIndex)
-{
-    if(nIndex >= m_nNumCols)
-    {
-        return 0;
-    }
-    return m_pColumns[nIndex].GetWidth();
 }
 
 double LwpLayoutColumns::GetColGap(sal_uInt16 nIndex)

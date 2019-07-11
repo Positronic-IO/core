@@ -60,12 +60,9 @@ public:
 
     const sal_uInt8* m_pBuffer;
     sal_uInt32      m_bufferLen;
-    bool            m_isCopied;
 
-    BlopObject(const sal_uInt8* buffer, sal_uInt32 len, bool copyBuffer);
+    BlopObject(const sal_uInt8* buffer, sal_uInt32 len);
         // throws std::bad_alloc
-
-    ~BlopObject();
 
     sal_uInt8 readBYTE(sal_uInt32 index) const
     {
@@ -152,29 +149,10 @@ public:
     }
 };
 
-BlopObject::BlopObject(const sal_uInt8* buffer, sal_uInt32 len, bool copyBuffer)
+BlopObject::BlopObject(const sal_uInt8* buffer, sal_uInt32 len)
     : m_bufferLen(len)
-    , m_isCopied(copyBuffer)
 {
-    if (m_isCopied)
-    {
-        m_pBuffer = nullptr;
-        sal_uInt8* newBuffer = new sal_uInt8[len];
-        memcpy(newBuffer, buffer, len);
-        m_pBuffer = newBuffer;
-    }
-    else
-    {
-        m_pBuffer = buffer;
-    }
-}
-
-BlopObject::~BlopObject()
-{
-    if (m_isCopied)
-    {
-        delete[] m_pBuffer;
-    }
+    m_pBuffer = buffer;
 }
 
 /**************************************************************************
@@ -235,13 +213,13 @@ class ConstantPool : public BlopObject
 {
 public:
 
-    sal_uInt16                   m_numOfEntries;
+    sal_uInt16 const             m_numOfEntries;
     std::unique_ptr<sal_Int32[]> m_pIndex;           // index values may be < 0 for cached string constants
 
     std::unique_ptr<StringCache> m_pStringCache;
 
     ConstantPool(const sal_uInt8* buffer, sal_uInt32 len, sal_uInt16 numEntries)
-        : BlopObject(buffer, len, false)
+        : BlopObject(buffer, len)
         , m_numOfEntries(numEntries)
     {
     }
@@ -551,12 +529,12 @@ class FieldList : public BlopObject
 {
 public:
 
-    sal_uInt16      m_numOfEntries;
+    sal_uInt16 const m_numOfEntries;
     size_t          m_FIELD_ENTRY_SIZE;
-    ConstantPool*   m_pCP;
+    ConstantPool* const m_pCP;
 
     FieldList(const sal_uInt8* buffer, sal_uInt32 len, sal_uInt16 numEntries, ConstantPool* pCP)
-        : BlopObject(buffer, len, false)
+        : BlopObject(buffer, len)
         , m_numOfEntries(numEntries)
         , m_pCP(pCP)
     {
@@ -735,12 +713,12 @@ class ReferenceList : public BlopObject
 {
 public:
 
-    sal_uInt16      m_numOfEntries;
+    sal_uInt16 const m_numOfEntries;
     size_t          m_REFERENCE_ENTRY_SIZE;
-    ConstantPool*   m_pCP;
+    ConstantPool* const m_pCP;
 
     ReferenceList(const sal_uInt8* buffer, sal_uInt32 len, sal_uInt16 numEntries, ConstantPool* pCP)
-        : BlopObject(buffer, len, false)
+        : BlopObject(buffer, len)
         , m_numOfEntries(numEntries)
         , m_pCP(pCP)
     {
@@ -835,13 +813,13 @@ class MethodList : public BlopObject
 {
 public:
 
-    sal_uInt16      m_numOfEntries;
+    sal_uInt16 const m_numOfEntries;
     size_t          m_PARAM_ENTRY_SIZE;
     std::unique_ptr<sal_uInt32[]>  m_pIndex;
-    ConstantPool*   m_pCP;
+    ConstantPool* const m_pCP;
 
     MethodList(const sal_uInt8* buffer, sal_uInt32 len, sal_uInt16 numEntries, ConstantPool* pCP)
-        : BlopObject(buffer, len, false)
+        : BlopObject(buffer, len)
         , m_numOfEntries(numEntries)
         , m_pCP(pCP)
     {
@@ -1111,7 +1089,7 @@ public:
 
 TypeRegistryEntry::TypeRegistryEntry(
     const sal_uInt8* buffer, sal_uInt32 len):
-    BlopObject(buffer, len, /*copyBuffer*/false), m_refCount(1), m_nSuperTypes(0),
+    BlopObject(buffer, len), m_refCount(1), m_nSuperTypes(0),
     m_offset_SUPERTYPES(0)
 {
     std::size_t const entrySize = sizeof(sal_uInt16);
@@ -1699,16 +1677,16 @@ RegistryTypeReader::~RegistryTypeReader()
 RTTypeClass RegistryTypeReader::getTypeClass() const
 {  return typereg_reader_getTypeClass(m_hImpl); }
 
-rtl::OUString RegistryTypeReader::getTypeName() const
+OUString RegistryTypeReader::getTypeName() const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     typereg_reader_getTypeName(m_hImpl, &sRet.pData);
     return sRet;
 }
 
-rtl::OUString RegistryTypeReader::getSuperTypeName() const
+OUString RegistryTypeReader::getSuperTypeName() const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     ::getSuperTypeName(m_hImpl, &sRet.pData);
     return sRet;
 }
@@ -1716,16 +1694,16 @@ rtl::OUString RegistryTypeReader::getSuperTypeName() const
 sal_uInt32 RegistryTypeReader::getFieldCount() const
 {   return ::getFieldCount(m_hImpl); }
 
-rtl::OUString RegistryTypeReader::getFieldName( sal_uInt16 index ) const
+OUString RegistryTypeReader::getFieldName( sal_uInt16 index ) const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     typereg_reader_getFieldName(m_hImpl, &sRet.pData, index);
     return sRet;
 }
 
-rtl::OUString RegistryTypeReader::getFieldType( sal_uInt16 index ) const
+OUString RegistryTypeReader::getFieldType( sal_uInt16 index ) const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     typereg_reader_getFieldTypeName(m_hImpl, &sRet.pData, index);
     return sRet;
 }
@@ -1740,16 +1718,16 @@ RTConstValue RegistryTypeReader::getFieldConstValue( sal_uInt16 index ) const
     return ret;
 }
 
-rtl::OUString RegistryTypeReader::getFieldDoku( sal_uInt16 index ) const
+OUString RegistryTypeReader::getFieldDoku( sal_uInt16 index ) const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     typereg_reader_getFieldDocumentation(m_hImpl, &sRet.pData, index);
     return sRet;
 }
 
-rtl::OUString RegistryTypeReader::getFieldFileName( sal_uInt16 index ) const
+OUString RegistryTypeReader::getFieldFileName( sal_uInt16 index ) const
 {
-    rtl::OUString sRet;
+    OUString sRet;
     typereg_reader_getFieldFileName(m_hImpl, &sRet.pData, index);
     return sRet;
 }

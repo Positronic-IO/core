@@ -41,6 +41,7 @@
 
 #include <strings.hrc>
 #include <drawdoc.hxx>
+#include <sdmod.hxx>
 #include <sdpage.hxx>
 #include <stlpool.hxx>
 #include <sdresid.hxx>
@@ -48,6 +49,7 @@
 #include <strmname.h>
 #include <anminfo.hxx>
 #include <customshowlist.hxx>
+#include <cusshow.hxx>
 #include <sdxfer.hxx>
 
 #include <unmovss.hxx>
@@ -219,7 +221,7 @@ SdDrawDocument* SdDrawDocument::OpenBookmarkDoc(SfxMedium* pMedium)
             // If that wasn't the case, we could load the model directly.
             if ( bCreateGraphicShell )
                 // Draw
-                mxBookmarkDocShRef = new ::sd::GraphicDocShell(SfxObjectCreateMode::STANDARD, true, DocumentType::Draw);
+                mxBookmarkDocShRef = new ::sd::GraphicDocShell(SfxObjectCreateMode::STANDARD);
             else
                 // Impress
                 mxBookmarkDocShRef = new ::sd::DrawDocShell(SfxObjectCreateMode::STANDARD, true, DocumentType::Impress);
@@ -336,26 +338,26 @@ namespace
 {
 
 void
-lcl_removeUnusedStyles(SfxStyleSheetBasePool* const pStyleSheetPool, SdStyleSheetVector& rStyles)
+lcl_removeUnusedStyles(SfxStyleSheetBasePool* const pStyleSheetPool, StyleSheetCopyResultVector& rStyles)
 {
-    SdStyleSheetVector aUsedStyles;
+    StyleSheetCopyResultVector aUsedStyles;
     aUsedStyles.reserve(rStyles.size());
-    for (SdStyleSheetVector::const_iterator aIt(rStyles.begin()), aLast(rStyles.end()); aIt != aLast; ++aIt)
+    for (const auto& a : rStyles)
     {
-        if ((*aIt)->IsUsed())
-            aUsedStyles.push_back(*aIt);
+        if (a.m_xStyleSheet->IsUsed())
+            aUsedStyles.push_back(a);
         else
-            pStyleSheetPool->Remove((*aIt).get());
+            pStyleSheetPool->Remove(a.m_xStyleSheet.get());
     }
     rStyles = aUsedStyles;
 }
 
-SfxStyleSheet *lcl_findStyle(SdStyleSheetVector& rStyles, const OUString& aStyleName)
+SfxStyleSheet *lcl_findStyle(StyleSheetCopyResultVector& rStyles, const OUString& aStyleName)
 {
-    for(SdStyleSheetVector::const_iterator aIt(rStyles.begin()), aLast(rStyles.end()); aIt != aLast; ++aIt)
+    for (const auto& a : rStyles)
     {
-        if((*aIt)->GetName().startsWith(aStyleName))
-            return (*aIt).get();
+        if (a.m_xStyleSheet->GetName().startsWith(aStyleName))
+            return a.m_xStyleSheet.get();
     }
     return nullptr;
 }
@@ -477,7 +479,7 @@ bool SdDrawDocument::InsertBookmarkAsPage(
 
     // Get the necessary presentation stylesheets and transfer them before
     // the pages, else, the text objects won't reference their styles anymore.
-    ::svl::IUndoManager* pUndoMgr = nullptr;
+    SfxUndoManager* pUndoMgr = nullptr;
     if( mpDocSh )
     {
         pUndoMgr = mpDocSh->GetUndoManager();
@@ -504,7 +506,7 @@ bool SdDrawDocument::InsertBookmarkAsPage(
     std::vector<OUString>::const_iterator pIter;
     for ( pIter = aLayoutsToTransfer.begin(); pIter != aLayoutsToTransfer.end(); ++pIter )
     {
-        SdStyleSheetVector aCreatedStyles;
+        StyleSheetCopyResultVector aCreatedStyles;
         OUString layoutName = *pIter;
 
         rStyleSheetPool.CopyLayoutSheets(layoutName, rBookmarkStyleSheetPool,aCreatedStyles);
@@ -513,8 +515,7 @@ bool SdDrawDocument::InsertBookmarkAsPage(
         {
             if( pUndoMgr )
             {
-                SdMoveStyleSheetsUndoAction* pMovStyles = new SdMoveStyleSheetsUndoAction(this, aCreatedStyles, true);
-                pUndoMgr->AddUndoAction(pMovStyles);
+                pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>(this, aCreatedStyles, true));
             }
         }
     }
@@ -523,12 +524,12 @@ bool SdDrawDocument::InsertBookmarkAsPage(
     // that are not used in any of the inserted pages. The unused styles
     // are then removed at the end of the function, where we also create
     // undo records for the inserted styles.
-    SdStyleSheetVector aNewGraphicStyles;
+    StyleSheetCopyResultVector aNewGraphicStyles;
     OUString aRenameStr;
     if(!bReplace && !bNoDialogs)
         aRenameStr = "_";
     rStyleSheetPool.RenameAndCopyGraphicSheets(rBookmarkStyleSheetPool, aNewGraphicStyles, aRenameStr);
-    SdStyleSheetVector aNewCellStyles;
+    StyleSheetCopyResultVector aNewCellStyles;
     rStyleSheetPool.CopyCellSheets(rBookmarkStyleSheetPool, aNewCellStyles);
 
     // TODO handle undo of table styles too
@@ -884,7 +885,7 @@ bool SdDrawDocument::InsertBookmarkAsPage(
                 pRefPage->RemoveEmptyPresentationObjects();
         }
 
-        ///Remove processed elements, to avoid doings hacks in InsertBookmarkAsObject
+        ///Remove processed elements, to avoid doing hacks in InsertBookmarkAsObject
         if ( pExchangeList )
             pExchangeList->erase(pExchangeList->begin(),pExchangeIter);
 
@@ -953,10 +954,10 @@ bool SdDrawDocument::InsertBookmarkAsPage(
     // styles, so it cannot be used after this point
     lcl_removeUnusedStyles(GetStyleSheetPool(), aNewGraphicStyles);
     if (!aNewGraphicStyles.empty() && pUndoMgr)
-        pUndoMgr->AddUndoAction(new SdMoveStyleSheetsUndoAction(this, aNewGraphicStyles, true));
+        pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>(this, aNewGraphicStyles, true));
     lcl_removeUnusedStyles(GetStyleSheetPool(), aNewCellStyles);
     if (!aNewCellStyles.empty() && pUndoMgr)
-        pUndoMgr->AddUndoAction(new SdMoveStyleSheetsUndoAction(this, aNewCellStyles, true));
+        pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>(this, aNewCellStyles, true));
 
     if( bUndo )
         EndUndo();
@@ -977,7 +978,7 @@ bool SdDrawDocument::InsertBookmarkAsObject(
 {
     bool bOK = true;
     bool bOLEObjFound = false;
-    ::sd::View* pBMView = nullptr;
+    std::unique_ptr<::sd::View> pBMView;
 
     SdDrawDocument* pBookmarkDoc = nullptr;
 
@@ -996,7 +997,7 @@ bool SdDrawDocument::InsertBookmarkAsObject(
 
     if (rBookmarkList.empty())
     {
-        pBMView = new ::sd::View(*pBookmarkDoc, nullptr);
+        pBMView.reset(new ::sd::View(*pBookmarkDoc, nullptr));
         pBMView->EndListening(*pBookmarkDoc);
         pBMView->MarkAll();
     }
@@ -1023,11 +1024,11 @@ bool SdDrawDocument::InsertBookmarkAsObject(
                 if (!pBMView)
                 {
                     // Create View for the first time
-                    pBMView = new ::sd::View(*pBookmarkDoc, nullptr);
+                    pBMView.reset(new ::sd::View(*pBookmarkDoc, nullptr));
                     pBMView->EndListening(*pBookmarkDoc);
                 }
 
-                pPage = pObj->GetPage();
+                pPage = pObj->getSdrPageFromSdrObject();
 
                 if (pPage->IsMasterPage())
                 {
@@ -1097,7 +1098,7 @@ bool SdDrawDocument::InsertBookmarkAsObject(
         if (bOLEObjFound)
             pBMView->GetDoc().SetAllocDocSh(true);
 
-        SdDrawDocument* pTmpDoc = static_cast<SdDrawDocument*>( pBMView->GetMarkedObjModel() );
+        SdDrawDocument* pTmpDoc = static_cast<SdDrawDocument*>( pBMView->CreateMarkedObjModel().release() );
         bOK = pView->Paste(*pTmpDoc, aObjPos, pPage, SdrInsertFlags::NONE);
 
         if (bOLEObjFound)
@@ -1129,8 +1130,6 @@ bool SdDrawDocument::InsertBookmarkAsObject(
             }
         }
     }
-
-    delete pBMView;
 
     return bOK;
 }
@@ -1182,7 +1181,7 @@ SdCustomShowList* SdDrawDocument::GetCustomShowList(bool bCreate)
 void SdDrawDocument::RemoveUnnecessaryMasterPages(SdPage* pMasterPage, bool bOnlyDuplicatePages, bool bUndo)
 {
     ::sd::View* pView = nullptr;
-    ::svl::IUndoManager* pUndoMgr = nullptr;
+    SfxUndoManager* pUndoMgr = nullptr;
 
     if( bUndo && !IsUndoEnabled() )
         bUndo = false;
@@ -1304,11 +1303,13 @@ void SdDrawDocument::RemoveUnnecessaryMasterPages(SdPage* pMasterPage, bool bOnl
 
                     if( bUndo )
                     {
-                        // This list belongs to UndoAction
-                        SdMoveStyleSheetsUndoAction* pMovStyles = new SdMoveStyleSheetsUndoAction( this, aRemove, false );
+                        StyleSheetCopyResultVector aUndoRemove;
+                        aUndoRemove.reserve(aRemove.size());
+                        for (const auto& a : aRemove)
+                            aUndoRemove.emplace_back(a.get(), true);
 
                         if (pUndoMgr)
-                            pUndoMgr->AddUndoAction(pMovStyles);
+                            pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>(this, aUndoRemove, false));
                     }
 
                     for( SdStyleSheetVector::iterator iter = aRemove.begin(); iter != aRemove.end(); ++iter )
@@ -1337,7 +1338,7 @@ void SdDrawDocument::RemoveUnnecessaryMasterPages(SdPage* pMasterPage, bool bOnl
   * If rLayoutName is empty, the first master page is used.
   */
 // #i121863# factored out functionality
-bool isMasterPageLayoutNameUnique(const SdDrawDocument& rDoc, const OUString& rCandidate)
+static bool isMasterPageLayoutNameUnique(const SdDrawDocument& rDoc, const OUString& rCandidate)
 {
     if (rCandidate.isEmpty())
     {
@@ -1364,30 +1365,21 @@ bool isMasterPageLayoutNameUnique(const SdDrawDocument& rDoc, const OUString& rC
 }
 
 // #i121863# factored out functinality
-OUString createNewMasterPageLayoutName(const SdDrawDocument& rDoc)
+static OUString createNewMasterPageLayoutName(const SdDrawDocument& rDoc)
 {
     const OUString aBaseName(SdResId(STR_LAYOUT_DEFAULT_NAME));
-    OUString aRetval;
     sal_uInt16 nCount(0);
-
-    while (aRetval.isEmpty())
+    for (;;)
     {
-        aRetval = aBaseName;
-
+        OUString aRetval = aBaseName;
         if(nCount)
         {
             aRetval += OUString::number(nCount);
         }
-
+        if (isMasterPageLayoutNameUnique(rDoc, aRetval))
+            return aRetval;
         nCount++;
-
-        if(!isMasterPageLayoutNameUnique(rDoc, aRetval))
-        {
-            aRetval.clear();
-        }
     }
-
-    return aRetval;
 }
 
 void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
@@ -1396,7 +1388,7 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
                                    bool bMaster,
                                    bool bCheckMasters)
 {
-    ::svl::IUndoManager* pUndoMgr = nullptr;
+    SfxUndoManager* pUndoMgr = nullptr;
 
     if( mpDocSh )
     {
@@ -1544,7 +1536,7 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
             pSourceStyleSheetPool->SetSearchMask(SfxStyleFamily::Page);
             static_cast<SdStyleSheetPool*>( mxStyleSheetPool.get())->SetSearchMask(SfxStyleFamily::Page);
 
-            SdStyleSheetVector aCreatedStyles;          // List of created stylesheets
+            StyleSheetCopyResultVector aCreatedStyles;          // List of created stylesheets
             SfxStyleSheetBase* pHisSheet = pSourceStyleSheetPool->First();
 
             while (pHisSheet)
@@ -1573,9 +1565,8 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
 
                         if (bUndo)
                         {
-                            StyleSheetUndoAction* pUndoChStyle = new StyleSheetUndoAction(this,
-                                                                 pMySheet, &pHisSheet->GetItemSet());
-                            pUndoMgr->AddUndoAction(pUndoChStyle);
+                            pUndoMgr->AddUndoAction(o3tl::make_unique<StyleSheetUndoAction>(this,
+                                                                 pMySheet, &pHisSheet->GetItemSet()));
                         }
                         pMySheet->GetItemSet().Put(pHisSheet->GetItemSet());
                         pMySheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -1589,7 +1580,7 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
                         pMySheet->GetItemSet().ClearItem();  // Delete all
                         pMySheet->GetItemSet().Put(pHisSheet->GetItemSet());
 
-                        aCreatedStyles.emplace_back( static_cast< SdStyleSheet* >( pMySheet ) );
+                        aCreatedStyles.emplace_back(static_cast<SdStyleSheet*>(pMySheet), true);
                     }
 
                     StyleReplaceData aReplData;
@@ -1649,8 +1640,7 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
             {
                 // Add UndoAction for creating and inserting the stylesheets to
                 // the top of the UndoManager
-                SdMoveStyleSheetsUndoAction* pMovStyles = new SdMoveStyleSheetsUndoAction( this, aCreatedStyles, true);
-                pUndoMgr->AddUndoAction(pMovStyles);
+                pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>( this, aCreatedStyles, true));
             }
         }
 
@@ -1737,13 +1727,11 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
 
             if( bUndo )
             {
-                SdPresentationLayoutUndoAction * pPLUndoAction =
-                    new SdPresentationLayoutUndoAction
+                pUndoMgr->AddUndoAction(o3tl::make_unique<SdPresentationLayoutUndoAction>
                         (this,
                         pPage->IsMasterPage() ? aLayoutName : aOldLayoutName,
                         aLayoutName,
-                         eAutoLayout, eAutoLayout, false, *pIter);
-                pUndoMgr->AddUndoAction(pPLUndoAction);
+                         eAutoLayout, eAutoLayout, false, *pIter));
             }
             pPage->SetPresentationLayout(aLayoutName);
             pPage->SetAutoLayout(eAutoLayout);
@@ -1801,8 +1789,11 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
 
         if( bUndo )
         {
-            SdMoveStyleSheetsUndoAction* pMovStyles = new SdMoveStyleSheetsUndoAction(this, aCreatedStyles, true);
-            pUndoMgr->AddUndoAction(pMovStyles);
+            StyleSheetCopyResultVector aUndoInsert;
+            aUndoInsert.reserve(aCreatedStyles.size());
+            for (const auto& a : aCreatedStyles)
+                aUndoInsert.emplace_back(a.get(), true);
+            pUndoMgr->AddUndoAction(o3tl::make_unique<SdMoveStyleSheetsUndoAction>(this, aUndoInsert, true));
         }
 
         // Generate new master pages and register them with the document
@@ -1871,12 +1862,10 @@ void SdDrawDocument::SetMasterPage(sal_uInt16 nSdPageNum,
 
             if( bUndo )
             {
-                SdPresentationLayoutUndoAction * pPLUndoAction =
-                    new SdPresentationLayoutUndoAction
+                pUndoMgr->AddUndoAction(o3tl::make_unique<SdPresentationLayoutUndoAction>
                             (this, aOldLayoutName, aName,
                              eOldAutoLayout, eNewAutoLayout, true,
-                             *pIter);
-                pUndoMgr->AddUndoAction(pPLUndoAction);
+                             *pIter));
             }
 
             (*pIter)->SetPresentationLayout(aName);

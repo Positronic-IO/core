@@ -55,7 +55,7 @@
  ************************************************************************/
 /*************************************************************************
  * @file
- * Interfer for all style object.
+ * Interface for all style object.
  ************************************************************************/
 #ifndef INCLUDED_LOTUSWORDPRO_INC_XFILTER_IXFSTYLE_HXX
 #define INCLUDED_LOTUSWORDPRO_INC_XFILTER_IXFSTYLE_HXX
@@ -68,6 +68,12 @@
 class IXFStyle
 {
 public:
+    IXFStyle() = default;
+    IXFStyle(IXFStyle const &) = default;
+    IXFStyle(IXFStyle &&) = default;
+    IXFStyle & operator =(IXFStyle const &) = default;
+    IXFStyle & operator =(IXFStyle &&) = default;
+
     virtual ~IXFStyle(){}
     /**
      * @descr:  return the style name.

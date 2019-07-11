@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -41,8 +42,6 @@
 #include <oox/ppt/presentationfragmenthandler.hxx>
 #include <oox/token/tokens.hxx>
 
-#include <services.hxx>
-
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::xml::sax;
@@ -52,24 +51,6 @@ using ::com::sun::star::beans::PropertyValue;
 using ::com::sun::star::lang::XComponent;
 
 namespace oox { namespace ppt {
-
-OUString PowerPointImport_getImplementationName()
-{
-    return OUString( "com.sun.star.comp.oox.ppt.PowerPointImport" );
-}
-
-uno::Sequence< OUString > PowerPointImport_getSupportedServiceNames()
-{
-    Sequence< OUString > aSeq( 2 );
-    aSeq[ 0 ] = "com.sun.star.document.ImportFilter";
-    aSeq[ 1 ] = "com.sun.star.document.ExportFilter";
-    return aSeq;
-}
-
-uno::Reference< uno::XInterface > PowerPointImport_createInstance( const Reference< XComponentContext >& rxContext )
-{
-    return static_cast< ::cppu::OWeakObject* >( new PowerPointImport( rxContext ) );
-}
 
 #if OSL_DEBUG_LEVEL > 0
 XmlFilterBase* PowerPointImport::mpDebugFilterBase = nullptr;
@@ -157,7 +138,8 @@ bool PowerPointImport::importDocument()
 
     bool bRet = importFragment(xPresentationFragmentHandler);
 
-    if (mbMissingExtDrawing)
+    static bool bNoSmartartWarning = getenv("OOX_NO_SMARTART_WARNING");
+    if (!bNoSmartartWarning && mbMissingExtDrawing)
     {
         // Construct a warning message.
         INetURLObject aURL(getFileUrl());
@@ -320,9 +302,16 @@ GraphicHelper* PowerPointImport::implCreateGraphicHelper() const
 
 OUString PowerPointImport::getImplementationName()
 {
-    return PowerPointImport_getImplementationName();
+    return OUString( "com.sun.star.comp.oox.ppt.PowerPointImport" );
 }
 
 }}
+
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+com_sun_star_comp_oox_ppt_PowerPointImport_get_implementation(
+    uno::XComponentContext* pCtx, uno::Sequence<uno::Any> const& /*rSeq*/)
+{
+    return cppu::acquire(new oox::ppt::PowerPointImport(pCtx));
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

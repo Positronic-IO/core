@@ -59,6 +59,7 @@
 #include <ftninfo.hxx>
 #include <fmtline.hxx>
 #include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <sectfrm.hxx>
 #include "itrform2.hxx"
 #include "widorp.hxx"
@@ -75,10 +76,347 @@
 #include <numrule.hxx>
 #include <swtable.hxx>
 #include <fldupde.hxx>
+#include <docufld.hxx>
 #include <IGrammarContact.hxx>
 #include <calbck.hxx>
 #include <ftnidx.hxx>
+#include <ftnfrm.hxx>
 
+
+namespace sw {
+
+    MergedAttrIterBase::MergedAttrIterBase(SwTextFrame const& rFrame)
+        : m_pMerged(rFrame.GetMergedPara())
+        , m_pNode(m_pMerged ? nullptr : rFrame.GetTextNodeFirst())
+        , m_CurrentExtent(0)
+        , m_CurrentHint(0)
+    {
+    }
+
+    SwTextAttr const* MergedAttrIter::NextAttr(SwTextNode const** ppNode)
+    {
+        if (m_pMerged)
+        {
+            while (m_CurrentExtent < m_pMerged->extents.size())
+            {
+                sw::Extent const& rExtent(m_pMerged->extents[m_CurrentExtent]);
+                if (SwpHints const*const pHints = rExtent.pNode->GetpSwpHints())
+                {
+                    while (m_CurrentHint < pHints->Count())
+                    {
+                        SwTextAttr *const pHint(pHints->Get(m_CurrentHint));
+                        if (rExtent.nEnd < pHint->GetStart()
+                                // <= if it has no end or isn't empty
+                            || (rExtent.nEnd == pHint->GetStart()
+                                && (!pHint->GetEnd()
+                                    || *pHint->GetEnd() != pHint->GetStart())))
+                        {
+                            break;
+                        }
+                        ++m_CurrentHint;
+                        if (rExtent.nStart <= pHint->GetStart())
+                        {
+                            if (ppNode)
+                            {
+                                *ppNode = rExtent.pNode;
+                            }
+                            return pHint;
+                        }
+                    }
+                }
+                ++m_CurrentExtent;
+                if (m_CurrentExtent < m_pMerged->extents.size() &&
+                    rExtent.pNode != m_pMerged->extents[m_CurrentExtent].pNode)
+                {
+                    m_CurrentHint = 0; // reset
+                }
+            }
+            return nullptr;
+        }
+        else
+        {
+            SwpHints const*const pHints(m_pNode->GetpSwpHints());
+            if (pHints)
+            {
+                if (m_CurrentHint < pHints->Count())
+                {
+                    SwTextAttr const*const pHint(pHints->Get(m_CurrentHint));
+                    ++m_CurrentHint;
+                    if (ppNode)
+                    {
+                        *ppNode = m_pNode;
+                    }
+                    return pHint;
+                }
+            }
+            return nullptr;
+        }
+    }
+
+    MergedAttrIterByEnd::MergedAttrIterByEnd(SwTextFrame const& rFrame)
+        : m_pNode(rFrame.GetMergedPara() ? nullptr : rFrame.GetTextNodeFirst())
+        , m_CurrentHint(0)
+    {
+        if (!m_pNode)
+        {
+            MergedAttrIterReverse iter(rFrame);
+            SwTextNode const* pNode(nullptr);
+            while (SwTextAttr const* pHint = iter.PrevAttr(&pNode))
+            {
+                m_Hints.emplace_back(pNode, pHint);
+            }
+        }
+    }
+
+    SwTextAttr const* MergedAttrIterByEnd::NextAttr(SwTextNode const*& rpNode)
+    {
+        if (m_pNode)
+        {
+            SwpHints const*const pHints(m_pNode->GetpSwpHints());
+            if (pHints)
+            {
+                if (m_CurrentHint < pHints->Count())
+                {
+                    SwTextAttr const*const pHint(
+                            pHints->GetSortedByEnd(m_CurrentHint));
+                    ++m_CurrentHint;
+                    rpNode = m_pNode;
+                    return pHint;
+                }
+            }
+            return nullptr;
+        }
+        else
+        {
+            if (m_CurrentHint < m_Hints.size())
+            {
+                auto const ret = m_Hints[m_Hints.size() - m_CurrentHint - 1];
+                ++m_CurrentHint;
+                rpNode = ret.first;
+                return ret.second;
+            }
+            return nullptr;
+        }
+    }
+
+    void MergedAttrIterByEnd::PrevAttr()
+    {
+        assert(0 < m_CurrentHint); // should only rewind as far as 0
+        --m_CurrentHint;
+    }
+
+    MergedAttrIterReverse::MergedAttrIterReverse(SwTextFrame const& rFrame)
+        : MergedAttrIterBase(rFrame)
+    {
+        if (m_pMerged)
+        {
+            m_CurrentExtent = m_pMerged->extents.size();
+            SwpHints const*const pHints(0 < m_CurrentExtent
+                ? m_pMerged->extents[m_CurrentExtent-1].pNode->GetpSwpHints()
+                : nullptr);
+            m_CurrentHint = pHints ? pHints->Count() : 0;
+        }
+        else
+        {
+            if (SwpHints const*const pHints = m_pNode->GetpSwpHints())
+            {
+                m_CurrentHint = pHints->Count();
+            }
+        }
+    }
+
+    SwTextAttr const* MergedAttrIterReverse::PrevAttr(SwTextNode const** ppNode)
+    {
+        if (m_pMerged)
+        {
+            while (0 < m_CurrentExtent)
+            {
+                sw::Extent const& rExtent(m_pMerged->extents[m_CurrentExtent-1]);
+                if (SwpHints const*const pHints = rExtent.pNode->GetpSwpHints())
+                {
+                    while (0 < m_CurrentHint)
+                    {
+                        SwTextAttr *const pHint(
+                                pHints->GetSortedByEnd(m_CurrentHint - 1));
+                        if (*pHint->GetAnyEnd() < rExtent.nStart
+                                // <= if it has end and isn't empty
+                            || (pHint->GetEnd()
+                                && *pHint->GetEnd() != pHint->GetStart()
+                                && *pHint->GetEnd() == rExtent.nStart))
+                        {
+                            break;
+                        }
+                        --m_CurrentHint;
+                        if (*pHint->GetAnyEnd() <= rExtent.nEnd)
+                        {
+                            if (ppNode)
+                            {
+                                *ppNode = rExtent.pNode;
+                            }
+                            return pHint;
+                        }
+                    }
+                }
+                --m_CurrentExtent;
+                if (0 < m_CurrentExtent &&
+                    rExtent.pNode != m_pMerged->extents[m_CurrentExtent-1].pNode)
+                {
+                    SwpHints const*const pHints(
+                        m_pMerged->extents[m_CurrentExtent-1].pNode->GetpSwpHints());
+                    m_CurrentHint = pHints ? pHints->Count() : 0; // reset
+                }
+            }
+            return nullptr;
+        }
+        else
+        {
+            SwpHints const*const pHints(m_pNode->GetpSwpHints());
+            if (pHints && 0 < m_CurrentHint)
+            {
+                SwTextAttr const*const pHint(pHints->GetSortedByEnd(m_CurrentHint - 1));
+                --m_CurrentHint;
+                if (ppNode)
+                {
+                    *ppNode = m_pNode;
+                }
+                return pHint;
+            }
+            return nullptr;
+        }
+    }
+
+    bool FrameContainsNode(SwContentFrame const& rFrame, sal_uLong const nNodeIndex)
+    {
+        if (rFrame.IsTextFrame())
+        {
+            SwTextFrame const& rTextFrame(static_cast<SwTextFrame const&>(rFrame));
+            if (sw::MergedPara const*const pMerged = rTextFrame.GetMergedPara())
+            {
+                sal_uLong const nFirst(pMerged->pFirstNode->GetIndex());
+                sal_uLong const nLast(pMerged->pLastNode->GetIndex());
+                return (nFirst <= nNodeIndex && nNodeIndex <= nLast);
+            }
+            else
+            {
+                return rTextFrame.GetTextNodeFirst()->GetIndex() == nNodeIndex;
+            }
+        }
+        else
+        {
+            assert(rFrame.IsNoTextFrame());
+            return static_cast<SwNoTextFrame const&>(rFrame).GetNode()->GetIndex() == nNodeIndex;
+        }
+    }
+
+    bool IsParaPropsNode(SwRootFrame const& rLayout, SwTextNode const& rNode)
+    {
+        if (rLayout.IsHideRedlines())
+        {
+            if (SwTextFrame const*const pFrame = static_cast<SwTextFrame*>(rNode.getLayoutFrame(&rLayout)))
+            {
+                sw::MergedPara const*const pMerged(pFrame->GetMergedPara());
+                if (pMerged && pMerged->pParaPropsNode != &rNode)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    SwTextNode *
+    GetParaPropsNode(SwRootFrame const& rLayout, SwNodeIndex const& rPos)
+    {
+        SwTextNode *const pTextNode(rPos.GetNode().GetTextNode());
+        if (pTextNode && !sw::IsParaPropsNode(rLayout, *pTextNode))
+        {
+            return static_cast<SwTextFrame*>(pTextNode->getLayoutFrame(&rLayout))->GetMergedPara()->pParaPropsNode;
+        }
+        else
+        {
+            return pTextNode;
+        }
+    }
+
+    SwPosition
+    GetParaPropsPos(SwRootFrame const& rLayout, SwPosition const& rPos)
+    {
+        SwPosition pos(rPos);
+        SwTextNode const*const pNode(pos.nNode.GetNode().GetTextNode());
+        if (pNode)
+        {
+            pos.nNode = *sw::GetParaPropsNode(rLayout, *pNode);
+            pos.nContent.Assign(pos.nNode.GetNode().GetContentNode(), 0);
+        }
+        return pos;
+    }
+
+    std::pair<SwTextNode *, SwTextNode *>
+    GetFirstAndLastNode(SwRootFrame const& rLayout, SwNodeIndex const& rPos)
+    {
+        SwTextNode *const pTextNode(rPos.GetNode().GetTextNode());
+        if (pTextNode && rLayout.IsHideRedlines())
+        {
+            if (SwTextFrame const*const pFrame = static_cast<SwTextFrame*>(pTextNode->getLayoutFrame(&rLayout)))
+            {
+                if (sw::MergedPara const*const pMerged = pFrame->GetMergedPara())
+                {
+                    return std::make_pair(pMerged->pFirstNode, const_cast<SwTextNode*>(pMerged->pLastNode));
+                }
+            }
+        }
+        return std::make_pair(pTextNode, pTextNode);
+    }
+
+    SwTextNode const& GetAttrMerged(SfxItemSet & rFormatSet,
+            SwTextNode const& rNode, SwRootFrame const*const pLayout)
+    {
+        rNode.SwContentNode::GetAttr(rFormatSet);
+        if (pLayout && pLayout->IsHideRedlines())
+        {
+            auto pFrame = static_cast<SwTextFrame*>(rNode.getLayoutFrame(pLayout));
+            if (sw::MergedPara const*const pMerged = pFrame ? pFrame->GetMergedPara() : nullptr)
+            {
+                if (pMerged->pFirstNode != &rNode)
+                {
+                    rFormatSet.ClearItem(RES_PAGEDESC);
+                    rFormatSet.ClearItem(RES_BREAK);
+                    static_assert(RES_PAGEDESC + 1 == sal_uInt16(RES_BREAK),
+                            "first-node items must be adjacent");
+                    SfxItemSet firstSet(*rFormatSet.GetPool(),
+                            svl::Items<RES_PAGEDESC, RES_BREAK>{});
+                    pMerged->pFirstNode->SwContentNode::GetAttr(firstSet);
+                    rFormatSet.Put(firstSet);
+
+                }
+                if (pMerged->pParaPropsNode != &rNode)
+                {
+                    for (sal_uInt16 i = RES_PARATR_BEGIN; i != RES_FRMATR_END; ++i)
+                    {
+                        if (i != RES_PAGEDESC && i != RES_BREAK)
+                        {
+                            rFormatSet.ClearItem(i);
+                        }
+                    }
+                    for (sal_uInt16 i = XATTR_FILL_FIRST; i <= XATTR_FILL_LAST; ++i)
+                    {
+                        rFormatSet.ClearItem(i);
+                    }
+                    SfxItemSet propsSet(*rFormatSet.GetPool(),
+                        svl::Items<RES_PARATR_BEGIN, RES_PAGEDESC,
+                                   RES_BREAK+1, RES_FRMATR_END,
+                                   XATTR_FILL_FIRST, XATTR_FILL_LAST+1>{});
+                    pMerged->pParaPropsNode->SwContentNode::GetAttr(propsSet);
+                    rFormatSet.Put(propsSet);
+                    return *pMerged->pParaPropsNode;
+                }
+                // keep all the CHRATR/UNKNOWNATR anyway...
+            }
+        }
+        return rNode;
+    }
+
+} // namespace sw
 
 /// Switches width and height of the text frame
 void SwTextFrame::SwapWidthAndHeight()
@@ -272,9 +610,7 @@ long SwTextFrame::SwitchVerticalToHorizontal( long nLimit ) const
 SwFrameSwapper::SwFrameSwapper( const SwTextFrame* pTextFrame, bool bSwapIfNotSwapped )
     : pFrame( pTextFrame ), bUndo( false )
 {
-    if ( pFrame->IsVertical() &&
-        ( (   bSwapIfNotSwapped && ! pFrame->IsSwapped() ) ||
-          ( ! bSwapIfNotSwapped && pFrame->IsSwapped() ) ) )
+    if (pFrame->IsVertical() && bSwapIfNotSwapped != pFrame->IsSwapped())
     {
         bUndo = true;
         const_cast<SwTextFrame*>(pFrame)->SwapWidthAndHeight();
@@ -394,36 +730,89 @@ SwTextFrame::SwTextFrame(SwTextNode * const pNode, SwFrame* pSib )
     , mbFollowFormatAllowed( true )
 {
     mnFrameType = SwFrameType::Txt;
+    // note: this may call SwClientNotify if it's in a list so do it last
+    // note: this may change this->pRegisteredIn to m_pMergedPara->listeners
+    m_pMergedPara = CheckParaRedlineMerge(*this, *pNode, sw::FrameMode::New);
 }
+
+namespace sw {
+
+void RemoveFootnotesForNode(
+        SwRootFrame const& rLayout, SwTextNode const& rTextNode,
+        std::vector<std::pair<sal_Int32, sal_Int32>> const*const pExtents)
+{
+    if (pExtents && pExtents->empty())
+    {
+        return; // nothing to do
+    }
+    const SwFootnoteIdxs &rFootnoteIdxs = rTextNode.GetDoc()->GetFootnoteIdxs();
+    size_t nPos = 0;
+    sal_uLong const nIndex = rTextNode.GetIndex();
+    rFootnoteIdxs.SeekEntry( rTextNode, &nPos );
+    if (nPos < rFootnoteIdxs.size())
+    {
+        while (nPos && &rTextNode == &(rFootnoteIdxs[ nPos ]->GetTextNode()))
+            --nPos;
+        if (nPos || &rTextNode != &(rFootnoteIdxs[ nPos ]->GetTextNode()))
+            ++nPos;
+    }
+    size_t iter(0);
+    for ( ; nPos < rFootnoteIdxs.size(); ++nPos)
+    {
+        SwTextFootnote* pTextFootnote = rFootnoteIdxs[ nPos ];
+        if (pTextFootnote->GetTextNode().GetIndex() > nIndex)
+            break;
+        if (pExtents)
+        {
+            while ((*pExtents)[iter].second <= pTextFootnote->GetStart())
+            {
+                ++iter;
+                if (iter == pExtents->size())
+                {
+                    return;
+                }
+            }
+            if (pTextFootnote->GetStart() < (*pExtents)[iter].first)
+            {
+                continue;
+            }
+        }
+        pTextFootnote->DelFrames(&rLayout);
+    }
+}
+
+} // namespace sw
 
 void SwTextFrame::DestroyImpl()
 {
     // Remove associated SwParaPortion from s_pTextCache
     ClearPara();
 
-    const SwContentNode* pCNd;
-    if( nullptr != ( pCNd = dynamic_cast<SwContentNode*>( GetRegisteredIn() ) ) &&
-        !pCNd->GetDoc()->IsInDtor() && HasFootnote() )
+    assert(!GetDoc().IsInDtor()); // this shouldn't be happening with ViewShell owning layout
+    if (!GetDoc().IsInDtor() && HasFootnote())
     {
-        SwTextNode *pTextNd = GetTextNode();
-        const SwFootnoteIdxs &rFootnoteIdxs = pCNd->GetDoc()->GetFootnoteIdxs();
-        size_t nPos = 0;
-        sal_uLong nIndex = pCNd->GetIndex();
-        rFootnoteIdxs.SeekEntry( *pTextNd, &nPos );
-        if( nPos < rFootnoteIdxs.size() )
+        if (m_pMergedPara)
         {
-            while( nPos && pTextNd == &(rFootnoteIdxs[ nPos ]->GetTextNode()) )
-                --nPos;
-            if( nPos || pTextNd != &(rFootnoteIdxs[ nPos ]->GetTextNode()) )
-                ++nPos;
+            SwTextNode const* pNode(nullptr);
+            for (auto const& e : m_pMergedPara->extents)
+            {
+                if (e.pNode != pNode)
+                {
+                    pNode = e.pNode;
+                    // sw_redlinehide: not sure if it's necessary to check
+                    // if the nodes are still alive here, which would require
+                    // accessing WriterMultiListener::m_vDepends
+                    sw::RemoveFootnotesForNode(*getRootFrame(), *pNode, nullptr);
+                }
+            }
         }
-        while( nPos < rFootnoteIdxs.size() )
+        else
         {
-            SwTextFootnote* pTextFootnote = rFootnoteIdxs[ nPos ];
-            if( pTextFootnote->GetTextNode().GetIndex() > nIndex )
-                break;
-            pTextFootnote->DelFrames( this );
-            ++nPos;
+            SwTextNode *const pNode(static_cast<SwTextNode*>(GetDep()));
+            if (pNode)
+            {
+                sw::RemoveFootnotesForNode(*getRootFrame(), *pNode, nullptr);
+            }
         }
     }
 
@@ -434,9 +823,450 @@ SwTextFrame::~SwTextFrame()
 {
 }
 
+namespace sw {
+
+// 1. if real insert => correct nStart/nEnd for full nLen
+// 2. if rl un-delete => do not correct nStart/nEnd but just include un-deleted
+static TextFrameIndex UpdateMergedParaForInsert(MergedPara & rMerged,
+        bool const isRealInsert,
+        SwTextNode const& rNode, sal_Int32 const nIndex, sal_Int32 const nLen)
+{
+    assert(!isRealInsert || nLen); // can 0 happen? yes, for redline in empty node
+    assert(nIndex <= rNode.Len());
+    assert(nIndex + nLen <= rNode.Len());
+    assert(rMerged.pFirstNode->GetIndex() <= rNode.GetIndex() && rNode.GetIndex() <= rMerged.pLastNode->GetIndex());
+    if (!nLen)
+    {
+        return TextFrameIndex(0);
+    }
+    OUStringBuffer text(rMerged.mergedText);
+    sal_Int32 nTFIndex(0); // index used for insertion at the end
+    sal_Int32 nInserted(0);
+    bool bInserted(false);
+    bool bFoundNode(false);
+    auto itInsert(rMerged.extents.end());
+    for (auto it = rMerged.extents.begin(); it != rMerged.extents.end(); ++it)
+    {
+        if (it->pNode == &rNode)
+        {
+            if (isRealInsert)
+            {
+                bFoundNode = true;
+                if (it->nStart <= nIndex && nIndex <= it->nEnd)
+                {   // note: this can happen only once
+                    text.insert(nTFIndex + (nIndex - it->nStart),
+                            rNode.GetText().copy(nIndex, nLen));
+                    it->nEnd += nLen;
+                    nInserted = nLen;
+                    assert(!bInserted);
+                    bInserted = true;
+                }
+                else if (nIndex < it->nStart)
+                {
+                    if (itInsert == rMerged.extents.end())
+                    {
+                        itInsert = it;
+                    }
+                    it->nStart += nLen;
+                    it->nEnd += nLen;
+                }
+            }
+            else
+            {
+                assert(it == rMerged.extents.begin() || (it-1)->pNode != &rNode || (it-1)->nEnd < nIndex);
+                if (nIndex + nLen < it->nStart)
+                {
+                    itInsert = it;
+                    break;
+                }
+                if (nIndex < it->nStart)
+                {
+                    text.insert(nTFIndex,
+                        rNode.GetText().copy(nIndex, it->nStart - nIndex));
+                    nInserted += it->nStart - nIndex;
+                    it->nStart = nIndex;
+                    bInserted = true;
+                }
+                assert(it->nStart <= nIndex);
+                if (nIndex <= it->nEnd)
+                {
+                    nTFIndex += it->nEnd - it->nStart;
+                    while (it->nEnd < nIndex + nLen)
+                    {
+                        auto *const pNext(
+                            (it+1) != rMerged.extents.end() && (it+1)->pNode == it->pNode
+                                ? &*(it+1)
+                                : nullptr);
+                        if (pNext && pNext->nStart <= nIndex + nLen)
+                        {
+                            text.insert(nTFIndex,
+                                rNode.GetText().copy(it->nEnd, pNext->nStart - it->nEnd));
+                            nTFIndex += pNext->nStart - it->nEnd;
+                            nInserted += pNext->nStart - it->nEnd;
+                            pNext->nStart = it->nStart;
+                            it = rMerged.extents.erase(it);
+                        }
+                        else
+                        {
+                            text.insert(nTFIndex,
+                                rNode.GetText().copy(it->nEnd, nIndex + nLen - it->nEnd));
+                            nTFIndex += nIndex + nLen - it->nEnd;
+                            nInserted += nIndex + nLen - it->nEnd;
+                            it->nEnd = nIndex + nLen;
+                        }
+                    }
+                    bInserted = true;
+                    break;
+                }
+            }
+        }
+        else if (rNode.GetIndex() < it->pNode->GetIndex() || bFoundNode)
+        {
+            if (itInsert == rMerged.extents.end())
+            {
+                itInsert = it;
+            }
+            break;
+        }
+        if (itInsert == rMerged.extents.end())
+        {
+            nTFIndex += it->nEnd - it->nStart;
+        }
+    }
+//    assert((bFoundNode || rMerged.extents.empty()) && "text node not found - why is it sending hints to us");
+    if (!bInserted)
+    {   // must be in a gap
+        rMerged.extents.emplace(itInsert, const_cast<SwTextNode*>(&rNode), nIndex, nIndex + nLen);
+        text.insert(nTFIndex, rNode.GetText().copy(nIndex, nLen));
+        nInserted = nLen;
+        if (rNode.GetIndex() < rMerged.pParaPropsNode->GetIndex())
+        {   // text inserted before current para-props node
+            rMerged.pParaPropsNode->RemoveFromListRLHidden();
+            rMerged.pParaPropsNode = &const_cast<SwTextNode&>(rNode);
+            rMerged.pParaPropsNode->AddToListRLHidden();
+        }
+    }
+    rMerged.mergedText = text.makeStringAndClear();
+    return TextFrameIndex(nInserted);
+}
+
+// 1. if real delete => correct nStart/nEnd for full nLen
+// 2. if rl delete => do not correct nStart/nEnd but just exclude deleted
+TextFrameIndex UpdateMergedParaForDelete(MergedPara & rMerged,
+        bool const isRealDelete,
+        SwTextNode const& rNode, sal_Int32 nIndex, sal_Int32 const nLen)
+{
+    assert(nIndex <= rNode.Len());
+    assert(rMerged.pFirstNode->GetIndex() <= rNode.GetIndex() && rNode.GetIndex() <= rMerged.pLastNode->GetIndex());
+    OUStringBuffer text(rMerged.mergedText);
+    sal_Int32 nTFIndex(0);
+    sal_Int32 nToDelete(nLen);
+    sal_Int32 nDeleted(0);
+    size_t nFoundNode(0);
+    size_t nErased(0);
+    auto it = rMerged.extents.begin();
+    for (; it != rMerged.extents.end(); )
+    {
+        bool bErase(false);
+        if (it->pNode == &rNode)
+        {
+            ++nFoundNode;
+            if (nIndex + nToDelete < it->nStart)
+            {
+                nToDelete = 0;
+                if (!isRealDelete)
+                {
+                    break;
+                }
+                it->nStart -= nLen;
+                it->nEnd -= nLen;
+            }
+            else
+            {
+                if (nIndex < it->nStart)
+                {
+                    // do not adjust nIndex into the text frame index space!
+                    nToDelete -= it->nStart - nIndex;
+                    nIndex = it->nStart;
+                    // note: continue with the if check below, no else!
+                }
+                if (it->nStart <= nIndex && nIndex < it->nEnd)
+                {
+                    sal_Int32 const nDeleteHere(nIndex + nToDelete <= it->nEnd
+                            ? nToDelete
+                            : it->nEnd - nIndex);
+                    text.remove(nTFIndex + (nIndex - it->nStart), nDeleteHere);
+                    bErase = nDeleteHere == it->nEnd - it->nStart;
+                    if (bErase)
+                    {
+                        ++nErased;
+                        assert(it->nStart == nIndex);
+                        it = rMerged.extents.erase(it);
+                    }
+                    else if (isRealDelete)
+                    {   // adjust for deleted text
+                        it->nStart -= (nLen - nToDelete);
+                        it->nEnd -= (nLen - nToDelete + nDeleteHere);
+                        if (it != rMerged.extents.begin()
+                            && (it-1)->pNode == &rNode
+                            && (it-1)->nEnd == it->nStart)
+                        {   // merge adjacent extents
+                            nTFIndex += it->nEnd - it->nStart;
+                            (it-1)->nEnd = it->nEnd;
+                            it = rMerged.extents.erase(it);
+                            bErase = true; // skip increment
+                        }
+                    }
+                    else
+                    {   // exclude text marked as deleted
+                        if (nIndex + nDeleteHere == it->nEnd)
+                        {
+                            it->nEnd -= nDeleteHere;
+                        }
+                        else
+                        {
+                            if (nIndex == it->nStart)
+                            {
+                                it->nStart += nDeleteHere;
+                            }
+                            else
+                            {
+                                sal_Int32 const nOldEnd(it->nEnd);
+                                it->nEnd = nIndex;
+                                it = rMerged.extents.emplace(it+1,
+                                    it->pNode, nIndex + nDeleteHere, nOldEnd);
+                            }
+                            assert(nDeleteHere == nToDelete);
+                        }
+                    }
+                    nDeleted += nDeleteHere;
+                    nToDelete -= nDeleteHere;
+                    nIndex += nDeleteHere;
+                    if (!isRealDelete && nToDelete == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        else if (nFoundNode != 0)
+        {
+            break;
+        }
+        if (!bErase)
+        {
+            nTFIndex += it->nEnd - it->nStart;
+            ++it;
+        }
+    }
+//    assert(nFoundNode != 0 && "text node not found - why is it sending hints to us");
+    assert(nIndex <= rNode.Len() + nLen);
+    // if there's a remaining deletion, it must be in gap at the end of the node
+// can't do: might be last one in node was erased   assert(nLen == 0 || rMerged.empty() || (it-1)->nEnd <= nIndex);
+    // note: if first node gets deleted then that must call DelFrames as
+    // pFirstNode is never updated
+    if (nErased && nErased == nFoundNode)
+    {   // all visible text from node was erased
+#if 0
+        if (rMerged.pParaPropsNode == &rNode)
+        {
+            rMerged.pParaPropsNode->RemoveFromListRLHidden();
+            rMerged.pParaPropsNode = rMerged.extents.empty()
+                ? rMerged.pFirstNode
+                : rMerged.extents.front().pNode;
+            rMerged.pParaPropsNode->AddToListRLHidden();
+        }
+#endif
+// NOPE must listen on all non-hidden nodes; particularly on pLastNode        rMerged.listener.EndListening(&const_cast<SwTextNode&>(rNode));
+    }
+    rMerged.mergedText = text.makeStringAndClear();
+    return TextFrameIndex(nDeleted);
+}
+
+std::pair<SwTextNode*, sal_Int32>
+MapViewToModel(MergedPara const& rMerged, TextFrameIndex const i_nIndex)
+{
+    sal_Int32 nIndex(i_nIndex);
+    sw::Extent const* pExtent(nullptr);
+    for (const auto& rExt : rMerged.extents)
+    {
+        pExtent = &rExt;
+        if (nIndex < (pExtent->nEnd - pExtent->nStart))
+        {
+            return std::make_pair(pExtent->pNode, pExtent->nStart + nIndex);
+        }
+        nIndex = nIndex - (pExtent->nEnd - pExtent->nStart);
+    }
+    assert(nIndex == 0 && "view index out of bounds");
+    return pExtent
+        ? std::make_pair(pExtent->pNode, pExtent->nEnd) //1-past-the-end index
+        : std::make_pair(rMerged.pFirstNode, sal_Int32(0));
+}
+
+TextFrameIndex MapModelToView(MergedPara const& rMerged, SwTextNode const*const pNode, sal_Int32 const nIndex)
+{
+    assert(rMerged.pFirstNode->GetIndex() <= pNode->GetIndex()
+        && pNode->GetIndex() <= rMerged.pLastNode->GetIndex());
+    sal_Int32 nRet(0);
+    bool bFoundNode(false);
+    for (auto const& e : rMerged.extents)
+    {
+        if (pNode->GetIndex() < e.pNode->GetIndex())
+        {
+            return TextFrameIndex(nRet);
+        }
+        if (e.pNode == pNode)
+        {
+            if (e.nStart <= nIndex && nIndex <= e.nEnd)
+            {
+                return TextFrameIndex(nRet + (nIndex - e.nStart));
+            }
+            else if (nIndex < e.nStart)
+            {
+                // in gap before this extent => map to 0 here TODO???
+                return TextFrameIndex(nRet);
+            }
+            bFoundNode = true;
+        }
+        else if (bFoundNode)
+        {
+            break;
+        }
+        nRet += e.nEnd - e.nStart;
+    }
+    if (bFoundNode)
+    {
+        // must be in a gap at the end of the node
+        assert(nIndex <= pNode->Len());
+        return TextFrameIndex(nRet);
+    }
+    else if (rMerged.extents.empty())
+    {
+        assert(nIndex <= pNode->Len());
+        return TextFrameIndex(0);
+    }
+    return TextFrameIndex(rMerged.mergedText.getLength());
+}
+
+} // namespace sw
+
+std::pair<SwTextNode*, sal_Int32>
+SwTextFrame::MapViewToModel(TextFrameIndex const nIndex) const
+{
+//nope    assert(GetPara());
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+    {
+        return sw::MapViewToModel(*pMerged, nIndex);
+    }
+    else
+    {
+        return std::make_pair(static_cast<SwTextNode*>(const_cast<SwModify*>(
+                    SwFrame::GetDep())), sal_Int32(nIndex));
+    }
+}
+
+SwPosition SwTextFrame::MapViewToModelPos(TextFrameIndex const nIndex) const
+{
+    std::pair<SwTextNode*, sal_Int32> const ret(MapViewToModel(nIndex));
+    return SwPosition(*ret.first, ret.second);
+}
+
+TextFrameIndex SwTextFrame::MapModelToView(SwTextNode const*const pNode, sal_Int32 const nIndex) const
+{
+//nope    assert(GetPara());
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+    {
+        return sw::MapModelToView(*pMerged, pNode, nIndex);
+    }
+    else
+    {
+        assert(static_cast<SwTextNode*>(const_cast<SwModify*>(SwFrame::GetDep())) == pNode);
+        return TextFrameIndex(nIndex);
+    }
+}
+
+TextFrameIndex SwTextFrame::MapModelToViewPos(SwPosition const& rPos) const
+{
+    SwTextNode const*const pNode(rPos.nNode.GetNode().GetTextNode());
+    sal_Int32 const nIndex(rPos.nContent.GetIndex());
+    return MapModelToView(pNode, nIndex);
+}
+
+void SwTextFrame::SetMergedPara(std::unique_ptr<sw::MergedPara> p)
+{
+    SwTextNode *const pFirst(m_pMergedPara ? m_pMergedPara->pFirstNode : nullptr);
+    m_pMergedPara = std::move(p);
+    if (pFirst)
+    {
+        if (m_pMergedPara)
+        {
+            assert(pFirst == m_pMergedPara->pFirstNode);
+        }
+        else
+        {
+            pFirst->Add(this); // must register at node again
+        }
+    }
+}
+
 const OUString& SwTextFrame::GetText() const
 {
-    return GetTextNode()->GetText();
+//nope    assert(GetPara());
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+        return pMerged->mergedText;
+    else
+        return static_cast<SwTextNode const*>(SwFrame::GetDep())->GetText();
+}
+
+SwTextNode const* SwTextFrame::GetTextNodeForParaProps() const
+{
+    // FIXME can GetPara be 0 ? yes... this is needed in  SwContentNotify::SwContentNotify() which is called before any formatting is started
+//nope    assert(GetPara());
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+    {
+        assert(pMerged->pFirstNode == pMerged->pParaPropsNode); // surprising news!
+        return pMerged->pParaPropsNode;
+    }
+    else
+        return static_cast<SwTextNode const*>(SwFrame::GetDep());
+}
+
+SwTextNode const* SwTextFrame::GetTextNodeForFirstText() const
+{
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+        return pMerged->extents.empty()
+            ? pMerged->pFirstNode
+            : pMerged->extents.front().pNode;
+    else
+        return static_cast<SwTextNode const*>(SwFrame::GetDep());
+}
+
+SwTextNode const* SwTextFrame::GetTextNodeFirst() const
+{
+//nope    assert(GetPara());
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+        return pMerged->pFirstNode;
+    else
+        return static_cast<SwTextNode const*>(SwFrame::GetDep());
+}
+
+SwDoc const& SwTextFrame::GetDoc() const
+{
+    return *GetTextNodeFirst()->GetDoc();
+}
+
+LanguageType SwTextFrame::GetLangOfChar(TextFrameIndex const nIndex,
+        sal_uInt16 const nScript, bool const bNoChar) const
+{
+    // a single character can be mapped uniquely!
+    std::pair<SwTextNode const*, sal_Int32> const pos(MapViewToModel(nIndex));
+    return pos.first->GetLang(pos.second, bNoChar ? 0 : 1, nScript);
 }
 
 void SwTextFrame::ResetPreps()
@@ -459,10 +1289,63 @@ bool SwTextFrame::IsHiddenNow() const
         return true;
     }
 
-    if ( const SwViewShell* pVsh = getRootFrame()->GetCurrShell() )
+    bool bHiddenCharsHidePara(false);
+    bool bHiddenParaField(false);
+    if (m_pMergedPara)
     {
-        const bool bHiddenCharsHidePara = GetTextNode()->HasHiddenCharAttribute(true);
-        const bool bHiddenParaField = GetTextNode()->IsHiddenByParaField();
+        TextFrameIndex nHiddenStart(COMPLETE_STRING);
+        TextFrameIndex nHiddenEnd(0);
+        if (auto const pScriptInfo = GetScriptInfo())
+        {
+            pScriptInfo->GetBoundsOfHiddenRange(TextFrameIndex(0),
+                    nHiddenStart, nHiddenEnd);
+        }
+        else // ParaPortion is created in Format, but this is called earlier
+        {
+            SwScriptInfo aInfo;
+            aInfo.InitScriptInfo(*m_pMergedPara->pFirstNode, m_pMergedPara.get(), IsRightToLeft());
+            aInfo.GetBoundsOfHiddenRange(TextFrameIndex(0),
+                        nHiddenStart, nHiddenEnd);
+        }
+        if (TextFrameIndex(0) == nHiddenStart &&
+            TextFrameIndex(GetText().getLength()) <= nHiddenEnd)
+        {
+            bHiddenCharsHidePara = true;
+        }
+        sw::MergedAttrIter iter(*this);
+        SwTextNode const* pNode(nullptr);
+        int nNewResultWeight = 0;
+        for (SwTextAttr const* pHint = iter.NextAttr(&pNode); pHint; pHint = iter.NextAttr(&pNode))
+        {
+            if (pHint->Which() == RES_TXTATR_FIELD)
+            {
+                // see also SwpHints::CalcHiddenParaField()
+                const SwFormatField& rField = pHint->GetFormatField();
+                int nCurWeight = pNode->FieldCanHideParaWeight(rField.GetField()->GetTyp()->Which());
+                if (nCurWeight > nNewResultWeight)
+                {
+                    nNewResultWeight = nCurWeight;
+                    bHiddenParaField = pNode->FieldHidesPara(*rField.GetField());
+                }
+                else if (nCurWeight == nNewResultWeight && bHiddenParaField)
+                {
+                    // Currently, for both supported hiding types (HiddenPara, Database), "Don't hide"
+                    // takes precedence - i.e., if there's a "Don't hide" field of that weight, we only
+                    // care about fields of higher weight.
+                    bHiddenParaField = pNode->FieldHidesPara(*rField.GetField());
+                }
+            }
+        }
+    }
+    else
+    {
+        bHiddenCharsHidePara = static_cast<SwTextNode const*>(SwFrame::GetDep())->HasHiddenCharAttribute( true );
+        bHiddenParaField = static_cast<SwTextNode const*>(SwFrame::GetDep())->IsHiddenByParaField();
+    }
+    const SwViewShell* pVsh = getRootFrame()->GetCurrShell();
+
+    if ( pVsh && ( bHiddenCharsHidePara || bHiddenParaField ) )
+    {
 
         if (
              ( bHiddenParaField &&
@@ -484,35 +1367,30 @@ void SwTextFrame::HideHidden()
     OSL_ENSURE( !GetFollow() && IsHiddenNow(),
             "HideHidden on visible frame of hidden frame has follow" );
 
-    const sal_Int32 nEnd = COMPLETE_STRING;
-    HideFootnotes( GetOfst(), nEnd );
+    HideFootnotes(GetOfst(), TextFrameIndex(COMPLETE_STRING));
     HideAndShowObjects();
 
     // format information is obsolete
     ClearPara();
 }
 
-void SwTextFrame::HideFootnotes( sal_Int32 nStart, sal_Int32 nEnd )
+void SwTextFrame::HideFootnotes(TextFrameIndex const nStart, TextFrameIndex const nEnd)
 {
-    const SwpHints *pHints = GetTextNode()->GetpSwpHints();
-    if( pHints )
+    SwPageFrame *pPage = nullptr;
+    sw::MergedAttrIter iter(*this);
+    SwTextNode const* pNode(nullptr);
+    for (SwTextAttr const* pHt = iter.NextAttr(&pNode); pHt; pHt = iter.NextAttr(&pNode))
     {
-        const size_t nSize = pHints->Count();
-        SwPageFrame *pPage = nullptr;
-        for ( size_t i = 0; i < nSize; ++i )
+        if (pHt->Which() == RES_TXTATR_FTN)
         {
-            const SwTextAttr *pHt = pHints->Get(i);
-            if ( pHt->Which() == RES_TXTATR_FTN )
+            TextFrameIndex const nIdx(MapModelToView(pNode, pHt->GetStart()));
+            if (nEnd < nIdx)
+                break;
+            if (nStart <= nIdx)
             {
-                const sal_Int32 nIdx = pHt->GetStart();
-                if ( nEnd < nIdx )
-                    break;
-                if( nStart <= nIdx )
-                {
-                    if( !pPage )
-                        pPage = FindPageFrame();
-                    pPage->RemoveFootnote( this, static_cast<const SwTextFootnote*>(pHt) );
-                }
+                if (!pPage)
+                    pPage = FindPageFrame();
+                pPage->RemoveFootnote( this, static_cast<const SwTextFootnote*>(pHt) );
             }
         }
     }
@@ -529,27 +1407,30 @@ void SwTextFrame::HideFootnotes( sal_Int32 nStart, sal_Int32 nEnd )
  */
 bool sw_HideObj( const SwTextFrame& _rFrame,
                   const RndStdIds _eAnchorType,
-                  const sal_Int32 _nObjAnchorPos,
+                  SwPosition const& rAnchorPos,
                   SwAnchoredObject* _pAnchoredObj )
 {
     bool bRet( true );
 
     if (_eAnchorType == RndStdIds::FLY_AT_CHAR)
     {
-        const IDocumentSettingAccess* pIDSA = _rFrame.GetTextNode()->getIDocumentSettingAccess();
+        const IDocumentSettingAccess *const pIDSA = &_rFrame.GetDoc().getIDocumentSettingAccess();
         if ( !pIDSA->get(DocumentSettingId::USE_FORMER_TEXT_WRAPPING) &&
              !pIDSA->get(DocumentSettingId::OLD_LINE_SPACING) &&
              !pIDSA->get(DocumentSettingId::USE_FORMER_OBJECT_POS) &&
               pIDSA->get(DocumentSettingId::CONSIDER_WRAP_ON_OBJECT_POSITION) &&
              _rFrame.IsInDocBody() && !_rFrame.FindNextCnt() )
         {
-            const OUString &rStr = _rFrame.GetTextNode()->GetText();
-            const sal_Unicode cAnchorChar = _nObjAnchorPos < rStr.getLength() ? rStr[_nObjAnchorPos] : 0;
+            SwTextNode const& rNode(*rAnchorPos.nNode.GetNode().GetTextNode());
+            assert(FrameContainsNode(_rFrame, rNode.GetIndex()));
+            sal_Int32 const nObjAnchorPos(rAnchorPos.nContent.GetIndex());
+            const sal_Unicode cAnchorChar = nObjAnchorPos < rNode.Len()
+                ? rNode.GetText()[nObjAnchorPos]
+                : 0;
             if (cAnchorChar == CH_TXTATR_BREAKWORD)
             {
                 const SwTextAttr* const pHint(
-                    _rFrame.GetTextNode()->GetTextAttrForCharAt(_nObjAnchorPos,
-                        RES_TXTATR_FLYCNT) );
+                    rNode.GetTextAttrForCharAt(nObjAnchorPos, RES_TXTATR_FLYCNT));
                 if ( pHint )
                 {
                     const SwFrameFormat* pFrameFormat =
@@ -600,9 +1481,8 @@ void SwTextFrame::HideAndShowObjects()
                 SwContact* pContact = static_cast<SwContact*>(pObj->GetUserCall());
                 // under certain conditions
                 const RndStdIds eAnchorType( pContact->GetAnchorId() );
-                const sal_Int32 nObjAnchorPos = pContact->GetContentAnchorIndex().GetIndex();
                 if ((eAnchorType != RndStdIds::FLY_AT_CHAR) ||
-                    sw_HideObj( *this, eAnchorType, nObjAnchorPos,
+                    sw_HideObj(*this, eAnchorType, pContact->GetContentAnchor(),
                                  i ))
                 {
                     pContact->MoveObjToInvisibleLayer( pObj );
@@ -613,7 +1493,6 @@ void SwTextFrame::HideAndShowObjects()
         {
             // paragraph is visible, but can contain hidden text portion.
             // first we check if objects are allowed to be hidden:
-            const SwTextNode& rNode = *GetTextNode();
             const SwViewShell* pVsh = getRootFrame()->GetCurrShell();
             const bool bShouldBeHidden = !pVsh || !pVsh->GetWin() ||
                                          !pVsh->GetViewOptions()->IsShowHiddenChar();
@@ -637,12 +1516,16 @@ void SwTextFrame::HideAndShowObjects()
                 {
                     sal_Int32 nHiddenStart;
                     sal_Int32 nHiddenEnd;
-                    const sal_Int32 nObjAnchorPos = pContact->GetContentAnchorIndex().GetIndex();
-                    SwScriptInfo::GetBoundsOfHiddenRange( rNode, nObjAnchorPos, nHiddenStart, nHiddenEnd );
+                    const SwPosition& rAnchor = pContact->GetContentAnchor();
+                    SwScriptInfo::GetBoundsOfHiddenRange(
+                        *rAnchor.nNode.GetNode().GetTextNode(),
+                        rAnchor.nContent.GetIndex(), nHiddenStart, nHiddenEnd);
                     // Under certain conditions
                     if ( nHiddenStart != COMPLETE_STRING && bShouldBeHidden &&
-                         sw_HideObj( *this, eAnchorType, nObjAnchorPos, i ) )
+                        sw_HideObj(*this, eAnchorType, rAnchor, i))
+                    {
                         pContact->MoveObjToInvisibleLayer( pObj );
+                    }
                     else
                         pContact->MoveObjToVisibleLayer( pObj );
                 }
@@ -669,12 +1552,12 @@ void SwTextFrame::HideAndShowObjects()
  * line has to be formatted as well.
  * nFound is <= nEndLine.
  */
-sal_Int32 SwTextFrame::FindBrk( const OUString &rText,
-                              const sal_Int32 nStart,
-                              const sal_Int32 nEnd )
+TextFrameIndex SwTextFrame::FindBrk(const OUString &rText,
+                              const TextFrameIndex nStart,
+                              const TextFrameIndex nEnd)
 {
-    sal_Int32 nFound = nStart;
-    const sal_Int32 nEndLine = std::min( nEnd, rText.getLength() - 1 );
+    sal_Int32 nFound = sal_Int32(nStart);
+    const sal_Int32 nEndLine = std::min(sal_Int32(nEnd), rText.getLength() - 1);
 
     // Skip all leading blanks.
     while( nFound <= nEndLine && ' ' == rText[nFound] )
@@ -691,17 +1574,17 @@ sal_Int32 SwTextFrame::FindBrk( const OUString &rText,
         nFound++;
     }
 
-    return nFound;
+    return TextFrameIndex(nFound);
 }
 
-bool SwTextFrame::IsIdxInside( const sal_Int32 nPos, const sal_Int32 nLen ) const
+bool SwTextFrame::IsIdxInside(TextFrameIndex const nPos, TextFrameIndex const nLen) const
 {
 // Silence over-eager warning emitted at least by GCC trunk towards 6:
 #if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
-    if( nLen != COMPLETE_STRING && GetOfst() > nPos + nLen ) // the range preceded us
+    if (nLen != TextFrameIndex(COMPLETE_STRING) && GetOfst() > nPos + nLen) // the range preceded us
 #if defined __GNUC__ && !defined __clang__
 #pragma GCC diagnostic pop
 #endif
@@ -710,10 +1593,12 @@ bool SwTextFrame::IsIdxInside( const sal_Int32 nPos, const sal_Int32 nLen ) cons
     if( !GetFollow() ) // the range doesn't precede us,
         return true; // nobody follows us.
 
-    const sal_Int32 nMax = GetFollow()->GetOfst();
+    TextFrameIndex const nMax = GetFollow()->GetOfst();
 
     // either the range overlap or our text has been deleted
-    if( nMax > nPos || nMax > GetText().getLength() )
+    // sw_redlinehide: GetText() should be okay here because it has already
+    // been updated in the INS/DEL hint case
+    if (nMax > nPos || nMax > TextFrameIndex(GetText().getLength()))
         return true;
 
     // changes made in the first line of a follow can modify the master
@@ -749,7 +1634,7 @@ void SwTextFrame::InvalidateRange_( const SwCharRange &aRange, const long nD)
     }
     SwCharRange &rReformat = pPara->GetReformat();
     if(aRange != rReformat) {
-        if( COMPLETE_STRING == rReformat.Len() )
+        if (TextFrameIndex(COMPLETE_STRING) == rReformat.Len())
             rReformat = aRange;
         else
             rReformat += aRange;
@@ -770,7 +1655,7 @@ void SwTextFrame::CalcLineSpace()
         return;
 
     if( GetDrawObjs() ||
-        GetTextNode()->GetSwAttrSet().GetLRSpace().IsAutoFirst())
+        GetTextNodeForParaProps()->GetSwAttrSet().GetLRSpace().IsAutoFirst())
     {
         Init();
         return;
@@ -832,11 +1717,12 @@ void SwTextFrame::CalcLineSpace()
     }
 }
 
-static void lcl_SetWrong( SwTextFrame& rFrame, sal_Int32 nPos, sal_Int32 nCnt, bool bMove )
+static void lcl_SetWrong( SwTextFrame& rFrame, SwTextNode const& rNode,
+        sal_Int32 const nPos, sal_Int32 const nCnt, bool const bMove)
 {
     if ( !rFrame.IsFollow() )
     {
-        SwTextNode* pTextNode = rFrame.GetTextNode();
+        SwTextNode* pTextNode = const_cast<SwTextNode*>(&rNode);
         IGrammarContact* pGrammarContact = getGrammarContact( *pTextNode );
         SwGrammarMarkUp* pWrongGrammar = pGrammarContact ?
             pGrammarContact->getGrammarCheck( *pTextNode, false ) :
@@ -896,25 +1782,89 @@ static void lcl_SetWrong( SwTextFrame& rFrame, sal_Int32 nPos, sal_Int32 nCnt, b
     }
 }
 
-static void lcl_SetScriptInval( SwTextFrame& rFrame, sal_Int32 nPos )
+static void lcl_SetScriptInval(SwTextFrame& rFrame, TextFrameIndex const nPos)
 {
     if( rFrame.GetPara() )
         rFrame.GetPara()->GetScriptInfo().SetInvalidityA( nPos );
 }
 
-static void lcl_ModifyOfst( SwTextFrame* pFrame, sal_Int32 nPos, sal_Int32 nLen )
+// note: SwClientNotify will be called once for every frame => just fix own Ofst
+static void lcl_ModifyOfst(SwTextFrame & rFrame,
+        TextFrameIndex const nPos, TextFrameIndex const nLen,
+        TextFrameIndex (* op)(TextFrameIndex const&, TextFrameIndex const&))
 {
-    while( pFrame && pFrame->GetOfst() <= nPos )
-        pFrame = pFrame->GetFollow();
-    while( pFrame )
+    assert(nLen != TextFrameIndex(COMPLETE_STRING));
+    if (rFrame.IsFollow() && nPos < rFrame.GetOfst())
     {
-        if (nLen == COMPLETE_STRING)
-            pFrame->ManipOfst( pFrame->GetTextNode()->GetText().getLength() );
-        else
-            pFrame->ManipOfst( pFrame->GetOfst() + nLen );
-        pFrame = pFrame->GetFollow();
+        rFrame.ManipOfst( std::max(TextFrameIndex(0), op(rFrame.GetOfst(), nLen)) );
     }
 }
+
+namespace {
+
+void UpdateMergedParaForMove(sw::MergedPara & rMerged,
+        SwTextFrame & rTextFrame,
+        bool & o_rbRecalcFootnoteFlag,
+        SwTextNode const& rDestNode,
+        SwTextNode const& rNode,
+        sal_Int32 const nDestStart,
+        sal_Int32 const nSourceStart,
+        sal_Int32 const nLen)
+{
+    std::vector<std::pair<sal_Int32, sal_Int32>> deleted;
+    sal_Int32 const nSourceEnd(nSourceStart + nLen);
+    sal_Int32 nLastEnd(0);
+    for (const auto& rExt : rMerged.extents)
+    {
+        if (rExt.pNode == &rNode)
+        {
+            sal_Int32 const nStart(std::max(nLastEnd, nSourceStart));
+            sal_Int32 const nEnd(std::min(rExt.nStart, nSourceEnd));
+            if (nStart < nEnd)
+            {
+                deleted.emplace_back(nStart, nEnd);
+            }
+            nLastEnd = rExt.nEnd;
+            if (nSourceEnd <= rExt.nEnd)
+            {
+                break;
+            }
+        }
+        else if (rNode.GetIndex() < rExt.pNode->GetIndex())
+        {
+            break;
+        }
+    }
+    if (nLastEnd != rNode.Len()) // without nLen, string yet to be removed
+    {
+        assert(rNode.Len() == 0 || nLastEnd < nSourceEnd);
+        if (nLastEnd < nSourceEnd)
+        {
+            deleted.emplace_back(std::max(nLastEnd, nSourceStart), nSourceEnd);
+        }
+    }
+    if (!deleted.empty())
+    {
+        o_rbRecalcFootnoteFlag = true;
+        for (auto const& it : deleted)
+        {
+            sal_Int32 const nStart(it.first - nSourceStart + nDestStart);
+            TextFrameIndex const nDeleted = UpdateMergedParaForDelete(rMerged, false,
+                rDestNode, nStart, it.second - it.first);
+//FIXME asserts valid for join - but if called from split, the new node isn't there yet and it will be added later...       assert(nDeleted);
+//            assert(nDeleted == it.second - it.first);
+            if(nDeleted)
+            {
+                // InvalidateRange/lcl_SetScriptInval was called sufficiently for SwInsText
+                lcl_SetWrong(rTextFrame, rDestNode, nStart, it.first - it.second, false);
+                TextFrameIndex const nIndex(sw::MapModelToView(rMerged, &rDestNode, nStart));
+                lcl_ModifyOfst(rTextFrame, nIndex, nDeleted, &o3tl::operator-<sal_Int32, Tag_TextFrameIndex>);
+            }
+        }
+    }
+}
+
+} // namespace
 
 /**
  * Related: fdo#56031 filter out attribute changes that don't matter for
@@ -925,20 +1875,80 @@ static bool isA11yRelevantAttribute(sal_uInt16 nWhich)
     return nWhich != RES_CHRATR_RSID;
 }
 
-void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
+static bool hasA11yRelevantAttribute( const std::vector<sal_uInt16>& rWhichFmtAttr )
 {
+    for( sal_uInt16 nWhich : rWhichFmtAttr )
+        if ( isA11yRelevantAttribute( nWhich ) )
+            return true;
+
+    return false;
+}
+
+// Note: for now this overrides SwClient::SwClientNotify; the intermediary
+// classes still override SwClient::Modify, which should continue to work
+// as their implementation of SwClientNotify is SwClient's which calls Modify.
+// Therefore we also don't need to call SwClient::SwClientNotify(rModify, rHint)
+// because that's all it does, and this implementation calls
+// SwContentFrame::Modify() when appropriate.
+void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
+{
+    SfxPoolItem const* pOld(nullptr);
+    SfxPoolItem const* pNew(nullptr);
+    sw::MoveText const* pMoveText(nullptr);
+    sw::RedlineDelText const* pRedlineDelText(nullptr);
+    sw::RedlineUnDelText const* pRedlineUnDelText(nullptr);
+
+    if (auto const pHint = dynamic_cast<sw::LegacyModifyHint const*>(&rHint))
+    {
+        pOld = pHint->m_pOld;
+        pNew = pHint->m_pNew;
+    }
+    else if (auto const pHt = dynamic_cast<sw::MoveText const*>(&rHint))
+    {
+        pMoveText = pHt;
+    }
+    else if (auto const pHynt = dynamic_cast<sw::RedlineDelText const*>(&rHint))
+    {
+        pRedlineDelText = pHynt;
+    }
+    else if (auto const pHnt = dynamic_cast<sw::RedlineUnDelText const*>(&rHint))
+    {
+        pRedlineUnDelText = pHnt;
+    }
+    else
+    {
+        assert(!"unexpected hint");
+    }
+
+    if (m_pMergedPara)
+    {
+        assert(m_pMergedPara->listener.IsListeningTo(&rModify));
+    }
+
+    SwTextNode const& rNode(static_cast<SwTextNode const&>(rModify));
     const sal_uInt16 nWhich = pOld ? pOld->Which() : pNew ? pNew->Which() : 0;
 
     // modifications concerning frame attributes are processed by the base class
     if( IsInRange( aFrameFormatSetRange, nWhich ) || RES_FMT_CHG == nWhich )
     {
+        if (m_pMergedPara)
+        {   // ignore item set changes that don't apply
+            SwTextNode const*const pAttrNode(
+                (nWhich == RES_PAGEDESC || nWhich == RES_BREAK)
+                    ? m_pMergedPara->pFirstNode
+                    : m_pMergedPara->pParaPropsNode);
+            if (pAttrNode != &rModify)
+            {
+                return;
+            }
+        }
         SwContentFrame::Modify( pOld, pNew );
         if( nWhich == RES_FMT_CHG && getRootFrame()->GetCurrShell() )
         {
             // collection has changed
             Prepare();
             InvalidatePrt_();
-            lcl_SetWrong( *this, 0, COMPLETE_STRING, false );
+            lcl_SetWrong( *this, rNode, 0, COMPLETE_STRING, false );
             SetDerivedR2L( false );
             CheckDirChange();
             // Force complete paint due to existing indents.
@@ -948,28 +1958,116 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
         return;
     }
 
+    if (m_pMergedPara && m_pMergedPara->pParaPropsNode != &rModify)
+    {
+        if (isPARATR(nWhich) || isPARATR_LIST(nWhich)) // FRMATR handled above
+        {
+            return; // ignore it
+        }
+    }
+
+    Broadcast(SfxHint()); // notify SwAccessibleParagraph
+
     // while locked ignore all modifications
     if( IsLocked() )
         return;
 
     // save stack
     // warning: one has to ensure that all variables are set
-    sal_Int32 nPos;
-    sal_Int32 nLen;
+    TextFrameIndex nPos;
+    TextFrameIndex nLen;
     bool bSetFieldsDirty = false;
     bool bRecalcFootnoteFlag = false;
 
-    switch( nWhich )
+    if (pRedlineDelText)
+    {
+        if (m_pMergedPara)
+        {
+            sal_Int32 const nNPos = pRedlineDelText->nStart;
+            sal_Int32 const nNLen = pRedlineDelText->nLen;
+            nPos = MapModelToView(&rNode, nNPos);
+            // update merged before doing anything else
+            nLen = UpdateMergedParaForDelete(*m_pMergedPara, false, rNode, nNPos, nNLen);
+            const sal_Int32 m = -nNLen;
+            if (nLen && IsIdxInside(nPos, nLen))
+            {
+                InvalidateRange( SwCharRange(nPos, TextFrameIndex(1)), m );
+            }
+            lcl_SetWrong( *this, rNode, nNPos, m, false );
+            if (nLen)
+            {
+                lcl_SetScriptInval( *this, nPos );
+                bSetFieldsDirty = bRecalcFootnoteFlag = true;
+                lcl_ModifyOfst(*this, nPos, nLen, &o3tl::operator-<sal_Int32, Tag_TextFrameIndex>);
+            }
+        }
+    }
+    else if (pRedlineUnDelText)
+    {
+        if (m_pMergedPara)
+        {
+            sal_Int32 const nNPos = pRedlineUnDelText->nStart;
+            sal_Int32 const nNLen = pRedlineUnDelText->nLen;
+            nPos = MapModelToView(&rNode, nNPos);
+            nLen = UpdateMergedParaForInsert(*m_pMergedPara, false, rNode, nNPos, nNLen);
+            if (IsIdxInside(nPos, nLen))
+            {
+                if (!nLen)
+                {
+                    // Refresh NumPortions even when line is empty!
+                    if (nPos)
+                        InvalidateSize();
+                    else
+                        Prepare();
+                }
+                else
+                    InvalidateRange_( SwCharRange( nPos, nLen ), nNLen );
+            }
+            lcl_SetWrong( *this, rNode, nNPos, nNLen, false );
+            lcl_SetScriptInval( *this, nPos );
+            bSetFieldsDirty = true;
+            lcl_ModifyOfst(*this, nPos, nLen, &o3tl::operator+<sal_Int32, Tag_TextFrameIndex>);
+        }
+    }
+    else if (pMoveText)
+    {
+        if (m_pMergedPara
+            && m_pMergedPara->pFirstNode->GetIndex() <= pMoveText->pDestNode->GetIndex()
+            && pMoveText->pDestNode->GetIndex() <= m_pMergedPara->pLastNode->GetIndex())
+        {   // if it's not 2 nodes in merged frame, assume the target node doesn't have frames at all
+            assert(std::abs(static_cast<long>(rNode.GetIndex()) - static_cast<long>(pMoveText->pDestNode->GetIndex())) == 1);
+            UpdateMergedParaForMove(*m_pMergedPara,
+                    *this,
+                    bRecalcFootnoteFlag,
+                    *pMoveText->pDestNode, rNode,
+                    pMoveText->nDestStart,
+                    pMoveText->nSourceStart,
+                    pMoveText->nLen);
+        }
+        else
+        {
+            // there is a situation where this is okay: from JoinNext, which will then call CheckResetRedlineMergeFlag, which will then create merged from scratch for this frame
+            // assert(!m_pMergedPara || !getRootFrame()->IsHideRedlines() || !pMoveText->pDestNode->getLayoutFrame(getRootFrame()));
+        }
+    }
+    else switch (nWhich)
     {
         case RES_LINENUMBER:
         {
+            assert(false); // should have been forwarded to SwContentFrame
             InvalidateLineNum();
         }
         break;
         case RES_INS_TXT:
         {
-            nPos = static_cast<const SwInsText*>(pNew)->nPos;
-            nLen = static_cast<const SwInsText*>(pNew)->nLen;
+            sal_Int32 const nNPos = static_cast<const SwInsText*>(pNew)->nPos;
+            sal_Int32 const nNLen = static_cast<const SwInsText*>(pNew)->nLen;
+            nPos = MapModelToView(&rNode, nNPos);
+            nLen = TextFrameIndex(nNLen);
+            if (m_pMergedPara)
+            {
+                UpdateMergedParaForInsert(*m_pMergedPara, true, rNode, nNPos, nNLen);
+            }
             if( IsIdxInside( nPos, nLen ) )
             {
                 if( !nLen )
@@ -981,68 +2079,102 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                         Prepare();
                 }
                 else
-                    InvalidateRange_( SwCharRange( nPos, nLen ), nLen );
+                    InvalidateRange_( SwCharRange( nPos, nLen ), nNLen );
             }
-            lcl_SetWrong( *this, nPos, nLen, true );
+            lcl_SetWrong( *this, rNode, nNPos, nNLen, true );
             lcl_SetScriptInval( *this, nPos );
             bSetFieldsDirty = true;
-            if( HasFollow() )
-                lcl_ModifyOfst( this, nPos, nLen );
+            lcl_ModifyOfst(*this, nPos, nLen, &o3tl::operator+<sal_Int32, Tag_TextFrameIndex>);
         }
         break;
         case RES_DEL_CHR:
         {
-            nPos = static_cast<const SwDelChr*>(pNew)->nPos;
-            InvalidateRange( SwCharRange( nPos, 1 ), -1 );
-            lcl_SetWrong( *this, nPos, -1, true );
-            lcl_SetScriptInval( *this, nPos );
-            bSetFieldsDirty = bRecalcFootnoteFlag = true;
-            if( HasFollow() )
-                lcl_ModifyOfst( this, nPos, COMPLETE_STRING );
+            sal_Int32 const nNPos = static_cast<const SwDelChr*>(pNew)->nPos;
+            nPos = MapModelToView(&rNode, nNPos);
+            if (m_pMergedPara)
+            {
+                nLen = UpdateMergedParaForDelete(*m_pMergedPara, true, rNode, nNPos, 1);
+            }
+            else
+            {
+                nLen = TextFrameIndex(1);
+            }
+            lcl_SetWrong( *this, rNode, nNPos, -1, true );
+            if (nLen)
+            {
+                InvalidateRange( SwCharRange(nPos, nLen), -1 );
+                lcl_SetScriptInval( *this, nPos );
+                bSetFieldsDirty = bRecalcFootnoteFlag = true;
+                lcl_ModifyOfst(*this, nPos, nLen, &o3tl::operator-<sal_Int32, Tag_TextFrameIndex>);
+            }
         }
         break;
         case RES_DEL_TXT:
         {
-            nPos = static_cast<const SwDelText*>(pNew)->nStart;
-            nLen = static_cast<const SwDelText*>(pNew)->nLen;
-            const sal_Int32 m = -nLen;
-            if( IsIdxInside( nPos, nLen ) )
+            sal_Int32 const nNPos = static_cast<const SwDelText*>(pNew)->nStart;
+            sal_Int32 const nNLen = static_cast<const SwDelText*>(pNew)->nLen;
+            nPos = MapModelToView(&rNode, nNPos);
+            if (m_pMergedPara)
+            {   // update merged before doing anything else
+                nLen = UpdateMergedParaForDelete(*m_pMergedPara, true, rNode, nNPos, nNLen);
+            }
+            else
+            {
+                nLen = TextFrameIndex(nNLen);
+            }
+            const sal_Int32 m = -nNLen;
+            if ((!m_pMergedPara || nLen) && IsIdxInside(nPos, nLen))
             {
                 if( !nLen )
                     InvalidateSize();
                 else
-                    InvalidateRange( SwCharRange( nPos, 1 ), m );
+                    InvalidateRange( SwCharRange(nPos, TextFrameIndex(1)), m );
             }
-            lcl_SetWrong( *this, nPos, m, true );
-            lcl_SetScriptInval( *this, nPos );
-            bSetFieldsDirty = bRecalcFootnoteFlag = true;
-            if( HasFollow() )
-                lcl_ModifyOfst( this, nPos, nLen );
+            lcl_SetWrong( *this, rNode, nNPos, m, true );
+            if (nLen)
+            {
+                lcl_SetScriptInval( *this, nPos );
+                bSetFieldsDirty = bRecalcFootnoteFlag = true;
+                lcl_ModifyOfst(*this, nPos, nLen, &o3tl::operator-<sal_Int32, Tag_TextFrameIndex>);
+            }
         }
         break;
         case RES_UPDATE_ATTR:
         {
-            nPos = static_cast<const SwUpdateAttr*>(pNew)->getStart();
-            nLen = static_cast<const SwUpdateAttr*>(pNew)->getEnd() - nPos;
+            const SwUpdateAttr* pNewUpdate = static_cast<const SwUpdateAttr*>(pNew);
+
+            sal_Int32 const nNPos = pNewUpdate->getStart();
+            sal_Int32 const nNLen = pNewUpdate->getEnd() - nNPos;
+            nPos = MapModelToView(&rNode, nNPos);
+            nLen = MapModelToView(&rNode, nNPos + nNLen) - nPos;
             if( IsIdxInside( nPos, nLen ) )
             {
                 // We need to reformat anyways, even if the invalidated
-                // area is NULL.
+                // range is empty.
                 // E.g.: empty line, set 14 pt!
-                // if( !nLen ) nLen = 1;
 
                 // FootnoteNumbers need to be formatted
                 if( !nLen )
-                    nLen = 1;
+                    nLen = TextFrameIndex(1);
 
                 InvalidateRange_( SwCharRange( nPos, nLen) );
-                const sal_uInt16 nTmp = static_cast<const SwUpdateAttr*>(pNew)->getWhichAttr();
+                const sal_uInt16 nTmp = pNewUpdate->getWhichAttr();
 
                 if( ! nTmp || RES_TXTATR_CHARFMT == nTmp || RES_TXTATR_INETFMT == nTmp || RES_TXTATR_AUTOFMT == nTmp ||
                     RES_FMT_CHG == nTmp || RES_ATTRSET_CHG == nTmp )
                 {
-                    lcl_SetWrong( *this, nPos, nPos + nLen, false );
+                    lcl_SetWrong( *this, rNode, nNPos, nNPos + nNLen, false );
                     lcl_SetScriptInval( *this, nPos );
+                }
+            }
+
+            if( isA11yRelevantAttribute( pNewUpdate->getWhichAttr() ) &&
+                hasA11yRelevantAttribute( pNewUpdate->getFmtAttrs() ) )
+            {
+                SwViewShell* pViewSh = getRootFrame() ? getRootFrame()->GetCurrShell() : nullptr;
+                if ( pViewSh  )
+                {
+                    pViewSh->InvalidateAccessibleParaAttrs( *this );
                 }
             }
         }
@@ -1075,8 +2207,9 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
         case RES_TXTATR_FIELD:
         case RES_TXTATR_ANNOTATION:
             {
-                nPos = static_cast<const SwFormatField*>(pNew)->GetTextField()->GetStart();
-                if( IsIdxInside( nPos, 1 ) )
+                sal_Int32 const nNPos = static_cast<const SwFormatField*>(pNew)->GetTextField()->GetStart();
+                nPos = MapModelToView(&rNode, nNPos);
+                if (IsIdxInside(nPos, TextFrameIndex(1)))
                 {
                     if( pNew == pOld )
                     {
@@ -1086,19 +2219,29 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                         SetCompletePaint();
                     }
                     else
-                        InvalidateRange_( SwCharRange( nPos, 1 ) );
+                        InvalidateRange_(SwCharRange(nPos, TextFrameIndex(1)));
                 }
                 bSetFieldsDirty = true;
                 // ST2
                 if ( SwSmartTagMgr::Get().IsSmartTagsEnabled() )
-                    lcl_SetWrong( *this, nPos, nPos + 1, false );
+                    lcl_SetWrong( *this, rNode, nNPos, nNPos + 1, false );
             }
             break;
 
         case RES_TXTATR_FTN :
         {
-            nPos = static_cast<const SwFormatFootnote*>(pNew)->GetTextFootnote()->GetStart();
-            if( IsInFootnote() || IsIdxInside( nPos, 1 ) )
+            if (!IsInFootnote())
+            {   // the hint may be sent from the anchor node, or from a
+                // node in the footnote; the anchor index is only valid in the
+                // anchor node!
+                assert(&rNode == &static_cast<const SwFormatFootnote*>(pNew)->GetTextFootnote()->GetTextNode());
+                nPos = MapModelToView(&rNode,
+                    static_cast<const SwFormatFootnote*>(pNew)->GetTextFootnote()->GetStart());
+            }
+#ifdef _MSC_VER
+            else nPos = TextFrameIndex(42); // shut up MSVC 2017 spurious warning C4701
+#endif
+            if (IsInFootnote() || IsIdxInside(nPos, TextFrameIndex(1)))
                 Prepare( PREP_FTN, static_cast<const SwFormatFootnote*>(pNew)->GetTextFootnote() );
             break;
         }
@@ -1114,8 +2257,9 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
 
             if( SfxItemState::SET == rNewSet.GetItemState( RES_TXTATR_FTN, false, &pItem ))
             {
-                nPos = static_cast<const SwFormatFootnote*>(pItem)->GetTextFootnote()->GetStart();
-                if( IsIdxInside( nPos, 1 ) )
+                nPos = MapModelToView(&rNode,
+                    static_cast<const SwFormatFootnote*>(pItem)->GetTextFootnote()->GetStart());
+                if (IsIdxInside(nPos, TextFrameIndex(1)))
                     Prepare( PREP_FTN, pNew );
                 nClear = 0x01;
                 --nCount;
@@ -1123,8 +2267,9 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
 
             if( SfxItemState::SET == rNewSet.GetItemState( RES_TXTATR_FIELD, false, &pItem ))
             {
-                nPos = static_cast<const SwFormatField*>(pItem)->GetTextField()->GetStart();
-                if( IsIdxInside( nPos, 1 ) )
+                nPos = MapModelToView(&rNode,
+                    static_cast<const SwFormatField*>(pItem)->GetTextField()->GetStart());
+                if (IsIdxInside(nPos, TextFrameIndex(1)))
                 {
                     const SfxPoolItem* pOldItem = pOld ?
                         &(static_cast<const SwAttrSetChg*>(pOld)->GetChgSet()->Get(RES_TXTATR_FIELD)) : nullptr;
@@ -1134,7 +2279,7 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                         SetCompletePaint();
                     }
                     else
-                        InvalidateRange_( SwCharRange( nPos, 1 ) );
+                        InvalidateRange_(SwCharRange(nPos, TextFrameIndex(1)));
                 }
                 nClear |= 0x02;
                 --nCount;
@@ -1145,23 +2290,27 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                                             RES_PARATR_REGISTER, false );
             if ( bLineSpace || bRegister )
             {
-                Prepare( bRegister ? PREP_REGISTER : PREP_ADJUST_FRM );
-                CalcLineSpace();
-                InvalidateSize();
-                InvalidatePrt_();
+                if (!m_pMergedPara || m_pMergedPara->pParaPropsNode == &rModify)
+                {
+                    Prepare( bRegister ? PREP_REGISTER : PREP_ADJUST_FRM );
+                    CalcLineSpace();
+                    InvalidateSize();
+                    InvalidatePrt_();
 
-                // i#11859
-                //  (1) Also invalidate next frame on next page/column.
-                //  (2) Skip empty sections and hidden paragraphs
-                //  Thus, use method <InvalidateNextPrtArea()>
-                InvalidateNextPrtArea();
+                    // i#11859
+                    //  (1) Also invalidate next frame on next page/column.
+                    //  (2) Skip empty sections and hidden paragraphs
+                    //  Thus, use method <InvalidateNextPrtArea()>
+                    InvalidateNextPrtArea();
 
-                SetCompletePaint();
+                    SetCompletePaint();
+                }
                 nClear |= 0x04;
                 if ( bLineSpace )
                 {
                     --nCount;
-                    if( IsInSct() && !GetPrev() )
+                    if ((!m_pMergedPara || m_pMergedPara->pParaPropsNode == &rModify)
+                        && IsInSct() && !GetPrev())
                     {
                         SwSectionFrame *pSect = FindSctFrame();
                         if( pSect->ContainsAny() == this )
@@ -1174,15 +2323,19 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
             if ( SfxItemState::SET == rNewSet.GetItemState( RES_PARATR_SPLIT,
                                                        false ))
             {
-                if ( GetPrev() )
-                    CheckKeep();
-                Prepare();
-                InvalidateSize();
+                if (!m_pMergedPara || m_pMergedPara->pParaPropsNode == &rModify)
+                {
+                    if (GetPrev())
+                        CheckKeep();
+                    Prepare();
+                    InvalidateSize();
+                }
                 nClear |= 0x08;
                 --nCount;
             }
 
             if( SfxItemState::SET == rNewSet.GetItemState( RES_BACKGROUND, false)
+                && (!m_pMergedPara || m_pMergedPara->pParaPropsNode == &rModify)
                 && !IsFollow() && GetDrawObjs() )
             {
                 SwSortedObjs *pObjs = GetDrawObjs();
@@ -1218,8 +2371,8 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
             if ( SfxItemState::SET ==
                  rNewSet.GetItemState( RES_TXTATR_CHARFMT, false ) )
             {
-                lcl_SetWrong( *this, 0, COMPLETE_STRING, false );
-                lcl_SetScriptInval( *this, 0 );
+                lcl_SetWrong( *this, rNode, 0, COMPLETE_STRING, false );
+                lcl_SetScriptInval( *this, TextFrameIndex(0) );
             }
             else if ( SfxItemState::SET ==
                       rNewSet.GetItemState( RES_CHRATR_LANGUAGE, false ) ||
@@ -1227,16 +2380,17 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                       rNewSet.GetItemState( RES_CHRATR_CJK_LANGUAGE, false ) ||
                       SfxItemState::SET ==
                       rNewSet.GetItemState( RES_CHRATR_CTL_LANGUAGE, false ) )
-                lcl_SetWrong( *this, 0, COMPLETE_STRING, false );
+                lcl_SetWrong( *this, rNode, 0, COMPLETE_STRING, false );
             else if ( SfxItemState::SET ==
                       rNewSet.GetItemState( RES_CHRATR_FONT, false ) ||
                       SfxItemState::SET ==
                       rNewSet.GetItemState( RES_CHRATR_CJK_FONT, false ) ||
                       SfxItemState::SET ==
                       rNewSet.GetItemState( RES_CHRATR_CTL_FONT, false ) )
-                lcl_SetScriptInval( *this, 0 );
+                lcl_SetScriptInval( *this, TextFrameIndex(0) );
             else if ( SfxItemState::SET ==
-                      rNewSet.GetItemState( RES_FRAMEDIR, false ) )
+                      rNewSet.GetItemState( RES_FRAMEDIR, false )
+                && (!m_pMergedPara || m_pMergedPara->pParaPropsNode == &rModify))
             {
                 SetDerivedR2L( false );
                 CheckDirChange();
@@ -1252,10 +2406,37 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                     InvalidatePrt_();
                 }
 
-                if( nClear )
+                if (nClear || (m_pMergedPara &&
+                        (m_pMergedPara->pParaPropsNode != &rModify ||
+                         m_pMergedPara->pFirstNode != &rModify)))
                 {
+                    assert(pOld);
                     SwAttrSetChg aOldSet( *static_cast<const SwAttrSetChg*>(pOld) );
                     SwAttrSetChg aNewSet( *static_cast<const SwAttrSetChg*>(pNew) );
+
+                    if (m_pMergedPara && m_pMergedPara->pParaPropsNode != &rModify)
+                    {
+                        for (sal_uInt16 i = RES_PARATR_BEGIN; i != RES_FRMATR_END; ++i)
+                        {
+                            if (i != RES_BREAK && i != RES_PAGEDESC)
+                            {
+                                aOldSet.ClearItem(i);
+                                aNewSet.ClearItem(i);
+                            }
+                        }
+                        for (sal_uInt16 i = XATTR_FILL_FIRST; i <= XATTR_FILL_LAST; ++i)
+                        {
+                            aOldSet.ClearItem(i);
+                            aNewSet.ClearItem(i);
+                        }
+                    }
+                    if (m_pMergedPara && m_pMergedPara->pFirstNode != &rModify)
+                    {
+                        aOldSet.ClearItem(RES_BREAK);
+                        aNewSet.ClearItem(RES_BREAK);
+                        aOldSet.ClearItem(RES_PAGEDESC);
+                        aNewSet.ClearItem(RES_PAGEDESC);
+                    }
 
                     if( 0x01 & nClear )
                     {
@@ -1285,7 +2466,10 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                         aOldSet.ClearItem( RES_PARATR_SPLIT );
                         aNewSet.ClearItem( RES_PARATR_SPLIT );
                     }
-                    SwContentFrame::Modify( &aOldSet, &aNewSet );
+                    if (aOldSet.Count() || aNewSet.Count())
+                    {
+                        SwContentFrame::Modify( &aOldSet, &aNewSet );
+                    }
                 }
                 else
                     SwContentFrame::Modify( pOld, pNew );
@@ -1311,8 +2495,9 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
                 if( pDocPos->nDocPos <= getFrameArea().Top() )
                 {
                     const SwFormatField *pField = static_cast<const SwFormatField *>(pNew);
-                    InvalidateRange(
-                        SwCharRange( pField->GetTextField()->GetStart(), 1 ) );
+                    TextFrameIndex const nIndex(MapModelToView(&rNode,
+                                pField->GetTextField()->GetStart()));
+                    InvalidateRange(SwCharRange(nIndex, TextFrameIndex(1)));
                 }
             }
             break;
@@ -1324,6 +2509,7 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
             bSetFieldsDirty = true;
             break;
         case RES_FRAMEDIR :
+            assert(false); // should have been forwarded to SwContentFrame
             SetDerivedR2L( false );
             CheckDirChange();
             break;
@@ -1342,7 +2528,7 @@ void SwTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
     } // switch
 
     if( bSetFieldsDirty )
-        GetNode()->getIDocumentFieldsAccess().SetFieldsDirty( true, GetNode(), 1 );
+        GetDoc().getIDocumentFieldsAccess().SetFieldsDirty( true, &rNode, 1 );
 
     if ( bRecalcFootnoteFlag )
         CalcFootnoteFlag();
@@ -1391,7 +2577,7 @@ void SwTextFrame::PrepWidows( const sal_uInt16 nNeed, bool bNotify )
     SwTextSizeInfo aInf( this );
     SwTextMargin aLine( this, &aInf );
     aLine.Bottom();
-    sal_Int32 nTmpLen = aLine.GetCurr()->GetLen();
+    TextFrameIndex nTmpLen = aLine.GetCurr()->GetLen();
     while( nHave && aLine.PrevLine() )
     {
         if( nTmpLen )
@@ -1426,9 +2612,9 @@ void SwTextFrame::PrepWidows( const sal_uInt16 nNeed, bool bNotify )
     }
 }
 
-static bool lcl_ErgoVadis( SwTextFrame* pFrame, sal_Int32 &rPos, const PrepareHint ePrep )
+static bool lcl_ErgoVadis(SwTextFrame* pFrame, TextFrameIndex & rPos, const PrepareHint ePrep)
 {
-    const SwFootnoteInfo &rFootnoteInfo = pFrame->GetNode()->GetDoc()->GetFootnoteInfo();
+    const SwFootnoteInfo &rFootnoteInfo = pFrame->GetDoc().GetFootnoteInfo();
     if( ePrep == PREP_ERGOSUM )
     {
         if( rFootnoteInfo.aErgoSum.isEmpty() )
@@ -1442,7 +2628,7 @@ static bool lcl_ErgoVadis( SwTextFrame* pFrame, sal_Int32 &rPos, const PrepareHi
         if( pFrame->HasFollow() )
             rPos = pFrame->GetFollow()->GetOfst();
         else
-            rPos = pFrame->GetText().getLength();
+            rPos = TextFrameIndex(pFrame->GetText().getLength());
         if( rPos )
             --rPos; // our last character
     }
@@ -1491,11 +2677,11 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                     if ( aTextFly.Relax() || IsUndersized() )
                         break;
                 }
-                if( GetTextNode()->GetSwAttrSet().GetRegister().GetValue())
+                if (GetTextNodeForParaProps()->GetSwAttrSet().GetRegister().GetValue())
                     break;
 
                 SwTextGridItem const*const pGrid(GetGridItem(FindPageFrame()));
-                if ( pGrid && GetTextNode()->GetSwAttrSet().GetParaGrid().GetValue() )
+                if (pGrid && GetTextNodeForParaProps()->GetSwAttrSet().GetParaGrid().GetValue())
                     break;
 
                 // i#28701 - consider anchored objects
@@ -1545,9 +2731,9 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
             if( IsFootnoteNumFrame() != pPara->IsFootnoteNum() ||
                 IsUndersized() )
             {
-                InvalidateRange( SwCharRange( 0, 1 ), 1);
+                InvalidateRange(SwCharRange(TextFrameIndex(0), TextFrameIndex(1)), 1);
                 if( GetOfst() && !IsFollow() )
-                    SetOfst_( 0 );
+                    SetOfst_(TextFrameIndex(0));
             }
             break;
         case PREP_MUST_FIT :
@@ -1573,27 +2759,28 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                 if( !GetPrev() )
                     // So we're a TextFrame of the footnote, which has
                     // to display the footnote number or the ErgoSum text
-                    InvalidateRange( SwCharRange( 0, 1 ), 1);
+                    InvalidateRange(SwCharRange(TextFrameIndex(0), TextFrameIndex(1)), 1);
 
                 if( !GetNext() )
                 {
                     // We're the last Footnote; we need to update the
                     // QuoVadis texts now
-                    const SwFootnoteInfo &rFootnoteInfo = GetNode()->GetDoc()->GetFootnoteInfo();
+                    const SwFootnoteInfo &rFootnoteInfo = GetDoc().GetFootnoteInfo();
                     if( !pPara->UpdateQuoVadis( rFootnoteInfo.aQuoVadis ) )
                     {
-                        sal_Int32 nPos = pPara->GetParLen();
+                        TextFrameIndex nPos = pPara->GetParLen();
                         if( nPos )
                             --nPos;
-                        InvalidateRange( SwCharRange( nPos, 1 ), 1);
+                        InvalidateRange( SwCharRange(nPos, TextFrameIndex(1)), 1);
                     }
                 }
             }
             else
             {
                 // We are the TextFrame _with_ the footnote
-                const sal_Int32 nPos = pFootnote->GetStart();
-                InvalidateRange( SwCharRange( nPos, 1 ), 1);
+                TextFrameIndex const nPos = MapModelToView(
+                        &pFootnote->GetTextNode(), pFootnote->GetStart());
+                InvalidateRange(SwCharRange(nPos, TextFrameIndex(1)), 1);
             }
             break;
         }
@@ -1605,56 +2792,52 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                 bool bOld = IsVertical();
                 SetInvalidVert( true );
                 if( bOld != IsVertical() )
-                    InvalidateRange( SwCharRange( GetOfst(), COMPLETE_STRING ) );
+                    InvalidateRange(SwCharRange(GetOfst(), TextFrameIndex(COMPLETE_STRING)));
             }
 
             if( HasFollow() )
             {
-                sal_Int32 nNxtOfst = GetFollow()->GetOfst();
+                TextFrameIndex nNxtOfst = GetFollow()->GetOfst();
                 if( nNxtOfst )
                     --nNxtOfst;
-                InvalidateRange( SwCharRange( nNxtOfst, 1 ), 1);
+                InvalidateRange(SwCharRange( nNxtOfst, TextFrameIndex(1)), 1);
             }
             if( IsInFootnote() )
             {
-                sal_Int32 nPos;
+                TextFrameIndex nPos;
                 if( lcl_ErgoVadis( this, nPos, PREP_QUOVADIS ) )
-                    InvalidateRange( SwCharRange( nPos, 1 ) );
+                    InvalidateRange( SwCharRange( nPos, TextFrameIndex(1)) );
                 if( lcl_ErgoVadis( this, nPos, PREP_ERGOSUM ) )
-                    InvalidateRange( SwCharRange( nPos, 1 ) );
+                    InvalidateRange( SwCharRange( nPos, TextFrameIndex(1)) );
             }
             // If we have a page number field, we must invalidate those spots
-            SwpHints *pHints = GetTextNode()->GetpSwpHints();
-            if( pHints )
+            SwTextNode const* pNode(nullptr);
+            sw::MergedAttrIter iter(*this);
+            TextFrameIndex const nEnd = GetFollow()
+                    ? GetFollow()->GetOfst() : TextFrameIndex(COMPLETE_STRING);
+            for (SwTextAttr const* pHt = iter.NextAttr(&pNode); pHt; pHt = iter.NextAttr(&pNode))
             {
-                const size_t nSize = pHints->Count();
-                const sal_Int32 nEnd = GetFollow() ?
-                                    GetFollow()->GetOfst() : COMPLETE_STRING;
-                for ( size_t i = 0; i < nSize; ++i )
+                TextFrameIndex const nStart(MapModelToView(pNode, pHt->GetStart()));
+                if (nStart >= GetOfst())
                 {
-                    const SwTextAttr *pHt = pHints->Get(i);
-                    const sal_Int32 nStart = pHt->GetStart();
-                    if( nStart >= GetOfst() )
-                    {
-                        if( nStart >= nEnd )
-                            break;
+                    if (nStart >= nEnd)
+                        break;
 
                 // If we're flowing back and own a Footnote, the Footnote also flows
                 // with us. So that it doesn't obstruct us, we send ourselves
                 // a ADJUST_FRM.
                 // pVoid != 0 means MoveBwd()
-                        const sal_uInt16 nWhich = pHt->Which();
-                        if( RES_TXTATR_FIELD == nWhich ||
-                            (HasFootnote() && pVoid && RES_TXTATR_FTN == nWhich))
-                        InvalidateRange( SwCharRange( nStart, 1 ), 1 );
-                    }
+                    const sal_uInt16 nWhich = pHt->Which();
+                    if (RES_TXTATR_FIELD == nWhich ||
+                        (HasFootnote() && pVoid && RES_TXTATR_FTN == nWhich))
+                    InvalidateRange(SwCharRange(nStart, TextFrameIndex(1)), 1);
                 }
             }
             // A new boss, a new chance for growing
             if( IsUndersized() )
             {
                 InvalidateSize_();
-                InvalidateRange( SwCharRange( GetOfst(), 1 ), 1);
+                InvalidateRange(SwCharRange(GetOfst(), TextFrameIndex(1)), 1);
             }
             break;
         }
@@ -1664,7 +2847,7 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
             if ( isFramePrintAreaValid() )
             {
                 SwTextGridItem const*const pGrid(GetGridItem(FindPageFrame()));
-                if ( pGrid && GetTextNode()->GetSwAttrSet().GetParaGrid().GetValue() )
+                if (pGrid && GetTextNodeForParaProps()->GetSwAttrSet().GetParaGrid().GetValue())
                     InvalidatePrt();
             }
 
@@ -1724,7 +2907,7 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
             }
             else
             {
-                if( GetTextNode()->GetSwAttrSet().GetRegister().GetValue() )
+                if (GetTextNodeForParaProps()->GetSwAttrSet().GetRegister().GetValue())
                     bParaPossiblyInvalid = Prepare( PREP_REGISTER, nullptr, bNotify );
                 // The Frames need to be readjusted, which caused by changes
                 // in position
@@ -1746,7 +2929,7 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
             break;
         }
         case PREP_REGISTER:
-            if( GetTextNode()->GetSwAttrSet().GetRegister().GetValue() )
+            if (GetTextNodeForParaProps()->GetSwAttrSet().GetRegister().GetValue())
             {
                 pPara->SetPrepAdjust();
                 CalcLineSpace();
@@ -1774,29 +2957,29 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                 // Which had flowed to the next page to be together with the footnote (this is
                 // especially true for areas with columns)
                 OSL_ENSURE( GetFollow(), "PREP_FTN_GONE may only be called by Follow" );
-                sal_Int32 nPos = GetFollow()->GetOfst();
+                TextFrameIndex nPos = GetFollow()->GetOfst();
                 if( IsFollow() && GetOfst() == nPos )       // If we don't have a mass of text, we call our
                     FindMaster()->Prepare( PREP_FTN_GONE ); // Master's Prepare
                 if( nPos )
                     --nPos; // The char preceding our Follow
-                InvalidateRange( SwCharRange( nPos, 1 ) );
+                InvalidateRange(SwCharRange(nPos, TextFrameIndex(1)));
                 return bParaPossiblyInvalid;
             }
         case PREP_ERGOSUM:
         case PREP_QUOVADIS:
             {
-                sal_Int32 nPos;
+                TextFrameIndex nPos;
                 if( lcl_ErgoVadis( this, nPos, ePrep ) )
-                    InvalidateRange( SwCharRange( nPos, 1 ) );
+                    InvalidateRange(SwCharRange(nPos, TextFrameIndex(1)));
             }
             break;
         case PREP_FLY_ATTR_CHG:
         {
             if( pVoid )
             {
-                sal_Int32 nWhere = CalcFlyPos( static_cast<SwFrameFormat const *>(pVoid) );
-                OSL_ENSURE( COMPLETE_STRING != nWhere, "Prepare: Why me?" );
-                InvalidateRange( SwCharRange( nWhere, 1 ) );
+                TextFrameIndex const nWhere = CalcFlyPos( static_cast<SwFrameFormat const *>(pVoid) );
+                OSL_ENSURE( TextFrameIndex(COMPLETE_STRING) != nWhere, "Prepare: Why me?" );
+                InvalidateRange(SwCharRange(nWhere, TextFrameIndex(1)));
                 return bParaPossiblyInvalid;
             }
             SAL_FALLTHROUGH; // else: continue with default case block
@@ -1808,8 +2991,10 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
             {
                 if( PREP_FLY_ARRIVE == ePrep || PREP_FLY_LEAVE == ePrep )
                 {
-                    sal_Int32 nLen = ( GetFollow() ? GetFollow()->GetOfst() :
-                                      COMPLETE_STRING ) - GetOfst();
+                    TextFrameIndex const nLen = (GetFollow()
+                                ? GetFollow()->GetOfst()
+                                : TextFrameIndex(COMPLETE_STRING))
+                            - GetOfst();
                     InvalidateRange( SwCharRange( GetOfst(), nLen ) );
                 }
             }
@@ -1820,7 +3005,7 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                 Init();
                 pPara = nullptr;
                 if( GetOfst() && !IsFollow() )
-                    SetOfst_( 0 );
+                    SetOfst_( TextFrameIndex(0) );
                 if ( bNotify )
                     InvalidateSize();
                 else
@@ -2204,9 +3389,11 @@ void SwTextFrame::CalcAdditionalFirstLineOffset()
     // reset additional first line offset
     mnAdditionalFirstLineOffset = 0;
 
-    const SwTextNode* pTextNode( GetTextNode() );
-    if ( pTextNode && pTextNode->IsNumbered() && pTextNode->IsCountedInList() &&
-         pTextNode->GetNumRule() )
+    const SwTextNode* pTextNode( GetTextNodeForParaProps() );
+    // sw_redlinehide: check that pParaPropsNode is the correct one
+    assert(pTextNode->IsNumbered(getRootFrame()) == pTextNode->IsNumbered(nullptr));
+    if (pTextNode && pTextNode->IsNumbered(getRootFrame()) &&
+        pTextNode->IsCountedInList() && pTextNode->GetNumRule())
     {
         int nListLevel = pTextNode->GetActualListLevel();
 
@@ -2298,11 +3485,11 @@ void SwTextFrame::CalcHeightOfLastLine( const bool _bUseFont )
         return;
     }
     OutputDevice* pOut = pVsh->GetOut();
-    const IDocumentSettingAccess* pIDSA = GetTextNode()->getIDocumentSettingAccess();
+    const IDocumentSettingAccess *const pIDSA = &GetDoc().getIDocumentSettingAccess();
     if ( !pVsh->GetViewOptions()->getBrowseMode() ||
           pVsh->GetViewOptions()->IsPrtFormat() )
     {
-        pOut = GetTextNode()->getIDocumentDeviceAccess().getReferenceDevice( true );
+        pOut = GetDoc().getIDocumentDeviceAccess().getReferenceDevice( true );
     }
     OSL_ENSURE( pOut, "<SwTextFrame::_GetHeightOfLastLineForPropLineSpacing()> - no OutputDevice" );
 
@@ -2316,7 +3503,8 @@ void SwTextFrame::CalcHeightOfLastLine( const bool _bUseFont )
     {
         // former determination of last line height for proprotional line
         // spacing - take height of font set at the paragraph
-        SwFont aFont( GetAttrSet(), pIDSA );
+        // FIXME actually ... must the font match across all nodes?
+        SwFont aFont( &GetTextNodeForParaProps()->GetSwAttrSet(), pIDSA );
 
         // we must ensure that the font is restored correctly on the OutputDevice
         // otherwise Last!=Owner could occur
@@ -2422,8 +3610,7 @@ long SwTextFrame::GetLineSpace( const bool _bNoPropLineSpace ) const
 {
     long nRet = 0;
 
-    const SwAttrSet* pSet = GetAttrSet();
-    const SvxLineSpacingItem &rSpace = pSet->GetLineSpacing();
+    const SvxLineSpacingItem &rSpace = GetTextNodeForParaProps()->GetSwAttrSet().GetLineSpacing();
 
     switch( rSpace.GetInterLineSpaceRule() )
     {
@@ -2475,7 +3662,7 @@ sal_uInt16 SwTextFrame::FirstLineHeight() const
     return pPara->Height();
 }
 
-sal_uInt16 SwTextFrame::GetLineCount( sal_Int32 nPos )
+sal_uInt16 SwTextFrame::GetLineCount(TextFrameIndex const nPos)
 {
     sal_uInt16 nRet = 0;
     SwTextFrame *pFrame = this;
@@ -2486,7 +3673,7 @@ sal_uInt16 SwTextFrame::GetLineCount( sal_Int32 nPos )
             break;
         SwTextSizeInfo aInf( pFrame );
         SwTextMargin aLine( pFrame, &aInf );
-        if( COMPLETE_STRING == nPos )
+        if (TextFrameIndex(COMPLETE_STRING) == nPos)
             aLine.Bottom();
         else
             aLine.CharToLine( nPos );
@@ -2500,7 +3687,7 @@ void SwTextFrame::ChgThisLines()
 {
     // not necessary to format here (GerFormatted etc.), because we have to come from there!
     sal_uLong nNew = 0;
-    const SwLineNumberInfo &rInf = GetNode()->GetDoc()->GetLineNumberInfo();
+    const SwLineNumberInfo &rInf = GetDoc().GetLineNumberInfo();
     if ( !GetText().isEmpty() && HasPara() )
     {
         SwTextSizeInfo aInf( this );
@@ -2524,7 +3711,7 @@ void SwTextFrame::ChgThisLines()
 
     if ( nNew != mnThisLines )
     {
-        if ( !IsInTab() && GetAttrSet()->GetLineNumber().IsCount() )
+        if (!IsInTab() && GetTextNodeForParaProps()->GetSwAttrSet().GetLineNumber().IsCount())
         {
             mnAllLines -= mnThisLines;
             mnThisLines = nNew;
@@ -2555,14 +3742,12 @@ void SwTextFrame::RecalcAllLines()
 {
     ValidateLineNum();
 
-    const SwAttrSet *pAttrSet = GetAttrSet();
-
     if ( !IsInTab() )
     {
         const sal_uLong nOld = GetAllLines();
-        const SwFormatLineNumber &rLineNum = pAttrSet->GetLineNumber();
+        const SwFormatLineNumber &rLineNum = GetTextNodeForParaProps()->GetSwAttrSet().GetLineNumber();
         sal_uLong nNewNum;
-        const bool bRestart = GetTextNode()->GetDoc()->GetLineNumberInfo().IsRestartEachPage();
+        const bool bRestart = GetDoc().GetLineNumberInfo().IsRestartEachPage();
 
         if ( !IsFollow() && rLineNum.GetStartValue() && rLineNum.IsCount() )
             nNewNum = rLineNum.GetStartValue() - 1;
@@ -2694,8 +3879,7 @@ void SwTextFrame::CalcBaseOfstForFly()
     OSL_ENSURE( !IsVertical() || !IsSwapped(),
             "SwTextFrame::CalcBasePosForFly with swapped frame!" );
 
-    const SwNode* pNode = GetTextNode();
-    if ( !pNode->getIDocumentSettingAccess()->get(DocumentSettingId::ADD_FLY_OFFSETS) )
+    if (!GetDoc().getIDocumentSettingAccess().get(DocumentSettingId::ADD_FLY_OFFSETS))
         return;
 
     SwRectFnSet aRectFnSet(this);
@@ -2741,7 +3925,7 @@ void SwTextFrame::CalcBaseOfstForFly()
     mnFlyAnchorOfst = nRet1 - nLeft;
     mnFlyAnchorOfstNoWrap = nRet2 - nLeft;
 
-    if (!pNode->getIDocumentSettingAccess()->get(DocumentSettingId::ADD_VERTICAL_FLY_OFFSETS))
+    if (!GetDoc().getIDocumentSettingAccess().get(DocumentSettingId::ADD_VERTICAL_FLY_OFFSETS))
         return;
 
     mnFlyAnchorVertOfstNoWrap = nFlyAnchorVertOfstNoWrap;
@@ -2757,7 +3941,7 @@ SwTwips SwTextFrame::GetBaseVertOffsetForFly(bool bIgnoreFlysAnchoredAtThisFrame
  */
 void SwTextFrame::repaintTextFrames( const SwTextNode& rNode )
 {
-    SwIterator<SwTextFrame,SwTextNode> aIter( rNode );
+    SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(rNode);
     for( const SwTextFrame *pFrame = aIter.First(); pFrame; pFrame = aIter.Next() )
     {
         SwRect aRec( pFrame->GetPaintArea() );

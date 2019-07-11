@@ -63,7 +63,7 @@ namespace canvas
             // no explicit here. VCLObjects should be freely
             // constructible with Wrappees, and AFAIK there is no other
             // implicit conversion path that could cause harm here
-            VCLObject( Wrappee* pWrappee ) :
+            VCLObject( std::unique_ptr<Wrappee> pWrappee ) :
                 mpWrappee( pWrappee )
             {
             }
@@ -95,17 +95,19 @@ namespace canvas
             // assignment to wrappee
             VCLObject& operator=( const VCLObject& rhs )
             {
-                if( mpWrappee )
+                if (this != &rhs)
                 {
-                    if( rhs.mpWrappee )
-                        *mpWrappee = *rhs.mpWrappee;
+                    if( mpWrappee )
+                    {
+                        if( rhs.mpWrappee )
+                            *mpWrappee = *rhs.mpWrappee;
+                    }
+                    else
+                    {
+                        if( rhs.mpWrappee )
+                            mpWrappee = new Wrappee( *rhs.mpWrappee );
+                    }
                 }
-                else
-                {
-                    if( rhs.mpWrappee )
-                        mpWrappee = new Wrappee( *rhs.mpWrappee );
-                }
-
                 return *this;
             }
 
@@ -122,11 +124,11 @@ namespace canvas
                 // protecting object deletion with the solar mutex
                 SolarMutexGuard aGuard;
 
-                delete mpWrappee;
+                mpWrappee.reset();
             }
 
-            Wrappee*        operator->() { return mpWrappee; }
-            const Wrappee*  operator->() const { return mpWrappee; }
+            Wrappee*        operator->() { return mpWrappee.get(); }
+            const Wrappee*  operator->() const { return mpWrappee.get(); }
 
             Wrappee&        operator*() { return *mpWrappee; }
             const Wrappee&  operator*() const { return *mpWrappee; }
@@ -141,7 +143,7 @@ namespace canvas
 
         private:
 
-            Wrappee* mpWrappee;
+            std::unique_ptr<Wrappee> mpWrappee;
         };
 
     }

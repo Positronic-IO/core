@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/FilterConfigItem.hxx>
 #include <vcl/graph.hxx>
@@ -862,13 +863,16 @@ bool TIFFReader::ConvertScanline(sal_Int32 nY)
                 sal_uInt8  nLAlpha = 0;
                 for (sal_Int32 nx = 0; nx < nImageWidth; nx++, pt += nSamplesPerPixel)
                 {
-                    nLRed = nLRed + pt[ 0 ];
-                    nLGreen = nLGreen + pt[ 1 ];
-                    nLBlue = nLBlue + pt[ 2 ];
+                    // The following computations rely on sal_uInt8 wrap-around when adding the
+                    // (unsigned) pt deltas; the "& 0xFF" is only conceptual, but helps prevent
+                    // sanitizer warnings:
+                    nLRed = (nLRed + pt[ 0 ]) & 0xFF;
+                    nLGreen = (nLGreen + pt[ 1 ]) & 0xFF;
+                    nLBlue = (nLBlue + pt[ 2 ]) & 0xFF;
                     SetPixel(nY, nx, Color(nLRed, nLGreen, nLBlue));
                     if (HasAlphaChannel())
                     {
-                        nLAlpha = nLAlpha + pt[ 3 ];
+                        nLAlpha = (nLAlpha + pt[ 3 ]) & 0xFF;
                         SetPixelAlpha(nY, nx, ~nLAlpha);
                     }
                 }
@@ -1463,10 +1467,6 @@ bool TIFFReader::ReadTIFF(SvStream & rTIFF, Graphic & rGraphic )
                 if ( ( nFillOrder == 2 ) && ( nCompression != 5 ) )     // in the LZW mode bits are already being inverted
                     bByteSwap = true;
                 nStripsPerPlane = ( nImageLength - 1 ) / nDiv + 1;
-            }
-
-            if (bStatus)
-            {
                 bStatus = nSamplesPerPixel != 0;
             }
 

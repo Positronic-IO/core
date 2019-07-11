@@ -27,9 +27,9 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 
-FuConstPolygon::FuConstPolygon(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
-                   SdrModel* pDoc, const SfxRequest& rReq)
-    : FuConstruct(pViewSh, pWin, pViewP, pDoc, rReq)
+FuConstPolygon::FuConstPolygon(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP,
+                               SdrModel* pDoc, const SfxRequest& rReq)
+    : FuConstruct(rViewSh, pWin, pViewP, pDoc, rReq)
 {
 }
 
@@ -158,7 +158,7 @@ void FuConstPolygon::Activate()
 
     aNewPointer = Pointer( PointerStyle::DrawPolygon );
     aOldPointer = pWindow->GetPointer();
-    pViewShell->SetActivePointer( aNewPointer );
+    rViewShell.SetActivePointer( aNewPointer );
 }
 
 void FuConstPolygon::Deactivate()
@@ -169,11 +169,11 @@ void FuConstPolygon::Deactivate()
 
     FuConstruct::Deactivate();
 
-    pViewShell->SetActivePointer( aOldPointer );
+    rViewShell.SetActivePointer( aOldPointer );
 }
 
 // Create default drawing objects via keyboard
-SdrObject* FuConstPolygon::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstPolygon::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
 {
     // case SID_DRAW_XPOLYGON:
     // case SID_DRAW_XPOLYGON_NOFILL:
@@ -184,14 +184,14 @@ SdrObject* FuConstPolygon::CreateDefaultObject(const sal_uInt16 nID, const tools
     // case SID_DRAW_FREELINE:
     // case SID_DRAW_FREELINE_NOFILL:
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         *pDrDoc,
         pView->GetCurrentObjInventor(),
-        pView->GetCurrentObjIdentifier());
+        pView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {
-        if(dynamic_cast<const SdrPathObj*>( pObj) !=  nullptr)
+        if(dynamic_cast<const SdrPathObj*>( pObj.get() ) !=  nullptr)
         {
             basegfx::B2DPolyPolygon aPoly;
 
@@ -271,7 +271,7 @@ SdrObject* FuConstPolygon::CreateDefaultObject(const sal_uInt16 nID, const tools
                 }
             }
 
-            static_cast<SdrPathObj*>(pObj)->SetPathPoly(aPoly);
+            static_cast<SdrPathObj*>(pObj.get())->SetPathPoly(aPoly);
         }
         else
         {

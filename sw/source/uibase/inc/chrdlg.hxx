@@ -20,7 +20,6 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_CHRDLG_HXX
 
 #include <sfx2/tabdlg.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/combobox.hxx>
@@ -31,56 +30,46 @@
 class SwView;
 class SvxMacroItem;
 
-class SwCharDlg: public SfxTabDialog
+class SwCharDlg : public SfxTabDialogController
 {
     SwView&   m_rView;
-    SwCharDlgMode m_nDialogMode;
-
-    sal_uInt16 m_nCharStdId;
-    sal_uInt16 m_nCharExtId;
-    sal_uInt16 m_nCharPosId;
-    sal_uInt16 m_nCharTwoId;
-    sal_uInt16 m_nCharUrlId;
-    sal_uInt16 m_nCharBgdId;
-    sal_uInt16 m_nCharBrdId;
+    SwCharDlgMode const m_nDialogMode;
 
 public:
-    SwCharDlg(vcl::Window* pParent, SwView& pVw, const SfxItemSet& rCoreSet,
+    SwCharDlg(weld::Window* pParent, SwView& pVw, const SfxItemSet& rCoreSet,
               SwCharDlgMode nDialogMode, const OUString* pFormatStr);
 
     virtual ~SwCharDlg() override;
 
-    virtual void PageCreated( sal_uInt16 nId, SfxTabPage &rPage ) override;
+    virtual void PageCreated(const OString& rId, SfxTabPage &rPage) override;
 };
 
 class SwCharURLPage : public SfxTabPage
 {
-    VclPtr<Edit>               m_pURLED;
-    VclPtr<FixedText>          m_pTextFT;
-    VclPtr<Edit>               m_pTextED;
-    VclPtr<Edit>               m_pNameED;
-    VclPtr<ComboBox>           m_pTargetFrameLB;
-    VclPtr<PushButton>         m_pURLPB;
-    VclPtr<PushButton>         m_pEventPB;
-    VclPtr<ListBox>            m_pVisitedLB;
-    VclPtr<ListBox>            m_pNotVisitedLB;
-
-    VclPtr<VclContainer>       m_pCharStyleContainer;
-
-    SvxMacroItem*       pINetItem;
+    std::unique_ptr<SvxMacroItem> pINetItem;
     bool                bModified;
 
-    DECL_LINK(InsertFileHdl, Button*, void);
-    DECL_LINK(EventHdl, Button*, void);
+    std::unique_ptr<weld::Entry> m_xURLED;
+    std::unique_ptr<weld::Label> m_xTextFT;
+    std::unique_ptr<weld::Entry> m_xTextED;
+    std::unique_ptr<weld::Entry> m_xNameED;
+    std::unique_ptr<weld::ComboBox> m_xTargetFrameLB;
+    std::unique_ptr<weld::Button> m_xURLPB;
+    std::unique_ptr<weld::Button> m_xEventPB;
+    std::unique_ptr<weld::ComboBox> m_xVisitedLB;
+    std::unique_ptr<weld::ComboBox> m_xNotVisitedLB;
+    std::unique_ptr<weld::Widget> m_xCharStyleContainer;
+
+    DECL_LINK(InsertFileHdl, weld::Button&, void);
+    DECL_LINK(EventHdl, weld::Button&, void);
 
 public:
-                        SwCharURLPage( vcl::Window* pParent,
-                                           const SfxItemSet& rSet );
+    SwCharURLPage(TabPageParent pParent, const SfxItemSet& rSet);
 
-                        virtual ~SwCharURLPage() override;
-    virtual void        dispose() override;
-    static VclPtr<SfxTabPage> Create( TabPageParent pParent,
-                                      const SfxItemSet* rAttrSet);
+    virtual ~SwCharURLPage() override;
+    virtual void dispose() override;
+    static VclPtr<SfxTabPage> Create(TabPageParent pParent,
+                                     const SfxItemSet* rAttrSet);
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

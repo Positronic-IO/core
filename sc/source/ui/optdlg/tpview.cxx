@@ -40,8 +40,7 @@
 
 ScTpContentOptions::ScTpContentOptions( vcl::Window*         pParent,
                              const SfxItemSet&  rArgSet ) :
-    SfxTabPage(pParent, "TpViewPage", "modules/scalc/ui/tpviewpage.ui", &rArgSet),
-    pLocalOptions(nullptr)
+    SfxTabPage(pParent, "TpViewPage", "modules/scalc/ui/tpviewpage.ui", &rArgSet)
 {
     get(pGridLB,"grid");
     get(pColorFT,"color_label");
@@ -92,6 +91,8 @@ ScTpContentOptions::ScTpContentOptions( vcl::Window*         pParent,
     pGuideLineCB->SetClickHdl(aCBHdl);
     pRowColHeaderCB->SetClickHdl(aCBHdl);
 
+    pColorLB->SetSlotId(SID_ATTR_CHAR_COLOR);
+    pColorLB->SetAutoDisplayColor(SC_STD_GRIDCOLOR);
 }
 
 ScTpContentOptions::~ScTpContentOptions()
@@ -101,7 +102,7 @@ ScTpContentOptions::~ScTpContentOptions()
 
 void ScTpContentOptions::dispose()
 {
-    delete pLocalOptions;
+    pLocalOptions.reset();
     pGridLB.clear();
     pColorFT.clear();
     pColorLB.clear();
@@ -155,6 +156,11 @@ bool    ScTpContentOptions::FillItemSet( SfxItemSet* rCoreSet )
         pGuideLineCB   ->IsValueChangedFromSaved())
     {
         NamedColor aNamedColor = pColorLB->GetSelectedEntry();
+        if (aNamedColor.first == COL_AUTO)
+        {
+            aNamedColor.first = SC_STD_GRIDCOLOR;
+            aNamedColor.second.clear();
+        }
         pLocalOptions->SetGridColor(aNamedColor.first, aNamedColor.second);
         rCoreSet->Put(ScTpViewItem(*pLocalOptions));
         bRet = true;
@@ -177,10 +183,10 @@ void    ScTpContentOptions::Reset( const SfxItemSet* rCoreSet )
 {
     const SfxPoolItem* pItem;
     if(SfxItemState::SET == rCoreSet->GetItemState(SID_SCVIEWOPTIONS, false , &pItem))
-        pLocalOptions  = new ScViewOptions(
-                            static_cast<const ScTpViewItem*>(pItem)->GetViewOptions() );
+        pLocalOptions.reset( new ScViewOptions(
+                            static_cast<const ScTpViewItem*>(pItem)->GetViewOptions() ) );
     else
-        pLocalOptions = new ScViewOptions;
+        pLocalOptions.reset( new ScViewOptions );
     pFormulaCB ->Check(pLocalOptions->GetOption(VOPT_FORMULAS));
     pNilCB     ->Check(pLocalOptions->GetOption(VOPT_NULLVALS));
     pAnnotCB   ->Check(pLocalOptions->GetOption(VOPT_NOTES));
@@ -310,7 +316,7 @@ void ScTpContentOptions::InitGridOpt()
     Color     aCol    = pLocalOptions->GetGridColor( &aName );
 
     if (aName.trim().isEmpty() && aCol == SC_STD_GRIDCOLOR)
-        aName = ScResId(STR_GRIDCOLOR);
+        aCol = COL_AUTO;
 
     pColorLB->SelectEntry(std::make_pair(aCol, aName));
 }
@@ -364,11 +370,11 @@ ScTpLayoutOptions::ScTpLayoutOptions(   vcl::Window* pParent,
 
         switch ( eFUnit )
         {
-            case FUNIT_MM:
-            case FUNIT_CM:
-            case FUNIT_POINT:
-            case FUNIT_PICA:
-            case FUNIT_INCH:
+            case FieldUnit::MM:
+            case FieldUnit::CM:
+            case FieldUnit::POINT:
+            case FieldUnit::PICA:
+            case FieldUnit::INCH:
             {
                 // only use these metrics
                 sal_Int32 nPos = m_pUnitLB->InsertEntry( sMetric );
@@ -434,7 +440,7 @@ bool    ScTpLayoutOptions::FillItemSet( SfxItemSet* rCoreSet )
     if(m_pTabMF->IsValueChangedFromSaved())
     {
         rCoreSet->Put(SfxUInt16Item(SID_ATTR_DEFTABSTOP,
-                    sal::static_int_cast<sal_uInt16>( m_pTabMF->Denormalize(m_pTabMF->GetValue(FUNIT_TWIP)) )));
+                    sal::static_int_cast<sal_uInt16>( m_pTabMF->Denormalize(m_pTabMF->GetValue(FieldUnit::TWIP)) )));
         bRet = true;
     }
 
@@ -544,7 +550,7 @@ void    ScTpLayoutOptions::Reset( const SfxItemSet* rCoreSet )
 
     const SfxPoolItem* pItem;
     if(SfxItemState::SET == rCoreSet->GetItemState(SID_ATTR_DEFTABSTOP, false, &pItem))
-        m_pTabMF->SetValue(m_pTabMF->Normalize(static_cast<const SfxUInt16Item*>(pItem)->GetValue()), FUNIT_TWIP);
+        m_pTabMF->SetValue(m_pTabMF->Normalize(static_cast<const SfxUInt16Item*>(pItem)->GetValue()), FieldUnit::TWIP);
     m_pTabMF->SaveValue();
 
     m_pUnitLB       ->SaveValue();
@@ -641,9 +647,9 @@ IMPL_LINK_NOARG(ScTpLayoutOptions, MetricHdl, ListBox&, void)
     {
         FieldUnit eFieldUnit = static_cast<FieldUnit>(reinterpret_cast<sal_IntPtr>(m_pUnitLB->GetEntryData( nMPos )));
         sal_Int64 nVal =
-            m_pTabMF->Denormalize( m_pTabMF->GetValue( FUNIT_TWIP ) );
+            m_pTabMF->Denormalize( m_pTabMF->GetValue( FieldUnit::TWIP ) );
         ::SetFieldUnit( *m_pTabMF, eFieldUnit );
-        m_pTabMF->SetValue( m_pTabMF->Normalize( nVal ), FUNIT_TWIP );
+        m_pTabMF->SetValue( m_pTabMF->Normalize( nVal ), FieldUnit::TWIP );
     }
 }
 

@@ -19,15 +19,19 @@
 
 
 #include "optimizerdialog.hxx"
-#include "pppoptimizer.hxx"
+#include "impoptimizer.hxx"
 #include "fileopendialog.hxx"
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
 #include <com/sun/star/ucb/XSimpleFileAccess.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/util/XCloseBroadcaster.hpp>
 #include <sal/macros.h>
 #include <osl/time.h>
+#include <vcl/errinf.hxx>
+#include <svtools/sfxecode.hxx>
+#include <svtools/ehdl.hxx>
 #include <tools/urlobj.hxx>
 #include <bitmaps.hlst>
 
@@ -169,22 +173,19 @@ void OptimizerDialog::UpdateConfiguration()
     }
 
     aAny = getControlProperty( "CheckBox3Pg3", "State" );
-    if ( aAny >>= nInt16 )
+    if ( (aAny >>= nInt16) && nInt16 )
     {
-        if ( nInt16 )
+        aAny = getControlProperty( "ListBox0Pg3", "SelectedItems" );
+        if ( aAny >>= aSelectedItems )
         {
-            aAny = getControlProperty( "ListBox0Pg3", "SelectedItems" );
-            if ( aAny >>= aSelectedItems )
+            if ( aSelectedItems.getLength() )
             {
-                if ( aSelectedItems.getLength() )
+                sal_Int16 nSelectedItem = aSelectedItems[ 0 ];
+                aAny = getControlProperty( "ListBox0Pg3", "StringItemList" );
+                if ( aAny >>= aStringItemList )
                 {
-                    sal_Int16 nSelectedItem = aSelectedItems[ 0 ];
-                    aAny = getControlProperty( "ListBox0Pg3", "StringItemList" );
-                    if ( aAny >>= aStringItemList )
-                    {
-                        if ( aStringItemList.getLength() > nSelectedItem )
-                            SetConfigProperty( TK_CustomShowName, Any( aStringItemList[ nSelectedItem ] ) );
-                    }
+                    if ( aStringItemList.getLength() > nSelectedItem )
+                        SetConfigProperty( TK_CustomShowName, Any( aStringItemList[ nSelectedItem ] ) );
                 }
             }
         }
@@ -472,7 +473,6 @@ void ItemListener::disposing( const css::lang::EventObject& /* Source */ )
 {
 }
 
-
 void ActionListener::actionPerformed( const ActionEvent& rEvent )
 {
     switch( TKGet( rEvent.ActionCommand ) )
@@ -505,12 +505,15 @@ void ActionListener::actionPerformed( const ActionEvent& rEvent )
                 if ( xStorable.is() && xStorable->hasLocation() )
                 {
                     INetURLObject aURLObj( xStorable->getLocation() );
-                    if ( !aURLObj.hasFinalSlash() &&
-                         aURLObj.setExtension( "mini", INetURLObject::LAST_SEGMENT, false ) ) {
+                    if ( !aURLObj.hasFinalSlash() ) {
                         // tdf#105382 uri-decode file name
+                        aURLObj.removeExtension(INetURLObject::LAST_SEGMENT, false);
                         auto aName( aURLObj.getName( INetURLObject::LAST_SEGMENT,
                                                      false,
                                                      INetURLObject::DecodeMechanism::WithCharset ) );
+                        // Add "(minimized)"
+                        aName += " ";
+                        aName += mrOptimizerDialog.getString(STR_FILENAME_SUFFIX);
                         aFileOpenDialog.setDefaultName( aName );
                     }
                 }
@@ -555,11 +558,6 @@ void ActionListener::actionPerformed( const ActionEvent& rEvent )
             }
             if ( bSuccessfullyExecuted )
             {
-                Reference < XDispatch > xDispatch(
-                    new PPPOptimizer(
-                        mrOptimizerDialog.GetComponentContext(),
-                        mrOptimizerDialog.GetFrame()));
-
                 URL aURL;
                 aURL.Protocol = "vnd.com.sun.star.comp.PPPOptimizer:";
                 aURL.Path = "optimize";
@@ -572,7 +570,43 @@ void ActionListener::actionPerformed( const ActionEvent& rEvent )
                 lArguments[ 2 ].Name = "InformationDialog";
                 lArguments[ 2 ].Value <<= mrOptimizerDialog.GetFrame();
 
-                xDispatch->dispatch( aURL, lArguments );
+
+                ErrCode errorCode;
+                try
+                {
+                    ImpOptimizer aOptimizer(
+                        mrOptimizerDialog.GetComponentContext(),
+                        mrOptimizerDialog.GetFrame()->getController()->getModel());
+                    aOptimizer.Optimize(lArguments);
+                }
+                catch (css::io::IOException&)
+                {
+                    // We always receive just ERRCODE_IO_CANTWRITE in case of problems, so no need to bother
+                    // about extracting error code from exception text
+                    errorCode = ERRCODE_IO_CANTWRITE;
+                }
+                catch (css::uno::Exception&)
+                {
+                    // Other general exception
+                    errorCode = ERRCODE_IO_GENERAL;
+                }
+
+                if (errorCode != ERRCODE_NONE)
+                {
+                    // Restore wizard controls
+                    mrOptimizerDialog.maStats.SetStatusValue(TK_Progress,
+                                                             Any(static_cast<sal_Int32>(0)));
+                    mrOptimizerDialog.setControlProperty("btnNavBack", "Enabled", Any(true));
+                    mrOptimizerDialog.setControlProperty("btnNavNext", "Enabled", Any(false));
+                    mrOptimizerDialog.setControlProperty("btnNavFinish", "Enabled", Any(true));
+                    mrOptimizerDialog.setControlProperty("btnNavCancel", "Enabled", Any(true));
+
+                    OUString aFileName;
+                    mrOptimizerDialog.GetConfigProperty(TK_SaveAsURL) >>= aFileName;
+                    SfxErrorContext aEc(ERRCTX_SFX_SAVEASDOC, aFileName);
+                    ErrorHandler::HandleError(errorCode);
+                    break;
+                }
 
                 mrOptimizerDialog.endExecute( bSuccessfullyExecuted );
             }

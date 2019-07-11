@@ -26,11 +26,15 @@
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/frame/XModule.hpp>
 
+#include <officecfg/Office/Common.hxx>
+
 #include <comphelper/fileformat.h>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/genericpropertyset.hxx>
+#include <comphelper/propertysetinfo.hxx>
 #include <vcl/errinf.hxx>
 #include <o3tl/any.hxx>
+#include <sal/log.hxx>
 #include <unotools/streamwrap.hxx>
 #include <svx/xmlgrhlp.hxx>
 #include <svx/xmleohlp.hxx>
@@ -45,6 +49,7 @@
 #include <IDocumentRedlineAccess.hxx>
 #include <IDocumentStatistics.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <rootfrm.hxx>
 #include <docstat.hxx>
 #include <docsh.hxx>
 
@@ -160,7 +165,6 @@ ErrCode SwXMLWriter::Write_( const uno::Reference < task::XStatusIndicator >& xS
 
     xInfoSet->setPropertyValue( "TargetStorage", Any( xStg ) );
 
-    uno::Any aAny;
     if (m_bShowProgress)
     {
         // set progress range and start status indicator
@@ -180,9 +184,13 @@ ErrCode SwXMLWriter::Write_( const uno::Reference < task::XStatusIndicator >& xS
 
     // save show redline mode ...
     const OUString sShowChanges("ShowChanges");
-    RedlineFlags nRedlineFlags = m_pDoc->getIDocumentRedlineAccess().GetRedlineFlags();
-    xInfoSet->setPropertyValue( sShowChanges,
-        makeAny( IDocumentRedlineAccess::IsShowChanges( nRedlineFlags ) ) );
+    RedlineFlags const nOrigRedlineFlags = m_pDoc->getIDocumentRedlineAccess().GetRedlineFlags();
+    RedlineFlags nRedlineFlags(nOrigRedlineFlags);
+    bool isShowChanges;
+    // TODO: ideally this would be stored per-view...
+    SwRootFrame const*const pLayout(m_pDoc->getIDocumentLayoutAccess().GetCurrentLayout());
+    isShowChanges = pLayout == nullptr || !pLayout->IsHideRedlines();
+    xInfoSet->setPropertyValue(sShowChanges, makeAny(isShowChanges));
     // ... and hide redlines for export
     nRedlineFlags &= ~RedlineFlags::ShowMask;
     nRedlineFlags |= RedlineFlags::ShowInsert;
@@ -367,12 +375,14 @@ ErrCode SwXMLWriter::Write_( const uno::Reference < task::XStatusIndicator >& xS
     }
 
     if( m_pDoc->getIDocumentLayoutAccess().GetCurrentViewShell() && m_pDoc->getIDocumentStatistics().GetDocStat().nPage > 1 &&
-        !(m_bOrganizerMode || m_bBlock || bErr) )
+        !(m_bOrganizerMode || m_bBlock || bErr ||
+            // sw_redlinehide: disable layout cache for now
+            m_pDoc->getIDocumentLayoutAccess().GetCurrentLayout()->IsHideRedlines()))
     {
         try
         {
             uno::Reference < io::XStream > xStm = xStg->openStreamElement( "layout-cache", embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE );
-            SvStream* pStream = utl::UcbStreamHelper::CreateStream( xStm );
+            std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream( xStm );
             if( !pStream->GetError() )
             {
                 uno::Reference < beans::XPropertySet > xSet( xStm, UNO_QUERY );
@@ -381,8 +391,6 @@ ErrCode SwXMLWriter::Write_( const uno::Reference < task::XStatusIndicator >& xS
                 xSet->setPropertyValue("MediaType", aAny2 );
                 m_pDoc->WriteLayoutCache( *pStream );
             }
-
-            delete pStream;
         }
         catch ( uno::Exception& )
         {
@@ -400,12 +408,10 @@ ErrCode SwXMLWriter::Write_( const uno::Reference < task::XStatusIndicator >& xS
     xObjectResolver = nullptr;
 
     // restore redline mode
-    aAny = xInfoSet->getPropertyValue( sShowChanges );
     nRedlineFlags = m_pDoc->getIDocumentRedlineAccess().GetRedlineFlags();
     nRedlineFlags &= ~RedlineFlags::ShowMask;
     nRedlineFlags |= RedlineFlags::ShowInsert;
-    if ( *o3tl::doAccess<bool>(aAny) )
-        nRedlineFlags |= RedlineFlags::ShowDelete;
+    nRedlineFlags |= nOrigRedlineFlags & RedlineFlags::ShowMask;
     m_pDoc->getIDocumentRedlineAccess().SetRedlineFlags( nRedlineFlags );
 
     if (xStatusIndicator.is())

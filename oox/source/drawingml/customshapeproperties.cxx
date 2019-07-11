@@ -31,6 +31,7 @@
 #include <com/sun/star/drawing/XEnhancedCustomShapeDefaulter.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <comphelper/sequence.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -174,7 +175,7 @@ void CustomShapeProperties::pushToPropSet(
             }
         }
 
-        if ( maAdjustmentGuideList.size() )
+        if ( !maAdjustmentGuideList.empty() )
         {
             const OUString sType = "Type";
             if ( aGeoPropSet >>= aGeoPropSeq )
@@ -236,7 +237,7 @@ void CustomShapeProperties::pushToPropSet(
         // This size specifically affects scaling.
         // Note 2: Width and Height are set to 0 to force scaling to 1.
         awt::Rectangle aViewBox( 0, 0, aSize.Width, aSize.Height );
-        if( maGuideList.size() )
+        if( !maGuideList.empty() )
             aViewBox = awt::Rectangle( 0, 0, 0, 0 );
         aPropertyMap.setProperty( PROP_ViewBox, aViewBox);
 
@@ -275,7 +276,7 @@ void CustomShapeProperties::pushToPropSet(
                 aParameterPairs[ k++ ] = j;
         aPath.setProperty( PROP_Coordinates, aParameterPairs);
 
-        if ( maPath2DList.size() )
+        if ( !maPath2DList.empty() )
         {
             bool bAllZero = true;
             for ( auto const & i: maPath2DList )

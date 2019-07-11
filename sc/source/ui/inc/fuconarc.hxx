@@ -25,9 +25,9 @@
 /** Draw rectangle */
 class FuConstArc : public FuConstruct
 {
- public:
-    FuConstArc( ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pView,
-                   SdrModel* pDoc, const SfxRequest& rReq);
+public:
+    FuConstArc(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pView,
+               SdrModel* pDoc, const SfxRequest& rReq);
 
     virtual ~FuConstArc() override;
                                        // Mouse- & Key-Events
@@ -38,7 +38,7 @@ class FuConstArc : public FuConstruct
     virtual void Deactivate() override;
 
     // Create default drawing objects via keyboard
-    virtual SdrObject* CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
+    virtual SdrObjectUniquePtr CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
 };
 
 #endif      // _SD_FUCONARC_HXX

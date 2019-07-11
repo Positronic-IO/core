@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <tools/urlobj.hxx>
 #include <vcl/graph.hxx>
@@ -58,7 +59,6 @@
 #include <comphelper/extract.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/storagehelper.hxx>
-#include <comphelper/propertysequence.hxx>
 #include <unotools/fontcvt.hxx>
 #include <o3tl/make_unique.hxx>
 #include <xmloff/fasttokenhandler.hxx>
@@ -275,7 +275,7 @@ public:
     bool mbTextDocInOOoFileFormat;
 
     const uno::Reference< uno::XComponentContext > mxComponentContext;
-    OUString implementationName;
+    OUString const implementationName;
 
     uno::Reference< embed::XStorage > mxSourceStorage;
 
@@ -304,7 +304,7 @@ public:
 
     sal_uInt16 getGeneratorVersion( const SvXMLImport& rImport )
     {
-        if ( !mpDocumentInfo.get() )
+        if (!mpDocumentInfo)
         {
             mpDocumentInfo.reset( new DocumentInfo( rImport ) );
         }
@@ -397,7 +397,6 @@ SvXMLImport::SvXMLImport(
     mnErrorFlags(SvXMLErrorFlags::NO),
     isFastContext( false ),
     maNamespaceHandler( new SvXMLImportFastNamespaceHandler() ),
-    mxFastDocumentHandler( nullptr ),
     mbIsFormsSupported( true ),
     mbIsTableShapeSupported( false )
 {
@@ -432,6 +431,7 @@ void SvXMLImport::cleanup() throw ()
             pStylesContext->Clear();
         maContexts.pop();
     }
+    mxTextImport.clear(); // XMLRedlineImportHelper needs model
     DisposingModel();
 }
 
@@ -569,7 +569,7 @@ void SAL_CALL SvXMLImport::endDocument()
 
     GetTextImport()->MapCrossRefHeadingFieldsHorribly();
 
-    if (mpImpl->mpRDFaHelper.get())
+    if (mpImpl->mpRDFaHelper)
     {
         const uno::Reference<rdf::XRepositorySupplier> xRS(mxModel,
             uno::UNO_QUERY);
@@ -1289,20 +1289,17 @@ const Reference< container::XNameContainer > & SvXMLImport::GetMarkerHelper()
 
 const Reference< container::XNameContainer > & SvXMLImport::GetDashHelper()
 {
-    if( !mxDashHelper.is() )
+    if( !mxDashHelper.is() && mxModel.is() )
     {
-        if( mxModel.is() )
+        Reference< lang::XMultiServiceFactory > xServiceFact( mxModel, UNO_QUERY);
+        if( xServiceFact.is() )
         {
-            Reference< lang::XMultiServiceFactory > xServiceFact( mxModel, UNO_QUERY);
-            if( xServiceFact.is() )
+            try
             {
-                try
-                {
-                    mxDashHelper.set( xServiceFact->createInstance( "com.sun.star.drawing.DashTable" ), UNO_QUERY);
-                }
-                catch( lang::ServiceNotRegisteredException& )
-                {}
+                mxDashHelper.set( xServiceFact->createInstance( "com.sun.star.drawing.DashTable" ), UNO_QUERY);
             }
+            catch( lang::ServiceNotRegisteredException& )
+            {}
         }
     }
 
@@ -1595,15 +1592,15 @@ XMLEventImportHelper& SvXMLImport::GetEventImport()
         mpEventImportHelper = o3tl::make_unique<XMLEventImportHelper>();
         const OUString& sStarBasic(GetXMLToken(XML_STARBASIC));
         mpEventImportHelper->RegisterFactory(sStarBasic,
-                                            new XMLStarBasicContextFactory());
+                                            o3tl::make_unique<XMLStarBasicContextFactory>());
         const OUString& sScript(GetXMLToken(XML_SCRIPT));
         mpEventImportHelper->RegisterFactory(sScript,
-                                            new XMLScriptContextFactory());
+                                            o3tl::make_unique<XMLScriptContextFactory>());
         mpEventImportHelper->AddTranslationTable(aStandardEventTable);
 
         // register StarBasic event handler with capitalized spelling
         mpEventImportHelper->RegisterFactory("StarBasic",
-                                            new XMLStarBasicContextFactory());
+                                            o3tl::make_unique<XMLStarBasicContextFactory>());
     }
 
     return *mpEventImportHelper;
@@ -1628,26 +1625,15 @@ void SvXMLImport::SetAutoStyles( SvXMLStylesContext *pAutoStyles )
     if (pAutoStyles && mxNumberStyles.is() && (mnImportFlags & SvXMLImportFlags::CONTENT) )
     {
         uno::Reference<xml::sax::XAttributeList> xAttrList;
-        uno::Sequence< OUString > aNames = mxNumberStyles->getElementNames();
-        sal_uInt32 nCount(aNames.getLength());
-        if (nCount)
+        for (const auto& name : mxNumberStyles->getElementNames())
         {
-            const OUString* pNames = aNames.getConstArray();
-            if ( pNames )
+            uno::Any aAny(mxNumberStyles->getByName(name));
+            sal_Int32 nKey(0);
+            if (aAny >>= nKey)
             {
-                SvXMLStyleContext* pContext;
-                uno::Any aAny;
-                sal_Int32 nKey(0);
-                for (sal_uInt32 i = 0; i < nCount; i++, pNames++)
-                {
-                    aAny = mxNumberStyles->getByName(*pNames);
-                    if (aAny >>= nKey)
-                    {
-                        pContext = new SvXMLNumFormatContext( *this, XML_NAMESPACE_NUMBER,
-                                    *pNames, xAttrList, nKey, *pAutoStyles );
-                        pAutoStyles->AddStyle(*pContext);
-                    }
-                }
+                SvXMLStyleContext* pContext = new SvXMLNumFormatContext(
+                    *this, XML_NAMESPACE_NUMBER, name, xAttrList, nKey, *pAutoStyles);
+                pAutoStyles->AddStyle(*pContext);
             }
         }
     }
@@ -2006,7 +1992,7 @@ void SvXMLImport::SetXmlId(uno::Reference<uno::XInterface> const & i_xIfc,
 ::xmloff::RDFaImportHelper &
 SvXMLImport::GetRDFaImportHelper()
 {
-    if (!mpImpl->mpRDFaHelper.get())
+    if (!mpImpl->mpRDFaHelper)
     {
         mpImpl->mpRDFaHelper.reset( new ::xmloff::RDFaImportHelper(*this) );
     }
@@ -2185,8 +2171,8 @@ void SvXMLImportFastNamespaceHandler::addNSDeclAttributes( rtl::Reference < comp
 {
     for(const auto& aNamespaceDefine : m_aNamespaceDefines)
     {
-        OUString& rPrefix = aNamespaceDefine.get()->m_aPrefix;
-        OUString& rNamespaceURI = aNamespaceDefine.get()->m_aNamespaceURI;
+        OUString& rPrefix = aNamespaceDefine->m_aPrefix;
+        OUString& rNamespaceURI = aNamespaceDefine->m_aNamespaceURI;
         OUString sDecl;
         if ( rPrefix.isEmpty() )
             sDecl = "xmlns";

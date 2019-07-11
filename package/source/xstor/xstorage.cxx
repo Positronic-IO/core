@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 
@@ -76,9 +77,9 @@ struct StorInternalData_Impl
     rtl::Reference<comphelper::RefCountedMutex> m_xSharedMutex;
     ::cppu::OMultiTypeInterfaceContainerHelper m_aListenersContainer; // list of listeners
     ::std::unique_ptr< ::cppu::OTypeCollection> m_pTypeCollection;
-    bool m_bIsRoot;
-    sal_Int32 m_nStorageType; // the mode in which the storage is used
-    bool m_bReadOnlyWrap;
+    bool const m_bIsRoot;
+    sal_Int32 const m_nStorageType; // the mode in which the storage is used
+    bool const m_bReadOnlyWrap;
 
     ::rtl::Reference<OChildDispListener_Impl> m_pSubElDispListener;
 
@@ -142,7 +143,7 @@ void OStorage_Impl::completeStorageStreamCopy_Impl(
             xDestProps->setPropertyValue( aPropNames[ind], xSourceProps->getPropertyValue( aPropNames[ind] ) );
 }
 
-uno::Reference< io::XInputStream > GetSeekableTempCopy( const uno::Reference< io::XInputStream >& xInStream,
+static uno::Reference< io::XInputStream > GetSeekableTempCopy( const uno::Reference< io::XInputStream >& xInStream,
                                                         const uno::Reference< uno::XComponentContext >& xContext )
 {
     uno::Reference < io::XTempFile > xTempFile = io::TempFile::create(xContext);
@@ -1728,7 +1729,7 @@ void OStorage_Impl::CommitRelInfo( const uno::Reference< container::XNameContain
                     uno::makeAny( OUString( "application/vnd.openxmlformats-package.relationships+xml" ) ) );
 
                 m_xNewRelInfoStream.clear();
-                  if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM )
+                if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM )
                 {
                     m_aRelInfo = uno::Sequence< uno::Sequence< beans::StringPair > >();
                     m_nRelInfoStatus = RELINFO_NO_INIT;
@@ -1743,8 +1744,7 @@ void OStorage_Impl::CommitRelInfo( const uno::Reference< container::XNameContain
             if ( m_xRelStorage->hasElements() )
             {
                 uno::Reference< embed::XTransactedObject > xTrans( m_xRelStorage, uno::UNO_QUERY_THROW );
-                if ( xTrans.is() )
-                    xTrans->commit();
+                xTrans->commit();
             }
 
             if ( xNewPackageFolder.is() && xNewPackageFolder->hasByName( aRelsStorName ) )
@@ -1842,10 +1842,10 @@ void OStorage::InternalDispose( bool bNotifyImpl )
 
     if ( m_pData->m_bReadOnlyWrap )
     {
-        OSL_ENSURE( !m_pData->m_aOpenSubComponentsVector.size() || m_pData->m_pSubElDispListener.get(),
+        OSL_ENSURE( m_pData->m_aOpenSubComponentsVector.empty() || m_pData->m_pSubElDispListener.get(),
                     "If any subelements are open the listener must exist!" );
 
-        if (m_pData->m_pSubElDispListener.get())
+        if (m_pData->m_pSubElDispListener)
         {
             m_pData->m_pSubElDispListener->OwnerIsDisposed();
 
@@ -1985,7 +1985,7 @@ void OStorage::BroadcastTransaction( sal_Int8 nMessage )
                 case STOR_MESS_PRECOMMIT:
                        static_cast<embed::XTransactionListener*>( pIterator.next( ) )->preCommit( aSource );
                     break;
-                case STOR_MESS_COMMITED:
+                case STOR_MESS_COMMITTED:
                        static_cast<embed::XTransactionListener*>( pIterator.next( ) )->commited( aSource );
                     break;
                 case STOR_MESS_PREREVERT:
@@ -2042,7 +2042,7 @@ void OStorage::MakeLinkToSubComponent_Impl( const uno::Reference< lang::XCompone
     if ( !xComponent.is() )
         throw uno::RuntimeException( THROW_WHERE );
 
-    if (!m_pData->m_pSubElDispListener.get())
+    if (!m_pData->m_pSubElDispListener)
     {
         m_pData->m_pSubElDispListener = new OChildDispListener_Impl( *this );
     }
@@ -3142,9 +3142,6 @@ uno::Reference< io::XStream > SAL_CALL OStorage::openEncryptedStream(
         throw lang::DisposedException( THROW_WHERE );
     }
 
-    if ( m_pData->m_nStorageType != embed::StorageFormats::PACKAGE )
-        packages::NoEncryptionException();
-
     if ( ( nOpenMode & embed::ElementModes::WRITE ) && m_pData->m_bReadOnlyWrap )
         throw io::IOException( THROW_WHERE ); // TODO: access denied
 
@@ -3230,9 +3227,6 @@ uno::Reference< io::XStream > SAL_CALL OStorage::cloneEncryptedStream(
         SAL_INFO("package.xstor", THROW_WHERE "Disposed!");
         throw lang::DisposedException( THROW_WHERE );
     }
-
-    if ( m_pData->m_nStorageType != embed::StorageFormats::PACKAGE )
-        packages::NoEncryptionException();
 
     if ( !aEncryptionData.getLength() )
         throw lang::IllegalArgumentException( THROW_WHERE, uno::Reference< uno::XInterface >(), 2 );
@@ -3614,7 +3608,7 @@ void SAL_CALL OStorage::commit()
     if ( xParentModif.is() )
         xParentModif->setModified( true );
 
-    BroadcastTransaction( STOR_MESS_COMMITED );
+    BroadcastTransaction( STOR_MESS_COMMITTED );
 }
 
 void SAL_CALL OStorage::revert()
@@ -3936,7 +3930,7 @@ sal_Bool SAL_CALL OStorage::hasElements()
 
     try
     {
-        return ( m_pImpl->GetChildrenVector().size() != 0 );
+        return ( !m_pImpl->GetChildrenVector().empty() );
     }
     catch( const uno::RuntimeException& rRuntimeException )
     {
@@ -5126,7 +5120,7 @@ void SAL_CALL OStorage::copyElementDirectlyTo(
         SAL_INFO("package.xstor", "Rethrow: " << rException);
 
         uno::Any aCaught( ::cppu::getCaughtException() );
-        throw embed::StorageWrappedTargetException( THROW_WHERE "Can't copy element direcly!",
+        throw embed::StorageWrappedTargetException( THROW_WHERE "Can't copy element directly!",
                                                  uno::Reference< io::XInputStream >(),
                                                  aCaught );
     }
@@ -5432,7 +5426,7 @@ uno::Reference< embed::XExtendedStorageStream > SAL_CALL OStorage::openStreamEle
       && ( nOpenMode & embed::ElementModes::WRITE ) )
         throw io::IOException( THROW_WHERE ); // Access denied
 
-    OStringList_Impl aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
+    std::vector<OUString> aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
     OSL_ENSURE( aListPath.size(), "The result list must not be empty!" );
 
     uno::Reference< embed::XExtendedStorageStream > xResult;
@@ -5494,7 +5488,7 @@ void SAL_CALL OStorage::removeStreamElementByHierarchicalName( const OUString& a
     if ( !( m_pImpl->m_nStorageMode & embed::ElementModes::WRITE ) )
         throw io::IOException( THROW_WHERE ); // Access denied
 
-    OStringList_Impl aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
+    std::vector<OUString> aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
     OSL_ENSURE( aListPath.size(), "The result list must not be empty!" );
 
     if ( !m_pData->m_rHierarchyHolder.is() )
@@ -5528,7 +5522,7 @@ uno::Reference< embed::XExtendedStorageStream > SAL_CALL OStorage::openEncrypted
       && ( nOpenMode & embed::ElementModes::WRITE ) )
         throw io::IOException( THROW_WHERE ); // Access denied
 
-    OStringList_Impl aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
+    std::vector<OUString> aListPath = OHierarchyHolder_Impl::GetListPathFromString( aStreamPath );
     OSL_ENSURE( aListPath.size(), "The result list must not be empty!" );
 
     uno::Reference< embed::XExtendedStorageStream > xResult;

@@ -87,6 +87,7 @@
 #include <fmtmeta.hxx>
 #include <txtfld.hxx>
 #include <unoparagraph.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -474,7 +475,7 @@ bool getCursorPropertyValue(const SfxItemPropertySimpleEntry& rEntry
                 marks = rPam.GetNode().GetTextNode()->GetTextAttrsAt(
                     rPam.GetPoint()->nContent.GetIndex(), RES_TXTATR_TOXMARK);
             }
-            if (marks.size())
+            if (!marks.empty())
             {
                 if( pAny )
                 {   // hmm... can only return 1 here
@@ -599,8 +600,11 @@ bool getCursorPropertyValue(const SfxItemPropertySimpleEntry& rEntry
             SwTextNode* pTextNode = rPam.GetPoint()->nNode.GetNode().GetTextNode();
             if (pTextNode)
             {
-                uno::Reference<text::XTextContent> xParagraph = SwXParagraph::CreateXParagraph(*pTextNode->GetDoc(), pTextNode);
-                *pAny <<= xParagraph;
+                if (pAny)
+                {
+                    uno::Reference<text::XTextContent> xParagraph = SwXParagraph::CreateXParagraph(*pTextNode->GetDoc(), pTextNode);
+                    *pAny <<= xParagraph;
+                }
             }
             else
                 eNewState = PropertyState_DEFAULT_VALUE;
@@ -640,7 +644,7 @@ bool getCursorPropertyValue(const SfxItemPropertySimpleEntry& rEntry
                 marks = rPam.GetNode().GetTextNode()->GetTextAttrsAt(
                             rPam.GetPoint()->nContent.GetIndex(), RES_TXTATR_REFMARK);
             }
-            if (marks.size())
+            if (!marks.empty())
             {
                 if( pAny )
                 {   // hmm... can only return 1 here
@@ -1057,12 +1061,12 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
     pMed->Download();   // if necessary: start the download
     if( aRef.is() && 1 < aRef->GetRefCount() )  // Ref still valid?
     {
-        SwReader* pRdr;
+        SwReaderPtr pRdr;
         SfxItemSet* pSet =  pMed->GetItemSet();
         pSet->Put(SfxBoolItem(FN_API_CALL, true));
         if(!sPassword.isEmpty())
             pSet->Put(SfxStringItem(SID_PASSWORD, sPassword));
-        Reader *pRead = pDocSh->StartConvertFrom( *pMed, &pRdr, nullptr, pUnoCursor);
+        Reader *pRead = pDocSh->StartConvertFrom( *pMed, pRdr, nullptr, pUnoCursor);
         if( pRead )
         {
 
@@ -1087,9 +1091,6 @@ void InsertFile(SwUnoCursor* pUnoCursor, const OUString& rURL,
                     nContent = 0;
                 pUnoCursor->GetMark()->nContent.Assign( pCntNode, nContent );
             }
-
-            delete pRdr;
-
         }
     }
 }

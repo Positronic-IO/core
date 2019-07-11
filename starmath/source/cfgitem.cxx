@@ -29,6 +29,8 @@
 #include <vcl/outdev.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <officecfg/Office/Math.hxx>
 #include "cfgitem.hxx"
@@ -687,27 +689,27 @@ void SmMathConfig::SaveFontFormatList()
         // CharSet
         pVal->Name  = aNodeNameDelim;
         pVal->Name += *pName++;
-        pVal->Value <<= static_cast<sal_Int16>(aFntFmt.nCharSet); // 6.0 file-format GetSOStoreTextEncoding not needed
+        pVal->Value <<= aFntFmt.nCharSet; // 6.0 file-format GetSOStoreTextEncoding not needed
         pVal++;
         // Family
         pVal->Name  = aNodeNameDelim;
         pVal->Name += *pName++;
-        pVal->Value <<= static_cast<sal_Int16>(aFntFmt.nFamily);
+        pVal->Value <<= aFntFmt.nFamily;
         pVal++;
         // Pitch
         pVal->Name  = aNodeNameDelim;
         pVal->Name += *pName++;
-        pVal->Value <<= static_cast<sal_Int16>(aFntFmt.nPitch);
+        pVal->Value <<= aFntFmt.nPitch;
         pVal++;
         // Weight
         pVal->Name  = aNodeNameDelim;
         pVal->Name += *pName++;
-        pVal->Value <<= static_cast<sal_Int16>(aFntFmt.nWeight);
+        pVal->Value <<= aFntFmt.nWeight;
         pVal++;
         // Italic
         pVal->Name  = aNodeNameDelim;
         pVal->Name += *pName++;
-        pVal->Value <<= static_cast<sal_Int16>(aFntFmt.nItalic);
+        pVal->Value <<= aFntFmt.nItalic;
         pVal++;
     }
     OSL_ENSURE( sal::static_int_cast<size_t>(pVal - pValues) == nCount * nSymbolProps, "properties missing" );

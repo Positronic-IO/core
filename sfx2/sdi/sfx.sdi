@@ -3244,7 +3244,7 @@ SfxBoolItem PrintPreview SID_PRINTPREVIEW
 
 
 SfxVoidItem SetDocumentProperties SID_DOCINFO
-(SfxDocumentInfoItem Properties SID_DOCINFO)
+(SfxDocumentInfoItem Properties SID_DOCINFO,SfxUnoAnyItem AsyncFunc FN_PARAM_2)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -4844,9 +4844,9 @@ SfxBoolItem ShowImeStatusWindow SID_SHOW_IME_STATUS_WINDOW
     RecordPerSet;
 
 
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::View;
 ]
 
@@ -4898,6 +4898,21 @@ SfxVoidItem Documentation SID_DOCUMENTATION
     GroupId = SfxGroupId::Application;
 ]
 SfxVoidItem Donation SID_DONATION
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+SfxVoidItem GetInvolved SID_GETINVOLVED
 ()
 [
     AutoUpdate = FALSE,

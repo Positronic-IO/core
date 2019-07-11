@@ -13,6 +13,7 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
 #include <comphelper/genericpropertyset.hxx>
+#include <comphelper/propertysetinfo.hxx>
 
 #include <xmloff/xmlimp.hxx>
 #include <xmloff/xmlmetai.hxx>
@@ -47,7 +48,6 @@ private:
 };
 
 Test::Test()
-    : pExport( nullptr )
 {
 }
 
@@ -105,7 +105,7 @@ void Test::testMetaGenerator()
         comphelper::GenericPropertySet_CreateInstance(
             new comphelper::PropertySetInfo(aInfoMap)));
 
-    struct {
+    static struct {
         char const*const generator;
         char const*const buildId;
         sal_uInt16 const result;

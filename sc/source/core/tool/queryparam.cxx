@@ -35,7 +35,7 @@ const size_t MAXQUERY = 8;
 
 class FindByField
 {
-    SCCOLROW mnField;
+    SCCOLROW const mnField;
 public:
     explicit FindByField(SCCOLROW nField) : mnField(nField) {}
     bool operator() (const std::unique_ptr<ScQueryEntry>& rpEntry) const
@@ -89,20 +89,22 @@ ScQueryParamBase::ScQueryParamBase(const ScQueryParamBase& r) :
 
 ScQueryParamBase& ScQueryParamBase::operator=(const ScQueryParamBase& r)
 {
-    eSearchType = r.eSearchType;
-    bHasHeader  = r.bHasHeader;
-    bByRow = r.bByRow;
-    bInplace = r.bInplace;
-    bCaseSens = r.bCaseSens;
-    bDuplicate = r.bDuplicate;
-    mbRangeLookup = r.mbRangeLookup;
-
-    m_Entries.clear();
-    for (auto const& it : r.m_Entries)
+    if (this != &r)
     {
-        m_Entries.push_back(o3tl::make_unique<ScQueryEntry>(*it));
-    }
+        eSearchType = r.eSearchType;
+        bHasHeader  = r.bHasHeader;
+        bByRow = r.bByRow;
+        bInplace = r.bInplace;
+        bCaseSens = r.bCaseSens;
+        bDuplicate = r.bDuplicate;
+        mbRangeLookup = r.mbRangeLookup;
 
+        m_Entries.clear();
+        for (auto const& it : r.m_Entries)
+        {
+            m_Entries.push_back(o3tl::make_unique<ScQueryEntry>(*it));
+        }
+    }
     return *this;
 }
 
@@ -290,9 +292,9 @@ void ScQueryParamBase::FillInExcelSyntax(
          * This could be handled independently if all queries should support
          * it, needs to be evaluated if that actually is desired. */
 
-        // (empty = empty) is a match, and (empty <> not-empty) also is a match
-        if (rItem.meType == ScQueryEntry::ByString)
-            rItem.mbMatchEmpty = ((rEntry.eOp == SC_EQUAL && rItem.maString.isEmpty())
+        // (empty = empty) is a match, and (empty <> not-empty) also is a
+        // match. (empty = 0) is not a match.
+        rItem.mbMatchEmpty = ((rEntry.eOp == SC_EQUAL && rItem.maString.isEmpty())
                 || (rEntry.eOp == SC_NOT_EQUAL && !rItem.maString.isEmpty()));
     }
 }

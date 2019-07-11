@@ -30,6 +30,8 @@
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <vcl/scrbar.hxx>
+#include <vcl/customweld.hxx>
+#include <vcl/weld.hxx>
 #include <rtl/ustring.hxx>
 #include <swdllapi.h>
 
@@ -49,7 +51,7 @@ namespace SwMailMergeHelper
                             css::uno::Reference<css::mail::XMailService>& xInMailService,
                             const OUString& rInMailServerPassword,
                             const OUString& rOutMailServerPassword,
-                            vcl::Window* pDialogParentWindow = nullptr);
+                            weld::Window* pDialogParentWindow = nullptr);
 }
 
 struct SwAddressPreview_Impl;
@@ -97,12 +99,9 @@ public:
     // returns the selected address
     sal_uInt16 GetSelectedAddress() const;
     void SelectAddress(sal_uInt16 nSelect);
-    void ReplaceSelectedAddress(const OUString&);
-    void RemoveSelectedAddress();
 
     // set the number of rows and columns of addresses
     void SetLayout(sal_uInt16 nRows, sal_uInt16 nColumns);
-    void EnableScrollBar();
 
     // fill the actual data into a string (address block or greeting)
     static OUString FillData(const OUString& rAddress, SwMailMergeConfigItem const & rConfigItem,
@@ -110,6 +109,48 @@ public:
 
     void SetSelectHdl (const Link<LinkParamNone*,void>& rLink) { m_aSelectHdl = rLink; }
 };
+
+class SW_DLLPUBLIC AddressPreview : public weld::CustomWidgetController
+{
+    std::unique_ptr<SwAddressPreview_Impl> pImpl;
+    std::unique_ptr<weld::ScrolledWindow> m_xVScrollBar;
+
+    void DrawText_Impl(vcl::RenderContext& rRenderContext, const OUString& rAddress,
+                       const Point& rTopLeft, const Size& rSize, bool bIsSelected);
+
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override;
+    virtual void MouseButtonDown( const MouseEvent& rMEvt ) override;
+    virtual bool KeyInput( const KeyEvent& rKEvt ) override;
+    void UpdateScrollBar();
+
+    DECL_LINK(ScrollHdl, weld::ScrolledWindow&,void);
+
+public:
+    AddressPreview(std::unique_ptr<weld::ScrolledWindow> xParent);
+    virtual ~AddressPreview() override;
+
+    /** The address string is a list of address elements separated by spaces
+    and breaks. The addresses fit into the given layout. If more addresses then
+    rows/columns should be used a scrollbar will be added.
+
+     AddAddress appends the new address to the already added ones.
+     Initially the first added address will be selected
+    */
+    void AddAddress(const OUString& rAddress);
+    //  for preview mode - replaces the currently used address by the given one
+    void SetAddress(const OUString& rAddress);
+
+    // returns the selected address
+    sal_uInt16 GetSelectedAddress() const;
+    void SelectAddress(sal_uInt16 nSelect);
+    void ReplaceSelectedAddress(const OUString&);
+    void RemoveSelectedAddress();
+
+    // set the number of rows and columns of addresses
+    void SetLayout(sal_uInt16 nRows, sal_uInt16 nColumns);
+    void EnableScrollBar();
+};
+
 
 // iterate over an address block or a greeting line the iterator returns the
 // parts either as pure string or as column
@@ -140,14 +181,14 @@ public:
 class SW_DLLPUBLIC SwAuthenticator :
     public cppu::WeakImplHelper<css::mail::XAuthenticator>
 {
-    OUString m_aUserName;
+    OUString const m_aUserName;
     OUString m_aPassword;
-    VclPtr<vcl::Window> m_pParentWindow;
+    weld::Window* m_pParentWindow;
 public:
     SwAuthenticator()
         : m_pParentWindow(nullptr)
     {}
-    SwAuthenticator(const OUString& username, const OUString& password, vcl::Window* pParent)
+    SwAuthenticator(const OUString& username, const OUString& password, weld::Window* pParent)
         : m_aUserName(username)
         , m_aPassword(password)
         , m_pParentWindow(pParent)
@@ -161,9 +202,9 @@ public:
 
 class SW_DLLPUBLIC SwConnectionContext : public cppu::WeakImplHelper<css::uno::XCurrentContext>
 {
-    OUString m_sMailServer;
-    sal_Int16 m_nPort;
-    OUString m_sConnectionType;
+    OUString const m_sMailServer;
+    sal_Int16 const m_nPort;
+    OUString const m_sConnectionType;
 
 public:
     SwConnectionContext(const OUString& rMailServer, sal_Int16 nPort, const OUString& rConnectionType);
@@ -201,11 +242,11 @@ class SW_DLLPUBLIC SwMailTransferable :
         public SwMutexBase,
         public cppu::WeakComponentImplHelper<css::datatransfer::XTransferable, css::beans::XPropertySet>
 {
-    OUString  m_aMimeType;
-    OUString  m_sBody;
-    OUString  m_aURL;
-    OUString  m_aName;
-    bool m_bIsBody;
+    OUString const  m_aMimeType;
+    OUString const  m_sBody;
+    OUString const  m_aURL;
+    OUString const  m_aName;
+    bool const m_bIsBody;
 
     public:
     SwMailTransferable(const OUString& rURL, const OUString& rName, const OUString& rMimeType);

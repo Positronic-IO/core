@@ -32,7 +32,7 @@
 
 const wchar_t * const INDEXING_SERVICE_NAME = L"cisvc";
 
-bool StopIndexingService(SC_HANDLE hService)
+static bool StopIndexingService(SC_HANDLE hService)
 {
     SERVICE_STATUS status;
 
@@ -78,7 +78,7 @@ bool StopIndexingService(SC_HANDLE hService)
     return (status.dwCurrentState == SERVICE_STOPPED);
 }
 
-void StartIndexingService(SC_HANDLE hService)
+static void StartIndexingService(SC_HANDLE hService)
 {
     if (StartServiceW(hService, 0, nullptr))
     {
@@ -124,7 +124,7 @@ void StartIndexingService(SC_HANDLE hService)
     }
 }
 
-extern "C" UINT __stdcall RestartIndexingService(MSIHANDLE)
+extern "C" __declspec(dllexport) UINT __stdcall RestartIndexingService(MSIHANDLE)
 {
     SC_HANDLE hSCManager = OpenSCManagerW(
         nullptr, // local machine

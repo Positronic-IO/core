@@ -27,6 +27,9 @@
 #include <controller/SlsAnimationFunction.hxx>
 #include <controller/SlsScrollBarManager.hxx>
 #include <controller/SlsCurrentSlideManager.hxx>
+#include <Window.hxx>
+#include <SlideSorter.hxx>
+#include <view/SlideSorterView.hxx>
 
 namespace sd { namespace slidesorter { namespace controller {
 
@@ -51,9 +54,7 @@ namespace {
 VisibleAreaManager::VisibleAreaManager (SlideSorter& rSlideSorter)
     : mrSlideSorter(rSlideSorter),
       maVisibleRequests(),
-      mnScrollAnimationId(Animator::NotAnAnimationId),
       maRequestedVisibleTopLeft(),
-      meRequestedAnimationMode(Animator::AM_Immediate),
       mbIsCurrentSlideTrackingActive(true),
       mnDisableCount(0)
 {
@@ -114,35 +115,13 @@ void VisibleAreaManager::MakeVisible()
     if ( ! aNewVisibleTopLeft)
         return;
 
-    // We now know what the visible area shall be.  Scroll accordingly
-    // unless that is not already the visible area or a running scroll
-    // animation has it as its target area.
-    if (mnScrollAnimationId!=Animator::NotAnAnimationId
-        && maRequestedVisibleTopLeft==aNewVisibleTopLeft)
-        return;
-
-    // Stop a running animation.
-    if (mnScrollAnimationId != Animator::NotAnAnimationId)
-        mrSlideSorter.GetController().GetAnimator()->RemoveAnimation(mnScrollAnimationId);
-
     maRequestedVisibleTopLeft = aNewVisibleTopLeft.get();
     VisibleAreaScroller aAnimation(
         mrSlideSorter,
         aCurrentTopLeft,
         maRequestedVisibleTopLeft);
-    if (meRequestedAnimationMode==Animator::AM_Animated
-        && mrSlideSorter.GetProperties()->IsSmoothSelectionScrolling())
-    {
-        mnScrollAnimationId = mrSlideSorter.GetController().GetAnimator()->AddAnimation(
-            aAnimation,
-            Animator::FinishFunctor());
-    }
-    else
-    {
-        // Execute the animation at its final value.
-        aAnimation(1.0);
-    }
-    meRequestedAnimationMode = Animator::AM_Immediate;
+    // Execute the animation at its final value.
+    aAnimation(1.0);
 }
 
 ::boost::optional<Point> VisibleAreaManager::GetRequestedTopLeft() const

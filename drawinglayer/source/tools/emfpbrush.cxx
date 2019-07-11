@@ -34,6 +34,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
+#include <sal/log.hxx>
 #include <vcl/canvastools.hxx>
 #include "emfpbrush.hxx"
 #include "emfppath.hxx"
@@ -50,14 +51,9 @@ namespace emfplushelper
         , areaHeight(0.0)
         , hasTransformation(false)
         , blendPoints(0)
-        , blendPositions(nullptr)
         , blendFactors(nullptr)
         , colorblendPoints(0)
-        , colorblendPositions(nullptr)
-        , colorblendColors(nullptr)
         , surroundColorsNumber(0)
-        , surroundColors(nullptr)
-        , path(nullptr)
         , hatchStyle(HatchStyleHorizontal)
     {
     }

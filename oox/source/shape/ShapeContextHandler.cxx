@@ -26,7 +26,6 @@
 #include "LockedCanvasContext.hxx"
 #include "WpsContext.hxx"
 #include "WpgContext.hxx"
-#include <services.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <oox/vml/vmldrawingfragment.hxx>
 #include <oox/vml/vmlshape.hxx>
@@ -37,29 +36,11 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <memory>
 
-namespace oox { namespace shape {
-
 using namespace ::com::sun::star;
+
+namespace oox { namespace shape {
 using namespace core;
 using namespace drawingml;
-
-OUString ShapeContextHandler_getImplementationName()
-{
-    return OUString( "com.sun.star.comp.oox.ShapeContextHandler" );
-}
-
-uno::Sequence< OUString >
-ShapeContextHandler_getSupportedServiceNames()
-{
-    uno::Sequence< OUString > s { "com.sun.star.xml.sax.FastShapeContextHandler" };
-    return s;
-}
-
-uno::Reference< uno::XInterface >
-ShapeContextHandler_createInstance( const uno::Reference< uno::XComponentContext > & context)
-{
-    return static_cast< ::cppu::OWeakObject* >( new ShapeContextHandler(context) );
-}
 
 ShapeContextHandler::ShapeContextHandler(uno::Reference< uno::XComponentContext > const & context) :
   mnStartToken(0)
@@ -444,23 +425,16 @@ ShapeContextHandler::getShape()
                     oox::drawingml::ShapePtr pShapePtr( new Shape( "com.sun.star.drawing.GroupShape" ) );
                     pShapePtr->setDiagramType();
                     mxFilterBase->importFragment(new ShapeDrawingFragmentHandler(*mxFilterBase, aFragmentPath, pShapePtr));
+                    pShapePtr->setDiagramDoms(mpShape->getDiagramDoms());
+                    pShapePtr->keepDiagramDrawing(*mxFilterBase, aFragmentPath);
 
-                    uno::Sequence<beans::PropertyValue> aValue(mpShape->getDiagramDoms());
-                    uno::Sequence < uno::Any > diagramDrawing(2);
-                    // drawingValue[0] => dom, drawingValue[1] => Sequence of associated relationships
-
-                    sal_Int32 length = aValue.getLength();
-                    aValue.realloc(length+1);
-
-                    diagramDrawing[0] <<= mxFilterBase->importFragment( aFragmentPath );
-                    diagramDrawing[1] <<= pShapePtr->resolveRelationshipsOfTypeFromOfficeDoc(
-                                *mxFilterBase, aFragmentPath, "image" );
-
-                    beans::PropertyValue* pValue = aValue.getArray();
-                    pValue[length].Name = "OOXDrawing";
-                    pValue[length].Value <<= diagramDrawing;
-
-                    pShapePtr->setDiagramDoms( aValue );
+                    if (!mpShape->getChildren().empty())
+                    {
+                        // first child is diagram background - we want to keep it, as drawingML fallback doesn't contain it
+                        auto& aChildren = pShapePtr->getChildren();
+                        ShapePtr pBackground = mpShape->getChildren().front();
+                        aChildren.insert(aChildren.begin(), pBackground);
+                    }
 
                     pShapePtr->addShape( *mxFilterBase, mpThemePtr.get(), xShapes, aMatrix, pShapePtr->getFillProperties() );
                     xResult = pShapePtr->getXShape();
@@ -616,12 +590,13 @@ void SAL_CALL ShapeContextHandler::setMediaDescriptor(const uno::Sequence<beans:
 
 OUString ShapeContextHandler::getImplementationName()
 {
-    return ShapeContextHandler_getImplementationName();
+    return OUString( "com.sun.star.comp.oox.ShapeContextHandler" );
 }
 
 uno::Sequence< OUString > ShapeContextHandler::getSupportedServiceNames()
 {
-    return ShapeContextHandler_getSupportedServiceNames();
+    uno::Sequence< OUString > s { "com.sun.star.xml.sax.FastShapeContextHandler" };
+    return s;
 }
 
 sal_Bool SAL_CALL ShapeContextHandler::supportsService(const OUString & ServiceName)
@@ -630,5 +605,12 @@ sal_Bool SAL_CALL ShapeContextHandler::supportsService(const OUString & ServiceN
 }
 
 }}
+
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+com_sun_star_comp_oox_ShapeContextHandler_get_implementation(
+    uno::XComponentContext* pCtx, uno::Sequence<uno::Any> const& /*rSeq*/)
+{
+    return cppu::acquire(new oox::shape::ShapeContextHandler(pCtx));
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

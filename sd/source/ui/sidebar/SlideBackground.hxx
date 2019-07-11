@@ -48,6 +48,7 @@
 #include <sfx2/sidebar/IContextChangeReceiver.hxx>
 
 class SvxColorListBox;
+class SvxPageItem;
 
 static const long MINBODY = 284;
 
@@ -119,16 +120,17 @@ private:
     std::unique_ptr< XFillHatchItem >       mpHatchItem;
     std::unique_ptr< XFillBitmapItem >      mpBitmapItem;
 
-    bool mbEditModeChangePending;
+    bool mbSwitchModeToNormal;
+    bool mbSwitchModeToMaster;
 
     css::uno::Reference<css::frame::XFrame> mxFrame;
     vcl::EnumContext maContext;
-    vcl::EnumContext maDrawOtherContext;
-    vcl::EnumContext maDrawMasterContext;
-    vcl::EnumContext maImpressOtherContext;
-    vcl::EnumContext maImpressMasterContext;
-    vcl::EnumContext maImpressHandoutContext;
-    vcl::EnumContext maImpressNotesContext;
+    vcl::EnumContext const maDrawOtherContext;
+    vcl::EnumContext const maDrawMasterContext;
+    vcl::EnumContext const maImpressOtherContext;
+    vcl::EnumContext const maImpressMasterContext;
+    vcl::EnumContext const maImpressHandoutContext;
+    vcl::EnumContext const maImpressNotesContext;
     bool         mbTitle;
     std::unique_ptr<SvxLongLRSpaceItem> mpPageLRMarginItem;
     std::unique_ptr<SvxLongULSpaceItem> mpPageULMarginItem;
@@ -138,7 +140,7 @@ private:
     long m_nPageBottomMargin;
     OUString maCustomEntry;
 
-    SfxBindings* mpBindings;
+    SfxBindings* const mpBindings;
 
     MapUnit meUnit;
 

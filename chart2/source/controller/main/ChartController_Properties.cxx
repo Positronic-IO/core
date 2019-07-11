@@ -20,7 +20,9 @@
 #include <ChartController.hxx>
 #include <ChartWindow.hxx>
 #include <chartview/DrawModelWrapper.hxx>
+#include <chartview/ChartSfxItemIds.hxx>
 #include <ObjectIdentifier.hxx>
+#include <chartview/ExplicitScaleValues.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
 #include <dlg_ObjectProperties.hxx>
 #include <dlg_View3D.hxx>
@@ -51,9 +53,12 @@
 #include <ReferenceSizeProvider.hxx>
 #include <RegressionCurveHelper.hxx>
 #include <com/sun/star/chart2/XChartDocument.hpp>
+#include <com/sun/star/util/CloseVetoException.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
 
 #include <memory>
 
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <svx/ActionDescriptionProvider.hxx>
 
@@ -755,15 +760,14 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
         ViewElementListProvider aViewElementListProvider( m_pDrawModelWrapper.get() );
 
         SolarMutexGuard aGuard;
-        ScopedVclPtrInstance<SchAttribTabDlg> aDlg(
-                GetChartWindow(), &aItemSet, &aDialogParameter,
+        SchAttribTabDlg aDlg(
+                GetChartFrame(), &aItemSet, &aDialogParameter,
                 &aViewElementListProvider,
                 uno::Reference< util::XNumberFormatsSupplier >(
                         getModel(), uno::UNO_QUERY ) );
 
         if(aDialogParameter.HasSymbolProperties())
         {
-            SfxItemSet* pSymbolShapeProperties=nullptr;
             uno::Reference< beans::XPropertySet > xObjectProperties =
                 ObjectIdentifier::getObjectPropertySet( rObjectCID, getModel() );
             wrapper::DataPointItemConverter aSymbolItemConverter( getModel(), m_xCC
@@ -773,24 +777,24 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
                                         , uno::Reference< lang::XMultiServiceFactory >( getModel(), uno::UNO_QUERY )
                                         , wrapper::GraphicObjectType::FilledDataPoint );
 
-            pSymbolShapeProperties = new SfxItemSet( aSymbolItemConverter.CreateEmptyItemSet() );
+            std::unique_ptr<SfxItemSet> pSymbolShapeProperties(new SfxItemSet( aSymbolItemConverter.CreateEmptyItemSet() ));
             aSymbolItemConverter.FillItemSet( *pSymbolShapeProperties );
 
             sal_Int32 const nStandardSymbol=0;//@todo get from somewhere
-            Graphic*    pAutoSymbolGraphic = new Graphic( aViewElementListProvider.GetSymbolGraphic( nStandardSymbol, pSymbolShapeProperties ) );
+            std::unique_ptr<Graphic> pAutoSymbolGraphic(new Graphic( aViewElementListProvider.GetSymbolGraphic( nStandardSymbol, pSymbolShapeProperties.get() ) ));
             // note: the dialog takes the ownership of pSymbolShapeProperties and pAutoSymbolGraphic
-            aDlg->setSymbolInformation( pSymbolShapeProperties, pAutoSymbolGraphic );
+            aDlg.setSymbolInformation( std::move(pSymbolShapeProperties), std::move(pAutoSymbolGraphic) );
         }
         if( aDialogParameter.HasStatisticProperties() )
         {
-            aDlg->SetAxisMinorStepWidthForErrorBarDecimals(
+            aDlg.SetAxisMinorStepWidthForErrorBarDecimals(
                 InsertErrorBarsDialog::getAxisMinorStepWidthForErrorBarDecimals( getModel(), m_xChartView, rObjectCID ) );
         }
 
         //open the dialog
-        if (aDlg->Execute() == RET_OK || (bSuccessOnUnchanged && aDlg->DialogWasClosedWithOK()))
+        if (aDlg.run() == RET_OK || (bSuccessOnUnchanged && aDlg.DialogWasClosedWithOK()))
         {
-            const SfxItemSet* pOutItemSet = aDlg->GetOutputItemSet();
+            const SfxItemSet* pOutItemSet = aDlg.GetOutputItemSet();
             if(pOutItemSet)
             {
                 ControllerLockGuardUNO aCLGuard( getModel());

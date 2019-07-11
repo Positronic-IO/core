@@ -22,6 +22,7 @@
 #include <svl/poolitem.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/layout.hxx>
+#include <array>
 
 class Edit;
 class MetricField;
@@ -43,8 +44,8 @@ public:
 
 private:
     LinePropertyPanelBase& m_rParent;
-    OUString* m_pStr;
-    OUString m_sPt;
+    std::array<OUString,9> maStrUnits;
+    OUString const m_sPt;
     MapUnit m_eMapUnit;
     bool m_bVSFocus;
     bool m_bCustom;
@@ -52,8 +53,8 @@ private:
     VclPtr<MetricField> m_xMFWidth;
     VclPtr<VclContainer> m_xBox;
     VclPtr<LineWidthValueSet> m_xVSWidth;
-    Image m_aIMGCus;
-    Image m_aIMGCusGray;
+    Image const m_aIMGCus;
+    Image const m_aIMGCusGray;
 
     DECL_LINK(VSSelectHdl, ValueSet*, void);
     DECL_LINK(MFModifyHdl, Edit&, void);

@@ -37,6 +37,7 @@ cy \
 da \
 de \
 dgo \
+dsb \
 dz \
 el \
 en-GB \
@@ -49,6 +50,7 @@ eu \
 fa \
 fi \
 fr \
+fy \
 ga \
 gd \
 gl \
@@ -64,6 +66,7 @@ is \
 it \
 ja \
 ka \
+kab \
 kk \
 km \
 kmr-Latn \

@@ -42,9 +42,9 @@
 
 using namespace ::com::sun::star;
 
-long ImplSysChildProc( void* pInst, SalObjEvent nEvent )
+static void ImplSysChildProc( SystemChildWindow* pInst, SalObjEvent nEvent )
 {
-    VclPtr<SystemChildWindow> pWindow = static_cast<SystemChildWindow*>(pInst);
+    VclPtr<SystemChildWindow> pWindow = pInst;
 
     switch ( nEvent )
     {
@@ -68,6 +68,8 @@ long ImplSysChildProc( void* pInst, SalObjEvent nEvent )
         case SalObjEvent::LoseFocus:
             // trigger a LoseFocus which matches the status
             // of the window with matching Activate-Status
+            if (pWindow->IsDisposed())
+                break;
             pWindow->ImplGetFrameData()->mbSysObjFocus = false;
             if ( !pWindow->ImplGetFrameData()->mnFocusId )
             {
@@ -92,8 +94,6 @@ long ImplSysChildProc( void* pInst, SalObjEvent nEvent )
 
         default: break;
     }
-
-    return 0;
 }
 
 void SystemChildWindow::ImplInitSysChild( vcl::Window* pParent, WinBits nStyle, SystemWindowData *pData, bool bShow )

@@ -34,6 +34,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
+#include <sal/log.hxx>
 #include <vcl/canvastools.hxx>
 #include <implrenderer.hxx>
 #include "emfppen.hxx"
@@ -83,9 +84,7 @@ namespace cppcanvas
             , dashOffset(0.0)
             , alignment(0)
             , customStartCapLen(0)
-            , customStartCap(nullptr)
             , customEndCapLen(0)
-            , customEndCap(nullptr)
         {
         }
 

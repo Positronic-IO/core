@@ -30,6 +30,7 @@
 #include <winver.h>
 
 #include <comphelper/windowserrorstring.hxx>
+#include <sal/log.hxx>
 
 HINSTANCE D2DWriteTextOutRenderer::mmD2d1 = nullptr,
           D2DWriteTextOutRenderer::mmDWrite = nullptr;
@@ -270,8 +271,11 @@ bool D2DWriteTextOutRenderer::performRender(GenericSalLayout const & rLayout, Sa
     if (!GetDWriteFaceFromHDC(hDC, &mpFontFace, &mlfEmHeight))
         return false;
 
+    const WinFontInstance& rWinFont = static_cast<const WinFontInstance&>(rLayout.GetFont());
+    float fHScale = rWinFont.getHScale();
+
     tools::Rectangle bounds;
-    bool succeeded = rLayout.GetBoundRect(rGraphics, bounds);
+    bool succeeded = rLayout.GetBoundRect(bounds);
     if (succeeded)
     {
         hr = BindDC(hDC, bounds);   // Update the bounding rect.
@@ -295,10 +299,12 @@ bool D2DWriteTextOutRenderer::performRender(GenericSalLayout const & rLayout, Sa
         const GlyphItem* pGlyph;
         while (rLayout.GetNextGlyph(&pGlyph, aPos, nStart))
         {
-            UINT16 glyphIndices[] = { pGlyph->maGlyphId };
-            FLOAT glyphAdvances[] = { pGlyph->mnNewWidth };
+            UINT16 glyphIndices[] = { pGlyph->m_aGlyphId };
+            FLOAT glyphAdvances[] = { static_cast<FLOAT>(pGlyph->m_nNewWidth) / fHScale };
             DWRITE_GLYPH_OFFSET glyphOffsets[] = { { 0.0f, 0.0f }, };
-            D2D1_POINT_2F baseline = { aPos.X() - bounds.Left(), aPos.Y() - bounds.Top() };
+            D2D1_POINT_2F baseline = { static_cast<FLOAT>(aPos.X() - bounds.Left()) / fHScale,
+                                       static_cast<FLOAT>(aPos.Y() - bounds.Top()) };
+            WinFontTransformGuard aTransformGuard(mpRT, fHScale, rLayout, baseline);
             DWRITE_GLYPH_RUN glyphs = {
                 mpFontFace,
                 mlfEmHeight,
@@ -417,6 +423,30 @@ bool D2DWriteTextOutRenderer::GetDWriteFaceFromHDC(HDC hDC, IDWriteFontFace ** p
     return succeeded;
 }
 
+WinFontTransformGuard::WinFontTransformGuard(ID2D1RenderTarget* pRenderTarget, float fHScale,
+                                             const GenericSalLayout& rLayout,
+                                             const D2D1_POINT_2F& rBaseline)
+    : mpRenderTarget(pRenderTarget)
+{
+    pRenderTarget->GetTransform(&maTransform);
+    D2D1::Matrix3x2F aTransform = maTransform;
+    if (fHScale != 1.0f)
+    {
+        aTransform
+            = aTransform * D2D1::Matrix3x2F::Scale(D2D1::Size(fHScale, 1.0f), D2D1::Point2F(0, 0));
+    }
 
+    if (rLayout.GetOrientation() != 0)
+    {
+        // DWrite angle is in clockwise degrees, our orientation is in counter-clockwise 10th
+        // degrees.
+        aTransform = aTransform
+                     * D2D1::Matrix3x2F::Rotation(
+                           -static_cast<FLOAT>(rLayout.GetOrientation()) / 10, rBaseline);
+    }
+    mpRenderTarget->SetTransform(aTransform);
+}
+
+WinFontTransformGuard::~WinFontTransformGuard() { mpRenderTarget->SetTransform(maTransform); }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -42,7 +42,11 @@ $(eval $(call gb_CppunitTest_set_include,sw_odfexport,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sw_odfexport))
+$(eval $(call gb_CppunitTest_use_api,sw_odfexport,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sw_odfexport))
 $(eval $(call gb_CppunitTest_use_vcl,sw_odfexport))
@@ -60,9 +64,6 @@ $(eval $(call gb_CppunitTest_use_uiconfigs,sw_odfexport, \
     svx \
 ))
 
-ifneq ($(filter MORE_FONTS,$(BUILD_TYPE)),)
-$(call gb_CppunitTest_get_target,sw_odfexport): \
-    $(call gb_ExternalPackage_get_target,fonts_liberation)
-endif
+$(eval $(call gb_CppunitTest_use_more_fonts,sw_odfexport))
 
 # vim: set noet sw=4 ts=4:

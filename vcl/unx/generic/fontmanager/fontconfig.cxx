@@ -30,6 +30,7 @@
 #include <i18nlangtag/languagetag.hxx>
 #include <i18nutil/unicode.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <unicode/uchar.h>
 #include <unicode/uscript.h>
 #include <officecfg/Office/Common.hxx>
@@ -92,9 +93,7 @@ private:
 };
 
 FontCfgWrapper::FontCfgWrapper()
-    :
-        m_pOutlineSet( nullptr ),
-        m_pLanguageTag( nullptr )
+    : m_pOutlineSet( nullptr )
 {
     FcInit();
 }
@@ -561,9 +560,7 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
 
             std::unique_ptr<PrintFont> xUpdate;
 
-            auto second_font = aFonts.begin();
-            ++second_font;
-            if (second_font == aFonts.end()) // one font
+            if (aFonts.size() == 1) // one font
                 xUpdate = std::move(aFonts.front());
             else // more than one font
             {
@@ -619,7 +616,7 @@ void PrintFontManager::countFontconfigFonts( std::unordered_map<OString, int>& o
 
                 // sort into known fonts
                 fontID aFont = m_nNextFontID++;
-                m_aFonts[ aFont ] = xUpdate.release();
+                m_aFonts[ aFont ] = std::move(xUpdate);
                 m_aFontFileToFontID[ aBase ].insert( aFont );
                 nFonts++;
                 SAL_INFO("vcl.fonts.detail", "inserted font " << family << " as fontID " << aFont);
@@ -861,7 +858,7 @@ IMPL_LINK_NOARG(PrintFontManager, autoInstallFontLangSupport, Timer *, void)
     m_aCurrentRequests.clear();
 }
 
-void PrintFontManager::Substitute( FontSelectPattern &rPattern, OUString& rMissingCodes )
+void PrintFontManager::Substitute(FontSelectPattern &rPattern, OUString& rMissingCodes)
 {
     FontCfgWrapper& rWrapper = FontCfgWrapper::get();
 

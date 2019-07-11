@@ -30,6 +30,7 @@
 
 #include <vcl/svapp.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <comphelper/AccessibleImplementationHelper.hxx>
 
 #include "AccessibleKeyStroke.h"
 
@@ -114,7 +115,7 @@ STDMETHODIMP CAccActionBase::get_description(long actionIndex,BSTR __RPC_FAR *de
     if(!pRXAct.is())
         return E_FAIL;
 
-    ::rtl::OUString ouStr = GetXInterface()->getAccessibleActionDescription(actionIndex);
+    OUString ouStr = GetXInterface()->getAccessibleActionDescription(actionIndex);
     // #CHECK#
 
     SAFE_SYSFREESTRING(*description);
@@ -175,7 +176,8 @@ STDMETHODIMP CAccActionBase::get_keyBinding(
 
     for( int index = 0;index < nCount;index++ )
     {
-        auto const wString = GetkeyBindingStrByXkeyBinding( binding.get()->getAccessibleKeyBinding(index) );
+        auto const wString = comphelper::GetkeyBindingStrByXkeyBinding(
+            binding.get()->getAccessibleKeyBinding(index));
 
         (*keyBinding)[index] = SysAllocString(o3tl::toW(wString.getStr()));
     }
@@ -214,116 +216,6 @@ STDMETHODIMP CAccActionBase::put_XInterface(hyper pXInterface)
     return S_OK;
 
     LEAVE_PROTECTED_BLOCK
-}
-
-/**
- * Helper function used for converting keybinding to string.
- *
- * @param    keySet    the key stroke sequence.
- */
-OUString CAccActionBase::GetkeyBindingStrByXkeyBinding( const Sequence< KeyStroke > &keySet )
-{
-    OUStringBuffer buf;
-    for( int iIndex = 0;iIndex < keySet.getLength();iIndex++ )
-    {
-        KeyStroke stroke = keySet[iIndex];
-        buf.append('\n');
-        buf.append(stroke.KeyChar);
-    }
-    return buf.makeStringAndClear();
-}
-
-/**
- * Helper function used for converting key code to ole string.
- *
- * @param    key    the key code.
- */
-OLECHAR const * CAccActionBase::getOLECHARFromKeyCode(long key)
-{
-    static struct keyMap
-    {
-        int keyCode;
-        OLECHAR const * key;
-    }
-    map[] =
-        {
-#define CODEENTRY(key)   {KEYCODE_##key, L#key}
-            {MODIFIER_SHIFT, L"SHIFT" },
-            {MODIFIER_CTRL, L"CTRL" },
-            {MODIFIER_ALT, L"ALT" },
-            CODEENTRY(NUM0),CODEENTRY(NUM1),CODEENTRY(NUM2),CODEENTRY(NUM3),CODEENTRY(NUM4),CODEENTRY(NUM5),
-            CODEENTRY(NUM6),CODEENTRY(NUM7),CODEENTRY(NUM8),CODEENTRY(NUM9),
-            CODEENTRY(A),CODEENTRY(B),CODEENTRY(C),CODEENTRY(D),CODEENTRY(E),CODEENTRY(F),
-            CODEENTRY(G),CODEENTRY(H),CODEENTRY(I),CODEENTRY(J),CODEENTRY(K),CODEENTRY(L),
-            CODEENTRY(M),CODEENTRY(N),CODEENTRY(O),CODEENTRY(P),CODEENTRY(Q),CODEENTRY(R),
-            CODEENTRY(S),CODEENTRY(T),CODEENTRY(U),CODEENTRY(V),CODEENTRY(W),CODEENTRY(X),
-            CODEENTRY(Y),CODEENTRY(Z),
-            CODEENTRY(F1),CODEENTRY(F2),CODEENTRY(F3),CODEENTRY(F4),CODEENTRY(F5),CODEENTRY(F6),
-            CODEENTRY(F7),CODEENTRY(F8),CODEENTRY(F9),CODEENTRY(F10),CODEENTRY(F11),CODEENTRY(F12),
-            CODEENTRY(F13),CODEENTRY(F14),CODEENTRY(F15),CODEENTRY(F16),CODEENTRY(F17),CODEENTRY(F18),
-            CODEENTRY(F19),CODEENTRY(F20),CODEENTRY(F21),CODEENTRY(F22),CODEENTRY(F23),CODEENTRY(F24),
-            CODEENTRY(F25),CODEENTRY(F26),
-
-            { KEYCODE_DOWN, L"DOWN" },
-            { KEYCODE_UP, L"UP" },
-            { KEYCODE_LEFT, L"LEFT" },
-            { KEYCODE_RIGHT, L"RIGHT" },
-            { KEYCODE_HOME, L"HOME" },
-            { KEYCODE_END, L"END" },
-            { KEYCODE_PAGEUP, L"PAGEUP" },
-            { KEYCODE_PAGEDOWN, L"PAGEDOWN" },
-            { KEYCODE_RETURN, L"RETURN" },
-            { KEYCODE_ESCAPE, L"ESCAPE" },
-            { KEYCODE_TAB, L"TAB" },
-            { KEYCODE_BACKSPACE, L"BACKSPACE" },
-            { KEYCODE_SPACE, L"SPACE" },
-            { KEYCODE_INSERT, L"INSERT" },
-            { KEYCODE_DELETE, L"DELETE" },
-            { KEYCODE_ADD, L"ADD" },
-            { KEYCODE_SUBTRACT, L"SUBTRACT" },
-            { KEYCODE_MULTIPLY, L"MULTIPLY" },
-            { KEYCODE_DIVIDE, L"DIVIDE" },
-            { KEYCODE_POINT, L"POINT" },
-            { KEYCODE_COMMA, L"COMMA" },
-            { KEYCODE_LESS, L"LESS" },
-            { KEYCODE_GREATER, L"GREATER" },
-            { KEYCODE_EQUAL, L"EQUAL" },
-            { KEYCODE_OPEN, L"OPEN" },
-            { KEYCODE_CUT, L"CUT" },
-            { KEYCODE_COPY, L"COPY" },
-            { KEYCODE_PASTE, L"PASTE" },
-            { KEYCODE_UNDO, L"UNDO" },
-            { KEYCODE_REPEAT, L"REPEAT" },
-            { KEYCODE_FIND, L"FIND" },
-            { KEYCODE_PROPERTIES, L"PROPERTIES" },
-            { KEYCODE_FRONT, L"FRONT" },
-            { KEYCODE_CONTEXTMENU, L"CONTEXTMENU" },
-            { KEYCODE_HELP, L"HELP" },
-        };
-    static long nCount = SAL_N_ELEMENTS(map);
-
-    long min = 0;
-    long max = nCount-1;
-    long mid = nCount/2;
-    while(min<max)
-    {
-        if(key<map[mid].keyCode)
-            max = mid-1;
-        else if(key>map[mid].keyCode)
-            min = mid+1;
-        else
-            break;
-        mid = (min+max)/2;
-    }
-
-    if(key == map[mid].keyCode)
-    {
-        return map[mid].key;
-    }
-    else
-    {
-        return nullptr;
-    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

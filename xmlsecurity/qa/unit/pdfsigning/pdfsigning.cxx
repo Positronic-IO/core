@@ -12,6 +12,7 @@
 
 #include <comphelper/processfactory.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <test/bootstrapfixture.hxx>
 #include <tools/datetime.hxx>
 #include <unotools/streamwrap.hxx>
@@ -324,9 +325,9 @@ void PDFSigningTest::testPDFRemoveAll()
         osl::File::copy(m_directories.getURLFromSrc(DATA_DIRECTORY) + "2good.pdf", aOutURL));
     // Load the test document as a storage and read its two signatures.
     DocumentSignatureManager aManager(mxComponentContext, DocumentSignatureMode::Content);
-    SvStream* pStream
+    std::unique_ptr<SvStream> pStream
         = utl::UcbStreamHelper::CreateStream(aOutURL, StreamMode::READ | StreamMode::WRITE);
-    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(std::move(pStream)));
     aManager.mxSignatureStream = xStream;
     aManager.read(/*bUseTempStream=*/false);
     std::vector<SignatureInformation>& rInformations = aManager.maCurrentSignatureInformations;
@@ -354,9 +355,9 @@ void PDFSigningTest::testTdf107782()
     // Load the test document as a storage and read its signatures.
     DocumentSignatureManager aManager(mxComponentContext, DocumentSignatureMode::Content);
     OUString aURL = m_directories.getURLFromSrc(DATA_DIRECTORY) + "tdf107782.pdf";
-    SvStream* pStream
+    std::unique_ptr<SvStream> pStream
         = utl::UcbStreamHelper::CreateStream(aURL, StreamMode::READ | StreamMode::WRITE);
-    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(std::move(pStream)));
     aManager.mxSignatureStream = xStream;
     aManager.read(/*bUseTempStream=*/false);
     CPPUNIT_ASSERT(aManager.mpPDFSignatureHelper);
@@ -514,9 +515,9 @@ void PDFSigningTest::testUnknownSubFilter()
         = xml::crypto::SEInitializer::create(mxComponentContext);
     uno::Reference<xml::crypto::XXMLSecurityContext> xSecurityContext
         = xSEInitializer->createSecurityContext(OUString());
-    SvStream* pStream = utl::UcbStreamHelper::CreateStream(
+    std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream(
         m_directories.getURLFromSrc(DATA_DIRECTORY) + "cr-comment.pdf", StreamMode::STD_READ);
-    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(*pStream));
+    uno::Reference<io::XStream> xStream(new utl::OStreamWrapper(std::move(pStream)));
     DocumentSignatureManager aManager(mxComponentContext, DocumentSignatureMode::Content);
     aManager.mxSignatureStream = xStream;
     aManager.read(/*bUseTempStream=*/false);

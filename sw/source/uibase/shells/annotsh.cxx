@@ -160,7 +160,7 @@ SwAnnotationShell::~SwAnnotationShell()
 {
 }
 
-::svl::IUndoManager* SwAnnotationShell::GetUndoManager()
+SfxUndoManager* SwAnnotationShell::GetUndoManager()
 {
     SwPostItMgr* pPostItMgr = rView.GetPostItMgr();
     if ( !pPostItMgr ||
@@ -482,10 +482,7 @@ void SwAnnotationShell::Exec( SfxRequest &rReq )
                 aDlgAttr.Put( SvxKerningItem(0, RES_CHRATR_KERNING) );
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg( rView.GetWindow(), rView, aDlgAttr, SwCharDlgMode::Ann));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
+                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(rView.GetFrameWeld(), rView, aDlgAttr, SwCharDlgMode::Ann));
                 if (nSlot == SID_CHAR_DLG_EFFECT)
                 {
                     pDlg->SetCurPageId("fonteffects");
@@ -534,10 +531,7 @@ void SwAnnotationShell::Exec( SfxRequest &rReq )
                 aDlgAttr.Put( SvxOrphansItem( 0, RES_PARATR_ORPHANS ) );
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwParaDlg( rView.GetWindow(), rView, aDlgAttr, true ));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
+                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwParaDlg(rView.GetFrameWeld(), rView, aDlgAttr, true));
                 sal_uInt16 nRet = pDlg->Execute();
                 if(RET_OK == nRet)
                 {
@@ -654,7 +648,7 @@ void SwAnnotationShell::GetState(SfxItemSet& rSet)
                 SfxItemState eState = aEditAttr.GetItemState( EE_PARA_SBL );
                 if( eState >= SfxItemState::DEFAULT )
                 {
-                    SvxLineSpacingItem aLR = aEditAttr.Get( EE_PARA_SBL );
+                    const SvxLineSpacingItem& aLR = aEditAttr.Get( EE_PARA_SBL );
                     rSet.Put(aLR);
                 }
                 else
@@ -910,6 +904,10 @@ void SwAnnotationShell::ExecClpbrd(SfxRequest const &rReq)
             break;
         case SID_PASTE:
             if (pPostItMgr->GetActiveSidebarWin()->GetLayoutStatus()!=SwPostItHelper::DELETED)
+                pOLV->PasteSpecial();
+            break;
+        case SID_PASTE_UNFORMATTED:
+            if (pPostItMgr->GetActiveSidebarWin()->GetLayoutStatus()!=SwPostItHelper::DELETED)
                 pOLV->Paste();
             break;
         case SID_PASTE_SPECIAL:
@@ -992,6 +990,7 @@ void SwAnnotationShell::StateClpbrd(SfxItemSet &rSet)
                 break;
             }
             case SID_PASTE:
+            case SID_PASTE_UNFORMATTED:
             case SID_PASTE_SPECIAL:
                 {
                     if( !bPastePossible )
@@ -1483,7 +1482,7 @@ void SwAnnotationShell::ExecRotateTransliteration( SfxRequest const & rReq )
 void SwAnnotationShell::ExecUndo(SfxRequest &rReq)
 {
     const SfxItemSet* pArgs = rReq.GetArgs();
-    ::svl::IUndoManager* pUndoManager = GetUndoManager();
+    SfxUndoManager* pUndoManager = GetUndoManager();
     SwWrtShell &rSh = rView.GetWrtShell();
     SwUndoId nUndoId(SwUndoId::EMPTY);
 
@@ -1576,7 +1575,7 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
     SfxWhichIter aIter(rSet);
     SwUndoId nUndoId(SwUndoId::EMPTY);
     sal_uInt16 nWhich = aIter.FirstWhich();
-    ::svl::IUndoManager* pUndoManager = GetUndoManager();
+    SfxUndoManager* pUndoManager = GetUndoManager();
     SfxViewFrame *pSfxViewFrame = rView.GetViewFrame();
     SwWrtShell &rSh = rView.GetWrtShell();
 
@@ -1623,25 +1622,25 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
             {
                 if( pUndoManager )
                 {
-                    OUString (::svl::IUndoManager:: *fnGetComment)( size_t, bool const ) const;
+                    OUString (SfxUndoManager:: *fnGetComment)( size_t, bool const ) const;
 
                     sal_uInt16 nCount;
                     if( SID_GETUNDOSTRINGS == nWhich )
                     {
                         nCount = pUndoManager->GetUndoActionCount();
-                        fnGetComment = &::svl::IUndoManager::GetUndoActionComment;
+                        fnGetComment = &SfxUndoManager::GetUndoActionComment;
                     }
                     else
                     {
                         nCount = pUndoManager->GetRedoActionCount();
-                        fnGetComment = &::svl::IUndoManager::GetRedoActionComment;
+                        fnGetComment = &SfxUndoManager::GetRedoActionComment;
                     }
 
-                    OUString sList;
+                    OUStringBuffer sList;
                     if( nCount )
                     {
                         for( sal_uInt16 n = 0; n < nCount; ++n )
-                            sList += (pUndoManager->*fnGetComment)( n, ::svl::IUndoManager::TopLevel ) + "\n";
+                            sList.append( (pUndoManager->*fnGetComment)( n, SfxUndoManager::TopLevel ) ).append("\n");
                     }
 
                     SfxStringListItem aItem( nWhich );
@@ -1656,8 +1655,8 @@ void SwAnnotationShell::StateUndo(SfxItemSet &rSet)
                         rSh.GetDoStrings( SwWrtShell::UNDO, aItem );
                     }
 
-                    sList += aItem.GetString();
-                    aItem.SetString( sList );
+                    sList.append(aItem.GetString());
+                    aItem.SetString( sList.makeStringAndClear() );
                     rSet.Put( aItem );
                 }
                 else
@@ -1742,14 +1741,15 @@ void SwAnnotationShell::InsertSymbol(SfxRequest& rReq)
         aAllSet.Put( SfxBoolItem( FN_PARAM_1, false ) );
 
         SwViewOption aOpt(*rView.GetWrtShell().GetViewOptions());
-        OUString sSymbolFont = aOpt.GetSymbolFont();
+        const OUString& sSymbolFont = aOpt.GetSymbolFont();
         if( !sSymbolFont.isEmpty() )
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, sSymbolFont ) );
         else
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, aSetDlgFont.GetFamilyName() ) );
 
         // If character is selected then it can be shown.
-        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(rView.GetFrameWeld(), aAllSet, true));
+        auto xFrame = rView.GetViewFrame()->GetFrame().GetFrameInterface();
+        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(rView.GetFrameWeld(), aAllSet, xFrame));
         pDlg->Execute();
         return;
     }

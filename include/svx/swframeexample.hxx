@@ -19,14 +19,15 @@
 #ifndef INCLUDED_SVX_SWFRAMEEXAMPLE_HXX
 #define INCLUDED_SVX_SWFRAMEEXAMPLE_HXX
 
-#include <vcl/window.hxx>
 #include <tools/color.hxx>
 #include <tools/gen.hxx>
 #include <svx/svxdllapi.h>
 #include <svx/swframetypes.hxx>
+#include <vcl/customweld.hxx>
+#include <vcl/window.hxx>
 #include <com/sun/star/text/WrapTextMode.hpp>
 
-class SVX_DLLPUBLIC SvxSwFrameExample : public vcl::Window
+class SVX_DLLPUBLIC SwFrameExample : public weld::CustomWidgetController
 {
     Color       m_aTransColor;      ///< transparency
     Color       m_aBgCol;           ///< background
@@ -62,16 +63,16 @@ class SVX_DLLPUBLIC SvxSwFrameExample : public vcl::Window
 
     void InitColors_Impl();
     void InitAllRects_Impl(vcl::RenderContext& rRenderContext);
-    void CalcBoundRect_Impl(tools::Rectangle &rRect);
+    void CalcBoundRect_Impl(vcl::RenderContext& rRenderContext, tools::Rectangle &rRect);
     tools::Rectangle DrawInnerFrame_Impl(vcl::RenderContext& rRenderContext, const tools::Rectangle &rRect, const Color &rFillColor, const Color &rBorderColor);
 
+    virtual void StyleUpdated() override;
     virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override;
-    virtual Size GetOptimalSize() const override;
-protected:
-    virtual void DataChanged( const DataChangedEvent& rDCEvt ) override;
 public:
 
-    SvxSwFrameExample(vcl::Window* pParent, WinBits nStyle);
+    SwFrameExample();
+
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
 
     void SetWrap(css::text::WrapTextMode nW) { nWrap     = nW; }
 
@@ -86,6 +87,7 @@ public:
 
     void SetRelPos(const Point& rP);
 };
+
 
 
 #endif // INCLUDED_SVX_SWFRAMEEXAMPLE_HXX

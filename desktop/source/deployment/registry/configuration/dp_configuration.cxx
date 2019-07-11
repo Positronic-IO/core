@@ -20,7 +20,7 @@
 //TODO: Large parts of this file were copied from dp_component.cxx; those parts
 // should be consolidated.
 
-#include <config_features.h>
+#include <config_extensions.h>
 
 #include <dp_backend.h>
 #if HAVE_FEATURE_EXTENSIONS
@@ -29,6 +29,7 @@
 #include <dp_services.hxx>
 #include <dp_ucb.h>
 #include <rtl/string.hxx>
+#include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/uri.hxx>
 #include <osl/file.hxx>
@@ -60,9 +61,6 @@ namespace dp_registry {
 namespace backend {
 namespace configuration {
 namespace {
-
-typedef std::deque<OUString> t_stringlist;
-
 
 class BackendImpl : public ::dp_registry::backend::PackageRegistryBackend
 {
@@ -97,9 +95,9 @@ class BackendImpl : public ::dp_registry::backend::PackageRegistryBackend
     };
     friend class PackageImpl;
 
-    t_stringlist m_xcs_files;
-    t_stringlist m_xcu_files;
-    t_stringlist & getFiles( bool xcs ) {
+    std::deque<OUString> m_xcs_files;
+    std::deque<OUString> m_xcu_files;
+    std::deque<OUString> & getFiles( bool xcs ) {
         return xcs ? m_xcs_files : m_xcu_files;
     }
 
@@ -245,7 +243,7 @@ BackendImpl::BackendImpl(
 void BackendImpl::addDataToDb(
     OUString const & url, ConfigurationBackendDb::Data const & data)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->addEntry(url, data);
 }
 
@@ -253,27 +251,27 @@ void BackendImpl::addDataToDb(
     OUString const & url)
 {
     ::boost::optional<ConfigurationBackendDb::Data> data;
-    if (m_backendDb.get())
+    if (m_backendDb)
         data = m_backendDb->getEntry(url);
     return data;
 }
 
 void BackendImpl::revokeEntryFromDb(OUString const & url)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->revokeEntry(url);
 }
 
 bool BackendImpl::hasActiveEntry(OUString const & url)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         return m_backendDb->hasActiveEntry(url);
     return false;
 }
 
 bool BackendImpl::activateEntry(OUString const & url)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         return m_backendDb->activateEntry(url);
     return false;
 }
@@ -288,7 +286,7 @@ BackendImpl::getSupportedPackageTypes()
 }
 void BackendImpl::packageRemoved(OUString const & url, OUString const & /*mediaType*/)
 {
-    if (m_backendDb.get())
+    if (m_backendDb)
         m_backendDb->removeEntry(url);
 }
 
@@ -422,8 +420,8 @@ void BackendImpl::configmgrini_flush(
     OStringBuffer buf;
     if (! m_xcs_files.empty())
     {
-        t_stringlist::const_iterator iPos( m_xcs_files.begin() );
-        t_stringlist::const_iterator const iEnd( m_xcs_files.end() );
+        auto iPos( m_xcs_files.cbegin() );
+        auto const iEnd( m_xcs_files.cend() );
         buf.append( "SCHEMA=" );
         while (iPos != iEnd) {
             // encoded ASCII file-urls:
@@ -438,8 +436,8 @@ void BackendImpl::configmgrini_flush(
     }
     if (! m_xcu_files.empty())
     {
-        t_stringlist::const_iterator iPos( m_xcu_files.begin() );
-        t_stringlist::const_iterator const iEnd( m_xcu_files.end() );
+        auto iPos( m_xcu_files.cbegin() );
+        auto const iEnd( m_xcu_files.cend() );
         buf.append( "DATA=" );
         while (iPos != iEnd) {
             // encoded ASCII file-urls:
@@ -472,7 +470,7 @@ void BackendImpl::addToConfigmgrIni( bool isSchema, bool isURL, OUString const &
     const OUString rcterm( isURL ? dp_misc::makeRcTerm(url_) : url_ );
     const ::osl::MutexGuard guard( getMutex() );
     configmgrini_verify_init( xCmdEnv );
-    t_stringlist & rSet = getFiles(isSchema);
+    std::deque<OUString> & rSet = getFiles(isSchema);
     if (std::find( rSet.begin(), rSet.end(), rcterm ) == rSet.end()) {
         rSet.push_front( rcterm ); // prepend to list, thus overriding
         // write immediately:
@@ -489,8 +487,8 @@ bool BackendImpl::removeFromConfigmgrIni(
     const OUString rcterm( dp_misc::makeRcTerm(url_) );
     const ::osl::MutexGuard guard( getMutex() );
     configmgrini_verify_init( xCmdEnv );
-    t_stringlist & rSet = getFiles(isSchema);
-    t_stringlist::iterator i(std::find(rSet.begin(), rSet.end(), rcterm));
+    std::deque<OUString> & rSet = getFiles(isSchema);
+    auto i(std::find(rSet.begin(), rSet.end(), rcterm));
     if (i == rSet.end() && !isSchema)
     {
         //in case the xcu contained %origin% then the configmr.ini contains the

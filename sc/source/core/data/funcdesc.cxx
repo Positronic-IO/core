@@ -25,7 +25,6 @@
 #include <compiler.hxx>
 #include <compiler.hrc>
 #include <global.hxx>
-#include <sc.hrc>
 #include <scfuncs.hrc>
 #include <scmod.hxx>
 #include <scresid.hxx>
@@ -33,19 +32,18 @@
 
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
-#include <unotools/resmgr.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <formula/funcvarargs.h>
+#include <osl/diagnose.h>
 
 #include <memory>
-#include <numeric>
 
 struct ScFuncDescCore
 {
     /*
      * An opcode from include/formula/compiler.hxx
      */
-    sal_uInt16 nOpCode;
+    sal_uInt16 const nOpCode;
     /*
      * Pointer to list of strings
      */
@@ -53,7 +51,7 @@ struct ScFuncDescCore
     /*
      * Count of list of strings
      */
-    size_t nResourceLen;
+    size_t const nResourceLen;
     /*
      * 16-bit value:
      *
@@ -66,11 +64,11 @@ struct ScFuncDescCore
      * Bit 2: boolean flag whether function is hidden in the Function
      * Wizard unless used in an expression.
      */
-    sal_uInt16 nFunctionFlags;
+    sal_uInt16 const nFunctionFlags;
     /*
      * Function group (text, math, ...), one of ID_FUNCTION_GRP_...
      */
-    sal_uInt16 nCategory;
+    sal_uInt16 const nCategory;
     /*
      * Help ID, HID_FUNC_...
      */
@@ -82,12 +80,12 @@ struct ScFuncDescCore
      * paired parameters, or PAIRED_VAR_ARGS+number if number of fixed
      * parameters and variable paired arguments following.
      */
-    sal_uInt16 nArgs;
+    sal_uInt16 const nArgs;
     /*
      * For every parameter:
      *     Boolean flag whether the parameter is optional.
      */
-    sal_uInt8 aOptionalArgs[7];
+    sal_uInt8 const aOptionalArgs[7];
 };
 
 class ScFuncRes
@@ -98,15 +96,12 @@ public:
 
 // class ScFuncDesc:
 ScFuncDesc::ScFuncDesc() :
-        pFuncName       (nullptr),
-        pFuncDesc       (nullptr),
         pDefArgFlags    (nullptr),
         nFIndex         (0),
         nCategory       (0),
         nArgCount       (0),
         nVarArgsStart   (0),
         bIncomplete     (false),
-        bHasSuppressedArgs(false),
         mbHidden        (false)
 {}
 
@@ -132,17 +127,13 @@ void ScFuncDesc::Clear()
     maDefArgDescs.clear();
     pDefArgFlags = nullptr;
 
-    delete pFuncName;
-    pFuncName = nullptr;
-
-    delete pFuncDesc;
-    pFuncDesc = nullptr;
+    mxFuncName.reset();
+    mxFuncDesc.reset();
 
     nFIndex = 0;
     nCategory = 0;
     sHelpId.clear();
     bIncomplete = false;
-    bHasSuppressedArgs = false;
     mbHidden = false;
 }
 
@@ -228,9 +219,9 @@ OUString ScFuncDesc::getSignature() const
 {
     OUStringBuffer aSig;
 
-    if(pFuncName)
+    if(mxFuncName)
     {
-        aSig.append(*pFuncName);
+        aSig.append(*mxFuncName);
 
         OUString aParamList = GetParamList();
         if( !aParamList.isEmpty() )
@@ -253,9 +244,9 @@ OUString ScFuncDesc::getFormula( const ::std::vector< OUString >& _aArguments ) 
 
     OUStringBuffer aFormula;
 
-    if(pFuncName)
+    if(mxFuncName)
     {
-        aFormula.append( *pFuncName );
+        aFormula.append( *mxFuncName );
 
         aFormula.append( "(" );
         if ( nArgCount > 0 && !_aArguments.empty() && !_aArguments[0].isEmpty())
@@ -280,27 +271,14 @@ OUString ScFuncDesc::getFormula( const ::std::vector< OUString >& _aArguments ) 
 
 sal_uInt16 ScFuncDesc::GetSuppressedArgCount() const
 {
-    if (!bHasSuppressedArgs || !pDefArgFlags)
-        return nArgCount;
-
-    sal_uInt16 nArgs = nArgCount;
-    if (nArgs >= PAIRED_VAR_ARGS)
-        nArgs -= PAIRED_VAR_ARGS - 2;
-    else if (nArgs >= VAR_ARGS)
-        nArgs -= VAR_ARGS - 1;
-    sal_uInt16 nCount = nArgs;
-    if (nArgCount >= PAIRED_VAR_ARGS)
-        nCount += PAIRED_VAR_ARGS - 2;
-    else if (nArgCount >= VAR_ARGS)
-        nCount += VAR_ARGS - 1;
-    return nCount;
+    return nArgCount;
 }
 
 OUString ScFuncDesc::getFunctionName() const
 {
     OUString sRet;
-    if ( pFuncName )
-        sRet = *pFuncName;
+    if ( mxFuncName )
+        sRet = *mxFuncName;
     return sRet;
 }
 
@@ -312,8 +290,8 @@ const formula::IFunctionCategory* ScFuncDesc::getCategory() const
 OUString ScFuncDesc::getDescription() const
 {
     OUString sRet;
-    if ( pFuncDesc )
-        sRet = *pFuncDesc;
+    if ( mxFuncDesc )
+        sRet = *mxFuncDesc;
     return sRet;
 }
 
@@ -324,15 +302,11 @@ sal_Int32 ScFuncDesc::getSuppressedArgumentCount() const
 
 void ScFuncDesc::fillVisibleArgumentMapping(::std::vector<sal_uInt16>& _rArguments) const
 {
-    if (!bHasSuppressedArgs || !pDefArgFlags)
-    {
-        _rArguments.resize( nArgCount);
-        sal_uInt16 value = 0;
-        for (auto & argument : _rArguments)
-            argument = value++;
-    }
+    _rArguments.resize( nArgCount);
+    sal_uInt16 value = 0;
+    for (auto & argument : _rArguments)
+        argument = value++;
 
-    _rArguments.reserve( nArgCount);
     sal_uInt16 nArgs = nArgCount;
     if (nArgs >= PAIRED_VAR_ARGS)
         nArgs -= PAIRED_VAR_ARGS - 2;
@@ -349,10 +323,10 @@ void ScFuncDesc::initArgumentInfo()  const
     // get the full argument description
     // (add-in has to be instantiated to get the type information)
 
-    if ( bIncomplete && pFuncName )
+    if ( bIncomplete && mxFuncName )
     {
         ScUnoAddInCollection& rAddIns = *ScGlobal::GetAddInCollection();
-        OUString aIntName(rAddIns.FindFunction( *pFuncName, true ));         // pFuncName is upper-case
+        OUString aIntName(rAddIns.FindFunction( *mxFuncName, true ));         // pFuncName is upper-case
 
         if ( !aIntName.isEmpty() )
         {
@@ -407,7 +381,7 @@ bool ScFuncDesc::isParameterOptional(sal_uInt32 _nPos) const
 
 bool ScFuncDesc::compareByName(const ScFuncDesc* a, const ScFuncDesc* b)
 {
-    return (ScGlobal::GetCaseCollator()->compareString(*a->pFuncName, *b->pFuncName ) < 0);
+    return (ScGlobal::GetCaseCollator()->compareString(*a->mxFuncName, *b->mxFuncName ) < 0);
 }
 
 #define ENTRY(CODE) CODE, SAL_N_ELEMENTS(CODE)
@@ -420,7 +394,7 @@ ScFunctionList::ScFunctionList()
     // See ScFuncDescCore definition for format details.
     // This list must be sorted in order of the opcode, dbgutil builds enable _GLIBCXX_DEBUG
     // which will concept check that the list is sorted on first use to ensure this holds
-    ScFuncDescCore aDescs[] =
+    static const ScFuncDescCore aDescs[] =
     {
         { SC_OPCODE_IF, ENTRY(SC_OPCODE_IF_ARY), 0, ID_FUNCTION_GRP_LOGIC, HID_FUNC_WENN, 3, { 0, 1, 1 } },
         { SC_OPCODE_IF_ERROR, ENTRY(SC_OPCODE_IF_ERROR_ARY), 0, ID_FUNCTION_GRP_LOGIC, HID_FUNC_IFERROR, 2, { 0, 0 } },
@@ -812,7 +786,8 @@ ScFunctionList::ScFunctionList()
         { SC_OPCODE_ROUNDSIG, ENTRY(SC_OPCODE_ROUNDSIG_ARY), 0, ID_FUNCTION_GRP_MATH, HID_FUNC_ROUNDSIG, 2, { 0, 0 } },
         { SC_OPCODE_REPLACEB, ENTRY(SC_OPCODE_REPLACEB_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_REPLACEB, 4, { 0, 0, 0, 0 } },
         { SC_OPCODE_FINDB, ENTRY(SC_OPCODE_FINDB_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_FINDB, 3, { 0, 0, 1 } },
-        { SC_OPCODE_SEARCHB, ENTRY(SC_OPCODE_SEARCHB_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_SEARCHB, 3, { 0, 0, 1 } }
+        { SC_OPCODE_SEARCHB, ENTRY(SC_OPCODE_SEARCHB_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_SEARCHB, 3, { 0, 0, 1 } },
+        { SC_OPCODE_REGEX, ENTRY(SC_OPCODE_REGEX_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_REGEX, 4, { 0, 0, 1, 1 } }
     };
 
     ScFuncDesc* pDesc = nullptr;
@@ -823,10 +798,10 @@ ScFunctionList::ScFunctionList()
     // otherwise the sub resources within the resource blocks and the
     // resource blocks themselves would had to be ordered according to
     // OpCodes, which is utopian...
-    ScFuncDescCore* pDescsEnd = aDescs + SAL_N_ELEMENTS(aDescs);
+    ScFuncDescCore const * pDescsEnd = aDescs + SAL_N_ELEMENTS(aDescs);
     for (sal_uInt16 i = 0; i <= SC_OPCODE_LAST_OPCODE_ID; ++i)
     {
-        ScFuncDescCore *pEntry = std::lower_bound(aDescs, pDescsEnd, i,
+        const ScFuncDescCore *pEntry = std::lower_bound(aDescs, pDescsEnd, i,
             [](const ScFuncDescCore &rItem, sal_uInt16 key)
             {
                 return rItem.nOpCode < key;
@@ -850,7 +825,7 @@ ScFunctionList::ScFunctionList()
                 pDesc->nFIndex = i;
                 tmpFuncVector.push_back(pDesc);
 
-                nStrLen = (*(pDesc->pFuncName)).getLength();
+                nStrLen = pDesc->mxFuncName->getLength();
                 if (nStrLen > nMaxFuncNameLen)
                     nMaxFuncNameLen = nStrLen;
             }
@@ -885,14 +860,14 @@ ScFunctionList::ScFunctionList()
         pLegacyFuncData->getParamDesc( aArgName, aArgDesc, 0 );
         pDesc->nFIndex     = nNextId++; //  ??? OpCode vergeben
         pDesc->nCategory   = ID_FUNCTION_GRP_ADDINS;
-        pDesc->pFuncName   = new OUString(pLegacyFuncData->GetInternalName().toAsciiUpperCase());
+        pDesc->mxFuncName = pLegacyFuncData->GetInternalName().toAsciiUpperCase();
 
         OUStringBuffer aBuf(aArgDesc);
         aBuf.append('\n');
         aBuf.append("( AddIn: ");
         aBuf.append(pLegacyFuncData->GetModuleName());
         aBuf.append(" )");
-        pDesc->pFuncDesc = new OUString(aBuf.makeStringAndClear());
+        pDesc->mxFuncDesc = aBuf.makeStringAndClear();
 
         pDesc->nArgCount   = nArgs;
         if (nArgs)
@@ -962,7 +937,7 @@ ScFunctionList::ScFunctionList()
         }
 
         tmpFuncVector.push_back(pDesc);
-        nStrLen = (*(pDesc->pFuncName)).getLength();
+        nStrLen = pDesc->mxFuncName->getLength();
         if ( nStrLen > nMaxFuncNameLen)
             nMaxFuncNameLen = nStrLen;
     }
@@ -979,7 +954,7 @@ ScFunctionList::ScFunctionList()
         if ( pUnoAddIns->FillFunctionDesc( nFunc, *pDesc ) )
         {
             tmpFuncVector.push_back(pDesc);
-            nStrLen = (*(pDesc->pFuncName)).getLength();
+            nStrLen = pDesc->mxFuncName->getLength();
             if (nStrLen > nMaxFuncNameLen)
                 nMaxFuncNameLen = nStrLen;
         }
@@ -1244,8 +1219,8 @@ ScFuncRes::ScFuncRes(const ScFuncDescCore &rEntry, ScFuncDesc* pDesc, bool& rbSu
         }
     }
 
-    pDesc->pFuncName = new OUString(ScCompiler::GetNativeSymbol(static_cast<OpCode>(nOpCode)));
-    pDesc->pFuncDesc = new OUString(ScResId(rEntry.pResource[0]));
+    pDesc->mxFuncName = ScCompiler::GetNativeSymbol(static_cast<OpCode>(nOpCode));
+    pDesc->mxFuncDesc = ScResId(rEntry.pResource[0]);
 
     if (nArgs)
     {

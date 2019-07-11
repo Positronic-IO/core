@@ -36,7 +36,7 @@
 
 void SwTableHeightDlg::Apply()
 {
-    SwTwips nHeight = static_cast< SwTwips >(m_xHeightEdit->denormalize(m_xHeightEdit->get_value(FUNIT_TWIP)));
+    SwTwips nHeight = static_cast< SwTwips >(m_xHeightEdit->denormalize(m_xHeightEdit->get_value(FieldUnit::TWIP)));
     SwFormatFrameSize aSz(ATT_FIX_SIZE, 0, nHeight);
 
     SwFrameSize eFrameSize = m_xAutoHeightCB->get_active() ?  ATT_MIN_SIZE : ATT_FIX_SIZE;
@@ -50,29 +50,26 @@ void SwTableHeightDlg::Apply()
 SwTableHeightDlg::SwTableHeightDlg(weld::Window *pParent, SwWrtShell &rS)
     : GenericDialogController(pParent, "modules/swriter/ui/rowheight.ui", "RowHeightDialog")
     , m_rSh(rS)
-    , m_xHeightEdit(m_xBuilder->weld_metric_spin_button("heightmf", FUNIT_CM))
+    , m_xHeightEdit(m_xBuilder->weld_metric_spin_button("heightmf", FieldUnit::CM))
     , m_xAutoHeightCB(m_xBuilder->weld_check_button("fit"))
 {
     FieldUnit eFieldUnit = SW_MOD()->GetUsrPref( dynamic_cast< const SwWebDocShell*>(
                                 m_rSh.GetView().GetDocShell() ) != nullptr  )->GetMetric();
     ::SetFieldUnit(*m_xHeightEdit, eFieldUnit);
 
-    m_xHeightEdit->set_min(MINLAY, FUNIT_TWIP);
-    SwFormatFrameSize *pSz;
-    m_rSh.GetRowHeight(pSz);
+    m_xHeightEdit->set_min(MINLAY, FieldUnit::TWIP);
+    std::unique_ptr<SwFormatFrameSize> pSz = m_rSh.GetRowHeight();
     if (pSz)
     {
         auto nHeight = pSz->GetHeight();
         m_xAutoHeightCB->set_active(pSz->GetHeightSizeType() != ATT_FIX_SIZE);
-        m_xHeightEdit->set_value(m_xHeightEdit->normalize(nHeight), FUNIT_TWIP);
-
-        delete pSz;
+        m_xHeightEdit->set_value(m_xHeightEdit->normalize(nHeight), FieldUnit::TWIP);
     }
 }
 
-short SwTableHeightDlg::execute()
+short SwTableHeightDlg::run()
 {
-    short nRet = run();
+    short nRet = GenericDialogController::run();
     if (nRet == RET_OK)
         Apply();
     return nRet;

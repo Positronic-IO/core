@@ -18,6 +18,7 @@
  */
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <list>
@@ -50,7 +51,6 @@
 #include <swatrset.hxx>
 #include <frmatr.hxx>
 
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 using namespace ::com::sun::star;
@@ -79,8 +79,8 @@ class SwAccessibleTableData_Impl
     std::list < Int32Pair_Impl > maExtents;     // cell extends for event processing only
     Point   maTabFramePos;
     const SwTabFrame *mpTabFrame;
-    bool mbIsInPagePreview;
-    bool mbOnlyTableColumnHeader;
+    bool const mbIsInPagePreview;
+    bool const mbOnlyTableColumnHeader;
 
     void CollectData( const SwFrame *pFrame );
     void CollectExtents( const SwFrame *pFrame );
@@ -479,7 +479,7 @@ void SwAccessibleTableData_Impl::GetRowColumnAndExtent(
 
 class SwAccSingleTableSelHander_Impl : public SwAccTableSelHander_Impl
 {
-    bool bSelected;
+    bool m_bSelected;
 
 public:
 
@@ -487,19 +487,19 @@ public:
 
     virtual ~SwAccSingleTableSelHander_Impl() {}
 
-    bool IsSelected() const { return bSelected; }
+    bool IsSelected() const { return m_bSelected; }
 
     virtual void Unselect( sal_Int32, sal_Int32 ) override;
 };
 
 inline SwAccSingleTableSelHander_Impl::SwAccSingleTableSelHander_Impl() :
-    bSelected( true )
+    m_bSelected( true )
 {
 }
 
 void SwAccSingleTableSelHander_Impl::Unselect( sal_Int32, sal_Int32 )
 {
-    bSelected = false;
+    m_bSelected = false;
 }
 
 class SwAccAllTableSelHander_Impl : public SwAccTableSelHander_Impl
@@ -672,8 +672,7 @@ void SwAccessibleTable::GetStates(
 SwAccessibleTable::SwAccessibleTable(
         std::shared_ptr<SwAccessibleMap> const& pInitMap,
         const SwTabFrame* pTabFrame  ) :
-    SwAccessibleContext( pInitMap, AccessibleRole::TABLE, pTabFrame ),
-    mpTableData( nullptr )
+    SwAccessibleContext( pInitMap, AccessibleRole::TABLE, pTabFrame )
 {
     const SwFrameFormat *pFrameFormat = pTabFrame->GetFormat();
     const_cast< SwFrameFormat * >( pFrameFormat )->Add( this );
@@ -1590,14 +1589,13 @@ void SwAccessibleTable::FireSelectionEvent( )
 
     aEvent.EventId = AccessibleEventId::SELECTION_CHANGED_REMOVE;
 
-    for (Cells_t::iterator vi = m_vecCellRemove.begin();
-            vi != m_vecCellRemove.end(); ++vi)
+    for (const auto& rCell : m_vecCellRemove)
     {
         // fdo#57197: check if the object is still alive
-        uno::Reference<XAccessible> const xAcc(vi->second);
+        uno::Reference<XAccessible> const xAcc(rCell.second);
         if (xAcc.is())
         {
-            SwAccessibleContext *const pAccCell(vi->first);
+            SwAccessibleContext *const pAccCell(rCell.first);
             assert(pAccCell);
             pAccCell->FireAccessibleEvent(aEvent);
         }
@@ -1606,14 +1604,13 @@ void SwAccessibleTable::FireSelectionEvent( )
     if (m_vecCellAdd.size() <= SELECTION_WITH_NUM)
     {
         aEvent.EventId = AccessibleEventId::SELECTION_CHANGED_ADD;
-        for (Cells_t::iterator vi = m_vecCellAdd.begin();
-                vi != m_vecCellAdd.end(); ++vi)
+        for (const auto& rCell : m_vecCellAdd)
         {
             // fdo#57197: check if the object is still alive
-            uno::Reference<XAccessible> const xAcc(vi->second);
+            uno::Reference<XAccessible> const xAcc(rCell.second);
             if (xAcc.is())
             {
-                SwAccessibleContext *const pAccCell(vi->first);
+                SwAccessibleContext *const pAccCell(rCell.first);
                 assert(pAccCell);
                 pAccCell->FireAccessibleEvent(aEvent);
             }

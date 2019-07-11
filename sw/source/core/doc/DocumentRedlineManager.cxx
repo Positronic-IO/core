@@ -18,20 +18,28 @@
 */
 #include <DocumentRedlineManager.hxx>
 #include <frmfmt.hxx>
+#include <rootfrm.hxx>
+#include <txtfrm.hxx>
 #include <doc.hxx>
+#include <docsh.hxx>
+#include <fmtfld.hxx>
 #include <IDocumentUndoRedo.hxx>
+#include <IDocumentFieldsAccess.hxx>
+#include <IDocumentLayoutAccess.hxx>
 #include <IDocumentState.hxx>
 #include <redline.hxx>
 #include <UndoRedline.hxx>
 #include <docary.hxx>
 #include <ndtxt.hxx>
 #include <unocrsr.hxx>
+#include <ftnidx.hxx>
+#include <authfld.hxx>
 #include <strings.hrc>
 #include <swmodule.hxx>
 #include <editsh.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
-#include <comphelper/flagguard.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 
@@ -80,6 +88,8 @@ using namespace com::sun::star;
             for(SwRangeRedline* j : rTable)
             {
                 // check for empty redlines
+                // note: these can destroy sorting in SwTextNode::Update()
+                // if there's another one without mark on the same pos.
                 OSL_ENSURE( ( *(j->GetPoint()) != *(j->GetMark()) ) ||
                             ( j->GetContentIdx() != nullptr ),
                             ERROR_PREFIX "empty redline" );
@@ -112,9 +122,168 @@ using namespace com::sun::star;
 
 #endif
 
+namespace sw {
+
+static void UpdateFieldsForRedline(IDocumentFieldsAccess & rIDFA)
+{
+    auto const pAuthType(static_cast<SwAuthorityFieldType*>(rIDFA.GetFieldType(
+        SwFieldIds::TableOfAuthorities, OUString(), false)));
+    if (pAuthType) // created on demand...
+    {
+        pAuthType->DelSequenceArray();
+    }
+    rIDFA.GetFieldType(SwFieldIds::RefPageGet, OUString(), false)->UpdateFields();
+    rIDFA.GetSysFieldType(SwFieldIds::Chapter)->UpdateFields();
+    rIDFA.UpdateExpFields(nullptr, false);
+    rIDFA.UpdateRefFields();
+}
+
+void UpdateFramesForAddDeleteRedline(SwDoc & rDoc, SwPaM const& rPam)
+{
+    // no need to call UpdateFootnoteNums for FTNNUM_PAGE:
+    // the AppendFootnote/RemoveFootnote will do it by itself!
+    rDoc.GetFootnoteIdxs().UpdateFootnote(rPam.Start()->nNode);
+    SwTextNode *const pStartNode(rPam.Start()->nNode.GetNode().GetTextNode());
+    if (!pStartNode)
+    {
+        SwTableNode *const pTableNode(rPam.Start()->nNode.GetNode().GetTableNode());
+        assert(pTableNode); // known pathology
+        for (sal_uLong j = pTableNode->GetIndex(); j <= pTableNode->EndOfSectionIndex(); ++j)
+        {
+            pTableNode->GetNodes()[j]->SetRedlineMergeFlag(SwNode::Merge::Hidden);
+        }
+        for (SwRootFrame const*const pLayout : rDoc.GetAllLayouts())
+        {
+            if (pLayout->IsHideRedlines())
+            {
+                pTableNode->DelFrames(pLayout);
+            }
+        }
+    }
+    else
+    {
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pStartNode);
+        for (SwTextFrame * pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                frames.push_back(pFrame);
+            }
+        }
+        auto eMode(sw::FrameMode::Existing);
+        for (SwTextFrame * pFrame : frames)
+        {
+            SwTextNode & rFirstNode(pFrame->GetMergedPara()
+                ? *pFrame->GetMergedPara()->pFirstNode
+                : *pStartNode);
+            assert(rFirstNode.GetIndex() <= pStartNode->GetIndex());
+            // clear old one first to avoid DelFrames confusing updates & asserts...
+            pFrame->SetMergedPara(nullptr);
+            pFrame->SetMergedPara(sw::CheckParaRedlineMerge(
+                *pFrame, rFirstNode, eMode));
+            eMode = sw::FrameMode::New; // Existing is not idempotent!
+            // the first node of the new redline is not necessarily the first
+            // node of the merged frame, there could be another redline nearby
+            sw::AddRemoveFlysAnchoredToFrameStartingAtNode(*pFrame, *pStartNode, nullptr);
+        }
+    }
+    // fields last - SwGetRefField::UpdateField requires up-to-date frames
+    UpdateFieldsForRedline(rDoc.getIDocumentFieldsAccess()); // after footnotes
+
+    // update SwPostItMgr / notes in the margin
+    rDoc.GetDocShell()->Broadcast(
+            SwFormatFieldHint(nullptr, SwFormatFieldHintWhich::REMOVED) );
+}
+
+void UpdateFramesForRemoveDeleteRedline(SwDoc & rDoc, SwPaM const& rPam)
+{
+    rDoc.GetFootnoteIdxs().UpdateFootnote(rPam.Start()->nNode);
+    SwTextNode *const pStartNode(rPam.Start()->nNode.GetNode().GetTextNode());
+    if (!pStartNode)
+    {
+        SwTableNode const*const pTableNode(rPam.Start()->nNode.GetNode().GetTableNode());
+        assert(pTableNode); // known pathology
+        for (sal_uLong j = pTableNode->GetIndex(); j <= pTableNode->EndOfSectionIndex(); ++j)
+        {
+            pTableNode->GetNodes()[j]->SetRedlineMergeFlag(SwNode::Merge::None);
+        }
+        if (rDoc.getIDocumentLayoutAccess().GetCurrentLayout()->IsHideRedlines())
+        {
+            // note: this will also create frames for all currently hidden flys
+            // because it calls AppendAllObjs
+            ::MakeFrames(&rDoc, rPam.Start()->nNode, rPam.End()->nNode);
+        }
+    }
+    else
+    {
+        std::vector<SwTextFrame*> frames;
+        std::set<SwRootFrame*> layouts;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pStartNode);
+        for (SwTextFrame * pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                frames.push_back(pFrame);
+                layouts.insert(pFrame->getRootFrame());
+            }
+        }
+        if (frames.empty())
+        {
+            return;
+        }
+        if (rPam.GetPoint()->nNode != rPam.GetMark()->nNode)
+        {
+            // first, call CheckParaRedlineMerge on the first paragraph,
+            // to init flag on new merge range (if any) + 1st node post the merge
+            auto eMode(sw::FrameMode::Existing);
+            for (SwTextFrame * pFrame : frames)
+            {
+                if (auto const pMergedPara = pFrame->GetMergedPara())
+                {
+                    assert(pMergedPara->pFirstNode->GetIndex() <= pStartNode->GetIndex());
+                    // clear old one first to avoid DelFrames confusing updates & asserts...
+                    SwTextNode & rFirstNode(*pMergedPara->pFirstNode);
+                    pFrame->SetMergedPara(nullptr);
+                    pFrame->SetMergedPara(sw::CheckParaRedlineMerge(
+                        *pFrame, rFirstNode, eMode));
+                    eMode = sw::FrameMode::New; // Existing is not idempotent!
+                }
+            }
+            // now start node until end of merge + 1 has proper flags; MakeFrames
+            // should pick up from the next node in need of frames by checking flags
+            SwNodeIndex const start(*pStartNode, +1);
+            SwNodeIndex const end(rPam.End()->nNode, +1); // end is exclusive
+            // note: this will also create frames for all currently hidden flys
+            // both on first and non-first nodes because it calls AppendAllObjs
+            ::MakeFrames(&rDoc, start, end);
+            // re-use this to move flys that are now on the wrong frame, with end
+            // of redline as "second" node; the nodes between start and end should
+            // be complete with MakeFrames already
+            sw::MoveMergedFlysAndFootnotes(frames, *pStartNode,
+                    *rPam.End()->nNode.GetNode().GetTextNode(), false);
+        }
+        else
+        {   // recreate flys in the one node the hard way...
+            for (auto const& pLayout : layouts)
+            {
+                AppendAllObjs(rDoc.GetSpzFrameFormats(), pLayout);
+            }
+        }
+    }
+    // fields last - SwGetRefField::UpdateField requires up-to-date frames
+    UpdateFieldsForRedline(rDoc.getIDocumentFieldsAccess()); // after footnotes
+
+    // update SwPostItMgr / notes in the margin
+    rDoc.GetDocShell()->Broadcast(
+            SwFormatFieldHint(nullptr, SwFormatFieldHintWhich::INSERTED) );
+}
+
+} // namespace sw
+
 namespace
 {
-    inline bool IsPrevPos( const SwPosition & rPos1, const SwPosition & rPos2 )
+    bool IsPrevPos( const SwPosition & rPos1, const SwPosition & rPos2 )
     {
         const SwContentNode* pCNd;
         return 0 == rPos2.nContent.GetIndex() &&
@@ -139,7 +308,7 @@ namespace
             eCmp = ComparePosition( *pSttRng, *pEndRng, *pRStt, *pREnd );
         }
 
-        pRedl->InvalidateRange();
+        pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
 
         switch( pRedl->GetType() )
         {
@@ -253,17 +422,15 @@ namespace
 
                     if( pCSttNd && pCEndNd )
                         rDoc.getIDocumentContentOperations().DeleteAndJoin( aPam );
-                    else
-                    {
-                        rDoc.getIDocumentContentOperations().DeleteRange( aPam );
-
-                        if( pCSttNd && !pCEndNd )
+                    else if (pCSttNd && !pCEndNd)
                         {
                             aPam.GetBound().nContent.Assign( nullptr, 0 );
                             aPam.GetBound( false ).nContent.Assign( nullptr, 0 );
-                            aPam.DeleteMark();
                             rDoc.getIDocumentContentOperations().DelFullPara( aPam );
                         }
+                    else
+                    {
+                        rDoc.getIDocumentContentOperations().DeleteRange(aPam);
                     }
                     rDoc.getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );
                 }
@@ -293,6 +460,7 @@ namespace
     {
         bool bRet = true;
         SwRangeRedline* pRedl = rArr[ rPos ];
+        SwDoc& rDoc = *pRedl->GetDoc();
         SwPosition *pRStt = nullptr, *pREnd = nullptr;
         SwComparePosition eCmp = SwComparePosition::Outside;
         if( pSttRng && pEndRng )
@@ -302,13 +470,12 @@ namespace
             eCmp = ComparePosition( *pSttRng, *pEndRng, *pRStt, *pREnd );
         }
 
-        pRedl->InvalidateRange();
+        pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
 
         switch( pRedl->GetType() )
         {
         case nsRedlineType_t::REDLINE_INSERT:
             {
-                SwDoc& rDoc = *pRedl->GetDoc();
                 const SwPosition *pDelStt = nullptr, *pDelEnd = nullptr;
                 bool bDelRedl = false;
                 switch( eCmp )
@@ -367,17 +534,15 @@ namespace
 
                     if( pCSttNd && pCEndNd )
                         rDoc.getIDocumentContentOperations().DeleteAndJoin( aPam );
-                    else
-                    {
-                        rDoc.getIDocumentContentOperations().DeleteRange( aPam );
-
-                        if( pCSttNd && !pCEndNd )
+                    else if (pCSttNd && !pCEndNd)
                         {
                             aPam.GetBound().nContent.Assign( nullptr, 0 );
                             aPam.GetBound( false ).nContent.Assign( nullptr, 0 );
-                            aPam.DeleteMark();
                             rDoc.getIDocumentContentOperations().DelFullPara( aPam );
                         }
+                    else
+                    {
+                        rDoc.getIDocumentContentOperations().DeleteRange(aPam);
                     }
                     rDoc.getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );
                 }
@@ -389,6 +554,8 @@ namespace
             {
                 SwRangeRedline* pNew = nullptr;
                 bool bCheck = false, bReplace = false;
+                SwPaM const updatePaM(pSttRng ? *pSttRng : *pRedl->Start(),
+                                      pEndRng ? *pEndRng : *pRedl->End());
 
                 switch( eCmp )
                 {
@@ -472,6 +639,8 @@ namespace
                     rArr.Remove( pRedl );
                     rArr.Insert( pRedl );
                 }
+
+                sw::UpdateFramesForRemoveDeleteRedline(rDoc, updatePaM);
             }
             break;
 
@@ -516,25 +685,39 @@ namespace
             ++n;
         }
 
-        for( ; n < rArr.size(); ++n )
+        // tdf#119824 first we will accept only overlapping paragraph format changes
+        // in the first loop to avoid potential content changes during Redo
+        bool bHasParagraphFormatChange = false;
+        for( int m = 0 ; m < 2 && !bHasParagraphFormatChange; ++m )
         {
-            SwRangeRedline* pTmp = rArr[ n ];
-            if( pTmp->HasMark() && pTmp->IsVisible() )
+            for(SwRedlineTable::size_type o = n ; o < rArr.size(); ++o )
             {
-                if( *pTmp->End() <= *pEnd )
+                SwRangeRedline* pTmp = rArr[ o ];
+                if( pTmp->HasMark() && pTmp->IsVisible() )
                 {
-                    if( (*fn_AcceptReject)( rArr, n, bCallDelete, nullptr, nullptr ))
-                        nCount++;
-                }
-                else
-                {
-                    if( *pTmp->Start() < *pEnd )
+                    if( *pTmp->End() <= *pEnd )
                     {
-                        // Only revoke the partial selection
-                        if( (*fn_AcceptReject)( rArr, n, bCallDelete, pStt, pEnd ))
+                        if( (m > 0 || nsRedlineType_t::REDLINE_PARAGRAPH_FORMAT == pTmp->GetType()) &&
+                            (*fn_AcceptReject)( rArr, o, bCallDelete, nullptr, nullptr ))
+                        {
+                            bHasParagraphFormatChange = true;
                             nCount++;
+                        }
                     }
-                    break;
+                    else
+                    {
+                        if( *pTmp->Start() < *pEnd )
+                        {
+                            // Only revoke the partial selection
+                            if( (m > 0 || nsRedlineType_t::REDLINE_PARAGRAPH_FORMAT == pTmp->GetType()) &&
+                                (*fn_AcceptReject)( rArr, o, bCallDelete, pStt, pEnd ))
+                            {
+                                bHasParagraphFormatChange = true;
+                                nCount++;
+                            }
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -612,9 +795,7 @@ DocumentRedlineManager::DocumentRedlineManager(SwDoc& i_rSwdoc)
     , meRedlineFlags(RedlineFlags::ShowInsert | RedlineFlags::ShowDelete)
     , mpRedlineTable(new SwRedlineTable)
     , mpExtraRedlineTable(new SwExtraRedlineTable)
-    , mpAutoFormatRedlnComment(nullptr)
     , mbIsRedlineMove(false)
-    , mbReadlineChecked(false)
     , mnAutoFormatRedlnCommentNo(0)
 {
 }
@@ -634,7 +815,8 @@ void DocumentRedlineManager::SetRedlineFlags( RedlineFlags eMode )
             bool bSaveInXMLImportFlag = m_rDoc.IsInXMLImport();
             m_rDoc.SetInXMLImport( false );
             // and then hide/display everything
-            void (SwRangeRedline::*pFnc)(sal_uInt16, size_t) = nullptr;
+            void (SwRangeRedline::*pFnc)(sal_uInt16, size_t); // Allow compiler warn if use of
+                                                              // uninitialized ptr is possible
 
             RedlineFlags eShowMode = RedlineFlags::ShowMask & eMode;
             if (eShowMode == (RedlineFlags::ShowInsert | RedlineFlags::ShowDelete))
@@ -652,19 +834,49 @@ void DocumentRedlineManager::SetRedlineFlags( RedlineFlags eMode )
             CheckAnchoredFlyConsistency(m_rDoc);
             CHECK_REDLINE( *this )
 
-            if (pFnc)
+            std::set<SwRootFrame *> hiddenLayouts;
+            if (eShowMode == (RedlineFlags::ShowInsert | RedlineFlags::ShowDelete))
             {
-                for (sal_uInt16 nLoop = 1; nLoop <= 2; ++nLoop)
-                    for (size_t i = 0; i < mpRedlineTable->size(); ++i)
-                        ((*mpRedlineTable)[i]->*pFnc)(nLoop, i);
-
-                //SwRangeRedline::MoveFromSection routinely changes
-                //the keys that mpRedlineTable is sorted by
-                mpRedlineTable->Resort();
+                // sw_redlinehide: the problem here is that MoveFromSection
+                // creates the frames wrongly (non-merged), because its own
+                // SwRangeRedline has wrong positions until after the nodes
+                // are all moved, so fix things up by force by re-creating
+                // all merged frames from scratch.
+                std::set<SwRootFrame *> const layouts(m_rDoc.GetAllLayouts());
+                for (SwRootFrame *const pLayout : layouts)
+                {
+                    if (pLayout->IsHideRedlines())
+                    {
+                        pLayout->SetHideRedlines(false);
+                        hiddenLayouts.insert(pLayout);
+                    }
+                }
             }
+
+            for (sal_uInt16 nLoop = 1; nLoop <= 2; ++nLoop)
+                for (size_t i = 0; i < mpRedlineTable->size(); ++i)
+                {
+                    SwRangeRedline *const pRedline((*mpRedlineTable)[i]);
+                    (pRedline->*pFnc)(nLoop, i);
+                    while (mpRedlineTable->size() <= i
+                        || (*mpRedlineTable)[i] != pRedline)
+                    {        // ensure current position
+                        --i; // a previous redline may have been deleted
+                    }
+                }
+
+            //SwRangeRedline::MoveFromSection routinely changes
+            //the keys that mpRedlineTable is sorted by
+            mpRedlineTable->Resort();
 
             CheckAnchoredFlyConsistency(m_rDoc);
             CHECK_REDLINE( *this )
+
+            for (SwRootFrame *const pLayout : hiddenLayouts)
+            {
+                pLayout->SetHideRedlines(true);
+            }
+
             m_rDoc.SetInXMLImport( bSaveInXMLImportFlag );
         }
         meRedlineFlags = eMode;
@@ -766,7 +978,7 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
 
     if (IsRedlineOn() && !IsShowOriginal(meRedlineFlags))
     {
-        pNewRedl->InvalidateRange();
+        pNewRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
 
         if( m_rDoc.IsAutoFormatRedline() )
         {
@@ -1680,7 +1892,50 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                 pNewRedl = nullptr;
             }
             else
-                mpRedlineTable->Insert( pNewRedl );
+            {
+                if ( bCallDelete && nsRedlineType_t::REDLINE_DELETE == pNewRedl->GetType() )
+                {
+                    if ( pStt->nContent == 0 )
+                    {
+                        // tdf#54819 to keep the style of the paragraph
+                        // after the fully deleted paragraphs (normal behaviour
+                        // of editing without change tracking), we copy its style
+                        // to the first removed paragraph.
+                        SwTextNode* pDelNode = pStt->nNode.GetNode().GetTextNode();
+                        SwTextNode* pTextNode = pEnd->nNode.GetNode().GetTextNode();
+                        if (pDelNode != nullptr && pTextNode != nullptr && pDelNode != pTextNode)
+                            pDelNode->ChgFormatColl( pTextNode->GetTextColl() );
+                    }
+                    else
+                    {
+                        // tdf#119571 update the style of the joined paragraph
+                        // after a partially deleted paragraph to show its correct style
+                        // in "Show changes" mode, too. All removed paragraphs
+                        // get the style of the first (partially deleted) paragraph
+                        // to avoid text insertion with bad style in the deleted
+                        // area later.
+                        SwContentNode* pDelNd = pStt->nNode.GetNode().GetContentNode();
+                        SwContentNode* pTextNd = pEnd->nNode.GetNode().GetContentNode();
+                        SwTextNode* pDelNode = pStt->nNode.GetNode().GetTextNode();
+                        SwTextNode* pTextNode;
+                        SwNodeIndex aIdx( pEnd->nNode.GetNode() );
+
+                        while (pDelNode != nullptr && pTextNd != nullptr && pDelNd->GetIndex() < pTextNd->GetIndex())
+                        {
+                            pTextNode = pTextNd->GetTextNode();
+                            if (pTextNode && pDelNode != pTextNode )
+                                pTextNode->ChgFormatColl( pDelNode->GetTextColl() );
+                            pTextNd = SwNodes::GoPrevious( &aIdx );
+                        }
+                    }
+                }
+                bool const ret = mpRedlineTable->Insert( pNewRedl );
+                assert(ret || !pNewRedl);
+                if (ret && !pNewRedl)
+                {
+                    bMerged = true; // treat InsertWithValidRanges as "merge"
+                }
+            }
         }
 
         if( bCompress )
@@ -1875,7 +2130,7 @@ bool DocumentRedlineManager::SplitRedline( const SwPaM& rRange )
                 break;
 
             case 3:
-                pRedline->InvalidateRange();
+                pRedline->InvalidateRange(SwRangeRedline::Invalidation::Remove);
                 mpRedlineTable->DeleteAndDestroy( n-- );
                 pRedline = nullptr;
                 break;
@@ -1908,13 +2163,11 @@ bool DocumentRedlineManager::DeleteRedline( const SwPaM& rRange, bool bSaveInUnd
 
     if (bSaveInUndo && m_rDoc.GetIDocumentUndoRedo().DoesUndo())
     {
-        SwUndoRedline* pUndo = new SwUndoRedline( SwUndoId::REDLINE, rRange );
+        std::unique_ptr<SwUndoRedline> pUndo(new SwUndoRedline( SwUndoId::REDLINE, rRange ));
         if( pUndo->GetRedlSaveCount() )
         {
-            m_rDoc.GetIDocumentUndoRedo().AppendUndo(pUndo);
+            m_rDoc.GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
         }
-        else
-            delete pUndo;
     }
 
     const SwPosition* pStt = rRange.Start(),
@@ -1935,14 +2188,15 @@ bool DocumentRedlineManager::DeleteRedline( const SwPaM& rRange, bool bSaveInUnd
         {
         case SwComparePosition::Equal:
         case SwComparePosition::Outside:
-            pRedl->InvalidateRange();
+            pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
             mpRedlineTable->DeleteAndDestroy( n-- );
             bChg = true;
             break;
 
         case SwComparePosition::OverlapBefore:
-                pRedl->InvalidateRange();
+                pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
                 pRedl->SetStart( *pEnd, pRStt );
+                pRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
                 // re-insert
                 mpRedlineTable->Remove( n );
                 mpRedlineTable->Insert( pRedl );
@@ -1950,8 +2204,9 @@ bool DocumentRedlineManager::DeleteRedline( const SwPaM& rRange, bool bSaveInUnd
             break;
 
         case SwComparePosition::OverlapBehind:
-                pRedl->InvalidateRange();
+                pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
                 pRedl->SetEnd( *pStt, pREnd );
+                pRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
                 if( !pRedl->HasValidRange() )
                 {
                     // re-insert
@@ -1964,10 +2219,11 @@ bool DocumentRedlineManager::DeleteRedline( const SwPaM& rRange, bool bSaveInUnd
         case SwComparePosition::Inside:
             {
                 // this one needs to be splitted
-                pRedl->InvalidateRange();
+                pRedl->InvalidateRange(SwRangeRedline::Invalidation::Remove);
                 if( *pRStt == *pStt )
                 {
                     pRedl->SetStart( *pEnd, pRStt );
+                    pRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
                     // re-insert
                     mpRedlineTable->Remove( n );
                     mpRedlineTable->Insert( pRedl );
@@ -1980,10 +2236,12 @@ bool DocumentRedlineManager::DeleteRedline( const SwPaM& rRange, bool bSaveInUnd
                     {
                         pCpy = new SwRangeRedline( *pRedl );
                         pCpy->SetStart( *pEnd );
+                        pCpy->InvalidateRange(SwRangeRedline::Invalidation::Add);
                     }
                     else
                         pCpy = nullptr;
                     pRedl->SetEnd( *pStt, pREnd );
+                    pRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
                     if( !pRedl->HasValidRange() )
                     {
                         // re-insert
@@ -2140,8 +2398,8 @@ bool DocumentRedlineManager::AcceptRedline( SwRedlineTable::size_type nPos, bool
 
             if (m_rDoc.GetIDocumentUndoRedo().DoesUndo())
             {
-                SwUndo *const pUndo( new SwUndoAcceptRedline(*pTmp) );
-                m_rDoc.GetIDocumentUndoRedo().AppendUndo(pUndo);
+                m_rDoc.GetIDocumentUndoRedo().AppendUndo(
+                    o3tl::make_unique<SwUndoAcceptRedline>(*pTmp) );
             }
 
             bRet |= lcl_AcceptRedline( *mpRedlineTable, nPos, bCallDelete );
@@ -2156,7 +2414,10 @@ bool DocumentRedlineManager::AcceptRedline( SwRedlineTable::size_type nPos, bool
                 if( SwRedlineTable::npos != nFndPos || ( 0 != ( --nLoopCnt ) &&
                     SwRedlineTable::npos != ( nFndPos =
                         mpRedlineTable->FindPrevSeqNo( nSeqNo, nPos ))) )
-                    pTmp = (*mpRedlineTable)[ nPos = nFndPos ];
+                {
+                    nPos = nFndPos;
+                    pTmp = (*mpRedlineTable)[ nPos ];
+                }
                 else
                     nLoopCnt = 0;
             }
@@ -2197,7 +2458,7 @@ bool DocumentRedlineManager::AcceptRedline( const SwPaM& rPam, bool bCallDelete 
     if (m_rDoc.GetIDocumentUndoRedo().DoesUndo())
     {
         m_rDoc.GetIDocumentUndoRedo().StartUndo( SwUndoId::ACCEPT_REDLINE, nullptr );
-        m_rDoc.GetIDocumentUndoRedo().AppendUndo( new SwUndoAcceptRedline( aPam ));
+        m_rDoc.GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoAcceptRedline>( aPam ));
     }
 
     int nRet = lcl_AcceptRejectRedl( lcl_AcceptRedline, *mpRedlineTable,
@@ -2227,6 +2488,31 @@ bool DocumentRedlineManager::AcceptRedline( const SwPaM& rPam, bool bCallDelete 
     // #TODO - add 'SwExtraRedlineTable' also ?
 }
 
+void DocumentRedlineManager::AcceptRedlineParagraphFormatting( const SwPaM &rPam )
+{
+    const SwPosition* pStt = rPam.Start(),
+                    * pEnd = pStt == rPam.GetPoint() ? rPam.GetMark()
+                                                     : rPam.GetPoint();
+
+    const sal_uLong nSttIdx = pStt->nNode.GetIndex();
+    const sal_uLong nEndIdx = pEnd->nNode.GetIndex();
+
+    for( SwRedlineTable::size_type n = 0; n < mpRedlineTable->size() ; ++n )
+    {
+        const SwRangeRedline* pTmp = (*mpRedlineTable)[ n ];
+        sal_uLong nPt = pTmp->GetPoint()->nNode.GetIndex(),
+              nMk = pTmp->GetMark()->nNode.GetIndex();
+        if( nPt < nMk ) { long nTmp = nMk; nMk = nPt; nPt = nTmp; }
+
+        if( nsRedlineType_t::REDLINE_PARAGRAPH_FORMAT == pTmp->GetType() &&
+            ( (nSttIdx <= nMk && nMk <= nEndIdx) || (nSttIdx <= nPt && nPt <= nEndIdx) ) )
+                AcceptRedline( n, false );
+
+        if( nMk > nEndIdx )
+            break;
+    }
+}
+
 bool DocumentRedlineManager::RejectRedline( SwRedlineTable::size_type nPos, bool bCallDelete )
 {
     bool bRet = false;
@@ -2254,8 +2540,8 @@ bool DocumentRedlineManager::RejectRedline( SwRedlineTable::size_type nPos, bool
 
             if (m_rDoc.GetIDocumentUndoRedo().DoesUndo())
             {
-                SwUndo *const pUndo( new SwUndoRejectRedline( *pTmp ) );
-                m_rDoc.GetIDocumentUndoRedo().AppendUndo(pUndo);
+                m_rDoc.GetIDocumentUndoRedo().AppendUndo(
+                    o3tl::make_unique<SwUndoRejectRedline>( *pTmp ) );
             }
 
             bRet |= lcl_RejectRedline( *mpRedlineTable, nPos, bCallDelete );
@@ -2270,7 +2556,10 @@ bool DocumentRedlineManager::RejectRedline( SwRedlineTable::size_type nPos, bool
                 if( SwRedlineTable::npos != nFndPos || ( 0 != ( --nLoopCnt ) &&
                     SwRedlineTable::npos != ( nFndPos =
                             mpRedlineTable->FindPrevSeqNo( nSeqNo, nPos ))) )
-                    pTmp = (*mpRedlineTable)[ nPos = nFndPos ];
+                {
+                    nPos = nFndPos;
+                    pTmp = (*mpRedlineTable)[ nPos ];
+                }
                 else
                     nLoopCnt = 0;
             }
@@ -2311,7 +2600,7 @@ bool DocumentRedlineManager::RejectRedline( const SwPaM& rPam, bool bCallDelete 
     if (m_rDoc.GetIDocumentUndoRedo().DoesUndo())
     {
         m_rDoc.GetIDocumentUndoRedo().StartUndo( SwUndoId::REJECT_REDLINE, nullptr );
-        m_rDoc.GetIDocumentUndoRedo().AppendUndo( new SwUndoRejectRedline(aPam) );
+        m_rDoc.GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoRejectRedline>(aPam) );
     }
 
     int nRet = lcl_AcceptRejectRedl( lcl_RejectRedline, *mpRedlineTable,
@@ -2344,6 +2633,7 @@ bool DocumentRedlineManager::RejectRedline( const SwPaM& rPam, bool bCallDelete 
 
 void DocumentRedlineManager::AcceptAllRedline(bool bAccept)
 {
+    bool bSuccess = true;
     OUString sUndoStr;
     IDocumentUndoRedo& rUndoMgr = m_rDoc.GetIDocumentUndoRedo();
 
@@ -2360,12 +2650,12 @@ void DocumentRedlineManager::AcceptAllRedline(bool bAccept)
         rUndoMgr.StartUndo(bAccept ? SwUndoId::ACCEPT_REDLINE : SwUndoId::REJECT_REDLINE, &aRewriter);
     }
 
-    while (mpRedlineTable->size() > 0)
+    while (!mpRedlineTable->empty() && bSuccess)
     {
         if (bAccept)
-            AcceptRedline(mpRedlineTable->size() - 1, true);
+            bSuccess = AcceptRedline(mpRedlineTable->size() - 1, true);
         else
-            RejectRedline(mpRedlineTable->size() - 1, true);
+            bSuccess = RejectRedline(mpRedlineTable->size() - 1, true);
     }
 
     if (!sUndoStr.isEmpty())
@@ -2662,7 +2952,7 @@ void DocumentRedlineManager::UpdateRedlineAttr()
     for(SwRangeRedline* pRedl : rTable)
     {
         if( pRedl->IsVisible() )
-            pRedl->InvalidateRange();
+            pRedl->InvalidateRange(SwRangeRedline::Invalidation::Add);
     }
 
     // #TODO - add 'SwExtraRedlineTable' also ?
@@ -2697,27 +2987,6 @@ void DocumentRedlineManager::SetAutoFormatRedlineComment( const OUString* pText,
     }
 
     mnAutoFormatRedlnCommentNo = nSeqNo;
-}
-
-#define MAX_REDLINE_COUNT   250
-
-void DocumentRedlineManager::checkRedlining(RedlineFlags& _rReadlineMode)
-{
-    const SwRedlineTable& rRedlineTable = GetRedlineTable();
-    SwEditShell* pEditShell = m_rDoc.GetEditShell();
-    vcl::Window* pParent = pEditShell ? pEditShell->GetWin() : nullptr;
-    if ( pParent && !mbReadlineChecked && rRedlineTable.size() > MAX_REDLINE_COUNT
-        && ((_rReadlineMode & RedlineFlags::ShowDelete) != RedlineFlags::ShowDelete) )
-    {
-        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pParent->GetFrameWeld(), "modules/swriter/ui/queryshowchangesdialog.ui"));
-        std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryShowChangesDialog"));
-        sal_uInt16 nResult = xQuery->run();
-        mbReadlineChecked = true;
-        if ( nResult == RET_YES )
-        {
-            _rReadlineMode |= RedlineFlags::ShowInsert | RedlineFlags::ShowDelete;
-        }
-    }
 }
 
 DocumentRedlineManager::~DocumentRedlineManager()

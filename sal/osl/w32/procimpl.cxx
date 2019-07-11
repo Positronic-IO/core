@@ -25,6 +25,7 @@
 
 #include "file-impl.hxx"
 #include "procimpl.hxx"
+#include <rtl/alloc.h>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
 #include "secimpl.hxx"
@@ -36,11 +37,6 @@
 
 namespace /* private */
 {
-    typedef std::vector<rtl::OUString> string_container_t;
-    typedef string_container_t::iterator string_container_iterator_t;
-    typedef string_container_t::const_iterator string_container_const_iterator_t;
-    typedef std::vector<sal_Unicode> environment_container_t;
-
     /* Function object that compares two strings that are
        expected to be environment variables in the form
        "name=value". Only the 'name' part will be compared.
@@ -49,7 +45,7 @@ namespace /* private */
        second one. */
     struct less_environment_variable
     {
-        bool operator() (const rtl::OUString& lhs, const rtl::OUString& rhs) const
+        bool operator() (const OUString& lhs, const OUString& rhs) const
         {
             OSL_ENSURE((lhs.indexOf(L'=') > -1) &&
                         (rhs.indexOf(L'=') > -1),
@@ -74,7 +70,7 @@ namespace /* private */
 
         sum_of_string_lengths() : sum_(0) {}
 
-        void operator() (const rtl::OUString& string)
+        void operator() (const OUString& string)
         {
             OSL_ASSERT(string.getLength());
 
@@ -91,13 +87,13 @@ namespace /* private */
         size_t sum_;
     };
 
-    inline size_t calc_sum_of_string_lengths(const string_container_t& string_cont)
+    inline size_t calc_sum_of_string_lengths(const std::vector<OUString>& string_cont)
     {
         return std::for_each(
             string_cont.begin(), string_cont.end(), sum_of_string_lengths());
     }
 
-    void read_environment(/*out*/ string_container_t* environment)
+    void read_environment(/*out*/ std::vector<OUString>* environment)
     {
         // GetEnvironmentStrings returns a sorted list, Windows
         // sorts environment variables upper case
@@ -124,7 +120,7 @@ namespace /* private */
     bool create_merged_environment(
         rtl_uString* env_vars[],
         sal_uInt32 env_vars_count,
-        /*in|out*/ string_container_t* merged_env)
+        /*in|out*/ std::vector<OUString>* merged_env)
     {
         OSL_ASSERT(env_vars && env_vars_count > 0 && merged_env);
 
@@ -132,7 +128,7 @@ namespace /* private */
 
         for (sal_uInt32 i = 0; i < env_vars_count; i++)
         {
-            rtl::OUString env_var = rtl::OUString(env_vars[i]);
+            OUString env_var = OUString(env_vars[i]);
 
             if (env_var.getLength() == 0)
                 return false;
@@ -162,9 +158,9 @@ namespace /* private */
     bool setup_process_environment(
         rtl_uString* environment_vars[],
         sal_uInt32 n_environment_vars,
-        /*in|out*/ environment_container_t& environment)
+        /*in|out*/ std::vector<sal_Unicode>& environment)
     {
-        string_container_t merged_env;
+        std::vector<OUString> merged_env;
         if (!create_merged_environment(environment_vars, n_environment_vars, &merged_env))
             return false;
 
@@ -172,14 +168,9 @@ namespace /* private */
         // a final '\0'
         environment.resize(calc_sum_of_string_lengths(merged_env) + 1);
 
-        string_container_const_iterator_t iter = merged_env.begin();
-        string_container_const_iterator_t iter_end = merged_env.end();
-
         sal_uInt32 pos = 0;
-        for (/**/; iter != iter_end; ++iter)
+        for (auto& envv : merged_env)
         {
-            rtl::OUString envv = *iter;
-
             OSL_ASSERT(envv.getLength());
 
             sal_uInt32 n = envv.getLength() + 1; // copy the final '\0', too
@@ -245,9 +236,9 @@ namespace /* private */
 
     // Add a quote sign to the start and the end of a string
     // if not already present
-    rtl::OUString quote_string(const rtl::OUString& string)
+    OUString quote_string(const OUString& string)
     {
-        rtl::OUStringBuffer quoted;
+        OUStringBuffer quoted;
         if (string.indexOf(L'"') != 0)
             quoted.append('"');
 
@@ -265,9 +256,9 @@ namespace /* private */
     // may not have the file extension ".exe". However, if the file on disk has the
     // ".exe" extension, then the function will fail. In this case a second attempt
     // is started by adding the parameter "extension" to "path".
-    rtl::OUString getShortPath(rtl::OUString const & path, rtl::OUString const & extension)
+    OUString getShortPath(OUString const & path, OUString const & extension)
     {
-        rtl::OUString ret(path);
+        OUString ret(path);
         if (path.getLength() > 260)
         {
             std::vector<sal_Unicode> vec(path.getLength() + 1);
@@ -278,16 +269,16 @@ namespace /* private */
             if (!len && GetLastError() == ERROR_FILE_NOT_FOUND
                 && extension.getLength())
             {
-                const rtl::OUString extPath(path + extension);
+                const OUString extPath(path + extension);
                 std::vector<sal_Unicode> vec2(
                     extPath.getLength() + 1);
                 const DWORD len2 = GetShortPathNameW(
                     o3tl::toW(extPath.getStr()), o3tl::toW(&vec2[0]), extPath.getLength() + 1);
-                ret = rtl::OUString(&vec2[0], len2);
+                ret = OUString(&vec2[0], len2);
             }
             else
             {
-                ret = rtl::OUString(&vec[0], len);
+                ret = OUString(&vec[0], len);
             }
         }
         return ret;
@@ -297,26 +288,26 @@ namespace /* private */
     // be provided via the strImageName parameter or as first
     // element of the strArguments list.
     // The returned path will be quoted if it contains spaces.
-    rtl::OUString get_executable_path(
+    OUString get_executable_path(
         rtl_uString* image_name,
         rtl_uString* cmdline_args[],
         sal_uInt32 n_cmdline_args,
         bool search_path)
     {
-        rtl::OUString exe_name;
+        OUString exe_name;
 
         if (image_name)
             exe_name = image_name;
         else if (n_cmdline_args)
-            exe_name = rtl::OUString(cmdline_args[0]);
+            exe_name = OUString(cmdline_args[0]);
 
-        rtl::OUString exe_url = exe_name;
+        OUString exe_url = exe_name;
         if (search_path)
             osl_searchFileURL(exe_name.pData, nullptr, &exe_url.pData);
 
-        rtl::OUString exe_path;
+        OUString exe_path;
         if (osl::FileBase::E_None != osl::FileBase::getSystemPathFromFileURL(exe_url, exe_path))
-            return rtl::OUString();
+            return OUString();
 
         exe_path = getShortPath(exe_path, ".exe");
 
@@ -326,27 +317,37 @@ namespace /* private */
         return exe_path;
     }
 
-    rtl::OUString get_file_extension(const rtl::OUString& file_name)
+    OUString get_file_extension(const OUString& file_name)
     {
-        sal_Int32 index = file_name.lastIndexOf('.');
-        if ((index != -1) && ((index + 1) < file_name.getLength()))
-            return file_name.copy(index + 1);
-
-        return rtl::OUString();
+        // Quoted file name
+        if ((file_name.indexOf(L'"') == 0) && (file_name.lastIndexOf(L'"') == (file_name.getLength() - 1)))
+        {
+            sal_Int32 index = file_name.lastIndexOf('.');
+            if ((index != -1) && ((index + 2) < file_name.getLength()))
+                return file_name.copy(index + 1, file_name.getLength() - (index + 2));
+        }
+        // Unquoted file name
+        else
+        {
+            sal_Int32 index = file_name.lastIndexOf('.');
+            if ((index != -1) && ((index + 1) < file_name.getLength()))
+                return file_name.copy(index + 1);
+        }
+        return OUString();
     }
 
-    bool is_batch_file(const rtl::OUString& file_name)
+    bool is_batch_file(const OUString& file_name)
     {
-        rtl::OUString ext = get_file_extension(file_name);
+        OUString ext = get_file_extension(file_name);
         return (ext.equalsIgnoreAsciiCase("bat") ||
                 ext.equalsIgnoreAsciiCase("cmd") ||
                 ext.equalsIgnoreAsciiCase("btm"));
     }
 
-    const rtl::OUString ENV_COMSPEC ("COMSPEC");
-    rtl::OUString get_batch_processor()
+    const OUString ENV_COMSPEC ("COMSPEC");
+    OUString get_batch_processor()
     {
-        rtl::OUString comspec;
+        OUString comspec;
         osl_getEnvironment(ENV_COMSPEC.pData, &comspec.pData);
 
         OSL_ASSERT(comspec.getLength());
@@ -399,7 +400,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
     oslFileHandle *pProcessOutputRead,
     oslFileHandle *pProcessErrorRead)
 {
-    rtl::OUString exe_path = get_executable_path(
+    OUString exe_path = get_executable_path(
         ustrImageName, ustrArguments, nArguments, (Options & osl_Process_SEARCHPATH) != 0);
 
     if (0 == exe_path.getLength())
@@ -409,11 +410,11 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
         return osl_Process_E_InvalidError;
 
     DWORD flags = NORMAL_PRIORITY_CLASS;
-    rtl::OUStringBuffer command_line;
+    OUStringBuffer command_line;
 
     if (is_batch_file(exe_path))
     {
-        rtl::OUString batch_processor = get_batch_processor();
+        OUString batch_processor = get_batch_processor();
 
         if (batch_processor.getLength())
         {
@@ -439,13 +440,13 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
         command_line.append(" ");
 
         /* Quote arguments containing blanks */
-        if (rtl::OUString(ustrArguments[n]).indexOf(' ') != -1)
+        if (OUString(ustrArguments[n]).indexOf(' ') != -1)
             command_line.append(quote_string(ustrArguments[n]));
         else
             command_line.append(ustrArguments[n]);
     }
 
-    environment_container_t environment;
+    std::vector<sal_Unicode> environment;
     LPVOID p_environment = nullptr;
 
     if (nEnvironmentVars && ustrEnvironmentVars)
@@ -458,7 +459,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
         p_environment = &environment[0];
     }
 
-    rtl::OUString cwd;
+    OUString cwd;
     if (ustrDirectory && ustrDirectory->length && (osl::FileBase::E_None != osl::FileBase::getSystemPathFromFileURL(ustrDirectory, cwd)))
            return osl_Process_E_InvalidError;
 
@@ -519,7 +520,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
             startup_info.wShowWindow = SW_NORMAL;
     }
 
-    rtl::OUString cmdline = command_line.makeStringAndClear();
+    OUString cmdline = command_line.makeStringAndClear();
     PROCESS_INFORMATION process_info;
     BOOL bRet = FALSE;
 
@@ -555,7 +556,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
         CloseHandle(process_info.hThread);
 
         oslProcessImpl* pProcImpl = static_cast<oslProcessImpl*>(
-            rtl_allocateMemory(sizeof(oslProcessImpl)));
+            malloc(sizeof(oslProcessImpl)));
 
         if (pProcImpl != nullptr)
         {

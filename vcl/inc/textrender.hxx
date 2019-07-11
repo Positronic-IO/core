@@ -35,7 +35,7 @@ public:
     virtual ~TextRenderImpl() {}
 
     virtual void                    SetTextColor( Color nColor ) = 0;
-    virtual void                    SetFont( const FontSelectPattern*, int nFallbackLevel ) = 0;
+    virtual void                    SetFont(LogicalFontInstance*, int nFallbackLevel) = 0;
     virtual void                    GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) = 0;
     virtual const FontCharMapRef    GetFontCharMap() const = 0;
     virtual bool                    GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const = 0;
@@ -59,11 +59,9 @@ public:
                                         std::vector< sal_Int32 >& rWidths,
                                         Ucs2UIntMap& rUnicodeEnc ) = 0;
 
-    virtual bool                    GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) = 0;
-    virtual bool                    GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) = 0;
     virtual std::unique_ptr<SalLayout>
                                     GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) = 0;
-    virtual void                    DrawTextLayout(const GenericSalLayout&) = 0;
+    virtual void                    DrawTextLayout(const GenericSalLayout&, const SalGraphics&) = 0;
 #if ENABLE_CAIRO_CANVAS
     virtual SystemFontData          GetSysFontData( int nFallbackLevel ) const = 0;
 #endif // ENABLE_CAIRO_CANVAS

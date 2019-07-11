@@ -198,8 +198,6 @@ public:
     SvxShape( SdrObject* pObj );
     /// @throws css::uno::RuntimeException
     SvxShape( SdrObject* pObject, const SfxItemPropertyMapEntry* pEntries, const SvxItemPropertySet* pPropertySet );
-    /// @throws css::uno::RuntimeException
-    SvxShape();
     virtual ~SvxShape() throw () override;
 
     // Internals
@@ -615,9 +613,6 @@ public:
 ***********************************************************************/
 class SvxShapePolyPolygon : public SvxShapeText
 {
-private:
-    css::drawing::PolygonKind mePolygonKind;
-
 protected:
     using SvxUnoTextRangeBase::setPropertyValue;
     using SvxUnoTextRangeBase::getPropertyValue;
@@ -626,10 +621,13 @@ protected:
     virtual bool setPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, const css::uno::Any& rValue ) override;
     virtual bool getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, css::uno::Any& rValue ) override;
 
+    // local helper to detect PolygonKind from SdrObject::GetObjIdentifier()
+    css::drawing::PolygonKind GetPolygonKind() const;
+
 public:
     /// @throws css::lang::IllegalArgumentException
     /// @throws css::beans::PropertyVetoException
-    SvxShapePolyPolygon( SdrObject* pObj , css::drawing::PolygonKind eNew );
+    SvxShapePolyPolygon( SdrObject* pObj );
     virtual ~SvxShapePolyPolygon() throw() override;
 
     // Local support functions
@@ -642,32 +640,6 @@ public:
 *                                                                      *
 ***********************************************************************/
 
-class SvxShapePolyPolygonBezier : public SvxShapeText
-{
-private:
-    css::drawing::PolygonKind mePolygonKind;
-
-protected:
-    using SvxUnoTextRangeBase::setPropertyValue;
-    using SvxUnoTextRangeBase::getPropertyValue;
-
-public:
-    // override these for special property handling in subcasses. Return true if property is handled
-    virtual bool setPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, const css::uno::Any& rValue ) override;
-    virtual bool getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, css::uno::Any& rValue ) override;
-
-    SvxShapePolyPolygonBezier(SdrObject* pObj, css::drawing::PolygonKind eNew);
-    virtual ~SvxShapePolyPolygonBezier() throw() override;
-
-    // Local support functions
-    /// @throws css::uno::RuntimeException
-    void SetPolygon(const basegfx::B2DPolyPolygon & rNew);
-    basegfx::B2DPolyPolygon GetPolygon() const throw();
-};
-
-/***********************************************************************
-*                                                                      *
-***********************************************************************/
 class SvxGraphicObject : public SvxShapeText
 {
 protected:
@@ -878,30 +850,7 @@ protected:
     virtual bool getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, css::uno::Any& rValue ) override;
 
 private:
-    OUString referer_;
-};
-
-/*
- * This is a really ugly hack for the chart2 OpenGL backend
- * SvxShapeGroup::add only accepts objects derived from SvxShape and silently drops
- * other objects. This fixes my life time problems but I will burn for it in hell.
- *
- * The object does nothing and should not be painted. It is just there to ensure that the
- * wrapped object is not deleted prematurely.
- */
-class SVX_DLLPUBLIC SvxDummyShapeContainer : public SvxShape
-{
-private:
-    css::uno::Reference< css::drawing::XShapes >
-        m_xDummyObject;
-
-public:
-    SvxDummyShapeContainer( css::uno::Reference< css::drawing::XShapes > const & xWrappedObject );
-    virtual ~SvxDummyShapeContainer() throw() override;
-
-    const css::uno::Reference< css::drawing::XShapes >& getWrappedShape()
-            { return m_xDummyObject; }
-
+    OUString const referer_;
 };
 
 #endif

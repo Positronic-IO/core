@@ -37,6 +37,7 @@
 #include <com/sun/star/container/XNameReplace.hpp>
 #include <com/sun/star/util/XChangesBatch.hpp>
 #include <com/sun/star/util/XOfficeInstallationDirectories.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <comphelper/propertysequence.hxx>
 #include "hierarchyprovider.hxx"
 #include "hierarchyuri.hxx"
@@ -55,11 +56,11 @@ struct HierarchyEntry::iterator_Impl
     uno::Sequence< OUString>                          names;
     sal_Int32                                              pos;
     iterator_Impl()
-    : officeDirs( nullptr ), pos( -1 /* before first */ ) {};
+    : pos( -1 /* before first */ ) {};
 };
 
 
-void makeXMLName( const OUString & rIn, OUStringBuffer & rBuffer  )
+static void makeXMLName( const OUString & rIn, OUStringBuffer & rBuffer  )
 {
     sal_Int32 nCount = rIn.getLength();
     for ( sal_Int32 n = 0; n < nCount; ++n )

@@ -31,6 +31,7 @@
 #include <vcl/settings.hxx>
 #include <unotools/lingucfg.hxx>
 #include <svl/undo.hxx>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 #include <memory>
@@ -49,7 +50,7 @@ namespace frm
 
         RichTextEngine* pReturn = new RichTextEngine( pPool );
         OutputDevice* pOutputDevice = pReturn->GetRefDevice();
-        MapMode aDeviceMapMode( pOutputDevice->GetMapMode() );
+        const MapMode& aDeviceMapMode( pOutputDevice->GetMapMode() );
 
         pReturn->SetStatusEventHdl( LINK( pReturn, RichTextEngine, EditEngineStatusChanged ) );
 
@@ -115,10 +116,10 @@ namespace frm
 
     void RichTextEngine::revokeEngineStatusListener( IEngineStatusListener const * _pListener )
     {
-        ::std::vector< IEngineStatusListener* >::iterator aPos = ::std::find_if(
+        ::std::vector< IEngineStatusListener* >::iterator aPos = ::std::find(
             m_aStatusListeners.begin(),
             m_aStatusListeners.end(),
-            [_pListener](IEngineStatusListener * p) { return p == _pListener; }
+            _pListener
         );
         OSL_ENSURE( aPos != m_aStatusListeners.end(), "RichTextEngine::revokeEngineStatusListener: listener not registered!" );
         if ( aPos != m_aStatusListeners.end() )

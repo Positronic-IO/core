@@ -19,6 +19,7 @@ sub resolve_filelist_flag
 {
     my ($files, $links, $outdir) = @_;
     my @newfiles = ();
+    my $error = 0;
 
     foreach my $file (@{$files})
     {
@@ -52,6 +53,12 @@ sub resolve_filelist_flag
                     if ((index $path, $outdir) != 0)
                     {
                         installer::logger::print_error("file '$path' is not in '$outdir'");
+                        $error = 1;
+                    }
+                    if ($path =~ '\/\/')
+                    {
+                        installer::logger::print_error("file '$path' contains 2 consecutive '/' which breaks MSIs");
+                        $error = 1;
                     }
                     if (-l $path)
                     {
@@ -62,6 +69,7 @@ sub resolve_filelist_flag
                         if (!-e $path)
                         {
                             installer::logger::print_error("file '$path' does not exist");
+                            $error = 1;
                         }
                     }
 
@@ -104,6 +112,11 @@ sub resolve_filelist_flag
         {
             push @newfiles, $file;
         }
+    }
+
+    if ( $error )
+    {
+        installer::exiter::exit_program("ERROR: error(s) in resolve_filelist_flag");
     }
 
     return (\@newfiles, $links);

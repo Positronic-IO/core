@@ -19,9 +19,16 @@
 
 #include <sal/config.h>
 
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
 #include <com/sun/star/ucb/UniversalContentBroker.hpp>
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
+#include <cppuhelper/queryinterface.hxx>
+#include <cppuhelper/typeprovider.hxx>
+#include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/factory.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
 #include <osl/socket.hxx>
 #include "ftpcontentprovider.hxx"
 #include "ftpcontent.hxx"
@@ -38,8 +45,6 @@ using namespace com::sun::star::beans;
 
 FTPContentProvider::FTPContentProvider( const Reference< XComponentContext >& rxContext)
     : ::ucbhelper::ContentProviderImplHelper(rxContext)
-    , m_ftpLoaderThread(nullptr)
-    , m_pProxyDecider(nullptr)
 {
 }
 
@@ -162,6 +167,11 @@ Reference<XContent> SAL_CALL FTPContentProvider::queryContent(
         {
             try {
                 init();
+            } catch (css::uno::Exception const & ex) {
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                                css::uno::Reference< css::uno::XInterface >(),
+                                anyEx );
             } catch( ... ) {
                 throw RuntimeException();
             }

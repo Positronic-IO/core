@@ -16,14 +16,14 @@
 
 #include <rtl/ustring.hxx>
 
+#include "orcusxml.hxx"
+
 class ScDocument;
-class ScDBData;
 
 namespace sc {
 
 class ScDBDataManager;
 class DataProvider;
-class ScDBDataManager;
 class DataTransformation;
 
 class SC_DLLPUBLIC ExternalDataSource
@@ -62,7 +62,7 @@ private:
      */
     OUString maID;
 
-    double mnUpdateFrequency;
+    ScOrcusImportXMLParam maParam;
 
     std::shared_ptr<DataProvider> mpDataProvider;
     std::shared_ptr<ScDBDataManager> mpDBDataManager;
@@ -76,25 +76,25 @@ public:
     ExternalDataSource(const OUString& rURL,
             const OUString& rProvider, ScDocument* pDoc);
 
-    ~ExternalDataSource();
-
     void setUpdateFrequency(double nUpdateFrequency);
 
     void setID(const OUString& rID);
     void setURL(const OUString& rURL);
     void setProvider(const OUString& rProvider);
+    void setXMLImportParam(const ScOrcusImportXMLParam& rParam);
 
     const OUString& getURL() const;
     const OUString& getProvider() const;
     const OUString& getID() const;
-    double getUpdateFrequency() const;
+    const ScOrcusImportXMLParam& getXMLImportParam() const;
+    static double getUpdateFrequency();
     OUString getDBName() const;
-    void setDBData(const ScDBData* pDBData);
+    void setDBData(const OUString& rDBName);
     ScDBDataManager* getDBManager();
 
     void refresh(ScDocument* pDoc, bool bDeterministic = false);
 
-    void AddDataTransformation(std::shared_ptr<sc::DataTransformation> mpDataTransformation);
+    void AddDataTransformation(const std::shared_ptr<sc::DataTransformation>& mpDataTransformation);
     const std::vector<std::shared_ptr<sc::DataTransformation>>& getDataTransformation() const;
 };
 

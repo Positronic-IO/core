@@ -24,6 +24,7 @@
 #include <sal/log.hxx>
 #include <tools/date.hxx>
 #include <rtl/math.hxx>
+#include <rtl/character.hxx>
 #include <unotools/charclass.hxx>
 #include <unotools/calendarwrapper.hxx>
 #include <unotools/localedatawrapper.hxx>
@@ -66,18 +67,10 @@ const sal_uInt8 ImpSvNumberInputScan::nMatchedUsedAsReturn = 0x10;
 
 static const sal_Unicode cNoBreakSpace = 0xA0;
 static const sal_Unicode cNarrowNoBreakSpace = 0x202F;
-static const sal_Int16 kDefaultEra = 1;     // Gregorian CE, positive year
+static const bool kDefaultEra = true;     // Gregorian CE, positive year
 
 ImpSvNumberInputScan::ImpSvNumberInputScan( SvNumberFormatter* pFormatterP )
         :
-        pUpperMonthText( nullptr ),
-        pUpperAbbrevMonthText( nullptr ),
-        pUpperGenitiveMonthText( nullptr ),
-        pUpperGenitiveAbbrevMonthText( nullptr ),
-        pUpperPartitiveMonthText( nullptr ),
-        pUpperPartitiveAbbrevMonthText( nullptr ),
-        pUpperDayText( nullptr ),
-        pUpperAbbrevDayText( nullptr ),
         bTextInitialized( false ),
         bScanGenitiveMonths( false ),
         bScanPartitiveMonths( false ),
@@ -107,7 +100,7 @@ void ImpSvNumberInputScan::Reset()
     nSign        = 0;
     nESign       = 0;
     nDecPos      = 0;
-    nNegCheck    = 0;
+    bNegCheck    = false;
     nStringsCnt  = 0;
     nNumericsCnt = 0;
     nThousand    = 0;
@@ -115,7 +108,7 @@ void ImpSvNumberInputScan::Reset()
     nAmPm        = 0;
     nPosThousandString = 0;
     nLogical     = 0;
-    mnEra        = kDefaultEra;
+    mbEraCE        = kDefaultEra;
     nStringScanNumFor = 0;
     nStringScanSign = 0;
     nMatchedAllStrings = nMatchedVirgin;
@@ -134,7 +127,7 @@ void ImpSvNumberInputScan::Reset()
 }
 
 // native number transliteration if necessary
-void TransformInput( SvNumberFormatter const * pFormatter, OUString& rStr )
+static void TransformInput( SvNumberFormatter const * pFormatter, OUString& rStr )
 {
     sal_Int32 nPos, nLen;
     for ( nPos = 0, nLen = rStr.getLength(); nPos < nLen; ++nPos )
@@ -657,6 +650,46 @@ short ImpSvNumberInputScan::GetMonth( const OUString& rString, sal_Int32& nPos )
                 break;  // for
             }
         }
+        if (!res)
+        {
+            // Brutal hack for German locales that know "Januar" or "Jänner".
+            /* TODO: add alternative month names to locale data? if there are
+             * more languages.. */
+            const LanguageTag& rLanguageTag = pFormatter->GetLanguageTag();
+            if (rLanguageTag.getLanguage() == "de")
+            {
+                if (rLanguageTag.getCountry() == "AT")
+                {
+                    // Locale data has Jänner/Jän
+                    assert(pUpperMonthText[0] == u"J\u00C4NNER");
+                    if (StringContainsWord( "JANUAR", rString, nPos))
+                    {
+                        nPos += 6;
+                        res = 1;
+                    }
+                    else if (StringContainsWord( "JAN", rString, nPos))
+                    {
+                        nPos += 3;
+                        res = -1;
+                    }
+                }
+                else
+                {
+                    // Locale data has Januar/Jan
+                    assert(pUpperMonthText[0] == "JANUAR");
+                    if (StringContainsWord( u"J\u00C4NNER", rString, nPos))
+                    {
+                        nPos += 6;
+                        res = 1;
+                    }
+                    else if (StringContainsWord( u"J\u00C4N", rString, nPos))
+                    {
+                        nPos += 3;
+                        res = -1;
+                    }
+                }
+            }
+        }
     }
 
     return res;
@@ -839,7 +872,7 @@ inline bool ImpSvNumberInputScan::GetTime100SecSep( const OUString& rString, sal
  * Read a sign including brackets
  * '+'   =>  1
  * '-'   => -1
- *  '('   => -1, nNegCheck = 1
+ *  '('   => -1, bNegCheck = 1
  * else =>  0
  */
 int ImpSvNumberInputScan::GetSign( const OUString& rString, sal_Int32& nPos )
@@ -851,7 +884,7 @@ int ImpSvNumberInputScan::GetSign( const OUString& rString, sal_Int32& nPos )
             nPos++;
             return 1;
         case '(': // '(' similar to '-' ?!?
-            nNegCheck = 1;
+            bNegCheck = true;
             SAL_FALLTHROUGH;
         case '-':
             nPos++;
@@ -1018,7 +1051,7 @@ sal_uInt16 ImpSvNumberInputScan::ImplGetYear( sal_uInt16 nIndex )
         // A year in another, not Gregorian CE era is never expanded.
         // A year < 100 entered with at least 3 digits with leading 0 is taken
         // as is without expansion.
-        if (mnEra == kDefaultEra && nYear < 100 && nLen < 3)
+        if (mbEraCE == kDefaultEra && nYear < 100 && nLen < 3)
         {
             nYear = SvNumberFormatter::ExpandTwoDigitYear( nYear, nYear2000 );
         }
@@ -1137,8 +1170,18 @@ bool ImpSvNumberInputScan::MayBeMonthDate()
                 bool bYear1 = (sStrArray[nNums[0]].getLength() >= 3);
                 bool bYear2 = (sStrArray[nNums[1]].getLength() >= 3);
                 sal_Int32 n;
-                bool bDay1 = (!bYear1 && (n = sStrArray[nNums[0]].toInt32()) >= 1 && n <= 31);
-                bool bDay2 = (!bYear2 && (n = sStrArray[nNums[1]].toInt32()) >= 1 && n <= 31);
+                bool bDay1 = !bYear1;
+                if (bDay1)
+                {
+                    n = sStrArray[nNums[0]].toInt32();
+                    bDay1 = n >= 1 && n <= 31;
+                }
+                bool bDay2 = !bYear2;
+                if (bDay2)
+                {
+                    n = sStrArray[nNums[1]].toInt32();
+                    bDay2 = n >= 1 && n <= 31;
+                }
 
                 if (bDay1 && !bDay2)
                 {
@@ -2040,8 +2083,8 @@ input for the following reasons:
             break;
         }   // switch (nNumericsCnt)
 
-        if (mnEra != kDefaultEra)
-            pCal->setValue( CalendarFieldIndex::ERA, mnEra );
+        if (mbEraCE != kDefaultEra)
+            pCal->setValue( CalendarFieldIndex::ERA, mbEraCE ? 1 : 0);
 
         if ( res && pCal->isValid() )
         {
@@ -2491,10 +2534,10 @@ bool ImpSvNumberInputScan::ScanMidString( const OUString& rString, sal_uInt16 nS
         }
         if (bSignedYear)
         {
-            if (mnEra != kDefaultEra)               // signed year twice?
+            if (mbEraCE != kDefaultEra)               // signed year twice?
                 return MatchedReturn();
 
-            mnEra = 0;  // BCE
+            mbEraCE = false;  // BCE
         }
     }
 
@@ -2752,7 +2795,7 @@ bool ImpSvNumberInputScan::ScanEndString( const OUString& rString )
                                                     //!? catch time too?
     {                                               // not signed yet
         nSign = GetSign(rString, nPos);             // 1- DM
-        if (nNegCheck)                              // '(' as sign
+        if (bNegCheck)                              // '(' as sign
         {
             return MatchedReturn();
         }
@@ -2763,9 +2806,9 @@ bool ImpSvNumberInputScan::ScanEndString( const OUString& rString )
     }
 
     SkipBlanks(rString, nPos);
-    if (nNegCheck && SkipChar(')', rString, nPos))  // skip ')' if appropriate
+    if (bNegCheck && SkipChar(')', rString, nPos))  // skip ')' if appropriate
     {
-        nNegCheck = 0;
+        bNegCheck = false;
         SkipBlanks(rString, nPos);
     }
 
@@ -2784,15 +2827,15 @@ bool ImpSvNumberInputScan::ScanEndString( const OUString& rString )
         {
             nSign = GetSign(rString, nPos);         // DM -
             SkipBlanks(rString, nPos);
-            if (nNegCheck)                          // 3 DM (
+            if (bNegCheck)                          // 3 DM (
             {
                 return MatchedReturn();
             }
         }
-        if ( nNegCheck && eScannedType == SvNumFormatType::CURRENCY &&
+        if ( bNegCheck && eScannedType == SvNumFormatType::CURRENCY &&
              SkipChar(')', rString, nPos) )
         {
-            nNegCheck = 0;                          // ')' skipped
+            bNegCheck = false;                          // ')' skipped
             SkipBlanks(rString, nPos);              // only if currency
         }
     }
@@ -2935,11 +2978,11 @@ bool ImpSvNumberInputScan::ScanEndString( const OUString& rString )
         }
     }
 
-    if ( nNegCheck && SkipChar(')', rString, nPos) )
+    if ( bNegCheck && SkipChar(')', rString, nPos) )
     {
         if (eScannedType == SvNumFormatType::CURRENCY)  // only if currency
         {
-            nNegCheck = 0;                          // skip ')'
+            bNegCheck = false;                          // skip ')'
             SkipBlanks(rString, nPos);
         }
         else
@@ -3184,7 +3227,7 @@ bool ImpSvNumberInputScan::IsNumberFormatMain( const OUString& rString,        /
         GetNextNumber(i,j);                 // i=1,2
         if (eSetType == SvNumFormatType::FRACTION)  // Fraction -1 = -1/1
         {
-            if (nSign && !nNegCheck &&      // Sign +, -
+            if (nSign && !bNegCheck &&      // Sign +, -
                 eScannedType == SvNumFormatType::UNDEFINED &&   // not date or currency
                 nDecPos == 0 &&             // no previous decimal separator
                 (i >= nStringsCnt ||        // no end string nor decimal separator
@@ -3222,7 +3265,7 @@ bool ImpSvNumberInputScan::IsNumberFormatMain( const OUString& rString,        /
         }
         if (eSetType == SvNumFormatType::FRACTION)  // -1,200. as fraction
         {
-            if (!nNegCheck  &&                  // no sign '('
+            if (!bNegCheck  &&                  // no sign '('
                 eScannedType == SvNumFormatType::UNDEFINED &&
                 (nDecPos == 0 || nDecPos == 3)  // no decimal separator or at end
                 )
@@ -3270,7 +3313,7 @@ bool ImpSvNumberInputScan::IsNumberFormatMain( const OUString& rString,        /
         }
         if (eSetType == SvNumFormatType::FRACTION)  // -1,200,100. as fraction
         {
-            if (!nNegCheck  &&                  // no sign '('
+            if (!bNegCheck  &&                  // no sign '('
                 eScannedType == SvNumFormatType::UNDEFINED &&
                 (nDecPos == 0 || nDecPos == 3)  // no decimal separator or at end
                 )
@@ -3344,7 +3387,7 @@ bool ImpSvNumberInputScan::IsNumberFormatMain( const OUString& rString,        /
         }
         if (eSetType == SvNumFormatType::FRACTION)  // -1,200,100. as fraction
         {
-            if (!nNegCheck  &&                  // no sign '('
+            if (!bNegCheck  &&                  // no sign '('
                 eScannedType == SvNumFormatType::UNDEFINED &&
                 (nDecPos == 0 || nDecPos == 3)  // no decimal separator or at end
                 )
@@ -3609,7 +3652,7 @@ bool ImpSvNumberInputScan::IsNumberFormat( const OUString& rString,         // s
         // Accept only if the year immediately follows the sign character with
         // no space in between.
         if (nSign && (eScannedType == SvNumFormatType::DATE ||
-                      eScannedType == SvNumFormatType::DATETIME) && mnEra == kDefaultEra &&
+                      eScannedType == SvNumFormatType::DATETIME) && mbEraCE == kDefaultEra &&
                 (IsDatePatternNumberOfType(0,'Y') || (MayBeIso8601() && sStrArray[nNums[0]].getLength() >= 4)))
         {
             const sal_Unicode c = sStrArray[0][sStrArray[0].getLength()-1];
@@ -3617,11 +3660,11 @@ bool ImpSvNumberInputScan::IsNumberFormat( const OUString& rString,         // s
             {
                 // A '+' sign doesn't change the era.
                 if (nSign < 0)
-                    mnEra = 0;  // BCE
+                    mbEraCE = false;  // BCE
                 nSign = 0;
             }
         }
-        if ( nNegCheck ||                             // ')' not found for '('
+        if ( bNegCheck ||                             // ')' not found for '('
              (nSign && (eScannedType == SvNumFormatType::DATE ||
                         eScannedType == SvNumFormatType::DATETIME))) // signed date/datetime
         {

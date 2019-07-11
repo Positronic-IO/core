@@ -18,6 +18,7 @@
  */
 
 #include <richstring.hxx>
+#include <biffhelper.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/text/XText.hpp>
@@ -43,7 +44,7 @@ namespace {
 const sal_uInt8 BIFF12_STRINGFLAG_FONTS         = 0x01;
 const sal_uInt8 BIFF12_STRINGFLAG_PHONETICS     = 0x02;
 
-inline bool lclNeedsRichTextFormat( const oox::xls::Font* pFont )
+bool lclNeedsRichTextFormat( const oox::xls::Font* pFont )
 {
     return pFont && pFont->needsRichTextFormat();
 }
@@ -395,14 +396,14 @@ std::unique_ptr<EditTextObject> RichString::convert( ScEditEngineDefaulter& rEE,
 {
     ESelection aSelection;
 
-    OUString sString;
+    OUStringBuffer sString;
     for( PortionVector::const_iterator aIt = maTextPortions.begin(), aEnd = maTextPortions.end(); aIt != aEnd; ++aIt )
-        sString += (*aIt)->getText();
+        sString.append((*aIt)->getText());
 
     // fdo#84370 - diving into editeng is not thread safe.
     SolarMutexGuard aGuard;
 
-    rEE.SetText( sString );
+    rEE.SetText( sString.makeStringAndClear() );
 
     for( PortionVector::const_iterator aIt = maTextPortions.begin(), aEnd = maTextPortions.end(); aIt != aEnd; ++aIt )
     {

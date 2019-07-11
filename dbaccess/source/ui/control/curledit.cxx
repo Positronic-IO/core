@@ -26,43 +26,26 @@
 namespace dbaui
 {
 
-OConnectionURLEdit::OConnectionURLEdit(vcl::Window* _pParent, WinBits _nBits,bool _bShowPrefix)
-    :Edit(_pParent, _nBits)
-    ,m_pTypeCollection(nullptr)
-    ,m_pForcedPrefix(nullptr)
-    ,m_bShowPrefix(_bShowPrefix)
+OConnectionURLEdit::OConnectionURLEdit(std::unique_ptr<weld::Entry> xEntry, std::unique_ptr<weld::Label> xForcedPrefix)
+    : m_pTypeCollection(nullptr)
+    , m_bShowPrefix(false)
+    , m_xEntry(std::move(xEntry))
+    , m_xForcedPrefix(std::move(xForcedPrefix))
 {
-}
-
-extern "C" SAL_DLLPUBLIC_EXPORT void makeConnectionURLEdit(VclPtr<vcl::Window> & rRet, VclPtr<vcl::Window> & pParent, VclBuilder::stringmap &)
-{
-    rRet = VclPtr<OConnectionURLEdit>::Create(pParent, WB_BORDER, false);
 }
 
 OConnectionURLEdit::~OConnectionURLEdit()
 {
-    disposeOnce();
-}
-
-void OConnectionURLEdit::dispose()
-{
-    SetSubEdit(nullptr);
-    m_pForcedPrefix.disposeAndClear();
-    Edit::dispose();
 }
 
 void OConnectionURLEdit::SetTextNoPrefix(const OUString& _rText)
 {
-    OSL_ENSURE(GetSubEdit(), "OConnectionURLEdit::SetTextNoPrefix: have no current type, not changing the text!");
-    if (GetSubEdit())
-        GetSubEdit()->SetText(_rText);
+    m_xEntry->set_text(_rText);
 }
 
 OUString OConnectionURLEdit::GetTextNoPrefix() const
 {
-    if (GetSubEdit())
-        return GetSubEdit()->GetText();
-    return GetText();
+    return m_xEntry->get_text();
 }
 
 void OConnectionURLEdit::SetText(const OUString& _rStr)
@@ -71,36 +54,9 @@ void OConnectionURLEdit::SetText(const OUString& _rStr)
     SetText(_rStr, aNoSelection);
 }
 
-void OConnectionURLEdit::Resize()
-{
-    if (GetSubEdit())
-    {
-        Size aMySize = GetSizePixel();
-        sal_Int32 nTextWidth = 0;
-        if ( m_pForcedPrefix && m_bShowPrefix)
-        {
-            nTextWidth = m_pForcedPrefix->GetTextWidth(m_pForcedPrefix->GetText()) + 2;
-            m_pForcedPrefix->SetPosSizePixel(Point(0, -2), Size(nTextWidth, aMySize.Height()));
-        }
-        GetSubEdit()->SetPosSizePixel(Point(nTextWidth, -2), Size(aMySize.Width() - nTextWidth - 4, aMySize.Height()));
-    }
-}
-
 void OConnectionURLEdit::SetText(const OUString& _rStr, const Selection& /*_rNewSelection*/)
 {
-    // create new sub controls, if necessary
-    if (!GetSubEdit())
-        SetSubEdit(VclPtr<Edit>::Create(this, 0));
-    if ( !m_pForcedPrefix )
-    {
-        m_pForcedPrefix = VclPtr<FixedText>::Create(this, WB_VCENTER);
-
-        // we use a gray background for the fixed text
-        StyleSettings aSystemStyle = Application::GetSettings().GetStyleSettings();
-        m_pForcedPrefix->SetBackground(Wallpaper(aSystemStyle.GetDialogColor()));
-    }
-
-    m_pForcedPrefix->Show(m_bShowPrefix);
+    m_xForcedPrefix->show(m_bShowPrefix);
 
     bool bIsEmpty = _rStr.isEmpty();
     // calc the prefix
@@ -112,42 +68,24 @@ void OConnectionURLEdit::SetText(const OUString& _rStr, const Selection& /*_rNew
     }
 
     // the fixed text gets the prefix
-    m_pForcedPrefix->SetText(sPrefix);
+    m_xForcedPrefix->set_label(sPrefix);
 
-    // both subs have to be resized according to the text len of the prefix
-    Size aMySize = GetSizePixel();
-    sal_Int32 nTextWidth = 0;
-    if ( m_pForcedPrefix && m_bShowPrefix)
-    {
-        nTextWidth = m_pForcedPrefix->GetTextWidth(sPrefix) + 2;
-        m_pForcedPrefix->SetPosSizePixel(Point(0, -2), Size(nTextWidth, aMySize.Height()));
-    }
-    GetSubEdit()->SetPosSizePixel(Point(nTextWidth, -2), Size(aMySize.Width() - nTextWidth - 4, aMySize.Height()));
-        // -2 because the edit has a frame which is 2 pixel wide ... should not be necessary, but I don't fully understand this ....
-
-    // show the sub controls (in case they were just created)
-    GetSubEdit()->Show();
-
-    // do the real SetTex
-//  Edit::SetText(bIsEmpty ? _rStr : m_pTypeCollection->cutPrefix(_rStr), _rNewSelection);
+    // do the real SetText
     OUString sNewText( _rStr );
     if ( !bIsEmpty )
         sNewText  = m_pTypeCollection->cutPrefix( _rStr );
-    Edit::SetText( sNewText );
+    m_xEntry->set_text(sNewText);
 }
 
 OUString OConnectionURLEdit::GetText() const
 {
-    if ( m_pForcedPrefix )
-        return m_pForcedPrefix->GetText() + Edit::GetText();
-    return Edit::GetText();
+    return m_xForcedPrefix->get_label() + m_xEntry->get_text();
 }
 
 void OConnectionURLEdit::ShowPrefix(bool _bShowPrefix)
 {
     m_bShowPrefix = _bShowPrefix;
-    if ( m_pForcedPrefix )
-        m_pForcedPrefix->Show(m_bShowPrefix);
+    m_xForcedPrefix->show(m_bShowPrefix);
 }
 
 }   // namespace dbaui

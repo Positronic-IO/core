@@ -23,6 +23,7 @@
 #include <tools.hxx>
 #include "nodetools.hxx"
 #include <delayevent.hxx>
+#include <sal/log.hxx>
 
 #include <functional>
 #include <algorithm>
@@ -40,6 +41,7 @@ BaseContainerNode::BaseContainerNode(
       maChildren(),
       mnFinishedChildren(0),
       mnLeftIterations(0),
+      mbRepeatIndefinite(xNode->getRepeatCount().hasValue() && isIndefiniteTiming(xNode->getRepeatCount())),
       mbDurationIndefinite( isIndefiniteTiming( xNode->getEnd() ) &&
                             isIndefiniteTiming( xNode->getDuration() ) )
 {
@@ -136,12 +138,9 @@ bool BaseContainerNode::notifyDeactivatedChild(
     ++mnFinishedChildren;
     bool bFinished = (mnFinishedChildren >= nSize);
 
-    // all children finished, and we've got indefinite duration?
-    // think of ParallelTimeContainer::notifyDeactivating()
-    // if duration given, we will be deactivated by some end event
-    // @see fillCommonParameters()
-    if (bFinished && isDurationIndefinite()) {
-        if( mnLeftIterations >= 1.0 )
+    // Handle repetition here.
+    if (bFinished) {
+        if(!mbRepeatIndefinite && mnLeftIterations >= 1.0)
         {
             mnLeftIterations -= 1.0;
         }
@@ -154,7 +153,7 @@ bool BaseContainerNode::notifyDeactivatedChild(
                                "BaseContainerNode::repeat");
             getContext().mrEventQueue.addEvent( aRepetitionEvent );
         }
-        else
+        else if (isDurationIndefinite())
         {
             deactivate();
         }
@@ -165,6 +164,10 @@ bool BaseContainerNode::notifyDeactivatedChild(
 
 void BaseContainerNode::repeat()
 {
+    // Prevent repeat event scheduled before deactivation.
+    if (getState() == FROZEN || getState() == ENDED)
+        return;
+
     forEachChildNode( std::mem_fn(&AnimationNode::end), ~ENDED );
     bool bState = init_children();
     if( bState )

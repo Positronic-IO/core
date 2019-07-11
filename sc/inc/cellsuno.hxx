@@ -20,16 +20,14 @@
 #ifndef INCLUDED_SC_INC_CELLSUNO_HXX
 #define INCLUDED_SC_INC_CELLSUNO_HXX
 
-#include "global.hxx"
+#include "address.hxx"
 #include "rangelst.hxx"
 
-#include <editeng/unotext.hxx>
 #include <formula/grammar.hxx>
 #include <rtl/ref.hxx>
 #include <tools/link.hxx>
 #include <svl/lstner.hxx>
 #include <svl/listener.hxx>
-#include <svl/itemprop.hxx>
 #include <com/sun/star/table/XTableChartsSupplier.hpp>
 #include <com/sun/star/table/XTablePivotChartsSupplier.hpp>
 #include <com/sun/star/chart/XChartDataArray.hpp>
@@ -69,9 +67,6 @@
 #include <com/sun/star/util/XImportable.hpp>
 #include <com/sun/star/table/XColumnRowRange.hpp>
 #include <com/sun/star/table/XCell2.hpp>
-#include <com/sun/star/table/BorderLine2.hpp>
-#include <com/sun/star/table/TableBorder.hpp>
-#include <com/sun/star/table/TableBorder2.hpp>
 #include <com/sun/star/sheet/XDataPilotTablesSupplier.hpp>
 #include <com/sun/star/sheet/XSheetAnnotationAnchor.hpp>
 #include <com/sun/star/sheet/XScenariosSupplier.hpp>
@@ -90,9 +85,15 @@
 #include <com/sun/star/sheet/XExternalSheetName.hpp>
 #include <com/sun/star/document/XEventsSupplier.hpp>
 #include <cppuhelper/implbase.hxx>
+#include <cppuhelper/weakref.hxx>
 
 #include <memory>
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace table { struct BorderLine2; } } } }
+namespace com { namespace sun { namespace star { namespace table { struct BorderLine; } } } }
+namespace com { namespace sun { namespace star { namespace table { struct TableBorder2; } } } }
+namespace com { namespace sun { namespace star { namespace table { struct TableBorder; } } } }
 
 class ScDocShell;
 class ScMarkData;
@@ -100,17 +101,24 @@ class ScMemChart;
 class ScPrintRangeSaver;
 class ScAttrRectIterator;
 class ScCellRangeObj;
-class ScLinkListener;
 class ScPatternAttr;
 class SvxBoxItem;
 class SvxBoxInfoItem;
 class SvxItemPropertySet;
+class SvxUnoText;
+class ScDocument;
+class SfxBroadcaster;
+class SfxHint;
+class SfxItemPropertyMap;
+class SfxItemPropertySet;
+class SfxItemSet;
+struct SfxItemPropertySimpleEntry;
 
 namespace editeng { class SvxBorderLine; }
 
 class ScLinkListener : public SvtListener
 {
-    Link<const SfxHint&,void>  aLink;
+    Link<const SfxHint&,void> const  aLink;
 public:
                     ScLinkListener(const Link<const SfxHint&,void>& rL) : aLink(rL) {}
     virtual         ~ScLinkListener() override;
@@ -175,12 +183,12 @@ private:
     css::uno::WeakReference<css::uno::XInterface> m_wThis;
     const SfxItemPropertySet* pPropSet;
     ScDocShell*             pDocShell;
-    ScLinkListener*         pValueListener;
-    std::unique_ptr<ScPatternAttr> pCurrentFlat;
-    std::unique_ptr<ScPatternAttr> pCurrentDeep;
-    SfxItemSet*             pCurrentDataSet;
-    SfxItemSet*             pNoDfltCurrentDataSet;
-    ScMarkData*             pMarkData;
+    std::unique_ptr<ScLinkListener> pValueListener;
+    std::unique_ptr<ScPatternAttr>  pCurrentFlat;
+    std::unique_ptr<ScPatternAttr>  pCurrentDeep;
+    std::unique_ptr<SfxItemSet>     pCurrentDataSet;
+    std::unique_ptr<SfxItemSet>     pNoDfltCurrentDataSet;
+    std::unique_ptr<ScMarkData>     pMarkData;
     ScRangeList             aRanges;
     sal_Int64               nObjectId;
     bool                    bChartColAsHdr;
@@ -195,7 +203,7 @@ private:
     void            PaintGridRanges_Impl();
     ScRangeListRef  GetLimitedChartRanges_Impl( long nDataColumns, long nDataRows ) const;
     void            ForceChartListener_Impl();
-    ScMemChart*     CreateMemChart_Impl() const;
+    std::unique_ptr<ScMemChart> CreateMemChart_Impl() const;
 
     const ScPatternAttr*    GetCurrentAttrsFlat();
     const ScPatternAttr*    GetCurrentAttrsDeep();
@@ -793,7 +801,7 @@ private:
     const SfxItemPropertySet*       pSheetPropSet;
 
     SCTAB                   GetTab_Impl() const;
-    void                    PrintAreaUndo_Impl( ScPrintRangeSaver* pOldRanges );
+    void                    PrintAreaUndo_Impl( std::unique_ptr<ScPrintRangeSaver> pOldRanges );
 
 protected:
     virtual const SfxItemPropertyMap& GetItemPropertyMap() override;
@@ -1075,7 +1083,7 @@ private:
     ScDocShell*             pDocShell;
     ScRangeList             aRanges;
     ScAddress               aPos;
-    ScMarkData*             pMark;
+    std::unique_ptr<ScMarkData> pMark;
     bool                    bAtEnd;
 
 private:
@@ -1106,7 +1114,7 @@ class ScCellFormatsObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    ScRange                 aTotalRange;
+    ScRange const           aTotalRange;
 
 private:
     ScCellRangeObj*         GetObjectByIndex_Impl(long nIndex) const;
@@ -1142,8 +1150,8 @@ class ScCellFormatsEnumeration : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    SCTAB                   nTab;
-    ScAttrRectIterator*     pIter;
+    SCTAB const             nTab;
+    std::unique_ptr<ScAttrRectIterator> pIter;
     ScRange                 aNext;
     bool                    bAtEnd;
     bool                    bDirty;
@@ -1178,7 +1186,7 @@ class ScUniqueCellFormatsObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*                     pDocShell;
-    ScRange                         aTotalRange;
+    ScRange const                   aTotalRange;
     ScMyRangeLists                  aRangeLists;
 
 public:

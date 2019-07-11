@@ -18,10 +18,7 @@
  */
 
 #include <compressedarray.hxx>
-#include <address.hxx>
 #include <global.hxx>
-
-#include <algorithm>
 
 static const size_t nScCompressedArrayDelta = 4;
 
@@ -39,20 +36,6 @@ ScCompressedArray<A,D>::ScCompressedArray( A nMaxAccessP, const D& rValue )
 template< typename A, typename D >
 ScCompressedArray<A,D>::~ScCompressedArray()
 {
-    delete[] pData;
-}
-
-template< typename A, typename D >
-void ScCompressedArray<A,D>::Resize( size_t nNewLimit)
-{
-    if ((nCount <= nNewLimit && nNewLimit < nLimit) || nLimit < nNewLimit)
-    {
-        nLimit = nNewLimit;
-        DataEntry* pNewData = new DataEntry[nLimit];
-        memcpy( pNewData, pData, nCount*sizeof(DataEntry));
-        delete[] pData;
-        pData = pNewData;
-    }
 }
 
 template< typename A, typename D >
@@ -104,10 +87,9 @@ void ScCompressedArray<A,D>::SetValue( A nStart, A nEnd, const D& rValue )
                 nLimit += nScCompressedArrayDelta;
                 if (nLimit < nNeeded)
                     nLimit = nNeeded;
-                DataEntry* pNewData = new DataEntry[nLimit];
-                memcpy( pNewData, pData, nCount*sizeof(DataEntry));
-                delete[] pData;
-                pData = pNewData;
+                std::unique_ptr<DataEntry[]> pNewData(new DataEntry[nLimit]);
+                memcpy( pNewData.get(), pData.get(), nCount*sizeof(DataEntry));
+                pData = std::move(pNewData);
             }
 
             size_t ni;          // number of leading entries
@@ -180,7 +162,7 @@ void ScCompressedArray<A,D>::SetValue( A nStart, A nEnd, const D& rValue )
                 }
                 if (ni < nj)
                 {   // remove entries
-                    memmove( pData + ni, pData + nj,
+                    memmove( pData.get() + ni, pData.get() + nj,
                             (nCount - nj) * sizeof(DataEntry));
                     nCount -= nj - ni;
                 }
@@ -191,11 +173,11 @@ void ScCompressedArray<A,D>::SetValue( A nStart, A nEnd, const D& rValue )
                 if (nInsert <= nCount)
                 {
                     if (!bSplit)
-                        memmove( pData + nInsert + 1, pData + nInsert,
+                        memmove( pData.get() + nInsert + 1, pData.get() + nInsert,
                                 (nCount - nInsert) * sizeof(DataEntry));
                     else
                     {
-                        memmove( pData + nInsert + 2, pData + nInsert,
+                        memmove( pData.get() + nInsert + 2, pData.get() + nInsert,
                                 (nCount - nInsert) * sizeof(DataEntry));
                         pData[nInsert+1] = pData[nInsert-1];
                         nCount++;
@@ -290,7 +272,7 @@ void ScCompressedArray<A,D>::Remove( A nStart, size_t nAccessCount )
         }
         else
             nRemove = 1;
-        memmove( pData + nIndex, pData + nIndex + nRemove, (nCount - (nIndex +
+        memmove( pData.get() + nIndex, pData.get() + nIndex + nRemove, (nCount - (nIndex +
                         nRemove)) * sizeof(DataEntry));
         nCount -= nRemove;
     }

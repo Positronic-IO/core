@@ -22,7 +22,6 @@
 
 #include <svx/optgrid.hxx>
 
-#include <svx/svxids.hrc>
 #include "scdllapi.h"
 #include "optutil.hxx"
 #include "global.hxx"
@@ -69,7 +68,6 @@ public:
                 ScGridOptions( const SvxOptionsGrid& rOpt ) : SvxOptionsGrid( rOpt ) {}
 
     void                    SetDefaults();
-    ScGridOptions&          operator=  ( const ScGridOptions& rCpy );
     bool                    operator== ( const ScGridOptions& rOpt ) const;
     bool                    operator!= ( const ScGridOptions& rOpt ) const { return !(operator==(rOpt)); }
 };
@@ -118,13 +116,18 @@ public:
                 ScTpViewItem( const ScViewOptions& rOpt );
                 virtual ~ScTpViewItem() override;
 
+    ScTpViewItem(ScTpViewItem const &) = default;
+    ScTpViewItem(ScTpViewItem &&) = default;
+    ScTpViewItem & operator =(ScTpViewItem const &) = delete; // due to SfxPoolItem
+    ScTpViewItem & operator =(ScTpViewItem &&) = delete; // due to SfxPoolItem
+
     virtual bool            operator==( const SfxPoolItem& ) const override;
     virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
 
     const ScViewOptions&    GetViewOptions() const { return theOptions; }
 
 private:
-    ScViewOptions   theOptions;
+    ScViewOptions const   theOptions;
 };
 
 // CfgItem for View options

@@ -40,7 +40,6 @@
 #include <svx/unobrushitemhelper.hxx>
 #include <svx/svxids.hrc>
 
-// Taking the updated values from the set
 void SwPageExample::UpdateExample( const SfxItemSet& rSet )
 {
     if (SfxItemState::DEFAULT <= rSet.GetItemState(RES_FRAMEDIR))
@@ -55,10 +54,8 @@ void SwPageExample::UpdateExample( const SfxItemSet& rSet )
     if ( rSet.GetItemState( nWhich, false ) == SfxItemState::SET )
     {
         // alignment
-        const SvxPageItem* pPage = static_cast<const SvxPageItem*>(&rSet.Get( nWhich ));
-
-        if ( pPage )
-            SetUsage( pPage->GetPageUsage() );
+        const SvxPageItem& rPage = static_cast<const SvxPageItem&>(rSet.Get(nWhich));
+        SetUsage(rPage.GetPageUsage());
     }
 
     nWhich = pPool->GetWhich( SID_ATTR_PAGE_SIZE );
@@ -330,36 +327,22 @@ void SwColExample::DrawPage(vcl::RenderContext& rRenderContext, const Point& rOr
     }
 }
 
-VCL_BUILDER_FACTORY(SwColExample)
-
-SwColumnOnlyExample::SwColumnOnlyExample(vcl::Window* pParent)
-    : Window(pParent)
-    , m_aFrameSize(1,1)
+SwColumnOnlyExample::SwColumnOnlyExample()
+    : m_aFrameSize(SvxPaperInfo::GetPaperSize(PAPER_A4)) // DIN A4
 {
-    SetMapMode( MapMode( MapUnit::MapTwip ) );
-    m_aWinSize = GetOptimalSize();
-    m_aWinSize.AdjustHeight( -4 );
-    m_aWinSize.AdjustWidth( -4 );
-
-    m_aWinSize = PixelToLogic( m_aWinSize );
-
-    SetBorderStyle( WindowBorderStyle::MONO );
-
-    m_aFrameSize  = SvxPaperInfo::GetPaperSize(PAPER_A4);// DIN A4
     ::FitToActualSize(m_aCols, static_cast<sal_uInt16>(m_aFrameSize.Width()));
-
-    long nHeight = m_aFrameSize.Height();
-    Fraction aScale( m_aWinSize.Height(), nHeight );
-    MapMode aMapMode( GetMapMode() );
-    aMapMode.SetScaleX( aScale );
-    aMapMode.SetScaleY( aScale );
-    SetMapMode( aMapMode );
 }
-
-VCL_BUILDER_FACTORY(SwColumnOnlyExample)
 
 void SwColumnOnlyExample::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& /*rRect*/)
 {
+    rRenderContext.Push(PushFlags::MAPMODE);
+
+    Fraction aScale(m_aWinSize.Height(), m_aFrameSize.Height());
+    MapMode aMapMode(MapUnit::MapTwip);
+    aMapMode.SetScaleX(aScale);
+    aMapMode.SetScaleY(aScale);
+    rRenderContext.SetMapMode(aMapMode);
+
     const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
     const Color& rFieldColor = rStyleSettings.GetFieldColor();
     const Color& rDlgColor = rStyleSettings.GetDialogColor();
@@ -445,6 +428,7 @@ void SwColumnOnlyExample::Paint(vcl::RenderContext& rRenderContext, const tools:
             }
         }
     }
+    rRenderContext.Pop();
 }
 
 void  SwColumnOnlyExample::SetColumns(const SwFormatCol& rCol)
@@ -491,20 +475,29 @@ void  SwColumnOnlyExample::SetColumns(const SwFormatCol& rCol)
     }
 }
 
-Size SwColumnOnlyExample::GetOptimalSize() const
+void SwColumnOnlyExample::SetDrawingArea(weld::DrawingArea* pDrawingArea)
 {
-    return LogicToPixel(Size(75, 46), MapMode(MapUnit::MapAppFont));
+    weld::CustomWidgetController::SetDrawingArea(pDrawingArea);
+    OutputDevice& rRefDevice = pDrawingArea->get_ref_device();
+    Size aPrefSize(rRefDevice.LogicToPixel(Size(75, 46), MapMode(MapUnit::MapAppFont)));
+    pDrawingArea->set_size_request(aPrefSize.Width(), aPrefSize.Height());
 }
 
-SwPageGridExample::~SwPageGridExample()
+void SwColumnOnlyExample::Resize()
 {
-    disposeOnce();
+    OutputDevice& rRefDevice = GetDrawingArea()->get_ref_device();
+    rRefDevice.Push(PushFlags::MAPMODE);
+    rRefDevice.SetMapMode(MapMode(MapUnit::MapTwip));
+    m_aWinSize = GetOutputSizePixel();
+    m_aWinSize.AdjustHeight( -4 );
+    m_aWinSize.AdjustWidth( -4 );
+    m_aWinSize = rRefDevice.PixelToLogic(m_aWinSize);
+    rRefDevice.Pop();
+    Invalidate();
 }
 
-void SwPageGridExample::dispose()
+SwPageGridExample::SwPageGridExample()
 {
-    delete pGridItem;
-    SwPageExample::dispose();
 }
 
 void SwPageGridExample::DrawPage(vcl::RenderContext& rRenderContext, const Point& rOrg,
@@ -595,7 +588,7 @@ void SwPageGridExample::DrawPage(vcl::RenderContext& rRenderContext, const Point
             while (m_bVertical ? aStart.Y() < aRect.Bottom(): aStart.X() < aRect.Right())
             {
                 rRenderContext.DrawLine(aStart, aEnd);
-                if(m_bVertical)
+                if (m_bVertical)
                     aStart.setY( aEnd.AdjustY(nBaseHeight ) );
                 else
                     aStart.setX( aEnd.AdjustX(nBaseHeight ) );
@@ -609,13 +602,11 @@ void SwPageGridExample::DrawPage(vcl::RenderContext& rRenderContext, const Point
 
 void SwPageGridExample::UpdateExample( const SfxItemSet& rSet )
 {
-    DELETEZ(pGridItem);
+    pGridItem.reset();
     //get the grid information
-    if(SfxItemState::DEFAULT <= rSet.GetItemState(RES_TEXTGRID))
-        pGridItem = static_cast<SwTextGridItem*>(rSet.Get(RES_TEXTGRID).Clone());
+    if (SfxItemState::DEFAULT <= rSet.GetItemState(RES_TEXTGRID))
+        pGridItem.reset(static_cast<SwTextGridItem*>(rSet.Get(RES_TEXTGRID).Clone()));
     SwPageExample::UpdateExample(rSet);
 }
-
-VCL_BUILDER_FACTORY(SwPageGridExample)
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

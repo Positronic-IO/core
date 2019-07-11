@@ -20,6 +20,7 @@
 #include <string.h>
 #include <cassert>
 #include <memory>
+#include <utility>
 #include <vector>
 
 
@@ -139,11 +140,12 @@ struct Entity
 };
 
 
+static constexpr OUStringLiteral gsCDATA = "CDATA";
+
 class SaxExpatParser_Impl
 {
 public: // module scope
     Mutex               aMutex;
-    OUString            sCDATA;
     bool m_bEnableDoS; // fdo#60471 thank you Adobe Illustrator
 
     css::uno::Reference< XDocumentHandler >   rDocumentHandler;
@@ -159,8 +161,8 @@ public: // module scope
 
     // External entity stack
     vector<struct Entity>   vecEntity;
-    void pushEntity( const struct Entity &entity )
-        { vecEntity.push_back( entity ); }
+    void pushEntity( Entity &&entity )
+        { vecEntity.push_back( std::move(entity) ); }
     void popEntity()
         { vecEntity.pop_back( ); }
     struct Entity &getEntity()
@@ -178,8 +180,7 @@ public: // module scope
 
 public:
     SaxExpatParser_Impl()
-        : sCDATA("CDATA")
-        , m_bEnableDoS(false)
+        : m_bEnableDoS(false)
         , bExceptionWasThrown(false)
         , bRTExceptionWasThrown(false)
     {
@@ -388,18 +389,18 @@ class ParserCleanup
 {
 private:
     SaxExpatParser_Impl& m_rParser;
-    Entity& m_rEntity;
+    XML_Parser const m_xmlParser;
 public:
-    ParserCleanup(SaxExpatParser_Impl& rParser, Entity& rEntity)
+    ParserCleanup(SaxExpatParser_Impl& rParser, XML_Parser xmlParser)
         : m_rParser(rParser)
-        , m_rEntity(rEntity)
+        , m_xmlParser(xmlParser)
     {
     }
     ~ParserCleanup()
     {
         m_rParser.popEntity();
         //XML_ParserFree accepts a null arg
-        XML_ParserFree(m_rEntity.pParser);
+        XML_ParserFree(m_xmlParser);
     }
 };
 
@@ -469,9 +470,10 @@ void SaxExpatParser::parseStream(   const InputSource& structSource)
 
 
     m_pImpl->exception = SAXParseException();
-    m_pImpl->pushEntity( entity );
+    auto const xmlParser = entity.pParser;
+    m_pImpl->pushEntity( std::move(entity) );
 
-    ParserCleanup aEnsureFree(*m_pImpl, entity);
+    ParserCleanup aEnsureFree(*m_pImpl, xmlParser);
 
     // start the document
     if( m_pImpl->rDocumentHandler.is() ) {
@@ -709,7 +711,7 @@ void SaxExpatParser_Impl::callbackStartElement( void *pvThis ,
             assert(awAttributes[i+1]);
             pImpl->rAttrList->AddAttribute(
                 XML_CHAR_TO_OUSTRING( awAttributes[i] ) ,
-                pImpl->sCDATA,  // expat doesn't know types
+                gsCDATA,  // expat doesn't know types
                 XML_CHAR_TO_OUSTRING( awAttributes[i+1] ) );
             i +=2;
         }
@@ -847,7 +849,8 @@ bool SaxExpatParser_Impl::callbackExternalEntityRef(
         }
 
         entity.converter.setInputStream( entity.structSource.aInputStream );
-        pImpl->pushEntity( entity );
+        auto const xmlParser = entity.pParser;
+        pImpl->pushEntity( std::move(entity) );
         try
         {
             pImpl->parse();
@@ -870,7 +873,7 @@ bool SaxExpatParser_Impl::callbackExternalEntityRef(
 
         pImpl->popEntity();
 
-        XML_ParserFree( entity.pParser );
+        XML_ParserFree( xmlParser );
     }
 
     return bOK;

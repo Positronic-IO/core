@@ -52,6 +52,7 @@
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
@@ -80,8 +81,8 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <salhelper/thread.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svtools/controldims.hxx>
 #include <svx/checklbx.hxx>
 #include <tools/gen.hxx>
@@ -95,6 +96,7 @@
 #include <vcl/svapp.hxx>
 
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 
 #include <dp_dependencies.hxx>
 #include <dp_descriptioninfoset.hxx>
@@ -521,7 +523,9 @@ UpdateDialog::UpdateDialog(
     } catch (const uno::RuntimeException &) {
         throw;
     } catch (const uno::Exception & e) {
-        throw uno::RuntimeException(e.Message, e.Context);
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( e.Message,
+                        e.Context, anyEx );
     }
     m_pUpdates->SetSelectHdl(LINK(this, UpdateDialog, selectionHandler));
     m_pAll->SetToggleHdl(LINK(this, UpdateDialog, allHandler));
@@ -544,14 +548,8 @@ void UpdateDialog::dispose()
 {
     storeIgnoredUpdates();
 
-    for (auto const& listboxEntry : m_ListboxEntries)
-    {
-        delete listboxEntry;
-    }
-    for (auto const& ignoredUpdate : m_ignoredUpdates)
-    {
-        delete ignoredUpdate;
-    }
+    m_ListboxEntries.clear();
+    m_ignoredUpdates.clear();
     m_pUpdates.disposeAndClear();
     m_pchecking.clear();
     m_pthrobber.clear();
@@ -715,7 +713,7 @@ void UpdateDialog::addEnabledUpdate( OUString const & name,
     UpdateDialog::Index *pEntry = new UpdateDialog::Index( ENABLED_UPDATE, nIndex, name );
 
     m_enabledUpdates.push_back( data );
-    m_ListboxEntries.push_back( pEntry );
+    m_ListboxEntries.emplace_back( pEntry );
 
     if ( ! isIgnoredUpdate( pEntry ) )
     {
@@ -738,7 +736,7 @@ void UpdateDialog::addDisabledUpdate( UpdateDialog::DisabledUpdate const & data 
     UpdateDialog::Index *pEntry = new UpdateDialog::Index( DISABLED_UPDATE, nIndex, data.name );
 
     m_disabledUpdates.push_back( data );
-    m_ListboxEntries.push_back( pEntry );
+    m_ListboxEntries.emplace_back( pEntry );
 
     isIgnoredUpdate( pEntry );
     addAdditional( pEntry, SvLBoxButtonKind::DisabledCheckbox );
@@ -751,7 +749,7 @@ void UpdateDialog::addSpecificError( UpdateDialog::SpecificError const & data )
     UpdateDialog::Index *pEntry = new UpdateDialog::Index( SPECIFIC_ERROR, nIndex, data.name );
 
     m_specificErrors.push_back( data );
-    m_ListboxEntries.push_back( pEntry );
+    m_ListboxEntries.emplace_back( pEntry );
 
     addAdditional( pEntry, SvLBoxButtonKind::StaticImage);
 }
@@ -851,7 +849,7 @@ void UpdateDialog::notifyMenubar( bool bPrepareOnly, bool bRecheckOnly )
     if ( ! bRecheckOnly )
     {
         sal_Int32 nCount = 0;
-        for ( sal_Int16 i = 0; i < m_pUpdates->getItemCount(); ++i )
+        for ( sal_uInt16 i = 0; i < m_pUpdates->getItemCount(); ++i )
         {
             uno::Sequence< OUString > aItem(2);
 
@@ -972,7 +970,7 @@ void UpdateDialog::getIgnoredUpdates()
         uno::Any aPropValue( uno::Reference< beans::XPropertySet >( xNameAccess->getByName( aIdentifier ), uno::UNO_QUERY_THROW )->getPropertyValue( PROPERTY_VERSION ) );
         aPropValue >>= aVersion;
         IgnoredUpdate *pData = new IgnoredUpdate( aIdentifier, aVersion );
-        m_ignoredUpdates.push_back( pData );
+        m_ignoredUpdates.emplace_back( pData );
     }
 }
 
@@ -1102,7 +1100,7 @@ void UpdateDialog::setIgnoredUpdate( UpdateDialog::Index const *pIndex, bool bIg
         if ( bIgnore && !bFound )
         {
             IgnoredUpdate *pData = new IgnoredUpdate( aExtensionID, aVersion );
-            m_ignoredUpdates.push_back( pData );
+            m_ignoredUpdates.emplace_back( pData );
         }
     }
 }
@@ -1218,7 +1216,7 @@ IMPL_LINK_NOARG(UpdateDialog, allHandler, CheckBox&, void)
         for (auto const& listboxEntry : m_ListboxEntries)
         {
             if ( listboxEntry->m_bIgnored || ( listboxEntry->m_eKind != ENABLED_UPDATE ) )
-                insertItem( listboxEntry, SvLBoxButtonKind::DisabledCheckbox );
+                insertItem( listboxEntry.get(), SvLBoxButtonKind::DisabledCheckbox );
         }
     }
     else

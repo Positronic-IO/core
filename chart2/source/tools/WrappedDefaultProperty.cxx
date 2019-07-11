@@ -20,6 +20,10 @@
 #include <WrappedDefaultProperty.hxx>
 #include <tools/diagnose_ex.h>
 
+#include <com/sun/star/beans/XPropertySet.hpp>
+
+namespace com { namespace sun { namespace star { namespace beans { class XPropertyState; } } } }
+
 using namespace ::com::sun::star;
 
 using ::com::sun::star::uno::Reference;

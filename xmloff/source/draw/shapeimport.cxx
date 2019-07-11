@@ -21,6 +21,7 @@
 
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/text/PositionLayoutDir.hpp>
 #include <com/sun/star/chart/XChartDocument.hpp>
@@ -99,19 +100,16 @@ struct XMLShapeImportHelperImpl
     bool                        mbIsPresentationShapesSupported;
 };
 
+static const OUStringLiteral gsStartShape("StartShape");
+static const OUStringLiteral gsEndShape("EndShape");
+static const OUStringLiteral gsStartGluePointIndex("StartGluePointIndex");
+static const OUStringLiteral gsEndGluePointIndex("EndGluePointIndex");
+
 XMLShapeImportHelper::XMLShapeImportHelper(
         SvXMLImport& rImporter,
         const uno::Reference< frame::XModel>& rModel,
         SvXMLImportPropertyMapper *pExtMapper )
 :   mpImpl( new XMLShapeImportHelperImpl ),
-
-    mpPropertySetMapper(nullptr),
-    mpPresPagePropsMapper(nullptr),
-    msStartShape("StartShape"),
-    msEndShape("EndShape"),
-    msStartGluePointIndex("StartGluePointIndex"),
-    msEndGluePointIndex("EndGluePointIndex"),
-
     mrImporter( rImporter )
 {
     mpImpl->mpSortContext = nullptr;
@@ -940,10 +938,10 @@ void XMLShapeImportHelper::restoreConnections()
                     mrImporter.getInterfaceToIdentifierMapper().getReference( rHint.aDestShapeId ), uno::UNO_QUERY );
                 if( xShape.is() )
                 {
-                    xConnector->setPropertyValue( rHint.bStart ? msStartShape : msEndShape, uno::Any(xShape) );
+                    xConnector->setPropertyValue( rHint.bStart ? gsStartShape : gsEndShape, uno::Any(xShape) );
 
                     sal_Int32 nGlueId = rHint.nDestGlueId < 4 ? rHint.nDestGlueId : getGluePointId( xShape, rHint.nDestGlueId );
-                    xConnector->setPropertyValue( rHint.bStart ? msStartGluePointIndex : msEndGluePointIndex, uno::Any(nGlueId) );
+                    xConnector->setPropertyValue( rHint.bStart ? gsStartGluePointIndex : gsEndGluePointIndex, uno::Any(nGlueId) );
                 }
 
                 // #86637# restore line deltas
@@ -984,13 +982,10 @@ void XMLShapeImportHelper::moveGluePointMapping( const css::uno::Reference< css:
         ShapeGluePointsMap::iterator aShapeIter( mpPageContext->maShapeGluePointsMap.find( xShape ) );
         if( aShapeIter != mpPageContext->maShapeGluePointsMap.end() )
         {
-            GluePointIdMap::iterator aShapeIdIter = (*aShapeIter).second.begin();
-            GluePointIdMap::iterator aShapeIdEnd  = (*aShapeIter).second.end();
-            while ( aShapeIdIter != aShapeIdEnd )
+            for ( auto& rShapeId : (*aShapeIter).second )
             {
-                if ( (*aShapeIdIter).second != -1 )
-                    (*aShapeIdIter).second += n;
-                ++aShapeIdIter;
+                if ( rShapeId.second != -1 )
+                    rShapeId.second += n;
             }
         }
     }

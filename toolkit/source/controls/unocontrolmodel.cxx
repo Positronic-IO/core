@@ -28,11 +28,13 @@
 #include <com/sun/star/awt/XDevice.hpp>
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <com/sun/star/io/XMarkableStream.hpp>
+#include <com/sun/star/i18n/Currency2.hpp>
 #include <toolkit/controls/unocontrolmodel.hxx>
 #include <toolkit/helper/macros.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <rtl/uuid.h>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/date.hxx>
 #include <tools/time.hxx>
@@ -139,8 +141,8 @@ css::uno::Sequence<sal_Int32> UnoControlModel::ImplGetPropertyIds() const
     css::uno::Sequence<sal_Int32>  aIDs( nIDs );
     sal_Int32* pIDs = aIDs.getArray();
     sal_uInt32 n = 0;
-    for ( ImplPropertyTable::const_iterator it = maData.begin(); it != maData.end(); ++it )
-        pIDs[n++] = it->first;
+    for ( const auto& rData : maData )
+        pIDs[n++] = rData.first;
     return aIDs;
 }
 
@@ -407,11 +409,10 @@ void UnoControlModel::ImplRegisterProperty( sal_uInt16 nPropId )
 
 void UnoControlModel::ImplRegisterProperties( const std::vector< sal_uInt16 > &rIds )
 {
-    std::vector< sal_uInt16 >::const_iterator iter;
-    for( iter = rIds.begin(); iter != rIds.end(); ++iter)
+    for (const auto& rId : rIds)
     {
-        if( !ImplHasProperty( *iter ) )
-            ImplRegisterProperty( *iter, ImplGetDefaultValue( *iter ) );
+        if( !ImplHasProperty( rId ) )
+            ImplRegisterProperty( rId, ImplGetDefaultValue( rId ) );
     }
 }
 
@@ -537,12 +538,12 @@ void UnoControlModel::write( const css::uno::Reference< css::io::XObjectOutputSt
 
     std::set<sal_uInt16> aProps;
 
-    for (ImplPropertyTable::const_iterator it = maData.begin(); it != maData.end(); ++it )
+    for (const auto& rData : maData)
     {
-        if ( ( ( GetPropertyAttribs( it->first ) & css::beans::PropertyAttribute::TRANSIENT ) == 0 )
-            && ( getPropertyState( GetPropertyName( it->first ) ) != css::beans::PropertyState_DEFAULT_VALUE ) )
+        if ( ( ( GetPropertyAttribs( rData.first ) & css::beans::PropertyAttribute::TRANSIENT ) == 0 )
+            && ( getPropertyState( GetPropertyName( rData.first ) ) != css::beans::PropertyState_DEFAULT_VALUE ) )
         {
-            aProps.insert( it->first );
+            aProps.insert( rData.first );
         }
     }
 
@@ -551,13 +552,13 @@ void UnoControlModel::write( const css::uno::Reference< css::io::XObjectOutputSt
     // Save FontProperty always in the old format (due to missing distinction
     // between 5.0 and 5.1)
     OutStream->writeLong( ( aProps.find( BASEPROPERTY_FONTDESCRIPTOR ) != aProps.end() ) ? ( nProps + 3 ) : nProps );
-    for ( std::set<sal_uInt16>::const_iterator it = aProps.begin(); it != aProps.end(); ++it )
+    for ( const auto& rProp : aProps )
     {
         sal_Int32 nPropDataBeginMark = xMark->createMark();
         OutStream->writeLong( 0 ); // DataLen
 
-        const css::uno::Any* pProp = &(maData[*it]);
-        OutStream->writeShort( *it );
+        const css::uno::Any* pProp = &(maData[rProp]);
+        OutStream->writeShort( rProp );
 
         bool bVoid = pProp->getValueType().getTypeClass() == css::uno::TypeClass_VOID;
 
@@ -686,7 +687,7 @@ void UnoControlModel::write( const css::uno::Reference< css::io::XObjectOutputSt
                 SAL_WARN( "toolkit", "UnoControlModel::write: don't know how to handle a property of type '"
                           << rType.getTypeName()
                           << "'.\n(Currently handling property '"
-                          << GetPropertyName( *it )
+                          << GetPropertyName( rProp )
                           << "'.)");
             }
 #endif
@@ -1311,7 +1312,7 @@ void UnoControlModel::setPropertyValues( const css::uno::Sequence< OUString >& r
         {
             if ( ( pHandles[n] >= BASEPROPERTY_FONTDESCRIPTORPART_START ) && ( pHandles[n] <= BASEPROPERTY_FONTDESCRIPTORPART_END ) )
             {
-                if ( !pFD.get() )
+                if (!pFD)
                 {
                     css::uno::Any* pProp = &maData[ BASEPROPERTY_FONTDESCRIPTOR ];
                     pFD.reset( new awt::FontDescriptor );
@@ -1338,7 +1339,7 @@ void UnoControlModel::setPropertyValues( const css::uno::Sequence< OUString >& r
             // same as a few lines above
 
         // Don't merge FD property into array, as it is sorted
-        if ( pFD.get() )
+        if (pFD)
         {
             css::uno::Any aValue;
             aValue <<= *pFD;

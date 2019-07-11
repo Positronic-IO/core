@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <o3tl/clamp.hxx>
 #include <svgstyleattributes.hxx>
 #include <drawinglayer/primitive2d/transformprimitive2d.hxx>
 #include <drawinglayer/primitive2d/polypolygonprimitive2d.hxx>
@@ -38,12 +41,15 @@
 #include <drawinglayer/primitive2d/patternfillprimitive2d.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <drawinglayer/primitive2d/maskprimitive2d.hxx>
+#include <drawinglayer/primitive2d/pagehierarchyprimitive2d.hxx>
+
+const int nStyleDepthLimit = 1024;
 
 namespace svgio
 {
     namespace svgreader
     {
-        basegfx::B2DLineJoin StrokeLinejoinToB2DLineJoin(StrokeLinejoin aStrokeLinejoin)
+        static basegfx::B2DLineJoin StrokeLinejoinToB2DLineJoin(StrokeLinejoin aStrokeLinejoin)
         {
             if(StrokeLinejoin_round == aStrokeLinejoin)
             {
@@ -57,7 +63,7 @@ namespace svgio
             return basegfx::B2DLineJoin::Miter;
         }
 
-        css::drawing::LineCap StrokeLinecapToDrawingLineCap(StrokeLinecap aStrokeLinecap)
+        static css::drawing::LineCap StrokeLinecapToDrawingLineCap(StrokeLinecap aStrokeLinecap)
         {
             switch(aStrokeLinecap)
             {
@@ -671,7 +677,7 @@ namespace svgio
                         // the geometry for a single dot
                         if(1 == rPath.count())
                         {
-                            const basegfx::B2DPolygon aSingle(rPath.getB2DPolygon(0));
+                            const basegfx::B2DPolygon& aSingle(rPath.getB2DPolygon(0));
 
                             if(2 == aSingle.count() && aSingle.getB2DPoint(0).equal(aSingle.getB2DPoint(1)))
                             {
@@ -826,7 +832,7 @@ namespace svgio
                 {
                     double fTargetWidth(rMarker.getMarkerWidth().isSet() ? rMarker.getMarkerWidth().solve(mrOwner, xcoordinate) : 3.0);
                     double fTargetHeight(rMarker.getMarkerHeight().isSet() ? rMarker.getMarkerHeight().solve(mrOwner, xcoordinate) : 3.0);
-                    const bool bStrokeWidth(SvgMarkerNode::strokeWidth == rMarker.getMarkerUnits());
+                    const bool bStrokeWidth(SvgMarkerNode::MarkerUnits::strokeWidth == rMarker.getMarkerUnits());
                     const double fStrokeWidth(getStrokeWidth().isSet() ? getStrokeWidth().solve(mrOwner) : 1.0);
 
                     if(bStrokeWidth)
@@ -919,7 +925,7 @@ namespace svgio
                     for (sal_uInt32 a(0); a < nSubPathCount; a++)
                     {
                         // iterate over sub-paths
-                        const basegfx::B2DPolygon aSubPolygonPath(rPath.getB2DPolygon(a));
+                        const basegfx::B2DPolygon& aSubPolygonPath(rPath.getB2DPolygon(a));
                         const sal_uInt32 nSubPolygonPointCount(aSubPolygonPath.count());
                         const bool bSubPolygonPathIsClosed(aSubPolygonPath.isClosed());
 
@@ -1196,12 +1202,47 @@ namespace svgio
                         // #i124852# transform may be needed when userSpaceOnUse
                         pMask->apply(aSource, pTransform);
                     }
+                }
 
-                    if(!aSource.empty()) // test again, applied mask may have lead to empty geometry
+                // This is part of the SVG import of self-written SVGs from
+                // Draw/Impress containing multiple Slides/Pages. To be able
+                // to later 'break' these to multiple Pages if wanted, embed
+                // each Page-Content in a identifiable Primitive Grouping
+                // Object.
+                // This is the case when the current Node is a GroupNode, has
+                // class="Page" set, has a parent that also is a GroupNode
+                // at which class="Slide" is set.
+                // Multiple Slides/Pages are possible for Draw and Impress.
+                if(SVGTokenG == mrOwner.getType() && mrOwner.getClass())
+                {
+                    const OUString aOwnerClass(*mrOwner.getClass());
+
+                    if("Page" == aOwnerClass)
                     {
-                        // append to current target
-                        rTarget.append(aSource);
+                        const SvgNode* pParent(mrOwner.getParent());
+
+                        if(nullptr != pParent && SVGTokenG == pParent->getType() && pParent->getClass())
+                        {
+                            const OUString aParentClass(*pParent->getClass());
+
+                            if("Slide" == aParentClass)
+                            {
+                                // embed to grouping primitive to identify the
+                                // Slide/Page information
+                                const drawinglayer::primitive2d::Primitive2DReference xRef(
+                                    new drawinglayer::primitive2d::PageHierarchyPrimitive2D(
+                                        aSource));
+
+                                aSource = drawinglayer::primitive2d::Primitive2DContainer { xRef };
+                            }
+                        }
                     }
+                }
+
+                if(!aSource.empty()) // test again, applied mask may have lead to empty geometry
+                {
+                    // append to current target
+                    rTarget.append(aSource);
                 }
             }
         }
@@ -1253,6 +1294,7 @@ namespace svgio
             maClipRule(FillRule_nonzero),
             maBaselineShift(BaselineShift_Baseline),
             maBaselineShiftNumber(0),
+            maResolvingParent(30, 0),
             mbIsClipPathContent(SVGTokenClipPathNode == mrOwner.getType()),
             mbStrokeDasharraySet(false)
         {
@@ -1288,7 +1330,7 @@ namespace svgio
                         setFill(aSvgPaint);
                         if(aOpacity.isSet())
                         {
-                            setOpacity(SvgNumber(basegfx::clamp(aOpacity.getNumber(), 0.0, 1.0)));
+                            setOpacity(SvgNumber(o3tl::clamp(aOpacity.getNumber(), 0.0, 1.0)));
                         }
                     }
                     else if(!aURL.isEmpty())
@@ -1315,7 +1357,7 @@ namespace svgio
 
                     if(readSingleNumber(aContent, aNum))
                     {
-                        maFillOpacity = SvgNumber(basegfx::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet());
+                        maFillOpacity = SvgNumber(o3tl::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet());
                     }
                     break;
                 }
@@ -1345,7 +1387,7 @@ namespace svgio
                         maStroke = aSvgPaint;
                         if(aOpacity.isSet())
                         {
-                            setOpacity(SvgNumber(basegfx::clamp(aOpacity.getNumber(), 0.0, 1.0)));
+                            setOpacity(SvgNumber(o3tl::clamp(aOpacity.getNumber(), 0.0, 1.0)));
                         }
                     }
                     else if(!aURL.isEmpty())
@@ -1458,7 +1500,7 @@ namespace svgio
 
                     if(readSingleNumber(aContent, aNum))
                     {
-                        maStrokeOpacity = SvgNumber(basegfx::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet());
+                        maStrokeOpacity = SvgNumber(o3tl::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet());
                     }
                     break;
                 }
@@ -1486,7 +1528,7 @@ namespace svgio
                         maStopColor = aSvgPaint;
                         if(aOpacity.isSet())
                         {
-                            setOpacity(SvgNumber(basegfx::clamp(aOpacity.getNumber(), 0.0, 1.0)));
+                            setOpacity(SvgNumber(o3tl::clamp(aOpacity.getNumber(), 0.0, 1.0)));
                         }
                     }
                     break;
@@ -1799,7 +1841,7 @@ namespace svgio
                         maColor = aSvgPaint;
                         if(aOpacity.isSet())
                         {
-                            setOpacity(SvgNumber(basegfx::clamp(aOpacity.getNumber(), 0.0, 1.0)));
+                            setOpacity(SvgNumber(o3tl::clamp(aOpacity.getNumber(), 0.0, 1.0)));
                         }
                     }
                     break;
@@ -1810,7 +1852,7 @@ namespace svgio
 
                     if(readSingleNumber(aContent, aNum))
                     {
-                        setOpacity(SvgNumber(basegfx::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet()));
+                        setOpacity(SvgNumber(o3tl::clamp(aNum.getNumber(), 0.0, 1.0), aNum.getUnit(), aNum.isSet()));
                     }
                     break;
                 }
@@ -1992,9 +2034,11 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[0] < nStyleDepthLimit)
                 {
+                    ++maResolvingParent[0];
                     const basegfx::BColor* pFill = pSvgStyleAttributes->getFill();
+                    --maResolvingParent[0];
 
                     if(mbIsClipPathContent)
                     {
@@ -2035,9 +2079,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[1] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getStroke();
+                    ++maResolvingParent[1];
+                    auto ret = pSvgStyleAttributes->getStroke();
+                    --maResolvingParent[1];
+                    return ret;
                 }
             }
 
@@ -2066,9 +2113,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[2] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getSvgGradientNodeFill();
+                    ++maResolvingParent[2];
+                    auto ret = pSvgStyleAttributes->getSvgGradientNodeFill();
+                    --maResolvingParent[2];
+                    return ret;
                 }
             }
 
@@ -2085,9 +2135,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[3] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getSvgGradientNodeStroke();
+                    ++maResolvingParent[3];
+                    auto ret = pSvgStyleAttributes->getSvgGradientNodeStroke();
+                    --maResolvingParent[3];
+                    return ret;
                 }
             }
 
@@ -2104,9 +2157,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[4] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getSvgPatternNodeFill();
+                    ++maResolvingParent[4];
+                    auto ret = pSvgStyleAttributes->getSvgPatternNodeFill();
+                    --maResolvingParent[4];
+                    return ret;
                 }
             }
 
@@ -2123,9 +2179,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[5] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getSvgPatternNodeStroke();
+                    ++maResolvingParent[5];
+                    auto ret = pSvgStyleAttributes->getSvgPatternNodeStroke();
+                    --maResolvingParent[5];
+                    return ret;
                 }
             }
 
@@ -2141,9 +2200,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[6] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeWidth();
+                ++maResolvingParent[6];
+                auto ret = pSvgStyleAttributes->getStrokeWidth();
+                --maResolvingParent[6];
+                return ret;
             }
 
             if(mbIsClipPathContent)
@@ -2175,9 +2237,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[7] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getFillOpacity();
+                ++maResolvingParent[7];
+                auto ret = pSvgStyleAttributes->getFillOpacity();
+                --maResolvingParent[7];
+                return ret;
             }
 
             // default is 1
@@ -2193,9 +2258,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[8] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getOpacity();
+                ++maResolvingParent[8];
+                auto ret = pSvgStyleAttributes->getOpacity();
+                --maResolvingParent[8];
+                return ret;
             }
 
             // default is 1
@@ -2208,12 +2276,45 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[9] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getVisibility();
+                    ++maResolvingParent[9];
+                    auto ret = pSvgStyleAttributes->getVisibility();
+                    --maResolvingParent[9];
+                    return ret;
                 }
                 //default is Visible
                 return Visibility_visible;
+            }
+
+            // Visibility correction/exception for self-exported SVGs:
+            // When Impress exports single or multi-page SVGs, it puts the
+            // single slides into <g visibility="hidden">. Not sure why
+            // this happens, but this leads (correctly) to empty imported
+            // Graphics.
+            // Thus, if Visibility_hidden is active and owner is a SVGTokenG
+            // and it's parent is also a SVGTokenG and it has a Class 'SlideGroup'
+            // set, check if we are an Impress export.
+            // We are an Impress export if an SVG-Node titled 'ooo:meta_slides'
+            // exists.
+            // All together gives:
+            if(Visibility_hidden == maVisibility
+                && SVGTokenG == mrOwner.getType()
+                && nullptr != mrOwner.getDocument().findSvgNodeById("ooo:meta_slides"))
+            {
+                const SvgNode* pParent(mrOwner.getParent());
+
+                if(nullptr != pParent && SVGTokenG == pParent->getType() && pParent->getClass())
+                {
+                    const OUString aClass(*pParent->getClass());
+
+                    if("SlideGroup" == aClass)
+                    {
+                        // if we detect this exception,
+                        // override Visibility_hidden -> Visibility_visible
+                        return Visibility_visible;
+                    }
+                }
             }
 
             return maVisibility;
@@ -2228,9 +2329,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[10] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getFillRule();
+                ++maResolvingParent[10];
+                auto ret = pSvgStyleAttributes->getFillRule();
+                --maResolvingParent[10];
+                return ret;
             }
 
             // default is NonZero
@@ -2251,9 +2355,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[11] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeDasharray();
+                ++maResolvingParent[11];
+                const SvgNumberVector& ret = pSvgStyleAttributes->getStrokeDasharray();
+                --maResolvingParent[11];
+                return ret;
             }
 
             // default empty
@@ -2269,9 +2376,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[12] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeDashOffset();
+                ++maResolvingParent[12];
+                auto ret = pSvgStyleAttributes->getStrokeDashOffset();
+                --maResolvingParent[12];
+                return ret;
             }
 
             // default is 0
@@ -2287,9 +2397,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[13] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeLinecap();
+                ++maResolvingParent[13];
+                auto ret = pSvgStyleAttributes->getStrokeLinecap();
+                --maResolvingParent[13];
+                return ret;
             }
 
             // default is StrokeLinecap_butt
@@ -2305,9 +2418,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[14] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeLinejoin();
+                ++maResolvingParent[14];
+                auto ret = pSvgStyleAttributes->getStrokeLinejoin();
+                --maResolvingParent[14];
+                return ret;
             }
 
             // default is StrokeLinejoin_butt
@@ -2323,9 +2439,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[15] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeMiterLimit();
+                ++maResolvingParent[15];
+                auto ret = pSvgStyleAttributes->getStrokeMiterLimit();
+                --maResolvingParent[15];
+                return ret;
             }
 
             // default is 4
@@ -2341,9 +2460,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[16] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getStrokeOpacity();
+                ++maResolvingParent[16];
+                auto ret = pSvgStyleAttributes->getStrokeOpacity();
+                --maResolvingParent[16];
+                return ret;
             }
 
             // default is 1
@@ -2359,9 +2481,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[17] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getFontFamily();
+                ++maResolvingParent[17];
+                const SvgStringVector& ret = pSvgStyleAttributes->getFontFamily();
+                --maResolvingParent[17];
+                return ret;
             }
 
             // default is empty
@@ -2496,9 +2621,11 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[18] < nStyleDepthLimit)
             {
+                ++maResolvingParent[18];
                 FontStretch aInherited = pSvgStyleAttributes->getFontStretch();
+                --maResolvingParent[18];
 
                 if(FontStretch_wider == maFontStretch)
                 {
@@ -2525,9 +2652,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[19] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getFontStyle();
+                ++maResolvingParent[19];
+                auto ret = pSvgStyleAttributes->getFontStyle();
+                --maResolvingParent[19];
+                return ret;
             }
 
             // default is FontStyle_normal
@@ -2546,9 +2676,11 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[20] < nStyleDepthLimit)
             {
+                ++maResolvingParent[20];
                 FontWeight aInherited = pSvgStyleAttributes->getFontWeight();
+                --maResolvingParent[20];
 
                 if(FontWeight_bolder == maFontWeight)
                 {
@@ -2575,9 +2707,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[21] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getTextAlign();
+                ++maResolvingParent[21];
+                auto ret = pSvgStyleAttributes->getTextAlign();
+                --maResolvingParent[21];
+                return ret;
             }
 
             // default is TextAlign_left
@@ -2593,9 +2728,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[22] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getTextDecorationDefiningSvgStyleAttributes();
+                ++maResolvingParent[22];
+                auto ret = pSvgStyleAttributes->getTextDecorationDefiningSvgStyleAttributes();
+                --maResolvingParent[22];
+                return ret;
             }
 
             // default is 0
@@ -2626,9 +2764,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[23] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getTextAnchor();
+                ++maResolvingParent[23];
+                auto ret = pSvgStyleAttributes->getTextAnchor();
+                --maResolvingParent[23];
+                return ret;
             }
 
             // default is TextAnchor_start
@@ -2653,9 +2794,12 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[24] < nStyleDepthLimit)
                 {
-                    return pSvgStyleAttributes->getColor();
+                    ++maResolvingParent[24];
+                    auto ret = pSvgStyleAttributes->getColor();
+                    --maResolvingParent[24];
+                    return ret;
                 }
             }
 
@@ -2691,9 +2835,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes && !pSvgStyleAttributes->maMaskXLink.isEmpty())
+            if (pSvgStyleAttributes && !pSvgStyleAttributes->maMaskXLink.isEmpty() && maResolvingParent[25] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getMaskXLink();
+                ++maResolvingParent[25];
+                auto ret = pSvgStyleAttributes->getMaskXLink();
+                --maResolvingParent[25];
+                return ret;
             }
 
             return OUString();
@@ -2723,9 +2870,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[26] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getMarkerStartXLink();
+                ++maResolvingParent[26];
+                auto ret = pSvgStyleAttributes->getMarkerStartXLink();
+                --maResolvingParent[26];
+                return ret;
             }
 
             return OUString();
@@ -2755,9 +2905,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[27] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getMarkerMidXLink();
+                ++maResolvingParent[27];
+                auto ret = pSvgStyleAttributes->getMarkerMidXLink();
+                --maResolvingParent[27];
+                return ret;
             }
 
             return OUString();
@@ -2787,9 +2940,12 @@ namespace svgio
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if(pSvgStyleAttributes)
+            if (pSvgStyleAttributes && maResolvingParent[28] < nStyleDepthLimit)
             {
-                return pSvgStyleAttributes->getMarkerEndXLink();
+                ++maResolvingParent[28];
+                auto ret = pSvgStyleAttributes->getMarkerEndXLink();
+                --maResolvingParent[28];
+                return ret;
             }
 
             return OUString();
@@ -2817,9 +2973,11 @@ namespace svgio
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if(pSvgStyleAttributes)
+                if (pSvgStyleAttributes && maResolvingParent[29] < nStyleDepthLimit)
                 {
+                    ++maResolvingParent[29];
                     const SvgNumber aParentNumber = pSvgStyleAttributes->getBaselineShiftNumber();
+                    --maResolvingParent[29];
 
                     return SvgNumber(
                         aParentNumber.getNumber() * maBaselineShiftNumber.getNumber() * 0.01,

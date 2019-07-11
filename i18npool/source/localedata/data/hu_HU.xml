@@ -106,28 +106,28 @@
       <FormatCode># ##0,-- [$Ft-40E];[RED]-# ##0,-- [$Ft-40E]</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey1" default="true" type="short" usage="DATE" formatindex="18">
-      <FormatCode>YYYY". "M". "D.</FormatCode>
+      <FormatCode>YYYY". "MM". "DD.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey9" default="true" type="long" usage="DATE" formatindex="19">
       <FormatCode>YYYY". "MMMM D.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey8" default="false" type="medium" usage="DATE" formatindex="20">
-      <FormatCode>YY-MM-DD</FormatCode>
+      <FormatCode>YY.MM.DD.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey7" default="false" type="medium" usage="DATE" formatindex="21">
-      <FormatCode>YYYY-MM-DD</FormatCode>
+      <FormatCode>YYYY.MM.DD.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey10" default="false" type="long" usage="DATE" formatindex="22">
       <FormatCode>YY". "MMM D.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey11" default="false" type="long" usage="DATE" formatindex="23">
-      <FormatCode>YYYY". "MMM D.</FormatCode>
+      <FormatCode>YYYY". "MM". "DD.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey16" default="false" type="long" usage="DATE" formatindex="24">
       <FormatCode>YYYY". "MMM D.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey12" default="false" type="long" usage="DATE" formatindex="25">
-      <FormatCode>YYYY". "MMMM D.</FormatCode>
+      <FormatCode>YYYY". "MMMMM D.</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey17" default="false" type="long" usage="DATE" formatindex="26">
       <FormatCode>YYYY". "MMMM D.</FormatCode>
@@ -139,7 +139,7 @@
       <FormatCode>YYYY". "MMM D., NNN</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey14" default="false" type="long" usage="DATE" formatindex="29">
-      <FormatCode>YYYY". "MMMM D., NN</FormatCode>
+      <FormatCode>YYYY". "MMMMM D., NNN</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateFormatskey15" default="false" type="long" usage="DATE" formatindex="30">
       <FormatCode>YYYY". "MMMM D., NNN</FormatCode>
@@ -169,6 +169,108 @@
     <FormatElement msgid="DateFormatskey21" default="false" type="medium" usage="DATE" formatindex="38">
       <FormatCode>WW.</FormatCode>
     </FormatElement>
+    <FormatElement msgid="DateFormatskey22" default="false" type="long" usage="DATE" formatindex="60">
+      <FormatCode>[NatNum12 MMMM=abbreviation]YYYY". "MMMM D.</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey23" default="false" type="long" usage="DATE" formatindex="61">
+      <FormatCode>[NatNum12 D=possessive]YYYY". "MMMM D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey24" default="false" type="long" usage="DATE" formatindex="62">
+      <FormatCode>[NatNum12 D=possessive-superessive]YYYY". "MMMM D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey25" default="false" type="long" usage="DATE" formatindex="63">
+      <FormatCode>[NatNum12 D=possessive-ablative]YYYY". "MMMM D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey26" default="false" type="long" usage="DATE" formatindex="64">
+      <FormatCode>[NatNum12 D=possessive-terminative]YYYY". "MMMM D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey27" default="false" type="long" usage="DATE" formatindex="65">
+      <FormatCode>[NatNum12 D=possessive-adjective]YYYY". "MMMM D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey28" default="false" type="long" usage="DATE" formatindex="66">
+      <FormatCode>[NatNum12 D=possessive-superessive,NNN=superessive]YYYY". "MMMM D, NNN</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey29" default="false" type="medium" usage="DATE" formatindex="67">
+      <FormatCode>[NatNum12 D=possessive]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey30" default="false" type="medium" usage="DATE" formatindex="68">
+      <FormatCode>[NatNum12 D=possessive-superessive]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey31" default="false" type="medium" usage="DATE" formatindex="69">
+      <FormatCode>[NatNum12 D=possessive-ablative]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey32" default="false" type="medium" usage="DATE" formatindex="70">
+      <FormatCode>[NatNum12 D=possessive-terminative]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey33" default="false" type="long" usage="DATE" formatindex="71">
+      <FormatCode>[NatNum12 MMMM=article,D=possessive-adjective]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey34" default="false" type="medium" usage="DATE" formatindex="72">
+      <FormatCode>[NatNum12 MMMM=capitalize article,D=possessive-adjective]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey35" default="false" type="long" usage="DATE" formatindex="73">
+      <FormatCode>[NatNum12 MMMM=article,D=adjective]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey36" default="false" type="medium" usage="DATE" formatindex="74">
+      <FormatCode>[NatNum12 MMMM=capitalize article,D=adjective]MMMM" "D</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey37" default="false" type="long" usage="DATE" formatindex="75">
+      <FormatCode>[NatNum12 MMMM=article]MMMM"i"</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey38" default="false" type="medium" usage="DATE" formatindex="76">
+      <FormatCode>[NatNum12 MMMM=capitalize article]MMMM"i"</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey39" default="false" type="medium" usage="DATE" formatindex="77">
+      <FormatCode>[NatNum12 superessive]NNN</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey40" default="false" type="medium" usage="DATE" formatindex="79">
+      <FormatCode>[NatNum12 ablative]NNN</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey41" default="false" type="medium" usage="DATE" formatindex="80">
+      <FormatCode>[NatNum12 terminative]NNN</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey42" default="false" type="medium" usage="DATE" formatindex="81">
+      <FormatCode>[NatNum12 inessive]YYYY</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey43" default="false" type="medium" usage="DATE" formatindex="82">
+      <FormatCode>[NatNum12 ablative]YYYY</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey44" default="false" type="medium" usage="DATE" formatindex="83">
+      <FormatCode>[NatNum12 article]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey45" default="false" type="medium" usage="DATE" formatindex="84">
+      <FormatCode>[NatNum12 capitalize article]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey46" default="false" type="medium" usage="DATE" formatindex="85">
+      <FormatCode>[NatNum12 inessive]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey47" default="false" type="medium" usage="DATE" formatindex="86">
+      <FormatCode>[NatNum12 article inessive]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey48" default="false" type="medium" usage="DATE" formatindex="87">
+      <FormatCode>[NatNum12 capitalize article inessive]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey49" default="false" type="medium" usage="DATE" formatindex="88">
+      <FormatCode>[NatNum12 ablative]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey50" default="false" type="medium" usage="DATE" formatindex="89">
+      <FormatCode>[NatNum12 article ablative]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey51" default="false" type="medium" usage="DATE" formatindex="90">
+      <FormatCode>[NatNum12 capitalize article ablative]MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey52" default="false" type="medium" usage="DATE" formatindex="91">
+      <FormatCode>[NatNum12 MMMM=possessive-inessive]YYYY" "MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey53" default="false" type="medium" usage="DATE" formatindex="92">
+      <FormatCode>[NatNum12 MMMM=possessive-ablative]YYYY" "MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey54" default="false" type="medium" usage="DATE" formatindex="93">
+      <FormatCode>[NatNum12 MMMM=possessive-terminative]YYYY" "MMMM</FormatCode>
+    </FormatElement>
+    <FormatElement msgid="DateFormatskey55" default="false" type="medium" usage="DATE" formatindex="94">
+      <FormatCode>[NatNum12 ordinal year]YYYY</FormatCode>
+    </FormatElement>
     <FormatElement msgid="TimeFormatskey1" default="true" type="short" usage="TIME" formatindex="39">
       <FormatCode>HH:MM</FormatCode>
     </FormatElement>
@@ -194,7 +296,7 @@
       <FormatCode>YY-MM-DD HH:MM</FormatCode>
     </FormatElement>
     <FormatElement msgid="DateTimeFormatskey2" default="false" type="medium" usage="DATE_TIME" formatindex="47">
-      <FormatCode>YYYY-MM-DD HH:MM:SS</FormatCode>
+      <FormatCode>YYYY.MM.DD. HH:MM:SS</FormatCode>
     </FormatElement>
   </LC_FORMAT>
   <LC_COLLATION>
@@ -257,72 +359,84 @@
           <MonthID>jan</MonthID>
           <DefaultAbbrvName>I.</DefaultAbbrvName>
           <DefaultFullName>január</DefaultFullName>
+          <DefaultNarrowName>jan.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>feb</MonthID>
           <DefaultAbbrvName>II.</DefaultAbbrvName>
           <DefaultFullName>február</DefaultFullName>
+          <DefaultNarrowName>febr.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>mar</MonthID>
           <DefaultAbbrvName>III.</DefaultAbbrvName>
           <DefaultFullName>március</DefaultFullName>
+          <DefaultNarrowName>márc.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>apr</MonthID>
           <DefaultAbbrvName>IV.</DefaultAbbrvName>
           <DefaultFullName>április</DefaultFullName>
+          <DefaultNarrowName>ápr.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>may</MonthID>
           <DefaultAbbrvName>V.</DefaultAbbrvName>
           <DefaultFullName>május</DefaultFullName>
+          <DefaultNarrowName>máj.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>jun</MonthID>
           <DefaultAbbrvName>VI.</DefaultAbbrvName>
           <DefaultFullName>június</DefaultFullName>
+          <DefaultNarrowName>jún.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>jul</MonthID>
           <DefaultAbbrvName>VII.</DefaultAbbrvName>
           <DefaultFullName>július</DefaultFullName>
+          <DefaultNarrowName>júl.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>aug</MonthID>
           <DefaultAbbrvName>VIII.</DefaultAbbrvName>
           <DefaultFullName>augusztus</DefaultFullName>
+          <DefaultNarrowName>aug.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>sep</MonthID>
           <DefaultAbbrvName>IX.</DefaultAbbrvName>
           <DefaultFullName>szeptember</DefaultFullName>
+          <DefaultNarrowName>szept.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>oct</MonthID>
           <DefaultAbbrvName>X.</DefaultAbbrvName>
           <DefaultFullName>október</DefaultFullName>
+          <DefaultNarrowName>okt.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>nov</MonthID>
           <DefaultAbbrvName>XI.</DefaultAbbrvName>
           <DefaultFullName>november</DefaultFullName>
+          <DefaultNarrowName>nov.</DefaultNarrowName>
         </Month>
         <Month>
           <MonthID>dec</MonthID>
           <DefaultAbbrvName>XII.</DefaultAbbrvName>
           <DefaultFullName>december</DefaultFullName>
+          <DefaultNarrowName>dec.</DefaultNarrowName>
         </Month>
       </MonthsOfYear>
       <Eras>
         <Era>
           <EraID>bc</EraID>
-          <DefaultAbbrvName>i. e.</DefaultAbbrvName>
+          <DefaultAbbrvName>i. e.</DefaultAbbrvName>
           <DefaultFullName>i. e.</DefaultFullName>
         </Era>
         <Era>
           <EraID>ad</EraID>
-          <DefaultAbbrvName>i. sz.</DefaultAbbrvName>
+          <DefaultAbbrvName>i. sz.</DefaultAbbrvName>
           <DefaultFullName>i. sz.</DefaultFullName>
         </Era>
       </Eras>

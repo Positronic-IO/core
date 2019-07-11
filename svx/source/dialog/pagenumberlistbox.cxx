@@ -74,4 +74,30 @@ Size PageNumberListBox::GetOptimalSize() const
     return Size(150, ListBox::GetOptimalSize().Height());
 }
 
+SvxPageNumberListBox::SvxPageNumberListBox(std::unique_ptr<weld::ComboBox> pControl)
+    : m_xControl(std::move(pControl))
+{
+    m_xControl->set_size_request(150, -1);
+
+    for (size_t i = 0; i < SAL_N_ELEMENTS(RID_SVXSTRARY_NUMBERINGTYPE); ++i)
+    {
+        sal_uInt16 nData = RID_SVXSTRARY_NUMBERINGTYPE[i].second;
+        switch (nData)
+        {
+            // String list array is also used in Writer and contains strings
+            // for Bullet and Graphics, ignore those here.
+            case css::style::NumberingType::CHAR_SPECIAL:
+            case css::style::NumberingType::BITMAP:
+            case css::style::NumberingType::BITMAP | LINK_TOKEN:
+                break;
+            default:
+            {
+                OUString aStr = SvxResId(RID_SVXSTRARY_NUMBERINGTYPE[i].first);
+                m_xControl->append(OUString::number(nData), aStr);
+                break;
+            }
+        }
+    }
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

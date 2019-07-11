@@ -19,6 +19,7 @@
 
 #include <rtl/uri.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/file.hxx>
 
 #include <osl/diagnose.h>
@@ -40,6 +41,7 @@
 #include <com/sun/star/ucb/NameClash.hpp>
 #include <comphelper/fileurl.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include "filglob.hxx"
 #include "filid.hxx"
 #include "filrow.hxx"
@@ -86,14 +88,9 @@ BaseContent::BaseContent( TaskManager* pMyShell,
                           const OUString& parentName,
                           bool bFolder )
     : m_pMyShell( pMyShell ),
-      m_xContentIdentifier( nullptr ),
       m_aUncPath( parentName ),
       m_bFolder( bFolder ),
-      m_nState( JustInserted ),
-      m_pDisposeEventListeners( nullptr ),
-      m_pContentEventListeners( nullptr ),
-      m_pPropertySetInfoChangeListeners( nullptr ),
-      m_pPropertyListener( nullptr )
+      m_nState( JustInserted )
 {
     m_pMyShell->m_pProvider->acquire();
     // No registering, since we have no name
@@ -109,11 +106,7 @@ BaseContent::BaseContent( TaskManager* pMyShell,
       m_xContentIdentifier( xContentIdentifier ),
       m_aUncPath( aUncPath ),
       m_bFolder( false ),
-      m_nState( FullFeatured ),
-      m_pDisposeEventListeners( nullptr ),
-      m_pContentEventListeners( nullptr ),
-      m_pPropertySetInfoChangeListeners( nullptr ),
-      m_pPropertyListener( nullptr )
+      m_nState( FullFeatured )
 {
     m_pMyShell->m_pProvider->acquire();
     m_pMyShell->registerNotifier( m_aUncPath,this );
@@ -456,9 +449,9 @@ BaseContent::getContentType()
         if( m_nState & JustInserted )
         {
             if ( m_bFolder )
-                return m_pMyShell->FolderContentType;
+                return TaskManager::FolderContentType;
             else
-                return m_pMyShell->FileContentType;
+                return TaskManager::FileContentType;
         }
         else
         {
@@ -476,9 +469,9 @@ BaseContent::getContentType()
                 if ( !xRow->wasNull() )
                 {
                     if ( IsDocument )
-                        return m_pMyShell->FileContentType;
+                        return TaskManager::FileContentType;
                     else
-                        return m_pMyShell->FolderContentType;
+                        return TaskManager::FolderContentType;
                 }
                 else
                 {
@@ -557,7 +550,7 @@ BaseContent::removeProperty( const OUString& Name )
 Sequence< ContentInfo > SAL_CALL
 BaseContent::queryCreatableContentsInfo()
 {
-    return m_pMyShell->queryCreatableContentsInfo();
+    return TaskManager::queryCreatableContentsInfo();
 }
 
 
@@ -568,10 +561,10 @@ BaseContent::createNewContent( const ContentInfo& Info )
     if ( Info.Type.isEmpty() )
         return Reference< XContent >();
 
-    bool bFolder = Info.Type == m_pMyShell->FolderContentType;
+    bool bFolder = Info.Type == TaskManager::FolderContentType;
     if ( !bFolder )
     {
-        if ( Info.Type != m_pMyShell->FileContentType )
+        if ( Info.Type != TaskManager::FileContentType )
         {
             // Neither folder nor file to create!
             return Reference< XContent >();
@@ -732,8 +725,8 @@ BaseContent::getPropertyValues(
 
             if ( rProp.Name == "ContentType" )
             {
-                rValue <<= m_bFolder ? m_pMyShell->FolderContentType
-                    : m_pMyShell->FileContentType;
+                rValue <<= OUString(m_bFolder ? TaskManager::FolderContentType
+                    : TaskManager::FileContentType);
             }
             else if ( rProp.Name == "IsFolder" )
             {
@@ -895,7 +888,7 @@ BaseContent::open(
     sal_Int32 nMyCommandIdentifier,
     const OpenCommandArgument2& aCommandArgument )
 {
-    Reference< XDynamicResultSet > retValue( nullptr );
+    Reference< XDynamicResultSet > retValue;
 
     if( m_nState & Deleted )
     {
@@ -1134,7 +1127,7 @@ void BaseContent::insert( sal_Int32 nMyCommandIdentifier,
                         RTL_TEXTENCODING_UTF8),
                     static_cast<cppu::OWeakObject*>(this),
                     m_pMyShell,nMyCommandIdentifier);
-            uno::Reference<task::XInteractionRequest> const xReq(aRequestImpl.getRequest());
+            uno::Reference<task::XInteractionRequest> const& xReq(aRequestImpl.getRequest());
 
             m_pMyShell->handleTask( nMyCommandIdentifier, xReq );
             if (aRequestImpl.aborted() || aRequestImpl.newName().isEmpty())
@@ -1259,7 +1252,7 @@ BaseContent::cPCL()
 
     if( length )
     {
-        ListenerMap* listener = new ListenerMap;
+        std::unique_ptr<ListenerMap> listener(new ListenerMap);
         for( sal_Int32 i = 0; i < length; ++i )
         {
             cppu::OInterfaceContainerHelper* pContainer = m_pPropertyListener->getContainer(seqNames[i]);
@@ -1268,8 +1261,7 @@ BaseContent::cPCL()
             (*listener)[seqNames[i]] = pContainer->getElements();
         }
 
-        p.reset( new PropertyChangeNotifier( this,
-                                        listener ) );
+        p.reset( new PropertyChangeNotifier( this, std::move(listener) ) );
     }
 
     return p;

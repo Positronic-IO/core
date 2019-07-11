@@ -30,7 +30,8 @@
 #include <libxslt/xsltutils.h>
 #include <osl/thread.hxx>
 #include <chrono>
-#include<rtl/character.hxx>
+#include <rtl/character.hxx>
+#include <sal/log.hxx>
 
 static void impl_sleep( sal_uInt32 nSec )
 {
@@ -246,17 +247,17 @@ public:
     std::string documentId;
     std::string fileName;
     std::string title;
-    std::unique_ptr<HashSet> hidlist;
+    std::unique_ptr< std::vector<std::string> > hidlist;
     std::unique_ptr<Hashtable> keywords;
     std::unique_ptr<Stringtable> helptexts;
 private:
-    HashSet extendedHelpText;
+    std::vector<std::string> extendedHelpText;
 public:
     myparser(const std::string &indocumentId, const std::string &infileName,
         const std::string &intitle) : documentId(indocumentId), fileName(infileName),
         title(intitle)
     {
-        hidlist.reset(new HashSet);
+        hidlist.reset(new std::vector<std::string>);
         keywords.reset(new Hashtable);
         helptexts.reset(new Stringtable);
     }
@@ -286,7 +287,7 @@ std::string myparser::dump(xmlNodePtr node)
     return app;
 }
 
-void trim(std::string& str)
+static void trim(std::string& str)
 {
     std::string::size_type pos = str.find_last_not_of(' ');
     if(pos != std::string::npos)
@@ -325,10 +326,18 @@ void myparser::traverse( xmlNodePtr parentNode )
         else if (!strcmp(reinterpret_cast<const char*>(test->name), "bookmark"))
         {
             xmlChar *branchxml = xmlGetProp(test, reinterpret_cast<const xmlChar*>("branch"));
-            xmlChar *idxml = xmlGetProp(test, reinterpret_cast<const xmlChar*>("id"));
+            if (branchxml == nullptr) {
+                throw HelpProcessingException(
+                    HelpProcessingErrorClass::XmlParsing, "bookmark lacks branch attribute");
+            }
             std::string branch(reinterpret_cast<char*>(branchxml));
-            std::string anchor(reinterpret_cast<char*>(idxml));
             xmlFree (branchxml);
+            xmlChar *idxml = xmlGetProp(test, reinterpret_cast<const xmlChar*>("id"));
+            if (idxml == nullptr) {
+                throw HelpProcessingException(
+                    HelpProcessingErrorClass::XmlParsing, "bookmark lacks id attribute");
+            }
+            std::string anchor(reinterpret_cast<char*>(idxml));
             xmlFree (idxml);
 
             if (branch.compare(0, 3, "hid") == 0)
@@ -418,9 +427,8 @@ void myparser::traverse( xmlNodePtr parentNode )
                 //TODO: make these asserts and flush out all our broken help ids
                 SAL_WARN_IF(hidstr.empty(), "helpcompiler", "hid='' for text:" << text);
                 SAL_WARN_IF(!hidstr.empty() && extendedHelpText.empty(), "helpcompiler", "hid='.' with no hid bookmark branches in file: " << fileName + " for text: " << text);
-                for (auto const& elem : extendedHelpText)
+                for (const std::string& name : extendedHelpText)
                 {
-                    std::string name = elem;
                     (*helptexts)[name] = text;
                 }
             }
@@ -431,7 +439,7 @@ void myparser::traverse( xmlNodePtr parentNode )
     }
 }
 
-bool HelpCompiler::compile()
+void HelpCompiler::compile()
 {
     // we now have the jaroutputstream, which will contain the document.
     // now determine the document as a dom tree in variable docResolved
@@ -495,7 +503,6 @@ bool HelpCompiler::compile()
     }
     streamTable.document_module = actMod;
     xmlFreeDoc(docResolvedOrg);
-    return true;
 }
 
 namespace fs

@@ -18,6 +18,7 @@
  */
 
 #include <sal/types.h>
+#include <sal/log.hxx>
 #include <sot/formats.hxx>
 #include <sot/storage.hxx>
 #include <vcl/weld.hxx>
@@ -37,6 +38,7 @@
 #include <DrawDocShell.hxx>
 #include <drawdoc.hxx>
 #include <sdpage.hxx>
+#include <sdmod.hxx>
 #include <sdresid.hxx>
 #include <navigatr.hxx>
 #include <strings.hrc>
@@ -52,8 +54,8 @@
 #include <com/sun/star/frame/XFramesSupplier.hpp>
 #include <svtools/acceleratorexecute.hxx>
 #include <svtools/embedtransfer.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <tools/diagnose_ex.h>
@@ -69,12 +71,12 @@ public:
     IconProvider();
 
     // Regular icons.
-    Image maImgPage;
-    Image maImgPageExcl;
-    Image maImgPageObjsExcl;
-    Image maImgPageObjs;
-    Image maImgObjects;
-    Image maImgGroup;
+    Image const maImgPage;
+    Image const maImgPageExcl;
+    Image const maImgPageObjsExcl;
+    Image const maImgPageObjs;
+    Image const maImgObjects;
+    Image const maImgGroup;
 };
 
 bool SdPageObjsTLB::bIsInDrag = false;
@@ -192,8 +194,6 @@ SotClipboardFormatId SdPageObjsTLB::SdPageObjsTransferable::GetListBoxDropFormat
 
 SdPageObjsTLB::SdPageObjsTLB( vcl::Window* pParentWin, WinBits nStyle )
 :   SvTreeListBox       ( pParentWin, nStyle )
-,   bisInSdNavigatorWin ( false )
-,   mpParent            ( pParentWin )
 ,   mpDoc               ( nullptr )
 ,   mpBookmarkDoc       ( nullptr )
 ,   mpMedium            ( nullptr )
@@ -224,6 +224,11 @@ SdPageObjsTLB::SdPageObjsTLB( vcl::Window* pParentWin, WinBits nStyle )
     m_pAccel = ::svt::AcceleratorExecute::createAcceleratorHelper();
 }
 
+void SdPageObjsTLB::SetSdNavigator(SdNavigatorWin* pNavigator)
+{
+    mpNavigator = pNavigator;
+}
+
 void SdPageObjsTLB::SetViewFrame( SfxViewFrame* pViewFrame )
 {
     mpFrame = pViewFrame;
@@ -245,7 +250,7 @@ void SdPageObjsTLB::dispose()
     else
         // no document was created from mpMedium, so this object is still the owner of it
         delete mpMedium;
-    mpParent.clear();
+    mpNavigator.clear();
     mpDropNavWin.clear();
     m_pAccel.reset();
     SvTreeListBox::dispose();
@@ -265,7 +270,7 @@ OUString SdPageObjsTLB::getAltLongDescText(SvTreeListEntry* pEntry , bool isAltT
         const SdPage* pPage = static_cast<const SdPage*>( mpDoc->GetPage( pageNo ) );
         if( pPage->GetPageKind() != PageKind::Standard ) continue;
         if( pPage->GetName() !=  ParentName ) continue;
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         while( aIter.IsMore() )
         {
             pObj = aIter.Next();
@@ -315,7 +320,7 @@ void SdPageObjsTLB::SaveExpandedTreeItemState(SvTreeListEntry* pEntry, std::vect
                 SvTreeListEntry* pChildEntry = FirstChild(pListEntry);
                 SaveExpandedTreeItemState(pChildEntry, vectTreeItem);
             }
-            pListEntry = NextSibling(pListEntry);
+            pListEntry = pListEntry->NextSibling();
         }
     }
 }
@@ -524,7 +529,7 @@ void SdPageObjsTLB::AddShapeList (
         pUserData);
 
     SdrObjListIter aIter(
-        rList,
+        &rList,
         !rList.HasObjectNavigationOrder() /* use navigation order, if available */,
         SdrIterMode::Flat);
 
@@ -641,7 +646,7 @@ bool SdPageObjsTLB::IsEqualToShapeList(SvTreeListEntry*& pEntry, const SdrObjLis
 
     pEntry = Next(pEntry);
 
-    SdrObjListIter aIter(rList,
+    SdrObjListIter aIter(&rList,
                          !rList.HasObjectNavigationOrder() /* use navigation order, if available */,
                          SdrIterMode::Flat);
 
@@ -772,7 +777,7 @@ void SdPageObjsTLB::RequestingChildren( SvTreeListEntry* pFileEntry )
                                               TREELIST_APPEND,
                                               reinterpret_cast< void* >( 1 ) );
 
-                    SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+                    SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
 
                     while( aIter.IsMore() )
                     {
@@ -945,7 +950,7 @@ void SdPageObjsTLB::KeyInput( const KeyEvent& rKEvt )
     }
     else if (rKEvt.GetKeyCode().GetCode() == KEY_SPACE)
     {
-        if(bisInSdNavigatorWin)
+        if (mpNavigator)
         {
             SvTreeListEntry* pNewEntry = GetCurEntry();
             if (!pNewEntry)
@@ -986,7 +991,7 @@ void SdPageObjsTLB::StartDrag( sal_Int8, const Point& rPosPixel)
 
     if (pEntry != nullptr
         && pNavWin !=nullptr
-        && pNavWin == mpParent
+        && pNavWin == mpNavigator
         && pNavWin->GetNavigatorDragType() != NAVIGATOR_DRAGTYPE_NONE )
     {
         // Mark only the children of the page under the mouse as drop
@@ -1187,13 +1192,13 @@ sal_Int8 SdPageObjsTLB::ExecuteDrop( const ExecuteDropEvent& rEvt )
                 pNavWin = pWnd ? static_cast<SdNavigatorWin*>(pWnd->GetContextWindow(SD_MOD())) : nullptr;
             }
 
-            if( pNavWin && ( pNavWin == mpParent ) )
+            if( pNavWin && ( pNavWin == mpNavigator ) )
             {
                 TransferableDataHelper  aDataHelper( rEvt.maDropEvent.Transferable );
                 OUString                aFile;
 
                 if( aDataHelper.GetString( SotClipboardFormatId::SIMPLE_FILE, aFile ) &&
-                    static_cast<SdNavigatorWin*>(mpParent.get())->InsertFile( aFile ) )
+                    mpNavigator->InsertFile( aFile ) )
                 {
                     nRet = rEvt.mnAction;
                 }
@@ -1235,7 +1240,7 @@ bool SdPageObjsTLB::PageBelongsToCurrentShow (const SdPage* pPage) const
         if (pShowList != nullptr)
         {
             sal_uLong nCurrentShowIndex = pShowList->GetCurPos();
-            pCustomShow = (*pShowList)[nCurrentShowIndex];
+            pCustomShow = (*pShowList)[nCurrentShowIndex].get();
         }
 
         // Check whether the given page is part of that custom show.
@@ -1269,7 +1274,7 @@ TriState SdPageObjsTLB::NotifyMoving(
 
     if (pTargetObject != nullptr && pSourceObject != nullptr)
     {
-        SdrPage* pObjectList = pSourceObject->GetPage();
+        SdrPage* pObjectList = pSourceObject->getSdrPageFromSdrObject();
         if (pObjectList != nullptr)
         {
             sal_uInt32 nNewPosition;

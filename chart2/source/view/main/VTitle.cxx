@@ -20,13 +20,16 @@
 #include "VTitle.hxx"
 #include <CommonConverters.hxx>
 #include <PropertyMapper.hxx>
-#include <AbstractShapeFactory.hxx>
+#include <ShapeFactory.hxx>
 #include <com/sun/star/chart2/XFormattedString.hpp>
+#include <com/sun/star/chart2/XTitle.hpp>
+#include <com/sun/star/drawing/XShapes.hpp>
 #include <rtl/math.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/text/ControlCharacter.hpp>
 #include <com/sun/star/text/XText.hpp>
 #include <com/sun/star/text/XTextCursor.hpp>
+#include <sal/log.hxx>
 
 namespace chart
 {
@@ -34,10 +37,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
 VTitle::VTitle( const uno::Reference< XTitle > & xTitle )
-                : m_xTarget(nullptr)
-                , m_xShapeFactory(nullptr)
-                , m_xTitle(xTitle)
-                , m_xShape(nullptr)
+                : m_xTitle(xTitle)
                 , m_aCID()
                 , m_fRotationAngleDegree(0.0)
                 , m_nXPos(0)
@@ -61,7 +61,7 @@ void VTitle::init(
 
 double VTitle::getRotationAnglePi() const
 {
-    return m_fRotationAngleDegree*F_PI/180.0;
+    return basegfx::deg2rad(m_fRotationAngleDegree);
 }
 
 awt::Size VTitle::getUnrotatedSize() const //size before rotation
@@ -74,7 +74,7 @@ awt::Size VTitle::getUnrotatedSize() const //size before rotation
 
 awt::Size VTitle::getFinalSize() const //size after rotation
 {
-    return AbstractShapeFactory::getSizeAfterRotation(
+    return ShapeFactory::getSizeAfterRotation(
          m_xShape, m_fRotationAngleDegree );
 }
 
@@ -130,7 +130,7 @@ void VTitle::createShapes(
         SAL_WARN("chart2", "Exception caught. " << e );
     }
 
-    AbstractShapeFactory* pShapeFactory = AbstractShapeFactory::getOrCreateShapeFactory(m_xShapeFactory);
+    ShapeFactory* pShapeFactory = ShapeFactory::getOrCreateShapeFactory(m_xShapeFactory);
     m_xShape =pShapeFactory->createText( m_xTarget, rReferenceSize, rPos, aStringList,
             xTitleProperties, m_fRotationAngleDegree, m_aCID );
 }

@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <appluno.hxx>
 #include "xmlexprt.hxx"
@@ -69,6 +70,7 @@
 #include <tokenstringcontext.hxx>
 #include <cellform.hxx>
 #include <datamapper.hxx>
+#include <datatransformation.hxx>
 
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/xmlnmspe.hxx>
@@ -158,6 +160,8 @@
 #include <memory>
 #include <vector>
 #include <vbahelper/vbaaccesshelper.hxx>
+
+
 
 //! not found in unonames.hxx
 #define SC_LAYERID "LayerID"
@@ -330,6 +334,8 @@ sal_Int16 ScXMLExport::GetMeasureUnit()
     return xProperties->getMetric();
 }
 
+static const OUStringLiteral gsLayerID( SC_LAYERID );
+
 ScXMLExport::ScXMLExport(
     const css::uno::Reference< css::uno::XComponentContext >& rContext,
     OUString const & implementationName, SvXMLExportFlags nExportFlag)
@@ -337,21 +343,9 @@ ScXMLExport::ScXMLExport(
         rContext, implementationName, XML_SPREADSHEET, nExportFlag ),
     pDoc(nullptr),
     nSourceStreamPos(0),
-    pNumberFormatAttributesExportHelper(nullptr),
     pSharedData(nullptr),
-    pColumnStyles(nullptr),
-    pRowStyles(nullptr),
-    pCellStyles(nullptr),
-    pRowFormatRanges(nullptr),
     aTableStyles(),
-    pGroupColumns (nullptr),
-    pGroupRows (nullptr),
-    pDefaults(nullptr),
     pCurrentCell(nullptr),
-    pMergedRangesContainer(nullptr),
-    pValidationsContainer(nullptr),
-    pChangeTrackingExportHelper(nullptr),
-    sLayerID( SC_LAYERID ),
     nOpenRow(-1),
     nProgressCount(0),
     nCurrentTable(0),
@@ -527,7 +521,7 @@ void ScXMLExport::CollectSharedData(SCTAB& nTableCount, sal_Int32& nShapesCount)
                 continue;
 
             sal_Int16 nLayerID = 0;
-            bool bExtracted = xShapeProp->getPropertyValue(sLayerID) >>= nLayerID;
+            bool bExtracted = xShapeProp->getPropertyValue(gsLayerID) >>= nLayerID;
             if (!bExtracted)
                 continue;
 
@@ -744,7 +738,7 @@ void ScXMLExport::WriteSingleColumn(const sal_Int32 nRepeatColumns, const sal_In
     const sal_Int32 nIndex, const bool bIsAutoStyle, const bool bIsVisible)
 {
     CheckAttrList();
-    AddAttribute(sAttrStyleName, *pColumnStyles->GetStyleNameByIndex(nStyleIndex));
+    AddAttribute(sAttrStyleName, pColumnStyles->GetStyleNameByIndex(nStyleIndex));
     if (!bIsVisible)
         AddAttribute(XML_NAMESPACE_TABLE, XML_VISIBILITY, XML_COLLAPSE);
     if (nRepeatColumns > 1)
@@ -753,7 +747,7 @@ void ScXMLExport::WriteSingleColumn(const sal_Int32 nRepeatColumns, const sal_In
         AddAttribute(sAttrColumnsRepeated, sOUEndCol);
     }
     if (nIndex != -1)
-        AddAttribute(XML_NAMESPACE_TABLE, XML_DEFAULT_CELL_STYLE_NAME, *pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
+        AddAttribute(XML_NAMESPACE_TABLE, XML_DEFAULT_CELL_STYLE_NAME, pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
     SvXMLElementExport aElemC(*this, sElemCol, true, true);
 }
 
@@ -877,6 +871,7 @@ void ScXMLExport::ExportColumns(const sal_Int32 nTable, const ScRange& aColumnHe
             nColsRepeated = 1;
         }
     }
+    assert(nPrevIndex >= 0 && "coverity#1438402");
     WriteColumn(nPrevColumn, nColsRepeated, nPrevIndex, bPrevIsVisible);
     if (!bIsClosed)
         CloseHeaderColumn();
@@ -919,9 +914,7 @@ void ScXMLExport::ExportExternalRefCacheStyles()
         sal_Int32 nIndex;
         if (GetAutoStylePool()->Add(aName, XML_STYLE_FAMILY_TABLE_CELL, aDefaultStyle, aProps))
         {
-            OUString* pTemp(new OUString(aName));
-            if (!pCellStyles->AddStyleName(pTemp, nIndex))
-                delete pTemp;
+            pCellStyles->AddStyleName(aName, nIndex);
         }
         else
         {
@@ -1326,7 +1319,7 @@ void ScXMLExport::WriteRowContent()
             else
             {
                 if (nIndex != -1)
-                    AddAttribute(sAttrStyleName, *pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
+                    AddAttribute(sAttrStyleName, pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
                 if (nPrevValidationIndex > -1)
                     AddAttribute(XML_NAMESPACE_TABLE, XML_CONTENT_VALIDATION_NAME, pValidationsContainer->GetValidationName(nPrevValidationIndex));
                 if (nCols > 1)
@@ -1347,7 +1340,7 @@ void ScXMLExport::WriteRowContent()
     if (!bIsFirst)
     {
         if (nIndex != -1)
-            AddAttribute(sAttrStyleName, *pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
+            AddAttribute(sAttrStyleName, pCellStyles->GetStyleNameByIndex(nIndex, bIsAutoStyle));
         if (nPrevValidationIndex > -1)
             AddAttribute(XML_NAMESPACE_TABLE, XML_CONTENT_VALIDATION_NAME, pValidationsContainer->GetValidationName(nPrevValidationIndex));
         if (nCols > 1)
@@ -1362,7 +1355,7 @@ void ScXMLExport::WriteRowStartTag(
     const sal_Int32 nIndex, const sal_Int32 nEqualRows,
     bool bHidden, bool bFiltered)
 {
-    AddAttribute(sAttrStyleName, *pRowStyles->GetStyleNameByIndex(nIndex));
+    AddAttribute(sAttrStyleName, pRowStyles->GetStyleNameByIndex(nIndex));
     if (bHidden)
     {
         if (bFiltered)
@@ -1485,14 +1478,10 @@ void ScXMLExport::OpenRow(const sal_Int32 nTable, const sal_Int32 nStartRow, con
                     ++nEqualRows;
                 else
                 {
-                    if (nRow < nEndRow)
-                    {
-                        ScRowFormatRanges* pTempRowFormatRanges = new ScRowFormatRanges(pRowFormatRanges.get());
-                        OpenAndCloseRow(nPrevIndex, nRow - nEqualRows, nEqualRows, bPrevHidden, bPrevFiltered);
-                        pRowFormatRanges.reset(pTempRowFormatRanges);
-                    }
-                    else
-                        OpenAndCloseRow(nPrevIndex, nRow - nEqualRows, nEqualRows, bPrevHidden, bPrevFiltered);
+                    assert(nPrevIndex >= 0 && "coverity#1438402");
+                    ScRowFormatRanges* pTempRowFormatRanges = new ScRowFormatRanges(pRowFormatRanges.get());
+                    OpenAndCloseRow(nPrevIndex, nRow - nEqualRows, nEqualRows, bPrevHidden, bPrevFiltered);
+                    pRowFormatRanges.reset(pTempRowFormatRanges);
                     nEqualRows = 1;
                     nPrevIndex = nIndex;
                     bPrevHidden = bHidden;
@@ -1500,6 +1489,7 @@ void ScXMLExport::OpenRow(const sal_Int32 nTable, const sal_Int32 nStartRow, con
                 }
             }
         }
+        assert(nPrevIndex >= 0 && "coverity#1438402");
         OpenNewRow(nPrevIndex, nRow - nEqualRows, nEqualRows, bPrevHidden, bPrevFiltered);
     }
     else
@@ -1514,6 +1504,7 @@ void ScXMLExport::OpenRow(const sal_Int32 nTable, const sal_Int32 nStartRow, con
             bHidden = rRowAttr.rowHidden(nTable, nStartRow, nEndRowHidden);
             bFiltered = rRowAttr.rowFiltered(nTable, nStartRow, nEndRowFiltered);
         }
+        assert(nIndex >= 0 && "coverity#1438402");
         OpenNewRow(nIndex, nStartRow, 1, bHidden, bFiltered);
     }
     nOpenRow = nStartRow + nRepeatRow - 1;
@@ -2101,9 +2092,7 @@ void ScXMLExport::AddStyleFromCells(const uno::Reference<beans::XPropertySet>& x
                 {
                     GetAutoStylePool()->RegisterName(XML_STYLE_FAMILY_TABLE_CELL, *pOldName);
                     // add to pCellStyles, so the name is found for normal sheets
-                    OUString* pTemp(new OUString(*pOldName));
-                    if (!pCellStyles->AddStyleName(pTemp, nIndex))
-                        delete pTemp;
+                    pCellStyles->AddStyleName(*pOldName, nIndex);
                 }
             }
             else
@@ -2126,9 +2115,7 @@ void ScXMLExport::AddStyleFromCells(const uno::Reference<beans::XPropertySet>& x
                 bool bIsAutoStyle(true);
                 if (bAdded || GetAutoStylePool()->Add(sName, XML_STYLE_FAMILY_TABLE_CELL, sStyleName, aPropStates))
                 {
-                    OUString* pTemp(new OUString(sName));
-                    if (!pCellStyles->AddStyleName(pTemp, nIndex))
-                        delete pTemp;
+                    pCellStyles->AddStyleName(sName, nIndex);
                 }
                 else
                     nIndex = pCellStyles->GetIndexOfStyleName(sName, XML_STYLE_FAMILY_TABLE_CELL_STYLES_PREFIX, bIsAutoStyle);
@@ -2147,13 +2134,9 @@ void ScXMLExport::AddStyleFromCells(const uno::Reference<beans::XPropertySet>& x
         }
         else
         {
-            OUString* pTemp(new OUString(EncodeStyleName(sStyleName)));
+            OUString sEncodedStyleName(EncodeStyleName(sStyleName));
             sal_Int32 nIndex(0);
-            if (!pCellStyles->AddStyleName(pTemp, nIndex, false))
-            {
-                delete pTemp;
-                pTemp = nullptr;
-            }
+            pCellStyles->AddStyleName(sEncodedStyleName, nIndex, false);
             if ( !pOldName )
             {
                 uno::Sequence<table::CellRangeAddress> aAddresses(xCellRanges->getRangeAddresses());
@@ -2199,8 +2182,7 @@ void ScXMLExport::AddStyleFromColumn(const uno::Reference<beans::XPropertySet>& 
             {
                 GetAutoStylePool()->RegisterName(XML_STYLE_FAMILY_TABLE_COLUMN, *pOldName);
                 // add to pColumnStyles, so the name is found for normal sheets
-                OUString* pTemp(new OUString(*pOldName));
-                rIndex = pColumnStyles->AddStyleName(pTemp);
+                rIndex = pColumnStyles->AddStyleName(*pOldName);
             }
         }
         else
@@ -2208,8 +2190,7 @@ void ScXMLExport::AddStyleFromColumn(const uno::Reference<beans::XPropertySet>& 
             OUString sName;
             if (GetAutoStylePool()->Add(sName, XML_STYLE_FAMILY_TABLE_COLUMN, sParent, aPropStates))
             {
-                OUString* pTemp(new OUString(sName));
-                rIndex = pColumnStyles->AddStyleName(pTemp);
+                rIndex = pColumnStyles->AddStyleName(sName);
             }
             else
                 rIndex = pColumnStyles->GetIndexOfStyleName(sName, XML_STYLE_FAMILY_TABLE_COLUMN_STYLES_PREFIX);
@@ -2230,8 +2211,7 @@ void ScXMLExport::AddStyleFromRow(const uno::Reference<beans::XPropertySet>& xRo
             {
                 GetAutoStylePool()->RegisterName(XML_STYLE_FAMILY_TABLE_ROW, *pOldName);
                 // add to pRowStyles, so the name is found for normal sheets
-                OUString* pTemp(new OUString(*pOldName));
-                rIndex = pRowStyles->AddStyleName(pTemp);
+                rIndex = pRowStyles->AddStyleName(*pOldName);
             }
         }
         else
@@ -2239,8 +2219,7 @@ void ScXMLExport::AddStyleFromRow(const uno::Reference<beans::XPropertySet>& xRo
             OUString sName;
             if (GetAutoStylePool()->Add(sName, XML_STYLE_FAMILY_TABLE_ROW, sParent, aPropStates))
             {
-                OUString* pTemp(new OUString(sName));
-                rIndex = pRowStyles->AddStyleName(pTemp);
+                rIndex = pRowStyles->AddStyleName(sName);
             }
             else
                 rIndex = pRowStyles->GetIndexOfStyleName(sName, XML_STYLE_FAMILY_TABLE_ROW_STYLES_PREFIX);
@@ -2269,8 +2248,13 @@ static uno::Any lcl_GetEnumerated( uno::Reference<container::XEnumerationAccess>
     return aRet;
 }
 
-void ScXMLExport::ExportAutoStyles_()
+void ScXMLExport::collectAutoStyles()
 {
+    SvXMLExport::collectAutoStyles();
+
+    if (mbAutoStylesCollected)
+        return;
+
     if (!GetModel().is())
         return;
 
@@ -2590,79 +2574,99 @@ void ScXMLExport::ExportAutoStyles_()
                 }
             }
             uno::Reference<table::XColumnRowRange> xColumnRowRange (xTable, uno::UNO_QUERY);
-            if (xColumnRowRange.is())
+            if (xColumnRowRange.is() && pDoc)
             {
-                if (pDoc)
+                pDoc->SyncColRowFlags();
+                uno::Reference<table::XTableColumns> xTableColumns(xColumnRowRange->getColumns());
+                if (xTableColumns.is())
                 {
-                    pDoc->SyncColRowFlags();
-                    uno::Reference<table::XTableColumns> xTableColumns(xColumnRowRange->getColumns());
-                    if (xTableColumns.is())
+                    sal_Int32 nColumns(pDoc->GetLastChangedCol(sal::static_int_cast<SCTAB>(nTable)));
+                    pSharedData->SetLastColumn(nTable, nColumns);
+                    table::CellRangeAddress aCellAddress(GetEndAddress(xTable));
+                    if (aCellAddress.EndColumn > nColumns)
                     {
-                        sal_Int32 nColumns(pDoc->GetLastChangedCol(sal::static_int_cast<SCTAB>(nTable)));
-                        pSharedData->SetLastColumn(nTable, nColumns);
-                        table::CellRangeAddress aCellAddress(GetEndAddress(xTable));
-                        if (aCellAddress.EndColumn > nColumns)
-                        {
-                            ++nColumns;
-                            pColumnStyles->AddNewTable(nTable, aCellAddress.EndColumn);
-                        }
-                        else
-                            pColumnStyles->AddNewTable(nTable, nColumns);
-                        sal_Int32 nColumn = 0;
-                        while (nColumn <= MAXCOL)
-                        {
-                            sal_Int32 nIndex(-1);
-                            bool bIsVisible(true);
-                            uno::Reference <beans::XPropertySet> xColumnProperties(xTableColumns->getByIndex(nColumn), uno::UNO_QUERY);
-                            if (xColumnProperties.is())
-                            {
-                                AddStyleFromColumn( xColumnProperties, nullptr, nIndex, bIsVisible );
-                                pColumnStyles->AddFieldStyleName(nTable, nColumn, nIndex, bIsVisible);
-                            }
-                            sal_Int32 nOld(nColumn);
-                            nColumn = pDoc->GetNextDifferentChangedCol(sal::static_int_cast<SCTAB>(nTable), static_cast<SCCOL>(nColumn));
-                            for (sal_Int32 i = nOld + 1; i < nColumn; ++i)
-                                pColumnStyles->AddFieldStyleName(nTable, i, nIndex, bIsVisible);
-                        }
-                        if (aCellAddress.EndColumn > nColumns)
-                        {
-                            bool bIsVisible(true);
-                            sal_Int32 nIndex(pColumnStyles->GetStyleNameIndex(nTable, nColumns, bIsVisible));
-                            for (sal_Int32 i = nColumns + 1; i <= aCellAddress.EndColumn; ++i)
-                                pColumnStyles->AddFieldStyleName(nTable, i, nIndex, bIsVisible);
-                        }
+                        ++nColumns;
+                        pColumnStyles->AddNewTable(nTable, aCellAddress.EndColumn);
                     }
-                    uno::Reference<table::XTableRows> xTableRows(xColumnRowRange->getRows());
-                    if (xTableRows.is())
+                    else
+                        pColumnStyles->AddNewTable(nTable, nColumns);
+                    sal_Int32 nColumn = 0;
+                    while (nColumn <= MAXCOL)
                     {
-                        sal_Int32 nRows(pDoc->GetLastChangedRow(sal::static_int_cast<SCTAB>(nTable)));
-                        pSharedData->SetLastRow(nTable, nRows);
-
-                        pRowStyles->AddNewTable(nTable, MAXROW);
-                        sal_Int32 nRow = 0;
-                        while (nRow <= MAXROW)
+                        sal_Int32 nIndex(-1);
+                        bool bIsVisible(true);
+                        uno::Reference <beans::XPropertySet> xColumnProperties(xTableColumns->getByIndex(nColumn), uno::UNO_QUERY);
+                        if (xColumnProperties.is())
                         {
-                            sal_Int32 nIndex = 0;
-                            uno::Reference <beans::XPropertySet> xRowProperties(xTableRows->getByIndex(nRow), uno::UNO_QUERY);
-                            if(xRowProperties.is())
-                            {
-                                AddStyleFromRow( xRowProperties, nullptr, nIndex );
-                                pRowStyles->AddFieldStyleName(nTable, nRow, nIndex);
-                            }
-                            sal_Int32 nOld(nRow);
-                            nRow = pDoc->GetNextDifferentChangedRow(sal::static_int_cast<SCTAB>(nTable), static_cast<SCROW>(nRow));
-                            if (nRow > nOld + 1)
-                                pRowStyles->AddFieldStyleName(nTable, nOld + 1, nIndex, nRow - 1);
+                            AddStyleFromColumn( xColumnProperties, nullptr, nIndex, bIsVisible );
+                            pColumnStyles->AddFieldStyleName(nTable, nColumn, nIndex, bIsVisible);
                         }
+                        sal_Int32 nOld(nColumn);
+                        nColumn = pDoc->GetNextDifferentChangedCol(sal::static_int_cast<SCTAB>(nTable), static_cast<SCCOL>(nColumn));
+                        for (sal_Int32 i = nOld + 1; i < nColumn; ++i)
+                            pColumnStyles->AddFieldStyleName(nTable, i, nIndex, bIsVisible);
+                    }
+                    if (aCellAddress.EndColumn > nColumns)
+                    {
+                        bool bIsVisible(true);
+                        sal_Int32 nIndex(pColumnStyles->GetStyleNameIndex(nTable, nColumns, bIsVisible));
+                        for (sal_Int32 i = nColumns + 1; i <= aCellAddress.EndColumn; ++i)
+                            pColumnStyles->AddFieldStyleName(nTable, i, nIndex, bIsVisible);
+                    }
+                }
+                uno::Reference<table::XTableRows> xTableRows(xColumnRowRange->getRows());
+                if (xTableRows.is())
+                {
+                    sal_Int32 nRows(pDoc->GetLastChangedRow(sal::static_int_cast<SCTAB>(nTable)));
+                    pSharedData->SetLastRow(nTable, nRows);
+
+                    pRowStyles->AddNewTable(nTable, MAXROW);
+                    sal_Int32 nRow = 0;
+                    while (nRow <= MAXROW)
+                    {
+                        sal_Int32 nIndex = 0;
+                        uno::Reference <beans::XPropertySet> xRowProperties(xTableRows->getByIndex(nRow), uno::UNO_QUERY);
+                        if(xRowProperties.is())
+                        {
+                            AddStyleFromRow( xRowProperties, nullptr, nIndex );
+                            pRowStyles->AddFieldStyleName(nTable, nRow, nIndex);
+                        }
+                        sal_Int32 nOld(nRow);
+                        nRow = pDoc->GetNextDifferentChangedRow(sal::static_int_cast<SCTAB>(nTable), static_cast<SCROW>(nRow));
+                        if (nRow > nOld + 1)
+                            pRowStyles->AddFieldStyleName(nTable, nOld + 1, nIndex, nRow - 1);
                     }
                 }
             }
-
             ExportCellTextAutoStyles(nTable);
         }
 
         pChangeTrackingExportHelper->CollectAutoStyles();
+    }
 
+    if (getExportFlags() & SvXMLExportFlags::MASTERSTYLES)
+        GetPageExport()->collectAutoStyles(true);
+
+    mbAutoStylesCollected = true;
+}
+
+void ScXMLExport::ExportAutoStyles_()
+{
+    if (!GetModel().is())
+        return;
+
+    uno::Reference <sheet::XSpreadsheetDocument> xSpreadDoc( GetModel(), uno::UNO_QUERY );
+    if (!xSpreadDoc.is())
+        return;
+
+    uno::Reference<container::XIndexAccess> xIndex( xSpreadDoc->getSheets(), uno::UNO_QUERY );
+    if (!xIndex.is())
+        return;
+
+    collectAutoStyles();
+
+    if (getExportFlags() & SvXMLExportFlags::CONTENT)
+    {
         GetAutoStylePool()->exportXML(XML_STYLE_FAMILY_TABLE_COLUMN);
         GetAutoStylePool()->exportXML(XML_STYLE_FAMILY_TABLE_ROW);
         GetAutoStylePool()->exportXML(XML_STYLE_FAMILY_TABLE_TABLE);
@@ -2691,7 +2695,6 @@ void ScXMLExport::ExportAutoStyles_()
 
     if (getExportFlags() & SvXMLExportFlags::MASTERSTYLES)
     {
-        GetPageExport()->collectAutoStyles(true);
         GetPageExport()->exportAutoStyles();
     }
 
@@ -3061,10 +3064,10 @@ void writeContent(
                 // <text:a xlink:href="url" xlink:type="simple">value</text:a>
 
                 const SvxURLField* pURLField = static_cast<const SvxURLField*>(pField);
-                OUString aURL = pURLField->GetURL();
+                const OUString& aURL = pURLField->GetURL();
                 rExport.AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, rExport.GetRelativeReference(aURL));
                 rExport.AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, "simple");
-                OUString aTargetFrame = pURLField->GetTargetFrame();
+                const OUString& aTargetFrame = pURLField->GetTargetFrame();
                 if (!aTargetFrame.isEmpty())
                     rExport.AddAttribute(XML_NAMESPACE_OFFICE, XML_TARGET_FRAME_NAME, aTargetFrame);
 
@@ -3160,11 +3163,10 @@ void ScXMLExport::WriteCell(ScMyCell& aCell, sal_Int32 nEqualCellCount)
     SetRepeatAttribute(nEqualCellCount, (aCell.nType != table::CellContentType_EMPTY));
 
     if (aCell.nStyleIndex != -1)
-        AddAttribute(sAttrStyleName, *pCellStyles->GetStyleNameByIndex(aCell.nStyleIndex, aCell.bIsAutoStyle));
+        AddAttribute(sAttrStyleName, pCellStyles->GetStyleNameByIndex(aCell.nStyleIndex, aCell.bIsAutoStyle));
     if (aCell.nValidationIndex > -1)
         AddAttribute(XML_NAMESPACE_TABLE, XML_CONTENT_VALIDATION_NAME, pValidationsContainer->GetValidationName(aCell.nValidationIndex));
-    bool bIsMatrix(aCell.bIsMatrixBase || aCell.bIsMatrixCovered);
-    bool bIsFirstMatrixCell(aCell.bIsMatrixBase);
+    const bool bIsFirstMatrixCell(aCell.bIsMatrixBase);
     if (bIsFirstMatrixCell)
     {
         SCCOL nColumns( aCell.aMatrixRange.aEnd.Col() - aCell.aMatrixRange.aStart.Col() + 1 );
@@ -3204,6 +3206,7 @@ void ScXMLExport::WriteCell(ScMyCell& aCell, sal_Int32 nEqualCellCount)
             {
                 if (aCell.maBaseCell.meType == CELLTYPE_FORMULA)
                 {
+                    const bool bIsMatrix(bIsFirstMatrixCell || aCell.bIsMatrixCovered);
                     ScFormulaCell* pFormulaCell = aCell.maBaseCell.mpFormula;
                     if (!bIsMatrix || bIsFirstMatrixCell)
                     {
@@ -3245,7 +3248,7 @@ void ScXMLExport::WriteCell(ScMyCell& aCell, sal_Int32 nEqualCellCount)
                         {
                             GetNumberFormatAttributesExportHelper()->SetNumberFormatAttributes(
                                     aCell.nNumberFormat, pDoc->GetValue(aCell.maCellAddress));
-                            if( getDefaultVersion() >= SvtSaveOptions::ODFVER_012 )
+                            if( getDefaultVersion() > SvtSaveOptions::ODFVER_012 )
                             {
                                 GetNumberFormatAttributesExportHelper()->SetNumberFormatAttributes(
                                         aCell.nNumberFormat, pDoc->GetValue(aCell.maCellAddress), false, XML_NAMESPACE_CALC_EXT, false );
@@ -3622,7 +3625,7 @@ void ScXMLExport::exportAnnotationMeta( const uno::Reference < drawing::XShape >
         if (xCurrentShape.get()!=xShape.get())
             return;
 
-        OUString sAuthor(pNote->GetAuthor());
+        const OUString& sAuthor(pNote->GetAuthor());
         if (!sAuthor.isEmpty())
         {
             SvXMLElementExport aCreatorElem( *this, XML_NAMESPACE_DC,
@@ -3631,7 +3634,7 @@ void ScXMLExport::exportAnnotationMeta( const uno::Reference < drawing::XShape >
             Characters(sAuthor);
         }
 
-        OUString aDate(pNote->GetDate());
+        const OUString& aDate(pNote->GetDate());
         if (pDoc)
         {
             SvNumberFormatter* pNumForm = pDoc->GetFormatTable();
@@ -4061,6 +4064,7 @@ void ScXMLExport::WriteExternalDataMapping()
 
     sc::ExternalDataMapper& rDataMapper = pDoc->GetExternalDataMapper();
     auto& rDataSources = rDataMapper.getDataSources();
+
     if (!rDataSources.empty())
     {
         SvXMLElementExport aMappings(*this, XML_NAMESPACE_CALC_EXT, XML_DATA_MAPPINGS, true, true);
@@ -4068,10 +4072,311 @@ void ScXMLExport::WriteExternalDataMapping()
         {
             AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, itr.getURL());
             AddAttribute(XML_NAMESPACE_CALC_EXT, XML_PROVIDER, itr.getProvider());
-            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_DATA_FREQUENCY, OUString::number(itr.getUpdateFrequency()));
+            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_DATA_FREQUENCY, OUString::number(sc::ExternalDataSource::getUpdateFrequency()));
             AddAttribute(XML_NAMESPACE_CALC_EXT, XML_ID, itr.getID());
             AddAttribute(XML_NAMESPACE_CALC_EXT, XML_DATABASE_NAME, itr.getDBName());
+
             SvXMLElementExport aMapping(*this, XML_NAMESPACE_CALC_EXT, XML_DATA_MAPPING, true, true);
+            // Add the data transformations
+            WriteExternalDataTransformations(itr.getDataTransformation());
+        }
+    }
+}
+
+void ScXMLExport::WriteExternalDataTransformations(const std::vector<std::shared_ptr<sc::DataTransformation>>& aDataTransformations)
+{
+    SvXMLElementExport aTransformations(*this, XML_NAMESPACE_CALC_EXT, XML_DATA_TRANSFORMATIONS, true, true);
+    for (auto& itr : aDataTransformations)
+    {
+        sc::TransformationType aTransformationType = itr->getTransformationType();
+
+        switch(aTransformationType)
+        {
+            case sc::TransformationType::DELETE_TRANSFORMATION:
+            {
+                // Delete Columns Transformation
+                std::shared_ptr<sc::ColumnRemoveTransformation> aDeleteTransformation = std::dynamic_pointer_cast<sc::ColumnRemoveTransformation>(itr);
+                std::set<SCCOL> aColumns = aDeleteTransformation->getColumns();
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_REMOVE_TRANSFORMATION, true, true);
+                for(auto& col : aColumns)
+                {
+                    // Add Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::SPLIT_TRANSFORMATION:
+            {
+                std::shared_ptr<sc::SplitColumnTransformation> aSplitTransformation = std::dynamic_pointer_cast<sc::SplitColumnTransformation>(itr);
+
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(aSplitTransformation->getColumn()));
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_SEPARATOR, OUString::number(aSplitTransformation->getSeparator()));
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_SPLIT_TRANSFORMATION, true, true);
+            }
+            break;
+            case sc::TransformationType::MERGE_TRANSFORMATION:
+            {
+                // Merge Transformation
+                std::shared_ptr<sc::MergeColumnTransformation> aMergeTransformation = std::dynamic_pointer_cast<sc::MergeColumnTransformation>(itr);
+                std::set<SCCOL> aColumns = aMergeTransformation->getColumns();
+
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_MERGE_STRING, aMergeTransformation->getMergeString());
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_MERGE_TRANSFORMATION, true, true);
+
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::SORT_TRANSFORMATION:
+            {
+                // Sort Transformation
+                std::shared_ptr<sc::SortTransformation> aSortTransformation = std::dynamic_pointer_cast<sc::SortTransformation>(itr);
+                ScSortParam aSortParam = aSortTransformation->getSortParam();
+                const sc::DocumentLinkManager& rMgr = pDoc->GetDocLinkManager();
+                const sc::DataStream* pStrm = rMgr.getDataStream();
+                if (!pStrm)
+                    // No data stream.
+                    return;
+
+                // Streamed range
+                ScRange aRange = pStrm->GetRange();
+
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_SORT_TRANSFORMATION, true, true);
+
+                writeSort(*this, aSortParam, aRange, pDoc);
+            }
+            break;
+            case sc::TransformationType::TEXT_TRANSFORMATION:
+            {
+                // Text Transformation
+                std::shared_ptr<sc::TextTransformation> aTextTransformation = std::dynamic_pointer_cast<sc::TextTransformation>(itr);
+
+                sc::TEXT_TRANSFORM_TYPE aTextTransformType = aTextTransformation->getTextTransformationType();
+
+                switch ( aTextTransformType )
+                {
+                    case sc::TEXT_TRANSFORM_TYPE::TO_LOWER:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_CASEMAP_LOWERCASE);
+                    break;
+                    case sc::TEXT_TRANSFORM_TYPE::TO_UPPER:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_CASEMAP_UPPERCASE);
+                    break;
+                    case sc::TEXT_TRANSFORM_TYPE::CAPITALIZE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_CASEMAP_CAPITALIZE);
+                    break;
+                    case sc::TEXT_TRANSFORM_TYPE::TRIM:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_TRIM);
+                    break;
+                }
+
+                std::set<SCCOL> aColumns = aTextTransformation->getColumns();
+
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_TEXT_TRANSFORMATION, true, true);
+
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::AGGREGATE_FUNCTION:
+            {
+                // Aggregate Transformation
+                std::shared_ptr<sc::AggregateFunction> aAggregateFunction = std::dynamic_pointer_cast<sc::AggregateFunction>(itr);
+                std::set<SCCOL> aColumns = aAggregateFunction->getColumns();
+
+                sc::AGGREGATE_FUNCTION aAggregateType = aAggregateFunction->getAggregateType();
+
+                switch (aAggregateType)
+                {
+                    case sc::AGGREGATE_FUNCTION::SUM:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_SUM);
+                    break;
+                    case sc::AGGREGATE_FUNCTION::AVERAGE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_AVERAGE);
+                    break;
+                    case sc::AGGREGATE_FUNCTION::MIN:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_MIN);
+                    break;
+                    case sc::AGGREGATE_FUNCTION::MAX:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_MAX);
+                    break;
+                }
+
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT,XML_COLUMN_AGGREGATE_TRANSFORMATION, true, true);
+
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::NUMBER_TRANSFORMATION:
+            {
+                // Number Transformation
+                std::shared_ptr<sc::NumberTransformation> aNumberTransformation = std::dynamic_pointer_cast<sc::NumberTransformation>(itr);
+
+                sc::NUMBER_TRANSFORM_TYPE aNumberTransformType = aNumberTransformation->getNumberTransfromationType();
+
+                switch ( aNumberTransformType )
+                {
+                    case sc::NUMBER_TRANSFORM_TYPE::ROUND:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_ROUND);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::ROUND_UP:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_ROUND_UP);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::ROUND_DOWN:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_ROUND_DOWN);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::ABSOLUTE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_ABS);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::LOG_E:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_LOG);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::LOG_10:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_LOG_10);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::CUBE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_CUBE);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::SQUARE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_SQUARE);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::SQUARE_ROOT:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_SQUARE_ROOT);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::EXPONENT:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_EXPONENTIAL);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::IS_EVEN:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_EVEN);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::IS_ODD:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_ODD);
+                    break;
+                    case sc::NUMBER_TRANSFORM_TYPE::SIGN:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_SIGN);
+                    break;
+                }
+
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_PRECISION, OUString::number(aNumberTransformation->getPrecision()));
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_NUMBER_TRANSFORMATION, true, true);
+
+                std::set<SCCOL> aColumns = aNumberTransformation->getColumn();
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::REMOVE_NULL_TRANSFORMATION:
+            {
+                // Replace Null Transformation
+                std::shared_ptr<sc::ReplaceNullTransformation> aReplaceNullTransformation = std::dynamic_pointer_cast<sc::ReplaceNullTransformation>(itr);
+                std::set<SCCOL> aColumns = aReplaceNullTransformation->getColumn();
+
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_REPLACE_STRING, aReplaceNullTransformation->getReplaceString());
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_REPLACENULL_TRANSFORMATION, true, true);
+
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            case sc::TransformationType::DATETIME_TRANSFORMATION:
+            {
+                // Number Transformation
+                std::shared_ptr<sc::DateTimeTransformation> aDateTimeTransformation = std::dynamic_pointer_cast<sc::DateTimeTransformation>(itr);
+
+                sc::DATETIME_TRANSFORMATION_TYPE aDateTimeTransformationType = aDateTimeTransformation->getDateTimeTransfromationType();
+
+                switch ( aDateTimeTransformationType )
+                {
+                    case sc::DATETIME_TRANSFORMATION_TYPE::DATE_STRING:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_DATE_STRING);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::YEAR:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_YEAR);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::START_OF_YEAR:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_START_OF_YEAR);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::END_OF_YEAR:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_END_OF_YEAR);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::MONTH:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_MONTH);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::MONTH_NAME:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_MONTH_NAME);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::START_OF_MONTH:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_START_OF_MONTH);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::END_OF_MONTH:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_END_OF_MONTH);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::DAY:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_DAY);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::DAY_OF_WEEK:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_DAY_OF_WEEK);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::DAY_OF_YEAR:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_DAY_OF_YEAR);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::QUARTER:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_QUARTER);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::START_OF_QUARTER:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_START_OF_QUARTER);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::END_OF_QUARTER:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_END_OF_QUARTER);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::TIME:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_TIME);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::HOUR:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_HOUR);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::MINUTE:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_MINUTE);
+                    break;
+                    case sc::DATETIME_TRANSFORMATION_TYPE::SECOND:
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, XML_SECONDS);
+                    break;
+                }
+
+                SvXMLElementExport aTransformation(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN_DATETIME_TRANSFORMATION, true, true);
+
+                std::set<SCCOL> aColumns = aDateTimeTransformation->getColumn();
+                for(auto& col : aColumns)
+                {
+                    // Columns
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLUMN, OUString::number(col));
+                    SvXMLElementExport aCol(*this, XML_NAMESPACE_CALC_EXT, XML_COLUMN, true, true);
+                }
+            }
+            break;
+            default:
+            break;
         }
     }
 }
@@ -4207,22 +4512,6 @@ OUString getCondFormatEntryType(const ScColorScaleEntry& rEntry, bool bFirst = t
     return OUString();
 }
 
-OUString getIconSetName(ScIconSetType eType)
-{
-    const char* pName = nullptr;
-    const ScIconSetMap* pMap = ScIconSetFormat::g_IconSetMap;
-    for(;pMap->pName;++pMap)
-    {
-        if(pMap->eType == eType)
-        {
-            pName = pMap->pName;
-            break;
-        }
-    }
-    assert(pName);
-    return OUString::createFromAscii(pName);
-}
-
 OUString getDateStringForType(condformat::ScCondFormatDateType eType)
 {
     switch(eType)
@@ -4263,301 +4552,298 @@ OUString getDateStringForType(condformat::ScCondFormatDateType eType)
 void ScXMLExport::ExportConditionalFormat(SCTAB nTab)
 {
     ScConditionalFormatList* pCondFormatList = pDoc->GetCondFormList(nTab);
-    if(pCondFormatList)
+    if(!pCondFormatList)
+        return;
+
+    if (pCondFormatList->empty())
+        return;
+
+    SvXMLElementExport aElementCondFormats(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITIONAL_FORMATS, true, true);
+
+    for(ScConditionalFormatList::const_iterator itr = pCondFormatList->begin();
+            itr != pCondFormatList->end(); ++itr)
     {
-        if(pCondFormatList && !pCondFormatList->size())
-            return;
-
-        SvXMLElementExport aElementCondFormats(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITIONAL_FORMATS, true, true);
-
-        if(pCondFormatList)
+        OUString sRanges;
+        const ScRangeList& rRangeList = (*itr)->GetRange();
+        ScRangeStringConverter::GetStringFromRangeList( sRanges, &rRangeList, pDoc, formula::FormulaGrammar::CONV_OOO );
+        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TARGET_RANGE_ADDRESS, sRanges);
+        SvXMLElementExport aElementCondFormat(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITIONAL_FORMAT, true, true);
+        size_t nEntries = (*itr)->size();
+        for(size_t i = 0; i < nEntries; ++i)
         {
-            for(ScConditionalFormatList::const_iterator itr = pCondFormatList->begin();
-                    itr != pCondFormatList->end(); ++itr)
+            const ScFormatEntry* pFormatEntry = (*itr)->GetEntry(i);
+            if(pFormatEntry->GetType()==ScFormatEntry::Type::Condition)
             {
-                OUString sRanges;
-                const ScRangeList& rRangeList = (*itr)->GetRange();
-                ScRangeStringConverter::GetStringFromRangeList( sRanges, &rRangeList, pDoc, formula::FormulaGrammar::CONV_OOO );
-                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TARGET_RANGE_ADDRESS, sRanges);
-                SvXMLElementExport aElementCondFormat(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITIONAL_FORMAT, true, true);
-                size_t nEntries = (*itr)->size();
-                for(size_t i = 0; i < nEntries; ++i)
+                const ScCondFormatEntry* pEntry = static_cast<const ScCondFormatEntry*>(pFormatEntry);
+                OUStringBuffer aCond;
+                ScAddress aPos = pEntry->GetSrcPos();
+                switch(pEntry->GetOperation())
                 {
-                    const ScFormatEntry* pFormatEntry = (*itr)->GetEntry(i);
-                    if(pFormatEntry->GetType()==ScFormatEntry::Type::Condition)
-                    {
-                        const ScCondFormatEntry* pEntry = static_cast<const ScCondFormatEntry*>(pFormatEntry);
-                        OUStringBuffer aCond;
-                        ScAddress aPos = pEntry->GetSrcPos();
-                        switch(pEntry->GetOperation())
-                        {
-                            case ScConditionMode::Equal:
-                                aCond.append('=');
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::Less:
-                                aCond.append('<');
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::Greater:
-                                aCond.append('>');
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::EqLess:
-                                aCond.append("<=");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::EqGreater:
-                                aCond.append(">=");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::NotEqual:
-                                aCond.append("!=");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                break;
-                            case ScConditionMode::Between:
-                                aCond.append("between(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(',');
-                                aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(')');
-                                break;
-                            case ScConditionMode::NotBetween:
-                                aCond.append("not-between(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(',');
-                                aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(')');
-                                break;
-                            case ScConditionMode::Duplicate:
-                                aCond.append("duplicate");
-                                break;
-                            case ScConditionMode::NotDuplicate:
-                                aCond.append("unique");
-                                break;
-                            case ScConditionMode::Direct:
-                                aCond.append("formula-is(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(')');
-                                break;
-                            case ScConditionMode::Top10:
-                                aCond.append("top-elements(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::Bottom10:
-                                aCond.append("bottom-elements(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::TopPercent:
-                                aCond.append("top-percent(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::BottomPercent:
-                                aCond.append("bottom-percent(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::AboveAverage:
-                                aCond.append("above-average");
-                                break;
-                            case ScConditionMode::BelowAverage:
-                                aCond.append("below-average");
-                                break;
-                            case ScConditionMode::AboveEqualAverage:
-                                aCond.append("above-equal-average");
-                                break;
-                            case ScConditionMode::BelowEqualAverage:
-                                aCond.append("below-equal-average");
-                                break;
-                            case ScConditionMode::Error:
-                                aCond.append("is-error");
-                                break;
-                            case ScConditionMode::NoError:
-                                aCond.append("is-no-error");
-                                break;
-                            case ScConditionMode::BeginsWith:
-                                aCond.append("begins-with(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::EndsWith:
-                                aCond.append("ends-with(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::ContainsText:
-                                aCond.append("contains-text(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::NotContainsText:
-                                aCond.append("not-contains-text(");
-                                aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
-                                aCond.append(")");
-                                break;
-                            case ScConditionMode::NONE:
-                                continue;
-                            default:
-                                SAL_WARN("sc", "unimplemented conditional format export");
-                        }
-                        OUString sStyle = ScStyleNameConversion::DisplayToProgrammaticName(pEntry->GetStyle(), SfxStyleFamily::Para);
-                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_APPLY_STYLE_NAME, sStyle);
-                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, aCond.makeStringAndClear());
+                    case ScConditionMode::Equal:
+                        aCond.append('=');
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::Less:
+                        aCond.append('<');
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::Greater:
+                        aCond.append('>');
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::EqLess:
+                        aCond.append("<=");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::EqGreater:
+                        aCond.append(">=");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::NotEqual:
+                        aCond.append("!=");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        break;
+                    case ScConditionMode::Between:
+                        aCond.append("between(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(',');
+                        aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(')');
+                        break;
+                    case ScConditionMode::NotBetween:
+                        aCond.append("not-between(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(',');
+                        aCond.append(pEntry->GetExpression(aPos, 1, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(')');
+                        break;
+                    case ScConditionMode::Duplicate:
+                        aCond.append("duplicate");
+                        break;
+                    case ScConditionMode::NotDuplicate:
+                        aCond.append("unique");
+                        break;
+                    case ScConditionMode::Direct:
+                        aCond.append("formula-is(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(')');
+                        break;
+                    case ScConditionMode::Top10:
+                        aCond.append("top-elements(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::Bottom10:
+                        aCond.append("bottom-elements(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::TopPercent:
+                        aCond.append("top-percent(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::BottomPercent:
+                        aCond.append("bottom-percent(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::AboveAverage:
+                        aCond.append("above-average");
+                        break;
+                    case ScConditionMode::BelowAverage:
+                        aCond.append("below-average");
+                        break;
+                    case ScConditionMode::AboveEqualAverage:
+                        aCond.append("above-equal-average");
+                        break;
+                    case ScConditionMode::BelowEqualAverage:
+                        aCond.append("below-equal-average");
+                        break;
+                    case ScConditionMode::Error:
+                        aCond.append("is-error");
+                        break;
+                    case ScConditionMode::NoError:
+                        aCond.append("is-no-error");
+                        break;
+                    case ScConditionMode::BeginsWith:
+                        aCond.append("begins-with(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::EndsWith:
+                        aCond.append("ends-with(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::ContainsText:
+                        aCond.append("contains-text(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::NotContainsText:
+                        aCond.append("not-contains-text(");
+                        aCond.append(pEntry->GetExpression(aPos, 0, 0, formula::FormulaGrammar::GRAM_ODFF));
+                        aCond.append(")");
+                        break;
+                    case ScConditionMode::NONE:
+                        continue;
+                    default:
+                        SAL_WARN("sc", "unimplemented conditional format export");
+                }
+                OUString sStyle = ScStyleNameConversion::DisplayToProgrammaticName(pEntry->GetStyle(), SfxStyleFamily::Para);
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_APPLY_STYLE_NAME, sStyle);
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, aCond.makeStringAndClear());
 
-                        OUString sBaseAddress;
-                        ScRangeStringConverter::GetStringFromAddress( sBaseAddress, aPos, pDoc,formula::FormulaGrammar::CONV_ODF );
-                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_BASE_CELL_ADDRESS, sBaseAddress);
-                        SvXMLElementExport aElementCondEntry(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITION, true, true);
+                OUString sBaseAddress;
+                ScRangeStringConverter::GetStringFromAddress( sBaseAddress, aPos, pDoc,formula::FormulaGrammar::CONV_ODF );
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_BASE_CELL_ADDRESS, sBaseAddress);
+                SvXMLElementExport aElementCondEntry(*this, XML_NAMESPACE_CALC_EXT, XML_CONDITION, true, true);
+            }
+            else if(pFormatEntry->GetType() == ScFormatEntry::Type::Colorscale)
+            {
+                SvXMLElementExport aElementColorScale(*this, XML_NAMESPACE_CALC_EXT, XML_COLOR_SCALE, true, true);
+                const ScColorScaleFormat& rColorScale = static_cast<const ScColorScaleFormat&>(*pFormatEntry);
+                for(ScColorScaleEntries::const_iterator it = rColorScale.begin();
+                        it != rColorScale.end(); ++it)
+                {
+                    if(it[0]->GetType() == COLORSCALE_FORMULA)
+                    {
+                        OUString sFormula = it[0]->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
                     }
-                    else if(pFormatEntry->GetType() == ScFormatEntry::Type::Colorscale)
+                    else
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(it[0]->GetValue()));
+
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*it[0]));
+                    OUStringBuffer aBuffer;
+                    ::sax::Converter::convertColor(aBuffer, it[0]->GetColor());
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLOR, aBuffer.makeStringAndClear());
+                    SvXMLElementExport aElementColorScaleEntry(*this, XML_NAMESPACE_CALC_EXT, XML_COLOR_SCALE_ENTRY, true, true);
+                }
+            }
+            else if(pFormatEntry->GetType() == ScFormatEntry::Type::Databar)
+            {
+                const ScDataBarFormatData* pFormatData = static_cast<const ScDataBarFormat&>(*pFormatEntry).GetDataBarData();
+                if(!pFormatData->mbGradient)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_GRADIENT, XML_FALSE);
+                if(pFormatData->mbOnlyBar)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_SHOW_VALUE, XML_FALSE);
+
+                if (pFormatData->mnMinLength != 0.0)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_MIN_LENGTH, OUString::number(pFormatData->mnMinLength));
+
+                if (pFormatData->mnMaxLength != 0.0)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_MAX_LENGTH, OUString::number(pFormatData->mnMaxLength));
+
+                if(pFormatData->mbNeg)
+                {
+                    if(pFormatData->mpNegativeColor)
                     {
-                        SvXMLElementExport aElementColorScale(*this, XML_NAMESPACE_CALC_EXT, XML_COLOR_SCALE, true, true);
-                        const ScColorScaleFormat& rColorScale = static_cast<const ScColorScaleFormat&>(*pFormatEntry);
-                        for(ScColorScaleEntries::const_iterator it = rColorScale.begin();
-                                it != rColorScale.end(); ++it)
-                        {
-                            if(it[0]->GetType() == COLORSCALE_FORMULA)
-                            {
-                                OUString sFormula = it[0]->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
-                            }
-                            else
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(it[0]->GetValue()));
-
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*it[0]));
-                            OUStringBuffer aBuffer;
-                            ::sax::Converter::convertColor(aBuffer, it[0]->GetColor());
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_COLOR, aBuffer.makeStringAndClear());
-                            SvXMLElementExport aElementColorScaleEntry(*this, XML_NAMESPACE_CALC_EXT, XML_COLOR_SCALE_ENTRY, true, true);
-                        }
-                    }
-                    else if(pFormatEntry->GetType() == ScFormatEntry::Type::Databar)
-                    {
-                        const ScDataBarFormatData* pFormatData = static_cast<const ScDataBarFormat&>(*pFormatEntry).GetDataBarData();
-                        if(!pFormatData->mbGradient)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_GRADIENT, XML_FALSE);
-                        if(pFormatData->mbOnlyBar)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_SHOW_VALUE, XML_FALSE);
-
-                        if (pFormatData->mnMinLength != 0.0)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_MIN_LENGTH, OUString::number(pFormatData->mnMinLength));
-
-                        if (pFormatData->mnMaxLength != 0.0)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_MAX_LENGTH, OUString::number(pFormatData->mnMaxLength));
-
-                        if(pFormatData->mbNeg)
-                        {
-                            if(pFormatData->mpNegativeColor)
-                            {
-                                OUStringBuffer aBuffer;
-                                ::sax::Converter::convertColor(aBuffer, *pFormatData->mpNegativeColor);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_NEGATIVE_COLOR, aBuffer.makeStringAndClear());
-                            }
-                            else
-                            {
-                                OUStringBuffer aBuffer;
-                                ::sax::Converter::convertColor(aBuffer, COL_LIGHTRED);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_NEGATIVE_COLOR, aBuffer.makeStringAndClear());
-                            }
-                        }
-
-                        if(pFormatData->meAxisPosition != databar::AUTOMATIC)
-                        {
-                            if(pFormatData->meAxisPosition == databar::NONE)
-                            {
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_POSITION, OUString("none"));
-                            }
-                            else
-                            {
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_POSITION, OUString("middle"));
-                            }
-                        }
-
                         OUStringBuffer aBuffer;
-                        ::sax::Converter::convertColor(aBuffer, pFormatData->maPositiveColor);
-                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_POSITIVE_COLOR, aBuffer.makeStringAndClear());
-
-                        aBuffer.truncate();
-                        ::sax::Converter::convertColor(aBuffer, pFormatData->maAxisColor);
-                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_COLOR, aBuffer.makeStringAndClear());
-                        SvXMLElementExport aElementDataBar(*this, XML_NAMESPACE_CALC_EXT, XML_DATA_BAR, true, true);
-
-                        {
-                            if(pFormatData->mpLowerLimit->GetType() == COLORSCALE_FORMULA)
-                            {
-                                OUString sFormula = pFormatData->mpLowerLimit->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
-                            }
-                            else
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(pFormatData->mpLowerLimit->GetValue()));
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*pFormatData->mpLowerLimit));
-                            SvXMLElementExport aElementDataBarEntryLower(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
-                        }
-
-                        {
-                            if(pFormatData->mpUpperLimit->GetType() == COLORSCALE_FORMULA)
-                            {
-                                OUString sFormula = pFormatData->mpUpperLimit->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
-                            }
-                            else
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(pFormatData->mpUpperLimit->GetValue()));
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*pFormatData->mpUpperLimit, false));
-                            SvXMLElementExport aElementDataBarEntryUpper(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
-                        }
+                        ::sax::Converter::convertColor(aBuffer, *pFormatData->mpNegativeColor);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_NEGATIVE_COLOR, aBuffer.makeStringAndClear());
                     }
-                    else if(pFormatEntry->GetType() == ScFormatEntry::Type::Iconset)
+                    else
                     {
-                        const ScIconSetFormat& rIconSet = static_cast<const ScIconSetFormat&>(*pFormatEntry);
-                        OUString aIconSetName = getIconSetName(rIconSet.GetIconSetData()->eIconSetType);
-                        AddAttribute( XML_NAMESPACE_CALC_EXT, XML_ICON_SET_TYPE, aIconSetName );
-                        if (rIconSet.GetIconSetData()->mbCustom)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM, OUString::boolean(true));
-
-                        SvXMLElementExport aElementColorScale(*this, XML_NAMESPACE_CALC_EXT, XML_ICON_SET, true, true);
-
-                        if (rIconSet.GetIconSetData()->mbCustom)
-                        {
-                            for (std::vector<std::pair<ScIconSetType, sal_Int32> >::const_iterator
-                                    it = rIconSet.GetIconSetData()->maCustomVector.begin();
-                                    it != rIconSet.GetIconSetData()->maCustomVector.end(); ++it)
-                            {
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET_NAME, getIconSetName(it->first));
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET_INDEX, OUString::number(it->second));
-                                SvXMLElementExport aCustomIcon(*this, XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET, true, true);
-                            }
-
-                        }
-
-                        if(!rIconSet.GetIconSetData()->mbShowValue)
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_SHOW_VALUE, XML_FALSE);
-                        for (auto const& it : rIconSet)
-                        {
-                            if(it->GetType() == COLORSCALE_FORMULA)
-                            {
-                                OUString sFormula = it->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
-                            }
-                            else
-                                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(it->GetValue()));
-
-                            AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*it));
-                            SvXMLElementExport aElementColorScaleEntry(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
-                        }
-                    }
-                    else if(pFormatEntry->GetType() == ScFormatEntry::Type::Date)
-                    {
-                        const ScCondDateFormatEntry& rDateFormat = static_cast<const ScCondDateFormatEntry&>(*pFormatEntry);
-                        OUString aDateType = getDateStringForType(rDateFormat.GetDateType());
-                        OUString aStyleName = ScStyleNameConversion::DisplayToProgrammaticName(rDateFormat.GetStyleName(), SfxStyleFamily::Para );
-                        AddAttribute( XML_NAMESPACE_CALC_EXT, XML_STYLE, aStyleName);
-                        AddAttribute( XML_NAMESPACE_CALC_EXT, XML_DATE, aDateType);
-                        SvXMLElementExport aElementDateFormat(*this, XML_NAMESPACE_CALC_EXT, XML_DATE_IS, true, true);
+                        OUStringBuffer aBuffer;
+                        ::sax::Converter::convertColor(aBuffer, COL_LIGHTRED);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_NEGATIVE_COLOR, aBuffer.makeStringAndClear());
                     }
                 }
+
+                if(pFormatData->meAxisPosition != databar::AUTOMATIC)
+                {
+                    if(pFormatData->meAxisPosition == databar::NONE)
+                    {
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_POSITION, OUString("none"));
+                    }
+                    else
+                    {
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_POSITION, OUString("middle"));
+                    }
+                }
+
+                OUStringBuffer aBuffer;
+                ::sax::Converter::convertColor(aBuffer, pFormatData->maPositiveColor);
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_POSITIVE_COLOR, aBuffer.makeStringAndClear());
+
+                aBuffer.truncate();
+                ::sax::Converter::convertColor(aBuffer, pFormatData->maAxisColor);
+                AddAttribute(XML_NAMESPACE_CALC_EXT, XML_AXIS_COLOR, aBuffer.makeStringAndClear());
+                SvXMLElementExport aElementDataBar(*this, XML_NAMESPACE_CALC_EXT, XML_DATA_BAR, true, true);
+
+                {
+                    if(pFormatData->mpLowerLimit->GetType() == COLORSCALE_FORMULA)
+                    {
+                        OUString sFormula = pFormatData->mpLowerLimit->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
+                    }
+                    else
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(pFormatData->mpLowerLimit->GetValue()));
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*pFormatData->mpLowerLimit));
+                    SvXMLElementExport aElementDataBarEntryLower(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
+                }
+
+                {
+                    if(pFormatData->mpUpperLimit->GetType() == COLORSCALE_FORMULA)
+                    {
+                        OUString sFormula = pFormatData->mpUpperLimit->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
+                    }
+                    else
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(pFormatData->mpUpperLimit->GetValue()));
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*pFormatData->mpUpperLimit, false));
+                    SvXMLElementExport aElementDataBarEntryUpper(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
+                }
+            }
+            else if(pFormatEntry->GetType() == ScFormatEntry::Type::Iconset)
+            {
+                const ScIconSetFormat& rIconSet = static_cast<const ScIconSetFormat&>(*pFormatEntry);
+                OUString aIconSetName = OUString::createFromAscii(ScIconSetFormat::getIconSetName(rIconSet.GetIconSetData()->eIconSetType));
+                AddAttribute( XML_NAMESPACE_CALC_EXT, XML_ICON_SET_TYPE, aIconSetName );
+                if (rIconSet.GetIconSetData()->mbCustom)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM, OUString::boolean(true));
+
+                SvXMLElementExport aElementColorScale(*this, XML_NAMESPACE_CALC_EXT, XML_ICON_SET, true, true);
+
+                if (rIconSet.GetIconSetData()->mbCustom)
+                {
+                    for (std::vector<std::pair<ScIconSetType, sal_Int32> >::const_iterator
+                            it = rIconSet.GetIconSetData()->maCustomVector.begin();
+                            it != rIconSet.GetIconSetData()->maCustomVector.end(); ++it)
+                    {
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET_NAME, OUString::createFromAscii(ScIconSetFormat::getIconSetName(it->first)));
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET_INDEX, OUString::number(it->second));
+                        SvXMLElementExport aCustomIcon(*this, XML_NAMESPACE_CALC_EXT, XML_CUSTOM_ICONSET, true, true);
+                    }
+
+                }
+
+                if(!rIconSet.GetIconSetData()->mbShowValue)
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_SHOW_VALUE, XML_FALSE);
+                for (auto const& it : rIconSet)
+                {
+                    if(it->GetType() == COLORSCALE_FORMULA)
+                    {
+                        OUString sFormula = it->GetFormula(formula::FormulaGrammar::GRAM_ODFF);
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, sFormula);
+                    }
+                    else
+                        AddAttribute(XML_NAMESPACE_CALC_EXT, XML_VALUE, OUString::number(it->GetValue()));
+
+                    AddAttribute(XML_NAMESPACE_CALC_EXT, XML_TYPE, getCondFormatEntryType(*it));
+                    SvXMLElementExport aElementColorScaleEntry(*this, XML_NAMESPACE_CALC_EXT, XML_FORMATTING_ENTRY, true, true);
+                }
+            }
+            else if(pFormatEntry->GetType() == ScFormatEntry::Type::Date)
+            {
+                const ScCondDateFormatEntry& rDateFormat = static_cast<const ScCondDateFormatEntry&>(*pFormatEntry);
+                OUString aDateType = getDateStringForType(rDateFormat.GetDateType());
+                OUString aStyleName = ScStyleNameConversion::DisplayToProgrammaticName(rDateFormat.GetStyleName(), SfxStyleFamily::Para );
+                AddAttribute( XML_NAMESPACE_CALC_EXT, XML_STYLE, aStyleName);
+                AddAttribute( XML_NAMESPACE_CALC_EXT, XML_DATE, aDateType);
+                SvXMLElementExport aElementDateFormat(*this, XML_NAMESPACE_CALC_EXT, XML_DATE_IS, true, true);
             }
         }
     }
@@ -4729,7 +5015,7 @@ void ScXMLExport::WriteExternalRefCaches()
                         sal_Int32 nIndex = GetNumberFormatStyleIndex(nNumFmt);
                         if (nIndex >= 0)
                         {
-                            const OUString aStyleName = *pCellStyles->GetStyleNameByIndex(nIndex, true);
+                            const OUString & aStyleName = pCellStyles->GetStyleNameByIndex(nIndex, true);
                             AddAttribute(XML_NAMESPACE_TABLE, XML_STYLE_NAME, aStyleName);
                         }
 
@@ -4783,7 +5069,7 @@ void ScXMLExport::WriteConsolidation()
 
             sStrData.clear();
             for( sal_Int32 nIndex = 0; nIndex < pCons->nDataAreaCount; ++nIndex )
-                ScRangeStringConverter::GetStringFromArea( sStrData, *pCons->ppDataAreas[ nIndex ], pDoc, FormulaGrammar::CONV_OOO, ' ', true );
+                ScRangeStringConverter::GetStringFromArea( sStrData, pCons->pDataAreas[ nIndex ], pDoc, FormulaGrammar::CONV_OOO, ' ', true );
             AddAttribute( XML_NAMESPACE_TABLE, XML_SOURCE_CELL_RANGE_ADDRESSES, sStrData );
 
             ScRangeStringConverter::GetStringFromAddress( sStrData, ScAddress( pCons->nCol, pCons->nRow, pCons->nTab ), pDoc, FormulaGrammar::CONV_OOO );
@@ -4822,73 +5108,65 @@ void ScXMLExport::GetChangeTrackViewSettings(uno::Sequence<beans::PropertyValue>
         sal_Int32 nChangePos(rProps.getLength());
         rProps.realloc(nChangePos + 1);
         beans::PropertyValue* pProps(rProps.getArray());
-        if (pProps)
-        {
-            uno::Sequence<beans::PropertyValue> aChangeProps(SC_VIEWCHANGES_COUNT);
-            beans::PropertyValue* pChangeProps(aChangeProps.getArray());
-            if (pChangeProps)
-            {
-                pChangeProps[SC_SHOW_CHANGES].Name = "ShowChanges";
-                pChangeProps[SC_SHOW_CHANGES].Value <<= pViewSettings->ShowChanges();
-                pChangeProps[SC_SHOW_ACCEPTED_CHANGES].Name = "ShowAcceptedChanges";
-                pChangeProps[SC_SHOW_ACCEPTED_CHANGES].Value <<= pViewSettings->IsShowAccepted();
-                pChangeProps[SC_SHOW_REJECTED_CHANGES].Name = "ShowRejectedChanges";
-                pChangeProps[SC_SHOW_REJECTED_CHANGES].Value <<= pViewSettings->IsShowRejected();
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME].Name = "ShowChangesByDatetime";
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME].Value <<= pViewSettings->HasDate();
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_MODE].Name = "ShowChangesByDatetimeMode";
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_MODE].Value <<= static_cast<sal_Int16>(pViewSettings->GetTheDateMode());
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_FIRST_DATETIME].Name = "ShowChangesByDatetimeFirstDatetime";
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_FIRST_DATETIME].Value <<= pViewSettings->GetTheFirstDateTime().GetUNODateTime();
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_SECOND_DATETIME].Name = "ShowChangesByDatetimeSecondDatetime";
-                pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_SECOND_DATETIME].Value <<= pViewSettings->GetTheLastDateTime().GetUNODateTime();
-                pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR].Name = "ShowChangesByAuthor";
-                pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR].Value <<= pViewSettings->HasAuthor();
-                pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR_NAME].Name = "ShowChangesByAuthorName";
-                pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR_NAME].Value <<= pViewSettings->GetTheAuthorToShow();
-                pChangeProps[SC_SHOW_CHANGES_BY_COMMENT].Name = "ShowChangesByComment";
-                pChangeProps[SC_SHOW_CHANGES_BY_COMMENT].Value <<= pViewSettings->HasComment();
-                pChangeProps[SC_SHOW_CHANGES_BY_COMMENT_TEXT].Name = "ShowChangesByCommentText";
-                pChangeProps[SC_SHOW_CHANGES_BY_COMMENT_TEXT].Value <<= pViewSettings->GetTheComment();
-                pChangeProps[SC_SHOW_CHANGES_BY_RANGES].Name = "ShowChangesByRanges";
-                pChangeProps[SC_SHOW_CHANGES_BY_RANGES].Value <<= pViewSettings->HasRange();
-                OUString sRangeList;
-                ScRangeStringConverter::GetStringFromRangeList(sRangeList, &(pViewSettings->GetTheRangeList()), GetDocument(), FormulaGrammar::CONV_OOO);
-                pChangeProps[SC_SHOW_CHANGES_BY_RANGES_LIST].Name = "ShowChangesByRangesList";
-                pChangeProps[SC_SHOW_CHANGES_BY_RANGES_LIST].Value <<= sRangeList;
 
-                pProps[nChangePos].Name = "TrackedChangesViewSettings";
-                pProps[nChangePos].Value <<= aChangeProps;
-            }
-        }
+        uno::Sequence<beans::PropertyValue> aChangeProps(SC_VIEWCHANGES_COUNT);
+        beans::PropertyValue* pChangeProps(aChangeProps.getArray());
+        pChangeProps[SC_SHOW_CHANGES].Name = "ShowChanges";
+        pChangeProps[SC_SHOW_CHANGES].Value <<= pViewSettings->ShowChanges();
+        pChangeProps[SC_SHOW_ACCEPTED_CHANGES].Name = "ShowAcceptedChanges";
+        pChangeProps[SC_SHOW_ACCEPTED_CHANGES].Value <<= pViewSettings->IsShowAccepted();
+        pChangeProps[SC_SHOW_REJECTED_CHANGES].Name = "ShowRejectedChanges";
+        pChangeProps[SC_SHOW_REJECTED_CHANGES].Value <<= pViewSettings->IsShowRejected();
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME].Name = "ShowChangesByDatetime";
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME].Value <<= pViewSettings->HasDate();
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_MODE].Name = "ShowChangesByDatetimeMode";
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_MODE].Value <<= static_cast<sal_Int16>(pViewSettings->GetTheDateMode());
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_FIRST_DATETIME].Name = "ShowChangesByDatetimeFirstDatetime";
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_FIRST_DATETIME].Value <<= pViewSettings->GetTheFirstDateTime().GetUNODateTime();
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_SECOND_DATETIME].Name = "ShowChangesByDatetimeSecondDatetime";
+        pChangeProps[SC_SHOW_CHANGES_BY_DATETIME_SECOND_DATETIME].Value <<= pViewSettings->GetTheLastDateTime().GetUNODateTime();
+        pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR].Name = "ShowChangesByAuthor";
+        pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR].Value <<= pViewSettings->HasAuthor();
+        pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR_NAME].Name = "ShowChangesByAuthorName";
+        pChangeProps[SC_SHOW_CHANGES_BY_AUTHOR_NAME].Value <<= pViewSettings->GetTheAuthorToShow();
+        pChangeProps[SC_SHOW_CHANGES_BY_COMMENT].Name = "ShowChangesByComment";
+        pChangeProps[SC_SHOW_CHANGES_BY_COMMENT].Value <<= pViewSettings->HasComment();
+        pChangeProps[SC_SHOW_CHANGES_BY_COMMENT_TEXT].Name = "ShowChangesByCommentText";
+        pChangeProps[SC_SHOW_CHANGES_BY_COMMENT_TEXT].Value <<= pViewSettings->GetTheComment();
+        pChangeProps[SC_SHOW_CHANGES_BY_RANGES].Name = "ShowChangesByRanges";
+        pChangeProps[SC_SHOW_CHANGES_BY_RANGES].Value <<= pViewSettings->HasRange();
+        OUString sRangeList;
+        ScRangeStringConverter::GetStringFromRangeList(sRangeList, &(pViewSettings->GetTheRangeList()), GetDocument(), FormulaGrammar::CONV_OOO);
+        pChangeProps[SC_SHOW_CHANGES_BY_RANGES_LIST].Name = "ShowChangesByRangesList";
+        pChangeProps[SC_SHOW_CHANGES_BY_RANGES_LIST].Value <<= sRangeList;
+
+        pProps[nChangePos].Name = "TrackedChangesViewSettings";
+        pProps[nChangePos].Value <<= aChangeProps;
     }
 }
 
 void ScXMLExport::GetViewSettings(uno::Sequence<beans::PropertyValue>& rProps)
 {
-    rProps.realloc(4);
-    beans::PropertyValue* pProps(rProps.getArray());
-    if(pProps)
+    if (GetModel().is())
     {
-        if (GetModel().is())
+        rProps.realloc(4);
+        beans::PropertyValue* pProps(rProps.getArray());
+        ScModelObj* pDocObj(ScModelObj::getImplementation( GetModel() ));
+        if (pDocObj)
         {
-            ScModelObj* pDocObj(ScModelObj::getImplementation( GetModel() ));
-            if (pDocObj)
+            SfxObjectShell* pEmbeddedObj = pDocObj->GetEmbeddedObject();
+            if (pEmbeddedObj)
             {
-                SfxObjectShell* pEmbeddedObj = pDocObj->GetEmbeddedObject();
-                if (pEmbeddedObj)
-                {
-                    tools::Rectangle aRect(pEmbeddedObj->GetVisArea());
-                    sal_uInt16 i(0);
-                    pProps[i].Name = "VisibleAreaTop";
-                    pProps[i].Value <<= static_cast<sal_Int32>(aRect.getY());
-                    pProps[++i].Name = "VisibleAreaLeft";
-                    pProps[i].Value <<= static_cast<sal_Int32>(aRect.getX());
-                    pProps[++i].Name = "VisibleAreaWidth";
-                    pProps[i].Value <<= static_cast<sal_Int32>(aRect.getWidth());
-                    pProps[++i].Name = "VisibleAreaHeight";
-                    pProps[i].Value <<= static_cast<sal_Int32>(aRect.getHeight());
-                }
+                tools::Rectangle aRect(pEmbeddedObj->GetVisArea());
+                sal_uInt16 i(0);
+                pProps[i].Name = "VisibleAreaTop";
+                pProps[i].Value <<= static_cast<sal_Int32>(aRect.getY());
+                pProps[++i].Name = "VisibleAreaLeft";
+                pProps[i].Value <<= static_cast<sal_Int32>(aRect.getX());
+                pProps[++i].Name = "VisibleAreaWidth";
+                pProps[i].Value <<= static_cast<sal_Int32>(aRect.getWidth());
+                pProps[++i].Name = "VisibleAreaHeight";
+                pProps[i].Value <<= static_cast<sal_Int32>(aRect.getHeight());
             }
         }
     }

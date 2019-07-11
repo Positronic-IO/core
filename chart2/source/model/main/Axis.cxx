@@ -26,21 +26,15 @@
 #include <CloneHelper.hxx>
 #include <AxisHelper.hxx>
 #include <EventListenerHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <unonames.hxx>
 
 #include <com/sun/star/chart/ChartAxisArrangeOrderType.hpp>
 #include <com/sun/star/chart/ChartAxisLabelPosition.hpp>
 #include <com/sun/star/chart/ChartAxisMarkPosition.hpp>
 #include <com/sun/star/chart/ChartAxisPosition.hpp>
-#include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <com/sun/star/lang/Locale.hpp>
-#include <com/sun/star/drawing/LineStyle.hpp>
-#include <com/sun/star/drawing/LineDash.hpp>
-#include <com/sun/star/drawing/LineJoint.hpp>
 #include <com/sun/star/awt/Size.hpp>
-#include <rtl/uuid.h>
-#include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
 
@@ -340,7 +334,7 @@ Axis::Axis() :
 
 Axis::Axis( const Axis & rOther ) :
         MutexContainer(),
-        impl::Axis_Base(),
+        impl::Axis_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
     m_aScaleData( rOther.m_aScaleData )

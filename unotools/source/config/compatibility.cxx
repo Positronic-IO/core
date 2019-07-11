@@ -22,8 +22,12 @@
 #include <unotools/configitem.hxx>
 #include <unotools/syslocale.hxx>
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/lang/Locale.hpp>
+#include <i18nlangtag/languagetag.hxx>
 
 #include "itemholder1.hxx"
 
@@ -65,10 +69,6 @@ SvtCompatibilityEntry::SvtCompatibilityEntry()
     setValue<bool>( Index::EmptyDbFieldHidesPara, true );
 
     setDefaultEntry( false );
-}
-
-SvtCompatibilityEntry::~SvtCompatibilityEntry()
-{
 }
 
 OUString SvtCompatibilityEntry::getName( const Index rIdx )
@@ -247,10 +247,10 @@ Sequence< Sequence< PropertyValue > > SvtCompatibilityOptions_Impl::GetList() co
         lProperties[i].Name = SvtCompatibilityEntry::getName( SvtCompatibilityEntry::Index(i) );
 
     sal_Int32 j = 0;
-    for ( std::vector< SvtCompatibilityEntry >::const_iterator pItem = m_aOptions.begin(); pItem != m_aOptions.end(); ++pItem )
+    for ( const auto& rItem : m_aOptions )
     {
         for ( int i = static_cast<int>(SvtCompatibilityEntry::Index::Name); i < static_cast<int>(SvtCompatibilityEntry::Index::INVALID); ++i )
-            lProperties[i].Value = pItem->getValue( SvtCompatibilityEntry::Index(i) );
+            lProperties[i].Value = rItem.getValue( SvtCompatibilityEntry::Index(i) );
         lResult[ j++ ] = lProperties;
     }
 

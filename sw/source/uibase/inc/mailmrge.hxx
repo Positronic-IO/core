@@ -101,7 +101,6 @@ class SwMailMergeDlg : public SvxStandardDialog
     css::uno::Sequence< css::uno::Any >        m_aSelection;
     css::uno::Reference< css::frame::XFrame2 > m_xFrame;
 
-    Size            m_aDialogSize;
     OUString m_sSaveFilter;
     OUString m_sFilename;
 
@@ -140,30 +139,28 @@ public:
 
 };
 
-class SwMailMergeCreateFromDlg : public ModalDialog
+class SwMailMergeCreateFromDlg : public weld::GenericDialogController
 {
-    VclPtr<RadioButton> m_pThisDocRB;
+    std::unique_ptr<weld::RadioButton> m_xThisDocRB;
 public:
-    SwMailMergeCreateFromDlg(vcl::Window* pParent);
+    SwMailMergeCreateFromDlg(weld::Window* pParent);
     virtual ~SwMailMergeCreateFromDlg() override;
-    virtual void dispose() override;
     bool IsThisDocument() const
     {
-        return m_pThisDocRB->IsChecked();
+        return m_xThisDocRB->get_active();
     }
 };
 
-class SwMailMergeFieldConnectionsDlg : public ModalDialog
+class SwMailMergeFieldConnectionsDlg : public weld::GenericDialogController
 {
-    VclPtr<RadioButton> m_pUseExistingRB;
+    std::unique_ptr<weld::RadioButton> m_xUseExistingRB;
 public:
-    SwMailMergeFieldConnectionsDlg(vcl::Window* pParent);
+    SwMailMergeFieldConnectionsDlg(weld::Window* pParent);
     virtual ~SwMailMergeFieldConnectionsDlg() override;
-    virtual void dispose() override;
 
     bool IsUseExistingConnections() const
     {
-        return m_pUseExistingRB->IsChecked();
+        return m_xUseExistingRB->get_active();
     }
 };
 

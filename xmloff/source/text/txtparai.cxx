@@ -24,6 +24,7 @@
 
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <o3tl/make_unique.hxx>
 
@@ -273,10 +274,9 @@ XMLEndReferenceContext_Impl::XMLEndReferenceContext_Impl(
     if (XMLStartReferenceContext_Impl::FindName(GetImport(), xAttrList, sName))
     {
         // search for reference start
-        sal_uInt16 nCount = rHints.GetHints().size();
-        for(sal_uInt16 nPos = 0; nPos < nCount; nPos++)
+        for (const auto& rHintPtr : rHints.GetHints())
         {
-            XMLHint_Impl *const pHint = rHints.GetHints()[nPos].get();
+            XMLHint_Impl *const pHint = rHintPtr.get();
             if ( pHint->IsReference() &&
                  sName == static_cast<XMLReferenceHint_Impl *>(pHint)->GetRefName() )
             {
@@ -639,6 +639,11 @@ void XMLImpRubyContext_Impl::EndElement()
         GetImport().GetTextImport());
     const Reference < XTextCursor > xAttrCursor(
         xTextImport->GetText()->createTextCursorByRange( m_xStart ));
+    if (!xAttrCursor.is())
+    {
+        SAL_WARN("xmloff.text", "cannot insert ruby");
+        return;
+    }
     xAttrCursor->gotoRange(xTextImport->GetCursorAsRange()->getStart(),
             true);
     xTextImport->SetRuby( GetImport(), xAttrCursor,
@@ -1098,10 +1103,9 @@ void XMLIndexMarkImportContext_Impl::StartElement(
             if (!sID.isEmpty())
             {
                 // if we have an ID, find the hint and set the end position
-                sal_uInt16 nCount = m_rHints.GetHints().size();
-                for(sal_uInt16 nPos = 0; nPos < nCount; nPos++)
+                for (const auto& rHintPtr : m_rHints.GetHints())
                 {
-                    XMLHint_Impl *const pHint = m_rHints.GetHints()[nPos].get();
+                    XMLHint_Impl *const pHint = rHintPtr.get();
                     if ( pHint->IsIndexMark() &&
                          sID == static_cast<XMLIndexMarkHint_Impl *>(pHint)->GetID() )
                     {
@@ -1559,7 +1563,8 @@ SvXMLImportContextRef XMLImpSpanContext_Impl::CreateChildContext(
         }
         else
         {
-            pContext = new XMLUrlFieldImportContext( rImport, *rImport.GetTextImport().get(), nPrefix, rLocalName );
+            pContext = new XMLUrlFieldImportContext(rImport, *rImport.GetTextImport(), nPrefix,
+                                                    rLocalName);
             //whitespace handling like other fields
             rIgnoreLeadingSpace = false;
 
@@ -1583,9 +1588,8 @@ SvXMLImportContextRef XMLImpSpanContext_Impl::CreateChildContext(
         }
         else
         {
-            pContext = new XMLFootnoteImportContext( rImport,
-                                                     *rImport.GetTextImport().get(),
-                                                     nPrefix, rLocalName );
+            pContext = new XMLFootnoteImportContext(rImport, *rImport.GetTextImport(), nPrefix,
+                                                    rLocalName);
         }
         rIgnoreLeadingSpace = false;
         break;
@@ -1594,19 +1598,17 @@ SvXMLImportContextRef XMLImpSpanContext_Impl::CreateChildContext(
     case XML_TOK_TEXT_BOOKMARK:
     case XML_TOK_TEXT_BOOKMARK_START:
     case XML_TOK_TEXT_BOOKMARK_END:
-        pContext = new XMLTextMarkImportContext( rImport,
-                                                 *rImport.GetTextImport().get(),
-                                                 rHints.GetCrossRefHeadingBookmark(),
-                                                 nPrefix, rLocalName );
+        pContext = new XMLTextMarkImportContext(rImport, *rImport.GetTextImport(),
+                                                rHints.GetCrossRefHeadingBookmark(), nPrefix,
+                                                rLocalName);
         break;
 
     case XML_TOK_TEXT_FIELDMARK:
     case XML_TOK_TEXT_FIELDMARK_START:
     case XML_TOK_TEXT_FIELDMARK_END:
-        pContext = new XMLTextMarkImportContext( rImport,
-                                                 *rImport.GetTextImport().get(),
-                                                 rHints.GetCrossRefHeadingBookmark(),
-                                                 nPrefix, rLocalName );
+        pContext = new XMLTextMarkImportContext(rImport, *rImport.GetTextImport(),
+                                                rHints.GetCrossRefHeadingBookmark(), nPrefix,
+                                                rLocalName);
         break;
 
     case XML_TOK_TEXT_REFERENCE_START:
@@ -1707,10 +1709,8 @@ SvXMLImportContextRef XMLImpSpanContext_Impl::CreateChildContext(
 
     default:
         // none of the above? then it's probably  a text field!
-        pContext =
-            XMLTextFieldImportContext::CreateTextFieldImportContext(
-                rImport, *rImport.GetTextImport().get(), nPrefix, rLocalName,
-                nToken);
+        pContext = XMLTextFieldImportContext::CreateTextFieldImportContext(
+            rImport, *rImport.GetTextImport(), nPrefix, rLocalName, nToken);
         // #108784# import draw elements (except control shapes in headers)
         if( pContext == nullptr &&
             !( rImport.GetTextImport()->IsInHeaderFooter() &&
@@ -2132,7 +2132,7 @@ void XMLParaContext::EndElement()
                     const XMLDrawHint_Impl *pDHint =
                         static_cast<const XMLDrawHint_Impl*>(pHint);
                     // Improvement: hint directly provides the shape. (#i33242#)
-                    Reference < XShape > xShape = pDHint->GetShape();
+                    const Reference < XShape >& xShape = pDHint->GetShape();
                     if ( xShape.is() )
                     {
                         // determine anchor type
@@ -2215,7 +2215,6 @@ XMLNumberedParaContext::XMLNumberedParaContext(
         switch( rTokenMap.Get( nPrefix, aLocalName ) )
         {
             case XML_TOK_TEXT_NUMBERED_PARAGRAPH_XMLID:
-                m_XmlId = rValue;
 //FIXME: there is no UNO API for lists
                 break;
             case XML_TOK_TEXT_NUMBERED_PARAGRAPH_LIST_ID:

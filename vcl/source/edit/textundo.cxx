@@ -21,6 +21,7 @@
 #include "textund2.hxx"
 #include <strings.hrc>
 
+#include <sal/log.hxx>
 #include <vcl/texteng.hxx>
 #include <vcl/textview.hxx>
 #include <vcl/textdata.hxx>
@@ -135,11 +136,11 @@ void TextUndo::SetSelection( const TextSelection& rSel )
 }
 
 TextUndoDelPara::TextUndoDelPara( TextEngine* pTextEngine, TextNode* pNode, sal_uInt32 nPara )
-                    : TextUndo( pTextEngine )
+    : TextUndo( pTextEngine )
+    , mbDelObject( true)
+    , mnPara( nPara )
+    , mpNode( pNode )
 {
-    mpNode = pNode;
-    mnPara = nPara;
-    mbDelObject = true;
 }
 
 TextUndoDelPara::~TextUndoDelPara()
@@ -162,14 +163,19 @@ void TextUndoDelPara::Undo()
 
 void TextUndoDelPara::Redo()
 {
+    auto & rDocNodes = GetDoc()->GetNodes();
     // pNode is not valid anymore in case an Undo joined paragraphs
-    mpNode = GetDoc()->GetNodes()[ mnPara ].get();
+    mpNode = rDocNodes[ mnPara ].get();
 
     GetTEParaPortions()->Remove( mnPara );
 
     // do not delete Node because of Undo!
-    GetDoc()->GetNodes().erase( ::std::find_if( GetDoc()->GetNodes().begin(), GetDoc()->GetNodes().end(),
-                                                [&] (std::unique_ptr<TextNode> const & p) { return p.get() == mpNode; } ) );
+    auto it = ::std::find_if( rDocNodes.begin(), rDocNodes.end(),
+                              [&] (std::unique_ptr<TextNode> const & p) { return p.get() == mpNode; } );
+    assert(it != rDocNodes.end());
+    it->release();
+    GetDoc()->GetNodes().erase( it );
+
     GetTextEngine()->ImpParagraphRemoved( mnPara );
 
     mbDelObject = true; // belongs again to the Undo
@@ -187,10 +193,10 @@ OUString TextUndoDelPara::GetComment () const
 }
 
 TextUndoConnectParas::TextUndoConnectParas( TextEngine* pTextEngine, sal_uInt32 nPara, sal_Int32 nPos )
-                    :   TextUndo( pTextEngine )
+    : TextUndo( pTextEngine )
+    , mnPara( nPara )
+    , mnSepPos( nPos )
 {
-    mnPara = nPara;
-    mnSepPos = nPos;
 }
 
 TextUndoConnectParas::~TextUndoConnectParas()
@@ -215,10 +221,10 @@ OUString TextUndoConnectParas::GetComment () const
 }
 
 TextUndoSplitPara::TextUndoSplitPara( TextEngine* pTextEngine, sal_uInt32 nPara, sal_Int32 nPos )
-                    : TextUndo( pTextEngine )
+    : TextUndo( pTextEngine )
+    , mnPara( nPara )
+    , mnSepPos ( nPos )
 {
-    mnPara = nPara;
-    mnSepPos = nPos;
 }
 
 TextUndoSplitPara::~TextUndoSplitPara()

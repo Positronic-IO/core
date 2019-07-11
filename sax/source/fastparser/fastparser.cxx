@@ -22,6 +22,7 @@
 #include <xml2utf.hxx>
 
 #include <com/sun/star/io/IOException.hpp>
+#include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -91,8 +92,8 @@ struct Event
 
 struct NameWithToken
 {
-    OUString msName;
-    sal_Int32 mnToken;
+    OUString const msName;
+    sal_Int32 const mnToken;
 
     NameWithToken(const OUString& sName, sal_Int32 nToken) :
         msName(sName), mnToken(nToken) {}
@@ -101,7 +102,7 @@ struct NameWithToken
 struct SaxContext
 {
     Reference< XFastContextHandler > mxContext;
-    sal_Int32 mnElementToken;
+    sal_Int32 const mnElementToken;
     OUString  maNamespace;
     OUString  maElementName;
 
@@ -137,6 +138,7 @@ struct NamespaceDefine
     OUString    maNamespaceURL;
 
     NamespaceDefine( const OString& rPrefix, sal_Int32 nToken, const OUString& rNamespaceURL ) : maPrefix( rPrefix ), mnToken( nToken ), maNamespaceURL( rNamespaceURL ) {}
+    NamespaceDefine() : mnToken(-1) {}
 };
 
 // Entity binds all information needed for a single file | single call of parseStream
@@ -178,15 +180,14 @@ struct Entity : public ParserData
     void throwException( const ::rtl::Reference< FastLocatorImpl > &xDocumentLocator,
                          bool mbDuringParse );
 
-    std::stack< NameWithToken >           maNamespaceStack;
+    std::stack< NameWithToken, std::vector<NameWithToken> > maNamespaceStack;
     /* Context for main thread consuming events.
      * startElement() stores the data, which characters() and endElement() uses
      */
-    std::stack< SaxContext>               maContextStack;
+    std::stack< SaxContext, std::vector<SaxContext> >  maContextStack;
     // Determines which elements of maNamespaceDefines are valid in current context
-    std::stack< sal_uInt32 >              maNamespaceCount;
-    std::vector< std::shared_ptr< NamespaceDefine > >
-                                          maNamespaceDefines;
+    std::stack< sal_uInt32, std::vector<sal_uInt32> >  maNamespaceCount;
+    std::vector< NamespaceDefine >                     maNamespaceDefines;
 
     explicit Entity( const ParserData& rData );
     Entity( const Entity& rEntity ) = delete;
@@ -246,6 +247,7 @@ public:
     void parse();
     void produce( bool bForceFlush = false );
     bool m_bIgnoreMissingNSDecl;
+    bool m_bDisableThreadedParser;
 
 private:
     bool consume(EventList&);
@@ -270,8 +272,8 @@ private:
     ParserData maData;                      /// Cached parser configuration for next call of parseStream().
 
     Entity *mpTop;                          /// std::stack::top() is amazingly slow => cache this.
-    std::stack< Entity > maEntities;      /// Entity stack for each call of parseStream().
-    OUString pendingCharacters;             /// Data from characters() callback that needs to be sent.
+    std::stack< Entity > maEntities;        /// Entity stack for each call of parseStream().
+    std::vector<char> pendingCharacters;    /// Data from characters() callback that needs to be sent.
 };
 
 } // namespace sax_fastparser
@@ -442,8 +444,7 @@ void Entity::startElement( Event const *pEvent )
                 xContext->startFastElement( nElementToken, xAttr );
         }
         // swap the reference we own in to avoid referencing thrash.
-        maContextStack.top().mxContext.set( xContext.get() );
-        xContext.set( nullptr, SAL_NO_ACQUIRE );
+        maContextStack.top().mxContext = std::move( xContext );
     }
     catch (...)
     {
@@ -459,10 +460,10 @@ void Entity::characters( const OUString& sChars )
         return;
     }
 
-    const Reference< XFastContextHandler >& xContext( maContextStack.top().mxContext );
-    if( xContext.is() ) try
+    XFastContextHandler * pContext( maContextStack.top().mxContext.get() );
+    if( pContext ) try
     {
-        xContext->characters( sChars );
+        pContext->characters( sChars );
     }
     catch (...)
     {
@@ -479,19 +480,20 @@ void Entity::endElement()
     }
 
     const SaxContext& aContext = maContextStack.top();
-    const Reference< XFastContextHandler >& xContext( aContext.mxContext );
-    if( xContext.is() ) try
-    {
-        sal_Int32 nElementToken = aContext.mnElementToken;
-        if( nElementToken != FastToken::DONTKNOW )
-            xContext->endFastElement( nElementToken );
-        else
-            xContext->endUnknownElement( aContext.maNamespace, aContext.maElementName );
-    }
-    catch (...)
-    {
-        saveException( ::cppu::getCaughtException() );
-    }
+    XFastContextHandler* pContext( aContext.mxContext.get() );
+    if( pContext )
+        try
+        {
+            sal_Int32 nElementToken = aContext.mnElementToken;
+            if( nElementToken != FastToken::DONTKNOW )
+                pContext->endFastElement( nElementToken );
+            else
+                pContext->endUnknownElement( aContext.maNamespace, aContext.maElementName );
+        }
+        catch (...)
+        {
+            saveException( ::cppu::getCaughtException() );
+        }
     maContextStack.pop();
 }
 
@@ -633,6 +635,7 @@ namespace sax_fastparser {
 
 FastSaxParserImpl::FastSaxParserImpl() :
     m_bIgnoreMissingNSDecl(false),
+    m_bDisableThreadedParser(false),
     mpTop(nullptr)
 {
     mxDocumentLocator.set( new FastLocatorImpl( this ) );
@@ -653,7 +656,7 @@ void FastSaxParserImpl::DefineNamespace( const OString& rPrefix, const OUString&
     if( rEntity.maNamespaceDefines.size() <= nOffset )
         rEntity.maNamespaceDefines.resize( rEntity.maNamespaceDefines.size() + 64 );
 
-    rEntity.maNamespaceDefines[nOffset].reset( new NamespaceDefine( rPrefix, GetNamespaceToken( namespaceURL ), namespaceURL ) );
+    rEntity.maNamespaceDefines[nOffset] = NamespaceDefine( rPrefix, GetNamespaceToken( namespaceURL ), namespaceURL );
 }
 
 sal_Int32 FastSaxParserImpl::GetToken( const xmlChar* pName, sal_Int32 nameLen /* = 0 */ )
@@ -674,11 +677,12 @@ sal_Int32 FastSaxParserImpl::GetTokenWithPrefix( const xmlChar* pPrefix, int nPr
     sal_uInt32 nNamespace = rEntity.maNamespaceCount.top();
     while( nNamespace-- )
     {
-        const OString& rPrefix( rEntity.maNamespaceDefines[nNamespace]->maPrefix );
+        const auto & rNamespaceDefine = rEntity.maNamespaceDefines[nNamespace];
+        const OString& rPrefix( rNamespaceDefine.maPrefix );
         if( (rPrefix.getLength() == nPrefixLen) &&
-            (strncmp( rPrefix.getStr(), XML_CAST( pPrefix ), nPrefixLen ) == 0 ) )
+            rtl_str_reverseCompare_WithLength(rPrefix.pData->buffer, rPrefix.pData->length, XML_CAST( pPrefix ), nPrefixLen ) == 0 )
         {
-            nNamespaceToken = rEntity.maNamespaceDefines[nNamespace]->mnToken;
+            nNamespaceToken = rNamespaceDefine.mnToken;
             break;
         }
 
@@ -713,8 +717,8 @@ OUString const & FastSaxParserImpl::GetNamespaceURL( const OString& rPrefix )
     {
         sal_uInt32 nNamespace = rEntity.maNamespaceCount.top();
         while( nNamespace-- )
-            if( rEntity.maNamespaceDefines[nNamespace]->maPrefix == rPrefix )
-                return rEntity.maNamespaceDefines[nNamespace]->maNamespaceURL;
+            if( rEntity.maNamespaceDefines[nNamespace].maPrefix == rPrefix )
+                return rEntity.maNamespaceDefines[nNamespace].maNamespaceURL;
     }
 
     throw SAXException("No namespace defined for " + OUString::fromUtf8(rPrefix),
@@ -740,6 +744,7 @@ namespace
     private:
         FastSaxParserImpl& m_rParser;
         Entity& m_rEntity;
+        rtl::Reference<ParserThread> m_xParser;
     public:
         ParserCleanup(FastSaxParserImpl& rParser, Entity& rEntity)
             : m_rParser(rParser)
@@ -748,9 +753,27 @@ namespace
         }
         ~ParserCleanup()
         {
-            //xmlFreeParserCtxt accepts a null arg
-            xmlFreeParserCtxt(m_rEntity.mpParser);
+            if (m_rEntity.mpParser)
+            {
+                if (m_rEntity.mpParser->myDoc)
+                    xmlFreeDoc(m_rEntity.mpParser->myDoc);
+                xmlFreeParserCtxt(m_rEntity.mpParser);
+            }
+            joinThread();
             m_rParser.popEntity();
+        }
+        void setThread(const rtl::Reference<ParserThread> &xParser)
+        {
+            m_xParser = xParser;
+        }
+        void joinThread()
+        {
+            if (m_xParser.is())
+            {
+                rtl::Reference<ParserThread> xToJoin = m_xParser;
+                m_xParser.clear();
+                xToJoin->join();
+            }
         }
     };
 }
@@ -779,14 +802,20 @@ void FastSaxParserImpl::parseStream(const InputSource& rStructSource)
         rEntity.mxDocumentHandler->startDocument();
     }
 
-    rEntity.mbEnableThreads = rEntity.maStructSource.aInputStream->available() > 10000
-        && !getenv("SAX_DISABLE_THREADS");
+    if (!getenv("SAX_DISABLE_THREADS") && !m_bDisableThreadedParser)
+    {
+        Reference<css::io::XSeekable> xSeekable(rEntity.maStructSource.aInputStream, UNO_QUERY);
+        // available() is not __really__ relevant here, but leave it in as a heuristic for non-seekable streams
+        rEntity.mbEnableThreads = (xSeekable.is() && xSeekable->getLength() > 10000)
+                || (rEntity.maStructSource.aInputStream->available() > 10000);
+    }
 
     if (rEntity.mbEnableThreads)
     {
         rtl::Reference<ParserThread> xParser;
         xParser = new ParserThread(this);
         xParser->launch();
+        aEnsureFree.setThread(xParser);
         bool done = false;
         do {
             rEntity.maConsumeResume.wait();
@@ -827,7 +856,7 @@ void FastSaxParserImpl::parseStream(const InputSource& rStructSource)
                 rEntity.maUsedEvents.push(std::move(xEventList));
             }
         } while (!done);
-        xParser->join();
+        aEnsureFree.joinThread();
         deleteUsedEvents();
 
         // callbacks used inside XML_Parse may have caught an exception
@@ -1074,7 +1103,7 @@ void FastSaxParserImpl::parse()
 void FastSaxParserImpl::callbackStartElement(const xmlChar *localName , const xmlChar* prefix, const xmlChar* URI,
     int numNamespaces, const xmlChar** namespaces, int numAttributes, const xmlChar **attributes)
 {
-    if (!pendingCharacters.isEmpty())
+    if (!pendingCharacters.empty())
         sendPendingCharacters();
     Entity& rEntity = getEntity();
     if( rEntity.maNamespaceCount.empty() )
@@ -1245,7 +1274,7 @@ void FastSaxParserImpl::addUnknownElementWithPrefix(const xmlChar **attributes, 
 
 void FastSaxParserImpl::callbackEndElement()
 {
-    if (!pendingCharacters.isEmpty())
+    if (!pendingCharacters.empty())
         sendPendingCharacters();
     Entity& rEntity = getEntity();
     SAL_WARN_IF(rEntity.maNamespaceCount.empty(), "sax", "Empty NamespaceCount");
@@ -1270,24 +1299,33 @@ void FastSaxParserImpl::callbackCharacters( const xmlChar* s, int nLen )
     // simpler FastSaxParser's character callback provides the whole string at once,
     // so merge data from possible multiple calls and send them at once (before the element
     // ends or another one starts).
-    pendingCharacters += OUString( XML_CAST( s ), nLen, RTL_TEXTENCODING_UTF8 );
+    //
+    // We use a std::vector<char> to avoid calling into the OUString constructor more than once when
+    // we have multiple callbackCharacters() calls that we have to merge, which happens surprisingly
+    // often in writer documents.
+    int nOriginalLen = pendingCharacters.size();
+    pendingCharacters.resize(nOriginalLen + nLen);
+    memcpy(pendingCharacters.data() + nOriginalLen, s, nLen);
 }
 
 void FastSaxParserImpl::sendPendingCharacters()
 {
     Entity& rEntity = getEntity();
-    Event& rEvent = rEntity.getEvent( CHARACTERS );
-    rEvent.msChars = pendingCharacters;
-    pendingCharacters.clear();
+    OUString sChars( pendingCharacters.data(), pendingCharacters.size(), RTL_TEXTENCODING_UTF8 );
     if (rEntity.mbEnableThreads)
+    {
+        Event& rEvent = rEntity.getEvent( CHARACTERS );
+        rEvent.msChars = sChars;
         produce();
+    }
     else
-        rEntity.characters( rEvent.msChars );
+        rEntity.characters( sChars );
+    pendingCharacters.resize(0);
 }
 
 void FastSaxParserImpl::callbackProcessingInstruction( const xmlChar *target, const xmlChar *data )
 {
-    if (!pendingCharacters.isEmpty())
+    if (!pendingCharacters.empty())
         sendPendingCharacters();
     Entity& rEntity = getEntity();
     Event& rEvent = rEntity.getEvent( PROCESSING_INSTRUCTION );
@@ -1318,11 +1356,16 @@ FastSaxParser::initialize(css::uno::Sequence< css::uno::Any > const& rArguments)
     if (rArguments.getLength())
     {
         OUString str;
-        if ( ( rArguments[0] >>= str ) && "IgnoreMissingNSDecl" == str )
-            mpImpl->m_bIgnoreMissingNSDecl = true;
-        else if ( str == "DoSmeplease" )
+        if ( rArguments[0] >>= str )
         {
-            //just ignore as this is already immune to billion laughs
+            if ( str == "IgnoreMissingNSDecl" )
+                mpImpl->m_bIgnoreMissingNSDecl = true;
+            else if ( str == "DoSmeplease" )
+                ; //just ignore as this is already immune to billion laughs
+            else if ( str == "DisableThreadedParser" )
+                mpImpl->m_bDisableThreadedParser = true;
+            else
+                throw IllegalArgumentException();
         }
         else
             throw IllegalArgumentException();

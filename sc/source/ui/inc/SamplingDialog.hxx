@@ -11,13 +11,11 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_SAMPLINGDIALOG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_SAMPLINGDIALOG_HXX
 
-#include <global.hxx>
 #include <address.hxx>
 #include "anyrefdg.hxx"
+#include "viewdata.hxx"
 
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
-#include <vcl/lstbox.hxx>
 
 class ScSamplingDialog : public ScAnyRefDlg
 {
@@ -54,14 +52,14 @@ private:
     VclPtr<formula::RefEdit>   mpActiveEdit;
 
     // Data
-    ScViewData*         mViewData;
-    ScDocument*         mDocument;
+    ScViewData* const         mViewData;
+    ScDocument* const         mDocument;
 
-    ScRange             mInputRange;
-    ScAddress::Details  mAddressDetails;
-    ScAddress           mOutputAddress;
+    ScRange                   mInputRange;
+    ScAddress::Details const  mAddressDetails;
+    ScAddress                 mOutputAddress;
 
-    ScAddress           mCurrentAddress;
+    ScAddress const           mCurrentAddress;
 
     bool                mDialogLostFocus;
 

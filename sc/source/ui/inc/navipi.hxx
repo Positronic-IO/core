@@ -25,22 +25,20 @@
 #include <vcl/field.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/idle.hxx>
-#include <svl/poolitem.hxx>
 #include <svl/lstner.hxx>
 #include <sfx2/childwin.hxx>
 #include <svx/sidebar/PanelLayout.hxx>
 #include "content.hxx"
 #include <svtools/svmedit.hxx>
 
+class SfxPoolItem;
 class ScTabViewShell;
 class ScViewData;
 class ScArea;
 class ScScenarioWindow;
 class ScNavigatorControllerItem;
-class ScNavigatorDialogWrapper;
 class ScNavigatorDlg;
 class ScNavigatorSettings;
-class VclContainer;
 
 #define SC_DROPMODE_URL         0
 #define SC_DROPMODE_LINK        1
@@ -173,6 +171,8 @@ friend class RowEdit;
 friend class ScContentTree;
 
 private:
+    static constexpr int CTRL_ITEMS = 4;
+
     SfxBindings&        rBindings;      // must be first member
 
     VclPtr<ColumnEdit> aEdCol;
@@ -187,12 +187,12 @@ private:
     Size            aExpandedSize;
     Idle            aContentIdle;
 
-    OUString        aStrDragMode;
-    OUString        aStrDisplay;
+    OUString const  aStrDragMode;
+    OUString const  aStrDisplay;
     OUString        aStrActive;
     OUString        aStrNotActive;
     OUString        aStrHidden;
-    OUString        aStrActiveWin;
+    OUString const  aStrActiveWin;
 
     sal_uInt16      nZoomId;
     sal_uInt16      nChangeRootId;
@@ -201,7 +201,7 @@ private:
     sal_uInt16      nDownId;
     sal_uInt16      nUpId;
     sal_uInt16      nDataId;
-    ScArea*         pMarkArea;
+    std::unique_ptr<ScArea> pMarkArea;
     ScViewData*     pViewData;
 
     NavListMode     eListMode;
@@ -210,7 +210,7 @@ private:
     SCROW           nCurRow;
     SCTAB           nCurTab;
 
-    ScNavigatorControllerItem** ppBoundItems;
+    std::array<std::unique_ptr<ScNavigatorControllerItem>,CTRL_ITEMS> mvBoundItems;
 
     DECL_LINK(TimeHdl, Timer*, void);
     DECL_LINK(DocumentSelectHdl, ListBox&, void);

@@ -28,7 +28,6 @@
 
 class KeyEvent;
 class MouseEvent;
-class SdrHdlList;
 
 namespace sd {
 
@@ -171,7 +170,7 @@ public:
 
     virtual bool isMarkable() const;
 protected:
-    SmartTagReference mxSmartTag;
+    SmartTagReference const mxSmartTag;
 };
 
 } // end of namespace sd

@@ -68,7 +68,6 @@
 #include <listenercontainers.hxx>
 #include <comphelper/propmultiplex.hxx>
 #include <comphelper/uno3.hxx>
-#include <comphelper/proparrhlp.hxx>
 #include <cppuhelper/implbase12.hxx>
 #include <cppuhelper/implbase4.hxx>
 #include <cppuhelper/implbase7.hxx>
@@ -178,7 +177,7 @@ class ODatabaseForm :public OFormComponents
     rtl::Reference<OGroupManager>   m_pGroupManager;
     ::dbtools::ParameterManager m_aParameterManager;
     ::dbtools::FilterManager    m_aFilterManager;
-    Timer*                      m_pLoadTimer;
+    std::unique_ptr<Timer>      m_pLoadTimer;
 
     rtl::Reference<OFormSubmitResetThread>  m_pThread;
     OUString                    m_sCurrentErrorContext;
@@ -513,7 +512,7 @@ private:
     void FillSuccessfulList(HtmlSuccessfulObjList& rList, const css::uno::Reference< css::awt::XControl>& rxSubmitButton, const css::awt::MouseEvent& MouseEvt);
 
     static void InsertTextPart(INetMIMEMessage& rParent, const OUString& rName, const OUString& rData);
-    static bool InsertFilePart(INetMIMEMessage& rParent, const OUString& rName, const OUString& rFileName);
+    static void InsertFilePart(INetMIMEMessage& rParent, const OUString& rName, const OUString& rFileName);
     static void Encode(OUString& rString);
 
     css::uno::Reference< css::sdbc::XConnection > getConnection();

@@ -32,11 +32,8 @@
 #include <sfx2/dockwin.hxx>
 #include <sfx2/ctrlitem.hxx>
 #include <vcl/image.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
-#include <vcl/dialog.hxx>
-#include <vcl/group.hxx>
-#include <vcl/dockwin.hxx>
 #include <svx/fmtools.hxx>
 #include "fmexch.hxx"
 #include "sqlparserclient.hxx"
@@ -58,7 +55,7 @@ class FmFilterAdapter;
 
 class FmFilterData
 {
-    FmParentData*    m_pParent;
+    FmParentData* const    m_pParent;
     OUString         m_aText;
 
 public:
@@ -79,7 +76,7 @@ public:
 class FmParentData : public FmFilterData
 {
 protected:
-    ::std::vector< FmFilterData* >  m_aChildren;
+    ::std::vector< std::unique_ptr<FmFilterData> >  m_aChildren;
 
 public:
     FmParentData(FmParentData* pParent, const OUString& rText)
@@ -87,7 +84,7 @@ public:
     {}
     virtual ~FmParentData() override;
 
-    ::std::vector< FmFilterData* >& GetChildren() { return m_aChildren; }
+    ::std::vector< std::unique_ptr<FmFilterData> >& GetChildren() { return m_aChildren; }
 };
 
 
@@ -130,7 +127,7 @@ public:
 
 class FmFilterItem : public FmFilterData
 {
-    OUString     m_aFieldName;
+    OUString const      m_aFieldName;
     const sal_Int32     m_nComponentIndex;
 
 public:
@@ -166,7 +163,7 @@ public:
     void Update(const css::uno::Reference< css::container::XIndexAccess > & xControllers, const css::uno::Reference< css::form::runtime::XFormController > & xCurrent);
     void Clear();
     bool ValidateText(FmFilterItem const * pItem, OUString& rText, OUString& rErrorMsg) const;
-    void Append(FmFilterItems* pItems, FmFilterItem* pFilterItem);
+    void Append(FmFilterItems* pItems, std::unique_ptr<FmFilterItem> pFilterItem);
     void SetTextForItem(FmFilterItem* pItem, const OUString& rText);
 
     FmFormItem* GetCurrentForm() const {return m_pCurrentItems ? static_cast<FmFormItem*>(m_pCurrentItems->GetParent()) : nullptr;}
@@ -181,10 +178,10 @@ public:
     void EnsureEmptyFilterRows( FmParentData& _rItem );
 
 private:
-    void Insert(const ::std::vector<FmFilterData*>::iterator& rPos, FmFilterData* pFilterItem);
-    void Remove( const ::std::vector<FmFilterData*>::iterator& rPos );
-    FmFormItem* Find(const ::std::vector<FmFilterData*>& rItems, const css::uno::Reference< css::form::runtime::XFormController > & xController) const;
-    FmFormItem* Find(const ::std::vector<FmFilterData*>& rItems, const css::uno::Reference< css::form::XForm >& xForm) const;
+    void Insert(const ::std::vector<std::unique_ptr<FmFilterData>>::iterator& rPos, std::unique_ptr<FmFilterData> pFilterItem);
+    void Remove( const ::std::vector<std::unique_ptr<FmFilterData>>::iterator& rPos );
+    FmFormItem* Find(const ::std::vector<std::unique_ptr<FmFilterData>>& rItems, const css::uno::Reference< css::form::runtime::XFormController > & xController) const;
+    FmFormItem* Find(const ::std::vector<std::unique_ptr<FmFilterData>>& rItems, const css::uno::Reference< css::form::XForm >& xForm) const;
     void Update(const css::uno::Reference< css::container::XIndexAccess > & xControllers, FmParentData* pParent);
 };
 
@@ -231,7 +228,7 @@ class FmFilterNavigator final : public SvTreeListBox, public SfxListener
 {
     enum DROP_ACTION{ DA_SCROLLUP, DA_SCROLLDOWN, DA_EXPANDNODE };
 
-    FmFilterModel*          m_pModel;
+    std::unique_ptr<FmFilterModel> m_pModel;
     SvTreeListEntry*            m_pEditingCurrently;
     OFilterExchangeHelper   m_aControlExchange;
 
@@ -250,7 +247,7 @@ public:
             const css::uno::Reference< css::container::XIndexAccess > & xControllers,
             const css::uno::Reference< css::form::runtime::XFormController > & xCurrent
         );
-    const FmFilterModel* GetFilterModel() const {return m_pModel;}
+    const FmFilterModel* GetFilterModel() const {return m_pModel.get();}
 
 private:
 

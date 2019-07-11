@@ -24,7 +24,6 @@
 #include <svtools/colorcfg.hxx>
 #include "ReportDefines.hxx"
 #include "ReportSection.hxx"
-#include <comphelper/propmultiplex.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <svx/svdedtv.hxx>
@@ -48,8 +47,8 @@ namespace rptui
     struct RectangleLess
     {
         enum CompareMode { POS_LEFT,POS_RIGHT,POS_UPPER,POS_DOWN,POS_CENTER_HORIZONTAL,POS_CENTER_VERTICAL };
-        CompareMode m_eCompareMode;
-        Point       m_aRefPoint;
+        CompareMode const m_eCompareMode;
+        Point const m_aRefPoint;
         RectangleLess(CompareMode _eCompareMode,const Point& _rRefPoint ) : m_eCompareMode(_eCompareMode),m_aRefPoint(_rRefPoint){}
         bool operator() (const tools::Rectangle& lhs, const tools::Rectangle& rhs) const
         {
@@ -95,8 +94,8 @@ namespace rptui
         static void collectBoundResizeRect(const TRectangleMap& _rSortRectangles, ControlModification _nControlModification,bool _bAlignAtSection,tools::Rectangle& _rBound,tools::Rectangle& _rResize);
         void impl_resizeSectionWindow(OSectionWindow& _rSectionWindow,Point& _rStartPoint,bool _bSet);
 
-        OViewsWindow(OViewsWindow&) = delete;
-        void operator =(OViewsWindow&) = delete;
+        OViewsWindow(OViewsWindow const &) = delete;
+        void operator =(OViewsWindow const &) = delete;
     protected:
         virtual void DataChanged( const DataChangedEvent& rDCEvt ) override;
         // Window overrides

@@ -31,6 +31,8 @@
 #include <tools/fract.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <vcl/virdev.hxx>
 #include <o3tl/make_unique.hxx>
 #include <o3tl/safeint.hxx>
@@ -1332,7 +1334,7 @@ namespace emfio
 
                         mpGDIMetaFile->AddAction( new MetaCommentAction( "XPATHFILL_SEQ_BEGIN", 0,
                                                                 static_cast<const sal_uInt8*>(aMemStm.GetData()),
-                                                                aMemStm.Seek( STREAM_SEEK_TO_END ) ) );
+                                                                aMemStm.TellEnd() ) );
                         mpGDIMetaFile->AddAction( new MetaCommentAction( "XPATHFILL_SEQ_END" ) );
                     }
 
@@ -2183,7 +2185,10 @@ namespace emfio
                 mbClipNeedsUpdate = true;
             }
             if ( meLatestRasterOp != meRasterOp )
+            {
                 mpGDIMetaFile->AddAction( new MetaRasterOpAction( meRasterOp ) );
+                meLatestRasterOp = meRasterOp;
+            }
             mvSaveStack.pop_back();
         }
     }

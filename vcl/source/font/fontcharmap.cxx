@@ -18,6 +18,7 @@
 #include <vcl/fontcharmap.hxx>
 #include <fontinstance.hxx>
 #include <impfontcharmap.hxx>
+#include <sal/log.hxx>
 
 #include <vector>
 #include <set>
@@ -356,6 +357,7 @@ bool ParseCMAP( const unsigned char* pCmap, int nLength, CmapResult& rResult )
         if( nRangeCount <= 0 )
             return false;
         pCodePairs = new sal_UCS4[ nRangeCount * 2 ];
+        pCP = pCodePairs;
         for (auto const& supportedRange : aSupportedRanges)
             *(pCP++) = supportedRange;
     }

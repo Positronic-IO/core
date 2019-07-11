@@ -19,32 +19,9 @@ namespace svl {
 
 namespace {
 
-inline sal_Int32 getRefCount( const rtl_uString* p )
+sal_Int32 getRefCount( const rtl_uString* p )
 {
     return (p->refCount & 0x3FFFFFFF);
-}
-
-typedef std::unordered_set<OUString> StrHashType;
-typedef std::pair<StrHashType::iterator, bool> InsertResultType;
-typedef std::unordered_map<const rtl_uString*, OUString> StrStoreType;
-
-InsertResultType findOrInsert( StrHashType& rPool, const OUString& rStr )
-{
-    StrHashType::iterator it = rPool.find(rStr);
-    bool bInserted = false;
-    if (it == rPool.end())
-    {
-        // Not yet in the pool.
-        std::pair<StrHashType::iterator, bool> r = rPool.insert(rStr);
-        if (!r.second)
-            // Insertion failed.
-            return InsertResultType(rPool.end(), false);
-
-        it = r.first;
-        bInserted = true;
-    }
-
-    return InsertResultType(it, bInserted);
 }
 
 }
@@ -52,16 +29,17 @@ InsertResultType findOrInsert( StrHashType& rPool, const OUString& rStr )
 struct SharedStringPool::Impl
 {
     mutable osl::Mutex maMutex;
-    StrHashType maStrPool;
-    StrHashType maStrPoolUpper;
-    StrStoreType maStrStore;
-    const CharClass* mpCharClass;
+    // set of upper-case, so we can share these as the value in the maStrMap
+    std::unordered_set<OUString> maStrPoolUpper;
+    // map with rtl_uString* as key so we can avoid some ref-counting
+    std::unordered_map<OUString,rtl_uString*> maStrMap;
+    const CharClass& mrCharClass;
 
-    explicit Impl( const CharClass* pCharClass ) : mpCharClass(pCharClass) {}
+    explicit Impl( const CharClass& rCharClass ) : mrCharClass(rCharClass) {}
 };
 
-SharedStringPool::SharedStringPool( const CharClass* pCharClass ) :
-    mpImpl(new Impl(pCharClass)) {}
+SharedStringPool::SharedStringPool( const CharClass& rCharClass ) :
+    mpImpl(new Impl(rCharClass)) {}
 
 SharedStringPool::~SharedStringPool()
 {
@@ -71,82 +49,44 @@ SharedString SharedStringPool::intern( const OUString& rStr )
 {
     osl::MutexGuard aGuard(&mpImpl->maMutex);
 
-    InsertResultType aRes = findOrInsert(mpImpl->maStrPool, rStr);
-    if (aRes.first == mpImpl->maStrPool.end())
-        // Insertion failed.
-        return SharedString();
-
-    rtl_uString* pOrig = aRes.first->pData;
-
-    if (!mpImpl->mpCharClass)
-        // We don't track case insensitive strings.
-        return SharedString(pOrig, nullptr);
-
-    if (!aRes.second)
+    auto mapIt = mpImpl->maStrMap.find(rStr);
+    if (mapIt == mpImpl->maStrMap.end())
     {
-        // No new string has been inserted. Return the existing string in the pool.
-        StrStoreType::const_iterator it = mpImpl->maStrStore.find(pOrig);
-        if (it == mpImpl->maStrStore.end())
-            return SharedString();
-
-        rtl_uString* pUpper = it->second.pData;
-        return SharedString(pOrig, pUpper);
+        // This is a new string insertion. Establish mapping to upper-case variant.
+        OUString aUpper = mpImpl->mrCharClass.uppercase(rStr);
+        auto insertResult = mpImpl->maStrPoolUpper.insert(aUpper);
+        mapIt = mpImpl->maStrMap.emplace_hint(mapIt, rStr, insertResult.first->pData);
     }
-
-    // This is a new string insertion. Establish mapping to upper-case variant.
-
-    OUString aUpper = mpImpl->mpCharClass->uppercase(rStr);
-    aRes = findOrInsert(mpImpl->maStrPoolUpper, aUpper);
-    if (aRes.first == mpImpl->maStrPoolUpper.end())
-        // Failed to insert or fetch upper-case variant. Should never happen.
-        return SharedString();
-
-    mpImpl->maStrStore.emplace(pOrig, *aRes.first);
-
-    return SharedString(pOrig, aRes.first->pData);
+    return SharedString(mapIt->first.pData, mapIt->second);
 }
 
 void SharedStringPool::purge()
 {
     osl::MutexGuard aGuard(&mpImpl->maMutex);
 
-    StrHashType aNewStrPool;
-    StrHashType::iterator it = mpImpl->maStrPool.begin(), itEnd = mpImpl->maStrPool.end();
-    for (; it != itEnd; ++it)
+    std::unordered_set<OUString> aNewStrPoolUpper;
     {
-        const rtl_uString* p = it->pData;
-        if (getRefCount(p) == 1)
+        auto it = mpImpl->maStrMap.begin(), itEnd = mpImpl->maStrMap.end();
+        while (it != itEnd)
         {
-            // Remove it from the upper string map.  This should unref the
-            // upper string linked to this original string.
-            mpImpl->maStrStore.erase(p);
+            const rtl_uString* p = it->first.pData;
+            if (getRefCount(p) == 1)
+                it = mpImpl->maStrMap.erase(it);
+            else
+            {
+                // Still referenced outside the pool. Keep it.
+                aNewStrPoolUpper.insert(it->second);
+                ++it;
+            }
         }
-        else
-            // Still referenced outside the pool. Keep it.
-            aNewStrPool.insert(*it);
     }
-
-    mpImpl->maStrPool.swap(aNewStrPool);
-
-    aNewStrPool.clear(); // for re-use.
-
-    // Purge the upper string pool as well.
-    it = mpImpl->maStrPoolUpper.begin();
-    itEnd = mpImpl->maStrPoolUpper.end();
-    for (; it != itEnd; ++it)
-    {
-        const rtl_uString* p = it->pData;
-        if (getRefCount(p) > 1)
-            aNewStrPool.insert(*it);
-    }
-
-    mpImpl->maStrPoolUpper.swap(aNewStrPool);
+    mpImpl->maStrPoolUpper = std::move(aNewStrPoolUpper);
 }
 
 size_t SharedStringPool::getCount() const
 {
     osl::MutexGuard aGuard(&mpImpl->maMutex);
-    return mpImpl->maStrPool.size();
+    return mpImpl->maStrMap.size();
 }
 
 size_t SharedStringPool::getCountIgnoreCase() const

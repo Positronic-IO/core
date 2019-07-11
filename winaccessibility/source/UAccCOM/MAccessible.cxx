@@ -45,6 +45,7 @@
 
 #include <vcl/svapp.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <comphelper/AccessibleImplementationHelper.hxx>
 
 #include <com/sun/star/accessibility/XAccessibleText.hpp>
 #include <com/sun/star/accessibility/XAccessibleEditableText.hpp>
@@ -194,23 +195,19 @@ CMAccessible::~CMAccessible()
     if(m_pszName!=nullptr)
     {
         SAFE_SYSFREESTRING(m_pszName);
-        m_pszName=nullptr;
     }
     if(m_pszValue!=nullptr)
     {
         SAFE_SYSFREESTRING(m_pszValue);
-        m_pszValue=nullptr;
     }
     if(m_pszDescription!=nullptr)
     {
         SAFE_SYSFREESTRING(m_pszDescription);
-        m_pszDescription=nullptr;
     }
 
     if(m_pszActionDescription!=nullptr)
     {
         SAFE_SYSFREESTRING(m_pszActionDescription);
-        m_pszActionDescription=nullptr;
     }
 
     if(m_pIParent)
@@ -251,7 +248,7 @@ STDMETHODIMP CMAccessible::get_accParent(IDispatch **ppdispParent)
         else if(m_hwnd)
         {
             HRESULT hr = AccessibleObjectFromWindow(m_hwnd, OBJID_WINDOW, IID_IAccessible, reinterpret_cast<void**>(ppdispParent));
-            if( ! SUCCEEDED( hr ) || ! ppdispParent )
+            if (!SUCCEEDED(hr) || !*ppdispParent)
             {
                 return S_FALSE;
             }
@@ -592,7 +589,7 @@ STDMETHODIMP CMAccessible::get_accHelpTopic(BSTR *, VARIANT, long *)
     return E_NOTIMPL;
 }
 
-static bool GetMnemonicChar( const ::rtl::OUString& aStr, sal_Unicode* wStr)
+static bool GetMnemonicChar( const OUString& aStr, sal_Unicode* wStr)
 {
     for (sal_Int32 i = 0;; i += 2) {
         i = aStr.indexOf('~', i);
@@ -650,7 +647,7 @@ STDMETHODIMP CMAccessible::get_accKeyboardShortcut(VARIANT varChild, BSTR *pszKe
                             long nCount = binding->getAccessibleKeyBindingCount();
                             if(nCount >= 1)
                             {
-                                wString = CAccAction::GetkeyBindingStrByXkeyBinding( binding->getAccessibleKeyBinding(0) );
+                                wString = comphelper::GetkeyBindingStrByXkeyBinding( binding->getAccessibleKeyBinding(0) );
                             }
                         }
                     }
@@ -670,9 +667,9 @@ STDMETHODIMP CMAccessible::get_accKeyboardShortcut(VARIANT varChild, BSTR *pszKe
                             VARIANT varParentRole;
                             VariantInit( &varParentRole );
 
-                            m_pIParent->get_accRole(varChild, &varParentRole);
-
-                            if( m_pIParent && varParentRole.lVal == ROLE_SYSTEM_COMBOBOX ) // edit in comboBox
+                            if (m_pIParent
+                                && SUCCEEDED(m_pIParent->get_accRole(varChild, &varParentRole))
+                                && varParentRole.lVal == ROLE_SYSTEM_COMBOBOX) // edit in comboBox
                             {
                                 m_pIParent->get_accKeyboardShortcut(varChild, pszKeyboardShortcut);
                                 return S_OK;
@@ -727,7 +724,7 @@ STDMETHODIMP CMAccessible::get_accKeyboardShortcut(VARIANT varChild, BSTR *pszKe
                         if(!pRXIE.is())
                             return S_FALSE;
 
-                        ::rtl::OUString ouStr = pRXIE->getTitledBorderText();
+                        OUString ouStr = pRXIE->getTitledBorderText();
                         sal_Unicode key;
                         if(GetMnemonicChar(ouStr, &key))
                         {
@@ -1074,7 +1071,7 @@ STDMETHODIMP CMAccessible::put_accValue(VARIANT varChild, BSTR szValue)
         {
             if(varChild.lVal==CHILDID_SELF)
             {
-                SysAllocString(m_pszValue);
+                SAFE_SYSFREESTRING(m_pszValue);
                 m_pszValue=SysAllocString(szValue);
                 return S_OK;
             }
@@ -1108,7 +1105,7 @@ STDMETHODIMP CMAccessible::Put_XAccName(const OLECHAR __RPC_FAR *pszName)
             return E_INVALIDARG;
         }
 
-        SAFE_SYSFREESTRING(m_pszName);//??
+        SAFE_SYSFREESTRING(m_pszName);
         m_pszName = SysAllocString(pszName);
         if(m_pszName==nullptr)
             return E_FAIL;
@@ -1435,7 +1432,10 @@ IMAccessible* CMAccessible::GetNavigateChildForDM(VARIANT varCur, short flags)
     }
 
     IMAccessible* pCurChild = nullptr;
-    XAccessible* pChildXAcc = nullptr;
+    union {
+        XAccessible* pChildXAcc;
+        hyper nHyper = 0;
+    };
     Reference<XAccessible> pRChildXAcc;
     XAccessibleContext* pChildContext = nullptr;
     int index = 0,delta=0;
@@ -1454,7 +1454,7 @@ IMAccessible* CMAccessible::GetNavigateChildForDM(VARIANT varCur, short flags)
         {
             return nullptr;
         }
-        pCurChild->GetUNOInterface(reinterpret_cast<hyper*>(&pChildXAcc));
+        pCurChild->GetUNOInterface(&nHyper);
         if(pChildXAcc==nullptr)
         {
             return nullptr;
@@ -1861,8 +1861,8 @@ static XAccessible* getTheParentOfMember(XAccessible* pXAcc)
     }
     Reference<XAccessibleContext> pRContext = pXAcc->getAccessibleContext();
     Reference<XAccessibleRelationSet> pRrelationSet = pRContext->getAccessibleRelationSet();
-    long nRelations = pRrelationSet->getRelationCount();
-    for(int i=0 ; i<nRelations ; i++)
+    sal_Int32 nRelations = pRrelationSet->getRelationCount();
+    for(sal_Int32 i=0 ; i<nRelations ; i++)
     {
         AccessibleRelation accRelation = pRrelationSet->getRelation(i);
         if(accRelation.RelationType == 7)
@@ -1906,12 +1906,11 @@ STDMETHODIMP CMAccessible:: get_groupPosition(long __RPC_FAR *groupLevel,long __
             if ( xGroupPosition.is() )
             {
                 Sequence< sal_Int32 > rSeq = xGroupPosition->getGroupPosition( makeAny( pRContext ) );
-                sal_Int32* pSeq = rSeq.getArray();
-                if ( pSeq )
+                if (rSeq.getLength() >= 3)
                 {
-                    *groupLevel = pSeq[0];
-                    *similarItemsInGroup = pSeq[1];
-                    *positionInGroup = pSeq[2];
+                    *groupLevel = rSeq[0];
+                    *similarItemsInGroup = rSeq[1];
+                    *positionInGroup = rSeq[2];
                     return S_OK;
                 }
                 return S_OK;
@@ -2088,13 +2087,11 @@ STDMETHODIMP CMAccessible:: get_windowHandle(HWND __RPC_FAR *windowHandle)
 
         HWND nHwnd = m_hwnd;
         IAccessible* pParent = m_pIParent;
-        CMAccessible* pChild = this;
         while((nHwnd==nullptr) && pParent)
         {
-            pChild = static_cast<CMAccessible*>(pParent);
-            if(pChild)
+            if (CMAccessible* pChild = dynamic_cast<CMAccessible*>(pParent))
             {
-                pParent = static_cast<IAccessible*>(pChild->m_pIParent);
+                pParent = pChild->m_pIParent;
                 nHwnd = pChild->m_hwnd;
             }
             else
@@ -2313,8 +2310,11 @@ STDMETHODIMP CMAccessible::accSelect(long flagsSelect, VARIANT varChild)
 
     if( flagsSelect&SELFLAG_TAKEFOCUS )
     {
-        XAccessible * pTempUNO = nullptr;
-        pSelectAcc->GetUNOInterface(reinterpret_cast<hyper*>(&pTempUNO));
+        union {
+            XAccessible* pTempUNO;
+            hyper nHyper = 0;
+        };
+        pSelectAcc->GetUNOInterface(&nHyper);
 
         if( pTempUNO == nullptr )
             return NULL;
@@ -2541,7 +2541,7 @@ BOOL CMAccessible::GetXInterfaceFromXAccessible(XAccessible* pXAcc, XInterface**
     return FALSE;
 }
 
-template<typename T> HRESULT
+template<typename T> static HRESULT
 createAggInstance(CMAccessible &rOuter, void ** ppvObject)
 {
     // Note: CComAggObject has special handling for IUnknown - must
@@ -2641,12 +2641,13 @@ BOOL
 CMAccessible::get_IAccessibleFromXAccessible(XAccessible * pXAcc, IAccessible **ppIA)
 {
 
-    ENTER_PROTECTED_BLOCK
+    try
+    {
 
         // #CHECK#
         if(ppIA == nullptr)
         {
-            return E_INVALIDARG;
+            return FALSE;
         }
         BOOL isGet = FALSE;
         if(g_pAgent)
@@ -2657,7 +2658,11 @@ CMAccessible::get_IAccessibleFromXAccessible(XAccessible * pXAcc, IAccessible **
         else
             return FALSE;
 
-        LEAVE_PROTECTED_BLOCK
+    }
+    catch(...)
+    {
+        return FALSE;
+    }
 }
 
 OUString CMAccessible::get_StringFromAny(Any const & pAny)
@@ -2720,18 +2725,18 @@ OUString CMAccessible::get_StringFromAny(Any const & pAny)
         }
     case TypeClass_STRING:
         {
-            ::rtl::OUString val;
+            OUString val;
             pAny >>= val;
             return val;
         }
     case TypeClass_SEQUENCE:
         {
-            if(pAny.getValueType() == cppu::UnoType<Sequence< ::rtl::OUString >>::get())
+            if(pAny.getValueType() == cppu::UnoType<Sequence< OUString >>::get())
             {
-                Sequence < ::rtl::OUString > val;
+                Sequence < OUString > val;
                 pAny >>= val;
 
-                ::rtl::OUStringBuffer pString;
+                OUStringBuffer pString;
 
                 int count = val.getLength();
 
@@ -2897,10 +2902,13 @@ void CMAccessible::ConvertAnyToVariant(const css::uno::Any &rAnyVal, VARIANT *pv
             break;
 
         case TypeClass_BOOLEAN:
+        {
+            bool bBoolean(false);
+            rAnyVal >>= bBoolean;
             pvData->vt = VT_BOOL;
-            memcpy(&pvData->boolVal, rAnyVal.getValue(), sizeof(sal_Bool));
+            pvData->boolVal = bBoolean; // boolVal is a VARIANT_BOOL, a 16bit field
             break;
-
+        }
         case TypeClass_BYTE:
             pvData->vt = VT_UI1;
             memcpy(&pvData->bVal, rAnyVal.getValue(), sizeof(sal_Int8));
@@ -2939,7 +2947,7 @@ void CMAccessible::ConvertAnyToVariant(const css::uno::Any &rAnyVal, VARIANT *pv
         case TypeClass_STRING:
             {
                 pvData->vt = VT_BSTR;
-                ::rtl::OUString val;
+                OUString val;
                 rAnyVal >>= val;
                 pvData->bstrVal = SysAllocString(o3tl::toW(val.getStr()));
                 break;
@@ -3192,7 +3200,7 @@ STDMETHODIMP CMAccessible::get_attributes(/*[out]*/ BSTR *pAttr)
         pRXAttr = pRXI.get();
         css::uno::Any  anyVal = pRXAttr->getExtendedAttributes();
 
-        ::rtl::OUString val;
+        OUString val;
         anyVal >>= val;
 
         if(*pAttr)

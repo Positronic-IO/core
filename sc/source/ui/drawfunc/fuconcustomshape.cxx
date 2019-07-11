@@ -37,8 +37,8 @@
 
 using namespace com::sun::star;
 
-FuConstCustomShape::FuConstCustomShape( ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP, SdrModel* pDoc, const SfxRequest& rReq )
-    : FuConstruct( pViewSh, pWin, pViewP, pDoc, rReq )
+FuConstCustomShape::FuConstCustomShape(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP, SdrModel* pDoc, const SfxRequest& rReq )
+    : FuConstruct(rViewSh, pWin, pViewP, pDoc, rReq)
 {
     const SfxItemSet* pArgs = rReq.GetArgs();
     if ( pArgs )
@@ -108,7 +108,7 @@ void FuConstCustomShape::Activate()
 
     aNewPointer = Pointer( PointerStyle::DrawRect );
     aOldPointer = pWindow->GetPointer();
-    pViewShell->SetActivePointer( aNewPointer );
+    rViewShell.SetActivePointer( aNewPointer );
 
     SdrLayer* pLayer = pView->GetModel()->GetLayerAdmin().GetLayerPerID(SC_LAYER_CONTROLS);
     if (pLayer)
@@ -125,21 +125,21 @@ void FuConstCustomShape::Deactivate()
     if (pLayer)
         pView->SetActiveLayer( pLayer->GetName() );
 
-    pViewShell->SetActivePointer( aOldPointer );
+    rViewShell.SetActivePointer( aOldPointer );
 }
 
 // Create default drawing objects via keyboard
-SdrObject* FuConstCustomShape::CreateDefaultObject(const sal_uInt16 /* nID */, const tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstCustomShape::CreateDefaultObject(const sal_uInt16 /* nID */, const tools::Rectangle& rRectangle)
 {
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         *pDrDoc,
         pView->GetCurrentObjInventor(),
-        pView->GetCurrentObjIdentifier());
+        pView->GetCurrentObjIdentifier()));
 
     if( pObj )
     {
         tools::Rectangle aRectangle( rRectangle );
-        SetAttributes( pObj );
+        SetAttributes( pObj.get() );
         if ( SdrObjCustomShape::doConstructOrthogonal( aCustomShape ) )
             ImpForceQuadratic( aRectangle );
         pObj->SetLogicRect( aRectangle );
@@ -162,8 +162,9 @@ void FuConstCustomShape::SetAttributes( SdrObject* pObj )
                 if ( aObjList[ i ].equalsIgnoreAsciiCase( aCustomShape ) )
                 {
                     FmFormModel aFormModel;
-                    SfxItemPool& rPool = aFormModel.GetItemPool();
+                    SfxItemPool& rPool(aFormModel.GetItemPool());
                     rPool.FreezeIdRanges();
+
                     if ( GalleryExplorer::GetSdrObj( GALLERY_THEME_POWERPOINT, i, &aFormModel ) )
                     {
                         const SdrObject* pSourceObj = aFormModel.GetPage( 0 )->GetObj( 0 );

@@ -65,7 +65,7 @@
     3. Select the locale in the Language list box => MUST be assertion free.
     3.a. Assertions are only shown at the very first time a number formatter
          is created, respectively the first time a specific locale data is
-         used.  To repeat steps 1.-3. you'd need to create another spreadsheet
+         used. To repeat steps 1.-3. you'd need to create another spreadsheet
          document.
 
     ===========================================================================
@@ -103,13 +103,13 @@
 <!ATTLIST Locale versionDTD CDATA #FIXED "2.0.3">
 <!-- Version identifier to prevent mismatching data files being submitted
      because of older files being copied as templates. The version should be
-     less than or equal to the OOo release, or the OOo release number plus some
-     extension, like "2.0.enhanced", to be able to easily determine the
-     corresponding OOo version. New versions of the DTD with new required
-     elements SHOULD REALLY result in a new versionDTD here and
-     LOCALE_VERSION_DTD in ../LocaleNode.cxx, and *.xml files MUST be adapted
-     then, otherwise building the data or checking it with a validating parser
-     will throw an error.
+     less than or equal to the LibreOffice release, or the LibreOffice release
+     number plus some extension, like "2.0.enhanced", to be able to easily
+     determine the corresponding LibreOffice version. New versions of the DTD
+     with new required elements SHOULD REALLY result in a new versionDTD here
+     and LOCALE_VERSION_DTD in ../LocaleNode.cxx, and *.xml files MUST be
+     adapted then, otherwise building the data or checking it with a validating
+     parser will throw an error.
 -->
 <!ATTLIST Locale allowUpdateFromCLDR (yes|no) #REQUIRED>
 <!-- Whether some data elements may be (automatically) updated from the Common
@@ -127,6 +127,12 @@
 <!-- LangID must be a valid two or three letter language identifier defined by
      ISO 639. Use ISO 639-1 two letter code where available, else ISO 639-2 or
      639-3 three letter code.
+
+     If the Variant element designates a BCP 47 language tag (because the
+     locale is not expressable as a Language,Country pair, for example contains
+     a script tag) then the LangID value MUST be the code 'qlt' (reserved by
+     ISO 639-3 for private use) to tell the language tag processor that the
+     actual language tag is in the Variant element.
 -->
 
 <!ELEMENT Country (CountryID, DefaultName) >
@@ -140,7 +146,11 @@
 -->
 
 <!ELEMENT Variant (#PCDATA) >
-<!-- Reserved for future use, currently unused. -->
+<!-- If the LangID element contains the value 'qlt' then the Variant element
+     MUST contain the valid BCP 47 language tag of the locale. If LangID is
+     another ISO 639 code than 'qlt' then the Variant element must be empty or
+     not present.
+-->
 
 
 <!-- The LC_FORMAT element contains number format codes and may actually appear
@@ -309,7 +319,7 @@
 <!-- The unoid of a gregorian calendar MUST be lower case "gregorian",
      calendars MUST match the names defined in the OASIS OpenDocument Format
      (ODF) 1.2 or later specification. The implementation name registered with
-     the OOo service resgistry MUST match, e.g.
+     the LibreOffice service registry MUST match, e.g.
      com.sun.star.i18n.Calendar_gregorian
 -->
 <!ATTLIST Calendar default (true|false) #REQUIRED >
@@ -332,7 +342,9 @@
  -->
 
 <!ELEMENT MonthsOfYear (Month*)>
-<!-- All Month elements of a Calendar must be given if the RefLocale mechanism is not used! -->
+<!-- Nominative month names.
+     All Month elements of a Calendar must be given if the RefLocale mechanism is not used!
+ -->
 <!ATTLIST MonthsOfYear %RefLocale;>
 <!-- Sequence of months is important, MUST start with the first month of a
      year, e.g. January in a Gregorian calendar.
@@ -341,8 +353,9 @@
 <!ELEMENT GenitiveMonths (Month*)>
 <!-- Possessive genitive case month names, for example in Slavic locales. The
      element is optional, but if present all Month elements of a Calendar must
-     be given if the RefLocale mechanism is not used! If not present,
-     MonthsOfYear names will be used. -->
+     be given if the RefLocale mechanism is not used! If not specified,
+     the MonthsOfYear names will be used in the context of the number
+     formatter's genitive case. -->
 <!ATTLIST GenitiveMonths %RefLocale;>
 <!-- Sequence of months is important, MUST start with the first month of a
      year, e.g. January in a Gregorian calendar.
@@ -351,11 +364,39 @@
 <!ELEMENT PartitiveMonths (Month*)>
 <!-- Partitive case month names, for example in Finnish locales. The
      element is optional, but if present all Month elements of a Calendar must
-     be given if the RefLocale mechanism is not used! If not present,
-     GenitiveMonths names will be used. -->
+     be given if the RefLocale mechanism is not used! If not specified,
+     GenitiveMonths names will be used, or if those are not specified then
+     MonthsOfYear, in the context of the number formatter's partitive case. -->
 <!ATTLIST PartitiveMonths %RefLocale;>
 <!-- Sequence of months is important, MUST start with the first month of a
      year, e.g. January in a Gregorian calendar.
+ -->
+
+<!-- Rules for use of nominative / genitive / partitive case month names in
+     number formatter when encountering MMM or MMMM:
+
+     * MMM or MMMM immediately preceded or followed by a literal character
+       other than space => nominative month name (noun), for Excel and
+       backwards compatibility such as Finnish MMMM"ta"
+     * no day of month (D or DD) present in format code => nominative name
+     * day of month (D or DD) after MMM or MMMM => genitive name
+       * no genitive names defined => nominative name
+     * day of month (D or DD) before MMM or MMMM => partitive name
+       * no partitive names defined => genitive name
+         * no genitive names defined => nominative name
+
+     NOTE:
+
+     If only <MonthsOfYear> and <PartitiveMonths> are specified but not
+     <GenitiveMonths>, then for MMM(M) D(D) formats the <MonthsOfYear>
+     nominative name is displayed. Only for D(D) MMM(M) formats the
+     <PartitiveMonths> name is displayed.
+
+     If only for MMM(M) D(D) formats the <GenitiveMonths> are to be displayed
+     but nominative names for D(D) MMM(M), then specify <PartitiveMonths>
+     identical to <MonthsOfYear>, do not omit it as otherwise it would inherit
+     from <GenitiveMonths> again.
+
  -->
 
 <!ELEMENT Month (MonthID, DefaultAbbrvName, DefaultFullName, DefaultNarrowName*)>
@@ -401,7 +442,7 @@
      codes for compatibility with StarOffice5 and StarOffice4.
      Every locale data file MUST contain exactly one currency having this set to "true",
      and that currency MUST be used in format codes 12..17.
-     For European countries using the EURo it MUST be the old currency, for example, DM.
+     For European countries using EUR it MUST be the old currency, for example, DM.
 -->
 <!ATTLIST Currency  legacyOnly (true|false) #IMPLIED >
 <!-- If this Currency element exists only to be able to correctly load legacy
@@ -469,8 +510,8 @@
 	See Collation Customization in ICU User Guide for syntax,
 	http://www.icu-project.org/userguide/Collate_Customization.html
 
-	There are two ways to add language specific tailoring in OpenOffice.org.
-	For small tailoring, you can directly add it in locale data here. For 
+	There are two ways to add language specific tailoring in LibreOffice.
+	For small tailoring, you can directly add it in locale data here. For
 	large tailoring, it is suggested to put the data under collator/data, so
 	it will be compiled to a binary format in build time and improve performance
 	in run time.
@@ -567,7 +608,7 @@
 <!ELEMENT ForbiddenLineBeginCharacters (#PCDATA)>
 <!ELEMENT ForbiddenLineEndCharacters (#PCDATA)>
 
-<!-- optional break iterator rules for the languages. 
+<!-- optional break iterator rules for the languages.
      if defined, 5 rules should be all listed, each of them can be blank and default will be used.
      order of the rules is significant!
 -->

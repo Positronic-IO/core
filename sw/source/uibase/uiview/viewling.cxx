@@ -242,7 +242,7 @@ void SwView::StartTextConversion(
     bool bOldIns = m_pWrtShell->IsInsMode();
     m_pWrtShell->SetInsMode();
 
-    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell)->HasSelection() ||
+    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell.get())->HasSelection() ||
         m_pWrtShell->GetCursor() != m_pWrtShell->GetCursor()->GetNext();
 
     const bool  bStart = bSelection || m_pWrtShell->IsStartOfDoc();
@@ -405,8 +405,8 @@ void SwView::HyphenateDocument()
     // do not hyphenate if interactive hyphenation is active elsewhere
     if (SwEditShell::HasHyphIter())
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(nullptr, VclMessageType::Warning,
-            VclButtonsType::Ok, SwResId(STR_MULT_INTERACT_HYPH_WARN)));
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetEditWin().GetFrameWeld(),
+            VclMessageType::Warning, VclButtonsType::Ok, SwResId(STR_MULT_INTERACT_HYPH_WARN)));
         xBox->set_title(SwResId(STR_HYPH_TITLE));
         xBox->run();
         return;
@@ -438,7 +438,7 @@ void SwView::HyphenateDocument()
         m_pWrtShell->StartUndo(SwUndoId::INSATTR);         // valid later
 
         bool bHyphSpecial = xProp.is() && xProp->getIsHyphSpecial();
-        bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell)->HasSelection() ||
+        bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell.get())->HasSelection() ||
             m_pWrtShell->GetCursor() != m_pWrtShell->GetCursor()->GetNext();
         bool bOther = m_pWrtShell->HasOtherCnt() && bHyphSpecial && !bSelection;
         bool bStart = bSelection || ( !bOther && m_pWrtShell->IsStartOfDoc() );
@@ -478,7 +478,7 @@ bool SwView::IsValidSelectionForThesaurus() const
     // to be within a single paragraph
 
     const bool bMultiSel = m_pWrtShell->GetCursor()->IsMultiSelection();
-    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell)->HasSelection();
+    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell.get())->HasSelection();
     return !bMultiSel && (!bSelection || m_pWrtShell->IsSelOnePara() );
 }
 
@@ -556,7 +556,7 @@ void SwView::StartThesaurus()
     comphelper::ScopeGuard guard([&]() { pVOpt->SetIdle(bOldIdle); }); // restore when leaving scope
 
     // get initial LookUp text
-    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell)->HasSelection();
+    const bool bSelection = static_cast<SwCursorShell*>(m_pWrtShell.get())->HasSelection();
     OUString aTmp = GetThesaurusLookUpText( bSelection );
 
     Reference< XThesaurus >  xThes( ::GetThesaurus() );
@@ -578,7 +578,7 @@ void SwView::StartThesaurus()
         {
             guard.dismiss(); // ignore, we'll call SetIdle() explicitly after the dialog ends
 
-            pDlg->StartExecuteAsync([=](sal_Int32 nResult){
+            pDlg->StartExecuteAsync([aTmp, bSelection, bOldIdle, pDlg, pVOpt, this](sal_Int32 nResult){
                 if (nResult == RET_OK )
                     InsertThesaurusSynonym(pDlg->GetWord(), aTmp, bSelection);
 
@@ -639,7 +639,7 @@ bool SwView::ExecSpellPopup(const Point& rPt)
             m_pWrtShell->Push();
             SwRect aToFill;
 
-            SwCursorShell *pCursorShell = static_cast<SwCursorShell*>(m_pWrtShell);
+            SwCursorShell *pCursorShell = static_cast<SwCursorShell*>(m_pWrtShell.get());
             SwPaM *pCursor = pCursorShell->GetCursor();
             SwPosition aPoint(*pCursor->GetPoint());
             const SwTextNode *pNode = aPoint.nNode.GetNode().GetTextNode();
@@ -651,12 +651,14 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                 !pCursorShell->IsTableMode() &&
                 !pCursor->HasMark() && !pCursor->IsMultiSelection())
             {
-                SwContentFrame *pContentFrame = pCursor->GetContentNode()->getLayoutFrame(
+                std::pair<Point, bool> const tmp(rPt, false);
+                SwContentFrame *const pContentFrame = pCursor->GetContentNode()->getLayoutFrame(
                                         pCursorShell->GetLayout(),
-                                        &rPt, &aPoint, false);
+                                        &aPoint, &tmp);
                 if (pContentFrame)
                 {
-                    SwRect aRepaint(static_cast<SwTextFrame*>(pContentFrame)->AutoSpell_(nullptr, 0));
+                    SwRect aRepaint(static_cast<SwTextFrame*>(pContentFrame)->AutoSpell_(
+                        *pCursor->GetContentNode()->GetTextNode(), 0));
                     if (aRepaint.HasArea())
                         m_pWrtShell->InvalidateWindows(aRepaint);
                 }
@@ -700,8 +702,8 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                 bRet = true;
                 m_pWrtShell->SttSelect();
                 std::unique_ptr<SwSpellPopup> xPopup(bUseGrammarContext ?
-                    new SwSpellPopup(m_pWrtShell, aGrammarCheckRes, nErrorInResult, aSuggestions, aParaText) :
-                    new SwSpellPopup(m_pWrtShell, xAlt, aParaText));
+                    new SwSpellPopup(m_pWrtShell.get(), aGrammarCheckRes, nErrorInResult, aSuggestions, aParaText) :
+                    new SwSpellPopup(m_pWrtShell.get(), xAlt, aParaText));
                 ui::ContextMenuExecuteEvent aEvent;
                 const Point aPixPos = GetEditWin().LogicToPixel( rPt );
 

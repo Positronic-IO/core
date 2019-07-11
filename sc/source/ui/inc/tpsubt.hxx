@@ -22,7 +22,6 @@
 
 #include <sfx2/tabdlg.hxx>
 #include <svx/checklbx.hxx>
-#include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
 #include <global.hxx>
 
@@ -60,7 +59,7 @@ protected:
     const sal_uInt16            nWhichSubTotals;
     const ScSubTotalParam&  rSubTotalData;
     SCCOL                   nFieldArr[SC_MAXFIELDS];
-    const sal_uInt16            nFieldCount;
+    sal_uInt16              nFieldCount;
 
 private:
     void            Init            ();
@@ -125,7 +124,6 @@ class ScTpSubTotalOptions final : public SfxTabPage
 {
 public:
     virtual ~ScTpSubTotalOptions() override;
-    virtual void        dispose() override;
     static VclPtr<SfxTabPage>  Create      ( TabPageParent pParent,
             const SfxItemSet*     rArgSet );
     virtual bool        FillItemSet ( SfxItemSet* rArgSet ) override;
@@ -133,28 +131,28 @@ public:
 
 private:
     friend class VclPtr<ScTpSubTotalOptions>;
-    ScTpSubTotalOptions( vcl::Window*             pParent,
-                         const SfxItemSet&  rArgSet );
+    ScTpSubTotalOptions(TabPageParent pParent, const SfxItemSet& rArgSet);
 
     void Init                   ();
     void FillUserSortListBox    ();
 
     // Handler ------------------------
-    DECL_LINK( CheckHdl, Button*, void );
+    DECL_LINK(CheckHdl, weld::Button&, void);
 
-    VclPtr<CheckBox>    pBtnPagebreak;
-    VclPtr<CheckBox>    pBtnCase;
-    VclPtr<CheckBox>    pBtnSort;
-    VclPtr<FixedText>   pFlSort;
-    VclPtr<RadioButton> pBtnAscending;
-    VclPtr<RadioButton> pBtnDescending;
-    VclPtr<CheckBox>    pBtnFormats;
-    VclPtr<CheckBox>    pBtnUserDef;
-    VclPtr<ListBox>     pLbUserDef;
     ScViewData*             pViewData;
     ScDocument*             pDoc;
     const sal_uInt16        nWhichSubTotals;
     const ScSubTotalParam&  rSubTotalData;
+
+    std::unique_ptr<weld::CheckButton> m_xBtnPagebreak;
+    std::unique_ptr<weld::CheckButton> m_xBtnCase;
+    std::unique_ptr<weld::CheckButton> m_xBtnSort;
+    std::unique_ptr<weld::Label> m_xFlSort;
+    std::unique_ptr<weld::RadioButton> m_xBtnAscending;
+    std::unique_ptr<weld::RadioButton> m_xBtnDescending;
+    std::unique_ptr<weld::CheckButton> m_xBtnFormats;
+    std::unique_ptr<weld::CheckButton> m_xBtnUserDef;
+    std::unique_ptr<weld::ComboBox> m_xLbUserDef;
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_TPSUBT_HXX

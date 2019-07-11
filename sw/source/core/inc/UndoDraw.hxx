@@ -36,11 +36,11 @@ class SwDoc;
 // Undo for Draw Objects
 class SwSdrUndo : public SwUndo
 {
-    SdrUndoAction* pSdrUndo;
-    SdrMarkList* pMarkList; // MarkList for all selected SdrObjects
+    std::unique_ptr<SdrUndoAction> pSdrUndo;
+    std::unique_ptr<SdrMarkList> pMarkList; // MarkList for all selected SdrObjects
 
 public:
-    SwSdrUndo( SdrUndoAction* , const SdrMarkList* pMarkList, const SwDoc* pDoc );
+    SwSdrUndo( std::unique_ptr<SdrUndoAction> , const SdrMarkList* pMarkList, const SwDoc* pDoc );
 
     virtual ~SwSdrUndo() override;
 
@@ -53,7 +53,7 @@ public:
 class SwUndoDrawGroup : public SwUndo
 {
     std::unique_ptr<SwUndoGroupObjImpl[]> pObjArr;
-    sal_uInt16 nSize;
+    sal_uInt16 const nSize;
     bool bDelFormat;
 
 public:
@@ -116,8 +116,7 @@ public:
 class SwUndoDrawDelete : public SwUndo
 {
     std::unique_ptr<SwUndoGroupObjImpl[]> pObjArr;
-    SdrMarkList* pMarkLst;  // MarkList for all selected SdrObjects
-    sal_uInt16 nSize;
+    std::unique_ptr<SdrMarkList> pMarkLst;  // MarkList for all selected SdrObjects
     bool bDelFormat;
 
 public:

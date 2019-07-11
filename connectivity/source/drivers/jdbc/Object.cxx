@@ -21,6 +21,7 @@
 #include <connectivity/CommonTools.hxx>
 #include <com/sun/star/uno/Exception.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
+#include <com/sun/star/logging/LogLevel.hpp>
 #include <java/tools.hxx>
 #include <java/sql/SQLException.hxx>
 #include <osl/thread.h>
@@ -28,6 +29,7 @@
 #include <strings.hxx>
 
 #include <comphelper/logging.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 
 #include <memory>
 
@@ -39,7 +41,7 @@ using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::lang;
 
 
-::rtl::Reference< jvmaccess::VirtualMachine > const & getJavaVM2(const ::rtl::Reference< jvmaccess::VirtualMachine >& _rVM = ::rtl::Reference< jvmaccess::VirtualMachine >(),
+static ::rtl::Reference< jvmaccess::VirtualMachine > const & getJavaVM2(const ::rtl::Reference< jvmaccess::VirtualMachine >& _rVM = ::rtl::Reference< jvmaccess::VirtualMachine >(),
                                                         bool _bSet = false)
 {
     static ::rtl::Reference< jvmaccess::VirtualMachine > s_VM;
@@ -69,7 +71,7 @@ SDBThreadAttach::~SDBThreadAttach()
 {
 }
 
-oslInterlockedCount& getJavaVMRefCount()
+static oslInterlockedCount& getJavaVMRefCount()
 {
     static oslInterlockedCount s_nRefCount = 0;
     return s_nRefCount;
@@ -222,7 +224,9 @@ void java_lang_Object::ThrowRuntimeException( JNIEnv* _pEnvironment, const Refer
     }
     catch (const SQLException& e)
     {
-        throw WrappedTargetRuntimeException(e.Message, e.Context, makeAny(e));
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( e.Message,
+                        e.Context, anyEx );
     }
 }
 

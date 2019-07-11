@@ -21,7 +21,6 @@
 
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/basemutex.hxx>
-#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/ui/XUIElementFactory.hpp>
 
@@ -45,7 +44,7 @@ public:
 
     // XUIElementFactory
     virtual css::uno::Reference<css::ui::XUIElement> SAL_CALL createUIElement(
-        const ::rtl::OUString& rsResourceURL,
+        const OUString& rsResourceURL,
         const ::css::uno::Sequence<css::beans::PropertyValue>& rArguments) override;
 
     virtual OUString SAL_CALL getImplementationName() override;

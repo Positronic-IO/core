@@ -18,10 +18,6 @@
  */
 
 
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
-
 #include "impedit.hxx"
 #include <editeng/editview.hxx>
 #include <editeng/editeng.hxx>
@@ -31,6 +27,7 @@
 #include <editeng/langitem.hxx>
 #include <editeng/fontitem.hxx>
 #include "textconv.hxx"
+#include <osl/diagnose.h>
 
 
 using namespace com::sun::star;

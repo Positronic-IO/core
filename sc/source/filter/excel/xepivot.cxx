@@ -18,11 +18,14 @@
  */
 
 #include <xepivot.hxx>
+#include <xehelper.hxx>
 #include <com/sun/star/sheet/DataPilotFieldSortInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldAutoShowInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldLayoutInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldReference.hpp>
+#include <com/sun/star/sheet/DataPilotFieldReferenceItemType.hpp>
 #include <com/sun/star/sheet/DataPilotFieldGroupBy.hpp>
+#include <com/sun/star/sheet/DataPilotFieldSortMode.hpp>
 
 #include <algorithm>
 #include <math.h>
@@ -32,6 +35,8 @@
 #include <svl/zformat.hxx>
 #include <sot/storage.hxx>
 #include <document.hxx>
+#include <dpcache.hxx>
+#include <dpgroup.hxx>
 #include <dpobject.hxx>
 #include <dpsave.hxx>
 #include <dpdimsave.hxx>
@@ -1589,7 +1594,7 @@ public:
     virtual void        Save( XclExpStream& rStrm ) override;
 private:
     XclExpPivotTableManager& mrPTMgr;
-    SCTAB               mnScTab;
+    SCTAB const              mnScTab;
 };
 
 XclExpPivotRecWrapper::XclExpPivotRecWrapper( XclExpPivotTableManager& rPTMgr, SCTAB nScTab ) :

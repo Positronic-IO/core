@@ -22,10 +22,10 @@ forgotten and hard to notice.
 namespace {
 
 class SfxPoolItem:
-    public RecursiveASTVisitor<SfxPoolItem>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<SfxPoolItem>
 {
 public:
-    explicit SfxPoolItem(loplugin::InstantiationData const & data): Plugin(data)
+    explicit SfxPoolItem(loplugin::InstantiationData const & data): FilteringPlugin(data)
     {}
 
     virtual void run() override { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -111,10 +111,6 @@ bool SfxPoolItem::VisitCXXRecordDecl(const CXXRecordDecl* decl)
     if (tc.Class("SfxEnumItem").GlobalNamespace() || tc.Class("SfxAllEnumItem").GlobalNamespace())
         return true;
 
-    // the new field is only used for reading and writing to storage
-    if (tc.Class("SvxCharSetColorItem").GlobalNamespace())
-        return true;
-
     for (auto it = decl->method_begin(); it != decl->method_end(); ++it) {
         if ( endsWith((*it)->getQualifiedNameAsString(), "::operator==") )
             return true;
@@ -122,7 +118,7 @@ bool SfxPoolItem::VisitCXXRecordDecl(const CXXRecordDecl* decl)
     report(
             DiagnosticsEngine::Warning,
             "SfxPoolItem subclass %0 declares new fields, but does not override operator==",
-            decl->getLocStart())
+            compat::getBeginLoc(decl))
         << decl->getQualifiedNameAsString() << decl->getSourceRange();
     return true;
 }

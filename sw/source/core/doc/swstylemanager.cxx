@@ -25,6 +25,8 @@
 #include <swtypes.hxx>
 #include <istyleaccess.hxx>
 #include <unordered_map>
+#include <o3tl/make_unique.hxx>
+#include <osl/diagnose.h>
 
 typedef std::unordered_map< OUString,
                             std::shared_ptr<SfxItemSet> > SwStyleNameCache;
@@ -42,7 +44,7 @@ public:
 
 void SwStyleCache::addCompletePool( StylePool& rPool )
 {
-    IStylePoolIteratorAccess *pIter = rPool.createIterator();
+    std::unique_ptr<IStylePoolIteratorAccess> pIter = rPool.createIterator();
     std::shared_ptr<SfxItemSet> pStyle = pIter->getNext();
     while( pStyle.get() )
     {
@@ -50,7 +52,6 @@ void SwStyleCache::addCompletePool( StylePool& rPool )
         mMap[ aName ] = pStyle;
         pStyle = pIter->getNext();
     }
-    delete pIter;
 }
 
 class SwStyleManager : public IStyleAccess
@@ -77,9 +78,9 @@ public:
     virtual void clearCaches() override;
 };
 
-IStyleAccess *createStyleManager( SfxItemSet const * pIgnorableParagraphItems )
+std::unique_ptr<IStyleAccess> createStyleManager( SfxItemSet const * pIgnorableParagraphItems )
 {
-    return new SwStyleManager( pIgnorableParagraphItems );
+    return o3tl::make_unique<SwStyleManager>( pIgnorableParagraphItems );
 }
 
 void SwStyleManager::clearCaches()
@@ -139,7 +140,7 @@ void SwStyleManager::getAllStyles( std::vector<std::shared_ptr<SfxItemSet>> &rSt
 {
     StylePool& rAutoPool = eFamily == IStyleAccess::AUTO_STYLE_CHAR ? aAutoCharPool : aAutoParaPool;
     // setup <StylePool> iterator, which skips unused styles and ignorable items
-    IStylePoolIteratorAccess *pIter = rAutoPool.createIterator( true, true );
+    std::unique_ptr<IStylePoolIteratorAccess> pIter = rAutoPool.createIterator( true, true );
     std::shared_ptr<SfxItemSet> pStyle = pIter->getNext();
     while( pStyle.get() )
     {
@@ -147,7 +148,6 @@ void SwStyleManager::getAllStyles( std::vector<std::shared_ptr<SfxItemSet>> &rSt
 
         pStyle = pIter->getNext();
     }
-    delete pIter;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

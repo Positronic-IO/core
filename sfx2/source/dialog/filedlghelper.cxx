@@ -91,6 +91,7 @@
 #include <helpids.h>
 #include <sfx2/strings.hrc>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/sequence.hxx>
 
 #ifdef UNX
@@ -129,7 +130,7 @@ namespace
     }
 }
 
-const OUString* GetLastFilterConfigId( FileDialogHelper::Context _eContext )
+static const OUString* GetLastFilterConfigId( FileDialogHelper::Context _eContext )
 {
     static const OUString aSD_EXPORT_IDENTIFIER("SdExportLastFilter");
     static const OUString aSI_EXPORT_IDENTIFIER("SiExportLastFilter");
@@ -148,8 +149,8 @@ const OUString* GetLastFilterConfigId( FileDialogHelper::Context _eContext )
     return pRet;
 }
 
-OUString EncodeSpaces_Impl( const OUString& rSource );
-OUString DecodeSpaces_Impl( const OUString& rSource );
+static OUString EncodeSpaces_Impl( const OUString& rSource );
+static OUString DecodeSpaces_Impl( const OUString& rSource );
 
 // FileDialogHelper_Impl
 
@@ -275,7 +276,7 @@ OUString FileDialogHelper_Impl::handleHelpRequested( const FilePickerEvent& aEve
     OUString aHelpText;
     Help* pHelp = Application::GetHelp();
     if ( pHelp )
-        aHelpText = pHelp->GetHelpText( OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), nullptr );
+        aHelpText = pHelp->GetHelpText(OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), static_cast<weld::Widget*>(nullptr));
     return aHelpText;
 }
 
@@ -690,7 +691,7 @@ IMPL_LINK_NOARG(FileDialogHelper_Impl, TimeOutHdl_Impl, Timer *, void)
             // is responsible for placing it at its
             // proper position and painting a frame
 
-            Bitmap aBmp = maGraphic.GetBitmap();
+            BitmapEx aBmp = maGraphic.GetBitmapEx();
             if ( !aBmp.IsEmpty() )
             {
                 // scale the bitmap to the correct size
@@ -713,7 +714,7 @@ IMPL_LINK_NOARG(FileDialogHelper_Impl, TimeOutHdl_Impl, Timer *, void)
                 // and copy it into the Any
                 SvMemoryStream aData;
 
-                WriteDIB(aBmp, aData, false, true);
+                WriteDIB(aBmp, aData, false);
 
                 const Sequence < sal_Int8 > aBuffer(
                     static_cast< const sal_Int8* >(aData.GetData()),
@@ -765,13 +766,12 @@ ErrCode FileDialogHelper_Impl::getGraphic( const OUString& rURL,
     // non-local?
     if ( INetProtocol::File != aURLObj.GetProtocol() )
     {
-        SvStream* pStream = ::utl::UcbStreamHelper::CreateStream( rURL, StreamMode::READ );
+        std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream( rURL, StreamMode::READ );
 
         if( pStream )
             nRet = mpGraphicFilter->ImportGraphic( rGraphic, rURL, *pStream, nFilter, nullptr, nFilterImportFlags );
         else
             nRet = mpGraphicFilter->ImportGraphic( rGraphic, aURLObj, nFilter, nullptr, nFilterImportFlags );
-        delete pStream;
     }
     else
     {
@@ -894,7 +894,6 @@ FileDialogHelper_Impl::FileDialogHelper_Impl(
     mbHasPassword           = false;
     m_bHaveFilterOptions    = false;
     mbIsPwdEnabled          = true;
-    mbIsGpgEnabled          = true;
     mbHasVersions           = false;
     mbHasPreview            = false;
     mbShowPreview           = false;
@@ -1328,7 +1327,7 @@ void FileDialogHelper_Impl::implStartExecute()
     }
 }
 
-void lcl_saveLastURLs(std::vector<OUString>& rpURLList,
+static void lcl_saveLastURLs(std::vector<OUString>& rpURLList,
                       ::std::vector< OUString >& lLastURLs )
 {
     lLastURLs.clear();
@@ -1527,7 +1526,7 @@ ErrCode FileDialogHelper_Impl::execute( std::vector<OUString>& rpURLList,
             catch( const IllegalArgumentException& ){}
         }
         // check, whether or not we have to display a key selection box
-        if ( pCurrentFilter && mbHasPassword && mbIsGpgEnabled && xCtrlAccess.is() )
+        if ( pCurrentFilter && mbHasPassword && xCtrlAccess.is() )
         {
             try
             {
@@ -1863,10 +1862,9 @@ void FileDialogHelper_Impl::addGraphicFilter()
     for ( i = 0; i < nCount; i++ )
     {
         j = 0;
-        OUString sWildcard;
         while( true )
         {
-            sWildcard = mpGraphicFilter->GetImportWildcard( i, j++ );
+            OUString sWildcard = mpGraphicFilter->GetImportWildcard( i, j++ );
             if ( sWildcard.isEmpty() )
                 break;
             if ( aExtensions.indexOf( sWildcard ) == -1 )
@@ -1903,10 +1901,9 @@ void FileDialogHelper_Impl::addGraphicFilter()
         OUString aName = mpGraphicFilter->GetImportFormatName( i );
         OUString aExt;
         j = 0;
-        OUString sWildcard;
         while( true )
         {
-            sWildcard = mpGraphicFilter->GetImportWildcard( i, j++ );
+            OUString sWildcard = mpGraphicFilter->GetImportWildcard( i, j++ );
             if ( sWildcard.isEmpty() )
                 break;
             if ( aExt.indexOf( sWildcard ) == -1 )
@@ -2337,8 +2334,8 @@ FileDialogHelper::FileDialogHelper(
 
     aWildcard += aExtName;
 
-    OUString const aUIString = ::sfx2::addExtension( aFilterUIName,
-            aWildcard, (OPEN == lcl_OpenOrSave(mpImpl->m_nDialogType)), *mpImpl.get());
+    OUString const aUIString = ::sfx2::addExtension(
+        aFilterUIName, aWildcard, (OPEN == lcl_OpenOrSave(mpImpl->m_nDialogType)), *mpImpl);
     AddFilter( aUIString, aWildcard );
 }
 
@@ -2403,11 +2400,7 @@ void FileDialogHelper::StartExecuteModal( const Link<FileDialogHelper*,void>& rE
         mpImpl->implStartExecute();
 }
 
-
-short FileDialogHelper::GetDialogType() const
-{
-    return mpImpl.get() ? mpImpl->m_nDialogType : 0;
-}
+short FileDialogHelper::GetDialogType() const { return mpImpl ? mpImpl->m_nDialogType : 0; }
 
 bool FileDialogHelper::IsPasswordEnabled() const
 {
@@ -2417,7 +2410,7 @@ bool FileDialogHelper::IsPasswordEnabled() const
 OUString FileDialogHelper::GetRealFilter() const
 {
     OUString sFilter;
-    if ( mpImpl.get() )
+    if (mpImpl)
         mpImpl->getRealFilter( sFilter );
     return sFilter;
 }
@@ -2432,7 +2425,7 @@ OUString FileDialogHelper::GetPath() const
 {
     OUString aPath;
 
-    if ( mpImpl->mlLastURLs.size() > 0)
+    if ( !mpImpl->mlLastURLs.empty())
         return mpImpl->mlLastURLs[0];
 
     if ( mpImpl->mxFileDlg.is() )
@@ -2450,7 +2443,7 @@ OUString FileDialogHelper::GetPath() const
 
 Sequence < OUString > FileDialogHelper::GetMPath() const
 {
-    if ( mpImpl->mlLastURLs.size() > 0)
+    if ( !mpImpl->mlLastURLs.empty())
         return comphelper::containerToSequence(mpImpl->mlLastURLs);
 
     if ( mpImpl->mxFileDlg.is() )

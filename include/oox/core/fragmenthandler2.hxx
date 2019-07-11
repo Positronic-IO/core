@@ -69,6 +69,11 @@ public:
                             bool bEnableTrimSpace = true );
     virtual             ~FragmentHandler2() override;
 
+    FragmentHandler2(FragmentHandler2 const &) = default;
+    FragmentHandler2(FragmentHandler2 &&) = default;
+    FragmentHandler2 & operator =(FragmentHandler2 const &) = delete; // due to FragmentHandler
+    FragmentHandler2 & operator =(FragmentHandler2 &&) = delete; // due to FragmentHandler
+
     // resolve ambiguity from base classes
     virtual void SAL_CALL acquire() throw() override { FragmentHandler::acquire(); }
     virtual void SAL_CALL release() throw() override { FragmentHandler::release(); }

@@ -22,16 +22,16 @@
 
 #include <vcl/ctrl.hxx>
 #include <scdllapi.h>
-#include <global.hxx>
 #include <address.hxx>
 #include "csvsplits.hxx"
 #include <com/sun/star/uno/Reference.hxx>
-#include <o3tl/typed_flags_set.hxx>
 
 class ScAccessibleCsvControl;
 namespace com { namespace sun { namespace star { namespace accessibility {
     class XAccessible;
 } } } }
+
+namespace o3tl { template <typename T> struct typed_flags; }
 
 /** Minimum character count for a column in separators mode. */
 const sal_Int32 CSV_MINCOLWIDTH         = 8;
@@ -135,7 +135,7 @@ struct ScCsvLayoutData
     sal_Int32                   mnColCursor;        /// Position of grid column cursor.
 
     mutable sal_Int32           mnNoRepaint;        /// >0 = no repaint.
-    bool                        mbAppRTL;           /// true = application in RTL mode.
+    bool const                  mbAppRTL;           /// true = application in RTL mode.
 
     explicit                    ScCsvLayoutData();
 
@@ -197,7 +197,7 @@ enum ScCsvCmdType
     CSVCMD_REMOVEALLSPLITS      /// Remove all splits. [-]
 };
 
-/** Data for a CSV control command. The stored position data is aways character based,
+/** Data for a CSV control command. The stored position data is always character based,
     it's never a column index (required for internal consistency). */
 class ScCsvCmd
 {

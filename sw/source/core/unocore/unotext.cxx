@@ -35,7 +35,9 @@
 #include <comphelper/profilezone.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <sal/log.hxx>
 
 #include <cmdid.h>
 #include <unotextbodyhf.hxx>
@@ -345,7 +347,9 @@ SwXText::insertString(const uno::Reference< text::XTextRange >& xTextRange,
         catch (const lang::IllegalArgumentException& iae)
         {
             // stupid method not allowed to throw iae
-            throw uno::RuntimeException(iae.Message, nullptr);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( iae.Message,
+                            uno::Reference< uno::XInterface >(), anyEx );
         }
     }
     if (bAbsorb)
@@ -559,7 +563,7 @@ SwXText::insertTextContent(
         pTmp = pTmp->StartOfSectionNode();
     }
     // if the document starts with a section
-    while (pOwnStartNode->IsSectionNode())
+    while (pOwnStartNode && pOwnStartNode->IsSectionNode())
     {
         pOwnStartNode = pOwnStartNode->StartOfSectionNode();
     }
@@ -1461,10 +1465,10 @@ SwXText::insertTextContentWithProperties(
         }
         catch (const uno::Exception& e)
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             m_pImpl->m_pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT, nullptr);
-            lang::WrappedTargetRuntimeException wrapped;
-            wrapped.TargetException <<= e;
-            throw wrapped;
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            uno::Reference< uno::XInterface >(), anyEx );
         }
     }
     m_pImpl->m_pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT, nullptr);
@@ -1481,6 +1485,20 @@ SwXText::appendTextContent(
     // version, that has it already.
     uno::Reference<text::XTextRange> xInsertPosition = getEnd();
     return insertTextContentWithProperties(xTextContent, rCharacterAndParagraphProperties, xInsertPosition);
+}
+
+// determine wether SwFrameFormat is a graphic node
+static bool isGraphicNode(const SwFrameFormat* pFrameFormat)
+{
+    // safety
+    if( !pFrameFormat->GetContent().GetContentIdx() )
+    {
+        return false;
+    }
+    auto index = *pFrameFormat->GetContent().GetContentIdx();
+    // consider the next node -> there is the graphic stored
+    index++;
+    return index.GetNode().IsGrfNode();
 }
 
 // move previously appended paragraphs into a text frames
@@ -1628,13 +1646,15 @@ SwXText::convertToTextFrame(
 
     // see if there are frames already anchored to this node
     // we have to work with the SdrObjects, as unique name is not guaranteed in their frame format
+    // tdf#115094: do nothing if we have a graphic node
     std::set<const SdrObject*> aAnchoredObjectsByPtr;
     std::set<OUString> aAnchoredObjectsByName;
     for (size_t i = 0; i < m_pImpl->m_pDoc->GetSpzFrameFormats()->size(); ++i)
     {
         const SwFrameFormat* pFrameFormat = (*m_pImpl->m_pDoc->GetSpzFrameFormats())[i];
         const SwFormatAnchor& rAnchor = pFrameFormat->GetAnchor();
-        if ((RndStdIds::FLY_AT_PARA == rAnchor.GetAnchorId() || RndStdIds::FLY_AT_CHAR == rAnchor.GetAnchorId()) &&
+        if ( !isGraphicNode(pFrameFormat) &&
+                (RndStdIds::FLY_AT_PARA == rAnchor.GetAnchorId() || RndStdIds::FLY_AT_CHAR == rAnchor.GetAnchorId()) &&
                 aStartPam.Start()->nNode.GetIndex() <= rAnchor.GetContentAnchor()->nNode.GetIndex() &&
                 aStartPam.End()->nNode.GetIndex() >= rAnchor.GetContentAnchor()->nNode.GetIndex())
         {
@@ -1768,7 +1788,7 @@ SwXText::convertToTextFrame(
 struct VerticallyMergedCell
 {
     std::vector<uno::Reference< beans::XPropertySet > > aCells;
-    sal_Int32                                           nLeftPosition;
+    sal_Int32 const                                     nLeftPosition;
     bool                                                bOpen;
 
     VerticallyMergedCell(uno::Reference< beans::XPropertySet > const& rxCell,
@@ -2037,32 +2057,10 @@ lcl_ApplyCellProperties(
             {
                 xCellPS->setPropertyValue(rName, rValue);
             }
-            catch (const uno::Exception&)
+            catch (const uno::Exception& e)
             {
-                // Apply the paragraph and char properties to the cell's content
-                const uno::Reference< text::XText > xCellText(xCell,
-                        uno::UNO_QUERY);
-                const uno::Reference< text::XTextCursor > xCellCurs =
-                    xCellText->createTextCursor();
-                xCellCurs->gotoStart( false );
-                xCellCurs->gotoEnd( true );
-                const uno::Reference< beans::XPropertyState >
-                    xCellTextPropState(xCellCurs, uno::UNO_QUERY);
-                try
-                {
-                    const beans::PropertyState state = xCellTextPropState->getPropertyState(rName);
-                    if (state == beans::PropertyState_DEFAULT_VALUE)
-                    {
-                        const uno::Reference< beans::XPropertySet >
-                            xCellTextProps(xCellCurs, uno::UNO_QUERY);
-                        xCellTextProps->setPropertyValue(rName, rValue);
-                    }
-                }
-                catch (const uno::Exception& e)
-                {
-                    SAL_WARN( "sw.uno", "Exception when getting PropertyState: "
+                SAL_WARN( "sw.uno", "Exception when getting PropertyState: "
                         + rName + ". Message: " + e.Message );
-                }
             }
         }
     }
@@ -2458,14 +2456,13 @@ class SwXHeadFootText::Impl
 {
     public:
         SwFrameFormat* m_pHeadFootFormat;
-        bool m_bIsHeader;
+        bool const m_bIsHeader;
 
         Impl(SwFrameFormat& rHeadFootFormat, const bool bIsHeader)
             : m_pHeadFootFormat(&rHeadFootFormat)
             , m_bIsHeader(bIsHeader)
         {
-            if(m_pHeadFootFormat)
-                StartListening(m_pHeadFootFormat->GetNotifier());
+            StartListening(m_pHeadFootFormat->GetNotifier());
         }
 
         SwFrameFormat* GetHeadFootFormat() const {

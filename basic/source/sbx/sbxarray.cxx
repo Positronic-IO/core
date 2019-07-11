@@ -44,14 +44,6 @@ SbxArray::SbxArray( SbxDataType t ) : SbxBase()
         SetFlag( SbxFlagBits::Fixed );
 }
 
-SbxArray::SbxArray( const SbxArray& rArray ) :
-    SvRefBase( rArray ), SbxBase()
-{
-    if( rArray.eType != SbxVARIANT )
-        SetFlag( SbxFlagBits::Fixed );
-    *this = rArray;
-}
-
 SbxArray& SbxArray::operator=( const SbxArray& rArray )
 {
     if( &rArray != this )
@@ -198,10 +190,14 @@ void SbxArray::Put( SbxVariable* pVar, sal_uInt16 nIdx )
                 if( eType != SbxOBJECT || pVar->GetClass() != SbxClassType::Object )
                     pVar->Convert( eType );
         SbxVariableRef& rRef = GetRef( nIdx );
+        // tdf#122250. It is possible that I hold the last reference to myself, so check, otherwise I might
+        // call SetFlag on myself after I have died.
+        bool removingMyself = rRef.get() && rRef->GetParameters() == this && GetRefCount() == 1;
         if(rRef.get() != pVar )
         {
             rRef = pVar;
-            SetFlag( SbxFlagBits::Modified );
+            if (!removingMyself)
+                SetFlag( SbxFlagBits::Modified );
         }
     }
 }
@@ -230,7 +226,7 @@ void SbxArray::PutAlias( const OUString& rAlias, sal_uInt16 nIdx )
     else
     {
         SbxVarEntry& rRef = reinterpret_cast<SbxVarEntry&>( GetRef( nIdx ) );
-        rRef.maAlias.reset(rAlias);
+        rRef.maAlias = rAlias;
     }
 }
 
@@ -335,60 +331,10 @@ void SbxArray::Merge( SbxArray* p )
             SbxVarEntry aNewEntry;
             aNewEntry.mpVar = rEntry1.mpVar;
             if (rEntry1.maAlias)
-                aNewEntry.maAlias.reset(*rEntry1.maAlias);
+                aNewEntry.maAlias = *rEntry1.maAlias;
             mVarEntries.push_back(aNewEntry);
         }
     }
-}
-
-// Search of an element via the user data. If the element is
-// object, it will also be scanned.
-
-SbxVariable* SbxArray::FindUserData( sal_uInt32 nData )
-{
-    SbxVariable* p = nullptr;
-    for (auto& rEntry : mVarEntries)
-    {
-        if (!rEntry.mpVar.is())
-            continue;
-
-        if (rEntry.mpVar->IsVisible() && rEntry.mpVar->GetUserData() == nData)
-        {
-            p = rEntry.mpVar.get();
-            p->ResetFlag( SbxFlagBits::ExtFound );
-            break;  // JSM 1995-10-06
-        }
-
-        // Did we have an array/object with extended search?
-        if (rEntry.mpVar->IsSet(SbxFlagBits::ExtSearch))
-        {
-            switch (rEntry.mpVar->GetClass())
-            {
-                case SbxClassType::Object:
-                {
-                    // Objects are not allowed to scan their parent.
-                    SbxFlagBits nOld = rEntry.mpVar->GetFlags();
-                    rEntry.mpVar->ResetFlag(SbxFlagBits::GlobalSearch);
-                    p = static_cast<SbxObject&>(*rEntry.mpVar).FindUserData(nData);
-                    rEntry.mpVar->SetFlags(nOld);
-                }
-                break;
-                case SbxClassType::Array:
-                    // Casting SbxVariable to SbxArray?  Really?
-                    p = reinterpret_cast<SbxArray&>(*rEntry.mpVar).FindUserData(nData);
-                break;
-                default:
-                    ;
-            }
-
-            if (p)
-            {
-                p->SetFlag(SbxFlagBits::ExtFound);
-                break;
-            }
-        }
-    }
-    return p;
 }
 
 // Search of an element by his name and type. If an element is an object,
@@ -513,12 +459,6 @@ void SbxArray::PutDirect( SbxVariable* pVar, sal_uInt32 nIdx )
 
 SbxDimArray::SbxDimArray( SbxDataType t ) : SbxArray( t ), mbHasFixedSize( false )
 {
-}
-
-SbxDimArray::SbxDimArray( const SbxDimArray& rArray )
-    : SvRefBase( rArray ), SbxArray( rArray.eType )
-{
-    *this = rArray;
 }
 
 SbxDimArray& SbxDimArray::operator=( const SbxDimArray& rArray )

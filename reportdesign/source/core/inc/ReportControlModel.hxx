@@ -71,13 +71,13 @@ namespace reportdesign
     class OReportControlModel
     {
         void checkIndex(sal_Int32 _nIndex);
-        OReportControlModel(OReportControlModel&) = delete;
-        void operator =(OReportControlModel&) = delete;
+        OReportControlModel(OReportControlModel const &) = delete;
+        void operator =(OReportControlModel const &) = delete;
     public:
         ::comphelper::OInterfaceContainerHelper2                  aContainerListeners;
         OReportComponentProperties                          aComponent;
         OFormatProperties                                   aFormatProperties;
-        css::container::XContainer*                         m_pOwner;
+        css::container::XContainer* const                   m_pOwner;
         ::std::vector< css::uno::Reference< css::report::XFormatCondition> >
                                                             m_aFormatConditions;
         osl::Mutex&                                         m_rMutex;

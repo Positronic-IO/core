@@ -8,15 +8,19 @@
  */
 
 #include <svl/cryptosign.hxx>
+#include <svl/sigstruct.hxx>
+#include <config_features.h>
 
 #include <rtl/character.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/string.hxx>
+#include <sal/log.hxx>
 #include <tools/datetime.hxx>
 #include <tools/stream.hxx>
 #include <comphelper/base64.hxx>
-#include <comphelper/random.hxx>
 #include <comphelper/hash.hxx>
+#include <comphelper/processfactory.hxx>
+#include <comphelper/random.hxx>
 #include <com/sun/star/security/XCertificate.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <filter/msfilter/mscodec.hxx>
@@ -51,6 +55,13 @@
 #endif
 
 #if HAVE_FEATURE_NSS
+
+#include <com/sun/star/xml/crypto/XDigestContext.hpp>
+#include <com/sun/star/xml/crypto/XDigestContextSupplier.hpp>
+#include <com/sun/star/xml/crypto/DigestID.hpp>
+#include <com/sun/star/xml/crypto/NSSInitializer.hpp>
+#include <mutex>
+
 // Is this length truly the maximum possible, or just a number that
 // seemed large enough when the author tested this (with some type of
 // certificates)? I suspect the latter.
@@ -117,9 +128,9 @@ Extension  ::=  SEQUENCE  {
 */
 
 typedef struct {
-    SECItem extnID;
-    SECItem critical;
-    SECItem extnValue;
+    SECItem const extnID;
+    SECItem const critical;
+    SECItem const extnValue;
 } Extension;
 
 /*
@@ -471,8 +482,9 @@ bad_data:
     } while (len > 0);
     /* now result contains result_bytes of data */
     if (to->data && to->len >= result_bytes) {
-        PORT_Memcpy(to->data, result, to->len = result_bytes);
-    rv = SECSuccess;
+        to->len = result_bytes;
+        PORT_Memcpy(to->data, result, to->len);
+        rv = SECSuccess;
     } else {
         SECItem result_item = {siBuffer, nullptr, 0 };
     result_item.data = result;
@@ -1401,14 +1413,16 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
     aPara.cMsgCert = 1;
     aPara.rgpMsgCert = &pCertContext;
 
-    HCRYPTPROV hCryptProv;
+    NCRYPT_KEY_HANDLE hCryptKey = 0;
+    DWORD dwFlags = CRYPT_ACQUIRE_CACHE_FLAG | CRYPT_ACQUIRE_ONLY_NCRYPT_KEY_FLAG;
+    HCRYPTPROV_OR_NCRYPT_KEY_HANDLE* phCryptProvOrNCryptKey = &hCryptKey;
     DWORD nKeySpec;
     BOOL bFreeNeeded;
 
     if (!CryptAcquireCertificatePrivateKey(pCertContext,
-                                           CRYPT_ACQUIRE_CACHE_FLAG,
+                                           dwFlags,
                                            nullptr,
-                                           &hCryptProv,
+                                           phCryptProvOrNCryptKey,
                                            &nKeySpec,
                                            &bFreeNeeded))
     {
@@ -1423,7 +1437,7 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
     memset(&aSignerInfo, 0, sizeof(aSignerInfo));
     aSignerInfo.cbSize = sizeof(aSignerInfo);
     aSignerInfo.pCertInfo = pCertContext->pCertInfo;
-    aSignerInfo.hCryptProv = hCryptProv;
+    aSignerInfo.hNCryptKey = hCryptKey;
     aSignerInfo.dwKeySpec = nKeySpec;
     aSignerInfo.HashAlgorithm.pszObjId = const_cast<LPSTR>(szOID_NIST_sha256);
     aSignerInfo.HashAlgorithm.Parameters.cbData = 0;
@@ -1850,7 +1864,8 @@ bad_data:
     /* now result contains result_bytes of data */
     if (to->data && to->len >= result_bytes)
     {
-        PORT_Memcpy(to->data, result, to->len = result_bytes);
+        to->len = result_bytes;
+        PORT_Memcpy(to->data, result, to->len);
         rv = SECSuccess;
     }
     else
@@ -1955,15 +1970,34 @@ OUString GetSubjectName(PCCERT_CONTEXT pCertContext)
 #endif
 }
 
+#ifdef SVL_CRYPTO_NSS
+namespace
+{
+    void ensureNssInit()
+    {
+        // e.g. tdf#122599 ensure NSS library is initialized for NSS_CMSMessage_CreateFromDER
+        css::uno::Reference<css::xml::crypto::XNSSInitializer>
+            xNSSInitializer = css::xml::crypto::NSSInitializer::create(comphelper::getProcessComponentContext());
+
+        // this calls NSS_Init
+        css::uno::Reference<css::xml::crypto::XDigestContext> xDigestContext(
+                xNSSInitializer->getDigestContext(css::xml::crypto::DigestID::SHA256,
+                                                  uno::Sequence<beans::NamedValue>()));
+    }
+}
+#endif
+
 bool Signing::Verify(const std::vector<unsigned char>& aData,
                      const bool bNonDetached,
                      const std::vector<unsigned char>& aSignature,
                      SignatureInformation& rInformation)
 {
 #ifdef SVL_CRYPTO_NSS
-    // Validate the signature. No need to call NSS_Init() here, assume that the
-    // caller did that already.
+    // ensure NSS_Init() is called before using NSS_CMSMessage_CreateFromDER
+    static std::once_flag aInitOnce;
+    std::call_once(aInitOnce, ensureNssInit);
 
+    // Validate the signature.
     SECItem aSignatureItem;
     aSignatureItem.data = const_cast<unsigned char*>(aSignature.data());
     aSignatureItem.len = aSignature.size();

@@ -26,6 +26,7 @@
 #include <sfx2/docfile.hxx>
 #include <tools/urlobj.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
+#include <sal/log.hxx>
 
 #include <drawview.hxx>
 #include <global.hxx>
@@ -42,6 +43,7 @@
 #include <chartarr.hxx>
 #include <gridwin.hxx>
 #include <userdat.hxx>
+#include <tabvwsh.hxx>
 
 #include <com/sun/star/embed/NoVisualAreaSizeException.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
@@ -50,6 +52,7 @@
 #include <com/sun/star/chart2/XChartTypeContainer.hpp>
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 
 using namespace com::sun::star;
 
@@ -77,7 +80,7 @@ void ScDrawView::BeginDrag( vcl::Window* pWindow, const Point& rStartPos )
             aDragShellRef->DoInitNew();
         }
         ScDrawLayer::SetGlobalDrawPersist( aDragShellRef.get() );
-        SdrModel* pModel = GetMarkedObjModel();
+        std::unique_ptr<SdrModel> pModel(CreateMarkedObjModel());
         ScDrawLayer::SetGlobalDrawPersist(nullptr);
 
         //  Charts now always copy their data in addition to the source reference, so
@@ -92,7 +95,7 @@ void ScDrawView::BeginDrag( vcl::Window* pWindow, const Point& rStartPos )
         aObjDesc.maDisplayName = pDocSh->GetMedium()->GetURLObject().GetURLNoPass();
         // maSize is set in ScDrawTransferObj ctor
 
-        rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( pModel, pDocSh, aObjDesc );
+        rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( std::move(pModel), pDocSh, aObjDesc );
 
         pTransferObj->SetDrawPersist( aDragShellRef.get() );    // keep persist for ole objects alive
         pTransferObj->SetDragSource( this );               // copies selection
@@ -173,7 +176,7 @@ void getRangeFromOle2Object(const SdrOle2Obj& rObj, std::vector<OUString>& rRang
         // not a chart object.
         return;
 
-    uno::Reference<embed::XEmbeddedObject> xObj = rObj.GetObjRef();
+    const uno::Reference<embed::XEmbeddedObject>& xObj = rObj.GetObjRef();
     if (!xObj.is())
         return;
 
@@ -282,7 +285,7 @@ public:
 class CopyRangeData
 {
     ScDocument* mpSrc;
-    ScDocument* mpDest;
+    ScDocument* const mpDest;
 public:
     CopyRangeData(ScDocument* pSrc, ScDocument* pDest) : mpSrc(pSrc), mpDest(pDest) {}
 
@@ -350,12 +353,12 @@ void ScDrawView::DoCopy()
     if (ScGlobal::xDrawClipDocShellRef.is() && !aRanges.empty())
     {
         // Copy data referenced by the chart objects to the draw clip
-        // document. We need to do this before GetMarkedObjModel() below.
+        // document. We need to do this before CreateMarkedObjModel() below.
         ScDocShellRef xDocSh = ScGlobal::xDrawClipDocShellRef;
         ScDocument& rClipDoc = xDocSh->GetDocument();
         copyChartRefDataToClipDoc(pDoc, &rClipDoc, aRanges);
     }
-    SdrModel* pModel = GetMarkedObjModel();
+    std::unique_ptr<SdrModel> pModel(CreateMarkedObjModel());
     ScDrawLayer::SetGlobalDrawPersist(nullptr);
 
     //  Charts now always copy their data in addition to the source reference, so
@@ -370,7 +373,8 @@ void ScDrawView::DoCopy()
     aObjDesc.maDisplayName = pDocSh->GetMedium()->GetURLObject().GetURLNoPass();
     // maSize is set in ScDrawTransferObj ctor
 
-    rtl::Reference<ScDrawTransferObj> pTransferObj = new ScDrawTransferObj( pModel, pDocSh, aObjDesc );
+    ScDrawTransferObj* pTransferObj = new ScDrawTransferObj( std::move(pModel), pDocSh, aObjDesc );
+    uno::Reference<css::datatransfer::XTransferable2> xTransferObj = pTransferObj;
 
     if ( ScGlobal::xDrawClipDocShellRef.is() )
     {
@@ -388,7 +392,7 @@ uno::Reference<datatransfer::XTransferable> ScDrawView::CopyToTransferable()
 
     // update ScGlobal::xDrawClipDocShellRef
     ScDrawLayer::SetGlobalDrawPersist( ScTransferObj::SetDrawClipDoc( bAnyOle ) );
-    SdrModel* pModel = GetMarkedObjModel();
+    std::unique_ptr<SdrModel> pModel( CreateMarkedObjModel() );
     ScDrawLayer::SetGlobalDrawPersist(nullptr);
 
     //  Charts now always copy their data in addition to the source reference, so
@@ -404,7 +408,7 @@ uno::Reference<datatransfer::XTransferable> ScDrawView::CopyToTransferable()
     aObjDesc.maDisplayName = pDocSh->GetMedium()->GetURLObject().GetURLNoPass();
     // maSize is set in ScDrawTransferObj ctor
 
-    ScDrawTransferObj* pTransferObj = new ScDrawTransferObj( pModel, pDocSh, aObjDesc );
+    ScDrawTransferObj* pTransferObj = new ScDrawTransferObj( std::move(pModel), pDocSh, aObjDesc );
     uno::Reference<datatransfer::XTransferable> xTransferable( pTransferObj );
 
     if ( ScGlobal::xDrawClipDocShellRef.is() )
@@ -440,7 +444,7 @@ void ScDrawView::CalcNormScale( Fraction& rFractX, Fraction& rFractY ) const
 
 void ScDrawView::SetMarkedOriginalSize()
 {
-    SdrUndoGroup* pUndoGroup = new SdrUndoGroup(*GetModel());
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(*GetModel()));
 
     const SdrMarkList& rMarkList = GetMarkedObjectList();
     long nDone = 0;
@@ -514,7 +518,7 @@ void ScDrawView::SetMarkedOriginalSize()
         {
             tools::Rectangle aDrawRect = pObj->GetLogicRect();
 
-            pUndoGroup->AddAction( new SdrUndoGeoObj( *pObj ) );
+            pUndoGroup->AddAction( o3tl::make_unique<SdrUndoGeoObj>( *pObj ) );
             pObj->Resize( aDrawRect.TopLeft(), Fraction( aOriginalSize.Width(), aDrawRect.GetWidth() ),
                                                  Fraction( aOriginalSize.Height(), aDrawRect.GetHeight() ) );
             ++nDone;
@@ -525,11 +529,9 @@ void ScDrawView::SetMarkedOriginalSize()
     {
         pUndoGroup->SetComment(ScResId( STR_UNDO_ORIGINALSIZE ));
         ScDocShell* pDocSh = pViewData->GetDocShell();
-        pDocSh->GetUndoManager()->AddUndoAction(pUndoGroup);
+        pDocSh->GetUndoManager()->AddUndoAction(std::move(pUndoGroup));
         pDocSh->SetDrawModified();
     }
-    else
-        delete pUndoGroup;
 }
 
 void ScDrawView::FitToCellSize()
@@ -558,7 +560,7 @@ void ScDrawView::FitToCellSize()
         return;
     }
 
-    SdrUndoGroup* pUndoGroup = new SdrUndoGroup(*GetModel());
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(*GetModel()));
     tools::Rectangle aGraphicRect = pObj->GetSnapRect();
     tools::Rectangle aCellRect = ScDrawLayer::GetCellRect( *pDoc, pObjData->maStart, true);
 
@@ -577,13 +579,13 @@ void ScDrawView::FitToCellSize()
         aCellRect.setHeight(static_cast<double>(aGraphicRect.GetHeight()) * fScaleMin);
     }
 
-    pUndoGroup->AddAction( new SdrUndoGeoObj( *pObj ) );
+    pUndoGroup->AddAction( o3tl::make_unique<SdrUndoGeoObj>( *pObj ) );
 
     pObj->SetSnapRect(aCellRect);
 
     pUndoGroup->SetComment(ScResId( STR_UNDO_FITCELLSIZE ));
     ScDocShell* pDocSh = pViewData->GetDocShell();
-    pDocSh->GetUndoManager()->AddUndoAction(pUndoGroup);
+    pDocSh->GetUndoManager()->AddUndoAction(std::move(pUndoGroup));
 
 }
 

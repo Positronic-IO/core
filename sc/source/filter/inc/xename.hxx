@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_XENAME_HXX
 
 #include "xerecord.hxx"
-#include "xlname.hxx"
 #include "xlformula.hxx"
 #include "xeroot.hxx"
 #include <memory>
@@ -40,7 +39,7 @@ public:
     void                Initialize();
 
     /** Inserts the Calc name with the passed index and returns the Excel NAME index. */
-    sal_uInt16          InsertName( SCTAB nTab, sal_uInt16 nScNameIdx );
+    sal_uInt16          InsertName( SCTAB nTab, sal_uInt16 nScNameIdx, SCTAB nCurrTab );
 
     /** Inserts a new built-in defined name, referring to the passed sheet range. */
     sal_uInt16          InsertBuiltInName( sal_Unicode cBuiltIn, const ScRange& rRange );

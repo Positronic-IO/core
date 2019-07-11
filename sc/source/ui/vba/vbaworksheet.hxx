@@ -19,8 +19,6 @@
 #ifndef INCLUDED_SC_SOURCE_UI_VBA_VBAWORKSHEET_HXX
 #define INCLUDED_SC_SOURCE_UI_VBA_VBAWORKSHEET_HXX
 
-#include <comphelper/unwrapargs.hxx>
-
 #include <com/sun/star/sheet/XSpreadsheet.hpp>
 #include <ooo/vba/excel/XWorksheet.hpp>
 #include <ooo/vba/excel/XComments.hpp>
@@ -53,7 +51,7 @@ class ScVbaWorksheet : public WorksheetImpl_BASE
     css::uno::Reference< css::frame::XModel > mxModel;
     css::uno::Reference< ov::excel::XChartObjects > mxCharts;
     css::uno::Reference< ov::excel::XHyperlinks > mxHlinks;
-    ::rtl::Reference< ScVbaSheetObjectsBase > mxButtons;
+    ::rtl::Reference< ScVbaSheetObjectsBase > mxButtons[2];
     bool mbVeryHidden;
 
     /// @throws css::uno::RuntimeException
@@ -63,6 +61,8 @@ class ScVbaWorksheet : public WorksheetImpl_BASE
 
     css::uno::Reference< css::container::XNameAccess > getFormControls();
     css::uno::Any getControlShape( const OUString& sName );
+
+    css::uno::Any getButtons( const css::uno::Any &rIndex, bool bOptionButtons );
 
 public:
     /// @throws css::uno::RuntimeException

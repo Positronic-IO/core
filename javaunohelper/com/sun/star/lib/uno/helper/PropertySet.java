@@ -256,7 +256,7 @@ XMultiPropertySet
      *  then the argument <em>id</em> has to be a String that equals the name of
      *  the member variable that holds the Property's value.
      *  Override this method if you want to implement your own mapping from Property objects  to ids or
-     *  if you need ids of a type other then String.
+     *  if you need ids of a type other than String.
      *  Then you also need to override {@link #initMappings initMappings} and {@link #getPropertyId getPropertyId}.
      *  @param prop The Property object that is being assigned an id.
      *  @param id The object which identifies the storage used for the property's value.
@@ -592,7 +592,7 @@ XMultiPropertySet
      *  Then, no conversion is necessary, since they can hold all possible values. However, if
      *  the member is an Object and <em>setVal</em> is an Any then the object contained in the any is assigned to
      *  the member. The extra type information which exists as Type object in the Any will get lost. If this is not
-     *  intended then use an Any variable rather then an Object.
+     *  intended then use an Any variable rather than an Object.
      *
      *  If a member is an Object or Any and the argument <em>setVal</em> is an Object, other than String or array,
      *  then it is presumed to be an UNO object and queried for XInterface. If successful, the out-param <em>newVal</em>

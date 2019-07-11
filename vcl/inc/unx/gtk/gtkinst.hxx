@@ -184,7 +184,7 @@ class GtkInstance : public X11SalInstance
     typedef X11SalInstance Superclass_t;
 #endif
 public:
-            GtkInstance( SalYieldMutex* pMutex );
+            GtkInstance( std::unique_ptr<SalYieldMutex> pMutex );
     virtual ~GtkInstance() override;
     void    EnsureInit();
     virtual void AfterAppInit() override;
@@ -193,15 +193,13 @@ public:
     virtual SalFrame*           CreateChildFrame( SystemParentData* pParent, SalFrameStyleFlags nStyle ) override;
     virtual SalObject*          CreateObject( SalFrame* pParent, SystemWindowData* pWindowData, bool bShow ) override;
 #if !GTK_CHECK_VERSION(3,0,0)
-    virtual SalI18NImeStatus*   CreateI18NImeStatus() override;
+    virtual std::unique_ptr<SalI18NImeStatus> CreateI18NImeStatus() override;
 #endif
     virtual SalSystem*          CreateSalSystem() override;
     virtual SalInfoPrinter*     CreateInfoPrinter(SalPrinterQueueInfo* pPrinterQueueInfo, ImplJobSetup* pJobSetup) override;
-    virtual SalPrinter*         CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
-    virtual SalMenu*            CreateMenu( bool, Menu* ) override;
-    virtual void                DestroyMenu( SalMenu* pMenu ) override;
-    virtual SalMenuItem*        CreateMenuItem( const SalItemParams* ) override;
-    virtual void                DestroyMenuItem( SalMenuItem* pItem ) override;
+    virtual std::unique_ptr<SalPrinter> CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
+    virtual std::unique_ptr<SalMenu>     CreateMenu( bool, Menu* ) override;
+    virtual std::unique_ptr<SalMenuItem> CreateMenuItem( const SalItemParams& ) override;
     virtual SalTimer*           CreateSalTimer() override;
     virtual void                AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType, const OUString& rDocumentService) override;
     virtual std::unique_ptr<SalVirtualDevice>
@@ -209,7 +207,7 @@ public:
                                                      long &nDX, long &nDY,
                                                      DeviceFormat eFormat,
                                                      const SystemGraphicsData* = nullptr ) override;
-    virtual SalBitmap*          CreateSalBitmap() override;
+    virtual std::shared_ptr<SalBitmap> CreateSalBitmap() override;
 
     virtual bool                DoYield(bool bWait, bool bHandleAllCurrentEvents) override;
     virtual bool                AnyInput( VclInputFlags nType ) override;
@@ -237,7 +235,7 @@ public:
 
     virtual const cairo_font_options_t* GetCairoFontOptions() override;
             const cairo_font_options_t* GetLastSeenCairoFontOptions();
-                                   void ResetLastSeenCairoFontOptions();
+                                   void ResetLastSeenCairoFontOptions(const cairo_font_options_t* pOptions);
 
     void                        RemoveTimer ();
 

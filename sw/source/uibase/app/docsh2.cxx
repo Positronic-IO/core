@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -21,10 +21,12 @@
 
 #include <com/sun/star/drawing/ModuleDispatcher.hpp>
 #include <com/sun/star/frame/DispatchHelper.hpp>
-
+#include <ooo/vba/XSinkCaller.hpp>
+#include <ooo/vba/word/XDocument.hpp>
 #include <comphelper/fileformat.h>
 #include <comphelper/processfactory.hxx>
 
+#include <sal/log.hxx>
 #include <edtwin.hxx>
 #include <hintids.hxx>
 #include <tools/urlobj.hxx>
@@ -38,7 +40,7 @@
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
 #include <unotools/pathoptions.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/dinfdlg.hxx>
 #include <sfx2/request.hxx>
@@ -145,7 +147,9 @@ using namespace ::sfx2;
 // create DocInfo (virtual)
 VclPtr<SfxDocumentInfoDialog> SwDocShell::CreateDocumentInfoDialog(const SfxItemSet &rSet)
 {
-    VclPtr<SfxDocumentInfoDialog> pDlg = VclPtr<SfxDocumentInfoDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), rSet);
+    SfxViewShell* pViewShell = GetView() ? GetView() : SfxViewShell::Current();
+    vcl::Window* pWindow = pViewShell ? &pViewShell->GetViewFrame()->GetWindow() : nullptr;
+    VclPtr<SfxDocumentInfoDialog> pDlg = VclPtr<SfxDocumentInfoDialog>::Create(pWindow, rSet);
     //only with statistics, when this document is being shown, not
     //from within the Doc-Manager
     SwDocShell* pDocSh = static_cast<SwDocShell*>( SfxObjectShell::Current());
@@ -156,9 +160,8 @@ VclPtr<SfxDocumentInfoDialog> SwDocShell::CreateDocumentInfoDialog(const SfxItem
         if ( pVSh && dynamic_cast< const SwSrcView *>( pVSh ) ==  nullptr )
         {
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
             pDlg->AddFontTabPage();
-            pDlg->AddTabPage(RID_SW_TP_DOC_STAT, SwResId(STR_DOC_STAT), pFact->GetTabPageCreatorFunc(RID_SW_TP_DOC_STAT), nullptr);
+            pDlg->AddTabPage(RID_SW_TP_DOC_STAT, SwResId(STR_DOC_STAT), pFact->GetTabPageCreatorFunc(RID_SW_TP_DOC_STAT));
         }
     }
     return pDlg;
@@ -200,7 +203,8 @@ void SwDocShell::ToggleLayoutMode(SwView* pView)
 // update text fields on document properties changes
 void SwDocShell::DoFlushDocInfo()
 {
-    if (!m_xDoc.get()) return;
+    if (!m_xDoc)
+        return;
 
     bool bUnlockView(true);
     if (m_pWrtShell)
@@ -244,7 +248,7 @@ static void lcl_processCompatibleSfxHint( const uno::Reference< script::vba::XVB
 // Notification on DocInfo changes
 void SwDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
 {
-    if (!m_xDoc.get())
+    if (!m_xDoc)
     {
         return ;
     }
@@ -253,6 +257,47 @@ void SwDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
         m_xDoc->GetVbaEventProcessor();
     if( xVbaEvents.is() )
         lcl_processCompatibleSfxHint( xVbaEvents, rHint );
+
+    if ( const SfxEventHint* pSfxEventHint = dynamic_cast<const SfxEventHint*>(&rHint) )
+    {
+        switch( pSfxEventHint->GetEventId() )
+        {
+            case SfxEventHintId::ActivateDoc:
+            case SfxEventHintId::CreateDoc:
+            case SfxEventHintId::OpenDoc:
+            {
+                uno::Sequence< css::uno::Any > aArgs;
+                SW_MOD()->CallAutomationApplicationEventSinks( "DocumentChange", aArgs );
+                break;
+            }
+            default:
+                break;
+        }
+
+        switch( pSfxEventHint->GetEventId() )
+        {
+            case SfxEventHintId::CreateDoc:
+                {
+                    uno::Any aDocument;
+                    aDocument <<= mxAutomationDocumentObject;
+                    uno::Sequence< uno::Any > aArgs(1);
+                    aArgs[0] = aDocument;
+                    SW_MOD()->CallAutomationApplicationEventSinks( "NewDocument", aArgs );
+                }
+                break;
+            case SfxEventHintId::OpenDoc:
+                {
+                    uno::Any aDocument;
+                    aDocument <<= mxAutomationDocumentObject;
+                    uno::Sequence< uno::Any > aArgs(1);
+                    aArgs[0] = aDocument;
+                    SW_MOD()->CallAutomationApplicationEventSinks( "DocumentOpen", aArgs );
+                }
+                break;
+            default:
+                break;
+        }
+    }
 
     sal_uInt16 nAction = 0;
     auto pEventHint = dynamic_cast<const SfxEventHint*>(&rHint);
@@ -324,6 +369,28 @@ bool SwDocShell::PrepareClose( bool bUI )
 {
     bool bRet = SfxObjectShell::PrepareClose( bUI );
 
+    // If we are going to close it at this point, let potential DocumentBeforeClose event handlers
+    // in Automation clients veto it.
+    if (bRet && m_xDoc && IsInPrepareClose())
+    {
+        uno::Any aDocument;
+        aDocument <<= mxAutomationDocumentObject;
+
+        uno::Sequence< uno::Any > aArgs(2);
+        // Arg 0: Document
+        aArgs[0] = aDocument;
+        // Arg 1: Cancel
+        aArgs[1] <<= false;
+
+        SW_MOD()->CallAutomationApplicationEventSinks( "DocumentBeforeClose", aArgs );
+
+        // If the Cancel argument was set to True by an event handler, return false.
+        bool bCancel(false);
+        aArgs[1] >>= bCancel;
+        if (bCancel)
+            bRet = false;
+    }
+
     if( bRet )
         EndListening( *this );
 
@@ -334,8 +401,8 @@ bool SwDocShell::PrepareClose( bool bUI )
         if( xVbaEvents.is() )
         {
             using namespace com::sun::star::script::vba::VBAEventId;
-            uno::Sequence< uno::Any > aArgs;
-            xVbaEvents->processVbaEvent( DOCUMENT_CLOSE, aArgs );
+            uno::Sequence< uno::Any > aNoArgs;
+            xVbaEvents->processVbaEvent( DOCUMENT_CLOSE, aNoArgs );
         }
     }
     return bRet;
@@ -359,7 +426,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
 
             rACW.SetLockWordLstLocked( true );
 
-            editeng::SortedAutoCompleteStrings aTmpLst( rACW.GetWordList() );
+            editeng::SortedAutoCompleteStrings aTmpLst( rACW.GetWordList().createNonOwningCopy() );
             pAFlags->m_pAutoCompleteList = &aTmpLst;
 
             SfxApplication* pApp = SfxGetpApp();
@@ -377,7 +444,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 aSet.Put( *static_cast<const SfxBoolItem*>(pOpenSmartTagOptionsItem) );
 
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-            VclPtr<SfxAbstractTabDialog> pDlg = pFact->CreateAutoCorrTabDialog(&GetView()->GetViewFrame()->GetWindow(), &aSet);
+            VclPtr<SfxAbstractTabDialog> pDlg = pFact->CreateAutoCorrTabDialog(GetView()->GetViewFrame()->GetWindow().GetFrameWeld(), &aSet);
             pDlg->Execute();
             pDlg.disposeAndClear();
 
@@ -393,8 +460,6 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 // clear the temp WordList pointer
                 pAFlags->m_pAutoCompleteList = nullptr;
             }
-            // remove all pointer we never delete the strings
-            aTmpLst.clear();
 
             if( !bOldAutoCmpltCollectWords && bOldAutoCmpltCollectWords !=
                 pAFlags->bAutoCmpltCollectWords )
@@ -572,10 +637,14 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 if( !aFileName.isEmpty() )
                 {
                     SwgReaderOption aOpt;
-                    aOpt.SetTextFormats(    bText  = bool(nFlags & SfxTemplateFlags::LOAD_TEXT_STYLES ));
-                    aOpt.SetFrameFormats(    bFrame = bool(nFlags & SfxTemplateFlags::LOAD_FRAME_STYLES));
-                    aOpt.SetPageDescs(  bPage  = bool(nFlags & SfxTemplateFlags::LOAD_PAGE_STYLES ));
-                    aOpt.SetNumRules(   bNum   = bool(nFlags & SfxTemplateFlags::LOAD_NUM_STYLES  ));
+                    bText  = bool(nFlags & SfxTemplateFlags::LOAD_TEXT_STYLES );
+                    aOpt.SetTextFormats(bText);
+                    bFrame = bool(nFlags & SfxTemplateFlags::LOAD_FRAME_STYLES);
+                    aOpt.SetFrameFormats(bFrame);
+                    bPage  = bool(nFlags & SfxTemplateFlags::LOAD_PAGE_STYLES );
+                    aOpt.SetPageDescs(bPage);
+                    bNum   = bool(nFlags & SfxTemplateFlags::LOAD_NUM_STYLES  );
+                    aOpt.SetNumRules(bNum);
                     //different meaning between SFX_MERGE_STYLES and aOpt.SetMerge!
                     bMerge = bool(nFlags & SfxTemplateFlags::MERGE_STYLES);
                     aOpt.SetMerge( !bMerge );
@@ -682,7 +751,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     GetDoc()->getIDocumentDeviceAccess().setPrinter( pSavePrinter, true, true);
                     //pSavePrinter must not be deleted again
                 }
-                pViewFrame->GetBindings().SetState(SfxBoolItem(SID_SOURCEVIEW, nSlot == SID_VIEWSHELL2));
+                pViewFrame->GetBindings().SetState(SfxBoolItem(SID_SOURCEVIEW, false)); // not SID_VIEWSHELL2
                 pViewFrame->GetBindings().Invalidate( SID_NEWWINDOW );
                 pViewFrame->GetBindings().Invalidate( SID_BROWSER_MODE );
                 pViewFrame->GetBindings().Invalidate( FN_PRINT_LAYOUT );
@@ -691,7 +760,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
             case SID_GET_COLORLIST:
             {
                 const SvxColorListItem* pColItem = GetItem(SID_COLOR_TABLE);
-                XColorListRef pList = pColItem->GetColorList();
+                const XColorListRef& pList = pColItem->GetColorList();
                 rReq.SetReturnValue(OfaRefItem<XColorList>(SID_GET_COLORLIST, pList));
             }
             break;
@@ -699,10 +768,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
         case FN_ABSTRACT_NEWDOC:
         {
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
             ScopedVclPtr<AbstractSwInsertAbstractDlg> pDlg(pFact->CreateSwInsertAbstractDlg());
-            OSL_ENSURE(pDlg, "Dialog creation failed!");
             if(RET_OK == pDlg->Execute())
             {
                 sal_uInt8 nLevel = pDlg->GetLevel();
@@ -1225,10 +1291,11 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 }
                 else
                 {
-                    SfxViewShell* pViewShell = GetView()? GetView(): SfxViewShell::Current();
+                    SfxViewShell* pViewShell = GetView() ? GetView() : SfxViewShell::Current();
                     SfxBindings& rBindings( pViewShell->GetViewFrame()->GetBindings() );
-                    VclPtr<SwWatermarkDialog> pDlg(VclPtr<SwWatermarkDialog>::Create(&GetView()->GetViewFrame()->GetWindow(), rBindings));
-                    pDlg->StartExecuteAsync([](sal_Int32 /*nResult*/){});
+                    std::shared_ptr<SwWatermarkDialog> xDlg(new SwWatermarkDialog(pViewShell->GetViewFrame()->GetWindow().GetFrameWeld(),
+                                                                                  rBindings));
+                    weld::DialogController::runAsync(xDlg, [](sal_Int32 /*nResult*/){});
                 }
             }
         }
@@ -1552,7 +1619,7 @@ ErrCode SwDocShell::LoadStylesFromFile( const OUString& rURL,
     if ( bImport )
     {
         SwRead pRead =  ReadXML;
-        std::unique_ptr<SwReader, o3tl::default_delete<SwReader>> pReader;
+        SwReaderPtr pReader;
         std::unique_ptr<SwPaM> pPam;
         // the SW3IO - Reader need the pam/wrtshell, because only then he
         // insert the styles!
@@ -1603,15 +1670,6 @@ SfxInPlaceClient* SwDocShell::GetIPClient( const ::svt::EmbeddedObjectRef& xObjR
     }
 
     return pResult;
-}
-
-static bool lcl_MergePortions(SwNode *const& pNode, void *)
-{
-    if (pNode->IsTextNode())
-    {
-        pNode->GetTextNode()->FileLoadedInitHints();
-    }
-    return true;
 }
 
 int SwFindDocShell( SfxObjectShellRef& xDocSh,
@@ -1704,8 +1762,6 @@ int SwFindDocShell( SfxObjectShellRef& xDocSh,
             xDocSh = static_cast<SfxObjectShell*>(xLockRef);
             if (xDocSh->DoLoad(xMed.release()))
             {
-                SwDoc const& rDoc(*pNew->GetDoc());
-                const_cast<SwDoc&>(rDoc).GetNodes().ForEach(&lcl_MergePortions);
                 return 2;
             }
         }

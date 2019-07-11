@@ -18,6 +18,7 @@
  */
 
 #include <linkdlg.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 
 #include <tools/urlobj.hxx>
@@ -25,13 +26,12 @@
 #include <vcl/dialog.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <strings.hrc>
 #include <sfx2/linkmgr.hxx>

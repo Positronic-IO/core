@@ -23,11 +23,16 @@
 #include <sal/types.h>
 #include "dpitemdata.hxx"
 #include "calcmacros.hxx"
+#include "scdllapi.h"
+#include "types.hxx"
 
 #include <unordered_set>
 #include <vector>
 
 #include <mdds/flat_segment_tree.hpp>
+
+namespace com { namespace sun { namespace star { namespace uno { class Any; } } } }
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Sequence; } } } }
 
 class ScDPCache;
 struct ScDPValue;
@@ -64,7 +69,7 @@ public:
         virtual std::vector<ScDPItemData> getMatchValues() const override;
 
     private:
-        ScDPItemData maItem;
+        ScDPItemData const maItem;
     };
 
     /** multi-item (group) filter. */
@@ -151,7 +156,7 @@ private:
 
 private:
 
-    /** unique field entires for each field (column). */
+    /** unique field entries for each field (column). */
     ::std::vector< ::std::vector<SCROW> > maFieldEntries;
 
     /** Rows visible by standard filter query. */

@@ -59,10 +59,10 @@ protected:
     drawinglayer::primitive2d::Primitive2DContainer  maPrimitive2DSequence;
 
     // text animation allowed?
-    bool                                            mbTextAnimationAllowed : 1;
+    bool const                                       mbTextAnimationAllowed : 1;
 
     // graphic animation allowed?
-    bool                                            mbGraphicAnimationAllowed : 1;
+    bool const                                       mbGraphicAnimationAllowed : 1;
 
     // as tooling, the process() implementation takes over API handling and calls this
     // virtual render method when the primitive implementation is BasePrimitive2D-based.
@@ -159,7 +159,6 @@ ViewObjectContact::ViewObjectContact(ObjectContact& rObjectContact, ViewContact&
     mrViewContact(rViewContact),
     maObjectRange(),
     mxPrimitive2DSequence(),
-    mpPrimitiveAnimation(nullptr),
     mbLazyInvalidate(false)
 {
     // make the ViewContact remember me
@@ -249,14 +248,6 @@ void ViewObjectContact::triggerLazyInvalidate()
     {
         // reset flag
         mbLazyInvalidate = false;
-
-#if HAVE_FEATURE_DESKTOP
-        // 3D charts need to be notified separately, they are not to be
-        // drawn by the drawinglayer
-        ViewContactOfSdrOle2Obj* pViewContact = dynamic_cast<ViewContactOfSdrOle2Obj*>(&GetViewContact());
-        if (pViewContact && pViewContact->GetOle2Obj().IsReal3DChart())
-            ChartHelper::updateChart(pViewContact->GetOle2Obj().getXModel(), false);
-#endif
 
         // force ObjectRange
         getObjectRange();

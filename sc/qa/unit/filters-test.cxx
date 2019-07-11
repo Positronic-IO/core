@@ -33,11 +33,13 @@
 #include <userdat.hxx>
 #include <formulacell.hxx>
 #include <tabprotection.hxx>
+#include <testlotus.hxx>
 #include <dbdocfun.hxx>
 #include <globalnames.hxx>
 #include <dbdata.hxx>
 #include <sortparam.hxx>
 #include <scopetools.hxx>
+#include <scmod.hxx>
 
 #include <svx/svdpage.hxx>
 
@@ -71,6 +73,7 @@ public:
     void testContentXLSX();
     void testContentXLSXStrict(); // strict OOXML
     void testContentLotus123();
+    void testContentofz9704();
     void testContentDIF();
     void testContentXLSB();
     void testContentXLS_XML();
@@ -94,6 +97,7 @@ public:
     CPPUNIT_TEST(testContentXLSX);
     CPPUNIT_TEST(testContentXLSXStrict);
     CPPUNIT_TEST(testContentLotus123);
+    CPPUNIT_TEST(testContentofz9704);
     CPPUNIT_TEST(testContentDIF);
     CPPUNIT_TEST(testContentXLSB);
     CPPUNIT_TEST(testContentXLS_XML);
@@ -243,7 +247,7 @@ void testContentImpl(ScDocument& rDoc, sal_Int32 nFormat ) //same code for ods, 
         ScAddress aAddress(7, 2, 0);
         ScPostIt* pNote = rDoc.GetNote(aAddress);
         CPPUNIT_ASSERT_MESSAGE("note not imported", pNote);
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("note text not imported correctly", pNote->GetText(), OUString("Test"));
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("note text not imported correctly", OUString("Test"), pNote->GetText() );
     }
 
     //add additional checks here
@@ -299,6 +303,14 @@ void ScFiltersTest::testContentLotus123()
     ScDocument& rDoc = xDocSh->GetDocument();
     testContentImpl(rDoc, FORMAT_LOTUS123);
     xDocSh->DoClose();
+}
+
+void ScFiltersTest::testContentofz9704()
+{
+    OUString aFileName;
+    createFileURL("ofz9704.", "123", aFileName);
+    SvFileStream aFileStream(aFileName, StreamMode::READ);
+    TestImportWKS(aFileStream);
 }
 
 void ScFiltersTest::testContentDIF()
@@ -435,7 +447,7 @@ void ScFiltersTest::testSheetNamesXLSX()
     xDocSh->DoClose();
 }
 
-void impl_testLegacyCellAnchoredRotatedShape( ScDocument& rDoc, tools::Rectangle& aRect, const ScDrawObjData& aAnchor, long TOLERANCE = 30 /* 30 hmm */ )
+static void impl_testLegacyCellAnchoredRotatedShape( ScDocument& rDoc, tools::Rectangle& aRect, const ScDrawObjData& aAnchor, long TOLERANCE = 30 /* 30 hmm */ )
 {
     ScDrawLayer* pDrawLayer = rDoc.GetDrawLayer();
     CPPUNIT_ASSERT_MESSAGE("No drawing layer.", pDrawLayer);
@@ -549,7 +561,7 @@ void ScFiltersTest::testLegacyCellAnchoredRotatedShape()
     }
 }
 
-void testEnhancedProtectionImpl( const ScDocument& rDoc )
+static void testEnhancedProtectionImpl( const ScDocument& rDoc )
 {
     const ScTableProtection* pProt = rDoc.GetTabProtection(0);
 

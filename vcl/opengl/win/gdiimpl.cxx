@@ -11,6 +11,7 @@
 #include <thread>
 #include <opengl/win/gdiimpl.hxx>
 
+#include <sal/log.hxx>
 #include <comphelper/windowserrorstring.hxx>
 #include <opengl/zone.hxx>
 #include <win/wincomp.hxx>
@@ -76,7 +77,7 @@ void WinOpenGLContext::resetCurrent()
     g_bAnyCurrent = false;
 }
 
-void ensureDispatchTable()
+static void ensureDispatchTable()
 {
     thread_local bool bEpoxyDispatchMakeCurrentCalled = false;
     if (!bEpoxyDispatchMakeCurrentCalled)
@@ -188,7 +189,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     }
 }
 
-bool InitTempWindow(HWND& hwnd, int width, int height, const PIXELFORMATDESCRIPTOR& inPfd, GLWinWindow& glWin)
+static bool InitTempWindow(HWND& hwnd, int width, int height, const PIXELFORMATDESCRIPTOR& inPfd, GLWinWindow& glWin)
 {
     OpenGLZone aZone;
 
@@ -244,7 +245,7 @@ bool InitTempWindow(HWND& hwnd, int width, int height, const PIXELFORMATDESCRIPT
     return true;
 }
 
-bool WGLisExtensionSupported(const char *extension)
+static bool WGLisExtensionSupported(const char *extension)
 {
     OpenGLZone aZone;
 
@@ -283,7 +284,7 @@ bool WGLisExtensionSupported(const char *extension)
     }
 }
 
-bool InitMultisample(const PIXELFORMATDESCRIPTOR& pfd, int& rPixelFormat,
+static bool InitMultisample(const PIXELFORMATDESCRIPTOR& pfd, int& rPixelFormat,
         bool bUseDoubleBufferedRendering, bool bRequestVirtualDevice)
 {
     OpenGLZone aZone;
@@ -423,6 +424,10 @@ bool tryShaders(const OUString& rVertexShader, const OUString& rFragmentShader, 
     }
     if (!nId)
         return false;
+
+    // We're interested in the error returned by glDeleteProgram().
+    glGetError();
+
     glDeleteProgram(nId);
     return glGetError() == GL_NO_ERROR;
 }
@@ -472,7 +477,6 @@ bool compiledShaderBinariesWork()
          // vcl
          tryShaders("combinedVertexShader", "combinedFragmentShader") &&
          tryShaders("dumbVertexShader", "invert50FragmentShader") &&
-         tryShaders("combinedTextureVertexShader", "combinedTextureFragmentShader") &&
          tryShaders("textureVertexShader", "areaScaleFragmentShader") &&
          tryShaders("transformedTextureVertexShader", "maskedTextureFragmentShader") &&
          tryShaders("transformedTextureVertexShader", "areaScaleFastFragmentShader") &&
@@ -524,9 +528,7 @@ bool WinOpenGLContext::ImplInit()
         0, 0, 0                         // Layer Masks Ignored
     };
 
-    if (mbUseDoubleBufferedRendering)
-        PixelFormatFront.dwFlags |= PFD_DOUBLEBUFFER;
-
+    PixelFormatFront.dwFlags |= PFD_DOUBLEBUFFER;
     PixelFormatFront.dwFlags |= PFD_DRAW_TO_WINDOW;
 
     //  we must check whether can set the MSAA
@@ -534,7 +536,7 @@ bool WinOpenGLContext::ImplInit()
     bool bMultiSampleSupport = false;
 
     if (!mbVCLOnly)
-        bMultiSampleSupport = InitMultisample(PixelFormatFront, WindowPix, mbUseDoubleBufferedRendering, false);
+        bMultiSampleSupport = InitMultisample(PixelFormatFront, WindowPix, /*bUseDoubleBufferedRendering*/true, false);
     else
         VCL_GL_INFO("Skipping multisample detection for VCL.");
 

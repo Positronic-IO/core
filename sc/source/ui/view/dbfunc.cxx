@@ -21,6 +21,7 @@
 #include <sfx2/app.hxx>
 #include <sfx2/bindings.hxx>
 #include <vcl/weld.hxx>
+#include <unotools/charclass.hxx>
 
 #include <com/sun/star/sdbc/XResultSet.hpp>
 
@@ -38,6 +39,7 @@
 #include <queryentry.hxx>
 #include <markdata.hxx>
 #include <tabvwsh.hxx>
+#include <sortparam.hxx>
 
 ScDBFunc::ScDBFunc( vcl::Window* pParent, ScDocShell& rDocSh, ScTabViewShell* pViewShell ) :
     ScViewFunc( pParent, rDocSh, pViewShell )
@@ -315,7 +317,7 @@ void ScDBFunc::ToggleAutoFilter()
         ScRange aRange;
         pDBData->GetArea( aRange );
         pDocSh->GetUndoManager()->AddUndoAction(
-            new ScUndoAutoFilter( pDocSh, aRange, pDBData->GetName(), false ) );
+            o3tl::make_unique<ScUndoAutoFilter>( pDocSh, aRange, pDBData->GetName(), false ) );
 
         pDBData->SetAutoFilter(false);
 
@@ -354,7 +356,7 @@ void ScDBFunc::ToggleAutoFilter()
             ScRange aRange;
             pDBData->GetArea( aRange );
             pDocSh->GetUndoManager()->AddUndoAction(
-                new ScUndoAutoFilter( pDocSh, aRange, pDBData->GetName(), true ) );
+                o3tl::make_unique<ScUndoAutoFilter>( pDocSh, aRange, pDBData->GetName(), true ) );
 
             pDBData->SetAutoFilter(true);
 
@@ -413,7 +415,7 @@ void ScDBFunc::HideAutoFilter()
     ScRange aRange;
     pDBData->GetArea( aRange );
     pDocSh->GetUndoManager()->AddUndoAction(
-        new ScUndoAutoFilter( pDocSh, aRange, pDBData->GetName(), false ) );
+        o3tl::make_unique<ScUndoAutoFilter>( pDocSh, aRange, pDBData->GetName(), false ) );
 
     pDBData->SetAutoFilter(false);
 

@@ -31,6 +31,7 @@
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <rtl/digest.h>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <o3tl/make_unique.hxx>
 
@@ -82,13 +83,10 @@ ZipFile::ZipFile( const rtl::Reference<comphelper::RefCountedMutex>& aMutexHolde
 , m_xContext ( rxContext )
 , bRecoveryMode( false )
 {
-    if (bInitialise)
+    if (bInitialise && readCEN() == -1 )
     {
-        if ( readCEN() == -1 )
-        {
-            aEntries.clear();
-            throw ZipException( "stream data looks to be broken" );
-        }
+        aEntries.clear();
+        throw ZipException( "stream data looks to be broken" );
     }
 }
 
@@ -162,54 +160,47 @@ uno::Reference< xml::crypto::XCipherContext > ZipFile::StaticGetCipher( const un
 {
     uno::Reference< xml::crypto::XCipherContext > xResult;
 
-    try
+    if (xEncryptionData->m_nDerivedKeySize < 0)
     {
-        if (xEncryptionData->m_nDerivedKeySize < 0)
-        {
-            throw ZipIOException("Invalid derived key length!" );
-        }
-
-        uno::Sequence< sal_Int8 > aDerivedKey( xEncryptionData->m_nDerivedKeySize );
-        if ( !xEncryptionData->m_nIterationCount &&
-             xEncryptionData->m_nDerivedKeySize == xEncryptionData->m_aKey.getLength() )
-        {
-            // gpg4libre: no need to derive key, m_aKey is already
-            // usable as symmetric session key
-            aDerivedKey = xEncryptionData->m_aKey;
-        }
-        else if ( rtl_Digest_E_None != rtl_digest_PBKDF2( reinterpret_cast< sal_uInt8* >( aDerivedKey.getArray() ),
-                            aDerivedKey.getLength(),
-                            reinterpret_cast< const sal_uInt8 * > (xEncryptionData->m_aKey.getConstArray() ),
-                            xEncryptionData->m_aKey.getLength(),
-                            reinterpret_cast< const sal_uInt8 * > ( xEncryptionData->m_aSalt.getConstArray() ),
-                            xEncryptionData->m_aSalt.getLength(),
-                            xEncryptionData->m_nIterationCount ) )
-        {
-            throw ZipIOException("Can not create derived key!" );
-        }
-
-        if ( xEncryptionData->m_nEncAlg == xml::crypto::CipherID::AES_CBC_W3C_PADDING )
-        {
-            uno::Reference< uno::XComponentContext > xContext = xArgContext;
-            if ( !xContext.is() )
-                xContext = comphelper::getProcessComponentContext();
-
-            uno::Reference< xml::crypto::XNSSInitializer > xCipherContextSupplier = xml::crypto::NSSInitializer::create( xContext );
-
-            xResult = xCipherContextSupplier->getCipherContext( xEncryptionData->m_nEncAlg, aDerivedKey, xEncryptionData->m_aInitVector, bEncrypt, uno::Sequence< beans::NamedValue >() );
-        }
-        else if ( xEncryptionData->m_nEncAlg == xml::crypto::CipherID::BLOWFISH_CFB_8 )
-        {
-            xResult = BlowfishCFB8CipherContext::Create( aDerivedKey, xEncryptionData->m_aInitVector, bEncrypt );
-        }
-        else
-        {
-            throw ZipIOException("Unknown cipher algorithm is requested!" );
-        }
+        throw ZipIOException("Invalid derived key length!" );
     }
-    catch( ... )
+
+    uno::Sequence< sal_Int8 > aDerivedKey( xEncryptionData->m_nDerivedKeySize );
+    if ( !xEncryptionData->m_nIterationCount &&
+         xEncryptionData->m_nDerivedKeySize == xEncryptionData->m_aKey.getLength() )
     {
-        OSL_ENSURE( false, "Can not create cipher context!" );
+        // gpg4libre: no need to derive key, m_aKey is already
+        // usable as symmetric session key
+        aDerivedKey = xEncryptionData->m_aKey;
+    }
+    else if ( rtl_Digest_E_None != rtl_digest_PBKDF2( reinterpret_cast< sal_uInt8* >( aDerivedKey.getArray() ),
+                        aDerivedKey.getLength(),
+                        reinterpret_cast< const sal_uInt8 * > (xEncryptionData->m_aKey.getConstArray() ),
+                        xEncryptionData->m_aKey.getLength(),
+                        reinterpret_cast< const sal_uInt8 * > ( xEncryptionData->m_aSalt.getConstArray() ),
+                        xEncryptionData->m_aSalt.getLength(),
+                        xEncryptionData->m_nIterationCount ) )
+    {
+        throw ZipIOException("Can not create derived key!" );
+    }
+
+    if ( xEncryptionData->m_nEncAlg == xml::crypto::CipherID::AES_CBC_W3C_PADDING )
+    {
+        uno::Reference< uno::XComponentContext > xContext = xArgContext;
+        if ( !xContext.is() )
+            xContext = comphelper::getProcessComponentContext();
+
+        uno::Reference< xml::crypto::XNSSInitializer > xCipherContextSupplier = xml::crypto::NSSInitializer::create( xContext );
+
+        xResult = xCipherContextSupplier->getCipherContext( xEncryptionData->m_nEncAlg, aDerivedKey, xEncryptionData->m_aInitVector, bEncrypt, uno::Sequence< beans::NamedValue >() );
+    }
+    else if ( xEncryptionData->m_nEncAlg == xml::crypto::CipherID::BLOWFISH_CFB_8 )
+    {
+        xResult = BlowfishCFB8CipherContext::Create( aDerivedKey, xEncryptionData->m_aInitVector, bEncrypt );
+    }
+    else
+    {
+        throw ZipIOException("Unknown cipher algorithm is requested!" );
     }
 
     return xResult;
@@ -754,7 +745,7 @@ uno::Reference< XInputStream > ZipFile::getWrappedRawStream(
     return createStreamForZipEntry ( aMutexHolder, rEntry, rData, UNBUFF_STREAM_WRAPPEDRAW, true, true, aMediaType );
 }
 
-bool ZipFile::readLOC( ZipEntry &rEntry )
+void ZipFile::readLOC( ZipEntry &rEntry )
 {
     ::osl::MutexGuard aGuard( m_aMutexHolder->GetMutex() );
 
@@ -820,8 +811,6 @@ bool ZipFile::readLOC( ZipEntry &rEntry )
 
     if ( bBroken && !bRecoveryMode )
         throw ZipIOException("The stream seems to be broken!" );
-
-    return true;
 }
 
 sal_Int32 ZipFile::findEND()
@@ -832,7 +821,7 @@ sal_Int32 ZipFile::findEND()
     try
     {
         nLength = static_cast <sal_Int32 > (aGrabber.getLength());
-        if (nLength == 0 || nLength < ENDHDR)
+        if (nLength < ENDHDR)
             return -1;
         nPos = nLength - ENDHDR - ZIP_MAXNAMELEN;
         nEnd = nPos >= 0 ? nPos : 0 ;
@@ -997,7 +986,7 @@ void ZipFile::recover()
     try
     {
         nLength = aGrabber.getLength();
-        if (nLength == 0 || nLength < ENDHDR)
+        if (nLength < ENDHDR)
             return;
 
         aGrabber.seek( 0 );

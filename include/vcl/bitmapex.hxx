@@ -24,14 +24,14 @@
 #include <vcl/bitmap.hxx>
 #include <vcl/alpha.hxx>
 #include <tools/color.hxx>
-#include <basegfx/color/bcolormodifier.hxx>
 
-#include <com/sun/star/uno/Reference.hxx>
 #include <sal/types.h>
 
 namespace com { namespace sun { namespace star { namespace rendering {
     class XBitmapCanvas;
 } } } }
+namespace com { namespace sun { namespace star { namespace uno { template <class interface_type> class Reference; } } } }
+namespace basegfx { class BColorModifierStack; }
 
 enum class TransparentType
 {
@@ -431,6 +431,13 @@ public:
     void                AdjustTransparency( sal_uInt8 cTrans );
 
     void                CombineMaskOr(Color maskColor, sal_uInt8 nTol);
+
+    /**
+     * Retrieves the color model data we need for the XImageConsumer stuff.
+     */
+    void                GetColorModel(css::uno::Sequence< sal_Int32 >& rRGBPalette,
+                            sal_uInt32& rnRedMask, sal_uInt32& rnGreenMask, sal_uInt32& rnBlueMask, sal_uInt32& rnAlphaMask, sal_uInt32& rnTransparencyIndex,
+                            sal_uInt32& rnWidth, sal_uInt32& rnHeight, sal_uInt8& rnBitCount);
 public:
 
     SAL_DLLPRIVATE std::shared_ptr<SalBitmap> const & ImplGetBitmapSalBitmap() const { return maBitmap.ImplGetSalBitmap(); }

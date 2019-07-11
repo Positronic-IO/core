@@ -123,73 +123,6 @@ LocaleNode* LocaleNode::createNode (const OUString& name, const Reference< XAttr
 
 #define OSTR(s) (OUStringToOString( (s), RTL_TEXTENCODING_UTF8).getStr())
 
-void print_OUString( const OUString& s )
-{
-    printf( "%s", OSTR(s));
-}
-
-bool is_empty_string( const OUString& s )
-{
-     return s.isEmpty() || s == "\n";
-}
-
-void print_indent( int depth )
-{
-     for( int i=0; i<depth; i++ ) printf("    ");
-}
-
-void print_color( int color )
-{
-     printf("\033[%dm", color);
-}
-
-void print_node( const LocaleNode* p, int depth )
-{
-     if( !p ) return;
-
-     print_indent( depth );
-     printf("<");
-     print_color(36);
-     print_OUString( p->getName()  );
-     print_color(0);
-     const Attr& q = p->getAttr();
-     for( sal_Int32 j = 0; j < q.getLength(); ++j )
-     {
-          printf(" ");
-          print_color(33);
-          print_OUString( q.getTypeByIndex(j) );
-          print_color(0);
-          printf("=");
-          print_color(31);
-          printf("'");
-          print_OUString( q.getValueByIndex(j) );
-          printf("'");
-          print_color(0);
-     }
-     printf(">");
-     printf("\n");
-     if( !is_empty_string( p->getValue() ) )
-     {
-          print_indent( depth+1 );
-          printf("value: ");
-          print_color(31);
-          printf("'");
-          print_OUString( p->getValue() );
-          printf("'");
-          print_color(0);
-          printf("\n");
-     }
-     for( sal_Int32 i=0; i<p->getNumberOfChildren(); i++ )
-     {
-          print_node( p->getChildAt(i), depth+1 );
-     }
-     print_indent( depth );
-     printf("</");
-     print_OUString( p->getName()  );
-     printf(">");
-     printf("\n");
-}
-
 void LocaleNode::generateCode (const OFileWriter &of) const
 {
     OUString aDTD = getAttr().getValueByName("versionDTD");
@@ -322,7 +255,7 @@ void LCInfoNode::generateCode (const OFileWriter &of) const
     if (variantNode)
     {
         // If given Variant must be at least ll-Ssss and language must be 'qlt'
-        OUString aVariant( variantNode->getValue());
+        const OUString& aVariant( variantNode->getValue());
         if (!(aVariant.isEmpty() || (aVariant.getLength() >= 7 && aVariant.indexOf('-') >= 2)))
             incErrorStr( "Error: invalid Variant '%s'\n", aVariant);
         if (!(aVariant.isEmpty() || aLanguage == "qlt"))
@@ -760,7 +693,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
                         if (sTheCompatibleCurrency.isEmpty() &&
                                 ((nStart = n->getValue().indexOf("[$")) >= 0))
                         {
-                            OUString aCode( n->getValue());
+                            const OUString& aCode( n->getValue());
                             sal_Int32 nHyphen = aCode.indexOf( '-', nStart);
                             if (nHyphen >= nStart + 3)
                                 sTheCompatibleCurrency = aCode.copy( nStart + 2, nHyphen - nStart - 2);
@@ -776,7 +709,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
                     // and not parenthesized [C]###0;([C]###0) if not en_US.
                     if (strcmp( of.getLocale(), "en_US") != 0)
                     {
-                        OUString aCode( n->getValue());
+                        const OUString& aCode( n->getValue());
                         OUString const aPar1( "0)");
                         OUString const aPar2( "-)" );
                         OUString const aPar3( " )" );
@@ -788,7 +721,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
                     // Check if we have replaceTo for "[CURRENCY]" placeholder.
                     if (sTheCurrencyReplaceTo.isEmpty())
                     {
-                        OUString aCode( n->getValue());
+                        const OUString& aCode( n->getValue());
                         if (aCode.indexOf( "[CURRENCY]" ) >= 0)
                             incErrorInt( "Error: [CURRENCY] replaceTo not found for formatindex=\"%d\".\n", formatindex);
                     }
@@ -797,7 +730,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
                     if (aUsage == "SCIENTIFIC_NUMBER")
                     {
                         // Check for presence of  ##0.00E+00
-                        OUString aCode( n->getValue());
+                        const OUString& aCode( n->getValue());
                         // Simple check without decimal separator (assumed to
                         // be one UTF-16 character). May be prefixed with
                         // [NatNum1] or other tags.
@@ -811,7 +744,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
             if (pCtype)
             {
                 int nSavErr = nError;
-                OUString aCode( n->getValue());
+                const OUString& aCode( n->getValue());
                 if (formatindex == cssi::NumberFormatIndex::NUMBER_1000DEC2)
                 {
                     sal_Int32 nDec = -1;
@@ -1895,7 +1828,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
     of.writeFunction("getAllCalendars_", "calendarsCount", "calendars");
 }
 
-bool isIso4217( const OUString& rStr )
+static bool isIso4217( const OUString& rStr )
 {
     const sal_Unicode* p = rStr.getStr();
     return rStr.getLength() == 3
@@ -2376,14 +2309,6 @@ OUString Attr::getValueByName (const sal_Char *str) const {
         if (name[i].equalsAscii(str))
             return value[i];
     return OUString();
-}
-
-sal_Int32 Attr::getLength() const{
-    return name.getLength();
-}
-
-const OUString& Attr::getTypeByIndex (sal_Int32 idx) const {
-    return name[idx];
 }
 
 const OUString& Attr::getValueByIndex (sal_Int32 idx) const

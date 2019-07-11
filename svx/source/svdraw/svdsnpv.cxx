@@ -58,14 +58,14 @@ ImplPageOriginOverlay::ImplPageOriginOverlay(const SdrPaintView& rView, const ba
     for(sal_uInt32 a(0); a < rView.PaintWindowCount(); a++)
     {
         SdrPaintWindow* pCandidate = rView.GetPaintWindow(a);
-        rtl::Reference< sdr::overlay::OverlayManager > xTargetOverlay = pCandidate->GetOverlayManager();
+        const rtl::Reference< sdr::overlay::OverlayManager >& xTargetOverlay = pCandidate->GetOverlayManager();
 
         if (xTargetOverlay.is())
         {
-            sdr::overlay::OverlayCrosshairStriped* aNew = new sdr::overlay::OverlayCrosshairStriped(
-                maPosition);
+            std::unique_ptr<sdr::overlay::OverlayCrosshairStriped> aNew(new sdr::overlay::OverlayCrosshairStriped(
+                maPosition));
             xTargetOverlay->add(*aNew);
-            maObjects.append(aNew);
+            maObjects.append(std::move(aNew));
         }
     }
 }
@@ -101,9 +101,9 @@ class ImplHelpLineOverlay
     basegfx::B2DPoint                               maPosition;
 
     // HelpLine specific stuff
-    SdrPageView*                                    mpPageView;
-    sal_uInt16                                      mnHelpLineNumber;
-    SdrHelpLineKind                                 meHelpLineKind;
+    SdrPageView* const                              mpPageView;
+    sal_uInt16 const                                mnHelpLineNumber;
+    SdrHelpLineKind const                           meHelpLineKind;
 
 public:
     ImplHelpLineOverlay(const SdrPaintView& rView, const basegfx::B2DPoint& rStartPos,
@@ -132,14 +132,14 @@ ImplHelpLineOverlay::ImplHelpLineOverlay(
     for(sal_uInt32 a(0); a < rView.PaintWindowCount(); a++)
     {
         SdrPaintWindow* pCandidate = rView.GetPaintWindow(a);
-        rtl::Reference< sdr::overlay::OverlayManager > xTargetOverlay = pCandidate->GetOverlayManager();
+        const rtl::Reference< sdr::overlay::OverlayManager >& xTargetOverlay = pCandidate->GetOverlayManager();
 
         if (xTargetOverlay.is())
         {
-            sdr::overlay::OverlayHelplineStriped* aNew = new sdr::overlay::OverlayHelplineStriped(
-                maPosition, meHelpLineKind);
+            std::unique_ptr<sdr::overlay::OverlayHelplineStriped> aNew(new sdr::overlay::OverlayHelplineStriped(
+                maPosition, meHelpLineKind));
             xTargetOverlay->add(*aNew);
-            maObjects.append(aNew);
+            maObjects.append(std::move(aNew));
         }
     }
 }
@@ -325,7 +325,7 @@ SdrSnap SdrSnapView::SnapPos(Point& rPnt, const SdrPageView* pPV) const
         sal_uInt32 nMaxFrameSnapCount=200;
 
         // go back to SdrIterMode::DeepNoGroups runthrough for snap to object comparisons
-        SdrObjListIter aIter(*pPV->GetPage(),SdrIterMode::DeepNoGroups,true);
+        SdrObjListIter aIter(pPV->GetPage(),SdrIterMode::DeepNoGroups,true);
 
         while (aIter.IsMore() && (nMaxPointSnapCount>0 || nMaxFrameSnapCount>0)) {
             SdrObject* pO=aIter.Next();

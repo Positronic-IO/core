@@ -148,8 +148,20 @@ namespace basegfx
 
     B2DHomMatrix& B2DHomMatrix::operator*=(const B2DHomMatrix& rMat)
     {
-        if(!rMat.isIdentity())
+        if(rMat.isIdentity())
+        {
+            // multiply with identity, no change -> nothing to do
+        }
+        else if(isIdentity())
+        {
+            // we are identity, result will be rMat -> assign
+            *this = rMat;
+        }
+        else
+        {
+            // multiply
             mpImpl->doMulMatrix(*rMat.mpImpl);
+        }
 
         return *this;
     }
@@ -282,7 +294,7 @@ namespace basegfx
             {
                 // there is - 180 degree rotated
                 rScale *= -1;
-                rRotate = 180*F_PI180;
+                rRotate = M_PI;
             }
         }
         else

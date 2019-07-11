@@ -33,6 +33,7 @@
 #include <com/sun/star/connection/XAcceptor.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <services.hxx>
 #include "acceptor.hxx"
@@ -79,9 +80,7 @@ namespace io_acceptor
 
 
     OAcceptor::OAcceptor( const Reference< XComponentContext > & xCtx )
-        : m_pPipe( nullptr )
-        , m_pSocket( nullptr )
-        , m_bInAccept( false )
+        : m_bInAccept( false )
         , _xSMgr( xCtx->getServiceManager() )
         , _xCtx( xCtx )
     {}

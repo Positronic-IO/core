@@ -37,6 +37,7 @@
 #include <comphelper/types.hxx>
 #include <connectivity/dbmetadata.hxx>
 #include <com/sun/star/sdb/SQLFilterOperator.hpp>
+#include <sal/log.hxx>
 
 #include <iterator>
 #include <memory>
@@ -329,7 +330,7 @@ void OSQLParseTreeIterator::impl_getQueryParameterColumns( const OSQLTable& _rQu
 
     OUString sError;
     std::unique_ptr< OSQLParseNode > pSubQueryNode( const_cast< OSQLParser& >( m_rParser ).parseTree( sError, sSubQueryCommand ) );
-    if ( !pSubQueryNode.get() )
+    if (!pSubQueryNode)
         break;
 
     OSQLParseTreeIterator aSubQueryIterator( *this, m_rParser, pSubQueryNode.get() );
@@ -722,9 +723,8 @@ namespace
             // look up the column in the select column, to find an possible alias
             if ( _pSelectColumns )
             {
-                for (auto const& lookupColumn : _pSelectColumns->get())
+                for (const Reference< XPropertySet >& xColumn : _pSelectColumns->get())
                 {
-                    Reference< XPropertySet > xColumn( lookupColumn );
                     try
                     {
                         OUString sName, sTableName;
@@ -776,73 +776,6 @@ void OSQLParseTreeIterator::getColumnRange( const OSQLParseNode* _pColumnRef,
 {
     OUString sDummy;
     lcl_getColumnRange( _pColumnRef, _rxConnection, _out_rColumnName, _out_rTableRange, nullptr, sDummy );
-}
-
-
-bool OSQLParseTreeIterator::getColumnTableRange(const OSQLParseNode* pNode, OUString &rTableRange) const
-{
-    OUString tmp;
-    if(impl_getColumnTableRange(pNode, tmp))
-    {
-        rTableRange = tmp;
-        return true;
-    }
-    else
-        return false;
-}
-
-bool OSQLParseTreeIterator::impl_getColumnTableRange(const OSQLParseNode* pNode, OUString &rTableRange) const
-{
-    // See if all columns belong to one table
-    if (SQL_ISRULE(pNode,column_ref))
-    {
-        OUString aColName, aTableRange;
-        getColumnRange(pNode, aColName, aTableRange);
-        if (aTableRange.isEmpty())   // None found
-        {
-            // Look for the columns in the tables
-            for (auto const& table : *m_pImpl->m_pTables)
-            {
-                if (table.second.is())
-                {
-                    try
-                    {
-                        Reference< XNameAccess > xColumns = table.second->getColumns();
-                        if(xColumns->hasByName(aColName))
-                        {
-                            Reference< XPropertySet > xColumn;
-                            if (xColumns->getByName(aColName) >>= xColumn)
-                            {
-                                OSL_ENSURE(xColumn.is(),"Column isn't a propertyset!");
-                                aTableRange = table.first;
-                                break;
-                            }
-                        }
-                    }
-                    catch(Exception&)
-                    {
-                    }
-                }
-            }
-            if (aTableRange.isEmpty())
-                return false;
-        }
-
-
-        if (rTableRange.isEmpty())
-            rTableRange = aTableRange;
-        else if (rTableRange != aTableRange)
-            return false;
-    }
-    else
-    {
-        for (sal_uInt32 i = 0, ncount = pNode->count(); i < ncount; i++)
-        {
-            if (!getColumnTableRange(pNode->getChild(i), rTableRange))
-                return false;
-        }
-    }
-    return true;
 }
 
 
@@ -1804,7 +1737,7 @@ OUString OSQLParseTreeIterator::getUniqueColumnName(const OUString & rColumnName
     sal_Int32 i=1;
     while(aIter != m_aSelectColumns->get().end())
     {
-        (aAlias = rColumnName) += OUString::number(i++);
+        aAlias = rColumnName + OUString::number(i++);
         aIter = find(
             m_aSelectColumns->get().begin(),
             m_aSelectColumns->get().end(),

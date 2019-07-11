@@ -21,6 +21,7 @@
 
 #include <fuinsert.hxx>
 #include <comphelper/storagehelper.hxx>
+#include <editeng/outlobj.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <svx/svxdlg.hxx>
 #include <com/sun/star/embed/EmbedVerbs.hpp>
@@ -51,7 +52,7 @@
 #include <sfx2/printer.hxx>
 #include <comphelper/classids.hxx>
 #include <svtools/sfxecode.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svl/urlbmk.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdograf.hxx>
@@ -76,12 +77,14 @@
 #include <GraphicDocShell.hxx>
 #include <strings.hrc>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <sdgrffilter.hxx>
 #include <sdxfer.hxx>
 #include <vcl/svapp.hxx>
 #include <undo/undoobjects.hxx>
 #include <memory>
 #include <vcl/weld.hxx>
+#include <vcl/errinf.hxx>
 
 #include <vcl/GraphicNativeTransform.hxx>
 #include <vcl/GraphicNativeMetadata.hxx>
@@ -165,21 +168,16 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
                 }
             }
         }
-        if( mpViewShell && dynamic_cast< DrawViewShell *>( mpViewShell ) !=  nullptr)
+        if( dynamic_cast< DrawViewShell *>( mpViewShell ) )
         {
             sal_Int8    nAction = DND_ACTION_COPY;
-            SdrObject* pPickObj = mpView->GetEmptyPresentationObject( PRESOBJ_GRAPHIC );
-            bool bSelectionReplaced(false);
+            SdrObject* pPickObj;
 
-            if( pPickObj )
+            if( ( ( pPickObj = mpView->GetSelectedSingleObject( mpView->GetPage() ) ) && mbReplaceExistingImage ) || (pPickObj = mpView->GetEmptyPresentationObject( PRESOBJ_GRAPHIC ) ) )
             {
                 nAction = DND_ACTION_LINK;
-            }
-            else if(mbReplaceExistingImage && mpView->GetMarkedObjectCount() == 1)
-            {
-                pPickObj = mpView->GetMarkedObjectByIndex(0);
-                nAction = DND_ACTION_MOVE;
-                bSelectionReplaced = true;
+            } else {
+                pPickObj = nullptr;
             }
 
             Point aPos = mpWindow->GetVisibleCenter();
@@ -201,11 +199,6 @@ void FuInsertGraphic::DoExecute( SfxRequest& rReq )
                     aReferer = mpDocSh->GetMedium()->GetName();
                 }
                 pGrafObj->SetGraphicLink(aFileName, aReferer, aFilterName);
-            }
-
-            if(bSelectionReplaced && pGrafObj)
-            {
-                mpView->MarkObj(pGrafObj, mpView->GetSdrPageView());
             }
         }
     }
@@ -239,48 +232,45 @@ void FuInsertClipboard::DoExecute( SfxRequest&  )
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(mpViewShell->GetFrameWeld()));
-    if ( pDlg )
+    pDlg->Insert( SotClipboardFormatId::EMBED_SOURCE, OUString() );
+    pDlg->Insert( SotClipboardFormatId::LINK_SOURCE, OUString() );
+    pDlg->Insert( SotClipboardFormatId::DRAWING, OUString() );
+    pDlg->Insert( SotClipboardFormatId::SVXB, OUString() );
+    pDlg->Insert( SotClipboardFormatId::GDIMETAFILE, OUString() );
+    pDlg->Insert( SotClipboardFormatId::BITMAP, OUString() );
+    pDlg->Insert( SotClipboardFormatId::NETSCAPE_BOOKMARK, OUString() );
+    pDlg->Insert( SotClipboardFormatId::STRING, OUString() );
+    pDlg->Insert( SotClipboardFormatId::HTML, OUString() );
+    pDlg->Insert( SotClipboardFormatId::RTF, OUString() );
+    pDlg->Insert( SotClipboardFormatId::RICHTEXT, OUString() );
+    pDlg->Insert( SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT, OUString() );
+
+    //TODO/MBA: testing
+    nFormatId = pDlg->GetFormat( aDataHelper );
+    if( nFormatId != SotClipboardFormatId::NONE && aDataHelper.GetTransferable().is() )
     {
-        pDlg->Insert( SotClipboardFormatId::EMBED_SOURCE, OUString() );
-        pDlg->Insert( SotClipboardFormatId::LINK_SOURCE, OUString() );
-        pDlg->Insert( SotClipboardFormatId::DRAWING, OUString() );
-        pDlg->Insert( SotClipboardFormatId::SVXB, OUString() );
-        pDlg->Insert( SotClipboardFormatId::GDIMETAFILE, OUString() );
-        pDlg->Insert( SotClipboardFormatId::BITMAP, OUString() );
-        pDlg->Insert( SotClipboardFormatId::NETSCAPE_BOOKMARK, OUString() );
-        pDlg->Insert( SotClipboardFormatId::STRING, OUString() );
-        pDlg->Insert( SotClipboardFormatId::HTML, OUString() );
-        pDlg->Insert( SotClipboardFormatId::RTF, OUString() );
-        pDlg->Insert( SotClipboardFormatId::RICHTEXT, OUString() );
-        pDlg->Insert( SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT, OUString() );
+        sal_Int8 nAction = DND_ACTION_COPY;
+        DrawViewShell* pDrViewSh = nullptr;
 
-        //TODO/MBA: testing
-        nFormatId = pDlg->GetFormat( aDataHelper );
-        if( nFormatId != SotClipboardFormatId::NONE && aDataHelper.GetTransferable().is() )
+        if (!mpView->InsertData( aDataHelper,
+                                mpWindow->PixelToLogic( ::tools::Rectangle( Point(), mpWindow->GetOutputSizePixel() ).Center() ),
+                                nAction, false, nFormatId ))
         {
-            sal_Int8 nAction = DND_ACTION_COPY;
-            DrawViewShell* pDrViewSh = nullptr;
+            pDrViewSh = dynamic_cast<DrawViewShell*>(mpViewShell);
+        }
 
-            if (!mpView->InsertData( aDataHelper,
-                                    mpWindow->PixelToLogic( ::tools::Rectangle( Point(), mpWindow->GetOutputSizePixel() ).Center() ),
-                                    nAction, false, nFormatId ))
+        if (pDrViewSh)
+        {
+            INetBookmark        aINetBookmark( "", "" );
+
+            if( ( aDataHelper.HasFormat( SotClipboardFormatId::NETSCAPE_BOOKMARK ) &&
+                aDataHelper.GetINetBookmark( SotClipboardFormatId::NETSCAPE_BOOKMARK, aINetBookmark ) ) ||
+                ( aDataHelper.HasFormat( SotClipboardFormatId::FILEGRPDESCRIPTOR ) &&
+                aDataHelper.GetINetBookmark( SotClipboardFormatId::FILEGRPDESCRIPTOR, aINetBookmark ) ) ||
+                ( aDataHelper.HasFormat( SotClipboardFormatId::UNIFORMRESOURCELOCATOR ) &&
+                aDataHelper.GetINetBookmark( SotClipboardFormatId::UNIFORMRESOURCELOCATOR, aINetBookmark ) ) )
             {
-                pDrViewSh = dynamic_cast<DrawViewShell*>(mpViewShell);
-            }
-
-            if (pDrViewSh)
-            {
-                INetBookmark        aINetBookmark( "", "" );
-
-                if( ( aDataHelper.HasFormat( SotClipboardFormatId::NETSCAPE_BOOKMARK ) &&
-                    aDataHelper.GetINetBookmark( SotClipboardFormatId::NETSCAPE_BOOKMARK, aINetBookmark ) ) ||
-                    ( aDataHelper.HasFormat( SotClipboardFormatId::FILEGRPDESCRIPTOR ) &&
-                    aDataHelper.GetINetBookmark( SotClipboardFormatId::FILEGRPDESCRIPTOR, aINetBookmark ) ) ||
-                    ( aDataHelper.HasFormat( SotClipboardFormatId::UNIFORMRESOURCELOCATOR ) &&
-                    aDataHelper.GetINetBookmark( SotClipboardFormatId::UNIFORMRESOURCELOCATOR, aINetBookmark ) ) )
-                {
-                    pDrViewSh->InsertURLField( aINetBookmark.GetURL(), aINetBookmark.GetDescription(), "" );
-                }
+                pDrViewSh->InsertURLField( aINetBookmark.GetURL(), aINetBookmark.GetDescription(), "" );
             }
         }
     }
@@ -395,7 +385,7 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
             // if we have a pick obj we need to make this new ole a pres obj replacing the current pick obj
             if( pPickObj )
             {
-                SdPage* pPage = static_cast< SdPage* >(pPickObj->GetPage());
+                SdPage* pPage = static_cast< SdPage* >(pPickObj->getSdrPageFromSdrObject());
                 if(pPage && pPage->IsPresObj(pPickObj))
                 {
                     pPage->InsertPresObj( pOleObj, ePresObjKind );
@@ -471,7 +461,7 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
         const SfxGlobalNameItem* pNameItem = rReq.GetArg<SfxGlobalNameItem>(SID_INSERT_OBJECT);
         if ( nSlotId == SID_INSERT_OBJECT && pNameItem )
         {
-            SvGlobalName aClassName = pNameItem->GetValue();
+            const SvGlobalName& aClassName = pNameItem->GetValue();
             xObj =  mpViewShell->GetViewFrame()->GetObjectShell()->
                     GetEmbeddedObjectContainer().CreateEmbeddedObject( aClassName.GetByteSequence(), aName );
         }
@@ -499,19 +489,16 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                     ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
                             pFact->CreateInsertObjectDialog( mpViewShell->GetFrameWeld(), SD_MOD()->GetSlotPool()->GetSlot(nSlotId)->GetCommandString(),
                             xStorage, &aServerLst ));
-                    if ( pDlg )
-                    {
-                        pDlg->Execute();
-                        bCreateNew = pDlg->IsCreateNew();
-                        xObj = pDlg->GetObject();
+                    pDlg->Execute();
+                    bCreateNew = pDlg->IsCreateNew();
+                    xObj = pDlg->GetObject();
 
-                        xIconMetaFile = pDlg->GetIconIfIconified( &aIconMediaType );
-                        if ( xIconMetaFile.is() )
-                            nAspect = embed::Aspects::MSOLE_ICON;
+                    xIconMetaFile = pDlg->GetIconIfIconified( &aIconMediaType );
+                    if ( xIconMetaFile.is() )
+                        nAspect = embed::Aspects::MSOLE_ICON;
 
-                        if ( xObj.is() )
-                            mpViewShell->GetObjectShell()->GetEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aName );
-                    }
+                    if ( xObj.is() )
+                        mpViewShell->GetObjectShell()->GetEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aName );
 
                     break;
                 }

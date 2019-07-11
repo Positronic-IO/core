@@ -80,7 +80,7 @@ inline PyObject* PyStr_FromString(const char *string)
     return PyUnicode_FromString(string);
 }
 
-inline char * PyStr_AsString(PyObject *object)
+inline char const * PyStr_AsString(PyObject *object)
 {
     return PyUnicode_AsUTF8(object);
 }
@@ -336,8 +336,8 @@ class Adapter : public cppu::WeakImplHelper<
     css::script::XInvocation, css::lang::XUnoTunnel >
 {
     PyRef mWrappedObject;
-    PyInterpreterState *mInterpreter;  // interpreters don't seem to be refcounted !
-    css::uno::Sequence< css::uno::Type > mTypes;
+    PyInterpreterState * const mInterpreter;  // interpreters don't seem to be refcounted !
+    css::uno::Sequence< css::uno::Type > const mTypes;
     MethodOutIndexMap m_methodOutIndexMap;
 
 private:

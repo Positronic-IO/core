@@ -24,6 +24,7 @@
 #include "SOComWindowPeer.h"
 #include "SODispatchInterceptor.h"
 #include "SOActionsApproval.h"
+#include "com_uno_helper.h"
 
 #if defined __clang__
 #pragma clang diagnostic push
@@ -37,7 +38,7 @@
 #define STAROFFICE_WINDOWCLASS L"SOParentWindow"
 
 
-void OutputError_Impl( HWND hw, HRESULT ErrorCode )
+static void OutputError_Impl( HWND hw, HRESULT ErrorCode )
 {
     LPWSTR sMessage = nullptr;
     FormatMessageW(
@@ -81,7 +82,7 @@ HRESULT ExecuteFunc( IDispatch* idispUnoObject,
     return hr;
 }
 
-HRESULT GetIDispByFunc( IDispatch* idispUnoObject,
+static HRESULT GetIDispByFunc( IDispatch* idispUnoObject,
                           OLECHAR const * sFuncName,
                           CComVariant* params,
                           unsigned int count,
@@ -102,7 +103,7 @@ HRESULT GetIDispByFunc( IDispatch* idispUnoObject,
     return S_OK;
 }
 
-HRESULT PutPropertiesToIDisp( IDispatch* pdispObject,
+static HRESULT PutPropertiesToIDisp( IDispatch* pdispObject,
                               OLECHAR const ** sMemberNames,
                               CComVariant* pVariant,
                               unsigned int count )
@@ -353,18 +354,17 @@ STDMETHODIMP CSOActiveX::Load( LPPROPERTYBAG pPropBag, LPERRORLOG /*pErrorLog*/ 
         return hr;
     }
 
-    USES_CONVERSION;
     for( unsigned long ind = 0; ind < aNum; ind++ )
     {
         // all information from the 'object' tag is in strings
-        if( aVal[ind].vt == VT_BSTR && !strcmp( OLE2T( aPropNames[ind].pstrName ), "src" ) )
+        if (aVal[ind].vt == VT_BSTR && !wcscmp(aPropNames[ind].pstrName, L"src"))
         {
             mCurFileUrl = wcsdup( aVal[ind].bstrVal );
         }
         else if( aVal[ind].vt == VT_BSTR
-                && !strcmp( OLE2T( aPropNames[ind].pstrName ), "readonly" ) )
+                && !wcscmp(aPropNames[ind].pstrName, L"readonly"))
         {
-            if( !strcmp( OLE2T( aVal[ind].bstrVal ), "true" ) )
+            if (!wcscmp(aVal[ind].bstrVal, L"true"))
             {
                 // the default value
                 mbViewOnly = TRUE;
@@ -384,9 +384,16 @@ STDMETHODIMP CSOActiveX::Load( LPPROPERTYBAG pPropBag, LPERRORLOG /*pErrorLog*/ 
         return hr;
 
     mbReadyForActivation = FALSE;
-    hr = CBindStatusCallback<CSOActiveX>::Download( this, &CSOActiveX::CallbackCreateXInputStream, const_cast<OLECHAR *>(mCurFileUrl), m_spClientSite, FALSE );
-    if ( hr == MK_S_ASYNCHRONOUS )
-        hr = S_OK;
+    if (BSTR bStrUrl = SysAllocString(mCurFileUrl))
+    {
+        hr = CBindStatusCallback<CSOActiveX>::Download(
+            this, &CSOActiveX::CallbackCreateXInputStream, bStrUrl, m_spClientSite, FALSE);
+        SysFreeString(bStrUrl);
+        if (hr == MK_S_ASYNCHRONOUS)
+            hr = S_OK;
+    }
+    else
+        hr = E_OUTOFMEMORY;
 
     if ( !SUCCEEDED( hr ) )
     {
@@ -911,23 +918,22 @@ SOVersion CSOActiveX::GetVersionConnected()
 
                         if( SUCCEEDED( hr ) && aOfficeVersion.vt == VT_BSTR )
                         {
-                            USES_CONVERSION;
-                            if( !strcmp( OLE2T( aOfficeName.bstrVal ), "StarOffice" ) )
+                            if (!wcscmp(aOfficeName.bstrVal, L"StarOffice"))
                             {
-                                if( !strncmp( OLE2T( aOfficeVersion.bstrVal ), "6.1", 3 ) )
+                                if (!wcsncmp(aOfficeVersion.bstrVal, L"6.1", 3))
                                     bResult = SO_61;
-                                else if( !strncmp( OLE2T( aOfficeVersion.bstrVal ), "6.0", 3 ) )
+                                else if (!wcsncmp(aOfficeVersion.bstrVal, L"6.0", 3))
                                     bResult = SO_60;
-                                else if( !strncmp( OLE2T( aOfficeVersion.bstrVal ), "5.2", 3 ) )
+                                else if (!wcsncmp(aOfficeVersion.bstrVal, L"5.2", 3))
                                     bResult = SO_52;
                                 else
                                     bResult = SO_UNKNOWN;
                             }
                             else // OpenOffice
                             {
-                                if( !strncmp( OLE2T( aOfficeVersion.bstrVal ), "1.1", 3 ) )
+                                if (!wcsncmp(aOfficeVersion.bstrVal, L"1.1", 3))
                                     bResult = OO_11;
-                                else if( !strncmp( OLE2T( aOfficeVersion.bstrVal ), "1.0", 3 ) )
+                                else if (!wcsncmp(aOfficeVersion.bstrVal, L"1.0", 3))
                                     bResult = OO_10;
                                 else
                                     bResult = OO_UNKNOWN;
@@ -1029,7 +1035,7 @@ HRESULT CSOActiveX::OnDrawAdvanced( ATL_DRAWINFO& di )
             }
         }
 
-        if( !mnVersion )
+        if (mnVersion == SO_NOT_DETECTED)
         {
             OutputError_Impl( mOffWin, CS_E_INVALID_VERSION );
             return E_FAIL;

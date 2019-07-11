@@ -21,6 +21,7 @@
 #include <dndlistenercontainer.hxx>
 #include <window.h>
 #include <svdata.hxx>
+#include <sal/log.hxx>
 
 #include <osl/mutex.hxx>
 #include <vcl/svapp.hxx>
@@ -93,7 +94,7 @@ void SAL_CALL DNDEventDispatcher::drop( const DropTargetDropEvent& dtde )
 
     vcl::Window* pChildWindow = findTopLevelWindow(location);
 
-    // handle the case that drop is in an other vcl window than the last dragOver
+    // handle the case that drop is in another vcl window than the last dragOver
     if( pChildWindow != m_pCurrentWindow.get() )
     {
         // fire dragExit on listeners of previous window
@@ -260,9 +261,6 @@ sal_Int32 DNDEventDispatcher::fireDragEnterEvent( vcl::Window *pWindow,
     {
         SolarMutexClearableGuard aSolarGuard;
 
-        // set an UI lock
-        pWindow->IncrementLockCount();
-
         // query DropTarget from window
         Reference< XDropTarget > xDropTarget = pWindow->GetDropTarget();
 
@@ -323,9 +321,6 @@ sal_Int32 DNDEventDispatcher::fireDragExitEvent( vcl::Window *pWindow )
 
         if( xDropTarget.is() )
             n = static_cast < DNDListenerContainer * > ( xDropTarget.get() )->fireDragExitEvent();
-
-        // release UI lock
-        pWindow->DecrementLockCount();
     }
 
     return n;
@@ -385,13 +380,6 @@ sal_Int32 DNDEventDispatcher::fireDropEvent( vcl::Window *pWindow,
             n = static_cast < DNDListenerContainer * > ( xDropTarget.get() )->fireDropEvent(
                 xContext, nDropAction, relLoc.X(), relLoc.Y(), nSourceActions, xTransferable );
         }
-
-        if ( !xWindow->IsDisposed() )
-        {
-            // release UI lock
-            pWindow->DecrementLockCount();
-        }
-
     }
 
     return n;
@@ -420,9 +408,6 @@ sal_Int32 DNDEventDispatcher::fireDragGestureEvent( vcl::Window *pWindow,
             n = static_cast < DNDListenerContainer * > ( xDragGestureRecognizer.get() )->fireDragGestureEvent(
                 nDragAction, relLoc.X(), relLoc.Y(), xSource, event );
         }
-
-        // release UI lock
-        pWindow->DecrementLockCount();
     }
 
     return n;

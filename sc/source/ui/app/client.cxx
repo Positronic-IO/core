@@ -60,7 +60,7 @@ SdrOle2Obj* ScClient::GetDrawObj()
     for (sal_uInt16 nPNr=0; nPNr<nPages && !pOle2Obj; nPNr++)
     {
         SdrPage* pPage = pModel->GetPage(nPNr);
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject && !pOle2Obj)
         {
@@ -171,15 +171,9 @@ void ScClient::ObjectAreaChanged()
         pDrawObj->setSuppressSetVisAreaSize(false);
 
         //  set document modified (SdrModel::SetChanged is not used)
-        // TODO/LATER: is there a reason that this code is not executed in Draw?
-//        SfxViewShell* pSfxViewSh = GetViewShell();
-//        ScTabViewShell* pViewSh = dynamic_cast<ScTabViewShell*>( pSfxViewSh  );
-        if (pViewSh)
-            pViewSh->GetViewData().GetDocShell()->SetDrawModified();
+        pViewSh->GetViewData().GetDocShell()->SetDrawModified();
+        pViewSh->ScrollToObject(pDrawObj);
     }
-
-    if (pDrawObj)
-        pViewSh->ScrollToObject( pDrawObj );
 }
 
 void ScClient::ViewChanged()

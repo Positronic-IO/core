@@ -31,6 +31,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <rtl/uri.hxx>
+#include <sal/log.hxx>
 #include <drawinglayer/geometry/viewinformation2d.hxx>
 #include <comphelper/base64.hxx>
 
@@ -44,7 +45,6 @@ namespace svgio
         :   SvgNode(SVGTokenRect, rDocument, pParent),
             maSvgStyleAttributes(*this),
             maSvgAspectRatio(),
-            mpaTransform(nullptr),
             maX(0),
             maY(0),
             maWidth(0),
@@ -159,7 +159,7 @@ namespace svgio
             }
         }
 
-        void extractFromGraphic(
+        static void extractFromGraphic(
             const Graphic& rGraphic,
             drawinglayer::primitive2d::Primitive2DContainer& rEmbedded,
             basegfx::B2DRange& rViewBox,

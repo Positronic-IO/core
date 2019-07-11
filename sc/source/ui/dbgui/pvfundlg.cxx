@@ -28,6 +28,7 @@
 #include <com/sun/star/sheet/DataPilotFieldShowItemsMode.hpp>
 
 #include <vcl/builderfactory.hxx>
+#include <osl/diagnose.h>
 
 #include <scresid.hxx>
 #include <dpobject.hxx>
@@ -58,18 +59,14 @@ template< typename ListBoxType >
 bool lclFillListBox( ListBoxType& rLBox, const Sequence< OUString >& rStrings, sal_Int32 nEmptyPos = LISTBOX_APPEND )
 {
     bool bEmpty = false;
-    const OUString* pStr = rStrings.getConstArray();
-    if( pStr )
+    for (const OUString& str : rStrings)
     {
-        for( const OUString* pEnd = pStr + rStrings.getLength(); pStr != pEnd; ++pStr )
+        if (!str.isEmpty())
+            rLBox.InsertEntry(str);
+        else
         {
-            if( !pStr->isEmpty() )
-                rLBox.InsertEntry( *pStr );
-            else
-            {
-                rLBox.InsertEntry( ScResId( STR_EMPTYDATA ), nEmptyPos );
-                bEmpty = true;
-            }
+            rLBox.InsertEntry(ScResId(STR_EMPTYDATA), nEmptyPos);
+            bEmpty = true;
         }
     }
     return bEmpty;
@@ -850,9 +847,9 @@ ScDPShowDetailDlg::~ScDPShowDetailDlg()
 {
 }
 
-short ScDPShowDetailDlg::execute()
+short ScDPShowDetailDlg::run()
 {
-    return mxLbDims->n_children() ? m_xDialog->run() : static_cast<short>(RET_CANCEL);
+    return mxLbDims->n_children() ? GenericDialogController::run() : static_cast<short>(RET_CANCEL);
 }
 
 OUString ScDPShowDetailDlg::GetDimensionName() const

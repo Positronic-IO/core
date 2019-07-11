@@ -20,8 +20,7 @@
 #ifndef INCLUDED_SVX_FRMDIRLBOX_HXX
 #define INCLUDED_SVX_FRMDIRLBOX_HXX
 
-#include <vcl/lstbox.hxx>
-#include <sfx2/itemconnect.hxx>
+#include <vcl/weld.hxx>
 #include <editeng/frmdir.hxx>
 #include <svx/svxdllapi.h>
 
@@ -29,50 +28,42 @@ class SvxFrameDirectionItem;
 
 namespace svx {
 
-
 /** This listbox contains entries to select horizontal text direction.
 
     The control works on the SvxFrameDirection enumeration (i.e. left-to-right,
     right-to-left), used i.e. in conjunction with the SvxFrameDirectionItem.
  */
-class SAL_WARN_UNUSED SVX_DLLPUBLIC FrameDirectionListBox : public ListBox
+class SAL_WARN_UNUSED SVX_DLLPUBLIC FrameDirectionListBox
 {
+private:
+    std::unique_ptr<weld::ComboBox> m_xControl;
 public:
-    explicit            FrameDirectionListBox( vcl::Window* pParent, WinBits nBits );
-
+    explicit FrameDirectionListBox(std::unique_ptr<weld::ComboBox> pControl);
+    virtual ~FrameDirectionListBox();
+    bool get_visible() const { return m_xControl->get_visible(); }
+    void save_value() { m_xControl->save_value(); }
+    bool get_value_changed_from_saved() const { return m_xControl->get_value_changed_from_saved(); }
+    SvxFrameDirection get_active_id() const { return static_cast<SvxFrameDirection>(m_xControl->get_active_id().toUInt32()); }
+    void set_active_id(SvxFrameDirection eDir) { m_xControl->set_active_id(OUString::number(static_cast<sal_uInt32>(eDir))); }
+    void remove_id(SvxFrameDirection eDir)
+    {
+        int nPos = m_xControl->find_id(OUString::number(static_cast<sal_uInt32>(eDir)));
+        if (nPos != -1)
+            m_xControl->remove(nPos);
+    }
+    void set_active(int pos) { m_xControl->set_active(pos); }
+    int get_active() const { return m_xControl->get_active(); }
+    void set_sensitive(bool bSensitive) { m_xControl->set_sensitive(bSensitive); }
+    void hide() { m_xControl->hide(); }
+    void show(bool bShow = true) { m_xControl->show(bShow); }
+    int get_count() const { return m_xControl->get_count(); }
     /** Inserts a string with corresponding direction enum into the listbox. */
-    void                InsertEntryValue(
-                            const OUString& rString,
-                            SvxFrameDirection eDirection );
-    /** Removes the entry, that represents the specified frame direction. */
-    void                RemoveEntryValue( SvxFrameDirection eDirection );
-
-    /** Selects the specified frame direction. */
-    void                SelectEntryValue( SvxFrameDirection eDirection );
-    /** Returns the currently selected frame direction. */
-    SvxFrameDirection   GetSelectEntryValue() const;
+    void append(SvxFrameDirection eDirection, const OUString& rString)
+    {
+        m_xControl->append(OUString::number(static_cast<sal_uInt32>(eDirection)), rString);
+    }
+    void connect_changed(const Link<weld::ComboBox&, void>& rLink) { m_xControl->connect_changed(rLink); }
 };
-
-
-/** Wrapper for usage of a FrameDirectionListBox in item connections. */
-class SAL_WARN_UNUSED SVX_DLLPUBLIC FrameDirectionListBoxWrapper : public sfx::SingleControlWrapper< FrameDirectionListBox, SvxFrameDirection >
-{
-public:
-    explicit            FrameDirectionListBoxWrapper( FrameDirectionListBox& rListBox );
-
-    virtual bool        IsControlDontKnow() const override;
-    virtual void        SetControlDontKnow( bool bSet ) override;
-
-    virtual SvxFrameDirection GetControlValue() const override;
-    virtual void        SetControlValue( SvxFrameDirection eValue ) override;
-};
-
-/** Wrapper for usage of a SvxFrameDirectionItem in item connections. */
-typedef sfx::ValueItemWrapper< SvxFrameDirectionItem, SvxFrameDirection > FrameDirItemWrapper;
-
-/** An item<->control connection for a FrameDirectionListBox. */
-typedef sfx::ItemControlConnection< FrameDirItemWrapper, FrameDirectionListBoxWrapper > FrameDirectionListBoxConnection;
-
 
 }
 

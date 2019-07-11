@@ -43,6 +43,7 @@
 #include <sfx2/msgpool.hxx>
 #include <svx/charthelper.hxx>
 #include <scmod.hxx>
+#include <sal/log.hxx>
 
 #include <cppuhelper/component_context.hxx>
 #include <comphelper/processfactory.hxx>
@@ -53,7 +54,6 @@
 #include <com/sun/star/chart2/data/XDataProvider.hpp>
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
-#include <com/sun/star/chart2/X3DChartWindowProvider.hpp>
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
@@ -219,9 +219,9 @@ void lcl_ChartInit(const uno::Reference <embed::XEmbeddedObject>& xObj, ScViewDa
 
 }
 
-FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
+FuInsertOLE::FuInsertOLE(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP,
            SdrModel* pDoc, SfxRequest& rReq)
-    : FuPoor(pViewSh, pWin, pViewP, pDoc, rReq)
+    : FuPoor(rViewSh, pWin, pViewP, pDoc, rReq)
 {
     if( ! rReq.IsAPI() )
         rReq.Done();
@@ -241,14 +241,14 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
     const SfxGlobalNameItem* pNameItem = rReq.GetArg<SfxGlobalNameItem>(SID_INSERT_OBJECT);
     if ( nSlot == SID_INSERT_OBJECT && pNameItem )
     {
-        SvGlobalName aClassName = pNameItem->GetValue();
-        xObj = pViewShell->GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( aClassName.GetByteSequence(), aName );
+        const SvGlobalName& aClassName = pNameItem->GetValue();
+        xObj = rViewShell.GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( aClassName.GetByteSequence(), aName );
     }
     else if ( nSlot == SID_INSERT_SMATH )
     {
         if ( SvtModuleOptions().IsMath() )
         {
-            xObj = pViewShell->GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SM_CLASSID_60 ).GetByteSequence(), aName );
+            xObj = rViewShell.GetViewFrame()->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SM_CLASSID_60 ).GetByteSequence(), aName );
             rReq.AppendItem( SfxGlobalNameItem( SID_INSERT_OBJECT, SvGlobalName( SO3_SM_CLASSID_60 ) ) );
         }
     }
@@ -266,7 +266,7 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
-                        pFact->CreateInsertObjectDialog( pViewShell->GetFrameWeld(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommandString(),
+                        pFact->CreateInsertObjectDialog( rViewShell.GetFrameWeld(), SC_MOD()->GetSlotPool()->GetSlot(nSlot)->GetCommandString(),
                         xStorage, &aServerLst ));
                 if ( pDlg )
                 {
@@ -278,7 +278,7 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
                         nAspect = embed::Aspects::MSOLE_ICON;
 
                     if ( xObj.is() )
-                        pViewSh->GetObjectShell()->GetEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aName );
+                        rViewSh.GetObjectShell()->GetEmbeddedObjectContainer().InsertEmbeddedObject( xObj, aName );
                     // to activate DrawShell (no need to activate Object)
                     bIsFromFile = !pDlg->IsCreateNew();
                 }
@@ -341,11 +341,11 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
 
             //  initialize chart ?
             if ( SvtModuleOptions().IsChart() && SotExchange::IsChart( SvGlobalName( xObj->getClassID() ) ) )
-                lcl_ChartInit(xObj, &pViewSh->GetViewData(), OUString(), false);
+                lcl_ChartInit(xObj, &rViewSh.GetViewData(), OUString(), false);
 
-            ScViewData& rData = pViewSh->GetViewData();
+            ScViewData& rData = rViewSh.GetViewData();
 
-            Point aPnt = pViewSh->GetInsertPos();
+            Point aPnt = rViewSh.GetInsertPos();
             if ( rData.GetDocument()->IsNegativePage( rData.GetTabNo() ) )
                 aPnt.AdjustX( -(aSize.Width()) );      // move position to left edge
             tools::Rectangle aRect (aPnt, aSize);
@@ -386,11 +386,11 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
                 if (bIsFromFile)
                 {
                     // Object selected, activate Draw-Shell
-                    pViewShell->SetDrawShell( true );
+                    rViewShell.SetDrawShell( true );
                 }
                 else
                 {
-                    pViewShell->ActivateObject(pObj, embed::EmbedVerbs::MS_OLEVERB_SHOW);
+                    rViewShell.ActivateObject(pObj, embed::EmbedVerbs::MS_OLEVERB_SHOW);
                 }
             }
 
@@ -405,9 +405,9 @@ FuInsertOLE::FuInsertOLE(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView*
         rReq.Ignore();
 }
 
-FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
+FuInsertChart::FuInsertChart(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP,
            SdrModel* pDoc, SfxRequest& rReq)
-    : FuPoor(pViewSh, pWin, pViewP, pDoc, rReq)
+    : FuPoor(rViewSh, pWin, pViewP, pDoc, rReq)
 {
     const SfxItemSet* pReqArgs = rReq.GetArgs();
 
@@ -423,21 +423,21 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
     OUString aRangeString;
     bool bRangeIsPivotTable = false;
     ScRange aPositionRange;             // cell range for chart positioning
-    ScMarkData aMark = pViewSh->GetViewData().GetMarkData();
+    ScMarkData aMark = rViewSh.GetViewData().GetMarkData();
     if( pReqArgs )
     {
         const SfxPoolItem* pItem;
         if( pReqArgs->HasItem( FN_PARAM_5, &pItem ) )
             aRangeString = static_cast<const SfxStringItem*>(pItem)->GetValue();
 
-        aPositionRange = pViewSh->GetViewData().GetCurPos();
+        aPositionRange = rViewSh.GetViewData().GetCurPos();
     }
     else
     {
-        ScDocument* pDocument = pViewSh->GetViewData().GetDocument();
-        ScDPObject* pObject = pDocument->GetDPAtCursor(pViewSh->GetViewData().GetCurX(),
-                                                       pViewSh->GetViewData().GetCurY(),
-                                                       pViewSh->GetViewData().GetTabNo());
+        ScDocument* pDocument = rViewSh.GetViewData().GetDocument();
+        ScDPObject* pObject = pDocument->GetDPAtCursor(rViewSh.GetViewData().GetCurX(),
+                                                       rViewSh.GetViewData().GetCurY(),
+                                                       rViewSh.GetViewData().GetTabNo());
         if (pObject)
         {
             aRangeString = pObject->GetName();
@@ -448,7 +448,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
             bool bAutomaticMark = false;
             if ( !aMark.IsMarked() && !aMark.IsMultiMarked() )
             {
-                pViewSh->GetViewData().GetView()->MarkDataArea();
+                rViewSh.GetViewData().GetView()->MarkDataArea();
                 bAutomaticMark = true;
             }
 
@@ -472,7 +472,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
             }
 
             if(bAutomaticMark)
-                pViewSh->GetViewData().GetView()->Unmark();
+                rViewSh.GetViewData().GetView()->Unmark();
         }
     }
 
@@ -483,7 +483,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
     const sal_Int64 nAspect = embed::Aspects::MSOLE_CONTENT;
 
     uno::Reference < embed::XEmbeddedObject > xObj =
-        pViewShell->GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SCH_CLASSID_60 ).GetByteSequence(), aName );
+        rViewShell.GetObjectShell()->GetEmbeddedObjectContainer().CreateEmbeddedObject( SvGlobalName( SO3_SCH_CLASSID_60 ).GetByteSequence(), aName );
 
     uno::Reference< css::chart2::data::XDataReceiver > xReceiver;
     uno::Reference< embed::XComponentSupplier > xCompSupp( xObj, uno::UNO_QUERY );
@@ -520,7 +520,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
         xObj->setVisualAreaSize( nAspect, aSz );
     }
 
-    ScViewData& rData = pViewSh->GetViewData();
+    ScViewData& rData = rViewSh.GetViewData();
     ScDocShell* pScDocSh = rData.GetDocShell();
     ScDocument& rScDoc   = pScDocSh->GetDocument();
     bool bUndo (rScDoc.IsUndoEnabled());
@@ -564,12 +564,12 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
                 if (bUndo)
                 {
                     pScDocSh->GetUndoManager()->AddUndoAction(
-                        new ScUndoInsertTab( pScDocSh, nNewTab,
+                        o3tl::make_unique<ScUndoInsertTab>( pScDocSh, nNewTab,
                                              true/*bAppend*/, aTabName ) );
                 }
 
                 pScDocSh->Broadcast( ScTablesHint( SC_TAB_INSERTED, nNewTab ) );
-                pViewSh->SetTabNo( nNewTab, true );
+                rViewSh.SetTabNo( nNewTab, true );
                 pScDocSh->PostPaintExtras();            //! done afterwards ???
             }
             else
@@ -579,7 +579,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
         }
         else if ( nToTable != rData.GetTabNo() )
         {
-            pViewSh->SetTabNo( nToTable, true );
+            rViewSh.SetTabNo( nToTable, true );
         }
     }
 
@@ -588,7 +588,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
     //  object position
 
     // get chart position (from window size and data range)
-    Point aStart = pViewSh->GetChartInsertPos( aSize, aPositionRange );
+    Point aStart = rViewSh.GetChartInsertPos( aSize, aPositionRange );
 
     tools::Rectangle aRect (aStart, aSize);
     SdrOle2Obj* pObj = new SdrOle2Obj(
@@ -621,7 +621,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
         //the controller will be unlocked by the dialog when the dialog is told to do so
 
         // only activate object if not called via API (e.g. macro)
-        pViewShell->ActivateObject(pObj, embed::EmbedVerbs::MS_OLEVERB_SHOW);
+        rViewShell.ActivateObject(pObj, embed::EmbedVerbs::MS_OLEVERB_SHOW);
 
         //open wizard
         //@todo get context from calc if that has one
@@ -661,7 +661,7 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
                                 if ( aDialogSize.Width() > 0 && aDialogSize.Height() > 0 )
                                 {
                                     //calculate and set new position
-                                    Point aDialogPos = pViewShell->GetChartDialogPos( aDialogSize, aRect );
+                                    Point aDialogPos = rViewShell.GetChartDialogPos( aDialogSize, aRect );
                                     xDialogProps->setPropertyValue("Position",
                                         uno::makeAny( awt::Point(aDialogPos.getX(),aDialogPos.getY()) ) );
                                 }
@@ -681,9 +681,8 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
                     if( nDialogRet == ui::dialogs::ExecutableDialogResults::CANCEL )
                     {
                         // leave OLE inplace mode and unmark
-                        OSL_ASSERT( pViewShell );
                         OSL_ASSERT( pView );
-                        pViewShell->DeactivateOle();
+                        rViewShell.DeactivateOle();
                         pView->UnmarkAll();
 
                         // old page view pointer is invalid after switching sheets
@@ -705,11 +704,11 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
                         bAddUndo = false;       // don't create the undo action for inserting
 
                         // leave the draw shell
-                        pViewShell->SetDrawShell( false );
+                        rViewShell.SetDrawShell( false );
 
                         // reset marked cell area
 
-                        pViewSh->GetViewData().GetViewShell()->SetMarkData(aMark);
+                        rViewSh.GetViewData().GetViewShell()->SetMarkData(aMark);
                     }
                     else
                     {
@@ -728,47 +727,10 @@ FuInsertChart::FuInsertChart(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawV
     {
         // add undo action the same way as in SdrEditView::InsertObjectAtView
         // (using UndoActionHdl etc.)
-        pView->AddUndo(new SdrUndoNewObj(*pObj));
+        pView->AddUndo(o3tl::make_unique<SdrUndoNewObj>(*pObj));
     }
 
     // BM/IHA --
-}
-
-FuInsertChartFromFile::FuInsertChartFromFile( ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
-           SdrModel* pDoc, const SfxRequest& rReq, const OUString& rURL):
-    FuPoor(pViewSh, pWin, pViewP, pDoc, rReq)
-{
-    uno::Reference< io::XInputStream > xStorage = comphelper::OStorageHelper::GetInputStreamFromURL(
-            rURL, comphelper::getProcessComponentContext());
-
-    comphelper::EmbeddedObjectContainer& rObjContainer =
-        pViewShell->GetObjectShell()->GetEmbeddedObjectContainer();
-
-    OUString aName;
-    uno::Reference< embed::XEmbeddedObject > xObj = rObjContainer.InsertEmbeddedObject( xStorage, aName );
-
-    const sal_Int64 nAspect = embed::Aspects::MSOLE_CONTENT;
-    awt::Size aSz = xObj->getVisualAreaSize( nAspect );
-    Size aSize( aSz.Width, aSz.Height );
-
-    ScRange aPositionRange = pViewSh->GetViewData().GetCurPos();
-    Point aStart = pViewSh->GetChartInsertPos( aSize, aPositionRange );
-    tools::Rectangle aRect (aStart, aSize);
-    SdrOle2Obj* pObj = new SdrOle2Obj(
-        *pDoc, // TTTT should be reference
-        svt::EmbeddedObjectRef(xObj, nAspect),
-        aName,
-        aRect);
-
-    SdrPageView* pPV = pView->GetSdrPageView();
-
-    // use the page instead of the view to insert, so no undo action is created yet
-    SdrPage* pInsPage = pPV->GetPage();
-    pInsPage->InsertObject( pObj );
-    pView->UnmarkAllObj();
-    pView->MarkObj( pObj, pPV );
-
-    pViewShell->ActivateObject(pObj, embed::EmbedVerbs::MS_OLEVERB_SHOW);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

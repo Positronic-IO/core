@@ -30,6 +30,7 @@
 #include <acorrect.hxx>
 #include <swtable.hxx>
 #include <ndtxt.hxx>
+#include <txtfrm.hxx>
 #include <swundo.hxx>
 #include <SwRewriter.hxx>
 
@@ -88,8 +89,8 @@ void SwEditShell::StartAllAction()
 {
     for(SwViewShell& rCurrentShell : GetRingContainer())
     {
-        if( dynamic_cast<const SwEditShell *>(&rCurrentShell) != nullptr )
-            static_cast<SwEditShell*>(&rCurrentShell)->StartAction();
+        if (SwEditShell* pEditShell = dynamic_cast<SwEditShell*>(&rCurrentShell))
+            pEditShell->StartAction();
         else
             rCurrentShell.StartAction();
     }
@@ -265,9 +266,11 @@ void SwEditShell::AutoCorrect( SvxAutoCorrect& rACorr, bool bInsert,
 
     SwAutoCorrDoc aSwAutoCorrDoc( *this, *pCursor, cChar );
     // FIXME: this _must_ be called with reference to the actual node text!
-    OUString const& rNodeText(pTNd->GetText());
+    SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pTNd->getLayoutFrame(GetLayout())));
+    TextFrameIndex const nPos(pFrame->MapModelToViewPos(*pCursor->GetPoint()));
+    OUString const& rMergedText(pFrame->GetText());
     rACorr.DoAutoCorrect( aSwAutoCorrDoc,
-                    rNodeText, pCursor->GetPoint()->nContent.GetIndex(),
+                    rMergedText, sal_Int32(nPos),
                     cChar, bInsert, m_bNbspRunNext, GetWin() );
     if( cChar )
         SaveTableBoxContent( pCursor->GetPoint() );
@@ -285,13 +288,14 @@ bool SwEditShell::GetPrevAutoCorrWord( SvxAutoCorrect const & rACorr, OUString& 
 
     bool bRet;
     SwPaM* pCursor = getShellCursor( true );
-    const sal_Int32 nPos = pCursor->GetPoint()->nContent.GetIndex();
     SwTextNode* pTNd = pCursor->GetNode().GetTextNode();
-    if( pTNd && nPos )
+    if (pTNd)
     {
         SwAutoCorrDoc aSwAutoCorrDoc( *this, *pCursor, 0 );
+        SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pTNd->getLayoutFrame(GetLayout())));
+        TextFrameIndex const nPos(pFrame->MapModelToViewPos(*pCursor->GetPoint()));
         bRet = rACorr.GetPrevAutoCorrWord( aSwAutoCorrDoc,
-                                            pTNd->GetText(), nPos, rWord );
+                    pFrame->GetText(), sal_Int32(nPos), rWord );
     }
     else
         bRet = false;

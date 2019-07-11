@@ -33,6 +33,7 @@
 #include <objectformatter.hxx>
 #include <ndindex.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 static SwTwips lcl_GetFrameMinHeight(const SwLayoutFrame & rFrame)
 {
@@ -659,7 +660,7 @@ bool SwHeadFootFrame::GetEatSpacing() const
     return pFormat->GetHeaderAndFooterEatSpacing().GetValue();
 }
 
-void DelFlys( SwLayoutFrame const *pFrame, SwPageFrame *pPage )
+static void DelFlys( SwLayoutFrame const *pFrame, SwPageFrame *pPage )
 {
     size_t i = 0;
     while ( pPage->GetSortedObjs() &&
@@ -688,7 +689,7 @@ void SwPageFrame::PrepareHeader()
     if ( !pLay )
         return;
 
-    const SwFormatHeader &rH = static_cast<SwFrameFormat*>(GetRegisteredIn())->GetHeader();
+    const SwFormatHeader &rH = static_cast<SwFrameFormat*>(GetDep())->GetHeader();
 
     const SwViewShell *pSh = getRootFrame()->GetCurrShell();
     const bool bOn = !(pSh && (pSh->GetViewOptions()->getBrowseMode() ||
@@ -729,7 +730,7 @@ void SwPageFrame::PrepareFooter()
     if ( !pLay )
         return;
 
-    const SwFormatFooter &rF = static_cast<SwFrameFormat*>(GetRegisteredIn())->GetFooter();
+    const SwFormatFooter &rF = static_cast<SwFrameFormat*>(GetDep())->GetFooter();
     while ( pLay->GetNext() )
         pLay = static_cast<SwLayoutFrame*>(pLay->GetNext());
 

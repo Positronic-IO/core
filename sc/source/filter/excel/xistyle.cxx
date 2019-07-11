@@ -43,18 +43,25 @@
 #include <editeng/eeitem.hxx>
 #include <editeng/flstitem.hxx>
 #include <editeng/justifyitem.hxx>
+#include <editeng/editids.hrc>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <vcl/fontcharmap.hxx>
 #include <document.hxx>
+#include <documentimport.hxx>
 #include <docpool.hxx>
 #include <attrib.hxx>
+#include <patattr.hxx>
 #include <stlpool.hxx>
 #include <stlsheet.hxx>
 #include <formulacell.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <attarray.hxx>
+#include <xladdress.hxx>
+#include <xlcontent.hxx>
 #include <xltracer.hxx>
+#include <xltools.hxx>
 #include <xistream.hxx>
 #include <xicontent.hxx>
 
@@ -99,7 +106,7 @@ public:
     }
     virtual sal_Bool SAL_CALL hasElements() override
     {
-        return (maColor.size() > 0);
+        return (!maColor.empty());
     }
 
 private:
@@ -700,7 +707,7 @@ void XclImpNumFmtBuffer::CreateScFormats()
         {
             OUString aFormat( rNumFmt.maFormat );
             rFormatter.PutandConvertEntry( aFormat, nCheckPos,
-                                           nType, nKey, LANGUAGE_ENGLISH_US, rNumFmt.meLanguage );
+                                           nType, nKey, LANGUAGE_ENGLISH_US, rNumFmt.meLanguage, false);
         }
         else
             nKey = rFormatter.GetFormatIndex( rNumFmt.meOffset, rNumFmt.meLanguage );
@@ -1675,8 +1682,6 @@ ScStyleSheet* XclImpXFBuffer::CreateStyleSheet( sal_uInt16 nXFIndex )
 }
 
 // Buffer for XF indexes in cells =============================================
-
-IMPL_FIXEDMEMPOOL_NEWDEL( XclImpXFRange )
 
 bool XclImpXFRange::Expand( SCROW nScRow, const XclImpXFIndex& rXFIndex )
 {

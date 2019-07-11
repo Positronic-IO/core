@@ -19,7 +19,8 @@
 
 #include "NetChart.hxx"
 #include <PlottingPositionHelper.hxx>
-#include <AbstractShapeFactory.hxx>
+#include <ShapeFactory.hxx>
+#include <ExplicitCategoriesProvider.hxx>
 #include <CommonConverters.hxx>
 #include <ViewDefines.hxx>
 #include <ObjectIdentifier.hxx>
@@ -36,9 +37,11 @@
 
 #include <editeng/unoprnms.hxx>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/drawing/DoubleSequence.hpp>
 #include <com/sun/star/drawing/NormalsKind.hpp>
+#include <com/sun/star/drawing/XShapes.hpp>
 #include <com/sun/star/lang/XServiceName.hpp>
 
 namespace chart
@@ -50,14 +53,12 @@ using namespace ::com::sun::star::chart2;
 NetChart::NetChart( const uno::Reference<XChartType>& xChartTypeModel
                      , sal_Int32 nDimensionCount
                      , bool bNoArea
-                     , PlottingPositionHelper* pPlottingPositionHelper
+                     , std::unique_ptr<PlottingPositionHelper> pPlottingPositionHelper
                      )
         : VSeriesPlotter( xChartTypeModel, nDimensionCount, true )
-        , m_pMainPosHelper(pPlottingPositionHelper)
+        , m_pMainPosHelper(std::move(pPlottingPositionHelper))
         , m_bArea(!bNoArea)
         , m_bLine(bNoArea)
-        , m_xSeriesTarget(nullptr)
-        , m_xTextTarget(nullptr)
 {
     // we only support 2D Net charts
     assert(nDimensionCount == 2);
@@ -125,7 +126,7 @@ bool NetChart::impl_createLine( VDataSeries* pSeries
     drawing::PolyPolygonShape3D aPoly;
     {
         bool bIsClipped = false;
-        if( !AbstractShapeFactory::isPolygonEmptyOrSinglePoint(*pSeriesPoly) )
+        if( !ShapeFactory::isPolygonEmptyOrSinglePoint(*pSeriesPoly) )
         {
             // do NOT connect last and first point, if one is NAN, and NAN handling is NAN_AS_GAP
             double fFirstY = pSeries->getYValue( 0 );
@@ -148,14 +149,14 @@ bool NetChart::impl_createLine( VDataSeries* pSeries
             Clipping::clipPolygonAtRectangle( *pSeriesPoly, pPosHelper->getScaledLogicClipDoubleRect(), aPoly );
     }
 
-    if(!AbstractShapeFactory::hasPolygonAnyLines(aPoly))
+    if(!ShapeFactory::hasPolygonAnyLines(aPoly))
         return false;
 
     //transformation 3) -> 4)
     pPosHelper->transformScaledLogicToScene( aPoly );
 
     //create line:
-    uno::Reference< drawing::XShape > xShape(nullptr);
+    uno::Reference< drawing::XShape > xShape;
     {
         xShape = m_pShapeFactory->createLine2D( xSeriesGroupShape_Shapes
                 , PolyToPointSequence( aPoly ) );
@@ -163,7 +164,7 @@ bool NetChart::impl_createLine( VDataSeries* pSeries
                 , pSeries->getPropertiesOfSeries()
                 , PropertyMapper::getPropertyNameMapForLineSeriesProperties() );
         //because of this name this line will be used for marking
-        ::chart::AbstractShapeFactory::setShapeName(xShape, "MarkHandles");
+        ::chart::ShapeFactory::setShapeName(xShape, "MarkHandles");
     }
     return true;
 }
@@ -180,7 +181,7 @@ bool NetChart::impl_createArea( VDataSeries* pSeries
 
     drawing::PolyPolygonShape3D aPoly( *pSeriesPoly );
     //add second part to the polygon (grounding points or previous series points)
-    if( !AbstractShapeFactory::isPolygonEmptyOrSinglePoint(*pSeriesPoly) )
+    if( !ShapeFactory::isPolygonEmptyOrSinglePoint(*pSeriesPoly) )
     {
         if( pPreviousSeriesPoly )
             addPolygon( aPoly, *pPreviousSeriesPoly );
@@ -210,17 +211,17 @@ bool NetChart::impl_createArea( VDataSeries* pSeries
     {
         appendPoly( aPoly, *pPreviousSeriesPoly );
     }
-    AbstractShapeFactory::closePolygon(aPoly);
+    ShapeFactory::closePolygon(aPoly);
 
     //apply clipping
     {
         drawing::PolyPolygonShape3D aClippedPoly;
         Clipping::clipPolygonAtRectangle( aPoly, pPosHelper->getScaledLogicClipDoubleRect(), aClippedPoly, false );
-        AbstractShapeFactory::closePolygon(aClippedPoly); //again necessary after clipping
+        ShapeFactory::closePolygon(aClippedPoly); //again necessary after clipping
         aPoly = aClippedPoly;
     }
 
-    if(!AbstractShapeFactory::hasPolygonAnyLines(aPoly))
+    if(!ShapeFactory::hasPolygonAnyLines(aPoly))
         return false;
 
     //transformation 3) -> 4)
@@ -234,7 +235,7 @@ bool NetChart::impl_createArea( VDataSeries* pSeries
                 , pSeries->getPropertiesOfSeries()
                 , PropertyMapper::getPropertyNameMapForFilledSeriesProperties() );
     //because of this name this line will be used for marking
-    ::chart::AbstractShapeFactory::setShapeName(xShape, "MarkHandles");
+    ::chart::ShapeFactory::setShapeName(xShape, "MarkHandles");
     return true;
 }
 
@@ -251,23 +252,21 @@ void NetChart::impl_createSeriesShapes()
             drawing::PolyPolygonShape3D* pSeriesPoly = nullptr;
 
             //iterate through all series
-            for( VDataSeries* pSeries : rXSlot.m_aSeriesVector )
+            for( std::unique_ptr<VDataSeries> const & pSeries : rXSlot.m_aSeriesVector )
             {
                 sal_Int32 nAttachedAxisIndex = pSeries->getAttachedAxisIndex();
-                PlottingPositionHelper* pPosHelper = &(getPlottingPositionHelper( nAttachedAxisIndex ));
-                if(!pPosHelper)
-                    pPosHelper = m_pMainPosHelper.get();
-                PlotterBase::m_pPosHelper = pPosHelper;
+                m_pPosHelper = &getPlottingPositionHelper(nAttachedAxisIndex);
 
                 pSeriesPoly = &pSeries->m_aPolyPolygonShape3D;
                 if( m_bArea )
                 {
-                    if( !impl_createArea( pSeries, pSeriesPoly, aPreviousSeriesPolyMap[nAttachedAxisIndex], pPosHelper ) )
+                    if (!impl_createArea(pSeries.get(), pSeriesPoly,
+                                         aPreviousSeriesPolyMap[nAttachedAxisIndex], m_pPosHelper))
                         continue;
                 }
                 if( m_bLine )
                 {
-                    if( !impl_createLine( pSeries, pSeriesPoly, pPosHelper ) )
+                    if (!impl_createLine(pSeries.get(), pSeriesPoly, m_pPosHelper))
                         continue;
                 }
                 aPreviousSeriesPolyMap[nAttachedAxisIndex] = pSeriesPoly;
@@ -289,18 +288,16 @@ void lcl_reorderSeries( std::vector< std::vector< VDataSeriesGroup > >&  rZSlots
     for( ; aZIt != aZEnd; ++aZIt )
     {
         std::vector< VDataSeriesGroup > aXSlot;
-        aXSlot.reserve( aZIt->size() );
 
         std::vector< VDataSeriesGroup >::reverse_iterator aXIt( aZIt->rbegin() );
         std::vector< VDataSeriesGroup >::reverse_iterator aXEnd( aZIt->rend() );
         for( ; aXIt != aXEnd; ++aXIt )
-            aXSlot.push_back(*aXIt);
+            aXSlot.push_back(std::move(*aXIt));
 
-        aRet.push_back(aXSlot);
+        aRet.push_back(std::move(aXSlot));
     }
 
-    rZSlots.clear();
-    rZSlots = aRet;
+    rZSlots = std::move(aRet);
 }
 
 }//anonymous namespace
@@ -370,7 +367,7 @@ void NetChart::createShapes()
             //iterate through all x slots in this category to get 100percent sum
             for( auto const& rXSlot : rZSlot )
             {
-                for( VDataSeries* pSeries : rXSlot.m_aSeriesVector )
+                for( std::unique_ptr<VDataSeries> const & pSeries : rXSlot.m_aSeriesVector )
                 {
                     if(!pSeries)
                         continue;
@@ -382,10 +379,7 @@ void NetChart::createShapes()
                     if( aLogicYSumMap.find(nAttachedAxisIndex)==aLogicYSumMap.end() )
                         aLogicYSumMap[nAttachedAxisIndex]=0.0;
 
-                    PlottingPositionHelper* pPosHelper = &(getPlottingPositionHelper( nAttachedAxisIndex ));
-                    if(!pPosHelper)
-                        pPosHelper = m_pMainPosHelper.get();
-                    PlotterBase::m_pPosHelper = pPosHelper;
+                    m_pPosHelper = &getPlottingPositionHelper(nAttachedAxisIndex);
 
                     double fAdd = pSeries->getYValue( nIndex );
                     if( !::rtl::math::isNan(fAdd) && !::rtl::math::isInf(fAdd) )
@@ -402,7 +396,7 @@ void NetChart::createShapes()
             {
                 std::map< sal_Int32, double > aLogicYForNextSeriesMap;//one for each different nAttachedAxisIndex
                 //iterate through all series
-                for( VDataSeries* pSeries : rXSlot.m_aSeriesVector )
+                for( std::unique_ptr<VDataSeries> const & pSeries : rXSlot.m_aSeriesVector )
                 {
                     if(!pSeries)
                         continue;
@@ -413,13 +407,10 @@ void NetChart::createShapes()
                     if( m_bArea && (rXSlot.m_aSeriesVector.size() == 1) && (nIndex >= pSeries->getTotalPointCount()) )
                         continue;
 
-                    uno::Reference< drawing::XShapes > xSeriesGroupShape_Shapes = getSeriesGroupShapeFrontChild(pSeries, m_xSeriesTarget);
+                    uno::Reference< drawing::XShapes > xSeriesGroupShape_Shapes = getSeriesGroupShapeFrontChild(pSeries.get(), m_xSeriesTarget);
 
                     sal_Int32 nAttachedAxisIndex = pSeries->getAttachedAxisIndex();
-                    PlottingPositionHelper* pPosHelper = &(getPlottingPositionHelper( nAttachedAxisIndex ));
-                    if(!pPosHelper)
-                        pPosHelper = m_pMainPosHelper.get();
-                    PlotterBase::m_pPosHelper = pPosHelper;
+                    m_pPosHelper = &getPlottingPositionHelper(nAttachedAxisIndex);
 
                     pSeries->m_fLogicZPos = fLogicZ;
 
@@ -435,16 +426,16 @@ void NetChart::createShapes()
                         {
                             if( rXSlot.m_aSeriesVector.size() == 1 || pSeries == rXSlot.m_aSeriesVector.front() )
                             {
-                                fLogicY = pPosHelper->getLogicMinY();
-                                if( !pPosHelper->isMathematicalOrientationY() )
-                                    fLogicY = pPosHelper->getLogicMaxY();
+                                fLogicY = m_pPosHelper->getLogicMinY();
+                                if (!m_pPosHelper->isMathematicalOrientationY())
+                                    fLogicY = m_pPosHelper->getLogicMaxY();
                             }
                             else
                                 fLogicY = 0.0;
                         }
                     }
 
-                    if( pPosHelper->isPercentY() && aLogicYSumMap[nAttachedAxisIndex] != 0.0 )
+                    if (m_pPosHelper->isPercentY() && aLogicYSumMap[nAttachedAxisIndex] != 0.0)
                     {
                         fLogicY = fabs( fLogicY )/aLogicYSumMap[nAttachedAxisIndex];
                     }
@@ -474,7 +465,7 @@ void NetChart::createShapes()
                     fLogicY += aLogicYForNextSeriesMap[nAttachedAxisIndex];
                     aLogicYForNextSeriesMap[nAttachedAxisIndex] = fLogicY;
 
-                    bool bIsVisible = pPosHelper->isLogicVisible( fLogicX, fLogicY, fLogicZ );
+                    bool bIsVisible = m_pPosHelper->isLogicVisible(fLogicX, fLogicY, fLogicZ);
 
                     //remind minimal and maximal x values for area 'grounding' points
                     //only for filled area
@@ -489,24 +480,25 @@ void NetChart::createShapes()
 
                     drawing::Position3D aUnscaledLogicPosition( fLogicX, fLogicY, fLogicZ );
                     drawing::Position3D aScaledLogicPosition(aUnscaledLogicPosition);
-                    pPosHelper->doLogicScaling( aScaledLogicPosition );
+                    m_pPosHelper->doLogicScaling(aScaledLogicPosition);
 
                     //transformation 3) -> 4)
-                    drawing::Position3D aScenePosition( pPosHelper->transformLogicToScene( fLogicX,fLogicY,fLogicZ, false ) );
+                    drawing::Position3D aScenePosition(
+                        m_pPosHelper->transformLogicToScene(fLogicX, fLogicY, fLogicZ, false));
 
                     //better performance for big data
-                    FormerPoint aFormerPoint( aSeriesFormerPointMap[pSeries] );
-                    pPosHelper->setCoordinateSystemResolution( m_aCoordinateSystemResolution );
+                    FormerPoint aFormerPoint( aSeriesFormerPointMap[pSeries.get()] );
+                    m_pPosHelper->setCoordinateSystemResolution(m_aCoordinateSystemResolution);
                     if( !pSeries->isAttributedDataPoint(nIndex)
-                            &&
-                        pPosHelper->isSameForGivenResolution( aFormerPoint.m_fX, aFormerPoint.m_fY, aFormerPoint.m_fZ
+                            && m_pPosHelper->isSameForGivenResolution(
+                               aFormerPoint.m_fX, aFormerPoint.m_fY, aFormerPoint.m_fZ
                                                             , aScaledLogicPosition.PositionX, aScaledLogicPosition.PositionY, aScaledLogicPosition.PositionZ ) )
                     {
                         ++nSkippedPoints;
                         m_bPointsWereSkipped = true;
                         continue;
                     }
-                    aSeriesFormerPointMap[pSeries] = FormerPoint(aScaledLogicPosition.PositionX, aScaledLogicPosition.PositionY, aScaledLogicPosition.PositionZ);
+                    aSeriesFormerPointMap[pSeries.get()] = FormerPoint(aScaledLogicPosition.PositionX, aScaledLogicPosition.PositionY, aScaledLogicPosition.PositionZ);
 
                     //store point information for series polygon
                     //for area and/or line (symbols only do not need this)
@@ -518,8 +510,11 @@ void NetChart::createShapes()
                         if( !bIsVisible && m_bArea )
                         {
                             drawing::Position3D aClippedPos(aScaledLogicPosition);
-                            pPosHelper->clipScaledLogicValues( nullptr, &aClippedPos.PositionY, nullptr );
-                            if( pPosHelper->isLogicVisible( aClippedPos.PositionX, aClippedPos.PositionY, aClippedPos.PositionZ ) )
+                            m_pPosHelper->clipScaledLogicValues(nullptr, &aClippedPos.PositionY,
+                                                                nullptr);
+                            if (m_pPosHelper->isLogicVisible(aClippedPos.PositionX,
+                                                             aClippedPos.PositionY,
+                                                             aClippedPos.PositionZ))
                             {
                                 AddPointToPoly( pSeries->m_aPolyPolygonShape3D, aClippedPos, pSeries->m_nPolygonIndex );
                                 AddPointToPoly( pSeries->m_aPolyPolygonShape3D, aScaledLogicPosition, pSeries->m_nPolygonIndex );
@@ -551,33 +546,28 @@ void NetChart::createShapes()
 
                         //create data point
                         drawing::Direction3D aSymbolSize(0,0,0);
-                        if( bCreateSymbol )
+                        if (bCreateSymbol) // implies pSymbolProperties
                         {
-                            if( pSymbolProperties )
+                            if (pSymbolProperties->Style != SymbolStyle_NONE)
                             {
-                                if( pSymbolProperties->Style != SymbolStyle_NONE )
-                                {
-                                    aSymbolSize.DirectionX = pSymbolProperties->Size.Width;
-                                    aSymbolSize.DirectionY = pSymbolProperties->Size.Height;
-                                }
-
-                                if( pSymbolProperties->Style == SymbolStyle_STANDARD )
-                                {
-                                    sal_Int32 nSymbol = pSymbolProperties->StandardSymbol;
-                                    m_pShapeFactory->createSymbol2D( xPointGroupShape_Shapes
-                                            , aScenePosition, aSymbolSize
-                                            , nSymbol
-                                            , pSymbolProperties->BorderColor
-                                            , pSymbolProperties->FillColor );
-                                }
-                                else if( pSymbolProperties->Style == SymbolStyle_GRAPHIC )
-                                {
-                                    m_pShapeFactory->createGraphic2D( xPointGroupShape_Shapes
-                                            , aScenePosition , aSymbolSize
-                                            , pSymbolProperties->Graphic );
-                                }
-                                //@todo other symbol styles
+                                aSymbolSize.DirectionX = pSymbolProperties->Size.Width;
+                                aSymbolSize.DirectionY = pSymbolProperties->Size.Height;
                             }
+
+                            if (pSymbolProperties->Style == SymbolStyle_STANDARD)
+                            {
+                                sal_Int32 nSymbol = pSymbolProperties->StandardSymbol;
+                                m_pShapeFactory->createSymbol2D(
+                                    xPointGroupShape_Shapes, aScenePosition, aSymbolSize, nSymbol,
+                                    pSymbolProperties->BorderColor, pSymbolProperties->FillColor);
+                            }
+                            else if (pSymbolProperties->Style == SymbolStyle_GRAPHIC)
+                            {
+                                m_pShapeFactory->createGraphic2D(xPointGroupShape_Shapes,
+                                                                 aScenePosition, aSymbolSize,
+                                                                 pSymbolProperties->Graphic);
+                            }
+                            //@todo other symbol styles
                         }
 
                         //create data point label
@@ -588,7 +578,8 @@ void NetChart::createShapes()
                                         , aScenePosition.PositionY
                                         , aScenePosition.PositionZ+getTransformedDepth() );
 
-                            sal_Int32 nLabelPlacement = pSeries->getLabelPlacement( nIndex, m_xChartTypeModel, pPosHelper->isSwapXAndY() );
+                            sal_Int32 nLabelPlacement = pSeries->getLabelPlacement(
+                                nIndex, m_xChartTypeModel, m_pPosHelper->isSwapXAndY());
 
                             switch(nLabelPlacement)
                             {
@@ -623,7 +614,8 @@ void NetChart::createShapes()
                             sal_Int32 nOffset = 100; //todo maybe calculate this font height dependent
                             if( nLabelPlacement == css::chart::DataLabelPlacement::OUTSIDE )
                             {
-                                PolarPlottingPositionHelper* pPolarPosHelper = dynamic_cast<PolarPlottingPositionHelper*>(pPosHelper);
+                                PolarPlottingPositionHelper* pPolarPosHelper
+                                    = dynamic_cast<PolarPlottingPositionHelper*>(m_pPosHelper);
                                 if( pPolarPosHelper )
                                 {
                                     PolarLabelPositionHelper aPolarLabelPositionHelper(pPolarPosHelper,m_nDimension,m_xLogicTarget,m_pShapeFactory);

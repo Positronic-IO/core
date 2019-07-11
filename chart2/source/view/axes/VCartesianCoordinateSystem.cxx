@@ -24,6 +24,10 @@
 #include <AxisHelper.hxx>
 #include <ChartTypeHelper.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <ChartModel.hxx>
+#include <com/sun/star/chart2/XCoordinateSystem.hpp>
+#include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
+#include <com/sun/star/chart2/AxisType.hpp>
 
 namespace chart
 {

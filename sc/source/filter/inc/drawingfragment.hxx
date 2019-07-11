@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_DRAWINGFRAGMENT_HXX
 
 #include <memory>
-#include <com/sun/star/awt/Rectangle.hpp>
 #include <oox/drawingml/shapegroupcontext.hxx>
 #include <oox/ole/axcontrol.hxx>
 #include <oox/drawingml/shape.hxx>
@@ -34,7 +33,6 @@
 
 namespace oox { namespace ole {
     struct AxFontData;
-    class AxMorphDataModelBase;
 } }
 
 namespace oox {
@@ -134,9 +132,9 @@ private:
 
 private:
     css::uno::Reference< css::container::XIndexContainer > mxCtrlFormIC;
-    sal_Int32           mnCtrlIndex;
-    sal_Int32           mnCtrlType;
-    sal_Int32           mnDropStyle;
+    sal_Int32 const           mnCtrlIndex;
+    sal_Int32 const           mnCtrlType;
+    sal_Int32 const           mnDropStyle;
 };
 
 class VmlDrawing : public ::oox::vml::Drawing, public WorksheetHelper
@@ -189,7 +187,7 @@ private:
                             const ::oox::vml::ShapeBase& rShape ) const;
 
 private:
-    ::oox::ole::ControlConverter maControlConv;
+    ::oox::ole::ControlConverter const maControlConv;
     ::oox::vml::TextFontModel maListBoxFont;
 };
 

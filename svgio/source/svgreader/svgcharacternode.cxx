@@ -518,7 +518,7 @@ namespace svgio
                     if(pCandidate)
                     {
                         const localTextBreakupHelper alocalTextBreakupHelper(*pCandidate, rSvgTextPosition);
-                        const drawinglayer::primitive2d::Primitive2DContainer aResult(
+                        const drawinglayer::primitive2d::Primitive2DContainer& aResult(
                             alocalTextBreakupHelper.getResult());
 
                         if(!aResult.empty())
@@ -604,11 +604,9 @@ namespace svgio
             // but it seems to be degrees. Convert here to radians
             if(!maRotate.empty())
             {
-                const double fFactor(F_PI / 180.0);
-
-                for(size_t a(0); a < maRotate.size(); a++)
+                for (double& f : maRotate)
                 {
-                    maRotate[a] *= fFactor;
+                    f = basegfx::deg2rad(f);
                 }
             }
 

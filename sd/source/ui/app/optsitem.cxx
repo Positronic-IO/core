@@ -34,7 +34,7 @@
 using namespace ::utl;
 using namespace ::com::sun::star::uno;
 
-template< class T > T getSafeValue( const Any& rAny )
+template< class T > static T getSafeValue( const Any& rAny )
 {
     T value = T();
     bool bOk = (rAny >>= value);
@@ -76,7 +76,6 @@ bool SdOptionsItem::PutProperties( const Sequence< OUString >& rNames, const Seq
 
 SdOptionsGeneric::SdOptionsGeneric(bool bImpress, const OUString& rSubTree)
     : maSubTree(rSubTree)
-    , mpCfgItem( nullptr)
     , mbImpress(bImpress)
     , mbInit(rSubTree.isEmpty())
     , mbEnableModify(false)
@@ -90,11 +89,14 @@ SdOptionsGeneric::SdOptionsGeneric(SdOptionsGeneric const & rSource)
 
 SdOptionsGeneric& SdOptionsGeneric::operator=(SdOptionsGeneric const & rSource)
 {
-    maSubTree = rSource.maSubTree;
-    mpCfgItem.reset(rSource.mpCfgItem ? new SdOptionsItem(*rSource.mpCfgItem) : nullptr );
-    mbImpress = rSource.mbImpress;
-    mbInit = rSource.mbInit;
-    mbEnableModify = rSource.mbEnableModify;
+    if (this != &rSource)
+    {
+        maSubTree = rSource.maSubTree;
+        mpCfgItem.reset(rSource.mpCfgItem ? new SdOptionsItem(*rSource.mpCfgItem) : nullptr );
+        mbImpress = rSource.mbImpress;
+        mbInit = rSource.mbInit;
+        mbEnableModify = rSource.mbEnableModify;
+    }
     return *this;
 }
 
@@ -190,7 +192,7 @@ SdOptionsLayout::SdOptionsLayout(bool bImpress, bool bUseConfig) :
     bDragStripes( false ),
     bHandlesBezier( false ),
     bHelplines( true ),
-    nMetric(static_cast<sal_uInt16>(isMetricSystem() ? FUNIT_CM : FUNIT_INCH)),
+    nMetric(static_cast<sal_uInt16>(isMetricSystem() ? FieldUnit::CM : FieldUnit::INCH)),
     nDefTab( 1250 )
 {
     EnableModify( true );

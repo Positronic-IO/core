@@ -20,7 +20,6 @@
 #define INCLUDED_SW_INC_DBMGR_HXX
 
 #include <rtl/ustring.hxx>
-#include <tools/link.hxx>
 #include <tools/solar.h>
 #include <i18nlangtag/lang.h>
 #include <com/sun/star/util/Date.hpp>
@@ -30,7 +29,6 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
-#include <vcl/weld.hxx>
 
 #include <memory>
 #include <vector>
@@ -70,14 +68,13 @@ struct SwDBFormatData
 };
 
 namespace weld {
-    class ComboBoxText;
+    class ComboBox;
     class Window;
 }
 
 class SwView;
 class SwWrtShell;
 class ListBox;
-class Button;
 class SvNumberFormatter;
 class SwXMailMerge;
 class SwMailMergeConfigItem;
@@ -312,18 +309,17 @@ public:
     void     SetInitDBFields(bool b) { bInitDBFields = b;    }
 
     /// Fill listbox with all table names of a database.
-    bool            GetTableNames(ListBox* pListBox, const OUString& rDBName );
-    bool            GetTableNames(weld::ComboBoxText& rBox, const OUString& rDBName);
+    bool            GetTableNames(weld::ComboBox& rBox, const OUString& rDBName);
 
     /// Fill listbox with all column names of a database table.
     void            GetColumnNames(ListBox* pListBox,
                             const OUString& rDBName, const OUString& rTableName);
-    void            GetColumnNames(weld::ComboBoxText& rBox,
+    void            GetColumnNames(weld::ComboBox& rBox,
                             const OUString& rDBName, const OUString& rTableName);
     static void GetColumnNames(ListBox* pListBox,
                             css::uno::Reference< css::sdbc::XConnection> const & xConnection,
                             const OUString& rTableName);
-    static void GetColumnNames(weld::ComboBoxText& rBox,
+    static void GetColumnNames(weld::ComboBox& rBox,
                             css::uno::Reference< css::sdbc::XConnection> const & xConnection,
                             const OUString& rTableName);
 
@@ -390,7 +386,8 @@ public:
 
     static css::uno::Reference< css::sdbc::XConnection>
             GetConnection(const OUString& rDataSource,
-                css::uno::Reference< css::sdbc::XDataSource>& rxSource);
+                css::uno::Reference< css::sdbc::XDataSource>& rxSource,
+                SwView* pView);
 
     static css::uno::Reference< css::sdbcx::XColumnsSupplier>
             GetColumnSupplier(css::uno::Reference< css::sdbc::XConnection> const & xConnection,
@@ -448,11 +445,11 @@ public:
 
     */
     static css::uno::Reference< css::sdbc::XResultSet>
-            createCursor(   const OUString& _sDataSourceName,
-                            const OUString& _sCommand,
-                            sal_Int32 _nCommandType,
-                            const css::uno::Reference< css::sdbc::XConnection>& _xConnection
-                            );
+            createCursor(const OUString& _sDataSourceName,
+                         const OUString& _sCommand,
+                         sal_Int32 _nCommandType,
+                         const css::uno::Reference< css::sdbc::XConnection>& _xConnection,
+                         SwView* pView);
 
     void setEmbeddedName(const OUString& rEmbeddedName, SwDocShell& rDocShell);
     const OUString& getEmbeddedName() const;
@@ -461,7 +458,7 @@ public:
     static void StoreEmbeddedDataSource(const css::uno::Reference<css::frame::XStorable>& xStorable,
                                         const css::uno::Reference<css::embed::XStorage>& xStorage,
                                         const OUString& rStreamRelPath,
-                                        const OUString& rOwnURL);
+                                        const OUString& rOwnURL, bool bCopyTo = false);
 
     SwDoc* getDoc() const;
     /// Stop reacting to removed database registrations.

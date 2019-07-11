@@ -31,15 +31,16 @@
 #include <oox/helper/refmap.hxx>
 #include <oox/helper/refvector.hxx>
 #include "numberformatsbuffer.hxx"
-#include <patattr.hxx>
-#include <stlsheet.hxx>
 #include <editeng/svxenum.hxx>
 #include <editeng/frmdir.hxx>
 #include <attarray.hxx>
 #include <vector>
 
+namespace oox { class SequenceInputStream; }
+
 namespace oox { class PropertySet;
-                class PropertyMap; }
+                class PropertyMap;
+                class AttributeList; }
 
 namespace oox {
 namespace xls {
@@ -257,7 +258,7 @@ private:
     FontModel           maModel;
     ApiFontData         maApiData;
     ApiFontUsedFlags    maUsedFlags;
-    bool                mbDxf;
+    bool const          mbDxf;
 };
 
 typedef std::shared_ptr< Font > FontRef;
@@ -458,7 +459,7 @@ private:
 private:
     BorderModel         maModel;
     ApiBorderData       maApiData;
-    bool                mbDxf;
+    bool const          mbDxf;
 };
 
 typedef std::shared_ptr< Border > BorderRef;
@@ -552,7 +553,7 @@ private:
     PatternModelRef     mxPatternModel;
     GradientModelRef    mxGradientModel;
     ApiSolidFillData    maApiData;
-    bool                mbDxf;
+    bool const          mbDxf;
 };
 
 typedef std::shared_ptr< Fill > FillRef;
@@ -712,7 +713,7 @@ public:
 
     /** Creates the style sheet in the document described by this cell style object. */
     void                createCellStyle();
-    /** Stores tha passed final style name and creates the cell style, if it is
+    /** Stores the passed final style name and creates the cell style, if it is
         user-defined or modified built-in. */
     void                finalizeImport( const OUString& rFinalName );
 

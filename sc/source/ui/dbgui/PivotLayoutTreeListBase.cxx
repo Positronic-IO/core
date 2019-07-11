@@ -13,7 +13,7 @@
 #include <PivotLayoutDialog.hxx>
 
 #include <reffact.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <scabstdlg.hxx>
 
 ScPivotLayoutTreeListBase::ScPivotLayoutTreeListBase(vcl::Window* pParent, WinBits nBits, SvPivotTreeListType eType)
@@ -114,4 +114,26 @@ void ScPivotLayoutTreeListBase::RemoveEntryForItem(const ScItemValue* pItemValue
     }
 }
 
+void ScPivotLayoutTreeListBase::GetFocus()
+{
+    SvTreeListBox::GetFocus();
+
+    if (!mpParent || !mpParent->mpPreviouslyFocusedListBox)
+        return;
+
+    if (GetGetFocusFlags() & GetFocusFlags::Mnemonic)
+    {
+        SvTreeListEntry* pEntry = mpParent->mpPreviouslyFocusedListBox->GetCurEntry();
+        if (pEntry)
+            InsertEntryForSourceTarget(pEntry, nullptr);
+        mpParent->mpPreviouslyFocusedListBox->GrabFocus();
+    }
+}
+
+void ScPivotLayoutTreeListBase::LoseFocus()
+{
+    SvTreeListBox::LoseFocus();
+    if (mpParent)
+        mpParent->mpPreviouslyFocusedListBox = this;
+}
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

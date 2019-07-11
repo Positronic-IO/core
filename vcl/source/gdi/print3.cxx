@@ -27,6 +27,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <sal/types.h>
+#include <sal/log.hxx>
 
 #include <printdlg.hxx>
 #include <svdata.hxx>
@@ -262,7 +263,7 @@ static OUString queryFile( Printer const * pPrinter )
 struct PrintJobAsync
 {
     std::shared_ptr<PrinterController>  mxController;
-    JobSetup                            maInitSetup;
+    JobSetup const                      maInitSetup;
 
     PrintJobAsync(const std::shared_ptr<PrinterController>& i_xController,
                   const JobSetup& i_rInitSetup)
@@ -506,7 +507,7 @@ bool Printer::PreparePrintJob(std::shared_ptr<PrinterController> xController,
     return true;
 }
 
-bool Printer::ExecutePrintJob(std::shared_ptr<PrinterController> xController)
+bool Printer::ExecutePrintJob(const std::shared_ptr<PrinterController>& xController)
 {
     OUString aJobName;
     css::beans::PropertyValue* pJobNameVal = xController->getValue( OUString( "JobName" ) );
@@ -616,9 +617,8 @@ bool Printer::StartJob( const OUString& i_rJobName, std::shared_ptr<vcl::Printer
             mnError = ImplSalPrinterErrorCodeToVCL(mpPrinter->GetErrorCode());
             if ( !mnError )
                 mnError = PRINTER_GENERALERROR;
-            pSVData->mpDefInst->DestroyPrinter( mpPrinter );
-            mbPrinting          = false;
-            mpPrinter = nullptr;
+            mbPrinting = false;
+            mpPrinter.reset();
             mbJobActive = false;
 
             GDIMetaFile aDummyFile;
@@ -726,10 +726,8 @@ bool Printer::StartJob( const OUString& i_rJobName, std::shared_ptr<vcl::Printer
                 i_xController->setJobState( mnError == PRINTER_ABORT
                                             ? css::view::PrintableState_JOB_ABORTED
                                             : css::view::PrintableState_JOB_FAILED );
-                if( mpPrinter )
-                    pSVData->mpDefInst->DestroyPrinter( mpPrinter );
-                mbPrinting          = false;
-                mpPrinter = nullptr;
+                mbPrinting = false;
+                mpPrinter.reset();
 
                 return false;
             }
@@ -1598,18 +1596,6 @@ bool PrinterController::isUIChoiceEnabled( const OUString& i_rProperty, sal_Int3
             bEnabled = ! rDisabled[i_nValue];
     }
     return bEnabled;
-}
-
-OUString PrinterController::getDependency( const OUString& i_rProperty ) const
-{
-    OUString aDependency;
-
-    vcl::ImplPrinterControllerData::ControlDependencyMap::const_iterator it =
-        mpImplData->maControlDependencies.find( i_rProperty );
-    if( it != mpImplData->maControlDependencies.end() )
-        aDependency = it->second.maDependsOnName;
-
-    return aDependency;
 }
 
 OUString PrinterController::makeEnabled( const OUString& i_rProperty )

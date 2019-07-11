@@ -21,14 +21,12 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_XESTYLE_HXX
 
 #include <map>
-#include <tools/mempool.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/nfkeytab.hxx>
 #include <editeng/svxfont.hxx>
 #include "xerecord.hxx"
 #include "xlstyle.hxx"
 #include "xeroot.hxx"
-#include <conditio.hxx>
 #include <fonthelper.hxx>
 #include <memory>
 #include <vector>
@@ -119,8 +117,6 @@ private:
 };
 
 // FONT record - font information =============================================
-
-class SvxFont;
 
 const size_t EXC_FONTLIST_NOTFOUND = static_cast< size_t >( -1 );
 
@@ -257,9 +253,9 @@ private:
 /** Stores a core number format index with corresponding Excel format index. */
 struct XclExpNumFmt
 {
-    sal_uInt32          mnScNumFmt;     /// Core index of the number format.
-    sal_uInt16          mnXclNumFmt;    /// Resulting Excel format index.
-    OUString            maNumFmtString; /// format string
+    sal_uInt32 const   mnScNumFmt;     /// Core index of the number format.
+    sal_uInt16 const   mnXclNumFmt;    /// Resulting Excel format index.
+    OUString const     maNumFmtString; /// format string
 
     explicit     XclExpNumFmt( sal_uInt32 nScNumFmt, sal_uInt16 nXclNumFmt, const OUString& rFrmt ) :
                             mnScNumFmt( nScNumFmt ), mnXclNumFmt( nXclNumFmt ), maNumFmtString( rFrmt ) {}
@@ -267,7 +263,6 @@ struct XclExpNumFmt
     void SaveXml( XclExpXmlStream& rStrm );
 };
 
-class SvNumberFormatter;
 typedef ::std::unique_ptr< SvNumberFormatter >    SvNumberFormatterPtr;
 
 /** Stores all number formats used in the document. */
@@ -303,7 +298,7 @@ private:
     SvNumberFormatterPtr mxFormatter;   /// Special number formatter for conversion.
     XclExpNumFmtVec     maFormatMap;    /// Maps core formats to Excel indexes.
     std::unique_ptr<NfKeywordTable>   mpKeywordTable; /// Replacement table.
-    sal_uInt32          mnStdFmt;       /// Key for standard number format.
+    sal_uInt32 const    mnStdFmt;       /// Key for standard number format.
     sal_uInt16          mnXclOffset;    /// Offset to first user defined format.
 };
 
@@ -548,10 +543,10 @@ private:
     virtual void        WriteBody( XclExpStream& rStrm ) override;
 
 private:
-    OUString            maName;         /// Name of the cell style.
+    OUString const      maName;         /// Name of the cell style.
     XclExpXFId          maXFId;         /// XF identifier for style formatting.
     sal_uInt8           mnStyleId;      /// Built-in style identifier.
-    sal_uInt8           mnLevel;        /// Outline level for RowLevel and ColLevel styles.
+    sal_uInt8 const     mnLevel;        /// Outline level for RowLevel and ColLevel styles.
 };
 
 /** Stores all XF records (cell formats and cell styles) in the document.
@@ -699,8 +694,9 @@ private:
 class XclExpDxf : public XclExpRecordBase, protected XclExpRoot
 {
 public:
-    XclExpDxf( const XclExpRoot& rRoot, XclExpCellAlign* pAlign, XclExpCellBorder* pBorder,
-            XclExpDxfFont* pFont, XclExpNumFmt* pNumberFmt, XclExpCellProt* pProt, XclExpColor* pColor);
+    XclExpDxf( const XclExpRoot& rRoot, std::unique_ptr<XclExpCellAlign> pAlign, std::unique_ptr<XclExpCellBorder> pBorder,
+            std::unique_ptr<XclExpDxfFont> pFont, std::unique_ptr<XclExpNumFmt> pNumberFmt,
+            std::unique_ptr<XclExpCellProt> pProt, std::unique_ptr<XclExpColor> pColor);
     virtual ~XclExpDxf() override;
 
     virtual void SaveXml( XclExpXmlStream& rStrm ) override;
@@ -726,7 +722,6 @@ private:
     typedef std::vector< std::unique_ptr<XclExpDxf> > DxfContainer;
     std::map<OUString, sal_Int32> maStyleNameToDxfId;
     DxfContainer maDxf;
-    SvNumberFormatterPtr mxFormatter;   /// Special number formatter for conversion.
     std::unique_ptr<NfKeywordTable>   mpKeywordTable; /// Replacement table.
 };
 

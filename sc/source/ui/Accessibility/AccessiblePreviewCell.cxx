@@ -35,7 +35,6 @@
 #include <vcl/window.hxx>
 #include <vcl/svapp.hxx>
 #include <toolkit/helper/convert.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <o3tl/make_unique.hxx>
 using namespace ::com::sun::star;
@@ -48,8 +47,7 @@ ScAccessiblePreviewCell::ScAccessiblePreviewCell( const css::uno::Reference<css:
                             const ScAddress& rCellAddress,
                             sal_Int32 nIndex ) :
     ScAccessibleCellBase( rxParent, ( pViewShell ? &pViewShell->GetDocument() : nullptr ), rCellAddress, nIndex ),
-    mpViewShell( pViewShell ),
-    mpTextHelper(nullptr)
+    mpViewShell( pViewShell )
 {
     if (mpViewShell)
         mpViewShell->AddAccessibilityObject(*this);
@@ -75,8 +73,7 @@ void SAL_CALL ScAccessiblePreviewCell::disposing()
         mpViewShell = nullptr;
     }
 
-    if (mpTextHelper)
-        DELETEZ(mpTextHelper);
+    mpTextHelper.reset();
 
     ScAccessibleCellBase::disposing();
 }
@@ -272,10 +269,10 @@ void ScAccessiblePreviewCell::CreateTextHelper()
 {
     if (!mpTextHelper)
     {
-        mpTextHelper = new ::accessibility::AccessibleTextHelper(
+        mpTextHelper.reset( new ::accessibility::AccessibleTextHelper(
             o3tl::make_unique<ScAccessibilityEditSource>(
                 o3tl::make_unique<ScAccessiblePreviewCellTextData>(
-                    mpViewShell, maCellAddress)));
+                    mpViewShell, maCellAddress))) );
         mpTextHelper->SetEventSource( this );
 
         // paragraphs in preview are transient

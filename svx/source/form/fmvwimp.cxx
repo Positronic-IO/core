@@ -74,9 +74,11 @@
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <vcl/stdtext.hxx>
 #include <connectivity/dbtools.hxx>
 
@@ -257,7 +259,7 @@ void SAL_CALL FormViewPageWindowAdapter::makeVisible( const Reference< XControl 
     }
 }
 
-Reference< XFormController >  getControllerSearchChildren( const Reference< XIndexAccess > & xIndex, const Reference< XTabControllerModel > & xModel)
+static Reference< XFormController >  getControllerSearchChildren( const Reference< XIndexAccess > & xIndex, const Reference< XTabControllerModel > & xModel)
 {
     if (xIndex.is() && xIndex->getCount())
     {
@@ -543,7 +545,7 @@ void FmXFormView::addWindow(const SdrPageWindow& rWindow)
     if ( !pFormPage )
         return;
 
-    Reference< XControlContainer > xCC = rWindow.GetControlContainer();
+    const Reference< XControlContainer >& xCC = rWindow.GetControlContainer();
     if  (   xCC.is()
         &&  ( !findWindow( xCC ).is() )
         )
@@ -885,7 +887,7 @@ namespace
         {
             Reference< XInterface > xNormalizedForm( _rxForm, UNO_QUERY_THROW );
 
-            SdrObjListIter aSdrObjectLoop( _rPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aSdrObjectLoop( &_rPage, SdrIterMode::DeepNoGroups );
             while ( aSdrObjectLoop.IsMore() )
             {
                 FmFormObj* pFormObject = FmFormObj::GetFormObject( aSdrObjectLoop.Next() );
@@ -1144,7 +1146,7 @@ namespace
 }
 
 
-SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor )
+SdrObjectUniquePtr FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor )
 {
     // not if we're in design mode
     if ( !m_pView->IsDesignMode() )
@@ -1331,8 +1333,8 @@ SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor
         if (!nOBJID)
             return nullptr;
 
-        SdrUnoObj* pLabel( nullptr );
-        SdrUnoObj* pControl( nullptr );
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pLabel;
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pControl;
         if  (   !createControlLabelPair( *pOutDev, 0, 0, xField, xNumberFormats, nOBJID, sLabelPostfix,
                     pLabel, pControl, xDataSource, sDataSource, sCommand, nCommandType )
             )
@@ -1345,27 +1347,26 @@ SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor
         bool bCheckbox = ( OBJ_FM_CHECKBOX == nOBJID );
         OSL_ENSURE( !bCheckbox || !pLabel, "FmXFormView::implCreateFieldControl: why was there a label created for a check box?" );
         if ( bCheckbox )
-            return pControl;
+            return SdrObjectUniquePtr(pControl.release());
 
         SdrObjGroup* pGroup  = new SdrObjGroup(getView()->getSdrModelFromSdrView());
         SdrObjList* pObjList = pGroup->GetSubList();
-        pObjList->InsertObject( pLabel );
-        pObjList->InsertObject( pControl );
+        pObjList->InsertObject( pLabel.release() );
+        pObjList->InsertObject( pControl.release() );
 
         if ( bDateNTimeField )
         {   // so far we created a date field only, but we also need a time field
-            pLabel = pControl = nullptr;
             if  (   createControlLabelPair( *pOutDev, 0, 1000, xField, xNumberFormats, OBJ_FM_TIMEFIELD,
                         SvxResId(RID_STR_POSTFIX_TIME), pLabel, pControl,
                         xDataSource, sDataSource, sCommand, nCommandType )
                 )
             {
-                pObjList->InsertObject( pLabel );
-                pObjList->InsertObject( pControl );
+                pObjList->InsertObject( pLabel.release() );
+                pObjList->InsertObject( pControl.release() );
             }
         }
 
-        return pGroup; // and done
+        return SdrObjectUniquePtr(pGroup); // and done
     }
     catch (const Exception&)
     {
@@ -1377,7 +1378,7 @@ SdrObject* FmXFormView::implCreateFieldControl( const svx::ODataAccessDescriptor
 }
 
 
-SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_rDesc )
+SdrObjectUniquePtr FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_rDesc )
 {
     // not if we're in design mode
     if ( !m_pView->IsDesignMode() )
@@ -1434,8 +1435,8 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
         // xform control or submission button?
         if ( !xSubmission.is() )
         {
-            SdrUnoObj* pLabel( nullptr );
-            SdrUnoObj* pControl( nullptr );
+            std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pLabel;
+            std::unique_ptr<SdrUnoObj, SdrObjectFreeOp> pControl;
             if  (   !createControlLabelPair( *pOutDev, 0, 0, nullptr, xNumberFormats, nOBJID, sLabelPostfix,
                         pLabel, pControl, nullptr, "", "", -1 )
                 )
@@ -1455,21 +1456,21 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
             bool bCheckbox = ( OBJ_FM_CHECKBOX == nOBJID );
             OSL_ENSURE( !bCheckbox || !pLabel, "FmXFormView::implCreateXFormsControl: why was there a label created for a check box?" );
             if ( bCheckbox )
-                return pControl;
+                return SdrObjectUniquePtr(pControl.release());
 
 
             // group objects
             SdrObjGroup* pGroup  = new SdrObjGroup(getView()->getSdrModelFromSdrView());
             SdrObjList* pObjList = pGroup->GetSubList();
-            pObjList->InsertObject(pLabel);
-            pObjList->InsertObject(pControl);
+            pObjList->InsertObject(pLabel.release());
+            pObjList->InsertObject(pControl.release());
 
-            return pGroup;
+            return SdrObjectUniquePtr(pGroup);
         }
         else {
 
             // create a button control
-            const MapMode eTargetMode( pOutDev->GetMapMode() );
+            const MapMode& eTargetMode( pOutDev->GetMapMode() );
             const MapMode eSourceMode(MapUnit::Map100thMM);
             const sal_uInt16 nObjID = OBJ_FM_BUTTON;
             ::Size controlSize(4000, 500);
@@ -1494,7 +1495,7 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
             Reference< css::form::submission::XSubmissionSupplier > xSubmissionSupplier(pControl->GetUnoControlModel(), UNO_QUERY);
             xSubmissionSupplier->setSubmission(xSubmission);
 
-            return pControl;
+            return SdrObjectUniquePtr(pControl);
         }
     }
     catch (const Exception&)
@@ -1510,15 +1511,32 @@ SdrObject* FmXFormView::implCreateXFormsControl( const svx::OXFormsDescriptor &_
 bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int32 _nXOffsetMM, sal_Int32 _nYOffsetMM,
         const Reference< XPropertySet >& _rxField, const Reference< XNumberFormats >& _rxNumberFormats,
         sal_uInt16 _nControlObjectID, const OUString& _rFieldPostfix,
-        SdrUnoObj*& _rpLabel, SdrUnoObj*& _rpControl,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl,
         const Reference< XDataSource >& _rxDataSource, const OUString& _rDataSourceName,
         const OUString& _rCommand, const sal_Int32 _nCommandType )
 {
-    if  (   !createControlLabelPair( _rOutDev, _nXOffsetMM, _nYOffsetMM,
-                _rxField, _rxNumberFormats, _nControlObjectID, _rFieldPostfix, SdrInventor::FmForm, OBJ_FM_FIXEDTEXT,
-                nullptr, nullptr, nullptr, _rpLabel, _rpControl )
-        )
+    if(!createControlLabelPair(
+        _rOutDev,
+        _nXOffsetMM,
+        _nYOffsetMM,
+        _rxField,
+        _rxNumberFormats,
+        _nControlObjectID,
+        _rFieldPostfix,
+        SdrInventor::FmForm,
+        OBJ_FM_FIXEDTEXT,
+
+        // tdf#118963 Hand over a SdrModel to SdrObject-creation. It uses the local m_pView
+        // and already returning false when nullptr == getView() could be done, but m_pView
+        // is already dereferenced here in many places (see below), so just use it for now.
+        getView()->getSdrModelFromSdrView(),
+
+        _rpLabel,
+        _rpControl))
+    {
         return false;
+    }
 
     // insert the control model(s) into the form component hierarchy
     if ( _rpLabel )
@@ -1539,7 +1557,8 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
     const Reference< XPropertySet >& _rxField,
     const Reference< XNumberFormats >& _rxNumberFormats, sal_uInt16 _nControlObjectID,
     const OUString& _rFieldPostfix, SdrInventor _nInventor, sal_uInt16 _nLabelObjectID,
-    SdrPage* _pLabelPage, SdrPage* _pControlPage, SdrModel* _pModel, SdrUnoObj*& _rpLabel, SdrUnoObj*& _rpControl)
+    SdrModel& _rModel,
+    std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel, std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl)
 {
     sal_Int32 nDataType = 0;
     OUString sFieldName;
@@ -1582,14 +1601,13 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
     {
         pLabel.reset( dynamic_cast< SdrUnoObj* >(
             SdrObjFactory::MakeNewObject(
-                *_pModel,
+                _rModel,
                 _nInventor,
-                _nLabelObjectID,
-                _pLabelPage)));
+                _nLabelObjectID)));
 
-        OSL_ENSURE( pLabel.get(), "FmXFormView::createControlLabelPair: could not create the label!" );
+        OSL_ENSURE(pLabel, "FmXFormView::createControlLabelPair: could not create the label!");
 
-        if ( !pLabel.get() )
+        if (!pLabel)
             return false;
 
         xLabelModel.set( pLabel->GetUnoControlModel(), UNO_QUERY );
@@ -1615,14 +1633,13 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
     // the control
     ::std::unique_ptr< SdrUnoObj, SdrObjectFreeOp > pControl( dynamic_cast< SdrUnoObj* >(
         SdrObjFactory::MakeNewObject(
-            *_pModel,
+            _rModel,
              _nInventor,
-             _nControlObjectID,
-             _pControlPage)));
+             _nControlObjectID)));
 
-    OSL_ENSURE( pControl.get(), "FmXFormView::createControlLabelPair: could not create the control!" );
+    OSL_ENSURE(pControl, "FmXFormView::createControlLabelPair: could not create the control!");
 
-    if ( !pControl.get() )
+    if (!pControl)
         return false;
 
     Reference< XPropertySet > xControlSet( pControl->GetUnoControlModel(), UNO_QUERY );
@@ -1696,8 +1713,8 @@ bool FmXFormView::createControlLabelPair( OutputDevice const & _rOutDev, sal_Int
         FormControlFactory::initializeFieldDependentProperties( _rxField, xControlSet, _rxNumberFormats );
     }
 
-    _rpLabel = pLabel.release();
-    _rpControl = pControl.release();
+    _rpLabel = std::move(pLabel);
+    _rpControl = std::move(pControl);
     return true;
 }
 
@@ -1782,7 +1799,7 @@ void FmXFormView::saveMarkList()
             {
                 if ( pObj->IsGroupObject() )
                 {
-                    SdrObjListIter aIter( *pObj->GetSubList() );
+                    SdrObjListIter aIter( pObj->GetSubList() );
                     bool bMixed = false;
                     while ( aIter.IsMore() && !bMixed )
                         bMixed = ( aIter.Next()->GetObjInventor() != SdrInventor::FmForm );
@@ -1866,7 +1883,7 @@ void FmXFormView::restoreMarkList( SdrMarkList& _rRestoredMarkList )
         // it is important that the objects of the mark list are not accessed,
         // because they can be already destroyed
         SdrPageView* pCurPageView = m_pView->GetSdrPageView();
-        SdrObjListIter aPageIter( *pPage );
+        SdrObjListIter aPageIter( pPage );
         bool bFound = true;
 
         // do all objects still exist
@@ -1877,7 +1894,7 @@ void FmXFormView::restoreMarkList( SdrMarkList& _rRestoredMarkList )
             SdrObject* pObj  = pMark->GetMarkedSdrObj();
             if (pObj->IsGroupObject())
             {
-                SdrObjListIter aIter(*pObj->GetSubList());
+                SdrObjListIter aIter(pObj->GetSubList());
                 while (aIter.IsMore() && bFound)
                     bFound = lcl_hasObject(aPageIter, aIter.Next());
             }

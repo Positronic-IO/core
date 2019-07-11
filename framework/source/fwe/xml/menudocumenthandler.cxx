@@ -146,8 +146,6 @@ static void ExtractMenuParameters( const Sequence< PropertyValue >& rProp,
 // Base class implementation
 
 ReadMenuDocumentHandlerBase::ReadMenuDocumentHandlerBase() :
-    m_xLocator( nullptr ),
-    m_xReader( nullptr ),
     m_aType( ITEM_DESCRIPTOR_TYPE ),
     m_aLabel( ITEM_DESCRIPTOR_LABEL ),
     m_aContainer( ITEM_DESCRIPTOR_CONTAINER ),
@@ -864,7 +862,7 @@ void OWriteMenuDocumentHandler::WriteMenuItem( const OUString& aCommandURL, cons
     }
     if ( nStyle > 0 )
     {
-        OUString aValue;
+        OUStringBuffer aValue;
         const MenuStyleItem* pStyle = MenuItemStyles;
 
         for ( sal_Int32 nIndex = 0; nIndex < nMenuStyleItemEntries; ++nIndex, ++pStyle )
@@ -872,13 +870,13 @@ void OWriteMenuDocumentHandler::WriteMenuItem( const OUString& aCommandURL, cons
             if ( nStyle & pStyle->nBit )
             {
                 if ( !aValue.isEmpty() )
-                    aValue += "+";
-                aValue += OUString::createFromAscii( pStyle->attrName );
+                    aValue.append("+");
+                aValue.appendAscii( pStyle->attrName );
             }
         }
         pList->AddAttribute( ATTRIBUTE_NS_STYLE,
                                 m_aAttributeType,
-                                aValue );
+                                aValue.makeStringAndClear() );
     }
 
     m_xWriteDocumentHandler->ignorableWhitespace( OUString() );

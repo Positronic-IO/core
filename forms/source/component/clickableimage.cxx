@@ -42,7 +42,10 @@
 #include <sfx2/objsh.hxx>
 #include <osl/mutex.hxx>
 #include <services.hxx>
-#include <comphelper/listenernotification.hxx>
+#include <comphelper/interfacecontainer2.hxx>
+#include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <svtools/imageresourceaccess.hxx>
 #define LOCAL_URL_PREFIX    '#'
 
@@ -422,10 +425,11 @@ namespace frm
             // allowed to leave
             throw;
         }
-        catch( const Exception& e )
+        catch( const Exception& )
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             OSL_FAIL( "OClickableImageBaseControl::implSubmit: caught an unknown exception!" );
-            throw WrappedTargetException( OUString(), *this, makeAny( e ) );
+            throw WrappedTargetException( OUString(), *this, anyEx );
         }
     }
 
@@ -447,7 +451,6 @@ namespace frm
         :OControlModel( _rxFactory, _rUnoControlModelTypeName, rDefault )
         ,OPropertyChangeListener(m_aMutex)
         ,m_xGraphicObject()
-        ,m_pMedium(nullptr)
         ,m_bDispatchUrlInternal(false)
         ,m_bProdStarted(false)
     {
@@ -460,7 +463,6 @@ namespace frm
         :OControlModel( _pOriginal, _rxFactory )
         ,OPropertyChangeListener( m_aMutex )
         ,m_xGraphicObject( _pOriginal->m_xGraphicObject )
-        ,m_pMedium( nullptr )
         ,m_bDispatchUrlInternal(false)
         ,m_bProdStarted( false )
     {
@@ -566,12 +568,7 @@ namespace frm
     void OClickableImageBaseModel::disposing()
     {
         OControlModel::disposing();
-        if (m_pMedium)
-        {
-            delete m_pMedium;
-            m_pMedium = nullptr;
-        }
-
+        m_pMedium.reset();
         m_xProducer.clear();
     }
 
@@ -686,8 +683,7 @@ namespace frm
         else
         {
             pImgProd->SetImage(OUString());
-            delete m_pMedium;
-            m_pMedium = nullptr;
+            m_pMedium.reset();
         }
     }
 
@@ -698,8 +694,7 @@ namespace frm
         {
             // Free the stream at the Producer, before the medium is deleted
             GetImageProducer()->SetImage(OUString());
-            delete m_pMedium;
-            m_pMedium = nullptr;
+            m_pMedium.reset();
         }
 
         // the SfxMedium is not allowed to be created with an invalid URL, so we have to check this first
@@ -710,9 +705,7 @@ namespace frm
 
         if (!rURL.isEmpty() && !::svt::GraphicAccess::isSupportedURL( rURL ) )
        {
-            delete m_pMedium;
-
-            m_pMedium = new SfxMedium(rURL, StreamMode::STD_READ);
+            m_pMedium.reset(new SfxMedium(rURL, StreamMode::STD_READ));
 
             // Find the XModel to get to the Object shell or at least the
             // Referer.

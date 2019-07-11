@@ -222,17 +222,8 @@ void raiseException( uno_Any * pUnoExc, uno_Mapping * pUno2Cpp )
     // destruct uno exception
     ::uno_any_destruct( pUnoExc, 0 );
     // avoiding locked counts
-    static RTTI * s_rtti = 0;
-    if (! s_rtti)
-    {
-        MutexGuard guard( Mutex::getGlobalMutex() );
-        if (! s_rtti)
-        {
-            static RTTI rtti_data;
-            s_rtti = &rtti_data;
-        }
-    }
-    rtti = (type_info *)s_rtti->getRTTI( (typelib_CompoundTypeDescription *) pTypeDescr );
+    static RTTI rtti_data;
+    rtti = (type_info*)rtti_data.getRTTI((typelib_CompoundTypeDescription*)pTypeDescr);
     TYPELIB_DANGER_RELEASE( pTypeDescr );
     if (! rtti)
         terminate();
@@ -241,13 +232,16 @@ void raiseException( uno_Any * pUnoExc, uno_Mapping * pUno2Cpp )
     __cxa_throw( pCppExc, rtti, deleteException );
 }
 
-void fillUnoException( __cxa_exception * header, uno_Any * pExc, uno_Mapping * pCpp2Uno )
+void fillUnoException(uno_Any * pExc, uno_Mapping * pCpp2Uno)
 {
+    __cxa_exception * header = __cxa_get_globals()->caughtExceptions;
     if (! header)
         terminate();
 
+    std::type_info *exceptionType = __cxa_current_exception_type();
+
     typelib_TypeDescription * pExcTypeDescr = 0;
-    OUString unoName( toUNOname( header->exceptionType->name() ) );
+    OUString unoName( toUNOname( exceptionType->name() ) );
     ::typelib_typedescription_getByName( &pExcTypeDescr, unoName.pData );
     if (! pExcTypeDescr)
         terminate();

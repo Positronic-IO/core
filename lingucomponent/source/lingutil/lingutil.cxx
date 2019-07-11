@@ -60,7 +60,7 @@ OString Win_AddLongPathPrefix( const OString &rPathName )
 
 #ifdef SYSTEM_DICTS
 // find old style dictionaries in system directories
-void GetOldStyleDicsInDir(
+static void GetOldStyleDicsInDir(
     OUString const & aSystemDir, OUString const & aFormatName,
     OUString const & aSystemSuffix, OUString const & aSystemPrefix,
     std::set< OUString >& aDicLangInUse,
@@ -112,7 +112,7 @@ void GetOldStyleDicsInDir(
                     continue;
 
                 // Thus we first get the language of the dictionary
-                OUString aLocaleName(aLangTag.getBcp47());
+                const OUString& aLocaleName(aLangTag.getBcp47());
 
                 if (aDicLangInUse.insert(aLocaleName).second)
                 {

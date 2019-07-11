@@ -20,6 +20,7 @@
 #include <memory>
 #include <utility>
 
+#include <sal/log.hxx>
 #include <sfx2/objsh.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
@@ -50,12 +51,10 @@
 
 #include <comphelper/documentinfo.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/propertycontainer.hxx>
-#include <comphelper/proparrhlp.hxx>
 
 #include <basic/sbx.hxx>
 #include <svtools/imagemgr.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <tools/urlobj.hxx>
 #include <vector>
 #include <algorithm>
@@ -66,7 +65,7 @@ using namespace css::script;
 using namespace css::frame;
 using namespace css::document;
 
-void ShowErrorDialog( const Any& aException )
+static void ShowErrorDialog( const Any& aException )
 {
     ScopedVclPtrInstance<SvxScriptErrorDialog> pDlg( aException );
     pDlg->Execute();
@@ -127,7 +126,7 @@ void SFTreeListBox::deleteTree( SvTreeListEntry* pEntry )
     pEntry = FirstChild( pEntry );
     while ( pEntry )
     {
-        SvTreeListEntry* pNextEntry = NextSibling( pEntry );
+        SvTreeListEntry* pNextEntry = pEntry->NextSibling();
         deleteTree( pEntry );
         GetModel()->Remove( pEntry );
         pEntry = pNextEntry;
@@ -143,7 +142,7 @@ void SFTreeListBox::deleteAllTree()
     {
         while ( pEntry )
         {
-            SvTreeListEntry* pNextEntry = NextSibling( pEntry ) ;
+            SvTreeListEntry* pNextEntry = pEntry->NextSibling();
             deleteTree( pEntry );
             GetModel()->Remove( pEntry );
             pEntry = pNextEntry;
@@ -231,9 +230,8 @@ void SFTreeListBox::Init( const OUString& language  )
             }
         }
 
-        OUString lang( language );
         Reference< browse::XBrowseNode > langEntries =
-            getLangNodeFromRootNode( children[ n ], lang );
+            getLangNodeFromRootNode( children[ n ], language );
 
         insertEntry( uiName, app ? OUStringLiteral(RID_CUIBMP_HARDDISK) : OUStringLiteral(RID_CUIBMP_DOC),
             nullptr, true, o3tl::make_unique< SFEntry >( langEntries, xDocumentModel ), factoryURL );
@@ -1091,12 +1089,12 @@ bool SvxScriptOrgDialog::getBoolProperty( Reference< beans::XPropertySet > const
 
 OUString SvxScriptOrgDialog::getListOfChildren( const Reference< browse::XBrowseNode >& node, int depth )
 {
-    OUString result = "\n";
+    OUStringBuffer result = "\n";
     for( int i=0;i<=depth;i++ )
     {
-        result += "\t";
+        result.append("\t");
     }
-    result += node->getName();
+    result.append(node->getName());
 
     try
     {
@@ -1106,7 +1104,7 @@ OUString SvxScriptOrgDialog::getListOfChildren( const Reference< browse::XBrowse
                 = node->getChildNodes();
             for ( sal_Int32 n = 0; n < children.getLength(); n++ )
             {
-                result += getListOfChildren( children[ n ] , depth+1 );
+                result.append( getListOfChildren( children[ n ] , depth+1 ) );
             }
         }
     }
@@ -1115,7 +1113,7 @@ OUString SvxScriptOrgDialog::getListOfChildren( const Reference< browse::XBrowse
         // ignore, will return an empty string
     }
 
-    return result;
+    return result.makeStringAndClear();
 }
 
 Selection_hash SvxScriptOrgDialog::m_lastSelection;
@@ -1156,7 +1154,7 @@ void SvxScriptOrgDialog::RestorePreviousSelection()
                 pEntry = pTmpEntry;
                 break;
             }
-            pTmpEntry = SvTreeListBox::NextSibling( pTmpEntry );
+            pTmpEntry = pTmpEntry->NextSibling();
         }
         if ( !pTmpEntry )
             break;

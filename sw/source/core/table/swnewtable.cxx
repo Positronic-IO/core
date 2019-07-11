@@ -42,6 +42,7 @@
 #include <swtblfmt.hxx>
 #include <calbck.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #ifdef DBG_UTIL
 #define CHECK_TABLE(t) (t).CheckConsistency();
@@ -733,10 +734,10 @@ bool SwTable::NewInsertCol( SwDoc* pDoc, const SwSelBoxes& rBoxes,
                 nLastRowSpan = nRowSpan;
         }
         const SvxBoxItem& aSelBoxItem = pBoxFrameFormat->GetBox();
-        SvxBoxItem* pNoRightBorder = nullptr;
+        std::unique_ptr<SvxBoxItem> pNoRightBorder;
         if( aSelBoxItem.GetRight() )
         {
-            pNoRightBorder = new SvxBoxItem( aSelBoxItem );
+            pNoRightBorder.reset( new SvxBoxItem( aSelBoxItem ));
             pNoRightBorder->SetLine( nullptr, SvxBoxItemLine::RIGHT );
         }
         for( sal_uInt16 j = 0; j < nCnt; ++j )
@@ -761,7 +762,6 @@ bool SwTable::NewInsertCol( SwDoc* pDoc, const SwSelBoxes& rBoxes,
             SwFrameFormat* pFrameFormat = pBox->ClaimFrameFormat();
             pFrameFormat->SetFormatAttr( *pNoRightBorder );
         }
-        delete pNoRightBorder;
     }
 
     aFndBox.MakeFrames( *this );
@@ -815,7 +815,7 @@ bool SwTable::PrepareMerge( const SwPaM& rPam, SwSelBoxes& rBoxes,
     CHECK_TABLE( *this )
     // We have to assert a "rectangular" box selection before we start to merge
     std::unique_ptr< SwBoxSelection > pSel( CollectBoxSelection( rPam ) );
-    if( !pSel.get() || pSel->isEmpty() )
+    if (!pSel || pSel->isEmpty())
         return false;
     // Now we should have a rectangle of boxes,
     // i.e. contiguous cells in contiguous rows
@@ -1200,7 +1200,7 @@ void SwTable::InsertSpannedRow( SwDoc* pDoc, sal_uInt16 nRowIdx, sal_uInt16 nCnt
 }
 
 typedef std::pair< sal_uInt16, sal_uInt16 > SwLineOffset;
-typedef std::list< SwLineOffset > SwLineOffsetArray;
+typedef std::vector< SwLineOffset > SwLineOffsetArray;
 
 /*
 * When a couple of table boxes has to be split,
@@ -1259,8 +1259,7 @@ static void lcl_SophisticatedFillLineIndices( SwLineOffsetArray &rArr,
         }
         OSL_ENSURE( aLnOfs.second < nCnt, "Clean-up failed" );
         aLnOfs.second = nCnt - aLnOfs.second; // the number of rows to insert
-        rArr.insert( rArr.end(),
-            SwLineOffset( aLnOfs.first - nSum, aLnOfs.second ) );
+        rArr.emplace_back( aLnOfs.first - nSum, aLnOfs.second );
         // the correction has to be incremented because in the following
         // loops the line ends were manipulated
         nSum = nSum + aLnOfs.second;
@@ -1309,7 +1308,7 @@ static sal_uInt16 lcl_CalculateSplitLineHeights( SwSplitLines &rCurr, SwSplitLin
 {
     if( nCnt < 2 )
         return 0;
-    std::list< SwLineOffset > aBoxes;
+    std::vector< SwLineOffset > aBoxes;
     SwLineOffset aLnOfs( USHRT_MAX, USHRT_MAX );
     sal_uInt16 nFirst = USHRT_MAX; // becomes the index of the first line
     sal_uInt16 nLast = 0; // becomes the index of the last line of the splitting
@@ -1325,7 +1324,7 @@ static sal_uInt16 lcl_CalculateSplitLineHeights( SwSplitLines &rCurr, SwSplitLin
         {
             aLnOfs.first = nStart;
             aLnOfs.second = nEnd;
-            aBoxes.insert( aBoxes.end(), aLnOfs );
+            aBoxes.push_back( aLnOfs );
             if( nStart < nFirst )
                 nFirst = nStart;
             if( nEnd > nLast )
@@ -1348,18 +1347,16 @@ static sal_uInt16 lcl_CalculateSplitLineHeights( SwSplitLines &rCurr, SwSplitLin
         rCurr.insert( rCurr.end(), nHeight );
         pLines[ i - nFirst ] = nHeight;
     }
-    std::list< SwLineOffset >::iterator pSplit = aBoxes.begin();
-    while( pSplit != aBoxes.end() )
+    for( const auto& rSplit : aBoxes )
     {
-        SwTwips nBase = pSplit->first <= nFirst ? 0 :
-                        pLines[ pSplit->first - nFirst - 1 ];
-        SwTwips nDiff = pLines[ pSplit->second - nFirst ] - nBase;
+        SwTwips nBase = rSplit.first <= nFirst ? 0 :
+                        pLines[ rSplit.first - nFirst - 1 ];
+        SwTwips nDiff = pLines[ rSplit.second - nFirst ] - nBase;
         for( sal_uInt16 i = 1; i < nCnt; ++i )
         {
             SwTwips nSplit = nBase + ( i * nDiff ) / nCnt;
             rNew.insert( nSplit );
         }
-        ++pSplit;
     }
     return nFirst;
 }
@@ -1423,10 +1420,9 @@ bool SwTable::NewSplitRow( SwDoc* pDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCn
         aFndBox.DelFrames( *this );
         SwTwips nLast = 0;
         SwSplitLines::iterator pSplit = aSplitLines.begin();
-        SwSplitLines::iterator pCurr = aRowLines.begin();
-        while( pCurr != aRowLines.end() )
+        for( const auto& rCurr : aRowLines )
         {
-            while( pSplit != aSplitLines.end() && *pSplit < *pCurr )
+            while( pSplit != aSplitLines.end() && *pSplit < rCurr )
             {
                 InsertSpannedRow( pDoc, nFirst, 1 );
                 SwTableLine* pRow = GetTabLines()[ nFirst ];
@@ -1439,16 +1435,15 @@ bool SwTable::NewSplitRow( SwDoc* pDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCn
                 ++pSplit;
                 ++nFirst;
             }
-            if( pSplit != aSplitLines.end() && *pCurr == *pSplit )
+            if( pSplit != aSplitLines.end() && rCurr == *pSplit )
                 ++pSplit;
             SwTableLine* pRow = GetTabLines()[ nFirst ];
             SwFrameFormat* pRowFormat = pRow->ClaimFrameFormat();
             SwFormatFrameSize aFSz( pRowFormat->GetFrameSize() );
             aFSz.SetHeightSizeType( ATT_MIN_SIZE );
-            aFSz.SetHeight( *pCurr - nLast );
+            aFSz.SetHeight( rCurr - nLast );
             pRowFormat->SetFormatAttr( aFSz );
-            nLast = *pCurr;
-            ++pCurr;
+            nLast = rCurr;
             ++nFirst;
         }
     }
@@ -1477,9 +1472,8 @@ bool SwTable::NewSplitRow( SwDoc* pDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCn
             aIndices.insert( i );
     }
 
-    std::set<size_t>::iterator pCurrBox = aIndices.begin();
-    while( pCurrBox != aIndices.end() )
-        lcl_UnMerge( *this, *rBoxes[*pCurrBox++], nCnt, bSameHeight );
+    for( const auto& rCurrBox : aIndices )
+        lcl_UnMerge( *this, *rBoxes[rCurrBox], nCnt, bSameHeight );
 
     CHECK_TABLE( *this )
     // update the layout
@@ -2062,17 +2056,13 @@ void SwTable::RestoreRowSpan( const SwSaveRowSpan& rSave )
     }
 }
 
-SwSaveRowSpan* SwTable::CleanUpTopRowSpan( sal_uInt16 nSplitLine )
+std::unique_ptr<SwSaveRowSpan> SwTable::CleanUpTopRowSpan( sal_uInt16 nSplitLine )
 {
-    SwSaveRowSpan* pRet = nullptr;
     if( !IsNewModel() )
-        return pRet;
-    pRet = new SwSaveRowSpan( GetTabLines()[0]->GetTabBoxes(), nSplitLine );
+        return nullptr;
+    std::unique_ptr<SwSaveRowSpan> pRet(new SwSaveRowSpan( GetTabLines()[0]->GetTabBoxes(), nSplitLine ));
     if( pRet->mnRowSpans.empty() )
-    {
-        delete pRet;
-        pRet = nullptr;
-    }
+        return nullptr;
     return pRet;
 }
 

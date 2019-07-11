@@ -33,8 +33,10 @@
 #include <com/sun/star/ucb/CachedDynamicResultSetStubFactory.hpp>
 #include <com/sun/star/ucb/XSourceInitialization.hpp>
 #include <cppuhelper/interfacecontainer.h>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/resultsethelper.hxx>
 #include <ucbhelper/getcomponentcontext.hxx>
+#include <ucbhelper/macros.hxx>
 
 #include <osl/diagnose.h>
 
@@ -50,8 +52,7 @@ namespace ucbhelper {
 ResultSetImplHelper::ResultSetImplHelper(
     const uno::Reference< uno::XComponentContext >& rxContext,
     const css::ucb::OpenCommandArgument2& rCommand )
-: m_pDisposeEventListeners( nullptr ),
-  m_bStatic( false ),
+: m_bStatic( false ),
   m_bInitDone( false ),
   m_aCommand( rCommand ),
   m_xContext( rxContext )

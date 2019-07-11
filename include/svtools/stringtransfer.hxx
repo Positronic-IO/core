@@ -21,7 +21,7 @@
 #define INCLUDED_SVTOOLS_STRINGTRANSFER_HXX
 
 #include <svtools/svtdllapi.h>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
 
 namespace svt
@@ -40,7 +40,7 @@ namespace svt
         virtual void AddSupportedFormats() override;
         virtual bool GetData( const css::datatransfer::DataFlavor& _rFlavor, const OUString& rDestDoc ) override;
 
-        OUString     m_sContent;
+        OUString const     m_sContent;
     };
 
 

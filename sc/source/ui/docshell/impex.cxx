@@ -24,6 +24,8 @@
 #include <sot/formats.hxx>
 #include <sfx2/mieclip.hxx>
 #include <com/sun/star/i18n/CalendarFieldIndex.hpp>
+#include <sal/log.hxx>
+#include <unotools/charclass.hxx>
 
 #include <global.hxx>
 #include <scerrors.hxx>
@@ -51,6 +53,7 @@
 #include <cellvalue.hxx>
 #include <tokenarray.hxx>
 #include <documentimport.hxx>
+#include <refundo.hxx>
 
 #include <globstr.hrc>
 #include <scresid.hxx>
@@ -75,7 +78,7 @@ namespace
 {
     const char SYLK_LF[]  = "\x1b :";
 
-    inline bool lcl_IsEndianSwap( const SvStream& rStrm )
+    bool lcl_IsEndianSwap( const SvStream& rStrm )
     {
     #ifdef OSL_BIGENDIAN
         return rStrm.GetEndian() != SvStreamEndian::BIG;
@@ -255,13 +258,13 @@ void ScImportExport::EndPaste(bool bAutoRowHeight)
 
     if( pUndoDoc && pDoc->IsUndoEnabled() && pDocSh )
     {
-        ScDocument* pRedoDoc = new ScDocument( SCDOCMODE_UNDO );
+        ScDocumentUniquePtr pRedoDoc(new ScDocument( SCDOCMODE_UNDO ));
         pRedoDoc->InitUndo( pDoc, aRange.aStart.Tab(), aRange.aEnd.Tab() );
         pDoc->CopyToDocument(aRange, InsertDeleteFlags::ALL | InsertDeleteFlags::NOCAPTIONS, false, *pRedoDoc);
         ScMarkData aDestMark;
         aDestMark.SetMarkArea(aRange);
         pDocSh->GetUndoManager()->AddUndoAction(
-            new ScUndoPaste(pDocSh, aRange, aDestMark, pUndoDoc.release(), pRedoDoc, InsertDeleteFlags::ALL, nullptr));
+            o3tl::make_unique<ScUndoPaste>(pDocSh, aRange, aDestMark, std::move(pUndoDoc), std::move(pRedoDoc), InsertDeleteFlags::ALL, nullptr));
     }
     pUndoDoc.reset();
     if( pDocSh )
@@ -287,7 +290,7 @@ bool ScImportExport::ExportData( const OUString& rMimeType,
         aStrm.WriteUChar( 0 );
         rValue <<= css::uno::Sequence< sal_Int8 >(
                                         static_cast<sal_Int8 const *>(aStrm.GetData()),
-                                        aStrm.Seek( STREAM_SEEK_TO_END ) );
+                                        aStrm.TellEnd() );
         return true;
     }
     return false;
@@ -337,8 +340,6 @@ bool ScImportExport::ExportString( OUString& rText, SotClipboardFormatId nFmt )
     if( ExportStream( aStrm, OUString(), nFmt ) )
     {
         aStrm.WriteUInt16( 0 );
-        aStrm.Seek( STREAM_SEEK_TO_END );
-
         rText = OUString( static_cast<const sal_Unicode*>(aStrm.GetData()) );
         return true;
     }
@@ -364,8 +365,7 @@ bool ScImportExport::ExportByteString( OString& rText, rtl_TextEncoding eEnc, So
     if( ExportStream( aStrm, OUString(), nFmt ) )
     {
         aStrm.WriteChar( 0 );
-        aStrm.Seek( STREAM_SEEK_TO_END );
-        if( aStrm.Tell() <= nSizeLimit )
+        if( aStrm.TellEnd() <= nSizeLimit )
         {
             rText = static_cast<const sal_Char*>(aStrm.GetData());
             return true;
@@ -564,7 +564,7 @@ enum QuoteType
         FIELDEND_QUOTE if end of field quote
         DONTKNOW_QUOTE anything else
  */
-static QuoteType lcl_isFieldEndQuote( const sal_Unicode* p, const sal_Unicode* pSeps )
+static QuoteType lcl_isFieldEndQuote( const sal_Unicode* p, const sal_Unicode* pSeps, sal_Unicode& rcDetectSep )
 {
     // Due to broken CSV generators that don't double embedded quotes check if
     // a field separator immediately or with trailing spaces follows the quote,
@@ -572,6 +572,10 @@ static QuoteType lcl_isFieldEndQuote( const sal_Unicode* p, const sal_Unicode* p
     const sal_Unicode cBlank = ' ';
     if (p[1] == cBlank && ScGlobal::UnicodeStrChr( pSeps, cBlank))
         return FIELDEND_QUOTE;
+    // Detect a possible blank separator if it's not already in the list (which
+    // was checked right above for p[1]==cBlank).
+    if (p[1] == cBlank && !rcDetectSep && p[2] && p[2] != cBlank)
+        rcDetectSep = cBlank;
     while (p[1] == cBlank)
         ++p;
     if (!p[1] || ScGlobal::UnicodeStrChr( pSeps, p[1]))
@@ -601,7 +605,7 @@ static QuoteType lcl_isFieldEndQuote( const sal_Unicode* p, const sal_Unicode* p
                             do not increment nQuotes in caller then!
  */
 static QuoteType lcl_isEscapedOrFieldEndQuote( sal_Int32 nQuotes, const sal_Unicode* p,
-        const sal_Unicode* pSeps, sal_Unicode cStr )
+        const sal_Unicode* pSeps, sal_Unicode cStr, sal_Unicode& rcDetectSep )
 {
     if ((nQuotes % 2) == 0)
     {
@@ -615,7 +619,7 @@ static QuoteType lcl_isEscapedOrFieldEndQuote( sal_Int32 nQuotes, const sal_Unic
     }
     if (p[1] == cStr)
         return FIRST_QUOTE;
-    return lcl_isFieldEndQuote( p, pSeps);
+    return lcl_isFieldEndQuote( p, pSeps, rcDetectSep);
 }
 
 /** Append characters of [p1,p2) to rField.
@@ -664,7 +668,8 @@ static const sal_Unicode* lcl_ScanString( const sal_Unicode* p, OUString& rStrin
                     // break or continue for loop
                     if (eMode == DoubledQuoteMode::ESCAPE)
                     {
-                        if (lcl_isFieldEndQuote( p-1, pSeps) == FIELDEND_QUOTE)
+                        sal_Unicode cDetectSep = 0xffff;    // No separator detection here.
+                        if (lcl_isFieldEndQuote( p-1, pSeps, cDetectSep) == FIELDEND_QUOTE)
                             break;
                         else
                             continue;
@@ -840,7 +845,7 @@ static void lcl_WriteString( SvStream& rStrm, OUString& rString, sal_Unicode cQu
     ScImportExport::WriteUnicodeOrByteString( rStrm, rString );
 }
 
-static inline void lcl_WriteSimpleString( SvStream& rStrm, const OUString& rString )
+static void lcl_WriteSimpleString( SvStream& rStrm, const OUString& rString )
 {
     ScImportExport::WriteUnicodeOrByteString( rStrm, rString );
 }
@@ -1157,16 +1162,18 @@ static bool lcl_PutString(
                 pCalendar->setValue( i18n::CalendarFieldIndex::DAY_OF_MONTH, nDay );
                 pCalendar->setValue( i18n::CalendarFieldIndex::MONTH, nMonth );
                 pCalendar->setValue( i18n::CalendarFieldIndex::YEAR, nYear );
-                sal_Int16 nHour, nMinute, nSecond, nMilli;
+                sal_Int16 nHour, nMinute, nSecond;
                 // #i14974# The imported value should have no fractional value, so set the
                 // time fields to zero (ICU calendar instance defaults to current date/time)
-                nHour = nMinute = nSecond = nMilli = 0;
+                nHour = nMinute = nSecond = 0;
                 if (nFound > 3)
                     nHour = static_cast<sal_Int16>(rStr.copy( nStart[3], nEnd[3]+1-nStart[3]).toInt32());
                 if (nFound > 4)
                     nMinute = static_cast<sal_Int16>(rStr.copy( nStart[4], nEnd[4]+1-nStart[4]).toInt32());
                 if (nFound > 5)
                     nSecond = static_cast<sal_Int16>(rStr.copy( nStart[5], nEnd[5]+1-nStart[5]).toInt32());
+                // do not use calendar's milliseconds, to avoid fractional part truncation
+                double fFrac = 0.0;
                 if (nFound > 6)
                 {
                     sal_Unicode cDec = '.';
@@ -1175,19 +1182,19 @@ static bool lcl_PutString(
                     rtl_math_ConversionStatus eStatus;
                     double fV = rtl::math::stringToDouble( aT, cDec, 0, &eStatus );
                     if (eStatus == rtl_math_ConversionStatus_Ok)
-                        nMilli = static_cast<sal_Int16>(1000.0 * fV + 0.5);
+                        fFrac = fV / 86400.0;
                 }
                 pCalendar->setValue( i18n::CalendarFieldIndex::HOUR, nHour );
                 pCalendar->setValue( i18n::CalendarFieldIndex::MINUTE, nMinute );
                 pCalendar->setValue( i18n::CalendarFieldIndex::SECOND, nSecond );
-                pCalendar->setValue( i18n::CalendarFieldIndex::MILLISECOND, nMilli );
+                pCalendar->setValue( i18n::CalendarFieldIndex::MILLISECOND, 0 );
                 if ( pCalendar->isValid() )
                 {
                     double fDiff = DateTime(pDocFormatter->GetNullDate()) -
                         pCalendar->getEpochStart();
                     // #i14974# must use getLocalDateTime to get the same
                     // date values as set above
-                    double fDays = pCalendar->getLocalDateTime();
+                    double fDays = pCalendar->getLocalDateTime() + fFrac;
                     fDays -= fDiff;
 
                     LanguageType eLatin, eCjk, eCtl;
@@ -1299,8 +1306,8 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     SCTAB nTab = aRange.aStart.Tab();
 
     bool    bFixed              = pExtOptions->IsFixedLen();
-    const OUString& rSeps       = pExtOptions->GetFieldSeps();
-    const sal_Unicode* pSeps    = rSeps.getStr();
+    OUString aSeps              = pExtOptions->GetFieldSeps();  // Need non-const for ReadCsvLine(),
+    const sal_Unicode* pSeps    = aSeps.getStr();               // but it will be const anyway (asserted below).
     bool    bMerge              = pExtOptions->IsMergeSeps();
     bool    bRemoveSpace        = pExtOptions->IsRemoveSpace();
     sal_uInt16  nInfoCount      = pExtOptions->GetInfoCount();
@@ -1336,10 +1343,11 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     OUString aCell;
     sal_uInt16 i;
     SCROW nRow = nStartRow;
+    sal_Unicode cDetectSep = 0xffff;    // No separator detection here.
 
     while(--nSkipLines>0)
     {
-        aLine = ReadCsvLine(rStrm, !bFixed, rSeps, cStr); // content is ignored
+        aLine = ReadCsvLine(rStrm, !bFixed, aSeps, cStr, cDetectSep); // content is ignored
         if ( rStrm.eof() )
             break;
     }
@@ -1362,9 +1370,11 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
     {
         for( ;; )
         {
-            aLine = ReadCsvLine(rStrm, !bFixed, rSeps, cStr);
+            aLine = ReadCsvLine(rStrm, !bFixed, aSeps, cStr, cDetectSep);
             if ( rStrm.eof() && aLine.isEmpty() )
                 break;
+
+            assert(pSeps == aSeps.getStr());
 
             if ( nRow > MAXROW )
             {
@@ -1480,7 +1490,7 @@ bool ScImportExport::ExtText2Doc( SvStream& rStrm )
             {
                 vcl::Window* pWin = ScDocShell::GetActiveDialogParent();
                 ScReplaceWarnBox aBox(pWin ? pWin->GetFrameWeld() : nullptr);
-                if (aBox.execute() != RET_YES)
+                if (aBox.run() != RET_YES)
                 {
                     return false;
                 }
@@ -1781,14 +1791,15 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                 break;
             bool bInvalidCol = false;
             bool bInvalidRow = false;
-            bool bInvalidRefCol = false;
-            bool bInvalidRefRow = false;
             const sal_Unicode* p = aLine.getStr();
             sal_Unicode cTag = *p++;
             if( cTag == 'C' )       // Content
             {
                 if( *p++ != ';' )
                     return false;
+
+                bool bInvalidRefCol = false;
+                bool bInvalidRefRow = false;
                 while( *p )
                 {
                     sal_Unicode ch = *p++;
@@ -1921,22 +1932,21 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                              * better GRAM_ENGLISH_XL_R1C1. */
                             const formula::FormulaGrammar::Grammar eGrammar = formula::FormulaGrammar::GRAM_PODF_A1;
                             ScCompiler aComp( pDoc, aPos, eGrammar);
-                            ScTokenArray* pCode = aComp.CompileString( aText );
-                            pDoc->CheckLinkFormulaNeedingCheck( *pCode);
+                            std::unique_ptr<ScTokenArray> xCode(aComp.CompileString(aText)); // ctor/InsertMatrixFormula did copy TokenArray
+                            pDoc->CheckLinkFormulaNeedingCheck(*xCode);
                             if ( ch == 'M' )
                             {
                                 ScMarkData aMark;
                                 aMark.SelectTable( aPos.Tab(), true );
                                 pDoc->InsertMatrixFormula( nCol, nRow, nRefCol,
-                                    nRefRow, aMark, EMPTY_OUSTRING, pCode );
+                                    nRefRow, aMark, EMPTY_OUSTRING, xCode.get() );
                             }
                             else
                             {
                                 ScFormulaCell* pFCell = new ScFormulaCell(
-                                        pDoc, aPos, *pCode, eGrammar, ScMatrixMode::NONE);
+                                        pDoc, aPos, *xCode, eGrammar, ScMatrixMode::NONE);
                                 pDoc->SetFormulaCell(aPos, pFCell);
                             }
-                            delete pCode;   // ctor/InsertMatrixFormula did copy TokenArray
                         }
                         break;
                     }
@@ -2027,7 +2037,7 @@ bool ScImportExport::Sylk2Doc( SvStream& rStrm )
                     SvNumFormatType nType;
                     sal_uInt32 nKey;
                     pDoc->GetFormatTable()->PutandConvertEntry( aCode, nCheckPos, nType, nKey,
-                                                                LANGUAGE_ENGLISH_US, ScGlobal::eLnge );
+                                                                LANGUAGE_ENGLISH_US, ScGlobal::eLnge, false);
                     if ( nCheckPos )
                         nKey = 0;
                     aFormats.push_back( nKey );
@@ -2256,7 +2266,7 @@ bool ScImportExport::Dif2Doc( SvStream& rStrm )
 
 bool ScImportExport::RTF2Doc( SvStream& rStrm, const OUString& rBaseURL )
 {
-    ScEEAbsImport *pImp = ScFormatFilter::Get().CreateRTFImport( pDoc, aRange );
+    std::unique_ptr<ScEEAbsImport> pImp = ScFormatFilter::Get().CreateRTFImport( pDoc, aRange );
     if (!pImp)
         return false;
     pImp->Read( rStrm, rBaseURL );
@@ -2270,13 +2280,12 @@ bool ScImportExport::RTF2Doc( SvStream& rStrm, const OUString& rBaseURL )
         pImp->WriteToDocument();
         EndPaste();
     }
-    delete pImp;
     return bOk;
 }
 
 bool ScImportExport::HTML2Doc( SvStream& rStrm, const OUString& rBaseURL )
 {
-    ScEEAbsImport *pImp = ScFormatFilter::Get().CreateHTMLImport( pDoc, rBaseURL, aRange);
+    std::unique_ptr<ScEEAbsImport> pImp = ScFormatFilter::Get().CreateHTMLImport( pDoc, rBaseURL, aRange);
     if (!pImp)
         return false;
     pImp->Read( rStrm, rBaseURL );
@@ -2307,7 +2316,6 @@ bool ScImportExport::HTML2Doc( SvStream& rStrm, const OUString& rBaseURL )
 
         EndPaste();
     }
-    delete pImp;
     return bOk;
 }
 
@@ -2323,7 +2331,7 @@ ScFormatFilterPlugin* ScFilterCreate();
 
 #endif
 
-typedef ScFormatFilterPlugin * (*FilterFn)(void);
+typedef ScFormatFilterPlugin * (*FilterFn)();
 ScFormatFilterPlugin &ScFormatFilter::Get()
 {
     static ScFormatFilterPlugin *plugin;
@@ -2355,7 +2363,7 @@ ScFormatFilterPlugin &ScFormatFilter::Get()
 
 // Precondition: pStr is guaranteed to be non-NULL and points to a 0-terminated
 // array.
-static inline const sal_Unicode* lcl_UnicodeStrChr( const sal_Unicode* pStr,
+static const sal_Unicode* lcl_UnicodeStrChr( const sal_Unicode* pStr,
         sal_Unicode c )
 {
     while (*pStr)
@@ -2380,8 +2388,26 @@ ScImportStringStream::ScImportStringStream( const OUString& rStr )
 }
 
 OUString ReadCsvLine( SvStream &rStream, bool bEmbeddedLineBreak,
-        const OUString& rFieldSeparators, sal_Unicode cFieldQuote )
+        OUString& rFieldSeparators, sal_Unicode cFieldQuote, sal_Unicode& rcDetectSep )
 {
+    enum RetryState
+    {
+        FORBID,
+        ALLOW,
+        RETRY,
+        RETRIED
+    } eRetryState = (bEmbeddedLineBreak && rcDetectSep == 0 ? RetryState::ALLOW : RetryState::FORBID);
+
+    sal_uInt64 nStreamPos = (eRetryState == RetryState::ALLOW ? rStream.Tell() : 0);
+
+Label_RetryWithNewSep:
+
+    if (eRetryState == RetryState::RETRY)
+    {
+        eRetryState = RetryState::RETRIED;
+        rStream.Seek( nStreamPos);
+    }
+
     OUString aStr;
     rStream.ReadUniOrByteStringLine(aStr, rStream.GetStreamCharSet(), nArbitraryLineLengthLimit);
 
@@ -2416,7 +2442,15 @@ OUString ReadCsvLine( SvStream &rStream, bool bEmbeddedLineBreak,
                         // we are in FIELDEND_QUOTE state.
                         else if (eQuoteState != FIELDEND_QUOTE)
                         {
-                            eQuoteState = lcl_isEscapedOrFieldEndQuote( nQuotes, p, pSeps, cFieldQuote);
+                            eQuoteState = lcl_isEscapedOrFieldEndQuote( nQuotes, p, pSeps, cFieldQuote, rcDetectSep);
+
+                            if (eRetryState == RetryState::ALLOW && rcDetectSep == ' ')
+                            {
+                                eRetryState = RetryState::RETRY;
+                                rFieldSeparators += OUString(' ');
+                                goto Label_RetryWithNewSep;
+                            }
+
                             // DONTKNOW_QUOTE is an embedded unescaped quote we
                             // don't count for pairing.
                             if (eQuoteState != DONTKNOW_QUOTE)

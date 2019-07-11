@@ -22,6 +22,7 @@
 #include <tools/urlobj.hxx>
 #include <unotools/bootstrap.hxx>
 #include <unotools/ucbstreamhelper.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -104,10 +105,10 @@ namespace migration
     }
 
 #define MAX_HEADER_LENGTH 16
-bool IsUserWordbook( const OUString& rFile )
+static bool IsUserWordbook( const OUString& rFile )
 {
     bool bRet = false;
-    SvStream* pStream = ::utl::UcbStreamHelper::CreateStream( rFile, StreamMode::STD_READ );
+    std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream( rFile, StreamMode::STD_READ );
     if ( pStream && !pStream->GetError() )
     {
         static const sal_Char* const pVerOOo7    = "OOoUserDict1";
@@ -137,7 +138,6 @@ bool IsUserWordbook( const OUString& rFile )
         }
     }
 
-    delete pStream;
     return bRet;
 }
 

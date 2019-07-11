@@ -48,7 +48,6 @@
 
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <comphelper/propertysequence.hxx>
 
 #include <svtools/addresstemplate.hxx>
@@ -73,6 +72,7 @@
 #include <vcl/help.hxx>
 #include <vcl/stdtext.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/file.hxx>
 #include <vcl/EnumContext.hxx>
 
@@ -319,9 +319,9 @@ namespace
         {
         }
 
-        short execute()
+        virtual short run() override
         {
-            short nRet = m_xDialog->run();
+            short nRet = GenericDialogController::run();
             if (nRet == RET_OK)
                 showDocument("LICENSE");
             return nRet;
@@ -336,9 +336,9 @@ namespace
         {
         }
 
-        short execute()
+        virtual short run() override
         {
-            short nRet = m_xDialog->run();
+            short nRet = MessageDialogController::run();
             if (nRet == RET_OK)
             {
                 sfx2::SafeMode::putFlag();
@@ -446,31 +446,25 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
             SfxAbstractDialogFactory* pFact =
                 SfxAbstractDialogFactory::Create();
 
-            if ( pFact )
+            const SfxStringItem* pStringItem = rReq.GetArg<SfxStringItem>(SID_CONFIG);
+
+            SfxItemSet aSet(
+                GetPool(), svl::Items<SID_CONFIG, SID_CONFIG>{} );
+
+            if ( pStringItem )
             {
-                const SfxStringItem* pStringItem = rReq.GetArg<SfxStringItem>(SID_CONFIG);
-
-                SfxItemSet aSet(
-                    GetPool(), svl::Items<SID_CONFIG, SID_CONFIG>{} );
-
-                if ( pStringItem )
-                {
-                    aSet.Put( SfxStringItem(
-                        SID_CONFIG, pStringItem->GetValue() ) );
-                }
-
-                Reference <XFrame> xFrame(GetRequestFrame(rReq));
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateCustomizeTabDialog(
-                    &aSet, xFrame ));
-
-                if ( pDlg )
-                {
-                    const short nRet = pDlg->Execute();
-
-                    if ( nRet )
-                        bDone = true;
-                }
+                aSet.Put( SfxStringItem(
+                    SID_CONFIG, pStringItem->GetValue() ) );
             }
+
+            Reference <XFrame> xFrame(GetRequestFrame(rReq));
+            ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateCustomizeTabDialog(
+                &aSet, xFrame ));
+
+            const short nRet = pDlg->Execute();
+
+            if ( nRet )
+                bDone = true;
             break;
         }
 
@@ -533,8 +527,10 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_SEND_FEEDBACK:
         {
             OUString module = SfxHelp::GetCurrentModuleIdentifier();
-            OUString sURL("https://hub.libreoffice.org/send-feedback/?LOversion=" + utl::ConfigManager::getAboutBoxProductVersion() +
-                "&LOlocale=" + utl::ConfigManager::getLocale() + "&LOmodule=" + module.copy(module.lastIndexOf('.') + 1 )  );
+            OUString sURL(officecfg::Office::Common::Menus::SendFeedbackURL::get() + //officecfg/registry/data/org/openoffice/Office/Common.xcu => https://hub.libreoffice.org/send-feedback/
+                "?LOversion=" + utl::ConfigManager::getAboutBoxProductVersion() +
+                "&LOlocale=" + utl::ConfigManager::getUILocale() +
+                "&LOmodule=" + module.copy(module.lastIndexOf('.') + 1 )  );
             sfx2::openUriExternally(sURL, false);
             break;
         }
@@ -544,30 +540,41 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
             // Askbot has URL's normalized to languages, not locales
             // Get language from locale: ll or lll or ll-CC or lll-CC
 
-            OUString sURL("https://hub.libreoffice.org/forum/?LOlocale=" + utl::ConfigManager::getLocale());
+            OUString sURL(officecfg::Office::Common::Menus::QA_URL::get() + //https://hub.libreoffice.org/forum/
+                "?LOlocale=" + utl::ConfigManager::getUILocale());
             sfx2::openUriExternally(sURL, false);
             break;
         }
         case SID_DOCUMENTATION:
         {
             // Open documentation page based on locales
-            OUString sURL("https://hub.libreoffice.org/documentation/?LOlocale=" + utl::ConfigManager::getLocale());
+            OUString sURL(officecfg::Office::Common::Menus::DocumentationURL::get() + //https://hub.libreoffice.org/documentation/
+                "?LOlocale=" + utl::ConfigManager::getUILocale());
+            sfx2::openUriExternally(sURL, false);
+            break;
+        }
+        case SID_GETINVOLVED:
+        {
+            // Open get involved/join us page based on locales
+            OUString sURL(officecfg::Office::Common::Menus::GetInvolvedURL::get() + //https://hub.libreoffice.org/joinus/
+                "?LOlocale=" + utl::ConfigManager::getUILocale());
             sfx2::openUriExternally(sURL, false);
             break;
         }
         case SID_DONATION:
         {
             // Open donation page based on language + script (BCP47) with language as fall back.
-            OUString aLang = LanguageTag(utl::ConfigManager::getLocale()).getLanguage();
-            OUString aBcp47 = LanguageTag(utl::ConfigManager::getLocale()).getBcp47();
-            OUString sURL("https://hub.libreoffice.org/donation/?BCP47=" + aBcp47 + "&LOlang=" + aLang );
+            OUString aLang = LanguageTag(utl::ConfigManager::getUILocale()).getLanguage();
+            OUString aBcp47 = LanguageTag(utl::ConfigManager::getUILocale()).getBcp47();
+            OUString sURL(officecfg::Office::Common::Menus::DonationURL::get() + //https://hub.libreoffice.org/donation/
+                "?BCP47=" + aBcp47 + "&LOlang=" + aLang );
             sfx2::openUriExternally(sURL, false);
             break;
         }
         case SID_SHOW_LICENSE:
         {
             LicenseDialog aDialog(rReq.GetFrameWeld());
-            aDialog.execute();
+            aDialog.run();
             break;
         }
 
@@ -643,12 +650,9 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_ABOUT:
         {
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-            if ( pFact )
-            {
-                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateVclDialog( nullptr, SID_ABOUT ));
-                pDlg->Execute();
-                bDone = true;
-            }
+            ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateVclDialog( nullptr, SID_ABOUT ));
+            pDlg->Execute();
+            bDone = true;
             break;
         }
 
@@ -1031,7 +1035,7 @@ void SfxApplication::MiscExec_Impl( SfxRequest& rReq )
         case SID_SAFE_MODE:
         {
             SafeModeQueryDialog aDialog(rReq.GetFrameWeld());
-            aDialog.execute();
+            aDialog.run();
             break;
         }
 
@@ -1194,9 +1198,10 @@ void SfxApplication::MiscState_Impl(SfxItemSet &rSet)
 
                     if ( xLayoutManager.is() )
                     {
-                        bool bState = true;
-                        bState = xLayoutManager->getElement( "private:resource/menubar/menubar" ).is()
-                            && xLayoutManager->isElementVisible( "private:resource/menubar/menubar" );
+                        const bool bState
+                            = xLayoutManager->getElement("private:resource/menubar/menubar").is()
+                              && xLayoutManager->isElementVisible(
+                                     "private:resource/menubar/menubar");
 
                         SfxBoolItem aItem( SID_MENUBAR, bState );
                         rSet.Put( aItem );
@@ -1224,17 +1229,17 @@ void SfxApplication::MiscState_Impl(SfxItemSet &rSet)
 
 #ifndef DISABLE_DYNLOADING
 
-typedef rtl_uString* (*basicide_choose_macro)(void*, void*, sal_Bool);
+typedef rtl_uString* (*basicide_choose_macro)(void*, void*, void*, sal_Bool);
 
 extern "C" { static void thisModule() {} }
 
 #else
 
-extern "C" rtl_uString* basicide_choose_macro(void*, void*, sal_Bool);
+extern "C" rtl_uString* basicide_choose_macro(void*, void*, void*, sal_Bool);
 
 #endif
 
-OUString ChooseMacro( const Reference< XModel >& rxLimitToDocument, const Reference< XFrame >& xDocFrame, bool bChooseOnly )
+static OUString ChooseMacro(weld::Window* pParent, const Reference<XModel>& rxLimitToDocument, const Reference<XFrame>& xDocFrame, bool bChooseOnly)
 {
 #ifndef DISABLE_DYNLOADING
     osl::Module aMod;
@@ -1253,7 +1258,7 @@ OUString ChooseMacro( const Reference< XModel >& rxLimitToDocument, const Refere
 #endif
 
     // call basicide_choose_macro in basctl
-    rtl_uString* pScriptURL = pSymbol( rxLimitToDocument.get(), xDocFrame.get(), bChooseOnly );
+    rtl_uString* pScriptURL = pSymbol(pParent, rxLimitToDocument.get(), xDocFrame.get(), bChooseOnly);
     OUString aScriptURL( pScriptURL );
     rtl_uString_release( pScriptURL );
     return aScriptURL;
@@ -1351,24 +1356,21 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
                 sPageURL = pURLItem->GetValue();
             Reference <XFrame> xFrame(GetRequestFrame(rReq));
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-            if ( pFact )
+            VclPtr<VclAbstractDialog> pDlg =
+                pFact->CreateFrameDialog(rReq.GetFrameWindow(), xFrame, rReq.GetSlot(), sPageURL );
+            short nRet = pDlg->Execute();
+            pDlg.disposeAndClear();
+            SfxViewFrame* pView = SfxViewFrame::GetFirst();
+            while ( pView )
             {
-                VclPtr<VclAbstractDialog> pDlg =
-                    pFact->CreateFrameDialog(rReq.GetFrameWindow(), xFrame, rReq.GetSlot(), sPageURL );
-                short nRet = pDlg->Execute();
-                pDlg.disposeAndClear();
-                SfxViewFrame* pView = SfxViewFrame::GetFirst();
-                while ( pView )
+                if (nRet == RET_OK)
                 {
-                    if (nRet == RET_OK)
-                    {
-                        SfxObjectShell* pObjSh = pView->GetObjectShell();
-                        if (pObjSh)
-                            pObjSh->SetConfigOptionsChecked(false);
-                    }
-                    pView->GetBindings().InvalidateAll(false);
-                    pView = SfxViewFrame::GetNext( *pView );
+                    SfxObjectShell* pObjSh = pView->GetObjectShell();
+                    if (pObjSh)
+                        pObjSh->SetConfigOptionsChecked(false);
                 }
+                pView->GetBindings().InvalidateAll(false);
+                pView = SfxViewFrame::GetNext( *pView );
             }
             break;
         }
@@ -1491,7 +1493,7 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
             }
 
             Reference <XFrame> xFrame(GetRequestFrame(rReq));
-            rReq.SetReturnValue(SfxStringItem(rReq.GetSlot(), ChooseMacro(xLimitToModel, xFrame, bChooseOnly)));
+            rReq.SetReturnValue(SfxStringItem(rReq.GetSlot(), ChooseMacro(rReq.GetFrameWeld(), xLimitToModel, xFrame, bChooseOnly)));
             rReq.Done();
         }
         break;
@@ -1609,19 +1611,16 @@ void SfxApplication::OfaExec_Impl( SfxRequest& rReq )
         case SID_AUTO_CORRECT_DLG:
         {
             SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-            if ( pFact )
-            {
-                SfxItemSet aSet(GetPool(), svl::Items<SID_AUTO_CORRECT_DLG, SID_AUTO_CORRECT_DLG>{});
-                const SfxPoolItem* pItem=nullptr;
-                const SfxItemSet* pSet = rReq.GetArgs();
-                SfxItemPool* pSetPool = pSet ? pSet->GetPool() : nullptr;
-                if ( pSet && pSet->GetItemState( pSetPool->GetWhich( SID_AUTO_CORRECT_DLG ), false, &pItem ) == SfxItemState::SET )
-                    aSet.Put( *pItem );
+            SfxItemSet aSet(GetPool(), svl::Items<SID_AUTO_CORRECT_DLG, SID_AUTO_CORRECT_DLG>{});
+            const SfxPoolItem* pItem=nullptr;
+            const SfxItemSet* pSet = rReq.GetArgs();
+            SfxItemPool* pSetPool = pSet ? pSet->GetPool() : nullptr;
+            if ( pSet && pSet->GetItemState( pSetPool->GetWhich( SID_AUTO_CORRECT_DLG ), false, &pItem ) == SfxItemState::SET )
+                aSet.Put( *pItem );
 
-                const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateAutoCorrTabDialog(pViewFrame? &pViewFrame->GetWindow(): nullptr, &aSet));
-                pDlg->Execute();
-            }
+            const SfxViewFrame* pViewFrame = SfxViewFrame::Current();
+            ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateAutoCorrTabDialog(pViewFrame ? pViewFrame->GetWindow().GetFrameWeld() : nullptr, &aSet));
+            pDlg->Execute();
 
             break;
         }

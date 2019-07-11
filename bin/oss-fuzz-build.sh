@@ -10,10 +10,14 @@ fi
 export CXX="$CXX -stdlib=libc++ -fsanitize-blacklist=$SRC/libreoffice/bin/sanitize-blacklist.txt"
 #similarly force the -fsanitize etc args in as well as pthread to get
 #things to link successfully during the build
-export LDFLAGS="$CFLAGS -lpthread"
+export LDFLAGS="$CFLAGS -Wl,--compress-debug-sections,zlib -lpthread"
+
+df -h $OUT $WORK
 
 cd $WORK
 $SRC/libreoffice/autogen.sh --with-distro=LibreOfficeOssFuzz --with-external-tar=$SRC
+
+make clean
 
 #build-time rsc tool leaks a titch
 export ASAN_OPTIONS="detect_leaks=0"
@@ -25,9 +29,9 @@ head -c -14 services.rdb  > templateservices.rdb
 tail -c +85 ./services/services.rdb >> templateservices.rdb
 for a in *fuzzer; do
     #some minimal fonts required
-    cp $a $OUT
+    mv $a $OUT
     mkdir -p $OUT/$a.fonts
-    cp $SRC/libreoffice/extras/source/truetype/symbol/opens___.ttf ../share/fonts/truetype/Liberation* $OUT/$a.fonts
+    cp $SRC/49a64f3bcf20a7909ba2751349231d6652ded9cd2840e961b5164d09de3ffa63-opens___.ttf ../share/fonts/truetype/Liberation* $OUT/$a.fonts
     #minimal runtime requirements
     cp templateservices.rdb $OUT/$a.services.rdb
     cp types.rdb $OUT/$a.types.rdb
@@ -40,6 +44,8 @@ UNO_SERVICES=\${ORIGIN}/$a.services.rdb
 EOF
 done
 popd
+
+df -h $OUT $WORK
 
 #starting corpuses
 cp $SRC/*_seed_corpus.zip $OUT

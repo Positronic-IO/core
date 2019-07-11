@@ -30,7 +30,6 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/random_access_index.hpp>
 
-#include "charfmt.hxx"
 #include "fmtcol.hxx"
 #include "frmfmt.hxx"
 #include "section.hxx"
@@ -53,6 +52,12 @@ public:
     virtual size_t GetFormatCount() const = 0;
     virtual SwFormat* GetFormat(size_t idx) const = 0;
     virtual ~SwFormatsBase() {};
+
+    SwFormatsBase() = default;
+    SwFormatsBase(SwFormatsBase const &) = default;
+    SwFormatsBase(SwFormatsBase &&) = default;
+    SwFormatsBase & operator =(SwFormatsBase const &) = default;
+    SwFormatsBase & operator =(SwFormatsBase &&) = default;
 };
 
 template<typename Value>
@@ -109,6 +114,14 @@ public:
             for(const_iterator it = begin(); it != end(); ++it)
                 delete *it;
     }
+
+    //TODO: These functions are apparently brittle (but the copy functions are actually used by the
+    // code; the move functions will be implicitly-defined as deleted anyway) and should probably
+    // only be used with DestructorPolicy::KeepELements:
+    SwVectorModifyBase(SwVectorModifyBase const &) = default;
+    SwVectorModifyBase(SwVectorModifyBase &&) = default;
+    SwVectorModifyBase & operator =(SwVectorModifyBase const &) = default;
+    SwVectorModifyBase & operator =(SwVectorModifyBase &&) = default;
 
     void DeleteAndDestroy(int aStartIdx, int aEndIdx)
     {
@@ -331,7 +344,7 @@ public:
 
     void Remove( size_type nPos );
     void Remove( const SwRangeRedline* p );
-    void DeleteAndDestroy( size_type nPos, size_type nLen = 1 );
+    void DeleteAndDestroy(size_type nPos);
     void DeleteAndDestroyAll();
 
     void dumpAsXml(struct _xmlTextWriter* pWriter) const;
@@ -375,7 +388,7 @@ public:
 
     void Insert( SwExtraRedline* p );
 
-    void DeleteAndDestroy( sal_uInt16 nPos, sal_uInt16 nLen = 1 );
+    void DeleteAndDestroy( sal_uInt16 nPos);
     void DeleteAndDestroyAll();
 
     void dumpAsXml(struct _xmlTextWriter* pWriter) const;

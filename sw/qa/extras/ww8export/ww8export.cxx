@@ -11,6 +11,7 @@
 
 //#include <com/sun/star/text/XDependentTextField.hpp>
 
+#include <IDocumentSettingAccess.hxx>
 #include <com/sun/star/awt/FontWeight.hpp>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/awt/XBitmap.hpp>
@@ -46,7 +47,7 @@
 #include <view.hxx>
 #include <wrtsh.hxx>
 
-#include <config_test.h>
+#include <config_features.h>
 
 #include <bordertest.hxx>
 
@@ -94,28 +95,6 @@ public:
         return (OString(filename).endsWith(".doc") && std::find(aBlacklist.begin(), aBlacklist.end(), filename) == aBlacklist.end());
     }
 protected:
-    bool CjkNumberedListTestHelper(sal_Int16 &nValue)
-    {
-        bool isNumber = false;
-        uno::Reference<text::XTextRange> xPara(getParagraph(1));
-        uno::Reference< beans::XPropertySet > properties( xPara, uno::UNO_QUERY);
-        properties->getPropertyValue("NumberingIsNumber") >>= isNumber;
-        if (!isNumber)
-            return false;
-        uno::Reference<container::XIndexAccess> xLevels( properties->getPropertyValue("NumberingRules"), uno::UNO_QUERY);
-        uno::Sequence< beans::PropertyValue > aPropertyValue;
-        xLevels->getByIndex(0) >>= aPropertyValue;
-        for( int j = 0 ; j< aPropertyValue.getLength() ; ++j)
-        {
-            beans::PropertyValue aProp= aPropertyValue[j];
-            if (aProp.Name == "NumberingType")
-            {
-                nValue = aProp.Value.get<sal_Int16>();
-                return true;
-            }
-        }
-        return false;
-    }
 
     virtual void postLoad(const char* pFilename) override
     {
@@ -380,6 +359,20 @@ DECLARE_WW8EXPORT_TEST(testCp1000044, "cp1000044.doc")
     uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
     // It wasn't possible to fill out this form.
     CPPUNIT_ASSERT_EQUAL(false, bool(xStorable->isReadonly()));
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    CPPUNIT_ASSERT_EQUAL( true, pDoc->getIDocumentSettingAccess().get( DocumentSettingId::PROTECT_FORM ) );
+
+    uno::Sequence<beans::PropertyValue> aGrabBag = getProperty< uno::Sequence<beans::PropertyValue> >(mxComponent, "InteropGrabBag");
+    sal_Int32 nPasswordHash = 0;
+    for ( sal_Int32 i = 0; i < aGrabBag.getLength(); ++i )
+    {
+        if ( aGrabBag[i].Name == "FormPasswordHash" )
+            aGrabBag[i].Value >>= nPasswordHash;
+    }
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Password Hash", sal_Int32(609995782), nPasswordHash);
 }
 
 DECLARE_WW8EXPORT_TEST(testBorderColours, "bordercolours.doc")
@@ -613,7 +606,7 @@ DECLARE_WW8EXPORT_TEST(testLayoutHanging, "fdo68967.doc")
     // This must not hang in layout
 }
 
-#if !TEST_FONTS_MISSING
+#if HAVE_MORE_FONTS
 DECLARE_WW8EXPORT_TEST(testfdo68963, "fdo68963.doc")
 {
     // The problem was that the text was not displayed.
@@ -1123,35 +1116,37 @@ DECLARE_WW8EXPORT_TEST(testBnc636128, "bnc636128.doc")
     uno::Reference<text::XFormField> xFormField = getProperty< uno::Reference<text::XFormField> >(getRun(getParagraph(1), 2), "Bookmark");
     uno::Reference<container::XNameContainer> xParameters = xFormField->getParameters();
     // This resulted in a container.NoSuchElementException.
-    CPPUNIT_ASSERT_EQUAL(OUString("5"), xParameters->getByName("MaxLength").get<OUString>());
+    CPPUNIT_ASSERT_EQUAL(sal_uInt16(5), xParameters->getByName("MaxLength").get<sal_uInt16>());
 }
 
 
 DECLARE_WW8EXPORT_TEST(testWw8Cjklist30, "cjklist30.doc")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::TIAN_GAN_ZH, numFormat);
 }
 
 DECLARE_WW8EXPORT_TEST(testWw8Cjklist31, "cjklist31.doc")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::DI_ZI_ZH, numFormat);
 }
 
 DECLARE_WW8EXPORT_TEST(testWw8Cjklist34, "cjklist34.doc")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_UPPER_ZH_TW, numFormat);
 }
 
 DECLARE_WW8EXPORT_TEST(testWw8Cjklist35, "cjklist35.doc")
 {
-    sal_Int16   numFormat;
-    CPPUNIT_ASSERT(CjkNumberedListTestHelper(numFormat));
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(1);
+    CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_LOWER_ZH, numFormat);
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf118564, "tdf118564.doc")
+{
+    sal_Int16   numFormat = getNumberingTypeOfParagraph(3);
     CPPUNIT_ASSERT_EQUAL(style::NumberingType::NUMBER_LOWER_ZH, numFormat);
 }
 
@@ -1294,7 +1289,7 @@ DECLARE_WW8EXPORT_TEST(testCommentExport, "comment-export.odt")
 }
 
 #if !defined(MACOSX) && !defined(_WIN32)
-#if !TEST_FONTS_MISSING
+#if HAVE_MORE_FONTS
 DECLARE_WW8EXPORT_TEST(testTableKeep, "tdf91083.odt")
 {
     //emulate table "keep with next" -do not split table

@@ -24,9 +24,9 @@
 #include <cellvalue.hxx>
 #include <tools/color.hxx>
 #include <tools/fract.hxx>
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
-#include <drawinglayer/processor2d/baseprocessor2d.hxx>
+#include <tools/gen.hxx>
 #include <editeng/svxenum.hxx>
+#include <vcl/outdev.hxx>
 
 namespace sc {
     struct SpellCheckContext;
@@ -35,14 +35,13 @@ namespace sc {
 namespace editeng {
     struct MisspellRanges;
 }
+namespace drawinglayer { namespace processor2d { class BaseProcessor2D; } }
+namespace o3tl { template <typename T> struct default_delete; }
 
-namespace tools { class Rectangle; }
 namespace vcl { class Font; }
-class OutputDevice;
 class EditEngine;
 class ScDocument;
 class ScPatternAttr;
-class SdrObject;
 struct RowInfo;
 struct ScTableInfo;
 class ScTabViewShell;
@@ -56,8 +55,8 @@ class SdrPaintWindow;
 
 enum ScOutputType { OUTTYPE_WINDOW, OUTTYPE_PRINTER };
 
-class ScFieldEditEngine;
 class ClearableClipRegion;
+typedef std::unique_ptr<ClearableClipRegion, o3tl::default_delete<ClearableClipRegion>> ClearableClipRegionPtr;
 
 class ScOutputData
 {
@@ -78,12 +77,12 @@ private:
     class DrawEditParam
     {
     public:
-        SvxCellHorJustify       meHorJustAttr;      ///< alignment attribute
+        SvxCellHorJustify const       meHorJustAttr;      ///< alignment attribute
         SvxCellHorJustify       meHorJustContext;   ///< context depending on attribute, content and direction
         SvxCellHorJustify       meHorJustResult;    ///< result for EditEngine
         SvxCellVerJustify       meVerJust;
-        SvxCellJustifyMethod    meHorJustMethod;
-        SvxCellJustifyMethod    meVerJustMethod;
+        SvxCellJustifyMethod const    meHorJustMethod;
+        SvxCellJustifyMethod const    meVerJustMethod;
         SvxCellOrientation      meOrient;
         SCSIZE                  mnArrY;
         SCCOL                   mnX;
@@ -92,8 +91,8 @@ private:
         long                    mnPosX;
         long                    mnPosY;
         long                    mnInitPosX;
-        bool                    mbBreak:1;
-        bool                    mbCellIsValue:1;
+        bool const              mbBreak:1;
+        bool const              mbCellIsValue:1;
         bool                    mbAsianVertical:1;
         bool                    mbPixelToLogic:1;
         bool                    mbHyphenatorSet:1;
@@ -145,25 +144,25 @@ private:
     VclPtr<OutputDevice> pFmtDevice;   // reference for text formatting
     ScTableInfo& mrTabInfo;
     RowInfo* pRowInfo;          // Info block
-    SCSIZE nArrCount;           // occupied lines in info block
+    SCSIZE const nArrCount;           // occupied lines in info block
     ScDocument* mpDoc;          // Document
     SCTAB nTab;                 // sheet
-    long nScrX;                 // Output Startpos. (Pixel)
-    long nScrY;
+    long const nScrX;                 // Output Startpos. (Pixel)
+    long const nScrY;
     long nScrW;                 // Output size (Pixel)
     long nScrH;
     long nMirrorW;              // Visible output width for mirroring (default: nScrW)
-    SCCOL nX1;                  // Start-/End coordinates
-    SCROW nY1;                  //  ( incl. hidden )
-    SCCOL nX2;
-    SCROW nY2;
+    SCCOL const nX1;                  // Start-/End coordinates
+    SCROW const nY1;                  //  ( incl. hidden )
+    SCCOL const nX2;
+    SCROW const nY2;
     SCCOL nVisX1;               // Start-/End coordinates
     SCROW nVisY1;               //  ( visible range )
     SCCOL nVisX2;
     SCROW nVisY2;
-    ScOutputType eType;         // Screen/Printer ...
-    double mnPPTX;              // Pixel per Twips
-    double mnPPTY;
+    ScOutputType const eType;         // Screen/Printer ...
+    double const mnPPTX;              // Pixel per Twips
+    double const mnPPTY;
     Fraction aZoomX;
     Fraction aZoomY;
 
@@ -181,12 +180,12 @@ private:
     bool bSolidBackground;      // white instead of transparent
 
     bool mbUseStyleColor;
-    bool mbForceAutoColor;
+    bool const mbForceAutoColor;
 
     bool mbSyntaxMode;          // Syntax highlighting
-    Color* pValueColor;
-    Color* pTextColor;
-    Color* pFormulaColor;
+    std::unique_ptr<Color> pValueColor;
+    std::unique_ptr<Color> pTextColor;
+    std::unique_ptr<Color> pFormulaColor;
 
     Color   aGridColor;
 
@@ -234,7 +233,7 @@ private:
 
     void            DrawRotatedFrame(vcl::RenderContext& rRenderContext);       // pixel
 
-    drawinglayer::processor2d::BaseProcessor2D*  CreateProcessor2D( );
+    std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> CreateProcessor2D( );
 
     void DrawEditStandard(DrawEditParam& rParam);
     void DrawEditBottomTop(DrawEditParam& rParam);
@@ -247,8 +246,8 @@ private:
     void ShowClipMarks( DrawEditParam& rParam, long nEngineHeight, const Size& aCellSize,
                         bool bMerged, OutputAreaParam& aAreaParam );
 
-    std::unique_ptr<ClearableClipRegion> Clip( DrawEditParam& rParam, const Size& aCellSize, OutputAreaParam& aAreaParam,
-                                               long nEngineHeight, bool bWrapFields );
+    ClearableClipRegionPtr Clip(DrawEditParam& rParam, const Size& aCellSize, OutputAreaParam& aAreaParam,
+                                long nEngineHeight, bool bWrapFields);
 
     bool AdjustAreaParamClipRect(OutputAreaParam& rAreaParam);
     long SetEngineTextAndGetWidth( DrawEditParam& rParam, const OUString& rSetString,

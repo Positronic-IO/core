@@ -10,6 +10,7 @@
 #include "Util.hxx"
 #include <rtl/ustrbuf.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 using namespace ::connectivity;
 
@@ -66,7 +67,7 @@ void firebird::evaluateStatusVector(const ISC_STATUS_ARRAY& rStatusVector,
     }
 }
 
-sal_Int32 lcl_getNumberType( short aType, NumberSubType aSubType )
+static sal_Int32 lcl_getNumberType( short aType, NumberSubType aSubType )
 {
     switch(aSubType)
     {
@@ -91,7 +92,7 @@ sal_Int32 lcl_getNumberType( short aType, NumberSubType aSubType )
             }
     }
 }
-sal_Int32 lcl_getCharColumnType( short aType, const OUString& sCharset )
+static sal_Int32 lcl_getCharColumnType( short aType, const OUString& sCharset )
 {
     switch(aType)
     {

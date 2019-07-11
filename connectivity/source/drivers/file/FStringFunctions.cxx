@@ -62,7 +62,7 @@ ORowSetValue OOp_Char::operate(const std::vector<ORowSetValue>& lhs) const
     if ( lhs.empty() )
         return ORowSetValue();
 
-    OUString sRet;
+    OUStringBuffer sRet;
     std::vector<ORowSetValue>::const_reverse_iterator aIter = lhs.rbegin();
     std::vector<ORowSetValue>::const_reverse_iterator aEnd = lhs.rend();
     for (; aIter != aEnd; ++aIter)
@@ -71,11 +71,11 @@ ORowSetValue OOp_Char::operate(const std::vector<ORowSetValue>& lhs) const
         {
             sal_Char c = static_cast<sal_Char>(static_cast<sal_Int32>(*aIter));
 
-            sRet += OUString(&c,1,RTL_TEXTENCODING_ASCII_US);
+            sRet.appendAscii(&c, 1);
         }
     }
 
-    return sRet;
+    return sRet.makeStringAndClear();
 }
 
 ORowSetValue OOp_Concat::operate(const std::vector<ORowSetValue>& lhs) const
@@ -191,13 +191,13 @@ ORowSetValue OOp_Repeat::operate(const ORowSetValue& lhs,const ORowSetValue& rhs
     if ( lhs.isNull() || rhs.isNull() )
         return lhs;
 
-    OUString sRet;
+    OUStringBuffer sRet;
     sal_Int32 nCount = rhs;
     for (sal_Int32 i=0; i < nCount; ++i)
     {
-        sRet += lhs;
+        sRet.append(lhs.operator OUString());
     }
-    return sRet;
+    return sRet.makeStringAndClear();
 }
 
 ORowSetValue OOp_Insert::operate(const std::vector<ORowSetValue>& lhs) const

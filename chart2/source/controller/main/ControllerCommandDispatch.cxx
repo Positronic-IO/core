@@ -30,9 +30,11 @@
 #include <RegressionCurveHelper.hxx>
 #include <DataSeriesHelper.hxx>
 #include <StatisticsHelper.hxx>
+#include <ReferenceSizeProvider.hxx>
 #include "ShapeController.hxx"
 
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/util/XModifyBroadcaster.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
@@ -40,6 +42,7 @@
 #include <com/sun/star/chart2/XChartType.hpp>
 #include <com/sun/star/chart2/XDataSeries.hpp>
 #include <com/sun/star/chart2/XRegressionCurve.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
 #include <com/sun/star/chart2/data/XDatabaseDataProvider.hpp>
 #include <com/sun/star/chart2/XDataProviderAccess.hpp>
 
@@ -519,8 +522,8 @@ void ControllerCommandDispatch::fireStatusEventForURLImpl(
 
 void ControllerCommandDispatch::updateCommandAvailability()
 {
-    bool bModelStateIsValid = ( m_apModelState.get() != nullptr );
-    bool bControllerStateIsValid = ( m_apControllerState.get() != nullptr );
+    bool bModelStateIsValid = (m_apModelState != nullptr);
+    bool bControllerStateIsValid = (m_apControllerState != nullptr);
     // Model and controller states exist.
     OSL_ASSERT( bModelStateIsValid );
     OSL_ASSERT( bControllerStateIsValid );

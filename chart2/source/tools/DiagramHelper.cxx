@@ -18,14 +18,12 @@
  */
 
 #include <DiagramHelper.hxx>
-#include <LegendHelper.hxx>
-#include <PropertyHelper.hxx>
 #include <DataSeriesHelper.hxx>
 #include <AxisHelper.hxx>
 #include <ContainerHelper.hxx>
 #include <ChartTypeHelper.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
-#include <CommonConverters.hxx>
 #include <ExplicitCategoriesProvider.hxx>
 #include <servicenames_charttypes.hxx>
 #include <RelativePositionHelper.hxx>
@@ -34,7 +32,6 @@
 #include <unonames.hxx>
 
 #include <com/sun/star/chart/MissingValueTreatment.hpp>
-#include <com/sun/star/chart/XChartDocument.hpp>
 #include <com/sun/star/chart/XDiagramPositioning.hpp>
 #include <com/sun/star/chart2/XAnyDescriptionAccess.hpp>
 #include <com/sun/star/chart2/XTitled.hpp>
@@ -42,23 +39,24 @@
 #include <com/sun/star/chart2/XChartTypeTemplate.hpp>
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
-#include <com/sun/star/chart2/InterpretedData.hpp>
 #include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/chart2/DataPointGeometry3D.hpp>
 #include <com/sun/star/chart2/RelativePosition.hpp>
 #include <com/sun/star/chart2/RelativeSize.hpp>
+#include <com/sun/star/chart2/StackingDirection.hpp>
 
+#include <com/sun/star/util/CloseVetoException.hpp>
 #include <com/sun/star/util/NumberFormat.hpp>
-#include <com/sun/star/util/XModifiable.hpp>
 #include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 
 #include <unotools/saveopt.hxx>
 #include <rtl/math.hxx>
-#include <svl/zformat.hxx>
+#include <svl/zforlist.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <comphelper/sequence.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
@@ -282,26 +280,23 @@ void DiagramHelper::setStackMode(
             if( !xChartTypeContainer.is() )
                 continue;
             uno::Sequence< uno::Reference< XChartType > > aChartTypeList( xChartTypeContainer->getChartTypes() );
-            sal_Int32 nMax = aChartTypeList.getLength();
-            if( nMax >= 1 )
-                nMax = 1;
-            for( sal_Int32 nT = 0; nT < nMax; ++nT )
+            if (!aChartTypeList.getLength())
+                continue;
+
+            uno::Reference< XChartType > xChartType( aChartTypeList[0] );
+
+            //iterate through all series in this chart type
+            uno::Reference< XDataSeriesContainer > xDataSeriesContainer( xChartType, uno::UNO_QUERY );
+            OSL_ASSERT( xDataSeriesContainer.is());
+            if( !xDataSeriesContainer.is() )
+                continue;
+
+            uno::Sequence< uno::Reference< XDataSeries > > aSeriesList( xDataSeriesContainer->getDataSeries() );
+            for( sal_Int32 nS = 0; nS < aSeriesList.getLength(); ++nS )
             {
-                uno::Reference< XChartType > xChartType( aChartTypeList[nT] );
-
-                //iterate through all series in this chart type
-                uno::Reference< XDataSeriesContainer > xDataSeriesContainer( xChartType, uno::UNO_QUERY );
-                OSL_ASSERT( xDataSeriesContainer.is());
-                if( !xDataSeriesContainer.is() )
-                    continue;
-
-                uno::Sequence< uno::Reference< XDataSeries > > aSeriesList( xDataSeriesContainer->getDataSeries() );
-                for( sal_Int32 nS = 0; nS < aSeriesList.getLength(); ++nS )
-                {
-                    Reference< beans::XPropertySet > xProp( aSeriesList[nS], uno::UNO_QUERY );
-                    if(xProp.is())
-                        xProp->setPropertyValue( "StackingDirection", aNewDirection );
-                }
+                Reference< beans::XPropertySet > xProp( aSeriesList[nS], uno::UNO_QUERY );
+                if(xProp.is())
+                    xProp->setPropertyValue( "StackingDirection", aNewDirection );
             }
         }
     }
@@ -578,8 +573,6 @@ bool DiagramHelper::attachSeriesToAxis( bool bAttachToMainAxis
 
     //set property at axis
     Reference< beans::XPropertySet > xProp( xDataSeries, uno::UNO_QUERY_THROW );
-    if( !xProp.is() )
-        return bChanged;
 
     sal_Int32 nNewAxisIndex = bAttachToMainAxis ? 0 : 1;
     sal_Int32 nOldAxisIndex = DataSeriesHelper::getAttachedAxisIndex(xDataSeries);
@@ -861,9 +854,8 @@ void DiagramHelper::setCategoriesToDiagram(
     std::vector< Reference< chart2::XAxis > > aCatAxes(
         lcl_getAxisHoldingCategoriesFromDiagram( xDiagram ));
 
-    for (auto const& elem : aCatAxes)
+    for (const Reference< chart2::XAxis >& xCatAxis : aCatAxes)
     {
-        Reference< chart2::XAxis > xCatAxis(elem);
         if( xCatAxis.is())
         {
             ScaleData aScaleData( xCatAxis->getScaleData());
@@ -924,7 +916,7 @@ Reference< data::XLabeledDataSequence >
     return xResult;
 }
 
-void lcl_generateAutomaticCategoriesFromChartType(
+static void lcl_generateAutomaticCategoriesFromChartType(
             Sequence< OUString >& rRet,
             const Reference< XChartType >& xChartType )
 {
@@ -1186,7 +1178,7 @@ sal_Int32 DiagramHelper::getPercentNumberFormat( const Reference< util::XNumberF
     SvNumberFormatter* pNumFormatter = aNumberFormatterWrapper.getSvNumberFormatter();
     if( pNumFormatter )
     {
-        nRet = pNumFormatter->GetStandardFormat( SvNumFormatType::PERCENT, rLanguageTag.getLanguageType() );
+        nRet = pNumFormatter->GetFormatIndex( NF_PERCENT_INT, rLanguageTag.getLanguageType() );
     }
     else
     {
@@ -1197,6 +1189,10 @@ sal_Int32 DiagramHelper::getPercentNumberFormat( const Reference< util::XNumberF
                     rLanguageTag.getLocale(), true/*bCreate*/ );
             if( aKeySeq.getLength() )
             {
+                // This *assumes* the sequence is sorted as in
+                // NfIndexTableOffset and the first format is the integer 0%
+                // format by chance.. which usually is the case, but.. anyway,
+                // we usually also have a number formatter so don't reach here.
                 nRet = aKeySeq[0];
             }
         }
@@ -1390,11 +1386,10 @@ bool lcl_moveSeriesOrCheckIfMoveIsAllowed(
                                             if( xOtherDataSeriesContainer.is() )
                                             {
                                                 uno::Sequence< uno::Reference< XDataSeries > > aOtherSeriesList( xOtherDataSeriesContainer->getDataSeries() );
-                                                sal_Int32 nOtherSeriesIndex = 0;
-                                                if( nOtherSeriesIndex >= 0 && nOtherSeriesIndex < aOtherSeriesList.getLength() )
+                                                if( 0 < aOtherSeriesList.getLength() )
                                                 {
-                                                    uno::Reference< XDataSeries > xExchangeSeries( aOtherSeriesList[nOtherSeriesIndex] );
-                                                    aOtherSeriesList[nOtherSeriesIndex] = xGivenDataSeries;
+                                                    uno::Reference< XDataSeries > xExchangeSeries( aOtherSeriesList[0] );
+                                                    aOtherSeriesList[0] = xGivenDataSeries;
                                                     xOtherDataSeriesContainer->setDataSeries(aOtherSeriesList);
 
                                                     aSeriesList[nOldSeriesIndex]=xExchangeSeries;
@@ -1596,7 +1591,7 @@ DiagramPositioningMode DiagramHelper::getDiagramPositioningMode( const uno::Refe
     return eMode;
 }
 
-void lcl_ensureRange0to1( double& rValue )
+static void lcl_ensureRange0to1( double& rValue )
 {
     if(rValue<0.0)
         rValue=0.0;

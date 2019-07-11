@@ -78,7 +78,7 @@ using ::com::sun::star::sdb::XRowSetSupplier;
 using ::com::sun::star::awt::XVclWindowPeer;
 
 
-css::awt::FontDescriptor ImplCreateFontDescriptor( const vcl::Font& rFont )
+static css::awt::FontDescriptor ImplCreateFontDescriptor( const vcl::Font& rFont )
 {
     css::awt::FontDescriptor aFD;
     aFD.Name = rFont.GetFamilyName();
@@ -101,7 +101,7 @@ css::awt::FontDescriptor ImplCreateFontDescriptor( const vcl::Font& rFont )
 }
 
 
-vcl::Font ImplCreateFont( const css::awt::FontDescriptor& rDescr )
+static vcl::Font ImplCreateFont( const css::awt::FontDescriptor& rDescr )
 {
     vcl::Font aFont;
     aFont.SetFamilyName( rDescr.Name );
@@ -728,13 +728,17 @@ void SAL_CALL FmXGridControl::setDesignMode(sal_Bool bOn)
                 }
             }
 
+            // Avoid infinite recursion when calling XVclWindowPeer::setDesignMode below
             mbDesignMode = bOn;
 
             Reference< XVclWindowPeer >  xVclWindowPeer( getPeer(), UNO_QUERY );
             if (xVclWindowPeer.is())
                 xVclWindowPeer->setDesignMode(bOn);
         }
-        mbDesignMode = bOn;
+        else
+        {
+            mbDesignMode = bOn;
+        }
 
         // dispose our current AccessibleContext, if we have one
         // (changing the design mode implies having a new implementation for this context,
@@ -1021,7 +1025,7 @@ void FmXGridPeer::columnChanged()
 
 namespace fmgridif
 {
-    const OUString getDataModeIdentifier()
+    static const OUString getDataModeIdentifier()
     {
         return OUString("DataMode");
     }
@@ -1030,7 +1034,8 @@ using namespace fmgridif;
 
 
 FmXGridPeer::FmXGridPeer(const Reference< XComponentContext >& _rxContext)
-            :m_aModifyListeners(m_aMutex)
+            :m_xContext(_rxContext)
+            ,m_aModifyListeners(m_aMutex)
             ,m_aUpdateListeners(m_aMutex)
             ,m_aContainerListeners(m_aMutex)
             ,m_aSelectionListeners(m_aMutex)
@@ -1038,9 +1043,6 @@ FmXGridPeer::FmXGridPeer(const Reference< XComponentContext >& _rxContext)
             ,m_aMode( getDataModeIdentifier() )
             ,m_nCursorListening(0)
             ,m_bInterceptingDispatch(false)
-            ,m_pStateCache(nullptr)
-            ,m_pDispatchers(nullptr)
-            ,m_xContext(_rxContext)
 {
     // Create must be called after this constructor
     m_pGridListener.reset( new GridListenerDelegator( this ) );
@@ -1594,7 +1596,7 @@ void FmXGridPeer::addColumnListeners(const Reference< XPropertySet >& xCol)
     // as not all properties have to be supported by all columns we have to check this
     // before adding a listener
     Reference< XPropertySetInfo > xInfo = xCol->getPropertySetInfo();
-    for (unsigned i=0; i<SAL_N_ELEMENTS(aPropsListenedTo); ++i)
+    for (size_t i=0; i<SAL_N_ELEMENTS(aPropsListenedTo); ++i)
     {
         if ( xInfo->hasPropertyByName( aPropsListenedTo[i] ) )
         {

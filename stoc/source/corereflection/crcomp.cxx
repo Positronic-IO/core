@@ -39,7 +39,7 @@ class IdlCompFieldImpl
     , public XIdlField
     , public XIdlField2
 {
-    sal_Int32                   _nOffset;
+    sal_Int32 const             _nOffset;
 
 public:
     IdlCompFieldImpl( IdlReflectionServiceImpl * pReflection, const OUString & rName,
@@ -94,20 +94,12 @@ void IdlCompFieldImpl::release() throw()
 
 Sequence< Type > IdlCompFieldImpl::getTypes()
 {
-    static ::cppu::OTypeCollection * s_pTypes = nullptr;
-    if (! s_pTypes)
-    {
-        ::osl::MutexGuard aGuard( getMutexAccess() );
-        if (! s_pTypes)
-        {
-            static ::cppu::OTypeCollection s_aTypes(
-                cppu::UnoType<XIdlField2>::get(),
-                cppu::UnoType<XIdlField>::get(),
-                IdlMemberImpl::getTypes() );
-            s_pTypes = &s_aTypes;
-        }
-    }
-    return s_pTypes->getTypes();
+    static cppu::OTypeCollection s_aTypes(
+        cppu::UnoType<XIdlField2>::get(),
+        cppu::UnoType<XIdlField>::get(),
+        IdlMemberImpl::getTypes() );
+
+    return s_aTypes.getTypes();
 }
 
 Sequence< sal_Int8 > IdlCompFieldImpl::getImplementationId()

@@ -78,6 +78,9 @@
 #include <svx/dialogs.hrc>
 
 #include <memory>
+#include <vcl/EnumContext.hxx>
+#include <vcl/notebookbar.hxx>
+#include <prevwpage.hxx>
 
 using namespace ::com::sun::star;
 SFX_IMPL_NAMED_VIEWFACTORY(SwPagePreview, "PrintPreview")
@@ -407,9 +410,9 @@ OUString SwPagePreviewWin::GetStatusStr( sal_uInt16 nPageCnt ) const
     const sal_uInt16 nVirtPageNum = mpPgPreviewLayout->GetVirtPageNumByPageNum( nPageNum );
     if( nVirtPageNum && nVirtPageNum != nPageNum )
     {
-        aStatusStr.append( OUString::number(nVirtPageNum) + " " );
+        aStatusStr.append( OUString::number(nVirtPageNum) ).append( " " );
     }
-    aStatusStr.append( OUString::number(nPageNum) + " / " + OUString::number(nPageCnt) );
+    aStatusStr.append( OUString::number(nPageNum) ).append( " / " ).append( OUString::number(nPageCnt) );
     return aStatusStr.makeStringAndClear();
 }
 
@@ -533,28 +536,19 @@ void SwPagePreviewWin::SetPagePreview( sal_uInt8 nRow, sal_uInt8 nCol )
     }
 }
 
-/** get selected page in document preview
-
-    @author OD
-*/
+/** get selected page in document preview */
 sal_uInt16 SwPagePreviewWin::SelectedPage() const
 {
     return mpPgPreviewLayout->SelectedPage();
 }
 
-/** set selected page number in document preview
-
-    @author OD
-*/
+/** set selected page number in document preview */
 void SwPagePreviewWin::SetSelectedPage( sal_uInt16 _nSelectedPageNum )
 {
     mpPgPreviewLayout->SetSelectedPage( _nSelectedPageNum );
 }
 
-/** method to enable/disable book preview
-
-    @author OD
-*/
+/** method to enable/disable book preview */
 bool SwPagePreviewWin::SetBookPreviewMode( const bool _bBookPreview )
 {
     return mpPgPreviewLayout->SetBookPreviewMode( _bBookPreview,
@@ -592,10 +586,7 @@ void SwPagePreviewWin::DataChanged( const DataChangedEvent& rDCEvt )
     }
 }
 
-/** help method to execute SfxRequest FN_PAGEUP and FN_PAGEDOWN
-
-    @author OD
-*/
+/** help method to execute SfxRequest FN_PAGEUP and FN_PAGEDOWN */
 void SwPagePreview::ExecPgUpAndPgDown( const bool  _bPgUp,
                                         SfxRequest* _pReq )
 {
@@ -671,9 +662,8 @@ void SwPagePreview::ExecPgUpAndPgDown( const bool  _bPgUp,
 // Then all for the SwPagePreview
 void  SwPagePreview::Execute( SfxRequest &rReq )
 {
-    int eMvMode;
+    int eMvMode = SwPagePreviewWin::MV_DOC_END;
     sal_uInt8 nRow = 1;
-    bool bRetVal = false;
     bool bRefresh = true;
 
     switch(rReq.GetSlot())
@@ -757,12 +747,7 @@ void  SwPagePreview::Execute( SfxRequest &rReq )
                 aCoreSet.Put( aZoom );
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                if(pFact)
-                {
-                    pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aCoreSet));
-                    OSL_ENSURE(pDlg, "Dialog creation failed!");
-                }
-
+                pDlg.disposeAndReset(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aCoreSet));
                 pDlg->SetLimits( MINZOOM, MAXZOOM );
 
                 if( pDlg->Execute() != RET_CANCEL )
@@ -881,18 +866,15 @@ void  SwPagePreview::Execute( SfxRequest &rReq )
         break;
         case FN_START_OF_LINE:
         case FN_START_OF_DOCUMENT:
-            m_pViewWin->SetSelectedPage( 1 );
-            eMvMode = SwPagePreviewWin::MV_DOC_STT; bRetVal = true; goto MOVEPAGE;
+            eMvMode = SwPagePreviewWin::MV_DOC_STT;
+            SAL_FALLTHROUGH;
         case FN_END_OF_LINE:
         case FN_END_OF_DOCUMENT:
-            m_pViewWin->SetSelectedPage( mnPageCount );
-            eMvMode = SwPagePreviewWin::MV_DOC_END; bRetVal = true; goto MOVEPAGE;
-MOVEPAGE:
+            m_pViewWin->SetSelectedPage(eMvMode == SwPagePreviewWin::MV_DOC_STT ? 1 : mnPageCount);
             {
                 bool bRet = ChgPage( eMvMode );
                 // return value for Basic
-                if(bRetVal)
-                    rReq.SetReturnValue(SfxBoolItem(rReq.GetSlot(), !bRet));
+                rReq.SetReturnValue(SfxBoolItem(rReq.GetSlot(), !bRet));
 
                 bRefresh = bRet;
                 rReq.Done();
@@ -1174,6 +1156,14 @@ SwPagePreview::SwPagePreview(SfxViewFrame *pViewFrame, SfxViewShell* pOldSh):
     CreateScrollbar( true );
     CreateScrollbar( false );
 
+    //notify notebookbar change in context
+    SfxShell::SetContextBroadcasterEnabled(true);
+    SfxShell::SetContextName(vcl::EnumContext::GetContextName(vcl::EnumContext::Context::Printpreview));
+    SfxShell::BroadcastContextForActivation(true);
+    //removelisteners for notebookbar
+    if (auto& pBar = SfxViewFrame::Current()->GetWindow().GetSystemWindow()->GetNotebookBar())
+        pBar->ControlListener(true);
+
     SfxObjectShell* pObjShell = pViewFrame->GetObjectShell();
     if ( !pOldSh )
     {
@@ -1238,7 +1228,9 @@ SwPagePreview::~SwPagePreview()
     delete pVShell;
 
     m_pViewWin.disposeAndClear();
-
+    if (SfxViewFrame* pCurrent = SfxViewFrame::Current())
+        if (auto& pBar = pCurrent->GetWindow().GetSystemWindow()->GetNotebookBar())
+            pBar->ControlListener(false);
     m_pScrollFill.disposeAndClear();
     m_pHScrollbar.disposeAndClear();
     m_pVScrollbar.disposeAndClear();
@@ -1706,10 +1698,10 @@ bool SwPagePreview::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> SwPagePreview::CreatePrintOptionsPage( weld::Container* pPage,
-                                                          const SfxItemSet &rOptions )
+VclPtr<SfxTabPage> SwPagePreview::CreatePrintOptionsPage(TabPageParent pParent,
+                                                         const SfxItemSet &rOptions)
 {
-    return ::CreatePrintOptionsPage(pPage, rOptions, !m_bNormalPrint);
+    return ::CreatePrintOptionsPage(pParent, rOptions, !m_bNormalPrint);
 }
 
 void SwPagePreviewWin::SetViewShell( SwViewShell* pShell )
@@ -1891,10 +1883,7 @@ void SwPagePreview::SetZoom(SvxZoomType eType, sal_uInt16 nFactor)
     }
 }
 
-/** adjust position of vertical scrollbar
-
-    @author OD
-*/
+/** adjust position of vertical scrollbar */
 void SwPagePreview::SetVScrollbarThumbPos( const sal_uInt16 _nNewThumbPos )
 {
     if ( m_pVScrollbar )

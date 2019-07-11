@@ -50,6 +50,8 @@
 #include <vcl/svapp.hxx>
 #include <unotools/streamhelper.hxx>
 #include <comphelper/guarding.hxx>
+#include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <svl/urihelper.hxx>
 
@@ -399,8 +401,8 @@ bool OImageControlModel::impl_updateStreamForURL_lck( const OUString& _rURL, Val
     }
     else
     {
-        pImageStream.reset( ::utl::UcbStreamHelper::CreateStream( _rURL, StreamMode::READ ) );
-        bool bSetNull = ( pImageStream.get() == nullptr ) || ( ERRCODE_NONE != pImageStream->GetErrorCode() );
+        pImageStream = ::utl::UcbStreamHelper::CreateStream( _rURL, StreamMode::READ );
+        bool bSetNull = (pImageStream == nullptr) || (ERRCODE_NONE != pImageStream->GetErrorCode());
 
         if ( !bSetNull )
         {
@@ -428,13 +430,13 @@ bool OImageControlModel::impl_updateStreamForURL_lck( const OUString& _rURL, Val
 }
 
 
-bool OImageControlModel::impl_handleNewImageURL_lck( ValueChangeInstigator _eInstigator )
+void OImageControlModel::impl_handleNewImageURL_lck( ValueChangeInstigator _eInstigator )
 {
     switch ( lcl_getImageStoreType( getFieldType() ) )
     {
     case ImageStoreBinary:
         if ( impl_updateStreamForURL_lck( m_sImageURL, _eInstigator ) )
-            return true;
+            return;
         break;
 
     case ImageStoreLink:
@@ -446,7 +448,7 @@ bool OImageControlModel::impl_handleNewImageURL_lck( ValueChangeInstigator _eIns
         if ( m_xColumnUpdate.is() )
         {
             m_xColumnUpdate->updateString( sCommitURL );
-            return true;
+            return;
         }
     }
     break;
@@ -462,8 +464,6 @@ bool OImageControlModel::impl_handleNewImageURL_lck( ValueChangeInstigator _eIns
         m_xColumnUpdate->updateNull();
     else
         setControlValue( Any(), _eInstigator );
-
-    return true;
 }
 
 
@@ -479,7 +479,7 @@ bool OImageControlModel::commitControlValueToDbColumn( bool _bPostReset )
     else
     {
         ::osl::MutexGuard aGuard(m_aMutex);
-        return impl_handleNewImageURL_lck( eDbColumnBinding );
+        impl_handleNewImageURL_lck( eDbColumnBinding );
     }
 
     return true;

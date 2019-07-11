@@ -64,27 +64,23 @@
 #include <IDocumentLayoutAccess.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
+#include <comphelper/sequence.hxx>
 #include <sfx2/lokhelper.hxx>
-#include <comphelper/string.hxx>
 #include <editeng/editview.hxx>
+#include <sal/log.hxx>
 #include <PostItMgr.hxx>
 #include <DocumentSettingManager.hxx>
+#include <vcl/uitest/logger.hxx>
+#include <vcl/uitest/eventdescription.hxx>
 
 using namespace com::sun::star;
 using namespace util;
-
-
-/**
- * Delete all overlapping Cursors from a Cursor ring.
- * @param pointer to SwCursor (ring)
- */
-void CheckRange( SwCursor* );
 
 /**
  * Check if pCurrentCursor points into already existing ranges and delete those.
  * @param Pointer to SwCursor object
  */
-void CheckRange( SwCursor* pCurrentCursor )
+static void CheckRange( SwCursor* pCurrentCursor )
 {
     const SwPosition *pStt = pCurrentCursor->Start(),
         *pEnd = pCurrentCursor->GetPoint() == pStt ? pCurrentCursor->GetMark() : pCurrentCursor->GetPoint();
@@ -294,7 +290,7 @@ void SwCursorShell::EndAction( const bool bIdleEnd, const bool DoSetPosX )
 void SwCursorShell::SttCursorMove()
 {
 #ifdef DBG_UTIL
-    OSL_ENSURE( m_nCursorMove < USHRT_MAX, "To many nested CursorMoves." );
+    OSL_ENSURE( m_nCursorMove < USHRT_MAX, "Too many nested CursorMoves." );
 #endif
     ++m_nCursorMove;
     StartAction();
@@ -338,10 +334,15 @@ bool SwCursorShell::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 nMode,
     }
     // 2. CASE: Cursor is at beginning of numbered paragraph. A move
     // to the left will simply set the bInFrontOfLabel flag:
-    else if ( bLeft && 0 == pShellCursor->GetPoint()->nContent.GetIndex() &&
-             !pShellCursor->IsInFrontOfLabel() && !pShellCursor->HasMark() &&
-             nullptr != ( pTextNd = pShellCursor->GetNode().GetTextNode() ) &&
-             pTextNd->HasVisibleNumberingOrBullet() )
+    else if (bLeft
+        && pShellCursor->GetPoint()->nNode.GetNode().IsTextNode()
+        && static_cast<SwTextFrame const*>(
+            pShellCursor->GetPoint()->nNode.GetNode().GetTextNode()->getLayoutFrame(GetLayout())
+            )->MapModelToViewPos(*pShellCursor->GetPoint()) == TextFrameIndex(0)
+        && !pShellCursor->IsInFrontOfLabel()
+        && !pShellCursor->HasMark()
+        && nullptr != (pTextNd = sw::GetParaPropsNode(*GetLayout(), pShellCursor->GetPoint()->nNode))
+        && pTextNd->HasVisibleNumberingOrBullet())
     {
         SetInFrontOfLabel( true );
         bRet = true;
@@ -355,7 +356,8 @@ bool SwCursorShell::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 nMode,
         // reflected in the return value <bRet>.
         const bool bResetOfInFrontOfLabel = SetInFrontOfLabel( false );
         bRet = pShellCursor->LeftRight( bLeft, nCnt, nMode, bVisualAllowed,
-                                      bSkipHidden, !IsOverwriteCursor() );
+                                      bSkipHidden, !IsOverwriteCursor(),
+                                      GetLayout());
         if ( !bRet && bLeft && bResetOfInFrontOfLabel )
         {
             // undo reset of <bInFrontOfLabel> flag
@@ -392,11 +394,12 @@ void SwCursorShell::MarkListLevel( const OUString& sListId,
 
 void SwCursorShell::UpdateMarkedListLevel()
 {
-    SwTextNode * pTextNd = GetCursor_()->GetNode().GetTextNode();
+    SwTextNode const*const pTextNd = sw::GetParaPropsNode(*GetLayout(),
+            GetCursor_()->GetPoint()->nNode);
 
     if ( pTextNd )
     {
-        if ( !pTextNd->IsNumbered() )
+        if (!pTextNd->IsNumbered(GetLayout()))
         {
             m_pCurrentCursor->SetInFrontOfLabel_( false );
             MarkListLevel( OUString(), 0 );
@@ -527,14 +530,14 @@ bool SwCursorShell::LRMargin( bool bLeft, bool bAPI)
     if( m_pBlockCursor )
         m_pBlockCursor->clearPoints();
 
-    const bool bWasAtLM =
-            ( 0 == GetCursor_()->GetPoint()->nContent.GetIndex() );
+    const bool bWasAtLM = GetCursor_()->IsAtLeftRightMargin(*GetLayout(), true, bAPI);
 
-    bool bRet = pTmpCursor->LeftRightMargin( bLeft, bAPI );
+    bool bRet = pTmpCursor->LeftRightMargin(*GetLayout(), bLeft, bAPI);
 
     if ( bLeft && !bTableMode && bRet && bWasAtLM && !GetCursor_()->HasMark() )
     {
         const SwTextNode * pTextNd = GetCursor_()->GetNode().GetTextNode();
+        assert(sw::GetParaPropsNode(*GetLayout(), GetCursor_()->GetPoint()->nNode) == pTextNd);
         if ( pTextNd && pTextNd->HasVisibleNumberingOrBullet() )
             SetInFrontOfLabel( true );
     }
@@ -553,7 +556,7 @@ bool SwCursorShell::LRMargin( bool bLeft, bool bAPI)
 bool SwCursorShell::IsAtLRMargin( bool bLeft, bool bAPI ) const
 {
     const SwShellCursor* pTmpCursor = getShellCursor( true );
-    return pTmpCursor->IsAtLeftRightMargin( bLeft, bAPI );
+    return pTmpCursor->IsAtLeftRightMargin(*GetLayout(), bLeft, bAPI);
 }
 
 bool SwCursorShell::SttEndDoc( bool bStt )
@@ -627,8 +630,9 @@ bool SwCursorShell::MovePage( SwWhichPage fnWhichPage, SwPosPage fnPosPage )
 
         SwCursorSaveState aSaveState( *m_pCurrentCursor );
         Point& rPt = m_pCurrentCursor->GetPtPos();
+        std::pair<Point, bool> tmp(rPt, false);
         SwContentFrame * pFrame = m_pCurrentCursor->GetContentNode()->
-                            getLayoutFrame( GetLayout(), &rPt, m_pCurrentCursor->GetPoint(), false );
+            getLayoutFrame(GetLayout(), m_pCurrentCursor->GetPoint(), &tmp);
         if( pFrame && ( bRet = GetFrameInPage( pFrame, fnWhichPage,
                                            fnPosPage, m_pCurrentCursor )  ) &&
             !m_pCurrentCursor->IsSelOvr( SwCursorSelOverFlags::Toggle |
@@ -643,9 +647,37 @@ bool SwCursorShell::MovePage( SwWhichPage fnWhichPage, SwPosPage fnPosPage )
 bool SwCursorShell::isInHiddenTextFrame(SwShellCursor* pShellCursor)
 {
     SwContentNode *pCNode = pShellCursor->GetContentNode();
-    SwContentFrame  *pFrame = pCNode ?
-        pCNode->getLayoutFrame( GetLayout(), &pShellCursor->GetPtPos(), pShellCursor->GetPoint(), false ) : nullptr;
+    std::pair<Point, bool> tmp(pShellCursor->GetPtPos(), false);
+    SwContentFrame *const pFrame = pCNode
+        ? pCNode->getLayoutFrame(GetLayout(), pShellCursor->GetPoint(), &tmp)
+        : nullptr;
     return !pFrame || (pFrame->IsTextFrame() && static_cast<SwTextFrame*>(pFrame)->IsHiddenNow());
+}
+
+// sw_redlinehide: this should work for all cases: GoCurrPara, GoNextPara, GoPrevPara
+static bool IsAtStartOrEndOfFrame(SwCursorShell const*const pShell,
+    SwShellCursor const*const pShellCursor, SwMoveFnCollection const& fnPosPara)
+{
+    SwContentNode *const pCNode = pShellCursor->GetContentNode();
+    assert(pCNode); // surely can't have moved otherwise?
+    std::pair<Point, bool> tmp(pShellCursor->GetPtPos(), false);
+    SwContentFrame const*const pFrame = pCNode->getLayoutFrame(
+            pShell->GetLayout(), pShellCursor->GetPoint(), &tmp);
+    if (!pFrame || !pFrame->IsTextFrame())
+    {
+        return false;
+    }
+    SwTextFrame const& rTextFrame(static_cast<SwTextFrame const&>(*pFrame));
+    TextFrameIndex const ix(rTextFrame.MapModelToViewPos(*pShellCursor->GetPoint()));
+    if (&fnParaStart == &fnPosPara)
+    {
+        return ix == TextFrameIndex(0);
+    }
+    else
+    {
+        assert(&fnParaEnd == &fnPosPara);
+        return ix == TextFrameIndex(rTextFrame.GetText().getLength());
+    }
 }
 
 bool SwCursorShell::MovePara(SwWhichPara fnWhichPara, SwMoveFnCollection const & fnPosPara )
@@ -660,7 +692,8 @@ bool SwCursorShell::MovePara(SwWhichPara fnWhichPara, SwMoveFnCollection const &
         //which is what SwCursorShell::UpdateCursorPos will reset
         //the position to if we pass it a position in an
         //invisible hidden paragraph field
-        while (isInHiddenTextFrame(pTmpCursor))
+        while (isInHiddenTextFrame(pTmpCursor)
+                || !IsAtStartOrEndOfFrame(this, pTmpCursor, fnPosPara))
         {
             if (!pTmpCursor->MovePara(fnWhichPara, fnPosPara))
                 break;
@@ -691,7 +724,10 @@ static SwFrame* lcl_IsInHeaderFooter( const SwNodeIndex& rIdx, Point& rPt )
     SwContentNode* pCNd = rIdx.GetNode().GetContentNode();
     if( pCNd )
     {
-        SwContentFrame *pContentFrame = pCNd->getLayoutFrame( pCNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &rPt, nullptr, false );
+        std::pair<Point, bool> tmp(rPt, false);
+        SwContentFrame *pContentFrame = pCNd->getLayoutFrame(
+            pCNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(),
+            nullptr, &tmp);
         pFrame = pContentFrame ? pContentFrame->GetUpper() : nullptr;
         while( pFrame && !pFrame->IsHeaderFrame() && !pFrame->IsFooterFrame() )
             pFrame = pFrame->IsFlyFrame() ? static_cast<SwFlyFrame*>(pFrame)->AnchorFrame()
@@ -721,7 +757,7 @@ int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
                                     bOnlyText ?  MV_SETONLYTEXT : MV_NONE );
     aTmpState.m_bSetInReadOnly = IsReadOnlyAvailable();
 
-    SwTextNode * pTextNd = pCursor->GetNode().GetTextNode();
+    SwTextNode const*const pTextNd = sw::GetParaPropsNode(*GetLayout(), pCursor->GetPoint()->nNode);
 
     if ( pTextNd && !IsTableMode() &&
         // #i37515# No bInFrontOfLabel during selection
@@ -775,10 +811,12 @@ int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
             else if( aPos.nNode.GetNode().IsContentNode() )
             {
                 // in the same frame?
+                std::pair<Point, bool> tmp(m_aCharRect.Pos(), false);
                 SwFrame* pOld = static_cast<SwContentNode&>(aPos.nNode.GetNode()).getLayoutFrame(
-                                GetLayout(), &m_aCharRect.Pos(), nullptr, false );
+                                GetLayout(), nullptr, &tmp);
+                tmp.first = aPt;
                 SwFrame* pNew = static_cast<SwContentNode&>(aPos.nNode.GetNode()).getLayoutFrame(
-                                GetLayout(), &aPt, nullptr, false );
+                                GetLayout(), nullptr, &tmp);
                 if( pNew == pOld )
                     return bRet;
             }
@@ -959,14 +997,12 @@ bool SwCursorShell::TestCurrPam(
 
     // search in all selections for this position
     SwShellCursor* pCmp = m_pCurrentCursor; // keep the pointer on cursor
-    do {
-        if( pCmp && pCmp->HasMark() &&
-            *pCmp->Start() <= aPtPos && *pCmp->End() > aPtPos )
-        {
+    do
+    {
+        if (pCmp->HasMark() && *pCmp->Start() <= aPtPos && *pCmp->End() > aPtPos)
             return true;               // return without update
-        }
-    } while( m_pCurrentCursor !=
-        ( pCmp = dynamic_cast<SwShellCursor*>(pCmp->GetNext()) ) );
+        pCmp = pCmp->GetNext();
+    } while (m_pCurrentCursor != pCmp);
     return false;
 }
 
@@ -1024,11 +1060,62 @@ int SwCursorShell::CompareCursorStackMkCurrPt() const
     return nRet;
 }
 
+bool SwCursorShell::IsSelOnePara() const
+{
+    if (m_pCurrentCursor->IsMultiSelection())
+    {
+        return false;
+    }
+    if (m_pCurrentCursor->GetPoint()->nNode == m_pCurrentCursor->GetMark()->nNode)
+    {
+        return true;
+    }
+    if (GetLayout()->IsHideRedlines())
+    {
+        SwContentFrame const*const pFrame(GetCurrFrame(false));
+        auto const n(m_pCurrentCursor->GetMark()->nNode.GetIndex());
+        return FrameContainsNode(*pFrame, n);
+    }
+    return false;
+}
+
 bool SwCursorShell::IsSttPara() const
-{   return m_pCurrentCursor->GetPoint()->nContent == 0; }
+{
+    if (GetLayout()->IsHideRedlines())
+    {
+        SwTextNode const*const pNode(m_pCurrentCursor->GetPoint()->nNode.GetNode().GetTextNode());
+        if (pNode)
+        {
+            SwTextFrame const*const pFrame(static_cast<SwTextFrame*>(
+                        pNode->getLayoutFrame(GetLayout())));
+            if (pFrame)
+            {
+                return pFrame->MapModelToViewPos(*m_pCurrentCursor->GetPoint())
+                    == TextFrameIndex(0);
+            }
+        }
+    }
+    return m_pCurrentCursor->GetPoint()->nContent == 0;
+}
 
 bool SwCursorShell::IsEndPara() const
-{   return m_pCurrentCursor->GetPoint()->nContent == m_pCurrentCursor->GetContentNode()->Len(); }
+{
+    if (GetLayout()->IsHideRedlines())
+    {
+        SwTextNode const*const pNode(m_pCurrentCursor->GetPoint()->nNode.GetNode().GetTextNode());
+        if (pNode)
+        {
+            SwTextFrame const*const pFrame(static_cast<SwTextFrame*>(
+                        pNode->getLayoutFrame(GetLayout())));
+            if (pFrame)
+            {
+                return pFrame->MapModelToViewPos(*m_pCurrentCursor->GetPoint())
+                    == TextFrameIndex(pFrame->GetText().getLength());
+            }
+        }
+    }
+    return m_pCurrentCursor->GetPoint()->nContent == m_pCurrentCursor->GetContentNode()->Len();
+}
 
 bool SwCursorShell::IsEndOfTable() const
 {
@@ -1070,6 +1157,21 @@ bool SwCursorShell::SetInFrontOfLabel( bool bNew )
     return false;
 }
 
+namespace {
+
+void collectUIInformation(const OUString& aPage)
+{
+    EventDescription aDescription;
+    aDescription.aAction = "GOTO";
+    aDescription.aParameters = {{"PAGE", aPage}};
+    aDescription.aID = "writer_edit";
+    aDescription.aKeyWord = "SwEditWinUIObject";
+    aDescription.aParent = "MainWindow";
+    UITestLogger::getInstance().logEvent(aDescription);
+}
+
+}
+
 bool SwCursorShell::GotoPage( sal_uInt16 nPage )
 {
     SET_CURR_SHELL( this );
@@ -1080,6 +1182,8 @@ bool SwCursorShell::GotoPage( sal_uInt16 nPage )
                                          SwCursorSelOverFlags::ChangePos );
     if( bRet )
         UpdateCursor(SwCursorShell::SCROLLWIN|SwCursorShell::CHKRANGE|SwCursorShell::READONLY);
+
+    collectUIInformation(OUString::number(nPage));
     return bRet;
 }
 
@@ -1107,6 +1211,30 @@ void SwCursorShell::GetPageNum( sal_uInt16 &rnPhyNum, sal_uInt16 &rnVirtNum,
     // pPg has to exist with a default of 1 for the special case "Writerstart"
     rnPhyNum  = pPg? pPg->GetPhyPageNum() : 1;
     rnVirtNum = pPg? pPg->GetVirtPageNum() : 1;
+}
+
+sal_uInt16 SwCursorShell::GetPageNumSeqNonEmpty()
+{
+    SET_CURR_SHELL(this);
+    // page number: first visible page or the one at the cursor
+    const SwContentFrame* pCFrame = GetCurrFrame(/*bCalcFrame*/true);
+    const SwPageFrame* pPg = nullptr;
+
+    if (!pCFrame || nullptr == (pPg = pCFrame->FindPageFrame()))
+    {
+        pPg = Imp()->GetFirstVisPage(GetOut());
+        while (pPg && pPg->IsEmptyPage())
+            pPg = static_cast<const SwPageFrame*>(pPg->GetNext());
+    }
+
+    sal_uInt16 nPageNo = 0;
+    while (pPg)
+    {
+        if (!pPg->IsEmptyPage())
+            ++nPageNo;
+        pPg = static_cast<const SwPageFrame*>(pPg->GetPrev());
+    }
+    return nPageNo;
 }
 
 sal_uInt16 SwCursorShell::GetNextPrevPageNum( bool bNext )
@@ -1220,7 +1348,7 @@ bool SwCursorShell::GoNextCursor()
 
     SET_CURR_SHELL( this );
     SwCallLink aLk( *this ); // watch Cursor-Moves; call Link if needed
-    m_pCurrentCursor = dynamic_cast<SwShellCursor*>(m_pCurrentCursor->GetNext());
+    m_pCurrentCursor = m_pCurrentCursor->GetNext();
 
     // #i24086#: show also all others
     if( !ActionPend() )
@@ -1239,7 +1367,7 @@ bool SwCursorShell::GoPrevCursor()
 
     SET_CURR_SHELL( this );
     SwCallLink aLk( *this ); // watch Cursor-Moves; call Link if needed
-    m_pCurrentCursor = dynamic_cast<SwShellCursor*>(m_pCurrentCursor->GetPrev());
+    m_pCurrentCursor = m_pCurrentCursor->GetPrev();
 
     // #i24086#: show also all others
     if( !ActionPend() )
@@ -1457,8 +1585,9 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
             lcl_CheckHiddenPara( *pITmpCursor->GetMark() );
         }
 
+        std::pair<Point, bool> const tmp(aTmpPt, false);
         SwContentFrame *pTableFrame = pPos->nNode.GetNode().GetContentNode()->
-                              getLayoutFrame( GetLayout(), &aTmpPt, pPos, false );
+                              getLayoutFrame( GetLayout(), pPos, &tmp);
 
         OSL_ENSURE( pTableFrame, "Table Cursor not in Content ??" );
 
@@ -1474,8 +1603,9 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
             // Second check if mark is in repeated headline:
             if ( !bInRepeatedHeadline )
             {
+                std::pair<Point, bool> const tmp1(aTmpMk, false);
                 SwContentFrame* pMarkTableFrame = pITmpCursor->GetContentNode( false )->
-                    getLayoutFrame( GetLayout(), &aTmpMk, pITmpCursor->GetMark(), false );
+                    getLayoutFrame(GetLayout(), pITmpCursor->GetMark(), &tmp1);
                 OSL_ENSURE( pMarkTableFrame, "Table Cursor not in Content ??" );
 
                 if ( pMarkTableFrame )
@@ -1688,8 +1818,9 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
         bool bAgainst;
         do {
             bAgainst = false;
-            pFrame = pShellCursor->GetContentNode()->getLayoutFrame( GetLayout(),
-                        &pShellCursor->GetPtPos(), pShellCursor->GetPoint(), false );
+            std::pair<Point, bool> const tmp1(pShellCursor->GetPtPos(), false);
+            pFrame = pShellCursor->GetContentNode()->getLayoutFrame(GetLayout(),
+                        pShellCursor->GetPoint(), &tmp1);
             // if the Frame doesn't exist anymore, the complete Layout has to be
             // created, because there used to be a Frame here!
             if ( !pFrame )
@@ -1697,8 +1828,9 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
                 do
                 {
                     CalcLayout();
-                    pFrame = pShellCursor->GetContentNode()->getLayoutFrame( GetLayout(),
-                                &pShellCursor->GetPtPos(), pShellCursor->GetPoint(), false );
+                    std::pair<Point, bool> const tmp(pShellCursor->GetPtPos(), false);
+                    pFrame = pShellCursor->GetContentNode()->getLayoutFrame(
+                                GetLayout(), pShellCursor->GetPoint(), &tmp);
                 }  while( !pFrame );
             }
             else if ( Imp()->IsIdleAction() )
@@ -1840,11 +1972,11 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
             m_pCurrentCursor->SwSelPaintRects::Show();
             if( m_pBlockCursor )
             {
-                SwShellCursor* pNxt = dynamic_cast<SwShellCursor*>(m_pCurrentCursor->GetNext());
+                SwShellCursor* pNxt = m_pCurrentCursor->GetNext();
                 while( pNxt && pNxt != m_pCurrentCursor )
                 {
                     pNxt->SwSelPaintRects::Show();
-                    pNxt = dynamic_cast<SwShellCursor*>(pNxt->GetNext());
+                    pNxt = pNxt->GetNext();
                 }
             }
         }
@@ -1882,7 +2014,9 @@ void SwCursorShell::RefreshBlockCursor()
     assert(m_pBlockCursor);
     SwShellCursor &rBlock = m_pBlockCursor->getShellCursor();
     Point aPt = rBlock.GetPtPos();
-    SwContentFrame* pFrame = rBlock.GetContentNode()->getLayoutFrame( GetLayout(), &aPt, rBlock.GetPoint(), false );
+    std::pair<Point, bool> const tmp(aPt, false);
+    SwContentFrame* pFrame = rBlock.GetContentNode()->getLayoutFrame(
+            GetLayout(), rBlock.GetPoint(), &tmp);
     Point aMk;
     if( m_pBlockCursor->getEndPoint() && m_pBlockCursor->getStartPoint() )
     {
@@ -2024,7 +2158,7 @@ bool SwCursorShell::Pop(PopMode const eDelete)
     // the successor becomes the current one
     if (m_pStackCursor->GetNext() != m_pStackCursor)
     {
-        pTmp = dynamic_cast<SwShellCursor*>(m_pStackCursor->GetNext());
+        pTmp = m_pStackCursor->GetNext();
     }
 
     if (PopMode::DeleteStack == eDelete)
@@ -2096,7 +2230,7 @@ void SwCursorShell::Combine()
     SwShellCursor * pTmp = nullptr;
     if (m_pStackCursor->GetNext() != m_pStackCursor)
     {
-        pTmp = dynamic_cast<SwShellCursor*>(m_pStackCursor->GetNext());
+        pTmp = m_pStackCursor->GetNext();
     }
     delete m_pCurrentCursor;
     m_pCurrentCursor = m_pStackCursor;
@@ -2206,13 +2340,17 @@ SwContentFrame *SwCursorShell::GetCurrFrame( const bool bCalcFrame ) const
             sal_uInt16* pST = const_cast<sal_uInt16*>(&mnStartAction);
             ++(*pST);
             const Size aOldSz( GetDocSize() );
-            pRet = pNd->getLayoutFrame( GetLayout(), &m_pCurrentCursor->GetPtPos(), m_pCurrentCursor->GetPoint() );
+            std::pair<Point, bool> const tmp(m_pCurrentCursor->GetPtPos(), true);
+            pRet = pNd->getLayoutFrame(GetLayout(), m_pCurrentCursor->GetPoint(), &tmp);
             --(*pST);
             if( aOldSz != GetDocSize() )
                 const_cast<SwCursorShell*>(this)->SizeChgNotify();
         }
         else
-            pRet = pNd->getLayoutFrame( GetLayout(), &m_pCurrentCursor->GetPtPos(), m_pCurrentCursor->GetPoint(), false);
+        {
+            std::pair<Point, bool> const tmp(m_pCurrentCursor->GetPtPos(), false);
+            pRet = pNd->getLayoutFrame(GetLayout(), m_pCurrentCursor->GetPoint(), &tmp);
+        }
     }
     return pRet;
 }
@@ -2274,31 +2412,50 @@ void SwCursorShell::CallChgLnk()
 OUString SwCursorShell::GetSelText() const
 {
     OUString aText;
-    if( m_pCurrentCursor->GetPoint()->nNode.GetIndex() ==
+    if (GetLayout()->IsHideRedlines())
+    {
+        SwContentFrame const*const pFrame(GetCurrFrame(false));
+        if (FrameContainsNode(*pFrame, m_pCurrentCursor->GetMark()->nNode.GetIndex()))
+        {
+            OUStringBuffer buf;
+            SwPosition const*const pStart(m_pCurrentCursor->Start());
+            SwPosition const*const pEnd(m_pCurrentCursor->End());
+            for (sal_uLong i = pStart->nNode.GetIndex(); i <= pEnd->nNode.GetIndex(); ++i)
+            {
+                SwNode const& rNode(*pStart->nNode.GetNodes()[i]);
+                assert(!rNode.IsEndNode());
+                if (rNode.IsStartNode())
+                {
+                    i = rNode.EndOfSectionIndex();
+                }
+                else if (rNode.IsTextNode())
+                {
+                    sal_Int32 const nStart(i == pStart->nNode.GetIndex()
+                            ? pStart->nContent.GetIndex()
+                            : 0);
+                    sal_Int32 const nEnd(i == pEnd->nNode.GetIndex()
+                            ? pEnd->nContent.GetIndex()
+                            : rNode.GetTextNode()->Len());
+                    buf.append(rNode.GetTextNode()->GetExpandText(
+                                GetLayout(),
+                                nStart, nEnd - nStart, false, false, false,
+                                ExpandMode::HideDeletions));
+
+                }
+            }
+            aText = buf.makeStringAndClear();
+        }
+    }
+    else if( m_pCurrentCursor->GetPoint()->nNode.GetIndex() ==
         m_pCurrentCursor->GetMark()->nNode.GetIndex() )
     {
         SwTextNode* pTextNd = m_pCurrentCursor->GetNode().GetTextNode();
         if( pTextNd )
         {
             const sal_Int32 nStt = m_pCurrentCursor->Start()->nContent.GetIndex();
-            aText = pTextNd->GetExpandText( nStt,
+            aText = pTextNd->GetExpandText(GetLayout(), nStt,
                     m_pCurrentCursor->End()->nContent.GetIndex() - nStt );
         }
-    }
-    return aText;
-}
-
-/// get text only from current cursor position (until end of node)
-OUString SwCursorShell::GetText() const
-{
-    OUString aText;
-    if( m_pCurrentCursor->GetPoint()->nNode.GetIndex() ==
-        m_pCurrentCursor->GetMark()->nNode.GetIndex() )
-    {
-        SwTextNode* pTextNd = m_pCurrentCursor->GetNode().GetTextNode();
-        if( pTextNd )
-            aText = pTextNd->GetText().copy(
-                    m_pCurrentCursor->GetPoint()->nContent.GetIndex() );
     }
     return aText;
 }
@@ -2393,7 +2550,8 @@ bool SwCursorShell::SetVisibleCursor( const Point &rPt )
                       pSectNd->GetSection().IsProtectFlag())) )
         return false;
 
-    SwContentFrame *pFrame = pTextNd->getLayoutFrame( GetLayout(), &aPt, &aPos );
+    std::pair<Point, bool> const tmp(aPt, true);
+    SwContentFrame *pFrame = pTextNd->getLayoutFrame(GetLayout(), &aPos, &tmp);
     if ( Imp()->IsIdleAction() )
         pFrame->PrepareCursor();
     SwRect aTmp( m_aCharRect );
@@ -2837,7 +2995,7 @@ bool SwCursorShell::FindValidContentNode( bool bOnlyText )
     SwContentNode* pCNd = rNdIdx.GetNode().GetContentNode();
     const SwContentFrame * pFrame;
 
-    if( pCNd && nullptr != (pFrame = pCNd->getLayoutFrame( GetLayout(), nullptr, m_pCurrentCursor->GetPoint(), false)) &&
+    if (pCNd && nullptr != (pFrame = pCNd->getLayoutFrame(GetLayout(), m_pCurrentCursor->GetPoint())) &&
         !IsReadOnlyAvailable() && pFrame->IsProtected() &&
         nNdIdx < rNds.GetEndOfExtras().GetIndex() )
     {
@@ -2955,7 +3113,8 @@ bool SwCursorShell::FindValidContentNode( bool bOnlyText )
                 if( bOk && rNdIdx.GetIndex() < rNds.GetEndOfExtras().GetIndex() )
                 {
                     // also check for Fly - might be protected as well
-                    if( nullptr == (pFrame = pCNd->getLayoutFrame( GetLayout(), nullptr, nullptr, false)) ||
+                    pFrame = pCNd->getLayoutFrame(GetLayout(), nullptr, nullptr);
+                    if (nullptr == pFrame ||
                         ( !IsReadOnlyAvailable() && pFrame->IsProtected() ) ||
                         ( bOnlyText && pCNd->IsNoTextNode() ) )
                     {
@@ -2984,7 +3143,7 @@ bool SwCursorShell::FindValidContentNode( bool bOnlyText )
     {
         pCNd = rNdIdx.GetNode().GetContentNode();
         // if cursor in hidden frame, always move it
-        if( !pCNd || !pCNd->getLayoutFrame( GetLayout(), nullptr, nullptr, false) )
+        if (!pCNd || !pCNd->getLayoutFrame(GetLayout(), nullptr, nullptr))
         {
             SwCursorMoveState aTmpState( MV_NONE );
             aTmpState.m_bSetInReadOnly = IsReadOnlyAvailable();
@@ -3156,7 +3315,7 @@ bool SwCursorShell::SelectHiddenRange()
     return bRet;
 }
 
-sal_uLong SwCursorShell::Find( const i18nutil::SearchOptions2& rSearchOpt,
+sal_uLong SwCursorShell::Find_Text( const i18nutil::SearchOptions2& rSearchOpt,
                              bool bSearchInNotes,
                              SwDocPositions eStart, SwDocPositions eEnd,
                              bool& bCancel,
@@ -3168,14 +3327,14 @@ sal_uLong SwCursorShell::Find( const i18nutil::SearchOptions2& rSearchOpt,
     delete m_pTableCursor;
     m_pTableCursor = nullptr;
     SwCallLink aLk( *this ); // watch Cursor-Moves; call Link if needed
-    sal_uLong nRet = m_pCurrentCursor->Find( rSearchOpt, bSearchInNotes, eStart, eEnd,
-                                     bCancel, eRng, bReplace );
+    sal_uLong nRet = m_pCurrentCursor->Find_Text(rSearchOpt, bSearchInNotes, eStart, eEnd,
+                                     bCancel, eRng, bReplace, GetLayout());
     if( nRet || bCancel )
         UpdateCursor();
     return nRet;
 }
 
-sal_uLong SwCursorShell::Find( const SwTextFormatColl& rFormatColl,
+sal_uLong SwCursorShell::FindFormat( const SwTextFormatColl& rFormatColl,
                              SwDocPositions eStart, SwDocPositions eEnd,
                              bool& bCancel,
                              FindRanges eRng,
@@ -3186,14 +3345,14 @@ sal_uLong SwCursorShell::Find( const SwTextFormatColl& rFormatColl,
     delete m_pTableCursor;
     m_pTableCursor = nullptr;
     SwCallLink aLk( *this ); // watch Cursor-Moves; call Link if needed
-    sal_uLong nRet = m_pCurrentCursor->Find( rFormatColl, eStart, eEnd, bCancel, eRng,
+    sal_uLong nRet = m_pCurrentCursor->FindFormat(rFormatColl, eStart, eEnd, bCancel, eRng,
                                      pReplFormat );
     if( nRet )
         UpdateCursor();
     return nRet;
 }
 
-sal_uLong SwCursorShell::Find( const SfxItemSet& rSet,
+sal_uLong SwCursorShell::FindAttrs( const SfxItemSet& rSet,
                              bool bNoCollections,
                              SwDocPositions eStart, SwDocPositions eEnd,
                              bool& bCancel,
@@ -3206,8 +3365,8 @@ sal_uLong SwCursorShell::Find( const SfxItemSet& rSet,
     delete m_pTableCursor;
     m_pTableCursor = nullptr;
     SwCallLink aLk( *this ); // watch Cursor-Moves; call Link if needed
-    sal_uLong nRet = m_pCurrentCursor->Find( rSet, bNoCollections, eStart, eEnd,
-                                     bCancel, eRng, pSearchOpt, rReplSet );
+    sal_uLong nRet = m_pCurrentCursor->FindAttrs(rSet, bNoCollections, eStart, eEnd,
+                         bCancel, eRng, pSearchOpt, rReplSet, GetLayout());
     if( nRet )
         UpdateCursor();
     return nRet;
@@ -3388,12 +3547,7 @@ static void lcl_FillRecognizerData( std::vector< OUString >& rSmartTagTypes,
 
     if ( !rSmartTagTypes.empty() )
     {
-        rStringKeyMaps.realloc( rSmartTagTypes.size() );
-
-        std::vector< uno::Reference< container::XStringKeyMap > >::const_iterator aMapsIter = aStringKeyMaps.begin();
-        sal_uInt16 i = 0;
-        for ( aMapsIter = aStringKeyMaps.begin(); aMapsIter != aStringKeyMaps.end(); ++aMapsIter )
-            rStringKeyMaps[i++] = *aMapsIter;
+        rStringKeyMaps = comphelper::containerToSequence(aStringKeyMaps);
     }
 }
 
@@ -3514,7 +3668,9 @@ void SwCursorShell::GetSmartTagRect( const Point& rPt, SwRect& rSelectRect )
             SwCursorMoveState aState;
             aState.m_bRealWidth = true;
             SwContentNode* pContentNode = pCursor->GetContentNode();
-            SwContentFrame *pContentFrame = pContentNode->getLayoutFrame( GetLayout(), &rPt, pCursor->GetPoint(), false);
+            std::pair<Point, bool> const tmp(rPt, false);
+            SwContentFrame *pContentFrame = pContentNode->getLayoutFrame(
+                    GetLayout(), pCursor->GetPoint(), &tmp);
 
             pContentFrame->GetCharRect( aStartRect, *pCursor->GetPoint(), &aState );
             rContent = nWordEnd - 1;

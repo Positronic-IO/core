@@ -19,6 +19,7 @@
 
 #include <config_features.h>
 
+#include <osl/diagnose.h>
 #include <osx/saldata.hxx>
 #include <osx/salnsmenu.h>
 #include <osx/salinst.h>
@@ -54,6 +55,7 @@ SalData::SalData()
     mnDPIX( 0 ),
     mnDPIY( 0 )
 {
+    SetSalData(this);
     maCursors.fill( INVALID_CURSOR_PTR );
     if( s_aAutoReleaseKey == nullptr )
         s_aAutoReleaseKey = osl_createThreadKey( releasePool );
@@ -85,6 +87,13 @@ SalData::~SalData()
     if ( mpAppleRemoteMainController )
         [mpAppleRemoteMainController release];
 #endif
+
+    if( mpStatusItem )
+    {
+        [mpStatusItem release];
+        mpStatusItem = nil;
+    }
+    SetSalData( nullptr );
 }
 
 void SalData::ensureThreadAutoreleasePool()
@@ -247,7 +256,11 @@ NSStatusItem* SalData::getStatusItem()
             pData->mpStatusItem = [pStatBar statusItemWithLength: NSVariableStatusItemLength];
             [pData->mpStatusItem retain];
             OOStatusItemView* pView = [[OOStatusItemView alloc] init];
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+                // "'setView:' is deprecated: first deprecated in macOS 10.14 - Use the standard
+                // button property instead"
             [pData->mpStatusItem setView: pView ];
+SAL_WNODEPRECATED_DECLARATIONS_POP
             [pView display];
         }
     }

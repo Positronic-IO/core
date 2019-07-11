@@ -38,6 +38,7 @@
 #include <svx/xmlsecctrl.hxx>
 #include <tools/urlobj.hxx>
 #include <bitmaps.hlst>
+#include <sal/log.hxx>
 
 SFX_IMPL_STATUSBAR_CONTROL( XmlSecStatusBarControl, SfxUInt16Item );
 
@@ -81,8 +82,7 @@ void XmlSecStatusBarControl::StateChanged( sal_uInt16, SfxItemState eState, cons
         mpImpl->mnState = SignatureState::UNKNOWN;
     }
 
-    if( GetStatusBar().AreItemsVisible() )              // necessary ?
-        GetStatusBar().SetItemData( GetId(), nullptr );
+    GetStatusBar().SetItemData( GetId(), nullptr ); // necessary ?
 
     GetStatusBar().SetItemText( GetId(), "" );    // necessary ?
 

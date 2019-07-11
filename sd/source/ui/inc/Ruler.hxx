@@ -26,7 +26,6 @@ namespace sd {
 
 class DrawViewShell;
 class RulerCtrlItem;
-class View;
 class Window;
 
 class Ruler final
@@ -51,7 +50,7 @@ public:
 
 private:
     DrawViewShell* pDrViewShell;
-    RulerCtrlItem* pCtrlItem;
+    std::unique_ptr<RulerCtrlItem> pCtrlItem;
     bool bHorz;
 
     virtual void    MouseButtonDown(const MouseEvent& rMEvt) override;

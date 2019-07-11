@@ -28,6 +28,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/wall.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -41,7 +42,7 @@
 #include <TableWindowAccess.hxx>
 #include <browserids.hxx>
 #include <connectivity/dbtools.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 using namespace dbaui;
 using namespace ::utl;
@@ -179,7 +180,7 @@ void OTableWindow::SetPosSizePixel( const Point& rNewPos, const Size& rNewSize )
     SetSizePixel( rNewSize );
 }
 
-bool OTableWindow::FillListBox()
+void OTableWindow::FillListBox()
 {
     m_xListBox->Clear();
     if ( !m_pContainerListener.is() )
@@ -236,8 +237,6 @@ bool OTableWindow::FillListBox()
     {
         OSL_FAIL("Exception occurred!");
     }
-
-    return true;
 }
 
 void* OTableWindow::createUserData(const Reference< XPropertySet>& /*_xColumn*/,bool /*_bPrimaryKey*/)
@@ -303,13 +302,12 @@ bool OTableWindow::Init()
 
     // add the fields to the ListBox
     clearListBox();
-    bool bSuccess = FillListBox();
-    if ( bSuccess )
-        m_xListBox->SelectAll( false );
+    FillListBox();
+    m_xListBox->SelectAll( false );
 
     impl_updateImage();
 
-    return bSuccess;
+    return true;
 }
 
 void OTableWindow::DataChanged(const DataChangedEvent& rDCEvt)

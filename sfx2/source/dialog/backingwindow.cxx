@@ -20,6 +20,7 @@
 #include "backingwindow.hxx"
 #include <sfx2/inputdlg.hxx>
 
+#include <sal/log.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/virdev.hxx>
@@ -419,15 +420,18 @@ bool BackingWindow::PreNotify(NotifyEvent& rNEvt)
             }
             else // F6
             {
-                if(mpAllRecentThumbnails->IsVisible())
+                if( mpAllButtonsBox->HasChildPathFocus() )
                 {
-                    mpAllRecentThumbnails->GrabFocus();
-                    return true;
-                }
-                else if(mpLocalView->IsVisible())
-                {
-                    mpLocalView->GrabFocus();
-                    return true;
+                    if(mpAllRecentThumbnails->IsVisible())
+                    {
+                        mpAllRecentThumbnails->GrabFocus();
+                        return true;
+                    }
+                    else if(mpLocalView->IsVisible())
+                    {
+                        mpLocalView->GrabFocus();
+                        return true;
+                    }
                 }
             }
         }
@@ -712,8 +716,8 @@ IMPL_LINK(BackingWindow, EditTemplateHdl, ThumbnailViewItem*, pItem, void)
 struct ImplDelayedDispatch
 {
     Reference< XDispatch >      xDispatch;
-    css::util::URL   aDispatchURL;
-    Sequence< PropertyValue >   aArgs;
+    css::util::URL const   aDispatchURL;
+    Sequence< PropertyValue > const   aArgs;
 
     ImplDelayedDispatch( const Reference< XDispatch >& i_xDispatch,
                          const css::util::URL& i_rURL,

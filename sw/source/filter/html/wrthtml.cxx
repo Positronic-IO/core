@@ -90,14 +90,10 @@ static sal_Char sIndentTabs[MAX_INDENT_LEVEL+2] =
     "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 
 SwHTMLWriter::SwHTMLWriter( const OUString& rBaseURL )
-    : m_pHTMLPosFlyFrames(nullptr)
-    , m_pNumRuleInfo(new SwHTMLNumRuleInfo)
-    , m_pNextNumRuleInfo(nullptr)
+    : m_pNumRuleInfo(new SwHTMLNumRuleInfo)
     , m_nHTMLMode(0)
-    , m_eCSS1Unit(FUNIT_NONE)
-    , m_pFootEndNotes(nullptr)
+    , m_eCSS1Unit(FieldUnit::NONE)
     , mxFormComps()
-    , m_pDfltColor(nullptr)
     , m_pStartNdIdx(nullptr)
     , m_pCurrPageDesc(nullptr)
     , m_pFormatFootnote(nullptr)
@@ -169,6 +165,11 @@ SwHTMLWriter::SwHTMLWriter( const OUString& rBaseURL )
 
 SwHTMLWriter::~SwHTMLWriter()
 {
+}
+
+std::unique_ptr<SwHTMLNumRuleInfo> SwHTMLWriter::ReleaseNextNumInfo()
+{
+    return std::move(m_pNextNumRuleInfo);
 }
 
 void SwHTMLWriter::SetupFilterOptions(SfxMedium& rMedium)
@@ -319,7 +320,7 @@ ErrCode SwHTMLWriter::WriteStream()
         ::StartProgress( STR_STATSTR_W4WWRITE, 0, m_pDoc->GetNodes().Count(),
                          m_pDoc->GetDocShell());
 
-    m_pDfltColor = nullptr;
+    m_xDfltColor.reset();
     m_pFootEndNotes = nullptr;
     m_pFormatFootnote = nullptr;
     m_bOutTable = m_bOutHeader = m_bOutFooter = m_bOutFlyFrame = false;
@@ -479,37 +480,21 @@ ErrCode SwHTMLWriter::WriteStream()
 
     // delete the table with floating frames
     OSL_ENSURE( !m_pHTMLPosFlyFrames, "Were not all frames output?" );
-    if( m_pHTMLPosFlyFrames )
-    {
-        m_pHTMLPosFlyFrames->DeleteAndDestroyAll();
-        delete m_pHTMLPosFlyFrames;
-        m_pHTMLPosFlyFrames = nullptr;
-    }
+    m_pHTMLPosFlyFrames.reset();
 
-    m_aHTMLControls.DeleteAndDestroyAll();
+    m_aHTMLControls.clear();
 
-    if (!m_CharFormatInfos.empty())
-        m_CharFormatInfos.clear();
-
-    if (!m_TextCollInfos.empty())
-        m_TextCollInfos.clear();
-
-    if(!m_aImgMapNames.empty())
-        m_aImgMapNames.clear();
-
+    m_CharFormatInfos.clear();
+    m_TextCollInfos.clear();
+    m_aImgMapNames.clear();
     m_aImplicitMarks.clear();
-
     m_aOutlineMarks.clear();
-
     m_aOutlineMarkPoss.clear();
-
     m_aNumRuleNames.clear();
-
     m_aScriptParaStyles.clear();
     m_aScriptTextStyles.clear();
 
-    delete m_pDfltColor;
-    m_pDfltColor = nullptr;
+    m_xDfltColor.reset();
 
     delete m_pStartNdIdx;
     m_pStartNdIdx = nullptr;
@@ -923,7 +908,7 @@ static void OutBodyColor( const sal_Char* pTag, const SwFormat *pFormat,
             aColor = COL_BLACK;
         HTMLOutFuncs::Out_Color( rHWrt.Strm(), aColor );
         if( RES_POOLCOLL_STANDARD==pFormat->GetPoolFormatId() )
-            rHWrt.m_pDfltColor = new Color( aColor );
+            rHWrt.m_xDfltColor = aColor;
     }
 }
 
@@ -1092,7 +1077,7 @@ const SwPageDesc *SwHTMLWriter::MakeHeader( sal_uInt16 &rHeaderAttrs )
 
         if( m_bCfgOutStyles )
         {
-            OutCSS1_BodyTagStyleOpt( *this, rItemSet, OUString() );
+            OutCSS1_BodyTagStyleOpt( *this, rItemSet );
         }
         // append events
         if( m_pDoc->GetDocShell() )   // only with DocShell BASIC is possible
@@ -1110,9 +1095,21 @@ const SwPageDesc *SwHTMLWriter::MakeHeader( sal_uInt16 &rHeaderAttrs )
 void SwHTMLWriter::OutAnchor( const OUString& rName )
 {
     OStringBuffer sOut;
-    sOut.append("<" OOO_STRING_SVTOOLS_HTML_anchor " " OOO_STRING_SVTOOLS_HTML_O_name "=\"");
-    Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
-    HTMLOutFuncs::Out_String( Strm(), rName, m_eDestEnc, &m_aNonConvertableCharacters ).WriteCharPtr( "\">" );
+    sOut.append("<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor " ");
+    if (!mbXHTML)
+    {
+        sOut.append(OOO_STRING_SVTOOLS_HTML_O_name "=\"");
+        Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
+        HTMLOutFuncs::Out_String( Strm(), rName, m_eDestEnc, &m_aNonConvertableCharacters ).WriteCharPtr( "\">" );
+    }
+    else
+    {
+        // XHTML wants 'id' instead of 'name', also the value can't contain
+        // spaces.
+        sOut.append(OOO_STRING_SVTOOLS_HTML_O_id "=\"");
+        Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
+        HTMLOutFuncs::Out_String( Strm(), rName.replace(' ', '_'), m_eDestEnc, &m_aNonConvertableCharacters ).WriteCharPtr( "\">" );
+    }
     HTMLOutFuncs::Out_AsciiTag( Strm(), GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor, false );
 }
 
@@ -1325,7 +1322,8 @@ sal_uInt16 SwHTMLWriter::GetLangWhichIdFromScript( sal_uInt16 nScript )
 
 void SwHTMLWriter::OutLanguage( LanguageType nLang )
 {
-    if( LANGUAGE_DONTKNOW != nLang )
+    // ReqIF mode: consumers would ignore language anyway.
+    if (LANGUAGE_DONTKNOW != nLang && !mbReqIF)
     {
         OStringBuffer sOut;
         sOut.append(' ');
@@ -1476,8 +1474,6 @@ HTMLSaveData::HTMLSaveData(SwHTMLWriter& rWriter, sal_uLong nStt,
     : rWrt(rWriter)
     , pOldPam(rWrt.m_pCurrentPam)
     , pOldEnd(rWrt.GetEndPaM())
-    , pOldNumRuleInfo(nullptr)
-    , pOldNextNumRuleInfo(nullptr)
     , nOldDefListLvl(rWrt.m_nDefListLvl)
     , nOldDirection(rWrt.m_nDirection)
     , bOldOutHeader(rWrt.m_bOutHeader)
@@ -1506,9 +1502,8 @@ HTMLSaveData::HTMLSaveData(SwHTMLWriter& rWriter, sal_uLong nStt,
     // Only then also the numbering information of the next paragraph will be valid.
     if( bSaveNum )
     {
-        pOldNumRuleInfo = new SwHTMLNumRuleInfo( rWrt.GetNumInfo() );
-        pOldNextNumRuleInfo = rWrt.GetNextNumInfo();
-        rWrt.SetNextNumInfo( nullptr );
+        pOldNumRuleInfo.reset( new SwHTMLNumRuleInfo( rWrt.GetNumInfo() ) );
+        pOldNextNumRuleInfo = rWrt.ReleaseNextNumInfo();
     }
     else
     {
@@ -1542,8 +1537,8 @@ HTMLSaveData::~HTMLSaveData()
     if( pOldNumRuleInfo )
     {
         rWrt.GetNumInfo().Set( *pOldNumRuleInfo );
-        delete pOldNumRuleInfo;
-        rWrt.SetNextNumInfo( pOldNextNumRuleInfo );
+        pOldNumRuleInfo.reset();
+        rWrt.SetNextNumInfo( std::move(pOldNextNumRuleInfo) );
     }
     else
     {

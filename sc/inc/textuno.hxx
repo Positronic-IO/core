@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_INC_TEXTUNO_HXX
 #define INCLUDED_SC_INC_TEXTUNO_HXX
 
-#include "global.hxx"
 #include "address.hxx"
 #include <editeng/unotext.hxx>
 #include <svl/lstner.hxx>
@@ -32,7 +31,6 @@
 #include <cppuhelper/weakref.hxx>
 
 #include <rtl/ref.hxx>
-#include "scdllapi.h"
 
 #include <memory>
 
@@ -40,7 +38,6 @@ class EditEngine;
 class EditTextObject;
 class SvxEditEngineForwarder;
 class ScDocShell;
-class ScAddress;
 class ScCellObj;
 class ScSimpleEditSource;
 class ScCellEditSource;
@@ -107,9 +104,9 @@ class ScHeaderFooterTextData
 private:
     std::unique_ptr<EditTextObject> mpTextObj;
     css::uno::WeakReference<css::sheet::XHeaderFooterContent> xContentObj;
-    ScHeaderFooterPart          nPart;
-    ScEditEngineDefaulter*      pEditEngine;
-    SvxEditEngineForwarder*     pForwarder;
+    ScHeaderFooterPart const          nPart;
+    std::unique_ptr<ScEditEngineDefaulter>  pEditEngine;
+    std::unique_ptr<SvxEditEngineForwarder> pForwarder;
     bool                        bDataValid;
 
 public:
@@ -123,7 +120,7 @@ public:
     SvxTextForwarder*       GetTextForwarder();
     void UpdateData();
     void UpdateData(EditEngine& rEditEngine);
-    ScEditEngineDefaulter*  GetEditEngine() { GetTextForwarder(); return pEditEngine; }
+    ScEditEngineDefaulter*  GetEditEngine() { GetTextForwarder(); return pEditEngine.get(); }
 
     ScHeaderFooterPart      GetPart() const         { return nPart; }
     const css::uno::Reference<css::sheet::XHeaderFooterContent> GetContentObj() const { return xContentObj; }
@@ -223,6 +220,11 @@ public:
                             ScCellTextCursor(ScCellObj& rText);
         virtual             ~ScCellTextCursor() throw() override;
 
+    ScCellTextCursor(ScCellTextCursor const &) = default;
+    ScCellTextCursor(ScCellTextCursor &&) = default;
+    ScCellTextCursor & operator =(ScCellTextCursor const &) = delete; // due to SvxUnoTextCursor
+    ScCellTextCursor & operator =(ScCellTextCursor &&) = delete; // due to SvxUnoTextCursor
+
     ScCellObj&              GetCellObj() const  { return *mxTextObj; }
 
                             // SvxUnoTextCursor methods reimplemented here:
@@ -249,6 +251,11 @@ public:
                             ScHeaderFooterTextCursor(rtl::Reference<ScHeaderFooterTextObj> const & rText);
         virtual             ~ScHeaderFooterTextCursor() throw() override;
 
+    ScHeaderFooterTextCursor(ScHeaderFooterTextCursor const &) = default;
+    ScHeaderFooterTextCursor(ScHeaderFooterTextCursor &&) = default;
+    ScHeaderFooterTextCursor & operator =(ScHeaderFooterTextCursor const &) = delete; // due to SvxUnoTextCursor
+    ScHeaderFooterTextCursor & operator =(ScHeaderFooterTextCursor &&) = delete; // due to SvxUnoTextCursor
+
                             // SvxUnoTextCursor methods reimplemented here:
     virtual css::uno::Reference< css::text::XText > SAL_CALL
                             getText() override;
@@ -274,6 +281,11 @@ public:
                                             const SvxUnoTextBase& rText );
     virtual                  ~ScDrawTextCursor() throw() override;
 
+    ScDrawTextCursor(ScDrawTextCursor const &) = default;
+    ScDrawTextCursor(ScDrawTextCursor &&) = default;
+    ScDrawTextCursor & operator =(ScDrawTextCursor const &) = delete; // due to SvxUnoTextCursor
+    ScDrawTextCursor & operator =(ScDrawTextCursor &&) = delete; // due to SvxUnoTextCursor
+
                             // SvxUnoTextCursor methods reimplemented here:
     virtual css::uno::Reference< css::text::XText > SAL_CALL
                             getText() override;
@@ -296,16 +308,16 @@ public:
 
 class ScSimpleEditSourceHelper
 {
-    ScEditEngineDefaulter*  pEditEngine;
-    SvxEditEngineForwarder* pForwarder;
-    ScSimpleEditSource*     pOriginalSource;
+    std::unique_ptr<ScEditEngineDefaulter>  pEditEngine;
+    std::unique_ptr<SvxEditEngineForwarder> pForwarder;
+    std::unique_ptr<ScSimpleEditSource>     pOriginalSource;
 
 public:
             ScSimpleEditSourceHelper();
             ~ScSimpleEditSourceHelper();
 
-    ScSimpleEditSource* GetOriginalSource() const   { return pOriginalSource; }
-    ScEditEngineDefaulter* GetEditEngine() const    { return pEditEngine; }
+    ScSimpleEditSource* GetOriginalSource() const   { return pOriginalSource.get(); }
+    ScEditEngineDefaulter* GetEditEngine() const    { return pEditEngine.get(); }
 };
 
 class ScEditEngineTextObj : public ScSimpleEditSourceHelper, public SvxUnoText
@@ -324,10 +336,10 @@ class ScCellTextData : public SfxListener
 {
 protected:
     ScDocShell*             pDocShell;
-    ScAddress               aCellPos;
+    ScAddress const               aCellPos;
     std::unique_ptr<ScFieldEditEngine> pEditEngine;
-    SvxEditEngineForwarder* pForwarder;
-    ScCellEditSource* pOriginalSource;
+    std::unique_ptr<SvxEditEngineForwarder> pForwarder;
+    std::unique_ptr<ScCellEditSource> pOriginalSource;
     bool                    bDataValid;
     bool                    bInUpdate;
     bool                    bDirty;

@@ -11,6 +11,7 @@
 #include <boost/property_tree/json_parser.hpp>
 
 #include <com/sun/star/frame/DispatchResultState.hpp>
+#include <com/sun/star/frame/XDispatchResultListener.hpp>
 #include <swmodeltestbase.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/dispatchcommand.hxx>
@@ -412,10 +413,12 @@ void SwTiledRenderingTest::testSetGraphicSelection()
     SdrPage* pPage = pWrtShell->GetDoc()->getIDocumentDrawModelAccess().GetDrawModel()->GetPage(0);
     SdrObject* pObject = pPage->GetObj(0);
     pWrtShell->SelectObj(Point(), 0, pObject);
+    SdrHdlList handleList(nullptr);
+    pObject->AddToHdlList(handleList);
     // Make sure the rectangle has 8 handles: at each corner and at the center of each edge.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(8), pObject->GetHdlCount());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(8), handleList.GetHdlCount());
     // Take the bottom center one.
-    SdrHdl* pHdl = pObject->GetHdl(6);
+    SdrHdl* pHdl = handleList.GetHdl(6);
     CPPUNIT_ASSERT_EQUAL(int(SdrHdlKind::Lower), static_cast<int>(pHdl->GetKind()));
     tools::Rectangle aShapeBefore = pObject->GetSnapRect();
     // Resize.
@@ -454,7 +457,7 @@ void SwTiledRenderingTest::testResetSelection()
     CPPUNIT_ASSERT(!pWrtShell->IsSelFrameMode());
 }
 
-void lcl_search(bool bBackward)
+static void lcl_search(bool bBackward)
 {
     uno::Sequence<beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
     {
@@ -1136,7 +1139,7 @@ void SwTiledRenderingTest::testUndoInvalidations()
 
     // Insert a character the end of the document.
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
-    pWrtShell->EndDoc();
+    pWrtShell->EndOfSection();
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
     Scheduler::ProcessEventsToIdle();
@@ -1170,7 +1173,7 @@ void SwTiledRenderingTest::testUndoLimiting()
 
     // Insert a character the end of the document in the second view.
     SwWrtShell* pWrtShell2 = pXTextDocument->GetDocShell()->GetWrtShell();
-    pWrtShell2->EndDoc();
+    pWrtShell2->EndOfSection();
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
     Scheduler::ProcessEventsToIdle();
@@ -1396,9 +1399,9 @@ void SwTiledRenderingTest::testTrackChanges()
     ViewCallback aView;
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
     pWrtShell->GetSfxViewShell()->registerLibreOfficeKitViewCallback(&ViewCallback::callback, &aView);
-    pWrtShell->EndDoc();
+    pWrtShell->EndOfSection();
     pWrtShell->Insert("zzz");
-    pWrtShell->SttDoc();
+    pWrtShell->StartOfSection();
 
     // Get the redline just created
     const SwRedlineTable& rTable = pWrtShell->GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
@@ -1608,7 +1611,7 @@ void SwTiledRenderingTest::testRedlineColors()
     uno::Reference<beans::XPropertySet> xPropertySet(mxComponent, uno::UNO_QUERY);
     xPropertySet->setPropertyValue("RecordChanges", uno::makeAny(true));
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
-    pWrtShell->EndDoc();
+    pWrtShell->EndOfSection();
     pWrtShell->Insert("zzz");
 
     // Assert that info about exactly one author is returned.
@@ -1897,10 +1900,10 @@ void SwTiledRenderingTest::testAllTrackedChanges()
     SwWrtShell* pWrtShell2 = pView2->GetWrtShellPtr();
     // Insert text and reject all
     {
-        pWrtShell1->SttDoc();
+        pWrtShell1->StartOfSection();
         pWrtShell1->Insert("hxx");
 
-        pWrtShell2->EndDoc();
+        pWrtShell2->EndOfSection();
         pWrtShell2->Insert("cxx");
     }
 
@@ -1922,10 +1925,10 @@ void SwTiledRenderingTest::testAllTrackedChanges()
 
     // Insert text and accept all
     {
-        pWrtShell1->SttDoc();
+        pWrtShell1->StartOfSection();
         pWrtShell1->Insert("hyy");
 
-        pWrtShell2->EndDoc();
+        pWrtShell2->EndOfSection();
         pWrtShell2->Insert("cyy");
     }
 

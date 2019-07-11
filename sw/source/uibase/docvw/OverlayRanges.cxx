@@ -103,23 +103,23 @@ namespace sw
             return aRetval;
         }
 
-        /*static*/ OverlayRanges* OverlayRanges::CreateOverlayRange(
+        /*static*/ std::unique_ptr<OverlayRanges> OverlayRanges::CreateOverlayRange(
             SwView const & rDocView,
             const Color& rColor,
             const std::vector< basegfx::B2DRange >& rRanges,
             const bool bShowSolidBorder )
         {
-            OverlayRanges* pOverlayRanges = nullptr;
+            std::unique_ptr<OverlayRanges> pOverlayRanges;
 
             SdrView* pView = rDocView.GetDrawView();
             if ( pView != nullptr )
             {
                 SdrPaintWindow* pCandidate = pView->GetPaintWindow(0);
-                rtl::Reference<sdr::overlay::OverlayManager> xTargetOverlay = pCandidate->GetOverlayManager();
+                const rtl::Reference<sdr::overlay::OverlayManager>& xTargetOverlay = pCandidate->GetOverlayManager();
 
                 if ( xTargetOverlay.is() )
                 {
-                    pOverlayRanges = new sw::overlay::OverlayRanges( rColor, rRanges, bShowSolidBorder );
+                    pOverlayRanges.reset(new sw::overlay::OverlayRanges( rColor, rRanges, bShowSolidBorder ));
                     xTargetOverlay->add( *pOverlayRanges );
                 }
             }

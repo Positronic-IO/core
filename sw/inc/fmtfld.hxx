@@ -44,7 +44,7 @@ class SW_DLLPUBLIC SwFormatField
 
     css::uno::WeakReference<css::text::XTextField> m_wXTextField;
 
-    SwField* mpField;
+    std::unique_ptr<SwField> mpField;
     SwTextField* mpTextField; // the TextAttribute
 
 protected:
@@ -70,11 +70,11 @@ public:
 
     const SwField* GetField() const
     {
-        return mpField;
+        return mpField.get();
     }
     SwField* GetField()
     {
-        return mpField;
+        return mpField.get();
     }
 
     /**
@@ -84,7 +84,7 @@ public:
 
        @attention The current field will be destroyed before setting the new field.
      */
-    void SetField( SwField * pField );
+    void SetField( std::unique_ptr<SwField> pField );
 
     const SwTextField* GetTextField() const
     {
@@ -120,7 +120,7 @@ enum class SwFormatFieldHintWhich
 class SW_DLLPUBLIC SwFormatFieldHint : public SfxHint
 {
     const SwFormatField*   m_pField;
-    SwFormatFieldHintWhich m_nWhich;
+    SwFormatFieldHintWhich const m_nWhich;
     const SwView*     m_pView;
 
 public:

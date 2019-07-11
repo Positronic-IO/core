@@ -29,7 +29,6 @@
 #include <sal/log.hxx>
 #include <osl/file.hxx>
 #include <cppuhelper/exc_hlp.hxx>
-#include <comphelper/servicedecl.hxx>
 #include <comphelper/unwrapargs.hxx>
 #include <ucbhelper/content.hxx>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
@@ -37,6 +36,7 @@
 #include <com/sun/star/deployment/ExtensionRemovedException.hpp>
 #include <com/sun/star/deployment/InvalidRemovedParameterException.hpp>
 #include <com/sun/star/deployment/thePackageManagerFactory.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/ucb/InteractiveAugmentedIOException.hpp>
@@ -45,7 +45,7 @@
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <unotools/tempfile.hxx>
-
+#include <boost/optional.hpp>
 
 using namespace ::dp_misc;
 using namespace ::com::sun::star;
@@ -218,7 +218,7 @@ OUString PackageRegistryBackend::createFolder(
 
     const OUString baseDir(sDataFolder);
     ::utl::TempFile aTemp(&baseDir, true);
-    const OUString url = aTemp.GetURL();
+    const OUString& url = aTemp.GetURL();
     return sDataFolder + url.copy(url.lastIndexOf('/'));
 }
 
@@ -539,7 +539,7 @@ void Package::exportTo(
     bool bOk=true;
     try
     {
-        bOk = destFolder.transferContent(
+        destFolder.transferContent(
             sourceContent, ::ucbhelper::InsertOperation::Copy,
             newTitle, nameClashAction);
     }

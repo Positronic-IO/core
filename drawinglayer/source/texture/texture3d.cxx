@@ -18,9 +18,10 @@
  */
 
 #include <drawinglayer/texture/texture3d.hxx>
+#include <o3tl/clamp.hxx>
 #include <vcl/bitmapaccess.hxx>
 #include <drawinglayer/primitive3d/hatchtextureprimitive3d.hxx>
-
+#include <sal/log.hxx>
 
 namespace drawinglayer
 {
@@ -74,8 +75,6 @@ namespace drawinglayer
         {
             // #121194# Todo: use alpha channel, too (for 3d)
             maBitmap = maBitmapEx.GetBitmap();
-            mpReadBitmap = Bitmap::ScopedReadAccess(maBitmap);
-            OSL_ENSURE(mpReadBitmap, "GeoTexSvxBitmapEx: Got no read access to Bitmap (!)");
 
             if(mbIsTransparent)
             {
@@ -92,8 +91,14 @@ namespace drawinglayer
                 mpReadTransparence = Bitmap::ScopedReadAccess(maTransparence);
             }
 
-            mfMulX = static_cast<double>(mpReadBitmap->Width()) / maSize.getX();
-            mfMulY = static_cast<double>(mpReadBitmap->Height()) / maSize.getY();
+            if (!!maBitmap)
+                mpReadBitmap = Bitmap::ScopedReadAccess(maBitmap);
+            SAL_WARN_IF(!mpReadBitmap, "drawinglayer", "GeoTexSvxBitmapEx: Got no read access to Bitmap");
+            if (mpReadBitmap)
+            {
+                mfMulX = static_cast<double>(mpReadBitmap->Width()) / maSize.getX();
+                mfMulY = static_cast<double>(mpReadBitmap->Height()) / maSize.getY();
+            }
 
             if(maSize.getX() <= 1.0)
             {
@@ -284,8 +289,8 @@ namespace drawinglayer
             double fOffsetX,
             double fOffsetY)
         :   GeoTexSvxBitmapEx(rBitmapEx, rRange),
-            mfOffsetX(basegfx::clamp(fOffsetX, 0.0, 1.0)),
-            mfOffsetY(basegfx::clamp(fOffsetY, 0.0, 1.0)),
+            mfOffsetX(o3tl::clamp(fOffsetX, 0.0, 1.0)),
+            mfOffsetY(o3tl::clamp(fOffsetY, 0.0, 1.0)),
             mbUseOffsetX(!basegfx::fTools::equalZero(mfOffsetX)),
             mbUseOffsetY(!mbUseOffsetX && !basegfx::fTools::equalZero(mfOffsetY))
         {
@@ -317,10 +322,7 @@ namespace drawinglayer
         GeoTexSvxMultiHatch::GeoTexSvxMultiHatch(
             const primitive3d::HatchTexturePrimitive3D& rPrimitive,
             double fLogicPixelSize)
-        :   mfLogicPixelSize(fLogicPixelSize),
-            mp0(nullptr),
-            mp1(nullptr),
-            mp2(nullptr)
+        :   mfLogicPixelSize(fLogicPixelSize)
         {
             const attribute::FillHatchAttribute& rHatch(rPrimitive.getHatch());
             const basegfx::B2DRange aOutlineRange(0.0, 0.0, rPrimitive.getTextureSize().getX(), rPrimitive.getTextureSize().getY());

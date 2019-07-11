@@ -28,6 +28,7 @@
 #include <com/sun/star/view/SelectionType.hpp>
 #include <com/sun/star/awt/grid/XSortableGridData.hpp>
 
+#include <sal/log.hxx>
 #include <cppuhelper/weakref.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
@@ -547,7 +548,7 @@ namespace svt { namespace table
                 Color nColor = COL_TRANSPARENT;
                 if ( i_color >>= nColor )
                 {
-                    o_convertedColor.reset( nColor );
+                    o_convertedColor = nColor;
                 }
                 else
                 {
@@ -704,7 +705,7 @@ namespace svt { namespace table
             {
                 aColors[i] = Color(aAPIColors[i]);
             }
-            m_pImpl->m_aRowColors.reset( aColors );
+            m_pImpl->m_aRowColors = aColors;
         }
     }
 

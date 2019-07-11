@@ -15,13 +15,12 @@
 namespace {
 
 class BadStatics
-    : public clang::RecursiveASTVisitor<BadStatics>
-    , public loplugin::Plugin
+    : public loplugin::FilteringPlugin<BadStatics>
 {
 
 public:
     explicit BadStatics(loplugin::InstantiationData const& rData):
-        Plugin(rData) {}
+        FilteringPlugin(rData) {}
 
     void run() override {
         if (compiler.getLangOpts().CPlusPlus) { // no non-trivial dtors in C
@@ -198,8 +197,12 @@ public:
                 || name == "m_aUncommitedRegistrations" // sw/source/uibase/dbui/dbmgr.cxx
                 || (loplugin::DeclCheck(pVarDecl).Var("aAllListeners")
                     .Class("ScAddInListener").GlobalNamespace()) // not owning
+                || (loplugin::DeclCheck(pVarDecl).Var("maThreadSpecific")
+                    .Class("ScDocument").GlobalNamespace()) // not owning
                 || name == "s_pLOKWindowsMap" // LOK only, guarded by assert, and LOK never tries to perform a VCL cleanup
                 || name == "gStaticManager" // vcl/source/graphic/Manager.cxx - stores non-owning pointers
+                || name == "aThreadedInterpreterPool"    // ScInterpreterContext(Pool), not owning
+                || name == "aNonThreadedInterpreterPool" // ScInterpreterContext(Pool), not owning
                ) // these variables appear unproblematic
             {
                 return true;

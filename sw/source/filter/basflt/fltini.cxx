@@ -55,6 +55,8 @@
 #include <iodetect.hxx>
 #include <osl/module.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 using namespace utl;
 using namespace com::sun::star::uno;
@@ -62,9 +64,9 @@ using namespace com::sun::star;
 
 SwRead ReadAscii = nullptr, ReadHTML = nullptr, ReadXML = nullptr;
 
-Reader* GetRTFReader();
-Reader* GetWW8Reader();
-Reader* GetDOCXReader();
+static Reader* GetRTFReader();
+static Reader* GetWW8Reader();
+static Reader* GetDOCXReader();
 
 // Note: if editing, please don't forget to modify also the enum
 // ReaderWriterEnum and aFilterDetect in iodetect.hxx & iodetect.cxx
@@ -108,7 +110,7 @@ SwRead SwGetReaderXML() // SW_DLLPUBLIC
         return ReadXML;
 }
 
-inline void SetFltPtr( sal_uInt16 rPos, SwRead pReader )
+static void SetFltPtr( sal_uInt16 rPos, SwRead pReader )
 {
         aReaderWriter[ rPos ].pReader = pReader;
 }
@@ -117,9 +119,12 @@ namespace sw {
 
 Filters::Filters()
 {
-    SetFltPtr( READER_WRITER_BAS, (ReadAscii = new AsciiReader) );
-    SetFltPtr( READER_WRITER_HTML, (ReadHTML = new HTMLReader) );
-    SetFltPtr( READER_WRITER_XML, (ReadXML = new XMLReader)  );
+    ReadAscii = new AsciiReader;
+    ReadHTML = new HTMLReader;
+    ReadXML = new XMLReader;
+    SetFltPtr( READER_WRITER_BAS, ReadAscii );
+    SetFltPtr( READER_WRITER_HTML, ReadHTML );
+    SetFltPtr( READER_WRITER_XML, ReadXML );
     SetFltPtr( READER_WRITER_TEXT_DLG, ReadAscii );
     SetFltPtr( READER_WRITER_TEXT, ReadAscii );
 }
@@ -277,13 +282,13 @@ void SwFilterOptions::Notify( const css::uno::Sequence< OUString >& ) {}
 
 void StgReader::SetFltName( const OUString& rFltNm )
 {
-    if( SW_STORAGE_READER & GetReaderType() )
+    if( SwReaderType::Storage & GetReaderType() )
         aFltName = rFltNm;
 }
 
 SwRelNumRuleSpaces::SwRelNumRuleSpaces( SwDoc const & rDoc, bool bNDoc )
 {
-    pNumRuleTable = new SwNumRuleTable;
+    pNumRuleTable.reset(new SwNumRuleTable);
     pNumRuleTable->reserve(8);
     if( !bNDoc )
         pNumRuleTable->insert( pNumRuleTable->begin(),
@@ -293,10 +298,7 @@ SwRelNumRuleSpaces::SwRelNumRuleSpaces( SwDoc const & rDoc, bool bNDoc )
 SwRelNumRuleSpaces::~SwRelNumRuleSpaces()
 {
     if( pNumRuleTable )
-    {
         pNumRuleTable->clear();
-        delete pNumRuleTable;
-    }
 }
 
 void CalculateFlySize(SfxItemSet& rFlySet, const SwNodeIndex& rAnchor,
@@ -413,7 +415,7 @@ namespace
 
 struct CharSetNameMap
 {
-    rtl_TextEncoding eCode;
+    rtl_TextEncoding const eCode;
     const sal_Char* pName;
 };
 
@@ -569,42 +571,33 @@ OUString NameFromCharSet(rtl_TextEncoding nChrSet)
 // The user data contains the options for the ascii import/export filter.
 // The format is:
 //      1. CharSet - as ascii chars
-//      2. LineEnd - as CR/LR/CRLF
+//      2. LineEnd - as CR/LF/CRLF
 //      3. Fontname
 //      4. Language
+//      5. Whether to include byte-order-mark - as true/false
 // the delimiter character is ","
 
 void SwAsciiOptions::ReadUserData( const OUString& rStr )
 {
     sal_Int32 nToken = 0;
-    int nCnt = 0;
-    do {
-        const OUString sToken = rStr.getToken( 0, ',', nToken );
-        if (!sToken.isEmpty())
-        {
-            switch( nCnt )
-            {
-            case 0:         // CharSet
-                eCharSet = CharSetFromName(sToken);
-                break;
-            case 1:         // LineEnd
-                if (sToken.equalsIgnoreAsciiCase("CRLF"))
-                    eCRLF_Flag = LINEEND_CRLF;
-                else if (sToken.equalsIgnoreAsciiCase("LF"))
-                    eCRLF_Flag = LINEEND_LF;
-                else
-                    eCRLF_Flag = LINEEND_CR;
-                break;
-            case 2:         // fontname
-                sFont = sToken;
-                break;
-            case 3:         // Language
-                nLanguage = LanguageTag::convertToLanguageTypeWithFallback( sToken );
-                break;
-            }
-        }
-        ++nCnt;
-    } while( -1 != nToken );
+    OUString sToken = rStr.getToken(0, ',', nToken); // 1. Charset name
+    if (!sToken.isEmpty())
+        eCharSet = CharSetFromName(sToken);
+    if (nToken >= 0 && !(sToken = rStr.getToken(0, ',', nToken)).isEmpty()) // 2. Line ending type
+    {
+        if (sToken.equalsIgnoreAsciiCase("CRLF"))
+            eCRLF_Flag = LINEEND_CRLF;
+        else if (sToken.equalsIgnoreAsciiCase("LF"))
+            eCRLF_Flag = LINEEND_LF;
+        else
+            eCRLF_Flag = LINEEND_CR;
+    }
+    if (nToken >= 0 && !(sToken = rStr.getToken(0, ',', nToken)).isEmpty()) // 3. Font name
+        sFont = sToken;
+    if (nToken >= 0 && !(sToken = rStr.getToken(0, ',', nToken)).isEmpty()) // 4. Language tag
+        nLanguage = LanguageTag::convertToLanguageTypeWithFallback(sToken);
+    if (nToken >= 0 && !(sToken = rStr.getToken(0, ',', nToken)).isEmpty()) // 5. Include BOM?
+        bIncludeBOM = !(sToken.equalsIgnoreAsciiCase("FALSE"));
 }
 
 void SwAsciiOptions::WriteUserData(OUString& rStr)
@@ -634,6 +627,17 @@ void SwAsciiOptions::WriteUserData(OUString& rStr)
     if (nLanguage)
     {
         rStr += LanguageTag::convertToBcp47(nLanguage);
+    }
+    rStr += ",";
+
+    // 5. Whether to include byte-order-mark
+    if( bIncludeBOM )
+    {
+        rStr += "true";
+    }
+    else
+    {
+        rStr += "false";
     }
     rStr += ",";
 }

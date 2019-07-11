@@ -53,6 +53,7 @@
 #include <unotools/localfilehelper.hxx>
 
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 using namespace connectivity::firebird;
 using namespace connectivity;
@@ -85,9 +86,8 @@ Connection::Connection()
     , m_sConnectionURL()
     , m_sFirebirdURL()
     , m_bIsEmbedded(false)
-    , m_xEmbeddedStorage(nullptr)
     , m_bIsFile(false)
-    , m_bIsAutoCommit(false)
+    , m_bIsAutoCommit(true)
     , m_bIsReadOnly(false)
     , m_aTransactionIsolation(TransactionIsolation::REPEATABLE_READ)
 #if SAL_TYPES_SIZEOFPOINTER == 8
@@ -123,7 +123,7 @@ struct ConnectionGuard
     }
 };
 
-void Connection::construct(const ::rtl::OUString& url, const Sequence< PropertyValue >& info)
+void Connection::construct(const OUString& url, const Sequence< PropertyValue >& info)
 {
     ConnectionGuard aGuard(m_refCount);
 

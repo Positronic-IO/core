@@ -20,6 +20,7 @@
 #include <vcl/wrkwin.hxx>
 #include <vcl/settings.hxx>
 
+#include <sal/log.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/app.hxx>
 #include <Outliner.hxx>
@@ -42,7 +43,7 @@
 
 #include <editeng/outliner.hxx>
 #include <svx/svditer.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imapobj.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <boost/property_tree/json_parser.hpp>
 #include <comphelper/lok.hxx>
@@ -67,6 +68,7 @@
 #include "PageListWatcher.hxx"
 #include <vcl/virdev.hxx>
 #include <customshowlist.hxx>
+#include <unokywds.hxx>
 
 using namespace ::sd;
 
@@ -88,7 +90,7 @@ SdrObject* SdDrawDocument::GetObj(const OUString& rObjName) const
     while (nPage < nMaxPages && !pObjFound)
     {
         pPage = static_cast<const SdPage*>( GetPage(nPage) );
-        SdrObjListIter aIter(*pPage, SdrIterMode::DeepWithGroups);
+        SdrObjListIter aIter(pPage, SdrIterMode::DeepWithGroups);
 
         while (aIter.IsMore() && !pObjFound)
         {
@@ -113,7 +115,7 @@ SdrObject* SdDrawDocument::GetObj(const OUString& rObjName) const
     while (nPage < nMaxMasterPages && !pObjFound)
     {
         pPage = static_cast<const SdPage*>( GetMasterPage(nPage) );
-        SdrObjListIter aIter(*pPage, SdrIterMode::DeepWithGroups);
+        SdrObjListIter aIter(pPage, SdrIterMode::DeepWithGroups);
 
         while (aIter.IsMore() && !pObjFound)
         {
@@ -1341,8 +1343,8 @@ sal_uInt16 SdDrawDocument::DuplicatePage (sal_uInt16 nPageNum)
 
     // Get background flags
     SdrLayerAdmin& rLayerAdmin = GetLayerAdmin();
-    SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND));
-    SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ));
+    SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(sUNO_LayerName_background);
+    SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects);
     SdrLayerIDSet aVisibleLayers = pActualPage->TRG_GetMasterPageVisibleLayers();
 
     return DuplicatePage (
@@ -1485,8 +1487,8 @@ void SdDrawDocument::SetupNewPage (
     if (pPreviousPage != nullptr)
     {
         SdrLayerAdmin& rLayerAdmin = GetLayerAdmin();
-        SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND));
-        SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ));
+        SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(sUNO_LayerName_background);
+        SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects);
         SdrLayerIDSet aVisibleLayers = pPreviousPage->TRG_GetMasterPageVisibleLayers();
         aVisibleLayers.Set(aBckgrnd, bIsPageBack);
         aVisibleLayers.Set(aBckgrndObj, bIsPageObj);

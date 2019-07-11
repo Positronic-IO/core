@@ -23,6 +23,7 @@
 
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XDocumentProperties.hpp>
+#include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/frame/XTitle.hpp>
 
@@ -30,6 +31,7 @@
 
 #include <osl/diagnose.h>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 
 namespace comphelper {
 
@@ -101,7 +103,6 @@ namespace comphelper {
             {
                 Reference< XDocumentProperties > xDocProps (
                     xDPS->getDocumentProperties(), UNO_QUERY_THROW );
-                OSL_ENSURE(xDocProps.is(), "no DocumentProperties");
                 sTitle = xDocProps->getTitle();
                 if ( !sTitle.isEmpty() )
                     return sTitle;

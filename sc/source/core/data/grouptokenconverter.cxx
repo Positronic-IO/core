@@ -8,7 +8,10 @@
  */
 
 #include <grouptokenconverter.hxx>
-#include <compiler.hxx>
+#include <document.hxx>
+#include <formulacell.hxx>
+#include <tokenarray.hxx>
+#include <refdata.hxx>
 
 #include <formula/token.hxx>
 #include <formula/vectortoken.hxx>
@@ -17,7 +20,7 @@ using namespace formula;
 
 bool ScGroupTokenConverter::isSelfReferenceRelative(const ScAddress& rRefPos, SCROW nRelRow)
 {
-    if (rRefPos.Col() != mrPos.Col())
+    if (rRefPos.Col() != mrPos.Col() || rRefPos.Tab() != mrPos.Tab())
         return false;
 
     SCROW nLen = mrCell.GetCellGroup()->mnLength;
@@ -43,7 +46,7 @@ bool ScGroupTokenConverter::isSelfReferenceRelative(const ScAddress& rRefPos, SC
 
 bool ScGroupTokenConverter::isSelfReferenceAbsolute(const ScAddress& rRefPos)
 {
-    if (rRefPos.Col() != mrPos.Col())
+    if (rRefPos.Col() != mrPos.Col() || rRefPos.Tab() != mrPos.Tab())
         return false;
 
     SCROW nLen = mrCell.GetCellGroup()->mnLength;
@@ -116,6 +119,8 @@ bool ScGroupTokenConverter::convert( const ScTokenArray& rCode, sc::FormulaLogge
             case svSingleRef:
             {
                 ScSingleRefData aRef = *p->GetSingleRef();
+                if( aRef.IsDeleted())
+                    return false;
                 ScAddress aRefPos = aRef.toAbs(mrPos);
                 if (aRef.IsRowRel())
                 {
@@ -130,7 +135,20 @@ bool ScGroupTokenConverter::convert( const ScTokenArray& rCode, sc::FormulaLogge
 
                     formula::VectorRefArray aArray;
                     if (nTrimLen)
+                    {
+#ifdef DBG_UTIL
+                        // All the necessary Interpret() calls for all the cells
+                        // should have been already handled by ScDependantsCalculator
+                        // calling HandleRefArrayForParallelism(), and that handling also checks
+                        // for cycles etc. Recursively calling Interpret() from here (which shouldn't
+                        // happen) could lead to unhandled problems.
+                        // Also, because of caching FetchVectorRefArray() fetches values for all rows
+                        // up to the maximum one, so check those too.
+                        mrDoc.AssertNoInterpretNeeded(
+                            ScAddress(aRefPos.Col(), 0, aRefPos.Tab()), nTrimLen + aRefPos.Row());
+#endif
                         aArray = mrDoc.FetchVectorRefArray(aRefPos, nTrimLen);
+                    }
 
                     if (!aArray.isValid())
                         return false;
@@ -165,19 +183,15 @@ bool ScGroupTokenConverter::convert( const ScTokenArray& rCode, sc::FormulaLogge
             break;
             case svDoubleRef:
             {
-                /* FIXME: this simply does not work, it doesn't know
-                 * a) the context of implicit intersection, for which creating
-                      two arrays does not only result in huge unnecessary matrix
-                      operations but also produces wrong results, e.g. =B:B/C:C
-                 * b) when to keep a reference as a reference depending on the
-                      expected parameter type, e.g. INDEX(), OFFSET() and
-                      others (though that *may* be disabled by OpCode already).
-                 * Until both are solved keep the reference. */
-                mrGroupTokens.AddToken(*p);
-                break;
+                // This code may break in case of implicit intersection, leading to unnecessarily large
+                // matrix operations and possibly incorrect results (=C:C/D:D). That is handled by
+                // having ScCompiler check that there are no possible implicit intersections.
+                // Additionally some functions such as INDEX() and OFFSET() require a reference,
+                // that is handled by blacklisting those opcodes in ScTokenArray::CheckToken().
 
-#if 0
                 ScComplexRefData aRef = *p->GetDoubleRef();
+                if( aRef.IsDeleted())
+                    return false;
                 ScRange aAbs = aRef.toAbs(mrPos);
 
                 // Multiple sheets not handled by vector/matrix.
@@ -229,7 +243,13 @@ bool ScGroupTokenConverter::convert( const ScTokenArray& rCode, sc::FormulaLogge
                     aRefPos.SetCol(i);
                     formula::VectorRefArray aArray;
                     if (nArrayLength)
+                    {
+#ifdef DBG_UTIL
+                        mrDoc.AssertNoInterpretNeeded(
+                            ScAddress(aRefPos.Col(), 0, aRefPos.Tab()), nArrayLength + aRefPos.Row());
+#endif
                         aArray = mrDoc.FetchVectorRefArray(aRefPos, nArrayLength);
+                    }
 
                     if (!aArray.isValid())
                         return false;
@@ -249,7 +269,6 @@ bool ScGroupTokenConverter::convert( const ScTokenArray& rCode, sc::FormulaLogge
                     //ensure that backing storage exists for our lifetime
                     mxFormulaGroupContext = mrDoc.GetFormulaGroupContext();
                 }
-#endif
             }
             break;
             case svIndex:

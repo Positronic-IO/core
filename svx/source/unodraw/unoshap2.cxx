@@ -29,6 +29,7 @@
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <com/sun/star/drawing/PointSequenceSequence.hpp>
 #include <com/sun/star/drawing/PointSequence.hpp>
+#include <com/sun/star/drawing/PolygonKind.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <o3tl/any.hxx>
 #include <tools/urlobj.hxx>
@@ -59,13 +60,13 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
-#include <basegfx/utils/unotools.hxx>
-#include <comphelper/servicehelper.hxx>
+#include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <com/sun/star/awt/XBitmap.hpp>
 #include <svx/svdograf.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/fcontnr.hxx>
+#include <sal/log.hxx>
 
 
 #include <memory>
@@ -200,7 +201,7 @@ void SvxShapeGroup::addUnoShape( const uno::Reference< drawing::XShape >& xShape
         pSdrShape = mxPage->CreateSdrObject_( xShape );
 
     if( pSdrShape->IsInserted() )
-        pSdrShape->getParentOfSdrObject()->RemoveObject( pSdrShape->GetOrdNum() );
+        pSdrShape->getParentSdrObjListFromSdrObject()->RemoveObject( pSdrShape->GetOrdNum() );
 
     GetSdrObject()->GetSubList()->InsertObject(pSdrShape, nPos);
     // TTTT Was created using mpModel in CreateSdrObject_ above
@@ -208,7 +209,7 @@ void SvxShapeGroup::addUnoShape( const uno::Reference< drawing::XShape >& xShape
     // pSdrShape->SetModel(GetSdrObject()->GetModel());
 
     // #85922# It makes no sense to set the layer asked
-    // from the group object since these is an iteration
+    // from the group object since this is an iteration
     // over the contained objects. In consequence, this
     // statement erases all layer information from the draw
     // objects. Layers need to be set at draw objects directly
@@ -243,10 +244,10 @@ void SAL_CALL SvxShapeGroup::remove( const uno::Reference< drawing::XShape >& xS
     if( pShape )
         pSdrShape = pShape->GetSdrObject();
 
-    if( !HasSdrObject() || pSdrShape == nullptr || pSdrShape->getParentOfSdrObject()->GetOwnerObj() != GetSdrObject() )
+    if( !HasSdrObject() || pSdrShape == nullptr || pSdrShape->getParentSdrObjectFromSdrObject() != GetSdrObject() )
         throw uno::RuntimeException();
 
-    SdrObjList& rList = *pSdrShape->getParentOfSdrObject();
+    SdrObjList& rList = *pSdrShape->getParentSdrObjListFromSdrObject();
 
     const size_t nObjCount = rList.GetObjCount();
     size_t nObjNum = 0;
@@ -591,10 +592,10 @@ void SAL_CALL SvxShapeControl::setControl( const Reference< awt::XControlModel >
 static struct
 {
     const sal_Char* mpAPIName;
-    sal_uInt16 mnAPINameLen;
+    sal_uInt16 const mnAPINameLen;
 
     const sal_Char* mpFormName;
-    sal_uInt16 mnFormNameLen;
+    sal_uInt16 const mnFormNameLen;
 }
 const SvxShapeControlPropertyMapping[] =
 {
@@ -651,8 +652,8 @@ namespace
 
     struct EnumConversionMap
     {
-        style::ParagraphAdjust   nAPIValue;
-        sal_Int16                nFormValue;
+        style::ParagraphAdjust const   nAPIValue;
+        sal_Int16 const                nFormValue;
     };
 
     EnumConversionMap const aMapAdjustToAlign[] =
@@ -917,59 +918,50 @@ SvxShapeCircle::~SvxShapeCircle() throw()
 {
 }
 
-SvxShapePolyPolygon::SvxShapePolyPolygon( SdrObject* pObj , drawing::PolygonKind eNew )
-: SvxShapeText( pObj, getSvxMapProvider().GetMap(SVXMAP_POLYPOLYGON), getSvxMapProvider().GetPropertySet(SVXMAP_POLYPOLYGON, SdrObject::GetGlobalDrawObjectItemPool()) )
-, mePolygonKind( eNew )
+//////////////////////////////////////////////////////////////////////////////
+
+SvxShapePolyPolygon::SvxShapePolyPolygon(
+    SdrObject* pObj)
+:   SvxShapeText(
+        pObj,
+        getSvxMapProvider().GetMap(SVXMAP_POLYPOLYGON),
+        getSvxMapProvider().GetPropertySet(SVXMAP_POLYPOLYGON, SdrObject::GetGlobalDrawObjectItemPool()))
 {
 }
-
 
 SvxShapePolyPolygon::~SvxShapePolyPolygon() throw()
 {
 }
 
-basegfx::B2DPolyPolygon ImplSvxPointSequenceSequenceToB2DPolyPolygon( const drawing::PointSequenceSequence* pOuterSequence) throw()
-{
-    basegfx::B2DPolyPolygon aRetval;
-
-    // get pointer to internal sequences
-    const drawing::PointSequence* pInnerSequence = pOuterSequence->getConstArray();
-    const drawing::PointSequence* pInnerSeqEnd   = pInnerSequence + pOuterSequence->getLength();
-
-    for(;pInnerSequence != pInnerSeqEnd; ++pInnerSequence)
-    {
-        // prepare new polygon
-        basegfx::B2DPolygon aNewPolygon;
-
-        // get pointer to arrays
-        const awt::Point* pArray    = pInnerSequence->getConstArray();
-        const awt::Point* pArrayEnd = pArray + pInnerSequence->getLength();
-
-        for(;pArray != pArrayEnd;++pArray)
-        {
-            aNewPolygon.append(basegfx::B2DPoint(pArray->X, pArray->Y));
-        }
-
-        // check for closed state flag
-        basegfx::utils::checkClosed(aNewPolygon);
-
-        // add new subpolygon
-        aRetval.append(aNewPolygon);
-    }
-
-    return aRetval;
-}
-
-
 bool SvxShapePolyPolygon::setPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, const css::uno::Any& rValue )
 {
     switch( pProperty->nWID )
     {
+    case OWN_ATTR_VALUE_POLYPOLYGONBEZIER:
+    {
+        if( auto s = o3tl::tryAccess<drawing::PolyPolygonBezierCoords>(rValue) )
+        {
+            basegfx::B2DPolyPolygon aNewPolyPolygon(
+                basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon(*s));
+
+            // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+            ForceMetricToItemPoolMetric(aNewPolyPolygon);
+
+            SetPolygon(aNewPolyPolygon);
+            return true;
+        }
+        break;
+    }
     case OWN_ATTR_VALUE_POLYPOLYGON:
     {
         if( auto s = o3tl::tryAccess<drawing::PointSequenceSequence>(rValue) )
         {
-            basegfx::B2DPolyPolygon aNewPolyPolygon(ImplSvxPointSequenceSequenceToB2DPolyPolygon(s));
+            basegfx::B2DPolyPolygon aNewPolyPolygon(
+                basegfx::utils::UnoPointSequenceSequenceToB2DPolyPolygon(*s));
+
+            // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+            ForceMetricToItemPoolMetric(aNewPolyPolygon);
+
             SetPolygon(aNewPolyPolygon);
             return true;
         }
@@ -977,7 +969,10 @@ bool SvxShapePolyPolygon::setPropertyValueImpl( const OUString& rName, const Sfx
     }
     case OWN_ATTR_BASE_GEOMETRY:
     {
-        if( auto s = o3tl::tryAccess<drawing::PointSequenceSequence>(rValue) )
+        drawing::PointSequenceSequence aPointSequenceSequence;
+        drawing::PolyPolygonBezierCoords aPolyPolygonBezierCoords;
+
+        if( rValue >>= aPointSequenceSequence)
         {
             if( HasSdrObject() )
             {
@@ -985,10 +980,27 @@ bool SvxShapePolyPolygon::setPropertyValueImpl( const OUString& rName, const Sfx
                 basegfx::B2DHomMatrix aNewHomogenMatrix;
 
                 GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
-                aNewPolyPolygon = ImplSvxPointSequenceSequenceToB2DPolyPolygon(s);
+                aNewPolyPolygon = basegfx::utils::UnoPointSequenceSequenceToB2DPolyPolygon(aPointSequenceSequence);
 
                 // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
                 // Need to adapt aNewPolyPolygon from 100thmm to app-specific
+                ForceMetricToItemPoolMetric(aNewPolyPolygon);
+
+                GetSdrObject()->TRSetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
+            }
+            return true;
+        }
+        else if( rValue >>= aPolyPolygonBezierCoords)
+        {
+            if( HasSdrObject() )
+            {
+                basegfx::B2DPolyPolygon aNewPolyPolygon;
+                basegfx::B2DHomMatrix aNewHomogenMatrix;
+
+                GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
+                aNewPolyPolygon = basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon(aPolyPolygonBezierCoords);
+
+                // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
                 ForceMetricToItemPoolMetric(aNewPolyPolygon);
 
                 GetSdrObject()->TRSetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
@@ -1016,8 +1028,12 @@ bool SvxShapePolyPolygon::setPropertyValueImpl( const OUString& rName, const Sfx
             // check for closed state flag
             basegfx::utils::checkClosed(aNewPolygon);
 
+            // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+            basegfx::B2DPolyPolygon aNewPolyPolygon(aNewPolygon);
+            ForceMetricToItemPoolMetric(aNewPolyPolygon);
+
             // set polygon
-            SetPolygon(basegfx::B2DPolyPolygon(aNewPolygon));
+            SetPolygon(aNewPolyPolygon);
             return true;
         }
         break;
@@ -1029,61 +1045,35 @@ bool SvxShapePolyPolygon::setPropertyValueImpl( const OUString& rName, const Sfx
     throw lang::IllegalArgumentException();
 }
 
-void B2DPolyPolygonToSvxPointSequenceSequence( const basegfx::B2DPolyPolygon& rPolyPoly, drawing::PointSequenceSequence& rRetval )
-{
-    if( static_cast<sal_uInt32>(rRetval.getLength()) != rPolyPoly.count() )
-        rRetval.realloc( rPolyPoly.count() );
-
-    // get pointer to external arrays
-    drawing::PointSequence* pOuterSequence = rRetval.getArray();
-
-    for(sal_uInt32 a(0); a < rPolyPoly.count(); a++)
-    {
-        // get single polygon
-        const basegfx::B2DPolygon aPoly(rPolyPoly.getB2DPolygon(a));
-
-        // #i75974# take closed state into account, the API polygon still uses the old closed definition
-        // with last/first point are identical (cannot hold information about open polygons with identical
-        // first and last point, though)
-        const sal_uInt32 nPointCount(aPoly.count());
-        const bool bIsClosed(aPoly.isClosed());
-
-        // create space in arrays
-        pOuterSequence->realloc(bIsClosed ? nPointCount + 1 : nPointCount);
-
-        // get pointer to arrays
-        awt::Point* pInnerSequence = pOuterSequence->getArray();
-
-        for(sal_uInt32 b(0); b < nPointCount; b++)
-        {
-            const basegfx::B2DPoint aPoint(aPoly.getB2DPoint(b));
-            *pInnerSequence = awt::Point( basegfx::fround(aPoint.getX()), basegfx::fround(aPoint.getY()) );
-            pInnerSequence++;
-        }
-
-        // #i75974# copy first point
-        if(bIsClosed)
-        {
-            *pInnerSequence = *pOuterSequence->getArray();
-        }
-
-        pOuterSequence++;
-    }
-}
-
-
 bool SvxShapePolyPolygon::getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty,
                                                 css::uno::Any& rValue )
 {
     switch( pProperty->nWID )
     {
+    case OWN_ATTR_VALUE_POLYPOLYGONBEZIER:
+    {
+        // pack a tools::PolyPolygon in a struct tools::PolyPolygon
+        basegfx::B2DPolyPolygon aPolyPoly(GetPolygon());
+
+        // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+        ForceMetricTo100th_mm(aPolyPoly);
+
+        drawing::PolyPolygonBezierCoords aRetval;
+        basegfx::utils::B2DPolyPolygonToUnoPolyPolygonBezierCoords(aPolyPoly, aRetval);
+
+        rValue <<= aRetval;
+        break;
+    }
     case OWN_ATTR_VALUE_POLYPOLYGON:
     {
         // pack a tools::PolyPolygon in a struct tools::PolyPolygon
-        const basegfx::B2DPolyPolygon& rPolyPoly = GetPolygon();
-        drawing::PointSequenceSequence aRetval( rPolyPoly.count() );
+        basegfx::B2DPolyPolygon aPolyPoly(GetPolygon());
 
-        B2DPolyPolygonToSvxPointSequenceSequence( rPolyPoly, aRetval );
+        // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+        ForceMetricTo100th_mm(aPolyPoly);
+
+        drawing::PointSequenceSequence aRetval( aPolyPoly.count() );
+        basegfx::utils::B2DPolyPolygonToUnoPointSequenceSequence(aPolyPoly, aRetval);
 
         rValue <<= aRetval;
         break;
@@ -1091,38 +1081,46 @@ bool SvxShapePolyPolygon::getPropertyValueImpl( const OUString& rName, const Sfx
     case OWN_ATTR_BASE_GEOMETRY:
     {
         // pack a tools::PolyPolygon in struct PolyPolygon
-        basegfx::B2DPolyPolygon aNewPolyPolygon;
+        basegfx::B2DPolyPolygon aPolyPoly;
         basegfx::B2DHomMatrix aNewHomogenMatrix;
 
         if(HasSdrObject())
         {
-            GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
+            GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aPolyPoly);
 
             // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
-            // Need to adapt aNewPolyPolygon from app-specific to 100thmm
-            ForceMetricTo100th_mm(aNewPolyPolygon);
+            ForceMetricTo100th_mm(aPolyPoly);
         }
 
-        drawing::PointSequenceSequence aRetval(aNewPolyPolygon.count());
-        B2DPolyPolygonToSvxPointSequenceSequence(aNewPolyPolygon, aRetval);
-        rValue <<= aRetval;
+        if(aPolyPoly.areControlPointsUsed())
+        {
+            drawing::PolyPolygonBezierCoords aRetval;
+            basegfx::utils::B2DPolyPolygonToUnoPolyPolygonBezierCoords(aPolyPoly, aRetval);
+            rValue <<= aRetval;
+        }
+        else
+        {
+            drawing::PointSequenceSequence aRetval(aPolyPoly.count());
+            basegfx::utils::B2DPolyPolygonToUnoPointSequenceSequence(aPolyPoly, aRetval);
+            rValue <<= aRetval;
+        }
         break;
     }
     case OWN_ATTR_VALUE_POLYGON:
     {
         // pack a tools::PolyPolygon in a struct tools::PolyPolygon
-        const basegfx::B2DPolyPolygon& rPolyPoly = GetPolygon();
+        basegfx::B2DPolyPolygon aPolyPoly(GetPolygon());
 
-        sal_Int32 nCount = 0;
-        if( rPolyPoly.count() > 0 )
-            nCount = rPolyPoly.getB2DPolygon(0).count();
+        // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
+        ForceMetricTo100th_mm(aPolyPoly);
 
+        const sal_Int32 nCount(0 == aPolyPoly.count() ? 0 : aPolyPoly.getB2DPolygon(0).count());
         drawing::PointSequence aRetval( nCount );
 
         if( nCount > 0 )
         {
             // get single polygon
-            const basegfx::B2DPolygon aPoly(rPolyPoly.getB2DPolygon(0));
+            const basegfx::B2DPolygon& aPoly(aPolyPoly.getB2DPolygon(0));
 
             // get pointer to arrays
             awt::Point* pSequence = aRetval.getArray();
@@ -1139,7 +1137,7 @@ bool SvxShapePolyPolygon::getPropertyValueImpl( const OUString& rName, const Sfx
     }
     case OWN_ATTR_VALUE_POLYGONKIND:
     {
-        rValue <<= mePolygonKind;
+        rValue <<= GetPolygonKind();
         break;
     }
     default:
@@ -1149,6 +1147,28 @@ bool SvxShapePolyPolygon::getPropertyValueImpl( const OUString& rName, const Sfx
     return true;
 }
 
+drawing::PolygonKind SvxShapePolyPolygon::GetPolygonKind() const
+{
+    ::SolarMutexGuard aGuard;
+    drawing::PolygonKind aRetval(drawing::PolygonKind_LINE);
+
+    if(HasSdrObject())
+    {
+        switch(GetSdrObject()->GetObjIdentifier())
+        {
+            case OBJ_POLY:      aRetval = drawing::PolygonKind_POLY; break;
+            case OBJ_PLIN:      aRetval = drawing::PolygonKind_PLIN; break;
+            case OBJ_SPLNLINE:
+            case OBJ_PATHLINE:  aRetval = drawing::PolygonKind_PATHLINE; break;
+            case OBJ_SPLNFILL:
+            case OBJ_PATHFILL:  aRetval = drawing::PolygonKind_PATHFILL; break;
+            case OBJ_FREELINE:  aRetval = drawing::PolygonKind_FREELINE; break;
+            case OBJ_FREEFILL:  aRetval = drawing::PolygonKind_FREEFILL; break;
+        }
+    }
+
+    return aRetval;
+}
 
 void SvxShapePolyPolygon::SetPolygon(const basegfx::B2DPolyPolygon& rNew)
 {
@@ -1173,126 +1193,7 @@ basegfx::B2DPolyPolygon SvxShapePolyPolygon::GetPolygon() const throw()
     }
 }
 
-SvxShapePolyPolygonBezier::SvxShapePolyPolygonBezier(SdrObject* pObj , drawing::PolygonKind eNew)
-    : SvxShapeText(pObj, getSvxMapProvider().GetMap(SVXMAP_POLYPOLYGONBEZIER), getSvxMapProvider().GetPropertySet(SVXMAP_POLYPOLYGONBEZIER, SdrObject::GetGlobalDrawObjectItemPool()))
-    , mePolygonKind(eNew)
-{
-}
-
-SvxShapePolyPolygonBezier::~SvxShapePolyPolygonBezier() throw()
-{
-}
-
-bool SvxShapePolyPolygonBezier::setPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, const css::uno::Any& rValue )
-{
-    switch( pProperty->nWID )
-    {
-    case OWN_ATTR_VALUE_POLYPOLYGONBEZIER:
-    {
-        if( auto s = o3tl::tryAccess<drawing::PolyPolygonBezierCoords>(rValue) )
-        {
-            basegfx::B2DPolyPolygon aNewPolyPolygon(
-                basegfx::unotools::polyPolygonBezierToB2DPolyPolygon(*s));
-            SetPolygon(aNewPolyPolygon);
-            return true;
-        }
-        break;
-    }
-    case OWN_ATTR_BASE_GEOMETRY:
-    {
-        if( auto s = o3tl::tryAccess<drawing::PolyPolygonBezierCoords>(rValue) )
-        {
-            if( HasSdrObject() )
-            {
-                basegfx::B2DPolyPolygon aNewPolyPolygon;
-                basegfx::B2DHomMatrix aNewHomogenMatrix;
-
-                GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
-                aNewPolyPolygon = basegfx::unotools::polyPolygonBezierToB2DPolyPolygon(*s);
-
-                // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
-                // Need to adapt aNewPolyPolygon from 100thmm to app-specific
-                ForceMetricToItemPoolMetric(aNewPolyPolygon);
-
-                GetSdrObject()->TRSetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
-            }
-            return true;
-        }
-        break;
-    }
-    default:
-        return SvxShapeText::setPropertyValueImpl( rName, pProperty, rValue );
-    }
-
-    throw IllegalArgumentException();
-}
-
-
-bool SvxShapePolyPolygonBezier::getPropertyValueImpl( const OUString& rName, const SfxItemPropertySimpleEntry* pProperty, css::uno::Any& rValue )
-{
-    switch( pProperty->nWID )
-    {
-    case OWN_ATTR_VALUE_POLYPOLYGONBEZIER:
-    {
-        // pack a tools::PolyPolygon in a struct tools::PolyPolygon
-        const basegfx::B2DPolyPolygon& rPolyPoly = GetPolygon();
-        drawing::PolyPolygonBezierCoords aRetval;
-        basegfx::unotools::b2DPolyPolygonToPolyPolygonBezier(rPolyPoly, aRetval);
-
-        rValue <<= aRetval;
-        break;
-    }
-    case OWN_ATTR_BASE_GEOMETRY:
-    {
-        // pack a tools::PolyPolygon in a struct tools::PolyPolygon
-        basegfx::B2DPolyPolygon aNewPolyPolygon;
-        basegfx::B2DHomMatrix aNewHomogenMatrix;
-        GetSdrObject()->TRGetBaseGeometry(aNewHomogenMatrix, aNewPolyPolygon);
-
-        // tdf#117145 metric of SdrModel is app-specific, metric of UNO API is 100thmm
-        // Need to adapt aNewPolyPolygon from app-specific to 100thmm
-        ForceMetricTo100th_mm(aNewPolyPolygon);
-
-        drawing::PolyPolygonBezierCoords aRetval;
-        basegfx::unotools::b2DPolyPolygonToPolyPolygonBezier(aNewPolyPolygon, aRetval);
-
-        rValue <<= aRetval;
-        break;
-    }
-    case OWN_ATTR_VALUE_POLYGONKIND:
-    {
-        rValue <<= mePolygonKind;
-        break;
-    }
-    default:
-        return SvxShapeText::getPropertyValueImpl( rName, pProperty, rValue );
-    }
-    return true;
-}
-
-
-void SvxShapePolyPolygonBezier::SetPolygon(const basegfx::B2DPolyPolygon& rNew)
-{
-    ::SolarMutexGuard aGuard;
-
-    if(HasSdrObject())
-        static_cast<SdrPathObj*>(GetSdrObject())->SetPathPoly(rNew);
-}
-
-
-basegfx::B2DPolyPolygon SvxShapePolyPolygonBezier::GetPolygon() const throw()
-{
-    ::SolarMutexGuard aGuard;
-
-    if(HasSdrObject())
-    {
-        return static_cast<SdrPathObj*>(GetSdrObject())->GetPathPoly();
-    }
-    else
-    {
-        return basegfx::B2DPolyPolygon();
-    }
-}
+//////////////////////////////////////////////////////////////////////////////
 
 SvxGraphicObject::SvxGraphicObject(SdrObject* pObj)
     : SvxShapeText( pObj, getSvxMapProvider().GetMap(SVXMAP_GRAPHICOBJECT), getSvxMapProvider().GetPropertySet(SVXMAP_GRAPHICOBJECT, SdrObject::GetGlobalDrawObjectItemPool()) )
@@ -1367,6 +1268,7 @@ bool SvxGraphicObject::setPropertyValueImpl( const OUString& rName, const SfxIte
     case OWN_ATTR_GRAPHIC_URL:
     {
         OUString aURL;
+        uno::Reference<awt::XBitmap> xBitmap;
         if (rValue >>= aURL)
         {
             Graphic aGraphic = vcl::graphic::loadFromURL(aURL);
@@ -1374,6 +1276,19 @@ bool SvxGraphicObject::setPropertyValueImpl( const OUString& rName, const SfxIte
             {
                 static_cast<SdrGrafObj*>(GetSdrObject())->SetGraphic(aGraphic);
                 bOk = true;
+            }
+        }
+        else if (rValue >>= xBitmap)
+        {
+            uno::Reference<graphic::XGraphic> xGraphic(xBitmap, uno::UNO_QUERY);
+            if (xGraphic.is())
+            {
+                Graphic aGraphic = xGraphic;
+                if (aGraphic)
+                {
+                    static_cast<SdrGrafObj*>(GetSdrObject())->SetGraphic(aGraphic);
+                    bOk = true;
+                }
             }
         }
         break;
@@ -1489,6 +1404,17 @@ bool SvxGraphicObject::setPropertyValueImpl( const OUString& rName, const SfxIte
         break;
     }
 
+    case OWN_ATTR_SIGNATURELINE_IS_SIGNED:
+    {
+        bool bIsSigned;
+        if (rValue >>= bIsSigned)
+        {
+            static_cast<SdrGrafObj*>(GetSdrObject())->setSignatureLineIsSigned(bIsSigned);
+            bOk = true;
+        }
+        break;
+    }
+
     default:
         return SvxShapeText::setPropertyValueImpl( rName, pProperty, rValue );
     }
@@ -1549,7 +1475,7 @@ bool SvxGraphicObject::getPropertyValueImpl( const OUString& rName, const SfxIte
 
     case OWN_ATTR_GRAPHIC_URL:
     {
-        throw uno::RuntimeException("Getting from this property is not unsupported");
+        throw uno::RuntimeException("Getting from this property is not supported");
         break;
     }
 
@@ -1622,6 +1548,12 @@ bool SvxGraphicObject::getPropertyValueImpl( const OUString& rName, const SfxIte
         Reference<graphic::XGraphic> xGraphic(
             static_cast<SdrGrafObj*>(GetSdrObject())->getSignatureLineUnsignedGraphic());
         rValue <<= xGraphic;
+        break;
+    }
+
+    case OWN_ATTR_SIGNATURELINE_IS_SIGNED:
+    {
+        rValue <<= static_cast<SdrGrafObj*>(GetSdrObject())->isSignatureLineSigned();
         break;
     }
 

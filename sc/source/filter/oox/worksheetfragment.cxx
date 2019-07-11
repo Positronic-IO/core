@@ -18,6 +18,7 @@
  */
 
 #include <worksheetfragment.hxx>
+#include <formulaparser.hxx>
 
 #include <osl/diagnose.h>
 #include <oox/core/filterbase.hxx>
@@ -26,6 +27,7 @@
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
 #include <addressconverter.hxx>
+#include <biffhelper.hxx>
 #include <autofilterbuffer.hxx>
 #include <autofiltercontext.hxx>
 #include <commentsfragment.hxx>
@@ -76,7 +78,7 @@ const sal_uInt16 BIFF12_OLEOBJECT_AUTOLOAD  = 0x0002;
 
 void DataValidationsContextBase::SetValidation( WorksheetHelper& rTarget )
 {
-    if (!mxValModel.get())
+    if (!mxValModel)
         return;
 
     rTarget.getAddressConverter().convertToCellRangeList(mxValModel->maRanges, maSqref, rTarget.getSheetIndex(), true);

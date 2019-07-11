@@ -44,8 +44,6 @@ Writer::Writer( sal_Int32 nTWIPWidthOutput, sal_Int32 nTWIPHeightOutput, sal_Int
     mnDocXScale( static_cast<double>(nTWIPWidthOutput) / mnDocWidth ),
     mnDocYScale( static_cast<double>(nTWIPHeightOutput) / mnDocHeight ),
     mpClipPolyPolygon( nullptr ),
-    mpTag( nullptr ),
-    mpSprite( nullptr ),
     mnNextId( 1 ),
     mnFrames( 0 ),
     mnGlobalTransparency(0),
@@ -96,12 +94,11 @@ Writer::~Writer()
 }
 
 
-void ImplCopySvStreamToXOutputStream( SvStream& rIn, Reference< XOutputStream > const &xOut )
+static void ImplCopySvStreamToXOutputStream( SvStream& rIn, Reference< XOutputStream > const &xOut )
 {
     sal_uInt32 nBufferSize = 64*1024;
 
-    rIn.Seek( STREAM_SEEK_TO_END );
-    sal_uInt32 nSize = rIn.Tell();
+    sal_uInt32 nSize = rIn.TellEnd();
     rIn.Seek( STREAM_SEEK_TO_BEGIN );
 
     Sequence< sal_Int8 > aBuffer( std::min( nBufferSize, nSize ) );
@@ -128,11 +125,12 @@ void ImplCopySvStreamToXOutputStream( SvStream& rIn, Reference< XOutputStream > 
 
 void Writer::storeTo( Reference< XOutputStream > const &xOutStream )
 {
-    for (auto const& font : maFonts)
+    for (auto & font : maFonts)
     {
         font->write( *mpFontsStream );
-        delete font;
+        font.reset();
     }
+    maFonts.clear();
 
     // Endtag
     mpMovieStream->WriteUInt16( 0 );

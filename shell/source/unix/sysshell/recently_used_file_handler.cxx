@@ -32,14 +32,13 @@
 #include <i_xml_parser_event_handler.hxx>
 
 #include <map>
+#include <memory>
 #include <vector>
 #include <algorithm>
 #include <string.h>
 #include <time.h>
 
 namespace /* private */ {
-    typedef std::vector<string_t> string_container_t;
-
     #define TAG_RECENT_FILES "RecentFiles"
     #define TAG_RECENT_ITEM  "RecentItem"
     #define TAG_URI          "URI"
@@ -59,7 +58,7 @@ namespace /* private */ {
         recently_used_item(
             const string_t& uri,
             const string_t& mime_type,
-            const string_container_t& groups) :
+            const std::vector<string_t>& groups) :
             uri_(uri),
             mime_type_(mime_type),
             is_private_(false),
@@ -99,10 +98,8 @@ namespace /* private */ {
 
         bool has_group(const string_t& name) const
         {
-            string_container_t::const_iterator iter_end = groups_.end();
             return (has_groups() &&
-                    iter_end != std::find_if(
-                        groups_.begin(), iter_end,
+                    std::any_of(groups_.cbegin(), groups_.cend(),
                         [&name](const string_t& s)
                         { return (0 == strcasecmp(s.c_str(), name.c_str())); })
                         // compare two string_t's case insensitive
@@ -126,11 +123,8 @@ namespace /* private */ {
             {
                 write_xml_start_tag(TAG_GROUPS, file, true);
 
-                string_container_t::const_iterator iter = groups_.begin();
-                string_container_t::const_iterator iter_end = groups_.end();
-
-                for ( ; iter != iter_end; ++iter)
-                    write_xml_tag(TAG_GROUP, (*iter), file);
+                for (auto& group : groups_)
+                    write_xml_tag(TAG_GROUP, group, file);
 
                 write_xml_end_tag(TAG_GROUPS, file);
             }
@@ -191,10 +185,10 @@ namespace /* private */ {
         string_t mime_type_;
         time_t timestamp_;
         bool is_private_;
-        string_container_t groups_;
+        std::vector<string_t> groups_;
     };
 
-    typedef std::vector<recently_used_item*> recently_used_item_list_t;
+    typedef std::vector<std::unique_ptr<recently_used_item>> recently_used_item_list_t;
     typedef void (recently_used_item::* SET_COMMAND)(const string_t&);
 
     // thrown if we encounter xml tags that we do not know
@@ -205,7 +199,6 @@ namespace /* private */ {
     {
     public:
         explicit recently_used_file_filter(recently_used_item_list_t& item_list) :
-            item_(nullptr),
             item_list_(item_list)
         {
             named_command_map_[TAG_RECENT_FILES] = &recently_used_item::set_nothing;
@@ -227,7 +220,7 @@ namespace /* private */ {
             const xml_tag_attribute_container_t& /*attributes*/) override
         {
             if ((local_name == TAG_RECENT_ITEM) && (nullptr == item_))
-                item_ = new recently_used_item;
+                item_.reset(new recently_used_item);
         }
 
         virtual void end_element(const string_t& /*raw_name*/, const string_t& local_name) override
@@ -237,17 +230,16 @@ namespace /* private */ {
                 return; // will result in an XML parser error anyway
 
             if (named_command_map_.find(local_name) != named_command_map_.end())
-                (item_->*named_command_map_[local_name])(current_element_);
+                (item_.get()->*named_command_map_[local_name])(current_element_);
             else
             {
-                delete item_;
+                item_.reset();
                 throw unknown_xml_format_exception();
             }
 
             if (local_name == TAG_RECENT_ITEM)
             {
-                item_list_.push_back(item_);
-                item_ = nullptr;
+                item_list_.push_back(std::move(item_));
             }
             current_element_.clear();
         }
@@ -264,7 +256,7 @@ namespace /* private */ {
         virtual void comment(const string_t& /*comment*/) override
         {}
     private:
-        recently_used_item* item_;
+        std::unique_ptr<recently_used_item> item_;
         std::map<string_t, SET_COMMAND> named_command_map_;
         string_t current_element_;
         recently_used_item_list_t& item_list_;
@@ -301,7 +293,7 @@ namespace /* private */ {
             items_written_(0)
         {}
 
-        void operator() (const recently_used_item* item)
+        void operator() (const std::unique_ptr<recently_used_item> & item)
         {
             if (items_written_++ < MAX_RECENTLY_USED_ITEMS)
                 item->write_xml(file_);
@@ -338,23 +330,6 @@ namespace /* private */ {
     }
 
 
-    struct delete_recently_used_item
-    {
-        void operator() (const recently_used_item* item) const
-        { delete item; }
-    };
-
-
-    void recently_used_item_list_clear(recently_used_item_list_t& item_list)
-    {
-        std::for_each(
-            item_list.begin(),
-            item_list.end(),
-            delete_recently_used_item());
-        item_list.clear();
-    }
-
-
     class find_item_predicate
     {
     public:
@@ -362,16 +337,16 @@ namespace /* private */ {
             uri_(uri)
         {}
 
-        bool operator() (const recently_used_item* item) const
+        bool operator() (const std::unique_ptr<recently_used_item> & item) const
             { return (item->uri_ == uri_); }
     private:
-        string_t uri_;
+        string_t const uri_;
     };
 
 
     struct greater_recently_used_item
     {
-        bool operator ()(const recently_used_item* lhs, const recently_used_item* rhs) const
+        bool operator ()(const std::unique_ptr<recently_used_item> & lhs, const std::unique_ptr<recently_used_item> & rhs) const
         { return (lhs->timestamp_ > rhs->timestamp_); }
     };
 
@@ -405,7 +380,7 @@ namespace /* private */ {
         }
         else
         {
-            string_container_t groups;
+            std::vector<string_t> groups;
             groups.push_back(GROUP_OOO);
             groups.push_back(GROUP_STAR_OFFICE);
             groups.push_back(GROUP_STAR_SUITE);
@@ -416,7 +391,7 @@ namespace /* private */ {
             if (mimetype.length() == 0)
                 mimetype = "application/octet-stream";
 
-            item_list.push_back(new recently_used_item(uri, mimetype, groups));
+            item_list.emplace_back(new recently_used_item(uri, mimetype, groups));
         }
 
         // sort decreasing after the timestamp
@@ -434,7 +409,7 @@ namespace /* private */ {
             item_list_(item_list)
         {}
         ~cleanup_guard()
-        { recently_used_item_list_clear(item_list_); }
+        { item_list_.clear(); }
 
         recently_used_item_list_t& item_list_;
     };

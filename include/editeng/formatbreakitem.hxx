@@ -41,6 +41,7 @@ public:
     inline SvxFormatBreakItem( const SvxBreak eBrk /*= SvxBreak::NONE*/,
                             const sal_uInt16 nWhich );
     inline SvxFormatBreakItem& operator=( const SvxFormatBreakItem& rCpy );
+    SvxFormatBreakItem(SvxFormatBreakItem const &) = default; // SfxPoolItem copy function dichotomy
 
     // "pure virtual Methods" from SfxPoolItem
     virtual bool            operator==( const SfxPoolItem& ) const override;
@@ -51,7 +52,7 @@ public:
                                   MapUnit eCoreMetric,
                                   MapUnit ePresMetric,
                                   OUString &rText, const IntlWrapper& ) const override;
-    OUString                 GetValueTextByPos( sal_uInt16 nPos ) const;
+    static OUString          GetValueTextByPos( sal_uInt16 nPos );
 
     virtual SfxPoolItem*     Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual SvStream&        Store( SvStream& , sal_uInt16 nItemVersion ) const override;

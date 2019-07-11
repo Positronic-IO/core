@@ -23,12 +23,12 @@
 #include "TimerTriggeredControllerLock.hxx"
 #include "TabPageNotifiable.hxx"
 
-#include <com/sun/star/chart2/XChartDocument.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
-
 #include <svtools/roadmapwizard.hxx>
 
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace chart2 { class XChartDocument; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 namespace chart
 {
@@ -64,8 +64,6 @@ private:
     css::uno::Reference<css::uno::XComponentContext> m_xComponentContext;
     ChartTypeTemplateProvider* m_pTemplateProvider;
     std::unique_ptr<DialogModel> m_pDialogModel;
-
-    WizardState m_nLastState;
 
     TimerTriggeredControllerLock m_aTimerTriggeredControllerLock;
 

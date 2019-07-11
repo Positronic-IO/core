@@ -25,8 +25,6 @@
 #include <stack>
 #include <vector>
 
-#include <com/sun/star/container/NoSuchElementException.hpp>
-#include <com/sun/star/uno/RuntimeException.hpp>
 #include <osl/file.h>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
@@ -78,8 +76,8 @@ private:
     // elements_ and attributes_):
 
     struct NamespaceData {
-        Span prefix;
-        int nsId;
+        Span const prefix;
+        int const nsId;
 
         NamespaceData():
             nsId(-1) {}
@@ -91,9 +89,9 @@ private:
     typedef std::vector< NamespaceData > NamespaceList;
 
     struct ElementData {
-        Span name;
-        NamespaceList::size_type inheritedNamespaces;
-        int defaultNamespaceId;
+        Span const name;
+        NamespaceList::size_type const inheritedNamespaces;
+        int const defaultNamespaceId;
 
         ElementData(
             Span const & theName,
@@ -168,7 +166,7 @@ private:
 
     SAL_DLLPRIVATE static int toNamespaceId(NamespaceIris::size_type pos);
 
-    OUString fileUrl_;
+    OUString const fileUrl_;
     oslFileHandle fileHandle_;
     sal_uInt64 fileSize_;
     void * fileAddress_;

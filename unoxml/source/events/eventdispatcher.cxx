@@ -92,9 +92,8 @@ namespace DOM { namespace events {
         TypeListenerMap::const_iterator tIter = rTMap.find(aType);
         if (tIter != rTMap.end()) {
             ListenerMap const& rMap = tIter->second;
-            auto iter = rMap.lower_bound(pNode);
-            auto const ibound = rMap.upper_bound(pNode);
-            for( ; iter != ibound; ++iter )
+            auto iterRange = rMap.equal_range(pNode);
+            for( auto iter = iterRange.first; iter != iterRange.second; ++iter )
             {
                 if(iter->second.is())
                     (iter->second)->handleEvent(xEvent);
@@ -102,7 +101,7 @@ namespace DOM { namespace events {
         }
     }
 
-    bool CEventDispatcher::dispatchEvent(
+    void CEventDispatcher::dispatchEvent(
             DOM::CDocument & rDocument, ::osl::Mutex & rMutex,
             xmlNodePtr const pNode, Reference<XNode> const& xNode,
             Reference< XEvent > const& i_xEvent) const
@@ -117,7 +116,7 @@ namespace DOM { namespace events {
         }
 
         if (captureListeners.empty() && targetListeners.empty())
-            return true;
+            return;
 
         CEvent *pEvent = nullptr; // pointer to internal event representation
 
@@ -222,7 +221,7 @@ namespace DOM { namespace events {
             {
                 pEvent->m_currentTarget = rinode->first;
                 callListeners(captureListeners, rinode->second, aType, xEvent);
-                if  (pEvent->m_canceled) return true;
+                if  (pEvent->m_canceled) return;
                 ++rinode;
             }
 
@@ -232,7 +231,7 @@ namespace DOM { namespace events {
             pEvent->m_phase = PhaseType_AT_TARGET;
             pEvent->m_currentTarget = inode->first;
             callListeners(targetListeners, inode->second, aType, xEvent);
-            if  (pEvent->m_canceled) return true;
+            if  (pEvent->m_canceled) return;
             // bubbeling phase
             ++inode;
             if (i_xEvent->getBubbles()) {
@@ -242,12 +241,11 @@ namespace DOM { namespace events {
                     pEvent->m_currentTarget = inode->first;
                     callListeners(targetListeners,
                             inode->second, aType, xEvent);
-                    if  (pEvent->m_canceled) return true;
+                    if  (pEvent->m_canceled) return;
                     ++inode;
                 }
             }
         }
-        return true;
     }
 }}
 

@@ -19,6 +19,7 @@
 
 #include <editeng/numitem.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <vcl/wrkwin.hxx>
@@ -75,6 +76,7 @@
 #include <DrawDocShell.hxx>
 #include <FrameView.hxx>
 #include <optsitem.hxx>
+#include <unokywds.hxx>
 
 #include <unotools/fltrcfg.hxx>
 #include <sfx2/progress.hxx>
@@ -83,6 +85,8 @@
 #include <sfx2/docfac.hxx>
 #define MAX_USER_MOVE       2
 
+#include <animations.hxx>
+#include "pptanimations.hxx"
 #include "pptinanimations.hxx"
 #include "ppt97animations.hxx"
 
@@ -94,6 +98,7 @@
 
 #include <comphelper/string.hxx>
 #include <oox/ole/olehelper.hxx>
+#include <oox/ppt/pptfilterhelpers.hxx>
 
 #include <boost/optional.hpp>
 
@@ -106,7 +111,7 @@ SdPPTImport::SdPPTImport( SdDrawDocument* pDocument, SvStream& rDocStream, SotSt
     : maParam(rDocStream)
 {
 #ifdef DBG_UTIL
-    PropRead* pSummaryInformation = new PropRead( rStorage, "\005SummaryInformation" );
+    std::unique_ptr<PropRead> pSummaryInformation(new PropRead( rStorage, "\005SummaryInformation" ));
     if ( pSummaryInformation->IsValid() )
     {
         pSummaryInformation->Read();
@@ -129,14 +134,13 @@ SdPPTImport::SdPPTImport( SdDrawDocument* pDocument, SvStream& rDocStream, SotSt
             }
         }
     }
-    delete pSummaryInformation;
+    pSummaryInformation.reset();
 #endif
 
-    SvStream* pCurrentUserStream = rStorage.OpenSotStream( "Current User", StreamMode::STD_READ );
-    if( pCurrentUserStream )
+    if (auto pCurrentUserStream
+        = std::unique_ptr<SvStream>(rStorage.OpenSotStream("Current User", StreamMode::STD_READ)))
     {
         ReadPptCurrentUserAtom(*pCurrentUserStream, maParam.aCurrentUserAtom);
-        delete pCurrentUserStream;
     }
 
     if( pDocument )
@@ -247,15 +251,15 @@ bool ImplSdPPTImport::Import()
     const_cast<EditEngine&>(rOutl.GetEditEngine()).SetControlWord( nControlWord );
 
     SdrLayerAdmin& rAdmin = mpDoc->GetLayerAdmin();
-    mnBackgroundLayerID = rAdmin.GetLayerID( SdResId( STR_LAYER_BCKGRND ) );
-    mnBackgroundObjectsLayerID = rAdmin.GetLayerID( SdResId( STR_LAYER_BCKGRNDOBJ ) );
+    mnBackgroundLayerID = rAdmin.GetLayerID( sUNO_LayerName_background );
+    mnBackgroundObjectsLayerID = rAdmin.GetLayerID( sUNO_LayerName_background_objects );
 
     ::sd::DrawDocShell* pDocShell = mpDoc->GetDocSh();
     if ( pDocShell )
         SeekOle( pDocShell, mnFilterOptions );
 
     // hyperlinks
-    PropRead* pDInfoSec2 = new PropRead( mrStorage, "\005DocumentSummaryInformation" );
+    std::unique_ptr<PropRead> pDInfoSec2(new PropRead( mrStorage, "\005DocumentSummaryInformation" ));
     if ( pDInfoSec2->IsValid() )
     {
         PropItem aPropItem;
@@ -392,9 +396,9 @@ bool ImplSdPPTImport::Import()
 
                                     nPropCount /= 6;    // 6 properties per hyperlink
 
-                                    SdHyperlinkEntry aHyperlink;
                                     for ( i = 0; i < nPropCount; i++ )
                                     {
+                                        SdHyperlinkEntry aHyperlink;
                                         aHyperlink.nIndex = 0;
                                         aPropItem.ReadUInt32( nType );
                                         if ( nType != VT_I4 )
@@ -518,7 +522,7 @@ bool ImplSdPPTImport::Import()
             }
         }
     }
-    delete pDInfoSec2;
+    pDInfoSec2.reset();
 
     if ( mbDocumentFound )
     {
@@ -543,18 +547,21 @@ bool ImplSdPPTImport::Import()
         }
     }
 
-    Size aVisAreaSize;
-    switch ( aUserEditAtom.eLastViewType )
+    if (pDocShell)
     {
-        case PptViewTypeEnum::Notes:
-        case PptViewTypeEnum::NotesMaster:
-            aVisAreaSize = aDocAtom.GetNotesPageSize();
-        break;
-        default :
-            aVisAreaSize = aDocAtom.GetSlidesPageSize();
+        Size aVisAreaSize;
+        switch ( aUserEditAtom.eLastViewType )
+        {
+            case PptViewTypeEnum::Notes:
+            case PptViewTypeEnum::NotesMaster:
+                aVisAreaSize = aDocAtom.GetNotesPageSize();
+            break;
+            default :
+                aVisAreaSize = aDocAtom.GetSlidesPageSize();
+        }
+        Scale( aVisAreaSize );
+        pDocShell->SetVisArea( ::tools::Rectangle( Point(), aVisAreaSize ) );
     }
-    Scale( aVisAreaSize );
-    pDocShell->SetVisArea( ::tools::Rectangle( Point(), aVisAreaSize ) );
 
     // create master pages:
 
@@ -805,7 +812,7 @@ bool ImplSdPPTImport::Import()
                                                         ::tools::Rectangle aEmpty;
                                                         if (!aHd2.SeekToBegOfRecord(rStCtrl))
                                                             break;
-                                                        SdrObject* pImpObj = ImportObj( rStCtrl, static_cast<void*>(&aProcessData), aEmpty, aEmpty, /*nCalledByGroup*/0, /*pShapeId*/ nullptr );
+                                                        SdrObject* pImpObj = ImportObj( rStCtrl, aProcessData, aEmpty, aEmpty, /*nCalledByGroup*/0, /*pShapeId*/ nullptr );
                                                         if ( pImpObj )
                                                         {
                                                             pImpObj->SetLayer( mnBackgroundObjectsLayerID );
@@ -1227,54 +1234,51 @@ bool ImplSdPPTImport::Import()
                 pFrameView = new ::sd::FrameView( mpDoc );
                 rViews.push_back( std::unique_ptr<sd::FrameView>(pFrameView) );
             }
-            if ( pFrameView )
-            {
-                sal_uInt16  nSelectedPage = 0;
-                PageKind    ePageKind = PageKind::Standard;
-                EditMode    eEditMode = EditMode::Page;
+            sal_uInt16  nSelectedPage = 0;
+            PageKind    ePageKind = PageKind::Standard;
+            EditMode    eEditMode = EditMode::Page;
 
-                switch ( aUserEditAtom.eLastViewType )
+            switch ( aUserEditAtom.eLastViewType )
+            {
+                case PptViewTypeEnum::Outline:
                 {
-                    case PptViewTypeEnum::Outline:
-                    {
-                        SfxItemSet* pSet = mrMed.GetItemSet();
-                        if ( pSet )
-                            pSet->Put( SfxUInt16Item( SID_VIEW_ID, 3 ) );
-                    }
-                    break;
-                    case PptViewTypeEnum::SlideSorter:
-                    {
-                        SfxItemSet* pSet = mrMed.GetItemSet();
-                        if ( pSet )
-                            pSet->Put( SfxUInt16Item( SID_VIEW_ID, 2 ) );
-                    }
-                    break;
-                    case PptViewTypeEnum::TitleMaster:
-                        nSelectedPage = 1;
-                        SAL_FALLTHROUGH;
-                    case PptViewTypeEnum::SlideMaster:
-                    {
-                        ePageKind = PageKind::Standard;
-                        eEditMode = EditMode::MasterPage;
-                    }
-                    break;
-                    case PptViewTypeEnum::NotesMaster:
-                        eEditMode = EditMode::MasterPage;
-                        SAL_FALLTHROUGH;
-                    case PptViewTypeEnum::Notes:
-                        ePageKind = PageKind::Notes;
-                    break;
-                    case PptViewTypeEnum::Handout:
-                        ePageKind = PageKind::Handout;
-                    break;
-                    default :
-                    case PptViewTypeEnum::Slide:
-                    break;
+                    SfxItemSet* pSet = mrMed.GetItemSet();
+                    if ( pSet )
+                        pSet->Put( SfxUInt16Item( SID_VIEW_ID, 3 ) );
                 }
-                pFrameView->SetPageKind( ePageKind );
-                pFrameView->SetSelectedPage( nSelectedPage );
-                pFrameView->SetViewShEditMode( eEditMode );
+                break;
+                case PptViewTypeEnum::SlideSorter:
+                {
+                    SfxItemSet* pSet = mrMed.GetItemSet();
+                    if ( pSet )
+                        pSet->Put( SfxUInt16Item( SID_VIEW_ID, 2 ) );
+                }
+                break;
+                case PptViewTypeEnum::TitleMaster:
+                    nSelectedPage = 1;
+                    SAL_FALLTHROUGH;
+                case PptViewTypeEnum::SlideMaster:
+                {
+                    ePageKind = PageKind::Standard;
+                    eEditMode = EditMode::MasterPage;
+                }
+                break;
+                case PptViewTypeEnum::NotesMaster:
+                    eEditMode = EditMode::MasterPage;
+                    SAL_FALLTHROUGH;
+                case PptViewTypeEnum::Notes:
+                    ePageKind = PageKind::Notes;
+                break;
+                case PptViewTypeEnum::Handout:
+                    ePageKind = PageKind::Handout;
+                break;
+                default :
+                case PptViewTypeEnum::Slide:
+                break;
             }
+            pFrameView->SetPageKind( ePageKind );
+            pFrameView->SetSelectedPage( nSelectedPage );
+            pFrameView->SetViewShEditMode( eEditMode );
         }
         DffRecordHeader aCustomShowHeader;
         // read and set custom show
@@ -1300,7 +1304,7 @@ bool ImplSdPPTImport::Import()
                                 SdCustomShowList* pList = mpDoc->GetCustomShowList( true );
                                 if ( pList )
                                 {
-                                    SdCustomShow* pSdCustomShow = new SdCustomShow;
+                                    std::unique_ptr<SdCustomShow> pSdCustomShow(new SdCustomShow);
                                     pSdCustomShow->SetName( aCuShow );
                                     sal_uInt32 nFound = 0;
                                     for ( sal_uInt32 nS = 0; nS < nSCount; nS++ )
@@ -1319,9 +1323,7 @@ bool ImplSdPPTImport::Import()
                                         }
                                     }
                                     if ( nFound )
-                                        pList->push_back( pSdCustomShow );
-                                    else
-                                        delete pSdCustomShow;
+                                        pList->push_back( std::move(pSdCustomShow) );
                                 }
                             }
                         }
@@ -1437,7 +1439,7 @@ void ImplSdPPTImport::SetHeaderFooterPageSettings( SdPage* pPage, const PptSlide
                     bVisible = false;
                     rStCtrl.Seek( nPosition );
                     ProcessData aProcessData( rSlidePersist, SdPageCapsule(pPage) );
-                    SdrObject* pObj = ImportObj( rStCtrl, static_cast<void*>(&aProcessData), aEmpty, aEmpty, /*nCalledByGroup*/0, /*pShapeId*/nullptr );
+                    SdrObject* pObj = ImportObj( rStCtrl, aProcessData, aEmpty, aEmpty, /*nCalledByGroup*/0, /*pShapeId*/nullptr );
                     if ( pObj )
                         pPage->NbcInsertObject( pObj, 0 );
                 }
@@ -1841,7 +1843,7 @@ void ImplSdPPTImport::ImportPageEffect( SdPage* pPage, const bool bNewAnimations
         tAnimationVector aAnimationsOnThisPage;
 
         // add effects from page in correct order
-        SdrObjListIter aSdrIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aSdrIter( pPage, SdrIterMode::Flat );
         while ( aSdrIter.IsMore() )
         {
             SdrObject* pObj = aSdrIter.Next();
@@ -1944,8 +1946,9 @@ OUString ImplSdPPTImport::ReadSound(sal_uInt32 nSoundRef) const
                                 osl_getTempDirURL(&aGalleryDir.pData);
                             else
                                 aGalleryDir = SvtPathOptions().GetGalleryPath();
-                            sal_Int32 nTokenCount = comphelper::string::getTokenCount(aGalleryDir, ';');
-                            INetURLObject aGalleryUserSound( aGalleryDir.getToken( nTokenCount - 1, ';' ) );
+                            // Use last token delimited by ';'. copy(lastIndexOf+1) works whether
+                            // string is empty or not and whether ';' is there or not.
+                            INetURLObject aGalleryUserSound( aGalleryDir.copy(aGalleryDir.lastIndexOf(';')+1) );
 
                             aGalleryUserSound.Append( aRetval );
                             const auto nRemainingSize = rStCtrl.remainingSize();
@@ -1958,7 +1961,7 @@ OUString ImplSdPPTImport::ReadSound(sal_uInt32 nSoundRef) const
                             std::vector<sal_uInt8> aBuf(nSoundDataLen);
 
                             rStCtrl.ReadBytes(aBuf.data(), nSoundDataLen);
-                            SvStream* pOStm = ::utl::UcbStreamHelper::CreateStream( aGalleryUserSound.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::WRITE | StreamMode::TRUNC );
+                            std::unique_ptr<SvStream> pOStm = ::utl::UcbStreamHelper::CreateStream( aGalleryUserSound.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::WRITE | StreamMode::TRUNC );
 
                             if( pOStm )
                             {
@@ -1969,8 +1972,6 @@ OUString ImplSdPPTImport::ReadSound(sal_uInt32 nSoundRef) const
                                     GalleryExplorer::InsertURL( GALLERY_THEME_USERSOUNDS, aGalleryUserSound.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
                                     aRetval = aGalleryUserSound.GetMainURL( INetURLObject::DecodeMechanism::NONE );
                                 }
-
-                                delete pOStm;
                             }
                         }
                     }
@@ -2123,9 +2124,10 @@ void ImplSdPPTImport::FillSdAnimationInfo( SdAnimationInfo* pInfo, PptInteractiv
                         if ( !pPtr->aTarget.isEmpty() )
                         {
                             ::sd::DrawDocShell* pDocShell = mpDoc->GetDocSh();
-                            if ( pDocShell )
+                            SfxMedium* pMedium = pDocShell ? pDocShell->GetMedium() : nullptr;
+                            if (pMedium)
                             {
-                                OUString aBaseURL = pDocShell->GetMedium()->GetBaseURL();
+                                OUString aBaseURL = pMedium->GetBaseURL();
                                 OUString aBookmarkURL( pInfo->GetBookmark() );
                                 INetURLObject aURL( pPtr->aTarget );
                                 if( INetProtocol::NotValid == aURL.GetProtocol()
@@ -2576,9 +2578,9 @@ SdrObject* ImplSdPPTImport::ApplyTextObj( PPTTextObj* pTextObj, SdrTextObj* pObj
     return pRet;
 }
 
-SdrObject* ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, void* pData, ::tools::Rectangle& rTextRect, SdrObject* pRet )
+SdrObject* ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, SvxMSDffClientData& rData, ::tools::Rectangle& rTextRect, SdrObject* pRet )
 {
-    SdrObject* pObj = SdrPowerPointImport::ProcessObj( rSt, rObjData, pData, rTextRect, pRet );
+    SdrObject* pObj = SdrPowerPointImport::ProcessObj( rSt, rObjData, rData, rTextRect, pRet );
 
     // read animation effect of object
     if ( pObj )
@@ -2586,9 +2588,9 @@ SdrObject* ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
         // further setup placeholder objects
         if (dynamic_cast<const SdrPageObj*>(pObj))
         {
-            const ProcessData* pProcessData=static_cast<const ProcessData*>(pData);
-            if( pProcessData->pPage.page )
-                static_cast<SdPage *>(pProcessData->pPage.page)->InsertPresObj(
+            const ProcessData& rProcessData=static_cast<const ProcessData&>(rData);
+            if(rProcessData.pPage.page)
+                static_cast<SdPage *>(rProcessData.pPage.page)->InsertPresObj(
                     pObj, PRESOBJ_PAGE );
         }
 
@@ -2723,7 +2725,7 @@ SdrObject* ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData& rObjData, voi
                 if ( bInhabitanceChecked || bAnimationInfoFound )
                     break;
                 bInhabitanceChecked = true;
-                if ( ! ( IsProperty( DFF_Prop_hspMaster ) && SeekToShape( rSt, pData, GetPropertyValue( DFF_Prop_hspMaster, 0 ) ) ) )
+                if ( ! ( IsProperty( DFF_Prop_hspMaster ) && SeekToShape( rSt, &rData, GetPropertyValue( DFF_Prop_hspMaster, 0 ) ) ) )
                     break;
                 ReadDffRecordHeader( rSt, aMasterShapeHd );
                 if ( !SeekToRec( rSt, DFF_msofbtClientData, aMasterShapeHd.GetRecEndFilePos(), &aMasterShapeHd ) )
@@ -2781,7 +2783,13 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportPPT(SvStream &rStream)
         ::sd::DrawDocShellRef xDocShRef = new ::sd::DrawDocShell(SfxObjectCreateMode::EMBEDDED, false, DocumentType::Impress);
         SdDrawDocument *pDoc = xDocShRef->GetDoc();
 
-        bRet = ImportPPT(pDoc, *xDocStream, *xStorage, aSrcMed);
+        try
+        {
+            bRet = ImportPPT(pDoc, *xDocStream, *xStorage, aSrcMed);
+        }
+        catch (...)
+        {
+        }
 
         xDocShRef->DoClose();
     }

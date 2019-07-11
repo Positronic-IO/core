@@ -21,6 +21,8 @@
 
 #include <comphelper/fileurl.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <osl/file.h>
 
@@ -92,6 +94,9 @@ AquaSalFrame::AquaSalFrame( SalFrame* pParent, SalFrameStyleFlags salFrameStyle 
 
 AquaSalFrame::~AquaSalFrame()
 {
+    if (mbFullScreen)
+        ShowFullScreen(false, maGeometry.nDisplayScreenNumber);
+
     assert( GetSalData()->mpInstance->IsMainThread() );
 
     // if the frame is destroyed and has the current menubar
@@ -296,9 +301,9 @@ void AquaSalFrame::ReleaseGraphics( SalGraphics *pGraphics )
     mbGraphics = FALSE;
 }
 
-bool AquaSalFrame::PostEvent(ImplSVEvent* pData)
+bool AquaSalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    GetSalData()->mpInstance->PostEvent( this, pData, SalEvent::UserEvent );
+    GetSalData()->mpInstance->PostEvent( this, pData.release(), SalEvent::UserEvent );
     return TRUE;
 }
 
@@ -1090,7 +1095,11 @@ static Color getColor( NSColor* pSysColor, const Color& rDefault, NSWindow* pWin
     if( pSysColor )
     {
         // transform to RGB
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+            // "'colorUsingColorSpaceName:device:' is deprecated: first deprecated in macOS 10.14 -
+            // Use -colorUsingType: or -colorUsingColorSpace: instead"
         NSColor* pRBGColor = [pSysColor colorUsingColorSpaceName: NSDeviceRGBColorSpace device: [pWin deviceDescription]];
+SAL_WNODEPRECATED_DECLARATIONS_POP
         if( pRBGColor )
         {
             CGFloat r = 0, g = 0, b = 0, a = 0;
@@ -1146,7 +1155,12 @@ void AquaSalFrame::UpdateSettings( AllSettings& rSettings )
 
     OSX_SALDATA_RUNINMAIN( UpdateSettings( rSettings ) )
 
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+        // "'lockFocus' is deprecated: first deprecated in macOS 10.14 - To draw, subclass NSView
+        // and implement -drawRect:; AppKit's automatic deferred display mechanism will call
+        // -drawRect: as necessary to display the view."
     [mpNSView lockFocus];
+SAL_WNODEPRECATED_DECLARATIONS_POP
 
     StyleSettings aStyleSettings = rSettings.GetStyleSettings();
 
@@ -1181,6 +1195,8 @@ void AquaSalFrame::UpdateSettings( AllSettings& rSettings )
     aStyleSettings.SetTitleFont( aTitleFont );
     aStyleSettings.SetFloatTitleFont( aTitleFont );
 
+    vcl::Font aTooltipFont(getFont([NSFont toolTipsFontOfSize: 0], nDPIY, aAppFont));
+    aStyleSettings.SetHelpFont(aTooltipFont);
 
     Color aHighlightColor( getColor( [NSColor selectedTextBackgroundColor],
                                       aStyleSettings.GetHighlightColor(), mpNSWindow ) );
@@ -1226,7 +1242,12 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
     // don't draw frame around each and every toolbar
     ImplGetSVData()->maNWFData.mbDockingAreaAvoidTBFrames = true;
 
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+        // "'unlockFocus' is deprecated: first deprecated in macOS 10.14 - To draw, subclass NSView
+        // and implement -drawRect:; AppKit's automatic deferred display mechanism will call
+        // -drawRect: as necessary to display the view."
     [mpNSView unlockFocus];
+SAL_WNODEPRECATED_DECLARATIONS_POP
 }
 
 const SystemEnvData* AquaSalFrame::GetSystemData() const

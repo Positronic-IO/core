@@ -26,6 +26,7 @@
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
 #include <tools/urlobj.hxx>
+#include <sal/log.hxx>
 #include <component/CPreparedStatement.hxx>
 #include <component/CStatement.hxx>
 #include <unotools/pathoptions.hxx>
@@ -40,20 +41,22 @@ namespace connectivity
 {
 namespace writer
 {
-
-OWriterConnection::OWriterConnection(ODriver* _pDriver) : OConnection(_pDriver),m_nDocCount(0)
+OWriterConnection::OWriterConnection(ODriver* _pDriver)
+    : OConnection(_pDriver)
+    , m_nDocCount(0)
 {
 }
 
 OWriterConnection::~OWriterConnection() = default;
 
-void OWriterConnection::construct(const OUString& rURL, const uno::Sequence< beans::PropertyValue >& rInfo)
+void OWriterConnection::construct(const OUString& rURL,
+                                  const uno::Sequence<beans::PropertyValue>& rInfo)
 {
     //  open file
 
     sal_Int32 nLen = rURL.indexOf(':');
-    nLen = rURL.indexOf(':',nLen+1);
-    OUString aDSN(rURL.copy(nLen+1));
+    nLen = rURL.indexOf(':', nLen + 1);
+    OUString aDSN(rURL.copy(nLen + 1));
 
     m_aFileName = aDSN;
     INetURLObject aURL;
@@ -73,8 +76,8 @@ void OWriterConnection::construct(const OUString& rURL, const uno::Sequence< bea
     m_sPassword.clear();
     const char pPwd[] = "password";
 
-    const beans::PropertyValue* pIter  = rInfo.getConstArray();
-    const beans::PropertyValue* pEnd   = pIter + rInfo.getLength();
+    const beans::PropertyValue* pIter = rInfo.getConstArray();
+    const beans::PropertyValue* pEnd = pIter + rInfo.getLength();
     for (; pIter != pEnd; ++pIter)
     {
         if (pIter->Name == pPwd)
@@ -104,18 +107,18 @@ uno::Reference<text::XTextDocument> const& OWriterConnection::acquireDoc()
     if (!m_sPassword.isEmpty())
     {
         const sal_Int32 nPos = aArgs.getLength();
-        aArgs.realloc(nPos+1);
+        aArgs.realloc(nPos + 1);
         aArgs[nPos].Name = "Password";
         aArgs[nPos].Value <<= m_sPassword;
     }
 
-    uno::Reference< frame::XDesktop2 > xDesktop = frame::Desktop::create(getDriver()->getComponentContext());
-    uno::Reference< lang::XComponent > xComponent;
+    uno::Reference<frame::XDesktop2> xDesktop
+        = frame::Desktop::create(getDriver()->getComponentContext());
+    uno::Reference<lang::XComponent> xComponent;
     uno::Any aLoaderException;
     try
     {
-        xComponent = xDesktop->loadComponentFromURL(
-                         m_aFileName, "_blank", 0, aArgs);
+        xComponent = xDesktop->loadComponentFromURL(m_aFileName, "_blank", 0, aArgs);
     }
     catch (const uno::Exception&)
     {
@@ -133,13 +136,13 @@ uno::Reference<text::XTextDocument> const& OWriterConnection::acquireDoc()
             uno::Exception aLoaderError;
             OSL_VERIFY(aLoaderException >>= aLoaderError);
 
-            SAL_WARN("connectivity.writer", "empty m_xDoc, exception type: " << aLoaderException.getValueTypeName() << ", error message: " << aLoaderError);
+            SAL_WARN("connectivity.writer",
+                     "empty m_xDoc, exception type: " << aLoaderException.getValueTypeName()
+                                                      << ", error message: " << aLoaderError);
         }
 
         const OUString sError(m_aResources.getResourceStringWithSubstitution(
-                                  STR_COULD_NOT_LOAD_FILE,
-                                  "$filename$", m_aFileName
-                              ));
+            STR_COULD_NOT_LOAD_FILE, "$filename$", m_aFileName));
         ::dbtools::throwGenericSQLException(sError, *this);
     }
     osl_atomic_increment(&m_nDocCount);
@@ -154,7 +157,7 @@ void OWriterConnection::releaseDoc()
     {
         if (m_xCloseVetoButTerminateListener.is())
         {
-            m_xCloseVetoButTerminateListener->stop();   // dispose m_xDoc
+            m_xCloseVetoButTerminateListener->stop(); // dispose m_xDoc
             m_xCloseVetoButTerminateListener.clear();
         }
         m_xDoc.clear();
@@ -168,7 +171,7 @@ void OWriterConnection::disposing()
     m_nDocCount = 0;
     if (m_xCloseVetoButTerminateListener.is())
     {
-        m_xCloseVetoButTerminateListener->stop();   // dispose m_xDoc
+        m_xCloseVetoButTerminateListener->stop(); // dispose m_xDoc
         m_xCloseVetoButTerminateListener.clear();
     }
     m_xDoc.clear();
@@ -178,17 +181,15 @@ void OWriterConnection::disposing()
 
 // XServiceInfo
 
+IMPLEMENT_SERVICE_INFO(OWriterConnection, "com.sun.star.sdbc.drivers.writer.Connection",
+                       "com.sun.star.sdbc.Connection")
 
-IMPLEMENT_SERVICE_INFO(OWriterConnection, "com.sun.star.sdbc.drivers.writer.Connection", "com.sun.star.sdbc.Connection")
-
-
-uno::Reference< sdbc::XDatabaseMetaData > SAL_CALL OWriterConnection::getMetaData()
+uno::Reference<sdbc::XDatabaseMetaData> SAL_CALL OWriterConnection::getMetaData()
 {
     ::osl::MutexGuard aGuard(m_aMutex);
     checkDisposed(OConnection_BASE::rBHelper.bDisposed);
 
-
-    uno::Reference< sdbc::XDatabaseMetaData > xMetaData = m_xMetaData;
+    uno::Reference<sdbc::XDatabaseMetaData> xMetaData = m_xMetaData;
     if (!xMetaData.is())
     {
         xMetaData = new OWriterDatabaseMetaData(this);
@@ -198,11 +199,10 @@ uno::Reference< sdbc::XDatabaseMetaData > SAL_CALL OWriterConnection::getMetaDat
     return xMetaData;
 }
 
-
-css::uno::Reference< css::sdbcx::XTablesSupplier > OWriterConnection::createCatalog()
+css::uno::Reference<css::sdbcx::XTablesSupplier> OWriterConnection::createCatalog()
 {
     ::osl::MutexGuard aGuard(m_aMutex);
-    uno::Reference< css::sdbcx::XTablesSupplier > xTab = m_xCatalog;
+    uno::Reference<css::sdbcx::XTablesSupplier> xTab = m_xCatalog;
     if (!xTab.is())
     {
         auto pCat = new OWriterCatalog(this);
@@ -212,8 +212,7 @@ css::uno::Reference< css::sdbcx::XTablesSupplier > OWriterConnection::createCata
     return xTab;
 }
 
-
-uno::Reference< sdbc::XStatement > SAL_CALL OWriterConnection::createStatement()
+uno::Reference<sdbc::XStatement> SAL_CALL OWriterConnection::createStatement()
 {
     ::osl::MutexGuard aGuard(m_aMutex);
     checkDisposed(OConnection_BASE::rBHelper.bDisposed);
@@ -223,8 +222,8 @@ uno::Reference< sdbc::XStatement > SAL_CALL OWriterConnection::createStatement()
     return xReturn;
 }
 
-
-uno::Reference< sdbc::XPreparedStatement > SAL_CALL OWriterConnection::prepareStatement(const OUString& sql)
+uno::Reference<sdbc::XPreparedStatement>
+    SAL_CALL OWriterConnection::prepareStatement(const OUString& sql)
 {
     ::osl::MutexGuard aGuard(m_aMutex);
     checkDisposed(OConnection_BASE::rBHelper.bDisposed);
@@ -236,8 +235,8 @@ uno::Reference< sdbc::XPreparedStatement > SAL_CALL OWriterConnection::prepareSt
     return pStmt;
 }
 
-
-uno::Reference< sdbc::XPreparedStatement > SAL_CALL OWriterConnection::prepareCall(const OUString& /*sql*/)
+uno::Reference<sdbc::XPreparedStatement>
+    SAL_CALL OWriterConnection::prepareCall(const OUString& /*sql*/)
 {
     ::osl::MutexGuard aGuard(m_aMutex);
     checkDisposed(OConnection_BASE::rBHelper.bDisposed);

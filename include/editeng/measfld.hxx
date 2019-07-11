@@ -32,12 +32,17 @@ enum class SdrMeasureFieldKind { Value, Unit, Rotate90Blanks };
 class EDITENG_DLLPUBLIC SdrMeasureField: public SvxFieldData {
     SdrMeasureFieldKind eMeasureFieldKind;
 public:
-    SV_DECL_PERSIST1(SdrMeasureField, css::text::textfield::Type::MEASURE)
+    virtual sal_Int32  GetClassId() const override { return css::text::textfield::Type::MEASURE; }
     SdrMeasureField(SdrMeasureFieldKind eNewKind): eMeasureFieldKind(eNewKind) {}
     virtual ~SdrMeasureField() override;
-    virtual tools::SvRef<SvxFieldData> Clone() const override;
+    virtual std::unique_ptr<SvxFieldData> Clone() const override;
     virtual bool operator==(const SvxFieldData&) const override;
     SdrMeasureFieldKind GetMeasureFieldKind() const { return eMeasureFieldKind; }
+
+    SdrMeasureField(SdrMeasureField const &) = default;
+    SdrMeasureField(SdrMeasureField &&) = default;
+    SdrMeasureField & operator =(SdrMeasureField const &) = default;
+    SdrMeasureField & operator =(SdrMeasureField &&) = default;
 };
 
 

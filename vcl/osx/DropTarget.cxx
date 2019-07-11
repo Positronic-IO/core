@@ -44,12 +44,12 @@ using namespace com::sun::star::uno;
 using namespace com::sun::star;
 using namespace comphelper;
 
-OUString dropTarget_getImplementationName()
+static OUString dropTarget_getImplementationName()
 {
     return OUString("com.sun.star.comp.datatransfer.dnd.OleDropTarget_V1");
 }
 
-Sequence<OUString> dropTarget_getSupportedServiceNames()
+static Sequence<OUString> dropTarget_getSupportedServiceNames()
 {
     return { OUString("com.sun.star.datatransfer.dnd.OleDropTarget") };
 }
@@ -60,7 +60,7 @@ namespace /* private */
     // coordinate system upper-left hence we need to transform
     // coordinates
 
-    inline void CocoaToVCL(NSPoint& rPoint, const NSRect& bounds)
+    void CocoaToVCL(NSPoint& rPoint, const NSRect& bounds)
     {
         rPoint.y = bounds.size.height - rPoint.y;
     }
@@ -381,7 +381,11 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
     if (parentWnd == nil && (wndStyles == topWndStyle))
     {
         [wnd registerDraggingDestinationHandler:mDropTargetHelper];
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+            // "'NSFilenamesPboardType' is deprecated: first deprecated in macOS 10.14 - Create
+            // multiple pasteboard items with NSPasteboardTypeFileURL or kUTTypeFileURL instead"
         [wnd registerForDraggedTypes: [NSArray arrayWithObjects: NSFilenamesPboardType, nil]];
+SAL_WNODEPRECATED_DECLARATIONS_POP
     }
 }
 

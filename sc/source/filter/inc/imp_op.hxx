@@ -23,13 +23,7 @@
 #include <sal/types.h>
 #include "xiroot.hxx"
 #include "xistream.hxx"
-#include "xistyle.hxx"
-#include "flttypes.hxx"
-#include "root.hxx"
-#include "otlnbuff.hxx"
-#include "colrowst.hxx"
-#include "excdefs.hxx"
-#include <rtl/ref.hxx>
+#include "ftools.hxx"
 
 #include <vector>
 #include <memory>
@@ -39,8 +33,12 @@ class SvStream;
 
 class ScFormulaCell;
 class ScDocument;
+class ScTokenArray;
 
 class ExcelToSc;
+class XclImpOutlineBuffer;
+class XclImpColRowSettings;
+struct XclAddress;
 
 class ImportTyp
 {
@@ -97,14 +95,14 @@ protected:
     ScfUInt32Vec            maSheetOffsets;
     ScRange                 maScOleSize;        /// Visible range if embedded.
 
-    ExcelToSc*              pFormConv;          // formula-converter
+    std::unique_ptr<ExcelToSc> pFormConv;          // formula-converter
 
     XclImpOutlineBuffer*    pColOutlineBuff;
     XclImpOutlineBuffer*    pRowOutlineBuff;
     XclImpColRowSettings*   pColRowBuff;        // Col/Row settings 1 table
 
     typedef std::vector< std::unique_ptr<XclImpOutlineDataBuffer> > XclImpOutlineListBuffer;
-    XclImpOutlineListBuffer* pOutlineListBuffer;
+    std::unique_ptr<XclImpOutlineListBuffer> pOutlineListBuffer;
 
     LastFormulaMapType maLastFormulaCells; // Keep track of last formula cells in each column.
     LastFormula* mpLastFormula;
@@ -188,7 +186,7 @@ protected:
 
     virtual void            EndSheet();
     void                    NewTable();
-    const ScTokenArray*     ErrorToFormula( bool bErrOrVal, sal_uInt8 nError,
+    std::unique_ptr<ScTokenArray> ErrorToFormula( bool bErrOrVal, sal_uInt8 nError,
                                 double& rVal );
 
     void            AdjustRowHeight();

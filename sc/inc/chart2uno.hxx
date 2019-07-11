@@ -27,7 +27,6 @@
 #include "chartlis.hxx"
 
 #include <svl/lstner.hxx>
-#include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <com/sun/star/chart2/data/XDataProvider.hpp>
 #include <com/sun/star/chart2/data/XSheetDataProvider.hpp>
 #include <com/sun/star/chart2/data/XRangeXMLConversion.hpp>
@@ -35,7 +34,6 @@
 #include <com/sun/star/chart2/data/XDataSequence.hpp>
 #include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
 #include <com/sun/star/chart2/data/XNumericalDataSequence.hpp>
-#include <com/sun/star/chart2/data/XLabeledDataSequence.hpp>
 #include <com/sun/star/chart2/data/DataSequenceRole.hpp>
 #include <com/sun/star/chart2/XTimeBased.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -49,6 +47,8 @@
 #include <memory>
 #include <unordered_set>
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace chart2 { namespace data { class XLabeledDataSequence; } } } } }
 
 class ScDocument;
 
@@ -144,7 +144,7 @@ public:
 private:
 
     ScDocument*                 m_pDocument;
-    SfxItemPropertySet          m_aPropSet;
+    SfxItemPropertySet const    m_aPropSet;
     bool                        m_bIncludeHiddenCells;
 };
 
@@ -376,11 +376,11 @@ private:
     RangeIndexMapPtr            m_pRangeIndices;
     ExtRefListenerPtr           m_pExtRefListener;
     css::uno::Reference < css::chart2::data::XDataProvider > m_xDataProvider;
-    SfxItemPropertySet          m_aPropSet;
+    SfxItemPropertySet const    m_aPropSet;
 
     std::unique_ptr<HiddenRangeListener> m_pHiddenListener;
 
-    ScLinkListener*             m_pValueListener;
+    std::unique_ptr<ScLinkListener>      m_pValueListener;
     XModifyListenerArr_Impl     m_aValueListeners;
 
     bool                        m_bGotDataChangedHint;

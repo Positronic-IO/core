@@ -42,7 +42,7 @@ public:
     virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual sal_uInt16      GetVersion( sal_uInt16 nFileVersion ) const override;
 
-    OUString                GetValueTextByPos( sal_uInt16 nPos ) const;
+    static OUString         GetValueTextByPos( sal_uInt16 nPos );
     virtual sal_uInt16      GetValueCount() const override;
 
     virtual bool GetPresentation( SfxItemPresentation ePres,
@@ -53,12 +53,6 @@ public:
 
     virtual bool            QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId = 0 ) const override;
     virtual bool            PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId ) override;
-
-    SvxCharReliefItem& operator=( const SvxCharReliefItem& rItem )
-    {
-        SetValue( rItem.GetValue() );
-        return *this;
-    }
 };
 
 #endif

@@ -21,7 +21,6 @@
 #define INCLUDED_SD_SOURCE_UI_INC_TPOPTION_HXX
 
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/field.hxx>
 #include <vcl/button.hxx>
@@ -34,13 +33,12 @@
 class SdTpOptionsSnap : public SvxGridTabPage
 {
 public:
-            SdTpOptionsSnap( vcl::Window* pParent, const SfxItemSet& rInAttrs  );
-            virtual ~SdTpOptionsSnap() override;
+    SdTpOptionsSnap(TabPageParent pParent, const SfxItemSet& rInAttrs);
+    virtual ~SdTpOptionsSnap() override;
 
     static  VclPtr<SfxTabPage> Create( TabPageParent, const SfxItemSet* );
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
-
 };
 
 /**
@@ -67,7 +65,7 @@ public:
 /**
  * Option-Tab-Page: View
  */
-class SdModule;
+
 class SdTpOptionsMisc : public SfxTabPage
 {
  friend class SdModule;

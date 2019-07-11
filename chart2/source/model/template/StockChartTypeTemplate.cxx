@@ -20,16 +20,13 @@
 #include "StockChartTypeTemplate.hxx"
 #include <DataSeriesHelper.hxx>
 #include "StockDataInterpreter.hxx"
-#include <CartesianCoordinateSystem.hxx>
-#include <AxisHelper.hxx>
 #include <DiagramHelper.hxx>
 #include <servicenames_charttypes.hxx>
-#include <servicenames_coosystems.hxx>
-#include <AxisIndexDefines.hxx>
-#include <com/sun/star/chart2/AxisType.hpp>
-#include <com/sun/star/chart2/data/XDataSource.hpp>
 #include <com/sun/star/chart2/XChartTypeContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
+#include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <PropertyHelper.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
@@ -222,11 +219,8 @@ void SAL_CALL StockChartTypeTemplate::applyStyle(
 
         bool bHasVolume = false;
         getFastPropertyValue( PROP_STOCKCHARTTYPE_TEMPLATE_VOLUME ) >>= bHasVolume;
-        if( bHasVolume )
-        {
-            if( nChartTypeIndex != 0 )
-                nNewAxisIndex = 1;
-        }
+        if( bHasVolume && nChartTypeIndex != 0 )
+            nNewAxisIndex = 1;
 
         Reference< beans::XPropertySet > xProp( xSeries, uno::UNO_QUERY );
         if( xProp.is() )
@@ -441,11 +435,7 @@ sal_Bool SAL_CALL StockChartTypeTemplate::matchesTemplate(
                 break;
         }
 
-        if( xCandleStickChartType.is() &&
-            ( ( bHasVolume &&
-                xVolumeChartType.is() ) ||
-              ( ! bHasVolume &&
-                ! xVolumeChartType.is() )))
+        if (xCandleStickChartType.is() && bHasVolume == xVolumeChartType.is())
         {
             bResult = true;
 

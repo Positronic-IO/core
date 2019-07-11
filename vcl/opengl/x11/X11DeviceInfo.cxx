@@ -13,6 +13,7 @@
 #include <config_features.h>
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -282,8 +283,8 @@ bool X11OpenGLDeviceInfo::isDeviceBlocked()
     if (mnGLMajorVersion == 1)
         return true;
 
-    CrashReporter::AddKeyValue("AdapterVendorId", rtl::OStringToOUString(maVendor, RTL_TEXTENCODING_UTF8));
-    CrashReporter::AddKeyValue("AdapterDeviceId", rtl::OStringToOUString(maRenderer, RTL_TEXTENCODING_UTF8));
+    CrashReporter::AddKeyValue("AdapterVendorId", OStringToOUString(maVendor, RTL_TEXTENCODING_UTF8));
+    CrashReporter::AddKeyValue("AdapterDeviceId", OStringToOUString(maRenderer, RTL_TEXTENCODING_UTF8));
 
     SAL_INFO("vcl.opengl", "Vendor: " << maVendor);
     SAL_INFO("vcl.opengl", "Renderer: " << maRenderer);

@@ -21,13 +21,13 @@
 #define INCLUDED_SC_INC_TABBGCOLOR_HXX
 
 #include <tools/color.hxx>
-#include "address.hxx"
+#include "types.hxx"
 
 #include <vector>
 
 struct ScUndoTabColorInfo
 {
-    SCTAB mnTabId;
+    SCTAB const mnTabId;
     Color maOldTabBgColor;
     Color maNewTabBgColor;
 

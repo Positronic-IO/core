@@ -45,6 +45,7 @@
 #include <comphelper/processfactory.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/xmlimp.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -260,7 +261,6 @@ SchXMLSeries2Context::SchXMLSeries2Context(
         mrAxes( rAxes ),
         mrStyleVector( rStyleVector ),
         mrRegressionStyleVector( rRegressionStyleVector ),
-        m_xSeries(nullptr),
         mnSeriesIndex( nSeriesIndex ),
         mnDataPointIndex( 0 ),
         m_bStockHasVolume( bStockHasVolume ),
@@ -503,7 +503,7 @@ struct DomainInfo
         : aRole(rRole), aRange(rRange), nIndexForLocalData(nIndex)
     {}
 
-    OUString aRole;
+    OUString const aRole;
     OUString aRange;
     sal_Int32 nIndexForLocalData;
 };
@@ -909,14 +909,11 @@ void SchXMLSeries2Context::setStylesToRegressionCurves(
                 Reference< chart2::XRegressionCurve > xRegCurve( xMSF->createInstance( aServiceName ), uno::UNO_QUERY_THROW );
                 Reference< chart2::XRegressionCurveContainer > xRegCurveCont( regressionStyle.m_xSeries, uno::UNO_QUERY_THROW );
 
-                if( xRegCurve.is())
-                {
-                    Reference< beans::XPropertySet > xCurveProperties( xRegCurve, uno::UNO_QUERY );
-                    if( pPropStyleContext != nullptr)
-                        pPropStyleContext->FillPropertySet( xCurveProperties );
+                Reference< beans::XPropertySet > xCurveProperties( xRegCurve, uno::UNO_QUERY );
+                if( pPropStyleContext != nullptr)
+                    pPropStyleContext->FillPropertySet( xCurveProperties );
 
-                    xRegCurve->setEquationProperties( regressionStyle.m_xEquationProperties );
-                }
+                xRegCurve->setEquationProperties( regressionStyle.m_xEquationProperties );
 
                 xRegCurveCont->addRegressionCurve( xRegCurve );
             }

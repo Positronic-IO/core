@@ -87,13 +87,13 @@ void* GraphicHelper::getEnhMetaFileFromGDI_Impl( const GDIMetaFile* pGDIMeta )
         OUString aMetaFile = aTempFile.GetFileName();
         OUString aMetaURL = aTempFile.GetURL();
 
-        SvStream* pStream = ::utl::UcbStreamHelper::CreateStream( aMetaURL, StreamMode::STD_READWRITE );
+        std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream( aMetaURL, StreamMode::STD_READWRITE );
         if ( pStream )
         {
             Graphic aGraph( *pGDIMeta );
             ErrCode nFailed = GraphicConverter::Export( *pStream, aGraph, ConvertDataFormat::EMF );
             pStream->Flush();
-            delete pStream;
+            pStream.reset();
 
             if ( !nFailed )
                 pResult = GetEnhMetaFileW( o3tl::toW(aMetaFile.getStr()) );
@@ -121,7 +121,7 @@ void* GraphicHelper::getWinMetaFileFromGDI_Impl( const GDIMetaFile* pGDIMeta, co
         pStream.Flush();
         if ( !nFailed )
         {
-            sal_Int32 nLength = pStream.Seek( STREAM_SEEK_TO_END );
+            sal_Int32 nLength = pStream.TellEnd();
             if ( nLength > 22 )
             {
                 HMETAFILE hMeta = SetMetaFileBitsEx( nLength - 22,
@@ -196,7 +196,7 @@ bool GraphicHelper::getThumbnailFormatFromGDI_Impl(GDIMetaFile const * pMetaFile
 
     GraphicFilter& rFilter = GraphicFilter::GetGraphicFilter();
 
-    if (rFilter.compressAsPNG(aResultBitmap, *pStream.get()) != ERRCODE_NONE)
+    if (rFilter.compressAsPNG(aResultBitmap, *pStream) != ERRCODE_NONE)
         return false;
 
     pStream->Flush();

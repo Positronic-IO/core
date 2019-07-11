@@ -58,8 +58,6 @@ SvxLineStyleToolBoxControl::SvxLineStyleToolBoxControl( sal_uInt16 nSlotId,
                                                         sal_uInt16 nId,
                                                         ToolBox& rTbx ) :
     SfxToolBoxControl( nSlotId, nId, rTbx ),
-    pStyleItem      ( nullptr ),
-    pDashItem       ( nullptr ),
     bUpdate         ( false )
 {
     addStatusListener( ".uno:LineDash");
@@ -163,7 +161,7 @@ void SvxLineStyleToolBoxControl::Update( const SfxPoolItem* pState )
         }
     }
 
-    if ( pState && ( dynamic_cast<const SvxDashListItem*>( pState) !=  nullptr ) )
+    if ( auto pDashListItem = dynamic_cast<const SvxDashListItem*>( pState) )
     {
         // The list of line styles has changed
         SvxLineBox* pBox = static_cast<SvxLineBox*>(GetToolBox().GetItemWindow( GetId() ));
@@ -173,7 +171,7 @@ void SvxLineStyleToolBoxControl::Update( const SfxPoolItem* pState )
         pBox->Clear();
         pBox->InsertEntry( SvxResId(RID_SVXSTR_INVISIBLE) );
         pBox->InsertEntry( SvxResId(RID_SVXSTR_SOLID) );
-        pBox->Fill( static_cast<const SvxDashListItem*>(pState)->GetDashList() );
+        pBox->Fill( pDashListItem->GetDashList() );
         pBox->SelectEntry( aString );
     }
 }
@@ -247,7 +245,6 @@ class SvxLineEndWindow : public svtools::ToolbarPopup
 private:
     XLineEndListRef mpLineEndList;
     VclPtr<ValueSet> mpLineEndSet;
-    sal_uInt16 mnCols;
     sal_uInt16 mnLines;
     Size maBmpSize;
     svt::ToolboxController& mrController;
@@ -266,10 +263,11 @@ public:
     virtual void statusChanged( const css::frame::FeatureStateEvent& rEvent ) override;
 };
 
+static constexpr sal_uInt16 gnCols = 2;
+
 SvxLineEndWindow::SvxLineEndWindow( svt::ToolboxController& rController, vcl::Window* pParentWindow )
     :  ToolbarPopup ( rController.getFrameInterface(), pParentWindow, WB_STDPOPUP | WB_MOVEABLE | WB_CLOSEABLE ),
     mpLineEndSet    ( VclPtr<ValueSet>::Create(this, WinBits( WB_ITEMBORDER | WB_3DLOOK | WB_NO_DIRECTSELECT ) )),
-    mnCols          ( 2 ),
     mnLines         ( 12 ),
     mrController    ( rController )
 {
@@ -287,7 +285,7 @@ SvxLineEndWindow::SvxLineEndWindow( svt::ToolboxController& rController, vcl::Wi
     DBG_ASSERT( mpLineEndList.is(), "LineEndList not found" );
 
     mpLineEndSet->SetSelectHdl( LINK( this, SvxLineEndWindow, SelectHdl ) );
-    mpLineEndSet->SetColCount( mnCols );
+    mpLineEndSet->SetColCount( gnCols );
 
     // ValueSet fill with entries of LineEndList
     FillValueSet();
@@ -374,7 +372,7 @@ void SvxLineEndWindow::FillValueSet()
     basegfx::B2DPolyPolygon aNothing;
     mpLineEndList->Insert(o3tl::make_unique<XLineEndEntry>(aNothing, SvxResId(RID_SVXSTR_NONE)));
     const XLineEndEntry* pEntry = mpLineEndList->GetLineEnd(nCount);
-    Bitmap aBmp = mpLineEndList->GetUiBitmap( nCount );
+    BitmapEx aBmp = mpLineEndList->GetUiBitmap( nCount );
     OSL_ENSURE( !aBmp.IsEmpty(), "UI bitmap was not created" );
 
     maBmpSize = aBmp.GetSizePixel();
@@ -383,9 +381,9 @@ void SvxLineEndWindow::FillValueSet()
     Point aPt0( 0, 0 );
     Point aPt1( maBmpSize.Width(), 0 );
 
-    pVD->DrawBitmap( Point(), aBmp );
-    mpLineEndSet->InsertItem(1, Image(pVD->GetBitmap(aPt0, maBmpSize)), pEntry->GetName());
-    mpLineEndSet->InsertItem(2, Image(pVD->GetBitmap(aPt1, maBmpSize)), pEntry->GetName());
+    pVD->DrawBitmapEx( Point(), aBmp );
+    mpLineEndSet->InsertItem(1, Image(pVD->GetBitmapEx(aPt0, maBmpSize)), pEntry->GetName());
+    mpLineEndSet->InsertItem(2, Image(pVD->GetBitmapEx(aPt1, maBmpSize)), pEntry->GetName());
 
     mpLineEndList->Remove(nCount);
 
@@ -396,11 +394,11 @@ void SvxLineEndWindow::FillValueSet()
         aBmp = mpLineEndList->GetUiBitmap( i );
         OSL_ENSURE( !aBmp.IsEmpty(), "UI bitmap was not created" );
 
-        pVD->DrawBitmap( aPt0, aBmp );
+        pVD->DrawBitmapEx( aPt0, aBmp );
         mpLineEndSet->InsertItem(static_cast<sal_uInt16>((i+1)*2L+1),
-                Image(pVD->GetBitmap(aPt0, maBmpSize)), pEntry->GetName());
+                Image(pVD->GetBitmapEx(aPt0, maBmpSize)), pEntry->GetName());
         mpLineEndSet->InsertItem(static_cast<sal_uInt16>((i+2)*2L),
-                Image(pVD->GetBitmap(aPt1, maBmpSize)), pEntry->GetName());
+                Image(pVD->GetBitmapEx(aPt1, maBmpSize)), pEntry->GetName());
     }
     mnLines = std::min( static_cast<sal_uInt16>(nCount + 1), sal_uInt16(MAX_LINES) );
     mpLineEndSet->SetLineCount( mnLines );
@@ -428,7 +426,7 @@ void SvxLineEndWindow::statusChanged( const css::frame::FeatureStateEvent& rEven
 void SvxLineEndWindow::SetSize()
 {
     sal_uInt16 nItemCount = mpLineEndSet->GetItemCount();
-    sal_uInt16 nMaxLines  = nItemCount / mnCols;
+    sal_uInt16 nMaxLines  = nItemCount / gnCols;
 
     WinBits nBits = mpLineEndSet->GetStyle();
     if ( mnLines == nMaxLines )

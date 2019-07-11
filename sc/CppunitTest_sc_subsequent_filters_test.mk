@@ -62,13 +62,18 @@ $(eval $(call gb_CppunitTest_set_include,sc_subsequent_filters_test,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sc_subsequent_filters_test))
+$(eval $(call gb_CppunitTest_use_api,sc_subsequent_filters_test,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sc_subsequent_filters_test))
 $(eval $(call gb_CppunitTest_use_vcl,sc_subsequent_filters_test))
 
 $(eval $(call gb_CppunitTest_use_components,sc_subsequent_filters_test,\
 	basic/util/sb \
+	basctl/util/basctl \
     chart2/source/chartcore \
     chart2/source/controller/chartcontroller \
     comphelper/util/comphelp \
@@ -91,6 +96,7 @@ $(eval $(call gb_CppunitTest_use_components,sc_subsequent_filters_test,\
     scaddins/source/datefunc/date \
     sc/util/sc \
     sc/util/scfilt \
+    sc/util/vbaobj \
     sfx2/util/sfx \
     sot/util/sot \
     svl/util/svl \
@@ -123,5 +129,7 @@ $(eval $(call gb_CppunitTest_use_externals,sc_subsequent_filters_test,\
 ))
 
 $(eval $(call gb_CppunitTest_use_configuration,sc_subsequent_filters_test))
+
+$(eval $(call gb_CppunitTest_use_more_fonts,subsequent_filters_test))
 
 # vim: set noet sw=4 ts=4:

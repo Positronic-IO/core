@@ -118,7 +118,7 @@ public:
                 if (!next(&url, false)) {
                     throw CommandLineArgs::Supplier::Exception();
                 }
-                m_cwdUrl.reset(url);
+                m_cwdUrl = url;
                 break;
             }
         case '2':
@@ -131,7 +131,7 @@ public:
                 if (osl::FileBase::getFileURLFromSystemPath(path, url) ==
                     osl::FileBase::E_None)
                 {
-                    m_cwdUrl.reset(url);
+                    m_cwdUrl = url;
                 }
                 break;
             }
@@ -237,7 +237,7 @@ rtl::Reference< RequestHandler > RequestHandler::pGlobal;
 
 // Turns a string in aMsg such as file:///home/foo/.libreoffice/3
 // Into a hex string of well known length ff132a86...
-OUString CreateMD5FromString( const OUString& aMsg )
+static OUString CreateMD5FromString( const OUString& aMsg )
 {
     SAL_INFO("desktop.app", "create md5 from '" << aMsg << "'");
 
@@ -287,12 +287,12 @@ IMPL_STATIC_LINK( ProcessEventsClass_Impl, ProcessDocumentsEvent, void*, pEvent,
     delete pDocsRequest;
 }
 
-void ImplPostForeignAppEvent( ApplicationEvent* pEvent )
+static void ImplPostForeignAppEvent( ApplicationEvent* pEvent )
 {
     Application::PostUserEvent( LINK( nullptr, ProcessEventsClass_Impl, CallEvent ), pEvent );
 }
 
-void ImplPostProcessDocumentsEvent( ProcessDocumentsRequest* pEvent )
+static void ImplPostProcessDocumentsEvent( ProcessDocumentsRequest* pEvent )
 {
     Application::PostUserEvent( LINK( nullptr, ProcessEventsClass_Impl, ProcessDocumentsEvent ), pEvent );
 }
@@ -427,8 +427,8 @@ struct DbusMessageHolder {
     DBusMessage * message;
 
 private:
-    DbusMessageHolder(DbusMessageHolder &) = delete;
-    void operator =(DbusMessageHolder) = delete;
+    DbusMessageHolder(DbusMessageHolder const &) = delete;
+    DbusMessageHolder& operator =(DbusMessageHolder const &) = delete;
 };
 
 }
@@ -1086,7 +1086,7 @@ bool IpcThread::process(OString const & arguments, bool * waitProcessed) {
             }
             if (bShowHelp) {
                 aHelpURLBuffer.append("?Language=");
-                aHelpURLBuffer.append(utl::ConfigManager::getLocale());
+                aHelpURLBuffer.append(utl::ConfigManager::getUILocale());
 #if defined UNX
                 aHelpURLBuffer.append("&System=UNX");
 #elif defined WNT
@@ -1319,7 +1319,7 @@ bool RequestHandler::ExecuteCmdLineRequests(
     osl::ClearableMutexGuard aGuard( GetMutex() );
 
     // ensure that Processed flag (if exists) is signaled in any outcome
-    ConditionSetGuard(aRequest.pcProcessed);
+    ConditionSetGuard aSetGuard(aRequest.pcProcessed);
 
     static std::vector<DispatchWatcher::DispatchRequest> aDispatchList;
 

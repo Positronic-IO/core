@@ -381,13 +381,10 @@ IMPL_LINK_NOARG(CloseDispatcher, impl_asyncCallback, LinkParamNone*, void)
         try
         {
             css::uno::Reference< css::beans::XFastPropertySet > xSet( xContext->getServiceManager()->createInstanceWithContext(IMPLEMENTATIONNAME_QUICKLAUNCHER, xContext), css::uno::UNO_QUERY_THROW );
-            if( xSet.is() )
-            {
-                css::uno::Any aVal( xSet->getFastPropertyValue( 0 ) );
-                bool bState = false;
-                if( aVal >>= bState )
-                    bQuickstarterRunning = bState;
-            }
+            css::uno::Any aVal( xSet->getFastPropertyValue( 0 ) );
+            bool bState = false;
+            if( aVal >>= bState )
+                bQuickstarterRunning = bState;
         }
         catch( const css::uno::Exception& )
         {
@@ -417,7 +414,7 @@ IMPL_LINK_NOARG(CloseDispatcher, impl_asyncCallback, LinkParamNone*, void)
     // This method was called asynchronous from our main thread by using a pointer.
     // We reached this method only, by using a reference to ourself :-)
     // Further this member is used to detect still running and not yet finished
-    // asynchronous operations. So its time now to release this reference.
+    // asynchronous operations. So it's time now to release this reference.
     // But hold it temp alive. Otherwise we die before we can finish this method really :-))
     css::uno::Reference< css::uno::XInterface > xTempHold = m_xSelfHold;
     m_xSelfHold.clear();

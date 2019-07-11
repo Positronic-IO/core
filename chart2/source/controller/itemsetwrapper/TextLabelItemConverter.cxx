@@ -27,6 +27,7 @@
 #include "SchWhichPairs.hxx"
 #include <unonames.hxx>
 
+#include <sal/log.hxx>
 #include <editeng/brushitem.hxx>
 #include <editeng/sizeitem.hxx>
 #include <svl/ilstitem.hxx>
@@ -34,6 +35,7 @@
 #include <svl/stritem.hxx>
 #include <svx/tabline.hxx>
 
+#include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/chart2/DataPointLabel.hpp>
 #include <com/sun/star/chart2/Symbol.hpp>
 #include <memory>
@@ -194,7 +196,7 @@ TextLabelItemConverter::TextLabelItemConverter(
     mbDataSeries(bDataSeries),
     mbForbidPercentValue(true)
 {
-    maConverters.push_back(new CharacterPropertyItemConverter(rPropertySet, rItemPool, pRefSize, "ReferencePageSize"));
+    maConverters.emplace_back(new CharacterPropertyItemConverter(rPropertySet, rItemPool, pRefSize, "ReferencePageSize"));
 
     uno::Reference<XDiagram> xDiagram(ChartModelHelper::findDiagram(xChartModel));
     uno::Reference<XChartType> xChartType(DiagramHelper::getChartTypeOfSeries(xDiagram, xSeries));
@@ -208,7 +210,6 @@ TextLabelItemConverter::TextLabelItemConverter(
 
 TextLabelItemConverter::~TextLabelItemConverter()
 {
-    std::for_each(maConverters.begin(), maConverters.end(), std::default_delete<ItemConverter>());
 }
 
 void TextLabelItemConverter::FillItemSet( SfxItemSet& rOutItemSet ) const

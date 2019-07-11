@@ -26,7 +26,7 @@
 
 #define nBackGroundColor    aColorTable[ 0 ]
 
-typedef ::std::vector< Bundle* > BundleList;
+typedef ::std::vector< std::unique_ptr<Bundle> > BundleList;
 
 class CGMElements
 {
@@ -64,7 +64,6 @@ class CGMElements
         FloatRect           aClipRect;
 
         ColorSelectionMode  eColorSelectionMode;
-        ColorModel          eColorModel;
         sal_uInt32          nColorMaximumIndex;             // default 63
         sal_uInt32          nLatestColorMaximumIndex;       // default 63
         sal_Int8            aColorTableEntryIs[ 256 ];
@@ -132,7 +131,6 @@ class CGMElements
         static Bundle*      GetBundleIndex( long nIndex, BundleList&, Bundle& );
         static Bundle*      GetBundle( BundleList& rList, long nIndex );
         static Bundle*      InsertBundle( BundleList&, Bundle& );
-        static void         DeleteAllBundles( BundleList& );
         static void         CopyAllBundles( const BundleList& Source, BundleList& Dest );
 };
 

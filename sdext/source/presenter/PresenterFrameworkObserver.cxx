@@ -29,11 +29,9 @@ namespace sdext { namespace presenter {
 
 PresenterFrameworkObserver::PresenterFrameworkObserver (
     const css::uno::Reference<css::drawing::framework::XConfigurationController>&rxController,
-    const Predicate& rPredicate,
     const Action& rAction)
     : PresenterFrameworkObserverInterfaceBase(m_aMutex),
       mxConfigurationController(rxController),
-      maPredicate(rPredicate),
       maAction(rAction)
 {
     if ( ! mxConfigurationController.is())
@@ -48,7 +46,7 @@ PresenterFrameworkObserver::PresenterFrameworkObserver (
     }
     else
     {
-        rAction(maPredicate());
+        rAction(true);
     }
 }
 
@@ -62,13 +60,7 @@ void PresenterFrameworkObserver::RunOnUpdateEnd (
 {
     new PresenterFrameworkObserver(
         rxController,
-        &PresenterFrameworkObserver::True,
         rAction);
-}
-
-bool PresenterFrameworkObserver::True()
-{
-    return true;
 }
 
 void SAL_CALL PresenterFrameworkObserver::disposing()
@@ -81,8 +73,6 @@ void SAL_CALL PresenterFrameworkObserver::disposing()
 void PresenterFrameworkObserver::Shutdown()
 {
     maAction = Action();
-    maPredicate = Predicate();
-
     if (mxConfigurationController != nullptr)
     {
         mxConfigurationController->removeConfigurationChangeListener(this);
@@ -104,30 +94,14 @@ void SAL_CALL PresenterFrameworkObserver::disposing (const lang::EventObject& rE
 }
 
 void SAL_CALL PresenterFrameworkObserver::notifyConfigurationChange (
-    const ConfigurationChangeEvent& rEvent)
+    const ConfigurationChangeEvent& /*rEvent*/)
 {
-    bool bDispose(false);
+    Action aAction(maAction);
+    Shutdown();
+    aAction(true);
 
-    Action aAction (maAction);
-    Predicate aPredicate (maPredicate);
-    if (rEvent.Type == "ConfigurationUpdateEnd")
-    {
-        Shutdown();
-        aAction(aPredicate());
-        bDispose = true;
-    }
-    else if (aPredicate())
-    {
-        Shutdown();
-        aAction(true);
-        bDispose = true;
-    }
-
-    if (bDispose)
-    {
-        maAction = nullptr;
-        dispose();
-    }
+    maAction = nullptr;
+    dispose();
 }
 
 } }  // end of namespace ::sdext::presenter

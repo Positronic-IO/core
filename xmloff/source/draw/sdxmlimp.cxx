@@ -19,6 +19,7 @@
 
 #include <o3tl/make_unique.hxx>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <xmloff/xmlscripti.hxx>
@@ -287,6 +288,11 @@ SERVICE( XMLDrawMetaImportOasis, "com.sun.star.comp.Draw.XMLOasisMetaImporter", 
 SERVICE( XMLImpressSettingsImportOasis, "com.sun.star.comp.Impress.XMLOasisSettingsImporter", "XMLImpressSettingsImportOasis", false, SvXMLImportFlags::SETTINGS )
 SERVICE( XMLDrawSettingsImportOasis, "com.sun.star.comp.Draw.XMLOasisSettingsImporter", "XMLImpressSettingsImportOasis", true, SvXMLImportFlags::SETTINGS )
 
+#if !HAVE_CPP_INLINE_VARIABLES
+constexpr OUStringLiteral SdXMLImport::gsPageLayouts;
+constexpr OUStringLiteral SdXMLImport::gsPreview;
+#endif
+
 SdXMLImport::SdXMLImport(
     const css::uno::Reference< css::uno::XComponentContext >& xContext,
     OUString const & implementationName,
@@ -296,9 +302,7 @@ SdXMLImport::SdXMLImport(
     mnNewMasterPageCount(0),
     mbIsDraw(bIsDraw),
     mbLoadDoc(true),
-    mbPreview(false),
-    msPageLayouts(  "PageLayouts"  ),
-    msPreview(  "Preview"  )
+    mbPreview(false)
 {
     // add namespaces
     GetNamespaceMap().Add(
@@ -385,11 +389,11 @@ void SAL_CALL SdXMLImport::initialize( const uno::Sequence< uno::Any >& aArgumen
     {
         uno::Reference< beans::XPropertySetInfo > xInfoSetInfo( xInfoSet->getPropertySetInfo() );
 
-        if( xInfoSetInfo->hasPropertyByName( msPageLayouts ) )
-            xInfoSet->getPropertyValue( msPageLayouts ) >>= mxPageLayouts;
+        if( xInfoSetInfo->hasPropertyByName( gsPageLayouts ) )
+            xInfoSet->getPropertyValue( gsPageLayouts ) >>= mxPageLayouts;
 
-        if( xInfoSetInfo->hasPropertyByName( msPreview ) )
-            xInfoSet->getPropertyValue( msPreview ) >>= mbPreview;
+        if( xInfoSetInfo->hasPropertyByName( gsPreview ) )
+            xInfoSet->getPropertyValue( gsPreview ) >>= mbPreview;
 
         OUString const sOrganizerMode(
             "OrganizerMode");
@@ -662,8 +666,7 @@ SvXMLImportContext *SdXMLImport::CreateMetaContext(const sal_Int32 /*nElement*/,
 SvXMLImportContext *SdXMLImport::CreateBodyContext(const OUString& rLocalName,
     const uno::Reference<xml::sax::XAttributeList>&)
 {
-    SvXMLImportContext *pContext = nullptr;
-    pContext = new SdXMLBodyContext(*this, rLocalName);
+    SvXMLImportContext* pContext = new SdXMLBodyContext(*this, rLocalName);
     return pContext;
 }
 
@@ -713,9 +716,7 @@ SvXMLImportContext *SdXMLImport::CreateFontDeclsContext(const OUString& rLocalNa
 SvXMLImportContext *SdXMLImport::CreateScriptContext(
                                        const OUString& rLocalName )
 {
-    SvXMLImportContext *pContext = nullptr;
-
-    pContext = new XMLScriptContext( *this, rLocalName, GetModel() );
+    SvXMLImportContext *pContext = new XMLScriptContext( *this, rLocalName, GetModel() );
     return pContext;
 }
 

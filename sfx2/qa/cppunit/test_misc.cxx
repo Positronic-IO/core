@@ -50,9 +50,6 @@ class MiscTest
 {
 public:
     virtual void setUp() override;
-    void testODFCustomMetadata();
-    void testNoThumbnail();
-    void testHardLinks();
 
     virtual void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override
     {
@@ -64,14 +61,6 @@ public:
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("foo"), BAD_CAST("http://foo.net"));
         xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("baz"), BAD_CAST("http://baz.net"));
     }
-
-    CPPUNIT_TEST_SUITE(MiscTest);
-    CPPUNIT_TEST(testODFCustomMetadata);
-    CPPUNIT_TEST(testNoThumbnail);
-    CPPUNIT_TEST(testHardLinks);
-    CPPUNIT_TEST_SUITE_END();
-
-private:
 };
 
 void MiscTest::setUp()
@@ -81,7 +70,7 @@ void MiscTest::setUp()
     SfxApplication::GetOrCreate();
 }
 
-void MiscTest::testODFCustomMetadata()
+CPPUNIT_TEST_FIXTURE(MiscTest, testODFCustomMetadata)
 {
     uno::Reference<document::XDocumentProperties> const xProps(
         ::com::sun::star::document::DocumentProperties::create(m_xContext));
@@ -110,7 +99,7 @@ void MiscTest::testODFCustomMetadata()
     aTempFile.EnableKillingFile();
 }
 
-void MiscTest::testNoThumbnail()
+CPPUNIT_TEST_FIXTURE(MiscTest, testNoThumbnail)
 {
     // Load a document.
     const OUString aURL(m_directories.getURLFromSrc("/sfx2/qa/cppunit/misc/hello.odt"));
@@ -119,6 +108,9 @@ void MiscTest::testNoThumbnail()
     CPPUNIT_ASSERT(xComponent.is());
 
     // Save it with the NoThumbnail option and assert that it has no thumbnail.
+#ifndef _WIN32
+    mode_t nMask = umask(022);
+#endif
     uno::Reference<frame::XStorable> xStorable(xComponent, uno::UNO_QUERY);
     CPPUNIT_ASSERT(xStorable.is());
     utl::TempFile aTempFile;
@@ -132,7 +124,6 @@ void MiscTest::testNoThumbnail()
 
 #ifndef _WIN32
     // Check permissions of the URL after store.
-    mode_t nMask = umask(022);
     osl::DirectoryItem aItem;
     CPPUNIT_ASSERT_EQUAL(osl::DirectoryItem::E_None,
                          osl::DirectoryItem::get(aTempFile.GetURL(), aItem));
@@ -140,17 +131,25 @@ void MiscTest::testNoThumbnail()
     osl::FileStatus aStatus(osl_FileStatus_Mask_Attributes);
     CPPUNIT_ASSERT_EQUAL(osl::DirectoryItem::E_None, aItem.getFileStatus(aStatus));
 
-    // This failed, osl_File_Attribute_GrpRead was not set even if umask
-    // requested so.
+    // The following checks used to fail in the past, osl_File_Attribute_GrpRead was not set even if
+    // umask requested so:
     CPPUNIT_ASSERT(aStatus.getAttributes() & osl_File_Attribute_GrpRead);
     CPPUNIT_ASSERT(aStatus.getAttributes() & osl_File_Attribute_OthRead);
+
+    // Now "save as" again to trigger the "overwrite" case.
+    xStorable->storeToURL(aTempFile.GetURL(), {});
+    CPPUNIT_ASSERT_EQUAL(osl::DirectoryItem::E_None, aItem.getFileStatus(aStatus));
+    // The following check used to fail in the past, result had temp file
+    // permissions.
+    CPPUNIT_ASSERT(aStatus.getAttributes() & osl_File_Attribute_GrpRead);
+
     umask(nMask);
 #endif
 
     xComponent->dispose();
 }
 
-void MiscTest::testHardLinks()
+CPPUNIT_TEST_FIXTURE(MiscTest, testHardLinks)
 {
 #ifndef _WIN32
     OUString aSourceDir = m_directories.getURLFromSrc("/sfx2/qa/cppunit/misc/");
@@ -171,16 +170,25 @@ void MiscTest::testHardLinks()
     xStorable->store();
 
     struct stat buf;
+    // coverity[fs_check_call] - this is legitimate in the context of this text
     int nRet = stat(aOld.getStr(), &buf);
-    CPPUNIT_ASSERT_EQUAL(nRet, 0);
+    CPPUNIT_ASSERT_EQUAL(0, nRet);
     // This failed: hard link count was 1, the hard link broke on store.
     CPPUNIT_ASSERT(buf.st_nlink > 1);
+
+    // Test that symlinks are preserved as well.
+    nRet = remove(aNew.getStr());
+    CPPUNIT_ASSERT_EQUAL(0, nRet);
+    symlink(aOld.getStr(), aNew.getStr());
+    xStorable->storeToURL(aURL + ".2", {});
+    nRet = lstat(aNew.getStr(), &buf);
+    CPPUNIT_ASSERT_EQUAL(0, nRet);
+    // This failed, the hello.odt.2 symlink was replaced with a real file.
+    CPPUNIT_ASSERT(bool(S_ISLNK(buf.st_mode)));
 
     xComponent->dispose();
 #endif
 }
-
-CPPUNIT_TEST_SUITE_REGISTRATION(MiscTest);
 
 }
 

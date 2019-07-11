@@ -19,6 +19,8 @@
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
+#include <com/sun/star/frame/XStorable.hpp>
+
 #include <vcl/scheduler.hxx>
 #include <comphelper/processfactory.hxx>
 #include <rtl/uri.hxx>
@@ -116,6 +118,9 @@ public:
     void testCommentsCallbacksWriter();
     void testRunMacro();
     void testExtractParameter();
+    void testGetSignatureState_NonSigned();
+    void testGetSignatureState_Signed();
+    void testInsertCertificate();
     void testABI();
 
     CPPUNIT_TEST_SUITE(DesktopLOKTest);
@@ -159,6 +164,9 @@ public:
     CPPUNIT_TEST(testCommentsCallbacksWriter);
     CPPUNIT_TEST(testRunMacro);
     CPPUNIT_TEST(testExtractParameter);
+    CPPUNIT_TEST(testGetSignatureState_Signed);
+    CPPUNIT_TEST(testGetSignatureState_NonSigned);
+    CPPUNIT_TEST(testInsertCertificate);
     CPPUNIT_TEST(testABI);
     CPPUNIT_TEST_SUITE_END();
 
@@ -290,16 +298,16 @@ void DesktopLOKTest::testGetStyles()
     char* pJSON = pDocument->m_pDocumentClass->getCommandValues(pDocument, ".uno:StyleApply");
     std::stringstream aStream(pJSON);
     boost::property_tree::read_json(aStream, aTree);
-    CPPUNIT_ASSERT( aTree.size() > 0 );
+    CPPUNIT_ASSERT( !aTree.empty() );
     CPPUNIT_ASSERT_EQUAL( std::string(".uno:StyleApply"), aTree.get_child("commandName").get_value<std::string>()  );
 
     boost::property_tree::ptree aValues = aTree.get_child("commandValues");
-    CPPUNIT_ASSERT( aValues.size() > 0 );
+    CPPUNIT_ASSERT( !aValues.empty() );
     for (const auto& rPair : aValues)
     {
         if( rPair.first != "ClearStyle")
         {
-            CPPUNIT_ASSERT( rPair.second.size() > 0);
+            CPPUNIT_ASSERT( !rPair.second.empty());
         }
         if (rPair.first != "CharacterStyles" &&
             rPair.first != "ParagraphStyles" &&
@@ -326,15 +334,15 @@ void DesktopLOKTest::testGetFonts()
     char* pJSON = pDocument->m_pDocumentClass->getCommandValues(pDocument, ".uno:CharFontName");
     std::stringstream aStream(pJSON);
     boost::property_tree::read_json(aStream, aTree);
-    CPPUNIT_ASSERT( aTree.size() > 0 );
+    CPPUNIT_ASSERT( !aTree.empty() );
     CPPUNIT_ASSERT_EQUAL( std::string(".uno:CharFontName"), aTree.get_child("commandName").get_value<std::string>() );
 
     boost::property_tree::ptree aValues = aTree.get_child("commandValues");
-    CPPUNIT_ASSERT( aValues.size() > 0 );
+    CPPUNIT_ASSERT( !aValues.empty() );
     for (const auto& rPair : aValues)
     {
         // check that we have font sizes available for each font
-        CPPUNIT_ASSERT( rPair.second.size() > 0);
+        CPPUNIT_ASSERT( !rPair.second.empty());
     }
     free(pJSON);
     comphelper::LibreOfficeKit::setActive(false);
@@ -401,7 +409,7 @@ void DesktopLOKTest::testGetFilterTypes()
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
 
-    CPPUNIT_ASSERT(aTree.size() > 0);
+    CPPUNIT_ASSERT(!aTree.empty());
     CPPUNIT_ASSERT_EQUAL(std::string("application/vnd.oasis.opendocument.text"), aTree.get_child("writer8").get_child("MediaType").get_value<std::string>());
     free(pJSON);
     comphelper::LibreOfficeKit::setActive(false);
@@ -776,7 +784,7 @@ void DesktopLOKTest::testCellCursor()
 
     OString aRectangle(aTree.get<std::string>("commandValues").c_str());
     // cell cursor geometry + col + row
-    CPPUNIT_ASSERT_EQUAL(OString("0, 0, 1279, 255, 0, 0"), aRectangle);
+    CPPUNIT_ASSERT_EQUAL(OString("0, 0, 1274, 254, 0, 0"), aRectangle);
 
     comphelper::LibreOfficeKit::setActive(false);
 }
@@ -813,8 +821,8 @@ void DesktopLOKTest::testCommandResult()
     std::stringstream aStream(m_aCommandResult.getStr());
     boost::property_tree::read_json(aStream, aTree);
 
-    CPPUNIT_ASSERT_EQUAL(aTree.get_child("commandName").get_value<std::string>(), std::string(".uno:Bold"));
-    CPPUNIT_ASSERT_EQUAL(aTree.get_child("success").get_value<bool>(), true);
+    CPPUNIT_ASSERT_EQUAL(std::string(".uno:Bold"), aTree.get_child("commandName").get_value<std::string>());
+    CPPUNIT_ASSERT_EQUAL(true, aTree.get_child("success").get_value<bool>());
 
     comphelper::LibreOfficeKit::setActive(false);
 }
@@ -909,7 +917,7 @@ void DesktopLOKTest::testSheetOperations()
           "{ \"Index\": { \"type\": \"long\", \"value\": 3 } }", false);
 
     Scheduler::ProcessEventsToIdle();
-    CPPUNIT_ASSERT_EQUAL(pDocument->pClass->getParts(pDocument), 6);
+    CPPUNIT_ASSERT_EQUAL(6, pDocument->pClass->getParts(pDocument));
 
     std::vector<OString> aExpected = { "FirstSheet", "Renamed", "Sheet3", "Sheet4", "Sheet5", "LastSheet" };
     for (int i = 0; i < 6; ++i)
@@ -1930,10 +1938,10 @@ void DesktopLOKTest::testGetFontSubset()
     char* pJSON = pDocument->m_pDocumentClass->getCommandValues(pDocument, aCommand.getStr());
     std::stringstream aStream(pJSON);
     boost::property_tree::read_json(aStream, aTree);
-    CPPUNIT_ASSERT( aTree.size() > 0 );
+    CPPUNIT_ASSERT( !aTree.empty() );
     CPPUNIT_ASSERT_EQUAL( std::string(".uno:FontSubset"), aTree.get_child("commandName").get_value<std::string>() );
     boost::property_tree::ptree aValues = aTree.get_child("commandValues");
-    CPPUNIT_ASSERT( aValues.size() > 0 );
+    CPPUNIT_ASSERT( !aValues.empty() );
     free(pJSON);
 
     comphelper::LibreOfficeKit::setActive(false);
@@ -2240,9 +2248,133 @@ void DesktopLOKTest::testExtractParameter()
     comphelper::LibreOfficeKit::setActive(false);
 }
 
+void DesktopLOKTest::testGetSignatureState_Signed()
+{
+    comphelper::LibreOfficeKit::setActive();
+    LibLODocument_Impl* pDocument = loadDoc("signed.odt");
+    Scheduler::ProcessEventsToIdle();
+    pDocument->m_pDocumentClass->initializeForRendering(pDocument, "{}");
+    int nState = pDocument->m_pDocumentClass->getSignatureState(pDocument);
+    CPPUNIT_ASSERT_EQUAL(int(4), nState);
+
+    {
+        OUString aCertificateURL;
+        createFileURL("rootCA.der", aCertificateURL);
+        SvFileStream aCertificateStream(aCertificateURL, StreamMode::READ);
+        std::vector<unsigned char> aCertificate;
+        aCertificate.resize(aCertificateStream.remainingSize());
+        aCertificateStream.ReadBytes(aCertificate.data(), aCertificateStream.remainingSize());
+
+        bool bResult = pDocument->m_pDocumentClass->addCertificate(
+                            pDocument, aCertificate.data(), int(aCertificate.size()));
+        CPPUNIT_ASSERT(bResult);
+    }
+
+    {
+        OUString aCertificateURL;
+        createFileURL("intermediateRootCA.der", aCertificateURL);
+        SvFileStream aCertificateStream(aCertificateURL, StreamMode::READ);
+        std::vector<unsigned char> aCertificate;
+        aCertificate.resize(aCertificateStream.remainingSize());
+        aCertificateStream.ReadBytes(aCertificate.data(), aCertificateStream.remainingSize());
+
+
+        bool bResult = pDocument->m_pDocumentClass->addCertificate(
+                            pDocument, aCertificate.data(), int(aCertificate.size()));
+        CPPUNIT_ASSERT(bResult);
+    }
+
+    nState = pDocument->m_pDocumentClass->getSignatureState(pDocument);
+    CPPUNIT_ASSERT_EQUAL(int(1), nState);
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void DesktopLOKTest::testGetSignatureState_NonSigned()
+{
+    comphelper::LibreOfficeKit::setActive();
+    LibLODocument_Impl* pDocument = loadDoc("blank_text.odt");
+    Scheduler::ProcessEventsToIdle();
+    pDocument->m_pDocumentClass->initializeForRendering(pDocument, "{}");
+    int nState = pDocument->m_pDocumentClass->getSignatureState(pDocument);
+    CPPUNIT_ASSERT_EQUAL(int(0), nState);
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void DesktopLOKTest::testInsertCertificate()
+{
+    comphelper::LibreOfficeKit::setActive();
+
+    // Load the document, save it into a temp file and load that file again
+    LibLODocument_Impl* pDocument = loadDoc("blank_text.odt");
+    utl::TempFile aTempFile;
+    aTempFile.EnableKillingFile();
+    CPPUNIT_ASSERT(pDocument->pClass->saveAs(pDocument, aTempFile.GetURL().toUtf8().getStr(), "odt", nullptr));
+    closeDoc();
+
+    mxComponent = loadFromDesktop(aTempFile.GetURL(), "com.sun.star.text.TextDocument");
+    pDocument = new LibLODocument_Impl(mxComponent);
+
+    Scheduler::ProcessEventsToIdle();
+    CPPUNIT_ASSERT(mxComponent.is());
+    pDocument->m_pDocumentClass->initializeForRendering(pDocument, "{}");
+    Scheduler::ProcessEventsToIdle();
+
+    {
+        OUString aCertificateURL;
+        createFileURL("rootCA.der", aCertificateURL);
+        SvFileStream aCertificateStream(aCertificateURL, StreamMode::READ);
+        std::vector<unsigned char> aCertificate;
+        aCertificate.resize(aCertificateStream.remainingSize());
+        aCertificateStream.ReadBytes(aCertificate.data(), aCertificateStream.remainingSize());
+
+        bool bResult = pDocument->m_pDocumentClass->addCertificate(
+                            pDocument, aCertificate.data(), int(aCertificate.size()));
+        CPPUNIT_ASSERT(bResult);
+    }
+
+    {
+        OUString aCertificateURL;
+        createFileURL("intermediateRootCA.der", aCertificateURL);
+        SvFileStream aCertificateStream(aCertificateURL, StreamMode::READ);
+        std::vector<unsigned char> aCertificate;
+        aCertificate.resize(aCertificateStream.remainingSize());
+        aCertificateStream.ReadBytes(aCertificate.data(), aCertificateStream.remainingSize());
+
+
+        bool bResult = pDocument->m_pDocumentClass->addCertificate(
+                            pDocument, aCertificate.data(), int(aCertificate.size()));
+        CPPUNIT_ASSERT(bResult);
+    }
+
+    {
+        OUString aCertificateURL;
+        createFileURL("certificate.der", aCertificateURL);
+        SvFileStream aCertificateStream(aCertificateURL, StreamMode::READ);
+        std::vector<unsigned char> aCertificate;
+        aCertificate.resize(aCertificateStream.remainingSize());
+        aCertificateStream.ReadBytes(aCertificate.data(), aCertificateStream.remainingSize());
+
+
+        OUString aPrivateKeyURL;
+        createFileURL("certificatePrivateKey.der", aPrivateKeyURL);
+        SvFileStream aPrivateKeyStream(aPrivateKeyURL, StreamMode::READ);
+        std::vector<unsigned char> aPrivateKey;
+        aPrivateKey.resize(aPrivateKeyStream.remainingSize());
+        aPrivateKeyStream.ReadBytes(aPrivateKey.data(), aPrivateKeyStream.remainingSize());
+
+        bool bResult = pDocument->m_pDocumentClass->insertCertificate(pDocument,
+                            aCertificate.data(), int(aCertificate.size()),
+                            aPrivateKey.data(), int(aPrivateKey.size()));
+        CPPUNIT_ASSERT(bResult);
+    }
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
 namespace {
 
-size_t documentClassOffset(int i)
+constexpr size_t documentClassOffset(int i)
 {
     return sizeof(static_cast<struct _LibreOfficeKitDocumentClass*>(nullptr)->nSize) + i * sizeof(void*);
 }
@@ -2299,10 +2431,13 @@ void DesktopLOKTest::testABI()
     CPPUNIT_ASSERT_EQUAL(documentClassOffset(39), offsetof(struct _LibreOfficeKitDocumentClass, setViewLanguage));
     CPPUNIT_ASSERT_EQUAL(documentClassOffset(40), offsetof(struct _LibreOfficeKitDocumentClass, postWindowExtTextInputEvent));
     CPPUNIT_ASSERT_EQUAL(documentClassOffset(41), offsetof(struct _LibreOfficeKitDocumentClass, getPartInfo));
-
+    CPPUNIT_ASSERT_EQUAL(documentClassOffset(42), offsetof(struct _LibreOfficeKitDocumentClass, paintWindowDPI));
+    CPPUNIT_ASSERT_EQUAL(documentClassOffset(43), offsetof(struct _LibreOfficeKitDocumentClass, insertCertificate));
+    CPPUNIT_ASSERT_EQUAL(documentClassOffset(44), offsetof(struct _LibreOfficeKitDocumentClass, addCertificate));
+    CPPUNIT_ASSERT_EQUAL(documentClassOffset(45), offsetof(struct _LibreOfficeKitDocumentClass, getSignatureState));
     // Extending is fine, update this, and add new assert for the offsetof the
     // new method
-    CPPUNIT_ASSERT_EQUAL(documentClassOffset(42), sizeof(struct _LibreOfficeKitDocumentClass));
+    CPPUNIT_ASSERT_EQUAL(documentClassOffset(46), sizeof(struct _LibreOfficeKitDocumentClass));
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(DesktopLOKTest);

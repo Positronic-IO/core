@@ -35,6 +35,7 @@
 #include <com/sun/star/sheet/XDataPilotResults.hpp>
 #include <com/sun/star/sheet/DataResultFlags.hpp>
 
+#include <com/sun/star/sheet/XDimensionsSupplier.hpp>
 #include <com/sun/star/sheet/XHierarchiesSupplier.hpp>
 #include <com/sun/star/sheet/XLevelsSupplier.hpp>
 #include <com/sun/star/sheet/XDataPilotMemberResults.hpp>
@@ -610,30 +611,30 @@ PivotTableDataProvider::assignLabelsToDataSequence(size_t nIndex)
 
     OUString sLabelID = lcl_identifierForLabel(nIndex);
 
-    OUString aLabel;
+    OUStringBuffer aLabel;
     bool bFirst = true;
 
     if (m_aLabels.empty())
     {
         aLabel = ScResId(STR_PIVOT_TOTAL);
     }
-    else
+    else if (nIndex < m_aLabels.size())
     {
         for (ValueAndFormat const & rItem : m_aLabels[nIndex])
         {
             if (bFirst)
             {
-                aLabel += rItem.m_aString;
+                aLabel.append(rItem.m_aString);
                 bFirst = false;
             }
             else
             {
-                aLabel += " - " + rItem.m_aString;
+                aLabel.append(" - ").append(rItem.m_aString);
             }
         }
     }
 
-    std::vector<ValueAndFormat> aLabelVector { ValueAndFormat(aLabel) };
+    std::vector<ValueAndFormat> aLabelVector { ValueAndFormat(aLabel.makeStringAndClear()) };
 
     std::unique_ptr<PivotTableDataSequence> pSequence;
     pSequence.reset(new PivotTableDataSequence(m_pDocument, m_sPivotTableName,

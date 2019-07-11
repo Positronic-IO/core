@@ -31,6 +31,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/objsh.hxx>
 #include <svl/intitem.hxx>
+#include <sal/log.hxx>
 
 #include <svx/pszctrl.hxx>
 
@@ -64,13 +65,13 @@ OUString SvxPosSizeStatusBarControl::GetMetricStr_Impl( long nVal )
 
     OUString sMetric;
     const sal_Unicode cSep = Application::GetSettings().GetLocaleDataWrapper().getNumDecimalSep()[0];
-    sal_Int64 nConvVal = MetricField::ConvertValue( nVal * 100, 0L, 0, FUNIT_100TH_MM, eOutUnit );
+    sal_Int64 nConvVal = MetricField::ConvertValue( nVal * 100, 0L, 0, FieldUnit::MM_100TH, eOutUnit );
 
     if ( nConvVal < 0 && ( nConvVal / 100 == 0 ) )
         sMetric += "-";
     sMetric += OUString::number(nConvVal / 100);
 
-    if( FUNIT_NONE != eOutUnit )
+    if( FieldUnit::NONE != eOutUnit )
     {
         sMetric += OUStringLiteral1(cSep);
         sal_Int64 nFract = nConvVal % 100;
@@ -92,7 +93,7 @@ class FunctionPopup_Impl
 {
     VclBuilder        m_aBuilder;
     VclPtr<PopupMenu> m_xMenu;
-    sal_uInt32        m_nSelected;
+    sal_uInt32 const  m_nSelected;
     static sal_uInt16 id_to_function(const OString& rIdent);
     sal_uInt16 function_to_id(sal_uInt16 nFunc) const;
 public:
@@ -274,8 +275,8 @@ void SvxPosSizeStatusBarControl::StateChanged( sal_uInt16 nSID, SfxItemState eSt
         if ( eState == SfxItemState::DEFAULT )
         {
             pImpl->bHasMenu = true;
-            if ( pState && dynamic_cast< const SfxUInt32Item* >(pState) !=  nullptr )
-                pImpl->nFunctionSet = static_cast<const SfxUInt32Item*>(pState)->GetValue();
+            if ( auto pUInt32Item = dynamic_cast< const SfxUInt32Item* >(pState) )
+                pImpl->nFunctionSet = pUInt32Item->GetValue();
         }
         else
             pImpl->bHasMenu = false;
@@ -326,8 +327,7 @@ void SvxPosSizeStatusBarControl::StateChanged( sal_uInt16 nSID, SfxItemState eSt
         pImpl->bTable = false;
     }
 
-    if ( GetStatusBar().AreItemsVisible() )
-        GetStatusBar().SetItemData( GetId(), nullptr );
+    GetStatusBar().SetItemData( GetId(), nullptr );
 
     //  set only strings as text at the statusBar, so that the Help-Tips
     //  can work with the text, when it is too long for the statusBar

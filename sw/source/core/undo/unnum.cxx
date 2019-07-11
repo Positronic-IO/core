@@ -27,29 +27,29 @@
 #include <ndtxt.hxx>
 #include <UndoCore.hxx>
 #include <rolbck.hxx>
+#include <osl/diagnose.h>
 
 SwUndoInsNum::SwUndoInsNum( const SwNumRule& rOldRule,
                             const SwNumRule& rNewRule,
                             const SwDoc* pDoc,
                             SwUndoId nUndoId)
     : SwUndo( nUndoId, pDoc ),
-    aNumRule( rNewRule ), pHistory( nullptr ),
+    aNumRule( rNewRule ),
     pOldNumRule( new SwNumRule( rOldRule )), nLRSavePos( 0 )
 {
 }
 
 SwUndoInsNum::SwUndoInsNum( const SwPaM& rPam, const SwNumRule& rRule )
     : SwUndo( SwUndoId::INSNUM, rPam.GetDoc() ), SwUndRng( rPam ),
-    aNumRule( rRule ), pHistory( nullptr ),
-    pOldNumRule( nullptr ), nLRSavePos( 0 )
+    aNumRule( rRule ),
+    nLRSavePos( 0 )
 {
 }
 
 SwUndoInsNum::SwUndoInsNum( const SwPosition& rPos, const SwNumRule& rRule,
                             const OUString& rReplaceRule )
     : SwUndo( SwUndoId::INSNUM, rPos.nNode.GetNode().GetDoc() ),
-    aNumRule( rRule ), pHistory( nullptr ),
-    pOldNumRule( nullptr ),
+    aNumRule( rRule ),
     sReplaceRule( rReplaceRule ), nLRSavePos( 0 )
 {
     // No selection!
@@ -61,8 +61,8 @@ SwUndoInsNum::SwUndoInsNum( const SwPosition& rPos, const SwNumRule& rRule,
 
 SwUndoInsNum::~SwUndoInsNum()
 {
-    delete pHistory;
-    delete pOldNumRule;
+    pHistory.reset();
+    pOldNumRule.reset();
 }
 
 SwRewriter SwUndoInsNum::GetRewriter() const
@@ -145,14 +145,14 @@ void SwUndoInsNum::RepeatImpl(::sw::RepeatContext & rContext)
 SwHistory* SwUndoInsNum::GetHistory()
 {
     if( !pHistory )
-        pHistory = new SwHistory;
-    return pHistory;
+        pHistory.reset(new SwHistory);
+    return pHistory.get();
 }
 
 void SwUndoInsNum::SaveOldNumRule( const SwNumRule& rOld )
 {
     if( !pOldNumRule )
-        pOldNumRule = new SwNumRule( rOld );
+        pOldNumRule.reset(new SwNumRule( rOld ));
 }
 
 SwUndoDelNum::SwUndoDelNum( const SwPaM& rPam )
@@ -173,11 +173,11 @@ void SwUndoDelNum::UndoImpl(::sw::UndoRedoContext & rContext)
     pHistory->TmpRollback( &rDoc, 0 );
     pHistory->SetTmpEnd( pHistory->Count() );
 
-    for( std::vector<NodeLevel>::const_iterator i = aNodes.begin(); i != aNodes.end(); ++i )
+    for( const auto& rNode : aNodes )
     {
-        SwTextNode* pNd = rDoc.GetNodes()[ i->index ]->GetTextNode();
+        SwTextNode* pNd = rDoc.GetNodes()[ rNode.index ]->GetTextNode();
         OSL_ENSURE( pNd, "Where has the TextNode gone?" );
-        pNd->SetAttrListLevel( i->level );
+        pNd->SetAttrListLevel( rNode.level );
 
         if( pNd->GetCondFormatColl() )
             pNd->ChkCondColl();

@@ -18,12 +18,11 @@
 namespace {
 
 class LiteralToBoolConversion:
-    public RecursiveASTVisitor<LiteralToBoolConversion>,
-    public loplugin::RewritePlugin
+    public loplugin::FilteringRewritePlugin<LiteralToBoolConversion>
 {
 public:
     explicit LiteralToBoolConversion(loplugin::InstantiationData const & data):
-        RewritePlugin(data) {}
+        FilteringRewritePlugin(data) {}
 
     virtual void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -118,7 +117,7 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
         && subExpr->isIntegerConstantExpr(res, compiler.getASTContext())
         && res.getLimitedValue() <= 1)
     {
-        SourceLocation loc { subExpr->getLocStart() };
+        SourceLocation loc { compat::getBeginLoc(subExpr) };
         while (compiler.getSourceManager().isMacroArgExpansion(loc)) {
             loc = compiler.getSourceManager().getImmediateMacroCallerLoc(loc);
         }
@@ -134,7 +133,7 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
         }
     }
     if (isa<clang::StringLiteral>(subExpr)) {
-        SourceLocation loc { subExpr->getLocStart() };
+        SourceLocation loc { compat::getBeginLoc(subExpr) };
         if (compiler.getSourceManager().isMacroArgExpansion(loc)
             && (Lexer::getImmediateMacroName(
                     loc, compiler.getSourceManager(), compiler.getLangOpts())
@@ -150,25 +149,25 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
         bool bRewritten = false;
         if (rewriter != nullptr) {
             SourceLocation loc { compiler.getSourceManager().getExpansionLoc(
-                    expr2->getLocStart()) };
-            if (compiler.getSourceManager().getExpansionLoc(expr2->getLocEnd())
+                    compat::getBeginLoc(expr2)) };
+            if (compiler.getSourceManager().getExpansionLoc(compat::getEndLoc(expr2))
                 == loc)
             {
                 char const * s = compiler.getSourceManager().getCharacterData(
                     loc);
                 unsigned n = Lexer::MeasureTokenLength(
-                    expr2->getLocEnd(), compiler.getSourceManager(),
+                    compat::getEndLoc(expr2), compiler.getSourceManager(),
                     compiler.getLangOpts());
                 std::string tok { s, n };
                 if (tok == "sal_False" || tok == "0") {
                     bRewritten = replaceText(
                         compiler.getSourceManager().getExpansionLoc(
-                            expr2->getLocStart()),
+                            compat::getBeginLoc(expr2)),
                         n, "false");
                 } else if (tok == "sal_True" || tok == "1") {
                     bRewritten = replaceText(
                         compiler.getSourceManager().getExpansionLoc(
-                            expr2->getLocStart()),
+                            compat::getBeginLoc(expr2)),
                         n, "true");
                 }
             }
@@ -177,7 +176,7 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
             report(
                 DiagnosticsEngine::Warning,
                 "implicit conversion (%0) of literal of type %1 to %2",
-                expr2->getLocStart())
+                compat::getBeginLoc(expr2))
                 << castExpr->getCastKindName() << subExpr->getType()
                 << castExpr->getType() << expr2->getSourceRange();
         }
@@ -194,7 +193,7 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
             DiagnosticsEngine::Warning,
             ("implicit conversion (%0) of null pointer constant of type %1 to"
              " %2"),
-            expr2->getLocStart())
+            compat::getBeginLoc(expr2))
             << castExpr->getCastKindName() << subExpr->getType()
             << castExpr->getType() << expr2->getSourceRange();
     } else if (!subExpr->isValueDependent()
@@ -204,7 +203,7 @@ void LiteralToBoolConversion::handleImplicitCastSubExpr(
             DiagnosticsEngine::Warning,
             ("implicit conversion (%0) of integer constant expression of type"
              " %1 with value %2 to %3"),
-            expr2->getLocStart())
+            compat::getBeginLoc(expr2))
             << castExpr->getCastKindName() << subExpr->getType()
             << res.toString(10) << castExpr->getType()
             << expr2->getSourceRange();

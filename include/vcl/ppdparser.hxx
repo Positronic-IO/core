@@ -65,7 +65,7 @@ class VCL_DLLPUBLIC PPDKey
     typedef std::unordered_map< OUString, PPDValue > hash_type;
     typedef std::vector< PPDValue* > value_type;
 
-    OUString            m_aKey;
+    OUString const      m_aKey;
     hash_type           m_aValues;
     value_type          m_aOrderedValues;
     const PPDValue*     m_pDefaultValue;
@@ -124,10 +124,10 @@ class VCL_DLLPUBLIC PPDParser
     friend class CPDManager;
     friend class PPDCache;
 
-    typedef std::unordered_map< OUString, PPDKey* > hash_type;
+    typedef std::unordered_map< OUString, std::unique_ptr<PPDKey> > hash_type;
     typedef std::vector< PPDKey* > value_type;
 
-    void insertKey( const OUString& rKey, PPDKey* pKey );
+    void insertKey( std::unique_ptr<PPDKey> pKey );
 public:
     struct PPDConstraint
     {
@@ -167,7 +167,7 @@ private:
     std::unique_ptr<PPDTranslator>              m_pTranslator;
 
     PPDParser( const OUString& rFile );
-    PPDParser( const OUString& rFile, std::vector<PPDKey*> keys );
+    PPDParser(const OUString& rFile, const std::vector<PPDKey*>& keys);
 
     void parseOrderDependency(const OString& rLine);
     void parseOpenUI(const OString& rLine, const OString& rPPDGroup);
@@ -261,7 +261,7 @@ public:
 
     // for printer setup
     char*   getStreamableBuffer( sal_uLong& rBytes ) const;
-    void    rebuildFromStreamBuffer( char* pBuffer, sal_uLong nBytes );
+    void    rebuildFromStreamBuffer(const std::vector<char> &rBuffer);
 
     // convenience
     int getRenderResolution() const;

@@ -38,9 +38,10 @@ one go*/
 #include <comphelper/genericpropertyset.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
-#include <comphelper/string.hxx>
+#include <comphelper/propertysetinfo.hxx>
 #include <o3tl/make_unique.hxx>
 #include <rtl/character.hxx>
+#include <sal/log.hxx>
 #include <sfx2/frame.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/sfxsids.hrc>
@@ -433,41 +434,21 @@ const uno::Sequence< sal_Int8 > & SmXMLImport::getUnoTunnelId() throw()
     return theSmXMLImportUnoTunnelId::get().getSeq();
 }
 
-OUString SmXMLImport_getImplementationName() throw()
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+Math_XMLImporter_get_implementation(uno::XComponentContext* pCtx,
+                                    uno::Sequence<uno::Any> const& /*rSeq*/)
 {
-    return OUString( "com.sun.star.comp.Math.XMLImporter" );
+    return cppu::acquire(
+        new SmXMLImport(pCtx, "com.sun.star.comp.Math.XMLImporter", SvXMLImportFlags::ALL));
 }
 
-uno::Sequence< OUString > SmXMLImport_getSupportedServiceNames()
-        throw()
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+Math_XMLOasisMetaImporter_get_implementation(uno::XComponentContext* pCtx,
+                                             uno::Sequence<uno::Any> const& /*rSeq*/)
 {
-    return uno::Sequence<OUString>{ IMPORT_SVC_NAME };
+    return cppu::acquire(new SmXMLImport(pCtx, "com.sun.star.comp.Math.XMLOasisMetaImporter",
+                                         SvXMLImportFlags::META));
 }
-
-uno::Reference< uno::XInterface > SmXMLImport_createInstance(
-    const uno::Reference< lang::XMultiServiceFactory > & rSMgr)
-{
-    return static_cast<cppu::OWeakObject*>(new SmXMLImport(comphelper::getComponentContext(rSMgr), SmXMLImport_getImplementationName(), SvXMLImportFlags::ALL));
-}
-
-
-OUString SmXMLImportMeta_getImplementationName() throw()
-{
-    return OUString( "com.sun.star.comp.Math.XMLOasisMetaImporter" );
-}
-
-uno::Sequence< OUString > SmXMLImportMeta_getSupportedServiceNames()
-throw()
-{
-    return uno::Sequence<OUString>{ IMPORT_SVC_NAME };
-}
-
-uno::Reference< uno::XInterface > SmXMLImportMeta_createInstance(
-    const uno::Reference< lang::XMultiServiceFactory > & rSMgr)
-{
-    return static_cast<cppu::OWeakObject*>(new SmXMLImport( comphelper::getComponentContext(rSMgr), SmXMLImportMeta_getImplementationName(), SvXMLImportFlags::META ));
-}
-
 
 OUString SmXMLImportSettings_getImplementationName() throw()
 {
@@ -925,7 +906,7 @@ public:
 class SmXMLRowContext_Impl : public SmXMLDocContext_Impl
 {
 protected:
-    size_t nElementCount;
+    size_t const nElementCount;
 
 public:
     SmXMLRowContext_Impl(SmXMLImport &rImport,sal_uInt16 nPrefix,
@@ -1160,7 +1141,6 @@ void SmXMLFencedContext_Impl::EndElement()
     SmNodeStack &rNodeStack = GetSmImport().GetNodeStack();
 
     aToken.cMathChar = '\0';
-    aToken.aText = ",";
     aToken.eType = TIDENT;
 
     auto i = rNodeStack.size() - nElementCount;

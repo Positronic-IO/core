@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
 #include <comphelper/base64.hxx>
 #include <sax/tools/converter.hxx>
 #include <sfx2/recentdocsview.hxx>
@@ -37,6 +38,7 @@
 #include <bitmaps.hlst>
 
 #include <officecfg/Office/Common.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 using namespace com::sun::star::uno;
@@ -114,11 +116,12 @@ static std::map<ApplicationType,OUString> EncryptedBitmapForExtension =
     { ApplicationType::TYPE_MATH, BMP_128X128_MATH_DOC }
 };
 
+static constexpr long gnTextHeight = 30;
+static constexpr long gnItemPadding = 5;
+
 RecentDocsView::RecentDocsView( vcl::Window* pParent )
     : ThumbnailView(pParent)
     , mnFileTypes(ApplicationType::TYPE_NONE)
-    , mnTextHeight(30)
-    , mnItemPadding(5)
     , mnLastMouseDownItem(THUMBNAILVIEW_ITEM_NOTFOUND)
     , maWelcomeImage(BitmapEx(BMP_WELCOME))
     , maWelcomeLine1(SfxResId(STR_WELCOME_LINE1))
@@ -129,7 +132,7 @@ RecentDocsView::RecentDocsView( vcl::Window* pParent )
 
     SetStyle(GetStyle() | WB_VSCROLL);
     setItemMaxTextLength( 30 );
-    setItemDimensions( mnItemMaxSize, mnItemMaxSize, mnTextHeight, mnItemPadding );
+    setItemDimensions( mnItemMaxSize, mnItemMaxSize, gnTextHeight, gnItemPadding );
 
     maFillColor = Color(officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsBackgroundColor::get());
     maTextColor = Color(officecfg::Office::Common::Help::StartCenter::StartCenterThumbnailsTextColor::get());
@@ -215,9 +218,7 @@ BitmapEx RecentDocsView::getDefaultThumbnail(const OUString &rURL)
 
 void RecentDocsView::insertItem(const OUString &rURL, const OUString &rTitle, const BitmapEx &rThumbnail, sal_uInt16 nId)
 {
-    RecentDocsViewItem *pChild = new RecentDocsViewItem(*this, rURL, rTitle, rThumbnail, nId, mnItemMaxSize);
-
-    AppendItem(pChild);
+    AppendItem( o3tl::make_unique<RecentDocsViewItem>(*this, rURL, rTitle, rThumbnail, nId, mnItemMaxSize) );
 }
 
 void RecentDocsView::Reload()
@@ -333,7 +334,7 @@ void RecentDocsView::Paint(vcl::RenderContext& rRenderContext, const tools::Rect
     }
     else
     {
-        set_width_request(mnTextHeight + mnItemMaxSize + 2 * mnItemPadding);
+        set_width_request(gnTextHeight + mnItemMaxSize + 2 * gnItemPadding);
     }
 
     if (mItemList.empty())

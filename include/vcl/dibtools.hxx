@@ -20,15 +20,14 @@
 #define INCLUDED_VCL_DIBTOOLS_HXX
 
 #include <vcl/dllapi.h>
-#include <vcl/mapmod.hxx>
-#include <vcl/region.hxx>
-#include <vcl/alpha.hxx>
+#include <vcl/salbtype.hxx>
 
 // predefines
 
 class SvStream;
 class BitmapEx;
 class Bitmap;
+class AlphaMask;
 
 // - Compression defines
 
@@ -46,24 +45,34 @@ bool VCL_DLLPUBLIC ReadDIB( // ReadDIB(rBitmap, rIStm, true);
 
 bool VCL_DLLPUBLIC ReadDIBBitmapEx(
     BitmapEx& rTarget,
-    SvStream& rIStm);
+    SvStream& rIStm,
+    bool bFileHeader = true,
+    bool bMSOFormat = false);
 
 bool VCL_DLLPUBLIC ReadDIBV5(
     Bitmap& rTarget,
     AlphaMask& rTargetAlpha,
     SvStream& rIStm);
 
+bool VCL_DLLPUBLIC ReadRawDIB(
+    Bitmap& rTarget,
+    const unsigned char* pBuf,
+    const ScanlineFormat nFormat,
+    const int nHeight,
+    const int nStride);
 
-bool VCL_DLLPUBLIC WriteDIB( // WriteDIB(rBitmap, rOStm, false, true);
+
+bool VCL_DLLPUBLIC WriteDIB(
     const Bitmap& rSource,
     SvStream& rOStm,
     bool bCompressed,
     bool bFileHeader);
 
 // compressed, with file header
-bool VCL_DLLPUBLIC WriteDIB( // WriteDIB(rBitmap, rOStm, false, true);
+bool VCL_DLLPUBLIC WriteDIB(
     const BitmapEx& rSource,
-    SvStream& rOStm);
+    SvStream& rOStm,
+    bool bCompressed = true);
 
 bool VCL_DLLPUBLIC WriteDIBBitmapEx(
     const BitmapEx& rSource,

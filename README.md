@@ -34,7 +34,7 @@ run and compile LibreOffice, also used by the TDF builds:
 
 * Windows:
     * Runtime: Windows 7
-    * Build: Cygwin + Visual Studio 2015 Update 3
+    * Build: Cygwin + Visual Studio 2017
 * macOS:
     * Runtime: 10.9
     * Build: 10.12 + Xcode 8
@@ -42,8 +42,8 @@ run and compile LibreOffice, also used by the TDF builds:
     * Runtime: RHEL 6 or CentOS 6
     * Build: GCC 4.8.1 or Clang
 * iOS (only for LibreOfficeKit):
-    * Runtime: 11.3 (only support for newer i devices == 64 bit)
-    * Build: Xcode 9.3 and iPhone SDK 11.3
+    * Runtime: 11.4 (only support for newer i devices == 64 bit)
+    * Build: Xcode 9.3 and iPhone SDK 11.4
 
 At least Clang 3.4.2 is known to be too old to pass the configure.ac check "whether $CXX supports
 C++17, C++14, or C++11" in its current form (due to the #pragma GCC diagnostic ignored "-Wpragmas"
@@ -111,6 +111,8 @@ mail [Re: C[++]: Normalizing include syntax ("" vs
 
 The UNO API include files should consistently use double quotes, for the
 benefit of external users of this API.
+
+loplugin:includeform (compilerplugins/clang/includeform.cxx) enforces these rules.
 
 
 ## Finding out more

@@ -29,14 +29,13 @@
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/xml/crypto/SEInitializer.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/beans/PropertyValue.hpp>
 
 #include <comphelper/base64.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <rtl/ustrbuf.hxx>
-#include <sax/tools/converter.hxx>
-#include <tools/date.hxx>
-#include <tools/time.hxx>
+#include <sal/log.hxx>
+#include <tools/datetime.hxx>
 #include <o3tl/make_unique.hxx>
 
 #include <certificate.hxx>
@@ -269,8 +268,8 @@ bool DocumentSignatureManager::add(
     const uno::Reference<security::XCertificate>& xCert,
     const uno::Reference<xml::crypto::XXMLSecurityContext>& xSecurityContext,
     const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant,
-    const OUString& rSignatureLineId, const Reference<XGraphic> xValidGraphic,
-    const Reference<XGraphic> xInvalidGraphic)
+    const OUString& rSignatureLineId, const Reference<XGraphic>& xValidGraphic,
+    const Reference<XGraphic>& xInvalidGraphic)
 {
     if (!xCert.is())
     {
@@ -364,14 +363,13 @@ bool DocumentSignatureManager::add(
 
     uno::Sequence<uno::Reference<security::XCertificate>> aCertPath
         = xSecurityContext->getSecurityEnvironment()->buildCertificatePath(xCert);
-    const uno::Reference<security::XCertificate>* pCertPath = aCertPath.getConstArray();
-    sal_Int32 nCnt = aCertPath.getLength();
 
     OUStringBuffer aStrBuffer;
-    for (int i = 0; i < nCnt; i++)
+    for (uno::Reference<security::XCertificate> const& rxCertificate : aCertPath)
     {
-        comphelper::Base64::encode(aStrBuffer, pCertPath[i]->getEncoded());
-        maSignatureHelper.AddEncapsulatedX509Certificate(aStrBuffer.makeStringAndClear());
+        comphelper::Base64::encode(aStrBuffer, rxCertificate->getEncoded());
+        OUString aString = aStrBuffer.makeStringAndClear();
+        maSignatureHelper.AddEncapsulatedX509Certificate(aString);
     }
 
     std::vector<OUString> aElements = DocumentSignatureHelper::CreateElementList(
@@ -385,8 +383,7 @@ bool DocumentSignatureManager::add(
         maSignatureHelper.AddForSigning(nSecurityId, aElements[n], bBinaryMode, bAdESCompliant);
     }
 
-    maSignatureHelper.SetDateTime(nSecurityId, Date(Date::SYSTEM),
-                                  tools::Time(tools::Time::SYSTEM));
+    maSignatureHelper.SetDateTime(nSecurityId, DateTime(DateTime::SYSTEM));
     maSignatureHelper.SetDescription(nSecurityId, rDescription);
 
     if (!rSignatureLineId.isEmpty())

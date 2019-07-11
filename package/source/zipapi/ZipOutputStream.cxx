@@ -68,9 +68,9 @@ void ZipOutputStream::setEntry( ZipEntry *pEntry )
     }
 }
 
-void ZipOutputStream::addDeflatingThread( ZipOutputEntry *pEntry, comphelper::ThreadTask *pThread )
+void ZipOutputStream::addDeflatingThread( ZipOutputEntry *pEntry, std::unique_ptr<comphelper::ThreadTask> pThread )
 {
-    comphelper::ThreadPool::getSharedOptimalPool().pushTask(pThread);
+    comphelper::ThreadPool::getSharedOptimalPool().pushTask(std::move(pThread));
     m_aEntries.push_back(pEntry);
 }
 
@@ -91,15 +91,14 @@ void ZipOutputStream::rawCloseEntry( bool bEncrypt )
     m_pCurrentEntry = nullptr;
 }
 
-void ZipOutputStream::consumeScheduledThreadEntry(ZipOutputEntry* pCandidate)
+void ZipOutputStream::consumeScheduledThreadEntry(std::unique_ptr<ZipOutputEntry> pCandidate)
 {
     //Any exceptions thrown in the threads were caught and stored for now
-    ::css::uno::Any aCaughtException(pCandidate->getParallelDeflateException());
-    if (aCaughtException.hasValue())
+    const std::exception_ptr& rCaughtException(pCandidate->getParallelDeflateException());
+    if (rCaughtException)
     {
-        m_aDeflateException = aCaughtException; // store it for later throwing
+        m_aDeflateException = rCaughtException; // store it for later throwing
         // the exception handler in DeflateThread should have cleaned temp file
-        delete pCandidate;
         return;
     }
 
@@ -123,22 +122,21 @@ void ZipOutputStream::consumeScheduledThreadEntry(ZipOutputEntry* pCandidate)
 
     pCandidate->getZipPackageStream()->successfullyWritten(pCandidate->getZipEntry());
     pCandidate->deleteBufferFile();
-    delete pCandidate;
 }
 
 void ZipOutputStream::consumeFinishedScheduledThreadEntries()
 {
     std::vector< ZipOutputEntry* > aNonFinishedEntries;
 
-    for(auto aIter = m_aEntries.begin(); aIter != m_aEntries.end(); ++aIter)
+    for(ZipOutputEntry* pEntry : m_aEntries)
     {
-        if((*aIter)->isFinished())
+        if(pEntry->isFinished())
         {
-            consumeScheduledThreadEntry(*aIter);
+            consumeScheduledThreadEntry(std::unique_ptr<ZipOutputEntry>(pEntry));
         }
         else
         {
-            aNonFinishedEntries.push_back(*aIter);
+            aNonFinishedEntries.push_back(pEntry);
         }
     }
 
@@ -154,8 +152,7 @@ void ZipOutputStream::reduceScheduledThreadsToGivenNumberOrLess(sal_Int32 nThrea
 
         if(static_cast< sal_Int32 >(m_aEntries.size()) > nThreads)
         {
-            const TimeValue aTimeValue(0, 100000);
-            osl_waitThread(&aTimeValue);
+            osl::Thread::wait(std::chrono::microseconds(100));
         }
     }
 }
@@ -172,7 +169,7 @@ void ZipOutputStream::finish()
     {
         ZipOutputEntry* pCandidate = m_aEntries.back();
         m_aEntries.pop_back();
-        consumeScheduledThreadEntry(pCandidate);
+        consumeScheduledThreadEntry(std::unique_ptr<ZipOutputEntry>(pCandidate));
     }
 
     sal_Int32 nOffset= static_cast < sal_Int32 > (m_aChucker.GetPosition());
@@ -185,9 +182,9 @@ void ZipOutputStream::finish()
     m_xStream->flush();
     m_aZipList.clear();
 
-    if (m_aDeflateException.hasValue())
+    if (m_aDeflateException)
     {   // throw once all threads are finished and m_aEntries can be released
-        ::cppu::throwException(m_aDeflateException);
+        std::rethrow_exception(m_aDeflateException);
     }
 }
 

@@ -74,7 +74,10 @@ void SidebarDockingWindow::DoDispose()
 void SidebarDockingWindow::GetFocus()
 {
     if (mpSidebarController.is())
+    {
+        mpSidebarController->RequestOpenDeck();
         mpSidebarController->GetFocusManager().GrabFocus();
+    }
     else
         SfxDockingWindow::GetFocus();
 }
@@ -116,9 +119,30 @@ bool SidebarDockingWindow::EventNotify(NotifyEvent& rEvent)
 {
     MouseNotifyEvent nType = rEvent.GetType();
     if (MouseNotifyEvent::KEYINPUT == nType)
-        return true;
-
-    if (MouseNotifyEvent::MOUSEBUTTONDOWN == nType)
+    {
+        const vcl::KeyCode& rKeyCode = rEvent.GetKeyEvent()->GetKeyCode();
+        if (!(rKeyCode.GetCode() == KEY_F10 && rKeyCode.GetModifier() &&
+            rKeyCode.IsShift() && rKeyCode.IsMod1()))
+        {
+            if (!mpAccel)
+            {
+                mpAccel = svt::AcceleratorExecute::createAcceleratorHelper();
+                mpAccel->init(comphelper::getProcessComponentContext(), mpSidebarController->getXFrame());
+            }
+            const OUString aCommand(mpAccel->findCommand(svt::AcceleratorExecute::st_VCLKey2AWTKey(rKeyCode)));
+            if (".uno:DesignerDialog" == aCommand)
+            {
+                std::shared_ptr<PanelDescriptor> xPanelDescriptor =
+                    mpSidebarController->GetResourceManager()->GetPanelDescriptor( "StyleListPanel" );
+                if ( xPanelDescriptor && mpSidebarController->IsDeckVisible( xPanelDescriptor->msDeckId ) )
+                    Close();
+                return true;
+            }
+            if (".uno:Sidebar" != aCommand)
+                return true;
+        }
+    }
+    else if (MouseNotifyEvent::MOUSEBUTTONDOWN == nType)
     {
         const MouseEvent *mEvt = rEvent.GetMouseEvent();
         if (mEvt->IsLeft())

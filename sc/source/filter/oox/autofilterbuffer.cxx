@@ -26,6 +26,7 @@
 #include <com/sun/star/sheet/XDatabaseRange.hpp>
 #include <com/sun/star/sheet/XSheetFilterDescriptor3.hpp>
 #include <com/sun/star/table/TableOrientation.hpp>
+#include <com/sun/star/table/CellAddress.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <osl/diagnose.h>
 #include <oox/helper/attributelist.hxx>
@@ -37,6 +38,7 @@
 #include <oox/token/tokens.hxx>
 #include <addressconverter.hxx>
 #include <defnamesbuffer.hxx>
+#include <biffhelper.hxx>
 
 namespace oox {
 namespace xls {

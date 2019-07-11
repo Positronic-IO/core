@@ -57,7 +57,7 @@ class XMLOFF_DLLPUBLIC SvXMLTokenEnumerator
 private:
     const OUString&  maTokenString;
     sal_Int32               mnNextTokenPos;
-    sal_Unicode             mcSeparator;
+    sal_Unicode const       mcSeparator;
 
 public:
     SvXMLTokenEnumerator( const OUString& rString, sal_Unicode cSeparator = u' ' );
@@ -216,13 +216,13 @@ public:
                               const css::drawing::Position3D& rVector );
 
 
-    /** convert num-forat and num-letter-sync values to NumberingType */
+    /** convert num-format and num-letter-sync values to NumberingType */
     bool convertNumFormat( sal_Int16& rType,
                            const OUString& rNumFormat,
                            const OUString& rNumLetterSync,
                            bool bNumberNone = false ) const;
 
-    /** convert NumberingType to num-forat and num-letter-sync values */
+    /** convert NumberingType to num-format and num-letter-sync values */
     void convertNumFormat( OUStringBuffer& rBuffer,
                            sal_Int16 nType ) const;
     static void convertNumLetterSync( OUStringBuffer& rBuffer,

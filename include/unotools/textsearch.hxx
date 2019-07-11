@@ -24,12 +24,13 @@
 #include <i18nlangtag/lang.h>
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Reference.h>
-#include <com/sun/star/lang/Locale.hpp>
-#include <com/sun/star/util/XTextSearch2.hpp>
 
 #include <ostream>
 
 class CharClass;
+
+namespace com { namespace sun { namespace star { namespace lang { struct Locale; } } } }
+namespace com { namespace sun { namespace star { namespace util { class XTextSearch2; } } } }
 
 namespace com {
     namespace sun {
@@ -201,6 +202,13 @@ public:
     bool SearchForward( const OUString &rStr,
                         sal_Int32* pStart, sal_Int32* pEnd,
                         css::util::SearchResult* pRes = nullptr );
+    /**
+     * @brief searchForward Search forward beginning from the start to the end
+     *        of the given text
+     * @param rStr The text in wich we search
+     * @return True if the search term is found in the text
+     */
+    bool searchForward( const OUString &rStr );
     bool SearchBackward( const OUString &rStr,
                         sal_Int32* pStart, sal_Int32* pEnd,
                         css::util::SearchResult* pRes = nullptr );

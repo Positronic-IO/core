@@ -26,9 +26,9 @@
 #include <svx/svdocirc.hxx>
 #include <svx/sxciaitm.hxx>
 
-FuConstArc::FuConstArc( ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
-                   SdrModel* pDoc, const SfxRequest& rReq )
-    : FuConstruct( pViewSh, pWin, pViewP, pDoc, rReq )
+FuConstArc::FuConstArc(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP,
+                       SdrModel* pDoc, const SfxRequest& rReq)
+    : FuConstruct(rViewSh, pWin, pViewP, pDoc, rReq)
 {
 }
 
@@ -104,7 +104,7 @@ void FuConstArc::Activate()
     pView->SetCurrentObj( sal::static_int_cast<sal_uInt16>( aObjKind ) );
 
     aOldPointer = pWindow->GetPointer();
-    pViewShell->SetActivePointer( aNewPointer );
+    rViewShell.SetActivePointer( aNewPointer );
 
     FuDraw::Activate();
 }
@@ -112,24 +112,24 @@ void FuConstArc::Activate()
 void FuConstArc::Deactivate()
 {
     FuDraw::Deactivate();
-    pViewShell->SetActivePointer( aOldPointer );
+    rViewShell.SetActivePointer( aOldPointer );
 }
 
 // Create default drawing objects via keyboard
-SdrObject* FuConstArc::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstArc::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
 {
     // case SID_DRAW_ARC:
     // case SID_DRAW_PIE:
     // case SID_DRAW_CIRCLECUT:
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         *pDrDoc,
         pView->GetCurrentObjInventor(),
-        pView->GetCurrentObjIdentifier());
+        pView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {
-        if(dynamic_cast<const SdrCircObj*>( pObj) !=  nullptr)
+        if(dynamic_cast<const SdrCircObj*>( pObj.get() ) !=  nullptr)
         {
             tools::Rectangle aRect(rRectangle);
 

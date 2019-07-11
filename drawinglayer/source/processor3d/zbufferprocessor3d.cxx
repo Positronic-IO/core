@@ -18,9 +18,8 @@
  */
 
 #include <drawinglayer/processor3d/zbufferprocessor3d.hxx>
-#include <basegfx/raster/bpixelraster.hxx>
-#include <basegfx/raster/rasterconvert3d.hxx>
 #include <basegfx/raster/bzpixelraster.hxx>
+#include <basegfx/raster/rasterconvert3d.hxx>
 #include <drawinglayer/attribute/materialattribute3d.hxx>
 #include <drawinglayer/texture/texture.hxx>
 #include <drawinglayer/primitive3d/drawinglayer_primitivetypes3d.hxx>
@@ -527,9 +526,7 @@ namespace drawinglayer
             sal_uInt32 nStopLine)
         :   DefaultProcessor3D(rViewInformation3D, rSdrSceneAttribute, rSdrLightingAttribute),
             maInvEyeToView(),
-            mpZBufferRasterConverter3D(nullptr),
             mnAntiAlialize(nAntiAlialize),
-            mpRasterPrimitive3Ds(nullptr),
             mnStartLine(nStartLine),
             mnStopLine(nStopLine)
         {

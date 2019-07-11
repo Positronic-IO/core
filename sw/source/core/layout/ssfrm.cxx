@@ -27,6 +27,7 @@
 #include <fmtfsize.hxx>
 #include <editeng/boxitem.hxx>
 #include <editeng/shaditem.hxx>
+#include <IDocumentRedlineAccess.hxx>
 #include <fmtclds.hxx>
 #include <viewimp.hxx>
 #include <sortedobjs.hxx>
@@ -324,8 +325,10 @@ void SwFrame::DestroyImpl()
 
     // accessible objects for fly and cell frames have been already disposed
     // by the destructors of the derived classes.
-    if( IsAccessibleFrame() && !(IsFlyFrame() || IsCellFrame()) && GetDep() )
+    if (IsAccessibleFrame() && !(IsFlyFrame() || IsCellFrame())
+        && (GetDep() || IsTextFrame())) // sw_redlinehide: text frame may not have Dep!
     {
+        assert(!IsTextFrame() || GetDep() || static_cast<SwTextFrame*>(this)->GetMergedPara());
         SwRootFrame *pRootFrame = getRootFrame();
         if( pRootFrame && pRootFrame->IsAnyShellAccessible() )
         {
@@ -410,13 +413,19 @@ SwContentFrame::SwContentFrame( SwContentNode * const pContent, SwFrame* pSib ) 
     SwFrame( pContent, pSib ),
     SwFlowFrame( static_cast<SwFrame&>(*this) )
 {
+    assert(!getRootFrame()->IsHideRedlines() || pContent->IsCreateFrameWhenHidingRedlines());
 }
 
 void SwContentFrame::DestroyImpl()
 {
-    const SwContentNode* pCNd;
-    if( nullptr != ( pCNd = dynamic_cast<SwContentNode*>( GetRegisteredIn() ) ) &&
-        !pCNd->GetDoc()->IsInDtor() )
+    const SwContentNode* pCNd(dynamic_cast<SwContentNode*>(GetDep()));
+    if (nullptr == pCNd && IsTextFrame())
+    {
+        pCNd = static_cast<SwTextFrame*>(this)->GetTextNodeFirst();
+    }
+    // IsInDtor shouldn't be happening with ViewShell owning layout
+    assert(nullptr == pCNd || !pCNd->GetDoc()->IsInDtor());
+    if (nullptr != pCNd && !pCNd->GetDoc()->IsInDtor())
     {
         //Unregister from root if I'm still in turbo there.
         SwRootFrame *pRoot = getRootFrame();
@@ -434,9 +443,28 @@ SwContentFrame::~SwContentFrame()
 {
 }
 
-void SwContentFrame::RegisterToNode( SwContentNode& rNode )
+void SwTextFrame::RegisterToNode(SwTextNode & rNode, bool const isForceNodeAsFirst)
 {
-    rNode.Add( this );
+    if (isForceNodeAsFirst && m_pMergedPara)
+    {   // nothing registered here, in particular no redlines
+        assert(m_pMergedPara->pFirstNode->GetIndex() + 1 == rNode.GetIndex());
+        assert(rNode.GetDoc()->getIDocumentRedlineAccess().GetRedlinePos(
+                *m_pMergedPara->pFirstNode, USHRT_MAX) == SwRedlineTable::npos);
+    }
+    assert(&rNode != GetDep());
+    assert(!m_pMergedPara
+        || (m_pMergedPara->pFirstNode->GetIndex() < rNode.GetIndex())
+        || (rNode.GetIndex() + 1 == m_pMergedPara->pFirstNode->GetIndex()));
+    SwTextNode & rFirstNode(
+        (!isForceNodeAsFirst && m_pMergedPara && m_pMergedPara->pFirstNode->GetIndex() < rNode.GetIndex())
+            ? *m_pMergedPara->pFirstNode
+            : rNode);
+    // sw_redlinehide: use New here, because the only caller also calls lcl_ChangeFootnoteRef
+    m_pMergedPara = sw::CheckParaRedlineMerge(*this, rFirstNode, sw::FrameMode::New);
+    if (!m_pMergedPara)
+    {
+        rNode.Add(this);
+    }
 }
 
 void SwLayoutFrame::DestroyImpl()
@@ -465,9 +493,10 @@ void SwLayoutFrame::DestroyImpl()
                 const size_t nCnt = pFrame->GetDrawObjs()->size();
                 // #i28701#
                 SwAnchoredObject* pAnchoredObj = (*pFrame->GetDrawObjs())[0];
-                if ( dynamic_cast< const SwFlyFrame *>( pAnchoredObj ) !=  nullptr )
+                pAnchoredObj->ClearTmpConsiderWrapInfluence();
+                if (SwFlyFrame* pFlyFrame = dynamic_cast<SwFlyFrame*>(pAnchoredObj))
                 {
-                    SwFrame::DestroyFrame(static_cast<SwFlyFrame*>(pAnchoredObj));
+                    SwFrame::DestroyFrame(pFlyFrame);
                     assert(!pFrame->GetDrawObjs() || nCnt > pFrame->GetDrawObjs()->size());
                 }
                 else
@@ -490,6 +519,9 @@ void SwLayoutFrame::DestroyImpl()
                 }
             }
             pFrame->RemoveFromLayout();
+            //forcepoint#74, testcase swanchoredobject_considerobjwrapinfluenceonobjpos
+            if (pFrame->IsDeleteForbidden())
+                throw std::logic_error("DeleteForbidden");
             SwFrame::DestroyFrame(pFrame);
             pFrame = m_pLower;
         }
@@ -664,11 +696,11 @@ const SwRect SwFrame::UnionFrame( bool bBorder ) const
         const SvxBoxItem &rBox = rAttrs.GetBox();
         if ( rBox.GetLeft() )
             nLeft -= rBox.CalcLineSpace( SvxBoxItemLine::LEFT );
-        else if ( rAttrs.IsBorderDist() )
+        else
             nLeft -= rBox.GetDistance( SvxBoxItemLine::LEFT ) + 1;
         if ( rBox.GetRight() )
             nAdd += rBox.CalcLineSpace( SvxBoxItemLine::RIGHT );
-        else if ( rAttrs.IsBorderDist() )
+        else
             nAdd += rBox.GetDistance( SvxBoxItemLine::RIGHT ) + 1;
         if( rAttrs.GetShadow().GetLocation() != SvxShadowLocation::NONE )
         {

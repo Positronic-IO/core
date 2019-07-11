@@ -14,6 +14,7 @@
 #include <scmatrix.hxx>
 #include <comphelper/random.hxx>
 #include <formula/token.hxx>
+#include <sal/log.hxx>
 
 #include <stack>
 #include <cmath>
@@ -72,7 +73,7 @@ static bool lcl_SortByX( const DataPoint &lhs, const DataPoint &rhs ) { return l
 class ScETSForecastCalculation
 {
 private:
-    SvNumberFormatter* mpFormatter;
+    SvNumberFormatter* const mpFormatter;
     std::vector< DataPoint > maRange;   // data (X, Y)
     std::unique_ptr<double[]> mpBase;                     // calculated base value array
     std::unique_ptr<double[]> mpTrend;                    // calculated trend factor array
@@ -95,21 +96,21 @@ private:
     bool bEDS;                          // true: EDS, false: ETS
 
     // constants used in determining best fit for alpha, beta, gamma
-    const double cfMinABCResolution = 0.001;  // minimum change of alpha, beta, gamma
+    static constexpr double cfMinABCResolution = 0.001;  // minimum change of alpha, beta, gamma
     static const SCSIZE cnScenarios = 1000;   // No. of scenarios to calculate for PI calculations
 
     bool initData();
-    bool prefillBaseData();
+    void prefillBaseData();
     bool prefillTrendData();
     bool prefillPerIdx();
-    bool initCalc();
+    void initCalc();
     void refill();
     SCSIZE CalcPeriodLen();
     void CalcAlphaBetaGamma();
     void CalcBetaGamma();
     void CalcGamma();
     void calcAccuracyIndicators();
-    bool GetForecast( double fTarget, double& rForecast );
+    void GetForecast( double fTarget, double& rForecast );
     double RandDev();
     double convertXtoMonths( double x );
 
@@ -120,19 +121,15 @@ public:
                               bool bDataCompletion, int nAggregation, const ScMatrixRef& rTMat,
                               ScETSType eETSType );
     FormulaError GetError() { return mnErrorValue; };
-    bool GetForecastRange( const ScMatrixRef& rTMat, const ScMatrixRef& rFcMat );
-    bool GetStatisticValue( const ScMatrixRef& rTypeMat, const ScMatrixRef& rStatMat );
-    bool GetSamplesInPeriod( double& rVal );
-    bool GetEDSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel );
-    bool GetETSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel );
+    void GetForecastRange( const ScMatrixRef& rTMat, const ScMatrixRef& rFcMat );
+    void GetStatisticValue( const ScMatrixRef& rTypeMat, const ScMatrixRef& rStatMat );
+    void GetSamplesInPeriod( double& rVal );
+    void GetEDSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel );
+    void GetETSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel );
 };
 
 ScETSForecastCalculation::ScETSForecastCalculation( SCSIZE nSize, SvNumberFormatter* pFormatter )
     : mpFormatter(pFormatter)
-    , mpBase(nullptr)
-    , mpTrend(nullptr)
-    , mpPerIdx(nullptr)
-    , mpForecast(nullptr)
     , mnSmplInPrd(0)
     , mfStepSize(0.0)
     , mfAlpha(0.0)
@@ -395,8 +392,8 @@ bool ScETSForecastCalculation::initData( )
     {
         if ( prefillPerIdx() )
         {
-            if ( prefillBaseData() )
-                return true;
+            prefillBaseData();
+            return true;
         }
     }
     return false;
@@ -473,16 +470,15 @@ bool ScETSForecastCalculation::prefillPerIdx()
     return true;
 }
 
-bool ScETSForecastCalculation::prefillBaseData()
+void ScETSForecastCalculation::prefillBaseData()
 {
     if ( bEDS )
         mpBase[ 0 ] = maRange[ 0 ].Y;
     else
         mpBase[ 0 ] = maRange[ 0 ].Y / mpPerIdx[ 0 ];
-    return true;
 }
 
-bool ScETSForecastCalculation::initCalc()
+void ScETSForecastCalculation::initCalc()
 {
     if ( !mbInitialised )
     {
@@ -491,7 +487,6 @@ bool ScETSForecastCalculation::initCalc()
         mbInitialised = true;
         calcAccuracyIndicators();
     }
-    return true;
 }
 
 void ScETSForecastCalculation::calcAccuracyIndicators()
@@ -836,10 +831,9 @@ double ScETSForecastCalculation::convertXtoMonths( double x )
     return ( 12.0 * nYear + nMonth + ( aDate.GetDay() - mnMonthDay ) / fMonthLength );
 }
 
-bool ScETSForecastCalculation::GetForecast( double fTarget, double& rForecast )
+void ScETSForecastCalculation::GetForecast( double fTarget, double& rForecast )
 {
-    if ( !initCalc() )
-        return false;
+    initCalc();
 
     if ( fTarget <= maRange[ mnCount - 1 ].X )
     {
@@ -883,10 +877,9 @@ bool ScETSForecastCalculation::GetForecast( double fTarget, double& rForecast )
             rForecast = rForecast + fInterpolateFactor * ( fFc_1 - rForecast );
         }
     }
-    return true;
 }
 
-bool ScETSForecastCalculation::GetForecastRange( const ScMatrixRef& rTMat, const ScMatrixRef& rFcMat )
+void ScETSForecastCalculation::GetForecastRange( const ScMatrixRef& rTMat, const ScMatrixRef& rFcMat )
 {
     SCSIZE nC, nR;
     rTMat->GetDimensions( nC, nR );
@@ -901,19 +894,15 @@ bool ScETSForecastCalculation::GetForecastRange( const ScMatrixRef& rTMat, const
             else
                 fTarget = rTMat->GetDouble( j, i );
             double fForecast;
-            if ( GetForecast( fTarget, fForecast ) )
-                rFcMat->PutDouble( fForecast, j, i );
-            else
-                return false;
+            GetForecast( fTarget, fForecast );
+            rFcMat->PutDouble( fForecast, j, i );
         }
     }
-    return true;
 }
 
-bool ScETSForecastCalculation::GetStatisticValue( const ScMatrixRef& rTypeMat, const ScMatrixRef& rStatMat )
+void ScETSForecastCalculation::GetStatisticValue( const ScMatrixRef& rTypeMat, const ScMatrixRef& rStatMat )
 {
-    if ( !initCalc() )
-        return false;
+    initCalc();
 
     SCSIZE nC, nR;
     rTypeMat->GetDimensions( nC, nR );
@@ -953,13 +942,11 @@ bool ScETSForecastCalculation::GetStatisticValue( const ScMatrixRef& rTypeMat, c
             }
         }
     }
-    return true;
 }
 
-bool ScETSForecastCalculation::GetSamplesInPeriod( double& rVal )
+void ScETSForecastCalculation::GetSamplesInPeriod( double& rVal )
 {
     rVal = mnSmplInPrd;
-    return true;
 }
 
 double ScETSForecastCalculation::RandDev()
@@ -969,10 +956,9 @@ double ScETSForecastCalculation::RandDev()
              ::comphelper::rng::uniform_real_distribution( 0.5, 1.0 ) ) );
 }
 
-bool ScETSForecastCalculation::GetETSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel )
+void ScETSForecastCalculation::GetETSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel )
 {
-    if ( !initCalc() )
-        return false;
+    initCalc();
 
     SCSIZE nC, nR;
     rTMat->GetDimensions( nC, nR );
@@ -1096,14 +1082,12 @@ bool ScETSForecastCalculation::GetETSPredictionIntervals( const ScMatrixRef& rTM
             rPIMat->PutDouble( fPI, j, i );
         }
     }
-    return true;
 }
 
 
-bool ScETSForecastCalculation::GetEDSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel )
+void ScETSForecastCalculation::GetEDSPredictionIntervals( const ScMatrixRef& rTMat, const ScMatrixRef& rPIMat, double fPILevel )
 {
-    if ( !initCalc() )
-        return false;
+    initCalc();
 
     SCSIZE nC, nR;
     rTMat->GetDimensions( nC, nR );
@@ -1159,7 +1143,6 @@ bool ScETSForecastCalculation::GetEDSPredictionIntervals( const ScMatrixRef& rTM
             rPIMat->PutDouble( fPI, j, i );
         }
     }
-    return true;
 }
 
 
@@ -1319,10 +1302,8 @@ void ScInterpreter::ScForecast_Ets( ScETSType eETSType )
                 SCSIZE nC, nR;
                 pTMat->GetDimensions( nC, nR );
                 ScMatrixRef pFcMat = GetNewMat( nC, nR );
-                if ( aETSCalc.GetForecastRange( pTMat, pFcMat ) )
-                    PushMatrix( pFcMat );
-                else
-                    PushError( aETSCalc.GetError() );
+                aETSCalc.GetForecastRange( pTMat, pFcMat );
+                PushMatrix( pFcMat );
             }
             break;
         case etsPIAdd :
@@ -1333,17 +1314,13 @@ void ScInterpreter::ScForecast_Ets( ScETSType eETSType )
                 ScMatrixRef pPIMat = GetNewMat( nC, nR );
                 if ( nSmplInPrd == 0 )
                 {
-                    if ( aETSCalc.GetEDSPredictionIntervals( pTMat, pPIMat, fPILevel ) )
-                        PushMatrix( pPIMat );
-                    else
-                        PushError( aETSCalc.GetError() );
+                    aETSCalc.GetEDSPredictionIntervals( pTMat, pPIMat, fPILevel );
+                    PushMatrix( pPIMat );
                 }
                 else
                 {
-                    if ( aETSCalc.GetETSPredictionIntervals( pTMat, pPIMat, fPILevel ) )
-                        PushMatrix( pPIMat );
-                    else
-                        PushError( aETSCalc.GetError() );
+                    aETSCalc.GetETSPredictionIntervals( pTMat, pPIMat, fPILevel );
+                    PushMatrix( pPIMat );
                 }
             }
             break;
@@ -1353,19 +1330,15 @@ void ScInterpreter::ScForecast_Ets( ScETSType eETSType )
                 SCSIZE nC, nR;
                 pTypeMat->GetDimensions( nC, nR );
                 ScMatrixRef pStatMat = GetNewMat( nC, nR );
-                if ( aETSCalc.GetStatisticValue( pTypeMat, pStatMat ) )
-                    PushMatrix( pStatMat );
-                else
-                    PushError( aETSCalc.GetError() );
+                aETSCalc.GetStatisticValue( pTypeMat, pStatMat );
+                PushMatrix( pStatMat );
             }
             break;
         case etsSeason :
             {
                 double rVal;
-                if ( aETSCalc.GetSamplesInPeriod( rVal ) )
-                    PushDouble( rVal );
-                else
-                    PushError( aETSCalc.GetError() );
+                aETSCalc.GetSamplesInPeriod( rVal );
+                PushDouble( rVal );
             }
             break;
     }
@@ -1386,7 +1359,11 @@ void ScInterpreter::ScConcat_MS()
         {
             case svString:
             case svDouble:
-                aResBuf.append( GetString().getString() );
+                {
+                    const OUString& rStr = GetString().getString();
+                    if (CheckStringResultLen( aResBuf, rStr))
+                        aResBuf.append( rStr);
+                }
                 break;
             case svSingleRef :
             {
@@ -1401,7 +1378,9 @@ void ScInterpreter::ScConcat_MS()
                     {
                         svl::SharedString aSS;
                         GetCellString( aSS, aCell);
-                        aResBuf.append( aSS.getString());
+                        const OUString& rStr = aSS.getString();
+                        if (CheckStringResultLen( aResBuf, rStr))
+                            aResBuf.append( rStr);
                     }
                 }
             }
@@ -1442,7 +1421,9 @@ void ScInterpreter::ScConcat_MS()
                             {
                                 svl::SharedString aSS;
                                 GetCellString( aSS, aCell);
-                                aResBuf.append( aSS.getString());
+                                const OUString& rStr = aSS.getString();
+                                if (CheckStringResultLen( aResBuf, rStr))
+                                    aResBuf.append( rStr);
                             }
                         }
                     }
@@ -1467,11 +1448,19 @@ void ScInterpreter::ScConcat_MS()
                             for (SCSIZE k = 0; k < nR; k++ )
                             {
                                 if ( pMat->IsStringOrEmpty( j, k ) )
-                                    aResBuf.append(  pMat->GetString( j, k ).getString() );
+                                {
+                                    const OUString& rStr = pMat->GetString( j, k ).getString();
+                                    if (CheckStringResultLen( aResBuf, rStr))
+                                        aResBuf.append( rStr);
+                                }
                                 else
                                 {
                                     if ( pMat->IsValue( j, k ) )
-                                        aResBuf.append( pMat->GetString( *pFormatter, j, k ).getString() );
+                                    {
+                                        const OUString& rStr = pMat->GetString( *pFormatter, j, k ).getString();
+                                        if (CheckStringResultLen( aResBuf, rStr))
+                                            aResBuf.append( rStr);
+                                    }
                                 }
                             }
                         }
@@ -1644,7 +1633,8 @@ void ScInterpreter::ScTextJoin_MS()
                         }
                         else
                             bFirst = false;
-                        aResBuf.append( aStr );
+                        if (CheckStringResultLen( aResBuf, aStr))
+                            aResBuf.append( aStr );
                     }
                 }
                 break;
@@ -1680,7 +1670,8 @@ void ScInterpreter::ScTextJoin_MS()
                         }
                         else
                             bFirst = false;
-                        aResBuf.append( aStr );
+                        if (CheckStringResultLen( aResBuf, aStr))
+                            aResBuf.append( aStr );
                     }
                 }
                 break;
@@ -1739,7 +1730,8 @@ void ScInterpreter::ScTextJoin_MS()
                                 }
                                 else
                                     bFirst = false;
-                                aResBuf.append( aStr );
+                                if (CheckStringResultLen( aResBuf, aStr))
+                                    aResBuf.append( aStr );
                             }
                         }
                     }
@@ -1788,7 +1780,8 @@ void ScInterpreter::ScTextJoin_MS()
                                         }
                                         else
                                             bFirst = false;
-                                        aResBuf.append( aStr );
+                                        if (CheckStringResultLen( aResBuf, aStr))
+                                            aResBuf.append( aStr );
                                     }
                                 }
                             }

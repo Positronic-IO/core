@@ -41,6 +41,7 @@
 #include <docsh.hxx>
 #include <view.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 // This class saves the Pam as integers and can recompose those into a PaM
 SwUndRng::SwUndRng()
@@ -361,8 +362,8 @@ OUString GetUndoComment(SwUndoId eId)
             pId = STR_CHANGEFTN;
             break;
         case SwUndoId::REDLINE:
-            SAL_WARN("sw.core", "Should NEVER be used/translated");
-            return OUString();
+            SAL_INFO("sw.core", "Should NEVER be used/translated");
+            return OUString("$1");
         case SwUndoId::ACCEPT_REDLINE:
             pId = STR_ACCEPT_REDLINE;
             break;
@@ -689,7 +690,6 @@ SwRewriter SwUndo::GetRewriter() const
 }
 
 SwUndoSaveContent::SwUndoSaveContent()
-    : pHistory( nullptr )
 {}
 
 SwUndoSaveContent::~SwUndoSaveContent() COVERITY_NOEXCEPT_FALSE
@@ -985,17 +985,15 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
 
                                 // Moving the anchor?
                                 if( !( DelContentType::CheckNoCntnt & nDelContentType ) &&
-                                    ( rPoint.nNode.GetIndex() == pAPos->nNode.GetIndex() ) )
-                                {
+                                    (rPoint.nNode.GetIndex() == pAPos->nNode.GetIndex())
                                     // Do not try to move the anchor to a table!
-                                    if( rMark.nNode.GetNode().GetTextNode() )
-                                    {
-                                        pHistory->Add( *pFormat );
-                                        SwFormatAnchor aAnch( *pAnchor );
-                                        SwPosition aPos( rMark.nNode );
-                                        aAnch.SetAnchor( &aPos );
-                                        pFormat->SetFormatAttr( aAnch );
-                                    }
+                                    && rMark.nNode.GetNode().IsTextNode())
+                                {
+                                    pHistory->Add( *pFormat );
+                                    SwFormatAnchor aAnch( *pAnchor );
+                                    SwPosition aPos( rMark.nNode );
+                                    aAnch.SetAnchor( &aPos );
+                                    pFormat->SetFormatAttr( aAnch );
                                 }
                                 else
                                 {
@@ -1181,7 +1179,7 @@ void SwUndoSaveContent::DelContentIndex( const SwPosition& rMark,
 
 // save a complete section into UndoNodes array
 SwUndoSaveSection::SwUndoSaveSection()
-    : pRedlSaveData( nullptr ), nMvLen( 0 ), nStartPos( ULONG_MAX )
+    : nMvLen( 0 ), nStartPos( ULONG_MAX )
 {
 }
 
@@ -1195,7 +1193,7 @@ SwUndoSaveSection::~SwUndoSaveSection()
 
         m_pMovedStart.reset();
     }
-    delete pRedlSaveData;
+    pRedlSaveData.reset();
 }
 
 void SwUndoSaveSection::SaveSection( const SwNodeIndex& rSttIdx )
@@ -1211,19 +1209,22 @@ void SwUndoSaveSection::SaveSection(
 
     // delete all footnotes, fly frames, bookmarks
     DelContentIndex( *aPam.GetMark(), *aPam.GetPoint() );
+
+    // redlines *before* CorrAbs, because DelBookmarks will make them 0-length
+    // but *after* DelContentIndex because that also may use FillSaveData (in
+    // flys) and that will be restored *after* this one...
+    pRedlSaveData.reset( new SwRedlineSaveDatas );
+    if (!SwUndo::FillSaveData( aPam, *pRedlSaveData ))
+    {
+        pRedlSaveData.reset();
+    }
+
     {
         // move certain indexes out of deleted range
         SwNodeIndex aSttIdx( aPam.Start()->nNode.GetNode() );
         SwNodeIndex aEndIdx( aPam.End()->nNode.GetNode() );
         SwNodeIndex aMvStt( aEndIdx, 1 );
         SwDoc::CorrAbs( aSttIdx, aEndIdx, SwPosition( aMvStt ), true );
-    }
-
-    pRedlSaveData = new SwRedlineSaveDatas;
-    if( !SwUndo::FillSaveData( aPam, *pRedlSaveData ))
-    {
-        delete pRedlSaveData;
-        pRedlSaveData = nullptr;
     }
 
     nStartPos = rRange.aStart.GetIndex();
@@ -1278,8 +1279,7 @@ void SwUndoSaveSection::RestoreSection( SwDoc* pDoc, const SwNodeIndex& rInsPos 
         if( pRedlSaveData )
         {
             SwUndo::SetSaveData( *pDoc, *pRedlSaveData );
-            delete pRedlSaveData;
-            pRedlSaveData = nullptr;
+            pRedlSaveData.reset();
         }
     }
 }

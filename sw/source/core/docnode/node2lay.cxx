@@ -36,10 +36,10 @@
  */
 class SwNode2LayImpl
 {
-    std::unique_ptr<SwIterator<SwFrame,SwModify>> pIter;
+    std::unique_ptr<SwIterator<SwFrame, SwModify, sw::IteratorMode::UnwrapMulti>> pIter;
     SwModify* pMod;
     std::vector<SwFrame*> mvUpperFrames; // To collect the Upper
-    sal_uLong nIndex;        // The Index of the to-be-inserted Nodes
+    sal_uLong const nIndex;        // The Index of the to-be-inserted Nodes
     bool bMaster    : 1; // true => only Master, false => only Frames without Follow
     bool bInit      : 1; // Did we already call First() at SwClient?
 
@@ -57,7 +57,7 @@ public:
     SwFrame* GetFrame( const Point* pDocPos ) const;
 };
 
-SwNode* GoNextWithFrame(const SwNodes& rNodes, SwNodeIndex *pIdx)
+static SwNode* GoNextWithFrame(const SwNodes& rNodes, SwNodeIndex *pIdx)
 {
     if( pIdx->GetIndex() >= rNodes.Count() - 1 )
         return nullptr;
@@ -69,7 +69,9 @@ SwNode* GoNextWithFrame(const SwNodes& rNodes, SwNodeIndex *pIdx)
         pNd = &aTmp.GetNode();
         bool bFound = false;
         if ( pNd->IsContentNode() )
-            bFound = SwIterator<SwFrame,SwContentNode>(*static_cast<SwContentNode*>(pNd)).First();
+            // sw_redlinehide: assume that it's OK to find a node with the same
+            // frame as the caller's one
+            bFound = SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti>(*static_cast<SwContentNode*>(pNd)).First();
         else if ( pNd->IsTableNode() )
             bFound = SwIterator<SwFrame,SwFormat>(*static_cast<SwTableNode*>(pNd)->GetTable().GetFrameFormat()).First() ;
         else if( pNd->IsEndNode() && !pNd->StartOfSectionNode()->IsSectionNode() )
@@ -89,7 +91,7 @@ SwNode* GoNextWithFrame(const SwNodes& rNodes, SwNodeIndex *pIdx)
     return pNd;
 }
 
-SwNode* GoPreviousWithFrame(SwNodeIndex *pIdx)
+static SwNode* GoPreviousWithFrame(SwNodeIndex *pIdx)
 {
     if( !pIdx->GetIndex() )
         return nullptr;
@@ -101,7 +103,9 @@ SwNode* GoPreviousWithFrame(SwNodeIndex *pIdx)
         pNd = &aTmp.GetNode();
         bool bFound = false;
         if ( pNd->IsContentNode() )
-            bFound = SwIterator<SwFrame,SwContentNode>(*static_cast<SwContentNode*>(pNd)).First();
+            // sw_redlinehide: assume that it's OK to find a node with the same
+            // frame as the caller's one
+            bFound = SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti>(*static_cast<SwContentNode*>(pNd)).First();
         else if ( pNd->IsTableNode() )
             bFound = SwIterator<SwFrame,SwFormat>(*static_cast<SwTableNode*>(pNd)->GetTable().GetFrameFormat()).First();
         else if( pNd->IsStartNode() && !pNd->IsSectionNode() )
@@ -166,10 +170,10 @@ SwNode2LayImpl::SwNode2LayImpl( const SwNode& rNode, sal_uLong nIdx, bool bSearc
             pMod = const_cast<SwModify*>(static_cast<SwModify const *>(pNd->GetContentNode()));
         else
         {
-            OSL_ENSURE( pNd->IsTableNode(), "For Tablenodes only" );
+            assert(pNd->IsTableNode());
             pMod = pNd->GetTableNode()->GetTable().GetFrameFormat();
         }
-        pIter.reset(new SwIterator<SwFrame,SwModify>( *pMod ));
+        pIter.reset(new SwIterator<SwFrame, SwModify, sw::IteratorMode::UnwrapMulti>(*pMod));
     }
     else
     {
@@ -207,7 +211,7 @@ SwFrame* SwNode2LayImpl::NextFrame()
     while( pRet )
     {
         SwFlowFrame* pFlow = SwFlowFrame::CastFlowFrame( pRet );
-        OSL_ENSURE( pFlow, "Content or Table expected?!" );
+        assert(pFlow);
         // Follows are pretty volatile, thus we ignore them.
         // Even if we insert after the Frame, we start from the Master
         // and iterate through it until the last Follow
@@ -229,9 +233,9 @@ SwFrame* SwNode2LayImpl::NextFrame()
                 // SectionFrame is also located within the Footnote and not outside of it.
                 if( !pRet->IsInFootnote() || pSct->IsInFootnote() )
                 {
-                    OSL_ENSURE( pSct && pSct->GetSection(), "Where's my section?" );
+                    assert(pSct && pSct->GetSection());
                     SwSectionNode* pNd = pSct->GetSection()->GetFormat()->GetSectionNode();
-                    OSL_ENSURE( pNd, "Lost SectionNode" );
+                    assert(pNd);
                     // If the result Frame is located within a Section Frame
                     // whose Section does not contain the Node, we return with
                     // the SectionFrame, else we return with the Content/TabFrame
@@ -303,11 +307,10 @@ SwLayoutFrame* SwNode2LayImpl::UpperFrame( SwFrame* &rpFrame, const SwNode &rNod
                     {
                         pFrame = static_cast<SwLayoutFrame*>(pFrame)->Lower();
                     }
-                    OSL_ENSURE( pFrame->IsLayoutFrame(),
-                            "<SwNode2LayImpl::UpperFrame(..)> - expected upper frame isn't a layout frame." );
+                    assert(pFrame->IsLayoutFrame());
                     rpFrame = bMaster ? nullptr
                                     : static_cast<SwLayoutFrame*>(pFrame)->Lower();
-                    OSL_ENSURE( !rpFrame || rpFrame->IsFlowFrame(),
+                    assert((!rpFrame || rpFrame->IsFlowFrame()) &&
                             "<SwNode2LayImpl::UpperFrame(..)> - expected sibling isn't a flow frame." );
                     return static_cast<SwLayoutFrame*>(pFrame);
                 }
@@ -371,7 +374,7 @@ void SwNode2LayImpl::RestoreUpperFrames( SwNodes& rNds, sal_uLong nStt, sal_uLon
                 else
                     pNxt = pUp->Lower();
                 pNew = static_cast<SwTableNode*>(pNd)->MakeFrame( pUp );
-                OSL_ENSURE( pNew->IsTabFrame(), "Table expected" );
+                assert(pNew->IsTabFrame());
                 pNew->Paste( pUp, pNxt );
                 static_cast<SwTabFrame*>(pNew)->RegistFlys();
                 mvUpperFrames[x-2] = pNew;
@@ -413,7 +416,13 @@ void SwNode2LayImpl::RestoreUpperFrames( SwNodes& rNds, sal_uLong nStt, sal_uLon
 SwFrame* SwNode2LayImpl::GetFrame( const Point* pDocPos ) const
 {
     // test if change of member pIter -> pMod broke anything
-    return pMod ? ::GetFrameOfModify( nullptr, *pMod, FRM_ALL, pDocPos, nullptr ) : nullptr;
+    std::pair<Point, bool> tmp;
+    if (pDocPos)
+    {
+        tmp.first = *pDocPos;
+        tmp.second = false;
+    }
+    return pMod ? ::GetFrameOfModify(nullptr, *pMod, FRM_ALL, nullptr, pDocPos ? &tmp : nullptr) : nullptr;
 }
 
 SwNode2Layout::SwNode2Layout( const SwNode& rNd, sal_uLong nIdx )
@@ -421,15 +430,15 @@ SwNode2Layout::SwNode2Layout( const SwNode& rNd, sal_uLong nIdx )
 {
 }
 
-SwNode2Layout::SwNode2Layout( const SwNode& rNd )
+SwNode2LayoutSaveUpperFrames::SwNode2LayoutSaveUpperFrames(const SwNode& rNd)
     : pImpl( new SwNode2LayImpl( rNd, rNd.GetIndex(), true ) )
 {
     pImpl->SaveUpperFrames();
 }
 
-void SwNode2Layout::RestoreUpperFrames( SwNodes& rNds, sal_uLong nStt, sal_uLong nEnd )
+void SwNode2LayoutSaveUpperFrames::RestoreUpperFrames(
+        SwNodes& rNds, sal_uLong const nStt, sal_uLong const nEnd)
 {
-    OSL_ENSURE( pImpl, "RestoreUpperFrames without SaveUpperFrames" );
     pImpl->RestoreUpperFrames( rNds, nStt, nEnd );
 }
 
@@ -444,6 +453,10 @@ SwLayoutFrame* SwNode2Layout::UpperFrame( SwFrame* &rpFrame, const SwNode &rNode
 }
 
 SwNode2Layout::~SwNode2Layout()
+{
+}
+
+SwNode2LayoutSaveUpperFrames::~SwNode2LayoutSaveUpperFrames()
 {
 }
 

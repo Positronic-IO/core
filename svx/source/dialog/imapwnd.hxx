@@ -23,15 +23,14 @@
 #include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
 #include <vcl/menu.hxx>
-#include <svtools/imapobj.hxx>
-#include <svtools/transfer.hxx>
-#include <svtools/imap.hxx>
+#include <vcl/imapobj.hxx>
+#include <vcl/transfer.hxx>
+#include <vcl/imap.hxx>
 #include <sfx2/frame.hxx>
 #include <svx/graphctl.hxx>
+#include <svl/itempool.hxx>
 
 #include <com/sun/star/frame/XFrame.hpp>
-
-struct SfxItemInfo;
 
 struct NotifyInfo
 {
@@ -76,7 +75,7 @@ class IMapWindow final : public GraphCtrl, public DropTargetHelper
     TargetList          aTargetList;
     Link<IMapWindow&,void> aInfoLink;
     SfxItemPool*        pIMapPool;
-    SfxItemInfo*        pItemInfo;
+    SfxItemInfo         maItemInfos[1];
     css::uno::Reference< css::frame::XFrame >
                         mxDocumentFrame;
 

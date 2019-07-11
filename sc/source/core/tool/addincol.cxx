@@ -23,6 +23,8 @@
 #include <vcl/settings.hxx>
 #include <sfx2/objsh.hxx>
 #include <unotools/charclass.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/lang/XServiceName.hpp>
@@ -37,6 +39,8 @@
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/sheet/XCompatibilityNames.hpp>
 #include <com/sun/star/sheet/NoConvergenceException.hpp>
+#include <com/sun/star/sheet/XAddIn.hpp>
+#include <com/sun/star/sheet/XVolatileResult.hpp>
 
 #include <addincol.hxx>
 #include <addinhelpid.hxx>
@@ -143,7 +147,7 @@ bool ScUnoAddInFuncData::GetExcelName( LanguageType eDestLang, OUString& rRetExc
     if ( !rCompNames.empty() )
     {
         LanguageTag aLanguageTag( eDestLang);
-        const OUString aSearch( aLanguageTag.getBcp47());
+        const OUString& aSearch( aLanguageTag.getBcp47());
 
         // First, check exact match without fallback overhead.
         ::std::vector<LocalizedName>::const_iterator itNames( rCompNames.begin());
@@ -220,31 +224,20 @@ void ScUnoAddInFuncData::SetCallerPos( long nNewPos )
 
 ScUnoAddInCollection::ScUnoAddInCollection() :
     nFuncCount( 0 ),
-    ppFuncData( nullptr ),
-    pExactHashMap( nullptr ),
-    pNameHashMap( nullptr ),
-    pLocalHashMap( nullptr ),
     bInitialized( false )
 {
 }
 
 ScUnoAddInCollection::~ScUnoAddInCollection()
 {
-    Clear();
 }
 
 void ScUnoAddInCollection::Clear()
 {
-    DELETEZ( pExactHashMap );
-    DELETEZ( pNameHashMap );
-    DELETEZ( pLocalHashMap );
-    if ( ppFuncData )
-    {
-        for ( long i=0; i<nFuncCount; i++ )
-            delete ppFuncData[i];
-        delete[] ppFuncData;
-    }
-    ppFuncData = nullptr;
+    pExactHashMap.reset();
+    pNameHashMap.reset();
+    pLocalHashMap.reset();
+    ppFuncData.reset();
     nFuncCount = 0;
 
     bInitialized = false;
@@ -385,22 +378,21 @@ void ScUnoAddInCollection::ReadConfiguration()
         nFuncCount = nNewCount+nOld;
         if ( nOld )
         {
-            ScUnoAddInFuncData** ppNew = new ScUnoAddInFuncData*[nFuncCount];
+            std::unique_ptr<std::unique_ptr<ScUnoAddInFuncData>[]> ppNew(new std::unique_ptr<ScUnoAddInFuncData>[nFuncCount]);
             for (long i=0; i<nOld; i++)
-                ppNew[i] = ppFuncData[i];
-            delete[] ppFuncData;
-            ppFuncData = ppNew;
+                ppNew[i] = std::move(ppFuncData[i]);
+            ppFuncData = std::move(ppNew);
         }
         else
-            ppFuncData = new ScUnoAddInFuncData*[nFuncCount];
+            ppFuncData.reset( new std::unique_ptr<ScUnoAddInFuncData>[nFuncCount] );
 
         //TODO: adjust bucket count?
         if ( !pExactHashMap )
-            pExactHashMap = new ScAddInHashMap;
+            pExactHashMap.reset( new ScAddInHashMap );
         if ( !pNameHashMap )
-            pNameHashMap = new ScAddInHashMap;
+            pNameHashMap.reset( new ScAddInHashMap );
         if ( !pLocalHashMap )
-            pLocalHashMap = new ScAddInHashMap;
+            pLocalHashMap.reset( new ScAddInHashMap );
 
         //TODO: get the function information in a single call for all functions?
 
@@ -551,7 +543,7 @@ void ScUnoAddInCollection::ReadConfiguration()
 
                 pData->SetCompNames( aCompNames );
 
-                ppFuncData[nFuncPos+nOld] = pData;
+                ppFuncData[nFuncPos+nOld].reset(pData);
 
                 pExactHashMap->emplace(
                             pData->GetOriginalName(),
@@ -609,7 +601,7 @@ bool ScUnoAddInCollection::GetCalcName( const OUString& rExcelName, OUString& rR
 
     for (long i=0; i<nFuncCount; i++)
     {
-        ScUnoAddInFuncData* pFuncData = ppFuncData[i];
+        ScUnoAddInFuncData* pFuncData = ppFuncData[i].get();
         if ( pFuncData )
         {
             const ::std::vector<ScUnoAddInFuncData::LocalizedName>& rNames = pFuncData->GetCompNames();
@@ -633,7 +625,7 @@ bool ScUnoAddInCollection::GetCalcName( const OUString& rExcelName, OUString& rR
     return false;
 }
 
-inline bool IsTypeName( const OUString& rName, const uno::Type& rType )
+static bool IsTypeName( const OUString& rName, const uno::Type& rType )
 {
     return rName == rType.getTypeName();
 }
@@ -767,22 +759,21 @@ void ScUnoAddInCollection::ReadFromAddIn( const uno::Reference<uno::XInterface>&
                 nFuncCount = nNewCount+nOld;
                 if ( nOld )
                 {
-                    ScUnoAddInFuncData** ppNew = new ScUnoAddInFuncData*[nFuncCount];
+                    std::unique_ptr<std::unique_ptr<ScUnoAddInFuncData>[]> ppNew(new std::unique_ptr<ScUnoAddInFuncData>[nFuncCount]);
                     for (long i=0; i<nOld; i++)
-                        ppNew[i] = ppFuncData[i];
-                    delete[] ppFuncData;
-                    ppFuncData = ppNew;
+                        ppNew[i] = std::move(ppFuncData[i]);
+                    ppFuncData = std::move(ppNew);
                 }
                 else
-                    ppFuncData = new ScUnoAddInFuncData*[nFuncCount];
+                    ppFuncData.reset(new std::unique_ptr<ScUnoAddInFuncData>[nFuncCount]);
 
                 //TODO: adjust bucket count?
                 if ( !pExactHashMap )
-                    pExactHashMap = new ScAddInHashMap;
+                    pExactHashMap.reset( new ScAddInHashMap );
                 if ( !pNameHashMap )
-                    pNameHashMap = new ScAddInHashMap;
+                    pNameHashMap.reset( new ScAddInHashMap );
                 if ( !pLocalHashMap )
-                    pLocalHashMap = new ScAddInHashMap;
+                    pLocalHashMap.reset( new ScAddInHashMap );
 
                 const uno::Reference<reflection::XIdlMethod>* pArray = aMethods.getConstArray();
                 for (long nFuncPos=0; nFuncPos<nNewCount; nFuncPos++)
@@ -931,14 +922,14 @@ void ScUnoAddInCollection::ReadFromAddIn( const uno::Reference<uno::XInterface>&
                                     OSL_ENSURE( nDestPos==nVisibleCount, "wrong count" );
                                 }
 
-                                ppFuncData[nFuncPos+nOld] = new ScUnoAddInFuncData(
+                                ppFuncData[nFuncPos+nOld].reset( new ScUnoAddInFuncData(
                                     aFuncName, aLocalName, aDescription,
                                     nCategory, sHelpId,
                                     xFunc, aObject,
-                                    nVisibleCount, pVisibleArgs.get(), nCallerPos );
+                                    nVisibleCount, pVisibleArgs.get(), nCallerPos ) );
 
                                 const ScUnoAddInFuncData* pData =
-                                    ppFuncData[nFuncPos+nOld];
+                                    ppFuncData[nFuncPos+nOld].get();
                                 pExactHashMap->emplace(
                                             pData->GetOriginalName(),
                                             pData );
@@ -965,7 +956,7 @@ static void lcl_UpdateFunctionList( const ScFunctionList& rFunctionList, const S
     for (sal_uLong nPos=0; nPos<nCount; nPos++)
     {
         const ScFuncDesc* pDesc = rFunctionList.GetFunction( nPos );
-        if ( pDesc && pDesc->pFuncName && *pDesc->pFuncName == aCompare )
+        if ( pDesc && pDesc->mxFuncName && *pDesc->mxFuncName == aCompare )
         {
             ScUnoAddInCollection::FillFunctionDescFromData( rFuncData, *const_cast<ScFuncDesc*>(pDesc) );
             break;
@@ -1180,7 +1171,7 @@ const ScUnoAddInFuncData* ScUnoAddInCollection::GetFuncData( long nIndex )
         Initialize();
 
     if (nIndex < nFuncCount)
-        return ppFuncData[nIndex];
+        return ppFuncData[nIndex].get();
     return nullptr;
 }
 
@@ -1232,14 +1223,14 @@ bool ScUnoAddInCollection::FillFunctionDescFromData( const ScUnoAddInFuncData& r
 
     // nFIndex is set from outside
 
-    rDesc.pFuncName = new OUString( rFuncData.GetUpperLocal() );     //TODO: upper?
+    rDesc.mxFuncName = rFuncData.GetUpperLocal();     //TODO: upper?
     rDesc.nCategory = rFuncData.GetCategory();
     rDesc.sHelpId = rFuncData.GetHelpId();
 
     OUString aDesc = rFuncData.GetDescription();
     if (aDesc.isEmpty())
         aDesc = rFuncData.GetLocalName();      // use name if no description is available
-    rDesc.pFuncDesc = new OUString( aDesc );
+    rDesc.mxFuncDesc = aDesc ;
 
     // AddInArgumentType_CALLER is already left out in FuncData
 
@@ -1557,7 +1548,7 @@ void ScUnoAddInCall::SetResult( const uno::Any& rNewRes )
                     }
                     if ( nMaxColCount && nRowCount )
                     {
-                        xMatrix = new ScFullMatrix(
+                        xMatrix = new ScMatrix(
                                 static_cast<SCSIZE>(nMaxColCount),
                                 static_cast<SCSIZE>(nRowCount), 0.0);
                         for (long nRow=0; nRow<nRowCount; nRow++)
@@ -1598,7 +1589,7 @@ void ScUnoAddInCall::SetResult( const uno::Any& rNewRes )
                     }
                     if ( nMaxColCount && nRowCount )
                     {
-                        xMatrix = new ScFullMatrix(
+                        xMatrix = new ScMatrix(
                                 static_cast<SCSIZE>(nMaxColCount),
                                 static_cast<SCSIZE>(nRowCount), 0.0);
                         for (long nRow=0; nRow<nRowCount; nRow++)
@@ -1639,7 +1630,7 @@ void ScUnoAddInCall::SetResult( const uno::Any& rNewRes )
                     }
                     if ( nMaxColCount && nRowCount )
                     {
-                        xMatrix = new ScFullMatrix(
+                        xMatrix = new ScMatrix(
                                 static_cast<SCSIZE>(nMaxColCount),
                                 static_cast<SCSIZE>(nRowCount), 0.0);
                         for (long nRow=0; nRow<nRowCount; nRow++)

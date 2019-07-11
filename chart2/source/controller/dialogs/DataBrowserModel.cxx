@@ -45,6 +45,7 @@
 #include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
 #include <tools/diagnose_ex.h>
+#include <comphelper/property.hxx>
 
 #include <rtl/math.hxx>
 
@@ -278,7 +279,7 @@ private:
 
 void DataBrowserModel::insertDataSeries( sal_Int32 nAfterColumnIndex )
 {
-    OSL_ASSERT( m_apDialogModel.get());
+    OSL_ASSERT(m_apDialogModel);
     Reference< chart2::XInternalDataProvider > xDataProvider(
         m_apDialogModel->getDataProvider(), uno::UNO_QUERY );
 
@@ -399,7 +400,7 @@ void DataBrowserModel::insertComplexCategoryLevel( sal_Int32 nAfterColumnIndex )
 {
     //create a new text column for complex categories
 
-    OSL_ASSERT( m_apDialogModel.get());
+    OSL_ASSERT(m_apDialogModel);
     Reference< chart2::XInternalDataProvider > xDataProvider( m_apDialogModel->getDataProvider(), uno::UNO_QUERY );
     if (!xDataProvider.is())
         return;
@@ -437,7 +438,7 @@ void DataBrowserModel::removeComplexCategoryLevel( sal_Int32 nAtColumnIndex )
 
 void DataBrowserModel::removeDataSeriesOrComplexCategoryLevel( sal_Int32 nAtColumnIndex )
 {
-    OSL_ASSERT( m_apDialogModel.get());
+    OSL_ASSERT(m_apDialogModel);
     if (nAtColumnIndex < 0 || static_cast<size_t>(nAtColumnIndex) >= m_aColumns.size())
         // Out of bound.
         return;
@@ -484,11 +485,9 @@ void DataBrowserModel::removeDataSeriesOrComplexCategoryLevel( sal_Int32 nAtColu
     Sequence<Reference<chart2::data::XLabeledDataSequence> > aSequencesOfDeleted = xSourceOfDeleted->getDataSequences();
     for (sal_Int32 i = 0; i < aSequencesOfDeleted.getLength(); ++i)
     {
-        std::vector<Reference<chart2::data::XLabeledDataSequence> >::const_iterator aHitIt(
-            std::find_if( aAllDataSeqs.begin(), aAllDataSeqs.end(),
-                lcl_RepresentationsOfLSeqMatch( aSequencesOfDeleted[i] )));
         // if not used by the remaining series this sequence can be deleted
-        if( aHitIt == aAllDataSeqs.end() )
+        if( std::none_of( aAllDataSeqs.begin(), aAllDataSeqs.end(),
+                         lcl_RepresentationsOfLSeqMatch( aSequencesOfDeleted[i] )) )
             aSequenceIndexesToDelete.push_back( lcl_getValuesRepresentationIndex( aSequencesOfDeleted[i] ) );
     }
 
@@ -508,7 +507,7 @@ void DataBrowserModel::removeDataSeriesOrComplexCategoryLevel( sal_Int32 nAtColu
 
 void DataBrowserModel::swapDataSeries( sal_Int32 nFirstColumnIndex )
 {
-    OSL_ASSERT( m_apDialogModel.get());
+    OSL_ASSERT(m_apDialogModel);
     if( static_cast< tDataColumnVector::size_type >( nFirstColumnIndex ) < m_aColumns.size() - 1 )
     {
         Reference< chart2::XDataSeries > xSeries( m_aColumns[nFirstColumnIndex].m_xDataSeries );
@@ -522,7 +521,7 @@ void DataBrowserModel::swapDataSeries( sal_Int32 nFirstColumnIndex )
 
 void DataBrowserModel::swapDataPointForAllSeries( sal_Int32 nFirstIndex )
 {
-    OSL_ASSERT( m_apDialogModel.get());
+    OSL_ASSERT(m_apDialogModel);
     Reference< chart2::XInternalDataProvider > xDataProvider(
         m_apDialogModel->getDataProvider(), uno::UNO_QUERY );
     // lockControllers
@@ -872,8 +871,8 @@ void DataBrowserModel::updateFromModel()
                             else if( aRole == "values-x" )
                                 nSequenceNumberFormatKey = nXAxisNumberFormat;
 
-                            if( std::find_if( aSharedSequences.begin(), aSharedSequences.end(),
-                                             lcl_RepresentationsOfLSeqMatch( aLSeqs[nSeqIdx] )) == aSharedSequences.end())
+                            if( std::none_of( aSharedSequences.begin(), aSharedSequences.end(),
+                                             lcl_RepresentationsOfLSeqMatch( aLSeqs[nSeqIdx] )) )
                             {
                                 // no shared sequence
                                 m_aColumns.emplace_back(

@@ -25,6 +25,7 @@
 
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+#include <sal/log.hxx>
 
 
 #include <vcl/virdev.hxx>
@@ -1095,13 +1096,13 @@ bool OutputDevice::RemoveTransparenciesFromMetaFile( const GDIMetaFile& rInMtf, 
 
         Point aPageOffset;
         Size aTmpSize( GetOutputSizePixel() );
-        if( mpPDFWriter )
+        if( meOutDevType == OUTDEV_PDF )
         {
-            aTmpSize = mpPDFWriter->getCurPageSize();
-            aTmpSize = LogicToPixel( aTmpSize, MapMode( MapUnit::MapPoint ) );
+            auto pPdfWriter = static_cast<vcl::PDFWriterImpl*>(this);
+            aTmpSize = LogicToPixel(pPdfWriter->getCurPageSize(), MapMode(MapUnit::MapPoint));
 
             // also add error code to PDFWriter
-            mpPDFWriter->insertError( vcl::PDFWriter::Warning_Transparency_Converted );
+            pPdfWriter->insertError(vcl::PDFWriter::Warning_Transparency_Converted);
         }
         else if( meOutDevType == OUTDEV_PRINTER )
         {

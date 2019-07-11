@@ -17,15 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <limits.h>
-
 #include <olinetab.hxx>
-#include <global.hxx>
-#include <rechead.hxx>
 #include <address.hxx>
 #include <table.hxx>
-
-#include <o3tl/make_unique.hxx>
 
 #include <osl/diagnose.h>
 
@@ -203,28 +197,25 @@ bool ScOutlineArray::Insert(
         if (nStartLevel == nEndLevel && nStartIndex == nEndIndex && nStartLevel < SC_OL_MAXDEPTH)
             bFound = true;
 
-        if (!bFound)
+        if (!bFound && nFindMax>0)
         {
-            if (nFindMax>0)
+            --nFindMax;
+            if (nStartLevel)
             {
-                --nFindMax;
-                if (nStartLevel)
-                {
-                    ScOutlineCollection::const_iterator it = aCollections[nStartLevel-1].begin();
-                    std::advance(it, nStartIndex);
-                    if (it->second.GetStart() == nStartCol)
-                        FindEntry(nStartCol, nStartLevel, nStartIndex, nFindMax);
-                }
-
-                if (nEndLevel)
-                {
-                    ScOutlineCollection::const_iterator it = aCollections[nEndLevel-1].begin();
-                    std::advance(it, nEndIndex);
-                    if (it->second.GetEnd() == nEndCol)
-                        FindEntry(nEndCol, nEndLevel, nEndIndex, nFindMax);
-                }
-                bCont = true;
+                ScOutlineCollection::const_iterator it = aCollections[nStartLevel-1].begin();
+                std::advance(it, nStartIndex);
+                if (it->second.GetStart() == nStartCol)
+                    FindEntry(nStartCol, nStartLevel, nStartIndex, nFindMax);
             }
+
+            if (nEndLevel)
+            {
+                ScOutlineCollection::const_iterator it = aCollections[nEndLevel-1].begin();
+                std::advance(it, nEndIndex);
+                if (it->second.GetEnd() == nEndCol)
+                    FindEntry(nEndCol, nEndLevel, nEndIndex, nFindMax);
+            }
+            bCont = true;
         }
     }
     while ( !bFound && bCont );

@@ -21,6 +21,7 @@
 #include <com/sun/star/linguistic2/XSpellChecker1.hpp>
 
 #include <View.hxx>
+#include <editeng/outlobj.hxx>
 #include <editeng/unolingu.hxx>
 #include <sfx2/request.hxx>
 #include <svx/obj3d.hxx>
@@ -63,6 +64,7 @@
 #include <sdmod.hxx>
 #include <sdpage.hxx>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <DrawViewShell.hxx>
 #include <futext.hxx>
 #include <fuinsfil.hxx>
@@ -112,9 +114,7 @@ View::View(
     mrDoc(rDrawDoc),
     mpDocSh(rDrawDoc.GetDocSh()),
     mpViewSh(pViewShell),
-    mpDragSrcMarkList(nullptr),
     mpDropMarkerObj(nullptr),
-    mpDropMarker(nullptr),
     mnDragSrcPgNum(SDRPAGE_NOTFOUND),
     mnAction(DND_ACTION_NONE),
     maDropErrorIdle("sd View DropError"),
@@ -137,7 +137,7 @@ View::View(
 
     SetMinMoveDistancePixel(2);
     SetHitTolerancePixel(2);
-    SetMeasureLayer(SdResId(STR_LAYER_MEASURELINES));
+    SetMeasureLayer(sUNO_LayerName_measurelines);
 
     // Timer for delayed drop (has to be for MAC)
     maDropErrorIdle.SetInvokeHandler( LINK(this, View, DropErrorHdl) );
@@ -146,11 +146,7 @@ View::View(
 
 void View::ImplClearDrawDropMarker()
 {
-    if(mpDropMarker)
-    {
-        delete mpDropMarker;
-        mpDropMarker = nullptr;
-    }
+    mpDropMarker.reset();
 }
 
 View::~View()
@@ -195,20 +191,20 @@ drawinglayer::primitive2d::Primitive2DContainer ViewRedirector::createRedirected
     SdrObject* pObject = rOriginal.GetViewContact().TryToGetSdrObject();
     drawinglayer::primitive2d::Primitive2DContainer xRetval;
 
-    if(pObject && pObject->GetPage())
+    if(pObject && pObject->getSdrPageFromSdrObject())
     {
-        const bool bDoCreateGeometry(pObject->GetPage()->checkVisibility( rOriginal, rDisplayInfo, true ));
+        const bool bDoCreateGeometry(pObject->getSdrPageFromSdrObject()->checkVisibility( rOriginal, rDisplayInfo, true ));
 
         if(!bDoCreateGeometry && !(( pObject->GetObjInventor() == SdrInventor::Default ) && ( pObject->GetObjIdentifier() == OBJ_PAGE )) )
             return xRetval;
 
         PresObjKind eKind(PRESOBJ_NONE);
         const bool bSubContentProcessing(rDisplayInfo.GetSubContentActive());
-        const bool bIsMasterPageObject(pObject->GetPage()->IsMasterPage());
+        const bool bIsMasterPageObject(pObject->getSdrPageFromSdrObject()->IsMasterPage());
         const bool bIsPrinting(rOriginal.GetObjectContact().isOutputToPrinter());
         const SdrPageView* pPageView = rOriginal.GetObjectContact().TryToGetSdrPageView();
         const SdrPage* pVisualizedPage = GetSdrPageFromXDrawPage(rOriginal.GetObjectContact().getViewInformation2D().getVisualizedPage());
-        const SdPage* pObjectsSdPage = dynamic_cast< SdPage* >(pObject->GetPage());
+        const SdPage* pObjectsSdPage = dynamic_cast< SdPage* >(pObject->getSdrPageFromSdrObject());
         const bool bIsInsidePageObj(pPageView && pPageView->GetPage() != pVisualizedPage);
 
         // check if we need to draw a placeholder border. Never do it for
@@ -474,19 +470,13 @@ void View::CompleteRedraw(OutputDevice* pOutDev, const vcl::Region& rReg, sdr::c
                 SdrOutliner& rOutl = mrDoc.GetDrawOutliner();
                 bool bScreenDisplay(true);
 
-                if(bScreenDisplay && pOutDev && OUTDEV_PRINTER == pOutDev->GetOutDevType())
-                {
-                    // #i75566# printing; suppress AutoColor BackgroundColor generation
-                    // for visibility reasons by giving GetPageBackgroundColor()
-                    // the needed hint
+                // #i75566# printing; suppress AutoColor BackgroundColor generation
+                // for visibility reasons by giving GetPageBackgroundColor()
+                // the needed hint
+                // #i75566# PDF export; suppress AutoColor BackgroundColor generation (see printing)
+                if (pOutDev && ((OUTDEV_PRINTER == pOutDev->GetOutDevType())
+                        || (OUTDEV_PDF == pOutDev->GetOutDevType())))
                     bScreenDisplay = false;
-                }
-
-                if(bScreenDisplay && pOutDev && pOutDev->GetPDFWriter())
-                {
-                    // #i75566# PDF export; suppress AutoColor BackgroundColor generation (see above)
-                    bScreenDisplay = false;
-                }
 
                 // #i75566# Name change GetBackgroundColor -> GetPageBackgroundColor and
                 // hint value if screen display. Only then the AutoColor mechanisms shall be applied
@@ -531,7 +521,7 @@ bool View::IsPresObjSelected(bool bOnPage, bool bOnMasterPage, bool bCheckPresOb
         /* Drag&Drop is in progress
            Source and destination page are different:
            we use the saved mark list */
-        pMarkList = mpDragSrcMarkList;
+        pMarkList = mpDragSrcMarkList.get();
     }
     else
     {
@@ -554,7 +544,7 @@ bool View::IsPresObjSelected(bool bOnPage, bool bOnMasterPage, bool bCheckPresOb
 
         if ( pObj && ( bCheckPresObjListOnly || pObj->IsEmptyPresObj() || pObj->GetUserCall() ) )
         {
-            pPage = static_cast<SdPage*>( pObj->GetPage() );
+            pPage = static_cast<SdPage*>( pObj->getSdrPageFromSdrObject() );
             bMasterPage = pPage && pPage->IsMasterPage();
 
             if ( (bMasterPage && bOnMasterPage) || (!bMasterPage && bOnPage) )
@@ -577,7 +567,7 @@ bool View::IsPresObjSelected(bool bOnPage, bool bOnMasterPage, bool bCheckPresOb
         }
     }
 
-    if (pMarkList != mpDragSrcMarkList)
+    if (pMarkList != mpDragSrcMarkList.get())
     {
        delete pMarkList;
     }
@@ -602,7 +592,8 @@ void View::SelectAll()
 bool View::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr)
 {
     // forward to SdrView
-    return FmFormView::SetStyleSheet(pStyleSheet, bDontRemoveHardAttr);
+    FmFormView::SetStyleSheet(pStyleSheet, bDontRemoveHardAttr);
+    return true;
 }
 
 /**
@@ -652,7 +643,7 @@ bool View::SdrBeginTextEdit(
     SdrOutliner* pOutl, OutlinerView* pGivenOutlinerView,
     bool bDontDeleteOutliner, bool bOnlyOneView, bool bGrabFocus )
 {
-    SdrPage* pPage = pObj ? pObj->GetPage() : nullptr;
+    SdrPage* pPage = pObj ? pObj->getSdrPageFromSdrObject() : nullptr;
     bool bMasterPage = pPage && pPage->IsMasterPage();
 
     GetViewShell()->GetViewShellBase().GetEventMultiplexer()->MultiplexEvent(
@@ -699,6 +690,9 @@ bool View::SdrBeginTextEdit(
     {
         mpViewSh->GetViewShellBase().GetDrawController().FireSelectionChangeListener();
 
+        if (pObj && pObj->GetObjIdentifier() == OBJ_TABLE)
+            mpViewSh->UpdateScrollBars();
+
         if (comphelper::LibreOfficeKit::isActive())
         {
             if (OutlinerView* pView = GetTextEditOutlinerView())
@@ -712,36 +706,30 @@ bool View::SdrBeginTextEdit(
         }
     }
 
-    if (bReturn)
+    if (::Outliner* pOL = bReturn ? GetTextEditOutliner() : nullptr)
     {
-        ::Outliner* pOL = GetTextEditOutliner();
-
-        if( pObj && pObj->GetPage() )
+        if (pObj)
         {
-            Color aBackground;
             if( pObj->GetObjInventor() == SdrInventor::Default && pObj->GetObjIdentifier() == OBJ_TABLE )
             {
+                Color aBackground;
                 aBackground = GetTextEditBackgroundColor(*this);
+                pOL->SetBackgroundColor( aBackground  );
             }
             else
             {
-                aBackground = pObj->GetPage()->GetPageBackgroundColor(pPV);
+                pObj->setSuitableOutlinerBg(*pOL);
             }
-            if (pOL != nullptr)
-                pOL->SetBackgroundColor( aBackground  );
         }
 
-        if (pOL != nullptr)
-        {
-            pOL->SetParaInsertedHdl(LINK(this, View, OnParagraphInsertedHdl));
-            pOL->SetParaRemovingHdl(LINK(this, View, OnParagraphRemovingHdl));
-        }
+        pOL->SetParaInsertedHdl(LINK(this, View, OnParagraphInsertedHdl));
+        pOL->SetParaRemovingHdl(LINK(this, View, OnParagraphRemovingHdl));
     }
 
     if (bMasterPage && bReturn && pOutl)
     {
         const SdrTextObj* pTextObj = pOutl->GetTextObj();
-        const SdPage* pSdPage = pTextObj ? static_cast<const SdPage*>(pTextObj->GetPage()) : nullptr;
+        const SdPage* pSdPage = pTextObj ? static_cast<const SdPage*>(pTextObj->getSdrPageFromSdrObject()) : nullptr;
         const PresObjKind eKind = pSdPage ? pSdPage->GetPresObjKind(const_cast<SdrTextObj*>(pTextObj)) : PRESOBJ_NONE;
         switch (eKind)
         {
@@ -785,7 +773,7 @@ SdrEndTextEditKind View::SdrEndTextEdit(bool bDontDeleteReally)
         SdrTextObj* pObj = xObj.get();
         if( pObj && pObj->HasText() )
         {
-            SdrPage* pPage = pObj->GetPage();
+            SdrPage* pPage = pObj->getSdrPageFromSdrObject();
             if( !pPage || !pPage->IsMasterPage() )
                 pObj->SetEmptyPresObj( false );
         }
@@ -806,7 +794,7 @@ SdrEndTextEditKind View::SdrEndTextEdit(bool bDontDeleteReally)
 
         }
 
-        SdPage* pPage = dynamic_cast< SdPage* >( xObj->GetPage() );
+        SdPage* pPage = dynamic_cast< SdPage* >( xObj->getSdrPageFromSdrObject() );
         if( pPage )
             pPage->onEndTextEdit( xObj.get() );
     }
@@ -824,7 +812,7 @@ bool View::RestoreDefaultText( SdrTextObj* pTextObj )
     {
         if( !pTextObj->HasText() )
         {
-            SdPage* pPage = dynamic_cast< SdPage* >( pTextObj->GetPage() );
+            SdPage* pPage = dynamic_cast< SdPage* >( pTextObj->getSdrPageFromSdrObject() );
 
             if(pPage)
             {
@@ -849,7 +837,7 @@ bool View::RestoreDefaultText( SdrTextObj* pTextObj )
  */
 void View::SetMarkedOriginalSize()
 {
-    SdrUndoGroup* pUndoGroup = new SdrUndoGroup(mrDoc);
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(mrDoc));
     const size_t nCount = GetMarkedObjectCount();
     bool            bOK = false;
 
@@ -914,10 +902,8 @@ void View::SetMarkedOriginalSize()
     if( bOK )
     {
         pUndoGroup->SetComment(SdResId(STR_UNDO_ORIGINALSIZE));
-        mpDocSh->GetUndoManager()->AddUndoAction(pUndoGroup);
+        mpDocSh->GetUndoManager()->AddUndoAction(std::move(pUndoGroup));
     }
-    else
-        delete pUndoGroup;
 }
 
 /**
@@ -1074,7 +1060,7 @@ IMPL_LINK( View, OnParagraphInsertedHdl, ::Outliner::ParagraphHdlParam, aParam, 
 
     if( aParam.pPara && pObj )
     {
-        SdPage* pPage = dynamic_cast< SdPage* >( pObj->GetPage() );
+        SdPage* pPage = dynamic_cast< SdPage* >( pObj->getSdrPageFromSdrObject() );
         if( pPage )
             pPage->onParagraphInserted( aParam.pOutliner, aParam.pPara, pObj );
     }
@@ -1089,7 +1075,7 @@ IMPL_LINK( View, OnParagraphRemovingHdl, ::Outliner::ParagraphHdlParam, aParam, 
 
     if( aParam.pPara && pObj )
     {
-        SdPage* pPage = dynamic_cast< SdPage* >( pObj->GetPage() );
+        SdPage* pPage = dynamic_cast< SdPage* >( pObj->getSdrPageFromSdrObject() );
         if( pPage )
             pPage->onParagraphRemoving( aParam.pOutliner, aParam.pPara, pObj );
     }
@@ -1150,13 +1136,6 @@ bool View::HasMarkedPoints() const
         return FmFormView::HasMarkedPoints();
 }
 
-sal_Int32 View::GetMarkedPointCount() const
-{
-    sal_Int32 nCount = FmFormView::GetMarkedPointCount();
-    nCount += maSmartTags.GetMarkedPointCount();
-    return nCount;
-}
-
 bool View::IsPointMarkable(const SdrHdl& rHdl) const
 {
     if( SmartTagSet::IsPointMarkable( rHdl ) )
@@ -1207,10 +1186,10 @@ void View::OnEndPasteOrDrop( PasteOrDropInfos* pInfo )
     /* Style Sheet handling */
     SdrTextObj* pTextObj = GetTextEditObject();
     SdrOutliner* pOutliner = GetTextEditOutliner();
-    if( !pOutliner || !pTextObj || !pTextObj->GetPage() )
+    if( !pOutliner || !pTextObj || !pTextObj->getSdrPageFromSdrObject() )
         return;
 
-    SdPage* pPage = static_cast< SdPage* >( pTextObj->GetPage() );
+    SdPage* pPage = static_cast< SdPage* >( pTextObj->getSdrPageFromSdrObject() );
     const PresObjKind eKind = pPage->GetPresObjKind(pTextObj);
 
     // outline kinds are taken care of in Outliner::ImplSetLevelDependentStyleSheet
@@ -1305,7 +1284,7 @@ void View::ChangeMarkedObjectsBulletsNumbering(
         return;
 
     const bool bUndoEnabled = pSdrModel->IsUndoEnabled();
-    SdrUndoGroup* pUndoGroup = bUndoEnabled ? new SdrUndoGroup(*pSdrModel) : nullptr;
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(bUndoEnabled ? new SdrUndoGroup(*pSdrModel) : nullptr);
 
     const bool bToggleOn = ShouldToggleOn( bToggle, bHandleBullets );
 
@@ -1347,8 +1326,7 @@ void View::ChangeMarkedObjectsBulletsNumbering(
                     pOutliner->SetText(*(pText->GetOutlinerParaObject()));
                     if (bUndoEnabled)
                     {
-                        SdrUndoObjSetText* pTxtUndo = dynamic_cast< SdrUndoObjSetText* >(pSdrModel->GetSdrUndoFactory().CreateUndoObjectSetText(*pTextObj, nCellIndex));
-                        pUndoGroup->AddAction(pTxtUndo);
+                        pUndoGroup->AddAction(pSdrModel->GetSdrUndoFactory().CreateUndoObjectSetText(*pTextObj, nCellIndex));
                     }
                     if ( !bToggleOn )
                     {
@@ -1378,8 +1356,8 @@ void View::ChangeMarkedObjectsBulletsNumbering(
             pOutliner->SetText(*pParaObj);
             if (bUndoEnabled)
             {
-                SdrUndoObjSetText* pTxtUndo = dynamic_cast< SdrUndoObjSetText* >(pSdrModel->GetSdrUndoFactory().CreateUndoObjectSetText(*pTextObj, 0));
-                pUndoGroup->AddAction(pTxtUndo);
+                pUndoGroup->AddAction(
+                    pSdrModel->GetSdrUndoFactory().CreateUndoObjectSetText(*pTextObj, 0));
             }
             if ( !bToggleOn )
             {
@@ -1398,11 +1376,9 @@ void View::ChangeMarkedObjectsBulletsNumbering(
     if ( bUndoEnabled && pUndoGroup->GetActionCount() > 0 )
     {
         pSdrModel->BegUndo();
-        pSdrModel->AddUndo(pUndoGroup);
+        pSdrModel->AddUndo(std::move(pUndoGroup));
         pSdrModel->EndUndo();
     }
-    else
-        delete pUndoGroup;
 }
 
 } // end of namespace sd

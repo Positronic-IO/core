@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -37,6 +37,7 @@
 #include <rtl/ref.hxx>
 #include <tools/datetime.hxx>
 #include <vcl/timer.hxx>
+#include <vcl/svapp.hxx>
 
 #include <basic/sbx.hxx>
 #include <basic/sbstar.hxx>
@@ -44,6 +45,8 @@
 #include <basic/sbmeth.hxx>
 #include <basic/sbmod.hxx>
 #include <basic/vbahelper.hxx>
+
+#include <comphelper/asyncquithandler.hxx>
 
 #include "vbacommandbars.hxx"
 
@@ -54,10 +57,8 @@ using namespace ::ooo::vba;
 
 #define OFFICEVERSION "11.0"
 
-// ====VbaTimerInfo==================================
 typedef ::std::pair< OUString, ::std::pair< double, double > > VbaTimerInfo;
 
-// ====VbaTimer==================================
 class VbaTimer
 {
     Timer m_aTimer;
@@ -126,7 +127,7 @@ IMPL_LINK_NOARG(VbaTimer, MacroCallHdl, Timer *, void)
         {}
     }
 
-    // mast be the last call in the method since it deletes the timer
+    // must be the last call in the method since it deletes the timer
     try
     {
         m_xBase->OnTime( uno::makeAny( m_aTimerInfo.second.first ), m_aTimerInfo.first, uno::makeAny( m_aTimerInfo.second.second ), uno::makeAny( false ) );
@@ -134,7 +135,6 @@ IMPL_LINK_NOARG(VbaTimer, MacroCallHdl, Timer *, void)
     {}
 }
 
-// ====VbaTimerInfoHash==================================
 struct VbaTimerInfoHash
 {
     size_t operator()( const VbaTimerInfo& rTimerInfo ) const
@@ -145,31 +145,17 @@ struct VbaTimerInfoHash
     }
 };
 
-// ====VbaTimerHashMap==================================
-typedef std::unordered_map< VbaTimerInfo, VbaTimer*, VbaTimerInfoHash > VbaTimerHashMap;
+typedef std::unordered_map< VbaTimerInfo, std::unique_ptr<VbaTimer>, VbaTimerInfoHash > VbaTimerHashMap;
 
-// ====VbaApplicationBase_Impl==================================
 struct VbaApplicationBase_Impl final
 {
     VbaTimerHashMap m_aTimerHash;
     bool mbVisible;
+    OUString msCaption;
 
     VbaApplicationBase_Impl() : mbVisible( true ) {}
-
-    ~VbaApplicationBase_Impl()
-    {
-        // remove the remaining timers
-        for ( VbaTimerHashMap::iterator aIter = m_aTimerHash.begin();
-              aIter != m_aTimerHash.end();
-              ++aIter )
-        {
-            delete aIter->second;
-            aIter->second = nullptr;
-        }
-    }
 };
 
-// ====VbaApplicationBase==================================
 VbaApplicationBase::VbaApplicationBase( const uno::Reference< uno::XComponentContext >& xContext )
                     : ApplicationBase_BASE( uno::Reference< XHelperInterface >(), xContext )
                     , m_pImpl( new VbaApplicationBase_Impl )
@@ -185,7 +171,7 @@ VbaApplicationBase::getScreenUpdating()
 {
     uno::Reference< frame::XModel > xModel = getCurrentDocument();
     if (!xModel.is())
-        return false;
+        return true;
     return !xModel->hasControllersLocked();
 }
 
@@ -204,11 +190,9 @@ VbaApplicationBase::getDisplayStatusBar()
     uno::Reference< frame::XFrame > xFrame( xModel->getCurrentController()->getFrame(), uno::UNO_QUERY_THROW );
     uno::Reference< beans::XPropertySet > xProps( xFrame, uno::UNO_QUERY_THROW );
 
-    if( xProps.is() ){
-        uno::Reference< frame::XLayoutManager > xLayoutManager( xProps->getPropertyValue( "LayoutManager"), uno::UNO_QUERY_THROW );
-        if( xLayoutManager.is() && xLayoutManager->isElementVisible( "private:resource/statusbar/statusbar" ) ){
-            return true;
-        }
+    uno::Reference< frame::XLayoutManager > xLayoutManager( xProps->getPropertyValue( "LayoutManager"), uno::UNO_QUERY_THROW );
+    if( xLayoutManager->isElementVisible( "private:resource/statusbar/statusbar" ) ){
+        return true;
     }
     return false;
 }
@@ -220,20 +204,16 @@ VbaApplicationBase::setDisplayStatusBar(sal_Bool bDisplayStatusBar)
     uno::Reference< frame::XFrame > xFrame( xModel->getCurrentController()->getFrame(), uno::UNO_QUERY_THROW );
     uno::Reference< beans::XPropertySet > xProps( xFrame, uno::UNO_QUERY_THROW );
 
-    if( xProps.is() ){
-        uno::Reference< frame::XLayoutManager > xLayoutManager( xProps->getPropertyValue( "LayoutManager" ), uno::UNO_QUERY_THROW );
-        OUString url( "private:resource/statusbar/statusbar" );
-        if( xLayoutManager.is() ){
-            if( bDisplayStatusBar && !xLayoutManager->isElementVisible( url ) ){
-                if( !xLayoutManager->showElement( url ) )
-                    xLayoutManager->createElement( url );
-                return;
-            }
-            else if( !bDisplayStatusBar && xLayoutManager->isElementVisible( url ) ){
-                xLayoutManager->hideElement( url );
-                return;
-            }
-        }
+    uno::Reference< frame::XLayoutManager > xLayoutManager( xProps->getPropertyValue( "LayoutManager" ), uno::UNO_QUERY_THROW );
+    OUString url( "private:resource/statusbar/statusbar" );
+    if( bDisplayStatusBar && !xLayoutManager->isElementVisible( url ) ){
+        if( !xLayoutManager->showElement( url ) )
+            xLayoutManager->createElement( url );
+        return;
+    }
+    else if( !bDisplayStatusBar && xLayoutManager->isElementVisible( url ) ){
+        xLayoutManager->hideElement( url );
+        return;
     }
 }
 
@@ -241,7 +221,7 @@ sal_Bool SAL_CALL VbaApplicationBase::getInteractive()
 {
     uno::Reference< frame::XModel > xModel = getCurrentDocument();
     if (!xModel.is())
-        return false;
+        return true;
     uno::Reference< frame::XFrame > xFrame( xModel->getCurrentController()->getFrame(), uno::UNO_QUERY_THROW );
     uno::Reference< awt::XWindow2 > xWindow( xFrame->getContainerWindow(), uno::UNO_QUERY_THROW );
 
@@ -265,6 +245,39 @@ void SAL_CALL VbaApplicationBase::setVisible( sal_Bool bVisible )
     m_pImpl->mbVisible = bVisible;  // dummy implementation
 }
 
+OUString SAL_CALL VbaApplicationBase::getCaption()
+{
+    SbMethod* pMeth = StarBASIC::GetActiveMethod();
+    if (!pMeth)
+    {
+        // When called from Automation clients, we don't even try, as there doesn't seem to be any
+        // good way to get at the actual "caption" (title) of the application's window (any of them,
+        // if there are several). We just keep a copy of a fake caption in the VbaApplicationBase_Impl.
+        return m_pImpl->msCaption;
+    }
+
+    // No idea if this code, which uses APIs that apparently are related to StarBasic (check
+    // getCurrentDoc() in vbahelper.cxx), actually works any better.
+    uno::Reference< frame::XModel > xModel( getCurrentDocument(), uno::UNO_QUERY_THROW );
+    uno::Reference< frame::XFrame > xFrame( xModel->getCurrentController()->getFrame(), uno::UNO_QUERY_THROW );
+    return xFrame->getName();
+}
+
+void SAL_CALL VbaApplicationBase::setCaption( const OUString& sCaption )
+{
+    // See comments in getCaption().
+
+    SbMethod* pMeth = StarBASIC::GetActiveMethod();
+    if (!pMeth)
+    {
+        m_pImpl->msCaption = sCaption;
+        return;
+    }
+
+    uno::Reference< frame::XModel > xModel( getCurrentDocument(), uno::UNO_QUERY_THROW );
+    uno::Reference< frame::XFrame > xFrame( xModel->getCurrentController()->getFrame(), uno::UNO_QUERY_THROW );
+    xFrame->setName( sCaption );
+}
 
 void SAL_CALL
 VbaApplicationBase::OnKey( const OUString& Key, const uno::Any& Procedure )
@@ -370,15 +383,13 @@ void SAL_CALL VbaApplicationBase::OnTime( const uno::Any& aEarliestTime, const O
     VbaTimerHashMap::iterator aIter = m_pImpl->m_aTimerHash.find( aTimerIndex );
     if ( aIter != m_pImpl->m_aTimerHash.end() )
     {
-        delete aIter->second;
-        aIter->second = nullptr;
         m_pImpl->m_aTimerHash.erase( aIter );
     }
 
     if ( bSetTimer )
     {
         VbaTimer* pTimer = new VbaTimer;
-        m_pImpl->m_aTimerHash[ aTimerIndex ] = pTimer;
+        m_pImpl->m_aTimerHash[ aTimerIndex ].reset(pTimer);
         pTimer->Start( this, aFunction, nEarliestTime, nLatestTime );
     }
 }
@@ -445,6 +456,15 @@ void VbaApplicationBase::Quit()
             if ( pBasic )
                 pBasic->QuitAndExitApplication();
         }
+    }
+    else
+    {
+        // This is the case of a call from an (OLE) Automation client.
+
+        // TODO: Probably we should just close any document windows open by the "application"
+        // (Writer or Calc) the call being handled is for. And only then, if no document windows
+        // are left open, quit the actual LibreOffice application.
+        Application::PostUserEvent( LINK( &AsyncQuitHandler::instance(), AsyncQuitHandler, OnAsyncQuit ) );
     }
 }
 

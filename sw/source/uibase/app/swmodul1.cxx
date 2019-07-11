@@ -148,7 +148,7 @@ void SwModule::ApplyUsrPref(const SwViewOption &rUsrPref, SwView* pActView,
     SwMasterUsrPref* pPref = const_cast<SwMasterUsrPref*>(GetUsrPref(
                                          nDest == SvViewOpt::DestWeb
                                          || (nDest != SvViewOpt::DestText
-                                             && pCurrView && dynamic_cast< const SwWebView *>( pCurrView ) !=  nullptr) ));
+                                             && dynamic_cast< const SwWebView *>( pCurrView )) ));
 
     // with Uno, only sdbcx::View, but not the Module should be changed
     bool bViewOnly = SvViewOpt::DestViewOnly == nDest;
@@ -309,20 +309,20 @@ void SwModule::ApplyUserCharUnit(bool bApplyChar, bool bWeb)
     FieldUnit eVScrollMetric = pPref->IsVScrollMetric() ? pPref->GetVScrollMetric() : pPref->GetMetric();
     if(bApplyChar)
     {
-        eHScrollMetric = FUNIT_CHAR;
-        eVScrollMetric = FUNIT_LINE;
+        eHScrollMetric = FieldUnit::CHAR;
+        eVScrollMetric = FieldUnit::LINE;
     }
     else
     {
         SvtCJKOptions aCJKOptions;
-        if ( !aCJKOptions.IsAsianTypographyEnabled() && ( eHScrollMetric == FUNIT_CHAR ))
-            eHScrollMetric = FUNIT_INCH;
-        else if ( eHScrollMetric == FUNIT_CHAR )
-            eHScrollMetric = FUNIT_CM;
-        if ( !aCJKOptions.IsAsianTypographyEnabled() && ( eVScrollMetric == FUNIT_LINE ))
-            eVScrollMetric = FUNIT_INCH;
-        else if ( eVScrollMetric == FUNIT_LINE )
-            eVScrollMetric = FUNIT_CM;
+        if ( !aCJKOptions.IsAsianTypographyEnabled() && ( eHScrollMetric == FieldUnit::CHAR ))
+            eHScrollMetric = FieldUnit::INCH;
+        else if ( eHScrollMetric == FieldUnit::CHAR )
+            eHScrollMetric = FieldUnit::CM;
+        if ( !aCJKOptions.IsAsianTypographyEnabled() && ( eVScrollMetric == FieldUnit::LINE ))
+            eVScrollMetric = FieldUnit::INCH;
+        else if ( eVScrollMetric == FieldUnit::LINE )
+            eVScrollMetric = FieldUnit::CM;
     }
     SwView* pTmpView = SwModule::GetFirstView();
     // switch rulers for all MDI-Windows
@@ -439,7 +439,7 @@ static Color lcl_GetAuthorColor(std::size_t nPos)
 }
 
 /// Returns a JSON representation of a redline author.
-boost::property_tree::ptree lcl_AuthorToJson(const OUString& rAuthor, std::size_t nIndex)
+static boost::property_tree::ptree lcl_AuthorToJson(const OUString& rAuthor, std::size_t nIndex)
 {
     boost::property_tree::ptree aRet;
     aRet.put("index", nIndex);

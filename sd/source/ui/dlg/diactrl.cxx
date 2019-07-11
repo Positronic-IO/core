@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <svl/intitem.hxx>
 #include <svx/dialogs.hrc>
 
 #include <sdattr.hxx>
@@ -51,7 +52,7 @@ SdPagesField::SdPagesField( vcl::Window* pParent,
     SetSizePixel( aSize );
 
     // set parameter of MetricFields
-    SetUnit( FUNIT_CUSTOM );
+    SetUnit( FieldUnit::CUSTOM );
     SetMin( 1 );
     SetFirst( 1 );
     SetMax( 15 );

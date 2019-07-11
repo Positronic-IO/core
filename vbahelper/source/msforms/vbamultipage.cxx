@@ -29,7 +29,7 @@ const OUString SVALUE( "MultiPageValue" );
 
 class PagesImpl : public cppu::WeakImplHelper< container::XIndexAccess >
 {
-    sal_Int32 mnPages;
+    sal_Int32 const mnPages;
 public:
     explicit PagesImpl( sal_Int32 nPages ) : mnPages( nPages ) {}
     virtual ::sal_Int32 SAL_CALL getCount() override { return mnPages; }
@@ -57,8 +57,8 @@ ScVbaMultiPage::ScVbaMultiPage(
         const uno::Reference< uno::XComponentContext >& xContext,
         const uno::Reference< uno::XInterface >& xControl,
         const uno::Reference< frame::XModel >& xModel,
-        AbstractGeometryAttributes* pGeomHelper) :
-    MultiPageImpl_BASE( xParent, xContext, xControl, xModel, pGeomHelper )
+        std::unique_ptr<ov::AbstractGeometryAttributes> pGeomHelper) :
+    MultiPageImpl_BASE( xParent, xContext, xControl, xModel, std::move(pGeomHelper) )
 {
 }
 

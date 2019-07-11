@@ -184,7 +184,7 @@ public:
     SbiDdeControl* GetDdeControl() { return pDdeCtrl.get(); }
     StarBASIC* GetBasic() { return pBasic; }
     SbiDllMgr* GetDllMgr();
-    SbiRTLData* GetRTLData() const { return const_cast<SbiRTLData*>(&aRTLData); }
+    SbiRTLData& GetRTLData() const { return const_cast<SbiRTLData&>(aRTLData); }
 
     std::shared_ptr<SvNumberFormatter> const & GetNumberFormatter();
     sal_uInt32 GetStdDateIdx() const { return nStdDateIdx; }
@@ -230,8 +230,8 @@ class SbiRuntime
     const sal_uInt8*   pStmnt;           // beginning of the last statement
     const sal_uInt8*   pError;           // address of the current error handler
     const sal_uInt8*   pRestart;         // restart-address
-    const sal_uInt8*   pErrCode;         // restart-adresse RESUME NEXT
-    const sal_uInt8*   pErrStmnt;        // Restart-Adresse RESUME 0
+    const sal_uInt8*   pErrCode;         // restart-address RESUME NEXT
+    const sal_uInt8*   pErrStmnt;        // restart-address RESUME 0
     OUString           aLibName;         // Lib-name for declare-call
     SbxArrayRef        refParams;        // current procedure parameters
     SbxArrayRef        refLocals;        // local variable
@@ -286,7 +286,7 @@ class SbiRuntime
     void DllCall( const OUString&, const OUString&, SbxArray*, SbxDataType, bool );
 
     // #56204 swap out DIM-functionality into help method (step0.cxx)
-    void DimImpl( SbxVariableRef refVar );
+    void DimImpl(const SbxVariableRef& refVar);
 
     static bool implIsClass( SbxObject const * pObj, const OUString& aClass );
 

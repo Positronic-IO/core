@@ -31,6 +31,7 @@
 #include <sfx2/dispatch.hxx>
 #include <editeng/eeitem.hxx>
 #include <sfx2/request.hxx>
+#include <sfx2/sfxdlg.hxx>
 #include <editeng/numitem.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/lrspitem.hxx>
@@ -61,6 +62,7 @@
 #include <prlayout.hxx>
 #include <svx/xfillit.hxx>
 #include <sdresid.hxx>
+#include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
 #include <helpids.h>
 #include <sdabstdlg.hxx>
@@ -303,7 +305,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
 
                 if (eFamily == SfxStyleFamily::Para)
                 {
-                    pStdDlg.disposeAndReset(pFact ? pFact->CreateSdTabTemplateDlg(mpViewShell->GetActiveWindow(), mpDoc->GetDocSh(), *pStyleSheet, mpDoc, mpView) : nullptr);
+                    pStdDlg.disposeAndReset(pFact ? pFact->CreateSdTabTemplateDlg(mpViewShell->GetFrameWeld(), mpDoc->GetDocSh(), *pStyleSheet, mpDoc, mpView) : nullptr);
                 }
                 else if (eFamily == SfxStyleFamily::Pseudo)
                 {
@@ -361,7 +363,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
 
                     if( !bOldDocInOtherLanguage )
                     {
-                        pPresDlg.disposeAndReset(pFact ? pFact->CreateSdPresLayoutTemplateDlg( mpDocSh,  mpViewShell->GetActiveWindow(), bBackground, *pStyleSheet, ePO, pSSPool ) : nullptr);
+                        pPresDlg.disposeAndReset(pFact ? pFact->CreateSdPresLayoutTemplateDlg(mpDocSh,  mpViewShell->GetFrameWeld(), bBackground, *pStyleSheet, ePO, pSSPool ) : nullptr);
                     }
                 }
 
@@ -522,7 +524,7 @@ void FuTemplate::DoExecute( SfxRequest& rReq )
 
                                 if( pPage )
                                 {
-                                    SdrObjListIter aIter( *pPage );
+                                    SdrObjListIter aIter( pPage );
                                     while( aIter.IsMore() )
                                     {
                                         SdrObject* pObj = aIter.Next();

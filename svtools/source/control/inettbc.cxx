@@ -41,6 +41,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 #include <salhelper/thread.hxx>
 #include <osl/file.hxx>
 #include <osl/mutex.hxx>
@@ -95,11 +96,11 @@ class SvtMatchContext_Impl: public salhelper::Thread
     std::vector<OUString>           aCompletions;
     std::vector<OUString>           aURLs;
     svtools::AsynchronLink          aLink;
-    OUString                        aBaseURL;
-    OUString                        aText;
+    OUString const                  aBaseURL;
+    OUString const                  aText;
     VclPtr<SvtURLBox>               pBox;
-    bool                            bOnlyDirectories;
-    bool                            bNoSelection;
+    bool const                      bOnlyDirectories;
+    bool const                      bNoSelection;
 
     osl::Mutex mutex_;
     bool stopped_;
@@ -128,7 +129,7 @@ class MatchContext_Impl: public salhelper::Thread
     std::vector<OUString>           aCompletions;
     std::vector<OUString>           aURLs;
     svtools::AsynchronLink          aLink;
-    OUString                        aText;
+    OUString const                  aText;
     URLBox*                         pBox;
 
     osl::Mutex mutex_;
@@ -698,9 +699,8 @@ void MatchContext_Impl::ReadFolder( const OUString& rURL,
         try
         {
             uno::Reference< XDynamicResultSet > xDynResultSet;
-            ResultSetInclude eInclude = INCLUDE_FOLDERS_AND_DOCUMENTS;
 
-            xDynResultSet = aCnt.createDynamicCursor( aProps, eInclude );
+            xDynResultSet = aCnt.createDynamicCursor( aProps, INCLUDE_FOLDERS_AND_DOCUMENTS );
 
             uno::Reference < XAnyCompareFactory > xCompare;
             uno::Reference < XSortedDynamicResultSetFactory > xSRSFac =
@@ -2009,9 +2009,9 @@ IMPL_LINK_NOARG(URLBox, TryAutoComplete, Timer *, void)
         m_xWidget->clear();
 }
 
-URLBox::URLBox(weld::ComboBoxText* pWidget)
+URLBox::URLBox(std::unique_ptr<weld::ComboBox> pWidget)
     : bHistoryDisabled(false)
-    , m_xWidget(pWidget)
+    , m_xWidget(std::move(pWidget))
 {
     Init();
 
@@ -2097,13 +2097,14 @@ void URLBox::UpdatePicklistForSmartProtocol_Impl()
     }
 }
 
-IMPL_LINK_NOARG(URLBox, ChangedHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(URLBox, ChangedHdl, weld::ComboBox&, void)
 {
     aChangedIdle.Start(); //launch this to happen on idle after cursor position will have been set
 }
 
 IMPL_LINK_NOARG(URLBox, FocusInHdl, weld::Widget&, void)
 {
+    (void)this; // loplugin:staticmethod
 #ifndef UNX
     // pb: don't select automatically on unix #93251#
     m_xWidget->select_entry_region(0, -1);

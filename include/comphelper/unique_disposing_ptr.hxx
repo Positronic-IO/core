@@ -17,8 +17,9 @@
 #include <com/sun/star/frame/XDesktop.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 
-#include <o3tl/deleter.hxx>
 #include <vcl/svapp.hxx>
+
+namespace o3tl { template <typename T> struct default_delete; }
 
 namespace comphelper
 {
@@ -74,7 +75,7 @@ private:
     private:
         css::uno::Reference< css::lang::XComponent > m_xComponent;
         unique_disposing_ptr<T>& m_rItem;
-        bool mbComponentDLL;
+        bool const mbComponentDLL;
     public:
         TerminateListener(const css::uno::Reference< css::lang::XComponent > &rComponent,
             unique_disposing_ptr<T>& rItem, bool bComponentDLL) :

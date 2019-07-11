@@ -117,9 +117,9 @@ IMPL_LINK(SidebarTextEditSource, NotifyHdl, EENotify&, rNotify, void)
 {
     std::unique_ptr< SfxHint > aHint( SvxEditSourceHelper::EENotification2Hint( &rNotify ) );
 
-    if( aHint.get() )
+    if (aHint)
     {
-        Broadcast( *aHint.get() );
+        Broadcast(*aHint);
     }
 }
 
@@ -128,7 +128,6 @@ class SidebarTextControlAccessibleContext : public VCLXAccessibleComponent
 {
     public:
         explicit SidebarTextControlAccessibleContext( SidebarTextControl& rSidebarTextControl );
-        virtual ~SidebarTextControlAccessibleContext() override;
 
         virtual sal_Int32 SAL_CALL
                 getAccessibleChildCount() override;
@@ -146,8 +145,7 @@ class SidebarTextControlAccessibleContext : public VCLXAccessibleComponent
         virtual void ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent ) override;
 
     private:
-        SidebarTextControl& mrSidebarTextControl;
-        ::accessibility::AccessibleTextHelper* mpAccessibleTextHelper;
+        std::unique_ptr<::accessibility::AccessibleTextHelper> mpAccessibleTextHelper;
 
         ::osl::Mutex maMutex;
 
@@ -156,23 +154,15 @@ class SidebarTextControlAccessibleContext : public VCLXAccessibleComponent
 
 SidebarTextControlAccessibleContext::SidebarTextControlAccessibleContext( SidebarTextControl& rSidebarTextControl )
     : VCLXAccessibleComponent( rSidebarTextControl.GetWindowPeer() )
-    , mrSidebarTextControl( rSidebarTextControl )
-    , mpAccessibleTextHelper( nullptr )
     , maMutex()
 {
-    mpAccessibleTextHelper = new ::accessibility::AccessibleTextHelper( o3tl::make_unique<SidebarTextEditSource>(mrSidebarTextControl) );
-    mpAccessibleTextHelper->SetEventSource( mrSidebarTextControl.GetWindowPeer() );
-}
-
-SidebarTextControlAccessibleContext::~SidebarTextControlAccessibleContext()
-{
-    defunc();
+    mpAccessibleTextHelper.reset(new ::accessibility::AccessibleTextHelper( o3tl::make_unique<SidebarTextEditSource>(rSidebarTextControl) ));
+    mpAccessibleTextHelper->SetEventSource( rSidebarTextControl.GetWindowPeer() );
 }
 
 void SidebarTextControlAccessibleContext::defunc()
 {
-    delete mpAccessibleTextHelper;
-    mpAccessibleTextHelper = nullptr;
+    mpAccessibleTextHelper.reset();
 }
 
 sal_Int32 SAL_CALL SidebarTextControlAccessibleContext::getAccessibleChildCount()

@@ -63,7 +63,7 @@ ChartTransferable::ChartTransferable(
     m_xMetaFileGraphic.set( aGraphic.GetXGraphic());
     if ( m_bDrawing )
     {
-        m_pMarkedObjModel = pExchgView->GetMarkedObjModel();
+        m_pMarkedObjModel = pExchgView->CreateMarkedObjModel().release();
     }
 }
 
@@ -130,7 +130,7 @@ bool ChartTransferable::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, voi
                     for ( sal_uInt16 i = 0; i < nCount; ++i )
                     {
                         const SdrPage* pPage = pMarkedObjModel->GetPage( i );
-                        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                         while ( aIter.IsMore() )
                         {
                             SdrObject* pObj = aIter.Next();

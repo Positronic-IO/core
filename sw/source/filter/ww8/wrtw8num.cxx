@@ -74,7 +74,7 @@ sal_uInt16 MSWordExportBase::GetId( const SwNumRule& rNumRule )
 {
     if ( !m_pUsedNumTable )
     {
-        m_pUsedNumTable = new SwNumRuleTable;
+        m_pUsedNumTable.reset(new SwNumRuleTable);
         m_pUsedNumTable->insert( m_pUsedNumTable->begin(), m_pDoc->GetNumRuleTable().begin(), m_pDoc->GetNumRuleTable().end() );
         // Check, if the outline rule is already inserted into <pUsedNumTable>.
         // If yes, do not insert it again.
@@ -127,7 +127,7 @@ sal_Int16 GetWordFirstLineOffset(const SwNumFormat &rFormat)
     if (rFormat.GetNumAdjust() == SvxAdjust::Right)
         nFirstLineOffset = -rFormat.GetCharTextDistance();
     else
-        nFirstLineOffset = rFormat.GetFirstLineOffset();
+        nFirstLineOffset = rFormat.GetFirstLineOffset(); //TODO: overflow
     return nFirstLineOffset;
 }
 
@@ -204,7 +204,7 @@ static sal_uInt8 GetLevelNFC(  sal_uInt16 eNumType, const SfxItemSet *pOutSet)
     case SVX_NUM_NUMBER_LOWER_ZH:
         nRet = 35;
         if ( pOutSet ) {
-            const SvxLanguageItem rLang = pOutSet->Get( RES_CHRATR_CJK_LANGUAGE);
+            const SvxLanguageItem& rLang = pOutSet->Get( RES_CHRATR_CJK_LANGUAGE);
             const LanguageType eLang = rLang.GetLanguage();
             if (LANGUAGE_CHINESE_SIMPLIFIED ==eLang) {
                 nRet = 39;
@@ -514,7 +514,7 @@ void MSWordExportBase::AbstractNumberingDefinitions()
             // #i86652#
             if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
             {
-                nIndentAt = nListTabPos = rFormat.GetAbsLSpace();
+                nIndentAt = nListTabPos = rFormat.GetAbsLSpace(); //TODO: overflow
                 nFirstLineIndex = GetWordFirstLineOffset(rFormat);
             }
             else if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )

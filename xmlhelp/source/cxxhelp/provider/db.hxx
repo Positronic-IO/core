@@ -51,7 +51,7 @@ namespace helpdatafileproxy {
 
     class Hdf
     {
-        OUString       m_aFileURL;
+        OUString const       m_aFileURL;
         std::unique_ptr<StringToDataMap>   m_pStringToDataMap;
         std::unique_ptr<StringToValPosMap> m_pStringToValPosMap;
         css::uno::Reference< css::ucb::XSimpleFileAccess3 >
@@ -72,8 +72,6 @@ namespace helpdatafileproxy {
         Hdf( const OUString& rFileURL,
             css::uno::Reference< css::ucb::XSimpleFileAccess3 > const & xSFA )
                 : m_aFileURL( rFileURL )
-                , m_pStringToDataMap( nullptr )
-                , m_pStringToValPosMap( nullptr )
                 , m_xSFA( xSFA )
                 , m_pItData( nullptr )
                 , m_nItRead( -1 )

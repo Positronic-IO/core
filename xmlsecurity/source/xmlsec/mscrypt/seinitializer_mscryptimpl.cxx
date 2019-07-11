@@ -23,12 +23,12 @@
 #include "securityenvironment_mscryptimpl.hxx"
 
 #include <xmlsec-wrapper.h>
-#include <xmlsec/mscrypto/app.h>
+#include <xmlsec/mscng/app.h>
 #include <com/sun/star/xml/crypto/SecurityEnvironment.hpp>
 #include <com/sun/star/xml/crypto/XMLSecurityContext.hpp>
-#include <comphelper/processfactory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <svl/cryptosign.hxx>
 
 using namespace com::sun::star;
 namespace cssl = com::sun::star::lang;
@@ -70,7 +70,7 @@ uno::Reference< cssxc::XXMLSecurityContext > SAL_CALL
         n_hStoreHandle = nullptr ;
     }
 
-    xmlSecMSCryptoAppInit( n_pCertStore ) ;
+    xmlSecMSCngAppInit(n_pCertStore);
 
     try {
         /* Build Security Environment */
@@ -86,7 +86,7 @@ uno::Reference< cssxc::XXMLSecurityContext > SAL_CALL
                 CertCloseStore( n_hStoreHandle, CERT_CLOSE_STORE_FORCE_FLAG ) ;
             }
 
-            xmlSecMSCryptoAppShutdown() ;
+            xmlSecMSCngAppShutdown();
             return nullptr;
         }
 
@@ -113,7 +113,7 @@ uno::Reference< cssxc::XXMLSecurityContext > SAL_CALL
             CertCloseStore( n_hStoreHandle, CERT_CLOSE_STORE_FORCE_FLAG ) ;
         }
 
-        xmlSecMSCryptoAppShutdown() ;
+        xmlSecMSCngAppShutdown();
         return nullptr;
     }
 }
@@ -144,7 +144,7 @@ void SAL_CALL SEInitializer_MSCryptImpl::freeSecurityContext( const uno::Referen
     }
     */
 
-    xmlSecMSCryptoAppShutdown() ;
+    xmlSecMSCngAppShutdown();
 }
 
 /* XServiceInfo */

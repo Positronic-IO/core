@@ -24,6 +24,7 @@
 #include <CharacterProperties.hxx>
 #include <PropertyHelper.hxx>
 #include <ContainerHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <unonames.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
@@ -36,6 +37,8 @@
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 
@@ -195,7 +198,7 @@ RegressionEquation::RegressionEquation() :
 
 RegressionEquation::RegressionEquation( const RegressionEquation & rOther ) :
         MutexContainer(),
-        impl::RegressionEquation_Base(),
+        impl::RegressionEquation_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( new ModifyListenerHelper::ModifyEventForwarder())
 {}

@@ -77,7 +77,6 @@ using namespace ::com::sun::star::view;
 SwMailMergeLayoutPage::SwMailMergeLayoutPage( SwMailMergeWizard* _pParent) :
     svt::OWizardPage(_pParent, "MMLayoutPage",
         "modules/swriter/ui/mmlayoutpage.ui")
-    , m_pExampleFrame(nullptr)
     , m_pExampleWrtShell(nullptr)
     , m_pAddressBlockFormat(nullptr)
     , m_bIsGreetingInserted(false)
@@ -111,22 +110,25 @@ SwMailMergeLayoutPage::SwMailMergeLayoutPage( SwMailMergeWizard* _pParent) :
         aTempFile.EnableKillingFile();
     }
     SwView* pView = m_pWizard->GetSwView();
-    uno::Sequence< beans::PropertyValue > aValues(1);
+    uno::Sequence< beans::PropertyValue > aValues(2);
     beans::PropertyValue* pValues = aValues.getArray();
     pValues[0].Name = "FilterName";
     pValues[0].Value <<= pSfxFlt->GetFilterName();
+    // Don't save embedded data set! It would steal it from current document.
+    pValues[1].Name = "NoEmbDataSet";
+    pValues[1].Value <<= true;
 
     uno::Reference< frame::XStorable > xStore( pView->GetDocShell()->GetModel(), uno::UNO_QUERY);
     xStore->storeToURL( m_sExampleURL, aValues   );
 
     Link<SwOneExampleFrame&,void> aLink(LINK(this, SwMailMergeLayoutPage, PreviewLoadedHdl_Impl));
-    m_pExampleFrame = new SwOneExampleFrame( *m_pExampleContainerWIN,
-                                    EX_SHOW_DEFAULT_PAGE, &aLink, &m_sExampleURL );
+    m_pExampleFrame.reset( new SwOneExampleFrame( *m_pExampleContainerWIN,
+                                    EX_SHOW_DEFAULT_PAGE, &aLink, &m_sExampleURL ) );
 
     m_pExampleContainerWIN->Show(false);
 
-    m_pLeftMF->SetValue(m_pLeftMF->Normalize(DEFAULT_LEFT_DISTANCE), FUNIT_TWIP);
-    m_pTopMF->SetValue(m_pTopMF->Normalize(DEFAULT_TOP_DISTANCE), FUNIT_TWIP);
+    m_pLeftMF->SetValue(m_pLeftMF->Normalize(DEFAULT_LEFT_DISTANCE), FieldUnit::TWIP);
+    m_pTopMF->SetValue(m_pTopMF->Normalize(DEFAULT_TOP_DISTANCE), FieldUnit::TWIP);
 
     const LanguageTag& rLang = Application::GetSettings().GetUILanguageTag();
     m_pZoomLB->InsertEntry(unicode::formatPercent(50, rLang), 1);
@@ -162,7 +164,7 @@ SwMailMergeLayoutPage::~SwMailMergeLayoutPage()
 
 void SwMailMergeLayoutPage::dispose()
 {
-    delete m_pExampleFrame;
+    m_pExampleFrame.reset();
     File::remove( m_sExampleURL );
     m_pPosition.clear();
     m_pAlignToBodyCB.clear();
@@ -219,8 +221,8 @@ void SwMailMergeLayoutPage::ActivatePage()
             }
             else
             {
-                long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FUNIT_TWIP)));
-                long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FUNIT_TWIP)));
+                long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FieldUnit::TWIP)));
+                long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FieldUnit::TWIP)));
                 m_pAddressBlockFormat = InsertAddressFrame(
                         *m_pExampleWrtShell, m_pWizard->GetConfigItem(),
                         Point(nLeft, nTop),
@@ -237,8 +239,8 @@ bool SwMailMergeLayoutPage::commitPage(::svt::WizardTypes::CommitPageReason eRea
     SwMailMergeConfigItem& rConfigItem = m_pWizard->GetConfigItem();
     if (eReason == ::svt::WizardTypes::eTravelForward || eReason == ::svt::WizardTypes::eFinish)
     {
-        long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FUNIT_TWIP)));
-        long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FUNIT_TWIP)));
+        long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FieldUnit::TWIP)));
+        long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FieldUnit::TWIP)));
         InsertAddressAndGreeting(
                     m_pWizard->GetSwView(),
                     rConfigItem,
@@ -451,7 +453,7 @@ void SwMailMergeLayoutPage::InsertGreeting(SwWrtShell& rShell, SwMailMergeConfig
         //we may end up inside of a paragraph if the left margin is not at DEFAULT_LEFT_DISTANCE
         rShell.MovePara(GoCurrPara, fnParaStart);
     }
-    bool bSplitNode = !rShell.GetText().isEmpty();
+    bool bSplitNode = !rShell.IsEndPara();
     sal_Int32 nMoves = rConfigItem.GetGreetingMoves();
     if( !bExample && 0 != nMoves )
     {
@@ -690,8 +692,8 @@ IMPL_LINK_NOARG(SwMailMergeLayoutPage, ChangeAddressHdl_Impl, SpinField&, void)
 {
     if(m_pExampleWrtShell && m_pAddressBlockFormat)
     {
-        long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FUNIT_TWIP)));
-        long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FUNIT_TWIP)));
+        long nLeft = static_cast< long >(m_pLeftMF->Denormalize(m_pLeftMF->GetValue(FieldUnit::TWIP)));
+        long nTop  = static_cast< long >(m_pTopMF->Denormalize(m_pTopMF->GetValue(FieldUnit::TWIP)));
 
         SfxItemSet aSet(
             m_pExampleWrtShell->GetAttrPool(),

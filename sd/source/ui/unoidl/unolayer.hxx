@@ -55,9 +55,6 @@ public:
     // intern
     SdrLayer* GetSdrLayer() const throw() { return pLayer; }
 
-    static OUString convertToInternalName( const OUString& rName );
-    static OUString convertToExternalName( const OUString& rName );
-
     // uno helper
     UNO3_GETIMPLEMENTATION_DECL( SdLayer )
 
@@ -165,7 +162,7 @@ public:
 
 private:
     SdXImpressDocument* mpModel;
-    SvUnoWeakContainer* mpLayers;
+    std::unique_ptr<SvUnoWeakContainer> mpLayers;
 
     ::sd::View* GetView() const throw();
     ::sd::DrawDocShell* GetDocShell() const throw() { return mpModel->mpDocShell; }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.18.3 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="cui">
   <requires lib="gtk+" version="3.18"/>
   <object class="GtkTextBuffer" id="textbuffer1">
@@ -162,6 +162,19 @@
                         <property name="top_attach">0</property>
                       </packing>
                     </child>
+                    <child>
+                      <object class="GtkLabel" id="uilocale">
+                        <property name="can_focus">False</property>
+                        <property name="no_show_all">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="label" translatable="yes" context="aboutdialog|locale">UI-Language: $LOCALE</property>
+                        <property name="justify">center</property>
+                      </object>
+                      <packing>
+                        <property name="left_attach">0</property>
+                        <property name="top_attach">3</property>
+                      </packing>
+                    </child>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -211,7 +224,7 @@
                         <property name="margin_left">12</property>
                         <property name="margin_right">12</property>
                         <property name="hexpand">True</property>
-                        <property name="label" translatable="yes" context="aboutdialog|copyright">Copyright © 2000–2018 LibreOffice contributors.</property>
+                        <property name="label" translatable="yes" context="aboutdialog|copyright">Copyright © 2000–2019 LibreOffice contributors.</property>
                         <property name="justify">center</property>
                         <property name="wrap">True</property>
                       </object>

@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #endif
+#include <unx/gtk/gtkbackend.hxx>
 #include <unx/gtk/gtkdata.hxx>
 #include <unx/gtk/gtkinst.hxx>
 #include <unx/gtk/gtkframe.hxx>
@@ -46,6 +47,7 @@
 #include <unx/x11_cursors/salcursors.h>
 
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 #ifdef GDK_WINDOWING_X11
 #  include <gdk/gdkx.h>
@@ -60,7 +62,7 @@ using namespace vcl_sal;
  * class GtkSalDisplay                                         *
  ***************************************************************/
 extern "C" {
-GdkFilterReturn call_filterGdkEvent( GdkXEvent* sys_event,
+static GdkFilterReturn call_filterGdkEvent( GdkXEvent* sys_event,
                                      GdkEvent* /*event*/,
                                      gpointer data )
 {
@@ -83,7 +85,7 @@ GtkSalDisplay::GtkSalDisplay( GdkDisplay* pDisplay ) :
     if ( getenv( "SAL_IGNOREXERRORS" ) )
         GetGenericUnixSalData()->ErrorTrapPush(); // and leak the trap
 
-    m_bX11Display = GDK_IS_X11_DISPLAY( m_pGdkDisplay );
+    m_bX11Display = DLSYM_GDK_IS_X11_DISPLAY( m_pGdkDisplay );
 
     gtk_widget_set_default_direction(AllSettings::GetLayoutRTL() ? GTK_TEXT_DIR_RTL : GTK_TEXT_DIR_LTR);
 }
@@ -102,13 +104,13 @@ GtkSalDisplay::~GtkSalDisplay()
 
 extern "C" {
 
-void signalScreenSizeChanged( GdkScreen* pScreen, gpointer data )
+static void signalScreenSizeChanged( GdkScreen* pScreen, gpointer data )
 {
     GtkSalDisplay* pDisp = static_cast<GtkSalDisplay*>(data);
     pDisp->screenSizeChanged( pScreen );
 }
 
-void signalMonitorsChanged( GdkScreen* pScreen, gpointer data )
+static void signalMonitorsChanged( GdkScreen* pScreen, gpointer data )
 {
     GtkSalDisplay* pDisp = static_cast<GtkSalDisplay*>(data);
     pDisp->monitorsChanged( pScreen );
@@ -213,7 +215,10 @@ GdkCursor* GtkSalDisplay::getFromXBM( const unsigned char *pBitmap,
     return cursor;
 }
 
-#define MAKE_CURSOR( vcl_name, name ) \
+static unsigned char nullmask_bits[] = { 0x00, 0x00, 0x00, 0x00 };
+static unsigned char nullcurs_bits[] = { 0x00, 0x00, 0x00, 0x00 };
+
+#define MAKE_CURSOR( vcl_name, name )           \
     case vcl_name: \
         pCursor = getFromXBM( name##curs##_bits, name##mask##_bits, \
                               name##curs_width, name##curs_height, \
@@ -420,7 +425,7 @@ GtkSalData::~GtkSalData()
         m_pUserEvent = nullptr;
     }
 #if defined(GDK_WINDOWING_X11)
-    if (GDK_IS_X11_DISPLAY(gdk_display_get_default()))
+    if (DLSYM_GDK_IS_X11_DISPLAY(gdk_display_get_default()))
         XSetIOErrorHandler(aOrigXIOErrorHandler);
 #endif
 }
@@ -460,8 +465,8 @@ bool GtkSalData::Yield( bool bWait, bool bHandleAllCurrentEvents )
                 if( wasOneEvent )
                     bWasEvent = true;
             }
-            if (m_aException.hasValue())
-                ::cppu::throwException(m_aException);
+            if (m_aException)
+                std::rethrow_exception(m_aException);
         }
         else if( bWait )
         {
@@ -568,7 +573,7 @@ void GtkSalData::Init()
     }
 
 #if defined(GDK_WINDOWING_X11)
-    if (GDK_IS_X11_DISPLAY(pGdkDisp))
+    if (DLSYM_GDK_IS_X11_DISPLAY(pGdkDisp))
         aOrigXIOErrorHandler = XSetIOErrorHandler(XIOErrorHdl);
 #endif
 

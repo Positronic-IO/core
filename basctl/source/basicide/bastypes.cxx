@@ -27,6 +27,7 @@
 
 #include <basic/basmgr.hxx>
 #include <com/sun/star/script/XLibraryContainerPassword.hpp>
+#include <sal/log.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/passwd.hxx>
 #include <svl/intitem.hxx>
@@ -195,7 +196,7 @@ bool BaseWindow::IsModified ()
     return true;
 }
 
-::svl::IUndoManager* BaseWindow::GetUndoManager()
+SfxUndoManager* BaseWindow::GetUndoManager()
 {
     return nullptr;
 }
@@ -706,7 +707,7 @@ LibInfo::Item::Item (
 LibInfo::Item::~Item ()
 { }
 
-bool QueryDel(const OUString& rName, const OUString &rStr, weld::Widget* pParent)
+static bool QueryDel(const OUString& rName, const OUString &rStr, weld::Widget* pParent)
 {
     OUStringBuffer aNameBuf( rName );
     aNameBuf.append('\'');
@@ -763,7 +764,7 @@ bool QueryPassword( const Reference< script::XLibraryContainer >& xLibContainer,
         }
 
         // execute dialog
-        nRet = aDlg.execute();
+        nRet = aDlg.run();
 
         // verify password
         if ( nRet == RET_OK )
@@ -774,7 +775,6 @@ bool QueryPassword( const Reference< script::XLibraryContainer >& xLibContainer,
                 if ( xPasswd.is() && xPasswd->isLibraryPasswordProtected( rLibName ) && !xPasswd->isLibraryPasswordVerified( rLibName ) )
                 {
                     rPassword = aDlg.GetPassword();
-                    //                    OUString aOUPassword( rPassword );
                     bOK = xPasswd->verifyLibraryPassword( rLibName, rPassword );
 
                     if ( !bOK )

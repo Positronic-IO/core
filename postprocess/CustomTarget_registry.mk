@@ -277,9 +277,8 @@ ifeq (DBCONNECTIVITY,$(filter DBCONNECTIVITY,$(BUILD_TYPE)))
 postprocess_FILES_main += \
 	$(call gb_XcuModuleTarget_get_target,connectivity/registry/dbase)/org/openoffice/Office/DataAccess/Drivers-dbase.xcu \
 	$(call gb_XcuModuleTarget_get_target,connectivity/registry/flat)/org/openoffice/Office/DataAccess/Drivers-flat.xcu \
-	$(call gb_XcuModuleTarget_get_target,connectivity/registry/mysql)/org/openoffice/Office/DataAccess/Drivers-mysql.xcu \
 	$(call gb_XcuModuleTarget_get_target,connectivity/registry/odbc)/org/openoffice/Office/DataAccess/Drivers-odbc.xcu
-postprocess_DRIVERS += dbase flat mysql odbc
+postprocess_DRIVERS += dbase flat odbc
 ifeq (WNT,$(OS))
 else ifeq (DBCONNECTIVITY,$(filter DBCONNECTIVITY,$(BUILD_TYPE)))
 ifneq (,$(filter DESKTOP,$(BUILD_TYPE)))
@@ -332,13 +331,20 @@ endif
 ifeq ($(ENABLE_JAVA),TRUE)
 postprocess_FILES_main += \
 	$(call gb_XcuModuleTarget_get_target,connectivity/registry/hsqldb)/org/openoffice/Office/DataAccess/Drivers-hsqldb.xcu \
-	$(call gb_XcuModuleTarget_get_target,connectivity/registry/jdbc)/org/openoffice/Office/DataAccess/Drivers-jdbc.xcu
-postprocess_DRIVERS += hsqldb jdbc
+	$(call gb_XcuModuleTarget_get_target,connectivity/registry/jdbc)/org/openoffice/Office/DataAccess/Drivers-jdbc.xcu \
+	$(call gb_XcuModuleTarget_get_target,connectivity/registry/mysql_jdbc)/org/openoffice/Office/DataAccess/Drivers-mysql_jdbc.xcu
+postprocess_DRIVERS += hsqldb jdbc mysql_jdbc
 endif
 ifeq ($(ENABLE_FIREBIRD_SDBC),TRUE)
 postprocess_FILES_main += \
 	$(call gb_XcuModuleTarget_get_target,connectivity/registry/firebird)/org/openoffice/Office/DataAccess/Drivers-firebird.xcu
 postprocess_DRIVERS += firebird_sdbc
+endif
+
+ifeq ($(ENABLE_MARIADBC),TRUE)
+postprocess_FILES_main += \
+	$(call gb_XcuModuleTarget_get_target,connectivity/registry/mysqlc)/org/openoffice/Office/DataAccess/Drivers-mysqlc.xcu
+postprocess_DRIVERS += mysqlc
 endif
 
 ifneq (,$(SYSTEM_LIBEXTTEXTCAT_DATA))
@@ -353,7 +359,7 @@ else
 postprocess_FILES_main += $(postprocess_MOD)/org/openoffice/Office/Paths-internallibnumbertextdata.xcu
 endif
 
-ifneq ($(filter $(CPUNAME),POWERPC INTEL ARM HPPA GODSON M68K SPARC S390),)
+ifneq ($(filter POWERPC INTEL ARM HPPA GODSON M68K SPARC S390,$(CPUNAME)),)
 postprocess_FILES_main += \
 	$(postprocess_MOD)/org/openoffice/Office/Common-32bit.xcu
 endif
@@ -554,7 +560,6 @@ postprocess_main_SED := \
 	-e 's,$${PRODUCTEXTENSION},.$(LIBO_VERSION_MICRO).$(LIBO_VERSION_PATCH)$(LIBO_VERSION_SUFFIX),g' \
 	-e 's,$${STARTCENTER_ADDFEATURE_URL},http://extensions.libreoffice.org/,g' \
 	-e 's,$${STARTCENTER_INFO_URL},https://www.libreoffice.org/,g' \
-	-e 's,$${STARTCENTER_HIDE_EXTERNAL_LINKS},0,g' \
 	-e 's,$${STARTCENTER_TEMPLREP_URL},http://templates.libreoffice.org/,g' \
 	-e 's,$${SYSTEM_LIBEXTTEXTCAT_DATA},$(SYSTEM_LIBEXTTEXTCAT_DATA),g' \
 	-e 's,$${SYSTEM_LIBNUMBERTEXT_DATA},$(SYSTEM_LIBNUMBERTEXT_DATA),g' \
@@ -585,7 +590,7 @@ $(call gb_CustomTarget_get_workdir,postprocess/registry)/Langpack-%.list :
 	echo '<list><dependency file="main"/><filename>$(call gb_XcuLangpackTarget_get_target,Langpack-$*.xcu)</filename></list>' > $@
 
 # It can happen that localized fcfg_langpack_*.zip contains
-# zero-sized org/openoffice/TypeDectection/Filter.xcu; filter them out in the
+# zero-sized org/openoffice/TypeDetection/Filter.xcu; filter them out in the
 # find shell command below (see issue 110041):
 $(call gb_CustomTarget_get_workdir,postprocess/registry)/fcfg_langpack_%.list :
 	$(call gb_Output_announce,$(subst $(WORKDIR)/,,$@),$(true),AWK,2)

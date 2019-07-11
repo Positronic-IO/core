@@ -56,7 +56,6 @@ VCLXAccessibleList::VCLXAccessibleList (VCLXWindow* pVCLWindow, BoxType aBoxType
                                         const Reference< XAccessible >& _xParent)
     : VCLXAccessibleComponent   (pVCLWindow),
       m_aBoxType                (aBoxType),
-      m_pListBoxHelper          (nullptr),
       m_nVisibleLineCount       (0),
       m_nIndexInParent          (DEFAULT_INDEX_IN_PARENT),
       m_nLastTopEntry           ( 0 ),
@@ -174,7 +173,7 @@ void VCLXAccessibleList::notifyVisibleStates(bool _bSetNew )
     }
 }
 
-void VCLXAccessibleList::UpdateSelection_Acc (const ::rtl::OUString& /*sTextOfSelectedItem*/, bool b_IsDropDownList)
+void VCLXAccessibleList::UpdateSelection_Acc (const OUString& /*sTextOfSelectedItem*/, bool b_IsDropDownList)
 {
     if ( m_aBoxType == COMBOBOX )
     {

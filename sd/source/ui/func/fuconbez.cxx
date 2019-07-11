@@ -39,6 +39,7 @@
 #include <Window.hxx>
 #include <ToolBarManager.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
@@ -171,7 +172,7 @@ bool FuConstructBezierPolygon::MouseButtonUp(const MouseEvent& rMEvt )
     if( bCreated && maTargets.hasValue() )
     {
         SdrPathObj* pPathObj = dynamic_cast< SdrPathObj* >( mpView->GetSdrPageView()->GetObjList()->GetObj( nCount ) );
-        SdPage* pPage = dynamic_cast< SdPage* >( pPathObj ? pPathObj->GetPage() : nullptr );
+        SdPage* pPage = dynamic_cast< SdPage* >( pPathObj ? pPathObj->getSdrPageFromSdrObject() : nullptr );
         if( pPage )
         {
             std::shared_ptr< sd::MainSequence > pMainSequence( pPage->getMainSequence() );
@@ -297,7 +298,7 @@ void FuConstructBezierPolygon::SetEditMode(sal_uInt16 nMode)
     rBindings.Invalidate(SID_BEZIER_INSERT);
 }
 
-SdrObject* FuConstructBezierPolygon::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstructBezierPolygon::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
 {
     // case SID_DRAW_POLYGON:
     // case SID_DRAW_POLYGON_NOFILL:
@@ -308,14 +309,14 @@ SdrObject* FuConstructBezierPolygon::CreateDefaultObject(const sal_uInt16 nID, c
     // case SID_DRAW_BEZIER_FILL:          // BASIC
     // case SID_DRAW_BEZIER_NOFILL:        // BASIC
 
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         mpView->getSdrModelFromSdrView(),
         mpView->GetCurrentObjInventor(),
-        mpView->GetCurrentObjIdentifier());
+        mpView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {
-        if( dynamic_cast< const SdrPathObj *>( pObj ) !=  nullptr)
+        if( auto pPathObj = dynamic_cast< SdrPathObj *>( pObj.get() ) )
         {
             basegfx::B2DPolyPolygon aPoly;
 
@@ -434,7 +435,7 @@ SdrObject* FuConstructBezierPolygon::CreateDefaultObject(const sal_uInt16 nID, c
                 }
             }
 
-            static_cast<SdrPathObj*>(pObj)->SetPathPoly(aPoly);
+            pPathObj->SetPathPoly(aPoly);
         }
         else
         {

@@ -20,13 +20,11 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_PREVIEWRENDERER_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_PREVIEWRENDERER_HXX
 
-#include "drawview.hxx"
 #include <vcl/image.hxx>
-#include <vcl/virdev.hxx>
-#include <svl/listener.hxx>
 #include <memory>
 
-class OutputDevice;
+#include <svl/lstner.hxx>
+
 class SdPage;
 class VirtualDevice;
 
@@ -51,8 +49,8 @@ public:
 
     /** Render a page with the given pixel size.
         Use this version when only the width of the preview is known to the
-        caller.  The height is then calculated according to the aspect
-        ration of the given page.
+        caller. The height is then calculated according to the aspect
+        ratio of the given page.
         @param pPage
             The page to render.
         @param nWidth

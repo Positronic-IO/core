@@ -55,12 +55,23 @@
 #include <poolfmt.hxx>
 #include <fltini.hxx>
 #include <docsh.hxx>
+#include <ndtxt.hxx>
 #include <redline.hxx>
 #include <swerror.h>
 #include <paratr.hxx>
 #include <pausethreadstarting.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
+
+static bool sw_MergePortions(SwNode *const& pNode, void *)
+{
+    if (pNode->IsTextNode())
+    {
+        pNode->GetTextNode()->FileLoadedInitHints();
+    }
+    return true;
+}
 
 ErrCode SwReader::Read( const Reader& rOptions )
 {
@@ -111,7 +122,6 @@ ErrCode SwReader::Read( const Reader& rOptions )
 
     // Pams are connected like rings; stop when we return to the 1st element
     SwPaM *pEnd = pPam;
-    SwUndoInsDoc* pUndo = nullptr;
 
     bool bReadPageDescs = false;
     bool const bDocUndo = mxDoc->GetIDocumentUndoRedo().DoesUndo();
@@ -145,17 +155,18 @@ ErrCode SwReader::Read( const Reader& rOptions )
 
     while( true )
     {
+        std::unique_ptr<SwUndoInsDoc> pUndo;
         if( bSaveUndo )
-            pUndo = new SwUndoInsDoc( *pPam );
+            pUndo.reset(new SwUndoInsDoc( *pPam ));
 
         mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::Ignore );
 
-        SwPaM* pUndoPam = nullptr;
+        std::unique_ptr<SwPaM> pUndoPam;
         if( bDocUndo || pCursor )
         {
             // set Pam to the previous node, so that it is not also moved
             const SwNodeIndex& rTmp = pPam->GetPoint()->nNode;
-            pUndoPam = new SwPaM( rTmp, rTmp, 0, -1 );
+            pUndoPam.reset(new SwPaM( rTmp, rTmp, 0, -1 ));
         }
 
         // store for now all Fly's
@@ -268,7 +279,7 @@ ErrCode SwReader::Read( const Reader& rOptions )
                                 // UGLY: temp. enable undo
                                 mxDoc->GetIDocumentUndoRedo().DoUndo(true);
                                 mxDoc->GetIDocumentUndoRedo().AppendUndo(
-                                    new SwUndoInsLayFormat( pFrameFormat,0,0 ) );
+                                    o3tl::make_unique<SwUndoInsLayFormat>( pFrameFormat,0,0 ) );
                                 mxDoc->GetIDocumentUndoRedo().DoUndo(false);
                                 mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::Ignore );
                             }
@@ -295,8 +306,7 @@ ErrCode SwReader::Read( const Reader& rOptions )
                     }
                 }
             }
-            if( !aFlyFrameArr.empty() )
-                aFlyFrameArr.clear();
+            aFlyFrameArr.clear();
 
             mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );
             if( mxDoc->getIDocumentRedlineAccess().IsRedlineOn() )
@@ -311,12 +321,12 @@ ErrCode SwReader::Read( const Reader& rOptions )
             pUndo->SetInsertRange( *pUndoPam, false );
             // UGLY: temp. enable undo
             mxDoc->GetIDocumentUndoRedo().DoUndo(true);
-            mxDoc->GetIDocumentUndoRedo().AppendUndo( pUndo );
+            mxDoc->GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
             mxDoc->GetIDocumentUndoRedo().DoUndo(false);
             mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::Ignore );
         }
 
-        delete pUndoPam;
+        pUndoPam.reset();
 
         pPam = pPam->GetNext();
         if( pPam == pEnd )
@@ -338,6 +348,13 @@ ErrCode SwReader::Read( const Reader& rOptions )
         }
     }
 
+    // fdo#52028: ODF file import does not result in MergePortions being called
+    // for every attribute, since that would be inefficient.  So call it here.
+    // This is only necessary for formats that may contain RSIDs (ODF,MSO).
+    // It's too hard to figure out which nodes were inserted in Insert->File
+    // case (redlines, flys, footnotes, header/footer) so just do every node.
+    mxDoc->GetNodes().ForEach(&sw_MergePortions);
+
     mxDoc->SetInReading( false );
     mxDoc->SetInXMLImport( false );
 
@@ -350,14 +367,11 @@ ErrCode SwReader::Read( const Reader& rOptions )
     mxDoc->GetCellStyles().clear();
 
     mxDoc->GetIDocumentUndoRedo().DoUndo(bDocUndo);
-    if (!bReadPageDescs)
+    if (!bReadPageDescs && bSaveUndo )
     {
-        if( bSaveUndo )
-        {
-            mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );
-            mxDoc->GetIDocumentUndoRedo().EndUndo( SwUndoId::INSDOKUMENT, nullptr );
-            mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::Ignore );
-        }
+        mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );
+        mxDoc->GetIDocumentUndoRedo().EndUndo( SwUndoId::INSDOKUMENT, nullptr );
+        mxDoc->getIDocumentRedlineAccess().SetRedlineFlags_intern( RedlineFlags::Ignore );
     }
 
     // delete Pam if it was created only for reading
@@ -574,7 +588,7 @@ bool Reader::SetStrmStgPtr()
 
     if( m_pMedium->IsStorage() )
     {
-        if( SW_STORAGE_READER & GetReaderType() )
+        if( SwReaderType::Storage & GetReaderType() )
         {
             m_xStorage = m_pMedium->GetStorage();
             return true;
@@ -583,12 +597,12 @@ bool Reader::SetStrmStgPtr()
     else
     {
         m_pStream = m_pMedium->GetInStream();
-        if ( m_pStream && SotStorage::IsStorageFile(m_pStream) && (SW_STORAGE_READER & GetReaderType()) )
+        if ( m_pStream && SotStorage::IsStorageFile(m_pStream) && (SwReaderType::Storage & GetReaderType()) )
         {
             m_pStorage = new SotStorage( *m_pStream );
             m_pStream = nullptr;
         }
-        else if ( !(SW_STREAM_READER & GetReaderType()) )
+        else if ( !(SwReaderType::Stream & GetReaderType()) )
         {
             m_pStream = nullptr;
             return false;
@@ -599,9 +613,9 @@ bool Reader::SetStrmStgPtr()
     return false;
 }
 
-int Reader::GetReaderType()
+SwReaderType Reader::GetReaderType()
 {
-    return SW_STREAM_READER;
+    return SwReaderType::Stream;
 }
 
 void Reader::SetFltName( const OUString& )
@@ -678,9 +692,9 @@ bool Reader::ReadGlossaries( SwTextBlocks&, bool ) const
     return false;
 }
 
-int StgReader::GetReaderType()
+SwReaderType StgReader::GetReaderType()
 {
-    return SW_STORAGE_READER;
+    return SwReaderType::Storage;
 }
 
 /*

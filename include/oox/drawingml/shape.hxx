@@ -81,7 +81,7 @@ typedef ::std::map< sal_Int32, ShapeStyleRef > ShapeStyleRefMap;
 struct ChartShapeInfo
 {
     OUString     maFragmentPath;     ///< Path to related XML stream, e.g. for charts.
-    bool                mbEmbedShapes;      ///< True = load chart shapes into chart, false = load into parent drawpage.
+    bool const   mbEmbedShapes;      ///< True = load chart shapes into chart, false = load into parent drawpage.
 
     explicit     ChartShapeInfo( bool bEmbedShapes ) : mbEmbedShapes( bEmbedShapes ) {}
 };
@@ -150,6 +150,7 @@ public:
     const OUString&                 getId() { return msId; }
     void                            setHidden( bool bHidden ) { mbHidden = bHidden; }
     void                            setHiddenMasterShape( bool bHiddenMasterShape ) { mbHiddenMasterShape = bHiddenMasterShape; }
+    void                            setLocked( bool bLocked ) { mbLocked = bLocked; }
     void                            setSubType( sal_Int32 nSubType ) { mnSubType = nSubType; }
     sal_Int32                       getSubType() const { return mnSubType; }
     void                            setSubTypeIndex( sal_Int32 nSubTypeIndex ) { moSubTypeIndex = nSubTypeIndex; }
@@ -181,14 +182,6 @@ public:
                             FillProperties& rShapeOrParentShapeFillProps,
                             ShapeIdMap* pShapeMap = nullptr );
 
-    void                addChildren(
-                            ::oox::core::XmlFilterBase& rFilterBase,
-                            const Theme* pTheme,
-                            const css::uno::Reference< css::drawing::XShapes >& rxShapes,
-                            basegfx::B2DHomMatrix const & aTransformation );
-
-    void                setXShape( const css::uno::Reference< css::drawing::XShape >& rXShape )
-                            { mxShape = rXShape; };
     const css::uno::Reference< css::drawing::XShape > &
                         getXShape() const { return mxShape; }
 
@@ -214,7 +207,37 @@ public:
     const LinkedTxbxAttr&     getLinkedTxbxAttributes() { return maLinkedTxbxAttr; };
     bool                isLinkedTxbx() { return mbHasLinkedTxbx; };
 
+    void setZOrder(sal_Int32 nZOrder) { mnZOrder = nZOrder; }
+
+    sal_Int32 getZOrder() const { return mnZOrder; }
+
+    void setZOrderOff(sal_Int32 nZOrderOff) { mnZOrderOff = nZOrderOff; }
+
+    sal_Int32 getZOrderOff() const { return mnZOrderOff; }
+
+    void setDataNodeType(sal_Int32 nDataNodeType) { mnDataNodeType = nDataNodeType; }
+
+    sal_Int32 getDataNodeType() const { return mnDataNodeType; }
+
+    void setAspectRatio(double fAspectRatio) { mfAspectRatio = fAspectRatio; }
+
+    double getAspectRatio() const { return mfAspectRatio; }
+
+    /// Changes reference semantics to value semantics for fill properties.
+    void cloneFillProperties();
+
+    void keepDiagramDrawing(::oox::core::XmlFilterBase& rFilterBase, const OUString& rFragmentPath);
+
 protected:
+
+    enum FrameType
+    {
+        FRAMETYPE_GENERIC, ///< Generic shape, no special type.
+        FRAMETYPE_OLEOBJECT, ///< OLE object embedded in a shape.
+        FRAMETYPE_CHART, ///< Chart embedded in a shape.
+        FRAMETYPE_DIAGRAM, ///< Complex diagram drawing shape.
+        FRAMETYPE_TABLE ///< A table embedded in a shape.
+    };
 
     css::uno::Reference< css::drawing::XShape > const &
                         createAndInsert(
@@ -236,7 +259,8 @@ protected:
                             ShapeIdMap* pShapeMap,
                             const basegfx::B2DHomMatrix& aTransformation );
 
-    void                keepDiagramCompatibilityInfo( ::oox::core::XmlFilterBase const & rFilterBase );
+    void                keepDiagramCompatibilityInfo();
+    void                convertSmartArtToMetafile( ::oox::core::XmlFilterBase const& rFilterBase );
 
     css::uno::Reference< css::drawing::XShape >
                         renderDiagramToGraphic( ::oox::core::XmlFilterBase const & rFilterBase );
@@ -295,20 +319,13 @@ protected:
     ::std::vector<OUString>     maExtDrawings;
     Color                       maFontRefColorForNodes;
 
+    FrameType                   meFrameType; ///< Type for graphic frame shapes.
+
 private:
-    enum FrameType
-    {
-        FRAMETYPE_GENERIC,          ///< Generic shape, no special type.
-        FRAMETYPE_OLEOBJECT,        ///< OLE object embedded in a shape.
-        FRAMETYPE_CHART,            ///< Chart embedded in a shape.
-        FRAMETYPE_DIAGRAM,          ///< Complex diagram drawing shape.
-        FRAMETYPE_TABLE             ///< A table embedded in a shape.
-    };
 
     typedef std::shared_ptr< ::oox::vml::OleObjectInfo >    OleObjectInfoRef;
     typedef std::shared_ptr< ChartShapeInfo >               ChartShapeInfoRef;
 
-    FrameType           meFrameType;        ///< Type for graphic frame shapes.
     OleObjectInfoRef    mxOleObjectInfo;    ///< Additional data for OLE objects.
     ChartShapeInfoRef   mxChartShapeInfo;   ///< Additional data for chart shapes.
 
@@ -320,6 +337,7 @@ private:
     bool                            mbHiddenMasterShape; // master shapes can be hidden in layout slides
                                                          // we need separate flag because we don't want
                                                          // to propagate it when applying reference shape
+    bool                            mbLocked;
     bool mbLockedCanvas; ///< Is this shape part of a locked canvas?
     bool mbWps; ///< Is this a wps shape?
     bool mbTextBox; ///< This shape has a textbox.
@@ -327,6 +345,18 @@ private:
     bool                            mbHasLinkedTxbx; // this text box has linked text box ?
 
     css::uno::Sequence<css::beans::PropertyValue> maDiagramDoms;
+
+    /// Z-Order.
+    sal_Int32 mnZOrder = 0;
+
+    /// Z-Order offset.
+    sal_Int32 mnZOrderOff = 0;
+
+    /// Type of data node for an in-diagram shape.
+    sal_Int32 mnDataNodeType = 0;
+
+    /// Aspect ratio for an in-diagram shape.
+    double mfAspectRatio = 0;
 };
 
 } }

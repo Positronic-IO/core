@@ -20,6 +20,7 @@
 #include <svl/broadcast.hxx>
 #include <svl/listener.hxx>
 #include <svl/hint.hxx>
+#include <cassert>
 #include <algorithm>
 
 void SvtBroadcaster::Normalize() const
@@ -27,24 +28,26 @@ void SvtBroadcaster::Normalize() const
     if (!mbNormalized)
     {
         std::sort(maListeners.begin(), maListeners.end());
-        ListenersType::iterator itUniqueEnd = std::unique(maListeners.begin(), maListeners.end());
-        maListeners.erase(itUniqueEnd, maListeners.end());
         mbNormalized = true;
     }
 
     if (!mbDestNormalized)
     {
         std::sort(maDestructedListeners.begin(), maDestructedListeners.end());
-        ListenersType::iterator itUniqueEnd = std::unique(maDestructedListeners.begin(), maDestructedListeners.end());
-        maDestructedListeners.erase(itUniqueEnd, maDestructedListeners.end());
         mbDestNormalized = true;
     }
 }
 
 void SvtBroadcaster::Add( SvtListener* p )
 {
+    assert(!mbDisposing && "called inside my own destructor?");
+    assert(!mbAboutToDie && "called after PrepareForDestruction()?");
+    if (mbDisposing || mbAboutToDie)
+        return;
+    // only reset mbNormalized if we are going to become unsorted
+    if (!maListeners.empty() && maListeners.back() > p)
+        mbNormalized = false;
     maListeners.push_back(p);
-    mbNormalized = false;
 }
 
 void SvtBroadcaster::Remove( SvtListener* p )
@@ -60,42 +63,31 @@ void SvtBroadcaster::Remove( SvtListener* p )
     }
 
     Normalize();
-    std::pair<ListenersType::iterator,ListenersType::iterator> r =
-        std::equal_range(maListeners.begin(), maListeners.end(), p);
 
-    if (r.first != r.second)
-        maListeners.erase(r.first, r.second);
+    auto it = std::lower_bound(maListeners.begin(), maListeners.end(), p);
+    assert (it != maListeners.end() && *it == p);
+    if (it != maListeners.end() && *it == p)
+    {
+        maListeners.erase(it);
+    }
+
     if (maListeners.empty())
         ListenersGone();
 }
 
-SvtBroadcaster::SvtBroadcaster() : mbAboutToDie(false), mbDisposing(false), mbNormalized(false), mbDestNormalized(false) {}
+SvtBroadcaster::SvtBroadcaster() : mbAboutToDie(false), mbDisposing(false), mbNormalized(true), mbDestNormalized(true) {}
 
 SvtBroadcaster::SvtBroadcaster( const SvtBroadcaster &rBC ) :
-    maListeners(rBC.maListeners), maDestructedListeners(rBC.maDestructedListeners),
-    mbAboutToDie(rBC.mbAboutToDie), mbDisposing(false),
-    mbNormalized(rBC.mbNormalized), mbDestNormalized(rBC.mbDestNormalized)
+    mbAboutToDie(false), mbDisposing(false),
+    mbNormalized(true), mbDestNormalized(true)
 {
-    if (mbAboutToDie)
-        Normalize();
+    assert(!rBC.mbAboutToDie && "copying an object marked with PrepareForDestruction()?");
+    assert(!rBC.mbDisposing && "copying an object that is in it's destructor?");
 
-    ListenersType::const_iterator dest(maDestructedListeners.begin());
-    for (ListenersType::iterator it(maListeners.begin()); it != maListeners.end(); ++it)
-    {
-        bool bStart = true;
-
-        if (mbAboutToDie)
-        {
-            // skip the destructed ones
-            while (dest != maDestructedListeners.end() && (*dest < *it))
-                ++dest;
-
-            bStart = (dest == maDestructedListeners.end() || *dest != *it);
-        }
-
-        if (bStart)
-            (*it)->StartListening(*this);
-    }
+    rBC.Normalize(); // so that insert into ourself is in-order, and therefore we do not need to Normalize()
+    maListeners.reserve(rBC.maListeners.size());
+    for (SvtListener* p : rBC.maListeners)
+         p->StartListening(*this); // this will call back into this->Add()
 }
 
 SvtBroadcaster::~SvtBroadcaster()
@@ -116,7 +108,7 @@ SvtBroadcaster::~SvtBroadcaster()
             ++dest;
 
         if (dest == maDestructedListeners.end() || *dest != *it)
-            (*it)->EndListening(*this);
+            (*it)->BroadcasterDying(*this);
     }
 }
 
@@ -159,6 +151,7 @@ bool SvtBroadcaster::HasListeners() const
 void SvtBroadcaster::PrepareForDestruction()
 {
     mbAboutToDie = true;
+    // the reserve() serves two purpose (1) performance (2) makes sure our iterators do not become invalid
     maDestructedListeners.reserve(maListeners.size());
 }
 

@@ -9,13 +9,17 @@
 
 $(eval $(call gb_Package_Package,infoplist,$(call gb_CustomTarget_get_workdir,sysui/infoplist)))
 
-$(eval $(call gb_Package_add_files,infoplist,,\
+# workaround to avoid gb_Package_add_files with empty directory adding extra '/'
+$(eval $(call gb_Package_set_outdir,infoplist,$(INSTDIR)))
+
+$(eval $(call gb_Package_add_files,infoplist,$(PRODUCTNAME_WITHOUT_SPACES).app/Contents,\
 	PkgInfo \
 	Info.plist \
 ))
 
-$(eval $(call gb_Package_add_files,infoplist,bin,\
-	$(foreach lang,en-US $(gb_WITH_LANG),InfoPlist_$(lang).zip) \
-))
+$(foreach lang,$(filter ca cs da de el en es fi fr hr hu id it ja ko ms nl no pl pt pt_PT ro ru sk sv th tr uk vi zh_CN zh_TW,$(gb_WITH_LANG)),\
+$(eval $(call gb_Package_add_files,infoplist,$(PRODUCTNAME_WITHOUT_SPACES).app/Contents/Resources/$(lang).lproj,\
+	InfoPlist_$(lang)/InfoPlist.strings \
+)))
 
 # vim: set noet sw=4 ts=4:

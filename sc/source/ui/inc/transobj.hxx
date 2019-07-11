@@ -20,15 +20,14 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_TRANSOBJ_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_TRANSOBJ_HXX
 
-#include <svtools/transfer.hxx>
-#include <global.hxx>
+#include <vcl/transfer.hxx>
 #include <address.hxx>
+#include <document.hxx>
 #include <sfx2/objsh.hxx>
 
 
 class ScDocShell;
 class ScMarkData;
-class SfxObjectShell;
 enum class ScDragSrc;
 
 namespace com { namespace sun { namespace star {
@@ -40,7 +39,7 @@ namespace com { namespace sun { namespace star {
 class ScTransferObj : public TransferableHelper
 {
 private:
-    ScDocument*                     m_pDoc;
+    ScDocumentUniquePtr             m_pDoc;
     ScRange                         m_aBlock;
     SCROW                           m_nNonFiltered;       // non-filtered rows
     TransferableObjectDescriptor    m_aObjDesc;
@@ -69,7 +68,7 @@ private:
     static void GetAreaSize( const ScDocument* pDoc, SCTAB nTab1, SCTAB nTab2, SCROW& nRow, SCCOL& nCol );
 
 public:
-            ScTransferObj( ScDocument* pClipDoc, const TransferableObjectDescriptor& rDesc );
+            ScTransferObj( ScDocumentUniquePtr pClipDoc, const TransferableObjectDescriptor& rDesc );
     virtual ~ScTransferObj() override;
 
     virtual void        AddSupportedFormats() override;
@@ -78,7 +77,7 @@ public:
                                         const css::datatransfer::DataFlavor& rFlavor ) override;
     virtual void        DragFinished( sal_Int8 nDropAction ) override;
 
-    ScDocument*         GetDocument()           { return m_pDoc; }        // owned by ScTransferObj
+    ScDocument*         GetDocument() const     { return m_pDoc.get(); }        // owned by ScTransferObj
     const ScRange&      GetRange() const        { return m_aBlock; }
     SCROW               GetNonFilteredRows() const { return m_nNonFiltered; }
     SCCOL               GetDragHandleX() const  { return m_nDragHandleX; }
@@ -103,7 +102,7 @@ public:
     void                SetDragWasInternal();
     SC_DLLPUBLIC void   SetUseInApi( bool bSet );
 
-    static SC_DLLPUBLIC ScTransferObj* GetOwnClipboard( vcl::Window* pUIWin );
+    static  SC_DLLPUBLIC ScTransferObj* GetOwnClipboard(const css::uno::Reference<css::datatransfer::XTransferable2>&);
 
     static SfxObjectShell*  SetDrawClipDoc( bool bAnyOle );     // update ScGlobal::xDrawClipDocShellRef
     virtual sal_Int64 SAL_CALL getSomething( const com::sun::star::uno::Sequence< sal_Int8 >& rId ) override;

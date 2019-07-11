@@ -21,6 +21,9 @@
 #include <comphelper/sequenceashashmap.hxx>
 #include <osl/thread.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
+#include <tools/solar.h>
+#include <ftools.hxx>
 #include <xistream.hxx>
 #include <xlstring.hxx>
 #include <xiroot.hxx>
@@ -437,8 +440,7 @@ XclImpStream::XclImpStream( SvStream& rInStrm, const XclImpRoot& rRoot ) :
     mbValidRec( false ),
     mbValid( false )
 {
-    mrStrm.Seek( STREAM_SEEK_TO_END );
-    mnStreamSize = mrStrm.Tell();
+    mnStreamSize = mrStrm.TellEnd();
     mrStrm.Seek( STREAM_SEEK_TO_BEGIN );
 }
 
@@ -825,7 +827,7 @@ std::size_t XclImpStream::ReadUniStringExtHeader( bool& rb16Bit, sal_uInt8 nFlag
 
 OUString XclImpStream::ReadRawUniString( sal_uInt16 nChars, bool b16Bit )
 {
-    OUString aRet;
+    OUStringBuffer aRet;
     sal_uInt16 nCharsLeft = nChars;
     sal_uInt16 nReadSize;
 
@@ -865,14 +867,16 @@ OUString XclImpStream::ReadRawUniString( sal_uInt16 nChars, bool b16Bit )
         }
 
         *pcEndChar = '\0';
-        aRet += OUString( pcBuffer.get() );
+        // this has the side-effect of only copying as far as the first null, which appears to be intentional. e.g.
+        // see tdf#124318
+        aRet.append( pcBuffer.get() );
 
         nCharsLeft = nCharsLeft - nReadSize;
         if( nCharsLeft > 0 )
             JumpToNextStringContinue( b16Bit );
     }
 
-    return aRet;
+    return aRet.makeStringAndClear();
 }
 
 OUString XclImpStream::ReadUniString( sal_uInt16 nChars, sal_uInt8 nFlags )

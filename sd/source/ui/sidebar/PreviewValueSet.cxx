@@ -22,12 +22,12 @@
 
 namespace sd { namespace sidebar {
 
+static const int gnBorderWidth(3);
+static const int gnBorderHeight(3);
+
 PreviewValueSet::PreviewValueSet (vcl::Window* pParent)
     : ValueSet (pParent, WB_TABSTOP),
-      maPreviewSize(10,10),
-      mnBorderWidth(3),
-      mnBorderHeight(3),
-      mnMaxColumnCount(-1)
+      maPreviewSize(10,10)
 {
     SetStyle (
         GetStyle()
@@ -88,11 +88,9 @@ sal_uInt16 PreviewValueSet::CalculateColumnCount (int nWidth) const
     int nColumnCount = 0;
     if (nWidth > 0)
     {
-        nColumnCount = nWidth / (maPreviewSize.Width() + 2*mnBorderWidth);
+        nColumnCount = nWidth / (maPreviewSize.Width() + 2*gnBorderWidth);
         if (nColumnCount < 1)
             nColumnCount = 1;
-        else if (mnMaxColumnCount>0 && nColumnCount>mnMaxColumnCount)
-            nColumnCount = mnMaxColumnCount;
     }
     return static_cast<sal_uInt16>(nColumnCount);
 }
@@ -116,7 +114,7 @@ sal_Int32 PreviewValueSet::GetPreferredHeight (sal_Int32 nWidth)
     int nRowCount (CalculateRowCount(CalculateColumnCount(nWidth)));
     int nItemHeight (maPreviewSize.Height());
 
-    return nRowCount * (nItemHeight + 2*mnBorderHeight);
+    return nRowCount * (nItemHeight + 2*gnBorderHeight);
 }
 
 } } // end of namespace sd::sidebar

@@ -26,6 +26,7 @@
 #include <osl/diagnose.h>
 #include <com/sun/star/sdbc/XDatabaseMetaData.hpp>
 #include <vcl/svapp.hxx>
+#include <vcl/commandevent.hxx>
 
 using namespace dbaui;
 using namespace ::com::sun::star::sdbc;
@@ -94,7 +95,7 @@ SvTreeListEntry* OTableWindowListBox::GetEntryFromText( const OUString& rEntryTe
     try
     {
         bool bCase = false;
-        Reference<XConnection> xConnection = rController.getConnection();
+        const Reference<XConnection>& xConnection = rController.getConnection();
         if(xConnection.is())
         {
             Reference<XDatabaseMetaData> xMeta = xConnection->getMetaData();
@@ -245,9 +246,8 @@ sal_Int8 OTableWindowListBox::AcceptDrop( const AcceptDropEvent& _rEvt )
                     ScrollUpHdl( nullptr );
                 }
             }
-
-           // scroll down if the pointer is on the lower scroll area
-           else if( aTopScrollArea.IsInside(m_aMousePos) )
+            // scroll down if the pointer is on the lower scroll area
+            else if( aTopScrollArea.IsInside(m_aMousePos) )
             {
                 if( !m_aScrollTimer.IsActive() )
                 {

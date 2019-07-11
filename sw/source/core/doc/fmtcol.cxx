@@ -21,6 +21,7 @@
 #include <libxml/xmlwriter.h>
 
 #include <sal/macros.h>
+#include <osl/diagnose.h>
 #include <hintids.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/lrspitem.hxx>
@@ -61,7 +62,7 @@ namespace TextFormatCollFunc
             }
             if (pNewNumRuleItem)
             {
-                OUString sNumRuleName = pNewNumRuleItem->GetValue();
+                const OUString& sNumRuleName = pNewNumRuleItem->GetValue();
                 if ( sNumRuleName.isEmpty() ||
                      sNumRuleName != pTextFormatColl->GetDoc()->GetOutlineNumRule()->GetName() )
                 {
@@ -80,7 +81,7 @@ namespace TextFormatCollFunc
         (void)rTextFormatColl.GetItemState(RES_PARATR_NUMRULE, false, reinterpret_cast<const SfxPoolItem**>(&pNumRuleItem));
         if (pNumRuleItem)
         {
-            const OUString sNumRuleName = pNumRuleItem->GetValue();
+            const OUString& sNumRuleName = pNumRuleItem->GetValue();
             if ( !sNumRuleName.isEmpty() )
             {
                 pNumRule = rTextFormatColl.GetDoc()->FindNumRulePtr( sNumRuleName );

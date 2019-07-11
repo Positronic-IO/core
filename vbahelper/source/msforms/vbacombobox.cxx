@@ -28,6 +28,7 @@
 #include <ooo/vba/msforms/fmEnterFieldBehavior.hpp>
 #include <ooo/vba/msforms/fmListStyle.hpp>
 #include <ooo/vba/msforms/fmTextAlign.hpp>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 using namespace ooo::vba;
@@ -36,7 +37,8 @@ using namespace ooo::vba;
 //SelectedItems list of integer indexes
 //StringItemList list of items
 
-ScVbaComboBox::ScVbaComboBox( const uno::Reference< XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< uno::XInterface >& xControl, const uno::Reference< frame::XModel >& xModel, AbstractGeometryAttributes* pGeomHelper ) : ComboBoxImpl_BASE( xParent, xContext, xControl, xModel, pGeomHelper )
+ScVbaComboBox::ScVbaComboBox( const uno::Reference< XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< uno::XInterface >& xControl, const uno::Reference< frame::XModel >& xModel, std::unique_ptr<ov::AbstractGeometryAttributes> pGeomHelper )
+    : ComboBoxImpl_BASE( xParent, xContext, xControl, xModel, std::move(pGeomHelper) )
 {
     mpListHelper.reset( new ListControlHelper( m_xProps ) );
     try

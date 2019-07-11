@@ -11,6 +11,7 @@
 
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/ucb/XContent.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <svl/itemset.hxx>
@@ -20,6 +21,7 @@
 #include <sfx2/sfxsids.hrc>
 #include <unotools/mediadescriptor.hxx>
 #include <sot/storage.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 using utl::MediaDescriptor;
@@ -54,8 +56,7 @@ bool hasStream(const uno::Reference<io::XInputStream>& xInStream, const OUString
     if (!pStream)
         return false;
 
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 const nSize = pStream->Tell();
+    sal_uInt64 const nSize = pStream->TellEnd();
     pStream->Seek(0);
 
     if (!nSize)
@@ -92,8 +93,7 @@ bool isExcel40(const uno::Reference<io::XInputStream>& xInStream)
     if (!pStream)
         return false;
 
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 const nSize = pStream->Tell();
+    sal_uInt64 const nSize = pStream->TellEnd();
     pStream->Seek(0);
 
     if (nSize < 4)

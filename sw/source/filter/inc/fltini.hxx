@@ -35,6 +35,11 @@ class HTMLReader: public Reader
     virtual bool SetStrmStgPtr() override;
     virtual ErrCode Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
     virtual OUString GetTemplateName(SwDoc& rDoc) const override;
+
+    /// Parse FilterOptions passed to the importer.
+    void SetupFilterOptions();
+
+    OUString m_aNamespace;
 public:
     HTMLReader();
 };
@@ -43,7 +48,7 @@ class XMLReader : public Reader
 {
     virtual ErrCode Read(SwDoc &, const OUString& rBaseURL, SwPaM &, const OUString &) override;
 public:
-    virtual int GetReaderType() override;
+    virtual SwReaderType GetReaderType() override;
 
     XMLReader();
 
@@ -64,7 +69,7 @@ void GetWW8Writer( const OUString&, const OUString&, WriterRef& );
 // of the NumRule must be subtracted from the paragraph indentation.
 class SW_DLLPUBLIC SwRelNumRuleSpaces
 {
-    SwNumRuleTable* pNumRuleTable;  // list of all named NumRules
+    std::unique_ptr<SwNumRuleTable> pNumRuleTable;  // list of all named NumRules
 
 public:
     SwRelNumRuleSpaces( SwDoc const & rDoc, bool bNewDoc );

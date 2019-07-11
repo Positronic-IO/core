@@ -22,6 +22,7 @@
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/registry/XRegistryKey.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <i18nlangtag/languagetag.hxx>
 #include <tools/debug.hxx>
 #include <osl/mutex.hxx>
@@ -33,6 +34,7 @@
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/textenc.h>
+#include <sal/log.hxx>
 
 #include <linguistic/lngprops.hxx>
 #include <linguistic/misc.hxx>
@@ -98,7 +100,7 @@ Sequence< Locale > SAL_CALL Hyphenator::getLocales()
 
     // this routine should return the locales supported by the installed
     // dictionaries.
-    if (!mvDicts.size())
+    if (mvDicts.empty())
     {
         SvtLinguConfig aLinguCfg;
 
@@ -699,7 +701,7 @@ OUString Hyphenator::makeInitCap(const OUString& aTerm, CharClass const * pCC)
 }
 
 /// @throws Exception
-Reference< XInterface > Hyphenator_CreateInstance(
+static Reference< XInterface > Hyphenator_CreateInstance(
         const Reference< XMultiServiceFactory > & /*rSMgr*/ )
 {
     Reference< XInterface > xService = static_cast<cppu::OWeakObject*>(new Hyphenator);

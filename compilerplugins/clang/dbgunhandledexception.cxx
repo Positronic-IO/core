@@ -24,7 +24,7 @@ Check that DBG_UNHANDLED_EXCEPTION is always the first statement in a catch bloc
 it does not work properly.
 */
 
-class DbgUnhandledException : public RecursiveASTVisitor<DbgUnhandledException>, public Plugin
+class DbgUnhandledException : public loplugin::FilteringPlugin<DbgUnhandledException>
 {
 public:
     explicit DbgUnhandledException(InstantiationData const& data);
@@ -37,7 +37,7 @@ private:
 };
 
 DbgUnhandledException::DbgUnhandledException(const InstantiationData& data)
-    : Plugin(data)
+    : FilteringPlugin(data)
 {
 }
 
@@ -69,7 +69,7 @@ bool DbgUnhandledException::VisitCallExpr(const CallExpr* call)
     if (!currCatchStmt)
     {
         report(DiagnosticsEngine::Warning, "DBG_UNHANDLED_EXCEPTION outside catch block",
-               call->getLocStart());
+               compat::getBeginLoc(call));
         return true;
     }
     auto catchBlock = dyn_cast<CompoundStmt>(currCatchStmt->getHandlerBlock());
@@ -77,14 +77,14 @@ bool DbgUnhandledException::VisitCallExpr(const CallExpr* call)
     {
         report(DiagnosticsEngine::Warning,
                "something wrong with DBG_UNHANDLED_EXCEPTION, no CompoundStmt?",
-               call->getLocStart());
+               compat::getBeginLoc(call));
         return true;
     }
     if (catchBlock->size() < 1)
     {
         report(DiagnosticsEngine::Warning,
                "something wrong with DBG_UNHANDLED_EXCEPTION, CompoundStmt size == 0?",
-               call->getLocStart());
+               compat::getBeginLoc(call));
         return true;
     }
 
@@ -95,7 +95,7 @@ bool DbgUnhandledException::VisitCallExpr(const CallExpr* call)
     {
         report(DiagnosticsEngine::Warning,
                "DBG_UNHANDLED_EXCEPTION must be first statement in catch block",
-               call->getLocStart());
+               compat::getBeginLoc(call));
     }
     return true;
 }

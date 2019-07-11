@@ -7,6 +7,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include <sal/config.h>
+
+#include <iostream>
+
 #include <test/screenshot_test.hxx>
 
 #include <com/sun/star/util/XCloseable.hpp>
@@ -34,9 +38,11 @@ namespace {
 using namespace css;
 using namespace css::uno;
 
+    /// the target directory for screenshots
+static constexpr OUStringLiteral g_aScreenshotDirectory("screenshots");
+
 ScreenshotTest::ScreenshotTest()
-:   m_aScreenshotDirectory("screenshots"),
-    maKnownDialogs()
+    : maKnownDialogs()
 {
     maCurrentLanguage = OUString::fromUtf8(getenv("LO_TEST_LOCALE"));
 }
@@ -52,7 +58,7 @@ void ScreenshotTest::setUp()
     mxDesktop = css::frame::Desktop::create( comphelper::getComponentContext(getMultiServiceFactory()) );
     CPPUNIT_ASSERT_MESSAGE("no desktop!", mxDesktop.is());
 
-    osl::Directory::create( m_directories.getURLFromWorkdir( m_aScreenshotDirectory)) ;
+    osl::Directory::create( m_directories.getURLFromWorkdir( g_aScreenshotDirectory)) ;
 
     // initialize maKnownDialogs
     if (maKnownDialogs.empty())
@@ -61,11 +67,11 @@ void ScreenshotTest::setUp()
     }
 }
 
-void ScreenshotTest::implSaveScreenshot(const Bitmap& rScreenshot, const OString& rScreenshotId)
+void ScreenshotTest::implSaveScreenshot(const BitmapEx& rScreenshot, const OString& rScreenshotId)
 {
     OUString aDirname, aBasename;
     splitHelpId(rScreenshotId, aDirname, aBasename);
-    aDirname = m_aScreenshotDirectory + "/" + aDirname +
+    aDirname = g_aScreenshotDirectory + "/" + aDirname +
                ( (maCurrentLanguage == "en-US") ? OUString() : "/" + maCurrentLanguage );
 
     auto const dirUrl = m_directories.getURLFromWorkdir(aDirname);
@@ -87,7 +93,7 @@ void ScreenshotTest::implSaveScreenshot(const Bitmap& rScreenshot, const OString
 
 void ScreenshotTest::saveScreenshot(VclAbstractDialog const & rDialog)
 {
-    const Bitmap aScreenshot(rDialog.createScreenshot());
+    const BitmapEx aScreenshot(rDialog.createScreenshot());
 
     if (!aScreenshot.IsEmpty())
     {
@@ -102,7 +108,7 @@ void ScreenshotTest::saveScreenshot(VclAbstractDialog const & rDialog)
 
 void ScreenshotTest::saveScreenshot(Dialog& rDialog)
 {
-    const Bitmap aScreenshot(rDialog.createScreenshot());
+    const BitmapEx aScreenshot(rDialog.createScreenshot());
 
     if (!aScreenshot.IsEmpty())
     {
@@ -131,7 +137,7 @@ void ScreenshotTest::dumpDialogToPath(VclAbstractDialog& rDialog)
 {
     const std::vector<OString> aPageDescriptions(rDialog.getAllPageUIXMLDescriptions());
 
-    if (aPageDescriptions.size())
+    if (!aPageDescriptions.empty())
     {
         for (size_t a(0); a < aPageDescriptions.size(); a++)
         {
@@ -155,7 +161,7 @@ void ScreenshotTest::dumpDialogToPath(Dialog& rDialog)
 {
     const std::vector<OString> aPageDescriptions(rDialog.getAllPageUIXMLDescriptions());
 
-    if (aPageDescriptions.size())
+    if (!aPageDescriptions.empty())
     {
         for (size_t a(0); a < aPageDescriptions.size(); a++)
         {
@@ -185,10 +191,7 @@ void ScreenshotTest::dumpDialogToPath(const OString& rUIXMLDescription)
             VclPtr<vcl::Window> aOwnedToplevel;
 
             bool bLegacy;
-            if (rUIXMLDescription == "cui/ui/textanimtabpage.ui")
-                bLegacy = false;
-            else
-                bLegacy = true;
+            bLegacy = rUIXMLDescription != "cui/ui/textanimtabpage.ui" && rUIXMLDescription != "cui/ui/areatabpage.ui";
             std::unique_ptr<VclBuilder> xBuilder(new VclBuilder(pDialog, VclBuilderContainer::getUIRootDir(), OStringToOUString(rUIXMLDescription, RTL_TEXTENCODING_UTF8), OString(), css::uno::Reference<css::frame::XFrame>(), bLegacy));
             vcl::Window *pRoot = xBuilder->get_widget_root();
             Dialog *pRealDialog = dynamic_cast<Dialog*>(pRoot);
@@ -219,9 +222,9 @@ void ScreenshotTest::dumpDialogToPath(const OString& rUIXMLDescription)
 
 void ScreenshotTest::processAllKnownDialogs()
 {
-    for (mapType::const_iterator i = getKnownDialogs().begin(); i != getKnownDialogs().end(); ++i)
+    for (const auto& rDialog : getKnownDialogs())
     {
-        ScopedVclPtr<VclAbstractDialog> pDlg(createDialogByID((*i).second));
+        ScopedVclPtr<VclAbstractDialog> pDlg(createDialogByID(rDialog.second));
 
         if (pDlg)
         {
@@ -249,6 +252,8 @@ void ScreenshotTest::processDialogBatchFile(const OUString& rFile)
     {
         if (!aNextUIFile.isEmpty() && !aNextUIFile.startsWith(aComment))
         {
+            std::cout << "processing " << aNextUIFile << ":\n";
+
             // first check if it's a known dialog
             ScopedVclPtr<VclAbstractDialog> pDlg(createDialogByName(aNextUIFile));
 

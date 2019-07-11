@@ -46,8 +46,7 @@ using namespace ::com::sun::star::uno;
 #define USERITEM_NAME "UserItem"
 
 SingleTabDlgImpl::SingleTabDlgImpl()
-        : m_pSfxPage(nullptr)
-        , m_pLine(nullptr)
+    : m_pSfxPage(nullptr)
 {
 }
 
@@ -57,6 +56,7 @@ public:
     OString aWinState;
     SfxChildWindow* pMgr;
     bool            bConstructed;
+    bool            bClosing;
     void            Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
 
     Idle            aMoveIdle;
@@ -124,10 +124,15 @@ void SfxModalDialog::GetDialogData_Impl()
 
 SfxModalDialog::SfxModalDialog(vcl::Window *pParent, const OUString& rID, const OUString& rUIXMLDescription )
 :   ModalDialog(pParent, rID, rUIXMLDescription),
-    pInputSet(nullptr),
-    pOutputSet(nullptr)
+    pInputSet(nullptr)
 {
+    SetInstallLOKNotifierHdl(LINK(this, SfxModalDialog, InstallLOKNotifierHdl));
     GetDialogData_Impl();
+}
+
+IMPL_STATIC_LINK_NOARG(SfxModalDialog, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*)
+{
+    return SfxViewShell::Current();
 }
 
 SfxModalDialog::~SfxModalDialog()
@@ -152,37 +157,6 @@ void SfxModalDialog::CreateOutputItemSet( const SfxItemSet& rSet )
         pOutputSet->ClearItem();
     }
 }
-
-
-void SfxModalDialog::StateChanged( StateChangedType nType )
-{
-    if (comphelper::LibreOfficeKit::isActive())
-    {
-        if (nType == StateChangedType::InitShow && !GetLOKNotifier())
-        {
-            // There are some dialogs, like Hyperlink dialog, which inherit from
-            // SfxModalDialog even though they are modeless, i.e., their Execute method
-            // isn't called.
-            SetLOKNotifier(SfxViewShell::Current());
-            std::vector<vcl::LOKPayloadItem> aItems;
-            aItems.emplace_back("type", "dialog");
-            aItems.emplace_back("size", GetSizePixel().toString());
-            if (!GetText().isEmpty())
-                aItems.emplace_back("title", GetText().toUtf8());
-            SfxViewShell::Current()->notifyWindow(GetLOKWindowId(), "created", aItems);
-        }
-        else if (nType == StateChangedType::Visible &&
-                 !IsVisible() &&
-                 GetLOKNotifier())
-        {
-            SfxViewShell::Current()->notifyWindow(GetLOKWindowId(), "close");
-            ReleaseLOKNotifier();
-        }
-    }
-
-    ModalDialog::StateChanged(nType);
-}
-
 
 void SfxModelessDialog::StateChanged( StateChangedType nStateChange )
 {
@@ -221,18 +195,6 @@ void SfxModelessDialog::StateChanged( StateChangedType nStateChange )
 
                 SetPosPixel( aPos );
             }
-        }
-
-        SfxViewShell* pViewShell = SfxViewShell::Current();
-        if (comphelper::LibreOfficeKit::isActive() && pViewShell && !GetLOKNotifier())
-        {
-            SetLOKNotifier(pViewShell);
-            std::vector<vcl::LOKPayloadItem> aItems;
-            aItems.emplace_back("type", "dialog");
-            aItems.emplace_back("size", GetSizePixel().toString());
-            if (!GetText().isEmpty())
-                aItems.emplace_back("title", GetText().toUtf8());
-            pViewShell->notifyWindow(GetLOKWindowId(), "created", aItems);
         }
 
         pImpl->bConstructed = true;
@@ -308,7 +270,13 @@ SfxModelessDialog::SfxModelessDialog(SfxBindings* pBindinx,
     const OUString& rUIXMLDescription)
     : ModelessDialog(pParent, rID, rUIXMLDescription)
 {
+    SetInstallLOKNotifierHdl(LINK(this, SfxModelessDialog, InstallLOKNotifierHdl));
     Init(pBindinx, pCW);
+}
+
+IMPL_STATIC_LINK_NOARG(SfxModelessDialog, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*)
+{
+    return SfxViewShell::Current();
 }
 
 void SfxModelessDialog::Init(SfxBindings *pBindinx, SfxChildWindow *pCW)
@@ -317,6 +285,7 @@ void SfxModelessDialog::Init(SfxBindings *pBindinx, SfxChildWindow *pCW)
     pImpl.reset(new SfxModelessDialog_Impl);
     pImpl->pMgr = pCW;
     pImpl->bConstructed = false;
+    pImpl->bClosing = false;
     if ( pBindinx )
         pImpl->StartListening( *pBindinx );
     pImpl->aMoveIdle.SetPriority(TaskPriority::RESIZE);
@@ -413,6 +382,130 @@ void SfxModelessDialog::FillInfo(SfxChildWinInfo& rInfo) const
     rInfo.aSize  = aSize;
     if ( IsRollUp() )
         rInfo.nFlags |= SfxChildWindowFlags::ZOOMIN;
+}
+
+void SfxModelessDialogController::Initialize(SfxChildWinInfo const *pInfo)
+
+/*  [Description]
+
+    Initialization of the class SfxModelessDialog via a SfxChildWinInfo.
+    The initialization is done only in a 2nd step after the constructor, this
+    constructor should be called from the derived class or from the
+    SfxChildWindows.
+*/
+
+{
+    if (!pInfo)
+        return;
+    m_xImpl->aWinState = pInfo->aWinState;
+    if (m_xImpl->aWinState.isEmpty())
+        return;
+    m_xDialog->set_window_state(m_xImpl->aWinState);
+}
+
+SfxModelessDialogController::SfxModelessDialogController(SfxBindings* pBindinx,
+    SfxChildWindow *pCW, weld::Window *pParent, const OUString& rUIXMLDescription,
+    const OString& rID)
+    : SfxDialogController(pParent, rUIXMLDescription, rID)
+{
+    Init(pBindinx, pCW);
+    m_xDialog->connect_focus_in(LINK(this, SfxModelessDialogController, FocusInHdl));
+    m_xDialog->connect_focus_out(LINK(this, SfxModelessDialogController, FocusOutHdl));
+}
+
+void SfxModelessDialogController::Init(SfxBindings *pBindinx, SfxChildWindow *pCW)
+{
+    m_pBindings = pBindinx;
+    m_xImpl.reset(new SfxModelessDialog_Impl);
+    m_xImpl->pMgr = pCW;
+    m_xImpl->bConstructed = true;
+    m_xImpl->bClosing = false;
+    if (pBindinx)
+        m_xImpl->StartListening( *pBindinx );
+}
+
+void SfxModelessDialogController::DeInit()
+{
+    if (m_xImpl->pMgr)
+    {
+        WindowStateMask nMask = WindowStateMask::Pos | WindowStateMask::State;
+        if (m_xDialog->get_resizable())
+            nMask |= ( WindowStateMask::Width | WindowStateMask::Height );
+        m_xImpl->aWinState = m_xDialog->get_window_state(nMask);
+        GetBindings().GetWorkWindow_Impl()->ConfigChild_Impl( SfxChildIdentifier::DOCKINGWINDOW, SfxDockingConfig::ALIGNDOCKINGWINDOW, m_xImpl->pMgr->GetType() );
+    }
+
+    m_xImpl->pMgr = nullptr;
+}
+
+/*  [Description]
+
+    If a ModelessDialog is enabled its ViewFrame will be activated.
+    This is necessary by PluginInFrames.
+*/
+IMPL_LINK_NOARG(SfxModelessDialogController, FocusInHdl, weld::Widget&, void)
+{
+    if (!m_xImpl)
+        return;
+    m_pBindings->SetActiveFrame(m_xImpl->pMgr->GetFrame());
+    m_xImpl->pMgr->Activate_Impl();
+    Activate();
+}
+
+IMPL_LINK_NOARG(SfxModelessDialogController, FocusOutHdl, weld::Widget&, void)
+{
+    if (!m_xImpl)
+        return;
+    m_pBindings->SetActiveFrame(css::uno::Reference< css::frame::XFrame>());
+}
+
+SfxModelessDialogController::~SfxModelessDialogController()
+{
+    if (!m_xImpl->pMgr)
+        return;
+    auto xFrame = m_xImpl->pMgr->GetFrame();
+    if (!xFrame)
+        return;
+    if (xFrame == m_pBindings->GetActiveFrame())
+        m_pBindings->SetActiveFrame(nullptr);
+}
+
+void SfxModelessDialogController::EndDialog()
+{
+    if (!m_xDialog->get_visible())
+        return;
+    m_xImpl->bClosing = true;
+    response(RET_CLOSE);
+    m_xImpl->bClosing = false;
+}
+
+/*  [Description]
+
+    The window is closed when the ChildWindow is destroyed by running the
+    ChildWindow-slots.
+*/
+void SfxModelessDialogController::Close()
+{
+    if (m_xImpl->bClosing)
+        return;
+    // Execute with Parameters, since Toggle is ignored by some ChildWindows.
+    SfxBoolItem aValue(m_xImpl->pMgr->GetType(), false);
+    m_pBindings->GetDispatcher_Impl()->ExecuteList(
+        m_xImpl->pMgr->GetType(),
+        SfxCallMode::RECORD|SfxCallMode::SYNCHRON, { &aValue } );
+}
+
+/*  [Description]
+
+    Fills a SfxChildWinInfo with specific data from SfxModelessDialog,
+    so that it can be written in the INI file. It is assumed that rinfo
+    receives all other possible relevant data in the ChildWindow class.
+    ModelessDialogs have no specific information, so that the base
+    implementation does nothing and therefore must not be called.
+*/
+void SfxModelessDialogController::FillInfo(SfxChildWinInfo& rInfo) const
+{
+    rInfo.aSize = m_xDialog->get_size();
 }
 
 bool SfxFloatingWindow::EventNotify( NotifyEvent& rEvt )
@@ -696,7 +789,6 @@ SfxSingleTabDialog::~SfxSingleTabDialog()
 void SfxSingleTabDialog::dispose()
 {
     pImpl->m_pSfxPage.disposeAndClear();
-    pImpl->m_pLine.disposeAndClear();
     pImpl.reset();
     pOKBtn.clear();
     pCancelBtn.clear();
@@ -739,6 +831,125 @@ void SfxSingleTabDialog::SetTabPage(SfxTabPage* pTabPage)
         if (!sHelpId.isEmpty())
             SetHelpId(sHelpId);
     }
+}
+
+SfxDialogController::SfxDialogController(weld::Widget* pParent, const OUString& rUIFile,
+                                         const OString& rDialogId)
+    : GenericDialogController(pParent, rUIFile, rDialogId)
+{
+    m_xDialog->SetInstallLOKNotifierHdl(LINK(this, SfxDialogController, InstallLOKNotifierHdl));
+}
+
+IMPL_STATIC_LINK_NOARG(SfxDialogController, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*)
+{
+    return SfxViewShell::Current();
+}
+
+SfxSingleTabDialogController::SfxSingleTabDialogController(weld::Window *pParent, const SfxItemSet& rSet,
+    const OUString& rUIXMLDescription, const OString& rID)
+    : SfxDialogController(pParent, rUIXMLDescription, rID)
+    , m_pInputSet(&rSet)
+    , m_xContainer(m_xDialog->weld_content_area())
+    , m_xOKBtn(m_xBuilder->weld_button("ok"))
+    , m_xHelpBtn(m_xBuilder->weld_button("help"))
+{
+    m_xOKBtn->connect_clicked(LINK(this, SfxSingleTabDialogController, OKHdl_Impl));
+}
+
+SfxSingleTabDialogController::~SfxSingleTabDialogController()
+{
+    m_xSfxPage.disposeAndClear();
+}
+
+/*  [Description]
+
+    Insert a (new) TabPage; an existing page is deleted.
+    The passed on page is initialized with the initially given Itemset
+    through calling Reset().
+*/
+void SfxSingleTabDialogController::SetTabPage(SfxTabPage* pTabPage)
+{
+    m_xSfxPage.disposeAndClear();
+    m_xSfxPage = pTabPage;
+
+    if (m_xSfxPage)
+    {
+        // First obtain the user data, only then Reset()
+        OUString sConfigId = OStringToOUString(m_xSfxPage->GetConfigId(), RTL_TEXTENCODING_UTF8);
+        SvtViewOptions aPageOpt(EViewType::TabPage, sConfigId);
+        Any aUserItem = aPageOpt.GetUserItem( USERITEM_NAME );
+        OUString sUserData;
+        aUserItem >>= sUserData;
+        m_xSfxPage->SetUserData(sUserData);
+        m_xSfxPage->Reset(GetInputItemSet());
+
+        m_xHelpBtn->show(Help::IsContextHelpEnabled());
+
+        // Set TabPage text in the Dialog if there is any
+        OUString sTitle(m_xSfxPage->GetText());
+        if (!sTitle.isEmpty())
+            m_xDialog->set_title(sTitle);
+
+        // Dialog receives the HelpId of TabPage if there is any
+        OString sHelpId(m_xSfxPage->GetHelpId());
+        if (!sHelpId.isEmpty())
+            m_xDialog->set_help_id(sHelpId);
+    }
+}
+
+/*  [Description]
+
+    Ok_Handler; FillItemSet() is called for setting of Page.
+*/
+IMPL_LINK_NOARG(SfxSingleTabDialogController, OKHdl_Impl, weld::Button&, void)
+{
+    const SfxItemSet* pInputSet = GetInputItemSet();
+    if (!pInputSet)
+    {
+        // TabPage without ItemSet
+        m_xDialog->response(RET_OK);
+        return;
+    }
+
+    if (!GetOutputItemSet())
+    {
+        CreateOutputItemSet(*pInputSet);
+    }
+
+    bool bModified = false;
+
+    if (m_xSfxPage->HasExchangeSupport())
+    {
+        DeactivateRC nRet = m_xSfxPage->DeactivatePage(m_xOutputSet.get());
+        if (nRet != DeactivateRC::LeavePage)
+            return;
+        else
+            bModified = m_xOutputSet->Count() > 0;
+    }
+    else
+        bModified = m_xSfxPage->FillItemSet(m_xOutputSet.get());
+
+    if (bModified)
+    {
+        // Save user data in IniManager.
+        m_xSfxPage->FillUserData();
+        OUString sData(m_xSfxPage->GetUserData());
+
+        OUString sConfigId = OStringToOUString(m_xSfxPage->GetConfigId(),
+            RTL_TEXTENCODING_UTF8);
+        SvtViewOptions aPageOpt(EViewType::TabPage, sConfigId);
+        aPageOpt.SetUserItem( USERITEM_NAME, makeAny( sData ) );
+        m_xDialog->response(RET_OK);
+    }
+    else
+        m_xDialog->response(RET_CANCEL);
+}
+
+void SfxSingleTabDialogController::CreateOutputItemSet(const SfxItemSet& rSet)
+{
+    assert(!m_xOutputSet && "Double creation of OutputSet!");
+    m_xOutputSet.reset(new SfxItemSet(rSet));
+    m_xOutputSet->ClearItem();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -23,6 +23,8 @@
 #include <vcl/button.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/quickselectionengine.hxx>
+#include <vcl/glyphitem.hxx>
+#include <vcl/vcllayout.hxx>
 
 #include <set>
 #include <vector>
@@ -44,8 +46,9 @@ enum LB_EVENT_TYPE
 
 struct ImplEntryType
 {
-    OUString    maStr;
-    Image       maImage;
+    OUString const    maStr;
+    SalLayoutGlyphs   maStrGlyphs;
+    Image const       maImage;
     void*       mpUserData;
     bool        mbIsSelected;
     ListBoxEntryFlags mnFlags;
@@ -69,6 +72,9 @@ struct ImplEntryType
         mbIsSelected = false;
         mpUserData = nullptr;
     }
+
+    /// Computes maStr's text layout (glyphs), cached in maStrGlyphs.
+    SalLayoutGlyphs* GetTextGlyphs(OutputDevice* pOutputDevice);
 };
 
 class ImplEntryList
@@ -189,7 +195,6 @@ private:
 
     sal_Int32       mnTop;           ///< output from line on
     long            mnLeft;          ///< output from column on
-    long            mnBorder;        ///< distance border - text
     long            mnTextHeight;    ///< text height
     ProminentEntry  meProminentType; ///< where is the "prominent" entry
 
@@ -210,8 +215,8 @@ private:
     bool mbInUserDraw : 1;       ///< In UserDraw
     bool mbReadOnly : 1;         ///< ReadOnly
     bool mbMirroring : 1;        ///< pb: #106948# explicit mirroring for calc
-    bool mbRight : 1;            ///< right align Text output
     bool mbCenter : 1;           ///< center Text output
+    bool mbRight : 1;            ///< right align Text output
     bool mbEdgeBlending : 1;
 
     Link<ImplListBoxWindow*,void>  maScrollHdl;

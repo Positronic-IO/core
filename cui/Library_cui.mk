@@ -66,10 +66,14 @@ $(eval $(call gb_Library_use_externals,cui,\
 	boost_headers \
 	$(call gb_Helper_optional,OPENCL,\
 		clew) \
+    $(call gb_Helper_optional,DESKTOP,\
+		curl) \
     icuuc \
     icu_headers \
+    orcus-parser \
+    orcus \
 ))
-ifeq ($(ENABLE_HEADLESS),)
+ifeq ($(DISABLE_GUI),)
 $(eval $(call gb_Library_use_externals,cui,\
      epoxy \
  ))
@@ -102,6 +106,7 @@ $(eval $(call gb_Library_add_exception_objects,cui,\
     cui/source/dialogs/cuiimapwnd \
     cui/source/dialogs/cuitbxform \
     cui/source/dialogs/dlgname \
+    cui/source/dialogs/FontFeaturesDialog \
     cui/source/dialogs/hangulhanjadlg \
     cui/source/dialogs/hldocntp \
     cui/source/dialogs/hldoctp \
@@ -170,8 +175,8 @@ $(eval $(call gb_Library_add_exception_objects,cui,\
     cui/source/options/optpath \
     cui/source/options/optsave \
     cui/source/options/optupdt \
-    cui/source/options/personalization \
-    cui/source/options/personasdochandler \
+    $(call gb_Helper_optional,DESKTOP,\
+        cui/source/options/personalization) \
     cui/source/options/radiobtnbox \
     cui/source/options/sdbcdriverenum \
     cui/source/options/securityoptions \
@@ -182,7 +187,6 @@ $(eval $(call gb_Library_add_exception_objects,cui,\
     cui/source/tabpages/autocdlg \
     cui/source/tabpages/backgrnd \
     cui/source/tabpages/bbdlg \
-    cui/source/tabpages/borderconn \
     cui/source/tabpages/border \
     cui/source/tabpages/chardlg \
     cui/source/tabpages/connect \

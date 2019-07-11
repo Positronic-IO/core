@@ -23,7 +23,7 @@
 #include <svl/filenotation.hxx>
 #include <helpids.h>
 #include <svtools/editbrowsebox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <strings.hrc>
 #include <bitmaps.hlst>
 #include <vcl/field.hxx>
@@ -34,7 +34,7 @@
 #include <com/sun/star/ui/dialogs/XFilePicker.hpp>
 #include <com/sun/star/ui/dialogs/XFilterManager.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
-#include <svtools/svtabbx.hxx>
+#include <vcl/svtabbx.hxx>
 #include <svl/itemset.hxx>
 #include "doclinkdialog.hxx"
 #include <unotools/localfilehelper.hxx>
@@ -284,7 +284,9 @@ IMPL_LINK_NOARG(DbRegistrationOptionsPage, NewHdl, Button*, void)
 IMPL_LINK_NOARG(DbRegistrationOptionsPage, PathBoxDoubleClickHdl, SvTreeListBox*, bool)
 {
     EditHdl(nullptr);
-    return false;
+    // Signal more to be done, i.e. when entry removed/inserted via
+    // openLinkDialog().
+    return true;
 }
 
 

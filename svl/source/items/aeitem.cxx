@@ -20,6 +20,7 @@
 #include <rtl/ustring.hxx>
 #include <svl/aeitem.hxx>
 
+#include <climits>
 #include <cstddef>
 #include <vector>
 
@@ -33,8 +34,7 @@ class SfxAllEnumValueArr : public std::vector<SfxAllEnumValue_Impl> {};
 
 
 SfxAllEnumItem::SfxAllEnumItem(sal_uInt16 which, sal_uInt16 nVal):
-    SfxAllEnumItem_Base(which, nVal),
-    pValues( nullptr )
+    SfxAllEnumItem_Base(which, nVal)
 {
     InsertValue( nVal );
 }
@@ -66,7 +66,7 @@ sal_uInt16 SfxAllEnumItem::GetValueCount() const
     return pValues ? pValues->size() : 0;
 }
 
-OUString SfxAllEnumItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString const & SfxAllEnumItem::GetValueTextByPos( sal_uInt16 nPos ) const
 {
     assert(pValues && nPos < pValues->size());
     return (*pValues)[nPos].aText;

@@ -19,6 +19,8 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <vcl/opengl/OpenGLHelper.hxx>
 
@@ -47,7 +49,7 @@
 namespace
 {
 
-inline bool determineTextureFormat(sal_uInt16 nBits, GLenum& nFormat, GLenum& nType)
+bool determineTextureFormat(sal_uInt16 nBits, GLenum& nFormat, GLenum& nType)
 {
     switch(nBits)
     {
@@ -74,7 +76,7 @@ inline bool determineTextureFormat(sal_uInt16 nBits, GLenum& nFormat, GLenum& nT
     return false;
 }
 
-inline bool isValidBitCount( sal_uInt16 nBitCount )
+bool isValidBitCount( sal_uInt16 nBitCount )
 {
     return (nBitCount == 1) || (nBitCount == 4) || (nBitCount == 8) || (nBitCount == 16) || (nBitCount == 24) || (nBitCount == 32);
 }
@@ -115,8 +117,9 @@ OpenGLSalBitmap::~OpenGLSalBitmap()
     VCL_GL_INFO( "~OpenGLSalBitmap" );
 }
 
-bool OpenGLSalBitmap::Create( const OpenGLTexture& rTex, long nX, long nY, long nWidth, long nHeight )
+void OpenGLSalBitmap::Create( const OpenGLTexture& rTex, long nX, long nY, long nWidth, long nHeight )
 {
+    DBG_TESTSOLARMUTEX();
     static const BitmapPalette aEmptyPalette;
     OpenGLVCLContextZone aContextZone;
 
@@ -154,12 +157,11 @@ bool OpenGLSalBitmap::Create( const OpenGLTexture& rTex, long nX, long nY, long 
 
     assert(mnWidth == maTexture.GetWidth() &&
            mnHeight == maTexture.GetHeight());
-
-    return true;
 }
 
 bool OpenGLSalBitmap::Create( const Size& rSize, sal_uInt16 nBits, const BitmapPalette& rBitmapPalette )
 {
+    DBG_TESTSOLARMUTEX();
     OpenGLVCLContextZone aContextZone;
 
     Destroy();
@@ -185,16 +187,19 @@ bool OpenGLSalBitmap::Create( const Size& rSize, sal_uInt16 nBits, const BitmapP
 
 bool OpenGLSalBitmap::Create( const SalBitmap& rSalBmp )
 {
+    DBG_TESTSOLARMUTEX();
     return Create( rSalBmp, rSalBmp.GetBitCount() );
 }
 
 bool OpenGLSalBitmap::Create( const SalBitmap& rSalBmp, SalGraphics* pGraphics )
 {
+    DBG_TESTSOLARMUTEX();
     return Create( rSalBmp, pGraphics ? pGraphics->GetBitCount() : rSalBmp.GetBitCount() );
 }
 
 bool OpenGLSalBitmap::Create( const SalBitmap& rSalBmp, sal_uInt16 nNewBitCount )
 {
+    DBG_TESTSOLARMUTEX();
     OpenGLZone aZone;
 
     // check that carefully only in the debug mode
@@ -233,6 +238,7 @@ bool OpenGLSalBitmap::Create( const SalBitmap& rSalBmp, sal_uInt16 nNewBitCount 
 
 bool OpenGLSalBitmap::Create( const css::uno::Reference< css::rendering::XBitmapCanvas >& /*xBitmapCanvas*/, Size& /*rSize*/, bool /*bMask*/ )
 {
+    DBG_TESTSOLARMUTEX();
     // TODO Is this method needed?
     return false;
 }
@@ -297,7 +303,7 @@ bool OpenGLSalBitmap::AllocateUserData()
     }
 #endif
 
-    return mpUserBuffer.get() != nullptr;
+    return mpUserBuffer != nullptr;
 }
 
 namespace {
@@ -429,9 +435,9 @@ void lclInstantiateTexture(OpenGLTexture& rTexture, const int nWidth, const int 
 class ScanlineWriter
 {
     BitmapPalette& maPalette;
-    sal_uInt8 mnColorsPerByte; // number of colors that are stored in one byte
-    sal_uInt8 mnColorBitSize;  // number of bits a color takes
-    sal_uInt8 mnColorBitMask;  // bit mask used to isolate the color
+    sal_uInt8 const mnColorsPerByte; // number of colors that are stored in one byte
+    sal_uInt8 const mnColorBitSize;  // number of bits a color takes
+    sal_uInt8 const mnColorBitMask;  // bit mask used to isolate the color
     sal_uInt8* mpCurrentScanline;
     long mnX;
 
@@ -481,7 +487,7 @@ GLuint OpenGLSalBitmap::CreateTexture()
     sal_uInt8* pData( nullptr );
     bool bAllocated( false );
 
-    if (mpUserBuffer.get() != nullptr)
+    if (mpUserBuffer != nullptr)
     {
         if( mnBits == 16 || mnBits == 24 || mnBits == 32 )
         {
@@ -489,13 +495,6 @@ GLuint OpenGLSalBitmap::CreateTexture()
             pData = mpUserBuffer.get();
 
             determineTextureFormat(mnBits, nFormat, nType);
-        }
-        else if( mnBits == 8 && maPalette.IsGreyPalette() )
-        {
-            // no conversion needed for grayscale
-            pData = mpUserBuffer.get();
-            nFormat = GL_LUMINANCE;
-            nType = GL_UNSIGNED_BYTE;
         }
         else
         {
@@ -576,7 +575,7 @@ bool OpenGLSalBitmap::ReadTexture()
     xContext->state().scissor().disable();
     xContext->state().stencil().disable();
 
-    if (mnBits == 8 || mnBits == 16 || mnBits == 24 || mnBits == 32)
+    if ((mnBits == 8 && maPalette.IsGreyPalette()) || mnBits == 16 || mnBits == 24 || mnBits == 32)
     {
         determineTextureFormat(mnBits, nFormat, nType);
 
@@ -591,7 +590,7 @@ bool OpenGLSalBitmap::ReadTexture()
 
         maTexture.Read(nFormat, nType, pData);
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
         // If we read over the end of pData we have a real hidden memory
         // corruption problem !
         size_t nCanary = mnBytesPerRow * mnHeight;

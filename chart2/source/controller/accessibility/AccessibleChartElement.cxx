@@ -25,13 +25,17 @@
 
 #include <com/sun/star/awt/XDevice.hpp>
 #include <com/sun/star/chart2/XTitle.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/view/XSelectionSupplier.hpp>
 
 #include <vcl/svapp.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <tools/diagnose_ex.h>
+#include <comphelper/property.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;

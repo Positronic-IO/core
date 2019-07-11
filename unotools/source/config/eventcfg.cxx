@@ -29,10 +29,12 @@
 #include <o3tl/enumrange.hxx>
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include "itemholder1.hxx"
 
 #include <algorithm>
+#include <unordered_map>
 
 using namespace ::std;
 using namespace ::utl;
@@ -84,7 +86,6 @@ class GlobalEventConfig_Impl : public utl::ConfigItem
 {
 private:
     EventBindingHash m_eventBindingHash;
-    FrameVector m_lFrames;
     SupportedEventsVector m_supportedEvents;
 
     void initBindingInfo();
@@ -153,20 +154,6 @@ void GlobalEventConfig_Impl::Notify( const Sequence< OUString >& )
     MutexGuard aGuard( GlobalEventConfig::GetOwnStaticMutex() );
 
     initBindingInfo();
-
-    // don't forget to update all existing frames and her might cached dispatch objects!
-    // But look for already killed frames. We hold weak references instead of hard ones ...
-    for (FrameVector::iterator pIt  = m_lFrames.begin(); pIt != m_lFrames.end(); )
-    {
-        css::uno::Reference< css::frame::XFrame > xFrame(pIt->get(), css::uno::UNO_QUERY);
-        if (xFrame.is())
-        {
-            xFrame->contextChanged();
-            ++pIt;
-        }
-        else
-            pIt = m_lFrames.erase(pIt);
-    }
 }
 
 //  public method
@@ -175,24 +162,22 @@ void GlobalEventConfig_Impl::ImplCommit()
 {
     //DF need to check it this is correct??
     SAL_INFO("unotools", "In GlobalEventConfig_Impl::ImplCommit");
-    EventBindingHash::const_iterator it = m_eventBindingHash.begin();
-    EventBindingHash::const_iterator it_end = m_eventBindingHash.end();
     // clear the existing nodes
     ClearNodeSet( SETNODE_BINDINGS );
     Sequence< beans::PropertyValue > seqValues( 1 );
     OUString sNode;
     //step through the list of events
-    for(int i=0;it!=it_end;++it,++i)
+    for(const auto& rEntry : m_eventBindingHash)
     {
         //no point in writing out empty bindings!
-        if(it->second.isEmpty() )
+        if(rEntry.second.isEmpty() )
             continue;
         sNode = SETNODE_BINDINGS PATHDELIMITER "BindingType['" +
-                it->first +
+                rEntry.first +
                 "']" PATHDELIMITER PROPERTYNAME_BINDINGURL;
         SAL_INFO("unotools", "writing binding for: " << sNode);
         seqValues[ 0 ].Name = sNode;
-        seqValues[ 0 ].Value <<= it->second;
+        seqValues[ 0 ].Value <<= rEntry.second;
         //write the data to the registry
         SetSetProperties(SETNODE_BINDINGS,seqValues);
     }

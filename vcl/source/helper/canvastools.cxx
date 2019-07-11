@@ -48,6 +48,7 @@
 #include <basegfx/utils/canvastools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 
+#include <sal/log.hxx>
 #include <tools/poly.hxx>
 #include <tools/diagnose_ex.h>
 #include <rtl/uuid.h>
@@ -75,7 +76,7 @@ namespace vcl
 
         namespace
         {
-            inline bool equalsLayout( const rendering::IntegerBitmapLayout& rLHS,
+            bool equalsLayout( const rendering::IntegerBitmapLayout& rLHS,
                                     const rendering::IntegerBitmapLayout& rRHS )
             {
                 return

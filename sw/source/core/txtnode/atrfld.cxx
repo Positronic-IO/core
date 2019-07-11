@@ -39,7 +39,9 @@
 #include <hints.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <IDocumentMarkAccess.hxx>
+#include <IDocumentLayoutAccess.hxx>
 #include <fieldhint.hxx>
+#include <sal/log.hxx>
 
 
 // constructor for default item in attribute-pool
@@ -47,7 +49,6 @@ SwFormatField::SwFormatField( sal_uInt16 nWhich )
     : SfxPoolItem( nWhich )
     , SwModify(nullptr)
     , SfxBroadcaster()
-    , mpField( nullptr )
     , mpTextField( nullptr )
 {
 }
@@ -63,12 +64,12 @@ SwFormatField::SwFormatField( const SwField &rField )
     {
         // input field in-place editing
         SetWhich( RES_TXTATR_INPUTFIELD );
-        static_cast<SwInputField*>(mpField)->SetFormatField( *this );
+        static_cast<SwInputField*>(mpField.get())->SetFormatField( *this );
     }
     else if (mpField->GetTyp()->Which() == SwFieldIds::SetExp)
     {
         // see SwWrtShell::StartInputFieldDlg
-        static_cast<SwSetExpField *>(mpField)->SetFormatField(*this);
+        static_cast<SwSetExpField *>(mpField.get())->SetFormatField(*this);
     }
     else if ( mpField->GetTyp()->Which() == SwFieldIds::Postit )
     {
@@ -82,10 +83,9 @@ SwFormatField::SwFormatField( const SwField &rField )
 // full pool range, all items need to be clonable. Thus, this one needed to be
 // corrected
 SwFormatField::SwFormatField( const SwFormatField& rAttr )
-    : SfxPoolItem( RES_TXTATR_FIELD )
+    : SfxPoolItem( rAttr )
     , SwModify(nullptr)
     , SfxBroadcaster()
-    , mpField( nullptr )
     , mpTextField( nullptr )
 {
     if ( rAttr.mpField )
@@ -96,7 +96,7 @@ SwFormatField::SwFormatField( const SwFormatField& rAttr )
         {
             // input field in-place editing
             SetWhich( RES_TXTATR_INPUTFIELD );
-            SwInputField *pField = dynamic_cast<SwInputField*>(mpField);
+            SwInputField *pField = dynamic_cast<SwInputField*>(mpField.get());
             assert(pField);
             if (pField)
                 pField->SetFormatField( *this );
@@ -104,7 +104,7 @@ SwFormatField::SwFormatField( const SwFormatField& rAttr )
         else if (mpField->GetTyp()->Which() == SwFieldIds::SetExp)
         {
             // see SwWrtShell::StartInputFieldDlg
-            static_cast<SwSetExpField *>(mpField)->SetFormatField(*this);
+            static_cast<SwSetExpField *>(mpField.get())->SetFormatField(*this);
         }
         else if ( mpField->GetTyp()->Which() == SwFieldIds::Postit )
         {
@@ -122,7 +122,7 @@ SwFormatField::~SwFormatField()
         pType = nullptr;  // DB field types destroy themselves
 
     Broadcast( SwFormatFieldHint( this, SwFormatFieldHintWhich::REMOVED ) );
-    delete mpField;
+    mpField.reset();
 
     // some fields need to delete their field type
     if( pType && pType->HasOnlyOneListener() )
@@ -158,19 +158,17 @@ void SwFormatField::RegisterToFieldType( SwFieldType& rType )
     rType.Add(this);
 }
 
-void SwFormatField::SetField(SwField * _pField)
+void SwFormatField::SetField(std::unique_ptr<SwField> _pField)
 {
-    delete mpField;
-
-    mpField = _pField;
+    mpField = std::move(_pField);
     if ( mpField->GetTyp()->Which() == SwFieldIds::Input )
     {
-        static_cast<SwInputField* >(mpField)->SetFormatField( *this );
+        static_cast<SwInputField* >(mpField.get())->SetFormatField( *this );
     }
     else if (mpField->GetTyp()->Which() == SwFieldIds::SetExp)
     {
         // see SwWrtShell::StartInputFieldDlg
-        static_cast<SwSetExpField *>(mpField)->SetFormatField(*this);
+        static_cast<SwSetExpField *>(mpField.get())->SetFormatField(*this);
     }
     Broadcast( SwFormatFieldHint( this, SwFormatFieldHintWhich::CHANGED ) );
 }
@@ -218,13 +216,13 @@ void SwFormatField::SwClientNotify( const SwModify& rModify, const SfxHint& rHin
     if ( pHint )
     {
         // replace field content by text
-        SwPaM* pPaM = pHint->GetPaM();
+        SwPaM* pPaM = pHint->m_pPaM;
         SwDoc* pDoc = pPaM->GetDoc();
         const SwTextNode& rTextNode = mpTextField->GetTextNode();
         pPaM->GetPoint()->nNode = rTextNode;
         pPaM->GetPoint()->nContent.Assign( const_cast<SwTextNode*>(&rTextNode), mpTextField->GetStart() );
 
-        OUString const aEntry( mpField->ExpandField( pDoc->IsClipBoard() ) );
+        OUString const aEntry(mpField->ExpandField(pDoc->IsClipBoard(), pHint->m_pLayout));
         pPaM->SetMark();
         pPaM->Move( fnMoveForward );
         pDoc->getIDocumentContentOperations().DeleteRange( *pPaM );
@@ -260,7 +258,7 @@ void SwFormatField::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
                 if( SwFieldIds::GetRef == mpField->GetTyp()->Which() )
                 {
                     // #i81002#
-                    static_cast<SwGetRefField*>(mpField)->UpdateField( mpTextField );
+                    static_cast<SwGetRefField*>(mpField.get())->UpdateField( mpTextField );
                 }
                 break;
         case RES_DOCPOS_UPDATE:
@@ -309,12 +307,9 @@ void SwFormatField::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
 bool SwFormatField::GetInfo( SfxPoolItem& rInfo ) const
 {
     const SwTextNode* pTextNd;
-    if( RES_AUTOFMT_DOCNODE != rInfo.Which() ||
+    return RES_AUTOFMT_DOCNODE != rInfo.Which() ||
         !mpTextField || nullptr == ( pTextNd = mpTextField->GetpTextNode() ) ||
-        &pTextNd->GetNodes() != static_cast<SwAutoFormatGetDocNode&>(rInfo).pNodes )
-        return true;
-
-    return false;
+        &pTextNd->GetNodes() != static_cast<SwAutoFormatGetDocNode&>(rInfo).pNodes;
 }
 
 bool SwFormatField::IsFieldInDoc() const
@@ -351,7 +346,7 @@ SwTextField::SwTextField(
     : SwTextAttr( rAttr, nStartPos )
 // fdo#39694 the ExpandField here may not give the correct result in all cases,
 // but is better than nothing
-    , m_aExpand( rAttr.GetField()->ExpandField(bInClipboard) )
+    , m_aExpand( rAttr.GetField()->ExpandField(bInClipboard, nullptr) )
     , m_pTextNode( nullptr )
 {
     rAttr.SetTextField( *this );
@@ -378,7 +373,9 @@ void SwTextField::ExpandTextField(const bool bForceNotify) const
     OSL_ENSURE( m_pTextNode, "SwTextField: where is my TextNode?" );
 
     const SwField* pField = GetFormatField().GetField();
-    const OUString aNewExpand( pField->ExpandField(m_pTextNode->GetDoc()->IsClipBoard()) );
+    const OUString aNewExpand( pField->ExpandField(m_pTextNode->GetDoc()->IsClipBoard(),
+        // can't do any better than this here...
+        m_pTextNode->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout()) );
 
     const SwFieldIds nWhich = pField->GetTyp()->Which();
     const bool bSameExpandSimpleNotification
@@ -515,7 +512,7 @@ void SwTextField::DeleteTextField( const SwTextField& rTextField )
     {
         std::shared_ptr< SwPaM > pPamForTextField;
         GetPamForTextField(rTextField, pPamForTextField);
-        if (pPamForTextField.get() != nullptr)
+        if (pPamForTextField != nullptr)
         {
             rTextField.GetTextNode().GetDoc()->getIDocumentContentOperations().DeleteAndJoin(*pPamForTextField);
         }
@@ -569,7 +566,7 @@ void SwTextInputField::NotifyContentChange( SwFormatField& rFormatField )
 
 const OUString SwTextInputField::GetFieldContent() const
 {
-    return GetFormatField().GetField()->ExpandField(false);
+    return GetFormatField().GetField()->ExpandField(false, nullptr/*ignored anyway*/);
 }
 
 void SwTextInputField::UpdateFieldContent()
@@ -583,7 +580,7 @@ void SwTextInputField::UpdateFieldContent()
         const sal_Int32 nIdx = GetStart() + 1;
         // skip CH_TXT_ATR_INPUTFIELDEND character
         const sal_Int32 nLen = static_cast<sal_Int32>(std::max<sal_Int32>( 0, ( (*End()) - 1 - nIdx ) ));
-        const OUString aNewFieldContent = GetTextNode().GetExpandText( nIdx, nLen );
+        const OUString aNewFieldContent = GetTextNode().GetExpandText(nullptr, nIdx, nLen);
 
         const SwInputField* pInputField = dynamic_cast<const SwInputField*>(GetFormatField().GetField());
         assert(pInputField != nullptr);

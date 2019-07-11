@@ -20,23 +20,19 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_XLROOT_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_XLROOT_HXX
 
-#include <com/sun/star/beans/NamedValue.hpp>
-
 #include <i18nlangtag/lang.h>
-#include <sot/storage.hxx>
+#include <tools/ref.hxx>
 #include "xlconst.hxx"
-#include "xltools.hxx"
-#include <documentimport.hxx>
 #include <memory>
 
+namespace com { namespace sun { namespace star { namespace beans { struct NamedValue; } } } }
 namespace comphelper { class IDocPasswordVerifier; }
 
 // Forward declarations of objects in public use ==============================
 
 class DateTime;
-
-struct XclAddress;
-struct XclRange;
+class SotStorage;
+class SotStorageStream;
 
 // Global data ================================================================
 
@@ -76,21 +72,21 @@ struct XclRootData
     typedef std::shared_ptr< XclTracer >             XclTracerRef;
     typedef std::shared_ptr< RootData >              RootDataRef;
 
-    XclBiff             meBiff;             /// Current BIFF version.
+    XclBiff const             meBiff;             /// Current BIFF version.
     XclOutput           meOutput;           /// Current Output format.
     SfxMedium&          mrMedium;           /// The medium to import from.
-    tools::SvRef<SotStorage>       mxRootStrg;         /// The root OLE storage of imported/exported file.
+    tools::SvRef<SotStorage> const mxRootStrg;         /// The root OLE storage of imported/exported file.
     ScDocument&         mrDoc;              /// The source or destination document.
     OUString            maDocUrl;           /// Document URL of imported/exported file.
     OUString            maBasePath;         /// Base path of imported/exported file (path of maDocUrl).
     OUString            maUserName;         /// Current user name.
-    const OUString      maDefPassword;      /// The default password used for stream encryption.
+    static const OUStringLiteral gaDefPassword; /// The default password used for stream encryption.
     rtl_TextEncoding    meTextEnc;          /// Text encoding to import/export byte strings.
-    LanguageType        meSysLang;          /// System language.
+    LanguageType const  meSysLang;          /// System language.
     LanguageType        meDocLang;          /// Document language (import: from file, export: from system).
     LanguageType        meUILang;           /// UI language (import: from file, export: from system).
     sal_Int16           mnDefApiScript;     /// Default script type for blank cells (API constant).
-    ScAddress           maScMaxPos;         /// Highest Calc cell position.
+    ScAddress const     maScMaxPos;         /// Highest Calc cell position.
     ScAddress           maXclMaxPos;        /// Highest Excel cell position.
     ScAddress           maMaxPos;           /// Highest position valid in Calc and Excel.
 
@@ -178,7 +174,7 @@ public:
     const OUString& GetUserName() const { return mrData.maUserName; }
 
     /** Returns the default password used for stream encryption. */
-    const OUString& GetDefaultPassword() const { return mrData.maDefPassword; }
+    static const OUStringLiteral& GetDefaultPassword() { return XclRootData::gaDefPassword; }
     /** Requests and verifies a password from the medium or the user. */
     css::uno::Sequence< css::beans::NamedValue >
         RequestEncryptionData( ::comphelper::IDocPasswordVerifier& rVerifier ) const;

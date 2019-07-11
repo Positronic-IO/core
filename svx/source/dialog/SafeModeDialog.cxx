@@ -118,7 +118,7 @@ SafeModeDialog::SafeModeDialog(vcl::Window* pParent)
 
     // Set URL for help button (module=safemode)
     OUString sURL("http://hub.libreoffice.org/send-feedback/?LOversion=" + utl::ConfigManager::getAboutBoxProductVersion() +
-        "&LOlocale=" + utl::ConfigManager::getLocale() + "&LOmodule=safemode");
+        "&LOlocale=" + utl::ConfigManager::getUILocale() + "&LOmodule=safemode");
     mpBugLink->SetURL(sURL);
 
     mpUserProfileLink->SetURL(comphelper::BackupFileHelper::getUserProfileURL());
@@ -343,7 +343,7 @@ namespace {
     };
 
     ProfileExportedDialog::ProfileExportedDialog(weld::Window* pParent)
-        : GenericDialogController(pParent, "svx/ui/profileexporteddialog.ui", "GenericDialogController")
+        : GenericDialogController(pParent, "svx/ui/profileexporteddialog.ui", "ProfileExportedDialog")
         , m_xButton(m_xBuilder->weld_button("ok"))
     {
         m_xButton->connect_clicked(LINK(this, ProfileExportedDialog, OpenHdl));
@@ -356,7 +356,7 @@ namespace {
         css::system::SystemShellExecute::create(comphelper::getProcessComponentContext()));
         try {
             exec->execute(uri, OUString(), css::system::SystemShellExecuteFlags::URIS_ONLY);
-        } catch (css::uno::Exception) {
+        } catch (const css::uno::Exception &) {
         }
         m_xDialog->response(RET_OK);
     }
@@ -373,7 +373,7 @@ IMPL_LINK(SafeModeDialog, CreateZipBtnHdl, Button*, /*pBtn*/, void)
         aZipHelper.addFolderWithContent(aZipHelper.getRootFolder(), comphelper::BackupFileHelper::getUserProfileWorkURL());
         aZipHelper.savePackage();
     }
-    catch (uno::Exception)
+    catch (const uno::Exception &)
     {
         std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                  VclMessageType::Warning, VclButtonsType::Ok,

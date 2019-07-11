@@ -20,6 +20,7 @@
 #include <oox/ppt/pptshape.hxx>
 #include <oox/core/xmlfilterbase.hxx>
 #include <drawingml/textbody.hxx>
+#include <drawingml/table/tableproperties.hxx>
 
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/container/XNamed.hpp>
@@ -29,8 +30,10 @@
 #include <com/sun/star/drawing/XShapes.hpp>
 #include <com/sun/star/text/XText.hpp>
 #include <basegfx/matrix/b2dhommatrix.hxx>
+#include <sal/log.hxx>
 #include <oox/ppt/slidepersist.hxx>
 #include <oox/token/tokens.hxx>
+#include <unotools/fltrcfg.hxx>
 
 using namespace ::oox::core;
 using namespace ::oox::drawingml;
@@ -223,6 +226,23 @@ void PPTShape::addShape(
             }
         }
 
+        if (sServiceName != "com.sun.star.drawing.TableShape")
+        {
+            if (TextBodyPtr pTextBody = getTextBody())
+            {
+                sal_Int32 nNumCol = pTextBody->getTextProperties().mnNumCol;
+                if (nNumCol > 1)
+                {
+                    // This shape is not a table, but has multiple columns,
+                    // represent that as a table.
+                    sServiceName = "com.sun.star.drawing.TableShape";
+                    oox::drawingml::table::TablePropertiesPtr pTableProperties = getTableProperties();
+                    pTableProperties->pullFromTextBody(pTextBody, maSize.Width);
+                    setTextBody(nullptr);
+                }
+            }
+        }
+
         SAL_INFO("oox.ppt","shape service: " << sServiceName);
 
         if (mnSubType && getSubTypeIndex().has() && meShapeLocation == Layout)
@@ -378,6 +398,9 @@ void PPTShape::addShape(
             Reference<XShapes> xShapes(xShape, UNO_QUERY);
             if (xShapes.is())
                 addChildren( rFilterBase, *this, pTheme, xShapes, pShapeMap, aTransformation );
+
+            if (meFrameType == FRAMETYPE_DIAGRAM)
+                keepDiagramCompatibilityInfo();
         }
     }
     catch (const Exception&)

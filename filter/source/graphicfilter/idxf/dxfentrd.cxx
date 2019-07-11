@@ -633,7 +633,7 @@ bool DXFBoundaryPathData::EvaluateGroup( DXFGroupReader & rDGR )
                 case 4 : aEdges.emplace_back( new DXFEdgeTypeSpline() ); break;
             }
         }
-        else if ( aEdges.size() )
+        else if ( !aEdges.empty() )
             aEdges[ aEdges.size() - 1 ]->EvaluateGroup( rDGR );
         else
             bExecutingGroupCode = false;
@@ -655,8 +655,7 @@ DXFHatchEntity::DXFHatchEntity() :
     nHatchDoubleFlag( 0 ),
     nHatchPatternDefinitionLines( 0 ),
     fPixelSize( 1.0 ),
-    nNumberOfSeedPoints( 0 ),
-    pBoundaryPathData( nullptr )
+    nNumberOfSeedPoints( 0 )
 {
 }
 

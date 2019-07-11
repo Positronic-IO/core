@@ -27,6 +27,7 @@
 #include <frmfmt.hxx>
 #include <ndole.hxx>
 #include <com/sun/star/chart2/XChartDocument.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 
 
 using namespace com::sun::star;
@@ -35,8 +36,7 @@ using namespace com::sun::star::uno;
 namespace sw {
 
 DocumentChartDataProviderManager::DocumentChartDataProviderManager( SwDoc& i_rSwdoc ) : m_rDoc( i_rSwdoc ),
-                                                                                        maChartDataProviderImplRef(),
-                                                                                        mpChartControllerHelper( nullptr )
+                                                                                        maChartDataProviderImplRef()
 {
 
 }

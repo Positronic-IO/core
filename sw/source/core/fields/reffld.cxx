@@ -21,7 +21,6 @@
 #include <com/sun/star/text/ReferenceFieldSource.hpp>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/charclass.hxx>
-#include <comphelper/string.hxx>
 #include <editeng/unolingu.hxx>
 #include <doc.hxx>
 #include <IDocumentFieldsAccess.hxx>
@@ -30,6 +29,8 @@
 #include <pam.hxx>
 #include <cntfrm.hxx>
 #include <pagefrm.hxx>
+#include <rootfrm.hxx>
+#include <modeltoviewhelper.hxx>
 #include <docary.hxx>
 #include <fmtfld.hxx>
 #include <txtfld.hxx>
@@ -70,6 +71,11 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::text;
 using namespace ::com::sun::star::lang;
 
+static std::pair<OUString, bool> MakeRefNumStr(SwRootFrame const* pLayout,
+      const SwTextNode& rTextNodeOfField,
+      const SwTextNode& rTextNodeOfReferencedItem,
+      sal_uInt32 nRefNumFormat);
+
 static void lcl_GetLayTree( const SwFrame* pFrame, std::vector<const SwFrame*>& rArr )
 {
     while( pFrame )
@@ -95,12 +101,19 @@ static void lcl_GetLayTree( const SwFrame* pFrame, std::vector<const SwFrame*>& 
 bool IsFrameBehind( const SwTextNode& rMyNd, sal_Int32 nMySttPos,
                     const SwTextNode& rBehindNd, sal_Int32 nSttPos )
 {
-    const SwTextFrame *pMyFrame = static_cast<SwTextFrame*>(rMyNd.getLayoutFrame( rMyNd.GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr, false) ),
-                   *pFrame = static_cast<SwTextFrame*>(rBehindNd.getLayoutFrame( rBehindNd.GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr, false) );
+    const SwTextFrame * pMyFrame = static_cast<SwTextFrame*>(rMyNd.getLayoutFrame(
+        rMyNd.GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr));
+    const SwTextFrame * pFrame = static_cast<SwTextFrame*>(rBehindNd.getLayoutFrame(
+        rBehindNd.GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr));
 
-    while( pFrame && !pFrame->IsInside( nSttPos ) )
+    if( !pFrame || !pMyFrame)
+        return false;
+
+    TextFrameIndex const nMySttPosIndex(pMyFrame->MapModelToView(&rMyNd, nMySttPos));
+    TextFrameIndex const nSttPosIndex(pFrame->MapModelToView(&rBehindNd, nSttPos));
+    while (pFrame && !pFrame->IsInside(nSttPosIndex))
         pFrame = pFrame->GetFollow();
-    while( pMyFrame && !pMyFrame->IsInside( nMySttPos ) )
+    while (pMyFrame && !pMyFrame->IsInside(nMySttPosIndex))
         pMyFrame = pMyFrame->GetFollow();
 
     if( !pFrame || !pMyFrame || pFrame == pMyFrame )
@@ -281,7 +294,7 @@ static void lcl_formatReferenceLanguage( OUString& rRefText,
             0x00E1, 0x00C1, 0x00E9, 0x00C9, 0x00ED, 0x00CD,
             0x00F3, 0x00D3, 0x00F6, 0x00D6, 0x0151, 0x0150,
             0x00FA, 0x00DA, 0x00FC, 0x00DC, 0x0171, 0x0170, 0 };
-        static OUString sVowels = "aAeEoOuU" + OUString(sVowelsWithDiacritic);
+        static OUString sVowels = "aAeEiIoOuU" + OUString(sVowelsWithDiacritic);
 
         // handle more than 1-letter long Roman numbers and
         // their possible combinations with letters:
@@ -339,10 +352,10 @@ SwGetRefField::SwGetRefField( SwGetRefFieldType* pFieldType,
                               const OUString& rSetRef, const OUString& rSetReferenceLanguage, sal_uInt16 nSubTyp,
                               sal_uInt16 nSequenceNo, sal_uLong nFormat )
     : SwField( pFieldType, nFormat ),
-      sSetRefName( rSetRef ),
-      sSetReferenceLanguage( rSetReferenceLanguage ),
-      nSubType( nSubTyp ),
-      nSeqNo( nSequenceNo )
+      m_sSetRefName( rSetRef ),
+      m_sSetReferenceLanguage( rSetReferenceLanguage ),
+      m_nSubType( nSubTyp ),
+      m_nSeqNo( nSequenceNo )
 {
 }
 
@@ -357,25 +370,25 @@ OUString SwGetRefField::GetDescription() const
 
 sal_uInt16 SwGetRefField::GetSubType() const
 {
-    return nSubType;
+    return m_nSubType;
 }
 
 void SwGetRefField::SetSubType( sal_uInt16 n )
 {
-    nSubType = n;
+    m_nSubType = n;
 }
 
 // #i81002#
 bool SwGetRefField::IsRefToHeadingCrossRefBookmark() const
 {
     return GetSubType() == REF_BOOKMARK &&
-        ::sw::mark::CrossRefHeadingBookmark::IsLegalName(sSetRefName);
+        ::sw::mark::CrossRefHeadingBookmark::IsLegalName(m_sSetRefName);
 }
 
 bool SwGetRefField::IsRefToNumItemCrossRefBookmark() const
 {
     return GetSubType() == REF_BOOKMARK &&
-        ::sw::mark::CrossRefNumItemBookmark::IsLegalName(sSetRefName);
+        ::sw::mark::CrossRefNumItemBookmark::IsLegalName(m_sSetRefName);
 }
 
 const SwTextNode* SwGetRefField::GetReferencedTextNode() const
@@ -384,56 +397,109 @@ const SwTextNode* SwGetRefField::GetReferencedTextNode() const
     if (!pTyp)
         return nullptr;
     sal_Int32 nDummy = -1;
-    return SwGetRefFieldType::FindAnchor( pTyp->GetDoc(), sSetRefName, nSubType, nSeqNo, &nDummy );
+    return SwGetRefFieldType::FindAnchor( pTyp->GetDoc(), m_sSetRefName, m_nSubType, m_nSeqNo, &nDummy );
 }
 
 // #i85090#
-OUString SwGetRefField::GetExpandedTextOfReferencedTextNode() const
+OUString SwGetRefField::GetExpandedTextOfReferencedTextNode(
+        SwRootFrame const& rLayout) const
 {
     const SwTextNode* pReferencedTextNode( GetReferencedTextNode() );
     return pReferencedTextNode
-           ? pReferencedTextNode->GetExpandText( 0, -1, true, true, false, false )
+           ? sw::GetExpandTextMerged(&rLayout, *pReferencedTextNode, true, false, ExpandMode(0))
            : OUString();
 }
 
-OUString SwGetRefField::Expand() const
+void SwGetRefField::SetExpand( const OUString& rStr )
 {
-    return sText;
+    m_sText = rStr;
+    m_sTextRLHidden = rStr;
+}
+
+OUString SwGetRefField::ExpandImpl(SwRootFrame const*const pLayout) const
+{
+    return pLayout && pLayout->IsHideRedlines() ? m_sTextRLHidden : m_sText;
 }
 
 OUString SwGetRefField::GetFieldName() const
 {
     const OUString aName = GetTyp()->GetName();
-    if ( !aName.isEmpty() || !sSetRefName.isEmpty() )
+    if ( !aName.isEmpty() || !m_sSetRefName.isEmpty() )
     {
-        return aName + " " + sSetRefName;
+        return aName + " " + m_sSetRefName;
     }
-    return Expand();
+    return ExpandImpl(nullptr);
+}
+
+
+static void FilterText(OUString & rText, LanguageType const eLang,
+        OUString const& rSetReferenceLanguage)
+{
+    // remove all special characters (replace them with blanks)
+    if (!rText.isEmpty())
+    {
+        rText = rText.replaceAll(OUStringLiteral1(0xad), "");
+        OUStringBuffer aBuf(rText);
+        const sal_Int32 l = aBuf.getLength();
+        for (sal_Int32 i = 0; i < l; ++i)
+        {
+            if (aBuf[i] < ' ')
+            {
+                aBuf[i] = ' ';
+            }
+            else if (aBuf[i] == 0x2011)
+            {
+                aBuf[i] = '-';
+            }
+        }
+        rText = aBuf.makeStringAndClear();
+        if (!rSetReferenceLanguage.isEmpty())
+        {
+            lcl_formatReferenceLanguage(rText, false, eLang, rSetReferenceLanguage);
+        }
+    }
 }
 
 // #i81002# - parameter <pFieldTextAttr> added
 void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
 {
-    sText.clear();
+    m_sText.clear();
+    m_sTextRLHidden.clear();
 
     SwDoc* pDoc = static_cast<SwGetRefFieldType*>(GetTyp())->GetDoc();
     // finding the reference target (the number)
     sal_Int32 nNumStart = -1;
     sal_Int32 nNumEnd = -1;
     SwTextNode* pTextNd = SwGetRefFieldType::FindAnchor(
-        pDoc, sSetRefName, nSubType, nSeqNo, &nNumStart, &nNumEnd
+        pDoc, m_sSetRefName, m_nSubType, m_nSeqNo, &nNumStart, &nNumEnd
     );
     // not found?
     if ( !pTextNd )
     {
-        sText = SwViewShell::GetShellRes()->aGetRefField_RefItemNotFound;
+        m_sText = SwViewShell::GetShellRes()->aGetRefField_RefItemNotFound;
+        m_sTextRLHidden = m_sText;
         return ;
     }
+
+    SwRootFrame const* pLayout(nullptr);
+    SwRootFrame const* pLayoutRLHidden(nullptr);
+    for (SwRootFrame const*const pLay : pDoc->GetAllLayouts())
+    {
+        if (pLay->IsHideRedlines())
+        {
+            pLayoutRLHidden = pLay;
+        }
+        else
+        {
+            pLayout = pLay;
+        }
+    }
+
     // where is the category name (e.g. "Illustration")?
     const OUString aText = pTextNd->GetText();
-    const sal_Int32 nCatStart = aText.indexOf(sSetRefName);
+    const sal_Int32 nCatStart = aText.indexOf(m_sSetRefName);
     const bool bHasCat = nCatStart>=0;
-    const sal_Int32 nCatEnd = bHasCat ? nCatStart + sSetRefName.getLength() : -1;
+    const sal_Int32 nCatEnd = bHasCat ? nCatStart + m_sSetRefName.getLength() : -1;
 
     // length of the referenced text
     const sal_Int32 nLen = aText.getLength();
@@ -450,7 +516,7 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
             sal_Int32 nStart;
             sal_Int32 nEnd;
 
-            switch( nSubType )
+            switch( m_nSubType )
             {
             case REF_SEQUENCEFLD:
 
@@ -491,8 +557,13 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
                     nEnd = std::min(nStart + 1, nLen);
                     break;
 
-                // "Reference" (whole Text)
                 default:
+                    assert(false); // fall through to appease MSVC C4701
+#ifdef NDEBUG
+                    SAL_FALLTHROUGH;
+#endif
+                // "Reference" (whole Text)
+                case REF_CONTENT:
                     nStart = 0;
                     nEnd = nLen;
                     break;
@@ -516,17 +587,26 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
                 for( size_t i = 0; i < pDoc->GetFootnoteIdxs().size(); ++i )
                 {
                     SwTextFootnote* const pFootnoteIdx = pDoc->GetFootnoteIdxs()[i];
-                    if( nSeqNo == pFootnoteIdx->GetSeqRefNo() )
+                    if( m_nSeqNo == pFootnoteIdx->GetSeqRefNo() )
                     {
-                        sText = pFootnoteIdx->GetFootnote().GetViewNumStr( *pDoc );
-                        if (!sSetReferenceLanguage.isEmpty())
-                            lcl_formatReferenceLanguage(sText, false, GetLanguage(), sSetReferenceLanguage);
+                        m_sText = pFootnoteIdx->GetFootnote().GetViewNumStr(*pDoc, nullptr);
+                        m_sTextRLHidden = pFootnoteIdx->GetFootnote().GetViewNumStr(*pDoc, pLayoutRLHidden);
+                        if (!m_sSetReferenceLanguage.isEmpty())
+                        {
+                            lcl_formatReferenceLanguage(m_sText, false, GetLanguage(), m_sSetReferenceLanguage);
+                            lcl_formatReferenceLanguage(m_sTextRLHidden, false, GetLanguage(), m_sSetReferenceLanguage);
+                        }
                         break;
                     }
                 }
                 return;
 
             default:
+                assert(false); // fall through to appease MSVC C4701
+#ifdef NDEBUG
+                SAL_FALLTHROUGH;
+#endif
+            case REF_SETREFATTR:
                 nStart = nNumStart;
                 nEnd = nNumEnd;
                 break;
@@ -534,29 +614,20 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
 
             if( nStart != nEnd ) // a section?
             {
-                sText = pTextNd->GetExpandText( nStart, nEnd - nStart, false, false, false, false );
-
-                // remove all special characters (replace them with blanks)
-                if( !sText.isEmpty() )
+                m_sText = pTextNd->GetExpandText(pLayout, nStart, nEnd - nStart, false, false, false, ExpandMode(0));
+                if (m_nSubType == REF_OUTLINE
+                    || (m_nSubType == REF_SEQUENCEFLD && REF_CONTENT == GetFormat()))
                 {
-                    sText = sText.replaceAll(OUStringLiteral1(0xad), "");
-                    OUStringBuffer aBuf(sText);
-                    const sal_Int32 l = aBuf.getLength();
-                    for (sal_Int32 i=0; i<l; ++i)
-                    {
-                        if (aBuf[i]<' ')
-                        {
-                            aBuf[i]=' ';
-                        }
-                        else if (aBuf[i]==0x2011)
-                        {
-                            aBuf[i]='-';
-                        }
-                    }
-                    sText = aBuf.makeStringAndClear();
-                    if (!sSetReferenceLanguage.isEmpty())
-                        lcl_formatReferenceLanguage(sText, false, GetLanguage(), sSetReferenceLanguage);
+                    m_sTextRLHidden = sw::GetExpandTextMerged(
+                        pLayoutRLHidden, *pTextNd, false, false, ExpandMode(0));
                 }
+                else
+                {
+                    m_sTextRLHidden = pTextNd->GetExpandText(pLayoutRLHidden,
+                        nStart, nEnd - nStart, false, false, false, ExpandMode::HideDeletions);
+                }
+                FilterText(m_sText, GetLanguage(), m_sSetReferenceLanguage);
+                FilterText(m_sTextRLHidden, GetLanguage(), m_sSetReferenceLanguage);
             }
         }
         break;
@@ -564,10 +635,17 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
     case REF_PAGE:
     case REF_PAGE_PGDESC:
         {
-            const SwTextFrame* pFrame = static_cast<SwTextFrame*>(pTextNd->getLayoutFrame( pDoc->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr, false)),
-                        *pSave = pFrame;
-            while( pFrame && !pFrame->IsInside( nNumStart ) )
-                pFrame = pFrame->GetFollow();
+          auto const func =
+          [this, pTextNd, nNumStart](OUString & rText, SwRootFrame const*const pLay)
+          {
+            SwTextFrame const* pFrame = static_cast<SwTextFrame*>(pTextNd->getLayoutFrame(pLay, nullptr, nullptr));
+            SwTextFrame const*const pSave = pFrame;
+            if (pFrame)
+            {
+                TextFrameIndex const nNumStartIndex(pFrame->MapModelToView(pTextNd, nNumStart));
+                while (pFrame && !pFrame->IsInside(nNumStartIndex))
+                    pFrame = pFrame->GetFollow();
+            }
 
             if( pFrame || nullptr != ( pFrame = pSave ))
             {
@@ -576,32 +654,46 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
                 if( REF_PAGE_PGDESC == GetFormat() &&
                     nullptr != ( pPage = pFrame->FindPageFrame() ) &&
                     pPage->GetPageDesc() )
-                    sText = pPage->GetPageDesc()->GetNumType().GetNumStr( nPageNo );
+                {
+                    rText = pPage->GetPageDesc()->GetNumType().GetNumStr(nPageNo);
+                }
                 else
-                    sText = OUString::number(nPageNo);
+                {
+                    rText = OUString::number(nPageNo);
+                }
 
-                if (!sSetReferenceLanguage.isEmpty())
-                    lcl_formatReferenceLanguage(sText, false, GetLanguage(), sSetReferenceLanguage);
+                if (!m_sSetReferenceLanguage.isEmpty())
+                    lcl_formatReferenceLanguage(rText, false, GetLanguage(), m_sSetReferenceLanguage);
             }
+          };
+            // sw_redlinehide: currently only one of these layouts will exist,
+            // so the getLayoutFrame will use the same frame in both cases
+            func(m_sText, pLayout);
+            func(m_sTextRLHidden, pLayoutRLHidden);
         }
         break;
 
     case REF_CHAPTER:
         {
+          auto const func =
+          [this, pTextNd](OUString & rText, SwRootFrame const*const pLay)
+          {
             // a bit tricky: search any frame
-            const SwFrame* pFrame = pTextNd->getLayoutFrame( pDoc->getIDocumentLayoutAccess().GetCurrentLayout() );
+            SwFrame const*const pFrame = pTextNd->getLayoutFrame(pLay);
             if( pFrame )
             {
                 SwChapterFieldType aFieldTyp;
                 SwChapterField aField( &aFieldTyp, 0 );
                 aField.SetLevel( MAXLEVEL - 1 );
-                aField.ChangeExpansion( pFrame, pTextNd, true );
-                sText = aField.GetNumber();
+                aField.ChangeExpansion( *pFrame, pTextNd, true );
+                rText = aField.GetNumber(pLay);
 
-                if (!sSetReferenceLanguage.isEmpty())
-                    lcl_formatReferenceLanguage(sText, false, GetLanguage(), sSetReferenceLanguage);
-
+                if (!m_sSetReferenceLanguage.isEmpty())
+                    lcl_formatReferenceLanguage(rText, false, GetLanguage(), m_sSetReferenceLanguage);
             }
+          };
+            func(m_sText, pLayout);
+            func(m_sTextRLHidden, pLayoutRLHidden);
         }
         break;
 
@@ -618,19 +710,22 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
             // first a "short" test - in case both are in the same node
             if( pFieldTextAttr->GetpTextNode() == pTextNd )
             {
-                sText = nNumStart < pFieldTextAttr->GetStart()
+                m_sText = nNumStart < pFieldTextAttr->GetStart()
                             ? aLocaleData.getAboveWord()
                             : aLocaleData.getBelowWord();
+                m_sTextRLHidden = m_sText;
                 break;
             }
 
-            sText = ::IsFrameBehind( *pFieldTextAttr->GetpTextNode(), pFieldTextAttr->GetStart(),
+            m_sText = ::IsFrameBehind( *pFieldTextAttr->GetpTextNode(), pFieldTextAttr->GetStart(),
                                     *pTextNd, nNumStart )
                         ? aLocaleData.getAboveWord()
                         : aLocaleData.getBelowWord();
 
-            if (!sSetReferenceLanguage.isEmpty())
-                    lcl_formatReferenceLanguage(sText, false, GetLanguage(), sSetReferenceLanguage);
+            if (!m_sSetReferenceLanguage.isEmpty())
+                    lcl_formatReferenceLanguage(m_sText, false, GetLanguage(), m_sSetReferenceLanguage);
+
+            m_sTextRLHidden = m_sText;
         }
         break;
     // #i81002#
@@ -638,19 +733,26 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
     case REF_NUMBER_NO_CONTEXT:
     case REF_NUMBER_FULL_CONTEXT:
         {
-            // for differentiation of Roman numbers and letters in Hungarian article handling
-            bool bClosingParenthesis = false;
-
             if ( pFieldTextAttr && pFieldTextAttr->GetpTextNode() )
             {
-                sText = MakeRefNumStr( pFieldTextAttr->GetTextNode(), *pTextNd, GetFormat() );
-                if ( !sText.isEmpty() && !sSetReferenceLanguage.isEmpty() )
-                    bClosingParenthesis = pTextNd->GetNumRule()->MakeNumString( *(pTextNd->GetNum()), true).endsWith(")");
+                auto result =
+                    MakeRefNumStr(pLayout, pFieldTextAttr->GetTextNode(), *pTextNd, GetFormat());
+                m_sText = result.first;
+                // for differentiation of Roman numbers and letters in Hungarian article handling
+                bool bClosingParenthesis = result.second;
+                if (!m_sSetReferenceLanguage.isEmpty())
+                {
+                    lcl_formatReferenceLanguage(m_sText, bClosingParenthesis, GetLanguage(), m_sSetReferenceLanguage);
+                }
+                result =
+                    MakeRefNumStr(pLayoutRLHidden, pFieldTextAttr->GetTextNode(), *pTextNd, GetFormat());
+                m_sTextRLHidden = result.first;
+                bClosingParenthesis = result.second;
+                if (!m_sSetReferenceLanguage.isEmpty())
+                {
+                    lcl_formatReferenceLanguage(m_sTextRLHidden, bClosingParenthesis, GetLanguage(), m_sSetReferenceLanguage);
+                }
             }
-
-            if (!sSetReferenceLanguage.isEmpty())
-                lcl_formatReferenceLanguage(sText, bClosingParenthesis, GetLanguage(), sSetReferenceLanguage);
-
         }
         break;
 
@@ -660,14 +762,22 @@ void SwGetRefField::UpdateField( const SwTextField* pFieldTextAttr )
 }
 
 // #i81002#
-OUString SwGetRefField::MakeRefNumStr( const SwTextNode& rTextNodeOfField,
-                                     const SwTextNode& rTextNodeOfReferencedItem,
-                                     const sal_uInt32 nRefNumFormat )
+static std::pair<OUString, bool> MakeRefNumStr(
+        SwRootFrame const*const pLayout,
+        const SwTextNode& i_rTextNodeOfField,
+        const SwTextNode& i_rTextNodeOfReferencedItem,
+        const sal_uInt32 nRefNumFormat)
 {
+    SwTextNode const& rTextNodeOfField(pLayout
+            ?   *sw::GetParaPropsNode(*pLayout, i_rTextNodeOfField)
+            :   i_rTextNodeOfField);
+    SwTextNode const& rTextNodeOfReferencedItem(pLayout
+            ?   *sw::GetParaPropsNode(*pLayout, i_rTextNodeOfReferencedItem)
+            :   i_rTextNodeOfReferencedItem);
     if ( rTextNodeOfReferencedItem.HasNumber() &&
          rTextNodeOfReferencedItem.IsCountedInList() )
     {
-        OSL_ENSURE( rTextNodeOfReferencedItem.GetNum(),
+        OSL_ENSURE( rTextNodeOfReferencedItem.GetNum(pLayout),
                 "<SwGetRefField::MakeRefNumStr(..)> - referenced paragraph has number, but no <SwNodeNum> instance!" );
 
         // Determine, up to which level the superior list labels have to be
@@ -691,17 +801,19 @@ OUString SwGetRefField::MakeRefNumStr( const SwTextNode& rTextNodeOfField,
             if ( rTextNodeOfField.HasNumber() &&
                  rTextNodeOfField.GetNumRule() == rTextNodeOfReferencedItem.GetNumRule() )
             {
-                pNodeNumForTextNodeOfField = rTextNodeOfField.GetNum();
+                pNodeNumForTextNodeOfField = rTextNodeOfField.GetNum(pLayout);
             }
             else
             {
                 pNodeNumForTextNodeOfField =
-                    rTextNodeOfReferencedItem.GetNum()->GetPrecedingNodeNumOf( rTextNodeOfField );
+                    rTextNodeOfReferencedItem.GetNum(pLayout)->GetPrecedingNodeNumOf(rTextNodeOfField);
             }
             if ( pNodeNumForTextNodeOfField )
             {
-                const SwNumberTree::tNumberVector rFieldNumVec = pNodeNumForTextNodeOfField->GetNumberVector();
-                const SwNumberTree::tNumberVector rRefItemNumVec = rTextNodeOfReferencedItem.GetNum()->GetNumberVector();
+                const SwNumberTree::tNumberVector rFieldNumVec =
+                    pNodeNumForTextNodeOfField->GetNumberVector();
+                const SwNumberTree::tNumberVector rRefItemNumVec =
+                    rTextNodeOfReferencedItem.GetNum()->GetNumberVector();
                 std::size_t nLevel( 0 );
                 while ( nLevel < rFieldNumVec.size() && nLevel < rRefItemNumVec.size() )
                 {
@@ -725,39 +837,44 @@ OUString SwGetRefField::MakeRefNumStr( const SwTextNode& rTextNodeOfField,
 
         OSL_ENSURE( rTextNodeOfReferencedItem.GetNumRule(),
                 "<SwGetRefField::MakeRefNumStr(..)> - referenced numbered paragraph has no numbering rule set!" );
-        return rTextNodeOfReferencedItem.GetNumRule()->MakeRefNumString(
-                                            *(rTextNodeOfReferencedItem.GetNum()),
-                                            bInclSuperiorNumLabels,
-                                            nRestrictInclToThisLevel );
+        return std::make_pair(
+                rTextNodeOfReferencedItem.GetNumRule()->MakeRefNumString(
+                    *(rTextNodeOfReferencedItem.GetNum(pLayout)),
+                    bInclSuperiorNumLabels,
+                    nRestrictInclToThisLevel ),
+                rTextNodeOfReferencedItem.GetNumRule()->MakeNumString(
+                    *(rTextNodeOfReferencedItem.GetNum(pLayout)),
+                    true).endsWith(")") );
     }
 
-    return OUString();
+    return std::make_pair(OUString(), false);
 }
 
-SwField* SwGetRefField::Copy() const
+std::unique_ptr<SwField> SwGetRefField::Copy() const
 {
-    SwGetRefField* pField = new SwGetRefField( static_cast<SwGetRefFieldType*>(GetTyp()),
-                                                sSetRefName, sSetReferenceLanguage, nSubType,
-                                                nSeqNo, GetFormat() );
-    pField->sText = sText;
-    return pField;
+    std::unique_ptr<SwGetRefField> pField( new SwGetRefField( static_cast<SwGetRefFieldType*>(GetTyp()),
+                                                m_sSetRefName, m_sSetReferenceLanguage, m_nSubType,
+                                                m_nSeqNo, GetFormat() ) );
+    pField->m_sText = m_sText;
+    pField->m_sTextRLHidden = m_sTextRLHidden;
+    return std::unique_ptr<SwField>(pField.release());
 }
 
 /// get reference name
 OUString SwGetRefField::GetPar1() const
 {
-    return sSetRefName;
+    return m_sSetRefName;
 }
 
 /// set reference name
 void SwGetRefField::SetPar1( const OUString& rName )
 {
-    sSetRefName = rName;
+    m_sSetRefName = rName;
 }
 
 OUString SwGetRefField::GetPar2() const
 {
-    return Expand();
+    return ExpandImpl(nullptr);
 }
 
 bool SwGetRefField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
@@ -788,7 +905,7 @@ bool SwGetRefField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
     case FIELD_PROP_USHORT2:
         {
             sal_Int16 nSource = 0;
-            switch(nSubType)
+            switch(m_nSubType)
             {
             case  REF_SETREFATTR : nSource = ReferenceFieldSource::REFERENCE_MARK; break;
             case  REF_SEQUENCEFLD: nSource = ReferenceFieldSource::SEQUENCE_FIELD; break;
@@ -803,7 +920,7 @@ bool SwGetRefField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
     case FIELD_PROP_PAR1:
     {
         OUString sTmp(GetPar1());
-        if(REF_SEQUENCEFLD == nSubType)
+        if(REF_SEQUENCEFLD == m_nSubType)
         {
             sal_uInt16 nPoolId = SwStyleNameMapper::GetPoolIdFromUIName( sTmp, SwGetPoolIdFromName::TxtColl );
             switch( nPoolId )
@@ -821,13 +938,13 @@ bool SwGetRefField::QueryValue( uno::Any& rAny, sal_uInt16 nWhichId ) const
     }
     break;
     case FIELD_PROP_PAR3:
-        rAny <<= Expand();
+        rAny <<= ExpandImpl(nullptr);
         break;
     case FIELD_PROP_PAR4:
-        rAny <<= sSetReferenceLanguage;
+        rAny <<= m_sSetReferenceLanguage;
         break;
     case FIELD_PROP_SHORT1:
-        rAny <<= static_cast<sal_Int16>(nSeqNo);
+        rAny <<= static_cast<sal_Int16>(m_nSeqNo);
         break;
     default:
         assert(false);
@@ -868,18 +985,18 @@ bool SwGetRefField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
             rAny >>= nSource;
             switch(nSource)
             {
-            case ReferenceFieldSource::REFERENCE_MARK : nSubType = REF_SETREFATTR ; break;
+            case ReferenceFieldSource::REFERENCE_MARK : m_nSubType = REF_SETREFATTR ; break;
             case ReferenceFieldSource::SEQUENCE_FIELD :
             {
-                if(REF_SEQUENCEFLD == nSubType)
+                if(REF_SEQUENCEFLD == m_nSubType)
                     break;
-                nSubType = REF_SEQUENCEFLD;
+                m_nSubType = REF_SEQUENCEFLD;
                 ConvertProgrammaticToUIName();
             }
             break;
-            case ReferenceFieldSource::BOOKMARK       : nSubType = REF_BOOKMARK   ; break;
-            case ReferenceFieldSource::FOOTNOTE       : nSubType = REF_FOOTNOTE   ; break;
-            case ReferenceFieldSource::ENDNOTE        : nSubType = REF_ENDNOTE    ; break;
+            case ReferenceFieldSource::BOOKMARK       : m_nSubType = REF_BOOKMARK   ; break;
+            case ReferenceFieldSource::FOOTNOTE       : m_nSubType = REF_FOOTNOTE   ; break;
+            case ReferenceFieldSource::ENDNOTE        : m_nSubType = REF_ENDNOTE    ; break;
             }
         }
         break;
@@ -899,14 +1016,14 @@ bool SwGetRefField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
         }
         break;
     case FIELD_PROP_PAR4:
-        rAny >>= sSetReferenceLanguage;
+        rAny >>= m_sSetReferenceLanguage;
         break;
     case FIELD_PROP_SHORT1:
         {
             sal_Int16 nSetSeq = 0;
             rAny >>= nSetSeq;
             if(nSetSeq >= 0)
-                nSeqNo = nSetSeq;
+                m_nSeqNo = nSetSeq;
         }
         break;
     default:
@@ -917,7 +1034,7 @@ bool SwGetRefField::PutValue( const uno::Any& rAny, sal_uInt16 nWhichId )
 
 void SwGetRefField::ConvertProgrammaticToUIName()
 {
-    if(GetTyp() && REF_SEQUENCEFLD == nSubType)
+    if(GetTyp() && REF_SEQUENCEFLD == m_nSubType)
     {
         SwDoc* pDoc = static_cast<SwGetRefFieldType*>(GetTyp())->GetDoc();
         const OUString rPar1 = GetPar1();
@@ -951,12 +1068,12 @@ void SwGetRefField::ConvertProgrammaticToUIName()
 }
 
 SwGetRefFieldType::SwGetRefFieldType( SwDoc* pDc )
-    : SwFieldType( SwFieldIds::GetRef ), pDoc( pDc )
+    : SwFieldType( SwFieldIds::GetRef ), m_pDoc( pDc )
 {}
 
 SwFieldType* SwGetRefFieldType::Copy() const
 {
-    return new SwGetRefFieldType( pDoc );
+    return new SwGetRefFieldType( m_pDoc );
 }
 
 void SwGetRefFieldType::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
@@ -987,19 +1104,54 @@ void SwGetRefFieldType::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew
     NotifyClients( pOld, pNew );
 }
 
+namespace sw {
+
+bool IsMarkHintHidden(SwRootFrame const& rLayout,
+        SwTextNode const& rNode, SwTextAttrEnd const& rHint)
+{
+    if (!rLayout.IsHideRedlines())
+    {
+        return false;
+    }
+    SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(
+        rNode.getLayoutFrame(&rLayout)));
+    if (!pFrame)
+    {
+        return true;
+    }
+    sal_Int32 const*const pEnd(const_cast<SwTextAttrEnd &>(rHint).GetEnd());
+    if (pEnd)
+    {
+        return pFrame->MapModelToView(&rNode, rHint.GetStart())
+            == pFrame->MapModelToView(&rNode, *pEnd);
+    }
+    else
+    {
+        assert(rHint.HasDummyChar());
+        return pFrame->MapModelToView(&rNode, rHint.GetStart())
+            == pFrame->MapModelToView(&rNode, rHint.GetStart() + 1);
+    }
+}
+
+} // namespace sw
+
 SwTextNode* SwGetRefFieldType::FindAnchor( SwDoc* pDoc, const OUString& rRefMark,
                                         sal_uInt16 nSubType, sal_uInt16 nSeqNo,
-                                        sal_Int32* pStt, sal_Int32* pEnd )
+                                        sal_Int32* pStt, sal_Int32* pEnd,
+                                        SwRootFrame const*const pLayout)
 {
     OSL_ENSURE( pStt, "Why did no one check the StartPos?" );
 
+    IDocumentRedlineAccess & rIDRA(pDoc->getIDocumentRedlineAccess());
     SwTextNode* pTextNd = nullptr;
     switch( nSubType )
     {
     case REF_SETREFATTR:
         {
             const SwFormatRefMark *pRef = pDoc->GetRefMark( rRefMark );
-            if( pRef && pRef->GetTextRefMark() )
+            SwTextRefMark const*const pRefMark(pRef ? pRef->GetTextRefMark() : nullptr);
+            if (pRefMark && (!pLayout || !sw::IsMarkHintHidden(*pLayout,
+                                           pRefMark->GetTextNode(), *pRefMark)))
             {
                 pTextNd = const_cast<SwTextNode*>(&pRef->GetTextRefMark()->GetTextNode());
                 *pStt = pRef->GetTextRefMark()->GetStart();
@@ -1018,10 +1170,12 @@ SwTextNode* SwGetRefFieldType::FindAnchor( SwDoc* pDoc, const OUString& rRefMark
                 SwIterator<SwFormatField,SwFieldType> aIter( *pFieldType );
                 for( SwFormatField* pFormatField = aIter.First(); pFormatField; pFormatField = aIter.Next() )
                 {
-                    if( pFormatField->GetTextField() && nSeqNo ==
-                        static_cast<SwSetExpField*>(pFormatField->GetField())->GetSeqNumber() )
+                    SwTextField *const pTextField(pFormatField->GetTextField());
+                    if (pTextField && nSeqNo ==
+                        static_cast<SwSetExpField*>(pFormatField->GetField())->GetSeqNumber()
+                        && (!pLayout || !pLayout->IsHideRedlines()
+                            || !sw::IsFieldDeletedInModel(rIDRA, *pTextField)))
                     {
-                        SwTextField* pTextField = pFormatField->GetTextField();
                         pTextNd = pTextField->GetpTextNode();
                         *pStt = pTextField->GetStart();
                         if( pEnd )
@@ -1036,7 +1190,9 @@ SwTextNode* SwGetRefFieldType::FindAnchor( SwDoc* pDoc, const OUString& rRefMark
     case REF_BOOKMARK:
         {
             IDocumentMarkAccess::const_iterator_t ppMark = pDoc->getIDocumentMarkAccess()->findMark(rRefMark);
-            if(ppMark != pDoc->getIDocumentMarkAccess()->getAllMarksEnd())
+            if (ppMark != pDoc->getIDocumentMarkAccess()->getAllMarksEnd()
+                && (!pLayout || !pLayout->IsHideRedlines()
+                    || !sw::IsMarkHidden(*pLayout, **ppMark)))
             {
                 const ::sw::mark::IMark* pBkmk = ppMark->get();
                 const SwPosition* pPos = &pBkmk->GetMarkStart();
@@ -1074,6 +1230,13 @@ SwTextNode* SwGetRefFieldType::FindAnchor( SwDoc* pDoc, const OUString& rRefMark
             for( auto pFootnoteIdx : pDoc->GetFootnoteIdxs() )
                 if( nSeqNo == pFootnoteIdx->GetSeqRefNo() )
                 {
+                    if (pLayout && pLayout->IsHideRedlines()
+                        && sw::IsFootnoteDeleted(rIDRA, *pFootnoteIdx))
+                    {
+                        return nullptr;
+                    }
+                    // otherwise: the position at the start of the footnote
+                    // will be mapped to something visible at least...
                     SwNodeIndex* pIdx = pFootnoteIdx->GetStartNode();
                     if( pIdx )
                     {
@@ -1096,7 +1259,7 @@ SwTextNode* SwGetRefFieldType::FindAnchor( SwDoc* pDoc, const OUString& rRefMark
 struct RefIdsMap
 {
 private:
-    OUString aName;
+    OUString const aName;
     std::set<sal_uInt16> aIds;
     std::set<sal_uInt16> aDstIds;
     std::map<sal_uInt16, sal_uInt16> sequencedIds; /// ID numbers sorted by sequence number.
@@ -1165,8 +1328,8 @@ void RefIdsMap::Init( SwDoc& rDoc, SwDoc& rDestDoc, bool bField )
         GetFieldIdsFromDoc( rDoc, aDstIds );
 
         // Map all the new src fields to the next available unused id
-        for ( std::set<sal_uInt16>::iterator pIt = aDstIds.begin(); pIt != aDstIds.end(); ++pIt )
-            AddId( GetFirstUnusedId(aIds), *pIt );
+        for (const auto& rId : aDstIds)
+            AddId( GetFirstUnusedId(aIds), rId );
 
         // Change the Sequence number of all SetExp fields in the source document
         SwFieldType* pType = rDoc.getIDocumentFieldsAccess().GetFieldType( SwFieldIds::SetExp, aName, false );
@@ -1188,8 +1351,8 @@ void RefIdsMap::Init( SwDoc& rDoc, SwDoc& rDestDoc, bool bField )
         GetNoteIdsFromDoc( rDestDoc, aIds );
         GetNoteIdsFromDoc( rDoc, aDstIds );
 
-        for (std::set<sal_uInt16>::iterator pIt = aDstIds.begin(); pIt != aDstIds.end(); ++pIt)
-            AddId( GetFirstUnusedId(aIds), *pIt );
+        for (const auto& rId : aDstIds)
+            AddId( GetFirstUnusedId(aIds), rId );
 
         // Change the footnotes/endnotes in the source doc to the new ID
         for ( const auto pFootnoteIdx : rDoc.GetFootnoteIdxs() )
@@ -1207,11 +1370,10 @@ void RefIdsMap::Init( SwDoc& rDoc, SwDoc& rDestDoc, bool bField )
 sal_uInt16 RefIdsMap::GetFirstUnusedId( std::set<sal_uInt16> &rIds )
 {
     sal_uInt16 num(0);
-    std::set<sal_uInt16>::iterator it;
 
-    for( it = rIds.begin(); it != rIds.end(); ++it )
+    for( const auto& rId : rIds )
     {
-        if( num != *it )
+        if( num != rId )
         {
             return num;
         }
@@ -1256,7 +1418,7 @@ void RefIdsMap::Check( SwDoc& rDoc, SwDoc& rDestDoc, SwGetRefField& rField,
 ///    what is most desirable since it's going to be wrong anyway
 void SwGetRefFieldType::MergeWithOtherDoc( SwDoc& rDestDoc )
 {
-    if( &rDestDoc != pDoc )
+    if( &rDestDoc != m_pDoc )
     {
         if (rDestDoc.IsClipBoard())
         {
@@ -1294,13 +1456,13 @@ void SwGetRefFieldType::MergeWithOtherDoc( SwDoc& rDestDoc )
                         aFieldMap.push_back(std::unique_ptr<RefIdsMap>(pMap));
                     }
 
-                    pMap->Check( *pDoc, rDestDoc, rRefField, true );
+                    pMap->Check( *m_pDoc, rDestDoc, rRefField, true );
                 }
                 break;
 
             case REF_FOOTNOTE:
             case REF_ENDNOTE:
-                aFntMap.Check( *pDoc, rDestDoc, rRefField, false );
+                aFntMap.Check( *m_pDoc, rDestDoc, rRefField, false );
                 break;
             }
         }

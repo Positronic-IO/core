@@ -27,15 +27,14 @@
 #include <unotools/pathoptions.hxx>
 
 #include <com/sun/star/sdbc/XResultSet.hpp>
-#include <com/sun/star/sdbc/XRow.hpp>
-#include <com/sun/star/ucb/XCommandEnvironment.hpp>
 #include <com/sun/star/ucb/XContentAccess.hpp>
 
 #include <com/sun/star/i18n/OrdinalSuffix.hpp>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/localedatawrapper.hxx>
+
+namespace com { namespace sun { namespace star { namespace ucb { class XCommandEnvironment; } } } }
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -48,14 +47,14 @@ void ScGlobal::InitAddIns()
 
     // multi paths separated by semicolons
     SvtPathOptions aPathOpt;
-    OUString aMultiPath = aPathOpt.GetAddinPath();
+    const OUString& aMultiPath = aPathOpt.GetAddinPath();
     if (aMultiPath.isEmpty())
         return;
 
-    sal_Int32 nTokens = comphelper::string::getTokenCount(aMultiPath, ';');
-    for (sal_Int32 j = 0; j < nTokens; ++j)
+    sal_Int32 nIdx {0};
+    do
     {
-        OUString aPath = aMultiPath.getToken(j, ';');
+        OUString aPath = aMultiPath.getToken(0, ';', nIdx);
         if (aPath.isEmpty())
             continue;
 
@@ -114,6 +113,7 @@ void ScGlobal::InitAddIns()
             OSL_FAIL( "unexpected exception caught!" );
         }
     }
+    while (nIdx>0);
 }
 
 OUString ScGlobal::GetOrdinalSuffix( sal_Int32 nNumber)

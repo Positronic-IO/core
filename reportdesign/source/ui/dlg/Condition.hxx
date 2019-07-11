@@ -88,7 +88,7 @@ namespace rptui
         sal_uInt16                  m_nFontColorId;
         sal_uInt16                  m_nFontDialogId;
         std::shared_ptr<PaletteManager> m_xPaletteManager;
-        BorderColorStatus           m_aBorderColorStatus;
+        ColorStatus                 m_aColorStatus;
         ConditionColorWrapper       m_aColorWrapper;
 
         ::rptui::OReportController& m_rController;
@@ -96,9 +96,9 @@ namespace rptui
         VclPtr<FixedText>                  m_pHeader;
         VclPtr<ListBox>                    m_pConditionType;
         VclPtr<ListBox>                    m_pOperationList;
-        ConditionField*                    m_pCondLHS;
+        std::unique_ptr<ConditionField>    m_pCondLHS;
         VclPtr<FixedText>                  m_pOperandGlue;
-        ConditionField*                    m_pCondRHS;
+        std::unique_ptr<ConditionField>    m_pCondRHS;
         VclPtr<ToolBox>                    m_pActions;
         VclPtr<SvxFontPrevWindow>          m_pPreview;
         VclPtr<PushButton>                 m_pMoveUp;
@@ -107,8 +107,8 @@ namespace rptui
         VclPtr<PushButton>                 m_pRemoveCondition;
         VclPtr<SvxColorWindow>             m_pColorFloat;
 
-        svx::ToolboxButtonColorUpdater*   m_pBtnUpdaterFontColor; // updates the color below the toolbar icon
-        svx::ToolboxButtonColorUpdater*   m_pBtnUpdaterBackgroundColor;
+        std::unique_ptr<svx::ToolboxButtonColorUpdater> m_pBtnUpdaterFontColor; // updates the color below the toolbar icon
+        std::unique_ptr<svx::ToolboxButtonColorUpdater> m_pBtnUpdaterBackgroundColor;
 
 
         size_t                          m_nCondIndex;
@@ -162,7 +162,7 @@ namespace rptui
 
         /** forward to the parent class
         */
-        void    ApplyCommand(sal_uInt16 _nCommandId, const ::Color& _aColor );
+        void    ApplyCommand( sal_uInt16 _nCommandId, const NamedColor& rNamedColor );
 
         ::rptui::OReportController& getController() const { return m_rController; }
 

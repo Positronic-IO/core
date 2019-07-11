@@ -21,6 +21,7 @@
 #define INCLUDED_VCL_INC_SALWTYPE_HXX
 
 #include <i18nlangtag/lang.h>
+#include <rtl/ref.hxx>
 #include <rtl/ustring.hxx>
 #include <tools/solar.h>
 
@@ -186,7 +187,6 @@ struct SalExtTextInputPosEvent
 
 struct SalInputContextChangeEvent
 {
-    LanguageType    meLanguage;     // new language
 };
 
 struct SalSurroundingTextRequestEvent
@@ -198,8 +198,8 @@ struct SalSurroundingTextRequestEvent
 
 struct SalSurroundingTextSelectionChangeEvent
 {
-    sal_uLong       mnStart;        // The beginning index of selected range
-    sal_uLong       mnEnd;          // The end index of selected range
+    sal_uLong const mnStart;        // The beginning index of selected range
+    sal_uLong const mnEnd;          // The end index of selected range
 };
 
 struct SalQueryCharPositionEvent
@@ -221,8 +221,6 @@ enum class SalObjEvent {
     ToTop              = 3
 };
 
-typedef long (*SALOBJECTPROC)( void* pInst, SalObjEvent nEvent );
-
 struct SalFrameState
 {
     WindowStateMask mnMask;
@@ -239,7 +237,7 @@ struct SalFrameState
 
 struct SalInputContext
 {
-    LogicalFontInstance* mpFont;
+    rtl::Reference<LogicalFontInstance> mpFont;
     LanguageType           meLanguage;
     InputContextFlags      mnOptions;
 };

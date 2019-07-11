@@ -20,26 +20,23 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_XML_XMLFILTI_HXX
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLFILTI_HXX
 
-#include <xmloff/xmlictxt.hxx>
-#include <xmloff/xmlimp.hxx>
-#include <com/sun/star/sheet/FilterOperator.hpp>
-
-#include "xmldrani.hxx"
-#include "xmldpimp.hxx"
 #include "importcontext.hxx"
 #include <queryentry.hxx>
+#include <queryparam.hxx>
 
 #include <stack>
 #include <vector>
 
 class ScXMLImport;
-struct ScQueryParam;
+class ScXMLDatabaseRangeContext;
+class ScXMLDataPilotTableContext;
+namespace sax_fastparser { class FastAttributeList; }
 
 class ScXMLFilterContext : public ScXMLImportContext
 {
     struct ConnStackItem
     {
-        bool mbOr;
+        bool const mbOr;
         int  mnCondCount;
         explicit ConnStackItem(bool bOr);
     };

@@ -22,13 +22,14 @@
 
 #include <rtl/ustring.hxx>
 #include <com/sun/star/util/DateTime.hpp>
-#include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/xml/crypto/SecurityOperationStatus.hpp>
 #include <com/sun/star/xml/crypto/DigestID.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 
 #include <set>
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace graphic { class XGraphic; } } } }
 
 /*
  * type of reference
@@ -47,6 +48,8 @@ struct SignatureReferenceInformation
     // For ODF: XAdES digests (SHA256) or the old SHA1, from css::xml::crypto::DigestID
     sal_Int32  nDigestID;
     OUString   ouDigestValue;
+    /// Type of the reference: an URI (newer idSignedProperties references) or empty.
+    OUString ouType;
 
     SignatureReferenceInformation() :
         nType(SignatureReferenceType::SAMEDOCUMENT),
@@ -56,12 +59,13 @@ struct SignatureReferenceInformation
     {
     }
 
-    SignatureReferenceInformation( SignatureReferenceType type, sal_Int32 digestID, const OUString& uri ) :
+    SignatureReferenceInformation( SignatureReferenceType type, sal_Int32 digestID, const OUString& uri, const OUString& rType ) :
         SignatureReferenceInformation()
     {
         nType = type;
         nDigestID = digestID;
         ouURI = uri;
+        ouType = rType;
     }
 };
 
@@ -119,10 +123,10 @@ struct SignatureInformation
     OUString ouDescriptionPropertyId;
     /// OOXML certificate SHA-256 digest, empty for ODF except when doing XAdES signature.
     OUString ouCertDigest;
-    /// OOXML Valid and invalid signature images
+    /// Valid and invalid signature line images
     css::uno::Reference<css::graphic::XGraphic> aValidSignatureImage;
     css::uno::Reference<css::graphic::XGraphic> aInvalidSignatureImage;
-    /// OOXML Signature Line Id, used to map signatures to their respective signature line images.
+    /// Signature Line Id, used to map signatures to their respective signature line images.
     OUString ouSignatureLineId;
     /// A full OOXML signature for unchanged roundtrip, empty for ODF.
     css::uno::Sequence<sal_Int8> aSignatureBytes;

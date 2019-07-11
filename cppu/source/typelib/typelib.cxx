@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <new>
+#include <sal/log.hxx>
 #include <osl/interlck.h>
 #include <osl/mutex.hxx>
 #include <rtl/ustring.hxx>
@@ -42,10 +43,6 @@
 
 using namespace std;
 using namespace osl;
-
-using ::rtl::OUString;
-using ::rtl::OUStringBuffer;
-using ::rtl::OString;
 
 #ifdef _WIN32
 #pragma pack(push, 8)
@@ -77,7 +74,7 @@ struct AlignSize_Impl
 // the value of the maximal alignment
 static sal_Int32 nMaxAlignment = static_cast<sal_Int32>( reinterpret_cast<sal_Size>(&reinterpret_cast<AlignSize_Impl *>(16)->dDouble) - 16);
 
-static inline sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
+static sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
 {
     if( nRequestedAlignment > nMaxAlignment )
         nRequestedAlignment = nMaxAlignment;
@@ -87,19 +84,19 @@ static inline sal_Int32 adjustAlignment( sal_Int32 nRequestedAlignment )
 /**
  * Calculate the new size of the structure.
  */
-static inline sal_Int32 newAlignedSize(
+static sal_Int32 newAlignedSize(
     sal_Int32 OldSize, sal_Int32 ElementSize, sal_Int32 NeededAlignment )
 {
     NeededAlignment = adjustAlignment( NeededAlignment );
     return (OldSize + NeededAlignment -1) / NeededAlignment * NeededAlignment + ElementSize;
 }
 
-static inline bool reallyWeak( typelib_TypeClass eTypeClass )
+static bool reallyWeak( typelib_TypeClass eTypeClass )
 {
     return TYPELIB_TYPEDESCRIPTIONREFERENCE_ISREALLYWEAK( eTypeClass );
 }
 
-static inline sal_Int32 getDescriptionSize( typelib_TypeClass eTypeClass )
+static sal_Int32 getDescriptionSize( typelib_TypeClass eTypeClass )
 {
     OSL_ASSERT( typelib_TypeClass_TYPEDEF != eTypeClass );
 
@@ -197,10 +194,9 @@ struct TypeDescriptor_Init_Impl
     sal_Int32           nTypeDescriptionReferenceCount;
 #endif
 
-    TypeDescriptor_Init_Impl():
-        pWeakMap(nullptr), pCallbacks(nullptr), pCache(nullptr), pMutex(nullptr)
+    TypeDescriptor_Init_Impl()
 #if OSL_DEBUG_LEVEL > 0
-        , nTypeDescriptionCount(0), nCompoundTypeDescriptionCount(0),
+        : nTypeDescriptionCount(0), nCompoundTypeDescriptionCount(0),
         nIndirectTypeDescriptionCount(0),
         nEnumTypeDescriptionCount(0),
         nInterfaceMethodTypeDescriptionCount(0),
@@ -292,7 +288,7 @@ TypeDescriptor_Init_Impl::~TypeDescriptor_Init_Impl()
             typelib_TypeDescriptionReference * pTDR = (*aIt).second;
             if (pTDR)
             {
-                OString aTypeName( rtl::OUStringToOString( pTDR->pTypeName, RTL_TEXTENCODING_ASCII_US ) );
+                OString aTypeName( OUStringToOString( pTDR->pTypeName, RTL_TEXTENCODING_ASCII_US ) );
                 SAL_INFO("cppu.typelib", "remaining type: " << aTypeName << "; ref count = " << pTDR->nRefCount);
             }
             else
@@ -358,7 +354,7 @@ extern "C" void SAL_CALL typelib_typedescription_revokeCallback(
     }
 }
 
-static inline void typelib_typedescription_initTables(
+static void typelib_typedescription_initTables(
     typelib_TypeDescription * pTD )
 {
     typelib_InterfaceTypeDescription * pITD = reinterpret_cast<typelib_InterfaceTypeDescription *>(pTD);
@@ -554,6 +550,7 @@ extern "C" void typelib_typedescription_newEmpty(
             osl_atomic_increment( &Init::get().nIndirectTypeDescriptionCount );
 #endif
             pTmp->pType = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -571,6 +568,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->aBase.ppTypeRefs = nullptr;
             pTmp->aBase.ppMemberNames = nullptr;
             pTmp->pParameterizedTypes = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -587,6 +585,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->pMemberOffsets = nullptr;
             pTmp->ppTypeRefs = nullptr;
             pTmp->ppMemberNames = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -601,6 +600,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->nEnumValues       = 0;
             pTmp->ppEnumNames       = nullptr;
             pTmp->pEnumValues       = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -622,6 +622,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->pMapMemberIndexToFunctionIndex= nullptr;
             pTmp->nBaseTypes = 0;
             pTmp->ppBaseTypes = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -642,6 +643,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->pInterface = nullptr;
             pTmp->pBaseRef = nullptr;
             pTmp->nIndex = 0;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -662,6 +664,7 @@ extern "C" void typelib_typedescription_newEmpty(
             pTmp->ppGetExceptions = nullptr;
             pTmp->nSetExceptions = 0;
             pTmp->ppSetExceptions = nullptr;
+            // coverity[leaked_storage] - this is on purpose
         }
         break;
 
@@ -742,7 +745,7 @@ void newTypeDescription(
                 pTmp->ppTypeRefs = new typelib_TypeDescriptionReference *[ nMembers ];
                 pTmp->ppMemberNames = new rtl_uString *[ nMembers ];
                 bool polymorphic = eTypeClass == typelib_TypeClass_STRUCT
-                    && rtl::OUString::unacquired(&pTypeName).indexOf('<') >= 0;
+                    && OUString::unacquired(&pTypeName).indexOf('<') >= 0;
                 OSL_ASSERT(!polymorphic || pStructMembers != nullptr);
                 if (polymorphic) {
                     reinterpret_cast< typelib_StructTypeDescription * >(pTmp)->
@@ -882,7 +885,7 @@ extern "C" void SAL_CALL typelib_typedescription_newInterface(
     typelib_TypeDescriptionReference ** ppMembers )
     SAL_THROW_EXTERN_C()
 {
-    // coverity[callee_ptr_arith]
+    // coverity[callee_ptr_arith] - not a bug
     typelib_typedescription_newMIInterface(
         ppRet, pTypeName, 0, 0, 0, 0, 0, pBaseInterface == nullptr ? 0 : 1,
         &pBaseInterface, nMembers, ppMembers);
@@ -908,7 +911,7 @@ public:
     sal_Int32 getBaseMembers() const { return members; }
 
 private:
-    typedef std::set< rtl::OUString > Set;
+    typedef std::set< OUString > Set;
 
     void calculate(
         sal_Int32 directBaseIndex, Set & directBaseSet,
@@ -1028,14 +1031,14 @@ extern "C" void SAL_CALL typelib_typedescription_newMIInterface(
             for (sal_Int32 j = 0; j < pBase->nMembers; ++j) {
                 typelib_TypeDescriptionReference const * pDirectBaseMember
                     = pDirectBase->ppAllMembers[i->directBaseMemberOffset + j];
-                rtl::OUStringBuffer aBuf(pDirectBaseMember->pTypeName);
+                OUStringBuffer aBuf(pDirectBaseMember->pTypeName);
                 aBuf.append(":@");
                 aBuf.append(i->directBaseIndex);
                 aBuf.append(',');
                 aBuf.append(i->memberOffset + j);
                 aBuf.append(':');
                 aBuf.append(pITD->aBase.pTypeName);
-                rtl::OUString aName(aBuf.makeStringAndClear());
+                OUString aName(aBuf.makeStringAndClear());
                 typelib_TypeDescriptionReference * pDerivedMember = nullptr;
                 typelib_typedescriptionreference_new(
                     &pDerivedMember, pDirectBaseMember->eTypeClass,
@@ -1112,7 +1115,7 @@ extern "C" void SAL_CALL typelib_typedescription_newInterfaceMethod(
         OSL_FAIL("Bad interface method type name");
         return;
     }
-    rtl::OUString aInterfaceTypeName(pTypeName->buffer, nOffset - 1);
+    OUString aInterfaceTypeName(pTypeName->buffer, nOffset - 1);
     typelib_InterfaceTypeDescription * pInterface = nullptr;
     typelib_typedescription_getByName(
         reinterpret_cast< typelib_TypeDescription ** >(&pInterface),
@@ -1204,7 +1207,7 @@ extern "C" void SAL_CALL typelib_typedescription_newExtendedInterfaceAttribute(
         OSL_FAIL("Bad interface attribute type name");
         return;
     }
-    rtl::OUString aInterfaceTypeName(pTypeName->buffer, nOffset - 1);
+    OUString aInterfaceTypeName(pTypeName->buffer, nOffset - 1);
     typelib_InterfaceTypeDescription * pInterface = nullptr;
     typelib_typedescription_getByName(
         reinterpret_cast< typelib_TypeDescription ** >(&pInterface),
@@ -1268,7 +1271,7 @@ void deleteExceptions(
 }
 
 // frees anything except typelib_TypeDescription base!
-static inline void typelib_typedescription_destructExtendedMembers(
+static void typelib_typedescription_destructExtendedMembers(
     typelib_TypeDescription * pTD )
 {
     OSL_ASSERT( typelib_TypeClass_TYPEDEF != pTD->eTypeClass );
@@ -1578,7 +1581,7 @@ extern "C" void SAL_CALL typelib_typedescription_register(
 }
 
 
-static inline bool type_equals(
+static bool type_equals(
     typelib_TypeDescriptionReference const * p1, typelib_TypeDescriptionReference const * p2 )
 {
     return (p1 == p2 ||
@@ -1746,7 +1749,7 @@ typelib_TypeDescriptionReference ** copyExceptions(
 }
 
 bool createDerivedInterfaceMemberDescription(
-    typelib_TypeDescription ** result, rtl::OUString const & name,
+    typelib_TypeDescription ** result, OUString const & name,
     typelib_TypeDescriptionReference * baseRef,
     typelib_TypeDescription const * base, typelib_TypeDescription * interface,
     sal_Int32 index, sal_Int32 position)

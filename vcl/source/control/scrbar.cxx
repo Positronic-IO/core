@@ -26,6 +26,7 @@
 #include <svdata.hxx>
 
 #include <rtl/string.hxx>
+#include <sal/log.hxx>
 
 /*  #i77549#
     HACK: for scrollbars in case of thumb rect, page up and page down rect we
@@ -578,11 +579,8 @@ bool ScrollBar::ImplDrawNative(vcl::RenderContext& rRenderContext, sal_uInt16 nD
             if (IsMouseOver())
             {
                 tools::Rectangle* pRect = ImplFindPartRect(GetPointerPosPixel());
-                if (pRect)
-                {
-                    if (pRect == &maThumbRect)
-                        nState |= ControlState::ROLLOVER;
-                }
+                if (pRect && pRect == &maThumbRect)
+                    nState |= ControlState::ROLLOVER;
             }
 
             bNativeOK = rRenderContext.DrawNativeControl(ControlType::Scrollbar, (bHorz ? ControlPart::ThumbHorz : ControlPart::ThumbVert),

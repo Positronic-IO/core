@@ -47,7 +47,7 @@ class SvXMLImport;
  */
 struct ContextID_Index_Pair
 {
-    sal_Int16 nContextID;
+    sal_Int16 const nContextID;
     sal_Int32 nIndex;
 };
 
@@ -57,8 +57,8 @@ class XMLOFF_DLLPUBLIC SvXMLImportPropertyMapper : public salhelper::SimpleRefer
 
     SvXMLImport& rImport;   // access to error handling
 
-    SvXMLImportPropertyMapper(SvXMLImportPropertyMapper &) = delete;
-    void operator =(SvXMLImportPropertyMapper &) = delete;
+    SvXMLImportPropertyMapper(SvXMLImportPropertyMapper const &) = delete;
+    SvXMLImportPropertyMapper& operator =(SvXMLImportPropertyMapper const &) = delete;
 
 protected:
 

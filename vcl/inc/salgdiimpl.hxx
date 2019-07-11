@@ -79,7 +79,7 @@ public:
     virtual void SetFillColor( Color nColor ) = 0;
 
     // enable/disable XOR drawing
-    virtual void SetXORMode( bool bSet ) = 0;
+    virtual void SetXORMode( bool bSet, bool bInvertOnly ) = 0;
 
     // set line color for raster operations
     virtual void SetROPLineColor( SalROPColor nROPColor ) = 0;
@@ -100,15 +100,21 @@ public:
     virtual void drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry ) = 0;
 
     virtual void drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, PCONSTSALPOINT* pPtAry ) = 0;
-    virtual bool drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) = 0;
+
+    virtual bool drawPolyPolygon(
+        const basegfx::B2DHomMatrix& rObjectToDevice,
+        const basegfx::B2DPolyPolygon&,
+        double fTransparency) = 0;
 
     virtual bool drawPolyLine(
+                const basegfx::B2DHomMatrix& rObjectToDevice,
                 const basegfx::B2DPolygon&,
                 double fTransparency,
                 const basegfx::B2DVector& rLineWidths,
                 basegfx::B2DLineJoin,
                 css::drawing::LineCap,
-                double fMiterMinimumAngle) = 0;
+                double fMiterMinimumAngle,
+                bool bPixelSnapHairline) = 0;
 
     virtual bool drawPolyLineBezier(
                 sal_uInt32 nPoints,
@@ -149,7 +155,7 @@ public:
                 const SalBitmap& rSalBitmap,
                 Color nMaskColor ) = 0;
 
-    virtual SalBitmap* getBitmap( long nX, long nY, long nWidth, long nHeight ) = 0;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) = 0;
 
     virtual Color getPixel( long nX, long nY ) = 0;
 

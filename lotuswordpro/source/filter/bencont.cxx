@@ -168,13 +168,11 @@ LtcBenContainer::LtcBenContainer(LwpSvStream * pStream)
 *   @param  buffer pointer
 *   @param  buffer size
 *   @param  number of bytes read
-*   @return BenError
 */
-BenError LtcBenContainer::Read(void * pBuffer, size_t MaxSize,
+void LtcBenContainer::Read(void * pBuffer, size_t MaxSize,
   size_t* pAmtRead)
 {
     *pAmtRead = cpStream->Read(pBuffer, MaxSize);
-    return BenErr_OK;
 }
 /**
 *   Read buffer from bento file with specified size
@@ -194,24 +192,19 @@ BenError LtcBenContainer::ReadKnownSize(void * pBuffer, size_t Amt)
 /**
 *   Seek to position from the beginning of the bento file
 *   @param  position in container file from beginning
-*   @return BenError
 */
-BenError LtcBenContainer::SeekToPosition(BenContainerPos Pos)
+void LtcBenContainer::SeekToPosition(BenContainerPos Pos)
 {
     cpStream->Seek(Pos);
-    return BenErr_OK;
 }
 /**
 *   Seek to position compare to end of bento file
 *   @param  position in container file from end
-*   @return BenError
 */
-BenError LtcBenContainer::SeekFromEnd(long Offset)
+void LtcBenContainer::SeekFromEnd(long Offset)
 {
     cpStream->Seek(STREAM_SEEK_TO_END);
     cpStream->SeekRel(Offset);
-
-    return BenErr_OK;
 }
 /**
 *   Find the next value stream with property name
@@ -251,16 +244,6 @@ LtcUtBenValueStream * LtcBenContainer::FindNextValueStreamWithPropertyName(const
 LtcUtBenValueStream * LtcBenContainer::FindValueStreamWithPropertyName(const char * sPropertyName)
 {
     return FindNextValueStreamWithPropertyName(sPropertyName);
-}
-
-sal_uInt64 GetSvStreamSize(SvStream * pStream)
-{
-    sal_uInt64 nCurPos = pStream->Tell();
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 ulLength = pStream->Tell();
-    pStream->Seek(nCurPos);
-
-    return ulLength;
 }
 
 namespace
@@ -310,12 +293,12 @@ std::vector<sal_uInt8> LtcBenContainer::GetGraphicData(const char *pObjectName)
     sal_uInt64 nDLen = 0;
     if (xD)
     {
-        nDLen = GetSvStreamSize(xD.get());
+        nDLen = xD->TellEnd();
     }
     sal_uInt64 nSLen = 0;
     if (xS)
     {
-        nSLen = GetSvStreamSize(xS.get()) ;
+        nSLen = xS->TellEnd();
     }
 
     sal_uInt64 nLen = nDLen + nSLen;

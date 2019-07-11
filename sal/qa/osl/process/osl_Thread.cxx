@@ -48,8 +48,6 @@
 
 using namespace osl;
 
-using ::rtl::OString;
-
 // Small stopwatch
 class StopWatch {
     TimeValue t1,t2;                                // Start and stoptime
@@ -105,7 +103,6 @@ void StopWatch::stop()
 // pre: Timer should be started
 // post: Timer will stopped
 
-    // gettimeofday(&t2, 0);                         // Ask timer
     osl_getSystemTime( &t2 );
     t_print("# %u %u nsecs\n", static_cast<unsigned>(t2.Seconds), static_cast<unsigned>(t2.Nanosec));
 
@@ -113,18 +110,13 @@ void StopWatch::stop()
     {                                // check if started.
         m_nSeconds = static_cast<sal_Int32>(t2.Seconds) - static_cast<sal_Int32>(t1.Seconds);
         if ( t2.Nanosec > t1.Nanosec )
-               m_nNanoSec = static_cast<sal_Int32>(t2.Nanosec) - static_cast<sal_Int32>(t1.Nanosec);
-           else
-           {
-        m_nNanoSec = 1000000000 + static_cast<sal_Int32>(t2.Nanosec) - static_cast<sal_Int32>(t1.Nanosec);
-                m_nSeconds -= 1;
-    }
-    t_print("# %u %u nsecs\n", static_cast<unsigned>(m_nSeconds), static_cast<unsigned>(m_nNanoSec) );
-        //if (m_nNanoSec < 0)
-        //{
-            //m_nNanoSec += 1000000000;
-            //m_nSeconds -= 1;
-        //}
+            m_nNanoSec = static_cast<sal_Int32>(t2.Nanosec) - static_cast<sal_Int32>(t1.Nanosec);
+        else
+        {
+            m_nNanoSec = 1000000000 + static_cast<sal_Int32>(t2.Nanosec) - static_cast<sal_Int32>(t1.Nanosec);
+            m_nSeconds -= 1;
+        }
+        t_print("# %u %u nsecs\n", static_cast<unsigned>(m_nSeconds), static_cast<unsigned>(m_nNanoSec) );
         m_bIsValid = true;
         m_bIsRunning = false;
     }
@@ -178,19 +170,12 @@ public:
 
 namespace ThreadHelper
 {
-    void thread_sleep_tenth_sec(sal_Int32 _nTenthSec)
+    static void thread_sleep_tenth_sec(sal_Int32 _nTenthSec)
     {
-#ifdef _WIN32
-        Sleep(_nTenthSec * 100 );
-#else
-        TimeValue nTV;
-        nTV.Seconds = static_cast<sal_uInt32>( _nTenthSec/10 );
-        nTV.Nanosec = ( (_nTenthSec%10 ) * 100000000 );
-        osl_waitThread(&nTV);
-#endif
+        osl::Thread::wait(std::chrono::milliseconds(_nTenthSec * 100));
     }
 
-    void outputPriority(oslThreadPriority const& _aPriority)
+    static void outputPriority(oslThreadPriority const& _aPriority)
     {
         // LLA: output the priority
         if (_aPriority == osl_Thread_PriorityHighest)
@@ -411,7 +396,7 @@ public:
 namespace osl_Thread
 {
 
-    void resumeAndWaitThread(Thread* _pThread)
+    static void resumeAndWaitThread(Thread* _pThread)
     {
         // This function starts a thread, wait a second and suspends the thread
         // Due to the fact, that a suspend and never run thread never really exists.
@@ -429,7 +414,7 @@ namespace osl_Thread
     }
 
     // kill a running thread and join it, if it has terminated, do nothing
-    void termAndJoinThread(Thread* _pThread)
+    static void termAndJoinThread(Thread* _pThread)
     {
         _pThread->terminate();
 
@@ -575,7 +560,7 @@ namespace osl_Thread
 
     /** when the count value equal to or more than 3, suspend the thread.
     */
-    void suspendCountThread(OCountThread* _pCountThread)
+    static void suspendCountThread(OCountThread* _pCountThread)
     {
         sal_Int32 nValue = 0;
         while (true)
@@ -948,9 +933,9 @@ namespace osl_Thread
     {
     public:
         // insert your test code here.
-        rtl::OString getPrioName(oslThreadPriority _aPriority)
+        OString getPrioName(oslThreadPriority _aPriority)
             {
-                rtl::OString sPrioStr;
+                OString sPrioStr;
                 switch (_aPriority)
                 {
                 case osl_Thread_PriorityHighest:
@@ -1010,7 +995,7 @@ namespace osl_Thread
                 sal_Int32 nValueNormal2 = 0;
                 nValueNormal2 = p2Thread->getValue();
 
-                rtl::OString sPrio = getPrioName(_aPriority);
+                OString sPrio = getPrioName(_aPriority);
                 t_print("After 10 tenth seconds\n");
 
                 t_print("nValue in %s Prio Thread is  %d\n",sPrio.getStr(), static_cast<int>(nValueNormal));
@@ -1696,7 +1681,7 @@ namespace osl_Thread
 } // namespace osl_Thread
 
 // destroy function when the binding thread terminate
-void destroyCallback(void * data)
+static void destroyCallback(void * data)
 {
     delete[] static_cast<char *>(data);
 }

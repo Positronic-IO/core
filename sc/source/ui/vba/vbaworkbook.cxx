@@ -20,8 +20,6 @@
 #include <vbahelper/helperdecl.hxx>
 #include <tools/urlobj.hxx>
 #include <boost/optional.hpp>
-#include <comphelper/unwrapargs.hxx>
-#include <comphelper/servicehelper.hxx>
 
 #include <com/sun/star/util/XModifiable.hpp>
 #include <com/sun/star/util/XProtectable.hpp>
@@ -201,6 +199,9 @@ ScVbaWorkbook::init()
 {
     if ( !ColorData.getLength() )
         ResetColors();
+    uno::Reference< frame::XModel > xModel( getModel(), uno::UNO_QUERY );
+    if ( xModel.is() )
+        excel::getDocShell( xModel )->RegisterAutomationWorkbookObject( this );
 }
 
 ScVbaWorkbook::ScVbaWorkbook(   const css::uno::Reference< ov::XHelperInterface >& xParent, const css::uno::Reference< css::uno::XComponentContext >& xContext, css::uno::Reference< css::frame::XModel > const & xModel ) : ScVbaWorkbook_BASE( xParent, xContext, xModel )
@@ -290,6 +291,24 @@ void SAL_CALL ScVbaWorkbook::setPrecisionAsDisplayed( sal_Bool _precisionAsDispl
     ScDocOptions aOpt = rDoc.GetDocOptions();
     aOpt.SetCalcAsShown( _precisionAsDisplayed );
     rDoc.SetDocOptions( aOpt );
+}
+
+OUString SAL_CALL ScVbaWorkbook::getAuthor()
+{
+    uno::Reference<document::XDocumentPropertiesSupplier> xDPS( getModel(), uno::UNO_QUERY );
+    if (!xDPS.is())
+        return OUString("?");
+    uno::Reference<document::XDocumentProperties> xDocProps = xDPS->getDocumentProperties();
+    return xDocProps->getAuthor();
+}
+
+void SAL_CALL ScVbaWorkbook::setAuthor( const OUString& _author )
+{
+    uno::Reference<document::XDocumentPropertiesSupplier> xDPS( getModel(), uno::UNO_QUERY );
+    if (!xDPS.is())
+        return;
+    uno::Reference<document::XDocumentProperties> xDocProps = xDPS->getDocumentProperties();
+    xDocProps->setAuthor( _author );
 }
 
 void

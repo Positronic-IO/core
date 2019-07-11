@@ -20,12 +20,10 @@
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLCELLI_HXX
 
 #include "XMLDetectiveContext.hxx"
-#include "XMLCellRangeSourceContext.hxx"
 #include "importcontext.hxx"
 #include <formula/grammar.hxx>
 #include <svl/itemset.hxx>
 #include <editeng/editdata.hxx>
-#include <editeng/flditem.hxx>
 
 #include <boost/optional.hpp>
 #include <memory>
@@ -34,7 +32,9 @@
 class ScXMLImport;
 class ScFormulaCell;
 class ScEditEngineDefaulter;
+class SvxFieldData;
 struct ScXMLAnnotationData;
+struct ScMyImpCellRangeSource;
 
 class ScXMLTableRowCellContext : public ScXMLImportContext
 {
@@ -48,13 +48,13 @@ class ScXMLTableRowCellContext : public ScXMLImportContext
 
     struct Field
     {
-        tools::SvRef<SvxFieldData> mpData;
+        std::unique_ptr<SvxFieldData> mpData;
         ESelection maSelection;
 
         Field(const Field&) = delete;
         const Field& operator=(const Field&) = delete;
 
-        explicit Field(SvxFieldData* pData);
+        explicit Field(std::unique_ptr<SvxFieldData> pData);
         ~Field();
     };
 
@@ -85,7 +85,7 @@ class ScXMLTableRowCellContext : public ScXMLImportContext
     sal_Int16   nCellType;
     bool        bIsMerged;
     bool        bIsMatrix;
-    bool        bIsCovered;
+    bool const  bIsCovered;
     bool        bIsEmpty;
     bool        mbNewValueType;
     bool        mbErrorValue;
@@ -121,7 +121,7 @@ class ScXMLTableRowCellContext : public ScXMLImportContext
 
     bool IsPossibleErrorString() const;
 
-    void PushParagraphField(SvxFieldData* pData, const OUString& rStyleName);
+    void PushParagraphField(std::unique_ptr<SvxFieldData> pData, const OUString& rStyleName);
 
     void PushFormat(sal_Int32 nBegin, sal_Int32 nEnd, const OUString& rStyleName);
 

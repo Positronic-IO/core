@@ -45,6 +45,8 @@ class GraphicAttr;
 class SwPageDesc;
 class SwFrameFormats;
 class SwRegionRects;
+class SwTextNode;
+namespace sw { struct Extent; }
 
 #define FAR_AWAY (SAL_MAX_INT32 - 20000)  // initial position of a Fly
 #define BROWSE_HEIGHT (56700L * 10L) // 10 Meters
@@ -54,6 +56,19 @@ class SwRegionRects;
 
 void AppendObjs( const SwFrameFormats *pTable, sal_uLong nIndex,
                        SwFrame *pFrame, SwPageFrame *pPage, SwDoc* doc );
+
+void AppendObjsOfNode(SwFrameFormats const* pTable, sal_uLong nIndex,
+        SwFrame * pFrame, SwPageFrame * pPage, SwDoc * pDoc,
+        std::vector<sw::Extent>::const_iterator * pIter,
+        std::vector<sw::Extent>::const_iterator const* pEnd);
+
+void RemoveHiddenObjsOfNode(SwTextNode const& rNode,
+        std::vector<sw::Extent>::const_iterator * pIter,
+        std::vector<sw::Extent>::const_iterator const* pEnd);
+
+bool IsAnchoredObjShown(SwTextFrame const& rFrame, SwFormatAnchor const& rAnchor);
+
+void AppendAllObjs(const SwFrameFormats* pTable, const SwFrame* pSib);
 
 // draw background with brush or graphics
 // The 6th parameter indicates that the method should consider background
@@ -156,13 +171,23 @@ bool IsFrameInSameContext( const SwFrame *pInnerFrame, const SwFrame *pFrame );
 
 const SwFrame * FindPage( const SwRect &rRect, const SwFrame *pPage );
 
-// used by SwContentNode::GetFrame and SwFlyFrame::GetFrame
+/** @see SwContentNode::getLayoutFrame()
+    @param pPos
+      Document model position; for a text frame, the returned frame will be
+      one containing this position.
+    @param pViewPosAndCalcFrame
+      First is a point in the document view; the returned frame will be the one
+      with the minimal distance to this point.  To get the first frame in the
+      document, pass in a default-initialized Point with coordinates 0,0.
+      Second indicates whether the frames should be formatted before retrieving
+      their position for the test; this cannot be done by every caller so use
+      with care!
+ */
 SwFrame* GetFrameOfModify( const SwRootFrame* pLayout,
                        SwModify const&,
                        SwFrameType const nFrameType,
-                       const Point* = nullptr,
                        const SwPosition *pPos = nullptr,
-                       const bool bCalcFrame = false );
+                       std::pair<Point, bool> const* pViewPosAndCalcFrame = nullptr);
 
 // Should extra data (redline stroke, line numbers) be painted?
 bool IsExtraData( const SwDoc *pDoc );
@@ -182,7 +207,7 @@ protected:
     SwTwips mnFlyAnchorOfstNoWrap;
     bool     mbHadFollow;
     bool     mbInvaKeep;
-    bool     mbValidSize;
+    bool const     mbValidSize;
 
 public:
     SwFrameNotify( SwFrame *pFrame );
@@ -206,7 +231,7 @@ public:
 
 class SwFlyNotify : public SwLayNotify
 {
-    SwPageFrame *pOldPage;
+    SwPageFrame * const pOldPage;
     const SwRect aFrameAndSpace;
 
 public:
@@ -255,9 +280,6 @@ class SwBorderAttrs : public SwCacheObj
     const SvxBoxItem     &m_rBox;
     const SvxShadowItem  &m_rShadow;
     const Size            m_aFrameSize;
-
-    // Is it a frame that can have a margin without a border?
-    bool m_bBorderDist  : 1;
 
     // the following bool values set the cached values to INVALID - until they
     // are calculated for the first time
@@ -328,8 +350,6 @@ class SwBorderAttrs : public SwCacheObj
                        const SwFrame *pCmp ) const;
 
 public:
-    DECL_FIXEDMEMPOOL_NEWDEL(SwBorderAttrs)
-
     SwBorderAttrs( const SwModify *pOwner, const SwFrame *pConstructor );
     virtual ~SwBorderAttrs() override;
 
@@ -350,8 +370,6 @@ public:
     inline bool IsLine() const;
 
     const Size &GetSize()     const { return m_aFrameSize; }
-
-    bool IsBorderDist() const { return m_bBorderDist; }
 
     // Should upper (or lower) border be evaluated for this frame?
     // #i25029# - If <_pPrevFrame> is set, its value is taken for testing, if
@@ -389,7 +407,6 @@ class SwOrderIter
 {
     const SwPageFrame *m_pPage;
     const SdrObject *m_pCurrent;
-    const bool m_bFlysOnly;
 
 public:
     SwOrderIter( const SwPageFrame *pPage );
@@ -544,11 +561,7 @@ private:
     const SwModify* mpRegIn;
 
 public:
-    SwDeletionChecker( const SwFrame* pFrame )
-            : mpFrame( pFrame ),
-              mpRegIn( pFrame ? const_cast<SwFrame*>(pFrame)->GetRegisteredIn() : nullptr )
-    {
-    }
+    SwDeletionChecker(const SwFrame* pFrame);
 
     /**
      *  return

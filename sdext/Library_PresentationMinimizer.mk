@@ -33,6 +33,9 @@ $(eval $(call gb_Library_use_libraries,PresentationMinimizer,\
     cppu \
     cppuhelper \
     sal \
+	sfx \
+	svt \
+	vcl \
     tl \
 ))
 

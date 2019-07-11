@@ -22,6 +22,8 @@
 #include <tools/debug.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
@@ -70,12 +72,6 @@ XMLRedlineExport::XMLRedlineExport(SvXMLExport& rExp)
 
 XMLRedlineExport::~XMLRedlineExport()
 {
-    // delete changes lists
-    for (auto const& change : aChangeMap)
-    {
-        delete change.second;
-    }
-    aChangeMap.clear();
 }
 
 
@@ -128,10 +124,10 @@ void XMLRedlineExport::ExportChangesList(
     ChangesMapType::iterator aFind = aChangeMap.find(rText);
     if (aFind != aChangeMap.end())
     {
-        ChangesVectorType* pChangesList = aFind->second;
+        ChangesVectorType* pChangesList = aFind->second.get();
 
         // export only if changes are found
-        if (pChangesList->size() > 0)
+        if (!pChangesList->empty())
         {
             // changes container element
             SvXMLElementExport aChanges(rExport, XML_NAMESPACE_TEXT,
@@ -159,11 +155,11 @@ void XMLRedlineExport::SetCurrentXText(
         if (aIter == aChangeMap.end())
         {
             ChangesVectorType* pList = new ChangesVectorType;
-            aChangeMap[rText] = pList;
+            aChangeMap[rText].reset( pList );
             pCurrentChangesList = pList;
         }
         else
-            pCurrentChangesList = aIter->second;
+            pCurrentChangesList = aIter->second.get();
     }
     else
     {
@@ -373,7 +369,7 @@ void XMLRedlineExport::ExportChangedRegion(
         //       be exported there
     }
 
-    // changed change? Hierarchical changes can onl be two levels
+    // changed change? Hierarchical changes can only be two levels
     // deep. Here we check for the second level.
     aAny = rPropSet->getPropertyValue("RedlineSuccessorData");
     Sequence<PropertyValue> aSuccessorData;

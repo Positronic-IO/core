@@ -60,7 +60,7 @@ using ::com::sun::star::accessibility::XAccessible;
 struct LanguageDependentProp
 {
     const char* pPropName;
-    sal_Int32   nPropNameLength;
+    sal_Int32 const nPropNameLength;
 };
 
 static const LanguageDependentProp aLanguageDependentProp[] =
@@ -140,7 +140,7 @@ UnoControl::UnoControl() :
     , mpData( new UnoControl_Data )
 {
     mbDisposePeer = true;
-    mbRefeshingPeer = false;
+    mbRefreshingPeer = false;
     mbCreatingPeer = false;
     mbCreatingCompatiblePeer = false;
     mbDesignMode = false;
@@ -412,8 +412,7 @@ void UnoControl::propertiesChange( const Sequence< PropertyChangeEvent >& rEvent
             for ( ; pEvents < pEventsEnd; )
                 if ( mpData->aSuspendedPropertyNotifications.find( pEvents->PropertyName ) != mpData->aSuspendedPropertyNotifications.end() )
                 {
-                    if ( pEvents != pEventsEnd )
-                        ::std::copy( pEvents + 1, pEventsEnd, pEvents );
+                    std::copy(pEvents + 1, pEventsEnd, pEvents);
                     --pEventsEnd;
                 }
                 else
@@ -499,7 +498,7 @@ void UnoControl::ImplModelPropertiesChanged( const Sequence< PropertyChangeEvent
         }
 
         sal_uInt16 nPType = GetPropertyId( pEvents->PropertyName );
-        if ( mbDesignMode && mbDisposePeer && !mbRefeshingPeer && !mbCreatingPeer )
+        if ( mbDesignMode && mbDisposePeer && !mbRefreshingPeer && !mbCreatingPeer )
         {
             // if we're in design mode, then some properties can change which
             // require creating a *new* peer (since these properties cannot
@@ -620,10 +619,10 @@ void UnoControl::ImplModelPropertiesChanged( const Sequence< PropertyChangeEvent
         getPeer()->dispose();
         mxPeer.clear();
         mxVclWindowPeer = nullptr;
-        mbRefeshingPeer = true;
+        mbRefreshingPeer = true;
         Reference< XWindowPeer >    xP( xParent, UNO_QUERY );
         xThis->createPeer( Reference< XToolkit > (), xP );
-        mbRefeshingPeer = false;
+        mbRefreshingPeer = false;
         aPeerPropertiesToSet.clear();
     }
 
@@ -644,13 +643,9 @@ void UnoControl::ImplModelPropertiesChanged( const Sequence< PropertyChangeEvent
     // setting peer properties may result in an attempt to acquire the solar mutex, 'cause the peers
     // usually don't have an own mutex but use the SolarMutex instead.
     // To prevent deadlocks resulting from this, we do this without our own mutex locked
-    std::vector< PropertyValue >::iterator aEnd = aPeerPropertiesToSet.end();
-    for (   std::vector< PropertyValue >::iterator aLoop = aPeerPropertiesToSet.begin();
-            aLoop != aEnd;
-            ++aLoop
-        )
+    for (const auto& rProp : aPeerPropertiesToSet)
     {
-        ImplSetPeerProperty( aLoop->Name, aLoop->Value );
+        ImplSetPeerProperty( rProp.Name, rProp.Value );
     }
 
 }
@@ -1166,6 +1161,16 @@ void UnoControl::createPeer( const Reference< XToolkit >& rxToolkit, const Refer
         bool b = bool();
         if ( ( aVal >>= b ) && b)
             aDescr.WindowAttributes |= WindowAttribute::MOVEABLE;
+    }
+
+    // Sizeable
+    aPropName = GetPropertyName( BASEPROPERTY_SIZEABLE );
+    if ( xInfo->hasPropertyByName( aPropName ) )
+    {
+        aVal = xPSet->getPropertyValue( aPropName );
+        bool b = bool();
+        if ( ( aVal >>= b ) && b)
+            aDescr.WindowAttributes |= WindowAttribute::SIZEABLE;
     }
 
     // Closeable

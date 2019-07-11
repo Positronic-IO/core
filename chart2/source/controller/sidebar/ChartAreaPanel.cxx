@@ -14,6 +14,8 @@
 #include <PropertyHelper.hxx>
 
 #include <chartview/DrawModelWrapper.hxx>
+#include <com/sun/star/util/XModifyBroadcaster.hpp>
+#include <com/sun/star/chart2/XDiagram.hpp>
 
 #include <editeng/memberids.h>
 #include <svx/xfltrit.hxx>
@@ -329,7 +331,7 @@ void ChartAreaPanel::setFillFloatTransparence(
         return;
     }
 
-    OUString aName = rItem.GetName();
+    const OUString& aName = rItem.GetName();
     css::uno::Any aGradientVal;
     rItem.QueryValue(aGradientVal, MID_FILLGRADIENT);
     OUString aNewName = PropertyHelper::addTransparencyGradientUniqueNameToTable(aGradientVal, css::uno::Reference<css::lang::XMultiServiceFactory>(mxModel, css::uno::UNO_QUERY_THROW), aName);
@@ -397,7 +399,7 @@ void ChartAreaPanel::setFillStyleAndBitmap(const XFillStyleItem* pStyleItem,
 
     css::uno::Any aBitmap;
     rBitmapItem.QueryValue(aBitmap, MID_BITMAP);
-    OUString aPreferredName = rBitmapItem.GetName();
+    const OUString& aPreferredName = rBitmapItem.GetName();
     aBitmap <<= PropertyHelper::addBitmapUniqueNameToTable(aBitmap, css::uno::Reference<css::lang::XMultiServiceFactory>(mxModel, css::uno::UNO_QUERY_THROW), aPreferredName);
     xPropSet->setPropertyValue("FillBitmapName", aBitmap);
 }

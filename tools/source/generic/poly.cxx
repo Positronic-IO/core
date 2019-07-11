@@ -53,7 +53,7 @@
 #define SMALL_DVALUE    0.0000001
 #define FSQRT2          1.4142135623730950488016887242097
 
-inline double ImplGetParameter( const Point& rCenter, const Point& rPt, double fWR, double fHR )
+static double ImplGetParameter( const Point& rCenter, const Point& rPt, double fWR, double fHR )
 {
     const long nDX = rPt.X() - rCenter.X();
     double fAngle = atan2( -rPt.Y() + rCenter.Y(), ( ( nDX == 0 ) ? 0.000000001 : nDX ) );
@@ -110,8 +110,8 @@ ImplPolygon::ImplPolygon( const tools::Rectangle& rRect )
          mxPointAry[2] = rRect.BottomRight();
          mxPointAry[3] = rRect.BottomLeft();
          mxPointAry[4] = rRect.TopLeft();
-     }
-     else
+    }
+    else
         mnPoints = 0;
 }
 
@@ -149,16 +149,16 @@ ImplPolygon::ImplPolygon( const tools::Rectangle& rRect, sal_uInt32 nHorzRound, 
             Point* pDstAry = mxPointAry.get();
 
             for( i = 0, nEnd = nSize4; i < nEnd; i++ )
-                ( pDstAry[ i ] = pSrcAry[ i ] ) += aTR;
+                pDstAry[ i ] = pSrcAry[ i ] + aTR;
 
             for( nEnd = nEnd + nSize4; i < nEnd; i++ )
-                ( pDstAry[ i ] = pSrcAry[ i ] ) += aTL;
+                pDstAry[ i ] = pSrcAry[ i ] + aTL;
 
             for( nEnd = nEnd + nSize4; i < nEnd; i++ )
-                ( pDstAry[ i ] = pSrcAry[ i ] ) += aBL;
+                pDstAry[ i ] = pSrcAry[ i ] + aBL;
 
             for( nEnd = nEnd + nSize4; i < nEnd; i++ )
-                ( pDstAry[ i ] = pSrcAry[ i ] ) += aBR;
+                pDstAry[ i ] = pSrcAry[ i ] + aBR;
 
             pDstAry[ nEnd ] = pDstAry[ 0 ];
         }
@@ -1054,7 +1054,8 @@ void Polygon::Optimize( PolyOptimizeFlags nOptimizeFlags )
                     if( ( mpImplPolygon->mxPointAry[ i ] != mpImplPolygon->mxPointAry[ nLast ] ) &&
                         ( !nReduce || ( nReduce < FRound( CalcDistance( nLast, i ) ) ) ) )
                     {
-                        aNewPoly[ nNewCount++ ] = mpImplPolygon->mxPointAry[ nLast = i ];
+                        nLast = i;
+                        aNewPoly[ nNewCount++ ] = mpImplPolygon->mxPointAry[ i ];
                     }
                 }
 
@@ -1292,7 +1293,8 @@ void Polygon::ImplReduceEdges( tools::Polygon& rPoly, const double& rArea, sal_u
                 else
                 {
                     Vector2D    aVecB( rPoly[ nIndNext ] );
-                    double      fDistB = ( aVecB -= Vector2D(rPoly[ nIndPrev ] )).GetLength();
+                    aVecB -= Vector2D(rPoly[ nIndPrev ] );
+                    double      fDistB = aVecB.GetLength();
                     double      fLenWithB = fDist2 + fDist3;
                     double      fLenFact = ( fDistB != 0.0 ) ? fLenWithB / fDistB : 1.0;
                     double      fTurnPrev = aVec1.Normalize().Scalar( aVec2 );
@@ -1302,14 +1304,14 @@ void Polygon::ImplReduceEdges( tools::Polygon& rPoly, const double& rArea, sal_u
                     if( fabs( fTurnPrev ) < ( 1.0 + SMALL_DVALUE ) && fabs( fTurnPrev ) > ( 1.0 - SMALL_DVALUE ) )
                         fGradPrev = 0.0;
                     else
-                        fGradPrev = acos( fTurnPrev ) / ( aVec1.IsNegative( aVec2 ) ? -F_PI180 : F_PI180 );
+                        fGradPrev = basegfx::rad2deg(acos(fTurnPrev)) * (aVec1.IsNegative(aVec2) ? -1 : 1);
 
-                    fGradB = acos( fTurnB ) / ( aVec2.IsNegative( aVec3 ) ? -F_PI180 : F_PI180 );
+                    fGradB = basegfx::rad2deg(acos(fTurnB)) * (aVec2.IsNegative(aVec3) ? -1 : 1);
 
                     if( fabs( fTurnNext ) < ( 1.0 + SMALL_DVALUE ) && fabs( fTurnNext ) > ( 1.0 - SMALL_DVALUE ) )
                         fGradNext = 0.0;
                     else
-                        fGradNext = acos( fTurnNext ) / ( aVec3.IsNegative( aVec4 ) ? -F_PI180 : F_PI180 );
+                        fGradNext = basegfx::rad2deg(acos(fTurnNext)) * (aVec3.IsNegative(aVec4) ? -1 : 1);
 
                     if( ( fGradPrev > 0.0 && fGradB < 0.0 && fGradNext > 0.0 ) ||
                         ( fGradPrev < 0.0 && fGradB > 0.0 && fGradNext < 0.0 ) )
@@ -1708,7 +1710,7 @@ void Polygon::Write( SvStream& rOStream ) const
 }
 
 // #i74631#/#i115917# numerical correction method for B2DPolygon
-void impCorrectContinuity(basegfx::B2DPolygon& roPolygon, sal_uInt32 nIndex, PolyFlags nCFlag)
+static void impCorrectContinuity(basegfx::B2DPolygon& roPolygon, sal_uInt32 nIndex, PolyFlags nCFlag)
 {
     const sal_uInt32 nPointCount(roPolygon.count());
     OSL_ENSURE(nIndex < nPointCount, "impCorrectContinuity: index access out of range (!)");

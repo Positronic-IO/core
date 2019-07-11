@@ -22,17 +22,19 @@
 
 #include <svtools/svtdllapi.h>
 
+#include <vcl/customweld.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/image.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/field.hxx>
+#include <vcl/weld.hxx>
 
 #include <com/sun/star/table/BorderLineStyle.hpp>
-#include <o3tl/typed_flags_set.hxx>
 #include <memory>
 
+class BorderWidthImpl;
 class FontList;
 class ImpLineListData;
 enum class SvxBorderLineStyle : sal_Int16;
@@ -52,7 +54,7 @@ All scalar numbers in 1/100 of the corresponding unit.
 
 Line1 is the outer, Line2 the inner line, Distance is the distance between
 these two lines. If Line2 == 0, only Line1 will be shown. Defaults for
-source and target unit are FUNIT_POINT.
+source and target unit are FieldUnit::POINT.
 
 SetColor() sets the line color.
 
@@ -129,58 +131,6 @@ FontList; FontNameBox; FontStyleBox; FontSizeMenu
 
 *************************************************************************/
 
-/**
-    Class computing border widths shared between Line style listbox and the
-    SvxBorderLine implementation.
-
-    This class doesn't know anything about units: it all depends on the different
-    values set. A border is composed of 2 lines separated by a gap. The computed
-    widths are the ones of each line and the gap and they can either be fix or vary.
-
-    The #m_nflags member will define which widths will vary (value 0 means that all
-    widths are fixed). The available flags are:
-     - CHANGE_LINE1
-     - CHANGE_LINE2
-     - CHANGE_DIST
-
-    For each line, the rate member is used as a multiplication factor is the width
-    isn't fixed. Otherwise it is the width in the unit expected by the client code.
- */
-enum class BorderWidthImplFlags
-{
-    FIXED           = 0,
-    CHANGE_LINE1    = 1,
-    CHANGE_LINE2    = 2,
-    CHANGE_DIST     = 4,
-};
-namespace o3tl
-{
-    template<> struct typed_flags<BorderWidthImplFlags> : is_typed_flags<BorderWidthImplFlags, 0x07> {};
-}
-class SVT_DLLPUBLIC BorderWidthImpl
-{
-    BorderWidthImplFlags m_nFlags;
-    double m_nRate1;
-    double m_nRate2;
-    double m_nRateGap;
-
-public:
-
-    BorderWidthImpl( BorderWidthImplFlags nFlags = BorderWidthImplFlags::CHANGE_LINE1, double nRate1 = 0.0,
-            double nRate2 = 0.0, double nRateGap = 0.0 );
-
-    bool operator== ( const BorderWidthImpl& r ) const;
-
-    long GetLine1 ( long nWidth ) const;
-    long GetLine2( long nWidth ) const;
-    long GetGap( long nWidth ) const;
-
-    long GuessWidth( long nLine1, long nLine2, long nGap );
-
-    bool IsEmpty( ) const { return (0 == m_nRate1) && (0 == m_nRate2); }
-    bool IsDouble( ) const { return (0 != m_nRate1) && (0 != m_nRate2);  }
-};
-
 inline Color sameColor( Color rMain )
 {
     return rMain;
@@ -214,23 +164,19 @@ public:
                         ColorFunc pColor2Fn = &sameColor,
                         ColorDistFunc pColorDistFn = &sameDistColor);
 
-    using ListBox::GetEntryPos;
-    sal_Int32       GetEntryPos( SvxBorderLineStyle nStyle ) const;
     SvxBorderLineStyle GetEntryStyle( sal_Int32 nPos ) const;
 
-    void            SelectEntry( SvxBorderLineStyle nStyle, bool bSelect = true );
     SvxBorderLineStyle GetSelectEntryStyle() const;
 
     void            SetSourceUnit( FieldUnit eNewUnit ) { eSourceUnit = eNewUnit; }
 
-    void            SetColor( const Color& rColor );
     const Color&    GetColor() const { return aColor; }
 
 private:
 
     SVT_DLLPRIVATE void         ImpGetLine( long nLine1, long nLine2, long nDistance,
                                     Color nColor1, Color nColor2, Color nColorDist,
-                                    SvxBorderLineStyle nStyle, Bitmap& rBmp );
+                                    SvxBorderLineStyle nStyle, BitmapEx& rBmp );
     using Window::ImplInit;
     void            UpdatePaintLineColor();       // returns sal_True if maPaintCol has changed
     virtual void    DataChanged( const DataChangedEvent& rDCEvt ) override;
@@ -251,17 +197,10 @@ private:
     OUString        m_sNone;
     ScopedVclPtr<VirtualDevice>   aVirDev;
     Size            aTxtSize;
-    Color           aColor;
+    Color const     aColor;
     Color           maPaintCol;
     FieldUnit       eSourceUnit;
 };
-
-inline void LineListBox::SetColor( const Color& rColor )
-{
-    aColor = rColor;
-
-    UpdateEntries( m_nWidth );
-}
 
 const Color& LineListBox::GetPaintColor() const
 {
@@ -279,6 +218,96 @@ inline void LineListBox::SetNone( const OUString& sNone )
 {
     m_sNone = sNone;
 }
+
+class SvtValueSet;
+
+class SVT_DLLPUBLIC SvtLineListBox
+{
+public:
+    typedef Color (*ColorFunc)(Color);
+    typedef Color (*ColorDistFunc)(Color, Color);
+
+    SvtLineListBox(std::unique_ptr<weld::MenuButton> pControl);
+    ~SvtLineListBox();
+
+    /** Set the width in Twips */
+    void SetWidth(long nWidth)
+    {
+        m_nWidth = nWidth;
+        UpdateEntries();
+        UpdatePreview();
+    }
+
+    long GetWidth() const { return m_nWidth; }
+
+    /** Insert a listbox entry with all widths in Twips. */
+    void            InsertEntry(const BorderWidthImpl& rWidthImpl,
+                        SvxBorderLineStyle nStyle, long nMinWidth = 0,
+                        ColorFunc pColor1Fn = &sameColor,
+                        ColorFunc pColor2Fn = &sameColor,
+                        ColorDistFunc pColorDistFn = &sameDistColor);
+
+    void            SelectEntry( SvxBorderLineStyle nStyle );
+    SvxBorderLineStyle GetSelectEntryStyle() const;
+
+    void            SetSourceUnit( FieldUnit eNewUnit ) { eSourceUnit = eNewUnit; }
+
+    void            SetColor( const Color& rColor )
+    {
+        aColor = rColor;
+        UpdateEntries();
+        UpdatePreview();
+    }
+
+    const Color&    GetColor() const { return aColor; }
+
+    void            SetSelectHdl(const Link<SvtLineListBox&,void>& rLink) { maSelectHdl = rLink; }
+
+    void            set_sensitive(bool bSensitive) { m_xControl->set_sensitive(bSensitive); }
+
+private:
+
+    SVT_DLLPRIVATE void         ImpGetLine( long nLine1, long nLine2, long nDistance,
+                                    Color nColor1, Color nColor2, Color nColorDist,
+                                    SvxBorderLineStyle nStyle, BitmapEx& rBmp );
+
+    void            UpdatePaintLineColor();       // returns sal_True if maPaintCol has changed
+    DECL_LINK(StyleUpdated, weld::Widget&, void);
+    DECL_LINK(ValueSelectHdl, SvtValueSet*, void);
+    DECL_LINK(FocusHdl, weld::Widget&, void);
+    DECL_LINK(NoneHdl, weld::Button&, void);
+
+    void            UpdateEntries();
+    sal_Int32       GetStylePos(sal_Int32 nListPos);
+
+    const Color&    GetPaintColor() const
+    {
+        return maPaintCol;
+    }
+    Color   GetColorLine1( sal_Int32  nPos );
+    Color   GetColorLine2( sal_Int32  nPos );
+    Color   GetColorDist( sal_Int32  nPos );
+
+    void UpdatePreview();
+
+                    SvtLineListBox( const SvtLineListBox& ) = delete;
+    SvtLineListBox&    operator =( const SvtLineListBox& ) = delete;
+
+    std::unique_ptr<weld::MenuButton> m_xControl;
+    std::unique_ptr<weld::Builder> m_xBuilder;
+    std::unique_ptr<weld::Widget> m_xTopLevel;
+    std::unique_ptr<weld::Button> m_xNoneButton;
+    std::unique_ptr<SvtValueSet> m_xLineSet;
+    std::unique_ptr<weld::CustomWeld> m_xLineSetWin;
+
+    std::vector<std::unique_ptr<ImpLineListData>> m_vLineList;
+    long            m_nWidth;
+    ScopedVclPtr<VirtualDevice>   aVirDev;
+    Color           aColor;
+    Color           maPaintCol;
+    FieldUnit       eSourceUnit;
+    Link<SvtLineListBox&,void> maSelectHdl;
+};
 
 class SVT_DLLPUBLIC FontNameBox : public ComboBox
 {
@@ -328,60 +357,56 @@ public:
     virtual void    Modify() override;
     virtual Size    GetOptimalSize() const override;
 
-    void            SetText( const OUString& rText ) override;
-    void            Fill( const OUString& rName, const FontList* pList );
+    void            SetText( const OUString& rText ) override
+    {
+        aLastStyle = rText;
+        ComboBox::SetText( rText );
+    }
 
 private:
                     FontStyleBox( const FontStyleBox& ) = delete;
     FontStyleBox&   operator =( const FontStyleBox& ) = delete;
 };
 
-inline void FontStyleBox::SetText( const OUString& rText )
+class SVT_DLLPUBLIC SvtFontStyleBox
 {
-    aLastStyle = rText;
-    ComboBox::SetText( rText );
-}
+    std::unique_ptr<weld::ComboBox> m_xComboBox;
+public:
+    SvtFontStyleBox(std::unique_ptr<weld::ComboBox> p);
+
+    void Fill(const OUString& rName, const FontList* pList);
+
+    void connect_changed(const Link<weld::ComboBox&, void>& rLink) { m_xComboBox->connect_changed(rLink); }
+    OUString get_active_text() const { return m_xComboBox->get_active_text(); }
+    void set_active_text(const OUString& rText) { m_xComboBox->set_active_text(rText); }
+    void append_text(const OUString& rStr) { m_xComboBox->append_text(rStr); }
+    void set_sensitive(bool bSensitive) { m_xComboBox->set_sensitive(bSensitive); }
+    void save_value() { m_xComboBox->save_value(); }
+    OUString const& get_saved_value() const { return m_xComboBox->get_saved_value(); }
+    int get_count() const { return m_xComboBox->get_count(); }
+    int find_text(const OUString& rStr) const { return m_xComboBox->find_text(rStr); }
+private:
+    SvtFontStyleBox(const SvtFontStyleBox& ) = delete;
+    SvtFontStyleBox& operator=(const SvtFontStyleBox&) = delete;
+};
 
 class SVT_DLLPUBLIC FontSizeBox : public MetricBox
 {
     FontMetric       aFontMetric;
-    const FontList* pFontList;
-    sal_uInt16          nRelMin;
-    sal_uInt16          nRelMax;
-    sal_uInt16          nRelStep;
-    short           nPtRelMin;
-    short           nPtRelMax;
-    short           nPtRelStep;
-    bool            bRelativeMode:1,
-                    bRelative:1,
-                    bPtRelative:1,
-                    bStdSize:1;
+    bool             bStdSize:1;
 
     using Window::ImplInit;
     SVT_DLLPRIVATE void         ImplInit();
 
 protected:
-    virtual OUString CreateFieldText( sal_Int64 nValue ) const override;
     virtual sal_Int64 GetValueFromStringUnit(const OUString& rStr, FieldUnit eOutUnit) const override;
 
 public:
                     FontSizeBox( vcl::Window* pParent, WinBits nWinStyle );
 
     void            Reformat() override;
-    void            Modify() override;
 
     void            Fill( const FontMetric* pFontMetric, const FontList* pList );
-
-    void            EnableRelativeMode( sal_uInt16 nMin, sal_uInt16 nMax,
-                                        sal_uInt16 nStep = 5 );
-    void            EnablePtRelativeMode( short nMin, short nMax,
-                                          short nStep = 10 );
-    bool            IsRelativeMode() const { return bRelativeMode; }
-    void            SetRelative( bool bRelative );
-    bool            IsRelative() const { return bRelative; }
-    void            SetPtRelative( bool bPtRel )
-                        { bPtRelative = bPtRel; SetRelative( true ); }
-    bool            IsPtRelative() const { return bPtRelative; }
 
     virtual void    SetValue( sal_Int64 nNewValue, FieldUnit eInUnit ) override;
     virtual void    SetValue( sal_Int64 nNewValue  ) override;
@@ -390,6 +415,73 @@ private:
                     FontSizeBox( const FontSizeBox& ) = delete;
     FontSizeBox&    operator =( const FontSizeBox& ) = delete;
 };
+
+class SVT_DLLPUBLIC SvtFontSizeBox
+{
+    FontMetric      aFontMetric;
+    const FontList* pFontList;
+    int             nSavedValue;
+    int             nMin;
+    int             nMax;
+    FieldUnit       eUnit;
+    sal_uInt16      nDecimalDigits;
+    sal_uInt16      nRelMin;
+    sal_uInt16      nRelMax;
+    sal_uInt16      nRelStep;
+    short           nPtRelMin;
+    short           nPtRelMax;
+    short           nPtRelStep;
+    bool            bRelativeMode:1,
+                    bRelative:1,
+                    bPtRelative:1,
+                    bStdSize:1;
+    Link<weld::ComboBox&, void> m_aChangeHdl;
+    std::unique_ptr<weld::ComboBox> m_xComboBox;
+
+    sal_uInt16 GetDecimalDigits() const { return nDecimalDigits; }
+    void SetDecimalDigits(sal_uInt16 nDigits) { nDecimalDigits = nDigits; }
+    FieldUnit GetUnit() const { return eUnit; }
+    void SetUnit(FieldUnit _eUnit) { eUnit = _eUnit; }
+    void SetRange(int nNewMin, int nNewMax) { nMin = nNewMin; nMax = nNewMax; }
+    void SetValue(int nNewValue, FieldUnit eInUnit);
+
+    void InsertValue(int i);
+
+    OUString format_number(int nValue) const;
+
+    DECL_LINK(ModifyHdl, weld::ComboBox&, void);
+    DECL_LINK(ReformatHdl, weld::Widget&, void);
+public:
+    SvtFontSizeBox(std::unique_ptr<weld::ComboBox> p);
+
+    void Fill(const FontMetric* pFontMetric, const FontList* pList);
+
+    void EnableRelativeMode(sal_uInt16 nMin, sal_uInt16 nMax, sal_uInt16 nStep = 5);
+    void EnablePtRelativeMode(short nMin, short nMax, short nStep = 10);
+    bool IsRelativeMode() const { return bRelativeMode; }
+    void SetRelative( bool bRelative );
+    bool IsRelative() const { return bRelative; }
+    void SetPtRelative( bool bPtRel )
+    {
+        bPtRelative = bPtRel;
+        SetRelative(true);
+    }
+    bool IsPtRelative() const { return bPtRelative; }
+
+    void connect_changed(const Link<weld::ComboBox&, void>& rLink) { m_aChangeHdl = rLink; }
+    OUString get_active_text() const { return m_xComboBox->get_active_text(); }
+    void set_active_text(const OUString& rText) { m_xComboBox->set_active_text(rText); }
+    void set_sensitive(bool bSensitive) { m_xComboBox->set_sensitive(bSensitive); }
+    int get_value() const;
+    void set_value(int nValue);
+    void save_value() { nSavedValue = get_value(); }
+    int get_saved_value() const { return nSavedValue; }
+
+private:
+    SvtFontSizeBox(const SvtFontSizeBox&) = delete;
+    SvtFontSizeBox& operator=(const SvtFontSizeBox&) = delete;
+};
+
 
 #endif // INCLUDED_SVTOOLS_CTRLBOX_HXX
 

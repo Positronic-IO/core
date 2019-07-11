@@ -18,8 +18,10 @@
  */
 
 #include <UserDefinedProperties.hxx>
+#include <com/sun/star/beans/Property.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
+#include <cppu/unotype.hxx>
 
 using namespace ::com::sun::star;
 

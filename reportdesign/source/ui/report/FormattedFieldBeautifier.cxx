@@ -86,7 +86,7 @@ namespace rptui
                     bool bSet = true;
                     if ( aFormula.getType() == ReportFormula::Field )
                     {
-                        const OUString sColumnName = aFormula.getFieldName();
+                        const OUString& sColumnName = aFormula.getFieldName();
                         OUString sLabel = m_rReportController.getColumnLabel_throw(sColumnName);
                         if ( !sLabel.isEmpty() )
                         {
@@ -100,10 +100,9 @@ namespace rptui
                     if ( bSet )
                         sDataField = aFormula.getEqualUndecoratedContent();
                 }
-            }
 
-            if ( xControlModel.is() )
                 setPlaceholderText( getVclWindowPeer( xControlModel.get() ), sDataField );
+            }
         }
         catch (const uno::Exception &)
         {

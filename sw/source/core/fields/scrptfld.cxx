@@ -21,6 +21,7 @@
 #include <unofldmid.h>
 #include <strings.hrc>
 #include <o3tl/any.hxx>
+#include <o3tl/make_unique.hxx>
 #include <swtypes.hxx>
 
 using namespace ::com::sun::star;
@@ -46,14 +47,14 @@ OUString SwScriptField::GetDescription() const
     return SwResId(STR_SCRIPT);
 }
 
-OUString SwScriptField::Expand() const
+OUString SwScriptField::ExpandImpl(SwRootFrame const*const) const
 {
     return OUString();
 }
 
-SwField* SwScriptField::Copy() const
+std::unique_ptr<SwField> SwScriptField::Copy() const
 {
-    return new SwScriptField( static_cast<SwScriptFieldType*>(GetTyp()), m_sType, m_sCode, m_bCodeURL );
+    return o3tl::make_unique<SwScriptField>( static_cast<SwScriptFieldType*>(GetTyp()), m_sType, m_sCode, m_bCodeURL );
 }
 
 /// set type

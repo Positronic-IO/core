@@ -170,7 +170,7 @@ BibConfig::BibConfig()
             OUString sTempReal;
             sal_Int16 nSetMapping = 0;
             nFieldIdx = 0;
-            for(sal_Int16 nFieldVal = 0; nFieldVal < aAssignmentValues.getLength() / 2; nFieldVal++)
+            for(sal_Int32 nFieldVal = 0; nFieldVal < aAssignmentValues.getLength() / 2; nFieldVal++)
             {
                 pAssignmentValues[nFieldIdx++] >>= sTempLogical;
                 pAssignmentValues[nFieldIdx++] >>= sTempReal;
@@ -270,7 +270,7 @@ const Mapping*  BibConfig::GetMapping(const BibDBDescriptor& rDesc) const
 {
     for(std::unique_ptr<Mapping> const & i : mvMappings)
     {
-        Mapping& rMapping = *i.get();
+        Mapping& rMapping = *i;
         bool bURLEqual = rDesc.sDataSource == rMapping.sURL;
         if(rDesc.sTableOrQuery == rMapping.sTableName && bURLEqual)
             return &rMapping;

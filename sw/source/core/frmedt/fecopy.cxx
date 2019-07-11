@@ -23,11 +23,9 @@
 #include <vcl/graph.hxx>
 #include <sot/formats.hxx>
 #include <sot/storage.hxx>
-#include <unotools/pathoptions.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/viewsh.hxx>
-#include <svx/xexch.hxx>
 #include <svx/xflasit.hxx>
 #include <svx/xfillit0.hxx>
 #include <svx/xflclit.hxx>
@@ -191,7 +189,7 @@ void SwFEShell::Copy( SwDoc* pClpDoc, const OUString* pNewClpText )
             SdrObject *pObj = rMrkList.GetMark( i )->GetMarkedSdrObj();
 
             if( Imp()->GetDrawView()->IsGroupEntered() ||
-                ( !pObj->GetUserCall() && pObj->GetUpGroup()) )
+                ( !pObj->GetUserCall() && pObj->getParentSdrObjectFromSdrObject()) )
             {
                 SfxItemSet aSet( pClpDoc->GetAttrPool(), aFrameFormatSetRange );
 
@@ -253,7 +251,9 @@ static bool lcl_SetAnchor( const SwPosition& rPos, const SwNode& rNd, SwFlyFrame
 {
     bool bRet = true;
     rAnchor.SetAnchor( &rPos );
-    SwContentFrame* pTmpFrame = rNd.GetContentNode()->getLayoutFrame( rDestShell.GetLayout(), &rInsPt, nullptr, false );
+    std::pair<Point, bool> const tmp(rInsPt, false);
+    SwContentFrame *const pTmpFrame = rNd.GetContentNode()->getLayoutFrame(
+            rDestShell.GetLayout(), nullptr, &tmp);
     SwFlyFrame *pTmpFly = pTmpFrame->FindFlyFrame();
     if( pTmpFly && bCheckFlyRecur && pFly->IsUpperOf( *pTmpFly ) )
     {
@@ -378,7 +378,7 @@ bool SwFEShell::CopyDrawSel( SwFEShell* pDestShell, const Point& rSttPt,
             if( bRet )
             {
                 if( pSrcDrwView->IsGroupEntered() ||
-                    ( !pObj->GetUserCall() && pObj->GetUpGroup()) )
+                    ( !pObj->GetUserCall() && pObj->getParentSdrObjectFromSdrObject()) )
                 {
                     SfxItemSet aSet( pDestDoc->GetAttrPool(),aFrameFormatSetRange);
                     aSet.Put( aAnchor );
@@ -762,7 +762,7 @@ bool SwFEShell::Paste( SwDoc* pClpDoc )
                     SwCursor aCursor( aStartPos, nullptr);
                     // Check if we find another insert position by moving
                     // down the last given position
-                    if( aCursor.UpDown( false, ++nMove, nullptr, 0 ) )
+                    if (aCursor.UpDown(false, ++nMove, nullptr, 0, *GetLayout()))
                         aInsertPos = *aCursor.GetPoint();
                     else // if there is no paragraph we have to create it
                         bCompletePara = nCount > 0;
@@ -891,7 +891,7 @@ bool SwFEShell::Paste( SwDoc* pClpDoc )
                 break;      // exit the "while-loop"
             }
             else if( *aCpyPam.GetPoint() == *aCpyPam.GetMark() &&
-                 pClpDoc->GetSpzFrameFormats()->size() )
+                 !pClpDoc->GetSpzFrameFormats()->empty() )
             {
                 // we need a DrawView
                 if( !Imp()->GetDrawView() )
@@ -928,14 +928,14 @@ bool SwFEShell::Paste( SwDoc* pClpDoc )
                             Imp()->GetDrawView()->InsertObjectAtView( pNew, *Imp()->GetPageView() );
 
                             Point aGrpAnchor( 0, 0 );
-                            SdrObjList* pList = pNew->getParentOfSdrObject();
+                            SdrObjList* pList = pNew->getParentSdrObjListFromSdrObject();
                             if ( pList )
                             {
-                                SdrObject* pOwner = pList->GetOwnerObj();
-                                if ( pOwner )
+                                SdrObjGroup* pOwner(dynamic_cast< SdrObjGroup* >(pList->getSdrObjectFromSdrObjList()));
+
+                                if(nullptr != pOwner)
                                 {
-                                    SdrObjGroup* pThisGroup = dynamic_cast<SdrObjGroup*>( pOwner );
-                                    aGrpAnchor = pThisGroup->GetAnchorPos();
+                                    aGrpAnchor = pOwner->GetAnchorPos();
                                 }
                             }
 
@@ -1153,7 +1153,7 @@ void SwFEShell::PastePages( SwFEShell& rToFill, sal_uInt16 nStartPage, sal_uInt1
     }
     // now the page bound objects
     // additionally copy page bound frames
-    if( GetDoc()->GetSpzFrameFormats()->size() )
+    if( !GetDoc()->GetSpzFrameFormats()->empty() )
     {
         // create a draw view if necessary
         if( !rToFill.Imp()->GetDrawView() )
@@ -1242,7 +1242,7 @@ bool SwFEShell::GetDrawObjGraphic( SotClipboardFormatId nFormat, Graphic& rGrf )
                         if( pVirtDev->SetOutputSize( aSz ) )
                         {
                             aGrf.Draw( pVirtDev.get(), Point(), aSz );
-                            rGrf = pVirtDev->GetBitmap( Point(), aSz );
+                            rGrf = pVirtDev->GetBitmapEx( Point(), aSz );
                         }
                         else
                         {
@@ -1269,14 +1269,14 @@ static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs( SdrModel& _rModel )
     {
         // setup object iterator in order to iterate through all objects
         // including objects in group objects, but exclusive group objects.
-        SdrObjListIter aIter(*(_rModel.GetPage( nPgNum )));
+        SdrObjListIter aIter(_rModel.GetPage(nPgNum));
         while( aIter.IsMore() )
         {
             SdrOle2Obj* pOle2Obj = dynamic_cast< SdrOle2Obj* >( aIter.Next() );
             if( pOle2Obj )
             {
                 // found an ole2 shape
-                SdrObjList* pObjList = pOle2Obj->getParentOfSdrObject();
+                SdrObjList* pObjList = pOle2Obj->getParentSdrObjListFromSdrObject();
 
                 // get its graphic
                 Graphic aGraphic;
@@ -1308,9 +1308,11 @@ void SwFEShell::Paste( SvStream& rStrm, SwPasteSdr nAction, const Point* pPt )
     StartAllAction();
     StartUndo();
 
-    SvtPathOptions aPathOpt;
-    std::unique_ptr<FmFormModel> pModel( new FmFormModel( aPathOpt.GetPalettePath(),
-                                            nullptr, GetDoc()->GetDocShell() ) );
+    std::unique_ptr< FmFormModel > pModel(
+        new FmFormModel(
+            nullptr,
+            GetDoc()->GetDocShell()));
+
     pModel->GetItemPool().FreezeIdRanges();
 
     rStrm.Seek(0);
@@ -1488,7 +1490,7 @@ void SwFEShell::Paste( SvStream& rStrm, SwPasteSdr nAction, const Point* pPt )
 
         // #i50824#
         // method <lcl_RemoveOleObjsFromSdrModel> replaced by <lcl_ConvertSdrOle2ObjsToSdrGrafObjs>
-        lcl_ConvertSdrOle2ObjsToSdrGrafObjs( *pModel.get() );
+        lcl_ConvertSdrOle2ObjsToSdrGrafObjs(*pModel);
         pView->Paste(*pModel, aPos, nullptr, SdrInsertFlags::NONE);
 
         const size_t nCnt = pView->GetMarkedObjectList().GetMarkCount();
@@ -1530,9 +1532,12 @@ bool SwFEShell::Paste(const Graphic &rGrf, const OUString& rURL)
     SdrObject* pObj = nullptr;
     SdrView *pView = Imp()->GetDrawView();
 
-    bool bRet = 1 == pView->GetMarkedObjectList().GetMarkCount() &&
-        (pObj = pView->GetMarkedObjectList().GetMark( 0 )->GetMarkedSdrObj())->IsClosedObj() &&
-        dynamic_cast<const SdrOle2Obj*>( pObj) ==  nullptr;
+    bool bRet = 1 == pView->GetMarkedObjectList().GetMarkCount();
+    if (bRet)
+    {
+        pObj = pView->GetMarkedObjectList().GetMark( 0 )->GetMarkedSdrObj();
+        bRet = pObj->IsClosedObj() && dynamic_cast<const SdrOle2Obj*>( pObj) == nullptr;
+    }
 
     if( bRet && pObj )
     {
@@ -1564,7 +1569,7 @@ bool SwFEShell::Paste(const Graphic &rGrf, const OUString& rURL)
         }
         else
         {
-            pView->AddUndo(new SdrUndoAttrObj(*pObj));
+            pView->AddUndo(o3tl::make_unique<SdrUndoAttrObj>(*pObj));
 
             SfxItemSet aSet(pView->GetModel()->GetItemPool(), svl::Items<XATTR_FILLSTYLE, XATTR_FILLBITMAP>{});
 

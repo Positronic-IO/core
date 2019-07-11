@@ -1388,20 +1388,18 @@ void UnoConversionUtilities<T>::createUnoObjectWrapper(const Any & rObj, VARIANT
         }
     }
     // If we have no UNO wrapper nor the IDispatch yet then we have to create
-    // a wrapper. For that we need an XInvocation from the UNO object.
+    // a wrapper. For that we need an XInvocation.
 
-    // get an XInvocation or create one using the invocation service
-    Reference<XInvocation> xInv(xInt, UNO_QUERY);
-    if ( ! xInv.is())
+    // create an XInvocation using the invocation service
+    Reference<XInvocation> xInv;
+    Reference<XSingleServiceFactory> xInvFactory= getInvocationFactory(rObj);
+    if (xInvFactory.is())
     {
-        Reference<XSingleServiceFactory> xInvFactory= getInvocationFactory(rObj);
-        if (xInvFactory.is())
-        {
-            Sequence<Any> params(1);
-            params.getArray()[0] = rObj;
-            Reference<XInterface> xInt2 = xInvFactory->createInstanceWithArguments(params);
-            xInv.set(xInt2, UNO_QUERY);
-        }
+        Sequence<Any> params(2);
+        params.getArray()[0] = rObj;
+        params.getArray()[1] <<= OUString("FromOLE");
+        Reference<XInterface> xInt2 = xInvFactory->createInstanceWithArguments(params);
+        xInv.set(xInt2, UNO_QUERY);
     }
 
     if (xInv.is())
@@ -1929,7 +1927,6 @@ void UnoConversionUtilities<T>::dispatchExObject2Sequence( const VARIANTARG* pva
 {
     try
     {
-        bool bFail = false;
         if( pvar->vt != VT_DISPATCH)
             throw BridgeRuntimeError("[automation bridge] UnoConversionUtilities<T>::dispatchExObject2Sequence \n"
                                      "Conversion of dispatch object to Sequence failed!");
@@ -2040,10 +2037,6 @@ void UnoConversionUtilities<T>::dispatchExObject2Sequence( const VARIANTARG* pva
         anySeq.setValue( &p_uno_Seq, pDesc);
         uno_destructData( &p_uno_Seq, pDesc, cpp_release);
         typelib_typedescription_release( pDesc);
-
-        if (bFail)
-            throw BridgeRuntimeError(
-                "[automation bridge] Conversion of ValueObject failed ");
     }
     catch (const BridgeRuntimeError &)
     {

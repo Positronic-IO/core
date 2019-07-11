@@ -19,15 +19,16 @@
 
 #include <sfx2/objsh.hxx>
 #include <svl/listener.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <document.hxx>
 #include <brdcst.hxx>
 #include <bcaslot.hxx>
 #include <scerrors.hxx>
-#include <docoptio.hxx>
 #include <refupdat.hxx>
-#include <table.hxx>
 #include <bulkdatahint.hxx>
+#include <columnspanset.hxx>
 
 #if DEBUG_AREA_BROADCASTER
 #include <formulacell.hxx>
@@ -39,13 +40,8 @@
 // Number of slots per dimension
 // must be integer divisors of MAXCOLCOUNT respectively MAXROWCOUNT
 #define BCA_SLOTS_COL ((MAXCOLCOUNT_DEFINE) / 16)
-#if MAXROWCOUNT_DEFINE == 32000
-#define BCA_SLOTS_ROW 256
-#define BCA_SLICE 125
-#else
 #define BCA_SLICE 128
 #define BCA_SLOTS_ROW ((MAXROWCOUNT_DEFINE) / BCA_SLICE)
-#endif
 #define BCA_SLOT_COLS ((MAXCOLCOUNT_DEFINE) / BCA_SLOTS_COL)
 #define BCA_SLOT_ROWS ((MAXROWCOUNT_DEFINE) / BCA_SLOTS_ROW)
 // multiple?
@@ -66,20 +62,14 @@
 
 struct ScSlotData
 {
-    SCROW  nStartRow;   // first row of this segment
-    SCROW  nStopRow;    // first row of next segment
-    SCSIZE nSlice;      // slice size in this segment
-    SCSIZE nCumulated;  // cumulated slots of previous segments
+    SCROW const  nStartRow;   // first row of this segment
+    SCROW const  nStopRow;    // first row of next segment
+    SCSIZE const nSlice;      // slice size in this segment
+    SCSIZE const nCumulated;  // cumulated slots of previous segments
 
     ScSlotData( SCROW r1, SCROW r2, SCSIZE s, SCSIZE c ) : nStartRow(r1), nStopRow(r2), nSlice(s), nCumulated(c) {}
 };
 typedef ::std::vector< ScSlotData > ScSlotDistribution;
-#if MAXROWCOUNT_DEFINE <= 65536
-// Linear distribution.
-static ScSlotDistribution aSlotDistribution( ScSlotData( 0, MAXROWCOUNT, BCA_SLOT_ROWS, 0));
-static SCSIZE nBcaSlotsRow = BCA_SLOTS_ROW;
-static SCSIZE nBcaSlots = BCA_SLOTS_DEFINE;
-#else
 // Logarithmic or any other distribution.
 // Upper sheet part usually is more populated and referenced and gets fine
 // grained resolution, larger data in larger hunks.
@@ -107,7 +97,6 @@ static ScSlotDistribution aSlotDistribution;
 static SCSIZE nBcaSlotsRow;
 static SCSIZE nBcaSlots = initSlotDistribution( aSlotDistribution, nBcaSlotsRow) * BCA_SLOTS_COL;
 // Ensure that all static variables are initialized with this one call.
-#endif
 
 ScBroadcastArea::ScBroadcastArea( const ScRange& rRange ) :
     pUpdateChainNext(nullptr),
@@ -597,7 +586,7 @@ void ScBroadcastAreaSlot::Dump() const
         const SvtBroadcaster::ListenersType& rListeners = rBC.GetAllListeners();
         size_t n = rListeners.size();
 
-        cout << "  * range: " << rtl::OUStringToOString(pArea->GetRange().Format(ScRefFlags::VALID|ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
+        cout << "  * range: " << OUStringToOString(pArea->GetRange().Format(ScRefFlags::VALID|ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
             << ", group: " << pArea->IsGroupListening()
             << ", listener count: " << n << endl;
 
@@ -607,7 +596,7 @@ void ScBroadcastAreaSlot::Dump() const
             if (pFC)
             {
                 cout << "    * listener: formula cell: "
-                     << rtl::OUStringToOString(pFC->aPos.Format(ScRefFlags::VALID|ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
+                     << OUStringToOString(pFC->aPos.Format(ScRefFlags::VALID|ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
                      << endl;
                 continue;
             }
@@ -616,7 +605,7 @@ void ScBroadcastAreaSlot::Dump() const
             if (pFGListener)
             {
                 cout << "    * listener: formula group: (pos: "
-                     << rtl::OUStringToOString(pFGListener->getTopCellPos().Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
+                     << OUStringToOString(pFGListener->getTopCellPos().Format(ScRefFlags::VALID | ScRefFlags::TAB_3D, pDoc), RTL_TEXTENCODING_UTF8).getStr()
                      << ", length: " << pFGListener->getGroupLength()
                      << ")" << endl;
                 continue;
@@ -649,7 +638,6 @@ ScBroadcastAreaSlotMachine::TableSlots::~TableSlots()
 
 ScBroadcastAreaSlotMachine::ScBroadcastAreaSlotMachine(
         ScDocument* pDocument ) :
-    pBCAlways( nullptr ),
     pDoc( pDocument ),
     pUpdateChain( nullptr ),
     pEOUpdateChain( nullptr ),
@@ -700,7 +688,7 @@ void ScBroadcastAreaSlotMachine::ComputeAreaPoints( const ScRange& rRange,
         ScAddress( rRange.aStart.Col(), rRange.aEnd.Row(), 0 ) ) - rStart;
 }
 
-inline void ComputeNextSlot( SCSIZE & nOff, SCSIZE & nBreak, ScBroadcastAreaSlot** & pp,
+static void ComputeNextSlot( SCSIZE & nOff, SCSIZE & nBreak, ScBroadcastAreaSlot** & pp,
         SCSIZE & nStart, ScBroadcastAreaSlot** const & ppSlots, SCSIZE nRowBreak )
 {
     if ( nOff < nBreak )

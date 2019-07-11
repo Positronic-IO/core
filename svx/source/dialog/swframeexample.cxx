@@ -45,32 +45,29 @@ void DrawRect_Impl(vcl::RenderContext& rRenderContext, const tools::Rectangle &r
 
 }
 
-SvxSwFrameExample::SvxSwFrameExample( vcl::Window *pParent, WinBits nStyle ) :
-
-    Window(pParent, nStyle),
-
-    nHAlign     (HoriOrientation::CENTER),
-    nHRel       (RelOrientation::FRAME),
-    nVAlign     (VertOrientation::TOP),
-    nVRel       (RelOrientation::PRINT_AREA),
-    nWrap       (WrapTextMode_NONE),
-    nAnchor     (RndStdIds::FLY_AT_PAGE),
-    bTrans      (false),
-    aRelPos     (Point(0,0))
+SwFrameExample::SwFrameExample()
+    : nHAlign(HoriOrientation::CENTER)
+    , nHRel(RelOrientation::FRAME)
+    , nVAlign(VertOrientation::TOP)
+    , nVRel(RelOrientation::PRINT_AREA)
+    , nWrap(WrapTextMode_NONE)
+    , nAnchor(RndStdIds::FLY_AT_PAGE)
+    , bTrans(false)
+    , aRelPos(Point(0,0))
 {
     InitColors_Impl();
 }
 
-VCL_BUILDER_FACTORY_ARGS(SvxSwFrameExample, 0)
-
-Size SvxSwFrameExample::GetOptimalSize() const
+void SwFrameExample::SetDrawingArea(weld::DrawingArea* pDrawingArea)
 {
-    return LogicToPixel(Size(52, 86), MapMode(MapUnit::MapAppFont));
+    CustomWidgetController::SetDrawingArea(pDrawingArea);
+    pDrawingArea->set_size_request(pDrawingArea->get_approximate_digit_width() * 16,
+                                   pDrawingArea->get_text_height() * 12);
 }
 
-void SvxSwFrameExample::InitColors_Impl()
+void SwFrameExample::InitColors_Impl()
 {
-    const StyleSettings& rSettings = GetSettings().GetStyleSettings();
+    const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
     m_aBgCol = rSettings.GetWindowColor();
 
     bool bHC = rSettings.GetHighContrastMode();
@@ -88,15 +85,13 @@ void SvxSwFrameExample::InitColors_Impl()
     m_aBlankFrameCol = bHC? m_aTxtCol : COL_GRAY;
 }
 
-void SvxSwFrameExample::DataChanged(const DataChangedEvent& rDCEvt)
+void SwFrameExample::StyleUpdated()
 {
-    Window::DataChanged(rDCEvt);
-
-    if (rDCEvt.GetType() == DataChangedEventType::SETTINGS && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE))
-        InitColors_Impl();
+    InitColors_Impl();
+    CustomWidgetController::StyleUpdated();
 }
 
-void SvxSwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
+void SwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
 {
     aPage.SetSize(GetOutputSizePixel());
 
@@ -166,7 +161,7 @@ void SvxSwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
     {
         vcl::Font aFont = OutputDevice::GetDefaultFont(
                                 DefaultFontType::LATIN_TEXT, Application::GetSettings().GetLanguageTag().getLanguageType(),
-                                GetDefaultFontFlags::OnlyOne, this );
+                                GetDefaultFontFlags::OnlyOne, &rRenderContext );
         aFont.SetColor( m_aTxtCol );
         aFont.SetFillColor( m_aBgCol );
         aFont.SetWeight(WEIGHT_NORMAL);
@@ -174,14 +169,14 @@ void SvxSwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
         if (nAnchor == RndStdIds::FLY_AS_CHAR)
         {
             aFont.SetFontSize(Size(0, aParaPrtArea.GetHeight() - 2));
-            SetFont(aFont);
-            aParaPrtArea.SetSize(Size(GetTextWidth(DEMOTEXT), GetTextHeight()));
+            rRenderContext.SetFont(aFont);
+            aParaPrtArea.SetSize(Size(rRenderContext.GetTextWidth(DEMOTEXT), rRenderContext.GetTextHeight()));
         }
         else
         {
             aFont.SetFontSize(Size(0, aParaPrtArea.GetHeight() / 2));
             rRenderContext.SetFont(aFont);
-            aAutoCharFrame.SetSize(Size(GetTextWidth(OUString('A')), GetTextHeight()));
+            aAutoCharFrame.SetSize(Size(rRenderContext.GetTextWidth(OUString('A')), GetTextHeight()));
             aAutoCharFrame.SetPos(Point(aParaPrtArea.Left() + (aParaPrtArea.GetWidth() - aAutoCharFrame.GetWidth()) / 2,
                 aParaPrtArea.Top() + (aParaPrtArea.GetHeight() - aAutoCharFrame.GetHeight()) / 2));
         }
@@ -221,7 +216,7 @@ void SvxSwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
     }
     else
     {
-        sal_uInt32 nFreeWidth = aPagePrtArea.GetWidth() - GetTextWidth(DEMOTEXT);
+        sal_uInt32 nFreeWidth = aPagePrtArea.GetWidth() - rRenderContext.GetTextWidth(DEMOTEXT);
 
         aFrmSize = Size(nFreeWidth / 2, (aTextLine.GetHeight() + 2) * 3);
         aDrawObj.SetSize(Size(std::max(5L, static_cast<long>(nFreeWidth) / 3L), std::max(5L, aFrmSize.Height() * 3L)));
@@ -230,7 +225,7 @@ void SvxSwFrameExample::InitAllRects_Impl(vcl::RenderContext& rRenderContext)
     }
 }
 
-void SvxSwFrameExample::CalcBoundRect_Impl(tools::Rectangle &rRect)
+void SwFrameExample::CalcBoundRect_Impl(vcl::RenderContext& rRenderContext, tools::Rectangle &rRect)
 {
     switch (nAnchor)
     {
@@ -412,7 +407,7 @@ void SvxSwFrameExample::CalcBoundRect_Impl(tools::Rectangle &rRect)
                 case VertOrientation::CENTER:
                 case VertOrientation::BOTTOM:
                 {
-                    FontMetric aMetric(GetFontMetric());
+                    FontMetric aMetric(rRenderContext.GetFontMetric());
 
                     rRect.SetTop( aParaPrtArea.Bottom() - aMetric.GetDescent() );
                     rRect.SetBottom( rRect.Top() );
@@ -442,14 +437,14 @@ void SvxSwFrameExample::CalcBoundRect_Impl(tools::Rectangle &rRect)
     }
 }
 
-tools::Rectangle SvxSwFrameExample::DrawInnerFrame_Impl(vcl::RenderContext& rRenderContext, const tools::Rectangle &rRect,
+tools::Rectangle SwFrameExample::DrawInnerFrame_Impl(vcl::RenderContext& rRenderContext, const tools::Rectangle &rRect,
                                                  const Color &rFillColor, const Color &rBorderColor)
 {
     DrawRect_Impl(rRenderContext, rRect, rFillColor, rBorderColor);
 
     // determine the area relative to which the positioning happens
     tools::Rectangle aRect(rRect); // aPagePrtArea = Default
-    CalcBoundRect_Impl(aRect);
+    CalcBoundRect_Impl(rRenderContext, aRect);
 
     if (nAnchor == RndStdIds::FLY_AT_FLY && &rRect == &aPagePrtArea)
     {
@@ -470,7 +465,7 @@ tools::Rectangle SvxSwFrameExample::DrawInnerFrame_Impl(vcl::RenderContext& rRen
     return aRect;
 }
 
-void SvxSwFrameExample::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
+void SwFrameExample::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
 {
     rRenderContext.SetMapMode(MapMode(MapUnit::MapPixel));
 
@@ -679,7 +674,7 @@ void SvxSwFrameExample::Paint(vcl::RenderContext& rRenderContext, const tools::R
             aParaPrtArea.AdjustBottom(nDiff );
             aPara.AdjustBottom(nDiff );
 
-            CalcBoundRect_Impl(aRect);
+            CalcBoundRect_Impl(rRenderContext, aRect);
 
             aParaPrtArea.AdjustBottom( -nDiff );
             aPara.AdjustBottom( -nDiff );
@@ -701,7 +696,7 @@ void SvxSwFrameExample::Paint(vcl::RenderContext& rRenderContext, const tools::R
     DrawRect_Impl(rRenderContext, aFrmRect, bDontFill? m_aTransColor : m_aBgCol, m_aFrameColor);
 }
 
-void SvxSwFrameExample::SetRelPos(const Point& rP)
+void SwFrameExample::SetRelPos(const Point& rP)
 {
     aRelPos = rP;
 

@@ -24,6 +24,7 @@
 #include <PhysicalFontCollection.hxx>
 #include <svdata.hxx>
 #include <vcl/ITiledRenderable.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star::uno;
 
@@ -67,7 +68,7 @@ bool VirtualDevice::AcquireGraphics() const
 
     if ( mpGraphics )
     {
-        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp) );
+        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp), RasterOp::Invert == meRasterOp );
         mpGraphics->setAntiAliasB2DDraw(bool(mnAntialiasing & AntialiasingFlags::EnableB2dDraw));
     }
 
@@ -107,9 +108,12 @@ void VirtualDevice::ReleaseGraphics( bool bRelease )
 }
 
 void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
-                                    long nDX, long nDY, DeviceFormat eFormat, const SystemGraphicsData *pData )
+                                    long nDX, long nDY, const SystemGraphicsData *pData )
 {
-    SAL_INFO( "vcl.virdev", "ImplInitVirDev(" << nDX << "," << nDY << "," << static_cast<int>(eFormat) << ")" );
+    SAL_INFO( "vcl.virdev", "ImplInitVirDev(" << nDX << "," << nDY << ")" );
+
+    meRefDevMode = RefDevMode::NONE;
+    mbForceZeroExtleadBug = false;
 
     bool bErase = nDX > 0 && nDY > 0;
 
@@ -131,7 +135,7 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
         (void)pOutDev->AcquireGraphics();
     pGraphics = pOutDev->mpGraphics;
     if ( pGraphics )
-        mpVirDev = pSVData->mpDefInst->CreateVirtualDevice(pGraphics, nDX, nDY, eFormat, pData);
+        mpVirDev = pSVData->mpDefInst->CreateVirtualDevice(pGraphics, nDX, nDY, meFormat, pData);
     else
         mpVirDev = nullptr;
     if ( !mpVirDev )
@@ -142,7 +146,6 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
             css::uno::Reference< css::uno::XInterface >() );
     }
 
-    meFormat        = eFormat;
     switch (meFormat)
     {
         case DeviceFormat::BITMASK:
@@ -155,20 +158,18 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
     mnOutWidth      = nDX;
     mnOutHeight     = nDY;
     mbScreenComp    = true;
-    meAlphaFormat   = DeviceFormat::NONE;
 
     if (meFormat == DeviceFormat::BITMASK)
         SetAntialiasing( AntialiasingFlags::DisableText );
 
     if ( pOutDev->GetOutDevType() == OUTDEV_PRINTER )
         mbScreenComp = false;
-    else if ( pOutDev->GetOutDevType() == OUTDEV_VIRDEV )
+    else if ( pOutDev->IsVirtual() )
         mbScreenComp = static_cast<const VirtualDevice*>(pOutDev)->mbScreenComp;
 
-    meOutDevType    = OUTDEV_VIRDEV;
     mbDevOutput     = true;
-    mpFontCollection      = pSVData->maGDIData.mpScreenFontList;
-    mpFontCache     = pSVData->maGDIData.mpScreenFontCache;
+    mxFontCollection = pSVData->maGDIData.mxScreenFontList;
+    mxFontCache     = pSVData->maGDIData.mxScreenFontCache;
     mnDPIX          = pOutDev->mnDPIX;
     mnDPIY          = pOutDev->mnDPIY;
     mnDPIScalePercentage = pOutDev->mnDPIScalePercentage;
@@ -197,46 +198,28 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
     pSVData->maGDIData.mpFirstVirDev = this;
 }
 
-VirtualDevice::VirtualDevice(DeviceFormat eFormat)
-:   meRefDevMode( RefDevMode::NONE ),
-    mbForceZeroExtleadBug( false )
+VirtualDevice::VirtualDevice(const OutputDevice* pCompDev, DeviceFormat eFormat,
+                             DeviceFormat eAlphaFormat, OutDevType eOutDevType)
+    : OutputDevice(eOutDevType)
+    , meFormat(eFormat)
+    , meAlphaFormat(eAlphaFormat)
 {
-    SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat) << " )" );
+    SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat)
+                            << ", " << static_cast<int>(eAlphaFormat)
+                            << ", " << static_cast<int>(eOutDevType) << " )" );
 
-    ImplInitVirDev(Application::GetDefaultDevice(), 0, 0, eFormat);
-}
-
-VirtualDevice::VirtualDevice(const OutputDevice& rCompDev, DeviceFormat eFormat)
-    : meRefDevMode( RefDevMode::NONE ),
-    mbForceZeroExtleadBug( false )
-{
-    SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat) << " )" );
-
-    ImplInitVirDev(&rCompDev, 0, 0, eFormat);
-}
-
-VirtualDevice::VirtualDevice(const OutputDevice& rCompDev, DeviceFormat eFormat, DeviceFormat eAlphaFormat)
-    : meRefDevMode( RefDevMode::NONE )
-    , mbForceZeroExtleadBug( false )
-{
-    SAL_INFO( "vcl.virdev",
-            "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat) << ", " << static_cast<int>(eAlphaFormat) << " )" );
-
-    ImplInitVirDev(&rCompDev, 0, 0, eFormat);
-
-    // Enable alpha channel
-    meAlphaFormat = eAlphaFormat;
+    ImplInitVirDev(pCompDev ? pCompDev : Application::GetDefaultDevice(), 0, 0);
 }
 
 VirtualDevice::VirtualDevice(const SystemGraphicsData *pData, const Size &rSize,
                              DeviceFormat eFormat)
-:   meRefDevMode( RefDevMode::NONE ),
-    mbForceZeroExtleadBug( false )
+    : OutputDevice(OUTDEV_VIRDEV)
+    , meFormat(eFormat)
+    , meAlphaFormat(DeviceFormat::NONE)
 {
     SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat) << " )" );
 
-    ImplInitVirDev(Application::GetDefaultDevice(), rSize.Width(), rSize.Height(),
-                   eFormat, pData);
+    ImplInitVirDev(Application::GetDefaultDevice(), rSize.Width(), rSize.Height(), pData);
 }
 
 VirtualDevice::~VirtualDevice()
@@ -282,8 +265,7 @@ bool VirtualDevice::InnerImplSetOutputSizePixel( const Size& rNewSize, bool bEra
     {
         if ( bErase )
             Erase();
-        // Yeah, so trying to re-use a VirtualDevice but this time using a
-        // pre-allocated buffer won't work. Big deal.
+        SAL_INFO( "vcl.virdev", "Trying to re-use a VirtualDevice but this time using a pre-allocated buffer");
         return true;
     }
 
@@ -316,11 +298,8 @@ bool VirtualDevice::InnerImplSetOutputSizePixel( const Size& rNewSize, bool bEra
         ImplSVData*         pSVData = ImplGetSVData();
 
         // we need a graphics
-        if ( !mpGraphics )
-        {
-            if ( !AcquireGraphics() )
-                return false;
-        }
+        if ( !mpGraphics && !AcquireGraphics() )
+            return false;
 
         pNewVirDev = pSVData->mpDefInst->CreateVirtualDevice(mpGraphics, nNewWidth, nNewHeight, meFormat);
         if ( pNewVirDev )
@@ -487,27 +466,21 @@ void VirtualDevice::ImplSetReferenceDevice( RefDevMode i_eRefDevMode, sal_Int32 
 
     // the reference device should have only scalable fonts
     // => clean up the original font lists before getting new ones
-    if ( mpFontInstance )
-    {
-        mpFontInstance->Release();
-        mpFontInstance = nullptr;
-    }
+    mpFontInstance.clear();
     mpDeviceFontList.reset();
     mpDeviceFontSizeList.reset();
 
     // preserve global font lists
     ImplSVData* pSVData = ImplGetSVData();
-    if( mpFontCollection && (mpFontCollection != pSVData->maGDIData.mpScreenFontList) )
-        delete mpFontCollection;
-    if( mpFontCache && (mpFontCache != pSVData->maGDIData.mpScreenFontCache) )
-        delete mpFontCache;
+    mxFontCollection.reset();
+    mxFontCache.reset();
 
     // get font list with scalable fonts only
     AcquireGraphics();
-    mpFontCollection = pSVData->maGDIData.mpScreenFontList->Clone();
+    mxFontCollection = pSVData->maGDIData.mxScreenFontList->Clone();
 
     // prepare to use new font lists
-    mpFontCache = new ImplFontCache();
+    mxFontCache.reset(new ImplFontCache);
 }
 
 sal_uInt16 VirtualDevice::GetBitCount() const

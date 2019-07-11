@@ -18,6 +18,7 @@
  */
 
 #include <com/sun/star/container/XChild.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <com/sun/star/embed/XLinkageSupport.hpp>
 #include <com/sun/star/embed/EmbedMisc.hpp>
@@ -42,9 +43,10 @@
 #include <cntfrm.hxx>
 #include <frmatr.hxx>
 #include <ndole.hxx>
+#include <viewsh.hxx>
 #include <DocumentSettingManager.hxx>
 #include <IDocumentLinksAdministration.hxx>
-
+#include <IDocumentLayoutAccess.hxx>
 #include <comphelper/classids.hxx>
 #include <vcl/graph.hxx>
 #include <sot/formats.hxx>
@@ -193,6 +195,8 @@ SwEmbedObjectLink::SwEmbedObjectLink(SwOLENode* pNode):
     }
 
     pOleNode->GetNewReplacement();
+    pOleNode->SetChanged();
+
     return SUCCESS;
 }
 
@@ -237,13 +241,6 @@ const Graphic* SwOLENode::GetGraphic()
     if ( maOLEObj.GetOleRef().is() )
         return maOLEObj.m_xOLERef.GetGraphic();
     return nullptr;
-}
-
-SwContentNode *SwOLENode::SplitContentNode( const SwPosition & )
-{
-    // Multiply OLE objects?
-    OSL_FAIL( "OleNode: can't split." );
-    return this;
 }
 
 /**
@@ -411,7 +408,7 @@ Size SwOLENode::GetTwipSize() const
     return const_cast<SwOLENode*>(this)->maOLEObj.GetObject().GetSize( &aMapMode );
 }
 
-SwContentNode* SwOLENode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) const
+SwContentNode* SwOLENode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx, bool) const
 {
     // If there's already a SvPersist instance, we use it
     SfxObjectShell* pPersistShell = pDoc->GetPersist();
@@ -630,6 +627,36 @@ bool SwOLENode::IsChart() const
     return bIsChart;
 }
 
+// react on visual change (invalidate)
+void SwOLENode::SetChanged()
+{
+    SwFrame* pFrame(getLayoutFrame(nullptr));
+
+    if(nullptr == pFrame)
+    {
+        return;
+    }
+
+    const SwRect aFrameArea(pFrame->getFrameArea());
+    SwViewShell* pVSh(GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell());
+
+    if(nullptr == pVSh)
+    {
+        return;
+    }
+
+    for(SwViewShell& rShell : pVSh->GetRingContainer())
+    {
+        SET_CURR_SHELL(&rShell);
+
+        if(rShell.VisArea().IsOver(aFrameArea) && OUTDEV_WINDOW == rShell.GetOut()->GetOutDevType())
+        {
+            // invalidate instead of painting
+            rShell.GetWin()->Invalidate(aFrameArea.SVRect());
+        }
+    }
+}
+
 namespace { class DeflateThread; }
 
 /// Holder for local data for a parallel-executed task to load a chart model
@@ -732,8 +759,7 @@ SwOLEObj::SwOLEObj( const svt::EmbeddedObjectRef& xObj ) :
     m_pOLENode( nullptr ),
     m_xOLERef( xObj ),
     m_aPrimitive2DSequence(),
-    m_aRange(),
-    m_pDeflateData(nullptr)
+    m_aRange()
 {
     m_xOLERef.Lock();
     if ( xObj.is() )
@@ -747,8 +773,7 @@ SwOLEObj::SwOLEObj( const OUString &rString, sal_Int64 nAspect ) :
     m_pOLENode( nullptr ),
     m_aName( rString ),
     m_aPrimitive2DSequence(),
-    m_aRange(),
-    m_pDeflateData(nullptr)
+    m_aRange()
 {
     m_xOLERef.Lock();
     m_xOLERef.SetViewAspect( nAspect );
@@ -1019,8 +1044,7 @@ drawinglayer::primitive2d::Primitive2DContainer const & SwOLEObj::tryToGetChartC
             // copy the result data and cleanup
             m_aPrimitive2DSequence = m_pDeflateData->getSequence();
             m_aRange = m_pDeflateData->getRange();
-            delete m_pDeflateData;
-            m_pDeflateData = nullptr;
+            m_pDeflateData.reset();
         }
     }
 
@@ -1048,9 +1072,9 @@ drawinglayer::primitive2d::Primitive2DContainer const & SwOLEObj::tryToGetChartC
                 // is okay (preview will be reused)
                 if(!m_pDeflateData)
                 {
-                    m_pDeflateData = new DeflateData(aXModel);
-                    DeflateThread* pNew = new DeflateThread(*m_pDeflateData);
-                    comphelper::ThreadPool::getSharedOptimalPool().pushTask(pNew);
+                    m_pDeflateData.reset( new DeflateData(aXModel) );
+                    std::unique_ptr<DeflateThread> pNew( new DeflateThread(*m_pDeflateData) );
+                    comphelper::ThreadPool::getSharedOptimalPool().pushTask(std::move(pNew));
                 }
             }
         }
@@ -1074,8 +1098,7 @@ void SwOLEObj::resetBufferedData()
     {
         // load is in progress, wait until finished and cleanup without using it
         m_pDeflateData->waitFinished();
-        delete m_pDeflateData;
-        m_pDeflateData = nullptr;
+        m_pDeflateData.reset();
     }
 }
 

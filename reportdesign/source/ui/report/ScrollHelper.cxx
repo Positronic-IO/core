@@ -24,6 +24,7 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <toolkit/helper/convert.hxx>
 
+#include <vcl/commandevent.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 
@@ -34,7 +35,7 @@ namespace rptui
 using namespace ::com::sun::star;
 
 
-void lcl_setScrollBar(sal_Int32 _nNewValue,const Point& _aPos,const Size& _aSize,ScrollBar& _rScrollBar)
+static void lcl_setScrollBar(sal_Int32 _nNewValue,const Point& _aPos,const Size& _aSize,ScrollBar& _rScrollBar)
 {
     _rScrollBar.SetPosSizePixel(_aPos,_aSize);
     _rScrollBar.SetPageSize( _nNewValue );
@@ -50,7 +51,6 @@ OScrollWindowHelper::OScrollWindowHelper( ODesignView* _pDesignView)
     ,m_aCornerWin( VclPtr<ScrollBarBox>::Create(this) )
     ,m_pParent(_pDesignView)
     ,m_aReportWindow(VclPtr<rptui::OReportWindow>::Create(this,m_pParent))
-    ,m_pReportDefinitionMultiPlexer(nullptr)
 {
     SetMapMode( MapMode( MapUnit::Map100thMM ) );
 

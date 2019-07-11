@@ -18,8 +18,10 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/errinf.hxx>
+#include <com/sun/star/uri/UriReferenceFactory.hpp>
 #include <com/sun/star/util/MeasureUnit.hpp>
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
@@ -61,6 +63,7 @@
 #include <connectivity/DriversConfig.hxx>
 #include <dsntypes.hxx>
 #include <rtl/strbuf.hxx>
+#include <rtl/uri.hxx>
 
 using namespace ::com::sun::star;
 
@@ -74,7 +77,7 @@ namespace dbaxml
 {
     using namespace ::com::sun::star::util;
     /// read a component (file + filter version)
-ErrCode ReadThroughComponent(
+static ErrCode ReadThroughComponent(
     const uno::Reference<XInputStream>& xInputStream,
     const uno::Reference<XComponent>& xModelComponent,
     const uno::Reference<XComponentContext> & rxContext,
@@ -137,7 +140,7 @@ ErrCode ReadThroughComponent(
 
 
 /// read a component (storage version)
-ErrCode ReadThroughComponent(
+static ErrCode ReadThroughComponent(
     const uno::Reference< embed::XStorage >& xStorage,
     const uno::Reference<XComponent>& xModelComponent,
     const sal_Char* pStreamName,
@@ -302,18 +305,44 @@ bool ODBFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
     {
         uno::Reference<XComponent> xCom(GetModel(),UNO_QUERY);
 
-        tools::SvRef<SfxMedium> pMedium(nullptr);
+        tools::SvRef<SfxMedium> pMedium;
         if (!xStorage.is())
         {
             OUString sStreamRelPath;
             if (sFileName.startsWithIgnoreAsciiCase("vnd.sun.star.pkg:"))
             {
-                // In this case the host contains the real path, and the path is the embedded stream name.
-                INetURLObject aURL(sFileName);
-                sFileName = aURL.GetHost(INetURLObject::DecodeMechanism::WithCharset);
-                sStreamRelPath = aURL.GetURLPath(INetURLObject::DecodeMechanism::WithCharset);
-                if (sStreamRelPath.startsWith("/"))
-                    sStreamRelPath = sStreamRelPath.copy(1);
+                // In this case the authority contains the real path, and the path is the embedded stream name.
+                auto const uri = css::uri::UriReferenceFactory::create(GetComponentContext())
+                    ->parse(sFileName);
+                if (uri.is() && uri->isAbsolute() && uri->isHierarchical()
+                    && uri->hasAuthority() && !uri->hasQuery() && !uri->hasFragment())
+                {
+                    auto const auth = uri->getAuthority();
+                    auto const decAuth = rtl::Uri::decode(
+                        auth, rtl_UriDecodeStrict, RTL_TEXTENCODING_UTF8);
+                    auto path = uri->getPath();
+                    if (!path.isEmpty()) {
+                        assert(path[0] == '/');
+                        path = path.copy(1);
+                    }
+                    auto const decPath = rtl::Uri::decode(
+                        path, rtl_UriDecodeStrict, RTL_TEXTENCODING_UTF8);
+                        //TODO: really decode path?
+                    if (auth.isEmpty() == decAuth.isEmpty() && path.isEmpty() == decPath.isEmpty())
+                    {
+                        // Decoding of auth and path to UTF-8 succeeded:
+                        sFileName = decAuth;
+                        sStreamRelPath = decPath;
+                    } else {
+                        SAL_WARN(
+                            "dbaccess",
+                            "<" << sFileName << "> cannot be parse as vnd.sun.star.pkg URL");
+                    }
+                } else {
+                    SAL_WARN(
+                        "dbaccess",
+                        "<" << sFileName << "> cannot be parse as vnd.sun.star.pkg URL");
+                }
             }
 
             pMedium = new SfxMedium(sFileName, (StreamMode::READ | StreamMode::NOCREATE));
@@ -324,11 +353,13 @@ bool ODBFilter::implImport( const Sequence< PropertyValue >& rDescriptor )
                 if (!sStreamRelPath.isEmpty())
                     xStorage = xStorage->openStorageElement(sStreamRelPath, embed::ElementModes::READ);
             }
+            catch (const RuntimeException&)
+            {
+                throw;
+            }
             catch (const Exception&)
             {
                 Any aError = ::cppu::getCaughtException();
-                if  (aError.isExtractableTo(::cppu::UnoType<RuntimeException>::get()))
-                    throw;
                 throw lang::WrappedTargetRuntimeException(OUString(), *this, aError);
             }
         }
@@ -598,7 +629,7 @@ void ODBFilter::fillPropertyMap(const Any& _rValue,TPropertyNameMap& _rMap)
 
 const SvXMLTokenMap& ODBFilter::GetDocElemTokenMap() const
 {
-    if ( !m_pDocElemTokenMap.get() )
+    if (!m_pDocElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -617,7 +648,7 @@ const SvXMLTokenMap& ODBFilter::GetDocElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDocContentElemTokenMap() const
 {
-    if (!m_pDocContentElemTokenMap.get())
+    if (!m_pDocContentElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -627,6 +658,7 @@ const SvXMLTokenMap& ODBFilter::GetDocContentElemTokenMap() const
             { XML_NAMESPACE_OOO,    XML_AUTOMATIC_STYLES,   XML_TOK_CONTENT_AUTOSTYLES  },
             { XML_NAMESPACE_OFFICE, XML_SCRIPTS,            XML_TOK_CONTENT_SCRIPTS     },
             { XML_NAMESPACE_OFFICE, XML_BODY,               XML_TOK_CONTENT_BODY        },
+            { XML_NAMESPACE_OOO,    XML_BODY,               XML_TOK_CONTENT_BODY        },
             XML_TOKEN_MAP_END
         };
         m_pDocContentElemTokenMap.reset(new SvXMLTokenMap( aElemTokenMap ));
@@ -637,7 +669,7 @@ const SvXMLTokenMap& ODBFilter::GetDocContentElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDatabaseElemTokenMap() const
 {
-    if ( !m_pDatabaseElemTokenMap.get() )
+    if (!m_pDatabaseElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -658,7 +690,7 @@ const SvXMLTokenMap& ODBFilter::GetDatabaseElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDataSourceElemTokenMap() const
 {
-    if ( !m_pDataSourceElemTokenMap.get() )
+    if (!m_pDataSourceElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -710,7 +742,7 @@ const SvXMLTokenMap& ODBFilter::GetDataSourceElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetLoginElemTokenMap() const
 {
-    if ( !m_pLoginElemTokenMap.get() )
+    if (!m_pLoginElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -728,7 +760,7 @@ const SvXMLTokenMap& ODBFilter::GetLoginElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDatabaseDescriptionElemTokenMap() const
 {
-    if ( !m_pDatabaseDescriptionElemTokenMap.get() )
+    if (!m_pDatabaseDescriptionElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -744,7 +776,7 @@ const SvXMLTokenMap& ODBFilter::GetDatabaseDescriptionElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDataSourceInfoElemTokenMap() const
 {
-    if ( !m_pDataSourceInfoElemTokenMap.get() )
+    if (!m_pDataSourceInfoElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -771,7 +803,7 @@ const SvXMLTokenMap& ODBFilter::GetDataSourceInfoElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetDocumentsElemTokenMap() const
 {
-    if ( !m_pDocumentsElemTokenMap.get() )
+    if (!m_pDocumentsElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -792,7 +824,7 @@ const SvXMLTokenMap& ODBFilter::GetDocumentsElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetComponentElemTokenMap() const
 {
-    if ( !m_pComponentElemTokenMap.get() )
+    if (!m_pComponentElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -812,7 +844,7 @@ const SvXMLTokenMap& ODBFilter::GetComponentElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetQueryElemTokenMap() const
 {
-    if ( !m_pQueryElemTokenMap.get() )
+    if (!m_pQueryElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {
@@ -837,7 +869,7 @@ const SvXMLTokenMap& ODBFilter::GetQueryElemTokenMap() const
 
 const SvXMLTokenMap& ODBFilter::GetColumnElemTokenMap() const
 {
-    if ( !m_pColumnElemTokenMap.get() )
+    if (!m_pColumnElemTokenMap)
     {
         static const SvXMLTokenMapEntry aElemTokenMap[]=
         {

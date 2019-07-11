@@ -35,6 +35,7 @@
 
 #include <tools/urlobj.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/propshlp.hxx>
@@ -101,11 +102,6 @@ class PathSettings : private cppu::BaseMutex
                 , bIsSinglePath (false)
                 , bIsReadonly   (false)
             {}
-
-            PathInfo(const PathInfo& rCopy)
-            {
-                takeOver(rCopy);
-            }
 
             void takeOver(const PathInfo& rCopy)
             {
@@ -396,7 +392,7 @@ private:
     void impl_rebuildPropertyDescriptor();
 
     /** provides direct access to the list of path values
-        using it's internal property id.
+        using its internal property id.
      */
     css::uno::Any impl_getPathValue(      sal_Int32      nID ) const;
     void          impl_setPathValue(      sal_Int32      nID ,
@@ -445,7 +441,6 @@ PathSettings::PathSettings( const css::uno::Reference< css::uno::XComponentConte
     : PathSettings_BASE(m_aMutex)
     , ::cppu::OPropertySetHelper(cppu::WeakComponentImplHelperBase::rBHelper)
     ,   m_xContext (xContext)
-    ,   m_pPropHelp(nullptr    )
 {
 }
 

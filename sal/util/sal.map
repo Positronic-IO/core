@@ -196,13 +196,6 @@ UDK_3_0_0 {
         rtl_reallocateMemory;
         rtl_zeroMemory;
         rtl_findInMemory;
-        rtl_hashentry_destroy;
-        rtl_hashfunc;
-        rtl_hashtable_add;
-        rtl_hashtable_destroy;
-        rtl_hashtable_find;
-        rtl_hashtable_grow;
-        rtl_hashtable_init;
         rtl_locale_equals;
         rtl_locale_getCountry;
         rtl_locale_getDefault;
@@ -706,6 +699,11 @@ LIBO_UDK_5.3 { # symbols available in >= LibO 5.3
         rtl_uString_newReplaceFirstUtf16LAsciiL;
         rtl_uString_newReplaceFirstUtf16LUtf16L;
 } LIBO_UDK_5.2;
+
+LIBO_UDK_6.2 { # symbols available in >= LibO 6.2
+    global:
+        osl_replaceFile;
+} LIBO_UDK_5.3;
 
 PRIVATE_1.0 {
     global:

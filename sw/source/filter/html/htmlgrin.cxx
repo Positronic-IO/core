@@ -37,10 +37,12 @@
 #include <editeng/scripttypeitem.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/event.hxx>
-#include <svtools/imap.hxx>
+#include <vcl/imap.hxx>
 #include <svtools/htmltokn.h>
 #include <svtools/htmlkywd.hxx>
 #include <unotools/eventcfg.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <fmtornt.hxx>
 #include <fmturl.hxx>
@@ -74,14 +76,14 @@
 
 using namespace ::com::sun::star;
 
-HTMLOptionEnum<sal_Int16> aHTMLImgHAlignTable[] =
+HTMLOptionEnum<sal_Int16> const aHTMLImgHAlignTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_AL_left,    text::HoriOrientation::LEFT       },
     { OOO_STRING_SVTOOLS_HTML_AL_right,   text::HoriOrientation::RIGHT      },
     { nullptr,                            0               }
 };
 
-HTMLOptionEnum<sal_Int16> aHTMLImgVAlignTable[] =
+HTMLOptionEnum<sal_Int16> const aHTMLImgVAlignTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_VA_top,         text::VertOrientation::LINE_TOP       },
     { OOO_STRING_SVTOOLS_HTML_VA_texttop,     text::VertOrientation::CHAR_TOP       },
@@ -299,6 +301,20 @@ void SwHTMLParser::GetDefaultScriptType( ScriptType& rType,
     rTypeStr = GetScriptTypeString( pHeaderAttrs );
 }
 
+namespace
+{
+    bool allowAccessLink(SwDoc& rDoc)
+    {
+        OUString sReferer;
+        SfxObjectShell * sh = rDoc.GetPersist();
+        if (sh != nullptr && sh->HasName())
+        {
+            sReferer = sh->GetMedium()->GetName();
+        }
+        return !SvtSecurityOptions().isUntrustedReferer(sReferer);
+    }
+}
+
 /*  */
 
 void SwHTMLParser::InsertImage()
@@ -349,7 +365,8 @@ void SwHTMLParser::InsertImage()
             case HtmlOptionId::DATA:
                 aGraphicData = rOption.GetString();
                 if (!InternalImgToPrivateURL(aGraphicData))
-                    aGraphicData = INetURLObject::GetAbsURL(m_sBaseURL, aGraphicData);
+                    aGraphicData = INetURLObject::GetAbsURL(
+                        m_sBaseURL, SwHTMLParser::StripQueryFromPath(m_sBaseURL, aGraphicData));
                 break;
             case HtmlOptionId::ALIGN:
                 eVertOri =
@@ -627,7 +644,9 @@ IMAGE_SETEVENT:
     bool bSetScaleImageMap = false;
     sal_uInt8 nPrcWidth = 0, nPrcHeight = 0;
 
-    if (!nWidth || !nHeight)
+    // bPrcWidth / bPrcHeight means we have a percent size.  If that's not the case and we have no
+    // size from nWidth / nHeight either, then inspect the image header.
+    if ((!bPrcWidth && !nWidth) && (!bPrcHeight && !nHeight) && allowAccessLink(*m_xDoc))
     {
         GraphicDescriptor aDescriptor(aGraphicURL);
         if (aDescriptor.Detect(/*bExtendedInfo=*/true))
@@ -1344,7 +1363,7 @@ bool SwHTMLParser::HasCurrentParaBookmarks( bool bIgnoreStack ) const
         for( auto i = m_aSetAttrTab.size(); i; )
         {
             HTMLAttr* pAttr = m_aSetAttrTab[ --i ];
-            if( RES_FLTR_BOOKMARK == pAttr->pItem->Which() )
+            if( RES_FLTR_BOOKMARK == pAttr->m_pItem->Which() )
             {
                 if( pAttr->GetSttParaIdx() == nNodeIdx )
                     bHasMarks = true;

@@ -24,6 +24,7 @@
 #include <functional>
 
 #include "system.hxx"
+#include "unixerrnostring.hxx"
 #include <string.h>
 #if defined(OPENBSD)
 #include <sched.h>
@@ -87,11 +88,11 @@ typedef struct osl_thread_impl_st
 
 struct osl_thread_priority_st
 {
-    int m_Highest;
-    int m_Above_Normal;
-    int m_Normal;
-    int m_Below_Normal;
-    int m_Lowest;
+    int const m_Highest;
+    int const m_Above_Normal;
+    int const m_Normal;
+    int const m_Below_Normal;
+    int const m_Lowest;
 };
 
 #define OSL_THREAD_PRIORITY_INITIALIZER { 127, 96, 64, 32, 0 }
@@ -109,7 +110,7 @@ static void osl_thread_textencoding_init_Impl();
 struct osl_thread_global_st
 {
     pthread_once_t                    m_once;
-    struct osl_thread_priority_st     m_priority;
+    struct osl_thread_priority_st const m_priority;
     struct osl_thread_textencoding_st m_textencoding;
 };
 
@@ -292,8 +293,7 @@ static oslThread osl_thread_create_Impl (
     {
         SAL_WARN(
             "sal.osl",
-            "pthread_create failed with " << nRet << " \"" << strerror(nRet)
-                << "\"");
+            "pthread_create failed: " << UnixErrnoString(nRet));
 
         pthread_mutex_unlock (&(pImpl->m_Lock));
         osl_thread_destruct_Impl (&pImpl);
@@ -732,8 +732,7 @@ static void osl_thread_priority_init_Impl()
     {
         SAL_WARN(
             "sal.osl",
-            "pthread_getschedparam failed with " << nRet << " \""
-                << strerror(nRet) << "\"");
+            "pthread_getschedparam failed: " << UnixErrnoString(nRet));
         return;
     }
 
@@ -758,8 +757,7 @@ static void osl_thread_priority_init_Impl()
         int e = errno;
         SAL_WARN(
             "sal.osl",
-            "sched_get_priority_min failed with " << e << " \"" << strerror(e)
-                << "\"");
+            "sched_get_priority_min failed: " << UnixErrnoString(e));
     }
 
     if ((nRet = sched_get_priority_max(policy) ) != -1)
@@ -773,8 +771,7 @@ static void osl_thread_priority_init_Impl()
         int e = errno;
         SAL_WARN(
             "sal.osl",
-            "sched_get_priority_max failed with " << e << " \"" << strerror(e)
-                << "\"");
+            "sched_get_priority_max failed: " << UnixErrnoString(e));
     }
 
     g_thread.m_priority.m_Normal =
@@ -792,8 +789,7 @@ static void osl_thread_priority_init_Impl()
     {
         SAL_WARN(
             "sal.osl",
-            "pthread_setschedparam failed with " << nRet << " \""
-                << strerror(nRet) << "\"");
+            "pthread_setschedparam failed: " << UnixErrnoString(nRet));
         SAL_INFO(
             "sal.osl",
             "Thread ID " << pthread_self() << ", Policy " << policy
@@ -887,8 +883,7 @@ void SAL_CALL osl_setThreadPriority (
     {
         SAL_WARN(
             "sal.osl",
-            "pthread_setschedparam failed with " << nRet << " \""
-                << strerror(nRet) << "\"");
+            "pthread_setschedparam failed: " << UnixErrnoString(nRet));
     }
 
 #endif /* NO_PTHREAD_PRIORITY */
@@ -964,7 +959,7 @@ struct wrapper_pthread_key
 
 oslThreadKey SAL_CALL osl_createThreadKey( oslThreadKeyCallbackFunction pCallback )
 {
-    wrapper_pthread_key *pKey = static_cast<wrapper_pthread_key*>(rtl_allocateMemory(sizeof(wrapper_pthread_key)));
+    wrapper_pthread_key *pKey = static_cast<wrapper_pthread_key*>(malloc(sizeof(wrapper_pthread_key)));
 
     if (pKey)
     {
@@ -972,7 +967,7 @@ oslThreadKey SAL_CALL osl_createThreadKey( oslThreadKeyCallbackFunction pCallbac
 
         if (pthread_key_create(&(pKey->m_key), pKey->pfnCallback) != 0)
         {
-            rtl_freeMemory(pKey);
+            free(pKey);
             pKey = nullptr;
         }
     }
@@ -986,7 +981,7 @@ void SAL_CALL osl_destroyThreadKey(oslThreadKey Key)
     if (pKey)
     {
         pthread_key_delete(pKey->m_key);
-        rtl_freeMemory(pKey);
+        free(pKey);
     }
 }
 

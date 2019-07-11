@@ -35,6 +35,7 @@
 #include <comphelper/anytostring.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 #include <animations/animationnodehelper.hxx>
 
 #include <svx/svditer.hxx>
@@ -91,8 +92,8 @@ namespace sd
             // create a dictionary to map source to cloned shapes
             if( pSourcePage && pTargetPage )
             {
-                SdrObjListIter aSourceIter( *pSourcePage, SdrIterMode::DeepWithGroups );
-                SdrObjListIter aTargetIter( *pTargetPage, SdrIterMode::DeepWithGroups );
+                SdrObjListIter aSourceIter( pSourcePage, SdrIterMode::DeepWithGroups );
+                SdrObjListIter aTargetIter( pTargetPage, SdrIterMode::DeepWithGroups );
 
                 while( aSourceIter.IsMore() && aTargetIter.IsMore() )
                 {

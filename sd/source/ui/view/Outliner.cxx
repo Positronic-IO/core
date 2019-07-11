@@ -56,6 +56,7 @@
 #include <Window.hxx>
 #include <sdresid.hxx>
 #include <DrawViewShell.hxx>
+#include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
 #include <drawdoc.hxx>
 #include <DrawDocShell.hxx>
@@ -223,7 +224,6 @@ SdOutliner::SdOutliner( SdDrawDocument* pDoc, OutlinerMode nMode )
         SetHyphenator( xHyphenator );
 
     SetDefaultLanguage( Application::GetSettings().GetLanguageTag().getLanguageType() );
-    SetHoriAlignIgnoreTrailingWhitespace( pDoc->IsHoriAlignIgnoreTrailingWhitespace() );
 }
 
 /// Nothing spectacular in the destructor.
@@ -307,7 +307,7 @@ void SdOutliner::EndSpelling()
 
     // When in <member>PrepareSpelling()</member> a new outline view has
     // been created then delete it here.
-    bool bViewIsDrawViewShell(pViewShell && nullptr != dynamic_cast< const sd::DrawViewShell *>( pViewShell.get() ));
+    bool bViewIsDrawViewShell(dynamic_cast< const sd::DrawViewShell *>( pViewShell.get() ));
     if (bViewIsDrawViewShell)
     {
         SetStatusEventHdl(Link<EditStatus&,void>());
@@ -335,8 +335,8 @@ void SdOutliner::EndSpelling()
     // changes were done at SpellCheck
     if(IsModified())
     {
-        if(mpView && dynamic_cast< const sd::OutlineView *>( mpView ) !=  nullptr)
-            static_cast<sd::OutlineView*>(mpView)->PrepareClose();
+        if(auto pOutlineView = dynamic_cast<sd::OutlineView *>( mpView ))
+            pOutlineView->PrepareClose();
         if(mpDrawDocument && !mpDrawDocument->IsChanged())
             mpDrawDocument->SetChanged();
     }
@@ -449,7 +449,7 @@ bool SdOutliner::StartSearchAndReplace (const SvxSearchItem* pSearchItem)
     {
         std::shared_ptr<sd::ViewShell> pShell (pBase->GetMainViewShell());
         SetViewShell(pShell);
-        if (pShell.get() == nullptr)
+        if (pShell == nullptr)
             bAbort = true;
         else
             switch (pShell->GetShellType())
@@ -858,7 +858,7 @@ void SdOutliner::DetectChange()
         std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell));
 
     // Detect whether the view has been switched from the outside.
-    if (pDrawViewShell.get() != nullptr
+    if (pDrawViewShell != nullptr
         && (aPosition.meEditMode != pDrawViewShell->GetEditMode()
             || aPosition.mePageKind != pDrawViewShell->GetPageKind()))
     {
@@ -961,7 +961,7 @@ void SdOutliner::RememberStartPosition()
     {
         std::shared_ptr<sd::DrawViewShell> pDrawViewShell (
             std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell));
-        if (pDrawViewShell.get() != nullptr)
+        if (pDrawViewShell != nullptr)
         {
             meStartViewMode = pDrawViewShell->GetPageKind();
             meStartEditMode = pDrawViewShell->GetEditMode();
@@ -1017,7 +1017,7 @@ void SdOutliner::RestoreStartPosition()
             std::shared_ptr<sd::DrawViewShell> pDrawViewShell (
                 std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell));
             SetViewMode (meStartViewMode);
-            if (pDrawViewShell.get() != nullptr)
+            if (pDrawViewShell != nullptr)
             {
                 SetPage (meStartEditMode, mnStartPageIndex);
                 mpObj = mpStartEditedObject;
@@ -1203,11 +1203,11 @@ void SdOutliner::ShowEndOfSearchDialog()
     else
         aString = SdResId(STR_END_SPELLING);
 
-    // Show the message in an info box that is modal with respect to the
-    // whole application.
-    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+    // Show the message in an info box that is modal with respect to the whole application.
+    VclPtr<vcl::Window> xParent(GetMessageBoxParent());
+    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(xParent ? xParent->GetFrameWeld() : nullptr,
                                                   VclMessageType::Info, VclButtonsType::Ok, aString));
-    ShowModalMessageBox(*xInfoBox.get());
+    xInfoBox->run();
 }
 
 bool SdOutliner::ShowWrapArroundDialog()
@@ -1245,9 +1245,10 @@ bool SdOutliner::ShowWrapArroundDialog()
 
     // Pop up question box that asks the user whether to wrap around.
     // The dialog is made modal with respect to the whole application.
-    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr,
+    VclPtr<vcl::Window> xParent(GetMessageBoxParent());
+    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(xParent ? xParent->GetFrameWeld() : nullptr,
                                                    VclMessageType::Question, VclButtonsType::YesNo, SdResId(pStringId)));
-    sal_uInt16 nBoxResult = ShowModalMessageBox(*xQueryBox.get());
+    sal_uInt16 nBoxResult = xQueryBox->run();
 
     return (nBoxResult == RET_YES);
 }
@@ -1330,7 +1331,7 @@ void SdOutliner::SetViewMode (PageKind ePageKind)
     std::shared_ptr<sd::ViewShell> pViewShell (mpWeakViewShell.lock());
     std::shared_ptr<sd::DrawViewShell> pDrawViewShell(
         std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell));
-    if (pDrawViewShell.get()!=nullptr && ePageKind != pDrawViewShell->GetPageKind())
+    if (pDrawViewShell != nullptr && ePageKind != pDrawViewShell->GetPageKind())
     {
         // Restore old edit mode.
         pDrawViewShell->ChangeEditMode(mpImpl->meOriginalEditMode, false);
@@ -1383,8 +1384,8 @@ void SdOutliner::SetViewMode (PageKind ePageKind)
         // Save edit mode so that it can be restored when switching the view
         // shell again.
         pDrawViewShell = std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell);
-        OSL_ASSERT(pDrawViewShell.get()!=nullptr);
-        if (pDrawViewShell.get() != nullptr)
+        OSL_ASSERT(pDrawViewShell != nullptr);
+        if (pDrawViewShell != nullptr)
             mpImpl->meOriginalEditMode = pDrawViewShell->GetEditMode();
     }
 }
@@ -1396,8 +1397,8 @@ void SdOutliner::SetPage (EditMode eEditMode, sal_uInt16 nPageIndex)
         std::shared_ptr<sd::ViewShell> pViewShell (mpWeakViewShell.lock());
         std::shared_ptr<sd::DrawViewShell> pDrawViewShell(
             std::dynamic_pointer_cast<sd::DrawViewShell>(pViewShell));
-        OSL_ASSERT(pDrawViewShell.get()!=nullptr);
-        if (pDrawViewShell.get() != nullptr)
+        OSL_ASSERT(pDrawViewShell != nullptr);
+        if (pDrawViewShell != nullptr)
         {
             pDrawViewShell->ChangeEditMode(eEditMode, false);
             pDrawViewShell->SwitchPage(nPageIndex);
@@ -1650,7 +1651,7 @@ void SdOutliner::EndConversion()
 bool SdOutliner::ConvertNextDocument()
 {
     std::shared_ptr<sd::ViewShell> pViewShell (mpWeakViewShell.lock());
-    if (pViewShell && nullptr != dynamic_cast< const sd::OutlineViewShell *>( pViewShell.get() ) )
+    if (dynamic_cast< const sd::OutlineViewShell *>( pViewShell.get() ) )
         return false;
 
     mpDrawDocument->GetDocSh()->SetWaitCursor( true );
@@ -1683,7 +1684,7 @@ bool SdOutliner::ConvertNextDocument()
     return !mbEndOfSearch;
 }
 
-sal_uInt16 SdOutliner::ShowModalMessageBox(weld::MessageDialog& rMessageBox)
+VclPtr<vcl::Window> SdOutliner::GetMessageBoxParent()
 {
     // We assume that the parent of the given message box is NULL, i.e. it is
     // modal with respect to the top application window. However, this
@@ -1713,16 +1714,12 @@ sal_uInt16 SdOutliner::ShowModalMessageBox(weld::MessageDialog& rMessageBox)
 
     if (pChildWindow != nullptr)
         pSearchDialog = pChildWindow->GetWindow();
-    if (pSearchDialog != nullptr)
-        pSearchDialog->EnableInput(false);
 
-    sal_uInt16 nResult = rMessageBox.run();
+    if (pSearchDialog)
+        return pSearchDialog;
 
-    // Unlock the search dialog.
-    if (pSearchDialog != nullptr)
-        pSearchDialog->EnableInput();
-
-    return nResult;
+    std::shared_ptr<sd::ViewShell> pViewShell (mpWeakViewShell.lock());
+    return pViewShell->GetActiveWindow();
 }
 
 //===== SdOutliner::Implementation ==============================================
@@ -1754,7 +1751,7 @@ void SdOutliner::Implementation::ProvideOutlinerView (
     const std::shared_ptr<sd::ViewShell>& rpViewShell,
     vcl::Window* pWindow)
 {
-    if (rpViewShell.get() != nullptr)
+    if (rpViewShell != nullptr)
     {
         switch (rpViewShell->GetShellType())
         {

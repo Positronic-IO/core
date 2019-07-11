@@ -36,6 +36,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/app.hxx>
 #include <svx/ruler.hxx>
+#include <editeng/outlobj.hxx>
 #include <editeng/outliner.hxx>
 #include <svtools/ehdl.hxx>
 #include <svx/svdoole2.hxx>
@@ -478,11 +479,11 @@ void ViewShell::SetPageSizeAndBorder(PageKind ePageKind, const Size& rNewSize,
         return;
     }
 
-    SdUndoGroup* pUndoGroup(nullptr);
+    std::unique_ptr<SdUndoGroup> pUndoGroup;
     SfxViewShell* pViewShell(GetViewShell());
     if (pViewShell)
     {
-        pUndoGroup = new SdUndoGroup(GetDoc());
+        pUndoGroup.reset(new SdUndoGroup(GetDoc()));
         pUndoGroup->SetComment(SdResId(STR_UNDO_CHANGE_PAGEFORMAT));
     }
     Broadcast (ViewShellHint(ViewShellHint::HINT_PAGE_RESIZE_START));
@@ -491,7 +492,7 @@ void ViewShell::SetPageSizeAndBorder(PageKind ePageKind, const Size& rNewSize,
     GetDoc()->AdaptPageSizeForAllPages(
         rNewSize,
         ePageKind,
-        pUndoGroup,
+        pUndoGroup.get(),
         nLeft,
         nRight,
         nUpper,
@@ -510,7 +511,7 @@ void ViewShell::SetPageSizeAndBorder(PageKind ePageKind, const Size& rNewSize,
     // handed over undo group to undo manager
     if (pViewShell)
     {
-        pViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager()->AddUndoAction(pUndoGroup);
+        pViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager()->AddUndoAction(std::move(pUndoGroup));
     }
 
     // calculate View-Sizes
@@ -900,7 +901,7 @@ sal_Int8 ViewShell::ExecuteDrop (
     return pView ? pView->ExecuteDrop( rEvt, pTargetWindow, nPage, nLayer ) : DND_ACTION_NONE;
 }
 
-void ViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool /*bBrowse*/)
+void ViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     const sal_Int32 nIndex = rSequence.getLength();
     rSequence.realloc( nIndex + 1 );
@@ -910,7 +911,7 @@ void ViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::Propert
     // usually be the called view shell, but to be on the safe side we call
     // the main view shell explicitly.
     SfxInterfaceId nViewID (IMPRESS_FACTORY_ID);
-    if (GetViewShellBase().GetMainViewShell().get() != nullptr)
+    if (GetViewShellBase().GetMainViewShell() != nullptr)
         nViewID = GetViewShellBase().GetMainViewShell()->mpImpl->GetViewId();
     rSequence[nIndex].Name = sUNO_View_ViewId;
     rSequence[nIndex].Value <<= "view" + OUString::number( static_cast<sal_uInt16>(nViewID));
@@ -918,7 +919,7 @@ void ViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::Propert
     mpFrameView->WriteUserDataSequence( rSequence );
 }
 
-void ViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool /*bBrowse*/ )
+void ViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     mpFrameView->ReadUserDataSequence( rSequence );
 }

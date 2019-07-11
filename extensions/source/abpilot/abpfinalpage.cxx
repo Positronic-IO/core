@@ -20,6 +20,7 @@
 #include "abpfinalpage.hxx"
 #include "addresssettings.hxx"
 #include "abspilot.hxx"
+#include <osl/diagnose.h>
 #include <tools/urlobj.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <unotools/pathoptions.hxx>
@@ -34,7 +35,7 @@ namespace abp
     using namespace ::svt;
     using namespace ::utl;
 
-    std::shared_ptr<const SfxFilter> lcl_getBaseFilter()
+    static std::shared_ptr<const SfxFilter> lcl_getBaseFilter()
     {
         std::shared_ptr<const SfxFilter> pFilter = SfxFilter::GetFilterByName("StarOffice XML (Base)");
         OSL_ENSURE(pFilter,"Filter: StarOffice XML (Base) could not be found!");
@@ -53,8 +54,8 @@ namespace abp
         get(m_pLocationLabel, "locationft");
         get(m_pName, "name");
         get(m_pDuplicateNameError, "warning");
-        m_pLocationController = new svx::DatabaseLocationInputController(_pParent->getORB(),
-            *m_pLocation, *m_pBrowse);
+        m_pLocationController.reset( new svx::DatabaseLocationInputController(_pParent->getORB(),
+            *m_pLocation, *m_pBrowse) );
 
         m_pName->SetModifyHdl( LINK(this, FinalPage, OnNameModified) );
         m_pLocation->SetModifyHdl( LINK(this, FinalPage, OnNameModified) );
@@ -72,7 +73,7 @@ namespace abp
 
     void FinalPage::dispose()
     {
-        delete m_pLocationController;
+        m_pLocationController.reset();
         m_pLocation.clear();
         m_pBrowse.clear();
         m_pRegisterName.clear();

@@ -126,19 +126,6 @@ namespace sdr
                     DoProcessDisplay(rDisplayInfo);
                 }
             }
-
-            // after paint take care of the evtl. scheduled asynchronious commands.
-            // Do this by resetting the timer contained there. Thus, after the paint
-            // that timer will be triggered and the events will be executed.
-            if(HasEventHandler())
-            {
-                sdr::event::TimerEventHandler& rEventHandler = GetEventHandler();
-
-                if(!rEventHandler.IsEmpty())
-                {
-                    rEventHandler.Restart();
-                }
-            }
         }
 
         // Process the whole displaying. Only use given DisplayInfo, do not access other
@@ -339,15 +326,15 @@ namespace sdr
 
             if(pActiveGroupList)
             {
-                if(dynamic_cast<const SdrPage*>( pActiveGroupList) !=  nullptr)
+                if(nullptr != pActiveGroupList->getSdrPageFromSdrObjList())
                 {
                     // It's a Page itself
-                    return &(static_cast<SdrPage*>(pActiveGroupList)->GetViewContact());
+                    return &(pActiveGroupList->getSdrPageFromSdrObjList()->GetViewContact());
                 }
-                else if(pActiveGroupList->GetOwnerObj())
+                else if(pActiveGroupList->getSdrObjectFromSdrObjList())
                 {
                     // Group object
-                    return &(pActiveGroupList->GetOwnerObj()->GetViewContact());
+                    return &(pActiveGroupList->getSdrObjectFromSdrObjList()->GetViewContact());
                 }
             }
             else if(GetSdrPage())
@@ -365,33 +352,6 @@ namespace sdr
         {
             // invalidate at associated PageWindow
             GetPageWindow().InvalidatePageWindow(rRange);
-        }
-
-        // Get info if given Rectangle is visible in this view
-        bool ObjectContactOfPageView::IsAreaVisible(const basegfx::B2DRange& rRange) const
-        {
-            // compare with the visible rectangle
-            if(rRange.isEmpty())
-            {
-                // no range -> not visible
-                return false;
-            }
-            else
-            {
-                const OutputDevice& rTargetOutDev = GetPageWindow().GetPaintWindow().GetTargetOutputDevice();
-                const Size aOutputSizePixel(rTargetOutDev.GetOutputSizePixel());
-                basegfx::B2DRange aLogicViewRange(0.0, 0.0, aOutputSizePixel.getWidth(), aOutputSizePixel.getHeight());
-
-                aLogicViewRange.transform(rTargetOutDev.GetInverseViewTransformation());
-
-                if(!aLogicViewRange.isEmpty() && !aLogicViewRange.overlaps(rRange))
-                {
-                    return false;
-                }
-            }
-
-            // call parent
-            return ObjectContact::IsAreaVisible(rRange);
         }
 
         // Get info about the need to visualize GluePoints
@@ -420,29 +380,10 @@ namespace sdr
             return rOpt.GetIsAllowAnimatedGraphics();
         }
 
-        // check if asynchronious graphis loading is allowed. Default is sal_False.
-        bool ObjectContactOfPageView::IsAsynchronGraphicsLoadingAllowed() const
-        {
-            SdrView& rView = GetPageWindow().GetPageView().GetView();
-            return rView.IsSwapAsynchron();
-        }
-
         // print?
         bool ObjectContactOfPageView::isOutputToPrinter() const
         {
             return (OUTDEV_PRINTER == mrPageWindow.GetPaintWindow().GetOutputDevice().GetOutDevType());
-        }
-
-        // window?
-        bool ObjectContactOfPageView::isOutputToWindow() const
-        {
-            return (OUTDEV_WINDOW == mrPageWindow.GetPaintWindow().GetOutputDevice().GetOutDevType());
-        }
-
-        // VirtualDevice?
-        bool ObjectContactOfPageView::isOutputToVirtualDevice() const
-        {
-            return (OUTDEV_VIRDEV == mrPageWindow.GetPaintWindow().GetOutputDevice().GetOutDevType());
         }
 
         // recording MetaFile?
@@ -455,7 +396,7 @@ namespace sdr
         // pdf export?
         bool ObjectContactOfPageView::isOutputToPDFFile() const
         {
-            return (nullptr != mrPageWindow.GetPaintWindow().GetOutputDevice().GetPDFWriter());
+            return OUTDEV_PDF == mrPageWindow.GetPaintWindow().GetOutputDevice().GetOutDevType();
         }
 
         // gray display mode
@@ -463,13 +404,6 @@ namespace sdr
         {
             const DrawModeFlags nDrawMode(mrPageWindow.GetPaintWindow().GetOutputDevice().GetDrawMode());
             return (nDrawMode == (DrawModeFlags::GrayLine|DrawModeFlags::GrayFill|DrawModeFlags::BlackText|DrawModeFlags::GrayBitmap|DrawModeFlags::GrayGradient));
-        }
-
-        // gray display mode
-        bool ObjectContactOfPageView::isDrawModeBlackWhite() const
-        {
-            const DrawModeFlags nDrawMode(mrPageWindow.GetPaintWindow().GetOutputDevice().GetDrawMode());
-            return (nDrawMode == (DrawModeFlags::BlackLine|DrawModeFlags::BlackText|DrawModeFlags::WhiteFill|DrawModeFlags::GrayBitmap|DrawModeFlags::WhiteGradient));
         }
 
         // high contrast display mode

@@ -38,12 +38,12 @@
 #include <sot/formats.hxx>
 #include <sot/filelist.hxx>
 #include <sot/storage.hxx>
-#include <unotools/pathoptions.hxx>
 #include <svl/ptitem.hxx>
 #include <svl/stritem.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <vcl/graph.hxx>
 
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/string.hxx>
@@ -56,9 +56,12 @@
 #include <dbdata.hxx>
 #include <sc.hrc>
 #include <filter.hxx>
+#include <globstr.hrc>
+#include <global.hxx>
 #include <scextopt.hxx>
 #include <tabvwsh.hxx>
 #include <compiler.hxx>
+#include <scmod.hxx>
 
 #include <asciiopt.hxx>
 #include <scabstdlg.hxx>
@@ -293,10 +296,11 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
         else
         {
             ScAddress aCellPos( nPosX, nPosY, GetViewData().GetTabNo() );
-            ScImportExport aObj( GetViewData().GetDocument(), aCellPos );
-            aObj.SetOverwriting( true );
+            std::shared_ptr<ScImportExport> pObj(new ScImportExport(GetViewData().GetDocument(), aCellPos));
+            pObj->SetOverwriting( true );
 
-            OUString aStr;
+
+            std::shared_ptr<OUString> pStrBuffer(new OUString());
             tools::SvRef<SotStorageStream> xStream;
             if ( aDataHelper.GetSotStorageStream( nFormatId, xStream ) && xStream.is() )
             {
@@ -314,7 +318,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                         ScAsciiOptions aOptions;
                         aOptions.SetLanguage(pDlg->GetLanguageType());
                         aOptions.SetDetectSpecialNumber(pDlg->IsDateConversionSet());
-                        aObj.SetExtOptions(aOptions);
+                        pObj->SetExtOptions(aOptions);
                     }
                     else
                     {
@@ -323,48 +327,64 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                     }
                 }
                 if(!bRet)
-                    bRet = aObj.ImportStream( *xStream, OUString(), nFormatId );
+                    bRet = pObj->ImportStream( *xStream, OUString(), nFormatId );
                 // mba: clipboard always must contain absolute URLs (could be from alien source)
             }
             else if ((nFormatId == SotClipboardFormatId::STRING || nFormatId == SotClipboardFormatId::STRING_TSVC)
-                    && aDataHelper.GetString( nFormatId, aStr ))
+                    && aDataHelper.GetString( nFormatId, *pStrBuffer ))
             {
                 // Do CSV dialog if more than one line.
-                sal_Int32 nDelim = aStr.indexOf('\n');
-                if (nDelim >= 0 && nDelim != aStr.getLength () - 1)
+                sal_Int32 nDelim = pStrBuffer->indexOf('\n');
+                if (nDelim >= 0 && nDelim != pStrBuffer->getLength () - 1)
                 {
-                    ScImportStringStream aStrm( aStr);
-                    ScAbstractDialogFactory* pFact =
-                        ScAbstractDialogFactory::Create();
-                    ScopedVclPtr<AbstractScImportAsciiDlg> pDlg(
-                        pFact->CreateScImportAsciiDlg( OUString(), &aStrm, SC_PASTETEXT));
+                    vcl::Window* pParent = GetActiveWin();
 
-                    if (pDlg->Execute() == RET_OK)
-                    {
-                        ScAsciiOptions aOptions;
-                        pDlg->GetOptions( aOptions );
-                        pDlg->SaveParameters();
-                        aObj.SetExtOptions( aOptions );
+                    std::shared_ptr<ScImportStringStream> pStrm(new ScImportStringStream(*pStrBuffer));
 
-                        bRet = aObj.ImportString( aStr, nFormatId );
+                    ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
+                    VclPtr<AbstractScImportAsciiDlg> pDlg(
+                        pFact->CreateScImportAsciiDlg(pParent, OUString(), pStrm.get(), SC_PASTETEXT));
 
-                        // TODO: what if (aObj.IsOverflow())
-                        // Content was partially pasted, which can be undone by
-                        // the user though.
-                        if (aObj.IsOverflow())
-                            bRet = false;
-                    }
-                    else
-                        bRet = true;
-                        // Yes, no failure, don't raise a "couldn't paste"
-                        // dialog if user cancelled.
+                    bAllowDialogs = bAllowDialogs && !SC_MOD()->IsInExecuteDrop();
+
+                    pDlg->StartExecuteAsync([this, pDlg, pDoc, pStrm, nFormatId, pStrBuffer, pObj, bAllowDialogs](sal_Int32 nResult){
+                        bool bShowErrorDialog = bAllowDialogs;
+                        if (RET_OK == nResult)
+                        {
+                            ScAsciiOptions aOptions;
+                            pDlg->GetOptions( aOptions );
+                            pDlg->SaveParameters();
+                            pObj->SetExtOptions( aOptions );
+                            pObj->ImportString( *pStrBuffer, nFormatId );
+
+                            // TODO: what if (aObj.IsOverflow())
+                            // Content was partially pasted, which can be undone by
+                            // the user though.
+                            bShowErrorDialog = bShowErrorDialog && pObj->IsOverflow();
+                        }
+                        else
+                        {
+                            bShowErrorDialog = false;
+                            // Yes, no failure, don't raise a "couldn't paste"
+                            // dialog if user cancelled.
+                        }
+
+                        InvalidateAttribs();
+                        GetViewData().UpdateInputHandler();
+
+                        pDoc->SetPastingDrawFromOtherDoc( false );
+
+                        if (bShowErrorDialog)
+                            ErrorMessage(STR_PASTE_ERROR);
+                    });
+                    return true;
                 }
                 else
-                    bRet = aObj.ImportString( aStr, nFormatId );
+                    bRet = pObj->ImportString( *pStrBuffer, nFormatId );
             }
             else if ((nFormatId != SotClipboardFormatId::STRING && nFormatId != SotClipboardFormatId::STRING_TSVC)
-                    && aDataHelper.GetString( nFormatId, aStr ))
-                bRet = aObj.ImportString( aStr, nFormatId );
+                    && aDataHelper.GetString( nFormatId, *pStrBuffer ))
+                bRet = pObj->ImportString( *pStrBuffer, nFormatId );
 
             InvalidateAttribs();
             GetViewData().UpdateInputHandler();
@@ -422,7 +442,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
         {
             MakeDrawLayer();
             ScDrawView* pScDrawView = GetScDrawView();
-            SdrObject* pObj = pScDrawView->CreateFieldControl( svx::OColumnTransferable::extractColumnDescriptor( aDataHelper ) );
+            SdrObjectUniquePtr pObj = pScDrawView->CreateFieldControl( svx::OColumnTransferable::extractColumnDescriptor( aDataHelper ) );
             if (pObj)
             {
                 Point aInsPos = aPos;
@@ -434,11 +454,11 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                 aRect.SetPos(aInsPos);
                 pObj->SetLogicRect(aRect);
 
-                if ( dynamic_cast<const SdrUnoObj*>( pObj) !=  nullptr )
+                if ( dynamic_cast<const SdrUnoObj*>( pObj.get() ) !=  nullptr )
                     pObj->NbcSetLayer(SC_LAYER_CONTROLS);
                 else
                     pObj->NbcSetLayer(SC_LAYER_FRONT);
-                if (dynamic_cast<const SdrObjGroup*>( pObj) !=  nullptr)
+                if (dynamic_cast<const SdrObjGroup*>( pObj.get() ) !=  nullptr)
                 {
                     SdrObjListIter aIter( *pObj, SdrIterMode::DeepWithGroups );
                     SdrObject* pSubObj = aIter.Next();
@@ -452,7 +472,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                     }
                 }
 
-                pScDrawView->InsertObjectSafe(pObj, *pScDrawView->GetSdrPageView());
+                pScDrawView->InsertObjectSafe(pObj.release(), *pScDrawView->GetSdrPageView());
 
                 GetViewData().GetViewShell()->SetDrawShell( true );
                 bRet = true;
@@ -488,12 +508,13 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
         {
             MakeDrawLayer();    // before loading model, so 3D factory has been created
 
-            SvtPathOptions aPathOpt;
-            OUString aPath = aPathOpt.GetPalettePath();
-
             ScDocShellRef aDragShellRef( new ScDocShell );
             aDragShellRef->DoInitNew();
-            std::unique_ptr<FmFormModel> pModel(new FmFormModel( aPath, nullptr, aDragShellRef.get() ));
+
+            std::unique_ptr<FmFormModel> pModel(
+                new FmFormModel(
+                    nullptr,
+                    aDragShellRef.get()));
 
             pModel->GetItemPool().FreezeIdRanges();
             xStm->Seek(0);
@@ -507,7 +528,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
             for (sal_uInt16 i=0; i<nPages; i++)
             {
                 SdrPage* pPage = pModel->GetPage(i);
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
                 SdrObject* pObject = aIter.Next();
                 while (pObject)
                 {

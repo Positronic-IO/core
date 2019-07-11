@@ -17,22 +17,17 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-
 #include <svx/svdmodel.hxx>
-
 #include <cassert>
 #include <math.h>
-
 #include <osl/endian.h>
 #include <rtl/strbuf.hxx>
 #include <sal/log.hxx>
-
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
-
 #include <unotools/configmgr.hxx>
-
+#include <unotools/pathoptions.hxx>
 #include <svl/whiter.hxx>
 #include <svl/asiancfg.hxx>
 #include <svx/xit.hxx>
@@ -43,12 +38,9 @@
 #include <svx/xflftrit.hxx>
 #include <svx/xflhtit.hxx>
 #include <svx/xlnstit.hxx>
-
 #include <editeng/editdata.hxx>
 #include <editeng/editeng.hxx>
-
 #include <svx/xtable.hxx>
-
 #include <svx/svditer.hxx>
 #include <svx/svdtrans.hxx>
 #include <svx/svdpage.hxx>
@@ -64,10 +56,8 @@
 #include <svx/dialmgr.hxx>
 #include <svx/strings.hrc>
 #include <svdoutlinercache.hxx>
-
 #include <svx/xflclit.hxx>
 #include <svx/xlnclit.hxx>
-
 #include <officecfg/Office/Common.hxx>
 #include <editeng/fontitem.hxx>
 #include <editeng/colritem.hxx>
@@ -80,10 +70,8 @@
 #include <svl/zforlist.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/storagehelper.hxx>
-
 #include <tools/tenccvt.hxx>
 #include <unotools/syslocale.hxx>
-
 #include <svx/sdr/properties/properties.hxx>
 #include <editeng/eeitem.hxx>
 #include <svl/itemset.hxx>
@@ -92,7 +80,6 @@
 #include <memory>
 #include <libxml/xmlwriter.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
-#include <comphelper/lok.hxx>
 #include <sfx2/viewsh.hxx>
 #include <o3tl/enumrange.hxx>
 
@@ -107,22 +94,22 @@ struct SdrModelImpl
     SdrUndoFactory* mpUndoFactory;
 
     bool mbAnchoredTextOverflowLegacy; // tdf#99729 compatibility flag
-    bool mbHoriAlignIgnoreTrailingWhitespace; // tdf#115639 compatibility flag
 };
 
 
-void SdrModel::ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* _pEmbeddedHelper,
-    bool bUseExtColorTable)
+void SdrModel::ImpCtor(
+    SfxItemPool* pPool,
+    ::comphelper::IEmbeddedHelper* _pEmbeddedHelper,
+    bool bDisablePropertyFiles)
 {
     mpImpl.reset(new SdrModelImpl);
     mpImpl->mpUndoManager=nullptr;
     mpImpl->mpUndoFactory=nullptr;
     mpImpl->mbAnchoredTextOverflowLegacy = false;
-    mpImpl->mbHoriAlignIgnoreTrailingWhitespace = false;
     mbInDestruction = false;
     aObjUnit=SdrEngineDefaults::GetMapFraction();
     eObjUnit=SdrEngineDefaults::GetMapUnit();
-    eUIUnit=FUNIT_MM;
+    eUIUnit=FieldUnit::MM;
     aUIScale=Fraction(1,1);
     nUIUnitDecimalMark=0;
     pLayerAdmin=nullptr;
@@ -141,7 +128,6 @@ void SdrModel::ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* _pEmbe
     pCurrentUndoGroup=nullptr;
     nUndoLevel=0;
     mbUndoEnabled=true;
-    bExtColorTable=false;
     mbChanged = false;
     bPagNumsDirty=false;
     bMPgNumsDirty=false;
@@ -167,8 +153,6 @@ void SdrModel::ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* _pEmbe
             get());
     else
         mnCharCompressType = CharCompressType::NONE;
-
-    bExtColorTable=bUseExtColorTable;
 
     if ( pPool == nullptr )
     {
@@ -213,29 +197,22 @@ void SdrModel::ImpCtor(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* _pEmbe
     pTextChain.reset(new TextChain);
     /* End Text Chaining related code */
 
-    ImpCreateTables();
+    ImpCreateTables(bDisablePropertyFiles || utl::ConfigManager::IsFuzzing());
 }
 
-SdrModel::SdrModel():
+SdrModel::SdrModel(
+    SfxItemPool* pPool,
+    ::comphelper::IEmbeddedHelper* pPers,
+    bool bDisablePropertyFiles)
+:
+#ifdef DBG_UTIL
+    // SdrObjectLifetimeWatchDog:
+    maAllIncarnatedObjects(),
+#endif
     maMaPag(),
     maPages()
 {
-    ImpCtor(nullptr, nullptr, false);
-}
-
-SdrModel::SdrModel(SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* pPers):
-    maMaPag(),
-    maPages()
-{
-    ImpCtor(pPool,pPers,false/*bUseExtColorTable*/);
-}
-
-SdrModel::SdrModel(const OUString& rPath, SfxItemPool* pPool, ::comphelper::IEmbeddedHelper* pPers, bool bUseExtColorTable):
-    maMaPag(),
-    maPages(),
-    aTablePath(rPath)
-{
-    ImpCtor(pPool,pPers,bUseExtColorTable);
+    ImpCtor(pPool,pPers,bDisablePropertyFiles);
 }
 
 SdrModel::~SdrModel()
@@ -255,6 +232,21 @@ SdrModel::~SdrModel()
     pCurrentUndoGroup.reset();
 
     ClearModel(true);
+
+#ifdef DBG_UTIL
+    // SdrObjectLifetimeWatchDog:
+    if(!maAllIncarnatedObjects.empty())
+    {
+        SAL_WARN("svx","SdrModel::~SdrModel: Not all incarnations of SdrObjects deleted, possible memory leak (!)");
+        // copy to std::vector - calling SdrObject::Free will change maAllIncarnatedObjects
+        const std::vector< const SdrObject* > maRemainingObjects(maAllIncarnatedObjects.begin(), maAllIncarnatedObjects.end());
+        for(auto pSdrObject : maRemainingObjects)
+        {
+            SdrObject* pCandidate(const_cast<SdrObject*>(pSdrObject));
+            SdrObject::Free(pCandidate);
+        }
+    }
+#endif
 
     pLayerAdmin.reset();
 
@@ -354,9 +346,9 @@ void SdrModel::Undo()
             pDo->Undo();
             if(!pRedoStack)
                 pRedoStack.reset(new std::deque<std::unique_ptr<SfxUndoAction>>);
-            SfxUndoAction* p = pUndoStack->front().release();
+            std::unique_ptr<SfxUndoAction> p = std::move(pUndoStack->front());
             pUndoStack->pop_front();
-            pRedoStack->emplace_front(p);
+            pRedoStack->emplace_front(std::move(p));
             mbUndoEnabled = bWasUndoEnabled;
         }
     }
@@ -378,9 +370,9 @@ void SdrModel::Redo()
             pDo->Redo();
             if(!pUndoStack)
                 pUndoStack.reset(new std::deque<std::unique_ptr<SfxUndoAction>>);
-            SfxUndoAction* p = pRedoStack->front().release();
+            std::unique_ptr<SfxUndoAction> p = std::move(pRedoStack->front());
             pRedoStack->pop_front();
-            pUndoStack->emplace_front(p);
+            pUndoStack->emplace_front(std::move(p));
             mbUndoEnabled = bWasUndoEnabled;
         }
     }
@@ -410,9 +402,9 @@ void SdrModel::ImpPostUndoAction(std::unique_ptr<SdrUndoAction> pUndo)
     DBG_ASSERT( mpImpl->mpUndoManager == nullptr, "svx::SdrModel::ImpPostUndoAction(), method not supported with application undo manager!" );
     if( IsUndoEnabled() )
     {
-        if (aUndoLink.IsSet())
+        if (aUndoLink)
         {
-            aUndoLink.Call(pUndo.release());
+            aUndoLink(std::move(pUndo));
         }
         else
         {
@@ -520,8 +512,7 @@ void SdrModel::EndUndo()
             {
                 if(pCurrentUndoGroup->GetActionCount()!=0)
                 {
-                    SdrUndoAction* pUndo=pCurrentUndoGroup.release();
-                    ImpPostUndoAction(std::unique_ptr<SdrUndoAction>(pUndo));
+                    ImpPostUndoAction(std::move(pCurrentUndoGroup));
                 }
                 else
                 {
@@ -541,12 +532,9 @@ void SdrModel::SetUndoComment(const OUString& rComment)
     {
         OSL_FAIL("svx::SdrModel::SetUndoComment(), method not supported with application undo manager!" );
     }
-    else if( IsUndoEnabled() )
+    else if( IsUndoEnabled() && nUndoLevel==1)
     {
-        if(nUndoLevel==1)
-        {
-            pCurrentUndoGroup->SetComment(rComment);
-        }
+        pCurrentUndoGroup->SetComment(rComment);
     }
 }
 
@@ -567,25 +555,21 @@ void SdrModel::SetUndoComment(const OUString& rComment, const OUString& rObjDesc
     }
 }
 
-void SdrModel::AddUndo(SdrUndoAction* pUndo)
+void SdrModel::AddUndo(std::unique_ptr<SdrUndoAction> pUndo)
 {
     if( mpImpl->mpUndoManager )
     {
-        mpImpl->mpUndoManager->AddUndoAction( pUndo );
+        mpImpl->mpUndoManager->AddUndoAction( std::move(pUndo) );
     }
-    else if( !IsUndoEnabled() )
-    {
-        delete pUndo;
-    }
-    else
+    else if( IsUndoEnabled() )
     {
         if (pCurrentUndoGroup)
         {
-            pCurrentUndoGroup->AddAction(pUndo);
+            pCurrentUndoGroup->AddAction(std::move(pUndo));
         }
         else
         {
-            ImpPostUndoAction(std::unique_ptr<SdrUndoAction>(pUndo));
+            ImpPostUndoAction(std::move(pUndo));
         }
     }
 }
@@ -614,13 +598,14 @@ bool SdrModel::IsUndoEnabled() const
     }
 }
 
-void SdrModel::ImpCreateTables()
+void SdrModel::ImpCreateTables(bool bDisablePropertyFiles)
 {
+    // use standard path for initial construction
+    const OUString aTablePath(!bDisablePropertyFiles ? SvtPathOptions().GetPalettePath() : "");
+
     for( auto i : o3tl::enumrange<XPropertyListType>() )
     {
-        if( !bExtColorTable || i != XPropertyListType::Color )
-            maProperties[i] = XPropertyList::CreatePropertyList (
-                i, aTablePath, ""/*TODO?*/ );
+        maProperties[i] = XPropertyList::CreatePropertyList(i, aTablePath, ""/*TODO?*/ );
     }
 }
 
@@ -650,12 +635,12 @@ void SdrModel::ClearModel(bool bCalledFromDestructor)
     maMaPag.clear();
     MasterPageListChanged();
 
-    pLayerAdmin->ClearLayer();
+    pLayerAdmin->ClearLayers();
 }
 
 SdrModel* SdrModel::AllocModel() const
 {
-    SdrModel* pModel=new SdrModel;
+    SdrModel* pModel=new SdrModel();
     pModel->SetScaleUnit(eObjUnit,aObjUnit);
     return pModel;
 }
@@ -927,30 +912,30 @@ void SdrModel::ImpSetUIUnit()
     // 1 ft      = 12 "       =      1" =       304,8mm
     switch (eUIUnit)
     {
-        case FUNIT_NONE   : break;
+        case FieldUnit::NONE   : break;
         // metric
-        case FUNIT_100TH_MM: nUIUnitDecimalMark-=5; break;
-        case FUNIT_MM     : nUIUnitDecimalMark-=3; break;
-        case FUNIT_CM     : nUIUnitDecimalMark-=2; break;
-        case FUNIT_M      : nUIUnitDecimalMark+=0; break;
-        case FUNIT_KM     : nUIUnitDecimalMark+=3; break;
+        case FieldUnit::MM_100TH: nUIUnitDecimalMark-=5; break;
+        case FieldUnit::MM     : nUIUnitDecimalMark-=3; break;
+        case FieldUnit::CM     : nUIUnitDecimalMark-=2; break;
+        case FieldUnit::M      : nUIUnitDecimalMark+=0; break;
+        case FieldUnit::KM     : nUIUnitDecimalMark+=3; break;
         // Inch
-        case FUNIT_TWIP   : nMul=144; nUIUnitDecimalMark--;  break;  // 1Twip = 1/1440"
-        case FUNIT_POINT  : nMul=72;     break;            // 1Pt   = 1/72"
-        case FUNIT_PICA   : nMul=6;      break;            // 1Pica = 1/6"
-        case FUNIT_INCH   : break;                         // 1"    = 1"
-        case FUNIT_FOOT   : nDiv*=12;    break;            // 1Ft   = 12"
-        case FUNIT_MILE   : nDiv*=6336; nUIUnitDecimalMark++; break; // 1mile = 63360"
+        case FieldUnit::TWIP   : nMul=144; nUIUnitDecimalMark--;  break;  // 1Twip = 1/1440"
+        case FieldUnit::POINT  : nMul=72;     break;            // 1Pt   = 1/72"
+        case FieldUnit::PICA   : nMul=6;      break;            // 1Pica = 1/6"
+        case FieldUnit::INCH   : break;                         // 1"    = 1"
+        case FieldUnit::FOOT   : nDiv*=12;    break;            // 1Ft   = 12"
+        case FieldUnit::MILE   : nDiv*=6336; nUIUnitDecimalMark++; break; // 1mile = 63360"
         // other
-        case FUNIT_CUSTOM : break;
-        case FUNIT_PERCENT: nUIUnitDecimalMark+=2; break;
+        case FieldUnit::CUSTOM : break;
+        case FieldUnit::PERCENT: nUIUnitDecimalMark+=2; break;
         // TODO: Add code to handle the following if needed (added to remove warning)
-        case FUNIT_CHAR   : break;
-        case FUNIT_LINE   : break;
-        case FUNIT_PIXEL  : break;
-        case FUNIT_DEGREE : break;
-        case FUNIT_SECOND : break;
-        case FUNIT_MILLISECOND : break;
+        case FieldUnit::CHAR   : break;
+        case FieldUnit::LINE   : break;
+        case FieldUnit::PIXEL  : break;
+        case FieldUnit::DEGREE : break;
+        case FieldUnit::SECOND : break;
+        case FieldUnit::MILLISECOND : break;
     } // switch
 
     // check if mapping is from metric to inch and adapt
@@ -1078,32 +1063,32 @@ OUString SdrModel::GetUnitString(FieldUnit eUnit)
     switch(eUnit)
     {
         default:
-        case FUNIT_NONE   :
-        case FUNIT_CUSTOM :
+        case FieldUnit::NONE   :
+        case FieldUnit::CUSTOM :
             return OUString();
-        case FUNIT_100TH_MM:
+        case FieldUnit::MM_100TH:
             return OUString{"/100mm"};
-        case FUNIT_MM     :
+        case FieldUnit::MM     :
             return OUString{"mm"};
-        case FUNIT_CM     :
+        case FieldUnit::CM     :
             return OUString{"cm"};
-        case FUNIT_M      :
+        case FieldUnit::M      :
             return OUString{"m"};
-        case FUNIT_KM     :
+        case FieldUnit::KM     :
             return OUString{"km"};
-        case FUNIT_TWIP   :
+        case FieldUnit::TWIP   :
             return OUString{"twip"};
-        case FUNIT_POINT  :
+        case FieldUnit::POINT  :
             return OUString{"pt"};
-        case FUNIT_PICA   :
+        case FieldUnit::PICA   :
             return OUString{"pica"};
-        case FUNIT_INCH   :
+        case FieldUnit::INCH   :
             return OUString{"\""};
-        case FUNIT_FOOT   :
+        case FieldUnit::FOOT   :
             return OUString{"ft"};
-        case FUNIT_MILE   :
+        case FieldUnit::MILE   :
             return OUString{"mile(s)"};
-        case FUNIT_PERCENT:
+        case FieldUnit::PERCENT:
             return OUString{"%"};
     }
 }
@@ -1857,17 +1842,6 @@ bool SdrModel::IsAnchoredTextOverflowLegacy() const
     return mpImpl->mbAnchoredTextOverflowLegacy;
 }
 
-void SdrModel::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
-{
-    mpImpl->mbHoriAlignIgnoreTrailingWhitespace = bEnabled;
-    pDrawOutliner->SetHoriAlignIgnoreTrailingWhitespace(bEnabled);
-}
-
-bool SdrModel::IsHoriAlignIgnoreTrailingWhitespace() const
-{
-    return mpImpl->mbHoriAlignIgnoreTrailingWhitespace;
-}
-
 void SdrModel::ReformatAllTextObjects()
 {
     ImpReformatAllTextObjects();
@@ -1890,16 +1864,10 @@ std::vector<SdrOutliner*> SdrModel::GetActiveOutliners() const
     return aRet;
 }
 
-void SdrModel::disposeOutliner( SdrOutliner* pOutliner )
+void SdrModel::disposeOutliner( std::unique_ptr<SdrOutliner> pOutliner )
 {
     if( mpOutlinerCache )
-    {
-        mpOutlinerCache->disposeOutliner( pOutliner );
-    }
-    else
-    {
-        delete pOutliner;
-    }
+        mpOutlinerCache->disposeOutliner( std::move(pOutliner) );
 }
 
 SvxNumType SdrModel::GetPageNumType() const
@@ -1917,17 +1885,10 @@ void SdrModel::ReadUserDataSequenceValue(const css::beans::PropertyValue* pValue
             mpImpl->mbAnchoredTextOverflowLegacy = bBool;
         }
     }
-    if (pValue->Name == "HoriAlignIgnoreTrailingWhitespace")
-    {
-        if (pValue->Value >>= bBool)
-        {
-            SetHoriAlignIgnoreTrailingWhitespace(bBool);
-        }
-    }
 }
 
 template <typename T>
-inline void addPair(std::vector< std::pair< OUString, Any > >& aUserData, const OUString& name, const T val)
+static void addPair(std::vector< std::pair< OUString, Any > >& aUserData, const OUString& name, const T val)
 {
     aUserData.push_back(std::pair< OUString, Any >(name, css::uno::makeAny(val)));
 }
@@ -1936,8 +1897,6 @@ void SdrModel::WriteUserDataSequence(css::uno::Sequence < css::beans::PropertyVa
 {
     std::vector< std::pair< OUString, Any > > aUserData;
     addPair(aUserData, "AnchoredTextOverflowLegacy", IsAnchoredTextOverflowLegacy());
-    if (IsHoriAlignIgnoreTrailingWhitespace())
-        addPair(aUserData, "HoriAlignIgnoreTrailingWhitespace", IsHoriAlignIgnoreTrailingWhitespace());
 
     const sal_Int32 nOldLength = rValues.getLength();
     rValues.realloc(nOldLength + aUserData.size());
@@ -2061,7 +2020,7 @@ SdrHint::SdrHint(SdrHintKind eNewHint)
 SdrHint::SdrHint(SdrHintKind eNewHint, const SdrObject& rNewObj)
 :   meHint(eNewHint),
     mpObj(&rNewObj),
-    mpPage(rNewObj.GetPage())
+    mpPage(rNewObj.getSdrPageFromSdrObject())
 {
 }
 

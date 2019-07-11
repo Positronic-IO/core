@@ -30,6 +30,7 @@
 
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 
 #include <svx/svxids.hrc>
@@ -637,11 +638,11 @@ namespace frm
     {
         AttributeDispatchers::iterator aDispatcherPos = m_aDispatchers.find( SID_COPY );
         if ( aDispatcherPos != m_aDispatchers.end() )
-            aDispatcherPos->second.get()->invalidate();
+            aDispatcherPos->second->invalidate();
 
         aDispatcherPos = m_aDispatchers.find( SID_CUT );
         if ( aDispatcherPos != m_aDispatchers.end() )
-            aDispatcherPos->second.get()->invalidate();
+            aDispatcherPos->second->invalidate();
     }
 
 

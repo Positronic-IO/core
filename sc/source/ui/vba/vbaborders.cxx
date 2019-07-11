@@ -53,7 +53,7 @@ class ScVbaBorder : public ScVbaBorder_Base
 {
 private:
     uno::Reference< beans::XPropertySet > m_xProps;
-    sal_Int32 m_LineType;
+    sal_Int32 const m_LineType;
     ScVbaPalette m_Palette;
     void setBorderLine( const table::BorderLine& rBorderLine )
     {
@@ -352,7 +352,7 @@ public:
     }
 };
 
-uno::Reference< container::XIndexAccess >
+static uno::Reference< container::XIndexAccess >
 rangeToBorderIndexAccess( const uno::Reference< table::XCellRange >& xRange,  const uno::Reference< uno::XComponentContext > & xContext, const ScVbaPalette& rPalette )
 {
     return new RangeBorders( xRange, xContext, rPalette );

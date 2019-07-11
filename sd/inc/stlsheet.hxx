@@ -35,13 +35,12 @@
 
 #include <svl/style.hxx>
 
-#include <editeng/unoipset.hxx>
-
 #include <memory>
 
 #include "prlayout.hxx"
 
 class ModifyListenerForewarder;
+struct SfxItemPropertySimpleEntry;
 
 typedef cppu::ImplInheritanceHelper< SfxUnoStyleSheet,
                                     css::beans::XPropertySet,
@@ -80,6 +79,9 @@ public:
     //the one that changed
     static void BroadcastSdStyleSheetChange(SfxStyleSheetBase const * pStyleSheet, PresentationObjects ePO,
         SfxStyleSheetBasePool* pSSPool);
+
+    // SfxStyleSheetBase
+    virtual bool SetName(const OUString& rNewName, bool bReindexNow = true) override;
 
     // XInterface
     virtual void SAL_CALL release(  ) throw () override;
@@ -129,8 +131,6 @@ private:
     /// @throws css::uno::RuntimeException
     static const SfxItemPropertySimpleEntry* getPropertyMapEntry( const OUString& rPropertyName );
 
-    virtual void Load (SvStream& rIn, sal_uInt16 nVersion) override;
-
     virtual void Notify(SfxBroadcaster& rBC, const SfxHint& rHint) override;
     virtual             ~SdStyleSheet() override;
 
@@ -152,6 +152,19 @@ private:
 };
 
 typedef std::vector< rtl::Reference< SdStyleSheet > > SdStyleSheetVector;
+
+struct StyleSheetCopyResult
+{
+    rtl::Reference<SdStyleSheet> m_xStyleSheet;
+    bool m_bCreatedByCopy;
+    StyleSheetCopyResult(SdStyleSheet* pStyleSheet, bool bCreatedByCopy)
+        : m_xStyleSheet(pStyleSheet)
+        , m_bCreatedByCopy(bCreatedByCopy)
+    {
+    }
+};
+
+typedef std::vector<StyleSheetCopyResult> StyleSheetCopyResultVector;
 
 #endif // INCLUDED_SD_INC_STLSHEET_HXX
 

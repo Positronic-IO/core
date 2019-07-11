@@ -49,11 +49,9 @@ HWPFile::HWPFile()
     , linenumber(0)
     , info_block_len(0)
     , error_code(HWP_NoError)
-    , oledata(nullptr)
     , readdepth(0)
     , m_nCurrentPage(1)
     , m_nMaxSettedPage(0)
-    , hiodev(nullptr)
     , currenthyper(0)
 {
     SetCurrentDoc(this);
@@ -65,9 +63,9 @@ HWPFile::~HWPFile()
     hiodev.reset();
 }
 
-int HWPFile::ReadHwpFile(HStream * stream)
+int HWPFile::ReadHwpFile(std::unique_ptr<HStream> stream)
 {
-    if (Open(stream) != HWP_NoError)
+    if (Open(std::move(stream)) != HWP_NoError)
         return State();
     InfoRead();
     FontRead();
@@ -92,19 +90,16 @@ int detect_hwp_version(const char *str)
 
 // HIODev wrapper
 
-int HWPFile::Open(HStream * stream)
+int HWPFile::Open(std::unique_ptr<HStream> stream)
 {
-    HStreamIODev *hstreamio = new HStreamIODev(stream);
+    std::unique_ptr<HStreamIODev> hstreamio(new HStreamIODev(std::move(stream)));
 
     if (!hstreamio->open())
     {
-        delete hstreamio;
-
         return SetState(HWP_EMPTY_FILE);
     }
 
-    HIODev *pPrev = SetIODevice(hstreamio);
-    delete pPrev;
+    SetIODevice(std::move(hstreamio));
 
     char idstr[HWPIDLen];
 
@@ -124,9 +119,7 @@ int HWPFile::SetState(int errcode)
 
 bool HWPFile::Read1b(unsigned char &out)
 {
-    if (!hiodev || !hiodev->read1b(out))
-        return false;
-    return true;
+    return hiodev && hiodev->read1b(out);
 }
 
 bool HWPFile::Read1b(char &out)
@@ -185,13 +178,10 @@ void HWPFile::SetCompressed(bool flag)
 }
 
 
-HIODev *HWPFile::SetIODevice(HIODev * new_hiodev)
+std::unique_ptr<HIODev> HWPFile::SetIODevice(std::unique_ptr<HIODev> new_hiodev)
 {
-    HIODev *old_hiodev = hiodev.release();
-
-    hiodev.reset( new_hiodev );
-
-    return old_hiodev;
+    std::swap(hiodev, new_hiodev);
+    return new_hiodev;
 }
 
 
@@ -227,20 +217,20 @@ void HWPFile::ReadParaList(std::vector < HWPPara* > &aplist)
     unsigned char prev_etcflag = 0;
     while (spNode->Read(*this, 0))
     {
-         if( !(spNode->etcflag & 0x04) ){
-          tmp_etcflag = spNode->etcflag;
-          spNode->etcflag = prev_etcflag;
-          prev_etcflag = tmp_etcflag;
-         }
+        if( !(spNode->etcflag & 0x04) ){
+            tmp_etcflag = spNode->etcflag;
+            spNode->etcflag = prev_etcflag;
+            prev_etcflag = tmp_etcflag;
+        }
         if (spNode->nch && spNode->reuse_shape)
         {
             if (!aplist.empty()){
-                     spNode->pshape = aplist.back()->pshape;
-                }
-                else{
-                     spNode->nch = 0;
-                     spNode->reuse_shape = 0;
-                }
+                 spNode->pshape = aplist.back()->pshape;
+            }
+            else{
+                 spNode->nch = 0;
+                 spNode->reuse_shape = 0;
+            }
         }
         spNode->pshape->pagebreak = spNode->etcflag;
         if (spNode->nch)
@@ -253,7 +243,7 @@ void HWPFile::ReadParaList(std::vector < HWPPara* > &aplist)
     }
 }
 
-bool HWPFile::ReadParaList(std::vector< std::unique_ptr<HWPPara> > &aplist, unsigned char flag)
+void HWPFile::ReadParaList(std::vector< std::unique_ptr<HWPPara> > &aplist, unsigned char flag)
 {
     std::unique_ptr<HWPPara> spNode( new HWPPara );
     unsigned char tmp_etcflag;
@@ -268,12 +258,12 @@ bool HWPFile::ReadParaList(std::vector< std::unique_ptr<HWPPara> > &aplist, unsi
         if (spNode->nch && spNode->reuse_shape)
         {
             if (!aplist.empty()){
-                     spNode->pshape = aplist.back()->pshape;
-                }
-                else{
-                     spNode->nch = 0;
-                     spNode->reuse_shape = 0;
-                }
+                spNode->pshape = aplist.back()->pshape;
+            }
+            else{
+                spNode->nch = 0;
+                spNode->reuse_shape = 0;
+            }
         }
         spNode->pshape->pagebreak = spNode->etcflag;
         if (spNode->nch)
@@ -284,8 +274,6 @@ bool HWPFile::ReadParaList(std::vector< std::unique_ptr<HWPPara> > &aplist, unsi
         aplist.push_back(std::move(spNode));
         spNode.reset( new HWPPara );
     }
-
-    return true;
 }
 
 void HWPFile::TagsRead()

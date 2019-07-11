@@ -22,7 +22,6 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/text/ParagraphVertAlign.hpp>
-#include <comphelper/property.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
@@ -41,7 +40,7 @@ namespace reportdesign
 
     using namespace com::sun::star;
     using namespace comphelper;
-uno::Sequence< OUString > lcl_getShapeOptionals()
+static uno::Sequence< OUString > lcl_getShapeOptionals()
 {
     const OUString pProps[] = {
         OUString(PROPERTY_DATAFIELD)
@@ -194,7 +193,7 @@ uno::Reference< beans::XPropertySetInfo > SAL_CALL OShape::getPropertySetInfo(  
 
 cppu::IPropertyArrayHelper& OShape::getInfoHelper()
 {
-    if ( !m_pAggHelper.get() )
+    if (!m_pAggHelper)
     {
         uno::Sequence<beans::Property> aAggSeq;
         if ( m_aProps.aComponent.m_xProperty.is() )

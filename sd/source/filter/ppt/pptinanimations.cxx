@@ -32,6 +32,7 @@
 #include <com/sun/star/animations/AnimationAdditiveMode.hpp>
 #include <com/sun/star/animations/XIterateContainer.hpp>
 #include <com/sun/star/animations/XAnimateSet.hpp>
+#include <com/sun/star/animations/XAnimationNode.hpp>
 #include <com/sun/star/animations/XAudio.hpp>
 #include <com/sun/star/animations/XCommand.hpp>
 #include <com/sun/star/animations/XTransitionFilter.hpp>
@@ -55,6 +56,7 @@
 #include <com/sun/star/presentation/TextAnimationType.hpp>
 #include <comphelper/processfactory.hxx>
 #include <oox/helper/addtosequence.hxx>
+#include <oox/ppt/pptfilterhelpers.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
 
@@ -62,6 +64,8 @@
 #include <svx/svdotext.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/editobj.hxx>
+#include <animations.hxx>
+#include "pptanimations.hxx"
 #include "pptinanimations.hxx"
 #include "pptatom.hxx"
 #include "pptin.hxx"
@@ -83,7 +87,7 @@ using namespace ::com::sun::star::presentation;
 namespace ppt
 {
 
-SvStream& operator>>(SvStream& rIn, AnimationNode& rNode )
+static SvStream& operator>>(SvStream& rIn, AnimationNode& rNode )
 {
     rIn.ReadInt32( rNode.mnU1 );
     rIn.ReadInt32( rNode.mnRestart );
@@ -95,41 +99,6 @@ SvStream& operator>>(SvStream& rIn, AnimationNode& rNode )
     rIn.ReadInt32( rNode.mnNodeType );
 
     return rIn;
-}
-
-static bool convertMeasure( OUString& rString )
-{
-    bool bRet = false;
-
-    const sal_Char* pSource[] = { "ppt_x", "ppt_y", "ppt_w", "ppt_h", nullptr };
-    const sal_Char* pDest[] = { "x", "y", "width", "height", nullptr };
-    sal_Int32 nIndex = 0;
-
-    const sal_Char** ps = pSource;
-    const sal_Char** pd = pDest;
-
-    while( *ps )
-    {
-        const OUString aSearch( OUString::createFromAscii( *ps ) );
-        while( (nIndex = rString.indexOf( aSearch, nIndex )) != -1  )
-        {
-            sal_Int32 nLength = aSearch.getLength();
-            if( nIndex && (rString[nIndex-1] == '#' ) )
-            {
-                nIndex--;
-                nLength++;
-            }
-
-            const OUString aNew( OUString::createFromAscii( *pd ) );
-            rString = rString.replaceAt( nIndex, nLength, aNew );
-            nIndex += aNew.getLength();
-            bRet = true;
-        }
-        ps++;
-        pd++;
-    }
-
-    return bRet;
 }
 
 bool PropertySet::hasProperty( sal_Int32 nProperty ) const
@@ -512,7 +481,7 @@ bool AnimationImporter::convertAnimationNode( const Reference< XAnimationNode >&
 
     const oox::ppt::ImplAttributeNameConversion* p = oox::ppt::getAttributeConversionList();
 
-    oox::ppt::MS_AttributeNames eAttribute = oox::ppt::MS_UNKNOWN;
+    oox::ppt::AnimationAttributeEnum eAttribute = oox::ppt::AnimationAttributeEnum::UNKNOWN;
 
     if( (nNodeType == AnimationNodeType::ANIMATEMOTION) ||
         (nNodeType == AnimationNodeType::ANIMATETRANSFORM) )
@@ -542,26 +511,26 @@ bool AnimationImporter::convertAnimationNode( const Reference< XAnimationNode >&
 
     xAnimate->setAttributeName( aAttributeName );
 
-    if( eAttribute != oox::ppt::MS_UNKNOWN )
+    if(eAttribute != oox::ppt::AnimationAttributeEnum::UNKNOWN)
     {
         Any aAny( xAnimate->getFrom() );
         if( aAny.hasValue() )
         {
-            if( convertAnimationValue( eAttribute, aAny ) )
+            if(oox::ppt::convertAnimationValue(eAttribute, aAny))
                 xAnimate->setFrom( aAny );
         }
 
         aAny = xAnimate->getBy();
         if( aAny.hasValue() )
         {
-            if( convertAnimationValue( eAttribute, aAny ) )
+            if(oox::ppt::convertAnimationValue(eAttribute, aAny))
                 xAnimate->setBy( aAny );
         }
 
         aAny = xAnimate->getTo();
         if( aAny.hasValue() )
         {
-            if( convertAnimationValue( eAttribute, aAny ) )
+            if(oox::ppt::convertAnimationValue(eAttribute, aAny))
                 xAnimate->setTo( aAny );
         }
 
@@ -571,7 +540,7 @@ bool AnimationImporter::convertAnimationNode( const Reference< XAnimationNode >&
         {
             Any* p2 = aValues.getArray();
             while( nValues-- )
-                convertAnimationValue( eAttribute, *p2++ );
+                oox::ppt::convertAnimationValue(eAttribute, *p2++);
 
             xAnimate->setValues( aValues );
         }
@@ -579,7 +548,7 @@ bool AnimationImporter::convertAnimationNode( const Reference< XAnimationNode >&
         OUString aFormula( xAnimate->getFormula() );
         if( !aFormula.isEmpty() )
         {
-            if( convertMeasure( aFormula ) )
+            if(oox::ppt::convertMeasure(aFormula))
                 xAnimate->setFormula( aFormula );
         }
     }
@@ -644,230 +613,6 @@ bool AnimationImporter::convertAnimationNode( const Reference< XAnimationNode >&
     return true;
 }
 
-static int lcl_gethex( int nChar )
-{
-    if( nChar >= '0' && nChar <= '9' )
-        return nChar - '0';
-    else if( nChar >= 'a' && nChar <= 'f' )
-        return nChar - 'a' + 10;
-    else if( nChar >= 'A' && nChar <= 'F' )
-        return nChar - 'A' + 10;
-    else
-        return 0;
-}
-
-bool AnimationImporter::convertAnimationValue( oox::ppt::MS_AttributeNames eAttribute, Any& rValue )
-{
-    bool bRet = false;
-    switch( eAttribute )
-    {
-    case oox::ppt::MS_PPT_X:
-    case oox::ppt::MS_PPT_Y:
-    case oox::ppt::MS_PPT_W:
-    case oox::ppt::MS_PPT_H:
-    {
-        OUString aString;
-
-        if( rValue.getValueType() == cppu::UnoType<ValuePair>::get() )
-        {
-            ValuePair aValuePair;
-            if( rValue >>= aValuePair )
-            {
-                if( aValuePair.First >>= aString )
-                {
-                    if( convertMeasure( aString ) )
-                    {
-                        aValuePair.First <<= aString;
-                        bRet = true;
-                    }
-                }
-
-                if( aValuePair.Second >>= aString )
-                {
-                    if( convertMeasure( aString ) )
-                    {
-                        aValuePair.Second <<= aString;
-                        bRet = true;
-                    }
-                }
-            }
-        }
-        else if( rValue.getValueType() == cppu::UnoType<OUString>::get() )
-        {
-            if( rValue >>= aString )
-            {
-                bRet = convertMeasure( aString );
-
-                if( bRet )
-                    rValue <<= aString;
-            }
-        }
-    }
-    break;
-
-    case oox::ppt::MS_XSHEAR:
-    case oox::ppt::MS_R:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString.toDouble();
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STYLEROTATION:
-    {
-        if( rValue.getValueType() == cppu::UnoType<OUString>::get() )
-        {
-            OUString aString;
-            rValue >>= aString;
-            rValue <<= static_cast<sal_Int16>(aString.toDouble());
-            bRet = true;
-        }
-        else if( rValue.getValueType() == cppu::UnoType<double>::get() )
-        {
-            double fValue = 0.0;
-            rValue >>= fValue;
-            rValue <<= static_cast<sal_Int16>(fValue);
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_FILLCOLOR:
-    case oox::ppt::MS_STROKECOLOR:
-    case oox::ppt::MS_STYLECOLOR:
-    case oox::ppt::MS_PPT_C:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            if( aString.getLength() >= 7 && aString[0] == '#' )
-            {
-                Color aColor;
-                aColor.SetRed( static_cast<sal_uInt8>(lcl_gethex( aString[1] ) * 16 + lcl_gethex( aString[2] )) );
-                aColor.SetGreen( static_cast<sal_uInt8>(lcl_gethex( aString[3] ) * 16 + lcl_gethex( aString[4] )) );
-                aColor.SetBlue( static_cast<sal_uInt8>(lcl_gethex( aString[5] ) * 16 + lcl_gethex( aString[6] )) );
-                rValue <<= aColor;
-                bRet = true;
-            }
-            else if( aString.startsWith( "rgb(" ) )
-            {
-                aString = aString.copy( 4, aString.getLength() - 5 );
-                Color aColor;
-                sal_Int32 index = 0;
-                aColor.SetRed( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
-                aColor.SetGreen( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
-                aColor.SetRed( static_cast<sal_uInt8>(aString.getToken( 0, ',', index ).toInt32()) );
-                rValue <<= aColor;
-                bRet = true;
-            }
-            else if( aString.startsWith( "hsl(" ) )
-            {
-                sal_Int32 index = 0;
-                sal_Int32 nA = aString.getToken( 0, ',', index ).toInt32();
-                sal_Int32 nB = aString.getToken( 0, ',', index ).toInt32();
-                sal_Int32 nC = aString.getToken( 0, ',', index ).toInt32();
-                dump( "hsl(%ld", nA );
-                dump( ",%ld", nB );
-                dump( ",%ld)", nC );
-                Sequence< double > aHSL( 3 );
-                aHSL[0] = nA * 360.0/255.0;
-                aHSL[1] = nB / 255.0;
-                aHSL[2] = nC / 255.0;
-                rValue <<= aHSL;
-                bRet = true;
-            }
-        }
-    }
-    break;
-
-    case oox::ppt::MS_FILLTYPE:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "solid" ? FillStyle_SOLID : FillStyle_NONE;
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STROKEON:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "true" ? css::drawing::LineStyle_SOLID : css::drawing::LineStyle_NONE;
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_FONTWEIGHT:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "bold" ? css::awt::FontWeight::BOLD : css::awt::FontWeight::NORMAL;
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STYLEFONTSTYLE:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "italic" ? css::awt::FontSlant_ITALIC : css::awt::FontSlant_NONE;
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STYLEUNDERLINE:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "true" ? css::awt::FontUnderline::SINGLE : css::awt::FontUnderline::NONE;
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STYLEOPACITY:
-    case oox::ppt::MS_STYLEFONTSIZE:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= static_cast<float>(aString.toDouble());
-            bRet = true;
-        }
-    }
-    break;
-
-    case oox::ppt::MS_STYLEVISIBILITY:
-    {
-        OUString aString;
-        if( rValue >>= aString )
-        {
-            rValue <<= aString == "visible";
-            bRet = true;
-        }
-    }
-    break;
-    default:
-        break;
-    }
-
-    return bRet;
-}
-
 void AnimationImporter::fillNode( Reference< XAnimationNode > const & xNode, const AnimationNode& rNode, const PropertySet& rSet )
 {
     bool bAfterEffect = false;
@@ -928,8 +673,11 @@ void AnimationImporter::fillNode( Reference< XAnimationNode > const & xNode, con
             sal_Int16 nNodeType = css::presentation::EffectNodeType::DEFAULT;
             switch( nPPTNodeType )
             {
+                case DFF_ANIM_NODE_TYPE_CLICK_PARALLEL: SAL_FALLTHROUGH;
                 case DFF_ANIM_NODE_TYPE_ON_CLICK:       nNodeType = css::presentation::EffectNodeType::ON_CLICK;   break;
+                case DFF_ANIM_NODE_TYPE_WITH_GROUP:     SAL_FALLTHROUGH;
                 case DFF_ANIM_NODE_TYPE_WITH_PREVIOUS:  nNodeType = css::presentation::EffectNodeType::WITH_PREVIOUS; break;
+                case DFF_ANIM_NODE_TYPE_AFTER_GROUP:    SAL_FALLTHROUGH;
                 case DFF_ANIM_NODE_TYPE_AFTER_PREVIOUS: nNodeType = css::presentation::EffectNodeType::AFTER_PREVIOUS; break;
                 case DFF_ANIM_NODE_TYPE_MAIN_SEQUENCE:  nNodeType = css::presentation::EffectNodeType::MAIN_SEQUENCE; break;
                 case DFF_ANIM_NODE_TYPE_TIMING_ROOT:    nNodeType = css::presentation::EffectNodeType::TIMING_ROOT; break;
@@ -987,7 +735,7 @@ void AnimationImporter::fillNode( Reference< XAnimationNode > const & xNode, con
             aUserData.realloc(nSize+1);
             aUserData[nSize].Name = "preset-id";
 
-            const oox::ppt::preset_maping* p = oox::ppt::preset_maping::getList();
+            const oox::ppt::preset_mapping* p = oox::ppt::preset_mapping::getList();
             while( p->mpStrPresetId && ((p->mnPresetClass != nEffectPresetClass) || (p->mnPresetId != nPresetId )) )
                 p++;
 
@@ -1459,27 +1207,24 @@ void AnimationImporter::importAnimateAttributeTargetContainer( const Atom* pAtom
                     // nAccumulate 0 = none, 1 = always
                     // nTransformType 0: "property" else "image"
 
-                    if( nBits & 3 )
+                    if( nBits & 3 && xAnimate.is() )
                     {
-                        if( xAnimate.is() )
+                        if( nBits & 1 )
                         {
-                            if( nBits & 1 )
+                            sal_Int16 nTemp = AnimationAdditiveMode::BASE;
+                            switch( nAdditive )
                             {
-                                sal_Int16 nTemp = AnimationAdditiveMode::BASE;
-                                switch( nAdditive )
-                                {
-                                case 1: nTemp = AnimationAdditiveMode::SUM; break;
-                                case 2: nTemp = AnimationAdditiveMode::REPLACE; break;
-                                case 3: nTemp = AnimationAdditiveMode::MULTIPLY; break;
-                                case 4: nTemp = AnimationAdditiveMode::NONE; break;
-                                }
-                                xAnimate->setAdditive( nTemp );
+                            case 1: nTemp = AnimationAdditiveMode::SUM; break;
+                            case 2: nTemp = AnimationAdditiveMode::REPLACE; break;
+                            case 3: nTemp = AnimationAdditiveMode::MULTIPLY; break;
+                            case 4: nTemp = AnimationAdditiveMode::NONE; break;
                             }
+                            xAnimate->setAdditive( nTemp );
+                        }
 
-                            if( nBits & 2 )
-                            {
-                                xAnimate->setAccumulate( nAccumulate == 0 );
-                            }
+                        if( nBits & 2 )
+                        {
+                            xAnimate->setAccumulate( nAccumulate == 0 );
                         }
                     }
 #ifdef DBG_ANIM_LOG
@@ -2404,35 +2149,12 @@ void AnimationImporter::importAnimateKeyPoints( const Atom* pAtom, const Referen
                     {
                         pValue = Atom::findNextChildAtom(pValue);
                         if( pValue && pValue->getType() == DFF_msofbtAnimAttributeValue )
-                            (void)importAttributeValue( pValue, aValue2 );
-
-                        bool bCouldBeFormula = false;
-                        bool bHasValue = aValue2.hasValue();
-                        if( bHasValue )
                         {
-                            if( aValue2.getValueType() == cppu::UnoType<OUString>::get() )
-                            {
-                                OUString aTest;
-                                aValue2 >>= aTest;
-                                bHasValue = !aTest.isEmpty();
-                                bCouldBeFormula = true;
-                            }
+                            // Any occurrence of the formula becomes the formula of the whole list.
+                            if (importAttributeValue(pValue, aValue2) && aFormula.isEmpty())
+                                aValue2 >>= aFormula;
                         }
-
-                        if( bHasValue && bCouldBeFormula && (aValue1.getValueType() == cppu::UnoType<double>::get() ))
-                        {
-                            aValue2 >>= aFormula;
-                            bHasValue = false;
-                        }
-
-                        if( bHasValue )
-                        {
-                            aValues[nKeyTime] <<= ValuePair( aValue1, aValue2 );
-                        }
-                        else
-                        {
-                            aValues[nKeyTime] = aValue1;
-                        }
+                        aValues[nKeyTime] = aValue1;
                     }
                 }
             }

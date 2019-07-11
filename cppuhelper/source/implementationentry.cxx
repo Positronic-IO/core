@@ -18,14 +18,14 @@
  */
 
 #include <cppuhelper/implementationentry.hxx>
+#include <com/sun/star/lang/XSingleComponentFactory.hpp>
+#include <com/sun/star/registry/XRegistryKey.hpp>
 
 #include <osl/diagnose.h>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::registry;
-
-using rtl::OUString;
 
 namespace cppu {
 

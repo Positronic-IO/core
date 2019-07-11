@@ -134,10 +134,8 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                 else
                 {
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     VclPtr<AbstractScShowTabDlg> pDlg(pFact->CreateScShowTabDlg(GetFrameWeld()));
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
 
                     OUString aTabName;
                     bool bFirst = true;
@@ -216,11 +214,9 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                 else                                // dialog
                 {
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     ScopedVclPtr<AbstractScInsertTableDlg> pDlg(pFact->CreateScInsertTableDlg(GetFrameWeld(), rViewData,
                         nTabSelCount, nSlot == FID_INS_TABLE_EXT));
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
                     if ( RET_OK == pDlg->Execute() )
                     {
                         if (pDlg->GetTablesFromFile())
@@ -394,7 +390,6 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     }
 
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     vcl::Window* pWin = GetDialogParent();
                     ScopedVclPtr<AbstractScStringInputDlg> pDlg(pFact->CreateScStringInputDlg(
@@ -402,7 +397,6 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                         aName, GetStaticInterface()->GetSlot(nSlot)->GetCommand(),
                         pHelpId));
 
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
 
                     while ( !bDone && nRet == RET_OK )
                     {
@@ -520,11 +514,9 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     pDoc->GetName( rViewData.GetTabNo(), aDefaultName );
 
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     ScopedVclPtr<AbstractScMoveTableDlg> pDlg(pFact->CreateScMoveTableDlg(GetFrameWeld(),
                         aDefaultName));
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
 
                     SCTAB nTableCount = pDoc->GetTableCount();
                     ScMarkData& rMark       = GetViewData().GetMarkData();
@@ -703,7 +695,7 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                 {
                     //  handle several sheets
 
-                    ::svl::IUndoManager* pUndoManager = pDocSh->GetUndoManager();
+                    SfxUndoManager* pUndoManager = pDocSh->GetUndoManager();
                     OUString aUndo = ScResId( STR_UNDO_TAB_RTL );
                     pUndoManager->EnterListAction( aUndo, aUndo, 0, rViewData.GetViewShell()->GetViewShellId() );
 
@@ -785,9 +777,8 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
 
                     aTabBgColor = pDoc->GetTabBgColor( nCurrentTab );
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
                     ScopedVclPtr<AbstractScTabBgColorDlg> pDlg(pFact->CreateScTabBgColorDlg(
-                                                                GetDialogParent(),
+                                                                GetFrameWeld(),
                                                                 ScResId(SCSTR_SET_TAB_BG_COLOR),
                                                                 ScResId(SCSTR_NO_TAB_BG_COLOR),
                                                                 aTabBgColor));
@@ -804,38 +795,39 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                             {
                                 ScMarkData::iterator itr = rMark.begin(), itrEnd = rMark.end();
                                 for (; itr != itrEnd; ++itr)
+                                {
+                                    if ( !pDoc->IsTabProtected(*itr) )
                                     {
-                                        if ( !pDoc->IsTabProtected(*itr) )
-                                        {
-                                            ScUndoTabColorInfo aTabColorInfo(*itr);
-                                            aTabColorInfo.maNewTabBgColor = aSelectedColor;
-                                            pTabColorList->push_back(aTabColorInfo);
-                                        }
+                                        ScUndoTabColorInfo aTabColorInfo(*itr);
+                                        aTabColorInfo.maNewTabBgColor = aSelectedColor;
+                                        pTabColorList->push_back(aTabColorInfo);
                                     }
-                                    bDone = SetTabBgColor( *pTabColorList );
                                 }
-                                else
+                                bDone = SetTabBgColor( *pTabColorList );
+                            }
+                            else
+                            {
+                                bDone = SetTabBgColor( aSelectedColor, nCurrentTab ); //ScViewFunc.SetTabBgColor
+                            }
+
+                            if ( bDone )
+                            {
+                                rReq.AppendItem( SvxColorItem( aTabBgColor, nSlot ) );
+                                rReq.Done();
+                            }
+                            else
+                            {
+                                if( rReq.IsAPI() )
                                 {
-                                    bDone = SetTabBgColor( aSelectedColor, nCurrentTab ); //ScViewFunc.SetTabBgColor
-                                }
-                                if ( bDone )
-                                {
-                                    rReq.AppendItem( SvxColorItem( aTabBgColor, nSlot ) );
-                                    rReq.Done();
-                                }
-                                else
-                                {
-                                    if( rReq.IsAPI() )
-                                    {
 #if HAVE_FEATURE_SCRIPTING
-                                        StarBASIC::Error( ERRCODE_BASIC_SETPROP_FAILED );
+                                    StarBASIC::Error( ERRCODE_BASIC_SETPROP_FAILED );
 #endif
-                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
                 break;
 
         case FID_TAB_EVENTS:
@@ -844,14 +836,11 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     uno::Reference<container::XNameReplace> xEvents( new ScSheetEventsObj( pDocSh, nCurrentTab ) );
                     uno::Reference<frame::XFrame> xFrame = GetViewFrame()->GetFrame().GetFrameInterface();
                     SvxAbstractDialogFactory* pDlgFactory = SvxAbstractDialogFactory::Create();
-                    if (pDlgFactory)
+                    ScopedVclPtr<VclAbstractDialog> pDialog( pDlgFactory->CreateSvxMacroAssignDlg(
+                        GetDialogParent(), xFrame, false, xEvents, 0 ) );
+                    if ( pDialog->Execute() == RET_OK )
                     {
-                        ScopedVclPtr<VclAbstractDialog> pDialog( pDlgFactory->CreateSvxMacroAssignDlg(
-                            GetDialogParent(), xFrame, false, xEvents, 0 ) );
-                        if ( pDialog.get() && pDialog->Execute() == RET_OK )
-                        {
                             // the dialog modifies the settings directly
-                        }
                     }
                 }
                 break;

@@ -72,15 +72,15 @@ public:
         @deprecated
             This method is deprecated. Use the version with a ODataAccessDescriptor instead.
     */
-    SdrObject*   CreateFieldControl(const OUString& rFieldDesc) const;
+    SdrObjectUniquePtr CreateFieldControl(const OUString& rFieldDesc) const;
 
     /** create a control pair (label/bound control) for the database field description given.
     */
-    SdrObject*   CreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor );
+    SdrObjectUniquePtr CreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor );
 
     /** create a control pair (label/bound control) for the xforms description given.
     */
-    SdrObject*   CreateXFormsControl( const svx::OXFormsDescriptor &_rDesc );
+    SdrObjectUniquePtr CreateXFormsControl( const svx::OXFormsDescriptor &_rDesc );
 
     virtual void MarkListHasChanged() override;
     virtual void AddWindowToPaintView(OutputDevice* pNewWin, vcl::Window* pWindow) override;
@@ -95,11 +95,13 @@ public:
         sal_uInt16 _nControlObjectID,
         SdrInventor _nInventor,
         sal_uInt16 _nLabelObjectID,
-        SdrPage* _pLabelPage,
-        SdrPage* _pControlPage,
-        SdrModel* _pModel,
-        SdrUnoObj*& _rpLabel,
-        SdrUnoObj*& _rpControl
+
+        // tdf#118963 Need a SdrModel for SdrObject creation. To make the
+        // demand clear, hand over a SdrMldel&
+        SdrModel& _rModel,
+
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl
     );
 
     virtual SdrPageView* ShowSdrPage(SdrPage* pPage) override;

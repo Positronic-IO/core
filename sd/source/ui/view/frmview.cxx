@@ -22,6 +22,7 @@
 #include <svx/svxids.hrc>
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/drawing/framework/ResourceId.hpp>
+#include <com/sun/star/drawing/framework/XView.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <unokywds.hxx>
 #include <vcl/settings.hxx>
@@ -35,7 +36,6 @@
 #include <DrawViewShell.hxx>
 #include <OutlineViewShell.hxx>
 #include <sdmod.hxx>
-#include <sdresid.hxx>
 #include <pres.hxx>
 #include <strings.hrc>
 #include <sdiocmpt.hxx>
@@ -50,7 +50,7 @@ using namespace ::std;
 
 namespace sd {
 
-FrameView::FrameView(SdDrawDocument* pDrawDoc, FrameView* pFrameView /* = NULK */)
+FrameView::FrameView(SdDrawDocument* pDrawDoc, FrameView* pFrameView /* = NULL */)
 :   SdrView(*pDrawDoc, nullptr), // TTTT SdDrawDocument* -> should be reference
     mnRefCount(0),
     mnPresViewShellId(SID_VIEWSHELL0),
@@ -196,11 +196,18 @@ FrameView::FrameView(SdDrawDocument* pDrawDoc, FrameView* pFrameView /* = NULK *
     else
     {
         // initialize FrameView with the application data
-        maVisibleLayers.SetAll();
-        maPrintableLayers.SetAll();
+
+        // Layers need to be set, otherwise they are not visible and not printable in
+        // Impress documents. The document contains already the actual layers and their
+        // settings for visible, printable and locked. In case not read from <draw:layer-set>,
+        // ODF defaults are used.
+        SdrLayerAdmin rLayerAdmin = pDrawDoc -> GetLayerAdmin();
+        rLayerAdmin.getVisibleLayersODF(maVisibleLayers);
+        rLayerAdmin.getPrintableLayersODF(maPrintableLayers);
+        rLayerAdmin.getLockedLayersODF(maLockedLayers);
         SetGridCoarse( Size( 1000, 1000 ) );
         SetSnapGridWidth(Fraction(1000, 1), Fraction(1000, 1));
-        SetActiveLayer( SdResId(STR_LAYER_LAYOUT) );
+        SetActiveLayer(sUNO_LayerName_layout);
         mbNoColors = true;
         mbNoAttribs = false;
         maVisArea = ::tools::Rectangle( Point(), Size(0, 0) );
@@ -388,14 +395,15 @@ void FrameView::WriteUserDataSequence ( css::uno::Sequence < css::beans::Propert
     aUserData.addValue( sUNO_View_EliminatePolyPointLimitAngle, makeAny( static_cast<sal_Int32>(GetEliminatePolyPointLimitAngle()) ) );
     aUserData.addValue( sUNO_View_IsEliminatePolyPoints, makeAny( IsEliminatePolyPoints() ) );
 
+    SdrLayerAdmin& rLayerAdmin = getSdrModelFromSdrView().GetLayerAdmin();
     Any aAny;
-    GetVisibleLayers().QueryValue( aAny );
+    rLayerAdmin.QueryValue(GetVisibleLayers(), aAny);
     aUserData.addValue( sUNO_View_VisibleLayers, aAny );
 
-    GetPrintableLayers().QueryValue( aAny );
+    rLayerAdmin.QueryValue(GetPrintableLayers(), aAny);
     aUserData.addValue( sUNO_View_PrintableLayers, aAny );
 
-    GetLockedLayers().QueryValue( aAny );
+    rLayerAdmin.QueryValue(GetLockedLayers(), aAny);
     aUserData.addValue( sUNO_View_LockedLayers, aAny );
 
     aUserData.addValue( sUNO_View_NoAttribs, makeAny( IsNoAttribs() ) );

@@ -41,10 +41,11 @@ namespace dbaui
     // OSingleDocumentController_Data
     struct OSingleDocumentController_Data
     {
-        rtl::Reference< UndoManager >  m_xUndoManager;
+        // no Reference! see UndoManager::acquire
+        std::unique_ptr<UndoManager> m_pUndoManager;
 
         OSingleDocumentController_Data( ::cppu::OWeakObject& i_parent, ::osl::Mutex& i_mutex )
-            :m_xUndoManager( new UndoManager( i_parent, i_mutex ) )
+            : m_pUndoManager(new UndoManager(i_parent, i_mutex))
         {
         }
     };
@@ -64,7 +65,7 @@ namespace dbaui
     {
         OSingleDocumentController_Base::disposing();
         ClearUndoManager();
-        m_pData->m_xUndoManager->disposing();
+        m_pData->m_pUndoManager->disposing();
     }
 
     void OSingleDocumentController::ClearUndoManager()
@@ -74,13 +75,13 @@ namespace dbaui
 
     SfxUndoManager& OSingleDocumentController::GetUndoManager() const
     {
-        return m_pData->m_xUndoManager->GetSfxUndoManager();
+        return m_pData->m_pUndoManager->GetSfxUndoManager();
     }
 
-    void OSingleDocumentController::addUndoActionAndInvalidate(SfxUndoAction *_pAction)
+    void OSingleDocumentController::addUndoActionAndInvalidate(std::unique_ptr<SfxUndoAction> _pAction)
     {
         // add undo action
-        GetUndoManager().AddUndoAction( _pAction );
+        GetUndoManager().AddUndoAction( std::move(_pAction) );
 
         // when we add an undo action the controller was modified
         setModified( true );
@@ -92,7 +93,8 @@ namespace dbaui
 
     Reference< XUndoManager > SAL_CALL OSingleDocumentController::getUndoManager(  )
     {
-        return m_pData->m_xUndoManager.get();
+        // see UndoManager::acquire
+        return m_pData->m_pUndoManager.get();
     }
 
     FeatureState OSingleDocumentController::GetState(sal_uInt16 _nId) const

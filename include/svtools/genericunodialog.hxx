@@ -33,7 +33,6 @@
 
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/propshlp.hxx>
-#include <comphelper/proparrhlp.hxx>
 #include <comphelper/uno3.hxx>
 #include <comphelper/propertycontainer.hxx>
 #include <comphelper/broadcasthelper.hxx>
@@ -81,8 +80,8 @@ namespace svt
             {
             }
 
-            Dialog(weld::DialogController* pWeldDialog)
-                : m_xWeldDialog(pWeldDialog)
+            Dialog(std::unique_ptr<weld::DialogController> pWeldDialog)
+                : m_xWeldDialog(std::move(pWeldDialog))
             {
             }
 
@@ -167,7 +166,7 @@ namespace svt
             but the application-wide solar mutex is (to guard the not thread-safe ctor of the dialog).
             @param      pParent     the parent window for the new dialog
         */
-        virtual OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) = 0;
+        virtual OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) = 0;
 
         /// called to destroy the dialog used. deletes m_pDialog and resets it to NULL
         void destroyDialog();

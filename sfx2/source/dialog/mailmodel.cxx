@@ -53,6 +53,7 @@
 #include <rtl/uri.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <vcl/weld.hxx>
+#include <osl/diagnose.h>
 
 #include <sfx2/mailmodelapi.hxx>
 #include <sfxtypes.hxx>
@@ -67,7 +68,6 @@
 #include <unotools/useroptions.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequenceashashmap.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <comphelper/string.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <vcl/svapp.hxx>
@@ -538,20 +538,17 @@ SfxMailModel::SaveResult SfxMailModel::SaveDocumentAsFormat(
                 {
                     if( bNeedsPreparation && xPrepareDispatch.is() )
                     {
-                        if ( xPrepareDispatch.is() )
+                        try
                         {
-                            try
-                            {
-                                css::uno::Sequence< css::beans::PropertyValue > aDispatchArgs;
-                                xPrepareDispatch->dispatch( aPrepareURL, aDispatchArgs );
-                            }
-                            catch ( css::uno::RuntimeException& )
-                            {
-                                throw;
-                            }
-                            catch ( css::uno::Exception& )
-                            {
-                            }
+                            css::uno::Sequence< css::beans::PropertyValue > aDispatchArgs;
+                            xPrepareDispatch->dispatch( aPrepareURL, aDispatchArgs );
+                        }
+                        catch ( css::uno::RuntimeException& )
+                        {
+                            throw;
+                        }
+                        catch ( css::uno::Exception& )
+                        {
                         }
                     }
 

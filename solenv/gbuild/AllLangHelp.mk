@@ -18,6 +18,12 @@ gb_AllLangHelp_AUXDIR := $(gb_AllLangHelp_HELPDIR)/$(gb_AllLangHelp_AUXDIRNAME)
 
 gb_AllLangHelp__get_helpname = $(1)/$(2)
 
+ifneq ($(ENABLE_HTMLHELP),)
+$(call gb_AllLangHelp_get_helpfiles_target,%): | \
+        $(dir $(call gb_AllLangHelp_get_helpfiles_target,%)).dir
+	touch $@
+endif
+
 $(dir $(call gb_AllLangHelp_get_target,%)).dir :
 	$(if $(wildcard $(dir $@)),,mkdir -p $(dir $@))
 
@@ -35,7 +41,7 @@ ifeq ($(ENABLE_HTMLHELP),)
 	$(call gb_Output_announce,$*,$(false),ALH,5)
 endif
 	$(call gb_Helper_abbreviate_dirs,\
-		rm -f $(call gb_AllLangHelp_get_target,$*) \
+		rm -f $(call gb_AllLangHelp_get_target,$*) $(call gb_AllLangHelp_get_helpfiles_target,$*) \
 	)
 
 # gb_AllLangHelp_AllLangHelp__one_lang module lang helpname
@@ -79,33 +85,18 @@ $(foreach lang,$(gb_HELP_LANGS),\
 
 endef
 
-# Add a help file.
-#
-# gb_AllLangHelp_add_helpfile module file
-define gb_AllLangHelp_add_helpfile
-$(foreach lang,$(gb_HELP_LANGS),\
-	$(call gb_HelpTarget_add_helpfile,$(call gb_AllLangHelp__get_helpname,$(1),$(lang)),$(2)) \
-)
-
-endef
-
 # Add one or more help files.
 #
-# gb_AllLangHelp_add_helpfiles module file(s)
+# gb_AllLangHelp_add_helpfiles module file(s) [optional bookmark token]
 define gb_AllLangHelp_add_helpfiles
 $(foreach lang,$(gb_HELP_LANGS),\
 	$(call gb_HelpTarget_add_helpfiles,$(call gb_AllLangHelp__get_helpname,$(1),$(lang)),$(2)) \
 )
-
-endef
-
-# Add additional localized file to the help pack.
-#
-# gb_AllLangHelp_add_localized_file module basedir file
-define gb_AllLangHelp_add_localized_file
-$(foreach lang,$(gb_HELP_LANGS),\
-	$(call gb_HelpTarget_add_file,$(call gb_AllLangHelp__get_helpname,$(1),$(lang)),$(2)/$(lang)/$(3)) \
-)
+ifneq ($(ENABLE_HTMLHELP),)
+gb_AllLangHelp_$(1)_HELPFILES += $(addsuffix .xhp,$(2))
+gb_AllLangHelp_$(or $(3),$(1))_BOOKMARK_HELPFILES += $(addsuffix .xhp,$(2))
+$(call gb_AllLangHelp_get_helpfiles_target,$(1)): $(addprefix $(SRCDIR)/,$(addsuffix .xhp,$(2)))
+endif
 
 endef
 

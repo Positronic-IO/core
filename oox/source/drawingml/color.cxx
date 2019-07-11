@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <math.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <oox/helper/containerhelper.hxx>
 #include <oox/helper/graphichelper.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
@@ -145,29 +146,29 @@ struct StaticPresetColorsPool : public ::rtl::Static< PresetColorsPool, StaticPr
 const double DEC_GAMMA          = 2.3;
 const double INC_GAMMA          = 1.0 / DEC_GAMMA;
 
-inline void lclRgbToRgbComponents( sal_Int32& ornR, sal_Int32& ornG, sal_Int32& ornB, ::Color nRgb )
+void lclRgbToRgbComponents( sal_Int32& ornR, sal_Int32& ornG, sal_Int32& ornB, ::Color nRgb )
 {
     ornR = nRgb.GetRed();
     ornG = nRgb.GetGreen();
     ornB = nRgb.GetBlue();
 }
 
-inline sal_Int32 lclRgbComponentsToRgb( sal_Int32 nR, sal_Int32 nG, sal_Int32 nB )
+sal_Int32 lclRgbComponentsToRgb( sal_Int32 nR, sal_Int32 nG, sal_Int32 nB )
 {
     return static_cast< sal_Int32 >( (nR << 16) | (nG << 8) | nB );
 }
 
-inline sal_Int32 lclRgbCompToCrgbComp( sal_Int32 nRgbComp )
+sal_Int32 lclRgbCompToCrgbComp( sal_Int32 nRgbComp )
 {
     return static_cast< sal_Int32 >( nRgbComp * MAX_PERCENT / 255 );
 }
 
-inline sal_Int32 lclCrgbCompToRgbComp( sal_Int32 nCrgbComp )
+sal_Int32 lclCrgbCompToRgbComp( sal_Int32 nCrgbComp )
 {
     return static_cast< sal_Int32 >( nCrgbComp * 255 / MAX_PERCENT );
 }
 
-inline sal_Int32 lclGamma( sal_Int32 nComp, double fGamma )
+sal_Int32 lclGamma( sal_Int32 nComp, double fGamma )
 {
     return static_cast< sal_Int32 >( pow( static_cast< double >( nComp ) / MAX_PERCENT, fGamma ) * MAX_PERCENT + 0.5 );
 }
@@ -552,7 +553,7 @@ void Color::clearTransparence()
                 case XML_comp:
                     // comp: rotate hue by 180 degrees, do not change lum/sat
                     toHsl();
-                    (mnC1 += 180 * PER_DEGREE) %= MAX_DEGREE;
+                    mnC1 = (mnC1 + (180 * PER_DEGREE)) % MAX_DEGREE;
                 break;
                 case XML_inv:
                     // invert percentual RGB values

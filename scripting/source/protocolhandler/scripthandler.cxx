@@ -27,6 +27,7 @@
 #include <com/sun/star/document/XEmbeddedScripts.hpp>
 #include <com/sun/star/document/XScriptInvocationContext.hpp>
 
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/script/provider/ScriptFrameworkErrorException.hpp>
 #include <com/sun/star/script/provider/XScriptProviderSupplier.hpp>
@@ -38,6 +39,7 @@
 #include <sfx2/sfxdlg.hxx>
 #include <vcl/abstdlg.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/factory.hxx>
@@ -208,7 +210,7 @@ void SAL_CALL ScriptProtocolHandler::dispatchWithNotification(
             bSuccess = false;
             while ( !bSuccess )
             {
-                Any aFirstCaughtException;
+                std::exception_ptr aFirstCaughtException;
                 try
                 {
                     invokeResult = xFunc->invoke( inArgs, outIndex, outArgs );
@@ -216,17 +218,17 @@ void SAL_CALL ScriptProtocolHandler::dispatchWithNotification(
                 }
                 catch( const provider::ScriptFrameworkErrorException& se )
                 {
-                    if  ( !aFirstCaughtException.hasValue() )
-                        aFirstCaughtException = ::cppu::getCaughtException();
+                    if  (!aFirstCaughtException)
+                        aFirstCaughtException = std::current_exception();
 
                     if ( se.errorType != provider::ScriptFrameworkErrorType::NO_SUCH_SCRIPT )
                         // the only condition which allows us to retry is if there is no method with the
                         // given name/signature
-                        ::cppu::throwException( aFirstCaughtException );
+                        std::rethrow_exception(aFirstCaughtException);
 
                     if ( inArgs.getLength() == 0 )
                         // no chance to retry if we can't strip more in-args
-                        ::cppu::throwException( aFirstCaughtException );
+                        std::rethrow_exception(aFirstCaughtException);
 
                     // strip one argument, then retry
                     inArgs.realloc( inArgs.getLength() - 1 );
@@ -257,16 +259,10 @@ void SAL_CALL ScriptProtocolHandler::dispatchWithNotification(
     if ( bCaughtException )
     {
         SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-
-        if ( pFact != nullptr )
-        {
-            ScopedVclPtr<VclAbstractDialog> pDlg(
+        ScopedVclPtr<VclAbstractDialog> pDlg(
                 pFact->CreateScriptErrorDialog( aException ));
-
-            if ( pDlg )
-                pDlg->Execute();
-        }
-       }
+        pDlg->Execute();
+    }
 
     if ( xListener.is() )
     {
@@ -399,15 +395,12 @@ void ScriptProtocolHandler::createScriptProvider()
             m_xScriptProvider.set( xFac->createScriptProvider( aContext ), UNO_QUERY_THROW );
         }
     }
-    catch ( const RuntimeException & e )
-    {
-        OUString temp = "ScriptProtocolHandler::createScriptProvider(),  ";
-        throw RuntimeException( temp.concat( e.Message ) );
-    }
     catch ( const Exception & e )
     {
-        OUString temp = "ScriptProtocolHandler::createScriptProvider: ";
-        throw RuntimeException( temp.concat( e.Message ) );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
+            "ScriptProtocolHandler::createScriptProvider: " + e.Message,
+            nullptr, anyEx );
     }
 }
 

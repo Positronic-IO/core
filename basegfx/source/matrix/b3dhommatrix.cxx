@@ -117,9 +117,20 @@ namespace basegfx
 
     B3DHomMatrix& B3DHomMatrix::operator*=(const B3DHomMatrix& rMat)
     {
-        if(!rMat.isIdentity())
+        if(rMat.isIdentity())
+        {
+            // multiply with identity, no change -> nothing to do
+        }
+        else if(isIdentity())
+        {
+            // we are identity, result will be rMat -> assign
+            *this = rMat;
+        }
+        else
+        {
+            // multiply
             mpImpl->doMulMatrix(*rMat.mpImpl);
-
+        }
         return *this;
     }
 
@@ -461,7 +472,7 @@ namespace basegfx
 
         if(!fTools::equalZero(fShearY))
         {
-            // coverity[copy_paste_error] - this is correct getZ, not getY
+            // coverity[copy_paste_error : FALSE] - this is correct getZ, not getY
             rShear.setY(rShear.getY() / rScale.getZ());
         }
 

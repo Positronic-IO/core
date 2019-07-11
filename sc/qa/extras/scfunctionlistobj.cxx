@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/xfunctiondescriptions.hxx>
 
 #include <com/sun/star/lang/XComponent.hpp>
@@ -22,7 +23,9 @@ using namespace com::sun::star;
 
 namespace sc_apitest
 {
-class ScFunctionListObj : public CalcUnoApiTest, public apitest::XFunctionDescriptions
+class ScFunctionListObj : public CalcUnoApiTest,
+                          public apitest::XEnumerationAccess,
+                          public apitest::XFunctionDescriptions
 {
 public:
     ScFunctionListObj();
@@ -32,6 +35,9 @@ public:
     virtual void tearDown() override;
 
     CPPUNIT_TEST_SUITE(ScFunctionListObj);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     // XFunctionDescriptions
     CPPUNIT_TEST(testGetById);
@@ -50,8 +56,6 @@ ScFunctionListObj::ScFunctionListObj()
 uno::Reference<uno::XInterface> ScFunctionListObj::init()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
-
     uno::Reference<lang::XMultiServiceFactory> xMSF(xDoc, UNO_QUERY_THROW);
     return xMSF->createInstance("com.sun.star.sheet.FunctionDescriptions");
 }

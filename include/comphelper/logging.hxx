@@ -21,13 +21,15 @@
 #define INCLUDED_COMPHELPER_LOGGING_HXX
 
 #include <comphelper/comphelperdllapi.h>
-
-#include <com/sun/star/uno/XComponentContext.hpp>
-#include <com/sun/star/logging/XLogHandler.hpp>
-#include <com/sun/star/logging/LogLevel.hpp>
+#include <rtl/ustring.hxx>
 
 #include <boost/optional.hpp>
 #include <memory>
+
+#include <com/sun/star/logging/XLogger.hpp>
+
+namespace com { namespace sun { namespace star { namespace uno { template <class interface_type> class Reference; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 namespace comphelper
 {
@@ -108,8 +110,6 @@ namespace comphelper
             const sal_Char* _pAsciiLoggerName
         );
 
-        ~EventLogger();
-
     public:
         /// determines whether an event with the given level would be logged
         bool        isLoggable( const sal_Int32 _nLogLevel ) const;
@@ -119,12 +119,13 @@ namespace comphelper
         //- string messages
 
         /// logs a given message, without any arguments, or source class/method names
-        bool        log( const sal_Int32 _nLogLevel, const OUString& rMessage ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& rMessage ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log(_nLogLevel, nullptr, nullptr, rMessage);
-            return false;
+                impl_log(_nLogLevel, nullptr, nullptr, rMessage);
         }
+
+        const css::uno::Reference<css::logging::XLogger> getLogger();
 
         /** logs a given message, replacing a placeholder in the message with an argument
 
@@ -134,77 +135,71 @@ namespace comphelper
             is searched in the message string, and replaced with the argument string.
         */
         template< typename ARGTYPE1 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 2 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 3 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 4 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 5 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 6 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5, typename ARGTYPE6 >
-        bool        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
+        void        log( const sal_Int32 _nLogLevel, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
+                impl_log( _nLogLevel, nullptr, nullptr, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument6 ) ) );
-            return false;
         }
 
 
@@ -219,77 +214,71 @@ namespace comphelper
             is searched in the message string, and replaced with the argument string.
         */
         template< typename ARGTYPE1 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 2 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 3 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 4 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 5 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 6 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5, typename ARGTYPE6 >
-        bool        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
+        void        log( const sal_Int32 _nLogLevel, const sal_Char* _pMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
+                impl_log( _nLogLevel, nullptr, nullptr, OUString::createFromAscii( _pMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument6 ) ) );
-            return false;
         }
 
 
@@ -304,77 +293,71 @@ namespace comphelper
             is searched in the message string, and replaced with the argument string.
         */
         template< typename ARGTYPE1 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 2 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 3 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 4 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 5 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ) );
-            return false;
         }
 
         /// logs a given message, replacing 6 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5, typename ARGTYPE6 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const OUString& _rMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, _rMessage,
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument6 ) ) );
-            return false;
         }
 
 
@@ -389,81 +372,75 @@ namespace comphelper
             is searched in the message string, and replaced with the argument string.
         */
         template< typename ARGTYPE1 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ) );
-            return false;
         }
 
         /// logs a given ASCII message, replacing 2 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ) );
-            return false;
         }
 
         /// logs a given ASCII message, replacing 3 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ) );
-            return false;
         }
 
         /// logs a given ASCII message, replacing 4 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ) );
-            return false;
         }
 
         /// logs a given ASCII message, replacing 5 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ) );
-            return false;
         }
 
         /// logs a given ASCII message, replacing 6 placeholders in the message with respective values
         template< typename ARGTYPE1, typename ARGTYPE2, typename ARGTYPE3, typename ARGTYPE4, typename ARGTYPE5, typename ARGTYPE6 >
-        bool        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
+        void        logp( const sal_Int32 _nLogLevel, const sal_Char* _pSourceClass, const sal_Char* _pSourceMethod, const sal_Char* _pAsciiMessage, ARGTYPE1 _argument1, ARGTYPE2 _argument2, ARGTYPE3 _argument3, ARGTYPE4 _argument4, ARGTYPE5 _argument5, ARGTYPE6 _argument6 ) const
         {
             if ( isLoggable( _nLogLevel ) )
-                return impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
+                impl_log( _nLogLevel, _pSourceClass, _pSourceMethod, OUString::createFromAscii( _pAsciiMessage ),
                     OptionalString( log::convert::convertLogArgToString( _argument1 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument2 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument3 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument4 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument5 ) ),
                     OptionalString( log::convert::convertLogArgToString( _argument6 ) ) );
-            return false;
         }
 
     protected:
-        bool        impl_log(
+        void        impl_log(
                         const sal_Int32 _nLogLevel,
                         const sal_Char* _pSourceClass,
                         const sal_Char* _pSourceMethod,

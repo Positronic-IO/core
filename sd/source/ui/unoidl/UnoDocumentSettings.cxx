@@ -45,7 +45,9 @@
 
 #include <optsitem.hxx>
 #include <sfx2/printer.hxx>
+#include <sfx2/sfxsids.hrc>
 #include <sdattr.hxx>
+#include <sdmod.hxx>
 #include <ViewShell.hxx>
 #include <FrameView.hxx>
 #include <Outliner.hxx>
@@ -135,17 +137,19 @@ enum SdDocumentSettingsPropertyHandles
     HANDLE_SCALE_DOM, HANDLE_TABSTOP, HANDLE_PRINTPAGENAME, HANDLE_PRINTDATE, HANDLE_PRINTTIME,
     HANDLE_PRINTHIDENPAGES, HANDLE_PRINTFITPAGE, HANDLE_PRINTTILEPAGE, HANDLE_PRINTBOOKLET, HANDLE_PRINTBOOKLETFRONT,
     HANDLE_PRINTBOOKLETBACK, HANDLE_PRINTQUALITY, HANDLE_COLORTABLEURL, HANDLE_DASHTABLEURL, HANDLE_LINEENDTABLEURL, HANDLE_HATCHTABLEURL,
-    HANDLE_GRADIENTTABLEURL, HANDLE_BITMAPTABLEURL, HANDLE_FORBIDDENCHARS, HANDLE_APPLYUSERDATA, HANDLE_PAGENUMFMT,
+    HANDLE_GRADIENTTABLEURL, HANDLE_BITMAPTABLEURL, HANDLE_FORBIDDENCHARS, HANDLE_APPLYUSERDATA, HANDLE_SAVETHUMBNAIL, HANDLE_PAGENUMFMT,
     HANDLE_PRINTERNAME, HANDLE_PRINTERJOB, HANDLE_PRINTERPAPERSIZE, HANDLE_PARAGRAPHSUMMATION, HANDLE_CHARCOMPRESS, HANDLE_ASIANPUNCT,
     HANDLE_UPDATEFROMTEMPLATE, HANDLE_PRINTER_INDEPENDENT_LAYOUT
     // #i33095#
     ,HANDLE_LOAD_READONLY, HANDLE_MODIFY_PASSWD, HANDLE_SAVE_VERSION
-    ,HANDLE_SLIDESPERHANDOUT, HANDLE_HANDOUTHORIZONTAL, HANDLE_EMBED_FONTS
+    ,HANDLE_SLIDESPERHANDOUT, HANDLE_HANDOUTHORIZONTAL,
+    HANDLE_EMBED_FONTS, HANDLE_EMBED_USED_FONTS,
+    HANDLE_EMBED_LATIN_SCRIPT_FONTS, HANDLE_EMBED_ASIAN_SCRIPT_FONTS, HANDLE_EMBED_COMPLEX_SCRIPT_FONTS,
 };
 
 #define MID_PRINTER 1
 
-    rtl::Reference<PropertySetInfo> createSettingsInfoImpl( bool bIsDraw )
+    static rtl::Reference<PropertySetInfo> createSettingsInfoImpl( bool bIsDraw )
     {
         static PropertyMapEntry const aImpressSettingsInfoMap[] =
         {
@@ -192,6 +196,7 @@ enum SdDocumentSettingsPropertyHandles
 
             { OUString("ForbiddenCharacters"),   HANDLE_FORBIDDENCHARS,      cppu::UnoType<XForbiddenCharacters>::get(),    0, 0 },
             { OUString("ApplyUserData"),         HANDLE_APPLYUSERDATA,       cppu::UnoType<bool>::get(),                0,  0 },
+            { OUString("SaveThumbnail"),         HANDLE_SAVETHUMBNAIL,       cppu::UnoType<bool>::get(),                0,  0 },
 
             { OUString("PageNumberFormat"),      HANDLE_PAGENUMFMT,          ::cppu::UnoType<sal_Int32>::get(),    0,  0 },
             { OUString("ParagraphSummation"),    HANDLE_PARAGRAPHSUMMATION,  cppu::UnoType<bool>::get(),                0,  0 },
@@ -203,7 +208,11 @@ enum SdDocumentSettingsPropertyHandles
             { OUString("LoadReadonly"),          HANDLE_LOAD_READONLY,       cppu::UnoType<bool>::get(),                0,  0 },
             { OUString("ModifyPasswordInfo"),    HANDLE_MODIFY_PASSWD,       cppu::UnoType<uno::Sequence < beans::PropertyValue >>::get(),  0,  0 },
             { OUString("SaveVersionOnClose"),    HANDLE_SAVE_VERSION,        cppu::UnoType<bool>::get(),                0,  0 },
-            { OUString("EmbedFonts"),            HANDLE_EMBED_FONTS,         cppu::UnoType<bool>::get(),                0,  0 },
+            { OUString("EmbedFonts"),              HANDLE_EMBED_FONTS,                cppu::UnoType<bool>::get(), 0,  0 },
+            { OUString("EmbedOnlyUsedFonts"),      HANDLE_EMBED_USED_FONTS,           cppu::UnoType<bool>::get(), 0,  0 },
+            { OUString("EmbedLatinScriptFonts"),   HANDLE_EMBED_LATIN_SCRIPT_FONTS,   cppu::UnoType<bool>::get(), 0,  0 },
+            { OUString("EmbedAsianScriptFonts"),   HANDLE_EMBED_ASIAN_SCRIPT_FONTS,   cppu::UnoType<bool>::get(), 0,  0 },
+            { OUString("EmbedComplexScriptFonts"), HANDLE_EMBED_COMPLEX_SCRIPT_FONTS, cppu::UnoType<bool>::get(), 0,  0 },
             { OUString(), 0, css::uno::Type(), 0, 0 }
         };
 
@@ -264,7 +273,7 @@ void DocumentSettings::AssignURL( XPropertyListType t, const Any* pValue,
 static struct {
     const char *pName;
     XPropertyListType t;
-} aURLPropertyNames[] = {
+} const aURLPropertyNames[] = {
     { "ColorTableURL", XPropertyListType::Color },
     { "DashTableURL", XPropertyListType::Dash },
     { "LineEndTableURL", XPropertyListType::LineEnd },
@@ -328,7 +337,7 @@ uno::Sequence<beans::PropertyValue>
     SdDrawDocument* pDoc = mxModel->GetDoc();
     for( size_t i = 0; i < SAL_N_ELEMENTS( aURLPropertyNames ); i++ )
     {
-        XPropertyListRef pList = pDoc->GetPropertyList( static_cast<XPropertyListType>(i) );
+        const XPropertyListRef& pList = pDoc->GetPropertyList( static_cast<XPropertyListType>(i) );
         bHasEmbed = pList.is() && pList->IsEmbedInDocument();
         if( bHasEmbed )
             break;
@@ -350,7 +359,7 @@ uno::Sequence<beans::PropertyValue>
             XPropertyListType t = getTypeOfName( aConfigProps[i].Name );
             aRet[i] = aConfigProps[i];
             if (t != XPropertyListType::Unknown) {
-                XPropertyListRef pList = pDoc->GetPropertyList( t );
+                const XPropertyListRef& pList = pDoc->GetPropertyList( t );
                 if( !pList.is() || !pList->IsEmbedInDocument() )
                     continue; // no change ...
                 else
@@ -467,6 +476,18 @@ DocumentSettings::_setPropertyValues(const PropertyMapEntry** ppEntries,
                     }
                 }
                 break;
+            case HANDLE_SAVETHUMBNAIL:
+                {
+                    bool bSaveThumbnail = false;
+                    if (*pValues >>= bSaveThumbnail)
+                    {
+                         bChanged = (bSaveThumbnail != pDocSh->IsUseThumbnailSave());
+                         pDocSh->SetUseThumbnailSave(bSaveThumbnail);
+                         bOk = true;
+                    }
+                }
+                break;
+
             case HANDLE_PRINTDRAWING:
                 if( *pValues >>= bValue )
                 {
@@ -946,11 +967,59 @@ DocumentSettings::_setPropertyValues(const PropertyMapEntry** ppEntries,
 
             case HANDLE_EMBED_FONTS:
             {
-                bool bNewValue = false;
-                if ( *pValues >>= bNewValue )
+                if (pValues->has<bool>())
                 {
-                    bChanged = ( pDoc->IsUsingEmbededFonts() != bNewValue );
-                    pDoc->SetIsUsingEmbededFonts( bNewValue );
+                    bool bNewValue = pValues->get<bool>();
+                    bChanged = (pDoc->IsEmbedFonts() != bNewValue);
+                    pDoc->SetEmbedFonts(bNewValue);
+                    bOk = true;
+                }
+            }
+            break;
+
+            case HANDLE_EMBED_USED_FONTS:
+            {
+                if (pValues->has<bool>())
+                {
+                    bool bNewValue = pValues->get<bool>();
+                    bChanged = (pDoc->IsEmbedUsedFontsOnly() != bNewValue);
+                    pDoc->SetEmbedUsedFontsOnly(bNewValue);
+                    bOk = true;
+                }
+            }
+            break;
+
+            case HANDLE_EMBED_LATIN_SCRIPT_FONTS:
+            {
+                if (pValues->has<bool>())
+                {
+                    bool bNewValue = pValues->get<bool>();
+                    bChanged = (pDoc->IsEmbedFontScriptLatin() != bNewValue);
+                    pDoc->SetEmbedFontScriptLatin(bNewValue);
+                    bOk = true;
+                }
+            }
+            break;
+
+            case HANDLE_EMBED_ASIAN_SCRIPT_FONTS:
+            {
+                if (pValues->has<bool>())
+                {
+                    bool bNewValue = pValues->get<bool>();
+                    bChanged = (pDoc->IsEmbedFontScriptAsian() != bNewValue);
+                    pDoc->SetEmbedFontScriptAsian(bNewValue);
+                    bOk = true;
+                }
+            }
+            break;
+
+            case HANDLE_EMBED_COMPLEX_SCRIPT_FONTS:
+            {
+                if (pValues->has<bool>())
+                {
+                    bool bNewValue = pValues->get<bool>();
+                    bChanged = (pDoc->IsEmbedFontScriptComplex() != bNewValue);
+                    pDoc->SetEmbedFontScriptComplex(bNewValue);
                     bOk = true;
                 }
             }
@@ -1047,6 +1116,9 @@ DocumentSettings::_getPropertyValues(
             case HANDLE_APPLYUSERDATA:
                 *pValue <<= pDocSh->IsUseUserData();
                 break;
+            case HANDLE_SAVETHUMBNAIL:
+                *pValue <<= pDocSh->IsUseThumbnailSave();
+                break;
             case HANDLE_PRINTDRAWING:
                 *pValue <<= aPrintOpts.IsDraw();
                 break;
@@ -1127,12 +1199,8 @@ DocumentSettings::_getPropertyValues(
                     {
                         SvMemoryStream aStream;
                         pTempPrinter->Store( aStream );
-                        aStream.Seek ( STREAM_SEEK_TO_END );
-                        sal_uInt32 nSize = aStream.Tell();
-                        aStream.Seek ( STREAM_SEEK_TO_BEGIN );
-                        Sequence < sal_Int8 > aSequence ( nSize );
-                        memcpy ( aSequence.getArray(), aStream.GetData(), nSize );
-                        *pValue <<= aSequence;
+                        *pValue <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aStream.GetData() ),
+                                                        aStream.TellEnd() );
                     }
                     else
                     {
@@ -1203,7 +1271,31 @@ DocumentSettings::_getPropertyValues(
 
             case HANDLE_EMBED_FONTS:
             {
-                *pValue <<= pDoc->IsUsingEmbededFonts();
+                *pValue <<= pDoc->IsEmbedFonts();
+            }
+            break;
+
+            case HANDLE_EMBED_USED_FONTS:
+            {
+                *pValue <<= pDoc->IsEmbedUsedFontsOnly();
+            }
+            break;
+
+            case HANDLE_EMBED_LATIN_SCRIPT_FONTS:
+            {
+                *pValue <<= pDoc->IsEmbedFontScriptLatin();
+            }
+            break;
+
+            case HANDLE_EMBED_ASIAN_SCRIPT_FONTS:
+            {
+                *pValue <<= pDoc->IsEmbedFontScriptAsian();
+            }
+            break;
+
+            case HANDLE_EMBED_COMPLEX_SCRIPT_FONTS:
+            {
+                *pValue <<= pDoc->IsEmbedFontScriptComplex();
             }
             break;
 

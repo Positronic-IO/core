@@ -54,7 +54,7 @@ extern "C"
         if( ! ( pNoXInitThreads && *pNoXInitThreads ) )
             XInitThreads();
 
-        X11SalInstance* pInstance = new X11SalInstance( new SalYieldMutex() );
+        X11SalInstance* pInstance = new X11SalInstance( o3tl::make_unique<SalYieldMutex>() );
 
         // initialize SalData
         X11SalData *pSalData = new X11SalData( SAL_DATA_UNX, pInstance );
@@ -66,13 +66,12 @@ extern "C"
     }
 }
 
-X11SalInstance::X11SalInstance(SalYieldMutex* pMutex)
-    : SalGenericInstance(pMutex)
+X11SalInstance::X11SalInstance(std::unique_ptr<SalYieldMutex> pMutex)
+    : SalGenericInstance(std::move(pMutex))
     , mpXLib(nullptr)
 {
     ImplSVData* pSVData = ImplGetSVData();
-    delete pSVData->maAppData.mpToolkitName;
-    pSVData->maAppData.mpToolkitName = new OUString("x11");
+    pSVData->maAppData.mxToolkitName = OUString("x11");
 }
 
 X11SalInstance::~X11SalInstance()
@@ -100,7 +99,7 @@ struct PredicateReturn
 };
 
 extern "C" {
-Bool ImplPredicateEvent( Display *, XEvent *pEvent, char *pData )
+static Bool ImplPredicateEvent( Display *, XEvent *pEvent, char *pData )
 {
     PredicateReturn *pPre = reinterpret_cast<PredicateReturn *>(pData);
 

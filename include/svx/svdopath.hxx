@@ -47,7 +47,7 @@ class SVX_DLLPUBLIC SdrPathObj final : public SdrTextObj
 private:
     friend class ImpPathForDragAndCreate;
 
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
     basegfx::B2DPolyPolygon maPathPolygon;
     SdrObjKind                  meKind;
@@ -86,10 +86,8 @@ public:
     virtual void RecalcSnapRect() override;
     virtual void NbcSetSnapRect(const tools::Rectangle& rRect) override;
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
-    virtual sal_uInt32 GetPlusHdlCount(const SdrHdl& rHdl) const override;
-    virtual SdrHdl* GetPlusHdl(const SdrHdl& rHdl, sal_uInt32 nPlNum) const override;
     virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
+    virtual void AddToPlusHdlList(SdrHdlList& rHdlList, SdrHdl& rHdl) const override;
 
     // special drag methods
     virtual bool hasSpecialDrag() const override;

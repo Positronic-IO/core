@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cstddef>
 
@@ -26,13 +27,18 @@
 #include <unotextcursor.hxx>
 #include <unotextrange.hxx>
 #include <unocrsr.hxx>
+#include <ndtxt.hxx>
 #include <doc.hxx>
 #include <IDocumentContentOperations.hxx>
 #include <IDocumentStylePoolAccess.hxx>
 #include <tools/datetime.hxx>
 #include <poolfmt.hxx>
 #include <unoredline.hxx>
+#include <DocumentRedlineManager.hxx>
+#include "xmlimp.hxx"
+#include <officecfg/Office/Common.hxx>
 #include <o3tl/any.hxx>
+#include <unotools/configmgr.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <vcl/svapp.hxx>
 
@@ -98,9 +104,7 @@ public:
     bool IsValid();
 };
 
-XTextRangeOrNodeIndexPosition::XTextRangeOrNodeIndexPosition() :
-    xRange(nullptr),
-    pIndex(nullptr)
+XTextRangeOrNodeIndexPosition::XTextRangeOrNodeIndexPosition()
 {
 }
 
@@ -231,9 +235,12 @@ static const char g_sRecordChanges[] = "RecordChanges";
 static const char g_sRedlineProtectionKey[] = "RedlineProtectionKey";
 
 XMLRedlineImportHelper::XMLRedlineImportHelper(
+    SvXMLImport & rImport,
     bool bNoRedlinesPlease,
     const Reference<XPropertySet> & rModel,
-    const Reference<XPropertySet> & rImportInfo ) :
+    const Reference<XPropertySet> & rImportInfo )
+    :   m_rImport(rImport)
+    ,
         sInsertion( GetXMLToken( XML_INSERTION )),
         sDeletion( GetXMLToken( XML_DELETION )),
         sFormatChange( GetXMLToken( XML_FORMAT_CHANGE )),
@@ -280,10 +287,9 @@ XMLRedlineImportHelper::XMLRedlineImportHelper(
 XMLRedlineImportHelper::~XMLRedlineImportHelper()
 {
     // delete all left over (and obviously incomplete) RedlineInfos (and map)
-    RedlineMapType::iterator aFind = aRedlineMap.begin();
-    for( ; aRedlineMap.end() != aFind; ++aFind )
+    for( auto& rEntry : aRedlineMap )
     {
-        RedlineInfo* pInfo = aFind->second;
+        RedlineInfo* pInfo = rEntry.second;
 
         // left-over redlines. Insert them if possible (but assert),
         // and delete the incomplete ones. Finally, delete it.
@@ -337,7 +343,14 @@ XMLRedlineImportHelper::~XMLRedlineImportHelper()
 
         aAny <<= bShowChanges;
         if ( bHandleShowChanges )
+        {
+            aAny <<= true;
             xModelPropertySet->setPropertyValue( g_sShowChanges, aAny );
+            // TODO maybe we need some property for the view-setting?
+            SwDoc *const pDoc(SwImport::GetDocFromXMLImport(m_rImport));
+            assert(pDoc);
+            pDoc->GetDocumentRedlineManager().SetHideRedlines(!bShowChanges);
+        }
         else
             xImportInfoPropertySet->setPropertyValue( g_sShowChanges, aAny );
 
@@ -600,7 +613,9 @@ void XMLRedlineImportHelper::InsertIntoDocument(RedlineInfo* pRedlineInfo)
     // 2) check for:
     //    a) bIgnoreRedline (e.g. insert mode)
     //    b) illegal PaM range (CheckNodesRange())
+    //    c) redline with empty content section (quite useless)
     // 3) normal case: insert redline
+    SwTextNode const* pTempNode(nullptr);
     if( !aPaM.HasMark() && (pRedlineInfo->pContentIndex == nullptr) )
     {
         // these redlines have no function, and will thus be ignored (just as
@@ -609,7 +624,14 @@ void XMLRedlineImportHelper::InsertIntoDocument(RedlineInfo* pRedlineInfo)
     else if ( bIgnoreRedlines ||
          !CheckNodesRange( aPaM.GetPoint()->nNode,
                            aPaM.GetMark()->nNode,
-                           true ) )
+                           true )
+         || (pRedlineInfo->pContentIndex
+             && (pRedlineInfo->pContentIndex->GetIndex() + 2
+                 == pRedlineInfo->pContentIndex->GetNode().EndOfSectionIndex())
+             && (pTempNode = pDoc->GetNodes()[pRedlineInfo->pContentIndex->GetIndex() + 1]->GetTextNode()) != nullptr
+             && pTempNode->GetText().isEmpty()
+             && !pTempNode->GetpSwpHints()
+             && !pTempNode->GetAnchoredFlys()))
     {
         // ignore redline (e.g. file loaded in insert mode):
         // delete 'deleted' redlines and forget about the whole thing

@@ -60,15 +60,15 @@ private:
         SwapOutData(const OUString &aURL);
         ~SwapOutData();
 
-        OUString maURL; // File is removed in the destructor
+        OUString const maURL; // File is removed in the destructor
 
     };
 
     GfxLinkType     meType;
     sal_uInt32      mnUserId;
 
-    std::shared_ptr<sal_uInt8> mpSwapInData;
-    std::shared_ptr<SwapOutData> mpSwapOutData;
+    mutable std::shared_ptr<sal_uInt8> mpSwapInData;
+    mutable std::shared_ptr<SwapOutData> mpSwapOutData;
 
     sal_uInt32      mnSwapInDataSize;
     MapMode         maPrefMapMode;
@@ -108,9 +108,9 @@ public:
     bool                ExportNative( SvStream& rOStream ) const;
 
     void                SwapOut();
-    void                SwapIn();
     bool                IsSwappedOut() const { return( bool(mpSwapOutData) ); }
 
+    bool                IsEMF() const; // WMF & EMF stored under the same type (NativeWmf)
 public:
 
     friend VCL_DLLPUBLIC SvStream&  WriteGfxLink( SvStream& rOStream, const GfxLink& rGfxLink );

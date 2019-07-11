@@ -127,7 +127,7 @@ bool MorkParser::parse()
                 // Row
                 break;
             case '@':
-                Result = parseGroup();
+                parseGroup();
                 // Group
                 break;
             default:
@@ -324,7 +324,7 @@ bool MorkParser::parseCell()
     if ( NP::Rows != nowParsing_ )
     {
         // Dicts
-        if ( "" != Text )
+        if ( !Text.empty() )
         {
             if ( nowParsing_ == NP::Columns )
             {
@@ -338,7 +338,7 @@ bool MorkParser::parseCell()
     }
     else
     {
-        if ( "" != Text )
+        if ( !Text.empty() )
         {
             // Rows
             //int ValueId = string( Text.c_str() ).toInt( 0, 16 );
@@ -389,7 +389,7 @@ bool MorkParser::parseTable()
             switch ( cur )
             {
             case '{':
-                Result = parseMeta( '}' );
+                parseMeta( '}' );
                 break;
             case '[':
                 Result = parseRow( Id, Scope );
@@ -514,7 +514,7 @@ bool MorkParser::parseRow( int TableId, int TableScope )
                 Result = parseCell();
                 break;
             case '[':
-                Result = parseMeta( ']' );
+                parseMeta( ']' );
                 break;
             default:
                 Result = false;
@@ -528,12 +528,12 @@ bool MorkParser::parseRow( int TableId, int TableScope )
     return Result;
 }
 
-bool MorkParser::parseGroup()
+void MorkParser::parseGroup()
 {
-    return parseMeta( '@' );
+    parseMeta( '@' );
 }
 
-bool MorkParser::parseMeta( char c )
+void MorkParser::parseMeta( char c )
 {
     char cur = nextChar();
 
@@ -541,8 +541,6 @@ bool MorkParser::parseMeta( char c )
     {
         cur = nextChar();
     }
-
-    return true;
 }
 
 MorkTableMap *MorkParser::getTables( int TableScope )

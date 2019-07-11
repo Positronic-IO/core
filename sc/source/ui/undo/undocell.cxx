@@ -52,7 +52,7 @@ using std::shared_ptr;
 
 namespace HelperNotifyChanges
 {
-    void NotifyIfChangesListeners(const ScDocShell& rDocShell, const ScAddress &rPos,
+    static void NotifyIfChangesListeners(const ScDocShell& rDocShell, const ScAddress &rPos,
         const ScUndoEnterData::ValuesType &rOldValues)
     {
         if (ScModelObj* pModelObj = getMustPropagateChangesModel(rDocShell))
@@ -715,11 +715,12 @@ bool ScUndoThesaurus::CanRepeat(SfxRepeatTarget& rTarget) const
     return dynamic_cast<const ScTabViewTarget*>( &rTarget) !=  nullptr;
 }
 
+
 ScUndoReplaceNote::ScUndoReplaceNote( ScDocShell& rDocShell, const ScAddress& rPos,
-        const ScNoteData& rNoteData, bool bInsert, SdrUndoAction* pDrawUndo ) :
+        const ScNoteData& rNoteData, bool bInsert, std::unique_ptr<SdrUndoAction> pDrawUndo ) :
     ScSimpleUndo( &rDocShell ),
     maPos( rPos ),
-    mpDrawUndo( pDrawUndo )
+    mpDrawUndo( std::move(pDrawUndo) )
 {
     OSL_ENSURE( rNoteData.mxCaption, "ScUndoReplaceNote::ScUndoReplaceNote - missing note caption" );
     if (bInsert)
@@ -735,12 +736,12 @@ ScUndoReplaceNote::ScUndoReplaceNote( ScDocShell& rDocShell, const ScAddress& rP
 }
 
 ScUndoReplaceNote::ScUndoReplaceNote( ScDocShell& rDocShell, const ScAddress& rPos,
-        const ScNoteData& rOldData, const ScNoteData& rNewData, SdrUndoAction* pDrawUndo ) :
+        const ScNoteData& rOldData, const ScNoteData& rNewData, std::unique_ptr<SdrUndoAction> pDrawUndo ) :
     ScSimpleUndo( &rDocShell ),
     maPos( rPos ),
     maOldData( rOldData ),
     maNewData( rNewData ),
-    mpDrawUndo( pDrawUndo )
+    mpDrawUndo( std::move(pDrawUndo) )
 {
     OSL_ENSURE( maOldData.mxCaption || maNewData.mxCaption, "ScUndoReplaceNote::ScUndoReplaceNote - missing note captions" );
     OSL_ENSURE( !maOldData.mxInitData.get() && !maNewData.mxInitData.get(), "ScUndoReplaceNote::ScUndoReplaceNote - unexpected uninitialized note" );
@@ -750,13 +751,13 @@ ScUndoReplaceNote::ScUndoReplaceNote( ScDocShell& rDocShell, const ScAddress& rP
 
 ScUndoReplaceNote::~ScUndoReplaceNote()
 {
-    DeleteSdrUndoAction( mpDrawUndo );
+    mpDrawUndo.reset();
 }
 
 void ScUndoReplaceNote::Undo()
 {
     BeginUndo();
-    DoSdrUndoAction( mpDrawUndo, &pDocShell->GetDocument() );
+    DoSdrUndoAction( mpDrawUndo.get(), &pDocShell->GetDocument() );
     /*  Undo insert -> remove new note.
         Undo remove -> insert old note.
         Undo replace -> remove new note, insert old note. */
@@ -769,7 +770,7 @@ void ScUndoReplaceNote::Undo()
 void ScUndoReplaceNote::Redo()
 {
     BeginRedo();
-    RedoSdrUndoAction( mpDrawUndo );
+    RedoSdrUndoAction( mpDrawUndo.get() );
     /*  Redo insert -> insert new note.
         Redo remove -> remove old note.
         Redo replace -> remove old note, insert new note. */
@@ -866,12 +867,12 @@ OUString ScUndoShowHideNote::GetComment() const
 }
 
 ScUndoDetective::ScUndoDetective( ScDocShell* pNewDocShell,
-                                    SdrUndoAction* pDraw, const ScDetOpData* pOperation,
-                                    ScDetOpList* pUndoList ) :
+                                    std::unique_ptr<SdrUndoAction> pDraw, const ScDetOpData* pOperation,
+                                    std::unique_ptr<ScDetOpList> pUndoList ) :
     ScSimpleUndo( pNewDocShell ),
-    pOldList    ( pUndoList ),
+    pOldList    ( std::move(pUndoList) ),
     nAction     ( 0 ),
-    pDrawUndo   ( pDraw )
+    pDrawUndo   ( std::move(pDraw) )
 {
     bIsDelete = ( pOperation == nullptr );
     if (!bIsDelete)
@@ -883,8 +884,8 @@ ScUndoDetective::ScUndoDetective( ScDocShell* pNewDocShell,
 
 ScUndoDetective::~ScUndoDetective()
 {
-    DeleteSdrUndoAction( pDrawUndo );
-    delete pOldList;
+    pDrawUndo.reset();
+    pOldList.reset();
 }
 
 OUString ScUndoDetective::GetComment() const
@@ -908,7 +909,7 @@ void ScUndoDetective::Undo()
     BeginUndo();
 
     ScDocument& rDoc = pDocShell->GetDocument();
-    DoSdrUndoAction(pDrawUndo, &rDoc);
+    DoSdrUndoAction(pDrawUndo.get(), &rDoc);
 
     if (bIsDelete)
     {
@@ -944,7 +945,7 @@ void ScUndoDetective::Redo()
 {
     BeginRedo();
 
-    RedoSdrUndoAction(pDrawUndo);
+    RedoSdrUndoAction(pDrawUndo.get());
 
     ScDocument& rDoc = pDocShell->GetDocument();
 
@@ -971,18 +972,18 @@ bool ScUndoDetective::CanRepeat(SfxRepeatTarget& /* rTarget */) const
 }
 
 ScUndoRangeNames::ScUndoRangeNames( ScDocShell* pNewDocShell,
-                                    ScRangeName* pOld, ScRangeName* pNew, SCTAB nTab ) :
+                                    std::unique_ptr<ScRangeName> pOld, std::unique_ptr<ScRangeName> pNew, SCTAB nTab ) :
     ScSimpleUndo( pNewDocShell ),
-    pOldRanges  ( pOld ),
-    pNewRanges  ( pNew ),
+    pOldRanges  ( std::move(pOld) ),
+    pNewRanges  ( std::move(pNew) ),
     mnTab       ( nTab )
 {
 }
 
 ScUndoRangeNames::~ScUndoRangeNames()
 {
-    delete pOldRanges;
-    delete pNewRanges;
+    pOldRanges.reset();
+    pNewRanges.reset();
 }
 
 OUString ScUndoRangeNames::GetComment() const

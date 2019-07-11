@@ -37,6 +37,7 @@
 #include <tools/datetime.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/sharedstring.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace xmloff::token;
@@ -44,8 +45,7 @@ using namespace xmloff::token;
 ScChangeTrackingExportHelper::ScChangeTrackingExportHelper(ScXMLExport& rTempExport)
     : rExport(rTempExport),
     pChangeTrack(nullptr),
-    pEditTextObj(nullptr),
-    pDependings(nullptr)
+    pEditTextObj(nullptr)
 {
     pChangeTrack = rExport.GetDocument() ? rExport.GetDocument()->GetChangeTrack() : nullptr;
     pDependings.reset( new ScChangeActionMap );
@@ -104,8 +104,7 @@ void ScChangeTrackingExportHelper::WriteChangeInfo(const ScChangeAction* pAction
         SvXMLElementExport aCreatorElem( rExport, XML_NAMESPACE_DC,
                                             XML_CREATOR, true,
                                             false );
-        OUString sAuthor(pAction->GetUser());
-        rExport.Characters(sAuthor);
+        rExport.Characters(pAction->GetUser());
     }
 
     {
@@ -117,7 +116,7 @@ void ScChangeTrackingExportHelper::WriteChangeInfo(const ScChangeAction* pAction
         rExport.Characters(sDate.makeStringAndClear());
     }
 
-    OUString sComment(pAction->GetComment());
+    const OUString& sComment(pAction->GetComment());
     if (!sComment.isEmpty())
     {
         SvXMLElementExport aElemC(rExport, XML_NAMESPACE_TEXT, XML_P, true, false);

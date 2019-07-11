@@ -20,6 +20,7 @@
 #include <sal/config.h>
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include "iodlg.hxx"
 #include <svtools/PlaceEditDialog.hxx>
 #include "PlacesListBox.hxx"
@@ -38,8 +39,8 @@
 #include <unotools/viewoptions.hxx>
 #include <svtools/fileview.hxx>
 #include <svtools/sfxecode.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <fpicker/strings.hrc>
 #include <svtools/helpids.h>
@@ -53,6 +54,8 @@
 #include <rtl/ustring.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/ucb/UniversalContentBroker.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ui/dialogs/CommonFilePickerElementIds.hpp>
 #include <com/sun/star/ui/dialogs/ExtendedFilePickerElementIds.hpp>
 #include <com/sun/star/ui/dialogs/ControlActions.hpp>
@@ -1489,7 +1492,7 @@ IMPL_LINK_NOARG(SvtFileDialog, EntrySelectHdl_Impl, ComboBox&, void)
 
 IMPL_LINK( SvtFileDialog, OpenDoneHdl_Impl, SvtFileView*, pView, void )
 {
-    OUString sCurrentFolder( pView->GetViewURL() );
+    const OUString& sCurrentFolder( pView->GetViewURL() );
     // check if we can create new folders
     EnableControl( pImpl->_pBtnNewFolder, ContentCanMakeFolder( sCurrentFolder ) );
 
@@ -1682,16 +1685,14 @@ short SvtFileDialog::Execute()
     return nResult;
 }
 
-
-void SvtFileDialog::StartExecuteModal( const Link<Dialog&,void>& rEndDialogHdl )
+bool SvtFileDialog::StartExecuteAsync(VclAbstractDialog::AsyncContext &rCtx)
 {
     if (!PrepareExecute())
-        return;
+        return false;
 
     // start of the dialog
-    ModalDialog::StartExecuteModal( rEndDialogHdl );
+    return ModalDialog::StartExecuteAsync(rCtx);
 }
-
 
 void SvtFileDialog::onAsyncOperationStarted()
 {
@@ -1700,7 +1701,6 @@ void SvtFileDialog::onAsyncOperationStarted()
     pImpl->_pBtnCancel->Enable();
     pImpl->_pBtnCancel->GrabFocus();
 }
-
 
 void SvtFileDialog::onAsyncOperationFinished()
 {
@@ -1799,10 +1799,10 @@ void SvtFileDialog::EnableControl( Control* _pControl, bool _bEnable )
 }
 
 
-short SvtFileDialog::PrepareExecute()
+bool SvtFileDialog::PrepareExecute()
 {
     if (comphelper::LibreOfficeKit::isActive())
-        return 0;
+        return false;
 
     OUString aEnvValue;
     if ( getEnvironmentValue( "WorkDirMustContainRemovableMedia", aEnvValue ) && aEnvValue == "1" )
@@ -1820,27 +1820,13 @@ short SvtFileDialog::PrepareExecute()
 
             Reference< XResultSet > xResultSet
                 = aCnt.createCursor( aProps, ::ucbhelper::INCLUDE_FOLDERS_ONLY );
-            if ( xResultSet.is() )
+            if ( xResultSet.is() && !xResultSet->next() )
             {
-                bool bEmpty = true;
-                if ( !xResultSet->next() )
-                {
-                    // folder is empty
-                    bEmpty = true;
-                }
-                else
-                {
-                                bEmpty = false;
-                }
-
-                if ( bEmpty )
-                {
-                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
-                                                              VclMessageType::Warning, VclButtonsType::Ok,
-                                                              FpsResId(STR_SVT_NOREMOVABLEDEVICE)));
-                    xBox->run();
-                    return 0;
-                }
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                          VclMessageType::Warning, VclButtonsType::Ok,
+                                                          FpsResId(STR_SVT_NOREMOVABLEDEVICE)));
+                xBox->run();
+                return false;
             }
         }
         catch ( ContentCreationException const & )
@@ -1939,7 +1925,7 @@ short SvtFileDialog::PrepareExecute()
     OUString aFilter;
 
     if ( !IsolateFilterFromPath_Impl( _aPath, aFilter ) )
-        return 0;
+        return false;
 
     AdjustFilterFlags nNewFilterFlags = adjustFilter( aFilter );
     if ( nNewFilterFlags & ( AdjustFilterFlags::NonEmpty | AdjustFilterFlags::UserFilter ) )
@@ -1979,7 +1965,7 @@ short SvtFileDialog::PrepareExecute()
     // if applicable read and set size from ini
     InitSize();
 
-    return 1;
+    return true;
 }
 
 
@@ -2611,17 +2597,17 @@ void SvtFileDialog::setImage( sal_Int16 /*aImageFormat*/, const Any& rImage )
 
     if ( rImage >>= aBmpSequence )
     {
-        Bitmap          aBmp;
+        BitmapEx        aBmp;
         SvMemoryStream  aData( aBmpSequence.getArray(),
                                aBmpSequence.getLength(),
                                StreamMode::READ );
-        ReadDIB(aBmp, aData, true);
+        ReadDIBBitmapEx(aBmp, aData);
 
         _pPrevBmp->SetBitmap( aBmp );
     }
     else
     {
-        Bitmap aEmpty;
+        BitmapEx aEmpty;
         _pPrevBmp->SetBitmap( aEmpty );
     }
 }

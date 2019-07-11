@@ -349,7 +349,7 @@ typedef enum
 
     /**
      * The size and/or the position of the view cursor changed. A view cursor
-     * is a cursor of an other view, the current view can't change it.
+     * is a cursor of another view, the current view can't change it.
      *
      * The payload format:
      *
@@ -594,6 +594,20 @@ typedef enum
      * convenience.
      */
     LOK_CALLBACK_CLIPBOARD_CHANGED = 38,
+
+    /**
+     * When the (editing) context changes - like the user switches from
+     * editing textbox in Impress to editing a shape there.
+     *
+     * Payload is the application ID and context, delimited by space.
+     * Eg. com.sun.star.presentation.PresentationDocument TextObject
+     */
+    LOK_CALLBACK_CONTEXT_CHANGED = 39,
+
+    /**
+     * On-load notification of the document signature status.
+     */
+    LOK_CALLBACK_SIGNATURE_STATUS = 40,
 }
 LibreOfficeKitCallbackType;
 

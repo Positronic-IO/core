@@ -18,6 +18,7 @@
  */
 
 #include <osl/file.h>
+#include <sal/log.hxx>
 #include <tools/stream.hxx>
 #include <tools/vcompat.hxx>
 #include <unotools/tempfile.hxx>
@@ -45,7 +46,8 @@ GfxLink::GfxLink(std::unique_ptr<sal_uInt8[]> pBuf, sal_uInt32 nSize, GfxLinkTyp
     , mbPrefMapModeValid(false)
     , mbPrefSizeValid(false)
 {
-    SAL_WARN_IF(mpSwapInData.get() == nullptr || mnSwapInDataSize <= 0, "vcl", "GfxLink::GfxLink(): empty/NULL buffer given");
+    SAL_WARN_IF(mpSwapInData == nullptr || mnSwapInDataSize <= 0, "vcl",
+                "GfxLink::GfxLink(): empty/NULL buffer given");
 }
 
 bool GfxLink::operator==( const GfxLink& rGfxLink ) const
@@ -78,8 +80,14 @@ bool GfxLink::IsNative() const
 const sal_uInt8* GfxLink::GetData() const
 {
     if( IsSwappedOut() )
-        const_cast<GfxLink*>(this)->SwapIn();
-
+    {
+        auto pData = GetSwapInData();
+        if (pData)
+        {
+            mpSwapInData = pData;
+            mpSwapOutData.reset();
+        }
+    }
     return mpSwapInData.get();
 }
 
@@ -162,19 +170,6 @@ void GfxLink::SwapOut()
                     mpSwapInData.reset();
                 }
             }
-        }
-    }
-}
-
-void GfxLink::SwapIn()
-{
-    if( IsSwappedOut() )
-    {
-        auto pData = GetSwapInData();
-        if (pData)
-        {
-            mpSwapInData = pData;
-            mpSwapOutData.reset();
         }
     }
 }
@@ -284,6 +279,22 @@ std::shared_ptr<sal_uInt8> GfxLink::GetSwapInData() const
     if (bError)
         pData.reset();
     return pData;
+}
+
+bool GfxLink::IsEMF() const
+{
+    const sal_uInt8* pGraphicAry = GetData();
+    if ((GetType() == GfxLinkType::NativeWmf) && pGraphicAry && (GetDataSize() > 0x2c))
+    {
+        // check the magic number
+        if ((pGraphicAry[0x28] == 0x20) && (pGraphicAry[0x29] == 0x45)
+            && (pGraphicAry[0x2a] == 0x4d) && (pGraphicAry[0x2b] == 0x46))
+        {
+            //emf detected
+            return true;
+        }
+    }
+    return false;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

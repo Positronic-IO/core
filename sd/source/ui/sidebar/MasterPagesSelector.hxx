@@ -99,10 +99,6 @@ protected:
 
     SdDrawDocument& mrDocument;
     ViewShellBase& mrBase;
-    /** menu entry that is executed as default action when the left mouse button is
-        clicked over a master page.
-    */
-    OString msDefaultClickAction;
 
     SdPage* GetSelectedMasterPage();
 
@@ -145,7 +141,7 @@ protected:
     TokenToValueSetIndex maTokenToValueSetIndex;
 
     ItemList maLockedMasterPages;
-    /** Lock master pages in the given list and release locks that where
+    /** Lock master pages in the given list and release locks that were
         previously acquired.
     */
     void UpdateLocks (const ItemList& rItemList);

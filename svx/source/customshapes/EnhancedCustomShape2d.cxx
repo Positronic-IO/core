@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <o3tl/clamp.hxx>
 #include <svx/EnhancedCustomShape2d.hxx>
 #include <svx/EnhancedCustomShapeGeometry.hxx>
 #include <svx/EnhancedCustomShapeTypeNames.hxx>
@@ -52,6 +55,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <math.h>
 
 using namespace ::com::sun::star;
@@ -1049,15 +1053,15 @@ Color EnhancedCustomShape2d::GetColorData( const Color& rFillColor, sal_uInt32 n
         {
             if (dBrightness >=0.0)
             { //lighten, blending with white
-                return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetRed() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0)  )),
-                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetGreen() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0) )),
-                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetBlue() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0) ))  );
+                return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetRed() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0)  )),
+                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetGreen() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0) )),
+                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetBlue() * (1.0-dBrightness) + dBrightness * 255.0, 0.0, 255.0) ))  );
             }
             else
             { //darken (indicated by negative sign), blending with black
-                return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetRed() * (1.0+dBrightness), 0.0, 255.0)  )),
-                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetGreen() * (1.0+dBrightness), 0.0, 255.0) )),
-                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(rFillColor.GetBlue() * (1.0+dBrightness), 0.0, 255.0) ))  );
+                return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetRed() * (1.0+dBrightness), 0.0, 255.0)  )),
+                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetGreen() * (1.0+dBrightness), 0.0, 255.0) )),
+                              static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(rFillColor.GetBlue() * (1.0+dBrightness), 0.0, 255.0) ))  );
             }
         }
     }
@@ -1088,9 +1092,9 @@ Color EnhancedCustomShape2d::GetColorData( const Color& rFillColor, sal_uInt32 n
         }
 
         aHSVColor = basegfx::utils::hsv2rgb(aHSVColor);
-        return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(aHSVColor.getRed(),0.0,1.0) * 255.0 + 0.5 )),
-                    static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(aHSVColor.getGreen(),0.0,1.0) * 255.0 + 0.5 )),
-                    static_cast<sal_uInt8>(static_cast< sal_Int32 >( basegfx::clamp(aHSVColor.getBlue(),0.0,1.0) * 255.0 + 0.5 )) );
+        return Color( static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(aHSVColor.getRed(),0.0,1.0) * 255.0 + 0.5 )),
+                    static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(aHSVColor.getGreen(),0.0,1.0) * 255.0 + 0.5 )),
+                    static_cast<sal_uInt8>(static_cast< sal_Int32 >( o3tl::clamp(aHSVColor.getBlue(),0.0,1.0) * 255.0 + 0.5 )) );
     }
 }
 
@@ -1143,15 +1147,15 @@ bool EnhancedCustomShape2d::GetHandlePosition( const sal_uInt32 nIndex, Point& r
                 GetParameter( fRadius, aHandle.aPosition.First, false, false );
                 GetParameter( fAngle,  aHandle.aPosition.Second, false, false );
 
-                double a = ( 360.0 - fAngle ) * F_PI180;
+                double a = basegfx::deg2rad(360.0 - fAngle);
                 double dx = fRadius * fXScale;
                 double fX = dx * cos( a );
                 double fY =-dx * sin( a );
                 rReturnPosition =
                     Point(
-                        svx::Round( fX + aReferencePoint.X() ),
+                        FRound( fX + aReferencePoint.X() ),
                         basegfx::fTools::equalZero(fXScale) ? aReferencePoint.Y() :
-                        svx::Round( ( fY * fYScale ) / fXScale + aReferencePoint.Y() ) );
+                        FRound( ( fY * fYScale ) / fXScale + aReferencePoint.Y() ) );
             }
             else
             {
@@ -1171,7 +1175,7 @@ bool EnhancedCustomShape2d::GetHandlePosition( const sal_uInt32 nIndex, Point& r
             if ( aGeoStat.nShearAngle )
             {
                 double nTan = aGeoStat.nTan;
-                if ((bFlipV&&!bFlipH )||(bFlipH&&!bFlipV))
+                if (bFlipV != bFlipH)
                     nTan = -nTan;
                 ShearPoint( rReturnPosition, Point( aLogicRect.GetWidth() / 2, aLogicRect.GetHeight() / 2 ), nTan );
             }
@@ -1216,7 +1220,7 @@ bool EnhancedCustomShape2d::SetHandleControllerPosition( const sal_uInt32 nIndex
             if ( aGeoStat.nShearAngle )
             {
                 double nTan = -aGeoStat.nTan;
-                if ((bFlipV&&!bFlipH )||(bFlipH&&!bFlipV))
+                if (bFlipV != bFlipH)
                     nTan = -nTan;
                 ShearPoint( aP, Point( aLogicRect.GetWidth() / 2, aLogicRect.GetHeight() / 2 ), nTan );
             }
@@ -1279,7 +1283,7 @@ bool EnhancedCustomShape2d::SetHandleControllerPosition( const sal_uInt32 nIndex
                     fYRef = fHeight / 2;
                 }
                 const double fDX = fPos1 - fXRef;
-                fAngle = -( atan2( -fPos2 + fYRef, ( ( fDX == 0.0L ) ? 0.000000001 : fDX ) ) / F_PI180 );
+                fAngle = -basegfx::rad2deg(atan2(-fPos2 + fYRef, (fDX == 0.0) ? 0.000000001 : fDX));
                 double fX = ( fPos1 - fXRef );
                 double fY = ( fPos2 - fYRef );
                 double fRadius = sqrt( fX * fX + fY * fY );
@@ -1673,48 +1677,22 @@ void EnhancedCustomShape2d::CreateSubPath(
                                 }
                                 double fCenterX = aRect.Center().X();
                                 double fCenterY = aRect.Center().Y();
-                                double fx1 = ( cos( fStartAngle * F_PI180 ) * 65536.0 * fXScale ) + fCenterX;
-                                double fy1 = ( -sin( fStartAngle * F_PI180 ) * 65536.0 * fYScale ) + fCenterY;
-                                double fx2 = ( cos( fEndAngle * F_PI180 ) * 65536.0 * fXScale ) + fCenterX;
-                                double fy2 = ( -sin( fEndAngle * F_PI180 ) * 65536.0 * fYScale ) + fCenterY;
+                                double fx1 = cos(basegfx::deg2rad(fStartAngle)) * 65536.0 * fXScale
+                                             + fCenterX;
+                                double fy1 = -sin(basegfx::deg2rad(fStartAngle)) * 65536.0 * fYScale
+                                             + fCenterY;
+                                double fx2 = cos(basegfx::deg2rad(fEndAngle)) * 65536.0 * fXScale
+                                             + fCenterX;
+                                double fy2 = -sin(basegfx::deg2rad(fEndAngle)) * 65536.0 * fYScale
+                                             + fCenterY;
                                 aNewB2DPolygon.append(CreateArc( aRect, Point( static_cast<sal_Int32>(fx1), static_cast<sal_Int32>(fy1) ), Point( static_cast<sal_Int32>(fx2), static_cast<sal_Int32>(fy2) ), false));
                             }
                             else
-                            {   /* SJ: TODO: this block should be replaced sometimes, because the current point
-                                   is not set correct, it also does not use the correct moveto
-                                   point if ANGLEELLIPSETO was used, but the method CreateArc
-                                   is at the moment not able to draw full circles (if startangle is 0
-                                   and endangle 360 nothing is painted :-( */
-                                sal_Int32 nXControl = static_cast<sal_Int32>(static_cast<double>(aRect.GetWidth()) * 0.2835 );
-                                sal_Int32 nYControl = static_cast<sal_Int32>(static_cast<double>(aRect.GetHeight()) * 0.2835 );
-                                Point aCenter( aRect.Center() );
-
-                                // append start point
-                                aNewB2DPolygon.append(basegfx::B2DPoint(aCenter.X(), aRect.Top()));
-
-                                // append four bezier segments
-                                aNewB2DPolygon.appendBezierSegment(
-                                    basegfx::B2DPoint(aCenter.X() + nXControl, aRect.Top()),
-                                    basegfx::B2DPoint(aRect.Right(), aCenter.Y() - nYControl),
-                                    basegfx::B2DPoint(aRect.Right(), aCenter.Y()));
-
-                                aNewB2DPolygon.appendBezierSegment(
-                                    basegfx::B2DPoint(aRect.Right(), aCenter.Y() + nYControl),
-                                    basegfx::B2DPoint(aCenter.X() + nXControl, aRect.Bottom()),
-                                    basegfx::B2DPoint(aCenter.X(), aRect.Bottom()));
-
-                                aNewB2DPolygon.appendBezierSegment(
-                                    basegfx::B2DPoint(aCenter.X() - nXControl, aRect.Bottom()),
-                                    basegfx::B2DPoint(aRect.Left(), aCenter.Y() + nYControl),
-                                    basegfx::B2DPoint(aRect.Left(), aCenter.Y()));
-
-                                aNewB2DPolygon.appendBezierSegment(
-                                    basegfx::B2DPoint(aRect.Left(), aCenter.Y() - nYControl),
-                                    basegfx::B2DPoint(aCenter.X() - nXControl, aRect.Top()),
-                                    basegfx::B2DPoint(aCenter.X(), aRect.Top()));
-
-                                // close, rescue last controlpoint, remove double last point
-                                basegfx::utils::closeWithGeometryChange(aNewB2DPolygon);
+                            {
+                                basegfx::B2DPoint aEllipseCenter(aRect.Center().X(),aRect.Center().Y());
+                                double fRadiusX(aRect.GetWidth()/2.0);
+                                double fRadiusY(aRect.GetHeight()/2.0);
+                                aNewB2DPolygon.append(basegfx::utils::createPolygonFromEllipse(aEllipseCenter,fRadiusX,fRadiusY, 3));
                             }
                         }
                         rSrcPt += 3;
@@ -1813,8 +1791,8 @@ void EnhancedCustomShape2d::CreateSubPath(
 
                         // Convert angles to radians, but don't do any scaling / translation yet.
 
-                        fStartAngle *= F_PI180;
-                        fSwingAngle *= F_PI180;
+                        fStartAngle = basegfx::deg2rad(fStartAngle);
+                        fSwingAngle = basegfx::deg2rad(fSwingAngle);
 
                         SAL_INFO("svx", "ARCANGLETO scale: " << fWR << "x" << fHR << " angles: " << fStartAngle << "," << fSwingAngle);
 
@@ -2032,16 +2010,13 @@ void EnhancedCustomShape2d::CreateSubPath(
                 aTempSet.Put(XLineStyleItem(drawing::LineStyle_NONE));
             }
 
-            if(pObj)
-            {
-                pObj->SetMergedItemSet(aTempSet);
-                rObjectList.push_back(std::pair< SdrPathObj*, double >(pObj, dBrightness));
-            }
+            pObj->SetMergedItemSet(aTempSet);
+            rObjectList.push_back(std::pair< SdrPathObj*, double >(pObj, dBrightness));
         }
     }
 }
 
-void CorrectCalloutArrows(
+static void CorrectCalloutArrows(
     MSO_SPT eSpType,
     sal_uInt32 nLineObjectCount,
     std::vector< std::pair< SdrPathObj*, double> >& vObjectList )

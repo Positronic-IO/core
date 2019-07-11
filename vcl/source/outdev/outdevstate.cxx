@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/gdimtf.hxx>
 #include <vcl/metaact.hxx>
@@ -32,8 +33,6 @@
 
 OutDevState::OutDevState()
     : mbMapActive(false)
-    , mpClipRegion(nullptr)
-    , mpFont(nullptr)
     , meTextAlign(ALIGN_TOP)
     , meRasterOp(RasterOp::OverPaint)
     , mnTextLayoutMode(ComplexTextLayoutFlags::Default)
@@ -293,7 +292,7 @@ void OutputDevice::SetRasterOp( RasterOp eRasterOp )
         mbInitLineColor = mbInitFillColor = true;
 
         if( mpGraphics || AcquireGraphics() )
-            mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp) );
+            mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp), RasterOp::Invert == meRasterOp );
     }
 
     if( mpAlphaVDev )
@@ -615,12 +614,7 @@ void OutputDevice::ImplReleaseFonts()
     mbNewFont = true;
     mbInitFont = true;
 
-    if ( mpFontInstance )
-    {
-        mpFontInstance->Release();
-        mpFontInstance = nullptr;
-    }
-
+    mpFontInstance.clear();
     mpDeviceFontList.reset();
     mpDeviceFontSizeList.reset();
 }

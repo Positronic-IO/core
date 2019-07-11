@@ -103,7 +103,7 @@ private:
 
     RegError    deleteSubkeysAndValues(ORegKey* pKey);
 
-    RegError    loadAndSaveValue(ORegKey* pTargetKey,
+    static RegError loadAndSaveValue(ORegKey* pTargetKey,
                                  ORegKey const * pSourceKey,
                                  const OUString& valueName,
                                  sal_uInt32 nCut,
@@ -145,7 +145,7 @@ private:
     store::OStoreFile   m_file;
     KeyMap              m_openKeyTable;
 
-    const OUString ROOT;
+    static constexpr OUStringLiteral ROOT { "/" };
 };
 
 #endif

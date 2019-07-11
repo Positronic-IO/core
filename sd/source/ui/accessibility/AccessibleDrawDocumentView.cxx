@@ -29,13 +29,15 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
+#include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <comphelper/processfactory.hxx>
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 #include <sfx2/viewfrm.hxx>
 
 #include <svx/AccessibleShape.hxx>
-
+#include <svx/ChildrenManager.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/unoapi.hxx>
@@ -50,6 +52,7 @@
 #include <sdpage.hxx>
 #include <slideshow.hxx>
 #include <anminfo.hxx>
+#include <AccessiblePageShape.hxx>
 
 #include <strings.hrc>
 #include <sdresid.hxx>
@@ -83,8 +86,7 @@ AccessibleDrawDocumentView::AccessibleDrawDocumentView (
     const uno::Reference<frame::XController>& rxController,
     const uno::Reference<XAccessible>& rxParent)
     : AccessibleDocumentViewBase (pSdWindow, pViewShell, rxController, rxParent),
-      mpSdViewSh( pViewShell ),
-      mpChildrenManager (nullptr)
+      mpSdViewSh( pViewShell )
 {
     UpdateAccessibleName();
 }
@@ -106,7 +108,7 @@ void AccessibleDrawDocumentView::Init()
         xShapeList.set( xView->getCurrentPage(), uno::UNO_QUERY);
 
     // Create the children manager.
-    mpChildrenManager = new ChildrenManager(this, xShapeList, maShapeTreeInfo, *this);
+    mpChildrenManager.reset(new ChildrenManager(this, xShapeList, maShapeTreeInfo, *this));
 
     rtl::Reference<AccessiblePageShape> xPage(CreateDrawPageShape());
     if (xPage.is())
@@ -214,7 +216,7 @@ uno::Reference<XAccessible> SAL_CALL
 
     // Create a copy of the pointer to the children manager and release the
     // mutex before calling any of its methods.
-    ChildrenManager* pChildrenManager = mpChildrenManager;
+    ChildrenManager* pChildrenManager = mpChildrenManager.get();
     aGuard.clear();
 
     // Forward request to children manager.
@@ -730,12 +732,7 @@ void AccessibleDrawDocumentView::Deactivated()
 
 void AccessibleDrawDocumentView::impl_dispose()
 {
-    if (mpChildrenManager != nullptr)
-    {
-        delete mpChildrenManager;
-        mpChildrenManager = nullptr;
-    }
-
+    mpChildrenManager.reset();
     AccessibleDocumentViewBase::impl_dispose();
 }
 
@@ -744,13 +741,8 @@ void AccessibleDrawDocumentView::impl_dispose()
 */
 void SAL_CALL AccessibleDrawDocumentView::disposing()
 {
-
     // Release resources.
-    if (mpChildrenManager != nullptr)
-    {
-        delete mpChildrenManager;
-        mpChildrenManager = nullptr;
-    }
+    mpChildrenManager.reset();
 
     // Forward call to base classes.
     AccessibleDocumentViewBase::disposing ();

@@ -45,6 +45,7 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <rtl/uuid.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
 #include <tools/color.hxx>
@@ -54,6 +55,7 @@
 #include <vcl/tabpage.hxx>
 #include <vcl/button.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 #include <comphelper/asyncnotification.hxx>
 #include <comphelper/flagguard.hxx>
 #include <comphelper/profilezone.hxx>
@@ -117,7 +119,7 @@ public:
     bool                                mbDisposing             : 1;
     bool                                mbDesignMode            : 1;
     bool                                mbSynthesizingVCLEvent  : 1;
-    bool                                mbWithDefaultProps      : 1;
+    bool const                          mbWithDefaultProps      : 1;
 
     sal_uLong                           mnListenerLockLevel;
     sal_Int16                           mnWritingMode;
@@ -218,7 +220,6 @@ VCLXWindowImpl::VCLXWindowImpl( VCLXWindow& _rAntiImpl, bool _bWithDefaultProps 
     ,mnListenerLockLevel( 0 )
     ,mnWritingMode( WritingMode2::CONTEXT )
     ,mnContextWritingMode( WritingMode2::CONTEXT )
-    ,mpPropHelper( nullptr )
 {
 }
 
@@ -291,12 +292,9 @@ IMPL_LINK_NOARG(VCLXWindowImpl, OnProcessCallbacks, void*, void)
     {
         SAL_INFO("toolkit.controls", "OnProcessCallbacks relinquished solarmutex");
         SolarMutexReleaser aReleaseSolar;
-        for (   CallbackArray::const_iterator loop = aCallbacksCopy.begin();
-                loop != aCallbacksCopy.end();
-                ++loop
-            )
+        for (const auto& rCallback : aCallbacksCopy)
         {
-            (*loop)();
+            rCallback();
         }
     }
 }
@@ -314,7 +312,7 @@ Reference< XStyleSettings > VCLXWindowImpl::getStyleSettings()
 
 // Uses an out-parameter instead of return value, due to the object reference
 
-void ImplInitWindowEvent( css::awt::WindowEvent& rEvent, vcl::Window const * pWindow )
+static void ImplInitWindowEvent( css::awt::WindowEvent& rEvent, vcl::Window const * pWindow )
 {
     Point aPos = pWindow->GetPosPixel();
     Size aSz = pWindow->GetSizePixel();
@@ -329,7 +327,6 @@ void ImplInitWindowEvent( css::awt::WindowEvent& rEvent, vcl::Window const * pWi
 }
 
 VCLXWindow::VCLXWindow( bool _bWithDefaultProps )
-    :mpImpl( nullptr )
 {
     mpImpl.reset( new VCLXWindowImpl( *this, _bWithDefaultProps ) );
 }
@@ -1331,20 +1328,16 @@ void VCLXWindow::ImplGetPropertyIds( std::vector< sal_uInt16 > &rIds, bool bWith
 
     // lovely hack from:
     // void UnoControlModel::ImplRegisterProperty( sal_uInt16 nPropId )
-    std::vector< sal_uInt16 >::const_iterator iter;
-    for( iter = rIds.begin(); iter != rIds.end(); ++iter) {
-        if( *iter == BASEPROPERTY_FONTDESCRIPTOR )
-        {
-            // some properties are not included in the FontDescriptor, but every time
-            // when we have a FontDescriptor we want to have these properties too.
-            // => Easier to register the here, instead everywhere where I register the FontDescriptor...
+    if( std::find(rIds.begin(), rIds.end(), BASEPROPERTY_FONTDESCRIPTOR) != rIds.end() )
+    {
+        // some properties are not included in the FontDescriptor, but every time
+        // when we have a FontDescriptor we want to have these properties too.
+        // => Easier to register the here, instead everywhere where I register the FontDescriptor...
 
-            rIds.push_back( BASEPROPERTY_TEXTCOLOR );
-            rIds.push_back( BASEPROPERTY_TEXTLINECOLOR );
-            rIds.push_back( BASEPROPERTY_FONTRELIEF );
-            rIds.push_back( BASEPROPERTY_FONTEMPHASISMARK );
-            break;
-        }
+        rIds.push_back( BASEPROPERTY_TEXTCOLOR );
+        rIds.push_back( BASEPROPERTY_TEXTLINECOLOR );
+        rIds.push_back( BASEPROPERTY_FONTRELIEF );
+        rIds.push_back( BASEPROPERTY_FONTEMPHASISMARK );
     }
 }
 
@@ -1722,6 +1715,8 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
             WinBits nStyle = pWindow->GetStyle();
             sal_uInt16 nTmp = 0;
             Value >>= nTmp;
+            // clear any dodgy bits passed in, can come from dodgy extensions
+            nTmp &= o3tl::typed_flags<WindowBorderStyle>::mask;
             WindowBorderStyle nBorder = static_cast<WindowBorderStyle>(nTmp);
             if ( !bool(nBorder) )
             {

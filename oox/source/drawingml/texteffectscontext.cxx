@@ -110,7 +110,6 @@ TextEffectsContext::TextEffectsContext(
                         std::vector<PropertyValue>& rTextEffectsProperties)
     : ContextHandler2(rParent)
     , mrTextEffectsProperties(rTextEffectsProperties)
-    , mpGrabBagStack(nullptr)
     , mnCurrentElement(aElementToken)
 {
 }
@@ -284,7 +283,7 @@ void TextEffectsContext::processAttributes(const AttributeList& rAttribs)
 
 void TextEffectsContext::onStartElement(const oox::AttributeList& rAttribs)
 {
-    if(mpGrabBagStack.get() == nullptr)
+    if (mpGrabBagStack == nullptr)
     {
         OUString aGrabBagName = lclGetGrabBagName(mnCurrentElement);
         mpGrabBagStack.reset(new GrabBagStack(aGrabBagName));

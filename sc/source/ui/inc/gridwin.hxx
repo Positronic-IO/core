@@ -20,14 +20,11 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_GRIDWIN_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_GRIDWIN_HXX
 
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include "viewutil.hxx"
 #include "viewdata.hxx"
 #include "cbutton.hxx"
-#include <o3tl/deleter.hxx>
-#include <svx/sdr/overlay/overlayobject.hxx>
 #include <com/sun/star/sheet/DataPilotFieldOrientation.hpp>
-#include <basegfx/matrix/b2dhommatrix.hxx>
 
 #include <memory>
 #include <vector>
@@ -39,6 +36,9 @@ namespace editeng {
 namespace sc {
     struct SpellCheckContext;
 }
+
+namespace sdr { namespace overlay { class OverlayManager; } }
+namespace o3tl { template <typename T> struct default_delete; }
 
 class FmFormView;
 struct ScTableInfo;
@@ -134,7 +134,7 @@ class ScGridWindow : public vcl::Window, public DropTargetHelper, public DragSou
     std::unique_ptr<sc::SpellCheckContext> mpSpellCheckCxt;
 
     ScViewData*             pViewData;
-    ScSplitPos              eWhich;
+    ScSplitPos const        eWhich;
     ScHSplitPos             eHWhich;
     ScVSplitPos             eVWhich;
 
@@ -235,7 +235,7 @@ class ScGridWindow : public vcl::Window, public DropTargetHelper, public DragSou
 
     bool            HasScenarioButton( const Point& rPosPixel, ScRange& rScenRange );
 
-    bool            DropScroll( const Point& rMousePos );
+    void            DropScroll( const Point& rMousePos );
 
     sal_Int8        AcceptPrivateDrop( const AcceptDropEvent& rEvt );
     sal_Int8        ExecutePrivateDrop( const ExecuteDropEvent& rEvt );
@@ -300,7 +300,7 @@ protected:
     virtual void    StartDrag( sal_Int8 nAction, const Point& rPosPixel ) override;
 
 public:
-    enum AutoFilterMode { Normal, Top10, Custom, Empty, NonEmpty, SortAscending, SortDescending };
+    enum class AutoFilterMode { Normal, Top10, Custom, Empty, NonEmpty, SortAscending, SortDescending };
 
     ScGridWindow( vcl::Window* pParent, ScViewData* pData, ScSplitPos eWhichPos );
     virtual ~ScGridWindow() override;
@@ -351,7 +351,7 @@ public:
     void            ScrollPixel( long nDifX, long nDifY );
     void            UpdateEditViewPos();
 
-    void            UpdateFormulas();
+    void            UpdateFormulas(SCCOL nX1 = -1, SCROW nY1 = -1, SCCOL nX2 = -1, SCROW nY2 = -1);
 
     void            LaunchDataSelectMenu( SCCOL nCol, SCROW nRow );
     void            DoScenarioMenu( const ScRange& rScenRange );

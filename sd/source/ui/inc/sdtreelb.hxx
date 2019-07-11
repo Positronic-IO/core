@@ -20,11 +20,9 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_SDTREELB_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_SDTREELB_HXX
 
-#include <svtools/transfer.hxx>
-
 #include <pres.hxx>
 #include <sddllapi.h>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svl/urlbmk.hxx>
 #include <tools/ref.hxx>
 #include "sdxfer.hxx"
@@ -60,9 +58,6 @@ class SD_DLLPUBLIC SdPageObjsTLB final : public SvTreeListBox
 {
     static bool  SAL_DLLPRIVATE bIsInDrag;      ///< static, in the case the navigator is deleted in ExecuteDrag
 
-    // set contenttree in SdNavigatorWin
-    bool                           bisInSdNavigatorWin;
-
     ::std::unique_ptr< ::svt::AcceleratorExecute> m_pAccel;
 
 public:
@@ -94,9 +89,9 @@ public:
         static SotClipboardFormatId mnListBoxDropFormatId;
 
         SdPageObjsTLB&      mrParent;
-        INetBookmark        maBookmark;
+        INetBookmark const      maBookmark;
         ::sd::DrawDocShell&     mrDocShell;
-        NavigatorDragType   meDragType;
+        NavigatorDragType const   meDragType;
         SAL_DLLPRIVATE virtual               ~SdPageObjsTransferable() override;
 
         SAL_DLLPRIVATE virtual void      AddSupportedFormats() override;
@@ -121,13 +116,13 @@ public:
 
 private:
 
-    VclPtr<vcl::Window>     mpParent;
+    VclPtr<SdNavigatorWin>  mpNavigator;
     const SdDrawDocument*   mpDoc;
     SdDrawDocument*         mpBookmarkDoc;
     SfxMedium*              mpMedium;
     SfxMedium*              mpOwnMedium;
-    Image                   maImgOle;
-    Image                   maImgGraphic;
+    Image const             maImgOle;
+    Image const             maImgGraphic;
     bool                    mbLinkableSelected;
     OUString                maDocName;
     ::sd::DrawDocShellRef   mxBookmarkDocShRef; ///< for the loading of bookmarks
@@ -212,7 +207,7 @@ public:
     OUString                GetSelectedEntry();
 
     //Mark Current Entry
-    void                    SetSdNavigatorWinFlag(bool isInSdNavigatorWin){bisInSdNavigatorWin =isInSdNavigatorWin;};
+    void                    SetSdNavigator(SdNavigatorWin* pNavigator);
 
     void                    Clear();
     void                    SetSaveTreeItemStateFlag(bool bState){mbSaveTreeItemState = bState;}

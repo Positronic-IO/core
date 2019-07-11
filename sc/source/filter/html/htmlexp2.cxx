@@ -26,7 +26,7 @@
 #include <sot/exchange.hxx>
 #include <svtools/htmlkywd.hxx>
 #include <svtools/htmlout.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/embedtransfer.hxx>
 #include <svl/urihelper.hxx>
 #include <tools/urlobj.hxx>
@@ -72,7 +72,7 @@ void ScHTMLExport::FillGraphList( const SdrPage* pPage, SCTAB nTab,
         tools::Rectangle aRect;
         if ( !bAll )
             aRect = pDoc->GetMMRect( nStartCol, nStartRow, nEndCol, nEndRow, nTab );
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while ( pObject )
         {

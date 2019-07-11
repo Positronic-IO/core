@@ -40,6 +40,7 @@
 #include <editeng/editdata.hxx>
 #include <svx/svdmodel.hxx>
 #include <editeng/svxrtf.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::table;
@@ -62,14 +63,14 @@ typedef std::vector< std::shared_ptr< RTFCellDefault > > RTFCellDefaultVector;
 
 struct RTFCellInfo
 {
-    SfxItemSet          maItemSet;
+    SfxItemSet const    maItemSet;
     sal_Int32           mnStartPara;
     sal_Int32           mnParaCount;
     sal_Int32           mnCellX;
     sal_Int32           mnRowSpan;
     std::shared_ptr< RTFCellInfo > mxVMergeCell;
 
-    explicit RTFCellInfo( SfxItemPool& rPool ) : maItemSet(  rPool ), mnStartPara(0), mnParaCount(0), mnCellX(0), mnRowSpan(1), mxVMergeCell(nullptr) {}
+    explicit RTFCellInfo( SfxItemPool& rPool ) : maItemSet(  rPool ), mnStartPara(0), mnParaCount(0), mnCellX(0), mnRowSpan(1) {}
 };
 
 typedef std::shared_ptr< RTFCellInfo > RTFCellInfoPtr;
@@ -143,7 +144,6 @@ SdrTableRTFParser::SdrTableRTFParser( SdrTableObj& rTableObj )
 , mpActDefault( nullptr )
 , mpDefMerge( nullptr )
 , mxTable( rTableObj.getTable() )
-, mxLastRow( nullptr )
 {
     mpOutliner->SetUpdateMode(true);
     mpOutliner->SetStyleSheet( 0, mrTableObj.GetStyleSheet() );
@@ -238,7 +238,7 @@ void SdrTableRTFParser::InsertCell( RtfImportInfo const * pInfo )
         RTFColumnVectorPtr xColumn( maRows.back() );
         if ( xCellInfo->mxVMergeCell )
         {
-            if ( xColumn->size()==0 ||
+            if ( xColumn->empty() ||
                     xColumn->back()->mxVMergeCell != xCellInfo->mxVMergeCell )
                 xCellInfo->mxVMergeCell->mnRowSpan++;
         }
@@ -374,7 +374,7 @@ void SdrTableRTFParser::NextColumn()
         mpActDefault = nullptr;
 }
 
-long TwipsToHundMM( long nIn )
+static long TwipsToHundMM( long nIn )
 {
     long nRet = OutputDevice::LogicToLogic( nIn, MapUnit::MapTwip, MapUnit::Map100thMM );
     return nRet;
@@ -384,7 +384,7 @@ void SdrTableRTFParser::ProcToken( RtfImportInfo* pInfo )
 {
     switch ( pInfo->nToken )
     {
-        case RTF_TROWD:         // denotes table row defauls, before RTF_CELLX
+        case RTF_TROWD:         // denotes table row default, before RTF_CELLX
         {
             maDefaultList.clear();
             mpDefMerge = nullptr;

@@ -62,7 +62,7 @@ public:
 class VCL_DLLPUBLIC TextAttribFontColor : public TextAttrib
 {
 private:
-    Color   maColor;
+    Color const   maColor;
 
 public:
                             TextAttribFontColor( const Color& rColor );
@@ -78,7 +78,7 @@ public:
 class VCL_DLLPUBLIC TextAttribFontWeight : public TextAttrib
 {
 private:
-    FontWeight  meWeight;
+    FontWeight const  meWeight;
 
 public:
                             TextAttribFontWeight( FontWeight eWeight );
@@ -119,10 +119,10 @@ public:
     sal_uInt16          Which() const               { return mpAttr->Which(); }
 
     sal_Int32           GetStart() const            { return mnStart; }
-    sal_Int32&          GetStart()                  { return mnStart; }
+    void                SetStart(sal_Int32 n)       { mnStart = n; }
 
     sal_Int32           GetEnd() const              { return mnEnd; }
-    sal_Int32&          GetEnd()                    { return mnEnd; }
+    void                SetEnd(sal_Int32 n)         { mnEnd = n; }
 
     inline sal_Int32    GetLen() const;
 

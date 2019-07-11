@@ -219,12 +219,11 @@ bool ScTabPageSortFields::FillItemSet( SfxItemSet* rArgSet )
 {
     ScSortParam aNewSortData = aSortData;
 
-    ScSortDlg* pDlg = static_cast<ScSortDlg*>(GetDialogController());
-    if (pDlg)
+    const SfxItemSet* pExample = GetDialogExampleSet();
+    if (pExample)
     {
-        const SfxItemSet* pExample = pDlg->GetExampleSet();
         const SfxPoolItem* pItem;
-        if ( pExample && pExample->GetItemState( nWhichSort, true, &pItem ) == SfxItemState::SET )
+        if (pExample->GetItemState(nWhichSort, true, &pItem) == SfxItemState::SET)
         {
             ScSortParam aTempData = static_cast<const ScSortItem*>(pItem)->GetSortData();
             aTempData.maKeyState = aNewSortData.maKeyState;
@@ -250,6 +249,7 @@ bool ScTabPageSortFields::FillItemSet( SfxItemSet* rArgSet )
         // If the "OK" was selected on the Options page while the sort
         // direction was changed, then the first field (i.e. nFieldArr[0])
         // of the respective direction is chosen as the sorting criterion:
+        ScSortDlg* pDlg = static_cast<ScSortDlg*>(GetDialogController());
         if ( pDlg && bSortByRows != pDlg->GetByRows() )
         {
             for ( sal_uInt16 i=0; i<nSortKeyCount; i++ )
@@ -424,7 +424,7 @@ void ScTabPageSortFields::SetLastSortKey( sal_uInt16 nItem )
 
 // Handler:
 
-IMPL_LINK( ScTabPageSortFields, SelectHdl, weld::ComboBoxText&, rLb, void )
+IMPL_LINK( ScTabPageSortFields, SelectHdl, weld::ComboBox&, rLb, void )
 {
     OUString aSelEntry = rLb.get_active_text();
     ScSortKeyItems::iterator pIter;
@@ -495,13 +495,13 @@ ScTabPageSortOptions::ScTabPageSortOptions(TabPageParent pParent, const SfxItemS
     , m_xBtnFormats(m_xBuilder->weld_check_button("formats"))
     , m_xBtnNaturalSort(m_xBuilder->weld_check_button("naturalsort"))
     , m_xBtnCopyResult(m_xBuilder->weld_check_button("copyresult"))
-    , m_xLbOutPos(m_xBuilder->weld_combo_box_text("outarealb"))
+    , m_xLbOutPos(m_xBuilder->weld_combo_box("outarealb"))
     , m_xEdOutPos(m_xBuilder->weld_entry("outareaed"))
     , m_xBtnSortUser(m_xBuilder->weld_check_button("sortuser"))
-    , m_xLbSortUser(m_xBuilder->weld_combo_box_text("sortuserlb"))
-    , m_xLbLanguage(new LanguageBox(m_xBuilder->weld_combo_box_text("language")))
+    , m_xLbSortUser(m_xBuilder->weld_combo_box("sortuserlb"))
+    , m_xLbLanguage(new LanguageBox(m_xBuilder->weld_combo_box("language")))
     , m_xFtAlgorithm(m_xBuilder->weld_label("algorithmft"))
-    , m_xLbAlgorithm(m_xBuilder->weld_combo_box_text("algorithmlb"))
+    , m_xLbAlgorithm(m_xBuilder->weld_combo_box("algorithmlb"))
     , m_xBtnTopDown(m_xBuilder->weld_radio_button("topdown"))
     , m_xBtnLeftRight(m_xBuilder->weld_radio_button("leftright"))
     , m_xBtnIncComments(m_xBuilder->weld_check_button("includenotes"))
@@ -623,7 +623,7 @@ void ScTabPageSortOptions::Reset( const SfxItemSet* /* rArgSet */ )
     LanguageType eLang = LanguageTag::convertToLanguageType( aSortData.aCollatorLocale, false);
     if ( eLang == LANGUAGE_DONTKNOW )
         eLang = LANGUAGE_SYSTEM;
-    m_xLbLanguage->SelectLanguage( eLang );
+    m_xLbLanguage->set_active_id(eLang);
     FillAlgor();               // get algorithms, select default
     if ( !aSortData.aCollatorAlgorithm.isEmpty() )
         m_xLbAlgorithm->set_active_text(m_xColRes->GetTranslation(aSortData.aCollatorAlgorithm));
@@ -661,11 +661,11 @@ bool ScTabPageSortOptions::FillItemSet( SfxItemSet* rArgSet )
     // Create local copy of ScParam
     ScSortParam aNewSortData = aSortData;
 
-    if (ScSortDlg* pDlg = static_cast<ScSortDlg*>(GetDialogController()))
+    const SfxItemSet* pExample = GetDialogExampleSet();
+    if (pExample)
     {
-        const SfxItemSet* pExample = pDlg->GetExampleSet();
         const SfxPoolItem* pItem;
-        if ( pExample && pExample->GetItemState( nWhichSort, true, &pItem ) == SfxItemState::SET )
+        if (pExample->GetItemState(nWhichSort, true, &pItem) == SfxItemState::SET)
             aNewSortData = static_cast<const ScSortItem*>(pItem)->GetSortData();
     }
     aNewSortData.bByRow          = m_xBtnTopDown->get_active();
@@ -685,7 +685,7 @@ bool ScTabPageSortOptions::FillItemSet( SfxItemSet* rArgSet )
                                    : 0;
 
     // get locale
-    LanguageType eLang = m_xLbLanguage->GetSelectedLanguage();
+    LanguageType eLang = m_xLbLanguage->get_active_id();
     aNewSortData.aCollatorLocale = LanguageTag::convertToLocale( eLang, false);
 
     // get algorithm
@@ -755,7 +755,7 @@ DeactivateRC ScTabPageSortOptions::DeactivatePage( SfxItemSet* pSetP )
 
         if ( !bPosInputOk )
         {
-            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetTabDialog()->GetFrameWeld(),
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetDialogFrameWeld(),
                                                       VclMessageType::Warning, VclButtonsType::Ok,
                                                       ScResId(STR_INVALID_TABREF)));
             xBox->run();
@@ -826,7 +826,7 @@ IMPL_LINK( ScTabPageSortOptions, EnableHdl, weld::ToggleButton&, rButton, void )
     }
 }
 
-IMPL_LINK(ScTabPageSortOptions, SelOutPosHdl, weld::ComboBoxText&, rLb, void)
+IMPL_LINK(ScTabPageSortOptions, SelOutPosHdl, weld::ComboBox&, rLb, void)
 {
     if (&rLb == m_xLbOutPos.get())
     {
@@ -877,7 +877,7 @@ void ScTabPageSortOptions::FillAlgor()
     m_xLbAlgorithm->freeze();
     m_xLbAlgorithm->clear();
 
-    LanguageType eLang = m_xLbLanguage->GetSelectedLanguage();
+    LanguageType eLang = m_xLbLanguage->get_active_id();
     if ( eLang == LANGUAGE_SYSTEM )
     {
         //  for LANGUAGE_SYSTEM no algorithm can be selected because
@@ -907,7 +907,7 @@ void ScTabPageSortOptions::FillAlgor()
     m_xLbAlgorithm->thaw();
 }
 
-IMPL_LINK_NOARG(ScTabPageSortOptions, FillAlgorHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(ScTabPageSortOptions, FillAlgorHdl, weld::ComboBox&, void)
 {
     FillAlgor();
 }

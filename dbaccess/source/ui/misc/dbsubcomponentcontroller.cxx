@@ -36,7 +36,6 @@
 #include <com/sun/star/util/NumberFormatter.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 
-#include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbmetadata.hxx>
@@ -44,6 +43,7 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <comphelper/interfacecontainer2.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>

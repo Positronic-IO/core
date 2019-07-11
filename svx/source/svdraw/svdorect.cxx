@@ -43,28 +43,28 @@
 #include <svx/sdr/contact/viewcontactofsdrrectobj.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star;
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrRectObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrRectObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::RectangleProperties(*this);
+    return o3tl::make_unique<sdr::properties::RectangleProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrRectObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrRectObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrRectObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrRectObj>(*this);
 }
 
 
 SdrRectObj::SdrRectObj(SdrModel& rSdrModel)
-:   SdrTextObj(rSdrModel),
-    mpXPoly(nullptr)
+:   SdrTextObj(rSdrModel)
 {
     bClosedObj=true;
 }
@@ -72,8 +72,7 @@ SdrRectObj::SdrRectObj(SdrModel& rSdrModel)
 SdrRectObj::SdrRectObj(
     SdrModel& rSdrModel,
     const tools::Rectangle& rRect)
-:   SdrTextObj(rSdrModel, rRect),
-    mpXPoly(nullptr)
+:   SdrTextObj(rSdrModel, rRect)
 {
     bClosedObj=true;
 }
@@ -81,8 +80,7 @@ SdrRectObj::SdrRectObj(
 SdrRectObj::SdrRectObj(
     SdrModel& rSdrModel,
     SdrObjKind eNewTextKind)
-:   SdrTextObj(rSdrModel, eNewTextKind),
-    mpXPoly(nullptr)
+:   SdrTextObj(rSdrModel, eNewTextKind)
 {
     DBG_ASSERT(eTextKind==OBJ_TEXT ||
                eTextKind==OBJ_OUTLINETEXT || eTextKind==OBJ_TITLETEXT,
@@ -94,8 +92,7 @@ SdrRectObj::SdrRectObj(
     SdrModel& rSdrModel,
     SdrObjKind eNewTextKind,
     const tools::Rectangle& rRect)
-:   SdrTextObj(rSdrModel, eNewTextKind, rRect),
-    mpXPoly(nullptr)
+:   SdrTextObj(rSdrModel, eNewTextKind, rRect)
 {
     DBG_ASSERT(eTextKind==OBJ_TEXT ||
                eTextKind==OBJ_OUTLINETEXT || eTextKind==OBJ_TITLETEXT,
@@ -188,7 +185,7 @@ void SdrRectObj::TakeUnrotatedSnapRect(tools::Rectangle& rRect) const
     rRect = maRect;
     if (aGeo.nShearAngle!=0)
     {
-        long nDst=svx::Round((maRect.Bottom()-maRect.Top())*aGeo.nTan);
+        long nDst=FRound((maRect.Bottom()-maRect.Top())*aGeo.nTan);
         if (aGeo.nShearAngle>0)
         {
             Point aRef(rRect.TopLeft());
@@ -313,70 +310,63 @@ sal_uInt32 SdrRectObj::GetHdlCount() const
     return IsTextFrame() ? 10 : 9;
 }
 
-SdrHdl* SdrRectObj::GetHdl(sal_uInt32 nHdlNum) const
+void SdrRectObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    SdrHdl* pH = nullptr;
-    Point aPnt;
-    SdrHdlKind eKind = SdrHdlKind::Move;
-
-    if(!IsTextFrame())
+    // A text box has an additional (pseudo-)handle for the blinking frame.
+    if(IsTextFrame())
     {
-        nHdlNum++;
+        OSL_ENSURE(!IsTextEditActive(), "Do not use a ImpTextframeHdl for highlighting text in active text edit, this will collide with EditEngine paints (!)");
+        // hack for calc grid sync to ensure the hatched area
+        // for a textbox is displayed at correct position
+        std::unique_ptr<SdrHdl> pH(new ImpTextframeHdl(maRect + GetGridOffset()));
+        pH->SetObj(const_cast<SdrRectObj*>(this));
+        pH->SetRotationAngle(aGeo.nRotationAngle);
+        rHdlList.AddHdl(std::move(pH));
     }
 
-    switch(nHdlNum)
+    for(sal_Int32 nHdlNum = 1; nHdlNum <= 9; ++nHdlNum)
     {
-        case 0:
-        {
-            OSL_ENSURE(!IsTextEditActive(), "Do not use a ImpTextframeHdl for highlighting text in active text edit, this will collide with EditEngine paints (!)");
-            // hack for calc grid sync to ensure the hatched area
-            // for a textbox is displayed at correct position
-            pH = new ImpTextframeHdl(maRect + GetGridOffset() );
-            pH->SetObj(const_cast<SdrRectObj*>(this));
-            pH->SetRotationAngle(aGeo.nRotationAngle);
-            break;
-        }
-        case 1:
-        {
-            long a = GetEckenradius();
-            long b = std::max(maRect.GetWidth(),maRect.GetHeight())/2; // rounded up, because GetWidth() adds 1
-            if (a>b) a=b;
-            if (a<0) a=0;
-            aPnt=maRect.TopLeft();
-            aPnt.AdjustX(a );
-            eKind = SdrHdlKind::Circle;
-            break;
-        }
-        case 2: aPnt=maRect.TopLeft();      eKind = SdrHdlKind::UpperLeft; break;
-        case 3: aPnt=maRect.TopCenter();    eKind = SdrHdlKind::Upper; break;
-        case 4: aPnt=maRect.TopRight();     eKind = SdrHdlKind::UpperRight; break;
-        case 5: aPnt=maRect.LeftCenter();   eKind = SdrHdlKind::Left ; break;
-        case 6: aPnt=maRect.RightCenter();  eKind = SdrHdlKind::Right; break;
-        case 7: aPnt=maRect.BottomLeft();   eKind = SdrHdlKind::LowerLeft; break;
-        case 8: aPnt=maRect.BottomCenter(); eKind = SdrHdlKind::Lower; break;
-        case 9: aPnt=maRect.BottomRight();  eKind = SdrHdlKind::LowerRight; break;
-    }
+        Point aPnt;
+        SdrHdlKind eKind = SdrHdlKind::Move;
 
-    if(!pH)
-    {
+        switch(nHdlNum)
+        {
+            case 1: // Handle for changing the corner radius
+            {
+                long a = GetEckenradius();
+                long b = std::max(maRect.GetWidth(),maRect.GetHeight())/2; // rounded up, because GetWidth() adds 1
+                if (a>b) a=b;
+                if (a<0) a=0;
+                aPnt=maRect.TopLeft();
+                aPnt.AdjustX(a );
+                eKind = SdrHdlKind::Circle;
+                break;
+            }
+            case 2: aPnt=maRect.TopLeft();      eKind = SdrHdlKind::UpperLeft; break;
+            case 3: aPnt=maRect.TopCenter();    eKind = SdrHdlKind::Upper; break;
+            case 4: aPnt=maRect.TopRight();     eKind = SdrHdlKind::UpperRight; break;
+            case 5: aPnt=maRect.LeftCenter();   eKind = SdrHdlKind::Left ; break;
+            case 6: aPnt=maRect.RightCenter();  eKind = SdrHdlKind::Right; break;
+            case 7: aPnt=maRect.BottomLeft();   eKind = SdrHdlKind::LowerLeft; break;
+            case 8: aPnt=maRect.BottomCenter(); eKind = SdrHdlKind::Lower; break;
+            case 9: aPnt=maRect.BottomRight();  eKind = SdrHdlKind::LowerRight; break;
+        }
+
         if(aGeo.nShearAngle)
         {
             ShearPoint(aPnt,maRect.TopLeft(),aGeo.nTan);
         }
-
         if(aGeo.nRotationAngle)
         {
             RotatePoint(aPnt,maRect.TopLeft(),aGeo.nSin,aGeo.nCos);
         }
 
-        pH = new SdrHdl(aPnt,eKind);
+        std::unique_ptr<SdrHdl> pH(new SdrHdl(aPnt,eKind));
         pH->SetObj(const_cast<SdrRectObj*>(this));
         pH->SetRotationAngle(aGeo.nRotationAngle);
+        rHdlList.AddHdl(std::move(pH));
     }
-
-    return pH;
 }
-
 
 bool SdrRectObj::hasSpecialDrag() const
 {

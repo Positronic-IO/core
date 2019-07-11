@@ -57,7 +57,6 @@ public:
      * The caller is responsible for allocate the memory for the RGBA buffer, before call
      * this method. RGBA buffer size is assumed to be 4*width*height.
     **/
-    static void ConvertBitmapExToRGBATextureBuffer(const BitmapEx& rBitmapEx, sal_uInt8* o_pRGBABuffer);
     static BitmapEx ConvertBGRABufferToBitmapEx(const sal_uInt8* const pBuffer, long nWidth, long nHeight);
     static void renderToFile(long nWidth, long nHeight, const OUString& rFileName);
 
@@ -65,17 +64,18 @@ public:
 
     /**
      * The caller is responsible for deleting the buffer objects identified by
-     * nFramebufferId, nRenderbufferDepthId and nRenderbufferColorId
+     * nFramebufferId, nRenderbufferDepthId and nRenderbufferColorId.
+     * This create a buffer for rendering to texture and should be freed with
+     * glDeleteTextures.
+     *
      * @param nWidth                Width of frame
      * @param nHeight               Height of frame
      * @param nFramebufferId        FrameBuffer ID
      * @param nRenderbufferDepthId  RenderBuffer's depth ID
      * @param nRenderbufferColorId  RenderBuffer's color ID
-     * @param bRenderbuffer         true => off-screen rendering, false => rendering to texture
-     *          This also affects whether to free with glDeleteRenderbuffers or glDeleteTextures
      */
     static void createFramebuffer(long nWidth, long nHeight, GLuint& nFramebufferId,
-            GLuint& nRenderbufferDepthId, GLuint& nRenderbufferColorId, bool bRenderbuffer = true);
+            GLuint& nRenderbufferDepthId, GLuint& nRenderbufferColorId);
 
     /// Get OpenGL version (needs a context)
     static float getGLVersion();

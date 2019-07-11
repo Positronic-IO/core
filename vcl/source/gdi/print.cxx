@@ -18,6 +18,7 @@
  */
 
 #include <sal/types.h>
+#include <sal/log.hxx>
 
 #include <tools/helpers.hxx>
 
@@ -99,10 +100,6 @@ PrinterOptions::PrinterOptions() :
     mbReducedBitmapsIncludeTransparency( true ),
     mbConvertToGreyscales( false ),
     mbPDFAsStandardPrintJobFormat( false )
-{
-}
-
-PrinterOptions::~PrinterOptions()
 {
 }
 
@@ -336,15 +333,10 @@ QueueInfo::QueueInfo()
     mnJobs      = 0;
 }
 
-QueueInfo::QueueInfo( const QueueInfo& ) = default;
-
-QueueInfo::~QueueInfo() = default;
-
 SalPrinterQueueInfo::SalPrinterQueueInfo()
 {
     mnStatus    = PrintQueueFlags::NONE;
     mnJobs      = QUEUE_JOBS_DONTKNOW;
-    mpSysData   = nullptr;
 }
 
 SalPrinterQueueInfo::~SalPrinterQueueInfo()
@@ -353,33 +345,25 @@ SalPrinterQueueInfo::~SalPrinterQueueInfo()
 
 ImplPrnQueueList::~ImplPrnQueueList()
 {
-    ImplSVData*         pSVData = ImplGetSVData();
-    for(ImplPrnQueueData & rQueueInfo : m_aQueueInfos)
-    {
-        delete rQueueInfo.mpQueueInfo;
-        pSVData->mpDefInst->DeletePrinterQueueInfo( rQueueInfo.mpSalQueueInfo );
-    }
 }
 
-void ImplPrnQueueList::Add( SalPrinterQueueInfo* pData )
+void ImplPrnQueueList::Add( std::unique_ptr<SalPrinterQueueInfo> pData )
 {
     std::unordered_map< OUString, sal_Int32 >::iterator it =
         m_aNameToIndex.find( pData->maPrinterName );
     if( it == m_aNameToIndex.end() )
     {
         m_aNameToIndex[ pData->maPrinterName ] = m_aQueueInfos.size();
-        m_aQueueInfos.emplace_back( );
-        m_aQueueInfos.back().mpQueueInfo = nullptr;
-        m_aQueueInfos.back().mpSalQueueInfo = pData;
         m_aPrinterList.push_back( pData->maPrinterName );
+        m_aQueueInfos.push_back( ImplPrnQueueData() );
+        m_aQueueInfos.back().mpQueueInfo = nullptr;
+        m_aQueueInfos.back().mpSalQueueInfo = std::move(pData);
     }
     else // this should not happen, but ...
     {
         ImplPrnQueueData& rData = m_aQueueInfos[ it->second ];
-        delete rData.mpQueueInfo;
-        rData.mpQueueInfo = nullptr;
-        ImplGetSVData()->mpDefInst->DeletePrinterQueueInfo( rData.mpSalQueueInfo );
-        rData.mpSalQueueInfo = pData;
+        rData.mpQueueInfo.reset();
+        rData.mpSalQueueInfo = std::move(pData);
     }
 }
 
@@ -438,10 +422,10 @@ const QueueInfo* Printer::GetQueueInfo( const OUString& rPrinterName, bool bStat
     if( pInfo )
     {
         if( !pInfo->mpQueueInfo || bStatusUpdate )
-            pSVData->mpDefInst->GetPrinterQueueState( pInfo->mpSalQueueInfo );
+            pSVData->mpDefInst->GetPrinterQueueState( pInfo->mpSalQueueInfo.get() );
 
         if ( !pInfo->mpQueueInfo )
-            pInfo->mpQueueInfo = new QueueInfo;
+            pInfo->mpQueueInfo.reset(new QueueInfo);
 
         pInfo->mpQueueInfo->maPrinterName   = pInfo->mpSalQueueInfo->maPrinterName;
         pInfo->mpQueueInfo->maDriver        = pInfo->mpSalQueueInfo->maDriver;
@@ -449,7 +433,7 @@ const QueueInfo* Printer::GetQueueInfo( const OUString& rPrinterName, bool bStat
         pInfo->mpQueueInfo->maComment       = pInfo->mpSalQueueInfo->maComment;
         pInfo->mpQueueInfo->mnStatus        = pInfo->mpSalQueueInfo->mnStatus;
         pInfo->mpQueueInfo->mnJobs          = pInfo->mpSalQueueInfo->mnJobs;
-        return pInfo->mpQueueInfo;
+        return pInfo->mpQueueInfo.get();
     }
     return nullptr;
 }
@@ -469,7 +453,6 @@ OUString Printer::GetDefaultPrinterName()
 void Printer::ImplInitData()
 {
     mbDevOutput         = false;
-    meOutDevType        = OUTDEV_PRINTER;
     mbDefPrinter        = false;
     mnError             = ERRCODE_NONE;
     mnPageQueueSize     = 0;
@@ -561,7 +544,7 @@ bool Printer::AcquireGraphics() const
 
     if ( mpGraphics )
     {
-        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp) );
+        mpGraphics->SetXORMode( (RasterOp::Invert == meRasterOp) || (RasterOp::Xor == meRasterOp), RasterOp::Invert == meRasterOp );
         mpGraphics->setAntiAliasB2DDraw(bool(mnAntialiasing & AntialiasingFlags::EnableB2dDraw));
     }
 
@@ -580,12 +563,7 @@ void Printer::ImplReleaseFonts()
     mbNewFont = true;
     mbInitFont = true;
 
-    if ( mpFontInstance )
-    {
-        mpFontInstance->Release();
-        mpFontInstance = nullptr;
-    }
-
+    mpFontInstance.clear();
     mpDeviceFontList.reset();
     mpDeviceFontSizeList.reset();
 }
@@ -656,7 +634,7 @@ void Printer::ImplInit( SalPrinterQueueInfo* pInfo )
         if ( rData.GetPrinterName() != pInfo->maPrinterName ||
              rData.GetDriver() != pInfo->maDriver )
         {
-            rtl_freeMemory( const_cast<sal_uInt8*>(rData.GetDriverData()) );
+            std::free( const_cast<sal_uInt8*>(rData.GetDriverData()) );
             rData.SetDriverData(nullptr);
             rData.SetDriverDataLen(0);
         }
@@ -690,9 +668,9 @@ void Printer::ImplInit( SalPrinterQueueInfo* pInfo )
 
     // Init data
     ImplUpdatePageData();
-    mpFontCollection = new PhysicalFontCollection();
-    mpFontCache = new ImplFontCache();
-    mpGraphics->GetDevFontList( mpFontCollection );
+    mxFontCollection.reset(new PhysicalFontCollection);
+    mxFontCache.reset(new ImplFontCache);
+    mpGraphics->GetDevFontList(mxFontCollection.get());
 }
 
 void Printer::ImplInitDisplay()
@@ -704,8 +682,8 @@ void Printer::ImplInitDisplay()
     mpJobGraphics       = nullptr;
 
     mpDisplayDev = VclPtr<VirtualDevice>::Create();
-    mpFontCollection          = pSVData->maGDIData.mpScreenFontList;
-    mpFontCache         = pSVData->maGDIData.mpScreenFontCache;
+    mxFontCollection    = pSVData->maGDIData.mxScreenFontList;
+    mxFontCache         = pSVData->maGDIData.mxScreenFontCache;
     mnDPIX              = mpDisplayDev->mnDPIX;
     mnDPIY              = mpDisplayDev->mnDPIY;
 }
@@ -756,8 +734,8 @@ void Printer::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
     // do painting
     const long      nSrcWidth = aSrcRect.GetWidth(), nSrcHeight = aSrcRect.GetHeight();
     long            nX, nY; //, nWorkX, nWorkY, nWorkWidth, nWorkHeight;
-    long*           pMapX = new long[ nSrcWidth + 1 ];
-    long*           pMapY = new long[ nSrcHeight + 1 ];
+    std::unique_ptr<long[]> pMapX( new long[ nSrcWidth + 1 ] );
+    std::unique_ptr<long[]> pMapY( new long[ nSrcHeight + 1 ] );
     GDIMetaFile*    pOldMetaFile = mpMetaFile;
     const bool      bOldMap = mbMap;
 
@@ -792,11 +770,8 @@ void Printer::DrawDeviceMask( const Bitmap& rMask, const Color& rMaskColor,
     }
 
     Pop();
-    delete[] pMapX;
-    delete[] pMapY;
     mbMap = bOldMap;
     mpMetaFile = pOldMetaFile;
-
 }
 
 SalPrinterQueueInfo* Printer::ImplGetQueueInfo( const OUString& rPrinterName,
@@ -807,18 +782,18 @@ SalPrinterQueueInfo* Printer::ImplGetQueueInfo( const OUString& rPrinterName,
         ImplInitPrnQueueList();
 
     ImplPrnQueueList* pPrnList = pSVData->maGDIData.mpPrinterQueueList;
-    if ( pPrnList && pPrnList->m_aQueueInfos.size() )
+    if ( pPrnList && !pPrnList->m_aQueueInfos.empty() )
     {
         // first search for the printer name directly
         ImplPrnQueueData* pInfo = pPrnList->Get( rPrinterName );
         if( pInfo )
-            return pInfo->mpSalQueueInfo;
+            return pInfo->mpSalQueueInfo.get();
 
         // then search case insensitive
         for(ImplPrnQueueData & rQueueInfo : pPrnList->m_aQueueInfos)
         {
             if( rQueueInfo.mpSalQueueInfo->maPrinterName.equalsIgnoreAsciiCase( rPrinterName ) )
-                return rQueueInfo.mpSalQueueInfo;
+                return rQueueInfo.mpSalQueueInfo.get();
         }
 
         // then search for driver name
@@ -827,17 +802,17 @@ SalPrinterQueueInfo* Printer::ImplGetQueueInfo( const OUString& rPrinterName,
             for(ImplPrnQueueData & rQueueInfo : pPrnList->m_aQueueInfos)
             {
                 if( rQueueInfo.mpSalQueueInfo->maDriver == *pDriver )
-                    return rQueueInfo.mpSalQueueInfo;
+                    return rQueueInfo.mpSalQueueInfo.get();
             }
         }
 
         // then the default printer
         pInfo = pPrnList->Get( GetDefaultPrinterName() );
         if( pInfo )
-            return pInfo->mpSalQueueInfo;
+            return pInfo->mpSalQueueInfo.get();
 
         // last chance: the first available printer
-        return pPrnList->m_aQueueInfos[0].mpSalQueueInfo;
+        return pPrnList->m_aQueueInfos[0].mpSalQueueInfo.get();
     }
 
     return nullptr;
@@ -870,6 +845,7 @@ long Printer::GetGradientStepCount( long nMinRect )
 }
 
 Printer::Printer()
+    : OutputDevice(OUTDEV_PRINTER)
 {
     ImplInitData();
     SalPrinterQueueInfo* pInfo = ImplGetQueueInfo( GetDefaultPrinterName(), nullptr );
@@ -883,8 +859,9 @@ Printer::Printer()
         ImplInitDisplay();
 }
 
-Printer::Printer( const JobSetup& rJobSetup ) :
-    maJobSetup( rJobSetup )
+Printer::Printer( const JobSetup& rJobSetup )
+    : OutputDevice(OUTDEV_PRINTER)
+    , maJobSetup(rJobSetup)
 {
     ImplInitData();
     const ImplJobSetup& rConstData = rJobSetup.ImplGetConstData();
@@ -904,6 +881,7 @@ Printer::Printer( const JobSetup& rJobSetup ) :
 }
 
 Printer::Printer( const QueueInfo& rQueueInfo )
+    : OutputDevice(OUTDEV_PRINTER)
 {
     ImplInitData();
     SalPrinterQueueInfo* pInfo = ImplGetQueueInfo( rQueueInfo.GetPrinterName(),
@@ -915,6 +893,7 @@ Printer::Printer( const QueueInfo& rQueueInfo )
 }
 
 Printer::Printer( const OUString& rPrinterName )
+    : OutputDevice(OUTDEV_PRINTER)
 {
     ImplInitData();
     SalPrinterQueueInfo* pInfo = ImplGetQueueInfo( rPrinterName, nullptr );
@@ -946,15 +925,10 @@ void Printer::dispose()
         // OutputDevice Dtor is trying the same thing; that why we need to set
         // the FontEntry to NULL here
         // TODO: consolidate duplicate cleanup by Printer and OutputDevice
-        if ( mpFontInstance )
-        {
-            mpFontInstance->Release();
-            mpFontInstance = nullptr;
-        }
+        mpFontInstance.clear();
         mpDeviceFontList.reset();
         mpDeviceFontSizeList.reset();
-        delete mpFontCache;
-        mpFontCache = nullptr;
+        mxFontCache.reset();
         // font list deleted by OutputDevice dtor
     }
 
@@ -1087,18 +1061,12 @@ bool Printer::SetPrinterProps( const Printer* pPrinter )
         {
             ReleaseGraphics();
             pSVData->mpDefInst->DestroyInfoPrinter( mpInfoPrinter );
-            if ( mpFontInstance )
-            {
-                mpFontInstance->Release();
-                mpFontInstance = nullptr;
-            }
+            mpFontInstance.clear();
             mpDeviceFontList.reset();
             mpDeviceFontSizeList.reset();
             // clean up font list
-            delete mpFontCache;
-            delete mpFontCollection;
-            mpFontCache = nullptr;
-            mpFontCollection = nullptr;
+            mxFontCache.reset();
+            mxFontCollection.reset();
 
             mbInitFont = true;
             mbNewFont = true;
@@ -1122,17 +1090,11 @@ bool Printer::SetPrinterProps( const Printer* pPrinter )
         {
             pSVData->mpDefInst->DestroyInfoPrinter( mpInfoPrinter );
 
-            if ( mpFontInstance )
-            {
-                mpFontInstance->Release();
-                mpFontInstance = nullptr;
-            }
+            mpFontInstance.clear();
             mpDeviceFontList.reset();
             mpDeviceFontSizeList.reset();
-            delete mpFontCache;
-            delete mpFontCollection;
-            mpFontCache = nullptr;
-            mpFontCollection = nullptr;
+            mxFontCache.reset();
+            mxFontCollection.reset();
             mbInitFont = true;
             mbNewFont = true;
             mpInfoPrinter = nullptr;
@@ -1466,9 +1428,8 @@ int Printer::GetPaperInfoCount() const
 OUString Printer::GetPaperName( Paper ePaper )
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( ! pSVData->mpPaperNames )
+    if( pSVData->maPaperNames.empty() )
     {
-        pSVData->mpPaperNames = new std::unordered_map< int, OUString >;
         static const int PaperIndex[] =
         {
             PAPER_A0, PAPER_A1, PAPER_A2, PAPER_A3, PAPER_A4, PAPER_A5,
@@ -1482,11 +1443,11 @@ OUString Printer::GetPaperName( Paper ePaper )
         };
         assert(SAL_N_ELEMENTS(PaperIndex) == SAL_N_ELEMENTS(RID_STR_PAPERNAMES) && "localized paper name count wrong");
         for (size_t i = 0; i < SAL_N_ELEMENTS(PaperIndex); ++i)
-            (*pSVData->mpPaperNames)[PaperIndex[i]] = VclResId(RID_STR_PAPERNAMES[i]);
+            pSVData->maPaperNames[PaperIndex[i]] = VclResId(RID_STR_PAPERNAMES[i]);
     }
 
-    std::unordered_map<int,OUString>::const_iterator it = pSVData->mpPaperNames->find( static_cast<int>(ePaper) );
-    return (it != pSVData->mpPaperNames->end()) ? it->second : OUString();
+    std::unordered_map<int,OUString>::const_iterator it = pSVData->maPaperNames.find( static_cast<int>(ePaper) );
+    return (it != pSVData->maPaperNames.end()) ? it->second : OUString();
 }
 
 OUString Printer::GetPaperName() const
@@ -1610,8 +1571,7 @@ void Printer::EndJob()
         // FIXME: Do not destroy the printer asynchronously as Win95
         // can't handle destroying a printer object and printing
         // at the same time
-        ImplGetSVData()->mpDefInst->DestroyPrinter( mpPrinter );
-        mpPrinter = nullptr;
+        mpPrinter.reset();
     }
 }
 
@@ -1707,21 +1667,6 @@ void Printer::ClipAndDrawGradientMetafile ( const Gradient &rGradient, const too
     IntersectClipRegion(vcl::Region(rPolyPoly));
     DrawGradient( aBoundRect, rGradient );
     Pop();
-}
-
-void Printer::InitFont() const
-{
-    DBG_TESTSOLARMUTEX();
-
-    if (!mpFontInstance)
-        return;
-
-    if ( mbInitFont )
-    {
-        // select font in the device layers
-        mpGraphics->SetFont(&mpFontInstance->GetFontSelectPattern(), 0);
-        mbInitFont = false;
-    }
 }
 
 void Printer::SetFontOrientation( LogicalFontInstance* const pFontEntry ) const

@@ -273,7 +273,7 @@ void ScDetectiveFunc::Modified()
     pDoc->SetStreamValid(nTab, false);
 }
 
-inline bool Intersect( SCCOL nStartCol1, SCROW nStartRow1, SCCOL nEndCol1, SCROW nEndRow1,
+static bool Intersect( SCCOL nStartCol1, SCROW nStartRow1, SCCOL nEndCol1, SCROW nEndRow1,
                         SCCOL nStartCol2, SCROW nStartRow2, SCCOL nEndCol2, SCROW nEndRow2 )
 {
     return nEndCol1 >= nStartCol2 && nEndCol2 >= nStartCol1 &&
@@ -353,7 +353,7 @@ static bool lcl_IsOtherTab( const basegfx::B2DPolyPolygon& rPolyPolygon )
     //  test if rPolygon is the line end for "other table" (rectangle)
     if(1 == rPolyPolygon.count())
     {
-        const basegfx::B2DPolygon aSubPoly(rPolyPolygon.getB2DPolygon(0));
+        const basegfx::B2DPolygon& aSubPoly(rPolyPolygon.getB2DPolygon(0));
 
         // #i73305# circle consists of 4 segments, too, distinguishable from square by
         // the use of control points
@@ -390,7 +390,7 @@ bool ScDetectiveFunc::HasArrow( const ScAddress& rStart,
     OSL_ENSURE(pPage,"Page ?");
 
     bool bFound = false;
-    SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+    SdrObjListIter aIter( pPage, SdrIterMode::Flat );
     SdrObject* pObject = aIter.Next();
     while (pObject && !bFound)
     {
@@ -438,7 +438,7 @@ bool ScDetectiveFunc::IsNonAlienArrow( const SdrObject* pObject )
 
 //  InsertXXX: called from DrawEntry/DrawAlienEntry and InsertObject
 
-bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
+void ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
                                 SCCOL nRefStartCol, SCROW nRefStartRow,
                                 SCCOL nRefEndCol, SCROW nRefEndRow,
                                 bool bFromOtherTab, bool bRed,
@@ -461,7 +461,7 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
 
         pBox->SetLayer( SC_LAYER_INTERN );
         pPage->InsertObject( pBox );
-        pModel->AddCalcUndo( new SdrUndoInsertObj( *pBox ) );
+        pModel->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pBox ) );
 
         ScDrawObjData* pData = ScDrawLayer::GetObjData( pBox, true );
         pData->maStart.Set( nRefStartCol, nRefStartRow, nTab);
@@ -505,7 +505,7 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
 
     pArrow->SetLayer( SC_LAYER_INTERN );
     pPage->InsertObject( pArrow );
-    pModel->AddCalcUndo( new SdrUndoInsertObj( *pArrow ) );
+    pModel->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pArrow ) );
 
     ScDrawObjData* pData = ScDrawLayer::GetObjData(pArrow, true);
     if (bFromOtherTab)
@@ -517,10 +517,9 @@ bool ScDetectiveFunc::InsertArrow( SCCOL nCol, SCROW nRow,
     pData->meType = ScDrawObjData::DetectiveArrow;
 
     Modified();
-    return true;
 }
 
-bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
+void ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
                                 SCCOL nEndCol, SCROW nEndRow, bool bRed,
                                 ScDetectiveData& rData )
 {
@@ -539,7 +538,7 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
 
         pBox->SetLayer( SC_LAYER_INTERN );
         pPage->InsertObject( pBox );
-        pModel->AddCalcUndo( new SdrUndoInsertObj( *pBox ) );
+        pModel->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pBox ) );
 
         ScDrawObjData* pData = ScDrawLayer::GetObjData( pBox, true );
         pData->maStart.Set( nStartCol, nStartRow, nTab);
@@ -576,14 +575,13 @@ bool ScDetectiveFunc::InsertToOtherTab( SCCOL nStartCol, SCROW nStartRow,
 
     pArrow->SetLayer( SC_LAYER_INTERN );
     pPage->InsertObject( pArrow );
-    pModel->AddCalcUndo( new SdrUndoInsertObj( *pArrow ) );
+    pModel->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pArrow ) );
 
     ScDrawObjData* pData = ScDrawLayer::GetObjData( pArrow, true );
     pData->maStart.Set( nStartCol, nStartRow, nTab);
     pData->maEnd.SetInvalid();
 
     Modified();
-    return true;
 }
 
 //  DrawEntry:      formula from this spreadsheet,
@@ -604,10 +602,11 @@ bool ScDetectiveFunc::DrawEntry( SCCOL nCol, SCROW nRow,
     bool bError = HasError( rRef, aErrorPos );
     bool bAlien = ( rRef.aEnd.Tab() < nTab || rRef.aStart.Tab() > nTab );
 
-    return InsertArrow( nCol, nRow,
-                        rRef.aStart.Col(), rRef.aStart.Row(),
-                        rRef.aEnd.Col(), rRef.aEnd.Row(),
-                        bAlien, bError, rData );
+    InsertArrow( nCol, nRow,
+                 rRef.aStart.Col(), rRef.aStart.Row(),
+                 rRef.aEnd.Col(), rRef.aEnd.Row(),
+                 bAlien, bError, rData );
+    return true;
 }
 
 bool ScDetectiveFunc::DrawAlienEntry( const ScRange& rRef,
@@ -619,9 +618,10 @@ bool ScDetectiveFunc::DrawAlienEntry( const ScRange& rRef,
     ScAddress aErrorPos;
     bool bError = HasError( rRef, aErrorPos );
 
-    return InsertToOtherTab( rRef.aStart.Col(), rRef.aStart.Row(),
-                                rRef.aEnd.Col(), rRef.aEnd.Row(),
-                                bError, rData );
+    InsertToOtherTab( rRef.aStart.Col(), rRef.aStart.Row(),
+                      rRef.aEnd.Col(), rRef.aEnd.Row(),
+                      bError, rData );
+    return true;
 }
 
 void ScDetectiveFunc::DrawCircle( SCCOL nCol, SCROW nRow, ScDetectiveData& rData )
@@ -645,7 +645,7 @@ void ScDetectiveFunc::DrawCircle( SCCOL nCol, SCROW nRow, ScDetectiveData& rData
 
     pCircle->SetLayer( SC_LAYER_INTERN );
     pPage->InsertObject( pCircle );
-    pModel->AddCalcUndo( new SdrUndoInsertObj( *pCircle ) );
+    pModel->AddCalcUndo( o3tl::make_unique<SdrUndoInsertObj>( *pCircle ) );
 
     ScDrawObjData* pData = ScDrawLayer::GetObjData( pCircle, true );
     pData->maStart.Set( nCol, nRow, nTab);
@@ -671,7 +671,7 @@ void ScDetectiveFunc::DeleteArrowsAt( SCCOL nCol, SCROW nRow, bool bDestPnt )
         size_t nDelCount = 0;
         std::unique_ptr<SdrObject*[]> ppObj(new SdrObject*[nObjCount]);
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -690,7 +690,7 @@ void ScDetectiveFunc::DeleteArrowsAt( SCCOL nCol, SCROW nRow, bool bDestPnt )
         if (bRecording)
         {
             for (size_t i=1; i<=nDelCount; ++i)
-                pModel->AddCalcUndo(new SdrUndoDelObj(*ppObj[nDelCount-i]));
+                pModel->AddCalcUndo(o3tl::make_unique<SdrUndoDelObj>(*ppObj[nDelCount-i]));
         }
 
         for (size_t i=1; i<=nDelCount; ++i)
@@ -711,7 +711,7 @@ void ScDetectiveFunc::DeleteArrowsAt( SCCOL nCol, SCROW nRow, bool bDestPnt )
 
 #define SC_DET_TOLERANCE    50
 
-inline bool RectIsPoints( const tools::Rectangle& rRect, const Point& rStart, const Point& rEnd )
+static bool RectIsPoints( const tools::Rectangle& rRect, const Point& rStart, const Point& rEnd )
 {
     return rRect.Left()   >= rStart.X() - SC_DET_TOLERANCE
         && rRect.Left()   <= rStart.X() + SC_DET_TOLERANCE
@@ -744,7 +744,7 @@ void ScDetectiveFunc::DeleteBox( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nR
         size_t nDelCount = 0;
         std::unique_ptr<SdrObject*[]> ppObj(new SdrObject*[nObjCount]);
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -761,7 +761,7 @@ void ScDetectiveFunc::DeleteBox( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nR
         }
 
         for (size_t i=1; i<=nDelCount; ++i)
-            pModel->AddCalcUndo( new SdrUndoRemoveObj( *ppObj[nDelCount-i] ) );
+            pModel->AddCalcUndo( o3tl::make_unique<SdrUndoRemoveObj>( *ppObj[nDelCount-i] ) );
 
         for (size_t i=1; i<=nDelCount; ++i)
             pPage->RemoveObject( ppObj[nDelCount-i]->GetOrdNum() );
@@ -1246,7 +1246,7 @@ bool ScDetectiveFunc::DeleteAll( ScDetectiveDelete eWhat )
     {
         std::unique_ptr<SdrObject*[]> ppObj(new SdrObject*[nObjCount]);
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -1273,7 +1273,7 @@ bool ScDetectiveFunc::DeleteAll( ScDetectiveDelete eWhat )
         }
 
         for (size_t i=1; i<=nDelCount; ++i)
-            pModel->AddCalcUndo( new SdrUndoRemoveObj( *ppObj[nDelCount-i] ) );
+            pModel->AddCalcUndo( o3tl::make_unique<SdrUndoRemoveObj>( *ppObj[nDelCount-i] ) );
 
         for (size_t i=1; i<=nDelCount; ++i)
             pPage->RemoveObject( ppObj[nDelCount-i]->GetOrdNum() );
@@ -1418,7 +1418,7 @@ void ScDetectiveFunc::UpdateAllComments( ScDocument& rDoc )
         OSL_ENSURE( pPage, "Page ?" );
         if( pPage )
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+            SdrObjListIter aIter( pPage, SdrIterMode::Flat );
             for( SdrObject* pObject = aIter.Next(); pObject; pObject = aIter.Next() )
             {
                 if ( ScDrawObjData* pData = ScDrawLayer::GetNoteCaptionData( pObject, nObjTab ) )
@@ -1459,7 +1459,7 @@ void ScDetectiveFunc::UpdateAllArrowColors()
         OSL_ENSURE( pPage, "Page ?" );
         if( pPage )
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+            SdrObjListIter aIter( pPage, SdrIterMode::Flat );
             for( SdrObject* pObject = aIter.Next(); pObject; pObject = aIter.Next() )
             {
                 if ( pObject->GetLayer() == SC_LAYER_INTERN )
@@ -1536,7 +1536,7 @@ void ScDetectiveFunc::FindFrameForObject( const SdrObject* pObject, ScRange& rRa
     if (!pPage) return;
 
     // test if the object is a direct page member
-    if( pObject && pObject->GetPage() && (pObject->GetPage() == pObject->getParentOfSdrObject()) )
+    if( pObject && pObject->getSdrPageFromSdrObject() && (pObject->getSdrPageFromSdrObject() == pObject->getParentSdrObjListFromSdrObject()->getSdrPageFromSdrObjList()) )
     {
         // Is there a previous object?
         const size_t nOrdNum = pObject->GetOrdNum();

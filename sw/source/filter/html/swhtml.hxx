@@ -52,7 +52,7 @@ class SwHTMLForm_Impl;
 class SwApplet_Impl;
 struct SwHTMLFootEndNote_Impl;
 class HTMLTableCnts;
-struct SwPendingStack;
+struct SwPending;
 class SvxCSS1PropertyInfo;
 struct ImplSVEvent;
 
@@ -64,9 +64,9 @@ struct ImplSVEvent;
 #define HTML_DFLT_IMG_HEIGHT (MM50*2)
 
 // some things you often need
-extern HTMLOptionEnum<SvxAdjust> aHTMLPAlignTable[];
-extern HTMLOptionEnum<sal_Int16> aHTMLImgHAlignTable[];
-extern HTMLOptionEnum<sal_Int16> aHTMLImgVAlignTable[];
+extern HTMLOptionEnum<SvxAdjust> const aHTMLPAlignTable[];
+extern HTMLOptionEnum<sal_Int16> const aHTMLImgHAlignTable[];
+extern HTMLOptionEnum<sal_Int16> const aHTMLImgVAlignTable[];
 
 // attribute stack:
 
@@ -129,17 +129,17 @@ class HTMLAttr
     friend class SwHTMLParser;
     friend class CellSaveStruct;
 
-    SwNodeIndex nSttPara, nEndPara;
-    sal_Int32 nSttContent, nEndContent;
-    bool bInsAtStart : 1;
-    bool bLikePara : 1; // set attribute above the whole paragraph
-    bool bValid : 1;    // is the attribute valid?
+    SwNodeIndex m_nStartPara, m_nEndPara;
+    sal_Int32 m_nStartContent, m_nEndContent;
+    bool m_bInsAtStart : 1;
+    bool m_bLikePara : 1; // set attribute above the whole paragraph
+    bool m_bValid : 1;    // is the attribute valid?
 
-    std::unique_ptr<SfxPoolItem> pItem;
-    std::shared_ptr<HTMLAttrTable> xAttrTab;
-    HTMLAttr *pNext;   // still to close attributes with different values
-    HTMLAttr *pPrev;   // already closed but not set attributes
-    HTMLAttr **ppHead; // list head
+    std::unique_ptr<SfxPoolItem> m_pItem;
+    std::shared_ptr<HTMLAttrTable> m_xAttrTab;
+    HTMLAttr *m_pNext;   // still to close attributes with different values
+    HTMLAttr *m_pPrev;   // already closed but not set attributes
+    HTMLAttr **m_ppHead; // list head
 
     HTMLAttr( const SwPosition& rPos, const SfxPoolItem& rItem,
                HTMLAttr **pHd, const std::shared_ptr<HTMLAttrTable>& rAttrTab );
@@ -156,39 +156,39 @@ public:
                 HTMLAttr **pHd, const std::shared_ptr<HTMLAttrTable>& rAttrTab );
     inline void SetStart( const SwPosition& rPos );
 
-    sal_uInt32 GetSttParaIdx() const { return nSttPara.GetIndex(); }
-    sal_uInt32 GetEndParaIdx() const { return nEndPara.GetIndex(); }
+    sal_uInt32 GetSttParaIdx() const { return m_nStartPara.GetIndex(); }
+    sal_uInt32 GetEndParaIdx() const { return m_nEndPara.GetIndex(); }
 
-    const SwNodeIndex& GetSttPara() const { return nSttPara; }
-    const SwNodeIndex& GetEndPara() const { return nEndPara; }
+    const SwNodeIndex& GetSttPara() const { return m_nStartPara; }
+    const SwNodeIndex& GetEndPara() const { return m_nEndPara; }
 
-    sal_Int32 GetSttCnt() const { return nSttContent; }
-    sal_Int32 GetEndCnt() const { return nEndContent; }
+    sal_Int32 GetSttCnt() const { return m_nStartContent; }
+    sal_Int32 GetEndCnt() const { return m_nEndContent; }
 
-    bool IsLikePara() const { return bLikePara; }
-    void SetLikePara() { bLikePara = true; }
+    bool IsLikePara() const { return m_bLikePara; }
+    void SetLikePara() { m_bLikePara = true; }
 
-          SfxPoolItem& GetItem()        { return *pItem; }
-    const SfxPoolItem& GetItem() const  { return *pItem; }
+          SfxPoolItem& GetItem()        { return *m_pItem; }
+    const SfxPoolItem& GetItem() const  { return *m_pItem; }
 
-    HTMLAttr *GetNext() const { return pNext; }
-    void InsertNext( HTMLAttr *pNxt ) { pNext = pNxt; }
+    HTMLAttr *GetNext() const { return m_pNext; }
+    void InsertNext( HTMLAttr *pNxt ) { m_pNext = pNxt; }
 
-    HTMLAttr *GetPrev() const { return pPrev; }
+    HTMLAttr *GetPrev() const { return m_pPrev; }
     void InsertPrev( HTMLAttr *pPrv );
-    void ClearPrev() { pPrev = nullptr; }
+    void ClearPrev() { m_pPrev = nullptr; }
 
     void SetHead(HTMLAttr **ppHd, const std::shared_ptr<HTMLAttrTable>& rAttrTab)
     {
-        ppHead = ppHd;
-        xAttrTab = rAttrTab;
+        m_ppHead = ppHd;
+        m_xAttrTab = rAttrTab;
     }
 
     // During setting attributes from styles it can happen that these
     // shouldn't be set anymore. To delete them would be very expensive, because
     // you don't know all the places where they are linked in. Therefore they're
     // made invalid and deleted at the next call of SetAttr_().
-    void Invalidate() { bValid = false; }
+    void Invalidate() { m_bValid = false; }
 };
 
 class HTMLAttrContext_SaveDoc;
@@ -205,14 +205,14 @@ class HTMLAttrContext
 {
     HTMLAttrs m_aAttrs;      // the attributes created in the context
 
-    OUString    m_aClass;          // context class
+    OUString const    m_aClass;          // context class
 
-    HTMLAttrContext_SaveDoc *m_pSaveDocContext;
+    std::unique_ptr<HTMLAttrContext_SaveDoc> m_pSaveDocContext;
     std::unique_ptr<SfxItemSet> m_pFrameItemSet;
 
-    HtmlTokenId m_nToken;         // the token of the context
+    HtmlTokenId const m_nToken;         // the token of the context
 
-    sal_uInt16  m_nTextFormatColl;    // a style created in the context or zero
+    sal_uInt16 const  m_nTextFormatColl;    // a style created in the context or zero
 
     sal_uInt16  m_nLeftMargin;        // a changed left border
     sal_uInt16  m_nRightMargin;       // a changed right border
@@ -225,7 +225,7 @@ class HTMLAttrContext
 
     bool    m_bLRSpaceChanged : 1;    // left/right border, changed indent?
     bool    m_bULSpaceChanged : 1;    // top/bottom border changed?
-    bool    m_bDefaultTextFormatColl : 1;// nTextFormatColl is only default
+    bool const    m_bDefaultTextFormatColl : 1;// nTextFormatColl is only default
     bool    m_bSpansSection : 1;      // the context opens a SwSection
     bool    m_bPopStack : 1;          // delete above stack elements
     bool    m_bFinishPREListingXMP : 1;
@@ -238,52 +238,9 @@ public:
     void ClearSaveDocContext();
 
     HTMLAttrContext( HtmlTokenId nTokn, sal_uInt16 nPoolId, const OUString& rClass,
-                      bool bDfltColl=false ) :
-        m_aClass( rClass ),
-        m_pSaveDocContext( nullptr ),
-        m_nToken( nTokn ),
-        m_nTextFormatColl( nPoolId ),
-        m_nLeftMargin( 0 ),
-        m_nRightMargin( 0 ),
-        m_nFirstLineIndent( 0 ),
-        m_nUpperSpace( 0 ),
-        m_nLowerSpace( 0 ),
-        m_eAppend( AM_NONE ),
-        m_bLRSpaceChanged( false ),
-        m_bULSpaceChanged( false ),
-        m_bDefaultTextFormatColl( bDfltColl ),
-        m_bSpansSection( false ),
-        m_bPopStack( false ),
-        m_bFinishPREListingXMP( false ),
-        m_bRestartPRE( false ),
-        m_bRestartXMP( false ),
-        m_bRestartListing( false ),
-        m_bHeaderOrFooter( false )
-    {}
-
-    explicit HTMLAttrContext( HtmlTokenId nTokn ) :
-        m_pSaveDocContext( nullptr ),
-        m_nToken( nTokn ),
-        m_nTextFormatColl( 0 ),
-        m_nLeftMargin( 0 ),
-        m_nRightMargin( 0 ),
-        m_nFirstLineIndent( 0 ),
-        m_nUpperSpace( 0 ),
-        m_nLowerSpace( 0 ),
-        m_eAppend( AM_NONE ),
-        m_bLRSpaceChanged( false ),
-        m_bULSpaceChanged( false ),
-        m_bDefaultTextFormatColl( false ),
-        m_bSpansSection( false ),
-        m_bPopStack( false ),
-        m_bFinishPREListingXMP( false ),
-        m_bRestartPRE( false ),
-        m_bRestartXMP( false ),
-        m_bRestartListing( false ),
-        m_bHeaderOrFooter( false )
-    {}
-
-    ~HTMLAttrContext() { ClearSaveDocContext(); }
+                      bool bDfltColl=false );
+    explicit HTMLAttrContext( HtmlTokenId nTokn );
+    ~HTMLAttrContext();
 
     HtmlTokenId GetToken() const { return m_nToken; }
 
@@ -381,7 +338,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
      */
     std::unique_ptr<ImportProgress> m_xProgress;
 
-    OUString      m_aPathToFile;
+    OUString const      m_aPathToFile;
     OUString      m_sBaseURL;
     OUString      m_aBasicLib;
     OUString      m_aBasicModule;
@@ -390,7 +347,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     OUString      m_aScriptURL;     // script URL
     OUString      m_aStyleSource;   // content of current style sheet
     OUString      m_aContents;      // text of current marquee, field and so
-    OUString      m_sTitle;
+    OUStringBuffer m_sTitle;
     OUString      m_aUnknownToken;  // a started unknown token
     OUString      m_aBulletGrfs[MAXLEVEL];
     OUString      m_sJmpMark;
@@ -411,11 +368,11 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     //onto them until parsing is done
     std::vector<std::unique_ptr<SwTableBox>> m_aOrphanedTableBoxes;
 
-    SwApplet_Impl *m_pAppletImpl; // current applet
+    std::unique_ptr<SwApplet_Impl> m_pAppletImpl; // current applet
 
-    SwCSS1Parser    *m_pCSS1Parser;   // Style-Sheet-Parser
-    SwHTMLNumRuleInfo *m_pNumRuleInfo;
-    SwPendingStack  *m_pPendStack;
+    std::unique_ptr<SwCSS1Parser> m_pCSS1Parser;   // Style-Sheet-Parser
+    std::unique_ptr<SwHTMLNumRuleInfo> m_pNumRuleInfo;
+    std::vector<SwPending>  m_vPendingStack;
 
     rtl::Reference<SwDoc> m_xDoc;
     SwPaM           *m_pPam;      // SwPosition should be enough, or ??
@@ -424,12 +381,12 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
 
     std::vector<HTMLTable*> m_aTables;
     std::shared_ptr<HTMLTable> m_xTable; // current "outermost" table
-    SwHTMLForm_Impl *m_pFormImpl;   // current form
+    SwHTMLForm_Impl* m_pFormImpl;   // current form
     SdrObject       *m_pMarquee;    // current marquee
     std::unique_ptr<SwField> m_xField; // current field
     ImageMap        *m_pImageMap;   // current image map
-    ImageMaps       *m_pImageMaps;  ///< all Image-Maps that have been read
-    SwHTMLFootEndNote_Impl *m_pFootEndNoteImpl;
+    std::unique_ptr<ImageMaps> m_pImageMaps;  ///< all Image-Maps that have been read
+    std::unique_ptr<SwHTMLFootEndNote_Impl> m_pFootEndNoteImpl;
 
     Size    m_aHTMLPageSize;      // page size of HTML template
 
@@ -491,7 +448,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     bool m_bSelect : 1;
     bool m_bInFootEndNoteAnchor : 1;
     bool m_bInFootEndNoteSymbol : 1;
-    bool m_bIgnoreHTMLComments : 1;
+    bool const m_bIgnoreHTMLComments : 1;
     bool m_bRemoveHidden : 1; // the filter implementation might set the hidden flag
 
     bool m_bBodySeen : 1;
@@ -506,6 +463,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     SfxViewFrame* m_pTempViewFrame;
 
     bool m_bXHTML = false;
+    bool m_bReqIF = false;
 
     /**
      * Non-owning pointers to already inserted OLE nodes, matching opened
@@ -525,9 +483,9 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     DECL_LINK( AsyncCallback, void*, void );
 
     // set attribute on document
-    void SetAttr_( bool bChkEnd, bool bBeforeTable, HTMLAttrs *pPostIts );
+    void SetAttr_( bool bChkEnd, bool bBeforeTable, std::deque<std::unique_ptr<HTMLAttr>> *pPostIts );
     void SetAttr( bool bChkEnd = true, bool bBeforeTable = false,
-                         HTMLAttrs *pPostIts = nullptr )
+                         std::deque<std::unique_ptr<HTMLAttr>> *pPostIts = nullptr )
     {
         if( !m_aSetAttrTab.empty() || !m_aMoveFlyFrames.empty() )
             SetAttr_( bChkEnd, bBeforeTable, pPostIts );
@@ -552,7 +510,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     void SplitAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab, bool bMoveEndBack);
     void RestoreAttrTab(std::shared_ptr<HTMLAttrTable> const & rNewAttrTab);
     void InsertAttr( const SfxPoolItem& rItem, bool bInsAtStart );
-    void InsertAttrs( HTMLAttrs& rAttrs );
+    void InsertAttrs( std::deque<std::unique_ptr<HTMLAttr>> rAttrs );
 
     bool DoPositioning( SfxItemSet &rItemSet,
                         SvxCSS1PropertyInfo &rPropInfo,
@@ -676,7 +634,7 @@ class SwHTMLParser : public SfxHTMLParser, public SwClient
     // tags realized via character styles
     void NewCharFormat( HtmlTokenId nToken );
 
-    void ClearFootnotesInRange(const SwNodeIndex& rSttIdx, const SwNodeIndex& rEndIdx);
+    void ClearFootnotesMarksInRange(const SwNodeIndex& rSttIdx, const SwNodeIndex& rEndIdx);
 
     void DeleteSection(SwStartNode* pSttNd);
 
@@ -898,9 +856,6 @@ private:
 
     bool PendingObjectsInPaM(SwPaM& rPam) const;
 
-    /// Parse FilterOptions passed to the importer.
-    void SetupFilterOptions();
-
     class TableDepthGuard
     {
     private:
@@ -944,7 +899,8 @@ public:
                     const OUString& rBaseURL,
                     bool bReadNewDoc,
                     SfxMedium* pMed, bool bReadUTF8,
-                    bool bIgnoreHTMLComments );
+                    bool bIgnoreHTMLComments,
+                    const OUString& rNamespace);
 
     virtual SvParserState CallParser() override;
 
@@ -963,30 +919,36 @@ public:
     }
 
     void DeregisterHTMLTable(HTMLTable* pOld);
+
+    SwDoc* GetDoc() const;
+
+    bool IsReqIF() const;
+
+    /// Strips query and fragment from a URL path if base URL is a file:// one.
+    static OUString StripQueryFromPath(const OUString& rBase, const OUString& rPath);
 };
 
-struct SwPendingStackData
+struct SwPendingData
 {
-    virtual ~SwPendingStackData() {}
+    virtual ~SwPendingData() {}
 };
 
-struct SwPendingStack
+struct SwPending
 {
-    HtmlTokenId nToken;
-    SwPendingStackData* pData;
-    SwPendingStack* pNext;
+    HtmlTokenId const nToken;
+    std::unique_ptr<SwPendingData> pData;
 
-    SwPendingStack( HtmlTokenId nTkn, SwPendingStack* pNxt )
-        : nToken( nTkn ), pData( nullptr ), pNext( pNxt )
+    SwPending( HtmlTokenId nTkn )
+        : nToken( nTkn )
         {}
 };
 
 inline void HTMLAttr::SetStart( const SwPosition& rPos )
 {
-    nSttPara = rPos.nNode;
-    nSttContent = rPos.nContent.GetIndex();
-    nEndPara = nSttPara;
-    nEndContent = nSttContent;
+    m_nStartPara = rPos.nNode;
+    m_nStartContent = rPos.nContent.GetIndex();
+    m_nEndPara = m_nStartPara;
+    m_nEndContent = m_nStartContent;
 }
 
 inline void HTMLAttrContext::SetMargins( sal_uInt16 nLeft, sal_uInt16 nRight,

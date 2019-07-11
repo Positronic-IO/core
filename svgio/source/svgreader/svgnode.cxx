@@ -266,7 +266,7 @@ namespace svgio
             maXmlSpace(XmlSpace_notset),
             maDisplay(Display_inline),
             maCssStyleVector(),
-            mpLocalCssStyle(nullptr),
+            mbDecomposing(false),
             mbCssStyleVectorBuilt(false)
         {
             OSL_ENSURE(SVGTokenUnknown != maType, "SvgNode with unknown type created (!)");
@@ -464,6 +464,9 @@ namespace svgio
 
         void SvgNode::decomposeSvgNode(drawinglayer::primitive2d::Primitive2DContainer& rTarget, bool bReferenced) const
         {
+            if (mbDecomposing) //guard against infinite recurse
+                return;
+
             if(Display_none == getDisplay())
             {
                 return;
@@ -499,6 +502,8 @@ namespace svgio
 
             if(!rChildren.empty())
             {
+                mbDecomposing = true;
+
                 const sal_uInt32 nCount(rChildren.size());
 
                 for(sal_uInt32 a(0); a < nCount; a++)
@@ -522,11 +527,11 @@ namespace svgio
                                 rTarget.append(aNewTarget);
                             }
                         }
-                     }
-                     else if(!pCandidate)
-                     {
+                    }
+                    else if(!pCandidate)
+                    {
                         OSL_ENSURE(false, "Null-Pointer in child node list (!)");
-                     }
+                    }
                 }
 
                 if(!rTarget.empty())
@@ -571,6 +576,7 @@ namespace svgio
                         }
                     }
                 }
+                mbDecomposing = false;
             }
         }
 

@@ -26,11 +26,11 @@ namespace
 {
 
 class DataMemberShadow:
-    public RecursiveASTVisitor<DataMemberShadow>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<DataMemberShadow>
 {
 public:
     explicit DataMemberShadow(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override {
         TraverseDecl(compiler.getASTContext().getTranslationUnitDecl());
@@ -44,8 +44,8 @@ bool DataMemberShadow::VisitFieldDecl(FieldDecl const * fieldDecl)
     if (ignoreLocation(fieldDecl)) {
         return true;
     }
-    StringRef aFileName = compiler.getSourceManager().getFilename(
-            compiler.getSourceManager().getSpellingLoc(fieldDecl->getLocStart()));
+    StringRef aFileName = getFileNameOfSpellingLoc(
+        compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(fieldDecl)));
 
     // FIXME complex stuff to fix later
 
@@ -97,13 +97,13 @@ bool DataMemberShadow::VisitFieldDecl(FieldDecl const * fieldDecl)
             sPath += baseCXXRecordDecl->getNameAsString();
             report(DiagnosticsEngine::Warning,
                     "data member %0 is shadowing member in superclass, through inheritance path %1",
-                    fieldDecl->getLocStart())
+                    compat::getBeginLoc(fieldDecl))
                 << fieldDecl->getName()
                 << sPath
                 << fieldDecl->getSourceRange();
             report(DiagnosticsEngine::Note,
                     "superclass member here",
-                    baseFieldDecl->getLocStart())
+                    compat::getBeginLoc(baseFieldDecl))
                 << baseFieldDecl->getSourceRange();
         }
         return false;

@@ -19,6 +19,7 @@
 #ifndef INCLUDED_SVX_PAGECTRL_HXX
 #define INCLUDED_SVX_PAGECTRL_HXX
 
+#include <vcl/customweld.hxx>
 #include <vcl/window.hxx>
 #include <svx/svxdllapi.h>
 #include <svx/sdr/attribute/sdrallfillattributeshelper.hxx>
@@ -27,10 +28,8 @@ class SvxBoxItem;
 enum class SvxPageUsage;
 enum class SvxFrameDirection;
 
-class SVX_DLLPUBLIC SvxPageWindow : public vcl::Window
+class SVX_DLLPUBLIC SvxPageWindow : public weld::CustomWidgetController
 {
-    using Window::GetBorder;
-
 private:
     Size aWinSize;
     Size aSize;
@@ -72,12 +71,13 @@ protected:
     virtual void DrawPage(vcl::RenderContext& rRenderContext, const Point& rPoint,
                           const bool bSecond, const bool bEnabled);
 
-    void drawFillAttributes(vcl::RenderContext& rRenderContext,
+    static void drawFillAttributes(vcl::RenderContext& rRenderContext,
                             const drawinglayer::attribute::SdrAllFillAttributesHelperPtr& rFillAttributes,
                             const tools::Rectangle& rPaintRange, const tools::Rectangle& rDefineRange);
 
 public:
-    SvxPageWindow(vcl::Window* pParent);
+    SvxPageWindow();
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
     virtual ~SvxPageWindow() override;
 
     void setHeaderFillAttributes(const drawinglayer::attribute::SdrAllFillAttributesHelperPtr& rFillAttributes)
@@ -148,8 +148,6 @@ public:
     void SetFrameDirection(SvxFrameDirection nDirection);
 
     void ResetBackground();
-
-    virtual Size GetOptimalSize() const override;
 };
 
 #endif // INCLUDED_SVX_PAGECTRL_HXX

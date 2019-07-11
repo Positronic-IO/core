@@ -25,9 +25,9 @@
 /** Draw rectangle */
 class FuConstRectangle : public FuConstruct
 {
- public:
-    FuConstRectangle(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pView,
-                   SdrModel* pDoc, const SfxRequest& rReq);
+public:
+    FuConstRectangle(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pView,
+                     SdrModel* pDoc, const SfxRequest& rReq);
 
     virtual ~FuConstRectangle() override;
                                        // Mouse- & Key-Events
@@ -39,7 +39,7 @@ class FuConstRectangle : public FuConstruct
     static void SetLineEnds(SfxItemSet& rAttr, const SdrObject& rObj, sal_uInt16 nSlotId);
 
     // Create default drawing objects via keyboard
-    virtual SdrObject* CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
+    virtual SdrObjectUniquePtr CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
 };
 
 #endif      // _SD_FUCONREC_HXX

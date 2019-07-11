@@ -18,6 +18,7 @@
  */
 
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/animations/AnimationNodeType.hpp>
 #include <com/sun/star/animations/AnimateColor.hpp>
 #include <com/sun/star/animations/AnimateMotion.hpp>
@@ -128,6 +129,7 @@ private:
 CustomAnimationEffect::CustomAnimationEffect( const css::uno::Reference< css::animations::XAnimationNode >& xNode )
 :   mnNodeType(-1),
     mnPresetClass(-1),
+    mnFill(AnimationFill::HOLD),
     mfBegin(-1.0),
     mfDuration(-1.0),
     mfAbsoluteDuration(-1.0),
@@ -193,6 +195,8 @@ void CustomAnimationEffect::setNode( const css::uno::Reference< css::animations:
     mfAcceleration = mxNode->getAcceleration();
     mfDecelerate = mxNode->getDecelerate();
     mbAutoReverse = mxNode->getAutoReverse();
+
+    mnFill = mxNode->getFill();
 
     // get iteration data
     Reference< XIterateContainer > xIter( mxNode, UNO_QUERY );
@@ -818,6 +822,7 @@ void CustomAnimationEffect::replaceNode( const css::uno::Reference< css::animati
     sal_Int16 nNodeType = mnNodeType;
     Any aTarget = maTarget;
 
+    sal_Int16 nFill = mnFill;
     double fBegin = mfBegin;
     double fDuration = mfDuration;
     double fAcceleration = mfAcceleration;
@@ -836,6 +841,7 @@ void CustomAnimationEffect::replaceNode( const css::uno::Reference< css::animati
     setTargetSubItem( nSubItem );
     setDuration( fDuration );
     setBegin( fBegin );
+    setFill( nFill );
 
     setAcceleration( fAcceleration );
     setDecelerate( fDecelerate );
@@ -888,14 +894,6 @@ Any CustomAnimationEffect::getEnd() const
     }
 }
 
-sal_Int16 CustomAnimationEffect::getFill() const
-{
-    if( mxNode.is() )
-        return mxNode->getFill();
-    else
-        return 0;
-}
-
 void CustomAnimationEffect::setRepeatCount( const Any& rRepeatCount )
 {
     if( mxNode.is() )
@@ -915,8 +913,11 @@ void CustomAnimationEffect::setEnd( const Any& rEnd )
 
 void CustomAnimationEffect::setFill( sal_Int16 nFill )
 {
-    if( mxNode.is() )
+    if (mxNode.is())
+    {
+        mnFill = nFill;
         mxNode->setFill( nFill );
+    }
 }
 
 Reference< XAnimationNode > CustomAnimationEffect::createAfterEffectNode() const
@@ -1543,7 +1544,7 @@ void CustomAnimationEffect::updateSdrPathObjFromPath( SdrPathObj& rPathObj )
         SdrObject* pObj = GetSdrObjectFromXShape( getTargetShape() );
         if( pObj )
         {
-            SdrPage* pPage = pObj->GetPage();
+            SdrPage* pPage = pObj->getSdrPageFromSdrObject();
             if( pPage )
             {
                 const Size aPageSize( pPage->GetSize() );
@@ -1583,7 +1584,7 @@ void CustomAnimationEffect::updatePathFromSdrPathObj( const SdrPathObj& rPathObj
 
         aPolyPoly.transform(basegfx::utils::createTranslateB2DHomMatrix(-aCenter.X(), -aCenter.Y()));
 
-        SdrPage* pPage = pObj->GetPage();
+        SdrPage* pPage = pObj->getSdrPageFromSdrObject();
         if( pPage )
         {
             const Size aPageSize( pPage->GetSize() );
@@ -1787,6 +1788,20 @@ void EffectSequenceHelper::remove( const CustomAnimationEffectPtr& pEffect )
     }
 
     rebuild();
+}
+
+void EffectSequenceHelper::moveToBeforeEffect( const CustomAnimationEffectPtr& pEffect, const CustomAnimationEffectPtr& pInsertBefore)
+{
+    if ( pEffect.get() )
+    {
+        maEffects.remove( pEffect );
+        EffectSequence::iterator aInsertIter( find( pInsertBefore ) );
+
+        // aInsertIter being end() is OK: pInsertBefore could be null, so put at end.
+        maEffects.insert( aInsertIter, pEffect );
+
+        rebuild();
+    }
 }
 
 void EffectSequenceHelper::rebuild()
@@ -2021,12 +2036,8 @@ void stl_process_after_effect_node_func(AfterEffectNode const & rNode)
 
                     xNextContainer.set( ParallelTimeContainer::create( xContext ), UNO_QUERY_THROW );
 
-                    DBG_ASSERT( xNextContainer.is(), "ppt::stl_process_after_effect_node_func::operator(), could not create container!" );
-                    if( xNextContainer.is() )
-                    {
-                        xNextContainer->setBegin( makeAny( 0.0 ) );
-                        xNewClickContainer->appendChild( xNextContainer );
-                    }
+                    xNextContainer->setBegin( makeAny( 0.0 ) );
+                    xNewClickContainer->appendChild( xNextContainer );
                 }
 
                 if( xNextContainer.is() )
@@ -2322,9 +2333,22 @@ void EffectSequenceHelper::updateTextGroups()
 
         pGroup->addEffect( pEffect );
     }
+
+    // Now that all the text groups have been cleared up and rebuilt, we need to update its
+    // text grouping. addEffect() already make mnTextGrouping the last possible level,
+    // so just continue to find the last level that is not EffectNodeType::WITH_PREVIOUS.
+    for(const auto &rGroupMapItem: maGroupMap)
+    {
+        const CustomAnimationTextGroupPtr &pGroup = rGroupMapItem.second;
+        while(pGroup->mnTextGrouping > 0 && pGroup->mnDepthFlags[pGroup->mnTextGrouping - 1] == EffectNodeType::WITH_PREVIOUS)
+            --pGroup->mnTextGrouping;
+    }
 }
 
-CustomAnimationTextGroupPtr EffectSequenceHelper::createTextGroup( CustomAnimationEffectPtr pEffect, sal_Int32 nTextGrouping, double fTextGroupingAuto, bool bAnimateForm, bool bTextReverse )
+CustomAnimationTextGroupPtr
+EffectSequenceHelper::createTextGroup(const CustomAnimationEffectPtr& pEffect,
+                                      sal_Int32 nTextGrouping, double fTextGroupingAuto,
+                                      bool bAnimateForm, bool bTextReverse)
 {
     // first finde a free group-id
     sal_Int32 nGroupId = 0;
@@ -2670,7 +2694,7 @@ struct ImplStlTextGroupSortHelper
 {
     explicit ImplStlTextGroupSortHelper( bool bReverse ) : mbReverse( bReverse ) {};
     bool operator()( const CustomAnimationEffectPtr& p1, const CustomAnimationEffectPtr& p2 );
-    bool mbReverse;
+    bool const mbReverse;
     sal_Int32 getTargetParagraph( const CustomAnimationEffectPtr& p1 );
 };
 
@@ -2959,7 +2983,7 @@ void MainSequence::init()
     mnSequenceType = EffectNodeType::MAIN_SEQUENCE;
 
     maTimer.SetInvokeHandler( LINK(this, MainSequence, onTimerHdl) );
-    maTimer.SetTimeout(500);
+    maTimer.SetTimeout(50);
 
     mxChangesListener.set( new AnimationChangeListener( this ) );
 
@@ -3299,9 +3323,8 @@ bool MainSequence::setTrigger( const CustomAnimationEffectPtr& pEffect, const cs
     EffectSequenceHelper* pNewSequence = nullptr;
     if( xTriggerShape.is() )
     {
-        for (auto const& iteractiveSequence : maInteractiveSequenceVector)
+        for (InteractiveSequencePtr const& pIS : maInteractiveSequenceVector)
         {
-            InteractiveSequencePtr pIS(iteractiveSequence);
             if( pIS->getTriggerShape() == xTriggerShape )
             {
                 pNewSequence = pIS.get();
@@ -3346,7 +3369,7 @@ IMPL_LINK_NOARG(MainSequence, onTimerHdl, Timer *, void)
     }
 }
 
-/** starts a timer that recreates the internal structure from the API core after 1 second */
+/** starts a timer that recreates the internal structure from the API core */
 void MainSequence::startRecreateTimer()
 {
     if( !mbRebuilding && (mbIgnoreChanges == 0) )
@@ -3356,7 +3379,10 @@ void MainSequence::startRecreateTimer()
     }
 }
 
-/** starts a timer that rebuilds the API core from the internal structure after 1 second */
+/**
+ * starts a timer that rebuilds the API core from the internal structure
+ * This is used to reduce the number of screen redraws due to animation changes.
+*/
 void MainSequence::startRebuildTimer()
 {
     mbTimerMode = true;

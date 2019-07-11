@@ -20,6 +20,7 @@
 #include <hintids.hxx>
 #include <o3tl/make_unique.hxx>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 #include <unotools/collatorwrapper.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <comphelper/processfactory.hxx>
@@ -245,7 +246,7 @@ OUString SwSortBoxElement::GetKey(sal_uInt16 nKey) const
         pFndBox = pBox->GetBox(nRow, nCol);         // Sort columns
 
     // Extract the Text
-    OUString aRetStr;
+    OUStringBuffer aRetStr;
     if( pFndBox )
     {   // Get StartNode and skip it
         const SwTableBox* pMyBox = pFndBox->GetBox();
@@ -257,10 +258,10 @@ OUString SwSortBoxElement::GetKey(sal_uInt16 nKey) const
             const SwNode *pNd = nullptr, *pEndNd = pMyBox->GetSttNd()->EndOfSectionNode();
             for( sal_uLong nIdx = pMyBox->GetSttIdx() + 1; pNd != pEndNd; ++nIdx )
                 if( ( pNd = pDoc->GetNodes()[ nIdx ])->IsTextNode() )
-                    aRetStr += pNd->GetTextNode()->GetText();
+                    aRetStr.append(pNd->GetTextNode()->GetText());
         }
     }
-    return aRetStr;
+    return aRetStr.makeStringAndClear();
 }
 
 double SwSortBoxElement::GetValue( sal_uInt16 nKey ) const
@@ -391,17 +392,16 @@ bool SwDoc::SortText(const SwPaM& rPaM, const SwSortOptions& rOpt)
     if( bUndo && !pRedlUndo )
     {
         pUndoSort = new SwUndoSort(rPaM, rOpt);
-        GetIDocumentUndoRedo().AppendUndo(pUndoSort);
+        GetIDocumentUndoRedo().AppendUndo(std::unique_ptr<SwUndo>(pUndoSort));
     }
 
     GetIDocumentUndoRedo().DoUndo(false);
 
     size_t n = 0;
-    for (SwSortTextElements::const_iterator it = aSortSet.begin();
-            it != aSortSet.end(); ++it, ++n)
+    for (const auto& rElem : aSortSet)
     {
         aStart      = nBeg + n;
-        aRg.aStart  = it->aPos.GetIndex();
+        aRg.aStart  = rElem.aPos.GetIndex();
         aRg.aEnd    = aRg.aStart.GetIndex() + 1;
 
         // Move Nodes
@@ -411,8 +411,9 @@ bool SwDoc::SortText(const SwPaM& rPaM, const SwSortOptions& rOpt)
         // Insert Move in Undo
         if(pUndoSort)
         {
-            pUndoSort->Insert(it->nOrg, nBeg + n);
+            pUndoSort->Insert(rElem.nOrg, nBeg + n);
         }
+        ++n;
     }
     // Delete all elements from the SortArray
     aSortSet.clear();
@@ -425,7 +426,7 @@ bool SwDoc::SortText(const SwPaM& rPaM, const SwSortOptions& rOpt)
             pRedlUndo->SetSaveRange( *pRedlPam );
             // UGLY: temp. enable Undo
             GetIDocumentUndoRedo().DoUndo(true);
-            GetIDocumentUndoRedo().AppendUndo( pRedlUndo );
+            GetIDocumentUndoRedo().AppendUndo( std::unique_ptr<SwUndo>(pRedlUndo) );
             GetIDocumentUndoRedo().DoUndo(false);
         }
 
@@ -536,7 +537,7 @@ bool SwDoc::SortTable(const SwSelBoxes& rBoxes, const SwSortOptions& rOpt)
 
     // #i37739# A simple 'MakeFrames' after the node sorting
     // does not work if the table is inside a frame and has no prev/next.
-    SwNode2Layout aNode2Layout( *pTableNd );
+    SwNode2LayoutSaveUpperFrames aNode2Layout(*pTableNd);
 
     // Delete the Table's Frames
     pTableNd->DelFrames();
@@ -548,7 +549,7 @@ bool SwDoc::SortTable(const SwSelBoxes& rBoxes, const SwSortOptions& rOpt)
         pUndoSort = new SwUndoSort( rBoxes[0]->GetSttIdx(),
                                     rBoxes.back()->GetSttIdx(),
                                    *pTableNd, rOpt, aFlatBox.HasItemSets() );
-        GetIDocumentUndoRedo().AppendUndo(pUndoSort);
+        GetIDocumentUndoRedo().AppendUndo(std::unique_ptr<SwUndo>(pUndoSort));
     }
     ::sw::UndoGuard const undoGuard(GetIDocumentUndoRedo());
 
@@ -569,17 +570,17 @@ bool SwDoc::SortTable(const SwSelBoxes& rBoxes, const SwSortOptions& rOpt)
     // Move after Sorting
     SwMovedBoxes aMovedList;
     sal_uInt16 i = 0;
-    for (SwSortBoxElements::const_iterator it = aSortList.begin();
-            it != aSortList.end(); ++i, ++it)
+    for (const auto& rElem : aSortList)
     {
         if(rOpt.eDirection == SRT_ROWS)
         {
-            MoveRow(this, aFlatBox, it->nRow, i+nStart, aMovedList, pUndoSort);
+            MoveRow(this, aFlatBox, rElem.nRow, i+nStart, aMovedList, pUndoSort);
         }
         else
         {
-            MoveCol(this, aFlatBox, it->nRow, i+nStart, aMovedList, pUndoSort);
+            MoveCol(this, aFlatBox, rElem.nRow, i+nStart, aMovedList, pUndoSort);
         }
+        ++i;
     }
 
     // Restore table frames:
@@ -741,9 +742,8 @@ void MoveCell(SwDoc* pDoc, const SwTableBox* pSource, const SwTableBox* pTar,
 }
 
 /// Generate two-dimensional array of FndBoxes
-FlatFndBox::FlatFndBox(SwDoc* pDocPtr, const FndBox_& rBox) :
+FlatFndBox::FlatFndBox(SwDoc* pDocPtr, const FndBox_& rBoxRef) :
     pDoc(pDocPtr),
-    rBoxRef(rBox),
     nRow(0),
     nCol(0)
 { // If the array is symmetric
@@ -850,7 +850,7 @@ sal_uInt16 FlatFndBox::GetRowCount(const FndBox_& rBox)
         sal_uInt16 nLn = 1;
         for (const auto &rpB : rBoxes)
         {
-            if (rpB->GetLines().size())
+            if (!rpB->GetLines().empty())
             {   // Iterate recursively over the Lines
                 nLn = std::max(GetRowCount(*rpB), nLn);
             }

@@ -94,7 +94,6 @@ struct ColumnInfo{
  * to use @ref Open(), @ref InfoRead(), @ref FontRead(), @ref StyleRead(), @ref ParaListRead(), @ref TagsRead(),
  *
  * @short HWP file management object
- * @author Mizi Reserach
  */
 class DLLEXPORT HWPFile
 {
@@ -112,7 +111,7 @@ class DLLEXPORT HWPFile
  * @returns 0 if success, otherwise error code
  * @see State()
  */
-        int Open( HStream * );
+        int Open( std::unique_ptr<HStream> );
 
 /**
  * Say current state
@@ -157,7 +156,7 @@ class DLLEXPORT HWPFile
 /**
  * Reads main paragraph list
  */
-        bool ReadParaList(std::vector<std::unique_ptr<HWPPara>> &aplist, unsigned char flag = 0);
+        void ReadParaList(std::vector<std::unique_ptr<HWPPara>> &aplist, unsigned char flag = 0);
         void ReadParaList(std::vector<HWPPara*> &aplist);
 /**
  * Sets if the stream is compressed
@@ -166,12 +165,12 @@ class DLLEXPORT HWPFile
 /**
  * Sets current HIODev
  */
-        HIODev *SetIODevice( HIODev *hiodev );
+        std::unique_ptr<HIODev> SetIODevice( std::unique_ptr<HIODev> hiodev );
 
 /**
  * Reads all information of hwp file from stream
  */
-        int ReadHwpFile( HStream *);
+        int ReadHwpFile( std::unique_ptr<HStream> );
 /**
  * Reads document information of hwp file from HIODev
  */

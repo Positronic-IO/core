@@ -24,6 +24,8 @@
 #include <vector>
 #include <basic/sbxvar.hxx>
 #include <unotools/syslocale.hxx>
+#include <rtl/ustrbuf.hxx>
+#include <tools/solar.h>
 #include "swdllapi.h"
 
 class CharClass;
@@ -182,7 +184,8 @@ extern "C" typedef double (*pfCalc)(double);
 class SwCalc
 {
     SwHashTable<SwCalcExp> m_aVarTable;
-    OUString    m_aVarName, m_sCurrSym;
+    OUStringBuffer m_aVarName;
+    OUString    m_sCurrSym;
     OUString    m_sCommand;
     std::vector<const SwUserFieldType*> m_aRekurStack;
     SwSbxValue  m_nLastLeft;
@@ -191,7 +194,7 @@ class SwCalc
     sal_Int32   m_nCommandPos;
 
     SwDoc&      m_rDoc;
-    SvtSysLocale m_aSysLocale;
+    SvtSysLocale const m_aSysLocale;
     const LocaleDataWrapper* m_pLocaleDataWrapper;
     CharClass*  m_pCharClass;
 
@@ -214,8 +217,8 @@ class SwCalc
     SwCalc& operator=( const SwCalc& ) = delete;
 
 public:
-        SwCalc( SwDoc& rD );
-        ~SwCalc();
+    SwCalc(SwDoc& rD);
+    ~SwCalc() COVERITY_NOEXCEPT_FALSE;
 
     SwSbxValue  Calculate( const OUString &rStr );
     OUString    GetStrResult( const SwSbxValue& rValue );
@@ -229,6 +232,7 @@ public:
 
     bool        Push(const SwUserFieldType* pUserFieldType);
     void        Pop();
+    CharClass* GetCharClass();
 
     void        SetCalcError( SwCalcError eErr )    { m_eError = eErr; }
     bool        IsCalcError() const                 { return SwCalcError::NONE != m_eError; }

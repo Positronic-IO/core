@@ -21,6 +21,7 @@
 
 #include <vcl/texteng.hxx>
 #include <vcl/textview.hxx>
+#include <vcl/commandevent.hxx>
 #include "textdoc.hxx"
 #include "textdat2.hxx"
 #include "textundo.hxx"
@@ -29,6 +30,9 @@
 #include <vcl/window.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/edit.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
+#include <o3tl/make_unique.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/beans/PropertyValues.hpp>
@@ -64,13 +68,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
 TextEngine::TextEngine()
-    : mpDoc {nullptr}
-    , mpTEParaPortions {nullptr}
-    , mpViews {nullptr}
-    , mpActiveView {nullptr}
-    , mpUndoManager {nullptr}
-    , mpIdleFormatter {nullptr}
-    , mpLocaleDataWrapper {nullptr}
+    : mpActiveView {nullptr}
     , maTextColor {COL_BLACK}
     , mnMaxTextLen {0}
     , mnMaxTextWidth {0}
@@ -219,7 +217,7 @@ void TextEngine::SetMaxTextLen( sal_Int32 nLen )
 
 void TextEngine::SetMaxTextWidth( long nMaxWidth )
 {
-    if ( nMaxWidth != mnMaxTextWidth )
+    if ( nMaxWidth>=0 && nMaxWidth != mnMaxTextWidth )
     {
         mnMaxTextWidth = nMaxWidth;
         FormatFullDoc();
@@ -231,7 +229,7 @@ static const sal_Unicode static_aLFText[] = { '\n', 0 };
 static const sal_Unicode static_aCRText[] = { '\r', 0 };
 static const sal_Unicode static_aCRLFText[] = { '\r', '\n', 0 };
 
-static inline const sal_Unicode* static_getLineEndText( LineEnd aLineEnd )
+static const sal_Unicode* static_getLineEndText( LineEnd aLineEnd )
 {
     const sal_Unicode* pRet = nullptr;
 
@@ -262,7 +260,7 @@ OUString TextEngine::GetText( LineEnd aSeparator ) const
 
 OUString TextEngine::GetTextLines( LineEnd aSeparator ) const
 {
-    OUString aText;
+    OUStringBuffer aText;
     const sal_uInt32 nParas = mpTEParaPortions->Count();
     const sal_Unicode* pSep = static_getLineEndText( aSeparator );
     for ( sal_uInt32 nP = 0; nP < nParas; ++nP )
@@ -273,12 +271,12 @@ OUString TextEngine::GetTextLines( LineEnd aSeparator ) const
         for ( size_t nL = 0; nL < nLines; ++nL )
         {
             TextLine& rLine = pTEParaPortion->GetLines()[nL];
-            aText += pTEParaPortion->GetNode()->GetText().copy( rLine.GetStart(), rLine.GetEnd() - rLine.GetStart() );
+            aText.appendCopy( pTEParaPortion->GetNode()->GetText(), rLine.GetStart(), rLine.GetEnd() - rLine.GetStart() );
             if ( pSep && ( ( (nP+1) < nParas ) || ( (nL+1) < nLines ) ) )
-                aText += pSep;
+                aText.append(pSep);
         }
     }
-    return aText;
+    return aText.makeStringAndClear();
 }
 
 OUString TextEngine::GetText( sal_uInt32 nPara ) const
@@ -361,13 +359,9 @@ bool TextEngine::DoesKeyChangeText( const KeyEvent& rKeyEvent )
 
 bool TextEngine::IsSimpleCharInput( const KeyEvent& rKeyEvent )
 {
-    if( rKeyEvent.GetCharCode() >= 32 && rKeyEvent.GetCharCode() != 127 &&
+    return rKeyEvent.GetCharCode() >= 32 && rKeyEvent.GetCharCode() != 127 &&
         KEY_MOD1 != (rKeyEvent.GetKeyCode().GetModifier() & ~KEY_SHIFT) && // (ssa) #i45714#:
-        KEY_MOD2 != (rKeyEvent.GetKeyCode().GetModifier() & ~KEY_SHIFT) )  // check for Ctrl and Alt separately
-    {
-        return true;
-    }
-    return false;
+        KEY_MOD2 != (rKeyEvent.GetKeyCode().GetModifier() & ~KEY_SHIFT);  // check for Ctrl and Alt separately
 }
 
 void TextEngine::ImpInitDoc()
@@ -393,14 +387,13 @@ void TextEngine::ImpInitDoc()
 
 OUString TextEngine::GetText( const TextSelection& rSel, LineEnd aSeparator ) const
 {
-    OUString aText;
-
     if ( !rSel.HasRange() )
-        return aText;
+        return OUString();
 
     TextSelection aSel( rSel );
     aSel.Justify();
 
+    OUStringBuffer aText;
     const sal_uInt32 nStartPara = aSel.GetStart().GetPara();
     const sal_uInt32 nEndPara = aSel.GetEnd().GetPara();
     const sal_Unicode* pSep = static_getLineEndText( aSeparator );
@@ -415,11 +408,11 @@ OUString TextEngine::GetText( const TextSelection& rSel, LineEnd aSeparator ) co
         if ( nNode == nEndPara ) // may also be == nStart!
             nEndPos = aSel.GetEnd().GetIndex();
 
-        aText += pNode->GetText().copy( nStartPos, nEndPos-nStartPos );
+        aText.appendCopy(pNode->GetText(), nStartPos, nEndPos-nStartPos);
         if ( nNode < nEndPara )
-            aText += pSep;
+            aText.append(pSep);
     }
-    return aText;
+    return aText.makeStringAndClear();
 }
 
 void TextEngine::ImpRemoveText()
@@ -494,7 +487,7 @@ void TextEngine::ImpRemoveChars( const TextPaM& rPaM, sal_Int32 nChars )
                 break;  // for
             }
         }
-        InsertUndo( new TextUndoRemoveChars( this, rPaM, aStr ) );
+        InsertUndo( o3tl::make_unique<TextUndoRemoveChars>( this, rPaM, aStr ) );
     }
 
     mpDoc->RemoveChars( rPaM, nChars );
@@ -509,7 +502,7 @@ TextPaM TextEngine::ImpConnectParagraphs( sal_uInt32 nLeft, sal_uInt32 nRight )
     TextNode* pRight = mpDoc->GetNodes()[ nRight ].get();
 
     if ( IsUndoEnabled() && !IsInUndo() )
-        InsertUndo( new TextUndoConnectParas( this, nLeft, pLeft->GetText().getLength() ) );
+        InsertUndo( o3tl::make_unique<TextUndoConnectParas>( this, nLeft, pLeft->GetText().getLength() ) );
 
     // first lookup Portions, as pRight is gone after ConnectParagraphs
     TEParaPortion* pLeftPortion = mpTEParaPortions->GetObject( nLeft );
@@ -604,7 +597,7 @@ void TextEngine::ImpRemoveParagraph( sal_uInt32 nPara )
     // the Node is handled by Undo and is deleted if appropriate
     mpDoc->GetNodes().erase( mpDoc->GetNodes().begin() + nPara );
     if ( IsUndoEnabled() && !IsInUndo() )
-        InsertUndo( new TextUndoDelPara( this, pNode.release(), nPara ) );
+        InsertUndo( o3tl::make_unique<TextUndoDelPara>( this, pNode.release(), nPara ) );
 
     mpTEParaPortions->Remove( nPara );
 
@@ -726,9 +719,9 @@ TextPaM TextEngine::ImpInsertText( sal_Unicode c, const TextSelection& rCurSel, 
 
     if ( IsUndoEnabled() && !IsInUndo() )
     {
-        TextUndoInsertChars* pNewUndo = new TextUndoInsertChars( this, aPaM, OUString(c) );
+        std::unique_ptr<TextUndoInsertChars> pNewUndo(new TextUndoInsertChars( this, aPaM, OUString(c) ));
         bool bTryMerge = !bDoOverwrite && ( c != ' ' );
-        InsertUndo( pNewUndo, bTryMerge );
+        InsertUndo( std::move(pNewUndo), bTryMerge );
     }
 
     TEParaPortion* pPortion = mpTEParaPortions->GetObject( aPaM.GetPara() );
@@ -771,7 +764,7 @@ TextPaM TextEngine::ImpInsertText( const TextSelection& rCurSel, const OUString&
         {
             OUString aLine(aText.copy(nStart, nEnd-nStart));
             if ( IsUndoEnabled() && !IsInUndo() )
-                InsertUndo( new TextUndoInsertChars( this, aPaM, aLine ) );
+                InsertUndo( o3tl::make_unique<TextUndoInsertChars>( this, aPaM, aLine ) );
 
             TEParaPortion* pPortion = mpTEParaPortions->GetObject( aPaM.GetPara() );
             pPortion->MarkInvalid( aPaM.GetIndex(), aLine.getLength() );
@@ -811,7 +804,7 @@ TextPaM TextEngine::ImpInsertParaBreak( const TextSelection& rCurSel )
 TextPaM TextEngine::ImpInsertParaBreak( const TextPaM& rPaM )
 {
     if ( IsUndoEnabled() && !IsInUndo() )
-        InsertUndo( new TextUndoSplitPara( this, rPaM.GetPara(), rPaM.GetIndex() ) );
+        InsertUndo( o3tl::make_unique<TextUndoSplitPara>( this, rPaM.GetPara(), rPaM.GetIndex() ) );
 
     TextNode* pNode = mpDoc->GetNodes()[ rPaM.GetPara() ].get();
     bool bFirstParaContentChanged = rPaM.GetIndex() < pNode->GetText().getLength();
@@ -952,11 +945,8 @@ long TextEngine::ImpGetXPos( sal_uInt32 nPara, TextLine* pLine, sal_Int32 nIndex
                 if ( ( pPortion->GetKind() == PORTIONKIND_TAB ) && ( (nTextPortion+1) < pParaPortion->GetTextPortions().size() ) )
                 {
                     TETextPortion* pNextPortion = pParaPortion->GetTextPortions()[ nTextPortion+1 ];
-                    if ( ( pNextPortion->GetKind() != PORTIONKIND_TAB ) && (
-                              ( !IsRightToLeft() && pNextPortion->IsRightToLeft() ) ||
-                              ( IsRightToLeft() && !pNextPortion->IsRightToLeft() ) ) )
+                    if (pNextPortion->GetKind() != PORTIONKIND_TAB && IsRightToLeft() != pNextPortion->IsRightToLeft())
                     {
-//                        nX += pNextPortion->GetWidth();
                         // End of the tab portion, use start of next for cursor pos
                         SAL_WARN_IF( bPreferPortionStart, "vcl", "ImpGetXPos: How can we get here!" );
                         nX = ImpGetXPos( nPara, pLine, nIndex, true );
@@ -971,8 +961,7 @@ long TextEngine::ImpGetXPos( sal_uInt32 nPara, TextLine* pLine, sal_Int32 nIndex
 
             long nPosInPortion = CalcTextWidth( nPara, nTextPortionStart, nIndex-nTextPortionStart );
 
-            if ( ( !IsRightToLeft() && !pPortion->IsRightToLeft() ) ||
-                 ( IsRightToLeft() && pPortion->IsRightToLeft() ) )
+            if (IsRightToLeft() == pPortion->IsRightToLeft())
             {
                 nX += nPosInPortion;
             }
@@ -984,9 +973,7 @@ long TextEngine::ImpGetXPos( sal_uInt32 nPara, TextLine* pLine, sal_Int32 nIndex
     }
     else // if ( nIndex == pLine->GetStart() )
     {
-        if ( ( pPortion->GetKind() != PORTIONKIND_TAB ) &&
-                ( ( !IsRightToLeft() && pPortion->IsRightToLeft() ) ||
-                ( IsRightToLeft() && !pPortion->IsRightToLeft() ) ) )
+        if (pPortion->GetKind() != PORTIONKIND_TAB && IsRightToLeft() != pPortion->IsRightToLeft())
         {
             nX += nPortionTextWidth;
         }
@@ -1297,7 +1284,7 @@ void TextEngine::EnableUndo( bool bEnable )
     mbUndoEnabled = bEnable;
 }
 
-::svl::IUndoManager& TextEngine::GetUndoManager()
+SfxUndoManager& TextEngine::GetUndoManager()
 {
     if ( !mpUndoManager )
         mpUndoManager.reset( new TextUndoManager( this ) );
@@ -1318,10 +1305,10 @@ void TextEngine::UndoActionEnd()
         GetUndoManager().LeaveListAction();
 }
 
-void TextEngine::InsertUndo( TextUndo* pUndo, bool bTryMerge )
+void TextEngine::InsertUndo( std::unique_ptr<TextUndo> pUndo, bool bTryMerge )
 {
     SAL_WARN_IF( IsInUndo(), "vcl", "InsertUndo: in Undo mode!" );
-    GetUndoManager().AddUndoAction( pUndo, bTryMerge );
+    GetUndoManager().AddUndoAction( std::move(pUndo), bTryMerge );
 }
 
 void TextEngine::ResetUndo()
@@ -2015,25 +2002,21 @@ void TextEngine::ImpPaint( OutputDevice* pOutDev, const Point& rStartPos, tools:
                                     break;
                                 case PORTIONKIND_TAB:
                                     // for HideSelection() only Range, pSelection = 0.
-                                    if ( pSelStart )
+                                    if ( pSelStart ) // also implies pSelEnd
                                     {
                                         const tools::Rectangle aTabArea( aTmpPos, Point( aTmpPos.X()+nTxtWidth, aTmpPos.Y()+mnCharHeight-1 ) );
-                                        bool bDone = false;
-                                        if ( pSelStart )
+                                        // is the Tab in the Selection???
+                                        const TextPaM aTextStart(nPara, nIndex);
+                                        const TextPaM aTextEnd(nPara, nIndex + 1);
+                                        if ((aTextStart < *pSelEnd) && (aTextEnd > *pSelStart))
                                         {
-                                            // is the Tab in the Selection???
-                                            const TextPaM aTextStart( nPara, nIndex );
-                                            const TextPaM aTextEnd( nPara, nIndex+1 );
-                                            if ( ( aTextStart < *pSelEnd ) && ( aTextEnd > *pSelStart ) )
-                                            {
-                                                const Color aOldColor = pOutDev->GetFillColor();
-                                                pOutDev->SetFillColor( rStyleSettings.GetHighlightColor() );
-                                                pOutDev->DrawRect( aTabArea );
-                                                pOutDev->SetFillColor( aOldColor );
-                                                bDone = true;
-                                            }
+                                            const Color aOldColor = pOutDev->GetFillColor();
+                                            pOutDev->SetFillColor(
+                                                rStyleSettings.GetHighlightColor());
+                                            pOutDev->DrawRect(aTabArea);
+                                            pOutDev->SetFillColor(aOldColor);
                                         }
-                                        if ( !bDone )
+                                        else
                                         {
                                             pOutDev->Erase( aTabArea );
                                         }
@@ -2079,10 +2062,7 @@ bool TextEngine::CreateLines( sal_uInt32 nPara )
     {
         if ( !pTEParaPortion->GetTextPortions().empty() )
             pTEParaPortion->GetTextPortions().Reset();
-        if ( !pTEParaPortion->GetLines().empty() )
-        {
-            pTEParaPortion->GetLines().clear();
-        }
+        pTEParaPortion->GetLines().clear();
         CreateAndInsertEmptyLine( nPara );
         pTEParaPortion->SetValid();
         return nOldLineCount != pTEParaPortion->GetLines().size();
@@ -2365,7 +2345,7 @@ bool TextEngine::CreateLines( sal_uInt32 nPara )
                                           pTEParaPortion->GetLines().end() );
     }
 
-    SAL_WARN_IF( !pTEParaPortion->GetLines().size(), "vcl", "CreateLines: No Line!" );
+    SAL_WARN_IF( pTEParaPortion->GetLines().empty(), "vcl", "CreateLines: No Line!" );
 
     pTEParaPortion->SetValid();
 
@@ -2545,7 +2525,7 @@ void TextEngine::SetAttrib( const TextAttrib& rAttr, sal_uInt32 nPara, sal_Int32
         if ( nEnd > nMax )
             nEnd = nMax;
 
-        pNode->GetCharAttribs().InsertAttrib( new TextCharAttrib( rAttr, nStart, nEnd ) );
+        pNode->GetCharAttribs().InsertAttrib( o3tl::make_unique<TextCharAttrib>( rAttr, nStart, nEnd ) );
         pTEParaPortion->MarkSelectionInvalid( nStart );
 
         mbFormatted = false;

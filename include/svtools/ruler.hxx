@@ -21,6 +21,7 @@
 #define INCLUDED_SVTOOLS_RULER_HXX
 
 #include <memory>
+#include <map>
 #include <svtools/svtdllapi.h>
 #include <rtl/ref.hxx>
 #include <tools/link.hxx>
@@ -28,6 +29,8 @@
 #include <vcl/window.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/field.hxx>
+#include <vcl/glyphitem.hxx>
+#include <vcl/vcllayout.hxx>
 
 #include <svtools/accessibleruler.hxx>
 
@@ -108,15 +111,15 @@ The values are computed as described below:
 SetUnit() and SetZoom() configure which unit is used to display
 the values on the ruler. The following units are accepted:
 
-    FUNIT_MM
-    FUNIT_CM (Default)
-    FUNIT_M
-    FUNIT_KM
-    FUNIT_INCH
-    FUNIT_FOOT
-    FUNIT_MILE
-    FUNIT_POINT
-    FUNIT_PICA
+    FieldUnit::MM
+    FieldUnit::CM (Default)
+    FieldUnit::M
+    FieldUnit::KM
+    FieldUnit::INCH
+    FieldUnit::FOOT
+    FieldUnit::MILE
+    FieldUnit::POINT
+    FieldUnit::PICA
 
 --------------------------------------------------------------------------
 
@@ -547,7 +550,6 @@ struct RulerTab
 struct RulerLine
 {
     long    nPos;
-    sal_uInt16  nStyle;
 };
 
 
@@ -575,13 +577,13 @@ struct RulerSelection
 
 struct RulerUnitData
 {
-    MapUnit         eMapUnit;           // MAP_UNIT for calculation
-    long            nTickUnit;          // Unit divider
-    double          nTick1;             // Minimal step
-    double          nTick2;             // Tick quarter unit
-    double          nTick3;             // Tick half unit
-    double          nTick4;             // Tick whole unit
-    sal_Char        aUnitStr[8];        // Unit string
+    MapUnit const         eMapUnit;           // MAP_UNIT for calculation
+    long const            nTickUnit;          // Unit divider
+    double const          nTick1;             // Minimal step
+    double const          nTick2;             // Tick quarter unit
+    double const          nTick3;             // Tick half unit
+    double const          nTick4;             // Tick whole unit
+    sal_Char const        aUnitStr[8];        // Unit string
 };
 
 
@@ -625,7 +627,6 @@ private:
     long            mnBorderWidth;
     long            mnStartDragPos;
     long            mnDragPos;
-    ImplSVEvent *   mnUpdateEvtId;
     std::unique_ptr<ImplRulerData>  mpSaveData;
     ImplRulerData*  mpData;
     std::unique_ptr<ImplRulerData>  mpDragData;
@@ -660,6 +661,8 @@ private:
     std::unique_ptr<RulerSelection> mxPreviousHitTest;
 
     rtl::Reference<SvtRulerAccessible> mxAccContext;
+
+    std::map<OUString, SalLayoutGlyphs> maTextGlyphs;
 
     SVT_DLLPRIVATE void ImplVDrawLine(vcl::RenderContext& rRenderContext,  long nX1, long nY1, long nX2, long nY2 );
     SVT_DLLPRIVATE void ImplVDrawRect(vcl::RenderContext& rRenderContext, long nX1, long nY1, long nX2, long nY2 );

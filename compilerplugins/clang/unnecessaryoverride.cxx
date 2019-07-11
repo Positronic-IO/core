@@ -64,16 +64,15 @@ bool hasMultipleBaseInstances(
 }
 
 class UnnecessaryOverride:
-    public RecursiveASTVisitor<UnnecessaryOverride>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<UnnecessaryOverride>
 {
 public:
-    explicit UnnecessaryOverride(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit UnnecessaryOverride(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override
     {
         // ignore some files with problematic macros
-        StringRef fn( compiler.getSourceManager().getFileEntryForID(
-                          compiler.getSourceManager().getMainFileID())->getName() );
+        StringRef fn(handler.getMainFileName());
         if (loplugin::isSamePathname(fn, SRCDIR "/sd/source/ui/framework/factories/ChildWindowPane.cxx"))
              return;
         if (loplugin::isSamePathname(fn, SRCDIR "/forms/source/component/Date.cxx"))
@@ -113,7 +112,8 @@ bool UnnecessaryOverride::VisitCXXMethodDecl(const CXXMethodDecl* methodDecl)
         return true;
     }
 
-    StringRef aFileName = compiler.getSourceManager().getFilename(compiler.getSourceManager().getSpellingLoc(methodDecl->getLocStart()));
+    StringRef aFileName = getFileNameOfSpellingLoc(
+        compiler.getSourceManager().getSpellingLoc(compat::getBeginLoc(methodDecl)));
 
     if (isa<CXXDestructorDecl>(methodDecl)
        && !isInUnoIncludeFile(methodDecl))
@@ -389,7 +389,8 @@ const CXXMethodDecl* UnnecessaryOverride::findOverriddenOrSimilarMethodInSupercl
         return nullptr;
     }
 
-    std::vector<const CXXMethodDecl*> maSimilarMethods;
+    const CXXMethodDecl* similarMethod = nullptr;
+    CXXBasePath similarBasePath;
 
     auto BaseMatchesCallback = [&](const CXXBaseSpecifier *cxxBaseSpecifier, CXXBasePath& path)
     {
@@ -438,18 +439,31 @@ const CXXMethodDecl* UnnecessaryOverride::findOverriddenOrSimilarMethodInSupercl
                 }
             }
             if (bParamsMatch)
-                maSimilarMethods.push_back(baseMethod);
+            {
+                // if we have already found a method directly below us in the inheritance hierarchy, just ignore this one
+                auto Compare = [&](CXXBasePathElement const & lhs, CXXBasePathElement const & rhs)
+                {
+                    return lhs.Class == rhs.Class;
+                };
+                if (similarMethod
+                    && similarBasePath.size() < path.size()
+                    && std::equal(similarBasePath.begin(), similarBasePath.end(),
+                                  path.begin(), Compare))
+                    break;
+                if (similarMethod)
+                    return true; // short circuit the process
+                similarMethod = baseMethod;
+                similarBasePath = path;
+            }
         }
         return false;
     };
 
     CXXBasePaths aPaths;
-    methodDecl->getParent()->lookupInBases(BaseMatchesCallback, aPaths);
+    if (methodDecl->getParent()->lookupInBases(BaseMatchesCallback, aPaths))
+        return nullptr;
 
-    if (maSimilarMethods.size() == 1) {
-        return maSimilarMethods[0];
-    }
-    return nullptr;
+    return similarMethod;
 }
 
 

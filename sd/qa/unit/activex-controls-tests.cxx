@@ -97,7 +97,6 @@ void SdActiveXControlsTest::testBackgroundColor()
     for (size_t i = 0; i < vBackgroundColors.size(); ++i)
     {
         uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(i, 0, xDocShRef), uno::UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xControlShape.is());
 
         uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
         sal_Int32 nColor;
@@ -115,7 +114,6 @@ void SdActiveXControlsTest::testLabelProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sLabel;
@@ -151,7 +149,6 @@ void SdActiveXControlsTest::testLabelProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Label") >>= sLabel;
@@ -184,7 +181,6 @@ void SdActiveXControlsTest::testLabelProperties()
 
     // Third control has transparent background
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     CPPUNIT_ASSERT_EQUAL(false, xPropertySet->getPropertyValue("BackgroundColor") >>= nColor);
@@ -198,7 +194,6 @@ void SdActiveXControlsTest::testTextBoxProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sText;
@@ -257,7 +252,6 @@ void SdActiveXControlsTest::testTextBoxProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Text") >>= sText;
@@ -266,8 +260,9 @@ void SdActiveXControlsTest::testTextBoxProperties()
     xPropertySet->getPropertyValue("Enabled") >>= bEnabled;
     CPPUNIT_ASSERT_EQUAL(false, bEnabled);
 
+    // These textfields are not multilines in the pptx testfile
     xPropertySet->getPropertyValue("MultiLine") >>= bMultiLine;
-    CPPUNIT_ASSERT_EQUAL(true, bMultiLine);
+    CPPUNIT_ASSERT_EQUAL(false, bMultiLine);
 
     xPropertySet->getPropertyValue("TextColor") >>= nColor;
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0x404040), nColor);
@@ -303,7 +298,6 @@ void SdActiveXControlsTest::testTextBoxProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     // Transparent background
@@ -320,7 +314,6 @@ void SdActiveXControlsTest::testTextBoxProperties()
 
     // Fourth shape has both scroll bar
     xControlShape.set(getShapeFromPage(3, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("HScroll") >>= bHScroll;
@@ -338,7 +331,6 @@ void SdActiveXControlsTest::testSpinButtonProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     bool bEnabled;
@@ -383,7 +375,6 @@ void SdActiveXControlsTest::testSpinButtonProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Enabled") >>= bEnabled;
@@ -418,7 +409,6 @@ void SdActiveXControlsTest::testSpinButtonProperties()
 
     // Third control has horizontal orientation
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Orientation") >>= nOrientation;
@@ -433,7 +423,6 @@ void SdActiveXControlsTest::testCommandButtonProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sLabel;
@@ -465,7 +454,6 @@ void SdActiveXControlsTest::testCommandButtonProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Label") >>= sLabel;
@@ -491,7 +479,6 @@ void SdActiveXControlsTest::testCommandButtonProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     // Transparent background
@@ -507,7 +494,6 @@ void SdActiveXControlsTest::testScrollBarProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     bool bEnabled;
@@ -559,7 +545,6 @@ void SdActiveXControlsTest::testScrollBarProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Enabled") >>= bEnabled;
@@ -600,7 +585,6 @@ void SdActiveXControlsTest::testScrollBarProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Orientation") >>= nOrientation;
@@ -618,7 +602,6 @@ void SdActiveXControlsTest::testCheckBoxProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sLabel;
@@ -658,7 +641,6 @@ void SdActiveXControlsTest::testCheckBoxProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Label") >>= sLabel;
@@ -690,7 +672,6 @@ void SdActiveXControlsTest::testCheckBoxProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("TriState") >>= bTriState;
@@ -714,7 +695,6 @@ void SdActiveXControlsTest::testOptionButtonProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sLabel;
@@ -750,7 +730,6 @@ void SdActiveXControlsTest::testOptionButtonProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Label") >>= sLabel;
@@ -779,7 +758,6 @@ void SdActiveXControlsTest::testOptionButtonProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("State") >>= nState;
@@ -800,7 +778,6 @@ void SdActiveXControlsTest::testComboBoxProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     bool bEnabled;
@@ -852,7 +829,6 @@ void SdActiveXControlsTest::testComboBoxProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Enabled") >>= bEnabled;
@@ -893,7 +869,6 @@ void SdActiveXControlsTest::testComboBoxProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Autocomplete") >>= bAutocomplete;
@@ -917,7 +892,6 @@ void SdActiveXControlsTest::testListBoxProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     bool bEnabled;
@@ -961,7 +935,6 @@ void SdActiveXControlsTest::testListBoxProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Enabled") >>= bEnabled;
@@ -990,7 +963,6 @@ void SdActiveXControlsTest::testListBoxProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("MultiSelection") >>= bMultiSelection;
@@ -1008,7 +980,6 @@ void SdActiveXControlsTest::testToggleButtonProperties()
 
     // First control has default properties
     uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(0, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
     OUString sLabel;
@@ -1044,7 +1015,6 @@ void SdActiveXControlsTest::testToggleButtonProperties()
 
     // Second control has custom properties
     xControlShape.set(getShapeFromPage(1, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("Label") >>= sLabel;
@@ -1073,7 +1043,6 @@ void SdActiveXControlsTest::testToggleButtonProperties()
 
     // Third shape has some other custom properties
     xControlShape.set(getShapeFromPage(2, 0, xDocShRef), uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
     xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY);
 
     xPropertySet->getPropertyValue("State") >>= nState;
@@ -1116,7 +1085,6 @@ void SdActiveXControlsTest::testPictureProperties()
     for (size_t i = 0; i < vImagePositions.size(); ++i)
     {
         uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(i, 0, xDocShRef), uno::UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xControlShape.is());
         uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
         uno::Reference<graphic::XGraphic> xGraphic;
@@ -1133,7 +1101,6 @@ void SdActiveXControlsTest::testPictureProperties()
     for (size_t i = 0; i < 4; ++i)
     {
         uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(vImagePositions.size() + i, 0, xDocShRef), uno::UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xControlShape.is());
         uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
         OString sMessage = "The wrong control's index is: " + OString::number(i);
@@ -1170,7 +1137,6 @@ void SdActiveXControlsTest::testFontProperties()
     for (size_t i = 0; i < 8; ++i)
     {
         uno::Reference< drawing::XControlShape > xControlShape(getShapeFromPage(i, 0, xDocShRef), uno::UNO_QUERY_THROW);
-        CPPUNIT_ASSERT(xControlShape.is());
         uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
 
         OString sMessage = "The wrong control's index is: " + OString::number(i);

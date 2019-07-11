@@ -18,7 +18,7 @@
  */
 
 #include <chartview/DrawModelWrapper.hxx>
-#include <AbstractShapeFactory.hxx>
+#include <ShapeFactory.hxx>
 #include "ChartItemPool.hxx"
 #include <ObjectIdentifier.hxx>
 #include <svx/unomodel.hxx>
@@ -50,10 +50,8 @@ namespace chart
 {
 
 DrawModelWrapper::DrawModelWrapper()
-        : SdrModel( SvtPathOptions().GetPalettePath(), nullptr, nullptr, false )
-        , m_pChartItemPool(nullptr)
-        , m_xMainDrawPage(nullptr)
-        , m_xHiddenDrawPage(nullptr)
+:   SdrModel()
+    , m_pChartItemPool(nullptr)
 {
     m_pChartItemPool = ChartItemPool::CreateChartItemPool();
 
@@ -188,7 +186,7 @@ uno::Reference< drawing::XDrawPage > const & DrawModelWrapper::getMainDrawPage()
     //ensure that additional shapes are in front of the chart objects so create the chart root before
     // let us disable this call for now
     // TODO:moggi
-    // AbstractShapeFactory::getOrCreateShapeFactory(getShapeFactory())->getOrCreateChartRootShape( m_xMainDrawPage );
+    // ShapeFactory::getOrCreateShapeFactory(getShapeFactory())->getOrCreateChartRootShape( m_xMainDrawPage );
     return m_xMainDrawPage;
 }
 uno::Reference< drawing::XDrawPage > const & DrawModelWrapper::getHiddenDrawPage()
@@ -218,7 +216,7 @@ uno::Reference< drawing::XDrawPage > const & DrawModelWrapper::getHiddenDrawPage
 void DrawModelWrapper::clearMainDrawPage()
 {
     //uno::Reference<drawing::XShapes> xChartRoot( m_xMainDrawPage, uno::UNO_QUERY );
-    uno::Reference<drawing::XShapes> xChartRoot( AbstractShapeFactory::getChartRootShape( m_xMainDrawPage ) );
+    uno::Reference<drawing::XShapes> xChartRoot( ShapeFactory::getChartRootShape( m_xMainDrawPage ) );
     if( xChartRoot.is() )
     {
         sal_Int32 nSubCount = xChartRoot->getCount();
@@ -234,7 +232,7 @@ void DrawModelWrapper::clearMainDrawPage()
 uno::Reference< drawing::XShapes > DrawModelWrapper::getChartRootShape(
     const uno::Reference< drawing::XDrawPage>& xDrawPage )
 {
-    return AbstractShapeFactory::getChartRootShape( xDrawPage );
+    return ShapeFactory::getChartRootShape( xDrawPage );
 }
 
 void DrawModelWrapper::lockControllers()

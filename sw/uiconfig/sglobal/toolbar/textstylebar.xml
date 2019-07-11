@@ -17,7 +17,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
 -->
-<toolbar:toolbar xmlns:toolbar="http://openoffice.org/2001/toolbar" xmlns:xlink="http://www.w3.org/1999/xlink" toolbar:id="toolbar">
+<toolbar:toolbar xmlns:toolbar="http://openoffice.org/2001/toolbar" xmlns:xlink="http://www.w3.org/1999/xlink">
  <toolbar:toolbaritem xlink:href=".uno:DesignerDialog"/>
  <toolbar:toolbarseparator/>
  <toolbar:toolbaritem xlink:href=".uno:StyleApply"/>
@@ -73,9 +73,13 @@
  <!-- These command can be enabled when tdf#107000 is fixed -->
  <toolbar:toolbaritem xlink:href=".uno:StyleApply" toolbar:text="List Styles" toolbar:visible="false"/>
  <toolbar:toolbarseparator/>
- <toolbar:toolbaritem xlink:href=".uno:BulletListStyle" toolbar:text="Bullet"/>
- <toolbar:toolbaritem xlink:href=".uno:NumberListStyle" toolbar:text="Number"/>
- <toolbar:toolbaritem xlink:href=".uno:RomanListStyle" toolbar:text="Roman"/>
+ <toolbar:toolbaritem xlink:href=".uno:BulletListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:NumberListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:AlphaListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:AlphaLowListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:RomanListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:RomanLowListStyle"/>
+ <toolbar:toolbaritem xlink:href=".uno:RemoveBullets"/>
  <toolbar:toolbarseparator/>
  <toolbar:toolbaritem xlink:href=".uno:LeftPara"/>
  <toolbar:toolbaritem xlink:href=".uno:CenterPara"/>

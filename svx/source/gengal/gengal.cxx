@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <stdio.h>
 #ifndef _WIN32
@@ -56,28 +57,12 @@ protected:
     void DeInit() override;
 };
 
-Gallery* createGallery( const OUString& rURL )
-{
-    return new Gallery( rURL );
-}
-
-void disposeGallery( Gallery* pGallery )
-{
-    delete pGallery;
-}
-
 static void createTheme( const OUString& aThemeName, const OUString& aGalleryURL,
                          const OUString& aDestDir, std::vector<INetURLObject> &rFiles,
                          bool bRelativeURLs )
 {
-    Gallery* pGallery;
+    std::unique_ptr<Gallery> pGallery(new Gallery( aGalleryURL ));
 
-    pGallery = createGallery( aGalleryURL );
-    if (!pGallery ) {
-            fprintf( stderr, "Couldn't create '%s'\n",
-                     OUStringToOString( aGalleryURL, RTL_TEXTENCODING_UTF8 ).getStr() );
-            exit( 1 );
-    }
     fprintf( stderr, "Work on gallery '%s'\n",
              OUStringToOString( aGalleryURL, RTL_TEXTENCODING_UTF8 ).getStr() );
 
@@ -127,8 +112,6 @@ static void createTheme( const OUString& aThemeName, const OUString& aGalleryURL
     }
 
     pGallery->ReleaseTheme( pGalTheme, aListener );
-
-    disposeGallery( pGallery );
 }
 
 static int PrintHelp()
@@ -200,16 +183,16 @@ void GalApp::Init()
         css::ucb::UniversalContentBroker::create(xComponentContext);
     } catch (const uno::Exception &e) {
         fprintf( stderr, "Bootstrap exception '%s'\n",
-                 rtl::OUStringToOString( e.Message, RTL_TEXTENCODING_UTF8 ).getStr() );
+                 OUStringToOString( e.Message, RTL_TEXTENCODING_UTF8 ).getStr() );
         exit( 1 );
     }
 }
 
-std::vector<OUString> ReadResponseFile_Impl(OUString const& rInput)
+static std::vector<OUString> ReadResponseFile_Impl(OUString const& rInput)
 {
     osl::File file(rInput);
     osl::FileBase::RC rc = file.open(osl_File_OpenFlag_Read);
-    OString const uInput(rtl::OUStringToOString(rInput, RTL_TEXTENCODING_UTF8));
+    OString const uInput(OUStringToOString(rInput, RTL_TEXTENCODING_UTF8));
     if (osl::FileBase::E_None != rc)
     {
         fprintf(stderr, "error while opening response file: %s (%d)\n",
@@ -260,7 +243,7 @@ std::vector<OUString> ReadResponseFile_Impl(OUString const& rInput)
     return ret;
 }
 
-void
+static void
 ReadResponseFile(std::vector<INetURLObject> & rFiles, OUString const& rInput)
 {
     std::vector<OUString> files(ReadResponseFile_Impl(rInput));

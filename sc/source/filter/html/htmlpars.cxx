@@ -49,6 +49,7 @@
 #include <vcl/svapp.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/tenccvt.hxx>
+#include <osl/diagnose.h>
 
 #include <rtl/tencinfo.h>
 
@@ -202,7 +203,6 @@ ScHTMLLayoutParser::ScHTMLLayoutParser(
         aPageSize( aPageSizeP ),
         aBaseURL( rBaseURL ),
         xLockedList( new ScRangeList ),
-        pTables( nullptr ),
         pLocalColOffset( new ScHTMLColOffset ),
         nFirstTableCell(0),
         nTableLevel(0),
@@ -214,8 +214,8 @@ ScHTMLLayoutParser::ScHTMLLayoutParser(
         nColOffset(0),
         nColOffsetStart(0),
         nOffsetTolerance( SC_HTML_OFFSET_TOLERANCE_SMALL ),
-        bTabInTabCell( false ),
         bFirstRow( true ),
+        bTabInTabCell( false ),
         bInCell( false ),
         bInTitle( false )
 {
@@ -227,18 +227,17 @@ ScHTMLLayoutParser::~ScHTMLLayoutParser()
 {
     while ( !aTableStack.empty() )
     {
-        ScHTMLTableStackEntry* pS = aTableStack.top();
-        aTableStack.pop();
+        ScHTMLTableStackEntry * pS = aTableStack.top().get();
         if ( pS->pLocalColOffset != pLocalColOffset )
-            delete pS->pLocalColOffset;
-        delete pS;
+             delete pS->pLocalColOffset;
+        aTableStack.pop();
     }
     delete pLocalColOffset;
     if ( pTables )
     {
         for( OuterMap::const_iterator it = pTables->begin(); it != pTables->end(); ++it)
             delete it->second;
-        delete pTables;
+        pTables.reset();
     }
 }
 
@@ -1032,7 +1031,7 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
     {   // Table in Table
         sal_uInt16 nTmpColOffset = nColOffset; // Will be changed in Colonize()
         Colonize(mxActEntry.get());
-        aTableStack.push( new ScHTMLTableStackEntry(
+        aTableStack.push( o3tl::make_unique<ScHTMLTableStackEntry>(
             mxActEntry, xLockedList, pLocalColOffset, nFirstTableCell,
             nRowCnt, nColCntStart, nMaxCol, nTable,
             nTableWidth, nColOffset, nColOffsetStart,
@@ -1088,7 +1087,7 @@ void ScHTMLLayoutParser::TableOn( HtmlImportInfo* pInfo )
             CloseEntry( pInfo );
             NextRow( pInfo );
         }
-        aTableStack.push( new ScHTMLTableStackEntry(
+        aTableStack.push( o3tl::make_unique<ScHTMLTableStackEntry>(
             mxActEntry, xLockedList, pLocalColOffset, nFirstTableCell,
             nRowCnt, nColCntStart, nMaxCol, nTable,
             nTableWidth, nColOffset, nColOffsetStart,
@@ -1141,7 +1140,7 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
     {   // Table in Table done
         if ( !aTableStack.empty() )
         {
-            ScHTMLTableStackEntry* pS = aTableStack.top();
+            std::unique_ptr<ScHTMLTableStackEntry> pS = std::move(aTableStack.top());
             aTableStack.pop();
 
             auto& pE = pS->xCellEntry;
@@ -1151,7 +1150,7 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
                 SCROW nRow = pS->nRowCnt;
                 sal_uInt16 nTab = pS->nTable;
                 if ( !pTables )
-                    pTables = new OuterMap;
+                    pTables.reset( new OuterMap );
                 // Height of outer table
                 OuterMap::const_iterator it = pTables->find( nTab );
                 InnerMap* pTab1;
@@ -1258,12 +1257,10 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
             nColOffsetStart = pS->nColOffsetStart;
             bFirstRow = pS->bFirstRow;
             xLockedList = pS->xLockedList;
-            delete pLocalColOffset;
             pLocalColOffset = pS->pLocalColOffset;
             // mxActEntry is kept around if a table is started in the same row
             // (anything's possible in HTML); will be deleted by CloseEntry
             mxActEntry = pE;
-            delete pS;
         }
         bTabInTabCell = true;
         bInCell = true;
@@ -1275,11 +1272,10 @@ void ScHTMLLayoutParser::TableOff( const HtmlImportInfo* pInfo )
         nTable = 0;
         if ( !aTableStack.empty() )
         {
-            ScHTMLTableStackEntry* pS = aTableStack.top();
-            aTableStack.pop();
+            ScHTMLTableStackEntry* pS = aTableStack.top().get();
             delete pLocalColOffset;
             pLocalColOffset = pS->pLocalColOffset;
-            delete pS;
+            aTableStack.pop();
         }
     }
 }
@@ -1360,7 +1356,7 @@ void ScHTMLLayoutParser::Image( HtmlImportInfo* pInfo )
         pImage->aSize = pDefaultDev->LogicToPixel( pGraphic->GetPrefSize(),
             pGraphic->GetPrefMapMode() );
     }
-    if (mxActEntry->maImageList.size() > 0)
+    if (!mxActEntry->maImageList.empty())
     {
         long nWidth = 0;
         for (std::unique_ptr<ScHTMLImage> & pI : mxActEntry->maImageList)
@@ -1441,7 +1437,7 @@ void ScHTMLLayoutParser::FontOn( HtmlImportInfo* pInfo )
                 case HtmlOptionId::FACE :
                 {
                     const OUString& rFace = rOption.GetString();
-                    OUString aFontName;
+                    OUStringBuffer aFontName;
                     sal_Int32 nPos = 0;
                     while( nPos != -1 )
                     {
@@ -1450,12 +1446,12 @@ void ScHTMLLayoutParser::FontOn( HtmlImportInfo* pInfo )
                         OUString aFName = rFace.getToken( 0, ',', nPos );
                         aFName = comphelper::string::strip(aFName, ' ');
                         if( !aFontName.isEmpty() )
-                            aFontName += ";";
-                        aFontName += aFName;
+                            aFontName.append(";");
+                        aFontName.append(aFName);
                     }
                     if ( !aFontName.isEmpty() )
                         mxActEntry->aItemSet.Put( SvxFontItem( FAMILY_DONTKNOW,
-                            aFontName, EMPTY_OUSTRING, PITCH_DONTKNOW,
+                            aFontName.makeStringAndClear(), EMPTY_OUSTRING, PITCH_DONTKNOW,
                             RTL_TEXTENCODING_DONTKNOW, ATTR_FONT ) );
                 }
                 break;
@@ -1569,7 +1565,7 @@ void ScHTMLLayoutParser::ProcToken( HtmlImportInfo* pInfo )
         break;
         case HtmlTokenId::PARABREAK_OFF:
         {   // We continue vertically after an image
-            if (mxActEntry->maImageList.size() > 0)
+            if (!mxActEntry->maImageList.empty())
                 mxActEntry->maImageList.back()->nDir = nVertical;
         }
         break;
@@ -1651,7 +1647,7 @@ void ScHTMLLayoutParser::ProcToken( HtmlImportInfo* pInfo )
 // HTML DATA QUERY PARSER
 
 template< typename Type >
-inline Type getLimitedValue( const Type& rValue, const Type& rMin, const Type& rMax )
+static Type getLimitedValue( const Type& rValue, const Type& rMin, const Type& rMax )
 { return std::max( std::min( rValue, rMax ), rMin ); }
 
 ScHTMLEntry::ScHTMLEntry( const SfxItemSet& rItemSet, ScHTMLTableId nTableId ) :
@@ -3044,15 +3040,11 @@ class CSSHandler
         }
     };
 
-    typedef std::pair<MemStr, MemStr> SelectorName; // element : class
-    typedef std::vector<SelectorName> SelectorNames;
-    SelectorNames maSelectorNames; /// current selector names.
     MemStr maPropName;  /// current property name.
     MemStr maPropValue; /// current property value.
 
-    ScHTMLStyles& mrStyles;
 public:
-    explicit CSSHandler(ScHTMLStyles& rStyles) : mrStyles(rStyles) {}
+    explicit CSSHandler() {}
 
     static void at_rule_name(const char* /*p*/, size_t /*n*/)
     {
@@ -3075,26 +3067,12 @@ public:
 
     static void begin_block() {}
 
-    void end_block()
-    {
-        maSelectorNames.clear();
-    }
+    static void end_block() {}
 
     static void begin_property() {}
 
     void end_property()
     {
-        SelectorNames::const_iterator itr = maSelectorNames.begin(), itrEnd = maSelectorNames.end();
-        for (; itr != itrEnd; ++itr)
-        {
-            // Add this property to the collection for each selector.
-            const SelectorName& rSelName = *itr;
-            const MemStr& rElem = rSelName.first;
-            const MemStr& rClass = rSelName.second;
-            OUString aName(maPropName.mp, maPropName.mn, RTL_TEXTENCODING_UTF8);
-            OUString aValue(maPropValue.mp, maPropValue.mn, RTL_TEXTENCODING_UTF8);
-            mrStyles.add(rElem.mp, rElem.mn, rClass.mp, rClass.mn, aName, aValue);
-        }
         maPropName = MemStr();
         maPropValue = MemStr();
     }
@@ -3133,7 +3111,7 @@ public:
 void ScHTMLQueryParser::ParseStyle(const OUString& rStrm)
 {
     OString aStr = OUStringToOString(rStrm, RTL_TEXTENCODING_UTF8);
-    CSSHandler aHdl(GetStyles());
+    CSSHandler aHdl;
     orcus::css_parser<CSSHandler> aParser(aStr.getStr(), aStr.getLength(), aHdl);
     try
     {

@@ -250,7 +250,7 @@ BorderWindowHitTest ImplBorderWindowView::ImplHitTest( ImplBorderFrameData const
     return BorderWindowHitTest::NONE;
 }
 
-bool ImplBorderWindowView::ImplMouseMove( ImplBorderFrameData* pData, const MouseEvent& rMEvt )
+void ImplBorderWindowView::ImplMouseMove( ImplBorderFrameData* pData, const MouseEvent& rMEvt )
 {
     DrawButtonFlags oldCloseState = pData->mnCloseState;
     DrawButtonFlags oldMenuState = pData->mnMenuState;
@@ -289,8 +289,6 @@ bool ImplBorderWindowView::ImplMouseMove( ImplBorderFrameData* pData, const Mous
         pData->mpBorderWindow->Invalidate( pData->maCloseRect );
     if( pData->mnMenuState != oldMenuState )
         pData->mpBorderWindow->Invalidate( pData->maMenuRect );
-
-    return true;
 }
 
 OUString ImplBorderWindowView::ImplRequestHelp( ImplBorderFrameData const * pData,
@@ -764,7 +762,8 @@ ImplStdBorderWindowView::~ImplStdBorderWindowView()
 
 bool ImplStdBorderWindowView::MouseMove( const MouseEvent& rMEvt )
 {
-    return ImplMouseMove( &maFrameData, rMEvt );
+    ImplMouseMove( &maFrameData, rMEvt );
+    return true;
 }
 
 bool ImplStdBorderWindowView::MouseButtonDown( const MouseEvent& rMEvt )
@@ -822,20 +821,17 @@ bool ImplStdBorderWindowView::MouseButtonDown( const MouseEvent& rMEvt )
             {
                 if ( rMEvt.GetClicks() == 1 )
                 {
-                    if ( bTracking )
-                    {
-                        Point   aPos         = pBorderWindow->GetPosPixel();
-                        Size    aSize        = pBorderWindow->GetOutputSizePixel();
-                        maFrameData.mnTrackX      = aPos.X();
-                        maFrameData.mnTrackY      = aPos.Y();
-                        maFrameData.mnTrackWidth  = aSize.Width();
-                        maFrameData.mnTrackHeight = aSize.Height();
+                    Point aPos  = pBorderWindow->GetPosPixel();
+                    Size  aSize = pBorderWindow->GetOutputSizePixel();
+                    maFrameData.mnTrackX      = aPos.X();
+                    maFrameData.mnTrackY      = aPos.Y();
+                    maFrameData.mnTrackWidth  = aSize.Width();
+                    maFrameData.mnTrackHeight = aSize.Height();
 
-                        if ( maFrameData.mnHitTest & BorderWindowHitTest::Title )
-                            nDragFullTest = DragFullOptions::WindowMove;
-                        else
-                            nDragFullTest = DragFullOptions::WindowSize;
-                    }
+                    if (maFrameData.mnHitTest & BorderWindowHitTest::Title)
+                        nDragFullTest = DragFullOptions::WindowMove;
+                    else
+                        nDragFullTest = DragFullOptions::WindowSize;
                 }
                 else
                 {
@@ -1293,7 +1289,7 @@ void ImplStdBorderWindowView::Init( OutputDevice* pDev, long nWidth, long nHeigh
     else if ( pData->mnTitleType == BorderWindowTitleType::Tearoff )
         pData->mnBorderSize = 0;
     else
-        pData->mnBorderSize = rStyleSettings.GetBorderSize();
+        pData->mnBorderSize = StyleSettings::GetBorderSize();
     pData->mnLeftBorder     = aCalcRect.Left();
     pData->mnTopBorder      = aCalcRect.Top();
     pData->mnRightBorder    = aRect.Right()-aCalcRect.Right();
@@ -1781,6 +1777,21 @@ void ImplBorderWindow::Resize()
         if (mpNotebookBar)
         {
             long nNotebookBarHeight = mpNotebookBar->GetSizePixel().Height();
+
+            const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
+            const BitmapEx& aPersona = rStyleSettings.GetPersonaHeader();
+            // since size of notebookbar changes, to make common persona for menubar
+            // and notebookbar persona should be set again with changed coordinates
+            if (!aPersona.IsEmpty())
+                {
+                    Wallpaper aWallpaper(aPersona);
+                    aWallpaper.SetStyle(WallpaperStyle::TopRight);
+                    aWallpaper.SetRect(tools::Rectangle(Point(0, -nTopBorder),
+                           Size(aSize.Width() - nLeftBorder - nRightBorder,
+                                nNotebookBarHeight + nTopBorder)));
+                    mpNotebookBar->SetBackground(aWallpaper);
+                }
+
             mpNotebookBar->setPosSizePixel(
                     nLeftBorder, nTopBorder,
                     aSize.Width() - nLeftBorder - nRightBorder,

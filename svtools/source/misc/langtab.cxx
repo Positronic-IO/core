@@ -26,10 +26,12 @@
 #include <i18nlangtag/mslangid.hxx>
 #include <i18nlangtag/languagetag.hxx>
 
+#include <sal/log.hxx>
 #include <svtools/strings.hrc>
 #include <svtools/svtresid.hxx>
 #include <svtools/langtab.hxx>
 #include <unotools/syslocale.hxx>
+#include <unotools/charclass.hxx>
 #include <tools/resary.hxx>
 #include <officecfg/VCL.hxx>
 #include <langtab.hrc>
@@ -185,7 +187,7 @@ SvtLanguageTableImpl::SvtLanguageTableImpl()
         {
             LanguageTag aLang(rBcp47);
             LanguageType nLangType = aLang.getLanguageType();
-            if (nType <= LanguageTag::ScriptType::RTL && nType > LanguageTag::ScriptType::UNKNOWN)
+            if (nType <= sal_Int32(LanguageTag::ScriptType::RTL) && nType > sal_Int32(LanguageTag::ScriptType::UNKNOWN))
                 aLang.setScriptType(LanguageTag::ScriptType(nType));
             sal_uInt32 nPos = FindIndex(nLangType);
             if (nPos == RESARRAY_INDEX_NOTFOUND)

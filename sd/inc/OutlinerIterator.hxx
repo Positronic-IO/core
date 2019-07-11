@@ -88,7 +88,7 @@ public:
         @param pObject
             A copy of this object will become the implementation object.
     */
-    explicit Iterator (IteratorImplBase* pObject);
+    explicit Iterator (std::unique_ptr<IteratorImplBase> pObject);
 
     ~Iterator();
 
@@ -193,7 +193,7 @@ public:
 
 private:
     /// The wrapped outliner that is represented as object container.
-    SdOutliner* mpOutliner;
+    SdOutliner* const mpOutliner;
 
     /** Create an iterator.  The object pointed to depends on the search
         direction retrieved from the outliner object

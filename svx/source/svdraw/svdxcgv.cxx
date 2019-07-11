@@ -21,7 +21,6 @@
 #include <editeng/editdata.hxx>
 #include <editeng/editeng.hxx>
 #include <rtl/strbuf.hxx>
-#include <svx/xexch.hxx>
 #include <svx/xflclit.hxx>
 #include <svx/svdxcgv.hxx>
 #include <svx/svdoutl.hxx>
@@ -115,7 +114,7 @@ bool SdrExchangeView::ImpGetPasteLayer(const SdrObjList* pObjList, SdrLayerID& r
     bool bRet=false;
     rLayer=SdrLayerID(0);
     if (pObjList!=nullptr) {
-        const SdrPage* pPg=pObjList->GetPage();
+        const SdrPage* pPg=pObjList->getSdrPageFromSdrObjList();
         if (pPg!=nullptr) {
             rLayer=pPg->GetLayerAdmin().GetLayerID(maActualLayer);
             if (rLayer==SDRLAYER_NOTFOUND) rLayer=SdrLayerID(0);
@@ -142,7 +141,7 @@ bool SdrExchangeView::Paste(const OUString& rStr, const Point& rPos, SdrObjList*
     bool bUnmark = (nOptions & (SdrInsertFlags::DONTMARK|SdrInsertFlags::ADDMARK))==SdrInsertFlags::NONE && !IsTextEdit();
     if (bUnmark) UnmarkAllObj();
     tools::Rectangle aTextRect(0,0,500,500);
-    SdrPage* pPage=pLst->GetPage();
+    SdrPage* pPage=pLst->getSdrPageFromSdrObjList();
     if (pPage!=nullptr) {
         aTextRect.SetSize(pPage->GetSize());
     }
@@ -182,7 +181,7 @@ bool SdrExchangeView::Paste(SvStream& rInput, EETextFormat eFormat, const Point&
     bool bUnmark=(nOptions&(SdrInsertFlags::DONTMARK|SdrInsertFlags::ADDMARK))==SdrInsertFlags::NONE && !IsTextEdit();
     if (bUnmark) UnmarkAllObj();
     tools::Rectangle aTextRect(0,0,500,500);
-    SdrPage* pPage=pLst->GetPage();
+    SdrPage* pPage=pLst->getSdrPageFromSdrObjList();
     if (pPage!=nullptr) {
         aTextRect.SetSize(pPage->GetSize());
     }
@@ -256,11 +255,8 @@ bool SdrExchangeView::Paste(
     SdrPageView* pMarkPV=nullptr;
     SdrPageView* pPV = GetSdrPageView();
 
-    if(pPV)
-    {
-        if ( pPV->GetObjList() == pLst )
-            pMarkPV=pPV;
-    }
+    if(pPV && pPV->GetObjList() == pLst )
+        pMarkPV=pPV;
 
     ImpLimitToWorkArea( aPos );
     if (pLst==nullptr)
@@ -320,10 +316,9 @@ bool SdrExchangeView::Paste(
                 }
 
                 // #i39861#
-                pNewObj->SetPage(pDstLst->GetPage());
                 pNewObj->NbcMove(aSiz);
 
-                const SdrPage* pPg = pDstLst->GetPage();
+                const SdrPage* pPg = pDstLst->getSdrPageFromSdrObjList();
 
                 if(pPg)
                 {
@@ -426,11 +421,8 @@ void SdrExchangeView::ImpPasteObject(SdrObject* pObj, SdrObjList& rLst, const Po
     SdrPageView* pMarkPV=nullptr;
     SdrPageView* pPV = GetSdrPageView();
 
-    if(pPV)
-    {
-        if (pPV->GetObjList()==&rLst)
-            pMarkPV=pPV;
-    }
+    if(pPV && pPV->GetObjList()==&rLst)
+        pMarkPV=pPV;
 
     bool bMark = pMarkPV!=nullptr && !IsTextEdit() && (nOptions&SdrInsertFlags::DONTMARK)==SdrInsertFlags::NONE;
     if (bMark)
@@ -700,9 +692,9 @@ void SdrExchangeView::DrawMarkedObj(OutputDevice& rOut) const
 {
     ::std::vector< SdrObject* > aSdrObjects(GetMarkedObjects());
 
-    if(aSdrObjects.size())
+    if(!aSdrObjects.empty())
     {
-        sdr::contact::ObjectContactOfObjListPainter aPainter(rOut, aSdrObjects, aSdrObjects[0]->GetPage());
+        sdr::contact::ObjectContactOfObjListPainter aPainter(rOut, aSdrObjects, aSdrObjects[0]->getSdrPageFromSdrObject());
         sdr::contact::DisplayInfo aDisplayInfo;
 
         // do processing
@@ -710,12 +702,12 @@ void SdrExchangeView::DrawMarkedObj(OutputDevice& rOut) const
     }
 }
 
-SdrModel* SdrExchangeView::GetMarkedObjModel() const
+std::unique_ptr<SdrModel> SdrExchangeView::CreateMarkedObjModel() const
 {
     // Sorting the MarkList here might be problematic in the future, so
     // use a copy.
     SortMarkedObjects();
-    SdrModel* pNewModel(mpModel->AllocModel());
+    std::unique_ptr<SdrModel> pNewModel(mpModel->AllocModel());
     SdrPage* pNewPage(pNewModel->AllocPage(false));
     pNewModel->InsertPage(pNewPage);
     ::std::vector< SdrObject* > aSdrObjects(GetMarkedObjects());
@@ -755,7 +747,6 @@ SdrModel* SdrExchangeView::GetMarkedObjModel() const
 
         if(pNewObj)
         {
-            pNewObj->SetPage(pNewPage);
             pNewPage->InsertObject(pNewObj, SAL_MAX_SIZE);
 
             // #i13033#

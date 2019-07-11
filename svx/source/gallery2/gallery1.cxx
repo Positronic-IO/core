@@ -29,11 +29,11 @@
 #include <sal/config.h>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <osl/thread.h>
 #include <tools/vcompat.hxx>
 #include <vcl/lstbox.hxx>
 #include <ucbhelper/content.hxx>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <unotools/configmgr.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/pathoptions.hxx>
@@ -53,7 +53,7 @@
 using namespace ::com::sun::star;
 
 
-static bool FileExists( const INetURLObject &rURL, const rtl::OUString &rExt )
+static bool FileExists( const INetURLObject &rURL, const OUString &rExt )
 {
     INetURLObject aURL( rURL );
     aURL.setExtension( rExt );
@@ -187,7 +187,7 @@ GalleryThemeEntry::GalleryThemeEntry( bool bCreateUniqueURL,
         aName = rName;
 }
 
-void GalleryTheme::InsertAllThemes(weld::ComboBoxText& rListBox)
+void GalleryTheme::InsertAllThemes(weld::ComboBox& rListBox)
 {
     for (size_t i = 0; i < SAL_N_ELEMENTS(aUnlocalized); ++i)
         rListBox.append_text(OUString::createFromAscii(aUnlocalized[i].second));
@@ -243,8 +243,8 @@ private:
 
 public:
 
-                                GalleryThemeCacheEntry( const GalleryThemeEntry* pThemeEntry, GalleryTheme* pTheme ) :
-                                    mpThemeEntry( pThemeEntry ), mpTheme( pTheme ) {}
+                                GalleryThemeCacheEntry( const GalleryThemeEntry* pThemeEntry, std::unique_ptr<GalleryTheme> pTheme ) :
+                                    mpThemeEntry( pThemeEntry ), mpTheme( std::move(pTheme) ) {}
 
     const GalleryThemeEntry*    GetThemeEntry() const { return mpThemeEntry; }
     GalleryTheme*               GetTheme() const { return mpTheme.get(); }
@@ -273,10 +273,9 @@ Gallery* Gallery::GetGalleryInstance()
 
 void Gallery::ImplLoad( const OUString& rMultiPath )
 {
-    const sal_Int32 nTokenCount = comphelper::string::getTokenCount(rMultiPath, ';');
-    bool            bIsReadOnlyDir;
+    bool bIsReadOnlyDir {false};
 
-    bMultiPath = ( nTokenCount > 0 );
+    bMultiPath = !rMultiPath.isEmpty();
 
     INetURLObject aCurURL(SvtPathOptions().GetConfigPath());
     ImplLoadSubDirs( aCurURL, bIsReadOnlyDir );
@@ -286,17 +285,23 @@ void Gallery::ImplLoad( const OUString& rMultiPath )
 
     if( bMultiPath )
     {
-        aRelURL = INetURLObject( rMultiPath.getToken(0, ';') );
-
-        for( sal_Int32 i = 0; i < nTokenCount; ++i )
+        bool bIsRelURL {true};
+        sal_Int32 nIdx {0};
+        do
         {
-            aCurURL = INetURLObject(rMultiPath.getToken(i, ';'));
+            aCurURL = INetURLObject(rMultiPath.getToken(0, ';', nIdx));
+            if (bIsRelURL)
+            {
+                aRelURL = aCurURL;
+                bIsRelURL = false;
+            }
 
             ImplLoadSubDirs( aCurURL, bIsReadOnlyDir );
 
             if( !bIsReadOnlyDir )
                 aUserURL = aCurURL;
         }
+        while (nIdx>0);
     }
     else
         aRelURL = INetURLObject( rMultiPath );
@@ -651,7 +656,7 @@ bool Gallery::RemoveTheme( const OUString& rThemeName )
             INetURLObject   aThmURL( pThm->GetThmURL() );
             INetURLObject   aSdgURL( pThm->GetSdgURL() );
             INetURLObject   aSdvURL( pThm->GetSdvURL() );
-            INetURLObject   aStrURL( pThm->GetSdvURL() );
+            INetURLObject   aStrURL( pThm->GetStrURL() );
 
             ReleaseTheme( pThm, aListener );
 
@@ -699,6 +704,7 @@ GalleryTheme* Gallery::ImplGetCachedTheme(const GalleryThemeEntry* pThemeEntry)
 
             DBG_ASSERT( aURL.GetProtocol() != INetProtocol::NotValid, "invalid URL" );
 
+            std::unique_ptr<GalleryTheme> pNewTheme;
             if( FileExists( aURL ) )
             {
                 std::unique_ptr<SvStream> pIStm(::utl::UcbStreamHelper::CreateStream( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ), StreamMode::READ ));
@@ -707,14 +713,11 @@ GalleryTheme* Gallery::ImplGetCachedTheme(const GalleryThemeEntry* pThemeEntry)
                 {
                     try
                     {
-                        pTheme = new GalleryTheme( this, const_cast<GalleryThemeEntry*>(pThemeEntry) );
-                        ReadGalleryTheme( *pIStm, *pTheme );
+                        pNewTheme.reset( new GalleryTheme( this, const_cast<GalleryThemeEntry*>(pThemeEntry) ) );
+                        ReadGalleryTheme( *pIStm, *pNewTheme );
 
                         if( pIStm->GetError() )
-                        {
-                            delete pTheme;
-                            pTheme = nullptr;
-                        }
+                            pNewTheme.reset();
                     }
                     catch (const css::ucb::ContentCreationException&)
                     {
@@ -722,8 +725,9 @@ GalleryTheme* Gallery::ImplGetCachedTheme(const GalleryThemeEntry* pThemeEntry)
                 }
             }
 
+            pTheme = pNewTheme.get();
             if( pTheme )
-                aThemeCache.push_back( new GalleryThemeCacheEntry( pThemeEntry, pTheme ));
+                aThemeCache.push_back( new GalleryThemeCacheEntry( pThemeEntry, std::move(pNewTheme) ));
         }
     }
 

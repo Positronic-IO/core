@@ -28,9 +28,11 @@
 #include <com/sun/star/ucb/XPropertySetRegistry.hpp>
 #include <com/sun/star/ucb/XPropertySetRegistryFactory.hpp>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/contenthelper.hxx>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/providerhelper.hxx>
+#include <ucbhelper/macros.hxx>
 
 #include <osl/diagnose.h>
 #include <osl/mutex.hxx>
@@ -194,20 +196,14 @@ void ContentProviderImplHelper::queryExistingContents(
 
     cleanupRegisteredContents();
 
-    ucbhelper_impl::Contents::const_iterator it
-        = m_pImpl->m_aContents.begin();
-    ucbhelper_impl::Contents::const_iterator end
-        = m_pImpl->m_aContents.end();
-
-    while ( it != end )
+    for ( const auto& rContent : m_pImpl->m_aContents )
     {
-        uno::Reference< ucb::XContent > xContent( (*it).second );
+        uno::Reference< ucb::XContent > xContent( rContent.second );
         if ( xContent.is() )
         {
             rContents.emplace_back(
                     static_cast< ContentImplHelper * >( xContent.get() ) );
         }
-        ++it;
     }
 }
 

@@ -28,7 +28,7 @@ class BarGeometryResources;
 class SchLayoutTabPage : public SfxTabPage
 {
 public:
-    SchLayoutTabPage(vcl::Window* pParent, const SfxItemSet& rInAttrs);
+    SchLayoutTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs);
     virtual ~SchLayoutTabPage() override;
     virtual void dispose() override;
 
@@ -37,7 +37,7 @@ public:
     virtual void Reset(const SfxItemSet* rInAttrs) override;
 
 private:
-    BarGeometryResources*   m_pGeometryResources;
+    std::unique_ptr<BarGeometryResources> m_pGeometryResources;
 };
 
 } //namespace chart

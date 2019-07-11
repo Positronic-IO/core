@@ -28,11 +28,13 @@
 #include <dlg_ObjectProperties.hxx>
 
 #include <ChartWindow.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <AxisHelper.hxx>
 #include <TitleHelper.hxx>
 #include <DiagramHelper.hxx>
 #include <chartview/DrawModelWrapper.hxx>
+#include <chartview/ChartSfxItemIds.hxx>
 #include <NumberFormatterWrapper.hxx>
 #include <ViewElementListProvider.hxx>
 #include <MultipleChartConverters.hxx>
@@ -52,10 +54,13 @@
 #include <LegendHelper.hxx>
 
 #include <com/sun/star/chart2/XRegressionCurve.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
 #include <svx/ActionDescriptionProvider.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 
 using namespace ::com::sun::star;
@@ -167,13 +172,13 @@ void ChartController::executeDispatch_InsertTitles()
         aDialogInput.readFromModel( getModel() );
 
         SolarMutexGuard aGuard;
-        ScopedVclPtrInstance< SchTitleDlg > aDlg( GetChartWindow(), aDialogInput );
-        if( aDlg->Execute() == RET_OK )
+        SchTitleDlg aDlg(GetChartFrame(), aDialogInput);
+        if (aDlg.run() == RET_OK)
         {
             // lock controllers till end of block
             ControllerLockGuardUNO aCLGuard( getModel() );
             TitleDialogData aDialogOutput(impl_createReferenceSizeProvider());
-            aDlg->getResult( aDialogOutput );
+            aDlg.getResult(aDialogOutput);
             bool bChanged = aDialogOutput.writeDifferenceToModel( getModel(), m_xCC, &aDialogInput );
             if( bChanged )
                 aUndoGuard.commit();
@@ -220,15 +225,14 @@ void ChartController::executeDispatch_OpenLegendDialog()
     {
         //prepare and open dialog
         SolarMutexGuard aGuard;
-        ScopedVclPtrInstance< SchLegendDlg > aDlg( GetChartWindow(), m_xCC );
-        aDlg->init( getModel() );
-        if( aDlg->Execute() == RET_OK )
+        SchLegendDlg aDlg(GetChartFrame(), m_xCC);
+        aDlg.init( getModel() );
+        if (aDlg.run() == RET_OK)
         {
             // lock controllers till end of block
             ControllerLockGuardUNO aCLGuard( getModel() );
-            bool bChanged = aDlg->writeToModel( getModel() );
-            if( bChanged )
-                aUndoGuard.commit();
+            aDlg.writeToModel( getModel() );
+            aUndoGuard.commit();
         }
     }
     catch(const uno::RuntimeException& e)
@@ -280,12 +284,12 @@ void ChartController::executeDispatch_InsertMenu_DataLabels()
         NumberFormatterWrapper aNumberFormatterWrapper( xNumberFormatsSupplier );
         SvNumberFormatter* pNumberFormatter = aNumberFormatterWrapper.getSvNumberFormatter();
 
-        ScopedVclPtrInstance< DataLabelsDialog > aDlg( GetChartWindow(), aItemSet, pNumberFormatter);
+        DataLabelsDialog aDlg(GetChartFrame(), aItemSet, pNumberFormatter);
 
-        if( aDlg->Execute() == RET_OK )
+        if (aDlg.run() == RET_OK)
         {
             SfxItemSet aOutItemSet = aItemConverter.CreateEmptyItemSet();
-            aDlg->FillItemSet( aOutItemSet );
+            aDlg.FillItemSet(aOutItemSet);
             // lock controllers till end of block
             ControllerLockGuardUNO aCLGuard( getModel() );
             bool bChanged = aItemConverter.ApplyItemSet( aOutItemSet );//model should be changed now
@@ -386,17 +390,17 @@ void ChartController::executeDispatch_InsertTrendline()
     aDialogParameter.init( getModel() );
     ViewElementListProvider aViewElementListProvider( m_pDrawModelWrapper.get());
     SolarMutexGuard aGuard;
-    ScopedVclPtrInstance<SchAttribTabDlg> aDialog(
-        GetChartWindow(), &aItemSet, &aDialogParameter,
+    SchAttribTabDlg aDialog(
+        GetChartFrame(), &aItemSet, &aDialogParameter,
         &aViewElementListProvider,
         uno::Reference< util::XNumberFormatsSupplier >(
                 getModel(), uno::UNO_QUERY ) );
 
     // note: when a user pressed "OK" but didn't change any settings in the
     // dialog, the SfxTabDialog returns "Cancel"
-    if( aDialog->Execute() == RET_OK || aDialog->DialogWasClosedWithOK())
+    if( aDialog.run() == RET_OK || aDialog.DialogWasClosedWithOK())
     {
-        const SfxItemSet* pOutItemSet = aDialog->GetOutputItemSet();
+        const SfxItemSet* pOutItemSet = aDialog.GetOutputItemSet();
         if( pOutItemSet )
         {
             ControllerLockGuardUNO aCLGuard( getModel() );
@@ -444,20 +448,20 @@ void ChartController::executeDispatch_InsertErrorBars( bool bYError )
         aDialogParameter.init( getModel() );
         ViewElementListProvider aViewElementListProvider( m_pDrawModelWrapper.get());
         SolarMutexGuard aGuard;
-        ScopedVclPtrInstance<SchAttribTabDlg> aDlg(
-                GetChartWindow(), &aItemSet, &aDialogParameter,
+        SchAttribTabDlg aDlg(
+                GetChartFrame(), &aItemSet, &aDialogParameter,
                 &aViewElementListProvider,
                 uno::Reference< util::XNumberFormatsSupplier >(
                         getModel(), uno::UNO_QUERY ) );
-        aDlg->SetAxisMinorStepWidthForErrorBarDecimals(
+        aDlg.SetAxisMinorStepWidthForErrorBarDecimals(
             InsertErrorBarsDialog::getAxisMinorStepWidthForErrorBarDecimals( getModel(),
                                                                              m_xChartView, m_aSelection.getSelectedCID()));
 
         // note: when a user pressed "OK" but didn't change any settings in the
         // dialog, the SfxTabDialog returns "Cancel"
-        if( aDlg->Execute() == RET_OK || aDlg->DialogWasClosedWithOK())
+        if (aDlg.run() == RET_OK || aDlg.DialogWasClosedWithOK())
         {
-            const SfxItemSet* pOutItemSet = aDlg->GetOutputItemSet();
+            const SfxItemSet* pOutItemSet = aDlg.GetOutputItemSet();
             if( pOutItemSet )
             {
                 ControllerLockGuardUNO aCLGuard( getModel() );
@@ -484,18 +488,18 @@ void ChartController::executeDispatch_InsertErrorBars( bool bYError )
 
             //prepare and open dialog
             SolarMutexGuard aGuard;
-            ScopedVclPtrInstance<InsertErrorBarsDialog> aDlg(
-                GetChartWindow(), aItemSet,
+            InsertErrorBarsDialog aDlg(
+                GetChartFrame(), aItemSet,
                 uno::Reference< chart2::XChartDocument >( getModel(), uno::UNO_QUERY ),
                 bYError ? ErrorBarResources::ERROR_BAR_Y : ErrorBarResources::ERROR_BAR_X);
 
-            aDlg->SetAxisMinorStepWidthForErrorBarDecimals(
+            aDlg.SetAxisMinorStepWidthForErrorBarDecimals(
                 InsertErrorBarsDialog::getAxisMinorStepWidthForErrorBarDecimals( getModel(), m_xChartView, OUString() ) );
 
-            if( aDlg->Execute() == RET_OK )
+            if (aDlg.run() == RET_OK)
             {
                 SfxItemSet aOutItemSet = aItemConverter.CreateEmptyItemSet();
-                aDlg->FillItemSet( aOutItemSet );
+                aDlg.FillItemSet( aOutItemSet );
 
                 // lock controllers till end of block
                 ControllerLockGuardUNO aCLGuard( getModel() );

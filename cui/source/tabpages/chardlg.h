@@ -21,13 +21,6 @@
 
 // define ----------------------------------------------------------------
 
-#define CHRDLG_ENCLOSE_NONE                 0
-#define CHRDLG_ENCLOSE_ROUND                1
-#define CHRDLG_ENCLOSE_SQUARE               2
-#define CHRDLG_ENCLOSE_POINTED              3
-#define CHRDLG_ENCLOSE_CURVED               4
-#define CHRDLG_ENCLOSE_SPECIAL_CHAR         5
-
 #define CHRDLG_POSITION_OVER                0
 #define CHRDLG_POSITION_UNDER               1
 

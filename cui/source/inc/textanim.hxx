@@ -24,7 +24,6 @@
 #include <svx/svdattr.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 
 class SdrView;
 
@@ -49,7 +48,7 @@ private:
     TriState m_aRightState;
     TriState m_aDownState;
 
-    std::unique_ptr<weld::ComboBoxText> m_xLbEffect;
+    std::unique_ptr<weld::ComboBox> m_xLbEffect;
     std::unique_ptr<weld::Widget> m_xBoxDirection;
     std::unique_ptr<weld::ToggleButton> m_xBtnUp;
     std::unique_ptr<weld::ToggleButton> m_xBtnLeft;
@@ -70,7 +69,7 @@ private:
     std::unique_ptr<weld::CheckButton> m_xTsbAuto;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldDelay;
 
-    DECL_LINK( SelectEffectHdl_Impl, weld::ComboBoxText&, void );
+    DECL_LINK( SelectEffectHdl_Impl, weld::ComboBox&, void );
     DECL_LINK( ClickEndlessHdl_Impl, weld::Button&, void );
     DECL_LINK( ClickAutoHdl_Impl, weld::Button&, void );
     DECL_LINK( ClickPixelHdl_Impl, weld::Button&, void );

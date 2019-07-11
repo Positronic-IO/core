@@ -143,6 +143,7 @@ protected:
     void         CheckMarked();                                              // Scan MarkList after Del and Lock Layer ...
     void         AddDragModeHdl(SdrDragMode eMode);
     virtual bool MouseMove(const MouseEvent& rMEvt, vcl::Window* pWin) override;
+    virtual bool RequestHelp(const HelpEvent& rHEvt) override;
 
     // add custom handles (used by other apps, e.g. AnchorPos)
     virtual void AddCustomHdl();
@@ -189,7 +190,7 @@ public:
     bool IsMarking() const { return IsMarkObj() || IsMarkPoints() || IsMarkGluePoints(); }
 
     // Marking objects by drawing of a selection frame
-    bool BegMarkObj(const Point& rPnt, bool bUnmark = false);
+    void BegMarkObj(const Point& rPnt, bool bUnmark = false);
     void MovMarkObj(const Point& rPnt);
     bool EndMarkObj();
     void BrkMarkObj();
@@ -311,7 +312,6 @@ public:
     virtual bool HasMarkablePoints() const;
     virtual sal_Int32 GetMarkablePointCount() const;
     virtual bool HasMarkedPoints() const;
-    virtual sal_Int32 GetMarkedPointCount() const;
 
     // There might be points which can't be marked:
     virtual bool IsPointMarkable(const SdrHdl& rHdl) const;
@@ -328,8 +328,8 @@ public:
     // Selects the first marked point (P1) which is hit by rPnt
     // and from there it searches the first non-marked point(P2).
     // In case of success the marking of
-    // P1 is deleted, a mark is set at P2 and true is returned.
-    bool MarkNextPoint();
+    // P1 is deleted, a mark is set at P2.
+    void MarkNextPoint();
 
     // Search for the number of the suitable handle. In case of empty search result,
     // SAL_MAX_SIZE is returned.
@@ -378,8 +378,8 @@ public:
     // Selects the first marked point (P1) which is hit by rPnt
     // and from there it searches the first non-marked point(P2).
     // In case of success the marking of
-    // P1 is deleted, a mark is set at P2 and true is returned.
-    bool MarkNextGluePoint();
+    // P1 is deleted, a mark is set at P2.
+    void MarkNextGluePoint();
 
     // Draw a selection frame for glue point marking.
     // This routine will just be started in case that HasMarkablePoints() returns sal_True.
@@ -426,7 +426,7 @@ public:
     void SetRef1(const Point& rPt);
 
     // End point of the axis of reflextion
-    const Point& GetRef2() const { return maRef1; }
+    const Point& GetRef2() const { return maRef2; }
     void SetRef2(const Point& rPt);
     /// Get access to the view shell owning this draw view, if any.
     virtual SfxViewShell* GetSfxViewShell() const;

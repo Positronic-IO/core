@@ -50,6 +50,8 @@
 #include <comphelper/lok.hxx>
 #include <vcl/weld.hxx>
 
+#include "viewfunc.hxx"
+
 // The SetVisArea of the DocShell must not be called from InnerResizePixel.
 // But our adjustments must take place.
 static bool bProtectDocShellVisArea = false;
@@ -68,7 +70,7 @@ bool SwView::IsDocumentBorder()
            SvxZoomType::PAGEWIDTH_NOBORDER == m_pWrtShell->GetViewOptions()->GetZoomType();
 }
 
-inline long GetLeftMargin( SwView const &rView )
+static long GetLeftMargin( SwView const &rView )
 {
     SvxZoomType eType = rView.GetWrtShell().GetViewOptions()->GetZoomType();
     long lRet = rView.GetWrtShell().GetAnyCurRect(CurRectType::PagePrt).Left();
@@ -401,8 +403,8 @@ void SwView::Scroll( const tools::Rectangle &rRect, sal_uInt16 nRangeX, sal_uInt
     tools::Rectangle aOldVisArea( m_aVisArea );
     long nDiffY = 0;
 
-    vcl::Window* pCareWn = SwViewShell::GetCareWin(GetWrtShell());
-    weld::Dialog* pCareDialog = SwViewShell::GetCareDialog();
+    vcl::Window* pCareWn = SwViewShell::GetCareWin();
+    weld::Window* pCareDialog = SwViewShell::GetCareDialog(GetWrtShell());
     if (pCareWn || pCareDialog)
     {
         int x, y, width, height;
@@ -576,30 +578,30 @@ bool SwView::GetPageScrollDownOffset( SwTwips &rOff ) const
 }
 
 // Scroll page by page
-long SwView::PageUp()
+bool SwView::PageUp()
 {
     if (!m_aVisArea.GetHeight())
-        return 0;
+        return false;
 
     Point aPos(m_aVisArea.TopLeft());
     aPos.AdjustY( -(m_aVisArea.GetHeight() - (GetYScroll() / 2)) );
     aPos.setY( std::max(0L, aPos.Y()) );
     SetVisArea( aPos );
-    return 1;
+    return true;
 }
 
-long SwView::PageDown()
+bool SwView::PageDown()
 {
     if ( !m_aVisArea.GetHeight() )
-        return 0;
+        return false;
     Point aPos( m_aVisArea.TopLeft() );
     aPos.AdjustY(m_aVisArea.GetHeight() - (GetYScroll() / 2) );
     aPos.setY( SetVScrollMax( aPos.Y() ) );
     SetVisArea( aPos );
-    return 1;
+    return true;
 }
 
-long SwView::PhyPageUp()
+void SwView::PhyPageUp()
 {
     // Check for the currently visible page, do not format
     sal_uInt16 nActPage = m_pWrtShell->GetNextPrevPageNum( false );
@@ -615,10 +617,9 @@ long SwView::PhyPageUp()
             aAlPt.AdjustY(3 * GetEditWin().PixelToLogic( Size( 0, 1 ) ).Height() );
         SetVisArea( aAlPt );
     }
-    return 1;
 }
 
-long SwView::PhyPageDown()
+void SwView::PhyPageDown()
 {
     // Check for the currently visible page, do not format
     sal_uInt16 nActPage = m_pWrtShell->GetNextPrevPageNum();
@@ -634,7 +635,6 @@ long SwView::PhyPageDown()
             aAlPt.AdjustY(3 * GetEditWin().PixelToLogic( Size( 0, 1 ) ).Height() );
         SetVisArea( aAlPt );
     }
-    return 1;
 }
 
 bool SwView::PageUpCursor( bool bSelect )
@@ -1075,7 +1075,7 @@ void SwView::OuterResizePixel( const Point &rOfst, const Size &rSize )
         ShowVScrollbar(bShowV);
     m_pVScrollbar->SetAuto(bAuto);
 
-    SET_CURR_SHELL( m_pWrtShell );
+    SET_CURR_SHELL( m_pWrtShell.get() );
     bool bRepeat = false;
     long nCnt = 0;
 

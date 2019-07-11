@@ -25,13 +25,15 @@
 #endif
 
 #include <sot/sotdllapi.h>
+#include <sot/exchange.hxx>
+#include <sot/formats.hxx>
 
 struct SotAction_Impl
 {
-    SotClipboardFormatId   nFormatId;          // Clipboard Id
-    sal_uInt16             nAction;            // Action Id
-    SotExchangeActionFlags nFlags;             // Action Id
-    sal_uInt8              nContextCheckId;    // additional check of content in clipboard
+    SotClipboardFormatId const   nFormatId;          // Clipboard Id
+    sal_uInt16 const             nAction;            // Action Id
+    SotExchangeActionFlags const nFlags;             // Action Id
+    sal_uInt8 const              nContextCheckId;    // additional check of content in clipboard
 
     constexpr SotAction_Impl(SotClipboardFormatId _nFormatId, sal_uInt16 _nAction, SotExchangeActionFlags _nFlags, sal_uInt8 _nContextCheckId)
         : nFormatId(_nFormatId), nAction(_nAction), nFlags(_nFlags), nContextCheckId(_nContextCheckId) {}

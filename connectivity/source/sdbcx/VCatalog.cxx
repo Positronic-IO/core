@@ -17,12 +17,12 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/types.hxx>
 #include <connectivity/sdbcx/VCatalog.hxx>
 #include <connectivity/sdbcx/VCollection.hxx>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <connectivity/sdbcx/VDescriptor.hxx>
 #include <TConnection.hxx>
-#include <comphelper/uno3.hxx>
 #include <connectivity/dbtools.hxx>
 
 using namespace connectivity;
@@ -37,10 +37,6 @@ using namespace ::com::sun::star::lang;
 IMPLEMENT_SERVICE_INFO(OCatalog,"com.sun.star.comp.connectivity.OCatalog","com.sun.star.sdbcx.DatabaseDefinition")
 
 OCatalog::OCatalog(const Reference< XConnection> &_xConnection) : OCatalog_BASE(m_aMutex)
-            ,m_pTables(nullptr)
-            ,m_pViews(nullptr)
-            ,m_pGroups(nullptr)
-            ,m_pUsers(nullptr)
 {
     try
     {

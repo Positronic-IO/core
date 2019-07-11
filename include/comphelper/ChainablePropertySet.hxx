@@ -24,11 +24,12 @@
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <comphelper/PropertyInfoHash.hxx>
 #include <comphelper/comphelperdllapi.h>
-#include <comphelper/solarmutex.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <rtl/ref.hxx>
+
+namespace comphelper { class SolarMutex; }
+namespace comphelper { struct PropertyInfo; }
 
 namespace comphelper
 {
@@ -68,7 +69,7 @@ namespace comphelper
     {
         friend class MasterPropertySet;
     protected:
-        SolarMutex* mpMutex;
+        SolarMutex* const mpMutex;
         rtl::Reference < ChainablePropertySetInfo > mxInfo;
 
         /// @throws css::beans::UnknownPropertyException

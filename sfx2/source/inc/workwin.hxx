@@ -84,6 +84,7 @@ namespace o3tl
 struct SfxChild_Impl
 {
     VclPtr<vcl::Window>             pWin;
+    std::shared_ptr<SfxModelessDialogController> xController;
     Size                            aSize;
     SfxChildAlignment               eAlign;
     SfxChildVisibility              nVisible;
@@ -97,11 +98,19 @@ struct SfxChild_Impl
     {
         nVisible = bIsVisible ? SfxChildVisibility::VISIBLE : SfxChildVisibility::NOT_VISIBLE;
     }
+
+    SfxChild_Impl(std::shared_ptr<SfxModelessDialogController>& rChild,
+                  SfxChildAlignment eAlignment):
+        pWin(nullptr), xController(rChild), eAlign(eAlignment), bResize(false),
+        bSetFocus( false )
+    {
+        nVisible = xController->getDialog()->get_visible() ? SfxChildVisibility::VISIBLE : SfxChildVisibility::NOT_VISIBLE;
+    }
 };
 
 struct SfxChildWin_Impl
 {
-    sal_uInt16                      nSaveId;       // the ChildWindow-Id
+    sal_uInt16 const                nSaveId;       // the ChildWindow-Id
     sal_uInt16                      nInterfaceId;  // the current context
     sal_uInt16                      nId;           // current Id
     SfxChildWindow*                 pWin;
@@ -174,7 +183,6 @@ class LayoutManagerListener : public ::cppu::WeakImplHelper<
         bool                                             m_bHasFrame;
         SfxWorkWindow*                                   m_pWrkWin;
         css::uno::WeakReference< css::frame::XFrame >    m_xFrame;
-        OUString                                         m_aLayoutManagerPropName;
 };
 
 class SfxWorkWindow final
@@ -186,11 +194,10 @@ class SfxWorkWindow final
     std::vector< SfxObjectBar_Impl > aObjBarList;
     tools::Rectangle               aClientArea;
     tools::Rectangle               aUpperClientArea;
-    SfxWorkWindow*          pParent;
     VclPtr<SfxSplitWindow>  pSplit[SFX_SPLITWINDOWS_MAX];
     std::vector<SfxChild_Impl*>
                             aChildren;
-    std::vector<SfxChildWin_Impl*>
+    std::vector<std::unique_ptr<SfxChildWin_Impl>>
                             aChildWins;
     SfxBindings*            pBindings;
     VclPtr<vcl::Window>     pWorkWin;
@@ -205,13 +212,9 @@ class SfxWorkWindow final
     bool                    bIsFullScreen : 1;
     bool                    bShowStatusBar : 1;
     sal_Int32               m_nLock;
-    OUString                m_aStatusBarResName;
-    OUString                m_aLayoutManagerPropName;
-    OUString                m_aTbxTypeName;
-    OUString                m_aProgressBarResName;
     css::uno::Reference< css::lang::XComponent > m_xLayoutManagerListener;
     SfxFrame*               pMasterFrame;
-    SfxFrame*               pFrame;
+    SfxFrame* const         pFrame;
 
     void                    CreateChildWin_Impl(SfxChildWin_Impl*,bool);
     void                    RemoveChildWin_Impl(SfxChildWin_Impl*);
@@ -241,19 +244,19 @@ public:
                             { return bDockingAllowed; }
     bool                    IsInternalDockingAllowed() const
                             { return bInternalDockingAllowed; }
-    SfxWorkWindow*          GetParent_Impl() const
-                            { return pParent; }
 
     // Methods for all Child windows
     void                    DataChanged_Impl();
     void                    ReleaseChild_Impl( vcl::Window& rWindow );
+    void                    ReleaseChild_Impl(SfxModelessDialogController&);
     SfxChild_Impl*          RegisterChild_Impl( vcl::Window& rWindow, SfxChildAlignment eAlign );
+    SfxChild_Impl*          RegisterChild_Impl(std::shared_ptr<SfxModelessDialogController>& rController, SfxChildAlignment eAlign);
     void                    ShowChildren_Impl();
     void                    HideChildren_Impl();
     bool                    PrepareClose_Impl();
     void                    ArrangeChildren_Impl( bool bForce = true );
     void                    DeleteControllers_Impl();
-    void                    HidePopups_Impl(bool bHide, bool bParent, sal_uInt16 nId=0);
+    void                    HidePopups_Impl(bool bHide, sal_uInt16 nId=0);
     void                    ConfigChild_Impl(SfxChildIdentifier,
                                              SfxDockingConfig, sal_uInt16);
     void                    MakeChildrenVisible_Impl( bool bVis );
@@ -266,8 +269,7 @@ public:
     void                    UpdateObjectBars_Impl();
     void                    UpdateObjectBars_Impl2();
     void                    ResetObjectBars_Impl();
-    void                    SetObjectBar_Impl(sal_uInt16 nPos, SfxVisibilityFlags nFlags, ToolbarId eId,
-                                    SfxInterface *pIFace);
+    void                    SetObjectBar_Impl(sal_uInt16 nPos, SfxVisibilityFlags nFlags, ToolbarId eId);
     bool                    IsVisible_Impl();
     void                    MakeVisible_Impl( bool );
     void                    Lock_Impl( bool );

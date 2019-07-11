@@ -18,6 +18,7 @@
  */
 
 #include <sal/main.h>
+#include <sal/log.hxx>
 
 #include <cppuhelper/bootstrap.hxx>
 #include <comphelper/processfactory.hxx>
@@ -55,7 +56,7 @@ using namespace ::com::sun::star::lang;
 using namespace cppu;
 
 // Forward declaration
-void Main();
+static void Main();
 
 SAL_IMPLEMENT_MAIN()
 {
@@ -266,14 +267,14 @@ IMPL_LINK_NOARG( MyWin, SelectHdl, ListBox&, void)
     GraphicFilter &rFilter = GraphicFilter::GetGraphicFilter();
     rFilter.ImportGraphic( aGraphicResult, OUString("import"), aStream );
 
-    Bitmap aBitmap = aGraphicResult.GetBitmap();
+    BitmapEx aBitmap = aGraphicResult.GetBitmapEx();
 
     SAL_INFO("vcl", "got bitmap of size " << aBitmap.GetSizePixel().Width() << "x" << aBitmap.GetSizePixel().Height());
     Size aFixedSize( aBitmap.GetSizePixel() );
     aFixedSize.AdjustWidth(10 );
     aFixedSize.AdjustHeight(10 );
     m_aImage->SetSizePixel( aFixedSize );
-    m_aImage->SetImage( Image( BitmapEx( aBitmap ) ) );
+    m_aImage->SetImage( Image( aBitmap ) );
 
 }
 

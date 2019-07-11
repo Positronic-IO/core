@@ -70,6 +70,7 @@
 #include <xehelper.hxx>
 #include <xepage.hxx>
 #include <xestyle.hxx>
+#include <xltools.hxx>
 
 #include <memory>
 
@@ -127,7 +128,7 @@ XclExpStream& operator<<( XclExpStream& rStrm, const XclChRectangle& rRect )
     return rStrm << rRect.mnX << rRect.mnY << rRect.mnWidth << rRect.mnHeight;
 }
 
-inline void lclSaveRecord( XclExpStream& rStrm, XclExpRecordRef const & xRec )
+void lclSaveRecord( XclExpStream& rStrm, XclExpRecordRef const & xRec )
 {
     if( xRec )
         xRec->Save( rStrm );
@@ -163,7 +164,7 @@ void lclWriteChFrBlockRecord( XclExpStream& rStrm, const XclChFrBlock& rFrBlock,
 }
 
 template< typename Type >
-inline bool lclIsAutoAnyOrGetValue( Type& rValue, const Any& rAny )
+bool lclIsAutoAnyOrGetValue( Type& rValue, const Any& rAny )
 {
     return !rAny.hasValue() || !(rAny >>= rValue);
 }

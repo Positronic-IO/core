@@ -32,6 +32,7 @@
 
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/base64.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/attributelist.hxx>
@@ -271,8 +272,8 @@ ManifestExport::ManifestExport( uno::Reference< xml::sax::XDocumentHandler > con
                     pNewAttrList->AddAttribute ( sAlgorithmAttribute, sCdataAttribute,
                                                  "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p" );
                     xHandler->startElement( sEncryptionMethodElement, xNewAttrList );
-                    xHandler->ignorableWhitespace ( sWhiteSpace );
                     xHandler->endElement( sEncryptionMethodElement );
+                    xHandler->ignorableWhitespace ( sWhiteSpace );
 
                     xHandler->startElement( sKeyInfoElement, nullptr );
                     xHandler->ignorableWhitespace ( sWhiteSpace );

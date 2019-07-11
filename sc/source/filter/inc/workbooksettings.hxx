@@ -22,6 +22,9 @@
 
 #include "workbookhelper.hxx"
 
+namespace oox { class AttributeList; }
+namespace oox { class SequenceInputStream; }
+
 namespace com { namespace sun { namespace star { namespace util { struct Date; } } } }
 
 namespace oox {
@@ -72,7 +75,6 @@ struct CalcSettingsModel
     bool                mbFullPrecision;        /// True = use full precision on calculation.
     bool                mbIterate;              /// True = allow circular references.
     bool                mbConcurrent;           /// True = concurrent calculation enabled.
-    bool                mbUseNlr;               /// True = use natural language references in formulas.
 
     explicit            CalcSettingsModel();
 };

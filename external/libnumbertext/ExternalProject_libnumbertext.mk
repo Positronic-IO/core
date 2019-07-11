@@ -18,26 +18,21 @@ $(eval $(call gb_ExternalProject_register_targets,libnumbertext,\
 
 libnumbertext_CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_CXX11)
 
-ifneq (,$(filter ANDROID DRAGONFLY FREEBSD IOS LINUX NETBSD OPENBSD,$(OS)))
+ifneq (,$(filter ANDROID DRAGONFLY FREEBSD iOS LINUX NETBSD OPENBSD,$(OS)))
 ifneq (,$(gb_ENABLE_DBGUTIL))
 libnumbertext_CPPFLAGS+=-D_GLIBCXX_DEBUG
 endif
 endif
 
-libnumbertext_LIBS+=-L$(gb_StaticLibrary_WORKDIR)
-
 $(call gb_ExternalProject_get_state_target,libnumbertext,build):
 	$(call gb_ExternalProject_run,build,\
-		$(if $(libnumbertext_LIBS),LIBS='$(libnumbertext_LIBS)') \
-		$(if $(filter IOS MACOSX,$(OS)),ACLOCAL="aclocal -I $(SRCDIR)/m4/mac") \
 		LIBS="$(gb_STDLIBS) $(LIBS)" \
-		autoreconf && \
 		$(SHELL) ./configure --disable-shared --with-pic \
 			$(if $(verbose),--disable-silent-rules,--enable-silent-rules) \
 			$(if $(CROSS_COMPILING),--build=$(BUILD_PLATFORM) --host=$(HOST_PLATFORM))\
 			$(if $(filter AIX,$(OS)),CFLAGS="-D_LINUX_SOURCE_COMPAT") \
 			$(if $(libnumbertext_CPPFLAGS),CPPFLAGS='$(libnumbertext_CPPFLAGS)') \
-			CXXFLAGS="$(libnumbertext_CXXFLAGS) $(if $(ENABLE_OPTIMIZED) $(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) $(if $(debug),$(gb_DEBUGINFO_FLAGS) $(gb_DEBUG_CXXFLAGS)) $(gb_VISIBILITY_FLAGS) $(gb_VISIBILITY_FLAGS_CXX)" \
+			CXXFLAGS="$(libnumbertext_CXXFLAGS) $(if $(ENABLE_OPTIMIZED),$(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) $(if $(debug),$(gb_DEBUGINFO_FLAGS) $(gb_DEBUG_CXXFLAGS)) $(gb_VISIBILITY_FLAGS) $(gb_VISIBILITY_FLAGS_CXX)" \
 		&& cd src && $(MAKE) \
 	)
 

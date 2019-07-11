@@ -21,6 +21,9 @@
 
 #include <cppuhelper/implbase.hxx>
 #include <xmlscript/xml_helper.hxx>
+#include <com/sun/star/xml/sax/XDocumentHandler.hpp>
+#include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/io/XOutputStream.hpp>
 
 using namespace osl;
 using namespace com::sun::star;
@@ -63,7 +66,7 @@ sal_Int32 BSeqInputStream::readBytes(
     if (rData.getLength() != nBytesToRead)
         rData.realloc( nBytesToRead );
     if (nBytesToRead != 0) {
-        memcpy(rData.getArray(), &_seq.data()[_nPos], nBytesToRead);
+        memcpy(rData.getArray(), &_seq[_nPos], nBytesToRead);
     }
     _nPos += nBytesToRead;
     return nBytesToRead;

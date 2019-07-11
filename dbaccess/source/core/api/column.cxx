@@ -29,10 +29,9 @@
 #include <com/sun/star/sdbc/ColumnValue.hpp>
 #include <com/sun/star/sdbc/DataType.hpp>
 
-#include <comphelper/property.hxx>
-#include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
+#include <comphelper/uno3.hxx>
 #include <connectivity/TTableHelper.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
@@ -145,7 +144,6 @@ OColumns::OColumns(::cppu::OWeakObject& _rParent,
                    bool _bUseHardRef)
                    : OColumns_BASE(_rParent,_bCaseSensitive,_rMutex,_rVector,_bUseHardRef)
     ,m_pMediator(nullptr)
-    ,m_xDrvColumns(nullptr)
     ,m_pColFactoryImpl(_pColFactory)
     ,m_pRefreshColumns(_pRefresh)
     ,m_bInitialized(false)

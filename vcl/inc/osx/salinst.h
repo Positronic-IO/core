@@ -49,7 +49,7 @@ enum class SalEvent;
 
 typedef void(^RuninmainBlock)(void);
 
-class SalYieldMutex : public comphelper::GenericSolarMutex
+class SalYieldMutex : public comphelper::SolarMutex
 {
 public:
     OSX_RUNINMAIN_MEMBERS
@@ -76,7 +76,6 @@ class AquaSalInstance : public SalInstance, public SalUserEventList
 public:
     virtual void TriggerUserEventProcessing() override;
 
-    SalYieldMutex*                          mpSalYieldMutex;        // Sal-Yield-Mutex
     OUString                                maDefaultPrinter;
     oslThreadIdentifier                     maMainThread;
     int                                     mnActivePrintJobs;
@@ -90,6 +89,9 @@ public:
 
     AquaSalInstance();
     virtual ~AquaSalInstance() override;
+
+    virtual void AfterAppInit() override;
+    virtual bool SVMainHook(int *) override;
 
     virtual SalFrame*       CreateChildFrame( SystemParentData* pParent, SalFrameStyleFlags nStyle ) override;
     virtual SalFrame*       CreateFrame( SalFrame* pParent, SalFrameStyleFlags nStyle ) override;
@@ -105,25 +107,17 @@ public:
     virtual SalInfoPrinter* CreateInfoPrinter( SalPrinterQueueInfo* pQueueInfo,
                                                ImplJobSetup* pSetupData ) override;
     virtual void            DestroyInfoPrinter( SalInfoPrinter* pPrinter ) override;
-    virtual SalPrinter*     CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
-    virtual void            DestroyPrinter( SalPrinter* pPrinter ) override;
+    virtual std::unique_ptr<SalPrinter> CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
     virtual void            GetPrinterQueueInfo( ImplPrnQueueList* pList ) override;
     virtual void            GetPrinterQueueState( SalPrinterQueueInfo* pInfo ) override;
-    virtual void            DeletePrinterQueueInfo( SalPrinterQueueInfo* pInfo ) override;
     virtual OUString        GetDefaultPrinter() override;
     virtual SalTimer*       CreateSalTimer() override;
     virtual SalSystem*      CreateSalSystem() override;
-    virtual SalBitmap*      CreateSalBitmap() override;
-    virtual comphelper::SolarMutex* GetYieldMutex() override;
-    virtual sal_uInt32      ReleaseYieldMutexAll() override;
-    virtual void            AcquireYieldMutex( sal_uInt32 nCount = 1 ) override;
+    virtual std::shared_ptr<SalBitmap> CreateSalBitmap() override;
     virtual bool            DoYield(bool bWait, bool bHandleAllCurrentEvents) override;
     virtual bool            AnyInput( VclInputFlags nType ) override;
-    virtual SalMenu*        CreateMenu( bool bMenuBar, Menu* pVCLMenu ) override;
-    virtual void            DestroyMenu( SalMenu* ) override;
-    virtual SalMenuItem*    CreateMenuItem( const SalItemParams* pItemData ) override;
-    virtual void            DestroyMenuItem( SalMenuItem* ) override;
-    virtual SalSession*     CreateSalSession() override;
+    virtual std::unique_ptr<SalMenu>     CreateMenu( bool bMenuBar, Menu* pVCLMenu ) override;
+    virtual std::unique_ptr<SalMenuItem> CreateMenuItem( const SalItemParams & rItemData ) override;
     virtual OpenGLContext*  CreateOpenGLContext() override;
     virtual OUString        GetConnectionIdentifier() override;
     virtual void            AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType,
@@ -152,8 +146,7 @@ public:
     void endedPrintJob() { mnActivePrintJobs--; }
 
     // event subtypes for NSApplicationDefined events
-    static const short AppExecuteSVMain   = 0x7fff;
-    static const short AppEndLoopEvent    = 1;
+    static const short AppExecuteSVMain   = 1;
     static const short AppStartTimerEvent = 10;
     static const short YieldWakeupEvent   = 20;
     static const short DispatchTimerEvent = 30;

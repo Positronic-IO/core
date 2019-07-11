@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <math.h>
 #include <memory>
@@ -398,7 +399,7 @@ namespace cairocanvas
             if (cairo_glyphs.empty())
                 continue;
 
-            vcl::Font aFont = rOutDev.GetFont();
+            const vcl::Font& aFont = rOutDev.GetFont();
             long nWidth = aFont.GetAverageFontWidth();
             long nHeight = aFont.GetFontHeight();
             if (nWidth == 0)
@@ -459,7 +460,7 @@ namespace cairocanvas
                 "Size:(" << aFont.GetAverageFontWidth() << "," << aFont.GetFontHeight()
                     << "), Pos (" << rOutpos.X() << "," << rOutpos.Y()
                     << "), G("
-                    << (cairo_glyphs.size() > 0 ? cairo_glyphs[0].index : -1)
+                    << (!cairo_glyphs.empty() ? cairo_glyphs[0].index : -1)
                     << ","
                     << (cairo_glyphs.size() > 1 ? cairo_glyphs[1].index : -1)
                     << ","

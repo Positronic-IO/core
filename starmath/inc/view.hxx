@@ -215,7 +215,7 @@ class SmViewShell: public SfxViewShell
     std::unique_ptr<SmViewShell_Impl> mpImpl;
 
     VclPtr<SmGraphicWindow> mpGraphic;
-    SmGraphicController maGraphicController;
+    SmGraphicController const maGraphicController;
     OUString maStatusText;
 
     bool mbPasteState;
@@ -251,7 +251,7 @@ protected:
     void InsertFrom(SfxMedium &rMedium);
 
     virtual bool HasPrintOptionsPage() const override;
-    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(weld::Container* pPage,
+    virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(TabPageParent pParent,
                                                       const SfxItemSet &rOptions) override;
     virtual void Deactivate(bool IsMDIActivate) override;
     virtual void Activate(bool IsMDIActivate) override;

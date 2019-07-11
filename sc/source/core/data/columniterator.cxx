@@ -15,22 +15,21 @@
 #include <osl/diagnose.h>
 
 ScColumnTextWidthIterator::ScColumnTextWidthIterator(ScColumn& rCol, SCROW nStartRow, SCROW nEndRow) :
-    mrCellTextAttrs(rCol.maCellTextAttrs),
     mnEnd(static_cast<size_t>(nEndRow)),
-    mnCurPos(0),
-    miBlockCur(mrCellTextAttrs.begin()),
-    miBlockEnd(mrCellTextAttrs.end())
+    mnCurPos(0)
 {
+    miBlockCur = rCol.maCellTextAttrs.begin();
+    miBlockEnd = rCol.maCellTextAttrs.end();
     init(nStartRow, nEndRow);
 }
 
 ScColumnTextWidthIterator::ScColumnTextWidthIterator(ScDocument& rDoc, const ScAddress& rStartPos, SCROW nEndRow) :
-    mrCellTextAttrs(rDoc.maTabs[rStartPos.Tab()]->aCol[rStartPos.Col()].maCellTextAttrs),
     mnEnd(static_cast<size_t>(nEndRow)),
-    mnCurPos(0),
-    miBlockCur(mrCellTextAttrs.begin()),
-    miBlockEnd(mrCellTextAttrs.end())
+    mnCurPos(0)
 {
+    auto & rCellTextAttrs = rDoc.maTabs[rStartPos.Tab()]->aCol[rStartPos.Col()].maCellTextAttrs;
+    miBlockCur = rCellTextAttrs.begin();
+    miBlockEnd = rCellTextAttrs.end();
     init(rStartPos.Row(), nEndRow);
 }
 
@@ -172,7 +171,8 @@ namespace sc {
 
 ColumnIterator::ColumnIterator( const CellStoreType& rCells, SCROW nRow1, SCROW nRow2 ) :
     maPos(rCells.position(nRow1)),
-    maPosEnd(rCells.position(maPos.first, nRow2+1))
+    maPosEnd(rCells.position(maPos.first, nRow2)),
+    mbComplete(false)
 {
 }
 
@@ -180,7 +180,10 @@ ColumnIterator::~ColumnIterator() {}
 
 void ColumnIterator::next()
 {
-    maPos = CellStoreType::next_position(maPos);
+    if ( maPos == maPosEnd)
+        mbComplete = true;
+    else
+        maPos = CellStoreType::next_position(maPos);
 }
 
 SCROW ColumnIterator::getRow() const
@@ -190,7 +193,7 @@ SCROW ColumnIterator::getRow() const
 
 bool ColumnIterator::hasCell() const
 {
-    return maPos != maPosEnd;
+    return !mbComplete;
 }
 
 mdds::mtv::element_t ColumnIterator::getType() const

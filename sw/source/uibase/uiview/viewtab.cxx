@@ -71,7 +71,7 @@ static void lcl_FillSvxColumn(const SwFormatCol& rCol,
 {
     const SwColumns& rCols = rCol.GetColumns();
 
-    bool bOrtho = rCol.IsOrtho() && rCols.size();
+    bool bOrtho = rCol.IsOrtho() && !rCols.empty();
     long nInnerWidth = 0;
     if( bOrtho )
     {
@@ -183,7 +183,7 @@ static void lcl_Scale(long& nVal, long nScale)
     nVal >>= 8;
 }
 
-void ResizeFrameCols(SwFormatCol& rCol,
+static void ResizeFrameCols(SwFormatCol& rCol,
                     long nOldWidth,
                     long nNewWidth,
                     long nLeftDelta )
@@ -402,7 +402,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
     case SID_ATTR_PAGE_LRSPACE:
         if ( pReqArgs )
         {
-            const SvxLongLRSpaceItem aLongLR( pReqArgs->Get( SID_ATTR_PAGE_LRSPACE ) );
+            const SvxLongLRSpaceItem& aLongLR( pReqArgs->Get( SID_ATTR_PAGE_LRSPACE ) );
 
             SwPageDesc aDesc( rDesc );
             {
@@ -543,7 +543,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
     case SID_ATTR_PAGE_ULSPACE:
         if ( pReqArgs )
         {
-            SvxLongULSpaceItem aLongULSpace( pReqArgs->Get( SID_ATTR_PAGE_ULSPACE ) );
+            const SvxLongULSpaceItem& aLongULSpace( pReqArgs->Get( SID_ATTR_PAGE_ULSPACE ) );
 
             SwPageDesc aDesc( rDesc );
             {
@@ -1329,18 +1329,9 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                     aLongLR.SetRight(rPageRect.Right() - aRect.Right());
                 }
             }
-            if( nWhich == SID_ATTR_LONG_LRSPACE )
-                rSet.Put( aLongLR );
-            else
-            {
-                SvxLRSpaceItem aLR( aLongLR.GetLeft(),
-                                    aLongLR.GetRight(),
-                                    0, 0,
-                                    nWhich);
-                rSet.Put(aLR);
-            }
-            break;
+            rSet.Put( aLongLR );
         }
+        break;
 
         // provide left and right margins of current page style
         case SID_ATTR_PAGE_LRSPACE:
@@ -1387,17 +1378,9 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                 aLongUL.SetUpper(rPagePrtRect.Top());
                 aLongUL.SetLower(nPageHeight - rPagePrtRect.Bottom());
             }
-            if( nWhich == SID_ATTR_LONG_ULSPACE )
-                rSet.Put( aLongUL );
-            else
-            {
-                SvxULSpaceItem aULTmp(static_cast<sal_uInt16>(aLongUL.GetUpper()),
-                                      static_cast<sal_uInt16>(aLongUL.GetLower()),
-                                      nWhich);
-                rSet.Put(aULTmp);
-            }
-            break;
+            rSet.Put( aLongUL );
         }
+        break;
 
         // provide top and bottom margins of current page style
         case SID_ATTR_PAGE_ULSPACE:
@@ -1700,8 +1683,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                 const int nRgt = (bTableVertical ? nPageHeight : nPageWidth) -
                                  (aTabCols.GetLeftMin() + aTabCols.GetRight());
 
-                const sal_uInt16 nL = std::max< sal_uInt16 >(nLft, 0);
-                const sal_uInt16 nR = std::max< sal_uInt16 >(nRgt, 0);
+                const sal_uInt16 nL = static_cast< sal_uInt16 >(std::max(nLft, 0));
+                const sal_uInt16 nR = static_cast< sal_uInt16 >(std::max(nRgt, 0));
 
                 SvxColumnItem aColItem(nNum, nL, nR);
 
@@ -1937,8 +1920,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                 const int nRgt = (bVerticalWriting ? nPageWidth : nPageHeight) -
                                  (aTabCols.GetLeftMin() + aTabCols.GetRight());
 
-                const sal_uInt16 nL = std::max< sal_uInt16 >(nLft, 0);
-                const sal_uInt16 nR = std::max< sal_uInt16 >(nRgt, 0);
+                const sal_uInt16 nL = static_cast< sal_uInt16 >(std::max(nLft, 0));
+                const sal_uInt16 nR = static_cast< sal_uInt16 >(std::max(nRgt, 0));
 
                 SvxColumnItem aColItem(0, nL, nR);
 
@@ -2011,8 +1994,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                     const int nLft = aTabCols.GetLeftMin() + aTabCols.GetLeft();
                     const int nRgt = nPageWidth -(aTabCols.GetLeftMin() + aTabCols.GetRight());
 
-                    const sal_uInt16 nL = std::max< sal_uInt16 >(nLft, 0);
-                    const sal_uInt16 nR = std::max< sal_uInt16 >(nRgt, 0);
+                    const sal_uInt16 nL = static_cast< sal_uInt16 >(std::max(nLft, 0));
+                    const sal_uInt16 nR = static_cast< sal_uInt16 >(std::max(nRgt, 0));
 
                     aRectangle.SetLeft( nL );
                     if(nNum > 1)
@@ -2166,7 +2149,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                                                                 pPt ).Pos();
 
                     const sal_uInt16 nTotalWidth = static_cast<sal_uInt16>(aRect.Width());
-                    // Initialize nStart and nEnd initialisieren for nNum == 0
+                    // Initialize nStart and nEnd for nNum == 0
                     int nWidth = 0,
                         nStart = 0,
                         nEnd = nTotalWidth;

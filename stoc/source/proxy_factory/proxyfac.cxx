@@ -34,6 +34,7 @@
 #include <cppuhelper/implementationentry.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/weakagg.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/reflection/XProxyFactory.hpp>
@@ -92,29 +93,16 @@ UnoInterfaceReference FactoryImpl::binuno_queryInterface(
     typelib_InterfaceTypeDescription * pTypeDescr )
 {
     // init queryInterface() td
-    static typelib_TypeDescription * s_pQITD = nullptr;
-    if (s_pQITD == nullptr)
-    {
-        ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-        if (s_pQITD == nullptr)
-        {
-            typelib_TypeDescription * pTXInterfaceDescr = nullptr;
-            TYPELIB_DANGER_GET(
-                &pTXInterfaceDescr,
-                cppu::UnoType<XInterface>::get().getTypeLibType() );
-            typelib_TypeDescription * pQITD = nullptr;
-            typelib_typedescriptionreference_getDescription(
-                &pQITD, reinterpret_cast< typelib_InterfaceTypeDescription * >(
-                    pTXInterfaceDescr )->ppAllMembers[ 0 ] );
-            TYPELIB_DANGER_RELEASE( pTXInterfaceDescr );
-            OSL_DOUBLE_CHECKED_LOCKING_MEMORY_BARRIER();
-            s_pQITD = pQITD;
-        }
-    }
-    else
-    {
-        OSL_DOUBLE_CHECKED_LOCKING_MEMORY_BARRIER();
-    }
+    static typelib_TypeDescription* s_pQITD = []() {
+        typelib_TypeDescription* pTXInterfaceDescr = nullptr;
+        TYPELIB_DANGER_GET(&pTXInterfaceDescr, cppu::UnoType<XInterface>::get().getTypeLibType());
+        typelib_TypeDescription* pQITD = nullptr;
+        typelib_typedescriptionreference_getDescription(
+            &pQITD, reinterpret_cast<typelib_InterfaceTypeDescription*>(pTXInterfaceDescr)
+                        ->ppAllMembers[0]);
+        TYPELIB_DANGER_RELEASE(pTXInterfaceDescr);
+        return pQITD;
+    }();
 
     void * args[ 1 ];
     args[ 0 ] = &reinterpret_cast< typelib_TypeDescription * >(
@@ -163,7 +151,7 @@ struct ProxyRoot : public ::cppu::OWeakAggObject
     // XAggregation
     virtual Any SAL_CALL queryAggregation( Type const & rType ) override;
 
-    inline ProxyRoot( ::rtl::Reference< FactoryImpl > const & factory,
+    ProxyRoot( ::rtl::Reference< FactoryImpl > const & factory,
                       Reference< XInterface > const & xTarget );
 
     ::rtl::Reference< FactoryImpl > m_factory;
@@ -177,11 +165,11 @@ struct binuno_Proxy : public uno_Interface
 {
     oslInterlockedCount m_nRefCount;
     ::rtl::Reference< ProxyRoot > m_root;
-    UnoInterfaceReference m_target;
-    OUString m_oid;
+    UnoInterfaceReference const m_target;
+    OUString const m_oid;
     TypeDescription m_typeDescr;
 
-    inline binuno_Proxy(
+    binuno_Proxy(
         ::rtl::Reference< ProxyRoot > const & root,
         UnoInterfaceReference const & target,
         OUString const & oid, TypeDescription const & typeDescr );
@@ -280,7 +268,7 @@ static void binuno_proxy_dispatch(
 }
 
 
-inline binuno_Proxy::binuno_Proxy(
+binuno_Proxy::binuno_Proxy(
     ::rtl::Reference< ProxyRoot > const & root,
     UnoInterfaceReference const & target,
     OUString const & oid, TypeDescription const & typeDescr )
@@ -295,7 +283,7 @@ inline binuno_Proxy::binuno_Proxy(
     uno_Interface::pDispatcher = binuno_proxy_dispatch;
 }
 
-inline ProxyRoot::ProxyRoot(
+ProxyRoot::ProxyRoot(
     ::rtl::Reference< FactoryImpl > const & factory,
     Reference< XInterface > const & xTarget )
     : m_factory( factory )

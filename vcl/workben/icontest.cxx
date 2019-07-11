@@ -29,6 +29,7 @@
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <vcl/builder.hxx>
 #include <vcl/button.hxx>
 #include <vcl/dialog.hxx>
@@ -36,7 +37,6 @@
 #include <vcl/graph.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <vcl/image.hxx>
-#include <vcl/openglwin.hxx>
 #include <vcl/opengl/OpenGLContext.hxx>
 #include <vcl/opengl/OpenGLHelper.hxx>
 #include <vcl/svapp.hxx>
@@ -65,7 +65,7 @@ class MyWorkWindow : public WorkWindow
 
 public:
     Graphic maGraphic;
-    Bitmap *mpBitmap;
+    BitmapEx *mpBitmap;
     VclPtr<FixedBitmap> mpFixedBitmap;
 
     MyWorkWindow( vcl::Window* pParent, WinBits nWinStyle );
@@ -112,10 +112,10 @@ void MyWorkWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Rectan
     aSize.setWidth( aSize.Width() * (1 + (0.1*sin(mnPaintCount/60.))) );
     aSize.setHeight( aSize.Height() * (1 + (0.1*sin(mnPaintCount/50.))) );
 
-    Bitmap aEmpty;
+    BitmapEx aEmpty;
     mpFixedBitmap->SetBitmap( aEmpty );
     GraphicConversionParameters aConv( aSize );
-    mpBitmap = new Bitmap( maGraphic.GetBitmap( aConv ) );
+    mpBitmap = new BitmapEx(maGraphic.GetBitmapEx( aConv ));
     mpFixedBitmap->SetBitmap( *mpBitmap );
     mpFixedBitmap->SetSizePixel( aSize );
 

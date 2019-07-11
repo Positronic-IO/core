@@ -22,9 +22,9 @@ private:
     std::vector<Vertex>& mrVertices;
     std::vector<GLuint>& mrIndices;
     GLubyte mR, mG, mB, mA;
-    GLfloat mfLineWidth;
-    GLfloat mfLineWidthAndAA;
-    size_t mnInitialIndexSize;
+    GLfloat const mfLineWidth;
+    GLfloat const mfLineWidthAndAA;
+    size_t const mnInitialIndexSize;
     bool mbIncomplete;
 
 public:
@@ -39,9 +39,12 @@ public:
 
     void appendAndConnectLinePoint(const glm::vec2& rPoint, const glm::vec2& aNormal, GLfloat aExtrusion);
 
-    void appendMiterJoint(glm::vec2 const & point, glm::vec2 prevLineVector, glm::vec2 const & nextLineVector);
-    void appendBevelJoint(glm::vec2 const & point, glm::vec2 prevLineVector, glm::vec2 nextLineVector);
-    void appendRoundJoint(glm::vec2 const & point, glm::vec2 prevLineVector, glm::vec2 nextLineVector);
+    void appendMiterJoint(glm::vec2 const& point, const glm::vec2& prevLineVector,
+                          glm::vec2 const& nextLineVector);
+    void appendBevelJoint(glm::vec2 const& point, const glm::vec2& prevLineVector,
+                          const glm::vec2& nextLineVector);
+    void appendRoundJoint(glm::vec2 const& point, const glm::vec2& prevLineVector,
+                          const glm::vec2& nextLineVector);
     void appendRoundLineCapVertices(const glm::vec2& rPoint1, const glm::vec2& rPoint2);
     void appendSquareLineCapVertices(const glm::vec2& rPoint1, const glm::vec2& rPoint2);
 };

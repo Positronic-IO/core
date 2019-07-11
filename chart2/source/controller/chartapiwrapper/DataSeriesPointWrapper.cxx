@@ -49,12 +49,14 @@
 #include <com/sun/star/chart/ChartErrorCategory.hpp>
 #include <com/sun/star/chart/ChartSymbolType.hpp>
 #include <com/sun/star/chart/XChartDocument.hpp>
+#include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/LineJoint.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <cppuhelper/propshlp.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::chart::wrapper;
@@ -445,7 +447,6 @@ DataSeriesPointWrapper::DataSeriesPointWrapper(const std::shared_ptr<Chart2Model
     , m_nSeriesIndexInNewAPI( -1 )
     , m_nPointIndex( -1 )
     , m_bLinesAllowed(true)
-    , m_xDataSeries(nullptr)
 {
     //need initialize call afterwards
 }
@@ -485,7 +486,6 @@ DataSeriesPointWrapper::DataSeriesPointWrapper(eType _eType,
     , m_nSeriesIndexInNewAPI( nSeriesIndexInNewAPI )
     , m_nPointIndex( (_eType == DATA_POINT) ? nPointIndex : -1 )
     , m_bLinesAllowed( false )
-    , m_xDataSeries(nullptr)
 {
 }
 
@@ -702,19 +702,19 @@ const Sequence< beans::Property >& DataSeriesPointWrapper::getPropertySequence()
         return *StaticPointWrapperPropertyArray::get();
 }
 
-const std::vector< WrappedProperty* > DataSeriesPointWrapper::createWrappedProperties()
+std::vector< std::unique_ptr<WrappedProperty> > DataSeriesPointWrapper::createWrappedProperties()
 {
-    std::vector< ::chart::WrappedProperty* > aWrappedProperties;
+    std::vector< std::unique_ptr<WrappedProperty> > aWrappedProperties;
 
     WrappedCharacterHeightProperty::addWrappedProperties( aWrappedProperties, this );
 
     if( m_eType == DATA_SERIES )
     {
         WrappedStatisticProperties::addWrappedPropertiesForSeries( aWrappedProperties, m_spChart2ModelContact );
-        aWrappedProperties.push_back( new WrappedAttachedAxisProperty( m_spChart2ModelContact ) );
+        aWrappedProperties.emplace_back( new WrappedAttachedAxisProperty( m_spChart2ModelContact ) );
 
-        aWrappedProperties.push_back( new WrappedNumberFormatProperty(m_spChart2ModelContact) );
-        aWrappedProperties.push_back( new WrappedLinkNumberFormatProperty );
+        aWrappedProperties.emplace_back( new WrappedNumberFormatProperty(m_spChart2ModelContact) );
+        aWrappedProperties.emplace_back( new WrappedLinkNumberFormatProperty );
     }
 
     WrappedSymbolProperties::addWrappedPropertiesForSeries( aWrappedProperties, m_spChart2ModelContact );
@@ -723,39 +723,39 @@ const std::vector< WrappedProperty* > DataSeriesPointWrapper::createWrappedPrope
 
     //add unnamed line properties (different inner names here)
 
-    aWrappedProperties.push_back( new WrappedProperty("FillColor","Color") );
-    aWrappedProperties.push_back( new WrappedLineStyleProperty( this ) );
-    aWrappedProperties.push_back( new WrappedLineColorProperty( this ) );
-    aWrappedProperties.push_back( new WrappedSeriesAreaOrLineProperty("LineDashName","BorderDashName","LineDashName", this ) );
-    aWrappedProperties.push_back( new WrappedSeriesAreaOrLineProperty("LineTransparence","BorderTransparency","Transparency", this ) );
-    aWrappedProperties.push_back( new WrappedSeriesAreaOrLineProperty("LineWidth","BorderWidth","LineWidth", this ) );
-    aWrappedProperties.push_back( new WrappedProperty("FillStyle","FillStyle" ) );
-    aWrappedProperties.push_back( new WrappedProperty("FillTransparence","Transparency") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillColor","Color") );
+    aWrappedProperties.emplace_back( new WrappedLineStyleProperty( this ) );
+    aWrappedProperties.emplace_back( new WrappedLineColorProperty( this ) );
+    aWrappedProperties.emplace_back( new WrappedSeriesAreaOrLineProperty("LineDashName","BorderDashName","LineDashName", this ) );
+    aWrappedProperties.emplace_back( new WrappedSeriesAreaOrLineProperty("LineTransparence","BorderTransparency","Transparency", this ) );
+    aWrappedProperties.emplace_back( new WrappedSeriesAreaOrLineProperty("LineWidth","BorderWidth","LineWidth", this ) );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillStyle","FillStyle" ) );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillTransparence","Transparency") );
 
-    aWrappedProperties.push_back( new WrappedIgnoreProperty("LineJoint", uno::Any( drawing::LineJoint_ROUND ) ) );
-    aWrappedProperties.push_back( new WrappedProperty("FillTransparenceGradientName","TransparencyGradientName") );
-    aWrappedProperties.push_back( new WrappedProperty("FillGradientName","GradientName") );
-    aWrappedProperties.push_back( new WrappedProperty("FillGradientStepCount","GradientStepCount") );
-    aWrappedProperties.push_back( new WrappedProperty("FillHatchName","HatchName") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapName","FillBitmapName") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBackground","FillBackground") );
+    aWrappedProperties.emplace_back( new WrappedIgnoreProperty("LineJoint", uno::Any( drawing::LineJoint_ROUND ) ) );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillTransparenceGradientName","TransparencyGradientName") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillGradientName","GradientName") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillGradientStepCount","GradientStepCount") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillHatchName","HatchName") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapName","FillBitmapName") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBackground","FillBackground") );
 
     //bitmap properties
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapMode","FillBitmapMode") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapSizeX","FillBitmapSizeX") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapSizeY","FillBitmapSizeY") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapLogicalSize","FillBitmapLogicalSize") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapOffsetX","FillBitmapOffsetX") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapOffsetY","FillBitmapOffsetY") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapRectanglePoint","FillBitmapRectanglePoint") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapPositionOffsetX","FillBitmapPositionOffsetX") );
-    aWrappedProperties.push_back( new WrappedProperty("FillBitmapPositionOffsetY","FillBitmapPositionOffsetY") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapMode","FillBitmapMode") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapSizeX","FillBitmapSizeX") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapSizeY","FillBitmapSizeY") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapLogicalSize","FillBitmapLogicalSize") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapOffsetX","FillBitmapOffsetX") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapOffsetY","FillBitmapOffsetY") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapRectanglePoint","FillBitmapRectanglePoint") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapPositionOffsetX","FillBitmapPositionOffsetX") );
+    aWrappedProperties.emplace_back( new WrappedProperty("FillBitmapPositionOffsetY","FillBitmapPositionOffsetY") );
 
-    aWrappedProperties.push_back( new WrappedProperty("SolidType","Geometry3D") );
-    aWrappedProperties.push_back( new WrappedSegmentOffsetProperty() );
-    aWrappedProperties.push_back( new WrappedProperty("D3DPercentDiagonal","PercentDiagonal") );
+    aWrappedProperties.emplace_back( new WrappedProperty("SolidType","Geometry3D") );
+    aWrappedProperties.emplace_back( new WrappedSegmentOffsetProperty() );
+    aWrappedProperties.emplace_back( new WrappedProperty("D3DPercentDiagonal","PercentDiagonal") );
 
-    aWrappedProperties.push_back( new WrappedTextRotationProperty() );
+    aWrappedProperties.emplace_back( new WrappedTextRotationProperty() );
 
     return aWrappedProperties;
 }

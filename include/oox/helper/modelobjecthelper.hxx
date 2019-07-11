@@ -32,6 +32,7 @@ namespace com { namespace sun { namespace star {
     namespace graphic { class XGraphic; }
     namespace container { class XNameContainer; }
     namespace drawing { struct LineDash; }
+    namespace drawing { struct Hatch; }
     namespace drawing { struct PolyPolygonBezierCoords; }
     namespace lang { class XMultiServiceFactory; }
 } } }
@@ -68,7 +69,7 @@ private:
                         mxModelFactory;         ///< Factory to create the container.
     mutable css::uno::Reference< css::container::XNameContainer >
                         mxContainer;            ///< Container for the objects.
-    OUString            maServiceName;          ///< Service name to create the container.
+    OUString const      maServiceName;          ///< Service name to create the container.
     sal_Int32           mnIndex;                ///< Index to create unique identifiers.
 };
 
@@ -105,6 +106,8 @@ public:
 
     OUString     insertTransGrandient( const css::awt::Gradient& rGradient );
 
+    OUString     insertFillHatch( const css::drawing::Hatch& rHatch );
+
     /** Inserts a new named fill graphic, returns the bitmap name, based on
         an internal constant name with a new unused index appended. */
     OUString insertFillBitmapXGraphic(css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
@@ -117,10 +120,7 @@ private:
     ObjectContainer     maGradientContainer;    ///< Contains all named fill gradients.
     ObjectContainer     maTransGradContainer;   ///< Contains all named transparency Gradients.
     ObjectContainer     maBitmapUrlContainer;   ///< Contains all named fill bitmap URLs.
-    const OUString      maDashNameBase;       ///< Base name for all named line dashes.
-    const OUString      maGradientNameBase;   ///< Base name for all named fill gradients.
-    const OUString      maTransGradNameBase;   ///< Base name for all named fill gradients.
-    const OUString      maBitmapUrlNameBase;  ///< Base name for all named fill bitmap URLs.
+    ObjectContainer     maHatchContainer;       ///< Contains all named fill hatches.
 };
 
 

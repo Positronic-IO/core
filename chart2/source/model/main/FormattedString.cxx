@@ -21,9 +21,11 @@
 
 #include <CharacterProperties.hxx>
 #include <PropertyHelper.hxx>
-#include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <ModifyListenerHelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 
@@ -103,7 +105,7 @@ FormattedString::FormattedString() :
 
 FormattedString::FormattedString( const FormattedString & rOther ) :
         MutexContainer(),
-        impl::FormattedString_Base(),
+        impl::FormattedString_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_aString( rOther.m_aString ),
     m_aType(rOther.m_aType),

@@ -33,8 +33,6 @@
 #include <svl/typedwhich.hxx>
 
 class SfxItemPool;
-class SfxPoolItem;
-class SvStream;
 
 namespace svl {
 
@@ -158,11 +156,7 @@ public:
     }
     template<class T> const T* GetItem( TypedWhichId<T> nWhich, bool bSearchInParent = true ) const
     {
-        const SfxPoolItem* pItem = GetItem(sal_uInt16(nWhich), bSearchInParent);
-        const T* pCastedItem = dynamic_cast<const T*>(pItem);
-
-        assert(!pItem || pCastedItem); // if it exists, must have the correct type
-        return pCastedItem;
+        return GetItem<T>(sal_uInt16(nWhich), bSearchInParent);
     }
 
 
@@ -173,6 +167,12 @@ public:
             return pItemSet->GetItem<T>(nWhich, bSearchInParent);
 
         return nullptr;
+    }
+    template <class T>
+    static const T* GetItem(const SfxItemSet* pItemSet, TypedWhichId<T> nWhich,
+                            bool bSearchInParent)
+    {
+        return GetItem<T>(pItemSet, static_cast<sal_uInt16>(nWhich), bSearchInParent);
     }
 
     sal_uInt16                  GetWhichByPos(sal_uInt16 nPos) const;
@@ -192,9 +192,8 @@ public:
     inline void                 SetParent( const SfxItemSet* pNew );
 
     // add, delete items, work on items
-protected:
-    virtual const SfxPoolItem*  Put( const SfxPoolItem&, sal_uInt16 nWhich );
 public:
+    virtual const SfxPoolItem*  Put( const SfxPoolItem&, sal_uInt16 nWhich );
     const SfxPoolItem*          Put( const SfxPoolItem& rItem )
                                 { return Put(rItem, rItem.Which()); }
     bool                        Put( const SfxItemSet&,

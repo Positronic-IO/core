@@ -17,12 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <memory>
-#include <comphelper/string.hxx>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
-
 #include <editeng/tstpitem.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/fontitem.hxx>
@@ -39,7 +33,6 @@
 #include <editeng/escapementitem.hxx>
 #include <editeng/shdditem.hxx>
 #include <editeng/autokernitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/langitem.hxx>
 #include <editeng/emphasismarkitem.hxx>
 #include <editeng/charscaleitem.hxx>
@@ -58,6 +51,8 @@
 #include "impedit.hxx"
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <svl/grabbagitem.hxx>
 #include <tools/stream.hxx>
@@ -65,9 +60,11 @@
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <libxml/xmlwriter.h>
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
-#include <algorithm>
+#include <memory>
+#include <set>
 
 using namespace ::com::sun::star;
 
@@ -162,7 +159,7 @@ const SfxItemInfo aItemInfos[EDITITEMCOUNT] = {
         { SID_ATTR_FRAMEDIRECTION, true },         // EE_PARA_WRITINGDIR
         { 0, true },                               // EE_PARA_XMLATTRIBS
         { SID_ATTR_PARA_HANGPUNCTUATION, true },   // EE_PARA_HANGINGPUNCTUATION
-        { SID_ATTR_PARA_FORBIDDEN_RULES, true },
+        { SID_ATTR_PARA_FORBIDDEN_RULES, true },   // EE_PARA_FORBIDDENRULES
         { SID_ATTR_PARA_SCRIPTSPACE, true },       // EE_PARA_ASIANCJKSPACING
         { SID_ATTR_NUMBERING_RULE, true },         // EE_PARA_NUMBULL
         { 0, true },                               // EE_PARA_HYPHENATE
@@ -177,42 +174,43 @@ const SfxItemInfo aItemInfos[EDITITEMCOUNT] = {
         { SID_ATTR_TABSTOP, true },                // EE_PARA_TABS
         { SID_ATTR_ALIGN_HOR_JUSTIFY_METHOD, true }, // EE_PARA_JUST_METHOD
         { SID_ATTR_ALIGN_VER_JUSTIFY, true },      // EE_PARA_VER_JUST
-        { SID_ATTR_CHAR_COLOR, true },
-        { SID_ATTR_CHAR_FONT, true },
-        { SID_ATTR_CHAR_FONTHEIGHT, true },
-        { SID_ATTR_CHAR_SCALEWIDTH, true },
-        { SID_ATTR_CHAR_WEIGHT, true },
-        { SID_ATTR_CHAR_UNDERLINE, true },
-        { SID_ATTR_CHAR_STRIKEOUT, true },
-        { SID_ATTR_CHAR_POSTURE, true },
-        { SID_ATTR_CHAR_CONTOUR, true },
-        { SID_ATTR_CHAR_SHADOWED, true },
-        { SID_ATTR_CHAR_ESCAPEMENT, true },
-        { SID_ATTR_CHAR_AUTOKERN, true },
-        { SID_ATTR_CHAR_KERNING, true },
-        { SID_ATTR_CHAR_WORDLINEMODE, true },
-        { SID_ATTR_CHAR_LANGUAGE, true },
-        { SID_ATTR_CHAR_CJK_LANGUAGE, true },
-        { SID_ATTR_CHAR_CTL_LANGUAGE, true },
-        { SID_ATTR_CHAR_CJK_FONT, true },
-        { SID_ATTR_CHAR_CTL_FONT, true },
-        { SID_ATTR_CHAR_CJK_FONTHEIGHT, true },
-        { SID_ATTR_CHAR_CTL_FONTHEIGHT, true },
-        { SID_ATTR_CHAR_CJK_WEIGHT, true },
-        { SID_ATTR_CHAR_CTL_WEIGHT, true },
-        { SID_ATTR_CHAR_CJK_POSTURE, true },
-        { SID_ATTR_CHAR_CTL_POSTURE, true },
-        { SID_ATTR_CHAR_EMPHASISMARK, true },
-        { SID_ATTR_CHAR_RELIEF, true },
+        { SID_ATTR_CHAR_COLOR, true },         // EE_CHAR_COLOR
+        { SID_ATTR_CHAR_FONT, true },          // EE_CHAR_FONTINFO
+        { SID_ATTR_CHAR_FONTHEIGHT, true },    // EE_CHAR_FONTHEIGHT
+        { SID_ATTR_CHAR_SCALEWIDTH, true },    // EE_CHAR_FONTWIDTH
+        { SID_ATTR_CHAR_WEIGHT, true },        // EE_CHAR_WEIGHT
+        { SID_ATTR_CHAR_UNDERLINE, true },     // EE_CHAR_UNDERLINE
+        { SID_ATTR_CHAR_STRIKEOUT, true },     // EE_CHAR_STRIKEOUT
+        { SID_ATTR_CHAR_POSTURE, true },       // EE_CHAR_ITALIC
+        { SID_ATTR_CHAR_CONTOUR, true },       // EE_CHAR_OUTLINE
+        { SID_ATTR_CHAR_SHADOWED, true },      // EE_CHAR_SHADOW
+        { SID_ATTR_CHAR_ESCAPEMENT, true },    // EE_CHAR_ESCAPEMENT
+        { SID_ATTR_CHAR_AUTOKERN, true },      // EE_CHAR_PAIRKERNING
+        { SID_ATTR_CHAR_KERNING, true },       // EE_CHAR_KERNING
+        { SID_ATTR_CHAR_WORDLINEMODE, true },  // EE_CHAR_WLM
+        { SID_ATTR_CHAR_LANGUAGE, true },      // EE_CHAR_LANGUAGE
+        { SID_ATTR_CHAR_CJK_LANGUAGE, true },  // EE_CHAR_LANGUAGE_CJK
+        { SID_ATTR_CHAR_CTL_LANGUAGE, true },  // EE_CHAR_LANGUAGE_CTL
+        { SID_ATTR_CHAR_CJK_FONT, true },      // EE_CHAR_FONTINFO_CJK
+        { SID_ATTR_CHAR_CTL_FONT, true },      // EE_CHAR_FONTINFO_CTL
+        { SID_ATTR_CHAR_CJK_FONTHEIGHT, true }, // EE_CHAR_FONTHEIGHT_CJK
+        { SID_ATTR_CHAR_CTL_FONTHEIGHT, true }, // EE_CHAR_FONTHEIGHT_CTL
+        { SID_ATTR_CHAR_CJK_WEIGHT, true },    // EE_CHAR_WEIGHT_CJK
+        { SID_ATTR_CHAR_CTL_WEIGHT, true },    // EE_CHAR_WEIGHT_CTL
+        { SID_ATTR_CHAR_CJK_POSTURE, true },   // EE_CHAR_ITALIC_CJK
+        { SID_ATTR_CHAR_CTL_POSTURE, true },   // EE_CHAR_ITALIC_CTL
+        { SID_ATTR_CHAR_EMPHASISMARK, true },  // EE_CHAR_EMPHASISMARK
+        { SID_ATTR_CHAR_RELIEF, true },        // EE_CHAR_RELIEF
         { 0, true },                           // EE_CHAR_RUBI_DUMMY
         { 0, true },                           // EE_CHAR_XMLATTRIBS
-        { SID_ATTR_CHAR_OVERLINE, true },
+        { SID_ATTR_CHAR_OVERLINE, true },      // EE_CHAR_OVERLINE
         { SID_ATTR_CHAR_CASEMAP, true },       // EE_CHAR_CASEMAP
         { SID_ATTR_CHAR_GRABBAG, true },       // EE_CHAR_GRABBAG
         { SID_ATTR_CHAR_BACK_COLOR, true },    // EE_CHAR_BKGCOLOR
         { 0, true },                           // EE_FEATURE_TAB
         { 0, true },                           // EE_FEATURE_LINEBR
         { SID_ATTR_CHAR_CHARSETCOLOR, true },  // EE_FEATURE_NOTCONV
+        { SID_FIELD, false },                  // EE_FEATURE_FIELD
 };
 
 EditCharAttrib* MakeCharAttrib( SfxItemPool& rPool, const SfxPoolItem& rAttr, sal_Int32 nS, sal_Int32 nE )
@@ -487,7 +485,6 @@ ExtraPortionInfo::ExtraPortionInfo()
 , nAsianCompressionTypes(AsianCompressionFlags::Normal)
 , bFirstCharIsRightPunktuation(false)
 , bCompressed(false)
-, pOrgDXArray(nullptr)
 , lineBreaksList()
 {
 }
@@ -699,14 +696,14 @@ const ParaPortion* ParaPortionList::operator [](sal_Int32 nPos) const
     return 0 <= nPos && nPos < static_cast<sal_Int32>(maPortions.size()) ? maPortions[nPos].get() : nullptr;
 }
 
-ParaPortion* ParaPortionList::Release(sal_Int32 nPos)
+std::unique_ptr<ParaPortion> ParaPortionList::Release(sal_Int32 nPos)
 {
     if (nPos < 0 || static_cast<sal_Int32>(maPortions.size()) <= nPos)
     {
         SAL_WARN( "editeng", "ParaPortionList::Release - out of bounds pos " << nPos);
         return nullptr;
     }
-    ParaPortion* p = maPortions[nPos].release();
+    std::unique_ptr<ParaPortion> p = std::move(maPortions[nPos]);
     maPortions.erase(maPortions.begin()+nPos);
     return p;
 }
@@ -721,19 +718,19 @@ void ParaPortionList::Remove(sal_Int32 nPos)
     maPortions.erase(maPortions.begin()+nPos);
 }
 
-void ParaPortionList::Insert(sal_Int32 nPos, ParaPortion* p)
+void ParaPortionList::Insert(sal_Int32 nPos, std::unique_ptr<ParaPortion> p)
 {
     if (nPos < 0 || static_cast<sal_Int32>(maPortions.size()) < nPos)
     {
         SAL_WARN( "editeng", "ParaPortionList::Insert - out of bounds pos " << nPos);
         return;
     }
-    maPortions.insert(maPortions.begin()+nPos, std::unique_ptr<ParaPortion>(p));
+    maPortions.insert(maPortions.begin()+nPos, std::move(p));
 }
 
-void ParaPortionList::Append(ParaPortion* p)
+void ParaPortionList::Append(std::unique_ptr<ParaPortion> p)
 {
-    maPortions.push_back(std::unique_ptr<ParaPortion>(p));
+    maPortions.push_back(std::move(p));
 }
 
 sal_Int32 ParaPortionList::Count() const
@@ -788,7 +785,7 @@ ParaPortion* ParaPortionList::SafeGetObject(sal_Int32 nPos)
     return 0 <= nPos && nPos < static_cast<sal_Int32>(maPortions.size()) ? maPortions[nPos].get() : nullptr;
 }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
 void
 ParaPortionList::DbgCheck(ParaPortionList const& rParas, EditDoc const& rDoc)
 {
@@ -900,11 +897,10 @@ void ConvertAndPutItems( SfxItemSet& rDest, const SfxItemSet& rSource, const Map
             MapUnit eDestUnit = pDestUnit ? *pDestUnit : pDestPool->GetMetric( nWhich );
             if ( eSourceUnit != eDestUnit )
             {
-                SfxPoolItem* pItem = rSource.Get( nSourceWhich ).Clone();
+                std::unique_ptr<SfxPoolItem> pItem(rSource.Get( nSourceWhich ).Clone());
                 ConvertItem( *pItem, eSourceUnit, eDestUnit );
                 pItem->SetWhich(nWhich);
                 rDest.Put( *pItem );
-                delete pItem;
             }
             else
             {
@@ -1207,7 +1203,7 @@ void ContentNode::ExpandAttribs( sal_Int32 nIndex, sal_Int32 nNew, SfxItemPool& 
     if ( !nNew )
         return;
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
 #endif
 
@@ -1337,7 +1333,7 @@ void ContentNode::ExpandAttribs( sal_Int32 nIndex, sal_Int32 nNew, SfxItemPool& 
         mpWrongList->TextInserted( nIndex, nNew, bSep );
     }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
 #endif
 }
@@ -1347,7 +1343,7 @@ void ContentNode::CollapseAttribs( sal_Int32 nIndex, sal_Int32 nDeleted, SfxItem
     if ( !nDeleted )
         return;
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
 #endif
 
@@ -1431,7 +1427,7 @@ void ContentNode::CollapseAttribs( sal_Int32 nIndex, sal_Int32 nDeleted, SfxItem
     if (mpWrongList)
         mpWrongList->TextDeleted(nIndex, nDeleted);
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
 #endif
 }
@@ -1440,7 +1436,7 @@ void ContentNode::CopyAndCutAttribs( ContentNode* pPrevNode, SfxItemPool& rPool,
 {
     assert(pPrevNode);
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
     CharAttribList::DbgCheckAttribs(pPrevNode->aCharAttribList);
 #endif
@@ -1489,7 +1485,7 @@ void ContentNode::CopyAndCutAttribs( ContentNode* pPrevNode, SfxItemPool& rPool,
         pAttrib = GetAttrib(rPrevAttribs, nAttr);
     }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
     CharAttribList::DbgCheckAttribs(pPrevNode->aCharAttribList);
 #endif
@@ -1501,7 +1497,7 @@ void ContentNode::AppendAttribs( ContentNode* pNextNode )
 
     sal_Int32 nNewStart = maString.getLength();
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
     CharAttribList::DbgCheckAttribs(pNextNode->aCharAttribList);
 #endif
@@ -1559,7 +1555,7 @@ void ContentNode::AppendAttribs( ContentNode* pNextNode )
     // For the Attributes that just moved over:
     rNextAttribs.clear();
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(aCharAttribList);
     CharAttribList::DbgCheckAttribs(pNextNode->aCharAttribList);
 #endif
@@ -1633,7 +1629,7 @@ OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos) co
     DBG_ASSERT( nStartPos <= nEndPos, "Start and End reversed?" );
 
     sal_Int32 nIndex = nStartPos;
-    OUString aStr;
+    OUStringBuffer aStr;
     const EditCharAttrib* pNextFeature = GetCharAttribs().FindFeature( nIndex );
     while ( nIndex < nEndPos )
     {
@@ -1646,18 +1642,18 @@ OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos) co
         DBG_ASSERT( nEnd >= nIndex, "End in front of the index?" );
         //!! beware of sub string length  of -1
         if (nEnd > nIndex)
-            aStr += GetString().copy(nIndex, nEnd - nIndex);
+            aStr.appendCopy( GetString(), nIndex, nEnd - nIndex );
 
         if ( pNextFeature )
         {
             switch ( pNextFeature->GetItem()->Which() )
             {
-                case EE_FEATURE_TAB:    aStr += "\t";
+                case EE_FEATURE_TAB:    aStr.append( "\t" );
                 break;
-                case EE_FEATURE_LINEBR: aStr += "\x0A";
+                case EE_FEATURE_LINEBR: aStr.append( "\x0A" );
                 break;
                 case EE_FEATURE_FIELD:
-                    aStr += static_cast<const EditCharAttribField*>(pNextFeature)->GetFieldValue();
+                    aStr.append( static_cast<const EditCharAttribField*>(pNextFeature)->GetFieldValue() );
                 break;
                 default:    OSL_FAIL( "What feature?" );
             }
@@ -1665,7 +1661,7 @@ OUString ContentNode::GetExpandedText(sal_Int32 nStartPos, sal_Int32 nEndPos) co
         }
         nIndex = nEnd;
     }
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 void ContentNode::UnExpandPosition( sal_Int32 &rPos, bool bBiasStart )
@@ -1931,7 +1927,7 @@ public:
     explicit RemoveEachItemFromPool(EditDoc& rDoc) : mrDoc(rDoc) {}
     void operator() (const std::unique_ptr<ContentNode>& rNode)
     {
-        mrDoc.RemoveItemsFromPool(*rNode.get());
+        mrDoc.RemoveItemsFromPool(*rNode);
     }
 };
 
@@ -2105,7 +2101,7 @@ void EditDoc::Release(sal_Int32 nPos)
         SAL_WARN( "editeng", "EditDoc::Release - out of bounds pos " << nPos);
         return;
     }
-    maContents[nPos].release();
+    (void)maContents[nPos].release();
     maContents.erase(maContents.begin() + nPos);
 }
 
@@ -2400,7 +2396,7 @@ bool EditDoc::RemoveAttribs( ContentNode* pNode, sal_Int32 nStart, sal_Int32 nEn
 
     DBG_ASSERT( nStart <= nEnd, "Small miscalculations in InsertAttribInSelection" );
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(pNode->GetCharAttribs());
 #endif
 
@@ -2495,7 +2491,7 @@ bool EditDoc::RemoveAttribs( ContentNode* pNode, sal_Int32 nStart, sal_Int32 nEn
         SetModified(true);
     }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(pNode->GetCharAttribs());
 #endif
 
@@ -2725,7 +2721,7 @@ void CharAttribList::InsertAttrib( EditCharAttrib* pAttrib )
 
     const sal_Int32 nStart = pAttrib->GetStart(); // may be better for Comp.Opt.
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(*this);
 #endif
 
@@ -2746,7 +2742,7 @@ void CharAttribList::InsertAttrib( EditCharAttrib* pAttrib )
 
     if (bInsert) aAttribs.push_back(std::unique_ptr<EditCharAttrib>(pAttrib));
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(*this);
 #endif
 }
@@ -2755,14 +2751,14 @@ void CharAttribList::ResortAttribs()
 {
     std::sort(aAttribs.begin(), aAttribs.end(), LessByStart());
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(*this);
 #endif
 }
 
 void CharAttribList::OptimizeRanges( SfxItemPool& rItemPool )
 {
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(*this);
 #endif
     for (sal_Int32 i = 0; i < static_cast<sal_Int32>(aAttribs.size()); ++i)
@@ -2787,7 +2783,7 @@ void CharAttribList::OptimizeRanges( SfxItemPool& rItemPool )
             }
         }
     }
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(*this);
 #endif
 }
@@ -2804,7 +2800,7 @@ const EditCharAttrib* CharAttribList::FindAttrib( sal_uInt16 nWhich, sal_Int32 n
     AttribsType::const_reverse_iterator it = aAttribs.rbegin(), itEnd = aAttribs.rend();
     for (; it != itEnd; ++it)
     {
-        const EditCharAttrib& rAttr = *it->get();
+        const EditCharAttrib& rAttr = **it;
         if (rAttr.Which() == nWhich && rAttr.IsIn(nPos))
             return &rAttr;
     }
@@ -2818,7 +2814,7 @@ EditCharAttrib* CharAttribList::FindAttrib( sal_uInt16 nWhich, sal_Int32 nPos )
     AttribsType::reverse_iterator it = aAttribs.rbegin(), itEnd = aAttribs.rend();
     for (; it != itEnd; ++it)
     {
-        EditCharAttrib& rAttr = *it->get();
+        EditCharAttrib& rAttr = **it;
         if (rAttr.Which() == nWhich && rAttr.IsIn(nPos))
             return &rAttr;
     }
@@ -2830,7 +2826,7 @@ const EditCharAttrib* CharAttribList::FindNextAttrib( sal_uInt16 nWhich, sal_Int
     assert(nWhich);
     for (auto const& attrib : aAttribs)
     {
-        const EditCharAttrib& rAttr = *attrib.get();
+        const EditCharAttrib& rAttr = *attrib;
         if (rAttr.GetStart() >= nFromPos && rAttr.Which() == nWhich)
             return &rAttr;
     }
@@ -2842,7 +2838,7 @@ bool CharAttribList::HasAttrib( sal_Int32 nStartPos, sal_Int32 nEndPos ) const
     AttribsType::const_reverse_iterator it = aAttribs.rbegin(), itEnd = aAttribs.rend();
     for (; it != itEnd; ++it)
     {
-        const EditCharAttrib& rAttr = *it->get();
+        const EditCharAttrib& rAttr = **it;
         if (rAttr.GetStart() < nEndPos && rAttr.GetEnd() > nStartPos)
             return true;
     }
@@ -2892,7 +2888,7 @@ bool CharAttribList::HasBoundingAttrib( sal_Int32 nBound ) const
     AttribsType::const_reverse_iterator it = aAttribs.rbegin(), itEnd = aAttribs.rend();
     for (; it != itEnd; ++it)
     {
-        const EditCharAttrib& rAttr = *it->get();
+        const EditCharAttrib& rAttr = **it;
         if (rAttr.GetEnd() < nBound)
             return false;
 
@@ -2968,7 +2964,7 @@ void CharAttribList::DeleteEmptyAttribs( SfxItemPool& rItemPool )
     bHasEmptyAttribs = false;
 }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
 void CharAttribList::DbgCheckAttribs(CharAttribList const& rAttribs)
 {
     std::set<std::pair<sal_Int32, sal_uInt16>> zero_set;

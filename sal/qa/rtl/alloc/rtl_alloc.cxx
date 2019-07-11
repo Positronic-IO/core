@@ -33,7 +33,7 @@ namespace rtl_alloc
 
     // small memory check routine, which return false, if there is a problem
 
-    bool checkMemory(const char* _pMemory, sal_uInt32 _nSize, char _n)
+    static bool checkMemory(const char* _pMemory, sal_uInt32 _nSize, char _n)
     {
         bool bOk = true;
 
@@ -155,10 +155,10 @@ public:
 
     void test()
     {
-        const char *sample = "Hello World";
+        const char sample[] = "Hello World";
         std::vector<OUString> aStrings;
 
-        rtl_alloc_preInit(rtlAllocPreInitStart);
+        rtl_alloc_preInit(true);
 
         OUString aFoo("foo");
 
@@ -168,7 +168,7 @@ public:
             for (int i = 1; i < 4096; i += 8)
             {
                 OUStringBuffer aBuf(i);
-                aBuf.appendAscii(sample, (i/8) % (sizeof(sample)-1));
+                aBuf.appendAscii(sample, (i/8) % (SAL_N_ELEMENTS(sample)-1));
                 OUString aStr = aBuf.makeStringAndClear();
                 aStrings.push_back(aStr);
             }
@@ -183,7 +183,7 @@ public:
         }
 
         // should static-ize all the strings.
-        rtl_alloc_preInit(rtlAllocPreInitEnd);
+        rtl_alloc_preInit(false);
 
         for (size_t i = 0; i < aStrings.size(); ++i)
             CPPUNIT_ASSERT_MESSAGE( "static after.", (aStrings[i].pData->refCount & SAL_STRING_STATIC_FLAG) );

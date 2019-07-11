@@ -25,6 +25,7 @@
 #include <oox/ole/oleobjecthelper.hxx>
 #include <ooxml/resourceids.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <unotools/mediadescriptor.hxx>
 #include <officecfg/Office/Common.hxx>
@@ -94,8 +95,10 @@ void OLEHandler::lcl_attribute(Id rName, Value & rVal)
             rVal.getAny() >>= m_xInputStream;
         break;
         case NS_ooxml::LN_CT_Object_dxaOrig:
+             m_sVisAreaWidth = sStringValue;
         break;
         case NS_ooxml::LN_CT_Object_dyaOrig:
+             m_sVisAreaHeight = sStringValue;
         break;
         case NS_ooxml::LN_shape:
         {
@@ -105,7 +108,10 @@ void OLEHandler::lcl_attribute(Id rName, Value & rVal)
             // Control shape is handled on a different code path
             uno::Reference< lang::XServiceInfo > xSInfo( xTempShape, uno::UNO_QUERY_THROW );
             if(xSInfo->supportsService("com.sun.star.drawing.ControlShape"))
+            {
+                m_rDomainMapper.hasControls(true);
                 break;
+            }
 
             if( xTempShape.is() )
             {
@@ -156,7 +162,7 @@ void OLEHandler::lcl_sprm(Sprm & rSprm)
             writerfilter::Reference<Properties>::Pointer_t pProperties = rSprm.getProps();
             if ( pProperties.get( ) )
             {
-                std::shared_ptr<WrapHandler> pHandler( new WrapHandler );
+                tools::SvRef<WrapHandler> pHandler( new WrapHandler );
                 pProperties->resolve( *pHandler );
 
                 m_nWrapMode = pHandler->getWrapMode( );
@@ -256,6 +262,16 @@ OUString OLEHandler::getCLSID(const uno::Reference<uno::XComponentContext>& xCom
 OUString const & OLEHandler::GetDrawAspect() const
 {
     return m_sDrawAspect;
+}
+
+OUString const & OLEHandler::GetVisAreaWidth() const
+{
+    return m_sVisAreaWidth;
+}
+
+OUString const & OLEHandler::GetVisAreaHeight() const
+{
+    return m_sVisAreaHeight;
 }
 
 OUString OLEHandler::copyOLEOStream(

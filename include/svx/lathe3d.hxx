@@ -37,8 +37,8 @@ class SVX_DLLPUBLIC E3dLatheObj final : public E3dCompoundObject
 {
     basegfx::B2DPolyPolygon maPolyPoly2D;
 
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
     void SetDefaultAttributes(const E3dDefaultAttributes& rDefault);
 
 private:
@@ -111,7 +111,7 @@ public:
 
     // break up
     virtual bool IsBreakObjPossible() override;
-    virtual SdrAttrObj* GetBreakObj() override;
+    virtual std::unique_ptr<SdrAttrObj,SdrObjectFreeOp> GetBreakObj() override;
 };
 
 #endif // INCLUDED_SVX_LATHE3D_HXX

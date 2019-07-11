@@ -24,6 +24,7 @@
 #include <com/sun/star/embed/NoVisualAreaSizeException.hpp>
 #include <com/sun/star/datatransfer/XTransferable.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
+#include <osl/diagnose.h>
 #include <sot/exchange.hxx>
 #include <svtools/embedtransfer.hxx>
 #include <tools/mapunit.hxx>
@@ -117,7 +118,7 @@ bool SvEmbedTransferHelper::GetData( const css::datatransfer::DataFlavor& rFlavo
                             if ( xStg->isStreamElement( aName ) )
                             {
                                 uno::Reference < io::XStream > xStm = xStg->cloneStreamElement( aName );
-                                pStream = utl::UcbStreamHelper::CreateStream( xStm );
+                                pStream = utl::UcbStreamHelper::CreateStream( xStm ).release();
                                 bDeleteStream = true;
                             }
                             else
@@ -127,7 +128,7 @@ bool SvEmbedTransferHelper::GetData( const css::datatransfer::DataFlavor& rFlavo
                                 xStg->openStorageElement( aName, embed::ElementModes::READ )->copyToStorage( xStor );
                             }
 
-                            const sal_uInt32               nLen = pStream->Seek( STREAM_SEEK_TO_END );
+                            const sal_uInt32               nLen = pStream->TellEnd();
                             css::uno::Sequence< sal_Int8 > aSeq( nLen );
 
                             pStream->Seek( STREAM_SEEK_TO_BEGIN );
@@ -159,7 +160,7 @@ bool SvEmbedTransferHelper::GetData( const css::datatransfer::DataFlavor& rFlavo
                     const_cast<GDIMetaFile*>(&aMetaFile)->Write( aMemStm );
                     uno::Any aAny;
                     aAny <<= uno::Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aMemStm.GetData() ),
-                                                    aMemStm.Seek( STREAM_SEEK_TO_END ) );
+                                                    aMemStm.TellEnd() );
                     SetAny( aAny );
                     bRet = true;
                 }

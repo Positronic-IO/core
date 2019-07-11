@@ -31,6 +31,7 @@
 #include <vcl/commandinfoprovider.hxx>
 
 #include <sal/macros.h>
+#include <osl/diagnose.h>
 
 #define LID_RECORD_LABEL    1000
 #define LID_RECORD_FILLER   1001
@@ -238,12 +239,12 @@ namespace frm
         // items. We could duplicate all the information here in our lib
         // (such as the item text and the image), but why should we?
 
-        struct FeatureDescription
+        static struct FeatureDescription
         {
             sal_uInt16      nId;
             bool        bRepeat;
             bool        bItemWindow;
-        } aSupportedFeatures[] =
+        } const aSupportedFeatures[] =
         {
             { LID_RECORD_LABEL,                     false, true },
             { FormFeature::MoveAbsolute,            false, true },
@@ -270,8 +271,8 @@ namespace frm
             { FormFeature::RemoveFilterAndSort,     false, false },
         };
 
-        FeatureDescription* pSupportedFeatures = aSupportedFeatures;
-        FeatureDescription* pSupportedFeaturesEnd = aSupportedFeatures + SAL_N_ELEMENTS( aSupportedFeatures );
+        FeatureDescription const * pSupportedFeatures = aSupportedFeatures;
+        FeatureDescription const * pSupportedFeaturesEnd = aSupportedFeatures + SAL_N_ELEMENTS( aSupportedFeatures );
         for ( ; pSupportedFeatures < pSupportedFeaturesEnd; ++pSupportedFeatures )
         {
             if ( pSupportedFeatures->nId )
@@ -345,8 +346,7 @@ namespace frm
         const ToolBox::ImplToolItems::size_type nItemCount = m_pToolbar->GetItemCount();
 
         // collect the FormFeatures in the toolbar
-        typedef ::std::vector< sal_Int16 >  FormFeatures;
-        FormFeatures aFormFeatures;
+        std::vector<sal_Int16> aFormFeatures;
         aFormFeatures.reserve( nItemCount );
 
         for ( ToolBox::ImplToolItems::size_type i=0; i<nItemCount; ++i )

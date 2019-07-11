@@ -31,6 +31,7 @@
 #include <vcl/waitobj.hxx>
 #include <svl/aeitem.hxx>
 #include <editeng/editstat.hxx>
+#include <editeng/outlobj.hxx>
 #include <vcl/weld.hxx>
 #include <svl/urlbmk.hxx>
 #include <svx/svdpagv.hxx>
@@ -79,6 +80,7 @@
 #include <fuconarc.hxx>
 #include <fucon3d.hxx>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <Outliner.hxx>
 #include <PresentationViewShell.hxx>
 #include <sdpage.hxx>
@@ -94,6 +96,7 @@
 #include <Window.hxx>
 #include <fuformatpaintbrush.hxx>
 #include <fuzoom.hxx>
+#include <sdmod.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -104,7 +107,7 @@ namespace sd {
 
 // Permanent Functions
 
-void ImpAddPrintableCharactersToTextEdit(SfxRequest const & rReq, ::sd::View* pView)
+static void ImpAddPrintableCharactersToTextEdit(SfxRequest const & rReq, ::sd::View* pView)
 {
     // evtl. feed characters to activated textedit
     const SfxItemSet* pSet = rReq.GetArgs();
@@ -270,7 +273,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                 if(pPageView)
                 {
                     svx::ODataAccessDescriptor aDescriptor(pDescriptorItem->GetValue());
-                    SdrObject* pNewDBField = pFormView->CreateFieldControl(aDescriptor);
+                    SdrObjectUniquePtr pNewDBField = pFormView->CreateFieldControl(aDescriptor);
 
                     if(pNewDBField)
                     {
@@ -283,7 +286,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
 
                         pNewDBField->SetLogicRect(aNewObjectRectangle);
 
-                        GetView()->InsertObjectAtView(pNewDBField, *pPageView);
+                        GetView()->InsertObjectAtView(pNewDBField.release(), *pPageView);
                     }
                 }
             }
@@ -303,16 +306,13 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_OBJECT_CROOK_STRETCH:
         case SID_CONVERT_TO_3D_LATHE:
         {
-            short nSlotId = rReq.GetSlot();
+            sal_uInt16 nSlotId = rReq.GetSlot();
 
-            if( nSlotId == sal_uInt16(SID_OBJECT_ROTATE) )
+            // toggle function
+            if( nOldSId == nSlotId )
             {
-                // toggle rotation
-                if( nOldSId == nSlotId )
-                {
-                    nSlotId = SID_OBJECT_SELECT;
-                    rReq.SetSlot( nSlotId );
-                }
+                nSlotId = SID_OBJECT_SELECT;
+                rReq.SetSlot( nSlotId );
             }
 
             if (nSlotId == SID_OBJECT_CROOK_ROTATE ||
@@ -543,8 +543,15 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_ZOOM_MODE:
         case SID_ZOOM_PANNING:
         {
-            mbZoomOnPage = false;
-            SetCurrentFunction( FuZoom::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
+            if (nOldSId != nSId)
+            {
+                mbZoomOnPage = false;
+                SetCurrentFunction( FuZoom::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq ) );
+            }
+            else
+            {
+                GetViewFrame()->GetDispatcher()->Execute(SID_OBJECT_SELECT, SfxCallMode::ASYNCHRON);
+            }
             rReq.Done();
         }
         break;
@@ -609,12 +616,13 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         if(pPageView)
         {
             // create the default object
-            SdrObject* pObj = GetCurrentFunction()->CreateDefaultObject(nSId, aNewObjectRectangle);
+            SdrObjectUniquePtr pObj = GetCurrentFunction()->CreateDefaultObject(nSId, aNewObjectRectangle);
 
             if(pObj)
             {
+                auto pObjTmp = pObj.get();
                 // insert into page
-                GetView()->InsertObjectAtView(pObj, *pPageView);
+                GetView()->InsertObjectAtView(pObj.release(), *pPageView);
 
                 // Now that pFuActual has done what it was created for we
                 // can switch on the edit mode for callout objects.
@@ -629,7 +637,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
                             ExecuteList(SID_TEXTEDIT, SfxCallMode::SYNCHRON |
                                 SfxCallMode::RECORD, { &aItem });
                         // Put text object into edit mode.
-                        GetView()->SdrBeginTextEdit(static_cast<SdrTextObj*>(pObj), pPageView);
+                        GetView()->SdrBeginTextEdit(static_cast<SdrTextObj*>(pObjTmp), pPageView);
                         break;
                     }
                 }
@@ -655,7 +663,7 @@ void DrawViewShell::FuDeleteSelectedObjects()
         for (size_t i=0; i < rMarkList.GetMarkCount(); ++i)
         {
             SdrObject* pObj = rMarkList.GetMark(i)->GetMarkedSdrObj();
-            SdPage* pPage = static_cast<SdPage*>(pObj->GetPage());
+            SdPage* pPage = static_cast<SdPage*>(pObj->getSdrPageFromSdrObject());
             PresObjKind eKind = pPage->GetPresObjKind(pObj);
             if (eKind == PRESOBJ_FOOTER || eKind == PRESOBJ_HEADER ||
                 eKind == PRESOBJ_DATETIME || eKind == PRESOBJ_SLIDENUMBER)
@@ -668,7 +676,7 @@ void DrawViewShell::FuDeleteSelectedObjects()
         {
             //Unmark object
             mpDrawView->MarkObj(pObj, mpDrawView->GetSdrPageView(), true);
-            SdPage* pPage = static_cast<SdPage*>(pObj->GetPage());
+            SdPage* pPage = static_cast<SdPage*>(pObj->getSdrPageFromSdrObject());
             //remove placeholder from master page
             pPage->DestroyDefaultPresObj(pPage->GetPresObjKind(pObj));
         }
@@ -776,7 +784,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
                 mpDrawView->UnmarkAllPoints();
 
                 if( bUndo )
-                    mpDrawView->AddUndo(new SdrUndoGeoObj(*pPathObj));
+                    mpDrawView->AddUndo(o3tl::make_unique<SdrUndoGeoObj>(*pPathObj));
 
                 pPathObj->ToggleClosed();
 
@@ -1014,7 +1022,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
                 ViewShellHint(ViewShellHint::HINT_CHANGE_EDIT_MODE_START));
 
             // turn on default layer of MasterPage
-            mpDrawView->SetActiveLayer( SdResId(STR_LAYER_BCKGRNDOBJ) );
+            mpDrawView->SetActiveLayer(sUNO_LayerName_background_objects);
 
             ChangeEditMode(EditMode::MasterPage, mbIsLayerModeActive);
 
@@ -1456,7 +1464,7 @@ void DrawViewShell::InsertURLField(const OUString& rURL, const OUString& rText,
         aURLField.SetTargetFrame(rTarget);
         SvxFieldItem aURLItem(aURLField, EE_FEATURE_FIELD);
         pOutl->QuickInsertField( aURLItem, ESelection() );
-        OutlinerParaObject* pOutlParaObject = pOutl->CreateParaObject();
+        std::unique_ptr<OutlinerParaObject> pOutlParaObject = pOutl->CreateParaObject();
 
         SdrRectObj* pRectObj = new SdrRectObj(
             GetView()->getSdrModelFromSdrView(),
@@ -1476,7 +1484,7 @@ void DrawViewShell::InsertURLField(const OUString& rURL, const OUString& rText,
 
         ::tools::Rectangle aLogicRect(aPos, aSize);
         pRectObj->SetLogicRect(aLogicRect);
-        pRectObj->SetOutlinerParaObject( pOutlParaObject );
+        pRectObj->SetOutlinerParaObject( std::move(pOutlParaObject) );
         mpDrawView->InsertObjectAtView(pRectObj, *mpDrawView->GetSdrPageView());
         pOutl->Init( nOutlMode );
     }
@@ -1540,8 +1548,8 @@ void DrawViewShell::InsertURLButton(const OUString& rURL, const OUString& rText,
             SdrObjFactory::MakeNewObject(
                 GetView()->getSdrModelFromSdrView(),
                 SdrInventor::FmForm,
-                OBJ_FM_BUTTON,
-                mpDrawView->GetSdrPageView()->GetPage()));
+                OBJ_FM_BUTTON)); //,
+                //mpDrawView->GetSdrPageView()->GetPage()));
 
         Reference< awt::XControlModel > xControlModel( pUnoCtrl->GetUnoControlModel(), uno::UNO_QUERY_THROW );
         Reference< beans::XPropertySet > xPropSet( xControlModel, uno::UNO_QUERY_THROW );

@@ -172,7 +172,7 @@ public:
 
     SwUndoFormatAttr* GetUndo() const  { return m_pUndo.get(); }
     // release the undo object (so it is not deleted here), and return it
-    SwUndoFormatAttr* ReleaseUndo()    { return m_pUndo.release(); }
+    std::unique_ptr<SwUndoFormatAttr> ReleaseUndo()    { return std::move(m_pUndo); }
 };
 
 class SwUndoMoveLeftMargin : public SwUndo, private SwUndRng
@@ -212,12 +212,11 @@ class SwUndoChangeFootNote : public SwUndo, private SwUndRng
 {
     const std::unique_ptr<SwHistory> m_pHistory;
     const OUString m_Text;
-    const sal_uInt16 m_nNumber;
     const bool m_bEndNote;
 
 public:
     SwUndoChangeFootNote( const SwPaM& rRange, const OUString& rText,
-                          sal_uInt16 nNum, bool bIsEndNote );
+                          bool bIsEndNote );
     virtual ~SwUndoChangeFootNote() override;
 
     virtual void UndoImpl( ::sw::UndoRedoContext & ) override;

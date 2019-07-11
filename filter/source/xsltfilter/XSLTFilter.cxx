@@ -28,12 +28,14 @@
 #include <osl/conditn.hxx>
 #include <rtl/strbuf.hxx>
 #include <tools/urlobj.hxx>
+#include <sal/log.hxx>
 
 #include <comphelper/interaction.hxx>
 #include <comphelper/processfactory.hxx>
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/EventObject.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <com/sun/star/uno/Any.hxx>
 

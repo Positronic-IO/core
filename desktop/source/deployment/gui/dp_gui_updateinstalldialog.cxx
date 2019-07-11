@@ -344,7 +344,9 @@ void UpdateInstallDialog::Thread::downloadExtensions()
             dp_misc::create_folder(nullptr, destFolder, m_updateCmdEnv.get() );
         } catch (const cssu::Exception & e)
         {
-            throw cssu::Exception(e.Message + " No extensions will be installed.", nullptr);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetException( e.Message + " No extensions will be installed",
+                            nullptr, anyEx );
         }
 
 
@@ -596,9 +598,10 @@ bool UpdateInstallDialog::Thread::download(OUString const & sDownloadURL, Update
 
     const OUString sTitle( StrTitle::getTitle( sourceContent ) );
 
-    if (destFolderContent.transferContent(
+    destFolderContent.transferContent(
             sourceContent, ::ucbhelper::InsertOperation::Copy,
-            sTitle, css::ucb::NameClash::OVERWRITE ))
+            sTitle, css::ucb::NameClash::OVERWRITE );
+
     {
         //the user may have cancelled the dialog because downloading took to long
         SolarMutexGuard g;

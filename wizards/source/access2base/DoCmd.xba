@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
-<script:module xmlns:script="http://openoffice.org/2000/script" script:name="DoCmd" script:language="StarBasic">REM =======================================================================================================================
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="DoCmd" script:language="StarBasic">
+REM =======================================================================================================================
 REM ===					The Access2Base library is a part of the LibreOffice project.									===
 REM ===					Full documentation is available on http://www.access2base.com									===
 REM =======================================================================================================================
@@ -124,7 +125,7 @@ Dim oDatabase As Object
 	&apos;	Check existence of object and find its exact (case-sensitive) name
 	Select Case pvObjectType
 		Case acForm
-			sObjects = oDatabase.Document.getFormDocuments.ElementNames()
+			sObjects = Application._GetAllHierarchicalNames()
 			lComponent = com.sun.star.sdb.application.DatabaseObject.FORM
 		Case acTable
 			sObjects = oDatabase.Connection.getTables.ElementNames()
@@ -148,7 +149,7 @@ Dim oDatabase As Object
 	
 	Select Case pvObjectType
 		Case acForm
-			Set oController = oDatabase.Document.getFormDocuments.getByName(sObjectName)
+			Set oController = oDatabase.Document.getFormDocuments.getByHierarchicalName(sObjectName)
 			mClose = oController.close()
 		Case acTable, acQuery				&apos;	Not optimal but it works !!
 			Set oController = oDatabase.Document.CurrentController
@@ -274,6 +275,7 @@ Const cstProgressMeterLimit = 100
 					_ConvertDataDescriptor oSourceCol, oSourceDatabase._RDBMS, oTargetCol, oDatabase
 					oTarget.Columns.appendByDescriptor(oTargetCol)
 				Next i
+
 				&apos;	Copy keys
 				Set oSourceKeys = oSourceTable.Keys
 				Set oTargetKey = oTarget.Keys.createDataDescriptor()
@@ -361,6 +363,7 @@ Const cstProgressMeterLimit = 100
 										Utils._updateResultSetColumnValue(iRDBMS, oOutput.RowSet, i + 1, vField)
 									End If
 								Next i
+
 								If oOutput.RowSet.IsNew And oOutput.RowSet.IsModified Then oOutput.RowSet.insertRow()
 								oOutput._EditMode = dbEditNone
 								lInputRecs = lInputRecs + 1
@@ -1139,6 +1142,8 @@ Dim sFilter As String, oForm As Object, oFormsCollection As Object
 	Else
 		sFilter = &quot;(&quot; &amp; pvFilterName &amp; &quot;) And (&quot; &amp; pvWhereCondition &amp; &quot;)&quot;
 	End If
+	Set oFormsCollection = oOpenForm.DrawPage.Forms
+	If oFormsCollection.getCount() &gt; 0 Then Set oForm = oFormsCollection.getByIndex(0) Else Set oForm = Nothing
 	If Not IsNull(oForm) Then
 		If sFilter &lt;&gt; &quot;&quot; Then
 			oForm.Filter = oDatabase._ReplaceSquareBrackets(sFilter)
@@ -1173,7 +1178,7 @@ Dim sFilter As String, oForm As Object, oFormsCollection As Object
 		End If
 		.Visible = ( pvWindowMode &lt;&gt; acHidden )
 		._OpenArgs = pvOpenArgs
-		&apos;To avoid AOO 3,4 bug See http://user.services.openoffice.org/en/forum/viewtopic.php?f=13&amp;t=53751
+		&apos;To avoid AOO 3.4 bug See http://user.services.openoffice.org/en/forum/viewtopic.php?f=13&amp;t=53751
 		.Component.CurrentController.ViewSettings.ShowOnlineLayout = True
 	End With
 
@@ -2354,6 +2359,7 @@ Dim oEnum As Object, oDesk As Object, oComp As Object, oFrame As Object, i As In
 Dim bFound As Boolean, bActive As Boolean, sName As String, iType As Integer, sDocumentType As String
 Dim sImplementation As String, vLocation() As Variant
 Dim oWindow As _Window
+Dim vPersistent As Variant, oForm As Object
 
 	If _ErrorHandler() Then On Local Error Goto Error_Function
 
@@ -2401,7 +2407,10 @@ Dim oWindow As _Window
 							iType = acDocument
 							sDocumentType = docWriter
 					End Select
-					If iType = acForm Or iType = acReport Then		&apos;	Identify Form or Report name
+					If iType = acForm Then				&apos;	Identify persistent Form name
+						vPersistent = Split(oComp.StringValue, &quot;/&quot;)
+						sName = _GetHierarchicalName(vPersistent(UBound(vPersistent) - 1))
+					ElseIf iType = acReport Then		&apos;	Identify Report name
 						For i = 0 To UBound(oComp.Args())
 							If oComp.Args(i).Name = &quot;DocumentTitle&quot; Then
 								sName = oComp.Args(i).Value
@@ -2447,7 +2456,7 @@ Dim oWindow As _Window
 				Set oFrame = oComp.Frame
 				iType = acDiagram
 				sName = &quot;&quot;
-			Case &quot;com.sun.star.comp.sfx2.BackingComp&quot;				&apos;	Welcome screen
+			Case &quot;com.sun.star.comp.sfx2.BackingComp&quot;				&apos;		Welcome screen
 				Set oFrame = oComp.Frame
 				iType = acWelcome
 				sName = &quot;&quot;

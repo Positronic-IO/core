@@ -20,6 +20,7 @@
 #include <statusbarcontroller.hxx>
 
 #include <cppuhelper/supportsservice.hxx>
+#include <comphelper/types.hxx>
 #include <svx/zoomsliderctrl.hxx>
 #include <svx/zoomctrl.hxx>
 #include <svx/svxids.hrc>
@@ -102,11 +103,13 @@ void SAL_CALL OStatusbarController::initialize( const Sequence< Any >& _rArgumen
         SfxStatusBarControl *pController = nullptr;
         if ( m_aCommandURL == ".uno:ZoomSlider" )
         {
-            pController = new SvxZoomSliderControl(m_nSlotId = SID_ATTR_ZOOMSLIDER,m_nId,*pStatusBar);
+            m_nSlotId = SID_ATTR_ZOOMSLIDER;
+            pController = new SvxZoomSliderControl(m_nSlotId,m_nId,*pStatusBar);
         }
         else if ( m_aCommandURL == ".uno:Zoom" )
         {
-            pController = new SvxZoomStatusBarControl(m_nSlotId = SID_ATTR_ZOOM,m_nId,*pStatusBar);
+            m_nSlotId = SID_ATTR_ZOOM;
+            pController = new SvxZoomStatusBarControl(m_nSlotId,m_nId,*pStatusBar);
         }
 
         if ( pController )

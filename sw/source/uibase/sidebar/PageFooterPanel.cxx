@@ -25,12 +25,14 @@
 #include <svx/svxids.hrc>
 #include <svx/dlgutil.hxx>
 #include <svx/rulritem.hxx>
+#include <svx/svdtrans.hxx>
 #include "PageFooterPanel.hxx"
 #include <sfx2/sidebar/ControlFactory.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/objsh.hxx>
+#include <uitool.hxx>
 #include <cmdid.h>
 
 namespace sw { namespace sidebar{
@@ -66,8 +68,11 @@ PageFooterPanel::PageFooterPanel(
 {
     get(mpFooterToggle, "footertoggle");
     get(mpFooterSpacingLB, "spacingpreset");
+    FieldUnit eMetric = ::GetDfltMetric(false);
+    mpFooterSpacingLB->Init(IsInch(eMetric) ? SpacingType::SPACING_INCH : SpacingType::SPACING_CM);
     get(mpFooterLayoutLB, "samecontentLB");
     get(mpFooterMarginPresetLB, "footermarginpreset");
+    mpFooterMarginPresetLB->Init(IsInch(GetModuleFieldUnit()) ? SpacingType::MARGINS_INCH : SpacingType::MARGINS_CM);
     get(mpCustomEntry, "customlabel");
 
     Initialize();
@@ -177,7 +182,7 @@ void PageFooterPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_FOOTER:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SfxBoolItem*>( pState) !=  nullptr )
+                dynamic_cast<const SfxBoolItem*>( pState) )
             {
                 mpFooterItem.reset( static_cast<SfxBoolItem*>(pState->Clone()) );
                 mpFooterToggle->Check(mpFooterItem->GetValue());
@@ -188,7 +193,7 @@ void PageFooterPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_FOOTER_LRMARGIN:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SvxLongLRSpaceItem*>( pState) !=  nullptr )
+                dynamic_cast<const SvxLongLRSpaceItem*>( pState) )
             {
                 mpFooterLRMarginItem.reset( static_cast<SvxLongLRSpaceItem*>(pState->Clone()) );
                 UpdateMarginControl();
@@ -198,7 +203,7 @@ void PageFooterPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_FOOTER_SPACING:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SvxLongULSpaceItem*>( pState) !=  nullptr )
+                dynamic_cast<const SvxLongULSpaceItem*>( pState) )
             {
                 mpFooterSpacingItem.reset(static_cast<SvxLongULSpaceItem*>(pState->Clone()) );
                 UpdateSpacingControl();
@@ -208,7 +213,7 @@ void PageFooterPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_FOOTER_LAYOUT:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SfxInt16Item*>( pState) !=  nullptr )
+                dynamic_cast<const SfxInt16Item*>( pState) )
             {
                 mpFooterLayoutItem.reset(static_cast<SfxInt16Item*>(pState->Clone()) );
                 UpdateLayoutControl();

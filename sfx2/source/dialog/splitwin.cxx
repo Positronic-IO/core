@@ -25,6 +25,7 @@
 
 #include <vcl/wrkwin.hxx>
 #include <unotools/viewoptions.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/menu.hxx>
 #include <vcl/timer.hxx>
@@ -242,7 +243,7 @@ SfxSplitWindow::SfxSplitWindow( vcl::Window* pParent, SfxChildAlignment eAl,
             sal_uInt16 nCount = static_cast<sal_uInt16>(aWinData.getToken(i++, ',').toInt32());
             for ( sal_uInt16 n=0; n<nCount; n++ )
             {
-                SfxDock_Impl *pDock = new SfxDock_Impl;
+                std::unique_ptr<SfxDock_Impl> pDock(new SfxDock_Impl);
                 pDock->pWin = nullptr;
                 pDock->bNewLine = false;
                 pDock->bHide = true;
@@ -254,14 +255,13 @@ SfxSplitWindow::SfxSplitWindow( vcl::Window* pParent, SfxChildAlignment eAl,
                     if ( !pDock->nType )
                     {
                         // Read error
-                        delete pDock;
                         break;
                     }
                     else
                         pDock->bNewLine = true;
                 }
 
-                maDockArr.insert(maDockArr.begin() + n, std::unique_ptr<SfxDock_Impl>(pDock));
+                maDockArr.insert(maDockArr.begin() + n, std::move(pDock));
             }
         }
     }
@@ -281,8 +281,7 @@ SfxSplitWindow::~SfxSplitWindow()
 
 void SfxSplitWindow::dispose()
 {
-    if ( !pWorkWin->GetParent_Impl() )
-        SaveConfig_Impl();
+    SaveConfig_Impl();
 
     if ( pEmptyWin )
     {
@@ -657,7 +656,7 @@ void SfxSplitWindow::InsertWindow_Impl( SfxDock_Impl const * pDock,
         nWinSize = rSize.Height();
     }
 
-    DeactivateUpdateMode* pDeactivateUpdateMode = new DeactivateUpdateMode( *this );
+    std::unique_ptr<DeactivateUpdateMode> pDeactivateUpdateMode(new DeactivateUpdateMode( *this ));
 
     if ( bNewLine || nLine == GetItemCount() )
     {
@@ -727,7 +726,7 @@ void SfxSplitWindow::InsertWindow_Impl( SfxDock_Impl const * pDock,
         pWorkWin->ShowChildren_Impl();
     }
 
-    delete pDeactivateUpdateMode;
+    pDeactivateUpdateMode.reset();
 
     // workaround insufficiency of <SplitWindow> regarding dock layouting:
     // apply FIXED item size as 'original' item size to improve layouting of undock-dock-cycle of a window

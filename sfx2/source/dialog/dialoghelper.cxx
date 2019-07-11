@@ -14,47 +14,9 @@
 #include <vcl/settings.hxx>
 #include <vector>
 
-//these tab pages both have the same basic layout with a preview on the
-//right, get both of their non-preview areas to request the same size
-//so that the preview appears in the same place in each one so
-//flipping between tabs isn't distracting as it jumps around
-void setPreviewsToSamePlace(vcl::Window const *pParent, VclBuilderContainer *pPage)
+Size getParagraphPreviewOptimalSize(const OutputDevice& rReference)
 {
-    vcl::Window *pOurGrid = pPage->get<vcl::Window>("maingrid");
-    if (!pOurGrid)
-        return;
-
-    std::vector<vcl::Window*> aGrids;
-    aGrids.push_back(pOurGrid);
-
-    for (vcl::Window* pChild = pParent->GetWindow(GetWindowType::FirstChild); pChild;
-        pChild = pChild->GetWindow(GetWindowType::Next))
-    {
-        VclBuilderContainer *pPeer = dynamic_cast<VclBuilderContainer*>(pChild);
-        if (!pPeer || pPeer == pPage || !pPeer->hasBuilder())
-            continue;
-
-        vcl::Window *pOtherGrid = pPeer->get<vcl::Window>("maingrid");
-        if (!pOtherGrid)
-            continue;
-
-       aGrids.push_back(pOtherGrid);
-    }
-
-    if (aGrids.size() > 1)
-    {
-        std::shared_ptr<VclSizeGroup> xGroup(std::make_shared<VclSizeGroup>());
-        for (auto const& grid : aGrids)
-        {
-            grid->remove_from_all_size_groups();
-            grid->add_to_size_group(xGroup);
-        }
-    }
-}
-
-Size getParagraphPreviewOptimalSize(const vcl::Window *pReference)
-{
-    return pReference->LogicToPixel(Size(68 , 112), MapMode(MapUnit::MapAppFont));
+    return rReference.LogicToPixel(Size(68 , 112), MapMode(MapUnit::MapAppFont));
 }
 
 Size getDrawPreviewOptimalSize(const vcl::Window *pReference)
@@ -62,9 +24,9 @@ Size getDrawPreviewOptimalSize(const vcl::Window *pReference)
     return pReference->LogicToPixel(Size(88, 42), MapMode(MapUnit::MapAppFont));
 }
 
-Size getPreviewStripSize(const vcl::Window *pReference)
+Size getPreviewStripSize(const OutputDevice& rReference)
 {
-    return pReference->LogicToPixel(Size(70 , 40), MapMode(MapUnit::MapAppFont));
+    return rReference.LogicToPixel(Size(70 , 40), MapMode(MapUnit::MapAppFont));
 }
 
 Size getPreviewOptionsSize(const vcl::Window *pReference)

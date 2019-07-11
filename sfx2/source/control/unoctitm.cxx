@@ -43,7 +43,6 @@
 #include <com/sun/star/frame/ModuleManager.hpp>
 #include <com/sun/star/frame/status/Visibility.hpp>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/sequence.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <uno/current_context.hxx>
 #include <vcl/svapp.hxx>
@@ -532,13 +531,14 @@ void UsageInfo::save()
 
     if( file.open(osl_File_OpenFlag_Read | osl_File_OpenFlag_Write | osl_File_OpenFlag_Create) == osl::File::E_None )
     {
-        OString aUsageInfoMsg = "Document Type;Command;Count";
+        OStringBuffer aUsageInfoMsg("Document Type;Command;Count");
 
         for (auto const& elem : maUsage)
-            aUsageInfoMsg += "\n" + elem.first.toUtf8() + ";" + OString::number(elem.second);
+            aUsageInfoMsg.append("\n").append(elem.first.toUtf8()).append(";").append(OString::number(elem.second));
 
         sal_uInt64 written = 0;
-        file.write(aUsageInfoMsg.pData->buffer, aUsageInfoMsg.getLength(), written);
+        auto s = aUsageInfoMsg.makeStringAndClear();
+        file.write(s.getStr(), s.getLength(), written);
         file.close();
     }
 }
@@ -594,13 +594,13 @@ void collectUsageInformation(const util::URL& rURL, const uno::Sequence<beans::P
     theUsageInfo::get().increment(aCommand);
 }
 
-void collectUIInformation(const util::URL& rURL)
+void collectUIInformation(const util::URL& rURL, const css::uno::Sequence< css::beans::PropertyValue >& rArgs)
 {
     static const char* pFile = std::getenv("LO_COLLECT_UIINFO");
     if (!pFile)
         return;
 
-    UITestLogger::getInstance().logCommand(rURL.Complete);
+    UITestLogger::getInstance().logCommand("CommandSent Name:" + rURL.Complete, rArgs);
 }
 
 }
@@ -610,7 +610,7 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
         const css::uno::Reference< css::frame::XDispatchResultListener >& rListener )
 {
     collectUsageInformation(aURL, aArgs);
-    collectUIInformation(aURL);
+    collectUIInformation(aURL,aArgs);
 
     SolarMutexGuard aGuard;
     if (
@@ -713,8 +713,7 @@ void SfxDispatchController_Impl::dispatch( const css::util::URL& aURL,
                 if ( !pDispatcher->IsLocked() )
                 {
                     const SfxSlot *pSlot = nullptr;
-                    if ( pDispatcher->GetShellAndSlot_Impl( GetId(), &pShell, &pSlot, false,
-                                                            SfxCallMode::MODAL==(nCall&SfxCallMode::MODAL), false ) )
+                    if ( pDispatcher->GetShellAndSlot_Impl( GetId(), &pShell, &pSlot, false, false ) )
                     {
                         if ( bMasterSlave )
                         {
@@ -1154,7 +1153,7 @@ static void InterceptLOKStateChangeEvent(const SfxViewFrame* pViewFrame, const c
 
         if (aEvent.IsEnabled && (aEvent.State >>= aPoint))
         {
-            aBuffer.append(OUString::number(aPoint.X) + " / " + OUString::number(aPoint.Y));
+            aBuffer.append(OUString::number(aPoint.X)).append(" / ").append(OUString::number(aPoint.Y));
         }
     }
     else if (aEvent.FeatureURL.Path == "Size")
@@ -1163,7 +1162,7 @@ static void InterceptLOKStateChangeEvent(const SfxViewFrame* pViewFrame, const c
 
         if (aEvent.IsEnabled && (aEvent.State >>= aSize))
         {
-            aBuffer.append(OUString::number(aSize.Width) + " x " + OUString::number(aSize.Height));
+            aBuffer.append(OUString::number(aSize.Width)).append(" x ").append(OUString::number(aSize.Height));
         }
     }
     else if (aEvent.FeatureURL.Path == "LanguageStatus")
@@ -1194,7 +1193,7 @@ static void InterceptLOKStateChangeEvent(const SfxViewFrame* pViewFrame, const c
                 aBuffer.append(u'{');
                 for (sal_Int32 itSeq = 0; itSeq < aSeq.getLength(); itSeq++)
                 {
-                    aBuffer.append("\"" + aSeq[itSeq]);
+                    aBuffer.append("\"").append(aSeq[itSeq]);
                     if (itSeq != aSeq.getLength() - 1)
                         aBuffer.append("\":true,");
                     else

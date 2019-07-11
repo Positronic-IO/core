@@ -19,16 +19,20 @@
 
 #include <vcl/errinf.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/xml/sax/SAXParseException.hpp>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <editeng/outlobj.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/docfilt.hxx>
 #include <sfx2/sfxsids.hrc>
+#include <sot/storage.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <Outliner.hxx>
 #include <unotools/streamwrap.hxx>
 #include <svx/dialmgr.hxx>
@@ -143,9 +147,9 @@ struct XML_SERVICES
     const sal_Char* mpSettings;
 };
 
-XML_SERVICES* getServices( bool bImport, bool bDraw, sal_uLong nStoreVer )
+static XML_SERVICES const * getServices( bool bImport, bool bDraw, sal_uLong nStoreVer )
 {
-    static XML_SERVICES gServices[] =
+    static XML_SERVICES const gServices[] =
     {
         { sXML_export_impress_meta_oasis_service, sXML_export_impress_styles_oasis_service, sXML_export_impress_content_oasis_service, sXML_export_impress_settings_oasis_service },
         { sXML_export_draw_meta_oasis_service, sXML_export_draw_styles_oasis_service, sXML_export_draw_content_oasis_service, sXML_export_draw_settings_oasis_service },
@@ -412,7 +416,7 @@ ErrCode ReadThroughComponent(
 //But there exist documents which were saved previous to that modification
 //so here we detect such cases and fix them up to ensure the previews
 //numbering level matches that of the outline level it previews
-void fixupOutlinePlaceholderNumberingDepths(SdDrawDocument* pDoc)
+static void fixupOutlinePlaceholderNumberingDepths(SdDrawDocument* pDoc)
 {
     for (sal_uInt16 i = 0; i < pDoc->GetMasterSdPageCount(PageKind::Standard); ++i)
     {
@@ -618,7 +622,7 @@ bool SdXMLFilter::Import( ErrCode& nError )
 
         const OUString aName( mrMedium.GetName() );
 
-        XML_SERVICES* pServices = getServices( true, IsDraw(), mnStoreVer );
+        XML_SERVICES const * pServices = getServices( true, IsDraw(), mnStoreVer );
 
         ErrCode nWarn = ERRCODE_NONE;
         ErrCode nWarn2 = ERRCODE_NONE;
@@ -911,7 +915,7 @@ bool SdXMLFilter::Export()
 
             uno::Reference< lang::XComponent > xComponent( mxModel, uno::UNO_QUERY );
 
-            XML_SERVICES* pServiceNames = getServices( false, IsDraw(), mnStoreVer );
+            XML_SERVICES const * pServiceNames = getServices( false, IsDraw(), mnStoreVer );
 
             XML_SERVICEMAP aServices[5]; sal_uInt16 i = 0;
             aServices[i  ].mpService = pServiceNames->mpStyles;
@@ -1100,16 +1104,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportPPTX(SvStream &rStream)
     {
         ret = xFilter->filter(aArgs);
     }
-    catch (const css::io::IOException&)
-    {
-    }
-    catch (const css::xml::sax::SAXException&)
-    {
-    }
-    catch (const css::lang::IllegalArgumentException&)
-    {
-    }
-    catch (const css::lang::WrappedTargetRuntimeException&)
+    catch (...)
     {
     }
     xDocSh->SetLoading(SfxLoadedFlags::ALL);

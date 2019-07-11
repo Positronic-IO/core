@@ -29,12 +29,12 @@ template <typename DataProvider> class DifferentialEvolutionAlgorithm
 
     DataProvider& mrDataProvider;
 
-    size_t mnPopulationSize;
+    size_t const mnPopulationSize;
     std::vector<Individual> maPopulation;
 
     std::random_device maRandomDevice;
     std::mt19937 maGenerator;
-    size_t mnDimensionality;
+    size_t const mnDimensionality;
 
     std::uniform_int_distribution<> maRandomPopulation;
     std::uniform_int_distribution<> maRandomDimensionality;
@@ -76,6 +76,7 @@ public:
         // Initialize population with individuals that have been initialized with uniform random
         // noise
         // uniform noise means random value inside your search space
+        maPopulation.reserve(mnPopulationSize);
         for (size_t i = 0; i < mnPopulationSize; ++i)
         {
             maPopulation.emplace_back();

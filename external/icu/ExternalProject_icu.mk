@@ -32,7 +32,7 @@ $(call gb_ExternalProject_get_state_target,icu,build) :
 else # $(OS)
 
 icu_CFLAGS:=" \
-	$(if $(filter IOS,$(OS)),-DUCONFIG_NO_FILE_IO) \
+	$(if $(filter iOS,$(OS)),-DUCONFIG_NO_FILE_IO) \
 	$(if $(SYSBASE),-I$(SYSBASE)/usr/include) \
 	$(if $(ENABLE_OPTIMIZED),$(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) \
 	$(if $(debug),$(gb_DEBUG_CFLAGS)) \
@@ -42,20 +42,19 @@ icu_CFLAGS:=" \
 	$(if $(filter FUZZERS,$(BUILD_TYPE)),-DU_USE_STRTOD_L=0) \
 	$(if $(filter ANDROID,$(OS)),-fvisibility=hidden -fno-omit-frame-pointer)"
 icu_CXXFLAGS:="$(CXXFLAGS) $(CXXFLAGS_CXX11) \
-	$(if $(filter IOS,$(OS)),-DUCONFIG_NO_FILE_IO) \
+	$(if $(filter iOS,$(OS)),-DUCONFIG_NO_FILE_IO) \
 	$(if $(ENABLE_OPTIMIZED),$(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) \
 	$(if $(debug),$(gb_DEBUG_CFLAGS)) \
 	$(if $(ENABLE_LTO),$(gb_LTOFLAGS)) \
 	$(if $(filter GCC,$(COM)),-fno-strict-aliasing) \
 	$(if $(filter $(true),$(gb_SYMBOL)),$(gb_DEBUGINFO_FLAGS)) \
 	$(if $(filter FUZZERS,$(BUILD_TYPE)),-DU_USE_STRTOD_L=0) \
-	$(if $(filter ANDROID,$(OS)),-fvisibility=hidden -fno-omit-frame-pointer)"
+	$(if $(filter ANDROID,$(OS)),-fvisibility=hidden -fno-omit-frame-pointer $(SOLARINC))"
 icu_LDFLAGS:=" \
 	$(if $(ENABLE_LTO),$(gb_LTOFLAGS)) \
 	$(if $(filter TRUE,$(HAVE_LD_HASH_STYLE)),-Wl$(COMMA)--hash-style=$(WITH_LINKER_HASH_STYLE)) \
     $(if $(SYSBASE),-L../lib -L../../lib -L../stubdata -L../../stubdata -L$(SYSBASE)/usr/lib) \
-    $(if $(filter TRUE,$(HAVE_LD_BSYMBOLIC_FUNCTIONS)),\
-	    -Wl$(COMMA)-Bsymbolic-functions -Wl$(COMMA)--dynamic-list-cpp-new -Wl$(COMMA)--dynamic-list-cpp-typeinfo) \
+    $(if $(filter TRUE,$(HAVE_LD_BSYMBOLIC_FUNCTIONS)), -Wl$(COMMA)-Bsymbolic-functions) \
     $(if $(filter ANDROID,$(OS)),$(gb_STDLIBS))"
 
 # DATASUBDIR=data in cross-compiling case, because --disable-tools completely skips the
@@ -67,8 +66,9 @@ $(call gb_ExternalProject_get_state_target,icu,build) :
 		CXXFLAGS=$(icu_CXXFLAGS) LDFLAGS=$(icu_LDFLAGS) \
 		./configure \
 			--disable-layout --disable-samples \
+			$(if $(filter FUZZERS,$(BUILD_TYPE)),--disable-release) \
 			$(if $(CROSS_COMPILING),--disable-tools --disable-extras) \
-			$(if $(filter IOS ANDROID,$(OS)),--disable-dyload) \
+			$(if $(filter iOS ANDROID,$(OS)),--disable-dyload) \
 			$(if $(filter ANDROID,$(OS)),--disable-strict ac_cv_c_bigendian=no) \
 			$(if $(filter SOLARIS AIX,$(OS)),--disable-64bit-libs) \
 			$(if $(filter TRUE,$(DISABLE_DYNLOADING)),\

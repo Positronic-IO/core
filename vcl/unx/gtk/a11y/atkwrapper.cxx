@@ -55,6 +55,7 @@
 #include <com/sun/star/beans/Property.hpp>
 
 #include <rtl/ref.hxx>
+#include <rtl/strbuf.hxx>
 #include <osl/diagnose.h>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/queryinterface.hxx>
@@ -176,7 +177,7 @@ AtkStateType mapAtkState( sal_Int16 nState )
     return type;
 }
 
-static inline AtkRole getRoleForName( const gchar * name )
+static AtkRole getRoleForName( const gchar * name )
 {
     AtkRole ret = atk_role_for_name( name );
     if( ATK_ROLE_INVALID == ret )
@@ -283,11 +284,17 @@ static AtkRole mapToAtkRole( sal_Int16 nRole )
         , ATK_ROLE_DOCUMENT_PRESENTATION
         , ATK_ROLE_DOCUMENT_SPREADSHEET
         , ATK_ROLE_DOCUMENT_TEXT
+#if ATK_CHECK_VERSION(2,15,2)
+        , ATK_ROLE_STATIC
+#else
+        , ATK_ROLE_LABEL
+#endif
 #else
         //older version should fallback to DOCUMENT_FRAME role
         , ATK_ROLE_DOCUMENT_FRAME
         , ATK_ROLE_DOCUMENT_FRAME
         , ATK_ROLE_DOCUMENT_FRAME
+        , ATK_ROLE_LABEL
 #endif
     };
 
@@ -297,7 +304,7 @@ static AtkRole mapToAtkRole( sal_Int16 nRole )
     {
         // the accessible roles below were added to ATK in later versions,
         // with role_for_name we will know if they exist in runtime.
-        roleMap[accessibility::AccessibleRole::EDIT_BAR] = getRoleForName("editbar");
+        roleMap[accessibility::AccessibleRole::EDIT_BAR] = getRoleForName("edit bar");
         roleMap[accessibility::AccessibleRole::EMBEDDED_OBJECT] = getRoleForName("embedded");
         roleMap[accessibility::AccessibleRole::CHART] = getRoleForName("chart");
         roleMap[accessibility::AccessibleRole::CAPTION] = getRoleForName("caption");
@@ -310,8 +317,8 @@ static AtkRole mapToAtkRole( sal_Int16 nRole )
         roleMap[accessibility::AccessibleRole::IMAGE_MAP] = getRoleForName("image map");
         roleMap[accessibility::AccessibleRole::TREE_ITEM] = getRoleForName("tree item");
         roleMap[accessibility::AccessibleRole::HYPER_LINK] = getRoleForName("link");
-        roleMap[accessibility::AccessibleRole::END_NOTE] = getRoleForName("comment");
-        roleMap[accessibility::AccessibleRole::FOOTNOTE] = getRoleForName("comment");
+        roleMap[accessibility::AccessibleRole::END_NOTE] = getRoleForName("footnote");
+        roleMap[accessibility::AccessibleRole::FOOTNOTE] = getRoleForName("footnote");
         roleMap[accessibility::AccessibleRole::NOTE] = getRoleForName("comment");
 
         initialized = true;
@@ -469,7 +476,7 @@ wrapper_get_index_in_parent( AtkObject *atk_obj )
 {
     AtkObjectWrapper *obj = ATK_OBJECT_WRAPPER (atk_obj);
 
-    //if we're a native GtkDrawingArea with custom a11y, use the default toolkit index in parent
+    //if we're a native GtkDrawingArea with custom a11y, use the default toolkit a11y
     if (obj->mpOrig)
         return atk_object_get_index_in_parent(obj->mpOrig);
 
@@ -686,12 +693,12 @@ isOfType( uno::XInterface *pInterface, const uno::Type & rType )
 }
 
 extern "C" {
-typedef  GType (* GetGIfaceType ) (void);
+typedef  GType (* GetGIfaceType ) ();
 }
 const struct {
         const char          *name;
-        GInterfaceInitFunc   aInit;
-        GetGIfaceType        aGetGIfaceType;
+        GInterfaceInitFunc const   aInit;
+        GetGIfaceType const        aGetGIfaceType;
         const uno::Type &  (*aGetUnoType) ();
 } aTypeTable[] = {
 // re-location heaven:
@@ -751,17 +758,18 @@ ensureTypeFor( uno::XInterface *pAccessible )
 {
     int i;
     bool bTypes[ aTypeTableSize ] = { false, };
-    OString aTypeName( "OOoAtkObj" );
+    OStringBuffer aTypeNameBuf( "OOoAtkObj" );
 
     for( i = 0; i < aTypeTableSize; i++ )
     {
         if( isOfType( pAccessible, aTypeTable[i].aGetUnoType() ) )
         {
-            aTypeName += aTypeTable[i].name;
+            aTypeNameBuf.append(aTypeTable[i].name);
             bTypes[i] = true;
         }
     }
 
+    OString aTypeName = aTypeNameBuf.makeStringAndClear();
     GType nType = g_type_from_name( aTypeName.getStr() );
     if( nType == G_TYPE_INVALID )
     {

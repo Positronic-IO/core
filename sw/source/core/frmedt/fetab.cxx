@@ -39,6 +39,8 @@
 #include <IDocumentState.hxx>
 #include <IDocumentLayoutAccess.hxx>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <rootfrm.hxx>
 #include <pagefrm.hxx>
 #include <tabfrm.hxx>
@@ -61,7 +63,7 @@
 #include <swerror.h>
 #include <swundo.hxx>
 #include <frmtool.hxx>
-
+#include <fmtrowsplt.hxx>
 #include <node.hxx>
 #include <sortedobjs.hxx>
 
@@ -70,7 +72,7 @@ using namespace ::com::sun::star;
 // also see swtable.cxx
 #define COLFUZZY 20L
 
-inline bool IsSame( long nA, long nB ) { return  std::abs(nA-nB) <= COLFUZZY; }
+static bool IsSame( long nA, long nB ) { return  std::abs(nA-nB) <= COLFUZZY; }
 
 class TableWait
 {
@@ -201,7 +203,7 @@ void SwFEShell::InsertRow( sal_uInt16 nCnt, bool bBehind )
 
     TableWait aWait( nCnt, pFrame, *GetDoc()->GetDocShell(), aBoxes.size() );
 
-    if ( aBoxes.size() )
+    if ( !aBoxes.empty() )
         GetDoc()->InsertRow( aBoxes, nCnt, bBehind );
 
     EndAllActionAndCall();
@@ -347,7 +349,9 @@ bool SwFEShell::DeleteRow(bool bCompleteTable)
         //  2. the preceding row, if there is another row before this
         //  3. otherwise below the table
         {
-            SwTableNode* pTableNd = static_cast<SwContentFrame*>(pFrame)->GetNode()->FindTableNode();
+            SwTableNode* pTableNd = pFrame->IsTextFrame()
+                ? static_cast<SwTextFrame*>(pFrame)->GetTextNodeFirst()->FindTableNode()
+                : static_cast<SwNoTextFrame*>(pFrame)->GetNode()->FindTableNode();
 
             // search all boxes / lines
             FndBox_ aFndBox( nullptr, nullptr );
@@ -714,9 +718,9 @@ void SwFEShell::SetRowSplit( const SwFormatRowSplit& rNew )
     EndAllActionAndCall();
 }
 
-void SwFEShell::GetRowSplit( SwFormatRowSplit*& rpSz ) const
+std::unique_ptr<SwFormatRowSplit> SwFEShell::GetRowSplit() const
 {
-    SwDoc::GetRowSplit( *getShellCursor( false ), rpSz );
+    return SwDoc::GetRowSplit( *getShellCursor( false ) );
 }
 
 void SwFEShell::SetRowHeight( const SwFormatFrameSize &rNew )
@@ -727,17 +731,17 @@ void SwFEShell::SetRowHeight( const SwFormatFrameSize &rNew )
     EndAllActionAndCall();
 }
 
-void SwFEShell::GetRowHeight( SwFormatFrameSize *& rpSz ) const
+std::unique_ptr<SwFormatFrameSize> SwFEShell::GetRowHeight() const
 {
-    SwDoc::GetRowHeight( *getShellCursor( false ), rpSz );
+    return SwDoc::GetRowHeight( *getShellCursor( false ) );
 }
 
-bool SwFEShell::BalanceRowHeight( bool bTstOnly )
+bool SwFEShell::BalanceRowHeight( bool bTstOnly, const bool bOptimize )
 {
     SET_CURR_SHELL( this );
     if( !bTstOnly )
         StartAllAction();
-    bool bRet = GetDoc()->BalanceRowHeight( *getShellCursor( false ), bTstOnly );
+    bool bRet = GetDoc()->BalanceRowHeight( *getShellCursor( false ), bTstOnly, bOptimize );
     if( !bTstOnly )
         EndAllActionAndCall();
     return bRet;
@@ -1016,8 +1020,9 @@ static sal_uInt16 lcl_GetRowNumber( const SwPosition& rPos )
     const SwContentNode *pNd;
     const SwContentFrame *pFrame;
 
+    std::pair<Point, bool> const tmp(aTmpPt, false);
     if( nullptr != ( pNd = rPos.nNode.GetNode().GetContentNode() ))
-        pFrame = pNd->getLayoutFrame( pNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aTmpPt, &rPos, false );
+        pFrame = pNd->getLayoutFrame(pNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &rPos, &tmp);
     else
         pFrame = nullptr;
 
@@ -1102,7 +1107,7 @@ bool SwFEShell::CheckHeadline( bool bRepeat ) const
     return bRet;
 }
 
-void SwFEShell::AdjustCellWidth( bool bBalance )
+void SwFEShell::AdjustCellWidth( bool bBalance, const bool bNoShrink, const bool bColumnWidth )
 {
     SET_CURR_SHELL( this );
     StartAllAction();
@@ -1112,7 +1117,7 @@ void SwFEShell::AdjustCellWidth( bool bBalance )
     TableWait aWait(std::numeric_limits<size_t>::max(), nullptr,
                   *GetDoc()->GetDocShell());
 
-    GetDoc()->AdjustCellWidth( *getShellCursor( false ), bBalance );
+    GetDoc()->AdjustCellWidth( *getShellCursor( false ), bBalance, bNoShrink, bColumnWidth );
     EndAllActionAndCall();
 }
 
@@ -1805,8 +1810,8 @@ bool SwFEShell::SelTableRowCol( const Point& rPt, const Point* pEnd, bool bRowDr
 
             if ( pContent && pContent->IsTextFrame() )
             {
-                ppPos[i] = new SwPosition( *pContent->GetNode() );
-                ppPos[i]->nContent.Assign( const_cast<SwContentNode*>(pContent->GetNode()), 0 );
+
+                ppPos[i] = new SwPosition(static_cast<SwTextFrame const*>(pContent)->MapViewToModelPos(TextFrameIndex(0)));
 
                 // paPt[i] will not be used any longer, now we use it to store
                 // a position inside the content frame
@@ -2274,12 +2279,8 @@ static bool lcl_IsFormulaSelBoxes( const SwTable& rTable, const SwTableBoxFormul
     for (size_t nSelBoxes = aBoxes.size(); nSelBoxes; )
     {
         SwTableBox* pBox = aBoxes[ --nSelBoxes ];
-        SwCellFrames::iterator iC;
-        for( iC = rCells.begin(); iC != rCells.end(); ++iC )
-            if( (*iC)->GetTabBox() == pBox )
-                break;      // found
 
-        if( iC == rCells.end() )
+        if( std::none_of(rCells.begin(), rCells.end(), [&pBox](SwCellFrame* pFrame) { return pFrame->GetTabBox() == pBox; }) )
             return false;
     }
 

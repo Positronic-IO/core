@@ -19,7 +19,9 @@
 
 #include <dlg_DataEditor.hxx>
 #include "DataBrowser.hxx"
+#include <comphelper/stl_types.hxx>
 
+#include <osl/diagnose.h>
 #include <sfx2/dispatch.hxx>
 #include <vcl/taskpanelist.hxx>
 #include <svtools/miscopt.hxx>

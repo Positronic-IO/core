@@ -43,6 +43,7 @@
 #include <vcl/i18nhelp.hxx>
 #include <vcl/dockingarea.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 
 using namespace ::com::sun::star;
@@ -59,7 +60,6 @@ ToolbarLayoutManager::ToolbarLayoutManager(
     m_pParentLayouter( pParentLayouter ),
     m_eDockOperation( DOCKOP_ON_COLROW ),
     m_ePreviewDetection( PREVIEWFRAME_UNKNOWN ),
-    m_pAddonOptions( nullptr ),
     m_bComponentAttached( false ),
     m_bLayoutDirty( false ),
     m_bGlobalSettings( false ),
@@ -903,7 +903,7 @@ bool ToolbarLayoutManager::dockAllToolbars()
     return bResult;
 }
 
-long ToolbarLayoutManager::childWindowEvent( VclSimpleEvent const * pEvent )
+void ToolbarLayoutManager::childWindowEvent( VclSimpleEvent const * pEvent )
 {
     // To enable toolbar controllers to change their image when a sub-toolbar function
     // is activated, we need this mechanism. We have NO connection between these toolbars
@@ -982,8 +982,6 @@ long ToolbarLayoutManager::childWindowEvent( VclSimpleEvent const * pEvent )
             }
         }
     }
-
-    return 1;
 }
 
 void ToolbarLayoutManager::resetDockingArea()
@@ -3390,7 +3388,7 @@ awt::DockingData SAL_CALL ToolbarLayoutManager::docking( const awt::DockingEvent
                                                    aNewDockingRect.getWidth(), aNewDockingRect.getHeight() );
                 aDockingData.TrackingRectangle = aNewTrackingRect;
             }
-            else if ( pToolBox && bDockingInProgress )
+            else if (pToolBox)
             {
                 bool bIsHorizontal = isToolboxHorizontalAligned( pToolBox );
                 awt::Size aFloatSize = aUIDockingElement.m_aFloatingData.m_aSize;
@@ -3919,7 +3917,7 @@ uno::Sequence< uno::Reference< ui::XUIElement > > ToolbarLayoutManager::getToolb
     uno::Sequence< uno::Reference< ui::XUIElement > > aSeq;
 
     SolarMutexGuard g;
-    if ( m_aUIElements.size() > 0 )
+    if ( !m_aUIElements.empty() )
     {
         sal_uInt32 nCount(0);
         for (auto const& elem : m_aUIElements)

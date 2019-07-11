@@ -23,20 +23,16 @@
 #include <sfx2/dockwin.hxx>
 #include <vcl/fixed.hxx>
 #include <tools/fract.hxx>
-#include <vcl/group.hxx>
 #include <sfx2/ctrlitem.hxx>
 
 #include <vcl/button.hxx>
 #include <vcl/field.hxx>
-#include <svx/dlgctrl.hxx>
-#include <sfx2/progress.hxx>
 
 #include <vcl/lstbox.hxx>
 
 #include <misc/scopelock.hxx>
 
 class SdDrawDocument;
-class BitmapEx;
 
 namespace sd {
 
@@ -116,15 +112,15 @@ private:
     VclPtr<ListBox>        m_pLbAdjustment;
     VclPtr<PushButton>     m_pBtnCreateGroup;
 
-    ::std::vector< ::std::pair<BitmapEx*, ::tools::Time*> > m_FrameList;
+    ::std::vector< ::std::pair<BitmapEx, ::tools::Time> > m_FrameList;
     static const size_t EMPTY_FRAMELIST;
     size_t          m_nCurrentFrame;
-    SdDrawDocument* pMyDoc;
+    std::unique_ptr<SdDrawDocument> pMyDoc;
 
     bool            bMovie;
     bool            bAllObjects;
 
-    AnimationControllerItem*    pControllerItem;
+    std::unique_ptr<AnimationControllerItem> pControllerItem;
 
     ScopeLock       maPlayLock;
 

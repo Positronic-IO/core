@@ -20,17 +20,20 @@
 #include <memory>
 #include <xlroot.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/awt/XDevice.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <comphelper/processfactory.hxx>
+#include <sot/storage.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/stritem.hxx>
 #include <svl/languageoptions.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/docfile.hxx>
+#include <sfx2/sfxsids.hrc>
 #include <vcl/font.hxx>
 #include <vcl/settings.hxx>
 
@@ -49,6 +52,7 @@
 #include <xlstyle.hxx>
 #include <xlchart.hxx>
 #include <xltracer.hxx>
+#include <xltools.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/useroptions.hxx>
 #include <root.hxx>
@@ -74,6 +78,8 @@ XclDebugObjCounter::~XclDebugObjCounter()
 }
 #endif
 
+const OUStringLiteral XclRootData::gaDefPassword( "VelvetSweatshop" );
+
 XclRootData::XclRootData( XclBiff eBiff, SfxMedium& rMedium,
         tools::SvRef<SotStorage> const & xRootStrg, ScDocument& rDoc, rtl_TextEncoding eTextEnc, bool bExport ) :
     meBiff( eBiff ),
@@ -81,7 +87,6 @@ XclRootData::XclRootData( XclBiff eBiff, SfxMedium& rMedium,
     mrMedium( rMedium ),
     mxRootStrg( xRootStrg ),
     mrDoc( rDoc ),
-    maDefPassword( "VelvetSweatshop" ),
     meTextEnc( eTextEnc ),
     meSysLang( Application::GetSettings().GetLanguageTag().getLanguageType() ),
     meDocLang( Application::GetSettings().GetLanguageTag().getLanguageType() ),
@@ -235,7 +240,7 @@ sal_Int32 XclRoot::GetHmmFromPixelY( double fPixelY ) const
 uno::Sequence< beans::NamedValue > XclRoot::RequestEncryptionData( ::comphelper::IDocPasswordVerifier& rVerifier ) const
 {
     ::std::vector< OUString > aDefaultPasswords;
-    aDefaultPasswords.push_back( mrData.maDefPassword );
+    aDefaultPasswords.push_back( XclRootData::gaDefPassword );
     return ScfApiHelper::QueryEncryptionDataForMedium( mrData.mrMedium, rVerifier, &aDefaultPasswords );
 }
 
@@ -387,9 +392,9 @@ ScHeaderEditEngine& XclRoot::GetHFEditEngine() const
         // FillToEditItemSet() adjusts font height to 1/100th mm, we need twips
         std::unique_ptr<SfxPoolItem> pNewItem( aItemSet.Get( ATTR_FONT_HEIGHT ).CloneSetWhich(EE_CHAR_FONTHEIGHT));
         pEditSet->Put( *pNewItem );
-        pNewItem.reset( aItemSet.Get( ATTR_CJK_FONT_HEIGHT ).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK));
+        pNewItem = aItemSet.Get( ATTR_CJK_FONT_HEIGHT ).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK);
         pEditSet->Put( *pNewItem );
-        pNewItem.reset( aItemSet.Get( ATTR_CTL_FONT_HEIGHT ).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL));
+        pNewItem = aItemSet.Get( ATTR_CTL_FONT_HEIGHT ).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL);
         pEditSet->Put( *pNewItem );
         rEE.SetDefaults( pEditSet );    // takes ownership
    }

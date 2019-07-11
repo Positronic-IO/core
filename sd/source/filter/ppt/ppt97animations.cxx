@@ -24,6 +24,7 @@
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
 #include <svx/unoapi.hxx>
+#include <sal/log.hxx>
 #include <EffectMigration.hxx>
 #include <CustomAnimationPreset.hxx>
 #include <com/sun/star/drawing/XShape.hpp>
@@ -549,7 +550,7 @@ void Ppt97Animation::createAndSetCustomAnimationEffect( SdrObject* pObj )
 
     if( !HasEffect() )
         return;
-    if( !pObj || !pObj->GetPage() )
+    if( !pObj || !pObj->getSdrPageFromSdrObject() )
     {
         OSL_FAIL("no valid SdrObject or page found for ppt import");
         return;
@@ -561,7 +562,7 @@ void Ppt97Animation::createAndSetCustomAnimationEffect( SdrObject* pObj )
         OSL_FAIL("no XShape interface found for ppt import");
         return;
     }
-    ::sd::MainSequencePtr pMainSequence = static_cast<SdPage*>(pObj->GetPage())->getMainSequence();
+    ::sd::MainSequencePtr pMainSequence = static_cast<SdPage*>(pObj->getSdrPageFromSdrObject())->getMainSequence();
     if( !pMainSequence.get() )
     {
         OSL_FAIL("no MainSequence found for ppt import");
@@ -580,11 +581,6 @@ void Ppt97Animation::createAndSetCustomAnimationEffect( SdrObject* pObj )
 
     //1. ------ create an effect from the presets ------
     ::sd::CustomAnimationEffectPtr pEffect( new ::sd::CustomAnimationEffect( pPreset->create( GetPresetSubType() ) ) );
-    if( !pEffect.get() )
-    {
-        DBG_ASSERT(pEffect.get(),"no suitable effect found");
-        return;
-    }
 
     //2. ------ adapt the created effect ------
 

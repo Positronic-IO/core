@@ -11,11 +11,13 @@
 #include <PivotTableDataSequence.hxx>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <miscuno.hxx>
 #include <document.hxx>
 #include <docsh.hxx>
 #include <hints.hxx>
+#include <unonames.hxx>
 
 #include <com/sun/star/chart/ChartDataChangeEvent.hpp>
 
@@ -26,7 +28,7 @@ namespace sc
 
 SC_SIMPLE_SERVICE_INFO( PivotTableDataSequence, "PivotTableDataSequence", "com.sun.star.chart2.data.DataSequence")
 
-const SfxItemPropertyMapEntry* lcl_GetDataSequencePropertyMap()
+static const SfxItemPropertyMapEntry* lcl_GetDataSequencePropertyMap()
 {
     static const SfxItemPropertyMapEntry aDataSequencePropertyMap_Impl[] =
     {

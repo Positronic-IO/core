@@ -25,7 +25,6 @@
 #include <stringconstants.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/string.hxx>
-#include <svtools/miscopt.hxx>
 
 namespace dbaccess
 {
@@ -85,17 +84,20 @@ OUString ODsnTypeCollection::cutPrefix(const OUString& _sURL) const
     OUString sRet;
     OUString sOldPattern;
 
+    // on Windows or with gen rendering, the urls may begin with an ~
+    const OUString& sCleanURL = comphelper::string::stripStart(_sURL, '~');
+
     for (auto const& dsnPrefix : m_aDsnPrefixes)
     {
         WildCard aWildCard(dsnPrefix);
-        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(_sURL) )
+        if ( sOldPattern.getLength() < dsnPrefix.getLength() && aWildCard.Matches(sCleanURL) )
         {
             // This relies on the fact that all patterns are of the form
             //   foo*
             // that is, the very concept of "prefix" applies.
             OUString prefix(comphelper::string::stripEnd(dsnPrefix, '*'));
-            OSL_ENSURE(prefix.getLength() <= _sURL.getLength(), "How can A match B when A shorter than B?");
-            sRet = _sURL.copy(prefix.getLength());
+            OSL_ENSURE(prefix.getLength() <= sCleanURL.getLength(), "How can A match B when A shorter than B?");
+            sRet = sCleanURL.copy(prefix.getLength());
             sOldPattern = dsnPrefix;
         }
     }
@@ -208,8 +210,8 @@ void ODsnTypeCollection::extractHostNamePort(const OUString& _rDsn,OUString& _sD
             _rsHostname = sUrl.getToken(0,':');
         }
         if ( !_rsHostname.isEmpty() )
-            _rsHostname = _rsHostname.getToken(comphelper::string::getTokenCount(_rsHostname, '@') - 1, '@');
-        _sDatabaseName = sUrl.getToken(nUrlTokens - 1, ':');
+            _rsHostname = _rsHostname.copy(_rsHostname.lastIndexOf('@')+1);
+        _sDatabaseName = sUrl.copy(sUrl.lastIndexOf(':')+1);
     }
     else if ( _rDsn.startsWithIgnoreAsciiCase("sdbc:address:ldap:") )
     {
@@ -223,7 +225,7 @@ void ODsnTypeCollection::extractHostNamePort(const OUString& _rDsn,OUString& _sD
         const sal_Int32 nUrlTokens {comphelper::string::getTokenCount(sUrl, '/')};
         if ( _nPortNumber == -1 && _rsHostname.isEmpty() && nUrlTokens == 2 )
             _rsHostname = sUrl.getToken(0,'/');
-        _sDatabaseName = sUrl.getToken(nUrlTokens - 1, '/');
+        _sDatabaseName = sUrl.copy(sUrl.lastIndexOf('/')+1);
     }
     else if ( _rDsn.startsWithIgnoreAsciiCase("sdbc:ado:access:Provider=Microsoft.ACE.OLEDB.12.0;DATA SOURCE=")
            || _rDsn.startsWithIgnoreAsciiCase("sdbc:ado:access:PROVIDER=Microsoft.Jet.OLEDB.4.0;DATA SOURCE=") )
@@ -300,12 +302,7 @@ OUString ODsnTypeCollection::getEmbeddedDatabase() const
     }
     if ( sEmbeddedDatabaseURL.isEmpty() )
     {
-        SvtMiscOptions aMiscOptions;
-        if( aMiscOptions.IsExperimentalMode() )
-            sEmbeddedDatabaseURL = "sdbc:embedded:firebird";
-        else
-            sEmbeddedDatabaseURL = "sdbc:embedded:hsqldb";
-
+        sEmbeddedDatabaseURL = "sdbc:embedded:firebird";
     }
 
     return sEmbeddedDatabaseURL;

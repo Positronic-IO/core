@@ -122,8 +122,8 @@ namespace frm
 
     void ORichTextModel::implInit()
     {
-        OSL_ENSURE( m_pEngine.get(), "ORichTextModel::implInit: where's the engine?" );
-        if ( m_pEngine.get() )
+        OSL_ENSURE(m_pEngine, "ORichTextModel::implInit: where's the engine?");
+        if (m_pEngine)
         {
             m_pEngine->SetModifyHdl( LINK( this, ORichTextModel, OnEngineContentModified ) );
 
@@ -201,7 +201,7 @@ namespace frm
             acquire();
             dispose();
         }
-        if ( m_pEngine.get() )
+        if (m_pEngine)
         {
             SolarMutexGuard g;
             SfxItemPool* pPool = m_pEngine->getPool();
@@ -485,7 +485,7 @@ namespace frm
 
     void ORichTextModel::impl_smlock_setEngineText( const OUString& _rText )
     {
-        if ( m_pEngine.get() )
+        if (m_pEngine)
         {
             SolarMutexGuard aSolarGuard;
             m_bSettingEngineText = true;
@@ -524,17 +524,8 @@ namespace frm
 
     Sequence< sal_Int8 > ORichTextModel::getEditEngineTunnelId()
     {
-        static ::cppu::OImplementationId * pId = nullptr;
-        if (! pId)
-        {
-            ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-            if (! pId)
-            {
-                static ::cppu::OImplementationId aId;
-                pId = &aId;
-            }
-        }
-        return pId->getImplementationId();
+        static cppu::OImplementationId aId;
+        return aId.getImplementationId();
     }
 
 
@@ -584,7 +575,7 @@ namespace frm
     void ORichTextModel::potentialTextChange( )
     {
         OUString sCurrentEngineText;
-        if ( m_pEngine.get() )
+        if (m_pEngine)
             sCurrentEngineText = m_pEngine->GetText();
 
         if ( sCurrentEngineText != m_sLastKnownEngineText )

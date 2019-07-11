@@ -53,9 +53,9 @@ namespace {
 
 struct AutoFormatPatternEntry
 {
-    sal_Int32           mnColorToken;       /// Theme color token.
-    sal_Int32           mnModToken;         /// Color modification token.
-    sal_Int32           mnModValue;         /// Color modification value.
+    sal_Int32 const     mnColorToken;       /// Theme color token.
+    sal_Int32 const     mnModToken;         /// Color modification token.
+    sal_Int32 const     mnModValue;         /// Color modification value.
 };
 
 #define AUTOFORMAT_PATTERN_COLOR( color_token ) \
@@ -117,15 +117,15 @@ static const AutoFormatPatternEntry spAutoFormatPattern4[] =
 
 struct AutoFormatEntry
 {
-    sal_Int32           mnFirstStyleIdx;    /// First chart style index.
-    sal_Int32           mnLastStyleIdx;     /// Last chart style index.
-    sal_Int32           mnThemedIdx;        /// Themed style index.
-    sal_Int32           mnColorToken;       /// Theme color token.
-    sal_Int32           mnModToken;         /// Color modification token.
-    sal_Int32           mnModValue;         /// Color modification value.
-    sal_Int32           mnRelLineWidth;     /// Relative line width (percent).
+    sal_Int32 const     mnFirstStyleIdx;    /// First chart style index.
+    sal_Int32 const     mnLastStyleIdx;     /// Last chart style index.
+    sal_Int32 const     mnThemedIdx;        /// Themed style index.
+    sal_Int32 const     mnColorToken;       /// Theme color token.
+    sal_Int32 const     mnModToken;         /// Color modification token.
+    sal_Int32 const     mnModValue;         /// Color modification value.
+    sal_Int32 const     mnRelLineWidth;     /// Relative line width (percent).
     const AutoFormatPatternEntry* mpPattern;/// Color cycling pattern for data series.
-    bool                mbFadedColor;       /// True = Faded color for data series.
+    bool const          mbFadedColor;       /// True = Faded color for data series.
 };
 
 #define AUTOFORMAT_COLOR( first, last, themed_style, color_token ) \
@@ -394,13 +394,13 @@ const AutoFormatEntry* lclGetAutoFormatEntry( const AutoFormatEntry* pEntries, s
 
 struct AutoTextEntry
 {
-    sal_Int32           mnFirstStyleIdx;    /// First chart style index.
-    sal_Int32           mnLastStyleIdx;     /// Last chart style index.
-    sal_Int32           mnThemedFont;       /// Themed font (minor/major).
-    sal_Int32           mnColorToken;       /// Theme color token.
-    sal_Int32           mnDefFontSize;      /// Default font size (1/100 points).
-    sal_Int32           mnRelFontSize;      /// Font size relative to chart global font (percent).
-    bool                mbBold;             /// True = bold font.
+    sal_Int32 const     mnFirstStyleIdx;    /// First chart style index.
+    sal_Int32 const     mnLastStyleIdx;     /// Last chart style index.
+    sal_Int32 const     mnThemedFont;       /// Themed font (minor/major).
+    sal_Int32 const     mnColorToken;       /// Theme color token.
+    sal_Int32 const     mnDefFontSize;      /// Default font size (1/100 points).
+    sal_Int32 const     mnRelFontSize;      /// Font size relative to chart global font (percent).
+    bool const          mbBold;             /// True = bold font.
 };
 
 #define AUTOTEXT_COLOR( first, last, themed_font, color_token, def_font_size, rel_font_size, bold ) \
@@ -449,7 +449,8 @@ static const ShapePropertyIds spnCommonPropIds =
     PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID,
     PROP_FillStyle, PROP_FillColor, PROP_FillTransparence, PROP_INVALID, PROP_FillGradientName,
     PROP_FillBitmapName, PROP_FillBitmapMode, PROP_FillBitmapSizeX, PROP_FillBitmapSizeY,
-    PROP_FillBitmapPositionOffsetX, PROP_FillBitmapPositionOffsetY, PROP_FillBitmapRectanglePoint
+    PROP_FillBitmapPositionOffsetX, PROP_FillBitmapPositionOffsetY, PROP_FillBitmapRectanglePoint,
+    PROP_FillHatchName, PROP_FillBackground
 };
 
 static const ShapePropertyIds spnLinearPropIds =
@@ -458,7 +459,8 @@ static const ShapePropertyIds spnLinearPropIds =
     PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID,
     PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID,
     PROP_INVALID, PROP_INVALID, PROP_INVALID, PROP_INVALID,
-    PROP_INVALID, PROP_INVALID, PROP_INVALID
+    PROP_INVALID, PROP_INVALID, PROP_INVALID,
+    PROP_INVALID, PROP_INVALID
 };
 
 static const ShapePropertyIds spnFilledPropIds =
@@ -487,15 +489,16 @@ static const ShapePropertyIds spnFilledPropIds =
     PROP_FillBitmapPositionOffsetX,
     PROP_FillBitmapPositionOffsetY,
     PROP_FillBitmapRectanglePoint,
-    PROP_FillHatch
+    PROP_HatchName,
+    PROP_FillBackground
 };
 
 /** Property info for common chart objects, to be used in ShapePropertyMap. */
-static const ShapePropertyInfo saCommonPropInfo( spnCommonPropIds, false, true, true, true );
+static const ShapePropertyInfo saCommonPropInfo( spnCommonPropIds, false, true, true, true, true );
 /** Property info for linear data series, to be used in ShapePropertyMap. */
-static const ShapePropertyInfo saLinearPropInfo( spnLinearPropIds, false, true, true, true );
+static const ShapePropertyInfo saLinearPropInfo( spnLinearPropIds, false, true, true, true, true );
 /** Property info for filled data series, to be used in ShapePropertyMap. */
-static const ShapePropertyInfo saFilledPropInfo( spnFilledPropIds, false, true, true, true );
+static const ShapePropertyInfo saFilledPropInfo( spnFilledPropIds, false, true, true, true, true );
 
 /** Contains information about formatting of a specific chart object type. */
 struct ObjectTypeFormatEntry
@@ -505,7 +508,7 @@ struct ObjectTypeFormatEntry
     const AutoFormatEntry* mpAutoLines;     /// Automatic line formatting for all chart styles.
     const AutoFormatEntry* mpAutoFills;     /// Automatic fill formatting for all chart styles.
     const AutoTextEntry* mpAutoTexts;       /// Automatic text attributes for all chart styles.
-    bool                mbIsFrame;          /// True = object is a frame, false = object is a line.
+    bool const          mbIsFrame;          /// True = object is a frame, false = object is a line.
     ObjectTypeFormatEntry(ObjectType eObjType, const ShapePropertyInfo& rPropInfo,
                                  const AutoFormatEntry* pAutoLines,
                                  const AutoFormatEntry* pAutoFills,
@@ -704,8 +707,8 @@ struct ObjectFormatterData
     ModelObjectHelper   maModelObjHelper;       /// Helper for named drawing formatting (dashes, gradients, bitmaps).
     Reference< XNumberFormats > mxNumFmts;      /// Number formats collection of container document.
     Reference< XNumberFormatTypes > mxNumTypes; /// Number format types collection of container document.
-    Locale              maEnUsLocale;           /// Locale struct containing en-US.
-    Locale              maFromLocale;           /// Empty locale struct.
+    Locale const        maEnUsLocale;           /// Locale struct containing en-US.
+    Locale const        maFromLocale;           /// Empty locale struct.
     sal_Int32           mnMaxSeriesIdx;         /// Maximum series index used for color cycling/fading.
 
     explicit            ObjectFormatterData(
@@ -1116,6 +1119,26 @@ void ObjectFormatter::convertAutomaticFill( PropertySet& rPropSet, ObjectType eO
 bool ObjectFormatter::isAutomaticFill( const ModelRef< Shape >& rxShapeProp )
 {
     return !rxShapeProp || !rxShapeProp->getFillProperties().moFillType.has();
+}
+
+bool ObjectFormatter::getTextRotation( const ModelRef< TextBody >& rxTextProp, sal_Int32 nDefaultRotation )
+{
+    if( rxTextProp.is() )
+    {
+        double fAnglevalue = static_cast< double >( rxTextProp->getTextProperties().moRotation.get( nDefaultRotation ) );
+        if( fAnglevalue < -5400000.0 || fAnglevalue > 5400000.0 || fAnglevalue == 0.0 )
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
 }
 
 } // namespace chart

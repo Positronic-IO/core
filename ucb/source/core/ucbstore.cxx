@@ -27,6 +27,7 @@
 #include <memory>
 #include <list>
 #include <unordered_map>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ref.hxx>
@@ -43,8 +44,10 @@
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/container/XNameReplace.hpp>
 #include <com/sun/star/util/XChangesBatch.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
 #include "ucbstore.hxx"
 
 using namespace com::sun::star::beans;
@@ -58,7 +61,7 @@ using namespace comphelper;
 using namespace cppu;
 
 
-OUString makeHierarchalNameSegment( const OUString & rIn  )
+static OUString makeHierarchalNameSegment( const OUString & rIn  )
 {
     OUStringBuffer aBuffer;
     aBuffer.append( "['" );
@@ -1056,7 +1059,7 @@ struct PersistentPropertySet_Impl
 {
     rtl::Reference<PropertySetRegistry>  m_pCreator;
     rtl::Reference<PropertySetInfo_Impl> m_pInfo;
-    OUString                    m_aKey;
+    OUString const              m_aKey;
     OUString                    m_aFullKey;
     osl::Mutex                  m_aMutex;
     std::unique_ptr<OInterfaceContainerHelper2>  m_pDisposeEventListeners;
@@ -1065,7 +1068,7 @@ struct PersistentPropertySet_Impl
 
     PersistentPropertySet_Impl( PropertySetRegistry& rCreator,
                                 const OUString& rKey )
-    : m_pCreator( &rCreator ), m_pInfo( nullptr ), m_aKey( rKey )
+    : m_pCreator( &rCreator ), m_aKey( rKey )
     {
     }
 };
@@ -2072,8 +2075,7 @@ PropertySetRegistry& PersistentPropertySet::getPropertySetRegistry()
 
 PropertySetInfo_Impl::PropertySetInfo_Impl(
                         PersistentPropertySet* pOwner )
-: m_pProps( nullptr ),
-  m_pOwner( pOwner )
+: m_pOwner( pOwner )
 {
 }
 

@@ -24,142 +24,123 @@
 #include <dbui.hrc>
 
 SwCustomizeAddressListDialog::SwCustomizeAddressListDialog(
-        vcl::Window* pParent, const SwCSVData& rOldData)
-    : SfxModalDialog(pParent, "CustomizeAddrListDialog",
-        "modules/swriter/ui/customizeaddrlistdialog.ui")
-    , m_pNewData( new SwCSVData(rOldData))
+        weld::Window* pParent, const SwCSVData& rOldData)
+    : SfxDialogController(pParent, "modules/swriter/ui/customizeaddrlistdialog.ui",
+                          "CustomizeAddrListDialog")
+    , m_xNewData(new SwCSVData(rOldData))
+    , m_xFieldsLB(m_xBuilder->weld_tree_view("treeview"))
+    , m_xAddPB(m_xBuilder->weld_button("add"))
+    , m_xDeletePB(m_xBuilder->weld_button("delete"))
+    , m_xRenamePB(m_xBuilder->weld_button("rename"))
+    , m_xUpPB(m_xBuilder->weld_button("up"))
+    , m_xDownPB(m_xBuilder->weld_button("down"))
 {
-    get(m_pFieldsLB, "treeview");
-    m_pFieldsLB->SetDropDownLineCount(14);
-    get(m_pAddPB, "add");
-    get(m_pDeletePB, "delete");
-    get(m_pRenamePB, "rename");
-    get(m_pUpPB, "up");
-    get(m_pDownPB, "down");
+    m_xFieldsLB->set_size_request(-1, m_xFieldsLB->get_height_rows(14));
 
-    m_pFieldsLB->SetSelectHdl(LINK(this, SwCustomizeAddressListDialog, ListBoxSelectHdl_Impl));
-    Link<Button*,void> aAddRenameLk = LINK(this, SwCustomizeAddressListDialog, AddRenameHdl_Impl );
-    m_pAddPB->SetClickHdl(aAddRenameLk);
-    m_pRenamePB->SetClickHdl(aAddRenameLk);
-    m_pDeletePB->SetClickHdl(LINK(this, SwCustomizeAddressListDialog, DeleteHdl_Impl ));
-    Link<Button*,void> aUpDownLk = LINK(this, SwCustomizeAddressListDialog, UpDownHdl_Impl);
-    m_pUpPB->SetClickHdl(aUpDownLk);
-    m_pDownPB->SetClickHdl(aUpDownLk);
+    m_xFieldsLB->connect_changed(LINK(this, SwCustomizeAddressListDialog, ListBoxSelectHdl_Impl));
+    Link<weld::Button&,void> aAddRenameLk = LINK(this, SwCustomizeAddressListDialog, AddRenameHdl_Impl );
+    m_xAddPB->connect_clicked(aAddRenameLk);
+    m_xRenamePB->connect_clicked(aAddRenameLk);
+    m_xDeletePB->connect_clicked(LINK(this, SwCustomizeAddressListDialog, DeleteHdl_Impl ));
+    Link<weld::Button&,void> aUpDownLk = LINK(this, SwCustomizeAddressListDialog, UpDownHdl_Impl);
+    m_xUpPB->connect_clicked(aUpDownLk);
+    m_xDownPB->connect_clicked(aUpDownLk);
 
-    std::vector< OUString >::iterator aHeaderIter;
+    for (const auto& rHeader : m_xNewData->aDBColumnHeaders)
+        m_xFieldsLB->append_text(rHeader);
 
-    for(aHeaderIter = m_pNewData->aDBColumnHeaders.begin();
-                aHeaderIter != m_pNewData->aDBColumnHeaders.end(); ++aHeaderIter)
-        m_pFieldsLB->InsertEntry(*aHeaderIter);
-
-    m_pFieldsLB->SelectEntryPos(0);
+    m_xFieldsLB->select(0);
     UpdateButtons();
 }
 
 SwCustomizeAddressListDialog::~SwCustomizeAddressListDialog()
 {
-    disposeOnce();
 }
 
-void SwCustomizeAddressListDialog::dispose()
-{
-    m_pFieldsLB.clear();
-    m_pAddPB.clear();
-    m_pDeletePB.clear();
-    m_pRenamePB.clear();
-    m_pUpPB.clear();
-    m_pDownPB.clear();
-    SfxModalDialog::dispose();
-}
-
-
-IMPL_LINK_NOARG(SwCustomizeAddressListDialog, ListBoxSelectHdl_Impl, ListBox&, void)
+IMPL_LINK_NOARG(SwCustomizeAddressListDialog, ListBoxSelectHdl_Impl, weld::TreeView&, void)
 {
     UpdateButtons();
 }
 
-IMPL_LINK(SwCustomizeAddressListDialog, AddRenameHdl_Impl, Button*, pButton, void)
+IMPL_LINK(SwCustomizeAddressListDialog, AddRenameHdl_Impl, weld::Button&, rButton, void)
 {
-    bool bRename = pButton == m_pRenamePB;
-    sal_Int32 nPos = m_pFieldsLB->GetSelectedEntryPos();
-    if(nPos == LISTBOX_ENTRY_NOTFOUND)
+    bool bRename = &rButton == m_xRenamePB.get();
+    auto nPos = m_xFieldsLB->get_selected_index();
+    if (nPos == -1)
         nPos = 0;
 
-    ScopedVclPtr<SwAddRenameEntryDialog> pDlg;
+    std::unique_ptr<SwAddRenameEntryDialog> xDlg;
     if (bRename)
-        pDlg.disposeAndReset(VclPtr<SwRenameEntryDialog>::Create(pButton, m_pNewData->aDBColumnHeaders));
+        xDlg.reset(new SwRenameEntryDialog(m_xDialog.get(), m_xNewData->aDBColumnHeaders));
     else
-        pDlg.disposeAndReset(VclPtr<SwAddEntryDialog>::Create(pButton, m_pNewData->aDBColumnHeaders));
-    if(bRename)
+        xDlg.reset(new SwAddEntryDialog(m_xDialog.get(), m_xNewData->aDBColumnHeaders));
+    if (bRename)
     {
-        OUString aTemp = m_pFieldsLB->GetEntry(nPos);
-        pDlg->SetFieldName(aTemp);
+        OUString aTemp = m_xFieldsLB->get_text(nPos);
+        xDlg->SetFieldName(aTemp);
     }
-    if(RET_OK == pDlg->Execute())
+    if (xDlg->run() == RET_OK)
     {
-        OUString sNew = pDlg->GetFieldName();
+        OUString sNew = xDlg->GetFieldName();
         if(bRename)
         {
-            m_pNewData->aDBColumnHeaders[nPos] = sNew;
-            m_pFieldsLB->RemoveEntry(nPos);
+            m_xNewData->aDBColumnHeaders[nPos] = sNew;
+            m_xFieldsLB->remove(nPos);
         }
         else
         {
-            if ( m_pFieldsLB->GetSelectedEntryPos() != LISTBOX_ENTRY_NOTFOUND )
+            if (m_xFieldsLB->get_selected_index() != -1)
                 ++nPos; // append the new entry behind the selected
             //add the new column
-            m_pNewData->aDBColumnHeaders.insert(m_pNewData->aDBColumnHeaders.begin() + nPos, sNew);
+            m_xNewData->aDBColumnHeaders.insert(m_xNewData->aDBColumnHeaders.begin() + nPos, sNew);
             //add a new entry into all data arrays
-            std::vector< std::vector< OUString > >::iterator aDataIter;
-            for( aDataIter = m_pNewData->aDBData.begin(); aDataIter != m_pNewData->aDBData.end(); ++aDataIter)
-                aDataIter->insert(aDataIter->begin() + nPos, OUString());
+            for (auto& rData : m_xNewData->aDBData)
+                rData.insert(rData.begin() + nPos, OUString());
 
         }
 
-        m_pFieldsLB->InsertEntry(sNew, nPos);
-        m_pFieldsLB->SelectEntryPos(nPos);
+        m_xFieldsLB->insert_text(nPos, sNew);
+        m_xFieldsLB->select(nPos);
     }
     UpdateButtons();
 }
 
-IMPL_LINK_NOARG(SwCustomizeAddressListDialog, DeleteHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SwCustomizeAddressListDialog, DeleteHdl_Impl, weld::Button&, void)
 {
-    sal_Int32 nPos = m_pFieldsLB->GetSelectedEntryPos();
-    m_pFieldsLB->RemoveEntry(m_pFieldsLB->GetSelectedEntryPos());
-    m_pFieldsLB->SelectEntryPos(nPos > m_pFieldsLB->GetEntryCount() - 1 ? nPos - 1 : nPos);
+    auto nPos = m_xFieldsLB->get_selected_index();
+    m_xFieldsLB->remove(nPos);
+    m_xFieldsLB->select(nPos > m_xFieldsLB->n_children() - 1 ? nPos - 1 : nPos);
 
     //remove the column
-    m_pNewData->aDBColumnHeaders.erase(m_pNewData->aDBColumnHeaders.begin() + nPos);
+    m_xNewData->aDBColumnHeaders.erase(m_xNewData->aDBColumnHeaders.begin() + nPos);
     //remove the data
-    std::vector< std::vector< OUString > >::iterator aDataIter;
-    for( aDataIter = m_pNewData->aDBData.begin(); aDataIter != m_pNewData->aDBData.end(); ++aDataIter)
-        aDataIter->erase(aDataIter->begin() + nPos);
+    for (auto& rData : m_xNewData->aDBData)
+        rData.erase(rData.begin() + nPos);
 
     UpdateButtons();
 }
 
-IMPL_LINK(SwCustomizeAddressListDialog, UpDownHdl_Impl, Button*, pButton, void)
+IMPL_LINK(SwCustomizeAddressListDialog, UpDownHdl_Impl, weld::Button&, rButton, void)
 {
-    sal_Int32 nPos;
-    sal_Int32 nOldPos = nPos = m_pFieldsLB->GetSelectedEntryPos();
-    OUString aTemp = m_pFieldsLB->GetEntry(nPos);
-    m_pFieldsLB->RemoveEntry( nPos );
-    if(pButton == m_pUpPB)
+    auto nPos = m_xFieldsLB->get_selected_index();
+    auto nOldPos = nPos;
+    OUString aTemp = m_xFieldsLB->get_text(nPos);
+    m_xFieldsLB->remove(nPos);
+    if (&rButton == m_xUpPB.get())
         --nPos;
     else
         ++nPos;
-    m_pFieldsLB->InsertEntry(aTemp, nPos);
-    m_pFieldsLB->SelectEntryPos(nPos);
-    //align m_pNewData
-    OUString sHeader = m_pNewData->aDBColumnHeaders[nOldPos];
-    m_pNewData->aDBColumnHeaders.erase(m_pNewData->aDBColumnHeaders.begin() + nOldPos);
-    m_pNewData->aDBColumnHeaders.insert(m_pNewData->aDBColumnHeaders.begin() + nPos, sHeader);
-    std::vector< std::vector< OUString > >::iterator aDataIter;
-    for( aDataIter = m_pNewData->aDBData.begin(); aDataIter != m_pNewData->aDBData.end(); ++aDataIter)
+    m_xFieldsLB->insert_text(nPos, aTemp);
+    m_xFieldsLB->select(nPos);
+    //align m_xNewData
+    OUString sHeader = m_xNewData->aDBColumnHeaders[nOldPos];
+    m_xNewData->aDBColumnHeaders.erase(m_xNewData->aDBColumnHeaders.begin() + nOldPos);
+    m_xNewData->aDBColumnHeaders.insert(m_xNewData->aDBColumnHeaders.begin() + nPos, sHeader);
+    for (auto& rData : m_xNewData->aDBData)
     {
-        OUString sData = (*aDataIter)[nOldPos];
-        aDataIter->erase(aDataIter->begin() + nOldPos);
-        aDataIter->insert(aDataIter->begin() + nPos, sData);
+        OUString sData = rData[nOldPos];
+        rData.erase(rData.begin() + nOldPos);
+        rData.insert(rData.begin() + nPos, sData);
     }
 
     UpdateButtons();
@@ -167,57 +148,37 @@ IMPL_LINK(SwCustomizeAddressListDialog, UpDownHdl_Impl, Button*, pButton, void)
 
 void SwCustomizeAddressListDialog::UpdateButtons()
 {
-    sal_Int32 nPos = m_pFieldsLB->GetSelectedEntryPos();
-    sal_Int32 nEntries = m_pFieldsLB->GetEntryCount();
-    m_pUpPB->Enable(nPos > 0 && nEntries > 0);
-    m_pDownPB->Enable(nPos < nEntries -1);
-    m_pDeletePB->Enable(nEntries > 0);
-    m_pRenamePB->Enable(nEntries > 0);
+    auto nPos = m_xFieldsLB->get_selected_index();
+    auto nEntries = m_xFieldsLB->n_children();
+    m_xUpPB->set_sensitive(nPos > 0 && nEntries > 0);
+    m_xDownPB->set_sensitive(nPos < nEntries -1);
+    m_xDeletePB->set_sensitive(nEntries > 0);
+    m_xRenamePB->set_sensitive(nEntries > 0);
 }
-
 
 SwAddRenameEntryDialog::SwAddRenameEntryDialog(
-        vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription,
+        weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID,
         const std::vector< OUString >& rCSVHeader)
-    : SfxModalDialog(pParent, rID, rUIXMLDescription)
+    : SfxDialogController(pParent, rUIXMLDescription, rID)
     , m_rCSVHeader(rCSVHeader)
+    , m_xFieldNameED(m_xBuilder->weld_entry("entry"))
+    , m_xOK(m_xBuilder->weld_button("ok"))
 {
-    get(m_pOK, "ok");
-    get(m_pFieldNameED, "entry");
-    m_pFieldNameED->SetModifyHdl(LINK(this, SwAddRenameEntryDialog, ModifyHdl_Impl));
-    ModifyHdl_Impl(*m_pFieldNameED);
+    m_xFieldNameED->connect_changed(LINK(this, SwAddRenameEntryDialog, ModifyHdl_Impl));
+    ModifyHdl_Impl(*m_xFieldNameED);
 }
 
-SwAddRenameEntryDialog::~SwAddRenameEntryDialog()
+IMPL_LINK(SwAddRenameEntryDialog, ModifyHdl_Impl, weld::Entry&, rEdit, void)
 {
-    disposeOnce();
-}
-
-void SwAddRenameEntryDialog::dispose()
-{
-    m_pFieldNameED.clear();
-    m_pOK.clear();
-    SfxModalDialog::dispose();
-}
-
-IMPL_LINK(SwAddRenameEntryDialog, ModifyHdl_Impl, Edit&, rEdit, void)
-{
-    OUString sEntry = rEdit.GetText();
+    OUString sEntry = rEdit.get_text();
     bool bFound = sEntry.isEmpty();
 
     if(!bFound)
     {
-        std::vector< OUString >::const_iterator aHeaderIter;
-        for(aHeaderIter = m_rCSVHeader.begin();
-                    aHeaderIter != m_rCSVHeader.end();
-                    ++aHeaderIter)
-            if(*aHeaderIter == sEntry)
-            {
-                bFound = true;
-                break;
-            }
+        bFound = std::any_of(m_rCSVHeader.begin(), m_rCSVHeader.end(),
+            [&sEntry](const OUString& rHeader) { return rHeader == sEntry; });
     }
-    m_pOK->Enable(!bFound);
+    m_xOK->set_sensitive(!bFound);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

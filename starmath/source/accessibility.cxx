@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <memory>
 
@@ -231,7 +232,7 @@ awt::Size SAL_CALL SmGraphicAccessible::getSize()
             "mismatch of window parent and accessible parent" );
 
     Size aSz( pWin->GetSizePixel() );
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     awt::Rectangle aRect( lcl_GetBounds( pWin ) );
     Size aSz2( aRect.Width, aRect.Height );
     assert(aSz == aSz2 && "mismatch in width" );
@@ -806,32 +807,6 @@ bool SmViewForwarder::IsValid() const
     return rEditAcc.GetEditView() != nullptr;
 }
 
-tools::Rectangle SmViewForwarder::GetVisArea() const
-{
-    EditView *pEditView = rEditAcc.GetEditView();
-    OutputDevice* pOutDev = pEditView ? pEditView->GetWindow() : nullptr;
-
-    if( pOutDev && pEditView)
-    {
-        tools::Rectangle aVisArea = pEditView->GetVisArea();
-
-        // figure out map mode from edit engine
-        EditEngine* pEditEngine = pEditView->GetEditEngine();
-
-        if( pEditEngine )
-        {
-            MapMode aMapMode(pOutDev->GetMapMode());
-            aVisArea = OutputDevice::LogicToLogic( aVisArea,
-                                                   pEditEngine->GetRefMapMode(),
-                                                   MapMode(aMapMode.GetMapUnit()));
-            aMapMode.SetOrigin(Point());
-            return pOutDev->LogicToPixel( aVisArea, aMapMode );
-        }
-    }
-
-    return tools::Rectangle();
-}
-
 Point SmViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
 {
     EditView *pEditView = rEditAcc.GetEditView();
@@ -887,8 +862,8 @@ SmTextForwarder::~SmTextForwarder()
 IMPL_LINK(SmTextForwarder, NotifyHdl, EENotify&, rNotify, void)
 {
     ::std::unique_ptr< SfxHint > aHint = SvxEditSourceHelper::EENotification2Hint( &rNotify );
-    if (aHint.get())
-        rEditSource.GetBroadcaster().Broadcast( *aHint.get() );
+    if (aHint)
+        rEditSource.GetBroadcaster().Broadcast(*aHint);
 }
 
 sal_Int32 SmTextForwarder::GetParagraphCount() const
@@ -1259,8 +1234,10 @@ bool SmTextForwarder::GetWordIndices( sal_Int32 nPara, sal_Int32 nIndex, sal_Int
 bool SmTextForwarder::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nEndIndex, sal_Int32 nPara, sal_Int32 nIndex, bool bInCell ) const
 {
     EditEngine *pEditEngine = rEditAcc.GetEditEngine();
-    return pEditEngine &&
-           SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, *pEditEngine, nPara, nIndex, bInCell );
+    if (!pEditEngine)
+        return false;
+    SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, *pEditEngine, nPara, nIndex, bInCell );
+    return true;
 }
 
 sal_Int32 SmTextForwarder::GetLineCount( sal_Int32 nPara ) const
@@ -1409,33 +1386,6 @@ bool SmEditViewForwarder::IsValid() const
     return rEditAcc.GetEditView() != nullptr;
 }
 
-tools::Rectangle SmEditViewForwarder::GetVisArea() const
-{
-    tools::Rectangle aRect(0,0,0,0);
-
-    EditView *pEditView = rEditAcc.GetEditView();
-    OutputDevice* pOutDev = pEditView ? pEditView->GetWindow() : nullptr;
-
-    if( pOutDev && pEditView)
-    {
-        tools::Rectangle aVisArea = pEditView->GetVisArea();
-
-        // figure out map mode from edit engine
-        EditEngine* pEditEngine = pEditView->GetEditEngine();
-
-        if( pEditEngine )
-        {
-            MapMode aMapMode(pOutDev->GetMapMode());
-            aVisArea = OutputDevice::LogicToLogic( aVisArea,
-                                                   pEditEngine->GetRefMapMode(),
-                                                   MapMode(aMapMode.GetMapUnit()));
-            aMapMode.SetOrigin(Point());
-            aRect = pOutDev->LogicToPixel( aVisArea, aMapMode );
-        }
-    }
-
-    return aRect;
-}
 
 Point SmEditViewForwarder::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
 {
@@ -1653,7 +1603,7 @@ awt::Size SAL_CALL SmEditAccessible::getSize(  )
             "mismatch of window parent and accessible parent" );
 
     Size aSz( pWin->GetSizePixel() );
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     awt::Rectangle aRect( lcl_GetBounds( pWin ) );
     Size aSz2( aRect.Width, aRect.Height );
     assert(aSz == aSz2 && "mismatch in width");

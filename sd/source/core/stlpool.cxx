@@ -90,14 +90,14 @@ OUString lcl_findRenamedStyleName(std::vector< std::pair< OUString, OUString > >
     return OUString();
 }
 
-SfxStyleSheet *lcl_findStyle(SdStyleSheetVector& rStyles, const OUString& aStyleName)
+SfxStyleSheet *lcl_findStyle(StyleSheetCopyResultVector& rStyles, const OUString& aStyleName)
 {
     if( aStyleName.isEmpty() )
         return nullptr;
-    for(SdStyleSheetVector::const_iterator aIt(rStyles.begin()), aLast(rStyles.end()); aIt != aLast; ++aIt)
+    for (const auto& a : rStyles)
     {
-        if((*aIt)->GetName() == aStyleName)
-            return (*aIt).get();
+        if (a.m_xStyleSheet->GetName() == aStyleName)
+            return a.m_xStyleSheet.get();
     }
     return nullptr;
 }
@@ -586,23 +586,23 @@ void SdStyleSheetPool::CopyTableStyles(SdStyleSheetPool const & rSourcePool)
     }
 }
 
-void SdStyleSheetPool::CopyCellSheets(SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets)
+void SdStyleSheetPool::CopyCellSheets(SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets)
 {
     CopySheets( rSourcePool, SfxStyleFamily::Frame, rCreatedSheets );
 }
 
-void SdStyleSheetPool::RenameAndCopyGraphicSheets(SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets, OUString const &rRenameSuffix)
+void SdStyleSheetPool::RenameAndCopyGraphicSheets(SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets, OUString const &rRenameSuffix)
 {
     CopySheets( rSourcePool, SfxStyleFamily::Para, rCreatedSheets, rRenameSuffix );
 }
 
 void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily )
 {
-    SdStyleSheetVector aTmpSheets;
+    StyleSheetCopyResultVector aTmpSheets;
     CopySheets(rSourcePool, eFamily, aTmpSheets);
 }
 
-void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, SdStyleSheetVector& rCreatedSheets)
+void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, StyleSheetCopyResultVector& rCreatedSheets)
 {
     CopySheets(rSourcePool, eFamily, rCreatedSheets, "");
 }
@@ -619,12 +619,12 @@ struct HasFamilyPredicate : svl::StyleSheetPredicate
     {
         return sheet.GetFamily() == meFamily;
     }
-    SfxStyleFamily meFamily;
+    SfxStyleFamily const meFamily;
 };
 
 }
 
-void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, SdStyleSheetVector& rCreatedSheets, const OUString& rRenameSuffix)
+void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, StyleSheetCopyResultVector& rCreatedSheets, const OUString& rRenameSuffix)
 {
     std::vector< std::pair< rtl::Reference< SfxStyleSheetBase >, OUString > > aNewStyles;
     std::vector< std::pair< OUString, OUString > > aRenamedList;
@@ -636,11 +636,10 @@ void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily 
     for (std::vector<unsigned>::const_iterator it = aSheetsWithFamily.begin();
          it != aSheetsWithFamily.end(); ++it )
     {
-        rtl::Reference<SfxStyleSheetBase> const xSheet =
-            rSourcePool.GetStyleSheetByPositionInIndex( *it );
-        if( !xSheet.is() )
+        SfxStyleSheetBase* pSheet = rSourcePool.GetStyleSheetByPositionInIndex( *it );
+        if( !pSheet )
             continue;
-        rtl::OUString aName( xSheet->GetName() );
+        OUString aName( pSheet->GetName() );
 
         // now check whether we already have a sheet with the same name
         std::vector<unsigned> aSheetsWithName = GetIndexedStyleSheets().FindPositionsByName(aName);
@@ -650,9 +649,9 @@ void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily 
         {
             // if we have a rename suffix, try to find a new name
             pExistingSheet =
-                GetStyleSheetByPositionInIndex(aSheetsWithName.front()).get();
+                GetStyleSheetByPositionInIndex(aSheetsWithName.front());
             if (!rRenameSuffix.isEmpty() &&
-                pExistingSheet->GetItemSet().Equals(xSheet->GetItemSet(), false))
+                !pExistingSheet->GetItemSet().Equals(pSheet->GetItemSet(), false))
             {
                 // we have found a sheet with the same name, but different contents. Try to find a new name.
                 // If we already have a sheet with the new name, and it is equal to the one in the source pool,
@@ -664,7 +663,8 @@ void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily 
                     aTmpName = aName + rRenameSuffix + OUString::number(nSuffix);
                     pExistingSheet = Find(aTmpName, eFamily);
                     nSuffix++;
-                } while( pExistingSheet && pExistingSheet->GetItemSet().Equals(xSheet->GetItemSet(), false) );
+                } while (pExistingSheet &&
+                        !pExistingSheet->GetItemSet().Equals(pSheet->GetItemSet(), false));
                 aName = aTmpName;
                 bAddToList = true;
             }
@@ -675,28 +675,28 @@ void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily 
             assert(!Find(aName, eFamily));
             rtl::Reference< SfxStyleSheetBase > xNewSheet( &Make( aName, eFamily ) );
 
-            xNewSheet->SetMask( xSheet->GetMask() );
+            xNewSheet->SetMask( pSheet->GetMask() );
 
             // Also set parent relation for copied style sheets
-            OUString aParent( xSheet->GetParent() );
+            OUString aParent( pSheet->GetParent() );
             if( !aParent.isEmpty() )
                 aNewStyles.emplace_back( xNewSheet, aParent );
 
             if( !bAddToList )
             {
                 OUString aHelpFile;
-                xNewSheet->SetHelpId( aHelpFile, xSheet->GetHelpId( aHelpFile ) );
+                xNewSheet->SetHelpId( aHelpFile, pSheet->GetHelpId( aHelpFile ) );
             }
-            xNewSheet->GetItemSet().Put( xSheet->GetItemSet() );
+            xNewSheet->GetItemSet().Put( pSheet->GetItemSet() );
 
-            rCreatedSheets.emplace_back( static_cast< SdStyleSheet* >( xNewSheet.get() ) );
-            aRenamedList.emplace_back( xSheet->GetName(), aName );
+            rCreatedSheets.emplace_back(static_cast<SdStyleSheet*>(xNewSheet.get()), true);
+            aRenamedList.emplace_back( pSheet->GetName(), aName );
         }
         else if (bAddToList)
         {
             // Add to list - used for renaming
-            rCreatedSheets.emplace_back( static_cast< SdStyleSheet* >( pExistingSheet ) );
-            aRenamedList.emplace_back( xSheet->GetName(), aName );
+            rCreatedSheets.emplace_back(static_cast<SdStyleSheet*>(pExistingSheet), false);
+            aRenamedList.emplace_back( pSheet->GetName(), aName );
         }
     }
 
@@ -731,7 +731,7 @@ void SdStyleSheetPool::CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily 
 |*
 \************************************************************************/
 
-void SdStyleSheetPool::CopyLayoutSheets(const OUString& rLayoutName, SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets)
+void SdStyleSheetPool::CopyLayoutSheets(const OUString& rLayoutName, SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets)
 {
     SfxStyleSheetBase* pSheet = nullptr;
 
@@ -752,7 +752,7 @@ void SdStyleSheetPool::CopyLayoutSheets(const OUString& rLayoutName, SdStyleShee
                 OUString file;
                 rNewSheet.SetHelpId( file, pSourceSheet->GetHelpId( file ) );
                 rNewSheet.GetItemSet().Put(pSourceSheet->GetItemSet());
-                rCreatedSheets.emplace_back( static_cast< SdStyleSheet* >( &rNewSheet ) );
+                rCreatedSheets.emplace_back(static_cast<SdStyleSheet*>(&rNewSheet), true);
             }
         }
     }
@@ -898,13 +898,10 @@ void SdStyleSheetPool::CreatePseudosIfNecessary()
         {
             pSheet = &Make(aLevelName, SfxStyleFamily::Pseudo, nUsedMask);
 
-            if (pSheet)
-            {
-                if (pParent)
-                    pSheet->SetParent(pParent->GetName());
-                pParent = pSheet;
-                static_cast<SfxStyleSheet*>(pSheet)->StartListening(*this);
-            }
+            if (pParent)
+                pSheet->SetParent(pParent->GetName());
+            pParent = pSheet;
+            static_cast<SfxStyleSheet*>(pSheet)->StartListening(*this);
         }
         pSheet->SetHelpId( aHelpFile, HID_PSEUDOSHEET_OUTLINE + nLevel );
     }
@@ -939,7 +936,7 @@ void SdStyleSheetPool::UpdateStdNames()
     for (std::vector<unsigned>::const_iterator it = aUserDefinedStyles.begin();
             it != aUserDefinedStyles.end(); ++it)
     {
-        SfxStyleSheetBase* pStyle = GetStyleSheetByPositionInIndex(*it).get();
+        SfxStyleSheetBase* pStyle = GetStyleSheetByPositionInIndex(*it);
 
         if( !pStyle->IsUserDefined() )
         {
@@ -956,9 +953,16 @@ void SdStyleSheetPool::UpdateStdNames()
                 case HID_POOLSHEET_OBJWITHOUTFILL:  pNameId = STR_POOLSHEET_OBJWITHOUTFILL; break;
                 case HID_POOLSHEET_OBJNOLINENOFILL: pNameId = STR_POOLSHEET_OBJNOLINENOFILL;break;
                 case HID_POOLSHEET_TEXT:            pNameId = STR_POOLSHEET_TEXT;           break;
-                case HID_POOLSHEET_TITLE:           pNameId = STR_POOLSHEET_TITLE;          break;
-                case HID_POOLSHEET_HEADLINE:        pNameId = STR_POOLSHEET_HEADLINE;       break;
-                case HID_POOLSHEET_MEASURE:         pNameId = STR_POOLSHEET_MEASURE;        break;
+                case HID_POOLSHEET_A4:              pNameId = STR_POOLSHEET_A4;             break;
+                case HID_POOLSHEET_A4_TITLE:        pNameId = STR_POOLSHEET_A4_TITLE;       break;
+                case HID_POOLSHEET_A4_HEADLINE:     pNameId = STR_POOLSHEET_A4_HEADLINE;    break;
+                case HID_POOLSHEET_A4_TEXT:         pNameId = STR_POOLSHEET_A4_TEXT;        break;
+                case HID_POOLSHEET_A0:              pNameId = STR_POOLSHEET_A0;             break;
+                case HID_POOLSHEET_A0_TITLE:        pNameId = STR_POOLSHEET_A0_TITLE;       break;
+                case HID_POOLSHEET_A0_HEADLINE:     pNameId = STR_POOLSHEET_A0_HEADLINE;    break;
+                case HID_POOLSHEET_A0_TEXT:         pNameId = STR_POOLSHEET_A0_TEXT;        break;
+                case HID_POOLSHEET_GRAPHIC:         pNameId = STR_POOLSHEET_GRAPHIC;        break;
+                case HID_POOLSHEET_SHAPES:          pNameId = STR_POOLSHEET_SHAPES;         break;
                 case HID_POOLSHEET_FILLED:          pNameId = STR_POOLSHEET_FILLED;         break;
                 case HID_POOLSHEET_FILLED_BLUE:     pNameId = STR_POOLSHEET_FILLED_BLUE;    break;
                 case HID_POOLSHEET_FILLED_GREEN:    pNameId = STR_POOLSHEET_FILLED_GREEN;   break;
@@ -969,9 +973,10 @@ void SdStyleSheetPool::UpdateStdNames()
                 case HID_POOLSHEET_OUTLINE_GREEN:   pNameId = STR_POOLSHEET_OUTLINE_GREEN;  break;
                 case HID_POOLSHEET_OUTLINE_RED:     pNameId = STR_POOLSHEET_OUTLINE_RED;    break;
                 case HID_POOLSHEET_OUTLINE_YELLOW:  pNameId = STR_POOLSHEET_OUTLINE_YELLOW; break;
+                case HID_POOLSHEET_LINES:           pNameId = STR_POOLSHEET_LINES;          break;
+                case HID_POOLSHEET_MEASURE:         pNameId = STR_POOLSHEET_MEASURE;        break;
+                case HID_POOLSHEET_LINES_DASHED:    pNameId = STR_POOLSHEET_LINES_DASHED;   break;
 
-                case HID_PSEUDOSHEET_TITLE:         pNameId = STR_PSEUDOSHEET_TITLE;        break;
-                case HID_PSEUDOSHEET_SUBTITLE:      pNameId = STR_PSEUDOSHEET_SUBTITLE;     break;
                 case HID_PSEUDOSHEET_OUTLINE1:
                 case HID_PSEUDOSHEET_OUTLINE2:
                 case HID_PSEUDOSHEET_OUTLINE3:
@@ -1039,9 +1044,9 @@ void SdStyleSheetPool::setDefaultOutlineNumberFormatBulletAndIndent(sal_uInt16 i
 {
     rNumberFormat.SetBulletChar( 0x25CF );  // StarBats: 0xF000 + 34
     rNumberFormat.SetBulletRelSize(45);
-    const short nLSpace = (i + 1) * 1200;
+    const auto nLSpace = (i + 1) * 1200;
     rNumberFormat.SetAbsLSpace(nLSpace);
-    short nFirstLineOffset = -600;
+    sal_Int32 nFirstLineOffset = -600;
 
     switch(i)
     {
@@ -1101,7 +1106,7 @@ void SdStyleSheetPool::PutNumBulletItem( SfxStyleSheetBase* pSheet,
 
             for( sal_uInt16 i = 0; i < aNumRule.GetLevelCount(); i++ )
             {
-                const short nLSpace = (i + 1) * 600;
+                const auto nLSpace = (i + 1) * 600;
                 aNumberFormat.SetAbsLSpace(nLSpace);
                 aNumberFormat.SetFirstLineOffset(-600);
                 aNumRule.SetLevel( i, aNumberFormat );

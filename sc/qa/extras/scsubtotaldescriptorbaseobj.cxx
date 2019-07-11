@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/subtotaldescriptor.hxx>
 #include <test/sheet/xsubtotaldescriptor.hxx>
 
@@ -31,9 +32,9 @@ using namespace com::sun::star;
 
 namespace sc_apitest {
 
-class ScSubTotalDescriptorBaseObj : public CalcUnoApiTest,
-                                    public apitest::SubTotalDescriptor,
-                                    public apitest::XSubTotalDescriptor
+class ScSubTotalDescriptorBaseObj : public CalcUnoApiTest,public apitest::XEnumerationAccess,
+                                                          public apitest::SubTotalDescriptor,
+                                                          public apitest::XSubTotalDescriptor
 {
 public:
     ScSubTotalDescriptorBaseObj();
@@ -43,6 +44,9 @@ public:
     virtual void tearDown() override;
 
     CPPUNIT_TEST_SUITE(ScSubTotalDescriptorBaseObj);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     // SubTotalDescriptor
     CPPUNIT_TEST(testSubTotalDescriptorProperties);
@@ -65,7 +69,6 @@ ScSubTotalDescriptorBaseObj::ScSubTotalDescriptorBaseObj()
 uno::Reference< uno::XInterface > ScSubTotalDescriptorBaseObj::init()
 {
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference< container::XIndexAccess > xIndex(xDoc->getSheets(), uno::UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet(xIndex->getByIndex(0), uno::UNO_QUERY_THROW);

@@ -33,6 +33,7 @@
 #include <sfx2/filedlghelper.hxx>
 #include <tools/debug.hxx>
 #include <svl/svdde.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -55,7 +56,6 @@ struct BaseLink_Impl
     BaseLink_Impl() :
           m_pLinkMgr( nullptr )
         , m_pParentWin( nullptr )
-        , m_pFileDlg( nullptr )
         , m_bIsConnect( false )
         {}
 };

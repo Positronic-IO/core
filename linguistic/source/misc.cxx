@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <unotools/pathoptions.hxx>
 #include <svl/lngmisc.hxx>
 #include <ucbhelper/content.hxx>
@@ -38,6 +39,8 @@
 #include <comphelper/processfactory.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/syslocale.hxx>
+#include <svtools/strings.hrc>
+#include <unotools/resmgr.hxx>
 
 #include <rtl/instance.hxx>
 
@@ -109,7 +112,7 @@ bool LinguIsUnspecified( const OUString & rBcp47 )
     return rBcp47 == "zxx" || rBcp47 == "und" || rBcp47 == "mul";
 }
 
-static inline sal_Int32 Minimum( sal_Int32 n1, sal_Int32 n2, sal_Int32 n3 )
+static sal_Int32 Minimum( sal_Int32 n1, sal_Int32 n2, sal_Int32 n3 )
 {
     return std::min(std::min(n1, n2), n3);
 }
@@ -381,7 +384,8 @@ std::vector< LanguageType >
     sal_Int32 nCount = rLocaleSeq.getLength();
 
     std::vector< LanguageType >   aLangs;
-    for (sal_Int32 i = 0;  i < nCount;  ++i)
+    aLangs.reserve(nCount);
+    for (sal_Int32 i = 0; i < nCount; ++i)
     {
         aLangs.push_back( LinguLocaleToLanguage( pLocale[i] ) );
     }
@@ -586,7 +590,7 @@ static CharClass & lcl_GetCharClass()
     return aCC;
 }
 
-osl::Mutex & lcl_GetCharClassMutex()
+static osl::Mutex & lcl_GetCharClassMutex()
 {
     static osl::Mutex   aMutex;
     return aMutex;
@@ -741,7 +745,10 @@ uno::Reference< XDictionary > GetIgnoreAllList()
     uno::Reference< XDictionary > xRes;
     uno::Reference< XSearchableDictionaryList > xDL( GetDictionaryList() );
     if (xDL.is())
-        xRes = xDL->getDictionaryByName( "IgnoreAllList" );
+    {
+        std::locale loc(Translate::Create("svt"));
+        xRes = xDL->getDictionaryByName( Translate::get(STR_DESCRIPTION_IGNOREALLLIST, loc) );
+    }
     return xRes;
 }
 

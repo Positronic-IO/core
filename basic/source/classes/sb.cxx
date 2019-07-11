@@ -39,6 +39,7 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/util/XCloseBroadcaster.hpp>
 #include <com/sun/star/util/XCloseListener.hpp>
+#include <sal/log.hxx>
 #include <errobject.hxx>
 #include <memory>
 #include <unordered_map>
@@ -680,7 +681,7 @@ SbClassModuleObject::SbClassModuleObject( SbModule* pClassModule )
 
             // Search for own copy of ImplMethod
             SbxVariable* p = pMethods->Find( pImplMethod->GetName(), SbxClassType::Method );
-            SbMethod* pImplMethodCopy = p ? dynamic_cast<SbMethod*>( p ) : nullptr;
+            SbMethod* pImplMethodCopy = dynamic_cast<SbMethod*>( p );
             if( !pImplMethodCopy )
             {
                 OSL_FAIL( "Found no ImplMethod copy" );
@@ -729,7 +730,7 @@ SbClassModuleObject::SbClassModuleObject( SbModule* pClassModule )
                     SbxObject* pObj = dynamic_cast<SbxObject*>( pObjBase );
                     if( pObj != nullptr )
                     {
-                        OUString aObjClass = pObj->GetClassName();
+                        const OUString& aObjClass = pObj->GetClassName();
 
                         SbClassModuleObject* pClassModuleObj = dynamic_cast<SbClassModuleObject*>( pObjBase );
                         if( pClassModuleObj != nullptr )
@@ -1148,7 +1149,7 @@ void SbModule::implProcessModuleRunInit( ModuleInitDependencyMap& rMap, ClassMod
     if( pModule->pClassData != nullptr )
     {
         std::vector< OUString >& rReqTypes = pModule->pClassData->maRequiredTypes;
-        if( rReqTypes.size() > 0 )
+        if( !rReqTypes.empty() )
         {
             for( const auto& rStr : rReqTypes )
             {
@@ -1951,8 +1952,8 @@ static const char pItemStr[]    = "Item";
 static const char pRemoveStr[]  = "Remove";
 static sal_uInt16 nCountHash = 0, nAddHash, nItemHash, nRemoveHash;
 
-SbxInfoRef BasicCollection::xAddInfo = nullptr;
-SbxInfoRef BasicCollection::xItemInfo = nullptr;
+SbxInfoRef BasicCollection::xAddInfo;
+SbxInfoRef BasicCollection::xItemInfo;
 
 BasicCollection::BasicCollection( const OUString& rClass )
              : SbxObject( rClass )

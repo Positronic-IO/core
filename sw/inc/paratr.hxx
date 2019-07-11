@@ -49,12 +49,12 @@ class IntlWrapper;
    via the Modify of SwFormatDrop. */
 class SW_DLLPUBLIC SwFormatDrop: public SfxPoolItem, public SwClient
 {
-    SwModify* pDefinedIn;       /**< Modify-Object, that contains DropCaps.
+    SwModify* m_pDefinedIn;       /**< Modify-Object, that contains DropCaps.
                                   Can only be TextFormatCollection/TextNode. */
-    sal_uInt16 nDistance;       ///< Distance to beginning of text.
-    sal_uInt8  nLines;          ///< Line count.
-    sal_uInt8  nChars;          ///< Character count.
-    bool   bWholeWord;      ///< First word with initials.
+    sal_uInt16 m_nDistance;       ///< Distance to beginning of text.
+    sal_uInt8  m_nLines;          ///< Line count.
+    sal_uInt8  m_nChars;          ///< Character count.
+    bool   m_bWholeWord;      ///< First word with initials.
 public:
     static SfxPoolItem* CreateDefault();
 
@@ -83,17 +83,17 @@ public:
     virtual bool QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId = 0 ) const override;
     virtual bool PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId ) override;
 
-    sal_uInt8 GetLines() const { return nLines; }
-    sal_uInt8 &GetLines() { return nLines; }
+    sal_uInt8 GetLines() const { return m_nLines; }
+    sal_uInt8 &GetLines() { return m_nLines; }
 
-    sal_uInt8 GetChars() const { return nChars; }
-    sal_uInt8 &GetChars() { return nChars; }
+    sal_uInt8 GetChars() const { return m_nChars; }
+    sal_uInt8 &GetChars() { return m_nChars; }
 
-    bool GetWholeWord() const { return bWholeWord; }
-    bool &GetWholeWord() { return bWholeWord; }
+    bool GetWholeWord() const { return m_bWholeWord; }
+    bool &GetWholeWord() { return m_bWholeWord; }
 
-    sal_uInt16 GetDistance() const { return nDistance; }
-    sal_uInt16 &GetDistance() { return nDistance; }
+    sal_uInt16 GetDistance() const { return m_nDistance; }
+    sal_uInt16 &GetDistance() { return m_nDistance; }
 
     const SwCharFormat *GetCharFormat() const { return static_cast<const SwCharFormat*>(GetRegisteredIn()); }
     SwCharFormat *GetCharFormat()       { return static_cast<SwCharFormat*>(GetRegisteredIn()); }
@@ -102,9 +102,9 @@ public:
     virtual bool GetInfo( SfxPoolItem& ) const override;
 
     /// Get and set Modify pointer.
-    const SwModify* GetDefinedIn() const { return pDefinedIn; }
+    const SwModify* GetDefinedIn() const { return m_pDefinedIn; }
     void ChgDefinedIn( const SwModify* pNew )
-    { pDefinedIn = const_cast<SwModify*>(pNew); }
+    { m_pDefinedIn = const_cast<SwModify*>(pNew); }
 };
 
 class SwRegisterItem : public SfxBoolItem
@@ -113,8 +113,6 @@ public:
     static SfxPoolItem* CreateDefault();
 
     inline SwRegisterItem( const bool bRegister = false );
-
-    inline SwRegisterItem& operator=( const SwRegisterItem& rRegister );
 
     /// "pure virtual methods" of SfxPoolItem
     virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
@@ -129,13 +127,6 @@ inline SwRegisterItem::SwRegisterItem( const bool bRegister ) :
     SfxBoolItem( RES_PARATR_REGISTER, bRegister )
 {}
 
-inline SwRegisterItem& SwRegisterItem::operator=(
-    const SwRegisterItem& rRegister )
-{
-    SetValue( rRegister.GetValue() );
-    return *this;
-}
-
 class SW_DLLPUBLIC SwNumRuleItem : public SfxStringItem
 {
 public:
@@ -149,6 +140,7 @@ public:
 
     SwNumRuleItem& operator=( const SwNumRuleItem& rCpy )
     { SetValue( rCpy.GetValue() ); return *this; }
+    SwNumRuleItem(SwNumRuleItem const &) = default; // SfxPoolItem copy function dichotomy
 
     /// "pure virtual methods" of SfxPoolItem
     virtual bool            operator==( const SfxPoolItem& ) const override;
@@ -171,8 +163,6 @@ public:
 
     inline SwParaConnectBorderItem( const bool bConnect = true );
 
-    inline SwParaConnectBorderItem& operator=( const SwParaConnectBorderItem& rConnect );
-
     /// "pure virtual methods" of SfxPoolItem
     virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual bool GetPresentation( SfxItemPresentation ePres,
@@ -185,13 +175,6 @@ public:
 inline SwParaConnectBorderItem::SwParaConnectBorderItem( const bool bConnect ) :
     SfxBoolItem( RES_PARATR_CONNECT_BORDER, bConnect )
 {}
-
-inline SwParaConnectBorderItem& SwParaConnectBorderItem::operator=(
-    const SwParaConnectBorderItem& rConnect )
-{
-    SetValue( rConnect.GetValue() );
-    return *this;
-}
 
 //  Implementation of paragraph-attributes methods of SwAttrSet
 inline const SvxLineSpacingItem &SwAttrSet::GetLineSpacing(bool bInP) const

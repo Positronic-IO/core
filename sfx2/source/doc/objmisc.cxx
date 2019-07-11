@@ -27,6 +27,7 @@
 #include <svl/intitem.hxx>
 #include <svtools/svparser.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
@@ -896,13 +897,6 @@ void SfxObjectShell::SetActivateEvent_Impl(SfxEventHintId nId )
     pImpl->nEventId = nId;
 }
 
-void SfxObjectShell::PrepareReload( )
-/*
-  Is called before the Reload and gives the opportunity to clear any caches.
-*/
-{
-}
-
 bool SfxObjectShell::IsAutoLoadLocked() const
 
 /* Returns whether an Autoload is allowed to be executed. Before the
@@ -1346,6 +1340,16 @@ namespace
     }
 }
 
+namespace {
+
+// don't allow LibreLogo to be used with our mouseover/etc dom-alike events
+bool UnTrustedScript(const OUString& rScriptURL)
+{
+    return rScriptURL.startsWithIgnoreAsciiCase("vnd.sun.star.script:LibreLogo");
+}
+
+}
+
 ErrCode SfxObjectShell::CallXScript( const Reference< XInterface >& _rxScriptContext, const OUString& _rScriptURL,
     const Sequence< Any >& aParams, Any& aRet, Sequence< sal_Int16 >& aOutParamIndex, Sequence< Any >& aOutParam, bool bRaiseError, const css::uno::Any* pCaller )
 {
@@ -1356,6 +1360,9 @@ ErrCode SfxObjectShell::CallXScript( const Reference< XInterface >& _rxScriptCon
         // TODO: we should parse the URL, and check whether there is a parameter with this name.
         // Otherwise, we might find too much.
     if ( bIsDocumentScript && !lcl_isScriptAccessAllowed_nothrow( _rxScriptContext ) )
+        return ERRCODE_IO_ACCESSDENIED;
+
+    if ( UnTrustedScript(_rScriptURL) )
         return ERRCODE_IO_ACCESSDENIED;
 
     bool bCaughtException = false;
@@ -1402,14 +1409,9 @@ ErrCode SfxObjectShell::CallXScript( const Reference< XInterface >& _rxScriptCon
     if ( bCaughtException && bRaiseError )
     {
         SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-        if ( pFact )
-        {
-            ScopedVclPtr<VclAbstractDialog> pScriptErrDlg( pFact->CreateScriptErrorDialog( aException ) );
-            OSL_ENSURE( pScriptErrDlg.get(), "SfxObjectShell::CallXScript: no script error dialog!" );
-
-            if ( pScriptErrDlg.get() )
-                pScriptErrDlg->Execute();
-        }
+        ScopedVclPtr<VclAbstractDialog> pScriptErrDlg( pFact->CreateScriptErrorDialog( aException ) );
+        if ( pScriptErrDlg.get() )
+            pScriptErrDlg->Execute();
     }
 
     SAL_INFO("sfx", "leaving CallXScript" );
@@ -1587,7 +1589,7 @@ vcl::Window* SfxObjectShell::GetDialogParent( SfxMedium const * pLoadingMedium )
     const SfxUnoFrameItem* pUnoItem = SfxItemSet::GetItem<SfxUnoFrameItem>(pSet, SID_FILLFRAME, false);
     if ( pUnoItem )
     {
-        uno::Reference < frame::XFrame > xFrame( pUnoItem->GetFrame() );
+        const uno::Reference < frame::XFrame >& xFrame( pUnoItem->GetFrame() );
         pWindow = VCLUnoHelper::GetWindow( xFrame->getContainerWindow() );
     }
 
@@ -1649,10 +1651,6 @@ bool SfxObjectShell::IsUIActive()
 
     SfxViewFrame* pFrame = SfxViewFrame::GetFirst( this );
     return pFrame && pFrame->GetFrame().IsInPlace() && pFrame->GetFrame().GetWorkWindow_Impl()->IsVisible_Impl();
-}
-
-void SfxObjectShell::InPlaceActivate( bool )
-{
 }
 
 bool SfxObjectShell::UseInteractionToHandleError(
@@ -1773,7 +1771,7 @@ bool SfxObjectShell_Impl::hasTrustedScriptingSignature( bool bAllowUIToAddAuthor
           || nScriptingSignatureState == SignatureState::OK
           || nScriptingSignatureState == SignatureState::NOTVALIDATED )
         {
-            uno::Sequence< security::DocumentSignatureInformation > aInfo = rDocShell.ImplAnalyzeSignature( true, xSigner );
+            uno::Sequence< security::DocumentSignatureInformation > aInfo = rDocShell.GetDocumentSignatureInformation( true, xSigner );
 
             if ( aInfo.getLength() )
             {

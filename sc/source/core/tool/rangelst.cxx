@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <unotools/collatorwrapper.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <rangelst.hxx>
 #include <document.hxx>
@@ -76,18 +77,6 @@ private:
     const T& mrTest;
 };
 
-class AppendToList
-{
-public:
-    explicit AppendToList(vector<ScRange>& rRanges) : mrRanges(rRanges) {}
-    void operator() (const ScRange& r)
-    {
-        mrRanges.push_back(r);
-    }
-private:
-    vector<ScRange>& mrRanges;
-};
-
 class CountCells
 {
 public:
@@ -130,12 +119,12 @@ public:
     }
 private:
     OUString& mrStr;
-    ScRefFlags mnFlags;
-    ScDocument* mpDoc;
-    FormulaGrammar::AddressConvention meConv;
-    sal_Unicode mcDelim;
+    ScRefFlags const mnFlags;
+    ScDocument* const mpDoc;
+    FormulaGrammar::AddressConvention const meConv;
+    sal_Unicode const mcDelim;
     bool mbFirst;
-    bool mbFullAddressNotation;
+    bool const mbFullAddressNotation;
 };
 
 }
@@ -143,7 +132,6 @@ private:
 //  ScRangeList
 ScRangeList::~ScRangeList()
 {
-    RemoveAll();
 }
 
 ScRefFlags ScRangeList::Parse( const OUString& rStr, const ScDocument* pDoc,
@@ -352,19 +340,7 @@ bool ScRangeList::operator==( const ScRangeList& r ) const
     if ( this == &r )
         return true;
 
-    if (maRanges.size() != r.maRanges.size())
-        return false;
-
-    auto itr1 = maRanges.begin(), itrEnd = maRanges.end();
-    auto itr2 = r.maRanges.begin();
-    for (; itr1 != itrEnd; ++itr1, ++itr2)
-    {
-        const ScRange& r1 = *itr1;
-        const ScRange& r2 = *itr2;
-        if (r1 != r2)
-            return false;
-    }
-    return true;
+    return maRanges == r.maRanges;
 }
 
 bool ScRangeList::operator!=( const ScRangeList& r ) const
@@ -414,10 +390,8 @@ bool ScRangeList::UpdateReference(
     if(maRanges.empty())
         return true;
 
-    iterator itr = maRanges.begin(), itrEnd = maRanges.end();
-    for (; itr != itrEnd; ++itr)
+    for (auto& rR : maRanges)
     {
-        ScRange& rR = *itr;
         SCCOL theCol1;
         SCROW theRow1;
         SCTAB theTab1;
@@ -454,10 +428,8 @@ bool ScRangeList::UpdateReference(
 void ScRangeList::InsertRow( SCTAB nTab, SCCOL nColStart, SCCOL nColEnd, SCROW nRowPos, SCSIZE nSize )
 {
     std::vector<ScRange> aNewRanges;
-    for(iterator it = maRanges.begin(), itEnd = maRanges.end(); it != itEnd;
-            ++it)
+    for(auto & rRange : maRanges)
     {
-        ScRange & rRange = *it;
         if(rRange.aStart.Tab() <= nTab && rRange.aEnd.Tab() >= nTab)
         {
             if(rRange.aEnd.Row() == nRowPos - 1 && (nColStart <= rRange.aEnd.Col() || nColEnd >= rRange.aStart.Col()))
@@ -474,23 +446,20 @@ void ScRangeList::InsertRow( SCTAB nTab, SCCOL nColStart, SCCOL nColEnd, SCROW n
         }
     }
 
-    for(std::vector<ScRange>::const_iterator it = aNewRanges.begin(), itEnd = aNewRanges.end();
-            it != itEnd; ++it)
+    for(auto & rRange : aNewRanges)
     {
-        if(!it->IsValid())
+        if(!rRange.IsValid())
             continue;
 
-        Join(*it);
+        Join(rRange);
     }
 }
 
 void ScRangeList::InsertCol( SCTAB nTab, SCROW nRowStart, SCROW nRowEnd, SCCOL nColPos, SCSIZE nSize )
 {
     std::vector<ScRange> aNewRanges;
-    for(iterator it = maRanges.begin(), itEnd = maRanges.end(); it != itEnd;
-            ++it)
+    for(auto & rRange : maRanges)
     {
-        ScRange & rRange = *it;
         if(rRange.aStart.Tab() <= nTab && rRange.aEnd.Tab() >= nTab)
         {
             if(rRange.aEnd.Col() == nColPos - 1 && (nRowStart <= rRange.aEnd.Row() || nRowEnd >= rRange.aStart.Row()))
@@ -505,13 +474,12 @@ void ScRangeList::InsertCol( SCTAB nTab, SCROW nRowStart, SCROW nRowEnd, SCCOL n
         }
     }
 
-    for(std::vector<ScRange>::const_iterator it = aNewRanges.begin(), itEnd = aNewRanges.end();
-            it != itEnd; ++it)
+    for(auto & rRange : aNewRanges)
     {
-        if(!it->IsValid())
+        if(!rRange.IsValid())
             continue;
 
-        Join(*it);
+        Join(rRange);
     }
 }
 
@@ -958,13 +926,13 @@ bool ScRangeList::DeleteArea( SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
 
     std::vector<ScRange> aNewRanges;
 
-    for(iterator itr = maRanges.begin(); itr != maRanges.end(); ++itr)
+    for(auto & rRange : maRanges)
     {
         // we have two basic cases here:
         // 1. Delete area and pRange intersect
         // 2. Delete area and pRange are not intersecting
         // checking for 2 and if true skip this range
-        if(!itr->Intersects(aRange))
+        if(!rRange.Intersects(aRange))
             continue;
 
         // We get between 1 and 4 ranges from the difference of the first with the second
@@ -975,7 +943,7 @@ bool ScRangeList::DeleteArea( SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
         // getting exactly one range is the simple case
         // r.aStart.X() <= p.aStart.X() && r.aEnd.X() >= p.aEnd.X()
         // && ( r.aStart.Y() <= p.aStart.Y() || r.aEnd.Y() >= r.aEnd.Y() )
-        if(handleOneRange( aRange, *itr ))
+        if(handleOneRange( aRange, rRange ))
         {
             bChanged = true;
             continue;
@@ -983,7 +951,7 @@ bool ScRangeList::DeleteArea( SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
 
         // getting two ranges
         // r.aStart.X()
-        else if(handleTwoRanges( aRange, *itr, aNewRanges ))
+        else if(handleTwoRanges( aRange, rRange, aNewRanges ))
         {
             bChanged = true;
             continue;
@@ -995,7 +963,7 @@ bool ScRangeList::DeleteArea( SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
         // or
         // r.aStart.X() <= p.aStart.X() && r.aEnd.X() < p.aEnd.X()
         // && r.aStart.Y() > p.aStart.Y() && r.aEnd.Y() < p.aEnd.Y()
-        else if(handleThreeRanges( aRange, *itr, aNewRanges ))
+        else if(handleThreeRanges( aRange, rRange, aNewRanges ))
         {
             bChanged = true;
             continue;
@@ -1004,28 +972,28 @@ bool ScRangeList::DeleteArea( SCCOL nCol1, SCROW nRow1, SCTAB nTab1,
         // getting 4 ranges
         // r.aStart.X() > p.aStart.X() && r.aEnd().X() < p.aEnd.X()
         // && r.aStart.Y() > p.aStart.Y() && r.aEnd().Y() < p.aEnd.Y()
-        else if(handleFourRanges( aRange, *itr, aNewRanges ))
+        else if(handleFourRanges( aRange, rRange, aNewRanges ))
         {
             bChanged = true;
             continue;
         }
     }
-    for(vector<ScRange>::iterator itr = aNewRanges.begin(); itr != aNewRanges.end(); ++itr)
-        Join( *itr);
+    for(auto & rRange : aNewRanges)
+        Join(rRange);
 
     return bChanged;
 }
 
 const ScRange* ScRangeList::Find( const ScAddress& rAdr ) const
 {
-    const_iterator itr = find_if(
-        maRanges.begin(), maRanges.end(), FindEnclosingRange<ScAddress>(rAdr));
+    auto itr = find_if(
+        maRanges.cbegin(), maRanges.cend(), FindEnclosingRange<ScAddress>(rAdr));
     return itr == maRanges.end() ? nullptr : &*itr;
 }
 
 ScRange* ScRangeList::Find( const ScAddress& rAdr )
 {
-    iterator itr = find_if(
+    auto itr = find_if(
         maRanges.begin(), maRanges.end(), FindEnclosingRange<ScAddress>(rAdr));
     return itr == maRanges.end() ? nullptr : &*itr;
 }
@@ -1033,12 +1001,10 @@ ScRange* ScRangeList::Find( const ScAddress& rAdr )
 ScRangeList::ScRangeList() : mnMaxRowUsed(-1) {}
 
 ScRangeList::ScRangeList( const ScRangeList& rList ) :
-    SvRefBase(),
-    mnMaxRowUsed(-1)
+    SvRefBase(rList),
+    maRanges(rList.maRanges),
+    mnMaxRowUsed(rList.mnMaxRowUsed)
 {
-    maRanges.reserve(rList.maRanges.size());
-    for_each(rList.maRanges.begin(), rList.maRanges.end(), AppendToList(maRanges));
-    mnMaxRowUsed = rList.mnMaxRowUsed;
 }
 
 ScRangeList::ScRangeList( const ScRangeList&& rList ) :
@@ -1057,9 +1023,7 @@ ScRangeList::ScRangeList( const ScRange& rRange ) :
 
 ScRangeList& ScRangeList::operator=(const ScRangeList& rList)
 {
-    RemoveAll();
-    maRanges.reserve(rList.maRanges.size());
-    for_each(rList.maRanges.begin(), rList.maRanges.end(), AppendToList(maRanges));
+    maRanges = rList.maRanges;
     mnMaxRowUsed = rList.mnMaxRowUsed;
     return *this;
 }
@@ -1098,6 +1062,7 @@ void ScRangeList::Remove(size_t nPos)
 void ScRangeList::RemoveAll()
 {
     maRanges.clear();
+    mnMaxRowUsed = -1;
 }
 
 ScRange ScRangeList::Combine() const
@@ -1105,7 +1070,7 @@ ScRange ScRangeList::Combine() const
     if (maRanges.empty())
         return ScRange();
 
-    const_iterator itr = maRanges.begin(), itrEnd = maRanges.end();
+    auto itr = maRanges.cbegin(), itrEnd = maRanges.cend();
     ScRange aRet = *itr;
     ++itr;
     for (; itr != itrEnd; ++itr)
@@ -1161,15 +1126,14 @@ ScAddress ScRangeList::GetTopLeftCorner() const
 ScRangeList ScRangeList::GetIntersectedRange(const ScRange& rRange) const
 {
     ScRangeList aReturn;
-    for(const_iterator itr = maRanges.begin(), itrEnd = maRanges.end();
-            itr != itrEnd; ++itr)
+    for(auto& rR : maRanges)
     {
-        if(itr->Intersects(rRange))
+        if(rR.Intersects(rRange))
         {
             SCCOL nColStart1, nColEnd1, nColStart2, nColEnd2;
             SCROW nRowStart1, nRowEnd1, nRowStart2, nRowEnd2;
             SCTAB nTabStart1, nTabEnd1, nTabStart2, nTabEnd2;
-            itr->GetVars(nColStart1, nRowStart1, nTabStart1,
+            rR.GetVars(nColStart1, nRowStart1, nTabStart1,
                         nColEnd1, nRowEnd1, nTabEnd1);
             rRange.GetVars(nColStart2, nRowStart2, nTabStart2,
                         nColEnd2, nRowEnd2, nTabEnd2);
@@ -1383,7 +1347,7 @@ public:
         return false;
     }
 private:
-    ScDocument *mpDoc;
+    ScDocument * const mpDoc;
 };
 
 void ScRangePairList::Join( const ScRangePair& r, bool bIsInList )

@@ -23,6 +23,7 @@
 
 #include <svl/poolitem.hxx>
 #include <comphelper/sequence.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <unofldmid.h>
 #include <unoprnms.hxx>
@@ -61,7 +62,7 @@ SwDropDownField::~SwDropDownField()
 {
 }
 
-OUString SwDropDownField::Expand() const
+OUString SwDropDownField::ExpandImpl(SwRootFrame const*const) const
 {
     OUString sSelect = GetSelectedItem();
     if (sSelect.isEmpty())
@@ -76,9 +77,9 @@ OUString SwDropDownField::Expand() const
     return sSelect;
 }
 
-SwField * SwDropDownField::Copy() const
+std::unique_ptr<SwField> SwDropDownField::Copy() const
 {
-    return new SwDropDownField(*this);
+    return o3tl::make_unique<SwDropDownField>(*this);
 }
 
 OUString SwDropDownField::GetPar1() const

@@ -92,8 +92,8 @@ typedef SfxChildWindowContext* (*SfxChildWinContextCtor)( vcl::Window *pParentWi
                                             SfxChildWinInfo *pInfo);
 struct SfxChildWinContextFactory
 {
-    SfxChildWinContextCtor  pCtor;      // Factory method
-    sal_uInt16              nContextId; // Identifier for SfxInterface
+    SfxChildWinContextCtor const  pCtor;      // Factory method
+    sal_uInt16 const              nContextId; // Identifier for SfxInterface
 
     SfxChildWinContextFactory( SfxChildWinContextCtor pTheCtor, sal_uInt16 nID )
         : pCtor(pTheCtor)
@@ -105,10 +105,10 @@ class SfxChildWinContextArr_Impl;
 
 struct SFX2_DLLPUBLIC SfxChildWinFactory
 {
-    SfxChildWinCtor             pCtor;  // Factory method
-    sal_uInt16                  nId;    // ChildWindow-Id ( SlotId )
+    SfxChildWinCtor const       pCtor;  // Factory method
+    sal_uInt16 const            nId;    // ChildWindow-Id ( SlotId )
     SfxChildWinInfo             aInfo;  // Configuration
-    sal_uInt16                  nPos;   // Position in UI
+    sal_uInt16 const            nPos;   // Position in UI
     std::unique_ptr<SfxChildWinContextArr_Impl> pArr;   // Array for Contexts
 
     SfxChildWinFactory( SfxChildWinCtor pTheCtor, sal_uInt16 nID, sal_uInt16 n );
@@ -143,9 +143,10 @@ public:
 
 class SFX2_DLLPUBLIC SfxChildWindow
 {
-    VclPtr<vcl::Window>        pParent;        // parent window ( Topwindow )
-    sal_uInt16                 nType;          // ChildWindow-Id
+    VclPtr<vcl::Window>        pParent;         // parent window ( Topwindow )
+    sal_uInt16 const           nType;           // ChildWindow-Id
     VclPtr<vcl::Window>        pWindow;         // actual contents
+    std::shared_ptr<SfxModelessDialogController> xController;     // actual contents
     SfxChildAlignment          eChildAlignment; // Current css::drawing::Alignment
     std::unique_ptr< SfxChildWindow_Impl>       pImpl;            // Implementation data
     std::unique_ptr<SfxChildWindowContext>      pContext;        // With context-sensitive ChildWindows:
@@ -161,6 +162,9 @@ public:
     void                Destroy();
     vcl::Window*        GetWindow() const
                         { return pWindow; }
+    void                SetController(std::shared_ptr<SfxModelessDialogController> controller) { xController = controller; }
+    void                ClearController() { xController.reset(); }
+    std::shared_ptr<SfxModelessDialogController>& GetController() { return xController; }
     vcl::Window*        GetParent() const
                         { return pParent; }
     SfxChildAlignment   GetAlignment() const

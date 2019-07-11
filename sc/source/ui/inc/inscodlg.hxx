@@ -29,7 +29,6 @@ class ScInsertContentsDlg : public weld::GenericDialogController
 {
 public:
             ScInsertContentsDlg( weld::Window*      pParent,
-                                 InsertDeleteFlags nCheckDefaults,
                                  const OUString*   pStrTitle );
     virtual ~ScInsertContentsDlg() override;
 
@@ -55,7 +54,6 @@ private:
 
     InsertDeleteFlags nShortCutInsContentsCmdBits;
     bool              bShortCutTranspose;
-    InsCellCmd        nShortCutMoveMode;
 
 
     std::unique_ptr<weld::CheckButton>        mxBtnInsAll;

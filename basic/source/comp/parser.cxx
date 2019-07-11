@@ -762,13 +762,10 @@ void SbiParser::Option()
         case BASIC_EXPLICIT:
             bExplicit = true; break;
         case BASE:
-            if( Next() == NUMBER )
+            if( Next() == NUMBER && ( nVal == 0 || nVal == 1 ) )
             {
-                if( nVal == 0 || nVal == 1 )
-                {
-                    nBase = static_cast<short>(nVal);
-                    break;
-                }
+                nBase = static_cast<short>(nVal);
+                break;
             }
             Error( ERRCODE_BASIC_EXPECTED, "0/1" );
             break;
@@ -830,7 +827,7 @@ void SbiParser::Option()
     }
 }
 
-void addStringConst( SbiSymPool& rPool, const OUString& pSym, const OUString& rStr )
+static void addStringConst( SbiSymPool& rPool, const OUString& pSym, const OUString& rStr )
 {
     SbiConstDef* pConst = new SbiConstDef( pSym );
     pConst->SetType( SbxSTRING );

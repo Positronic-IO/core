@@ -26,12 +26,33 @@
 
 #include <svl/sigstruct.hxx>
 #include "xmlsignaturehelper.hxx"
-#include <com/sun/star/uno/XComponentContext.hpp>
-#include <com/sun/star/embed/XStorage.hpp>
-#include <com/sun/star/graphic/XGraphic.hpp>
 #include "documentsignaturehelper.hxx"
-#include <com/sun/star/beans/PropertyValue.hpp>
 
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace beans
+{
+struct PropertyValue;
+}
+namespace embed
+{
+class XStorage;
+}
+namespace graphic
+{
+class XGraphic;
+}
+namespace uno
+{
+class XComponentContext;
+}
+}
+}
+}
 class PDFSignatureHelper;
 
 /// Manages signatures (addition, removal), used by DigitalSignaturesDialog.
@@ -43,7 +64,7 @@ public:
     XMLSignatureHelper maSignatureHelper;
     std::unique_ptr<PDFSignatureHelper> mpPDFSignatureHelper;
     SignatureInformations maCurrentSignatureInformations;
-    DocumentSignatureMode meSignatureMode;
+    DocumentSignatureMode const meSignatureMode;
     css::uno::Sequence<css::uno::Sequence<css::beans::PropertyValue>> m_manifest;
     css::uno::Reference<css::io::XStream> mxSignatureStream;
     css::uno::Reference<css::io::XStream> mxTempSignatureStream;
@@ -68,9 +89,9 @@ public:
              const css::uno::Reference<css::xml::crypto::XXMLSecurityContext>& xSecurityContext,
              const OUString& rDescription, sal_Int32& nSecurityId, bool bAdESCompliant,
              const OUString& rSignatureLineId = OUString(),
-             const css::uno::Reference<css::graphic::XGraphic> xValidGraphic
+             const css::uno::Reference<css::graphic::XGraphic>& xValidGraphic
              = css::uno::Reference<css::graphic::XGraphic>(),
-             const css::uno::Reference<css::graphic::XGraphic> xInvalidGraphic
+             const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic
              = css::uno::Reference<css::graphic::XGraphic>());
     /// Remove signature at nPosition.
     void remove(sal_uInt16 nPosition);

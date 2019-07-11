@@ -450,7 +450,7 @@ void NWPixmapCacheList::ThemeChanged( )
 /*********************************************************
  * Make border manipulation easier
  *********************************************************/
-inline void NW_gtk_border_set_from_border( GtkBorder& aDst, const GtkBorder * pSrc )
+static void NW_gtk_border_set_from_border( GtkBorder& aDst, const GtkBorder * pSrc )
 {
     aDst.left        = pSrc->left;
     aDst.top        = pSrc->top;
@@ -1018,7 +1018,7 @@ bool GtkSalGraphics::DoDrawNativeControl(
     }
     else if( (nType == ControlType::ListNode) && (nPart == ControlPart::Entire) )
     {
-        return NWPaintGTKListNode( aCtrlRect, nState, aValue );
+        return NWPaintGTKListNode( pDrawable, aCtrlRect, nState, aValue );
     }
     else if( (nType == ControlType::ListNet) && (nPart == ControlPart::Entire) )
     {
@@ -1853,7 +1853,7 @@ bool GtkSalGraphics::NWPaintGTKScrollbar( ControlPart nPart,
 {
     assert(aValue.getType() == ControlType::Scrollbar);
     const ScrollbarValue& rScrollbarVal = static_cast<const ScrollbarValue&>(aValue);
-    GdkX11Pixmap*    pixmap = nullptr;
+    std::unique_ptr<GdkX11Pixmap> pixmap;
     tools::Rectangle        pixmapRect, scrollbarRect;
     GtkStateType    stateType;
     GtkShadowType    shadowType;
@@ -2029,7 +2029,7 @@ bool GtkSalGraphics::NWPaintGTKScrollbar( ControlPart nPart,
 
     // as multiple paints are required for the scrollbar
     // painting them directly to the window flickers
-    pixmap = NWGetPixmapFromScreen( pixmapRect );
+    pixmap.reset( NWGetPixmapFromScreen( pixmapRect ) );
     if( ! pixmap )
         return false;
     x = y = 0;
@@ -2158,8 +2158,7 @@ bool GtkSalGraphics::NWPaintGTKScrollbar( ControlPart nPart,
                          arrowRect.GetWidth(), arrowRect.GetHeight() );
     }
 
-    bool bRet = NWRenderPixmapToScreen( pixmap, nullptr, pixmapRect );
-    delete pixmap;
+    bool bRet = NWRenderPixmapToScreen( pixmap.get(), nullptr, pixmapRect );
 
     return bRet;
 }
@@ -3346,7 +3345,18 @@ bool GtkSalGraphics::NWPaintGTKTooltip(
     return true;
 }
 
+namespace
+{
+void NWPaintGTKListNodeReal(SalX11Screen nXScreen, GdkDrawable* gdkDrawable, GtkStateType stateType,
+                            gint w, int h, GtkExpanderStyle eStyle)
+{
+    gtk_paint_expander(gWidgetData[nXScreen].gTreeView->style, gdkDrawable, stateType, nullptr,
+                       gWidgetData[nXScreen].gTreeView, "treeview", w / 2, h / 2, eStyle);
+}
+}
+
 bool GtkSalGraphics::NWPaintGTKListNode(
+            GdkDrawable* gdkDrawable,
             const tools::Rectangle& rControlRectangle,
             ControlState nState, const ImplControlValue& rValue )
 {
@@ -3376,16 +3386,15 @@ bool GtkSalGraphics::NWPaintGTKListNode(
             break;
     }
 
+    if (GtkSalGraphics::bNeedPixmapPaint)
+    {
+        NWPaintGTKListNodeReal(m_nXScreen, gdkDrawable, stateType, w, h, eStyle);
+        return true;
+    }
+
     BEGIN_PIXMAP_RENDER( aRect, pixDrawable )
     {
-        gtk_paint_expander( gWidgetData[m_nXScreen].gTreeView->style,
-                            pixDrawable,
-                            stateType,
-                            nullptr,
-                            gWidgetData[m_nXScreen].gTreeView,
-                            "treeview",
-                            w/2, h/2,
-                            eStyle );
+        NWPaintGTKListNodeReal(m_nXScreen, pixDrawable, stateType, w, h, eStyle);
     }
     END_PIXMAP_RENDER( aRect )
 
@@ -3684,7 +3693,7 @@ static tools::Rectangle NWGetToolbarRect(  SalX11Screen nScreen,
 /************************************************************************
  * helper for GtkSalFrame
  ************************************************************************/
-static inline Color getColor( const GdkColor& rCol )
+static Color getColor( const GdkColor& rCol )
 {
     return Color( rCol.red >> 8, rCol.green >> 8, rCol.blue >> 8 );
 }
@@ -3998,7 +4007,7 @@ void GtkSalGraphics::updateSettings( AllSettings& rSettings )
         g_object_get( pSettings, "gtk-cursor-blink-time", &blink_time, nullptr );
         // set the blink_time if there is a setting and it is reasonable
         // else leave the default value
-        if( blink_time > 100 && blink_time != gint(STYLE_CURSOR_NOBLINKTIME) )
+        if( blink_time > 100 )
             aStyleSet.SetCursorBlinkTime( blink_time/2 );
     }
     else

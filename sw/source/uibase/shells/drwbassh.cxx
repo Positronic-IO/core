@@ -137,10 +137,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
 
                         pSh->GetObjAttr(aSet);
                         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
-                        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSwWrapDlg( GetView().GetWindow(), aSet, pSh ));
-                        OSL_ENSURE(pDlg, "Dialog creation failed!");
+                        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSwWrapDlg(GetView().GetFrameWeld(), aSet, pSh));
 
                         if (pDlg->Execute() == RET_OK)
                         {
@@ -199,7 +196,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                         {
                             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                             VclPtr<AbstractSvxTransformTabDialog> pTransform =
-                                        pFact->CreateSvxTransformTabDialog( nullptr, nullptr, pSdrView, nAllowedAnchors );
+                                        pFact->CreateSvxTransformTabDialog(rReq.GetFrameWeld(), nullptr, pSdrView, nAllowedAnchors);
                             pDlg.disposeAndReset(pTransform);
                             pTransform->SetValidateFramePosLink( LINK(this, SwDrawBaseShell, ValidatePosition) );
                         }
@@ -422,41 +419,57 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
             if ( bAlignPossible )
             {
                 const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
-                if( rMarkList.GetMarkCount() == 1 && bAlignPossible )
-                {   // Do not align objects to each other
-                    RndStdIds nAnchor = pSh->GetAnchorId();
-                    if (nAnchor == RndStdIds::FLY_AS_CHAR)
-                    {
-                        sal_Int16 nVertOrient = -1;
+                if ( rMarkList.GetMarkCount() == 1 )
+                {
+                    sal_Int16 nHorizOrient = -1, nVertOrient = -1;
 
-                        switch (nSlotId)
-                        {
-                            case SID_OBJECT_ALIGN_UP:
-                                nVertOrient = text::VertOrientation::TOP;
-                                break;
-                            case SID_OBJECT_ALIGN_MIDDLE:
-                                nVertOrient = text::VertOrientation::CENTER;
-                                break;
-                            case SID_OBJECT_ALIGN_DOWN:
-                                nVertOrient = text::VertOrientation::BOTTOM;
-                                break;
-                            default:
-                                break;
-                        }
-                        if (nVertOrient != -1)
-                        {
-                            pSh->StartAction();
-                            SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
-                            SwFrameFormat* pFrameFormat = FindFrameFormat( pObj );
-                            SwFormatVertOrient aVOrient(pFrameFormat->GetFormatAttr(RES_VERT_ORIENT));
-                            aVOrient.SetVertOrient( nVertOrient );
-                            pFrameFormat->SetFormatAttr(aVOrient);
-                            pSh->EndAction();
-                        }
-                        break;
+                    switch (nSlotId)
+                    {
+                        case SID_OBJECT_ALIGN_LEFT:
+                            nHorizOrient = text::HoriOrientation::LEFT;
+                            break;
+                        case SID_OBJECT_ALIGN_CENTER:
+                            nHorizOrient = text::HoriOrientation::CENTER;
+                            break;
+                        case SID_OBJECT_ALIGN_RIGHT:
+                            nHorizOrient = text::HoriOrientation::RIGHT;
+                            break;
+                        case SID_OBJECT_ALIGN_UP:
+                            nVertOrient = text::VertOrientation::TOP;
+                            break;
+                        case SID_OBJECT_ALIGN_MIDDLE:
+                            nVertOrient = text::VertOrientation::CENTER;
+                            break;
+                        case SID_OBJECT_ALIGN_DOWN:
+                            nVertOrient = text::VertOrientation::BOTTOM;
+                            break;
+                        default:
+                            break;
                     }
-                    if (nAnchor == RndStdIds::FLY_AT_PARA)
-                        break;  // Do not align frames of an anchored paragraph
+
+                    if (nHorizOrient != -1)
+                    {
+                        pSh->StartAction();
+                        SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
+                        SwFrameFormat* pFrameFormat = FindFrameFormat( pObj );
+                        SwFormatHoriOrient aHOrient(pFrameFormat->GetFormatAttr(RES_HORI_ORIENT));
+                        aHOrient.SetHoriOrient( nHorizOrient );
+                        pFrameFormat->SetFormatAttr(aHOrient);
+                        pSh->EndAction();
+                    }
+
+                    if (nVertOrient != -1)
+                    {
+                        pSh->StartAction();
+                        SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
+                        SwFrameFormat* pFrameFormat = FindFrameFormat( pObj );
+                        SwFormatVertOrient aVOrient(pFrameFormat->GetFormatAttr(RES_VERT_ORIENT));
+                        aVOrient.SetVertOrient( nVertOrient );
+                        pFrameFormat->SetFormatAttr(aVOrient);
+                        pSh->EndAction();
+                    }
+
+                    break;
                 }
 
                 pSh->StartAction();
@@ -512,9 +525,7 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                 OUString aName(pSelected->GetName());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "Dialog creation failed!");
                 ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetView().GetFrameWeld(), aName));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                 pDlg->SetCheckNameHdl(LINK(this, SwDrawBaseShell, CheckGroupShapeNameHdl));
 
@@ -542,10 +553,8 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                 OUString aDescription(pSelected->GetDescription());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "Dialog creation failed!");
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
                             aTitle, aDescription));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                 if(RET_OK == pDlg->Execute())
                 {
@@ -596,7 +605,7 @@ IMPL_LINK( SwDrawBaseShell, CheckGroupShapeNameHdl, AbstractSvxObjectNameDialog&
     {
         bRet = true;
         SwDrawModel* pModel = rSh.getIDocumentDrawModelAccess().GetDrawModel();
-        SdrObjListIter aIter( *(pModel->GetPage(0)), SdrIterMode::DeepWithGroups );
+        SdrObjListIter aIter( pModel->GetPage(0), SdrIterMode::DeepWithGroups );
         while( aIter.IsMore() )
         {
             SdrObject* pTempObj = aIter.Next();
@@ -661,7 +670,7 @@ void SwDrawBaseShell::GetState(SfxItemSet& rSet)
             case SID_OBJECT_ALIGN:
                 if ( !rSh.IsAlignPossible() || bProtected )
                     rSet.DisableItem( nWhich );
-                else
+                else if ( rSh.GetAnchorId() == RndStdIds::FLY_AS_CHAR )
                 {
                     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
                     //if only one object is selected it can only be vertically
@@ -740,11 +749,16 @@ void SwDrawBaseShell::DisableState( SfxItemSet& rSet )
     SwWrtShell *pSh = &GetShell();
     SdrView*    pSdrView = pSh->GetDrawView();
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
+    const size_t nMarkCount = rMarkList.GetMarkCount();
+    bool bShowArea = true, bShowMeasure = true;
 
-    if ( rMarkList.GetMarkCount() == 1 )
+    for (size_t i = 0; i < nMarkCount && i < 50; ++i)
     {
-        SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
+        SdrObject* pObj = rMarkList.GetMark(i)->GetMarkedSdrObj();
         sal_uInt16 nObjType = pObj->GetObjIdentifier();
+
+        if ( nObjType != OBJ_MEASURE )
+            bShowMeasure = false;
 
         // If marked object is 2D, disable format area command.
         if ( nObjType == OBJ_PLIN     ||
@@ -752,9 +766,19 @@ void SwDrawBaseShell::DisableState( SfxItemSet& rSet )
              nObjType == OBJ_PATHLINE ||
              nObjType == OBJ_FREELINE ||
              nObjType == OBJ_EDGE     ||
-             nObjType == OBJ_CARC )
-            rSet.DisableItem( SID_ATTRIBUTES_AREA );
+             nObjType == OBJ_CARC     ||
+             bShowMeasure )
+            bShowArea = false;
+
+        if (!bShowArea && !bShowMeasure)
+            break;
     }
+
+    if (!bShowArea)
+        rSet.DisableItem(SID_ATTRIBUTES_AREA);
+
+    if (!bShowMeasure)
+        rSet.DisableItem(SID_MEASURE_DLG);
 
     Disable(rSet);
 

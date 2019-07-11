@@ -20,6 +20,7 @@
 #include <svx/SpellDialogChildWindow.hxx>
 
 #include <svx/svxdlg.hxx>
+#include <osl/diagnose.h>
 
 namespace svx {
 
@@ -31,7 +32,6 @@ SpellDialogChildWindow::SpellDialogChildWindow (
     : SfxChildWindow (_pParent, nId)
 {
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    DBG_ASSERT(pFact, "SvxAbstractDialogFactory::Create() failed");
     m_xAbstractSpellDialog = pFact->CreateSvxSpellDialog(_pParent,
                                             pBindings,
                                             this );

@@ -99,7 +99,7 @@ enum WID_PAGE
 static sal_Char const sEmptyPageName[sizeof("page")] = "page";
 
 // this function stores the property maps for draw pages in impress and draw
-const SvxItemPropertySet* ImplGetDrawPagePropertySet( bool bImpress, PageKind ePageKind )
+static const SvxItemPropertySet* ImplGetDrawPagePropertySet( bool bImpress, PageKind ePageKind )
 {
     static const SfxItemPropertyMapEntry aDrawPagePropertyMap_Impl[] =
     {
@@ -255,7 +255,7 @@ const SvxItemPropertySet* ImplGetDrawPagePropertySet( bool bImpress, PageKind eP
 }
 
 /** this function stores the property map for master pages in impress and draw */
-const SvxItemPropertySet* ImplGetMasterPagePropertySet( PageKind ePageKind )
+static const SvxItemPropertySet* ImplGetMasterPagePropertySet( PageKind ePageKind )
 {
     static const SfxItemPropertyMapEntry aMasterPagePropertyMap_Impl[] =
     {
@@ -404,24 +404,6 @@ SdrObject * SdGenericDrawPage::CreateSdrObject_( const Reference< drawing::XShap
     if( !aType.startsWith( aPrefix ) )
     {
         SdrObject* pObj = SvxFmDrawPage::CreateSdrObject_( xShape );
-        if( pObj && ( (pObj->GetObjInventor() != SdrInventor::Default) || (pObj->GetObjIdentifier() != OBJ_PAGE) ) )
-        {
-            SdDrawDocument& rDoc(static_cast< SdDrawDocument& >(GetPage()->getSdrModelFromSdrPage()));
-            // #i119287# similar to the code in the SdrObject methods the graphic and ole
-            // SdrObjects need another default style than the rest, see task. Adding here, too.
-            // TTTT: Same as for #i119287#: Can be removed in branch aw080 again
-            const bool bIsSdrGrafObj(dynamic_cast< const SdrGrafObj* >(pObj) !=  nullptr);
-            const bool bIsSdrOle2Obj(dynamic_cast< const SdrOle2Obj* >(pObj) !=  nullptr);
-
-            if(bIsSdrGrafObj || bIsSdrOle2Obj)
-            {
-                pObj->NbcSetStyleSheet(rDoc.GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj(), true);
-            }
-            else
-            {
-                pObj->NbcSetStyleSheet(rDoc.GetDefaultStyleSheet(), true);
-            }
-        }
         return pObj;
     }
 
@@ -782,7 +764,7 @@ void SAL_CALL SdGenericDrawPage::setPropertyValue( const OUString& aPropertyName
                 {
                     SdrLayerAdmin& rLayerAdmin = rDoc.GetLayerAdmin();
                     SdrLayerIDSet aVisibleLayers = pPage->TRG_GetMasterPageVisibleLayers();
-                    aVisibleLayers.Set(rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND)), bVisible);
+                    aVisibleLayers.Set(rLayerAdmin.GetLayerID(sUNO_LayerName_background), bVisible);
                     pPage->TRG_SetMasterPageVisibleLayers(aVisibleLayers);
                 }
             }
@@ -802,7 +784,7 @@ void SAL_CALL SdGenericDrawPage::setPropertyValue( const OUString& aPropertyName
                 {
                     SdrLayerAdmin& rLayerAdmin = rDoc.GetLayerAdmin();
                     SdrLayerIDSet aVisibleLayers = pPage->TRG_GetMasterPageVisibleLayers();
-                    aVisibleLayers.Set(rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ)), bVisible);
+                    aVisibleLayers.Set(rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects), bVisible);
                     pPage->TRG_SetMasterPageVisibleLayers(aVisibleLayers);
                 }
             }
@@ -1201,7 +1183,7 @@ Any SAL_CALL SdGenericDrawPage::getPropertyValue( const OUString& PropertyName )
             {
                 SdrLayerAdmin& rLayerAdmin = rDoc.GetLayerAdmin();
                 SdrLayerIDSet aVisibleLayers = pPage->TRG_GetMasterPageVisibleLayers();
-                aAny <<= aVisibleLayers.IsSet(rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND)));
+                aAny <<= aVisibleLayers.IsSet(rLayerAdmin.GetLayerID(sUNO_LayerName_background));
             }
             else
             {
@@ -1220,7 +1202,7 @@ Any SAL_CALL SdGenericDrawPage::getPropertyValue( const OUString& PropertyName )
             {
                 SdrLayerAdmin& rLayerAdmin = rDoc.GetLayerAdmin();
                 SdrLayerIDSet aVisibleLayers = pPage->TRG_GetMasterPageVisibleLayers();
-                aAny <<= aVisibleLayers.IsSet(rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ)));
+                aAny <<= aVisibleLayers.IsSet(rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects));
             }
             else
             {
@@ -1280,7 +1262,7 @@ Any SAL_CALL SdGenericDrawPage::getPropertyValue( const OUString& PropertyName )
     case WID_PAGE_DATETIMEFORMAT:
         {
             auto const & rSettings = GetPage()->getHeaderFooterSettings();
-            sal_Int32 x = static_cast<sal_Int32>(rSettings.meDateFormat) & (static_cast<sal_Int32>(rSettings.meTimeFormat) << 4);
+            sal_Int32 x = static_cast<sal_Int32>(rSettings.meDateFormat) | (static_cast<sal_Int32>(rSettings.meTimeFormat) << 4);
             aAny <<= x;
         }
         break;
@@ -1902,7 +1884,7 @@ sal_Bool SAL_CALL SdPageLinkTargets::hasElements()
     SdPage* pPage = mpUnoPage->GetPage();
     if( pPage != nullptr )
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
 
         while( aIter.IsMore() )
         {
@@ -1948,7 +1930,7 @@ Sequence< OUString > SAL_CALL SdPageLinkTargets::getElementNames()
     SdPage* pPage = mpUnoPage->GetPage();
     if( pPage != nullptr )
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
         while( aIter.IsMore() )
         {
             SdrObject* pObj = aIter.Next();
@@ -1965,7 +1947,7 @@ Sequence< OUString > SAL_CALL SdPageLinkTargets::getElementNames()
     {
         OUString* pStr = aSeq.getArray();
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
         while( aIter.IsMore() )
         {
             SdrObject* pObj = aIter.Next();
@@ -1993,7 +1975,7 @@ SdrObject* SdPageLinkTargets::FindObject( const OUString& rName ) const throw()
     if( pPage == nullptr )
         return nullptr;
 
-    SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+    SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
 
     while( aIter.IsMore() )
     {
@@ -2300,11 +2282,8 @@ void SAL_CALL SdDrawPage::setName( const OUString& rName )
         // fake a mode change to repaint the page tab bar
         ::sd::DrawDocShell* pDocSh = GetModel()->GetDocShell();
         ::sd::ViewShell* pViewSh = pDocSh ? pDocSh->GetViewShell() : nullptr;
-        if( pViewSh && dynamic_cast< const ::sd::DrawViewShell* >(pViewSh) !=  nullptr)
+        if( auto pDrawViewSh = dynamic_cast<::sd::DrawViewShell* >(pViewSh) )
         {
-            ::sd::DrawViewShell* pDrawViewSh = static_cast<
-                  ::sd::DrawViewShell*>(pViewSh);
-
             EditMode eMode = pDrawViewSh->GetEditMode();
             if( eMode == EditMode::Page )
             {
@@ -2544,7 +2523,7 @@ void SdDrawPage::getBackground(Any& rValue)
 {
     const SfxItemSet& rFillAttributes = GetPage()->getSdrPageProperties().GetItemSet();
 
-       if(drawing::FillStyle_NONE == rFillAttributes.Get(XATTR_FILLSTYLE).GetValue())
+    if(drawing::FillStyle_NONE == rFillAttributes.Get(XATTR_FILLSTYLE).GetValue())
     {
         // no fill set (switched off by drawing::FillStyle_NONE), clear rValue to represent this
         rValue.clear();
@@ -2827,29 +2806,26 @@ void SdMasterPage::setBackground( const Any& rValue )
         {
             Reference< container::XNameAccess >  xFamilies( GetModel()->getStyleFamilies(), UNO_QUERY_THROW );
             Reference< container::XNameAccess > xFamily( xFamilies->getByName( getName() ), UNO_QUERY_THROW ) ;
-            if( xFamily.is() )
+            OUString aStyleName(sUNO_PseudoSheet_Background);
+
+            Reference< beans::XPropertySet >  xStyleSet( xFamily->getByName( aStyleName ), UNO_QUERY_THROW );
+
+            Reference< beans::XPropertySetInfo >  xSetInfo( xInputSet->getPropertySetInfo(), UNO_QUERY_THROW );
+            Reference< beans::XPropertyState > xSetStates( xInputSet, UNO_QUERY );
+
+            PropertyEntryVector_t aBackgroundProperties = ImplGetPageBackgroundPropertySet()->getPropertyMap().getPropertyEntries();
+            PropertyEntryVector_t::const_iterator aIt = aBackgroundProperties.begin();
+            while( aIt != aBackgroundProperties.end() )
             {
-                OUString aStyleName(sUNO_PseudoSheet_Background);
-
-                Reference< beans::XPropertySet >  xStyleSet( xFamily->getByName( aStyleName ), UNO_QUERY_THROW );
-
-                Reference< beans::XPropertySetInfo >  xSetInfo( xInputSet->getPropertySetInfo(), UNO_QUERY_THROW );
-                Reference< beans::XPropertyState > xSetStates( xInputSet, UNO_QUERY );
-
-                PropertyEntryVector_t aBackgroundProperties = ImplGetPageBackgroundPropertySet()->getPropertyMap().getPropertyEntries();
-                PropertyEntryVector_t::const_iterator aIt = aBackgroundProperties.begin();
-                while( aIt != aBackgroundProperties.end() )
+                if( xSetInfo->hasPropertyByName( aIt->sName ) )
                 {
-                    if( xSetInfo->hasPropertyByName( aIt->sName ) )
-                    {
-                        if( !xSetStates.is() || xSetStates->getPropertyState( aIt->sName ) == beans::PropertyState_DIRECT_VALUE )
-                            xStyleSet->setPropertyValue( aIt->sName,    xInputSet->getPropertyValue( aIt->sName ) );
-                        else
-                            xSetStates->setPropertyToDefault( aIt->sName );
-                    }
-
-                    ++aIt;
+                    if( !xSetStates.is() || xSetStates->getPropertyState( aIt->sName ) == beans::PropertyState_DIRECT_VALUE )
+                        xStyleSet->setPropertyValue( aIt->sName,    xInputSet->getPropertyValue( aIt->sName ) );
+                    else
+                        xSetStates->setPropertyToDefault( aIt->sName );
                 }
+
+                ++aIt;
             }
         }
         else
@@ -2999,11 +2975,8 @@ void SAL_CALL SdMasterPage::setName( const OUString& rName )
         // fake a mode change to repaint the page tab bar
         ::sd::DrawDocShell* pDocSh = GetModel()->GetDocShell();
         ::sd::ViewShell* pViewSh = pDocSh ? pDocSh->GetViewShell() : nullptr;
-        if( pViewSh && dynamic_cast< const ::sd::DrawViewShell* >(pViewSh) !=  nullptr )
+        if( auto pDrawViewSh = dynamic_cast< ::sd::DrawViewShell* >(pViewSh) )
         {
-            ::sd::DrawViewShell* pDrawViewSh =
-                  static_cast< ::sd::DrawViewShell*>(pViewSh);
-
             EditMode eMode = pDrawViewSh->GetEditMode();
             if( eMode == EditMode::MasterPage )
             {
@@ -3068,11 +3041,8 @@ void SAL_CALL SdMasterPage::remove( const Reference< drawing::XShape >& xShape )
     if( pShape )
     {
         SdrObject* pObj = pShape->GetSdrObject();
-        if( pObj )
-        {
-            if( GetPage()->IsPresObj( pObj ) )
-                GetPage()->RemovePresObj(pObj);
-        }
+        if( pObj && GetPage()->IsPresObj( pObj ) )
+            GetPage()->RemovePresObj(pObj);
     }
 
     SdGenericDrawPage::remove( xShape );

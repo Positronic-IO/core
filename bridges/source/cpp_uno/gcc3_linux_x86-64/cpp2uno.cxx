@@ -160,7 +160,8 @@ static typelib_TypeClass cpp2uno_call(
             }
             else if ( bridges::cpp_uno::shared::relatesToInterfaceType( pParamTypeDescr ) ) // is in/inout
             {
-                uno_copyAndConvertData( pUnoArgs[nPos] = alloca( pParamTypeDescr->nSize ),
+                pUnoArgs[nPos] = alloca( pParamTypeDescr->nSize );
+                uno_copyAndConvertData( pUnoArgs[nPos],
                                         pCppStack, pParamTypeDescr,
                                         pThis->getBridge()->getCpp2Uno() );
                 pTempIndices[nTempIndices] = nPos; // has to be reconverted
@@ -400,7 +401,7 @@ const int codeSnippetSize = 24;
 // Note: The code snippet we build here must not create a stack frame,
 // otherwise the UNO exceptions stop working thanks to non-existing
 // unwinding info.
-unsigned char * codeSnippet( unsigned char * code,
+static unsigned char * codeSnippet( unsigned char * code,
         sal_Int32 nFunctionIndex, sal_Int32 nVtableOffset,
         bool bHasHiddenParam )
 {

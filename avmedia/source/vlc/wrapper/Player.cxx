@@ -67,7 +67,7 @@ namespace wrapper
 {
     bool Player::LoadSymbols()
     {
-        ApiMap const VLC_PLAYER_API[] =
+        static ApiMap const VLC_PLAYER_API[] =
         {
             SYM_MAP( libvlc_media_player_new_from_media ),
             SYM_MAP( libvlc_media_player_release ),
@@ -229,9 +229,9 @@ namespace wrapper
 #endif
     }
 
-    void Player::takeSnapshot( const rtl::OUString& file )
+    void Player::takeSnapshot( const OUString& file )
     {
-        rtl::OString dest;
+        OString dest;
         file.convertToString( &dest, RTL_TEXTENCODING_UTF8, 0 );
         libvlc_video_take_snapshot( mPlayer, 0, dest.getStr(), 480, 360 );
     }

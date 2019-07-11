@@ -28,18 +28,15 @@
 class SfxTabPage;
 class SfxItemSet;
 
-struct SfxPrinter_Impl;
-
 // class SfxPrinter ------------------------------------------------------
 
 class SFX2_DLLPUBLIC SfxPrinter : public Printer
 {
 private:
     std::unique_ptr<SfxItemSet> pOptions;
-    std::unique_ptr< SfxPrinter_Impl >  pImpl;
     bool                    bKnown;
 
-    SAL_DLLPRIVATE void operator =(SfxPrinter &) = delete;
+    SfxPrinter& operator =(SfxPrinter const &) = delete;
 
 public:
                             SfxPrinter( std::unique_ptr<SfxItemSet> &&pTheOptions );

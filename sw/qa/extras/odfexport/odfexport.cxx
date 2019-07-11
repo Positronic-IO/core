@@ -52,17 +52,9 @@ public:
         return OString(filename).endsWith(".odt");
     }
 
-    bool mustValidate(const char* filename) const override
+    bool mustValidate(const char* /*filename*/) const override
     {
-        std::vector<const char*> aBlacklist = {
-            // These are known problems, they should be fixed one by one.
-            "fdo86963.odt",
-            "shape-relsize.odt",
-            "fdo60769.odt",
-            "fdo38244.odt"
-        };
-
-        return std::find(aBlacklist.begin(), aBlacklist.end(), filename) == aBlacklist.end();
+        return true;
     }
 
     virtual std::unique_ptr<Resetter> preTest(const char* pFilename) override
@@ -116,7 +108,7 @@ DECLARE_ODFEXPORT_TEST(testMathObjectFlatExport, "2_MathType3.docx")
     CPPUNIT_ASSERT_EQUAL(OUString(" size 12{2+2=4} {}"), formula2);
 }
 
-void testTdf43569_CheckIfFieldParse()
+static void testTdf43569_CheckIfFieldParse()
 {
     {
         const OUString fieldDefinition("IF A B C");
@@ -1407,6 +1399,53 @@ DECLARE_ODFEXPORT_TEST(testFdo86963, "fdo86963.odt")
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xDrawPage->getCount());
 }
 
+// Check for correct header/footer with special first page with TOC inside:
+// - DECLARE_ODFEXPORT_TEST(testTdf118393, "tdf118393.odt")
+// - DECLARE_OOXMLEXPORT_TEST(testTdf118393, "tdf118393.odt")
+DECLARE_ODFEXPORT_TEST(testTdf118393, "tdf118393.odt")
+{
+    CPPUNIT_ASSERT_EQUAL( 7, getPages() );
+
+    // First page has no header/footer
+    {
+        xmlDocPtr pXmlDoc = parseLayoutDump();
+
+        // check first page
+        xmlXPathObjectPtr pXmlPage1Header = getXPathNode(pXmlDoc, "/root/page[1]/header");
+        CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlPage1Header->nodesetval));
+
+        xmlXPathObjectPtr pXmlPage1Footer = getXPathNode(pXmlDoc, "/root/page[1]/footer");
+        CPPUNIT_ASSERT_EQUAL(0, xmlXPathNodeSetGetLength(pXmlPage1Footer->nodesetval));
+
+        // check second page in the same way
+        xmlXPathObjectPtr pXmlPage2Header = getXPathNode(pXmlDoc, "/root/page[2]/header");
+        CPPUNIT_ASSERT_EQUAL(1, xmlXPathNodeSetGetLength(pXmlPage2Header->nodesetval));
+
+        xmlXPathObjectPtr pXmlPage2Footer = getXPathNode(pXmlDoc, "/root/page[2]/footer");
+        CPPUNIT_ASSERT_EQUAL(1, xmlXPathNodeSetGetLength(pXmlPage2Footer->nodesetval));
+   }
+
+    // All other pages should have header/footer
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[2]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[2]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[3]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[3]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[4]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[4]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[5]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[5]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[6]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[6]/footer/txt/text()"));
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[7]/header/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Seite * von *"),   parseDump("/root/page[7]/footer/txt/text()"));
+}
+
 DECLARE_ODFEXPORT_TEST(testGerrit13858, "gerrit13858.odt")
 {
     // Just make sure the output is valid.
@@ -1909,7 +1948,7 @@ DECLARE_ODFEXPORT_TEST(testReferenceLanguage, "referencelanguage.odt")
 {
     // Test loext:reference-language attribute of reference fields
     // (used from LibreOffice 6.1, and proposed for next ODF)
-    const char* aFieldTexts[] = { "A 2", "Az 50-esek",
+    const char* aFieldTexts[] = { "A 2", "Az Isten", "Az 50-esek",
         "A 2018-asok", "Az egyebek", "A fejezetek",
         u8"Az „Őseinket...”", "a 2",
         "Az v", "az 1", "Az e", "az 1",
@@ -1923,7 +1962,7 @@ DECLARE_ODFEXPORT_TEST(testReferenceLanguage, "referencelanguage.odt")
 
     uno::Any aHu = uno::makeAny(OUString("Hu"));
     uno::Any ahu = uno::makeAny(OUString("hu"));
-    for (sal_uInt32 i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
+    for (size_t i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
     {
         uno::Any aField = xFields->nextElement();
         uno::Reference<lang::XServiceInfo> xServiceInfo(aField, uno::UNO_QUERY);
@@ -1981,9 +2020,9 @@ DECLARE_ODFEXPORT_TEST(testChapterNumberingNewLine, "chapter-number-new-line.odt
 DECLARE_ODFEXPORT_TEST(testSpellOutNumberingTypes, "spellout-numberingtypes.odt")
 {
     // ordinal indicator, ordinal and cardinal number numbering styles (from LibreOffice 6.1)
-    const char* aFieldTexts[] = { "1st", "Erste", "Eins",  "1.", "Premier", "Un", "1ᵉʳ", "First", "One" };
+    static const char* const aFieldTexts[] = { "1st", "Erste", "Eins",  "1.", "Premier", "Un", "1ᵉʳ", "First", "One" };
     // fallback for old platforms without std::codecvt and std::regex supports
-    const char* aFieldTextFallbacks[] = { "Ordinal-number 1", "Ordinal 1", "1" };
+    static const char* const aFieldTextFallbacks[] = { "Ordinal-number 1", "Ordinal 1", "1" };
     uno::Reference<text::XTextFieldsSupplier> xTextFieldsSupplier(mxComponent, uno::UNO_QUERY);
     // update text field content
     uno::Reference<util::XRefreshable>(xTextFieldsSupplier->getTextFields(), uno::UNO_QUERY)->refresh();
@@ -1991,7 +2030,7 @@ DECLARE_ODFEXPORT_TEST(testSpellOutNumberingTypes, "spellout-numberingtypes.odt"
     uno::Reference<container::XEnumerationAccess> xFieldsAccess(xTextFieldsSupplier->getTextFields());
     uno::Reference<container::XEnumeration> xFields(xFieldsAccess->createEnumeration());
 
-    for (sal_uInt32 i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
+    for (size_t i = 0; i < SAL_N_ELEMENTS(aFieldTexts); i++)
     {
         uno::Any aField = xFields->nextElement();
         uno::Reference<lang::XServiceInfo> xServiceInfo(aField, uno::UNO_QUERY);
@@ -2004,6 +2043,101 @@ DECLARE_ODFEXPORT_TEST(testSpellOutNumberingTypes, "spellout-numberingtypes.odt"
     }
 }
 
+// MAILMERGE Add conditional to expand / collapse bookmarks
+DECLARE_ODFEXPORT_TEST(tdf101856_overlapped, "tdf101856_overlapped.odt")
+{
+    // get bookmark interface
+    uno::Reference<text::XBookmarksSupplier> xBookmarksSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xBookmarksByIdx(xBookmarksSupplier->getBookmarks(), uno::UNO_QUERY);
+    uno::Reference<container::XNameAccess> xBookmarksByName(xBookmarksSupplier->getBookmarks(), uno::UNO_QUERY);
+
+    // check: we have 2 bookmarks
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2), xBookmarksByIdx->getCount());
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkNonHidden"));
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkHidden"));
+
+    // <text:bookmark-start text:name="BookmarkNonHidden"/>
+    uno::Reference<beans::XPropertySet> xBookmark1(xBookmarksByName->getByName("BookmarkNonHidden"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xBookmark1, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xBookmark1, UNO_NAME_BOOKMARK_HIDDEN));
+
+    // <text:bookmark-start text:name="BookmarkHidden"/>
+    uno::Reference<beans::XPropertySet> xBookmark2(xBookmarksByName->getByName("BookmarkHidden"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xBookmark2, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xBookmark2, UNO_NAME_BOOKMARK_HIDDEN));
+}
+
+// MAILMERGE Add conditional to expand / collapse bookmarks
+DECLARE_ODFEXPORT_TEST(tdf101856, "tdf101856.odt")
+{
+    // get bookmark interface
+    uno::Reference<text::XBookmarksSupplier> xBookmarksSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xBookmarksByIdx(xBookmarksSupplier->getBookmarks(), uno::UNO_QUERY);
+    uno::Reference<container::XNameAccess> xBookmarksByName(xBookmarksSupplier->getBookmarks(), uno::UNO_QUERY);
+
+    // check: we have 2 bookmarks
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(5), xBookmarksByIdx->getCount());
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkVisible"));
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkHidden"));
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkVisibleWithCondition"));
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkNotHiddenWithCondition"));
+    CPPUNIT_ASSERT(xBookmarksByName->hasByName("BookmarkHiddenWithCondition"));
+
+    // <text:bookmark-start text:name="BookmarkVisible"/>
+    uno::Reference<beans::XPropertySet> xBookmark1(xBookmarksByName->getByName("BookmarkVisible"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xBookmark1, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xBookmark1, UNO_NAME_BOOKMARK_HIDDEN));
+
+    // <text:bookmark-start text:name="BookmarkHidden" loext:condition="" loext:hidden="true"/>
+    uno::Reference<beans::XPropertySet> xBookmark2(xBookmarksByName->getByName("BookmarkHidden"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xBookmark2, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xBookmark2, UNO_NAME_BOOKMARK_HIDDEN));
+
+    // <text:bookmark-start text:name="BookmarkVisibleWithCondition" loext:condition="0==1" loext:hidden="true"/>
+    uno::Reference<beans::XPropertySet> xBookmark3(xBookmarksByName->getByName("BookmarkVisibleWithCondition"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("0==1"), getProperty<OUString>(xBookmark3, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xBookmark3, UNO_NAME_BOOKMARK_HIDDEN));
+
+    // <text:bookmark-start text:name="BookmarkNotHiddenWithCondition" loext:condition="1==1" loext:hidden="false"/>
+    //
+    // The following test doesn't work, while during output in the case of loext:hidden="false".
+    // no additional parameters are written. Implementation should be reviewed.
+    //
+//    uno::Reference<beans::XPropertySet> xBookmark4(xBookmarksByName->getByName("BookmarkNotHiddenWithCondition"), uno::UNO_QUERY);
+//    CPPUNIT_ASSERT_EQUAL(OUString("1==1"), getProperty<OUString>(xBookmark4, UNO_NAME_BOOKMARK_CONDITION));
+//    CPPUNIT_ASSERT_EQUAL(false, getProperty<bool>(xBookmark4, UNO_NAME_BOOKMARK_HIDDEN));
+
+    // <text:bookmark-start text:name="BookmarkHiddenWithCondition" loext:condition="1==1" loext:hidden="true"/>
+    uno::Reference<beans::XPropertySet> xBookmark5(xBookmarksByName->getByName("BookmarkHiddenWithCondition"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("1==1"), getProperty<OUString>(xBookmark5, UNO_NAME_BOOKMARK_CONDITION));
+    CPPUNIT_ASSERT_EQUAL(true, getProperty<bool>(xBookmark5, UNO_NAME_BOOKMARK_HIDDEN));
+}
+
+DECLARE_ODFEXPORT_TEST(tdf118502, "tdf118502.odt")
+{
+    uno::Reference<drawing::XShape> xShape = getShape(1);
+    // Make sure the replacement graphic is still there
+    // (was gone because the original graphic was not recognized during load)
+    auto xReplacementGraphic
+        = getProperty<uno::Reference<graphic::XGraphic>>(xShape, "ReplacementGraphic");
+    CPPUNIT_ASSERT(xReplacementGraphic.is());
+}
+
+DECLARE_ODFEXPORT_TEST(tdf99631, "tdf99631.docx")
+{
+    // check import of VisualArea settings of the embedded XLSX OLE objects
+    xmlDocPtr pXmlDoc = parseExport("Object 1/settings.xml");
+    if (!pXmlDoc)
+        return;
+    assertXPathContent(pXmlDoc, "//config:config-item[@config:name='VisibleAreaWidth']", "4515");
+    assertXPathContent(pXmlDoc, "//config:config-item[@config:name='VisibleAreaHeight']", "903");
+
+    xmlDocPtr pXmlDoc2 = parseExport("Object 2/settings.xml");
+    if (!pXmlDoc2)
+        return;
+    assertXPathContent(pXmlDoc2, "//config:config-item[@config:name='VisibleAreaWidth']", "4515");
+    assertXPathContent(pXmlDoc2, "//config:config-item[@config:name='VisibleAreaHeight']", "1354");
+}
 #endif
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -21,6 +21,7 @@
 #define INCLUDED_OOX_EXPORT_DRAWINGML_HXX
 
 #include <map>
+#include <vector>
 
 #include <com/sun/star/beans/PropertyState.hpp>
 #include <com/sun/star/uno/Any.hxx>
@@ -81,6 +82,9 @@ namespace io {
 namespace uno {
     class XInterface;
 }
+namespace frame {
+    class XModel;
+}
 }}}
 
 struct EscherConnectorListEntry;
@@ -123,7 +127,7 @@ private:
     static std::map<OUString, OUString> maWdpCache;
 
     /// To specify where write eg. the images to (like 'ppt', or 'word' - according to the OPC).
-    DocumentType meDocumentType;
+    DocumentType const meDocumentType;
     /// Parent exporter, used for text callback.
     DMLTextExport* mpTextExport;
 
@@ -166,14 +170,14 @@ public:
     OUString WriteImage( const Graphic &rGraphic , bool bRelPathToMedia = false);
 
     void WriteColor( ::Color nColor, sal_Int32 nAlpha = MAX_PERCENT );
-    void WriteColor( const OUString& sColorSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
-    void WriteColorTransformations( const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
+    void WriteColor( const OUString& sColorSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations, sal_Int32 nAlpha = MAX_PERCENT );
+    void WriteColorTransformations( const css::uno::Sequence< css::beans::PropertyValue >& aTransformations, sal_Int32 nAlpha = MAX_PERCENT );
     void WriteGradientStop( sal_uInt16 nStop, ::Color nColor );
     void WriteLineArrow( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet, bool bLineStart );
     void WriteConnectorConnections( EscherConnectorListEntry& rConnectorEntry, sal_Int32 nStartID, sal_Int32 nEndID );
 
     void WriteSolidFill( ::Color nColor, sal_Int32 nAlpha = MAX_PERCENT );
-    void WriteSolidFill( const OUString& sSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations );
+    void WriteSolidFill( const OUString& sSchemeName, const css::uno::Sequence< css::beans::PropertyValue >& aTransformations, sal_Int32 nAlpha = MAX_PERCENT );
     void WriteSolidFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WriteGradientFill( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WriteGradientFill( css::awt::Gradient rGradient );
@@ -200,7 +204,8 @@ public:
     void WriteSrcRectXGraphic(css::uno::Reference<css::beans::XPropertySet> const & rxPropertySet,
                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
 
-    void WriteOutline( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
+    void WriteOutline( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,
+                              css::uno::Reference< css::frame::XModel> const & xModel = nullptr );
 
     void WriteXGraphicStretch(css::uno::Reference<css::beans::XPropertySet> const & rXPropSet,
                               css::uno::Reference<css::graphic::XGraphic> const & rxGraphic);
@@ -234,7 +239,7 @@ public:
 
     void WritePresetShape( const char* pShape , std::vector< std::pair<sal_Int32,sal_Int32>> & rAvList );
     void WritePresetShape( const char* pShape );
-    void WritePresetShape( const char* pShape, MSO_SPT eShapeType, bool bPredefinedHandlesUsed, sal_Int32 nAdjustmentsWhichNeedsToBeConverted, const css::beans::PropertyValue& rProp );
+    void WritePresetShape( const char* pShape, MSO_SPT eShapeType, bool bPredefinedHandlesUsed, const css::beans::PropertyValue& rProp );
     bool WriteCustomGeometry(
         const css::uno::Reference<css::drawing::XShape>& rXShape,
         const SdrObjCustomShape& rSdrObjCustomShape);
@@ -252,6 +257,12 @@ public:
     void WriteShape3DEffects( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     void WriteArtisticEffect( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     OString WriteWdpPicture( const OUString& rFileId, const css::uno::Sequence< sal_Int8 >& rPictureData );
+    void WriteDiagram(const css::uno::Reference<css::drawing::XShape>& rXShape, int nDiagramId);
+    void writeDiagramRels(const css::uno::Sequence<css::uno::Sequence<css::uno::Any>>& xRelSeq,
+                          const css::uno::Reference<css::io::XOutputStream>& xOutStream,
+                          const OUString& sGrabBagProperyName, int nDiagramId);
+    static bool IsGroupShape( const css::uno::Reference< css::drawing::XShape >& rXShape );
+    static bool IsDiagram(const css::uno::Reference<css::drawing::XShape>& rXShape);
     sal_Int32 getBulletMarginIndentation (const css::uno::Reference< css::beans::XPropertySet >& rXPropSet,sal_Int16 nLevel, const OUString& propName);
 
     static void ResetCounters();

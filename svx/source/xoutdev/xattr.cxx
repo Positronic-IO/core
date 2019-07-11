@@ -38,6 +38,7 @@
 #include <editeng/memberids.h>
 #include <tools/stream.hxx>
 #include <tools/mapunit.hxx>
+#include <osl/diagnose.h>
 
 #include <svx/unoapi.hxx>
 #include <svl/style.hxx>
@@ -57,7 +58,7 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/vector/b2dvector.hxx>
-#include <basegfx/utils/unotools.hxx>
+#include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <vcl/gradient.hxx>
 
@@ -65,7 +66,7 @@
 
 using namespace ::com::sun::star;
 
-long ScaleMetricValue( long nVal, long nMul, long nDiv )
+static long ScaleMetricValue( long nVal, long nMul, long nDiv )
 {
     BigInt aVal( nVal );
 
@@ -200,7 +201,7 @@ OUString NameOrIndex::CheckNamedItem( const NameOrIndex* pCheckItem, const sal_u
                     }
                     else
                     {
-                        const OUString aEntryName = pEntry->GetName();
+                        const OUString& aEntryName = pEntry->GetName();
                         if(aEntryName.getLength() >= aUser.getLength())
                         {
                             sal_Int32 nThisIndex = aEntryName.copy( aUser.getLength() ).toInt32();
@@ -1020,7 +1021,7 @@ bool XLineStartItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) cons
     else
     {
         css::drawing::PolyPolygonBezierCoords aBezier;
-        basegfx::unotools::b2DPolyPolygonToPolyPolygonBezier( maPolyPolygon, aBezier );
+        basegfx::utils::B2DPolyPolygonToUnoPolyPolygonBezierCoords( maPolyPolygon, aBezier );
         rVal <<= aBezier;
     }
 
@@ -1047,7 +1048,7 @@ bool XLineStartItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
 
             if( pCoords->Coordinates.getLength() > 0 )
             {
-                maPolyPolygon = basegfx::unotools::polyPolygonBezierToB2DPolyPolygon( *pCoords );
+                maPolyPolygon = basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon( *pCoords );
                 // #i72807# close line start/end polygons hard
                 // maPolyPolygon.setClosed(true);
             }
@@ -1099,14 +1100,14 @@ XLineStartItem* XLineStartItem::checkForUniqueItem( SdrModel* pModel ) const
 
         sal_uInt32 nCount, nSurrogate;
 
-        const SfxItemPool* pPool1 = &pModel->GetItemPool();
-        if( !aUniqueName.isEmpty() && pPool1 )
+        const SfxItemPool& rPool1 = pModel->GetItemPool();
+        if (!aUniqueName.isEmpty())
         {
-            nCount = pPool1->GetItemCount2( XATTR_LINESTART );
+            nCount = rPool1.GetItemCount2(XATTR_LINESTART);
 
             for( nSurrogate = 0; nSurrogate < nCount; nSurrogate++ )
             {
-                const XLineStartItem* pItem = pPool1->GetItem2( XATTR_LINESTART, nSurrogate );
+                const XLineStartItem* pItem = rPool1.GetItem2(XATTR_LINESTART, nSurrogate);
 
                 if( pItem && ( pItem->GetName() == pLineStartItem->GetName() ) )
                 {
@@ -1124,11 +1125,11 @@ XLineStartItem* XLineStartItem::checkForUniqueItem( SdrModel* pModel ) const
 
             if( !bForceNew )
             {
-                nCount = pPool1->GetItemCount2( XATTR_LINEEND );
+                nCount = rPool1.GetItemCount2(XATTR_LINEEND);
 
                 for( nSurrogate = 0; nSurrogate < nCount; nSurrogate++ )
                 {
-                    const XLineEndItem* pItem = pPool1->GetItem2( XATTR_LINEEND, nSurrogate );
+                    const XLineEndItem* pItem = rPool1.GetItem2(XATTR_LINEEND, nSurrogate);
 
                     if( pItem && ( pItem->GetName() == pLineStartItem->GetName() ) )
                     {
@@ -1200,53 +1201,50 @@ XLineStartItem* XLineStartItem::checkForUniqueItem( SdrModel* pModel ) const
             sal_Int32 nUserIndex = 1;
             const OUString aUser(SvxResId(RID_SVXSTR_LINEEND));
 
-            if( pPool1 )
+            nCount = rPool1.GetItemCount2(XATTR_LINESTART);
+            sal_uInt32 nSurrogate2;
+
+            for (nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++)
             {
-                nCount = pPool1->GetItemCount2( XATTR_LINESTART );
-                sal_uInt32 nSurrogate2;
+                const XLineStartItem* pItem = rPool1.GetItem2(XATTR_LINESTART, nSurrogate2);
 
-                for( nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++ )
+                if (pItem && !pItem->GetName().isEmpty())
                 {
-                    const XLineStartItem* pItem = pPool1->GetItem2( XATTR_LINESTART, nSurrogate2 );
-
-                    if( pItem && !pItem->GetName().isEmpty() )
+                    if (!bForceNew && pItem->GetLineStartValue() == pLineStartItem->GetLineStartValue())
                     {
-                        if( !bForceNew && pItem->GetLineStartValue() == pLineStartItem->GetLineStartValue() )
-                        {
-                            aUniqueName = pItem->GetName();
-                            bFoundExisting = true;
-                            break;
-                        }
+                        aUniqueName = pItem->GetName();
+                        bFoundExisting = true;
+                        break;
+                    }
 
-                        if( pItem->GetName().startsWith( aUser ) )
-                        {
-                            sal_Int32 nThisIndex = pItem->GetName().copy( aUser.getLength() ).toInt32();
-                            if( nThisIndex >= nUserIndex )
-                                nUserIndex = nThisIndex + 1;
-                        }
+                    if (pItem->GetName().startsWith(aUser))
+                    {
+                        sal_Int32 nThisIndex = pItem->GetName().copy(aUser.getLength()).toInt32();
+                        if (nThisIndex >= nUserIndex)
+                            nUserIndex = nThisIndex + 1;
                     }
                 }
+            }
 
-                nCount = pPool1->GetItemCount2( XATTR_LINEEND );
-                for( nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++ )
+            nCount = rPool1.GetItemCount2(XATTR_LINEEND);
+            for (nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++)
+            {
+                const XLineEndItem* pItem = rPool1.GetItem2(XATTR_LINEEND, nSurrogate2);
+
+                if (pItem && !pItem->GetName().isEmpty())
                 {
-                    const XLineEndItem* pItem = pPool1->GetItem2( XATTR_LINEEND, nSurrogate2 );
-
-                    if( pItem && !pItem->GetName().isEmpty() )
+                    if (!bForceNew && pItem->GetLineEndValue() == pLineStartItem->GetLineStartValue())
                     {
-                        if( !bForceNew && pItem->GetLineEndValue() == pLineStartItem->GetLineStartValue() )
-                        {
-                            aUniqueName = pItem->GetName();
-                            bFoundExisting = true;
-                            break;
-                        }
+                        aUniqueName = pItem->GetName();
+                        bFoundExisting = true;
+                        break;
+                    }
 
-                        if( pItem->GetName().startsWith( aUser ) )
-                        {
-                            sal_Int32 nThisIndex = pItem->GetName().copy( aUser.getLength() ).toInt32();
-                            if( nThisIndex >= nUserIndex )
-                                nUserIndex = nThisIndex + 1;
-                        }
+                    if (pItem->GetName().startsWith(aUser))
+                    {
+                        sal_Int32 nThisIndex = pItem->GetName().copy(aUser.getLength()).toInt32();
+                        if (nThisIndex >= nUserIndex)
+                            nUserIndex = nThisIndex + 1;
                     }
                 }
             }
@@ -1353,14 +1351,14 @@ XLineEndItem* XLineEndItem::checkForUniqueItem( SdrModel* pModel ) const
 
         sal_uInt16 nCount, nSurrogate;
 
-        const SfxItemPool* pPool1 = &pModel->GetItemPool();
-        if( !aUniqueName.isEmpty() && pPool1 )
+        const SfxItemPool& rPool1 = pModel->GetItemPool();
+        if (!aUniqueName.isEmpty())
         {
-            nCount = pPool1->GetItemCount2( XATTR_LINESTART );
+            nCount = rPool1.GetItemCount2(XATTR_LINESTART);
 
             for( nSurrogate = 0; nSurrogate < nCount; nSurrogate++ )
             {
-                const XLineStartItem* pItem = pPool1->GetItem2( XATTR_LINESTART, nSurrogate );
+                const XLineStartItem* pItem = rPool1.GetItem2(XATTR_LINESTART, nSurrogate);
 
                 if( pItem && ( pItem->GetName() == pLineEndItem->GetName() ) )
                 {
@@ -1378,11 +1376,11 @@ XLineEndItem* XLineEndItem::checkForUniqueItem( SdrModel* pModel ) const
 
             if( !bForceNew )
             {
-                nCount = pPool1->GetItemCount2( XATTR_LINEEND );
+                nCount = rPool1.GetItemCount2(XATTR_LINEEND);
 
                 for( nSurrogate = 0; nSurrogate < nCount; nSurrogate++ )
                 {
-                    const XLineEndItem* pItem = pPool1->GetItem2( XATTR_LINEEND, nSurrogate );
+                    const XLineEndItem* pItem = rPool1.GetItem2(XATTR_LINEEND, nSurrogate);
 
                     if( pItem && ( pItem->GetName() == pLineEndItem->GetName() ) )
                     {
@@ -1454,53 +1452,50 @@ XLineEndItem* XLineEndItem::checkForUniqueItem( SdrModel* pModel ) const
             sal_Int32 nUserIndex = 1;
             const OUString aUser(SvxResId(RID_SVXSTR_LINEEND));
 
-            if( pPool1 )
+            nCount = rPool1.GetItemCount2(XATTR_LINESTART);
+            sal_uInt32 nSurrogate2;
+
+            for (nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++)
             {
-                nCount = pPool1->GetItemCount2( XATTR_LINESTART );
-                sal_uInt32 nSurrogate2;
+                const XLineStartItem* pItem = rPool1.GetItem2(XATTR_LINESTART, nSurrogate2);
 
-                for( nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++ )
+                if (pItem && !pItem->GetName().isEmpty())
                 {
-                    const XLineStartItem* pItem = pPool1->GetItem2( XATTR_LINESTART, nSurrogate2 );
-
-                    if( pItem && !pItem->GetName().isEmpty() )
+                    if (!bForceNew && pItem->GetLineStartValue() == pLineEndItem->GetLineEndValue())
                     {
-                        if( !bForceNew && pItem->GetLineStartValue() == pLineEndItem->GetLineEndValue() )
-                        {
-                            aUniqueName = pItem->GetName();
-                            bFoundExisting = true;
-                            break;
-                        }
+                        aUniqueName = pItem->GetName();
+                        bFoundExisting = true;
+                        break;
+                    }
 
-                        if( pItem->GetName().startsWith( aUser ) )
-                        {
-                            sal_Int32 nThisIndex = pItem->GetName().copy( aUser.getLength() ).toInt32();
-                            if( nThisIndex >= nUserIndex )
-                                nUserIndex = nThisIndex + 1;
-                        }
+                    if (pItem->GetName().startsWith(aUser))
+                    {
+                        sal_Int32 nThisIndex = pItem->GetName().copy(aUser.getLength()).toInt32();
+                        if (nThisIndex >= nUserIndex)
+                            nUserIndex = nThisIndex + 1;
                     }
                 }
+            }
 
-                nCount = pPool1->GetItemCount2( XATTR_LINEEND );
-                for( nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++ )
+            nCount = rPool1.GetItemCount2(XATTR_LINEEND);
+            for (nSurrogate2 = 0; nSurrogate2 < nCount; nSurrogate2++)
+            {
+                const XLineEndItem* pItem = rPool1.GetItem2(XATTR_LINEEND, nSurrogate2);
+
+                if (pItem && !pItem->GetName().isEmpty())
                 {
-                    const XLineEndItem* pItem = pPool1->GetItem2( XATTR_LINEEND, nSurrogate2 );
-
-                    if( pItem && !pItem->GetName().isEmpty() )
+                    if (!bForceNew && pItem->GetLineEndValue() == pLineEndItem->GetLineEndValue())
                     {
-                        if( !bForceNew && pItem->GetLineEndValue() == pLineEndItem->GetLineEndValue() )
-                        {
-                            aUniqueName = pItem->GetName();
-                            bFoundExisting = true;
-                            break;
-                        }
+                        aUniqueName = pItem->GetName();
+                        bFoundExisting = true;
+                        break;
+                    }
 
-                        if( pItem->GetName().startsWith( aUser ) )
-                        {
-                            sal_Int32 nThisIndex = pItem->GetName().copy( aUser.getLength() ).toInt32();
-                            if( nThisIndex >= nUserIndex )
-                                nUserIndex = nThisIndex + 1;
-                        }
+                    if (pItem->GetName().startsWith(aUser))
+                    {
+                        sal_Int32 nThisIndex = pItem->GetName().copy(aUser.getLength()).toInt32();
+                        if (nThisIndex >= nUserIndex)
+                            nUserIndex = nThisIndex + 1;
                     }
                 }
             }
@@ -1551,7 +1546,7 @@ bool XLineEndItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) const
     else
     {
         css::drawing::PolyPolygonBezierCoords aBezier;
-        basegfx::unotools::b2DPolyPolygonToPolyPolygonBezier( maPolyPolygon, aBezier );
+        basegfx::utils::B2DPolyPolygonToUnoPolyPolygonBezierCoords( maPolyPolygon, aBezier );
         rVal <<= aBezier;
     }
     return true;
@@ -1577,7 +1572,7 @@ bool XLineEndItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
 
             if( pCoords->Coordinates.getLength() > 0 )
             {
-                maPolyPolygon = basegfx::unotools::polyPolygonBezierToB2DPolyPolygon( *pCoords );
+                maPolyPolygon = basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon( *pCoords );
                 // #i72807# close line start/end polygons hard
                 // maPolyPolygon.setClosed(true);
             }

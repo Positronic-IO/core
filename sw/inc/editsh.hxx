@@ -110,13 +110,15 @@ namespace sw {
     class UndoRedoContext;
 }
 
-#define GETSELTXT_PARABRK_TO_BLANK      0
-#define GETSELTXT_PARABRK_TO_ONLYCR     2
+enum class ParaBreakType {
+    ToBlank = 0,
+    ToOnlyCR = 2
+};
 
  /// For querying the INet-attributes for Navigator.
 struct SwGetINetAttr
 {
-    OUString sText;
+    OUString const sText;
     const SwTextINetFormat& rINetAttr;
 
     SwGetINetAttr( const OUString& rText, const SwTextINetFormat& rAttr )
@@ -202,7 +204,7 @@ public:
        Copy all selections to the document. */
     bool CopySelToDoc( SwDoc* pInsDoc );
 
-    long SplitNode( bool bAutoFormat = false, bool bCheckTableStart = true );
+    void SplitNode( bool bAutoFormat = false, bool bCheckTableStart = true );
     bool AppendTextNode();
     void AutoFormatBySplitNode();
 
@@ -392,7 +394,7 @@ public:
 
     void Insert2(SwField const &, const bool bForceExpandHints);
 
-    void UpdateFields( SwField & );   ///< One single field.
+    void UpdateOneField(SwField &);   ///< One single field.
 
     size_t GetFieldTypeCount(SwFieldIds nResId = SwFieldIds::Unknown) const;
     SwFieldType* GetFieldType(size_t nField, SwFieldIds nResId = SwFieldIds::Unknown) const;
@@ -451,7 +453,7 @@ public:
     /// Insert content table. Renew if required.
     void                InsertTableOf(const SwTOXBase& rTOX,
                                         const SfxItemSet* pSet = nullptr);
-    bool                UpdateTableOf(const SwTOXBase& rTOX,
+    void                UpdateTableOf(const SwTOXBase& rTOX,
                                         const SfxItemSet* pSet = nullptr);
     const SwTOXBase*    GetCurTOX() const;
     const SwTOXBase*    GetDefaultTOXBase( TOXTypes eTyp, bool bCreate = false );
@@ -527,7 +529,7 @@ public:
     // #i90078#
     /// Remove unused default parameter <nLevel> and <bRelative>.
     // Adjust method name and parameter name
-    void ChangeIndentOfAllListLevels( short nDiff );
+    void ChangeIndentOfAllListLevels( sal_Int32 nDiff );
     // Adjust method name
     void SetIndent(short nIndent, const SwPosition & rPos);
     bool IsFirstOfNumRuleAtCursorPos() const;
@@ -619,11 +621,9 @@ public:
     /// Apply ViewOptions with Start-/EndAction.
     virtual void ApplyViewOptions( const SwViewOption &rOpt ) override;
 
-    /** Query text within selection.
-     @returns FALSE, if selected range is too large to be copied
-     into string buffer or if other errors occur. */
-    bool GetSelectedText( OUString &rBuf,
-                        int nHndlParaBreak = GETSELTXT_PARABRK_TO_BLANK );
+    /** Query text within selection. */
+    void GetSelectedText( OUString &rBuf,
+                        ParaBreakType nHndlParaBreak = ParaBreakType::ToBlank );
 
     /** @return graphic, if CurrentCursor->Point() points to a SwGrfNode
      (and mark is not set or points to the same graphic). */
@@ -783,9 +783,9 @@ public:
     /// Is hyphenation active somewhere else?
     static bool HasHyphIter();
 
-    void HandleCorrectionError( const OUString aText, SwPosition aPos,
-            sal_Int32 nBegin, sal_Int32 nLen, SwPaM* pCursor,
-            const Point* pPt, SwRect& rSelectRect );
+    void HandleCorrectionError(const OUString& aText, SwPosition aPos, sal_Int32 nBegin,
+                               sal_Int32 nLen, const Point* pPt,
+                               SwRect& rSelectRect);
     css::uno::Reference< css::linguistic2::XSpellAlternatives >
             GetCorrection( const Point* pPt, SwRect& rSelectRect );
 

@@ -44,6 +44,7 @@
 #include <dbdata.hxx>
 #include <validat.hxx>
 #include <formulacell.hxx>
+#include <formulaopt.hxx>
 #include <userdat.hxx>
 #include <stlsheet.hxx>
 #include <docfunc.hxx>
@@ -137,6 +138,7 @@ public:
     void testMergedCellsODS();
     void testRepeatedColumnsODS();
     void testDataValidityODS();
+    void testDataValidityXLSX();
     void testDataTableMortgageXLS();
     void testDataTableOneVarXLSX();
     void testDataTableMultiTableXLSX();
@@ -176,6 +178,7 @@ public:
 
     //test shape import
     void testControlImport();
+    void testActiveXOptionButtonGroup();
     void testChartImportODS();
 #if HAVE_MORE_FONTS
     void testChartImportXLS();
@@ -194,6 +197,7 @@ public:
     void testMiscRowHeights();
     void testOptimalHeightReset();
     void testCustomNumFormatHybridCellODS();
+    void testTdf121040();
 
     void testPrintRangeODS();
     void testOutlineODS();
@@ -232,6 +236,7 @@ public:
 
     void testPageScalingXLSX();
     void testActiveXCheckboxXLSX();
+    void testtdf120301_xmlSpaceParsingXLSX();
 #ifdef UNX
     void testUnicodeFileNameGnumeric();
 #endif
@@ -245,6 +250,9 @@ public:
     void testBorderColorsXLSXML();
     void testHiddenRowsColumnsXLSXML();
     void testColumnWidthRowHeightXLSXML();
+    void testCharacterSetXLSXML();
+    void testTdf62268();
+    void testVBAMacroFunctionODS();
 
     CPPUNIT_TEST_SUITE(ScFiltersTest);
     CPPUNIT_TEST(testBooleanFormatXLSX);
@@ -278,6 +286,7 @@ public:
     CPPUNIT_TEST(testMergedCellsODS);
     CPPUNIT_TEST(testRepeatedColumnsODS);
     CPPUNIT_TEST(testDataValidityODS);
+    CPPUNIT_TEST(testDataValidityXLSX);
     CPPUNIT_TEST(testDataTableMortgageXLS);
     CPPUNIT_TEST(testDataTableOneVarXLSX);
     CPPUNIT_TEST(testDataTableMultiTableXLSX);
@@ -285,6 +294,7 @@ public:
     CPPUNIT_TEST(testCellValueXLSX);
     CPPUNIT_TEST(testRowIndex1BasedXLSX);
     CPPUNIT_TEST(testControlImport);
+    CPPUNIT_TEST(testActiveXOptionButtonGroup);
     CPPUNIT_TEST(testChartImportODS);
 #if HAVE_MORE_FONTS
     CPPUNIT_TEST(testChartImportXLS);
@@ -327,6 +337,7 @@ public:
     CPPUNIT_TEST(testMiscRowHeights);
     CPPUNIT_TEST(testOptimalHeightReset);
     CPPUNIT_TEST(testCustomNumFormatHybridCellODS);
+    CPPUNIT_TEST(testTdf121040);
     CPPUNIT_TEST(testPrintRangeODS);
     CPPUNIT_TEST(testOutlineODS);
     CPPUNIT_TEST(testColumnStyleXLSX);
@@ -364,6 +375,7 @@ public:
 
     CPPUNIT_TEST(testPageScalingXLSX);
     CPPUNIT_TEST(testActiveXCheckboxXLSX);
+    CPPUNIT_TEST(testtdf120301_xmlSpaceParsingXLSX);
 #ifdef UNX
     CPPUNIT_TEST(testUnicodeFileNameGnumeric);
 #endif
@@ -375,7 +387,10 @@ public:
     CPPUNIT_TEST(testBorderColorsXLSXML);
     CPPUNIT_TEST(testHiddenRowsColumnsXLSXML);
     CPPUNIT_TEST(testColumnWidthRowHeightXLSXML);
+    CPPUNIT_TEST(testCharacterSetXLSXML);
     CPPUNIT_TEST(testCondFormatFormulaListenerXLSX);
+    CPPUNIT_TEST(testTdf62268);
+    CPPUNIT_TEST(testVBAMacroFunctionODS);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -698,13 +713,13 @@ void ScFiltersTest::testCachedFormulaResultsODS()
                 aIsErrorFormula.append(")");
                 OUString aFormula = aIsErrorFormula.makeStringAndClear();
                 rDoc.SetString(nCol, nRow + 2, 2, aFormula);
-                CPPUNIT_ASSERT_EQUAL_MESSAGE(OUStringToOString(aFormula, RTL_TEXTENCODING_UTF8).getStr(), rDoc.GetString(nCol, nRow +2, 2), OUString("TRUE"));
+                CPPUNIT_ASSERT_EQUAL_MESSAGE(OUStringToOString(aFormula, RTL_TEXTENCODING_UTF8).getStr(), OUString("TRUE"), rDoc.GetString(nCol, nRow +2, 2));
 
                 OUStringBuffer aIsTextFormula("=ISTEXT(");
                 aIsTextFormula.append(static_cast<char>('A'+nCol)).append(OUString::number(nRow));
                 aIsTextFormula.append(")");
                 rDoc.SetString(nCol, nRow + 4, 2, aIsTextFormula.makeStringAndClear());
-                CPPUNIT_ASSERT_EQUAL_MESSAGE("", rDoc.GetString(nCol, nRow +4, 2), OUString("FALSE"));
+                CPPUNIT_ASSERT_EQUAL(OUString("FALSE"), rDoc.GetString(nCol, nRow +4, 2));
             }
         }
 
@@ -1332,6 +1347,7 @@ void ScFiltersTest::testDataValidityODS()
 
     ScAddress aValBaseAddr1( 2,6,0 ); //sheet1
     ScAddress aValBaseAddr2( 2,3,1 ); //sheet2
+    ScAddress aValBaseAddr3( 2,2,2 ); //sheet3
 
     //sheet1's expected Data Validation Entry values
     ValDataTestParams aVDTParams1(
@@ -1347,17 +1363,27 @@ void ScFiltersTest::testDataValidityODS()
         "Must be a whole number between 1 and 10.",
         SC_VALERR_STOP, 2
     );
+    //sheet3's expected Data Validation Entry values
+    ValDataTestParams aVDTParams3(
+        SC_VALID_CUSTOM, ScConditionMode::Direct, "ISTEXT(C3)", EMPTY_OUSTRING, rDoc,
+        aValBaseAddr3, "Error sheet 3",
+        "Must not be a numerical value.",
+        SC_VALERR_STOP, 3
+    );
     //check each sheet's Data Validation Entries
     checkValiditationEntries( aVDTParams1 );
     checkValiditationEntries( aVDTParams2 );
+    checkValiditationEntries( aVDTParams3 );
 
     //expected ranges to be associated with data validity
     ScRange aRange1( 2,2,0, 2,6,0 ); //sheet1
     ScRange aRange2( 2,3,1, 6,7,1 ); //sheet2
+    ScRange aRange3( 2,2,2, 2,6,2 ); //sheet3
 
     //check each sheet's cells for data validity
     checkCellValidity( aValBaseAddr1, aRange1, rDoc );
     checkCellValidity( aValBaseAddr2, aRange2, rDoc );
+    checkCellValidity( aValBaseAddr3, aRange3, rDoc );
 
     //check each sheet's content
     OUString aCSVFileName1;
@@ -1367,6 +1393,32 @@ void ScFiltersTest::testDataValidityODS()
     OUString aCSVFileName2;
     createCSVPath("dataValidity2.", aCSVFileName2);
     testFile(aCSVFileName2, rDoc, 1);
+
+    OUString aCSVFileName3;
+    createCSVPath("dataValidity3.", aCSVFileName3);
+    testFile(aCSVFileName3, rDoc, 2);
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testDataValidityXLSX()
+{
+    ScDocShellRef xDocSh = loadDoc("dataValidity.", FORMAT_XLSX);
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    ScAddress aValBaseAddr1( 2,6,0 ); //sheet1
+    ScAddress aValBaseAddr2( 2,3,1 ); //sheet2
+    ScAddress aValBaseAddr3( 2,2,2 ); //sheet3
+
+    //expected ranges to be associated with data validity
+    ScRange aRange1( 2,2,0, 2,6,0 ); //sheet1
+    ScRange aRange2( 2,3,1, 6,7,1 ); //sheet2
+    ScRange aRange3( 2,2,2, 2,6,2 ); //sheet3
+
+    //check each sheet's cells for data validity
+    checkCellValidity( aValBaseAddr1, aRange1, rDoc );
+    checkCellValidity( aValBaseAddr2, aRange2, rDoc );
+    checkCellValidity( aValBaseAddr3, aRange3, rDoc );
 
     xDocSh->DoClose();
 }
@@ -1628,8 +1680,80 @@ void ScFiltersTest::testControlImport()
     uno::Reference< container::XIndexAccess > xIA_DrawPage(xDrawPageSupplier->getDrawPage(), UNO_QUERY_THROW);
     uno::Reference< drawing::XControlShape > xControlShape(xIA_DrawPage->getByIndex(0), UNO_QUERY_THROW);
 
-    CPPUNIT_ASSERT(xControlShape.is());
     xDocSh->DoClose();
+}
+
+void ScFiltersTest::testActiveXOptionButtonGroup()
+{
+    ScDocShellRef xDocSh = loadDoc("tdf111980_radioButtons.", FORMAT_XLSX);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load singlecontrol.xlsx", xDocSh.is());
+    uno::Reference< frame::XModel > xModel = xDocSh->GetModel();
+    uno::Reference< sheet::XSpreadsheetDocument > xDoc(xModel, UNO_QUERY_THROW);
+    uno::Reference< container::XIndexAccess > xIA(xDoc->getSheets(), UNO_QUERY_THROW);
+    uno::Reference< drawing::XDrawPageSupplier > xDrawPageSupplier( xIA->getByIndex(0), UNO_QUERY_THROW);
+    uno::Reference< container::XIndexAccess > xIA_DrawPage(xDrawPageSupplier->getDrawPage(), UNO_QUERY_THROW);
+
+    OUString sGroupName;
+    uno::Reference< drawing::XControlShape > xControlShape(xIA_DrawPage->getByIndex(0), UNO_QUERY_THROW);
+    uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName;
+    CPPUNIT_ASSERT_EQUAL(OUString("Sheet1"), sGroupName);
+
+    // Optionbuttons (without Group names) were not grouped.
+    // The two optionbuttons should have the same auto-generated group name.
+    OUString sGroupName2; //ActiveX controls
+    xControlShape.set(xIA_DrawPage->getByIndex(2), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName2;
+    CPPUNIT_ASSERT_EQUAL( false, sGroupName2.isEmpty() );
+
+    OUString sGroupName3;
+    xControlShape.set(xIA_DrawPage->getByIndex(3), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName3;
+    CPPUNIT_ASSERT_EQUAL( sGroupName2, sGroupName3 );
+    CPPUNIT_ASSERT( sGroupName != sGroupName3 );
+
+    OUString sGroupName4; //Form controls
+    xControlShape.set(xIA_DrawPage->getByIndex(4), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName4;
+    CPPUNIT_ASSERT_EQUAL( false, sGroupName4.isEmpty() );
+
+    OUString sGroupName5;
+    xControlShape.set(xIA_DrawPage->getByIndex(5), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName5;
+    CPPUNIT_ASSERT_EQUAL( sGroupName4, sGroupName5 );
+    CPPUNIT_ASSERT( sGroupName2 != sGroupName5 );
+    CPPUNIT_ASSERT( sGroupName != sGroupName5 );
+
+    OUString sGroupName7; //Form radiobutton autogrouped by GroupBox
+    xControlShape.set(xIA_DrawPage->getByIndex(7), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName7;
+    CPPUNIT_ASSERT_EQUAL( OUString("autoGroup_Group Box 7"), sGroupName7 );
+
+    OUString sGroupName8;
+    xControlShape.set(xIA_DrawPage->getByIndex(8), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName8;
+    CPPUNIT_ASSERT_EQUAL( sGroupName7, sGroupName8 );
+    CPPUNIT_ASSERT( sGroupName4 != sGroupName8 );
+    CPPUNIT_ASSERT( sGroupName2 != sGroupName8 );
+    CPPUNIT_ASSERT( sGroupName != sGroupName8 );
+
+    OUString sGroupName9; //Form radiobutton not fully inside GroupBox
+    xControlShape.set(xIA_DrawPage->getByIndex(9), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName9;
+    CPPUNIT_ASSERT_EQUAL( sGroupName4, sGroupName9 );
+
+    OUString sGroupName10; //ActiveX unaffected by GroupBox
+    xControlShape.set(xIA_DrawPage->getByIndex(10), uno::UNO_QUERY_THROW);
+    xPropertySet.set(xControlShape->getControl(), uno::UNO_QUERY_THROW);
+    xPropertySet->getPropertyValue("GroupName") >>= sGroupName10;
+    CPPUNIT_ASSERT_EQUAL( sGroupName, sGroupName10 );
 }
 
 void ScFiltersTest::testChartImportODS()
@@ -2178,13 +2302,13 @@ void ScFiltersTest::testCondFormatThemeColorXLSX()
     ScConditionalFormat* pFormat = rDoc.GetCondFormat(0, 0, 0);
     const ScFormatEntry* pEntry = pFormat->GetEntry(0);
     CPPUNIT_ASSERT(pEntry);
-    CPPUNIT_ASSERT_EQUAL(pEntry->GetType(), ScFormatEntry::Type::Databar);
+    CPPUNIT_ASSERT_EQUAL(ScFormatEntry::Type::Databar, pEntry->GetType());
     const ScDataBarFormat* pDataBar = static_cast<const ScDataBarFormat*>(pEntry);
     const ScDataBarFormatData* pDataBarFormatData = pDataBar->GetDataBarData();
 
     CPPUNIT_ASSERT_EQUAL(Color(157, 195, 230), pDataBarFormatData->maPositiveColor);
-    CPPUNIT_ASSERT(pDataBarFormatData->mpNegativeColor.get());
-    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, *pDataBarFormatData->mpNegativeColor.get());
+    CPPUNIT_ASSERT(pDataBarFormatData->mpNegativeColor);
+    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, *pDataBarFormatData->mpNegativeColor);
 
     CPPUNIT_ASSERT_EQUAL(size_t(1), rDoc.GetCondFormList(1)->size());
     pFormat = rDoc.GetCondFormat(0, 0, 1);
@@ -2192,7 +2316,7 @@ void ScFiltersTest::testCondFormatThemeColorXLSX()
     CPPUNIT_ASSERT_EQUAL(size_t(1), pFormat->size());
     pEntry = pFormat->GetEntry(0);
     CPPUNIT_ASSERT(pEntry);
-    CPPUNIT_ASSERT_EQUAL(pEntry->GetType(), ScFormatEntry::Type::Colorscale);
+    CPPUNIT_ASSERT_EQUAL(ScFormatEntry::Type::Colorscale, pEntry->GetType());
     const ScColorScaleFormat* pColorScale = static_cast<const ScColorScaleFormat*>(pEntry);
     CPPUNIT_ASSERT_EQUAL(size_t(2), pColorScale->size());
     const ScColorScaleEntry* pColorScaleEntry = pColorScale->GetEntry(0);
@@ -2217,13 +2341,13 @@ void ScFiltersTest::testCondFormatThemeColor2XLSX()
     CPPUNIT_ASSERT(pFormat);
     const ScFormatEntry* pEntry = pFormat->GetEntry(0);
     CPPUNIT_ASSERT(pEntry);
-    CPPUNIT_ASSERT_EQUAL(pEntry->GetType(), ScFormatEntry::Type::Databar);
+    CPPUNIT_ASSERT_EQUAL(ScFormatEntry::Type::Databar, pEntry->GetType());
     const ScDataBarFormat* pDataBar = static_cast<const ScDataBarFormat*>(pEntry);
     const ScDataBarFormatData* pDataBarFormatData = pDataBar->GetDataBarData();
 
     CPPUNIT_ASSERT_EQUAL(Color(99, 142, 198), pDataBarFormatData->maPositiveColor);
-    CPPUNIT_ASSERT(pDataBarFormatData->mpNegativeColor.get());
-    CPPUNIT_ASSERT_EQUAL(Color(217, 217, 217), *pDataBarFormatData->mpNegativeColor.get());
+    CPPUNIT_ASSERT(pDataBarFormatData->mpNegativeColor);
+    CPPUNIT_ASSERT_EQUAL(Color(217, 217, 217), *pDataBarFormatData->mpNegativeColor);
     CPPUNIT_ASSERT_EQUAL(Color(197, 90, 17), pDataBarFormatData->maAxisColor);
 
     xDocSh->DoClose();
@@ -2236,7 +2360,7 @@ void checkDatabarPositiveColor(const ScConditionalFormat* pFormat, const Color& 
     CPPUNIT_ASSERT(pFormat);
     const ScFormatEntry* pEntry = pFormat->GetEntry(0);
     CPPUNIT_ASSERT(pEntry);
-    CPPUNIT_ASSERT_EQUAL(pEntry->GetType(), ScFormatEntry::Type::Databar);
+    CPPUNIT_ASSERT_EQUAL(ScFormatEntry::Type::Databar, pEntry->GetType());
     const ScDataBarFormat* pDataBar = static_cast<const ScDataBarFormat*>(pEntry);
     const ScDataBarFormatData* pDataBarFormatData = pDataBar->GetDataBarData();
 
@@ -2256,7 +2380,7 @@ void ScFiltersTest::testCondFormatThemeColor3XLSX()
     CPPUNIT_ASSERT(pFormat);
     const ScFormatEntry* pEntry = pFormat->GetEntry(0);
     CPPUNIT_ASSERT(pEntry);
-    CPPUNIT_ASSERT_EQUAL(pEntry->GetType(), ScFormatEntry::Type::Colorscale);
+    CPPUNIT_ASSERT_EQUAL(ScFormatEntry::Type::Colorscale, pEntry->GetType());
     const ScColorScaleFormat* pColorScale = static_cast<const ScColorScaleFormat*>(pEntry);
 
     CPPUNIT_ASSERT_EQUAL(size_t(2), pColorScale->size());
@@ -2425,10 +2549,10 @@ void ScFiltersTest::testOrcusODSStyleInterface()
     CPPUNIT_ASSERT_EQUAL(Color(255, 204, 18), pBoxItem->GetRight()->GetColor());
     CPPUNIT_ASSERT_EQUAL(Color(255, 204, 18), pBoxItem->GetTop()->GetColor());
     CPPUNIT_ASSERT_EQUAL(Color(255, 204, 18), pBoxItem->GetBottom()->GetColor());
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetLeft()->GetBorderLineStyle(), SvxBorderLineStyle::DOTTED);
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetRight()->GetBorderLineStyle(), SvxBorderLineStyle::DOTTED);
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetTop()->GetBorderLineStyle(), SvxBorderLineStyle::DOTTED);
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetBottom()->GetBorderLineStyle(), SvxBorderLineStyle::DOTTED);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DOTTED, pBoxItem->GetLeft()->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DOTTED, pBoxItem->GetRight()->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DOTTED, pBoxItem->GetTop()->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DOTTED, pBoxItem->GetBottom()->GetBorderLineStyle());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with left width", 1, pBoxItem->GetLeft()->GetWidth());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with right width", 1, pBoxItem->GetRight()->GetWidth());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with top width", 1, pBoxItem->GetTop()->GetWidth());
@@ -2452,8 +2576,8 @@ void ScFiltersTest::testOrcusODSStyleInterface()
     pBoxItem = static_cast<const SvxBoxItem*>(pItem);
     CPPUNIT_ASSERT_EQUAL(Color(0, 0, 0), pBoxItem->GetLeft()->GetColor());
     CPPUNIT_ASSERT_EQUAL(Color(255, 0, 0), pBoxItem->GetRight()->GetColor());
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetLeft()->GetBorderLineStyle(), SvxBorderLineStyle::SOLID);
-    CPPUNIT_ASSERT_EQUAL(pBoxItem->GetRight()->GetBorderLineStyle(), SvxBorderLineStyle::DOTTED);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::SOLID, pBoxItem->GetLeft()->GetBorderLineStyle());
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DOTTED, pBoxItem->GetRight()->GetBorderLineStyle());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with left width", 0, pBoxItem->GetLeft()->GetWidth());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with right width", 14, pBoxItem->GetRight()->GetWidth());
 
@@ -2462,7 +2586,7 @@ void ScFiltersTest::testOrcusODSStyleInterface()
 
     const SvxLineItem* pTLBR= static_cast<const SvxLineItem*>(pItem);
     CPPUNIT_ASSERT_EQUAL(Color(18, 0, 0), pTLBR->GetLine()->GetColor());
-    CPPUNIT_ASSERT_EQUAL(pTLBR->GetLine()->GetBorderLineStyle(), SvxBorderLineStyle::DASH_DOT);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DASH_DOT, pTLBR->GetLine()->GetBorderLineStyle());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with diagonal tl-br width", 14, pTLBR->GetLine()->GetWidth());
 
     CPPUNIT_ASSERT_MESSAGE("Style Name2 : Doesn't have Attribute diagonal(bl-tr) border, but it should have.",
@@ -2470,7 +2594,7 @@ void ScFiltersTest::testOrcusODSStyleInterface()
 
     const SvxLineItem* pBLTR= static_cast<const SvxLineItem*>(pItem);
     CPPUNIT_ASSERT_EQUAL(Color(255, 204, 238), pBLTR->GetLine()->GetColor());
-    CPPUNIT_ASSERT_EQUAL(pBLTR->GetLine()->GetBorderLineStyle(), SvxBorderLineStyle::DASHED);
+    CPPUNIT_ASSERT_EQUAL(SvxBorderLineStyle::DASHED, pBLTR->GetLine()->GetBorderLineStyle());
     ASSERT_DOUBLES_EQUAL_MESSAGE("Error with diagonal tl-br width", 34, pBLTR->GetLine()->GetWidth());
 
     CPPUNIT_ASSERT_MESSAGE("Style Name2 : Has Attribute background, but it shouldn't.",
@@ -2641,7 +2765,13 @@ void ScFiltersTest::testFormulaDependency()
 
 void ScFiltersTest::testMiscRowHeights()
 {
-    TestParam::RowData DfltRowData[] =
+    // FIXME: the DPI check should be removed when either (1) the test is fixed to work with
+    // non-default DPI; or (2) unit tests on Windows are made to use svp VCL plugin.
+    if (Application::GetDefaultDevice()->GetDPIX() != 96
+        || Application::GetDefaultDevice()->GetDPIY() != 96)
+        return;
+
+    static const TestParam::RowData DfltRowData[] =
     {
         // check rows at the beginning and end of document
         // and make sure they are reported as the default row
@@ -2650,10 +2780,10 @@ void ScFiltersTest::testMiscRowHeights()
         { 1048573, 1048575, 0, -1, 0, false  },
     };
 
-    TestParam::RowData MultiLineOptData[] =
+    static const TestParam::RowData MultiLineOptData[] =
     {
-        // Row 0 is 12.63 mm and optimal flag is set
-        { 0, 0, 0, 1263, CHECK_OPTIMAL, true  },
+        // Row 0 is 12.63 mm, but optimal flag is set
+        { 0, 0, 0, 1236, CHECK_OPTIMAL, true  },
         // Row 1 is 11.99 mm and optimal flag is NOT set
         { 1, 1, 0, 1199, CHECK_OPTIMAL, false  },
     };
@@ -2679,14 +2809,21 @@ void ScFiltersTest::testMiscRowHeights()
 
 void ScFiltersTest::testOptimalHeightReset()
 {
+    // FIXME: the DPI check should be removed when either (1) the test is fixed to work with
+    // non-default DPI; or (2) unit tests on Windows are made to use svp VCL plugin.
+    if (Application::GetDefaultDevice()->GetDPIX() != 96
+        || Application::GetDefaultDevice()->GetDPIY() != 96)
+        return;
+
     ScDocShellRef xDocSh = loadDoc("multilineoptimal.", FORMAT_ODS, true);
     SCTAB nTab = 0;
     SCROW nRow = 0;
     ScDocument& rDoc = xDocSh->GetDocument();
     // open document in read/write mode ( otherwise optimal height stuff won't
     // be triggered ) *and* you can't delete cell contents.
-    int nHeight = sc::TwipsToHMM ( rDoc.GetRowHeight(nRow, nTab, false) );
-    CPPUNIT_ASSERT_EQUAL(1263, nHeight);
+    int nHeight = rDoc.GetRowHeight(nRow, nTab, false);
+    // Due to some minor differences on Mac this comparison is made bit fuzzy
+    CPPUNIT_ASSERT_LESSEQUAL( 8, abs( nHeight - 701 ) );
 
     ScDocFunc &rFunc = xDocSh->GetDocFunc();
 
@@ -2743,6 +2880,22 @@ void ScFiltersTest::testCustomNumFormatHybridCellODS()
     xDocSh->DoClose();
 }
 
+void ScFiltersTest::testTdf121040()
+{
+    ScDocShellRef xDocSh = loadDoc("tdf121040.", FORMAT_ODS);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load tdf121040.ods", xDocSh.is());
+
+    const SCTAB nTab = 0;
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    // The first 9 rows should have the same height
+    const sal_uInt16 nHeight = rDoc.GetRowHeight(0, nTab, false);
+    for (SCTAB nRow=1; nRow<9; nRow++)
+    {
+        CPPUNIT_ASSERT_EQUAL(nHeight, rDoc.GetRowHeight(nRow, nTab, false));
+    }
+}
+
 void ScFiltersTest::testPrintRangeODS()
 {
     ScDocShellRef xDocSh = loadDoc("print-range.", FORMAT_ODS);
@@ -2785,7 +2938,7 @@ void ScFiltersTest::testOutlineODS()
         size_t nIndex;
     };
 
-    OutlineData aRow[] =
+    static const OutlineData aRow[] =
     {
         { 1, 29, false, true, 0, 0 },
         { 2, 26, false, true, 1, 0 },
@@ -3493,7 +3646,6 @@ void ScFiltersTest::testTdf83672XLSX()
         xDoc->getDrawPages()->getByIndex(0), uno::UNO_QUERY_THROW );
     uno::Reference< drawing::XShape > xShape(
         xPage->getByIndex(0), uno::UNO_QUERY_THROW );
-    CPPUNIT_ASSERT_MESSAGE( "failed to load shape", xShape.is() );
     uno::Reference< beans::XPropertySet > xShapeProperties(
         xShape, uno::UNO_QUERY );
     sal_Int32 nRotate = 0;
@@ -3947,6 +4099,37 @@ void ScFiltersTest::testColumnWidthRowHeightXLSXML()
     xDocSh->DoClose();
 }
 
+void ScFiltersTest::testCharacterSetXLSXML()
+{
+    ScDocShellRef xDocSh = loadDoc("character-set.", FORMAT_XLS_XML);
+    CPPUNIT_ASSERT_MESSAGE("Failed to load column-width-row-height.xml", xDocSh.is());
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    CPPUNIT_ASSERT_EQUAL(SCTAB(1), rDoc.GetTableCount());
+
+    OUString aName;
+    rDoc.GetName(0, aName);
+
+    // Check the sheet name.  The values are all Cyrillic letters.
+    std::vector<sal_Unicode> aBuf = { 0x041b, 0x0438, 0x0441, 0x0442, 0x0031 };
+    OUString aExpected(aBuf.data(), aBuf.size());
+    CPPUNIT_ASSERT_EQUAL(aExpected, aName);
+
+    // Check the value of I4
+    OUString aVal = rDoc.GetString(ScAddress(8,3,0));
+    aBuf = { 0x0421, 0x0443, 0x043c, 0x043c, 0x0430 };
+    aExpected = OUString(aBuf.data(), aBuf.size());
+    CPPUNIT_ASSERT_EQUAL(aExpected, aVal);
+
+    // Check the value of J3
+    aVal = rDoc.GetString(ScAddress(9,2,0));
+    aBuf = { 0x041e, 0x0441, 0x0442, 0x0430, 0x0442, 0x043e, 0x043a };
+    aExpected = OUString(aBuf.data(), aBuf.size());
+    CPPUNIT_ASSERT_EQUAL(aExpected, aVal);
+
+    xDocSh->DoClose();
+}
+
 void ScFiltersTest::testCondFormatXLSB()
 {
     ScDocShellRef xDocSh = loadDoc("cond_format.", FORMAT_XLSB);
@@ -3989,7 +4172,6 @@ void ScFiltersTest::testActiveXCheckboxXLSX()
     uno::Reference< drawing::XDrawPageSupplier > xDrawPageSupplier(xIA->getByIndex(0), UNO_QUERY_THROW);
     uno::Reference< container::XIndexAccess > xIA_DrawPage(xDrawPageSupplier->getDrawPage(), UNO_QUERY_THROW);
     uno::Reference< drawing::XControlShape > xControlShape(xIA_DrawPage->getByIndex(0), UNO_QUERY_THROW);
-    CPPUNIT_ASSERT(xControlShape.is());
 
     // Check control type
     uno::Reference<beans::XPropertySet> xPropertySet(xControlShape->getControl(), uno::UNO_QUERY);
@@ -4015,6 +4197,23 @@ void ScFiltersTest::testActiveXCheckboxXLSX()
     xPropertySet->getPropertyValue("State") >>= nState;
     CPPUNIT_ASSERT_EQUAL(sal_Int16(1), nState);
 
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testtdf120301_xmlSpaceParsingXLSX()
+{
+    ScDocShellRef xDocSh = loadDoc("tdf120301_xmlSpaceParsing.", FORMAT_XLSX);
+    uno::Reference< frame::XModel > xModel = xDocSh->GetModel();
+    uno::Reference< sheet::XSpreadsheetDocument > xDoc(xModel, UNO_QUERY_THROW);
+    uno::Reference< container::XIndexAccess > xIA(xDoc->getSheets(), UNO_QUERY_THROW);
+    uno::Reference< drawing::XDrawPageSupplier > xDrawPageSupplier( xIA->getByIndex(0), UNO_QUERY_THROW);
+    uno::Reference< container::XIndexAccess > xIA_DrawPage(xDrawPageSupplier->getDrawPage(), UNO_QUERY_THROW);
+
+    uno::Reference< drawing::XControlShape > xControlShape(xIA_DrawPage->getByIndex(0), UNO_QUERY_THROW);
+    uno::Reference< beans::XPropertySet > XPropSet( xControlShape->getControl(), uno::UNO_QUERY_THROW );
+    OUString sCaption;
+    XPropSet->getPropertyValue("Label") >>= sCaption;
+    CPPUNIT_ASSERT_EQUAL(OUString("Check Box 1"), sCaption);
     xDocSh->DoClose();
 }
 
@@ -4055,6 +4254,34 @@ void ScFiltersTest::testCondFormatFormulaListenerXLSX()
     rDoc.SetValue(0, 0, 0, 2.0);
 
     CPPUNIT_ASSERT(aListener.mbCalled);
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testTdf62268()
+{
+    ScDocShellRef xDocSh = loadDoc("tdf62268.", FORMAT_ODS);
+    ScDocument& rDoc = xDocSh->GetDocument();
+    int nHeight;
+
+    SCTAB nTab = 0;
+    nHeight = rDoc.GetRowHeight(0, nTab, false);
+    CPPUNIT_ASSERT_LESSEQUAL( 3, abs( 256 - nHeight ) );
+    nHeight = rDoc.GetRowHeight(1, nTab, false);
+    CPPUNIT_ASSERT_LESSEQUAL( 19, abs( 1905 - nHeight ) );
+
+    xDocSh->DoClose();
+}
+
+void ScFiltersTest::testVBAMacroFunctionODS()
+{
+    ScDocShellRef xDocSh = loadDoc("vba_macro_functions.", FORMAT_ODS);
+    ScDocument& rDoc = xDocSh->GetDocument();
+
+    OUString aFunction;
+    rDoc.GetFormula(2, 0, 0, aFunction);
+    std::cout << aFunction << std::endl;
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(10.0, rDoc.GetValue(2, 0, 0), 1e-6);
 
     xDocSh->DoClose();
 }

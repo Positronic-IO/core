@@ -51,7 +51,7 @@ public:
 class SVX_DLLPUBLIC SdrDragEntryPolyPolygon : public SdrDragEntry
 {
 private:
-    basegfx::B2DPolyPolygon             maOriginalPolyPolygon;
+    basegfx::B2DPolyPolygon const        maOriginalPolyPolygon;
 
 public:
     SdrDragEntryPolyPolygon(const basegfx::B2DPolyPolygon& rOriginalPolyPolygon);
@@ -67,7 +67,7 @@ private:
     const SdrObject&                                maOriginal;
     SdrObject*                                      mpClone;
     sdr::contact::ObjectContact&                    mrObjectContact;
-    bool                                            mbModify;
+    bool const                                      mbModify;
 
 public:
     SdrDragEntrySdrObject(const SdrObject& rOriginal, sdr::contact::ObjectContact& rObjectContact, bool bModify);
@@ -86,7 +86,7 @@ public:
 class SdrDragEntryPrimitive2DSequence : public SdrDragEntry
 {
 private:
-    drawinglayer::primitive2d::Primitive2DContainer  maPrimitive2DSequence;
+    drawinglayer::primitive2d::Primitive2DContainer const  maPrimitive2DSequence;
 
 public:
     SdrDragEntryPrimitive2DSequence(
@@ -100,8 +100,8 @@ public:
 class SdrDragEntryPointGlueDrag : public SdrDragEntry
 {
 private:
-    std::vector< basegfx::B2DPoint >                maPositions;
-    bool                                            mbIsPointDrag;
+    std::vector< basegfx::B2DPoint > const                maPositions;
+    bool const                                            mbIsPointDrag;
 
 public:
     SdrDragEntryPointGlueDrag(const std::vector< basegfx::B2DPoint >& rPositions, bool bIsPointDrag);
@@ -130,7 +130,7 @@ protected:
     virtual void createSdrDragEntryForSdrObject(const SdrObject& rOriginal, sdr::contact::ObjectContact& rObjectContact);
 
     // access for derivated classes to maOverlayObjectList (passes ownership)
-    void addToOverlayObjectList(sdr::overlay::OverlayObject* pNew) { maOverlayObjectList.append(pNew); }
+    void addToOverlayObjectList(std::unique_ptr<sdr::overlay::OverlayObject> pNew) { maOverlayObjectList.append(std::move(pNew)); }
 
     // access for derivated classes to mrSdrDragView
     SdrDragView& getSdrDragView() { return mrSdrDragView; }
@@ -155,7 +155,7 @@ protected:
     Point&             Ref1() const                    { return mrSdrDragView.maRef1; }
     Point&             Ref2() const                    { return mrSdrDragView.maRef2; }
     const SdrHdlList&  GetHdlList() const              { return getSdrDragView().GetHdlList(); }
-    void               AddUndo(SdrUndoAction* pUndo)   { getSdrDragView().AddUndo(pUndo); }
+    void               AddUndo(std::unique_ptr<SdrUndoAction> pUndo) { getSdrDragView().AddUndo(std::move(pUndo)); }
     bool               IsDragLimit()                   { return getSdrDragView().mbDragLimit; }
     const tools::Rectangle&   GetDragLimitRect()              { return getSdrDragView().maDragLimit; }
     const SdrMarkList& GetMarkedObjectList()                   { return getSdrDragView().GetMarkedObjectList(); }

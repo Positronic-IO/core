@@ -26,6 +26,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/sdbc/XRowSet.hpp>
 #include <com/sun/star/sdbc/XConnection.hpp>
+#include <comphelper/proparrhlp.hxx>
 
 namespace dbaui
 {
@@ -60,7 +61,7 @@ namespace dbaui
 
     protected:
         // OGenericUnoDialog overridables
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
         virtual void implInitialize(const css::uno::Any& _rValue) override;
     };
 

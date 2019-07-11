@@ -50,7 +50,7 @@ namespace sw
 // FieldType for DDE
 class SW_DLLPUBLIC SwDDEFieldType : public SwFieldType
 {
-    OUString aName;
+    OUString const aName;
     OUString aExpansion;
 
     tools::SvRef<sfx2::SvBaseLink> refLink;
@@ -105,8 +105,8 @@ public:
 class SwDDEField : public SwField
 {
 private:
-    virtual OUString Expand() const override;
-    virtual SwField* Copy() const override;
+    virtual OUString ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
 public:
     SwDDEField(SwDDEFieldType*);

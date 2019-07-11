@@ -26,6 +26,7 @@
 #include <tools/debug.hxx>
 #include <o3tl/make_unique.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
@@ -191,19 +192,18 @@ void SdXMLDrawingPageStyleContext::Finish( bool bOverwrite )
 
     const rtl::Reference< XMLPropertySetMapper >& rImpPrMap = GetStyles()->GetImportPropertyMapper( GetFamily() )->getPropertySetMapper();
 
-    ::std::vector< XMLPropertyState >::iterator property = rProperties.begin();
-    for(; property != rProperties.end(); ++property)
+    for(auto& property : rProperties)
     {
-        if( property->mnIndex == -1 )
+        if( property.mnIndex == -1 )
             continue;
 
-        sal_Int16 nContextID = rImpPrMap->GetEntryContextId(property->mnIndex);
+        sal_Int16 nContextID = rImpPrMap->GetEntryContextId(property.mnIndex);
         switch( nContextID )
         {
             case CTF_DATE_TIME_FORMAT:
             {
                 OUString sStyleName;
-                (*property).maValue >>= sStyleName;
+                property.maValue >>= sStyleName;
 
                 sal_Int32 nStyle = 0;
 
@@ -214,7 +214,7 @@ void SdXMLDrawingPageStyleContext::Finish( bool bOverwrite )
                 if( pSdNumStyle )
                     nStyle = pSdNumStyle->GetDrawKey();
 
-                (*property).maValue <<= nStyle;
+                property.maValue <<= nStyle;
             }
             break;
         }
@@ -381,14 +381,12 @@ SdXMLPageMasterContext::SdXMLPageMasterContext(
         OUString sAttrName = xAttrList->getNameByIndex(i);
         OUString aLocalName;
         sal_uInt16 nPrefix = GetSdImport().GetNamespaceMap().GetKeyByAttrName(sAttrName, &aLocalName);
-        OUString sValue = xAttrList->getValueByIndex(i);
         const SvXMLTokenMap& rAttrTokenMap = GetSdImport().GetPageMasterAttrTokenMap();
 
         switch(rAttrTokenMap.Get(nPrefix, aLocalName))
         {
             case XML_TOK_PAGEMASTER_NAME:
             {
-                msName = sValue;
                 break;
             }
         }
@@ -426,19 +424,6 @@ SdXMLPresentationPageLayoutContext::SdXMLPresentationPageLayoutContext(
 {
     // set family to something special at SvXMLStyleContext
     // for differences in search-methods
-
-    sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
-    for( sal_Int16 i=0; i < nAttrCount; i++ )
-    {
-        const OUString& rAttrName = xAttrList->getNameByIndex( i );
-        OUString aLocalName;
-        sal_uInt16 nPrefix = GetImport().GetNamespaceMap().GetKeyByAttrName( rAttrName, &aLocalName );
-
-        if(nPrefix == XML_NAMESPACE_STYLE && IsXMLToken( aLocalName, XML_NAME ) )
-        {
-            msName = xAttrList->getValueByIndex( i );
-        }
-    }
 }
 
 SvXMLImportContextRef SdXMLPresentationPageLayoutContext::CreateChildContext(
@@ -678,10 +663,7 @@ SdXMLPresentationPlaceholderContext::SdXMLPresentationPlaceholderContext(
     OUString& rLName,
     const uno::Reference< xml::sax::XAttributeList>& xAttrList)
 :   SvXMLImportContext( rImport, nPrfx, rLName),
-    mnX(0),
-    mnY(0),
-    mnWidth(1),
-    mnHeight(1)
+    mnX(0)
 {
     sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
     for(sal_Int16 i=0; i < nAttrCount; i++)
@@ -707,20 +689,14 @@ SdXMLPresentationPlaceholderContext::SdXMLPresentationPlaceholderContext(
             }
             case XML_TOK_PRESENTATIONPLACEHOLDER_Y:
             {
-                GetSdImport().GetMM100UnitConverter().convertMeasureToCore(
-                        mnY, sValue);
                 break;
             }
             case XML_TOK_PRESENTATIONPLACEHOLDER_WIDTH:
             {
-                GetSdImport().GetMM100UnitConverter().convertMeasureToCore(
-                        mnWidth, sValue);
                 break;
             }
             case XML_TOK_PRESENTATIONPLACEHOLDER_HEIGHT:
             {
-                GetSdImport().GetMM100UnitConverter().convertMeasureToCore(
-                        mnHeight, sValue);
                 break;
             }
         }
@@ -741,6 +717,7 @@ SdXMLMasterPageContext::SdXMLMasterPageContext(
 :   SdXMLGenericPageContext( rImport, nPrfx, rLName, xAttrList, rShapes )
 {
     const bool bHandoutMaster = IsXMLToken( rLName, XML_HANDOUT_MASTER );
+    OUString sStyleName, sPageMasterName;
 
     const sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
     for(sal_Int16 i=0; i < nAttrCount; i++)
@@ -765,12 +742,12 @@ SdXMLMasterPageContext::SdXMLMasterPageContext(
             }
             case XML_TOK_MASTERPAGE_PAGE_MASTER_NAME:
             {
-                msPageMasterName = sValue;
+                sPageMasterName = sValue;
                 break;
             }
             case XML_TOK_MASTERPAGE_STYLE_NAME:
             {
-                msStyleName = sValue;
+                sStyleName = sValue;
                 break;
             }
             case XML_TOK_MASTERPAGE_PAGE_LAYOUT_NAME:
@@ -812,12 +789,12 @@ SdXMLMasterPageContext::SdXMLMasterPageContext(
     }
 
     // set page-master?
-    if(!msPageMasterName.isEmpty())
+    if(!sPageMasterName.isEmpty())
     {
-        SetPageMaster( msPageMasterName );
+        SetPageMaster( sPageMasterName );
     }
 
-    SetStyle( msStyleName );
+    SetStyle( sStyleName );
 
     SetLayout();
 
@@ -1209,18 +1186,13 @@ static bool canSkipReset(const OUString &rName, const XMLPropStyleContext* pProp
         if (nIndexStyle != -1)
         {
             const ::std::vector< XMLPropertyState > &rProperties = pPropStyle->GetProperties();
-            ::std::vector< XMLPropertyState >::const_iterator property = rProperties.begin();
-            for(; property != rProperties.end(); ++property)
+            auto property = std::find_if(rProperties.cbegin(), rProperties.cend(),
+                [nIndexStyle](const XMLPropertyState& rProp) { return rProp.mnIndex == nIndexStyle; });
+            if (property != rProperties.cend())
             {
-                sal_Int32 nIdx = property->mnIndex;
-                if (nIdx == nIndexStyle)
-                {
-                    bool bNewStyleTextAutoGrowHeight(false);
-                    property->maValue >>= bNewStyleTextAutoGrowHeight;
-                    if (bNewStyleTextAutoGrowHeight == bOldStyleTextAutoGrowHeight)
-                        bCanSkipReset = true;
-                    break;
-                }
+                bool bNewStyleTextAutoGrowHeight(false);
+                property->maValue >>= bNewStyleTextAutoGrowHeight;
+                bCanSkipReset = (bNewStyleTextAutoGrowHeight == bOldStyleTextAutoGrowHeight);
             }
         }
     }

@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
-
 #include <o3tl/make_unique.hxx>
 
 #include <unotools/syslocale.hxx>
@@ -32,6 +30,7 @@
 #include <tools/color.hxx>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <sax/tools/converter.hxx>
 
@@ -54,8 +53,8 @@ using namespace ::xmloff::token;
 
 struct SvXMLNumFmtEntry
 {
-    OUString   aName;
-    sal_uInt32  nKey;
+    OUString const    aName;
+    sal_uInt32 const  nKey;
     bool        bRemoveAfterUse;
 
     SvXMLNumFmtEntry( const OUString& rN, sal_uInt32 nK, bool bR ) :
@@ -93,40 +92,31 @@ public:
 
 struct SvXMLNumberInfo
 {
-    sal_Int32   nDecimals;
-    sal_Int32   nInteger;
-    sal_Int32   nExpDigits;
-    sal_Int32   nExpInterval;
-    sal_Int32   nMinNumerDigits;
-    sal_Int32   nMinDenomDigits;
-    sal_Int32   nMaxNumerDigits;
-    sal_Int32   nMaxDenomDigits;
-    sal_Int32   nFracDenominator;
-    sal_Int32   nMinDecimalDigits;
-    sal_Int32   nZerosNumerDigits;
-    sal_Int32   nZerosDenomDigits;
-    bool        bGrouping;
-    bool        bDecReplace;
-    bool        bExpSign;
-    bool        bDecAlign;
-    double      fDisplayFactor;
+    sal_Int32   nDecimals           = -1;
+    sal_Int32   nInteger            = -1;
+    sal_Int32   nExpDigits          = -1;
+    sal_Int32   nExpInterval        = -1;
+    sal_Int32   nMinNumerDigits     = -1;
+    sal_Int32   nMinDenomDigits     = -1;
+    sal_Int32   nMaxNumerDigits     = -1;
+    sal_Int32   nMaxDenomDigits     = -1;
+    sal_Int32   nFracDenominator    = -1;
+    sal_Int32   nMinDecimalDigits   = -1;
+    sal_Int32   nZerosNumerDigits   = -1;
+    sal_Int32   nZerosDenomDigits   = -1;
+    bool        bGrouping           = false;
+    bool        bDecReplace         = false;
+    bool        bExpSign            = true;
+    bool        bDecAlign           = false;
+    double      fDisplayFactor      = 1.0;
     OUString    aIntegerFractionDelimiter;
     std::map<sal_Int32, OUString> m_EmbeddedElements;
-
-    SvXMLNumberInfo()
-    {
-        nDecimals = nInteger = nExpDigits = nExpInterval = nMinNumerDigits = nMinDenomDigits = nMaxNumerDigits = nMaxDenomDigits =
-            nFracDenominator = nMinDecimalDigits = nZerosNumerDigits = nZerosDenomDigits = -1;
-        bGrouping = bDecReplace = bDecAlign = false;
-        bExpSign = true;
-        fDisplayFactor = 1.0;
-    }
 };
 
 class SvXMLNumFmtElementContext : public SvXMLImportContext
 {
     SvXMLNumFormatContext&  rParent;
-    sal_uInt16              nType;
+    sal_uInt16 const        nType;
     OUStringBuffer          aContent;
     SvXMLNumberInfo         aNumInfo;
     LanguageType            nElementLang;
@@ -246,7 +236,8 @@ enum SvXMLStyleAttrTokens
     XML_TOK_STYLE_ATTR_TRANSL_FORMAT,
     XML_TOK_STYLE_ATTR_TRANSL_LANGUAGE,
     XML_TOK_STYLE_ATTR_TRANSL_COUNTRY,
-    XML_TOK_STYLE_ATTR_TRANSL_STYLE
+    XML_TOK_STYLE_ATTR_TRANSL_STYLE,
+    XML_TOK_STYLE_ATTR_TRANSL_SPELLOUT
 };
 
 enum SvXMLStyleElemAttrTokens
@@ -319,15 +310,15 @@ static const SvXMLEnumMapEntry<bool> aFormatSourceMap[] =
 
 struct SvXMLDefaultDateFormat
 {
-    NfIndexTableOffset          eFormat;
-    SvXMLDateElementAttributes  eDOW;
-    SvXMLDateElementAttributes  eDay;
-    SvXMLDateElementAttributes  eMonth;
-    SvXMLDateElementAttributes  eYear;
-    SvXMLDateElementAttributes  eHours;
-    SvXMLDateElementAttributes  eMins;
-    SvXMLDateElementAttributes  eSecs;
-    bool                        bSystem;
+    NfIndexTableOffset const          eFormat;
+    SvXMLDateElementAttributes const  eDOW;
+    SvXMLDateElementAttributes const  eDay;
+    SvXMLDateElementAttributes const  eMonth;
+    SvXMLDateElementAttributes const  eYear;
+    SvXMLDateElementAttributes const  eHours;
+    SvXMLDateElementAttributes const  eMins;
+    SvXMLDateElementAttributes const  eSecs;
+    bool const                        bSystem;
 };
 
 static const SvXMLDefaultDateFormat aDefaultDateFormats[] =
@@ -365,12 +356,10 @@ SvXMLNumImpData::SvXMLNumImpData(
 
 sal_uInt32 SvXMLNumImpData::GetKeyForName( const OUString& rName )
 {
-    sal_uInt16 nCount = m_NameEntries.size();
-    for (sal_uInt16 i=0; i<nCount; i++)
+    for (const auto& rObj : m_NameEntries)
     {
-        const SvXMLNumFmtEntry *const pObj = &m_NameEntries[i];
-        if ( pObj->aName == rName )
-            return pObj->nKey;              // found
+        if (rObj.aName == rName)
+            return rObj.nKey;              // found
     }
     return NUMBERFORMAT_ENTRY_NOT_FOUND;
 }
@@ -382,11 +371,9 @@ void SvXMLNumImpData::AddKey( sal_uInt32 nKey, const OUString& rName, bool bRemo
         //  if there is already an entry for this key without the bRemoveAfterUse flag,
         //  clear the flag for this entry, too
 
-        sal_uInt16 nCount = m_NameEntries.size();
-        for (sal_uInt16 i=0; i<nCount; i++)
+        for (const auto& rObj : m_NameEntries)
         {
-            SvXMLNumFmtEntry *const pObj = &m_NameEntries[i];
-            if ( pObj->nKey == nKey && !pObj->bRemoveAfterUse )
+            if (rObj.nKey == nKey && !rObj.bRemoveAfterUse)
             {
                 bRemoveAfterUse = false;        // clear flag for new entry
                 break;
@@ -404,13 +391,11 @@ void SvXMLNumImpData::AddKey( sal_uInt32 nKey, const OUString& rName, bool bRemo
 
 void SvXMLNumImpData::SetUsed( sal_uInt32 nKey )
 {
-    sal_uInt16 nCount = m_NameEntries.size();
-    for (sal_uInt16 i=0; i<nCount; i++)
+    for (auto& rObj : m_NameEntries)
     {
-        SvXMLNumFmtEntry *const pObj = &m_NameEntries[i];
-        if ( pObj->nKey == nKey )
+        if (rObj.nKey == nKey)
         {
-            pObj->bRemoveAfterUse = false;      // used -> don't remove
+            rObj.bRemoveAfterUse = false;      // used -> don't remove
 
             //  continue searching - there may be several entries for the same key
             //  (with different names), the format must not be deleted if any one of
@@ -428,15 +413,13 @@ void SvXMLNumImpData::RemoveVolatileFormats()
     if ( !pFormatter )
         return;
 
-    sal_uInt16 nCount = m_NameEntries.size();
-    for (sal_uInt16 i=0; i<nCount; i++)
+    for (const auto& rObj : m_NameEntries)
     {
-        const SvXMLNumFmtEntry *const pObj = &m_NameEntries[i];
-        if ( pObj->bRemoveAfterUse )
+        if (rObj.bRemoveAfterUse )
         {
-            const SvNumberformat* pFormat = pFormatter->GetEntry(pObj->nKey);
+            const SvNumberformat* pFormat = pFormatter->GetEntry(rObj.nKey);
             if (pFormat && (pFormat->GetType() & SvNumFormatType::DEFINED))
-                pFormatter->DeleteEntry( pObj->nKey );
+                pFormatter->DeleteEntry(rObj.nKey);
         }
     }
 }
@@ -524,6 +507,8 @@ const SvXMLTokenMap& SvXMLNumImpData::GetStyleAttrTokenMap()
             // not defined in ODF { XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_SCRIPT,     XML_TOK_STYLE_ATTR_TRANSL_SCRIPT    },
             { XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_COUNTRY,    XML_TOK_STYLE_ATTR_TRANSL_COUNTRY   },
             { XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_STYLE,      XML_TOK_STYLE_ATTR_TRANSL_STYLE     },
+            { XML_NAMESPACE_LO_EXT, XML_TRANSLITERATION_SPELLOUT,    XML_TOK_STYLE_ATTR_TRANSL_SPELLOUT   },
+            { XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_SPELLOUT,    XML_TOK_STYLE_ATTR_TRANSL_SPELLOUT   },
             XML_TOKEN_MAP_END
         };
 
@@ -1395,6 +1380,7 @@ SvXMLNumFormatContext::SvXMLNumFormatContext( SvXMLImport& rImport,
 {
     LanguageTagODF aLanguageTagODF;
     css::i18n::NativeNumberXmlAttributes aNatNumAttr;
+    OUString aSpellout;
     bool bAttrBool(false);
 
     sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
@@ -1446,6 +1432,9 @@ SvXMLNumFormatContext::SvXMLNumFormatContext( SvXMLImport& rImport,
             case XML_TOK_STYLE_ATTR_TRANSL_FORMAT:
                 aNatNumAttr.Format = sValue;
                 break;
+            case XML_TOK_STYLE_ATTR_TRANSL_SPELLOUT:
+                aSpellout = sValue;
+                break;
             case XML_TOK_STYLE_ATTR_TRANSL_LANGUAGE:
                 aNatNumAttr.Locale.Language = sValue;
                 break;
@@ -1465,30 +1454,36 @@ SvXMLNumFormatContext::SvXMLNumFormatContext( SvXMLImport& rImport,
             nFormatLang = LANGUAGE_SYSTEM;          //! error handling for unknown locales?
     }
 
-    if ( !aNatNumAttr.Format.isEmpty() )
+    if ( !aNatNumAttr.Format.isEmpty() || !aSpellout.isEmpty() )
     {
-        SvNumberFormatter* pFormatter = pData->GetNumberFormatter();
-        if ( pFormatter )
-        {
-            LanguageTag aLanguageTag( OUString(), aNatNumAttr.Locale.Language,
+        LanguageTag aLanguageTag( OUString(), aNatNumAttr.Locale.Language,
                     OUString(), aNatNumAttr.Locale.Country);
-            aNatNumAttr.Locale = aLanguageTag.getLocale( false);
+        aNatNumAttr.Locale = aLanguageTag.getLocale( false);
+
+        // NatNum12 spell out formula (cardinal, ordinal, ordinal-feminine etc.)
+        if ( !aSpellout.isEmpty() )
+        {
+            aFormatCode.append( "[NatNum12 " );
+            aFormatCode.append( aSpellout );
+        } else {
+            SvNumberFormatter* pFormatter = pData->GetNumberFormatter();
+            if ( !pFormatter ) return;
 
             sal_Int32 nNatNum = pFormatter->GetNatNum()->convertFromXmlAttributes( aNatNumAttr );
             aFormatCode.append( "[NatNum" );
             aFormatCode.append( nNatNum );
-
-            LanguageType eLang = aLanguageTag.getLanguageType( false);
-            if ( eLang == LANGUAGE_DONTKNOW )
-                eLang = LANGUAGE_SYSTEM;            //! error handling for unknown locales?
-            if ( eLang != nFormatLang && eLang != LANGUAGE_SYSTEM )
-            {
-                aFormatCode.append( "][$-" );
-                // language code in upper hex:
-                aFormatCode.append(OUString::number(static_cast<sal_uInt16>(eLang), 16).toAsciiUpperCase());
-            }
-            aFormatCode.append( ']' );
         }
+
+        LanguageType eLang = aLanguageTag.getLanguageType( false );
+        if ( eLang == LANGUAGE_DONTKNOW )
+            eLang = LANGUAGE_SYSTEM;            //! error handling for unknown locales?
+        if ( eLang != nFormatLang && eLang != LANGUAGE_SYSTEM )
+        {
+            aFormatCode.append( "][$-" );
+            // language code in upper hex:
+            aFormatCode.append(OUString::number(static_cast<sal_uInt16>(eLang), 16).toAsciiUpperCase());
+        }
+        aFormatCode.append( ']' );
     }
 }
 
@@ -2041,7 +2036,7 @@ void SvXMLNumFormatContext::AddCurrency( const OUString& rContent, LanguageType 
         if ( nLang != LANGUAGE_SYSTEM )
         {
             //  '-' sign and language code in hex:
-            aFormatCode.append("-" + OUString::number(sal_uInt16(nLang), 16).toAsciiUpperCase());
+            aFormatCode.append("-").append(OUString::number(sal_uInt16(nLang), 16).toAsciiUpperCase());
         }
 
         aFormatCode.append( ']' );    // end of "new" currency symbol
@@ -2072,7 +2067,7 @@ void SvXMLNumFormatContext::AddNfKeyword( sal_uInt16 nIndex )
         if ( !bTruncate && !bHasDateTime )
         {
             //  with truncate-on-overflow = false, add "[]" to first time part
-            aFormatCode.append("[" + sKeyword + "]");
+            aFormatCode.append("[").append(sKeyword).append("]");
         }
         else
         {
@@ -2197,7 +2192,7 @@ void SvXMLNumFormatContext::AddCondition( const sal_Int32 nIndex )
                     sRealCond = sRealCond.replaceAt( nPos, 1, rDecSep );
                 }
             }
-            aConditions.append("[" + sRealCond + "]");
+            aConditions.append("[").append(sRealCond).append("]");
         }
 
         const SvNumberformat* pFormat = pFormatter->GetEntry(l_nKey);

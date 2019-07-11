@@ -22,6 +22,7 @@
 #include <memory>
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <datanavi.hxx>
 #include <fmservs.hxx>
 
@@ -35,7 +36,7 @@
 #include <svtools/miscopt.hxx>
 #include <unotools/pathoptions.hxx>
 #include <unotools/viewoptions.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <sfx2/objitem.hxx>
@@ -79,6 +80,14 @@ using namespace ::svx;
 namespace svxform
 {
 
+#if !HAVE_CPP_INLINE_VARIABLES
+constexpr OUStringLiteral ReplaceString::m_sDoc_API;
+constexpr OUStringLiteral ReplaceString::m_sInstance_API;
+constexpr OUStringLiteral ReplaceString::m_sNone_API;
+constexpr OUStringLiteral MethodString::m_sPost_API;
+constexpr OUStringLiteral MethodString::m_sPut_API;
+constexpr OUStringLiteral MethodString::m_sGet_API;
+#endif
 
     // properties of instance
     #define PN_INSTANCE_MODEL       "Instance"
@@ -1739,7 +1748,7 @@ namespace svxform
             {
                 m_bShowDetails = !m_bShowDetails;
                 PopupMenu* pMenu = m_pInstanceBtn->GetPopupMenu();
-                pMenu->CheckItem(pMenu->GetItemId("instancesdetails"), m_bShowDetails );
+                pMenu->CheckItem("instancesdetails", m_bShowDetails );
                 ModelSelectHdl(m_pModelsBox);
             }
             else
@@ -1760,7 +1769,7 @@ namespace svxform
 
     bool DataNavigatorWindow::IsAdditionalPage(sal_uInt16 nId) const
     {
-        return m_pTabCtrl->GetPagePos(nId) >= 3;
+        return m_pTabCtrl->GetPageName(nId).isEmpty();
     }
 
     IMPL_LINK( DataNavigatorWindow, MenuActivateHdl, MenuButton *, pBtn, void )
@@ -1914,8 +1923,10 @@ namespace svxform
                 XFormsPage* pPage = GetCurrentPage( nId );
                 DBG_ASSERT( pPage, "DataNavigatorWindow::SetPageModel(): no page" );
                 if (IsAdditionalPage(nId) || m_pTabCtrl->GetPageName(nId) == "instance")
+                {
                     // instance page
                     nPagePos = m_pTabCtrl->GetPagePos( nId );
+                }
                 m_bIsNotifyDisabled = true;
                 OUString sText = pPage->SetModel( xFormsModel, nPagePos );
                 m_bIsNotifyDisabled = false;
@@ -2400,7 +2411,7 @@ namespace svxform
         }
     }
 
-    void copyPropSet( const Reference< XPropertySet >& xFrom, Reference< XPropertySet > const & xTo )
+    static void copyPropSet( const Reference< XPropertySet >& xFrom, Reference< XPropertySet > const & xTo )
     {
         DBG_ASSERT( xFrom.is(), "copyPropSet(): no source" );
         DBG_ASSERT( xTo.is(), "copyPropSet(): no target" );
@@ -3335,7 +3346,7 @@ namespace svxform
         : GenericDialogController(pParent, "svx/ui/addinstancedialog.ui", "AddInstanceDialog")
         , m_xNameED(m_xBuilder->weld_entry("name"))
         , m_xURLFT(m_xBuilder->weld_label("urlft"))
-        , m_xURLED(new URLBox(m_xBuilder->weld_combo_box_text("url")))
+        , m_xURLED(new URLBox(m_xBuilder->weld_combo_box("url")))
         , m_xFilePickerBtn(m_xBuilder->weld_button("browse"))
         , m_xLinkInstanceCB(m_xBuilder->weld_check_button("link"))
         , m_xAltTitle(m_xBuilder->weld_label("alttitle"))

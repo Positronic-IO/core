@@ -39,6 +39,7 @@
 #include <vcl/weld.hxx>
 #include <vcl/settings.hxx>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
@@ -558,7 +559,7 @@ void DataBrowser::clearHeaders()
 
 void DataBrowser::RenewTable()
 {
-    if( ! m_apDataBrowserModel.get())
+    if (!m_apDataBrowserModel)
         return;
 
     long   nOldRow     = GetCurRow();
@@ -636,7 +637,7 @@ void DataBrowser::RenewTable()
 
 OUString DataBrowser::GetColString( sal_Int32 nColumnId ) const
 {
-    OSL_ASSERT( m_apDataBrowserModel.get());
+    OSL_ASSERT(m_apDataBrowserModel);
     if( nColumnId > 0 )
         return m_apDataBrowserModel->getRoleOfColumn( nColumnId - 1 );
     return OUString();
@@ -819,8 +820,7 @@ void DataBrowser::SetDataFromModel(
         new NumberFormatterWrapper(
             Reference< util::XNumberFormatsSupplier >( m_xChartDoc, uno::UNO_QUERY )));
 
-    if( m_spNumberFormatterWrapper.get() )
-        m_aNumberEditField->SetFormatter( m_spNumberFormatterWrapper->getSvNumberFormatter() );
+    m_aNumberEditField->SetFormatter( m_spNumberFormatterWrapper->getSvNumberFormatter() );
 
     RenewTable();
 
@@ -1119,14 +1119,14 @@ void DataBrowser::InitController(
 
 bool DataBrowser::CellContainsNumbers( sal_uInt16 nCol ) const
 {
-    if( ! m_apDataBrowserModel.get())
+    if (!m_apDataBrowserModel)
         return false;
     return m_apDataBrowserModel->getCellType( lcl_getColumnInData( nCol )) == DataBrowserModel::NUMBER;
 }
 
 sal_uInt32 DataBrowser::GetNumberFormatKey( sal_uInt16 nCol ) const
 {
-    if( ! m_apDataBrowserModel.get())
+    if (!m_apDataBrowserModel)
         return 0;
     return m_apDataBrowserModel->getNumberFormatKey( lcl_getColumnInData( nCol ) );
 }

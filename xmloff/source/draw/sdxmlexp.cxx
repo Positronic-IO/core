@@ -52,6 +52,8 @@
 #include <com/sun/star/util/Duration.hpp>
 #include <com/sun/star/util/MeasureUnit.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <tools/gen.hxx>
 #include <sax/tools/converter.hxx>
 #include <xmloff/xmlaustp.hxx>
@@ -192,8 +194,8 @@ void ImpXMLEXPPageMasterInfo::SetName(const OUString& rStr)
 
 class ImpXMLAutoLayoutInfo
 {
-    sal_uInt16                  mnType;
-    ImpXMLEXPPageMasterInfo*    mpPageMasterInfo;
+    sal_uInt16 const                   mnType;
+    ImpXMLEXPPageMasterInfo* const     mpPageMasterInfo;
     OUString                    msLayoutName;
     tools::Rectangle                   maTitleRect;
     tools::Rectangle                   maPresRect;
@@ -382,6 +384,8 @@ ImpXMLAutoLayoutInfo::ImpXMLAutoLayoutInfo(sal_uInt16 nTyp, ImpXMLEXPPageMasterI
     maPresRect.SetSize(aLayoutSize);
 }
 
+static const OUStringLiteral gsPageLayoutNames( "PageLayoutNames" );
+
 SdXMLExport::SdXMLExport(
     const css::uno::Reference< css::uno::XComponentContext >& xContext,
     OUString const & implementationName,
@@ -392,8 +396,7 @@ SdXMLExport::SdXMLExport(
     mnDocDrawPageCount(0),
     mnObjectCount(0),
     mpHandoutPageMaster(nullptr),
-    mbIsDraw(bIsDraw),
-    msPageLayoutNames( "PageLayoutNames" )
+    mbIsDraw(bIsDraw)
 {
 
 }
@@ -1360,13 +1363,8 @@ void SdXMLExport::ImpPrepDrawPageInfos()
 static OUString findOrAppendImpl( std::vector< OUString >& rVector, const OUString& rText, const sal_Char* pPrefix )
 {
     // search rVector if there is already a string that equals rText
-    std::vector< OUString >::iterator aIter;
-    sal_Int32 nIndex;
-    for( nIndex = 1, aIter = rVector.begin(); aIter != rVector.end(); ++aIter, ++nIndex )
-    {
-        if( (*aIter) == rText )
-            break;
-    }
+    auto aIter = std::find(rVector.begin(), rVector.end(), rText);
+    sal_Int32 nIndex = std::distance(rVector.begin(), aIter) + 1;
 
     // if nothing is found, append the string at the end of rVector
     if( aIter == rVector.end() )
@@ -1382,16 +1380,13 @@ static OUString findOrAppendImpl( std::vector< OUString >& rVector, const OUStri
 static OUString findOrAppendImpl( std::vector< DateTimeDeclImpl >& rVector, const OUString& rText, bool bFixed, sal_Int32 nFormat, const sal_Char* pPrefix )
 {
     // search rVector if there is already a DateTimeDeclImpl with rText,bFixed and nFormat
-    std::vector< DateTimeDeclImpl >::iterator aIter;
-    sal_Int32 nIndex;
-    for( nIndex = 1, aIter = rVector.begin(); aIter != rVector.end(); ++aIter, ++nIndex )
-    {
-        const DateTimeDeclImpl& rDecl = (*aIter);
-        if( (rDecl.mbFixed == bFixed ) &&
-            (!bFixed || rDecl.maStrText == rText) &&
-            (bFixed || (rDecl.mnFormat == nFormat) ) )
-            break;
-    }
+    auto aIter = std::find_if(rVector.begin(), rVector.end(),
+        [bFixed, &rText, nFormat](const DateTimeDeclImpl& rDecl) {
+            return (rDecl.mbFixed == bFixed) &&
+                (!bFixed || (rDecl.maStrText == rText)) &&
+                (bFixed || (rDecl.mnFormat == nFormat));
+        });
+    sal_Int32 nIndex = std::distance(rVector.begin(), aIter) + 1;
 
     // if nothing is found, append a new DateTimeDeclImpl
     if( aIter == rVector.end() )
@@ -1408,7 +1403,6 @@ static OUString findOrAppendImpl( std::vector< DateTimeDeclImpl >& rVector, cons
     OUString aStr( OUString::createFromAscii( pPrefix ) );
     aStr += OUString::number( nIndex );
     return aStr;
-
 }
 
 static const sal_Char gpStrHeaderTextPrefix[] = "hdr";
@@ -1475,16 +1469,16 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
     {
         // export header decls
         const OUString aPrefix( gpStrHeaderTextPrefix );
-        std::vector< OUString >::iterator aIter;
-        sal_Int32 nIndex;
-        for( nIndex = 1, aIter = maHeaderDeclsVector.begin(); aIter != maHeaderDeclsVector.end(); ++aIter, ++nIndex )
+        sal_Int32 nIndex = 1;
+        for( const auto& rDecl : maHeaderDeclsVector )
         {
             sBuffer.append( aPrefix );
             sBuffer.append( nIndex );
             AddAttribute(XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
 
             SvXMLElementExport aElem(*this, XML_NAMESPACE_PRESENTATION, XML_HEADER_DECL, true, true);
-            Characters(*aIter);
+            Characters(rDecl);
+            ++nIndex;
         }
     }
 
@@ -1492,16 +1486,16 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
     {
         // export footer decls
         const OUString aPrefix( gpStrFooterTextPrefix );
-        std::vector< OUString >::iterator aIter;
-        sal_Int32 nIndex;
-        for( nIndex = 1, aIter = maFooterDeclsVector.begin(); aIter != maFooterDeclsVector.end(); ++aIter, ++nIndex )
+        sal_Int32 nIndex = 1;
+        for( const auto& rDecl : maFooterDeclsVector )
         {
             sBuffer.append( aPrefix );
             sBuffer.append( nIndex );
             AddAttribute(XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
 
             SvXMLElementExport aElem(*this, XML_NAMESPACE_PRESENTATION, XML_FOOTER_DECL, false, false);
-            Characters(*aIter);
+            Characters(rDecl);
+            ++nIndex;
         }
     }
 
@@ -1509,12 +1503,9 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
     {
         // export footer decls
         const OUString aPrefix( gpStrDateTimeTextPrefix );
-        std::vector< DateTimeDeclImpl >::iterator aIter;
-        sal_Int32 nIndex;
-        for( nIndex = 1, aIter = maDateTimeDeclsVector.begin(); aIter != maDateTimeDeclsVector.end(); ++aIter, ++nIndex )
+        sal_Int32 nIndex = 1;
+        for( const auto& rDecl : maDateTimeDeclsVector )
         {
-            const DateTimeDeclImpl& rDecl = (*aIter);
-
             sBuffer.append( aPrefix );
             sBuffer.append( nIndex );
             AddAttribute( XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
@@ -1527,6 +1518,8 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
             SvXMLElementExport aElem(*this, XML_NAMESPACE_PRESENTATION, XML_DATE_TIME_DECL, false, false);
             if( rDecl.mbFixed )
                 Characters(rDecl.maStrText);
+
+            ++nIndex;
         }
     }
 }
@@ -2077,23 +2070,27 @@ void SdXMLExport::ExportStyles_(bool bUsed)
     {
         Reference< beans::XPropertySetInfo > xInfoSetInfo( xInfoSet->getPropertySetInfo() );
 
-        if( xInfoSetInfo->hasPropertyByName( msPageLayoutNames ) )
+        if( xInfoSetInfo->hasPropertyByName( gsPageLayoutNames ) )
         {
-            xInfoSet->setPropertyValue( msPageLayoutNames, Any(maDrawPagesAutoLayoutNames) );
+            xInfoSet->setPropertyValue( gsPageLayoutNames, Any(maDrawPagesAutoLayoutNames) );
         }
     }
 }
 
-void SdXMLExport::ExportAutoStyles_()
+void SdXMLExport::collectAutoStyles()
 {
+    SvXMLExport::collectAutoStyles();
+    if (mbAutoStylesCollected)
+        return;
+
     Reference< beans::XPropertySet > xInfoSet( getExportInfo() );
     if( xInfoSet.is() )
     {
         Reference< beans::XPropertySetInfo > xInfoSetInfo( xInfoSet->getPropertySetInfo() );
 
-        if( xInfoSetInfo->hasPropertyByName( msPageLayoutNames ) )
+        if( xInfoSetInfo->hasPropertyByName( gsPageLayoutNames ) )
         {
-            xInfoSet->getPropertyValue( msPageLayoutNames ) >>= maDrawPagesAutoLayoutNames;
+            xInfoSet->getPropertyValue( gsPageLayoutNames ) >>= maDrawPagesAutoLayoutNames;
         }
     }
 
@@ -2105,9 +2102,6 @@ void SdXMLExport::ExportAutoStyles_()
         // prepare page-master infos
         ImpPrepPageMasterInfos();
 
-        // write page-master infos
-        ImpWritePageMasterInfos();
-
         // prepare draw:style-name for master page export
         ImpPrepMasterPageInfos();
     }
@@ -2117,9 +2111,6 @@ void SdXMLExport::ExportAutoStyles_()
         // prepare draw:style-name for page export
         ImpPrepDrawPageInfos();
     }
-
-    // export draw-page styles
-    GetAutoStylePool()->exportXML( XML_STYLE_FAMILY_SD_DRAWINGPAGE_ID );
 
     if( getExportFlags() & SvXMLExportFlags::STYLES )
     {
@@ -2255,12 +2246,28 @@ void SdXMLExport::ExportAutoStyles_()
                 collectAnnotationAutoStyles( xDrawPage );
             }
         }
-        if(IsImpress())
+        if (IsImpress())
         {
             rtl::Reference< XMLAnimationsExporter > xAnimExport;
             GetShapeExport()->setAnimationsExporter( xAnimExport );
         }
     }
+
+    mbAutoStylesCollected = true;
+}
+
+void SdXMLExport::ExportAutoStyles_()
+{
+    collectAutoStyles();
+
+    if( getExportFlags() & SvXMLExportFlags::STYLES )
+    {
+        // write page-master infos
+        ImpWritePageMasterInfos();
+    }
+
+    // export draw-page styles
+    GetAutoStylePool()->exportXML( XML_STYLE_FAMILY_SD_DRAWINGPAGE_ID );
 
     exportAutoDataStyles();
 
@@ -2297,7 +2304,7 @@ void SdXMLExport::ExportMasterStyles_()
                 ImpXMLEXPPageMasterInfo* pInfo = mpHandoutPageMaster;
                 if(pInfo)
                 {
-                    OUString sString = pInfo->GetName();
+                    const OUString& sString = pInfo->GetName();
                     AddAttribute(XML_NAMESPACE_STYLE, XML_PAGE_LAYOUT_NAME, sString );
                 }
 
@@ -2342,7 +2349,7 @@ void SdXMLExport::ExportMasterStyles_()
             ImpXMLEXPPageMasterInfo* pInfo = mvPageMasterUsageList.at( nMPageId );
             if(pInfo)
             {
-                OUString sString = pInfo->GetName();
+                const OUString& sString = pInfo->GetName();
                 AddAttribute(XML_NAMESPACE_STYLE, XML_PAGE_LAYOUT_NAME, sString );
             }
 
@@ -2377,7 +2384,7 @@ void SdXMLExport::ExportMasterStyles_()
                             ImpXMLEXPPageMasterInfo* pMasterInfo = mvNotesPageMasterUsageList.at( nMPageId );
                             if(pMasterInfo)
                             {
-                                OUString sString = pMasterInfo->GetName();
+                                const OUString& sString = pMasterInfo->GetName();
                                 AddAttribute(XML_NAMESPACE_STYLE, XML_PAGE_LAYOUT_NAME, sString);
                             }
 
@@ -2419,11 +2426,6 @@ void SdXMLExport::exportFormsElement( const Reference< XDrawPage >& xDrawPage )
 
 void SdXMLExport::GetViewSettings(uno::Sequence<beans::PropertyValue>& rProps)
 {
-    rProps.realloc(4);
-    beans::PropertyValue* pProps = rProps.getArray();
-    if(!pProps)
-        return;
-
     Reference< beans::XPropertySet > xPropSet( GetModel(), UNO_QUERY );
     if( !xPropSet.is() )
         return;
@@ -2431,15 +2433,17 @@ void SdXMLExport::GetViewSettings(uno::Sequence<beans::PropertyValue>& rProps)
     awt::Rectangle aVisArea;
     xPropSet->getPropertyValue("VisibleArea") >>= aVisArea;
 
-    sal_uInt16 i = 0;
-    pProps[i].Name = "VisibleAreaTop";
-    pProps[i++].Value <<= aVisArea.Y;
-    pProps[i].Name = "VisibleAreaLeft";
-    pProps[i++].Value <<= aVisArea.X;
-    pProps[i].Name = "VisibleAreaWidth";
-    pProps[i++].Value <<= aVisArea.Width;
-    pProps[i].Name = "VisibleAreaHeight";
-    pProps[i++].Value <<= aVisArea.Height;
+    rProps.realloc(4);
+    beans::PropertyValue* pProps = rProps.getArray();
+
+    pProps[0].Name = "VisibleAreaTop";
+    pProps[0].Value <<= aVisArea.Y;
+    pProps[1].Name = "VisibleAreaLeft";
+    pProps[1].Value <<= aVisArea.X;
+    pProps[2].Name = "VisibleAreaWidth";
+    pProps[2].Value <<= aVisArea.Width;
+    pProps[3].Name = "VisibleAreaHeight";
+    pProps[3].Value <<= aVisArea.Height;
 
 }
 
@@ -2486,16 +2490,11 @@ void SdXMLExport::exportDataStyles()
 
 void SdXMLExport::exportAutoDataStyles()
 {
-    SdXMLFormatMap::iterator aIter( maUsedDateStyles.begin() );
-    SdXMLFormatMap::iterator aEnd( maUsedDateStyles.end() );
+    for( const auto& rUsedDateStyle : maUsedDateStyles )
+        SdXMLNumberStylesExporter::exportDateStyle( *this, rUsedDateStyle );
 
-    while( aIter != aEnd )
-        SdXMLNumberStylesExporter::exportDateStyle( *this, (*aIter++) );
-
-    aIter = maUsedTimeStyles.begin();
-    aEnd = maUsedTimeStyles.end();
-    while( aIter != aEnd )
-        SdXMLNumberStylesExporter::exportTimeStyle( *this, (*aIter++) );
+    for( const auto& rUsedTimeStyle : maUsedTimeStyles )
+        SdXMLNumberStylesExporter::exportTimeStyle( *this, rUsedTimeStyle );
 
     if(HasFormExport())
         GetFormExport()->exportAutoControlNumberStyles();
@@ -2694,26 +2693,46 @@ SERVICE( XMLImpressClipboardExport, "com.sun.star.comp.Impress.XMLClipboardExpor
 XMLFontAutoStylePool* SdXMLExport::CreateFontAutoStylePool()
 {
     bool bEmbedFonts = false;
+    bool bEmbedUsedOnly = false;
+    bool bEmbedLatinScript = true;
+    bool bEmbedAsianScript = true;
+    bool bEmbedComplexScript = true;
+
     if (getExportFlags() & SvXMLExportFlags::CONTENT)
     {
-        Reference< lang::XMultiServiceFactory > xFac( GetModel(), UNO_QUERY );
-        if( xFac.is() )
+        try
         {
-            try
+            Reference<lang::XMultiServiceFactory> xFactory(GetModel(), UNO_QUERY);
+            Reference<beans::XPropertySet> xProps;
+            Reference<beans::XPropertySetInfo> xInfo;
+
+            if (xFactory.is())
+                xProps.set(xFactory->createInstance("com.sun.star.document.Settings"), UNO_QUERY);
+            if (xProps.is())
+                xInfo.set(xProps->getPropertySetInfo(), uno::UNO_QUERY);
+            if (xInfo.is() && xProps.is())
             {
-                Reference<beans::XPropertySet> const xProps( xFac->createInstance(
-                             "com.sun.star.document.Settings"), UNO_QUERY_THROW );
-                xProps->getPropertyValue("EmbedFonts") >>= bEmbedFonts;
+                if (xInfo->hasPropertyByName("EmbedFonts"))
+                    xProps->getPropertyValue("EmbedFonts") >>= bEmbedFonts;
+                if (xInfo->hasPropertyByName("EmbedOnlyUsedFonts"))
+                    xProps->getPropertyValue("EmbedOnlyUsedFonts") >>= bEmbedUsedOnly;
+                if (xInfo->hasPropertyByName("EmbedLatinScriptFonts"))
+                    xProps->getPropertyValue("EmbedLatinScriptFonts") >>= bEmbedLatinScript;
+                if (xInfo->hasPropertyByName("EmbedAsianScriptFonts"))
+                    xProps->getPropertyValue("EmbedAsianScriptFonts") >>= bEmbedAsianScript;
+                if (xInfo->hasPropertyByName("EmbedComplexScriptFonts"))
+                    xProps->getPropertyValue("EmbedComplexScriptFonts") >>= bEmbedComplexScript;
             }
-            catch (...)
-            {
-                // clipboard document doesn't have shell so throws from getPropertyValue
-                // gallery elements may not support com.sun.star.document.Settings so throws from createInstance
-            }
+        } catch(...)
+        {
+            // clipboard document doesn't have shell so throws from getPropertyValue
+            // gallery elements may not support com.sun.star.document.Settings so throws from createInstance
         }
     }
 
     XMLFontAutoStylePool *pPool = new XMLFontAutoStylePool( *this, bEmbedFonts );
+    pPool->setEmbedOnlyUsedFonts(bEmbedUsedOnly);
+    pPool->setEmbedFontScripts(bEmbedLatinScript, bEmbedAsianScript, bEmbedComplexScript);
 
     Reference< beans::XPropertySet > xProps( GetModel(), UNO_QUERY );
     if ( xProps.is() ) {

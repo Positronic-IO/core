@@ -50,9 +50,11 @@
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <rtl/instance.hxx>
 #include <rtl/random.h>
+#include <sal/log.hxx>
 
 #include <PackageConstants.hxx>
 
@@ -471,9 +473,9 @@ private:
             mpEntry->closeBufferFile();
             mpEntry->setFinished();
         }
-        catch (const uno::Exception&)
+        catch (...)
         {
-            mpEntry->setParallelDeflateException(::cppu::getCaughtException());
+            mpEntry->setParallelDeflateException(std::current_exception());
             try
             {
                 if (mpEntry->m_xOutStream.is())
@@ -619,7 +621,7 @@ bool ZipPackageStream::saveChild(
                 // at position zero...otherwise, assert and skip this stream...
                 if ( IsPackageMember() )
                 {
-                    // if the password has been changed than the stream should not be package member any more
+                    // if the password has been changed then the stream should not be package member any more
                     if ( m_bIsEncrypted && m_bToBeEncrypted )
                     {
                         // Should be handled close to the raw stream handling
@@ -835,7 +837,7 @@ bool ZipPackageStream::saveChild(
                     // Start a new thread deflating this zip entry
                     ZipOutputEntry *pZipEntry = new ZipOutputEntry(
                             m_xContext, *pTempEntry, this, bToBeEncrypted);
-                    rZipOut.addDeflatingThread( pZipEntry, new DeflateThread(rZipOut.getThreadTaskTag(), pZipEntry, xStream) );
+                    rZipOut.addDeflatingThread( pZipEntry, o3tl::make_unique<DeflateThread>(rZipOut.getThreadTaskTag(), pZipEntry, xStream) );
                 }
                 else
                 {

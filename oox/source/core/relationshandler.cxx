@@ -20,6 +20,7 @@
 #include <oox/core/relationshandler.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
@@ -43,7 +44,7 @@ OUString lclGetRelationsPath( const OUString& rFragmentPath )
     return
         OUStringBuffer( rFragmentPath.copy( 0, nPathLen ) ).    // file path including slash
         append( "_rels/" ).                                // additional '_rels/' path
-        append( rFragmentPath.copy( nPathLen ) ).               // file name after path
+        appendCopy( rFragmentPath, nPathLen ).               // file name after path
         append( ".rels" ).                                 // '.rels' suffix
         makeStringAndClear();
 }

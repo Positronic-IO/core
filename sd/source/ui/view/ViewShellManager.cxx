@@ -24,6 +24,7 @@
 #include <DrawDocShell.hxx>
 #include <FormShellManager.hxx>
 
+#include <sal/log.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svx/svxids.hrc>
 #include <svx/fmshell.hxx>
@@ -82,7 +83,7 @@ public:
     bool operator() (const ShellDescriptor& rDescriptor)
     { return rDescriptor.mnId == mnId; }
 private:
-    ShellId mnId;
+    ShellId const mnId;
 };
 
 } // end of anonymous namespace
@@ -517,11 +518,7 @@ void ViewShellManager::Implementation::ActivateSubShell (
     ::osl::MutexGuard aGuard (maMutex);
 
     // Check that the given view shell is active.
-    ActiveShellList::iterator iShell (::std::find_if (
-        maActiveViewShells.begin(),
-        maActiveViewShells.end(),
-        IsShell(&rParentShell)));
-    if (iShell == maActiveViewShells.end())
+    if (std::none_of (maActiveViewShells.begin(), maActiveViewShells.end(), IsShell(&rParentShell)))
         return;
 
     // Create the sub shell list if it does not yet exist.
@@ -532,7 +529,7 @@ void ViewShellManager::Implementation::ActivateSubShell (
     // Do not activate an object bar that is already active.  Requesting
     // this is not exactly an error but may be an indication of one.
     SubShellSubList& rList (iList->second);
-    if (::std::find_if(rList.begin(),rList.end(), IsId(nId)) != rList.end())
+    if (std::any_of(rList.begin(),rList.end(), IsId(nId)))
         return;
 
     // Add just the id of the sub shell. The actual shell is created
@@ -707,7 +704,7 @@ void ViewShellManager::Implementation::UpdateShellStack()
 
     // Remember the undo manager from the top-most shell on the stack.
     SfxShell* pTopMostShell = mrBase.GetSubShell(0);
-    ::svl::IUndoManager* pUndoManager = (pTopMostShell!=nullptr)
+    SfxUndoManager* pUndoManager = (pTopMostShell!=nullptr)
         ? pTopMostShell->GetUndoManager()
         : nullptr;
 
@@ -800,7 +797,7 @@ void ViewShellManager::Implementation::TakeShellsFromStack (const SfxShell* pShe
 
     // Remember the undo manager from the top-most shell on the stack.
     SfxShell* pTopMostShell = mrBase.GetSubShell(0);
-    ::svl::IUndoManager* pUndoManager = (pTopMostShell!=nullptr)
+    SfxUndoManager* pUndoManager = (pTopMostShell!=nullptr)
         ? pTopMostShell->GetUndoManager()
         : nullptr;
 

@@ -20,6 +20,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <tools/urlobj.hxx>
 #include "XmlFilterAdaptor.hxx"
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -43,6 +44,7 @@
 #include <comphelper/sequenceashashmap.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <comphelper/genericpropertyset.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <comphelper/scopeguard.hxx>

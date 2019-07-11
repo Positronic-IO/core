@@ -24,6 +24,7 @@
 #include <CustomAnimationPreset.hxx>
 #include <vcl/tabdlg.hxx>
 #include <vcl/lstbox.hxx>
+#include <vcl/weld.hxx>
 
 class TabControl;
 class OKButton;
@@ -105,7 +106,7 @@ public:
 
     virtual Control*    getControl() = 0;
 
-    static PropertySubControl*
+    static std::unique_ptr<PropertySubControl>
                         create( sal_Int32 nType,
                                 vcl::Window* pParent,
                                 const css::uno::Any& rValue,
@@ -115,7 +116,35 @@ public:
     sal_Int32 getControlType() const { return mnType; }
 
 protected:
-    sal_Int32           mnType;
+    sal_Int32 const  mnType;
+};
+
+class SdPropertySubControl
+{
+public:
+    explicit SdPropertySubControl(weld::Container* pParent)
+        : mxBuilder(Application::CreateBuilder(pParent, "modules/simpress/ui/customanimationfragment.ui"))
+        , mxContainer(mxBuilder->weld_container("EffectFragment"))
+    {
+    }
+
+    virtual ~SdPropertySubControl();
+
+    virtual             css::uno::Any getValue() = 0;
+    virtual             void setValue( const css::uno::Any& rValue, const OUString& rPresetId ) = 0;
+
+    static std::unique_ptr<SdPropertySubControl>
+                        create( sal_Int32 nType,
+                                weld::Label* pLabel,
+                                weld::Container* pParent,
+                                weld::Window* pTopLevel,
+                                const css::uno::Any& rValue,
+                                const OUString& rPresetId,
+                                const Link<LinkParamNone*,void>& rModifyHdl );
+
+protected:
+    std::unique_ptr<weld::Builder> mxBuilder;
+    std::unique_ptr<weld::Container> mxContainer;
 };
 
 class PropertyControl : public ListBox
@@ -125,13 +154,13 @@ public:
     virtual ~PropertyControl() override;
     virtual void dispose() override;
 
-    void setSubControl( PropertySubControl* pSubControl );
-    PropertySubControl* getSubControl() const { return mpSubControl; }
+    void setSubControl( std::unique_ptr<PropertySubControl> pSubControl );
+    PropertySubControl* getSubControl() const { return mpSubControl.get(); }
 
     virtual void Resize() override;
 
 private:
-    PropertySubControl* mpSubControl;
+    std::unique_ptr<PropertySubControl> mpSubControl;
 };
 
 class CustomAnimationDurationTabPage;
@@ -139,26 +168,25 @@ class CustomAnimationEffectTabPage;
 class CustomAnimationTextAnimTabPage;
 class STLPropertySet;
 
-class CustomAnimationDialog : public TabDialog
+class CustomAnimationDialog : public weld::GenericDialogController
 {
 public:
-    CustomAnimationDialog(vcl::Window* pParent, STLPropertySet* pSet, const OString& Page);
+    CustomAnimationDialog(weld::Window* pParent, std::unique_ptr<STLPropertySet> pSet, const OString& Page);
     virtual ~CustomAnimationDialog() override;
-    virtual void dispose() override;
 
     STLPropertySet* getResultSet();
+    STLPropertySet* getPropertySet() const { return mxSet.get(); }
 
-    static STLPropertySet* createDefaultSet();
+    static std::unique_ptr<STLPropertySet> createDefaultSet();
 
 private:
-    STLPropertySet* mpSet;
-    STLPropertySet* mpResultSet;
+    std::unique_ptr<STLPropertySet> mxSet;
+    std::unique_ptr<STLPropertySet> mxResultSet;
 
-    VclPtr<TabControl> mpTabControl;
-
-    VclPtr<CustomAnimationDurationTabPage> mpDurationTabPage;
-    VclPtr<CustomAnimationEffectTabPage> mpEffectTabPage;
-    VclPtr<CustomAnimationTextAnimTabPage> mpTextAnimTabPage;
+    std::unique_ptr<weld::Notebook> mxTabControl;
+    std::unique_ptr<CustomAnimationDurationTabPage> mxDurationTabPage;
+    std::unique_ptr<CustomAnimationEffectTabPage> mxEffectTabPage;
+    std::unique_ptr<CustomAnimationTextAnimTabPage> mxTextAnimTabPage;
 };
 
 }

@@ -76,13 +76,12 @@ public:
     void requestLegacyContext();
 
     bool init(vcl::Window* pParent);
-    bool init(SystemChildWindow* pChildWindow);
 
     void reset();
 
     // use these methods right after setting a context to make sure drawing happens
     // in the right FBO (default one is for onscreen painting)
-    bool               BindFramebuffer( OpenGLFramebuffer* pFramebuffer );
+    void               BindFramebuffer( OpenGLFramebuffer* pFramebuffer );
     void               AcquireDefaultFramebuffer();
     OpenGLFramebuffer* AcquireFramebuffer( const OpenGLTexture& rTexture );
     static void        ReleaseFramebuffer( OpenGLFramebuffer* pFramebuffer );
@@ -95,7 +94,6 @@ public:
     // retrieve a program from the cache or compile/link it
     OpenGLProgram*      GetProgram( const OUString& rVertexShader, const OUString& rFragmentShader, const OString& preamble = "" );
     OpenGLProgram*      UseProgram( const OUString& rVertexShader, const OUString& rFragmentShader, const OString& preamble = "" );
-    void                UseNoProgram();
 
     RenderState& state()
     {
@@ -135,7 +133,6 @@ public:
     void show();
 
     void setWinPosAndSize(const Point &rPos, const Size& rSize);
-    void setWinSize(const Size& rSize);
     virtual const GLWindow& getOpenGLWindow() const = 0;
 
     SystemChildWindow* getChildWindow();
@@ -171,7 +168,6 @@ protected:
     bool mbInitialized;
     int  mnRefCount;
     bool mbRequestLegacyContext;
-    bool mbUseDoubleBufferedRendering;
     bool mbVCLOnly;
 
     int mnFramebufferCount;
@@ -184,13 +180,13 @@ protected:
 private:
     struct ProgramHash
     {
-        size_t operator()( const rtl::OString& aDigest ) const
+        size_t operator()( const OString& aDigest ) const
         {
             return static_cast<size_t>( rtl_crc32( 0, aDigest.getStr(), aDigest.getLength() ) );
         }
     };
 
-    typedef std::unordered_map< rtl::OString, std::shared_ptr<OpenGLProgram>, ProgramHash > ProgramCollection;
+    typedef std::unordered_map< OString, std::shared_ptr<OpenGLProgram>, ProgramHash > ProgramCollection;
     ProgramCollection maPrograms;
     OpenGLProgram* mpCurrentProgram;
 

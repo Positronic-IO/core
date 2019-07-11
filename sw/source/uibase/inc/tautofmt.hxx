@@ -35,8 +35,25 @@ class SwWrtShell;
 
 enum AutoFormatLine { TOP_LINE, BOTTOM_LINE, LEFT_LINE, RIGHT_LINE };
 
-class SwAutoFormatDlg : public weld::GenericDialogController
+class SwAutoFormatDlg : public SfxDialogController
 {
+    OUString const  m_aStrTitle;
+    OUString const  m_aStrLabel;
+    OUString const  m_aStrClose;
+    OUString const  m_aStrDelTitle;
+    OUString const  m_aStrDelMsg;
+    OUString const  m_aStrRenameTitle;
+    OUString const  m_aStrInvalidFormat;
+
+    SwWrtShell*     m_pShell;
+    sal_uInt8       m_nIndex;
+    sal_uInt8       m_nDfltStylePos;
+    bool            m_bCoreDataChanged : 1;
+    bool const      m_bSetAutoFormat : 1;
+
+    AutoFormatPreview m_aWndPreview;
+    std::unique_ptr<SwTableAutoFormatTable> m_xTableTable;
+
     std::unique_ptr<weld::TreeView> m_xLbFormat;
     std::unique_ptr<weld::CheckButton> m_xBtnNumFormat;
     std::unique_ptr<weld::CheckButton> m_xBtnBorder;
@@ -47,21 +64,7 @@ class SwAutoFormatDlg : public weld::GenericDialogController
     std::unique_ptr<weld::Button> m_xBtnAdd;
     std::unique_ptr<weld::Button> m_xBtnRemove;
     std::unique_ptr<weld::Button> m_xBtnRename;
-    std::unique_ptr<AutoFormatPreview> m_xWndPreview;
-    std::unique_ptr<SwTableAutoFormatTable> m_xTableTable;
-    OUString        m_aStrTitle;
-    OUString        m_aStrLabel;
-    OUString        m_aStrClose;
-    OUString        m_aStrDelTitle;
-    OUString        m_aStrDelMsg;
-    OUString        m_aStrRenameTitle;
-    OUString        m_aStrInvalidFormat;
-
-    SwWrtShell*     m_pShell;
-    sal_uInt8       m_nIndex;
-    sal_uInt8       m_nDfltStylePos;
-    bool            m_bCoreDataChanged : 1;
-    bool            m_bSetAutoFormat : 1;
+    std::unique_ptr<weld::CustomWeld> m_xWndPreview;
 
     void Init( const SwTableAutoFormat* pSelFormat );
     void UpdateChecks( const SwTableAutoFormat&, bool bEnableBtn );
@@ -76,7 +79,7 @@ public:
     SwAutoFormatDlg(weld::Window* pParent, SwWrtShell* pShell,
                     bool bSetAutoFormat, const SwTableAutoFormat* pSelFormat);
 
-    short execute();
+    virtual short run() override;
 
     SwTableAutoFormat* FillAutoFormatOfIndex() const;
 

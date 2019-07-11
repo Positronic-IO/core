@@ -46,7 +46,7 @@ class RtfExport : public MSWordExportBase
     MSWordSections* m_pSections;
 
     std::unique_ptr<RtfSdrExport> m_pSdrExport;
-    bool m_bOutOutlineOnly;
+    bool const m_bOutOutlineOnly;
 
 public:
     /// Access to the attribute output class.
@@ -118,7 +118,7 @@ public:
 
 protected:
     /// Format-dependent part of the actual export.
-    void ExportDocument_Impl() override;
+    ErrCode ExportDocument_Impl() override;
 
     void SectionBreaksAndFrames(const SwTextNode& /*rNode*/) override {}
 
@@ -189,6 +189,8 @@ public:
     void InsStyle(sal_uInt16 nId, const OString& rStyle);
     OString* GetStyle(sal_uInt16 nId);
 
+    const SfxItemSet* GetFirstPageItemSet() { return m_pFirstPageItemSet; }
+
 private:
     void WriteFonts();
     void WriteStyles();
@@ -214,6 +216,8 @@ private:
     std::map<OUString, sal_uInt16> m_aRedlineTable;
     /// If set, then Strm() returns this tream, instead of m_pWriter's stream.
     std::unique_ptr<SvMemoryStream> m_pStream;
+    /// Item set of the first page during export of a follow page format.
+    const SfxItemSet* m_pFirstPageItemSet = nullptr;
 };
 
 #endif // INCLUDED_SW_SOURCE_FILTER_WW8_RTFEXPORT_HXX

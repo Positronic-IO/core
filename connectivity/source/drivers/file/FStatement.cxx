@@ -23,9 +23,8 @@
 #include <sqlbison.hxx>
 #include <file/FDriver.hxx>
 #include <file/FResultSet.hxx>
-#include <comphelper/property.hxx>
-#include <comphelper/uno3.hxx>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <com/sun/star/sdbc/ResultSetConcurrency.hpp>
 #include <com/sun/star/sdbc/ResultSetType.hpp>
 #include <com/sun/star/sdbc/FetchDirection.hpp>
@@ -33,6 +32,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/typeprovider.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <strings.hrc>
 #include <algorithm>
@@ -59,7 +59,6 @@ OStatement_Base::OStatement_Base(OConnection* _pConnection )
     ,m_aSQLIterator( _pConnection, _pConnection->createCatalog()->getTables(), m_aParser )
     ,m_pConnection(_pConnection)
     ,m_pParseTree(nullptr)
-    ,m_pSQLAnalyzer(nullptr)
     ,m_nMaxFieldSize(0)
     ,m_nMaxRows(0)
     ,m_nQueryTimeOut(0)

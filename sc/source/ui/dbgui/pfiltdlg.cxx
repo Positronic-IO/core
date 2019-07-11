@@ -52,7 +52,6 @@ ScPivotFilterDlg::ScPivotFilterDlg(vcl::Window* pParent, const SfxItemSet& rArgS
         nWhichQuery     ( rArgSet.GetPool()->GetWhich( SID_QUERY ) ),
         theQueryData    ( static_cast<const ScQueryItem&>(
                            rArgSet.Get( nWhichQuery )).GetQueryData() ),
-        pOutItem        ( nullptr ),
         pViewData       ( nullptr ),
         pDoc            ( nullptr ),
         nSrcTab         ( nSourceTab )     // is not in QueryParam
@@ -85,7 +84,7 @@ void ScPivotFilterDlg::dispose()
 {
     for (auto& a : m_pEntryLists) a.reset();
 
-    delete pOutItem;
+    pOutItem.reset();
     m_pLbField1.clear();
     m_pLbCond1.clear();
     m_pEdVal1.clear();
@@ -413,8 +412,7 @@ const ScQueryItem& ScPivotFilterDlg::GetOutputItem()
     theParam.bCaseSens      = m_pBtnCase->IsChecked();
     theParam.eSearchType    = m_pBtnRegExp->IsChecked() ? utl::SearchParam::SearchType::Regexp : utl::SearchParam::SearchType::Normal;
 
-    if ( pOutItem ) DELETEZ( pOutItem );
-    pOutItem = new ScQueryItem( nWhichQuery, &theParam );
+    pOutItem.reset( new ScQueryItem( nWhichQuery, &theParam ) );
 
     return *pOutItem;
 }

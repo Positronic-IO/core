@@ -59,13 +59,13 @@ Reference < XStyle > XMLTextMasterPageContext::Create()
     return xNewStyle;
 }
 
+static const OUStringLiteral gsFollowStyle( "FollowStyle" );
+
 XMLTextMasterPageContext::XMLTextMasterPageContext( SvXMLImport& rImport,
         sal_uInt16 nPrfx, const OUString& rLName,
         const Reference< XAttributeList > & xAttrList,
         bool bOverwrite )
 :   SvXMLStyleContext( rImport, nPrfx, rLName, xAttrList, XML_STYLE_FAMILY_MASTER_PAGE )
-,   sIsPhysical( "IsPhysical" )
-,   sFollowStyle( "FollowStyle" )
 ,   bInsertHeader( false )
 ,   bInsertFooter( false )
 ,   bInsertHeaderLeft( false )
@@ -141,6 +141,7 @@ XMLTextMasterPageContext::XMLTextMasterPageContext( SvXMLImport& rImport,
     Reference < XPropertySet > xPropSet( xStyle, UNO_QUERY );
     Reference< XPropertySetInfo > xPropSetInfo =
                 xPropSet->getPropertySetInfo();
+    OUString sIsPhysical( "IsPhysical" );
     if( !bNew && xPropSetInfo->hasPropertyByName( sIsPhysical ) )
     {
         aAny = xPropSet->getPropertyValue( sIsPhysical );
@@ -271,7 +272,7 @@ void XMLTextMasterPageContext::Finish( bool bOverwrite )
 
         Reference< XPropertySetInfo > xPropSetInfo =
             xPropSet->getPropertySetInfo();
-        if( xPropSetInfo->hasPropertyByName( sFollowStyle ) )
+        if( xPropSetInfo->hasPropertyByName( gsFollowStyle ) )
         {
             OUString sDisplayFollow(
                 GetImport().GetStyleDisplayName(
@@ -280,12 +281,12 @@ void XMLTextMasterPageContext::Finish( bool bOverwrite )
                 !xPageStyles->hasByName( sDisplayFollow ) )
                 sDisplayFollow = xStyle->getName();
 
-            Any aAny = xPropSet->getPropertyValue( sFollowStyle );
+            Any aAny = xPropSet->getPropertyValue( gsFollowStyle );
             OUString sCurrFollow;
             aAny >>= sCurrFollow;
             if( sCurrFollow != sDisplayFollow )
             {
-                xPropSet->setPropertyValue( sFollowStyle, Any(sDisplayFollow) );
+                xPropSet->setPropertyValue( gsFollowStyle, Any(sDisplayFollow) );
             }
         }
 

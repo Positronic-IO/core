@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
+
 #include <com/sun/star/xml/sax/FastToken.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
@@ -173,7 +175,7 @@ ContextHandlerRef PPTShapeContext::onCreateContext( sal_Int32 aElementToken, con
             oox::drawingml::TextBodyPtr xTextBody( new oox::drawingml::TextBody( mpShapePtr->getTextBody() ) );
             xTextBody->getTextProperties().maPropertyMap.setProperty( PROP_FontIndependentLineSpacing, true );
             mpShapePtr->setTextBody( xTextBody );
-            return new oox::drawingml::TextBodyContext( *this, *xTextBody );
+            return new oox::drawingml::TextBodyContext( *this, mpShapePtr );
         }
         case PPT_TOKEN( txXfrm ):
         {

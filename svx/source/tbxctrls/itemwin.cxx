@@ -51,7 +51,7 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
 
 SvxLineBox::SvxLineBox( vcl::Window* pParent, const Reference< XFrame >& rFrame ) :
-    LineLB( pParent, WB_BORDER | WB_DROPDOWN | WB_AUTOHSCROLL ),
+    LineLB( pParent ),
     nCurPos     ( 0 ),
     aLogicalSize(40,140),
     bRelease    ( true ),
@@ -248,7 +248,7 @@ SvxMetricField::SvxMetricField(
     Size aSize( CalcMinimumSize() );
     SetSizePixel( aSize );
     aLogicalSize = PixelToLogic(aSize, MapMode(MapUnit::MapAppFont));
-    SetUnit( FUNIT_MM );
+    SetUnit( FieldUnit::MM );
     SetDecimalDigits( 2 );
     SetMax( 5000 );
     SetMin( 0 );
@@ -527,7 +527,7 @@ void SvxFillAttrBox::Fill( const XHatchListRef &pList )
     for( long i = 0; i < nCount; i++ )
     {
         const XHatchEntry* pEntry = pList->GetHatch(i);
-        const Bitmap aBitmap = pList->GetUiBitmap( i );
+        const BitmapEx aBitmap = pList->GetUiBitmap( i );
         if( !aBitmap.IsEmpty() )
             ListBox::InsertEntry(pEntry->GetName(), Image(aBitmap));
         else
@@ -548,7 +548,7 @@ void SvxFillAttrBox::Fill( const XGradientListRef &pList )
     for( long i = 0; i < nCount; i++ )
     {
         const XGradientEntry* pEntry = pList->GetGradient(i);
-        const Bitmap aBitmap = pList->GetUiBitmap( i );
+        const BitmapEx aBitmap = pList->GetUiBitmap( i );
         if( !aBitmap.IsEmpty() )
             ListBox::InsertEntry(pEntry->GetName(), Image(aBitmap));
         else
@@ -608,7 +608,7 @@ namespace
                 }
             }
 
-            rBitmapEx = pVirtualDevice->GetBitmap(Point(0, 0), rSize);
+            rBitmapEx = pVirtualDevice->GetBitmapEx(Point(0, 0), rSize);
         }
     }
 } // end of anonymous namespace

@@ -24,21 +24,14 @@
 #include <com/sun/star/accessibility/XAccessibleComponent.hpp>
 #include <com/sun/star/accessibility/XAccessibleContext.hpp>
 #include <com/sun/star/accessibility/XAccessibleEventBroadcaster.hpp>
-#include <com/sun/star/accessibility/IllegalAccessibleComponentStateException.hpp>
-#include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/uno/Reference.hxx>
-#include <cppuhelper/weak.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XTypeProvider.hpp>
-#include <com/sun/star/lang/XServiceName.hpp>
-#include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <cppuhelper/interfacecontainer.h>
 
 #include <svl/lstner.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/compbase5.hxx>
 #include <cppuhelper/implbase1.hxx>
-#include <comphelper/servicehelper.hxx>
 
 namespace tools { class Rectangle; }
 
@@ -285,7 +278,7 @@ private:
 
     /** This is the role of this object.
     */
-    sal_Int16 maRole;
+    sal_Int16 const maRole;
 };
 
 #endif

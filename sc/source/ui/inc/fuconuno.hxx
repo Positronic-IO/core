@@ -31,7 +31,7 @@ class FuConstUnoControl final : public FuConstruct
     sal_uInt16  nIdentifier;
 
 public:
-    FuConstUnoControl(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pView,
+    FuConstUnoControl(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pView,
                        SdrModel* pDoc, const SfxRequest& rReq);
 
     virtual ~FuConstUnoControl() override;
@@ -43,7 +43,7 @@ public:
     virtual void Deactivate() override;
 
     // Create default drawing objects via keyboard
-    virtual SdrObject* CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
+    virtual SdrObjectUniquePtr CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle) override;
 };
 
 #endif      // _SD_FUCONCTL_HXX

@@ -22,7 +22,6 @@
 #include <cppuhelper/queryinterface.hxx>
 
 #include <vector>
-#include <algorithm>
 #include <memory>
 
 using namespace ::com::sun::star;
@@ -57,8 +56,8 @@ OPropertySet::OPropertySet( const OPropertySet & rOther, ::osl::Mutex & par_rMut
         m_bSetNewValuesExplicitlyEvenIfTheyEqualDefault(false)
 {
     MutexGuard aGuard( m_rMutex );
-    if( rOther.m_pImplProperties.get())
-        m_pImplProperties.reset( new impl::ImplOPropertySet( * rOther.m_pImplProperties.get()));
+    if (rOther.m_pImplProperties)
+        m_pImplProperties.reset(new impl::ImplOPropertySet(*rOther.m_pImplProperties));
 }
 
 void OPropertySet::SetNewValuesExplicitlyEvenIfTheyEqualDefault()

@@ -148,7 +148,7 @@ void VBATest::testMiscVBAFunctions()
     SvtSysLocaleOptions aLocalOptions;
     aLocalOptions.SetLocaleConfigString( aLocale.getBcp47() );
 
-    for ( sal_uInt32  i=0; i<SAL_N_ELEMENTS( macroSource ); ++i )
+    for ( size_t  i=0; i<SAL_N_ELEMENTS( macroSource ); ++i )
     {
         OUString sMacroURL = sMacroPathURL
                            + OUString::createFromAscii( macroSource[ i ] );
@@ -156,13 +156,12 @@ void VBATest::testMiscVBAFunctions()
         MacroSnippet myMacro;
         myMacro.LoadSourceFromFile( sMacroURL );
         SbxVariableRef pReturn = myMacro.Run();
-        if ( pReturn.is() )
-        {
-            fprintf(stderr, "macro result for %s\n", macroSource[ i ] );
-            fprintf(stderr, "macro returned:\n%s\n", OUStringToOString( pReturn->GetOUString(), RTL_TEXTENCODING_UTF8 ).getStr() );
-        }
-        CPPUNIT_ASSERT_MESSAGE("No return variable huh?", pReturn.get() != nullptr );
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Result not as expected", OUString("OK"), pReturn->GetOUString() );
+        CPPUNIT_ASSERT_MESSAGE("No return variable huh?", pReturn.is());
+        fprintf(stderr, "macro result for %s\n", macroSource[i]);
+        fprintf(stderr, "macro returned:\n%s\n",
+                OUStringToOString(pReturn->GetOUString(), RTL_TEXTENCODING_UTF8).getStr());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Result not as expected", OUString("OK"),
+                                     pReturn->GetOUString());
     }
 }
 
@@ -234,13 +233,12 @@ void VBATest::testMiscOLEStuff()
         MacroSnippet myMacro;
         myMacro.LoadSourceFromFile( sMacroURL );
         SbxVariableRef pReturn = myMacro.Run( aArgs );
-        if ( pReturn.is() )
-        {
-            fprintf(stderr, "macro result for %s\n", macroSource[ i ] );
-            fprintf(stderr, "macro returned:\n%s\n", OUStringToOString( pReturn->GetOUString(), RTL_TEXTENCODING_UTF8 ).getStr() );
-        }
-        CPPUNIT_ASSERT_MESSAGE("No return variable huh?", pReturn.get() != nullptr );
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("Result not as expected", OUString("OK"), pReturn->GetOUString() );
+        CPPUNIT_ASSERT_MESSAGE("No return variable huh?", pReturn.is());
+        fprintf(stderr, "macro result for %s\n", macroSource[i]);
+        fprintf(stderr, "macro returned:\n%s\n",
+                OUStringToOString(pReturn->GetOUString(), RTL_TEXTENCODING_UTF8).getStr());
+        CPPUNIT_ASSERT_EQUAL_MESSAGE("Result not as expected", OUString("OK"),
+                                     pReturn->GetOUString());
     }
 #else
     // Avoid "this method is empty and should be removed" warning

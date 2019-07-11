@@ -34,6 +34,7 @@ public:
     SwLabItem();
 
     SwLabItem& operator =(const SwLabItem& rItem);
+    SwLabItem(SwLabItem const &) = default; // SfxPoolItem copy function dichotomy
 
     virtual bool operator ==(const SfxPoolItem& rItem) const override;
 
@@ -46,7 +47,6 @@ public:
     OUString   m_aWriting; // label
     OUString   m_aMake;   // label mark
     OUString   m_aType;   // label type
-    OUString   m_aBin;    // printer shaft
     sal_Int32       m_lHDist;  // horizontal distance (user)
     sal_Int32       m_lVDist;  // vertical distance (user)
     sal_Int32       m_lWidth;  // width (user)
@@ -106,7 +106,7 @@ class SwLabCfgItem : public utl::ConfigItem
 {
 private:
     SwLabItem   aItem;
-    bool    bIsLabel;
+    bool const  bIsLabel;
 
     css::uno::Sequence<OUString> GetPropertyNames();
 

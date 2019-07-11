@@ -23,6 +23,7 @@
 #include <docsh.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/editeng.hxx>
+#include <editeng/outlobj.hxx>
 
 #include <com/sun/star/text/XTextField.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -52,16 +53,16 @@ static const SvxItemPropertySet* ImplGetSvxTextPortionPropertySet()
     return &aSvxTextPortionPropertySet;
 }
 
-SwTextAPIObject::SwTextAPIObject( SwTextAPIEditSource* p )
-: SvxUnoText( p, ImplGetSvxTextPortionPropertySet(), uno::Reference < text::XText >() )
-, pSource(p)
+SwTextAPIObject::SwTextAPIObject( std::unique_ptr<SwTextAPIEditSource> p )
+: SvxUnoText( p.get(), ImplGetSvxTextPortionPropertySet(), uno::Reference < text::XText >() )
+, pSource(std::move(p))
 {
 }
 
 SwTextAPIObject::~SwTextAPIObject() throw()
 {
     pSource->Dispose();
-    delete pSource;
+    pSource.reset();
 }
 
 struct SwTextAPIEditSource_Impl
@@ -168,7 +169,7 @@ void SwTextAPIEditSource::SetString( const OUString& rText )
     }
 }
 
-OutlinerParaObject* SwTextAPIEditSource::CreateText()
+std::unique_ptr<OutlinerParaObject> SwTextAPIEditSource::CreateText()
 {
     if ( pImpl->mpPool && pImpl->mpOutliner )
         return pImpl->mpOutliner->CreateParaObject();

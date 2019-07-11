@@ -14,10 +14,31 @@
 #include <vector>
 
 #include <dmapper/GraphicZOrderHelper.hxx>
-#include <com/sun/star/drawing/XShapes.hpp>
-#include <com/sun/star/lang/XComponent.hpp>
-#include <com/sun/star/beans/PropertyValue.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
+#include <tools/ref.hxx>
+
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace beans
+{
+class XPropertySet;
+struct PropertyValue;
+}
+namespace drawing
+{
+class XShape;
+class XShapes;
+}
+namespace lang
+{
+class XComponent;
+}
+}
+}
+}
 
 namespace writerfilter
 {
@@ -27,12 +48,12 @@ class RTFDocumentImpl;
 class RTFShape;
 
 /// Handles the import of drawings using RTF markup.
-class RTFSdrImport final
+class RTFSdrImport final : public virtual SvRefBase
 {
 public:
     RTFSdrImport(RTFDocumentImpl& rDocument,
                  css::uno::Reference<css::lang::XComponent> const& xDstDoc);
-    ~RTFSdrImport();
+    ~RTFSdrImport() override;
 
     enum ShapeOrPict
     {

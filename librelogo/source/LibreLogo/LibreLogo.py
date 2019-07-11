@@ -145,6 +145,7 @@ __LineStyle_DOTTED__ = 2
 class __Doc__:
     def __init__(self, doc):
         self.doc = doc
+        self.secure = False
         try:
             self.drawpage = doc.DrawPage # Writer
         except:
@@ -303,10 +304,13 @@ def Input(s):
         if inputtext:
             inputtext = e.Text
         else:
+            # Cancel button
             __halt__ = True
 
         # dispose the dialog
         controlContainer.dispose()
+        # stop program at pressing Cancel
+        __checkhalt__()
         return inputtext
     except Exception:
         __trace__()
@@ -333,7 +337,9 @@ def Print(s):
     global __halt__
     s = __string__(s, _.decimal)
     if not MessageBox(_.doc.CurrentController.Frame.ContainerWindow, s[:500] + s[500:5000].replace('\n', ' '), "", "messbox", __OK_CANCEL__):
+        # stop program at pressing Cancel
         __halt__ = True
+        __checkhalt__()
 
 def MessageBox(parent, message, title, msgtype = "messbox", buttons = __OK__):
     msgtypes = ("messbox", "infobox", "errorbox", "warningbox", "querybox")
@@ -417,7 +423,7 @@ def __translate__(arg = None):
     __strings__ = []
 
     text = re.sub(r"^(([ \t]*[;#][^\n]*))", __encodecomment__, text)
-    text = re.sub("(?u)([%s])([^\n%s]*)(?<!\\\\)[%s]" % (lq, rq, rq), __encodestring__, selection.getString())
+    text = re.sub("(?u)([%s])((?:[^\n%s]|\\\\[%s])*)(?<!\\\\)[%s]" % (lq, rq, rq, rq), __encodestring__, selection.getString())
     text = re.sub('(?u)(?<![0-9])(")(~?\w*)', __encodestring__, text)
     text = re.sub(r";(([^\n]*))", __encodecomment__, text)
 
@@ -450,9 +456,9 @@ def __translate__(arg = None):
         pagebreak = False
         selection.setString(text)
     # convert to paragraphs
-    __dispatcher__(".uno:ExecuteSearch", (__getprop__("SearchItem.SearchString", r"\n"), __getprop__("SearchItem.ReplaceString", "\n"), \
+    __dispatcher__(".uno:ExecuteSearch", (__getprop__("SearchItem.SearchString", r"\n"), __getprop__("SearchItem.ReplaceString", r"\n"), \
         __getprop__("Quiet", True), __getprop__("SearchItem.Command", 3), __getprop__("SearchItem.StyleFamily", 2), \
-        __getprop__("SearchItem.AlgorithmType2", 1), __getprop__("SearchItem.SearchFlags", 0)))
+        __getprop__("SearchItem.AlgorithmType", 1), __getprop__("SearchItem.AlgorithmType2", 2), __getprop__("SearchItem.SearchFlags", 0)))
     # set 2-page layout
     if pagebreak:
         selection.getStart().BreakType = 4
@@ -463,10 +469,58 @@ class LogoProgram(threading.Thread):
         self.code = code
         threading.Thread.__init__(self)
 
+    def secure(self):
+        # 0 = secure
+        if _.secure:
+            return 0
+
+        # 1 = forms, fields or embedded objects are forbidden
+        if _.doc.DrawPage.Forms.getCount() > 0 or _.doc.getTextFields().createEnumeration().hasMoreElements() or _.doc.getEmbeddedObjects().getCount() > 0:
+            return 1
+
+        # 2 = hyperlinks with script events
+        nodes = _.doc.Text.createEnumeration()
+        while nodes.hasMoreElements():
+            node = nodes.nextElement()
+            if node.supportsService("com.sun.star.text.Paragraph"):
+                portions = node.createEnumeration()
+                while portions.hasMoreElements():
+                    portion = portions.nextElement()
+                    if portion.PropertySetInfo.hasPropertyByName("HyperLinkEvents"):
+                        events = portion.getPropertyValue("HyperLinkEvents")
+                        for event in events.getElementNames():
+                            attributes = events.getByName(event)
+                            for attribute in attributes:
+                                if attribute.Name == "EventType" and attribute.Value == "Script":
+                                    return 2
+
+        # 2 = images with script events
+        images = _.doc.DrawPage.createEnumeration()
+        while images.hasMoreElements():
+            image = images.nextElement()
+            try:
+                events = image.Events
+                for event in events.getElementNames():
+                    attributes = events.getByName(event)
+                    for attribute in attributes:
+                        if attribute.Name == "EventType" and attribute.Value == "Script":
+                            return 2
+            except:
+                pass
+
+        _.secure = True
+        return 0
+
     def run(self):
         global __thread__
         try:
-            exec(self.code)
+            # check document security
+            secid = self.secure()
+            if secid > 0:
+                parent = _.doc.CurrentController.Frame.ContainerWindow
+                MessageBox(parent, "Document objects with%s script events" % [" possible", ""][secid-1], "LibreLogo program can't start", "errorbox")
+            else:
+                exec(self.code)
             if _.origcursor[0] and _.origcursor[1]:
                 __dispatcher__(".uno:Escape")
                 try:
@@ -516,9 +570,13 @@ class LogoProgram(threading.Thread):
         with __lock__:
             __thread__ = None
 
+# to check LibreLogo program termination (in that case, return value is False)
+def __is_alive__():
+    return __thread__ != None
 
 def __encodestring__(m):
-    __strings__.append(re.sub("\\[^\\]", "", m.group(2)))
+    __strings__.append(re.sub("(\\[^\\]|\\\\(?=[‘’“”»」』]))", "", m.group(2)))
+    # replace the string with the numbered identifier _s_0___, _s_1___, ...
     return __ENCODED_STRING__ % (len(__strings__) - 1)
 
 def __encodecomment__(m):
@@ -968,7 +1026,7 @@ def __go__(shapename, n, dot = False, preciseAngle = -1):
     if shape and not _.pen and not dot:
         _.continuous = False
         return
-    c, c2 = __Point__(pos.X + turtle.BoundRect.Width / 2.0, pos.Y + turtle.BoundRect.Height / 2.0), __Point__(round(dx), round(dy))
+    c, c2 = __Point__(pos.X + turtle.BoundRect.Width / 2.0, pos.Y + turtle.BoundRect.Height / 2.0), __Point__(round(dx / __MM10_TO_TWIP__), round(dy / __MM10_TO_TWIP__))
     if shape and "LineShape" in shape.ShapeType:
             if _.continuous or dot:
                 last = shape.PolyPolygon[-1][-1]
@@ -1688,7 +1746,6 @@ def __loadlang__(lang, a):
     [r"(?<!:)\b(?:%s)\b" % a['BACKWARD'], "\n)backward("],
     [r"(?<!:)\b(?:%s)\b" % a['TURNRIGHT'], "\n)turnright("],
     [r"(?<!:)\b(?:%s)\b" % a['RANDOM'], "Random"],
-    [r"(?<!:)\b(?:%s)\b(?= \d)" % 'Random', "random.random()*"],
     [r"(?<!:)\b(?:%s)\b" % a['SET'], "set"],
     [r"(?<!:)\b(?:%s)\b" % a['RANGE'], "range"],
     [r"(?<!:)\b(?:%s)\b" % a['LIST'], "list"],
@@ -1699,21 +1756,105 @@ def __loadlang__(lang, a):
     [r"(?<!:)\b(?:%s)\b ?\(" % a['REFINDALL'], "re.findall('(?u)'+"],
     [r"(?<!:)\b(?:%s)\b" % a['ANY'], "u'any'"],
     [r"(?<!:)\b(?:%s) (\w+|[[][^\]]*])\b" % a['INPUT'], " Input(\\1)"],
-    [r"(?<!:)\b(?:%s)\b" % a['PRINT'], "\n)Print("],
+    [r"(?<!:)\b(?:%s)\b" % a['PRINT'], "\nPrint"],
     [r"(?<!:)\b(?:%s)\b" % a['TURNLEFT'], "\n)turnleft("],
     [r"\b([0-9]+([,.][0-9]+)?)(%s)\b" % a['PT'], "\\1"],
     [r"\b([0-9]+([,.][0-9]+)?)(%s)(?!\w)" % a['INCH'], lambda r: str(float(r.group(1).replace(",", "."))*72)],
     [r"\b([0-9]+([,.][0-9]+)?)(%s)\b" % a['MM'], lambda r: str(float(r.group(1).replace(",", "."))*__MM_TO_PT__)],
     [r"\b([0-9]+([,.][0-9]+)?)(%s)\b" % a['CM'], lambda r: str(float(r.group(1).replace(",", "."))*__MM_TO_PT__*10)],
-    [r"\b(__(?:int|float|string)__len|round|abs|sin|cos|sqrt|log10|set|list|tuple|sorted)\b ((?:\w|\d+([,.]\d+)?|0[xX][0-9a-fA-F]+|[-+*/]| )+)\)" , "\\1(\\2))" ], # fix parsing: (1 + sqrt x) -> (1 + sqrt(x))
     [r"(?<=[-*/=+,]) ?\n\)(\w+)\(", "\\1()"], # read attributes, eg. x = fillcolor
     [r"(?<=return) ?\n\)(\w+)\(", "\\1()"], # return + user function
-    [r"(?<=(?:Print|label)\() ?\n\)(\w+)\(", "\\1()\n"] # Print/label + user function
     ]
 
 def __concatenation__(r): # keep line positions with extra line breaks
     s = re.subn("~[ \t]*\n", " ", r.group(0))
     return s[0] + "\n" * s[1]
+
+# convert Logo expressions to Python ones by adding
+# missing parentheses to procedure and function calls
+# f x y z -> f(x, y, z)
+# a = [sin len f [cos 45, 6] [1, 2, 3] sin 90] ->
+# a = [sin(len(f([cos(45),6],[1, 2, 3], sin(90))]
+# NOTE: "f(45)" and "f (45)" are not the same:
+# sin(45) + cos 45 -> sin(45) + cos(45)
+# sin (45) + cos 45 -> sin(45 + cos(45))
+def __l2p__(i, par, insub, inarray):
+    first = True
+    while par["pos"] < len(i):
+        pos = par["pos"]
+        ch = i[pos]
+        ignored = False
+        # starting parenthesis
+        if ch in "([":
+            if insub and not inarray and not first and par["out"][-1:] != "]":
+                return
+            par["out"] += ch
+            par["pos"] += 1
+            __l2p__(i, par, insub, True)
+        # ending parenthesis
+        elif ch in ")]":
+            if insub and not inarray:
+                return
+            # put character before terminating spaces
+            par["out"] = re.sub("( *)$", ch + "\\1", par["out"])
+            par["pos"] += 1
+            return
+        # starting a subroutine
+        elif pos in par["sub"]:
+            if insub and not inarray and not first:
+                return
+            first = False
+            subname = i[pos:par["sub"][pos]]
+            par["pos"] += len(subname)
+            par["out"] += subname
+            # Logo syntax: add parentheses
+            # for example: foo x y z -> foo(x, y, z)
+            par["out"] += "("
+            for j in range(par["names"][subname]):
+                # add commas, except if already added, eg. with special RANGE
+                # (variable argument counts: RANGE 1 or RANGE 1 100 or RANGE 1 100 10)
+                if j > 0 and par["out"].rstrip()[-1] != ",":
+                    par["out"] = re.sub("( +),$",",\\1", par["out"] + ",")
+                __l2p__(i, par, True, False)
+            par["out"] = re.sub("( +)\\)$", ")\\1", par["out"] + ")")
+        # operators
+        elif pos in par["op"]:
+            op = i[pos:par["op"][pos]]
+            par["out"] += op
+            par["pos"] += len(op)
+            __l2p__(i, par, insub, False)
+        # other atoms
+        elif pos in par["atom"]:
+            if insub and not inarray and not first:
+                return
+            first = False
+            atom = i[pos:par["atom"][pos]]
+            par["out"] += atom
+            par["pos"] += len(atom)
+            # handle subroutines with explicit parentheses
+            # and array indices
+            if i[par["pos"]:par["pos"]+1] in "([":
+                first = True
+                continue
+        # optional negative or positive sign
+        elif ch in "-+":
+            if insub and not inarray and not first:
+                return
+            par["out"] += ch
+            par["pos"] += 1
+            ignored = first
+        elif ch == " ":
+            par["out"] += ch
+            par["pos"] += 1
+            ignored = first
+        elif insub and ((ch == ","  and not inarray) or (ch != ",")):
+            return
+        else:
+            par["out"] += ch
+            par["pos"] += 1
+        # end of first subexpression, except in the case of ignored characters
+        if not ignored:
+            first = False
 
 def __compil__(s):
     global _, comp, __strings__, __compiled__
@@ -1732,17 +1873,18 @@ def __compil__(s):
             __loadlang__(_.lng, __l12n__(_.lng))
     except:
         __trace__()
+        # for testing compiling, we create a not document based namespace
+        if "_" not in locals():
+            _ = lambda: None
         _.lng = 'en_US'
         if not _.lng in __comp__:
             __loadlang__(_.lng, __l12n__(_.lng)) 
 
     _.decimal = __l12n__(_.lng)['DECIMAL']
-    names = {}
 
     rmsp = re.compile(r"[ ]*([=+*/]|==|<=|>=|<>|!=|-[ ]+)[ ]*")
     chsp = re.compile(r"[ \t]+")
     chch = re.compile(r"(?u)(?<!\w):(?=\w)")
-    parenfix = re.compile(r"(?ui)(\([^\(\[\]\)]+)]\)")
 
     # remove CR characters and split lines
     s = re.sub(r'[ \t\r]*(?=\n)', '', s)
@@ -1761,7 +1903,7 @@ def __compil__(s):
     lq = '\'' + __l12n__(_.lng)['LEFTSTRING'].replace("|", "")
     rq = '\'' + __l12n__(_.lng)['RIGHTSTRING'].replace("|", "")
     __strings__ = []
-    s = re.sub("(?u)([%s])([^\n%s]*)(?<!\\\\)[%s]" % (lq, rq, rq), __encodestring__, s)
+    s = re.sub("(?u)([%s])((?:[^\n%s]|\\\\[%s])*)(?<!\\\\)[%s]" % (lq, rq, rq, rq), __encodestring__, s)
     s = re.sub('(?u)(?<![0-9])(")(~?\w*)', __encodestring__, s)
 
     # remove extra spaces
@@ -1779,6 +1921,7 @@ def __compil__(s):
     subnames = re.findall(u"(?iu)(?<=__def__ )\w+", s)
     globs = ""
     functions = ["range", "__int__", "__float__", "Random", "Input", "__string__", "len", "round", "abs", "sin", "cos", "sqrt", "log10", "set", "list", "tuple", "re.sub", "re.search", "re.findall", "sorted", "min", "max"]
+    defaultfunc = ["Print"] # TODO handle all default procedures
 
     if len(subnames) > 0:
         globs = "global %s" % ", ".join(subnames)
@@ -1798,66 +1941,68 @@ def __compil__(s):
         if len(procedures) > 0:
             s = re.sub(r"(?<!__def__)(?<![-+=*/])(?<!%s)(?:^|[ \t]+)(" % ")(?<!".join(functions) + "|".join(procedures) + ")(?!\w)", r"\n\1", s)
 
-    # compile native Logo
+    # substitute LibreLogo functions and specifiers with their Python equivalents
     for i in __comp__[_.lng]:
         s = re.sub(u"(?u)" + i[0], i[1], s)
-    indent = 0
+
+    indent = 0 # Python indentation level
     result = ""
     func = re.compile("(?iu)(def (\w+))(\(.*\):)")
-    expr = r"""(?iu)(?<!def[ ])(?<![:\w])%(name)s(?!\w)(?!\()(?![ ]\()
-        (
-            ([ ]+\[*([-+]|\([ ]?)*((%(functions)s)\b[ ]*\(*)*
-            (?:0x[0-9a-f]+|[0-9]+([,.][0-9]+)?|:?\w+(?:[.]\w+[\(]?[\)]?)?]*|\[])]*[\)]*
-            (
-                (?:[ ]*([+*/,<>]|//|==|<=|>=|<>|!=)[ ]*|[ ]*-[ ]+|-|[ ]*[*][*][ ]*) # operators, eg. "**", " - ", "-", "- "
-                \[*([-+]|\([ ]?)* # minus sign, parenthesis
-                ((%(functions)s)\b[ ]*\(*)*(0x[0-9a-f]+|[0-9]+([.,][0-9]+)?|:?\w+(?:[.]\w+[\(]?[\)]?)?)]*
-            ([ ]?\))*)*
-        [\)]*){,%(repeat)s}
-    )
-"""
-    chargsp = re.compile(r"(?<![\(,])(?<!%s) (?!\)|,)" % ")(?<!".join(functions))
 
     # compile to Python
-    joinfunc = "|".join(functions)
-    funcnames = {}
+    subroutines = re.compile(r"(?iu)(?<!def )(?<![_\w])\b(%s)\b(?![\w(])" % "|".join(subnames + functions + defaultfunc))
+    operators = re.compile(r"(?iu)(%s)" % "(?:[ ]*([+*/<>]|//|==|<=|>=|<>|!=)[ ]*|[ ]*-[ ]+|(?<! )-[ ]*|[ ]*[*][*][ ]*)") # operators, eg. " - ", "-", "- "
+    atoms = re.compile(r"(?iu)(%s)" % "[0-9]+([.,][0-9]+)?|:?\w+([.]\w)?")
 
+    # store argument numbers of all subroutines in dictionary "names"
+    names = {key: 1 for key in functions + defaultfunc}
+    names["range"] = names["re.sub"] = 3
+    names["re.search"] = names["re.findall"] = 2
+
+    # match a function header
+    search_funcdef = re.compile(r"(^|\n) *(def (\w+))(\([^\n]*\):) *(?=\n)")
+
+    # "multiline" lambda function to process function headers: add commas to argument list and
+    # add {"subroutine_name": argument_count} into names using a temporary array
+    # (instead of using global variable "names" and a new global function to process the matching patterns)
+    # for example: "def f(x y z):" -> "def f(x,y,z):" and names = {"f": 3}
+    process_funcdef = lambda r: r.group(1) + r.group(2) + \
+        [chsp.sub(", ", r.group(4)), names.update({r.group(3): len(re.findall(r"\w+", r.group(4)))})][0]
+    # process all function headers calling process_funcdef for every matching
+    # (before parsing Logo expressions line by line, we need to know about all functions,
+    # because functions can be defined in any order, ie. their calls can be before
+    # their definitions)
+    s = search_funcdef.sub(process_funcdef, s)
+
+    # process line by line
     for i in s.split("\n"):
         i = i.strip()
-        if i[0:4] == 'def ':
-            s = func.search(i)
-            if s.group(3) == '():':
-                names[s.group(2)] = (0, "")
-            else:
-                s2 = len(chsp.findall(s.group(3))) + 1
-                i = s.group(1) + chsp.sub(", ", s.group(3))
-                names[s.group(2)] = (s2, re.compile(expr % {"name": s.group(2), "functions": joinfunc, "repeat": s2}, re.X))
-        for j in functions:
-            if j in i:
-                if not j in funcnames:
-                    funcnames[j] = (1, re.compile(expr % {"name": j, "functions": joinfunc, "repeat": 1 + 2 * int(j == 'range')}, re.X))
-                r = funcnames[j][1].search(i)
-                while r:
-                    i = i[:r.start()] + j + '(' + chargsp.sub(", ", rmsp.sub(lambda l: l.group(1).strip(), r.group(1).strip())) + ')' + i[r.end():]
-                    i = parenfix.sub("\\1)]", i)
-                    r = funcnames[j][1].search(i)
-        for j in names:
-            if j in i:
-                if names[j][0] == 0:
-                    if not j in functions:
-                        i = re.sub(r"(?iu)(?<!def )(?<![_\w])\b%s\b(?!\w)" %j, j+'()', i)
-                else:
-                    r = names[j][1].search(i)
-                    if r:
-                        i = i[:r.start()] + j + '(' + chargsp.sub(", ", rmsp.sub(lambda l: l.group(1).strip(), r.group(1).strip())) + ')' + i[r.end():]
-                        i = parenfix.sub("\\1)]", i)
+
+        # convert Logo expressions to Python ones using regex based tokenization
+        # tokens: {startpos: endpos} dictionaries for subroutine names, operators and other tokens
+
+        # sub: subroutine tokens = positions of Logo subroutine names
+        # (without explicit parentheses, for example: "f x" or "f (x*2)", but not "f(x)")
+        sub = {key: value for (key, value) in [j.span() for j in list(subroutines.finditer(i))]}
+        if sub != {}:
+            # op: operator tokens
+            op = {key: value for (key, value) in [j.span() for j in list(operators.finditer(i))]}
+            # atom: other tokens (variable names, numbers and function names)
+            atom = {key: value for (key, value) in [j.span() for j in list(atoms.finditer(i))]}
+            par = {"pos": 0, "out": "", "sub": sub, "op": op, "atom": atom, "names": names}
+            __l2p__(i, par, False, False)
+            i = par["out"]
+        # starting program block
         if i[0:1] == '[':
             i = i[1:]
             indent += 1
+            # check program stop, for example, in every execution of a loop
             result = result + "\n" + " " * indent + "__checkhalt__()\n"
+        # fix position of ending parenthesis
         if i[0:1] == ')':
             i = i[1:] + ')'
         result = result + "\n" + " " * indent + i
+        # ending program block
         if i[0:1] == ']':
             result = result[:-1]
             indent -= 1

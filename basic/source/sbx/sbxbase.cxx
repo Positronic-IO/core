@@ -29,13 +29,13 @@
 
 #include <rtl/instance.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 // AppData-Structure for SBX:
 
 
 SbxAppData::SbxAppData()
     : eErrCode(ERRCODE_NONE)
-    , pBasicFormater(nullptr)
     , eBasicFormaterLangType(LANGUAGE_DONTKNOW)
 {
 }
@@ -127,7 +127,7 @@ void SbxBase::RemoveFactory( SbxFactory const * pFac )
         {
             std::unique_ptr<SbxFactory> tmp(std::move(*it));
             r.m_Factories.erase( it );
-            tmp.release();
+            (void)tmp.release();
             break;
         }
     }

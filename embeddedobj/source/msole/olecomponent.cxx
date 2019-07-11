@@ -34,7 +34,6 @@
 #include <cppuhelper/interfacecontainer.h>
 #include <comphelper/mimeconfighelper.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <osl/file.hxx>
 #include <rtl/ref.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
@@ -225,7 +224,7 @@ struct OleComponentNative_Impl {
 };
 
 
-DWORD GetAspectFromFlavor( const datatransfer::DataFlavor& aFlavor )
+static DWORD GetAspectFromFlavor( const datatransfer::DataFlavor& aFlavor )
 {
     if ( aFlavor.MimeType.indexOf( ";Aspect=THUMBNAIL" ) != -1 )
         return DVASPECT_THUMBNAIL;
@@ -238,7 +237,7 @@ DWORD GetAspectFromFlavor( const datatransfer::DataFlavor& aFlavor )
 }
 
 
-OUString GetFlavorSuffixFromAspect( DWORD nAsp )
+static OUString GetFlavorSuffixFromAspect( DWORD nAsp )
 {
     OUString aResult;
 
@@ -255,7 +254,7 @@ OUString GetFlavorSuffixFromAspect( DWORD nAsp )
 }
 
 
-HRESULT OpenIStorageFromURL_Impl( const OUString& aURL, IStorage** ppIStorage )
+static HRESULT OpenIStorageFromURL_Impl( const OUString& aURL, IStorage** ppIStorage )
 {
     OSL_ENSURE( ppIStorage, "The pointer must not be empty!" );
 
@@ -376,7 +375,7 @@ bool OleComponentNative_Impl::GraphicalFlavor( const datatransfer::DataFlavor& a
 }
 
 
-bool GetClassIDFromSequence_Impl( uno::Sequence< sal_Int8 > const & aSeq, CLSID& aResult )
+static bool GetClassIDFromSequence_Impl( uno::Sequence< sal_Int8 > const & aSeq, CLSID& aResult )
 {
     if ( aSeq.getLength() == 16 )
     {
@@ -393,7 +392,7 @@ bool GetClassIDFromSequence_Impl( uno::Sequence< sal_Int8 > const & aSeq, CLSID&
 }
 
 
-OUString WinAccToVcl_Impl( const sal_Unicode* pStr )
+static OUString WinAccToVcl_Impl( const sal_Unicode* pStr )
 {
     OUString aResult;
 
@@ -455,8 +454,9 @@ OleComponent::~OleComponent()
 
     if ( m_pOleWrapClientSite || m_pImplAdviseSink || m_pInterfaceContainer || m_bOleInitialized )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        ::osl::ClearableMutexGuard aGuard( m_aMutex );
         m_refCount++;
+        aGuard.clear();
         try {
             Dispose();
         } catch( const uno::Exception& ) {}
@@ -473,12 +473,15 @@ OleComponent::~OleComponent()
 
 void OleComponent::Dispose()
 {
-    // the mutex must be locked before this method is called
     if ( m_bDisposed )
         return;
 
+    // Call CloseObject() without m_aMutex locked, since it will call
+    // IOleObject::Close(), which can call event listeners, which can run on a
+    // different thread.
     CloseObject();
 
+    osl::MutexGuard aGuard(m_aMutex);
     if ( m_pOleWrapClientSite )
     {
         m_pOleWrapClientSite->disconnectOleComponent();
@@ -914,8 +917,8 @@ void OleComponent::InitEmbeddedCopyOfLink( OleComponent const * pOleLinkComponen
         if ( SUCCEEDED( hr ) && aMonType == MKSYS_FILEMONIKER )
         {
             ComSmart< IMalloc > pMalloc;
-            CoGetMalloc( 1, &pMalloc ); // if fails there will be a memory leak
-            OSL_ENSURE( pMalloc, "CoGetMalloc() failed!" );
+            hr = CoGetMalloc( 1, &pMalloc ); // if fails there will be a memory leak
+            OSL_ENSURE(SUCCEEDED(hr) && pMalloc, "CoGetMalloc() failed!");
 
             LPOLESTR pOleStr = nullptr;
             hr = pOleLink->GetSourceDisplayName( &pOleStr );
@@ -1409,7 +1412,7 @@ void OleComponent::OnClose_Impl()
 
 void SAL_CALL OleComponent::close( sal_Bool bDeliverOwnership )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    ::osl::ClearableMutexGuard aGuard( m_aMutex );
     if ( m_bDisposed )
         throw lang::DisposedException(); // TODO
 
@@ -1454,6 +1457,7 @@ void SAL_CALL OleComponent::close( sal_Bool bDeliverOwnership )
             }
         }
     }
+    aGuard.clear();
 
     Dispose();
 }

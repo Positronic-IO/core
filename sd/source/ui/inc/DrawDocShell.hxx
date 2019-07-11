@@ -24,14 +24,11 @@
 #include <sfx2/docfac.hxx>
 #include <sfx2/objsh.hxx>
 
-#include <vcl/jobset.hxx>
 #include <glob.hxx>
-#include <sdmod.hxx>
 #include <pres.hxx>
 #include <sddllapi.h>
 #include "fupoor.hxx"
 
-class SfxStyleSheetBasePool;
 class FontList;
 class SdDrawDocument;
 class SdPage;
@@ -94,8 +91,7 @@ public:
 
     virtual ::tools::Rectangle       GetVisArea(sal_uInt16 nAspect) const override;
     virtual void            Draw(OutputDevice*, const JobSetup& rSetup, sal_uInt16 nAspect) override;
-    virtual ::svl::IUndoManager*
-                            GetUndoManager() override;
+    virtual SfxUndoManager* GetUndoManager() override;
     virtual Printer*        GetDocumentPrinter() override;
     virtual void            OnDocumentPrinterChanged(Printer* pNewPrinter) override;
     virtual SfxStyleSheetBasePool* GetStyleSheetPool() override;
@@ -131,7 +127,7 @@ public:
 
     void                    GotoBookmark(const OUString& rBookmark);
 
-    Bitmap                  GetPagePreviewBitmap(SdPage* pPage);
+    BitmapEx                GetPagePreviewBitmap(SdPage* pPage);
 
     /** checks, if the given name is a valid new name for a slide
 
@@ -214,18 +210,17 @@ protected:
     ::sd::ViewShell*        mpViewShell;
     std::unique_ptr<FontList> mpFontList;
     rtl::Reference<FuPoor> mxDocShellFunction;
-    DocumentType            meDocType;
+    DocumentType const      meDocType;
     SfxStyleFamily          mnStyleFamily;
     o3tl::array_view<sal_uInt16 const>
                             mpFilterSIDs;
     bool                    mbFilterEnable;
-    bool                    mbSdDataObj;
+    bool const              mbSdDataObj;
     bool                    mbInDestruction;
     bool                    mbOwnPrinter;
 
     bool                    mbOwnDocument;          // if true, we own mpDoc and will delete it in our d'tor
     void                    Construct(bool bClipboard);
-    virtual void            InPlaceActivate( bool bActive ) override;
 private:
     static void setEditMode(DrawViewShell* pDrawViewShell, bool isMasterPage);
 };

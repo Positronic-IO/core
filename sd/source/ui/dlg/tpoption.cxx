@@ -46,10 +46,10 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
-SdTpOptionsSnap::SdTpOptionsSnap( vcl::Window* pParent, const SfxItemSet& rInAttrs  ) :
-        SvxGridTabPage(pParent, rInAttrs)
+SdTpOptionsSnap::SdTpOptionsSnap(TabPageParent pParent, const SfxItemSet& rInAttrs)
+    : SvxGridTabPage(pParent, rInAttrs)
 {
-    pSnapFrames->Show();
+    m_xSnapFrames->show();
 }
 
 SdTpOptionsSnap::~SdTpOptionsSnap()
@@ -61,16 +61,16 @@ bool SdTpOptionsSnap::FillItemSet( SfxItemSet* rAttrs )
     SvxGridTabPage::FillItemSet(rAttrs);
     SdOptionsSnapItem aOptsItem;
 
-    aOptsItem.GetOptionsSnap().SetSnapHelplines( pCbxSnapHelplines->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetSnapBorder( pCbxSnapBorder->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetSnapFrame( pCbxSnapFrame->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetSnapPoints( pCbxSnapPoints->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetOrtho( pCbxOrtho->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetBigOrtho( pCbxBigOrtho->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetRotate( pCbxRotate->IsChecked() );
-    aOptsItem.GetOptionsSnap().SetSnapArea( static_cast<sal_Int16>(pMtrFldSnapArea->GetValue()) );
-    aOptsItem.GetOptionsSnap().SetAngle( static_cast<sal_Int16>(pMtrFldAngle->GetValue()) );
-    aOptsItem.GetOptionsSnap().SetEliminatePolyPointLimitAngle( static_cast<sal_Int16>(pMtrFldBezAngle->GetValue()) );
+    aOptsItem.GetOptionsSnap().SetSnapHelplines( m_xCbxSnapHelplines->get_active() );
+    aOptsItem.GetOptionsSnap().SetSnapBorder( m_xCbxSnapBorder->get_active() );
+    aOptsItem.GetOptionsSnap().SetSnapFrame( m_xCbxSnapFrame->get_active() );
+    aOptsItem.GetOptionsSnap().SetSnapPoints( m_xCbxSnapPoints->get_active() );
+    aOptsItem.GetOptionsSnap().SetOrtho( m_xCbxOrtho->get_active() );
+    aOptsItem.GetOptionsSnap().SetBigOrtho( m_xCbxBigOrtho->get_active() );
+    aOptsItem.GetOptionsSnap().SetRotate( m_xCbxRotate->get_active() );
+    aOptsItem.GetOptionsSnap().SetSnapArea(static_cast<sal_Int16>(m_xMtrFldSnapArea->get_value(FieldUnit::PIXEL)));
+    aOptsItem.GetOptionsSnap().SetAngle(static_cast<sal_Int16>(m_xMtrFldAngle->get_value(FieldUnit::DEGREE)));
+    aOptsItem.GetOptionsSnap().SetEliminatePolyPointLimitAngle(static_cast<sal_Int16>(m_xMtrFldBezAngle->get_value(FieldUnit::DEGREE)));
 
     rAttrs->Put( aOptsItem );
 
@@ -86,24 +86,24 @@ void SdTpOptionsSnap::Reset( const SfxItemSet* rAttrs )
     SdOptionsSnapItem aOptsItem( static_cast<const SdOptionsSnapItem&>( rAttrs->
                         Get( ATTR_OPTIONS_SNAP ) ) );
 
-    pCbxSnapHelplines->Check( aOptsItem.GetOptionsSnap().IsSnapHelplines() );
-    pCbxSnapBorder->Check( aOptsItem.GetOptionsSnap().IsSnapBorder() );
-    pCbxSnapFrame->Check( aOptsItem.GetOptionsSnap().IsSnapFrame() );
-    pCbxSnapPoints->Check( aOptsItem.GetOptionsSnap().IsSnapPoints() );
-    pCbxOrtho->Check( aOptsItem.GetOptionsSnap().IsOrtho() );
-    pCbxBigOrtho->Check( aOptsItem.GetOptionsSnap().IsBigOrtho() );
-    pCbxRotate->Check( aOptsItem.GetOptionsSnap().IsRotate() );
-    pMtrFldSnapArea->SetValue( aOptsItem.GetOptionsSnap().GetSnapArea() );
-    pMtrFldAngle->SetValue( aOptsItem.GetOptionsSnap().GetAngle() );
-    pMtrFldBezAngle->SetValue( aOptsItem.GetOptionsSnap().GetEliminatePolyPointLimitAngle() );
+    m_xCbxSnapHelplines->set_active( aOptsItem.GetOptionsSnap().IsSnapHelplines() );
+    m_xCbxSnapBorder->set_active( aOptsItem.GetOptionsSnap().IsSnapBorder() );
+    m_xCbxSnapFrame->set_active( aOptsItem.GetOptionsSnap().IsSnapFrame() );
+    m_xCbxSnapPoints->set_active( aOptsItem.GetOptionsSnap().IsSnapPoints() );
+    m_xCbxOrtho->set_active( aOptsItem.GetOptionsSnap().IsOrtho() );
+    m_xCbxBigOrtho->set_active( aOptsItem.GetOptionsSnap().IsBigOrtho() );
+    m_xCbxRotate->set_active( aOptsItem.GetOptionsSnap().IsRotate() );
+    m_xMtrFldSnapArea->set_value(aOptsItem.GetOptionsSnap().GetSnapArea(), FieldUnit::PIXEL);
+    m_xMtrFldAngle->set_value(aOptsItem.GetOptionsSnap().GetAngle(), FieldUnit::DEGREE);
+    m_xMtrFldBezAngle->set_value(aOptsItem.GetOptionsSnap().GetEliminatePolyPointLimitAngle(), FieldUnit::DEGREE);
 
-    pCbxRotate->GetClickHdl().Call(nullptr);
+    ClickRotateHdl_Impl(*m_xCbxRotate);
 }
 
 VclPtr<SfxTabPage> SdTpOptionsSnap::Create( TabPageParent pWindow,
                                             const SfxItemSet* rAttrs )
 {
-    return VclPtr<SdTpOptionsSnap>::Create( pWindow.pParent, *rAttrs );
+    return VclPtr<SdTpOptionsSnap>::Create(pWindow, *rAttrs);
 }
 
 /*************************************************************************
@@ -243,7 +243,7 @@ SdTpOptionsMisc::SdTpOptionsMisc(vcl::Window* pParent, const SfxItemSet& rInAttr
     for (sal_uInt32 i = 0; i < SvxFieldUnitTable::Count(); ++i)
     {
         OUString sMetric = SvxFieldUnitTable::GetString(i);
-        sal_IntPtr nFieldUnit = SvxFieldUnitTable::GetValue(i);
+        sal_IntPtr nFieldUnit = sal_uInt16(SvxFieldUnitTable::GetValue(i));
         sal_Int32 nPos = m_pLbMetric->InsertEntry( sMetric );
         m_pLbMetric->SetEntryData( nPos, reinterpret_cast<void*>(nFieldUnit) );
     }
@@ -333,13 +333,13 @@ void SdTpOptionsMisc::ActivatePage( const SfxItemSet& rSet )
         if( eFUnit != m_pMtrFldOriginalWidth->GetUnit() )
         {
             // set metrics
-            sal_Int64 nVal = m_pMtrFldOriginalWidth->Denormalize( m_pMtrFldOriginalWidth->GetValue( FUNIT_TWIP ) );
+            sal_Int64 nVal = m_pMtrFldOriginalWidth->Denormalize( m_pMtrFldOriginalWidth->GetValue( FieldUnit::TWIP ) );
             SetFieldUnit( *m_pMtrFldOriginalWidth, eFUnit, true );
-            m_pMtrFldOriginalWidth->SetValue( m_pMtrFldOriginalWidth->Normalize( nVal ), FUNIT_TWIP );
+            m_pMtrFldOriginalWidth->SetValue( m_pMtrFldOriginalWidth->Normalize( nVal ), FieldUnit::TWIP );
 
-            nVal = m_pMtrFldOriginalHeight->Denormalize( m_pMtrFldOriginalHeight->GetValue( FUNIT_TWIP ) );
+            nVal = m_pMtrFldOriginalHeight->Denormalize( m_pMtrFldOriginalHeight->GetValue( FieldUnit::TWIP ) );
             SetFieldUnit( *m_pMtrFldOriginalHeight, eFUnit, true );
-            m_pMtrFldOriginalHeight->SetValue( m_pMtrFldOriginalHeight->Normalize( nVal ), FUNIT_TWIP );
+            m_pMtrFldOriginalHeight->SetValue( m_pMtrFldOriginalHeight->Normalize( nVal ), FieldUnit::TWIP );
 
             if( nWidth != 0 && nHeight != 0 )
             {
@@ -540,9 +540,9 @@ IMPL_LINK_NOARG(SdTpOptionsMisc, SelectMetricHdl_Impl, ListBox&, void)
     {
         FieldUnit eUnit = static_cast<FieldUnit>(reinterpret_cast<sal_IntPtr>(m_pLbMetric->GetEntryData( nPos )));
         sal_Int64 nVal =
-            m_pMtrFldTabstop->Denormalize( m_pMtrFldTabstop->GetValue( FUNIT_TWIP ) );
+            m_pMtrFldTabstop->Denormalize( m_pMtrFldTabstop->GetValue( FieldUnit::TWIP ) );
         SetFieldUnit( *m_pMtrFldTabstop, eUnit );
-        m_pMtrFldTabstop->SetValue( m_pMtrFldTabstop->Normalize( nVal ), FUNIT_TWIP );
+        m_pMtrFldTabstop->SetValue( m_pMtrFldTabstop->Normalize( nVal ), FieldUnit::TWIP );
     }
 }
 
@@ -587,10 +587,15 @@ OUString SdTpOptionsMisc::GetScale( sal_Int32 nX, sal_Int32 nY )
 
 bool SdTpOptionsMisc::SetScale( const OUString& aScale, sal_Int32& rX, sal_Int32& rY )
 {
-    if( comphelper::string::getTokenCount(aScale, TOKEN) != 2 )
+    if (aScale.isEmpty())
         return false;
 
-    OUString aTmp(aScale.getToken(0, TOKEN));
+    sal_Int32 nIdx {0};
+
+    OUString aTmp(aScale.getToken(0, TOKEN, nIdx));
+    if (nIdx<0)
+        return false; // we expect another token!
+
     if (!comphelper::string::isdigitAsciiString(aTmp))
         return false;
 
@@ -598,7 +603,10 @@ bool SdTpOptionsMisc::SetScale( const OUString& aScale, sal_Int32& rX, sal_Int32
     if( rX == 0 )
         return false;
 
-    aTmp = aScale.getToken(1, TOKEN);
+    aTmp = aScale.getToken(0, TOKEN, nIdx);
+    if (nIdx>=0)
+        return false; // we require just 2 tokens!
+
     if (!comphelper::string::isdigitAsciiString(aTmp))
         return false;
 

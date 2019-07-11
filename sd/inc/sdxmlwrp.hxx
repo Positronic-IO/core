@@ -20,8 +20,10 @@
 #define INCLUDED_SD_INC_SDXMLWRP_HXX
 
 #include <comphelper/fileformat.h>
-#include <vcl/errcode.hxx>
+#include <tools/solar.h>
 #include "sdfilter.hxx"
+
+class ErrCode;
 
 // SdXMLFilter
 enum SdXMLFilterMode
@@ -44,8 +46,8 @@ public:
     bool        Export() override;
 
 private:
-    SdXMLFilterMode meFilterMode;
-    sal_uLong mnStoreVer;
+    SdXMLFilterMode const meFilterMode;
+    sal_uLong const mnStoreVer;
 };
 
 #endif // INCLUDED_SD_INC_SDXMLWRP_HXX

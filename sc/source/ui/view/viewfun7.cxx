@@ -31,6 +31,7 @@
 #include <svtools/embedhlp.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/viewfrm.hxx>
+#include <sfx2/ipclient.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/embed/Aspects.hpp>
 
@@ -159,9 +160,6 @@ void ScViewFunc::PasteDraw( const Point& rLogicPos, SdrModel* pModel,
 
                 if (pNewObj!=nullptr)
                 {
-                    // pNewObj->SetModel(pDrawModel);
-                    pNewObj->SetPage(pDestPage);
-
                     //  copy graphics within the same model - always needs new name
                     if ( dynamic_cast<const SdrGrafObj*>( pNewObj) !=  nullptr && !bPasteIsMove )
                         pNewObj->SetName(static_cast<ScDrawLayer*>(pDrawModel)->GetNewGraphicName());
@@ -170,7 +168,7 @@ void ScViewFunc::PasteDraw( const Point& rLogicPos, SdrModel* pModel,
                         pNewObj->NbcMove(Size(nDiffX,nDiffY));
                     if (pDestPage)
                         pDestPage->InsertObject( pNewObj );
-                    pScDrawView->AddUndo(new SdrUndoInsertObj( *pNewObj ));
+                    pScDrawView->AddUndo(o3tl::make_unique<SdrUndoInsertObj>( *pNewObj ));
 
                     if (ScDrawLayer::IsCellAnchored(*pNewObj))
                         ScDrawLayer::SetCellAnchoredFromPosition(*pNewObj, *GetViewData().GetDocument(), nTab,
@@ -232,7 +230,7 @@ void ScViewFunc::PasteDraw( const Point& rLogicPos, SdrModel* pModel,
         // controls must be on SC_LAYER_CONTROLS
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
             SdrObject* pObject = aIter.Next();
             while (pObject)
             {
@@ -252,9 +250,8 @@ void ScViewFunc::PasteDraw( const Point& rLogicPos, SdrModel* pModel,
 
         ScDocument* pDocument = GetViewData().GetDocument();
         ScDocShell* pDocShell = GetViewData().GetDocShell();
-        vcl::Window* pWin = GetViewData().GetActiveWin();
         ScModelObj* pModelObj = ( pDocShell ? ScModelObj::getImplementation( pDocShell->GetModel() ) : nullptr );
-        ScDrawTransferObj* pTransferObj = ScDrawTransferObj::GetOwnClipboard( pWin );
+        const ScDrawTransferObj* pTransferObj = ScDrawTransferObj::GetOwnClipboard(ScTabViewShell::GetClipData(GetViewData().GetActiveWin()));
         if ( pDocument && pPage && pModelObj && ( pTransferObj || pDrawTrans ) )
         {
             const ScRangeListVector& rProtectedChartRangesVector(

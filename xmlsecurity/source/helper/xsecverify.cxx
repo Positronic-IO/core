@@ -42,7 +42,6 @@
 #include <unotools/datetime.hxx>
 #include <comphelper/base64.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/seqstream.hxx>
 
 using namespace css;
@@ -102,7 +101,7 @@ cssu::Reference< cssxc::sax::XReferenceResolvedListener > XSecController::prepar
 
 void XSecController::addSignature()
 {
-    cssu::Reference< cssxc::sax::XReferenceResolvedListener > xReferenceResolvedListener = nullptr;
+    cssu::Reference< cssxc::sax::XReferenceResolvedListener > xReferenceResolvedListener;
     sal_Int32 nSignatureId = 0;
 
 
@@ -149,7 +148,7 @@ void XSecController::switchGpgSignature()
 #endif
 }
 
-void XSecController::addReference( const OUString& ouUri, sal_Int32 nDigestID )
+void XSecController::addReference( const OUString& ouUri, sal_Int32 nDigestID, const OUString& ouType )
 {
     if (m_vInternalSignatureInformations.empty())
     {
@@ -157,7 +156,7 @@ void XSecController::addReference( const OUString& ouUri, sal_Int32 nDigestID )
         return;
     }
     InternalSignatureInformation &isi = m_vInternalSignatureInformations.back();
-    isi.addReference(SignatureReferenceType::SAMEDOCUMENT, nDigestID, ouUri, -1 );
+    isi.addReference(SignatureReferenceType::SAMEDOCUMENT, nDigestID, ouUri, -1, ouType );
 }
 
 void XSecController::addStreamReference(
@@ -190,7 +189,7 @@ void XSecController::addStreamReference(
         }
     }
 
-    isi.addReference(type, nDigestID, ouUri, -1);
+    isi.addReference(type, nDigestID, ouUri, -1, OUString());
 }
 
 void XSecController::setReferenceCount() const
@@ -467,7 +466,7 @@ void XSecController::collectToVerify( const OUString& referenceId )
      */
     {
         bool bJustChainingOn = false;
-        cssu::Reference< cssxs::XDocumentHandler > xHandler = nullptr;
+        cssu::Reference< cssxs::XDocumentHandler > xHandler;
 
         int i,j;
         int sigNum = m_vInternalSignatureInformations.size();

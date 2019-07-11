@@ -22,6 +22,7 @@
 #include <com/sun/star/document/XDocumentProperties.hpp>
 #include <com/sun/star/view/XRenderable.hpp>
 
+#include <sal/log.hxx>
 #include <svl/itempool.hxx>
 #include <vcl/weld.hxx>
 #include <svtools/prnsetup.hxx>
@@ -55,8 +56,8 @@ using namespace com::sun::star::uno;
 
 class SfxPrinterController : public vcl::PrinterController, public SfxListener
 {
-    Any                                     maCompleteSelection;
-    Any                                     maSelection;
+    Any const                               maCompleteSelection;
+    Any const                               maSelection;
     Reference< view::XRenderable >          mxRenderable;
     mutable VclPtr<Printer>                 mpLastPrinter;
     mutable Reference<awt::XDevice>         mxDevice;
@@ -64,8 +65,8 @@ class SfxPrinterController : public vcl::PrinterController, public SfxListener
     SfxObjectShell*                         mpObjectShell;
     bool        m_bOrigStatus;
     bool        m_bNeedsChange;
-    bool        m_bApi;
-    bool        m_bTempPrinter;
+    bool const        m_bApi;
+    bool const        m_bTempPrinter;
     util::DateTime  m_aLastPrinted;
     OUString m_aLastPrintedBy;
 
@@ -406,7 +407,7 @@ void SfxPrinterController::jobFinished( css::view::PrintableState nState )
 class SfxDialogExecutor_Impl
 {
 private:
-    SfxViewShell*           _pViewSh;
+    SfxViewShell* const           _pViewSh;
     PrinterSetupDialog&  _rSetupParent;
     std::unique_ptr<SfxItemSet> _pOptions;
     bool                    _bHelpDisabled;
@@ -425,7 +426,6 @@ SfxDialogExecutor_Impl::SfxDialogExecutor_Impl( SfxViewShell* pViewSh, PrinterSe
 
     _pViewSh        ( pViewSh ),
     _rSetupParent   ( rParent ),
-    _pOptions       ( nullptr ),
     _bHelpDisabled  ( false )
 
 {
@@ -447,7 +447,7 @@ IMPL_LINK_NOARG(SfxDialogExecutor_Impl, Execute, weld::Button&, void)
     SfxPrintOptionsDialog aDlg(_rSetupParent.GetFrameWeld(), _pViewSh, _pOptions.get() );
     if (_bHelpDisabled)
         aDlg.DisableHelp();
-    if (aDlg.execute() == RET_OK)
+    if (aDlg.run() == RET_OK)
     {
         _pOptions = aDlg.GetOptions().Clone();
     }
@@ -834,7 +834,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
                 }
 
                 aPrintSetupDlg.SetPrinter( pDlgPrinter );
-                nDialogRet = aPrintSetupDlg.execute();
+                nDialogRet = aPrintSetupDlg.run();
 
                 if ( pExecutor && pExecutor->GetOptions() )
                 {
@@ -892,7 +892,7 @@ sal_uInt16 SfxViewShell::SetPrinter( SfxPrinter* /*pNewPrinter*/, SfxPrinterChan
 
 VclPtr<SfxTabPage> SfxViewShell::CreatePrintOptionsPage
 (
-    weld::Container* /*pPage*/,
+    TabPageParent /*pParent*/,
     const SfxItemSet&   /*rOptions*/
 )
 {

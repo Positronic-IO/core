@@ -24,7 +24,7 @@
 #include <JoinExchange.hxx>
 #include <QEnumTypes.hxx>
 #include <com/sun/star/util/XNumberFormatter.hpp>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
 namespace connectivity
 {
@@ -170,7 +170,7 @@ namespace dbaui
             @return
                 The name of the specified object.
         */
-        virtual OUString     GetAccessibleObjectName( ::svt::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
+        virtual OUString     GetAccessibleObjectName( ::vcl::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
 
         // IAccessibleTableProvider
         /** Creates the accessible object of a data table cell.
@@ -210,12 +210,11 @@ namespace dbaui
 
         OTableFieldDescRef          FindFirstFreeCol(sal_uInt16& _rColumnPosition);
 
-            // rCol contains the Nummer (in pOTableFieldDescList) of the first column, which itself tells it is empty
+            // rCol contains the number (in pOTableFieldDescList) of the first column, which itself tells it is empty
             // if there are none, rCol is undefined and the returnvalue NULL
         void                        CheckFreeColumns(sal_uInt16& _rColumnPosition);
-
-            // check if empty columns are available, if not,  a new Packen is appended
-            // rCol contains the Nummer of the first empty column (in pOTableFieldDescList)
+            // checks if empty columns are available, if not, a new pack is appended
+            // rCol contains the number of the first empty column (in pOTableFieldDescList)
 
         void            RemoveField( sal_uInt16 nId );
         tools::Rectangle       GetInvalidRect( sal_uInt16 nColId );

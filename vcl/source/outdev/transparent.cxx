@@ -69,8 +69,8 @@ namespace
     tools::PolyPolygon toPolyPolygon( const basegfx::B2DPolyPolygon& rPolyPoly )
     {
         tools::PolyPolygon aTarget;
-        for (sal_uInt32 i = 0; i < rPolyPoly.count(); ++i)
-            aTarget.Insert(toPolygon(rPolyPoly.getB2DPolygon(i)));
+        for (auto const& rB2DPolygon : rPolyPoly)
+            aTarget.Insert(toPolygon(rB2DPolygon));
 
         return aTarget;
     }
@@ -212,7 +212,10 @@ void OutputDevice::ImplPrintTransparent( const Bitmap& rBmp, const Bitmap& rMask
 // void OutputDevice::DrawPolyPolygon( const basegfx::B2DPolyPolygon& rB2DPolyPoly )
 // so when changes are made here do not forget to make changes there, too
 
-void OutputDevice::DrawTransparent( const basegfx::B2DPolyPolygon& rB2DPolyPoly, double fTransparency)
+void OutputDevice::DrawTransparent(
+    const basegfx::B2DHomMatrix& rObjectTransform,
+    const basegfx::B2DPolyPolygon& rB2DPolyPoly,
+    double fTransparency)
 {
     assert(!is_double_buffered_window());
 
@@ -241,31 +244,44 @@ void OutputDevice::DrawTransparent( const basegfx::B2DPolyPolygon& rB2DPolyPoly,
        (RasterOp::OverPaint == GetRasterOp()) )
     {
         // b2dpolygon support not implemented yet on non-UNX platforms
-        const basegfx::B2DHomMatrix aTransform = ImplGetDeviceTransformation();
         basegfx::B2DPolyPolygon aB2DPolyPolygon(rB2DPolyPoly);
 
-        // transform the polygon into device space and ensure it is closed
-        aB2DPolyPolygon.transform( aTransform );
-        aB2DPolyPolygon.setClosed( true );
+        // ensure it is closed
+        if(!aB2DPolyPolygon.isClosed())
+        {
+            // maybe assert, prevents buffering due to making a copy
+            aB2DPolyPolygon.setClosed( true );
+        }
 
-        bool bDrawnOk = true;
+        // create ObjectToDevice transformation
+        const basegfx::B2DHomMatrix aFullTransform(ImplGetDeviceTransformation() * rObjectTransform);
+        bool bDrawnOk(true);
+
         if( IsFillColor() )
-            bDrawnOk = mpGraphics->DrawPolyPolygon( aB2DPolyPolygon, fTransparency, this );
+        {
+            bDrawnOk = mpGraphics->DrawPolyPolygon(
+                aFullTransform,
+                aB2DPolyPolygon,
+                fTransparency,
+                this);
+        }
 
         if( bDrawnOk && IsLineColor() )
         {
             const basegfx::B2DVector aHairlineWidth(1,1);
-            const sal_uInt32 nPolyCount = aB2DPolyPolygon.count();
-            for( sal_uInt32 nPolyIdx = 0; nPolyIdx < nPolyCount; ++nPolyIdx )
+            const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
+
+            for(auto const& rPolygon : aB2DPolyPolygon)
             {
-                const basegfx::B2DPolygon aOnePoly = aB2DPolyPolygon.getB2DPolygon( nPolyIdx );
                 mpGraphics->DrawPolyLine(
-                    aOnePoly,
+                    aFullTransform,
+                    rPolygon,
                     fTransparency,
                     aHairlineWidth,
                     basegfx::B2DLineJoin::NONE,
                     css::drawing::LineCap_BUTT,
-                    15.0 * F_PI180, // not used with B2DLineJoin::NONE, but the correct default
+                    basegfx::deg2rad(15.0), // not used with B2DLineJoin::NONE, but the correct default
+                    bPixelSnapHairline,
                     this );
             }
         }
@@ -273,14 +289,27 @@ void OutputDevice::DrawTransparent( const basegfx::B2DPolyPolygon& rB2DPolyPoly,
         if( bDrawnOk )
         {
             if( mpMetaFile )
-                mpMetaFile->AddAction( new MetaTransparentAction( tools::PolyPolygon( rB2DPolyPoly ), static_cast< sal_uInt16 >(fTransparency * 100.0)));
+            {
+                // tdf#119843 need transformed Polygon here
+                basegfx::B2DPolyPolygon aB2DPolyPoly(rB2DPolyPoly);
+                aB2DPolyPoly.transform(rObjectTransform);
+                mpMetaFile->AddAction(
+                    new MetaTransparentAction(
+                        tools::PolyPolygon(aB2DPolyPoly),
+                        static_cast< sal_uInt16 >(fTransparency * 100.0)));
+            }
 
             return;
         }
     }
 
     // fallback to old polygon drawing if needed
-    DrawTransparent(toPolyPolygon(rB2DPolyPoly), static_cast<sal_uInt16>(fTransparency * 100.0));
+    // tdf#119843 need transformed Polygon here
+    basegfx::B2DPolyPolygon aB2DPolyPoly(rB2DPolyPoly);
+    aB2DPolyPoly.transform(rObjectTransform);
+    DrawTransparent(
+        toPolyPolygon(aB2DPolyPoly),
+        static_cast<sal_uInt16>(fTransparency * 100.0));
 }
 
 void OutputDevice::DrawInvisiblePolygon( const tools::PolyPolygon& rPolyPoly )
@@ -333,9 +362,8 @@ bool OutputDevice::DrawTransparentNatively ( const tools::PolyPolygon& rPolyPoly
             InitFillColor();
 
         // get the polygon in device coordinates
-        basegfx::B2DPolyPolygon aB2DPolyPolygon( rPolyPoly.getB2DPolyPolygon() );
-        const basegfx::B2DHomMatrix aTransform = ImplGetDeviceTransformation();
-        aB2DPolyPolygon.transform( aTransform );
+        basegfx::B2DPolyPolygon aB2DPolyPolygon(rPolyPoly.getB2DPolyPolygon());
+        const basegfx::B2DHomMatrix aTransform(ImplGetDeviceTransformation());
 
         const double fTransparency = 0.01 * nTransparencePercent;
         if( mbFillColor )
@@ -349,28 +377,36 @@ bool OutputDevice::DrawTransparentNatively ( const tools::PolyPolygon& rPolyPoly
             // functionality and we use the fallback some lines below (which is not very good,
             // though. For now, WinSalGraphics::drawPolyPolygon will detect printer usage and
             // correct the wrong mapping (see there for details)
-            bDrawn = mpGraphics->DrawPolyPolygon( aB2DPolyPolygon, fTransparency, this );
+            bDrawn = mpGraphics->DrawPolyPolygon(
+                aTransform,
+                aB2DPolyPolygon,
+                fTransparency,
+                this);
         }
 
         if( mbLineColor )
         {
             // disable the fill color for now
             mpGraphics->SetFillColor();
+
             // draw the border line
             const basegfx::B2DVector aLineWidths( 1, 1 );
-            const sal_uInt32 nPolyCount = aB2DPolyPolygon.count();
-            for( sal_uInt32 nPolyIdx = 0; nPolyIdx < nPolyCount; ++nPolyIdx )
+            const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
+
+            for(auto const& rPolygon : aB2DPolyPolygon)
             {
-                const basegfx::B2DPolygon& rPolygon = aB2DPolyPolygon.getB2DPolygon( nPolyIdx );
                 bDrawn = mpGraphics->DrawPolyLine(
+                    aTransform,
                     rPolygon,
                     fTransparency,
                     aLineWidths,
                     basegfx::B2DLineJoin::NONE,
                     css::drawing::LineCap_BUTT,
-                    15.0 * F_PI180, // not used with B2DLineJoin::NONE, but the correct default
+                    basegfx::deg2rad(15.0), // not used with B2DLineJoin::NONE, but the correct default
+                    bPixelSnapHairline,
                     this );
             }
+
             // prepare to restore the fill color
             mbInitFillColor = mbFillColor;
         }

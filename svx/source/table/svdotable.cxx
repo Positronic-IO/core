@@ -257,7 +257,6 @@ std::vector<sal_Int32> SdrTableObjImpl::lastColWidths;
 
 SdrTableObjImpl::SdrTableObjImpl()
 : mpTableObj( nullptr )
-, mpLayouter( nullptr )
 , mbSkipChangeLayout(false)
 {
 }
@@ -837,18 +836,18 @@ void SdrTableObjImpl::UpdateCells( tools::Rectangle const & rArea )
 // BaseProperties section
 
 
-sdr::properties::BaseProperties* SdrTableObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrTableObj::CreateObjectSpecificProperties()
 {
-    return new TableProperties(*this);
+    return o3tl::make_unique<TableProperties>(*this);
 }
 
 
 // DrawContact section
 
 
-sdr::contact::ViewContact* SdrTableObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrTableObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfTableObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfTableObj>(*this);
 }
 
 SdrTableObj::SdrTableObj(SdrModel& rSdrModel)
@@ -1063,13 +1062,10 @@ CellPos SdrTableObj::getPreviousRow( const CellPos& rPos, bool bEdgeTravel ) con
     if( mpImpl.is() )
     {
         CellRef xCell( mpImpl->getCell( aPos ) );
-        if( xCell.is() )
+        if( xCell.is() && xCell->isMerged() )
         {
-            if( xCell->isMerged() )
-            {
-                sal_Int32 nTemp = 0;
-                findMergeOrigin( mpImpl->mxTable, aPos.mnCol, aPos.mnRow, nTemp, aPos.mnRow );
-            }
+            sal_Int32 nTemp = 0;
+            findMergeOrigin( mpImpl->mxTable, aPos.mnCol, aPos.mnRow, nTemp, aPos.mnRow );
         }
 
         if( aPos.mnRow > 0 )
@@ -1173,46 +1169,43 @@ TableHitKind SdrTableObj::CheckTableHit( const Point& rPos, sal_Int32& rnX, sal_
     // get vertical edge number and check for a hit
     const bool bRTL = (GetWritingMode() == WritingMode_RL_TB);
     bool bVrtHit = false;
-    if( nX >= 0 )
+    if( !bRTL )
     {
-        if( !bRTL )
+        while( rnX <= nColCount )
         {
-            while( rnX <= nColCount )
+            if( nX - aTol <= 0 )
             {
-                if( nX - aTol <= 0 )
-                {
-                    bVrtHit = true;
-                    break;
-                }
-
-                if( rnX == nColCount )
-                    break;
-
-                nX -= mpImpl->mpLayouter->getColumnWidth( rnX );
-                if( nX < 0 )
-                    break;
-                rnX++;
+                bVrtHit = true;
+                break;
             }
+
+            if( rnX == nColCount )
+                break;
+
+            nX -= mpImpl->mpLayouter->getColumnWidth( rnX );
+            if( nX < 0 )
+                break;
+            rnX++;
         }
-        else
+    }
+    else
+    {
+        rnX = nColCount;
+        while( rnX >= 0 )
         {
-            rnX = nColCount;
-            while( rnX >= 0 )
+            if( nX - aTol <= 0 )
             {
-                if( nX - aTol <= 0 )
-                {
-                    bVrtHit = true;
-                    break;
-                }
-
-                if( rnX == 0 )
-                    break;
-
-                rnX--;
-                nX -= mpImpl->mpLayouter->getColumnWidth( rnX );
-                if( nX < 0 )
-                    break;
+                bVrtHit = true;
+                break;
             }
+
+            if( rnX == 0 )
+                break;
+
+            rnX--;
+            nX -= mpImpl->mpLayouter->getColumnWidth( rnX );
+            if( nX < 0 )
+                break;
         }
     }
 
@@ -1220,24 +1213,21 @@ TableHitKind SdrTableObj::CheckTableHit( const Point& rPos, sal_Int32& rnX, sal_
 
     // get vertical edge number and check for a hit
     bool bHrzHit = false;
-    if( nY >= 0 )
+    while( rnY <= nRowCount )
     {
-        while( rnY <= nRowCount )
+        if( nY - aTol <= 0 )
         {
-            if( nY - aTol <= 0 )
-            {
-                bHrzHit = true;
-                break;
-            }
-
-            if( rnY == nRowCount )
-                break;
-
-            nY -= mpImpl->mpLayouter->getRowHeight(rnY);
-            if( nY < 0 )
-                break;
-            rnY++;
+            bHrzHit = true;
+            break;
         }
+
+        if( rnY == nRowCount )
+            break;
+
+        nY -= mpImpl->mpLayouter->getRowHeight(rnY);
+        if( nY < 0 )
+            break;
+        rnY++;
     }
 
     // rnY is now the edge number above the pointer, if it was hit bVrtHit is also true
@@ -1501,7 +1491,7 @@ void SdrTableObj::TakeTextRect( const CellPos& rPos, SdrOutliner& rOutliner, too
     // set text at outliner, maybe from edit outliner
     OutlinerParaObject* pPara= xCell->GetOutlinerParaObject();
     if (pEdtOutl && !bNoEditText && mpImpl->mxActiveCell == xCell )
-        pPara=pEdtOutl->CreateParaObject();
+        pPara=pEdtOutl->CreateParaObject().release();
 
     if (pPara)
     {
@@ -1760,7 +1750,7 @@ SdrTableObj& SdrTableObj::operator=(const SdrTableObj& rObj)
     // call parent
     // before SdrObject::operator= was called which is wrong from
     // the derivation hierarchy and may leave quite some entries
-    // unititialized. Changed to SdrTextObj::operator=, but had to adapt
+    // uninitialized. Changed to SdrTextObj::operator=, but had to adapt
     // usage of pNewOutlinerParaObject/mpText there due to nullptr access
     SdrTextObj::operator=(rObj);
 
@@ -1855,7 +1845,7 @@ void SdrTableObj::EndTextEdit(SdrOutliner& rOutl)
     {
         // These actions should be on the undo stack after text edit.
         for (std::unique_ptr<SdrUndoAction>& pAction : mpImpl->maUndos)
-            getSdrModelFromSdrObject().AddUndo(pAction.release());
+            getSdrModelFromSdrObject().AddUndo( std::move(pAction));
         mpImpl->maUndos.clear();
 
         getSdrModelFromSdrObject().AddUndo(getSdrModelFromSdrObject().GetSdrUndoFactory().CreateUndoGeoObject(*this));
@@ -1863,7 +1853,7 @@ void SdrTableObj::EndTextEdit(SdrOutliner& rOutl)
 
     if(rOutl.IsModified())
     {
-        OutlinerParaObject* pNewText = nullptr;
+        std::unique_ptr<OutlinerParaObject> pNewText;
         Paragraph* p1stPara = rOutl.GetParagraph( 0 );
         sal_Int32 nParaCnt = rOutl.GetParagraphCount();
 
@@ -1875,7 +1865,7 @@ void SdrTableObj::EndTextEdit(SdrOutliner& rOutl)
             // create new text object
             pNewText = rOutl.CreateParaObject( 0, nParaCnt );
         }
-        SetOutlinerParaObject(pNewText);
+        SetOutlinerParaObject(std::move(pNewText));
     }
 
     pEdtOutl = nullptr;
@@ -1898,7 +1888,7 @@ OutlinerParaObject* SdrTableObj::GetOutlinerParaObject() const
 }
 
 
-void SdrTableObj::NbcSetOutlinerParaObject( OutlinerParaObject* pTextObject)
+void SdrTableObj::NbcSetOutlinerParaObject( std::unique_ptr<OutlinerParaObject> pTextObject)
 {
     CellRef xCell( getActiveCell() );
     if( xCell.is() )
@@ -1911,7 +1901,7 @@ void SdrTableObj::NbcSetOutlinerParaObject( OutlinerParaObject* pTextObject)
             getSdrModelFromSdrObject().GetHitTestOutliner().SetTextObj(nullptr);
         }
 
-        xCell->SetOutlinerParaObject( pTextObject );
+        xCell->SetOutlinerParaObject( std::move(pTextObject) );
         SetTextSizeDirty();
         NbcAdjustTextFrameWidthAndHeight();
     }
@@ -2007,18 +1997,6 @@ void SdrTableObj::NbcReformatText()
 }
 
 
-void SdrTableObj::ReformatText()
-{
-    tools::Rectangle aBoundRect0;
-    if (pUserCall!=nullptr)
-        aBoundRect0=GetLastBoundRect();
-    NbcReformatText();
-    SetChanged();
-    BroadcastObjectChange();
-    SendUserCall(SdrUserCallType::Resize,aBoundRect0);
-}
-
-
 bool SdrTableObj::IsVerticalWriting() const
 {
     const SvxWritingModeItem* pModeItem = &GetObjectItem( SDRATTR_TEXTDIRECTION );
@@ -2111,10 +2089,10 @@ void SdrTableObj::AddToHdlList(SdrHdlList& rHdlList) const
         Point aPoint( maRect.TopLeft() );
         aPoint.AdjustY(nEdge );
 
-        TableEdgeHdl* pHdl= new TableEdgeHdl(aPoint,true,nEdgeMin,nEdgeMax,nColCount+1);
+        std::unique_ptr<TableEdgeHdl> pHdl(new TableEdgeHdl(aPoint,true,nEdgeMin,nEdgeMax,nColCount+1));
         pHdl->SetPointNum( nRow );
-        rHdlList.AddHdl( pHdl );
-        aRowEdges[nRow] = pHdl;
+        aRowEdges[nRow] = pHdl.get();
+        rHdlList.AddHdl( std::move(pHdl) );
     }
 
     // second add column handles
@@ -2130,10 +2108,10 @@ void SdrTableObj::AddToHdlList(SdrHdlList& rHdlList) const
         Point aPoint( maRect.TopLeft() );
         aPoint.AdjustX(nEdge );
 
-        TableEdgeHdl* pHdl = new TableEdgeHdl(aPoint,false,nEdgeMin,nEdgeMax, nRowCount+1);
+        std::unique_ptr<TableEdgeHdl> pHdl(new TableEdgeHdl(aPoint,false,nEdgeMin,nEdgeMax, nRowCount+1));
         pHdl->SetPointNum( nCol );
-        rHdlList.AddHdl( pHdl );
-        aColEdges[nCol] = pHdl;
+        aColEdges[nCol] = pHdl.get();
+        rHdlList.AddHdl( std::move(pHdl) );
     }
 
     // now add visible edges to row and column handles
@@ -2172,44 +2150,24 @@ void SdrTableObj::AddToHdlList(SdrHdlList& rHdlList) const
     }
 
     // add remaining handles
-    SdrHdl* pH=nullptr;
-    rHdlList.AddHdl( pH = new TableBorderHdl( maRect, !IsTextEditActive() ) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.TopLeft(),SdrHdlKind::UpperLeft) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.TopCenter(),SdrHdlKind::Upper) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.TopRight(),SdrHdlKind::UpperRight) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.LeftCenter(),SdrHdlKind::Left) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.RightCenter(),SdrHdlKind::Right) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.BottomLeft(),SdrHdlKind::LowerLeft) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.BottomCenter(),SdrHdlKind::Lower) ); pH->SetMoveOutside( true );
-    rHdlList.AddHdl( pH = new SdrHdl(maRect.BottomRight(),SdrHdlKind::LowerRight) ); pH->SetMoveOutside( true );
+    SdrHdlList tempList(nullptr);
+    tempList.AddHdl( o3tl::make_unique<TableBorderHdl>( maRect, !IsTextEditActive() ) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.TopLeft(),SdrHdlKind::UpperLeft) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.TopCenter(),SdrHdlKind::Upper) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.TopRight(),SdrHdlKind::UpperRight) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.LeftCenter(),SdrHdlKind::Left) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.RightCenter(),SdrHdlKind::Right) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.BottomLeft(),SdrHdlKind::LowerLeft) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.BottomCenter(),SdrHdlKind::Lower) );
+    tempList.AddHdl( o3tl::make_unique<SdrHdl>(maRect.BottomRight(),SdrHdlKind::LowerRight) );
+    for( size_t nHdl = 0; nHdl < tempList.GetHdlCount(); ++nHdl )
+        tempList.GetHdl(nHdl)->SetMoveOutside(true);
+    tempList.MoveTo(rHdlList);
 
     const size_t nHdlCount = rHdlList.GetHdlCount();
     for( size_t nHdl = 0; nHdl < nHdlCount; ++nHdl )
         rHdlList.GetHdl(nHdl)->SetObj(const_cast<SdrTableObj*>(this));
 }
-
-SdrHdl* SdrTableObj::GetHdl(sal_uInt32 nHdlNum) const
-{
-    // #i73248#
-    // Warn the user that this is ineffective and show alternatives. Should not be used at all.
-    OSL_FAIL("SdrTableObj::GetHdl(): ineffective, use AddToHdlList instead (!)");
-
-    // to have an alternative, get single handle using the ineffective way
-    SdrHdl* pRetval = nullptr;
-    SdrHdlList aLocalList(nullptr);
-    AddToHdlList(aLocalList);
-    const size_t nHdlCount(aLocalList.GetHdlCount());
-
-    if(nHdlCount && static_cast<size_t>(nHdlNum) < nHdlCount)
-    {
-        // remove and remember. The other created handles will be deleted again with the
-        // destruction of the local list
-        pRetval = aLocalList.RemoveHdl(nHdlNum);
-    }
-
-    return pRetval;
-}
-
 
 // Dragging
 
@@ -2442,22 +2400,22 @@ void SdrTableObj::CropTableModelToSelection(const CellPos& rStart, const CellPos
     mpImpl->CropTableModelToSelection(rStart, rEnd);
 }
 
-void SdrTableObj::DistributeColumns( sal_Int32 nFirstColumn, sal_Int32 nLastColumn )
+void SdrTableObj::DistributeColumns( sal_Int32 nFirstColumn, sal_Int32 nLastColumn, const bool bOptimize, const bool bMinimize )
 {
     if( mpImpl.is() && mpImpl->mpLayouter )
     {
         TableModelNotifyGuard aGuard( mpImpl->mxTable.get() );
-        mpImpl->mpLayouter->DistributeColumns( maRect, nFirstColumn, nLastColumn );
+        mpImpl->mpLayouter->DistributeColumns( maRect, nFirstColumn, nLastColumn, bOptimize, bMinimize );
     }
 }
 
 
-void SdrTableObj::DistributeRows( sal_Int32 nFirstRow, sal_Int32 nLastRow )
+void SdrTableObj::DistributeRows( sal_Int32 nFirstRow, sal_Int32 nLastRow, const bool bOptimize, const bool bMinimize )
 {
     if( mpImpl.is() && mpImpl->mpLayouter )
     {
         TableModelNotifyGuard aGuard( mpImpl->mxTable.get() );
-        mpImpl->mpLayouter->DistributeRows( maRect, nFirstRow, nLastRow );
+        mpImpl->mpLayouter->DistributeRows( maRect, nFirstRow, nLastRow, bOptimize, bMinimize );
     }
 }
 

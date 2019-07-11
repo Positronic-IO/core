@@ -48,6 +48,8 @@
 #include <svtools/rtfkeywd.hxx>
 #include <filter/msfilter/rtfutil.hxx>
 #include <unotools/docinfohelper.hxx>
+#include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 #if OSL_DEBUG_LEVEL > 1
 #include <iostream>
 #endif
@@ -331,7 +333,7 @@ void RtfExport::DoComboBox(const OUString& /*rName*/, const OUString& /*rHelp*/,
 
 void RtfExport::DoFormText(const SwInputField* pField)
 {
-    OUString sResult = pField->ExpandField(true);
+    OUString sResult = pField->ExpandField(true, nullptr);
     const OUString& rHelp = pField->GetHelp();
     OUString sName = pField->GetPar2();
     const OUString& rStatus = pField->GetToolTip();
@@ -674,7 +676,7 @@ void RtfExport::WritePageDescTable()
     m_pTableInfo = std::make_shared<ww8::WW8TableInfo>();
 }
 
-void RtfExport::ExportDocument_Impl()
+ErrCode RtfExport::ExportDocument_Impl()
 {
     // Make the header
     Strm()
@@ -945,6 +947,8 @@ void RtfExport::ExportDocument_Impl()
     WriteMainText();
 
     Strm().WriteChar('}');
+
+    return ERRCODE_NONE;
 }
 
 void RtfExport::PrepareNewPageDesc(const SfxItemSet* pSet, const SwNode& rNd,
@@ -1149,11 +1153,20 @@ void RtfExport::InsColorLine(const SvxBoxItem& rBox)
     const editeng::SvxBorderLine* pLine = nullptr;
 
     if (rBox.GetTop())
-        InsColor((pLine = rBox.GetTop())->GetColor());
+    {
+        pLine = rBox.GetTop();
+        InsColor(pLine->GetColor());
+    }
     if (rBox.GetBottom() && pLine != rBox.GetBottom())
-        InsColor((pLine = rBox.GetBottom())->GetColor());
+    {
+        pLine = rBox.GetBottom();
+        InsColor(pLine->GetColor());
+    }
     if (rBox.GetLeft() && pLine != rBox.GetLeft())
-        InsColor((pLine = rBox.GetLeft())->GetColor());
+    {
+        pLine = rBox.GetLeft();
+        InsColor(pLine->GetColor());
+    }
     if (rBox.GetRight() && pLine != rBox.GetRight())
         InsColor(rBox.GetRight()->GetColor());
 }
@@ -1348,7 +1361,10 @@ void RtfExport::OutPageDescription(const SwPageDesc& rPgDsc, bool bCheckForFirst
 
     const SwFormat* pFormat = &m_pCurrentPageDesc->GetMaster(); //GetLeft();
     m_bOutPageDescs = true;
+    if (m_pCurrentPageDesc != &rPgDsc)
+        m_pFirstPageItemSet = &rPgDsc.GetMaster().GetAttrSet();
     OutputFormat(*pFormat, true, false);
+    m_pFirstPageItemSet = nullptr;
     m_bOutPageDescs = false;
 
     // normal header / footer (without a style)

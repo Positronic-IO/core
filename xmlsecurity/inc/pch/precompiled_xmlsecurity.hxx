@@ -303,16 +303,7 @@
 #include <sot/formats.hxx>
 #include <sot/sotdllapi.h>
 #include <svl/sigstruct.hxx>
-#include <svtools/AccessibleBrowseBoxObjType.hxx>
-#include <svtools/accessibletableprovider.hxx>
-#include <svtools/headbar.hxx>
-#include <svtools/svtabbx.hxx>
 #include <svtools/svtdllapi.h>
-#include <svtools/transfer.hxx>
-#include <svtools/treelist.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentries.hxx>
-#include <svtools/viewdataentry.hxx>
 #include <tools/color.hxx>
 #include <tools/contnr.hxx>
 #include <tools/date.hxx>
@@ -350,6 +341,15 @@
 #include <unotools/resmgr.hxx>
 #include <unotools/syslocale.hxx>
 #include <unotools/unotoolsdllapi.h>
+#include <vcl/AccessibleBrowseBoxObjType.hxx>
+#include <vcl/accessibletableprovider.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/transfer.hxx>
+#include <vcl/treelist.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentries.hxx>
+#include <vcl/viewdataentry.hxx>
 #include <xsecctl.hxx>
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

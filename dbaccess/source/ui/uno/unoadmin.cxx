@@ -23,7 +23,6 @@
 #include <unoadmin.hxx>
 #include <dbadmin.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/property.hxx>
 
 // --- needed because of the solar mutex
 #include <osl/mutex.hxx>
@@ -39,7 +38,6 @@ namespace dbaui
 
 ODatabaseAdministrationDialog::ODatabaseAdministrationDialog(const Reference< XComponentContext >& _rxORB)
     :ODatabaseAdministrationDialogBase(_rxORB)
-    ,m_pDatasourceItems(nullptr)
     ,m_pItemPool(nullptr)
     ,m_pItemPoolDefaults(nullptr)
 {

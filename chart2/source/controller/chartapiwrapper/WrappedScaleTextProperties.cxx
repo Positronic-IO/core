@@ -18,9 +18,13 @@
  */
 
 #include "WrappedScaleTextProperties.hxx"
+#include "Chart2ModelContact.hxx"
 #include <FastPropertyIdRanges.hxx>
+#include <WrappedProperty.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertyState.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
@@ -121,10 +125,10 @@ void WrappedScaleTextProperties::addProperties( std::vector< Property > & rOutPr
                   | beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-void WrappedScaleTextProperties::addWrappedProperties( std::vector< WrappedProperty* >& rList
+void WrappedScaleTextProperties::addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                  , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
-    rList.push_back( new WrappedScaleTextProperty( spChart2ModelContact ) );
+    rList.emplace_back( new WrappedScaleTextProperty( spChart2ModelContact ) );
 }
 
 } //namespace wrapper

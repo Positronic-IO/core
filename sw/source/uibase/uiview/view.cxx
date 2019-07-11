@@ -97,6 +97,7 @@
 #include <com/sun/star/scanner/XScannerManager2.hpp>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <sax/tools/converter.hxx>
 
 #include <formatclipboard.hxx>
@@ -178,7 +179,7 @@ void SwView::GotFocus() const
     if ( pAsFormShell )
     {
         pAsFormShell->ForgetActiveControl();
-        const_cast< SwView* >( this )->AttrChangedNotify( m_pWrtShell );
+        const_cast< SwView* >( this )->AttrChangedNotify( m_pWrtShell.get() );
     }
     else if ( m_pPostItMgr )
     {
@@ -186,7 +187,7 @@ void SwView::GotFocus() const
         if ( pAsAnnotationShell )
         {
             m_pPostItMgr->SetActiveSidebarWin(nullptr);
-            const_cast< SwView* >( this )->AttrChangedNotify( m_pWrtShell );
+            const_cast< SwView* >( this )->AttrChangedNotify( m_pWrtShell.get() );
         }
     }
     if( GetWrtShellPtr() )
@@ -215,7 +216,41 @@ IMPL_LINK_NOARG(SwView, FormControlActivated, LinkParamNone*, void)
         if ( pSdrView && pSdrView->IsTextEdit() )
             pSdrView->SdrEndTextEdit( true );
 
-        AttrChangedNotify( m_pWrtShell );
+        AttrChangedNotify( m_pWrtShell.get() );
+    }
+}
+
+namespace
+{
+uno::Reference<frame::XLayoutManager> getLayoutManager(const SfxViewFrame& rViewFrame)
+{
+    uno::Reference<frame::XLayoutManager> xLayoutManager;
+    uno::Reference<beans::XPropertySet> xPropSet(rViewFrame.GetFrame().GetFrameInterface(),
+                                                 uno::UNO_QUERY);
+    if (xPropSet.is())
+    {
+        try
+        {
+            xLayoutManager.set(xPropSet->getPropertyValue("LayoutManager"), uno::UNO_QUERY);
+        }
+        catch (const Exception& e)
+        {
+            SAL_WARN("sw.ui", "Failure getting layout manager: " + e.Message);
+        }
+    }
+    return xLayoutManager;
+}
+}
+
+void SwView::ShowUIElement(const OUString& sElementURL) const
+{
+    if (auto xLayoutManager = getLayoutManager(*GetViewFrame()))
+    {
+        if (!xLayoutManager->getElement(sElementURL).is())
+        {
+            xLayoutManager->createElement(sElementURL);
+            xLayoutManager->showElement(sElementURL);
+        }
     }
 }
 
@@ -420,6 +455,10 @@ void SwView::SelectShell()
             GetEditWin().SetInputContext( aCntxt );
         }
 
+        // Show Mail Merge toolbar initially for documents with Database fields
+        if (!m_bInitOnceCompleted && GetWrtShell().IsAnyDatabaseFieldInDoc())
+            ShowUIElement("private:resource/toolbar/mailmerge");
+
         // Activate the toolbar to the new selection which also was active last time.
         // Before a flush () must be, but does not affect the UI according to MBA and
         // is not a performance problem.
@@ -444,6 +483,8 @@ void SwView::SelectShell()
         m_pWrtShell->UpdateTable();
 
     GetViewImpl()->GetUNOObject_Impl()->NotifySelChanged();
+
+    m_bInitOnceCompleted = true;
 }
 
 // Interaction: AttrChangedNotify() and TimeoutHdl.
@@ -678,7 +719,6 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     m_nOldPageNum(0),
     m_pNumRuleNodeFromDoc(nullptr),
     m_pEditWin( VclPtr<SwEditWin>::Create( &_pFrame->GetWindow(), *this ) ),
-    m_pWrtShell(nullptr),
     m_pShell(nullptr),
     m_pFormShell(nullptr),
     m_pHScrollbar(nullptr),
@@ -689,12 +729,8 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
                                 SvxRulerSupportFlags::BORDERS | SvxRulerSupportFlags::REDUCED_METRIC,
                             GetViewFrame()->GetBindings(),
                             WB_VSCROLL |  WB_EXTRAFIELD | WB_BORDER )),
-    m_pTogglePageBtn(nullptr),
-    m_pGlosHdl(nullptr),
-    m_pDrawActual(nullptr),
     m_pLastTableFormat(nullptr),
     m_pFormatClipboard(new SwFormatClipboard()),
-    m_pPostItMgr(nullptr),
     m_nSelectionType( SelectionType::All ),
     m_nPageCnt(0),
     m_nDrawSfxId( USHRT_MAX ),
@@ -731,7 +767,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     CreateScrollbar( true );
     CreateScrollbar( false );
 
-    m_pViewImpl = new SwView_Impl(this);
+    m_pViewImpl.reset(new SwView_Impl(this));
     SetName("View");
     SetWindow( m_pEditWin );
 
@@ -781,11 +817,11 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     SAL_INFO( "sw.ui", "before create WrtShell" );
     if (SwView *pView = dynamic_cast<SwView*>(pExistingSh))
     {
-        m_pWrtShell = new SwWrtShell(*pView->m_pWrtShell, m_pEditWin, *this);
+        m_pWrtShell.reset(new SwWrtShell(*pView->m_pWrtShell, m_pEditWin, *this));
     }
     else if (SwWrtShell *pWrtShell = dynamic_cast<SwWrtShell*>(rDocSh.GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell()))
     {
-        m_pWrtShell = new SwWrtShell(*pWrtShell, m_pEditWin, *this);
+        m_pWrtShell.reset(new SwWrtShell(*pWrtShell, m_pEditWin, *this));
     }
     else
     {
@@ -808,7 +844,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
             aUsrPref.SetViewLayoutBookMode( false );
             aUsrPref.SetViewLayoutColumns( 1 );
         }
-        m_pWrtShell = new SwWrtShell( rDoc, m_pEditWin, *this, &aUsrPref );
+        m_pWrtShell.reset(new SwWrtShell(rDoc, m_pEditWin, *this, &aUsrPref));
         // creating an SwView from a SwPagePreview needs to
         // add the SwViewShell to the ring of the other SwViewShell(s)
         if(m_bOldShellWasPagePreview)
@@ -833,7 +869,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
         }
     }
     SAL_INFO( "sw.ui", "after create WrtShell" );
-    m_pHRuler = VclPtr<SwCommentRuler>::Create(m_pWrtShell, &GetViewFrame()->GetWindow(), m_pEditWin,
+    m_pHRuler = VclPtr<SwCommentRuler>::Create(m_pWrtShell.get(), &GetViewFrame()->GetWindow(), m_pEditWin,
                 SvxRulerSupportFlags::TABS |
                 SvxRulerSupportFlags::PARAGRAPH_MARGINS |
                 SvxRulerSupportFlags::BORDERS |
@@ -880,14 +916,12 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     eMetric = pUsrPref->GetVScrollMetric();
     m_pVRuler->SetUnit( eMetric );
 
-        m_pHRuler->SetCharWidth( 371 );  // default character width
-        m_pVRuler->SetLineHeight( 551 );  // default line height
+    m_pHRuler->SetCharWidth( 371 );  // default character width
+    m_pVRuler->SetLineHeight( 551 );  // default line height
 
     // Set DocShell
-    rDocSh.SetView(this);
-    SW_MOD()->SetView( this );
-
-    m_pPostItMgr = new SwPostItMgr(this);
+    m_xGlueDocShell.reset(new SwViewGlueDocShell(*this, rDocSh));
+    m_pPostItMgr.reset(new SwPostItMgr(this));
 
     // Check and process the DocSize. Via the handler, the shell could not
     // be found, because the shell is not known in the SFX management
@@ -930,7 +964,7 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     {
         if (m_pWrtShell->GetDoc()->GetDocumentFieldsManager().containsUpdatableFields())
         {
-            SET_CURR_SHELL( m_pWrtShell );
+            SET_CURR_SHELL(m_pWrtShell.get());
             m_pWrtShell->StartAction();
             m_pWrtShell->CalcLayout();
             m_pWrtShell->GetDoc()->getIDocumentFieldsAccess().UpdateFields(false);
@@ -1007,6 +1041,23 @@ SwView::SwView( SfxViewFrame *_pFrame, SfxViewShell* pOldSh )
     GetViewFrame()->GetWindow().AddChildEventListener( LINK( this, SwView, WindowChildEventListener ) );
 }
 
+SwViewGlueDocShell::SwViewGlueDocShell(SwView& rView, SwDocShell& rDocSh)
+    : m_rView(rView)
+{
+    // Set DocShell
+    rDocSh.SetView(&m_rView);
+    SW_MOD()->SetView(&m_rView);
+}
+
+SwViewGlueDocShell::~SwViewGlueDocShell()
+{
+    SwDocShell* pDocSh = m_rView.GetDocShell();
+    if (pDocSh && pDocSh->GetView() == &m_rView)
+        pDocSh->SetView(nullptr);
+    if (SW_MOD()->GetView() == &m_rView)
+        SW_MOD()->SetView(nullptr);
+}
+
 SwView::~SwView()
 {
     // Notify other LOK views that we are going away.
@@ -1015,18 +1066,13 @@ SwView::~SwView()
     SfxLokHelper::notifyOtherViews(this, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", "EMPTY");
 
     GetViewFrame()->GetWindow().RemoveChildEventListener( LINK( this, SwView, WindowChildEventListener ) );
-    delete m_pPostItMgr;
-    m_pPostItMgr = nullptr;
+    m_pPostItMgr.reset();
 
     m_bInDtor = true;
     m_pEditWin->Hide(); // prevent problems with painting
 
     // Set pointer in SwDocShell to the view again
-    SwDocShell* pDocSh = GetDocShell();
-    if( pDocSh && pDocSh->GetView() == this )
-        pDocSh->SetView( nullptr );
-    if ( SW_MOD()->GetView() == this )
-        SW_MOD()->SetView( nullptr );
+    m_xGlueDocShell.reset();
 
     if( m_aTimer.IsActive() && m_bAttrChgNotifiedWithRegistrations )
         GetViewFrame()->GetBindings().LEAVEREGISTRATIONS();
@@ -1042,16 +1088,13 @@ SwView::~SwView()
     EndListening(*GetViewFrame());
     EndListening(*GetDocShell());
     m_pScrollFill.disposeAndClear();
-    delete m_pWrtShell;
-    m_pWrtShell = nullptr;      // Set to 0, so that it is not accessible by the following dtors cannot.
-    m_pShell = nullptr;
+    m_pWrtShell.reset(); // reset here so that it is not accessible by the following dtors.
     m_pHScrollbar.disposeAndClear();
     m_pVScrollbar.disposeAndClear();
     m_pHRuler.disposeAndClear();
     m_pVRuler.disposeAndClear();
-    m_pTogglePageBtn.disposeAndClear();
-    delete m_pGlosHdl;
-    delete m_pViewImpl;
+    m_pGlosHdl.reset();
+    m_pViewImpl.reset();
 
     // If this was enabled in the ctor for the frame, then disable it here.
     static bool bRequestDoubleBuffering = getenv("VCL_DOUBLEBUFFERING_ENABLE");
@@ -1059,7 +1102,7 @@ SwView::~SwView()
         m_pEditWin->RequestDoubleBuffering(false);
     m_pEditWin.disposeAndClear();
 
-    delete m_pFormatClipboard;
+    m_pFormatClipboard.reset();
 }
 
 SwDocShell* SwView::GetDocShell()
@@ -1117,14 +1160,14 @@ static bool lcl_IsOwnDocument( SwView& rView )
 
 void SwView::ReadUserData( const OUString &rUserData, bool bBrowse )
 {
-    if ( comphelper::string::getTokenCount(rUserData, ';') > 1 &&
+    if ( rUserData.indexOf(';')>=0 && // more than one token
         // For document without layout only in the onlinelayout or
         // while forward/backward
          (!m_pWrtShell->IsNewLayout() || m_pWrtShell->GetViewOptions()->getBrowseMode() || bBrowse) )
     {
         bool bIsOwnDocument = lcl_IsOwnDocument( *this );
 
-        SET_CURR_SHELL(m_pWrtShell);
+        SET_CURR_SHELL(m_pWrtShell.get());
 
         sal_Int32 nPos = 0;
 
@@ -1242,7 +1285,7 @@ void SwView::ReadUserDataSequence ( const uno::Sequence < beans::PropertyValue >
     if (!nLength)
         return;
 
-    SET_CURR_SHELL(m_pWrtShell);
+    SET_CURR_SHELL(m_pWrtShell.get());
     const beans::PropertyValue *pValue = rSequence.getConstArray();
     const SwRect& rRect = m_pWrtShell->GetCharRect();
     const tools::Rectangle &rVis = GetVisArea();
@@ -1559,8 +1602,8 @@ OUString SwView::GetSelectionTextParam( bool bCompleteWrds, bool bEraseTrail )
 SwGlossaryHdl* SwView::GetGlosHdl()
 {
     if(!m_pGlosHdl)
-        m_pGlosHdl = new SwGlossaryHdl(GetViewFrame(), m_pWrtShell);
-    return m_pGlosHdl;
+        m_pGlosHdl.reset(new SwGlossaryHdl(GetViewFrame(), m_pWrtShell.get()));
+    return m_pGlosHdl.get();
 }
 
 void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
@@ -1574,7 +1617,7 @@ void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
             GetDrawFuncPtr()->Deactivate();
             SetDrawFuncPtr(nullptr);
             LeaveDrawCreate();
-            AttrChangedNotify(m_pWrtShell);
+            AttrChangedNotify(m_pWrtShell.get());
         }
     }
     else
@@ -1649,10 +1692,10 @@ void SwView::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
             case SfxHintId::RedlineChanged:
                 {
                     static sal_uInt16 const aSlotRedLine[] = {
-                        FN_REDLINE_NEXT_CHANGE,
-                        FN_REDLINE_PREV_CHANGE,
                         FN_REDLINE_ACCEPT_DIRECT,
                         FN_REDLINE_REJECT_DIRECT,
+                        FN_REDLINE_NEXT_CHANGE,
+                        FN_REDLINE_PREV_CHANGE,
                         FN_REDLINE_ACCEPT_ALL,
                         FN_REDLINE_REJECT_ALL,
                         0

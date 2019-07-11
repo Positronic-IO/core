@@ -24,6 +24,7 @@
 
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/implementationentry.hxx>
+#include <com/sun/star/lang/XSingleComponentFactory.hpp>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -79,7 +80,7 @@ namespace
     {
         const sal_Char*     pAsciiServiceName;
         const sal_Char*     pAsciiImplementationName;
-        ComponentFactory    pFactory;
+        ComponentFactory const    pFactory;
 
         ComponentDescription()
             :pAsciiServiceName( nullptr )

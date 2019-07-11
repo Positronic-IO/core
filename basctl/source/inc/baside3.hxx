@@ -23,13 +23,7 @@
 #include "layout.hxx"
 #include "bastypes.hxx"
 #include "propbrw.hxx"
-
 #include <svl/undo.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/button.hxx>
-#include <vcl/lstbox.hxx>
-#include <vcl/fixed.hxx>
-
 #include <memory>
 
 class Printer;
@@ -72,7 +66,7 @@ protected:
     virtual void        Command( const CommandEvent& rCEvt ) override;
     virtual void        LoseFocus() override;
 
-    DECL_STATIC_LINK( DialogWindow, NotifyUndoActionHdl, SdrUndoAction *, void );
+    static void         NotifyUndoActionHdl( std::unique_ptr<SdrUndoAction> );
     virtual void        DoInit() override;
     virtual void        DoScroll( ScrollBar* pCurScrollBar ) override;
     virtual void        DataChanged( const DataChangedEvent& rDCEvt ) override;
@@ -103,7 +97,7 @@ public:
     virtual bool        IsModified() override;
     bool                IsPasteAllowed();
 
-    virtual svl::IUndoManager* GetUndoManager() override;
+    virtual SfxUndoManager* GetUndoManager() override;
     // return number of pages to be printed
     virtual sal_Int32 countPages( Printer* pPrinter ) override;
     // print page

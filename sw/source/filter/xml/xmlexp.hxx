@@ -47,9 +47,9 @@ typedef std::vector< SwXMLTableLines_Impl* > SwXMLTableLinesCache_Impl;
 
 class SwXMLExport : public SvXMLExport
 {
-    SvXMLUnitConverter*         m_pTwipUnitConverter;
-    SvXMLExportItemMapper*      m_pTableItemMapper;
-    SwXMLTableLinesCache_Impl*  m_pTableLines;
+    std::unique_ptr<SvXMLUnitConverter>    m_pTwipUnitConverter;
+    std::unique_ptr<SvXMLExportItemMapper> m_pTableItemMapper;
+    std::unique_ptr<SwXMLTableLinesCache_Impl> m_pTableLines;
 
     SvXMLItemMapEntriesRef      m_xTableItemMap;
     SvXMLItemMapEntriesRef      m_xTableRowItemMap;
@@ -113,6 +113,8 @@ public:
         OUString const & implementationName, SvXMLExportFlags nExportFlags);
 
     virtual ~SwXMLExport() override;
+
+    void collectAutoStyles() override;
 
     virtual ErrCode exportDoc( enum ::xmloff::token::XMLTokenEnum eClass = ::xmloff::token::XML_TOKEN_INVALID ) override;
 

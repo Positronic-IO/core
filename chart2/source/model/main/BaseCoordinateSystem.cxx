@@ -22,14 +22,14 @@
 #include <UserDefinedProperties.hxx>
 #include <ContainerHelper.hxx>
 #include <CloneHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include "Axis.hxx"
-#include <AxisHelper.hxx>
 #include <com/sun/star/chart2/AxisType.hpp>
+#include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
-#include <iterator>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
@@ -150,7 +150,7 @@ BaseCoordinateSystem::BaseCoordinateSystem(
 // explicit
 BaseCoordinateSystem::BaseCoordinateSystem(
     const BaseCoordinateSystem & rSource ) :
-        impl::BaseCoordinateSystem_Base(),
+        impl::BaseCoordinateSystem_Base(rSource),
         MutexContainer(),
         ::property::OPropertySet( rSource, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),

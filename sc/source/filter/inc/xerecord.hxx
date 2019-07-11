@@ -22,6 +22,7 @@
 
 #include "xlconst.hxx"
 #include "xestream.hxx"
+#include "xlstream.hxx"
 #include <memory>
 
 // Base classes to export Excel records =======================================
@@ -36,6 +37,12 @@
 class XclExpRecordBase
 {
 public:
+    XclExpRecordBase() = default;
+    XclExpRecordBase(XclExpRecordBase const &) = default;
+    XclExpRecordBase(XclExpRecordBase &&) = default;
+    XclExpRecordBase & operator =(XclExpRecordBase const &) = default;
+    XclExpRecordBase & operator =(XclExpRecordBase &&) = default;
+
     virtual             ~XclExpRecordBase();
 
     /** Overwrite this method to do any operation while saving the record. */
@@ -61,7 +68,7 @@ public:
     virtual             ~XclExpXmlElementRecord() override;
 
 protected:
-    sal_Int32           mnElement;
+    sal_Int32 const     mnElement;
 };
 
 class XclExpXmlStartElementRecord : public XclExpXmlElementRecord
@@ -123,6 +130,11 @@ public:
                             std::size_t nRecSize = 0 );
 
     virtual             ~XclExpRecord() override;
+
+    XclExpRecord(XclExpRecord const &) = default;
+    XclExpRecord(XclExpRecord &&) = default;
+    XclExpRecord & operator =(XclExpRecord const &) = default;
+    XclExpRecord & operator =(XclExpRecord &&) = default;
 
     /** Returns the current record ID. */
     sal_uInt16   GetRecId() const { return mnRecId; }
@@ -243,8 +255,8 @@ private:
     virtual void        WriteBody( XclExpStream& rStrm ) override;
 
 private:
-    bool                mbValue;        /// The record data.
-    sal_Int32           mnAttribute;    /// The attribute to generate within SaveXml()
+    bool const          mbValue;        /// The record data.
+    sal_Int32 const     mnAttribute;    /// The attribute to generate within SaveXml()
 };
 
 /** Record which exports a memory data array. */
@@ -280,7 +292,7 @@ public:
     virtual void        Save( XclExpStream& rStrm ) override;
 
 private:
-    XclFutureRecType    meRecType;
+    XclFutureRecType const    meRecType;
 };
 
 // List of records ============================================================

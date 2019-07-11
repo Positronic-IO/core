@@ -20,9 +20,9 @@
 #define INCLUDED_TOOLS_TIME_HXX
 
 #include <tools/toolsdllapi.h>
-#include <tools/solar.h>
 #include <com/sun/star/util/Time.hpp>
-#include <com/sun/star/util/DateTime.hpp>
+
+namespace com { namespace sun { namespace star { namespace util { struct DateTime; } } } }
 
 /**
  @WARNING: This class can serve both as wall clock time and time duration, and
@@ -103,6 +103,25 @@ public:
 
                     /// 12 hours == 0.5 days
     double          GetTimeInDays() const;
+
+    /** Get the wall clock time particles for a (date+)time value.
+
+        Does the necessary rounding and truncating to obtain hour, minute,
+        second and fraction of second from a double time value (time in days,
+        0.5 == 12h) such that individual values are not rounded up, i.e.
+        x:59:59.999 does not yield x+1:0:0.00
+
+        A potential date component (fTimeInDays >= 1.0) is discarded.
+
+        @param  nFractionDecimals
+                If > 0 fFractionOfSecond is truncated to that amount of
+                decimals.
+                Else fFractionOfSecond returns the full remainder of the
+                fractional second.
+     */
+    static void     GetClock( double fTimeInDays,
+                              sal_uInt16& nHour, sal_uInt16& nMinute, sal_uInt16& nSecond,
+                              double& fFractionOfSecond, int nFractionDecimals );
 
     bool            IsEqualIgnoreNanoSec( const tools::Time& rTime ) const;
 

@@ -29,7 +29,8 @@
 #include <vcl/edit.hxx>
 #include <vcl/image.hxx>
 #include <vcl/settings.hxx>
-#include <svtaccessiblefactory.hxx>
+#include <vcl/commandevent.hxx>
+#include <vcl/svtaccessiblefactory.hxx>
 #include <svtools/svtresid.hxx>
 #include <svtools/strings.hrc>
 #include <limits>
@@ -198,13 +199,14 @@ public:
 
 struct ImplTabBarItem
 {
-    sal_uInt16 mnId;
+    sal_uInt16 const mnId;
     TabBarPageBits mnBits;
     OUString maText;
     OUString maHelpText;
+    OUString maAuxiliaryText; // used in LayerTabBar for real layer name
     tools::Rectangle maRect;
     long mnWidth;
-    OString maHelpId;
+    OString const maHelpId;
     bool mbShort : 1;
     bool mbSelect : 1;
     bool mbProtect : 1;
@@ -493,7 +495,7 @@ struct TabBar_Impl
     ScopedVclPtr<TabBarEdit>    mpEdit;
     std::vector<std::unique_ptr<ImplTabBarItem>> mpItemList;
 
-    svt::AccessibleFactoryAccess  maAccessibleFactory;
+    vcl::AccessibleFactoryAccess  maAccessibleFactory;
 
     sal_uInt16 getItemSize()
     {
@@ -937,7 +939,7 @@ void TabBar::MouseMove(const MouseEvent& rMEvt)
 
 void TabBar::MouseButtonDown(const MouseEvent& rMEvt)
 {
-    // Only terminate EditModus and do not execute click
+    // Only terminate EditMode and do not execute click
     // if clicked inside our window,
     if (IsInEditMode())
     {
@@ -2234,6 +2236,24 @@ OUString TabBar::GetPageText(sal_uInt16 nPageId) const
     return OUString();
 }
 
+OUString TabBar::GetAuxiliaryText(sal_uInt16 nPageId) const
+{
+    sal_uInt16 nPos = GetPagePos(nPageId);
+    if (nPos != PAGE_NOT_FOUND)
+        return mpImpl->mpItemList[nPos]->maAuxiliaryText;
+    return OUString();
+}
+
+void TabBar::SetAuxiliaryText(sal_uInt16 nPageId, const OUString& rText )
+{
+    sal_uInt16 nPos = GetPagePos(nPageId);
+    if (nPos != PAGE_NOT_FOUND)
+    {
+        mpImpl->mpItemList[nPos]->maAuxiliaryText = rText;
+        // no redraw bar, no CallEventListener, internal use in LayerTabBar
+    }
+}
+
 OUString TabBar::GetHelpText(sal_uInt16 nPageId) const
 {
     sal_uInt16 nPos = GetPagePos(nPageId);
@@ -2512,7 +2532,7 @@ Size TabBar::CalcWindowSizePixel() const
 {
     long nWidth = 0;
 
-    if (mpImpl->mpItemList.size() > 0)
+    if (!mpImpl->mpItemList.empty())
     {
         const_cast<TabBar*>(this)->ImplCalcWidth();
         for (auto& pItem : mpImpl->mpItemList)

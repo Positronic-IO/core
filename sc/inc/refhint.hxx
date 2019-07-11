@@ -30,7 +30,7 @@ public:
     };
 
 private:
-    Type meType;
+    Type const meType;
 
 protected:
     RefHint( Type eType );
@@ -39,13 +39,18 @@ public:
     RefHint() = delete;
     virtual ~RefHint() override = 0;
 
+    RefHint(RefHint const &) = default;
+    RefHint(RefHint &&) = default;
+    RefHint & operator =(RefHint const &) = delete;
+    RefHint & operator =(RefHint &&) = delete;
+
     Type getType() const;
 };
 
 class RefMovedHint : public RefHint
 {
-    ScRange maRange;
-    ScAddress maMoveDelta;
+    ScRange const maRange;
+    ScAddress const maMoveDelta;
     const sc::RefUpdateContext& mrCxt;
 
 public:
@@ -69,13 +74,18 @@ public:
 class RefColReorderHint : public RefHint
 {
     const sc::ColRowReorderMapType& mrColMap;
-    SCTAB mnTab;
-    SCROW mnRow1;
-    SCROW mnRow2;
+    SCTAB const mnTab;
+    SCROW const mnRow1;
+    SCROW const mnRow2;
 
 public:
     RefColReorderHint( const sc::ColRowReorderMapType& rColMap, SCTAB nTab, SCROW nRow1, SCROW nRow2 );
     virtual ~RefColReorderHint() override;
+
+    RefColReorderHint(RefColReorderHint const &) = default;
+    RefColReorderHint(RefColReorderHint &&) = default;
+    RefColReorderHint & operator =(RefColReorderHint const &) = delete; // due to mrColMap
+    RefColReorderHint & operator =(RefColReorderHint &&) = delete; // due to mrColMap
 
     const sc::ColRowReorderMapType& getColMap() const;
 
@@ -87,13 +97,18 @@ public:
 class RefRowReorderHint : public RefHint
 {
     const sc::ColRowReorderMapType& mrRowMap;
-    SCTAB mnTab;
-    SCCOL mnCol1;
-    SCCOL mnCol2;
+    SCTAB const mnTab;
+    SCCOL const mnCol1;
+    SCCOL const mnCol2;
 
 public:
     RefRowReorderHint( const sc::ColRowReorderMapType& rRowMap, SCTAB nTab, SCCOL nCol1, SCCOL nCol2 );
     virtual ~RefRowReorderHint() override;
+
+    RefRowReorderHint(RefRowReorderHint const &) = default;
+    RefRowReorderHint(RefRowReorderHint &&) = default;
+    RefRowReorderHint & operator =(RefRowReorderHint const &) = delete; // due to mrRowMap
+    RefRowReorderHint & operator =(RefRowReorderHint &&) = delete; // due to mrRowMap
 
     const sc::ColRowReorderMapType& getRowMap() const;
 

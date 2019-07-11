@@ -14,7 +14,6 @@
 #include <rtl/ref.hxx>
 #include <comphelper/comphelperdllapi.h>
 #include <mutex>
-#include <thread>
 #include <condition_variable>
 #include <vector>
 #include <memory>
@@ -22,15 +21,15 @@
 namespace comphelper
 {
 class ThreadTaskTag;
-class ThreadPool;
 
 class COMPHELPER_DLLPUBLIC ThreadTask
 {
 friend class ThreadPool;
+friend struct std::default_delete<ThreadTask>;
     std::shared_ptr<ThreadTaskTag>  mpTag;
 
-    /// execute and delete this task
-    void      execAndDelete();
+    /// execute this task
+    void      exec();
 protected:
     /// override to get your task performed by the pool
     virtual void doWork() = 0;
@@ -62,7 +61,7 @@ public:
     ~ThreadPool();
 
     /// push a new task onto the work queue
-    void        pushTask( ThreadTask *pTask /* takes ownership */ );
+    void        pushTask( std::unique_ptr<ThreadTask> pTask);
 
     /// wait until all queued tasks associated with the tag are completed
     void        waitUntilDone(const std::shared_ptr<ThreadTaskTag>&);
@@ -84,15 +83,15 @@ private:
         @param  bWait - if set wait until task present or termination
         @return a new task to perform, or NULL if list empty or terminated
     */
-    ThreadTask *popWorkLocked( std::unique_lock< std::mutex > & rGuard, bool bWait );
+    std::unique_ptr<ThreadTask> popWorkLocked( std::unique_lock< std::mutex > & rGuard, bool bWait );
     void shutdownLocked(std::unique_lock<std::mutex>&);
 
     /// signalled when all in-progress tasks are complete
     std::mutex              maMutex;
     std::condition_variable maTasksChanged;
     bool                    mbTerminate;
-    std::size_t             mnWorkers;
-    std::vector< ThreadTask * >   maTasks;
+    std::size_t const       mnWorkers;
+    std::vector< std::unique_ptr<ThreadTask> >   maTasks;
     std::vector< rtl::Reference< ThreadWorker > > maWorkers;
 };
 

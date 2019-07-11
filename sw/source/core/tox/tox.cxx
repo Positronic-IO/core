@@ -34,6 +34,8 @@
 #include <calbck.hxx>
 
 #include <boost/optional.hpp>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 
@@ -164,7 +166,7 @@ void SwTOXMark::InvalidateTOXMark()
     NotifyClients(&aMsgHint, &aMsgHint);
 }
 
-OUString SwTOXMark::GetText() const
+OUString SwTOXMark::GetText(SwRootFrame const*const pLayout) const
 {
     if( !m_aAltText.isEmpty() )
         return m_aAltText;
@@ -176,7 +178,7 @@ OUString SwTOXMark::GetText() const
         if( pEndIdx )
         {
             const sal_Int32 nStt = m_pTextAttr->GetStart();
-            return m_pTextAttr->GetpTextNd()->GetExpandText( nStt, *pEndIdx-nStt );
+            return m_pTextAttr->GetpTextNd()->GetExpandText(pLayout, nStt, *pEndIdx-nStt);
         }
     }
 
@@ -742,8 +744,8 @@ static FormTokenType lcl_GetTokenType(const OUString & sToken,
 {
     static struct
     {
-        OUString sTokenStart;
-        sal_Int16 nTokenLength;
+        OUString const sTokenStart;
+        sal_Int16 const nTokenLength;
         FormTokenType eTokenType;
     } const aTokenArr[] = {
         { SwForm::GetFormTab().copy(0, 2),         3, TOKEN_TAB_STOP },

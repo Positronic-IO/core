@@ -34,7 +34,7 @@ public:
     virtual sdr::properties::BaseProperties& GetProperties() const override;
 
 protected:
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
     SdrObject&                  rRefObj; // Referenced drawing object
     tools::Rectangle            aSnapRect;
@@ -77,9 +77,7 @@ public:
 
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
-    virtual sal_uInt32 GetPlusHdlCount(const SdrHdl& rHdl) const override;
-    virtual SdrHdl* GetPlusHdl(const SdrHdl& rHdl, sal_uInt32 nPlNum) const override;
+    virtual void AddToPlusHdlList(SdrHdlList& rHdlList, SdrHdl& rHdl) const override;
     virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // special drag methods
@@ -136,14 +134,12 @@ public:
     virtual void SetGeoData(const SdrObjGeoData& rGeo) override;
 
     virtual void NbcReformatText() override;
-    virtual void ReformatText() override;
 
     virtual bool HasMacro() const override;
     virtual SdrObject* CheckMacroHit (const SdrObjMacroHitRec& rRec) const override;
     virtual Pointer GetMacroPointer (const SdrObjMacroHitRec& rRec) const override;
     virtual void PaintMacro (OutputDevice& rOut, const tools::Rectangle& rDirtyRect, const SdrObjMacroHitRec& rRec) const override;
     virtual bool DoMacro (const SdrObjMacroHitRec& rRec) override;
-    virtual OUString GetMacroPopupComment(const SdrObjMacroHitRec& rRec) const override;
 
     // #i73248# for default SdrVirtObj, offset is aAnchor, not (0,0)
     virtual const Point GetOffset() const;

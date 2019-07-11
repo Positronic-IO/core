@@ -29,6 +29,8 @@
 #include <com/sun/star/form/XLoadable.hpp>
 #include <com/sun/star/text/WritingMode2.hpp>
 #include <comphelper/basicio.hxx>
+#include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <vcl/unohelp.hxx>
 #include <vcl/svapp.hxx>
@@ -460,7 +462,7 @@ void OGridControlModel::getFastPropertyValue(Any& rValue, sal_Int32 nHandle ) co
             rValue <<= m_bEnableVisible;
             break;
         case PROPERTY_ID_BORDER:
-            rValue <<= static_cast<sal_Int16>(m_nBorder);
+            rValue <<= m_nBorder;
             break;
         case PROPERTY_ID_BORDERCOLOR:
             rValue = m_aBorderColor;

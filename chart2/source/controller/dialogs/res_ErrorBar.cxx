@@ -22,9 +22,12 @@
 #include <RangeSelectionHelper.hxx>
 #include <TabPageNotifiable.hxx>
 #include <helpids.h>
+#include <chartview/ChartSfxItemIds.hxx>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 
 #include <rtl/math.hxx>
-#include <vcl/dialog.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <svl/stritem.hxx>
 
 #define CHART_LB_FUNCTION_STD_ERROR     0
@@ -36,12 +39,18 @@ using namespace ::com::sun::star;
 
 namespace
 {
-void lcl_enableRangeChoosing( bool bEnable, Dialog * pDialog )
+void lcl_enableRangeChoosing(bool bEnable, TabPageParent pParent)
 {
-    if( pDialog )
+    if (weld::DialogController* pController = pParent.pController)
     {
-        pDialog->Show( !bEnable );
-        pDialog->SetModalInputMode( !bEnable );
+        weld::Window* pWeldDialog = pController->getDialog();
+        pWeldDialog->set_modal(!bEnable);
+        pWeldDialog->show(!bEnable);
+    }
+    else if (::Dialog* pVCLDialog = pParent.pParent ? pParent.pParent->GetParentDialog() : nullptr)
+    {
+        pVCLDialog->Show(!bEnable);
+        pVCLDialog->SetModalInputMode(!bEnable);
     }
 }
 
@@ -77,78 +86,74 @@ sal_uInt16 lcl_getLbEntryPosByErrorKind( SvxChartKindError eErrorKind )
 namespace chart
 {
 
-ErrorBarResources::ErrorBarResources( VclBuilderContainer* pParent, Dialog * pParentDialog,
-                                      const SfxItemSet& rInAttrs, bool bNoneAvailable,
-                                      tErrorBarType eType /* = ERROR_BAR_Y */ ) :
-        m_eErrorKind( SvxChartKindError::NONE ),
-        m_eIndicate( SvxChartIndicate::Both ),
-        m_bErrorKindUnique( true ),
-        m_bIndicatorUnique( true ),
-        m_bRangePosUnique( true ),
-        m_bRangeNegUnique( true ),
-        m_eErrorBarType( eType ),
-        m_nConstDecimalDigits( 1 ),
-        m_nConstSpinSize( 1 ),
-        m_fPlusValue(0.0),
-        m_fMinusValue(0.0),
-        m_pParentDialog( pParentDialog ),
-        m_pCurrentRangeChoosingField( nullptr ),
-        m_bHasInternalDataProvider( true ),
-        m_bEnableDataTableDialog( true )
+ErrorBarResources::ErrorBarResources(weld::Builder* pParent, TabPageParent pParentDialog,
+                                     const SfxItemSet& rInAttrs, bool bNoneAvailable,
+                                     tErrorBarType eType /* = ERROR_BAR_Y */ )
+    : m_eErrorKind( SvxChartKindError::NONE )
+    , m_eIndicate( SvxChartIndicate::Both )
+    , m_bErrorKindUnique( true )
+    , m_bIndicatorUnique( true )
+    , m_bRangePosUnique( true )
+    , m_bRangeNegUnique( true )
+    , m_eErrorBarType( eType )
+    , m_nConstDecimalDigits( 1 )
+    , m_nConstSpinSize( 1 )
+    , m_fPlusValue(0.0)
+    , m_fMinusValue(0.0)
+    , m_pParentDialog( pParentDialog )
+    , m_pCurrentRangeChoosingField( nullptr )
+    , m_bHasInternalDataProvider( true )
+    , m_bEnableDataTableDialog( true )
+    , m_xRbNone(pParent->weld_radio_button("RB_NONE"))
+    , m_xRbConst(pParent->weld_radio_button("RB_CONST"))
+    , m_xRbPercent(pParent->weld_radio_button("RB_PERCENT"))
+    , m_xRbFunction(pParent->weld_radio_button("RB_FUNCTION"))
+    , m_xRbRange(pParent->weld_radio_button("RB_RANGE"))
+    , m_xLbFunction(pParent->weld_combo_box("LB_FUNCTION"))
+    , m_xFlParameters(pParent->weld_frame("framePARAMETERS"))
+    , m_xBxPositive(pParent->weld_widget("boxPOSITIVE"))
+    , m_xMfPositive(pParent->weld_metric_spin_button("MF_POSITIVE", FieldUnit::NONE))
+    , m_xEdRangePositive(pParent->weld_entry("ED_RANGE_POSITIVE"))
+    , m_xIbRangePositive(pParent->weld_button("IB_RANGE_POSITIVE"))
+    , m_xBxNegative(pParent->weld_widget("boxNEGATIVE"))
+    , m_xMfNegative(pParent->weld_metric_spin_button("MF_NEGATIVE", FieldUnit::NONE))
+    , m_xEdRangeNegative(pParent->weld_entry("ED_RANGE_NEGATIVE"))
+    , m_xIbRangeNegative(pParent->weld_button("IB_RANGE_NEGATIVE"))
+    , m_xCbSyncPosNeg(pParent->weld_check_button("CB_SYN_POS_NEG"))
+    , m_xRbBoth(pParent->weld_radio_button("RB_BOTH"))
+    , m_xRbPositive(pParent->weld_radio_button("RB_POSITIVE"))
+    , m_xRbNegative(pParent->weld_radio_button("RB_NEGATIVE"))
+    , m_xFiBoth(pParent->weld_image("FI_BOTH"))
+    , m_xFiPositive(pParent->weld_image("FI_POSITIVE"))
+    , m_xFiNegative(pParent->weld_image("FI_NEGATIVE"))
+    , m_xUIStringPos(pParent->weld_label("STR_DATA_SELECT_RANGE_FOR_POSITIVE_ERRORBARS"))
+    , m_xUIStringNeg(pParent->weld_label("STR_DATA_SELECT_RANGE_FOR_NEGATIVE_ERRORBARS"))
+    , m_xUIStringRbRange(pParent->weld_label("STR_CONTROLTEXT_ERROR_BARS_FROM_DATA"))
 {
-        pParent->get(m_pRbNone,"RB_NONE");
-        pParent->get(m_pRbConst, "RB_CONST");
-        pParent->get(m_pRbPercent, "RB_PERCENT");
-        pParent->get(m_pRbFunction, "RB_FUNCTION");
-        pParent->get(m_pRbRange, "RB_RANGE");
-        pParent->get(m_pLbFunction, "LB_FUNCTION");
-
-        pParent->get(m_pFlParameters, "framePARAMETERS");
-        pParent->get(m_pBxPositive, "boxPOSITIVE");
-        pParent->get(m_pMfPositive, "MF_POSITIVE");
-        pParent->get(m_pEdRangePositive, "ED_RANGE_POSITIVE");
-        pParent->get(m_pIbRangePositive, "IB_RANGE_POSITIVE");
-        pParent->get(m_pBxNegative, "boxNEGATIVE");
-        pParent->get(m_pMfNegative, "MF_NEGATIVE");
-        pParent->get(m_pEdRangeNegative, "ED_RANGE_NEGATIVE");
-        pParent->get(m_pIbRangeNegative, "IB_RANGE_NEGATIVE");
-        pParent->get(m_pCbSyncPosNeg, "CB_SYN_POS_NEG");
-
-        pParent->get(m_pRbBoth, "RB_BOTH");
-        pParent->get(m_pRbPositive, "RB_POSITIVE");
-        pParent->get(m_pRbNegative, "RB_NEGATIVE");
-        pParent->get(m_pFiBoth, "FI_BOTH");
-        pParent->get(m_pFiPositive, "FI_POSITIVE");
-        pParent->get(m_pFiNegative, "FI_NEGATIVE");
-
-        pParent->get(m_pUIStringPos, "STR_DATA_SELECT_RANGE_FOR_POSITIVE_ERRORBARS");
-        pParent->get(m_pUIStringNeg, "STR_DATA_SELECT_RANGE_FOR_NEGATIVE_ERRORBARS");
-        pParent->get(m_pUIStringRbRange, "STR_CONTROLTEXT_ERROR_BARS_FROM_DATA");
-
     if( bNoneAvailable )
-        m_pRbNone->SetClickHdl( LINK( this, ErrorBarResources, CategoryChosen ));
+        m_xRbNone->connect_toggled(LINK(this, ErrorBarResources, CategoryChosen));
     else
-        m_pRbNone->Hide();
+        m_xRbNone->hide();
 
-    m_pRbConst->SetClickHdl( LINK( this, ErrorBarResources, CategoryChosen ));
-    m_pRbPercent->SetClickHdl( LINK( this, ErrorBarResources, CategoryChosen ));
-    m_pRbFunction->SetClickHdl( LINK( this, ErrorBarResources, CategoryChosen ));
-    m_pRbRange->SetClickHdl( LINK( this, ErrorBarResources, CategoryChosen ));
-    m_pLbFunction->SetSelectHdl( LINK( this, ErrorBarResources, CategoryChosen2 ));
+    m_xRbConst->connect_toggled( LINK( this, ErrorBarResources, CategoryChosen ));
+    m_xRbPercent->connect_toggled( LINK( this, ErrorBarResources, CategoryChosen ));
+    m_xRbFunction->connect_toggled( LINK( this, ErrorBarResources, CategoryChosen ));
+    m_xRbRange->connect_toggled( LINK( this, ErrorBarResources, CategoryChosen ));
+    m_xLbFunction->connect_changed( LINK( this, ErrorBarResources, CategoryChosen2 ));
 
-    m_pCbSyncPosNeg->Check( false );
-    m_pCbSyncPosNeg->SetToggleHdl( LINK( this, ErrorBarResources, SynchronizePosAndNeg ));
+    m_xCbSyncPosNeg->set_active( false );
+    m_xCbSyncPosNeg->connect_toggled( LINK( this, ErrorBarResources, SynchronizePosAndNeg ));
 
-    m_pMfPositive->SetModifyHdl( LINK( this, ErrorBarResources, PosValueChanged ));
-    m_pEdRangePositive->SetModifyHdl( LINK( this, ErrorBarResources, RangeChanged ));
-    m_pEdRangeNegative->SetModifyHdl( LINK( this, ErrorBarResources, RangeChanged ));
+    m_xMfPositive->connect_value_changed( LINK( this, ErrorBarResources, PosValueChanged ));
+    m_xEdRangePositive->connect_changed( LINK( this, ErrorBarResources, RangeChanged ));
+    m_xEdRangeNegative->connect_changed( LINK( this, ErrorBarResources, RangeChanged ));
 
-    m_pRbPositive->SetClickHdl( LINK( this, ErrorBarResources, IndicatorChanged ));
-    m_pRbNegative->SetClickHdl( LINK( this, ErrorBarResources, IndicatorChanged ));
-    m_pRbBoth->SetClickHdl( LINK( this, ErrorBarResources, IndicatorChanged ));
+    m_xRbPositive->connect_toggled( LINK( this, ErrorBarResources, IndicatorChanged ));
+    m_xRbNegative->connect_toggled( LINK( this, ErrorBarResources, IndicatorChanged ));
+    m_xRbBoth->connect_toggled( LINK( this, ErrorBarResources, IndicatorChanged ));
 
-    m_pIbRangePositive->SetClickHdl( LINK( this, ErrorBarResources, ChooseRange ));
-    m_pIbRangeNegative->SetClickHdl( LINK( this, ErrorBarResources, ChooseRange ));
+    m_xIbRangePositive->connect_clicked( LINK( this, ErrorBarResources, ChooseRange ));
+    m_xIbRangeNegative->connect_clicked( LINK( this, ErrorBarResources, ChooseRange ));
 
     FillValueSets();
     Reset( rInAttrs );
@@ -189,17 +194,17 @@ void ErrorBarResources::SetChartDocumentForRangeChoosing(
     m_apRangeSelectionHelper.reset( new RangeSelectionHelper( xChartDocument ));
 
     // has internal data provider => rename "cell range" to "from data"
-    OSL_ASSERT( m_apRangeSelectionHelper.get());
+    OSL_ASSERT(m_apRangeSelectionHelper);
     if( m_bHasInternalDataProvider )
     {
-        m_pRbRange->SetText(m_pUIStringRbRange->GetText());
-        m_pRbRange->SetHelpId( HID_SCH_ERROR_BARS_FROM_DATA );
+        m_xRbRange->set_label(m_xUIStringRbRange->get_label());
+        m_xRbRange->set_help_id(HID_SCH_ERROR_BARS_FROM_DATA);
     }
 
-    if( m_pRbRange->IsChecked())
+    if( m_xRbRange->get_active())
     {
-        isRangeFieldContentValid( *m_pEdRangePositive );
-        isRangeFieldContentValid( *m_pEdRangeNegative );
+        isRangeFieldContentValid( *m_xEdRangePositive );
+        isRangeFieldContentValid( *m_xEdRangeNegative );
     }
 }
 
@@ -225,64 +230,64 @@ void ErrorBarResources::SetAxisMinorStepWidthForErrorBarDecimals( double fMinorS
 void ErrorBarResources::UpdateControlStates()
 {
     // function
-    bool bIsFunction = m_pRbFunction->IsChecked();
-    m_pLbFunction->Enable( bIsFunction );
+    bool bIsFunction = m_xRbFunction->get_active();
+    m_xLbFunction->set_sensitive( bIsFunction );
 
     // range buttons
-    m_pRbRange->Enable( !m_bHasInternalDataProvider || m_bEnableDataTableDialog );
-    bool bShowRange = m_pRbRange->IsChecked();
+    m_xRbRange->set_sensitive( !m_bHasInternalDataProvider || m_bEnableDataTableDialog );
+    bool bShowRange = m_xRbRange->get_active();
     bool bCanChooseRange =
         ( bShowRange &&
           m_apRangeSelectionHelper.get() &&
           m_apRangeSelectionHelper->hasRangeSelection());
 
-    m_pMfPositive->Show( ! bShowRange );
-    m_pMfNegative->Show( ! bShowRange );
+    m_xMfPositive->show( ! bShowRange );
+    m_xMfNegative->show( ! bShowRange );
 
     // use range but without range chooser => hide controls
-    m_pEdRangePositive->Show( bShowRange && ! m_bHasInternalDataProvider );
-    m_pIbRangePositive->Show( bCanChooseRange );
-    m_pEdRangeNegative->Show( bShowRange && ! m_bHasInternalDataProvider );
-    m_pIbRangeNegative->Show( bCanChooseRange );
+    m_xEdRangePositive->show( bShowRange && ! m_bHasInternalDataProvider );
+    m_xIbRangePositive->show( bCanChooseRange );
+    m_xEdRangeNegative->show( bShowRange && ! m_bHasInternalDataProvider );
+    m_xIbRangeNegative->show( bCanChooseRange );
 
     bool bShowPosNegAndSync = ! (bShowRange && m_bHasInternalDataProvider);
-    m_pFlParameters->Show( bShowPosNegAndSync );
+    m_xFlParameters->show( bShowPosNegAndSync );
 
     // unit for metric fields
     bool bIsErrorMargin(
-        ( m_pRbFunction->IsChecked()) &&
-        ( m_pLbFunction->GetSelectedEntryPos() == CHART_LB_FUNCTION_ERROR_MARGIN ));
-    bool bIsPercentage( m_pRbPercent->IsChecked() || bIsErrorMargin );
-    FieldUnit eFieldUnit = FUNIT_NONE;
+        ( m_xRbFunction->get_active()) &&
+        ( m_xLbFunction->get_active() == CHART_LB_FUNCTION_ERROR_MARGIN ));
+    bool bIsPercentage( m_xRbPercent->get_active() || bIsErrorMargin );
+    FieldUnit eFieldUnit = FieldUnit::NONE;
 
     if( bIsPercentage )
     {
-        eFieldUnit = FUNIT_PERCENT;
-        m_pMfPositive->SetDecimalDigits( 1 );
-        m_pMfPositive->SetSpinSize( 10 );
-        m_pMfNegative->SetDecimalDigits( 1 );
-        m_pMfNegative->SetSpinSize( 10 );
+        eFieldUnit = FieldUnit::PERCENT;
+        m_xMfPositive->set_digits( 1 );
+        m_xMfPositive->set_increments(10, 100, FieldUnit::NONE);
+        m_xMfNegative->set_digits( 1 );
+        m_xMfNegative->set_increments(10, 100, FieldUnit::NONE);
     }
     else
     {
-        m_pMfPositive->SetDecimalDigits( m_nConstDecimalDigits );
-        m_pMfPositive->SetSpinSize( m_nConstSpinSize );
-        m_pMfNegative->SetDecimalDigits( m_nConstDecimalDigits );
-        m_pMfNegative->SetSpinSize( m_nConstSpinSize );
+        m_xMfPositive->set_digits( m_nConstDecimalDigits );
+        m_xMfPositive->set_increments(m_nConstSpinSize, m_nConstSpinSize * 10, FieldUnit::NONE);
+        m_xMfNegative->set_digits( m_nConstDecimalDigits );
+        m_xMfNegative->set_increments(m_nConstSpinSize, m_nConstSpinSize * 10, FieldUnit::NONE);
     }
 
-    sal_Int32 nPlusValue = static_cast< sal_Int32 >( m_fPlusValue * pow(10.0,m_pMfPositive->GetDecimalDigits()) );
-    sal_Int32 nMinusValue = static_cast< sal_Int32 >( m_fMinusValue * pow(10.0,m_pMfNegative->GetDecimalDigits()) );
+    sal_Int32 nPlusValue = static_cast< sal_Int32 >( m_fPlusValue * pow(10.0,m_xMfPositive->get_digits()) );
+    sal_Int32 nMinusValue = static_cast< sal_Int32 >( m_fMinusValue * pow(10.0,m_xMfNegative->get_digits()) );
 
-    m_pMfPositive->SetValue( nPlusValue );
-    m_pMfNegative->SetValue( nMinusValue );
+    m_xMfPositive->set_value(nPlusValue, FieldUnit::NONE);
+    m_xMfNegative->set_value(nMinusValue, FieldUnit::NONE);
 
-    m_pMfPositive->SetUnit(eFieldUnit);
-    m_pMfNegative->SetUnit(eFieldUnit);
+    m_xMfPositive->set_unit(eFieldUnit);
+    m_xMfNegative->set_unit(eFieldUnit);
 
     // positive and negative value fields
-    bool bPosEnabled = ( m_pRbPositive->IsChecked() || m_pRbBoth->IsChecked());
-    bool bNegEnabled = ( m_pRbNegative->IsChecked() || m_pRbBoth->IsChecked());
+    bool bPosEnabled = ( m_xRbPositive->get_active() || m_xRbBoth->get_active());
+    bool bNegEnabled = ( m_xRbNegative->get_active() || m_xRbBoth->get_active());
     if( !( bPosEnabled || bNegEnabled ))
     {
         // all three controls are not checked -> ambiguous state
@@ -292,89 +297,84 @@ void ErrorBarResources::UpdateControlStates()
 
     // functions with only one parameter
     bool bOneParameterCategory =
-        bIsErrorMargin || m_pRbPercent->IsChecked();
+        bIsErrorMargin || m_xRbPercent->get_active();
     if( bOneParameterCategory )
     {
-        m_pCbSyncPosNeg->Check();
+        m_xCbSyncPosNeg->set_active(true);
     }
 
-    if( m_pCbSyncPosNeg->IsChecked())
+    if( m_xCbSyncPosNeg->get_active())
     {
         bPosEnabled = true;
         bNegEnabled = false;
     }
 
     // all functions except error margin take no arguments
-    if( m_pRbFunction->IsChecked() &&  ( m_pLbFunction->GetSelectedEntryPos() != CHART_LB_FUNCTION_ERROR_MARGIN ))
+    if( m_xRbFunction->get_active() &&  ( m_xLbFunction->get_active() != CHART_LB_FUNCTION_ERROR_MARGIN ))
     {
         bPosEnabled = false;
         bNegEnabled = false;
     }
 
     // enable/disable pos/neg fields
-    m_pBxPositive->Enable( bPosEnabled );
-    m_pBxNegative->Enable( bNegEnabled );
+    m_xBxPositive->set_sensitive( bPosEnabled );
+    m_xBxNegative->set_sensitive( bNegEnabled );
     if( bShowRange )
     {
-        m_pEdRangePositive->Enable( bPosEnabled );
-        m_pIbRangePositive->Enable( bPosEnabled );
-        m_pEdRangeNegative->Enable( bNegEnabled );
-        m_pIbRangeNegative->Enable( bNegEnabled );
+        m_xEdRangePositive->set_sensitive( bPosEnabled );
+        m_xIbRangePositive->set_sensitive( bPosEnabled );
+        m_xEdRangeNegative->set_sensitive( bNegEnabled );
+        m_xIbRangeNegative->set_sensitive( bNegEnabled );
     }
     else
     {
-        m_pMfPositive->Enable( bPosEnabled );
-        m_pMfNegative->Enable( bNegEnabled );
+        m_xMfPositive->set_sensitive( bPosEnabled );
+        m_xMfNegative->set_sensitive( bNegEnabled );
     }
 
-    m_pCbSyncPosNeg->Enable( !bOneParameterCategory &&  ( bPosEnabled || bNegEnabled ));
+    m_xCbSyncPosNeg->set_sensitive( !bOneParameterCategory &&  ( bPosEnabled || bNegEnabled ));
 
     // mark invalid entries in the range fields
     if( bShowRange && ! m_bHasInternalDataProvider )
     {
-        isRangeFieldContentValid( *m_pEdRangePositive );
-        isRangeFieldContentValid( *m_pEdRangeNegative );
+        isRangeFieldContentValid( *m_xEdRangePositive );
+        isRangeFieldContentValid( *m_xEdRangeNegative );
     }
 }
 
-IMPL_LINK_NOARG( ErrorBarResources, CategoryChosen2, ListBox&, void )
+IMPL_LINK_NOARG( ErrorBarResources, CategoryChosen2, weld::ComboBox&, void )
 {
-   CategoryChosen(nullptr);
+   CategoryChosen(*m_xRbConst);
 }
 
-IMPL_LINK_NOARG( ErrorBarResources, CategoryChosen, Button*, void )
+IMPL_LINK_NOARG( ErrorBarResources, CategoryChosen, weld::ToggleButton&, void )
 {
     m_bErrorKindUnique = true;
     SvxChartKindError eOldError = m_eErrorKind;
 
-    if( m_pRbNone->IsChecked())
+    if( m_xRbNone->get_active())
         m_eErrorKind = SvxChartKindError::NONE;
-    else if( m_pRbConst->IsChecked())
+    else if( m_xRbConst->get_active())
         m_eErrorKind = SvxChartKindError::Const;
-    else if( m_pRbPercent->IsChecked())
+    else if( m_xRbPercent->get_active())
         m_eErrorKind = SvxChartKindError::Percent;
-    else if( m_pRbRange->IsChecked())
+    else if( m_xRbRange->get_active())
         m_eErrorKind = SvxChartKindError::Range;
-    else if( m_pRbFunction->IsChecked())
+    else if( m_xRbFunction->get_active())
     {
-        if( m_pLbFunction->GetSelectedEntryCount() == 1 )
+        switch( m_xLbFunction->get_active())
         {
-            switch( m_pLbFunction->GetSelectedEntryPos())
-            {
-                case CHART_LB_FUNCTION_STD_ERROR:
-                    m_eErrorKind = SvxChartKindError::StdError; break;
-                case CHART_LB_FUNCTION_STD_DEV:
-                    m_eErrorKind = SvxChartKindError::Sigma; break;
-                case CHART_LB_FUNCTION_VARIANCE:
-                    m_eErrorKind = SvxChartKindError::Variant; break;
-                case CHART_LB_FUNCTION_ERROR_MARGIN:
-                    m_eErrorKind = SvxChartKindError::BigError; break;
-                default:
-                    m_bErrorKindUnique = false;
-            }
+            case CHART_LB_FUNCTION_STD_ERROR:
+                m_eErrorKind = SvxChartKindError::StdError; break;
+            case CHART_LB_FUNCTION_STD_DEV:
+                m_eErrorKind = SvxChartKindError::Sigma; break;
+            case CHART_LB_FUNCTION_VARIANCE:
+                m_eErrorKind = SvxChartKindError::Variant; break;
+            case CHART_LB_FUNCTION_ERROR_MARGIN:
+                m_eErrorKind = SvxChartKindError::BigError; break;
+            default:
+                m_bErrorKindUnique = false;
         }
-        else
-            m_bErrorKindUnique = false;
     }
     else
     {
@@ -386,48 +386,48 @@ IMPL_LINK_NOARG( ErrorBarResources, CategoryChosen, Button*, void )
     if( m_eErrorKind == SvxChartKindError::Range &&
         eOldError != SvxChartKindError::Range )
     {
-        m_pCbSyncPosNeg->Check(
-            (!m_pEdRangePositive->GetText().isEmpty()) &&
-            m_pEdRangePositive->GetText() == m_pEdRangeNegative->GetText());
+        m_xCbSyncPosNeg->set_active(
+            (!m_xEdRangePositive->get_text().isEmpty()) &&
+            m_xEdRangePositive->get_text() == m_xEdRangeNegative->get_text());
     }
     // changed from range
     else if( m_eErrorKind != SvxChartKindError::Range &&
         eOldError == SvxChartKindError::Range )
     {
-        m_pCbSyncPosNeg->Check( m_pMfPositive->GetValue() == m_pMfNegative->GetValue());
+        m_xCbSyncPosNeg->set_active( m_xMfPositive->get_value(FieldUnit::NONE) == m_xMfNegative->get_value(FieldUnit::NONE));
     }
 
     UpdateControlStates();
 }
 
-IMPL_LINK_NOARG(ErrorBarResources, SynchronizePosAndNeg, CheckBox&, void)
+IMPL_LINK_NOARG(ErrorBarResources, SynchronizePosAndNeg, weld::ToggleButton&, void)
 {
     UpdateControlStates();
-    PosValueChanged( *m_pMfPositive );
+    PosValueChanged( *m_xMfPositive );
 }
 
-IMPL_LINK_NOARG(ErrorBarResources, PosValueChanged, Edit&, void)
+IMPL_LINK_NOARG(ErrorBarResources, PosValueChanged, weld::MetricSpinButton&, void)
 {
-    if( m_pCbSyncPosNeg->IsChecked())
+    if( m_xCbSyncPosNeg->get_active())
     {
-        if( m_pRbRange->IsChecked())
+        if( m_xRbRange->get_active())
         {
-            m_pEdRangeNegative->SetText( m_pEdRangePositive->GetText());
+            m_xEdRangeNegative->set_text( m_xEdRangePositive->get_text());
             m_bRangeNegUnique = m_bRangePosUnique;
         }
         else
-            m_pMfNegative->SetValue( m_pMfPositive->GetValue());
+            m_xMfNegative->set_value(m_xMfPositive->get_value(FieldUnit::NONE), FieldUnit::NONE);
     }
 }
 
-IMPL_LINK_NOARG(ErrorBarResources, IndicatorChanged, Button*, void)
+IMPL_LINK_NOARG(ErrorBarResources, IndicatorChanged, weld::ToggleButton&, void)
 {
     m_bIndicatorUnique = true;
-    if( m_pRbBoth->IsChecked())
+    if( m_xRbBoth->get_active())
         m_eIndicate = SvxChartIndicate::Both;
-    else if( m_pRbPositive->IsChecked())
+    else if( m_xRbPositive->get_active())
         m_eIndicate = SvxChartIndicate::Up;
-    else if( m_pRbNegative->IsChecked())
+    else if( m_xRbNegative->get_active())
         m_eIndicate = SvxChartIndicate::Down;
     else
         m_bIndicatorUnique = false;
@@ -435,44 +435,38 @@ IMPL_LINK_NOARG(ErrorBarResources, IndicatorChanged, Button*, void)
     UpdateControlStates();
 }
 
-IMPL_LINK( ErrorBarResources, ChooseRange, Button*, pButton, void )
+IMPL_LINK(ErrorBarResources, ChooseRange, weld::Button&, rButton, void)
 {
-    OSL_ASSERT( m_apRangeSelectionHelper.get());
-    if( ! m_apRangeSelectionHelper.get())
+    OSL_ASSERT(m_apRangeSelectionHelper);
+    if (!m_apRangeSelectionHelper)
         return;
     OSL_ASSERT( m_pCurrentRangeChoosingField == nullptr );
 
     OUString aUIString;
 
-    if( pButton == m_pIbRangePositive )
+    if (&rButton == m_xIbRangePositive.get())
     {
-        m_pCurrentRangeChoosingField = m_pEdRangePositive;
-        aUIString = m_pUIStringPos->GetText();
+        m_pCurrentRangeChoosingField = m_xEdRangePositive.get();
+        aUIString = m_xUIStringPos->get_label();
     }
     else
     {
-        m_pCurrentRangeChoosingField = m_pEdRangeNegative;
-        aUIString = m_pUIStringNeg->GetText();
+        m_pCurrentRangeChoosingField = m_xEdRangeNegative.get();
+        aUIString = m_xUIStringNeg->get_label();
     }
 
-    assert( m_pParentDialog );
-    if( m_pParentDialog )
-    {
-        lcl_enableRangeChoosing( true, m_pParentDialog );
-        m_apRangeSelectionHelper->chooseRange(
-            m_pCurrentRangeChoosingField->GetText(),
-            aUIString, *this );
-    }
-    else
-        m_pCurrentRangeChoosingField = nullptr;
+    lcl_enableRangeChoosing( true, m_pParentDialog );
+    m_apRangeSelectionHelper->chooseRange(
+        m_pCurrentRangeChoosingField->get_text(),
+        aUIString, *this );
 }
 
-IMPL_LINK( ErrorBarResources, RangeChanged, Edit&, rEdit, void )
+IMPL_LINK( ErrorBarResources, RangeChanged, weld::Entry&, rEdit, void )
 {
-    if( &rEdit == m_pEdRangePositive )
+    if( &rEdit == m_xEdRangePositive.get() )
     {
         m_bRangePosUnique = true;
-        PosValueChanged( *m_pMfPositive );
+        PosValueChanged( *m_xMfPositive );
     }
     else
     {
@@ -494,38 +488,38 @@ void ErrorBarResources::Reset(const SfxItemSet& rInAttrs)
     if( aState == SfxItemState::SET )
         m_eErrorKind = static_cast<const SvxChartKindErrorItem*>(pPoolItem)->GetValue();
 
-    m_pLbFunction->SelectEntryPos( lcl_getLbEntryPosByErrorKind( m_eErrorKind ));
+    m_xLbFunction->set_active( lcl_getLbEntryPosByErrorKind( m_eErrorKind ));
 
     if( m_bErrorKindUnique )
     {
         switch( m_eErrorKind )
         {
             case SvxChartKindError::NONE:
-                m_pRbNone->Check();
+                m_xRbNone->set_active(true);
                 break;
             case SvxChartKindError::Percent:
-                m_pRbPercent->Check();
+                m_xRbPercent->set_active(true);
                 break;
             case SvxChartKindError::Const:
-                m_pRbConst->Check();
+                m_xRbConst->set_active(true);
                 break;
             case SvxChartKindError::StdError:
             case SvxChartKindError::Variant:
             case SvxChartKindError::Sigma:
             case SvxChartKindError::BigError:
-                m_pRbFunction->Check();
+                m_xRbFunction->set_active(true);
                 break;
             case SvxChartKindError::Range:
-                m_pRbRange->Check();
+                m_xRbRange->set_active(true);
                 break;
         }
     }
     else
     {
-        m_pRbNone->Check( false );
-        m_pRbConst->Check( false );
-        m_pRbPercent->Check( false );
-        m_pRbFunction->Check( false );
+        m_xRbNone->set_active( false );
+        m_xRbConst->set_active( false );
+        m_xRbPercent->set_active( false );
+        m_xRbFunction->set_active( false );
     }
 
     // parameters
@@ -542,7 +536,7 @@ void ErrorBarResources::Reset(const SfxItemSet& rInAttrs)
 
         if( m_eErrorKind != SvxChartKindError::Range &&
             m_fPlusValue == m_fMinusValue )
-            m_pCbSyncPosNeg->Check();
+            m_xCbSyncPosNeg->set_active(true);
     }
 
     // indicator
@@ -560,18 +554,18 @@ void ErrorBarResources::Reset(const SfxItemSet& rInAttrs)
                 m_eIndicate = SvxChartIndicate::Both;
                 SAL_FALLTHROUGH; // to BOTH
             case SvxChartIndicate::Both :
-                m_pRbBoth->Check(); break;
+                m_xRbBoth->set_active(true); break;
             case SvxChartIndicate::Up :
-                m_pRbPositive->Check(); break;
+                m_xRbPositive->set_active(true); break;
             case SvxChartIndicate::Down :
-                m_pRbNegative->Check(); break;
+                m_xRbNegative->set_active(true); break;
         }
     }
     else
     {
-        m_pRbBoth->Check( false );
-        m_pRbPositive->Check( false );
-        m_pRbNegative->Check( false );
+        m_xRbBoth->set_active( false );
+        m_xRbPositive->set_active( false );
+        m_xRbNegative->set_active( false );
     }
 
     // ranges
@@ -580,7 +574,7 @@ void ErrorBarResources::Reset(const SfxItemSet& rInAttrs)
     if( aState == SfxItemState::SET )
     {
         OUString sRangePositive = static_cast< const SfxStringItem * >( pPoolItem )->GetValue();
-        m_pEdRangePositive->SetText( sRangePositive );
+        m_xEdRangePositive->set_text( sRangePositive );
     }
 
     aState = rInAttrs.GetItemState( SCHATTR_STAT_RANGE_NEG, true, &pPoolItem );
@@ -588,17 +582,17 @@ void ErrorBarResources::Reset(const SfxItemSet& rInAttrs)
     if( aState == SfxItemState::SET )
     {
         OUString sRangeNegative = static_cast< const SfxStringItem * >( pPoolItem )->GetValue();
-        m_pEdRangeNegative->SetText( sRangeNegative );
+        m_xEdRangeNegative->set_text( sRangeNegative );
         if( m_eErrorKind == SvxChartKindError::Range &&
             !sRangeNegative.isEmpty() &&
-            sRangeNegative == m_pEdRangePositive->GetText() )
-            m_pCbSyncPosNeg->Check();
+            sRangeNegative == m_xEdRangePositive->get_text() )
+            m_xCbSyncPosNeg->set_active(true);
     }
 
     UpdateControlStates();
 }
 
-bool ErrorBarResources::FillItemSet(SfxItemSet& rOutAttrs) const
+void ErrorBarResources::FillItemSet(SfxItemSet& rOutAttrs) const
 {
     if( m_bErrorKindUnique )
         rOutAttrs.Put( SvxChartKindErrorItem( m_eErrorKind, SCHATTR_STAT_KIND_ERROR ));
@@ -620,11 +614,11 @@ bool ErrorBarResources::FillItemSet(SfxItemSet& rOutAttrs) const
             }
             else
             {
-                aPosRange = m_pEdRangePositive->GetText();
-                if( m_pCbSyncPosNeg->IsChecked())
+                aPosRange = m_xEdRangePositive->get_text();
+                if( m_xCbSyncPosNeg->get_active())
                     aNegRange = aPosRange;
                 else
-                    aNegRange = m_pEdRangeNegative->GetText();
+                    aNegRange = m_xEdRangeNegative->get_text();
             }
 
             if( m_bRangePosUnique )
@@ -636,15 +630,15 @@ bool ErrorBarResources::FillItemSet(SfxItemSet& rOutAttrs) const
                  m_eErrorKind == SvxChartKindError::Percent ||
                  m_eErrorKind == SvxChartKindError::BigError )
         {
-            double fPosValue = static_cast< double >( m_pMfPositive->GetValue()) /
-                pow( 10.0, m_pMfPositive->GetDecimalDigits());
+            double fPosValue = static_cast< double >( m_xMfPositive->get_value(FieldUnit::NONE)) /
+                pow( 10.0, m_xMfPositive->get_digits());
             double fNegValue = 0.0;
 
-            if( m_pCbSyncPosNeg->IsChecked())
+            if( m_xCbSyncPosNeg->get_active())
                 fNegValue = fPosValue;
             else
-                fNegValue = static_cast< double >( m_pMfNegative->GetValue()) /
-                    pow( 10.0, m_pMfNegative->GetDecimalDigits());
+                fNegValue = static_cast< double >( m_xMfNegative->get_value(FieldUnit::NONE)) /
+                    pow( 10.0, m_xMfNegative->get_digits());
 
             rOutAttrs.Put( SvxDoubleItem( fPosValue, SCHATTR_STAT_CONSTPLUS ));
             rOutAttrs.Put( SvxDoubleItem( fNegValue, SCHATTR_STAT_CONSTMINUS ));
@@ -652,31 +646,29 @@ bool ErrorBarResources::FillItemSet(SfxItemSet& rOutAttrs) const
     }
 
     rOutAttrs.Put( SfxBoolItem( SCHATTR_STAT_ERRORBAR_TYPE , m_eErrorBarType == ERROR_BAR_Y ));
-
-    return true;
 }
 
 void ErrorBarResources::FillValueSets()
 {
     if( m_eErrorBarType == ERROR_BAR_Y )
     {
-        m_pFiNegative->SetImage(Image(BitmapEx(BMP_INDICATE_DOWN)));
-        m_pFiPositive->SetImage(Image(BitmapEx(BMP_INDICATE_UP)));
-        m_pFiBoth->SetImage(Image(BitmapEx(BMP_INDICATE_BOTH_VERTI)));
+        m_xFiNegative->set_from_icon_name(BMP_INDICATE_DOWN);
+        m_xFiPositive->set_from_icon_name(BMP_INDICATE_UP);
+        m_xFiBoth->set_from_icon_name(BMP_INDICATE_BOTH_VERTI);
     }
     else if( m_eErrorBarType == ERROR_BAR_X )
     {
-        m_pFiNegative->SetImage(Image(BitmapEx(BMP_INDICATE_LEFT)));
-        m_pFiPositive->SetImage(Image(BitmapEx(BMP_INDICATE_RIGHT)));
-        m_pFiBoth->SetImage(Image(BitmapEx(BMP_INDICATE_BOTH_HORI)));
+        m_xFiNegative->set_from_icon_name(BMP_INDICATE_LEFT);
+        m_xFiPositive->set_from_icon_name(BMP_INDICATE_RIGHT);
+        m_xFiBoth->set_from_icon_name(BMP_INDICATE_BOTH_HORI);
     }
 }
 
 void ErrorBarResources::listeningFinished(
     const OUString & rNewRange )
 {
-    OSL_ASSERT( m_apRangeSelectionHelper.get());
-    if( ! m_apRangeSelectionHelper.get())
+    OSL_ASSERT(m_apRangeSelectionHelper);
+    if (!m_apRangeSelectionHelper)
         return;
 
     // rNewRange becomes invalid after removing the listener
@@ -689,47 +681,43 @@ void ErrorBarResources::listeningFinished(
 //     if( m_pParentWindow )
 //     {
 //         m_pParentWindow->ToTop();
-//         m_pParentWindow->GrabFocus();
+//         m_pParentWindow->grab_focus();
 //     }
 
     if( m_pCurrentRangeChoosingField )
     {
-        m_pCurrentRangeChoosingField->SetText( aRange );
-        m_pCurrentRangeChoosingField->GrabFocus();
-        PosValueChanged( *m_pMfPositive );
+        m_pCurrentRangeChoosingField->set_text( aRange );
+        m_pCurrentRangeChoosingField->grab_focus();
+        PosValueChanged( *m_xMfPositive );
     }
 
     m_pCurrentRangeChoosingField = nullptr;
 
     UpdateControlStates();
-    OSL_ASSERT( m_pParentDialog );
-    if( m_pParentDialog )
-        lcl_enableRangeChoosing( false, m_pParentDialog );
+    lcl_enableRangeChoosing( false, m_pParentDialog );
 }
 
 void ErrorBarResources::disposingRangeSelection()
 {
-    OSL_ASSERT( m_apRangeSelectionHelper.get());
-    if( m_apRangeSelectionHelper.get())
+    OSL_ASSERT(m_apRangeSelectionHelper);
+    if (m_apRangeSelectionHelper)
         m_apRangeSelectionHelper->stopRangeListening( false );
 }
 
-void ErrorBarResources::isRangeFieldContentValid( Edit & rEdit )
+void ErrorBarResources::isRangeFieldContentValid(weld::Entry& rEdit)
 {
-    OUString aRange( rEdit.GetText());
+    OUString aRange( rEdit.get_text());
     bool bIsValid = ( aRange.isEmpty() ) ||
         ( m_apRangeSelectionHelper.get() &&
           m_apRangeSelectionHelper->verifyCellRange( aRange ));
 
-    if( bIsValid || !rEdit.IsEnabled())
+    if( bIsValid || !rEdit.get_sensitive())
     {
-        rEdit.SetControlForeground();
-        rEdit.SetControlBackground();
+        rEdit.set_error(false);
     }
     else
     {
-        rEdit.SetControlBackground( RANGE_SELECTION_INVALID_RANGE_BACKGROUND_COLOR );
-        rEdit.SetControlForeground( RANGE_SELECTION_INVALID_RANGE_FOREGROUND_COLOR );
+        rEdit.set_error(true);
     }
 }
 

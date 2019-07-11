@@ -18,15 +18,13 @@
  */
 
 #include <memory>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
 #include "impedit.hxx"
 #include <editeng/editeng.hxx>
 #include "editdbg.hxx"
 #include <svl/hint.hxx>
 #include <editeng/lrspitem.hxx>
 #include <sfx2/app.hxx>
+#include <o3tl/make_unique.hxx>
 
 void ImpEditEngine::SetStyleSheetPool( SfxStyleSheetPool* pSPool )
 {
@@ -82,7 +80,7 @@ void ImpEditEngine::SetStyleSheet( sal_Int32 nPara, SfxStyleSheet* pStyle )
                 aNewStyleName = pStyle->GetName();
 
             InsertUndo(
-                new EditUndoSetStyleSheet(pEditEngine, aEditDoc.GetPos( pNode ),
+                o3tl::make_unique<EditUndoSetStyleSheet>(pEditEngine, aEditDoc.GetPos( pNode ),
                         aPrevStyleName, pCurStyle ? pCurStyle->GetFamily() : SfxStyleFamily::Para,
                         aNewStyleName, pStyle ? pStyle->GetFamily() : SfxStyleFamily::Para,
                         pNode->GetContentAttribs().GetItems() ) );
@@ -178,7 +176,7 @@ void ImpEditEngine::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
         Dispose();
 }
 
-EditUndoSetAttribs* ImpEditEngine::CreateAttribUndo( EditSelection aSel, const SfxItemSet& rSet )
+std::unique_ptr<EditUndoSetAttribs> ImpEditEngine::CreateAttribUndo( EditSelection aSel, const SfxItemSet& rSet )
 {
     DBG_ASSERT( !aSel.DbgIsBuggy( aEditDoc ), "CreateAttribUndo: Incorrect selection ");
     aSel.Adjust( aEditDoc );
@@ -190,16 +188,16 @@ EditUndoSetAttribs* ImpEditEngine::CreateAttribUndo( EditSelection aSel, const S
 
     DBG_ASSERT( nStartNode <= nEndNode, "CreateAttribUndo: Start > End ?!" );
 
-    EditUndoSetAttribs* pUndo = nullptr;
+    std::unique_ptr<EditUndoSetAttribs> pUndo;
     if ( rSet.GetPool() != &aEditDoc.GetItemPool() )
     {
         SfxItemSet aTmpSet( GetEmptyItemSet() );
         aTmpSet.Put( rSet );
-        pUndo = new EditUndoSetAttribs(pEditEngine, aESel, aTmpSet);
+        pUndo.reset( new EditUndoSetAttribs(pEditEngine, aESel, aTmpSet) );
     }
     else
     {
-        pUndo = new EditUndoSetAttribs(pEditEngine, aESel, rSet);
+        pUndo.reset( new EditUndoSetAttribs(pEditEngine, aESel, rSet) );
     }
 
     SfxItemPool* pPool = pUndo->GetNewAttribs().GetPool();
@@ -242,7 +240,7 @@ void ImpEditEngine::UndoActionStart( sal_uInt16 nId, const ESelection& aSel )
     {
         GetUndoManager().EnterListAction( GetEditEnginePtr()->GetUndoComment( nId ), OUString(), nId, CreateViewShellId() );
         DBG_ASSERT( !pUndoMarkSelection, "UndoAction SelectionMarker?" );
-        pUndoMarkSelection = new ESelection( aSel );
+        pUndoMarkSelection.reset(new ESelection( aSel ));
     }
 }
 
@@ -260,22 +258,19 @@ void ImpEditEngine::UndoActionEnd()
     if ( IsUndoEnabled() && !IsInUndo() )
     {
         GetUndoManager().LeaveListAction();
-        delete pUndoMarkSelection;
-        pUndoMarkSelection = nullptr;
+        pUndoMarkSelection.reset();
     }
 }
 
-void ImpEditEngine::InsertUndo( EditUndo* pUndo, bool bTryMerge )
+void ImpEditEngine::InsertUndo( std::unique_ptr<EditUndo> pUndo, bool bTryMerge )
 {
-    DBG_ASSERT( !IsInUndo(), "InsertUndo in Undomodus!" );
+    DBG_ASSERT( !IsInUndo(), "InsertUndo in Undo mode!" );
     if ( pUndoMarkSelection )
     {
-        EditUndoMarkSelection* pU = new EditUndoMarkSelection(pEditEngine, *pUndoMarkSelection);
-        GetUndoManager().AddUndoAction( pU );
-        delete pUndoMarkSelection;
-        pUndoMarkSelection = nullptr;
+        GetUndoManager().AddUndoAction( o3tl::make_unique<EditUndoMarkSelection>(pEditEngine, *pUndoMarkSelection) );
+        pUndoMarkSelection.reset();
     }
-    GetUndoManager().AddUndoAction( pUndo, bTryMerge );
+    GetUndoManager().AddUndoAction( std::move(pUndo), bTryMerge );
 
     mbLastTryMerge = bTryMerge;
 }
@@ -440,7 +435,7 @@ SfxItemSet ImpEditEngine::GetAttribs( sal_Int32 nPara, sal_Int32 nStart, sal_Int
             const CharAttribList::AttribsType& rAttrs = pNode->GetCharAttribs().GetAttribs();
             for (const auto & nAttr : rAttrs)
             {
-                const EditCharAttrib& rAttr = *nAttr.get();
+                const EditCharAttrib& rAttr = *nAttr;
 
                 if ( nStart == nEnd )
                 {
@@ -506,9 +501,9 @@ void ImpEditEngine::SetAttribs( EditSelection aSel, const SfxItemSet& rSet, SetA
 
     if ( IsUndoEnabled() && !IsInUndo() && aStatus.DoUndoAttribs() )
     {
-        EditUndoSetAttribs* pUndo = CreateAttribUndo( aSel, rSet );
+        std::unique_ptr<EditUndoSetAttribs> pUndo = CreateAttribUndo( aSel, rSet );
         pUndo->SetSpecial( nSpecial );
-        InsertUndo( pUndo );
+        InsertUndo( std::move(pUndo) );
     }
 
     bool bCheckLanguage = false;
@@ -525,7 +520,7 @@ void ImpEditEngine::SetAttribs( EditSelection aSel, const SfxItemSet& rSet, SetA
         bool bParaAttribFound = false;
         bool bCharAttribFound = false;
 
-        DBG_ASSERT( aEditDoc.GetObject( nNode ), "Node not founden: SetAttribs" );
+        DBG_ASSERT( aEditDoc.GetObject( nNode ), "Node not found: SetAttribs" );
         DBG_ASSERT( GetParaPortions().SafeGetObject( nNode ), "Portion not found: SetAttribs" );
 
         ContentNode* pNode = aEditDoc.GetObject( nNode );
@@ -554,7 +549,7 @@ void ImpEditEngine::SetAttribs( EditSelection aSel, const SfxItemSet& rSet, SetA
                         CharAttribList::AttribsType& rAttribs = pNode->GetCharAttribs().GetAttribs();
                         for (std::unique_ptr<EditCharAttrib> & rAttrib : rAttribs)
                         {
-                            EditCharAttrib& rAttr = *rAttrib.get();
+                            EditCharAttrib& rAttr = *rAttrib;
                             if (rAttr.GetStart() > nEndPos)
                                 break;
 
@@ -598,11 +593,11 @@ void ImpEditEngine::RemoveCharAttribs( EditSelection aSel, bool bRemoveParaAttri
     if ( IsUndoEnabled() && !IsInUndo() && aStatus.DoUndoAttribs() )
     {
         // Possibly a special Undo, or itemset*
-        EditUndoSetAttribs* pUndo = CreateAttribUndo( aSel, GetEmptyItemSet() );
+        std::unique_ptr<EditUndoSetAttribs> pUndo = CreateAttribUndo( aSel, GetEmptyItemSet() );
         pUndo->SetRemoveAttribs( true );
         pUndo->SetRemoveParaAttribs( bRemoveParaAttribs );
         pUndo->SetRemoveWhich( nWhich );
-        InsertUndo( pUndo );
+        InsertUndo( std::move(pUndo) );
     }
 
     // iterate over the paragraphs ...
@@ -674,7 +669,7 @@ void ImpEditEngine::RemoveCharAttribs( sal_Int32 nPara, sal_uInt16 nWhich, bool 
         pAttr = GetAttrib(rAttrs, nAttr);
     }
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     CharAttribList::DbgCheckAttribs(pNode->GetCharAttribs());
 #endif
 
@@ -696,11 +691,11 @@ void ImpEditEngine::SetParaAttribs( sal_Int32 nPara, const SfxItemSet& rSet )
             {
                 SfxItemSet aTmpSet( GetEmptyItemSet() );
                 aTmpSet.Put( rSet );
-                InsertUndo(new EditUndoSetParaAttribs(pEditEngine, nPara, pNode->GetContentAttribs().GetItems(), aTmpSet));
+                InsertUndo(o3tl::make_unique<EditUndoSetParaAttribs>(pEditEngine, nPara, pNode->GetContentAttribs().GetItems(), aTmpSet));
             }
             else
             {
-                InsertUndo(new EditUndoSetParaAttribs(pEditEngine, nPara, pNode->GetContentAttribs().GetItems(), rSet));
+                InsertUndo(o3tl::make_unique<EditUndoSetParaAttribs>(pEditEngine, nPara, pNode->GetContentAttribs().GetItems(), rSet));
             }
         }
 
@@ -751,7 +746,7 @@ void ImpEditEngine::GetCharAttribs( sal_Int32 nPara, std::vector<EECharAttrib>& 
         const CharAttribList::AttribsType& rAttrs = pNode->GetCharAttribs().GetAttribs();
         for (const auto & i : rAttrs)
         {
-            const EditCharAttrib& rAttr = *i.get();
+            const EditCharAttrib& rAttr = *i;
             EECharAttrib aEEAttr;
             aEEAttr.pAttr = rAttr.GetItem();
             aEEAttr.nStart = rAttr.GetStart();
@@ -826,7 +821,6 @@ void IdleFormattter::ForceTimeout()
 
 ImplIMEInfos::ImplIMEInfos( const EditPaM& rPos, const OUString& rOldTextAfterStartPos )
  : aOldTextAfterStartPos( rOldTextAfterStartPos ),
- pAttribs(nullptr),
  aPos(rPos),
  nLen(0),
  bWasCursorOverwrite(false)

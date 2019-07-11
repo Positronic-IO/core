@@ -144,7 +144,8 @@ const short ROLE_TABLE[][2] =
         {COMMENT_END,               IA2_ROLE_TEXT_FRAME },
         {DOCUMENT_PRESENTATION,     ROLE_SYSTEM_DOCUMENT },
         {DOCUMENT_SPREADSHEET,      ROLE_SYSTEM_DOCUMENT },
-        {DOCUMENT_TEXT,             ROLE_SYSTEM_DOCUMENT }
+        {DOCUMENT_TEXT,             ROLE_SYSTEM_DOCUMENT },
+        {STATIC,                    IA2_ROLE_TEXT_FRAME }
     };
 
 
@@ -379,16 +380,13 @@ void AccObject::UpdateDefaultAction( )
    */
 void  AccObject::SetValue( Any pAny )
 {
-    unsigned short pUNumberString[100];
-    memset( pUNumberString, 0 , sizeof( pUNumberString) );
-
     if( nullptr == m_pIMAcc || !m_xAccContextRef.is() )
     {
         assert(false);
         return ;
     }
     Reference< XAccessibleText > pRText(m_xAccContextRef,UNO_QUERY);
-    ::rtl::OUString val;
+    OUString val;
     switch(m_accRole)
     {
     case SPIN_BOX:
@@ -422,12 +420,11 @@ void  AccObject::SetValue( Any pAny )
     }
 
     return;
-
-
 }
-::rtl::OUString AccObject::GetMAccessibleValueFromAny(Any pAny)
+
+OUString AccObject::GetMAccessibleValueFromAny(Any pAny)
 {
-    ::rtl::OUString strValue;
+    OUString strValue;
 
     if(nullptr == m_pIMAcc)
         return strValue;
@@ -437,19 +434,19 @@ void  AccObject::SetValue( Any pAny )
         sal_uInt16 val;
         if (pAny >>= val)
         {
-            strValue=::rtl::OUString::number(val);
+            strValue=OUString::number(val);
 
         }
     }
-    else if(pAny.getValueType() == cppu::UnoType<rtl::OUString>::get())
+    else if(pAny.getValueType() == cppu::UnoType<OUString>::get())
     {
 
         pAny >>= strValue ;
 
     }
-    else if(pAny.getValueType() == cppu::UnoType<Sequence< ::rtl::OUString >>::get())
+    else if(pAny.getValueType() == cppu::UnoType<Sequence< OUString >>::get())
     {
-        Sequence< ::rtl::OUString > val;
+        Sequence< OUString > val;
         if (pAny >>= val)
         {
 
@@ -467,7 +464,7 @@ void  AccObject::SetValue( Any pAny )
         double val;
         if (pAny >>= val)
         {
-            strValue=::rtl::OUString::number(val);
+            strValue=OUString::number(val);
         }
     }
     else if(pAny.getValueType() == cppu::UnoType<sal_Int32>::get())
@@ -475,7 +472,7 @@ void  AccObject::SetValue( Any pAny )
         sal_Int32 val;
         if (pAny >>= val)
         {
-            strValue=::rtl::OUString::number(val);
+            strValue=OUString::number(val);
         }
     }
     else if (pAny.getValueType() == cppu::UnoType<css::accessibility::TextSegment>::get())
@@ -483,7 +480,7 @@ void  AccObject::SetValue( Any pAny )
         css::accessibility::TextSegment val;
         if (pAny >>= val)
         {
-            ::rtl::OUString realVal(val.SegmentText);
+            OUString realVal(val.SegmentText);
             strValue = realVal;
 
         }
@@ -755,7 +752,7 @@ void AccObject::UpdateActionDesc()
         return;
     }
 
-    ::rtl::OUString pXString = m_xAccContextRef->getAccessibleDescription();
+    OUString pXString = m_xAccContextRef->getAccessibleDescription();
     m_pIMAcc->Put_XAccDescription(o3tl::toW(pXString.getStr()));
     long Role = m_accRole;
 
@@ -875,42 +872,40 @@ void AccObject::UpdateState()
 
     short Role = m_accRole;
 
-    if( m_pIMAcc )
+    switch(m_accRole)
     {
-        switch(m_accRole)
-        {
-        case LABEL:
-            m_pIMAcc->IncreaseState( STATE_SYSTEM_READONLY );
-            break;
-        case TEXT:
-            // 2. editable combobox -> readonly ------ bridge
-        case EMBEDDED_OBJECT:
-        case END_NOTE:
-        case FOOTER:
-        case FOOTNOTE:
-        case GRAPHIC:
-        case HEADER:
-        case HEADING:
+    case LABEL:
+    case STATIC:
+        m_pIMAcc->IncreaseState( STATE_SYSTEM_READONLY );
+        break;
+    case TEXT:
+        // 2. editable combobox -> readonly ------ bridge
+    case EMBEDDED_OBJECT:
+    case END_NOTE:
+    case FOOTER:
+    case FOOTNOTE:
+    case GRAPHIC:
+    case HEADER:
+    case HEADING:
 
-            //Image Map
-        case PARAGRAPH:
-        case PASSWORD_TEXT:
-        case SHAPE:
-        case SPIN_BOX:
-        case TABLE:
-        case TABLE_CELL:
-        case TEXT_FRAME:
-        case DATE_EDITOR:
-        case DOCUMENT:
-        case COLUMN_HEADER:
-            {
-                if(!isEditable)
-                    m_pIMAcc->IncreaseState( STATE_SYSTEM_READONLY );
-            }
-            break;
-        default:
-            break;
+        //Image Map
+    case PARAGRAPH:
+    case PASSWORD_TEXT:
+    case SHAPE:
+    case SPIN_BOX:
+    case TABLE:
+    case TABLE_CELL:
+    case TEXT_FRAME:
+    case DATE_EDITOR:
+    case DOCUMENT:
+    case COLUMN_HEADER:
+        {
+            if(!isEditable)
+                m_pIMAcc->IncreaseState( STATE_SYSTEM_READONLY );
         }
+        break;
+    default:
+        break;
     }
 
     if( isEnable )
@@ -918,7 +913,8 @@ void AccObject::UpdateState()
 
         if(!(Role == FILLER || Role == END_NOTE || Role == FOOTER || Role == FOOTNOTE || Role == GROUP_BOX || Role == RULER
                 || Role == HEADER || Role == ICON || Role == INTERNAL_FRAME || Role == LABEL || Role == LAYERED_PANE
-                || Role == SCROLL_BAR || Role == SCROLL_PANE || Role == SPLIT_PANE || Role == STATUS_BAR || Role == TOOL_TIP))
+                || Role == SCROLL_BAR || Role == SCROLL_PANE || Role == SPLIT_PANE || Role == STATIC || Role == STATUS_BAR
+                || Role == TOOL_TIP))
         {
             if( SEPARATOR == Role  )
             {
@@ -971,24 +967,21 @@ void AccObject::UpdateState()
         }
     }
 
-    if( m_pIMAcc )
+    switch(m_accRole)
     {
-        switch(m_accRole)
-        {
-        case POPUP_MENU:
-        case MENU:
-            if( pContext->getAccessibleChildCount() > 0 )
-                m_pIMAcc->IncreaseState( STATE_SYSTEM_HASPOPUP );
-            break;
-        case PASSWORD_TEXT:
-            m_pIMAcc->IncreaseState( STATE_SYSTEM_PROTECTED );
-            break;
-        default:
-            break;
-        }
+    case POPUP_MENU:
+    case MENU:
+        if( pContext->getAccessibleChildCount() > 0 )
+            m_pIMAcc->IncreaseState( STATE_SYSTEM_HASPOPUP );
+        break;
+    case PASSWORD_TEXT:
+        m_pIMAcc->IncreaseState( STATE_SYSTEM_PROTECTED );
+        break;
+    default:
+        break;
     }
-
 }
+
 /**
    * update location information from uno to com
    * @param

@@ -22,14 +22,17 @@
 #include <com/sun/star/xml/dom/XDocument.hpp>
 #include <com/sun/star/xml/sax/XFastSAXSerializable.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <editeng/unoprnms.hxx>
 #include <drawingml/textbody.hxx>
 #include <drawingml/textparagraph.hxx>
 #include <drawingml/textrun.hxx>
 #include <drawingml/diagram/diagram.hxx>
 #include <drawingml/fillproperties.hxx>
+#include <drawingml/customshapeproperties.hxx>
 #include <oox/ppt/pptshapegroupcontext.hxx>
 #include <oox/ppt/pptshape.hxx>
+#include <oox/token/namespaces.hxx>
 
 #include "diagramlayoutatoms.hxx"
 #include "layoutatomvisitors.hxx"
@@ -129,6 +132,46 @@ static sal_Int32 calcDepth( const OUString& rNodeName,
     }
 
     return 0;
+}
+
+static void sortChildrenByZOrder(const ShapePtr& pShape)
+{
+    std::vector<ShapePtr>& rChildren = pShape->getChildren();
+
+    // Offset the children from their default z-order stacking, if necessary.
+    for (size_t i = 0; i < rChildren.size(); ++i)
+        rChildren[i]->setZOrder(i);
+
+    for (size_t i = 0; i < rChildren.size(); ++i)
+    {
+        const ShapePtr& pChild = rChildren[i];
+        sal_Int32 nZOrderOff = pChild->getZOrderOff();
+        if (nZOrderOff <= 0)
+            continue;
+
+        // Increase my ZOrder by nZOrderOff.
+        pChild->setZOrder(pChild->getZOrder() + nZOrderOff);
+        pChild->setZOrderOff(0);
+
+        for (sal_Int32 j = 0; j < nZOrderOff; ++j)
+        {
+            size_t nIndex = i + j + 1;
+            if (nIndex >= rChildren.size())
+                break;
+
+            // Decrease the ZOrder of the next nZOrderOff elements by one.
+            const ShapePtr& pNext = rChildren[nIndex];
+            pNext->setZOrder(pNext->getZOrder() - 1);
+        }
+    }
+
+    // Now that the ZOrders are adjusted, sort the children.
+    std::sort(rChildren.begin(), rChildren.end(),
+              [](const ShapePtr& a, const ShapePtr& b) { return a->getZOrder() < b->getZOrder(); });
+
+    // Apply also for children.
+    for (auto& rChild : rChildren)
+        sortChildrenByZOrder(rChild);
 }
 
 void Diagram::build(  )
@@ -269,8 +312,10 @@ void Diagram::build(  )
         if( connection.mnType == XML_presOf )
         {
             DiagramData::StringMap::value_type::second_type& rVec=getData()->getPresOfNameMap()[connection.msDestId];
-            rVec.emplace_back(
-                    connection.msSourceId,sal_Int32(0));
+            DiagramData::SourceIdAndDepth aSourceIdAndDepth;
+            aSourceIdAndDepth.msSourceId = connection.msSourceId;
+            aSourceIdAndDepth.mnDepth = 0;
+            rVec[connection.mnDestOrder] = aSourceIdAndDepth;
         }
     }
 
@@ -280,9 +325,8 @@ void Diagram::build(  )
     {
         for (auto & elem : elemPresOf.second)
         {
-            const sal_Int32 nDepth=calcDepth(elem.first,
-                                             getData()->getConnections());
-            elem.second = nDepth != 0 ? nDepth : -1;
+            const sal_Int32 nDepth = calcDepth(elem.second.msSourceId, getData()->getConnections());
+            elem.second.mnDepth = nDepth != 0 ? nDepth : -1;
             if (nDepth > getData()->getMaxDepth())
                 getData()->setMaxDepth(nDepth);
         }
@@ -313,7 +357,19 @@ void Diagram::addTo( const ShapePtr & pParentShape )
         // layout shapes - now all shapes are created
         ShapeLayoutingVisitor aLayoutingVisitor;
         mpLayout->getNode()->accept(aLayoutingVisitor);
+
+        sortChildrenByZOrder(pParentShape);
     }
+
+    ShapePtr pBackground(new Shape("com.sun.star.drawing.CustomShape"));
+    pBackground->setSubType(XML_rect);
+    pBackground->getCustomShapeProperties()->setShapePresetType(XML_rect);
+    pBackground->setSize(pParentShape->getSize());
+    pBackground->getFillProperties() = *mpData->getFillProperties();
+    pBackground->setLocked(true);
+    auto& aChildren = pParentShape->getChildren();
+    aChildren.insert(aChildren.begin(), pBackground);
+
     pParentShape->setDiagramDoms( getDomsAsPropertyValues() );
 }
 
@@ -343,7 +399,7 @@ uno::Sequence<beans::PropertyValue> Diagram::getDomsAsPropertyValues() const
     return aValue;
 }
 
-uno::Reference<xml::dom::XDocument> loadFragment(
+static uno::Reference<xml::dom::XDocument> loadFragment(
     core::XmlFilterBase& rFilter,
     const OUString& rFragmentPath )
 {
@@ -352,14 +408,14 @@ uno::Reference<xml::dom::XDocument> loadFragment(
     return rFilter.importFragment( rFragmentPath );
 }
 
-uno::Reference<xml::dom::XDocument> loadFragment(
+static uno::Reference<xml::dom::XDocument> loadFragment(
     core::XmlFilterBase& rFilter,
     const rtl::Reference< core::FragmentHandler >& rxHandler )
 {
     return loadFragment( rFilter, rxHandler->getFragmentPath() );
 }
 
-void importFragment( core::XmlFilterBase& rFilter,
+static void importFragment( core::XmlFilterBase& rFilter,
                      const uno::Reference<xml::dom::XDocument>& rXDom,
                      const char* pDocName,
                      const DiagramPtr& pDiagram,
@@ -375,12 +431,57 @@ void importFragment( core::XmlFilterBase& rFilter,
     rFilter.importFragment( rxHandler, xSerializer );
 }
 
+namespace
+{
+/**
+ * A fragment handler that just counts the number of <dsp:sp> elements in a
+ * fragment.
+ */
+class DiagramShapeCounter : public oox::core::FragmentHandler2
+{
+public:
+    DiagramShapeCounter(oox::core::XmlFilterBase& rFilter, const OUString& rFragmentPath,
+                        sal_Int32& nCounter);
+    oox::core::ContextHandlerRef onCreateContext(sal_Int32 nElement,
+                                                 const AttributeList& rAttribs) override;
+
+private:
+    sal_Int32& m_nCounter;
+};
+
+DiagramShapeCounter::DiagramShapeCounter(oox::core::XmlFilterBase& rFilter,
+                                         const OUString& rFragmentPath, sal_Int32& nCounter)
+    : FragmentHandler2(rFilter, rFragmentPath)
+    , m_nCounter(nCounter)
+{
+}
+
+oox::core::ContextHandlerRef DiagramShapeCounter::onCreateContext(sal_Int32 nElement,
+                                                                  const AttributeList& /*rAttribs*/)
+{
+    switch (nElement)
+    {
+        case DSP_TOKEN(drawing):
+        case DSP_TOKEN(spTree):
+            return this;
+        case DSP_TOKEN(sp):
+            ++m_nCounter;
+            break;
+        default:
+            break;
+    }
+
+    return nullptr;
+}
+}
+
 void loadDiagram( ShapePtr const & pShape,
                   core::XmlFilterBase& rFilter,
                   const OUString& rDataModelPath,
                   const OUString& rLayoutPath,
                   const OUString& rQStylePath,
-                  const OUString& rColorStylePath )
+                  const OUString& rColorStylePath,
+                  const oox::core::Relations& rRelations )
 {
     DiagramPtr pDiagram( new Diagram );
 
@@ -407,11 +508,26 @@ void loadDiagram( ShapePtr const & pShape,
 
         // Pass the info to pShape
         for (auto const& extDrawing : pData->getExtDrawings())
-                pShape->addExtDrawingRelId(extDrawing);
+        {
+            OUString aFragmentPath = rRelations.getFragmentPathFromRelId(extDrawing);
+            // Ignore RelIds which don't resolve to a fragment path.
+            if (aFragmentPath.isEmpty())
+                continue;
+
+            sal_Int32 nCounter = 0;
+            rtl::Reference<core::FragmentHandler> xCounter(
+                new DiagramShapeCounter(rFilter, aFragmentPath, nCounter));
+            rFilter.importFragment(xCounter);
+            // Ignore ext drawings which don't actually have any shapes.
+            if (nCounter == 0)
+                continue;
+
+            pShape->addExtDrawingRelId(extDrawing);
+        }
     }
 
     // extLst is present, lets bet on that and ignore the rest of the data from here
-    if( pData->getExtDrawings().empty() )
+    if( pShape->getExtDrawings().empty() )
     {
         // layout
         if( !rLayoutPath.isEmpty() )
@@ -468,57 +584,6 @@ void loadDiagram( ShapePtr const & pShape,
             pShape->setFontRefColorForNodes(aColor->second.maTextFillColor);
         }
     }
-
-    // diagram loaded. now lump together & attach to shape
-    pDiagram->addTo(pShape);
-}
-
-void loadDiagram( const ShapePtr& pShape,
-                  core::XmlFilterBase& rFilter,
-                  const uno::Reference<xml::dom::XDocument>& rXDataModelDom,
-                  const uno::Reference<xml::dom::XDocument>& rXLayoutDom,
-                  const uno::Reference<xml::dom::XDocument>& rXQStyleDom,
-                  const uno::Reference<xml::dom::XDocument>& rXColorStyleDom )
-{
-    DiagramPtr pDiagram( new Diagram );
-
-    DiagramDataPtr pData( new DiagramData() );
-    pDiagram->setData( pData );
-
-    DiagramLayoutPtr pLayout( new DiagramLayout(*pDiagram) );
-    pDiagram->setLayout( pLayout );
-
-    // data
-    if( rXDataModelDom.is() )
-        importFragment(rFilter,
-                       rXDataModelDom,
-                       "OOXData",
-                       pDiagram,
-                       new DiagramDataFragmentHandler( rFilter, "", pData ));
-
-    // layout
-    if( rXLayoutDom.is() )
-        importFragment(rFilter,
-                       rXLayoutDom,
-                       "OOXLayout",
-                       pDiagram,
-                       new DiagramLayoutFragmentHandler( rFilter, "", pLayout ));
-
-    // style
-    if( rXQStyleDom.is() )
-        importFragment(rFilter,
-                       rXQStyleDom,
-                       "OOXStyle",
-                       pDiagram,
-                       new DiagramQStylesFragmentHandler( rFilter, "", pDiagram->getStyles() ));
-
-    // colors
-    if( rXColorStyleDom.is() )
-        importFragment(rFilter,
-                       rXColorStyleDom,
-                       "OOXColor",
-                       pDiagram,
-                       new ColorFragmentHandler( rFilter, "", pDiagram->getColors() ));
 
     // diagram loaded. now lump together & attach to shape
     pDiagram->addTo(pShape);

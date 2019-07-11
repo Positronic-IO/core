@@ -38,7 +38,6 @@ using namespace ::com::sun::star::container;
 OFileTable::OFileTable(sdbcx::OCollection* _pTables,OConnection* _pConnection)
 : OTable_TYPEDEF(_pTables,_pConnection->getMetaData()->supportsMixedCaseQuotedIdentifiers())
                 ,m_pConnection(_pConnection)
-                ,m_pFileStream(nullptr)
                 ,m_nFilePos(0)
                 ,m_nBufferSize(0)
                 ,m_bWriteable(false)
@@ -60,7 +59,6 @@ OFileTable::OFileTable( sdbcx::OCollection* _pTables,OConnection* _pConnection,
                      SchemaName,
                      CatalogName)
     , m_pConnection(_pConnection)
-    , m_pFileStream(nullptr)
     , m_nFilePos(0)
     , m_nBufferSize(0)
     , m_bWriteable(false)
@@ -124,17 +122,9 @@ void SAL_CALL OFileTable::disposing()
 
 Sequence< sal_Int8 > OFileTable::getUnoTunnelImplementationId()
 {
-    static ::cppu::OImplementationId * pId = nullptr;
-    if (! pId)
-    {
-        ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-        if (! pId)
-        {
-            static ::cppu::OImplementationId aId;
-            pId = &aId;
-        }
-    }
-    return pId->getImplementationId();
+    static ::cppu::OImplementationId s_Id;
+
+    return s_Id.getImplementationId();
 }
 
 // css::lang::XUnoTunnel

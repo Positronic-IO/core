@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <basegfx/utils/canvastools.hxx>
 #include <basegfx/utils/unopolypolygon.hxx>
@@ -76,7 +77,6 @@ namespace oglcanvas
 {
 
     SpriteDeviceHelper::SpriteDeviceHelper() :
-        mpDevice(nullptr),
         mpSpriteCanvas(nullptr),
         maActiveSprites(),
         maLastUpdate(),
@@ -137,7 +137,6 @@ namespace oglcanvas
     {
         // release all references
         mpSpriteCanvas = nullptr;
-        mpDevice = nullptr;
         mpTextureCache.reset();
 
         if( mxContext->isInitialized() )
@@ -274,8 +273,7 @@ namespace oglcanvas
         if( !bIsVisible || !mxContext->isInitialized() || !mpSpriteCanvas )
             return false;
 
-        if( !activateWindowContext() )
-            return false;
+        mxContext->makeCurrent();
 
         SystemChildWindow* pChildWindow = mxContext->getChildWindow();
         const ::Size& rOutputSize = pChildWindow->GetSizePixel();
@@ -504,12 +502,6 @@ namespace oglcanvas
             setupUniforms(mnRectangularTwoColorGradientProgram, pColors[0], pColors[1], rTexTransform);
     }
 
-    bool SpriteDeviceHelper::activateWindowContext()
-    {
-        mxContext->makeCurrent();
-        return true;
-    }
-
     namespace
     {
 
@@ -541,7 +533,7 @@ namespace oglcanvas
                 mnTextureId(0)
             {
                 OpenGLHelper::createFramebuffer(rSize.getX(), rSize.getY(), mnFrambufferId,
-                        mnDepthId, mnTextureId, false);
+                        mnDepthId, mnTextureId);
             }
 
             virtual ~BufferContextImpl() override

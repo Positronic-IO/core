@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <utility>
@@ -32,6 +33,7 @@
 #include "DAVSession.hxx"
 #include "SerfUri.hxx"
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
+#include <com/sun/star/ucb/ResultSetException.hpp>
 
 using namespace com::sun::star;
 using namespace http_dav_ucp;
@@ -86,13 +88,9 @@ struct DataSupplier_Impl
 
 DataSupplier_Impl::~DataSupplier_Impl()
 {
-    ResultList::const_iterator it  = m_aResults.begin();
-    ResultList::const_iterator end = m_aResults.end();
-
-    while ( it != end )
+    for ( auto& rResultPtr : m_aResults )
     {
-        delete (*it);
-        ++it;
+        delete rResultPtr;
     }
 }
 
@@ -339,20 +337,10 @@ bool DataSupplier::getData()
         // needed to get a valid ContentProperties::pIsFolder value, which
         // is needed for OpenMode handling.
 
-        std::vector< OUString >::const_iterator it
-            = propertyNames.begin();
-        std::vector< OUString >::const_iterator end
-            = propertyNames.end();
+        bool isNoResourceType = std::none_of(propertyNames.begin(), propertyNames.end(),
+            [](const OUString& rPropName) { return rPropName.equals(DAVProperties::RESOURCETYPE); });
 
-        while ( it != end )
-        {
-            if ( (*it).equals( DAVProperties::RESOURCETYPE ) )
-                break;
-
-            ++it;
-        }
-
-        if ( it == end )
+        if ( isNoResourceType )
             propertyNames.push_back( DAVProperties::RESOURCETYPE );
 
         std::vector< DAVResource > resources;

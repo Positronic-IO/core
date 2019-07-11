@@ -41,6 +41,7 @@ class SwTOXType;
 class SwTOXMark;
 class SwTextTOXMark;
 class SwDoc;
+class SwRootFrame;
 
 typedef std::vector<SwTOXMark*> SwTOXMarks;
 
@@ -98,7 +99,7 @@ public:
 
     void InvalidateTOXMark();
 
-    OUString                GetText() const;
+    OUString                GetText(SwRootFrame const* pLayout) const;
 
     inline bool             IsAlternativeText() const;
     inline const OUString&  GetAlternativeText() const;
@@ -159,8 +160,8 @@ public:
     inline TOXTypes         GetType() const;
 
 private:
-    OUString        m_aName;
-    TOXTypes        m_eType;
+    OUString const        m_aName;
+    TOXTypes const        m_eType;
 
     // @@@ public copy ctor, but no copy assignment?
     SwTOXType & operator= (const SwTOXType &) = delete;
@@ -237,7 +238,7 @@ struct SW_DLLPUBLIC SwFormToken
 
 struct SwFormTokenEqualToFormTokenType
 {
-    FormTokenType eType;
+    FormTokenType const eType;
 
     SwFormTokenEqualToFormTokenType(FormTokenType _eType) : eType(_eType) {}
     bool operator()(const SwFormToken & rToken)

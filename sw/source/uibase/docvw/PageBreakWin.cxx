@@ -12,6 +12,8 @@
 
 #include <cmdid.h>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <DashedLine.hxx>
 #include <doc.hxx>
 #include <edtwin.hxx>
@@ -84,8 +86,7 @@ namespace
 
         if ( !rMEvt.IsSynthetic() && !m_pWin->IsVisible() )
         {
-            Point* pPtr = new Point( rMEvt.GetPosPixel() );
-            m_pWin->UpdatePosition( pPtr );
+            m_pWin->UpdatePosition( rMEvt.GetPosPixel() );
         }
     }
 }
@@ -98,8 +99,7 @@ SwPageBreakWin::SwPageBreakWin( SwEditWin* pEditWin, const SwFrame *pFrame ) :
     m_bIsAppearing( false ),
     m_nFadeRate( 100 ),
     m_nDelayAppearing( 0 ),
-    m_bDestroyed( false ),
-    m_pMousePt( nullptr )
+    m_bDestroyed( false )
 {
     // Use pixels for the rest of the drawing
     SetMapMode( MapMode ( MapUnit::MapPixel ) );
@@ -128,9 +128,6 @@ void SwPageBreakWin::dispose()
     m_pLine.disposeAndClear();
     m_pPopupMenu.clear();
     m_aBuilder.disposeBuilder();
-
-    delete m_pMousePt;
-    m_pMousePt = nullptr;
 
     SwFrameMenuButtonBase::dispose();
 }
@@ -240,7 +237,9 @@ void SwPageBreakWin::Select()
                 rSh.ClearMark();
 
                 SwContentFrame *pCnt = const_cast< SwContentFrame* >( pBodyFrame->ContainsContent() );
-                SwContentNode* pNd = pCnt->GetNode();
+                SwContentNode* pNd = pCnt->IsTextFrame()
+                    ? static_cast<SwTextFrame*>(pCnt)->GetTextNodeFirst()
+                    : static_cast<SwNoTextFrame*>(pCnt)->GetNode();
                 rSh.SetSelection( *pNd );
 
                 SfxStringItem aItem(pEditWin->GetView().GetPool().GetWhich(FN_FORMAT_TABLE_DLG), "textflow");
@@ -254,7 +253,9 @@ void SwPageBreakWin::Select()
             else
             {
                 SwContentFrame *pCnt = const_cast< SwContentFrame* >( pBodyFrame->ContainsContent() );
-                SwContentNode* pNd = pCnt->GetNode();
+                SwContentNode* pNd = pCnt->IsTextFrame()
+                    ? static_cast<SwTextFrame*>(pCnt)->GetTextNodeFirst()
+                    : static_cast<SwNoTextFrame*>(pCnt)->GetNode();
 
                 SwPaM aPaM( *pNd );
                 SwPaMItem aPaMItem( pEditWin->GetView().GetPool( ).GetWhich( FN_PARAM_PAM ), &aPaM );
@@ -276,8 +277,11 @@ void SwPageBreakWin::Select()
 
         if ( pBodyFrame )
         {
+
             SwContentFrame *pCnt = const_cast< SwContentFrame* >( pBodyFrame->ContainsContent() );
-            SwContentNode* pNd = pCnt->GetNode();
+            SwContentNode* pNd = pCnt->IsTextFrame()
+                ? static_cast<SwTextFrame*>(pCnt)->GetTextNodeFirst()
+                : static_cast<SwNoTextFrame*>(pCnt)->GetNode();
 
             pNd->GetDoc()->GetIDocumentUndoRedo( ).StartUndo( SwUndoId::UI_DELETE_PAGE_BREAK, nullptr );
 
@@ -288,7 +292,8 @@ void SwPageBreakWin::Select()
             aSet.Put( SwFormatPageDesc( nullptr ) );
 
             SwPaM aPaM( *pNd );
-            pNd->GetDoc()->getIDocumentContentOperations().InsertItemSet( aPaM, aSet );
+            pNd->GetDoc()->getIDocumentContentOperations().InsertItemSet(
+                aPaM, aSet, SetAttrMode::DEFAULT, GetPageFrame()->getRootFrame());
 
             pNd->GetDoc()->GetIDocumentUndoRedo( ).EndUndo( SwUndoId::UI_DELETE_PAGE_BREAK, nullptr );
         }
@@ -319,14 +324,13 @@ void SwPageBreakWin::Activate( )
     MenuButton::Activate();
 }
 
-void SwPageBreakWin::UpdatePosition( const Point* pEvtPt )
+void SwPageBreakWin::UpdatePosition(const boost::optional<Point>& xEvtPt)
 {
-    if ( pEvtPt != nullptr )
+    if ( xEvtPt )
     {
-        if ( pEvtPt == m_pMousePt )
+        if ( xEvtPt == m_xMousePt )
             return;
-        delete m_pMousePt;
-        m_pMousePt = pEvtPt;
+        m_xMousePt = xEvtPt;
     }
 
     const SwPageFrame* pPageFrame = GetPageFrame();
@@ -371,9 +375,9 @@ void SwPageBreakWin::UpdatePosition( const Point* pEvtPt )
     long nLineRight = std::min( nPgRight, aVisArea.Right() );
     long nBtnLeft = nLineLeft;
 
-    if ( m_pMousePt )
+    if ( m_xMousePt )
     {
-        nBtnLeft = nLineLeft + m_pMousePt->X() - aBtnSize.getWidth() / 2;
+        nBtnLeft = nLineLeft + m_xMousePt->X() - aBtnSize.getWidth() / 2;
 
         if ( nBtnLeft < nLineLeft )
             nBtnLeft = nLineLeft;

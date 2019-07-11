@@ -23,11 +23,11 @@
 
 #include <ObjectIdentifier.hxx>
 #include <TitleHelper.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <AxisHelper.hxx>
 #include <servicenames_charttypes.hxx>
 #include <DiagramHelper.hxx>
-#include <AxisIndexDefines.hxx>
 #include <unonames.hxx>
 
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
@@ -36,9 +36,13 @@
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
 #include <com/sun/star/chart2/XAxis.hpp>
 #include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
+#include <com/sun/star/awt/Point.hpp>
+#include <com/sun/star/drawing/XShape.hpp>
 
 #include <rtl/ustrbuf.hxx>
 #include <tools/diagnose_ex.h>
+
+namespace com { namespace sun { namespace star { namespace drawing { class XShape; } } } }
 
 namespace chart
 {
@@ -240,13 +244,11 @@ void lcl_getDiagramAndCooSys( const OUString& rObjectCID
 
 ObjectIdentifier::ObjectIdentifier()
     :m_aObjectCID( OUString() )
-    ,m_xAdditionalShape( nullptr )
 {
 }
 
 ObjectIdentifier::ObjectIdentifier( const OUString& rObjectCID )
     :m_aObjectCID( rObjectCID )
-    ,m_xAdditionalShape( nullptr )
 {
 }
 
@@ -258,7 +260,6 @@ ObjectIdentifier::ObjectIdentifier( const Reference< drawing::XShape >& rxShape 
 
 ObjectIdentifier::ObjectIdentifier( const Any& rAny )
     :m_aObjectCID( OUString() )
-    ,m_xAdditionalShape( nullptr )
 {
     const uno::Type& rType = rAny.getValueType();
     if ( rType == cppu::UnoType<OUString>::get() )
@@ -269,12 +270,6 @@ ObjectIdentifier::ObjectIdentifier( const Any& rAny )
     {
         rAny >>= m_xAdditionalShape;
     }
-}
-
-ObjectIdentifier::ObjectIdentifier( const ObjectIdentifier& rOID )
-    :m_aObjectCID( rOID.m_aObjectCID )
-    ,m_xAdditionalShape( rOID.m_xAdditionalShape )
-{
 }
 
 bool ObjectIdentifier::operator==( const ObjectIdentifier& rOID ) const
@@ -1215,7 +1210,7 @@ Reference< beans::XPropertySet > ObjectIdentifier::getObjectPropertySet(
     if(!xChartModel.is())
         return nullptr;
 
-    Reference< beans::XPropertySet > xObjectProperties = nullptr;
+    Reference< beans::XPropertySet > xObjectProperties;
     try
     {
         ObjectType eObjectType = ObjectIdentifier::getObjectType( rObjectCID );
@@ -1411,7 +1406,7 @@ Reference< XDataSeries > ObjectIdentifier::getDataSeriesForCID(
                 const OUString& rObjectCID
                 , const Reference< frame::XModel >& xChartModel )
 {
-    Reference< XDataSeries > xSeries(nullptr);
+    Reference< XDataSeries > xSeries;
 
     Reference< XDiagram > xDiagram;
     Reference< XCoordinateSystem > xCooSys;

@@ -35,7 +35,7 @@ struct StatisticCalculation {
     const char* aResultRangeName;
 };
 
-static StatisticCalculation lclBasicStatistics[] =
+static StatisticCalculation const lclBasicStatistics[] =
 {
     { STR_ANOVA_LABEL_GROUPS, nullptr,             nullptr       },
     { STRID_CALC_COUNT,       "=COUNT(%RANGE%)",   "COUNT_RANGE" },
@@ -64,16 +64,16 @@ OUString lclCreateMultiParameterFormula(
             const OUString&     aWildcard,  const ScDocument*     pDocument,
             const ScAddress::Details& aAddressDetails)
 {
-    OUString aResult;
+    OUStringBuffer aResult;
     for (size_t i = 0; i < aRangeList.size(); i++)
     {
-        OUString aRangeString(aRangeList[i].Format(ScRefFlags::RANGE_ABS, pDocument, aAddressDetails));
+        OUString aRangeString(aRangeList[i].Format(ScRefFlags::RANGE_ABS_3D, pDocument, aAddressDetails));
         OUString aFormulaString = aFormulaTemplate.replaceAll(aWildcard, aRangeString);
-        aResult += aFormulaString;
+        aResult.append(aFormulaString);
         if(i != aRangeList.size() - 1) // Not Last
-            aResult+= ";";
+            aResult.append(";");
     }
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 void lclMakeSubRangesList(ScRangeList& rRangeList, const ScRange& rInputRange, ScStatisticsInputOutputDialog::GroupedBy aGroupedBy)
@@ -260,7 +260,6 @@ void ScAnalysisOfVarianceDialog::AnovaSingleFactor(AddressWalkerWriter& output, 
         output.nextColumn();
 
         // Sum of Squares
-
         aTemplate.setTemplate("=SUMPRODUCT(%SUM_RANGE%;%MEAN_RANGE%)-SUM(%SUM_RANGE%)^2/SUM(%COUNT_RANGE%)");
         aTemplate.autoReplaceAddress("%BETWEEN_SS%", output.current());
         output.writeFormula(aTemplate.getTemplate());
@@ -334,7 +333,7 @@ void ScAnalysisOfVarianceDialog::AnovaSingleFactor(AddressWalkerWriter& output, 
 
         // Sum of Squares
         aTemplate.setTemplate("=DEVSQ(%RANGE_LIST%)");
-        aTemplate.applyRangeList("%RANGE_LIST%", aRangeList);
+        aTemplate.applyRangeList("%RANGE_LIST%", aRangeList, ';');
         output.writeFormula(aTemplate.getTemplate());
         output.nextColumn();
 

@@ -28,6 +28,7 @@
 #include <DiagramHelper.hxx>
 #include <ChartTypeHelper.hxx>
 #include <DataSeriesHelper.hxx>
+#include <ChartModel.hxx>
 
 #include <com/sun/star/chart/MissingValueTreatment.hpp>
 #include <com/sun/star/chart2/XDataSeries.hpp>
@@ -37,6 +38,7 @@
 #include <svl/ilstitem.hxx>
 #include <rtl/math.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <functional>
 #include <algorithm>
@@ -65,7 +67,6 @@ SeriesOptionsItemConverter::SeriesOptionsItemConverter(
         , m_bConnectBars(false)
         , m_bSupportingAxisSideBySide(false)
         , m_bGroupBarsPerAxis(true)
-        , m_nAllSeriesAxisIndex(-1)
         , m_bSupportingStartingAngle(false)
         , m_nStartingAngle(90)
         , m_bClockwise(false)
@@ -391,8 +392,6 @@ void SeriesOptionsItemConverter::FillSpecialItem(
         }
         case SCHATTR_AXIS_FOR_ALL_SERIES:
         {
-            if( m_nAllSeriesAxisIndex != - 1)
-                rOutItemSet.Put( SfxInt32Item(nWhichId, m_nAllSeriesAxisIndex));
             break;
         }
         case SCHATTR_STARTING_ANGLE:

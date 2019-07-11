@@ -36,6 +36,7 @@
 #include <osl/file.hxx>
 #include <rtl/bootstrap.hxx>
 #include <rtl/process.h>
+#include <sal/log.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
@@ -50,12 +51,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
-#if defined(GDK_WINDOWING_X11)
-#   include <gdk/gdkx.h>
-#endif
-#if defined(GDK_WINDOWING_WAYLAND)
-#   include <gdk/gdkwayland.h>
-#endif
+#include <unx/gtk/gtkbackend.hxx>
 
 #include <dlfcn.h>
 #include <vcl/salbtype.hxx>
@@ -97,11 +93,6 @@
 
 #define IS_WIDGET_REALIZED gtk_widget_get_realized
 #define IS_WIDGET_MAPPED   gtk_widget_get_mapped
-
-#ifndef GDK_IS_X11_DISPLAY
-#define GDK_IS_X11_DISPLAY(foo) (true)
-#endif
-
 
 using namespace com::sun::star;
 
@@ -350,7 +341,7 @@ struct KeyAlternate
     KeyAlternate( sal_uInt16 nKey, sal_Unicode nChar = 0 ) : nKeyCode( nKey ), nCharCode( nChar ) {}
 };
 
-inline KeyAlternate
+static KeyAlternate
 GetAlternateKeyCode( const sal_uInt16 nKeyCode )
 {
     KeyAlternate aAlternate;
@@ -487,7 +478,6 @@ bool GtkSalFrame::doKeyCallback( guint state,
 GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
     , m_pHeaderBar(nullptr)
-    , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
     getDisplay()->registerFrame( this );
@@ -500,7 +490,6 @@ GtkSalFrame::GtkSalFrame( SalFrame* pParent, SalFrameStyleFlags nStyle )
 GtkSalFrame::GtkSalFrame( SystemParentData* pSysData )
     : m_nXScreen( getDisplay()->GetDefaultXScreen() )
     , m_pHeaderBar(nullptr)
-    , m_pGraphics(nullptr)
     , m_bGraphics(false)
 {
     getDisplay()->registerFrame( this );
@@ -600,7 +589,7 @@ static const GActionEntry app_entries[] = {
   { "New", activate_uno, nullptr, nullptr, nullptr, {0} }
 };
 
-gboolean ensure_dbus_setup( gpointer data )
+static gboolean ensure_dbus_setup( gpointer data )
 {
     GtkSalFrame* pSalFrame = static_cast< GtkSalFrame* >( data );
     GdkWindow* gdkWindow = widget_get_window( pSalFrame->getWindow() );
@@ -632,7 +621,7 @@ gboolean ensure_dbus_setup( gpointer data )
         // fdo#70885 we don't want app menu under Unity
         const bool bDesktopIsUnity = (SalGetDesktopEnvironment() == "UNITY");
 #if defined(GDK_WINDOWING_X11)
-        if (GDK_IS_X11_DISPLAY(pDisplay))
+        if (DLSYM_GDK_IS_X11_DISPLAY(pDisplay))
         {
             gdk_x11_window_set_utf8_property( gdkWindow, "_GTK_APPLICATION_ID", "org.libreoffice" );
             if (!bDesktopIsUnity)
@@ -644,7 +633,7 @@ gboolean ensure_dbus_setup( gpointer data )
         }
 #endif
 #if defined(GDK_WINDOWING_WAYLAND)
-        if (GDK_IS_WAYLAND_DISPLAY(pDisplay))
+        if (DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay))
         {
             gdk_wayland_window_set_dbus_properties_libgtk_only(gdkWindow, "org.libreoffice",
                                                                "/org/libreoffice/menus/appmenu",
@@ -924,11 +913,30 @@ void GtkSalFrame::resizeWindow( long nWidth, long nHeight )
         window_resize(nWidth, nHeight);
 }
 
+// tdf#124694 GtkFixed takes the max size of all its children as its
+// preferred size, causing it to not clip its child, but grow instead.
+
+static void
+ooo_fixed_get_preferred_height(GtkWidget*, gint *minimum, gint *natural)
+{
+    *minimum = 0;
+    *natural = 0;
+}
+
+static void
+ooo_fixed_get_preferred_width(GtkWidget*, gint *minimum, gint *natural)
+{
+    *minimum = 0;
+    *natural = 0;
+}
+
 static void
 ooo_fixed_class_init(GtkFixedClass *klass)
 {
     GtkWidgetClass *widget_class = GTK_WIDGET_CLASS(klass);
     widget_class->get_accessible = ooo_fixed_get_accessible;
+    widget_class->get_preferred_height = ooo_fixed_get_preferred_height;
+    widget_class->get_preferred_width = ooo_fixed_get_preferred_width;
 }
 
 /*
@@ -1010,6 +1018,7 @@ void GtkSalFrame::InitCommon()
     // add the fixed container child,
     // fixed is needed since we have to position plugin windows
     m_pFixedContainer = GTK_FIXED(g_object_new( ooo_fixed_get_type(), nullptr ));
+    gtk_widget_set_size_request(GTK_WIDGET(m_pFixedContainer), 1, 1);
     gtk_container_add( GTK_CONTAINER(m_pEventBox), GTK_WIDGET(m_pFixedContainer) );
 
     GtkWidget *pEventWidget = getMouseEventWidget();
@@ -1017,7 +1026,7 @@ void GtkSalFrame::InitCommon()
     gtk_widget_set_app_paintable(GTK_WIDGET(m_pFixedContainer), true);
     /*non-X11 displays won't show anything at all without double-buffering
       enabled*/
-    if (GDK_IS_X11_DISPLAY(getGdkDisplay()))
+    if (DLSYM_GDK_IS_X11_DISPLAY(getGdkDisplay()))
         gtk_widget_set_double_buffered(GTK_WIDGET(m_pFixedContainer), false);
     gtk_widget_set_redraw_on_allocate(GTK_WIDGET(m_pFixedContainer), false);
 
@@ -1029,6 +1038,9 @@ void GtkSalFrame::InitCommon()
     m_aMouseSignalIds.push_back(g_signal_connect( G_OBJECT(pEventWidget), "button-press-event", G_CALLBACK(signalButton), this ));
     m_aMouseSignalIds.push_back(g_signal_connect( G_OBJECT(pEventWidget), "motion-notify-event", G_CALLBACK(signalMotion), this ));
     m_aMouseSignalIds.push_back(g_signal_connect( G_OBJECT(pEventWidget), "button-release-event", G_CALLBACK(signalButton), this ));
+    m_aMouseSignalIds.push_back(g_signal_connect( G_OBJECT(pEventWidget), "leave-notify-event", G_CALLBACK(signalCrossing), this ));
+    m_aMouseSignalIds.push_back(g_signal_connect( G_OBJECT(pEventWidget), "enter-notify-event", G_CALLBACK(signalCrossing), this ));
+
 
     //Drop Target Stuff
     gtk_drag_dest_set(GTK_WIDGET(pEventWidget), GtkDestDefaults(0), nullptr, 0, GdkDragAction(0));
@@ -1068,8 +1080,6 @@ void GtkSalFrame::InitCommon()
     g_signal_connect( G_OBJECT(m_pWindow), "key-release-event", G_CALLBACK(signalKey), this );
     g_signal_connect( G_OBJECT(m_pWindow), "delete-event", G_CALLBACK(signalDelete), this );
     g_signal_connect( G_OBJECT(m_pWindow), "window-state-event", G_CALLBACK(signalWindowState), this );
-    g_signal_connect( G_OBJECT(m_pWindow), "leave-notify-event", G_CALLBACK(signalCrossing), this );
-    g_signal_connect( G_OBJECT(m_pWindow), "enter-notify-event", G_CALLBACK(signalCrossing), this );
     g_signal_connect( G_OBJECT(m_pWindow), "visibility-notify-event", G_CALLBACK(signalVisibility), this );
     g_signal_connect( G_OBJECT(m_pWindow), "destroy", G_CALLBACK(signalDestroy), this );
 
@@ -1120,15 +1130,26 @@ void GtkSalFrame::InitCommon()
 
 #if defined(GDK_WINDOWING_X11)
     GdkDisplay *pDisplay = getGdkDisplay();
-    if (GDK_IS_X11_DISPLAY(pDisplay))
+    if (DLSYM_GDK_IS_X11_DISPLAY(pDisplay))
     {
         m_aSystemData.pDisplay = gdk_x11_display_get_xdisplay(pDisplay);
         m_aSystemData.pVisual = gdk_x11_visual_get_xvisual(pVisual);
+        m_aSystemData.pPlatformName = "xcb";
+    }
+#endif
+#if defined(GDK_WINDOWING_WAYLAND)
+    if (DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay))
+    {
+        m_aSystemData.pDisplay = gdk_wayland_display_get_wl_display(pDisplay);
+        m_aSystemData.pPlatformName = "wayland";
     }
 #endif
 
     m_bGraphics = false;
     m_pGraphics = nullptr;
+
+    m_nFloatFlags = FloatWinPopupFlags::NONE;
+    m_bFloatPositioned = false;
 
     m_nWidthRequest = 0;
     m_nHeightRequest = 0;
@@ -1256,7 +1277,7 @@ void GtkSalFrame::Init( SalFrame* pParent, SalFrameStyleFlags nStyle )
         //built-in close button of the titlebar follows the overridden direction rather than continue in the same
         //direction as every other titlebar on the user's desktop. So if they don't match set an explicit
         //header bar with the desired 'outside' direction
-        if ((eType == GDK_WINDOW_TYPE_HINT_NORMAL || eType == GDK_WINDOW_TYPE_HINT_DIALOG) && GDK_IS_WAYLAND_DISPLAY(GtkSalFrame::getGdkDisplay()))
+        if ((eType == GDK_WINDOW_TYPE_HINT_NORMAL || eType == GDK_WINDOW_TYPE_HINT_DIALOG) && DLSYM_GDK_IS_WAYLAND_DISPLAY(GtkSalFrame::getGdkDisplay()))
         {
             const bool bDesktopIsRTL = MsLangId::isRightToLeft(MsLangId::getSystemUILanguage());
             const bool bAppIsRTL = gtk_widget_get_default_direction() == GTK_TEXT_DIR_RTL;
@@ -1351,9 +1372,9 @@ void GtkSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
     m_bGraphics = false;
 }
 
-bool GtkSalFrame::PostEvent(ImplSVEvent* pData)
+bool GtkSalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    getDisplay()->SendInternalEvent( this, pData );
+    getDisplay()->SendInternalEvent( this, pData.release() );
     return true;
 }
 
@@ -1465,7 +1486,7 @@ void GtkSalFrame::Show( bool bVisible, bool /*bNoActivate*/ )
             //startcenter when initially shown to at least get
             //the default LibreOffice icon and not the broken
             //app icon
-            if (GDK_IS_WAYLAND_DISPLAY(getGdkDisplay()))
+            if (DLSYM_GDK_IS_WAYLAND_DISPLAY(getGdkDisplay()))
             {
                 OString sOrigName(g_get_prgname());
                 g_set_prgname("libreoffice-startcenter");
@@ -2447,11 +2468,28 @@ void GtkSalFrame::EndSetClipRegion()
         gdk_window_shape_combine_region( widget_get_window(m_pWindow), m_pRegion, 0, 0 );
 }
 
+void GtkSalFrame::PositionByToolkit(const tools::Rectangle& rRect, FloatWinPopupFlags nFlags)
+{
+    if (ImplGetSVData()->maNWFData.mbCanDetermineWindowPosition)
+        return;
+
+    m_aFloatRect = rRect;
+    m_nFloatFlags = nFlags;
+    m_bFloatPositioned = true;
+}
+
 void GtkSalFrame::SetModal(bool bModal)
 {
     if (!m_pWindow)
         return;
     gtk_window_set_modal(GTK_WINDOW(m_pWindow), bModal);
+}
+
+bool GtkSalFrame::GetModal() const
+{
+    if (!m_pWindow)
+        return false;
+    return gtk_window_get_modal(GTK_WINDOW(m_pWindow));
 }
 
 gboolean GtkSalFrame::signalTooltipQuery(GtkWidget*, gint /*x*/, gint /*y*/,
@@ -2482,12 +2520,18 @@ bool GtkSalFrame::ShowTooltip(const OUString& rHelpText, const tools::Rectangle&
     return true;
 }
 
+void GtkSalFrame::HideTooltip()
+{
+    m_aTooltip.clear();
+    gtk_widget_trigger_tooltip_query(getMouseEventWidget());
+}
+
 namespace
 {
-    void set_pointing_to(GtkPopover *pPopOver, const tools::Rectangle& rHelpArea, const SalFrameGeometry& rGeometry)
+    void set_pointing_to(GtkPopover *pPopOver, vcl::Window* pParent, const tools::Rectangle& rHelpArea, const SalFrameGeometry& rGeometry)
     {
         GdkRectangle aRect;
-        aRect.x = rHelpArea.Left();
+        aRect.x = FloatingWindow::ImplConvertToAbsPos(pParent, rHelpArea).Left() - rGeometry.nX;
         aRect.y = rHelpArea.Top();
         aRect.width = 1;
         aRect.height = 1;
@@ -2505,14 +2549,11 @@ namespace
                 break;
         }
 
-        if (AllSettings::GetLayoutRTL())
-            aRect.x = rGeometry.nWidth-aRect.width-1-aRect.x;
-
         gtk_popover_set_pointing_to(pPopOver, &aRect);
     }
 }
 
-void* GtkSalFrame::ShowPopover(const OUString& rHelpText, const tools::Rectangle& rHelpArea, QuickHelpFlags nFlags)
+void* GtkSalFrame::ShowPopover(const OUString& rHelpText, vcl::Window* pParent, const tools::Rectangle& rHelpArea, QuickHelpFlags nFlags)
 {
     GtkWidget *pWidget = gtk_popover_new(getMouseEventWidget());
     OString sUTF = OUStringToOString(rHelpText, RTL_TEXTENCODING_UTF8);
@@ -2528,7 +2569,7 @@ void* GtkSalFrame::ShowPopover(const OUString& rHelpText, const tools::Rectangle
     else if (nFlags & QuickHelpFlags::Right)
         gtk_popover_set_position(GTK_POPOVER(pWidget), GTK_POS_LEFT);
 
-    set_pointing_to(GTK_POPOVER(pWidget), rHelpArea, maGeometry);
+    set_pointing_to(GTK_POPOVER(pWidget), pParent, rHelpArea, maGeometry);
 
     gtk_popover_set_modal(GTK_POPOVER(pWidget), false);
 
@@ -2537,11 +2578,11 @@ void* GtkSalFrame::ShowPopover(const OUString& rHelpText, const tools::Rectangle
     return pWidget;
 }
 
-bool GtkSalFrame::UpdatePopover(void* nId, const OUString& rHelpText, const tools::Rectangle& rHelpArea)
+bool GtkSalFrame::UpdatePopover(void* nId, const OUString& rHelpText, vcl::Window* pParent, const tools::Rectangle& rHelpArea)
 {
     GtkWidget *pWidget = static_cast<GtkWidget*>(nId);
 
-    set_pointing_to(GTK_POPOVER(pWidget), rHelpArea, maGeometry);
+    set_pointing_to(GTK_POPOVER(pWidget), pParent, rHelpArea, maGeometry);
 
     GtkWidget *pLabel = gtk_bin_get_child(GTK_BIN(pWidget));
     OString sUTF = OUStringToOString(rHelpText, RTL_TEXTENCODING_UTF8);
@@ -2586,11 +2627,37 @@ void GtkSalFrame::closePopup()
     pSVData->maWinData.mpFirstFloat->EndPopupMode(FloatWinPopupEndFlags::Cancel | FloatWinPopupEndFlags::CloseAll);
 }
 
+namespace
+{
+    //tdf#117981 translate embedded video window mouse events to parent coordinates
+    void translate_coords(GdkWindow* pSourceWindow, GtkWidget* pTargetWidget, int& rEventX, int& rEventY)
+    {
+        gpointer user_data=nullptr;
+        gdk_window_get_user_data(pSourceWindow, &user_data);
+        GtkWidget* pRealEventWidget = static_cast<GtkWidget*>(user_data);
+        if (pRealEventWidget)
+        {
+            gtk_widget_translate_coordinates(pRealEventWidget, pTargetWidget, rEventX, rEventY, &rEventX, &rEventY);
+        }
+    }
+}
+
 gboolean GtkSalFrame::signalButton( GtkWidget*, GdkEventButton* pEvent, gpointer frame )
 {
     UpdateLastInputEventTime(pEvent->time);
 
     GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
+    GtkWidget* pEventWidget = pThis->getMouseEventWidget();
+    bool bDifferentEventWindow = pEvent->window != widget_get_window(pEventWidget);
+
+    // tdf#120764 It isn't allowed under wayland to have two visible popups that share
+    // the same top level parent. The problem is that since gtk 3.24 tooltips are also
+    // implemented as popups, which means that we cannot show any popup if there is a
+    // visible tooltip. In fact, gtk will hide the tooltip by itself after this handler,
+    // in case of a button press event. But if we intend to show a popup on button press
+    // it will be too late, so just do it here:
+    if (pEvent->type == GDK_BUTTON_PRESS)
+        pThis->HideTooltip();
 
     SalMouseEvent aEvent;
     SalEvent nEventType = SalEvent::NONE;
@@ -2619,7 +2686,7 @@ gboolean GtkSalFrame::signalButton( GtkWidget*, GdkEventButton* pEvent, gpointer
     {
         //rhbz#1505379 if the window that got the event isn't our one, or there's none
         //of our windows under the mouse then close this popup window
-        if (pEvent->window != widget_get_window(pThis->getMouseEventWidget()) ||
+        if (bDifferentEventWindow ||
             gdk_device_get_window_at_position(pEvent->device, nullptr, nullptr) == nullptr)
         {
             if (pEvent->type == GDK_BUTTON_PRESS)
@@ -2629,10 +2696,16 @@ gboolean GtkSalFrame::signalButton( GtkWidget*, GdkEventButton* pEvent, gpointer
         }
     }
 
+    int nEventX = pEvent->x;
+    int nEventY = pEvent->y;
+
+    if (bDifferentEventWindow)
+        translate_coords(pEvent->window, pEventWidget, nEventX, nEventY);
+
     if (!aDel.isDeleted())
     {
-        int frame_x = static_cast<int>(pEvent->x_root - pEvent->x);
-        int frame_y = static_cast<int>(pEvent->y_root - pEvent->y);
+        int frame_x = static_cast<int>(pEvent->x_root - nEventX);
+        int frame_y = static_cast<int>(pEvent->y_root - nEventY);
         if (pThis->m_bGeometryIsProvisional || frame_x != pThis->maGeometry.nX || frame_y != pThis->maGeometry.nY)
         {
             pThis->m_bGeometryIsProvisional = false;
@@ -2820,17 +2893,14 @@ void GtkSalFrame::gestureSwipe(GtkGestureSwipe* gesture, gdouble velocity_x, gdo
     }
 }
 
-void GtkSalFrame::gestureLongPress(GtkGestureLongPress* gesture, gpointer frame)
+void GtkSalFrame::gestureLongPress(GtkGestureLongPress* gesture, gdouble x, gdouble y, gpointer frame)
 {
-    GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
-
-    if(pThis)
+    GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(gesture));
+    if (gtk_gesture_get_point(GTK_GESTURE(gesture), sequence, &x, &y))
     {
-        SalLongPressEvent aEvent;
+        GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
 
-        gdouble x, y;
-        GdkEventSequence *sequence = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(gesture));
-        gtk_gesture_get_point(GTK_GESTURE(gesture), sequence, &x, &y);
+        SalLongPressEvent aEvent;
         aEvent.mnX = x;
         aEvent.mnY = y;
 
@@ -2843,18 +2913,27 @@ gboolean GtkSalFrame::signalMotion( GtkWidget*, GdkEventMotion* pEvent, gpointer
     UpdateLastInputEventTime(pEvent->time);
 
     GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
+    GtkWidget* pEventWidget = pThis->getMouseEventWidget();
+    bool bDifferentEventWindow = pEvent->window != widget_get_window(pEventWidget);
 
     //If a menu, e.g. font name dropdown, is open, then under wayland moving the
     //mouse in the top left corner of the toplevel window in a
     //0,0,float-width,float-height area generates motion events which are
     //delivered to the dropdown
-    if (pThis->isFloatGrabWindow() && pEvent->window != widget_get_window(pThis->getMouseEventWidget()))
+    if (pThis->isFloatGrabWindow() && bDifferentEventWindow)
         return true;
 
     vcl::DeletionListener aDel( pThis );
 
-    int frame_x = static_cast<int>(pEvent->x_root - pEvent->x);
-    int frame_y = static_cast<int>(pEvent->y_root - pEvent->y);
+    int nEventX = pEvent->x;
+    int nEventY = pEvent->y;
+
+    if (bDifferentEventWindow)
+        translate_coords(pEvent->window, pEventWidget, nEventX, nEventY);
+
+    int frame_x = static_cast<int>(pEvent->x_root - nEventX);
+    int frame_y = static_cast<int>(pEvent->y_root - nEventY);
+
     if (pThis->m_bGeometryIsProvisional || frame_x != pThis->maGeometry.nX || frame_y != pThis->maGeometry.nY)
     {
         pThis->m_bGeometryIsProvisional = false;
@@ -2961,6 +3040,24 @@ void GtkSalFrame::sizeAllocated(GtkWidget* pWidget, GdkRectangle *pAllocation, g
         pThis->TriggerPaintEvent();
 }
 
+#if GTK_CHECK_VERSION(3,23,0)
+namespace {
+
+void swapDirection(GdkGravity& gravity)
+{
+    if (gravity == GDK_GRAVITY_NORTH_WEST)
+        gravity = GDK_GRAVITY_NORTH_EAST;
+    else if (gravity == GDK_GRAVITY_NORTH_EAST)
+        gravity = GDK_GRAVITY_NORTH_WEST;
+    else if (gravity == GDK_GRAVITY_SOUTH_WEST)
+        gravity = GDK_GRAVITY_SOUTH_EAST;
+    else if (gravity == GDK_GRAVITY_SOUTH_EAST)
+        gravity = GDK_GRAVITY_SOUTH_WEST;
+}
+
+}
+#endif
+
 void GtkSalFrame::signalRealize(GtkWidget*, gpointer frame)
 {
     GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
@@ -2968,6 +3065,45 @@ void GtkSalFrame::signalRealize(GtkWidget*, gpointer frame)
     if (pThis->m_bSalObjectSetPosSize)
         return;
     pThis->TriggerPaintEvent();
+
+#if GTK_CHECK_VERSION(3,23,0)
+    if (gtk_check_version(3, 23, 0) == nullptr && pThis->m_bFloatPositioned)
+    {
+        GdkGravity rect_anchor = GDK_GRAVITY_SOUTH_WEST, menu_anchor = GDK_GRAVITY_NORTH_WEST;
+
+        if (pThis->m_nFloatFlags & FloatWinPopupFlags::Left)
+        {
+            rect_anchor = GDK_GRAVITY_NORTH_WEST;
+            menu_anchor = GDK_GRAVITY_NORTH_EAST;
+        }
+        else if (pThis->m_nFloatFlags & FloatWinPopupFlags::Up)
+        {
+            rect_anchor = GDK_GRAVITY_NORTH_WEST;
+            menu_anchor = GDK_GRAVITY_SOUTH_WEST;
+        }
+        else if (pThis->m_nFloatFlags & FloatWinPopupFlags::Right)
+        {
+            rect_anchor = GDK_GRAVITY_NORTH_EAST;
+        }
+
+        VclPtr<vcl::Window> pVclParent = pThis->GetWindow()->GetParent();
+        if (pVclParent->HasMirroredGraphics() && pVclParent->IsRTLEnabled())
+        {
+            swapDirection(rect_anchor);
+            swapDirection(menu_anchor);
+        }
+
+        tools::Rectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(pVclParent, pThis->m_aFloatRect);
+        if (gdk_window_get_window_type(widget_get_window(pThis->m_pParent->m_pWindow)) != GDK_WINDOW_TOPLEVEL)
+            aFloatRect.Move(-pThis->m_pParent->maGeometry.nX, -pThis->m_pParent->maGeometry.nY);
+
+        GdkRectangle rect {static_cast<int>(aFloatRect.Left()), static_cast<int>(aFloatRect.Top()),
+                           static_cast<int>(aFloatRect.GetWidth()), static_cast<int>(aFloatRect.GetHeight())};
+
+        GdkWindow* gdkWindow = widget_get_window(pThis->m_pWindow);
+        gdk_window_move_to_rect(gdkWindow, &rect, rect_anchor, menu_anchor, GDK_ANCHOR_FLIP, 0, 0);
+    }
+#endif
 }
 
 gboolean GtkSalFrame::signalConfigure(GtkWidget*, GdkEventConfigure* pEvent, gpointer frame)
@@ -3076,6 +3212,15 @@ gboolean GtkSalFrame::signalUnmap( GtkWidget*, GdkEvent*, gpointer frame )
     GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
 
     pThis->CallCallbackExc( SalEvent::Resize, nullptr );
+
+    if (pThis->m_bFloatPositioned)
+    {
+        // Unrealize is needed for cases where we reuse the same popup
+        // (e.g. the font name control), making the realize signal fire
+        // again on next show.
+        gtk_widget_unrealize(pThis->m_pWindow);
+        pThis->m_bFloatPositioned = false;
+    }
 
     return false;
 }
@@ -3224,7 +3369,7 @@ void GtkSalFrame::signalStyleUpdated(GtkWidget*, gpointer frame)
         bFontSettingsChanged = false;
     if (bFontSettingsChanged)
     {
-        pInstance->ResetLastSeenCairoFontOptions();
+        pInstance->ResetLastSeenCairoFontOptions(pCurrentCairoFontOptions);
         GtkSalFrame::getDisplay()->SendInternalEvent( pThis, nullptr, SalEvent::FontChanged );
     }
 }
@@ -3314,6 +3459,9 @@ namespace
     }
 }
 
+static bool g_DropSuccessSet = false;
+static bool g_DropSuccess = false;
+
 class GtkDropTargetDropContext : public cppu::WeakImplHelper<css::datatransfer::dnd::XDropTargetDropContext>
 {
     GdkDragContext *m_pContext;
@@ -3339,6 +3487,11 @@ public:
     virtual void SAL_CALL dropComplete(sal_Bool bSuccess) override
     {
         gtk_drag_finish(m_pContext, bSuccess, false, m_nTime);
+        if (GtkDragSource::g_ActiveDragSource)
+        {
+            g_DropSuccessSet = true;
+            g_DropSuccess = bSuccess;
+        }
     }
 };
 
@@ -3536,10 +3689,16 @@ gboolean GtkSalFrame::signalDragMotion(GtkWidget *pWidget, GdkDragContext *conte
     GdkModifierType mask;
     gdk_window_get_pointer(widget_get_window(pWidget), nullptr, nullptr, &mask);
 
+    // tdf#124411 default to move if drag originates within LO itself, default
+    // to copy if it comes from outside, this is similar to srcAndDestEqual
+    // in macosx DropTarget::determineDropAction equivalent
+    sal_Int8 nNewDropAction = GtkDragSource::g_ActiveDragSource ?
+                                css::datatransfer::dnd::DNDConstants::ACTION_MOVE :
+                                css::datatransfer::dnd::DNDConstants::ACTION_COPY;
+
     // tdf#109227 if a modifier is held down, default to the matching
     // action for that modifier combo, otherwise pick the preferred
     // default from the possible source actions
-    sal_Int8 nNewDropAction = css::datatransfer::dnd::DNDConstants::ACTION_MOVE;
     if ((mask & GDK_SHIFT_MASK) && !(mask & GDK_CONTROL_MASK))
         nNewDropAction = css::datatransfer::dnd::DNDConstants::ACTION_MOVE;
     else if ((mask & GDK_CONTROL_MASK) && !(mask & GDK_SHIFT_MASK))
@@ -3821,19 +3980,14 @@ bool GtkSalFrame::IMHandler::handleKeyEvent( GdkEventKey* pEvent )
 
         m_bPreeditJustChanged = false;
 
-        std::list<PreviousKeyPress>::iterator    iter     = m_aPrevKeyPresses.begin();
-        std::list<PreviousKeyPress>::iterator    iter_end = m_aPrevKeyPresses.end();
-        while (iter != iter_end)
+        auto iter = std::find(m_aPrevKeyPresses.begin(), m_aPrevKeyPresses.end(), pEvent);
+        // If we found a corresponding previous key press event, swallow the release
+        // and remove the earlier key press from our list
+        if (iter != m_aPrevKeyPresses.end())
         {
-            // If we found a corresponding previous key press event, swallow the release
-            // and remove the earlier key press from our list
-            if (*iter == pEvent)
-            {
-                m_aPrevKeyPresses.erase(iter);
-                m_nPrevKeyPresses--;
-                return true;
-            }
-            ++iter;
+            m_aPrevKeyPresses.erase(iter);
+            m_nPrevKeyPresses--;
+            return true;
         }
 
         if( bResult )
@@ -4061,7 +4215,7 @@ void GtkSalFrame::IMHandler::signalIMPreeditEnd( GtkIMContext*, gpointer im_hand
         pThis->updateIMSpotLocation();
 }
 
-uno::Reference<accessibility::XAccessibleEditableText>
+static uno::Reference<accessibility::XAccessibleEditableText>
     FindFocus(uno::Reference< accessibility::XAccessibleContext > const & xContext)
 {
     if (!xContext.is())
@@ -4080,6 +4234,13 @@ uno::Reference<accessibility::XAccessibleEditableText>
                 return uno::Reference< accessibility::XAccessibleEditableText >();
         }
     }
+
+    bool bSafeToIterate = true;
+    sal_Int32 nCount = xContext->getAccessibleChildCount();
+    if (nCount < 0 || nCount > SAL_MAX_UINT16 /* slow enough for anyone */)
+        bSafeToIterate = false;
+    if (!bSafeToIterate)
+        return uno::Reference< accessibility::XAccessibleEditableText >();
 
     for (sal_Int32 i = 0; i < xContext->getAccessibleChildCount(); ++i)
     {
@@ -4122,12 +4283,15 @@ gboolean GtkSalFrame::IMHandler::signalIMRetrieveSurrounding( GtkIMContext* pCon
     if (xText.is())
     {
         sal_Int32 nPosition = xText->getCaretPosition();
-        OUString sAllText = xText->getText();
-        OString sUTF = OUStringToOString(sAllText, RTL_TEXTENCODING_UTF8);
-        OUString sCursorText(sAllText.copy(0, nPosition));
-        gtk_im_context_set_surrounding(pContext, sUTF.getStr(), sUTF.getLength(),
-            OUStringToOString(sCursorText, RTL_TEXTENCODING_UTF8).getLength());
-        return true;
+        if (nPosition != -1)
+        {
+            OUString sAllText = xText->getText();
+            OString sUTF = OUStringToOString(sAllText, RTL_TEXTENCODING_UTF8);
+            OUString sCursorText(sAllText.copy(0, nPosition));
+            gtk_im_context_set_surrounding(pContext, sUTF.getStr(), sUTF.getLength(),
+                OUStringToOString(sCursorText, RTL_TEXTENCODING_UTF8).getLength());
+            return true;
+        }
     }
 
     return false;
@@ -4185,13 +4349,13 @@ sal_uIntPtr GtkSalFrame::GetNativeWindowHandle(GtkWidget *pWidget)
     GdkWindow *pWindow = gtk_widget_get_window(pWidget);
 
 #if defined(GDK_WINDOWING_X11)
-    if (GDK_IS_X11_DISPLAY(pDisplay))
+    if (DLSYM_GDK_IS_X11_DISPLAY(pDisplay))
     {
         return GDK_WINDOW_XID(pWindow);
     }
 #endif
 #if defined(GDK_WINDOWING_WAYLAND)
-    if (GDK_IS_WAYLAND_DISPLAY(pDisplay))
+    if (DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay))
     {
         return reinterpret_cast<sal_uIntPtr>(gdk_wayland_window_get_wl_surface(pWindow));
     }
@@ -4233,9 +4397,12 @@ void GtkDragSource::startDrag(const datatransfer::dnd::DragGestureEvent& rEvent,
         // For LibreOffice internal D&D we provide the Transferable without Gtk
         // intermediaries as a shortcut, see tdf#100097 for how dbaccess depends on this
         g_ActiveDragSource = this;
+        g_DropSuccessSet = false;
+        g_DropSuccess = false;
 
         m_pFrame->startDrag(nDragButton, rEvent.DragOriginX, rEvent.DragOriginY,
                             VclToGdk(sourceActions), pTargetList);
+
         gtk_target_list_unref(pTargetList);
         for (auto &a : aGtkTargets)
             g_free(a.target);
@@ -4320,7 +4487,12 @@ void GtkDragSource::dragEnd(GdkDragContext* context)
     {
         datatransfer::dnd::DragSourceDropEvent aEv;
         aEv.DropAction = GdkToVcl(gdk_drag_context_get_selected_action(context));
-        aEv.DropSuccess = true;
+        // an internal drop can accept the drop but fail with dropComplete( false )
+        // this is different than the GTK API
+        if (g_DropSuccessSet)
+            aEv.DropSuccess = g_DropSuccess;
+        else
+            aEv.DropSuccess = true;
         auto xListener = m_xListener;
         m_xListener.clear();
         xListener->dragDropEnd(aEv);
@@ -4357,25 +4529,10 @@ bool GtkSalFrame::CallCallbackExc(SalEvent nEvent, const void* pEvent) const
     {
         nRet = CallCallback(nEvent, pEvent);
     }
-    catch (const css::uno::Exception&)
-    {
-        auto e = cppu::getCaughtException();
-        GtkSalData *pSalData = static_cast<GtkSalData*>(GetSalData());
-        pSalData->setException(e);
-    }
-    catch (std::exception & e)
-    {
-        static_cast<GtkSalData *>(GetSalData())->setException(
-            css::uno::Any(
-                css::uno::RuntimeException(
-                    "wrapped std::exception "
-                    + o3tl::runtimeToOUString(e.what()))));
-    }
     catch (...)
     {
-        static_cast<GtkSalData *>(GetSalData())->setException(
-            css::uno::Any(
-                css::uno::RuntimeException("wrapped unknown exception")));
+        GtkSalData *pSalData = static_cast<GtkSalData*>(GetSalData());
+        pSalData->setException(std::current_exception());
     }
     return nRet;
 }

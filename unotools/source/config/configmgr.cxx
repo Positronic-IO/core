@@ -32,6 +32,7 @@
 #include <rtl/instance.hxx>
 #include <rtl/ustring.h>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <unotools/configitem.hxx>
 #include <unotools/configmgr.hxx>
 #include <comphelper/processfactory.hxx>
@@ -107,10 +108,16 @@ OUString utl::ConfigManager::getDefaultCurrency() {
         "L10N/ooSetupCurrency");
 }
 
-OUString utl::ConfigManager::getLocale() {
+OUString utl::ConfigManager::getUILocale() {
     return getConfigurationString(
         "/org.openoffice.Setup",
         "L10N/ooLocale");
+}
+
+OUString utl::ConfigManager::getWorkLocale() {
+    return getConfigurationString(
+        "/org.openoffice.Setup",
+        "L10N/ooSetupSystemLocale");
 }
 
 OUString utl::ConfigManager::getProductExtension() {
@@ -198,10 +205,12 @@ void utl::ConfigManager::doStoreConfigItems() {
 
 static bool bIsFuzzing = false;
 
+#if !defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
 bool utl::ConfigManager::IsFuzzing()
 {
     return bIsFuzzing;
 }
+#endif
 
 void utl::ConfigManager::EnableFuzzing()
 {

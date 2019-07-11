@@ -26,6 +26,7 @@
 #include <com/sun/star/text/RelOrientation.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/WrapTextMode.hpp>
+#include <com/sun/star/view/XFormLayerAccess.hpp>
 #include <com/sun/star/view/XViewSettingsSupplier.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <com/sun/star/style/LineSpacing.hpp>
@@ -172,6 +173,16 @@ DECLARE_OOXMLEXPORT_TEST(testTdf79272_strictDxa, "tdf79272_strictDxa.docx")
     uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(4318), getProperty<sal_Int32>(xTables->getByIndex(0), "Width"));
+
+     xmlDocPtr pXmlDoc = parseExport("word/styles.xml");
+     if (!pXmlDoc)
+         return;
+    // Validation test: order of elements was wrong. Order was: insideH, end, insideV.
+    int nEnd = getXPathPosition(pXmlDoc, "/w:styles/w:style[@w:styleId='TableGrid']/w:tblPr/w:tblBorders", "end");
+    int nInsideH = getXPathPosition(pXmlDoc, "/w:styles/w:style[@w:styleId='TableGrid']/w:tblPr/w:tblBorders", "insideH");
+    int nInsideV = getXPathPosition(pXmlDoc, "/w:styles/w:style[@w:styleId='TableGrid']/w:tblPr/w:tblBorders", "insideV");
+    CPPUNIT_ASSERT(nEnd < nInsideH);
+    CPPUNIT_ASSERT(nInsideH < nInsideV);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf109306, "tdf109306.docx")
@@ -251,6 +262,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf97648_relativeWidth,"tdf97648_relativeWidth.docx
 DECLARE_OOXMLEXPORT_TEST(testTdf104061_tableSectionColumns,"tdf104061_tableSectionColumns.docx")
 {
     CPPUNIT_ASSERT_MESSAGE("There should be two or three pages", getPages() <= 3 );
+
+    //tdf#95114 - follow style is Text Body - DOCX test
+    uno::Reference< beans::XPropertySet > properties(getStyles("ParagraphStyles")->getByName("annotation subject"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("annotation text"), getProperty<OUString>(properties, "FollowStyle"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf46940_dontEquallyDistributeColumns, "tdf46940_dontEquallyDistributeColumns.docx")
@@ -270,6 +285,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf98700_keepWithNext, "tdf98700_keepWithNext.odt")
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Heading 1 style inherits keeps with next", true, getProperty<bool>(getParagraph(3), "ParaKeepTogether"));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Heading 2 style disabled keep with next", false, getProperty<bool>(getParagraph(4), "ParaKeepTogether"));
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Text Body style toggled off keep with next", false, getProperty<bool>(getParagraph(5), "ParaKeepTogether"));
+
+    //tdf#95114 - follow style is Text Body - ODT test
+    uno::Reference< beans::XPropertySet > properties(getStyles("ParagraphStyles")->getByName("Heading 1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Text body"), getProperty<OUString>(properties, "FollowStyle"));
 }
 
 // base class to supply a helper method for testHFLinkToPrev
@@ -303,72 +322,72 @@ DECLARE_SW_EXPORT_TEST(testHFLinkToPrev, "headerfooter-link-to-prev.docx", nullp
     uno::Reference<style::XStyle> xPageStyle(
         xPageStyles->getByName(pageStyleName), uno::UNO_QUERY);
     // check page 1 header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("First page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("First page footer for section 1 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page footer for section 1 only"),
+        getHFText(xPageStyle, "FooterText"));
 
     // get LO page style for page 2, corresponding to docx section 1
     xCursor->jumpToPage(2);
     pageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
     xPageStyle.set( xPageStyles->getByName(pageStyleName), uno::UNO_QUERY );
     // check header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderTextLeft"),
-        OUString("Even page header for section 1 only"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterTextLeft"),
-        OUString("Even page footer for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("Odd page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("Odd page footer for section 1 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page header for section 1 only"),
+        getHFText(xPageStyle, "HeaderTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page footer for all sections"),
+        getHFText(xPageStyle, "FooterTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer for section 1 only"),
+        getHFText(xPageStyle, "FooterText"));
 
     // get LO page style for page 4, corresponding to docx section 2 first page
     xCursor->jumpToPage(4);
     pageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
     xPageStyle.set( xPageStyles->getByName(pageStyleName), uno::UNO_QUERY );
     // check header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("First page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("First page footer for sections 2 and 3 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page footer for sections 2 and 3 only"),
+        getHFText(xPageStyle, "FooterText"));
 
     // get LO page style for page 5, corresponding to docx section 2
     xCursor->jumpToPage(5);
     pageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
     xPageStyle.set( xPageStyles->getByName(pageStyleName), uno::UNO_QUERY );
     // check header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderTextLeft"),
-        OUString("Even page header for sections 2 and 3 only"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterTextLeft"),
-        OUString("Even page footer for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("Odd page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("Odd page footer for sections 2 and 3 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page header for sections 2 and 3 only"),
+        getHFText(xPageStyle, "HeaderTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page footer for all sections"),
+        getHFText(xPageStyle, "FooterTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer for sections 2 and 3 only"),
+        getHFText(xPageStyle, "FooterText"));
 
     // get LO page style for page 7, corresponding to docx section 3 first page
     xCursor->jumpToPage(7);
     pageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
     xPageStyle.set( xPageStyles->getByName(pageStyleName), uno::UNO_QUERY );
     // check header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("First page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("First page footer for sections 2 and 3 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First page footer for sections 2 and 3 only"),
+        getHFText(xPageStyle, "FooterText"));
 
     // get LO page style for page 8, corresponding to docx section 3
     xCursor->jumpToPage(8);
     pageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
     xPageStyle.set( xPageStyles->getByName(pageStyleName), uno::UNO_QUERY );
     // check header & footer text
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderTextLeft"),
-        OUString("Even page header for sections 2 and 3 only"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterTextLeft"),
-        OUString("Even page footer for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "HeaderText"),
-        OUString("Odd page header for all sections"));
-    CPPUNIT_ASSERT_EQUAL(getHFText(xPageStyle, "FooterText"),
-        OUString("Odd page footer for sections 2 and 3 only"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page header for sections 2 and 3 only"),
+        getHFText(xPageStyle, "HeaderTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Even page footer for all sections"),
+        getHFText(xPageStyle, "FooterTextLeft"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page header for all sections"),
+        getHFText(xPageStyle, "HeaderText"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Odd page footer for sections 2 and 3 only"),
+        getHFText(xPageStyle, "FooterText"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testRhbz988516, "rhbz988516.docx")
@@ -543,10 +562,6 @@ DECLARE_OOXMLEXPORT_TEST(testBnc519228OddBreaks, "bnc519228_odd-breaksB.docx")
 
     // Page2 comes from follow of style for page 1 and should be a normal page. Also check the two page style have the same properties,
     // since page style for page1 was created from page style for page 2.
-    uno::Any page2StyleAny = uno::Reference<beans::XPropertySet>(
-        getParagraph(2, "This is page 2, which is obviously an even page."),
-        uno::UNO_QUERY_THROW)->getPropertyValue("PageDescName");
-    CPPUNIT_ASSERT_EQUAL(uno::Any(), page2StyleAny);
     OUString page2StyleName = getProperty<OUString>( page1Style, "FollowStyle" );
     uno::Reference<beans::XPropertySet> page2Style(getStyles("PageStyles")->getByName(page2StyleName), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(uno::makeAny(style::PageStyleLayout_ALL), page2Style->getPropertyValue("PageStyleLayout"));
@@ -576,6 +591,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf103982, "tdf103982.docx")
     sal_Int32 nDistB = getXPath(pXmlDoc, "//wp:anchor", "distB").toInt32();
     // This was -260350, which is not a valid value for an unsigned type.
     CPPUNIT_ASSERT(nDistB >= 0);
+
+    // tdf#115670 the shadow should not be enabled (no on="t")
+    uno::Reference<beans::XPropertySet> xPropertySet(getShape(1), uno::UNO_QUERY);
+    CPPUNIT_ASSERT(!getProperty<bool>(xPropertySet, "Shadow"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf104115, "tdf104115.docx")
@@ -652,6 +671,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf82173_footnoteStyle, "tdf82173_footnoteStyle.doc
     xPageStyle.set(getStyles("CharacterStyles")->getByName("Footnote anchor"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL( sal_Int32(58),       getProperty< sal_Int32 >(xPageStyle, "CharEscapementHeight") );
     CPPUNIT_ASSERT_EQUAL( sal_Int32(0x00FF00), getProperty< sal_Int32 >(xPageStyle, "CharColor") );
+
+    //tdf#118361 - in RTL locales, the footnote separator should still be left aligned.
+    uno::Any aPageStyle = getStyles("PageStyles")->getByName("Standard");
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Footnote separator LTR", sal_Int16(0), getProperty<sal_Int16>(aPageStyle, "FootnoteLineAdjust"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf82173_endnoteStyle, "tdf82173_endnoteStyle.docx")
@@ -759,6 +782,11 @@ DECLARE_OOXMLEXPORT_TEST(testTdf103976, "tdf103976.docx")
     uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
     // This was 0, table style inheritance went wrong and w:afterLines had priority over w:after.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(convertTwipToMm100(60)), getProperty<sal_Int32>(getParagraphOfText(1, xCell->getText()), "ParaBottomMargin"));
+
+    // tdf#116549: heading 2 style should not have a bottom border.
+    uno::Reference<beans::XPropertySet> xStyle(getStyles("ParagraphStyles")->getByName("Heading 2"), uno::UNO_QUERY);
+    table::BorderLine2 aBottomBorder = getProperty<table::BorderLine2>(xStyle, "BottomBorder");
+    CPPUNIT_ASSERT_EQUAL(sal_uInt32(0), aBottomBorder.LineWidth);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf106001, "tdf106001.docx")
@@ -924,6 +952,36 @@ DECLARE_OOXMLEXPORT_TEST(testTdf106062_nonHangingFootnote, "tdf106062_nonHanging
     uno::Reference<text::XTextRange> xTextRange(xFootnotes->getByIndex(0), uno::UNO_QUERY);
     // This failed, tab between the footnote number and the footnote content was lost on import.
     CPPUNIT_ASSERT_MESSAGE( "Footnote starts with a tab", xTextRange->getString().startsWith("\t") );
+}
+
+DECLARE_OOXMLEXPORT_TEST( testActiveXTextfield, "activex_textbox.docx" )
+{
+    uno::Reference<drawing::XControlShape> xControlShape( getShape(1), uno::UNO_QUERY );
+    CPPUNIT_ASSERT( xControlShape.is() );
+
+    // Check control type
+    uno::Reference<beans::XPropertySet> xPropertySet( xControlShape->getControl(), uno::UNO_QUERY );
+    uno::Reference<lang::XServiceInfo> xServiceInfo( xPropertySet, uno::UNO_QUERY );
+    CPPUNIT_ASSERT_EQUAL( true, bool( xServiceInfo->supportsService ( "com.sun.star.form.component.TextField" ) ) );
+
+    // Check textfield is multi-line
+    CPPUNIT_ASSERT_EQUAL( true, getProperty<bool>(xPropertySet, "MultiLine") );
+
+    uno::Reference<drawing::XControlShape> xControlShape2( getShape(2), uno::UNO_QUERY );
+    CPPUNIT_ASSERT( xControlShape2.is() );
+
+    // Check control type
+    uno::Reference<beans::XPropertySet> xPropertySet2( xControlShape2->getControl(), uno::UNO_QUERY );
+    uno::Reference<lang::XServiceInfo> xServiceInfo2( xPropertySet2, uno::UNO_QUERY );
+    CPPUNIT_ASSERT_EQUAL( true, bool( xServiceInfo2->supportsService ( "com.sun.star.form.component.TextField" ) ) );
+
+    // Check textfield is single-line
+    CPPUNIT_ASSERT_EQUAL( false, getProperty<bool>(xPropertySet2, "MultiLine") );
+
+    // Don't open in design mode when form controls exist
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+    uno::Reference<view::XFormLayerAccess> xFormLayerAccess(xModel->getCurrentController(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT( !xFormLayerAccess->isFormDesignMode() );
 }
 
 DECLARE_OOXMLEXPORT_TEST( testActiveXCheckbox, "activex_checkbox.docx" )
@@ -1110,6 +1168,13 @@ DECLARE_OOXMLEXPORT_TEST(testActiveXOptionButtonGroup, "activex_option_button_gr
 DECLARE_OOXMLEXPORT_TEST(tdf112169, "tdf112169.odt")
 {
     // LO crashed while export because of character background color handling
+
+    //tdf76683 - Cannot be negative number - use firstLine instead of hanging
+    xmlDocPtr pXmlDoc = parseExport("word/numbering.xml");
+    if (!pXmlDoc)
+        return;
+    assertXPathNoAttribute(pXmlDoc, "/w:numbering/w:abstractNum[1]/w:lvl[1]/w:pPr/w:ind", "hanging");
+    assertXPath(pXmlDoc, "/w:numbering/w:abstractNum[1]/w:lvl[1]/w:pPr/w:ind", "firstLine","360");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf103090, "tdf103090.odt")
@@ -1162,12 +1227,60 @@ DECLARE_OOXMLEXPORT_TEST(testTdf90789, "tdf90789.docx")
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int16>(1), xPageCursor->getPage());
 }
 
-
 DECLARE_OOXMLEXPORT_TEST(testTdf90789_2, "tdf90789-2.docx")
 {
     // Section break before frame and shape was ignored
     CPPUNIT_ASSERT_EQUAL( 3, getPages() );
 }
+
+DECLARE_OOXMLEXPORT_TEST(testTdf104354_2, "tdf104354-2.docx")
+{
+    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(), uno::UNO_QUERY);
+    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
+
+    // top margin of the first paragraph and bottom margin of the last paragraph
+    // is zero, when auto spacing is used.
+
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(494), getProperty<sal_Int32>(getParagraphOfText(1, xCell->getText()), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(494), getProperty<sal_Int32>(getParagraphOfText(2, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(494), getProperty<sal_Int32>(getParagraphOfText(2, xCell->getText()), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(494), getProperty<sal_Int32>(getParagraphOfText(3, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(3, xCell->getText()), "ParaBottomMargin"));
+
+    // top margin is not auto spacing
+    uno::Reference<text::XTextRange> xCell2(xTable->getCellByName("A2"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(847), getProperty<sal_Int32>(getParagraphOfText(1, xCell2->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell2->getText()), "ParaBottomMargin"));
+
+    // bottom margin is not auto spacing
+    uno::Reference<text::XTextRange> xCell3(xTable->getCellByName("A3"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell3->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(847), getProperty<sal_Int32>(getParagraphOfText(1, xCell3->getText()), "ParaBottomMargin"));
+
+    // auto spacing, if the paragraph contains footnotes
+    uno::Reference<text::XTextRange> xCell4(xTable->getCellByName("A4"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell4->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell4->getText()), "ParaBottomMargin"));
+
+    // auto spacing is explicitly disabled, and no margins are defined.
+    xCell.set(xTable->getCellByName("A5"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell->getText()), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(2, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(2, xCell->getText()), "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(3, xCell->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(3, xCell->getText()), "ParaBottomMargin"));
+
+    // auto spacing on a paragraph
+    uno::Reference<text::XTextTable> xTable2(xTables->getByIndex(1), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell5(xTable2->getCellByName("A1"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell5->getText()), "ParaTopMargin"));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), getProperty<sal_Int32>(getParagraphOfText(1, xCell5->getText()), "ParaBottomMargin"));
+}
+
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 

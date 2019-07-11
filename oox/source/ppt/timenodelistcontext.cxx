@@ -21,11 +21,13 @@
 
 #include <cppuhelper/exc_hlp.hxx>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/animations/AnimationTransformType.hpp>
 #include <com/sun/star/animations/AnimationCalcMode.hpp>
 #include <com/sun/star/animations/AnimationColorSpace.hpp>
 #include <com/sun/star/animations/AnimationNodeType.hpp>
+#include <com/sun/star/animations/ValuePair.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/presentation/EffectCommands.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
@@ -54,6 +56,44 @@ using namespace ::com::sun::star::animations;
 using namespace ::com::sun::star::presentation;
 using namespace ::com::sun::star::xml::sax;
 using ::com::sun::star::beans::NamedValue;
+
+namespace {
+
+    oox::ppt::AnimationAttributeEnum getAttributeEnumByAPIName(const OUString &rAPIName)
+    {
+        oox::ppt::AnimationAttributeEnum eResult = oox::ppt::AnimationAttributeEnum::UNKNOWN;
+        const oox::ppt::ImplAttributeNameConversion *attrConv = oox::ppt::getAttributeConversionList();
+        while(attrConv->mpAPIName != nullptr)
+        {
+            if(rAPIName.equalsAscii(attrConv->mpAPIName))
+            {
+                eResult = attrConv->meAttribute;
+                break;
+            }
+            attrConv++;
+        }
+        return eResult;
+    }
+
+    bool convertAnimationValueWithTimeNode(const oox::ppt::TimeNodePtr& pNode, css::uno::Any &rAny)
+    {
+        css::uno::Any aAny = pNode->getNodeProperties()[oox::ppt::NP_ATTRIBUTENAME];
+        OUString aNameList;
+        aAny >>= aNameList;
+
+        // only get first token.
+        return oox::ppt::convertAnimationValue(getAttributeEnumByAPIName(aNameList.getToken(0, ';')), rAny);
+    }
+
+    css::uno::Any convertPointPercent(const css::awt::Point& rPoint)
+    {
+        css::animations::ValuePair aPair;
+        // rPoint.X and rPoint.Y are in 1000th of a percent, but we only need ratio.
+        aPair.First <<= static_cast<double>(rPoint.X) / 100000.0;
+        aPair.Second <<= static_cast<double>(rPoint.Y) / 100000.0;
+        return makeAny(aPair);
+    }
+}
 
 namespace oox { namespace ppt {
 
@@ -172,25 +212,10 @@ namespace oox { namespace ppt {
 
         virtual ~SetTimeNodeContext() throw () override
             {
-                if( maTo.hasValue() )
+                if(maTo.hasValue())
                 {
-                    // TODO
-                    // HACK !!! discard and refactor
-                    OUString aString;
-                    if( maTo >>= aString )
-                    {
-                        if( aString == "visible" || aString == "true" )
-                            maTo <<= true;
-                        else if( aString == "false" )
-                            maTo <<= false;
-
-                        if (!maTo.has<bool>())
-                        {
-                            SAL_WARN("oox.ppt", "conversion failed");
-                            maTo <<= false;
-                        }
-                    }
-                    mpNode->setTo( maTo );
+                    convertAnimationValueWithTimeNode(mpNode, maTo);
+                    mpNode->setTo(maTo);
                 }
 
             }
@@ -480,8 +505,8 @@ namespace oox { namespace ppt {
             }
 
     private:
-        sal_Int32 mnColorSpace;
-        sal_Int32 mnDir;
+        sal_Int32 const mnColorSpace;
+        sal_Int32 const mnDir;
         bool mbHasByColor;
         AnimColor m_byColor;
         oox::drawingml::Color maToClr;
@@ -519,27 +544,40 @@ namespace oox { namespace ppt {
                     }
                     aProps[ NP_CALCMODE ] <<= nEnum;
                 }
-                OUString aStr;
-                aStr = xAttribs->getOptionalValue( XML_from );
-                if( !aStr.isEmpty() )
-                {
-                    pNode->setFrom( makeAny( aStr ) );
-                }
-                aStr = xAttribs->getOptionalValue( XML_by );
-                if( !aStr.isEmpty() )
-                {
-                    pNode->setBy( makeAny( aStr ) );
-                }
-                aStr = xAttribs->getOptionalValue( XML_to );
-                if( !aStr.isEmpty() )
-                {
-                    pNode->setTo( makeAny( aStr ) );
-                }
+
+                msFrom = xAttribs->getOptionalValue(XML_from);
+                msTo = xAttribs->getOptionalValue(XML_to);
+                msBy = xAttribs->getOptionalValue(XML_by);
+
                 mnValueType = xAttribs->getOptionalValueToken( XML_valueType, 0 );
             }
 
         virtual ~AnimContext() throw () override
             {
+                if (!msFrom.isEmpty())
+                {
+                    css::uno::Any aAny;
+                    aAny <<= msFrom;
+                    convertAnimationValueWithTimeNode(mpNode, aAny);
+                    mpNode->setFrom(aAny);
+                }
+
+                if (!msTo.isEmpty())
+                {
+                    css::uno::Any aAny;
+                    aAny <<= msTo;
+                    convertAnimationValueWithTimeNode(mpNode, aAny);
+                    mpNode->setTo(aAny);
+                }
+
+                if (!msBy.isEmpty())
+                {
+                    css::uno::Any aAny;
+                    aAny <<= msBy;
+                    convertAnimationValueWithTimeNode(mpNode, aAny);
+                    mpNode->setBy(aAny);
+                }
+
                 int nKeyTimes = maTavList.size();
                 if( nKeyTimes > 0)
                 {
@@ -554,17 +592,17 @@ namespace oox { namespace ppt {
                         Any aTime = GetTimeAnimateValueTime( tav.msTime );
                         aTime >>= aKeyTimes[i];
                         aValues[i] = tav.maValue;
+                        convertAnimationValueWithTimeNode(mpNode, aValues[i]);
 
-                        OUString aTest;
-                        tav.maValue >>= aTest;
-                        if( !aTest.isEmpty() )
+                        // Examine pptx documents and find that only the first tav
+                        // has the formula set. The formula can be used for the whole.
+                        if (!tav.msFormula.isEmpty())
                         {
-                            aValues[i] = tav.maValue;
+                            OUString sFormula = tav.msFormula;
+                            convertMeasure(sFormula);
+                            aProps[NP_FORMULA] <<= sFormula;
                         }
-                        else
-                        {
-                            aProps[ NP_FORMULA ] <<= tav.msFormula;
-                        }
+
                         ++i;
                     }
                     aProps[ NP_VALUES ] <<= aValues;
@@ -589,6 +627,9 @@ namespace oox { namespace ppt {
     private:
         sal_Int32              mnValueType;
         TimeAnimationValueList maTavList;
+        OUString msFrom;
+        OUString msTo;
+        OUString msBy;
     };
 
     /** CT_TLAnimateScaleBehavior */
@@ -637,25 +678,23 @@ namespace oox { namespace ppt {
                 case PPT_TOKEN( to ):
                 {
                     // CT_TLPoint
-                    awt::Point p = GetPointPercent( rAttribs.getFastAttributeList() );
-                    maTo <<= p.X;
-                    maTo <<= p.Y;
+                    maTo = convertPointPercent(GetPointPercent(rAttribs.getFastAttributeList()));
                     return this;
                 }
                 case PPT_TOKEN( from ):
                 {
                     // CT_TLPoint
-                    awt::Point p = GetPointPercent( rAttribs.getFastAttributeList() );
-                    maFrom <<= p.X;
-                    maFrom <<= p.Y;
+                    maFrom  = convertPointPercent(GetPointPercent(rAttribs.getFastAttributeList()));
                     return this;
                 }
                 case PPT_TOKEN( by ):
                 {
                     // CT_TLPoint
-                    awt::Point p = GetPointPercent( rAttribs.getFastAttributeList() );
-                    maBy <<= p.X;
-                    maBy <<= p.Y;
+                    css::awt::Point aPoint = GetPointPercent(rAttribs.getFastAttributeList());
+                    // We got ending values instead of offset values, so subtract 100% from them.
+                    aPoint.X -= 100000;
+                    aPoint.Y -= 100000;
+                    maBy = convertPointPercent(aPoint);
                     return this;
                 }
                 default:

@@ -24,8 +24,8 @@
 #include <com/sun/star/drawing/CameraGeometry.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <vcl/svapp.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <comphelper/serviceinfohelper.hxx>
+#include <sal/log.hxx>
 
 #include <svx/svdpool.hxx>
 #include <svx/svditer.hxx>
@@ -126,9 +126,7 @@ void SAL_CALL Svx3DSceneObject::add( const Reference< drawing::XShape >& xShape 
     if( dynamic_cast<const E3dObject* >(pSdrShape) !=  nullptr )
     {
         GetSdrObject()->GetSubList()->NbcInsertObject( pSdrShape );
-
-        if(pShape)
-            pShape->Create( pSdrShape, mxPage.get()  );
+        pShape->Create(pSdrShape, mxPage.get());
     }
     else
     {
@@ -150,12 +148,12 @@ void SAL_CALL Svx3DSceneObject::remove( const Reference< drawing::XShape >& xSha
         throw uno::RuntimeException();
 
     SdrObject* pSdrShape = pShape->GetSdrObject();
-    if(pSdrShape == nullptr || pSdrShape->getParentOfSdrObject()->GetOwnerObj() != GetSdrObject())
+    if(pSdrShape == nullptr || pSdrShape->getParentSdrObjectFromSdrObject() != GetSdrObject())
     {
         throw uno::RuntimeException();
     }
 
-    SdrObjList& rList = *pSdrShape->getParentOfSdrObject();
+    SdrObjList& rList = *pSdrShape->getParentSdrObjListFromSdrObject();
 
     const size_t nObjCount = rList.GetObjCount();
     size_t nObjNum = 0;
@@ -280,7 +278,7 @@ bool Svx3DSceneObject::setPropertyValueImpl( const OUString& rName, const SfxIte
             aSceneTAR.maRect = pScene->GetSnapRect();
 
             // rescue object transformations
-            SdrObjListIter aIter(*pScene->GetSubList(), SdrIterMode::DeepWithGroups);
+            SdrObjListIter aIter(pScene->GetSubList(), SdrIterMode::DeepWithGroups);
             std::vector<basegfx::B3DHomMatrix*> aObjTrans;
             while(aIter.IsMore())
             {
@@ -649,7 +647,7 @@ Svx3DLatheObject::~Svx3DLatheObject() throw()
 {
 }
 
-bool PolyPolygonShape3D_to_B3dPolyPolygon(
+static bool PolyPolygonShape3D_to_B3dPolyPolygon(
     const Any& rValue,
     basegfx::B3DPolyPolygon& rResultPolygon,
     bool bCorrectPolygon)
@@ -707,7 +705,7 @@ static void B3dPolyPolygon_to_PolyPolygonShape3D( const basegfx::B3DPolyPolygon&
     drawing::DoubleSequence* pOuterSequenceZ = aRetval.SequenceZ.getArray();
     for(sal_uInt32 a(0);a<rSourcePolyPolygon.count();a++)
     {
-        const basegfx::B3DPolygon aPoly(rSourcePolyPolygon.getB3DPolygon(a));
+        const basegfx::B3DPolygon& aPoly(rSourcePolyPolygon.getB3DPolygon(a));
         sal_Int32 nPointCount(aPoly.count());
         if(aPoly.isClosed()) nPointCount++;
         pOuterSequenceX->realloc(nPointCount);

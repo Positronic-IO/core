@@ -30,13 +30,11 @@
 
 namespace sc {
 
-struct RowSpan;
 struct ColRowSpan;
 
 }
 
 class ScMarkArray;
-class ScRangeList;
 
 //!     todo:
 //!     It should be possible to have MarkArrays for each table, in order to

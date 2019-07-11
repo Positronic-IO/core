@@ -164,16 +164,23 @@ public:
      * @param y y-coordinate from where the dialog should start painting
      * @param width The width of the dialog image to be painted
      * @param height The height of the dialog image to be painted
+     * @param dpiscale The dpi scale value used by the client.  Please note
+     *                 that the x, y, width, height are supposed to be the
+     *                 values with dpiscale applied (ie. dialog covering
+     *                 100x100 "normal" pixels with dpiscale '2' will have
+     *                 200x200 width x height), so that it is easy to compute
+     *                 the buffer sizes etc.
      */
     void paintWindow(unsigned nWindowId,
                      unsigned char* pBuffer,
                      const int x,
                      const int y,
                      const int width,
-                     const int height)
+                     const int height,
+                     const double dpiscale = 1.0)
     {
-        return mpDoc->pClass->paintWindow(mpDoc, nWindowId, pBuffer,
-                                          x, y, width, height);
+        return mpDoc->pClass->paintWindowDPI(mpDoc, nWindowId, pBuffer,
+                                             x, y, width, height, dpiscale);
     }
 
     /**
@@ -548,6 +555,68 @@ public:
     void postWindowExtTextInputEvent(unsigned nWindowId, int nType, const char* pText)
     {
         mpDoc->pClass->postWindowExtTextInputEvent(mpDoc, nWindowId, nType, pText);
+    }
+
+#ifdef IOS
+    /**
+     * Renders a subset of the document to a Core Graphics context.
+     *
+     * Note that the buffer size and the tile size implicitly supports
+     * rendering at different zoom levels, as the number of rendered pixels and
+     * the rendered rectangle of the document are independent.
+     *
+     * @param rCGContext the CGContextRef, cast to a void*.
+     * @param nCanvasHeight number of pixels in a column of pBuffer.
+     * @param nTilePosX logical X position of the top left corner of the rendered rectangle, in TWIPs.
+     * @param nTilePosY logical Y position of the top left corner of the rendered rectangle, in TWIPs.
+     * @param nTileWidth logical width of the rendered rectangle, in TWIPs.
+     * @param nTileHeight logical height of the rendered rectangle, in TWIPs.
+     */
+    void paintTileToCGContext(void* rCGContext,
+                              const int nCanvasWidth,
+                              const int nCanvasHeight,
+                              const int nTilePosX,
+                              const int nTilePosY,
+                              const int nTileWidth,
+                              const int nTileHeight)
+    {
+        return mpDoc->pClass->paintTileToCGContext(mpDoc, rCGContext, nCanvasWidth, nCanvasHeight,
+                                                   nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+    }
+#endif // IOS
+
+    /**
+     *  Insert certificate (in binary form) to the certificate store.
+     */
+    bool insertCertificate(const unsigned char* pCertificateBinary,
+                           const int pCertificateBinarySize,
+                           const unsigned char* pPrivateKeyBinary,
+                           const int nPrivateKeyBinarySize)
+    {
+        return mpDoc->pClass->insertCertificate(mpDoc,
+                                                pCertificateBinary, pCertificateBinarySize,
+                                                pPrivateKeyBinary, nPrivateKeyBinarySize);
+    }
+
+    /**
+     *  Add the certificate (in binary form) to the certificate store.
+     *
+     */
+    bool addCertificate(const unsigned char* pCertificateBinary,
+                         const int pCertificateBinarySize)
+    {
+        return mpDoc->pClass->addCertificate(mpDoc,
+                                             pCertificateBinary, pCertificateBinarySize);
+    }
+
+    /**
+     *  Verify signature of the document.
+     *
+     *  Check possible values in include/sfx2/signaturestate.hxx
+     */
+    int getSignatureState()
+    {
+        return mpDoc->pClass->getSignatureState(mpDoc);
     }
 
 #endif // defined LOK_USE_UNSTABLE_API || defined LIBO_INTERNAL_ONLY

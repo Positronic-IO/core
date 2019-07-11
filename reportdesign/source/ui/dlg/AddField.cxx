@@ -24,6 +24,7 @@
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/sdb/XDocumentDataSource.hpp>
 #include <com/sun/star/i18n/XCollator.hpp>
+#include <com/sun/star/beans/XPropertyChangeListener.hpp>
 
 #include <vcl/waitobj.hxx>
 #include <vcl/svapp.hxx>
@@ -41,7 +42,7 @@
 
 #include <comphelper/property.hxx>
 #include <svtools/imgdef.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 namespace rptui
 {
@@ -153,8 +154,6 @@ OAddFieldWindow::OAddFieldWindow(vcl::Window* pParent ,const uno::Reference< bea
     , m_pListBox(VclPtr<OAddFieldWindowListBox>::Create(get<vcl::Window>("box"), this))
     , m_nCommandType(0)
     , m_bEscapeProcessing(false)
-    , m_pChangeListener(nullptr)
-    , m_pContainerListener(nullptr)
 {
     get(m_aActions, "toolbox");
     m_nSortUpId = m_aActions->GetItemId(0);

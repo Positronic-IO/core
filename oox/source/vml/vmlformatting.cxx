@@ -16,6 +16,11 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
+
+#include <sal/config.h>
+
+#include <cstdlib>
+
 #include <oox/vml/vmlformatting.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -25,6 +30,7 @@
 #include <com/sun/star/table/ShadowFormat.hpp>
 #include <com/sun/star/text/XTextRange.hpp>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <oox/drawingml/color.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
@@ -134,7 +140,7 @@ sal_Int32 ConversionHelper::decodeRotation( const OUString& rValue )
         return 0;
     }
 
-    return NormAngle360(fRotation * -100);
+    return NormAngle36000(fRotation * -100);
 }
 
 sal_Int64 ConversionHelper::decodeMeasureToEmu( const GraphicHelper& rGraphicHelper,
@@ -341,7 +347,7 @@ void ConversionHelper::decodeVmlPath( ::std::vector< ::std::vector< Point > >& r
                 {
                 case MOVE_REL:
                     aCoordList.resize(2, 0); // 2* params -> param count reset
-                    if ( rPointLists.size() > 0 && rPointLists.back().size() > 0 )
+                    if ( !rPointLists.empty() && !rPointLists.back().empty() )
                     {
                         rPointLists.emplace_back( );
                         rFlagLists.emplace_back( );
@@ -354,7 +360,7 @@ void ConversionHelper::decodeVmlPath( ::std::vector< ::std::vector< Point > >& r
 
                 case MOVE_ABS:
                     aCoordList.resize(2, 0); // 2 params -> no param count reset
-                    if ( rPointLists.size() > 0 && rPointLists.back().size() > 0 )
+                    if ( !rPointLists.empty() && !rPointLists.back().empty() )
                     {
                         rPointLists.emplace_back( );
                         rFlagLists.emplace_back( );
@@ -716,7 +722,7 @@ void FillModel::assignUsed( const FillModel& rSource )
     moRotate.assignIfUsed( rSource.moRotate );
 }
 
-void lcl_setGradientStop( std::multimap< double, Color >& rMap, const double fKey, const Color& rValue ) {
+static void lcl_setGradientStop( std::multimap< double, Color >& rMap, const double fKey, const Color& rValue ) {
     auto aElement = rMap.find( fKey );
 
     if (aElement != rMap.end())
@@ -779,7 +785,7 @@ void FillModel::pushToPropMap( ShapePropertyMap& rPropMap, const GraphicHelper& 
                             behaviour is reversed. This means that in this case
                             a focus of 0% swaps the gradient. */
                         if( fFocus < -0.5 || fFocus > 0.5 )
-                            (nVmlAngle += 180) %= 360;
+                            nVmlAngle = (nVmlAngle + 180) % 360;
                         // set the start and stop colors
                         lcl_setGradientStop( aFillProps.maGradientProps.maGradientStops, 0.0, aColor1 );
                         lcl_setGradientStop( aFillProps.maGradientProps.maGradientStops, 1.0, aColor2 );
@@ -872,9 +878,11 @@ void ShadowModel::pushToPropMap(ShapePropertyMap& rPropMap, const GraphicHelper&
 
     table::ShadowFormat aFormat;
     aFormat.Color = sal_Int32(aColor.getColor(rGraphicHelper));
-    aFormat.Location = table::ShadowLocation_BOTTOM_RIGHT;
+    aFormat.Location = nOffsetX < 0
+        ? nOffsetY < 0 ? table::ShadowLocation_TOP_LEFT : table::ShadowLocation_BOTTOM_LEFT
+        : nOffsetY < 0 ? table::ShadowLocation_TOP_RIGHT : table::ShadowLocation_BOTTOM_RIGHT;
     // The width of the shadow is the average of the x and y values, see SwWW8ImplReader::MatchSdrItemsIntoFlySet().
-    aFormat.ShadowWidth = ((nOffsetX + nOffsetY) / 2);
+    aFormat.ShadowWidth = ((std::abs(nOffsetX) + std::abs(nOffsetY)) / 2);
     rPropMap.setProperty(PROP_ShadowFormat, aFormat);
 }
 
@@ -882,7 +890,7 @@ TextpathModel::TextpathModel()
 {
 }
 
-beans::PropertyValue lcl_createTextpathProps()
+static beans::PropertyValue lcl_createTextpathProps()
 {
     uno::Sequence<beans::PropertyValue> aTextpathPropSeq( comphelper::InitPropertySequence({
             { "TextPath", uno::Any(true) },
@@ -960,7 +968,7 @@ void TextpathModel::pushToPropMap(ShapePropertyMap& rPropMap, const uno::Referen
     if (!moTrim.has() || !moTrim.get())
     {
         OUString sText = moString.get();
-        VclPtr<VirtualDevice> pDevice = VclPtr<VirtualDevice>::Create();
+        ScopedVclPtrInstance<VirtualDevice> pDevice;
         vcl::Font aFont = pDevice->GetFont();
         aFont.SetFamilyName(sFont);
         aFont.SetFontSize(Size(0, 96));

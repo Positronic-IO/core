@@ -22,42 +22,34 @@
 
 #include <rtl/ref.hxx>
 
-#include <vcl/field.hxx>
 #include <sfx2/viewsh.hxx>
 #include <vcl/prntypes.hxx>
-#include <svtools/transfer.hxx>
-#include <glob.hxx>
 #include <pres.hxx>
 #include "View.hxx"
+#include "fupoor.hxx"
 #include <sddllapi.h>
 
-#include <com/sun/star/drawing/XDrawSubController.hpp>
-#include <o3tl/deleter.hxx>
 #include <memory>
+
+namespace o3tl { template <typename T> struct default_delete; }
 
 class SdPage;
 class SvxRuler;
 class SdrOle2Obj;       // for the ones, who have undefined parts of SVDRAW
-class ScrollBarBox;
 class SdDrawDocument;
-class ScrollBar;
 
 namespace weld
 {
     class Window;
 }
 
-namespace com { namespace sun { namespace star {
-namespace embed {
-    class XEmbeddedObject;
-}}}}
+namespace com { namespace sun { namespace star { namespace drawing { class XDrawSubController; } } } }
 
 namespace sd {
 
 class DrawDocShell;
 class FrameView;
 class LayerTabBar;
-class View;
 class ViewShellBase;
 class Window;
 class WindowUpdater;
@@ -83,7 +75,7 @@ static const DrawModeFlags OUTPUT_DRAWMODE_CONTRAST
 
     <p>Despite its name this class is not a descendant of SfxViewShell
     but of SfxShell.  Its name expresses the fact that it acts like a
-    view shell.  Being a stacked shell rather then being an actual view shell
+    view shell.  Being a stacked shell rather than being an actual view shell
     there can be several instances of this class that
     <ul>
     <li>all are based on the same view shell and thus show the same
@@ -160,7 +152,7 @@ public:
         show running then the active window is a ShowWindow.
     */
     ::sd::Window* GetActiveWindow() const { return mpActiveWindow;}
-    weld::Window* GetFrameWeld() const;
+    SD_DLLPUBLIC weld::Window* GetFrameWeld() const;
 
     /** Set the active window.  When the shell is displayed in the center
         pane then the window of the ViewShellBase is also set to the given
@@ -285,8 +277,8 @@ public:
     virtual sal_Int8 ExecuteDrop( const ExecuteDropEvent& rEvt, DropTargetHelper& rTargetHelper,
                                   ::sd::Window* pTargetWindow, sal_uInt16 nPage, SdrLayerID nLayer );
 
-    virtual void WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >&, bool bBrowse );
-    virtual void ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >&, bool bBrowse );
+    virtual void WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& );
+    virtual void ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& );
 
     /** this method is called when the visible area of the view from this viewshell is changed */
     virtual void VisAreaChanged(const ::tools::Rectangle& rRect);
@@ -362,7 +354,7 @@ public:
 
     /** Return the type of the shell.
     */
-    ShellType GetShellType() const;
+    SD_DLLPUBLIC ShellType GetShellType() const; //Export for unit test
 
     /** This method is more or less an alias to Deactivate().  It is called
         before an object of this class is taken from the stack of view
@@ -492,7 +484,7 @@ protected:
     std::unique_ptr<Implementation, o3tl::default_delete<Implementation>> mpImpl;
 
     // Support methods for centralized UNDO/REDO
-    virtual ::svl::IUndoManager* ImpGetUndoManager() const;
+    virtual SfxUndoManager* ImpGetUndoManager() const;
     void ImpGetUndoStrings(SfxItemSet &rSet) const;
     void ImpGetRedoStrings(SfxItemSet &rSet) const;
     void ImpSidUndo(SfxRequest& rReq);

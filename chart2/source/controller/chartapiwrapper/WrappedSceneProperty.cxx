@@ -18,6 +18,7 @@
  */
 
 #include "WrappedSceneProperty.hxx"
+#include "Chart2ModelContact.hxx"
 #include <DiagramHelper.hxx>
 #include <servicenames_charttypes.hxx>
 #include <BaseGFXHelper.hxx>
@@ -31,10 +32,10 @@ namespace chart
 namespace wrapper
 {
 
-void WrappedSceneProperty::addWrappedProperties( std::vector< WrappedProperty* >& rList
+void WrappedSceneProperty::addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
                 , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
-    rList.push_back( new WrappedD3DTransformMatrixProperty( spChart2ModelContact ) );
+    rList.emplace_back( new WrappedD3DTransformMatrixProperty( spChart2ModelContact ) );
 }
 
 WrappedD3DTransformMatrixProperty::WrappedD3DTransformMatrixProperty(

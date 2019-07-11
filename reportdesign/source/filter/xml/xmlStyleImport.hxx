@@ -75,13 +75,9 @@ namespace rptxml
 
     class OReportStylesContext : public SvXMLStylesContext
     {
-        const OUString m_sTableStyleFamilyName;
-        const OUString m_sColumnStyleFamilyName;
-        const OUString m_sRowStyleFamilyName;
-        const OUString m_sCellStyleFamilyName;
         ORptFilter&           m_rImport;
         sal_Int32 m_nNumberFormatIndex;
-        bool bAutoStyles : 1;
+        bool const bAutoStyles : 1;
 
         //mutable rtl::Reference < SvXMLImportPropertyMapper > m_xControlImpPropMapper;
         mutable rtl::Reference < SvXMLImportPropertyMapper > m_xCellImpPropMapper;

@@ -23,6 +23,7 @@
 #include <osl/diagnose.h>
 #include <sfx2/docfile.hxx>
 #include <sot/storage.hxx>
+#include <sal/log.hxx>
 
 #include "eqnolefilehdr.hxx"
 #include <node.hxx>
@@ -310,14 +311,12 @@ bool MathType::LookupChar(sal_Unicode nChar,OUStringBuffer &rRet,sal_uInt8 nVers
         case 0x2207:
             pC = " nabla ";
             break;
-        case 0x2208:
-            pC = " in ";
+        case 0x2208: // in
+        case 0x2209: // notin
+            rRet.append(" func ").append(OUStringLiteral1(nChar)).append(" ");
             break;
-        case 0x2209:
-            pC = " notin ";
-            break;
-        case 0x220d:
-            pC = " owns ";
+        case 0x220d: // owns
+            rRet.append(" func ").append(OUStringLiteral1(0x220b)).append(" ");
             break;
         case 0x220f:
             pC = " prod ";
@@ -420,33 +419,17 @@ bool MathType::LookupChar(sal_Unicode nChar,OUStringBuffer &rRet,sal_uInt8 nVers
             pC = " nsucc ";
             break;
 
-        case 0x2282:
-            pC = " subset ";
-            break;
-        case 0x2283:
-            pC = " supset ";
-            break;
-        case 0x2284:
-            pC = " nsubset ";
-            break;
-        case 0x2285:
-            pC = " nsupset ";
-            break;
-        case 0x2286:
-            pC = " subseteq ";
-            break;
-        case 0x2287:
-            pC = " supseteq ";
-            break;
-        case 0x2288:
-            pC = " nsubseteq ";
-            break;
-        case 0x2289:
-            pC = " nsupseteq ";
-            break;
-        case 0x22b2:
-        case 0x22b3:
-            rRet.append(" ").append(OUStringLiteral1(nChar)).append(" ");
+        case 0x2282: // subset
+        case 0x2283: // supset
+        case 0x2284: // nsubset
+        case 0x2285: // nsupset
+        case 0x2286: // subseteq
+        case 0x2287: // supseteq
+        case 0x2288: // nsubseteq
+        case 0x2289: // nsupseteq
+        case 0x22b2: // NORMAL SUBGROUP OF
+        case 0x22b3: // CONTAINS AS NORMAL SUBGROUP
+            rRet.append(" func ").append(OUStringLiteral1(nChar)).append(" ");
             break;
         case 0x22a5:
             pC = " ortho ";
@@ -762,9 +745,9 @@ bool MathType::HandleRecords(int nLevel, sal_uInt8 nSelector,
                                 rRet.append(" \\ldline ");
                             break;
                         case tmFLOOR:
-                            if (nVariation == 0 || nVariation == 1)
+                            if (nVariation == 0 || nVariation & 0x01) // tvFENCE_L
                                 rRet.append(" left lfloor ");
-                            else if (nVariation==1)
+                            else
                                 rRet.append(" left none ");
                             break;
                         case tmCEILING:
@@ -1303,9 +1286,9 @@ bool MathType::HandleRecords(int nLevel, sal_uInt8 nSelector,
                                 rRet.append(" \\rdline ");
                             break;
                         case tmFLOOR:
-                            if (nVariation == 0 || nVariation == 2)
+                            if (nVariation == 0 || nVariation & 0x02) // tvFENCE_R
                                 rRet.append(" right rfloor ");
-                            else if (nVariation==2)
+                            else
                                 rRet.append(" right none ");
                             break;
                         case tmCEILING:
@@ -2759,28 +2742,28 @@ void MathType::HandleEmblishments()
         case 0x05:
             if (!nPostSup)
             {
-                sPost += " sup {}";
+                sPost.append(" sup {}");
                 nPostSup = sPost.getLength();
             }
-            sPost = sPost.replaceAt(nPostSup-1,0," ' ");
+            sPost.insert(nPostSup-1," ' ");
             nPostSup += 3;
             break;
         case 0x06:
             if (!nPostSup)
             {
-                sPost += " sup {}";
+                sPost.append(" sup {}");
                 nPostSup = sPost.getLength();
             }
-            sPost = sPost.replaceAt(nPostSup-1,0," '' ");
+            sPost.insert(nPostSup-1," '' ");
             nPostSup += 4;
             break;
         case 0x07:
             if (!nPostlSup)
             {
-                sPost += " lsup {}";
+                sPost.append(" lsup {}");
                 nPostlSup = sPost.getLength();
             }
-            sPost = sPost.replaceAt(nPostlSup-1,0," ' ");
+            sPost.insert(nPostlSup-1," ' ");
             nPostlSup += 3;
             break;
         case 0x08:
@@ -2801,10 +2784,10 @@ void MathType::HandleEmblishments()
         case 0x12:
             if (!nPostSup)
             {
-                sPost += " sup {}";
+                sPost.append(" sup {}");
                 nPostSup = sPost.getLength();
             }
-            sPost = sPost.replaceAt(nPostSup-1,0," ''' ");
+            sPost.insert(nPostSup-1," ''' ");
             nPostSup += 5;
             break;
         case 0x14:
@@ -2882,7 +2865,7 @@ bool MathType::HandleChar(sal_Int32 &rTextStart, int &rSetSize, int nLevel,
         //follows the char and nPostSup and nPostlSup are the
         //indexes at which this class of emblishment is
         //collated together
-        sPost.clear();
+        sPost = "";
         nPostSup = nPostlSup = 0;
         int nOriglen=rRet.getLength()-rTextStart;
         rRet.append(" {");  // #i24340# make what would be "vec {A}_n" become "{vec {A}}_n"

@@ -20,8 +20,6 @@
 #include <ChartTypeManager.hxx>
 #include <StackMode.hxx>
 
-#include <CartesianCoordinateSystem.hxx>
-
 #include "LineChartTypeTemplate.hxx"
 #include "BarChartTypeTemplate.hxx"
 #include "ColumnLineChartTypeTemplate.hxx"
@@ -31,21 +29,15 @@
 #include "StockChartTypeTemplate.hxx"
 #include "NetChartTypeTemplate.hxx"
 #include "BubbleChartTypeTemplate.hxx"
-#include <config_features.h>
-#if HAVE_FEATURE_OPENGL
-#include "GL3DBarChartTypeTemplate.hxx"
-#endif
-#include <cppuhelper/component_context.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/lang/XServiceName.hpp>
-#include <com/sun/star/chart/ChartSolidType.hpp>
-#include <com/sun/star/chart2/CurveStyle.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <iterator>
-#include <functional>
 #include <o3tl/functional.hxx>
 #include <map>
 
@@ -122,8 +114,6 @@ enum TemplateId
     TEMPLATE_STOCKVOLUMELOWHIGHCLOSE,
     TEMPLATE_STOCKVOLUMEOPENLOWHIGHCLOSE,
     TEMPLATE_BUBBLE,
-    TEMPLATE_GL3DBAR,
-    TEMPLATE_GL3DBAR_ROUNDED_RECTANGLE,
 //    TEMPLATE_SURFACE,
 //     TEMPLATE_ADDIN,
     TEMPLATE_NOT_FOUND = 0xffff
@@ -198,8 +188,6 @@ const tTemplateMapType & lcl_DefaultChartTypeMap()
         {"com.sun.star.chart2.template.StockVolumeLowHighClose",        TEMPLATE_STOCKVOLUMELOWHIGHCLOSE},
         {"com.sun.star.chart2.template.StockVolumeOpenLowHighClose",    TEMPLATE_STOCKVOLUMEOPENLOWHIGHCLOSE},
         {"com.sun.star.chart2.template.Bubble",                         TEMPLATE_BUBBLE},
-        {"com.sun.star.chart2.template.GL3DBar",                        TEMPLATE_GL3DBAR},
-        {"com.sun.star.chart2.template.GL3DBarRoundedRectangle",        TEMPLATE_GL3DBAR_ROUNDED_RECTANGLE},
 //      {"com.sun.star.chart2.template.Surface",                        TEMPLATE_SURFACE},
 //      {"com.sun.star.chart2.template.Addin",                          TEMPLATE_ADDIN},
         };
@@ -529,16 +517,7 @@ uno::Reference< uno::XInterface > SAL_CALL ChartTypeManager::createInstance(
             case TEMPLATE_BUBBLE:
                 xTemplate.set( new BubbleChartTypeTemplate( m_xContext, aServiceSpecifier ));
                 break;
-#if HAVE_FEATURE_OPENGL
-            case TEMPLATE_GL3DBAR:
-                xTemplate.set(new GL3DBarChartTypeTemplate(m_xContext, aServiceSpecifier));
-                break;
-            case TEMPLATE_GL3DBAR_ROUNDED_RECTANGLE:
-                xTemplate.set(new GL3DBarChartTypeTemplate(m_xContext, aServiceSpecifier));
-                break;
-#else
             default: break;
-#endif
 //            case TEMPLATE_SURFACE:
 //            case TEMPLATE_ADDIN:
 //               break;

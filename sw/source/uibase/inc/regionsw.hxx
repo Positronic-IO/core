@@ -26,9 +26,8 @@
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/combobox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/layout.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/tabdlg.hxx>
 #include <editeng/brushitem.hxx>
@@ -93,10 +92,9 @@ class SwEditRegionDlg : public SfxModalDialog
     SwWrtShell&             rSh;
     SectReprs_t             m_SectReprs;
     const SwSection*        pCurrSect;
-    sfx2::DocumentInserter* m_pDocInserter;
+    std::unique_ptr<sfx2::DocumentInserter> m_pDocInserter;
 
     bool            bDontCheckPasswd :1;
-    bool            bWeb            :1;
 
     void    RecurseList( const SwSectionFormat* pFormat, SvTreeListEntry* pEntry);
     size_t  FindArrPos(const SwSectionFormat* pFormat);
@@ -164,7 +162,7 @@ class SwInsertSectionTabPage : public SfxTabPage
 
     css::uno::Sequence <sal_Int8 > m_aNewPasswd;
     SwWrtShell*             m_pWrtSh;
-    sfx2::DocumentInserter* m_pDocInserter;
+    std::unique_ptr<sfx2::DocumentInserter> m_pDocInserter;
 
     DECL_LINK( ChangeHideHdl, Button *, void );
     DECL_LINK( ChangeProtectHdl, Button *, void );
@@ -191,39 +189,33 @@ public:
 
 class SwSectionFootnoteEndTabPage : public SfxTabPage
 {
-    VclPtr<CheckBox>        m_pFootnoteNtAtTextEndCB;
+    std::unique_ptr<weld::CheckButton> m_xFootnoteNtAtTextEndCB;
+    std::unique_ptr<weld::CheckButton> m_xFootnoteNtNumCB;
+    std::unique_ptr<weld::Label> m_xFootnoteOffsetLbl;
+    std::unique_ptr<weld::SpinButton> m_xFootnoteOffsetField;
+    std::unique_ptr<weld::CheckButton> m_xFootnoteNtNumFormatCB;
+    std::unique_ptr<weld::Label> m_xFootnotePrefixFT;
+    std::unique_ptr<weld::Entry> m_xFootnotePrefixED;
+    std::unique_ptr<SwNumberingTypeListBox> m_xFootnoteNumViewBox;
+    std::unique_ptr<weld::Label> m_xFootnoteSuffixFT;
+    std::unique_ptr<weld::Entry> m_xFootnoteSuffixED;
+    std::unique_ptr<weld::CheckButton> m_xEndNtAtTextEndCB;
+    std::unique_ptr<weld::CheckButton> m_xEndNtNumCB;
+    std::unique_ptr<weld::Label> m_xEndOffsetLbl;
+    std::unique_ptr<weld::SpinButton> m_xEndOffsetField;
+    std::unique_ptr<weld::CheckButton> m_xEndNtNumFormatCB;
+    std::unique_ptr<weld::Label> m_xEndPrefixFT;
+    std::unique_ptr<weld::Entry> m_xEndPrefixED;
+    std::unique_ptr<SwNumberingTypeListBox> m_xEndNumViewBox;
+    std::unique_ptr<weld::Label> m_xEndSuffixFT;
+    std::unique_ptr<weld::Entry> m_xEndSuffixED;
 
-    VclPtr<CheckBox>        m_pFootnoteNtNumCB;
-    VclPtr<FixedText>       m_pFootnoteOffsetLbl;
-    VclPtr<NumericField>    m_pFootnoteOffsetField;
-
-    VclPtr<CheckBox>        m_pFootnoteNtNumFormatCB;
-    VclPtr<FixedText>       m_pFootnotePrefixFT;
-    VclPtr<Edit>            m_pFootnotePrefixED;
-    VclPtr<SwNumberingTypeListBox> m_pFootnoteNumViewBox;
-    VclPtr<FixedText>       m_pFootnoteSuffixFT;
-    VclPtr<Edit>            m_pFootnoteSuffixED;
-
-    VclPtr<CheckBox>        m_pEndNtAtTextEndCB;
-
-    VclPtr<CheckBox>        m_pEndNtNumCB;
-    VclPtr<FixedText>       m_pEndOffsetLbl;
-    VclPtr<NumericField>    m_pEndOffsetField;
-
-    VclPtr<CheckBox>        m_pEndNtNumFormatCB;
-    VclPtr<FixedText>       m_pEndPrefixFT;
-    VclPtr<Edit>            m_pEndPrefixED;
-    VclPtr<SwNumberingTypeListBox> m_pEndNumViewBox;
-    VclPtr<FixedText>       m_pEndSuffixFT;
-    VclPtr<Edit>            m_pEndSuffixED;
-
-    DECL_LINK( FootEndHdl, Button*, void );
+    DECL_LINK(FootEndHdl, weld::ToggleButton&, void);
     void ResetState( bool bFootnote, const SwFormatFootnoteEndAtTextEnd& );
 
 public:
-    SwSectionFootnoteEndTabPage( vcl::Window *pParent, const SfxItemSet &rAttrSet );
+    SwSectionFootnoteEndTabPage(TabPageParent pParent, const SfxItemSet &rAttrSet);
     virtual ~SwSectionFootnoteEndTabPage() override;
-    virtual void dispose() override;
 
     virtual bool        FillItemSet( SfxItemSet* ) override;
     virtual void        Reset( const SfxItemSet* ) override;
@@ -234,21 +226,20 @@ public:
 
 class SwSectionIndentTabPage : public SfxTabPage
 {
-    VclPtr<MetricField>       m_pBeforeMF;
-    VclPtr<MetricField>       m_pAfterMF;
-    VclPtr<SvxParaPrevWindow> m_pPreviewWin;
+    SvxParaPrevWindow m_aPreviewWin;
+    std::unique_ptr<weld::MetricSpinButton> m_xBeforeMF;
+    std::unique_ptr<weld::MetricSpinButton> m_xAfterMF;
+    std::unique_ptr<weld::CustomWeld> m_xPreviewWin;
 
-    DECL_LINK(IndentModifyHdl, Edit&, void);
+    DECL_LINK(IndentModifyHdl, weld::MetricSpinButton&, void);
 public:
-    SwSectionIndentTabPage( vcl::Window *pParent, const SfxItemSet &rAttrSet );
+    SwSectionIndentTabPage(TabPageParent pParent, const SfxItemSet &rAttrSet);
     virtual ~SwSectionIndentTabPage() override;
-    virtual void dispose() override;
 
     virtual bool        FillItemSet( SfxItemSet* ) override;
     virtual void        Reset( const SfxItemSet* ) override;
 
-    static VclPtr<SfxTabPage>  Create( TabPageParent pParent,
-                                const SfxItemSet* rAttrSet);
+    static VclPtr<SfxTabPage>  Create(TabPageParent pParent, const SfxItemSet* rAttrSet);
 
     void    SetWrtShell(SwWrtShell const & rSh);
 };

@@ -23,9 +23,11 @@
 #include <sal/types.h>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/vector/b2dvector.hxx>
-#include <basegfx/range/b2drange.hxx>
+#include <basegfx/point/b2dpoint.hxx>
+#include <basegfx/tuple/b2dtuple.hxx>
 #include <basegfx/basegfxdllapi.h>
 
+namespace basegfx { class B2DRange; }
 
 namespace basegfx
 {
@@ -63,7 +65,7 @@ namespace basegfx
 
         /** Tooling methods for faster completely combined matrix creation
             when scale, shearX, rotation and translation needs to be done in
-            exactly that order. It's faster since it direcly calculates
+            exactly that order. It's faster since it directly calculates
             each matrix value based on a symbolic calculation of the three
             matrix multiplications.
             Inline versions for parameters as tuples added, too.

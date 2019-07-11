@@ -41,6 +41,9 @@ private:
 
     void testcall( const char str[] );
 
+    // Check that OUStringLiteral ctor is actually constexpr:
+    static constexpr rtlunittest::OUStringLiteral dummy{"dummy"};
+
 CPPUNIT_TEST_SUITE(StringLiterals);
 CPPUNIT_TEST(checkCtors);
 CPPUNIT_TEST(checkUsage);
@@ -55,7 +58,7 @@ CPPUNIT_TEST_SUITE_END();
 
 // reset the flag, evaluate the expression and return
 // whether the string literal ctor was used (i.e. whether the conversion was valid)
-template<typename T> bool VALID_CONVERSION( T && expression )
+template<typename T> static bool VALID_CONVERSION( T && expression )
 {
     rtl_string_unittest_invalid_conversion = false;
     // OK to std::forward expression twice; what is relevant in both ctor calls
@@ -65,7 +68,7 @@ template<typename T> bool VALID_CONVERSION( T && expression )
     ( void ) rtl::OUStringBuffer( std::forward<T>(expression) );
     return !rtl_string_unittest_invalid_conversion;
 }
-template<typename T> bool VALID_CONVERSION_CALL( T f )
+template<typename T> static bool VALID_CONVERSION_CALL( T f )
 {
     rtl_string_unittest_invalid_conversion = false;
     ( void ) rtl::OUString( f() );

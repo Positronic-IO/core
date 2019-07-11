@@ -18,18 +18,14 @@
 #include <unordered_map>
 
 class ScDPCache;
-class ScDPCollection;
 class ScDPObject;
 
 class XclExpXmlPivotCaches : public XclExpRecordBase, protected XclExpRoot
 {
 public:
-    enum EntryType { Worksheet, Name, Database };
-
     struct Entry
     {
         const ScDPCache* mpCache;
-        EntryType meType;
         ScRange maSrcRange;
     };
 
@@ -52,8 +48,8 @@ class XclExpXmlPivotTables : public XclExpRecordBase, protected XclExpRoot
     struct Entry
     {
         const ScDPObject* mpTable;
-        sal_Int32 mnCacheId;
-        sal_Int32 mnPivotId; /// used as [n] in pivotTable[n].xml part name.
+        sal_Int32 const mnCacheId;
+        sal_Int32 const mnPivotId; /// used as [n] in pivotTable[n].xml part name.
 
         Entry( const ScDPObject* pTable, sal_Int32 nCacheId, sal_Int32 nPivotId );
     };

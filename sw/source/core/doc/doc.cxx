@@ -44,8 +44,8 @@
 #include <tools/globname.hxx>
 #include <svx/svxids.hrc>
 
-#include <comphelper/string.hxx>
 #include <comphelper/random.hxx>
+#include <o3tl/make_unique.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/poly.hxx>
 #include <tools/multisel.hxx>
@@ -56,7 +56,6 @@
 #include <unotools/syslocale.hxx>
 #include <sfx2/printer.hxx>
 #include <editeng/keepitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/formatbreakitem.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <svx/svdmodel.hxx>
@@ -489,6 +488,8 @@ void SwDoc::ChgDBData(const SwDBData& rNewData)
     {
         maDBData = rNewData;
         getIDocumentState().SetModified();
+        if (m_pDBManager)
+            m_pDBManager->CommitLastRegistrations();
     }
     getIDocumentFieldsAccess().GetSysFieldType(SwFieldIds::DatabaseName)->UpdateFields();
 }
@@ -519,10 +520,11 @@ sal_uInt16 PostItField_::GetPageNo(
     //Probably only once. For the page number we don't select a random one,
     //but the PostIt's first occurrence in the selected area.
     rVirtPgNo = 0;
-    const sal_Int32 nPos = GetContent();
-    SwIterator<SwTextFrame,SwTextNode> aIter( GetTextField()->GetTextNode() );
+    SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(GetTextField()->GetTextNode());
     for( SwTextFrame* pFrame = aIter.First(); pFrame;  pFrame = aIter.Next() )
     {
+        TextFrameIndex const nPos = pFrame->MapModelToView(
+                &GetTextField()->GetTextNode(), GetContent());
         if( pFrame->GetOfst() > nPos ||
             (pFrame->HasFollow() && pFrame->GetFollow()->GetOfst() <= nPos) )
             continue;
@@ -561,8 +563,8 @@ bool sw_GetPostIts(
                 if (pSrtLst)
                 {
                     SwNodeIndex aIdx( pTextField->GetTextNode() );
-                    PostItField_* pNew = new PostItField_( aIdx, pTextField );
-                    pSrtLst->insert( pNew );
+                    std::unique_ptr<PostItField_> pNew(new PostItField_( aIdx, pTextField ));
+                    pSrtLst->insert( std::move(pNew) );
                 }
                 else
                     break;  // we just wanted to check for the existence of postits ...
@@ -1358,17 +1360,20 @@ bool HandleHidingField(SwFormatField& rFormatField, const SwNodes& rNodes,
 }
 }
 
-bool SwDoc::FieldCanHidePara(SwFieldIds eFieldId) const
+// The greater the returned value, the more weight has this field type on deciding the final
+// paragraph state
+int SwDoc::FieldCanHideParaWeight(SwFieldIds eFieldId) const
 {
     switch (eFieldId)
     {
         case SwFieldIds::HiddenPara:
-            return true;
+            return 20;
         case SwFieldIds::Database:
-            return GetDocumentSettingManager().get(
-                DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA);
+            return GetDocumentSettingManager().get(DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA)
+                       ? 10
+                       : 0;
         default:
-            return false;
+            return 0;
     }
 }
 
@@ -1379,35 +1384,52 @@ bool SwDoc::FieldHidesPara(const SwField& rField) const
         case SwFieldIds::HiddenPara:
             return static_cast<const SwHiddenParaField&>(rField).IsHidden();
         case SwFieldIds::Database:
-            return FieldCanHidePara(SwFieldIds::Database) && rField.ExpandField(true).isEmpty();
+            return FieldCanHideParaWeight(SwFieldIds::Database)
+                   && rField.ExpandField(true, nullptr).isEmpty();
         default:
             return false;
     }
 }
 
 /// Remove the invisible content from the document e.g. hidden areas, hidden paragraphs
+// Returns if the data was actually modified
 bool SwDoc::RemoveInvisibleContent()
 {
     bool bRet = false;
     GetIDocumentUndoRedo().StartUndo( SwUndoId::UI_DELETE_INVISIBLECNTNT, nullptr );
 
     {
+        class FieldTypeGuard : public SwClient
+        {
+        public:
+            explicit FieldTypeGuard(SwFieldType* pType)
+                : SwClient(pType)
+            {
+            }
+            const SwFieldType* get() const
+            {
+                return static_cast<const SwFieldType*>(GetRegisteredIn());
+            }
+        };
         // Removing some nodes for one SwFieldIds::Database type might remove the type from
         // document's field types, invalidating iterators. So, we need to create own list of
         // matching types prior to processing them.
-        std::vector<const SwFieldType*> aHidingFieldTypes;
-        for (const auto* pType : *getIDocumentFieldsAccess().GetFieldTypes())
+        std::vector<std::unique_ptr<FieldTypeGuard>> aHidingFieldTypes;
+        for (SwFieldType* pType : *getIDocumentFieldsAccess().GetFieldTypes())
         {
-            if (FieldCanHidePara(pType->Which()))
-                aHidingFieldTypes.push_back(pType);
+            if (FieldCanHideParaWeight(pType->Which()))
+                aHidingFieldTypes.push_back(o3tl::make_unique<FieldTypeGuard>(pType));
         }
-        for (const auto* pType : aHidingFieldTypes)
+        for (const auto& pTypeGuard : aHidingFieldTypes)
         {
-            SwIterator<SwFormatField, SwFieldType> aIter(*pType);
-            for (SwFormatField* pFormatField = aIter.First(); pFormatField;
-                 pFormatField = aIter.Next())
-                bRet |= HandleHidingField(*pFormatField, GetNodes(),
-                                          getIDocumentContentOperations());
+            if (const SwFieldType* pType = pTypeGuard->get())
+            {
+                SwIterator<SwFormatField, SwFieldType> aIter(*pType);
+                for (SwFormatField* pFormatField = aIter.First(); pFormatField;
+                     pFormatField = aIter.Next())
+                    bRet |= HandleHidingField(*pFormatField, GetNodes(),
+                                              getIDocumentContentOperations());
+            }
         }
     }
 
@@ -1564,7 +1586,7 @@ bool SwDoc::RestoreInvisibleContent()
     return false;
 }
 
-bool SwDoc::ConvertFieldsToText()
+bool SwDoc::ConvertFieldsToText(SwRootFrame const& rLayout)
 {
     bool bRet = false;
     getIDocumentFieldsAccess().LockExpFields();
@@ -1585,11 +1607,9 @@ bool SwDoc::ConvertFieldsToText()
         for( SwFormatField* pCurFieldFormat = aIter.First(); pCurFieldFormat; pCurFieldFormat = aIter.Next() )
             aFieldFormats.push_back(pCurFieldFormat);
 
-        std::vector<const SwFormatField*>::iterator aBegin = aFieldFormats.begin();
-        std::vector<const SwFormatField*>::iterator aEnd = aFieldFormats.end();
-        while(aBegin != aEnd)
+        for(const auto& rpFieldFormat : aFieldFormats)
         {
-            const SwTextField *pTextField = (*aBegin)->GetTextField();
+            const SwTextField *pTextField = rpFieldFormat->GetTextField();
             // skip fields that are currently not in the document
             // e.g. fields in undo or redo array
 
@@ -1613,7 +1633,7 @@ bool SwDoc::ConvertFieldsToText()
                         nWhich != SwFieldIds::RefPageGet&&
                         nWhich != SwFieldIds::RefPageSet))
                 {
-                    OUString sText = pField->ExpandField(true);
+                    OUString sText = pField->ExpandField(true, &rLayout);
 
                     // database fields should not convert their command into text
                     if( SwFieldIds::Database == pCurType->Which() && !static_cast<const SwDBField*>(pField)->IsInitialized())
@@ -1657,7 +1677,6 @@ bool SwDoc::ConvertFieldsToText()
                     bRet = true;
                 }
             }
-            ++aBegin;
         }
     }
 
@@ -1692,35 +1711,35 @@ void SwDoc::AppendUndoForInsertFromDB( const SwPaM& rPam, bool bIsTable )
         const SwTableNode* pTableNd = rPam.GetPoint()->nNode.GetNode().FindTableNode();
         if( pTableNd )
         {
-            SwUndoCpyTable* pUndo = new SwUndoCpyTable(this);
+            std::unique_ptr<SwUndoCpyTable> pUndo(new SwUndoCpyTable(this));
             pUndo->SetTableSttIdx( pTableNd->GetIndex() );
-            GetIDocumentUndoRedo().AppendUndo( pUndo );
+            GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
         }
     }
     else if( rPam.HasMark() )
     {
-        SwUndoCpyDoc* pUndo = new SwUndoCpyDoc( rPam );
+        std::unique_ptr<SwUndoCpyDoc> pUndo(new SwUndoCpyDoc( rPam ));
         pUndo->SetInsertRange( rPam, false );
-        GetIDocumentUndoRedo().AppendUndo( pUndo );
+        GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
     }
 }
 
-void SwDoc::ChgTOX(SwTOXBase & rTOX, const SwTOXBase & rNew)
+void SwDoc::ChangeTOX(SwTOXBase & rTOX, const SwTOXBase & rNew,
+        SwRootFrame const& rLayout)
 {
     if (GetIDocumentUndoRedo().DoesUndo())
     {
         GetIDocumentUndoRedo().DelAllUndoObj();
 
-        SwUndo * pUndo = new SwUndoTOXChange(this, &rTOX, rNew);
-
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(
+            o3tl::make_unique<SwUndoTOXChange>(this, &rTOX, rNew));
     }
 
     rTOX = rNew;
 
     if (dynamic_cast<const SwTOXBaseSection*>( &rTOX) !=  nullptr)
     {
-        static_cast<SwTOXBaseSection &>(rTOX).Update();
+        static_cast<SwTOXBaseSection &>(rTOX).Update(nullptr, &rLayout);
         static_cast<SwTOXBaseSection &>(rTOX).UpdatePageNum();
     }
 }

@@ -122,7 +122,7 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
     std::unique_ptr<SvXMLExport_Impl>            mpImpl;            // dummy
 
     css::uno::Reference< css::uno::XComponentContext > m_xContext;
-    OUString m_implementationName;
+    OUString const m_implementationName;
 
     css::uno::Reference< css::frame::XModel > mxModel;
     css::uno::Reference< css::xml::sax::XDocumentHandler >            mxHandler;      // the handlers
@@ -181,7 +181,7 @@ class XMLOFF_DLLPUBLIC SvXMLExport : public cppu::WeakImplHelper<
 protected:
     void setExportFlags( SvXMLExportFlags nExportFlags ) { mnExportFlags = nExportFlags; }
 
-    // Get (modifyable) namespace map
+    // Get (modifiable) namespace map
     SvXMLNamespaceMap& GetNamespaceMap_() { return *mpNamespaceMap; }
 
     // get a new namespave map (used in starmath to have a default namespace)
@@ -232,8 +232,8 @@ protected:
 
     struct SettingsGroup
     {
-        ::xmloff::token::XMLTokenEnum                     eGroupName;
-        css::uno::Sequence< css::beans::PropertyValue >   aSettings;
+        ::xmloff::token::XMLTokenEnum const                     eGroupName;
+        css::uno::Sequence< css::beans::PropertyValue > const   aSettings;
 
         SettingsGroup(
                 const ::xmloff::token::XMLTokenEnum _eGroupName,
@@ -264,6 +264,7 @@ protected:
 
     void SetDocHandler( const css::uno::Reference< css::xml::sax::XDocumentHandler > &rHandler );
 
+    bool mbAutoStylesCollected;
 public:
 
     SvXMLExport(
@@ -290,6 +291,8 @@ public:
         SvXMLExportFlags nExportFlag );
 
     virtual ~SvXMLExport() override;
+
+    virtual void collectAutoStyles();
 
     static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId() throw();
     static SvXMLExport* getImplementation( const css::uno::Reference< css::uno::XInterface >& ) throw();

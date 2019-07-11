@@ -29,11 +29,10 @@
 namespace chart
 {
 
-SchLayoutTabPage::SchLayoutTabPage(vcl::Window* pWindow,const SfxItemSet& rInAttrs)
-     : SfxTabPage(pWindow, "tp_ChartType", "modules/schart/ui/tp_ChartType.ui", &rInAttrs)
-     , m_pGeometryResources(nullptr)
+SchLayoutTabPage::SchLayoutTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs)
+     : SfxTabPage(pParent, "modules/schart/ui/tp_ChartType.ui", "tp_ChartType", &rInAttrs)
 {
-    m_pGeometryResources = new BarGeometryResources( this );
+    m_pGeometryResources.reset(new BarGeometryResources(m_xBuilder.get()));
 }
 
 SchLayoutTabPage::~SchLayoutTabPage()
@@ -43,26 +42,23 @@ SchLayoutTabPage::~SchLayoutTabPage()
 
 void SchLayoutTabPage::dispose()
 {
-    delete m_pGeometryResources;
-    m_pGeometryResources = nullptr;
+    m_pGeometryResources.reset();
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SchLayoutTabPage::Create(TabPageParent pWindow,
-                                            const SfxItemSet* rOutAttrs)
+VclPtr<SfxTabPage> SchLayoutTabPage::Create(TabPageParent pParent, const SfxItemSet* rOutAttrs)
 {
-    return VclPtr<SchLayoutTabPage>::Create(pWindow.pParent, *rOutAttrs);
+    return VclPtr<SchLayoutTabPage>::Create(pParent, *rOutAttrs);
 }
 
 bool SchLayoutTabPage::FillItemSet(SfxItemSet* rOutAttrs)
 {
-
-    if(m_pGeometryResources && m_pGeometryResources->GetSelectedEntryCount())
+    int nShape = m_pGeometryResources ? m_pGeometryResources->get_selected_index() : -1;
+    if (nShape != -1)
     {
         long nSegs=32;
 
-        long nShape = m_pGeometryResources->GetSelectedEntryPos();
-        if(nShape==CHART_SHAPE3D_PYRAMID)
+        if (nShape==CHART_SHAPE3D_PYRAMID)
             nSegs=4;
 
         rOutAttrs->Put(SfxInt32Item(SCHATTR_STYLE_SHAPE,nShape));
@@ -80,8 +76,8 @@ void SchLayoutTabPage::Reset(const SfxItemSet* rInAttrs)
         long nVal = static_cast<const SfxInt32Item*>(pPoolItem)->GetValue();
         if(m_pGeometryResources)
         {
-            m_pGeometryResources->SelectEntryPos(static_cast<sal_uInt16>(nVal));
-            m_pGeometryResources->Show( true );
+            m_pGeometryResources->select(static_cast<sal_uInt16>(nVal));
+            m_pGeometryResources->show(true);
         }
     }
 }

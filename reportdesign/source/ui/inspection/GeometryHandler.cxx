@@ -24,6 +24,7 @@
 
 #include <GeometryHandler.hxx>
 
+#include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/mimeconfighelper.hxx>
@@ -855,7 +856,7 @@ inspection::LineDescriptor SAL_CALL GeometryHandler::describePropertyLine(const 
         )
     {
         const MeasurementSystem eSystem = SvtSysLocale().GetLocaleData().getMeasurementSystemEnum();
-        const sal_Int16 nDisplayUnit = VCLUnoHelper::ConvertToMeasurementUnit( MeasurementSystem::Metric == eSystem ? FUNIT_CM : FUNIT_INCH, 1 );
+        const sal_Int16 nDisplayUnit = VCLUnoHelper::ConvertToMeasurementUnit( MeasurementSystem::Metric == eSystem ? FieldUnit::CM : FieldUnit::INCH, 1 );
         uno::Reference< inspection::XNumericControl > xNumericControl(aOut.Control,uno::UNO_QUERY);
         xNumericControl->setDecimalDigits( 2 );
         xNumericControl->setValueUnit( util::MeasureUnit::MM_100TH );

@@ -17,6 +17,7 @@
 class DateTime;
 class LocaleDataWrapper;
 namespace vcl { class Window; }
+class OutputDevice;
 class VclBuilderContainer;
 
 //when two tab pages both have the same basic layout with a preview on the
@@ -24,15 +25,11 @@ class VclBuilderContainer;
 //the preview appears in the same place in each one so flipping between tabs
 //isn't distracting as it jumps around
 
-//there has to be a "maingrid" container which contains all the widgets
-//except for the preview widget
-void SFX2_DLLPUBLIC setPreviewsToSamePlace(vcl::Window const *pParent, VclBuilderContainer *pPage);
-
-Size SFX2_DLLPUBLIC getParagraphPreviewOptimalSize(const vcl::Window *pReference);
+Size SFX2_DLLPUBLIC getParagraphPreviewOptimalSize(const OutputDevice& rReference);
 
 Size SFX2_DLLPUBLIC getDrawPreviewOptimalSize(const vcl::Window *pReference);
 
-Size SFX2_DLLPUBLIC getPreviewStripSize(const vcl::Window *pReference);
+Size SFX2_DLLPUBLIC getPreviewStripSize(const OutputDevice& rReference);
 
 Size SFX2_DLLPUBLIC getPreviewOptionsSize(const vcl::Window *pReference);
 

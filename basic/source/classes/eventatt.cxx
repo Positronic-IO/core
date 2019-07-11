@@ -36,10 +36,12 @@
 #include <com/sun/star/script/provider/theMasterScriptProviderFactory.hpp>
 #include <com/sun/star/script/provider/XScriptProviderSupplier.hpp>
 #include <com/sun/star/script/provider/XScriptProvider.hpp>
+#include <com/sun/star/io/XInputStreamProvider.hpp>
 
 #include <basic/basicmanagerrepository.hxx>
 #include <basic/basmgr.hxx>
 
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <xmlscript/xmldlg_imexp.hxx>
 #include <sbunoobj.hxx>
@@ -184,7 +186,7 @@ void BasicScriptListener_Impl::firing_impl( const ScriptEvent& aScriptEvent, Any
         if( comphelper::string::getTokenCount(aMacro, '.') == 3 )
         {
             sal_Int32 nLast = 0;
-            OUString aFullLibName = aMacro.getToken( sal_Int32(0), '.', nLast );
+            OUString aFullLibName = aMacro.getToken( 0, '.', nLast );
 
             sal_Int32 nIndex = aFullLibName.indexOf( ':' );
             if (nIndex >= 0)
@@ -320,9 +322,8 @@ css::uno::Reference< css::container::XNameContainer > implFindDialogLibForDialog
     css::uno::Reference< css::container::XNameContainer > aRetDlgLib;
 
     SbxVariable* pDlgLibContVar = pBasic->Find("DialogLibraries", SbxClassType::Object);
-    if( pDlgLibContVar && dynamic_cast<const SbUnoObject*>( pDlgLibContVar) != nullptr )
+    if( auto pDlgLibContUnoObj = dynamic_cast<SbUnoObject*>( pDlgLibContVar) )
     {
-        SbUnoObject* pDlgLibContUnoObj = static_cast<SbUnoObject*>(static_cast<SbxBase*>(pDlgLibContVar));
         Any aDlgLibContAny = pDlgLibContUnoObj->getUnoAny();
 
         Reference< XLibraryContainer > xDlgLibContNameAccess( aDlgLibContAny, UNO_QUERY );

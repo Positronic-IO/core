@@ -19,15 +19,10 @@
 
 #include <dpgroup.hxx>
 
-#include <global.hxx>
+#include <dpcache.hxx>
 #include <document.hxx>
 #include <dpfilteredcache.hxx>
-#include <dptabsrc.hxx>
-#include <dptabres.hxx>
-#include <dpobject.hxx>
-#include <dpglobal.hxx>
 #include <dputil.hxx>
-#include <globalnames.hxx>
 
 #include <osl/diagnose.h>
 #include <rtl/math.hxx>
@@ -56,8 +51,8 @@ public:
     virtual bool match(const ScDPItemData &rCellData) const override;
     virtual std::vector<ScDPItemData> getMatchValues() const override;
 private:
-    std::vector<ScDPItemData> maValues;
-    ScDPNumGroupInfo maNumInfo;
+    std::vector<ScDPItemData> const maValues;
+    ScDPNumGroupInfo const maNumInfo;
 };
 
 ScDPGroupNumFilter::ScDPGroupNumFilter(const std::vector<ScDPItemData>& rValues, const ScDPNumGroupInfo& rInfo) :
@@ -115,9 +110,9 @@ public:
     virtual std::vector<ScDPItemData> getMatchValues() const override;
 
 private:
-    std::vector<ScDPItemData> maValues;
-    Date             maNullDate;
-    ScDPNumGroupInfo maNumInfo;
+    std::vector<ScDPItemData> const maValues;
+    Date const             maNullDate;
+    ScDPNumGroupInfo const maNumInfo;
 };
 
 ScDPGroupDateFilter::ScDPGroupDateFilter(
@@ -168,31 +163,29 @@ bool ScDPGroupDateFilter::match( const ScDPItemData & rCellData ) const
             nGroupType == DataPilotFieldGroupBy::SECONDS)
         {
             // handle time
-            // (as in the cell functions, ScInterpreter::ScGetHour etc.: seconds are rounded)
+            // (do as in the cell functions, ScInterpreter::ScGetHour() etc.)
 
-            double time = rCellData.GetValue() - approxFloor(rCellData.GetValue());
-            long seconds = static_cast<long>(approxFloor(time*DATE_TIME_FACTOR + 0.5));
+            sal_uInt16 nHour, nMinute, nSecond;
+            double fFractionOfSecond;
+            tools::Time::GetClock( rCellData.GetValue(), nHour, nMinute, nSecond, fFractionOfSecond, 0);
 
             switch (nGroupType)
             {
                 case DataPilotFieldGroupBy::HOURS:
                 {
-                    sal_Int32 hrs = seconds / 3600;
-                    if (hrs == nValue)
+                    if (nHour == nValue)
                         return true;
                 }
                 break;
                 case DataPilotFieldGroupBy::MINUTES:
                 {
-                    sal_Int32 minutes = (seconds % 3600) / 60;
-                    if (minutes == nValue)
+                    if (nMinute == nValue)
                         return true;
                 }
                 break;
                 case DataPilotFieldGroupBy::SECONDS:
                 {
-                    sal_Int32 sec = seconds % 60;
-                    if (sec == nValue)
+                    if (nSecond == nValue)
                         return true;
                 }
                 break;
@@ -636,7 +629,7 @@ namespace {
 
 class FindCaseInsensitive
 {
-    ScDPItemData maValue;
+    ScDPItemData const maValue;
 public:
     explicit FindCaseInsensitive(const ScDPItemData& rVal) : maValue(rVal) {}
 
@@ -1030,7 +1023,11 @@ long ScDPGroupTableData::Compare(long nDim, long nDataId1, long nDataId2)
 {
     if ( getIsDataLayoutDimension(nDim) )
         return 0;
-    return ScDPItemData::Compare( *GetMemberById(nDim,  nDataId1),*GetMemberById(nDim,  nDataId2) );
+    const ScDPItemData* rItem1 = GetMemberById(nDim, nDataId1);
+    const ScDPItemData* rItem2 = GetMemberById(nDim, nDataId2);
+    if (rItem1 == nullptr || rItem2 == nullptr)
+        return 0;
+    return ScDPItemData::Compare( *rItem1,*rItem2);
 }
 
 #if DUMP_PIVOT_TABLE

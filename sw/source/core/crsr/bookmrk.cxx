@@ -36,6 +36,7 @@
 #include <libxml/xmlwriter.h>
 #include <comphelper/random.hxx>
 #include <comphelper/anytostring.hxx>
+#include <sal/log.hxx>
 
 using namespace ::sw::mark;
 using namespace ::com::sun::star;
@@ -254,7 +255,6 @@ namespace sw { namespace mark
 
     DdeBookmark::DdeBookmark(const SwPaM& aPaM)
         : MarkBase(aPaM, MarkBase::GenerateNewName("__DdeLink__"))
-        , m_aRefObj(nullptr)
     { }
 
     void DdeBookmark::SetRefObject(SwServerObject* pObj)
@@ -287,6 +287,7 @@ namespace sw { namespace mark
         : DdeBookmark(aPaM)
         , ::sfx2::Metadatable()
         , m_aCode(rCode)
+        , m_bHidden(false)
     {
         m_aName = rName;
     }
@@ -296,7 +297,7 @@ namespace sw { namespace mark
         if (io_pDoc->GetIDocumentUndoRedo().DoesUndo())
         {
             io_pDoc->GetIDocumentUndoRedo().AppendUndo(
-                    new SwUndoInsBookmark(*this));
+                    o3tl::make_unique<SwUndoInsBookmark>(*this));
         }
         io_pDoc->getIDocumentState().SetModified();
     }
@@ -308,7 +309,7 @@ namespace sw { namespace mark
         if (io_pDoc->GetIDocumentUndoRedo().DoesUndo())
         {
             io_pDoc->GetIDocumentUndoRedo().AppendUndo(
-                    new SwUndoDeleteBookmark(*this));
+                    o3tl::make_unique<SwUndoDeleteBookmark>(*this));
         }
         io_pDoc->getIDocumentState().SetModified();
     }
@@ -406,9 +407,12 @@ namespace sw { namespace mark
         xmlTextWriterEndElement(pWriter);
     }
 
-    TextFieldmark::TextFieldmark(const SwPaM& rPaM)
+    TextFieldmark::TextFieldmark(const SwPaM& rPaM, const OUString& rName)
         : Fieldmark(rPaM)
-    { }
+    {
+        if ( !rName.isEmpty() )
+            m_aName = rName;
+    }
 
     void TextFieldmark::InitDoc(SwDoc* const io_pDoc, sw::mark::InsertMode const eMode)
     {

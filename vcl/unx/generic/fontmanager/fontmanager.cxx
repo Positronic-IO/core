@@ -47,6 +47,7 @@
 #include <rtl/strbuf.hxx>
 
 #include <sal/macros.h>
+#include <sal/log.hxx>
 
 #include <i18nlangtag/applelangid.hxx>
 #include <i18nlangtag/mslangid.hxx>
@@ -65,7 +66,6 @@
 #include <valgrind/callgrind.h>
 #endif
 
-#include <comphelper/string.hxx>
 #include <com/sun/star/beans/XMaterialHolder.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
 
@@ -81,7 +81,7 @@ using namespace com::sun::star::lang;
  *  static helpers
  */
 
-inline sal_uInt16 getUInt16BE( const sal_uInt8*& pBuffer )
+static sal_uInt16 getUInt16BE( const sal_uInt8*& pBuffer )
 {
     sal_uInt16 nRet = static_cast<sal_uInt16>(pBuffer[1]) |
         (static_cast<sal_uInt16>(pBuffer[0]) << 8);
@@ -111,30 +111,14 @@ PrintFontManager::PrintFont::PrintFont()
 {
 }
 
-GenericUnixSalData::GenericUnixSalData(GenericUnixSalDataType const t, SalInstance *const pInstance)
-    : m_eType(t), m_pDisplay(nullptr), m_pPrintFontManager(nullptr)
-{
-    m_pInstance = pInstance; SetSalData(this);
-}
-
-GenericUnixSalData::~GenericUnixSalData()
-{
-}
-
 /*
  *  one instance only
  */
 PrintFontManager& PrintFontManager::get()
 {
-    GenericUnixSalData *const pSalData(GetGenericUnixSalData());
+    GenericUnixSalData* const pSalData(GetGenericUnixSalData());
     assert(pSalData);
-
-    if (!pSalData->m_pPrintFontManager)
-    {
-        pSalData->m_pPrintFontManager.reset( new PrintFontManager );
-        pSalData->m_pPrintFontManager->initialize();
-    }
-    return *pSalData->m_pPrintFontManager;
+    return *pSalData->GetPrintFontManager();
 }
 
 /*
@@ -153,8 +137,6 @@ PrintFontManager::~PrintFontManager()
 {
     m_aFontInstallerTimer.Stop();
     deinitFontconfig();
-    for (auto const& font : m_aFonts)
-        delete font.second;
 }
 
 OString PrintFontManager::getDirectory( int nAtom ) const
@@ -197,7 +179,7 @@ std::vector<fontID> PrintFontManager::addFontFile( const OString& rFileName )
             for (auto & font : aNewFonts)
             {
                 fontID nFontId = m_nNextFontID++;
-                m_aFonts[nFontId] = font.release();
+                m_aFonts[nFontId] = std::move(font);
                 m_aFontFileToFontID[ aName ].insert( nFontId );
                 aFontIds.push_back(nFontId);
             }
@@ -306,10 +288,10 @@ fontID PrintFontManager::findFontFileID( int nDirID, const OString& rFontFile, i
 
     for (auto const& elem : set_it->second)
     {
-        std::unordered_map< fontID, PrintFont* >::const_iterator it = m_aFonts.find(elem);
+        auto it = m_aFonts.find(elem);
         if( it == m_aFonts.end() )
             continue;
-        PrintFont* const pFont = (*it).second;
+        PrintFont* const pFont = (*it).second.get();
         if (pFont->m_nDirectory == nDirID &&
             pFont->m_aFontFile == rFontFile && pFont->m_nCollectionEntry == nFaceIndex)
         {
@@ -332,10 +314,10 @@ std::vector<fontID> PrintFontManager::findFontFileIDs( int nDirID, const OString
 
     for (auto const& elem : set_it->second)
     {
-        std::unordered_map< fontID, PrintFont* >::const_iterator it = m_aFonts.find(elem);
+        auto it = m_aFonts.find(elem);
         if( it == m_aFonts.end() )
             continue;
-        PrintFont* const pFont = (*it).second;
+        PrintFont* const pFont = (*it).second.get();
         if (pFont->m_nDirectory == nDirID &&
             pFont->m_aFontFile == rFontFile)
             aIds.push_back(it->first);
@@ -562,7 +544,8 @@ bool PrintFontManager::analyzeSfntFile( PrintFont* pFont ) const
     OString aFile = getFontFile( pFont );
     TrueTypeFont* pTTFont = nullptr;
 
-    if( OpenTTFontFile( aFile.getStr(), pFont->m_nCollectionEntry, &pTTFont ) == SF_OK )
+    auto const e = OpenTTFontFile( aFile.getStr(), pFont->m_nCollectionEntry, &pTTFont );
+    if( e == SFErrCodes::Ok )
     {
         TTGlobalFontInfo aInfo;
         GetTTGlobalFontInfo( pTTFont, & aInfo );
@@ -691,7 +674,7 @@ bool PrintFontManager::analyzeSfntFile( PrintFont* pFont ) const
         bSuccess = true;
     }
     else
-        SAL_WARN("vcl.fonts", "Could not OpenTTFont \"" << aFile << "\"");
+        SAL_WARN("vcl.fonts", "Could not OpenTTFont \"" << aFile << "\": " << int(e));
 
     return bSuccess;
 }
@@ -707,8 +690,6 @@ void PrintFontManager::initialize()
     // gtk-fontconfig-timestamp changes to reflect new font installed and
     // PrintFontManager::initialize called again
     {
-        for (auto const& font : m_aFonts)
-            delete font.second;
         m_nNextFontID = 1;
         m_aFonts.clear();
     }
@@ -861,12 +842,12 @@ FontFamily PrintFontManager::matchFamilyName( const OUString& rFamily )
 {
     typedef struct {
         const char*  mpName;
-        sal_uInt16   mnLength;
-        FontFamily   meType;
+        sal_uInt16 const   mnLength;
+        FontFamily const   meType;
     } family_t;
 
 #define InitializeClass( p, a ) p, sizeof(p) - 1, a
-    const family_t pFamilyMatch[] =  {
+    static const family_t pFamilyMatch[] =  {
         { InitializeClass( "arial",                  FAMILY_SWISS )  },
         { InitializeClass( "arioso",                 FAMILY_SCRIPT ) },
         { InitializeClass( "avant garde",            FAMILY_SWISS )  },
@@ -1018,7 +999,7 @@ bool PrintFontManager::createFontSubset(
     const OString aFromFile = getFontFile( pFont );
 
     TrueTypeFont* pTTFont = nullptr; // TODO: rename to SfntFont
-    if( OpenTTFontFile( aFromFile.getStr(), pFont->m_nCollectionEntry, &pTTFont ) != SF_OK )
+    if( OpenTTFontFile( aFromFile.getStr(), pFont->m_nCollectionEntry, &pTTFont ) != SFErrCodes::Ok )
         return false;
 
     // prepare system name for write access for subset file target
@@ -1081,15 +1062,15 @@ bool PrintFontManager::createFontSubset(
     rInfo.m_nCapHeight  = yMax; // Well ...
 
     // fill in glyph advance widths
-    TTSimpleGlyphMetrics* pMetrics = GetTTSimpleGlyphMetrics( pTTFont,
+    std::unique_ptr<sal_uInt16[]> pMetrics = GetTTSimpleGlyphMetrics( pTTFont,
                                                               pGID,
                                                               nGlyphs,
                                                               false/*bVertical*/ );
     if( pMetrics )
     {
         for( int i = 0; i < nGlyphs; i++ )
-            pWidths[pOldIndex[i]] = pMetrics[i].adv;
-        free( pMetrics );
+            pWidths[pOldIndex[i]] = pMetrics[i];
+        pMetrics.reset();
     }
     else
     {
@@ -1097,7 +1078,7 @@ bool PrintFontManager::createFontSubset(
         return false;
     }
 
-    bool bSuccess = ( SF_OK == CreateTTFromTTGlyphs( pTTFont,
+    bool bSuccess = ( SFErrCodes::Ok == CreateTTFromTTGlyphs( pTTFont,
                                                      aToFile.getStr(),
                                                      pGID,
                                                      pEnc,
@@ -1117,7 +1098,7 @@ void PrintFontManager::getGlyphWidths( fontID nFont,
         return;
     TrueTypeFont* pTTFont = nullptr;
     OString aFromFile = getFontFile( pFont );
-    if( OpenTTFontFile( aFromFile.getStr(), pFont->m_nCollectionEntry, &pTTFont ) != SF_OK )
+    if( OpenTTFontFile( aFromFile.getStr(), pFont->m_nCollectionEntry, &pTTFont ) != SFErrCodes::Ok )
         return;
     int nGlyphs = GetTTGlyphCount(pTTFont);
     if (nGlyphs > 0)
@@ -1126,15 +1107,15 @@ void PrintFontManager::getGlyphWidths( fontID nFont,
         std::vector<sal_uInt16> aGlyphIds(nGlyphs);
         for (int i = 0; i < nGlyphs; i++)
             aGlyphIds[i] = sal_uInt16(i);
-        TTSimpleGlyphMetrics* pMetrics = GetTTSimpleGlyphMetrics(pTTFont,
+        std::unique_ptr<sal_uInt16[]> pMetrics = GetTTSimpleGlyphMetrics(pTTFont,
                                                                  &aGlyphIds[0],
                                                                  nGlyphs,
                                                                  bVertical);
         if (pMetrics)
         {
             for (int i = 0; i< nGlyphs; i++)
-                rWidths[i] = pMetrics[i].adv;
-            free(pMetrics);
+                rWidths[i] = pMetrics[i];
+            pMetrics.reset();
             rUnicodeEnc.clear();
         }
 

@@ -23,6 +23,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <ooo/vba/office/MsoBarType.hpp>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 using namespace ooo::vba;
@@ -161,8 +162,8 @@ sal_Int32 SAL_CALL
 ScVbaCommandBar::Type()
 {
     // #FIXME support msoBarTypePopup
-    sal_Int32 nType = office::MsoBarType::msoBarTypePopup;
-    nType = m_bIsMenu? office::MsoBarType::msoBarTypeNormal : office::MsoBarType::msoBarTypeMenuBar;
+    sal_Int32 nType
+        = m_bIsMenu ? office::MsoBarType::msoBarTypeNormal : office::MsoBarType::msoBarTypeMenuBar;
     return nType;
 }
 

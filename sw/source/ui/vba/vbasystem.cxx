@@ -26,9 +26,6 @@
 #include <o3tl/char16_t2wchar_t.hxx>
 
 #ifdef _WIN32
-#if !defined WINVER
-# define WINVER 0x0400
-#endif
 #if !defined WIN32_LEAN_AND_MEAN
 # define WIN32_LEAN_AND_MEAN
 #endif
@@ -49,7 +46,7 @@ void PrivateProfileStringListener::Initialize( const OUString& rFileName, const 
     maKey = rKey;
 }
 #ifdef _WIN32
-void lcl_getRegKeyInfo( const OString& sKeyInfo, HKEY& hBaseKey, OString& sSubKey )
+static void lcl_getRegKeyInfo( const OString& sKeyInfo, HKEY& hBaseKey, OString& sSubKey )
 {
     sal_Int32 nBaseKeyIndex = sKeyInfo.indexOf('\\');
     if( nBaseKeyIndex > 0 )

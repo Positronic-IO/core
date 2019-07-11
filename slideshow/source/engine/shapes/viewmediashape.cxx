@@ -26,6 +26,7 @@
 #include <comphelper/anytostring.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
+#include <sal/log.hxx>
 #include <vcl/canvastools.hxx>
 #include <vcl/syschild.hxx>
 #include <vcl/sysdata.hxx>
@@ -75,7 +76,6 @@ namespace slideshow
                                         const uno::Reference< drawing::XShape >&        rxShape,
                                         const uno::Reference< uno::XComponentContext >& rxContext ) :
             mpViewLayer( rViewLayer ),
-            mpEventHandlerParent(nullptr),
             maWindowOffset( 0, 0 ),
             maBounds(),
             mxShape( rxShape ),
@@ -136,7 +136,6 @@ namespace slideshow
             }
 
             mpMediaWindow.disposeAndClear();
-            mpEventHandlerParent.disposeAndClear();
 
             // shutdown player
             if( mxPlayer.is() )
@@ -256,15 +255,7 @@ namespace slideshow
 
             if( mpMediaWindow.get() )
             {
-                if( mpEventHandlerParent )
-                {
-                    mpEventHandlerParent->SetPosSizePixel( aPosPixel, aSizePixel );
-                    mpMediaWindow->SetPosSizePixel( Point(0,0), aSizePixel );
-                }
-                else
-                {
-                    mpMediaWindow->SetPosSizePixel( aPosPixel, aSizePixel );
-                }
+                mpMediaWindow->SetPosSizePixel( aPosPixel, aSizePixel );
                 mxPlayerWindow->setPosSize( 0, 0,
                                             aSizePixel.Width(), aSizePixel.Height(),
                                             0 );
@@ -454,7 +445,6 @@ namespace slideshow
                             mpMediaWindow->SetBackground( COL_BLACK );
                             mpMediaWindow->SetParentClipMode( ParentClipMode::NoClip );
                             mpMediaWindow->EnableEraseBackground( false );
-                            mpMediaWindow->EnablePaint( false );
                             mpMediaWindow->SetForwardKey( true );
                             mpMediaWindow->SetMouseTransparent( true );
                             mpMediaWindow->Show();
@@ -482,7 +472,6 @@ namespace slideshow
                                 //if there was no playerwindow, then clear the mpMediaWindow too
                                 //so that we can draw a placeholder instead in that space
                                 mpMediaWindow.disposeAndClear();
-                                mpEventHandlerParent.disposeAndClear();
                             }
                         }
                     }

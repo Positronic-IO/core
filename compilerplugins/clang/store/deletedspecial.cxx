@@ -32,10 +32,10 @@ CXXRecordDecl const * getClass(CXXMethodDecl const * decl) {
 }
 
 class DeletedSpecial:
-    public RecursiveASTVisitor<DeletedSpecial>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<DeletedSpecial>
 {
 public:
-    explicit DeletedSpecial(InstantiationData const & data): Plugin(data) {}
+    explicit DeletedSpecial(InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override;
 
@@ -80,7 +80,6 @@ bool DeletedSpecial::VisitCXXMethodDecl(CXXMethodDecl const * decl) {
                 || whitelist(decl, "SbMethod", "include/basic/sbmeth.hxx")
                 || whitelist(decl, "ScDBCollection::NamedDBs", "sc/inc/dbdata.hxx")
                 || whitelist(decl, "ScDrawPage", "sc/inc/drawpage.hxx")
-                || whitelist(decl, "ScFormEditData", "sc/source/ui/inc/formdata.hxx")
                 || whitelist(decl, "SmEditSource", "starmath/source/accessibility.hxx")
                 || whitelist(decl, "SwChartDataSequence", "sw/inc/unochart.hxx")
                 || whitelist(decl, "SwDPage", "sw/inc/dpage.hxx")

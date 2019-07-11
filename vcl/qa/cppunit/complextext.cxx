@@ -7,9 +7,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include <config_features.h>
+
 #include <ostream>
 #include <vector>
-std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec);
+#if !defined(_WIN32) && HAVE_MORE_FONTS
+static std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec);
+#endif
 
 #include <unotest/filters-test.hxx>
 #include <test/bootstrapfixture.hxx>
@@ -21,9 +25,8 @@ std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec);
 #include <osl/file.hxx>
 #include <osl/process.h>
 
-#include <config_test.h>
-
-std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec)
+#if !defined(_WIN32) && HAVE_MORE_FONTS
+static std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec)
 {
     rStream << "{ ";
     for (size_t i = 0; i < rVec.size() - 1; i++)
@@ -32,20 +35,23 @@ std::ostream& operator<<(std::ostream& rStream, const std::vector<long>& rVec)
     rStream << " }";
     return rStream;
 }
+#endif
 
 class VclComplexTextTest : public test::BootstrapFixture
 {
 public:
     VclComplexTextTest() : BootstrapFixture(true, false) {}
 
+#if HAVE_MORE_FONTS
     /// Play with font measuring etc.
     void testArabic();
+#endif
 #if defined(_WIN32)
     void testTdf95650(); // Windows-only issue
 #endif
 
     CPPUNIT_TEST_SUITE(VclComplexTextTest);
-#if !TEST_FONTS_MISSING
+#if HAVE_MORE_FONTS
     CPPUNIT_TEST(testArabic);
 #endif
 #if defined(_WIN32)
@@ -54,7 +60,7 @@ public:
     CPPUNIT_TEST_SUITE_END();
 };
 
-#if !TEST_FONTS_MISSING
+#if HAVE_MORE_FONTS
 void VclComplexTextTest::testArabic()
 {
     const unsigned char pOneTwoThreeUTF8[] = {
@@ -76,18 +82,21 @@ void VclComplexTextTest::testArabic()
     pOutDev->SetFont( aFont );
 
     // absolute character widths AKA text array.
+#if !defined(_WIN32)
     std::vector<long> aRefCharWidths {6,  9,  16, 16, 22, 22, 26, 29, 32, 32,
                                       36, 40, 49, 53, 56, 63, 63, 66, 72, 72};
     std::vector<long> aCharWidths(aOneTwoThree.getLength(), 0);
     long nTextWidth = pOutDev->GetTextArray(aOneTwoThree, aCharWidths.data());
 
     CPPUNIT_ASSERT_EQUAL(aRefCharWidths, aCharWidths);
+    // this sporadically returns 75 or 74 on some of the windows tinderboxes eg. tb73
     CPPUNIT_ASSERT_EQUAL(72L, nTextWidth);
     CPPUNIT_ASSERT_EQUAL(nTextWidth, aCharWidths.back());
 
     // text advance width and line height
     CPPUNIT_ASSERT_EQUAL(72L, pOutDev->GetTextWidth(aOneTwoThree));
     CPPUNIT_ASSERT_EQUAL(14L, pOutDev->GetTextHeight());
+#endif
 
     // exact bounding rectangle, not essentially the same as text width/height
 #if defined(MACOSX) || defined(_WIN32)

@@ -87,7 +87,7 @@ namespace slideshow
                                       pAttr->getShearYAngle() :
                                       0.0 );
                 const double nRotation( pAttr->isRotationAngleValid() ?
-                                        pAttr->getRotationAngle()*M_PI/180.0 :
+                                        basegfx::deg2rad(pAttr->getRotationAngle()) :
                                         0.0 );
 
                 // scale, shear and rotation pivot point is the shape
@@ -361,10 +361,7 @@ namespace slideshow
                            const ::basegfx::B2DVector&  /*rSlideBounds*/ )
         {
             // try to extract string
-            if( !(rSourceAny >>= o_rValue) )
-                return false; // nothing left to try
-
-            return true;
+            return rSourceAny >>= o_rValue;
         }
 
         /// extract bool value from Any
@@ -492,7 +489,7 @@ namespace slideshow
                                       pAttr->getShearYAngle() :
                                       0.0 );
                 const double nRotation( pAttr->isRotationAngleValid() ?
-                                        pAttr->getRotationAngle()*M_PI/180.0 :
+                                        basegfx::deg2rad(pAttr->getRotationAngle()) :
                                         0.0 );
 
                 // scale, shear and rotation pivot point is the

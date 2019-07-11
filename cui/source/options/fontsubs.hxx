@@ -22,7 +22,7 @@
 #include <sfx2/tabdlg.hxx>
 #include <svtools/ctrlbox.hxx>
 #include <svtools/simptabl.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/toolbox.hxx>
 
@@ -75,7 +75,7 @@ class SvxFontSubstTabPage : public SfxTabPage
 
     OUString                    m_sAutomatic;
 
-    SvtFontSubstConfig*         pConfig;
+    std::unique_ptr<SvtFontSubstConfig> pConfig;
 
     Color           aTextColor;
 

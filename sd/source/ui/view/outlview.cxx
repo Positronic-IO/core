@@ -58,6 +58,7 @@
 #include <OutlineViewShell.hxx>
 #include <app.hrc>
 #include <strings.hrc>
+#include <sdmod.hxx>
 #include <sdresid.hxx>
 #include <Outliner.hxx>
 #include <EventMultiplexer.hxx>
@@ -83,7 +84,6 @@ OutlineView::OutlineView( DrawDocShell& rDocSh, vcl::Window* pWindow, OutlineVie
 , mnPagesToProcess(0)
 , mnPagesProcessed(0)
 , mbFirstPaint(true)
-, mpProgress(nullptr)
 , maDocColor( COL_WHITE )
 , maLRSpaceItem( 0, 0, 2000, 0, EE_PARA_OUTLLRSPACE )
 {
@@ -136,7 +136,8 @@ OutlineView::OutlineView( DrawDocShell& rDocSh, vcl::Window* pWindow, OutlineVie
  */
 OutlineView::~OutlineView()
 {
-    DBG_ASSERT(maDragAndDropModelGuard.get() == nullptr, "sd::OutlineView::~OutlineView(), prior drag operation not finished correctly!" );
+    DBG_ASSERT(maDragAndDropModelGuard == nullptr,
+               "sd::OutlineView::~OutlineView(), prior drag operation not finished correctly!");
 
     Link<tools::EventMultiplexerEvent&,void> aLink( LINK(this,OutlineView,EventMultiplexerListener) );
     mrOutlineViewShell.GetViewShellBase().GetEventMultiplexer()->RemoveEventListener( aLink );
@@ -332,7 +333,7 @@ IMPL_LINK( OutlineView, ParagraphInsertedHdl, Outliner::ParagraphHdlParam, aPara
 {
     // we get calls to this handler during binary insert of drag and drop contents but
     // we ignore it here and handle it later in OnEndPasteOrDrop()
-    if( maDragAndDropModelGuard.get() == nullptr )
+    if (maDragAndDropModelGuard == nullptr)
     {
         OutlineViewPageChangesGuard aGuard(this);
 
@@ -751,7 +752,8 @@ IMPL_LINK_NOARG(OutlineView, StatusEventHdl, EditStatus&, void)
 
 IMPL_LINK_NOARG(OutlineView, BeginDropHdl, EditView*, void)
 {
-    DBG_ASSERT(maDragAndDropModelGuard.get() == nullptr, "sd::OutlineView::BeginDropHdl(), prior drag operation not finished correctly!" );
+    DBG_ASSERT(maDragAndDropModelGuard == nullptr,
+               "sd::OutlineView::BeginDropHdl(), prior drag operation not finished correctly!");
 
     maDragAndDropModelGuard.reset( new OutlineViewModelChangeGuard( *this ) );
 }
@@ -965,7 +967,7 @@ SdrTextObj* OutlineView::CreateOutlineTextObject(SdPage* pPage)
 }
 
 /** updates draw model with all changes from outliner model */
-bool OutlineView::PrepareClose()
+void OutlineView::PrepareClose()
 {
     ::sd::UndoManager* pDocUndoMgr = dynamic_cast<sd::UndoManager*>(mpDocSh->GetUndoManager());
     if (pDocUndoMgr != nullptr)
@@ -977,7 +979,6 @@ bool OutlineView::PrepareClose()
     UpdateDocument();
     EndUndo();
     mrDoc.SetSelected(GetActualPage(), true);
-    return true;
 }
 
 /**
@@ -1338,11 +1339,10 @@ SvtScriptType OutlineView::GetScriptType() const
 {
     SvtScriptType nScriptType = ::sd::View::GetScriptType();
 
-    OutlinerParaObject* pTempOPObj = mrOutliner.CreateParaObject();
+    std::unique_ptr<OutlinerParaObject> pTempOPObj = mrOutliner.CreateParaObject();
     if(pTempOPObj)
     {
         nScriptType = pTempOPObj->GetTextObject().GetScriptType();
-        delete pTempOPObj;
     }
 
     return nScriptType;
@@ -1428,7 +1428,7 @@ void OutlineView::EndModelChange()
 {
     UpdateDocument();
 
-    ::svl::IUndoManager* pDocUndoMgr = mpDocSh->GetUndoManager();
+    SfxUndoManager* pDocUndoMgr = mpDocSh->GetUndoManager();
 
     bool bHasUndoActions = pDocUndoMgr->GetUndoActionCount() != 0;
 
@@ -1474,15 +1474,14 @@ void OutlineView::UpdateDocument()
         mrOutlineViewShell.UpdateTitleObject( pPage, pPara );
         mrOutlineViewShell.UpdateOutlineObject( pPage, pPara );
 
-        if( pPara )
-            pPara = GetNextTitle(pPara);
+        pPara = GetNextTitle(pPara);
     }
 }
 
 /** merge edit engine undo actions if possible */
 void OutlineView::TryToMergeUndoActions()
 {
-    ::svl::IUndoManager& rOutlineUndo = mrOutliner.GetUndoManager();
+    SfxUndoManager& rOutlineUndo = mrOutliner.GetUndoManager();
     if( rOutlineUndo.GetUndoActionCount() > 1 )
     {
         SfxListUndoAction* pListAction = dynamic_cast< SfxListUndoAction* >( rOutlineUndo.GetUndoAction() );
@@ -1490,11 +1489,11 @@ void OutlineView::TryToMergeUndoActions()
         if( pListAction && pPrevListAction )
         {
             // find the top EditUndo action in the top undo action list
-            size_t nAction = pListAction->aUndoActions.size();
+            size_t nAction = pListAction->maUndoActions.size();
             EditUndo* pEditUndo = nullptr;
             while( !pEditUndo && nAction )
             {
-                pEditUndo = dynamic_cast< EditUndo* >(pListAction->aUndoActions.GetUndoAction(--nAction));
+                pEditUndo = dynamic_cast< EditUndo* >(pListAction->GetUndoAction(--nAction));
             }
 
             sal_uInt16 nEditPos = nAction; // we need this later to remove the merged undo actions
@@ -1502,7 +1501,7 @@ void OutlineView::TryToMergeUndoActions()
             // make sure it is the only EditUndo action in the top undo list
             while( pEditUndo && nAction )
             {
-                if( dynamic_cast< EditUndo* >(pListAction->aUndoActions.GetUndoAction(--nAction)) )
+                if( dynamic_cast< EditUndo* >(pListAction->GetUndoAction(--nAction)) )
                     pEditUndo = nullptr;
             }
 
@@ -1511,10 +1510,10 @@ void OutlineView::TryToMergeUndoActions()
             {
                 // yes, see if we can merge it with the prev undo list
 
-                nAction = pPrevListAction->aUndoActions.size();
+                nAction = pPrevListAction->maUndoActions.size();
                 EditUndo* pPrevEditUndo = nullptr;
                 while( !pPrevEditUndo && nAction )
-                    pPrevEditUndo = dynamic_cast< EditUndo* >(pPrevListAction->aUndoActions.GetUndoAction(--nAction));
+                    pPrevEditUndo = dynamic_cast< EditUndo* >(pPrevListAction->GetUndoAction(--nAction));
 
                 if( pPrevEditUndo && pPrevEditUndo->Merge( pEditUndo ) )
                 {
@@ -1522,26 +1521,23 @@ void OutlineView::TryToMergeUndoActions()
                     // the top EditUndo of the previous undo list
 
                     // first remove the merged undo action
-                    DBG_ASSERT( pListAction->aUndoActions.GetUndoAction(nEditPos) == pEditUndo,
+                    assert( pListAction->GetUndoAction(nEditPos) == pEditUndo &&
                         "sd::OutlineView::TryToMergeUndoActions(), wrong edit pos!" );
-                    pListAction->aUndoActions.Remove(nEditPos);
-                    delete pEditUndo;
+                    pListAction->Remove(nEditPos);
 
-                    if ( !pListAction->aUndoActions.empty() )
+                    if ( !pListAction->maUndoActions.empty() )
                     {
                         // now we have to move all remaining doc undo actions from the top undo
                         // list to the previous undo list and remove the top undo list
 
-                        size_t nCount = pListAction->aUndoActions.size();
-                        size_t nDestAction = pPrevListAction->aUndoActions.size();
+                        size_t nCount = pListAction->maUndoActions.size();
+                        size_t nDestAction = pPrevListAction->maUndoActions.size();
                         while( nCount-- )
                         {
-                            SfxUndoAction* pTemp = pListAction->aUndoActions.GetUndoAction(0);
-                            pListAction->aUndoActions.Remove(0);
-                            if( pTemp )
-                                pPrevListAction->aUndoActions.Insert( pTemp, nDestAction++ );
+                            std::unique_ptr<SfxUndoAction> pTemp = pListAction->Remove(0);
+                            pPrevListAction->Insert( std::move(pTemp), nDestAction++ );
                         }
-                        pPrevListAction->nCurUndoAction = pPrevListAction->aUndoActions.size();
+                        pPrevListAction->nCurUndoAction = pPrevListAction->maUndoActions.size();
                     }
 
                     rOutlineUndo.RemoveLastUndoAction();
@@ -1668,8 +1664,7 @@ void OutlineView::OnEndPasteOrDrop( PasteOrDropInfos* pInfo )
             SdStyleSheet* pStyleSheet = dynamic_cast< SdStyleSheet* >( mrOutliner.GetStyleSheet( nPara ) );
             if( pStyleSheet )
             {
-                const OUString aName( pStyleSheet->GetApiName() );
-                if ( aName == "title" )
+                if ( pStyleSheet->GetApiName() == "title" )
                     bPage = true;
             }
         }

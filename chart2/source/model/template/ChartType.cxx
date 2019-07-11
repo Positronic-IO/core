@@ -18,15 +18,14 @@
  */
 
 #include "ChartType.hxx"
-#include <PropertyHelper.hxx>
-#include <CommonFunctors.hxx>
 #include <CartesianCoordinateSystem.hxx>
 #include <AxisHelper.hxx>
 #include <CloneHelper.hxx>
 #include <AxisIndexDefines.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <vcl/svapp.hxx>
 #include <com/sun/star/chart2/AxisType.hpp>
-#include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/container/NoSuchElementException.hpp>
 #include <tools/diagnose_ex.h>
 
 using namespace ::com::sun::star;
@@ -46,7 +45,7 @@ ChartType::ChartType() :
 
 ChartType::ChartType( const ChartType & rOther ) :
         MutexContainer(),
-        impl::ChartType_Base(),
+        impl::ChartType_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
     m_bNotifyChanges( true )

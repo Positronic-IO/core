@@ -15,8 +15,6 @@
 #include <cellvalues.hxx>
 #include <columnspanset.hxx>
 #include <columniterator.hxx>
-#include <listenercontext.hxx>
-#include <tokenstringcontext.hxx>
 #include <mtvcellfunc.hxx>
 #include <clipcontext.hxx>
 #include <attrib.hxx>
@@ -25,14 +23,15 @@
 #include <conditio.hxx>
 #include <formulagroup.hxx>
 #include <tokenarray.hxx>
-#include <globalnames.hxx>
 #include <scitems.hxx>
 #include <cellform.hxx>
 #include <sharedformula.hxx>
 #include <drwlayer.hxx>
+#include <compiler.hxx>
 
 #include <svl/sharedstringpool.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <vector>
 #include <cassert>
@@ -317,13 +316,16 @@ void ScColumn::SetValues( const SCROW nRow, const std::vector<double>& rVals )
         return;
 
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
-    DetachFormulaCells(aPos, rVals.size());
+    std::vector<SCROW> aNewSharedRows;
+    DetachFormulaCells(aPos, rVals.size(), &aNewSharedRows);
 
     maCells.set(nRow, rVals.begin(), rVals.end());
     std::vector<sc::CellTextAttr> aDefaults(rVals.size());
     maCellTextAttrs.set(nRow, aDefaults.begin(), aDefaults.end());
 
     CellStorageModified();
+
+    StartListeningUnshared( aNewSharedRows);
 
     std::vector<SCROW> aRows;
     aRows.reserve(rVals.size());
@@ -344,7 +346,7 @@ void ScColumn::TransferCellValuesTo( SCROW nRow, size_t nLen, sc::CellValues& rD
         return;
 
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
-    DetachFormulaCells(aPos, nLen);
+    DetachFormulaCells(aPos, nLen, nullptr);
 
     rDest.transferFrom(*this, nRow, nLen);
 
@@ -369,7 +371,7 @@ void ScColumn::CopyCellValuesFrom( SCROW nRow, const sc::CellValues& rSrc )
         return;
 
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
-    DetachFormulaCells(aPos, rSrc.size());
+    DetachFormulaCells(aPos, rSrc.size(), nullptr);
 
     rSrc.copyTo(*this, nRow);
 
@@ -445,7 +447,7 @@ void ScColumn::ConvertFormulaToValue(
         // No formula cells encountered.
         return;
 
-    DetachFormulaCells(rCxt, nRow1, nRow2);
+    DetachFormulaCells(rCxt, nRow1, nRow2, nullptr);
 
     // Undo storage to hold static values which will get swapped to the cell storage later.
     sc::CellValues aUndoCells;
@@ -654,7 +656,7 @@ public:
 
 class NoteCaptionCleaner
 {
-    bool mbPreserveData;
+    bool const mbPreserveData;
 public:
     explicit NoteCaptionCleaner( bool bPreserveData ) : mbPreserveData(bPreserveData) {}
 
@@ -716,10 +718,10 @@ namespace {
 class NoteEntryCollector
 {
     std::vector<sc::NoteEntry>& mrNotes;
-    SCTAB mnTab;
-    SCCOL mnCol;
-    SCROW mnStartRow;
-    SCROW mnEndRow;
+    SCTAB const mnTab;
+    SCCOL const mnCol;
+    SCROW const mnStartRow;
+    SCROW const mnEndRow;
 public:
     NoteEntryCollector( std::vector<sc::NoteEntry>& rNotes, SCTAB nTab, SCCOL nCol,
             SCROW nStartRow = 0, SCROW nEndRow = MAXROW) :
@@ -928,7 +930,8 @@ public:
                 ScTokenArray* pNewCode = aComp.CompileString(aFormula);
 
                 // Generate RPN tokens.
-                ScCompiler aComp2(mpDoc, pCell->aPos, *pNewCode);
+                ScCompiler aComp2(mpDoc, pCell->aPos, *pNewCode, formula::FormulaGrammar::GRAM_UNSPECIFIED,
+                                  true, pCell->GetMatrixFlag() != ScMatrixMode::NONE);
                 aComp2.CompileTokenArray();
 
                 pCell->SetCode(pNewCode);
@@ -987,7 +990,7 @@ class ScriptTypeUpdater
     ScColumn& mrCol;
     sc::CellTextAttrStoreType& mrTextAttrs;
     sc::CellTextAttrStoreType::iterator miPosAttr;
-    ScConditionalFormatList* mpCFList;
+    ScConditionalFormatList* const mpCFList;
     SvNumberFormatter* mpFormatter;
     ScAddress maPos;
     bool mbUpdated;
@@ -1128,8 +1131,8 @@ namespace {
 
 class FormulaColPosSetter
 {
-    SCCOL mnCol;
-    bool  mbUpdateRefs;
+    SCCOL const mnCol;
+    bool const  mbUpdateRefs;
 public:
     FormulaColPosSetter( SCCOL nCol, bool bUpdateRefs ) : mnCol(nCol), mbUpdateRefs(bUpdateRefs) {}
 
@@ -1168,7 +1171,7 @@ namespace {
 class RelativeRefBoundChecker
 {
     std::vector<SCROW> maBounds;
-    ScRange maBoundRange;
+    ScRange const maBoundRange;
 
 public:
     explicit RelativeRefBoundChecker( const ScRange& rBoundRange ) :
@@ -1224,6 +1227,7 @@ public:
     void operator() ( size_t /*nRow*/, SvtBroadcaster* p )
     {
         SvtBroadcaster::ListenersType& rLis = p->GetAllListeners();
+        mrListeners.reserve(mrListeners.size() + rLis.size());
         std::copy(rLis.begin(), rLis.end(), std::back_inserter(mrListeners));
     }
 };
@@ -1539,10 +1543,12 @@ void ScColumn::EndListeningIntersectedGroups(
     {
         ScFormulaCell* pFC = sc::formula_block::at(*it->data, aPos.second);
         ScFormulaCellGroupRef xGroup = pFC->GetCellGroup();
-        if (xGroup && !pFC->IsSharedTop())
+        if (xGroup)
         {
-            // End listening.
-            pFC->EndListeningTo(rCxt);
+            if (!pFC->IsSharedTop())
+                // End listening.
+                pFC->EndListeningTo(rCxt);
+
             if (pGroupPos)
                 // Record the position of the top cell of the group.
                 pGroupPos->push_back(xGroup->mpTopCell->aPos);
@@ -1555,10 +1561,12 @@ void ScColumn::EndListeningIntersectedGroups(
     {
         ScFormulaCell* pFC = sc::formula_block::at(*it->data, aPos.second);
         ScFormulaCellGroupRef xGroup = pFC->GetCellGroup();
-        if (xGroup && !pFC->IsSharedTop())
+        if (xGroup)
         {
-            // End listening.
-            pFC->EndListeningTo(rCxt);
+            if (!pFC->IsSharedTop())
+                // End listening.
+                pFC->EndListeningTo(rCxt);
+
             if (pGroupPos)
             {
                 // Record the position of the bottom cell of the group.
@@ -1722,7 +1730,7 @@ public:
                     const ScFormulaCell* pCell = *it;
                     OUString aFormula;
                     pCell->GetFormula(aFormula, formula::FormulaGrammar::GRAM_ENGLISH_XL_R1C1);
-                    auto xCellGroup = pCell->GetCellGroup();
+                    const auto& xCellGroup = pCell->GetCellGroup();
                     sal_uInt64 nGroupLength = 0;
                     if (xCellGroup)
                     {

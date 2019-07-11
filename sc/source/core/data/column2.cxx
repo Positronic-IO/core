@@ -22,25 +22,18 @@
 #include <scitems.hxx>
 #include <formulacell.hxx>
 #include <document.hxx>
-#include <docpool.hxx>
 #include <drwlayer.hxx>
 #include <attarray.hxx>
 #include <patattr.hxx>
 #include <cellform.hxx>
-#include <stlsheet.hxx>
-#include <rechead.hxx>
-#include <brdcst.hxx>
 #include <editutil.hxx>
 #include <subtotal.hxx>
 #include <markdata.hxx>
-#include <compiler.hxx>
-#include <dbdata.hxx>
 #include <fillinfo.hxx>
 #include <segmenttree.hxx>
 #include <docparam.hxx>
 #include <cellvalue.hxx>
 #include <tokenarray.hxx>
-#include <globalnames.hxx>
 #include <formulagroup.hxx>
 #include <listenercontext.hxx>
 #include <mtvcellfunc.hxx>
@@ -48,6 +41,7 @@
 #include <scmatrix.hxx>
 #include <rowheightcontext.hxx>
 #include <tokenstringcontext.hxx>
+#include <recursionhelper.hxx>
 
 #include <editeng/eeitem.hxx>
 
@@ -56,9 +50,7 @@
 #include <editeng/editstat.hxx>
 #include <editeng/emphasismarkitem.hxx>
 #include <editeng/fhgtitem.hxx>
-#include <editeng/forbiddencharacterstable.hxx>
 #include <svx/rotmodit.hxx>
-#include <editeng/scripttypeitem.hxx>
 #include <editeng/unolingu.hxx>
 #include <editeng/justifyitem.hxx>
 #include <svl/zforlist.hxx>
@@ -77,7 +69,7 @@
 // factor from font size to optimal cell height (text width)
 #define SC_ROT_BREAK_FACTOR     6
 
-inline bool IsAmbiguousScript( SvtScriptType nScript )
+static bool IsAmbiguousScript( SvtScriptType nScript )
 {
     //TODO: move to a header file
     return ( nScript != SvtScriptType::LATIN &&
@@ -159,8 +151,18 @@ long ScColumn::GetNeededSize(
 
     SvNumberFormatter* pFormatter = pDocument->GetFormatTable();
     sal_uInt32 nFormat = pPattern->GetNumberFormat( pFormatter, pCondSet );
-    // #i111387# disable automatic line breaks only for "General" number format
-    if (bBreak && ( nFormat % SV_COUNTRY_LANGUAGE_OFFSET ) == 0 )
+
+    // get "cell is value" flag
+    // Must be synchronized with ScOutputData::LayoutStrings()
+    bool bCellIsValue = (aCell.meType == CELLTYPE_VALUE);
+    if (aCell.meType == CELLTYPE_FORMULA)
+    {
+        ScFormulaCell* pFCell = aCell.mpFormula;
+        bCellIsValue = pFCell->IsRunning() || pFCell->IsValue();
+    }
+
+    // #i111387#, tdf#121040: disable automatic line breaks for all number formats
+    if (bBreak && bCellIsValue && (pFormatter->GetType(nFormat) == SvNumFormatType::NUMBER))
     {
         // If a formula cell needs to be interpreted during aCell.hasNumeric()
         // to determine the type, the pattern may get invalidated because the
@@ -182,7 +184,7 @@ long ScColumn::GetNeededSize(
             else
             {
                 nFormat = pPattern->GetNumberFormat( pFormatter, pCondSet );
-                if ((nFormat % SV_COUNTRY_LANGUAGE_OFFSET) == 0)
+                if (pFormatter->GetType(nFormat) == SvNumFormatType::NUMBER)
                     bBreak = false;
             }
         }
@@ -345,7 +347,7 @@ long ScColumn::GetNeededSize(
                 long nDocPixel = static_cast<long>( ( pDocument->GetColWidth( nCol,nTab ) -
                                     pMargin->GetLeftMargin() - pMargin->GetRightMargin() -
                                     nIndent )
-                                    * nPPT );
+                                    * nPPTX );
                 nDocPixel = (nDocPixel * 9) / 10;           // for safety
                 if ( aSize.Width() > nDocPixel )
                     bEditEngine = true;
@@ -573,7 +575,7 @@ namespace {
 class MaxStrLenFinder
 {
     ScDocument& mrDoc;
-    sal_uInt32 mnFormat;
+    sal_uInt32 const mnFormat;
     OUString maMaxLenStr;
     sal_Int32 mnMaxLen;
 
@@ -726,13 +728,10 @@ sal_uInt16 ScColumn::GetOptimalColWidth(
                     pOldPattern = pPattern;
                     sal_uInt16 nThis = static_cast<sal_uInt16>(GetNeededSize(
                         nRow, pDev, nPPTX, nPPTY, rZoomX, rZoomY, true, aOptions, &pOldPattern));
-                    if (nThis)
+                    if (nThis && (nThis > nWidth || !bFound))
                     {
-                        if (nThis > nWidth || !bFound)
-                        {
-                            nWidth = nThis;
-                            bFound = true;
-                        }
+                        nWidth = nThis;
+                        bFound = true;
                     }
                 }
             }
@@ -1035,8 +1034,8 @@ class StrEntries
 protected:
     struct StrEntry
     {
-        SCROW mnRow;
-        OUString maStr;
+        SCROW const mnRow;
+        OUString const maStr;
 
         StrEntry(SCROW nRow, const OUString& rStr) : mnRow(nRow), maStr(rStr) {}
     };
@@ -1120,7 +1119,7 @@ public:
 
 class TestTabRefAbsHandler
 {
-    SCTAB mnTab;
+    SCTAB const mnTab;
     bool mbTestResult;
 public:
     explicit TestTabRefAbsHandler(SCTAB nTab) : mnTab(nTab), mbTestResult(false) {}
@@ -1306,7 +1305,7 @@ SCROW ScColumn::GetLastDataPos() const
 SCROW ScColumn::GetLastDataPos( SCROW nLastRow, bool bConsiderCellNotes,
                                 bool bConsiderCellDrawObjects ) const
 {
-    sc::CellStoreType::const_position_type aPos = maCells.position(nLastRow);
+    sc::CellStoreType::const_position_type aPos = maCells.position(std::min(nLastRow,MAXROW));
 
     if (bConsiderCellNotes && !IsNotesEmptyBlock(nLastRow, nLastRow))
         return nLastRow;
@@ -1416,6 +1415,52 @@ bool ScColumn::GetNextDataPos(SCROW& rRow) const        // greater than rRow
     return true;
 }
 
+bool ScColumn::TrimEmptyBlocks(SCROW& rRowStart, SCROW& rRowEnd) const
+{
+    assert(rRowStart <= rRowEnd);
+    SCROW nRowStartNew = rRowStart, nRowEndNew = rRowEnd;
+
+    // Trim down rRowStart first
+    std::pair<sc::CellStoreType::const_iterator,size_t> aPos = maCells.position(rRowStart);
+    sc::CellStoreType::const_iterator it = aPos.first;
+    if (it == maCells.end())
+        return false;
+
+    if (it->type == sc::element_type_empty)
+    {
+        // This block is empty. Skip ahead to the next block (if exists).
+        nRowStartNew += it->size - aPos.second;
+        if (nRowStartNew > rRowEnd)
+            return false;
+        ++it;
+        if (it == maCells.end())
+            // No more next block.
+            return false;
+    }
+
+    // Trim up rRowEnd next
+    aPos = maCells.position(rRowEnd);
+    it = aPos.first;
+    if (it == maCells.end())
+    {
+        rRowStart = nRowStartNew;
+        return true; // Because trimming of rRowStart is ok
+    }
+
+    if (it->type == sc::element_type_empty)
+    {
+        // rRowEnd cannot be in the first block which is empty !
+        assert(it != maCells.begin());
+        // This block is empty. Skip to the previous block (it exists).
+        nRowEndNew -= aPos.second + 1; // Last row position of the previous block.
+        assert(nRowStartNew <= nRowEndNew);
+    }
+
+    rRowStart = nRowStartNew;
+    rRowEnd = nRowEndNew;
+    return true;
+}
+
 SCROW ScColumn::FindNextVisibleRow(SCROW nRow, bool bForward) const
 {
     if(bForward)
@@ -1506,6 +1551,11 @@ SCROW ScColumn::FindNextVisibleRowWithContent(
 
 void ScColumn::CellStorageModified()
 {
+    // Remove cached values. Given how often this function is called and how (not that) often
+    // the cached values are used, it should be more efficient to just discard everything
+    // instead of trying to figure out each time exactly what to discard.
+    GetDoc()->DiscardFormulaGroupContext();
+
     // TODO: Update column's "last updated" timestamp here.
 
 #if DEBUG_COLUMN_STORAGE
@@ -1563,8 +1613,6 @@ void ScColumn::CellStorageModified()
         while (itAttr != maCellTextAttrs.end() && itAttr->type != sc::element_type_empty)
             ++itAttr;
     }
-#else
-    (void) this; // Avoid "this member function can be declared static [loplugin:staticmethods]"
 #endif
 }
 
@@ -1763,12 +1811,12 @@ class CopyCellNotesHandler
     ScColumn& mrDestCol;
     sc::CellNoteStoreType& mrDestNotes;
     sc::CellNoteStoreType::iterator miPos;
-    SCTAB mnSrcTab;
-    SCCOL mnSrcCol;
-    SCTAB mnDestTab;
-    SCCOL mnDestCol;
-    SCROW mnDestOffset; /// Add this to the source row position to get the destination row.
-    bool mbCloneCaption;
+    SCTAB const mnSrcTab;
+    SCCOL const mnSrcCol;
+    SCTAB const mnDestTab;
+    SCCOL const mnDestCol;
+    SCROW const mnDestOffset; /// Add this to the source row position to get the destination row.
+    bool const mbCloneCaption;
 
 public:
     CopyCellNotesHandler( const ScColumn& rSrcCol, ScColumn& rDestCol, SCROW nDestOffset, bool bCloneCaption ) :
@@ -2133,9 +2181,9 @@ namespace {
 class ToMatrixHandler
 {
     ScMatrix& mrMat;
-    SCCOL mnMatCol;
-    SCROW mnTopRow;
-    ScDocument* mpDoc;
+    SCCOL const mnMatCol;
+    SCROW const mnTopRow;
+    ScDocument* const mpDoc;
     svl::SharedStringPool& mrStrPool;
 public:
     ToMatrixHandler(ScMatrix& rMat, SCCOL nMatCol, SCROW nTopRow, ScDocument* pDoc) :
@@ -2226,10 +2274,10 @@ struct CellBucket
 class FillMatrixHandler
 {
     ScMatrix& mrMat;
-    size_t mnMatCol;
-    size_t mnTopRow;
+    size_t const mnMatCol;
+    size_t const mnTopRow;
 
-    ScDocument* mpDoc;
+    ScDocument* const mpDoc;
     svl::SharedStringPool& mrPool;
     svl::SharedStringPool* mpPool; // if matrix is not in the same document
 
@@ -2635,6 +2683,15 @@ bool hasNonEmpty( const sc::FormulaGroupContext::StrArrayType& rArray, SCROW nRo
     return std::any_of(it, itEnd, NonNullStringFinder());
 }
 
+struct ProtectFormulaGroupContext
+{
+    ProtectFormulaGroupContext( ScDocument* d )
+        : doc( d ) { doc->BlockFormulaGroupContextDiscard( true ); }
+    ~ProtectFormulaGroupContext()
+        { doc->BlockFormulaGroupContextDiscard( false ); }
+    ScDocument* doc;
+};
+
 }
 
 formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 )
@@ -2658,6 +2715,12 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
 
         return formula::VectorRefArray(pNum, pStr);
     }
+
+    // ScColumn::CellStorageModified() simply discards the entire cache (FormulaGroupContext)
+    // on any modification. However getting cell values may cause this to be called
+    // if interpreting a cell results in a change to it (not just its result though).
+    // So temporarily block the discarding.
+    ProtectFormulaGroupContext protectContext( GetDoc());
 
     double fNan;
     rtl::math::setNan(&fNan);
@@ -2692,7 +2755,10 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
             size_t nPos = itBlk->size;
             ++itBlk;
             if (!appendToBlock(pDocument, rCxt, *pColArray, nPos, nRow2+1, itBlk, maCells.end()))
+            {
+                rCxt.discardCachedColArray(nTab, nCol);
                 return formula::VectorRefArray(formula::VectorRefArray::Invalid);
+            }
 
             rtl_uString** pStr = nullptr;
             if (pColArray->mpStrArray && hasNonEmpty(*pColArray->mpStrArray, nRow1, nRow2))
@@ -2725,7 +2791,10 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
             size_t nPos = itBlk->size;
             ++itBlk;
             if (!appendToBlock(pDocument, rCxt, *pColArray, nPos, nRow2+1, itBlk, maCells.end()))
+            {
+                rCxt.discardCachedColArray(nTab, nCol);
                 return formula::VectorRefArray(formula::VectorRefArray::Invalid);
+            }
 
             assert(pColArray->mpStrArray);
 
@@ -2762,13 +2831,18 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
 
             pColArray = copyFirstFormulaBlock(rCxt, itBlk, nRow2+1, nTab, nCol);
             if (!pColArray)
+            {
                 // Failed to insert a new cached column array.
                 return formula::VectorRefArray(formula::VectorRefArray::Invalid);
+            }
 
             size_t nPos = itBlk->size;
             ++itBlk;
             if (!appendToBlock(pDocument, rCxt, *pColArray, nPos, nRow2+1, itBlk, maCells.end()))
+            {
+                rCxt.discardCachedColArray(nTab, nCol);
                 return formula::VectorRefArray(formula::VectorRefArray::Invalid);
+            }
 
             const double* pNum = nullptr;
             rtl_uString** pStr = nullptr;
@@ -2798,7 +2872,10 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
             size_t nPos = itBlk->size;
             ++itBlk;
             if (!appendToBlock(pDocument, rCxt, *pColArray, nPos, nRow2+1, itBlk, maCells.end()))
+            {
+                rCxt.discardCachedColArray(nTab, nCol);
                 return formula::VectorRefArray(formula::VectorRefArray::Invalid);
+            }
 
             if (pColArray->mpStrArray && hasNonEmpty(*pColArray->mpStrArray, nRow1, nRow2))
                 return formula::VectorRefArray(&(*pColArray->mpNumArray)[nRow1], &(*pColArray->mpStrArray)[nRow1]);
@@ -2813,16 +2890,93 @@ formula::VectorRefArray ScColumn::FetchVectorRefArray( SCROW nRow1, SCROW nRow2 
     return formula::VectorRefArray(formula::VectorRefArray::Invalid);
 }
 
-bool ScColumn::HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2 )
+#ifdef DBG_UTIL
+static void assertNoInterpretNeededHelper( const sc::CellStoreType::value_type& node,
+    size_t nOffset, size_t nDataSize )
+{
+    switch (node.type)
+    {
+        case sc::element_type_formula:
+        {
+            sc::formula_block::const_iterator it = sc::formula_block::begin(*node.data);
+            std::advance(it, nOffset);
+            sc::formula_block::const_iterator itEnd = it;
+            std::advance(itEnd, nDataSize);
+            for (; it != itEnd; ++it)
+            {
+                const ScFormulaCell* pCell = *it;
+                assert( !pCell->NeedsInterpret());
+            }
+            break;
+        }
+    }
+}
+void ScColumn::AssertNoInterpretNeeded( SCROW nRow1, SCROW nRow2 )
+{
+    assert(nRow2 >= nRow1);
+    sc::ParseBlock( maCells.begin(), maCells, assertNoInterpretNeededHelper, 0, nRow2 );
+}
+#endif
+
+
+bool ScColumn::HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup )
 {
     if (nRow1 > nRow2)
         return false;
 
-    for (auto i = nRow1; i <= nRow2; ++i)
+    std::pair<sc::CellStoreType::const_iterator,size_t> aPos = maCells.position(nRow1);
+    sc::CellStoreType::const_iterator it = aPos.first;
+    size_t nOffset = aPos.second;
+    SCROW nRow = nRow1;
+    for (;it != maCells.end() && nRow <= nRow2; ++it, nOffset = 0)
     {
-        auto aCell = GetCellValue(i);
-        if (aCell.meType == CELLTYPE_FORMULA)
-            aCell.mpFormula->MaybeInterpret();
+        switch( it->type )
+        {
+            case sc::element_type_edittext:
+                // These require EditEngine (in ScEditUtils::GetString()), which is probably
+                // too complex for use in threads.
+                return false;
+            case sc::element_type_formula:
+            {
+                size_t nRowsToRead = nRow2 - nRow + 1;
+                size_t nEnd = std::min(it->size, nOffset+nRowsToRead); // last row + 1
+                sc::formula_block::const_iterator itCell = sc::formula_block::begin(*it->data);
+                std::advance(itCell, nOffset);
+                // Loop inside the formula block.
+                for (size_t i = nOffset; i < nEnd; ++itCell, ++i)
+                {
+                    // Check if itCell is already in path.
+                    // If yes use a cycle guard to mark all elements of the cycle
+                    // and return false
+                    const ScFormulaCellGroupRef& mxGroupChild = (*itCell)->GetCellGroup();
+                    ScFormulaCell* pChildTopCell = mxGroupChild ? mxGroupChild->mpTopCell : *itCell;
+                    if (pChildTopCell->GetSeenInPath())
+                    {
+                        ScRecursionHelper& rRecursionHelper = GetDoc()->GetRecursionHelper();
+                        ScFormulaGroupCycleCheckGuard aCycleCheckGuard(rRecursionHelper, pChildTopCell);
+                        return false;
+                    }
+
+                    (*itCell)->MaybeInterpret();
+
+                    // child cell's Interpret could result in calling dependency calc
+                    // and that could detect a cycle involving mxGroup
+                    // and do early exit in that case.
+                    if (mxGroup->mbPartOfCycle)
+                    {
+                        // Set itCell as dirty as itCell may be interpreted in InterpretTail()
+                        (*itCell)->SetDirtyVar();
+                        return false;
+                    }
+                }
+                nRow += nEnd - nOffset;
+                break;
+            }
+            default:
+                // Skip this block.
+                nRow += it->size - nOffset;
+                continue;
+        }
     }
 
     return true;
@@ -2833,8 +2987,11 @@ void ScColumn::SetFormulaResults( SCROW nRow, const double* pResults, size_t nLe
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
     sc::CellStoreType::iterator it = aPos.first;
     if (it->type != sc::element_type_formula)
+    {
         // This is not a formula block.
+        assert( false );
         return;
+    }
 
     size_t nBlockLen = it->size - aPos.second;
     if (nBlockLen < nLen)
@@ -2858,41 +3015,18 @@ void ScColumn::SetFormulaResults( SCROW nRow, const double* pResults, size_t nLe
     }
 }
 
-void ScColumn::SetFormulaResults( SCROW nRow, const formula::FormulaConstTokenRef* pResults, size_t nLen )
-{
-    sc::CellStoreType::position_type aPos = maCells.position(nRow);
-    sc::CellStoreType::iterator it = aPos.first;
-    if (it->type != sc::element_type_formula)
-        // This is not a formula block.
-        return;
-
-    size_t nBlockLen = it->size - aPos.second;
-    if (nBlockLen < nLen)
-        // Result array is longer than the length of formula cells. Not good.
-        return;
-
-    sc::formula_block::iterator itCell = sc::formula_block::begin(*it->data);
-    std::advance(itCell, aPos.second);
-
-    const formula::FormulaConstTokenRef* pResEnd = pResults + nLen;
-    for (; pResults != pResEnd; ++pResults, ++itCell)
-    {
-        ScFormulaCell& rCell = **itCell;
-        rCell.SetResultToken(pResults->get());
-        rCell.ResetDirty();
-        rCell.SetChanged(true);
-    }
-}
-
 void ScColumn::CalculateInThread( ScInterpreterContext& rContext, SCROW nRow, size_t nLen, unsigned nThisThread, unsigned nThreadsTotal)
 {
-    assert(GetDoc()->mbThreadedGroupCalcInProgress);
+    assert(GetDoc()->IsThreadedGroupCalcInProgress());
 
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
     sc::CellStoreType::iterator it = aPos.first;
     if (it->type != sc::element_type_formula)
+    {
         // This is not a formula block.
+        assert( false );
         return;
+    }
 
     size_t nBlockLen = it->size - aPos.second;
     if (nBlockLen < nLen)
@@ -2919,8 +3053,11 @@ void ScColumn::HandleStuffAfterParallelCalculation( SCROW nRow, size_t nLen )
     sc::CellStoreType::position_type aPos = maCells.position(nRow);
     sc::CellStoreType::iterator it = aPos.first;
     if (it->type != sc::element_type_formula)
+    {
         // This is not a formula block.
+        assert( false );
         return;
+    }
 
     size_t nBlockLen = it->size - aPos.second;
     if (nBlockLen < nLen)
@@ -3296,10 +3433,20 @@ class UpdateSubTotalHandler
                     mrData.nVal = fVal;
             }
             break;
-            default:
+            case SUBTOTAL_FUNC_VAR:
+            case SUBTOTAL_FUNC_VARP:
+            case SUBTOTAL_FUNC_STD:
+            case SUBTOTAL_FUNC_STDP:
             {
-                // added to avoid warnings
+                if (!bVal)
+                    return;
+
+                mrData.maWelford.update( fVal);
             }
+            break;
+            default:
+                // unhandled unknown
+                mrData.bError = true;
         }
     }
 
@@ -3416,48 +3563,91 @@ namespace {
 
 class WeightedCounter
 {
-    size_t mnCount;
+    sal_uLong mnCount;
 public:
     WeightedCounter() : mnCount(0) {}
 
     void operator() (const sc::CellStoreType::value_type& node)
     {
+        mnCount += getWeight(node);
+    }
+
+    static sal_uLong getWeight(const sc::CellStoreType::value_type& node)
+    {
         switch (node.type)
         {
             case sc::element_type_numeric:
             case sc::element_type_string:
-                mnCount += node.size;
+                return node.size;
             break;
             case sc::element_type_formula:
             {
+                size_t nCount = 0;
                 // Each formula cell is worth its code length plus 5.
                 sc::formula_block::const_iterator it = sc::formula_block::begin(*node.data);
                 sc::formula_block::const_iterator itEnd = sc::formula_block::end(*node.data);
                 for (; it != itEnd; ++it)
                 {
                     const ScFormulaCell* p = *it;
-                    mnCount += 5 + p->GetCode()->GetCodeLen();
+                    nCount += 5 + p->GetCode()->GetCodeLen();
                 }
+
+                return nCount;
             }
             break;
             case sc::element_type_edittext:
                 // each edit-text cell is worth 50.
-                mnCount += node.size * 50;
+                return node.size * 50;
             break;
             default:
-                ;
+                return 0;
         }
     }
 
-    size_t getCount() const { return mnCount; }
+    sal_uLong getCount() const { return mnCount; }
+};
+
+class WeightedCounterWithRows
+{
+    const SCROW mnStartRow;
+    const SCROW mnEndRow;
+    sal_uLong mnCount;
+
+public:
+    WeightedCounterWithRows(SCROW nStartRow, SCROW nEndRow)
+        : mnStartRow(nStartRow)
+        , mnEndRow(nEndRow)
+        , mnCount(0)
+    {
+    }
+
+    void operator() (const sc::CellStoreType::value_type& node)
+    {
+        const SCROW nRow1 = node.position;
+        const SCROW nRow2 = nRow1 + 1;
+
+        if (! ((nRow2 < mnStartRow) || (nRow1 > mnEndRow)))
+        {
+            mnCount += WeightedCounter::getWeight(node);
+        }
+    }
+
+    sal_uLong getCount() const { return mnCount; }
 };
 
 }
 
-sal_uInt32 ScColumn::GetWeightedCount() const
+sal_uLong ScColumn::GetWeightedCount() const
 {
-    WeightedCounter aFunc;
-    std::for_each(maCells.begin(), maCells.end(), aFunc);
+    const WeightedCounter aFunc = std::for_each(maCells.begin(), maCells.end(),
+        WeightedCounter());
+    return aFunc.getCount();
+}
+
+sal_uLong ScColumn::GetWeightedCount(SCROW nStartRow, SCROW nEndRow) const
+{
+    const WeightedCounterWithRows aFunc = std::for_each(maCells.begin(), maCells.end(),
+        WeightedCounterWithRows(nStartRow, nEndRow));
     return aFunc.getCount();
 }
 

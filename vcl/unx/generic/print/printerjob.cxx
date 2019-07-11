@@ -51,7 +51,7 @@ using namespace psp;
 namespace psp
 {
 
-bool
+static bool
 AppendPS (FILE* pDst, osl::File* pSrc, unsigned char* pBuffer)
 {
     assert(pBuffer);
@@ -183,7 +183,7 @@ PrinterJob::PrinterJob()
 
 /* remove all our temporary files, uses external program "rm", since
    osl functionality is inadequate */
-void
+static void
 removeSpoolDir (const OUString& rSpoolDir)
 {
     OUString aSysPath;
@@ -202,7 +202,7 @@ removeSpoolDir (const OUString& rSpoolDir)
 
 /* creates a spool directory with a "pidgin random" value based on
    current system time */
-OUString
+static OUString
 createSpoolDir ()
 {
     TimeValue aCur;
@@ -833,7 +833,7 @@ void PrinterJob::writeJobPatch( osl::File* pFile, const JobData& rJobData )
     }
 }
 
-bool PrinterJob::writeProlog (osl::File* pFile, const JobData& rJobData )
+void PrinterJob::writeProlog (osl::File* pFile, const JobData& rJobData )
 {
     WritePS( pFile, "%%BeginProlog\n" );
 
@@ -928,8 +928,6 @@ bool PrinterJob::writeProlog (osl::File* pFile, const JobData& rJobData )
         "%%EndProlog\n"
     };
     WritePS (pFile, pProlog);
-
-    return true;
 }
 
 bool PrinterJob::writeSetup( osl::File* pFile, const JobData& rJob )

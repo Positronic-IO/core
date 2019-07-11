@@ -20,7 +20,7 @@
 #include <config_features.h>
 
 #include <sal/config.h>
-
+#include <editeng/outlobj.hxx>
 #include <algorithm>
 #include <memory>
 
@@ -86,8 +86,10 @@
 #include <scriptinfo.hxx>
 #include <tools/datetime.hxx>
 #include <tools/urlobj.hxx>
+#include <svl/listener.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <o3tl/any.hxx>
+#include <o3tl/make_unique.hxx>
 #include <osl/mutex.hxx>
 #include <vcl/svapp.hxx>
 #include <textapi.hxx>
@@ -96,6 +98,7 @@
 #include <fmtmeta.hxx>
 #include <calbck.hxx>
 #include <rtl/strbuf.hxx>
+#include <editeng/outlobj.hxx>
 #include <vector>
 
 using namespace ::com::sun::star;
@@ -122,14 +125,14 @@ static const sal_uInt16 aDocInfoSubTypeFromService[] =
     DI_PRINT | DI_SUB_DATE,     //PROPERTY_MAP_FLDTYP_DOCINFO_PRINT_DATE_TIME
     DI_KEYS,                    //PROPERTY_MAP_FLDTYP_DOCINFO_KEY_WORDS
     DI_THEMA,                   //PROPERTY_MAP_FLDTYP_DOCINFO_SUBJECT
-    DI_TITEL,                   //PROPERTY_MAP_FLDTYP_DOCINFO_TITLE
+    DI_TITLE,                   //PROPERTY_MAP_FLDTYP_DOCINFO_TITLE
     DI_DOCNO                    //PROPERTY_MAP_FLDTYP_DOCINFO_REVISION
 };
 
 struct ServiceIdResId
 {
-    SwFieldIds    nResId;
-    SwServiceType nServiceId;
+    SwFieldIds const    nResId;
+    SwServiceType const nServiceId;
 };
 
 static const ServiceIdResId aServiceToRes[] =
@@ -190,7 +193,7 @@ static const ServiceIdResId aServiceToRes[] =
 
 static SwFieldIds lcl_ServiceIdToResId(SwServiceType nServiceId)
 {
-    for (unsigned i=0; i<SAL_N_ELEMENTS(aServiceToRes); ++i)
+    for (size_t i=0; i<SAL_N_ELEMENTS(aServiceToRes); ++i)
         if (aServiceToRes[i].nServiceId == nServiceId)
             return aServiceToRes[i].nResId;
 #if OSL_DEBUG_LEVEL > 0
@@ -235,7 +238,7 @@ static SwServiceType lcl_GetServiceForField( const SwField& rField )
             case DI_COMMENT:nSrvId = SwServiceType::FieldTypeDocInfoDescription;break;
             case DI_KEYS:   nSrvId = SwServiceType::FieldTypeDocInfoKeywords;break;
             case DI_THEMA:  nSrvId = SwServiceType::FieldTypeDocInfoSubject;  break;
-            case DI_TITEL:  nSrvId = SwServiceType::FieldTypeDocInfoTitle;    break;
+            case DI_TITLE:  nSrvId = SwServiceType::FieldTypeDocInfoTitle;    break;
             case DI_DOCNO:  nSrvId = SwServiceType::FieldTypeDocInfoRevision; break;
             case DI_CUSTOM: nSrvId = SwServiceType::FieldTypeDocInfoCustom;   break;
             }
@@ -314,7 +317,7 @@ static sal_Int32 lcl_PropName2TokenPos(const OUString& rPropertyName)
     return SAL_MAX_INT32;
 }
 
-sal_uInt16 GetFieldTypeMId( const OUString& rProperty, const SwFieldType& rTyp )
+static sal_uInt16 GetFieldTypeMId( const OUString& rProperty, const SwFieldType& rTyp )
 {
     sal_uInt16 nId = lcl_GetPropMapIdForFieldType( rTyp.Which() );
     const SfxItemPropertySet* pSet = aSwMapProvider.GetPropertySet( nId );
@@ -409,7 +412,7 @@ static sal_uInt16 lcl_GetPropertyMapOfService( SwServiceType nServiceId )
 }
 
 class SwXFieldMaster::Impl
-    : public SwClient
+    : public SvtListener
 {
 private:
     ::osl::Mutex m_Mutex; // just for OInterfaceContainerHelper2
@@ -419,10 +422,9 @@ public:
     ::comphelper::OInterfaceContainerHelper2 m_EventListeners;
 
     SwDoc*          m_pDoc;
+    SwFieldType* m_pType;
 
-    bool            m_bIsDescriptor;
-
-    SwFieldIds      m_nResTypeId;
+    SwFieldIds const      m_nResTypeId;
 
     OUString        m_sParam1;  // Content / Database / NumberingSeparator
     OUString        m_sParam2;  // -    /DataTablename
@@ -433,22 +435,39 @@ public:
     bool            m_bParam1;  // IsExpression
     sal_Int32       m_nParam2;
 
-    Impl(SwModify *const pModify,
-            SwDoc * pDoc, SwFieldIds nResId, bool bIsDescriptor)
-        : SwClient(pModify)
-        , m_EventListeners(m_Mutex)
+    Impl(SwPageDesc* const pPageDesc, SwDoc* pDoc, SwFieldIds nResId)
+        : m_EventListeners(m_Mutex)
         , m_pDoc(pDoc)
-        , m_bIsDescriptor(bIsDescriptor)
+        , m_pType(nullptr)
         , m_nResTypeId(nResId)
         , m_fParam1(0.0)
         , m_nParam1(-1)
         , m_bParam1(false)
         , m_nParam2(0)
-    { }
+    {
+        StartListening(pPageDesc->GetNotifier());
+    }
 
+    Impl(SwFieldType* const pType, SwDoc* pDoc, SwFieldIds nResId)
+        : m_EventListeners(m_Mutex)
+        , m_pDoc(pDoc)
+        , m_pType(pType)
+        , m_nResTypeId(nResId)
+        , m_fParam1(0.0)
+        , m_nParam1(-1)
+        , m_bParam1(false)
+        , m_nParam2(0)
+    {
+        StartListening(m_pType->GetNotifier());
+    }
+    void SetFieldType(SwFieldType* pType)
+    {
+        EndListeningAll();
+        m_pType = pType;
+        StartListening(m_pType->GetNotifier());
+    }
 protected:
-    // SwClient
-    virtual void Modify(SfxPoolItem const* pOld, SfxPoolItem const* pNew) override;
+    virtual void Notify(const SfxHint& rHint) override;
 };
 
 namespace
@@ -521,13 +540,12 @@ SwXFieldMaster::getSupportedServiceNames()
 }
 
 SwXFieldMaster::SwXFieldMaster(SwDoc *const pDoc, SwFieldIds const nResId)
-    : m_pImpl(new Impl(pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD),
-                pDoc, nResId, true))
+    : m_pImpl(new Impl(pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD), pDoc, nResId))
 {
 }
 
 SwXFieldMaster::SwXFieldMaster(SwFieldType& rType, SwDoc * pDoc)
-    : m_pImpl(new Impl(&rType, pDoc, rType.Which(), false))
+    : m_pImpl(new Impl(&rType, pDoc, rType.Which()))
 {
 }
 
@@ -685,8 +703,7 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
         {
             throw uno::RuntimeException("no field type found!", *this);
         }
-        pType2->Add(m_pImpl.get());
-        m_pImpl->m_bIsDescriptor = false;
+        m_pImpl->SetFieldType(pType2);
     }
     else
     {
@@ -780,7 +797,7 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
 SwFieldType* SwXFieldMaster::GetFieldType(bool const bDontCreate) const
 {
     if (!bDontCreate && SwFieldIds::Database == m_pImpl->m_nResTypeId
-        && m_pImpl->m_bIsDescriptor && m_pImpl->m_pDoc)
+        && !m_pImpl->m_pType && m_pImpl->m_pDoc)
     {
         SwDBData aData;
 
@@ -797,13 +814,9 @@ SwFieldType* SwXFieldMaster::GetFieldType(bool const bDontCreate) const
 
         SwDBFieldType aType(m_pImpl->m_pDoc, m_pImpl->m_sParam3, aData);
         SwFieldType *const pType = m_pImpl->m_pDoc->getIDocumentFieldsAccess().InsertFieldType(aType);
-        pType->Add(m_pImpl.get());
-        const_cast<SwXFieldMaster*>(this)->m_pImpl->m_bIsDescriptor = false;
+        m_pImpl->SetFieldType(pType);
     }
-    if (m_pImpl->m_bIsDescriptor)
-        return nullptr;
-    else
-        return static_cast<SwFieldType*>(m_pImpl->GetRegisteredIn());
+    return m_pImpl->m_pType;
 }
 
 uno::Any SAL_CALL
@@ -1010,23 +1023,20 @@ void SAL_CALL SwXFieldMaster::removeEventListener(
     m_pImpl->m_EventListeners.removeInterface(xListener);
 }
 
-void SwXFieldMaster::Impl::Modify(
-        SfxPoolItem const*const pOld, SfxPoolItem const*const pNew)
+void SwXFieldMaster::Impl::Notify(const SfxHint& rHint)
 {
-    ClientModify(this, pOld, pNew);
-    if (GetRegisteredIn())
+    if(rHint.GetId() == SfxHintId::Dying)
     {
-        return; // core object still alive
+        m_pDoc = nullptr;
+        m_pType = nullptr;
+        uno::Reference<uno::XInterface> const xThis(m_wThis);
+        if (!xThis.is())
+        {   // fdo#72695: if UNO object is already dead, don't revive it with event
+            return;
+        }
+        lang::EventObject const ev(xThis);
+        m_EventListeners.disposeAndClear(ev);
     }
-
-    m_pDoc = nullptr;
-    uno::Reference<uno::XInterface> const xThis(m_wThis);
-    if (!xThis.is())
-    {   // fdo#72695: if UNO object is already dead, don't revive it with event
-        return;
-    }
-    lang::EventObject const ev(xThis);
-    m_EventListeners.disposeAndClear(ev);
 }
 
 OUString SwXFieldMaster::GetProgrammaticName(const SwFieldType& rType, SwDoc& rDoc)
@@ -1093,7 +1103,6 @@ struct SwFieldProperties_Impl
     SwFieldProperties_Impl():
         aDate( Date::EMPTY ),
         fDouble(0.),
-        pDateTime(nullptr),
         nSubType(0),
         nFormat(0),
         nUSHORT1(0),
@@ -1126,7 +1135,7 @@ public:
     // required to access field master of not yet inserted fields
     SwClient            m_FieldTypeClient;
     bool                m_bCallUpdate;
-    SwServiceType       m_nServiceId;
+    SwServiceType const       m_nServiceId;
     OUString            m_sTypeName;
     std::unique_ptr<SwFieldProperties_Impl> m_pProps;
 
@@ -1296,7 +1305,7 @@ OUString SAL_CALL SwXTextField::getPresentation(sal_Bool bShowCommand)
     {
         throw uno::RuntimeException();
     }
-    return bShowCommand ? pField->GetFieldName() : pField->ExpandField(true);
+    return bShowCommand ? pField->GetFieldName() : pField->ExpandField(true, nullptr);
 }
 
 void SAL_CALL SwXTextField::attach(
@@ -1585,7 +1594,7 @@ void SAL_CALL SwXTextField::attach(
                     static_cast<SwRefPageGetFieldType*>(pFieldType),
                     m_pImpl->m_pProps->nUSHORT1 );
             xField.reset(pRGField);
-            pRGField->SetText(m_pImpl->m_pProps->sPar1);
+            pRGField->SetText(m_pImpl->m_pProps->sPar1, nullptr);
         }
         break;
         case SwServiceType::FieldTypePageNum:
@@ -1721,7 +1730,7 @@ void SAL_CALL SwXTextField::attach(
             pSEField->SetInputFlag(m_pImpl->m_pProps->bBool1);
             pSEField->SetPromptText(m_pImpl->m_pProps->sPar3);
             if (!m_pImpl->m_pProps->sPar4.isEmpty())
-                pSEField->ChgExpStr(m_pImpl->m_pProps->sPar4);
+                pSEField->ChgExpStr(m_pImpl->m_pProps->sPar4, nullptr);
 
         }
         break;
@@ -1763,7 +1772,7 @@ void SAL_CALL SwXTextField::attach(
             xField.reset(pGEField);
             //TODO: evaluate SubType!
             if (!m_pImpl->m_pProps->sPar4.isEmpty())
-                pGEField->ChgExpStr(m_pImpl->m_pProps->sPar4);
+                pGEField->ChgExpStr(m_pImpl->m_pProps->sPar4, nullptr);
             // #i82544#
             if (bSetGetExpFieldUninitialized)
                 pGEField->SetLateInitialization();
@@ -1890,62 +1899,61 @@ void SAL_CALL SwXTextField::attach(
         break;
         default: OSL_FAIL("What kind of type is that?");
     }
+
     if (!xField)
         throw uno::RuntimeException("no SwField created?");
-    if (xField)
+
+    xField->SetAutomaticLanguage(!m_pImpl->m_pProps->bBool4);
+    SwFormatField aFormat(*xField);
+
+    UnoActionContext aCont(pDoc);
+    if (aPam.HasMark() &&
+        m_pImpl->m_nServiceId != SwServiceType::FieldTypeAnnotation)
     {
-        xField->SetAutomaticLanguage(!m_pImpl->m_pProps->bBool4);
-        SwFormatField aFormat(*xField);
-
-        UnoActionContext aCont(pDoc);
-        if (aPam.HasMark() &&
-            m_pImpl->m_nServiceId != SwServiceType::FieldTypeAnnotation)
-        {
-            pDoc->getIDocumentContentOperations().DeleteAndJoin(aPam);
-        }
-
-        SwXTextCursor const*const pTextCursor(dynamic_cast<SwXTextCursor*>(pCursor));
-        const bool bForceExpandHints(
-            pTextCursor
-            && pTextCursor->IsAtEndOfMeta() );
-        const SetAttrMode nInsertFlags =
-            bForceExpandHints
-            ? SetAttrMode::FORCEHINTEXPAND
-            : SetAttrMode::DEFAULT;
-
-        if (*aPam.GetPoint() != *aPam.GetMark() &&
-            m_pImpl->m_nServiceId == SwServiceType::FieldTypeAnnotation)
-        {
-            // Make sure we always insert the field at the end
-            SwPaM aEnd(*aPam.End(), *aPam.End());
-            pDoc->getIDocumentContentOperations().InsertPoolItem(aEnd, aFormat, nInsertFlags);
-        }
-        else
-            pDoc->getIDocumentContentOperations().InsertPoolItem(aPam, aFormat, nInsertFlags);
-
-        SwTextAttr* pTextAttr = aPam.GetNode().GetTextNode()->GetFieldTextAttrAt( aPam.GetPoint()->nContent.GetIndex()-1, true );
-
-        // What about updating the fields? (see fldmgr.cxx)
-        if (!pTextAttr)
-            throw uno::RuntimeException("no SwTextAttr inserted?");  // could theoretically happen, if paragraph is full
-
-        const SwFormatField& rField = pTextAttr->GetFormatField();
-        m_pImpl->m_pFormatField = &rField;
-
-        if ( pTextAttr->Which() == RES_TXTATR_ANNOTATION
-             && *aPam.GetPoint() != *aPam.GetMark() )
-        {
-            // create annotation mark
-            const SwPostItField* pPostItField = dynamic_cast< const SwPostItField* >(pTextAttr->GetFormatField().GetField());
-            OSL_ENSURE( pPostItField != nullptr, "<SwXTextField::attachToRange(..)> - annotation field missing!" );
-            if ( pPostItField != nullptr )
-            {
-                IDocumentMarkAccess* pMarksAccess = pDoc->getIDocumentMarkAccess();
-                pMarksAccess->makeAnnotationMark( aPam, pPostItField->GetName() );
-            }
-        }
-
+        pDoc->getIDocumentContentOperations().DeleteAndJoin(aPam);
     }
+
+    SwXTextCursor const*const pTextCursor(dynamic_cast<SwXTextCursor*>(pCursor));
+    const bool bForceExpandHints(
+        pTextCursor
+        && pTextCursor->IsAtEndOfMeta() );
+    const SetAttrMode nInsertFlags =
+        bForceExpandHints
+        ? SetAttrMode::FORCEHINTEXPAND
+        : SetAttrMode::DEFAULT;
+
+    if (*aPam.GetPoint() != *aPam.GetMark() &&
+        m_pImpl->m_nServiceId == SwServiceType::FieldTypeAnnotation)
+    {
+        // Make sure we always insert the field at the end
+        SwPaM aEnd(*aPam.End(), *aPam.End());
+        pDoc->getIDocumentContentOperations().InsertPoolItem(aEnd, aFormat, nInsertFlags);
+    }
+    else
+        pDoc->getIDocumentContentOperations().InsertPoolItem(aPam, aFormat, nInsertFlags);
+
+    SwTextAttr* pTextAttr = aPam.GetNode().GetTextNode()->GetFieldTextAttrAt( aPam.GetPoint()->nContent.GetIndex()-1, true );
+
+    // What about updating the fields? (see fldmgr.cxx)
+    if (!pTextAttr)
+        throw uno::RuntimeException("no SwTextAttr inserted?");  // could theoretically happen, if paragraph is full
+
+    const SwFormatField& rField = pTextAttr->GetFormatField();
+    m_pImpl->m_pFormatField = &rField;
+
+    if ( pTextAttr->Which() == RES_TXTATR_ANNOTATION
+         && *aPam.GetPoint() != *aPam.GetMark() )
+    {
+        // create annotation mark
+        const SwPostItField* pPostItField = dynamic_cast< const SwPostItField* >(pTextAttr->GetFormatField().GetField());
+        OSL_ENSURE( pPostItField != nullptr, "<SwXTextField::attachToRange(..)> - annotation field missing!" );
+        if ( pPostItField != nullptr )
+        {
+            IDocumentMarkAccess* pMarksAccess = pDoc->getIDocumentMarkAccess();
+            pMarksAccess->makeAnnotationMark( aPam, pPostItField->GetName() );
+        }
+    }
+
     xField.reset();
 
     assert(m_pImpl->m_pFormatField);
@@ -1975,9 +1983,9 @@ void SAL_CALL SwXTextField::attach(
         {
             UnoActionContext aCont( m_pImpl->m_pDoc );
             // insert copy of annotation at new text range
-            SwPostItField* pPostItField = static_cast< SwPostItField* >(m_pImpl->m_pFormatField->GetField()->CopyField());
+            std::unique_ptr<SwPostItField> pPostItField(static_cast< SwPostItField* >(m_pImpl->m_pFormatField->GetField()->CopyField().release()));
             SwFormatField aFormatField( *pPostItField );
-            delete pPostItField;
+            pPostItField.reset();
             SwPaM aEnd( *aIntPam.End(), *aIntPam.End() );
             m_pImpl->m_pDoc->getIDocumentContentOperations().InsertPoolItem( aEnd, aFormatField );
             // delete former annotation
@@ -2031,7 +2039,7 @@ SwXTextField::getAnchor()
 
     std::shared_ptr< SwPaM > pPamForTextField;
     SwTextField::GetPamForTextField(*pTextField, pPamForTextField);
-    if (pPamForTextField.get() == nullptr)
+    if (pPamForTextField == nullptr)
         return nullptr;
 
     // If this is a postit field, then return the range of its annotation mark if it has one.
@@ -2099,7 +2107,7 @@ SwXTextField::getPropertySetInfo()
     }
     const SfxItemPropertySet* pPropSet = aSwMapProvider.GetPropertySet(
                     lcl_GetPropertyMapOfService(m_pImpl->m_nServiceId));
-    uno::Reference<beans::XPropertySetInfo> xInfo = pPropSet->getPropertySetInfo();
+    const uno::Reference<beans::XPropertySetInfo>& xInfo = pPropSet->getPropertySetInfo();
     // extend PropertySetInfo!
     const uno::Sequence<beans::Property> aPropSeq = xInfo->getProperties();
     aRef = new SfxExtItemPropertySetInfo(
@@ -2367,9 +2375,8 @@ uno::Any SAL_CALL SwXTextField::getPropertyValue(const OUString& rPropertyName)
                 {
                     if (!m_pImpl->m_xTextObject.is())
                     {
-                        SwTextAPIEditSource* pObj =
-                            new SwTextAPIEditSource(m_pImpl->m_pDoc);
-                        m_pImpl->m_xTextObject = new SwTextAPIObject( pObj );
+                        m_pImpl->m_xTextObject
+                            = new SwTextAPIObject( o3tl::make_unique<SwTextAPIEditSource>(m_pImpl->m_pDoc) );
                     }
 
                     uno::Reference<text::XText> xText(m_pImpl->m_xTextObject.get());
@@ -2672,8 +2679,7 @@ static SwFieldIds lcl_GetIdByName( OUString& rName, OUString& rTypeName )
     else if (rTypeName.equalsIgnoreAsciiCase("DataBase"))
     {
         rName = rName.copy(RTL_CONSTASCII_LENGTH("DataBase."));
-        const sal_Int32 nDotCount = comphelper::string::getTokenCount(rName, '.');
-        if( 1 <= nDotCount )
+        if (!rName.isEmpty())
         {
             // #i51815#
             rName = "DataBase." + rName;
@@ -2895,24 +2901,25 @@ void SAL_CALL SwXTextFieldTypes::removeRefreshListener(
 }
 
 class SwXFieldEnumeration::Impl
-    : public SwClient
+    : public SvtListener
 {
-
 public:
-    SwDoc * m_pDoc;
+    SwDoc* m_pDoc;
+    std::vector<uno::Reference<text::XTextField>> m_Items;
+    sal_Int32 m_nNextIndex;  ///< index of next element to be returned
 
-    std::vector< uno::Reference<text::XTextField> > m_Items;
-    sal_Int32       m_nNextIndex;  ///< index of next element to be returned
-
-    explicit Impl(SwDoc & rDoc)
-        : SwClient(rDoc.getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD))
-        , m_pDoc(& rDoc)
+    explicit Impl(SwDoc& rDoc)
+        : m_pDoc(&rDoc)
         , m_nNextIndex(0)
-    { }
+    {
+        StartListening(rDoc.getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD)->GetNotifier());
+    }
 
-protected:
-    // SwClient
-    virtual void Modify(SfxPoolItem const* pOld, SfxPoolItem const* pNew) override;
+    virtual void Notify(const SfxHint& rHint) override
+    {
+        if(rHint.GetId() == SfxHintId::Dying)
+            m_pDoc = nullptr;
+    }
 };
 
 OUString SAL_CALL
@@ -2926,11 +2933,10 @@ sal_Bool SAL_CALL SwXFieldEnumeration::supportsService(const OUString& rServiceN
     return cppu::supportsService(this, rServiceName);
 }
 
-uno::Sequence< OUString > SAL_CALL
+uno::Sequence<OUString> SAL_CALL
 SwXFieldEnumeration::getSupportedServiceNames()
 {
-    uno::Sequence<OUString> aRet { "com.sun.star.text.FieldEnumeration" };
-    return aRet;
+    return { "com.sun.star.text.FieldEnumeration" };
 }
 
 SwXFieldEnumeration::SwXFieldEnumeration(SwDoc & rDoc)
@@ -2994,14 +3000,6 @@ uno::Any SAL_CALL SwXFieldEnumeration::nextElement()
     aRet <<= rxField;
     rxField = nullptr;  // free memory for item that is no longer used
     return aRet;
-}
-
-void SwXFieldEnumeration::Impl::Modify(
-        SfxPoolItem const*const pOld, SfxPoolItem const*const pNew)
-{
-    ClientModify(this, pOld, pNew);
-    if(!GetRegisteredIn())
-        m_pDoc = nullptr;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

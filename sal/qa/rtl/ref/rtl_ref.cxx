@@ -45,7 +45,7 @@ public:
     void set_inc_flag() { m_bIncFlag = true; }
 };
 
-rtl::Reference< MoveTestClass > get_reference( MoveTestClass* pcTestClass )
+static rtl::Reference< MoveTestClass > get_reference( MoveTestClass* pcTestClass )
 {
     // constructor will increment the reference count
     pcTestClass->set_inc_flag();
@@ -70,7 +70,7 @@ class TestReferenceRefCounting : public CppUnit::TestFixture
 
         // test1 now contains a null pointer
         CPPUNIT_ASSERT_MESSAGE("!test1.is()",
-                               !test1.is());
+                               !test1.is()); // NOLINT(bugprone-use-after-move)
 
         // function return should move the reference
         test2 = get_reference( &cTestClass );
@@ -84,7 +84,7 @@ class TestReferenceRefCounting : public CppUnit::TestFixture
                                static_cast<long>(2), test2->use_count());
 
         // use count should decrement
-        test2 = rtl::Reference< MoveTestClass >(nullptr);
+        test2 = rtl::Reference< MoveTestClass >();
         CPPUNIT_ASSERT_EQUAL_MESSAGE("test1.use_count() == 1",
                                static_cast<long>(1), test1->use_count());
 
@@ -94,7 +94,7 @@ class TestReferenceRefCounting : public CppUnit::TestFixture
         CPPUNIT_ASSERT_MESSAGE("!test1.is()",
                                !test1.is());
         CPPUNIT_ASSERT_MESSAGE("!test2.is()",
-                               !test2.is());
+                               !test2.is()); // NOLINT(bugprone-use-after-move)
 
         CPPUNIT_ASSERT_EQUAL_MESSAGE("cTestClass.use_count() == 0",
                                static_cast<long>(0), cTestClass.use_count());

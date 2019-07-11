@@ -19,6 +19,7 @@
 
 #include <o3tl/make_unique.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <xmloff/nmspmap.hxx>
 #include <format.hxx>
@@ -64,13 +65,13 @@ using namespace ::xmloff::token;
 
 class SwXMLConditionParser_Impl
 {
-    OUString sInput;
+    OUString const sInput;
 
     Master_CollCondition nCondition;
     sal_uInt32 nSubCondition;
 
     sal_Int32 nPos;
-    sal_Int32 nLength;
+    sal_Int32 const nLength;
 
     inline bool SkipWS();
     inline bool MatchChar( sal_Unicode c );
@@ -354,8 +355,7 @@ SwXMLTextStyleContext_Impl::SwXMLTextStyleContext_Impl( SwXMLImport& rImport,
         const uno::Reference< xml::sax::XAttributeList > & xAttrList,
         sal_uInt16 nFamily,
         SvXMLStylesContext& rStyles ) :
-    XMLTextStyleContext( rImport, nPrfx, rLName, xAttrList, rStyles, nFamily ),
-    pConditions( nullptr )
+    XMLTextStyleContext( rImport, nPrfx, rLName, xAttrList, rStyles, nFamily )
 {
 }
 
@@ -522,7 +522,6 @@ SwXMLItemSetStyleContext_Impl::SwXMLItemSetStyleContext_Impl( SwXMLImport& rImpo
         SvXMLStylesContext& rStylesC,
         sal_uInt16 nFamily ) :
     SvXMLStyleContext( rImport, nPrfx, rLName, xAttrList, nFamily ),
-    pItemSet( nullptr ),
     pTextStyle( nullptr ),
     rStyles( rStylesC ),
     bHasMasterPageName( false ),

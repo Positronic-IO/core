@@ -125,14 +125,6 @@ namespace connectivity
                                  m_aExprCondType( OR )
                             {}
 
-            virtual ~MQueryExpression() override {
-                for (ExprVector::iterator i(m_aExprVector.begin());
-                     i != m_aExprVector.end(); ++i)
-                {
-                    delete *i;
-                }
-            }
-
         private:
             ExprVector          m_aExprVector;
             bool_cond           m_aExprCondType;
@@ -175,9 +167,7 @@ namespace connectivity
 
             void                       reset();
             MQueryHelperResultEntry*   getByIndex( sal_uInt32 nRow );
-            static bool                queryComplete() { return true; }
             sal_Int32                  getResultCount() const;
-            bool                       checkRowAvailable( sal_Int32 nDBRow );
             bool                       getRowValue( ORowSetValue& rValue, sal_Int32 nDBRow,const OUString& aDBColumnName, sal_Int32 nType );
             sal_Int32                  executeQuery(OConnection* xConnection, MQueryExpression & expr);
             const OColumnAlias&        getColumnAlias() const { return m_rColumnAlias; }

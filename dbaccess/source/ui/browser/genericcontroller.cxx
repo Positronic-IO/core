@@ -55,6 +55,7 @@
 #include <com/sun/star/frame/status/Visibility.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <o3tl/functional.hxx>
 #include <limits>
 #include <unordered_map>
@@ -428,7 +429,7 @@ void OGenericUnoController::ImplBroadcastFeatureState(const OUString& _rFeature,
         lcl_notifyMultipleStates( *xListener.get(), aEvent, aStates );
     else
     {   // no -> iterate through all listeners responsible for the URL
-        StringBag aFeatureCommands;
+        std::set<OUString> aFeatureCommands;
         for( const auto& rFeature : m_aSupportedFeatures )
         {
             if( rFeature.second.nFeatureId == nFeat )
@@ -523,12 +524,12 @@ void OGenericUnoController::ImplInvalidateFeature( sal_Int32 _nId, const Referen
 #if OSL_DEBUG_LEVEL > 0
     if ( _nId != -1 )
     {
-        SupportedFeatures::const_iterator aFeaturePos = std::find_if(
+        auto isSupportedFeature = std::any_of(
             m_aSupportedFeatures.begin(),
             m_aSupportedFeatures.end(),
             CompareFeatureById( _nId )
         );
-        OSL_ENSURE( aFeaturePos != m_aSupportedFeatures.end(), "OGenericUnoController::ImplInvalidateFeature: invalidating an unsupported feature is suspicious, at least!" );
+        OSL_ENSURE( isSupportedFeature, "OGenericUnoController::ImplInvalidateFeature: invalidating an unsupported feature is suspicious, at least!" );
     }
 #endif
 
@@ -930,7 +931,7 @@ void OGenericUnoController::clearView()
 
 void OGenericUnoController::showError(const SQLExceptionInfo& _rInfo)
 {
-    ::dbaui::showError(_rInfo,getView(),getORB());
+    ::dbtools::showError(_rInfo,VCLUnoHelper::GetInterface(getView()),getORB());
 }
 
 Reference< XLayoutManager > OGenericUnoController::getLayoutManager(const Reference< XFrame >& _xFrame)

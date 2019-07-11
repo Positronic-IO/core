@@ -27,6 +27,7 @@
 #include <vcl/textdata.hxx>
 #include <vcl/xtextedt.hxx>
 #include "textdat2.hxx"
+#include <vcl/commandevent.hxx>
 
 #include <svl/undo.hxx>
 #include <vcl/cursor.hxx>
@@ -35,6 +36,7 @@
 #include <vcl/svapp.hxx>
 #include <tools/stream.hxx>
 
+#include <sal/log.hxx>
 #include <sot/formats.hxx>
 #include <svl/urlbmk.hxx>
 
@@ -87,8 +89,7 @@ css::uno::Any TETextDataObject::getTransferData( const css::datatransfer::DataFl
     }
     else if ( nT == SotClipboardFormatId::HTML )
     {
-        GetHTMLStream().Seek( STREAM_SEEK_TO_END );
-        sal_uLong nLen = GetHTMLStream().Tell();
+        sal_uLong nLen = GetHTMLStream().TellEnd();
         GetHTMLStream().Seek(0);
 
         css::uno::Sequence< sal_Int8 > aSeq( nLen );
@@ -1697,7 +1698,7 @@ void TextView::ImpShowCursor( bool bGotoCursor, bool bForceVisCursor, bool bSpec
         mpImpl->mpCursor->Show();
 }
 
-bool TextView::SetCursorAtPoint( const Point& rPosPixel )
+void TextView::SetCursorAtPoint( const Point& rPosPixel )
 {
     mpImpl->mpTextEngine->CheckIdleFormatter();
 
@@ -1725,7 +1726,6 @@ bool TextView::SetCursorAtPoint( const Point& rPosPixel )
 
     bool bForceCursor = !mpImpl->mpDDInfo; // && !mbInSelection
     ImpShowCursor( mpImpl->mbAutoScroll, bForceCursor, false );
-    return true;
 }
 
 bool TextView::IsSelectionAtPoint( const Point& rPosPixel )

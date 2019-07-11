@@ -19,6 +19,7 @@
 
 #include "ManifestReader.hxx"
 #include "ManifestImport.hxx"
+#include <sal/log.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/factory.hxx>
@@ -79,7 +80,7 @@ Sequence< Sequence< PropertyValue > > SAL_CALL ManifestReader::readManifestSeque
 }
 // Component functions
 
-Reference < XInterface > ManifestReader_createInstance( Reference< XMultiServiceFactory > const & rServiceFactory )
+static Reference < XInterface > ManifestReader_createInstance( Reference< XMultiServiceFactory > const & rServiceFactory )
 {
     return *new ManifestReader( comphelper::getComponentContext(rServiceFactory) );
 }

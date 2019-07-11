@@ -42,7 +42,7 @@ struct ContainerStats {
 
 class ContainerListener : public cppu::WeakImplHelper< XEventListener >
 {
-    ContainerStats *m_pStats;
+    ContainerStats * const m_pStats;
 public:
     explicit ContainerListener(ContainerStats *pStats)
         : m_pStats(pStats) { m_pStats->m_nAlive++; }
@@ -112,7 +112,7 @@ namespace comphelper_ifcontainer
             std::vector< Reference< XInterface > > aElements = pContainer->getElements();
 
             CPPUNIT_ASSERT_EQUAL_MESSAGE("query contents",
-                                   static_cast<int>(aElements.size()), nTests);
+                                   nTests, static_cast<int>(aElements.size()));
             if (static_cast<int>(aElements.size()) == nTests)
             {
                 for (i = 0; i < nTests; i++)

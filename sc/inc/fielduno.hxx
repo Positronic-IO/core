@@ -24,7 +24,6 @@
 #include "mutexhlp.hxx"
 
 #include <svl/lstner.hxx>
-#include <svl/itemprop.hxx>
 #include <editeng/editdata.hxx>
 #include <com/sun/star/text/XTextField.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -37,17 +36,18 @@
 #include <com/sun/star/util/DateTime.hpp>
 #include <cppuhelper/component.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/interfacecontainer2.hxx>
 #include <osl/mutex.hxx>
 
 #include <memory>
 
+namespace comphelper { class OInterfaceContainerHelper2; }
+
 class ScEditSource;
 class SvxFieldItem;
 class SvxFieldData;
-class ScEditFieldObj;
 class ScDocShell;
 class ScHeaderFooterTextData;
+class SfxItemPropertySet;
 
 class ScCellFieldsObj : public cppu::WeakImplHelper<
                             css::container::XEnumerationAccess,
@@ -60,10 +60,10 @@ class ScCellFieldsObj : public cppu::WeakImplHelper<
 private:
     css::uno::Reference<css::text::XTextRange> mxContent;
     ScDocShell*             pDocShell;
-    ScAddress               aCellPos;
-    ScEditSource* mpEditSource;
+    ScAddress const               aCellPos;
+    std::unique_ptr<ScEditSource> mpEditSource;
     /// List of refresh listeners.
-    comphelper::OInterfaceContainerHelper2* mpRefreshListeners;
+    std::unique_ptr<comphelper::OInterfaceContainerHelper2> mpRefreshListeners;
     /// mutex to lock the InterfaceContainerHelper
     osl::Mutex              aMutex;
 
@@ -114,10 +114,10 @@ class ScHeaderFieldsObj : public cppu::WeakImplHelper<
 {
 private:
     ScHeaderFooterTextData& mrData;
-    ScEditSource* mpEditSource;
+    std::unique_ptr<ScEditSource> mpEditSource;
 
     /// List of refresh listeners.
-    comphelper::OInterfaceContainerHelper2* mpRefreshListeners;
+    std::unique_ptr<comphelper::OInterfaceContainerHelper2> mpRefreshListeners;
     /// mutex to lock the InterfaceContainerHelper
     osl::Mutex                  aMutex;
 
@@ -175,7 +175,7 @@ class ScEditFieldObj : public cppu::WeakImplHelper<
     std::unique_ptr<ScEditSource> mpEditSource;
     ESelection aSelection;
 
-    sal_Int32 meType;
+    sal_Int32 const meType;
     std::unique_ptr<SvxFieldData> mpData;
     css::uno::Reference<css::text::XTextRange> mpContent;
 
@@ -185,7 +185,7 @@ class ScEditFieldObj : public cppu::WeakImplHelper<
     bool mbIsFixed:1;
 
 private:
-    SvxFieldData* getData();
+    SvxFieldData& getData();
 
     void setPropertyValueURL(const OUString& rName, const css::uno::Any& rVal);
     css::uno::Any getPropertyValueURL(const OUString& rName);
@@ -204,7 +204,7 @@ public:
 
     ScEditFieldObj(
         const css::uno::Reference<css::text::XTextRange>& rContent,
-        ScEditSource* pEditSrc, sal_Int32 eType, const ESelection& rSel);
+        std::unique_ptr<ScEditSource> pEditSrc, sal_Int32 eType, const ESelection& rSel);
     virtual ~ScEditFieldObj() override;
 
     sal_Int32 GetFieldType() const { return meType;}
@@ -213,7 +213,7 @@ public:
     SvxFieldItem CreateFieldItem();
     void InitDoc(
         const css::uno::Reference<css::text::XTextRange>& rContent,
-        ScEditSource* pEditSrc, const ESelection& rSel);
+        std::unique_ptr<ScEditSource> pEditSrc, const ESelection& rSel);
 
                             // XTextField
     virtual OUString SAL_CALL getPresentation( sal_Bool bShowCommand ) override;

@@ -22,10 +22,12 @@
 
 #include <config_version.h>
 
+#include <o3tl/lru_map.hxx>
 #include <tools/fldunit.hxx>
 #include <unotools/options.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
+#include <vcl/task.hxx>
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/i18n/XCharacterClassification.hpp>
@@ -106,6 +108,11 @@ namespace vcl
     class Window;
 }
 
+namespace basegfx
+{
+    class SystemDependentDataManager;
+}
+
 class LocaleConfigurationListener : public utl::ConfigurationListener
 {
 public:
@@ -126,16 +133,16 @@ struct ImplSVAppData
         ImeStatusWindowMode_SHOW
     };
 
-    AllSettings*            mpSettings = nullptr;           // Application settings
+    std::unique_ptr<AllSettings> mpSettings;           // Application settings
     LocaleConfigurationListener* mpCfgListener = nullptr;
-    VclEventListeners*      mpEventListeners = nullptr;     // listeners for vcl events (eg, extended toolkit)
-    SVAppKeyListeners*      mpKeyListeners = nullptr;       // listeners for key events only (eg, extended toolkit)
+    VclEventListeners       maEventListeners;     // listeners for vcl events (eg, extended toolkit)
+    SVAppKeyListeners       maKeyListeners;       // listeners for key events only (eg, extended toolkit)
     std::vector<ImplPostEventPair> maPostedEventList;
-    ImplAccelManager*       mpAccelMgr = nullptr;           // Accelerator Manager
-    OUString*               mpAppName = nullptr;            // Application name
-    OUString*               mpAppFileName = nullptr;        // Abs. Application FileName
-    OUString*               mpDisplayName = nullptr;        // Application Display Name
-    OUString*               mpToolkitName = nullptr;        // Toolkit Name
+    ImplAccelManager*       mpAccelMgr;           // Accelerator Manager
+    boost::optional<OUString> mxAppName;            // Application name
+    boost::optional<OUString> mxAppFileName;        // Abs. Application FileName
+    boost::optional<OUString> mxDisplayName;        // Application Display Name
+    boost::optional<OUString> mxToolkitName;        // Toolkit Name
     Help*                   mpHelp = nullptr;               // Application help
     VclPtr<PopupMenu>       mpActivePopupMenu;              // Actives Popup-Menu (in Execute)
     VclPtr<ImplWheelWindow> mpWheelWindow;                  // WheelWindow
@@ -168,6 +175,8 @@ struct ImplSVAppData
     DECL_LINK(VclEventTestingHdl, Timer*, void);
 };
 
+typedef o3tl::lru_map<SalBitmap*, BitmapEx> lru_scale_cache;
+
 struct ImplSVGDIData
 {
     ~ImplSVGDIData();
@@ -184,8 +193,9 @@ struct ImplSVGDIData
     VclPtr<Printer>         mpFirstPrinter;                 // First Printer
     VclPtr<Printer>         mpLastPrinter;                  // Last Printer
     ImplPrnQueueList*       mpPrinterQueueList = nullptr;   // List of all printer queue
-    PhysicalFontCollection* mpScreenFontList = nullptr;     // Screen-Font-List
-    ImplFontCache*          mpScreenFontCache = nullptr;    // Screen-Font-Cache
+    std::shared_ptr<PhysicalFontCollection> mxScreenFontList; // Screen-Font-List
+    std::shared_ptr<ImplFontCache> mxScreenFontCache;       // Screen-Font-Cache
+    lru_scale_cache maScaleCache = lru_scale_cache(10);     // Cache for scaled images
     ImplDirectFontSubstitution* mpDirectFontSubst = nullptr; // Font-Substitutions defined in Tools->Options->Fonts
     GraphicConverter*       mpGrfConverter = nullptr;       // Converter for graphics
     long                    mnAppFontX = 0;                 // AppFont X-Numenator for 40/tel Width
@@ -210,7 +220,7 @@ struct ImplSVWinData
     std::vector<Image>      maMsgBoxImgList;                // ImageList for MessageBox
     VclPtr<vcl::Window>     mpAutoScrollWin;                // window, that is in AutoScrollMode mode
     VclPtr<vcl::Window>     mpLastWheelWindow;              // window, that last received a mouse wheel event
-    SalWheelMouseEvent      maLastWheelEvent;               // the last received mouse whell event
+    SalWheelMouseEvent      maLastWheelEvent;               // the last received mouse wheel event
 
     StartTrackingFlags      mnTrackFlags = StartTrackingFlags::NONE; // tracking flags
     StartAutoScrollFlags    mnAutoScrollFlags = StartAutoScrollFlags::NONE; // auto scroll flags
@@ -226,8 +236,8 @@ struct ImplSVCtrlData
 {
     std::vector<Image>      maCheckImgList;                 // ImageList for CheckBoxes
     std::vector<Image>      maRadioImgList;                 // ImageList for RadioButtons
-    Image*                  mpDisclosurePlus = nullptr;
-    Image*                  mpDisclosureMinus = nullptr;
+    std::unique_ptr<Image>  mpDisclosurePlus;
+    std::unique_ptr<Image>  mpDisclosureMinus;
     ImplTBDragMgr*          mpTBDragMgr = nullptr;          // DragMgr for ToolBox
     sal_uInt16              mnCheckStyle = 0;               // CheckBox-Style for ImageList-Update
     sal_uInt16              mnRadioStyle = 0;               // Radio-Style for ImageList-Update
@@ -237,8 +247,8 @@ struct ImplSVCtrlData
     Color                   mnLastRadioFColor;              // Last FaceColor for RadioImage
     Color                   mnLastRadioWColor;              // Last WindowColor for RadioImage
     Color                   mnLastRadioLColor;              // Last LightColor for RadioImage
-    FieldUnitStringList*    mpFieldUnitStrings = nullptr;   // list with field units
-    FieldUnitStringList*    mpCleanUnitStrings = nullptr;   // same list but with some "fluff" like spaces removed
+    FieldUnitStringList     maFieldUnitStrings;   // list with field units
+    FieldUnitStringList     maCleanUnitStrings;   // same list but with some "fluff" like spaces removed
 };
 
 struct ImplSVHelpData
@@ -322,9 +332,10 @@ struct BlendFrameCache
 
 struct ImplSchedulerContext
 {
-    ImplSchedulerData*      mpFirstSchedulerData = nullptr; ///< list of all active tasks
-    ImplSchedulerData*      mpLastSchedulerData = nullptr;  ///< last item of the mpFirstSchedulerData list
+    ImplSchedulerData*      mpFirstSchedulerData[PRIO_COUNT] = { nullptr, }; ///< list of all active tasks per priority
+    ImplSchedulerData*      mpLastSchedulerData[PRIO_COUNT] = { nullptr, };  ///< last item of each mpFirstSchedulerData list
     ImplSchedulerData*      mpSchedulerStack = nullptr;     ///< stack of invoked tasks
+    ImplSchedulerData*      mpSchedulerStackTop = nullptr;  ///< top most stack entry to detect needed rescheduling during pop
     SalTimer*               mpSalTimer = nullptr;           ///< interface to sal event loop / system timer
     sal_uInt64              mnTimerStart = 0;               ///< start time of the timer
     sal_uInt64              mnTimerPeriod = SAL_MAX_UINT64; ///< current timer period
@@ -340,8 +351,8 @@ struct ImplSVData
     Application*            mpApp = nullptr;                // pApp
     VclPtr<WorkWindow>      mpDefaultWin;                   // Default-Window
     bool                    mbDeInit = false;               // Is VCL deinitializing
-    SalI18NImeStatus*       mpImeStatus = nullptr;          // interface to ime status window
-    SalSystem*              mpSalSystem = nullptr;          // SalSystem interface
+    std::unique_ptr<SalI18NImeStatus> mpImeStatus;          // interface to ime status window, only used by the X11 backend
+    std::unique_ptr<SalSystem> mpSalSystem;                 // SalSystem interface
     bool                    mbResLocaleSet = false;         // SV-Resource-Manager
     std::locale             maResLocale;                    // Resource locale
     ImplSchedulerContext    maSchedCtx;                     // indepen data for class Scheduler
@@ -353,16 +364,16 @@ struct ImplSVData
     ImplSVNWFData           maNWFData;
     UnoWrapperBase*         mpUnoWrapper = nullptr;
     VclPtr<vcl::Window>     mpIntroWindow;                  // the splash screen
-    DockingManager*         mpDockingManager = nullptr;
-    BlendFrameCache*        mpBlendFrameCache = nullptr;
+    std::unique_ptr<DockingManager> mpDockingManager;
+    std::unique_ptr<BlendFrameCache> mpBlendFrameCache;
 
     oslThreadIdentifier     mnMainThreadId = 0;
     rtl::Reference< vcl::DisplayConnectionDispatch > mxDisplayConnection;
 
     css::uno::Reference< css::lang::XComponent > mxAccessBridge;
-    vcl::SettingsConfigItem* mpSettingsConfigItem = nullptr;
-    std::vector< vcl::DeleteOnDeinitBase* >* mpDeinitDeleteList = nullptr;
-    std::unordered_map< int, OUString >* mpPaperNames = nullptr;
+    std::unique_ptr<vcl::SettingsConfigItem> mpSettingsConfigItem;
+    std::vector< vcl::DeleteOnDeinitBase* > maDeinitDeleteList;
+    std::unordered_map< int, OUString > maPaperNames;
 
     css::uno::Reference<css::i18n::XCharacterClassification> m_xCharClass;
 
@@ -372,6 +383,7 @@ struct ImplSVData
 css::uno::Reference<css::i18n::XCharacterClassification> const& ImplGetCharClass();
 
 void        ImplDeInitSVData();
+VCL_PLUGIN_PUBLIC basegfx::SystemDependentDataManager& ImplGetSystemDependentDataManager();
 VCL_PLUGIN_PUBLIC vcl::Window* ImplGetDefaultWindow();
 VCL_PLUGIN_PUBLIC vcl::Window* ImplGetDefaultContextWindow();
 VCL_PLUGIN_PUBLIC const std::locale& ImplGetResLocale();
@@ -379,7 +391,7 @@ VCL_PLUGIN_PUBLIC OUString VclResId(const char* pId);
 DockingManager*     ImplGetDockingManager();
 BlendFrameCache*    ImplGetBlendFrameCache();
 
-bool        ImplCallPreNotify( NotifyEvent& rEvt );
+VCL_DLLPUBLIC bool        ImplCallPreNotify( NotifyEvent& rEvt );
 
 VCL_PLUGIN_PUBLIC ImplSVData* ImplGetSVData();
 VCL_PLUGIN_PUBLIC void ImplHideSplash();
@@ -388,8 +400,8 @@ VCL_PLUGIN_PUBLIC void ImplHideSplash();
 bool ImplInitAccessBridge();
 #endif
 
-FieldUnitStringList* ImplGetFieldUnits();
-FieldUnitStringList* ImplGetCleanedFieldUnits();
+const FieldUnitStringList& ImplGetFieldUnits();
+const FieldUnitStringList& ImplGetCleanedFieldUnits();
 
 struct ImplSVEvent
 {

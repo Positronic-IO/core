@@ -135,7 +135,7 @@ OString createFileNameFromType( const OString& destination,
         }
 
         buffer.append(token);
-    } while( nIndex != -1 );
+    } while(true);
 
     OUString uSysFileName;
     OSL_VERIFY( FileBase::getSystemPathFromFileURL(
@@ -156,7 +156,7 @@ bool fileExists(const OString& fileName)
     return false;
 }
 
-bool checkFileContent(const OString& targetFileName, const OString& tmpFileName)
+static bool checkFileContent(const OString& targetFileName, const OString& tmpFileName)
 {
     FILE  *target = fopen(targetFileName.getStr(), "r");
     FILE  *tmp = fopen(tmpFileName.getStr(), "r");
@@ -214,10 +214,7 @@ bool makeValidTypeFile(const OString& targetFileName, const OString& tmpFileName
 
 bool removeTypeFile(const OString& fileName)
 {
-    if ( !unlink(fileName.getStr()) )
-        return true;
-
-    return false;
+    return unlink(fileName.getStr()) == 0;
 }
 
 OUString convertToFileUrl(const OString& fileName)
@@ -269,10 +266,7 @@ FileStream::~FileStream()
 
 bool FileStream::isValid() const
 {
-    if ( m_file )
-        return true;
-
-    return false;
+    return m_file != nullptr;
 }
 
 void FileStream::createTempFile(const OString& sPath)
@@ -339,30 +333,30 @@ FileStream &operator<<(FileStream& o, char const * s) {
     osl_writeFile(o.m_file, s, strlen(s), &writtenBytes);
     return o;
 }
-FileStream &operator<<(FileStream& o, ::rtl::OString const * s) {
+FileStream &operator<<(FileStream& o, OString const * s) {
     sal_uInt64 writtenBytes;
     osl_writeFile(o.m_file, s->getStr(), s->getLength() * sizeof(sal_Char), &writtenBytes);
     return o;
 }
-FileStream &operator<<(FileStream& o, const ::rtl::OString& s) {
+FileStream &operator<<(FileStream& o, const OString& s) {
     sal_uInt64 writtenBytes;
     osl_writeFile(o.m_file, s.getStr(), s.getLength() * sizeof(sal_Char), &writtenBytes);
     return o;
 
 }
-FileStream &operator<<(FileStream& o, ::rtl::OStringBuffer const * s) {
+FileStream &operator<<(FileStream& o, OStringBuffer const * s) {
     sal_uInt64 writtenBytes;
     osl_writeFile(o.m_file, s->getStr(), s->getLength() * sizeof(sal_Char), &writtenBytes);
     return o;
 }
-FileStream &operator<<(FileStream& o, const ::rtl::OStringBuffer& s) {
+FileStream &operator<<(FileStream& o, const OStringBuffer& s) {
     sal_uInt64 writtenBytes;
     osl_writeFile(
         o.m_file, s.getStr(), s.getLength() * sizeof(sal_Char), &writtenBytes);
     return o;
 }
 
-FileStream & operator <<(FileStream & out, rtl::OUString const & s) {
+FileStream & operator <<(FileStream & out, OUString const & s) {
     return out << OUStringToOString(s, RTL_TEXTENCODING_UTF8);
 }
 

@@ -176,7 +176,7 @@ public:
 
 protected:
     bool AcquireContext(bool bForceCreate = false);
-    bool ReleaseContext();
+    void ReleaseContext();
 
     /// create a new context for rendering to the underlying window
     virtual rtl::Reference<OpenGLContext> CreateWinContext() = 0;
@@ -228,7 +228,7 @@ public:
     virtual void SetFillColor( Color nColor ) override;
 
     // enable/disable XOR drawing
-    virtual void SetXORMode( bool bSet ) override;
+    virtual void SetXORMode( bool bSet, bool bInvertOnly ) override;
 
     // set line color for raster operations
     virtual void SetROPLineColor( SalROPColor nROPColor ) override;
@@ -249,15 +249,21 @@ public:
     virtual void drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
 
     virtual void drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, PCONSTSALPOINT* pPtAry ) override;
-    virtual bool drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) override;
+
+    virtual bool drawPolyPolygon(
+                const basegfx::B2DHomMatrix& rObjectToDevice,
+                const basegfx::B2DPolyPolygon&,
+                double fTransparency) override;
 
     virtual bool drawPolyLine(
+                const basegfx::B2DHomMatrix& rObjectToDevice,
                 const basegfx::B2DPolygon&,
                 double fTransparency,
                 const basegfx::B2DVector& rLineWidths,
                 basegfx::B2DLineJoin,
                 css::drawing::LineCap,
-                double fMiterMinimumAngle) override;
+                double fMiterMinimumAngle,
+                bool bPixelSnapHairline) override;
 
     virtual bool drawPolyLineBezier(
                 sal_uInt32 nPoints,
@@ -308,7 +314,7 @@ public:
                 const SalBitmap& rSalBitmap,
                 Color nMaskColor ) override;
 
-    virtual SalBitmap* getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
 
     virtual Color getPixel( long nX, long nY ) override;
 

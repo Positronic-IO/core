@@ -75,6 +75,7 @@
 #include <com/sun/star/text/WritingMode2.hpp>
 
 #include <comphelper/extract.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <connectivity/dbexception.hxx>
 #include <cppuhelper/exc_hlp.hxx>
@@ -2520,17 +2521,16 @@ namespace pcr
         }
     }
 
-
     bool FormComponentPropertyHandler::impl_dialogListSelection_nothrow( const OUString& _rProperty, ::osl::ClearableMutexGuard& _rClearBeforeDialog ) const
     {
-        OSL_PRECOND( m_pInfoService.get(), "FormComponentPropertyHandler::impl_dialogListSelection_nothrow: no property meta data!" );
+        OSL_PRECOND(m_pInfoService, "FormComponentPropertyHandler::impl_dialogListSelection_"
+                                    "nothrow: no property meta data!");
 
         OUString sPropertyUIName( m_pInfoService->getPropertyTranslation( m_pInfoService->getPropertyId( _rProperty ) ) );
-        ScopedVclPtrInstance< ListSelectionDialog > aDialog( impl_getDefaultDialogParent_nothrow(), m_xComponent, _rProperty, sPropertyUIName );
+        ListSelectionDialog aDialog(impl_getDefaultDialogFrame_nothrow(), m_xComponent, _rProperty, sPropertyUIName);
         _rClearBeforeDialog.clear();
-        return ( RET_OK == aDialog->Execute() );
+        return ( RET_OK == aDialog.run() );
     }
-
 
     bool FormComponentPropertyHandler::impl_dialogFilterOrSort_nothrow( bool _bFilter, OUString& _out_rSelectedClause, ::osl::ClearableMutexGuard& _rClearBeforeDialog ) const
     {
@@ -2644,7 +2644,6 @@ namespace pcr
             ScopedVclPtrInstance< SfxSingleTabDialog > xDialog( impl_getDefaultDialogParent_nothrow(), aCoreSet,
                 "FormatNumberDialog", "cui/ui/formatnumberdialog.ui");
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-            DBG_ASSERT( pFact, "CreateFactory fail!" );
             ::CreateTabPage fnCreatePage = pFact->GetTabPageCreatorFunc( RID_SVXPAGE_NUMBERFORMAT );
             if ( !fnCreatePage )
                 throw RuntimeException();   // caught below
@@ -2659,12 +2658,10 @@ namespace pcr
 
                 const SfxPoolItem* pItem = pResult->GetItem( SID_ATTR_NUMBERFORMAT_INFO );
                 const SvxNumberInfoItem* pInfoItem = dynamic_cast< const SvxNumberInfoItem* >( pItem );
-                if (pInfoItem && pInfoItem->GetDelCount())
+                if (pInfoItem)
                 {
-                    const sal_uInt32* pDeletedKeys = pInfoItem->GetDelArray();
-
-                    for (sal_uInt32 i=0; i< pInfoItem->GetDelCount(); ++i)
-                        pFormatter->DeleteEntry(pDeletedKeys[i]);
+                    for (sal_uInt32 key : pInfoItem->GetDelFormats())
+                        pFormatter->DeleteEntry(key);
                 }
 
                 pItem = nullptr;
@@ -2780,19 +2777,19 @@ namespace pcr
         bool bSuccess = false;
 
         // create an item set for use with the dialog
-        SfxItemSet* pSet = nullptr;
+        std::unique_ptr<SfxItemSet> pSet;
         SfxItemPool* pPool = nullptr;
         std::vector<SfxPoolItem*>* pDefaults = nullptr;
         ControlCharacterDialog::createItemSet(pSet, pPool, pDefaults);
-        ControlCharacterDialog::translatePropertiesToItems(m_xComponent, pSet);
+        ControlCharacterDialog::translatePropertiesToItems(m_xComponent, pSet.get());
 
         {   // do this in an own block. The dialog needs to be destroyed before we call
             // destroyItemSet
-            ScopedVclPtrInstance< ControlCharacterDialog > aDlg( impl_getDefaultDialogParent_nothrow(), *pSet );
+            ControlCharacterDialog aDlg(impl_getDefaultDialogFrame_nothrow(), *pSet);
             _rClearBeforeDialog.clear();
-            if ( RET_OK == aDlg->Execute() )
+            if (RET_OK == aDlg.run())
             {
-                const SfxItemSet* pOut = aDlg->GetOutputItemSet();
+                const SfxItemSet* pOut = aDlg.GetOutputItemSet();
                 if ( pOut )
                 {
                     std::vector< NamedValue > aFontPropertyValues;
@@ -2843,11 +2840,12 @@ namespace pcr
     {
         ::Color aColor;
         OSL_VERIFY( impl_getPropertyValue_throw( impl_getPropertyNameFromId_nothrow( _nColorPropertyId ) ) >>= aColor );
-        SvColorDialog aColorDlg( impl_getDefaultDialogParent_nothrow() );
+        SvColorDialog aColorDlg;
         aColorDlg.SetColor( aColor );
 
         _rClearBeforeDialog.clear();
-        if ( !aColorDlg.Execute() )
+        vcl::Window* pParent = impl_getDefaultDialogParent_nothrow();
+        if (!aColorDlg.Execute(pParent ? pParent->GetFrameWeld() : nullptr))
             return false;
 
         _out_rNewValue <<= aColorDlg.GetColor();

@@ -21,6 +21,7 @@
 #include <algorithm>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/solar.h>
 #include <xmloff/PageMasterStyleMap.hxx>
 #include <xmloff/attrlist.hxx>
@@ -160,8 +161,7 @@ data2string(void *data,
     return result.makeStringAndClear();
 }
 
-static OUString
-any2string(uno::Any any)
+static OUString any2string(const uno::Any& any)
 {
     return data2string(const_cast<void*>(any.getValue()), any.pType);
 }
@@ -187,7 +187,7 @@ XMLAutoStylePoolProperties::XMLAutoStylePoolProperties( XMLAutoStyleFamily& rFam
             }
 
         // Create a name based on the properties used
-        for(XMLPropertyState & rState : maProperties)
+        for(XMLPropertyState const & rState : maProperties)
             {
                 if (rState.mnIndex == -1)
                     continue;
@@ -247,7 +247,7 @@ XMLAutoStylePoolProperties::XMLAutoStylePoolProperties( XMLAutoStyleFamily& rFam
 
 #if OSL_DEBUG_LEVEL > 0
     std::set<sal_Int32> DebugProperties;
-    for (XMLPropertyState & rPropState : maProperties)
+    for (XMLPropertyState const & rPropState : maProperties)
     {
         sal_Int32 const property(rPropState.mnIndex);
         // serious bug: will cause duplicate attributes to be exported
@@ -480,10 +480,10 @@ void SvXMLAutoStylePoolP_Impl::GetRegisteredNames(
         XMLAutoStyleFamily &rFamily = *aJ;
 
         // iterate over names
-        for (std::set<OUString>::const_iterator aI = rFamily.maNameSet.begin(); aI != rFamily.maNameSet.end(); ++aI)
+        for (const auto& rName : rFamily.maNameSet)
         {
             aFamilies.push_back( rFamily.mnFamily );
-            aNames.push_back( *aI );
+            aNames.push_back( rName );
         }
     }
 
@@ -589,6 +589,35 @@ OUString SvXMLAutoStylePoolP_Impl::Find( sal_Int32 nFamily,
     }
 
     return sName;
+}
+
+std::vector<xmloff::AutoStyleEntry> SvXMLAutoStylePoolP_Impl::GetAutoStyleEntries() const
+{
+    std::vector<xmloff::AutoStyleEntry> rReturnVector;
+
+    for (std::unique_ptr<XMLAutoStyleFamily> const & rFamily : m_FamilySet)
+    {
+        rtl::Reference<XMLPropertySetMapper> aPropertyMapper = rFamily->mxMapper->getPropertySetMapper();
+        for (auto const & rParent : rFamily->m_ParentSet)
+        {
+            for (auto const & rProperty : rParent->GetPropertiesList())
+            {
+                rReturnVector.emplace_back();
+                xmloff::AutoStyleEntry & rEntry = rReturnVector.back();
+                rEntry.m_aParentName = rParent->GetParent();
+                rEntry.m_aName = rProperty->GetName();
+                for (XMLPropertyState const & rPropertyState : rProperty->GetProperties())
+                {
+                    if (rPropertyState.mnIndex >= 0)
+                    {
+                        OUString sXmlName = aPropertyMapper->GetEntryXMLName(rPropertyState.mnIndex);
+                        rEntry.m_aXmlProperties.emplace_back(sXmlName, rPropertyState.maValue);
+                    }
+                }
+            }
+        }
+    }
+    return rReturnVector;
 }
 
 namespace {
@@ -705,14 +734,10 @@ void SvXMLAutoStylePoolP_Impl::exportXML(
             else
                 sName = rFamily.maStrFamilyName;
 
-            pAntiImpl->exportStyleAttributes(
-                GetExport().GetAttrList(),
-                nFamily,
-                aExpStyles[i].mpProperties->GetProperties(),
-                *rFamily.mxMapper.get()
-                    , GetExport().GetMM100UnitConverter(),
-                    GetExport().GetNamespaceMap()
-                );
+            pAntiImpl->exportStyleAttributes(GetExport().GetAttrList(), nFamily,
+                                             aExpStyles[i].mpProperties->GetProperties(),
+                                             *rFamily.mxMapper, GetExport().GetMM100UnitConverter(),
+                                             GetExport().GetNamespaceMap());
 
             SvXMLElementExport aElem( GetExport(),
                                       XML_NAMESPACE_STYLE, sName,
@@ -743,14 +768,10 @@ void SvXMLAutoStylePoolP_Impl::exportXML(
                 aExpStyles[i].mpProperties->GetProperties(),
                 nStart, nEnd, SvXmlExportFlags::IGN_WS, bExtensionNamespace );
 
-            pAntiImpl->exportStyleContent(
-                GetExport().GetDocHandler(),
-                nFamily,
-                aExpStyles[i].mpProperties->GetProperties(),
-                *rFamily.mxMapper.get(),
-                GetExport().GetMM100UnitConverter(),
-                GetExport().GetNamespaceMap()
-                );
+            pAntiImpl->exportStyleContent(GetExport().GetDocHandler(), nFamily,
+                                          aExpStyles[i].mpProperties->GetProperties(),
+                                          *rFamily.mxMapper, GetExport().GetMM100UnitConverter(),
+                                          GetExport().GetNamespaceMap());
         }
     }
 }

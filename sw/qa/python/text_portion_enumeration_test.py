@@ -934,6 +934,11 @@ class TextPortionEnumerationTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.xDoc.close(True)
+        cls._uno.tearDown()
+        # HACK in case cls.xDoc holds a UNO proxy to an SwXTextDocument (whose dtor calls
+        # Application::GetSolarMutex via sw::UnoImplPtrDeleter), which would potentially only be
+        # garbage-collected after VCL has already been deinitialized:
+        cls.xDoc = None
 
     def test_text(self):
         root = TreeNode()
@@ -3432,7 +3437,7 @@ class TextPortionEnumerationTest(unittest.TestCase):
         xIndex3 = xIndexes["Illustration Index1"]
         self.assertTrue(self.eq(xIndex3.MetadataReference,
                         StringPair("content.xml", "idII")), "idII")
-        xIndex3s = xSections["Illustration Index1"]
+        xIndex3s = xSections["Table of Figures1"]
         self.assertTrue(self.eq(xIndex3s.MetadataReference,
                         StringPair("content.xml", "idII")), "idII")
         xIndex4 = xIndexes["Index of Tables1"]

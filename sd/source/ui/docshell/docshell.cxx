@@ -47,7 +47,6 @@
 #include <svtools/langtab.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <comphelper/classids.hxx>
-#include <comphelper/lok.hxx>
 #include <svl/cjkoptions.hxx>
 #include <svl/visitem.hxx>
 #include <o3tl/make_unique.hxx>
@@ -133,10 +132,8 @@ DrawDocShell::DrawDocShell(SfxObjectCreateMode eMode,
                                DocumentType eDocumentType) :
     SfxObjectShell( eMode == SfxObjectCreateMode::INTERNAL ?  SfxObjectCreateMode::EMBEDDED : eMode),
     mpDoc(nullptr),
-    mpUndoManager(nullptr),
     mpPrinter(nullptr),
     mpViewShell(nullptr),
-    mpFontList(nullptr),
     meDocType(eDocumentType),
     mbSdDataObj(bDataObject),
     mbOwnPrinter(false)
@@ -147,10 +144,8 @@ DrawDocShell::DrawDocShell(SfxObjectCreateMode eMode,
 DrawDocShell::DrawDocShell( SfxModelFlags nModelCreationFlags, bool bDataObject, DocumentType eDocumentType ) :
     SfxObjectShell( nModelCreationFlags ),
     mpDoc(nullptr),
-    mpUndoManager(nullptr),
     mpPrinter(nullptr),
     mpViewShell(nullptr),
-    mpFontList(nullptr),
     meDocType(eDocumentType),
     mbSdDataObj(bDataObject),
     mbOwnPrinter(false)
@@ -163,10 +158,8 @@ DrawDocShell::DrawDocShell(SdDrawDocument* pDoc, SfxObjectCreateMode eMode,
                                DocumentType eDocumentType) :
     SfxObjectShell(eMode == SfxObjectCreateMode::INTERNAL ?  SfxObjectCreateMode::EMBEDDED : eMode),
     mpDoc(pDoc),
-    mpUndoManager(nullptr),
     mpPrinter(nullptr),
     mpViewShell(nullptr),
-    mpFontList(nullptr),
     meDocType(eDocumentType),
     mbSdDataObj(bDataObject),
     mbOwnPrinter(false)
@@ -282,7 +275,7 @@ void DrawDocShell::GetState(SfxItemSet &rSet)
                 sal_uInt16 nCount = mpDoc->GetPageCount();
                 for ( sal_uInt16 itPage = 0; itPage < nCount && !bLanguageFound; itPage++ )
                 {
-                    SdrObjListIter aListIter(*mpDoc->GetPage(itPage), SdrIterMode::DeepWithGroups);
+                    SdrObjListIter aListIter(mpDoc->GetPage(itPage), SdrIterMode::DeepWithGroups);
                     while ( aListIter.IsMore() && !bLanguageFound )
                     {
                         pObj = aListIter.Next();
@@ -348,51 +341,6 @@ void DrawDocShell::GetState(SfxItemSet &rSet)
     }
 }
 
-void DrawDocShell::InPlaceActivate( bool bActive )
-{
-    SfxViewFrame* pSfxViewFrame = SfxViewFrame::GetFirst(this, false);
-    std::vector<std::unique_ptr<FrameView>> &rViews = mpDoc->GetFrameViewList();
-
-    if( !bActive )
-    {
-        rViews.clear();
-
-        while (pSfxViewFrame)
-        {
-            // determine the number of FrameViews
-            SfxViewShell* pSfxViewSh = pSfxViewFrame->GetViewShell();
-            ViewShell* pViewSh = dynamic_cast<ViewShell*>(pSfxViewSh);
-
-            if ( pViewSh && pViewSh->GetFrameView() )
-            {
-                pViewSh->WriteFrameViewData();
-                rViews.push_back( o3tl::make_unique<FrameView>( mpDoc, pViewSh->GetFrameView() ) );
-            }
-
-            pSfxViewFrame = SfxViewFrame::GetNext(*pSfxViewFrame, this, false);
-        }
-    }
-
-    SfxObjectShell::InPlaceActivate( bActive );
-
-    if( bActive )
-    {
-        for( std::vector<FrameView*>::size_type i = 0; pSfxViewFrame && (i < rViews.size()); i++ )
-        {
-            // determine the number of FrameViews
-            SfxViewShell* pSfxViewSh = pSfxViewFrame->GetViewShell();
-            ViewShell* pViewSh = dynamic_cast<ViewShell*>(pSfxViewSh);
-
-            if ( pViewSh )
-            {
-                pViewSh->ReadFrameViewData( rViews[ i ].get() );
-            }
-
-            pSfxViewFrame = SfxViewFrame::GetNext(*pSfxViewFrame, this, false);
-        }
-    }
-}
-
 void DrawDocShell::Activate( bool bMDI)
 {
     if (bMDI)
@@ -406,7 +354,7 @@ void DrawDocShell::Deactivate( bool )
 {
 }
 
-::svl::IUndoManager* DrawDocShell::GetUndoManager()
+SfxUndoManager* DrawDocShell::GetUndoManager()
 {
     return mpUndoManager.get();
 }
@@ -522,7 +470,7 @@ void DrawDocShell::ClearUndoBuffer()
         pSfxViewFrame = SfxViewFrame::GetNext(*pSfxViewFrame, this, false);
     }
 
-    ::svl::IUndoManager* pUndoManager = GetUndoManager();
+    SfxUndoManager* pUndoManager = GetUndoManager();
     if(pUndoManager && pUndoManager->GetUndoActionCount())
         pUndoManager->Clear();
 }

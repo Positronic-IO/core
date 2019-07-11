@@ -20,12 +20,14 @@
 #include <memory>
 #include <UndoSection.hxx>
 
+#include <comphelper/scopeguard.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <fmtcntnt.hxx>
 #include <doc.hxx>
 #include <IDocumentLinksAdministration.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
+#include <IDocumentLayoutAccess.hxx>
 #include <docary.hxx>
 #include <swundo.hxx>
 #include <pam.hxx>
@@ -36,10 +38,12 @@
 #include <redline.hxx>
 #include <doctxm.hxx>
 #include <ftnidx.hxx>
+#include <rootfrm.hxx>
 #include <editsh.hxx>
 /// OD 04.10.2002 #102894#
 /// class Calc needed for calculation of the hidden condition of a section.
 #include <calc.hxx>
+#include <o3tl/make_unique.hxx>
 
 static SfxItemSet* lcl_GetAttrSet( const SwSection& rSect )
 {
@@ -70,10 +74,14 @@ static SfxItemSet* lcl_GetAttrSet( const SwSection& rSect )
 
 SwUndoInsSection::SwUndoInsSection(
         SwPaM const& rPam, SwSectionData const& rNewData,
-        SfxItemSet const*const pSet, SwTOXBase const*const pTOXBase)
+        SfxItemSet const*const pSet,
+        std::pair<SwTOXBase const*, sw::RedlineMode> const*const pTOXBase)
     : SwUndo( SwUndoId::INSSECTION, rPam.GetDoc() ), SwUndRng( rPam )
     , m_pSectionData(new SwSectionData(rNewData))
-    , m_pTOXBase( pTOXBase ? new SwTOXBase(*pTOXBase) : nullptr )
+    , m_pTOXBase( pTOXBase
+        ? o3tl::make_unique<std::pair<SwTOXBase *, sw::RedlineMode>>(
+            new SwTOXBase(*pTOXBase->first), pTOXBase->second)
+        : nullptr )
     , m_pAttrSet( (pSet && pSet->Count()) ? new SfxItemSet( *pSet ) : nullptr )
     , m_nSectionNodePos(0)
     , m_bSplitAtStart(false)
@@ -148,7 +156,7 @@ void SwUndoInsSection::UndoImpl(::sw::UndoRedoContext & rContext)
         Join( rDoc, nEndNode );
     }
 
-    if (m_pHistory.get())
+    if (m_pHistory)
     {
         m_pHistory->TmpRollback( &rDoc, 0, false );
     }
@@ -160,7 +168,7 @@ void SwUndoInsSection::UndoImpl(::sw::UndoRedoContext & rContext)
 
     AddUndoRedoPaM(rContext);
 
-    if( m_pRedlineSaveData.get())
+    if (m_pRedlineSaveData)
         SetSaveData( rDoc, *m_pRedlineSaveData );
 }
 
@@ -170,17 +178,41 @@ void SwUndoInsSection::RedoImpl(::sw::UndoRedoContext & rContext)
     SwPaM & rPam( AddUndoRedoPaM(rContext) );
 
     const SwTOXBaseSection* pUpdateTOX = nullptr;
-    if (m_pTOXBase.get())
+    if (m_pTOXBase)
     {
+        SwRootFrame const* pLayout(nullptr);
+        SwRootFrame * pLayoutToReset(nullptr);
+        comphelper::ScopeGuard g([&]() {
+                if (pLayoutToReset)
+                {
+                    pLayoutToReset->SetHideRedlines(m_pTOXBase->second == sw::RedlineMode::Shown);
+                }
+            });
+        std::set<SwRootFrame *> layouts(rDoc.GetAllLayouts());
+        for (SwRootFrame const*const p : layouts)
+        {
+            if ((m_pTOXBase->second == sw::RedlineMode::Hidden) == p->IsHideRedlines())
+            {
+                pLayout = p;
+                break;
+            }
+        }
+        if (!pLayout)
+        {
+            assert(!layouts.empty()); // must have one layout
+            pLayoutToReset = *layouts.begin();
+            pLayoutToReset->SetHideRedlines(m_pTOXBase->second == sw::RedlineMode::Hidden);
+            pLayout = pLayoutToReset;
+        }
         pUpdateTOX = rDoc.InsertTableOf( *rPam.GetPoint(),
-                                        *m_pTOXBase, m_pAttrSet.get(), true);
+            *m_pTOXBase->first, m_pAttrSet.get(), true, pLayout);
     }
     else
     {
         rDoc.InsertSwSection(rPam, *m_pSectionData, nullptr, m_pAttrSet.get());
     }
 
-    if (m_pHistory.get())
+    if (m_pHistory)
     {
         m_pHistory->SetTmpEnd( m_pHistory->Count() );
     }
@@ -219,10 +251,11 @@ void SwUndoInsSection::RedoImpl(::sw::UndoRedoContext & rContext)
 void SwUndoInsSection::RepeatImpl(::sw::RepeatContext & rContext)
 {
     SwDoc & rDoc = rContext.GetDoc();
-    if (m_pTOXBase.get())
+    if (m_pTOXBase)
     {
         rDoc.InsertTableOf(*rContext.GetRepeatPaM().GetPoint(),
-                                        *m_pTOXBase, m_pAttrSet.get(), true);
+            *m_pTOXBase->first, m_pAttrSet.get(), true,
+            rDoc.getIDocumentLayoutAccess().GetCurrentLayout()); // TODO add shell to RepeatContext?
     }
     else
     {
@@ -244,7 +277,7 @@ void SwUndoInsSection::Join( SwDoc& rDoc, sal_uLong nNode )
     }
     pTextNd->JoinNext();
 
-    if (m_pHistory.get())
+    if (m_pHistory)
     {
         SwIndex aCntIdx( pTextNd, 0 );
         pTextNd->RstTextAttr( aCntIdx, pTextNd->Len(), 0, nullptr, true );
@@ -256,7 +289,7 @@ SwUndoInsSection::SaveSplitNode(SwTextNode *const pTextNd, bool const bAtStart)
 {
     if( pTextNd->GetpSwpHints() )
     {
-        if (!m_pHistory.get())
+        if (!m_pHistory)
         {
             m_pHistory.reset( new SwHistory );
         }
@@ -293,9 +326,9 @@ public:
     virtual void RedoImpl( ::sw::UndoRedoContext & ) override;
 };
 
-SwUndo * MakeUndoDelSection(SwSectionFormat const& rFormat)
+std::unique_ptr<SwUndo> MakeUndoDelSection(SwSectionFormat const& rFormat)
 {
-    return new SwUndoDelSection(rFormat, *rFormat.GetSection(),
+    return o3tl::make_unique<SwUndoDelSection>(rFormat, *rFormat.GetSection(),
                 rFormat.GetContent().GetContentIdx());
 }
 
@@ -318,8 +351,9 @@ void SwUndoDelSection::UndoImpl(::sw::UndoRedoContext & rContext)
 {
     SwDoc & rDoc = rContext.GetDoc();
 
-    if (m_pTOXBase.get())
+    if (m_pTOXBase)
     {
+        // sw_redlinehide: this should work as-is; there will be another undo for the update
         rDoc.InsertTableOf(m_nStartNode, m_nEndNode-2, *m_pTOXBase,
                 m_pAttrSet.get());
     }
@@ -328,7 +362,7 @@ void SwUndoDelSection::UndoImpl(::sw::UndoRedoContext & rContext)
         SwNodeIndex aStt( rDoc.GetNodes(), m_nStartNode );
         SwNodeIndex aEnd( rDoc.GetNodes(), m_nEndNode-2 );
         SwSectionFormat* pFormat = rDoc.MakeSectionFormat();
-        if (m_pAttrSet.get())
+        if (m_pAttrSet)
         {
             pFormat->SetFormatAttr( *m_pAttrSet );
         }
@@ -395,10 +429,10 @@ public:
     virtual void RedoImpl( ::sw::UndoRedoContext & ) override;
 };
 
-SwUndo *
+std::unique_ptr<SwUndo>
 MakeUndoUpdateSection(SwSectionFormat const& rFormat, bool const bOnlyAttr)
 {
-    return new SwUndoUpdateSection(*rFormat.GetSection(),
+    return o3tl::make_unique<SwUndoUpdateSection>(*rFormat.GetSection(),
                 rFormat.GetContent().GetContentIdx(), bOnlyAttr);
 }
 
@@ -424,7 +458,7 @@ void SwUndoUpdateSection::UndoImpl(::sw::UndoRedoContext & rContext)
     SwFormat* pFormat = rNdSect.GetFormat();
 
     SfxItemSet* pCur = ::lcl_GetAttrSet( rNdSect );
-    if (m_pAttrSet.get())
+    if (m_pAttrSet)
     {
         // The Content and Protect items must persist
         const SfxPoolItem* pItem;

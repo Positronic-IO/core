@@ -404,8 +404,9 @@ private:
             rDataRow[ columnIndex ].first = i_values[ col ];
         }
 
-        sal_Int32 const firstAffectedColumn = *::std::min_element( i_columnIndexes.begin(), i_columnIndexes.end() );
-        sal_Int32 const lastAffectedColumn = *::std::max_element( i_columnIndexes.begin(), i_columnIndexes.end() );
+        auto aPair = ::std::minmax_element( i_columnIndexes.begin(), i_columnIndexes.end() );
+        sal_Int32 const firstAffectedColumn = *aPair.first;
+        sal_Int32 const lastAffectedColumn = *aPair.second;
         broadcast(
             GridDataEvent( *this, firstAffectedColumn, lastAffectedColumn, i_rowIndex, i_rowIndex ),
             &XGridDataListener::dataChanged,
@@ -443,8 +444,8 @@ private:
         ::comphelper::ComponentGuard aGuard( *this, rBHelper );
 
         RowData& rRowData = impl_getRowDataAccess_throw( i_rowIndex, m_nColumnCount );
-        for ( RowData::iterator cell = rRowData.begin(); cell != rRowData.end(); ++cell )
-            cell->second = i_value;
+        for ( auto& rCell : rRowData )
+            rCell.second = i_value;
     }
 
 

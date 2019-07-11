@@ -25,11 +25,16 @@
  *************************************************************************/
 
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/weak.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/contentidentifier.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
+#include <ucbhelper/macros.hxx>
 #include <com/sun/star/container/XHierarchicalNameAccess.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include "pkgprovider.hxx"
 #include "pkgcontent.hxx"
 #include "pkguri.hxx"
@@ -49,7 +54,7 @@ class Package : public cppu::OWeakObject,
 {
     friend class ContentProvider;
 
-    OUString                                        m_aName;
+    OUString const                                       m_aName;
     uno::Reference< container::XHierarchicalNameAccess > m_xNA;
     ContentProvider*                                     m_pOwner;
 
@@ -91,8 +96,7 @@ using namespace package_ucp;
 // ContentProvider Implementation.
 ContentProvider::ContentProvider(
             const uno::Reference< uno::XComponentContext >& rxContext )
-: ::ucbhelper::ContentProviderImplHelper( rxContext ),
-  m_pPackages( nullptr )
+: ::ucbhelper::ContentProviderImplHelper( rxContext )
 {
 }
 
@@ -238,8 +242,9 @@ ContentProvider::createPackage( const PackageUri & rURI )
     }
     catch ( uno::Exception const & e )
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
-            e.Message, e.Context, css::uno::makeAny(e));
+            e.Message, e.Context, anyEx);
     }
 
     rtl::Reference< Package> xPackage = new Package( rURL, xNameAccess, this );

@@ -19,6 +19,8 @@
 
 #include <VLineProperties.hxx>
 #include <com/sun/star/drawing/LineStyle.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <sal/log.hxx>
 
 namespace chart
 {

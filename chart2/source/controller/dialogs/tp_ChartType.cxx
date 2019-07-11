@@ -24,15 +24,17 @@
 #include <DiagramHelper.hxx>
 #include "res_BarGeometry.hxx"
 #include <ControllerLockGuard.hxx>
-#include "GL3DBarChartDialogController.hxx"
 #include <unonames.hxx>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 
 #include <svtools/controldims.hxx>
-#include <svtools/miscopt.hxx>
+#include <svtools/valueset.hxx>
 
-#include <vcl/layout.hxx>
+#include <o3tl/make_unique.hxx>
 #include <vcl/weld.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 namespace chart
 {
@@ -47,7 +49,7 @@ enum {
 class Dim3DLookResourceGroup : public ChangingResource
 {
 public:
-    explicit Dim3DLookResourceGroup(VclBuilderContainer* pWindow);
+    explicit Dim3DLookResourceGroup(weld::Builder* pBuilder);
 
     void showControls( bool bShow );
 
@@ -55,47 +57,46 @@ public:
     void fillParameter( ChartTypeParameter& rParameter );
 
 private:
-    DECL_LINK( Dim3DLookCheckHdl, CheckBox&, void );
-    DECL_LINK( SelectSchemeHdl, ListBox&, void );
+    DECL_LINK( Dim3DLookCheckHdl, weld::ToggleButton&, void );
+    DECL_LINK( SelectSchemeHdl, weld::ComboBox&, void );
 
 private:
-    VclPtr<CheckBox> m_pCB_3DLook;
-    VclPtr<ListBox>  m_pLB_Scheme;
+    std::unique_ptr<weld::CheckButton> m_xCB_3DLook;
+    std::unique_ptr<weld::ComboBox>  m_xLB_Scheme;
 };
 
-Dim3DLookResourceGroup::Dim3DLookResourceGroup(VclBuilderContainer* pWindow)
+Dim3DLookResourceGroup::Dim3DLookResourceGroup(weld::Builder* pBuilder)
     : ChangingResource()
+    , m_xCB_3DLook(pBuilder->weld_check_button("3dlook"))
+    , m_xLB_Scheme(pBuilder->weld_combo_box("3dscheme"))
 {
-    pWindow->get(m_pCB_3DLook, "3dlook");
-    pWindow->get(m_pLB_Scheme, "3dscheme");
-
-    m_pCB_3DLook->SetToggleHdl( LINK( this, Dim3DLookResourceGroup, Dim3DLookCheckHdl ) );
-    m_pLB_Scheme->SetSelectHdl( LINK( this, Dim3DLookResourceGroup, SelectSchemeHdl ) );
+    m_xCB_3DLook->connect_toggled( LINK( this, Dim3DLookResourceGroup, Dim3DLookCheckHdl ) );
+    m_xLB_Scheme->connect_changed( LINK( this, Dim3DLookResourceGroup, SelectSchemeHdl ) );
 }
 
 void Dim3DLookResourceGroup::showControls( bool bShow )
 {
-    m_pCB_3DLook->Show(bShow);
-    m_pLB_Scheme->Show(bShow);
+    m_xCB_3DLook->show(bShow);
+    m_xLB_Scheme->show(bShow);
 }
 
 void Dim3DLookResourceGroup::fillControls( const ChartTypeParameter& rParameter )
 {
-    m_pCB_3DLook->Check(rParameter.b3DLook);
-    m_pLB_Scheme->Enable(rParameter.b3DLook);
+    m_xCB_3DLook->set_active(rParameter.b3DLook);
+    m_xLB_Scheme->set_sensitive(rParameter.b3DLook);
 
     if( rParameter.eThreeDLookScheme == ThreeDLookScheme_Simple )
-        m_pLB_Scheme->SelectEntryPos(POS_3DSCHEME_SIMPLE);
+        m_xLB_Scheme->set_active(POS_3DSCHEME_SIMPLE);
     else if( rParameter.eThreeDLookScheme == ThreeDLookScheme_Realistic )
-        m_pLB_Scheme->SelectEntryPos(POS_3DSCHEME_REALISTIC);
+        m_xLB_Scheme->set_active(POS_3DSCHEME_REALISTIC);
     else
-        m_pLB_Scheme->SetNoSelection();
+        m_xLB_Scheme->set_active(-1);
 }
 
 void Dim3DLookResourceGroup::fillParameter( ChartTypeParameter& rParameter )
 {
-    rParameter.b3DLook = m_pCB_3DLook->IsChecked();
-    const sal_Int32 nPos = m_pLB_Scheme->GetSelectedEntryPos();
+    rParameter.b3DLook = m_xCB_3DLook->get_active();
+    const int nPos = m_xLB_Scheme->get_active();
     if( nPos == POS_3DSCHEME_SIMPLE )
         rParameter.eThreeDLookScheme = ThreeDLookScheme_Simple;
     else if( nPos == POS_3DSCHEME_REALISTIC )
@@ -104,13 +105,13 @@ void Dim3DLookResourceGroup::fillParameter( ChartTypeParameter& rParameter )
         rParameter.eThreeDLookScheme = ThreeDLookScheme_Unknown;
 }
 
-IMPL_LINK_NOARG(Dim3DLookResourceGroup, Dim3DLookCheckHdl, CheckBox&, void)
+IMPL_LINK_NOARG(Dim3DLookResourceGroup, Dim3DLookCheckHdl, weld::ToggleButton&, void)
 {
     if(m_pChangeListener)
         m_pChangeListener->stateChanged(this);
 }
 
-IMPL_LINK_NOARG(Dim3DLookResourceGroup, SelectSchemeHdl, ListBox&, void)
+IMPL_LINK_NOARG(Dim3DLookResourceGroup, SelectSchemeHdl, weld::ComboBox&, void)
 {
     if(m_pChangeListener)
         m_pChangeListener->stateChanged(this);
@@ -119,7 +120,7 @@ IMPL_LINK_NOARG(Dim3DLookResourceGroup, SelectSchemeHdl, ListBox&, void)
 class SortByXValuesResourceGroup : public ChangingResource
 {
 public:
-    explicit SortByXValuesResourceGroup(VclBuilderContainer* pWindow);
+    explicit SortByXValuesResourceGroup(weld::Builder* pBuilder);
 
     void showControls( bool bShow );
 
@@ -127,35 +128,35 @@ public:
     void fillParameter( ChartTypeParameter& rParameter );
 
 private:
-    DECL_LINK( SortByXValuesCheckHdl, CheckBox&, void );
+    DECL_LINK(SortByXValuesCheckHdl, weld::ToggleButton&, void);
 
 private:
-    VclPtr<CheckBox> m_pCB_XValueSorting;
+    std::unique_ptr<weld::CheckButton> m_xCB_XValueSorting;
 };
 
-SortByXValuesResourceGroup::SortByXValuesResourceGroup(VclBuilderContainer* pWindow )
+SortByXValuesResourceGroup::SortByXValuesResourceGroup(weld::Builder* pBuilder)
     : ChangingResource()
+    , m_xCB_XValueSorting(pBuilder->weld_check_button("sort"))
 {
-    pWindow->get(m_pCB_XValueSorting, "sort");
-    m_pCB_XValueSorting->SetToggleHdl( LINK( this, SortByXValuesResourceGroup, SortByXValuesCheckHdl ) );
+    m_xCB_XValueSorting->connect_toggled(LINK(this, SortByXValuesResourceGroup, SortByXValuesCheckHdl));
 }
 
 void SortByXValuesResourceGroup::showControls( bool bShow )
 {
-    m_pCB_XValueSorting->Show(bShow);
+    m_xCB_XValueSorting->show(bShow);
 }
 
 void SortByXValuesResourceGroup::fillControls( const ChartTypeParameter& rParameter )
 {
-    m_pCB_XValueSorting->Check( rParameter.bSortByXValues );
+    m_xCB_XValueSorting->set_active(rParameter.bSortByXValues);
 }
 
 void SortByXValuesResourceGroup::fillParameter( ChartTypeParameter& rParameter )
 {
-    rParameter.bSortByXValues = m_pCB_XValueSorting->IsChecked();
+    rParameter.bSortByXValues = m_xCB_XValueSorting->get_active();
 }
 
-IMPL_LINK_NOARG(SortByXValuesResourceGroup, SortByXValuesCheckHdl, CheckBox&, void)
+IMPL_LINK_NOARG(SortByXValuesResourceGroup, SortByXValuesCheckHdl, weld::ToggleButton&, void)
 {
     if(m_pChangeListener)
         m_pChangeListener->stateChanged(this);
@@ -164,7 +165,7 @@ IMPL_LINK_NOARG(SortByXValuesResourceGroup, SortByXValuesCheckHdl, CheckBox&, vo
 class StackingResourceGroup : public ChangingResource
 {
 public:
-    explicit StackingResourceGroup(VclBuilderContainer* pWindow);
+    explicit StackingResourceGroup(weld::Builder* pBuilder);
 
     void showControls( bool bShow, bool bShowDeepStacking );
 
@@ -172,133 +173,93 @@ public:
     void fillParameter( ChartTypeParameter& rParameter );
 
 private:
-    DECL_LINK( StackingChangeHdl, RadioButton&, void );
-    DECL_LINK( StackingEnableHdl, CheckBox&, void );
+    DECL_LINK( StackingChangeHdl, weld::ToggleButton&, void );
+    DECL_LINK( StackingEnableHdl, weld::ToggleButton&, void );
 
 private:
-    VclPtr<CheckBox>    m_pCB_Stacked;
-    VclPtr<RadioButton> m_pRB_Stack_Y;
-    VclPtr<RadioButton> m_pRB_Stack_Y_Percent;
-    VclPtr<RadioButton> m_pRB_Stack_Z;
+    std::unique_ptr<weld::CheckButton> m_xCB_Stacked;
+    std::unique_ptr<weld::RadioButton> m_xRB_Stack_Y;
+    std::unique_ptr<weld::RadioButton> m_xRB_Stack_Y_Percent;
+    std::unique_ptr<weld::RadioButton> m_xRB_Stack_Z;
 };
 
-StackingResourceGroup::StackingResourceGroup(VclBuilderContainer* pWindow)
-        : ChangingResource()
+StackingResourceGroup::StackingResourceGroup(weld::Builder* pBuilder)
+    : ChangingResource()
+    , m_xCB_Stacked(pBuilder->weld_check_button("stack"))
+    , m_xRB_Stack_Y(pBuilder->weld_radio_button("ontop"))
+    , m_xRB_Stack_Y_Percent(pBuilder->weld_radio_button("percent"))
+    , m_xRB_Stack_Z(pBuilder->weld_radio_button("deep"))
 {
-    pWindow->get(m_pCB_Stacked, "stack");
-    pWindow->get(m_pRB_Stack_Y, "ontop");
-    pWindow->get(m_pRB_Stack_Y_Percent, "percent");
-    pWindow->get(m_pRB_Stack_Z, "deep");
-
-    m_pCB_Stacked->SetToggleHdl( LINK( this, StackingResourceGroup, StackingEnableHdl ) );
-    m_pRB_Stack_Y->SetToggleHdl( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
-    m_pRB_Stack_Y_Percent->SetToggleHdl( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
-    m_pRB_Stack_Z->SetToggleHdl( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
+    m_xCB_Stacked->connect_toggled( LINK( this, StackingResourceGroup, StackingEnableHdl ) );
+    m_xRB_Stack_Y->connect_toggled( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
+    m_xRB_Stack_Y_Percent->connect_toggled( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
+    m_xRB_Stack_Z->connect_toggled( LINK( this, StackingResourceGroup, StackingChangeHdl ) );
 }
 
 void StackingResourceGroup::showControls( bool bShow, bool bShowDeepStacking )
 {
-    m_pCB_Stacked->Show(bShow);
-    m_pRB_Stack_Y->Show(bShow);
-    m_pRB_Stack_Y_Percent->Show(bShow);
-    m_pRB_Stack_Z->Show(bShow&&bShowDeepStacking);
+    m_xCB_Stacked->show(bShow);
+    m_xRB_Stack_Y->show(bShow);
+    m_xRB_Stack_Y_Percent->show(bShow);
+    m_xRB_Stack_Z->show(bShow&&bShowDeepStacking);
 }
 
 void StackingResourceGroup::fillControls( const ChartTypeParameter& rParameter )
 {
-    m_pCB_Stacked->Check( rParameter.eStackMode!=GlobalStackMode_NONE
+    m_xCB_Stacked->set_active( rParameter.eStackMode!=GlobalStackMode_NONE
         && rParameter.eStackMode!=GlobalStackMode_STACK_Z ); //todo remove this condition if z stacking radio button is really used
     switch( rParameter.eStackMode )
     {
         case GlobalStackMode_STACK_Y:
-            m_pRB_Stack_Y->Check();
+            m_xRB_Stack_Y->set_active(true);
             break;
         case GlobalStackMode_STACK_Y_PERCENT:
-            m_pRB_Stack_Y_Percent->Check();
+            m_xRB_Stack_Y_Percent->set_active(true);
             break;
         case GlobalStackMode_STACK_Z:
             //todo uncomment this condition if z stacking radio button is really used
             /*
             if( rParameter.b3DLook )
-                m_pRB_Stack_Z->Check();
+                m_xRB_Stack_Z->set_active(true);
             else
             */
-                m_pRB_Stack_Y->Check();
+                m_xRB_Stack_Y->set_active(true);
             break;
         default:
-            m_pRB_Stack_Y->Check();
+            m_xRB_Stack_Y->set_active(true);
             break;
     }
     //dis/enabling
-    m_pCB_Stacked->Enable( !rParameter.bXAxisWithValues );
-    m_pRB_Stack_Y->Enable( m_pCB_Stacked->IsChecked() && !rParameter.bXAxisWithValues );
-    m_pRB_Stack_Y_Percent->Enable( m_pCB_Stacked->IsChecked() && !rParameter.bXAxisWithValues );
-    m_pRB_Stack_Z->Enable( m_pCB_Stacked->IsChecked() && rParameter.b3DLook );
+    m_xCB_Stacked->set_sensitive( !rParameter.bXAxisWithValues );
+    m_xRB_Stack_Y->set_sensitive( m_xCB_Stacked->get_active() && !rParameter.bXAxisWithValues );
+    m_xRB_Stack_Y_Percent->set_sensitive( m_xCB_Stacked->get_active() && !rParameter.bXAxisWithValues );
+    m_xRB_Stack_Z->set_sensitive( m_xCB_Stacked->get_active() && rParameter.b3DLook );
 }
+
 void StackingResourceGroup::fillParameter( ChartTypeParameter& rParameter )
 {
-    if(!m_pCB_Stacked->IsChecked())
+    if(!m_xCB_Stacked->get_active())
         rParameter.eStackMode = GlobalStackMode_NONE;
-    else if(m_pRB_Stack_Y->IsChecked())
+    else if(m_xRB_Stack_Y->get_active())
         rParameter.eStackMode = GlobalStackMode_STACK_Y;
-    else if(m_pRB_Stack_Y_Percent->IsChecked())
+    else if(m_xRB_Stack_Y_Percent->get_active())
         rParameter.eStackMode = GlobalStackMode_STACK_Y_PERCENT;
-    else if(m_pRB_Stack_Z->IsChecked())
+    else if(m_xRB_Stack_Z->get_active())
         rParameter.eStackMode = GlobalStackMode_STACK_Z;
 }
-IMPL_LINK( StackingResourceGroup, StackingChangeHdl, RadioButton&, rRadio, void )
+
+IMPL_LINK( StackingResourceGroup, StackingChangeHdl, weld::ToggleButton&, rRadio, void )
 {
     //for each radio click there are coming two change events
     //first uncheck of previous button -> ignore that call
     //the second call gives the check of the new button
-    if( m_pChangeListener && rRadio.IsChecked() )
+    if (m_pChangeListener && rRadio.get_active())
         m_pChangeListener->stateChanged(this);
 }
-IMPL_LINK_NOARG(StackingResourceGroup, StackingEnableHdl, CheckBox&, void)
+
+IMPL_LINK_NOARG(StackingResourceGroup, StackingEnableHdl, weld::ToggleButton&, void)
 {
     if( m_pChangeListener )
-        m_pChangeListener->stateChanged(this);
-}
-
-class GL3DResourceGroup : public ChangingResource
-{
-public:
-    explicit GL3DResourceGroup( VclBuilderContainer* pWindow );
-
-    void showControls( bool bShow );
-    void fillControls( const ChartTypeParameter& rParam );
-    void fillParameter( ChartTypeParameter& rParam );
-
-private:
-    DECL_LINK( SettingChangedHdl, CheckBox&, void );
-private:
-    VclPtr<CheckBox> m_pCB_RoundedEdge;
-};
-
-GL3DResourceGroup::GL3DResourceGroup( VclBuilderContainer* pWindow )
-{
-    pWindow->get(m_pCB_RoundedEdge, "rounded-edge");
-    m_pCB_RoundedEdge->SetToggleHdl( LINK(this, GL3DResourceGroup, SettingChangedHdl) );
-}
-
-void GL3DResourceGroup::showControls( bool bShow )
-{
-    m_pCB_RoundedEdge->Show(bShow);
-}
-
-void GL3DResourceGroup::fillControls( const ChartTypeParameter& rParam )
-{
-    m_pCB_RoundedEdge->Check(rParam.mbRoundedEdge);
-}
-
-void GL3DResourceGroup::fillParameter( ChartTypeParameter& rParam )
-{
-    rParam.mbRoundedEdge = m_pCB_RoundedEdge->IsChecked();
-}
-
-IMPL_LINK_NOARG( GL3DResourceGroup, SettingChangedHdl, CheckBox&, void )
-{
-    if (m_pChangeListener)
         m_pChangeListener->stateChanged(this);
 }
 
@@ -311,10 +272,10 @@ public:
     void fillParameter( ChartTypeParameter& rParameter, bool bSmoothLines );
 
 private:
-    DECL_LINK(SplineTypeListBoxHdl, weld::ComboBoxText&, void);
+    DECL_LINK(SplineTypeListBoxHdl, weld::ComboBox&, void);
 
 private:
-    std::unique_ptr<weld::ComboBoxText> m_xLB_Spline_Type;
+    std::unique_ptr<weld::ComboBox> m_xLB_Spline_Type;
     std::unique_ptr<weld::SpinButton> m_xMF_SplineResolution;
     std::unique_ptr<weld::Label> m_xFT_SplineOrder;
     std::unique_ptr<weld::SpinButton> m_xMF_SplineOrder;
@@ -325,7 +286,7 @@ const sal_uInt16 B_SPLINE_POS = 1;
 
 SplinePropertiesDialog::SplinePropertiesDialog(weld::Window* pParent)
     : GenericDialogController(pParent, "modules/schart/ui/smoothlinesdlg.ui", "SmoothLinesDialog")
-    , m_xLB_Spline_Type(m_xBuilder->weld_combo_box_text("SplineTypeComboBox"))
+    , m_xLB_Spline_Type(m_xBuilder->weld_combo_box("SplineTypeComboBox"))
     , m_xMF_SplineResolution(m_xBuilder->weld_spin_button("ResolutionSpinbutton"))
     , m_xFT_SplineOrder(m_xBuilder->weld_label("PolynomialsLabel"))
     , m_xMF_SplineOrder(m_xBuilder->weld_spin_button("PolynomialsSpinButton"))
@@ -370,47 +331,35 @@ void SplinePropertiesDialog::fillParameter( ChartTypeParameter& rParameter, bool
     rParameter.nSplineOrder = m_xMF_SplineOrder->get_value();
 }
 
-IMPL_LINK_NOARG(SplinePropertiesDialog, SplineTypeListBoxHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SplinePropertiesDialog, SplineTypeListBoxHdl, weld::ComboBox&, void)
 {
     m_xFT_SplineOrder->set_sensitive(m_xLB_Spline_Type->get_active() == B_SPLINE_POS);
     m_xMF_SplineOrder->set_sensitive(m_xLB_Spline_Type->get_active() == B_SPLINE_POS);
 }
 
-class SteppedPropertiesDialog : public ModalDialog
+class SteppedPropertiesDialog : public weld::GenericDialogController
 {
 public:
-    explicit SteppedPropertiesDialog( vcl::Window* pParent );
-    virtual ~SteppedPropertiesDialog() override { disposeOnce(); }
-    virtual void dispose() override;
+    explicit SteppedPropertiesDialog(weld::Window* pParent);
 
     void fillControls( const ChartTypeParameter& rParameter );
     void fillParameter( ChartTypeParameter& rParameter, bool bSteppedLines );
 
 private:
-    VclPtr<RadioButton> m_pRB_Start;
-    VclPtr<RadioButton> m_pRB_End;
-    VclPtr<RadioButton> m_pRB_CenterX;
-    VclPtr<RadioButton> m_pRB_CenterY;
+    std::unique_ptr<weld::RadioButton> m_xRB_Start;
+    std::unique_ptr<weld::RadioButton> m_xRB_End;
+    std::unique_ptr<weld::RadioButton> m_xRB_CenterX;
+    std::unique_ptr<weld::RadioButton> m_xRB_CenterY;
 };
 
-SteppedPropertiesDialog::SteppedPropertiesDialog( vcl::Window* pParent )
-    : ModalDialog( pParent, "SteppedLinesDialog", "modules/schart/ui/steppedlinesdlg.ui")
+SteppedPropertiesDialog::SteppedPropertiesDialog(weld::Window* pParent)
+    : GenericDialogController(pParent, "modules/schart/ui/steppedlinesdlg.ui", "SteppedLinesDialog")
+    , m_xRB_Start(m_xBuilder->weld_radio_button("step_start_rb"))
+    , m_xRB_End(m_xBuilder->weld_radio_button("step_end_rb"))
+    , m_xRB_CenterX(m_xBuilder->weld_radio_button("step_center_x_rb"))
+    , m_xRB_CenterY(m_xBuilder->weld_radio_button("step_center_y_rb"))
 {
-    get(m_pRB_Start, "step_start_rb");
-    get(m_pRB_End, "step_end_rb");
-    get(m_pRB_CenterX, "step_center_x_rb");
-    get(m_pRB_CenterY, "step_center_y_rb");
-
-    SetText(SchResId(STR_DLG_STEPPED_LINE_PROPERTIES));
-}
-
-void SteppedPropertiesDialog::dispose()
-{
-    m_pRB_Start.clear();
-    m_pRB_End.clear();
-    m_pRB_CenterX.clear();
-    m_pRB_CenterY.clear();
-    ModalDialog::dispose();
+    m_xDialog->set_title(SchResId(STR_DLG_STEPPED_LINE_PROPERTIES));
 }
 
 void SteppedPropertiesDialog::fillControls( const ChartTypeParameter& rParameter )
@@ -418,16 +367,16 @@ void SteppedPropertiesDialog::fillControls( const ChartTypeParameter& rParameter
     switch(rParameter.eCurveStyle)
     {
         case CurveStyle_STEP_END:
-            m_pRB_End->Check();
+            m_xRB_End->set_active(true);
             break;
         case CurveStyle_STEP_CENTER_X:
-            m_pRB_CenterX->Check();
+            m_xRB_CenterX->set_active(true);
             break;
         case CurveStyle_STEP_CENTER_Y:
-            m_pRB_CenterY->Check();
+            m_xRB_CenterY->set_active(true);
             break;
         default: // includes CurveStyle_STEP_START
-            m_pRB_Start->Check();
+            m_xRB_Start->set_active(true);
             break;
     }
 }
@@ -435,13 +384,13 @@ void SteppedPropertiesDialog::fillParameter( ChartTypeParameter& rParameter, boo
 {
     if (!bSteppedLines)
         rParameter.eCurveStyle=CurveStyle_LINES;
-    else if(m_pRB_CenterY->IsChecked())
+    else if(m_xRB_CenterY->get_active())
         rParameter.eCurveStyle=CurveStyle_STEP_CENTER_Y;
-    else if(m_pRB_Start->IsChecked())
+    else if(m_xRB_Start->get_active())
         rParameter.eCurveStyle=CurveStyle_STEP_START;
-    else if(m_pRB_End->IsChecked())
+    else if(m_xRB_End->get_active())
         rParameter.eCurveStyle=CurveStyle_STEP_END;
-    else if(m_pRB_CenterX->IsChecked())
+    else if(m_xRB_CenterX->get_active())
         rParameter.eCurveStyle=CurveStyle_STEP_CENTER_X;
 }
 
@@ -452,7 +401,7 @@ void SteppedPropertiesDialog::fillParameter( ChartTypeParameter& rParameter, boo
 class SplineResourceGroup : public ChangingResource
 {
 public:
-    explicit SplineResourceGroup(VclBuilderContainer* pWindow);
+    explicit SplineResourceGroup(weld::Builder* pBuilder, TabPageParent pParent);
 
     void showControls( bool bShow );
 
@@ -460,54 +409,54 @@ public:
     void fillParameter( ChartTypeParameter& rParameter );
 
 private:
-    DECL_LINK( LineTypeChangeHdl, ListBox&, void );
-    DECL_LINK( SplineDetailsDialogHdl, Button*, void );
-    DECL_LINK( SteppedDetailsDialogHdl, Button*, void );
+    DECL_LINK( LineTypeChangeHdl, weld::ComboBox&, void );
+    DECL_LINK( SplineDetailsDialogHdl, weld::Button&, void );
+    DECL_LINK( SteppedDetailsDialogHdl, weld::Button&, void );
     SplinePropertiesDialog& getSplinePropertiesDialog();
     SteppedPropertiesDialog& getSteppedPropertiesDialog();
 
 private:
-    VclPtr<FixedText>  m_pFT_LineType;
-    VclPtr<ListBox>    m_pLB_LineType;
-    VclPtr<PushButton> m_pPB_DetailsDialog;
+    TabPageParent m_pParent;
+    std::unique_ptr<weld::Label> m_xFT_LineType;
+    std::unique_ptr<weld::ComboBox> m_xLB_LineType;
+    std::unique_ptr<weld::Button> m_xPB_DetailsDialog;
     std::unique_ptr<SplinePropertiesDialog> m_xSplinePropertiesDialog;
-    VclPtr< SteppedPropertiesDialog > m_pSteppedPropertiesDialog;
+    std::unique_ptr<SteppedPropertiesDialog> m_xSteppedPropertiesDialog;
 };
 
-SplineResourceGroup::SplineResourceGroup(VclBuilderContainer* pWindow)
+SplineResourceGroup::SplineResourceGroup(weld::Builder* pBuilder, TabPageParent pParent)
     : ChangingResource()
+    , m_pParent(pParent)
+    , m_xFT_LineType(pBuilder->weld_label("linetypeft"))
+    , m_xLB_LineType(pBuilder->weld_combo_box("linetype"))
+    , m_xPB_DetailsDialog(pBuilder->weld_button("properties"))
 {
-    pWindow->get(m_pFT_LineType, "linetypeft");
-    pWindow->get(m_pLB_LineType, "linetype");
-    pWindow->get(m_pPB_DetailsDialog, "properties");
-
-    m_pLB_LineType->SetSelectHdl( LINK( this, SplineResourceGroup, LineTypeChangeHdl ) );
+    m_xLB_LineType->connect_changed(LINK(this, SplineResourceGroup, LineTypeChangeHdl));
 }
 
 SplinePropertiesDialog& SplineResourceGroup::getSplinePropertiesDialog()
 {
-    if( !m_xSplinePropertiesDialog.get() )
+    if (!m_xSplinePropertiesDialog)
     {
-        Dialog* pDialog = m_pPB_DetailsDialog->GetParentDialog();
-        m_xSplinePropertiesDialog.reset(new SplinePropertiesDialog(pDialog ? pDialog->GetFrameWeld() : nullptr));
+        m_xSplinePropertiesDialog.reset(new SplinePropertiesDialog(m_pParent.GetFrameWeld()));
     }
     return *m_xSplinePropertiesDialog;
 }
 
 SteppedPropertiesDialog& SplineResourceGroup::getSteppedPropertiesDialog()
 {
-    if( !m_pSteppedPropertiesDialog.get() )
+    if (!m_xSteppedPropertiesDialog)
     {
-        m_pSteppedPropertiesDialog.reset( VclPtr<SteppedPropertiesDialog>::Create( m_pPB_DetailsDialog->GetParentDialog() ) );
+        m_xSteppedPropertiesDialog.reset(new SteppedPropertiesDialog(m_pParent.GetFrameWeld()));
     }
-    return *m_pSteppedPropertiesDialog;
+    return *m_xSteppedPropertiesDialog;
 }
 
 void SplineResourceGroup::showControls( bool bShow )
 {
-    m_pFT_LineType->Show(bShow);
-    m_pLB_LineType->Show(bShow);
-    m_pPB_DetailsDialog->Show(bShow);
+    m_xFT_LineType->show(bShow);
+    m_xLB_LineType->show(bShow);
+    m_xPB_DetailsDialog->show(bShow);
 }
 
 void SplineResourceGroup::fillControls( const ChartTypeParameter& rParameter )
@@ -515,35 +464,35 @@ void SplineResourceGroup::fillControls( const ChartTypeParameter& rParameter )
     switch (rParameter.eCurveStyle)
     {
         case CurveStyle_LINES:
-            m_pLB_LineType->SelectEntryPos(POS_LINETYPE_STRAIGHT);
-            m_pPB_DetailsDialog->Enable(false);
+            m_xLB_LineType->set_active(POS_LINETYPE_STRAIGHT);
+            m_xPB_DetailsDialog->set_sensitive(false);
             break;
         case CurveStyle_CUBIC_SPLINES:
         case CurveStyle_B_SPLINES:
-            m_pLB_LineType->SelectEntryPos(POS_LINETYPE_SMOOTH);
-            m_pPB_DetailsDialog->Enable();
-            m_pPB_DetailsDialog->SetClickHdl( LINK( this, SplineResourceGroup, SplineDetailsDialogHdl ) );
-            m_pPB_DetailsDialog->SetQuickHelpText( SchResId(STR_DLG_SMOOTH_LINE_PROPERTIES) );
+            m_xLB_LineType->set_active(POS_LINETYPE_SMOOTH);
+            m_xPB_DetailsDialog->set_sensitive(true);
+            m_xPB_DetailsDialog->connect_clicked( LINK( this, SplineResourceGroup, SplineDetailsDialogHdl ) );
+            m_xPB_DetailsDialog->set_tooltip_text(SchResId(STR_DLG_SMOOTH_LINE_PROPERTIES));
             getSplinePropertiesDialog().fillControls( rParameter );
             break;
         case CurveStyle_STEP_START:
         case CurveStyle_STEP_END:
         case CurveStyle_STEP_CENTER_X:
         case CurveStyle_STEP_CENTER_Y:
-            m_pLB_LineType->SelectEntryPos(POS_LINETYPE_STEPPED);
-            m_pPB_DetailsDialog->Enable();
-            m_pPB_DetailsDialog->SetClickHdl( LINK( this, SplineResourceGroup, SteppedDetailsDialogHdl ) );
-            m_pPB_DetailsDialog->SetQuickHelpText( SchResId(STR_DLG_STEPPED_LINE_PROPERTIES) );
+            m_xLB_LineType->set_active(POS_LINETYPE_STEPPED);
+            m_xPB_DetailsDialog->set_sensitive(true);
+            m_xPB_DetailsDialog->connect_clicked( LINK( this, SplineResourceGroup, SteppedDetailsDialogHdl ) );
+            m_xPB_DetailsDialog->set_tooltip_text( SchResId(STR_DLG_STEPPED_LINE_PROPERTIES) );
             getSteppedPropertiesDialog().fillControls( rParameter );
             break;
         default:
-            m_pLB_LineType->SetNoSelection();
-            m_pPB_DetailsDialog->Enable(false);
+            m_xLB_LineType->set_active(-1);
+            m_xPB_DetailsDialog->set_sensitive(false);
     }
 }
 void SplineResourceGroup::fillParameter( ChartTypeParameter& rParameter )
 {
-    switch (m_pLB_LineType->GetSelectedEntryPos())
+    switch (m_xLB_LineType->get_active())
     {
         case POS_LINETYPE_SMOOTH:
             getSplinePropertiesDialog().fillParameter( rParameter, true );
@@ -556,19 +505,21 @@ void SplineResourceGroup::fillParameter( ChartTypeParameter& rParameter )
             break;
     }
 }
-IMPL_LINK_NOARG(SplineResourceGroup, LineTypeChangeHdl, ListBox&, void)
+
+IMPL_LINK_NOARG(SplineResourceGroup, LineTypeChangeHdl, weld::ComboBox&, void)
 {
     if( m_pChangeListener )
         m_pChangeListener->stateChanged(this);
 }
-IMPL_LINK_NOARG(SplineResourceGroup, SplineDetailsDialogHdl, Button*, void)
+
+IMPL_LINK_NOARG(SplineResourceGroup, SplineDetailsDialogHdl, weld::Button&, void)
 {
 
     ChartTypeParameter aOldParameter;
-    getSplinePropertiesDialog().fillParameter( aOldParameter, m_pLB_LineType->GetSelectedEntryPos() == POS_LINETYPE_SMOOTH );
+    getSplinePropertiesDialog().fillParameter( aOldParameter, m_xLB_LineType->get_active() == POS_LINETYPE_SMOOTH );
 
-    const sal_Int32 iOldLineTypePos = m_pLB_LineType->GetSelectedEntryPos();
-    m_pLB_LineType->SelectEntryPos(POS_LINETYPE_SMOOTH);
+    const sal_Int32 iOldLineTypePos = m_xLB_LineType->get_active();
+    m_xLB_LineType->set_active(POS_LINETYPE_SMOOTH);
     if (getSplinePropertiesDialog().run() == RET_OK)
     {
         if( m_pChangeListener )
@@ -577,19 +528,20 @@ IMPL_LINK_NOARG(SplineResourceGroup, SplineDetailsDialogHdl, Button*, void)
     else
     {
         //restore old state:
-        m_pLB_LineType->SelectEntryPos( iOldLineTypePos );
+        m_xLB_LineType->set_active( iOldLineTypePos );
         getSplinePropertiesDialog().fillControls( aOldParameter );
     }
 }
-IMPL_LINK_NOARG(SplineResourceGroup, SteppedDetailsDialogHdl, Button*, void)
+
+IMPL_LINK_NOARG(SplineResourceGroup, SteppedDetailsDialogHdl, weld::Button&, void)
 {
 
     ChartTypeParameter aOldParameter;
-    getSteppedPropertiesDialog().fillParameter( aOldParameter, m_pLB_LineType->GetSelectedEntryPos() == POS_LINETYPE_STEPPED );
+    getSteppedPropertiesDialog().fillParameter( aOldParameter, m_xLB_LineType->get_active() == POS_LINETYPE_STEPPED );
 
-    const sal_Int32 iOldLineTypePos = m_pLB_LineType->GetSelectedEntryPos();
-    m_pLB_LineType->SelectEntryPos(POS_LINETYPE_STEPPED);
-    if( getSteppedPropertiesDialog().Execute() == RET_OK )
+    const sal_Int32 iOldLineTypePos = m_xLB_LineType->get_active();
+    m_xLB_LineType->set_active(POS_LINETYPE_STEPPED);
+    if (getSteppedPropertiesDialog().run() == RET_OK)
     {
         if( m_pChangeListener )
             m_pChangeListener->stateChanged(this);
@@ -597,7 +549,7 @@ IMPL_LINK_NOARG(SplineResourceGroup, SteppedDetailsDialogHdl, Button*, void)
     else
     {
         //restore old state:
-        m_pLB_LineType->SelectEntryPos( iOldLineTypePos );
+        m_xLB_LineType->set_active(iOldLineTypePos);
         getSteppedPropertiesDialog().fillControls( aOldParameter );
     }
 }
@@ -605,7 +557,7 @@ IMPL_LINK_NOARG(SplineResourceGroup, SteppedDetailsDialogHdl, Button*, void)
 class GeometryResourceGroup : public ChangingResource
 {
 public:
-    explicit GeometryResourceGroup(VclBuilderContainer* pWindow);
+    explicit GeometryResourceGroup(weld::Builder* pBuilder);
 
     void showControls( bool bShow );
 
@@ -613,87 +565,84 @@ public:
     void fillParameter( ChartTypeParameter& rParameter );
 
 private:
-    DECL_LINK( GeometryChangeHdl, ListBox&, void );
+    DECL_LINK( GeometryChangeHdl, weld::TreeView&, void );
 
 private:
     BarGeometryResources m_aGeometryResources;
 };
 
-GeometryResourceGroup::GeometryResourceGroup(VclBuilderContainer* pWindow )
+GeometryResourceGroup::GeometryResourceGroup(weld::Builder* pBuilder)
     : ChangingResource()
-    , m_aGeometryResources( pWindow )
+    , m_aGeometryResources(pBuilder)
 {
-    m_aGeometryResources.SetSelectHdl( LINK( this, GeometryResourceGroup, GeometryChangeHdl ) );
+    m_aGeometryResources.connect_changed( LINK( this, GeometryResourceGroup, GeometryChangeHdl ) );
 }
 
-void GeometryResourceGroup::showControls( bool bShow )
+void GeometryResourceGroup::showControls(bool bShow)
 {
-    m_aGeometryResources.Show(bShow);
+    m_aGeometryResources.show(bShow);
 }
 
-void GeometryResourceGroup::fillControls( const ChartTypeParameter& rParameter )
+void GeometryResourceGroup::fillControls(const ChartTypeParameter& rParameter)
 {
     sal_uInt16 nGeometry3D = static_cast<sal_uInt16>(rParameter.nGeometry3D);
-    m_aGeometryResources.SelectEntryPos(nGeometry3D);
-    m_aGeometryResources.Enable(rParameter.b3DLook);
+    m_aGeometryResources.select(nGeometry3D);
+    m_aGeometryResources.set_sensitive(rParameter.b3DLook);
 }
 
-void GeometryResourceGroup::fillParameter( ChartTypeParameter& rParameter )
+void GeometryResourceGroup::fillParameter(ChartTypeParameter& rParameter)
 {
     rParameter.nGeometry3D = 1;
-    if( m_aGeometryResources.GetSelectedEntryCount() )
-        rParameter.nGeometry3D = m_aGeometryResources.GetSelectedEntryPos();
+    int nSelected = m_aGeometryResources.get_selected_index();
+    if (nSelected != -1)
+        rParameter.nGeometry3D = nSelected;
 }
 
-IMPL_LINK_NOARG(GeometryResourceGroup, GeometryChangeHdl, ListBox&, void)
+IMPL_LINK_NOARG(GeometryResourceGroup, GeometryChangeHdl, weld::TreeView&, void)
 {
     if( m_pChangeListener )
         m_pChangeListener->stateChanged(this);
 }
 
-ChartTypeTabPage::ChartTypeTabPage(vcl::Window* pParent
-        , const uno::Reference< XChartDocument >& xChartModel
-        , bool bShowDescription)
-        : OWizardPage(pParent, "tp_ChartType",
-            "modules/schart/ui/tp_ChartType.ui")
-        , m_pDim3DLookResourceGroup( new Dim3DLookResourceGroup(this) )
-        , m_pStackingResourceGroup( new StackingResourceGroup(this) )
-        , m_pSplineResourceGroup( new SplineResourceGroup(this) )
-        , m_pGeometryResourceGroup( new GeometryResourceGroup( this ) )
-        , m_pSortByXValuesResourceGroup( new SortByXValuesResourceGroup( this ) )
-        , m_pGL3DResourceGroup(new GL3DResourceGroup(this))
-        , m_xChartModel( xChartModel )
-        , m_aChartTypeDialogControllerList(0)
-        , m_pCurrentMainType(nullptr)
-        , m_nChangingCalls(0)
-        , m_aTimerTriggeredControllerLock( uno::Reference< frame::XModel >( m_xChartModel, uno::UNO_QUERY ) )
+ChartTypeTabPage::ChartTypeTabPage(TabPageParent pParent , const uno::Reference< XChartDocument >& xChartModel,
+                                   bool bShowDescription)
+    : OWizardPage(pParent, "modules/schart/ui/tp_ChartType.ui", "tp_ChartType")
+    , m_pDim3DLookResourceGroup( new Dim3DLookResourceGroup(m_xBuilder.get()) )
+    , m_pStackingResourceGroup( new StackingResourceGroup(m_xBuilder.get()) )
+    , m_pSplineResourceGroup( new SplineResourceGroup(m_xBuilder.get(), pParent) )
+    , m_pGeometryResourceGroup( new GeometryResourceGroup(m_xBuilder.get()) )
+    , m_pSortByXValuesResourceGroup( new SortByXValuesResourceGroup(m_xBuilder.get()) )
+    , m_xChartModel( xChartModel )
+    , m_aChartTypeDialogControllerList(0)
+    , m_pCurrentMainType(nullptr)
+    , m_nChangingCalls(0)
+    , m_aTimerTriggeredControllerLock( uno::Reference< frame::XModel >( m_xChartModel, uno::UNO_QUERY ) )
+    , m_xFT_ChooseType(m_xBuilder->weld_label("FT_CAPTION_FOR_WIZARD"))
+    , m_xMainTypeList(m_xBuilder->weld_tree_view("charttype"))
+    , m_xSubTypeList(new SvtValueSet(m_xBuilder->weld_scrolled_window("subtypewin")))
+    , m_xSubTypeListWin(new weld::CustomWeld(*m_xBuilder, "subtype", *m_xSubTypeList))
 {
-    get(m_pFT_ChooseType, "FT_CAPTION_FOR_WIZARD");
-    get(m_pMainTypeList, "charttype");
-    get(m_pSubTypeList, "subtype");
-    Size aSize(m_pSubTypeList->LogicToPixel(Size(150, 50), MapMode(MapUnit::MapAppFont)));
-    m_pSubTypeList->set_width_request(aSize.Width());
-    m_pSubTypeList->set_height_request(aSize.Height());
+    Size aSize(m_xSubTypeList->GetDrawingArea()->get_ref_device().LogicToPixel(Size(150, 50), MapMode(MapUnit::MapAppFont)));
+    m_xSubTypeListWin->set_size_request(aSize.Width(), aSize.Height());
 
-    if( bShowDescription )
+    if (bShowDescription)
     {
-        m_pFT_ChooseType->Show();
+        m_xFT_ChooseType->show();
     }
     else
     {
-        m_pFT_ChooseType->SetStyle(m_pFT_ChooseType->GetStyle() | WB_NOLABEL);
+        m_xFT_ChooseType->hide();
     }
 
     SetText( SchResId(STR_PAGE_CHARTTYPE) );
 
-    m_pMainTypeList->SetStyle(m_pMainTypeList->GetStyle() | WB_ITEMBORDER | WB_DOUBLEBORDER | WB_FLATVALUESET | WB_3DLOOK );
-    m_pMainTypeList->SetSelectHdl( LINK( this, ChartTypeTabPage, SelectMainTypeHdl ) );
-    m_pSubTypeList->SetSelectHdl( LINK( this, ChartTypeTabPage, SelectSubTypeHdl ) );
+    m_xMainTypeList->connect_changed(LINK(this, ChartTypeTabPage, SelectMainTypeHdl));
+    m_xSubTypeList->SetSelectHdl( LINK( this, ChartTypeTabPage, SelectSubTypeHdl ) );
 
-    m_pSubTypeList->SetStyle(m_pSubTypeList->GetStyle() |
+    m_xSubTypeList->SetStyle(m_xSubTypeList->GetStyle() |
         WB_ITEMBORDER | WB_DOUBLEBORDER | WB_NAMEFIELD | WB_FLATVALUESET | WB_3DLOOK );
-    m_pSubTypeList->SetColCount(4);
-    m_pSubTypeList->SetLineCount(1);
+    m_xSubTypeList->SetColCount(4);
+    m_xSubTypeList->SetLineCount(1);
 
     bool bEnableComplexChartTypes = true;
     uno::Reference< beans::XPropertySet > xProps( m_xChartModel, uno::UNO_QUERY );
@@ -709,39 +658,38 @@ ChartTypeTabPage::ChartTypeTabPage(vcl::Window* pParent
         }
     }
 
-    m_aChartTypeDialogControllerList.push_back(new ColumnChartDialogController() );
-    m_aChartTypeDialogControllerList.push_back(new BarChartDialogController() );
-    m_aChartTypeDialogControllerList.push_back(new PieChartDialogController() );
-    m_aChartTypeDialogControllerList.push_back(new AreaChartDialogController() );
-    m_aChartTypeDialogControllerList.push_back(new LineChartDialogController() );
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<ColumnChartDialogController>());
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<BarChartDialogController>());
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<PieChartDialogController>());
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<AreaChartDialogController>());
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<LineChartDialogController>());
     if (bEnableComplexChartTypes)
     {
-        m_aChartTypeDialogControllerList.push_back(new XYChartDialogController() );
-        m_aChartTypeDialogControllerList.push_back(new BubbleChartDialogController() );
+        m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<XYChartDialogController>());
+        m_aChartTypeDialogControllerList.push_back(
+            o3tl::make_unique<BubbleChartDialogController>());
     }
-    m_aChartTypeDialogControllerList.push_back(new NetChartDialogController() );
+    m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<NetChartDialogController>());
     if (bEnableComplexChartTypes)
     {
-        m_aChartTypeDialogControllerList.push_back(new StockChartDialogController() );
+        m_aChartTypeDialogControllerList.push_back(o3tl::make_unique<StockChartDialogController>());
     }
-    m_aChartTypeDialogControllerList.push_back(new CombiColumnLineChartDialogController() );
-
-    SvtMiscOptions aOpts;
-    if ( aOpts.IsExperimentalMode() )
-        m_aChartTypeDialogControllerList.push_back(new GL3DBarChartDialogController());
+    m_aChartTypeDialogControllerList.push_back(
+        o3tl::make_unique<CombiColumnLineChartDialogController>());
 
     for (auto const& elem : m_aChartTypeDialogControllerList)
     {
-        m_pMainTypeList->InsertEntry( elem->getName(), elem->getImage() );
+        m_xMainTypeList->append("", elem->getName(), elem->getImage());
         elem->setChangeListener( this );
     }
+
+    m_xMainTypeList->set_size_request(m_xMainTypeList->get_preferred_size().Width(), -1);
 
     m_pDim3DLookResourceGroup->setChangeListener( this );
     m_pStackingResourceGroup->setChangeListener( this );
     m_pSplineResourceGroup->setChangeListener( this );
     m_pGeometryResourceGroup->setChangeListener( this );
     m_pSortByXValuesResourceGroup->setChangeListener( this );
-    m_pGL3DResourceGroup->setChangeListener(this);
 }
 
 ChartTypeTabPage::~ChartTypeTabPage()
@@ -752,41 +700,28 @@ ChartTypeTabPage::~ChartTypeTabPage()
 void ChartTypeTabPage::dispose()
 {
     //delete all dialog controller
-    for (auto const& elem : m_aChartTypeDialogControllerList)
-    {
-        delete elem;
-    }
     m_aChartTypeDialogControllerList.clear();
 
     //delete all resource helper
-    delete m_pDim3DLookResourceGroup;
-    m_pDim3DLookResourceGroup = nullptr;
-    delete m_pStackingResourceGroup;
-    m_pStackingResourceGroup = nullptr;
-    delete m_pSplineResourceGroup;
-    m_pSplineResourceGroup = nullptr;
-    delete m_pGeometryResourceGroup;
-    m_pGeometryResourceGroup = nullptr;
-    delete m_pSortByXValuesResourceGroup;
-    m_pSortByXValuesResourceGroup = nullptr;
-    delete m_pGL3DResourceGroup;
-    m_pGL3DResourceGroup = nullptr;
-    m_pFT_ChooseType.clear();
-    m_pMainTypeList.clear();
-    m_pSubTypeList.clear();
+    m_pDim3DLookResourceGroup.reset();
+    m_pStackingResourceGroup.reset();
+    m_pSplineResourceGroup.reset();
+    m_pGeometryResourceGroup.reset();
+    m_pSortByXValuesResourceGroup.reset();
+    m_xSubTypeListWin.reset();
+    m_xSubTypeList.reset();
     svt::OWizardPage::dispose();
 }
 
 ChartTypeParameter ChartTypeTabPage::getCurrentParamter() const
 {
     ChartTypeParameter aParameter;
-    aParameter.nSubTypeIndex = static_cast<sal_Int32>( m_pSubTypeList->GetSelectedItemId() );
+    aParameter.nSubTypeIndex = static_cast<sal_Int32>(m_xSubTypeList->GetSelectedItemId());
     m_pDim3DLookResourceGroup->fillParameter( aParameter );
     m_pStackingResourceGroup->fillParameter( aParameter );
     m_pSplineResourceGroup->fillParameter( aParameter );
     m_pGeometryResourceGroup->fillParameter( aParameter );
     m_pSortByXValuesResourceGroup->fillParameter( aParameter );
-    m_pGL3DResourceGroup->fillParameter(aParameter);
     return aParameter;
 }
 
@@ -834,14 +769,14 @@ void ChartTypeTabPage::stateChanged( ChangingResource* /*pResource*/ )
 ChartTypeDialogController* ChartTypeTabPage::getSelectedMainType()
 {
     ChartTypeDialogController* pTypeController = nullptr;
-    std::vector< ChartTypeDialogController* >::size_type nM = static_cast< std::vector< ChartTypeDialogController* >::size_type >(
-        m_pMainTypeList->GetSelectedEntryPos() );
+    auto nM = static_cast< std::vector< ChartTypeDialogController* >::size_type >(
+        m_xMainTypeList->get_selected_index() );
     if( nM<m_aChartTypeDialogControllerList.size() )
-        pTypeController = m_aChartTypeDialogControllerList[nM];
+        pTypeController = m_aChartTypeDialogControllerList[nM].get();
     return pTypeController;
 }
 
-IMPL_LINK_NOARG(ChartTypeTabPage, SelectSubTypeHdl, ValueSet*, void)
+IMPL_LINK_NOARG(ChartTypeTabPage, SelectSubTypeHdl, SvtValueSet*, void)
 {
     if( m_pCurrentMainType )
     {
@@ -852,7 +787,7 @@ IMPL_LINK_NOARG(ChartTypeTabPage, SelectSubTypeHdl, ValueSet*, void)
     }
 }
 
-IMPL_LINK_NOARG(ChartTypeTabPage, SelectMainTypeHdl, ListBox&, void)
+IMPL_LINK_NOARG(ChartTypeTabPage, SelectMainTypeHdl, weld::TreeView&, void)
 {
     selectMainType();
 }
@@ -898,8 +833,8 @@ void ChartTypeTabPage::selectMainType()
 
 void ChartTypeTabPage::showAllControls( ChartTypeDialogController& rTypeController )
 {
-    m_pMainTypeList->Show();
-    m_pSubTypeList->Show();
+    m_xMainTypeList->show();
+    m_xSubTypeList->Show();
 
     bool bShow = rTypeController.shouldShow_3DLookControl();
     m_pDim3DLookResourceGroup->showControls( bShow );
@@ -911,9 +846,7 @@ void ChartTypeTabPage::showAllControls( ChartTypeDialogController& rTypeControll
     m_pGeometryResourceGroup->showControls( bShow );
     bShow = rTypeController.shouldShow_SortByXValuesResourceGroup();
     m_pSortByXValuesResourceGroup->showControls( bShow );
-    bShow = rTypeController.shouldShow_GL3DResourceGroup();
-    m_pGL3DResourceGroup->showControls(bShow);
-    rTypeController.showExtraControls(this);
+    rTypeController.showExtraControls(m_xBuilder.get());
 }
 
 void ChartTypeTabPage::fillAllControls( const ChartTypeParameter& rParameter, bool bAlsoResetSubTypeList )
@@ -921,15 +854,14 @@ void ChartTypeTabPage::fillAllControls( const ChartTypeParameter& rParameter, bo
     m_nChangingCalls++;
     if( m_pCurrentMainType && bAlsoResetSubTypeList )
     {
-        m_pCurrentMainType->fillSubTypeList(*m_pSubTypeList, rParameter);
+        m_pCurrentMainType->fillSubTypeList(*m_xSubTypeList, rParameter);
     }
-    m_pSubTypeList->SelectItem( static_cast<sal_uInt16>( rParameter.nSubTypeIndex) );
+    m_xSubTypeList->SelectItem( static_cast<sal_uInt16>( rParameter.nSubTypeIndex) );
     m_pDim3DLookResourceGroup->fillControls( rParameter );
     m_pStackingResourceGroup->fillControls( rParameter );
     m_pSplineResourceGroup->fillControls( rParameter );
     m_pGeometryResourceGroup->fillControls( rParameter );
     m_pSortByXValuesResourceGroup->fillControls( rParameter );
-    m_pGL3DResourceGroup->fillControls(rParameter);
     m_nChangingCalls--;
 }
 
@@ -953,7 +885,7 @@ void ChartTypeTabPage::initializePage()
         {
             bFound = true;
 
-            m_pMainTypeList->SelectEntryPos( nM );
+            m_xMainTypeList->select(nM);
             showAllControls(*elem);
             uno::Reference< beans::XPropertySet > xTemplateProps( aTemplate.first, uno::UNO_QUERY );
             ChartTypeParameter aParameter = elem->getChartTypeParameterForService( aServiceName, xTemplateProps );
@@ -984,13 +916,12 @@ void ChartTypeTabPage::initializePage()
 
     if( !bFound )
     {
-        m_pSubTypeList->Hide();
+        m_xSubTypeList->Hide();
         m_pDim3DLookResourceGroup->showControls( false );
         m_pStackingResourceGroup->showControls( false, false );
         m_pSplineResourceGroup->showControls( false );
         m_pGeometryResourceGroup->showControls( false );
         m_pSortByXValuesResourceGroup->showControls( false );
-        m_pGL3DResourceGroup->showControls(false);
     }
 }
 

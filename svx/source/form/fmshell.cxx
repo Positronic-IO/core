@@ -23,7 +23,6 @@
 #include <fmservs.hxx>
 #include <fmprop.hxx>
 #include <fmpgeimp.hxx>
-#include <fmitems.hxx>
 #include <fmundo.hxx>
 #include <vcl/waitobj.hxx>
 #include <com/sun/star/form/XLoadable.hpp>
@@ -81,7 +80,6 @@
 #include <svxslots.hxx>
 
 #include <tbxform.hxx>
-#include <comphelper/property.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
 
 #include <memory>
@@ -247,7 +245,10 @@ bool FmFormShell::PrepareClose(bool bUI)
 
                     if ( bModified && bUI )
                     {
-                        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(nullptr, "svx/ui/savemodifieddialog.ui"));
+                        SfxViewShell* pShell = GetViewShell();
+                        vcl::Window* pShellWnd = pShell ? pShell->GetWindow() : nullptr;
+                        weld::Widget* pFrameWeld = pShellWnd ? pShellWnd->GetFrameWeld() : nullptr;
+                        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pFrameWeld, "svx/ui/savemodifieddialog.ui"));
                         std::unique_ptr<weld::MessageDialog> xQry(xBuilder->weld_message_dialog("SaveModifiedDialog"));
                         switch (xQry->run())
                         {
@@ -729,17 +730,12 @@ void FmFormShell::Execute(SfxRequest &rReq)
             else
             {
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                DBG_ASSERT( pFact, "no dialog factory!" );
-                if ( pFact )
-                {
-                    ScopedVclPtr<AbstractFmInputRecordNoDialog> dlg(pFact->CreateFmInputRecordNoDialog(rReq.GetFrameWeld()));
-                    assert(dlg.get() && "Dialog creation failed!");
-                    dlg->SetValue( rController->getCursor()->getRow() );
-                    if ( dlg->Execute() == RET_OK )
-                        nRecord = dlg->GetValue();
+                ScopedVclPtr<AbstractFmInputRecordNoDialog> dlg(pFact->CreateFmInputRecordNoDialog(rReq.GetFrameWeld()));
+                dlg->SetValue( rController->getCursor()->getRow() );
+                if ( dlg->Execute() == RET_OK )
+                    nRecord = dlg->GetValue();
 
-                    rReq.AppendItem( SfxInt32Item( FN_PARAM_1, nRecord ) );
-                }
+                rReq.AppendItem( SfxInt32Item( FN_PARAM_1, nRecord ) );
             }
 
             if ( nRecord != -1 )
@@ -1274,11 +1270,11 @@ namespace
 {
     SdrUnoObj* lcl_findUnoObject( const SdrObjList& _rObjList, const Reference< XControlModel >& _rxModel )
     {
-        SdrObjListIter aIter( _rObjList );
+        SdrObjListIter aIter( &_rObjList );
         while ( aIter.IsMore() )
         {
             SdrObject* pObject = aIter.Next();
-            SdrUnoObj* pUnoObject = pObject ? dynamic_cast<SdrUnoObj*>( pObject  ) : nullptr;
+            SdrUnoObj* pUnoObject = dynamic_cast<SdrUnoObj*>( pObject  );
             if ( !pUnoObject )
                 continue;
 

@@ -31,16 +31,14 @@ namespace cmis
         }
     };
 
-    typedef std::vector< ResultListEntry* > ResultList;
-
     class DataSupplier : public ucbhelper::ResultSetDataSupplier
     {
         private:
             ChildrenProvider* m_pChildrenProvider;
-            sal_Int32 mnOpenMode;
+            sal_Int32 const mnOpenMode;
             bool mbCountFinal;
-            bool getData();
-            ResultList maResults;
+            void getData();
+            std::vector< ResultListEntry > maResults;
 
         public:
             DataSupplier( ChildrenProvider* pChildrenProvider, sal_Int32 nOpenMode );

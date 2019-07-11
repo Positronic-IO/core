@@ -33,6 +33,7 @@
 #include <cppuhelper/typeprovider.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <comphelper/types.hxx>
+#include <rtl/strbuf.hxx>
 #include <algorithm>
 #include <strings.hrc>
 #include <connectivity/dbexception.hxx>
@@ -425,7 +426,7 @@ Reference< XResultSet > SAL_CALL OStatement_Base::executeQuery( const OUString& 
     checkDisposed(OStatement_BASE::rBHelper.bDisposed);
 
 
-    Reference< XResultSet > xRS = nullptr;
+    Reference< XResultSet > xRS;
 
     // Execute the statement.  If execute returns true, a result
     // set exists.
@@ -474,18 +475,18 @@ Sequence< sal_Int32 > SAL_CALL OStatement::executeBatch(  )
     ::osl::MutexGuard aGuard( m_aMutex );
     checkDisposed(OStatement_BASE::rBHelper.bDisposed);
 
-
-    OString aBatchSql;
+    OStringBuffer aBatchSql;
     sal_Int32 nLen = m_aBatchVector.size();
 
     for (auto const& elem : m_aBatchVector)
     {
-        aBatchSql += OUStringToOString(elem,getOwnConnection()->getTextEncoding());
-        aBatchSql += ";";
+        aBatchSql.append(OUStringToOString(elem,getOwnConnection()->getTextEncoding()));
+        aBatchSql.append(";");
     }
 
     OSL_ENSURE(m_aStatementHandle,"StatementHandle is null!");
-    THROW_SQL(N3SQLExecDirect(m_aStatementHandle, reinterpret_cast<SDB_ODBC_CHAR *>(const_cast<char *>(aBatchSql.getStr())), aBatchSql.getLength()));
+    auto s = aBatchSql.makeStringAndClear();
+    THROW_SQL(N3SQLExecDirect(m_aStatementHandle, reinterpret_cast<SDB_ODBC_CHAR *>(const_cast<char *>(s.getStr())), s.getLength()));
 
     Sequence< sal_Int32 > aRet(nLen);
     sal_Int32* pArray = aRet.getArray();
@@ -821,8 +822,7 @@ void OStatement_Base::setFetchSize(sal_Int32 _par0)
     {
         setStmtOption<SQLULEN, SQL_IS_UINTEGER>(SQL_ATTR_ROW_ARRAY_SIZE, _par0);
 
-        if (m_pRowStatusArray)
-            delete[] m_pRowStatusArray;
+        delete[] m_pRowStatusArray;
         m_pRowStatusArray = new SQLUSMALLINT[_par0];
         setStmtOption<SQLUSMALLINT*, SQL_IS_POINTER>(SQL_ATTR_ROW_STATUS_PTR, m_pRowStatusArray);
     }

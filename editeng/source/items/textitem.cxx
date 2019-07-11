@@ -25,6 +25,8 @@
 #include <tools/stream.hxx>
 #include <math.h>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <unotools/fontdefs.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/unohelp.hxx>
@@ -75,7 +77,6 @@
 #include <editeng/wrlmitem.hxx>
 #include <editeng/contouritem.hxx>
 #include <editeng/colritem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/kernitem.hxx>
 #include <editeng/cmapitem.hxx>
 #include <editeng/escapementitem.hxx>
@@ -469,7 +470,7 @@ bool SvxPostureItem::GetPresentation
 }
 
 
-OUString SvxPostureItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxPostureItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     DBG_ASSERT( nPos <= sal_uInt16(ITALIC_NORMAL), "enum overflow!" );
 
@@ -615,7 +616,7 @@ bool SvxWeightItem::GetPresentation
     return true;
 }
 
-OUString SvxWeightItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxWeightItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_WEIGHTS[] =
     {
@@ -1043,7 +1044,7 @@ void SvxFontHeightItem::SetHeight( sal_uInt32 nNewHeight, const sal_uInt16 nNewP
 
     if( MapUnit::MapRelative != eUnit )
         nHeight = nNewHeight + ::ItemToControl( short(nNewProp), eUnit,
-                                                FUNIT_TWIP );
+                                                FieldUnit::TWIP );
     else if( 100 != nNewProp )
         nHeight = sal_uInt32(( nNewHeight * nNewProp ) / 100 );
     else
@@ -1061,7 +1062,7 @@ void SvxFontHeightItem::SetHeight( sal_uInt32 nNewHeight, sal_uInt16 nNewProp,
     if( MapUnit::MapRelative != eMetric )
         nHeight = nNewHeight +
                 ::ControlToItem( ::ItemToControl(static_cast<short>(nNewProp), eMetric,
-                                        FUNIT_TWIP ), FUNIT_TWIP,
+                                        FieldUnit::TWIP ), FieldUnit::TWIP,
                                         eCoreMetric );
     else if( 100 != nNewProp )
         nHeight = sal_uInt32(( nNewHeight * nNewProp ) / 100 );
@@ -1393,7 +1394,7 @@ bool SvxCrossedOutItem::GetPresentation
     return true;
 }
 
-OUString SvxCrossedOutItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxCrossedOutItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_STRIKEOUT[] =
     {
@@ -1750,43 +1751,6 @@ void SvxColorItem::SetValue( const Color& rNewCol )
     mColor = rNewCol;
 }
 
-// class SvxCharSetColorItem ---------------------------------------------
-
-SvxCharSetColorItem::SvxCharSetColorItem( const sal_uInt16 nId ) :
-    SvxColorItem( nId ),
-
-    eFrom( RTL_TEXTENCODING_DONTKNOW )
-{
-}
-
-
-SvxCharSetColorItem::SvxCharSetColorItem( const Color& rCol,
-                                          const sal_uInt16 nId ) :
-    SvxColorItem( rCol, nId ),
-
-    eFrom( RTL_TEXTENCODING_DONTKNOW )
-{
-}
-
-
-SfxPoolItem* SvxCharSetColorItem::Clone( SfxItemPool * ) const
-{
-    return new SvxCharSetColorItem( *this );
-}
-
-
-bool SvxCharSetColorItem::GetPresentation
-(
-    SfxItemPresentation /*ePres*/,
-    MapUnit             /*eCoreUnit*/,
-    MapUnit             /*ePresUnit*/,
-    OUString&           rText, const IntlWrapper& /*rIntl*/
-)   const
-{
-    rText.clear();
-    return false;
-}
-
 // class SvxKerningItem --------------------------------------------------
 
 SvxKerningItem::SvxKerningItem( const short nKern, const sal_uInt16 nId ) :
@@ -1901,7 +1865,7 @@ bool SvxCaseMapItem::GetPresentation
     return true;
 }
 
-OUString SvxCaseMapItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxCaseMapItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_CASEMAP[] =
     {
@@ -2025,7 +1989,7 @@ bool SvxEscapementItem::GetPresentation
     return true;
 }
 
-OUString SvxEscapementItem::GetValueTextByPos( sal_uInt16 nPos ) const
+OUString SvxEscapementItem::GetValueTextByPos( sal_uInt16 nPos )
 {
     static const char* RID_SVXITEMS_ESCAPEMENT[] =
     {
@@ -2197,8 +2161,8 @@ bool SvxLanguageItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
 
 // class SvxNoHyphenItem -------------------------------------------------
 
-SvxNoHyphenItem::SvxNoHyphenItem( const bool bHyphen, const sal_uInt16 nId ) :
-    SfxBoolItem( nId , bHyphen )
+SvxNoHyphenItem::SvxNoHyphenItem( const sal_uInt16 nId ) :
+    SfxBoolItem( nId , true )
 {
 }
 
@@ -2762,7 +2726,7 @@ static const char* RID_SVXITEMS_RELIEF[] =
     RID_SVXITEMS_RELIEF_ENGRAVED
 };
 
-OUString SvxCharReliefItem::GetValueTextByPos(sal_uInt16 nPos) const
+OUString SvxCharReliefItem::GetValueTextByPos(sal_uInt16 nPos)
 {
     assert(nPos < SAL_N_ELEMENTS(RID_SVXITEMS_RELIEF) && "enum overflow");
     return EditResId(RID_SVXITEMS_RELIEF[nPos]);
@@ -2918,7 +2882,7 @@ void SvxScriptSetItem::PutItemForScriptType( SvtScriptType nScriptType,
     sal_uInt16 nLatin, nAsian, nComplex;
     GetWhichIds( nLatin, nAsian, nComplex );
 
-    SfxPoolItem* pCpy = rItem.Clone();
+    std::unique_ptr<SfxPoolItem> pCpy(rItem.Clone());
     if( SvtScriptType::LATIN & nScriptType )
     {
         pCpy->SetWhich( nLatin );
@@ -2934,7 +2898,6 @@ void SvxScriptSetItem::PutItemForScriptType( SvtScriptType nScriptType,
         pCpy->SetWhich( nComplex );
         GetItemSet().Put( *pCpy );
     }
-    delete pCpy;
 }
 
 void SvxScriptSetItem::GetWhichIds( sal_uInt16 nSlotId, const SfxItemSet& rSet, sal_uInt16& rLatin, sal_uInt16& rAsian, sal_uInt16& rComplex )
@@ -3008,7 +2971,7 @@ void GetDefaultFonts( SvxFontItem& rLatin, SvxFontItem& rAsian, SvxFontItem& rCo
         DefaultFontType nFontType;
         LanguageType    nLanguage;
     }
-    aOutTypeArr[ nItemCnt ] =
+    const aOutTypeArr[ nItemCnt ] =
     {
         {  DefaultFontType::LATIN_TEXT, LANGUAGE_ENGLISH_US },
         {  DefaultFontType::CJK_TEXT, LANGUAGE_ENGLISH_US },
@@ -3051,6 +3014,18 @@ bool SvxRsidItem::PutValue( const uno::Any& rVal, sal_uInt8 )
 SfxPoolItem* SvxRsidItem::Clone( SfxItemPool * ) const
 {
     return new SvxRsidItem( *this );
+}
+
+bool SvxRsidItem::GetPresentation
+(
+    SfxItemPresentation /*ePres*/,
+    MapUnit             /*eCoreUnit*/,
+    MapUnit             /*ePresUnit*/,
+    OUString&           rText, const IntlWrapper& /*rIntl*/
+)   const
+{
+    rText.clear();
+    return false;
 }
 
 void SvxRsidItem::dumpAsXml(xmlTextWriterPtr pWriter) const

@@ -30,18 +30,17 @@ namespace pcr
 
 
     //= ControlCharacterDialog
-
-    class ControlCharacterDialog : public SfxTabDialog
+    class ControlCharacterDialog : public SfxTabDialogController
     {
     public:
-        ControlCharacterDialog(vcl::Window* _pParent, const SfxItemSet& _rCoreSet);
+        ControlCharacterDialog(weld::Window* pParent, const SfxItemSet& rCoreSet);
         virtual ~ControlCharacterDialog() override;
 
         /// creates an item set to be used with this dialog
-        static SfxItemSet*  createItemSet(SfxItemSet*& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
+        static void         createItemSet(std::unique_ptr<SfxItemSet>& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
 
         /// destroys an item previously created with <method>createItemSet</method>
-        static void         destroyItemSet(SfxItemSet*& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
+        static void         destroyItemSet(std::unique_ptr<SfxItemSet>& _rpSet, SfxItemPool*& _rpPool, std::vector<SfxPoolItem*>*& _rpDefaults);
 
         /// fills the given item set with values obtained from the given property set
         static void         translatePropertiesToItems(
@@ -61,9 +60,7 @@ namespace pcr
             std::vector< css::beans::NamedValue >& _out_properties );
 
     protected:
-        virtual void PageCreated(sal_uInt16 _nId, SfxTabPage& _rPage) override;
-    private:
-        sal_uInt16 m_nCharsId;
+        virtual void PageCreated(const OString& rId, SfxTabPage& rPage) override;
     };
 
 }   // namespace pcr

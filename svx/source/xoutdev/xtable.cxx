@@ -37,12 +37,6 @@ XColorEntry::XColorEntry(const Color& rColor, const OUString& rName)
 {
 }
 
-XColorEntry::XColorEntry(const XColorEntry& rOther)
-:   XPropertyEntry(rOther),
-aColor(rOther.aColor)
-{
-}
-
 XLineEndEntry::XLineEndEntry(const basegfx::B2DPolyPolygon& rB2DPolyPolygon, const OUString& rName)
 :   XPropertyEntry(rName),
     aB2DPolyPolygon(rB2DPolyPolygon)
@@ -165,9 +159,9 @@ long XPropertyList::GetIndex(const OUString& rName) const
     return -1;
 }
 
-Bitmap XPropertyList::GetUiBitmap( long nIndex ) const
+BitmapEx XPropertyList::GetUiBitmap( long nIndex ) const
 {
-    Bitmap aRetval;
+    BitmapEx aRetval;
     if (!isValidIdx(nIndex))
         return aRetval;
 
@@ -375,9 +369,9 @@ XPropertyList::CreatePropertyListFromURL( XPropertyListType t,
 }
 
 static struct {
-    XPropertyListType t;
+    XPropertyListType const t;
     const char *pExt;
-} pExtnMap[] = {
+} const pExtnMap[] = {
     { XPropertyListType::Color,    "soc" },
     { XPropertyListType::LineEnd, "soe" },
     { XPropertyListType::Dash,     "sod" },

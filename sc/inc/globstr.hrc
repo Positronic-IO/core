@@ -20,7 +20,8 @@
 #ifndef SC_GLOBSTR_HRC
 #define SC_GLOBSTR_HRC
 
-#define NC_(Context, String) (Context "\004" u8##String)
+#define NC_(Context, String) reinterpret_cast<char const *>(Context "\004" u8##String)
+#define NNC_(Context, StringSingular, StringPlural) reinterpret_cast<char const *>(Context "\004" u8##StringSingular "\004" u8##StringPlural)
 
 /*
  * This file is reserved for string IDs of permanently loaded resident string
@@ -141,8 +142,8 @@
 #define STR_TABLE_GRAND                         NC_("STR_TABLE_GRAND", "Grand")
 #define STR_TABLE_ERGEBNIS                      NC_("STR_TABLE_ERGEBNIS", "Result")
 #define STR_UNDO_SPELLING                       NC_("STR_UNDO_SPELLING", "Spellcheck")
-#define STR_TABLE_UND                           NC_("STR_TABLE_UND", "AND")
-#define STR_TABLE_ODER                          NC_("STR_TABLE_ODER", "OR")
+#define STR_TABLE_AND                           NC_("STR_TABLE_AND", "AND")
+#define STR_TABLE_OR                            NC_("STR_TABLE_OR", "OR")
 #define STR_TABLE_DEF                           NC_("STR_TABLE_DEF", "Sheet")
 #define STR_MOVE_TO_END                         NC_("STR_MOVE_TO_END", "- move to end position -")
 #define STR_NO_REF_TABLE                        NC_("STR_NO_REF_TABLE", "#REF!")
@@ -155,7 +156,13 @@
 #define STR_PIVOT_TOTAL                         NC_("STR_PIVOT_TOTAL", "Total")
 #define STR_PIVOT_DATA                          NC_("STR_PIVOT_DATA", "Data")
 #define STR_PIVOT_GROUP                         NC_("STR_PIVOT_GROUP", "Group")
-#define STR_ROWCOL_SELCOUNT                     NC_("STR_ROWCOL_SELCOUNT", "$1 rows, $2 columns selected")
+/* To translators: $1 == will be replaced by STR_SELCOUNT_ROWARG, and $2 by STR_SELCOUNT_COLARG
+   e.g. Selected: 1 row, 2 columns */
+#define STR_SELCOUNT                            NC_("STR_SELCOUNT", "Selected: $1, $2")
+// To translators: STR_SELCOUNT_ROWARG is $1 of STR_SELCOUNT. $1 of STR_SELCOUNT_ROWARG is number of rows
+#define STR_SELCOUNT_ROWARG                     NNC_("STR_SELCOUNT_ROWARG", "$1 row", "$1 rows")
+// To translators: STR_SELCOUNT_COLARG is $1 of STR_SELCOUNT. $1 of STR_SELCOUNT_ROWARG is number of columns
+#define STR_SELCOUNT_COLARG                     NNC_("STR_SELCOUNT_COLARG", "$1 column", "$1 columns")
 #define STR_FILTER_SELCOUNT                     NC_("STR_FILTER_SELCOUNT", "$1 of $2 records found")
 #define STR_COLUMN                              NC_("STR_COLUMN", "Column")
 #define STR_ROW                                 NC_("STR_ROW", "Row")
@@ -175,7 +182,7 @@
 #define STR_ERR_NEWSCENARIO                     NC_("STR_ERR_NEWSCENARIO", "The scenario ranges must be selected in order to be able to create a new scenario.")
 #define STR_NOAREASELECTED                      NC_("STR_NOAREASELECTED", "A range has not been selected.")
 #define STR_NEWTABNAMENOTUNIQUE                 NC_("STR_NEWTABNAMENOTUNIQUE", "This name already exists.")
-#define STR_INVALIDTABNAME                      NC_("STR_INVALIDTABNAME", "Invalid sheet name.\nThe sheet name must not be a duplicate of an existing name \nand may not contain the characters [ ] * ? : / \\ \nor the character ' (apostrophe) as first or last character.")
+#define STR_INVALIDTABNAME                      NC_("STR_INVALIDTABNAME", "Invalid sheet name.\nThe sheet name must not be empty or a duplicate of \nan existing name and may not contain the characters [ ] * ? : / \\ \nor the character ' (apostrophe) as first or last character.")
 #define STR_SCENARIO                            NC_("STR_SCENARIO", "Scenario")
 #define STR_PIVOT_TABLE                         NC_("STR_PIVOT_TABLE", "Pivot Table")
  // Text strings for captions of subtotal functions.
@@ -239,7 +246,6 @@
 #define STR_LONG_ERR_NO_CONV                    NC_("STR_LONG_ERR_NO_CONV", "Error: Calculation does not converge")
 /* END error constants and error strings. */
 
-#define STR_GRIDCOLOR                           NC_("STR_GRIDCOLOR", "Grid color")
 #define STR_CELL_FILTER                         NC_("STR_CELL_FILTER", "Filter")
 #define STR_TARGETNOTFOUND                      NC_("STR_TARGETNOTFOUND", "The target database range does not exist.")
 #define STR_INVALID_EPS                         NC_("STR_INVALID_EPS", "Invalid increment")
@@ -314,7 +320,7 @@
 #define STR_SCATTR_PAGE_SCALETO                 NC_("STR_SCATTR_PAGE_SCALETO", "Fit print range(s) to width/height")
 #define STR_SCATTR_PAGE_SCALE_WIDTH             NC_("STR_SCATTR_PAGE_SCALE_WIDTH", "Width")
 #define STR_SCATTR_PAGE_SCALE_HEIGHT            NC_("STR_SCATTR_PAGE_SCALE_HEIGHT", "Height")
-#define STR_SCATTR_PAGE_SCALE_PAGES             NC_("STR_SCATTR_PAGE_SCALE_PAGES", "%1 page(s)")
+#define STR_SCATTR_PAGE_SCALE_PAGES             NNC_("STR_SCATTR_PAGE_SCALE_PAGES", "One page", "%1 pages")
 #define STR_SCATTR_PAGE_SCALE_AUTO              NC_("STR_SCATTR_PAGE_SCALE_AUTO", "automatic")
 #define STR_DOC_STAT                            NC_("STR_DOC_STAT", "Statistics")
 #define STR_LINKERROR                           NC_("STR_LINKERROR", "The link could not be updated.")
@@ -387,6 +393,7 @@
 #define STR_RECALC_MANUAL                       NC_("STR_RECALC_MANUAL", "Manual")
 #define STR_RECALC_AUTO                         NC_("STR_RECALC_AUTO", "Automatic")
 #define STR_ERR_LONG_NESTED_ARRAY               NC_("STR_ERR_LONG_NESTED_ARRAY", "Nested arrays are not supported.")
+#define STR_ERR_LONG_BAD_ARRAY_CONTENT          NC_("STR_ERR_LONG_BAD_ARRAY_CONTENT", "Unsupported inline array content.")
 #define STR_UNDO_TEXTTOCOLUMNS                  NC_("STR_UNDO_TEXTTOCOLUMNS", "Text to Columns")
 #define STR_DOC_UPDATED                         NC_("STR_DOC_UPDATED", "Your spreadsheet has been updated with changes saved by other users.")
 #define STR_DOC_WILLBESAVED                     NC_("STR_DOC_WILLBESAVED", "The spreadsheet must be saved now to activate sharing mode.\n\nDo you want to continue?")
@@ -510,6 +517,7 @@
 #define STR_TEXT                                NC_("STR_TEXT", "Text")
 #define STR_QUERY_PIVOTTABLE_DELTAB             NC_("STR_QUERY_PIVOTTABLE_DELTAB", "The selected sheet(s) contain source data of related pivot tables that will be lost. Are you sure you want to delete the selected sheet(s)?")
 #define STR_ERR_NAME_INVALID_CELL_REF           NC_("STR_ERR_NAME_INVALID_CELL_REF", "Invalid name. Reference to a cell, or a range of cells not allowed.")
+#define STR_ERR_LONG_LINK_FORMULA_NEEDING_CHECK NC_("STR_ERR_LONG_LINK_FORMULA_NEEDING_CHECK", "External content disabled.")
 
 #endif
 

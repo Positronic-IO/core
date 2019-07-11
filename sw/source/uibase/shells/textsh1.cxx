@@ -120,16 +120,13 @@
 #include <numrule.hxx>
 #include <memory>
 
-#include <svx/xattr.hxx>
-#include <svx/unobrushitemhelper.hxx>
-
 using namespace ::com::sun::star;
 using namespace com::sun::star::beans;
 using namespace ::com::sun::star::container;
 using namespace com::sun::star::style;
 using namespace svx::sidebar;
 
-static void sw_CharDialogResult(const SfxItemSet* pSet, SwWrtShell &rWrtSh, std::shared_ptr<SfxItemSet> pCoreSet, bool bSel, bool bSelectionPut, SfxRequest *pReq);
+static void sw_CharDialogResult(const SfxItemSet* pSet, SwWrtShell &rWrtSh, std::shared_ptr<SfxItemSet> const & pCoreSet, bool bSel, bool bSelectionPut, SfxRequest *pReq);
 
 void sw_CharDialog(SwWrtShell &rWrtSh, bool bUseDialog, sal_uInt16 nSlot, const SfxItemSet *pArgs, SfxRequest *pReq )
 {
@@ -178,19 +175,8 @@ void sw_CharDialog(SwWrtShell &rWrtSh, bool bUseDialog, sal_uInt16 nSlot, const 
     VclPtr<SfxAbstractTabDialog> pDlg;
     if ( bUseDialog && GetActiveView() )
     {
-        sal_uInt16 nWhich = rWrtSh.GetView().GetPool().GetWhich( SID_ATTR_BRUSH_CHAR );
-        SvxBrushItem aBrushItem(static_cast<const SvxBrushItem&>(pCoreSet->Get(nWhich)));
-        setSvxBrushItemAsFillAttributesToTargetSet(aBrushItem, *pCoreSet);
-
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
-        pDlg.reset(pFact->CreateSwCharDlg(rWrtSh.GetView().GetWindow(), rWrtSh.GetView(), *pCoreSet, SwCharDlgMode::Std));
-        if (!pDlg)
-        {
-            SAL_WARN("sw.ui", "Dialog creation failed!");
-            return;
-        }
+        pDlg.reset(pFact->CreateSwCharDlg(rWrtSh.GetView().GetFrameWeld(), rWrtSh.GetView(), *pCoreSet, SwCharDlgMode::Std));
 
         if (nSlot == FN_INSERT_HYPERLINK)
             pDlg->SetCurPageId("hyperlink");
@@ -219,6 +205,7 @@ void sw_CharDialog(SwWrtShell &rWrtSh, bool bUseDialog, sal_uInt16 nSlot, const 
             {
                 sw_CharDialogResult(pDlg->GetOutputItemSet(), rWrtSh, pCoreSet, bSel, bSelectionPut, pRequest.get());
             }
+            pDlg->disposeOnce();
         });
     }
     else if (pArgs)
@@ -227,14 +214,10 @@ void sw_CharDialog(SwWrtShell &rWrtSh, bool bUseDialog, sal_uInt16 nSlot, const 
     }
 }
 
-static void sw_CharDialogResult(const SfxItemSet* pSet, SwWrtShell &rWrtSh, std::shared_ptr<SfxItemSet> pCoreSet, bool bSel, bool bSelectionPut, SfxRequest *pReq)
+static void sw_CharDialogResult(const SfxItemSet* pSet, SwWrtShell &rWrtSh, std::shared_ptr<SfxItemSet> const & pCoreSet, bool bSel, bool bSelectionPut, SfxRequest *pReq)
 {
     SfxItemSet aTmpSet( *pSet );
     ::ConvertAttrGenToChar(aTmpSet, *pCoreSet);
-
-    // Clear these to prevent paragraph background being set.
-    aTmpSet.ClearItem( rWrtSh.GetView().GetPool().GetWhich( XATTR_FILLSTYLE ) );
-    aTmpSet.ClearItem( rWrtSh.GetView().GetPool().GetWhich( XATTR_FILLCOLOR ) );
 
     const SfxPoolItem* pSelectionItem;
     bool bInsert = false;
@@ -419,11 +402,8 @@ void SwTextShell::Execute(SfxRequest &rReq)
                 // open the dialog "Tools/Options/Language Settings - Language"
                 // to set the documents default language
                 SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-                if (pFact)
-                {
-                    ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateVclDialog( GetView().GetWindow(), SID_LANGUAGE_OPTIONS ));
-                    pDlg->Execute();
-                }
+                ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateVclDialog( GetView().GetWindow(), SID_LANGUAGE_OPTIONS ));
+                pDlg->Execute();
             }
             else
             {
@@ -562,10 +542,8 @@ void SwTextShell::Execute(SfxRequest &rReq)
         case FN_INSERT_FOOTNOTE_DLG:
         {
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "Dialog creation failed!");
             ScopedVclPtr<AbstractInsFootNoteDlg> pDlg(pFact->CreateInsFootNoteDlg(
                 GetView().GetFrameWeld(), rWrtSh));
-            OSL_ENSURE(pDlg, "Dialog creation failed!");
             pDlg->SetHelpId(GetStaticInterface()->GetSlot(nSlot)->GetCommand());
             if ( pDlg->Execute() == RET_OK )
             {
@@ -646,9 +624,7 @@ void SwTextShell::Execute(SfxRequest &rReq)
             else
             {
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact && "SwAbstractDialogFactory fail!");
                 ScopedVclPtr<AbstractSwBreakDlg> pDlg(pFact->CreateSwBreakDlg(GetView().GetFrameWeld(), rWrtSh));
-                assert(pDlg && "Dialog creation failed!");
                 if ( pDlg->Execute() == RET_OK )
                 {
                     nKind = pDlg->GetKind();
@@ -703,10 +679,7 @@ void SwTextShell::Execute(SfxRequest &rReq)
             else
             {
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
                 ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwInsertBookmarkDlg( GetView().GetWindow(), rWrtSh, rReq ));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
                 pDlg->Execute();
             }
 
@@ -735,10 +708,7 @@ void SwTextShell::Execute(SfxRequest &rReq)
                 pVFrame->ToggleChildWindow(FN_REDLINE_ACCEPT);
 
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
             ScopedVclPtr<AbstractSwModalRedlineAcceptDlg> pDlg(pFact->CreateSwModalRedlineAcceptDlg(&GetView().GetEditWin()));
-            OSL_ENSURE(pDlg, "Dialog creation failed!");
 
             switch (lcl_AskRedlineFlags(GetView().GetFrameWeld()))
             {
@@ -1067,10 +1037,7 @@ void SwTextShell::Execute(SfxRequest &rReq)
                     sDefPage = OUStringToOString(static_cast<const SfxStringItem*>(pItem)->GetValue(), RTL_TEXTENCODING_UTF8);
 
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
-                pDlg.reset(pFact->CreateSwParaDlg( GetView().GetWindow(),GetView(), aCoreSet, false, sDefPage ));
-                OSL_ENSURE(pDlg, "Dialog creation failed!");
+                pDlg.reset(pFact->CreateSwParaDlg(GetView().GetFrameWeld(), GetView(), aCoreSet, false, sDefPage));
             }
 
             if ( !bUseDialog )
@@ -1123,6 +1090,7 @@ void SwTextShell::Execute(SfxRequest &rReq)
 
                         sw_ParagraphDialogResult(pSet, rWrtSh, *pRequest, rWrtSh.GetCursor());
                     }
+                    pDlg->disposeOnce();
                 });
             }
         }
@@ -1227,34 +1195,21 @@ void SwTextShell::Execute(SfxRequest &rReq)
             {
                 if (nSlot != SID_ATTR_CHAR_COLOR_EXT)
                 {
-                    rWrtSh.StartUndo( SwUndoId::INSATTR );
-                    rWrtSh.SetAttrItem(
-                        SvxBrushItem( rEdtWin.GetWaterCanTextBackColor(), RES_CHRATR_BACKGROUND) );
+                    SfxItemSet aCoreSet( rWrtSh.GetView().GetPool(), svl::Items<
+                                         RES_CHRATR_BACKGROUND, RES_CHRATR_BACKGROUND>{} );
 
-                    // Remove MS specific highlight when background is set
-                    rWrtSh.SetAttrItem( SvxBrushItem(RES_CHRATR_HIGHLIGHT) );
-
-                    // Remove shading marker
-                    SfxItemSet aCoreSet( rWrtSh.GetView().GetPool(), svl::Items<RES_CHRATR_GRABBAG, RES_CHRATR_GRABBAG>{} );
                     rWrtSh.GetCurAttr( aCoreSet );
 
-                    const SfxPoolItem *pTmpItem;
-                    if( SfxItemState::SET == aCoreSet.GetItemState( RES_CHRATR_GRABBAG, false, &pTmpItem ) )
-                    {
-                        SfxGrabBagItem aGrabBag(*static_cast<const SfxGrabBagItem*>(pTmpItem));
-                        std::map<OUString, css::uno::Any>& rMap = aGrabBag.GetGrabBag();
-                        auto aIterator = rMap.find("CharShadingMarker");
-                        if( aIterator != rMap.end() )
-                        {
-                            aIterator->second <<= false;
-                        }
-                        rWrtSh.SetAttrItem( aGrabBag );
-                    }
-                    rWrtSh.EndUndo( SwUndoId::INSATTR );
+                    // Remove highlight if already set of the same color
+                    const SvxBrushItem& rBrushItem = aCoreSet.Get(RES_CHRATR_BACKGROUND);
+                    if ( aSet == rBrushItem.GetColor() )
+                        aSet = COL_TRANSPARENT;
+
+                    ApplyCharBackground(aSet, rWrtSh);
                 }
                 else
                     rWrtSh.SetAttrItem(
-                        SvxColorItem( rEdtWin.GetWaterCanTextColor(), RES_CHRATR_COLOR) );
+                        SvxColorItem(aSet, RES_CHRATR_COLOR) );
             }
             else if (nSlot == SID_ATTR_CHAR_COLOR_BACKGROUND)
             {
@@ -1450,7 +1405,7 @@ void SwTextShell::GetState( SfxItemSet &rSet )
 
             LanguageType nLang = rSh.GetCurLang();
             LanguageTag aLanguageTag( nLang);
-            lang::Locale aLocale( aLanguageTag.getLocale());
+            const lang::Locale& aLocale( aLanguageTag.getLocale());
 
             // disable "Thesaurus" context menu entry if there is nothing to look up
             uno::Reference< linguistic2::XThesaurus >  xThes( ::GetThesaurus() );

@@ -21,11 +21,14 @@
 
 #include <unotools/unotoolsdllapi.h>
 #include <sal/types.h>
-#include <osl/mutex.hxx>
-#include <com/sun/star/frame/XFrame.hpp>
 #include <rtl/ustring.hxx>
 #include <unotools/options.hxx>
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
+
+namespace com { namespace sun { namespace star { namespace frame { class XFrame; } } } }
+namespace osl { class Mutex; }
 
 /*-************************************************************************************************************
     @descr          The method GetList() returns a list of property values.
@@ -65,7 +68,7 @@ class SAL_WARN_UNUSED UNOTOOLS_DLLPUBLIC SvtCommandOptions : public utl::detail:
         /*-****************************************************************************************************
             @short      return complete specified list
             @descr      Call it to get all entries of an dynamic menu.
-                        We return a list of all nodes with his names and properties.
+                        We return a list of all nodes with its names and properties.
             @param      "eOption" select the list to retrieve.
             @return     A list of command strings is returned.
 

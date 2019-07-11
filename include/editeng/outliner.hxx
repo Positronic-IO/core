@@ -87,11 +87,8 @@ class OutlinerViewShell;
 enum class CharCompressType;
 enum class TransliterationFlags;
 class SvxFieldData;
+class SfxUndoManager;
 
-namespace svl
-{
-    class IUndoManager;
-}
 namespace com { namespace sun { namespace star { namespace linguistic2 {
     class XSpellChecker1;
     class XHyphenator;
@@ -248,8 +245,7 @@ public:
 
     void        CreateSelectionList (std::vector<Paragraph*> &aSelList) ;
 
-    // Returns the number of selected paragraphs
-    sal_Int32   Select( Paragraph const * pParagraph, bool bSelect = true);
+    void        Select( Paragraph const * pParagraph, bool bSelect = true);
 
     OUString    GetSelected() const;
     void        SelectRange( sal_Int32 nFirst, sal_Int32 nCount );
@@ -278,7 +274,7 @@ public:
 
     void        Cut();
     void        Copy();
-    void        Paste();
+    void        Paste( bool bUseSpecial = false );
     void        PasteSpecial();
 
     const SfxStyleSheet*  GetStyleSheet() const;
@@ -609,7 +605,7 @@ private:
 
     sal_Int32           nDepthChangedHdlPrevDepth;
     sal_Int16           nMaxDepth;
-    const sal_Int16     nMinDepth;
+    static constexpr sal_Int16 gnMinDepth = -1;
 
     OutlinerMode        nOutlinerMode;
 
@@ -694,7 +690,7 @@ public:
 
     size_t          InsertView( OutlinerView* pView, size_t nIndex = size_t(-1) );
     void            RemoveView( OutlinerView const * pView );
-    OutlinerView*   RemoveView( size_t nIndex );
+    void            RemoveView( size_t nIndex );
     OutlinerView*   GetView( size_t nIndex ) const;
     size_t          GetViewCount() const;
 
@@ -706,7 +702,7 @@ public:
 
     void            SetToEmptyText();
 
-    OutlinerParaObject* CreateParaObject( sal_Int32 nStartPara = 0, sal_Int32 nParaCount = EE_PARA_ALL ) const;
+    std::unique_ptr<OutlinerParaObject> CreateParaObject( sal_Int32 nStartPara = 0, sal_Int32 nParaCount = EE_PARA_ALL ) const;
 
     const SfxItemSet& GetEmptyItemSet() const;
 
@@ -742,7 +738,7 @@ public:
     bool            IsUndoEnabled() const;
     void            UndoActionStart( sal_uInt16 nId );
     void            UndoActionEnd();
-    void            InsertUndo( EditUndo* pUndo );
+    void            InsertUndo( std::unique_ptr<EditUndo> pUndo );
     bool            IsInUndo();
 
     void            ClearModifyFlag();
@@ -760,7 +756,7 @@ public:
     void ClearOverflowingParaNum();
     bool IsPageOverflow();
 
-    OutlinerParaObject *GetEmptyParaObject() const;
+    std::unique_ptr<OutlinerParaObject> GetEmptyParaObject() const;
 
 
     void            DepthChangedHdl(Paragraph*, ParaFlag nPrevFlags);
@@ -882,8 +878,8 @@ public:
 
     ErrCode             Read( SvStream& rInput, const OUString& rBaseURL, EETextFormat, SvKeyValueIterator* pHTTPHeaderAttrs = nullptr );
 
-    ::svl::IUndoManager& GetUndoManager();
-    ::svl::IUndoManager* SetUndoManager(::svl::IUndoManager* pNew);
+    SfxUndoManager& GetUndoManager();
+    SfxUndoManager* SetUndoManager(SfxUndoManager* pNew);
 
     void            QuickSetAttribs( const SfxItemSet& rSet, const ESelection& rSel );
     void            QuickInsertField( const SvxFieldItem& rFld, const ESelection& rSel );
@@ -911,7 +907,6 @@ public:
 
     // Deprecated
     void            SetDefaultLanguage( LanguageType eLang );
-    LanguageType    GetDefaultLanguage() const;
 
     void            CompleteOnlineSpelling();
 
@@ -992,9 +987,6 @@ public:
 
     // convenient method to determine the bullets/numbering status for all paragraphs
     sal_Int32 GetBulletsNumberingStatus() const;
-
-    // tdf#115639 compatibility flag
-    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled);
 };
 
 #endif

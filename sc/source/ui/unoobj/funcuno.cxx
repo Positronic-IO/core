@@ -21,6 +21,7 @@
 #include <sfx2/app.hxx>
 #include <svl/itemprop.hxx>
 #include <svl/sharedstringpool.hxx>
+#include <unotools/charclass.hxx>
 
 #include <scitems.hxx>
 #include <funcuno.hxx>
@@ -166,7 +167,6 @@ static bool lcl_CopyData( ScDocument* pSrcDoc, const ScRange& rSrcRange,
 }
 
 ScFunctionAccess::ScFunctionAccess() :
-    pOptions( nullptr ),
     aPropertyMap( ScDocOptionsHelper::GetPropertyMap() ),
     mbArray( true ),    // default according to behaviour of older Office versions
     mbValid( true )
@@ -176,7 +176,7 @@ ScFunctionAccess::ScFunctionAccess() :
 
 ScFunctionAccess::~ScFunctionAccess()
 {
-    delete pOptions;
+    pOptions.reset();
     {
         // SfxBroadcaster::RemoveListener checks DBG_TESTSOLARMUTEX():
         SolarMutexGuard g;
@@ -241,7 +241,7 @@ void SAL_CALL ScFunctionAccess::setPropertyValue(
     else
     {
         if ( !pOptions )
-            pOptions = new ScDocOptions();
+            pOptions.reset( new ScDocOptions() );
 
         // options aren't initialized from configuration - always get the same default behaviour
 
@@ -259,7 +259,7 @@ uno::Any SAL_CALL ScFunctionAccess::getPropertyValue( const OUString& aPropertyN
         return uno::Any( mbArray );
 
     if ( !pOptions )
-        pOptions = new ScDocOptions();
+        pOptions.reset( new ScDocOptions() );
 
     // options aren't initialized from configuration - always get the same default behaviour
 
@@ -389,7 +389,7 @@ class SequencesContainer
     long& mrDocRow;
     bool mbOverflow;
     bool mbArgError;
-    ScDocument* mpDoc;
+    ScDocument* const mpDoc;
     ScTokenArray& mrTokenArr;
 
 public:

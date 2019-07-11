@@ -23,10 +23,13 @@
 #include <com/sun/star/sheet/DataPilotFieldAutoShowInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldLayoutInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldReference.hpp>
+#include <com/sun/star/sheet/DataPilotFieldReferenceItemType.hpp>
 
 #include <tools/datetime.hxx>
 #include <svl/zformat.hxx>
 #include <svl/intitem.hxx>
+#include <sal/log.hxx>
+#include <sot/storage.hxx>
 
 #include <document.hxx>
 #include <formulacell.hxx>
@@ -115,9 +118,11 @@ void XclImpPCItem::WriteToSource( XclImpRoot& rRoot, const ScAddress& rScPos ) c
     {
         double fValue;
         sal_uInt8 nErrCode = static_cast< sal_uInt8 >( *pnError );
-        const ScTokenArray* pScTokArr = rRoot.GetOldFmlaConverter().GetBoolErr(
+        std::unique_ptr<ScTokenArray> pScTokArr = rRoot.GetOldFmlaConverter().GetBoolErr(
             XclTools::ErrorToEnum( fValue, true, nErrCode ) );
-        ScFormulaCell* pCell = pScTokArr ? new ScFormulaCell(&rDoc.getDoc(), rScPos, *pScTokArr) : new ScFormulaCell(&rDoc.getDoc(), rScPos);
+        ScFormulaCell* pCell = pScTokArr
+            ? new ScFormulaCell(&rDoc.getDoc(), rScPos, pScTokArr.release())
+            : new ScFormulaCell(&rDoc.getDoc(), rScPos);
         pCell->SetHybridDouble( fValue );
         rDoc.setFormulaCell(rScPos, pCell);
     }
@@ -1472,7 +1477,7 @@ void XclImpPivotTable::Convert()
     }
 
     // create the DataPilot
-    ScDPObject* pDPObj = new ScDPObject( &GetDocRef() );
+    std::unique_ptr<ScDPObject> pDPObj(new ScDPObject( &GetDocRef() ));
     pDPObj->SetName( maPTInfo.maTableName );
     if (!maPTInfo.maDataName.isEmpty())
         aSaveData.GetDataLayoutDimension()->SetLayoutName(maPTInfo.maDataName);
@@ -1485,8 +1490,7 @@ void XclImpPivotTable::Convert()
     pDPObj->SetOutRange( aOutRange );
     pDPObj->SetHeaderLayout( maPTViewEx9Info.mnGridLayout == 0 );
 
-    GetDoc().GetDPCollection()->InsertNewTable(pDPObj);
-    mpDPObj = pDPObj;
+    mpDPObj = GetDoc().GetDPCollection()->InsertNewTable(std::move(pDPObj));
 
     ApplyFieldInfo();
     ApplyMergeFlags(aOutRange, aSaveData);
@@ -1566,13 +1570,13 @@ void XclImpPivotTable::ApplyMergeFlags(const ScRange& rOutRange, const ScDPSaveD
         itr    = aFieldBtns.begin();
         itrEnd = aFieldBtns.end();
         vector<const ScDPSaveDimension*>::const_iterator itDim = aFieldDims.begin();
-        for (; itr != itrEnd; ++itr, ++itDim)
+        for (; itr != itrEnd; ++itr)
         {
             ScMF nMFlag = ScMF::Button;
-            const ScDPSaveDimension* pDim = *itDim;
-            if (pDim->HasInvisibleMember())
+            const ScDPSaveDimension* pDim = itDim != aFieldDims.end() ? *itDim++ : nullptr;
+            if (pDim && pDim->HasInvisibleMember())
                 nMFlag |= ScMF::HiddenMember;
-            if (!pDim->IsDataLayout())
+            if (!pDim || !pDim->IsDataLayout())
                 nMFlag |= ScMF::ButtonPopup;
             rDoc.ApplyFlagsTab(itr->Col(), itr->Row(), itr->Col(), itr->Row(), itr->Tab(), nMFlag);
         }

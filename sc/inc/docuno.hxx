@@ -37,7 +37,6 @@
 #include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
 #include <com/sun/star/sheet/XSpreadsheets2.hpp>
 #include <com/sun/star/sheet/XDocumentAuditing.hpp>
-#include <com/sun/star/chart2/data/XDataProvider.hpp>
 #include <com/sun/star/chart2/XDataProviderAccess.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/util/XProtectable.hpp>
@@ -48,14 +47,14 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/sheet/XCellRangesAccess.hpp>
 #include <com/sun/star/sheet/opencl/XOpenCLSelection.hpp>
-#include <com/sun/star/sheet/opencl/OpenCLPlatform.hpp>
 #include <com/sun/star/util/XChangesNotifier.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/interfacecontainer2.hxx>
 #include <svl/itemprop.hxx>
-#include <vcl/event.hxx>
 #include <vcl/ITiledRenderable.hxx>
-#include "drwlayer.hxx"
+
+namespace com { namespace sun { namespace star { namespace chart2 { namespace data { class XDataProvider; } } } } }
+namespace com { namespace sun { namespace star { namespace sheet { namespace opencl { struct OpenCLPlatform; } } } } }
 
 class ScDocShell;
 class ScAnnotationObj;
@@ -92,10 +91,10 @@ class SC_DLLPUBLIC ScModelObj : public SfxBaseModel,
                     public css::sheet::opencl::XOpenCLSelection
 {
 private:
-    SfxItemPropertySet      aPropSet;
+    SfxItemPropertySet const aPropSet;
     ScDocShell*             pDocShell;
-    ScPrintFuncCache*       pPrintFuncCache;
-    ScPrintUIOptions*       pPrinterOptions;
+    std::unique_ptr<ScPrintFuncCache> pPrintFuncCache;
+    std::unique_ptr<ScPrintUIOptions> pPrinterOptions;
     std::unique_ptr<ScPrintState> m_pPrintState;
     css::uno::Reference<css::uno::XAggregation> xNumberAgg;
     css::uno::Reference<css::uno::XInterface> xDrawGradTab;
@@ -507,9 +506,9 @@ class ScTableColumnsObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    SCTAB                   nTab;
-    SCCOL                   nStartCol;
-    SCCOL                   nEndCol;
+    SCTAB const             nTab;
+    SCCOL const             nStartCol;
+    SCCOL const             nEndCol;
 
     ScTableColumnObj*       GetObjectByIndex_Impl(sal_Int32 nIndex) const;
     ScTableColumnObj*       GetObjectByName_Impl(const OUString& aName) const;
@@ -573,9 +572,9 @@ class ScTableRowsObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    SCTAB                   nTab;
-    SCROW                   nStartRow;
-    SCROW                   nEndRow;
+    SCTAB const             nTab;
+    SCROW const             nStartRow;
+    SCROW const             nEndRow;
 
     ScTableRowObj*          GetObjectByIndex_Impl(sal_Int32 nIndex) const;
 
@@ -660,7 +659,7 @@ class ScAnnotationsObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    SCTAB                   nTab;           ///< Collection belongs to the sheet
+    SCTAB const             nTab;           ///< Collection belongs to the sheet
 
     bool                    GetAddressByIndex_Impl( sal_Int32 nIndex, ScAddress& rPos ) const;
     ScAnnotationObj*        GetObjectByIndex_Impl( sal_Int32 nIndex ) const;
@@ -703,7 +702,7 @@ class ScScenariosObj : public cppu::WeakImplHelper<
 {
 private:
     ScDocShell*             pDocShell;
-    SCTAB                   nTab;
+    SCTAB const             nTab;
 
     bool                    GetScenarioIndex_Impl( const OUString& rName, SCTAB& rIndex );
     ScTableSheetObj*        GetObjectByIndex_Impl(sal_Int32 nIndex);

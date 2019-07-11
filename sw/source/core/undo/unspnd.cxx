@@ -32,12 +32,13 @@
 #include <redline.hxx>
 #include <docary.hxx>
 #include <IShellCursorSupplier.hxx>
+#include <osl/diagnose.h>
 
 // SPLITNODE
 
 SwUndoSplitNode::SwUndoSplitNode( SwDoc* pDoc, const SwPosition& rPos,
                                     bool bChkTable )
-    : SwUndo( SwUndoId::SPLITNODE, pDoc ), pRedlData( nullptr ), nNode( rPos.nNode.GetIndex() ),
+    : SwUndo( SwUndoId::SPLITNODE, pDoc ), nNode( rPos.nNode.GetIndex() ),
         nContent( rPos.nContent.GetIndex() ),
         bTableFlag( false ), bChkTableStt( bChkTable )
 {
@@ -56,7 +57,7 @@ SwUndoSplitNode::SwUndoSplitNode( SwDoc* pDoc, const SwPosition& rPos,
     // consider Redline
     if( pDoc->getIDocumentRedlineAccess().IsRedlineOn() )
     {
-        pRedlData = new SwRedlineData( nsRedlineType_t::REDLINE_INSERT, pDoc->getIDocumentRedlineAccess().GetRedlineAuthor() );
+        pRedlData.reset( new SwRedlineData( nsRedlineType_t::REDLINE_INSERT, pDoc->getIDocumentRedlineAccess().GetRedlineAuthor() ) );
         SetRedlineFlags( pDoc->getIDocumentRedlineAccess().GetRedlineFlags() );
     }
 
@@ -66,7 +67,7 @@ SwUndoSplitNode::SwUndoSplitNode( SwDoc* pDoc, const SwPosition& rPos,
 SwUndoSplitNode::~SwUndoSplitNode()
 {
     m_pHistory.reset();
-    delete pRedlData;
+    pRedlData.reset();
 }
 
 void SwUndoSplitNode::UndoImpl(::sw::UndoRedoContext & rContext)

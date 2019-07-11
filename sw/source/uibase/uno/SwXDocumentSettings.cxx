@@ -20,6 +20,7 @@
 #include <config_features.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <utility>
 
@@ -49,7 +50,6 @@
 #include <unomod.hxx>
 #include <vcl/svapp.hxx>
 #include <svl/asiancfg.hxx>
-#include <comphelper/servicehelper.hxx>
 
 #include <swmodule.hxx>
 #include <cfgitems.hxx>
@@ -78,6 +78,7 @@ enum SwDocumentSettingsPropertyHandles
     HANDLE_IS_KERN_ASIAN_PUNCTUATION,
     HANDLE_CHARACTER_COMPRESSION_TYPE,
     HANDLE_APPLY_USER_DATA,
+    HANDLE_SAVE_THUMBNAIL,
     HANDLE_SAVE_GLOBAL_DOCUMENT_LINKS,
     HANDLE_CURRENT_DATABASE_DATA_SOURCE,
     HANDLE_CURRENT_DATABASE_COMMAND,
@@ -128,6 +129,10 @@ enum SwDocumentSettingsPropertyHandles
     HANDLE_CLIPPED_PICTURES,
     HANDLE_BACKGROUND_PARA_OVER_DRAWINGS,
     HANDLE_EMBED_FONTS,
+    HANDLE_EMBED_USED_FONTS,
+    HANDLE_EMBED_LATIN_SCRIPT_FONTS,
+    HANDLE_EMBED_ASIAN_SCRIPT_FONTS,
+    HANDLE_EMBED_COMPLEX_SCRIPT_FONTS,
     HANDLE_EMBED_SYSTEM_FONTS,
     HANDLE_TAB_OVER_MARGIN,
     HANDLE_TREAT_SINGLE_COLUMN_BREAK_AS_PAGE_BREAK,
@@ -155,7 +160,8 @@ static MasterPropertySetInfo * lcl_createSettingsInfo()
         { OUString("PrinterPaperFromSetup"),      HANDLE_PRINTER_PAPER,                   cppu::UnoType<bool>::get(),           0},
         { OUString("IsKernAsianPunctuation"),     HANDLE_IS_KERN_ASIAN_PUNCTUATION,       cppu::UnoType<bool>::get(),           0},
         { OUString("CharacterCompressionType"),   HANDLE_CHARACTER_COMPRESSION_TYPE,      cppu::UnoType<sal_Int16>::get(),             0},
-        { OUString("ApplyUserData"),              HANDLE_APPLY_USER_DATA,                 cppu::UnoType<bool>::get(),           0},
+        { OUString("ApplyUserData"),              HANDLE_APPLY_USER_DATA,                 cppu::UnoType<bool>::get(),           0 },
+        { OUString("SaveThumbnail"),              HANDLE_SAVE_THUMBNAIL,                  cppu::UnoType<bool>::get(),           0 },
         { OUString("SaveGlobalDocumentLinks"),    HANDLE_SAVE_GLOBAL_DOCUMENT_LINKS,      cppu::UnoType<bool>::get(),           0},
         { OUString("CurrentDatabaseDataSource"),  HANDLE_CURRENT_DATABASE_DATA_SOURCE,    cppu::UnoType<OUString>::get(),          0},
         { OUString("CurrentDatabaseCommand"),     HANDLE_CURRENT_DATABASE_COMMAND,        cppu::UnoType<OUString>::get(),          0},
@@ -207,6 +213,10 @@ static MasterPropertySetInfo * lcl_createSettingsInfo()
         { OUString("ClippedPictures"), HANDLE_CLIPPED_PICTURES, cppu::UnoType<bool>::get(), 0},
         { OUString("BackgroundParaOverDrawings"), HANDLE_BACKGROUND_PARA_OVER_DRAWINGS, cppu::UnoType<bool>::get(), 0},
         { OUString("EmbedFonts"), HANDLE_EMBED_FONTS, cppu::UnoType<bool>::get(), 0},
+        { OUString("EmbedOnlyUsedFonts"), HANDLE_EMBED_USED_FONTS, cppu::UnoType<bool>::get(), 0},
+        { OUString("EmbedLatinScriptFonts"), HANDLE_EMBED_LATIN_SCRIPT_FONTS, cppu::UnoType<bool>::get(), 0},
+        { OUString("EmbedAsianScriptFonts"), HANDLE_EMBED_ASIAN_SCRIPT_FONTS, cppu::UnoType<bool>::get(), 0},
+        { OUString("EmbedComplexScriptFonts"), HANDLE_EMBED_COMPLEX_SCRIPT_FONTS, cppu::UnoType<bool>::get(), 0},
         { OUString("EmbedSystemFonts"), HANDLE_EMBED_SYSTEM_FONTS, cppu::UnoType<bool>::get(), 0},
         { OUString("TabOverMargin"), HANDLE_TAB_OVER_MARGIN, cppu::UnoType<bool>::get(), 0},
         { OUString("TreatSingleColumnBreakAsPageBreak"), HANDLE_TREAT_SINGLE_COLUMN_BREAK_AS_PAGE_BREAK, cppu::UnoType<bool>::get(), 0},
@@ -481,7 +491,12 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
         break;
         case HANDLE_APPLY_USER_DATA:
         {
-            mpDocSh->SetUseUserData( *o3tl::doAccess<bool>(rValue) );
+            mpDocSh->SetUseUserData(*o3tl::doAccess<bool>(rValue));
+        }
+        break;
+        case HANDLE_SAVE_THUMBNAIL:
+        {
+            mpDocSh->SetUseThumbnailSave(*o3tl::doAccess<bool>(rValue));
         }
         break;
         case HANDLE_SAVE_GLOBAL_DOCUMENT_LINKS:
@@ -820,6 +835,30 @@ void SwXDocumentSettings::_setSingleValue( const comphelper::PropertyInfo & rInf
             mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::EMBED_FONTS, bTmp);
         }
         break;
+        case HANDLE_EMBED_USED_FONTS:
+        {
+            bool bTmp = *o3tl::doAccess<bool>(rValue);
+            mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::EMBED_USED_FONTS, bTmp);
+        }
+        break;
+        case HANDLE_EMBED_LATIN_SCRIPT_FONTS:
+        {
+            bool bTmp = *o3tl::doAccess<bool>(rValue);
+            mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::EMBED_LATIN_SCRIPT_FONTS, bTmp);
+        }
+        break;
+        case HANDLE_EMBED_ASIAN_SCRIPT_FONTS:
+        {
+            bool bTmp = *o3tl::doAccess<bool>(rValue);
+            mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::EMBED_ASIAN_SCRIPT_FONTS, bTmp);
+        }
+        break;
+        case HANDLE_EMBED_COMPLEX_SCRIPT_FONTS:
+        {
+            bool bTmp = *o3tl::doAccess<bool>(rValue);
+            mpDoc->getIDocumentSettingAccess().set(DocumentSettingId::EMBED_COMPLEX_SCRIPT_FONTS, bTmp);
+        }
+        break;
         case HANDLE_EMBED_SYSTEM_FONTS:
         {
             bool bTmp = *o3tl::doAccess<bool>(rValue);
@@ -982,8 +1021,7 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
             {
                 SvMemoryStream aStream;
                 pPrinter->Store( aStream );
-                aStream.Seek ( STREAM_SEEK_TO_END );
-                sal_uInt32 nSize = aStream.Tell();
+                sal_uInt32 nSize = aStream.TellEnd();
                 aStream.Seek ( STREAM_SEEK_TO_BEGIN );
                 Sequence < sal_Int8 > aSequence( nSize );
                 aStream.ReadBytes(aSequence.getArray(), nSize);
@@ -1010,6 +1048,11 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
         case HANDLE_APPLY_USER_DATA:
         {
             rValue <<= mpDocSh->IsUseUserData();
+        }
+        break;
+        case HANDLE_SAVE_THUMBNAIL:
+        {
+            rValue <<= mpDocSh->IsUseThumbnailSave();
         }
         break;
         case HANDLE_CHARACTER_COMPRESSION_TYPE:
@@ -1274,6 +1317,26 @@ void SwXDocumentSettings::_getSingleValue( const comphelper::PropertyInfo & rInf
         case HANDLE_EMBED_FONTS:
         {
             rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::EMBED_FONTS );
+        }
+        break;
+        case HANDLE_EMBED_USED_FONTS:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::EMBED_USED_FONTS );
+        }
+        break;
+        case HANDLE_EMBED_LATIN_SCRIPT_FONTS:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::EMBED_LATIN_SCRIPT_FONTS );
+        }
+        break;
+        case HANDLE_EMBED_ASIAN_SCRIPT_FONTS:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::EMBED_ASIAN_SCRIPT_FONTS );
+        }
+        break;
+        case HANDLE_EMBED_COMPLEX_SCRIPT_FONTS:
+        {
+            rValue <<= mpDoc->getIDocumentSettingAccess().get( DocumentSettingId::EMBED_COMPLEX_SCRIPT_FONTS );
         }
         break;
         case HANDLE_EMBED_SYSTEM_FONTS:

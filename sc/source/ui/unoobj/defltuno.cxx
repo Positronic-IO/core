@@ -37,6 +37,7 @@
 
 #include <limits>
 
+class SvxFontItem;
 using namespace ::com::sun::star;
 
 static const SfxItemPropertyMapEntry* lcl_GetDocDefaultsMap()
@@ -185,13 +186,12 @@ void SAL_CALL ScDocDefaultsObj::setPropertyValue(
     else
     {
         ScDocumentPool* pPool = pDocShell->GetDocument().GetPool();
-        SfxPoolItem* pNewItem = pPool->GetDefaultItem(pEntry->nWID).Clone();
+        std::unique_ptr<SfxPoolItem> pNewItem(pPool->GetDefaultItem(pEntry->nWID).Clone());
 
         if( !pNewItem->PutValue( aValue, pEntry->nMemberId ) )
             throw lang::IllegalArgumentException();
 
         pPool->SetPoolDefaultItem( *pNewItem );
-        delete pNewItem;    // copied in SetPoolDefaultItem
 
         ItemsChanged();
     }

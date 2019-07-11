@@ -26,6 +26,7 @@
 #include <vector>
 
 class SwTextNode;
+class SwRootFrame;
 
 /** Some helpers for converting model strings to view strings.
 
@@ -94,17 +95,16 @@ class ModelToViewHelper
             , m_bVisible(bVisible)
         {
         }
-        sal_Int32 m_nModelPos;
-        sal_Int32 m_nViewPos;
-        bool m_bVisible;
+        sal_Int32 const m_nModelPos;
+        sal_Int32 const m_nViewPos;
+        bool const m_bVisible;
     };
     typedef std::vector< ConversionMapEntry > ConversionMap;
-    typedef std::vector<sal_Int32> Positions;
 
     ConversionMap m_aMap;
     /// store positions of fields and footnotes for grammar checkers
-    Positions m_FieldPositions;
-    Positions m_FootnotePositions;
+    std::vector<sal_Int32> m_FieldPositions;
+    std::vector<sal_Int32> m_FootnotePositions;
 
     OUString m_aRetText;
 
@@ -125,7 +125,7 @@ public:
         ModelPosition() : mnPos(0), mnSubPos(0), mbIsField(false) {}
     };
 
-    ModelToViewHelper(const SwTextNode &rNode,
+    ModelToViewHelper(const SwTextNode &rNode, SwRootFrame const* pLayout,
             // defaults are appropriate for spell/grammar checking
             ExpandMode eMode = ExpandMode::ExpandFields | ExpandMode::ExpandFootnote | ExpandMode::ReplaceMode);
     ModelToViewHelper() //pass through filter, view == model
@@ -163,8 +163,8 @@ public:
     ModelPosition ConvertToModelPosition( sal_Int32 nViewPos ) const;
 
     const OUString& getViewText() const { return m_aRetText; }
-    Positions const& getFieldPositions() const { return m_FieldPositions; }
-    Positions const& getFootnotePositions() const { return m_FootnotePositions;}
+    std::vector<sal_Int32> const& getFieldPositions() const { return m_FieldPositions; }
+    std::vector<sal_Int32> const& getFootnotePositions() const { return m_FootnotePositions;}
 };
 
 #endif

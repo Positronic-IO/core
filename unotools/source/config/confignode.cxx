@@ -21,14 +21,18 @@
 #include <unotools/configpaths.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <com/sun/star/container/XHierarchicalName.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/util/XChangesBatch.hpp>
 #include <com/sun/star/util/XStringEscape.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/container/XNamed.hpp>
+#include <com/sun/star/container/XNameContainer.hpp>
+#include <com/sun/star/container/XHierarchicalNameAccess.hpp>
 #include <comphelper/namedvaluecollection.hxx>
 #include <rtl/string.hxx>
 #if OSL_DEBUG_LEVEL > 0

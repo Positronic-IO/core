@@ -35,6 +35,7 @@
 #include <tools/helpers.hxx>
 #include <osl/mutex.hxx>
 #include <osl/module.hxx>
+#include <osl/diagnose.h>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/sysdata.hxx>
@@ -68,6 +69,8 @@ enum TwainState
     TWAIN_STATE_DONE = 2,
     TWAIN_STATE_CANCELED = 3
 };
+
+static LRESULT CALLBACK TwainMsgProc( int nCode, WPARAM wParam, LPARAM lParam );
 
 class ImpTwain : public ::cppu::WeakImplHelper< util::XCloseListener >
 {
@@ -118,7 +121,7 @@ public:
 
 static ImpTwain* pImpTwainInstance = nullptr;
 
-LRESULT CALLBACK TwainWndProc( HWND hWnd,UINT nMsg, WPARAM nPar1, LPARAM nPar2 )
+static LRESULT CALLBACK TwainWndProc( HWND hWnd,UINT nMsg, WPARAM nPar1, LPARAM nPar2 )
 {
     return DefWindowProcW( hWnd, nMsg, nPar1, nPar2 );
 }

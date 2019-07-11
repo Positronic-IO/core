@@ -19,15 +19,14 @@
 #ifndef INCLUDED_SW_INC_TXTFTN_HXX
 #define INCLUDED_SW_INC_TXTFTN_HXX
 
+#include <rtl/ustring.hxx>
 #include "txatbase.hxx"
-
-namespace rtl { class OUString; }
 
 class SwNodeIndex;
 class SwTextNode;
 class SwNodes;
 class SwDoc;
-class SwFrame;
+class SwRootFrame;
 
 class SW_DLLPUBLIC SwTextFootnote : public SwTextAttr
 {
@@ -41,7 +40,7 @@ public:
 
     SwNodeIndex *GetStartNode() const { return m_pStartNode.get(); }
     void SetStartNode( const SwNodeIndex *pNode, bool bDelNodes = true );
-    void SetNumber( const sal_uInt16 nNumber, const OUString &sNumStr );
+    void SetNumber(sal_uInt16 nNumber, sal_uInt16 nNumberRLHidden, const OUString &sNumStr);
     void CopyFootnote(SwTextFootnote & rDest, SwTextNode & rDestNode) const;
 
     // Get and set TextNode pointer.
@@ -52,10 +51,12 @@ public:
     void MakeNewTextSection( SwNodes& rNodes );
 
     // Delete the FootnoteFrame from page.
-    void DelFrames( const SwFrame* );
+    void DelFrames(const SwRootFrame *);
 
     // Check conditional paragraph styles.
     void CheckCondColl();
+
+    void InvalidateNumberInLayout();
 
     // For references to footnotes.
     void SetSeqRefNo();

@@ -36,9 +36,9 @@
 #include <ooo/vba/XApplicationBase.hpp>
 
 #include <cppuhelper/exc_hlp.hxx>
-#include <comphelper/unwrapargs.hxx>
 #include <tools/urlobj.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::ooo::vba;

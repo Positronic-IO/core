@@ -36,7 +36,7 @@ public:
     virtual SfxPoolItem*     Clone(SfxItemPool* pPool=nullptr) const override;
     virtual sal_uInt16       GetValueCount() const override; // { return 3; }
 
-    OUString GetValueTextByPos(sal_uInt16 nPos) const;
+    static OUString GetValueTextByPos(sal_uInt16 nPos);
 
     virtual bool GetPresentation(SfxItemPresentation ePres, MapUnit eCoreMetric, MapUnit ePresMetric, OUString& rText, const IntlWrapper&) const override;
 };
@@ -51,6 +51,11 @@ public:
     SdrCaptionEscIsRelItem(bool bRel=true): SdrYesNoItem(SDRATTR_CAPTIONESCISREL,bRel) {}
     virtual ~SdrCaptionEscIsRelItem() override;
     virtual SfxPoolItem* Clone(SfxItemPool* pPool=nullptr) const override;
+
+    SdrCaptionEscIsRelItem(SdrCaptionEscIsRelItem const &) = default;
+    SdrCaptionEscIsRelItem(SdrCaptionEscIsRelItem &&) = default;
+    SdrCaptionEscIsRelItem & operator =(SdrCaptionEscIsRelItem const &) = delete; // due to SdrYesNoItem
+    SdrCaptionEscIsRelItem & operator =(SdrCaptionEscIsRelItem &&) = delete; // due to SdrYesNoItem
 };
 
 
@@ -65,6 +70,11 @@ public:
     SdrCaptionEscRelItem(long nEscRel=5000): SfxInt32Item(SDRATTR_CAPTIONESCREL,nEscRel) {}
     virtual ~SdrCaptionEscRelItem() override;
     virtual SfxPoolItem* Clone(SfxItemPool* pPool=nullptr) const override;
+
+    SdrCaptionEscRelItem(SdrCaptionEscRelItem const &) = default;
+    SdrCaptionEscRelItem(SdrCaptionEscRelItem &&) = default;
+    SdrCaptionEscRelItem & operator =(SdrCaptionEscRelItem const &) = delete; // due to SfxInt32Item
+    SdrCaptionEscRelItem & operator =(SdrCaptionEscRelItem &&) = delete; // due to SfxInt32Item
 };
 
 

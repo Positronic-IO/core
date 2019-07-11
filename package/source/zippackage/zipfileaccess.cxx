@@ -25,6 +25,7 @@
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <zipfileaccess.hxx>
 #include <ZipEnumeration.hxx>
@@ -34,6 +35,8 @@
 #include <ucbhelper/content.hxx>
 #include <rtl/ref.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star;
 
@@ -46,7 +49,6 @@ using namespace ::com::sun::star;
 OZipFileAccess::OZipFileAccess( const uno::Reference< uno::XComponentContext >& rxContext )
 : m_aMutexHolder( new comphelper::RefCountedMutex )
 , m_xContext( rxContext )
-, m_pListenersContainer( nullptr )
 , m_bDisposed( false )
 , m_bOwnContent( false )
 {
@@ -282,11 +284,11 @@ uno::Any SAL_CALL OZipFileAccess::getByName( const OUString& aName )
     {
         throw;
     }
-    catch (const uno::Exception& e)
+    catch (const uno::Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetException( "This package is unusable!",
-                  static_cast < OWeakObject * > ( this ),
-                                        makeAny(e));
+                  static_cast < OWeakObject * > ( this ), anyEx);
     }
 
     if ( !xEntryStream.is() )
@@ -366,7 +368,7 @@ sal_Bool SAL_CALL OZipFileAccess::hasElements()
     if ( !m_pZipFile )
         throw uno::RuntimeException(THROW_WHERE);
 
-    return ( m_pZipFile->GetEntryHash().size() != 0 );
+    return ( !m_pZipFile->GetEntryHash().empty() );
 }
 
 // XZipFileAccess

@@ -22,35 +22,68 @@
 
 #include <vcl/edit.hxx>
 #include <vcl/fixed.hxx>
+#include <vcl/weld.hxx>
 #include <dsntypes.hxx>
 
 namespace dbaui
 {
 
-// OConnectionURLEdit
-/** an edit control which may be used to edit connection URLs like
-    "sdbc:odbc:" or "jdbc:". It prevents the user from editing this prefix,
-    though it is normally shown.
-*/
-class OConnectionURLEdit : public Edit
+class OConnectionURLEdit
 {
-    ::dbaccess::ODsnTypeCollection*
-                        m_pTypeCollection;
-    VclPtr<FixedText>          m_pForcedPrefix;
-    OUString            m_sSaveValueNoPrefix;
-    bool            m_bShowPrefix; // when <TRUE> the prefix will be visible, otherwise not
+    OUString m_sSavedValue;
+
+    ::dbaccess::ODsnTypeCollection* m_pTypeCollection;
+    OUString m_sSaveValueNoPrefix;
+    bool m_bShowPrefix; // when <TRUE> the prefix will be visible, otherwise not
+
+    std::unique_ptr<weld::Entry> m_xEntry;
+    std::unique_ptr<weld::Label> m_xForcedPrefix;
 
 public:
-    OConnectionURLEdit(vcl::Window* pParent, WinBits _nBits, bool _bShowPrefix);
-    virtual ~OConnectionURLEdit() override;
-    virtual void dispose() override;
+    OConnectionURLEdit(std::unique_ptr<weld::Entry> xEntry, std::unique_ptr<weld::Label> xForcedPrefix);
+    ~OConnectionURLEdit();
 
 public:
+    bool get_visible() const { return m_xEntry->get_visible(); }
+    void connect_changed(const Link<weld::Entry&, void>& rLink) { m_xEntry->connect_changed(rLink); }
+    void set_help_id(const OString& rName) { m_xEntry->set_help_id(rName); }
+    void hide()
+    {
+        m_xEntry->hide();
+        if (m_bShowPrefix)
+            m_xForcedPrefix->hide();
+    }
+    void show()
+    {
+        m_xEntry->show();
+        if (m_bShowPrefix)
+            m_xForcedPrefix->show();
+    }
+    void save_value() { m_sSavedValue = GetText(); }
+    bool get_value_changed_from_saved() const { return m_sSavedValue != GetText(); }
+    void grab_focus()
+    {
+        m_xEntry->grab_focus();
+    }
+    void set_sensitive(bool bSensitive)
+    {
+        m_xEntry->set_sensitive(bSensitive);
+        if (m_bShowPrefix)
+            m_xForcedPrefix->set_sensitive(bSensitive);
+    }
+    void connect_focus_in(const Link<weld::Widget&, void>& rLink)
+    {
+        m_xEntry->connect_focus_in(rLink);
+    }
+    void connect_focus_out(const Link<weld::Widget&, void>& rLink)
+    {
+        m_xEntry->connect_focus_out(rLink);
+    }
+
     // Edit overridables
-    virtual void    SetText(const OUString& _rStr) override;
-    virtual void    SetText(const OUString& _rStr, const Selection& _rNewSelection) override;
-    virtual OUString  GetText() const override;
-    virtual void Resize() override;
+    void    SetText(const OUString& _rStr);
+    void    SetText(const OUString& _rStr, const Selection& _rNewSelection);
+    OUString  GetText() const;
 
     /** Shows the Prefix
         @param  _bShowPrefix

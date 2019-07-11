@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <comphelper/numberedcollection.hxx>
 #include <com/sun/star/frame/UntitledNumbersConst.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
 
 namespace comphelper{
 
@@ -220,7 +221,7 @@ OUString SAL_CALL NumberedCollection::getUntitledPrefix()
         impl_cleanUpDeadItems(m_lComponents, lDeadItems);
 
         // a) non free numbers ... return INVALID_NUMBER
-        if (lPossibleNumbers.size () < 1)
+        if (lPossibleNumbers.empty())
             return css::frame::UntitledNumbersConst::INVALID_NUMBER;
 
         // b) return first free number

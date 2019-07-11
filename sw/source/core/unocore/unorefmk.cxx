@@ -23,12 +23,14 @@
 #include <comphelper/interfacecontainer2.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/weak.hxx>
 #include <osl/mutex.hxx>
 #include <sal/config.h>
 #include <svl/listener.hxx>
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 #include <unomid.h>
 #include <unotextrange.hxx>
@@ -606,8 +608,7 @@ SwXMetaText::createTextCursorByRange(
 // the Meta has a cached list of text portions for its contents
 // this list is created by SwXTextPortionEnumeration
 // the Meta listens at the SwTextNode and throws away the cache when it changes
-class SwXMeta::Impl
-    : public SwClient
+class SwXMeta::Impl : public SvtListener
 {
 private:
     ::osl::Mutex m_Mutex; // just for OInterfaceContainerHelper2
@@ -621,56 +622,53 @@ public:
     bool m_bIsDescriptor;
     uno::Reference<text::XText> m_xParentText;
     rtl::Reference<SwXMetaText> m_xText;
+    sw::Meta* m_pMeta;
 
-    Impl(   SwXMeta & rThis, SwDoc & rDoc,
-            ::sw::Meta * const pMeta,
+    Impl(SwXMeta& rThis, SwDoc& rDoc,
+            ::sw::Meta* const pMeta,
             uno::Reference<text::XText> const& xParentText,
-            TextRangeList_t const * const pPortions)
-        : SwClient(pMeta)
-        , m_EventListeners(m_Mutex)
-        , m_pTextPortions( pPortions )
-        , m_bIsDisposed( false )
+            std::unique_ptr<TextRangeList_t const> pPortions)
+        : m_EventListeners(m_Mutex)
+        , m_pTextPortions(std::move(pPortions))
+        , m_bIsDisposed(false)
         , m_bIsDescriptor(nullptr == pMeta)
         , m_xParentText(xParentText)
         , m_xText(new SwXMetaText(rDoc, rThis))
+        , m_pMeta(pMeta)
     {
+        !m_bIsDescriptor && StartListening(m_pMeta->GetNotifier());
     }
 
-    inline const ::sw::Meta * GetMeta() const;
+    inline const ::sw::Meta* GetMeta() const;
     // only for SwXMetaField!
-    inline const ::sw::MetaField * GetMetaField() const;
+    inline const ::sw::MetaField* GetMetaField() const;
 protected:
-    // SwClient
-    virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew) override;
+    virtual void Notify(const SfxHint& rHint) override;
 
 };
 
-inline const ::sw::Meta * SwXMeta::Impl::GetMeta() const
+inline const ::sw::Meta* SwXMeta::Impl::GetMeta() const
 {
-    return static_cast< const ::sw::Meta * >(GetRegisteredIn());
+    return m_pMeta;
 }
 
 // SwModify
-void SwXMeta::Impl::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
+void SwXMeta::Impl::Notify(const SfxHint& rHint)
 {
     m_pTextPortions.reset(); // throw away cache (SwTextNode changed)
-
-    ClientModify(this, pOld, pNew);
-
-    if (GetRegisteredIn())
+    if(rHint.GetId() == SfxHintId::Dying || rHint.GetId() == SfxHintId::Deinitializing)
     {
-        return; // core object still alive
+        m_bIsDisposed = true;
+        m_pMeta = nullptr;
+        m_xText->Invalidate();
+        uno::Reference<uno::XInterface> const xThis(m_wThis);
+        if (!xThis.is())
+        {   // fdo#72695: if UNO object is already dead, don't revive it with event
+            return;
+        }
+        lang::EventObject const ev(xThis);
+        m_EventListeners.disposeAndClear(ev);
     }
-
-    m_bIsDisposed = true;
-    m_xText->Invalidate();
-    uno::Reference<uno::XInterface> const xThis(m_wThis);
-    if (!xThis.is())
-    {   // fdo#72695: if UNO object is already dead, don't revive it with event
-        return;
-    }
-    lang::EventObject const ev(xThis);
-    m_EventListeners.disposeAndClear(ev);
 }
 
 uno::Reference<text::XText> const & SwXMeta::GetParentText() const
@@ -680,8 +678,8 @@ uno::Reference<text::XText> const & SwXMeta::GetParentText() const
 
 SwXMeta::SwXMeta(SwDoc *const pDoc, ::sw::Meta *const pMeta,
         uno::Reference<text::XText> const& xParentText,
-        TextRangeList_t const*const pPortions)
-    : m_pImpl( new SwXMeta::Impl(*this, *pDoc, pMeta, xParentText, pPortions) )
+        std::unique_ptr<TextRangeList_t const> pPortions)
+    : m_pImpl( new SwXMeta::Impl(*this, *pDoc, pMeta, xParentText, std::move(pPortions)) )
 {
 }
 
@@ -716,7 +714,7 @@ SwXMeta::CreateXMeta(::sw::Meta & rMeta,
     uno::Reference<rdf::XMetadatable> xMeta(rMeta.GetXMeta());
     if (xMeta.is())
     {
-        if (pPortions.get()) // set cache in the XMeta to the given portions
+        if (pPortions) // set cache in the XMeta to the given portions
         {
             const uno::Reference<lang::XUnoTunnel> xUT(xMeta, uno::UNO_QUERY);
             SwXMeta *const pXMeta(
@@ -752,9 +750,9 @@ SwXMeta::CreateXMeta(::sw::Meta & rMeta,
     if (!xParentText.is()) { return nullptr; }
     SwXMeta *const pXMeta( (RES_TXTATR_META == rMeta.GetFormatMeta()->Which())
         ? new SwXMeta     (pTextNode->GetDoc(), &rMeta, xParentText,
-                            pPortions.release()) // temporarily un-unique_ptr :-(
+                            std::move(pPortions))
         : new SwXMetaField(pTextNode->GetDoc(), &rMeta, xParentText,
-                            pPortions.release()));
+                            std::move(pPortions)));
     // this is why the constructor is private: need to acquire pXMeta here
     xMeta.set(pXMeta);
     // in order to initialize the weak pointer cache in the core object
@@ -1019,7 +1017,9 @@ SwXMeta::AttachImpl(const uno::Reference< text::XTextRange > & i_xTextRange,
             static_cast< ::cppu::OWeakObject* >(this));
     }
 
-    pMeta->Add(m_pImpl.get());
+    m_pImpl->EndListeningAll();
+    m_pImpl->m_pMeta = pMeta.get();
+    m_pImpl->StartListening(pMeta->GetNotifier());
     pMeta->SetXMeta(uno::Reference<rdf::XMetadatable>(this));
 
     m_pImpl->m_xParentText = ::sw::CreateParentXText(*pDoc, *aPam.GetPoint());
@@ -1185,12 +1185,10 @@ SwXMeta::getElementType()
     return cppu::UnoType<text::XTextRange>::get();
 }
 
-sal_Bool SAL_CALL
-SwXMeta::hasElements()
+sal_Bool SAL_CALL SwXMeta::hasElements()
 {
     SolarMutexGuard g;
-
-    return m_pImpl->GetRegisteredIn() != nullptr;
+    return m_pImpl->m_pMeta != nullptr;
 }
 
 // XEnumerationAccess
@@ -1220,7 +1218,7 @@ SwXMeta::createEnumeration()
 
     SwPaM aPam(*pTextNode, nMetaStart);
 
-    if (!m_pImpl->m_pTextPortions.get())
+    if (!m_pImpl->m_pTextPortions)
     {
         return new SwXTextPortionEnumeration(
                     aPam, GetParentText(), nMetaStart, nMetaEnd);
@@ -1252,17 +1250,17 @@ uno::Reference<frame::XModel> SwXMeta::GetModel()
     return nullptr;
 }
 
-inline const ::sw::MetaField * SwXMeta::Impl::GetMetaField() const
+inline const ::sw::MetaField* SwXMeta::Impl::GetMetaField() const
 {
-    return static_cast< const ::sw::MetaField * >(GetRegisteredIn());
+    return dynamic_cast<sw::MetaField*>(m_pMeta);
 }
 
 SwXMetaField::SwXMetaField(SwDoc *const pDoc, ::sw::Meta *const pMeta,
         uno::Reference<text::XText> const& xParentText,
-        TextRangeList_t const*const pPortions)
-    : SwXMetaField_Base(pDoc, pMeta, xParentText, pPortions)
+        std::unique_ptr<TextRangeList_t const> pPortions)
+    : SwXMetaField_Base(pDoc, pMeta, xParentText, std::move(pPortions))
 {
-    OSL_ENSURE(pMeta && dynamic_cast< ::sw::MetaField* >(pMeta),
+    OSL_ENSURE(dynamic_cast< ::sw::MetaField* >(pMeta),
         "SwXMetaField created for wrong hint!");
 }
 
@@ -1505,10 +1503,9 @@ getPrefixAndSuffix(
         }
     } catch (uno::RuntimeException &) {
         throw;
-    } catch (const uno::Exception & e) {
-        throw lang::WrappedTargetRuntimeException(
-            "getPrefixAndSuffix: exception",
-            nullptr, uno::makeAny(e));
+    } catch (const uno::Exception &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw lang::WrappedTargetRuntimeException("getPrefixAndSuffix: exception", nullptr, anyEx);
     }
 }
 

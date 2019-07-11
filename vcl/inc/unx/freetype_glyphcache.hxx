@@ -23,6 +23,7 @@
 #include <unx/glyphcache.hxx>
 #include <PhysicalFontFace.hxx>
 #include <fontinstance.hxx>
+#include <vcl/glyphitem.hxx>
 
 // FreetypeFontFile has the responsibility that a font file is only mapped once.
 // (#86621#) the old directly ft-managed solution caused it to be mapped
@@ -80,53 +81,33 @@ private:
     FreetypeFontFile* const mpFontFile;
     const int       mnFaceNum;
     int             mnRefCount;
-    sal_IntPtr      mnFontId;
+    sal_IntPtr const mnFontId;
     FontAttributes  maDevFontAttributes;
 
     FontCharMapRef  mxFontCharMap;
 };
 
-class FreetypeManager
-{
-public:
-                        FreetypeManager();
-                        ~FreetypeManager();
-
-    void                AddFontFile( const OString& rNormalizedName,
-                            int nFaceNum, sal_IntPtr nFontId, const FontAttributes&);
-    void                AnnounceFonts( PhysicalFontCollection* ) const;
-    void                ClearFontList();
-
-    FreetypeFont* CreateFont( const FontSelectPattern& );
-
-private:
-    typedef std::unordered_map<sal_IntPtr,FreetypeFontInfo*> FontList;
-    FontList            maFontList;
-
-    sal_IntPtr          mnMaxFontId;
-};
-
 class FreetypeFontFace : public PhysicalFontFace
 {
 private:
-    FreetypeFontInfo*             mpFreetypeFontInfo;
+    FreetypeFontInfo* const             mpFreetypeFontInfo;
 
 public:
                             FreetypeFontFace( FreetypeFontInfo*, const FontAttributes& );
 
-    virtual LogicalFontInstance* CreateFontInstance( const FontSelectPattern& ) const override;
-    virtual PhysicalFontFace* Clone() const override   { return new FreetypeFontFace( *this ); }
+    virtual rtl::Reference<LogicalFontInstance> CreateFontInstance( const FontSelectPattern& ) const override;
     virtual sal_IntPtr      GetFontId() const override { return mpFreetypeFontInfo->GetFontId(); }
 };
 
 // a class for cache entries for physical font instances that are based on serverfonts
 class VCL_DLLPUBLIC FreetypeFontInstance : public LogicalFontInstance
 {
-    friend LogicalFontInstance* FreetypeFontFace::CreateFontInstance(const FontSelectPattern&) const;
+    friend rtl::Reference<LogicalFontInstance> FreetypeFontFace::CreateFontInstance(const FontSelectPattern&) const;
 
     FreetypeFont* mpFreetypeFont;
 
     virtual hb_font_t* ImplInitHbFont() override;
+    virtual bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const override;
 
 protected:
     explicit FreetypeFontInstance(const PhysicalFontFace& rPFF, const FontSelectPattern& rFSP);
@@ -136,6 +117,8 @@ public:
 
     void SetFreetypeFont(FreetypeFont* p);
     FreetypeFont* GetFreetypeFont() const { return mpFreetypeFont; }
+
+    virtual bool GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const override;
 };
 
 #endif // INCLUDED_VCL_GENERIC_GLYPHS_GCACH_FTYP_HXX

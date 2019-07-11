@@ -229,7 +229,7 @@ namespace drawinglayer
         {
             // This can be made dependent of  getSdrLFSAttribute().getFill() and getSdrLFSAttribute().getLine()
             // again when no longer geometry is needed for non-visible 3D objects as it is now for chart
-            if(getPolyPolygon().count() && !maSlices.size())
+            if(getPolyPolygon().count() && maSlices.empty())
             {
                 ::osl::MutexGuard aGuard( m_aMutex );
 
@@ -264,7 +264,6 @@ namespace drawinglayer
             mfDiagonal(fDiagonal),
             mfBackScale(fBackScale),
             mfRotation(fRotation),
-            mpLastRLGViewInformation(nullptr),
             mbSmoothNormals(bSmoothNormals),
             mbSmoothLids(bSmoothLids),
             mbCharacterMode(bCharacterMode),

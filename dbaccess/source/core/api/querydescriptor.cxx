@@ -22,8 +22,6 @@
 #include "querydescriptor.hxx"
 #include <apitools.hxx>
 #include <stringconstants.hxx>
-#include <comphelper/property.hxx>
-#include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -35,7 +33,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::util;
-using namespace ::comphelper;
 using namespace ::osl;
 using namespace ::cppu;
 
@@ -154,7 +151,16 @@ sal_Int64 SAL_CALL OQueryDescriptor_Base::getSomething( const Sequence< sal_Int8
     return 0;
 }
 
-IMPLEMENT_IMPLEMENTATION_ID(OQueryDescriptor_Base)
+css::uno::Sequence<sal_Int8> OQueryDescriptor_Base::getUnoTunnelImplementationId()
+{
+    static cppu::OImplementationId aId;
+    return aId.getImplementationId();
+}
+
+css::uno::Sequence<sal_Int8> OQueryDescriptor_Base::getImplementationId()
+{
+    return css::uno::Sequence<sal_Int8>();
+}
 
 void OQueryDescriptor_Base::setColumnsOutOfDate( bool _bOutOfDate )
 {

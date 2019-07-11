@@ -17,9 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <rtl/tencinfo.h>
 #include <hintids.hxx>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
-#include <comphelper/string.hxx>
 #include <unotools/tempfile.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/errinf.hxx>
@@ -36,7 +36,7 @@
 #include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
 #include <unotools/saveopt.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/strings.hrc>
 #include <svtools/svtresid.hxx>
 #include <svx/svxids.hrc>
@@ -211,7 +211,6 @@ static OUString lcl_ConvertTabsToSpaces( const OUString& sLine )
 SwSrcView::SwSrcView(SfxViewFrame* pViewFrame, SfxViewShell*) :
     SfxViewShell( pViewFrame, SWSRCVIEWFLAGS ),
     aEditWin( VclPtr<SwSrcEditWindow>::Create( &pViewFrame->GetWindow(), this ) ),
-    pSearchItem(nullptr),
     bSourceSaved(false),
     eLoadEncoding(RTL_TEXTENCODING_DONTKNOW)
 {
@@ -234,7 +233,7 @@ SwSrcView::~SwSrcView()
     pDocShell->SetAutoLoad(INetURLObject(url), delay,
                             (delay != 0) || !url.isEmpty());
     EndListening(*pDocShell);
-    delete pSearchItem;
+    pSearchItem.reset();
 
     aEditWin.disposeAndClear();
 }
@@ -485,7 +484,7 @@ void SwSrcView::GetState(SfxItemSet& rSet)
             case SID_UNDO:
             case SID_REDO:
             {
-                ::svl::IUndoManager& rMgr = pTextView->GetTextEngine()->GetUndoManager();
+                SfxUndoManager& rMgr = pTextView->GetTextEngine()->GetUndoManager();
                 sal_uInt16 nCount = 0;
                 if(nWhich == SID_UNDO)
                 {
@@ -548,15 +547,14 @@ SvxSearchItem* SwSrcView::GetSearchItem()
 {
     if(!pSearchItem)
     {
-        pSearchItem = new SvxSearchItem(SID_SEARCH_ITEM);
+        pSearchItem.reset(new SvxSearchItem(SID_SEARCH_ITEM));
     }
-    return pSearchItem;
+    return pSearchItem.get();
 }
 
 void SwSrcView::SetSearchItem( const SvxSearchItem& rItem )
 {
-    delete pSearchItem;
-    pSearchItem = static_cast<SvxSearchItem*>(rItem.Clone());
+    pSearchItem.reset(static_cast<SvxSearchItem*>(rItem.Clone()));
 }
 
 void SwSrcView::StartSearchAndReplace(const SvxSearchItem& rSearchItem,

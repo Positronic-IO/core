@@ -18,6 +18,7 @@
  */
 
 #include <basegfx/raster/rasterconvert3d.hxx>
+#include <basegfx/vector/b2dvector.hxx>
 #include <basegfx/polygon/b3dpolygon.hxx>
 #include <basegfx/polygon/b3dpolypolygon.hxx>
 #include <basegfx/point/b3dpoint.hxx>
@@ -69,12 +70,11 @@ namespace basegfx
             std::vector< RasterConversionLineEntry3D* > aCurrentLine;
             std::vector< RasterConversionLineEntry3D* > aNextLine;
             std::vector< RasterConversionLineEntry3D* >::iterator aRasterConversionLineEntry3D;
-            sal_uInt32 nPairCount(0);
 
             // get scanlines first LineNumber as start
             sal_Int32 nLineNumber(std::max(aCurrentEntry->getY(), nStartLine));
 
-            while((aCurrentLine.size() || aCurrentEntry != maLineEntries.end()) && (nLineNumber < nStopLine))
+            while((!aCurrentLine.empty() || aCurrentEntry != maLineEntries.end()) && (nLineNumber < nStopLine))
             {
                 // add all entries which start at current line to current scanline
                 while(aCurrentEntry != maLineEntries.end())
@@ -117,7 +117,7 @@ namespace basegfx
                 // process current scanline
                 aRasterConversionLineEntry3D = aCurrentLine.begin();
                 aNextLine.clear();
-                nPairCount = 0;
+                sal_uInt32 nPairCount(0);
 
                 while(aRasterConversionLineEntry3D != aCurrentLine.end())
                 {

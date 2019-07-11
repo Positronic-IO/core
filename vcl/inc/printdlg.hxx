@@ -44,9 +44,9 @@ namespace vcl
             Size                maPreviewSize;
             sal_Int32           mnDPIX;
             sal_Int32           mnDPIY;
-            Bitmap              maPreviewBitmap;
+            BitmapEx            maPreviewBitmap;
             OUString            maReplacementString;
-            OUString            maToolTipString;
+            OUString const      maToolTipString;
             bool                mbGreyscale;
             VclPtr<FixedLine>   maHorzDim;
             VclPtr<FixedLine>   maVertDim;
@@ -145,10 +145,10 @@ namespace vcl
             VclPtr<FixedImage>                      mpCollateImage;
             VclPtr<CheckBox>                        mpReverseOrderBox;
 
-            BitmapEx                                maCollateBmp;
-            BitmapEx                                maNoCollateBmp;
+            BitmapEx const                          maCollateBmp;
+            BitmapEx const                          maNoCollateBmp;
 
-            long                                    mnCollateUIMode;
+            bool                                    mbCollateAlwaysOff;
 
             JobTabPage( VclBuilder* );
 
@@ -187,7 +187,7 @@ namespace vcl
         VclPtr<HelpButton>                      mpHelpButton;
 
         OUString                                maPageStr;
-        OUString                                maNoPageStr;
+        OUString const                          maNoPageStr;
         sal_Int32                               mnCurPage;
         sal_Int32                               mnCachedPages;
 
@@ -195,7 +195,6 @@ namespace vcl
         std::map< OUString, std::vector< VclPtr<vcl::Window> > >
                                                 maPropertyToWindowMap;
         std::map< VclPtr<vcl::Window>, sal_Int32 >          maControlToNumValMap;
-        std::set< OUString >                    maReverseDependencySet;
 
         Size                                    maNupPortraitSize;
         Size                                    maNupLandscapeSize;
@@ -203,9 +202,9 @@ namespace vcl
         /// internal, used for automatic Nup-Portrait/landscape
         Size                                    maFirstPageSize;
 
-        OUString                           maPrintToFileText;
-        OUString                           maPrintText;
-        OUString                           maDefPrtText;
+        OUString const                          maPrintToFileText;
+        OUString                                maPrintText;
+        OUString const                          maDefPrtText;
 
         bool                                mbShowLayoutPage;
 
@@ -233,6 +232,7 @@ namespace vcl
         DECL_LINK( ToggleHdl, CheckBox&, void );
         DECL_LINK( ToggleRadioHdl, RadioButton&, void );
         DECL_LINK( ModifyHdl, Edit&, void );
+        DECL_LINK( ActivatePageHdl, TabControl *, void);
 
         DECL_LINK( UIOption_CheckHdl, CheckBox&, void );
         DECL_LINK( UIOption_RadioHdl, RadioButton&, void );

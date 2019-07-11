@@ -11,9 +11,7 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_PIVOTLAYOUTTREELISTBASE_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_PIVOTLAYOUTTREELISTBASE_HXX
 
-#include <svtools/treelistbox.hxx>
-
-#include <vcl/builder.hxx>
+#include <vcl/treelistbox.hxx>
 
 #include <pivot.hxx>
 
@@ -52,6 +50,9 @@ public:
     virtual DragDropMode NotifyStartDrag(TransferDataContainer& aTransferDataContainer,
                                          SvTreeListEntry* pEntry) override;
     virtual void DragFinished(sal_Int8 nDropAction) override;
+
+    virtual void GetFocus() override;
+    virtual void LoseFocus() override;
 
     void PushEntriesToPivotFieldVector(ScPivotFieldVector& rVector);
 

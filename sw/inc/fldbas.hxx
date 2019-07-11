@@ -25,8 +25,10 @@
 #include <cppuhelper/weakref.hxx>
 #include <editeng/svxenum.hxx>
 #include <vector>
+#include <climits>
 
 class SwDoc;
+class SwRootFrame;
 class SvNumberFormatter;
 namespace com { namespace sun { namespace star { namespace beans { class XPropertySet; } } } }
 namespace com { namespace sun { namespace star { namespace uno { class Any; } } } }
@@ -43,7 +45,7 @@ enum class SwFieldIds : sal_uInt16 {
     Author,
     Chapter,
     DocStat,
-    GetExp,
+    GetExp, // 10
     SetExp,
     GetRef,
     HiddenText,
@@ -53,7 +55,7 @@ enum class SwFieldIds : sal_uInt16 {
     Reg,
     VarReg,
     SetRef,
-    Input,
+    Input, // 20
     Macro,
     Dde,
     Table,
@@ -63,7 +65,7 @@ enum class SwFieldIds : sal_uInt16 {
     DbNextSet,
     DbNumSet,
     DbSetNumber,
-    ExtUser,
+    ExtUser, // 30
     RefPageSet,
     RefPageGet,
     Internet,
@@ -73,7 +75,7 @@ enum class SwFieldIds : sal_uInt16 {
     TableOfAuthorities,
     CombinedChars,
     Dropdown,
-    ParagraphSignature,
+    ParagraphSignature, // 40
     LAST = ParagraphSignature,
 
     Unknown = USHRT_MAX, // used as default value in some method calls
@@ -129,7 +131,7 @@ enum SwFieldTypesEnum {
     TYP_PARAGRAPHSIGFLD,
     TYP_END
 };
-enum SwAttrFieldTYpe {
+enum SwAttrFieldType {
     ATTR_NONE,
     ATTR_DATEFLD,
     ATTR_TIMEFLD,
@@ -190,7 +192,6 @@ namespace nsSwGetSetExpType
 {
 const SwGetSetExpType GSE_STRING  = 0x0001; ///< String
 const SwGetSetExpType GSE_EXPR    = 0x0002; ///< Expression
-const SwGetSetExpType GSE_INP     = 0x0004; ///< InputField
 const SwGetSetExpType GSE_SEQ     = 0x0008; ///< Sequence
 const SwGetSetExpType GSE_FORMULA = 0x0010; ///< Formula
 }
@@ -227,11 +228,11 @@ OUString  FormatNumber(sal_uInt32 nNum, SvxNumType nFormat, LanguageType nLang =
  For each class there is one instance of the associated type class.
  Base class of all field types is SwFieldType. */
 
-class SW_DLLPUBLIC SwFieldType : public SwModify
+class SW_DLLPUBLIC SwFieldType : public SwModify, public sw::BroadcasterMixin
 {
     css::uno::WeakReference<css::beans::XPropertySet> m_wXFieldMaster;
 
-    SwFieldIds m_nWhich;
+    SwFieldIds const m_nWhich;
 
     friend void FinitUI();     ///< In order to delete pointer!
     static  std::vector<OUString>* s_pFieldNames;
@@ -262,6 +263,7 @@ public:
     SwFieldIds              Which() const { return m_nWhich; }
 
     inline  void            UpdateFields() const;
+    virtual void dumpAsXml(struct _xmlTextWriter* pWriter) const;
 };
 
 inline void SwFieldType::UpdateFields() const
@@ -271,7 +273,7 @@ inline void SwFieldType::UpdateFields() const
 
 /** Base class of all fields.
  Type of field is queried via Which.
- Expanded content of field is queried via Expand(). */
+ Expanded content of field is queried via ExpandField(). */
 class SW_DLLPUBLIC SwField
 {
 private:
@@ -282,8 +284,8 @@ private:
     sal_uInt32          m_nFormat;              /// this can be either SvxNumType or SwChapterFormat depending on the subtype
     SwFieldType*        m_pType;
 
-    virtual OUString    Expand() const = 0;
-    virtual SwField*    Copy() const = 0;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const = 0;
+    virtual std::unique_ptr<SwField> Copy() const = 0;
 
 protected:
     void                SetFormat(sal_uInt32 const nSet) {
@@ -298,6 +300,11 @@ protected:
 public:
     virtual             ~SwField();
 
+    SwField(SwField const &) = default;
+    SwField(SwField &&) = default;
+    SwField & operator =(SwField const &) = default;
+    SwField & operator =(SwField &&) = default;
+
     inline SwFieldType* GetTyp() const;
 
     /// Set new type (used for copying among documents).
@@ -309,14 +316,16 @@ public:
                     this is because various fields need special handing
                     (ChangeExpansion()) to return correct values, and only
                     SwTextFormatter::NewFieldPortion() sets things up properly.
+        @param  pLayout     the layout to use for expansion; there are a few
+                            fields that expand differently via layout mode.
         @return     the generated text (suitable for display)
       */
-    OUString            ExpandField(bool const bCached) const;
+    OUString            ExpandField(bool bCached, SwRootFrame const* pLayout) const;
 
     /// @return name or content.
     virtual OUString    GetFieldName() const;
 
-    SwField *           CopyField() const;
+    std::unique_ptr<SwField> CopyField() const;
 
     /// ResId
     SwFieldIds          Which() const
@@ -441,6 +450,7 @@ public:
     }
 
     static sal_uInt32       GetSystemFormat(SvNumberFormatter* pFormatter, sal_uInt32 nFormat);
+    void dumpAsXml(struct _xmlTextWriter* pWriter) const override;
 };
 
 class SW_DLLPUBLIC SwFormulaField : public SwValueField

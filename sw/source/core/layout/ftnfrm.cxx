@@ -35,6 +35,7 @@
 #include <calbck.hxx>
 #include <ndindex.hxx>
 #include <pam.hxx>
+#include <sal/log.hxx>
 
 #define ENDNOTE 0x80000000
 
@@ -473,6 +474,27 @@ void SwFootnoteFrame::InvalidateNxtFootnoteCnts( SwPageFrame const *pPage )
     }
 }
 
+bool SwFootnoteFrame::IsDeleteForbidden() const
+{
+    if (SwLayoutFrame::IsDeleteForbidden())
+        return true;
+    // needs to be in sync with the ::Cut logic
+    const SwLayoutFrame *pUp = GetUpper();
+    if (pUp)
+    {
+        if (GetPrev())
+            return false;
+
+        // The last footnote takes its container along if it
+        // is deleted. Cut would put pUp->Lower() to the value
+        // of GetNext(), so if there is no GetNext then
+        // Cut would delete pUp. If that condition is true
+        // here then check if the container is delete-forbidden
+        return !GetNext() && pUp->IsDeleteForbidden();
+    }
+    return false;
+}
+
 void SwFootnoteFrame::Cut()
 {
     if ( GetNext() )
@@ -498,7 +520,7 @@ void SwFootnoteFrame::Cut()
     if ( pUp )
     {
         // The last footnote takes its container along
-        if ( !pUp->Lower() )
+        if (!pUp->Lower())
         {
             SwPageFrame *pPage = pUp->FindPageFrame();
             if ( pPage )
@@ -1104,7 +1126,7 @@ void SwFootnoteBossFrame::ResetFootnote( const SwFootnoteFrame *pCheck )
     if ( !pNd )
         pNd = pCheck->GetFormat()->GetDoc()->
               GetNodes().GoNextSection( &aIdx, true, false );
-    SwIterator<SwFrame,SwContentNode> aIter( *pNd );
+    SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti> aIter(*pNd);
     SwFrame* pFrame = aIter.First();
     while( pFrame )
     {
@@ -1589,7 +1611,8 @@ void SwFootnoteBossFrame::AppendFootnote( SwContentFrame *pRef, SwTextFootnote *
             pNew->Calc(getRootFrame()->GetCurrShell()->GetOut());
             // #i57914# - adjust fix #i49383#
             if ( !bOldFootnoteFrameLocked && !pNew->GetLower() &&
-                 !pNew->IsColLocked() && !pNew->IsBackMoveLocked() )
+                 !pNew->IsColLocked() && !pNew->IsBackMoveLocked() &&
+                 !pNew->IsDeleteForbidden() )
             {
                 pNew->Cut();
                 SwFrame::DestroyFrame(pNew);
@@ -1612,7 +1635,7 @@ SwFootnoteFrame *SwFootnoteBossFrame::FindFootnote( const SwContentFrame *pRef, 
               GetNodes().GoNextSection( &aIdx, true, false );
     if ( !pNd )
         return nullptr;
-    SwIterator<SwFrame,SwContentNode> aIter( *pNd );
+    SwIterator<SwFrame, SwContentNode, sw::IteratorMode::UnwrapMulti> aIter(*pNd);
     SwFrame* pFrame = aIter.First();
     if( pFrame )
         do
@@ -1641,12 +1664,15 @@ SwFootnoteFrame *SwFootnoteBossFrame::FindFootnote( const SwContentFrame *pRef, 
     return nullptr;
 }
 
-void SwFootnoteBossFrame::RemoveFootnote( const SwContentFrame *pRef, const SwTextFootnote *pAttr,
+bool SwFootnoteBossFrame::RemoveFootnote(
+        const SwContentFrame *const pRef, const SwTextFootnote *const pAttr,
                               bool bPrep )
 {
+    bool ret(false);
     SwFootnoteFrame *pFootnote = FindFootnote( pRef, pAttr );
     if( pFootnote )
     {
+        ret = true;
         do
         {
             SwFootnoteFrame *pFoll = pFootnote->GetFollow();
@@ -1663,6 +1689,7 @@ void SwFootnoteBossFrame::RemoveFootnote( const SwContentFrame *pRef, const SwTe
         }
     }
     FindPageFrame()->UpdateFootnoteNum();
+    return ret;
 }
 
 void SwFootnoteBossFrame::ChangeFootnoteRef( const SwContentFrame *pOld, const SwTextFootnote *pAttr,
@@ -1732,7 +1759,7 @@ void SwFootnoteBossFrame::CollectFootnotes( const SwContentFrame* _pRef,
     CollectFootnotes_( _pRef, pFootnote, _rFootnoteArr, _bCollectOnlyPreviousFootnotes, pRefBossFrame );
 }
 
-inline void FootnoteInArr( SwFootnoteFrames& rFootnoteArr, SwFootnoteFrame* pFootnote )
+static void FootnoteInArr( SwFootnoteFrames& rFootnoteArr, SwFootnoteFrame* pFootnote )
 {
     if ( rFootnoteArr.end() == std::find( rFootnoteArr.begin(), rFootnoteArr.end(), pFootnote ) )
         rFootnoteArr.push_back( pFootnote );
@@ -2194,7 +2221,8 @@ void SwFootnoteBossFrame::RearrangeFootnotes( const SwTwips nDeadLine, const boo
                         if ( !bLock && bUnlockLastFootnoteFrame &&
                              !pLastFootnoteFrame->GetLower() &&
                              !pLastFootnoteFrame->IsColLocked() &&
-                             !pLastFootnoteFrame->IsBackMoveLocked() )
+                             !pLastFootnoteFrame->IsBackMoveLocked() &&
+                             !pLastFootnoteFrame->IsDeleteForbidden() )
                         {
                             pLastFootnoteFrame->Cut();
                             SwFrame::DestroyFrame(pLastFootnoteFrame);
@@ -2367,10 +2395,30 @@ void SwPageFrame::UpdateFootnoteNum()
                     SwTextFootnote* pTextFootnote = pFootnote->GetAttr();
                     if( !pTextFootnote->GetFootnote().IsEndNote() &&
                          pTextFootnote->GetFootnote().GetNumStr().isEmpty() &&
-                         !pFootnote->GetMaster() &&
-                         (pTextFootnote->GetFootnote().GetNumber() != ++nNum) )
+                         !pFootnote->GetMaster())
                     {
-                        pTextFootnote->SetNumber( nNum, OUString() );
+                        // sw_redlinehide: the layout can only keep one number
+                        // up to date; depending on its setting, this is either
+                        // the non-hidden or the hidden number; the other
+                        // number will simply be preserved as-is (so in case
+                        // there are 2 layouts, maybe both can be updated...)
+                        ++nNum;
+                        sal_uInt16 const nOldNum(pTextFootnote->GetFootnote().GetNumber());
+                        sal_uInt16 const nOldNumRLHidden(pTextFootnote->GetFootnote().GetNumberRLHidden());
+                        if (getRootFrame()->IsHideRedlines())
+                        {
+                            if (nNum != nOldNumRLHidden)
+                            {
+                                pTextFootnote->SetNumber(nOldNum, nNum, OUString());
+                            }
+                        }
+                        else
+                        {
+                            if (nNum != nOldNum)
+                            {
+                                pTextFootnote->SetNumber(nNum, nOldNumRLHidden, OUString());
+                            }
+                        }
                     }
                     if ( pFootnote->GetNext() )
                         pFootnote = static_cast<SwFootnoteFrame*>(pFootnote->GetNext());
@@ -2804,18 +2852,20 @@ SwSaveFootnoteHeight::~SwSaveFootnoteHeight()
 const SwContentFrame* SwFootnoteFrame::GetRef() const
 {
     const SwContentFrame* pRefAttr = GetRefFromAttr();
-    SAL_WARN_IF( mpReference != pRefAttr && !mpReference->IsAnFollow( pRefAttr )
-            && !pRefAttr->IsAnFollow( mpReference ),
-            "sw.core", "access to deleted Frame? pRef != pAttr->GetRef()" );
+    // check consistency: access to deleted frame?
+    assert(mpReference == pRefAttr || mpReference->IsAnFollow(pRefAttr)
+            || pRefAttr->IsAnFollow(mpReference));
+    (void) pRefAttr;
     return mpReference;
 }
 
 SwContentFrame* SwFootnoteFrame::GetRef()
 {
     const SwContentFrame* pRefAttr = GetRefFromAttr();
-    SAL_WARN_IF( mpReference != pRefAttr && !mpReference->IsAnFollow( pRefAttr )
-            && !pRefAttr->IsAnFollow( mpReference ),
-            "sw.core", "access to deleted Frame? pRef != pAttr->GetRef()" );
+    // check consistency: access to deleted frame?
+    assert(mpReference == pRefAttr || mpReference->IsAnFollow(pRefAttr)
+            || pRefAttr->IsAnFollow(mpReference));
+    (void) pRefAttr;
     return mpReference;
 }
 #endif
@@ -2831,7 +2881,7 @@ SwContentFrame* SwFootnoteFrame::GetRefFromAttr()
     assert(mpAttribute && "invalid Attribute");
     SwTextNode& rTNd = const_cast<SwTextNode&>(mpAttribute->GetTextNode());
     SwPosition aPos( rTNd, SwIndex( &rTNd, mpAttribute->GetStart() ));
-    SwContentFrame* pCFrame = rTNd.getLayoutFrame( getRootFrame(), nullptr, &aPos, false );
+    SwContentFrame* pCFrame = rTNd.getLayoutFrame(getRootFrame(), &aPos);
     return pCFrame;
 }
 

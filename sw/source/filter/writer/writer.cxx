@@ -27,6 +27,8 @@
 #include <editeng/fontitem.hxx>
 #include <editeng/eeitem.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <shellio.hxx>
 #include <doc.hxx>
 #include <docary.hxx>
@@ -35,6 +37,7 @@
 #include <IDocumentMarkAccess.hxx>
 #include <numrule.hxx>
 #include <swerror.h>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 using namespace css;
 
@@ -82,10 +85,9 @@ Writer_Impl::Writer_Impl()
 
 void Writer_Impl::RemoveFontList( SwDoc& rDoc )
 {
-    for( std::vector<const SvxFontItem*>::const_iterator it = aFontRemoveLst.begin();
-        it != aFontRemoveLst.end(); ++it )
+    for( const auto& rpFontItem : aFontRemoveLst )
     {
-        rDoc.GetAttrPool().Remove( **it );
+        rDoc.GetAttrPool().Remove( *rpFontItem );
     }
 }
 
@@ -118,6 +120,7 @@ void Writer_Impl::InsertBkmk(const ::sw::mark::IMark& rBkmk)
 Writer::Writer()
     : m_pImpl(o3tl::make_unique<Writer_Impl>())
     , m_pOrigFileName(nullptr), m_pDoc(nullptr), m_pOrigPam(nullptr), m_pCurrentPam(nullptr)
+    , m_bHideDeleteRedlines(false)
 {
     m_bWriteAll = m_bShowProgress = m_bUCS2_WithStartChar = true;
     m_bASCII_NoLastLineEnd = m_bASCII_ParaAsBlank = m_bASCII_ParaAsCR =
@@ -314,7 +317,7 @@ bool Writer::CopyLocalFileToINet( OUString& rFileNm )
             INetProtocol::VndSunStarWebdav >= aTargetUrl.GetProtocol() ) )
         return bRet;
 
-    if (m_pImpl->pFileNameMap.get())
+    if (m_pImpl->pFileNameMap)
     {
         // has the file been moved?
         std::map<OUString, OUString>::iterator it = m_pImpl->pFileNameMap->find( rFileNm );

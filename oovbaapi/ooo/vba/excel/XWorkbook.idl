@@ -20,21 +20,11 @@
 #define __ooo_vba_excel_XWorkbook_idl__
 
 #include <com/sun/star/lang/XUnoTunnel.idl>
-#include <ooo/vba/XHelperInterface.idl>
-
-
 
 module ooo {  module vba {  module excel {
 
-
-
-interface XWorksheet;
-interface XWorksheets;
-interface XStyles;
-
 interface XWorkbook
 {
-
     interface ::com::sun::star::lang::XUnoTunnel;
 
     [attribute, readonly] boolean ProtectStructure;
@@ -42,6 +32,7 @@ interface XWorkbook
     [attribute, readonly] string  CodeName;
     [attribute, readonly] long FileFormat;
     [attribute] boolean  PrecisionAsDisplayed;
+    [attribute] string Author;
 
     any  Worksheets( [in] any Index );
     any  Styles( [in] any Index ) raises (com::sun::star::script::BasicErrorException);

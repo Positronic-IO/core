@@ -55,7 +55,7 @@ public:
 };
 
 
-void getAllHit3DObjectWithRelativePoint(
+static void getAllHit3DObjectWithRelativePoint(
     const basegfx::B3DPoint& rFront,
     const basegfx::B3DPoint& rBack,
     const E3dCompoundObject& rObject,
@@ -100,13 +100,13 @@ E3dScene* fillViewInformation3DForCompoundObject(drawinglayer::geometry::ViewInf
     // transformation for the correct complete ObjectTransformation. For historical reasons, the
     // root scene's own object transformation is part of the scene's ViewTransformation, o do not
     // add it. For more details, see ViewContactOfE3dScene::createViewInformation3D.
-    E3dScene* pParentScene = dynamic_cast< E3dScene* >(rCandidate.GetParentObj());
-    E3dScene* pRootScene = nullptr;
+    E3dScene* pParentScene(rCandidate.getParentE3dSceneFromE3dObject());
+    E3dScene* pRootScene(nullptr);
     basegfx::B3DHomMatrix aInBetweenSceneMatrix;
 
     while(pParentScene)
     {
-        E3dScene* pParentParentScene = dynamic_cast< E3dScene* >(pParentScene->GetParentObj());
+        E3dScene* pParentParentScene(pParentScene->getParentE3dSceneFromE3dObject());
 
         if(pParentParentScene)
         {
@@ -162,7 +162,7 @@ void getAllHit3DObjectsSortedFrontToBack(
     o_rResult.clear();
     SdrObjList* pList = rScene.GetSubList();
 
-    if(pList && pList->GetObjCount())
+    if(nullptr != pList && 0 != pList->GetObjCount())
     {
         // prepare relative HitPoint. To do so, get the VC of the 3DScene and from there
         // the Scene's 2D transformation. Multiplying with the inverse transformation
@@ -175,7 +175,7 @@ void getAllHit3DObjectsSortedFrontToBack(
         // check if test point is inside scene's area at all
         if(aRelativePoint.getX() >= 0.0 && aRelativePoint.getX() <= 1.0 && aRelativePoint.getY() >= 0.0 && aRelativePoint.getY() <= 1.0)
         {
-            SdrObjListIter aIterator(*pList, SdrIterMode::DeepNoGroups);
+            SdrObjListIter aIterator(pList, SdrIterMode::DeepNoGroups);
             ::std::vector< ImplPairDephAndObject > aDepthAndObjectResults;
             const uno::Sequence< beans::PropertyValue > aEmptyParameters;
             drawinglayer::geometry::ViewInformation3D aViewInfo3D(aEmptyParameters);

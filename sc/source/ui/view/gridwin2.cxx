@@ -203,12 +203,10 @@ void ScGridWindow::DoPushPivotButton( SCCOL nCol, SCROW nRow, const MouseEvent& 
             aArgSet.Put( ScQueryItem( SCITEM_QUERYDATA, pViewData, &aQueryParam ) );
 
             ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
             ScopedVclPtr<AbstractScPivotFilterDlg> pDlg(
                 pFact->CreateScPivotFilterDlg(
                     pViewData->GetViewShell()->GetDialogParent(), aArgSet, nSrcTab));
-            OSL_ENSURE(pDlg, "Dialog create fail!");
             if ( pDlg->Execute() == RET_OK )
             {
                 ScSheetSourceDesc aNewDesc(pDoc);
@@ -429,9 +427,9 @@ public:
     }
 
 private:
-    ScDPObject*     mpDPObject;
-    long            mnDimIndex;
-    SortType        meType;
+    ScDPObject* const     mpDPObject;
+    long const            mnDimIndex;
+    SortType const        meType;
     sal_uInt16      mnUserListIndex;
     ScTabViewShell* mpViewShell;
 };
@@ -472,7 +470,7 @@ void ScGridWindow::DPLaunchFieldPopupMenu(const Point& rScrPos, const Size& rScr
     mpDPFieldPopup.disposeAndClear();
     mpDPFieldPopup.reset(VclPtr<ScCheckListMenuWindow>::Create(this, pViewData->GetDocument()));
     mpDPFieldPopup->setName("DataPilot field member popup");
-    mpDPFieldPopup->setExtendedData(pDPData.release());
+    mpDPFieldPopup->setExtendedData(std::move(pDPData));
     mpDPFieldPopup->setOKAction(new DPFieldPopupOKAction(this));
     {
         // Populate field members.
@@ -599,8 +597,6 @@ void ScGridWindow::UpdateDPFromFieldPopupMenu()
 
 bool ScGridWindow::UpdateVisibleRange()
 {
-    ScDocument& rDoc = *pViewData->GetDocument();
-
     SCCOL nPosX = 0;
     SCROW nPosY = 0;
     SCCOL nXRight = MAXCOL;
@@ -610,6 +606,7 @@ bool ScGridWindow::UpdateVisibleRange()
     {
         // entire table in the tiled rendering case
         SCTAB nTab = pViewData->GetTabNo();
+        ScDocument const& rDoc = *pViewData->GetDocument();
         SCCOL nEndCol = 0;
         SCROW nEndRow = 0;
 

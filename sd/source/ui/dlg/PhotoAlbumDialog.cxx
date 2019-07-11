@@ -20,6 +20,7 @@
 #include <sfx2/filedlghelper.hxx>
 #include <tools/urlobj.hxx>
 
+#include <sal/log.hxx>
 #include <unotools/pathoptions.hxx>
 #include <unotools/useroptions.hxx>
 #include <unotools/ucbstreamhelper.hxx>
@@ -49,8 +50,8 @@ SdPhotoAlbumDialog::SdPhotoAlbumDialog(weld::Window* pWindow, SdDrawDocument* pA
     , m_xDownBtn(m_xBuilder->weld_button("down_btn"))
     , m_xRemoveBtn(m_xBuilder->weld_button("rem_btn"))
     , m_xImagesLst(m_xBuilder->weld_tree_view("images_tree"))
-    , m_xImg(new SvxGraphCtrl(*m_xBuilder, "preview_img"))
-    , m_xInsTypeCombo(m_xBuilder->weld_combo_box_text("opt_combo"))
+    , m_xImg(new weld::CustomWeld(*m_xBuilder, "preview_img", m_aImg))
+    , m_xInsTypeCombo(m_xBuilder->weld_combo_box("opt_combo"))
     , m_xASRCheck(m_xBuilder->weld_check_button("asr_check"))
     , m_xASRCheckCrop(m_xBuilder->weld_check_button("asr_check_crop"))
     , m_xCapCheck(m_xBuilder->weld_check_button("cap_check"))
@@ -549,8 +550,8 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, UpHdl, weld::Button&, void)
         m_xImagesLst->remove_text(sActEntry);
         m_xImagesLst->remove_text(sUpperEntry);
 
-        m_xImagesLst->insert(nActPos - 1, sAct, sActEntry, "");
-        m_xImagesLst->insert(nActPos, sUpper, sUpperEntry, "");
+        m_xImagesLst->insert(nActPos - 1, sActEntry, &sAct, nullptr, nullptr);
+        m_xImagesLst->insert(nActPos, sUpperEntry, &sUpper, nullptr, nullptr);
 
         m_xImagesLst->select(nActPos - 1);
     }
@@ -572,8 +573,8 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, DownHdl, weld::Button&, void)
         m_xImagesLst->remove_text(sActEntry);
         m_xImagesLst->remove_text(sDownEntry);
 
-        m_xImagesLst->insert(nActPos, sDown, sDownEntry, "");
-        m_xImagesLst->insert(nActPos + 1, sAct, sActEntry, "");
+        m_xImagesLst->insert(nActPos, sDownEntry, &sDown, nullptr, nullptr);
+        m_xImagesLst->insert(nActPos + 1, sActEntry, &sAct, nullptr, nullptr);
 
         m_xImagesLst->select(nActPos + 1);
     }
@@ -583,7 +584,7 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, DownHdl, weld::Button&, void)
 IMPL_LINK_NOARG(SdPhotoAlbumDialog, RemoveHdl, weld::Button&, void)
 {
     m_xImagesLst->remove(m_xImagesLst->get_selected_index());
-    m_xImg->SetGraphic(Graphic());
+    m_aImg.SetGraphic(Graphic());
 
     EnableDisableButtons();
 }
@@ -610,20 +611,19 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, SelectHdl, weld::TreeView&, void)
         // remote?
         if ( INetProtocol::File != aURLObj.GetProtocol() )
         {
-            SvStream* pStream = ::utl::UcbStreamHelper::CreateStream( sImgUrl, StreamMode::READ );
+            std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream( sImgUrl, StreamMode::READ );
 
             if( pStream )
                 m_pGraphicFilter->ImportGraphic( aGraphic, sImgUrl, *pStream, nFilter, nullptr, nFilterImportFlags );
             else
                 m_pGraphicFilter->ImportGraphic( aGraphic, aURLObj, nFilter, nullptr, nFilterImportFlags );
-            delete pStream;
         }
         else
         {
             m_pGraphicFilter->ImportGraphic( aGraphic, aURLObj, nFilter, nullptr, nFilterImportFlags );
         }
 
-        Bitmap aBmp = aGraphic.GetBitmap();
+        BitmapEx aBmp = aGraphic.GetBitmapEx();
         sal_Int32 nBmpWidth  = aBmp.GetSizePixel().Width();
         sal_Int32 nBmpHeight = aBmp.GetSizePixel().Height();
 
@@ -635,16 +635,16 @@ IMPL_LINK_NOARG(SdPhotoAlbumDialog, SelectHdl, weld::TreeView&, void)
             aBmp.Scale( nYRatio, nYRatio );
 
         aBmp.Convert( BmpConversion::N24Bit );
-        m_xImg->SetGraphic(Graphic(aBmp));
+        m_aImg.SetGraphic(Graphic(aBmp));
     }
     else
     {
-        m_xImg->SetGraphic(Graphic());
+        m_aImg.SetGraphic(Graphic());
     }
     EnableDisableButtons();
 }
 
-IMPL_LINK_NOARG(SdPhotoAlbumDialog, TypeSelectHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SdPhotoAlbumDialog, TypeSelectHdl, weld::ComboBox&, void)
 {
     // Enable "Fill Slide" only for one image
     // If we want to have it for other images too, we need to implement the actual cropping.

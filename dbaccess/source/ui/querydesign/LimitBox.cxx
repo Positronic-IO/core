@@ -32,8 +32,8 @@ namespace dbaui
 {
 
 
-LimitBox::LimitBox( vcl::Window* pParent, WinBits nStyle )
-    : NumericBox( pParent, nStyle )
+LimitBox::LimitBox( vcl::Window* pParent )
+    : NumericBox( pParent, WB_DROPDOWN | WB_VSCROLL )
 {
     SetShowTrailingZeros( false );
     SetDecimalDigits( 0 );
@@ -105,8 +105,6 @@ void LimitBox::LoadDefaultLimits()
         InsertValue( nIndex );
     }
 }
-
-VCL_BUILDER_FACTORY_ARGS( LimitBox, WB_DROPDOWN | WB_VSCROLL )
 
 } ///dbaui namespace
 

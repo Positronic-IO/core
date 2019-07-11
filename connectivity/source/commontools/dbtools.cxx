@@ -68,6 +68,7 @@
 #include <comphelper/interaction.hxx>
 #include <comphelper/property.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/conncleanup.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <connectivity/dbexception.hxx>
@@ -76,6 +77,7 @@
 #include <o3tl/any.hxx>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 #include <cppuhelper/implbase.hxx>
 #include <strings.hrc>
@@ -218,7 +220,7 @@ sal_Int32 getDefaultNumberFormat(sal_Int32 _nDataType,
     return nFormat;
 }
 
-Reference< XConnection> findConnection(const Reference< XInterface >& xParent)
+static Reference< XConnection> findConnection(const Reference< XInterface >& xParent)
 {
     Reference< XConnection> xConnection(xParent, UNO_QUERY);
     if (!xConnection.is())
@@ -230,7 +232,7 @@ Reference< XConnection> findConnection(const Reference< XInterface >& xParent)
     return xConnection;
 }
 
-Reference< XDataSource> getDataSource_allowException(
+static Reference< XDataSource> getDataSource_allowException(
             const OUString& _rsTitleOrPath,
             const Reference< XComponentContext >& _rxContext )
 {
@@ -258,7 +260,7 @@ Reference< XDataSource > getDataSource(
     return xDS;
 }
 
-Reference< XConnection > getConnection_allowException(
+static Reference< XConnection > getConnection_allowException(
             const OUString& _rsTitleOrPath,
             const OUString& _rsUser,
             const OUString& _rsPwd,
@@ -335,7 +337,7 @@ Reference< XConnection> getConnection(const Reference< XRowSet>& _rxRowSet)
 // helper function which allows to implement both the connectRowset and the ensureRowSetConnection semantics
 // if connectRowset (which is deprecated) is removed, this function and one of its parameters are
 // not needed anymore, the whole implementation can be moved into ensureRowSetConnection then)
-SharedConnection lcl_connectRowSet(const Reference< XRowSet>& _rxRowSet, const Reference< XComponentContext >& _rxContext,
+static SharedConnection lcl_connectRowSet(const Reference< XRowSet>& _rxRowSet, const Reference< XComponentContext >& _rxContext,
         bool _bAttachAutoDisposer )
 {
     SharedConnection xConnection;
@@ -478,22 +480,19 @@ Reference< XNameAccess> getPrimaryKeyColumns_throw(const Reference< XPropertySet
         if ( xKeys.is() )
         {
             ::dbtools::OPropertyMap& rPropMap = OMetaConnection::getPropMap();
-            const OUString sPropName = rPropMap.getNameByIndex(PROPERTY_ID_TYPE);
+            const OUString& sPropName = rPropMap.getNameByIndex(PROPERTY_ID_TYPE);
             Reference<XPropertySet> xProp;
             const sal_Int32 nCount = xKeys->getCount();
             for(sal_Int32 i = 0;i< nCount;++i)
             {
                 xProp.set(xKeys->getByIndex(i),UNO_QUERY_THROW);
-                if ( xProp.is() )
+                sal_Int32 nKeyType = 0;
+                xProp->getPropertyValue(sPropName) >>= nKeyType;
+                if(KeyType::PRIMARY == nKeyType)
                 {
-                    sal_Int32 nKeyType = 0;
-                    xProp->getPropertyValue(sPropName) >>= nKeyType;
-                    if(KeyType::PRIMARY == nKeyType)
-                    {
-                        const Reference<XColumnsSupplier> xKeyColsSup(xProp,UNO_QUERY_THROW);
-                        xKeyColumns = xKeyColsSup->getColumns();
-                        break;
-                    }
+                    const Reference<XColumnsSupplier> xKeyColsSup(xProp,UNO_QUERY_THROW);
+                    xKeyColumns = xKeyColsSup->getColumns();
+                    break;
                 }
             }
         }
@@ -592,16 +591,13 @@ Reference< XNameAccess > getFieldsByCommandDescriptor( const Reference< XConnect
                     eState = FAILED;
 
                     OSL_ENSURE( xObjectCollection.is(), "::dbtools::getFieldsByCommandDescriptor: invalid connection (no sdb.Connection, or no Tables-/QueriesSupplier)!");
-                    if ( xObjectCollection.is() )
+                    if ( xObjectCollection.is() && xObjectCollection->hasByName( _rCommand ) )
                     {
-                        if ( xObjectCollection.is() && xObjectCollection->hasByName( _rCommand ) )
-                        {
-                            xObjectCollection->getByName( _rCommand ) >>= xSupplyColumns;
-                                // (xSupplyColumns being NULL will be handled in the next state)
+                        xObjectCollection->getByName( _rCommand ) >>= xSupplyColumns;
+                            // (xSupplyColumns being NULL will be handled in the next state)
 
-                            // next: go for the columns
-                            eState = RETRIEVE_COLUMNS;
-                        }
+                        // next: go for the columns
+                        eState = RETRIEVE_COLUMNS;
                     }
                     break;
 
@@ -1198,7 +1194,7 @@ Reference< XDataSource> findDataSource(const Reference< XInterface >& _xParent)
     return xDataSource;
 }
 
-Reference< XSingleSelectQueryComposer > getComposedRowSetStatement( const Reference< XPropertySet >& _rxRowSet, const Reference< XComponentContext >& _rxContext )
+static Reference< XSingleSelectQueryComposer > getComposedRowSetStatement( const Reference< XPropertySet >& _rxRowSet, const Reference< XComponentContext >& _rxContext )
 {
     Reference< XSingleSelectQueryComposer > xComposer;
     try

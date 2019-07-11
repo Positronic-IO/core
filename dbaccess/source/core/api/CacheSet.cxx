@@ -39,6 +39,7 @@
 #include <com/sun/star/io/XInputStream.hpp>
 #include <comphelper/types.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 using namespace comphelper;
 
@@ -162,7 +163,7 @@ void OCacheSet::insertRow( const ORowSetRow& _rInsertRow,const connectivity::OSQ
     connectivity::ORowVector< ORowSetValue > ::Vector::iterator aEnd = _rInsertRow->get().end();
     for(; aIter != aEnd;++aIter)
     {
-        aSql.append(::dbtools::quoteName( aQuote,m_xSetMetaData->getColumnName(i++)) + ",");
+        aSql.append(::dbtools::quoteName( aQuote,m_xSetMetaData->getColumnName(i++)) ).append(",");
         aValues.append("?,");
     }
 
@@ -263,7 +264,7 @@ void OCacheSet::fillParameters( const ORowSetRow& _rRow
         }
         if(aIter->isModified())
         {
-            _sParameter.append(::dbtools::quoteName( aQuote,aColumnName) + "?,");
+            _sParameter.append(::dbtools::quoteName( aQuote,aColumnName) ).append("?,");
         }
     }
 }
@@ -284,7 +285,7 @@ void OCacheSet::updateRow(const ORowSetRow& _rInsertRow ,const ORowSetRow& _rOri
     {
         aCondition.setLength(aCondition.getLength()-5);
 
-        aSql.append(" WHERE " + aCondition.makeStringAndClear());
+        aSql.append(" WHERE " ).append( aCondition.makeStringAndClear());
     }
     else
         ::dbtools::throwSQLException(

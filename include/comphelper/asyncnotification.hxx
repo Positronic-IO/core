@@ -44,8 +44,8 @@ namespace comphelper
         virtual ~AnyEvent() override;
 
     private:
-        AnyEvent( AnyEvent& ) = delete;
-        void operator=( AnyEvent& ) = delete;
+        AnyEvent( AnyEvent const & ) = delete;
+        AnyEvent& operator=( AnyEvent const & ) = delete;
     };
 
 
@@ -204,7 +204,7 @@ namespace comphelper
         typedef EVENT_OBJECT    EventObjectType;
 
     private:
-        EventObjectType m_aEvent;
+        EventObjectType const m_aEvent;
 
     public:
         EventHolder( const EventObjectType& _rEvent )

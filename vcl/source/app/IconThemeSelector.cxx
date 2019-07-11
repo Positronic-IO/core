@@ -11,12 +11,13 @@
 
 #include <vcl/IconThemeScanner.hxx>
 #include <vcl/IconThemeInfo.hxx>
+#include <config_mpl.h>
 
 #include <algorithm>
 
 namespace vcl {
 
-/*static*/ const OUStringLiteral IconThemeSelector::FALLBACK_ICON_THEME_ID("colibre");
+/*static*/ const OUStringLiteral IconThemeSelector::FALLBACK_ICON_THEME_ID("tango");
 
 namespace {
 
@@ -50,22 +51,33 @@ IconThemeSelector::IconThemeSelector()
 /*static*/ OUString
 IconThemeSelector::GetIconThemeForDesktopEnvironment(const OUString& desktopEnvironment)
 {
+#ifdef _WIN32
+    (void)desktopEnvironment;
+    return OUString("colibre");
+#else
     OUString r;
     if ( desktopEnvironment.equalsIgnoreAsciiCase("kde4") ||
          desktopEnvironment.equalsIgnoreAsciiCase("kde5") ||
-         desktopEnvironment.equalsIgnoreAsciiCase("macosx") ) {
+         desktopEnvironment.equalsIgnoreAsciiCase("lxqt") ) {
         r = "breeze";
     }
-    else
-    if ( desktopEnvironment.equalsIgnoreAsciiCase("gnome") ||
+    else if ( desktopEnvironment.equalsIgnoreAsciiCase("macosx") ) {
+#if MPL_HAVE_SUBSET
+        r = "tango";
+#else
+        r = "breeze";
+#endif
+    }
+    else if ( desktopEnvironment.equalsIgnoreAsciiCase("gnome") ||
          desktopEnvironment.equalsIgnoreAsciiCase("mate") ||
          desktopEnvironment.equalsIgnoreAsciiCase("unity") ) {
         r = "elementary";
-    }
-    else {
-        r = FALLBACK_ICON_THEME_ID; //effective also on Windows
+    } else
+    {
+        r = FALLBACK_ICON_THEME_ID;
     }
     return r;
+#endif // _WIN32
 }
 
 OUString
@@ -118,7 +130,9 @@ IconThemeSelector::SetUseHighContrastTheme(bool v)
 void
 IconThemeSelector::SetPreferredIconTheme(const OUString& theme, bool bDarkIconTheme)
 {
-    mPreferredIconTheme = theme;
+    // lower case theme name, and (tdf#120175) replace - with _
+    // see icon-themes/README
+    mPreferredIconTheme = theme.toAsciiLowerCase().replace('-','_');
     mPreferDarkIconTheme = bDarkIconTheme;
 }
 

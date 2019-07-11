@@ -1419,9 +1419,9 @@ void SbaXFormAdapter::implInsert(const Any& aElement, sal_Int32 nIndex, const OU
 
 sal_Int32 SbaXFormAdapter::implGetPos(const OUString& rName)
 {
-    std::vector< OUString>::const_iterator aIter = std::find_if(   m_aChildNames.begin(),
+    std::vector< OUString>::const_iterator aIter = std::find(   m_aChildNames.begin(),
                                                                 m_aChildNames.end(),
-                                                                [&rName](OUString const & s) { return s == rName; });
+                                                                rName);
 
     if(aIter != m_aChildNames.end())
         return aIter - m_aChildNames.begin();
@@ -1484,7 +1484,7 @@ Type SAL_CALL SbaXFormAdapter::getElementType()
 
 sal_Bool SAL_CALL SbaXFormAdapter::hasElements()
 {
-    return m_aChildren.size() > 0;
+    return !m_aChildren.empty();
 }
 
 // css::container::XIndexContainer

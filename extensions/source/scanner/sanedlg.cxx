@@ -30,6 +30,7 @@
 #include "grid.hxx"
 #include <math.h>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <rtl/strbuf.hxx>
 #include <memory>
 #include <strings.hrc>
@@ -210,7 +211,6 @@ SaneDlg::SaneDlg( vcl::Window* pParent, Sane& rSane, bool bScanEnabled ) :
         mbScanEnabled( bScanEnabled ),
         mnCurrentOption(0),
         mnCurrentElement(0),
-        mpRange(nullptr),
         mfMin(0.0),
         mfMax(0.0),
         doScan(false)
@@ -469,12 +469,12 @@ void SaneDlg::InitFields()
             {
                 if( mrSane.GetOptionUnit( nOption ) == SANE_UNIT_MM )
                 {
-                    pField->SetUnit( FUNIT_MM );
-                    pField->SetValue( static_cast<int>(fValue), FUNIT_MM );
+                    pField->SetUnit( FieldUnit::MM );
+                    pField->SetValue( static_cast<int>(fValue), FieldUnit::MM );
                 }
                 else // SANE_UNIT_PIXEL
                 {
-                    pField->SetValue( static_cast<int>(fValue), FUNIT_CUSTOM );
+                    pField->SetValue( static_cast<int>(fValue), FieldUnit::CUSTOM );
                     pField->SetCustomUnitText("Pixel");
                 }
                 switch( i ) {
@@ -892,7 +892,7 @@ void SaneDlg::AcquirePreview()
         mrSane.SetOptionValue( nOption, true );
 
     rtl::Reference<BitmapTransporter> xTransporter(new BitmapTransporter);
-    if( ! mrSane.Start( *xTransporter.get() ) )
+    if (!mrSane.Start(*xTransporter))
     {
         std::unique_ptr<weld::MessageDialog> xErrorBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                        VclMessageType::Warning, VclButtonsType::Ok,

@@ -37,12 +37,15 @@
 #include <framework/ContextChangeEventMultiplexerTunnel.hxx>
 #include <vcl/floatwin.hxx>
 #include <vcl/fixed.hxx>
+#include <vcl/uitest/logger.hxx>
+#include <vcl/uitest/eventdescription.hxx>
 #include <splitwin.hxx>
 #include <tools/link.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/ui/ContextChangeEventMultiplexer.hpp>
@@ -91,7 +94,7 @@ SidebarController::SidebarController (
       mpTabBar(VclPtr<TabBar>::Create(
               mpParentWindow,
               rxFrame,
-              [this](const ::rtl::OUString& rsDeckId) { return this->OpenThenToggleDeck(rsDeckId); },
+              [this](const OUString& rsDeckId) { return this->OpenThenToggleDeck(rsDeckId); },
               [this](const tools::Rectangle& rButtonBox,const ::std::vector<TabBar::DeckMenuData>& rMenuData) { return this->ShowPopupMenu(rButtonBox,rMenuData); },
               this)),
       mxFrame(rxFrame),
@@ -106,7 +109,8 @@ SidebarController::SidebarController (
       mbIsDeckOpen(),
       mbFloatingDeckClosed(!pParentWindow->IsFloatingMode()),
       mnSavedSidebarWidth(pParentWindow->GetSizePixel().Width()),
-      maFocusManager([this](const Panel& rPanel){ return this->ShowPanel(rPanel); }),
+      maFocusManager([this](const Panel& rPanel){ return this->ShowPanel(rPanel); },
+                     [this](const sal_Int32 nIndex){ return this->IsDeckOpen(nIndex); }),
       mxReadOnlyModeDispatch(),
       mbIsDocumentReadOnly(false),
       mpSplitWindow(nullptr),
@@ -514,6 +518,21 @@ void SidebarController::UpdateConfigurations()
     }
 }
 
+namespace {
+
+void collectUIInformation(const OUString& rDeckId)
+{
+    EventDescription aDescription;
+    aDescription.aAction = "SIDEBAR";
+    aDescription.aParent = "MainWindow";
+    aDescription.aParameters = {{"PANEL", rDeckId}};
+    aDescription.aKeyWord = "CurrentApp";
+
+    UITestLogger::getInstance().logEvent(aDescription);
+}
+
+}
+
 void SidebarController::OpenThenToggleDeck (
     const OUString& rsDeckId)
 {
@@ -540,6 +559,7 @@ void SidebarController::OpenThenToggleDeck (
     SwitchToDeck(rsDeckId);
     mpTabBar->Invalidate();
     mpTabBar->HighlightDeck(rsDeckId);
+    collectUIInformation(rsDeckId);
 }
 
 void SidebarController::OpenThenSwitchToDeck (
@@ -561,7 +581,7 @@ void SidebarController::SwitchToDefaultDeck()
 }
 
 void SidebarController::SwitchToDeck (
-    const ::rtl::OUString& rsDeckId)
+    const OUString& rsDeckId)
 {
     if (  msCurrentDeckId != rsDeckId
         || ! mbIsDeckOpen
@@ -574,11 +594,11 @@ void SidebarController::SwitchToDeck (
     }
 }
 
-void SidebarController::CreateDeck(const ::rtl::OUString& rDeckId) {
+void SidebarController::CreateDeck(const OUString& rDeckId) {
     CreateDeck(rDeckId, maCurrentContext);
 }
 
-void SidebarController::CreateDeck(const ::rtl::OUString& rDeckId, const Context& rContext, bool bForceCreate)
+void SidebarController::CreateDeck(const OUString& rDeckId, const Context& rContext, bool bForceCreate)
 {
     std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rDeckId);
 
@@ -600,7 +620,7 @@ void SidebarController::CreateDeck(const ::rtl::OUString& rDeckId, const Context
     }
 }
 
-void SidebarController::CreatePanels(const ::rtl::OUString& rDeckId, const Context& rContext)
+void SidebarController::CreatePanels(const OUString& rDeckId, const Context& rContext)
 {
      std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rDeckId);
 
@@ -732,6 +752,8 @@ void SidebarController::SwitchToDeck (
     if (bForceNewPanels && !bForceNewDeck) // already forced if bForceNewDeck
         CreatePanels(rDeckDescriptor.msId, rContext);
 
+    if (mpCurrentDeck && mpCurrentDeck != rDeckDescriptor.mpDeck)
+        mpCurrentDeck->Hide();
     mpCurrentDeck.reset(rDeckDescriptor.mpDeck);
 
     if ( ! mpCurrentDeck)
@@ -832,7 +854,7 @@ VclPtr<Panel> SidebarController::CreatePanel (
 
 Reference<ui::XUIElement> SidebarController::CreateUIElement (
     const Reference<awt::XWindowPeer>& rxWindow,
-    const ::rtl::OUString& rsImplementationURL,
+    const OUString& rsImplementationURL,
     const bool bWantsCanvas,
     const Context& rContext)
 {
@@ -1074,7 +1096,10 @@ IMPL_LINK(SidebarController, OnMenuItemSelected, Menu*, pMenu, bool)
                                                     mxFrame->getController());
                         // Notify the tab bar about the updated set of decks.
                         mpTabBar->SetDecks(aDecks);
+                        mpTabBar->HighlightDeck(mpCurrentDeck->GetId());
+                        mpTabBar->UpdateFocusManager(maFocusManager);
                     }
+                mpParentWindow->GrabFocusToDocument();
             }
             catch (RuntimeException&)
             {
@@ -1091,14 +1116,24 @@ void SidebarController::RequestCloseDeck()
     mbIsDeckRequestedOpen = false;
     UpdateDeckOpenState();
 
-    // remove highlight from TabBar, because Deck will be closed
-    mpTabBar->RemoveDeckHighlight();
+    if (!mpCurrentDeck.get())
+        mpTabBar->RemoveDeckHighlight();
 }
 
 void SidebarController::RequestOpenDeck()
 {
     mbIsDeckRequestedOpen = true;
     UpdateDeckOpenState();
+}
+
+bool SidebarController::IsDeckOpen(const sal_Int32 nIndex)
+{
+    if (nIndex >= 0)
+    {
+        OUString asDeckId(mpTabBar->GetDeckIdForIndex(nIndex));
+        return IsDeckVisible(asDeckId);
+    }
+    return mbIsDeckOpen && mbIsDeckOpen.get();
 }
 
 bool SidebarController::IsDeckVisible(const OUString& rsDeckId)
@@ -1299,7 +1334,11 @@ void SidebarController::UpdateTitleBarIcons()
 void SidebarController::ShowPanel (const Panel& rPanel)
 {
     if (mpCurrentDeck)
+    {
+        if (!IsDeckOpen())
+            RequestOpenDeck();
         mpCurrentDeck->ShowPanel(rPanel);
+    }
 }
 
 ResourceManager::DeckContextDescriptorContainer SidebarController::GetMatchingDecks()
@@ -1312,7 +1351,7 @@ ResourceManager::DeckContextDescriptorContainer SidebarController::GetMatchingDe
     return aDecks;
 }
 
-ResourceManager::PanelContextDescriptorContainer SidebarController::GetMatchingPanels(const ::rtl::OUString& rDeckId)
+ResourceManager::PanelContextDescriptorContainer SidebarController::GetMatchingPanels(const OUString& rDeckId)
 {
     ResourceManager::PanelContextDescriptorContainer aPanels;
 
@@ -1344,9 +1383,15 @@ tools::Rectangle SidebarController::GetDeckDragArea() const
 {
     tools::Rectangle aRect;
 
-    VclPtr<DeckTitleBar> pTitleBar = mpCurrentDeck->GetTitleBar();
-    if ( pTitleBar)
-        aRect = pTitleBar->GetDragArea();
+    if(mpCurrentDeck)
+    {
+        VclPtr<DeckTitleBar> pTitleBar(mpCurrentDeck->GetTitleBar());
+
+        if(pTitleBar)
+        {
+            aRect = DeckTitleBar::GetDragArea();
+        }
+    }
 
     return aRect;
 }

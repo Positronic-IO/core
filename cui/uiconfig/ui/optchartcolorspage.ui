@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface domain="cui">
-  <!-- interface-requires gtk+ 3.0 -->
-  <!-- interface-requires LibreOffice 1.0 -->
+  <requires lib="gtk+" version="3.18"/>
+  <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkBox" id="OptChartColorsPage">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -31,6 +31,7 @@
                 <property name="can_focus">True</property>
                 <property name="hexpand">True</property>
                 <property name="vexpand">True</property>
+                <property name="show_expanders">False</property>
               </object>
             </child>
           </object>

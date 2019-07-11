@@ -26,8 +26,6 @@
 #include <vcl/scrbar.hxx>
 #include <vcl/help.hxx>
 
-#include <sfx2/ipclient.hxx>
-
 #include "hiranges.hxx"
 #include "viewutil.hxx"
 #include "select.hxx"
@@ -39,14 +37,12 @@ namespace editeng {
 }
 
 class ScEditEngineDefaulter;
-class ScGridWindow;
 class ScOutlineWindow;
 class ScRowBar;
 class ScColBar;
 class ScTabControl;
 class ScTabViewShell;
 struct ScRangeFindData;
-class ScDrawView;
 class SvBorder;
 class FuPoor;
 class Splitter;
@@ -74,8 +70,8 @@ enum HeaderType
 class ScCornerButton : public vcl::Window
 {
 private:
-    ScViewData*     pViewData;
-    bool            bAdd;
+    ScViewData* const     pViewData;
+    bool const            bAdd;
 
 protected:
     virtual void    Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
@@ -122,7 +118,7 @@ private:
     void Modifier(ScGridWindow* pWin);
 
 private:
-    ScTabViewShell* mpThisViewShell;
+    ScTabViewShell* const mpThisViewShell;
     std::array<VclPtr<ScGridWindow>, 4> const & mpGridWin;
     EditView* mpOtherEditView;
     int nTotalWindows;
@@ -136,17 +132,19 @@ private:
     VclPtr<vcl::Window>             pFrameWin;              // First !!!
     ScViewData          aViewData;              // must be at the front !
 
-    ScViewSelectionEngine*  pSelEngine;
+    std::unique_ptr<ScViewSelectionEngine> pSelEngine;
     ScViewFunctionSet       aFunctionSet;
 
-    ScHeaderSelectionEngine* pHdrSelEng;
+    std::unique_ptr<ScHeaderSelectionEngine> pHdrSelEng;
     ScHeaderFunctionSet      aHdrFunc;
 
-    ScDrawView*         pDrawView;
+    std::unique_ptr<ScDrawView> pDrawView;
 
     Size                aFrameSize;             // passed on as for DoResize
     Point               aBorderPos;
 
+    // The ownership of these two is rather weird. we seem to need
+    // to keep an old copy alive for some period of time to avoid crashing.
     FuPoor*             pDrawActual;
     FuPoor*             pDrawOld;
 
@@ -168,11 +166,11 @@ private:
 
     std::unique_ptr<sdr::overlay::OverlayObjectList> mxInputHintOO; // help hint for data validation
 
-    ScPageBreakData*    pPageBreakData;
-    std::vector<ScHighlightEntry>   maHighlightRanges;
+    std::unique_ptr<ScPageBreakData>  pPageBreakData;
+    std::vector<ScHighlightEntry>     maHighlightRanges;
 
-    ScDocument*         pBrushDocument;         // cell formats for format paint brush
-    SfxItemSet*         pDrawBrushSet;          // drawing object attributes for paint brush
+    ScDocumentUniquePtr               pBrushDocument;         // cell formats for format paint brush
+    std::unique_ptr<SfxItemSet>       pDrawBrushSet;          // drawing object attributes for paint brush
 
     Timer               aScrollTimer;
     VclPtr<ScGridWindow>       pTimerWindow;
@@ -334,7 +332,7 @@ public:
     void            DrawMarkListHasChanged();
     void            UpdateAnchorHandles();
 
-    ScPageBreakData* GetPageBreakData()     { return pPageBreakData; }
+    ScPageBreakData* GetPageBreakData()     { return pPageBreakData.get(); }
     const std::vector<ScHighlightEntry>& GetHighlightRanges()   { return maHighlightRanges; }
 
     void            UpdatePageBreakData( bool bForcePaint = false );
@@ -343,13 +341,13 @@ public:
     const ScViewData&   GetViewData() const { return aViewData; }
 
     ScViewFunctionSet&      GetFunctionSet()    { return aFunctionSet; }
-    ScViewSelectionEngine*  GetSelEngine()      { return pSelEngine; }
+    ScViewSelectionEngine*  GetSelEngine()      { return pSelEngine.get(); }
 
     bool            SelMouseButtonDown( const MouseEvent& rMEvt );
 
-    ScDrawView*     GetScDrawView()         { return pDrawView; }
+    ScDrawView*     GetScDrawView()         { return pDrawView.get(); }
     // against CLOKs
-    SdrView*        GetSdrView()            { return pDrawView; }
+    SdrView*        GetSdrView()            { return pDrawView.get(); }
 
     bool            IsMinimized() const     { return bMinimized; }
 
@@ -493,7 +491,7 @@ public:
     void            UpdateShrinkOverlay();
     void            UpdateAllOverlays();
 
-    void            UpdateFormulas();
+    void            UpdateFormulas( SCCOL nStartCol = -1, SCROW nStartRow = -1, SCCOL nEndCol = -1, SCROW nEndRow = -1 );
     void            InterpretVisible();
     void            CheckNeedsRepaint();
     bool            NeedsRepaint();
@@ -594,11 +592,11 @@ public:
     vcl::Window*         GetFrameWin() const { return pFrameWin; }
 
     bool            HasPaintBrush() const           { return pBrushDocument || pDrawBrushSet; }
-    ScDocument*     GetBrushDocument() const        { return pBrushDocument; }
-    SfxItemSet*     GetDrawBrushSet() const         { return pDrawBrushSet; }
+    ScDocument*     GetBrushDocument() const        { return pBrushDocument.get(); }
+    SfxItemSet*     GetDrawBrushSet() const         { return pDrawBrushSet.get(); }
     bool            IsPaintBrushLocked() const      { return bLockPaintBrush; }
-    void            SetBrushDocument( ScDocument* pNew, bool bLock );
-    void            SetDrawBrushSet( SfxItemSet* pNew, bool bLock );
+    void            SetBrushDocument( ScDocumentUniquePtr pNew, bool bLock );
+    void            SetDrawBrushSet( std::unique_ptr<SfxItemSet> pNew, bool bLock );
     void            ResetBrushDocument();
 
     bool ContinueOnlineSpelling();
@@ -608,6 +606,11 @@ public:
     /// @see ScModelObj::getRowColumnHeaders().
     OUString getRowColumnHeaders(const tools::Rectangle& rRectangle);
     static void OnLOKNoteStateChanged(const ScPostIt* pNote);
+
+    SCROW GetLOKStartHeaderRow() { return mnLOKStartHeaderRow; }
+    SCROW GetLOKEndHeaderRow() { return mnLOKEndHeaderRow; }
+    SCCOL GetLOKStartHeaderCol() { return mnLOKStartHeaderCol; }
+    SCCOL GetLOKEndHeaderCol() { return mnLOKEndHeaderCol; }
 };
 
 #endif

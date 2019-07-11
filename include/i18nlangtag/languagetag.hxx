@@ -62,7 +62,7 @@ public:
         These need to correspond to the ExtraLanguages.ScriptType template
         property in officecfg/registry/schema/org/openoffice/VCL.xcs
      */
-    enum ScriptType
+    enum class ScriptType
     {
         UNKNOWN = 0,
         WESTERN = 1,      // Copies css::i18n::ScriptType for strong types
@@ -106,8 +106,6 @@ public:
         This is a convenience ctor.
      */
     explicit LanguageTag( const rtl_Locale & rLocale );
-
-    ~LanguageTag();
 
     /** Obtain BCP 47 language tag.
 

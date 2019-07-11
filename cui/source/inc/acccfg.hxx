@@ -33,11 +33,9 @@
 
 #include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/treelistbox.hxx>
 #include <sfx2/tabdlg.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <i18nutil/searchopt.hxx>
@@ -110,7 +108,7 @@ class SfxAcceleratorConfigPage : public SfxTabPage
     friend class SfxAccCfgTabListBox_Impl;
 private:
     const SfxMacroInfoItem*         m_pMacroInfoItem;
-    sfx2::FileDialogHelper*         m_pFileDlg;
+    std::unique_ptr<sfx2::FileDialogHelper> m_pFileDlg;
 
     VclPtr<SfxAccCfgTabListBox_Impl>    m_pEntriesBox;
     VclPtr<RadioButton>                 m_pOfficeButton;

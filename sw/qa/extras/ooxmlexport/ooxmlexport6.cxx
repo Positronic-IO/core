@@ -114,6 +114,23 @@ DECLARE_OOXMLEXPORT_TEST(testDmlTextshape, "dml-textshape.docx")
     CPPUNIT_ASSERT_EQUAL(sal_Int32(-4727), xShape->getPosition().Y);
 }
 
+DECLARE_OOXMLEXPORT_TEST(testDmlTextshapeB, "dml-textshapeB.docx")
+{
+    uno::Reference<container::XIndexAccess> xGroup(getShape(1), uno::UNO_QUERY);
+    xmlDocPtr pXmlDocument = parseExport("word/document.xml");
+    if (!pXmlDocument)
+        return;
+
+    uno::Reference<drawing::XShape> xShape(xGroup->getByIndex(3), uno::UNO_QUERY);
+    // Connector was incorrectly shifted towards the top left corner, X was 192, Y was -5743.
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3778), xShape->getPosition().X);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(-5064), xShape->getPosition().Y);
+
+    xShape.set(xGroup->getByIndex(5), uno::UNO_QUERY);
+    // This was incorrectly shifted towards the top of the page, Y was -5011.
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(-4713), xShape->getPosition().Y);
+}
+
 DECLARE_OOXMLEXPORT_TEST(testDMLSolidfillAlpha, "dml-solidfill-alpha.docx")
 {
     // Problem was that the transparency was not exported (a:alpha).
@@ -431,7 +448,7 @@ DECLARE_OOXMLEXPORT_TEST(testTableFloatingMargins, "table-floating-margins.docx"
     xmlDocPtr pXmlDoc = parseExport();
     if (!pXmlDoc)
         return;
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent/mc:Fallback/w:pict/v:rect/v:textbox/w:txbxContent/w:tbl/w:tr[1]/w:tc[1]/w:p/w:pPr/w:spacing", "after", "0");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tr[1]/w:tc[1]/w:p/w:pPr/w:spacing", "after", "0");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testFdo69636, "fdo69636.docx")
@@ -454,7 +471,7 @@ DECLARE_OOXMLEXPORT_TEST(testVMLData, "TestVMLData.docx")
 {
     // The problem was exporter was exporting vml data for shape in w:rPr element.
     // vml data should not come under w:rPr element.
-    xmlDocPtr pXmlDoc = parseExport("word/header1.xml");
+    xmlDocPtr pXmlDoc = parseExport("word/header2.xml");
     if (!pXmlDoc)
         return;
     CPPUNIT_ASSERT(getXPath(pXmlDoc, "/w:hdr/w:p/w:r/mc:AlternateContent/mc:Fallback/w:pict/v:shape", "stroked").match("f"));
@@ -464,7 +481,7 @@ DECLARE_OOXMLEXPORT_TEST(testImageData, "image_data.docx")
 {
     // The problem was exporter was exporting v:imagedata data for shape in w:pict as v:fill w element.
 
-    xmlDocPtr pXmlDoc = parseExport("word/header1.xml");
+    xmlDocPtr pXmlDoc = parseExport("word/header2.xml");
     if (!pXmlDoc)
         return;
     CPPUNIT_ASSERT(getXPath(pXmlDoc, "/w:hdr/w:p/w:r/mc:AlternateContent/mc:Fallback/w:pict/v:shape/v:imagedata", "detectmouseclick").match("t"));
@@ -754,7 +771,7 @@ DECLARE_OOXMLEXPORT_TEST(testShapeThemePreservation, "shape-theme-preservation.d
     OUString sFillColor = getXPath(pXmlDocument,
             "/w:document/w:body/w:p[5]/w:r/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:solidFill/a:srgbClr",
             "val");
-    CPPUNIT_ASSERT_EQUAL(sFillColor.toInt32(16), sal_Int32(0x00b050));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0x00b050), sFillColor.toInt32(16));
     sal_Int32 nLineColor = getXPath(pXmlDocument,
             "/w:document/w:body/w:p[5]/w:r/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:solidFill/a:srgbClr",
             "val").toInt32(16);
@@ -769,7 +786,7 @@ DECLARE_OOXMLEXPORT_TEST(testShapeThemePreservation, "shape-theme-preservation.d
             "/w:document/w:body/w:p[5]/w:r/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:miter",
             1);
     assertXPath(pXmlDocument,
-            "/w:document/w:body/w:p[5]/w:r/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:custDash",
+            "/w:document/w:body/w:p[5]/w:r/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash",
             1);
 
     uno::Reference<drawing::XShape> xShape1 = getShape(1);
@@ -823,13 +840,19 @@ DECLARE_OOXMLEXPORT_TEST(testAlignForShape,"Shape.docx")
 DECLARE_OOXMLEXPORT_TEST(testLineStyle_DashType, "LineStyle_DashType.docx")
 {
     /* DOCX contatining Shape with LineStyle as Dash Type should get preserved inside
-     * an XMl tag <a:prstDash> with value "dash".
+     * an XMl tag <a:prstDash> with value "dash", "sysDot", "lgDot", etc.
      */
     xmlDocPtr pXmlDoc = parseExport("word/document.xml");
     if (!pXmlDoc)
         return;
 
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r[1]/mc:AlternateContent/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "dash");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[7]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "lgDashDotDot");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[6]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "lgDashDot");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[5]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "lgDash");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[4]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "dashDot");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[3]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "dash");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[2]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "sysDash");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/mc:AlternateContent[1]/mc:Choice/w:drawing/wp:anchor/a:graphic/a:graphicData/wps:wsp/wps:spPr/a:ln/a:prstDash", "val", "sysDot");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testGradientFillPreservation, "gradient-fill-preservation.docx")
@@ -903,7 +926,7 @@ DECLARE_OOXMLEXPORT_TEST(testOuterShdw,"testOuterShdw.docx")
     xmlDocPtr pXmlDoc = parseExport("word/document.xml");
     if (!pXmlDoc)
         return;
-    assertXPath(pXmlDoc, "//mc:AlternateContent[1]/mc:Choice[1]/w:drawing[1]/wp:anchor[1]/a:graphic[1]/a:graphicData[1]/wps:wsp[1]/wps:spPr[1]/a:effectLst[1]/a:outerShdw[1]", "dist", "57811035");
+    assertXPath(pXmlDoc, "//mc:AlternateContent[1]/mc:Choice[1]/w:drawing[1]/wp:anchor[1]/a:graphic[1]/a:graphicData[1]/wps:wsp[1]/wps:spPr[1]/a:effectLst[1]/a:outerShdw[1]", "dist", "1041400");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testExtentValue, "fdo74605.docx")

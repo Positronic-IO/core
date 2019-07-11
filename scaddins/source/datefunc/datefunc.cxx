@@ -23,8 +23,10 @@
 #include <com/sun/star/util/Date.hpp>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <unotools/resmgr.hxx>
+#include <unotools/charclass.hxx>
 #include <algorithm>
 #include "deffuncname.hxx"
 
@@ -80,14 +82,14 @@ sal_uInt16 ScaFuncData::GetStrIndex( sal_uInt16 nParam ) const
     return (nParam > nParamCount) ? (nParamCount * 2) : (nParam * 2);
 }
 
-void InitScaFuncDataList(ScaFuncDataList& rList)
+static void InitScaFuncDataList(ScaFuncDataList& rList)
 {
     for (const auto & nIndex : pFuncDataArr)
         rList.push_back(ScaFuncData(nIndex));
 }
 
 //  entry points for service registration / instantiation
-uno::Reference< uno::XInterface > ScaDateAddIn_CreateInstance(
+static uno::Reference< uno::XInterface > ScaDateAddIn_CreateInstance(
         const uno::Reference< lang::XMultiServiceFactory >& )
 {
     return static_cast<cppu::OWeakObject*>(new ScaDateAddIn());
@@ -122,9 +124,7 @@ SAL_DLLPUBLIC_EXPORT void * date_component_getFactory(
 }   // extern C
 
 //  "normal" service implementation
-ScaDateAddIn::ScaDateAddIn() :
-    pDefLocales( nullptr ),
-    pFuncDataList( nullptr )
+ScaDateAddIn::ScaDateAddIn()
 {
 }
 

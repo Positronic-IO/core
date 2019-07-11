@@ -24,6 +24,7 @@
 #include "linedescriptor.hxx"
 #include "inspectorhelpwindow.hxx"
 
+#include <sal/log.hxx>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/inspection/PropertyControlType.hpp>
@@ -32,6 +33,7 @@
 #include <comphelper/asyncnotification.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/commandevent.hxx>
 #include <osl/mutex.hxx>
 
 
@@ -638,7 +640,6 @@ namespace pcr
 
     sal_uInt16 OBrowserListBox::GetPropertyPos( const OUString& _rEntryName ) const
     {
-        sal_uInt16 nRet = EDITOR_LIST_ENTRY_NOTFOUND;
         sal_uInt16 nPos = 0;
         for (auto const& line : m_aLines)
         {
@@ -649,7 +650,7 @@ namespace pcr
             ++nPos;
         }
 
-        return nRet;
+        return EDITOR_LIST_ENTRY_NOTFOUND;
     }
 
 
@@ -977,7 +978,7 @@ namespace pcr
         }
 
         // wrap around?
-        if ( ( static_cast< size_t >( nLine ) >= m_aLines.size() ) && ( m_aLines.size() > 0 ) )
+        if ( ( static_cast< size_t >( nLine ) >= m_aLines.size() ) && ( !m_aLines.empty() ) )
             m_aLines[0].pLine->GrabFocus();
     }
 

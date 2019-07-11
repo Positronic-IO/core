@@ -23,6 +23,7 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <osl/diagnose.h>
+#include <rtl/character.hxx>
 #include <vcl/svapp.hxx>
 #include <svtools/unoevent.hxx>
 #include <svl/urihelper.hxx>
@@ -54,6 +55,7 @@
 #include <svl/macitem.hxx>
 #include <editeng/acorrcfg.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <memory>
@@ -339,7 +341,9 @@ uno::Reference< text::XAutoTextEntry >  SwXAutoTextGroup::insertNewByName(const 
     if(!xTextRange.is())
         throw uno::RuntimeException();
 
-    SwTextBlocks* pGlosGroup = pGlossaries ? pGlossaries->GetGroupDoc(m_sGroupName) : nullptr;
+    std::unique_ptr<SwTextBlocks> pGlosGroup;
+    if (pGlossaries)
+        pGlosGroup = pGlossaries->GetGroupDoc(m_sGroupName);
     const OUString& sShortName(aName);
     const OUString& sLongName(aTitle);
     if (pGlosGroup && !pGlosGroup->GetError())
@@ -397,7 +401,7 @@ uno::Reference< text::XAutoTextEntry >  SwXAutoTextGroup::insertNewByName(const 
             throw uno::RuntimeException();
         }
     }
-    delete pGlosGroup;
+    pGlosGroup.reset();
 
     uno::Reference< text::XAutoTextEntry > xEntry;
 
@@ -417,12 +421,13 @@ uno::Reference< text::XAutoTextEntry >  SwXAutoTextGroup::insertNewByName(const 
     {
         throw;
     }
-    catch (const uno::Exception& e)
+    catch (const uno::Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                "Error Getting AutoText!",
                static_cast < OWeakObject * > ( this ),
-               makeAny( e ) );
+               anyEx );
     }
 
     return xEntry;
@@ -436,8 +441,10 @@ void SwXAutoTextGroup::removeByName(const OUString& aEntryName)
         throw container::NoSuchElementException();
 
     sal_uInt16 nIdx = pGlosGroup->GetIndex(aEntryName);
-    if ( nIdx != USHRT_MAX )
-        pGlosGroup->Delete(nIdx);
+    if ( nIdx == USHRT_MAX )
+        throw container::NoSuchElementException();
+
+    pGlosGroup->Delete(nIdx);
 }
 
 OUString SwXAutoTextGroup::getName()
@@ -962,8 +969,6 @@ const struct SvEventDescription aAutotextEvents[] =
 SwAutoTextEventDescriptor::SwAutoTextEventDescriptor(
     SwXAutoTextEntry& rAutoText ) :
         SvBaseEventDescriptor(aAutotextEvents),
-        sSwAutoTextEventDescriptor(
-            "SwAutoTextEventDescriptor"),
         rAutoTextEntry(rAutoText)
 {
 }
@@ -974,7 +979,7 @@ SwAutoTextEventDescriptor::~SwAutoTextEventDescriptor()
 
 OUString SwAutoTextEventDescriptor::getImplementationName()
 {
-    return sSwAutoTextEventDescriptor;
+    return OUString("SwAutoTextEventDescriptor");
 }
 
 void SwAutoTextEventDescriptor::replaceByName(

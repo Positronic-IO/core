@@ -23,7 +23,7 @@
 
 using namespace css;
 
-inline std::ostream& operator<<(std::ostream& rStrm, const Color& rColor)
+static std::ostream& operator<<(std::ostream& rStrm, const Color& rColor)
 {
     rStrm << "Color: R:" << static_cast<int>(rColor.GetRed()) << " G:" << static_cast<int>(rColor.GetGreen()) << " B: " << static_cast<int>(rColor.GetBlue());
     return rStrm;
@@ -71,7 +71,6 @@ uno::Reference< uno::XInterface > ScConditionalFormatTest::init(sal_Int32 nIndex
 {
     // get the first sheet
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
     uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), uno::UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet( xIndex->getByIndex(nIndex), uno::UNO_QUERY_THROW);
 

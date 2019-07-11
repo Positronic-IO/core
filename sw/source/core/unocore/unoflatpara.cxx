@@ -39,6 +39,7 @@
 #include <unotextrange.hxx>
 #include <pagefrm.hxx>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
 #include <rootfrm.hxx>
 #include <poolfmt.hxx>
 #include <pagedesc.hxx>
@@ -47,6 +48,7 @@
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <comphelper/sequence.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/text/XTextRange.hpp>
@@ -396,16 +398,46 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getNextPara()
 
                 while( pCnt && pCurrentPage->IsAnLower( pCnt ) )
                 {
-                    SwTextNode* pTextNode = pCnt->GetNode()->GetTextNode();
-
-                    if ( pTextNode &&
-                        ((mnType == text::TextMarkupType::SPELLCHECK &&
-                                pTextNode->IsWrongDirty()) ||
-                         (mnType == text::TextMarkupType::PROOFREADING &&
-                                pTextNode->IsGrammarCheckDirty())) )
+                    if (pCnt->IsTextFrame())
                     {
-                        pRet = pTextNode;
-                        break;
+                        SwTextFrame const*const pText(static_cast<SwTextFrame const*>(pCnt));
+                        if (sw::MergedPara const*const pMergedPara = pText->GetMergedPara()
+            )
+                        {
+                            SwTextNode * pTextNode(nullptr);
+                            for (auto const& e : pMergedPara->extents)
+                            {
+                                if (e.pNode != pTextNode)
+                                {
+                                    pTextNode = e.pNode;
+                                    if ((mnType == text::TextMarkupType::SPELLCHECK
+                                            && pTextNode->IsWrongDirty()) ||
+                                        (mnType == text::TextMarkupType::PROOFREADING
+                                             && pTextNode->IsGrammarCheckDirty()))
+                                    {
+                                        pRet = pTextNode;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            SwTextNode const*const pTextNode(pText->GetTextNodeFirst());
+                            if ((mnType == text::TextMarkupType::SPELLCHECK
+                                    && pTextNode->IsWrongDirty()) ||
+                                (mnType == text::TextMarkupType::PROOFREADING
+                                     && pTextNode->IsGrammarCheckDirty()))
+
+                            {
+                                pRet = const_cast<SwTextNode*>(pTextNode);
+                            }
+                        }
+
+                        if (pRet)
+                        {
+                            break;
+                        }
                     }
 
                     pCnt = pCnt->GetNextContentFrame();
@@ -455,7 +487,7 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getNextPara()
     if ( pRet )
     {
         // Expand the string:
-        const ModelToViewHelper aConversionMap(*pRet);
+        const ModelToViewHelper aConversionMap(*pRet, mpDoc->getIDocumentLayoutAccess().GetCurrentLayout());
         const OUString& aExpandText = aConversionMap.getViewText();
 
         xRet = new SwXFlatParagraph( *pRet, aExpandText, aConversionMap );
@@ -505,7 +537,7 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getParaAfter(co
     if ( pNextTextNode )
     {
         // Expand the string:
-        const ModelToViewHelper aConversionMap(*pNextTextNode);
+        const ModelToViewHelper aConversionMap(*pNextTextNode, mpDoc->getIDocumentLayoutAccess().GetCurrentLayout());
         const OUString& aExpandText = aConversionMap.getViewText();
 
         xRet = new SwXFlatParagraph( *pNextTextNode, aExpandText, aConversionMap );
@@ -551,7 +583,7 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getParaBefore(c
     if ( pPrevTextNode )
     {
         // Expand the string:
-        const ModelToViewHelper aConversionMap(*pPrevTextNode);
+        const ModelToViewHelper aConversionMap(*pPrevTextNode, mpDoc->getIDocumentLayoutAccess().GetCurrentLayout());
         const OUString& aExpandText = aConversionMap.getViewText();
 
         xRet = new SwXFlatParagraph( *pPrevTextNode, aExpandText, aConversionMap );

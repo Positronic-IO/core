@@ -156,9 +156,6 @@ private:
     std::vector< sal_uInt16 > maGlyphOffsets;
 };
 
-typedef std::vector<FlashFont*> FontMap;
-
-
 /** this class helps creating flash tags */
 class Tag : public SvMemoryStream
 {
@@ -363,7 +360,7 @@ private:
 private:
     css::uno::Reference< css::i18n::XBreakIterator > mxBreakIterator;
 
-    FontMap                 maFonts;
+    std::vector<std::unique_ptr<FlashFont>> maFonts;
 
     sal_Int32 mnDocWidth;
     sal_Int32 mnDocHeight;
@@ -381,8 +378,7 @@ private:
     /** holds the information of the objects defined in the movie stream
         while executing defineShape
     */
-    typedef std::vector<sal_uInt16> CharacterIdVector;
-    CharacterIdVector       maShapeIds;
+    std::vector<sal_uInt16> maShapeIds;
 
     std::unique_ptr<Tag> mpTag;
     std::unique_ptr<Sprite> mpSprite;

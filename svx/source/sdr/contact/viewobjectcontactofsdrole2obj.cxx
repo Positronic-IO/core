@@ -31,7 +31,6 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <svtools/embedhlp.hxx>
-#include <comphelper/sequence.hxx>
 
 using namespace com::sun::star;
 
@@ -89,8 +88,7 @@ drawinglayer::primitive2d::Primitive2DContainer ViewObjectContactOfSdrOle2Obj::c
                 }
 
                 SdrPageView* pPageView = GetObjectContact().TryToGetSdrPageView();
-                if(pPageView && ((nMiscStatus & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE) ||
-                    xObjRef.IsGLChart()))
+                if(pPageView && (nMiscStatus & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE))
                 {
                     // connect plugin object
                     pPageView->GetView().DoConnect(const_cast< SdrOle2Obj* >(&rSdrOle2));
@@ -118,7 +116,7 @@ drawinglayer::primitive2d::Primitive2DContainer ViewObjectContactOfSdrOle2Obj::c
                 const drawinglayer::attribute::FillHatchAttribute aFillHatch(
                     drawinglayer::attribute::HatchStyle::Single, // single hatch
                     125.0, // 1.25 mm
-                    45.0 * F_PI180, // 45 degree diagonal
+                    basegfx::deg2rad(45.0), // 45 degree diagonal
                     COL_BLACK.getBColor(), // black color
                     3, // same default as VCL, a minimum of three discrete units (pixels) offset
                     false); // no filling

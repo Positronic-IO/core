@@ -21,6 +21,11 @@
 
 #include <osl/diagnose.h>
 
+    // Near and far clipping planes
+static constexpr double gfNearBound = 0.001;
+static constexpr double gfFarBound = 1.001;
+
+
 // B3dTransformationSet --------------------------------------------------------
 // Transformations for all 3D output
 
@@ -142,8 +147,6 @@ void B3dTransformationSet::Reset()
 
     mfLeftBound = mfBottomBound = -1.0;
     mfRightBound = mfTopBound = 1.0;
-    mfNearBound = 0.001;
-    mfFarBound = 1.001;
 
     mfRatio = 0.0;
 
@@ -250,16 +253,16 @@ void B3dTransformationSet::CalcViewport()
     // OpenGL needs a little more rough additional size to not let
     // the front face vanish. Changed from SMALL_DVALUE to 0.000001,
     // which is 1/10000th, comared with 1/tenth of a million from SMALL_DVALUE.
-    const double fDistPart((mfFarBound - mfNearBound) * 0.0001);
+    const double fDistPart((gfFarBound - gfNearBound) * 0.0001);
 
     // To avoid critical clipping, set Near & Far generously
     if(mbPerspective)
     {
-        Frustum(aNewProjection, fLeft, fRight, fBottom, fTop, mfNearBound - fDistPart, mfFarBound + fDistPart);
+        Frustum(aNewProjection, fLeft, fRight, fBottom, fTop, gfNearBound - fDistPart, gfFarBound + fDistPart);
     }
     else
     {
-        Ortho(aNewProjection, fLeft, fRight, fBottom, fTop, mfNearBound - fDistPart, mfFarBound + fDistPart);
+        Ortho(aNewProjection, fLeft, fRight, fBottom, fTop, gfNearBound - fDistPart, gfFarBound + fDistPart);
     }
 
     // Set to true to guarantee loop termination
@@ -389,7 +392,6 @@ B3dCamera::B3dCamera(
     double fFocLen, double fBnkAng)
 :   B3dViewport(),
     aPosition(rPos),
-    aCorrectedPosition(rPos),
     aLookAt(rLkAt),
     fFocalLength(fFocLen),
     fBankAngle(fBnkAng)
@@ -429,8 +431,7 @@ void B3dCamera::CalcNewViewportValues()
     aNewVUV.normalize();
 
     SetViewportValues(aPosition, aNewVPN, aNewVUV);
-    if(CalcFocalLength())
-        SetViewportValues(aCorrectedPosition, aNewVPN, aNewVUV);
+    CalcFocalLength();
 
     if(fBankAngle != 0.0)
     {
@@ -444,7 +445,7 @@ void B3dCamera::CalcNewViewportValues()
     }
 }
 
-bool B3dCamera::CalcFocalLength()
+void B3dCamera::CalcFocalLength()
 {
     double fWidth = GetDeviceRectangleWidth();
 
@@ -455,7 +456,6 @@ bool B3dCamera::CalcFocalLength()
         fFocalLength = aOldPosition.getZ() / fWidth * 35.0;
     if(fFocalLength < 5.0)
         fFocalLength = 5.0;
-    return false;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

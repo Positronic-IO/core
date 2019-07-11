@@ -26,6 +26,7 @@
 #include <unotools/charclass.hxx>
 #include <osl/diagnose.h>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <string.h>
 
 #if DEBUG_SC_PARCLASSDOC
@@ -98,25 +99,25 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocTableOp,         {{ Value, Value, Value, Value, Value                    }, 0, Value }},
     // Operators and functions.
     { ocAdd,             {{ Array, Array                                         }, 0, Value }},
-    { ocAggregate,       {{ Value, Value, Reference                              }, 1, Value }},
+    { ocAggregate,       {{ Value, Value, ReferenceOrRefArray                    }, 1, Value }},
     { ocAmpersand,       {{ Array, Array                                         }, 0, Value }},
     { ocAnd,             {{ Reference                                            }, 1, Value }},
     { ocAreas,           {{ Reference                                            }, 0, Value }},
     { ocAveDev,          {{ Reference                                            }, 1, Value }},
-    { ocAverage,         {{ Reference                                            }, 1, Value }},
-    { ocAverageA,        {{ Reference                                            }, 1, Value }},
-    { ocAverageIf,       {{ Reference, Value, Reference                          }, 0, Value }},
-    { ocAverageIfs,      {{ Reference, Reference, Value                          }, 2, Value }},
+    { ocAverage,         {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocAverageA,        {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocAverageIf,       {{ ReferenceOrRefArray, Value, Reference                }, 0, Value }},
+    { ocAverageIfs,      {{ ReferenceOrRefArray, ReferenceOrRefArray, Value      }, 2, Value }},
     { ocCell,            {{ Value, Reference                                     }, 0, Value }},
     { ocColumn,          {{ Reference                                            }, 0, Value }},
     { ocColumns,         {{ Reference                                            }, 1, Value }},
     { ocConcat_MS,       {{ Reference                                            }, 1, Value }},
     { ocCorrel,          {{ ForceArray, ForceArray                               }, 0, Value }},
-    { ocCount,           {{ Reference                                            }, 1, Value }},
-    { ocCount2,          {{ Reference                                            }, 1, Value }},
-    { ocCountEmptyCells, {{ Reference                                            }, 0, Value }},
-    { ocCountIf,         {{ Reference, Value                                     }, 0, Value }},
-    { ocCountIfs,        {{ Reference, Value                                     }, 2, Value }},
+    { ocCount,           {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocCount2,          {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocCountEmptyCells, {{ ReferenceOrRefArray                                  }, 0, Value }},
+    { ocCountIf,         {{ ReferenceOrRefArray, Value                           }, 0, Value }},
+    { ocCountIfs,        {{ ReferenceOrRefArray, Value                           }, 2, Value }},
     { ocCovar,           {{ ForceArray, ForceArray                               }, 0, Value }},
     { ocCovarianceP,     {{ ForceArray, ForceArray                               }, 0, Value }},
     { ocCovarianceS,     {{ ForceArray, ForceArray                               }, 0, Value }},
@@ -145,7 +146,7 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocForecast_ETS_STA, {{ ForceArray, ForceArray, ForceArray, Value, Value, Value        }, 0, Value }},
     { ocForecast_ETS_STM, {{ ForceArray, ForceArray, ForceArray, Value, Value, Value        }, 0, Value }},
     { ocFormula,         {{ Reference                                            }, 0, Value }},
-    { ocFrequency,       {{ Reference, Reference                                 }, 0, Value }},
+    { ocFrequency,       {{ ReferenceOrForceArray, ReferenceOrForceArray         }, 0, ForceArrayReturn }},
     { ocGCD,             {{ Reference                                            }, 1, Value }},
     { ocGeoMean,         {{ Reference                                            }, 1, Value }},
     { ocGreater,         {{ Array, Array                                         }, 0, Value }},
@@ -158,6 +159,7 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocIndirect,        {{ Value, Value                                         }, 0, Reference }},
     { ocIntercept,       {{ ForceArray, ForceArray                               }, 0, Value }},
     { ocIntersect,       {{ Reference, Reference                                 }, 0, Reference }},
+    { ocIsFormula,       {{ Reference                                            }, 0, Value }},
     { ocIsRef,           {{ Reference                                            }, 0, Value }},
     { ocKurt,            {{ Reference                                            }, 1, Value }},
     { ocLCM,             {{ Reference                                            }, 1, Value }},
@@ -171,14 +173,16 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocMatDet,          {{ ForceArray                                           }, 0, Value }},
     { ocMatInv,          {{ ForceArray                                           }, 0, Value }},
     { ocMatMult,         {{ ForceArray, ForceArray                               }, 0, Value }},
-    { ocMatTrans,        {{ Array                                                }, 0, Value }}, // strange, but Xcl doesn't force MatTrans array
+    { ocMatTrans,        {{ ForceArray                                           }, 0, ForceArrayReturn }},
     { ocMatValue,        {{ Reference, Value, Value                              }, 0, Value }},
     { ocMatch,           {{ Value, ReferenceOrForceArray, Value                  }, 0, Value }},
-    { ocMax,             {{ Reference                                            }, 1, Value }},
-    { ocMaxA,            {{ Reference                                            }, 1, Value }},
+    { ocMax,             {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocMaxA,            {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocMaxIfs_MS,       {{ ReferenceOrRefArray, ReferenceOrRefArray, Value      }, 2, Value }},
     { ocMedian,          {{ Reference                                            }, 1, Value }},
-    { ocMin,             {{ Reference                                            }, 1, Value }},
-    { ocMinA,            {{ Reference                                            }, 1, Value }},
+    { ocMin,             {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocMinA,            {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocMinIfs_MS,       {{ ReferenceOrRefArray, ReferenceOrRefArray, Value      }, 2, Value }},
     { ocModalValue,      {{ ForceArray                                           }, 1, Value }},
     { ocModalValue_MS,   {{ ForceArray                                           }, 1, Value }},
     { ocModalValue_Multi,{{ ForceArray                                           }, 1, Value }},
@@ -204,7 +208,7 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocPow,             {{ Array, Array                                         }, 0, Value }},
     { ocPower,           {{ Array, Array                                         }, 0, Value }},
     { ocProb,            {{ ForceArray, ForceArray, Value, Value                 }, 0, Value }},
-    { ocProduct,         {{ Reference                                            }, 1, Value }},
+    { ocProduct,         {{ ReferenceOrRefArray                                  }, 1, Value }},
     { ocQuartile,        {{ Reference, Value                                     }, 0, Value }},
     { ocQuartile_Exc,    {{ Reference, Value                                     }, 0, Value }},
     { ocQuartile_Inc,    {{ Reference, Value                                     }, 0, Value }},
@@ -229,12 +233,12 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocStDevP_MS,       {{ Reference                                            }, 1, Value }},
     { ocStDevS,          {{ Reference                                            }, 1, Value }},
     { ocSub,             {{ Array, Array                                         }, 0, Value }},
-    { ocSubTotal,        {{ Value, Reference                                     }, 1, Value }},
-    { ocSum,             {{ Reference                                            }, 1, Value }},
-    { ocSumIf,           {{ Reference, Value, Reference                          }, 0, Value }},
-    { ocSumIfs,          {{ Reference, Reference, Value                          }, 2, Value }},
+    { ocSubTotal,        {{ Value, ReferenceOrRefArray                           }, 1, Value }},
+    { ocSum,             {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocSumIf,           {{ ReferenceOrRefArray, Value, Reference                }, 0, Value }},
+    { ocSumIfs,          {{ ReferenceOrRefArray, ReferenceOrRefArray, Value      }, 2, Value }},
     { ocSumProduct,      {{ ForceArray                                           }, 1, Value }},
-    { ocSumSQ,           {{ Reference                                            }, 1, Value }},
+    { ocSumSQ,           {{ ReferenceOrRefArray                                  }, 1, Value }},
     { ocSumX2DY2,        {{ ForceArray, ForceArray                               }, 0, Value }},
     { ocSumX2MY2,        {{ ForceArray, ForceArray                               }, 0, Value }},
     { ocSumXMY2,         {{ ForceArray, ForceArray                               }, 0, Value }},
@@ -244,10 +248,10 @@ const ScParameterClassification::RawData ScParameterClassification::pRawData[] =
     { ocTrimMean,        {{ Reference, Value                                     }, 0, Value }},
     { ocUnion,           {{ Reference, Reference                                 }, 0, Reference }},
     { ocVLookup,         {{ Value, ReferenceOrForceArray, Value, Value           }, 0, Value }},
-    { ocVar,             {{ Reference                                            }, 1, Value }},
-    { ocVarA,            {{ Reference                                            }, 1, Value }},
-    { ocVarP,            {{ Reference                                            }, 1, Value }},
-    { ocVarPA,           {{ Reference                                            }, 1, Value }},
+    { ocVar,             {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocVarA,            {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocVarP,            {{ ReferenceOrRefArray                                  }, 1, Value }},
+    { ocVarPA,           {{ ReferenceOrRefArray                                  }, 1, Value }},
     { ocVarP_MS,         {{ Reference                                            }, 1, Value }},
     { ocVarS,            {{ Reference                                            }, 1, Value }},
     { ocWorkday_MS,      {{ Value, Value, Value, Reference                       }, 0, Value }},
@@ -611,6 +615,9 @@ void ScParameterClassification::GenerateDocumentation()
                     case Reference :
                         aStr.append(" Reference");
                     break;
+                    case ReferenceOrRefArray :
+                        aStr.append(" ReferenceOrRefArray");
+                    break;
                     case Array :
                         aStr.append(" Array");
                     break;
@@ -661,6 +668,9 @@ void ScParameterClassification::GenerateDocumentation()
                 break;
                 case Reference :
                     aStr.append(" -> Reference");
+                break;
+                case ReferenceOrRefArray :
+                    aStr.append(" -> ReferenceOrRefArray");
                 break;
                 case Array :
                     aStr.append(" -> Array");

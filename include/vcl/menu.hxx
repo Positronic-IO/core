@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <vcl/vclenum.hxx>
+#include <tools/link.hxx>
 #include <tools/solar.h>
 #include <vcl/dllapi.h>
 #include <vcl/bitmapex.hxx>
@@ -146,6 +147,7 @@ private:
     sal_uInt16 mnHighlightedItemPos; // for native menus: keeps track of the highlighted item
     MenuFlags nMenuFlags;
     sal_uInt16 nSelectedId;
+    OString sSelectedIdent;
 
     // for output:
     sal_uInt16 nImgOrChkPos;
@@ -157,7 +159,7 @@ private:
 
     css::uno::Reference<css::accessibility::XAccessible > mxAccessible;
     mutable std::unique_ptr<vcl::MenuLayoutData> mpLayoutData;
-    SalMenu* mpSalMenu;
+    std::unique_ptr<SalMenu> mpSalMenu;
 
 protected:
     SAL_DLLPRIVATE Menu* ImplGetStartMenu();
@@ -181,7 +183,7 @@ protected:
     DECL_DLLPRIVATE_LINK(ImplCallSelect, void*, void );
 
     SAL_DLLPRIVATE void ImplFillLayoutData() const;
-    SAL_DLLPRIVATE SalMenu* ImplGetSalMenu() { return mpSalMenu; }
+    SAL_DLLPRIVATE SalMenu* ImplGetSalMenu() { return mpSalMenu.get(); }
     SAL_DLLPRIVATE void ImplClearSalMenu();
     SAL_DLLPRIVATE OUString ImplGetHelpText( sal_uInt16 nItemId ) const;
 
@@ -262,8 +264,7 @@ public:
     OString GetItemIdent(sal_uInt16 nItemId) const;
     MenuItemType GetItemType( sal_uInt16 nPos ) const;
     sal_uInt16 GetCurItemId() const { return nSelectedId;}
-    OString GetCurItemIdent() const;
-
+    OString GetCurItemIdent() const { return sSelectedIdent; }
     void SetItemBits( sal_uInt16 nItemId, MenuItemBits nBits );
     MenuItemBits GetItemBits( sal_uInt16 nItemId ) const;
 
@@ -469,6 +470,9 @@ public:
     tools::Rectangle GetMenuBarButtonRectPixel( sal_uInt16 nId );
     void RemoveMenuBarButton( sal_uInt16 nId );
     void LayoutChanged();
+    // get the height of the menubar, return the native menubar height if that is active or the vcl
+    // one if not
+    int GetMenuBarHeight() const;
 };
 
 inline MenuBar& MenuBar::operator=( const MenuBar& rMenu )

@@ -96,16 +96,14 @@ Customization* SwCTBWrapper::GetCustomizaton( sal_Int16 index )
 
 SwCTB* SwCTBWrapper::GetCustomizationData( const OUString& sTBName )
 {
-    SwCTB* pCTB = nullptr;
-    for ( std::vector< Customization >::iterator it = rCustomizations.begin(); it != rCustomizations.end(); ++it )
-    {
-        if ( it->GetCustomizationData() && it->GetCustomizationData()->GetName() == sTBName )
-        {
-            pCTB = it->GetCustomizationData();
-            break;
-        }
-    }
-    return pCTB;
+    auto it = std::find_if(rCustomizations.begin(), rCustomizations.end(),
+        [&sTBName](Customization& rCustomization) {
+            SwCTB* pCTB = rCustomization.GetCustomizationData();
+            return pCTB && pCTB->GetName() == sTBName;
+        });
+    if (it != rCustomizations.end())
+        return it->GetCustomizationData();
+    return nullptr;
 }
 
 bool SwCTBWrapper::Read( SvStream& rS )
@@ -161,29 +159,27 @@ bool SwCTBWrapper::Read( SvStream& rS )
             rCustomizations.push_back( aCust );
         }
     }
-    std::vector< sal_Int16 >::iterator it_end = dropDownMenuIndices.end();
-    for ( std::vector< sal_Int16 >::iterator it = dropDownMenuIndices.begin(); it != it_end; ++it )
+    for ( const auto& rIndex : dropDownMenuIndices )
     {
-        if (*it < 0 || static_cast<size_t>(*it) >= rCustomizations.size())
+        if (rIndex < 0 || static_cast<size_t>(rIndex) >= rCustomizations.size())
             continue;
-        rCustomizations[*it].bIsDroppedMenuTB = true;
+        rCustomizations[rIndex].bIsDroppedMenuTB = true;
     }
     return rS.good();
 }
 
 SwTBC* SwCTBWrapper::GetTBCAtOffset( sal_uInt32 nStreamOffset )
 {
-    for ( std::vector< SwTBC >::iterator it = rtbdc.begin(); it != rtbdc.end(); ++it )
-    {
-        if ( (*it).GetOffset() == nStreamOffset )
-            return &(*it);
-    }
+    auto it = std::find_if(rtbdc.begin(), rtbdc.end(),
+        [&nStreamOffset](SwTBC& rItem) { return rItem.GetOffset() == nStreamOffset; });
+    if ( it != rtbdc.end() )
+        return &(*it);
     return nullptr;
 }
 
 bool SwCTBWrapper::ImportCustomToolBar( SfxObjectShell& rDocSh )
 {
-    for ( std::vector< Customization >::iterator it = rCustomizations.begin(); it != rCustomizations.end(); ++it )
+    for ( auto& rCustomization : rCustomizations )
     {
         try
         {
@@ -197,7 +193,7 @@ bool SwCTBWrapper::ImportCustomToolBar( SfxObjectShell& rDocSh )
             CustomToolBarImportHelper helper(rDocSh, xCfgMgr);
             helper.setMSOCommandMap( new MSOWordCommandConvertor() );
 
-            if ( !(*it).ImportCustomToolBar( *this, helper ) )
+            if ( !rCustomization.ImportCustomToolBar( *this, helper ) )
                 return false;
         }
         catch (...)
@@ -205,7 +201,7 @@ bool SwCTBWrapper::ImportCustomToolBar( SfxObjectShell& rDocSh )
             continue;
         }
     }
-    return false;
+    return true;
 }
 
 Customization::Customization( SwCTBWrapper* wrapper )
@@ -256,20 +252,20 @@ bool Customization::ImportMenu( SwCTBWrapper& rWrapper, CustomToolBarImportHelpe
 {
     if ( tbidForTBD == 0x25 )  // we can handle in a limited way additions the built-in menu bar
     {
-        for ( std::vector< TBDelta >::iterator it = customizationDataTBDelta.begin(); it != customizationDataTBDelta.end(); ++it )
+        for ( auto& rTBDelta : customizationDataTBDelta )
         {
             // for each new menu ( control that drops a toolbar )
             // import a toolbar
-            if ( it->ControlIsInserted() && it->ControlDropsToolBar() )
+            if ( rTBDelta.ControlIsInserted() && rTBDelta.ControlDropsToolBar() )
             {
-                Customization* pCust = pWrapper->GetCustomizaton( it->CustomizationIndex() );
+                Customization* pCust = pWrapper->GetCustomizaton( rTBDelta.CustomizationIndex() );
                 if ( pCust )
                 {
                     // currently only support built-in menu
                     const OUString sMenuBar( "private:resource/menubar/menubar" );
 
                     // Get menu name
-                    SwTBC* pTBC = pWrapper->GetTBCAtOffset( it->TBCStreamOffset() );
+                    SwTBC* pTBC = pWrapper->GetTBCAtOffset( rTBDelta.TBCStreamOffset() );
                     if ( !pTBC )
                         return false;
                     const OUString sMenuName = pTBC->GetCustomText().replace('&','~');
@@ -442,10 +438,10 @@ bool SwCTB::ImportCustomToolBar( SwCTBWrapper& rWrapper, CustomToolBarImportHelp
         xProps->setPropertyValue( "UIName", uno::makeAny( name.getString() ) );
 
         const OUString sToolBarName = "private:resource/toolbar/custom_" + name.getString();
-        for ( std::vector< SwTBC >::iterator it =  rTBC.begin(); it != rTBC.end(); ++it )
+        for ( auto& rItem : rTBC )
         {
             // createToolBar item for control
-            if ( !it->ImportToolBarControl( rWrapper, xIndexContainer, helper, IsMenuToolbar() ) )
+            if ( !rItem.ImportToolBarControl( rWrapper, xIndexContainer, helper, IsMenuToolbar() ) )
                 return false;
         }
 
@@ -472,10 +468,10 @@ bool SwCTB::ImportCustomToolBar( SwCTBWrapper& rWrapper, CustomToolBarImportHelp
 
 bool SwCTB::ImportMenuTB( SwCTBWrapper& rWrapper, const css::uno::Reference< css::container::XIndexContainer >& xIndexContainer, CustomToolBarImportHelper& rHelper )
 {
-    for ( std::vector< SwTBC >::iterator it =  rTBC.begin(); it != rTBC.end(); ++it )
+    for ( auto& rItem : rTBC )
     {
         // createToolBar item for control
-        if ( !it->ImportToolBarControl( rWrapper, xIndexContainer, rHelper, true ) )
+        if ( !rItem.ImportToolBarControl( rWrapper, xIndexContainer, rHelper, true ) )
             return false;
     }
     return true;
@@ -564,8 +560,7 @@ SwTBC::ImportToolBarControl( SwCTBWrapper& rWrapper, const css::uno::Reference< 
             }
         }
         bool bBeginGroup = false;
-        if ( ! tbcd->ImportToolBarControl( helper, props, bBeginGroup, bIsMenuBar ) )
-            return false;
+        tbcd->ImportToolBarControl( helper, props, bBeginGroup, bIsMenuBar );
 
         TBCMenuSpecific* pMenu = tbcd->getMenuSpecific();
         if ( pMenu )
@@ -644,7 +639,7 @@ bool Tcg::Read(SvStream &rS)
 
 bool Tcg::ImportCustomToolBar( SfxObjectShell& rDocSh )
 {
-    if ( tcg.get() )
+    if (tcg)
         return tcg->ImportCustomToolBar( rDocSh );
     return false;
 }
@@ -655,9 +650,6 @@ Tcg255::Tcg255()
 
 Tcg255::~Tcg255()
 {
-    std::vector< Tcg255SubStruct* >::iterator it = rgtcgData.begin();
-    for ( ; it != rgtcgData.end(); ++it )
-        delete *it;
 }
 
 bool Tcg255::processSubStruct( sal_uInt8 nId, SvStream &rS )
@@ -703,19 +695,19 @@ bool Tcg255::processSubStruct( sal_uInt8 nId, SvStream &rS )
     xSubStruct->ch = nId;
     if (!xSubStruct->Read(rS))
         return false;
-    rgtcgData.push_back(xSubStruct.release());
+    rgtcgData.push_back(std::move(xSubStruct));
     return true;
 }
 
 bool Tcg255::ImportCustomToolBar( SfxObjectShell& rDocSh )
 {
     // Find the SwCTBWrapper
-    for ( std::vector< Tcg255SubStruct* >::const_iterator it = rgtcgData.begin(); it != rgtcgData.end(); ++it )
+    for ( auto & rSubStruct : rgtcgData )
     {
-        if ( (*it)->id() == 0x12 )
+        if ( rSubStruct->id() == 0x12 )
         {
             // not so great, shouldn't really have to do a horror casting
-            SwCTBWrapper* pCTBWrapper =  dynamic_cast< SwCTBWrapper* > ( *it );
+            SwCTBWrapper* pCTBWrapper =  dynamic_cast< SwCTBWrapper* > ( rSubStruct.get() );
             if ( pCTBWrapper )
             {
                 if ( !pCTBWrapper->ImportCustomToolBar( rDocSh ) )
@@ -787,7 +779,6 @@ bool PlfMcd::Read(SvStream &rS)
 
 PlfAcd::PlfAcd() :
  iMac(0)
-,rgacd(nullptr)
 {
 }
 
@@ -823,7 +814,6 @@ bool PlfAcd::Read( SvStream &rS)
 
 PlfKme::PlfKme() :
  iMac( 0 )
-,rgkme( nullptr )
 {
 }
 
@@ -869,7 +859,6 @@ bool TcgSttbf::Read( SvStream &rS)
 TcgSttbfCore::TcgSttbfCore() : fExtend( 0 )
 ,cData( 0 )
 ,cbExtra( 0 )
-,dataItems( nullptr )
 {
 }
 
@@ -899,7 +888,6 @@ bool TcgSttbfCore::Read( SvStream& rS )
 
 MacroNames::MacroNames() :
  iMac( 0 )
-,rgNames( nullptr )
 {
 }
 

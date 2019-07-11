@@ -54,9 +54,9 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 
 //Added for bug #i119954# Application crashed if undo/redo covert nest table to text
-bool ConvertTableToText( const SwTableNode *pTableNode, sal_Unicode cCh );
+static bool ConvertTableToText( const SwTableNode *pTableNode, sal_Unicode cCh );
 
-void    ConvertNestedTablesToText( const SwTableLines &rTableLines, sal_Unicode cCh )
+static void    ConvertNestedTablesToText( const SwTableLines &rTableLines, sal_Unicode cCh )
 {
     for (size_t n = 0; n < rTableLines.size(); ++n)
     {
@@ -232,8 +232,8 @@ void SwEditShell::InsertDDETable( const SwInsertTableOptions& rInsTableOpts,
 
     SwTableNode* pTableNode = const_cast<SwTableNode*>(pTable->GetTabSortBoxes()[ 0 ]->
                                                 GetSttNd()->FindTableNode());
-    SwDDETable* pDDETable = new SwDDETable( *pTable, pDDEType );
-    pTableNode->SetNewTable( pDDETable );       // set the DDE table
+    std::unique_ptr<SwDDETable> pDDETable(new SwDDETable( *pTable, pDDEType ));
+    pTableNode->SetNewTable( std::move(pDDETable) );   // set the DDE table
 
     if( bEndUndo )
         EndUndo( SwUndoId::END );

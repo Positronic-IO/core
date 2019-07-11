@@ -37,6 +37,7 @@
 #include "tablecolumns.hxx"
 #include "tableundo.hxx"
 #include <o3tl/safeint.hxx>
+#include <o3tl/make_unique.hxx>
 #include <svx/svdotable.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/strings.hrc>
@@ -55,7 +56,7 @@ namespace sdr { namespace table {
 
 
 // removes the given range from a vector
-template< class Vec, class Iter > void remove_range( Vec& rVector, sal_Int32 nIndex, sal_Int32 nCount )
+template< class Vec, class Iter > static void remove_range( Vec& rVector, sal_Int32 nIndex, sal_Int32 nCount )
 {
     const sal_Int32 nSize = static_cast<sal_Int32>(rVector.size());
     if( nCount && (nIndex >= 0) && (nIndex < nSize) )
@@ -74,7 +75,7 @@ template< class Vec, class Iter > void remove_range( Vec& rVector, sal_Int32 nIn
 
 
 /** inserts a range into a vector */
-template< class Vec, class Iter, class Entry > sal_Int32 insert_range( Vec& rVector, sal_Int32 nIndex, sal_Int32 nCount )
+template< class Vec, class Iter, class Entry > static sal_Int32 insert_range( Vec& rVector, sal_Int32 nIndex, sal_Int32 nCount )
 {
     if( nCount )
     {
@@ -638,7 +639,7 @@ void TableModel::insertColumns( sal_Int32 nIndex, sal_Int32 nCount )
                         (*aCellIter++) = getCell( nIndex + nOffset, nRow );
                 }
 
-                rModel.AddUndo( new InsertColUndo( xThis, nIndex, aNewColumns, aNewCells ) );
+                rModel.AddUndo( o3tl::make_unique<InsertColUndo>( xThis, nIndex, aNewColumns, aNewCells ) );
             }
 
             const sal_Int32 nRowCount = getRowCountImpl();
@@ -713,7 +714,7 @@ void TableModel::removeColumns( sal_Int32 nIndex, sal_Int32 nCount )
                         (*aCellIter++) = getCell( nIndex + nOffset, nRow );
                 }
 
-                rModel.AddUndo( new RemoveColUndo( xThis, nIndex, aRemovedCols, aRemovedCells ) );
+                rModel.AddUndo( o3tl::make_unique<RemoveColUndo>( xThis, nIndex, aRemovedCols, aRemovedCells ) );
             }
 
             // only rows before and inside the removed rows are considered
@@ -808,7 +809,7 @@ void TableModel::insertRows( sal_Int32 nIndex, sal_Int32 nCount )
                 rModel.BegUndo( SvxResId(STR_TABLE_INSROW) );
                 rModel.AddUndo( rModel.GetSdrUndoFactory().CreateUndoGeoObject(*mpTableObj) );
                 TableModelRef xThis( this );
-                rModel.AddUndo( new InsertRowUndo( xThis, nIndex, aNewRows ) );
+                rModel.AddUndo( o3tl::make_unique<InsertRowUndo>( xThis, nIndex, aNewRows ) );
             }
 
             // check if cells merge over new columns
@@ -871,7 +872,7 @@ void TableModel::removeRows( sal_Int32 nIndex, sal_Int32 nCount )
                 for( sal_Int32 nOffset = 0; nOffset < nCount; ++nOffset )
                     aRemovedRows[nOffset] = maRows[nIndex+nOffset];
 
-                rModel.AddUndo( new RemoveRowUndo( xThis, nIndex, aRemovedRows ) );
+                rModel.AddUndo( o3tl::make_unique<RemoveRowUndo>( xThis, nIndex, aRemovedRows ) );
             }
 
             // only rows before and inside the removed rows are considered
@@ -978,7 +979,7 @@ void TableModel::optimize()
 
             if( bEmpty )
             {
-                if( nCol > 0 ) try
+                try
                 {
                     const OUString sWidth("Width");
                     sal_Int32 nWidth1 = 0, nWidth2 = 0;
@@ -1015,7 +1016,7 @@ void TableModel::optimize()
 
             if( bEmpty )
             {
-                if( nRow > 0 ) try
+                try
                 {
                     const OUString sHeight("Height");
                     sal_Int32 nHeight1 = 0, nHeight2 = 0;

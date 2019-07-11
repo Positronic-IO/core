@@ -45,7 +45,7 @@ namespace
 {
 
 // A Follow on the same page as its master is nasty.
-inline bool IsNastyFollow( const SwTextFrame *pFrame )
+bool IsNastyFollow( const SwTextFrame *pFrame )
 {
     OSL_ENSURE( !pFrame->IsFollow() || !pFrame->GetPrev() ||
             static_cast<const SwTextFrame*>(pFrame->GetPrev())->GetFollow() == pFrame,
@@ -67,8 +67,8 @@ SwTextFrameBreak::SwTextFrameBreak( SwTextFrame *pNewFrame, const SwTwips nRst )
         const SwSectionFrame* const pSct = m_pFrame->FindSctFrame();
         m_bKeep = pSct->Lower()->IsColumnFrame() && !pSct->MoveAllowed( m_pFrame );
     }
-    m_bKeep = m_bKeep || !m_pFrame->GetTextNode()->GetSwAttrSet().GetSplit().GetValue() ||
-        m_pFrame->GetTextNode()->GetSwAttrSet().GetKeep().GetValue();
+    m_bKeep = m_bKeep || !m_pFrame->GetTextNodeForParaProps()->GetSwAttrSet().GetSplit().GetValue() ||
+        m_pFrame->GetTextNodeForParaProps()->GetSwAttrSet().GetKeep().GetValue();
     m_bBreak = false;
 
     if( !m_nRstHeight && !m_pFrame->IsFollow() && m_pFrame->IsInFootnote() && m_pFrame->HasPara() )
@@ -241,11 +241,11 @@ WidowsAndOrphans::WidowsAndOrphans( SwTextFrame *pNewFrame, const SwTwips nRst,
         // nevertheless the paragraph can request lines from the Master
         // because of the Orphan rule.
         if( m_pFrame->IsFollow() )
-            nWidLines = m_pFrame->GetTextNode()->GetSwAttrSet().GetWidows().GetValue();
+            nWidLines = m_pFrame->GetTextNodeForParaProps()->GetSwAttrSet().GetWidows().GetValue();
     }
     else
     {
-        const SwAttrSet& rSet = m_pFrame->GetTextNode()->GetSwAttrSet();
+        const SwAttrSet& rSet = m_pFrame->GetTextNodeForParaProps()->GetSwAttrSet();
         const SvxOrphansItem  &rOrph = rSet.GetOrphans();
         if ( rOrph.GetValue() > 1 )
             nOrphLines = rOrph.GetValue();
@@ -460,6 +460,7 @@ bool WidowsAndOrphans::FindWidows( SwTextFrame *pFrame, SwTextMargin &rLine )
     // i#91421
     if ( !pMaster->GetIndPrev() )
     {
+        pMaster->ChgThisLines();
         sal_uLong nLines = pMaster->GetThisLines();
         if(nLines == 0 && pMaster->HasPara())
         {
@@ -511,7 +512,7 @@ bool WidowsAndOrphans::WouldFit( SwTextMargin &rLine, SwTwips &rMaxHeight, bool 
         // because we are just in the middle of calculating the break.
         // In Ctor of WidowsAndOrphans the nWidLines are only calced for
         // Follows from the AttrSet - so we catch up now:
-        const SwAttrSet& rSet = m_pFrame->GetTextNode()->GetSwAttrSet();
+        const SwAttrSet& rSet = m_pFrame->GetTextNodeForParaProps()->GetSwAttrSet();
         nWidLines = rSet.GetWidows().GetValue();
     }
 

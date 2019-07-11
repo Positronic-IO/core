@@ -18,8 +18,10 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cppuhelper/compbase.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/document/XDocumentProperties.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
@@ -76,6 +78,7 @@
 #include <sfx2/docfile.hxx>
 #include <sax/tools/converter.hxx>
 #include <i18nlangtag/languagetag.hxx>
+#include <boost/optional.hpp>
 
 #include <utility>
 #include <vector>
@@ -677,11 +680,11 @@ SfxDocumentMetaData::setMetaText(const char* i_name,
             xNode->appendChild(xTextNode);
             return true;
         }
-    } catch (const css::xml::dom::DOMException & e) {
-        css::uno::Any a(e);
+    } catch (const css::xml::dom::DOMException &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                 "SfxDocumentMetaData::setMetaText: DOM exception",
-                css::uno::Reference<css::uno::XInterface>(*this), a);
+                css::uno::Reference<css::uno::XInterface>(*this), anyEx);
     }
 }
 
@@ -808,11 +811,11 @@ SfxDocumentMetaData::setMetaList(const char* i_name,
         }
 
         return true;
-    } catch (const css::xml::dom::DOMException & e) {
-        css::uno::Any a(e);
+    } catch (const css::xml::dom::DOMException &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                 "SfxDocumentMetaData::setMetaList: DOM exception",
-                css::uno::Reference<css::uno::XInterface>(*this), a);
+                css::uno::Reference<css::uno::XInterface>(*this), anyEx);
     }
 }
 
@@ -947,11 +950,11 @@ SfxDocumentMetaData::updateElement(const char *i_name,
             m_xParent->appendChild(xNode);
         }
         m_meta[name] = xNode;
-    } catch (const css::xml::dom::DOMException & e) {
-        css::uno::Any a(e);
+    } catch (const css::xml::dom::DOMException &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                 "SfxDocumentMetaData::updateElement: DOM exception",
-                css::uno::Reference<css::uno::XInterface>(*this), a);
+                css::uno::Reference<css::uno::XInterface>(*this), anyEx);
     }
 }
 
@@ -1104,11 +1107,11 @@ void SfxDocumentMetaData::init(
             css::uno::UNO_QUERY_THROW);
             xRElem->appendChild(xParent);
             m_xParent = xParent;
-        } catch (const css::xml::dom::DOMException & e) {
-            css::uno::Any a(e);
+        } catch (const css::xml::dom::DOMException &) {
+            css::uno::Any anyEx = cppu::getCaughtException();
             throw css::lang::WrappedTargetRuntimeException(
                     "SfxDocumentMetaData::init: DOM exception",
-                    css::uno::Reference<css::uno::XInterface>(*this), a);
+                    css::uno::Reference<css::uno::XInterface>(*this), anyEx);
         }
     }
 
@@ -1135,7 +1138,9 @@ void SfxDocumentMetaData::init(
         css::uno::Reference<css::xml::dom::XNodeList> nodes =
             xPath->selectNodeList(m_xParent, "child::" + name);
         std::vector<css::uno::Reference<css::xml::dom::XNode> > v;
-        for (sal_Int32 i = 0; i < nodes->getLength(); ++i) {
+        v.reserve(nodes->getLength());
+        for (sal_Int32 i = 0; i < nodes->getLength(); ++i)
+        {
             v.push_back(nodes->item(i));
         }
         m_metaList[name] = v;
@@ -1763,10 +1768,6 @@ SfxDocumentMetaData::loadFromStorage(
         xMsf->createInstanceWithArgumentsAndContext(
             OUString::createFromAscii(pServiceName), args, m_xContext),
         css::uno::UNO_QUERY_THROW);
-    if (!xDocHandler.is())
-        throw css::uno::RuntimeException(
-                "SfxDocumentMetaData::loadFromStorage:"
-                " cannot create XMLOasisMetaImporter service", *this);
     css::uno::Reference<css::document::XImporter> xImp (xDocHandler,
         css::uno::UNO_QUERY_THROW);
     xImp->setTargetDocument(css::uno::Reference<css::lang::XComponent>(this));
@@ -1886,11 +1887,12 @@ SfxDocumentMetaData::loadFromMedium(const OUString & URL,
         throw;
     } catch (const css::io::IOException &) {
         throw;
-    } catch (const css::uno::Exception & e) {
+    } catch (const css::uno::Exception &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetException(
                 "SfxDocumentMetaData::loadFromMedium: exception",
                 css::uno::Reference<css::uno::XInterface>(*this),
-                css::uno::makeAny(e));
+                anyEx);
     }
     if (!xStorage.is()) {
         throw css::uno::RuntimeException(
@@ -2001,11 +2003,11 @@ SfxDocumentMetaData::createClone()
         pNew->init(xDoc);
     } catch (const css::uno::RuntimeException &) {
         throw;
-    } catch (const css::uno::Exception & e) {
-        css::uno::Any a(e);
+    } catch (const css::uno::Exception &) {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
                 "SfxDocumentMetaData::createClone: exception",
-                css::uno::Reference<css::uno::XInterface>(*this), a);
+                css::uno::Reference<css::uno::XInterface>(*this), anyEx);
     }
     return css::uno::Reference<css::util::XCloneable> (pNew);
 }

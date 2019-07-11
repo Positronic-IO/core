@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/beans/Optional.hpp>
 #include <com/sun/star/beans/PropertyVetoException.hpp>
@@ -43,6 +44,7 @@
 #include <cppuhelper/weak.hxx>
 #include <osl/file.hxx>
 #include <osl/security.hxx>
+#include <rtl/byteseq.hxx>
 #include <rtl/string.h>
 #include <rtl/textenc.h>
 #include <rtl/ustring.h>
@@ -50,6 +52,7 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <uno/current_context.hxx>
+#include <vcl/svapp.hxx>
 
 namespace {
 
@@ -124,8 +127,9 @@ void Default::setPropertyValue(OUString const &, css::uno::Any const &)
         static_cast< cppu::OWeakObject * >(this), -1);
 }
 
-OUString xdg_user_dir_lookup (const char *type)
+OUString xdg_user_dir_lookup (const char *type, bool bAllowHomeDir)
 {
+    size_t nLenType = strlen(type);
     char *config_home;
     char *p;
     bool bError = false;
@@ -158,11 +162,10 @@ OUString xdg_user_dir_lookup (const char *type)
         rtl::ByteSequence seq;
         while (osl_File_E_None == osl_readLine(handle , reinterpret_cast<sal_Sequence **>(&seq)))
         {
-            /* Remove newline at end */
             int relative = 0;
             int len = seq.getLength();
-            if(len>0 && seq[len-1] == '\n')
-                seq[len-1] = 0;
+            seq.realloc(len + 1);
+            seq[len] = 0;
 
             p = reinterpret_cast<char *>(seq.getArray());
             while (*p == ' ' || *p == '\t')
@@ -170,9 +173,9 @@ OUString xdg_user_dir_lookup (const char *type)
             if (strncmp (p, "XDG_", 4) != 0)
                 continue;
             p += 4;
-            if (strncmp (p, type, strlen (type)) != 0)
+            if (strncmp (p, OString(type, nLenType).toAsciiUpperCase().getStr(), nLenType) != 0)
                 continue;
-            p += strlen (type);
+            p += nLenType;
             if (strncmp (p, "_DIR", 4) != 0)
                 continue;
             p += 4;
@@ -215,16 +218,20 @@ OUString xdg_user_dir_lookup (const char *type)
     if (aUserDirBuf.getLength()>0 && !bError)
     {
         aDocumentsDirURL = aUserDirBuf.makeStringAndClear();
-        osl::Directory aDocumentsDir( aDocumentsDirURL );
-        if( osl::FileBase::E_None == aDocumentsDir.open() )
-            return aDocumentsDirURL;
+        if ( bAllowHomeDir ||
+             (aDocumentsDirURL != aHomeDirURL && aDocumentsDirURL != aHomeDirURL + "/") )
+        {
+            osl::Directory aDocumentsDir( aDocumentsDirURL );
+            if( osl::FileBase::E_None == aDocumentsDir.open() )
+                return aDocumentsDirURL;
+        }
     }
     /* Use fallbacks historical compatibility if nothing else exists */
     return aHomeDirURL + "/" + OUString::createFromAscii(type);
 }
 
-css::uno::Any xdgDirectoryIfExists(char const * type) {
-    auto url = xdg_user_dir_lookup(type);
+css::uno::Any xdgDirectoryIfExists(char const * type, bool bAllowHomeDir) {
+    auto url = xdg_user_dir_lookup(type, bAllowHomeDir);
     return css::uno::Any(
         osl::Directory(url).open() == osl::FileBase::E_None
         ? css::beans::Optional<css::uno::Any>(true, css::uno::Any(url))
@@ -235,12 +242,13 @@ css::uno::Any Default::getPropertyValue(OUString const & PropertyName)
 {
     if (PropertyName == "TemplatePathVariable")
     {
-        return xdgDirectoryIfExists("Templates");
+        // Never pick up the HOME directory as the default location of user's templates
+        return xdgDirectoryIfExists("Templates", false);
     }
 
     if (PropertyName == "WorkPathVariable")
     {
-        return xdgDirectoryIfExists("Documents");
+        return xdgDirectoryIfExists("Documents", true);
     }
 
     if ( PropertyName == "EnableATToolSupport" ||
@@ -293,20 +301,20 @@ css::uno::Reference< css::uno::XInterface > createInstance(
         current->getValueByName("system.desktop-environment") >>= desktop;
     }
 
+    OUString sTK = Application::GetToolkitName();
+
     // Fall back to the default if the specific backend is not available:
     css::uno::Reference< css::uno::XInterface > backend;
-    if ( desktop == "KDE" ) {
-        backend = createBackend(
-            context,
-            "com.sun.star.configuration.backend.KDEBackend");
-    } else if ( desktop == "KDE4" ) {
-        backend = createBackend(
-            context,
-            "com.sun.star.configuration.backend.KDE4Backend");
+    if ( desktop == "KDE4" ) {
+        if (!(sTK.startsWith("qt5") || sTK.startsWith("kde5")))
+            backend = createBackend(
+                context,
+                "com.sun.star.configuration.backend.KDE4Backend");
     } else if ( desktop == "KDE5" ) {
-        backend = createBackend(
-            context,
-            "com.sun.star.configuration.backend.KDE5Backend");
+        if (!(sTK.startsWith("kde4")))
+            backend = createBackend(
+                context,
+                "com.sun.star.configuration.backend.KDE5Backend");
     }
     return backend.is()
         ? backend : static_cast< cppu::OWeakObject * >(new Default);

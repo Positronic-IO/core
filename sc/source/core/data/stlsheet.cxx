@@ -27,23 +27,18 @@
 #include <editeng/lrspitem.hxx>
 #include <svx/pageitem.hxx>
 #include <editeng/paperinf.hxx>
-#include <editeng/pbinitem.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/sizeitem.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/xmlcnitm.hxx>
-#include <sfx2/printer.hxx>
 #include <svl/itempool.hxx>
 #include <svl/itemset.hxx>
 #include <svl/hint.hxx>
 #include <attrib.hxx>
 
-#include <vcl/svapp.hxx>
-
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <sc.hrc>
-#include <helpids.h>
 
 #define TWO_CM      1134
 #define HFDIST_CM   142
@@ -54,13 +49,13 @@ ScStyleSheet::ScStyleSheet( const OUString&     rName,
                             SfxStyleSearchBits  nMaskP )
 
     : SfxStyleSheet   ( rName, rPoolP, eFamily, nMaskP )
-    , eUsage( UNKNOWN )
+    , eUsage( Usage::UNKNOWN )
 {
 }
 
 ScStyleSheet::ScStyleSheet( const ScStyleSheet& rStyle )
     : SfxStyleSheet ( rStyle )
-    , eUsage( UNKNOWN )
+    , eUsage( Usage::UNKNOWN )
 {
 }
 
@@ -97,7 +92,7 @@ bool ScStyleSheet::SetParent( const OUString& rParentName )
     SfxStyleSheetBase* pStyle = m_pPool->Find( aEffName, nFamily );
     if (!pStyle)
     {
-        std::shared_ptr<SfxStyleSheetIterator> pIter = m_pPool->CreateIterator( nFamily, SfxStyleSearchBits::All );
+        std::unique_ptr<SfxStyleSheetIterator> pIter = m_pPool->CreateIterator( nFamily, SfxStyleSearchBits::All );
         pStyle = pIter->First();
         if (pStyle)
             aEffName = pStyle->GetName();
@@ -261,10 +256,10 @@ bool ScStyleSheet::IsUsed() const
         // and store the state.
         ScDocument* pDoc = static_cast<ScStyleSheetPool*>(m_pPool)->GetDocument();
         if ( pDoc && pDoc->IsStyleSheetUsed( *this ) )
-            eUsage = USED;
+            eUsage = Usage::USED;
         else
-            eUsage = NOTUSED;
-        return eUsage == USED;
+            eUsage = Usage::NOTUSED;
+        return eUsage == Usage::USED;
     }
     else
         return true;

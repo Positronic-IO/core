@@ -19,12 +19,12 @@
 
 #include <ChartTypeHelper.hxx>
 #include <DiagramHelper.hxx>
-#include <DataSeriesHelper.hxx>
 #include <servicenames_charttypes.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/chart/DataLabelPlacement.hpp>
-#include <com/sun/star/chart2/XDataSeriesContainer.hpp>
+#include <com/sun/star/chart2/AxisType.hpp>
+#include <com/sun/star/chart2/StackingDirection.hpp>
 #include <com/sun/star/chart/MissingValueTreatment.hpp>
 #include <tools/diagnose_ex.h>
 
@@ -248,8 +248,7 @@ uno::Sequence < sal_Int32 > ChartTypeHelper::getSupportedLabelPlacements( const 
     {
         bool bDonut = false;
         uno::Reference< beans::XPropertySet > xChartTypeProp( xChartType, uno::UNO_QUERY_THROW );
-        if(xChartTypeProp.is())
-            xChartTypeProp->getPropertyValue( "UseRings") >>= bDonut;
+        xChartTypeProp->getPropertyValue( "UseRings") >>= bDonut;
 
         if(!bDonut)
         {

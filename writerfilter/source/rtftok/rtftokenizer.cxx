@@ -14,6 +14,7 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/character.hxx>
+#include <sal/log.hxx>
 #include "rtfskipdestination.hxx"
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/task/XStatusIndicator.hpp>
@@ -78,7 +79,8 @@ RTFError RTFTokenizer::resolveParse()
         m_xStatusIndicator->start(sDocLoad, nEndPos);
         nPercentSize = nEndPos / 100;
 
-        m_xStatusIndicator->setValue(nLastPos = nCurrentPos);
+        nLastPos = nCurrentPos;
+        m_xStatusIndicator->setValue(nLastPos);
     }
 
     while (Strm().ReadChar(ch), !Strm().eof())
@@ -87,7 +89,10 @@ RTFError RTFTokenizer::resolveParse()
 
         sal_uInt64 const nCurrentPos = Strm().Tell();
         if (m_xStatusIndicator.is() && nCurrentPos > (nLastPos + nPercentSize))
-            m_xStatusIndicator->setValue(nLastPos = nCurrentPos);
+        {
+            nLastPos = nCurrentPos;
+            m_xStatusIndicator->setValue(nLastPos);
+        }
 
         if (m_nGroup < 0)
             return RTFError::GROUP_UNDER;
@@ -246,10 +251,9 @@ bool RTFTokenizer::lookupMathKeyword(RTFMathSymbol& rSymbol)
 {
     auto low
         = std::lower_bound(s_aRTFMathControlWords.begin(), s_aRTFMathControlWords.end(), rSymbol);
-    int i = low - s_aRTFMathControlWords.begin();
     if (low == s_aRTFMathControlWords.end() || rSymbol < *low)
         return false;
-    rSymbol = s_aRTFMathControlWords[i];
+    rSymbol = *low;
     return true;
 }
 

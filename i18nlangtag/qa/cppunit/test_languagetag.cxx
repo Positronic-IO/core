@@ -19,6 +19,7 @@
 
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/file.hxx>
 
 #include <com/sun/star/lang/Locale.hpp>
@@ -547,7 +548,7 @@ void TestLanguageTag::testAllTags()
         LanguageTag qtx( s_qtx );
         qtx.setScriptType( LanguageTag::ScriptType::RTL );
         LanguageType n_qtx = qtx.getLanguageType();
-        CPPUNIT_ASSERT_EQUAL( MsLangId::getScriptType(n_qtx), css::i18n::ScriptType::COMPLEX );
+        CPPUNIT_ASSERT_EQUAL( css::i18n::ScriptType::COMPLEX, MsLangId::getScriptType(n_qtx) );
         CPPUNIT_ASSERT( MsLangId::isRightToLeft(n_qtx) );
         CPPUNIT_ASSERT( !MsLangId::isCJK(n_qtx) );
     }
@@ -743,6 +744,7 @@ bool checkMapping( const OUString& rStr1, const OUString& rStr2 )
     if (rStr1 == "crk-Cans-CN" ) return rStr2 == "crk-Cans-CA";
     if (rStr1 == "en-GB-oed"   ) return rStr2 == "en-GB-oxendict";
     if (rStr1 == "es-ES_tradnl") return rStr2 == "es-ES-u-co-trad";
+    if (rStr1 == "sd-IN"       ) return rStr2 == "sd-Deva-IN";
     return rStr1 == rStr2;
 }
 

@@ -37,7 +37,7 @@
 #include <cppuhelper/implbase5.hxx>
 #include "callbacks.hxx"
 #include <vcl/timer.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <sot/storage.hxx>
 #include "TableCopyHelper.hxx"
@@ -99,9 +99,8 @@ namespace dbaui
         OUString         m_sQueryCommand;    // the command of the query currently loaded (if any)
         //OUString         m_sToBeLoaded;      // contains the element name which should be loaded if any
 
-        VclPtr<DBTreeView>      m_pTreeView;
+        VclPtr<DBTreeView>      m_pTreeView; // contains the datasources of the registry
         VclPtr<Splitter>        m_pSplitter;
-        SvTreeList*             m_pTreeModel;           // contains the datasources of the registry
         SvTreeListEntry*        m_pCurrentlyDisplayed;
         ImplSVEvent *           m_nAsyncDrop;
 

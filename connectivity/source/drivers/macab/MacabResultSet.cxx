@@ -29,6 +29,8 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/sdbcx/CompareBookmark.hpp>
 #include <TConnection.hxx>
+#include <cppuhelper/typeprovider.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <resource/sharedresources.hxx>
 #include <strings.hrc>
@@ -49,7 +51,6 @@ MacabResultSet::MacabResultSet(MacabCommonStatement* pStmt)
     : MacabResultSet_BASE(m_aMutex),
       OPropertySetHelper(MacabResultSet_BASE::rBHelper),
       m_xStatement(pStmt),
-      m_xMetaData(nullptr),
       m_aMacabRecords(),
       m_nRowPos(-1),
       m_bWasNull(true)

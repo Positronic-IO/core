@@ -19,6 +19,7 @@
 
 #include <config_features.h>
 #include <rtl/character.hxx>
+#include <sal/log.hxx>
 #include <vcl/wrkwin.hxx>
 #include <svl/rectitem.hxx>
 #include <svl/eitem.hxx>
@@ -43,11 +44,13 @@
 #include <helper.hxx>
 #include <sfx2/docfile.hxx>
 #include <comphelper/processfactory.hxx>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 #if defined(_WIN32)
 
-OUString SfxDdeServiceName_Impl( const OUString& sIn )
+static OUString SfxDdeServiceName_Impl( const OUString& sIn )
 {
     OUStringBuffer sReturn(sIn.getLength());
 
@@ -153,7 +156,7 @@ bool ImplDdeService::MakeTopic( const OUString& rNm )
                     SfxCallMode::SYNCHRON,
                     { &aName, &aNewView, &aSilent });
 
-            if( pRet && dynamic_cast< const SfxViewFrameItem *>( pRet ) !=  nullptr &&
+            if( dynamic_cast< const SfxViewFrameItem *>( pRet ) &&
                 static_cast<SfxViewFrameItem const *>(pRet)->GetFrame() &&
                 nullptr != ( pShell = static_cast<SfxViewFrameItem const *>(pRet)
                     ->GetFrame()->GetObjectShell() ) )

@@ -20,13 +20,13 @@ public:
     SignatureLineDialogBase(weld::Widget* pParent, css::uno::Reference<css::frame::XModel> xModel,
                             const OUString& rUIFile, const OString& rDialogId);
 
-    short execute();
+    virtual short run() override;
 
 protected:
     css::uno::Reference<css::frame::XModel> m_xModel;
-    OUString getSignatureImage();
+    static OUString getSignatureImage();
     virtual void Apply() = 0;
-    OUString getCDataString(const OUString& rString);
+    static OUString getCDataString(const OUString& rString);
 };
 
 #endif

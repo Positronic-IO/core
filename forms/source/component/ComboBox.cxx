@@ -38,6 +38,7 @@
 #include <com/sun/star/sdb/CommandType.hpp>
 
 #include <comphelper/basicio.hxx>
+#include <comphelper/property.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <cppuhelper/queryinterface.hxx>
@@ -735,8 +736,9 @@ bool OComboBoxModel::commitControlValueToDbColumn( bool _bPostReset )
         {
             try
             {
-                OSL_PRECOND( m_pValueFormatter.get(), "OComboBoxModel::commitControlValueToDbColumn: no value formatter!" );
-                if ( m_pValueFormatter.get() )
+                OSL_PRECOND(m_pValueFormatter,
+                            "OComboBoxModel::commitControlValueToDbColumn: no value formatter!");
+                if (m_pValueFormatter)
                 {
                     if ( !m_pValueFormatter->setFormattedValue( sNewValue ) )
                         return false;
@@ -789,8 +791,9 @@ bool OComboBoxModel::commitControlValueToDbColumn( bool _bPostReset )
 
 Any OComboBoxModel::translateDbColumnToControlValue()
 {
-    OSL_PRECOND( m_pValueFormatter.get(), "OComboBoxModel::translateDbColumnToControlValue: no value formatter!" );
-    if ( m_pValueFormatter.get() )
+    OSL_PRECOND(m_pValueFormatter,
+                "OComboBoxModel::translateDbColumnToControlValue: no value formatter!");
+    if (m_pValueFormatter)
     {
         OUString sValue( m_pValueFormatter->getFormattedValue() );
         if  (   sValue.isEmpty()

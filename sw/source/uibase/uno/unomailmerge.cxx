@@ -81,7 +81,7 @@ using namespace SWUnoHelper;
 
 typedef ::utl::SharedUNOComponent< XInterface > SharedComponent;
 
-osl::Mutex &    GetMailMergeMutex()
+static osl::Mutex &    GetMailMergeMutex()
 {
     static osl::Mutex   aMutex;
     return aMutex;
@@ -187,7 +187,7 @@ namespace
         ::osl::Mutex                    m_aMutex;
         Reference< util::XCloseable >   m_xDocument;
         Timer                           m_aDeleteTimer;
-        OUString                        m_sTemporaryFile;
+        OUString const                  m_sTemporaryFile;
         sal_Int32                       m_nPendingDeleteAttempts;
 
         DelayedFileDeletion(DelayedFileDeletion const&) = delete;

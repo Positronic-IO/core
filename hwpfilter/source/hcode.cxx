@@ -565,9 +565,7 @@ static int is_jaso(hchar hh)
 
 static hchar jaso2ks(hchar hh)
 {
-    unsigned int i;
-
-    for (i = 0; i < SAL_N_ELEMENTS(jaso_hh_code); i++)
+    for (size_t i = 0; i < SAL_N_ELEMENTS(jaso_hh_code); i++)
         if (hh == jaso_hh_code[i])
     {
         return sal::static_int_cast<hchar>(0xa4a1 + i);
@@ -895,13 +893,13 @@ int hcharconv(hchar ch, hchar *dest, int codeType)
     if (ch < 128){
          dest[0] = ch;
         return 1;
-     }
+    }
     if (IsHangul(ch))
     {
-          hchar ch2 = ch;
+        hchar ch2 = ch;
         if (codeType == KS)
             ch = cdkssm2ks_han(ch);
-          else if( codeType == UNICODE ){
+        else if( codeType == UNICODE ){
                 if( ch2 == 0xd3c5 ){
                     dest[0] = 0xd55c;
                     return 1 ;
@@ -909,8 +907,8 @@ int hcharconv(hchar ch, hchar *dest, int codeType)
                 int res = kssm_hangul_to_ucs2(ch, dest);
                //printf("hcharconv Hangul[%04x]\n",dest[0]);
                 return res;
-          }
-          dest[0] = ch;
+        }
+        dest[0] = ch;
         return 1;
     }
       /* Chinese characters have a value of 4888 kinds from 0x4000. */
@@ -938,12 +936,12 @@ int hcharconv(hchar ch, hchar *dest, int codeType)
             lo = sal::static_int_cast<unsigned char>(index % (0xFE - 0xA1 + 1) + 0xA1);
             ch = (hi << 8) | lo;
         }
-          else if(codeType == UNICODE){
+        else if(codeType == UNICODE){
                 hi = sal::static_int_cast<unsigned char>(index / (0xFE - 0xA1 + 1) + 0xCA);
                 lo = sal::static_int_cast<unsigned char>(index % (0xFE - 0xA1 + 1) + 0xA1);
                 ch = (hi << 8) | lo;
                 ch = ksc5601_han_to_ucs2(ch);
-          }
+        }
         else
         {
             hi = sal::static_int_cast<unsigned char>(index / (0x100 - 0x31 - 0x11 - 2) + 0xE0);
@@ -1321,7 +1319,7 @@ char *hcolor2str(uchar color, uchar shade, char *buf, bool bIsChar)
     {
         // nothing special here, just copy
     }
-     else
+    else
     {
         unsigned int srclen = strlen(src);
         if (3 < srclen)

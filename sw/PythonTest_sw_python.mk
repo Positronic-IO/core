@@ -23,11 +23,21 @@ $(eval $(call gb_PythonTest_add_modules,sw_python,$(SRCDIR)/sw/qa/python,\
 	check_named_property_values \
 	check_indexed_property_values \
 	check_styles \
+	check_xtexttable \
 	check_table \
+	check_xautotextcontainer \
+	check_xmodifiable2 \
+	check_xnamedgraph \
+	check_xrefreshable \
+	check_xtextrangecompare \
 	get_expression \
 	set_expression \
 	text_portion_enumeration_test \
 	var_fields \
+	xscriptprovider \
+	xtextfieldssupplier \
+	xcontrolshape \
+	xtextcontent \
 ))
 
 # vim: set noet sw=4 ts=4:

@@ -56,26 +56,11 @@ enum class SdrDragMode
 // You can use this value in the methods of SdrLayerSet, but false is returned
 // every time or the method does nothing.
 // type declaration for Layer-IDs
-struct SdrLayerIDTag {};
-typedef o3tl::strong_int<sal_uInt8,SdrLayerIDTag> SdrLayerID;
+typedef o3tl::strong_int<sal_uInt8, struct SdrLayerIDTag> SdrLayerID;
 
 // If there is no layer when it should be identified, then
 // SdrLayerAdmin::GetLayerID(const String&) returns a value.
 constexpr SdrLayerID SDRLAYER_NOTFOUND(0xff);
-
-/*
- * Page + ObjList
- */
-enum class SdrObjListKind {
-    Unknown    = 0x00,
-    // pure object lists:
-    GroupObj   = 0x01,
-    // Here is space for 12 more types of lists
-    // Pages:
-    DrawPage   = 0x10,
-    MasterPage = 0x11
-    // Here is space for 8 more types of pages
-};   // reserved for Surrogate
 
 /*
  * Repeat

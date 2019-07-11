@@ -42,6 +42,7 @@
 #include <ooxml/OOXMLDocument.hxx>
 #include <unotools/mediadescriptor.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
@@ -139,8 +140,6 @@ sal_Bool WriterFilter::filter(const uno::Sequence< beans::PropertyValue >& rDesc
         }
         uno::Reference< document::XExporter > xExprtr(xIfc, uno::UNO_QUERY_THROW);
         uno::Reference< document::XFilter > xFltr(xIfc, uno::UNO_QUERY_THROW);
-        if (!xExprtr.is() || !xFltr.is())
-            return false;
         xExprtr->setSourceDocument(m_xSrcDoc);
         return xFltr->filter(rDescriptor);
     }
@@ -204,11 +203,12 @@ sal_Bool WriterFilter::filter(const uno::Sequence< beans::PropertyValue >& rDesc
         {
             throw;
         }
-        catch (uno::Exception const& e)
+        catch (uno::Exception const&)
         {
-            SAL_WARN("writerfilter", "WriterFilter::filter(): failed with " << e);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            SAL_WARN("writerfilter", "WriterFilter::filter(): failed with " << anyEx);
             throw lang::WrappedTargetRuntimeException("",
-                    static_cast<OWeakObject*>(this), uno::makeAny(e));
+                    static_cast<OWeakObject*>(this), anyEx);
         }
 
         // Adding some properties to the document's grab bag for interoperability purposes:
@@ -256,7 +256,7 @@ sal_Bool WriterFilter::filter(const uno::Sequence< beans::PropertyValue >& rDesc
             }
         }
 
-        pStream.reset();
+        pStream.clear();
 
         return true;
     }
@@ -286,7 +286,7 @@ void WriterFilter::setTargetDocument(const uno::Reference< lang::XComponent >& x
     xSettings->setPropertyValue("ConsiderTextWrapOnObjPos", uno::makeAny(true));
     xSettings->setPropertyValue("UseFormerTextWrapping", uno::makeAny(false));
     xSettings->setPropertyValue("TableRowKeep", uno::makeAny(true));
-    xSettings->setPropertyValue("IgnoreTabsAndBlanksForLineCalculation", uno::makeAny(true));
+    xSettings->setPropertyValue("IgnoreTabsAndBlanksForLineCalculation", uno::makeAny(false));
     xSettings->setPropertyValue("InvertBorderSpacing", uno::makeAny(true));
     xSettings->setPropertyValue("CollapseEmptyCellPara", uno::makeAny(true));
     xSettings->setPropertyValue("TabOverflow", uno::makeAny(true));

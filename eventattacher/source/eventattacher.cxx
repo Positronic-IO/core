@@ -37,6 +37,7 @@
 // InvocationToAllListenerMapper
 #include <com/sun/star/script/XInvocation.hpp>
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/weak.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -83,7 +84,7 @@ private:
 
 
 // Function to replace AllListenerAdapterService::createAllListerAdapter
-Reference< XInterface > createAllListenerAdapter
+static Reference< XInterface > createAllListenerAdapter
 (
     const Reference< XInvocationAdapterFactory2 >& xInvocationAdapterFactory,
     const Reference< XIdlClass >& xListenerType,
@@ -275,7 +276,7 @@ EventAttacherImpl::EventAttacherImpl( const Reference< XComponentContext >& rxCo
 }
 
 /// @throws Exception
-Reference< XInterface > EventAttacherImpl_CreateInstance( const Reference< XMultiServiceFactory >& rSMgr )
+static Reference< XInterface > EventAttacherImpl_CreateInstance( const Reference< XMultiServiceFactory >& rSMgr )
 {
     XEventAttacher *pEventAttacher = static_cast<XEventAttacher*>(new EventAttacherImpl( comphelper::getComponentContext(rSMgr) ));
 
@@ -510,9 +511,10 @@ Any SAL_CALL FilterAllListenerImpl::approveFiring( const AllEventObject& Event )
                 convertToEventReturn( aRet, aRetType );
             }
         }
-        catch( const CannotConvertException& e )
+        catch( const CannotConvertException& )
         {
-            throw InvocationTargetException( OUString(), Reference< XInterface >(), Any(&e, cppu::UnoType<CannotConvertException>::get()) );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw InvocationTargetException( OUString(), Reference< XInterface >(), anyEx );
         }
     }
     return aRet;
@@ -574,7 +576,7 @@ Reference<XEventListener> EventAttacherImpl::attachListenerForTarget(
     const OUString& aListenerType,
     const OUString& aAddListenerParam)
 {
-    Reference< XEventListener > xRet = nullptr;
+    Reference< XEventListener > xRet;
 
     // Construct the name of the addListener-Method.
     sal_Int32 nIndex = aListenerType.lastIndexOf('.');

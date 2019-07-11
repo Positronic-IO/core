@@ -20,8 +20,7 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_CONTENT_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_CONTENT_HXX
 
-#include <svtools/treelistbox.hxx>
-#include <global.hxx>
+#include <vcl/treelistbox.hxx>
 #include <address.hxx>
 #include <tools/solar.h>
 #include <o3tl/enumarray.hxx>
@@ -30,7 +29,6 @@ class ScNavigatorDlg;
 class ScDocument;
 class ScDocShell;
 class ScAreaLink;
-class SdrPage;
 
 enum class ScContentId {
     ROOT, TABLE, RANGENAME, DBAREA,
@@ -139,7 +137,7 @@ public:
     void    ActiveDocChanged();
     void    ResetManualDoc();
     void    SetManualDoc(const OUString& rName);
-    bool    LoadFile(const OUString& rUrl);
+    void    LoadFile(const OUString& rUrl);
     void    SelectDoc(const OUString& rName);
     void    SelectEntryByName(const ScContentId nRoot, const OUString& rName);
 

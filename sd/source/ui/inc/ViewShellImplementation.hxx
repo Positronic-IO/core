@@ -23,8 +23,9 @@
 #include "ViewShell.hxx"
 #include "ViewShellManager.hxx"
 #include "ToolBarManager.hxx"
-#include <o3tl/deleter.hxx>
 #include <memory>
+
+namespace o3tl { template <typename T> struct default_delete; }
 
 class SvxIMapDlg;
 
@@ -127,7 +128,7 @@ public:
         used by the SFX as factories.  They only set the initial pane
         configuration, nothing more.
 
-        So what we do here in essence is to return on of the
+        So what we do here in essence is to return one of the
         ViewShellFactoryIds that can be used to select the factory that
         creates the ViewShellBase subclass with the initial pane
         configuration that has in the center pane a view shell of the same

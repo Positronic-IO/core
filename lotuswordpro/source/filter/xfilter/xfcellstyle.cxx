@@ -65,9 +65,6 @@
 XFCellStyle::XFCellStyle()
     : m_eHoriAlign(enumXFAlignNone)
     , m_eVertAlign(enumXFAlignNone)
-    , m_fTextIndent(0)
-    , m_pBorders(nullptr)
-    , m_bWrapText(false)
 {}
 
 XFCellStyle::~XFCellStyle()
@@ -125,8 +122,6 @@ bool    XFCellStyle::Equal(IXFStyle *pStyle)
 
     if( m_strParentStyleName != pOther->m_strParentStyleName )
         return false;
-    if( m_fTextIndent != pOther->m_fTextIndent )
-        return false;
 
     //align:
     if( m_eHoriAlign != pOther->m_eHoriAlign )
@@ -144,10 +139,6 @@ bool    XFCellStyle::Equal(IXFStyle *pStyle)
         return false;
     //padding:
     if( m_aPadding != pOther->m_aPadding )
-        return false;
-
-    //wrap:
-    if( m_bWrapText != pOther->m_bWrapText )
         return false;
 
     //font:
@@ -211,11 +202,6 @@ void XFCellStyle::ToXml(IXFStream *pStrm)
     //Paragraph properties:
     pAttrList->Clear();
 
-    //text indent:
-    if( m_fTextIndent>FLOAT_MIN )
-    {
-        pAttrList->AddAttribute("fo:text-indent", OUString::number(m_fTextIndent) + "cm" );
-    }
     //padding:
     m_aPadding.ToXml(pStrm);
     //margin:
@@ -229,10 +215,6 @@ void XFCellStyle::ToXml(IXFStream *pStrm)
     //text vertical align
     if( m_eVertAlign != enumXFAlignNone )
         pAttrList->AddAttribute( "fo:vertical-align", GetAlignName(m_eVertAlign) );
-
-    //wrap text:
-    if( m_bWrapText )
-        pAttrList->AddAttribute( "fo:wrap-option", "wrap" );
 
     //shadow:
     m_aShadow.ToXml(pStrm);

@@ -29,12 +29,20 @@
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
+#include <svl/zforlist.hxx>
+#include <svl/zformat.hxx>
 #include <tools/fract.hxx>
 #include <tools/stream.hxx>
 #include <unotools/resmgr.hxx>
 #include <vcl/ImageTree.hxx>
+#include <vcl/i18nhelp.hxx>
+#include <vcl/quickselectionengine.hxx>
 #include <vcl/mnemonic.hxx>
+#include <vcl/syswin.hxx>
 #include <vcl/weld.hxx>
+#include <window.h>
+#include <numeric>
 
 using namespace com::sun::star;
 using namespace com::sun::star::uno;
@@ -185,7 +193,7 @@ sal_Bool SAL_CALL GtkTransferable::isDataFlavorSupported(const css::datatransfer
     const std::vector<css::datatransfer::DataFlavor> aAll =
         getTransferDataFlavorsAsVector();
 
-    return std::find_if(aAll.begin(), aAll.end(), DataFlavorEq(rFlavor)) != aAll.end();
+    return std::any_of(aAll.begin(), aAll.end(), DataFlavorEq(rFlavor));
 }
 
 class GtkClipboardTransferable : public GtkTransferable
@@ -211,7 +219,7 @@ public:
             OUString aStr;
             gchar *pText = gtk_clipboard_wait_for_text(clipboard);
             if (pText)
-                aStr = OUString(pText, rtl_str_getLength(pText), RTL_TEXTENCODING_UTF8);
+                aStr = OUString(pText, strlen(pText), RTL_TEXTENCODING_UTF8);
             g_free(pText);
             css::uno::Any aRet;
             aRet <<= aStr.replaceAll("\r\n", "\n");
@@ -377,7 +385,7 @@ namespace
 
 namespace
 {
-    void ClipboardGetFunc(GtkClipboard */*clipboard*/, GtkSelectionData *selection_data,
+    void ClipboardGetFunc(GtkClipboard* /*clipboard*/, GtkSelectionData *selection_data,
                           guint info,
                           gpointer user_data_or_owner)
     {
@@ -385,13 +393,13 @@ namespace
         pThis->ClipboardGet(selection_data, info);
     }
 
-    void ClipboardClearFunc(GtkClipboard */*clipboard*/, gpointer user_data_or_owner)
+    void ClipboardClearFunc(GtkClipboard* /*clipboard*/, gpointer user_data_or_owner)
     {
         VclGtkClipboard* pThis = static_cast<VclGtkClipboard*>(user_data_or_owner);
         pThis->ClipboardClear();
     }
 
-    void handle_owner_change(GtkClipboard *clipboard, GdkEvent */*event*/, gpointer user_data)
+    void handle_owner_change(GtkClipboard *clipboard, GdkEvent* /*event*/, gpointer user_data)
     {
         VclGtkClipboard* pThis = static_cast<VclGtkClipboard*>(user_data);
         pThis->OwnerPossiblyChanged(clipboard);
@@ -606,6 +614,12 @@ void VclGtkClipboard::setContents(
         const Reference< css::datatransfer::XTransferable >& xTrans,
         const Reference< css::datatransfer::clipboard::XClipboardOwner >& xClipboardOwner )
 {
+    css::uno::Sequence<css::datatransfer::DataFlavor> aFormats;
+    if (xTrans.is())
+    {
+        aFormats = xTrans->getTransferDataFlavors();
+    }
+
     osl::ClearableMutexGuard aGuard( m_aMutex );
     Reference< datatransfer::clipboard::XClipboardOwner > xOldOwner( m_aOwner );
     Reference< datatransfer::XTransferable > xOldContents( m_aContents );
@@ -624,7 +638,6 @@ void VclGtkClipboard::setContents(
     assert(m_aGtkTargets.empty());
     if (m_aContents.is())
     {
-        css::uno::Sequence<css::datatransfer::DataFlavor> aFormats = xTrans->getTransferDataFlavors();
         std::vector<GtkTargetEntry> aGtkTargets(m_aConversionHelper.FormatsToGtk(aFormats));
         if (!aGtkTargets.empty())
         {
@@ -1156,6 +1169,23 @@ OpenGLContext* GtkInstance::CreateOpenGLContext()
     return new GtkOpenGLContext;
 }
 
+// tdf#123800 avoid requiring wayland at runtime just because it existed at buildtime
+bool DLSYM_GDK_IS_WAYLAND_DISPLAY(GdkDisplay* pDisplay)
+{
+    auto get_type = reinterpret_cast<GType (*) (void)>(dlsym(nullptr, "gdk_wayland_display_get_type"));
+    if (!get_type)
+        return false;
+    return G_TYPE_CHECK_INSTANCE_TYPE(pDisplay, get_type());
+}
+
+bool DLSYM_GDK_IS_X11_DISPLAY(GdkDisplay* pDisplay)
+{
+    auto get_type = reinterpret_cast<GType (*) (void)>(dlsym(nullptr, "gdk_x11_display_get_type"));
+    if (!get_type)
+        return false;
+    return G_TYPE_CHECK_INSTANCE_TYPE(pDisplay, get_type());
+}
+
 class GtkInstanceBuilder;
 
 namespace
@@ -1172,38 +1202,100 @@ namespace
         const gchar* pStr = static_cast<const gchar*>(pData);
         return OString(pStr, pStr ? strlen(pStr) : 0);
     }
+
+    KeyEvent GtkToVcl(GdkEventKey& rEvent)
+    {
+        sal_uInt16 nKeyCode = GtkSalFrame::GetKeyCode(rEvent.keyval);
+        if (nKeyCode == 0)
+        {
+            guint updated_keyval = GtkSalFrame::GetKeyValFor(gdk_keymap_get_default(), rEvent.hardware_keycode, rEvent.group);
+            nKeyCode = GtkSalFrame::GetKeyCode(updated_keyval);
+        }
+        nKeyCode |= GtkSalFrame::GetKeyModCode(rEvent.state);
+        return KeyEvent(gdk_keyval_to_unicode(rEvent.keyval), nKeyCode, 0);
+    }
 }
 
 class GtkInstanceWidget : public virtual weld::Widget
 {
 protected:
     GtkWidget* m_pWidget;
-private:
-    bool m_bTakeOwnership;
-    gulong m_nFocusInSignalId;
-    gulong m_nFocusOutSignalId;
+    GtkInstanceBuilder* m_pBuilder;
 
-    static void signalFocusIn(GtkWidget*, GdkEvent*, gpointer widget)
+    static gboolean signalFocusIn(GtkWidget*, GdkEvent*, gpointer widget)
     {
         GtkInstanceWidget* pThis = static_cast<GtkInstanceWidget*>(widget);
         SolarMutexGuard aGuard;
         pThis->signal_focus_in();
+        return false;
     }
 
-    static void signalFocusOut(GtkWidget*, GdkEvent*, gpointer widget)
+    void signal_focus_in()
+    {
+        m_aFocusInHdl.Call(*this);
+    }
+
+    static gboolean signalFocusOut(GtkWidget*, GdkEvent*, gpointer widget)
     {
         GtkInstanceWidget* pThis = static_cast<GtkInstanceWidget*>(widget);
         SolarMutexGuard aGuard;
         pThis->signal_focus_out();
+        return false;
+    }
+
+    void signal_focus_out()
+    {
+        m_aFocusOutHdl.Call(*this);
+    }
+
+private:
+    bool m_bTakeOwnership;
+    bool m_bFrozen;
+    gulong m_nFocusInSignalId;
+    gulong m_nFocusOutSignalId;
+    gulong m_nKeyPressSignalId;
+    gulong m_nKeyReleaseSignalId;
+    gulong m_nSizeAllocateSignalId;
+
+    static void signalSizeAllocate(GtkWidget*, GdkRectangle* allocation, gpointer widget)
+    {
+        GtkInstanceWidget* pThis = static_cast<GtkInstanceWidget*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_size_allocate(allocation->width, allocation->height);
+    }
+
+    static gboolean signalKey(GtkWidget*, GdkEventKey* pEvent, gpointer widget)
+    {
+        // #i1820# use locale specific decimal separator
+        if (pEvent->keyval == GDK_KEY_KP_Decimal && Application::GetSettings().GetMiscSettings().GetEnableLocalizedDecimalSep())
+        {
+            OUString aSep(Application::GetSettings().GetLocaleDataWrapper().getNumDecimalSep());
+            pEvent->keyval = aSep[0];
+        }
+
+        GtkInstanceWidget* pThis = static_cast<GtkInstanceWidget*>(widget);
+        return pThis->signal_key(pEvent);
     }
 
 public:
-    GtkInstanceWidget(GtkWidget* pWidget, bool bTakeOwnership)
+    GtkInstanceWidget(GtkWidget* pWidget, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
         : m_pWidget(pWidget)
+        , m_pBuilder(pBuilder)
         , m_bTakeOwnership(bTakeOwnership)
+        , m_bFrozen(false)
         , m_nFocusInSignalId(0)
         , m_nFocusOutSignalId(0)
+        , m_nSizeAllocateSignalId(0)
     {
+        GdkEventMask eEventMask(static_cast<GdkEventMask>(gtk_widget_get_events(pWidget)));
+        if (eEventMask & GDK_BUTTON_PRESS_MASK)
+            m_nKeyPressSignalId = g_signal_connect(pWidget, "key-press-event", G_CALLBACK(signalKey), this);
+        else
+            m_nKeyPressSignalId = 0;
+        if (eEventMask & GDK_BUTTON_RELEASE_MASK)
+            m_nKeyReleaseSignalId = g_signal_connect(pWidget, "key-release-event", G_CALLBACK(signalKey), this);
+        else
+            m_nKeyReleaseSignalId = 0;
     }
 
     virtual void set_sensitive(bool sensitive) override
@@ -1231,6 +1323,11 @@ public:
         return gtk_widget_is_visible(m_pWidget);
     }
 
+    virtual void set_can_focus(bool bCanFocus) override
+    {
+        gtk_widget_set_can_focus(m_pWidget, bCanFocus);
+    }
+
     virtual void grab_focus() override
     {
         gtk_widget_grab_focus(m_pWidget);
@@ -1239,6 +1336,18 @@ public:
     virtual bool has_focus() const override
     {
         return gtk_widget_has_focus(m_pWidget);
+    }
+
+    virtual void set_has_default(bool has_default) override
+    {
+        g_object_set(G_OBJECT(m_pWidget), "has-default", has_default, nullptr);
+    }
+
+    virtual bool get_has_default() const override
+    {
+        gboolean has_default(false);
+        g_object_get(G_OBJECT(m_pWidget), "has-default", &has_default, nullptr);
+        return has_default;
     }
 
     virtual void show() override
@@ -1253,7 +1362,22 @@ public:
 
     virtual void set_size_request(int nWidth, int nHeight) override
     {
+        GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
+        if (GTK_IS_VIEWPORT(pParent))
+            pParent = gtk_widget_get_parent(pParent);
+        if (GTK_IS_SCROLLED_WINDOW(pParent))
+        {
+            gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(pParent), nWidth);
+            gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(pParent), nHeight);
+        }
         gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
+    }
+
+    virtual Size get_size_request() const override
+    {
+        int nWidth, nHeight;
+        gtk_widget_get_size_request(m_pWidget, &nWidth, &nHeight);
+        return Size(nWidth, nHeight);
     }
 
     virtual Size get_preferred_size() const override
@@ -1308,6 +1432,12 @@ public:
         gint nAttach(0);
         gtk_container_child_get(pParent, m_pWidget, "left-attach", &nAttach, nullptr);
         return nAttach;
+    }
+
+    virtual void set_grid_width(int nCols) override
+    {
+        GtkContainer* pParent = GTK_CONTAINER(gtk_widget_get_parent(m_pWidget));
+        gtk_container_child_set(pParent, m_pWidget, "width", nCols, nullptr);
     }
 
     virtual void set_grid_top_attach(int nAttach) override
@@ -1369,6 +1499,30 @@ public:
         return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
     }
 
+    virtual OUString get_accessible_description() const override
+    {
+        AtkObject* pAtkObject = gtk_widget_get_accessible(m_pWidget);
+        const char* pStr = pAtkObject ? atk_object_get_description(pAtkObject) : nullptr;
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    virtual bool get_extents_relative_to(weld::Widget& rRelative, int& x, int &y, int& width, int &height) override
+    {
+        //for toplevel windows this is sadly futile under wayland, so we can't tell where a dialog is in order to allow
+        //the document underneath to auto-scroll to place content in a visible location
+        gboolean ret = gtk_widget_translate_coordinates(m_pWidget,
+                                                        dynamic_cast<GtkInstanceWidget&>(rRelative).getWidget(),
+                                                        0, 0, &x, &y);
+        width = gtk_widget_get_allocated_width(m_pWidget);
+        height = gtk_widget_get_allocated_height(m_pWidget);
+        return ret;
+    }
+
+    virtual void set_tooltip_text(const OUString& rTip) override
+    {
+        gtk_widget_set_tooltip_text(m_pWidget, OUStringToOString(rTip, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
     virtual weld::Container* weld_parent() const override;
 
     virtual OString get_buildable_name() const override
@@ -1412,9 +1566,40 @@ public:
         weld::Widget::connect_focus_out(rLink);
     }
 
+    virtual void connect_size_allocate(const Link<const Size&, void>& rLink) override
+    {
+        m_nSizeAllocateSignalId = g_signal_connect(m_pWidget, "size_allocate", G_CALLBACK(signalSizeAllocate), this);
+        weld::Widget::connect_size_allocate(rLink);
+    }
+
+    virtual void signal_size_allocate(guint nWidth, guint nHeight)
+    {
+        m_aSizeAllocateHdl.Call(Size(nWidth, nHeight));
+    }
+
+    gboolean signal_key(GdkEventKey* pEvent)
+    {
+        if (pEvent->type == GDK_KEY_PRESS && m_aKeyPressHdl.IsSet())
+        {
+            SolarMutexGuard aGuard;
+            return m_aKeyPressHdl.Call(GtkToVcl(*pEvent));
+        }
+        if (pEvent->type == GDK_KEY_RELEASE && m_aKeyReleaseHdl.IsSet())
+        {
+            SolarMutexGuard aGuard;
+            return m_aKeyReleaseHdl.Call(GtkToVcl(*pEvent));
+        }
+        return false;
+    }
+
     virtual void grab_add() override
     {
         gtk_grab_add(m_pWidget);
+    }
+
+    virtual bool has_grab() const override
+    {
+        return gtk_widget_has_grab(m_pWidget);
     }
 
     virtual void grab_remove() override
@@ -1422,12 +1607,42 @@ public:
         gtk_grab_remove(m_pWidget);
     }
 
+    virtual bool get_direction() const override
+    {
+        return gtk_widget_get_direction(m_pWidget) == GTK_TEXT_DIR_RTL;
+    }
+
+    virtual void set_direction(bool bRTL) override
+    {
+        gtk_widget_set_direction(m_pWidget, bRTL ? GTK_TEXT_DIR_RTL : GTK_TEXT_DIR_LTR);
+    }
+
+    virtual void freeze() override
+    {
+        gtk_widget_freeze_child_notify(m_pWidget);
+        m_bFrozen = true;
+    }
+
+    virtual void thaw() override
+    {
+        gtk_widget_thaw_child_notify(m_pWidget);
+        m_bFrozen = false;
+    }
+
+    bool get_frozen() const { return m_bFrozen; }
+
     virtual ~GtkInstanceWidget() override
     {
+        if (m_nKeyPressSignalId)
+            g_signal_handler_disconnect(m_pWidget, m_nKeyPressSignalId);
+        if (m_nKeyReleaseSignalId)
+            g_signal_handler_disconnect(m_pWidget, m_nKeyReleaseSignalId);
         if (m_nFocusInSignalId)
             g_signal_handler_disconnect(m_pWidget, m_nFocusInSignalId);
         if (m_nFocusOutSignalId)
             g_signal_handler_disconnect(m_pWidget, m_nFocusOutSignalId);
+        if (m_nSizeAllocateSignalId)
+            g_signal_handler_disconnect(m_pWidget, m_nSizeAllocateSignalId);
         if (m_bTakeOwnership)
             gtk_widget_destroy(m_pWidget);
     }
@@ -1438,15 +1653,21 @@ public:
             g_signal_handler_block(m_pWidget, m_nFocusInSignalId);
         if (m_nFocusOutSignalId)
             g_signal_handler_block(m_pWidget, m_nFocusOutSignalId);
+        if (m_nSizeAllocateSignalId)
+            g_signal_handler_block(m_pWidget, m_nSizeAllocateSignalId);
     }
 
     virtual void enable_notify_events()
     {
+        if (m_nSizeAllocateSignalId)
+            g_signal_handler_unblock(m_pWidget, m_nSizeAllocateSignalId);
         if (m_nFocusOutSignalId)
             g_signal_handler_unblock(m_pWidget, m_nFocusOutSignalId);
         if (m_nFocusInSignalId)
             g_signal_handler_unblock(m_pWidget, m_nFocusInSignalId);
     }
+
+    virtual void help_hierarchy_foreach(const std::function<bool(const OString&)>& func) override;
 };
 
 namespace
@@ -1518,6 +1739,72 @@ namespace
     }
 }
 
+namespace
+{
+    GdkPixbuf* load_icon_by_name(const OUString& rIconName, const OUString& rIconTheme, const OUString& rUILang)
+    {
+        GdkPixbuf* pixbuf = nullptr;
+        auto xMemStm = ImageTree::get().getImageStream(rIconName, rIconTheme, rUILang);
+        if (xMemStm)
+        {
+            GdkPixbufLoader *pixbuf_loader = gdk_pixbuf_loader_new();
+            gdk_pixbuf_loader_write(pixbuf_loader, static_cast<const guchar*>(xMemStm->GetData()),
+                                    xMemStm->TellEnd(), nullptr);
+            gdk_pixbuf_loader_close(pixbuf_loader, nullptr);
+            pixbuf = gdk_pixbuf_loader_get_pixbuf(pixbuf_loader);
+            if (pixbuf)
+                g_object_ref(pixbuf);
+            g_object_unref(pixbuf_loader);
+        }
+        return pixbuf;
+    }
+
+    GdkPixbuf* load_icon_by_name(const OUString& rIconName)
+    {
+        OUString sIconTheme = Application::GetSettings().GetStyleSettings().DetermineIconTheme();
+        OUString sUILang = Application::GetSettings().GetUILanguageTag().getBcp47();
+        return load_icon_by_name(rIconName, sIconTheme, sUILang);
+    }
+
+    GdkPixbuf* load_icon_from_surface(VirtualDevice& rDevice)
+    {
+        Size aSize(rDevice.GetOutputSizePixel());
+        cairo_surface_t* surface = get_underlying_cairo_surface(rDevice);
+        double m_fXScale, m_fYScale;
+        dl_cairo_surface_get_device_scale(surface, &m_fXScale, &m_fYScale);
+        return gdk_pixbuf_get_from_surface(surface, 0, 0, aSize.Width() * m_fXScale, aSize.Height() * m_fYScale);
+    }
+
+    GtkWidget* image_new_from_virtual_device(VirtualDevice& rImageSurface)
+    {
+        GtkWidget* pImage = nullptr;
+        if (gtk_check_version(3, 20, 0) == nullptr)
+        {
+            cairo_surface_t* surface = get_underlying_cairo_surface(rImageSurface);
+
+            Size aSize(rImageSurface.GetOutputSizePixel());
+            cairo_surface_t* target = cairo_surface_create_similar(surface,
+                                                                   cairo_surface_get_content(surface),
+                                                                   aSize.Width(),
+                                                                   aSize.Height());
+
+            cairo_t* cr = cairo_create(target);
+            cairo_set_source_surface(cr, surface, 0, 0);
+            cairo_paint(cr);
+            cairo_destroy(cr);
+            pImage = gtk_image_new_from_surface(target);
+            cairo_surface_destroy(target);
+        }
+        else
+        {
+            GdkPixbuf* pixbuf = load_icon_from_surface(rImageSurface);
+            pImage = gtk_image_new_from_pixbuf(pixbuf);
+            g_object_unref(pixbuf);
+        }
+        return pImage;
+    }
+}
+
 class MenuHelper
 {
 protected:
@@ -1538,13 +1825,6 @@ private:
         }
     }
 
-    void add_to_map(GtkMenuItem* pMenuItem)
-    {
-        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pMenuItem));
-        OString id(pStr, pStr ? strlen(pStr) : 0);
-        m_aMap[id] = pMenuItem;
-    }
-
     static void signalActivate(GtkMenuItem* pItem, gpointer widget)
     {
         MenuHelper* pThis = static_cast<MenuHelper*>(widget);
@@ -1559,9 +1839,26 @@ public:
         : m_pMenu(pMenu)
         , m_bTakeOwnership(bTakeOwnership)
     {
+        if (!m_pMenu)
+            return;
         gtk_container_foreach(GTK_CONTAINER(m_pMenu), collect, this);
-        for (auto& a : m_aMap)
-            g_signal_connect(a.second, "activate", G_CALLBACK(signalActivate), this);
+    }
+
+    void add_to_map(GtkMenuItem* pMenuItem)
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pMenuItem));
+        OString id(pStr, pStr ? strlen(pStr) : 0);
+        m_aMap[id] = pMenuItem;
+        g_signal_connect(pMenuItem, "activate", G_CALLBACK(signalActivate), this);
+    }
+
+    void remove_from_map(GtkMenuItem* pMenuItem)
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pMenuItem));
+        OString id(pStr, pStr ? strlen(pStr) : 0);
+        auto iter = m_aMap.find(id);
+        g_signal_handlers_disconnect_by_data(iter->second, this);
+        m_aMap.erase(iter);
     }
 
     void disable_item_notify_events()
@@ -1574,6 +1871,47 @@ public:
     {
         for (auto& a : m_aMap)
             g_signal_handlers_unblock_by_func(a.second, reinterpret_cast<void*>(signalActivate), this);
+    }
+
+    void insert_item(int pos, const OUString& rId, const OUString& rStr,
+                     const OUString* pIconName, VirtualDevice* pImageSurface,
+                     bool bCheck)
+    {
+        GtkWidget* pImage = nullptr;
+        if (pIconName)
+        {
+            GdkPixbuf* pixbuf = load_icon_by_name(*pIconName);
+            if (!pixbuf)
+            {
+                pImage = gtk_image_new_from_pixbuf(pixbuf);
+                g_object_unref(pixbuf);
+            }
+        }
+        else if (pImageSurface)
+            pImage = image_new_from_virtual_device(*pImageSurface);
+
+        GtkWidget *pItem;
+        if (pImage)
+        {
+            GtkWidget *pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+            GtkWidget *pLabel = gtk_label_new(MapToGtkAccelerator(rStr).getStr());
+            pItem = bCheck ? gtk_check_menu_item_new() : gtk_menu_item_new();
+            gtk_container_add(GTK_CONTAINER(pBox), pImage);
+            gtk_container_add(GTK_CONTAINER(pBox), pLabel);
+            gtk_container_add(GTK_CONTAINER(pItem), pBox);
+            gtk_widget_show_all(pItem);
+        }
+        else
+        {
+            pItem = bCheck ? gtk_check_menu_item_new_with_label(MapToGtkAccelerator(rStr).getStr())
+                           : gtk_menu_item_new_with_label(MapToGtkAccelerator(rStr).getStr());
+        }
+        gtk_buildable_set_name(GTK_BUILDABLE(pItem), OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr());
+        gtk_menu_shell_append(GTK_MENU_SHELL(m_pMenu), pItem);
+        gtk_widget_show(pItem);
+        add_to_map(GTK_MENU_ITEM(pItem));
+        if (pos != -1)
+            gtk_menu_reorder_child(m_pMenu, pItem, pos);
     }
 
     void set_item_sensitive(const OString& rIdent, bool bSensitive)
@@ -1621,99 +1959,44 @@ public:
     }
 };
 
-class GtkInstanceMenu : public MenuHelper, public virtual weld::Menu
+class GtkInstanceSizeGroup : public weld::SizeGroup
 {
-protected:
-    OString m_sActivated;
-
 private:
-    virtual void signal_activate(GtkMenuItem* pItem) override
-    {
-        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
-        m_sActivated = OString(pStr, pStr ? strlen(pStr) : 0);
-    }
-
+    GtkSizeGroup* m_pGroup;
 public:
-    GtkInstanceMenu(GtkMenu* pMenu, bool bTakeOwnership)
-        : MenuHelper(pMenu, bTakeOwnership)
+    GtkInstanceSizeGroup()
+        : m_pGroup(gtk_size_group_new(GTK_SIZE_GROUP_NONE))
     {
     }
-
-    virtual OString popup_at_rect(weld::Widget* pParent, const tools::Rectangle &rRect) override
+    virtual void add_widget(weld::Widget* pWidget) override
     {
-        m_sActivated.clear();
-
-        GtkInstanceWidget* pGtkWidget = dynamic_cast<GtkInstanceWidget*>(pParent);
-        assert(pGtkWidget);
-
-        GtkWidget* pWidget = pGtkWidget->getWidget();
-        gtk_menu_attach_to_widget(m_pMenu, pWidget, nullptr);
-
-        //run in a sub main loop because we need to keep vcl PopupMenu alive to use
-        //it during DispatchCommand, returning now to the outer loop causes the
-        //launching PopupMenu to be destroyed, instead run the subloop here
-        //until the gtk menu is destroyed
-        GMainLoop* pLoop = g_main_loop_new(nullptr, true);
-        gulong nSignalId = g_signal_connect_swapped(G_OBJECT(m_pMenu), "deactivate", G_CALLBACK(g_main_loop_quit), pLoop);
-
-#if GTK_CHECK_VERSION(3,22,0)
-        if (gtk_check_version(3, 22, 0) == nullptr)
+        GtkInstanceWidget* pVclWidget = dynamic_cast<GtkInstanceWidget*>(pWidget);
+        assert(pVclWidget);
+        gtk_size_group_add_widget(m_pGroup, pVclWidget->getWidget());
+    }
+    virtual void set_mode(VclSizeGroupMode eVclMode) override
+    {
+        GtkSizeGroupMode eGtkMode(GTK_SIZE_GROUP_NONE);
+        switch (eVclMode)
         {
-            GdkRectangle aRect{static_cast<int>(rRect.Left()), static_cast<int>(rRect.Top()),
-                               static_cast<int>(rRect.GetWidth()), static_cast<int>(rRect.GetHeight())};
-            gtk_menu_popup_at_rect(m_pMenu, gtk_widget_get_window(pWidget), &aRect, GDK_GRAVITY_NORTH_WEST, GDK_GRAVITY_NORTH_WEST, nullptr);
+            case VclSizeGroupMode::NONE:
+                eGtkMode = GTK_SIZE_GROUP_NONE;
+                break;
+            case VclSizeGroupMode::Horizontal:
+                eGtkMode = GTK_SIZE_GROUP_HORIZONTAL;
+                break;
+            case VclSizeGroupMode::Vertical:
+                eGtkMode = GTK_SIZE_GROUP_VERTICAL;
+                break;
+            case VclSizeGroupMode::Both:
+                eGtkMode = GTK_SIZE_GROUP_BOTH;
+                break;
         }
-        else
-#else
-        (void) rRect;
-#endif
-        {
-            guint nButton;
-            guint32 nTime;
-
-            //typically there is an event, and we can then distinguish if this was
-            //launched from the keyboard (gets auto-mnemoniced) or the mouse (which
-            //doesn't)
-            GdkEvent *pEvent = gtk_get_current_event();
-            if (pEvent)
-            {
-                gdk_event_get_button(pEvent, &nButton);
-                nTime = gdk_event_get_time(pEvent);
-            }
-            else
-            {
-                nButton = 0;
-                nTime = GtkSalFrame::GetLastInputEventTime();
-            }
-
-            gtk_menu_popup(m_pMenu, nullptr, nullptr, nullptr, nullptr, nButton, nTime);
-        }
-
-        if (g_main_loop_is_running(pLoop))
-        {
-            gdk_threads_leave();
-            g_main_loop_run(pLoop);
-            gdk_threads_enter();
-        }
-        g_main_loop_unref(pLoop);
-        g_signal_handler_disconnect(m_pMenu, nSignalId);
-
-        return m_sActivated;
+        gtk_size_group_set_mode(m_pGroup, eGtkMode);
     }
-
-    virtual void set_sensitive(const OString& rIdent, bool bSensitive) override
+    virtual ~GtkInstanceSizeGroup() override
     {
-        set_item_sensitive(rIdent, bSensitive);
-    }
-
-    virtual void set_active(const OString& rIdent, bool bActive) override
-    {
-        set_item_active(rIdent, bActive);
-    }
-
-    virtual void show(const OString& rIdent, bool bShow) override
-    {
-        show_item(rIdent, bShow);
+        g_object_unref(m_pGroup);
     }
 };
 
@@ -1722,8 +2005,8 @@ class GtkInstanceContainer : public GtkInstanceWidget, public virtual weld::Cont
 private:
     GtkContainer* m_pContainer;
 public:
-    GtkInstanceContainer(GtkContainer* pContainer, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pContainer), bTakeOwnership)
+    GtkInstanceContainer(GtkContainer* pContainer, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pContainer), pBuilder, bTakeOwnership)
         , m_pContainer(pContainer)
     {
     }
@@ -1734,12 +2017,14 @@ public:
     {
         GtkInstanceWidget* pGtkWidget = dynamic_cast<GtkInstanceWidget*>(pWidget);
         assert(pGtkWidget);
-        GtkInstanceContainer* pNewGtkParent = dynamic_cast<GtkInstanceContainer*>(pNewParent);
-        assert(pNewGtkParent);
         GtkWidget* pChild = pGtkWidget->getWidget();
         g_object_ref(pChild);
         gtk_container_remove(getContainer(), pChild);
-        gtk_container_add(pNewGtkParent->getContainer(), pChild);
+
+        GtkInstanceContainer* pNewGtkParent = dynamic_cast<GtkInstanceContainer*>(pNewParent);
+        assert(!pNewParent || pNewGtkParent);
+        if (pNewGtkParent)
+            gtk_container_add(pNewGtkParent->getContainer(), pChild);
         g_object_unref(pChild);
     }
 };
@@ -1747,7 +2032,7 @@ public:
 weld::Container* GtkInstanceWidget::weld_parent() const
 {
     GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
-    return pParent ? new GtkInstanceContainer(GTK_CONTAINER(pParent), false) : nullptr;
+    return pParent ? new GtkInstanceContainer(GTK_CONTAINER(pParent), m_pBuilder, false) : nullptr;
 }
 
 class GtkInstanceWindow : public GtkInstanceContainer, public virtual weld::Window
@@ -1764,8 +2049,8 @@ private:
 protected:
     void help();
 public:
-    GtkInstanceWindow(GtkWindow* pWindow, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pWindow), bTakeOwnership)
+    GtkInstanceWindow(GtkWindow* pWindow, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pWindow), pBuilder, bTakeOwnership)
         , m_pWindow(pWindow)
     {
         //hook up F1 to show help
@@ -1794,13 +2079,24 @@ public:
 
     virtual void set_busy_cursor(bool bBusy) override
     {
-        gtk_widget_realize(m_pWidget);
+        if (!gtk_widget_get_realized(m_pWidget))
+            gtk_widget_realize(m_pWidget);
         GdkDisplay *pDisplay = gtk_widget_get_display(m_pWidget);
         GdkCursor *pCursor = bBusy ? gdk_cursor_new_from_name(pDisplay, "progress") : nullptr;
         gdk_window_set_cursor(gtk_widget_get_window(m_pWidget), pCursor);
         gdk_display_flush(pDisplay);
         if (pCursor)
             g_object_unref(pCursor);
+    }
+
+    virtual void set_modal(bool bModal) override
+    {
+        gtk_window_set_modal(m_pWindow, bModal);
+    }
+
+    virtual bool get_modal() const override
+    {
+        return gtk_window_get_modal(m_pWindow);
     }
 
     virtual void resize_to_request() override
@@ -1813,20 +2109,96 @@ public:
         gtk_window_move(m_pWindow, x, y);
     }
 
-    virtual bool get_extents_relative_to(Window& rRelative, int& x, int &y, int& width, int &height) override
-    {
-        //this is sadly futile under wayland, so we can't tell where a dialog is in order to allow
-        //the document underneath to auto-scroll to place content in a visible location
-        gboolean ret = gtk_widget_translate_coordinates(dynamic_cast<GtkInstanceWindow&>(rRelative).getWidget(), m_pWidget, 0, 0, &x, &y);
-        width = gtk_widget_get_allocated_width(m_pWidget);
-        height = gtk_widget_get_allocated_height(m_pWidget);
-        return ret;
-    }
-
     virtual SystemEnvData get_system_data() const override
     {
         assert(false && "nothing should call this impl, yet anyway, if ever");
         return SystemEnvData();
+    }
+
+    virtual Size get_size() const override
+    {
+        int current_width, current_height;
+        gtk_window_get_size(m_pWindow, &current_width, &current_height);
+        return Size(current_width, current_height);
+    }
+
+    virtual Point get_position() const override
+    {
+        int current_x, current_y;
+        gtk_window_get_position(m_pWindow, &current_x, &current_y);
+        return Point(current_x, current_y);
+    }
+
+    virtual bool get_resizable() const override
+    {
+        return gtk_window_get_resizable(m_pWindow);
+    }
+
+    virtual bool has_toplevel_focus() const override
+    {
+        return gtk_window_has_toplevel_focus(m_pWindow);
+    }
+
+    virtual void set_window_state(const OString& rStr) override
+    {
+        WindowStateData aData;
+        ImplWindowStateFromStr( aData, rStr );
+
+        auto nMask = aData.GetMask();
+        auto nState = aData.GetState() & WindowStateState::SystemMask;
+
+        if (nMask & WindowStateMask::Width && nMask & WindowStateMask::Height)
+        {
+            gtk_window_set_default_size(m_pWindow, aData.GetWidth(), aData.GetHeight());
+        }
+        if (nMask & WindowStateMask::State)
+        {
+            if (nState & WindowStateState::Maximized)
+                gtk_window_maximize(m_pWindow);
+            else
+                gtk_window_unmaximize(m_pWindow);
+        }
+    }
+
+    virtual OString get_window_state(WindowStateMask nMask) const override
+    {
+        bool bPositioningAllowed = true;
+#if defined(GDK_WINDOWING_WAYLAND)
+        // drop x/y when under wayland
+        GdkDisplay *pDisplay = gtk_widget_get_display(m_pWidget);
+        bPositioningAllowed = !DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay);
+#endif
+
+        WindowStateData aData;
+        WindowStateMask nAvailable = WindowStateMask::State |
+                                     WindowStateMask::Width | WindowStateMask::Height;
+        if (bPositioningAllowed)
+            nAvailable |= WindowStateMask::X | WindowStateMask::Y;
+        aData.SetMask(nMask & nAvailable);
+
+        if (nMask & WindowStateMask::State)
+        {
+            WindowStateState nState = WindowStateState::Normal;
+            if (gtk_window_is_maximized(m_pWindow))
+                nState |= WindowStateState::Maximized;
+            aData.SetState(nState);
+        }
+
+        if (bPositioningAllowed && (nMask & (WindowStateMask::X | WindowStateMask::Y)))
+        {
+            auto aPos = get_position();
+            aData.SetX(aPos.X());
+            aData.SetY(aPos.Y());
+        }
+
+        if (nMask & (WindowStateMask::Width | WindowStateMask::Height))
+        {
+            auto aSize = get_size();
+            aData.SetWidth(aSize.Width());
+            aData.SetHeight(aSize.Height());
+        }
+
+        return ImplWindowStateToStr(aData);
     }
 
     virtual ~GtkInstanceWindow() override
@@ -1840,7 +2212,7 @@ namespace
 {
     struct ButtonOrder
     {
-        OString m_aType;
+        const char * m_aType;
         int m_nPriority;
     };
 
@@ -1909,10 +2281,117 @@ namespace
     }
 }
 
+struct DialogRunner
+{
+    GtkDialog *m_pDialog;
+    gint m_nResponseId;
+    GMainLoop *m_pLoop;
+    VclPtr<vcl::Window> m_xFrameWindow;
+
+    DialogRunner(GtkDialog* pDialog)
+       : m_pDialog(pDialog)
+       , m_nResponseId(GTK_RESPONSE_NONE)
+       , m_pLoop(nullptr)
+    {
+        GtkWindow* pParent = gtk_window_get_transient_for(GTK_WINDOW(m_pDialog));
+        GtkSalFrame* pFrame = GtkSalFrame::getFromWindow(pParent);
+        m_xFrameWindow = pFrame ? pFrame->GetWindow() : nullptr;
+    }
+
+    bool loop_is_running() const
+    {
+        return m_pLoop && g_main_loop_is_running(m_pLoop);
+    }
+
+    void loop_quit()
+    {
+        if (g_main_loop_is_running(m_pLoop))
+            g_main_loop_quit(m_pLoop);
+    }
+
+    static void signal_response(GtkDialog*, gint nResponseId, gpointer data)
+    {
+        DialogRunner* pThis = static_cast<DialogRunner*>(data);
+        pThis->m_nResponseId = nResponseId;
+        pThis->loop_quit();
+    }
+
+    static gboolean signal_delete(GtkDialog*, GdkEventAny*, gpointer data)
+    {
+        DialogRunner* pThis = static_cast<DialogRunner*>(data);
+        pThis->loop_quit();
+        return true; /* Do not destroy */
+    }
+
+    static void signal_destroy(GtkDialog*, gpointer data)
+    {
+        DialogRunner* pThis = static_cast<DialogRunner*>(data);
+        pThis->loop_quit();
+    }
+
+    void inc_modal_count()
+    {
+        if (m_xFrameWindow)
+            m_xFrameWindow->IncModalCount();
+    }
+
+    void dec_modal_count()
+    {
+        if (m_xFrameWindow)
+            m_xFrameWindow->DecModalCount();
+    }
+
+    // same as gtk_dialog_run except that unmap doesn't auto-respond
+    // so we can hide the dialog and restore it without a response getting
+    // triggered
+    gint run()
+    {
+        g_object_ref(m_pDialog);
+
+        inc_modal_count();
+
+        bool bWasModal = gtk_window_get_modal(GTK_WINDOW(m_pDialog));
+        if (!bWasModal)
+            gtk_window_set_modal(GTK_WINDOW(m_pDialog), true);
+
+        if (!gtk_widget_get_visible(GTK_WIDGET(m_pDialog)))
+            gtk_widget_show(GTK_WIDGET(m_pDialog));
+
+        gulong nSignalResponseId = g_signal_connect(m_pDialog, "response", G_CALLBACK(signal_response), this);
+        gulong nSignalDeleteId = g_signal_connect(m_pDialog, "delete-event", G_CALLBACK(signal_delete), this);
+        gulong nSignalDestroyId = g_signal_connect(m_pDialog, "destroy", G_CALLBACK(signal_destroy), this);
+
+        m_pLoop = g_main_loop_new(nullptr, false);
+        m_nResponseId = GTK_RESPONSE_NONE;
+
+        gdk_threads_leave();
+        g_main_loop_run(m_pLoop);
+        gdk_threads_enter();
+
+        g_main_loop_unref(m_pLoop);
+
+        m_pLoop = nullptr;
+
+        if (!bWasModal)
+            gtk_window_set_modal(GTK_WINDOW(m_pDialog), false);
+
+        g_signal_handler_disconnect(m_pDialog, nSignalResponseId);
+        g_signal_handler_disconnect(m_pDialog, nSignalDeleteId);
+        g_signal_handler_disconnect(m_pDialog, nSignalDestroyId);
+
+        dec_modal_count();
+
+        g_object_unref(m_pDialog);
+
+        return m_nResponseId;
+    }
+};
+
 class GtkInstanceDialog : public GtkInstanceWindow, public virtual weld::Dialog
 {
 private:
     GtkDialog* m_pDialog;
+    DialogRunner m_aDialogRun;
     std::shared_ptr<weld::DialogController> m_xDialogController;
     std::function<void(sal_Int32)> m_aFunc;
     gulong m_nCloseSignalId;
@@ -1935,6 +2414,8 @@ private:
         if (ret == GTK_RESPONSE_OK)
             ret = RET_OK;
         else if (ret == GTK_RESPONSE_CANCEL)
+            ret = RET_CANCEL;
+        else if (ret == GTK_RESPONSE_DELETE_EVENT)
             ret = RET_CANCEL;
         else if (ret == GTK_RESPONSE_CLOSE)
             ret = RET_CLOSE;
@@ -1960,10 +2441,12 @@ private:
         m_aFunc = nullptr;
         m_xDialogController.reset();
     }
+
 public:
-    GtkInstanceDialog(GtkDialog* pDialog, bool bTakeOwnership)
-        : GtkInstanceWindow(GTK_WINDOW(pDialog), bTakeOwnership)
+    GtkInstanceDialog(GtkDialog* pDialog, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWindow(GTK_WINDOW(pDialog), pBuilder, bTakeOwnership)
         , m_pDialog(pDialog)
+        , m_aDialogRun(pDialog)
         , m_nCloseSignalId(g_signal_connect(m_pDialog, "close", G_CALLBACK(signalClose), this))
         , m_nResponseSignalId(0)
     {
@@ -1976,11 +2459,7 @@ public:
         m_xDialogController = rDialogController;
         m_aFunc = func;
 
-        if (!gtk_widget_get_visible(m_pWidget))
-        {
-            sort_native_button_order(GTK_BOX(gtk_dialog_get_action_area(m_pDialog)));
-            gtk_widget_show(m_pWidget);
-        }
+        show();
 
         m_nResponseSignalId = g_signal_connect(m_pDialog, "response", G_CALLBACK(signalAsyncResponse), this);
 
@@ -1993,16 +2472,9 @@ public:
     {
         sort_native_button_order(GTK_BOX(gtk_dialog_get_action_area(m_pDialog)));
         int ret;
-        GtkWindow* pParent = gtk_window_get_transient_for(GTK_WINDOW(m_pDialog));
-        GtkSalFrame* pFrame = GtkSalFrame::getFromWindow(pParent);
-        vcl::Window* pFrameWindow = pFrame ? pFrame->GetWindow() : nullptr;
         while (true)
         {
-            if (pFrameWindow)
-                pFrameWindow->IncModalCount();
-            ret = gtk_dialog_run(m_pDialog);
-            if (pFrameWindow)
-                pFrameWindow->DecModalCount();
+            ret = m_aDialogRun.run();
             if (ret == GTK_RESPONSE_HELP)
             {
                 help();
@@ -2015,6 +2487,34 @@ public:
         }
         hide();
         return GtkToVcl(ret);
+    }
+
+    virtual void hide() override
+    {
+        if (!gtk_widget_get_visible(m_pWidget))
+            return;
+        gtk_widget_hide(m_pWidget);
+        // if we hide the dialog while its running, then decrement the parent LibreOffice window
+        // modal count, we expect the dialog to restored while its running and match up with
+        // the inc_modal_count of show()
+        //
+        // This hide while running case is for the calc/chart dialogs which put
+        // up an extra range chooser dialog, hides the original, the user can
+        // select a range of cells and on completion the original dialog is
+        // restored
+        if (m_aDialogRun.loop_is_running())
+            m_aDialogRun.dec_modal_count();
+    }
+
+    virtual void show() override
+    {
+        if (gtk_widget_get_visible(m_pWidget))
+            return;
+        sort_native_button_order(GTK_BOX(gtk_dialog_get_action_area(m_pDialog)));
+        gtk_widget_show(m_pWidget);
+        // see hide comment
+        if (m_aDialogRun.loop_is_running())
+            m_aDialogRun.inc_modal_count();
     }
 
     static int VclToGtk(int nResponse)
@@ -2052,7 +2552,12 @@ public:
 
     virtual Container* weld_content_area() override
     {
-        return new GtkInstanceContainer(GTK_CONTAINER(gtk_dialog_get_content_area(m_pDialog)), false);
+        return new GtkInstanceContainer(GTK_CONTAINER(gtk_dialog_get_content_area(m_pDialog)), m_pBuilder, false);
+    }
+
+    virtual void SetInstallLOKNotifierHdl(const Link<void*, vcl::ILibreOfficeKitNotifier*>&) override
+    {
+        //not implemented for the gtk variant
     }
 
     virtual ~GtkInstanceDialog() override
@@ -2068,8 +2573,8 @@ class GtkInstanceMessageDialog : public GtkInstanceDialog, public virtual weld::
 private:
     GtkMessageDialog* m_pMessageDialog;
 public:
-    GtkInstanceMessageDialog(GtkMessageDialog* pMessageDialog, bool bTakeOwnership)
-        : GtkInstanceDialog(GTK_DIALOG(pMessageDialog), bTakeOwnership)
+    GtkInstanceMessageDialog(GtkMessageDialog* pMessageDialog, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceDialog(GTK_DIALOG(pMessageDialog), pBuilder, bTakeOwnership)
         , m_pMessageDialog(pMessageDialog)
     {
     }
@@ -2096,7 +2601,7 @@ public:
 
     virtual Container* weld_message_area() override
     {
-        return new GtkInstanceContainer(GTK_CONTAINER(gtk_message_dialog_get_message_area(m_pMessageDialog)), false);
+        return new GtkInstanceContainer(GTK_CONTAINER(gtk_message_dialog_get_message_area(m_pMessageDialog)), m_pBuilder, false);
     }
 };
 
@@ -2105,8 +2610,8 @@ class GtkInstanceFrame : public GtkInstanceContainer, public virtual weld::Frame
 private:
     GtkFrame* m_pFrame;
 public:
-    GtkInstanceFrame(GtkFrame* pFrame, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pFrame), bTakeOwnership)
+    GtkInstanceFrame(GtkFrame* pFrame, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pFrame), pBuilder, bTakeOwnership)
         , m_pFrame(pFrame)
     {
     }
@@ -2123,7 +2628,7 @@ public:
     }
 };
 
-GType crippled_viewport_get_type();
+static GType crippled_viewport_get_type();
 
 #define CRIPPLED_TYPE_VIEWPORT            (crippled_viewport_get_type ())
 #define CRIPPLED_VIEWPORT(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), CRIPPLED_TYPE_VIEWPORT, CrippledViewport))
@@ -2232,7 +2737,6 @@ static void crippled_viewport_class_init(GtkViewportClass *klass)
     /* GObject signals */
     o_class->set_property = crippled_viewport_set_property;
     o_class->get_property = crippled_viewport_get_property;
-//    o_class->finalize = gtk_tree_view_finalize;
 
     /* Properties */
     g_object_class_override_property(o_class, PROP_HADJUSTMENT,    "hadjustment");
@@ -2268,6 +2772,112 @@ GType crippled_viewport_get_type()
     return type;
 }
 
+static VclPolicyType GtkToVcl(GtkPolicyType eType)
+{
+    VclPolicyType eRet(VclPolicyType::NEVER);
+    switch (eType)
+    {
+        case GTK_POLICY_ALWAYS:
+            eRet = VclPolicyType::ALWAYS;
+            break;
+        case GTK_POLICY_AUTOMATIC:
+            eRet = VclPolicyType::AUTOMATIC;
+            break;
+        case GTK_POLICY_EXTERNAL:
+        case GTK_POLICY_NEVER:
+            eRet = VclPolicyType::NEVER;
+            break;
+    }
+    return eRet;
+}
+
+static GtkPolicyType VclToGtk(VclPolicyType eType)
+{
+    GtkPolicyType eRet(GTK_POLICY_ALWAYS);
+    switch (eType)
+    {
+        case VclPolicyType::ALWAYS:
+            eRet = GTK_POLICY_ALWAYS;
+            break;
+        case VclPolicyType::AUTOMATIC:
+            eRet = GTK_POLICY_AUTOMATIC;
+            break;
+        case VclPolicyType::NEVER:
+            eRet = GTK_POLICY_NEVER;
+            break;
+    }
+    return eRet;
+}
+
+static GtkMessageType VclToGtk(VclMessageType eType)
+{
+    GtkMessageType eRet(GTK_MESSAGE_INFO);
+    switch (eType)
+    {
+        case VclMessageType::Info:
+            eRet = GTK_MESSAGE_INFO;
+            break;
+        case VclMessageType::Warning:
+            eRet = GTK_MESSAGE_WARNING;
+            break;
+        case VclMessageType::Question:
+            eRet = GTK_MESSAGE_QUESTION;
+            break;
+        case VclMessageType::Error:
+            eRet = GTK_MESSAGE_ERROR;
+            break;
+    }
+    return eRet;
+}
+
+static GtkButtonsType VclToGtk(VclButtonsType eType)
+{
+    GtkButtonsType eRet(GTK_BUTTONS_NONE);
+    switch (eType)
+    {
+        case VclButtonsType::NONE:
+            eRet = GTK_BUTTONS_NONE;
+            break;
+        case VclButtonsType::Ok:
+            eRet = GTK_BUTTONS_OK;
+            break;
+        case VclButtonsType::Close:
+            eRet = GTK_BUTTONS_CLOSE;
+            break;
+        case VclButtonsType::Cancel:
+            eRet = GTK_BUTTONS_CANCEL;
+            break;
+        case VclButtonsType::YesNo:
+            eRet = GTK_BUTTONS_YES_NO;
+            break;
+        case VclButtonsType::OkCancel:
+            eRet = GTK_BUTTONS_OK_CANCEL;
+            break;
+    }
+    return eRet;
+}
+
+static GtkSelectionMode VclToGtk(SelectionMode eType)
+{
+    GtkSelectionMode eRet(GTK_SELECTION_NONE);
+    switch (eType)
+    {
+        case SelectionMode::NONE:
+            eRet = GTK_SELECTION_NONE;
+            break;
+        case SelectionMode::Single:
+            eRet = GTK_SELECTION_SINGLE;
+            break;
+        case SelectionMode::Range:
+            eRet = GTK_SELECTION_BROWSE;
+            break;
+        case SelectionMode::Multiple:
+            eRet = GTK_SELECTION_MULTIPLE;
+            break;
+    }
+    return eRet;
+}
+
 class GtkInstanceScrolledWindow : public GtkInstanceContainer, public virtual weld::ScrolledWindow
 {
 private:
@@ -2284,8 +2894,8 @@ private:
     }
 
 public:
-    GtkInstanceScrolledWindow(GtkScrolledWindow* pScrolledWindow, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pScrolledWindow), bTakeOwnership)
+    GtkInstanceScrolledWindow(GtkScrolledWindow* pScrolledWindow, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pScrolledWindow), pBuilder, bTakeOwnership)
         , m_pScrolledWindow(pScrolledWindow)
         , m_pOrigViewport(nullptr)
         , m_pVAdjustment(gtk_scrolled_window_get_vadjustment(m_pScrolledWindow))
@@ -2348,6 +2958,41 @@ public:
         enable_notify_events();
     }
 
+    virtual void set_hpolicy(VclPolicyType eHPolicy) override
+    {
+        GtkPolicyType eGtkVPolicy;
+        gtk_scrolled_window_get_policy(m_pScrolledWindow, nullptr, &eGtkVPolicy);
+        gtk_scrolled_window_set_policy(m_pScrolledWindow, eGtkVPolicy, VclToGtk(eHPolicy));
+    }
+
+    virtual VclPolicyType get_hpolicy() const override
+    {
+        GtkPolicyType eGtkHPolicy;
+        gtk_scrolled_window_get_policy(m_pScrolledWindow, &eGtkHPolicy, nullptr);
+        return GtkToVcl(eGtkHPolicy);
+    }
+
+    virtual void set_vpolicy(VclPolicyType eVPolicy) override
+    {
+        GtkPolicyType eGtkHPolicy;
+        gtk_scrolled_window_get_policy(m_pScrolledWindow, &eGtkHPolicy, nullptr);
+        gtk_scrolled_window_set_policy(m_pScrolledWindow, eGtkHPolicy, VclToGtk(eVPolicy));
+    }
+
+    virtual VclPolicyType get_vpolicy() const override
+    {
+        GtkPolicyType eGtkVPolicy;
+        gtk_scrolled_window_get_policy(m_pScrolledWindow, nullptr, &eGtkVPolicy);
+        return GtkToVcl(eGtkVPolicy);
+    }
+
+    virtual int get_vscroll_width() const override
+    {
+        if (gtk_scrolled_window_get_overlay_scrolling(m_pScrolledWindow))
+            return 0;
+        return gtk_widget_get_allocated_width(GTK_WIDGET(m_pScrolledWindow));
+    }
+
     virtual void disable_notify_events() override
     {
         g_signal_handler_block(m_pVAdjustment, m_nVAdjustChangedSignalId);
@@ -2390,7 +3035,18 @@ class GtkInstanceNotebook : public GtkInstanceContainer, public virtual weld::No
 {
 private:
     GtkNotebook* m_pNotebook;
-    gulong m_nSignalId;
+    GtkBox* m_pOverFlowBox;
+    GtkNotebook* m_pOverFlowNotebook;
+    gulong m_nSwitchPageSignalId;
+    gulong m_nOverFlowSwitchPageSignalId;
+    gulong m_nSizeAllocateSignalId;
+    gulong m_nFocusSignalId;
+    gulong m_nChangeCurrentPageId;
+    guint m_nLaunchSplitTimeoutId;
+    bool m_bOverFlowBoxActive;
+    bool m_bOverFlowBoxIsStart;
+    int m_nStartTabCount;
+    int m_nEndTabCount;
     mutable std::vector<std::unique_ptr<GtkInstanceContainer>> m_aPages;
 
     static void signalSwitchPage(GtkNotebook*, GtkWidget*, guint nNewPage, gpointer widget)
@@ -2400,30 +3056,137 @@ private:
         pThis->signal_switch_page(nNewPage);
     }
 
-    void signal_switch_page(guint nNewPage)
+    static gboolean launch_overflow_switch_page(GtkInstanceNotebook* pThis)
     {
+        SolarMutexGuard aGuard;
+        pThis->signal_overflow_switch_page();
+        return false;
+    }
+
+    static void signalOverFlowSwitchPage(GtkNotebook*, GtkWidget*, guint, gpointer widget)
+    {
+        g_timeout_add_full(G_PRIORITY_HIGH_IDLE, 0, reinterpret_cast<GSourceFunc>(launch_overflow_switch_page), widget, nullptr);
+    }
+
+    void signal_switch_page(int nNewPage)
+    {
+        if (m_bOverFlowBoxIsStart)
+        {
+            auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+            // add count of overflow pages, minus the extra tab
+            nNewPage += nOverFlowLen;
+        }
+
         bool bAllow = !m_aLeavePageHdl.IsSet() || m_aLeavePageHdl.Call(get_current_page_ident());
         if (!bAllow)
         {
             g_signal_stop_emission_by_name(m_pNotebook, "switch-page");
-            OString sNewIdent(get_page_ident(nNewPage));
-            m_aEnterPageHdl.Call(sNewIdent);
+            return;
         }
+        if (m_bOverFlowBoxActive)
+            gtk_notebook_set_current_page(m_pOverFlowNotebook, gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1);
+        OString sNewIdent(get_page_ident(nNewPage));
+        m_aEnterPageHdl.Call(sNewIdent);
     }
 
-    OString get_page_ident(guint nPage) const
+    void unsplit_notebooks()
     {
-        const GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pNotebook, gtk_notebook_get_nth_page(m_pNotebook, nPage));
+        int nOverFlowPages = gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1;
+        int nMainPages = gtk_notebook_get_n_pages(m_pNotebook);
+        int nPageIndex = 0;
+        if (!m_bOverFlowBoxIsStart)
+            nPageIndex += nMainPages;
+
+        // take the overflow pages, and put them back at the end of the normal one
+        int i = nMainPages;
+        while (nOverFlowPages)
+        {
+            OString sIdent(get_page_ident(m_pOverFlowNotebook, 0));
+            OUString sLabel(get_tab_label_text(m_pOverFlowNotebook, 0));
+            remove_page(m_pOverFlowNotebook, sIdent);
+
+            GtkWidget* pPage = m_aPages[nPageIndex]->getWidget();
+            append_page(m_pNotebook, sIdent, sLabel, pPage);
+
+            GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pNotebook,
+                                                               gtk_notebook_get_nth_page(m_pNotebook, i));
+            gtk_widget_set_hexpand(pTabWidget, true);
+            --nOverFlowPages;
+            ++i;
+            ++nPageIndex;
+        }
+
+        // remove the dangling placeholder tab page
+        remove_page(m_pOverFlowNotebook, "useless");
+    }
+
+    // a tab has been selected on the overflow notebook
+    void signal_overflow_switch_page()
+    {
+        int nNewPage = gtk_notebook_get_current_page(m_pOverFlowNotebook);
+        int nOverFlowPages = gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1;
+        if (nNewPage == nOverFlowPages)
+        {
+            // the useless tab which is there because there has to be an active tab
+            return;
+        }
+
+        // check if we are allowed leave before attempting to resplit the notebooks
+        bool bAllow = !m_aLeavePageHdl.IsSet() || m_aLeavePageHdl.Call(get_current_page_ident());
+        if (!bAllow)
+            return;
+
+        disable_notify_events();
+
+        // take the overflow pages, and put them back at the end of the normal one
+        unsplit_notebooks();
+
+        // now redo the split, the pages will be split the other way around this time
+        std::swap(m_nStartTabCount, m_nEndTabCount);
+        split_notebooks();
+
+        gtk_notebook_set_current_page(m_pNotebook, nNewPage);
+
+        enable_notify_events();
+
+        // trigger main notebook switch-page callback
+        OString sNewIdent(get_page_ident(m_pNotebook, nNewPage));
+        m_aEnterPageHdl.Call(sNewIdent);
+    }
+
+    static OString get_page_ident(GtkNotebook *pNotebook, guint nPage)
+    {
+        const GtkWidget* pTabWidget = gtk_notebook_get_tab_label(pNotebook, gtk_notebook_get_nth_page(pNotebook, nPage));
         const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pTabWidget));
         return OString(pStr, pStr ? strlen(pStr) : 0);
     }
 
-    gint get_page_number(const OString& rIdent) const
+    OString get_page_ident(int nPage) const
     {
-        gint nPages = gtk_notebook_get_n_pages(m_pNotebook);
+        auto nMainLen = gtk_notebook_get_n_pages(m_pNotebook);
+        auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+        if (m_bOverFlowBoxIsStart)
+        {
+            if (nPage < nOverFlowLen)
+                return get_page_ident(m_pOverFlowNotebook, nPage);
+            nPage -= nOverFlowLen;
+            return get_page_ident(m_pNotebook, nPage);
+        }
+        else
+        {
+            if (nPage < nMainLen)
+                return get_page_ident(m_pNotebook, nPage);
+            nPage -= nMainLen;
+            return get_page_ident(m_pOverFlowNotebook, nPage);
+        }
+    }
+
+    static gint get_page_number(GtkNotebook *pNotebook, const OString& rIdent)
+    {
+        gint nPages = gtk_notebook_get_n_pages(pNotebook);
         for (gint i = 0; i < nPages; ++i)
         {
-            const GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pNotebook, gtk_notebook_get_nth_page(m_pNotebook, i));
+            const GtkWidget* pTabWidget = gtk_notebook_get_tab_label(pNotebook, gtk_notebook_get_nth_page(pNotebook, i));
             const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pTabWidget));
             if (strcmp(pStr, rIdent.getStr()) == 0)
                 return i;
@@ -2431,17 +3194,328 @@ private:
         return -1;
     }
 
-public:
-    GtkInstanceNotebook(GtkNotebook* pNotebook, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pNotebook), bTakeOwnership)
-        , m_pNotebook(pNotebook)
-        , m_nSignalId(g_signal_connect(pNotebook, "switch-page", G_CALLBACK(signalSwitchPage), this))
+    void remove_page(GtkNotebook *pNotebook, const OString& rIdent)
     {
+        disable_notify_events();
+        gtk_notebook_remove_page(pNotebook, get_page_number(pNotebook, rIdent));
+        enable_notify_events();
+    }
+
+    static OUString get_tab_label_text(GtkNotebook *pNotebook, guint nPage)
+    {
+        const gchar* pStr = gtk_notebook_get_tab_label_text(pNotebook, gtk_notebook_get_nth_page(pNotebook, nPage));
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    void append_useless_page(GtkNotebook *pNotebook)
+    {
+        disable_notify_events();
+
+        GtkWidget *pTabWidget = gtk_fixed_new();
+        gtk_buildable_set_name(GTK_BUILDABLE(pTabWidget), "useless");
+
+        GtkWidget *pChild = gtk_grid_new();
+        gtk_notebook_append_page(pNotebook, pChild, pTabWidget);
+        gtk_widget_show(pChild);
+        gtk_widget_show(pTabWidget);
+
+        enable_notify_events();
+    }
+
+    void append_page(GtkNotebook *pNotebook, const OString& rIdent, const OUString& rLabel, GtkWidget *pChild)
+    {
+        disable_notify_events();
+
+        GtkWidget *pTabWidget = gtk_label_new(MapToGtkAccelerator(rLabel).getStr());
+        gtk_buildable_set_name(GTK_BUILDABLE(pTabWidget), rIdent.getStr());
+
+        gtk_notebook_append_page(pNotebook, pChild, pTabWidget);
+        gtk_widget_show(pChild);
+        gtk_widget_show(pTabWidget);
+
+        enable_notify_events();
+    }
+
+    gint get_page_number(const OString& rIdent) const
+    {
+        auto nMainIndex = get_page_number(m_pNotebook, rIdent);
+        auto nOverFlowIndex = get_page_number(m_pOverFlowNotebook, rIdent);
+
+        if (nMainIndex == -1 && nOverFlowIndex == -1)
+            return -1;
+
+        if (m_bOverFlowBoxIsStart)
+        {
+            if (nOverFlowIndex != -1)
+                return nOverFlowIndex;
+            else
+            {
+                auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+                return nMainIndex + nOverFlowLen;
+            }
+        }
+        else
+        {
+            if (nMainIndex != -1)
+                return nMainIndex;
+            else
+            {
+                auto nMainLen = gtk_notebook_get_n_pages(m_pNotebook);
+                return nOverFlowIndex + nMainLen;;
+            }
+        }
+    }
+
+    void make_overflow_boxes()
+    {
+        m_pOverFlowBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+        GtkWidget* pParent = gtk_widget_get_parent(GTK_WIDGET(m_pNotebook));
+        gtk_container_add(GTK_CONTAINER(pParent), GTK_WIDGET(m_pOverFlowBox));
+        gtk_box_pack_start(m_pOverFlowBox, GTK_WIDGET(m_pOverFlowNotebook), false, false, 0);
+        g_object_ref(m_pNotebook);
+        gtk_container_remove(GTK_CONTAINER(pParent), GTK_WIDGET(m_pNotebook));
+        gtk_box_pack_start(m_pOverFlowBox, GTK_WIDGET(m_pNotebook), true, true, 0);
+        g_object_unref(m_pNotebook);
+        gtk_widget_show(GTK_WIDGET(m_pOverFlowBox));
+    }
+
+    void split_notebooks()
+    {
+        // get the original preferred size for the notebook, the sane width
+        // expected here depends on the notebooks all initially having
+        // scrollable tabs enabled
+        GtkAllocation alloc;
+        gtk_widget_get_allocation(GTK_WIDGET(m_pNotebook), &alloc);
+
+        // toggle the direction of the split since the last time
+        m_bOverFlowBoxIsStart = !m_bOverFlowBoxIsStart;
+        if (!m_pOverFlowBox)
+             make_overflow_boxes();
+
+        // don't scroll the tabs anymore
+        gtk_notebook_set_scrollable(m_pNotebook, false);
+
+        gtk_widget_freeze_child_notify(GTK_WIDGET(m_pNotebook));
+        gtk_widget_freeze_child_notify(GTK_WIDGET(m_pOverFlowNotebook));
+
+        gtk_widget_show(GTK_WIDGET(m_pOverFlowNotebook));
+
+        gint nPages;
+
+        GtkRequisition size1, size2;
+
+        if (!m_nStartTabCount && !m_nEndTabCount)
+        {
+            nPages = gtk_notebook_get_n_pages(m_pNotebook);
+
+            std::vector<int> aLabelWidths;
+            //move tabs to the overflow notebook
+            for (int i = 0; i < nPages; ++i)
+            {
+                OUString sLabel(get_tab_label_text(m_pNotebook, i));
+                aLabelWidths.push_back(get_pixel_size(sLabel).Width());
+            }
+            int row_width = std::accumulate(aLabelWidths.begin(), aLabelWidths.end(), 0) / 2;
+            int count = 0;
+            for (int i = 0; i < nPages; ++i)
+            {
+                count += aLabelWidths[i];
+                if (count >= row_width)
+                {
+                    m_nStartTabCount = i;
+                    break;
+                }
+            }
+
+            m_nEndTabCount = nPages - m_nStartTabCount;
+        }
+
+        //move the tabs to the overflow notebook
+        int i = 0;
+        int nOverFlowPages = m_nStartTabCount;
+        while (nOverFlowPages)
+        {
+            OString sIdent(get_page_ident(m_pNotebook, 0));
+            OUString sLabel(get_tab_label_text(m_pNotebook, 0));
+            remove_page(m_pNotebook, sIdent);
+            append_page(m_pOverFlowNotebook, sIdent, sLabel, gtk_grid_new());
+            GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pOverFlowNotebook,
+                                                               gtk_notebook_get_nth_page(m_pOverFlowNotebook, i));
+            gtk_widget_set_hexpand(pTabWidget, true);
+
+            --nOverFlowPages;
+            ++i;
+        }
+
+        for (i = 0; i < m_nEndTabCount; ++i)
+        {
+            GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pNotebook,
+                                                               gtk_notebook_get_nth_page(m_pNotebook, i));
+            gtk_widget_set_hexpand(pTabWidget, true);
+        }
+
+        // have to have some tab as the active tab of the overflow notebook
+        append_useless_page(m_pOverFlowNotebook);
+        gtk_notebook_set_current_page(m_pOverFlowNotebook, gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1);
+        if (gtk_widget_has_focus(GTK_WIDGET(m_pOverFlowNotebook)))
+            gtk_widget_grab_focus(GTK_WIDGET(m_pNotebook));
+
+        // add this temporarily to the normal notebook to measure how wide
+        // the row would be if switched to the other notebook
+        append_useless_page(m_pNotebook);
+
+        gtk_widget_get_preferred_size(GTK_WIDGET(m_pNotebook), nullptr, &size1);
+        gtk_widget_get_preferred_size(GTK_WIDGET(m_pOverFlowNotebook), nullptr, &size2);
+
+        auto nWidth = std::max(size1.width, size2.width);
+        gtk_widget_set_size_request(GTK_WIDGET(m_pNotebook), nWidth, alloc.height);
+        gtk_widget_set_size_request(GTK_WIDGET(m_pOverFlowNotebook), nWidth, -1);
+
+        // remove it once we've measured it
+        remove_page(m_pNotebook, "useless");
+
+        gtk_widget_thaw_child_notify(GTK_WIDGET(m_pOverFlowNotebook));
+        gtk_widget_thaw_child_notify(GTK_WIDGET(m_pNotebook));
+
+        m_bOverFlowBoxActive = true;
+    }
+
+    static gboolean launch_split_notebooks(GtkInstanceNotebook* pThis)
+    {
+        int nCurrentPage = pThis->get_current_page();
+        pThis->split_notebooks();
+        pThis->set_current_page(nCurrentPage);
+        pThis->m_nLaunchSplitTimeoutId = 0;
+        return false;
+    }
+
+    // tdf#120371
+    // https://developer.gnome.org/hig-book/unstable/controls-notebooks.html.en#controls-too-many-tabs
+    // if no of tabs > 6, but only if the notebook would auto-scroll, then split the tabs over
+    // two notebooks. Checking for the auto-scroll allows themes like Ambience under Ubuntu 16.04 to keep
+    // tabs in a single row when they would fit
+    void signal_notebook_size_allocate()
+    {
+        if (m_bOverFlowBoxActive || m_nLaunchSplitTimeoutId)
+            return;
+        disable_notify_events();
+        gint nPages = gtk_notebook_get_n_pages(m_pNotebook);
+        if (nPages > 6 && gtk_notebook_get_tab_pos(m_pNotebook) == GTK_POS_TOP)
+        {
+            for (gint i = 0; i < nPages; ++i)
+            {
+                GtkWidget* pTabWidget = gtk_notebook_get_tab_label(m_pNotebook, gtk_notebook_get_nth_page(m_pNotebook, i));
+                if (!gtk_widget_get_child_visible(pTabWidget))
+                {
+                    m_nLaunchSplitTimeoutId = g_timeout_add_full(G_PRIORITY_HIGH_IDLE, 0, reinterpret_cast<GSourceFunc>(launch_split_notebooks), this, nullptr);
+                    break;
+                }
+            }
+        }
+        enable_notify_events();
+    }
+
+    static void signalSizeAllocate(GtkWidget*, GdkRectangle*, gpointer widget)
+    {
+        GtkInstanceNotebook* pThis = static_cast<GtkInstanceNotebook*>(widget);
+        pThis->signal_notebook_size_allocate();
+    }
+
+    bool signal_focus(GtkDirectionType direction)
+    {
+        if (!m_bOverFlowBoxActive)
+            return false;
+
+        int nPage = gtk_notebook_get_current_page(m_pNotebook);
+        if (direction == GTK_DIR_LEFT && nPage == 0)
+        {
+            auto nOverFlowLen = gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1;
+            gtk_notebook_set_current_page(m_pOverFlowNotebook, nOverFlowLen - 1);
+            return true;
+        }
+        else if (direction == GTK_DIR_RIGHT && nPage == gtk_notebook_get_n_pages(m_pNotebook) - 1)
+        {
+            gtk_notebook_set_current_page(m_pOverFlowNotebook, 0);
+            return true;
+        }
+
+        return false;
+    }
+
+    static gboolean signalFocus(GtkNotebook* notebook, GtkDirectionType direction, gpointer widget)
+    {
+        // if the notebook widget itself has focus
+        if (gtk_widget_is_focus(GTK_WIDGET(notebook)))
+        {
+            GtkInstanceNotebook* pThis = static_cast<GtkInstanceNotebook*>(widget);
+            return pThis->signal_focus(direction);
+        }
+        return false;
+    }
+
+    // ctrl + page_up/ page_down
+    bool signal_change_current_page(gint arg1)
+    {
+        bool bHandled = signal_focus(arg1 < 0 ? GTK_DIR_LEFT : GTK_DIR_RIGHT);
+        if (bHandled)
+            g_signal_stop_emission_by_name(m_pNotebook, "change-current-page");
+        return false;
+    }
+
+    static gboolean signalChangeCurrentPage(GtkNotebook*, gint arg1, gpointer widget)
+    {
+        if (arg1 == 0)
+            return true;
+        GtkInstanceNotebook* pThis = static_cast<GtkInstanceNotebook*>(widget);
+        return pThis->signal_change_current_page(arg1);
+    }
+
+public:
+    GtkInstanceNotebook(GtkNotebook* pNotebook, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pNotebook), pBuilder, bTakeOwnership)
+        , m_pNotebook(pNotebook)
+        , m_pOverFlowBox(nullptr)
+        , m_pOverFlowNotebook(GTK_NOTEBOOK(gtk_notebook_new()))
+        , m_nSwitchPageSignalId(g_signal_connect(pNotebook, "switch-page", G_CALLBACK(signalSwitchPage), this))
+        , m_nOverFlowSwitchPageSignalId(g_signal_connect(m_pOverFlowNotebook, "switch-page", G_CALLBACK(signalOverFlowSwitchPage), this))
+        , m_nFocusSignalId(g_signal_connect(pNotebook, "focus", G_CALLBACK(signalFocus), this))
+        , m_nChangeCurrentPageId(g_signal_connect(pNotebook, "change-current-page", G_CALLBACK(signalChangeCurrentPage), this))
+        , m_nLaunchSplitTimeoutId(0)
+        , m_bOverFlowBoxActive(false)
+        , m_bOverFlowBoxIsStart(false)
+        , m_nStartTabCount(0)
+        , m_nEndTabCount(0)
+    {
+        gtk_widget_add_events(GTK_WIDGET(pNotebook), GDK_SCROLL_MASK);
+        if (get_n_pages() > 6)
+            m_nSizeAllocateSignalId = g_signal_connect_after(pNotebook, "size-allocate", G_CALLBACK(signalSizeAllocate), this);
+        else
+            m_nSizeAllocateSignalId = 0;
+        gtk_notebook_set_show_border(m_pOverFlowNotebook, false);
+
+        // tdf#122623 it's nigh impossible to have a GtkNotebook without an active (checked) tab, so try and theme
+        // the unwanted tab into invisibility
+        GtkStyleContext *pNotebookContext = gtk_widget_get_style_context(GTK_WIDGET(m_pOverFlowNotebook));
+        GtkCssProvider *pProvider = gtk_css_provider_new();
+        static const gchar data[] = "header.top > tabs > tab:checked { box-shadow: none; padding: 0 0 0 0; margin: 0 0 0 0; border-image: none; border-image-width: 0 0 0 0; background-image: none; background-color: transparent; border-radius: 0 0 0 0; border-width: 0 0 0 0; border-style: none; border-color: transparent; opacity: 0; min-height: 0; min-width: 0; }";
+        static const gchar olddata[] = "tab.top:active { box-shadow: none; padding: 0 0 0 0; margin: 0 0 0 0; border-image: none; border-image-width: 0 0 0 0; background-image: none; background-color: transparent; border-radius: 0 0 0 0; border-width: 0 0 0 0; border-style: none; border-color: transparent; opacity: 0; }";
+        gtk_css_provider_load_from_data(pProvider, gtk_check_version(3, 20, 0) == nullptr ? data : olddata, -1, nullptr);
+        gtk_style_context_add_provider(pNotebookContext, GTK_STYLE_PROVIDER(pProvider),
+                                       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
 
     virtual int get_current_page() const override
     {
-        return gtk_notebook_get_current_page(m_pNotebook);
+        int nPage = gtk_notebook_get_current_page(m_pNotebook);
+        if (nPage == -1)
+            return nPage;
+        if (m_bOverFlowBoxIsStart)
+        {
+            auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+            // add count of overflow pages, minus the extra tab
+            nPage += nOverFlowLen;
+        }
+        return nPage;
     }
 
     virtual OString get_current_page_ident() const override
@@ -2454,18 +3528,63 @@ public:
         int nPage = get_page_number(rIdent);
         if (nPage < 0)
             return nullptr;
-        GtkContainer* pChild = GTK_CONTAINER(gtk_notebook_get_nth_page(m_pNotebook, nPage));
+
+        GtkContainer* pChild;
+        if (m_bOverFlowBoxIsStart)
+        {
+            auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+            if (nPage < nOverFlowLen)
+                pChild = GTK_CONTAINER(gtk_notebook_get_nth_page(m_pOverFlowNotebook, nPage));
+            else
+            {
+                nPage -= nOverFlowLen;
+                pChild = GTK_CONTAINER(gtk_notebook_get_nth_page(m_pNotebook, nPage));
+            }
+        }
+        else
+        {
+            auto nMainLen = gtk_notebook_get_n_pages(m_pNotebook);
+            if (nPage < nMainLen)
+                pChild = GTK_CONTAINER(gtk_notebook_get_nth_page(m_pNotebook, nPage));
+            else
+            {
+                nPage -= nMainLen;
+                pChild = GTK_CONTAINER(gtk_notebook_get_nth_page(m_pOverFlowNotebook, nPage));
+            }
+        }
+
         unsigned int nPageIndex = static_cast<unsigned int>(nPage);
         if (m_aPages.size() < nPageIndex + 1)
             m_aPages.resize(nPageIndex + 1);
         if (!m_aPages[nPageIndex])
-            m_aPages[nPageIndex].reset(new GtkInstanceContainer(pChild, false));
+            m_aPages[nPageIndex].reset(new GtkInstanceContainer(pChild, m_pBuilder, false));
         return m_aPages[nPageIndex].get();
     }
 
     virtual void set_current_page(int nPage) override
     {
-        gtk_notebook_set_current_page(m_pNotebook, nPage);
+        if (m_bOverFlowBoxIsStart)
+        {
+            auto nOverFlowLen = m_bOverFlowBoxActive ? gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1 : 0;
+            if (nPage < nOverFlowLen)
+                gtk_notebook_set_current_page(m_pOverFlowNotebook, nPage);
+            else
+            {
+                nPage -= nOverFlowLen;
+                gtk_notebook_set_current_page(m_pNotebook, nPage);
+            }
+        }
+        else
+        {
+            auto nMainLen = gtk_notebook_get_n_pages(m_pNotebook);
+            if (nPage < nMainLen)
+                gtk_notebook_set_current_page(m_pNotebook, nPage);
+            else
+            {
+                nPage -= nMainLen;
+                gtk_notebook_set_current_page(m_pOverFlowNotebook, nPage);
+            }
+        }
     }
 
     virtual void set_current_page(const OString& rIdent) override
@@ -2476,24 +3595,88 @@ public:
 
     virtual int get_n_pages() const override
     {
-        return gtk_notebook_get_n_pages(m_pNotebook);
+        int nLen = gtk_notebook_get_n_pages(m_pNotebook);
+        if (m_bOverFlowBoxActive)
+            nLen += gtk_notebook_get_n_pages(m_pOverFlowNotebook) - 1;
+        return nLen;
     }
 
     virtual OUString get_tab_label_text(const OString& rIdent) const override
     {
-        gint nPage = get_page_number(rIdent);
-        const gchar* pStr = gtk_notebook_get_tab_label_text(m_pNotebook, gtk_notebook_get_nth_page(m_pNotebook, nPage));
-        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+        gint nPageNum = get_page_number(m_pNotebook, rIdent);
+        if (nPageNum != -1)
+            return get_tab_label_text(m_pNotebook, nPageNum);
+        nPageNum = get_page_number(m_pOverFlowNotebook, rIdent);
+        if (nPageNum != -1)
+            return get_tab_label_text(m_pOverFlowNotebook, nPageNum);
+        return OUString();
+    }
+
+    virtual void disable_notify_events() override
+    {
+        g_signal_handler_block(m_pNotebook, m_nSwitchPageSignalId);
+        g_signal_handler_block(m_pNotebook, m_nFocusSignalId);
+        g_signal_handler_block(m_pNotebook, m_nChangeCurrentPageId);
+        g_signal_handler_block(m_pOverFlowNotebook, m_nOverFlowSwitchPageSignalId);
+        gtk_widget_freeze_child_notify(GTK_WIDGET(m_pOverFlowNotebook));
+        GtkInstanceContainer::disable_notify_events();
+    }
+
+    virtual void enable_notify_events() override
+    {
+        GtkInstanceContainer::enable_notify_events();
+        gtk_widget_thaw_child_notify(GTK_WIDGET(m_pOverFlowNotebook));
+        g_signal_handler_unblock(m_pOverFlowNotebook, m_nOverFlowSwitchPageSignalId);
+        g_signal_handler_unblock(m_pNotebook, m_nSwitchPageSignalId);
+        g_signal_handler_unblock(m_pNotebook, m_nFocusSignalId);
+        g_signal_handler_unblock(m_pNotebook, m_nChangeCurrentPageId);
+    }
+
+    void reset_split_data()
+    {
+        // reset overflow and allow it to be recalculated if necessary
+        gtk_widget_hide(GTK_WIDGET(m_pOverFlowNotebook));
+        m_bOverFlowBoxActive = false;
+        m_nStartTabCount = 0;
+        m_nEndTabCount = 0;
     }
 
     virtual void remove_page(const OString& rIdent) override
     {
-        gtk_notebook_remove_page(m_pNotebook, get_page_number(rIdent));
+        if (m_bOverFlowBoxActive)
+        {
+            unsplit_notebooks();
+            reset_split_data();
+        }
+        remove_page(m_pNotebook, rIdent);
+    }
+
+    virtual void append_page(const OString& rIdent, const OUString& rLabel) override
+    {
+        if (m_bOverFlowBoxActive)
+        {
+            unsplit_notebooks();
+            reset_split_data();
+        }
+
+        // reset overflow and allow it to be recalculated if necessary
+        gtk_widget_hide(GTK_WIDGET(m_pOverFlowNotebook));
+        m_bOverFlowBoxActive = false;
+
+        append_page(m_pNotebook, rIdent, rLabel, gtk_grid_new());
     }
 
     virtual ~GtkInstanceNotebook() override
     {
-        g_signal_handler_disconnect(m_pNotebook, m_nSignalId);
+        if (m_nSizeAllocateSignalId)
+            g_signal_handler_disconnect(m_pNotebook, m_nSizeAllocateSignalId);
+        g_signal_handler_disconnect(m_pNotebook, m_nSwitchPageSignalId);
+        g_signal_handler_disconnect(m_pNotebook, m_nFocusSignalId);
+        g_signal_handler_disconnect(m_pNotebook, m_nChangeCurrentPageId);
+        g_signal_handler_disconnect(m_pOverFlowNotebook, m_nOverFlowSwitchPageSignalId);
+        gtk_widget_destroy(GTK_WIDGET(m_pOverFlowNotebook));
+        if (m_pOverFlowBox)
+            gtk_widget_destroy(GTK_WIDGET(m_pOverFlowBox));
     }
 };
 
@@ -2511,8 +3694,8 @@ private:
     }
 
 public:
-    GtkInstanceButton(GtkButton* pButton, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pButton), bTakeOwnership)
+    GtkInstanceButton(GtkButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pButton), pBuilder, bTakeOwnership)
         , m_pButton(pButton)
         , m_nSignalId(g_signal_connect(pButton, "clicked", G_CALLBACK(signalClicked), this))
     {
@@ -2524,9 +3707,34 @@ public:
         ::set_label(m_pButton, rText);
     }
 
+    virtual void set_image(VirtualDevice* pDevice) override
+    {
+        gtk_button_set_always_show_image(m_pButton, true);
+        gtk_button_set_image_position(m_pButton, GTK_POS_LEFT);
+        if (pDevice)
+            gtk_button_set_image(m_pButton, image_new_from_virtual_device(*pDevice));
+        else
+            gtk_button_set_image(m_pButton, nullptr);
+    }
+
+    virtual void set_from_icon_name(const OUString& rIconName) override
+    {
+        GdkPixbuf* pixbuf = load_icon_by_name(rIconName);
+        if (!pixbuf)
+            return;
+        gtk_button_set_image(m_pButton, gtk_image_new_from_pixbuf(pixbuf));
+        g_object_unref(pixbuf);
+    }
+
     virtual OUString get_label() const override
     {
         return ::get_label(m_pButton);
+    }
+
+    virtual void set_label_line_wrap(bool wrap) override
+    {
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pButton));
+        gtk_label_set_line_wrap(GTK_LABEL(pChild), wrap);
     }
 
     // allow us to block buttons with click handlers making dialogs return a response
@@ -2564,7 +3772,7 @@ weld::Button* GtkInstanceDialog::get_widget_for_response(int nResponse)
     GtkButton* pButton = GTK_BUTTON(gtk_dialog_get_widget_for_response(m_pDialog, VclToGtk(nResponse)));
     if (!pButton)
         return nullptr;
-    return new GtkInstanceButton(pButton, false);
+    return new GtkInstanceButton(pButton, m_pBuilder, false);
 }
 
 void GtkInstanceDialog::response(int nResponse)
@@ -2591,42 +3799,6 @@ bool GtkInstanceDialog::has_click_handler(int nResponse)
     return false;
 }
 
-class GtkInstanceMenuButton : public GtkInstanceButton, public MenuHelper, public virtual weld::MenuButton
-{
-public:
-    GtkInstanceMenuButton(GtkMenuButton* pMenuButton, bool bTakeOwnership)
-        : GtkInstanceButton(GTK_BUTTON(pMenuButton), bTakeOwnership)
-        , MenuHelper(gtk_menu_button_get_popup(pMenuButton), false)
-    {
-    }
-
-    virtual void set_item_active(const OString& rIdent, bool bActive) override
-    {
-        MenuHelper::set_item_active(rIdent, bActive);
-    }
-
-    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override
-    {
-        MenuHelper::set_item_label(rIdent, rLabel);
-    }
-
-    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
-    {
-        MenuHelper::set_item_help_id(rIdent, rHelpId);
-    }
-
-    virtual OString get_item_help_id(const OString& rIdent) const override
-    {
-        return MenuHelper::get_item_help_id(rIdent);
-    }
-
-    virtual void signal_activate(GtkMenuItem* pItem) override
-    {
-        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
-        signal_selected(OString(pStr, pStr ? strlen(pStr) : 0));
-    }
-};
-
 class GtkInstanceToggleButton : public GtkInstanceButton, public virtual weld::ToggleButton
 {
 private:
@@ -2640,8 +3812,8 @@ private:
         pThis->signal_toggled();
     }
 public:
-    GtkInstanceToggleButton(GtkToggleButton* pButton, bool bTakeOwnership)
-        : GtkInstanceButton(GTK_BUTTON(pButton), bTakeOwnership)
+    GtkInstanceToggleButton(GtkToggleButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceButton(GTK_BUTTON(pButton), pBuilder, bTakeOwnership)
         , m_pToggleButton(pButton)
         , m_nSignalId(g_signal_connect(m_pToggleButton, "toggled", G_CALLBACK(signalToggled), this))
     {
@@ -2650,6 +3822,7 @@ public:
     virtual void set_active(bool active) override
     {
         disable_notify_events();
+        gtk_toggle_button_set_inconsistent(m_pToggleButton, false);
         gtk_toggle_button_set_active(m_pToggleButton, active);
         enable_notify_events();
     }
@@ -2687,11 +3860,515 @@ public:
     }
 };
 
+class GtkInstanceMenuButton : public GtkInstanceToggleButton, public MenuHelper, public virtual weld::MenuButton
+{
+private:
+    GtkMenuButton* m_pMenuButton;
+    GtkBox* m_pBox;
+    GtkImage* m_pImage;
+    GtkLabel* m_pLabel;
+    //popover cannot escape dialog under X so stick up own window instead
+    GtkWindow* m_pMenuHack;
+    GtkWidget* m_pPopover;
+    gulong m_nSignalId;
+
+    static void signalToggled(GtkWidget*, gpointer widget)
+    {
+        GtkInstanceMenuButton* pThis = static_cast<GtkInstanceMenuButton*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->toggle_menu();
+    }
+
+    void do_grab()
+    {
+        GdkDisplay *pDisplay = gtk_widget_get_display(GTK_WIDGET(m_pMenuHack));
+#if GTK_CHECK_VERSION(3, 20, 0)
+        if (gtk_check_version(3, 20, 0) == nullptr)
+        {
+            GdkSeat* pSeat = gdk_display_get_default_seat(pDisplay);
+            gdk_seat_grab(pSeat, gtk_widget_get_window(GTK_WIDGET(m_pMenuHack)),
+                          GDK_SEAT_CAPABILITY_ALL, true, nullptr, nullptr, nullptr, nullptr);
+            return;
+        }
+#endif
+        //else older gtk3
+        const int nMask = (GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK);
+
+        GdkDeviceManager* pDeviceManager = gdk_display_get_device_manager(pDisplay);
+        GdkDevice* pPointer = gdk_device_manager_get_client_pointer(pDeviceManager);
+        gdk_device_grab(pPointer, gtk_widget_get_window(GTK_WIDGET(m_pMenuHack)), GDK_OWNERSHIP_NONE,
+                        true, GdkEventMask(nMask), nullptr, gtk_get_current_event_time());
+    }
+
+    void do_ungrab()
+    {
+        GdkDisplay *pDisplay = gtk_widget_get_display(GTK_WIDGET(m_pMenuHack));
+#if GTK_CHECK_VERSION(3, 20, 0)
+        if (gtk_check_version(3, 20, 0) == nullptr)
+        {
+            GdkSeat* pSeat = gdk_display_get_default_seat(pDisplay);
+            gdk_seat_ungrab(pSeat);
+            return;
+        }
+#endif
+        //else older gtk3
+        GdkDeviceManager* pDeviceManager = gdk_display_get_device_manager(pDisplay);
+        GdkDevice* pPointer = gdk_device_manager_get_client_pointer(pDeviceManager);
+        gdk_device_ungrab(pPointer, gtk_get_current_event_time());
+    }
+
+    void toggle_menu()
+    {
+        if (!m_pMenuHack)
+            return;
+        if (!get_active())
+        {
+            do_ungrab();
+
+            gtk_widget_hide(GTK_WIDGET(m_pMenuHack));
+            //put contents back from where the came from
+            GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pMenuHack));
+            g_object_ref(pChild);
+            gtk_container_remove(GTK_CONTAINER(m_pMenuHack), pChild);
+            gtk_container_add(GTK_CONTAINER(m_pPopover), pChild);
+            g_object_unref(pChild);
+        }
+        else
+        {
+            //set border width
+            gtk_container_set_border_width(GTK_CONTAINER(m_pMenuHack), gtk_container_get_border_width(GTK_CONTAINER(m_pPopover)));
+
+            //steal popover contents and smuggle into toplevel display window
+            GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pPopover));
+            g_object_ref(pChild);
+            gtk_container_remove(GTK_CONTAINER(m_pPopover), pChild);
+            gtk_container_add(GTK_CONTAINER(m_pMenuHack), pChild);
+            g_object_unref(pChild);
+
+            //place the toplevel just below its launcher button
+            GtkWidget* pToplevel = gtk_widget_get_toplevel(GTK_WIDGET(m_pMenuButton));
+            gint x, y, absx, absy;
+            gtk_widget_translate_coordinates(GTK_WIDGET(m_pMenuButton), pToplevel, 0, 0, &x, &y);
+            GdkWindow *pWindow = gtk_widget_get_window(pToplevel);
+            gdk_window_get_position(pWindow, &absx, &absy);
+
+            gtk_window_group_add_window(gtk_window_get_group(GTK_WINDOW(pToplevel)), m_pMenuHack);
+            gtk_window_set_transient_for(m_pMenuHack, GTK_WINDOW(pToplevel));
+
+            gtk_widget_show_all(GTK_WIDGET(m_pMenuHack));
+            gtk_window_move(m_pMenuHack, x + absx, y + absy + gtk_widget_get_allocated_height(GTK_WIDGET(m_pMenuButton)));
+
+            gtk_widget_grab_focus(GTK_WIDGET(m_pMenuHack));
+
+            do_grab();
+        }
+    }
+
+    static void signalGrabBroken(GtkWidget*, GdkEventGrabBroken *pEvent, gpointer widget)
+    {
+        GtkInstanceMenuButton* pThis = static_cast<GtkInstanceMenuButton*>(widget);
+        pThis->grab_broken(pEvent);
+    }
+
+    void grab_broken(GdkEventGrabBroken *event)
+    {
+        if (event->grab_window == nullptr)
+        {
+            set_active(false);
+        }
+        else
+        {
+            //try and regrab, so when we lose the grab to the menu of the color palette
+            //combobox we regain it so the color palette doesn't itself disappear on next
+            //click on the color palette combobox
+            do_grab();
+        }
+    }
+
+    static gboolean signalButtonRelease(GtkWidget* pWidget, GdkEventButton* pEvent, gpointer widget)
+    {
+        GtkInstanceMenuButton* pThis = static_cast<GtkInstanceMenuButton*>(widget);
+        return pThis->button_release(pWidget, pEvent);
+    }
+
+    bool button_release(GtkWidget* pWidget, GdkEventButton* pEvent)
+    {
+        //we want to pop down if the button was released outside our popup
+        gdouble x = pEvent->x_root;
+        gdouble y = pEvent->y_root;
+        gint xoffset, yoffset;
+        gdk_window_get_root_origin(gtk_widget_get_window(pWidget), &xoffset, &yoffset);
+
+        GtkAllocation alloc;
+        gtk_widget_get_allocation(pWidget, &alloc);
+        xoffset += alloc.x;
+        yoffset += alloc.y;
+
+        gtk_widget_get_allocation(GTK_WIDGET(m_pMenuHack), &alloc);
+        gint x1 = alloc.x + xoffset;
+        gint y1 = alloc.y + yoffset;
+        gint x2 = x1 + alloc.width;
+        gint y2 = y1 + alloc.height;
+
+        if (x > x1 && x < x2 && y > y1 && y < y2)
+            return false;
+
+        set_active(false);
+
+        return false;
+    }
+
+    static gboolean keyPress(GtkWidget*, GdkEventKey* pEvent, gpointer widget)
+    {
+        GtkInstanceMenuButton* pThis = static_cast<GtkInstanceMenuButton*>(widget);
+        return pThis->key_press(pEvent);
+    }
+
+    bool key_press(GdkEventKey* pEvent)
+    {
+        if (pEvent->keyval == GDK_KEY_Escape)
+        {
+            set_active(false);
+            return true;
+        }
+        return false;
+    }
+
+public:
+    GtkInstanceMenuButton(GtkMenuButton* pMenuButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceToggleButton(GTK_TOGGLE_BUTTON(pMenuButton), pBuilder, bTakeOwnership)
+        , MenuHelper(gtk_menu_button_get_popup(pMenuButton), false)
+        , m_pMenuButton(pMenuButton)
+        , m_pImage(nullptr)
+        , m_pMenuHack(nullptr)
+        , m_pPopover(nullptr)
+        , m_nSignalId(0)
+    {
+        //do it "manually" so we can have the dropdown image in GtkMenuButtons shown
+        //on the right at the same time as this image is shown on the left
+        OString sLabel(gtk_button_get_label(GTK_BUTTON(m_pMenuButton)));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pMenuButton));
+        gtk_container_remove(GTK_CONTAINER(m_pMenuButton), pChild);
+
+        m_pBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
+
+        m_pLabel = GTK_LABEL(gtk_label_new_with_mnemonic(sLabel.getStr()));
+        gtk_label_set_mnemonic_widget(m_pLabel, GTK_WIDGET(m_pMenuButton));
+        gtk_box_pack_start(m_pBox, GTK_WIDGET(m_pLabel), false, false, 0);
+
+        gtk_box_pack_end(m_pBox, gtk_image_new_from_icon_name("pan-down-symbolic", GTK_ICON_SIZE_BUTTON), false, false, 0);
+        gtk_container_add(GTK_CONTAINER(m_pMenuButton), GTK_WIDGET(m_pBox));
+        gtk_widget_show_all(GTK_WIDGET(m_pBox));
+    }
+
+    virtual void set_size_request(int nWidth, int nHeight) override
+    {
+        // tweak the label to get a narrower size to stick
+        gtk_label_set_ellipsize(m_pLabel, PANGO_ELLIPSIZE_MIDDLE);
+        gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
+    }
+
+    virtual void set_label(const OUString& rText) override
+    {
+        ::set_label(m_pLabel, rText);
+    }
+
+    virtual void set_image(VirtualDevice* pDevice) override
+    {
+        if (!m_pImage)
+        {
+            m_pImage = GTK_IMAGE(gtk_image_new());
+            GtkStyleContext *pContext = gtk_widget_get_style_context(GTK_WIDGET(m_pMenuButton));
+            gint nImageSpacing(0);
+            gtk_style_context_get_style(pContext, "image-spacing", &nImageSpacing, nullptr);
+            gtk_box_pack_start(m_pBox, GTK_WIDGET(m_pImage), false, false, nImageSpacing);
+            gtk_box_reorder_child(m_pBox, GTK_WIDGET(m_pImage), 0);
+            gtk_widget_show(GTK_WIDGET(m_pImage));
+        }
+        if (pDevice)
+        {
+            if (gtk_check_version(3, 20, 0) == nullptr)
+                gtk_image_set_from_surface(m_pImage, get_underlying_cairo_surface(*pDevice));
+            else
+            {
+                GdkPixbuf* pixbuf = load_icon_from_surface(*pDevice);
+                gtk_image_set_from_pixbuf(m_pImage, pixbuf);
+                g_object_unref(pixbuf);
+            }
+        }
+        else
+            gtk_image_set_from_surface(m_pImage, nullptr);
+    }
+
+    virtual void insert_item(int pos, const OUString& rId, const OUString& rStr,
+                        const OUString* pIconName, VirtualDevice* pImageSurface, bool bCheck) override
+    {
+        MenuHelper::insert_item(pos, rId, rStr, pIconName, pImageSurface, bCheck);
+    }
+
+    virtual void set_item_active(const OString& rIdent, bool bActive) override
+    {
+        MenuHelper::set_item_active(rIdent, bActive);
+    }
+
+    virtual void set_item_sensitive(const OString& rIdent, bool bSensitive) override
+    {
+        MenuHelper::set_item_sensitive(rIdent, bSensitive);
+    }
+
+    virtual void set_item_label(const OString& rIdent, const OUString& rLabel) override
+    {
+        MenuHelper::set_item_label(rIdent, rLabel);
+    }
+
+    virtual void set_item_help_id(const OString& rIdent, const OString& rHelpId) override
+    {
+        MenuHelper::set_item_help_id(rIdent, rHelpId);
+    }
+
+    virtual OString get_item_help_id(const OString& rIdent) const override
+    {
+        return MenuHelper::get_item_help_id(rIdent);
+    }
+
+    virtual void signal_activate(GtkMenuItem* pItem) override
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
+        signal_selected(OString(pStr, pStr ? strlen(pStr) : 0));
+    }
+
+    virtual void set_popover(weld::Widget* pPopover) override
+    {
+        GtkInstanceWidget* pPopoverWidget = dynamic_cast<GtkInstanceWidget*>(pPopover);
+        m_pPopover = pPopoverWidget ? pPopoverWidget->getWidget() : nullptr;
+
+#if defined(GDK_WINDOWING_X11)
+        if (!m_pMenuHack)
+        {
+            //under wayland a Popover will work to "escape" the parent dialog, not
+            //so under X, so come up with this hack to use a raw GtkWindow
+            GdkDisplay *pDisplay = gtk_widget_get_display(m_pWidget);
+            if (DLSYM_GDK_IS_X11_DISPLAY(pDisplay))
+            {
+                m_pMenuHack = GTK_WINDOW(gtk_window_new(GTK_WINDOW_POPUP));
+                gtk_window_set_type_hint(m_pMenuHack, GDK_WINDOW_TYPE_HINT_COMBO);
+                gtk_window_set_modal(m_pMenuHack, true);
+                gtk_window_set_resizable(m_pMenuHack, false);
+                m_nSignalId = g_signal_connect(GTK_TOGGLE_BUTTON(m_pMenuButton), "toggled", G_CALLBACK(signalToggled), this);
+                g_signal_connect(m_pMenuHack, "grab-broken-event", G_CALLBACK(signalGrabBroken), this);
+                g_signal_connect(m_pMenuHack, "button-release-event", G_CALLBACK(signalButtonRelease), this);
+                g_signal_connect(m_pMenuHack, "key-press-event", G_CALLBACK(keyPress), this);
+            }
+        }
+#endif
+
+        if (m_pMenuHack)
+        {
+            gtk_menu_button_set_popover(m_pMenuButton, gtk_popover_new(GTK_WIDGET(m_pMenuButton)));
+        }
+        else
+        {
+            gtk_menu_button_set_popover(m_pMenuButton, m_pPopover);
+            if (m_pPopover)
+                gtk_widget_show_all(m_pPopover);
+        }
+    }
+
+    virtual ~GtkInstanceMenuButton() override
+    {
+        if (m_pMenuHack)
+        {
+            g_signal_handler_disconnect(m_pMenuButton, m_nSignalId);
+            gtk_widget_destroy(GTK_WIDGET(m_pMenuHack));
+        }
+    }
+};
+
+class GtkInstanceMenu : public MenuHelper, public virtual weld::Menu
+{
+protected:
+    std::vector<GtkMenuItem*> m_aExtraItems;
+    OString m_sActivated;
+    GtkInstanceMenuButton* m_pTopLevelMenuButton;
+
+private:
+    virtual void signal_activate(GtkMenuItem* pItem) override
+    {
+        const gchar* pStr = gtk_buildable_get_name(GTK_BUILDABLE(pItem));
+        m_sActivated = OString(pStr, pStr ? strlen(pStr) : 0);
+    }
+
+public:
+    GtkInstanceMenu(GtkMenu* pMenu, bool bTakeOwnership)
+        : MenuHelper(pMenu, bTakeOwnership)
+        , m_pTopLevelMenuButton(nullptr)
+    {
+        // tdf#122527 if we're welding a submenu of a menu of a MenuButton,
+        // then find that MenuButton parent so that when adding items to this
+        // menu we can inform the MenuButton of their addition
+        GtkMenu* pTopLevelMenu = pMenu;
+        while (true)
+        {
+            GtkWidget* pAttached = gtk_menu_get_attach_widget(pTopLevelMenu);
+            if (!pAttached || !GTK_IS_MENU_ITEM(pAttached))
+                break;
+            GtkWidget* pParent = gtk_widget_get_parent(pAttached);
+            if (!pParent || !GTK_IS_MENU(pParent))
+                break;
+            pTopLevelMenu = GTK_MENU(pParent);
+        }
+        if (pTopLevelMenu != pMenu)
+        {
+            GtkWidget* pAttached = gtk_menu_get_attach_widget(pTopLevelMenu);
+            if (pAttached && GTK_IS_MENU_BUTTON(pAttached))
+            {
+                void* pData = g_object_get_data(G_OBJECT(pAttached), "g-lo-GtkInstanceButton");
+                m_pTopLevelMenuButton = dynamic_cast<GtkInstanceMenuButton*>(static_cast<GtkInstanceButton*>(pData));
+            }
+        }
+    }
+
+    virtual OString popup_at_rect(weld::Widget* pParent, const tools::Rectangle &rRect) override
+    {
+        m_sActivated.clear();
+
+        GtkInstanceWidget* pGtkWidget = dynamic_cast<GtkInstanceWidget*>(pParent);
+        assert(pGtkWidget);
+
+        GtkWidget* pWidget = pGtkWidget->getWidget();
+        gtk_menu_attach_to_widget(m_pMenu, pWidget, nullptr);
+
+        //run in a sub main loop because we need to keep vcl PopupMenu alive to use
+        //it during DispatchCommand, returning now to the outer loop causes the
+        //launching PopupMenu to be destroyed, instead run the subloop here
+        //until the gtk menu is destroyed
+        GMainLoop* pLoop = g_main_loop_new(nullptr, true);
+        gulong nSignalId = g_signal_connect_swapped(G_OBJECT(m_pMenu), "deactivate", G_CALLBACK(g_main_loop_quit), pLoop);
+
+#if GTK_CHECK_VERSION(3,22,0)
+        if (gtk_check_version(3, 22, 0) == nullptr)
+        {
+            GdkRectangle aRect{static_cast<int>(rRect.Left()), static_cast<int>(rRect.Top()),
+                               static_cast<int>(rRect.GetWidth()), static_cast<int>(rRect.GetHeight())};
+            if (AllSettings::GetLayoutRTL())
+                aRect.x = gtk_widget_get_allocated_width(pWidget) - aRect.width - 1 - aRect.x;
+            gtk_menu_popup_at_rect(m_pMenu, gtk_widget_get_window(pWidget), &aRect, GDK_GRAVITY_NORTH_WEST, GDK_GRAVITY_NORTH_WEST, nullptr);
+        }
+        else
+#else
+        (void) rRect;
+#endif
+        {
+            guint nButton;
+            guint32 nTime;
+
+            //typically there is an event, and we can then distinguish if this was
+            //launched from the keyboard (gets auto-mnemoniced) or the mouse (which
+            //doesn't)
+            GdkEvent *pEvent = gtk_get_current_event();
+            if (pEvent)
+            {
+                gdk_event_get_button(pEvent, &nButton);
+                nTime = gdk_event_get_time(pEvent);
+            }
+            else
+            {
+                nButton = 0;
+                nTime = GtkSalFrame::GetLastInputEventTime();
+            }
+
+            gtk_menu_popup(m_pMenu, nullptr, nullptr, nullptr, nullptr, nButton, nTime);
+        }
+
+        if (g_main_loop_is_running(pLoop))
+        {
+            gdk_threads_leave();
+            g_main_loop_run(pLoop);
+            gdk_threads_enter();
+        }
+        g_main_loop_unref(pLoop);
+        g_signal_handler_disconnect(m_pMenu, nSignalId);
+
+        return m_sActivated;
+    }
+
+    virtual void set_sensitive(const OString& rIdent, bool bSensitive) override
+    {
+        set_item_sensitive(rIdent, bSensitive);
+    }
+
+    virtual void set_active(const OString& rIdent, bool bActive) override
+    {
+        set_item_active(rIdent, bActive);
+    }
+
+    virtual void show(const OString& rIdent, bool bShow) override
+    {
+        show_item(rIdent, bShow);
+    }
+
+    virtual void insert(int pos, const OUString& rId, const OUString& rStr,
+                        const OUString* pIconName, VirtualDevice* pImageSurface,
+                        bool bCheck) override
+    {
+        GtkWidget* pImage = nullptr;
+        if (pIconName)
+        {
+            GdkPixbuf* pixbuf = load_icon_by_name(*pIconName);
+            if (!pixbuf)
+            {
+                pImage = gtk_image_new_from_pixbuf(pixbuf);
+                g_object_unref(pixbuf);
+            }
+        }
+        else if (pImageSurface)
+        {
+            pImage = image_new_from_virtual_device(*pImageSurface);
+        }
+
+        GtkWidget *pItem;
+        if (pImage)
+        {
+            GtkWidget *pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+            GtkWidget *pLabel = gtk_label_new(MapToGtkAccelerator(rStr).getStr());
+            pItem = bCheck ? gtk_check_menu_item_new() : gtk_menu_item_new();
+            gtk_container_add(GTK_CONTAINER(pBox), pImage);
+            gtk_container_add(GTK_CONTAINER(pBox), pLabel);
+            gtk_container_add(GTK_CONTAINER(pItem), pBox);
+            gtk_widget_show_all(pItem);
+        }
+        else
+        {
+            pItem = bCheck ? gtk_check_menu_item_new_with_label(MapToGtkAccelerator(rStr).getStr())
+                           : gtk_menu_item_new_with_label(MapToGtkAccelerator(rStr).getStr());
+        }
+        gtk_buildable_set_name(GTK_BUILDABLE(pItem), OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr());
+        gtk_menu_shell_append(GTK_MENU_SHELL(m_pMenu), pItem);
+        gtk_widget_show(pItem);
+        GtkMenuItem* pMenuItem = GTK_MENU_ITEM(pItem);
+        m_aExtraItems.push_back(pMenuItem);
+        add_to_map(pMenuItem);
+        if (m_pTopLevelMenuButton)
+            m_pTopLevelMenuButton->add_to_map(pMenuItem);
+        if (pos != -1)
+            gtk_menu_reorder_child(m_pMenu, pItem, pos);
+    }
+
+    virtual ~GtkInstanceMenu() override
+    {
+        if (m_pTopLevelMenuButton)
+        {
+            for (auto a : m_aExtraItems)
+                m_pTopLevelMenuButton->remove_from_map(a);
+        }
+    }
+};
+
 class GtkInstanceRadioButton : public GtkInstanceToggleButton, public virtual weld::RadioButton
 {
 public:
-    GtkInstanceRadioButton(GtkRadioButton* pButton, bool bTakeOwnership)
-        : GtkInstanceToggleButton(GTK_TOGGLE_BUTTON(pButton), bTakeOwnership)
+    GtkInstanceRadioButton(GtkRadioButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceToggleButton(GTK_TOGGLE_BUTTON(pButton), pBuilder, bTakeOwnership)
     {
     }
 };
@@ -2699,8 +4376,8 @@ public:
 class GtkInstanceCheckButton : public GtkInstanceToggleButton, public virtual weld::CheckButton
 {
 public:
-    GtkInstanceCheckButton(GtkCheckButton* pButton, bool bTakeOwnership)
-        : GtkInstanceToggleButton(GTK_TOGGLE_BUTTON(pButton), bTakeOwnership)
+    GtkInstanceCheckButton(GtkCheckButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceToggleButton(GTK_TOGGLE_BUTTON(pButton), pBuilder, bTakeOwnership)
     {
     }
 };
@@ -2719,8 +4396,8 @@ private:
     }
 
 public:
-    GtkInstanceScale(GtkScale* pScale, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pScale), bTakeOwnership)
+    GtkInstanceScale(GtkScale* pScale, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pScale), pBuilder, bTakeOwnership)
         , m_pScale(pScale)
         , m_nValueChangedSignalId(g_signal_connect(m_pScale, "value-changed", G_CALLBACK(signalValueChanged), this))
     {
@@ -2740,7 +4417,16 @@ public:
 
     virtual void set_value(int value) override
     {
+        disable_notify_events();
         gtk_range_set_value(GTK_RANGE(m_pScale), value);
+        enable_notify_events();
+    }
+
+    virtual void set_range(int min, int max) override
+    {
+        disable_notify_events();
+        gtk_range_set_range(GTK_RANGE(m_pScale), min, max);
+        enable_notify_events();
     }
 
     virtual int get_value() const override
@@ -2760,8 +4446,8 @@ private:
     GtkProgressBar* m_pProgressBar;
 
 public:
-    GtkInstanceProgressBar(GtkProgressBar* pProgressBar, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pProgressBar), bTakeOwnership)
+    GtkInstanceProgressBar(GtkProgressBar* pProgressBar, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pProgressBar), pBuilder, bTakeOwnership)
         , m_pProgressBar(pProgressBar)
     {
     }
@@ -2772,6 +4458,28 @@ public:
     }
 };
 
+class GtkInstanceImage : public GtkInstanceWidget, public virtual weld::Image
+{
+private:
+    GtkImage* m_pImage;
+
+public:
+    GtkInstanceImage(GtkImage* pImage, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pImage), pBuilder, bTakeOwnership)
+        , m_pImage(pImage)
+    {
+    }
+
+    virtual void set_from_icon_name(const OUString& rIconName) override
+    {
+        GdkPixbuf* pixbuf = load_icon_by_name(rIconName);
+        if (!pixbuf)
+            return;
+        gtk_image_set_from_pixbuf(m_pImage, pixbuf);
+        g_object_unref(pixbuf);
+    }
+};
+
 class GtkInstanceEntry : public GtkInstanceWidget, public virtual weld::Entry
 {
 private:
@@ -2779,6 +4487,7 @@ private:
     gulong m_nChangedSignalId;
     gulong m_nInsertTextSignalId;
     gulong m_nCursorPosSignalId;
+    gulong m_nSelectionPosSignalId;
 
     static void signalChanged(GtkEntry*, gpointer widget)
     {
@@ -2818,12 +4527,13 @@ private:
     }
 
 public:
-    GtkInstanceEntry(GtkEntry* pEntry, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pEntry), bTakeOwnership)
+    GtkInstanceEntry(GtkEntry* pEntry, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pEntry), pBuilder, bTakeOwnership)
         , m_pEntry(pEntry)
         , m_nChangedSignalId(g_signal_connect(pEntry, "changed", G_CALLBACK(signalChanged), this))
         , m_nInsertTextSignalId(g_signal_connect(pEntry, "insert-text", G_CALLBACK(signalInsertText), this))
         , m_nCursorPosSignalId(g_signal_connect(pEntry, "notify::cursor-position", G_CALLBACK(signalCursorPosition), this))
+        , m_nSelectionPosSignalId(g_signal_connect(pEntry, "notify::selection-bound", G_CALLBACK(signalCursorPosition), this))
     {
     }
 
@@ -2845,7 +4555,13 @@ public:
     {
         disable_notify_events();
         gtk_entry_set_width_chars(m_pEntry, nChars);
+        gtk_entry_set_max_width_chars(m_pEntry, nChars);
         enable_notify_events();
+    }
+
+    virtual int get_width_chars() const override
+    {
+        return gtk_entry_get_width_chars(m_pEntry);
     }
 
     virtual void set_max_length(int nChars) override
@@ -2869,7 +4585,14 @@ public:
 
     virtual void set_position(int nCursorPos) override
     {
+        disable_notify_events();
         gtk_editable_set_position(GTK_EDITABLE(m_pEntry), nCursorPos);
+        enable_notify_events();
+    }
+
+    virtual int get_position() const override
+    {
+        return gtk_editable_get_position(GTK_EDITABLE(m_pEntry));
     }
 
     virtual void set_editable(bool bEditable) override
@@ -2877,8 +4600,23 @@ public:
         gtk_editable_set_editable(GTK_EDITABLE(m_pEntry), bEditable);
     }
 
+    virtual bool get_editable() const override
+    {
+        return gtk_editable_get_editable(GTK_EDITABLE(m_pEntry));
+    }
+
+    virtual void set_error(bool bError) override
+    {
+        if (bError)
+            gtk_entry_set_icon_from_icon_name(m_pEntry, GTK_ENTRY_ICON_SECONDARY, "dialog-error");
+        else
+            gtk_entry_set_icon_from_icon_name(m_pEntry, GTK_ENTRY_ICON_SECONDARY, nullptr);
+    }
+
     virtual void disable_notify_events() override
     {
+        g_signal_handler_block(m_pEntry, m_nSelectionPosSignalId);
+        g_signal_handler_block(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_block(m_pEntry, m_nInsertTextSignalId);
         g_signal_handler_block(m_pEntry, m_nChangedSignalId);
         GtkInstanceWidget::disable_notify_events();
@@ -2889,6 +4627,8 @@ public:
         GtkInstanceWidget::enable_notify_events();
         g_signal_handler_unblock(m_pEntry, m_nChangedSignalId);
         g_signal_handler_unblock(m_pEntry, m_nInsertTextSignalId);
+        g_signal_handler_unblock(m_pEntry, m_nCursorPosSignalId);
+        g_signal_handler_unblock(m_pEntry, m_nSelectionPosSignalId);
     }
 
     virtual vcl::Font get_font() override
@@ -2973,8 +4713,14 @@ public:
         pango_attr_list_unref(pAttrList);
     }
 
+    void fire_signal_changed()
+    {
+        signal_changed();
+    }
+
     virtual ~GtkInstanceEntry() override
     {
+        g_signal_handler_disconnect(m_pEntry, m_nSelectionPosSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nCursorPosSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nInsertTextSignalId);
         g_signal_handler_disconnect(m_pEntry, m_nChangedSignalId);
@@ -3008,38 +4754,183 @@ namespace
         return found;
     }
 
-    GdkPixbuf* load_icon_by_name(const OUString& rIconName, const OUString& rIconTheme, const OUString& rUILang)
+    void insert_row(GtkListStore* pListStore, GtkTreeIter& iter, int pos, const OUString* pId, const OUString& rText, const OUString* pIconName, VirtualDevice* pDevice)
+    {
+        if (!pIconName && !pDevice)
+        {
+            gtk_list_store_insert_with_values(pListStore, &iter, pos,
+                                              0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(),
+                                              1, !pId ? nullptr : OUStringToOString(*pId, RTL_TEXTENCODING_UTF8).getStr(),
+                                              -1);
+        }
+        else
+        {
+            if (pIconName)
+            {
+                GdkPixbuf* pixbuf = nullptr;
+
+                if (pIconName->lastIndexOf('.') != pIconName->getLength() - 4)
+                {
+                    assert((*pIconName== "dialog-warning" || *pIconName== "dialog-error" ||*pIconName== "dialog-information") &&
+                           "unknown stock image");
+
+                    GError *error = nullptr;
+                    GtkIconTheme *icon_theme = gtk_icon_theme_get_default();
+                    pixbuf = gtk_icon_theme_load_icon(icon_theme, OUStringToOString(*pIconName, RTL_TEXTENCODING_UTF8).getStr(),
+                                                      16, GTK_ICON_LOOKUP_USE_BUILTIN, &error);
+                }
+                else
+                {
+                    const AllSettings& rSettings = Application::GetSettings();
+                    pixbuf = load_icon_by_name(*pIconName,
+                                               rSettings.GetStyleSettings().DetermineIconTheme(),
+                                               rSettings.GetUILanguageTag().getBcp47());
+                }
+
+                gtk_list_store_insert_with_values(pListStore, &iter, pos,
+                                                  0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(),
+                                                  1, !pId ? nullptr : OUStringToOString(*pId, RTL_TEXTENCODING_UTF8).getStr(),
+                                                  2, pixbuf,
+                                                  -1);
+
+                if (pixbuf)
+                    g_object_unref(pixbuf);
+            }
+            else
+            {
+                cairo_surface_t* surface = get_underlying_cairo_surface(*pDevice);
+
+                Size aSize(pDevice->GetOutputSizePixel());
+                cairo_surface_t* target = cairo_surface_create_similar(surface,
+                                                                        cairo_surface_get_content(surface),
+                                                                        aSize.Width(),
+                                                                        aSize.Height());
+
+                cairo_t* cr = cairo_create(target);
+                cairo_set_source_surface(cr, surface, 0, 0);
+                cairo_paint(cr);
+                cairo_destroy(cr);
+
+                gtk_list_store_insert_with_values(pListStore, &iter, pos,
+                                                  0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(),
+                                                  1, !pId ? nullptr : OUStringToOString(*pId, RTL_TEXTENCODING_UTF8).getStr(),
+                                                  3, target,
+                                                  -1);
+                cairo_surface_destroy(target);
+            }
+        }
+    }
+
+    GdkPixbuf* getPixbuf(const OUString& rIconName)
     {
         GdkPixbuf* pixbuf = nullptr;
-        auto xMemStm = ImageTree::get().getImageStream(rIconName, rIconTheme, rUILang);
-        if (xMemStm)
+
+        if (rIconName.lastIndexOf('.') != rIconName.getLength() - 4)
         {
-            GdkPixbufLoader *pixbuf_loader = gdk_pixbuf_loader_new();
-            gdk_pixbuf_loader_write(pixbuf_loader, static_cast<const guchar*>(xMemStm->GetData()),
-                                    xMemStm->Seek(STREAM_SEEK_TO_END), nullptr);
-            gdk_pixbuf_loader_close(pixbuf_loader, nullptr);
-            pixbuf = gdk_pixbuf_loader_get_pixbuf(pixbuf_loader);
-            if (pixbuf)
-                g_object_ref(pixbuf);
-            g_object_unref(pixbuf_loader);
+            assert((rIconName== "dialog-warning" || rIconName== "dialog-error" || rIconName== "dialog-information") &&
+                   "unknown stock image");
+
+            GError *error = nullptr;
+            GtkIconTheme *icon_theme = gtk_icon_theme_get_default();
+            pixbuf = gtk_icon_theme_load_icon(icon_theme, OUStringToOString(rIconName, RTL_TEXTENCODING_UTF8).getStr(),
+                                              16, GTK_ICON_LOOKUP_USE_BUILTIN, &error);
         }
+        else
+        {
+            const AllSettings& rSettings = Application::GetSettings();
+            pixbuf = load_icon_by_name(rIconName,
+                                       rSettings.GetStyleSettings().DetermineIconTheme(),
+                                       rSettings.GetUILanguageTag().getBcp47());
+        }
+
         return pixbuf;
     }
+
 }
+
+namespace
+{
+    gint sort_func(GtkTreeModel* pModel, GtkTreeIter* a, GtkTreeIter* b, gpointer data)
+    {
+        comphelper::string::NaturalStringSorter* pSorter = static_cast<comphelper::string::NaturalStringSorter*>(data);
+        gchar* pName1;
+        gchar* pName2;
+        GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(pModel);
+        gint sort_column_id(0);
+        gtk_tree_sortable_get_sort_column_id(pSortable, &sort_column_id, nullptr);
+        gtk_tree_model_get(pModel, a, sort_column_id, &pName1, -1);
+        gtk_tree_model_get(pModel, b, sort_column_id, &pName2, -1);
+        gint ret = pSorter->compare(OUString(pName1, strlen(pName1), RTL_TEXTENCODING_UTF8),
+                                    OUString(pName2, strlen(pName2), RTL_TEXTENCODING_UTF8));
+        g_free(pName1);
+        g_free(pName2);
+        return ret;
+    }
+
+    int starts_with(GtkTreeModel* pTreeModel, const OUString& rStr, int col, int nStartRow)
+    {
+        GtkTreeIter iter;
+        if (!gtk_tree_model_iter_nth_child(pTreeModel, &iter, nullptr, nStartRow))
+            return -1;
+
+        const vcl::I18nHelper& rI18nHelper = Application::GetSettings().GetUILocaleI18nHelper();
+        int nRet = nStartRow;
+        do
+        {
+            gchar* pStr;
+            gtk_tree_model_get(pTreeModel, &iter, col, &pStr, -1);
+            OUString aStr(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+            g_free(pStr);
+            const bool bMatch = rI18nHelper.MatchString(rStr, aStr);
+            if (bMatch)
+                return nRet;
+            ++nRet;
+        } while (gtk_tree_model_iter_next(pTreeModel, &iter));
+
+        return -1;
+    }
+}
+
+struct GtkInstanceTreeIter : public weld::TreeIter
+{
+    GtkInstanceTreeIter(const GtkInstanceTreeIter* pOrig)
+    {
+        if (pOrig)
+            iter = pOrig->iter;
+        else
+            memset(&iter, 0, sizeof(iter));
+    }
+    GtkTreeIter iter;
+};
 
 class GtkInstanceTreeView : public GtkInstanceContainer, public virtual weld::TreeView
 {
 private:
     GtkTreeView* m_pTreeView;
-    GtkListStore* m_pListStore;
+    GtkTreeStore* m_pTreeStore;
+    std::unique_ptr<comphelper::string::NaturalStringSorter> m_xSorter;
+    // map from toggle column to toggle visibility column
+    std::map<int, int> m_aToggleVisMap;
+    gint m_nTextCol;
+    gint m_nImageCol;
+    gint m_nExpanderImageCol;
+    gint m_nIdCol;
     gulong m_nChangedSignalId;
     gulong m_nRowActivatedSignalId;
+    gulong m_nTestExpandRowSignalId;
+
+    DECL_LINK(async_signal_changed, void*, void);
 
     static void signalChanged(GtkTreeView*, gpointer widget)
     {
         GtkInstanceTreeView* pThis = static_cast<GtkInstanceTreeView*>(widget);
-        SolarMutexGuard aGuard;
-        pThis->signal_changed();
+        //tdf#117991 selection change is sent before the focus change, and focus change
+        //is what will cause a spinbutton that currently has the focus to set its contents
+        //as the spin button value. So any LibreOffice callbacks on
+        //signal-change would happen before the spinbutton value-change occurs.
+        //To avoid this, send the signal-change to LibreOffice to occur after focus-change
+        //has been processed
+        Application::PostUserEvent(LINK(pThis, GtkInstanceTreeView, async_signal_changed));
     }
 
     static void signalRowActivated(GtkTreeView*, GtkTreePath*, GtkTreeViewColumn*, gpointer widget)
@@ -3049,10 +4940,52 @@ private:
         pThis->signal_row_activated();
     }
 
+    void insert_row(GtkTreeIter& iter, GtkTreeIter* parent, int pos, const OUString* pId, const OUString* pText,
+                    const OUString* pIconName, VirtualDevice* pDevice, const OUString* pExpanderName)
+    {
+        gtk_tree_store_insert_with_values(m_pTreeStore, &iter, parent, pos,
+                                          m_nTextCol, !pText ? nullptr : OUStringToOString(*pText, RTL_TEXTENCODING_UTF8).getStr(),
+                                          m_nIdCol, !pId ? nullptr : OUStringToOString(*pId, RTL_TEXTENCODING_UTF8).getStr(),
+                                          -1);
+        if (pIconName)
+        {
+            GdkPixbuf* pixbuf = getPixbuf(*pIconName);
+            gtk_tree_store_set(m_pTreeStore, &iter, m_nImageCol, pixbuf, -1);
+            if (pixbuf)
+                g_object_unref(pixbuf);
+        }
+        else if (pDevice)
+        {
+            cairo_surface_t* surface = get_underlying_cairo_surface(*pDevice);
+
+            Size aSize(pDevice->GetOutputSizePixel());
+            cairo_surface_t* target = cairo_surface_create_similar(surface,
+                                                                    cairo_surface_get_content(surface),
+                                                                    aSize.Width(),
+                                                                    aSize.Height());
+
+            cairo_t* cr = cairo_create(target);
+            cairo_set_source_surface(cr, surface, 0, 0);
+            cairo_paint(cr);
+            cairo_destroy(cr);
+
+            gtk_tree_store_set(m_pTreeStore, &iter, m_nImageCol, target, -1);
+            cairo_surface_destroy(target);
+        }
+
+        if (pExpanderName)
+        {
+            GdkPixbuf* pixbuf = getPixbuf(*pExpanderName);
+            gtk_tree_store_set(m_pTreeStore, &iter, m_nExpanderImageCol, pixbuf, -1);
+            if (pixbuf)
+                g_object_unref(pixbuf);
+        }
+    }
+
     OUString get(int pos, int col) const
     {
         OUString sRet;
-        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pListStore);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
         GtkTreeIter iter;
         if (gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos))
         {
@@ -3064,91 +4997,232 @@ private:
         return sRet;
     }
 
+    bool get_bool(int pos, int col) const
+    {
+        gboolean bRet(false);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter iter;
+        if (gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos))
+        {
+            gtk_tree_model_get(pModel, &iter, col, &bRet, -1);
+        }
+        return bRet;
+    }
+
+    void set(int pos, int col, const OUString& rText)
+    {
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter iter;
+        if (gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos))
+        {
+            OString aStr(OUStringToOString(rText, RTL_TEXTENCODING_UTF8));
+            gtk_tree_store_set(m_pTreeStore, &iter, col, aStr.getStr(), -1);
+        }
+    }
+
+    void set(int pos, int col, bool bOn)
+    {
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter iter;
+        if (gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos))
+        {
+            gtk_tree_store_set(m_pTreeStore, &iter, col, bOn, -1);
+        }
+    }
+
+    static gboolean signalTestExpandRow(GtkTreeView*, GtkTreeIter* iter, GtkTreePath*, gpointer widget)
+    {
+        GtkInstanceTreeView* pThis = static_cast<GtkInstanceTreeView*>(widget);
+        return !pThis->signal_test_expand_row(*iter);
+    }
+
+    bool signal_test_expand_row(GtkTreeIter& iter)
+    {
+        GtkInstanceTreeIter aIter(nullptr);
+
+        // if there's a preexisting placeholder child, required to make this
+        // potentially expandable in the first place, now we remove it
+        bool bPlaceHolder = false;
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter tmp;
+        if (gtk_tree_model_iter_children(pModel, &tmp, &iter))
+        {
+            aIter.iter = tmp;
+            if (get_text(aIter) == "<dummy>")
+            {
+                gtk_tree_store_remove(m_pTreeStore, &tmp);
+                bPlaceHolder = true;
+            }
+        }
+
+        aIter.iter = iter;
+        bool bRet = signal_expanding(aIter);
+
+        //expand disallowed, restore placeholder
+        if (!bRet && bPlaceHolder)
+        {
+            GtkTreeIter subiter;
+            OUString sDummy("<dummy>");
+            insert_row(subiter, &iter, -1, nullptr, &sDummy, nullptr, nullptr, nullptr);
+        }
+
+        return bRet;
+    }
+
+    static void signalCellToggled(GtkCellRendererToggle* pCell, const gchar *path, gpointer widget)
+    {
+        GtkInstanceTreeView* pThis = static_cast<GtkInstanceTreeView*>(widget);
+        void* pData = g_object_get_data(G_OBJECT(pCell), "g-lo-CellIndex");
+        pThis->signal_cell_toggled(path, reinterpret_cast<sal_IntPtr>(pData));
+    }
+
+    void signal_cell_toggled(const gchar *path, int nCol)
+    {
+        GtkTreePath *tree_path = gtk_tree_path_new_from_string(path);
+
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter iter;
+        gtk_tree_model_get_iter(pModel, &iter, tree_path);
+
+        gboolean bRet(false);
+        gtk_tree_model_get(pModel, &iter, nCol, &bRet, -1);
+        bRet = !bRet;
+        gtk_tree_store_set(m_pTreeStore, &iter, nCol, bRet, -1);
+
+        int nRow = gtk_tree_path_get_indices(tree_path)[0];
+        signal_toggled(std::make_pair(nRow, nCol));
+
+        gtk_tree_path_free(tree_path);
+    }
+
 public:
-    GtkInstanceTreeView(GtkTreeView* pTreeView, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pTreeView), bTakeOwnership)
+    GtkInstanceTreeView(GtkTreeView* pTreeView, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pTreeView), pBuilder, bTakeOwnership)
         , m_pTreeView(pTreeView)
-        , m_pListStore(GTK_LIST_STORE(gtk_tree_view_get_model(m_pTreeView)))
+        , m_pTreeStore(GTK_TREE_STORE(gtk_tree_view_get_model(m_pTreeView)))
+        , m_nTextCol(-1)
+        , m_nImageCol(-1)
+        , m_nExpanderImageCol(-1)
         , m_nChangedSignalId(g_signal_connect(gtk_tree_view_get_selection(pTreeView), "changed",
                              G_CALLBACK(signalChanged), this))
         , m_nRowActivatedSignalId(g_signal_connect(pTreeView, "row-activated", G_CALLBACK(signalRowActivated), this))
+        , m_nTestExpandRowSignalId(g_signal_connect(pTreeView, "test-expand-row", G_CALLBACK(signalTestExpandRow), this))
     {
+        GList *pColumns = gtk_tree_view_get_columns(m_pTreeView);
+        int nIndex(0);
+        for (GList* pEntry = g_list_first(pColumns); pEntry; pEntry = g_list_next(pEntry))
+        {
+            GtkTreeViewColumn* pColumn = GTK_TREE_VIEW_COLUMN(pEntry->data);
+            GList *pRenderers = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(pColumn));
+            for (GList* pRenderer = g_list_first(pRenderers); pRenderer; pRenderer = g_list_next(pRenderer))
+            {
+                GtkCellRenderer* pCellRenderer = GTK_CELL_RENDERER(pRenderer->data);
+                if (m_nTextCol == -1 && GTK_IS_CELL_RENDERER_TEXT(pCellRenderer))
+                    m_nTextCol = nIndex;
+                else if (GTK_IS_CELL_RENDERER_TOGGLE(pCellRenderer))
+                {
+                    g_object_set_data(G_OBJECT(pCellRenderer), "g-lo-CellIndex", reinterpret_cast<gpointer>(nIndex));
+                    g_signal_connect(G_OBJECT(pCellRenderer), "toggled", G_CALLBACK(signalCellToggled), this);
+                    m_aToggleVisMap[nIndex] = -1;
+                }
+                else if (GTK_IS_CELL_RENDERER_PIXBUF(pCellRenderer))
+                {
+                    const bool bExpander = g_list_next(pRenderer) != nullptr;
+                    if (bExpander && m_nExpanderImageCol == -1)
+                        m_nExpanderImageCol = nIndex;
+                    else if (m_nImageCol == -1)
+                        m_nImageCol = nIndex;
+                }
+                ++nIndex;
+            }
+            g_list_free(pRenderers);
+        }
+        g_list_free(pColumns);
+        m_nIdCol = nIndex++;
+        for (auto& a : m_aToggleVisMap)
+        {
+            a.second = nIndex++;
+        }
     }
 
-    virtual void insert_text(const OUString& rText, int pos) override
+    virtual void set_column_fixed_widths(const std::vector<int>& rWidths) override
+    {
+        GList *pColumns = gtk_tree_view_get_columns(m_pTreeView);
+        GList* pEntry = g_list_first(pColumns);
+        for (auto nWidth : rWidths)
+        {
+            assert(pEntry && "wrong count");
+            GtkTreeViewColumn* pColumn = GTK_TREE_VIEW_COLUMN(pEntry->data);
+            gtk_tree_view_column_set_fixed_width(pColumn, nWidth);
+            pEntry = g_list_next(pEntry);
+        }
+        g_list_free(pColumns);
+    }
+
+    virtual OUString get_column_title(int nColumn) const override
+    {
+        GList *pColumns = gtk_tree_view_get_columns(m_pTreeView);
+        GtkTreeViewColumn* pColumn = GTK_TREE_VIEW_COLUMN(g_list_nth_data(pColumns, nColumn));
+        assert(pColumn && "wrong count");
+        const gchar* pTitle = gtk_tree_view_column_get_title(pColumn);
+        OUString sRet = OUString(pTitle, pTitle ? strlen(pTitle) : 0, RTL_TEXTENCODING_UTF8);
+        g_list_free(pColumns);
+        return sRet;
+    }
+
+    virtual void set_column_title(int nColumn, const OUString& rTitle) override
+    {
+        GList *pColumns = gtk_tree_view_get_columns(m_pTreeView);
+        GtkTreeViewColumn* pColumn = GTK_TREE_VIEW_COLUMN(g_list_nth_data(pColumns, nColumn));
+        assert(pColumn && "wrong count");
+        gtk_tree_view_column_set_title(pColumn, OUStringToOString(rTitle, RTL_TEXTENCODING_UTF8).getStr());
+        g_list_free(pColumns);
+    }
+
+    virtual void insert(weld::TreeIter* pParent, int pos, const OUString* pText, const OUString* pId, const OUString* pIconName,
+                        VirtualDevice* pImageSurface, const OUString* pExpanderName, bool bChildrenOnDemand) override
     {
         disable_notify_events();
         GtkTreeIter iter;
-        gtk_list_store_insert(m_pListStore, &iter, pos);
-        gtk_list_store_set(m_pListStore, &iter, 0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(), -1);
+        GtkInstanceTreeIter* pGtkIter = static_cast<GtkInstanceTreeIter*>(pParent);
+        insert_row(iter, pGtkIter ? &pGtkIter->iter : nullptr, pos, pId, pText, pIconName, pImageSurface, pExpanderName);
+        if (bChildrenOnDemand)
+        {
+            GtkTreeIter subiter;
+            OUString sDummy("<dummy>");
+            insert_row(subiter, &iter, -1, nullptr, &sDummy, nullptr, nullptr, nullptr);
+        }
         enable_notify_events();
     }
 
-    virtual void insert(int pos, const OUString& rId, const OUString& rText, const OUString& rImage) override
+    virtual void set_font_color(int pos, const Color& rColor) const override
     {
-        disable_notify_events();
         GtkTreeIter iter;
-        gtk_list_store_insert(m_pListStore, &iter, pos);
-        if (rImage.isEmpty())
-        {
-            gtk_list_store_set(m_pListStore, &iter,
-                    0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(),
-                    1, OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr(),
-                    -1);
-        }
-        else
-        {
-            GdkPixbuf* pixbuf = nullptr;
-
-            if (rImage.lastIndexOf('.') != rImage.getLength() - 4)
-            {
-                assert((rImage == "dialog-warning" || rImage == "dialog-error" || rImage == "dialog-information") && "unknown stock image");
-
-                GError *error = nullptr;
-                GtkIconTheme *icon_theme = gtk_icon_theme_get_default();
-                pixbuf = gtk_icon_theme_load_icon(icon_theme, OUStringToOString(rImage, RTL_TEXTENCODING_UTF8).getStr(),
-                                                  16, GTK_ICON_LOOKUP_USE_BUILTIN, &error);
-            }
-            else
-            {
-                const AllSettings& rSettings = Application::GetSettings();
-                pixbuf = load_icon_by_name(rImage,
-                                           rSettings.GetStyleSettings().DetermineIconTheme(),
-                                           rSettings.GetUILanguageTag().getBcp47());
-            }
-
-            gtk_list_store_set(m_pListStore, &iter,
-                    0, OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr(),
-                    1, OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr(),
-                    2, pixbuf,
-                    -1);
-
-            if (pixbuf)
-                g_object_unref(pixbuf);
-        }
-        enable_notify_events();
+        gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(m_pTreeStore), &iter, nullptr, pos);
+        GdkRGBA aColor{rColor.GetRed()/255.0, rColor.GetGreen()/255.0, rColor.GetBlue()/255.0, 0};
+        gtk_tree_store_set(m_pTreeStore, &iter, m_nIdCol + 1, &aColor, -1);
     }
 
     virtual void remove(int pos) override
     {
         disable_notify_events();
         GtkTreeIter iter;
-        gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(m_pListStore), &iter, nullptr, pos);
-        gtk_list_store_remove(m_pListStore, &iter);
+        gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(m_pTreeStore), &iter, nullptr, pos);
+        gtk_tree_store_remove(m_pTreeStore, &iter);
         enable_notify_events();
     }
 
     virtual int find_text(const OUString& rText) const override
     {
         Search aSearch(rText, 0);
-        gtk_tree_model_foreach(GTK_TREE_MODEL(m_pListStore), foreach_find, &aSearch);
+        gtk_tree_model_foreach(GTK_TREE_MODEL(m_pTreeStore), foreach_find, &aSearch);
         return aSearch.index;
     }
 
     virtual int find_id(const OUString& rId) const override
     {
-        Search aSearch(rId, 1);
-        gtk_tree_model_foreach(GTK_TREE_MODEL(m_pListStore), foreach_find, &aSearch);
+        Search aSearch(rId, m_nIdCol);
+        gtk_tree_model_foreach(GTK_TREE_MODEL(m_pTreeStore), foreach_find, &aSearch);
         return aSearch.index;
     }
 
@@ -3157,14 +5231,16 @@ public:
         if (pos == before)
             return;
 
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+
         disable_notify_events();
         GtkTreeIter iter;
-        gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(m_pListStore), &iter, nullptr, pos);
+        gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos);
 
         GtkTreeIter position;
-        gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(m_pListStore), &position, nullptr, before);
+        gtk_tree_model_iter_nth_child(pModel, &position, nullptr, before);
 
-        gtk_list_store_move_before(m_pListStore, &iter, &position);
+        gtk_tree_store_move_before(m_pTreeStore, &iter, &position);
         enable_notify_events();
     }
 
@@ -3178,13 +5254,23 @@ public:
     virtual void clear() override
     {
         disable_notify_events();
-        gtk_list_store_clear(m_pListStore);
+        gtk_tree_store_clear(m_pTreeStore);
         enable_notify_events();
+    }
+
+    virtual void make_sorted() override
+    {
+        m_xSorter.reset(new comphelper::string::NaturalStringSorter(
+                            ::comphelper::getProcessComponentContext(),
+                            Application::GetSettings().GetUILanguageTag().getLocale()));
+        GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeStore);
+        gtk_tree_sortable_set_sort_column_id(pSortable, m_nTextCol, GTK_SORT_ASCENDING);
+        gtk_tree_sortable_set_sort_func(pSortable, m_nTextCol, sort_func, m_xSorter.get(), nullptr);
     }
 
     virtual int n_children() const override
     {
-        return gtk_tree_model_iter_n_children(GTK_TREE_MODEL(m_pListStore), nullptr);
+        return gtk_tree_model_iter_n_children(GTK_TREE_MODEL(m_pTreeStore), nullptr);
     }
 
     virtual void select(int pos) override
@@ -3202,6 +5288,23 @@ public:
             gtk_tree_view_scroll_to_cell(m_pTreeView, path, nullptr, false, 0, 0);
             gtk_tree_path_free(path);
         }
+        enable_notify_events();
+    }
+
+    virtual void set_cursor(int pos) override
+    {
+        GtkTreePath* path = gtk_tree_path_new_from_indices(pos, -1);
+        gtk_tree_view_set_cursor(m_pTreeView, path, nullptr, false);
+        gtk_tree_path_free(path);
+    }
+
+    virtual void scroll_to_row(int pos) override
+    {
+        assert(gtk_tree_view_get_model(m_pTreeView) && "don't select when frozen");
+        disable_notify_events();
+        GtkTreePath* path = gtk_tree_path_new_from_indices(pos, -1);
+        gtk_tree_view_scroll_to_cell(m_pTreeView, path, nullptr, false, 0, 0);
+        gtk_tree_path_free(path);
         enable_notify_events();
     }
 
@@ -3238,43 +5341,314 @@ public:
         return aRows;
     }
 
-    virtual OUString get_text(int pos) const override
+    virtual OUString get_text(int pos, int col) const override
     {
-        return get(pos, 0);
+        if (col == -1)
+            return get(pos, m_nTextCol);
+        return get(pos, col);
+    }
+
+    virtual void set_text(int pos, const OUString& rText, int col) override
+    {
+        if (col == -1)
+            return set(pos, m_nTextCol, rText);
+        return set(pos, col, rText);
+    }
+
+    virtual bool get_toggle(int pos, int col) const override
+    {
+        return get_bool(pos, col);
+    }
+
+    virtual void set_toggle(int pos, bool bOn, int col) override
+    {
+        // checkbuttons are invisible until toggled on or off
+        set(pos, m_aToggleVisMap[col], true);
+        return set(pos, col, bOn);
     }
 
     virtual OUString get_id(int pos) const override
     {
-        return get(pos, 1);
+        return get(pos, m_nIdCol);
+    }
+
+    virtual void set_id(int pos, const OUString& rId) override
+    {
+        return set(pos, m_nIdCol, rId);
     }
 
     virtual int get_selected_index() const override
     {
+        assert(gtk_tree_view_get_model(m_pTreeView) && "don't request selection when frozen");
         int nRet = -1;
-        GtkTreeIter iter;
-        GtkTreeModel* pModel;
-        if (gtk_tree_selection_get_selected(gtk_tree_view_get_selection(m_pTreeView), &pModel, &iter))
+        GtkTreeSelection *selection = gtk_tree_view_get_selection(m_pTreeView);
+        if (gtk_tree_selection_get_mode(selection) != GTK_SELECTION_MULTIPLE)
         {
-            GtkTreePath* path = gtk_tree_model_get_path(pModel, &iter);
-            nRet = gtk_tree_path_get_indices(path)[0];
-            gtk_tree_path_free(path);
+            GtkTreeIter iter;
+            GtkTreeModel* pModel;
+            if (gtk_tree_selection_get_selected(gtk_tree_view_get_selection(m_pTreeView), &pModel, &iter))
+            {
+                GtkTreePath* path = gtk_tree_model_get_path(pModel, &iter);
+                nRet = gtk_tree_path_get_indices(path)[0];
+                gtk_tree_path_free(path);
+            }
+        }
+        else
+        {
+            auto vec = get_selected_rows();
+            return vec.empty() ? -1 : vec[0];
         }
         return nRet;
+    }
+
+    virtual std::unique_ptr<weld::TreeIter> make_iterator(const weld::TreeIter* pOrig) const override
+    {
+        return std::unique_ptr<weld::TreeIter>(new GtkInstanceTreeIter(static_cast<const GtkInstanceTreeIter*>(pOrig)));
+    }
+
+    virtual void copy_iterator(const weld::TreeIter& rSource, weld::TreeIter& rDest) const override
+    {
+        const GtkInstanceTreeIter& rGtkSource(static_cast<const GtkInstanceTreeIter&>(rSource));
+        GtkInstanceTreeIter& rGtkDest(static_cast<GtkInstanceTreeIter&>(rDest));
+        rGtkDest.iter = rGtkSource.iter;
+    }
+
+    virtual bool get_selected(weld::TreeIter* pIter) const override
+    {
+        GtkInstanceTreeIter* pGtkIter = static_cast<GtkInstanceTreeIter*>(pIter);
+        return gtk_tree_selection_get_selected(gtk_tree_view_get_selection(m_pTreeView), nullptr, pGtkIter ? &pGtkIter->iter : nullptr);
+    }
+
+    virtual bool get_cursor(weld::TreeIter* pIter) const override
+    {
+        GtkInstanceTreeIter* pGtkIter = static_cast<GtkInstanceTreeIter*>(pIter);
+        GtkTreePath* path;
+        gtk_tree_view_get_cursor(m_pTreeView, &path, nullptr);
+        if (pGtkIter && path)
+        {
+            GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+            gtk_tree_model_get_iter(pModel, &pGtkIter->iter, path);
+        }
+        return path != nullptr;
+    }
+
+    virtual void set_cursor(const weld::TreeIter& rIter) override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        gtk_tree_view_set_cursor(m_pTreeView, path, nullptr, false);
+        gtk_tree_path_free(path);
+    }
+
+    virtual bool get_iter_first(weld::TreeIter& rIter) const override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        return gtk_tree_model_get_iter_first(pModel, &rGtkIter.iter);
+    }
+
+    virtual bool iter_next_sibling(weld::TreeIter& rIter) const override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        return gtk_tree_model_iter_next(pModel, &rGtkIter.iter);
+    }
+
+    virtual bool iter_next(weld::TreeIter& rIter) const override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter iter = rGtkIter.iter;
+        if (iter_children(rGtkIter))
+            return true;
+        GtkTreeIter tmp = iter;
+        if (gtk_tree_model_iter_next(pModel, &tmp))
+        {
+            rGtkIter.iter = tmp;
+            return true;
+        }
+        if (!gtk_tree_model_iter_parent(pModel, &tmp, &iter))
+            return false;
+        if (gtk_tree_model_iter_next(pModel, &tmp))
+        {
+            rGtkIter.iter = tmp;
+            return true;
+        }
+        return false;
+    }
+
+    virtual bool iter_children(weld::TreeIter& rIter) const override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter tmp;
+        gboolean ret = gtk_tree_model_iter_children(pModel, &tmp, &rGtkIter.iter);
+        rGtkIter.iter = tmp;
+        if (ret)
+        {
+            //on-demand dummy entry doesn't count
+            return get_text(rGtkIter) != "<dummy>";
+        }
+        return ret;
+    }
+
+    virtual bool iter_parent(weld::TreeIter& rIter) const override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreeIter tmp;
+        auto ret = gtk_tree_model_iter_parent(pModel, &tmp, &rGtkIter.iter);
+        rGtkIter.iter = tmp;
+        return ret;
+    }
+
+    virtual void remove(const weld::TreeIter& rIter) override
+    {
+        disable_notify_events();
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        gtk_tree_store_remove(m_pTreeStore, const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        enable_notify_events();
+    }
+
+    virtual void select(const weld::TreeIter& rIter) override
+    {
+        assert(gtk_tree_view_get_model(m_pTreeView) && "don't select when frozen");
+        disable_notify_events();
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        gtk_tree_selection_select_iter(gtk_tree_view_get_selection(m_pTreeView), const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        enable_notify_events();
+    }
+
+    virtual void scroll_to_row(const weld::TreeIter& rIter) override
+    {
+        assert(gtk_tree_view_get_model(m_pTreeView) && "don't select when frozen");
+        disable_notify_events();
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        gtk_tree_view_scroll_to_cell(m_pTreeView, path, nullptr, false, 0, 0);
+        gtk_tree_path_free(path);
+        enable_notify_events();
+    }
+
+    virtual void unselect(const weld::TreeIter& rIter) override
+    {
+        assert(gtk_tree_view_get_model(m_pTreeView) && "don't select when frozen");
+        disable_notify_events();
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        gtk_tree_selection_unselect_iter(gtk_tree_view_get_selection(m_pTreeView), const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        enable_notify_events();
+    }
+
+    virtual int get_iter_depth(const weld::TreeIter& rIter) const override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        int ret = gtk_tree_path_get_depth(path) - 1;
+        gtk_tree_path_free(path);
+        return ret;
+    }
+
+    virtual bool iter_has_child(const weld::TreeIter& rIter) const override
+    {
+        weld::TreeIter& rNonConstIter = const_cast<weld::TreeIter&>(rIter);
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rNonConstIter);
+        GtkTreeIter restore(rGtkIter.iter);
+        bool ret = iter_children(rNonConstIter);
+        rGtkIter.iter = restore;
+        return ret;
+    }
+
+    virtual bool get_row_expanded(const weld::TreeIter& rIter) const override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter));
+        bool ret = gtk_tree_view_row_expanded(m_pTreeView, path);
+        gtk_tree_path_free(path);
+        return ret;
+    }
+
+    virtual void expand_row(weld::TreeIter& rIter) override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, &rGtkIter.iter);
+        if (!gtk_tree_view_row_expanded(m_pTreeView, path))
+            gtk_tree_view_expand_row(m_pTreeView, path, false);
+        gtk_tree_path_free(path);
+    }
+
+    virtual void collapse_row(weld::TreeIter& rIter) override
+    {
+        GtkInstanceTreeIter& rGtkIter = static_cast<GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        GtkTreePath* path = gtk_tree_model_get_path(pModel, &rGtkIter.iter);
+        if (gtk_tree_view_row_expanded(m_pTreeView, path))
+            gtk_tree_view_collapse_row(m_pTreeView, path);
+        gtk_tree_path_free(path);
+    }
+
+    virtual OUString get_text(const weld::TreeIter& rIter) const override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        gchar* pStr;
+        gtk_tree_model_get(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter), m_nTextCol, &pStr, -1);
+        OUString sRet(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+        g_free(pStr);
+        return sRet;
+    }
+
+    virtual OUString get_id(const weld::TreeIter& rIter) const override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        GtkTreeModel *pModel = GTK_TREE_MODEL(m_pTreeStore);
+        gchar* pStr;
+        gtk_tree_model_get(pModel, const_cast<GtkTreeIter*>(&rGtkIter.iter), m_nIdCol, &pStr, -1);
+        OUString sRet(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+        g_free(pStr);
+        return sRet;
+    }
+
+    virtual void set_expander_image(const weld::TreeIter& rIter, const OUString& rExpanderName) override
+    {
+        const GtkInstanceTreeIter& rGtkIter = static_cast<const GtkInstanceTreeIter&>(rIter);
+        disable_notify_events();
+        GdkPixbuf* pixbuf = getPixbuf(rExpanderName);
+        gtk_tree_store_set(m_pTreeStore, const_cast<GtkTreeIter*>(&rGtkIter.iter), m_nExpanderImageCol, pixbuf, -1);
+        if (pixbuf)
+            g_object_unref(pixbuf);
+        enable_notify_events();
     }
 
     virtual void freeze() override
     {
         disable_notify_events();
-        g_object_ref(m_pListStore);
+        g_object_ref(m_pTreeStore);
+        GtkInstanceContainer::freeze();
         gtk_tree_view_set_model(m_pTreeView, nullptr);
+        if (m_xSorter)
+        {
+            GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeStore);
+            gtk_tree_sortable_set_sort_column_id(pSortable, GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, GTK_SORT_ASCENDING);
+        }
         enable_notify_events();
     }
 
     virtual void thaw() override
     {
         disable_notify_events();
-        gtk_tree_view_set_model(m_pTreeView, GTK_TREE_MODEL(m_pListStore));
-        g_object_unref(m_pListStore);
+        if (m_xSorter)
+        {
+            GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeStore);
+            gtk_tree_sortable_set_sort_column_id(pSortable, m_nTextCol, GTK_SORT_ASCENDING);
+        }
+        gtk_tree_view_set_model(m_pTreeView, GTK_TREE_MODEL(m_pTreeStore));
+        GtkInstanceContainer::thaw();
+        g_object_unref(m_pTreeStore);
         enable_notify_events();
     }
 
@@ -3307,21 +5681,63 @@ public:
         {
             gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(pParent), nWidth);
             gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(pParent), nHeight);
+            return;
         }
-        else
-            gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
+        gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
     }
 
-    virtual void set_selection_mode(bool bMultiple) override
+    virtual Size get_preferred_size() const override
+    {
+        GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
+        if (GTK_IS_SCROLLED_WINDOW(pParent))
+        {
+            return Size(gtk_scrolled_window_get_min_content_width(GTK_SCROLLED_WINDOW(pParent)),
+                        gtk_scrolled_window_get_min_content_height(GTK_SCROLLED_WINDOW(pParent)));
+        }
+        GtkRequisition size;
+        gtk_widget_get_preferred_size(m_pWidget, nullptr, &size);
+        return Size(size.width, size.height);
+    }
+
+    virtual void set_visible(bool visible) override
+    {
+        GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
+        if (GTK_IS_SCROLLED_WINDOW(pParent))
+            gtk_widget_set_visible(pParent, visible);
+        gtk_widget_set_visible(m_pWidget, visible);
+    }
+
+    virtual void show() override
+    {
+        GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
+        if (GTK_IS_SCROLLED_WINDOW(pParent))
+            gtk_widget_show(pParent);
+        gtk_widget_show(m_pWidget);
+    }
+
+    virtual void hide() override
+    {
+        GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
+        if (GTK_IS_SCROLLED_WINDOW(pParent))
+            gtk_widget_hide(pParent);
+        gtk_widget_hide(m_pWidget);
+    }
+
+    virtual void set_selection_mode(SelectionMode eMode) override
     {
         disable_notify_events();
-        gtk_tree_selection_set_mode(gtk_tree_view_get_selection(m_pTreeView), bMultiple ? GTK_SELECTION_MULTIPLE : GTK_SELECTION_SINGLE);
+        gtk_tree_selection_set_mode(gtk_tree_view_get_selection(m_pTreeView), VclToGtk(eMode));
         enable_notify_events();
     }
 
     virtual int count_selected_rows() const override
     {
         return gtk_tree_selection_count_selected_rows(gtk_tree_view_get_selection(m_pTreeView));
+    }
+
+    int starts_with(const OUString& rStr, int col, int nStartRow)
+    {
+        return ::starts_with(GTK_TREE_MODEL(m_pTreeStore), rStr, col, nStartRow);
     }
 
     virtual void disable_notify_events() override
@@ -3340,11 +5756,16 @@ public:
 
     virtual ~GtkInstanceTreeView() override
     {
-        g_signal_handler_disconnect(gtk_tree_view_get_selection(m_pTreeView), m_nChangedSignalId);
+        g_signal_handler_disconnect(m_pTreeView, m_nTestExpandRowSignalId);
         g_signal_handler_disconnect(m_pTreeView, m_nRowActivatedSignalId);
+        g_signal_handler_disconnect(gtk_tree_view_get_selection(m_pTreeView), m_nChangedSignalId);
     }
 };
 
+IMPL_LINK_NOARG(GtkInstanceTreeView, async_signal_changed, void*, void)
+{
+    signal_changed();
+}
 
 class GtkInstanceSpinButton : public GtkInstanceEntry, public virtual weld::SpinButton
 {
@@ -3353,6 +5774,8 @@ private:
     gulong m_nValueChangedSignalId;
     gulong m_nOutputSignalId;
     gulong m_nInputSignalId;
+    bool m_bFormatting;
+    bool m_bBlockOutput;
 
     static void signalValueChanged(GtkSpinButton*, gpointer widget)
     {
@@ -3361,25 +5784,35 @@ private:
         pThis->signal_value_changed();
     }
 
+    bool guarded_signal_output()
+    {
+        if (m_bBlockOutput)
+            return true;
+        m_bFormatting = true;
+        bool bRet = signal_output();
+        m_bFormatting = false;
+        return bRet;
+    }
+
     static gboolean signalOutput(GtkSpinButton*, gpointer widget)
     {
         GtkInstanceSpinButton* pThis = static_cast<GtkInstanceSpinButton*>(widget);
         SolarMutexGuard aGuard;
-        return pThis->signal_output();
+        return pThis->guarded_signal_output();
     }
 
-    static gboolean signalInput(GtkSpinButton*, gdouble* new_value, gpointer widget)
+    static gint signalInput(GtkSpinButton*, gdouble* new_value, gpointer widget)
     {
         GtkInstanceSpinButton* pThis = static_cast<GtkInstanceSpinButton*>(widget);
         SolarMutexGuard aGuard;
         int result;
         TriState eHandled = pThis->signal_input(&result);
         if (eHandled == TRISTATE_INDET)
-            return false;
+            return 0;
         if (eHandled == TRISTATE_TRUE)
         {
-            *new_value = result;
-            return true;
+            *new_value = pThis->toGtk(result);
+            return 1;
         }
         return GTK_INPUT_ERROR;
     }
@@ -3395,12 +5828,14 @@ private:
     }
 
 public:
-    GtkInstanceSpinButton(GtkSpinButton* pButton, bool bTakeOwnership)
-        : GtkInstanceEntry(GTK_ENTRY(pButton), bTakeOwnership)
+    GtkInstanceSpinButton(GtkSpinButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceEntry(GTK_ENTRY(pButton), pBuilder, bTakeOwnership)
         , m_pButton(pButton)
         , m_nValueChangedSignalId(g_signal_connect(pButton, "value-changed", G_CALLBACK(signalValueChanged), this))
         , m_nOutputSignalId(g_signal_connect(pButton, "output", G_CALLBACK(signalOutput), this))
         , m_nInputSignalId(g_signal_connect(pButton, "input", G_CALLBACK(signalInput), this))
+        , m_bFormatting(false)
+        , m_bBlockOutput(false)
     {
     }
 
@@ -3413,6 +5848,22 @@ public:
     {
         disable_notify_events();
         gtk_spin_button_set_value(m_pButton, toGtk(value));
+        enable_notify_events();
+    }
+
+    virtual void set_text(const OUString& rText) override
+    {
+        disable_notify_events();
+        gtk_entry_set_text(GTK_ENTRY(m_pButton), OUStringToOString(rText, RTL_TEXTENCODING_UTF8).getStr());
+        // tdf#122786 if we're just formatting a value, then we're done,
+        // however if set_text has been called directly we want to update our
+        // value from this new text, but don't want to reformat with that value
+        if (!m_bFormatting)
+        {
+            m_bBlockOutput = true;
+            gtk_spin_button_update(m_pButton);
+            m_bBlockOutput = false;
+        }
         enable_notify_events();
     }
 
@@ -3478,13 +5929,176 @@ public:
     }
 };
 
+class GtkInstanceFormattedSpinButton : public GtkInstanceEntry, public virtual weld::FormattedSpinButton
+{
+private:
+    GtkSpinButton* m_pButton;
+    SvNumberFormatter* m_pFormatter;
+    Color* m_pLastOutputColor;
+    sal_uInt32 m_nFormatKey;
+    gulong m_nValueChangedSignalId;
+    gulong m_nOutputSignalId;
+    gulong m_nInputSignalId;
+
+    bool signal_output()
+    {
+        if (!m_pFormatter)
+            return false;
+        double dVal = get_value();
+        OUString sNewText;
+        if (m_pFormatter->IsTextFormat(m_nFormatKey))
+        {
+            // first convert the number as string in standard format
+            OUString sTemp;
+            m_pFormatter->GetOutputString(dVal, 0, sTemp, &m_pLastOutputColor);
+            // then encode the string in the corresponding text format
+            m_pFormatter->GetOutputString(sTemp, m_nFormatKey, sNewText, &m_pLastOutputColor);
+        }
+        else
+        {
+            m_pFormatter->GetInputLineString(dVal, m_nFormatKey, sNewText);
+        }
+        set_text(sNewText);
+        return true;
+    }
+
+    static gboolean signalOutput(GtkSpinButton*, gpointer widget)
+    {
+        GtkInstanceFormattedSpinButton* pThis = static_cast<GtkInstanceFormattedSpinButton*>(widget);
+        SolarMutexGuard aGuard;
+        return pThis->signal_output();
+    }
+
+    gint signal_input(double* value)
+    {
+        if (!m_pFormatter)
+            return 0;
+
+        sal_uInt32 nFormatKey = m_nFormatKey; // IsNumberFormat changes the FormatKey!
+
+        if (m_pFormatter->IsTextFormat(nFormatKey))
+            // for detection of values like "1,1" in fields that are formatted as text
+            nFormatKey = 0;
+
+        OUString sText(get_text());
+
+        // special treatment for percentage formatting
+        if (m_pFormatter->GetType(m_nFormatKey) == SvNumFormatType::PERCENT)
+        {
+            // the language of our format
+            LanguageType eLanguage = m_pFormatter->GetEntry(m_nFormatKey)->GetLanguage();
+            // the default number format for this language
+            sal_uLong nStandardNumericFormat = m_pFormatter->GetStandardFormat(SvNumFormatType::NUMBER, eLanguage);
+
+            sal_uInt32 nTempFormat = nStandardNumericFormat;
+            double dTemp;
+            if (m_pFormatter->IsNumberFormat(sText, nTempFormat, dTemp) &&
+                SvNumFormatType::NUMBER == m_pFormatter->GetType(nTempFormat))
+                // the string is equivalent to a number formatted one (has no % sign) -> append it
+                sText += "%";
+            // (with this, a input of '3' becomes '3%', which then by the formatter is translated
+            // into 0.03. Without this, the formatter would give us the double 3 for an input '3',
+            // which equals 300 percent.
+        }
+        if (!m_pFormatter->IsNumberFormat(sText, nFormatKey, *value))
+            return GTK_INPUT_ERROR;
+
+        return 1;
+    }
+
+    static gint signalInput(GtkSpinButton*, gdouble* new_value, gpointer widget)
+    {
+        GtkInstanceFormattedSpinButton* pThis = static_cast<GtkInstanceFormattedSpinButton*>(widget);
+        SolarMutexGuard aGuard;
+        return pThis->signal_input(new_value);
+    }
+
+    static void signalValueChanged(GtkSpinButton*, gpointer widget)
+    {
+        GtkInstanceFormattedSpinButton* pThis = static_cast<GtkInstanceFormattedSpinButton*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_value_changed();
+    }
+
+public:
+    GtkInstanceFormattedSpinButton(GtkSpinButton* pButton, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceEntry(GTK_ENTRY(pButton), pBuilder, bTakeOwnership)
+        , m_pButton(pButton)
+        , m_pFormatter(nullptr)
+        , m_pLastOutputColor(nullptr)
+        , m_nFormatKey(0)
+        , m_nValueChangedSignalId(g_signal_connect(pButton, "value-changed", G_CALLBACK(signalValueChanged), this))
+        , m_nOutputSignalId(g_signal_connect(pButton, "output", G_CALLBACK(signalOutput), this))
+        , m_nInputSignalId(g_signal_connect(pButton, "input", G_CALLBACK(signalInput), this))
+    {
+    }
+
+    virtual double get_value() const override
+    {
+        return gtk_spin_button_get_value(m_pButton);
+    }
+
+    virtual void set_value(double value) override
+    {
+        disable_notify_events();
+        gtk_spin_button_set_value(m_pButton, value);
+        enable_notify_events();
+    }
+
+    virtual void set_range(double min, double max) override
+    {
+        disable_notify_events();
+        gtk_spin_button_set_range(m_pButton, min, max);
+        enable_notify_events();
+    }
+
+    virtual void get_range(double& min, double& max) const override
+    {
+        gtk_spin_button_get_range(m_pButton, &min, &max);
+    }
+
+    virtual void set_formatter(SvNumberFormatter* pFormatter) override
+    {
+        m_pFormatter = pFormatter;
+
+        // calc the default format key from the Office's UI locale
+        if (m_pFormatter)
+        {
+            // get the Office's locale and translate
+            LanguageType eSysLanguage = Application::GetSettings().GetUILanguageTag().getLanguageType( false);
+            // get the standard numeric format for this language
+            m_nFormatKey = m_pFormatter->GetStandardFormat( SvNumFormatType::NUMBER, eSysLanguage );
+        }
+        else
+            m_nFormatKey = 0;
+        signal_output();
+    }
+
+    virtual sal_Int32 get_format_key() const override
+    {
+        return m_nFormatKey;
+    }
+
+    virtual void set_format_key(sal_Int32 nFormatKey) override
+    {
+        m_nFormatKey = nFormatKey;
+    }
+
+    virtual ~GtkInstanceFormattedSpinButton() override
+    {
+        g_signal_handler_disconnect(m_pButton, m_nInputSignalId);
+        g_signal_handler_disconnect(m_pButton, m_nOutputSignalId);
+        g_signal_handler_disconnect(m_pButton, m_nValueChangedSignalId);
+    }
+};
+
 class GtkInstanceLabel : public GtkInstanceWidget, public virtual weld::Label
 {
 private:
     GtkLabel* m_pLabel;
 public:
-    GtkInstanceLabel(GtkLabel* pLabel, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pLabel), bTakeOwnership)
+    GtkInstanceLabel(GtkLabel* pLabel, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pLabel), pBuilder, bTakeOwnership)
         , m_pLabel(pLabel)
     {
     }
@@ -3511,8 +6125,8 @@ class GtkInstanceTextView : public GtkInstanceContainer, public virtual weld::Te
 private:
     GtkTextView* m_pTextView;
 public:
-    GtkInstanceTextView(GtkTextView* pTextView, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pTextView), bTakeOwnership)
+    GtkInstanceTextView(GtkTextView* pTextView, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pTextView), pBuilder, bTakeOwnership)
         , m_pTextView(pTextView)
     {
     }
@@ -3524,9 +6138,9 @@ public:
         {
             gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(pParent), nWidth);
             gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(pParent), nHeight);
+            return;
         }
-        else
-            gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
+        gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
     }
 
     virtual void set_text(const OUString& rText) override
@@ -3610,6 +6224,11 @@ static MouseEventModifiers ImplGetMouseMoveMode(sal_uInt16 nCode)
     return nMode;
 }
 
+namespace
+{
+    AtkObject* (*default_drawing_area_get_accessible)(GtkWidget *widget);
+}
+
 class GtkInstanceDrawingArea : public GtkInstanceWidget, public virtual weld::DrawingArea
 {
 private:
@@ -3617,16 +6236,15 @@ private:
     a11yref m_xAccessible;
     AtkObject *m_pAccessible;
     ScopedVclPtrInstance<VirtualDevice> m_xDevice;
-    std::vector<unsigned char> m_aBuffer;
     cairo_surface_t* m_pSurface;
+    sal_uInt16 m_nLastMouseButton;
     gulong m_nDrawSignalId;
-    gulong m_nSizeAllocateSignalId;
     gulong m_nButtonPressSignalId;
     gulong m_nMotionSignalId;
     gulong m_nButtonReleaseSignalId;
-    gulong m_nKeyPressSignalId;
-    gulong m_nKeyReleaseSignalId;
     gulong m_nStyleUpdatedSignalId;
+    gulong m_nQueryTooltip;
+    gulong m_nPopupMenu;
 
     static gboolean signalDraw(GtkWidget*, cairo_t* cr, gpointer widget)
     {
@@ -3655,28 +6273,11 @@ private:
                              aFocusRect.Left(), aFocusRect.Top(), aFocusRect.GetWidth(), aFocusRect.GetHeight());
         }
     }
-    static void signalSizeAllocate(GtkWidget*, GdkRectangle* allocation, gpointer widget)
+    virtual void signal_size_allocate(guint nWidth, guint nHeight) override
     {
-        GtkInstanceDrawingArea* pThis = static_cast<GtkInstanceDrawingArea*>(widget);
-        SolarMutexGuard aGuard;
-        pThis->signal_size_allocate(allocation->width, allocation->height);
-    }
-    void signal_size_allocate(guint nWidth, guint nHeight)
-    {
-        if (m_pSurface)
-            cairo_surface_destroy(m_pSurface);
-
-        const int nScale = gtk_widget_get_scale_factor(GTK_WIDGET(m_pDrawingArea));
-        const int nStride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, nWidth * nScale);
-        m_aBuffer.resize(nHeight * nScale * nStride);
-        m_xDevice->SetOutputSizePixelScaleOffsetAndBuffer(Size(nWidth, nHeight), Fraction(1.0), Point(),
-                                                          m_aBuffer.data());
-        m_pSurface = cairo_image_surface_create_for_data(m_aBuffer.data(), CAIRO_FORMAT_ARGB32,
-                                                         nWidth * nScale, nHeight * nScale, nStride);
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-        cairo_surface_set_device_scale(m_pSurface, nScale, nScale);
-#endif
-        m_aSizeAllocateHdl.Call(Size(nWidth, nHeight));
+        m_xDevice->SetOutputSizePixel(Size(nWidth, nHeight));
+        m_pSurface = get_underlying_cairo_surface(*m_xDevice);
+        GtkInstanceWidget::signal_size_allocate(nWidth, nHeight);
     }
     static void signalStyleUpdated(GtkWidget*, gpointer widget)
     {
@@ -3687,6 +6288,39 @@ private:
     void signal_style_updated()
     {
         m_aStyleUpdatedHdl.Call(*this);
+    }
+    static gboolean signalQueryTooltip(GtkWidget* pGtkWidget, gint x, gint y,
+                                         gboolean /*keyboard_mode*/, GtkTooltip *tooltip,
+                                         gpointer widget)
+    {
+        GtkInstanceDrawingArea* pThis = static_cast<GtkInstanceDrawingArea*>(widget);
+        tools::Rectangle aHelpArea(x, y);
+        OUString aTooltip = pThis->signal_query_tooltip(aHelpArea);
+        if (aTooltip.isEmpty())
+            return false;
+        gtk_tooltip_set_text(tooltip, OUStringToOString(aTooltip, RTL_TEXTENCODING_UTF8).getStr());
+        GdkRectangle aGdkHelpArea;
+        aGdkHelpArea.x = aHelpArea.Left();
+        aGdkHelpArea.y = aHelpArea.Top();
+        aGdkHelpArea.width = aHelpArea.GetWidth();
+        aGdkHelpArea.height = aHelpArea.GetHeight();
+        if (AllSettings::GetLayoutRTL())
+            aGdkHelpArea.x = gtk_widget_get_allocated_width(pGtkWidget) - aGdkHelpArea.width - 1 - aGdkHelpArea.x;
+        gtk_tooltip_set_tip_area(tooltip, &aGdkHelpArea);
+        return true;
+    }
+    bool signal_popup_menu(const Point& rPos)
+    {
+        return m_aPopupMenuHdl.Call(rPos);
+    }
+    static gboolean signalPopupMenu(GtkWidget* pWidget, gpointer widget)
+    {
+        GtkInstanceDrawingArea* pThis = static_cast<GtkInstanceDrawingArea*>(widget);
+        SolarMutexGuard aGuard;
+        //center it when we don't know where else to use
+        Point aPos(gtk_widget_get_allocated_width(pWidget) / 2,
+                   gtk_widget_get_allocated_height(pWidget) / 2);
+        return pThis->signal_popup_menu(aPos);
     }
     static gboolean signalButton(GtkWidget*, GdkEventButton* pEvent, gpointer widget)
     {
@@ -3729,26 +6363,35 @@ private:
                 return false;
         }
 
-        sal_uInt16 nButton;
         switch (pEvent->button)
         {
             case 1:
-                nButton = MOUSE_LEFT;
+                m_nLastMouseButton = MOUSE_LEFT;
                 break;
             case 2:
-                nButton = MOUSE_MIDDLE;
+                m_nLastMouseButton = MOUSE_MIDDLE;
                 break;
             case 3:
-                nButton = MOUSE_RIGHT;
+                m_nLastMouseButton = MOUSE_RIGHT;
                 break;
             default:
                 return false;
         }
 
         Point aPos(pEvent->x, pEvent->y);
+        if (AllSettings::GetLayoutRTL())
+            aPos.setX(gtk_widget_get_allocated_width(m_pWidget) - 1 - aPos.X());
+
+        if (gdk_event_triggers_context_menu(reinterpret_cast<GdkEvent*>(pEvent)) && pEvent->type == GDK_BUTTON_PRESS)
+        {
+            //if handled for context menu, stop processing
+            if (signal_popup_menu(aPos))
+                return true;
+        }
+
         sal_uInt32 nModCode = GtkSalFrame::GetMouseModCode(pEvent->state);
-        sal_uInt16 nCode = nButton | (nModCode & (KEY_SHIFT | KEY_MOD1 | KEY_MOD2));
-        MouseEvent aMEvt(aPos, nClicks, ImplGetMouseButtonMode(nButton, nModCode), nCode, nCode);
+        sal_uInt16 nCode = m_nLastMouseButton | (nModCode & (KEY_SHIFT | KEY_MOD1 | KEY_MOD2));
+        MouseEvent aMEvt(aPos, nClicks, ImplGetMouseButtonMode(m_nLastMouseButton, nModCode), nCode, nCode);
 
         if (nEventType == SalEvent::MouseButtonDown)
             m_aMousePressHdl.Call(aMEvt);
@@ -3766,57 +6409,35 @@ private:
     bool signal_motion(GdkEventMotion* pEvent)
     {
         Point aPos(pEvent->x, pEvent->y);
+        if (AllSettings::GetLayoutRTL())
+            aPos.setX(gtk_widget_get_allocated_width(m_pWidget) - 1 - aPos.X());
         sal_uInt32 nModCode = GtkSalFrame::GetMouseModCode(pEvent->state);
-        sal_uInt16 nCode = (nModCode & (KEY_SHIFT | KEY_MOD1 | KEY_MOD2));
+        sal_uInt16 nCode = m_nLastMouseButton | (nModCode & (KEY_SHIFT | KEY_MOD1 | KEY_MOD2));
         MouseEvent aMEvt(aPos, 0, ImplGetMouseMoveMode(nModCode), nCode, nCode);
 
         m_aMouseMotionHdl.Call(aMEvt);
         return true;
     }
-    static gboolean signalKey(GtkWidget*, GdkEventKey* pEvent, gpointer widget)
-    {
-        GtkInstanceDrawingArea* pThis = static_cast<GtkInstanceDrawingArea*>(widget);
-        SolarMutexGuard aGuard;
-        return pThis->signal_key(pEvent);
-    }
-    gboolean signal_key(GdkEventKey* pEvent)
-    {
-        sal_uInt16 nKeyCode = GtkSalFrame::GetKeyCode(pEvent->keyval);
-        if (nKeyCode == 0)
-        {
-            guint updated_keyval = GtkSalFrame::GetKeyValFor(gdk_keymap_get_default(), pEvent->hardware_keycode, pEvent->group);
-            nKeyCode = GtkSalFrame::GetKeyCode(updated_keyval);
-        }
-        nKeyCode |= GtkSalFrame::GetKeyModCode(pEvent->state);
-        KeyEvent aKeyEvt(gdk_keyval_to_unicode(pEvent->keyval), nKeyCode, 0);
-
-        bool bProcessed;
-        if (pEvent->type == GDK_KEY_PRESS)
-            bProcessed = m_aKeyPressHdl.Call(aKeyEvt);
-        else
-            bProcessed = m_aKeyReleaseHdl.Call(aKeyEvt);
-
-        return bProcessed;
-    }
-
 public:
-    GtkInstanceDrawingArea(GtkDrawingArea* pDrawingArea, const a11yref& rA11y, bool bTakeOwnership)
-        : GtkInstanceWidget(GTK_WIDGET(pDrawingArea), bTakeOwnership)
+    GtkInstanceDrawingArea(GtkDrawingArea* pDrawingArea, GtkInstanceBuilder* pBuilder, const a11yref& rA11y, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pDrawingArea), pBuilder, bTakeOwnership)
         , m_pDrawingArea(pDrawingArea)
         , m_xAccessible(rA11y)
         , m_pAccessible(nullptr)
         , m_xDevice(nullptr, Size(1, 1), DeviceFormat::DEFAULT)
         , m_pSurface(nullptr)
+        , m_nLastMouseButton(0)
         , m_nDrawSignalId(g_signal_connect(m_pDrawingArea, "draw", G_CALLBACK(signalDraw), this))
-        , m_nSizeAllocateSignalId(g_signal_connect(m_pDrawingArea, "size_allocate", G_CALLBACK(signalSizeAllocate), this))
         , m_nButtonPressSignalId(g_signal_connect(m_pDrawingArea, "button-press-event", G_CALLBACK(signalButton), this))
         , m_nMotionSignalId(g_signal_connect(m_pDrawingArea, "motion-notify-event", G_CALLBACK(signalMotion), this))
         , m_nButtonReleaseSignalId(g_signal_connect(m_pDrawingArea, "button-release-event", G_CALLBACK(signalButton), this))
-        , m_nKeyPressSignalId(g_signal_connect(m_pDrawingArea, "key-press-event", G_CALLBACK(signalKey), this))
-        , m_nKeyReleaseSignalId(g_signal_connect(m_pDrawingArea,"key-release-event", G_CALLBACK(signalKey), this))
         , m_nStyleUpdatedSignalId(g_signal_connect(m_pDrawingArea,"style-updated", G_CALLBACK(signalStyleUpdated), this))
+        , m_nQueryTooltip(g_signal_connect(m_pDrawingArea, "query-tooltip", G_CALLBACK(signalQueryTooltip), this))
+        , m_nPopupMenu(g_signal_connect(m_pDrawingArea, "popup-menu", G_CALLBACK(signalPopupMenu), this))
     {
+        gtk_widget_set_has_tooltip(m_pWidget, true);
         g_object_set_data(G_OBJECT(m_pDrawingArea), "g-lo-GtkInstanceDrawingArea", this);
+        m_xDevice->EnableRTL(get_direction());
     }
 
     AtkObject* GetAtkObject(AtkObject* pDefaultAccessible)
@@ -3825,8 +6446,15 @@ public:
         {
             GtkWidget* pParent = gtk_widget_get_parent(m_pWidget);
             m_pAccessible = atk_object_wrapper_new(m_xAccessible, gtk_widget_get_accessible(pParent), pDefaultAccessible);
+            g_object_ref(m_pAccessible);
         }
         return m_pAccessible;
+    }
+
+    virtual void set_direction(bool bRTL) override
+    {
+        GtkInstanceWidget::set_direction(bRTL);
+        m_xDevice->EnableRTL(bRTL);
     }
 
     virtual void queue_draw() override
@@ -3837,6 +6465,11 @@ public:
     virtual void queue_draw_area(int x, int y, int width, int height) override
     {
         gtk_widget_queue_draw_area(GTK_WIDGET(m_pDrawingArea), x, y, width, height);
+    }
+
+    virtual void queue_resize() override
+    {
+        gtk_widget_queue_resize(GTK_WIDGET(m_pDrawingArea));
     }
 
     virtual a11yref get_accessible_parent() override
@@ -3857,68 +6490,176 @@ public:
         return uno::Reference<css::accessibility::XAccessibleRelationSet>();
     }
 
+    virtual Point get_accessible_location() override
+    {
+        AtkObject* pAtkObject = default_drawing_area_get_accessible(m_pWidget);
+        gint x(0), y(0);
+        if (pAtkObject && ATK_IS_COMPONENT(pAtkObject))
+            atk_component_get_extents(ATK_COMPONENT(pAtkObject), &x, &y, nullptr, nullptr, ATK_XY_WINDOW);
+        return Point(x, y);
+    }
+
+    virtual void set_accessible_name(const OUString& rName) override
+    {
+        AtkObject* pAtkObject = default_drawing_area_get_accessible(m_pWidget);
+        if (!pAtkObject)
+            return;
+        atk_object_set_name(pAtkObject, OUStringToOString(rName, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
+    virtual OUString get_accessible_name() const override
+    {
+        AtkObject* pAtkObject = default_drawing_area_get_accessible(m_pWidget);
+        const char* pStr = pAtkObject ? atk_object_get_name(pAtkObject) : nullptr;
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
+    virtual OUString get_accessible_description() const override
+    {
+        AtkObject* pAtkObject = default_drawing_area_get_accessible(m_pWidget);
+        const char* pStr = pAtkObject ? atk_object_get_description(pAtkObject) : nullptr;
+        return OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+    }
+
     virtual ~GtkInstanceDrawingArea() override
     {
         g_object_steal_data(G_OBJECT(m_pDrawingArea), "g-lo-GtkInstanceDrawingArea");
         if (m_pAccessible)
             g_object_unref(m_pAccessible);
-        if (m_pSurface)
-            cairo_surface_destroy(m_pSurface);
+        css::uno::Reference<css::lang::XComponent> xComp(m_xAccessible, css::uno::UNO_QUERY);
+        if (xComp.is())
+            xComp->dispose();
+        g_signal_handler_disconnect(m_pDrawingArea, m_nPopupMenu);
+        g_signal_handler_disconnect(m_pDrawingArea, m_nQueryTooltip);
         g_signal_handler_disconnect(m_pDrawingArea, m_nStyleUpdatedSignalId);
-        g_signal_handler_disconnect(m_pDrawingArea, m_nKeyPressSignalId);
-        g_signal_handler_disconnect(m_pDrawingArea, m_nKeyReleaseSignalId);
         g_signal_handler_disconnect(m_pDrawingArea, m_nButtonPressSignalId);
         g_signal_handler_disconnect(m_pDrawingArea, m_nMotionSignalId);
         g_signal_handler_disconnect(m_pDrawingArea, m_nButtonReleaseSignalId);
-        g_signal_handler_disconnect(m_pDrawingArea, m_nSizeAllocateSignalId);
         g_signal_handler_disconnect(m_pDrawingArea, m_nDrawSignalId);
+    }
+
+    virtual OutputDevice& get_ref_device() override
+    {
+        return *m_xDevice;
     }
 };
 
-namespace
-{
-    gint sort_func(GtkTreeModel* pModel, GtkTreeIter* a, GtkTreeIter* b, gpointer data)
-    {
-        comphelper::string::NaturalStringSorter* pSorter = static_cast<comphelper::string::NaturalStringSorter*>(data);
-        gchar* pName1;
-        gchar* pName2;
-        gtk_tree_model_get(pModel, a, 0, &pName1, -1);
-        gtk_tree_model_get(pModel, b, 0, &pName2, -1);
-        gint ret = pSorter->compare(OUString(pName1, strlen(pName1), RTL_TEXTENCODING_UTF8),
-                                    OUString(pName2, strlen(pName2), RTL_TEXTENCODING_UTF8));
-        g_free(pName1);
-        g_free(pName2);
-        return ret;
-    }
-}
-
-class GtkInstanceComboBoxText : public GtkInstanceContainer, public virtual weld::ComboBoxText
+class GtkInstanceComboBox : public GtkInstanceContainer, public vcl::ISearchableStringList, public virtual weld::ComboBox
 {
 private:
-    GtkComboBoxText* m_pComboBoxText;
+    GtkComboBox* m_pComboBox;
+    GtkTreeModel* m_pTreeModel;
+    GtkCellRenderer* m_pTextRenderer;
+    GtkMenu* m_pMenu;
+    GtkWidget* m_pToggleButton;
     std::unique_ptr<comphelper::string::NaturalStringSorter> m_xSorter;
+    vcl::QuickSelectionEngine m_aQuickSelectionEngine;
+    std::vector<int> m_aSeparatorRows;
     gboolean m_bPopupActive;
+    bool m_bAutoComplete;
+    gulong m_nToggleFocusInSignalId;
+    gulong m_nToggleFocusOutSignalId;
     gulong m_nChangedSignalId;
     gulong m_nPopupShownSignalId;
+    gulong m_nKeyPressEventSignalId;
+    gulong m_nEntryInsertTextSignalId;
     gulong m_nEntryActivateSignalId;
+    gulong m_nEntryFocusOutSignalId;
+    guint m_nAutoCompleteIdleId;
+
+    static gboolean idleAutoComplete(gpointer widget)
+    {
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
+        pThis->auto_complete();
+        return false;
+    }
+
+    void auto_complete()
+    {
+        m_nAutoCompleteIdleId = 0;
+        OUString aStartText = get_active_text();
+        int nStartPos, nEndPos;
+        get_entry_selection_bounds(nStartPos, nEndPos);
+        int nMaxSelection = std::max(nStartPos, nEndPos);
+        if (nMaxSelection != aStartText.getLength())
+            return;
+
+        disable_notify_events();
+        int nActive = get_active();
+        int nStart = nActive;
+
+        if (nStart == -1)
+            nStart = 0;
+
+        // Try match case insensitive from current position
+        int nPos = starts_with(m_pTreeModel, aStartText, 0, nStart);
+        if (nPos == -1 && nStart != 0)
+        {
+            // Try match case insensitive, but from start
+            nPos = starts_with(m_pTreeModel, aStartText, 0, 0);
+        }
+
+        if (nPos != -1)
+        {
+            OUString aText = get_text(nPos);
+            if (aText != aStartText)
+                set_active_text(aText);
+            select_entry_region(aText.getLength(), aStartText.getLength());
+        }
+        enable_notify_events();
+    }
+
+    static void signalEntryInsertText(GtkEntry* pEntry, const gchar* pNewText, gint nNewTextLength,
+                                      gint* position, gpointer widget)
+    {
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_entry_insert_text(pEntry, pNewText, nNewTextLength, position);
+    }
+
+    void signal_entry_insert_text(GtkEntry* pEntry, const gchar* pNewText, gint nNewTextLength, gint* position)
+    {
+        // first filter inserted text
+        if (m_aEntryInsertTextHdl.IsSet())
+        {
+            OUString sText(pNewText, nNewTextLength, RTL_TEXTENCODING_UTF8);
+            const bool bContinue = m_aEntryInsertTextHdl.Call(sText);
+            if (bContinue && !sText.isEmpty())
+            {
+                OString sFinalText(OUStringToOString(sText, RTL_TEXTENCODING_UTF8));
+                g_signal_handlers_block_by_func(pEntry, gpointer(signalEntryInsertText), this);
+                gtk_editable_insert_text(GTK_EDITABLE(pEntry), sFinalText.getStr(), sFinalText.getLength(), position);
+                g_signal_handlers_unblock_by_func(pEntry, gpointer(signalEntryInsertText), this);
+            }
+            g_signal_stop_emission_by_name(pEntry, "insert-text");
+        }
+        if (m_bAutoComplete)
+        {
+            // now check for autocompletes
+            if (m_nAutoCompleteIdleId)
+                g_source_remove(m_nAutoCompleteIdleId);
+            m_nAutoCompleteIdleId = g_idle_add(idleAutoComplete, this);
+        }
+    }
 
     static void signalChanged(GtkComboBox*, gpointer widget)
     {
-        GtkInstanceComboBoxText* pThis = static_cast<GtkInstanceComboBoxText*>(widget);
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
         SolarMutexGuard aGuard;
         pThis->signal_changed();
     }
 
     static void signalPopupShown(GtkComboBox*, GParamSpec*, gpointer widget)
     {
-        GtkInstanceComboBoxText* pThis = static_cast<GtkInstanceComboBoxText*>(widget);
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
         pThis->signal_popup_shown();
     }
 
     void signal_popup_shown()
     {
+        m_aQuickSelectionEngine.Reset();
         gboolean bIsShown(false);
-        g_object_get(m_pComboBoxText, "popup-shown", &bIsShown, nullptr);
+        g_object_get(m_pComboBox, "popup-shown", &bIsShown, nullptr);
         if (m_bPopupActive != bIsShown)
         {
             m_bPopupActive = bIsShown;
@@ -3928,9 +6669,28 @@ private:
         }
     }
 
-    static void signalEntryActivate(GtkComboBox*, gpointer widget)
+    static void signalEntryFocusOut(GtkWidget*, GdkEvent*, gpointer widget)
     {
-        GtkInstanceComboBoxText* pThis = static_cast<GtkInstanceComboBoxText*>(widget);
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
+        pThis->signal_entry_focus_out();
+    }
+
+    void signal_entry_focus_out()
+    {
+        // if we have an untidy selection on losing focus remove the selection
+        int nStartPos, nEndPos;
+        if (get_entry_selection_bounds(nStartPos, nEndPos))
+        {
+            int nMin = std::min(nStartPos, nEndPos);
+            int nMax = std::max(nStartPos, nEndPos);
+            if (nMin != 0 || nMax != get_active_text().getLength())
+                select_entry_region(0, 0);
+        }
+    }
+
+    static void signalEntryActivate(GtkEntry*, gpointer widget)
+    {
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
         pThis->signal_entry_activate();
     }
 
@@ -3939,31 +6699,39 @@ private:
         if (m_aEntryActivateHdl.IsSet())
         {
             SolarMutexGuard aGuard;
-            m_aEntryActivateHdl.Call(*this);
-            g_signal_stop_emission_by_name(get_entry(), "activate");
+            if (m_aEntryActivateHdl.Call(*this))
+                g_signal_stop_emission_by_name(get_entry(), "activate");
         }
     }
 
     OUString get(int pos, int col) const
     {
         OUString sRet;
-        GtkTreeModel *pModel = gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText));
         GtkTreeIter iter;
-        if (gtk_tree_model_iter_nth_child(pModel, &iter, nullptr, pos))
+        if (gtk_tree_model_iter_nth_child(m_pTreeModel, &iter, nullptr, pos))
         {
             gchar* pStr;
-            gtk_tree_model_get(pModel, &iter, col, &pStr, -1);
+            gtk_tree_model_get(m_pTreeModel, &iter, col, &pStr, -1);
             sRet = OUString(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
             g_free(pStr);
         }
         return sRet;
     }
 
+    void set(int pos, int col, const OUString& rText)
+    {
+        GtkTreeIter iter;
+        if (gtk_tree_model_iter_nth_child(m_pTreeModel, &iter, nullptr, pos))
+        {
+            OString aStr(OUStringToOString(rText, RTL_TEXTENCODING_UTF8));
+            gtk_list_store_set(GTK_LIST_STORE(m_pTreeModel), &iter, col, aStr.getStr(), -1);
+        }
+    }
+
     int find(const OUString& rStr, int col) const
     {
-        GtkTreeModel *pModel = gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText));
         GtkTreeIter iter;
-        if (!gtk_tree_model_get_iter_first(pModel, &iter))
+        if (!gtk_tree_model_get_iter_first(m_pTreeModel, &iter))
             return -1;
 
         OString aStr(OUStringToOString(rStr, RTL_TEXTENCODING_UTF8).getStr());
@@ -3971,71 +6739,253 @@ private:
         do
         {
             gchar* pStr;
-            gtk_tree_model_get(pModel, &iter, col, &pStr, -1);
+            gtk_tree_model_get(m_pTreeModel, &iter, col, &pStr, -1);
             const bool bEqual = g_strcmp0(pStr, aStr.getStr()) == 0;
             g_free(pStr);
             if (bEqual)
                 return nRet;
             ++nRet;
-        } while (gtk_tree_model_iter_next(pModel, &iter));
+        } while (gtk_tree_model_iter_next(m_pTreeModel, &iter));
 
         return -1;
     }
 
     GtkEntry* get_entry()
     {
-        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBoxText));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
         if (!GTK_IS_ENTRY(pChild))
             return nullptr;
         return GTK_ENTRY(pChild);
     }
 
-    void setup_completion(GtkEntry* pEntry)
+    bool separator_function(int nIndex)
     {
-        if (gtk_entry_get_completion(pEntry))
+        return std::find(m_aSeparatorRows.begin(), m_aSeparatorRows.end(), nIndex) != m_aSeparatorRows.end();
+    }
+
+    static gboolean separatorFunction(GtkTreeModel* pTreeModel, GtkTreeIter* pIter, gpointer widget)
+    {
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
+        GtkTreePath* path = gtk_tree_model_get_path(pTreeModel, pIter);
+        int nIndex = gtk_tree_path_get_indices(path)[0];
+        gtk_tree_path_free(path);
+        return pThis->separator_function(nIndex);
+    }
+
+    // in the absence of a built-in solution for https://gitlab.gnome.org/GNOME/gtk/issues/310
+    // a) support typeahead for the case where there is no entry widget, typing ahead
+    // into the button itself will select via the vcl selection engine, a matching
+    // entry
+    static gboolean signalKeyPress(GtkWidget*, GdkEventKey* pEvent, gpointer widget)
+    {
+        GtkInstanceComboBox* pThis = static_cast<GtkInstanceComboBox*>(widget);
+        return pThis->signal_key_press(pEvent);
+    }
+
+    bool signal_key_press(GdkEventKey* pEvent)
+    {
+        KeyEvent aKEvt(GtkToVcl(*pEvent));
+
+        vcl::KeyCode aKeyCode = aKEvt.GetKeyCode();
+
+        bool bDone = false;
+
+        switch (aKeyCode.GetCode())
+        {
+            case KEY_DOWN:
+            case KEY_UP:
+            case KEY_PAGEUP:
+            case KEY_PAGEDOWN:
+            case KEY_HOME:
+            case KEY_END:
+            case KEY_LEFT:
+            case KEY_RIGHT:
+            case KEY_RETURN:
+                m_aQuickSelectionEngine.Reset();
+                break;
+            default:
+                bDone = m_aQuickSelectionEngine.HandleKeyEvent(aKEvt);
+                break;
+        }
+
+        return bDone;
+    }
+
+    vcl::StringEntryIdentifier typeahead_getEntry(int nPos, OUString& out_entryText) const
+    {
+        int nEntryCount(get_count());
+        if (nPos >= nEntryCount)
+            nPos = 0;
+        out_entryText = get_text(nPos);
+
+        // vcl::StringEntryIdentifier does not allow for 0 values, but our position is 0-based
+        // => normalize
+        return reinterpret_cast<vcl::StringEntryIdentifier>(nPos + 1);
+    }
+
+    static int typeahead_getEntryPos(vcl::StringEntryIdentifier entry)
+    {
+        // our pos is 0-based, but StringEntryIdentifier does not allow for a NULL
+        return reinterpret_cast<sal_Int64>(entry) - 1;
+    }
+
+    int get_selected_entry() const
+    {
+        if (m_bPopupActive && m_pMenu)
+        {
+            GList* pChildren = gtk_container_get_children(GTK_CONTAINER(m_pMenu));
+            auto nRet = g_list_index(pChildren, gtk_menu_shell_get_selected_item(GTK_MENU_SHELL(m_pMenu)));
+            g_list_free(pChildren);
+            return nRet;
+        }
+        else
+            return get_active();
+    }
+
+    void set_selected_entry(int nSelect)
+    {
+        if (m_bPopupActive && m_pMenu)
+        {
+            GList* pChildren = gtk_container_get_children(GTK_CONTAINER(m_pMenu));
+            gtk_menu_shell_select_item(GTK_MENU_SHELL(m_pMenu), GTK_WIDGET(g_list_nth_data(pChildren, nSelect)));
+            g_list_free(pChildren);
+        }
+        else
+            set_active(nSelect);
+    }
+
+    virtual vcl::StringEntryIdentifier CurrentEntry(OUString& out_entryText) const override
+    {
+        int nCurrentPos = get_selected_entry();
+        return typeahead_getEntry((nCurrentPos == -1) ? 0 : nCurrentPos, out_entryText);
+    }
+
+    virtual vcl::StringEntryIdentifier NextEntry(vcl::StringEntryIdentifier currentEntry, OUString& out_entryText) const override
+    {
+        int nNextPos = typeahead_getEntryPos(currentEntry) + 1;
+        return typeahead_getEntry(nNextPos, out_entryText);
+    }
+
+    virtual void SelectEntry(vcl::StringEntryIdentifier entry) override
+    {
+        int nSelect = typeahead_getEntryPos(entry);
+        if (nSelect == get_selected_entry())
+        {
+            // ignore that. This method is a callback from the QuickSelectionEngine, which means the user attempted
+            // to select the given entry by typing its starting letters. No need to act.
             return;
-        GtkEntryCompletion* pCompletion = gtk_entry_completion_new();
-        gtk_entry_completion_set_model(pCompletion, gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText)));
-        gtk_entry_completion_set_text_column(pCompletion, 0);
-        gtk_entry_completion_set_inline_selection(pCompletion, true);
-        gtk_entry_completion_set_inline_completion(pCompletion, true);
-        gtk_entry_completion_set_popup_completion(pCompletion, false);
-        gtk_entry_set_completion(pEntry, pCompletion);
-        g_object_unref(pCompletion);
+        }
+
+        // normalize
+        int nCount = get_count();
+        if (nSelect >= nCount)
+            nSelect = nCount ? nCount-1 : -1;
+
+        set_selected_entry(nSelect);
+    }
+
+    // b) support typeahead for the menu itself, typing into the menu will
+    // select via the vcl selection engine, a matching entry. Clearly
+    // this is cheating, brittle and not a long term solution.
+    void install_menu_typeahead()
+    {
+        AtkObject* pAtkObj = gtk_combo_box_get_popup_accessible(m_pComboBox);
+        if (!pAtkObj)
+            return;
+        if (!GTK_IS_ACCESSIBLE(pAtkObj))
+            return;
+        GtkWidget* pWidget = gtk_accessible_get_widget(GTK_ACCESSIBLE(pAtkObj));
+        if (!pWidget)
+            return;
+        if (!GTK_IS_MENU(pWidget))
+            return;
+        m_pMenu = GTK_MENU(pWidget);
+
+        guint nSignalId = g_signal_lookup("key-press-event", GTK_TYPE_MENU);
+        gulong nOriginalMenuKeyPressEventId = g_signal_handler_find(m_pMenu, G_SIGNAL_MATCH_DATA, nSignalId, 0,
+                                                                    nullptr, nullptr, m_pComboBox);
+
+        g_signal_handler_block(m_pMenu, nOriginalMenuKeyPressEventId);
+        g_signal_connect(m_pMenu, "key-press-event", G_CALLBACK(signalKeyPress), this);
+    }
+
+    static void find_toggle_button(GtkWidget *pWidget, gpointer user_data)
+    {
+        if (g_strcmp0(gtk_widget_get_name(pWidget), "GtkToggleButton") == 0)
+        {
+            GtkWidget **ppToggleButton = static_cast<GtkWidget**>(user_data);
+            *ppToggleButton = pWidget;
+        }
+        else if (GTK_IS_CONTAINER(pWidget))
+            gtk_container_forall(GTK_CONTAINER(pWidget), find_toggle_button, user_data);
     }
 
 public:
-    GtkInstanceComboBoxText(GtkComboBoxText* pComboBoxText, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pComboBoxText), bTakeOwnership)
-        , m_pComboBoxText(pComboBoxText)
+    GtkInstanceComboBox(GtkComboBox* pComboBox, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pComboBox), pBuilder, bTakeOwnership)
+        , m_pComboBox(pComboBox)
+        , m_pTreeModel(gtk_combo_box_get_model(m_pComboBox))
+        , m_pMenu(nullptr)
+        , m_pToggleButton(nullptr)
+        , m_aQuickSelectionEngine(*this)
         , m_bPopupActive(false)
-        , m_nChangedSignalId(g_signal_connect(m_pComboBoxText, "changed", G_CALLBACK(signalChanged), this))
-        , m_nPopupShownSignalId(g_signal_connect(m_pComboBoxText, "notify::popup-shown", G_CALLBACK(signalPopupShown), this))
+        , m_bAutoComplete(false)
+        , m_nToggleFocusInSignalId(0)
+        , m_nToggleFocusOutSignalId(0)
+        , m_nChangedSignalId(g_signal_connect(m_pComboBox, "changed", G_CALLBACK(signalChanged), this))
+        , m_nPopupShownSignalId(g_signal_connect(m_pComboBox, "notify::popup-shown", G_CALLBACK(signalPopupShown), this))
+        , m_nAutoCompleteIdleId(0)
     {
-        // this bit isn't great, I really want to be able to ellipse the text in the comboboxtext itself and let
-        // the popup menu render them in full, in the interim allow the text to wrap in both cases
-        GList* cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(m_pComboBoxText));
-        GtkCellRenderer* cell = static_cast<GtkCellRenderer*>(cells->data);
-        g_object_set(G_OBJECT(cell), "wrap-width", 3, nullptr);
+        GList* cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(m_pComboBox));
+        if (!g_list_length(cells))
+        {
+            //Always use the same text column renderer layout
+            m_pTextRenderer = gtk_cell_renderer_text_new();
+            gtk_cell_layout_pack_end(GTK_CELL_LAYOUT(m_pComboBox), m_pTextRenderer, true);
+            gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(m_pComboBox), m_pTextRenderer, "text", 0, nullptr);
+        }
+        else
+        {
+            m_pTextRenderer = static_cast<GtkCellRenderer*>(cells->data);
+            if (g_list_length(cells) == 2)
+            {
+                //The ComboBox is always going to show the column associated with
+                //the entry when there is one, left to its own devices this image
+                //column will be after it, but we want it before
+                gtk_cell_layout_reorder(GTK_CELL_LAYOUT(m_pComboBox), m_pTextRenderer, 1);
+            }
+        }
         g_list_free(cells);
 
         if (GtkEntry* pEntry = get_entry())
         {
-            setup_completion(pEntry);
+            m_bAutoComplete = true;
+            m_nEntryInsertTextSignalId = g_signal_connect(pEntry, "insert-text", G_CALLBACK(signalEntryInsertText), this);
             m_nEntryActivateSignalId = g_signal_connect(pEntry, "activate", G_CALLBACK(signalEntryActivate), this);
+            m_nEntryFocusOutSignalId = g_signal_connect(pEntry, "focus-out-event", G_CALLBACK(signalEntryFocusOut), this);
+            m_nKeyPressEventSignalId = 0;
         }
         else
+        {
+            m_nEntryInsertTextSignalId = 0;
             m_nEntryActivateSignalId = 0;
+            m_nEntryFocusOutSignalId = 0;
+            m_nKeyPressEventSignalId = g_signal_connect(m_pWidget, "key-press-event", G_CALLBACK(signalKeyPress), this);
+        }
+
+        find_toggle_button(GTK_WIDGET(m_pComboBox), &m_pToggleButton);
+
+        install_menu_typeahead();
     }
 
     virtual int get_active() const override
     {
-        return gtk_combo_box_get_active(GTK_COMBO_BOX(m_pComboBoxText));
+        return gtk_combo_box_get_active(m_pComboBox);
     }
 
     virtual OUString get_active_id() const override
     {
-        const gchar* pText = gtk_combo_box_get_active_id(GTK_COMBO_BOX(m_pComboBoxText));
+        const gchar* pText = gtk_combo_box_get_active_id(m_pComboBox);
         return OUString(pText, pText ? strlen(pText) : 0, RTL_TEXTENCODING_UTF8);
     }
 
@@ -4043,16 +6993,40 @@ public:
     {
         disable_notify_events();
         OString aId(OUStringToOString(rStr, RTL_TEXTENCODING_UTF8));
-        gtk_combo_box_set_active_id(GTK_COMBO_BOX(m_pComboBoxText), aId.getStr());
+        gtk_combo_box_set_active_id(m_pComboBox, aId.getStr());
         enable_notify_events();
     }
 
     virtual void set_size_request(int nWidth, int nHeight) override
     {
         // tweak the cell render to get a narrower size to stick
-        GList* cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(m_pComboBoxText));
+        GList* cells = gtk_cell_layout_get_cells(GTK_CELL_LAYOUT(m_pComboBox));
         GtkCellRenderer* cell = static_cast<GtkCellRenderer*>(cells->data);
-        gtk_cell_renderer_set_fixed_size(cell, nWidth, -1);
+
+        if (nWidth != -1)
+        {
+            // this bit isn't great, I really want to be able to ellipse the text in the comboboxtext itself and let
+            // the popup menu render them in full, in the interim ellipse both of them
+            g_object_set(G_OBJECT(m_pTextRenderer), "ellipsize", PANGO_ELLIPSIZE_MIDDLE, nullptr);
+
+            // to find out how much of the width of the combobox belongs to the cell, set
+            // the cell and widget to the min cell width and see what the difference is
+            int min;
+            gtk_cell_renderer_get_preferred_width(cell, m_pWidget, &min, nullptr);
+            gtk_cell_renderer_set_fixed_size(cell, min, -1);
+            gtk_widget_set_size_request(m_pWidget, min, -1);
+            int nNonCellWidth = get_preferred_size().Width() - min;
+
+            // now set the cell to the max width which it can be within the
+            // requested widget width
+            gtk_cell_renderer_set_fixed_size(cell, nWidth - nNonCellWidth, -1);
+        }
+        else
+        {
+            g_object_set(G_OBJECT(m_pTextRenderer), "ellipsize", PANGO_ELLIPSIZE_NONE, nullptr);
+            gtk_cell_renderer_set_fixed_size(cell, -1, -1);
+        }
+
         g_list_free(cells);
 
         gtk_widget_set_size_request(m_pWidget, nWidth, nHeight);
@@ -4061,15 +7035,29 @@ public:
     virtual void set_active(int pos) override
     {
         disable_notify_events();
-        gtk_combo_box_set_active(GTK_COMBO_BOX(m_pComboBoxText), pos);
+        gtk_combo_box_set_active(m_pComboBox, pos);
         enable_notify_events();
     }
 
     virtual OUString get_active_text() const override
     {
-        gchar* pText = gtk_combo_box_text_get_active_text(m_pComboBoxText);
-        OUString sRet(pText, pText ? strlen(pText) : 0, RTL_TEXTENCODING_UTF8);
-        g_free(pText);
+        if (gtk_combo_box_get_has_entry(m_pComboBox))
+        {
+            GtkWidget *pEntry = gtk_bin_get_child(GTK_BIN(m_pComboBox));
+            const gchar* pText = gtk_entry_get_text(GTK_ENTRY(pEntry));
+            return OUString(pText, pText ? strlen(pText) : 0, RTL_TEXTENCODING_UTF8);
+        }
+
+        GtkTreeIter iter;
+        if (!gtk_combo_box_get_active_iter(m_pComboBox, &iter))
+            return OUString();
+
+        gint col = gtk_combo_box_get_entry_text_column(m_pComboBox);
+        gchar* pStr = nullptr;
+        gtk_tree_model_get(m_pTreeModel, &iter, col, &pStr, -1);
+        OUString sRet(pStr, pStr ? strlen(pStr) : 0, RTL_TEXTENCODING_UTF8);
+        g_free(pStr);
+
         return sRet;
     }
 
@@ -4080,37 +7068,84 @@ public:
 
     virtual OUString get_id(int pos) const override
     {
-        gint id_column = gtk_combo_box_get_id_column(GTK_COMBO_BOX(m_pComboBoxText));
+        gint id_column = gtk_combo_box_get_id_column(m_pComboBox);
         return get(pos, id_column);
     }
 
-    virtual void insert_text(int pos, const OUString& rStr) override
+    virtual void set_id(int pos, const OUString& rId) override
     {
-        disable_notify_events();
-        gtk_combo_box_text_insert_text(m_pComboBoxText, pos, OUStringToOString(rStr, RTL_TEXTENCODING_UTF8).getStr());
-        enable_notify_events();
+        gint id_column = gtk_combo_box_get_id_column(m_pComboBox);
+        set(pos, id_column, rId);
+    }
+
+    // https://gitlab.gnome.org/GNOME/gtk/issues/94
+    // when a super tall combobox menu is activated, and the selected entry is sufficiently
+    // far down the list, then the menu doesn't appear under wayland
+    void bodge_wayland_menu_not_appearing()
+    {
+        if (get_frozen())
+            return;
+        if (has_entry())
+            return;
+#if defined(GDK_WINDOWING_WAYLAND)
+        GdkDisplay *pDisplay = gtk_widget_get_display(m_pWidget);
+        if (DLSYM_GDK_IS_WAYLAND_DISPLAY(pDisplay))
+        {
+            gtk_combo_box_set_wrap_width(m_pComboBox, get_count() > 30 ? 1 : 0);
+        }
+#endif
+    }
+
+    virtual void insert_vector(const std::vector<weld::ComboBoxEntry>& rItems, bool bKeepExisting) override
+    {
+        freeze();
+        if (!bKeepExisting)
+            clear();
+        GtkTreeIter iter;
+        for (const auto& rItem : rItems)
+        {
+            insert_row(GTK_LIST_STORE(m_pTreeModel), iter, -1, rItem.sId.isEmpty() ? nullptr : &rItem.sId,
+                       rItem.sString, rItem.sImage.isEmpty() ? nullptr : &rItem.sImage, nullptr);
+        }
+        thaw();
     }
 
     virtual void remove(int pos) override
     {
         disable_notify_events();
-        gtk_combo_box_text_remove(m_pComboBoxText, pos);
+        GtkTreeIter iter;
+        gtk_tree_model_iter_nth_child(m_pTreeModel, &iter, nullptr, pos);
+        gtk_list_store_remove(GTK_LIST_STORE(m_pTreeModel), &iter);
+        m_aSeparatorRows.erase(std::remove(m_aSeparatorRows.begin(), m_aSeparatorRows.end(), pos), m_aSeparatorRows.end());
         enable_notify_events();
+        bodge_wayland_menu_not_appearing();
     }
 
-    virtual void insert(int pos, const OUString& rId, const OUString& rStr) override
+    virtual void insert(int pos, const OUString& rText, const OUString* pId, const OUString* pIconName, VirtualDevice* pImageSurface) override
     {
         disable_notify_events();
-        gtk_combo_box_text_insert(m_pComboBoxText, pos,
-                                  OUStringToOString(rId, RTL_TEXTENCODING_UTF8).getStr(),
-                                  OUStringToOString(rStr, RTL_TEXTENCODING_UTF8).getStr());
+        GtkTreeIter iter;
+        insert_row(GTK_LIST_STORE(m_pTreeModel), iter, pos, pId, rText, pIconName, pImageSurface);
         enable_notify_events();
+        bodge_wayland_menu_not_appearing();
+    }
+
+    virtual void insert_separator(int pos) override
+    {
+        disable_notify_events();
+        GtkTreeIter iter;
+        pos = pos == -1 ? get_count() : pos;
+        m_aSeparatorRows.push_back(pos);
+        if (!gtk_combo_box_get_row_separator_func(m_pComboBox))
+            gtk_combo_box_set_row_separator_func(m_pComboBox, separatorFunction, this, nullptr);
+        insert_row(GTK_LIST_STORE(m_pTreeModel), iter, pos, nullptr, "", nullptr, nullptr);
+        enable_notify_events();
+        bodge_wayland_menu_not_appearing();
     }
 
     virtual int get_count() const override
     {
-        GtkTreeModel *pModel = gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText));
-        return gtk_tree_model_iter_n_children(pModel, nullptr);
+        return gtk_tree_model_iter_n_children(m_pTreeModel, nullptr);
     }
 
     virtual int find_text(const OUString& rStr) const override
@@ -4126,9 +7161,11 @@ public:
     virtual void clear() override
     {
         disable_notify_events();
-        GtkTreeModel *pModel = gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText));
-        gtk_list_store_clear(GTK_LIST_STORE(pModel));
+        gtk_list_store_clear(GTK_LIST_STORE(m_pTreeModel));
+        m_aSeparatorRows.clear();
+        gtk_combo_box_set_row_separator_func(m_pComboBox, nullptr, nullptr, nullptr);
         enable_notify_events();
+        bodge_wayland_menu_not_appearing();
     }
 
     virtual void make_sorted() override
@@ -4136,15 +7173,19 @@ public:
         m_xSorter.reset(new comphelper::string::NaturalStringSorter(
                             ::comphelper::getProcessComponentContext(),
                             Application::GetSettings().GetUILanguageTag().getLocale()));
-        GtkTreeModel* pModel = gtk_combo_box_get_model(GTK_COMBO_BOX(m_pComboBoxText));
-        GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(pModel);
-        gtk_tree_sortable_set_sort_func(pSortable, 0, sort_func, m_xSorter.get(), nullptr);
+        GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeModel);
         gtk_tree_sortable_set_sort_column_id(pSortable, 0, GTK_SORT_ASCENDING);
+        gtk_tree_sortable_set_sort_func(pSortable, 0, sort_func, m_xSorter.get(), nullptr);
+    }
+
+    virtual bool has_entry() const override
+    {
+        return gtk_combo_box_get_has_entry(m_pComboBox);
     }
 
     virtual void set_entry_error(bool bError) override
     {
-        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBoxText));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
         assert(GTK_IS_ENTRY(pChild));
         GtkEntry* pEntry = GTK_ENTRY(pChild);
         if (bError)
@@ -4155,7 +7196,7 @@ public:
 
     virtual void set_entry_text(const OUString& rText) override
     {
-        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBoxText));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
         assert(pChild && GTK_IS_ENTRY(pChild));
         GtkEntry* pEntry = GTK_ENTRY(pChild);
         disable_notify_events();
@@ -4163,9 +7204,20 @@ public:
         enable_notify_events();
     }
 
+    virtual void set_entry_width_chars(int nChars) override
+    {
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
+        assert(pChild && GTK_IS_ENTRY(pChild));
+        GtkEntry* pEntry = GTK_ENTRY(pChild);
+        disable_notify_events();
+        gtk_entry_set_width_chars(pEntry, nChars);
+        gtk_entry_set_max_width_chars(pEntry, nChars);
+        enable_notify_events();
+    }
+
     virtual void select_entry_region(int nStartPos, int nEndPos) override
     {
-        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBoxText));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
         assert(pChild && GTK_IS_ENTRY(pChild));
         GtkEntry* pEntry = GTK_ENTRY(pChild);
         disable_notify_events();
@@ -4175,7 +7227,7 @@ public:
 
     virtual bool get_entry_selection_bounds(int& rStartPos, int &rEndPos) override
     {
-        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBoxText));
+        GtkWidget* pChild = gtk_bin_get_child(GTK_BIN(m_pComboBox));
         assert(pChild && GTK_IS_ENTRY(pChild));
         GtkEntry* pEntry = GTK_ENTRY(pChild);
         return gtk_editable_get_selection_bounds(GTK_EDITABLE(pEntry), &rStartPos, &rEndPos);
@@ -4183,48 +7235,287 @@ public:
 
     virtual void set_entry_completion(bool bEnable) override
     {
-        GtkEntry* pEntry = get_entry();
-        assert(pEntry);
-        if (bEnable)
-            setup_completion(pEntry);
-        else
-            gtk_entry_set_completion(pEntry, nullptr);
+        m_bAutoComplete = bEnable;
     }
 
     virtual void disable_notify_events() override
     {
         if (GtkEntry* pEntry = get_entry())
+        {
+            g_signal_handler_block(pEntry, m_nEntryInsertTextSignalId);
             g_signal_handler_block(pEntry, m_nEntryActivateSignalId);
-        g_signal_handler_block(m_pComboBoxText, m_nChangedSignalId);
-        g_signal_handler_block(m_pComboBoxText, m_nPopupShownSignalId);
+            g_signal_handler_block(pEntry, m_nEntryFocusOutSignalId);
+        }
+        else
+            g_signal_handler_block(m_pComboBox, m_nKeyPressEventSignalId);
+        if (m_nToggleFocusInSignalId)
+            g_signal_handler_block(m_pToggleButton, m_nToggleFocusInSignalId);
+        if (m_nToggleFocusOutSignalId)
+            g_signal_handler_block(m_pToggleButton, m_nToggleFocusOutSignalId);
+        g_signal_handler_block(m_pComboBox, m_nChangedSignalId);
+        g_signal_handler_block(m_pComboBox, m_nPopupShownSignalId);
         GtkInstanceContainer::disable_notify_events();
     }
 
     virtual void enable_notify_events() override
     {
         GtkInstanceContainer::enable_notify_events();
-        g_signal_handler_unblock(m_pComboBoxText, m_nPopupShownSignalId);
-        g_signal_handler_unblock(m_pComboBoxText, m_nChangedSignalId);
+        g_signal_handler_unblock(m_pComboBox, m_nPopupShownSignalId);
+        g_signal_handler_unblock(m_pComboBox, m_nChangedSignalId);
+        if (m_nToggleFocusInSignalId)
+            g_signal_handler_unblock(m_pToggleButton, m_nToggleFocusInSignalId);
+        if (m_nToggleFocusOutSignalId)
+            g_signal_handler_unblock(m_pToggleButton, m_nToggleFocusOutSignalId);
         if (GtkEntry* pEntry = get_entry())
+        {
             g_signal_handler_unblock(pEntry, m_nEntryActivateSignalId);
+            g_signal_handler_unblock(pEntry, m_nEntryFocusOutSignalId);
+            g_signal_handler_unblock(pEntry, m_nEntryInsertTextSignalId);
+        }
+        else
+            g_signal_handler_unblock(m_pComboBox, m_nKeyPressEventSignalId);
     }
 
     virtual void freeze() override
     {
-        //do nothing for now
+        disable_notify_events();
+        g_object_ref(m_pTreeModel);
+        GtkInstanceContainer::freeze();
+        gtk_combo_box_set_model(m_pComboBox, nullptr);
+        if (m_xSorter)
+        {
+            GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeModel);
+            gtk_tree_sortable_set_sort_column_id(pSortable, GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, GTK_SORT_ASCENDING);
+        }
+        enable_notify_events();
     }
 
     virtual void thaw() override
     {
-        //do nothing for now
+        disable_notify_events();
+        if (m_xSorter)
+        {
+            GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(m_pTreeModel);
+            gtk_tree_sortable_set_sort_column_id(pSortable, 0, GTK_SORT_ASCENDING);
+        }
+        gtk_combo_box_set_model(m_pComboBox, m_pTreeModel);
+        GtkInstanceContainer::thaw();
+        g_object_unref(m_pTreeModel);
+        enable_notify_events();
+
+        bodge_wayland_menu_not_appearing();
     }
 
-    virtual ~GtkInstanceComboBoxText() override
+    virtual bool get_popup_shown() const override
     {
+        return m_bPopupActive;
+    }
+
+    virtual void connect_focus_in(const Link<Widget&, void>& rLink) override
+    {
+        m_nToggleFocusInSignalId = g_signal_connect(m_pToggleButton, "focus-in-event", G_CALLBACK(signalFocusIn), this);
+        weld::Widget::connect_focus_in(rLink);
+    }
+
+    virtual void connect_focus_out(const Link<Widget&, void>& rLink) override
+    {
+        m_nToggleFocusOutSignalId = g_signal_connect(m_pToggleButton, "focus-out-event", G_CALLBACK(signalFocusOut), this);
+        weld::Widget::connect_focus_out(rLink);
+    }
+
+    virtual ~GtkInstanceComboBox() override
+    {
+        if (m_nAutoCompleteIdleId)
+            g_source_remove(m_nAutoCompleteIdleId);
         if (GtkEntry* pEntry = get_entry())
+        {
+            g_signal_handler_disconnect(pEntry, m_nEntryInsertTextSignalId);
             g_signal_handler_disconnect(pEntry, m_nEntryActivateSignalId);
-        g_signal_handler_disconnect(m_pComboBoxText, m_nChangedSignalId);
-        g_signal_handler_disconnect(m_pComboBoxText, m_nPopupShownSignalId);
+            g_signal_handler_disconnect(pEntry, m_nEntryFocusOutSignalId);
+        }
+        else
+            g_signal_handler_disconnect(m_pComboBox, m_nKeyPressEventSignalId);
+        if (m_nToggleFocusInSignalId)
+            g_signal_handler_disconnect(m_pToggleButton, m_nToggleFocusInSignalId);
+        if (m_nToggleFocusOutSignalId)
+            g_signal_handler_disconnect(m_pToggleButton, m_nToggleFocusOutSignalId);
+        g_signal_handler_disconnect(m_pComboBox, m_nChangedSignalId);
+        g_signal_handler_disconnect(m_pComboBox, m_nPopupShownSignalId);
+    }
+};
+
+class GtkInstanceEntryTreeView : public GtkInstanceContainer, public virtual weld::EntryTreeView
+{
+private:
+    GtkInstanceEntry* m_pEntry;
+    GtkInstanceTreeView* m_pTreeView;
+    gulong m_nKeyPressSignalId;
+    gulong m_nEntryInsertTextSignalId;
+    guint m_nAutoCompleteIdleId;
+
+    gboolean signal_key_press(GdkEventKey* pEvent)
+    {
+        if (pEvent->keyval == GDK_KEY_KP_Up || pEvent->keyval == GDK_KEY_Up || pEvent->keyval == GDK_KEY_KP_Page_Up || pEvent->keyval == GDK_KEY_Page_Up ||
+            pEvent->keyval == GDK_KEY_KP_Down || pEvent->keyval == GDK_KEY_Down || pEvent->keyval == GDK_KEY_KP_Page_Down || pEvent->keyval == GDK_KEY_Page_Down)
+        {
+            gboolean ret;
+            disable_notify_events();
+            GtkWidget* pWidget = m_pTreeView->getWidget();
+            if (m_pTreeView->get_selected_index() == -1)
+            {
+                m_pTreeView->set_cursor(0);
+                m_pTreeView->select(0);
+                m_xEntry->set_text(m_xTreeView->get_selected_text());
+            }
+            else
+            {
+                gtk_widget_grab_focus(pWidget);
+                g_signal_emit_by_name(pWidget, "key-press-event", pEvent, &ret);
+                m_xEntry->set_text(m_xTreeView->get_selected_text());
+                gtk_widget_grab_focus(m_pEntry->getWidget());
+            }
+            m_xEntry->select_region(0, -1);
+            enable_notify_events();
+            m_pEntry->fire_signal_changed();
+            return true;
+        }
+        return false;
+    }
+
+    static gboolean signalKeyPress(GtkWidget*, GdkEventKey* pEvent, gpointer widget)
+    {
+        GtkInstanceEntryTreeView* pThis = static_cast<GtkInstanceEntryTreeView*>(widget);
+        return pThis->signal_key_press(pEvent);
+    }
+
+    static gboolean idleAutoComplete(gpointer widget)
+    {
+        GtkInstanceEntryTreeView* pThis = static_cast<GtkInstanceEntryTreeView*>(widget);
+        pThis->auto_complete();
+        return false;
+    }
+
+    void auto_complete()
+    {
+        m_nAutoCompleteIdleId = 0;
+        OUString aStartText = get_active_text();
+        int nStartPos, nEndPos;
+        get_entry_selection_bounds(nStartPos, nEndPos);
+        int nMaxSelection = std::max(nStartPos, nEndPos);
+        if (nMaxSelection != aStartText.getLength())
+            return;
+
+        disable_notify_events();
+        int nActive = get_active();
+        int nStart = nActive;
+
+        if (nStart == -1)
+            nStart = 0;
+
+        // Try match case insensitive from current position
+        int nPos = m_pTreeView->starts_with(aStartText, 0, nStart);
+        if (nPos == -1 && nStart != 0)
+        {
+            // Try match case insensitive, but from start
+            nPos = m_pTreeView->starts_with(aStartText, 0, 0);
+        }
+
+        if (nPos != -1)
+        {
+            OUString aText = get_text(nPos);
+            if (aText != aStartText)
+                set_active_text(aText);
+            select_entry_region(aText.getLength(), aStartText.getLength());
+        }
+        enable_notify_events();
+    }
+
+    void signal_entry_insert_text(GtkEntry*, const gchar*, gint, gint*)
+    {
+        // now check for autocompletes
+        if (m_nAutoCompleteIdleId)
+            g_source_remove(m_nAutoCompleteIdleId);
+        m_nAutoCompleteIdleId = g_idle_add(idleAutoComplete, this);
+    }
+
+    static void signalEntryInsertText(GtkEntry* pEntry, const gchar* pNewText, gint nNewTextLength,
+                                      gint* position, gpointer widget)
+    {
+        GtkInstanceEntryTreeView* pThis = static_cast<GtkInstanceEntryTreeView*>(widget);
+        pThis->signal_entry_insert_text(pEntry, pNewText, nNewTextLength, position);
+    }
+
+
+public:
+    GtkInstanceEntryTreeView(GtkContainer* pContainer, GtkInstanceBuilder* pBuilder, bool bTakeOwnership,
+                             std::unique_ptr<weld::Entry> xEntry, std::unique_ptr<weld::TreeView> xTreeView)
+        : EntryTreeView(std::move(xEntry), std::move(xTreeView))
+        , GtkInstanceContainer(pContainer, pBuilder, bTakeOwnership)
+        , m_pEntry(dynamic_cast<GtkInstanceEntry*>(m_xEntry.get()))
+        , m_pTreeView(dynamic_cast<GtkInstanceTreeView*>(m_xTreeView.get()))
+        , m_nAutoCompleteIdleId(0)
+    {
+        assert(m_pEntry);
+        GtkWidget* pWidget = m_pEntry->getWidget();
+        m_nKeyPressSignalId = g_signal_connect(pWidget, "key-press-event", G_CALLBACK(signalKeyPress), this);
+        m_nEntryInsertTextSignalId = g_signal_connect(pWidget, "insert-text", G_CALLBACK(signalEntryInsertText), this);
+    }
+
+    virtual void insert_separator(int /*pos*/) override
+    {
+        assert(false);
+    }
+
+    virtual void make_sorted() override
+    {
+        GtkWidget* pTreeView = m_pTreeView->getWidget();
+        GtkTreeModel* pModel = gtk_tree_view_get_model(GTK_TREE_VIEW(pTreeView));
+        GtkTreeSortable* pSortable = GTK_TREE_SORTABLE(pModel);
+        gtk_tree_sortable_set_sort_column_id(pSortable, 1, GTK_SORT_ASCENDING);
+    }
+
+    virtual void set_entry_completion(bool bEnable) override
+    {
+        assert(!bEnable && "not implemented yet"); (void)bEnable;
+    }
+
+    virtual void grab_focus() override { m_xEntry->grab_focus(); }
+
+    virtual void connect_focus_in(const Link<Widget&, void>& rLink) override
+    {
+        m_xEntry->connect_focus_in(rLink);
+    }
+
+    virtual void connect_focus_out(const Link<Widget&, void>& rLink) override
+    {
+        m_xEntry->connect_focus_out(rLink);
+    }
+
+    virtual void disable_notify_events() override
+    {
+        GtkWidget* pWidget = m_pEntry->getWidget();
+        g_signal_handler_block(pWidget, m_nEntryInsertTextSignalId);
+        g_signal_handler_block(pWidget, m_nKeyPressSignalId);
+        m_pTreeView->disable_notify_events();
+        GtkInstanceContainer::disable_notify_events();
+    }
+
+    virtual void enable_notify_events() override
+    {
+        GtkWidget* pWidget = m_pEntry->getWidget();
+        g_signal_handler_unblock(pWidget, m_nKeyPressSignalId);
+        g_signal_handler_unblock(pWidget, m_nEntryInsertTextSignalId);
+        m_pTreeView->enable_notify_events();
+        GtkInstanceContainer::disable_notify_events();
+    }
+
+    virtual ~GtkInstanceEntryTreeView() override
+    {
+        if (m_nAutoCompleteIdleId)
+            g_source_remove(m_nAutoCompleteIdleId);
+        GtkWidget* pWidget = m_pEntry->getWidget();
+        g_signal_handler_disconnect(pWidget, m_nKeyPressSignalId);
+        g_signal_handler_disconnect(pWidget, m_nEntryInsertTextSignalId);
     }
 };
 
@@ -4264,8 +7555,8 @@ private:
     }
 
 public:
-    GtkInstanceExpander(GtkExpander* pExpander, bool bTakeOwnership)
-        : GtkInstanceContainer(GTK_CONTAINER(pExpander), bTakeOwnership)
+    GtkInstanceExpander(GtkExpander* pExpander, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceContainer(GTK_CONTAINER(pExpander), pBuilder, bTakeOwnership)
         , m_pExpander(pExpander)
         , m_nSignalId(g_signal_connect(m_pExpander, "notify::expanded", G_CALLBACK(signalExpanded), this))
     {
@@ -4295,31 +7586,31 @@ namespace
         const ImplSVData* pSVData = ImplGetSVData();
         if (pSVData->maHelpData.mbBalloonHelp)
         {
-            /*This is how I would prefer things to be, only a few like this though*/
-            AtkObject* pAtkObject = gtk_widget_get_accessible(pWidget);
-            const char* pDesc = pAtkObject ? atk_object_get_description(pAtkObject) : nullptr;
-            if (pDesc)
-            {
-                gtk_tooltip_set_text(tooltip, pDesc);
-                return true;
-            }
-
-            /*So fallback to existing mechanism which needs help installed*/
+            /*Current mechanism which needs help installed*/
             OString sHelpId = ::get_help_id(pWidget);
             Help* pHelp = !sHelpId.isEmpty() ? Application::GetHelp() : nullptr;
             if (pHelp)
             {
-                OUString sHelpText = pHelp->GetHelpText(OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), nullptr);
+                OUString sHelpText = pHelp->GetHelpText(OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), static_cast<weld::Widget*>(nullptr));
                 if (!sHelpText.isEmpty())
                 {
                     gtk_tooltip_set_text(tooltip, OUStringToOString(sHelpText, RTL_TEXTENCODING_UTF8).getStr());
                     return true;
                 }
             }
+
+            /*This is how I would prefer things to be, only a few like this though*/
+            AtkObject* pAtkObject = gtk_widget_get_accessible(pWidget);
+            const char* pDesc = pAtkObject ? atk_object_get_description(pAtkObject) : nullptr;
+            if (pDesc && pDesc[0])
+            {
+                gtk_tooltip_set_text(tooltip, pDesc);
+                return true;
+            }
         }
 
         const char* pDesc = gtk_widget_get_tooltip_text(pWidget);
-        if (pDesc)
+        if (pDesc && pDesc[0])
         {
             gtk_tooltip_set_text(tooltip, pDesc);
             return true;
@@ -4331,8 +7622,6 @@ namespace
 
 namespace
 {
-
-AtkObject* (*default_drawing_area_get_accessible)(GtkWidget *widget);
 
 AtkObject* drawing_area_get_accessibity(GtkWidget *pWidget)
 {
@@ -4372,6 +7661,7 @@ private:
     GtkBuilder* m_pBuilder;
     GSList* m_pObjectList;
     GtkWidget* m_pParentWidget;
+    gulong m_nNotifySignalId;
     std::vector<GtkButton*> m_aMnemonicButtons;
     std::vector<GtkLabel*> m_aMnemonicLabels;
 
@@ -4389,8 +7679,6 @@ private:
             GtkImage* pImage = GTK_IMAGE(pWidget);
             const gchar* icon_name;
             gtk_image_get_icon_name(pImage, &icon_name, nullptr);
-            GtkIconSize size;
-            g_object_get(pImage, "icon-size", &size, nullptr);
             if (icon_name)
             {
                 OUString aIconName(icon_name, strlen(icon_name), RTL_TEXTENCODING_UTF8);
@@ -4421,8 +7709,11 @@ private:
         if (GTK_IS_BUTTON(pWidget))
         {
             GtkButton* pButton = GTK_BUTTON(pWidget);
-            if (m_pStringReplace != nullptr) {
-                set_label(pButton, (*m_pStringReplace)(get_label(pButton)));
+            if (m_pStringReplace != nullptr)
+            {
+                OUString aLabel(get_label(pButton));
+                if (!aLabel.isEmpty())
+                    set_label(pButton, (*m_pStringReplace)(aLabel));
             }
             if (gtk_button_get_use_underline(pButton) && !gtk_button_get_use_stock(pButton))
                 m_aMnemonicButtons.push_back(pButton);
@@ -4430,11 +7721,25 @@ private:
         else if (GTK_IS_LABEL(pWidget))
         {
             GtkLabel* pLabel = GTK_LABEL(pWidget);
-            if (m_pStringReplace != nullptr) {
-                set_label(pLabel, (*m_pStringReplace)(get_label(pLabel)));
+            if (m_pStringReplace != nullptr)
+            {
+                OUString aLabel(get_label(pLabel));
+                if (!aLabel.isEmpty())
+                    set_label(pLabel, (*m_pStringReplace)(aLabel));
             }
             if (gtk_label_get_use_underline(pLabel))
                 m_aMnemonicLabels.push_back(pLabel);
+        }
+        else if (GTK_IS_SCROLLED_WINDOW(pWidget))
+        {
+#if GTK_CHECK_VERSION(3, 22, 0)
+            // while the .ui version is 3.18, do this in code when possible
+            if (gtk_check_version(3, 22, 0) == nullptr)
+            {
+                gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(pWidget), true);
+                gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(pWidget), true);
+            }
+#endif
         }
         else if (GTK_IS_WINDOW(pWidget))
         {
@@ -4448,6 +7753,28 @@ private:
                     set_secondary_text(pMessageDialog, (*m_pStringReplace)(get_secondary_text(pMessageDialog)));
                 }
             }
+        }
+    }
+
+    //GtkBuilder sets translation domain during parse, and unsets it again afterwards.
+    //In order for GtkBuilder to find the translations bindtextdomain has to be called
+    //for the domain. So here on the first setting of "domain" we call Translate::Create
+    //to make sure that happens. Without this, if some other part of LibreOffice has
+    //used the translation machinery for this domain it will still work, but if it
+    //hasn't, e.g. tdf#119929, then the translation fails
+    void translation_domain_set()
+    {
+        Translate::Create(gtk_builder_get_translation_domain(m_pBuilder), LanguageTag(m_aUILang));
+        g_signal_handler_disconnect(m_pBuilder, m_nNotifySignalId);
+    }
+
+    static void signalNotify(GObject*, GParamSpec *pSpec, gpointer pData)
+    {
+        g_return_if_fail(pSpec != nullptr);
+        if (strcmp(pSpec->name, "translation-domain") == 0)
+        {
+            GtkInstanceBuilder* pBuilder = static_cast<GtkInstanceBuilder*>(pData);
+            pBuilder->translation_domain_set();
         }
     }
 
@@ -4465,13 +7792,9 @@ public:
         , m_pStringReplace(Translate::GetReadStringHook())
         , m_sHelpRoot(rUIFile)
         , m_pParentWidget(pParent)
+        , m_nNotifySignalId(0)
     {
         ensure_intercept_drawing_area_accessibility();
-
-        OUString aUri(rUIRoot + rUIFile);
-        OUString aPath;
-        osl::FileBase::getSystemPathFromFileURL(aUri, aPath);
-        m_pBuilder = gtk_builder_new_from_file(OUStringToOString(aPath, RTL_TEXTENCODING_UTF8).getStr());
 
         sal_Int32 nIdx = m_sHelpRoot.lastIndexOf('.');
         if (nIdx != -1)
@@ -4480,6 +7803,13 @@ public:
         m_aUtf8HelpRoot = OUStringToOString(m_sHelpRoot, RTL_TEXTENCODING_UTF8);
         m_aIconTheme = Application::GetSettings().GetStyleSettings().DetermineIconTheme();
         m_aUILang = Application::GetSettings().GetUILanguageTag().getBcp47();
+
+        OUString aUri(rUIRoot + rUIFile);
+        OUString aPath;
+        osl::FileBase::getSystemPathFromFileURL(aUri, aPath);
+        m_pBuilder = gtk_builder_new();
+        m_nNotifySignalId = g_signal_connect_data(G_OBJECT(m_pBuilder), "notify", G_CALLBACK(signalNotify), this, nullptr, G_CONNECT_AFTER);
+        gtk_builder_add_from_file(m_pBuilder, OUStringToOString(aPath, RTL_TEXTENCODING_UTF8).getStr(), nullptr);
 
         m_pObjectList = gtk_builder_get_objects(m_pBuilder);
         g_slist_foreach(m_pObjectList, postprocess, this);
@@ -4528,227 +7858,268 @@ public:
     //gtk impl emulate this by doing this implicitly at weld time
     void auto_add_parentless_widgets_to_container(GtkWidget* pWidget)
     {
-        if (gtk_widget_get_toplevel(pWidget) == pWidget)
+        if (gtk_widget_get_toplevel(pWidget) == pWidget && !GTK_IS_POPOVER(pWidget))
             gtk_container_add(GTK_CONTAINER(m_pParentWidget), pWidget);
     }
 
-    virtual weld::MessageDialog* weld_message_dialog(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::MessageDialog> weld_message_dialog(const OString &id, bool bTakeOwnership) override
     {
         GtkMessageDialog* pMessageDialog = GTK_MESSAGE_DIALOG(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pMessageDialog)
             return nullptr;
         gtk_window_set_transient_for(GTK_WINDOW(pMessageDialog), GTK_WINDOW(gtk_widget_get_toplevel(m_pParentWidget)));
-        return new GtkInstanceMessageDialog(pMessageDialog, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceMessageDialog>(pMessageDialog, this, bTakeOwnership);
     }
 
-    virtual weld::Dialog* weld_dialog(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Dialog> weld_dialog(const OString &id, bool bTakeOwnership) override
     {
         GtkDialog* pDialog = GTK_DIALOG(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pDialog)
             return nullptr;
-        gtk_window_set_transient_for(GTK_WINDOW(pDialog), GTK_WINDOW(gtk_widget_get_toplevel(m_pParentWidget)));
-        return new GtkInstanceDialog(pDialog, bTakeOwnership);
+        if (m_pParentWidget)
+            gtk_window_set_transient_for(GTK_WINDOW(pDialog), GTK_WINDOW(gtk_widget_get_toplevel(m_pParentWidget)));
+        return o3tl::make_unique<GtkInstanceDialog>(pDialog, this, bTakeOwnership);
     }
 
-    virtual weld::Window* weld_window(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Window> weld_window(const OString &id, bool bTakeOwnership) override
     {
         GtkWindow* pWindow = GTK_WINDOW(gtk_builder_get_object(m_pBuilder, id.getStr()));
-        return pWindow ? new GtkInstanceWindow(pWindow, bTakeOwnership) : nullptr;
+        return pWindow ? o3tl::make_unique<GtkInstanceWindow>(pWindow, this, bTakeOwnership) : nullptr;
     }
 
-    virtual weld::Widget* weld_widget(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Widget> weld_widget(const OString &id, bool bTakeOwnership) override
     {
         GtkWidget* pWidget = GTK_WIDGET(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pWidget)
             return nullptr;
         auto_add_parentless_widgets_to_container(pWidget);
-        return new GtkInstanceWidget(pWidget, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceWidget>(pWidget, this, bTakeOwnership);
     }
 
-    virtual weld::Container* weld_container(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Container> weld_container(const OString &id, bool bTakeOwnership) override
     {
         GtkContainer* pContainer = GTK_CONTAINER(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pContainer)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pContainer));
-        return new GtkInstanceContainer(pContainer, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceContainer>(pContainer, this, bTakeOwnership);
     }
 
-    virtual weld::Frame* weld_frame(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Frame> weld_frame(const OString &id, bool bTakeOwnership) override
     {
         GtkFrame* pFrame = GTK_FRAME(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pFrame)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pFrame));
-        return new GtkInstanceFrame(pFrame, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceFrame>(pFrame, this, bTakeOwnership);
     }
 
-    virtual weld::ScrolledWindow* weld_scrolled_window(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::ScrolledWindow> weld_scrolled_window(const OString &id, bool bTakeOwnership) override
     {
         GtkScrolledWindow* pScrolledWindow = GTK_SCROLLED_WINDOW(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pScrolledWindow)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pScrolledWindow));
-        return new GtkInstanceScrolledWindow(pScrolledWindow, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceScrolledWindow>(pScrolledWindow, this, bTakeOwnership);
     }
 
-    virtual weld::Notebook* weld_notebook(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Notebook> weld_notebook(const OString &id, bool bTakeOwnership) override
     {
         GtkNotebook* pNotebook = GTK_NOTEBOOK(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pNotebook)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pNotebook));
-        return new GtkInstanceNotebook(pNotebook, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceNotebook>(pNotebook, this, bTakeOwnership);
     }
 
-    virtual weld::Button* weld_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Button> weld_button(const OString &id, bool bTakeOwnership) override
     {
         GtkButton* pButton = GTK_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pButton));
-        return new GtkInstanceButton(pButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceButton>(pButton, this, bTakeOwnership);
     }
 
-    virtual weld::MenuButton* weld_menu_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::MenuButton> weld_menu_button(const OString &id, bool bTakeOwnership) override
     {
         GtkMenuButton* pButton = GTK_MENU_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pButton));
-        return new GtkInstanceMenuButton(pButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceMenuButton>(pButton, this, bTakeOwnership);
     }
 
-    virtual weld::ToggleButton* weld_toggle_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::ToggleButton> weld_toggle_button(const OString &id, bool bTakeOwnership) override
     {
         GtkToggleButton* pToggleButton = GTK_TOGGLE_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pToggleButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pToggleButton));
-        return new GtkInstanceToggleButton(pToggleButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceToggleButton>(pToggleButton, this, bTakeOwnership);
     }
 
-    virtual weld::RadioButton* weld_radio_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::RadioButton> weld_radio_button(const OString &id, bool bTakeOwnership) override
     {
         GtkRadioButton* pRadioButton = GTK_RADIO_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pRadioButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pRadioButton));
-        return new GtkInstanceRadioButton(pRadioButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceRadioButton>(pRadioButton, this, bTakeOwnership);
     }
 
-    virtual weld::CheckButton* weld_check_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::CheckButton> weld_check_button(const OString &id, bool bTakeOwnership) override
     {
         GtkCheckButton* pCheckButton = GTK_CHECK_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pCheckButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pCheckButton));
-        return new GtkInstanceCheckButton(pCheckButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceCheckButton>(pCheckButton, this, bTakeOwnership);
     }
 
-    virtual weld::Scale* weld_scale(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Scale> weld_scale(const OString &id, bool bTakeOwnership) override
     {
         GtkScale* pScale = GTK_SCALE(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pScale)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pScale));
-        return new GtkInstanceScale(pScale, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceScale>(pScale, this, bTakeOwnership);
     }
 
-    virtual weld::ProgressBar* weld_progress_bar(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::ProgressBar> weld_progress_bar(const OString &id, bool bTakeOwnership) override
     {
         GtkProgressBar* pProgressBar = GTK_PROGRESS_BAR(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pProgressBar)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pProgressBar));
-        return new GtkInstanceProgressBar(pProgressBar, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceProgressBar>(pProgressBar, this, bTakeOwnership);
     }
 
-    virtual weld::Entry* weld_entry(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Image> weld_image(const OString &id, bool bTakeOwnership) override
+    {
+        GtkImage* pImage = GTK_IMAGE(gtk_builder_get_object(m_pBuilder, id.getStr()));
+        if (!pImage)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pImage));
+        return o3tl::make_unique<GtkInstanceImage>(pImage, this, bTakeOwnership);
+    }
+
+    virtual std::unique_ptr<weld::Entry> weld_entry(const OString &id, bool bTakeOwnership) override
     {
         GtkEntry* pEntry = GTK_ENTRY(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pEntry)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pEntry));
-        return new GtkInstanceEntry(pEntry, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceEntry>(pEntry, this, bTakeOwnership);
     }
 
-    virtual weld::SpinButton* weld_spin_button(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::SpinButton> weld_spin_button(const OString &id, bool bTakeOwnership) override
     {
         GtkSpinButton* pSpinButton = GTK_SPIN_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pSpinButton)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pSpinButton));
-        return new GtkInstanceSpinButton(pSpinButton, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceSpinButton>(pSpinButton, this, bTakeOwnership);
     }
 
-    virtual weld::TimeSpinButton* weld_time_spin_button(const OString& id, TimeFieldFormat eFormat,
+    virtual std::unique_ptr<weld::MetricSpinButton> weld_metric_spin_button(const OString& id, FieldUnit eUnit,
+                                                                      bool bTakeOwnership) override
+    {
+        return o3tl::make_unique<weld::MetricSpinButton>(weld_spin_button(id, bTakeOwnership), eUnit);
+    }
+
+    virtual std::unique_ptr<weld::FormattedSpinButton> weld_formatted_spin_button(const OString &id, bool bTakeOwnership) override
+    {
+        GtkSpinButton* pSpinButton = GTK_SPIN_BUTTON(gtk_builder_get_object(m_pBuilder, id.getStr()));
+        if (!pSpinButton)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pSpinButton));
+        return o3tl::make_unique<GtkInstanceFormattedSpinButton>(pSpinButton, this, bTakeOwnership);
+    }
+
+    virtual std::unique_ptr<weld::TimeSpinButton> weld_time_spin_button(const OString& id, TimeFieldFormat eFormat,
                                                         bool bTakeOwnership) override
     {
-        return new weld::TimeSpinButton(weld_spin_button(id, bTakeOwnership), eFormat);
+        return o3tl::make_unique<weld::TimeSpinButton>(weld_spin_button(id, bTakeOwnership), eFormat);
     }
 
-    virtual weld::ComboBoxText* weld_combo_box_text(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::ComboBox> weld_combo_box(const OString &id, bool bTakeOwnership) override
     {
-        GtkComboBoxText* pComboBoxText = GTK_COMBO_BOX_TEXT(gtk_builder_get_object(m_pBuilder, id.getStr()));
-        if (!pComboBoxText)
+        GtkComboBox* pComboBox = GTK_COMBO_BOX(gtk_builder_get_object(m_pBuilder, id.getStr()));
+        if (!pComboBox)
             return nullptr;
-        auto_add_parentless_widgets_to_container(GTK_WIDGET(pComboBoxText));
-        return new GtkInstanceComboBoxText(pComboBoxText, bTakeOwnership);
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pComboBox));
+        return o3tl::make_unique<GtkInstanceComboBox>(pComboBox, this, bTakeOwnership);
     }
 
-    virtual weld::TreeView* weld_tree_view(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::TreeView> weld_tree_view(const OString &id, bool bTakeOwnership) override
     {
         GtkTreeView* pTreeView = GTK_TREE_VIEW(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pTreeView)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pTreeView));
-        return new GtkInstanceTreeView(pTreeView, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceTreeView>(pTreeView, this, bTakeOwnership);
     }
 
-    virtual weld::Label* weld_label(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::EntryTreeView> weld_entry_tree_view(const OString& containerid, const OString& entryid, const OString& treeviewid, bool bTakeOwnership) override
+    {
+        GtkContainer* pContainer = GTK_CONTAINER(gtk_builder_get_object(m_pBuilder, containerid.getStr()));
+        if (!pContainer)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pContainer));
+        return o3tl::make_unique<GtkInstanceEntryTreeView>(pContainer, this, bTakeOwnership,
+                                                          weld_entry(entryid, bTakeOwnership),
+                                                          weld_tree_view(treeviewid, bTakeOwnership));
+    }
+
+    virtual std::unique_ptr<weld::Label> weld_label(const OString &id, bool bTakeOwnership) override
     {
         GtkLabel* pLabel = GTK_LABEL(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pLabel)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pLabel));
-        return new GtkInstanceLabel(pLabel, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceLabel>(pLabel, this, bTakeOwnership);
     }
 
-    virtual weld::TextView* weld_text_view(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::TextView> weld_text_view(const OString &id, bool bTakeOwnership) override
     {
         GtkTextView* pTextView = GTK_TEXT_VIEW(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pTextView)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pTextView));
-        return new GtkInstanceTextView(pTextView, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceTextView>(pTextView, this, bTakeOwnership);
     }
 
-    virtual weld::Expander* weld_expander(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Expander> weld_expander(const OString &id, bool bTakeOwnership) override
     {
         GtkExpander* pExpander = GTK_EXPANDER(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pExpander)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pExpander));
-        return new GtkInstanceExpander(pExpander, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceExpander>(pExpander, this, bTakeOwnership);
     }
 
-    virtual weld::DrawingArea* weld_drawing_area(const OString &id, const a11yref& rA11y,
+    virtual std::unique_ptr<weld::DrawingArea> weld_drawing_area(const OString &id, const a11yref& rA11y,
             FactoryFunction /*pUITestFactoryFunction*/, void* /*pUserData*/, bool bTakeOwnership) override
     {
         GtkDrawingArea* pDrawingArea = GTK_DRAWING_AREA(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pDrawingArea)
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pDrawingArea));
-        return new GtkInstanceDrawingArea(pDrawingArea, rA11y, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceDrawingArea>(pDrawingArea, this, rA11y, bTakeOwnership);
     }
 
-    virtual weld::Menu* weld_menu(const OString &id, bool bTakeOwnership) override
+    virtual std::unique_ptr<weld::Menu> weld_menu(const OString &id, bool bTakeOwnership) override
     {
         GtkMenu* pMenu = GTK_MENU(gtk_builder_get_object(m_pBuilder, id.getStr()));
         if (!pMenu)
             return nullptr;
-        return new GtkInstanceMenu(pMenu, bTakeOwnership);
+        return o3tl::make_unique<GtkInstanceMenu>(pMenu, bTakeOwnership);
+    }
+
+    virtual std::unique_ptr<weld::SizeGroup> create_size_group() override
+    {
+        return o3tl::make_unique<GtkInstanceSizeGroup>();
     }
 };
 
@@ -4766,7 +8137,7 @@ void GtkInstanceWindow::help()
             break;
         sHelpId = ::get_help_id(pWidget);
     }
-    std::unique_ptr<weld::Widget> xTemp(pWidget != m_pWidget ? new GtkInstanceWidget(pWidget, false) : nullptr);
+    std::unique_ptr<weld::Widget> xTemp(pWidget != m_pWidget ? new GtkInstanceWidget(pWidget, m_pBuilder, false) : nullptr);
     weld::Widget* pSource = xTemp ? xTemp.get() : this;
     bool bRunNormalHelpRequest = !m_aHelpRequestHdl.IsSet() || m_aHelpRequestHdl.Call(*pSource);
     Help* pHelp = bRunNormalHelpRequest ? Application::GetHelp() : nullptr;
@@ -4774,59 +8145,49 @@ void GtkInstanceWindow::help()
         pHelp->Start(OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), pSource);
 }
 
+//iterate upwards through the hierarchy from this widgets through its parents
+//calling func with their helpid until func returns true or we run out of parents
+void GtkInstanceWidget::help_hierarchy_foreach(const std::function<bool(const OString&)>& func)
+{
+    GtkWidget* pParent = m_pWidget;
+    while ((pParent = gtk_widget_get_parent(pParent)))
+    {
+        // tdf#122355 before trying dialog help, check to see if there is a notebook
+        // called tabcontrol, and try the help for the current page of that first
+        if (m_pBuilder && GTK_IS_DIALOG(pParent))
+        {
+            std::unique_ptr<weld::Notebook> xNotebook(m_pBuilder->weld_notebook("tabcontrol", false));
+            if (xNotebook)
+            {
+                if (GtkInstanceContainer* pPage = dynamic_cast<GtkInstanceContainer*>(xNotebook->get_page(xNotebook->get_current_page_ident())))
+                {
+                    bool bFinished = false;
+                    GtkWidget* pContainer = pPage->getWidget();
+                    GList* pChildren = gtk_container_get_children(GTK_CONTAINER(pContainer));
+                    GList* pChild = g_list_first(pChildren);
+                    if (pChild)
+                    {
+                        GtkWidget* pPageWidget = static_cast<GtkWidget*>(pChild->data);
+                        bFinished = func(::get_help_id(pPageWidget));
+                    }
+                    g_list_free(pChildren);
+                    if (bFinished)
+                        return;
+                }
+            }
+        }
+        if (func(::get_help_id(pParent)))
+            return;
+    }
+}
+
 weld::Builder* GtkInstance::CreateBuilder(weld::Widget* pParent, const OUString& rUIRoot, const OUString& rUIFile)
 {
     GtkInstanceWidget* pParentWidget = dynamic_cast<GtkInstanceWidget*>(pParent);
+    if (pParent && !pParentWidget) //remove when complete
+        return SalInstance::CreateBuilder(pParent, rUIRoot, rUIFile);
     GtkWidget* pBuilderParent = pParentWidget ? pParentWidget->getWidget() : nullptr;
     return new GtkInstanceBuilder(pBuilderParent, rUIRoot, rUIFile);
-}
-
-GtkMessageType VclToGtk(VclMessageType eType)
-{
-    GtkMessageType eRet(GTK_MESSAGE_INFO);
-    switch (eType)
-    {
-        case VclMessageType::Info:
-            eRet = GTK_MESSAGE_INFO;
-            break;
-        case VclMessageType::Warning:
-            eRet = GTK_MESSAGE_WARNING;
-            break;
-        case VclMessageType::Question:
-            eRet = GTK_MESSAGE_QUESTION;
-            break;
-        case VclMessageType::Error:
-            eRet = GTK_MESSAGE_ERROR;
-            break;
-    }
-    return eRet;
-}
-
-GtkButtonsType VclToGtk(VclButtonsType eType)
-{
-    GtkButtonsType eRet(GTK_BUTTONS_NONE);
-    switch (eType)
-    {
-        case VclButtonsType::NONE:
-            eRet = GTK_BUTTONS_NONE;
-            break;
-        case VclButtonsType::Ok:
-            eRet = GTK_BUTTONS_OK;
-            break;
-        case VclButtonsType::Close:
-            eRet = GTK_BUTTONS_CLOSE;
-            break;
-        case VclButtonsType::Cancel:
-            eRet = GTK_BUTTONS_CANCEL;
-            break;
-        case VclButtonsType::YesNo:
-            eRet = GTK_BUTTONS_YES_NO;
-            break;
-        case VclButtonsType::OkCancel:
-            eRet = GTK_BUTTONS_OK_CANCEL;
-            break;
-    }
-    return eRet;
 }
 
 weld::MessageDialog* GtkInstance::CreateMessageDialog(weld::Widget* pParent, VclMessageType eMessageType, VclButtonsType eButtonsType, const OUString &rPrimaryMessage)
@@ -4836,7 +8197,7 @@ weld::MessageDialog* GtkInstance::CreateMessageDialog(weld::Widget* pParent, Vcl
     GtkMessageDialog* pMessageDialog = GTK_MESSAGE_DIALOG(gtk_message_dialog_new(pParentWindow, GTK_DIALOG_MODAL,
                                                           VclToGtk(eMessageType), VclToGtk(eButtonsType), "%s",
                                                           OUStringToOString(rPrimaryMessage, RTL_TEXTENCODING_UTF8).getStr()));
-    return new GtkInstanceMessageDialog(pMessageDialog, true);
+    return new GtkInstanceMessageDialog(pMessageDialog, nullptr, true);
 }
 
 weld::Window* GtkInstance::GetFrameWeld(const css::uno::Reference<css::awt::XWindow>& rWindow)
@@ -4849,7 +8210,7 @@ weld::Window* GtkInstance::GetFrameWeld(const css::uno::Reference<css::awt::XWin
 weld::Window* GtkSalFrame::GetFrameWeld() const
 {
     if (!m_xFrameWeld)
-        m_xFrameWeld.reset(new GtkInstanceWindow(GTK_WINDOW(getWindow()), false));
+        m_xFrameWeld.reset(new GtkInstanceWindow(GTK_WINDOW(getWindow()), nullptr, false));
     return m_xFrameWeld.get();
 }
 

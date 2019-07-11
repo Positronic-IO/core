@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
+#include <com/sun/star/ucb/ResultSetException.hpp>
 #include <osl/diagnose.h>
 #include <ucbhelper/contentidentifier.hxx>
 
@@ -45,7 +46,7 @@ namespace tdoc_ucp
 
 struct ResultListEntry
 {
-    OUString                                  aURL;
+    OUString const                            aURL;
     uno::Reference< ucb::XContentIdentifier > xId;
     uno::Reference< ucb::XContent >           xContent;
     uno::Reference< sdbc::XRow >              xRow;

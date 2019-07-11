@@ -31,9 +31,12 @@
 #include <com/sun/star/sdbc/SQLException.hpp>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbexception.hxx>
 #include <comphelper/processfactory.hxx>
+
+#include <vcl/weld.hxx>
 
 #include "hsqlimport.hxx"
 #include "parseschema.hxx"
@@ -214,7 +217,6 @@ using namespace css::embed;
 
 HsqlImporter::HsqlImporter(Reference<XConnection>& rConnection, const Reference<XStorage>& rStorage)
     : m_rConnection(rConnection)
-    , m_xStorage(nullptr)
 {
     m_xStorage.set(rStorage);
 }
@@ -284,7 +286,7 @@ void HsqlImporter::parseTableRows(const IndexVector& rIndexes,
     Reference<XInputStream> xInput = xStream->getInputStream();
     rowInput.setInputStream(xInput);
 
-    if (rIndexes.size() > 0)
+    if (!rIndexes.empty())
     {
         HsqlBinaryNode aPrimaryNode{ rIndexes.at(0) };
         processTree(aPrimaryNode, rowInput, rColTypes, sTableName, rIndexes.size());
@@ -293,7 +295,7 @@ void HsqlImporter::parseTableRows(const IndexVector& rIndexes,
     xInput->closeInput();
 }
 
-void HsqlImporter::importHsqlDatabase()
+void HsqlImporter::importHsqlDatabase(weld::Window* pParent)
 {
     assert(m_xStorage);
 
@@ -305,13 +307,12 @@ void HsqlImporter::importHsqlDatabase()
     }
     catch (SQLException& ex)
     {
-        if (!pException)
-            pException.reset(new SQLException{ ex });
+        pException.reset(new SQLException{ std::move(ex) });
     }
 
     auto statements = parser.getCreateStatements();
 
-    if (statements.size() < 1 && !pException)
+    if (statements.empty() && !pException)
     {
         SAL_WARN("dbaccess", "dbashql: there is nothing to import");
         return; // there is nothing to import
@@ -327,23 +328,37 @@ void HsqlImporter::importHsqlDatabase()
         }
         catch (SQLException& ex)
         {
-            if (!pException)
-                pException.reset(new SQLException{ ex });
+            // chain errors and keep going
+            if (pException)
+                ex.NextException <<= *pException;
+            pException.reset(new SQLException{ std::move(ex) });
         }
     }
 
     // data
     for (const auto& tableIndex : parser.getTableIndexes())
     {
-        std::vector<ColumnDefinition> aColTypes = parser.getTableColumnTypes(tableIndex.first);
         try
         {
+            std::vector<ColumnDefinition> aColTypes = parser.getTableColumnTypes(tableIndex.first);
             parseTableRows(tableIndex.second, aColTypes, tableIndex.first);
+        }
+        catch (const std::out_of_range& e)
+        {
+            std::unique_ptr<SQLException> ex(new SQLException);
+            const char* msg = e.what();
+            ex->SQLState = OUString(msg, strlen(msg), RTL_TEXTENCODING_ASCII_US);
+            // chain errors and keep going
+            if (pException)
+                ex->NextException <<= *pException;
+            pException = std::move(ex);
         }
         catch (SQLException& ex)
         {
-            if (!pException)
-                pException.reset(new SQLException{ ex });
+            // chain errors and keep going
+            if (pException)
+                ex.NextException <<= *pException;
+            pException.reset(new SQLException{ std::move(ex) });
         }
     }
 
@@ -357,16 +372,18 @@ void HsqlImporter::importHsqlDatabase()
         }
         catch (SQLException& ex)
         {
-            if (!pException)
-                pException.reset(new SQLException{ ex });
+            // chain errors and keep going
+            if (pException)
+                ex.NextException <<= *pException;
+            pException.reset(new SQLException{ std::move(ex) });
         }
     }
 
-    // show first error occurred
     if (pException)
     {
         SAL_WARN("dbaccess", "Error during migration");
-        dbtools::showError(dbtools::SQLExceptionInfo{ *pException }, nullptr,
+        dbtools::showError(dbtools::SQLExceptionInfo{ *pException },
+                           pParent ? pParent->GetXWindow() : nullptr,
                            ::comphelper::getProcessComponentContext());
     }
 }

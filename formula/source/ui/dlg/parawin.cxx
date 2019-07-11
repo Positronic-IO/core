@@ -21,6 +21,7 @@
 #include <svl/zforlist.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include "parawin.hxx"
 #include <formula/formdata.hxx>
@@ -395,7 +396,7 @@ void ParaWin::SetArgNameFont(sal_uInt16 no,const vcl::Font& aFont)
 void ParaWin::SetEdFocus()
 {
     UpdateArgDesc(0);
-    if(0<aParaArray.size())
+    if(!aParaArray.empty())
         aArgInput[0].GetArgEdPtr()->GrabFocus();
 }
 
@@ -525,7 +526,7 @@ IMPL_LINK( ParaWin, GetFxHdl, ArgInput&, rPtr, void )
 {
     sal_uInt16 nOffset = GetSliderPos();
     nEdFocus=NOT_FOUND;
-    for (sal_uInt16 nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
+    for (size_t nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
     {
         if(&rPtr == &aArgInput[nPos])
         {
@@ -546,7 +547,7 @@ IMPL_LINK( ParaWin, GetFxFocusHdl, ArgInput&, rPtr, void )
 {
     sal_uInt16 nOffset = GetSliderPos();
     nEdFocus=NOT_FOUND;
-    for (sal_uInt16 nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
+    for (size_t nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
     {
         if(&rPtr == &aArgInput[nPos])
         {
@@ -568,7 +569,7 @@ IMPL_LINK( ParaWin, GetEdFocusHdl, ArgInput&, rPtr, void )
 {
     sal_uInt16 nOffset = GetSliderPos();
     nEdFocus=NOT_FOUND;
-    for (sal_uInt16 nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
+    for (size_t nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
     {
         if(&rPtr == &aArgInput[nPos])
         {
@@ -597,7 +598,7 @@ IMPL_LINK( ParaWin, ModifyHdl, ArgInput&, rPtr, void )
 {
     sal_uInt16 nOffset = GetSliderPos();
     nEdFocus=NOT_FOUND;
-    for (sal_uInt16 nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
+    for (size_t nPos=0; nPos < SAL_N_ELEMENTS(aArgInput); ++nPos)
     {
         if(&rPtr == &aArgInput[nPos])
         {

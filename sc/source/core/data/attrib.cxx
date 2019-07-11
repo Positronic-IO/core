@@ -21,20 +21,15 @@
 
 #include <scitems.hxx>
 
-#include <editeng/eeitem.hxx>
-
-#include <editeng/boxitem.hxx>
-#include <editeng/editdata.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/editobj.hxx>
-#include <editeng/flditem.hxx>
+#include <editeng/borderline.hxx>
 
 #include <libxml/xmlwriter.h>
 
 #include <attrib.hxx>
 #include <global.hxx>
 #include <editutil.hxx>
-#include <sc.hrc>
 #include <mid.h>
 #include <globstr.hrc>
 #include <scresid.hxx>
@@ -44,7 +39,6 @@ using namespace com::sun::star;
 
 
 SfxPoolItem* ScProtectionAttr::CreateDefault() { return new ScProtectionAttr; }
-SfxPoolItem* ScDoubleItem::CreateDefault() { SAL_WARN( "sc", "No ScDoubleItem factory available"); return nullptr; }
 
 /**
  * General Help Function
@@ -376,18 +370,12 @@ void ScProtectionAttr::SetHidePrint( bool bHPrint)
  * ScPageHFItem - Dates from the Head and Foot lines
  */
 ScPageHFItem::ScPageHFItem( sal_uInt16 nWhichP )
-    :   SfxPoolItem ( nWhichP ),
-        pLeftArea   ( nullptr ),
-        pCenterArea ( nullptr ),
-        pRightArea  ( nullptr )
+    :   SfxPoolItem ( nWhichP )
 {
 }
 
 ScPageHFItem::ScPageHFItem( const ScPageHFItem& rItem )
-    :   SfxPoolItem ( rItem ),
-        pLeftArea   ( nullptr ),
-        pCenterArea ( nullptr ),
-        pRightArea  ( nullptr )
+    :   SfxPoolItem ( rItem )
 {
     if ( rItem.pLeftArea )
         pLeftArea = rItem.pLeftArea->Clone();
@@ -575,37 +563,6 @@ sal_uInt16 ScViewObjectModeItem::GetVersion( sal_uInt16 /* nFileVersion */ ) con
     return 1;
 }
 
-/**
- * Double
- */
-ScDoubleItem::ScDoubleItem( sal_uInt16 nWhichP, double nVal )
-    :   SfxPoolItem ( nWhichP ),
-        nValue  ( nVal )
-{
-}
-
-ScDoubleItem::ScDoubleItem( const ScDoubleItem& rItem )
-    :   SfxPoolItem ( rItem )
-{
-        nValue = rItem.nValue;
-}
-
-bool ScDoubleItem::operator==( const SfxPoolItem& rItem ) const
-{
-    assert(SfxPoolItem::operator==(rItem));
-    const ScDoubleItem& _rItem = static_cast<const ScDoubleItem&>(rItem);
-    return nValue == _rItem.nValue;
-}
-
-SfxPoolItem* ScDoubleItem::Clone( SfxItemPool* ) const
-{
-    return new ScDoubleItem( *this );
-}
-
-ScDoubleItem::~ScDoubleItem()
-{
-}
-
 ScPageScaleToItem::ScPageScaleToItem() :
     SfxPoolItem( ATTR_PAGE_SCALETO ),
     mnWidth( 0 ),
@@ -642,7 +599,7 @@ void lclAppendScalePageCount( OUString& rText, sal_uInt16 nPages )
     rText += ": ";
     if( nPages )
     {
-        OUString aPages( ScResId( STR_SCATTR_PAGE_SCALE_PAGES ) );
+        OUString aPages(ScResId(STR_SCATTR_PAGE_SCALE_PAGES, nPages));
         rText += aPages.replaceFirst( "%1", OUString::number( nPages ) );
     }
     else

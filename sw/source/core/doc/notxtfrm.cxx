@@ -22,8 +22,8 @@
 #include <vcl/print.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/svapp.hxx>
-#include <svtools/imapobj.hxx>
-#include <svtools/imap.hxx>
+#include <vcl/imapobj.hxx>
+#include <vcl/imap.hxx>
 #include <svl/urihelper.hxx>
 #include <svtools/soerr.hxx>
 #include <sfx2/progress.hxx>
@@ -68,6 +68,7 @@
 #include <accessibilityoptions.hxx>
 #include <com/sun/star/embed/EmbedMisc.hpp>
 #include <com/sun/star/embed/EmbedStates.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <svtools/embedhlp.hxx>
 #include <dview.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
@@ -83,7 +84,7 @@
 
 using namespace com::sun::star;
 
-inline bool GetRealURL( const SwGrfNode& rNd, OUString& rText )
+static bool GetRealURL( const SwGrfNode& rNd, OUString& rText )
 {
     bool bRet = rNd.GetFileFilterNms( &rText, nullptr );
     if( bRet )
@@ -689,13 +690,10 @@ bool SwNoTextFrame::GetCharRect( SwRect &rRect, const SwPosition& rPos,
     else
         rRect.Intersection_( aFrameRect );
 
-    if ( pCMS )
+    if ( pCMS && pCMS->m_bRealHeight )
     {
-        if ( pCMS->m_bRealHeight )
-        {
-            pCMS->m_aRealHeight.setY(rRect.Height());
-            pCMS->m_aRealHeight.setX(0);
-        }
+        pCMS->m_aRealHeight.setY(rRect.Height());
+        pCMS->m_aRealHeight.setX(0);
     }
 
     return true;
@@ -710,13 +708,14 @@ bool SwNoTextFrame::GetCursorOfst(SwPosition* pPos, Point& ,
     return true;
 }
 
-#define CLEARCACHE {\
-    SwFlyFrame* pFly = FindFlyFrame();\
-    if( pFly && pFly->GetFormat()->GetSurround().IsContour() )\
-    {\
-        ClrContourCache( pFly->GetVirtDrawObj() );\
-        pFly->NotifyBackground( FindPageFrame(), getFramePrintArea(), PREP_FLY_ATTR_CHG );\
-    }\
+void SwNoTextFrame::ClearCache()
+{
+    SwFlyFrame* pFly = FindFlyFrame();
+    if( pFly && pFly->GetFormat()->GetSurround().IsContour() )
+    {
+        ClrContourCache( pFly->GetVirtDrawObj() );
+        pFly->NotifyBackground( FindPageFrame(), getFramePrintArea(), PREP_FLY_ATTR_CHG );
+    }
 }
 
 void SwNoTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
@@ -754,7 +753,7 @@ void SwNoTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
         }
         SAL_FALLTHROUGH;
     case RES_FMT_CHG:
-        CLEARCACHE
+        ClearCache();
         break;
 
     case RES_ATTRSET_CHG:
@@ -764,7 +763,7 @@ void SwNoTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
                 if( SfxItemState::SET == static_cast<const SwAttrSetChg*>(pOld)->GetChgSet()->
                                 GetItemState( n, false ))
                 {
-                    CLEARCACHE
+                    ClearCache();
 
                     if(RES_GRFATR_ROTATION == n)
                     {
@@ -813,7 +812,7 @@ void SwNoTextFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew )
             bComplete = false;
             SwGrfNode* pNd = static_cast<SwGrfNode*>( GetNode());
 
-            CLEARCACHE
+            ClearCache();
 
             SwRect aRect( getFrameArea() );
 
@@ -880,7 +879,7 @@ static void lcl_correctlyAlignRect( SwRect& rAlignedGrfArea, const SwRect& rInAr
     }
 }
 
-bool paintUsingPrimitivesHelper(
+static bool paintUsingPrimitivesHelper(
     vcl::RenderContext& rOutputDevice,
     const drawinglayer::primitive2d::Primitive2DContainer& rSequence,
     const basegfx::B2DRange& rSourceRange,
@@ -911,15 +910,13 @@ bool paintUsingPrimitivesHelper(
                 uno::Sequence< beans::PropertyValue >());
 
             // get a primitive processor for rendering
-            drawinglayer::processor2d::BaseProcessor2D* pProcessor2D =
+            std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> pProcessor2D(
                 drawinglayer::processor2d::createProcessor2DFromOutputDevice(
-                                                rOutputDevice, aViewInformation2D);
-
+                                                rOutputDevice, aViewInformation2D) );
             if(pProcessor2D)
             {
                 // render and cleanup
                 pProcessor2D->process(rSequence);
-                delete pProcessor2D;
                 return true;
             }
         }
@@ -939,60 +936,81 @@ void paintGraphicUsingPrimitivesHelper(
     // -> the primitive renderer will create the needed pdf export data
     // -> if bitmap content, it will be cached system-dependent
     drawinglayer::primitive2d::Primitive2DContainer aContent(1);
-    bool bDone(false);
 
-    if(!bDone)
+    aContent[0] = new drawinglayer::primitive2d::GraphicPrimitive2D(
+        rGraphicTransform,
+        rGrfObj,
+        rGraphicAttr);
+
+    // RotateFlyFrame3: If ClipRegion is set at OutputDevice, we
+    // need to use that. Usually the renderer would be a VCL-based
+    // PrimitiveRenderer, but there are system-specific shortcuts that
+    // will *not* use the VCL-Paint of Bitmap and thus ignore this.
+    // Anyways, indirectly using a CLipRegion set at the target OutDev
+    // when using a PrimitiveRenderer is a non-valid implication.
+    // First tried only to use when HasPolyPolygonOrB2DPolyPolygon(),
+    // but there is an optimization at ClipRegion creation that detects
+    // a single Rectangle in a tools::PolyPolygon and forces to a simple
+    // RegionBand-based implementation, so cannot use it here.
+    if(rOutputDevice.IsClipRegion())
     {
-        aContent[0] = new drawinglayer::primitive2d::GraphicPrimitive2D(
-            rGraphicTransform,
-            rGrfObj,
-            rGraphicAttr);
+        const basegfx::B2DPolyPolygon aClip(rOutputDevice.GetClipRegion().GetAsB2DPolyPolygon());
 
-        // RotateFlyFrame3: If ClipRegion is set at OutputDevice, we
-        // need to use that. Usually the renderer would be a VCL-based
-        // PrimitiveRenderer, but there are system-specific shortcuts that
-        // will *not* use the VCL-Paint of Bitmap and thus ignore this.
-        // Anyways, indirectly using a CLipRegion set at the target OutDev
-        // when using a PrimitiveRenderer is a non-valid implication.
-        // First tried only to use when HasPolyPolygonOrB2DPolyPolygon(),
-        // but there is an optimization at ClipRegion creation that detects
-        // a single Rectangle in a tools::PolyPolygon and forces to a simple
-        // RegionBand-based implementation, so cannot use it here.
-        if(rOutputDevice.IsClipRegion())
+        if(0 != aClip.count())
         {
-            const basegfx::B2DPolyPolygon aClip(rOutputDevice.GetClipRegion().GetAsB2DPolyPolygon());
+            // tdf#114076: Expand ClipRange to next PixelBound
+            // Do this by going to basegfx::B2DRange, adding a
+            // single pixel size and using floor/ceil to go to
+            // full integer (as needed for pixels). Also need
+            // to go back to basegfx::B2DPolyPolygon for the
+            // creation of the needed MaskPrimitive2D.
+            // The general problem is that Writer is scrolling
+            // using blitting the unchanged parts, this forces
+            // this part of the scroll to pixel coordinate steps,
+            // while the ViewTransformation for paint nowadays has
+            // a sub-pixel precision. This results in an offset
+            // up to one pixel in radius. To solve this for now,
+            // we need to expand to the next outer pixel bound.
+            // Hopefully in the future we will someday be able to
+            // stay on the full available precision, but this
+            // will need a change in the repaint/scroll paradigm.
+            const basegfx::B2DRange aClipRange(aClip.getB2DRange());
+            const basegfx::B2DVector aSinglePixelXY(rOutputDevice.GetInverseViewTransformation() * basegfx::B2DVector(1.0, 1.0));
+            const basegfx::B2DRange aExpandedClipRange(
+                floor(aClipRange.getMinX() - aSinglePixelXY.getX()),
+                floor(aClipRange.getMinY() - aSinglePixelXY.getY()),
+                ceil(aClipRange.getMaxX() + aSinglePixelXY.getX()),
+                ceil(aClipRange.getMaxY() + aSinglePixelXY.getY()));
 
-            if(0 != aClip.count())
+            // create the enclosing rectangle as polygon
+            basegfx::B2DPolyPolygon aTarget(basegfx::utils::createPolygonFromRect(aExpandedClipRange));
+
+            // tdf#124272 the fix above (tdf#114076) was too rough - the
+            // clip region used may be a PolyPolygon. In that case that
+            // PolyPolygon would have to be scaled to mentioned PixelBounds.
+            // Since that is not really possible geometrically (would need
+            // more some 'grow in outside direction' but with unequal grow
+            // values in all directions - just maaany problems
+            // involved), use a graphical trick: The topology of the
+            // PolyPolygon uses the stndard FillRule, so adding the now
+            // guaranteed to be bigger or equal bounding (enclosing)
+            // rectangle twice as polygon will expand the BoundRange, but
+            // not change the geometry visualization at all
+            if(!rOutputDevice.GetClipRegion().IsRectangle())
             {
-                // tdf#114076: Expand ClipRange to next PixelBound
-                // Do this by going to basegfx::B2DRange, adding a
-                // single pixel size and using floor/ceil to go to
-                // full integer (as needed for pixels). Also need
-                // to go back to basegfx::B2DPolyPolygon for the
-                // creation of the needed MaskPrimitive2D.
-                // The general problem is that Writer is scrolling
-                // using blitting the unchanged parts, this forces
-                // this part of the scroll to pixel coordinate steps,
-                // while the ViewTransformation for paint nowadays has
-                // a sub-pixel precision. This results in an offset
-                // up to one pixel in radius. To solve this for now,
-                // we need to expand to the next outer pixel bound.
-                // Hopefully in the future we will someday be able to
-                // stay on the full available precision, but this
-                // will need a change in the repaint/scroll paradigm.
-                const basegfx::B2DRange aClipRange(aClip.getB2DRange());
-                const basegfx::B2DVector aSinglePixelXY(rOutputDevice.GetInverseViewTransformation() * basegfx::B2DVector(1.0, 1.0));
-                const basegfx::B2DRange aExpandedClipRange(
-                    floor(aClipRange.getMinX() - aSinglePixelXY.getX()),
-                    floor(aClipRange.getMinY() - aSinglePixelXY.getY()),
-                    ceil(aClipRange.getMaxX() + aSinglePixelXY.getX()),
-                    ceil(aClipRange.getMaxY() + aSinglePixelXY.getY()));
+                // double the outer rectangle range polygon to have it
+                // included twice
+                aTarget.append(aTarget.getB2DPolygon(0));
 
-                aContent[0] = new drawinglayer::primitive2d::MaskPrimitive2D(
-                    basegfx::B2DPolyPolygon(
-                        basegfx::utils::createPolygonFromRect(aExpandedClipRange)),
-                    aContent);
+                // add the original clip 'inside' (due to being smaller
+                // or equal). That PolyPolygon may have an unknown number
+                // of polygons (>=1)
+                aTarget.append(aClip);
             }
+
+            aContent[0] = new drawinglayer::primitive2d::MaskPrimitive2D(
+                aTarget,
+                aContent);
         }
     }
 
@@ -1113,8 +1131,7 @@ void SwNoTextFrame::PaintPicture( vcl::RenderContext* pOut, const SwRect &rGrfAr
                         pVout = pOut;
                         pOut = pShell->GetOut();
                     }
-                    else if( pShell->GetWin() &&
-                             OUTDEV_VIRDEV == pOut->GetOutDevType() )
+                    else if( pShell->GetWin() && pOut->IsVirtual() )
                     {
                         pVout = pOut;
                         pOut = pShell->GetWin();
@@ -1122,7 +1139,7 @@ void SwNoTextFrame::PaintPicture( vcl::RenderContext* pOut, const SwRect &rGrfAr
                     else
                         pVout = nullptr;
 
-                    OSL_ENSURE( OUTDEV_VIRDEV != pOut->GetOutDevType() ||
+                    OSL_ENSURE( !pOut->IsVirtual() ||
                             pShell->GetViewOptions()->IsPDFExport() || pShell->isOutputToWindow(),
                             "pOut should not be a virtual device" );
 
@@ -1254,9 +1271,8 @@ void SwNoTextFrame::PaintPicture( vcl::RenderContext* pOut, const SwRect &rGrfAr
             }
 
             sal_Int64 nMiscStatus = pOLENd->GetOLEObj().GetOleRef()->getStatus( pOLENd->GetAspect() );
-            if ( !bPrn && dynamic_cast< const SwCursorShell *>( pShell ) !=  nullptr && (
-                    (nMiscStatus & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE) ||
-                    pOLENd->GetOLEObj().GetObject().IsGLChart()))
+            if ( !bPrn && dynamic_cast< const SwCursorShell *>( pShell ) !=  nullptr &&
+                    (nMiscStatus & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE))
             {
                 const SwFlyFrame *pFly = FindFlyFrame();
                 assert( pFly != nullptr );
@@ -1299,7 +1315,7 @@ bool SwNoTextFrame::IsTransparent() const
         // we can be more specific - rotations of multiples of
         // 90 degrees will leave no gaps. Go from [0.0 .. F_2PI]
         // to [0 .. 360] and check modulo 90
-        const long nRot(static_cast<long>(getLocalFrameRotation() / F_PI180));
+        const long nRot(static_cast<long>(basegfx::rad2deg(getLocalFrameRotation())));
         const bool bMultipleOf90(0 == (nRot % 90));
 
         if(!bMultipleOf90)

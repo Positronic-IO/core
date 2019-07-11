@@ -24,6 +24,7 @@
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
 #include <tools/fract.hxx>
+#include <sal/log.hxx>
 
 #include <functional>
 #include <algorithm>
@@ -111,6 +112,7 @@ BrowseBox::BrowseBox( vcl::Window* pParent, WinBits nBits, BrowserMode nMode )
     ,DragSourceHelper( this )
     ,DropTargetHelper( this )
     ,aHScroll( VclPtr<ScrollBar>::Create(this, WinBits( WB_HSCROLL )) )
+    ,aStatusBar( VclPtr<StatusBar>::Create(this) )
 {
     ConstructImpl( nMode );
 }
@@ -137,6 +139,7 @@ void BrowseBox::dispose()
     pDataWin.disposeAndClear();
     pVScroll.disposeAndClear();
     aHScroll.disposeAndClear();
+    aStatusBar.disposeAndClear();
 
     // free columns-space
     mvCols.clear();
@@ -741,13 +744,13 @@ void BrowseBox::RemoveColumns()
     commitBrowseBoxEvent(
         CHILD,
         Any(),
-        makeAny(m_pImpl->getAccessibleHeaderBar(BBTYPE_COLUMNHEADERBAR))
+        makeAny(m_pImpl->getAccessibleHeaderBar(vcl::BBTYPE_COLUMNHEADERBAR))
     );
 
     // and now append it again
     commitBrowseBoxEvent(
         CHILD,
-        makeAny(m_pImpl->getAccessibleHeaderBar(BBTYPE_COLUMNHEADERBAR)),
+        makeAny(m_pImpl->getAccessibleHeaderBar(vcl::BBTYPE_COLUMNHEADERBAR)),
         Any()
     );
 
@@ -1075,13 +1078,13 @@ void BrowseBox::Clear()
     commitBrowseBoxEvent(
         CHILD,
         Any(),
-        makeAny( m_pImpl->getAccessibleHeaderBar( BBTYPE_ROWHEADERBAR ) )
+        makeAny( m_pImpl->getAccessibleHeaderBar( vcl::BBTYPE_ROWHEADERBAR ) )
     );
 
     // and now append it again
     commitBrowseBoxEvent(
         CHILD,
-        makeAny( m_pImpl->getAccessibleHeaderBar( BBTYPE_ROWHEADERBAR ) ),
+        makeAny( m_pImpl->getAccessibleHeaderBar( vcl::BBTYPE_ROWHEADERBAR ) ),
         Any()
     );
 
@@ -1156,7 +1159,10 @@ void BrowseBox::RowInserted( long nRow, long nNumRows, bool bDoPaint, bool bKeep
     if ( nCurRow == BROWSER_ENDOFSELECTION )
         GoToRow( 0, false, bKeepSelection );
     else if ( nRow <= nCurRow )
-        GoToRow( nCurRow += nNumRows, false, bKeepSelection );
+    {
+        nCurRow += nNumRows;
+        GoToRow( nCurRow, false, bKeepSelection );
+    }
 
     // adjust the vertical scrollbar
     if ( bDoPaint )
@@ -1315,13 +1321,13 @@ void BrowseBox::RowRemoved( long nRow, long nNumRows, bool bDoPaint )
             commitBrowseBoxEvent(
                 CHILD,
                 Any(),
-                makeAny( m_pImpl->getAccessibleHeaderBar( BBTYPE_ROWHEADERBAR ) )
+                makeAny( m_pImpl->getAccessibleHeaderBar( vcl::BBTYPE_ROWHEADERBAR ) )
             );
 
             // and now append it again
             commitBrowseBoxEvent(
                 CHILD,
-                makeAny(m_pImpl->getAccessibleHeaderBar(BBTYPE_ROWHEADERBAR)),
+                makeAny(m_pImpl->getAccessibleHeaderBar(vcl::BBTYPE_ROWHEADERBAR)),
                 Any()
             );
             commitBrowseBoxEvent(
@@ -2081,11 +2087,11 @@ bool BrowseBox::ReserveControlArea(sal_uInt16 nWidth)
 
 tools::Rectangle BrowseBox::GetControlArea() const
 {
-
+    auto nHeight = aHScroll->GetSizePixel().Height();
     return tools::Rectangle(
-        Point( 0, GetOutputSizePixel().Height() - aHScroll->GetSizePixel().Height() ),
+        Point( 0, GetOutputSizePixel().Height() - nHeight ),
         Size( GetOutputSizePixel().Width() - aHScroll->GetSizePixel().Width(),
-             aHScroll->GetSizePixel().Height() ) );
+             nHeight ) );
 }
 
 void BrowseBox::SetMode( BrowserMode nMode )
@@ -2231,7 +2237,7 @@ bool BrowseBox::IsCursorMoveAllowed( long, sal_uInt16 ) const
 /*  [Description]
 
     This virtual method is always called before the cursor is moved directly.
-    By means of 'return sal_False', we avoid doing this if e.g. a record
+    By means of 'return false', we avoid doing this if e.g. a record
     contradicts any rules.
 
     This method is not called, if the cursor movement results from removing or

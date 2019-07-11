@@ -13,8 +13,8 @@ namespace
 {
     const char AVMEDIA_NO_ERROR[] = "No error";
 
-    const char* ( *libvlc_get_version ) (void);
-    char *  ( * libvlc_errmsg ) (void);
+    const char* ( *libvlc_get_version ) ();
+    char *  ( * libvlc_errmsg ) ();
 }
 
 namespace avmedia
@@ -25,7 +25,7 @@ namespace wrapper
 {
 bool Common::LoadSymbols()
 {
-    ApiMap const VLC_COMMON_API[] =
+    static ApiMap const VLC_COMMON_API[] =
     {
         SYM_MAP( libvlc_get_version ),
         SYM_MAP( libvlc_errmsg )

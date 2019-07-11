@@ -27,6 +27,8 @@
 #include <editeng/lrspitem.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <numrule.hxx>
 #include <doc.hxx>
 #include <docary.hxx>
@@ -43,7 +45,7 @@
 using namespace css;
 
 // <UL TYPE=...>
-static HTMLOptionEnum<sal_Unicode> aHTMLULTypeTable[] =
+static HTMLOptionEnum<sal_Unicode> const aHTMLULTypeTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_ULTYPE_disc,    HTML_BULLETCHAR_DISC   },
     { OOO_STRING_SVTOOLS_HTML_ULTYPE_circle,  HTML_BULLETCHAR_CIRCLE },
@@ -104,9 +106,9 @@ void SwHTMLParser::NewNumBulList( HtmlTokenId nToken )
             nChrFormatPoolId = RES_POOLCHR_BUL_LEVEL;
         }
 
-        short nAbsLSpace = HTML_NUMBUL_MARGINLEFT;
+        sal_Int32 nAbsLSpace = HTML_NUMBUL_MARGINLEFT;
 
-        short nFirstLineIndent  = HTML_NUMBUL_INDENT;
+        sal_Int32 nFirstLineIndent  = HTML_NUMBUL_INDENT;
         if( nLevel > 0 )
         {
             const SwNumFormat& rPrevNumFormat = rInfo.GetNumRule()->Get( nLevel-1 );

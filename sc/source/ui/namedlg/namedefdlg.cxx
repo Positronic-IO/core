@@ -12,7 +12,9 @@
 #include <vcl/settings.hxx>
 #include <formula/errorcodes.hxx>
 #include <sfx2/app.hxx>
+#include <unotools/charclass.hxx>
 
+#include <compiler.hxx>
 #include <document.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
@@ -258,7 +260,7 @@ void ScNameDefDlg::AddPushed()
                     assert( pNewEntry);     // undo of no insertion smells fishy
                     if (pNewEntry)
                         mpDocShell->GetUndoManager()->AddUndoAction(
-                                new ScUndoAddRangeData( mpDocShell, pNewEntry, nTab) );
+                                o3tl::make_unique<ScUndoAddRangeData>( mpDocShell, pNewEntry, nTab) );
 
                     // set table stream invalid, otherwise RangeName won't be saved if no other
                     // call invalidates the stream

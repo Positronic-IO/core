@@ -9,8 +9,9 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_EXCEL_XLTOOLBAR_HXX
 #define INCLUDED_SC_SOURCE_FILTER_EXCEL_XLTOOLBAR_HXX
 
-#include <com/sun/star/container/XIndexContainer.hpp>
 #include <filter/msfilter/mstoolbar.hxx>
+
+namespace com { namespace sun { namespace star { namespace container { class XIndexContainer; } } } }
 
 class ScCTBWrapper;
 // hmm I don't normally use these packed structures
@@ -48,7 +49,7 @@ public:
 
 class ScCTB : public TBBase
 {
-    sal_uInt16 nViews;
+    sal_uInt16 const nViews;
     TB tb;
     std::vector<TBVisualData> rVisualData;
     sal_uInt32 ectbid;

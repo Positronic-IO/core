@@ -13,9 +13,12 @@
 #include "sal/config.h"
 
 #include <cstddef>
-#include <cstring>
 
 #include "sal/types.h"
+
+#if defined LIBO_INTERNAL_ONLY
+#include "config_global.h"
+#endif
 
 // The unittest uses slightly different code to help check that the proper
 // calls are made. The class is put into a different namespace to make
@@ -165,10 +168,67 @@ struct ConstCharArrayDetector< const char[ N ], T >
     typedef T Type;
     static const std::size_t length = N - 1;
     static const bool ok = true;
-    static bool isValid(char const (& literal)[N])
-    { return std::strlen(literal) == length; }
+#if defined LIBO_INTERNAL_ONLY && HAVE_CXX14_CONSTEXPR
+    constexpr
+#endif
+    static bool isValid(char const (& literal)[N]) {
+        for (std::size_t i = 0; i != N - 1; ++i) {
+            if (literal[i] == '\0') {
+                return false;
+            }
+        }
+        return literal[N - 1] == '\0';
+    }
+#if defined LIBO_INTERNAL_ONLY
+    constexpr
+#endif
     static char const * toPointer(char const (& literal)[N]) { return literal; }
 };
+
+#if defined(__COVERITY__)
+//to silence over zealous warnings that the loop is logically dead
+//for the single char case
+template< typename T >
+struct ConstCharArrayDetector< const char[ 1 ], T >
+{
+    typedef T Type;
+    static const std::size_t length = 0;
+    static const bool ok = true;
+#if defined LIBO_INTERNAL_ONLY && HAVE_CXX14_CONSTEXPR
+    constexpr
+#endif
+    static bool isValid(char const (& literal)[1]) {
+        return literal[0] == '\0';
+    }
+#if defined LIBO_INTERNAL_ONLY
+    constexpr
+#endif
+    static char const * toPointer(char const (& literal)[1]) { return literal; }
+};
+#endif
+
+#if defined LIBO_INTERNAL_ONLY && defined __cpp_char8_t
+template<std::size_t N, typename T>
+struct ConstCharArrayDetector<char8_t const [N], T> {
+    using Type = T;
+    static constexpr bool const ok = true;
+    static constexpr std::size_t const length = N - 1;
+#if HAVE_CXX14_CONSTEXPR
+    constexpr
+#endif
+    static bool isValid(char8_t const (& literal)[N]) {
+        for (std::size_t i = 0; i != N - 1; ++i) {
+            if (literal[i] == u8'\0') {
+                return false;
+            }
+        }
+        return literal[N - 1] == u8'\0';
+    }
+    static constexpr char const * toPointer(char8_t const (& literal)[N])
+    { return reinterpret_cast<char const *>(literal); }
+};
+#endif
+
 #if defined LIBO_INTERNAL_ONLY
 template<std::size_t N, typename T>
 struct ConstCharArrayDetector<sal_Unicode const [N], T> {

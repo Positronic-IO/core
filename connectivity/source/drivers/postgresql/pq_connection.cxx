@@ -54,6 +54,7 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/uuid.h>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 #include <o3tl/enumarray.hxx>
 #include <osl/module.h>
 
@@ -116,11 +117,11 @@ public:
     }
 };
 
-OUString    ConnectionGetImplementationName()
+static OUString    ConnectionGetImplementationName()
 {
     return OUString( "org.openoffice.comp.connectivity.pq.Connection.noext" );
 }
-css::uno::Sequence<OUString> ConnectionGetSupportedServiceNames()
+static css::uno::Sequence<OUString> ConnectionGetSupportedServiceNames()
 {
     return Sequence< OUString > { "com.sun.star.sdbc.Connection" };
 }
@@ -469,7 +470,7 @@ static void properties2arrays( const Sequence< PropertyValue > & args,
         else
         {
             // ignore for now
-            SAL_WARN("connectivity.postgresql", "sdbc-postgresql: unknown argument " << args[i].Name );
+            SAL_WARN("connectivity.postgresql", "sdbc-postgresql: unknown argument '" << args[i].Name << "' having value: " << args[i].Value );
         }
     }
 }
@@ -520,7 +521,7 @@ void Connection::initialize( const Sequence< Any >& aArguments )
         {
             char *err;
             std::shared_ptr<PQconninfoOption> oOpts(PQconninfoParse(o.getStr(), &err), PQconninfoFree);
-            if ( oOpts.get() == nullptr )
+            if (oOpts == nullptr)
             {
                 OUString errorMessage;
                 if ( err != nullptr)
@@ -639,7 +640,7 @@ Reference< XNameAccess > Connection::getUsers()
 }
 
 /// @throws Exception
-Reference< XInterface >  ConnectionCreateInstance(
+static Reference< XInterface >  ConnectionCreateInstance(
     const Reference< XComponentContext > & ctx )
 {
     ::rtl::Reference< comphelper::RefCountedMutex > ref = new comphelper::RefCountedMutex;

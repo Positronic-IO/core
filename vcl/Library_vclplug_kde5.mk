@@ -24,6 +24,7 @@ $(eval $(call gb_Library_use_custom_headers,vclplug_kde5,vcl/unx/kde5))
 $(eval $(call gb_Library_set_include,vclplug_kde5,\
     $$(INCLUDE) \
     -I$(SRCDIR)/vcl/inc \
+    -I$(SRCDIR)/vcl/inc/qt5 \
 ))
 
 $(eval $(call gb_Library_add_defs,vclplug_kde5,\
@@ -33,7 +34,7 @@ $(eval $(call gb_Library_add_defs,vclplug_kde5,\
 $(eval $(call gb_Library_use_sdk_api,vclplug_kde5))
 
 $(eval $(call gb_Library_use_libraries,vclplug_kde5,\
-    vclplug_gen \
+    vclplug_qt5 \
     vcl \
     tl \
     utl \
@@ -53,16 +54,11 @@ $(eval $(call gb_Library_use_libraries,vclplug_kde5,\
 $(eval $(call gb_Library_use_externals,vclplug_kde5,\
 	boost_headers \
 	cairo \
+	graphite \
+	harfbuzz \
 	icuuc \
 	kde5 \
 	epoxy \
-))
-
-$(eval $(call gb_Library_add_libs,vclplug_kde5,\
-	-lX11 \
-	-lXext \
-	-lSM \
-	-lICE \
 ))
 
 ifneq ($(QT5_HAVE_GLIB),)
@@ -83,14 +79,11 @@ $(eval $(call gb_Library_add_libs,vclplug_kde5,\
 ))
 
 $(eval $(call gb_Library_add_exception_objects,vclplug_kde5,\
-    vcl/unx/kde5/KDE5Data \
-    vcl/unx/kde5/KDE5SalDisplay \
+    vcl/unx/kde5/KDE5FilePicker2 \
+    vcl/unx/kde5/KDE5SalData \
     vcl/unx/kde5/KDE5SalFrame \
     vcl/unx/kde5/KDE5SalGraphics \
     vcl/unx/kde5/KDE5SalInstance \
-    vcl/unx/kde5/KDE5XLib \
-    vcl/unx/kde5/VCLKDE5Application \
-    vcl/unx/kde5/main \
 ))
 
 ifeq ($(OS),LINUX)

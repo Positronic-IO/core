@@ -21,10 +21,9 @@
 #define INCLUDED_CUI_SOURCE_INC_HLMARKWN_HXX
 
 #include <com/sun/star/container/XNameAccess.hpp>
-#include <vcl/dialog.hxx>
 #include <vcl/button.hxx>
 #include <vcl/floatwin.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
 #include "hlmarkwn_def.hxx"
 class SvxHyperlinkTabPageBase;

@@ -51,6 +51,9 @@
 #include <editeng/brushitem.hxx>
 #include <svl/itempool.hxx>
 #include <libxml/xmlwriter.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
+#include <o3tl/make_unique.hxx>
 
 // calculate if it's RTL or not
 #include <unicode/ubidi.h>
@@ -64,8 +67,8 @@ using std::advance;
 
 void Outliner::ImplCheckDepth( sal_Int16& rnDepth ) const
 {
-    if( rnDepth < nMinDepth )
-        rnDepth = nMinDepth;
+    if( rnDepth < gnMinDepth )
+        rnDepth = gnMinDepth;
     else if( rnDepth > nMaxDepth )
         rnDepth = nMaxDepth;
 }
@@ -274,7 +277,7 @@ void Outliner::SetNumberingStartValue( sal_Int32 nPara, sal_Int16 nNumberingStar
     if( pPara && pPara->GetNumberingStartValue() != nNumberingStartValue )
     {
         if( IsUndoEnabled() && !IsInUndo() )
-            InsertUndo( new OutlinerUndoChangeParaNumberingRestart( this, nPara,
+            InsertUndo( o3tl::make_unique<OutlinerUndoChangeParaNumberingRestart>( this, nPara,
                 pPara->GetNumberingStartValue(), nNumberingStartValue,
                 pPara->IsParaIsNumberingRestart(), pPara->IsParaIsNumberingRestart() ) );
 
@@ -298,7 +301,7 @@ void Outliner::SetParaIsNumberingRestart( sal_Int32 nPara, bool bParaIsNumbering
     if( pPara && (pPara->IsParaIsNumberingRestart() != bParaIsNumberingRestart) )
     {
         if( IsUndoEnabled() && !IsInUndo() )
-            InsertUndo( new OutlinerUndoChangeParaNumberingRestart( this, nPara,
+            InsertUndo( o3tl::make_unique<OutlinerUndoChangeParaNumberingRestart>( this, nPara,
                 pPara->GetNumberingStartValue(), pPara->GetNumberingStartValue(),
                 pPara->IsParaIsNumberingRestart(), bParaIsNumberingRestart ) );
 
@@ -364,12 +367,7 @@ sal_Int32 Outliner::GetBulletsNumberingStatus() const
            : 2;
 }
 
-void Outliner::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
-{
-    pEditEngine->SetHoriAlignIgnoreTrailingWhitespace( bEnabled );
-}
-
-OutlinerParaObject* Outliner::CreateParaObject( sal_Int32 nStartPara, sal_Int32 nCount ) const
+std::unique_ptr<OutlinerParaObject> Outliner::CreateParaObject( sal_Int32 nStartPara, sal_Int32 nCount ) const
 {
     if ( static_cast<sal_uLong>(nStartPara) + nCount >
             static_cast<sal_uLong>(pParaList->GetParagraphCount()) )
@@ -393,7 +391,7 @@ OutlinerParaObject* Outliner::CreateParaObject( sal_Int32 nStartPara, sal_Int32 
         aParagraphDataVector[nPara-nStartPara] = *GetParagraph(nPara);
     }
 
-    OutlinerParaObject* pPObj = new OutlinerParaObject(*pText, aParagraphDataVector, bIsEditDoc);
+    std::unique_ptr<OutlinerParaObject> pPObj(new OutlinerParaObject(*pText, aParagraphDataVector, bIsEditDoc));
     pPObj->SetOutlinerMode(GetMode());
 
     return pPObj;
@@ -401,9 +399,8 @@ OutlinerParaObject* Outliner::CreateParaObject( sal_Int32 nStartPara, sal_Int32 
 
 void Outliner::SetToEmptyText()
 {
-    OutlinerParaObject *pEmptyTxt =  GetEmptyParaObject();
+    std::unique_ptr<OutlinerParaObject> pEmptyTxt = GetEmptyParaObject();
     SetText(*pEmptyTxt);
-    delete pEmptyTxt;
 }
 
 void Outliner::SetText( const OUString& rText, Paragraph* pPara )
@@ -423,17 +420,18 @@ void Outliner::SetText( const OUString& rText, Paragraph* pPara )
     }
     else
     {
-        OUString aText(convertLineEnd(rText, LINEEND_LF));
+        const OUString aText(convertLineEnd(rText, LINEEND_LF));
 
-        if (aText.endsWith("\x0A"))
-            aText = aText.copy(0, aText.getLength()-1); // Delete the last break
-
-        sal_Int32 nCount = comphelper::string::getTokenCount(aText, '\x0A');
         sal_Int32 nPos = 0;
         sal_Int32 nInsPos = nPara+1;
-        while( nCount > nPos )
+        sal_Int32 nIdx {0};
+        // Loop over all tokens, but ignore the last one if empty
+        // (i.e. if strings ends with the delimiter, detected by
+        // checking nIdx against string length). This check also
+        // handle empty strings.
+        while( nIdx>=0 && nIdx<aText.getLength() )
         {
-            OUString aStr = aText.getToken( nPos, '\x0A' );
+            OUString aStr = aText.getToken( 0, '\x0A', nIdx );
 
             sal_Int16 nCurDepth;
             if( nPos )
@@ -711,7 +709,7 @@ void Outliner::ImplSetLevelDependentStyleSheet( sal_Int32 nPara )
 void Outliner::ImplInitDepth( sal_Int32 nPara, sal_Int16 nDepth, bool bCreateUndo )
 {
 
-    DBG_ASSERT( ( nDepth >= nMinDepth ) && ( nDepth <= nMaxDepth ), "ImplInitDepth - Depth is invalid!" );
+    DBG_ASSERT( ( nDepth >= gnMinDepth ) && ( nDepth <= nMaxDepth ), "ImplInitDepth - Depth is invalid!" );
 
     Paragraph* pPara = pParaList->GetParagraph( nPara );
         if (!pPara)
@@ -736,7 +734,7 @@ void Outliner::ImplInitDepth( sal_Int32 nPara, sal_Int16 nDepth, bool bCreateUnd
 
         if ( bUndo )
         {
-            InsertUndo( new OutlinerUndoChangeDepth( this, nPara, nOldDepth, nDepth ) );
+            InsertUndo( o3tl::make_unique<OutlinerUndoChangeDepth>( this, nPara, nOldDepth, nDepth ) );
         }
 
         pEditEngine->SetUpdateMode( bUpdate );
@@ -758,19 +756,19 @@ bool Outliner::Expand( Paragraph const * pPara )
 {
     if ( pParaList->HasHiddenChildren( pPara ) )
     {
-        OLUndoExpand* pUndo = nullptr;
+        std::unique_ptr<OLUndoExpand> pUndo;
         bool bUndo = IsUndoEnabled() && !IsInUndo();
         if( bUndo )
         {
             UndoActionStart( OLUNDO_EXPAND );
-            pUndo = new OLUndoExpand( this, OLUNDO_EXPAND );
+            pUndo.reset( new OLUndoExpand( this, OLUNDO_EXPAND ) );
             pUndo->nCount = pParaList->GetAbsPos( pPara );
         }
         pParaList->Expand( pPara );
         InvalidateBullet(pParaList->GetAbsPos(pPara));
         if( bUndo )
         {
-            InsertUndo( pUndo );
+            InsertUndo( std::move(pUndo) );
             UndoActionEnd();
         }
         return true;
@@ -782,7 +780,7 @@ bool Outliner::Collapse( Paragraph const * pPara )
 {
     if ( pParaList->HasVisibleChildren( pPara ) ) // expanded
     {
-        OLUndoExpand* pUndo = nullptr;
+        std::unique_ptr<OLUndoExpand> pUndo;
         bool bUndo = false;
 
         if( !IsInUndo() && IsUndoEnabled() )
@@ -790,7 +788,7 @@ bool Outliner::Collapse( Paragraph const * pPara )
         if( bUndo )
         {
             UndoActionStart( OLUNDO_COLLAPSE );
-            pUndo = new OLUndoExpand( this, OLUNDO_COLLAPSE );
+            pUndo.reset( new OLUndoExpand( this, OLUNDO_COLLAPSE ) );
             pUndo->nCount = pParaList->GetAbsPos( pPara );
         }
 
@@ -798,7 +796,7 @@ bool Outliner::Collapse( Paragraph const * pPara )
         InvalidateBullet(pParaList->GetAbsPos(pPara));
         if( bUndo )
         {
-            InsertUndo( pUndo );
+            InsertUndo( std::move(pUndo) );
             UndoActionEnd();
         }
         return true;
@@ -967,7 +965,7 @@ void Outliner::PaintBullet( sal_Int32 nPara, const Point& rStartPos,
 
                 if(bStrippingPortions)
                 {
-                    const vcl::Font aSvxFont(pOutDev->GetFont());
+                    const vcl::Font& aSvxFont(pOutDev->GetFont());
                     std::unique_ptr<long[]> pBuf(new long[ pPara->GetText().getLength() ]);
                     pOutDev->GetTextArray( pPara->GetText(), pBuf.get() );
 
@@ -1152,12 +1150,12 @@ void Outliner::ImpFilterIndents( sal_Int32 nFirstPara, sal_Int32 nLastPara )
     pEditEngine->SetUpdateMode( bUpdate );
 }
 
-::svl::IUndoManager& Outliner::GetUndoManager()
+SfxUndoManager& Outliner::GetUndoManager()
 {
     return pEditEngine->GetUndoManager();
 }
 
-::svl::IUndoManager* Outliner::SetUndoManager(::svl::IUndoManager* pNew)
+SfxUndoManager* Outliner::SetUndoManager(SfxUndoManager* pNew)
 {
     return pEditEngine->SetUndoManager(pNew);
 }
@@ -1247,7 +1245,6 @@ Outliner::Outliner(SfxItemPool* pPool, OutlinerMode nMode)
     : mnFirstSelPage(0)
     , nDepthChangedHdlPrevDepth(0)
     , nMaxDepth(9)
-    , nMinDepth(-1)
     , bFirstParaIsEmpty(true)
     , nBlockInsCallback(0)
     , bStrippingPortions(false)
@@ -1309,9 +1306,8 @@ void Outliner::RemoveView( OutlinerView const * pView )
     }
 }
 
-OutlinerView* Outliner::RemoveView( size_t nIndex )
+void Outliner::RemoveView( size_t nIndex )
 {
-
     EditView* pEditView = pEditEngine->GetView( nIndex );
     pEditView->HideCursor(); // HACK
 
@@ -1322,8 +1318,6 @@ OutlinerView* Outliner::RemoveView( size_t nIndex )
         advance( it, nIndex );
         aViewList.erase( it );
     }
-
-    return nullptr;    // return superfluous
 }
 
 
@@ -1515,7 +1509,7 @@ tools::Rectangle Outliner::ImpCalcBulletArea( sal_Int32 nPara, bool bAdjust, boo
         bool bOutlineMode = bool( pEditEngine->GetControlWord() & EEControlBits::OUTLINER );
 
         // the ODF attribute text:space-before which holds the spacing to add to the left of the label
-        const short nSpaceBefore = pFmt->GetAbsLSpace() + pFmt->GetFirstLineOffset();
+        const auto nSpaceBefore = pFmt->GetAbsLSpace() + pFmt->GetFirstLineOffset();
 
         const SvxLRSpaceItem& rLR = pEditEngine->GetParaAttrib( nPara, bOutlineMode ? EE_PARA_OUTLLRSPACE : EE_PARA_LRSPACE );
         aTopLeft.setX( rLR.GetTextLeft() + rLR.GetTextFirstLineOfst() + nSpaceBefore );
@@ -1639,15 +1633,15 @@ EBulletInfo Outliner::GetBulletInfo( sal_Int32 nPara )
 OUString Outliner::GetText( Paragraph const * pParagraph, sal_Int32 nCount ) const
 {
 
-    OUString aText;
+    OUStringBuffer aText;
     sal_Int32 nStartPara = pParaList->GetAbsPos( pParagraph );
     for ( sal_Int32 n = 0; n < nCount; n++ )
     {
-        aText += pEditEngine->GetText( nStartPara + n );
+        aText.append(pEditEngine->GetText( nStartPara + n ));
         if ( (n+1) < nCount )
-            aText += "\n";
+            aText.append("\n");
     }
-    return aText;
+    return aText.makeStringAndClear();
 }
 
 void Outliner::Remove( Paragraph const * pPara, sal_Int32 nParaCount )
@@ -1886,7 +1880,7 @@ void Outliner::Clear()
         ImplBlockInsertionCallbacks( true );
         pEditEngine->Clear();
         pParaList->Clear();
-        pParaList->Append( std::unique_ptr<Paragraph>(new Paragraph( nMinDepth )));
+        pParaList->Append( std::unique_ptr<Paragraph>(new Paragraph( gnMinDepth )));
         bFirstParaIsEmpty = true;
         ImplBlockInsertionCallbacks( false );
     }
@@ -1894,7 +1888,7 @@ void Outliner::Clear()
     {
             Paragraph* pPara = pParaList->GetParagraph( 0 );
             if(pPara)
-                pPara->SetDepth( nMinDepth );
+                pPara->SetDepth( gnMinDepth );
     }
 }
 
@@ -1993,7 +1987,7 @@ void Outliner::SetParaFlag( Paragraph* pPara,  ParaFlag nFlag )
     if( pPara && !pPara->HasFlag( nFlag ) )
     {
         if( IsUndoEnabled() && !IsInUndo() )
-            InsertUndo( new OutlinerUndoChangeParaFlags( this, GetAbsPos( pPara ), pPara->nFlags, pPara->nFlags|nFlag ) );
+            InsertUndo( o3tl::make_unique<OutlinerUndoChangeParaFlags>( this, GetAbsPos( pPara ), pPara->nFlags, pPara->nFlags|nFlag ) );
 
         pPara->SetFlag( nFlag );
     }
@@ -2115,10 +2109,10 @@ NonOverflowingText *Outliner::GetNonOverflowingText() const
     }
 }
 
-OutlinerParaObject *Outliner::GetEmptyParaObject() const
+std::unique_ptr<OutlinerParaObject> Outliner::GetEmptyParaObject() const
 {
     std::unique_ptr<EditTextObject> pEmptyText = pEditEngine->GetEmptyTextObject();
-    OutlinerParaObject* pPObj = new OutlinerParaObject( *pEmptyText );
+    std::unique_ptr<OutlinerParaObject> pPObj( new OutlinerParaObject( std::move(pEmptyText) ));
     pPObj->SetOutlinerMode(GetMode());
     return pPObj;
 }

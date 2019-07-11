@@ -51,10 +51,30 @@
 #include <PostItMgr.hxx>
 #include <AnnotationWin.hxx>
 
+#include <svx/srchdlg.hxx>
+
+#include <vcl/uitest/logger.hxx>
+#include <vcl/uitest/eventdescription.hxx>
+
 sal_uInt16  SwView::m_nMoveType = NID_PGE;
 sal_Int32 SwView::m_nActMark = 0;
 
 using namespace ::com::sun::star::uno;
+
+namespace {
+
+void collectUIInformation(const OUString& aFactor)
+{
+    EventDescription aDescription;
+    aDescription.aID = "writer_edit";
+    aDescription.aParameters = {{"ZOOM", aFactor}};
+    aDescription.aAction = "SET";
+    aDescription.aKeyWord = "SwEditWinUIObject";
+    aDescription.aParent = "MainWindow";
+    UITestLogger::getInstance().logEvent(aDescription);
+}
+
+}
 
 void SwView::SetZoom( SvxZoomType eZoomType, short nFactor, bool bViewOnly )
 {
@@ -63,6 +83,8 @@ void SwView::SetZoom( SvxZoomType eZoomType, short nFactor, bool bViewOnly )
     // fdo#40465 force the cursor to stay in view whilst zooming
     if (bCursorIsVisible)
         m_pWrtShell->ShowCursor();
+
+    collectUIInformation(OUString::number(nFactor));
 }
 
 void SwView::SetZoom_( const Size &rEditSize, SvxZoomType eZoomType,
@@ -73,7 +95,7 @@ void SwView::SetZoom_( const Size &rEditSize, SvxZoomType eZoomType,
     m_pWrtShell->LockPaint();
 
     { // start of SwActContext scope
-    SwActContext aActContext(m_pWrtShell);
+    SwActContext aActContext(m_pWrtShell.get());
 
     long nFac = nFactor;
 
@@ -210,7 +232,7 @@ void SwView::SetViewLayout( sal_uInt16 nColumns, bool bBookMode, bool bViewOnly 
 
     {
 
-    SwActContext aActContext(m_pWrtShell);
+    SwActContext aActContext(m_pWrtShell.get());
 
     if ( !GetViewFrame()->GetFrame().IsInPlace() && !bViewOnly )
     {
@@ -389,10 +411,26 @@ IMPL_LINK( SwView, MoveNavigationHdl, void*, p, void )
             bNext ? rSh.GoNextCursor() : rSh.GoPrevCursor();
         break;
         case NID_FTN:
+        {
+            bool bFrameTypeFootnote(rSh.GetFrameType(nullptr, false) & FrameTypeFlags::FOOTNOTE);
+
+            if (bFrameTypeFootnote)
+            {
+                rSh.LockView(true);
+                rSh.GotoFootnoteAnchor();
+            }
+
             rSh.EnterStdMode();
             bNext ?
                 rSh.GotoNextFootnoteAnchor() :
                     rSh.GotoPrevFootnoteAnchor();
+
+            if (bFrameTypeFootnote)
+            {
+                rSh.LockView(false);
+                rSh.GotoFootnoteText();
+            }
+        }
         break;
         case NID_MARK:
         {
@@ -414,37 +452,56 @@ IMPL_LINK( SwView, MoveNavigationHdl, void*, p, void )
             // move
             if(!vNavMarks.empty())
             {
+                SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+
                 if(bNext)
                 {
                     m_nActMark++;
                     if (m_nActMark >= MAX_MARKS || m_nActMark >= static_cast<sal_Int32>(vNavMarks.size()))
+                    {
                         m_nActMark = 0;
+                        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::EndWrapped );
+                    }
                 }
                 else
                 {
                     m_nActMark--;
                     if (m_nActMark < 0 || m_nActMark >= static_cast<sal_Int32>(vNavMarks.size()))
+                    {
                         m_nActMark = vNavMarks.size()-1;
+                        SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::StartWrapped );
+                    }
                 }
                 rSh.GotoMark(vNavMarks[m_nActMark]);
             }
+            else
+                SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
         }
         break;
 
         case NID_POSTIT:
+        {
+            if ( m_pPostItMgr->HasNotes() )
             {
                 rSh.EnterStdMode();
                 sw::annotation::SwAnnotationWin* pPostIt = GetPostItMgr()->GetActiveSidebarWin();
                 if (pPostIt)
                     GetPostItMgr()->SetActiveSidebarWin(nullptr);
                 SwFieldType* pFieldType = rSh.GetFieldType(0, SwFieldIds::Postit);
-                if ( rSh.MoveFieldType( pFieldType, bNext ) )
-                    GetViewFrame()->GetDispatcher()->Execute(FN_POSTIT);
+                if ( !rSh.MoveFieldType( pFieldType, bNext ) )
+                {
+                    bNext ? (*(m_pPostItMgr->begin()))->pPostIt->GotoPos() :
+                        (*(m_pPostItMgr->end()-1))->pPostIt->GotoPos();
+                    SvxSearchDialogWrapper::SetSearchLabel( bNext ? SearchLabel::EndWrapped : SearchLabel::StartWrapped );
+                }
                 else
-                    //first/last item
-                    GetPostItMgr()->SetActiveSidebarWin(pPostIt);
+                    SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::Empty );
+                GetViewFrame()->GetDispatcher()->Execute(FN_POSTIT);
             }
-            break;
+            else
+                SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
+        }
+        break;
 
         case NID_SRCH_REP:
         if(m_pSrchItem)
@@ -474,20 +531,18 @@ IMPL_LINK( SwView, MoveNavigationHdl, void*, p, void )
     delete pbNext;
 }
 
-int SwView::CreateTab()
+void SwView::CreateTab()
 {
     m_pHRuler->SetActive(GetFrame() && IsActive());
 
     m_pHRuler->Show();
     InvalidateBorder();
-    return 1;
 }
 
-int SwView::KillTab()
+void SwView::KillTab()
 {
     m_pHRuler->Hide();
     InvalidateBorder();
-    return 1;
 }
 
 void SwView::ChangeTabMetric( FieldUnit eUnit )
@@ -518,22 +573,20 @@ void SwView::GetHRulerMetric(FieldUnit& eToFill) const
     eToFill = m_pHRuler->GetUnit();
 }
 
-int SwView::CreateVRuler()
+void SwView::CreateVRuler()
 {
     m_pHRuler->SetBorderPos( m_pVRuler->GetSizePixel().Width()-1 );
 
     m_pVRuler->SetActive(GetFrame() && IsActive());
     m_pVRuler->Show();
     InvalidateBorder();
-    return 1;
 }
 
-int SwView::KillVRuler()
+void SwView::KillVRuler()
 {
     m_pVRuler->Hide();
     m_pHRuler->SetBorderPos();
     InvalidateBorder();
-    return 1;
 }
 
 IMPL_LINK( SwView, ExecRulerClick, Ruler *, pRuler, void )

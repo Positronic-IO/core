@@ -45,14 +45,13 @@
 #include <docsh.hxx>
 #include <srcview.hxx>
 #include <helpids.h>
-#include <deque>
+#include <vector>
 
 namespace
 {
 
 struct TextPortion
 {
-    sal_uInt16 nLine;
     sal_uInt16 nStart, nEnd;
     svtools::ColorConfigEntry eType;
 };
@@ -62,7 +61,7 @@ struct TextPortion
 #define MAX_SYNTAX_HIGHLIGHT 20
 #define MAX_HIGHLIGHTTIME 200
 
-typedef std::deque<TextPortion> TextPortions;
+typedef std::vector<TextPortion> TextPortions;
 
 static void lcl_Highlight(const OUString& rSource, TextPortions& aPortionList)
 {
@@ -91,7 +90,6 @@ static void lcl_Highlight(const OUString& rSource, TextPortions& aPortionList)
             // insert 'empty' portion
             if(nPortEnd < nActPos - 1 )
             {
-                aText.nLine = 0;
                 // don't move at the beginning
                 aText.nStart = nPortEnd;
                 if(nInsert)
@@ -185,7 +183,6 @@ static void lcl_Highlight(const OUString& rSource, TextPortions& aPortionList)
                 if(bFound ||(eFoundType == svtools::HTMLCOMMENT))
                 {
                     TextPortion aTextPortion;
-                    aTextPortion.nLine = 0;
                     aTextPortion.nStart = nPortStart + 1;
                     aTextPortion.nEnd = nPortEnd;
                     aTextPortion.eType = eFoundType;
@@ -199,7 +196,6 @@ static void lcl_Highlight(const OUString& rSource, TextPortions& aPortionList)
     }
     if(nInsert && nPortEnd < nActPos - 1)
     {
-        aText.nLine = 0;
         aText.nStart = nPortEnd + 1;
         aText.nEnd = nActPos - 1;
         aText.eType = svtools::HTMLUNKNOWN;
@@ -235,8 +231,6 @@ private:
 
 SwSrcEditWindow::SwSrcEditWindow( vcl::Window* pParent, SwSrcView* pParentView ) :
     Window( pParent, WB_BORDER|WB_CLIPCHILDREN ),
-
-    m_pTextEngine(nullptr),
 
     m_pOutWin(nullptr),
     m_pHScrollbar(nullptr),
@@ -292,12 +286,10 @@ void SwSrcEditWindow::dispose()
     if ( m_pTextEngine )
     {
         EndListening( *m_pTextEngine );
-        m_pTextEngine->RemoveView( m_pTextView );
+        m_pTextEngine->RemoveView( m_pTextView.get() );
 
-        delete m_pTextView;
-        m_pTextView = nullptr;
-        delete m_pTextEngine;
-        m_pTextEngine = nullptr;
+        m_pTextView.reset();
+        m_pTextEngine.reset();
     }
     m_pHScrollbar.disposeAndClear();
     m_pVScrollbar.disposeAndClear();
@@ -447,9 +439,9 @@ void  TextViewOutWin::Command( const CommandEvent& rCEvt )
 
         default:
             if ( pTextView )
-            pTextView->Command( rCEvt );
-        else
-            Window::Command(rCEvt);
+                pTextView->Command( rCEvt );
+            else
+                Window::Command(rCEvt);
     }
 }
 
@@ -518,13 +510,13 @@ void SwSrcEditWindow::CreateTextEngine()
     m_pHScrollbar->EnableDrag();
     m_pVScrollbar->Show();
 
-    m_pTextEngine = new ExtTextEngine;
-    m_pTextView = new TextView( m_pTextEngine, m_pOutWin );
+    m_pTextEngine.reset(new ExtTextEngine);
+    m_pTextView.reset(new TextView( m_pTextEngine.get(), m_pOutWin ));
     m_pTextView->SetAutoIndentMode(true);
-    m_pOutWin->SetTextView(m_pTextView);
+    m_pOutWin->SetTextView(m_pTextView.get());
 
     m_pTextEngine->SetUpdateMode( false );
-    m_pTextEngine->InsertView( m_pTextView );
+    m_pTextEngine->InsertView( m_pTextView.get() );
 
     vcl::Font aFont;
     aFont.SetTransparent( false );
@@ -698,9 +690,6 @@ void SwSrcEditWindow::ImpDoHighlight( const OUString& rSource, sal_uInt16 nLineO
         for ( size_t i = 0; i < nCount; i++ )
         {
             TextPortion& r = aPortionList[i];
-            SAL_WARN_IF(
-                r.nLine != aPortionList[0].nLine, "sw.level2",
-                "multiple lines after all?");
             if ( r.nStart > r.nEnd )    // only until Bug from MD is resolved
                 continue;
 
@@ -726,8 +715,7 @@ void SwSrcEditWindow::ImpDoHighlight( const OUString& rSource, sal_uInt16 nLineO
             r.eType != svtools::HTMLUNKNOWN)
                 r.eType = svtools::HTMLUNKNOWN;
         Color aColor(SW_MOD()->GetColorConfig().GetColorValue(r.eType).nColor);
-        sal_uInt16 nLine = nLineOff+r.nLine;
-        m_pTextEngine->SetAttrib( TextAttribFontColor( aColor ), nLine, r.nStart, r.nEnd+1 );
+        m_pTextEngine->SetAttrib( TextAttribFontColor( aColor ), nLineOff, r.nStart, r.nEnd+1 );
     }
 }
 

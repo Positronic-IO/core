@@ -598,7 +598,7 @@ void SwFlyFreeFrame::CheckClip( const SwFormatFrameSize &rSz )
             // Note: section frames seems to be not critical - didn't found
             //       any critical layout situation so far.
             if ( Lower() && Lower()->IsNoTextFrame() &&
-                 ( static_cast<SwContentFrame*>(Lower())->GetNode()->GetOLENode() ||
+                 (static_cast<SwNoTextFrame*>(Lower())->GetNode()->GetOLENode() ||
                    !HasEnvironmentAutoSize() ) )
             {
                 // If width and height got adjusted, then the bigger
@@ -638,7 +638,7 @@ void SwFlyFreeFrame::CheckClip( const SwFormatFrameSize &rSz )
                 // attributes permanently. Maybe one day somebody dares to remove
                 // this code.
                 if ( aFrameRect.HasArea() &&
-                     static_cast<SwContentFrame*>(Lower())->GetNode()->GetOLENode() &&
+                     static_cast<SwNoTextFrame*>(Lower())->GetNode()->GetOLENode() &&
                      ( m_bWidthClipped || m_bHeightClipped ) )
                 {
                     SwFlyFrameFormat *pFormat = GetFormat();
@@ -781,7 +781,7 @@ void SwFlyLayFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pNew )
         {
             SwNodeIndex aIdx( pAnch->GetContentAnchor()->nNode );
             SwContentFrame *pContent = GetFormat()->GetDoc()->GetNodes().GoNext( &aIdx )->
-                         GetContentNode()->getLayoutFrame( getRootFrame(), nullptr, nullptr, false );
+                GetContentNode()->getLayoutFrame(getRootFrame(), nullptr, nullptr);
             if( pContent )
             {
                 SwFlyFrame *pTmp = pContent->FindFlyFrame();
@@ -825,8 +825,8 @@ void SwPageFrame::AppendFlyToPage( SwFlyFrame *pNew )
     {
         //#i119945# set pFly's OrdNum to _rNewObj's. So when pFly is removed by Undo, the original OrdNum will not be changed.
         sal_uInt32 nNewNum = pObj->GetOrdNumDirect();
-        if ( pObj->GetPage() )
-            pObj->GetPage()->SetObjectOrdNum( pFly->GetVirtDrawObj()->GetOrdNumDirect(), nNewNum );
+        if ( pObj->getSdrPageFromSdrObject() )
+            pObj->getSdrPageFromSdrObject()->SetObjectOrdNum( pFly->GetVirtDrawObj()->GetOrdNumDirect(), nNewNum );
         else
             pFly->GetVirtDrawObj()->SetOrdNum( nNewNum );
     }
@@ -1060,8 +1060,8 @@ void SwPageFrame::AppendDrawObjToPage( SwAnchoredObject& _rNewObj )
     {
         //#i119945# set pFly's OrdNum to _rNewObj's. So when pFly is removed by Undo, the original OrdNum will not be changed.
         sal_uInt32 nNewNum = _rNewObj.GetDrawObj()->GetOrdNumDirect();
-        if ( _rNewObj.GetDrawObj()->GetPage() )
-            _rNewObj.DrawObj()->GetPage()->SetObjectOrdNum( pFlyFrame->GetVirtDrawObj()->GetOrdNumDirect(), nNewNum );
+        if ( _rNewObj.GetDrawObj()->getSdrPageFromSdrObject() )
+            _rNewObj.DrawObj()->getSdrPageFromSdrObject()->SetObjectOrdNum( pFlyFrame->GetVirtDrawObj()->GetOrdNumDirect(), nNewNum );
         else
             pFlyFrame->GetVirtDrawObj()->SetOrdNum( nNewNum );
     }
@@ -1295,14 +1295,11 @@ bool CalcClipRect( const SdrObject *pSdrObj, SwRect &rRect, bool bMove )
                     if ( !pCell && pUp->IsCellFrame() )
                         pCell = pUp;
                 }
-                if ( bMove )
+                if ( bMove && pUp->IsRootFrame() )
                 {
-                    if ( pUp->IsRootFrame() )
-                    {
-                        rRect  = pUp->getFramePrintArea();
-                        rRect += pUp->getFrameArea().Pos();
-                        pUp = nullptr;
-                    }
+                    rRect  = pUp->getFramePrintArea();
+                    rRect += pUp->getFrameArea().Pos();
+                    pUp = nullptr;
                 }
                 if ( pUp )
                 {

@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_XEPIVOT_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_XEPIVOT_HXX
 
-#include <map>
 #include "xerecord.hxx"
 #include "xlpivot.hxx"
 #include "xeroot.hxx"
@@ -30,7 +29,6 @@ class ScDPSaveData;
 class ScDPSaveDimension;
 class ScDPSaveMember;
 class ScDPSaveGroupDimension;
-class ScDPSaveNumGroupDimension;
 struct ScDPNumGroupInfo;
 
 // Pivot cache
@@ -58,8 +56,6 @@ private:
 private:
     sal_uInt16          mnTypeFlag;         /// Data type flag.
 };
-
-class XclExpPivotCache;
 
 class XclExpPCField : public XclExpRecord, public XclPCField, protected XclExpRoot
 {
@@ -219,7 +215,7 @@ private:
     ScRange             maOrigSrcRange;     /// The original sheet source range.
     ScRange             maExpSrcRange;      /// The exported sheet source range.
     ScRange             maDocSrcRange;      /// The range used to build the cache fields and items.
-    sal_uInt16          mnListIdx;          /// List index in pivot cache buffer.
+    sal_uInt16 const    mnListIdx;          /// List index in pivot cache buffer.
     bool                mbValid;            /// true = The cache is valid for export.
 };
 

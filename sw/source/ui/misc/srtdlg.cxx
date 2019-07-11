@@ -98,22 +98,22 @@ static bool lcl_GetSelTable( SwWrtShell const &rSh, sal_uInt16& rX, sal_uInt16& 
 
 // init list
 SwSortDlg::SwSortDlg(weld::Window* pParent, SwWrtShell &rShell)
-    : weld::GenericDialogController(pParent, "modules/swriter/ui/sortdialog.ui", "SortDialog")
+    : GenericDialogController(pParent, "modules/swriter/ui/sortdialog.ui", "SortDialog")
     , m_pParent(pParent)
     , m_xColLbl(m_xBuilder->weld_label("column"))
     , m_xKeyCB1(m_xBuilder->weld_check_button("key1"))
     , m_xColEdt1(m_xBuilder->weld_spin_button("colsb1"))
-    , m_xTypDLB1(m_xBuilder->weld_combo_box_text("typelb1"))
+    , m_xTypDLB1(m_xBuilder->weld_combo_box("typelb1"))
     , m_xSortUp1RB(m_xBuilder->weld_radio_button("up1"))
     , m_xSortDn1RB(m_xBuilder->weld_radio_button("down1"))
     , m_xKeyCB2(m_xBuilder->weld_check_button("key2"))
     , m_xColEdt2(m_xBuilder->weld_spin_button("colsb2"))
-    , m_xTypDLB2(m_xBuilder->weld_combo_box_text("typelb2"))
+    , m_xTypDLB2(m_xBuilder->weld_combo_box("typelb2"))
     , m_xSortUp2RB(m_xBuilder->weld_radio_button("up2"))
     , m_xSortDn2RB(m_xBuilder->weld_radio_button("down2"))
     , m_xKeyCB3(m_xBuilder->weld_check_button("key3"))
     , m_xColEdt3(m_xBuilder->weld_spin_button("colsb3"))
-    , m_xTypDLB3(m_xBuilder->weld_combo_box_text("typelb3"))
+    , m_xTypDLB3(m_xBuilder->weld_combo_box("typelb3"))
     , m_xSortUp3RB(m_xBuilder->weld_radio_button("up3"))
     , m_xSortDn3RB(m_xBuilder->weld_radio_button("down3"))
     , m_xColumnRB(m_xBuilder->weld_radio_button("columns"))
@@ -122,7 +122,7 @@ SwSortDlg::SwSortDlg(weld::Window* pParent, SwWrtShell &rShell)
     , m_xDelimFreeRB(m_xBuilder->weld_radio_button("character"))
     , m_xDelimEdt(m_xBuilder->weld_entry("separator"))
     , m_xDelimPB(m_xBuilder->weld_button("delimpb"))
-    , m_xLangLB(new LanguageBox(m_xBuilder->weld_combo_box_text("langlb")))
+    , m_xLangLB(new LanguageBox(m_xBuilder->weld_combo_box("langlb")))
     , m_xCaseCB(m_xBuilder->weld_check_button("matchcase"))
     , aColText(SwResId(STR_COL))
     , aRowText(SwResId(STR_ROW))
@@ -181,7 +181,7 @@ SwSortDlg::SwSortDlg(weld::Window* pParent, SwWrtShell &rShell)
         nLang = GetAppLanguage();
 
     m_xLangLB->SetLanguageList( SvxLanguageListFlags::ALL | SvxLanguageListFlags::ONLY_KNOWN, true );
-    m_xLangLB->SelectLanguage( nLang );
+    m_xLangLB->set_active_id(nLang);
 
     LanguageHdl( nullptr );
     m_xLangLB->connect_changed( LINK( this, SwSortDlg, LanguageListBoxHdl ));
@@ -226,9 +226,9 @@ sal_Unicode SwSortDlg::GetDelimChar() const
     return cRet;
 }
 
-short SwSortDlg::execute()
+short SwSortDlg::run()
 {
-    short nRet = run();
+    short nRet = GenericDialogController::run();
     if (nRet == RET_OK)
         Apply();
     return nRet;
@@ -254,7 +254,7 @@ void SwSortDlg::Apply()
     bAsc2 = m_xSortUp2RB->get_active();
     bAsc3 = m_xSortUp3RB->get_active();
     bCol = m_xColumnRB->get_active();
-    nLang = m_xLangLB->GetSelectedLanguage();
+    nLang = m_xLangLB->get_active_id();
     cDeli = GetDelimChar();
     bCsSens = m_xCaseCB->get_active();
 
@@ -333,17 +333,14 @@ IMPL_LINK( SwSortDlg, DelimHdl, weld::ToggleButton&, rButton, void )
 IMPL_LINK_NOARG(SwSortDlg, DelimCharHdl, weld::Button&, void)
 {
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    if(pFact)
+    SfxAllItemSet aSet( rSh.GetAttrPool() );
+    aSet.Put( SfxInt32Item( SID_ATTR_CHAR, GetDelimChar() ) );
+    ScopedVclPtr<SfxAbstractDialog> pMap(pFact->CreateCharMapDialog(m_xDialog.get(), aSet, nullptr));
+    if( RET_OK == pMap->Execute() )
     {
-        SfxAllItemSet aSet( rSh.GetAttrPool() );
-        aSet.Put( SfxInt32Item( SID_ATTR_CHAR, GetDelimChar() ) );
-        ScopedVclPtr<SfxAbstractDialog> pMap(pFact->CreateCharMapDialog(m_xDialog.get(), aSet, false));
-        if( RET_OK == pMap->Execute() )
-        {
-            const SfxInt32Item* pItem = SfxItemSet::GetItem<SfxInt32Item>(pMap->GetOutputItemSet(), SID_ATTR_CHAR, false);
-            if ( pItem )
-                m_xDelimEdt->set_text(OUString(sal_Unicode(pItem->GetValue())));
-        }
+        const SfxInt32Item* pItem = SfxItemSet::GetItem<SfxInt32Item>(pMap->GetOutputItemSet(), SID_ATTR_CHAR, false);
+        if ( pItem )
+            m_xDelimEdt->set_text(OUString(sal_Unicode(pItem->GetValue())));
     }
 }
 
@@ -379,27 +376,27 @@ IMPL_LINK( SwSortDlg, CheckHdl, weld::ToggleButton&, rControl, void )
     }
 }
 
-IMPL_LINK( SwSortDlg, LanguageListBoxHdl, weld::ComboBoxText&, rLBox, void )
+IMPL_LINK( SwSortDlg, LanguageListBoxHdl, weld::ComboBox&, rLBox, void )
 {
     LanguageHdl(&rLBox);
 }
 
-void SwSortDlg::LanguageHdl(weld::ComboBoxText const* pLBox)
+void SwSortDlg::LanguageHdl(weld::ComboBox const* pLBox)
 {
     Sequence < OUString > aSeq( GetAppCollator().listCollatorAlgorithms(
-                LanguageTag( m_xLangLB->GetSelectedLanguage()).getLocale() ));
+                LanguageTag( m_xLangLB->get_active_id()).getLocale() ));
 
     if (!m_xColRes)
         m_xColRes.reset(new CollatorResource);
 
     const int nLstBoxCnt = 3;
-    weld::ComboBoxText* aLstArr[ nLstBoxCnt ] = { m_xTypDLB1.get(), m_xTypDLB2.get(), m_xTypDLB3.get() };
+    weld::ComboBox* aLstArr[ nLstBoxCnt ] = { m_xTypDLB1.get(), m_xTypDLB2.get(), m_xTypDLB3.get() };
     sal_uInt16* const aTypeArr[ nLstBoxCnt ] = { &nType1, &nType2, &nType3 };
     OUString aOldStrArr[ nLstBoxCnt ];
 
     for( int n = 0; n < nLstBoxCnt; ++n )
     {
-        weld::ComboBoxText* pL = aLstArr[ n ];
+        weld::ComboBox* pL = aLstArr[ n ];
         OUString sUserData = pL->get_active_id();
         if (!sUserData.isEmpty())
             aOldStrArr[ n ] = sUserData;
@@ -411,13 +408,16 @@ void SwSortDlg::LanguageHdl(weld::ComboBoxText const* pLBox)
     for( sal_Int32 nCnt = 0; nCnt <= nEnd; ++nCnt )
     {
         if( nCnt < nEnd )
-            sUINm = m_xColRes->GetTranslation( sAlg = aSeq[ nCnt ] );
+        {
+            sAlg = aSeq[ nCnt ];
+            sUINm = m_xColRes->GetTranslation( sAlg );
+        }
         else
             sUINm = sAlg = aNumericText;
 
         for( int n = 0; n < nLstBoxCnt; ++n )
         {
-            weld::ComboBoxText* pL = aLstArr[ n ];
+            weld::ComboBox* pL = aLstArr[ n ];
             pL->append(sAlg, sUINm);
             if (pLBox && sAlg == aOldStrArr[n])
                 pL->set_active_id(sAlg);
@@ -426,7 +426,7 @@ void SwSortDlg::LanguageHdl(weld::ComboBoxText const* pLBox)
 
     for( int n = 0; n < nLstBoxCnt; ++n )
     {
-        weld::ComboBoxText* pL = aLstArr[ n ];
+        weld::ComboBox* pL = aLstArr[ n ];
         if( !pLBox )
             pL->set_active(*aTypeArr[n]);
         else if (pL->get_active() == -1)

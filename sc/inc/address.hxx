@@ -32,13 +32,14 @@
 #include <formula/grammar.hxx>
 
 #include <o3tl/typed_flags_set.hxx>
-#include <com/sun/star/uno/Sequence.hxx>
 
 namespace com { namespace sun { namespace star {
     namespace sheet {
         struct ExternalLinkInfo;
     }
 }}}
+
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Sequence; } } } }
 
 class ScDocument;
 
@@ -73,7 +74,7 @@ const SCROW       MAXROW         = MAXROWCOUNT - 1;
 const SCCOL       MAXCOL         = MAXCOLCOUNT - 1;
 const SCTAB       MAXTAB         = MAXTABCOUNT - 1;
 const SCCOLROW    MAXCOLROW      = MAXROW;
-// Maximun tiled rendering values
+// Maximum tiled rendering values
 const SCROW       MAXTILEDROW    = 500000;
 // Limit the initial tab count to prevent users to set the count too high,
 // which could cause the memory usage of blank documents to exceed the
@@ -340,7 +341,7 @@ public:
         @param  pDocument
                 The document for the maximum defined sheet number.
      */
-    SC_DLLPUBLIC SAL_WARN_UNUSED_RESULT bool Move( SCCOL nDeltaX, SCROW nDeltaY, SCTAB nDeltaZ,
+    SAL_WARN_UNUSED_RESULT SC_DLLPUBLIC bool Move( SCCOL nDeltaX, SCROW nDeltaY, SCTAB nDeltaZ,
             ScAddress& rErrorPos, const ScDocument* pDocument = nullptr );
 
     inline bool operator==( const ScAddress& rAddress ) const;
@@ -615,11 +616,11 @@ public:
         @param  pDocument
                 The document for the maximum defined sheet number.
      */
-    SC_DLLPUBLIC SAL_WARN_UNUSED_RESULT bool Move( SCCOL aDeltaX, SCROW aDeltaY, SCTAB aDeltaZ,
+    SAL_WARN_UNUSED_RESULT SC_DLLPUBLIC bool Move( SCCOL aDeltaX, SCROW aDeltaY, SCTAB aDeltaZ,
             ScRange& rErrorRange, const ScDocument* pDocument = nullptr );
 
     /** Same as Move() but with sticky end col/row anchors. */
-    SC_DLLPUBLIC SAL_WARN_UNUSED_RESULT bool MoveSticky( SCCOL aDeltaX, SCROW aDeltaY, SCTAB aDeltaZ,
+    SAL_WARN_UNUSED_RESULT SC_DLLPUBLIC bool MoveSticky( SCCOL aDeltaX, SCROW aDeltaY, SCTAB aDeltaZ,
             ScRange& rErrorRange );
 
     SC_DLLPUBLIC void IncColIfNotLessThan(SCCOL nStartCol, SCCOL nOffset);
@@ -945,7 +946,7 @@ inline void ScColToAlpha( OUString& rStr, SCCOL nCol)
 {
     OUStringBuffer aBuf(2);
     ScColToAlpha( aBuf, nCol);
-    rStr += aBuf.makeStringAndClear();
+    rStr += aBuf;
 }
 
 inline OUString ScColToAlpha( SCCOL nCol )

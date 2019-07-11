@@ -17,10 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SVTOOLS_SOURCE_INC_ICONVIEWIMPL_HXX
-#define INCLUDED_SVTOOLS_SOURCE_INC_ICONVIEWIMPL_HXX
+#ifndef INCLUDED_VCL_SOURCE_INC_ICONVIEWIMPL_HXX
+#define INCLUDED_VCL_SOURCE_INC_ICONVIEWIMPL_HXX
 
-#include "svimpbox.hxx"
+#include <vcl/svimpbox.hxx>
 
 class SvTreeListBox;
 class Point;
@@ -30,39 +30,39 @@ class IconViewImpl : public SvImpLBox
 public:
     IconViewImpl( SvTreeListBox* pTreeListBox, SvTreeList* pTreeList, WinBits nWinStyle );
 
-    void KeyDown( bool bPageDown ) SAL_OVERRIDE;
+    void KeyDown( bool bPageDown ) override;
 
-    void KeyUp( bool bPageUp ) SAL_OVERRIDE;
+    void KeyUp( bool bPageUp ) override;
 
-    Point GetEntryPosition( SvTreeListEntry* pEntry ) const SAL_OVERRIDE;
+    Point GetEntryPosition( SvTreeListEntry* pEntry ) const override;
 
-    SvTreeListEntry* GetClickedEntry( const Point& rPoint ) const SAL_OVERRIDE;
+    SvTreeListEntry* GetClickedEntry( const Point& rPoint ) const override;
 
-    bool IsEntryInView( SvTreeListEntry* pEntry ) const SAL_OVERRIDE;
+    bool IsEntryInView( SvTreeListEntry* pEntry ) const override;
 
-    void Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) SAL_OVERRIDE;
+    void Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
 
     // returns 0 if position is just past the last entry
-    SvTreeListEntry* GetEntry( const Point& rPoint ) const SAL_OVERRIDE;
+    SvTreeListEntry* GetEntry( const Point& rPoint ) const override;
 
-    void UpdateAll( bool bInvalidateCompleteView ) SAL_OVERRIDE;
+    void UpdateAll( bool bInvalidateCompleteView ) override;
 
-    bool KeyInput( const KeyEvent& ) SAL_OVERRIDE;
+    bool KeyInput( const KeyEvent& ) override;
 
-    void InvalidateEntry( long nId ) const SAL_OVERRIDE;
+    void InvalidateEntry( long nId ) const override;
 
 protected:
-    long GetEntryLine( SvTreeListEntry* pEntry ) const SAL_OVERRIDE;
+    long GetEntryLine( SvTreeListEntry* pEntry ) const override;
 
-    void CursorUp() SAL_OVERRIDE;
-    void CursorDown() SAL_OVERRIDE;
-    void PageDown( sal_uInt16 nDelta ) SAL_OVERRIDE;
-    void PageUp( sal_uInt16 nDelta ) SAL_OVERRIDE;
+    void CursorUp() override;
+    void CursorDown() override;
+    void PageDown( sal_uInt16 nDelta ) override;
+    void PageUp( sal_uInt16 nDelta ) override;
 
-    void SyncVerThumb() SAL_OVERRIDE;
-    void AdjustScrollBars( Size& rSize ) SAL_OVERRIDE;
+    void SyncVerThumb() override;
+    void AdjustScrollBars( Size& rSize ) override;
 };
 
-#endif // INCLUDED_SVTOOLS_SOURCE_INC_ICONVIEWIMPL_HXX
+#endif // INCLUDED_VCL_SOURCE_INC_ICONVIEWIMPL_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

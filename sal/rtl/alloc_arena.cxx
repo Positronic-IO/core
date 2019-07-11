@@ -73,14 +73,12 @@ void rtl_machdep_free(
 
 sal_Size rtl_machdep_pagesize();
 
-int rtl_arena_segment_constructor(void * obj)
+void rtl_arena_segment_constructor(void * obj)
 {
     rtl_arena_segment_type * segment = static_cast<rtl_arena_segment_type*>(obj);
 
     QUEUE_START_NAMED(segment, s);
     QUEUE_START_NAMED(segment, f);
-
-    return 1;
 }
 
 void rtl_arena_segment_destructor(void * obj)
@@ -132,7 +130,7 @@ bool rtl_arena_segment_populate(rtl_arena_type * arena)
     @precond  arena->m_lock acquired.
     @precond  (*ppSegment == 0)
 */
-inline void rtl_arena_segment_get(
+void rtl_arena_segment_get(
     rtl_arena_type * arena,
     rtl_arena_segment_type ** ppSegment
 )
@@ -153,7 +151,7 @@ inline void rtl_arena_segment_get(
     @precond  arena->m_lock acquired.
     @postcond (*ppSegment == 0)
  */
-inline void rtl_arena_segment_put(
+void rtl_arena_segment_put(
     rtl_arena_type * arena,
     rtl_arena_segment_type ** ppSegment
 )
@@ -180,7 +178,7 @@ inline void rtl_arena_segment_put(
 /**
     @precond arena->m_lock acquired.
 */
-inline void rtl_arena_freelist_insert (
+void rtl_arena_freelist_insert (
     rtl_arena_type * arena,
     rtl_arena_segment_type * segment
 )
@@ -197,7 +195,7 @@ inline void rtl_arena_freelist_insert (
 /**
     @precond arena->m_lock acquired.
 */
-inline void rtl_arena_freelist_remove(
+void rtl_arena_freelist_remove(
     rtl_arena_type * arena,
     rtl_arena_segment_type * segment
 )
@@ -260,7 +258,7 @@ void rtl_arena_hash_rescale(
                 rtl_arena_segment_type  * next = curr->m_fnext;
                 rtl_arena_segment_type ** head;
 
-                // coverity[negative_shift]
+                // coverity[negative_shift] - bogus
                 head = &(arena->m_hash_table[RTL_ARENA_HASH_INDEX(arena, curr->m_addr)]);
                 curr->m_fnext = (*head);
                 (*head) = curr;
@@ -283,7 +281,7 @@ void rtl_arena_hash_rescale(
 /**
     Insert arena hash, and update stats.
 */
-inline void rtl_arena_hash_insert(
+void rtl_arena_hash_insert(
     rtl_arena_type * arena,
     rtl_arena_segment_type * segment
 )
@@ -425,7 +423,7 @@ dequeue_and_leave:
     @precond arena->m_lock acquired
     @precond (*ppSegment == 0)
 */
-int rtl_arena_segment_create(
+bool rtl_arena_segment_create(
     rtl_arena_type * arena,
     sal_Size size,
     rtl_arena_segment_type ** ppSegment
@@ -463,14 +461,14 @@ int rtl_arena_segment_create(
                     QUEUE_INSERT_HEAD_NAMED(span, (*ppSegment), s);
 
                     /* report success */
-                    return 1;
+                    return true;
                 }
                 rtl_arena_segment_put (arena, &span);
             }
             rtl_arena_segment_put (arena, ppSegment);
         }
     }
-    return 0;
+    return false; // failure
 }
 
 /**

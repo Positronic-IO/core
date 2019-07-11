@@ -71,12 +71,12 @@ SwObjectFormatterTextFrame::~SwObjectFormatterTextFrame()
 {
 }
 
-SwObjectFormatterTextFrame* SwObjectFormatterTextFrame::CreateObjFormatter(
+std::unique_ptr<SwObjectFormatterTextFrame> SwObjectFormatterTextFrame::CreateObjFormatter(
                                                 SwTextFrame& _rAnchorTextFrame,
                                                 const SwPageFrame& _rPageFrame,
                                                 SwLayAction* _pLayAction )
 {
-    SwObjectFormatterTextFrame* pObjFormatter = nullptr;
+    std::unique_ptr<SwObjectFormatterTextFrame> pObjFormatter;
 
     // determine 'master' of <_rAnchorTextFrame>, if anchor frame is a follow text frame.
     SwTextFrame* pMasterOfAnchorFrame = nullptr;
@@ -94,9 +94,9 @@ SwObjectFormatterTextFrame* SwObjectFormatterTextFrame::CreateObjFormatter(
     if ( _rAnchorTextFrame.GetDrawObjs() ||
          ( pMasterOfAnchorFrame && pMasterOfAnchorFrame->GetDrawObjs() ) )
     {
-        pObjFormatter =
+        pObjFormatter.reset(
             new SwObjectFormatterTextFrame( _rAnchorTextFrame, _rPageFrame,
-                                         pMasterOfAnchorFrame, _pLayAction );
+                                         pMasterOfAnchorFrame, _pLayAction ));
     }
 
     return pObjFormatter;
@@ -272,7 +272,7 @@ bool SwObjectFormatterTextFrame::DoFormatObj( SwAnchoredObject& _rAnchoredObj,
             // objects under the condition, that its follow contains all its text.
             else if ( !mrAnchorTextFrame.IsFollow() &&
                       mrAnchorTextFrame.GetFollow() &&
-                      mrAnchorTextFrame.GetFollow()->GetOfst() == 0 )
+                      mrAnchorTextFrame.GetFollow()->GetOfst() == TextFrameIndex(0))
             {
                 SwLayouter::RemoveMovedFwdFrame(
                                 *(mrAnchorTextFrame.FindPageFrame()->GetFormat()->GetDoc()),
@@ -440,7 +440,7 @@ bool SwObjectFormatterTextFrame::DoFormatObjs()
         // objects under the condition, that its follow contains all its text.
         else if ( !mrAnchorTextFrame.IsFollow() &&
                   mrAnchorTextFrame.GetFollow() &&
-                  mrAnchorTextFrame.GetFollow()->GetOfst() == 0 )
+                  mrAnchorTextFrame.GetFollow()->GetOfst() == TextFrameIndex(0))
         {
             SwLayouter::RemoveMovedFwdFrame(
                             *(mrAnchorTextFrame.FindPageFrame()->GetFormat()->GetDoc()),
@@ -702,6 +702,7 @@ void SwObjectFormatterTextFrame::FormatAnchorFrameAndItsPrevs( SwTextFrame& _rAn
             }
             if ( pSectFrame && pSectFrame->IsSctFrame() )
             {
+                SwFrameDeleteGuard aDeleteGuard(&_rAnchorTextFrame);
                 // #i44049#
                 _rAnchorTextFrame.LockJoin();
                 SwFrame* pFrame = pSectFrame->GetUpper()->GetLower();

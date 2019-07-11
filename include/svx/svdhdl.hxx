@@ -165,7 +165,7 @@ private:
     bool                        mbMouseOver;    // is true if the mouse is over this handle
 
 protected:
-    sdr::overlay::OverlayObject* CreateOverlayObject(
+    std::unique_ptr<sdr::overlay::OverlayObject> CreateOverlayObject(
         const basegfx::B2DPoint& rPos,
         BitmapColorIndex eColIndex, BitmapMarkerKind eKindOfMarker,
         Point aMoveOutsideOffset = Point());
@@ -226,6 +226,9 @@ public:
         visualisation during mouse over it must override this method and call Touch(). */
     virtual void onMouseEnter(const MouseEvent& rMEvt);
 
+    /** is called when help is requested for the area of this handle */
+    virtual void onHelpRequest(const HelpEvent& rHEvt);
+
     /** is called when the mouse leaves the area of this handle. If the handle changes his
         visualisation during mouse over it must override this method and call Touch(). */
     virtual void onMouseLeave();
@@ -249,7 +252,7 @@ class SVX_DLLPUBLIC SdrHdlColor : public SdrHdl
     Link<SdrHdlColor*,void>     aColorChangeHdl;
 
     // use luminance values only
-    bool                        bUseLuminance : 1;
+    bool const                  bUseLuminance : 1;
 
     // create marker for this kind
     SVX_DLLPRIVATE virtual void CreateB2dIAObject() override;
@@ -284,7 +287,7 @@ private:
     Point                       a2ndPos;
 
     // is this a gradient or a transparence
-    bool                        bGradient : 1;
+    bool const                  bGradient : 1;
 
     // select which handle to move
     bool                        bMoveSingleHandle : 1;
@@ -414,8 +417,8 @@ class SVX_DLLPUBLIC SdrHdlList
 {
 protected:
     size_t                      mnFocusIndex;
-    SdrMarkView*                pView;
-    std::deque<SdrHdl*>         aList;
+    SdrMarkView* const          pView;
+    std::deque<std::unique_ptr<SdrHdl>> maList;
     sal_uInt16                  nHdlSize;
 
     bool                        bRotateShear : 1;
@@ -443,8 +446,8 @@ public:
     //          2.Level PageView (Pointer)
     //          3.Level Position (x+y)
     void     Sort();
-    size_t   GetHdlCount() const { return aList.size(); }
-    SdrHdl*  GetHdl(size_t nNum) const { return nNum<aList.size() ? aList[nNum] : nullptr; }
+    size_t   GetHdlCount() const { return maList.size(); }
+    SdrHdl*  GetHdl(size_t nNum) const { return maList[nNum].get(); }
     size_t   GetHdlNum(const SdrHdl* pHdl) const;
     void     SetHdlSize(sal_uInt16 nSiz);
     sal_uInt16   GetHdlSize() const                        { return nHdlSize; }
@@ -457,9 +460,12 @@ public:
 
     // AddHdl takes ownership of the handle. It should be on the Heap
     // as Clear() deletes it.
-    void    AddHdl(SdrHdl* pHdl);
-    SdrHdl* RemoveHdl(size_t nNum);
+    void    AddHdl(std::unique_ptr<SdrHdl> pHdl);
+    std::unique_ptr<SdrHdl> RemoveHdl(size_t nNum);
     void RemoveAllByKind(SdrHdlKind eKind);
+
+    // move the ownership of all the SdrHdl to rOther
+    void MoveTo(SdrHdlList& rOther);
 
     // Last inserted handles are likely hit (if the handles are above each other)
     SdrHdl* IsHdlListHit(const Point& rPnt) const;
@@ -484,20 +490,20 @@ private:
 
     // evtl. shear and rotation, equal to the object's one to allow adaption of
     // the visualization handles
-    double          mfShearX;
-    double          mfRotation;
+    double const          mfShearX;
+    double const          mfRotation;
 };
 
 
 class SVX_DLLPUBLIC SdrCropViewHdl : public SdrHdl
 {
 private:
-    basegfx::B2DHomMatrix       maObjectTransform;
-    Graphic                     maGraphic;
-    double                      mfCropLeft;
-    double                      mfCropTop;
-    double                      mfCropRight;
-    double                      mfCropBottom;
+    basegfx::B2DHomMatrix const       maObjectTransform;
+    Graphic const                     maGraphic;
+    double const                      mfCropLeft;
+    double const                      mfCropTop;
+    double const                      mfCropRight;
+    double const                      mfCropBottom;
 
 public:
     SdrCropViewHdl(

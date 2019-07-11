@@ -39,6 +39,7 @@
 #include <com/sun/star/beans/Optional.hpp>
 #include <com/sun/star/task/XInteractionApprove.hpp>
 #include <com/sun/star/beans/Ambiguous.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -368,7 +369,7 @@ bool ExtensionManager::isUserDisabled(
         beans::Optional<beans::Ambiguous<sal_Bool> > reg =
             userExtension->isRegistered(Reference<task::XAbortChannel>(),
                                         Reference<ucb::XCommandEnvironment>());
-        //If the value is ambiguous is than we assume that the extension
+        //If the value is ambiguous, then we assume that the extension
         //is enabled, but something went wrong during enabling. We do not
         //automatically disable user extensions.
         if (reg.IsPresent &&

@@ -20,9 +20,13 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_OPTAB_H
 #define INCLUDED_SC_SOURCE_FILTER_INC_OPTAB_H
 
+#include <sal/types.h>
+
+class SvStream;
+
 struct LotusContext;
 
-typedef void ( *OPCODE_FKT )(LotusContext &rContext, SvStream &rStream, sal_uInt16 nLaenge);
+typedef void ( *OPCODE_FKT )(LotusContext &rContext, SvStream &rStream, sal_uInt16 nLength);
 
 #define FKT_LIMIT   101
 

@@ -22,7 +22,6 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <osl/diagnose.h>
 #include <rtl/instance.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
 #include <toolkit/controls/eventcontainer.hxx>
 #include <toolkit/helper/property.hxx>
@@ -586,7 +585,7 @@
 
     struct Int32Equal
     {
-        sal_Int32   m_nCompare;
+        sal_Int32 const   m_nCompare;
         explicit Int32Equal( sal_Int32 _nCompare ) : m_nCompare( _nCompare ) { }
 
         bool operator()( sal_Int32 _nLHS )
@@ -603,13 +602,7 @@
         // look if this id is one we recognized as duplicate
         IntArrayArray::value_type& rDuplicateIds = AmbiguousPropertyIds::get()[ m_nPropertyMapId ];
 
-        IntArrayArray::value_type::const_iterator aPos = ::std::find_if(
-            rDuplicateIds.begin(),
-            rDuplicateIds.end(),
-            Int32Equal( _nHandle )
-        );
-
-        if ( rDuplicateIds.end() != aPos )
+        if ( std::any_of(rDuplicateIds.begin(), rDuplicateIds.end(), Int32Equal( _nHandle )) )
         {
             // yes, it is such a property
             OUString sPropName;

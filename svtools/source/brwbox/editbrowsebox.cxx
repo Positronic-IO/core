@@ -33,7 +33,6 @@
 #include <tools/multisel.hxx>
 #include "editbrowseboximpl.hxx"
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
-#include <comphelper/types.hxx>
 
 
 namespace svt
@@ -761,12 +760,30 @@ return;
 
         if (bFont)
         {
-            GetDataWindow().ApplyControlFont(GetDataWindow(), rStyleSettings.GetFieldFont());
+            vcl::Font aFont = rStyleSettings.GetFieldFont();
+            if (IsControlFont())
+            {
+                GetDataWindow().SetControlFont(GetControlFont());
+                aFont.Merge(GetControlFont());
+            }
+            else
+                GetDataWindow().SetControlFont();
+
+            GetDataWindow().SetZoomedPointFont(GetDataWindow(), aFont);
         }
 
         if (bFont || bForeground)
         {
-            GetDataWindow().ApplyControlForeground(GetDataWindow(), rStyleSettings.GetFieldTextColor());
+            Color aTextColor = rStyleSettings.GetFieldTextColor();
+            if (IsControlForeground())
+            {
+                aTextColor = GetControlForeground();
+                GetDataWindow().SetControlForeground(aTextColor);
+            }
+            else
+                GetDataWindow().SetControlForeground();
+
+            GetDataWindow().SetTextColor( aTextColor );
         }
 
         if (!bBackground) // FIXME: Outside of Paint Hierarchy

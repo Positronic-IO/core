@@ -73,7 +73,7 @@ class XMLOFF_DLLPUBLIC SvXMLStyleContext : public SvXMLImportContext
                               // by Finish() or si somehow invalid.
     bool         mbNew : 1;   // Set this to false in CreateAnsInsert
                               // if the style is already existing.
-    bool         mbDefaultStyle : 1;
+    bool const   mbDefaultStyle : 1;
 
 protected:
 
@@ -148,9 +148,6 @@ public:
 
 class XMLOFF_DLLPUBLIC SvXMLStylesContext : public SvXMLImportContext
 {
-    const OUString msParaStyleServiceName;
-    const OUString msTextStyleServiceName;
-
     std::unique_ptr<SvXMLStylesContext_Impl> mpImpl;
     std::unique_ptr<SvXMLTokenMap>           mpStyleStylesElemTokenMap;
 
@@ -171,8 +168,8 @@ class XMLOFF_DLLPUBLIC SvXMLStylesContext : public SvXMLImportContext
 
     SAL_DLLPRIVATE const SvXMLTokenMap& GetStyleStylesElemTokenMap();
 
-    SvXMLStylesContext(SvXMLStylesContext &) = delete;
-    void operator =(SvXMLStylesContext &) = delete;
+    SvXMLStylesContext(SvXMLStylesContext const &) = delete;
+    SvXMLStylesContext& operator =(SvXMLStylesContext const &) = delete;
 
 protected:
 

@@ -19,12 +19,12 @@
 
 #ifdef _WIN32
 //#include <Windows.h>   // come from LibreOfficeKitInit.h
-    long getTimeMS()
+    static long getTimeMS()
     {
         return GetTickCount();
     }
 
-    bool IsAbsolutePath(char const *pPath)
+    static bool IsAbsolutePath(char const *pPath)
     {
         if (pPath[1] != ':')
         {
@@ -38,14 +38,14 @@
 #else
 #include <sys/time.h>
 #include <sal/types.h>
-    long getTimeMS()
+    static long getTimeMS()
     {
         struct timeval t;
         gettimeofday(&t, nullptr);
         return t.tv_sec*1000 + t.tv_usec/1000;
     }
 
-    bool IsAbsolutePath(char const *pPath)
+    static bool IsAbsolutePath(char const *pPath)
     {
         if (pPath[0] != '/')
         {

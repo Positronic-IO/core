@@ -18,6 +18,7 @@
  */
 
 #include <editeng/formatbreakitem.hxx>
+#include <sal/log.hxx>
 #include <doc.hxx>
 #include <IDocumentStatistics.hxx>
 #include <IDocumentLayoutAccess.hxx>
@@ -187,7 +188,9 @@ void SwLayoutCache::Write( SvStream &rStream, const SwDoc& rDoc )
                 {
                     if( pTmp->IsTextFrame() )
                     {
-                        sal_uLong nNdIdx = static_cast<SwTextFrame*>(pTmp)->GetNode()->GetIndex();
+                        SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pTmp));
+                        assert(!pFrame->GetMergedPara());
+                        sal_uLong nNdIdx = pFrame->GetTextNodeFirst()->GetIndex();
                         if( nNdIdx > nStartOfContent )
                         {
                             /*  Open Paragraph Record */
@@ -198,7 +201,7 @@ void SwLayoutCache::Write( SvStream &rStream, const SwDoc& rDoc )
                             nNdIdx -= nStartOfContent;
                             aIo.GetStream().WriteUInt32( nNdIdx );
                             if( bFollow )
-                                aIo.GetStream().WriteUInt32( static_cast<SwTextFrame*>(pTmp)->GetOfst() );
+                                aIo.GetStream().WriteUInt32( sal_Int32(static_cast<SwTextFrame*>(pTmp)->GetOfst()) );
                             aIo.CloseFlagRec();
                             /*  Close Paragraph Record */
                             aIo.CloseRec();
@@ -343,7 +346,10 @@ bool SwLayoutCache::CompareLayout( const SwDoc& rDoc ) const
             {
                 if( pTmp->IsTextFrame() )
                 {
-                    sal_uLong nNdIdx = static_cast<const SwTextFrame*>(pTmp)->GetNode()->GetIndex();
+
+                    SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pTmp));
+                    assert(!pFrame->GetMergedPara());
+                    sal_uLong nNdIdx = pFrame->GetTextNodeFirst()->GetIndex();
                     if( nNdIdx > nStartOfContent )
                     {
                         bool bFollow = static_cast<const SwTextFrame*>(pTmp)->IsFollow();
@@ -351,8 +357,9 @@ bool SwLayoutCache::CompareLayout( const SwDoc& rDoc ) const
                         if( pImpl->GetBreakIndex( nIndex ) != nNdIdx ||
                             SW_LAYCACHE_IO_REC_PARA !=
                             pImpl->GetBreakType( nIndex ) ||
-                            ( bFollow ? static_cast<const SwTextFrame*>(pTmp)->GetOfst()
-                              : COMPLETE_STRING ) != pImpl->GetBreakOfst( nIndex ) )
+                            (bFollow
+                              ? sal_Int32(static_cast<const SwTextFrame*>(pTmp)->GetOfst())
+                              : COMPLETE_STRING) != pImpl->GetBreakOfst(nIndex))
                         {
                             return false;
                         }
@@ -625,9 +632,8 @@ sal_uLong SwLayHelper::CalcPageCount()
 bool SwLayHelper::CheckInsertPage()
 {
     bool bEnd = nullptr == mrpPage->GetNext();
-    const SwAttrSet* pAttr = mrpFrame->GetAttrSet();
-    const SvxFormatBreakItem& rBrk = pAttr->GetBreak();
-    const SwFormatPageDesc& rDesc = pAttr->GetPageDesc();
+    const SvxFormatBreakItem& rBrk = mrpFrame->GetBreakItem();
+    const SwFormatPageDesc& rDesc = mrpFrame->GetPageDescItem();
     // #118195# Do not evaluate page description if frame
     // is a follow frame!
     const SwPageDesc* pDesc = mrpFrame->IsFlowFrame() &&
@@ -794,7 +800,7 @@ bool SwLayHelper::CheckInsert( sal_uLong nNodeIndex )
                     sal_uInt16 nRepeat( 0 );
                     if( !bLongTab && mrpFrame->IsTextFrame() &&
                         SW_LAYCACHE_IO_REC_PARA == nType &&
-                        nOfst < static_cast<SwTextFrame*>(mrpFrame)->GetTextNode()->GetText().getLength())
+                        nOfst < static_cast<SwTextFrame*>(mrpFrame)->GetText().getLength())
                         bSplit = true;
                     else if( mrpFrame->IsTabFrame() && nRowCount < nOfst &&
                              ( bLongTab || SW_LAYCACHE_IO_REC_TABLE == nType ) )
@@ -868,8 +874,8 @@ bool SwLayHelper::CheckInsert( sal_uLong nNodeIndex )
                         {
                             SwTextFrame *const pNew = static_cast<SwTextFrame*>(
                                 static_cast<SwTextFrame*>(mrpFrame)
-                                    ->GetTextNode()->MakeFrame(mrpFrame));
-                            pNew->ManipOfst( nOfst );
+                                    ->GetTextNodeFirst()->MakeFrame(mrpFrame));
+                            pNew->ManipOfst( TextFrameIndex(nOfst) );
                             pNew->SetFollow( static_cast<SwTextFrame*>(mrpFrame)->GetFollow() );
                             static_cast<SwTextFrame*>(mrpFrame)->SetFollow( pNew );
                             mrpFrame = pNew;
@@ -1008,14 +1014,11 @@ void SwLayHelper::CheckFlyCache_( SwPageFrame* pPage )
 
         if ( aFlyCacheSet.size() == aFlySet.size() )
         {
-            std::set< const SwFlyCache*, FlyCacheCompare >::iterator aFlyCacheSetIt =
-                    aFlyCacheSet.begin();
             std::set< const SdrObject*, SdrObjectCompare >::iterator aFlySetIt =
                     aFlySet.begin();
 
-            while ( aFlyCacheSetIt != aFlyCacheSet.end() )
+            for ( const SwFlyCache* pFlyCache : aFlyCacheSet )
             {
-                const SwFlyCache* pFlyCache = *aFlyCacheSetIt;
                 SwFlyFrame* pFly = const_cast<SwVirtFlyDrawObj*>(static_cast<const SwVirtFlyDrawObj*>(*aFlySetIt))->GetFlyFrame();
 
                 if ( pFly->getFrameArea().Left() == FAR_AWAY )
@@ -1032,7 +1035,6 @@ void SwLayHelper::CheckFlyCache_( SwPageFrame* pPage )
                     }
                 }
 
-                ++aFlyCacheSetIt;
                 ++aFlySetIt;
             }
         }
@@ -1188,7 +1190,7 @@ void SwLayCacheIoImpl::CloseFlagRec()
     }
     else
     {
-        OSL_ENSURE( pStream->Tell() <= nFlagRecEnd, "To many data read" );
+        OSL_ENSURE( pStream->Tell() <= nFlagRecEnd, "Too many data read" );
         if( pStream->Tell() != nFlagRecEnd )
             pStream->Seek( nFlagRecEnd );
     }

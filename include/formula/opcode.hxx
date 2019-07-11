@@ -303,9 +303,7 @@ enum OpCode : sal_uInt16
         ocDBVarP            = SC_OPCODE_DB_VAR_P,
     // Management functions
         ocIndirect          = SC_OPCODE_INDIRECT,
-        ocIndirectXL        = SC_OPCODE_INDIRECT_XL,
         ocAddress           = SC_OPCODE_ADDRESS,
-        ocAddressXL         = SC_OPCODE_ADDRESS_XL,
         ocMatch             = SC_OPCODE_MATCH,
         ocCountEmptyCells   = SC_OPCODE_COUNT_EMPTY_CELLS,
         ocCountIf           = SC_OPCODE_COUNT_IF,
@@ -345,6 +343,7 @@ enum OpCode : sal_uInt16
         ocFindB             = SC_OPCODE_FINDB,
         ocSearchB           = SC_OPCODE_SEARCHB,
         ocNumberValue       = SC_OPCODE_NUMBERVALUE,
+        ocRegex             = SC_OPCODE_REGEX,
     // Matrix functions
         ocMatValue          = SC_OPCODE_MAT_VALUE,
         ocMatDet            = SC_OPCODE_MAT_DET,
@@ -782,9 +781,7 @@ inline std::string OpCodeEnumToString(OpCode eCode)
     case ocDBVar: return "DBVar";
     case ocDBVarP: return "DBVarP";
     case ocIndirect: return "Indirect";
-    case ocIndirectXL: return "IndirectXL";
     case ocAddress: return "Address";
-    case ocAddressXL: return "AddressXL";
     case ocMatch: return "Match";
     case ocCountEmptyCells: return "CountEmptyCells";
     case ocCountIf: return "CountIf";
@@ -812,6 +809,7 @@ inline std::string OpCodeEnumToString(OpCode eCode)
     case ocText: return "Text";
     case ocSubstitute: return "Substitute";
     case ocRept: return "Rept";
+    case ocRegex: return "Regex";
     case ocConcat: return "Concat";
     case ocConcat_MS: return "Concat_MS";
     case ocTextJoin_MS: return "TextJoin_MS";

@@ -18,6 +18,7 @@
  */
 
 #include <memory>
+#include <vcl/commandevent.hxx>
 #include <vcl/builder.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/svapp.hxx>
@@ -31,6 +32,7 @@
 #include <strings.hrc>
 #include <vcl/scrbar.hxx>
 #include <vcl/settings.hxx>
+#include <osl/diagnose.h>
 
 class ImpVclMEdit : public SfxListener
 {
@@ -105,13 +107,10 @@ public:
 };
 
 ImpVclMEdit::ImpVclMEdit( VclMultiLineEdit* pEdt, WinBits nWinStyle )
-    :mpHScrollBar(nullptr)
-    ,mpVScrollBar(nullptr)
-    ,mpScrollBox(nullptr)
+    : pVclMultiLineEdit(pEdt)
+    , mpTextWindow(VclPtr<TextWindow>::Create(pEdt))
+    , mnTextWidth(0)
 {
-    pVclMultiLineEdit = pEdt;
-    mnTextWidth = 0;
-    mpTextWindow = VclPtr<TextWindow>::Create( pEdt );
     mpTextWindow->Show();
     InitFromStyle( nWinStyle );
     StartListening( *mpTextWindow->GetTextEngine() );

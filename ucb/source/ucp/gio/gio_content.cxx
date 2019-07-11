@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sal/macros.h>
 #include <osl/time.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/beans/IllegalTypeException.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -59,10 +60,12 @@
 
 #include <comphelper/seekableinput.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/propertyvalueset.hxx>
 #include <ucbhelper/interactionrequest.hxx>
 #include <ucbhelper/cancelcommandexecution.hxx>
+#include <ucbhelper/macros.hxx>
 #include <vcl/svapp.hxx>
 
 #include <osl/conditn.hxx>
@@ -422,12 +425,11 @@ static util::DateTime getDateFromUnix (time_t t)
         return util::DateTime();
 }
 
-uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *pInfo,
-    const uno::Reference< uno::XComponentContext >& rxContext,
-    const uno::Reference< ucb::XCommandEnvironment > & xEnv,
-    const uno::Sequence< beans::Property >& rProperties)
+uno::Reference< sdbc::XRow > Content::getPropertyValues(
+                const uno::Sequence< beans::Property >& rProperties,
+                const uno::Reference< ucb::XCommandEnvironment >& xEnv )
 {
-    rtl::Reference< ::ucbhelper::PropertyValueSet > xRow = new ::ucbhelper::PropertyValueSet( rxContext );
+    rtl::Reference< ::ucbhelper::PropertyValueSet > xRow = new ::ucbhelper::PropertyValueSet( m_xContext );
 
     sal_Int32 nProps;
     const beans::Property* pProps;
@@ -435,12 +437,14 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
     nProps = rProperties.getLength();
     pProps = rProperties.getConstArray();
 
+    GFileInfo *pInfo = nullptr;
     for( sal_Int32 n = 0; n < nProps; ++n )
     {
         const beans::Property& rProp = pProps[ n ];
 
         if ( rProp.Name == "IsDocument" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute(pInfo, G_FILE_ATTRIBUTE_STANDARD_TYPE))
                 xRow->appendBoolean( rProp, ( g_file_info_get_file_type( pInfo ) == G_FILE_TYPE_REGULAR ||
                                                g_file_info_get_file_type( pInfo ) == G_FILE_TYPE_UNKNOWN ) );
@@ -449,6 +453,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "IsFolder" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_STANDARD_TYPE) )
                 xRow->appendBoolean( rProp, ( g_file_info_get_file_type( pInfo ) == G_FILE_TYPE_DIRECTORY ));
             else
@@ -456,6 +461,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "Title" )
         {
+            getFileInfo(xEnv, &pInfo, false);
             if (pInfo != nullptr && g_file_info_has_attribute(pInfo, G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME))
             {
                 const char *pName = g_file_info_get_display_name(pInfo);
@@ -466,6 +472,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "IsReadOnly" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE ) )
                 xRow->appendBoolean( rProp, !g_file_info_get_attribute_boolean( pInfo, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE) );
             else
@@ -473,6 +480,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "DateCreated" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_TIME_CREATED ) )
                 xRow->appendTimestamp( rProp, getDateFromUnix(g_file_info_get_attribute_uint64(pInfo, G_FILE_ATTRIBUTE_TIME_CREATED)) );
             else
@@ -480,6 +488,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "DateModified" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo,  G_FILE_ATTRIBUTE_TIME_CHANGED ) )
                 xRow->appendTimestamp( rProp, getDateFromUnix(g_file_info_get_attribute_uint64(pInfo, G_FILE_ATTRIBUTE_TIME_CHANGED)) );
             else
@@ -487,6 +496,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "Size" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_STANDARD_SIZE) )
                 xRow->appendLong( rProp, ( g_file_info_get_size( pInfo ) ));
             else
@@ -499,6 +509,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "IsCompactDisc" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_MOUNTABLE_CAN_EJECT ) )
                 xRow->appendBoolean( rProp, g_file_info_get_attribute_boolean(pInfo, G_FILE_ATTRIBUTE_MOUNTABLE_CAN_EJECT) );
             else
@@ -506,6 +517,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "IsRemoveable" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_MOUNTABLE_CAN_UNMOUNT ) )
                 xRow->appendBoolean( rProp, g_file_info_get_attribute_boolean(pInfo, G_FILE_ATTRIBUTE_MOUNTABLE_CAN_UNMOUNT ) );
             else
@@ -517,6 +529,7 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
         }
         else if ( rProp.Name == "IsHidden" )
         {
+            getFileInfo(xEnv, &pInfo, true);
             if (pInfo != nullptr && g_file_info_has_attribute( pInfo, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN) )
                 xRow->appendBoolean( rProp, ( g_file_info_get_is_hidden ( pInfo ) ) );
             else
@@ -535,14 +548,6 @@ uno::Reference< sdbc::XRow > Content::getPropertyValuesFromGFileInfo(GFileInfo *
     }
 
     return uno::Reference< sdbc::XRow >( xRow.get() );
-}
-
-uno::Reference< sdbc::XRow > Content::getPropertyValues(
-                const uno::Sequence< beans::Property >& rProperties,
-                const uno::Reference< ucb::XCommandEnvironment >& xEnv )
-{
-    GFileInfo *pInfo = getGFileInfo(xEnv);
-    return getPropertyValuesFromGFileInfo(pInfo, m_xContext, xEnv, rProperties);
 }
 
 static lang::IllegalAccessException
@@ -568,12 +573,9 @@ void Content::queryChildren( ContentRefList& rChildren )
 
     sal_Int32 nLen = aURL.getLength();
 
-    ucbhelper::ContentRefList::const_iterator it  = aAllContents.begin();
-    ucbhelper::ContentRefList::const_iterator end = aAllContents.end();
-
-    while ( it != end )
+    for ( const auto& rContent : aAllContents )
     {
-        ucbhelper::ContentImplHelperRef xChild = (*it);
+        ucbhelper::ContentImplHelperRef xChild = rContent;
         OUString aChildURL = xChild->getIdentifier()->getContentIdentifier();
 
         // Is aURL a prefix of aChildURL?
@@ -588,7 +590,6 @@ void Content::queryChildren( ContentRefList& rChildren )
                 rChildren.emplace_back(static_cast< ::gio::Content * >(xChild.get() ) );
             }
         }
-        ++it;
     }
 }
 
@@ -614,12 +615,9 @@ bool Content::exchangeIdentity( const uno::Reference< ucb::XContentIdentifier >&
         ContentRefList aChildren;
         queryChildren( aChildren );
 
-        ContentRefList::const_iterator it  = aChildren.begin();
-        ContentRefList::const_iterator end = aChildren.end();
-
-        while ( it != end )
+        for ( const auto& rChild : aChildren )
         {
-            ContentRef xChild = (*it);
+            ContentRef xChild = rChild;
 
             // Create new content identifier for the child...
             uno::Reference< ucb::XContentIdentifier > xOldChildId = xChild->getIdentifier();
@@ -632,13 +630,30 @@ bool Content::exchangeIdentity( const uno::Reference< ucb::XContentIdentifier >&
 
             if ( !xChild->exchangeIdentity( xNewChildId ) )
                 return false;
-
-            ++it;
-         }
-         return true;
+        }
+        return true;
     }
 
     return false;
+}
+
+void Content::getFileInfo(
+    css::uno::Reference<css::ucb::XCommandEnvironment> const & env, GFileInfo ** info, bool fail)
+{
+    assert(info != nullptr);
+    if (*info == nullptr)
+    {
+        GError * err = nullptr;
+        *info = getGFileInfo(env, &err);
+        if (*info == nullptr && !mbTransient && fail)
+        {
+            ucbhelper::cancelCommandExecution(mapGIOError(err), env);
+        }
+        else if (err != nullptr)
+        {
+            g_error_free(err);
+        }
+    }
 }
 
 uno::Sequence< uno::Any > Content::setPropertyValues(
@@ -1008,13 +1023,9 @@ void Content::destroy( bool bDeletePhysical )
     ::gio::Content::ContentRefList aChildren;
     queryChildren( aChildren );
 
-    ContentRefList::const_iterator it  = aChildren.begin();
-    ContentRefList::const_iterator end = aChildren.end();
-
-    while ( it != end )
+    for ( auto& rChild : aChildren )
     {
-        (*it)->destroy( bDeletePhysical );
-        ++it;
+        rChild->destroy( bDeletePhysical );
     }
 }
 

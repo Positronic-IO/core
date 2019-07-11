@@ -20,6 +20,7 @@
 #include <config_gpgme.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <rtl/uuid.h>
 #include <cppuhelper/supportsservice.hxx>
 #include <gpg/xmlsignature_gpgimpl.hxx>
@@ -514,7 +515,6 @@ Sequence< OUString > SAL_CALL XMLSignature_GpgImpl::getSupportedServiceNames() {
 
 //Helper for XServiceInfo
 Sequence< OUString > XMLSignature_GpgImpl::impl_getSupportedServiceNames() {
-    ::osl::Guard< ::osl::Mutex > aGuard( ::osl::Mutex::getGlobalMutex() ) ;
     Sequence<OUString> seqServiceNames { "com.sun.star.xml.crypto.XMLSignature" };
     return seqServiceNames ;
 }
@@ -524,12 +524,8 @@ OUString XMLSignature_GpgImpl::impl_getImplementationName() {
 }
 
 //Helper for registry
-Reference< XInterface > SAL_CALL XMLSignature_GpgImpl::impl_createInstance( const Reference< XMultiServiceFactory >& ) {
+Reference< XInterface > XMLSignature_GpgImpl::impl_createInstance( const Reference< XMultiServiceFactory >& ) {
     return Reference< XInterface >( *new XMLSignature_GpgImpl ) ;
-}
-
-Reference< XSingleServiceFactory > XMLSignature_GpgImpl::impl_createFactory( const Reference< XMultiServiceFactory >& aServiceManager ) {
-    return ::cppu::createSingleFactory( aServiceManager , impl_getImplementationName() , impl_createInstance , impl_getSupportedServiceNames() ) ;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

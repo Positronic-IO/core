@@ -131,7 +131,6 @@ static BOOL WINAPI RawDllMain( HINSTANCE, DWORD fdwReason, LPVOID )
                 rtl_locale_fini();
 
                 /* finalize memory management */
-                rtl_memory_fini();
                 rtl_cache_fini();
                 rtl_arena_fini();
             }
@@ -222,13 +221,17 @@ BOOL WINAPI DllMain( HINSTANCE, DWORD fdwReason, LPVOID )
                 {
                     // No error check, it works or it does not
                     // Thread should only be started for headless mode, see desktop/win32/source/officeloader.cxx
-                    CreateThread( nullptr, 0, ParentMonitorThreadProc, reinterpret_cast<LPVOID>(dwParentProcessId), 0, &dwThreadId );
+                    HANDLE hThread
+                        = CreateThread(nullptr, 0, ParentMonitorThreadProc,
+                                       reinterpret_cast<LPVOID>(dwParentProcessId), 0, &dwThreadId);
                     // Note: calling CreateThread in DllMain is discouraged
                     // but this is only done in the headless mode and in
                     // that case no other threads should be running at startup
                     // when sal3.dll is loaded; also there is no
                     // synchronization with the spawned thread, so there
                     // does not appear to be a real risk of deadlock here
+                    if (hThread)
+                        CloseHandle(hThread);
                 }
             }
 

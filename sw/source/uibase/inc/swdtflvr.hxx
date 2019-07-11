@@ -21,10 +21,11 @@
 
 #include <sfx2/objsh.hxx>
 
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <vcl/graph.hxx>
 #include <sfx2/lnkbase.hxx>
 #include <com/sun/star/embed/XEmbeddedObject.hpp>
+#include <o3tl/deleter.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <svx/swframetypes.hxx>
 #include <memory>
@@ -68,7 +69,7 @@ class SW_DLLPUBLIC SwTransferable : public TransferableHelper
     /* #96392# Added pCreatorView to distinguish SwFrameShell from
        SwWrtShell. */
     const SwFrameShell *m_pCreatorView;
-    SwDocFac        *m_pClpDocFac;
+    std::unique_ptr<SwDocFac, o3tl::default_delete<SwDocFac>> m_pClpDocFac;
     std::unique_ptr<Graphic>        m_pClpGraphic;
     std::unique_ptr<Graphic>        m_pClpBitmap;
     Graphic                         *m_pOrigGraphic;
@@ -166,7 +167,7 @@ public:
     int  Copy( bool bIsCut = false );
     int  PrepareForCopy( bool bIsCut = false );
     void  CalculateAndCopy();                // special for Calculator
-    int  CopyGlossary( SwTextBlocks& rGlossary, const OUString& rStr );
+    bool  CopyGlossary( SwTextBlocks& rGlossary, const OUString& rStr );
 
     // remove the DDE-Link format promise
     void RemoveDDELinkFormat( const vcl::Window& rWin );

@@ -20,6 +20,7 @@
 #include <svtools/htmlkywd.hxx>
 
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 
 #include <unotools/configmgr.hxx>
 #include <svl/urihelper.hxx>
@@ -202,7 +203,6 @@ void SfxFrameHTMLWriter::Out_DocInfo( SvStream& rStrm, const OUString& rBaseURL,
             ::comphelper::getProcessComponentContext() ) );
         uno::Reference<beans::XPropertySet> xUserDefinedProps(
             i_xDocProps->getUserDefinedProperties(), uno::UNO_QUERY_THROW);
-        DBG_ASSERT(xUserDefinedProps.is(), "UserDefinedProperties is null");
         uno::Reference<beans::XPropertySetInfo> xPropInfo =
             xUserDefinedProps->getPropertySetInfo();
         DBG_ASSERT(xPropInfo.is(), "UserDefinedProperties Info is null");

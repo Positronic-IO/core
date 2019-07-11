@@ -26,7 +26,6 @@
 #include <PostItMgr.hxx>
 #include <AnnotationWin.hxx>
 #include <basegfx/range/b2drange.hxx>
-#include <comphelper/string.hxx>
 #include "SidebarTxtControl.hxx"
 #include "SidebarScrollBar.hxx"
 #include "AnchorOverlayObject.hxx"
@@ -487,15 +486,15 @@ void SwAnnotationWin::InitControls()
     }
 
     SwDocShell* aShell = mrView.GetDocShell();
-    mpOutliner = new Outliner(&aShell->GetPool(),OutlinerMode::TextObject);
-    aShell->GetDoc()->SetCalcFieldValueHdl( mpOutliner );
+    mpOutliner.reset(new Outliner(&aShell->GetPool(),OutlinerMode::TextObject));
+    aShell->GetDoc()->SetCalcFieldValueHdl( mpOutliner.get() );
     mpOutliner->SetUpdateMode( true );
     Rescale();
 
     mpSidebarTextControl->EnableRTL( false );
-    mpOutlinerView = new OutlinerView ( mpOutliner, mpSidebarTextControl );
+    mpOutlinerView.reset(new OutlinerView ( mpOutliner.get(), mpSidebarTextControl ));
     mpOutlinerView->SetBackgroundColor(COL_TRANSPARENT);
-    mpOutliner->InsertView(mpOutlinerView );
+    mpOutliner->InsertView(mpOutlinerView.get() );
     mpOutlinerView->SetOutputArea( PixelToLogic( tools::Rectangle(0,0,1,1) ) );
 
     mpOutlinerView->SetAttribs(DefaultItem());
@@ -838,8 +837,7 @@ void SwAnnotationWin::SetPosAndSize()
     }
     else
     {
-        delete mpTextRangeOverlay;
-        mpTextRangeOverlay = nullptr;
+        mpTextRangeOverlay.reset();
     }
 }
 
@@ -1111,10 +1109,20 @@ void SwAnnotationWin::ActivatePostIt()
 
     if ( !Application::GetSettings().GetStyleSettings().GetHighContrastMode() )
         GetOutlinerView()->SetBackgroundColor(mColorDark);
+
+    //tdf#119130 only have the active postit as a dialog control in which pressing
+    //ctrl+tab cycles between text and button so we don't waste time searching
+    //thousands of SwAnnotationWins
+    SetStyle(GetStyle() | WB_DIALOGCONTROL);
 }
 
 void SwAnnotationWin::DeactivatePostIt()
 {
+    //tdf#119130 only have the active postit as a dialog control in which pressing
+    //ctrl+tab cycles between text and button so we don't waste time searching
+    //thousands of SwAnnotationWins
+    SetStyle(GetStyle() & ~WB_DIALOGCONTROL);
+
     // remove selection, #i87073#
     if (GetOutlinerView()->GetEditView().HasSelection())
     {

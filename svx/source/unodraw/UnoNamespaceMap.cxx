@@ -47,8 +47,8 @@ namespace svx
     class NamespaceMap : public WeakImplHelper< XNameAccess, XServiceInfo >
     {
     private:
-        sal_uInt16* mpWhichIds;
-        SfxItemPool* mpPool;
+        sal_uInt16* const mpWhichIds;
+        SfxItemPool* const mpPool;
 
     public:
         NamespaceMap( sal_uInt16* pWhichIds, SfxItemPool* pPool );
@@ -73,14 +73,14 @@ namespace svx
         return static_cast<XWeak*>(new NamespaceMap( pWhichIds, pPool ));
     }
 
-    Sequence< OUString > NamespaceMap_getSupportedServiceNames()
+    static Sequence< OUString > NamespaceMap_getSupportedServiceNames()
         throw()
     {
         Sequence<OUString> aSupportedServiceNames { "com.sun.star.xml.NamespaceMap" };
         return aSupportedServiceNames;
     }
 
-    OUString NamespaceMap_getImplementationName()
+    static OUString NamespaceMap_getImplementationName()
         throw()
     {
         return OUString( "com.sun.star.comp.Svx.NamespaceMap" );

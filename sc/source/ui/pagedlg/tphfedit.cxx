@@ -28,6 +28,7 @@
 #include <editeng/fhgtitem.hxx>
 #include <sfx2/basedlgs.hxx>
 #include <sfx2/objsh.hxx>
+#include <sfx2/sfxdlg.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
@@ -80,25 +81,25 @@ ScEditWindow::ScEditWindow( vcl::Window* pParent, WinBits nBits, ScEditWindowLoc
     Size aSize( GetOutputSize() );
     aSize.setHeight( aSize.Height() * 4 );
 
-    pEdEngine = new ScHeaderEditEngine( EditEngine::CreatePool() );
+    pEdEngine.reset( new ScHeaderEditEngine( EditEngine::CreatePool() ) );
     pEdEngine->SetPaperSize( aSize );
     pEdEngine->SetRefDevice( this );
 
     ScHeaderFieldData aData;
     lcl_GetFieldData( aData );
 
-        //  Feldbefehle:
+    // fields
     pEdEngine->SetData( aData );
     pEdEngine->SetControlWord( pEdEngine->GetControlWord() | EEControlBits::MARKFIELDS );
     mbRTL = ScGlobal::IsSystemRTL();
     if (mbRTL)
         pEdEngine->SetDefaultHorizontalTextDirection(EEHorizontalTextDirection::R2L);
 
-    pEdView = new EditView( pEdEngine, this );
+    pEdView.reset( new EditView( pEdEngine.get(), this ) );
     pEdView->SetOutputArea( tools::Rectangle( Point(0,0), GetOutputSize() ) );
 
     pEdView->SetBackgroundColor( aBgColor );
-    pEdEngine->InsertView( pEdView );
+    pEdEngine->InsertView( pEdView.get() );
 }
 
 void ScEditWindow::Resize()
@@ -125,8 +126,8 @@ void ScEditWindow::dispose()
         if (xTemp.is())
             pAcc->dispose();
     }
-    delete pEdEngine;
-    delete pEdView;
+    pEdEngine.reset();
+    pEdView.reset();
     Control::dispose();
 }
 
@@ -162,9 +163,9 @@ void ScEditWindow::SetFont( const ScPatternAttr& rPattern )
     //  but for header/footer twips is needed, as in the PatternAttr:
     std::unique_ptr<SfxPoolItem> pNewItem(rPattern.GetItem(ATTR_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT));
     pSet->Put( *pNewItem );
-    pNewItem.reset(rPattern.GetItem(ATTR_CJK_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK));
+    pNewItem = rPattern.GetItem(ATTR_CJK_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CJK);
     pSet->Put( *pNewItem );
-    pNewItem.reset(rPattern.GetItem(ATTR_CTL_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL));
+    pNewItem = rPattern.GetItem(ATTR_CTL_FONT_HEIGHT).CloneSetWhich(EE_CHAR_FONTHEIGHT_CTL);
     pSet->Put( *pNewItem );
     if (mbRTL)
         pSet->Put( SvxAdjustItem( SvxAdjust::Right, EE_PARA_JUST ) );
@@ -199,11 +200,10 @@ void ScEditWindow::SetCharAttributes()
         SfxItemSet aSet( pEdView->GetAttribs() );
 
         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
+        vcl::Window* pWin = GetParent();
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateScCharDlg(
-            GetParent(),  &aSet, pDocSh));
-        OSL_ENSURE(pDlg, "Dialog create fail!");
+            pWin ? pWin->GetFrameWeld() : nullptr,  &aSet, pDocSh));
         pDlg->SetText( ScResId( STR_TEXTATTRS ) );
         if ( pDlg->Execute() == RET_OK )
         {
@@ -328,104 +328,11 @@ css::uno::Reference< css::accessibility::XAccessible > ScEditWindow::CreateAcces
         }
         break;
     }
-    pAcc = new ScAccessibleEditObject(GetAccessibleParentWindow()->GetAccessible(), pEdView, this,
+    pAcc = new ScAccessibleEditObject(GetAccessibleParentWindow()->GetAccessible(), pEdView.get(), this,
         sName, sDescription, ScAccessibleEditObject::EditControl);
     css::uno::Reference< css::accessibility::XAccessible > xAccessible = pAcc;
     xAcc = xAccessible;
     return pAcc;
-}
-
-ScExtIButton::ScExtIButton(vcl::Window* pParent, WinBits nBits )
-    : ImageButton(pParent,nBits),
-    aIdle("sc pagedlg ScExtIButton"),
-    pPopupMenu(nullptr)
-{
-    nSelected=0;
-    aIdle.SetPriority(TaskPriority::LOWEST);
-    SetDropDown(PushButtonDropdownStyle::Toolbox);
-}
-
-ScExtIButton::~ScExtIButton()
-{
-    disposeOnce();
-}
-
-void ScExtIButton::dispose()
-{
-    pPopupMenu.clear();
-    ImageButton::dispose();
-}
-
-VCL_BUILDER_FACTORY_ARGS(ScExtIButton, 0 /* WB_BORDER|WB_TABSTOP */)
-
-void ScExtIButton::SetPopupMenu(PopupMenu* pPopUp)
-{
-    pPopupMenu=pPopUp;
-}
-
-void ScExtIButton::MouseButtonDown( const MouseEvent& rMEvt )
-{
-    if(!aIdle.IsActive())
-    {
-        aIdle.SetInvokeHandler(LINK( this, ScExtIButton, TimerHdl));
-        aIdle.Start();
-    }
-
-    ImageButton::MouseButtonDown(rMEvt );
-}
-
-void ScExtIButton::MouseButtonUp( const MouseEvent& rMEvt)
-{
-    aIdle.Stop();
-    aIdle.ClearInvokeHandler();
-    ImageButton::MouseButtonUp(rMEvt );
-}
-
-void ScExtIButton::Click()
-{
-    aIdle.Stop();
-    aIdle.ClearInvokeHandler();
-    ImageButton::Click();
-}
-
-void ScExtIButton::StartPopup()
-{
-    nSelected=0;
-    aSelectedIdent.clear();
-
-    if(pPopupMenu!=nullptr)
-    {
-        SetPressed( true );
-        EndSelection();
-        Point aPoint(0,0);
-        aPoint.setY(GetOutputSizePixel().Height() );
-
-        nSelected = pPopupMenu->Execute( this, aPoint );
-
-        if(nSelected)
-        {
-            aSelectedIdent = pPopupMenu->GetItemIdent(nSelected);
-            aMLink.Call(*this);
-        }
-
-        SetPressed( false);
-    }
-}
-
-bool ScExtIButton::PreNotify( NotifyEvent& rNEvt )
-{
-    MouseNotifyEvent nSwitch=rNEvt.GetType();
-    if(nSwitch==MouseNotifyEvent::MOUSEBUTTONUP)
-    {
-        MouseButtonUp(*rNEvt.GetMouseEvent());
-    }
-
-    return ImageButton::PreNotify(rNEvt );
-}
-
-IMPL_LINK_NOARG(ScExtIButton, TimerHdl, Timer *, void)
-{
-    StartPopup();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

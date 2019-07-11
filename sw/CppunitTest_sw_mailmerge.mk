@@ -31,7 +31,11 @@ $(eval $(call gb_CppunitTest_use_externals,sw_mailmerge, \
     libxml2 \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sw_mailmerge))
+$(eval $(call gb_CppunitTest_use_api,sw_mailmerge,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_components,sw_mailmerge, \
     basic/util/sb \
@@ -77,7 +81,7 @@ $(eval $(call gb_CppunitTest_use_components,sw_mailmerge, \
     uui/util/uui \
     vcl/vcl.common \
     $(if $(filter-out MACOSX WNT,$(OS)), \
-        $(if $(ENABLE_HEADLESS),, \
+        $(if $(DISABLE_GUI),, \
             vcl/vcl.unx \
         ) \
     ) \

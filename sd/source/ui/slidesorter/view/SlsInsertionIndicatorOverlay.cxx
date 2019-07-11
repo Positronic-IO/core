@@ -32,6 +32,7 @@
 #include <drawdoc.hxx>
 #include <sdpage.hxx>
 #include <sdmod.hxx>
+#include <Window.hxx>
 
 #include <vcl/virdev.hxx>
 #include <basegfx/range/b2drectangle.hxx>
@@ -110,7 +111,7 @@ void InsertionIndicatorOverlay::Create (
     const sal_Int32 nSelectionCount)
 {
     view::Layouter& rLayouter (mrSlideSorter.GetView().GetLayouter());
-    std::shared_ptr<view::PageObjectLayouter> pPageObjectLayouter (
+    const std::shared_ptr<view::PageObjectLayouter>& pPageObjectLayouter (
         rLayouter.GetPageObjectLayouter());
     std::shared_ptr<view::Theme> pTheme (mrSlideSorter.GetTheme());
     const Size aOriginalPreviewSize (pPageObjectLayouter->GetPreviewSize());
@@ -214,6 +215,7 @@ Point InsertionIndicatorOverlay::PaintRepresentatives (
         rContent.SetFillColor(COL_BLACK);
         rContent.SetLineColor();
         rContent.DrawTransparent(
+            basegfx::B2DHomMatrix(),
             ::basegfx::B2DPolyPolygon(::basegfx::utils::createPolygonFromRect(
                 ::basegfx::B2DRectangle(aBox.Left(), aBox.Top(), aBox.Right()+1, aBox.Bottom()+1),
                 0,

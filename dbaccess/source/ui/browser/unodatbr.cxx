@@ -107,15 +107,16 @@
 #include <svl/filenotation.hxx>
 #include <svl/intitem.hxx>
 #include <unotools/moduleoptions.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
 #include <svx/algitem.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <svx/databaseregistrationui.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <tools/multisel.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/confignode.hxx>
@@ -165,14 +166,14 @@ namespace dbaui
 namespace DatabaseObject = css::sdb::application::DatabaseObject;
 namespace DatabaseObjectContainer = css::sdb::application::DatabaseObjectContainer;
 
-void SafeAddPropertyListener(const Reference< XPropertySet > & xSet, const OUString& rPropName, XPropertyChangeListener* pListener)
+static void SafeAddPropertyListener(const Reference< XPropertySet > & xSet, const OUString& rPropName, XPropertyChangeListener* pListener)
 {
     Reference< XPropertySetInfo >  xInfo = xSet->getPropertySetInfo();
     if (xInfo->hasPropertyByName(rPropName))
         xSet->addPropertyChangeListener(rPropName, pListener);
 }
 
-void SafeRemovePropertyListener(const Reference< XPropertySet > & xSet, const OUString& rPropName, XPropertyChangeListener* pListener)
+static void SafeRemovePropertyListener(const Reference< XPropertySet > & xSet, const OUString& rPropName, XPropertyChangeListener* pListener)
 {
     Reference< XPropertySetInfo >  xInfo = xSet->getPropertySetInfo();
     if (xInfo->hasPropertyByName(rPropName))
@@ -213,7 +214,6 @@ SbaTableQueryBrowser::SbaTableQueryBrowser(const Reference< XComponentContext >&
     ,m_aTableCopyHelper(this)
     ,m_pTreeView(nullptr)
     ,m_pSplitter(nullptr)
-    ,m_pTreeModel(nullptr)
     ,m_pCurrentlyDisplayed(nullptr)
     ,m_nAsyncDrop(nullptr)
     ,m_bQueryEscapeProcessing( false )
@@ -286,16 +286,12 @@ void SAL_CALL SbaTableQueryBrowser::disposing()
     m_aSelectionListeners.disposeAndClear(aEvt);
     m_aContextMenuInterceptors.disposeAndClear(aEvt);
 
-    // reset the content's tree view: it holds a reference to our model which is to be deleted immediately,
-    // and it will live longer than we do.
     if (getBrowserView())
-        getBrowserView()->setTreeView(nullptr);
-
-    clearTreeModel();
-    // clear the tree model
     {
-        std::unique_ptr<SvTreeList> aTemp(m_pTreeModel);
-        m_pTreeModel = nullptr;
+        // Need to do some cleaup of the data pointed to the tree view entries before we remove the treeview
+        clearTreeModel();
+        m_pTreeView = nullptr;
+        getBrowserView()->setTreeView(nullptr);
     }
 
     // remove ourself as status listener
@@ -364,10 +360,9 @@ bool SbaTableQueryBrowser::Construct(vcl::Window* pParent)
         getBrowserView()->setTreeView(m_pTreeView);
 
         // fill view with data
-        m_pTreeModel = new SvTreeList;
-        m_pTreeModel->SetSortMode(SortAscending);
-        m_pTreeModel->SetCompareHdl(LINK(this, SbaTableQueryBrowser, OnTreeEntryCompare));
-        m_pTreeView->setModel(m_pTreeModel);
+        auto pTreeModel = m_pTreeView->GetTreeModel();
+        pTreeModel->SetSortMode(SortAscending);
+        pTreeModel->SetCompareHdl(LINK(this, SbaTableQueryBrowser, OnTreeEntryCompare));
         m_pTreeView->setSelChangeHdl( LINK( this, SbaTableQueryBrowser, OnSelectionChange ) );
 
         // TODO
@@ -799,7 +794,7 @@ void SbaTableQueryBrowser::InitializeGridModel(const Reference< css::form::XForm
     }
 }
 
-Reference<XPropertySet> getColumnHelper(SvTreeListEntry const * _pCurrentlyDisplayed, const Reference<XPropertySet>& _rxSource)
+static Reference<XPropertySet> getColumnHelper(SvTreeListEntry const * _pCurrentlyDisplayed, const Reference<XPropertySet>& _rxSource)
 {
     Reference<XPropertySet> xRet;
     if(_pCurrentlyDisplayed)
@@ -1369,7 +1364,7 @@ void SAL_CALL SbaTableQueryBrowser::disposing( const css::lang::EventObject& _rS
                         break;
                     }
 
-                    pDSLoop = SvTreeList::NextSibling(pDSLoop);
+                    pDSLoop = pDSLoop->NextSibling();
                 }
             }
             else
@@ -2010,7 +2005,6 @@ void SbaTableQueryBrowser::implAddDatasource(const OUString& _rDbName, Image& _r
     if (_rTableName.isEmpty())
         _rTableName = DBA_RES(RID_STR_TABLES_CONTAINER);
 
-    ImageProvider aImageProvider;
     if (!_rQueryImage)
         _rQueryImage = ImageProvider::getFolderImage( DatabaseObject::QUERY );
     if (!_rTableImage)
@@ -2455,7 +2449,7 @@ SvTreeListEntry* SbaTableQueryBrowser::implGetConnectionEntry(SvTreeListEntry* _
     DBTreeListUserData* pEntryData = static_cast< DBTreeListUserData* >( pCurrentEntry->GetUserData() );
     while(pEntryData->eType != etDatasource )
     {
-        pCurrentEntry = m_pTreeModel->GetParent(pCurrentEntry);
+        pCurrentEntry = m_pTreeView->GetTreeModel()->GetParent(pCurrentEntry);
         pEntryData = static_cast< DBTreeListUserData* >( pCurrentEntry->GetUserData() );
     }
     return pCurrentEntry;
@@ -2477,11 +2471,11 @@ bool SbaTableQueryBrowser::implSelect( SvTreeListEntry* _pEntry )
             return false;
     }
 
-    OSL_ENSURE(m_pTreeModel->HasParent(_pEntry), "SbaTableQueryBrowser::implSelect: invalid entry (1)!");
-    OSL_ENSURE(m_pTreeModel->HasParent(m_pTreeModel->GetParent(_pEntry)), "SbaTableQueryBrowser::implSelect: invalid entry (2)!");
+    OSL_ENSURE(m_pTreeView->GetTreeModel()->HasParent(_pEntry), "SbaTableQueryBrowser::implSelect: invalid entry (1)!");
+    OSL_ENSURE(m_pTreeView->GetTreeModel()->HasParent(m_pTreeView->GetTreeModel()->GetParent(_pEntry)), "SbaTableQueryBrowser::implSelect: invalid entry (2)!");
 
     // get the entry for the tables or queries
-    SvTreeListEntry* pContainer = m_pTreeModel->GetParent(_pEntry);
+    SvTreeListEntry* pContainer = m_pTreeView->GetTreeModel()->GetParent(_pEntry);
     DBTreeListUserData* pContainerData = static_cast<DBTreeListUserData*>(pContainer->GetUserData());
 
     // get the entry for the datasource
@@ -2506,13 +2500,13 @@ bool SbaTableQueryBrowser::implSelect( SvTreeListEntry* _pEntry )
     if ( etQueryContainer == pContainerData->eType )
     {
         SvTreeListEntry* pTemp = pContainer;
-        while( m_pTreeModel->GetParent(pTemp) != pConnection )
+        while( m_pTreeView->GetTreeModel()->GetParent(pTemp) != pConnection )
         {
             sNameBuffer.insert(0,'/');
             pString = static_cast<SvLBoxString*>(pTemp->GetFirstItem(SvLBoxItemType::String));
             OSL_ENSURE(pString,"There must be a string item!");
             sNameBuffer.insert(0,pString->GetText());
-            pTemp = m_pTreeModel->GetParent(pTemp);
+            pTemp = m_pTreeView->GetTreeModel()->GetParent(pTemp);
         }
     }
     OUString aName = sNameBuffer.makeStringAndClear();
@@ -2697,7 +2691,7 @@ SvTreeListEntry* SbaTableQueryBrowser::getEntryFromContainer(const Reference<XNa
         if ( pTablesData && pTablesData->xContainer == _rxNameAccess )
             break;
 
-        pDSLoop     = SvTreeList::NextSibling(pDSLoop);
+        pDSLoop     = pDSLoop->NextSibling();
         pContainer  = nullptr;
     }
     return pContainer;
@@ -2773,12 +2767,12 @@ void SAL_CALL SbaTableQueryBrowser::elementRemoved( const ContainerEvent& _rEven
             pTemp->SetUserData(nullptr);
             delete pData;
                 // the data could be null because we have a table which isn't correct
-            m_pTreeModel->Remove(pTemp);
+            m_pTreeView->GetTreeModel()->Remove(pTemp);
         }
         else
         {
             // remove the entry from the model
-            SvTreeListEntry* pChild = m_pTreeModel->FirstChild(pContainer);
+            SvTreeListEntry* pChild = m_pTreeView->GetTreeModel()->FirstChild(pContainer);
             while(pChild)
             {
                 if (m_pTreeView->getListBox().GetEntryText(pChild) == aName)
@@ -2786,10 +2780,10 @@ void SAL_CALL SbaTableQueryBrowser::elementRemoved( const ContainerEvent& _rEven
                     DBTreeListUserData* pData = static_cast<DBTreeListUserData*>(pChild->GetUserData());
                     pChild->SetUserData(nullptr);
                     delete pData;
-                    m_pTreeModel->Remove(pChild);
+                    m_pTreeView->GetTreeModel()->Remove(pChild);
                     break;
                 }
-                pChild = SvTreeList::NextSibling(pChild);
+                pChild = pChild->NextSibling();
             }
         }
 
@@ -2834,7 +2828,7 @@ void SAL_CALL SbaTableQueryBrowser::elementReplaced( const ContainerEvent& _rEve
         else
         {
             // find the entry for this name
-            SvTreeListEntry* pChild = m_pTreeModel->FirstChild(pContainer);
+            SvTreeListEntry* pChild = m_pTreeView->GetTreeModel()->FirstChild(pContainer);
             while(pChild)
             {
                 if (m_pTreeView->getListBox().GetEntryText(pChild) == aName)
@@ -2854,7 +2848,7 @@ void SAL_CALL SbaTableQueryBrowser::elementReplaced( const ContainerEvent& _rEve
                     }
                     break;
                 }
-                pChild = SvTreeList::NextSibling(pChild);
+                pChild = pChild->NextSibling();
             }
         }
 
@@ -2921,9 +2915,9 @@ void SbaTableQueryBrowser::closeConnection(SvTreeListEntry* _pDSEntry, bool _bDi
         unloadAndCleanup(_bDisposeConnection);
 
     // collapse the query/table container
-    for (SvTreeListEntry* pContainers = m_pTreeModel->FirstChild(_pDSEntry); pContainers; pContainers = SvTreeList::NextSibling(pContainers))
+    for (SvTreeListEntry* pContainers = m_pTreeView->GetTreeModel()->FirstChild(_pDSEntry); pContainers; pContainers = pContainers->NextSibling())
     {
-        SvTreeListEntry* pElements = m_pTreeModel->FirstChild(pContainers);
+        SvTreeListEntry* pElements = m_pTreeView->GetTreeModel()->FirstChild(pContainers);
         if ( pElements )
             m_pTreeView->getListBox().Collapse(pContainers);
         m_pTreeView->getListBox().EnableExpandHandler(pContainers);
@@ -2931,11 +2925,11 @@ void SbaTableQueryBrowser::closeConnection(SvTreeListEntry* _pDSEntry, bool _bDi
         for (; pElements; )
         {
             SvTreeListEntry* pRemove = pElements;
-            pElements = SvTreeList::NextSibling(pElements);
+            pElements = pElements->NextSibling();
             DBTreeListUserData* pData = static_cast<DBTreeListUserData*>(pRemove->GetUserData());
             pRemove->SetUserData(nullptr);
             delete pData;
-            m_pTreeModel->Remove(pRemove);
+            m_pTreeView->GetTreeModel()->Remove(pRemove);
         }
     }
     // collapse the entry itself
@@ -3273,7 +3267,7 @@ bool SbaTableQueryBrowser::getExistentConnectionFor( SvTreeListEntry* _pAnyEntry
 
 bool SbaTableQueryBrowser::impl_isDataSourceEntry( SvTreeListEntry* _pEntry ) const
 {
-    return m_pTreeModel->GetRootLevelParent( _pEntry ) == _pEntry;
+    return m_pTreeView->GetTreeModel()->GetRootLevelParent( _pEntry ) == _pEntry;
 }
 
 bool SbaTableQueryBrowser::ensureConnection( SvTreeListEntry* _pDSEntry, void* pDSData, SharedConnection& _rConnection )
@@ -3596,7 +3590,7 @@ OUString SbaTableQueryBrowser::getPrivateTitle() const
     OUString sTitle;
     if ( m_pCurrentlyDisplayed )
     {
-        SvTreeListEntry* pContainer = m_pTreeModel->GetParent(m_pCurrentlyDisplayed);
+        SvTreeListEntry* pContainer = m_pTreeView->GetTreeModel()->GetParent(m_pCurrentlyDisplayed);
         // get the entry for the datasource
         SvTreeListEntry* pConnection = implGetConnectionEntry(pContainer);
         OUString sName = m_pTreeView->getListBox().GetEntryText(m_pCurrentlyDisplayed);
@@ -3700,7 +3694,7 @@ void SbaTableQueryBrowser::impl_cleanupDataSourceEntry( const OUString& _rDataSo
         if ( m_pTreeView->getListBox().GetEntryText( pDataSourceEntry ) == _rDataSourceName )
             break;
 
-        pDataSourceEntry = SvTreeList::NextSibling( pDataSourceEntry );
+        pDataSourceEntry = pDataSourceEntry->NextSibling();
     }
 
     OSL_ENSURE( pDataSourceEntry, "SbaTableQueryBrowser::impl_cleanupDataSourceEntry: do not know this data source!" );
@@ -3721,7 +3715,7 @@ void SbaTableQueryBrowser::impl_cleanupDataSourceEntry( const OUString& _rDataSo
 
     // delete any user data of the child entries of the to-be-removed entry
     std::pair<SvTreeListEntries::const_iterator, SvTreeListEntries::const_iterator> aIters =
-        m_pTreeModel->GetChildIterators(pDataSourceEntry);
+        m_pTreeView->GetTreeModel()->GetChildIterators(pDataSourceEntry);
 
     SvTreeListEntries::const_iterator it = aIters.first, itEnd = aIters.second;
 
@@ -3737,7 +3731,7 @@ void SbaTableQueryBrowser::impl_cleanupDataSourceEntry( const OUString& _rDataSo
     DBTreeListUserData* pData = static_cast< DBTreeListUserData* >( pDataSourceEntry->GetUserData() );
     pDataSourceEntry->SetUserData( nullptr );
     delete pData;
-    m_pTreeModel->Remove( pDataSourceEntry );
+    m_pTreeView->GetTreeModel()->Remove( pDataSourceEntry );
 }
 
 void SAL_CALL SbaTableQueryBrowser::revokedDatabaseLocation( const DatabaseRegistrationEvent& Event )

@@ -37,7 +37,6 @@
 #include <unocrsr.hxx>
 #include <unotools.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <ucbhelper/content.hxx>
 #include <com/sun/star/text/AutoTextContainer.hpp>
 #include <com/sun/star/ui/dialogs/XFilePicker3.hpp>
@@ -45,7 +44,7 @@
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 #include <svl/urihelper.hxx>
 #include <unotools/charclass.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <swwait.hxx>
 #include <swtypes.hxx>
 #include <wrtsh.hxx>
@@ -92,14 +91,15 @@ static OUString lcl_GetValidShortCut( const OUString& rName )
     while( rName[nStart-1]==' ' && nStart < nSz )
         nStart++;
 
-    OUString aBuf = OUString(rName[nStart-1]);
+    OUStringBuffer aBuf;
+    aBuf.append(rName[nStart-1]);
 
     for( ; nStart < nSz; ++nStart )
     {
         if( rName[nStart-1]==' ' && rName[nStart]!=' ')
-            aBuf += OUStringLiteral1(rName[nStart]);
+            aBuf.append(rName[nStart]);
     }
-    return aBuf;
+    return aBuf.makeStringAndClear();
 }
 
 struct GroupUserData
@@ -182,7 +182,6 @@ SwGlossaryDlg::SwGlossaryDlg(SfxViewFrame const * pViewFrame,
     : SvxStandardDialog(&pViewFrame->GetWindow(), "AutoTextDialog",
         "modules/swriter/ui/autotext.ui")
     , sReadonlyPath(SwResId(STR_READONLY_PATH))
-    , pExampleFrame(nullptr)
     , pGlossaryHdl(pGlosHdl)
     , bResume(false)
     , bSelection(pWrtShell->IsSelection())
@@ -247,7 +246,7 @@ SwGlossaryDlg::~SwGlossaryDlg()
 void SwGlossaryDlg::dispose()
 {
     m_pCategoryBox->Clear();
-    delete pExampleFrame;
+    pExampleFrame.reset();
     m_pInsertTipCB.clear();
     m_pNameED.clear();
     m_pShortNameLbl.clear();
@@ -532,7 +531,7 @@ IMPL_LINK( SwGlossaryDlg, MenuHdl, Menu *, pMn, bool )
 
         const SfxPoolItem* pItem;
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog( this, aSet,
+        ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog(GetFrameWeld(), aSet,
             pSh->GetView().GetViewFrame()->GetFrame().GetFrameInterface() ));
         if ( pMacroDlg && pMacroDlg->Execute() == RET_OK &&
             SfxItemState::SET == pMacroDlg->GetOutputItemSet()->GetItemState( RES_FRMMACRO, false, &pItem ) )
@@ -605,13 +604,13 @@ IMPL_LINK_NOARG(SwGlossaryDlg, BibHdl, Button*, void)
     {
         //check if at least one glossary path is write enabled
         SvtPathOptions aPathOpt;
-        const OUString sGlosPath( aPathOpt.GetAutoTextPath() );
-        const sal_Int32 nPaths = comphelper::string::getTokenCount(sGlosPath, ';');
+        const OUString& sGlosPath( aPathOpt.GetAutoTextPath() );
         bool bIsWritable = false;
-        for(sal_Int32 nPath = 0; nPath < nPaths; nPath++)
+        sal_Int32 nIdx {sGlosPath.isEmpty() ? -1 : 0};
+        while (nIdx>=0)
         {
             const OUString sPath = URIHelper::SmartRel2Abs(
-                INetURLObject(), sGlosPath.getToken(nPath, ';'),
+                INetURLObject(), sGlosPath.getToken(0, ';', nIdx),
                 URIHelper::GetMaybeFileHdl());
             try
             {
@@ -633,12 +632,12 @@ IMPL_LINK_NOARG(SwGlossaryDlg, BibHdl, Button*, void)
         if(bIsWritable)
         {
 
-            ScopedVclPtrInstance< SwGlossaryGroupDlg > pDlg( this, pGloss->GetPathArray(), pGlossaryHdl );
-            if ( RET_OK == pDlg->Execute() )
+            SwGlossaryGroupDlg aDlg(GetFrameWeld(), pGloss->GetPathArray(), pGlossaryHdl);
+            if (aDlg.run() == RET_OK)
             {
                 Init();
                 //if new groups were created - select one of them
-                const OUString sNewGroup = pDlg->GetCreatedGroupName();
+                const OUString sNewGroup = aDlg.GetCreatedGroupName();
                 SvTreeListEntry* pEntry = m_pCategoryBox->First();
                 while (!sNewGroup.isEmpty() && pEntry)
                 {
@@ -771,8 +770,8 @@ IMPL_LINK_NOARG(SwGlossaryDlg, EditHdl, MenuButton *, void)
 // EndDialog must not be called in MenuHdl
     if (m_pEditBtn->GetCurItemIdent() == "edit")
     {
-        SwTextBlocks *pGroup = ::GetGlossaries()->GetGroupDoc (  GetCurrGrpName () );
-        delete pGroup;
+        std::unique_ptr<SwTextBlocks> pGroup = ::GetGlossaries()->GetGroupDoc (  GetCurrGrpName () );
+        pGroup.reset();
         EndDialog(RET_EDIT);
     }
 }
@@ -1035,22 +1034,18 @@ OUString SwGlossaryDlg::GetCurrGrpName() const
 IMPL_LINK_NOARG( SwGlossaryDlg, PathHdl, Button *, void )
 {
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    if(pFact)
+    ScopedVclPtr<AbstractSvxMultiPathDialog> pDlg(pFact->CreateSvxPathSelectDialog(GetFrameWeld()));
+    SvtPathOptions aPathOpt;
+    const OUString sGlosPath( aPathOpt.GetAutoTextPath() );
+    pDlg->SetPath(sGlosPath);
+    if(RET_OK == pDlg->Execute())
     {
-        ScopedVclPtr<AbstractSvxMultiPathDialog> pDlg(pFact->CreateSvxPathSelectDialog(GetFrameWeld()));
-        OSL_ENSURE(pDlg, "Dialog creation failed!");
-        SvtPathOptions aPathOpt;
-        const OUString sGlosPath( aPathOpt.GetAutoTextPath() );
-        pDlg->SetPath(sGlosPath);
-        if(RET_OK == pDlg->Execute())
+        const OUString sTmp(pDlg->GetPath());
+        if(sTmp != sGlosPath)
         {
-            const OUString sTmp(pDlg->GetPath());
-            if(sTmp != sGlosPath)
-            {
-                aPathOpt.SetAutoTextPath( sTmp );
-                ::GetGlossaries()->UpdateGlosPath( true );
-                Init();
-            }
+            aPathOpt.SetAutoTextPath( sTmp );
+            ::GetGlossaries()->UpdateGlosPath( true );
+            Init();
         }
     }
 }
@@ -1071,8 +1066,8 @@ void SwGlossaryDlg::ShowPreview()
     if (!pExampleFrame)
     {
         Link<SwOneExampleFrame&,void> aLink(LINK(this, SwGlossaryDlg, PreviewLoadedHdl));
-        pExampleFrame = new SwOneExampleFrame( *m_pExampleWIN,
-                        EX_SHOW_ONLINE_LAYOUT, &aLink );
+        pExampleFrame.reset(new SwOneExampleFrame( *m_pExampleWIN,
+                        EX_SHOW_ONLINE_LAYOUT, &aLink ));
     }
 
     ShowAutoText(::GetCurrGlosGroup(), m_pShortNameEdit->GetText());

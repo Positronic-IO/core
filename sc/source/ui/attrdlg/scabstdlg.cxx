@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
-
 #include <scabstdlg.hxx>
 
 #include <osl/module.hxx>
@@ -40,7 +38,6 @@ extern "C" ScAbstractDialogFactory* ScCreateDialogFactory();
 ScAbstractDialogFactory* ScAbstractDialogFactory::Create()
 {
     ScFuncPtrCreateDialogFactory fp = nullptr;
-#if HAVE_FEATURE_DESKTOP
 #ifndef DISABLE_DYNLOADING
     static ::osl::Module aDialogLibrary;
 
@@ -52,8 +49,7 @@ ScAbstractDialogFactory* ScAbstractDialogFactory::Create()
         fp = reinterpret_cast<ScAbstractDialogFactory* (SAL_CALL*)()>(
             aDialogLibrary.getFunctionSymbol( "ScCreateDialogFactory" ));
 #else
-    fp = ScCreateDialogFactory();
-#endif
+    fp = ScCreateDialogFactory;
 #endif
     if ( fp )
         return fp();

@@ -20,7 +20,6 @@
 #include <com/sun/star/xml/crypto/XSecurityEnvironment.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/security/DocumentDigitalSignatures.hpp>
-#include <comphelper/sequence.hxx>
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/processfactory.hxx>
 #include <osl/file.h>
@@ -70,7 +69,6 @@ MacroWarning::MacroWarning(weld::Window* pParent, bool _bWithSignatures)
     , mxEnableBtn(m_xBuilder->weld_button("ok"))
     , mxDisableBtn(m_xBuilder->weld_button("cancel"))
     , mpInfos                ( nullptr )
-    , mbSignedMode           ( true )
     , mbShowSignatures       ( _bWithSignatures )
     , mnActSecLevel          ( 0 )
 {
@@ -84,8 +82,6 @@ void MacroWarning::SetDocumentURL( const OUString& rDocURL )
 {
     OUString aAbbreviatedPath;
     osl_abbreviateSystemPath(rDocURL.pData, &aAbbreviatedPath.pData, 50, nullptr);
-    fprintf(stderr, "in %s, out %s\n", OUStringToOString(rDocURL, RTL_TEXTENCODING_UTF8).getStr(),
-            OUStringToOString(aAbbreviatedPath, RTL_TEXTENCODING_UTF8).getStr());
     m_xDialog->set_primary_text(aAbbreviatedPath);
 }
 
@@ -106,7 +102,7 @@ IMPL_LINK_NOARG(MacroWarning, ViewSignsBtnHdl, weld::Button&, void)
 
 IMPL_LINK_NOARG(MacroWarning, EnableBtnHdl, weld::Button&, void)
 {
-    if (mbSignedMode && mxAlwaysTrustCB->get_active())
+    if (mxAlwaysTrustCB->get_active())
     {   // insert path into trusted path list
         uno::Reference< security::XDocumentDigitalSignatures > xD(
             security::DocumentDigitalSignatures::createWithVersion(comphelper::getProcessComponentContext(), maODFVersion));
@@ -161,16 +157,15 @@ void MacroWarning::SetStorage( const css::uno::Reference < css::embed::XStorage 
     {
         mpInfos = &rInfos;
         OUString aCN_Id("CN");
-        OUString s;
-        s = GetContentPart( rInfos[ 0 ].Signer->getSubjectName(), aCN_Id );
+        OUStringBuffer s = GetContentPart( rInfos[ 0 ].Signer->getSubjectName(), aCN_Id );
 
         for( sal_Int32 i = 1 ; i < nCnt ; ++i )
         {
-            s += "\n";
-            s += GetContentPart( rInfos[ i ].Signer->getSubjectName(), aCN_Id );
+            s.append("\n");
+            s.append(GetContentPart( rInfos[ i ].Signer->getSubjectName(), aCN_Id ));
         }
 
-        mxSignsFI->set_label(s);
+        mxSignsFI->set_label(s.makeStringAndClear());
         mxViewSignsBtn->set_sensitive(true);
     }
 }

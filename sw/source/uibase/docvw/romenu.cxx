@@ -22,9 +22,9 @@
 
 #include <svl/eitem.hxx>
 #include <svl/stritem.hxx>
-#include <svtools/imap.hxx>
-#include <svtools/inetimg.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/inetimg.hxx>
+#include <vcl/transfer.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svx/gallery.hxx>
@@ -52,8 +52,6 @@ using namespace ::sfx2;
 
 SwReadOnlyPopup::~SwReadOnlyPopup()
 {
-    delete m_pImageMap;
-    delete m_pTargetURL;
     m_xMenu.disposeAndClear();
 }
 
@@ -102,55 +100,37 @@ SwReadOnlyPopup::SwReadOnlyPopup(const Point &rDPos, SwView &rV)
     , m_nReadonlyBackgroundTogallerylink(m_xMenu->GetItemId("backaslink"))
     , m_nReadonlyBackgroundTogallerycopy(m_xMenu->GetItemId("backascopy"))
     , m_nReadonlyCopylink(m_xMenu->GetItemId("copylink"))
-    , m_nReadonlyCopyGraphic(m_xMenu->GetItemId("copygraphic"))
     , m_nReadonlyLoadGraphic(m_xMenu->GetItemId("loadgraphic"))
     , m_nReadonlyGraphicoff(m_xMenu->GetItemId("imagesoff"))
     , m_nReadonlyFullscreen(m_xMenu->GetItemId("fullscreen"))
     , m_nReadonlyCopy(m_xMenu->GetItemId("copy"))
     , m_rView(rV)
     , m_aBrushItem(RES_BACKGROUND)
-    , m_rDocPos(rDPos)
-    , m_pImageMap(nullptr)
-    , m_pTargetURL(nullptr)
 {
     m_bGrfToGalleryAsLnk = SW_MOD()->GetModuleConfig()->IsGrfToGalleryAsLnk();
     SwWrtShell &rSh = m_rView.GetWrtShell();
-    rSh.IsURLGrfAtPos( m_rDocPos, &m_sURL, &m_sTargetFrameName, &m_sDescription );
+    OUString sDescription;
+    rSh.IsURLGrfAtPos( rDPos, &m_sURL, &m_sTargetFrameName, &sDescription );
     if ( m_sURL.isEmpty() )
     {
         SwContentAtPos aContentAtPos( IsAttrAtPos::InetAttr );
-        if( rSh.GetContentAtPos( m_rDocPos, aContentAtPos))
+        if( rSh.GetContentAtPos( rDPos, aContentAtPos))
         {
             const SwFormatINetFormat &rIItem = *static_cast<const SwFormatINetFormat*>(aContentAtPos.aFnd.pAttr);
             m_sURL = rIItem.GetValue();
             m_sTargetFrameName = rIItem.GetTargetFrame();
-            m_sDescription = aContentAtPos.sStr;
         }
     }
 
     bool bLink = false;
     const Graphic *pGrf;
-    if ( nullptr == (pGrf = rSh.GetGrfAtPos( m_rDocPos, m_sGrfName, bLink )) )
+    if ( nullptr == (pGrf = rSh.GetGrfAtPos( rDPos, m_sGrfName, bLink )) )
     {
         m_xMenu->EnableItem(m_nReadonlySaveGraphic, false);
-        m_xMenu->EnableItem(m_nReadonlyCopyGraphic, false);
     }
     else
     {
         m_aGraphic = *pGrf;
-        const SwFrameFormat* pGrfFormat = rSh.GetFormatFromObj( m_rDocPos );
-        const SfxPoolItem* pURLItem;
-        if( pGrfFormat && SfxItemState::SET == pGrfFormat->GetItemState(
-            RES_URL, true, &pURLItem ))
-        {
-            const SwFormatURL& rURL = *static_cast<const SwFormatURL*>(pURLItem);
-            if( rURL.GetMap() )
-                m_pImageMap = new ImageMap( *rURL.GetMap() );
-            else if( !rURL.GetURL().isEmpty() )
-                m_pTargetURL = new INetImage( bLink ? m_sGrfName : OUString(),
-                                            rURL.GetURL(),
-                                            rURL.GetTargetFrameName() );
-        }
     }
 
     bool bEnableGraphicToGallery = bLink;
@@ -317,16 +297,6 @@ void SwReadOnlyPopup::Execute( vcl::Window* pWin, sal_uInt16 nId )
     {
         pClipCntnr = new TransferDataContainer;
         pClipCntnr->CopyString( m_sURL );
-    }
-    else if (nId == m_nReadonlyCopyGraphic)
-    {
-        pClipCntnr = new TransferDataContainer;
-        pClipCntnr->CopyGraphic( m_aGraphic );
-
-        if( m_pImageMap )
-            pClipCntnr->CopyImageMap( *m_pImageMap );
-        if( m_pTargetURL )
-            pClipCntnr->CopyINetImage( *m_pTargetURL );
     }
     else if (nId == m_nReadonlyLoadGraphic)
     {

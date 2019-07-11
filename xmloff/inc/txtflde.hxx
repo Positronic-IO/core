@@ -161,7 +161,7 @@ public:
 
     XMLTextFieldExport( SvXMLExport& rExp,
                         /// XMLPropertyState for the combined characters field
-                        XMLPropertyState* pCombinedCharState );
+                        std::unique_ptr<XMLPropertyState> pCombinedCharState );
     ~XMLTextFieldExport();
 
     /// Export this field and the surrounding span element with the formatting.
@@ -203,10 +203,10 @@ public:
     static enum ::xmloff::token::XMLTokenEnum MapCountFieldName(FieldIdEnum nToken);
     static enum ::xmloff::token::XMLTokenEnum MapBibliographyFieldName(const OUString& sName);
     static enum ::xmloff::token::XMLTokenEnum MapMeasureKind(sal_Int16 nKind);
-    enum ::xmloff::token::XMLTokenEnum MapPageNumberName(const css::uno::Reference< css::beans::XPropertySet> & xPropSet,
+    static enum ::xmloff::token::XMLTokenEnum MapPageNumberName(const css::uno::Reference< css::beans::XPropertySet> & xPropSet,
                       sal_Int32& nOffset);  /// also adjust page offset
-    enum ::xmloff::token::XMLTokenEnum MapAuthorFieldName(const css::uno::Reference< css::beans::XPropertySet > & xPropSet);
-    enum ::xmloff::token::XMLTokenEnum MapSenderFieldName(const css::uno::Reference< css::beans::XPropertySet > & xPropSet);
+    static enum ::xmloff::token::XMLTokenEnum MapAuthorFieldName(const css::uno::Reference< css::beans::XPropertySet > & xPropSet);
+    static enum ::xmloff::token::XMLTokenEnum MapSenderFieldName(const css::uno::Reference< css::beans::XPropertySet > & xPropSet);
 
 private:
 
@@ -376,26 +376,26 @@ private:
     GetMasterPropertySet(const css::uno::Reference < css::text::XTextField > & rTextField);
 
     /// get PropertySet of (any) DependentTextField for this FieldMaster
-    bool GetDependentFieldPropertySet(
+    static bool GetDependentFieldPropertySet(
         const css::uno::Reference< css::beans::XPropertySet> & xmaster,
         css::uno::Reference< css::beans::XPropertySet> & xField);
 
 
     /// get field ID from XTextField (and it's Property-Set)
-    enum FieldIdEnum GetFieldID(const css::uno::Reference < css::text::XTextField > & rTextField,
+    static enum FieldIdEnum GetFieldID(const css::uno::Reference < css::text::XTextField > & rTextField,
                           const css::uno::Reference < css::beans::XPropertySet > & xPropSet);
 
     /// get field ID from XTextField service name (and it's PropertySet)
-    enum FieldIdEnum MapFieldName(const OUString& sFieldName,
+    static enum FieldIdEnum MapFieldName(const OUString& sFieldName,
                             const css::uno::Reference < css::beans::XPropertySet> & xPropSet);
 
     /// determine, whether field has string or numeric content
-    bool IsStringField(FieldIdEnum nFieldType,  /// field ID
+    static bool IsStringField(FieldIdEnum nFieldType,  /// field ID
                            const css::uno::Reference < css::beans::XPropertySet > & xPropSet);
 
 
     /// explode a field master name into field type and field name
-    void ExplodeFieldMasterName(
+    static void ExplodeFieldMasterName(
         const OUString& sMasterName, /// name as returned by SO API
         OUString& sFieldType,        /// out: field type
         OUString& sVarName);         /// out: variable name
@@ -406,82 +406,6 @@ private:
     /// make reference name for a sequence field
     static OUString MakeSequenceRefName(sal_Int16 nSeqNo,
                                               const OUString& rSeqName);
-
-    // constants
-
-    // service names
-    const OUString sServicePrefix;
-    const OUString sFieldMasterPrefix;
-    const OUString sPresentationServicePrefix;
-
-    // property names
-    const OUString sPropertyAdjust;
-    const OUString sPropertyAuthor;
-    const OUString sPropertyChapterFormat;
-    const OUString sPropertyChapterNumberingLevel;
-    const OUString sPropertyCharStyleNames;
-    const OUString sPropertyCondition;
-    const OUString sPropertyContent;
-    const OUString sPropertyDataBaseName;
-    const OUString sPropertyDataBaseURL;
-    const OUString sPropertyDataColumnName;
-    const OUString sPropertyDataCommandType;
-    const OUString sPropertyDataTableName;
-    const OUString sPropertyDateTime;
-    const OUString sPropertyDateTimeValue;
-    const OUString sPropertyDDECommandElement;
-    const OUString sPropertyDDECommandFile;
-    const OUString sPropertyDDECommandType;
-    const OUString sPropertyDependentTextFields;
-    const OUString sPropertyFalseContent;
-    const OUString sPropertyFields;
-    const OUString sPropertyFieldSubType;
-    const OUString sPropertyFileFormat;
-    const OUString sPropertyFullName;
-    const OUString sPropertyHint;
-    const OUString sPropertyInitials;
-    const OUString sPropertyInstanceName;
-    const OUString sPropertyIsAutomaticUpdate;
-    const OUString sPropertyIsConditionTrue;
-    const OUString sPropertyIsDataBaseFormat;
-    const OUString sPropertyIsDate;
-    const OUString sPropertyIsExpression;
-    const OUString sPropertyIsFixed;
-    const OUString sPropertyIsFixedLanguage;
-    const OUString sPropertyIsHidden;
-    const OUString sPropertyIsInput;
-    const OUString sPropertyIsShowFormula;
-    const OUString sPropertyIsVisible;
-    const OUString sPropertyItems;
-    const OUString sPropertyLevel;
-    const OUString sPropertyMeasureKind;
-    const OUString sPropertyName;
-    const OUString sPropertyNumberFormat;
-    const OUString sPropertyNumberingSeparator;
-    const OUString sPropertyNumberingType;
-    const OUString sPropertyOffset;
-    const OUString sPropertyOn;
-    const OUString sPropertyPlaceholderType;
-    const OUString sPropertyReferenceFieldPart;
-    const OUString sPropertyReferenceFieldSource;
-    const OUString sPropertyReferenceFieldLanguage;
-    const OUString sPropertyScriptType;
-    const OUString sPropertySelectedItem;
-    const OUString sPropertySequenceNumber;
-    const OUString sPropertySequenceValue;
-    const OUString sPropertySetNumber;
-    const OUString sPropertySourceName;
-    const OUString sPropertySubType;
-    const OUString sPropertyTargetFrame;
-    const OUString sPropertyTrueContent;
-    const OUString sPropertyURL;
-    const OUString sPropertyURLContent;
-    const OUString sPropertyUserText;
-    const OUString sPropertyValue;
-    const OUString sPropertyVariableName;
-    const OUString sPropertyHelp;
-    const OUString sPropertyTooltip;
-    const OUString sPropertyTextRange;
 
     std::unique_ptr<XMLPropertyState> pCombinedCharactersPropertyState;
 

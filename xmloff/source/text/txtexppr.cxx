@@ -27,6 +27,7 @@
 #include <com/sun/star/awt/FontUnderline.hpp>
 #include <com/sun/star/text/XChapterNumberingSupplier.hpp>
 #include <o3tl/any.hxx>
+#include <sal/log.hxx>
 #include <tools/color.hxx>
 #include <xmloff/txtprmap.hxx>
 #include <xmloff/xmlexp.hxx>
@@ -671,11 +672,9 @@ void XMLTextExportPropertySetMapper::ContextFilter(
 
     bool bNeedsAnchor = false;
 
-    for( ::std::vector< XMLPropertyState >::iterator aIter = rProperties.begin();
-         aIter != rProperties.end();
-         ++aIter )
+    for( auto& rPropertyState : rProperties )
     {
-        XMLPropertyState *propertyState = &(*aIter);
+        XMLPropertyState *propertyState = &rPropertyState;
         if( propertyState->mnIndex == -1 )
             continue;
 

@@ -24,6 +24,7 @@
 #include <i18nlangtag/lang.h>
 #include <i18nlangtag/languagetag.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
 #include <tools/urlobj.hxx>
@@ -75,12 +76,6 @@ using namespace linguistic;
 // The following fake file name extension will be
 // added to the text of the title: field for correct
 // text stripping and dictionary saving.
-//
-// TODO: add translation support?
-//   tdf#50827 language dependent wordlists are already in
-//   the appropriate dict packages.
-//   Note: Also name of the special run-time dictionary
-//   "IgnoreAllList" hasn't been localized yet.
 #define EXTENSION_FOR_TITLE_TEXT "."
 
 static const sal_Char* const pVerStr2    = "WBSWG2";

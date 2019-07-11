@@ -25,12 +25,17 @@
 #include <oox/token/relationship.hxx>
 #include <unotools/collatorwrapper.hxx>
 #include <svl/zforlist.hxx>
+#include <sal/log.hxx>
 #include <document.hxx>
 #include <formulacell.hxx>
 #include <scextopt.hxx>
 #include <externalrefmgr.hxx>
 #include <tokenarray.hxx>
 #include <xecontent.hxx>
+#include <xeformula.hxx>
+#include <xehelper.hxx>
+#include <xllink.hxx>
+#include <xltools.hxx>
 
 #include <vector>
 #include <memory>
@@ -383,7 +388,7 @@ struct XclExpXti
                             { rStrm << mnSupbook << mnFirstSBTab << mnLastSBTab; }
 };
 
-inline bool operator==( const XclExpXti& rLeft, const XclExpXti& rRight )
+static bool operator==( const XclExpXti& rLeft, const XclExpXti& rRight )
 {
     return
         (rLeft.mnSupbook    == rRight.mnSupbook)    &&
@@ -1924,7 +1929,7 @@ void XclExpSupbookBuffer::StoreCellRange( sal_uInt16 nFileId, const OUString& rT
 
     if (aMatrixListSize != nTabCount)
     {
-        // matrix size mis-match !
+        // matrix size mismatch!
         return;
     }
 

@@ -11,7 +11,9 @@
 #include "MPreparedStatement.hxx"
 #include "MResultSetMetaData.hxx"
 #include <connectivity/dbtools.hxx>
+#include <comphelper/types.hxx>
 #include <com/sun/star/sdbc/ColumnValue.hpp>
+#include <sal/log.hxx>
 
 using namespace ::comphelper;
 using namespace connectivity;
@@ -434,7 +436,7 @@ void OPreparedStatement::describeParameter()
     {
         m_xParamColumns = new OSQLColumns();
         const OSQLTables& rTabs = m_pSQLIterator->getTables();
-        if(rTabs.size())
+        if(!rTabs.empty())
         {
             OSQLTable xTable = rTabs.begin()->second;
             for (auto const& parseNode : aParseNodes)

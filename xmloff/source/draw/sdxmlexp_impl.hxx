@@ -109,9 +109,7 @@ class SdXMLExport : public SvXMLExport
     SdXMLFormatMap  maUsedDateStyles;           // this is a vector with the used formattings for date fields
     SdXMLFormatMap  maUsedTimeStyles;           // this is a vector with the used formattings for time fields
 
-    bool                    mbIsDraw;
-
-    const OUString         msPageLayoutNames;
+    bool const      mbIsDraw;
 
     virtual void ExportStyles_(bool bUsed) override;
     virtual void ExportAutoStyles_() override;
@@ -160,6 +158,8 @@ public:
         OUString const & implementationName,
         bool bIsDraw, SvXMLExportFlags nExportFlags );
     virtual ~SdXMLExport() override;
+
+    void collectAutoStyles() override;
 
     // XExporter
     virtual void SAL_CALL setSourceDocument( const css::uno::Reference< css::lang::XComponent >& xDoc ) override;

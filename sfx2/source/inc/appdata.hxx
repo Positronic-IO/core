@@ -35,6 +35,7 @@
 #include <vector>
 
 class SfxApplication;
+class SfxPickList;
 class SfxProgress;
 class SfxDdeDocTopic_Impl;
 class DdeService;
@@ -88,6 +89,7 @@ public:
     SfxErrorHandler *m_pSbxErrorHdl;
 #endif
     rtl::Reference<SfxStatusDispatcher> mxAppDispatch;
+    std::unique_ptr<SfxPickList>        mxAppPickList;
     SfxDocumentTemplates*               pTemplates;
 
     // global pointers
@@ -98,7 +100,6 @@ public:
 
     sal_uInt16                              nDocModalMode;              // counts documents in modal mode
     sal_uInt16                              nRescheduleLocks;
-    sal_uInt16                              nInReschedule;
 
     rtl::Reference< sfx2::appl::ImeStatusWindow > m_xImeStatusWindow;
 

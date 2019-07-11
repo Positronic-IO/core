@@ -23,12 +23,14 @@
 # define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <sddl.h>
 #undef min
 #endif
 #include "osl_Security_Const.h"
 #include <osl/thread.h>
 #include <rtl/process.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
 using namespace osl;
@@ -36,12 +38,12 @@ using namespace rtl;
 
 /** print a UNI_CODE String.
 */
-inline void printUString( const ::rtl::OUString & str )
+static void printUString( const OUString & str )
 {
-    rtl::OString aString;
+    OString aString;
 
     //t_print("#printUString_u# " );
-    aString = ::rtl::OUStringToOString( str, RTL_TEXTENCODING_ASCII_US );
+    aString = OUStringToOString( str, RTL_TEXTENCODING_ASCII_US );
     t_print("%s\n", aString.getStr( ) );
 }
 
@@ -72,11 +74,11 @@ namespace osl_Security
     }; // class ctors
 
     /** testing the methods:
-        inline sal_Bool SAL_CALL logonUser(const ::rtl::OUString& strName,
-                                       const ::rtl::OUString& strPasswd);
-        inline sal_Bool SAL_CALL logonUser(const ::rtl::OUString & strName,
-                                       const ::rtl::OUString & strPasswd,
-                                       const ::rtl::OUString & strFileServer);
+        inline sal_Bool SAL_CALL logonUser(const OUString& strName,
+                                       const OUString& strPasswd);
+        inline sal_Bool SAL_CALL logonUser(const OUString & strName,
+                                       const OUString & strPasswd,
+                                       const OUString & strFileServer);
     */
     class logonUser : public CppUnit::TestFixture
     {
@@ -116,7 +118,7 @@ namespace osl_Security
     }; // class logonUser
 
     /** testing the method:
-        inline sal_Bool Security::getUserIdent( rtl::OUString& strIdent) const
+        inline sal_Bool Security::getUserIdent( OUString& strIdent) const
     */
     class getUserIdent : public CppUnit::TestFixture
     {
@@ -126,14 +128,14 @@ namespace osl_Security
         void getUserIdent_001( )
         {
             ::osl::Security aSec;
-            ::rtl::OUString strID;
+            OUString strID;
             bRes = aSec.getUserIdent( strID );
 
-            rtl::OStringBuffer aMessage;
+            OStringBuffer aMessage;
             aMessage.append("strUserID: ");
-            aMessage.append(rtl::OUStringToOString(strUserID, osl_getThreadTextEncoding()));
+            aMessage.append(OUStringToOString(strUserID, osl_getThreadTextEncoding()));
             aMessage.append(", strID: ");
-            aMessage.append(rtl::OUStringToOString(strID, osl_getThreadTextEncoding()));
+            aMessage.append(OUStringToOString(strID, osl_getThreadTextEncoding()));
             aMessage.append(", bRes: ");
             aMessage.append(bRes);
 
@@ -147,7 +149,7 @@ namespace osl_Security
     }; // class getUserIdent
 
     /** testing the method:
-        inline sal_Bool SAL_CALL getUserName( ::rtl::OUString& strName) const;
+        inline sal_Bool SAL_CALL getUserName( OUString& strName) const;
     */
     class getUserName : public CppUnit::TestFixture
     {
@@ -158,9 +160,9 @@ namespace osl_Security
         {
             ::osl::Security aSec;
 #ifdef _WIN32
-            ::rtl::OUString strName( strUserName ), strGetName;
+            OUString strName( strUserName ), strGetName;
 #else
-            ::rtl::OUString strName( strUserName ), strGetName;
+            OUString strName( strUserName ), strGetName;
 #endif
             bRes = aSec.getUserName( strGetName );
 
@@ -181,7 +183,7 @@ namespace osl_Security
     }; // class getUserName
 
     /** testing the method:
-        inline sal_Bool Security::getConfigDir( rtl::OUString& strDirectory ) const
+        inline sal_Bool Security::getConfigDir( OUString& strDirectory ) const
     */
     class getConfigDir : public CppUnit::TestFixture
     {
@@ -191,7 +193,7 @@ namespace osl_Security
         void getConfigDir_001( )
         {
             ::osl::Security aSec;
-            ::rtl::OUString strConfig;
+            OUString strConfig;
             bRes = aSec.getConfigDir( strConfig );
 
             CPPUNIT_ASSERT_MESSAGE( "failed to find a ConfigDir!", bRes );
@@ -277,9 +279,9 @@ namespace osl_Security
 
         void loginUserOnFileServer_001( )
             {
-                rtl::OUString suUserName;
-                rtl::OUString suPassword;
-                rtl::OUString suFileServer;
+                OUString suUserName;
+                OUString suPassword;
+                OUString suFileServer;
                 ::osl::Security aSec;
                 oslSecurity pSec = aSec.getHandle();
 
@@ -340,14 +342,14 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
     strUserID = OUString::number( getuid( ) );
 
     /// get user Name;
-    strUserName = ::rtl::OUString::createFromAscii( pw->pw_name );
+    strUserName = OUString::createFromAscii( pw->pw_name );
 
     /// get home directory;
     char *pw_dir = pw->pw_dir;
     if( getenv( "FAKEROOTKEY" ) )
         pw_dir = getenv("HOME");
     CPPUNIT_ASSERT_EQUAL_MESSAGE( "#Convert from system path to URL failed.",
-                            ::osl::File::E_None, ::osl::File::getFileURLFromSystemPath( ::rtl::OUString::createFromAscii( pw_dir ), strHomeDirectory ) );
+                            ::osl::File::E_None, ::osl::File::getFileURLFromSystemPath( OUString::createFromAscii( pw_dir ), strHomeDirectory ) );
 
     /// get config directory;
     strConfigDirectory = strHomeDirectory.copy(0);
@@ -416,11 +418,9 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
 
     // Create buffers for the SID and the domain name.
     PSID pSid = static_cast<PSID>(new BYTE[dwSidBufferSize]);
-    CPPUNIT_ASSERT_MESSAGE("# creating SID buffer failed.\n", pSid!= nullptr );
     memset( pSid, 0, dwSidBufferSize);
 
     wszDomainName = new WCHAR[dwDomainBufferSize];
-    CPPUNIT_ASSERT_MESSAGE("# creating Domain name buffer failed.\n", wszDomainName != nullptr );
     memset(wszDomainName, 0, dwDomainBufferSize*sizeof(WCHAR));
 
     // Obtain the SID for the account name passed.
@@ -452,9 +452,8 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
             {
                 // Reallocate memory for the SID buffer.
                 wprintf(L"# The SID buffer was too small. It will be reallocated.\n");
-                FreeSid( pSid);
+                delete[] static_cast<BYTE*>(pSid);
                 pSid = static_cast<PSID>(new BYTE[cbSid]);
-                CPPUNIT_ASSERT_MESSAGE("# re-creating SID buffer failed.\n",  pSid!= nullptr );
                 memset( pSid, 0, cbSid);
                 dwSidBufferSize = cbSid;
             }
@@ -464,7 +463,6 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
                 wprintf(L"# The domain name buffer was too small. It will be reallocated.\n");
                 delete [] wszDomainName;
                 wszDomainName = new WCHAR[cchDomainName];
-                CPPUNIT_ASSERT_MESSAGE("# re-creating domain name buffer failed.\n", wszDomainName!= nullptr );
                 memset(wszDomainName, 0, cchDomainName*sizeof(WCHAR));
                 dwDomainBufferSize = cchDomainName;
             }
@@ -476,58 +474,17 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
         }
     }
 
-    // now got SID successfully, only need to compare SID, so I copied the rest lines from source to convert SID to OUString.
-    PSID_IDENTIFIER_AUTHORITY psia;
-    DWORD dwSubAuthorities;
-    DWORD dwSidRev=SID_REVISION;
-    DWORD dwCounter;
-    DWORD dwSidSize;
-    wchar_t *Ident;
-
-    /* obtain SidIdentifierAuthority */
-    psia=GetSidIdentifierAuthority(pSid);
-
-    /* obtain sidsubauthority count */
-    dwSubAuthorities=std::min(static_cast<int>(*GetSidSubAuthorityCount(pSid)), 5);
-
-    /* buffer length: S-SID_REVISION- + identifierauthority- + subauthorities- + NULL */
-    Ident=static_cast<wchar_t *>(malloc(88*sizeof(wchar_t)));
-
-    /* prepare S-SID_REVISION- */
-    dwSidSize=wsprintfW(Ident, L"S-%lu-", dwSidRev);
-
-    /* prepare SidIdentifierAuthority */
-    if ((psia->Value[0] != 0) || (psia->Value[1] != 0))
+    LPWSTR pSidStr = nullptr;
+    if (ConvertSidToStringSidW(pSid, &pSidStr))
     {
-        dwSidSize+=wsprintfW(Ident + wcslen(Ident),
-                    L"0x%02hx%02hx%02hx%02hx%02hx%02hx",
-                    static_cast<sal_uInt16>(psia->Value[0]),
-                    static_cast<sal_uInt16>(psia->Value[1]),
-                    static_cast<sal_uInt16>(psia->Value[2]),
-                    static_cast<sal_uInt16>(psia->Value[3]),
-                    static_cast<sal_uInt16>(psia->Value[4]),
-                    static_cast<sal_uInt16>(psia->Value[5]));
+        strUserID = o3tl::toU(pSidStr);
+        LocalFree(pSidStr);
     }
     else
     {
-        dwSidSize+=wsprintfW(Ident + wcslen(Ident),
-                    L"%lu",
-                    static_cast<sal_uInt32>(psia->Value[5]      )   +
-                    static_cast<sal_uInt32>(psia->Value[4] <<  8)   +
-                    static_cast<sal_uInt32>(psia->Value[3] << 16)   +
-                    static_cast<sal_uInt32>(psia->Value[2] << 24)   );
+        wprintf(L"# ConvertSidToStringSidW failed. GetLastError returned: %d\n", GetLastError());
     }
 
-    /* loop through SidSubAuthorities */
-    for (dwCounter=0; dwCounter < dwSubAuthorities; dwCounter++)
-    {
-        dwSidSize+=wsprintfW(Ident + dwSidSize, L"-%lu",
-                    *GetSidSubAuthority(pSid, dwCounter) );
-    }
-
-    strUserID = o3tl::toU(Ident);
-
-    free(Ident);
     delete [] static_cast<BYTE*>(pSid);
     delete [] wszDomainName;
 
@@ -596,12 +553,12 @@ void MyTestPlugInImpl::initialize( CPPUNIT_NS::TestFactoryRegistry *,
         t_print("Administrator.\n" );
 
     /// get and display forwarded text if available.
-    rtl::OUString args[ 3 ];
+    OUString args[ 3 ];
     int argsCount = 0;
     sal_uInt32 n = rtl_getAppCommandArgCount();
     for (sal_uInt32 i = 0; i < n; ++i)
     {
-        rtl::OUString arg;
+        OUString arg;
         rtl_getAppCommandArg(i, &arg.pData);
         if( arg.startsWith("-") )
             continue;

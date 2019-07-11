@@ -44,7 +44,7 @@
 #include <UITools.hxx>
 #include <osl/diagnose.h>
 #include <svtools/imgdef.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <TablesSingleDlg.hxx>
 #include <tools/diagnose_ex.h>
 #include <cppuhelper/exc_hlp.hxx>
@@ -357,7 +357,7 @@ namespace dbaui
         {
             m_pTablesList->Expand(pExpand);
             pExpand = m_pTablesList->FirstChild(pExpand);
-            if (pExpand && SvTreeList::NextSibling(pExpand))
+            if (pExpand && pExpand->NextSibling())
                 pExpand = nullptr;
         }
 
@@ -437,7 +437,6 @@ namespace dbaui
         Sequence< OUString > aTableFilter;
         static const char sWildcard[] = "%";
 
-        OUString sComposedName;
         const SvTreeListEntry* pAllObjectsEntry = m_pTablesList->getAllObjectsEntry();
         if (!pAllObjectsEntry)
             return aTableFilter;
@@ -451,6 +450,7 @@ namespace dbaui
 
             if (m_pTablesList->GetCheckButtonState(pEntry) == SvButtonState::Checked && !m_pTablesList->GetModel()->HasChildren(pEntry))
             {   // checked and a leaf, which means it's no catalog, no schema, but a real table
+                OUStringBuffer sComposedName;
                 OUString sCatalog;
                 if(m_pTablesList->GetModel()->HasParent(pEntry))
                 {
@@ -473,9 +473,9 @@ namespace dbaui
                                 bCatalogWildcard = OTableTreeListBox::isWildcardChecked(pCatalog);
                                 if (m_bCatalogAtStart)
                                 {
-                                    sComposedName += m_pTablesList->GetEntryText( pCatalog ) + m_sCatalogSeparator;
+                                    sComposedName.append(m_pTablesList->GetEntryText( pCatalog )).append(m_sCatalogSeparator);
                                     if (bCatalogWildcard)
-                                        sComposedName += sWildcard;
+                                        sComposedName.append(sWildcard);
                                 }
                                 else
                                 {
@@ -488,26 +488,23 @@ namespace dbaui
                             }
                         }
                         bSchemaWildcard = OTableTreeListBox::isWildcardChecked(pSchema);
-                        sComposedName += m_pTablesList->GetEntryText( pSchema ) + ".";
+                        sComposedName.append(m_pTablesList->GetEntryText( pSchema )).append(".");
                     }
 
                     if (bSchemaWildcard)
-                        sComposedName += sWildcard;
+                        sComposedName.append(sWildcard);
                 }
                 if (!bSchemaWildcard && !bCatalogWildcard)
-                    sComposedName += m_pTablesList->GetEntryText( pEntry );
+                    sComposedName.append(m_pTablesList->GetEntryText( pEntry ));
 
                 if (!m_bCatalogAtStart && !bCatalogWildcard)
-                    sComposedName += sCatalog;
+                    sComposedName.append(sCatalog);
 
                 // need some space
                 sal_Int32 nOldLen = aTableFilter.getLength();
                 aTableFilter.realloc(nOldLen + 1);
                 // add the new name
-                aTableFilter[nOldLen] = sComposedName;
-
-                // reset the composed name
-                sComposedName.clear();
+                aTableFilter[nOldLen] = sComposedName.makeStringAndClear();
             }
 
             if (bCatalogWildcard)
@@ -526,7 +523,7 @@ namespace dbaui
         SvTreeListEntry* pReturn = nullptr;
         if (_pEntry)
         {
-            pReturn = SvTreeList::NextSibling(_pEntry);
+            pReturn = _pEntry->NextSibling();
             if (!pReturn)
                 pReturn = implNextSibling(m_pTablesList->GetParent(_pEntry));
         }
@@ -561,13 +558,13 @@ namespace dbaui
         return true;
     }
 
-    void OTableSubscriptionPage::fillControls(std::vector< ISaveValueWrapper* >& /*_rControlList*/)
+    void OTableSubscriptionPage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& /*_rControlList*/)
     {
     }
 
-    void OTableSubscriptionPage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OTableSubscriptionPage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back(new ODisableWrapper<VclContainer>(m_pTables));
+        _rControlList.emplace_back(new ODisableWrapper<VclContainer>(m_pTables));
     }
 }   // namespace dbaui
 

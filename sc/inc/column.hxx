@@ -40,7 +40,6 @@ namespace formula { struct VectorRefArray; }
 
 namespace sc {
 
-struct FormulaGroupContext;
 struct FormulaGroupEntry;
 class StartListeningContext;
 class EndListeningContext;
@@ -49,7 +48,6 @@ class CopyToClipContext;
 class CopyToDocContext;
 class MixDocContext;
 class ColumnSpanSet;
-struct ColumnBlockPosition;
 class SingleColumnSpanSet;
 struct RefUpdateContext;
 struct RefUpdateInsertTabContext;
@@ -64,7 +62,6 @@ struct RowSpan;
 class RowHeightContext;
 class CompileFormulaContext;
 struct SetFormulaDirtyContext;
-class RefMovedHint;
 enum class MatrixEdge;
 class ColumnIterator;
 
@@ -125,7 +122,7 @@ class ScColumn
     // Broadcasters for formula cells.
     sc::BroadcasterStoreType maBroadcasters;
 
-    sc::CellStoreEvent maCellsEvent;
+    sc::CellStoreEvent const maCellsEvent;
 
     // Cell values.
     sc::CellStoreType maCells;
@@ -225,6 +222,7 @@ public:
                                 bool bConsiderCellDrawObjects=false ) const;
     bool        GetPrevDataPos(SCROW& rRow) const;
     bool        GetNextDataPos(SCROW& rRow) const;
+    bool        TrimEmptyBlocks(SCROW& rRowStart, SCROW& rRowEnd) const;
     void        FindDataAreaPos(SCROW& rRow, bool bDown) const; // (without Broadcaster)
     void        FindUsed( SCROW nStartRow, SCROW nEndRow, mdds::flat_segment_tree<SCROW, bool>& rUsed ) const;
 
@@ -265,7 +263,7 @@ public:
         SCROW nRow1, SCROW nRow2, const SvNumberFormatterMergeMap& rMap, ScColumn& rDestCol );
 
     void CopyCellToDocument( SCROW nSrcRow, SCROW nDestRow, ScColumn& rDestCol );
-    bool InitBlockPosition( sc::ColumnBlockPosition& rBlockPos );
+    void InitBlockPosition( sc::ColumnBlockPosition& rBlockPos );
     void InitBlockPosition( sc::ColumnBlockConstPosition& rBlockPos ) const;
 
     void DeleteBeforeCopyFromClip(
@@ -331,10 +329,12 @@ public:
      */
     ScFormulaCell* SetFormulaCell(
         SCROW nRow, ScFormulaCell* pCell,
-        sc::StartListeningType eListenType = sc::SingleCellListening );
+        sc::StartListeningType eListenType = sc::SingleCellListening,
+        bool bInheritNumFormatIfNeeded = true);
     void SetFormulaCell(
         sc::ColumnBlockPosition& rBlockPos, SCROW nRow, ScFormulaCell* pCell,
-        sc::StartListeningType eListenType = sc::SingleCellListening );
+        sc::StartListeningType eListenType = sc::SingleCellListening,
+        bool bInheritNumFormatIfNeeded = true);
 
     bool SetFormulaCells( SCROW nRow, std::vector<ScFormulaCell*>& rCells );
 
@@ -355,7 +355,7 @@ public:
     void SetValue( sc::ColumnBlockPosition& rBlockPos, SCROW nRow, double fVal, bool bBroadcast = true );
     void        SetError( SCROW nRow, const FormulaError nError);
 
-    void        GetString( SCROW nRow, OUString& rString ) const;
+    void        GetString( SCROW nRow, OUString& rString, const ScInterpreterContext* pContext = nullptr ) const;
     double* GetValueCell( SCROW nRow );
     void        GetInputString( SCROW nRow, OUString& rString ) const;
     double      GetValue( SCROW nRow ) const;
@@ -367,7 +367,8 @@ public:
     ScFormulaCell * const * GetFormulaCellBlockAddress( SCROW nRow, size_t& rBlockSize ) const;
     CellType    GetCellType( SCROW nRow ) const;
     SCSIZE      GetCellCount() const;
-    sal_uInt32 GetWeightedCount() const;
+    sal_uLong GetWeightedCount() const;
+    sal_uLong GetWeightedCount(SCROW nStartRow, SCROW nEndRow) const;
     sal_uInt32 GetCodeCount() const;       // RPN-Code in formulas
     FormulaError  GetErrCode( SCROW nRow ) const;
 
@@ -574,9 +575,11 @@ public:
     bool ResolveStaticReference( ScMatrix& rMat, SCCOL nMatCol, SCROW nRow1, SCROW nRow2 );
     void FillMatrix( ScMatrix& rMat, size_t nMatCol, SCROW nRow1, SCROW nRow2, svl::SharedStringPool* pPool ) const;
     formula::VectorRefArray FetchVectorRefArray( SCROW nRow1, SCROW nRow2 );
-    bool HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2 );
+    bool HandleRefArrayForParallelism( SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup );
+#ifdef DBG_UTIL
+    void AssertNoInterpretNeeded( SCROW nRow1, SCROW nRow2 );
+#endif
     void SetFormulaResults( SCROW nRow, const double* pResults, size_t nLen );
-    void SetFormulaResults( SCROW nRow, const formula::FormulaConstTokenRef* pResults, size_t nLen );
 
     void CalculateInThread( ScInterpreterContext& rContext, SCROW nRow, size_t nLen, unsigned nThisThread, unsigned nThreadsTotal );
     void HandleStuffAfterParallelCalculation( SCROW nRow, size_t nLen );
@@ -633,13 +636,23 @@ public:
     /**
      * Detach a formula cell that's about to be deleted, or removed from
      * document storage (if that ever happens).
+     *
+     * @param rNewSharedRows collects possible new shared row ranges (top and
+     *        bottom of shared or remaining single twice) resulting from
+     *        unsharing to reestablish listeners on.
      */
-    void DetachFormulaCell( const sc::CellStoreType::position_type& aPos, ScFormulaCell& rCell );
+    void DetachFormulaCell( const sc::CellStoreType::position_type& aPos, ScFormulaCell& rCell,
+                            std::vector<SCROW>& rNewSharedRows );
 
-    void DetachFormulaCells( const sc::CellStoreType::position_type& aPos, size_t nLength );
+    /** Re-establish listeners on unshared formula groups */
+    void StartListeningUnshared( const std::vector<SCROW>& rNewSharedRows );
+
+    void DetachFormulaCells( const sc::CellStoreType::position_type& aPos, size_t nLength,
+                             std::vector<SCROW>* pNewSharedRows );
 
     void AttachFormulaCells( sc::StartListeningContext& rCxt, SCROW nRow1, SCROW nRow2 );
-    void DetachFormulaCells( sc::EndListeningContext& rCxt, SCROW nRow1, SCROW nRow2 );
+    void DetachFormulaCells( sc::EndListeningContext& rCxt, SCROW nRow1, SCROW nRow2,
+                             std::vector<SCROW>* pNewSharedRows );
 
     /**
      * Regroup formula cells for the entire column.
@@ -689,18 +702,24 @@ public:
     bool        ReservePatternCount( SCSIZE nReserve );
 private:
 
-    sc::CellStoreType::iterator GetPositionToInsert( SCROW nRow );
-    sc::CellStoreType::iterator GetPositionToInsert( const sc::CellStoreType::iterator& it, SCROW nRow );
+    sc::CellStoreType::iterator GetPositionToInsert( SCROW nRow, std::vector<SCROW>& rNewSharedRows,
+                                                     bool bInsertFormula );
+    sc::CellStoreType::iterator GetPositionToInsert( const sc::CellStoreType::iterator& it, SCROW nRow,
+                                                     std::vector<SCROW>& rNewSharedRows, bool bInsertFormula );
 
     void AttachNewFormulaCell(
         const sc::CellStoreType::iterator& itPos, SCROW nRow, ScFormulaCell& rCell,
+        const std::vector<SCROW>& rNewSharedRows,
         bool bJoin = true, sc::StartListeningType eListenType = sc::SingleCellListening );
 
     void AttachNewFormulaCell(
         const sc::CellStoreType::position_type& aPos, ScFormulaCell& rCell,
+        const std::vector<SCROW>& rNewSharedRows,
         bool bJoin = true, sc::StartListeningType eListenType = sc::SingleCellListening );
 
-    void AttachNewFormulaCells( const sc::CellStoreType::position_type& aPos, size_t nLength );
+    void AttachNewFormulaCells( const sc::CellStoreType::position_type& aPos, size_t nLength,
+                                std::vector<SCROW>& rNewSharedRows );
+
     void BroadcastNewCell( SCROW nRow );
     bool UpdateScriptType( sc::CellTextAttr& rAttr, SCROW nRow, sc::CellStoreType::iterator& itr );
 

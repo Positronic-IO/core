@@ -78,7 +78,7 @@
 class SdrHdlBitmapSet
 {
     // the bitmap holding all information
-    BitmapEx                    maMarkersBitmap;
+    BitmapEx const              maMarkersBitmap;
 
     // the cropped Bitmaps for reusage
     ::std::vector< BitmapEx >   maRealMarkers;
@@ -561,11 +561,11 @@ void SdrHdl::CreateB2dIAObject()
                             aMoveOutsideOffset.AdjustX(aOffset.Height() );
                     }
 
-                    rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                    const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                     if (xManager.is())
                     {
                         basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
-                        sdr::overlay::OverlayObject* pNewOverlayObject = nullptr;
+                        std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject;
                         if (getenv ("SVX_DRAW_HANDLES") && (eKindOfMarker == BitmapMarkerKind::Rect_7x7 || eKindOfMarker == BitmapMarkerKind::Rect_9x9 || eKindOfMarker == BitmapMarkerKind::Rect_11x11))
                         {
                             double fSize = 7.0;
@@ -604,7 +604,7 @@ void SdrHdl::CreateB2dIAObject()
                                 default:
                                     break;
                             }
-                            pNewOverlayObject = new sdr::overlay::OverlayHandle(aPosition, aB2DSize, /*HandleStrokeColor*/COL_BLACK, aHandleFillColor);
+                            pNewOverlayObject.reset(new sdr::overlay::OverlayHandle(aPosition, aB2DSize, /*HandleStrokeColor*/COL_BLACK, aHandleFillColor));
                         }
                         else
                         {
@@ -616,7 +616,7 @@ void SdrHdl::CreateB2dIAObject()
                         if (pNewOverlayObject)
                         {
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -779,11 +779,11 @@ BitmapEx ImpGetBitmapEx(BitmapMarkerKind eKindOfMarker, BitmapColorIndex eIndex)
 
 } // end anonymous namespace
 
-sdr::overlay::OverlayObject* SdrHdl::CreateOverlayObject(
+std::unique_ptr<sdr::overlay::OverlayObject> SdrHdl::CreateOverlayObject(
     const basegfx::B2DPoint& rPos,
     BitmapColorIndex eColIndex, BitmapMarkerKind eKindOfMarker, Point aMoveOutsideOffset)
 {
-    sdr::overlay::OverlayObject* pRetval = nullptr;
+    std::unique_ptr<sdr::overlay::OverlayObject> pRetval;
 
     // support bigger sizes
     bool bForceBiggerSize(false);
@@ -862,23 +862,23 @@ sdr::overlay::OverlayObject* SdrHdl::CreateOverlayObject(
         if(eKindOfMarker == BitmapMarkerKind::Anchor || eKindOfMarker == BitmapMarkerKind::AnchorPressed)
         {
             // when anchor is used take upper left as reference point inside the handle
-            pRetval = new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime);
+            pRetval.reset(new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime));
         }
         else if(eKindOfMarker == BitmapMarkerKind::AnchorTR || eKindOfMarker == BitmapMarkerKind::AnchorPressedTR)
         {
             // AnchorTR for SW, take top right as (0,0)
-            pRetval = new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime,
+            pRetval.reset(new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime,
                 static_cast<sal_uInt16>(aBmpEx1.GetSizePixel().Width() - 1), 0,
-                static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Width() - 1), 0);
+                static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Width() - 1), 0));
         }
         else
         {
             // create centered handle as default
-            pRetval = new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime,
+            pRetval.reset(new sdr::overlay::OverlayAnimatedBitmapEx(rPos, aBmpEx1, aBmpEx2, nBlinkTime,
                 static_cast<sal_uInt16>(aBmpEx1.GetSizePixel().Width() - 1) >> 1,
                 static_cast<sal_uInt16>(aBmpEx1.GetSizePixel().Height() - 1) >> 1,
                 static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Width() - 1) >> 1,
-                static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Height() - 1) >> 1);
+                static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Height() - 1) >> 1));
         }
     }
     else
@@ -902,13 +902,13 @@ sdr::overlay::OverlayObject* SdrHdl::CreateOverlayObject(
         if(eKindOfMarker == BitmapMarkerKind::Anchor || eKindOfMarker == BitmapMarkerKind::AnchorPressed)
         {
             // upper left as reference point inside the handle for AnchorPressed, too
-            pRetval = new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx);
+            pRetval.reset(new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx));
         }
         else if(eKindOfMarker == BitmapMarkerKind::AnchorTR || eKindOfMarker == BitmapMarkerKind::AnchorPressedTR)
         {
             // AnchorTR for SW, take top right as (0,0)
-            pRetval = new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx,
-                static_cast<sal_uInt16>(aBmpEx.GetSizePixel().Width() - 1), 0);
+            pRetval.reset(new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx,
+                static_cast<sal_uInt16>(aBmpEx.GetSizePixel().Width() - 1), 0));
         }
         else
         {
@@ -934,7 +934,7 @@ sdr::overlay::OverlayObject* SdrHdl::CreateOverlayObject(
             }
 
             // create centered handle as default
-            pRetval = new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx, nCenX, nCenY);
+            pRetval.reset(new sdr::overlay::OverlayBitmapEx(rPos, aBmpEx, nCenX, nCenY));
         }
     }
 
@@ -979,9 +979,8 @@ Pointer SdrHdl::GetPointer() const
                 default:
                     break;
             }
-            nHdlAngle+=nRotationAngle+2249; // a little bit more (for rounding)
-            while (nHdlAngle<0) nHdlAngle+=36000;
-            while (nHdlAngle>=36000) nHdlAngle-=36000;
+            // a little bit more (for rounding)
+            nHdlAngle = NormAngle36000(nHdlAngle + nRotationAngle + 2249);
             nHdlAngle/=4500;
             switch (static_cast<sal_uInt8>(nHdlAngle)) {
                 case 0: ePtr=PointerStyle::ESize;  break;
@@ -1062,6 +1061,10 @@ void SdrHdl::onMouseEnter(const MouseEvent& /*rMEvt*/)
 {
 }
 
+void SdrHdl::onHelpRequest(const HelpEvent& /*rHEvt*/)
+{
+}
+
 void SdrHdl::onMouseLeave()
 {
 }
@@ -1108,22 +1111,22 @@ void SdrHdlColor::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             BitmapEx aBmpCol(CreateColorDropper(aMarkerColor));
                             basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
-                            sdr::overlay::OverlayObject* pNewOverlayObject = new
+                            std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(new
                                 sdr::overlay::OverlayBitmapEx(
                                     aPosition,
                                     aBmpCol,
                                     static_cast<sal_uInt16>(aBmpCol.GetSizePixel().Width() - 1) >> 1,
                                     static_cast<sal_uInt16>(aBmpCol.GetSizePixel().Height() - 1) >> 1
-                                );
+                                ));
 
                             // OVERLAYMANAGER
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -1258,7 +1261,7 @@ void SdrHdlGradient::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             // striped line in between
@@ -1275,15 +1278,14 @@ void SdrHdlGradient::CreateB2dIAObject()
                             basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
                             basegfx::B2DPoint aMidPos(aMidPoint.X(), aMidPoint.Y());
 
-                            sdr::overlay::OverlayObject* pNewOverlayObject = new
+                            std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(new
                                 sdr::overlay::OverlayLineStriped(
                                     aPosition, aMidPos
-                                );
-                            DBG_ASSERT(pNewOverlayObject, "Got NO new IAO!");
+                                ));
 
                             pNewOverlayObject->setBaseColor(IsGradient() ? COL_BLACK : COL_BLUE);
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
 
                             // arrowhead
                             Point aLeft(aMidPoint.X() + static_cast<sal_Int32>(aPerpend.getX() * fHalfArrowWidth),
@@ -1295,17 +1297,16 @@ void SdrHdlGradient::CreateB2dIAObject()
                             basegfx::B2DPoint aPositionRight(aRight.X(), aRight.Y());
                             basegfx::B2DPoint aPosition2(a2ndPos.X(), a2ndPos.Y());
 
-                            pNewOverlayObject = new
+                            pNewOverlayObject.reset(new
                                 sdr::overlay::OverlayTriangle(
                                     aPositionLeft,
                                     aPosition2,
                                     aPositionRight,
                                     IsGradient() ? COL_BLACK : COL_BLUE
-                                );
-                            DBG_ASSERT(pNewOverlayObject, "Got NO new IAO!");
+                                ));
 
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -1416,24 +1417,24 @@ void SdrHdlLine::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             basegfx::B2DPoint aPosition1(pHdl1->GetPos().X(), pHdl1->GetPos().Y());
                             basegfx::B2DPoint aPosition2(pHdl2->GetPos().X(), pHdl2->GetPos().Y());
 
-                            sdr::overlay::OverlayObject* pNewOverlayObject = new
+                            std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(new
                                 sdr::overlay::OverlayLineStriped(
                                     aPosition1,
                                     aPosition2
-                                );
+                                ));
 
                             // OVERLAYMANAGER
                             // color(?)
                             pNewOverlayObject->setBaseColor(COL_LIGHTRED);
 
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -1472,7 +1473,7 @@ void SdrHdlBezWgt::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             basegfx::B2DPoint aPosition1(pHdl1->GetPos().X(), pHdl1->GetPos().Y());
@@ -1480,11 +1481,11 @@ void SdrHdlBezWgt::CreateB2dIAObject()
 
                             if(!aPosition1.equal(aPosition2))
                             {
-                                sdr::overlay::OverlayObject* pNewOverlayObject = new
+                                std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(new
                                     sdr::overlay::OverlayLineStriped(
                                         aPosition1,
                                         aPosition2
-                                    );
+                                    ));
                                 // OVERLAYMANAGER
                                 // line part is not hittable
                                 pNewOverlayObject->setHittable(false);
@@ -1493,7 +1494,7 @@ void SdrHdlBezWgt::CreateB2dIAObject()
                                 pNewOverlayObject->setBaseColor(COL_LIGHTBLUE);
 
                                 xManager->add(*pNewOverlayObject);
-                                maOverlayGroup.append(pNewOverlayObject);
+                                maOverlayGroup.append(std::move(pNewOverlayObject));
                             }
                         }
                     }
@@ -1528,18 +1529,18 @@ void E3dVolumeMarker::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is() && aWireframePoly.count())
                         {
-                            sdr::overlay::OverlayObject* pNewOverlayObject = new
-                            sdr::overlay::OverlayPolyPolygonStripedAndFilled(
-                                aWireframePoly);
+                            std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(new
+                                sdr::overlay::OverlayPolyPolygonStripedAndFilled(
+                                    aWireframePoly));
 
                             // OVERLAYMANAGER
                             pNewOverlayObject->setBaseColor(COL_BLACK);
 
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -1590,20 +1591,20 @@ void ImpEdgeHdl::CreateB2dIAObject()
 
                         if(rPageWindow.GetPaintWindow().OutputToWindow())
                         {
-                            rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                            const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                             if (xManager.is())
                             {
                                 basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
-                                sdr::overlay::OverlayObject* pNewOverlayObject = CreateOverlayObject(
+                                std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(CreateOverlayObject(
                                     aPosition,
                                     eColIndex,
-                                    eKindOfMarker);
+                                    eKindOfMarker));
 
                                 // OVERLAYMANAGER
                                 if (pNewOverlayObject)
                                 {
                                     xManager->add(*pNewOverlayObject);
-                                    maOverlayGroup.append(pNewOverlayObject);
+                                    maOverlayGroup.append(std::move(pNewOverlayObject));
                                 }
                             }
                         }
@@ -1706,20 +1707,20 @@ void ImpMeasureHdl::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
-                            sdr::overlay::OverlayObject* pNewOverlayObject = CreateOverlayObject(
+                            std::unique_ptr<sdr::overlay::OverlayObject> pNewOverlayObject(CreateOverlayObject(
                                 aPosition,
                                 eColIndex,
-                                eKindOfMarker);
+                                eKindOfMarker));
 
                             // OVERLAYMANAGER
                             if (pNewOverlayObject)
                             {
                                 xManager->add(*pNewOverlayObject);
-                                maOverlayGroup.append(pNewOverlayObject);
+                                maOverlayGroup.append(std::move(pNewOverlayObject));
                             }
                         }
                     }
@@ -1768,7 +1769,7 @@ void ImpTextframeHdl::CreateB2dIAObject()
 
                     if(rPageWindow.GetPaintWindow().OutputToWindow())
                     {
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if (xManager.is())
                         {
                             const basegfx::B2DPoint aTopLeft(maRect.Left(), maRect.Top());
@@ -1777,7 +1778,7 @@ void ImpTextframeHdl::CreateB2dIAObject()
                             const Color aHilightColor(aSvtOptionsDrawinglayer.getHilightColor());
                             const double fTransparence(aSvtOptionsDrawinglayer.GetTransparentSelectionPercent() * 0.01);
 
-                            sdr::overlay::OverlayRectangle* pNewOverlayObject = new sdr::overlay::OverlayRectangle(
+                            std::unique_ptr<sdr::overlay::OverlayRectangle> pNewOverlayObject(new sdr::overlay::OverlayRectangle(
                                 aTopLeft,
                                 aBottomRight,
                                 aHilightColor,
@@ -1785,12 +1786,12 @@ void ImpTextframeHdl::CreateB2dIAObject()
                                 3.0,
                                 3.0,
                                 nRotationAngle * -F_PI18000,
-                                true); // allow animation; the Handle is not shown at text edit time
+                                true)); // allow animation; the Handle is not shown at text edit time
 
                             // OVERLAYMANAGER
                             pNewOverlayObject->setHittable(false);
                             xManager->add(*pNewOverlayObject);
-                            maOverlayGroup.append(pNewOverlayObject);
+                            maOverlayGroup.append(std::move(pNewOverlayObject));
                         }
                     }
                 }
@@ -1800,7 +1801,7 @@ void ImpTextframeHdl::CreateB2dIAObject()
 }
 
 
-static bool ImpSdrHdlListSorter(SdrHdl* const& lhs, SdrHdl* const& rhs)
+static bool ImpSdrHdlListSorter(std::unique_ptr<SdrHdl> const& lhs, std::unique_ptr<SdrHdl> const& rhs)
 {
     SdrHdlKind eKind1=lhs->GetKind();
     SdrHdlKind eKind2=rhs->GetKind();
@@ -1867,9 +1868,11 @@ struct ImplHdlAndIndex
     sal_uInt32                  mnIndex;
 };
 
+extern "C" {
+
 // Helper method for sorting handles taking care of OrdNums, keeping order in
 // single objects and re-sorting polygon handles intuitively
-extern "C" int ImplSortHdlFunc( const void* pVoid1, const void* pVoid2 )
+static int ImplSortHdlFunc( const void* pVoid1, const void* pVoid2 )
 {
     const ImplHdlAndIndex* p1 = static_cast<ImplHdlAndIndex const *>(pVoid1);
     const ImplHdlAndIndex* p2 = static_cast<ImplHdlAndIndex const *>(pVoid2);
@@ -1943,6 +1946,7 @@ extern "C" int ImplSortHdlFunc( const void* pVoid1, const void* pVoid2 )
     }
 }
 
+}
 
 void SdrHdlList::TravelFocusHdl(bool bForward)
 {
@@ -1950,12 +1954,14 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
     if (mnFocusIndex >= GetHdlCount())
         mnFocusIndex = SAL_MAX_SIZE;
 
-    if(aList.empty())
+    if(maList.empty())
         return;
 
     // take care of old handle
     const size_t nOldHdlNum(mnFocusIndex);
-    SdrHdl* pOld = GetHdl(nOldHdlNum);
+    SdrHdl* pOld = nullptr;
+    if (nOldHdlNum < GetHdlCount())
+        pOld = GetHdl(nOldHdlNum);
 
     if(pOld)
     {
@@ -1965,23 +1971,23 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
     }
 
     // allocate pointer array for sorted handle list
-    std::unique_ptr<ImplHdlAndIndex[]> pHdlAndIndex(new ImplHdlAndIndex[aList.size()]);
+    std::unique_ptr<ImplHdlAndIndex[]> pHdlAndIndex(new ImplHdlAndIndex[maList.size()]);
 
     // build sorted handle list
-    for( size_t a = 0; a < aList.size(); ++a)
+    for( size_t a = 0; a < maList.size(); ++a)
     {
-        pHdlAndIndex[a].mpHdl = aList[a];
+        pHdlAndIndex[a].mpHdl = maList[a].get();
         pHdlAndIndex[a].mnIndex = a;
     }
 
-    qsort(pHdlAndIndex.get(), aList.size(), sizeof(ImplHdlAndIndex), ImplSortHdlFunc);
+    qsort(pHdlAndIndex.get(), maList.size(), sizeof(ImplHdlAndIndex), ImplSortHdlFunc);
 
     // look for old num in sorted array
     size_t nOldHdl(nOldHdlNum);
 
     if(nOldHdlNum != SAL_MAX_SIZE)
     {
-        for(size_t a = 0; a < aList.size(); ++a)
+        for(size_t a = 0; a < maList.size(); ++a)
         {
             if(pHdlAndIndex[a].mpHdl == pOld)
             {
@@ -1999,7 +2005,7 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
     {
         if(nOldHdl != SAL_MAX_SIZE)
         {
-            if(nOldHdl == aList.size() - 1)
+            if(nOldHdl == maList.size() - 1)
             {
                 // end forward run
                 nNewHdl = SAL_MAX_SIZE;
@@ -2021,7 +2027,7 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
         if(nOldHdl == SAL_MAX_SIZE)
         {
             // start backward run at last entry
-            nNewHdl = aList.size() - 1;
+            nNewHdl = maList.size() - 1;
 
         }
         else
@@ -2047,9 +2053,9 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
     {
         SdrHdl* pNew = pHdlAndIndex[nNewHdl].mpHdl;
 
-        for(size_t a = 0; a < aList.size(); ++a)
+        for(size_t a = 0; a < maList.size(); ++a)
         {
-            if(aList[a] == pNew)
+            if(maList[a].get() == pNew)
             {
                 nNewHdlNum = a;
                 break;
@@ -2061,10 +2067,9 @@ void SdrHdlList::TravelFocusHdl(bool bForward)
     if(nOldHdlNum != nNewHdlNum)
     {
         mnFocusIndex = nNewHdlNum;
-        SdrHdl* pNew = GetHdl(mnFocusIndex);
-
-        if(pNew)
+        if (mnFocusIndex < GetHdlCount())
         {
+            SdrHdl* pNew = GetHdl(mnFocusIndex);
             pNew->Touch();
         }
     }
@@ -2097,11 +2102,7 @@ void SdrHdlList::SetFocusHdl(SdrHdl* pNew)
                     pActual->Touch();
                 }
 
-                if(pNew)
-                {
-                    pNew->Touch();
-                }
-
+                pNew->Touch();
             }
         }
     }
@@ -2122,8 +2123,7 @@ void SdrHdlList::ResetFocusHdl()
 
 SdrHdlList::SdrHdlList(SdrMarkView* pV)
 :   mnFocusIndex(SAL_MAX_SIZE),
-    pView(pV),
-    aList()
+    pView(pV)
 {
     nHdlSize = 3;
     bRotateShear = false;
@@ -2178,24 +2178,20 @@ void SdrHdlList::SetDistortShear(bool bOn)
     bDistortShear = bOn;
 }
 
-SdrHdl* SdrHdlList::RemoveHdl(size_t nNum)
+std::unique_ptr<SdrHdl> SdrHdlList::RemoveHdl(size_t nNum)
 {
-    SdrHdl* pRetval = aList[nNum];
-    aList.erase(aList.begin() + nNum);
+    std::unique_ptr<SdrHdl> pRetval = std::move(maList[nNum]);
+    maList.erase(maList.begin() + nNum);
 
     return pRetval;
 }
 
 void SdrHdlList::RemoveAllByKind(SdrHdlKind eKind)
 {
-    for(std::deque<SdrHdl*>::iterator it = aList.begin(); it != aList.end(); )
+    for(auto it = maList.begin(); it != maList.end(); )
     {
-        SdrHdl* p = *it;
-        if (p->GetKind() == eKind)
-        {
-            it = aList.erase( it );
-            delete p;
-        }
+        if ((*it)->GetKind() == eKind)
+            it = maList.erase( it );
         else
             ++it;
     }
@@ -2203,12 +2199,7 @@ void SdrHdlList::RemoveAllByKind(SdrHdlKind eKind)
 
 void SdrHdlList::Clear()
 {
-    for (size_t i=0; i<GetHdlCount(); ++i)
-    {
-        SdrHdl* pHdl=GetHdl(i);
-        delete pHdl;
-    }
-    aList.clear();
+    maList.clear();
 
     bRotateShear=false;
     bDistortShear=false;
@@ -2219,7 +2210,7 @@ void SdrHdlList::Sort()
     // remember currently focused handle
     SdrHdl* pPrev = GetFocusHdl();
 
-    std::sort( aList.begin(), aList.end(), ImpSdrHdlListSorter );
+    std::sort( maList.begin(), maList.end(), ImpSdrHdlListSorter );
 
     // get now and compare
     SdrHdl* pNow = GetFocusHdl();
@@ -2243,19 +2234,19 @@ size_t SdrHdlList::GetHdlNum(const SdrHdl* pHdl) const
 {
     if (pHdl==nullptr)
         return SAL_MAX_SIZE;
-    std::deque<SdrHdl*>::const_iterator it = std::find( aList.begin(), aList.end(), pHdl);
-    if( it == aList.end() )
+    auto it = std::find_if( maList.begin(), maList.end(),
+        [&](const std::unique_ptr<SdrHdl> & p) { return p.get() == pHdl; });
+    assert(it != maList.end());
+    if( it == maList.end() )
         return SAL_MAX_SIZE;
-    return it - aList.begin();
+    return it - maList.begin();
 }
 
-void SdrHdlList::AddHdl(SdrHdl* pHdl)
+void SdrHdlList::AddHdl(std::unique_ptr<SdrHdl> pHdl)
 {
-    if (pHdl!=nullptr)
-    {
-        aList.push_back(pHdl);
-        pHdl->SetHdlList(this);
-    }
+    assert(pHdl);
+    pHdl->SetHdlList(this);
+    maList.push_back(std::move(pHdl));
 }
 
 SdrHdl* SdrHdlList::IsHdlListHit(const Point& rPnt) const
@@ -2283,6 +2274,15 @@ SdrHdl* SdrHdlList::GetHdl(SdrHdlKind eKind1) const
             pRet=pHdl;
     }
     return pRet;
+}
+
+void SdrHdlList::MoveTo(SdrHdlList& rOther)
+{
+    for (auto & pHdl : maList)
+        pHdl->SetHdlList(&rOther);
+    rOther.maList.insert(rOther.maList.end(),
+        std::make_move_iterator(maList.begin()), std::make_move_iterator(maList.end()));
+    maList.clear();
 }
 
 SdrCropHdl::SdrCropHdl(
@@ -2360,12 +2360,12 @@ void SdrCropHdl::CreateB2dIAObject()
 
             if(rPageWindow.GetPaintWindow().OutputToWindow())
             {
-                rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                 if (xManager.is())
                 {
                     basegfx::B2DPoint aPosition(aPos.X(), aPos.Y());
 
-                    sdr::overlay::OverlayObject* pOverlayObject = nullptr;
+                    std::unique_ptr<sdr::overlay::OverlayObject> pOverlayObject;
 
                     // animate focused handles
                     if(IsFocusHdl() && (pHdlList->GetFocusHdl() == this))
@@ -2377,7 +2377,7 @@ void SdrCropHdl::CreateB2dIAObject()
 
                         const sal_uInt64 nBlinkTime = rStyleSettings.GetCursorBlinkTime();
 
-                        pOverlayObject = new sdr::overlay::OverlayAnimatedBitmapEx(
+                        pOverlayObject.reset(new sdr::overlay::OverlayAnimatedBitmapEx(
                             aPosition,
                             aBmpEx1,
                             aBmpEx2,
@@ -2387,27 +2387,24 @@ void SdrCropHdl::CreateB2dIAObject()
                             static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Width() - 1) >> 1,
                             static_cast<sal_uInt16>(aBmpEx2.GetSizePixel().Height() - 1) >> 1,
                             mfShearX,
-                            mfRotation);
+                            mfRotation));
                     }
                     else
                     {
                         // create centered handle as default
-                        pOverlayObject = new sdr::overlay::OverlayBitmapEx(
+                        pOverlayObject.reset(new sdr::overlay::OverlayBitmapEx(
                             aPosition,
                             aBmpEx1,
                             static_cast<sal_uInt16>(aBmpEx1.GetSizePixel().Width() - 1) >> 1,
                             static_cast<sal_uInt16>(aBmpEx1.GetSizePixel().Height() - 1) >> 1,
                             0.0,
                             mfShearX,
-                            mfRotation);
+                            mfRotation));
                     }
 
                     // OVERLAYMANAGER
-                    if(pOverlayObject)
-                    {
-                        xManager->add(*pOverlayObject);
-                        maOverlayGroup.append(pOverlayObject);
-                    }
+                    xManager->add(*pOverlayObject);
+                    maOverlayGroup.append(std::move(pOverlayObject));
                 }
             }
         }
@@ -2611,16 +2608,16 @@ void SdrCropViewHdl::CreateB2dIAObject()
 
         if(rPageWindow.GetPaintWindow().OutputToWindow())
         {
-            rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+            const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
             if(xManager.is())
             {
-                sdr::overlay::OverlayObject* pNew = new sdr::overlay::OverlayPrimitive2DSequenceObject(aSequence);
+                std::unique_ptr<sdr::overlay::OverlayObject> pNew(new sdr::overlay::OverlayPrimitive2DSequenceObject(aSequence));
 
                 // only informative object, no hit
                 pNew->setHittable(false);
 
                 xManager->add(*pNew);
-                maOverlayGroup.append(pNew);
+                maOverlayGroup.append(std::move(pNew));
             }
         }
     }

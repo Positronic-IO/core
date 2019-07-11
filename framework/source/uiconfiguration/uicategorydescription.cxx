@@ -32,13 +32,13 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/configmgr.hxx>
 
 #include <vcl/mnemonic.hxx>
 #include <comphelper/propertysequence.hxx>
-#include <comphelper/sequence.hxx>
 
 #include <unordered_map>
 

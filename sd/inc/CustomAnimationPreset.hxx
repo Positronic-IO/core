@@ -22,7 +22,6 @@
 
 #include <sal/config.h>
 
-#include <memory>
 #include <vector>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -35,7 +34,6 @@ namespace sd {
 
 typedef std::unordered_map< OUString, CustomAnimationEffectPtr > EffectsSubTypeMap;
 typedef std::unordered_map< OUString, OUString > UStringMap;
-typedef std::vector< OUString > UStringList;
 
 class CustomAnimationPreset
 {
@@ -52,8 +50,8 @@ public:
     const OUString& getLabel() const { return maLabel; }
     double getDuration() const { return mfDuration; }
 
-    UStringList getSubTypes();
-    UStringList getProperties() const;
+    std::vector<OUString> getSubTypes();
+    std::vector<OUString> getProperties() const;
 
     bool hasProperty( const OUString& rProperty ) const;
     bool isTextOnly() const { return mbIsTextOnly; }
@@ -75,7 +73,7 @@ typedef std::vector< CustomAnimationPresetPtr > EffectDescriptorList;
 
 struct PresetCategory
 {
-    OUString maLabel;
+    OUString const maLabel;
     EffectDescriptorList maEffects;
 
     PresetCategory( const OUString& rLabel, const EffectDescriptorList& rEffects )

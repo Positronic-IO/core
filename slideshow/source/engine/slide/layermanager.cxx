@@ -22,6 +22,7 @@
 #include <basegfx/range/b1drange.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 
+#include <sal/log.hxx>
 #include <comphelper/anytostring.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 
@@ -35,7 +36,7 @@ using namespace ::com::sun::star;
 namespace std
 {
     // add operator!= for weak_ptr
-    inline bool operator!=( slideshow::internal::LayerWeakPtr const& rLHS,
+    static bool operator!=( slideshow::internal::LayerWeakPtr const& rLHS,
                             slideshow::internal::LayerWeakPtr const& rRHS )
     {
         return rLHS.lock().get() != rRHS.lock().get();
@@ -593,7 +594,7 @@ namespace slideshow
                 }
 
             private:
-                ::cppcanvas::CanvasSharedPtr mpCanvas;
+                ::cppcanvas::CanvasSharedPtr const mpCanvas;
             };
         }
 

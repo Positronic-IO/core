@@ -29,7 +29,7 @@ const sal_Unicode pDelimiters[] = {
     '=','(',')','+','-','*','/','^','&',' ','{','}','<','>',':', 0
 };
 
-inline bool IsText( sal_Unicode c )
+bool IsText( sal_Unicode c )
 {
     bool bFound = ScGlobal::UnicodeStrChr( pDelimiters, c );
     if (bFound)
@@ -41,7 +41,7 @@ inline bool IsText( sal_Unicode c )
     return c != sep;
 }
 
-inline bool IsText( bool& bQuote, sal_Unicode c )
+bool IsText( bool& bQuote, sal_Unicode c )
 {
     if (c == '\'')
     {
@@ -241,7 +241,7 @@ void ScRefFinder::ToggleRel( sal_Int32 nStartPos, sal_Int32 nEndPos )
 
     ExpandToText(pSource, nLen, nStartPos, nEndPos, meConv);
 
-    OUString aResult;
+    OUStringBuffer aResult;
     OUString aExpr;
     OUString aSep;
     ScAddress aAddr;
@@ -314,14 +314,14 @@ void ScRefFinder::ToggleRel( sal_Int32 nStartPos, sal_Int32 nEndPos )
 
         // assemble
 
-        aResult += aSep;
-        aResult += aExpr;
+        aResult.append(aSep);
+        aResult.append(aExpr);
 
         nLoopStart = nEEnd;
     }
 
     OUString aTotal = maFormula.copy(0, nStartPos);
-    aTotal += aResult;
+    aTotal += aResult.makeStringAndClear();
     if (nEndPos < maFormula.getLength()-1)
         aTotal += maFormula.copy(nEndPos+1);
 

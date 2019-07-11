@@ -20,52 +20,47 @@
 #define INCLUDED_CUI_SOURCE_INC_DSTRIBUT_HXX
 
 #include <svx/dlgctrl.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <svx/dstribut_enum.hxx>
 
-class SvxDistributePage : public SvxTabPage
+class SvxDistributePage : public SfxTabPage
 {
     SvxDistributeHorizontal     m_eDistributeHor;
     SvxDistributeVertical       m_eDistributeVer;
 
-    VclPtr<RadioButton>                m_pBtnHorNone;
-    VclPtr<RadioButton>                m_pBtnHorLeft;
-    VclPtr<RadioButton>                m_pBtnHorCenter;
-    VclPtr<RadioButton>                m_pBtnHorDistance;
-    VclPtr<RadioButton>                m_pBtnHorRight;
-    VclPtr<RadioButton>                m_pBtnVerNone;
-    VclPtr<RadioButton>                m_pBtnVerTop;
-    VclPtr<RadioButton>                m_pBtnVerCenter;
-    VclPtr<RadioButton>                m_pBtnVerDistance;
-    VclPtr<RadioButton>                m_pBtnVerBottom;
+    std::unique_ptr<weld::RadioButton> m_xBtnHorNone;
+    std::unique_ptr<weld::RadioButton> m_xBtnHorLeft;
+    std::unique_ptr<weld::RadioButton> m_xBtnHorCenter;
+    std::unique_ptr<weld::RadioButton> m_xBtnHorDistance;
+    std::unique_ptr<weld::RadioButton> m_xBtnHorRight;
+    std::unique_ptr<weld::RadioButton> m_xBtnVerNone;
+    std::unique_ptr<weld::RadioButton> m_xBtnVerTop;
+    std::unique_ptr<weld::RadioButton> m_xBtnVerCenter;
+    std::unique_ptr<weld::RadioButton> m_xBtnVerDistance;
+    std::unique_ptr<weld::RadioButton> m_xBtnVerBottom;
 
 public:
-    SvxDistributePage(vcl::Window* pWindow, const SfxItemSet& rInAttrs,
+    SvxDistributePage(TabPageParent pWindow, const SfxItemSet& rInAttrs,
         SvxDistributeHorizontal eHor,
         SvxDistributeVertical eVer);
     virtual ~SvxDistributePage() override;
-    virtual void dispose() override;
 
     virtual bool FillItemSet(SfxItemSet*) override;
     virtual void Reset(const SfxItemSet*) override;
-    virtual void PointChanged(vcl::Window* pWindow, RectPoint eRP) override;
-    virtual void PointChanged(weld::DrawingArea* pWindow, RectPoint eRP) override;
 
     SvxDistributeHorizontal GetDistributeHor() const { return m_eDistributeHor; }
     SvxDistributeVertical GetDistributeVer() const { return m_eDistributeVer; }
 };
 
-class SvxDistributeDialog : public SfxSingleTabDialog
+class SvxDistributeDialog : public SfxSingleTabDialogController
 {
     VclPtr<SvxDistributePage> mpPage;
 
 public:
-    SvxDistributeDialog(vcl::Window* pParent, const SfxItemSet& rAttr,
+    SvxDistributeDialog(weld::Window* pParent, const SfxItemSet& rAttr,
         SvxDistributeHorizontal eHor,
         SvxDistributeVertical eVer);
     virtual ~SvxDistributeDialog() override;
-    virtual void dispose() override;
 
     SvxDistributeHorizontal GetDistributeHor() const { return mpPage->GetDistributeHor(); }
     SvxDistributeVertical GetDistributeVer() const { return mpPage->GetDistributeVer(); }

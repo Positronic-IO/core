@@ -24,7 +24,6 @@
 #include "datasource.hxx"
 #include <stringconstants.hxx>
 #include <ModelImpl.hxx>
-#include <userinformation.hxx>
 #include <sdbcoretools.hxx>
 
 #include <com/sun/star/beans/PropertyBag.hpp>
@@ -41,13 +40,11 @@
 #include <com/sun/star/script/DocumentDialogLibraryContainer.hpp>
 #include <com/sun/star/util/NumberFormatsSupplier.hpp>
 
-#include <comphelper/interaction.hxx>
-#include <comphelper/seqstream.hxx>
-#include <comphelper/sequence.hxx>
 #include <connectivity/dbexception.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/typeprovider.hxx>
+#include <comphelper/types.hxx>
 #include <rtl/digest.h>
 #include <sfx2/signaturestate.hxx>
 #include <tools/debug.hxx>
@@ -57,6 +54,7 @@
 #include <vcl/errcode.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/sharedunocomponent.hxx>
+#include <unotools/configmgr.hxx>
 
 #include <algorithm>
 
@@ -692,9 +690,8 @@ const Reference< XNumberFormatsSupplier > & ODatabaseModelImpl::getNumberFormats
 {
     if (!m_xNumberFormatsSupplier.is())
     {
-        // the arguments : the locale of the current user
-        UserInformation aUserInfo;
-        Locale aLocale = aUserInfo.getUserLanguage();
+        // the arguments : the work locale of the current user
+        Locale aLocale( LanguageTag::convertToLocale( utl::ConfigManager::getWorkLocale(), false));
 
         m_xNumberFormatsSupplier.set( NumberFormatsSupplier::createWithLocale( m_aContext, aLocale ) );
     }

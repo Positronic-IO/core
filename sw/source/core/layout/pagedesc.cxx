@@ -23,6 +23,7 @@
 #include <editeng/brushitem.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/frmdiritem.hxx>
+#include <sal/log.hxx>
 #include <fmtclds.hxx>
 #include <fmtfsize.hxx>
 #include <pagefrm.hxx>
@@ -60,6 +61,7 @@ SwPageDesc::SwPageDesc(const OUString& rName, SwFrameFormat *pFormat, SwDoc *con
 
 SwPageDesc::SwPageDesc( const SwPageDesc &rCpy )
     : SwModify(nullptr)
+    , BroadcasterMixin()
     , m_StyleName( rCpy.GetName() )
     , m_NumType( rCpy.GetNumType() )
     , m_Master( rCpy.GetMaster() )
@@ -78,7 +80,7 @@ SwPageDesc::SwPageDesc( const SwPageDesc &rCpy )
     , m_IsFootnoteInfo( rCpy.GetFootnoteInfo() )
     , m_pdList( nullptr )
 {
-    if(rCpy.m_pTextFormatColl && const_cast<sw::WriterMultiListener*>(&rCpy.m_aDepends)->IsListeningTo(rCpy.m_pTextFormatColl))
+    if (rCpy.m_pTextFormatColl && rCpy.m_aDepends.IsListeningTo(rCpy.m_pTextFormatColl))
     {
         m_pTextFormatColl = rCpy.m_pTextFormatColl;
         m_aDepends.StartListening(const_cast<SwTextFormatColl*>(m_pTextFormatColl));
@@ -94,7 +96,7 @@ SwPageDesc & SwPageDesc::operator = (const SwPageDesc & rSrc)
     m_FirstMaster = rSrc.m_FirstMaster;
     m_FirstLeft = rSrc.m_FirstLeft;
     m_aDepends.EndListeningAll();
-    if(rSrc.m_pTextFormatColl && const_cast<sw::WriterMultiListener*>(&rSrc.m_aDepends)->IsListeningTo(rSrc.m_pTextFormatColl))
+    if (rSrc.m_pTextFormatColl && rSrc.m_aDepends.IsListeningTo(rSrc.m_pTextFormatColl))
     {
         m_pTextFormatColl = rSrc.m_pTextFormatColl;
         m_aDepends.StartListening(const_cast<SwTextFormatColl*>(m_pTextFormatColl));
@@ -196,7 +198,7 @@ void SwPageDesc::SetRegisterFormatColl(const SwTextFormatColl* pFormat)
 /// retrieve the style for the grid alignment
 const SwTextFormatColl* SwPageDesc::GetRegisterFormatColl() const
 {
-    if(!const_cast<sw::WriterMultiListener*>(&m_aDepends)->IsListeningTo(m_pTextFormatColl))
+    if (!m_aDepends.IsListeningTo(m_pTextFormatColl))
         m_pTextFormatColl = nullptr;
     return m_pTextFormatColl;
 }
@@ -297,7 +299,8 @@ static const SwFrame* lcl_GetFrameOfNode( const SwNode& rNd )
         pMod = nullptr;
 
     Point aNullPt;
-    return pMod ? ::GetFrameOfModify( nullptr, *pMod, nFrameType, &aNullPt )
+    std::pair<Point, bool> const tmp(aNullPt, false);
+    return pMod ? ::GetFrameOfModify(nullptr, *pMod, nFrameType, nullptr, &tmp)
                 : nullptr;
 }
 

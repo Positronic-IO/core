@@ -25,6 +25,7 @@
 #include "headless/svpdummies.hxx"
 #include "unx/gendata.hxx"
 #include "quartz/utils.h"
+#include <o3tl/make_unique.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/settings.hxx>
 
@@ -58,8 +59,8 @@ IosSalInstance *IosSalInstance::getInstance()
     return static_cast<IosSalInstance *>(pData->m_pInstance);
 }
 
-IosSalInstance::IosSalInstance( SalYieldMutex *pMutex )
-    : SvpSalInstance( pMutex )
+IosSalInstance::IosSalInstance( std::unique_ptr<SalYieldMutex> pMutex )
+    : SvpSalInstance( std::move(pMutex) )
 {
 }
 
@@ -137,11 +138,6 @@ SalFrame *IosSalInstance::CreateFrame( SalFrame* pParent, SalFrameStyleFlags nSt
     return new IosSalFrame( this, pParent, nStyle );
 }
 
-// All the interesting stuff is slaved from the IosSalInstance
-void InitSalData()   {}
-void DeInitSalData() {}
-void InitSalMain()   {}
-
 void SalAbort( const OUString& rErrorText, bool bDumpCore )
 {
     (void) bDumpCore;
@@ -170,7 +166,7 @@ SalData::~SalData()
 // This is our main entry point:
 SalInstance *CreateSalInstance()
 {
-    IosSalInstance* pInstance = new IosSalInstance( new SvpSalYieldMutex() );
+    IosSalInstance* pInstance = new IosSalInstance( o3tl::make_unique<SvpSalYieldMutex>() );
     new IosSalData( pInstance );
     pInstance->AcquireYieldMutex();
     return pInstance;

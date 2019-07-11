@@ -20,18 +20,21 @@
 #include <xlstyle.hxx>
 #include <com/sun/star/awt/FontFamily.hpp>
 #include <com/sun/star/awt/FontSlant.hpp>
+#include <com/sun/star/awt/FontStrikeout.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/font.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <rtl/tencinfo.h>
 #include <svtools/colorcfg.hxx>
 #include <vcl/unohelp.hxx>
 #include <editeng/svxfont.hxx>
 #include <global.hxx>
 #include <xlroot.hxx>
+#include <xltools.hxx>
 // Color data =================================================================
 
 /** Standard EGA colors, bright. */
@@ -659,8 +662,8 @@ void XclFontPropSetHelper::ReadFontProperties( XclFontData& rFontData,
         case EXC_FONTPROPSET_CONTROL:
         {
             OUString aApiFontName;
-            float fApiHeight, fApiWeight;
-            sal_Int16 nApiFamily, nApiCharSet, nApiPosture, nApiUnderl, nApiStrikeout;
+            float fApiHeight(0.0), fApiWeight(0.0);
+            sal_Int16 nApiFamily(0), nApiCharSet(0), nApiPosture(0), nApiUnderl(0), nApiStrikeout(0);
 
             // read font properties
             maHlpControl.ReadFromPropertySet( rPropSet );
@@ -769,8 +772,8 @@ struct XclBuiltInFormat
 {
     sal_uInt16          mnXclNumFmt;    /// Excel built-in index.
     const sal_Char*     mpFormat;       /// Format string, may be 0 (meOffset used then).
-    NfIndexTableOffset  meOffset;       /// SvNumberFormatter format index, if mpFormat==0.
-    sal_uInt16          mnXclReuseFmt;  /// Use this Excel format, if meOffset==PRV_NF_INDEX_REUSE.
+    NfIndexTableOffset const  meOffset;       /// SvNumberFormatter format index, if mpFormat==0.
+    sal_uInt16 const          mnXclReuseFmt;  /// Use this Excel format, if meOffset==PRV_NF_INDEX_REUSE.
 };
 
 /** Defines a literal Excel built-in number format. */
@@ -1397,7 +1400,7 @@ static const XclBuiltInFormat spBuiltInFormats_THAI[] =
 struct XclBuiltInFormatTable
 {
     LanguageType        meLanguage;         /// The language of this table.
-    LanguageType        meParentLang;       /// The language of the parent table.
+    LanguageType const        meParentLang;       /// The language of the parent table.
     const XclBuiltInFormat* mpFormats;      /// The number format table.
 };
 

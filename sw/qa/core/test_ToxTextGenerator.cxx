@@ -22,10 +22,17 @@
 #include <cppunit/extensions/HelperMacros.h>
 #include <cppunit/plugin/TestPlugIn.h>
 
+#include <swdll.hxx>
+
 using namespace sw;
 
 class ToxTextGeneratorTest : public CppUnit::TestFixture {
 public:
+    virtual void setUp() override
+    {
+        SwGlobals::ensure();
+    }
+
     void EmptyStringIsReturnedForPageNumberPlaceholderOfZeroItems();
     void OneAtSignIsReturnedForPageNumberPlaceholderOfOneItem();
     void TwoAtSignsAreReturnedForPageNumberPlaceholderOfOneItem();
@@ -50,7 +57,7 @@ struct MockedSortTab : public SwTOXSortTabBase {
     MockedSortTab()
     : SwTOXSortTabBase(TOX_SORT_INDEX,nullptr,nullptr,nullptr) {}
 
-    virtual TextAndReading GetText_Impl() const override {
+    virtual TextAndReading GetText_Impl(SwRootFrame const*) const override {
         return TextAndReading();
     }
     virtual sal_uInt16  GetLevel() const override {
@@ -89,7 +96,7 @@ ToxTextGeneratorTest::EmptyStringIsReturnedAsNumStringIfNoTextMarkIsSet()
     sortTab.pTextMark = nullptr;
 
     OUString const expected("");
-    OUString actual = ToxTextGenerator::GetNumStringOfFirstNode(sortTab, false, 0);
+    OUString actual = ToxTextGenerator::GetNumStringOfFirstNode(sortTab, false, 0, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 }
 
@@ -100,7 +107,7 @@ ToxTextGeneratorTest::EmptyStringIsReturnedAsNumStringIfToxSourcesIsEmpty()
     sortTab.pTextMark = reinterpret_cast<SwTextTOXMark*>(1);
 
     OUString const expected("");
-    OUString actual = ToxTextGenerator::GetNumStringOfFirstNode(sortTab, false, 0);
+    OUString actual = ToxTextGenerator::GetNumStringOfFirstNode(sortTab, false, 0, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 }
 
@@ -141,22 +148,22 @@ ToxTextGeneratorTest::ChapterNumberWithoutTextIsGeneratedForNoprepstTitle()
     SwForm form;
     ToxTextGeneratorWithMockedChapterField ttg(form);
     // set all values to make sure they are not used
-    ttg.GetChapterField().sNumber = "1";
-    ttg.GetChapterField().sPre = "PRE";
-    ttg.GetChapterField().sPost = "POST";
-    ttg.GetChapterField().sTitle = "TITLE";
+    ttg.GetChapterField().m_State.sNumber = "1";
+    ttg.GetChapterField().m_State.sPre = "PRE";
+    ttg.GetChapterField().m_State.sPost = "POST";
+    ttg.GetChapterField().m_State.sTitle = "TITLE";
 
     SwFormToken token(TOKEN_CHAPTER_INFO);
     token.nChapterFormat = CF_NUM_NOPREPST_TITLE;
 
     OUString expected("1");
-    OUString actual = ttg.GenerateTextForChapterToken(token, nullptr, nullptr);
+    OUString actual = ttg.GenerateTextForChapterToken(token, nullptr, nullptr, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 
     // we cannot mock the pre- and suffix generation in the chapterfield. We just test that sNumber and
     // sTitle are used and hope that the pre- and suffix addition works.
     token.nChapterFormat = CF_NUMBER;
-    expected = ttg.GenerateTextForChapterToken(token, nullptr, nullptr);
+    expected = ttg.GenerateTextForChapterToken(token, nullptr, nullptr, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 }
 
@@ -167,22 +174,22 @@ ToxTextGeneratorTest::ChapterNumberWithTitleIsGeneratedForNumberNoPrepst()
     SwForm form;
     ToxTextGeneratorWithMockedChapterField ttg(form);
     // set all values to make sure they are not used
-    ttg.GetChapterField().sNumber = "5";
-    ttg.GetChapterField().sPre = "PRE";
-    ttg.GetChapterField().sPost = "POST";
-    ttg.GetChapterField().sTitle = "myTitle";
+    ttg.GetChapterField().m_State.sNumber = "5";
+    ttg.GetChapterField().m_State.sPre = "PRE";
+    ttg.GetChapterField().m_State.sPost = "POST";
+    ttg.GetChapterField().m_State.sTitle = "myTitle";
 
     SwFormToken token(TOKEN_CHAPTER_INFO);
     token.nChapterFormat = CF_NUMBER_NOPREPST;
 
     OUString expected("5 myTitle");
-    OUString actual = ttg.GenerateTextForChapterToken(token, nullptr, nullptr);
+    OUString actual = ttg.GenerateTextForChapterToken(token, nullptr, nullptr, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 
     // we cannot mock the pre- and suffix generation in the chapterfield. We just test that sNumber and
     // sTitle are used and hope that the pre- and suffix addition works.
     token.nChapterFormat = CF_NUM_TITLE;
-    expected = ttg.GenerateTextForChapterToken(token, nullptr, nullptr);
+    expected = ttg.GenerateTextForChapterToken(token, nullptr, nullptr, nullptr);
     CPPUNIT_ASSERT_EQUAL(expected, actual);
 }
 

@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_LOTFORM_HXX
 
 #include "formel.hxx"
-#include <rtl/ustring.hxx>
 
 enum FUNC_TYPE
 {
@@ -89,7 +88,7 @@ private:
 public:
     LotusToSc(LotusContext &rContext, SvStream& aStr, svl::SharedStringPool& rSPool, rtl_TextEncoding eSrc, bool b);
 
-    virtual void        Convert( const ScTokenArray*& rpErg, sal_Int32& nRest ) override;
+    virtual void        Convert( std::unique_ptr<ScTokenArray>& rpErg, sal_Int32& nRest ) override;
 
     void                Reset( const ScAddress& rEingPos );
     inline void         SetWK3();

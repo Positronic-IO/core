@@ -21,6 +21,7 @@
 
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/ContentInfo.hpp>
 #include <com/sun/star/ucb/ContentInfoAttribute.hpp>
 #include <com/sun/star/ucb/XContent.hpp>
@@ -46,15 +47,13 @@ namespace svt
 
 
     SmartContent::SmartContent()
-        :m_pContent( nullptr )
-        ,m_eState( NOT_BOUND )
+        :m_eState( NOT_BOUND )
     {
     }
 
 
     SmartContent::SmartContent( const OUString& _rInitialURL )
-        :m_pContent( nullptr )
-        ,m_eState( NOT_BOUND )
+        :m_eState( NOT_BOUND )
     {
         bindTo( _rInitialURL );
     }

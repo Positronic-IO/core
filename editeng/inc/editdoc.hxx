@@ -33,7 +33,6 @@
 #include <tools/lineend.hxx>
 #include <o3tl/typed_flags_set.hxx>
 
-#include <deque>
 #include <memory>
 #include <vector>
 
@@ -90,7 +89,7 @@ struct ScriptTypePosInfo
     }
 };
 
-typedef std::deque< ScriptTypePosInfo > ScriptTypePosInfos;
+typedef std::vector<ScriptTypePosInfo> ScriptTypePosInfos;
 
 struct WritingDirectionInfo
 {
@@ -107,7 +106,7 @@ struct WritingDirectionInfo
 };
 
 
-typedef std::deque< WritingDirectionInfo > WritingDirectionInfos;
+typedef std::vector<WritingDirectionInfo> WritingDirectionInfos;
 
 class ContentAttribsInfo
 {
@@ -230,7 +229,7 @@ public:
     void Remove(const EditCharAttrib* p);
     void Remove(sal_Int32 nPos);
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     static void DbgCheckAttribs(CharAttribList const& rAttribs);
 #endif
 };
@@ -429,8 +428,6 @@ public:
 
     sal_Unicode    GetExtraValue() const       { return nExtraValue; }
     void           SetExtraValue( sal_Unicode n )  { nExtraValue = n; }
-
-    bool           HasValidSize() const        { return aOutSz.Width() != -1; }
 
     ExtraPortionInfo*   GetExtraInfos() const { return xExtraInfos.get(); }
     void                SetExtraInfos( ExtraPortionInfo* p ) { xExtraInfos.reset(p); }
@@ -665,13 +662,13 @@ public:
     ParaPortion* operator[](sal_Int32 nPos);
     const ParaPortion* operator[](sal_Int32 nPos) const;
 
-    ParaPortion* Release(sal_Int32 nPos);
+    std::unique_ptr<ParaPortion> Release(sal_Int32 nPos);
     void Remove(sal_Int32 nPos);
-    void Insert(sal_Int32 nPos, ParaPortion* p);
-    void Append(ParaPortion* p);
+    void Insert(sal_Int32 nPos, std::unique_ptr<ParaPortion> p);
+    void Append(std::unique_ptr<ParaPortion> p);
     sal_Int32 Count() const;
 
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     // temporary:
     static void DbgCheck(ParaPortionList const&, EditDoc const& rDoc);
 #endif
@@ -829,7 +826,9 @@ inline EditCharAttrib* GetAttrib(CharAttribList::AttribsType& rAttribs, sal_Int3
     return (nAttr < static_cast<sal_Int32>(rAttribs.size())) ? rAttribs[nAttr].get() : nullptr;
 }
 
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
 void CheckOrderedList(const CharAttribList::AttribsType& rAttribs);
+#endif
 
 class EditEngineItemPool : public SfxItemPool
 {

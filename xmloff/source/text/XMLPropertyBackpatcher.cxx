@@ -67,11 +67,9 @@ void XMLPropertyBackpatcher<A>::ResolveId(
         //    (and preserve Property, if appropriate)
         Any aAny;
         aAny <<= aValue;
-        for(BackpatchListType::iterator aIter = pList->begin();
-            aIter != pList->end();
-            ++aIter)
+        for(auto& rBackpatch : *pList)
         {
-            (*aIter)->setPropertyValue(sPropertyName, aAny);
+            rBackpatch->setPropertyValue(sPropertyName, aAny);
         }
 
         // c) delete list
@@ -160,7 +158,7 @@ static OUString GetSequenceNumber()
 
 XMLPropertyBackpatcher<sal_Int16>& XMLTextImportHelper::GetFootnoteBP()
 {
-    if (!m_xBackpatcherImpl->m_pFootnoteBackpatcher.get())
+    if (!m_xBackpatcherImpl->m_pFootnoteBackpatcher)
     {
         m_xBackpatcherImpl->m_pFootnoteBackpatcher.reset(
             new XMLPropertyBackpatcher<sal_Int16>(GetSequenceNumber()));
@@ -170,7 +168,7 @@ XMLPropertyBackpatcher<sal_Int16>& XMLTextImportHelper::GetFootnoteBP()
 
 XMLPropertyBackpatcher<sal_Int16>& XMLTextImportHelper::GetSequenceIdBP()
 {
-    if (!m_xBackpatcherImpl->m_pSequenceIdBackpatcher.get())
+    if (!m_xBackpatcherImpl->m_pSequenceIdBackpatcher)
     {
         m_xBackpatcherImpl->m_pSequenceIdBackpatcher.reset(
             new XMLPropertyBackpatcher<sal_Int16>(GetSequenceNumber()));
@@ -180,7 +178,7 @@ XMLPropertyBackpatcher<sal_Int16>& XMLTextImportHelper::GetSequenceIdBP()
 
 XMLPropertyBackpatcher<OUString>& XMLTextImportHelper::GetSequenceNameBP()
 {
-    if (!m_xBackpatcherImpl->m_pSequenceNameBackpatcher.get())
+    if (!m_xBackpatcherImpl->m_pSequenceNameBackpatcher)
     {
         m_xBackpatcherImpl->m_pSequenceNameBackpatcher.reset(
             new XMLPropertyBackpatcher<OUString>("SourceName"));

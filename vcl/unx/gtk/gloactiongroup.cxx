@@ -15,6 +15,8 @@
 #include <unx/gtk/gtkinst.hxx>
 #include <unx/gtk/gtkframe.hxx>
 
+#include <sal/log.hxx>
+
 /*
  * GLOAction
  */
@@ -47,7 +49,7 @@ G_DEFINE_TYPE (GLOAction, g_lo_action, G_TYPE_OBJECT);
 #pragma GCC diagnostic pop
 #endif
 
-GLOAction*
+static GLOAction*
 g_lo_action_new()
 {
     return G_LO_ACTION (g_object_new (G_TYPE_LO_ACTION, nullptr));
@@ -325,8 +327,14 @@ g_lo_action_group_class_init (GLOActionGroupClass *klass)
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
     object_class->finalize = g_lo_action_group_finalize;
-
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
     g_type_class_add_private (klass, sizeof (GLOActionGroupPrivate));
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 }
 
 static void

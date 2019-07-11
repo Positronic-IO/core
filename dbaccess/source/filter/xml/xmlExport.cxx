@@ -33,6 +33,7 @@
 #include <comphelper/types.hxx>
 #include <stringconstants.hxx>
 #include <strings.hxx>
+#include <sal/log.hxx>
 #include "xmlEnums.hxx"
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -133,7 +134,7 @@ namespace dbaxml
         return aSupported;
     }
 
-    OUString lcl_implGetPropertyXMLType(const Type& _rType)
+    static OUString lcl_implGetPropertyXMLType(const Type& _rType)
     {
         // possible types we can write (either because we recognize them directly or because we convert _rValue
         // into one of these types)
@@ -287,7 +288,7 @@ void ODBExport::exportDataSource()
 
         ::connectivity::DriversConfig aDriverConfig(getComponentContext());
         const OUString sURL = ::comphelper::getString(xProp->getPropertyValue(PROPERTY_URL));
-        ::comphelper::NamedValueCollection aDriverSupportedProperties( aDriverConfig.getProperties( sURL ) );
+        const ::comphelper::NamedValueCollection& aDriverSupportedProperties( aDriverConfig.getProperties( sURL ) );
 
         static OUString s_sTrue(::xmloff::token::GetXMLToken( XML_TRUE ));
         static OUString s_sFalse(::xmloff::token::GetXMLToken( XML_FALSE ));
@@ -748,7 +749,7 @@ void ODBExport::exportDelimiter()
 
 void ODBExport::exportAutoIncrement()
 {
-    if ( m_aAutoIncrement.get() )
+    if (m_aAutoIncrement)
     {
         AddAttribute(XML_NAMESPACE_DB, XML_ADDITIONAL_COLUMN_STATEMENT,m_aAutoIncrement->second);
         AddAttribute(XML_NAMESPACE_DB, XML_ROW_RETRIEVING_STATEMENT,m_aAutoIncrement->first);

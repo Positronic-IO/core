@@ -26,12 +26,12 @@
 #include <com/sun/star/ui/dialogs/XExecutableDialog.hpp>
 #include <com/sun/star/awt/XWindow.hpp>
 #include <stringconstants.hxx>
-#include <comphelper/types.hxx>
 #include <dsitems.hxx>
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/itemset.hxx>
+#include <sal/log.hxx>
 
 namespace dbaui
 {
@@ -42,7 +42,7 @@ using namespace ::com::sun::star::sdbcx;
 using namespace ::com::sun::star::ui::dialogs;
 using namespace ::comphelper;
 
-ODatasourceSelectDialog::ODatasourceSelectDialog(vcl::Window* _pParent, const StringBag& _rDatasources)
+ODatasourceSelectDialog::ODatasourceSelectDialog(vcl::Window* _pParent, const std::set<OUString>& _rDatasources)
     : ModalDialog(_pParent, "ChooseDataSourceDialog",
         "dbaccess/ui/choosedatasourcedialog.ui")
 {
@@ -56,7 +56,7 @@ ODatasourceSelectDialog::ODatasourceSelectDialog(vcl::Window* _pParent, const St
     get(m_pManageDatasources, "organize");
     m_pManageDatasources->Show();
 
-    // allow ODBC datasource managenment
+    // allow ODBC datasource management
     m_pManageDatasources->Show();
     m_pManageDatasources->Enable();
     m_pManageDatasources->SetClickHdl(LINK(this,ODatasourceSelectDialog,ManageClickHdl));
@@ -121,7 +121,7 @@ IMPL_LINK_NOARG(ODatasourceSelectDialog, ManageClickHdl, Button*, void)
 
 IMPL_LINK_NOARG( ODatasourceSelectDialog, ManageProcessFinished, void*, void )
 {
-    StringBag aOdbcDatasources;
+    std::set<OUString> aOdbcDatasources;
     OOdbcEnumeration aEnumeration;
     aEnumeration.getDatasourceNames( aOdbcDatasources );
     fillListBox( aOdbcDatasources );
@@ -133,7 +133,7 @@ IMPL_LINK_NOARG( ODatasourceSelectDialog, ManageProcessFinished, void*, void )
 }
 
 #endif
-void ODatasourceSelectDialog::fillListBox(const StringBag& _rDatasources)
+void ODatasourceSelectDialog::fillListBox(const std::set<OUString>& _rDatasources)
 {
     OUString sSelected;
     if (m_pDatasource->GetEntryCount())

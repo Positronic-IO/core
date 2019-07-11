@@ -19,6 +19,7 @@
 
 #include "xmlexpit.hxx"
 
+#include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
 #include <sax/tools/converter.hxx>
 #include <svl/itempool.hxx>
@@ -53,6 +54,7 @@
 #include "xmlithlp.hxx"
 
 #include <fmtrowsplt.hxx>
+#include <osl/diagnose.h>
 
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star;

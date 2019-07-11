@@ -19,7 +19,6 @@
 
 #include <DesignView.hxx>
 #include <ReportController.hxx>
-#include <comphelper/types.hxx>
 #include <svtools/acceleratorexecute.hxx>
 #include <unotools/syslocale.hxx>
 #include <unotools/viewoptions.hxx>
@@ -109,7 +108,7 @@ ODesignView::ODesignView(   vcl::Window* pParent,
     m_aSplitWin->InsertItem( COLSET_ID,100,SPLITWINDOW_APPEND, 0, SplitWindowItemFlags::PercentSize | SplitWindowItemFlags::ColSet );
     m_aSplitWin->InsertItem( REPORT_ID, m_aScrollWindow.get(), 100, SPLITWINDOW_APPEND, COLSET_ID, SplitWindowItemFlags::PercentSize);
 
-    // Splitter einrichten
+    // set up splitter
     m_aSplitWin->SetSplitHdl(LINK(this, ODesignView,SplitHdl));
     m_aSplitWin->SetAlign(WindowAlign::Left);
     m_aSplitWin->Show();
@@ -232,7 +231,7 @@ void ODesignView::resizeDocumentView(tools::Rectangle& _rPlayground)
         if ( m_aSplitWin->IsItemValid(TASKPANE_ID) )
         {
             // normalize the split pos
-            const long nSplitterWidth = GetSettings().GetStyleSettings().GetSplitSize();
+            const long nSplitterWidth = StyleSettings::GetSplitSize();
             Point aTaskPanePos(nSplitPos + nSplitterWidth, _rPlayground.Top());
             if (m_pTaskPane && m_pTaskPane->IsVisible() && m_pPropWin)
             {
@@ -341,8 +340,7 @@ void ODesignView::UpdatePropertyBrowserDelayed(OSectionView& _rView)
         if ( m_pCurrentView )
             m_aScrollWindow->setMarked(m_pCurrentView,false);
         m_pCurrentView = &_rView;
-        if ( m_pCurrentView )
-            m_aScrollWindow->setMarked(m_pCurrentView,true);
+        m_aScrollWindow->setMarked(m_pCurrentView, true);
         m_xReportComponent.clear();
         DlgEdHint aHint( RPTUI_HINT_SELECTIONCHANGED );
         Broadcast( aHint );
@@ -419,21 +417,21 @@ void ODesignView::unmarkAllObjects()
     m_aScrollWindow->unmarkAllObjects();
 }
 
-void ODesignView::togglePropertyBrowser(bool _bToogleOn)
+void ODesignView::togglePropertyBrowser(bool _bToggleOn)
 {
-    if ( !m_pPropWin && _bToogleOn )
+    if ( !m_pPropWin && _bToggleOn )
     {
         m_pPropWin = VclPtr<PropBrw>::Create(getController().getORB(), m_pTaskPane,this);
         m_pPropWin->Invalidate();
         static_cast<OTaskWindow*>(m_pTaskPane.get())->setPropertyBrowser(m_pPropWin);
         notifySystemWindow(this,m_pPropWin,::comphelper::mem_fun(&TaskPaneList::AddWindow));
     }
-    if ( m_pPropWin && _bToogleOn != m_pPropWin->IsVisible() )
+    if ( m_pPropWin && _bToggleOn != m_pPropWin->IsVisible() )
     {
         if ( !m_pCurrentView && !m_xReportComponent.is() )
             m_xReportComponent = getController().getReportDefinition();
 
-        const bool bWillBeVisible = _bToogleOn;
+        const bool bWillBeVisible = _bToggleOn;
         m_pPropWin->Show(bWillBeVisible);
         m_pTaskPane->Show(bWillBeVisible);
         m_pTaskPane->Invalidate();

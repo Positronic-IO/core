@@ -19,6 +19,7 @@
 
 #include "spinbutton.hxx"
 #include "scrollbar.hxx"
+#include <comphelper/property.hxx>
 #include <comphelper/streamsection.hxx>
 #include <comphelper/basicio.hxx>
 
@@ -178,7 +179,7 @@ namespace frm
 
     Any OSpinButtonModel::getDefaultForReset() const
     {
-        return makeAny( static_cast<sal_Int32>(m_nDefaultSpinValue) );
+        return makeAny( m_nDefaultSpinValue );
     }
 
 

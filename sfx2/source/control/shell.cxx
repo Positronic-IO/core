@@ -75,8 +75,6 @@ struct SfxShell_Impl: public SfxBroadcaster
         , pRepeatTarget(nullptr)
         , bActive(false)
         , nDisableFlags(SfxDisableFlags::NONE)
-        , pExecuter(nullptr)
-        , pUpdater(nullptr)
     {
     }
 
@@ -201,12 +199,12 @@ SfxInterface* SfxShell::GetInterface() const
     return GetStaticInterface();
 }
 
-::svl::IUndoManager* SfxShell::GetUndoManager()
+SfxUndoManager* SfxShell::GetUndoManager()
 {
     return pUndoMgr;
 }
 
-void SfxShell::SetUndoManager( ::svl::IUndoManager *pNewUndoMgr )
+void SfxShell::SetUndoManager( SfxUndoManager *pNewUndoMgr )
 {
     OSL_ENSURE( ( pUndoMgr == nullptr ) || ( pNewUndoMgr == nullptr ) || ( pUndoMgr == pNewUndoMgr ),
         "SfxShell::SetUndoManager: exchanging one non-NULL manager with another non-NULL manager? Suspicious!" );
@@ -403,7 +401,7 @@ bool SfxShell::IsConditionalFastCall( const SfxRequest &rReq )
 }
 
 
-void ShellCall_Impl( void* pObj, void* pArg )
+static void ShellCall_Impl( void* pObj, void* pArg )
 {
     static_cast<SfxShell*>(pObj)->ExecuteSlot( *static_cast<SfxRequest*>(pArg) );
 }
@@ -491,7 +489,7 @@ const SfxPoolItem* SfxShell::GetSlotState
         eState = SfxItemState::UNKNOWN;
 
     // Evaluate Item and item status and possibly maintain them in pStateSet
-    SfxPoolItem *pRetItem = nullptr;
+    std::unique_ptr<SfxPoolItem> pRetItem;
     if ( eState <= SfxItemState::DISABLED )
     {
         if ( pStateSet )
@@ -502,21 +500,22 @@ const SfxPoolItem* SfxShell::GetSlotState
     {
         if ( pStateSet )
             pStateSet->ClearItem(nSlotId);
-        pRetItem = new SfxVoidItem(0);
+        pRetItem.reset( new SfxVoidItem(0) );
     }
     else
     {
         if ( pStateSet && pStateSet->Put( *pItem ) )
             return &pStateSet->Get( pItem->Which() );
-        pRetItem = pItem->Clone();
+        pRetItem.reset(pItem->Clone());
     }
-    DeleteItemOnIdle(pRetItem);
+    auto pTemp = pRetItem.get();
+    DeleteItemOnIdle(std::move(pRetItem));
 
-    return pRetItem;
+    return pTemp;
 }
 
-SFX_EXEC_STUB(SfxShell, VerbExec)
-void SfxStubSfxShellVerbState(SfxShell *, SfxItemSet& rSet)
+static SFX_EXEC_STUB(SfxShell, VerbExec)
+static void SfxStubSfxShellVerbState(SfxShell *, SfxItemSet& rSet)
 {
     SfxShell::VerbState( rSet );
 }
@@ -546,7 +545,7 @@ void SfxShell::SetVerbs(const css::uno::Sequence < css::embed::VerbDescriptor >&
     for (sal_Int32 n=0; n<aVerbs.getLength(); n++)
     {
         sal_uInt16 nSlotId = SID_VERB_START + nr++;
-        DBG_ASSERT(nSlotId <= SID_VERB_END, "To many Verbs!");
+        DBG_ASSERT(nSlotId <= SID_VERB_END, "Too many Verbs!");
         if (nSlotId > SID_VERB_END)
             break;
 
@@ -580,14 +579,10 @@ void SfxShell::SetVerbs(const css::uno::Sequence < css::embed::VerbDescriptor >&
 
     pImpl->aVerbList = aVerbs;
 
-    if (pViewSh)
-    {
-        // The status of SID_OBJECT is collected in the controller directly on
-        // the Shell, it is thus enough to encourage a new status update
-        SfxBindings *pBindings = pViewSh->GetViewFrame()->GetDispatcher()->
-                GetBindings();
-        pBindings->Invalidate( SID_OBJECT, true, true );
-    }
+    // The status of SID_OBJECT is collected in the controller directly on
+    // the Shell, it is thus enough to encourage a new status update
+    SfxBindings* pBindings = pViewSh->GetViewFrame()->GetDispatcher()->GetBindings();
+    pBindings->Invalidate(SID_OBJECT, true, true);
 }
 
 const css::uno::Sequence < css::embed::VerbDescriptor >& SfxShell::GetVerbs() const
@@ -654,7 +649,7 @@ bool SfxShell::HasUIFeature(SfxShellFeature) const
     return false;
 }
 
-void DispatcherUpdate_Impl( void*, void* pArg )
+static void DispatcherUpdate_Impl( void*, void* pArg )
 {
     static_cast<SfxDispatcher*>(pArg)->Update_Impl( true );
     static_cast<SfxDispatcher*>(pArg)->GetBindings()->InvalidateAll(false);
@@ -695,7 +690,7 @@ void SfxShell::ApplyItemSet( sal_uInt16, const SfxItemSet& )
 {
 }
 
-void SfxShell::SetContextName (const ::rtl::OUString& rsContextName)
+void SfxShell::SetContextName (const OUString& rsContextName)
 {
     pImpl->maContextChangeBroadcaster.Initialize(rsContextName);
 }

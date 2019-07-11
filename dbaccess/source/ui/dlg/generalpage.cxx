@@ -41,7 +41,7 @@
 #include <comphelper/processfactory.hxx>
 #include <unotools/confignode.hxx>
 #include <osl/diagnose.h>
-#include <svtools/miscopt.hxx>
+#include <sal/log.hxx>
 
 namespace dbaui
 {
@@ -122,9 +122,13 @@ namespace dbaui
                         ++aTypeLoop
                     )
                 {
-                    const OUString sURLPrefix = aTypeLoop.getURLPrefix();
+                    const OUString& sURLPrefix = aTypeLoop.getURLPrefix();
                     if ( !sURLPrefix.isEmpty() )
                     {
+                        // skip mysql connection variations. It is handled in another window.
+                        if(sURLPrefix.startsWith("sdbc:mysql:") && !sURLPrefix.startsWith("sdbc:mysql:jdbc:"))
+                            continue;
+
                         OUString sDisplayName = aTypeLoop.getDisplayName();
                         if (   m_pDatasourceType->GetEntryPos( sDisplayName ) == LISTBOX_ENTRY_NOTFOUND
                             && approveDatasourceType( sURLPrefix, sDisplayName ) )
@@ -161,7 +165,7 @@ namespace dbaui
                         ++aTypeLoop
                     )
                 {
-                    const OUString sURLPrefix = aTypeLoop.getURLPrefix();
+                    const OUString& sURLPrefix = aTypeLoop.getURLPrefix();
                     if ( !sURLPrefix.isEmpty() )
                     {
                         OUString sDisplayName = aTypeLoop.getDisplayName();
@@ -350,14 +354,14 @@ namespace dbaui
         m_aEmbeddedURLPrefixes[nPos] = _sType;
     }
 
-    void OGeneralPage::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OGeneralPage::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back( new ODisableWrapper<FixedText>( m_pSpecialMessage ) );
+        _rControlList.emplace_back( new ODisableWrapper<FixedText>( m_pSpecialMessage ) );
     }
 
-    void OGeneralPage::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OGeneralPage::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back( new OSaveValueWrapper<ListBox>( m_pDatasourceType ) );
+        _rControlList.emplace_back( new OSaveValueWrapper<ListBox>( m_pDatasourceType ) );
     }
 
     void OGeneralPage::implSetCurrentType( const OUString& _eType )
@@ -399,6 +403,8 @@ namespace dbaui
     {
         // get the type from the entry data
         const sal_Int32 nSelected = _rBox.GetSelectedEntryPos();
+        if ( nSelected == LISTBOX_ENTRY_NOTFOUND)
+            return;
         if (static_cast<size_t>(nSelected) >= m_aURLPrefixes.size() )
         {
             SAL_WARN("dbaccess.ui.generalpage", "Got out-of-range value '" << nSelected <<  "' from the DatasourceType selection ListBox's GetSelectedEntryPos(): no corresponding URL prefix");
@@ -590,11 +596,7 @@ namespace dbaui
         // Sets the default selected database on startup.
         if (m_pRB_CreateDatabase->IsChecked() )
         {
-            SvtMiscOptions aMiscOptions;
-            if( aMiscOptions.IsExperimentalMode() )
-                return m_pCollection->getTypeDisplayName( "sdbc:embedded:firebird" );
-            else
-                return m_pCollection->getTypeDisplayName( "jdbc:" );
+            return m_pCollection->getTypeDisplayName( "sdbc:firebird:" );
         }
 
         return OGeneralPage::getDatasourceName( _rSet );
@@ -605,13 +607,9 @@ namespace dbaui
         switch ( eType )
         {
         case ::dbaccess::DST_MYSQL_JDBC:
-            _inout_rDisplayName = "MySQL";
-            break;
         case ::dbaccess::DST_MYSQL_ODBC:
         case ::dbaccess::DST_MYSQL_NATIVE:
-            // don't display those, the decision whether the user connects via JDBC/ODBC/C-OOo is made on another
-            // page
-            _inout_rDisplayName.clear();
+            _inout_rDisplayName = "MySQL";
             break;
         default:
             break;
@@ -703,7 +701,10 @@ namespace dbaui
         if ( aFileDlg.Execute() == ERRCODE_NONE )
         {
             OUString sPath = aFileDlg.GetPath();
-            if ( aFileDlg.GetCurrentFilter() != pFilter->GetUIName() || !pFilter->GetWildcard().Matches(sPath) )
+            // check for aFileDlg.GetCurrentFilter used to be here but current fpicker filter
+            // can be set to anything, see tdf#125267 how this breaks if other value
+            // than 'ODF Database' is selected. Let's therefore check only if wildcard matches
+            if ( !pFilter->GetWildcard().Matches(sPath) )
             {
                 OUString sMessage(DBA_RES(STR_ERR_USE_CONNECT_TO));
                 std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),

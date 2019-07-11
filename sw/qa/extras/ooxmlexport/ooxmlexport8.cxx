@@ -8,7 +8,6 @@
  */
 
 #include <memory>
-#include <config_test.h>
 
 #ifdef MACOSX
 #define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
@@ -19,6 +18,7 @@
 
 #include <swmodeltestbase.hxx>
 
+#include <IDocumentSettingAccess.hxx>
 #include <com/sun/star/awt/XBitmap.hpp>
 #include <com/sun/star/awt/FontUnderline.hpp>
 #include <com/sun/star/awt/FontWeight.hpp>
@@ -163,14 +163,14 @@ DECLARE_OOXMLEXPORT_TEST(testFdo74745, "fdo74745.docx")
 {
     uno::Reference<text::XTextRange > paragraph = getParagraph(3);
     uno::Reference<text::XTextRange> text(paragraph, uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(text->getString(),OUString("09/02/14"));
+    CPPUNIT_ASSERT_EQUAL(OUString("09/02/14"), text->getString());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testFdo81486, "fdo81486.docx")
 {
     uno::Reference<text::XTextRange > paragraph = getParagraph(1);
     uno::Reference<text::XTextRange> text(paragraph, uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(text->getString(),OUString("CustomTitle"));
+    CPPUNIT_ASSERT_EQUAL(OUString("CustomTitle"), text->getString());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testFdo79738, "fdo79738.docx")
@@ -559,6 +559,10 @@ DECLARE_OOXMLEXPORT_TEST(testN780853, "n780853.docx")
     uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextTablesSupplier->getTextTables(), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xIndexAccess->getCount());
+
+    //tdf#102619 - I would have expected this to be "Standard", but MSO 2013/2010/2003 all give FollowStyle==Date
+    uno::Reference< beans::XPropertySet > properties(getStyles("ParagraphStyles")->getByName("Date"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("Date"), getProperty<OUString>(properties, "FollowStyle"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN780843, "n780843.docx")
@@ -583,6 +587,8 @@ DECLARE_OOXMLEXPORT_TEST(testN780843b, "n780843b.docx")
     uno::Reference<beans::XPropertySet> xPageStyle(getStyles("PageStyles")->getByName(aStyleName), uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xFooterText = getProperty< uno::Reference<text::XTextRange> >(xPageStyle, "FooterText");
     CPPUNIT_ASSERT_EQUAL( OUString("hidden footer"), xFooterText->getString() );
+
+    CPPUNIT_ASSERT_EQUAL( 7, getParagraphs() );
 }
 
 DECLARE_OOXMLEXPORT_TEST(testShadow, "imgshadow.docx")
@@ -666,7 +672,7 @@ DECLARE_OOXMLEXPORT_TEST(testFineTableDash, "tableborder-finedash.docx")
     uno::Reference<beans::XPropertySet> xTableProperties(xTables->getByIndex(0), uno::UNO_QUERY);
     table::TableBorder2 aBorder;
     xTableProperties->getPropertyValue("TableBorder2") >>= aBorder;
-    CPPUNIT_ASSERT_EQUAL(aBorder.RightLine.LineStyle, table::BorderLineStyle::FINE_DASHED);
+    CPPUNIT_ASSERT_EQUAL(table::BorderLineStyle::FINE_DASHED, aBorder.RightLine.LineStyle);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN792778, "n792778.docx")
@@ -754,9 +760,14 @@ DECLARE_OOXMLEXPORT_TEST(testN779642, "n779642.docx")
     aFrame >>= xFrame;
     sal_Int16 nValue;
     xFrame->getPropertyValue("VertOrient") >>= nValue;
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong vertical orientation", nValue, text::VertOrientation::BOTTOM);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong vertical orientation", text::VertOrientation::BOTTOM, nValue);
     xFrame->getPropertyValue("VertOrientRelation") >>= nValue;
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong vertical orientation relation", nValue, text::RelOrientation::PAGE_PRINT_AREA);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong vertical orientation relation", text::RelOrientation::PAGE_PRINT_AREA, nValue);
+
+    // tdf#106572 - perhaps not the best test to hijack since this file
+    // produces an error in Word, but it nicely matches danger points,
+    // and has a different first footer, so nice visual confirmation.
+    CPPUNIT_ASSERT_EQUAL(OUString("First Page"), getProperty<OUString>(getParagraphOrTable(1), "PageDescName"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTbLrHeight, "tblr-height.docx")
@@ -788,6 +799,20 @@ DECLARE_OOXMLEXPORT_TEST(testFdo53985, "fdo53985.docx")
     uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables( ), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(5), xTables->getCount()); // Only 4 tables were imported.
+
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    CPPUNIT_ASSERT_MESSAGE("Compatibility: Protect form", pDoc->getIDocumentSettingAccess().get( DocumentSettingId::PROTECT_FORM ) );
+
+    uno::Reference<text::XTextSectionsSupplier> xTextSectionsSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xSections(xTextSectionsSupplier->getTextSections(), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), xSections->getCount()); // The first paragraph wasn't counted as a section.
+
+    uno::Reference<beans::XPropertySet> xSect(xSections->getByIndex(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("TextSection is protected", true, getProperty<bool>(xSect, "IsProtected"));
+    xSect.set(xSections->getByIndex(3), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Section3 is protected", false, getProperty<bool>(xSect, "IsProtected"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testFdo59638, "fdo59638.docx")
@@ -907,7 +932,7 @@ DECLARE_OOXMLEXPORT_TEST(testN592908_Frame, "n592908-frame.docx")
     uno::Reference<beans::XPropertySet> xPropertySet(getShape(1), uno::UNO_QUERY);
     text::WrapTextMode eValue;
     xPropertySet->getPropertyValue("Surround") >>= eValue;
-    CPPUNIT_ASSERT_EQUAL(eValue, text::WrapTextMode_PARALLEL);
+    CPPUNIT_ASSERT_EQUAL(text::WrapTextMode_PARALLEL, eValue);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN592908_Picture, "n592908-picture.docx")
@@ -915,7 +940,7 @@ DECLARE_OOXMLEXPORT_TEST(testN592908_Picture, "n592908-picture.docx")
     uno::Reference<beans::XPropertySet> xPropertySet(getShape(1), uno::UNO_QUERY);
     text::WrapTextMode eValue;
     xPropertySet->getPropertyValue("Surround") >>= eValue;
-    CPPUNIT_ASSERT_EQUAL(eValue, text::WrapTextMode_PARALLEL);
+    CPPUNIT_ASSERT_EQUAL(text::WrapTextMode_PARALLEL, eValue);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testN779630, "n779630.docx")
@@ -988,6 +1013,10 @@ DECLARE_OOXMLEXPORT_TEST(testN830205, "n830205.docx")
     getParagraph(1, "XXX");
 }
 
+DECLARE_OOXMLEXPORT_TEST(tdf123705, "tdf123705.docx")
+{
+}
+
 DECLARE_OOXMLEXPORT_TEST(testTableAutoColumnFixedSize, "table-auto-column-fixed-size.docx")
 {
     uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
@@ -1047,7 +1076,8 @@ DECLARE_OOXMLEXPORT_TEST(testFdo66474, "fdo66474.docx")
 DECLARE_OOXMLEXPORT_TEST(testGroupshapeRotation, "groupshape-rotation.docx")
 {
     // Rotation on groupshapes wasn't handled at all by the VML importer.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(315 * 100), getProperty<sal_Int32>(getShape(1), "RotateAngle"));
+    // Note: the shapes are still shifting on the page, so the rotation drifts after multiple round-trips.
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(31500.0, getProperty<double>(getShape(1), "RotateAngle"), 100);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testBnc780044Spacing, "bnc780044_spacing.docx")

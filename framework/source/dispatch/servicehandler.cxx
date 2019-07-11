@@ -23,8 +23,10 @@
 
 #include <com/sun/star/frame/DispatchResultState.hpp>
 #include <com/sun/star/task/XJobExecutor.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 namespace framework{
 

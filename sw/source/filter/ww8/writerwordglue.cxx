@@ -26,6 +26,7 @@
 #include <algorithm>
 
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 
 #include <unicode/ubidi.h>
 #include <tools/tenccvt.hxx>
@@ -53,7 +54,7 @@ using namespace css;
 
 namespace myImplHelpers
 {
-    SwTwips CalcHdFtDist(const SwFrameFormat& rFormat, sal_uInt16 nSpacing)
+    static SwTwips CalcHdFtDist(const SwFrameFormat& rFormat, sal_uInt16 nSpacing)
     {
         /*
         The normal case for reexporting word docs is to have dynamic spacing,
@@ -93,12 +94,12 @@ namespace myImplHelpers
         return nDist;
     }
 
-    SwTwips CalcHdDist(const SwFrameFormat& rFormat)
+    static SwTwips CalcHdDist(const SwFrameFormat& rFormat)
     {
         return CalcHdFtDist(rFormat, rFormat.GetULSpace().GetUpper());
     }
 
-    SwTwips CalcFtDist(const SwFrameFormat& rFormat)
+    static SwTwips CalcFtDist(const SwFrameFormat& rFormat)
     {
         return CalcHdFtDist(rFormat, rFormat.GetULSpace().GetLower());
     }
@@ -305,15 +306,14 @@ namespace myImplHelpers
                     (nI < SAL_MAX_INT32)
                   )
             {
-                aName = aBaseName;
-                aName += OUString::number(nI++);
+                aName = aBaseName + OUString::number(nI++);
             }
         }
 
         return pColl ? 0 : maHelper.MakeStyle(aName);
     }
 
-    OUString FindBestMSSubstituteFont(const OUString &rFont)
+    static OUString FindBestMSSubstituteFont(const OUString &rFont)
     {
         if (IsStarSymbol(rFont))
             return OUString("Arial Unicode MS");
@@ -324,7 +324,7 @@ namespace myImplHelpers
     class IfBeforeStart
     {
     private:
-        sal_Int32 mnStart;
+        sal_Int32 const mnStart;
     public:
         explicit IfBeforeStart(sal_Int32 nStart) : mnStart(nStart) {}
         bool operator()(const sw::util::CharRunEntry &rEntry) const
@@ -399,12 +399,11 @@ namespace sw
             else
             {
                 dyaHdrTop = dyaHdrBottom = 0;
-                dyaHdrBottom = 0;
             }
             const SvxULSpaceItem &rUL =
                 ItemGet<SvxULSpaceItem>(rPage, RES_UL_SPACE);
-            dyaHdrTop = dyaHdrTop + rUL.GetUpper();
-            dyaHdrBottom = dyaHdrBottom + rUL.GetLower();
+            dyaHdrTop += rUL.GetUpper();
+            dyaHdrBottom += rUL.GetLower();
 
             dyaTop = dyaHdrTop;
             dyaBottom = dyaHdrBottom;
@@ -433,8 +432,7 @@ namespace sw
         {
             // Check top only if both object have a header or if
             // both object don't have a header
-            if ( (  HasHeader() &&  rOther.HasHeader() ) ||
-                 ( !HasHeader() && !rOther.HasHeader() ) )
+            if (HasHeader() == rOther.HasHeader())
             {
                 if (dyaTop != rOther.dyaTop)
                     return false;
@@ -442,8 +440,7 @@ namespace sw
 
             // Check bottom only if both object have a footer or if
             // both object don't have a footer
-            if ( (  HasFooter() &&  rOther.HasFooter() ) ||
-                 ( !HasFooter() && !rOther.HasFooter() ) )
+            if (HasFooter() == rOther.HasFooter())
             {
                 if (dyaBottom != rOther.dyaBottom)
                     return false;
@@ -551,11 +548,9 @@ namespace sw
 
             typedef std::pair<int32_t, bool> DirEntry;
             typedef std::vector<DirEntry> DirChanges;
-            typedef DirChanges::const_iterator cDirIter;
 
             typedef std::pair<sal_Int32, sal_uInt16> ScriptEntry;
             typedef std::vector<ScriptEntry> ScriptChanges;
-            typedef ScriptChanges::const_iterator cScriptIter;
 
             DirChanges aDirChanges;
             ScriptChanges aScripts;
@@ -606,11 +601,11 @@ namespace sw
                 nScript = g_pBreakIt->GetBreakIter()->getScriptType(rText, nPos);
             }
 
-            cDirIter aBiDiEnd = aDirChanges.end();
-            cScriptIter aScriptEnd = aScripts.end();
+            auto aBiDiEnd = aDirChanges.cend();
+            auto aScriptEnd = aScripts.cend();
 
-            cDirIter aBiDiIter = aDirChanges.begin();
-            cScriptIter aScriptIter = aScripts.begin();
+            auto aBiDiIter = aDirChanges.cbegin();
+            auto aScriptIter = aScripts.cbegin();
 
             bool bCharIsRTL = bParaIsRTL;
 
@@ -681,7 +676,7 @@ namespace sw
         static bool
         CanEncode(OUString const& rString, rtl_TextEncoding const eEncoding)
         {
-            rtl::OString tmp;
+            OString tmp;
             return rString.convertToString(&tmp, eEncoding,
                     RTL_TEXTTOUNICODE_FLAGS_UNDEFINED_ERROR |
                     RTL_TEXTTOUNICODE_FLAGS_INVALID_ERROR);
@@ -758,7 +753,7 @@ namespace sw
         /** Find cFind in rParams if not embedded in " double quotes.
             Will NOT find '\\' or '"'.
          */
-        sal_Int32 findUnquoted( const OUString& rParams, sal_Unicode cFind, sal_Int32 nFromPos )
+        static sal_Int32 findUnquoted( const OUString& rParams, sal_Unicode cFind, sal_Int32 nFromPos )
         {
             const sal_Int32 nLen = rParams.getLength();
             if (nFromPos < 0 || nLen <= nFromPos)
@@ -791,7 +786,7 @@ namespace sw
         /** Find all rFind in rParams if not embedded in " double quotes and
             replace with rReplace. Will NOT find '\\' or '"'.
          */
-        bool replaceUnquoted( OUString& rParams, const OUString& rFind, const OUString& rReplace )
+        static bool replaceUnquoted( OUString& rParams, const OUString& rFind, const OUString& rReplace )
         {
             bool bReplaced = false;
             if (rFind.isEmpty())

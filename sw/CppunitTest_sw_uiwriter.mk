@@ -13,6 +13,7 @@ $(eval $(call gb_CppunitTest_CppunitTest,sw_uiwriter))
 
 $(eval $(call gb_CppunitTest_add_exception_objects,sw_uiwriter, \
     sw/qa/extras/uiwriter/uiwriter \
+    sw/qa/extras/uiwriter/uiwriter2 \
 ))
 
 # note: this links msword only for the reason to have a order dependency,
@@ -51,7 +52,11 @@ $(eval $(call gb_CppunitTest_set_include,sw_uiwriter,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sw_uiwriter))
+$(eval $(call gb_CppunitTest_use_api,sw_uiwriter,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sw_uiwriter))
 $(eval $(call gb_CppunitTest_use_vcl,sw_uiwriter))
@@ -67,9 +72,6 @@ $(eval $(call gb_CppunitTest_use_uiconfigs,sw_uiwriter, \
 $(call gb_CppunitTest_get_target,sw_uiwriter): \
     $(call gb_Library_get_target,textconv_dict)
 
-ifneq ($(filter MORE_FONTS,$(BUILD_TYPE)),)
-$(call gb_CppunitTest_get_target,sw_uiwriter): \
-    $(call gb_ExternalPackage_get_target,fonts_liberation)
-endif
+$(eval $(call gb_CppunitTest_use_more_fonts,sw_uiwriter))
 
 # vim: set noet sw=4 ts=4:

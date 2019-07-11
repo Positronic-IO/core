@@ -22,10 +22,12 @@
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
+#include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/container/XNameReplace.hpp>
+#include <com/sun/star/util/XChangesBatch.hpp>
 #include <rtl/instance.hxx>
 #include <sal/log.hxx>
 #include <osl/mutex.hxx>
@@ -33,6 +35,7 @@
 #include <i18nlangtag/mslangid.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <tools/debug.hxx>
+#include <unotools/configitem.hxx>
 #include <unotools/lingucfg.hxx>
 #include <unotools/linguprops.hxx>
 #include <sal/macros.h>
@@ -68,7 +71,7 @@ static bool lcl_SetLocale( LanguageType &rLanguage, const uno::Any &rVal )
     return bSucc;
 }
 
-static inline const OUString lcl_LanguageToCfgLocaleStr( LanguageType nLanguage )
+static const OUString lcl_LanguageToCfgLocaleStr( LanguageType nLanguage )
 {
     OUString aRes;
     if (LANGUAGE_SYSTEM != nLanguage)
@@ -212,8 +215,8 @@ static struct NamesToHdl
 {
     const char   *pFullPropName;      // full qualified name as used in configuration
     const char   *pPropName;          // property name only (atom) of above
-    sal_Int32   nHdl;               // numeric handle representing the property
-}aNamesToHdl[] =
+    sal_Int32 const   nHdl;               // numeric handle representing the property
+} const aNamesToHdl[] =
 {
 {/*  0 */    "General/DefaultLocale",                         UPN_DEFAULT_LOCALE,                    UPH_DEFAULT_LOCALE},
 {/*  1 */    "General/DictionaryList/ActiveDictionaries",     UPN_ACTIVE_DICTIONARIES,               UPH_ACTIVE_DICTIONARIES},
@@ -281,7 +284,7 @@ bool SvtLinguConfigItem::GetHdlByName(
     const OUString &rPropertyName,
     bool bFullPropName )
 {
-    NamesToHdl *pEntry = &aNamesToHdl[0];
+    NamesToHdl const *pEntry = &aNamesToHdl[0];
 
     if (bFullPropName)
     {
@@ -867,10 +870,9 @@ bool SvtLinguConfig::SetProperty( sal_Int32 nPropertyHandle, const uno::Any &rVa
     return GetConfigItem().SetProperty( nPropertyHandle, rValue );
 }
 
-bool SvtLinguConfig::GetOptions( SvtLinguOptions &rOptions ) const
+void SvtLinguConfig::GetOptions( SvtLinguOptions &rOptions ) const
 {
     rOptions = GetConfigItem().GetOptions();
-    return true;
 }
 
 bool SvtLinguConfig::IsReadOnly( const OUString &rPropertyName ) const

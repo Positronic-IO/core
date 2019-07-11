@@ -135,6 +135,8 @@ public:
      */
     bool IsDeckVisible(const OUString& rsDeckId);
 
+    bool IsDeckOpen(const sal_Int32 nIndex = -1);
+
     FocusManager& GetFocusManager() { return maFocusManager;}
 
     ResourceManager* GetResourceManager() { return mpResourceManager.get();}
@@ -165,6 +167,8 @@ public:
     void FadeOut();
 
     tools::Rectangle GetDeckDragArea() const;
+
+    css::uno::Reference<css::frame::XFrame> getXFrame() {return mxFrame;}
 
 private:
     SidebarController(

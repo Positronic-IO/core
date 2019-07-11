@@ -22,9 +22,11 @@
 #include <osl/module.h>
 #include <osl/file.hxx>
 #include <osl/thread.h>
+#include <osl/module.hxx>
 
 #include <rtl/tencinfo.h>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 
 #include <tools/debug.hxx>
 #include <tools/time.hxx>
@@ -44,7 +46,7 @@
 #include <vcl/wrkwin.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/cvtgrf.hxx>
-#include <vcl/unowrap.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/timer.hxx>
 #include <vcl/scheduler.hxx>
 #include <vcl/unohelp.hxx>
@@ -88,65 +90,35 @@ void InitSettings(ImplSVData* pSVData);
 }
 
 // keycodes handled internally by VCL
-class ImplReservedKey
+static vcl::KeyCode const ReservedKeys[]
 {
-public:
-    explicit ImplReservedKey( vcl::KeyCode aKeyCode )
-        : mKeyCode(aKeyCode)
-    {
-    }
-
-    vcl::KeyCode mKeyCode;
-};
-
-typedef std::pair<ImplReservedKey*, size_t> ReservedKeys;
-namespace
-{
-    struct ImplReservedKeysImpl
-    {
-        ReservedKeys* operator()()
-        {
-            static ImplReservedKey ImplReservedKeys[] =
-            {
-                ImplReservedKey(vcl::KeyCode(KEY_F1,0)                  ),
-                ImplReservedKey(vcl::KeyCode(KEY_F1,KEY_SHIFT)          ),
-                ImplReservedKey(vcl::KeyCode(KEY_F1,KEY_MOD1)           ),
-                ImplReservedKey(vcl::KeyCode(KEY_F2,KEY_SHIFT)          ),
-                ImplReservedKey(vcl::KeyCode(KEY_F4,KEY_MOD1)           ),
-                ImplReservedKey(vcl::KeyCode(KEY_F4,KEY_MOD2)           ),
-                ImplReservedKey(vcl::KeyCode(KEY_F4,KEY_MOD1|KEY_MOD2)  ),
-                ImplReservedKey(vcl::KeyCode(KEY_F6,0)                  ),
-                ImplReservedKey(vcl::KeyCode(KEY_F6,KEY_MOD1)           ),
-                ImplReservedKey(vcl::KeyCode(KEY_F6,KEY_SHIFT)          ),
-                ImplReservedKey(vcl::KeyCode(KEY_F6,KEY_MOD1|KEY_SHIFT) ),
-                ImplReservedKey(vcl::KeyCode(KEY_F10,0)                 )
+                vcl::KeyCode(KEY_F1,0)                  ,
+                vcl::KeyCode(KEY_F1,KEY_SHIFT)          ,
+                vcl::KeyCode(KEY_F1,KEY_MOD1)           ,
+                vcl::KeyCode(KEY_F2,KEY_SHIFT)          ,
+                vcl::KeyCode(KEY_F4,KEY_MOD1)           ,
+                vcl::KeyCode(KEY_F4,KEY_MOD2)           ,
+                vcl::KeyCode(KEY_F4,KEY_MOD1|KEY_MOD2)  ,
+                vcl::KeyCode(KEY_F6,0)                  ,
+                vcl::KeyCode(KEY_F6,KEY_MOD1)           ,
+                vcl::KeyCode(KEY_F6,KEY_SHIFT)          ,
+                vcl::KeyCode(KEY_F6,KEY_MOD1|KEY_SHIFT) ,
+                vcl::KeyCode(KEY_F10,0)
 #ifdef UNX
                 ,
-                ImplReservedKey(vcl::KeyCode(KEY_1,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_2,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_3,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_4,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_5,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_6,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_7,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_8,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_9,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_0,KEY_SHIFT|KEY_MOD1)),
-                ImplReservedKey(vcl::KeyCode(KEY_ADD,KEY_SHIFT|KEY_MOD1))
+                vcl::KeyCode(KEY_1,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_2,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_3,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_4,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_5,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_6,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_7,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_8,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_9,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_0,KEY_SHIFT|KEY_MOD1),
+                vcl::KeyCode(KEY_ADD,KEY_SHIFT|KEY_MOD1)
 #endif
-            };
-            static ReservedKeys aKeys
-            (
-                &ImplReservedKeys[0],
-                SAL_N_ELEMENTS(ImplReservedKeys)
-            );
-            return &aKeys;
-        }
-    };
-
-    struct ImplReservedKeys
-        : public rtl::StaticAggregate<ReservedKeys, ImplReservedKeysImpl> {};
-}
+};
 
 extern "C" {
     typedef UnoWrapperBase* (*FN_TkCreateUnoWrapper)();
@@ -154,7 +126,7 @@ extern "C" {
 
 struct ImplPostEventData
 {
-    VclEventId      mnEvent;
+    VclEventId const    mnEvent;
     VclPtr<vcl::Window> mpWin;
     ImplSVEvent *   mnEventId;
     KeyEvent        maKeyEvent;
@@ -181,13 +153,11 @@ Application::Application()
     osl_setEnvironment(aVar.pData, aValue.pData);
 
     ImplGetSVData()->mpApp = this;
-    InitSalData();
 }
 
 Application::~Application()
 {
     ImplDeInitSVData();
-    DeInitSalData();
     ImplGetSVData()->mpApp = nullptr;
 }
 
@@ -235,9 +205,9 @@ OUString Application::GetCommandLineParam( sal_uInt16 nParam )
 OUString Application::GetAppFileName()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    SAL_WARN_IF( !pSVData->maAppData.mpAppFileName, "vcl", "AppFileName should be set to something after SVMain!" );
-    if ( pSVData->maAppData.mpAppFileName )
-        return *pSVData->maAppData.mpAppFileName;
+    SAL_WARN_IF( !pSVData->maAppData.mxAppFileName, "vcl", "AppFileName should be set to something after SVMain!" );
+    if ( pSVData->maAppData.mxAppFileName )
+        return *pSVData->maAppData.mxAppFileName;
 
     /*
      *  provide a fallback for people without initialized vcl here (like setup
@@ -299,7 +269,7 @@ void Application::Abort( const OUString& rErrorText )
 
 sal_uLong Application::GetReservedKeyCodeCount()
 {
-    return ImplReservedKeys::get()->second;
+    return SAL_N_ELEMENTS(ReservedKeys);
 }
 
 const vcl::KeyCode* Application::GetReservedKeyCode( sal_uLong i )
@@ -307,7 +277,7 @@ const vcl::KeyCode* Application::GetReservedKeyCode( sal_uLong i )
     if( i >= GetReservedKeyCodeCount() )
         return nullptr;
     else
-        return &ImplReservedKeys::get()->first[i].mKeyCode;
+        return &ReservedKeys[i];
 }
 
 IMPL_STATIC_LINK_NOARG( ImplSVAppData, ImplEndAllPopupsMsg, void*, void )
@@ -452,17 +422,16 @@ void Application::Execute()
     pSVData->maAppData.mbInAppExecute = false;
 }
 
-inline bool ImplYield(bool i_bWait, bool i_bAllEvents)
+static bool ImplYield(bool i_bWait, bool i_bAllEvents)
 {
     ImplSVData* pSVData = ImplGetSVData();
 
     SAL_INFO("vcl.schedule", "Enter ImplYield: " << (i_bWait ? "wait" : "no wait") <<
              ": " << (i_bAllEvents ? "all events" : "one event"));
 
-    // TODO: there's a data race here on WNT only because ImplYield may be
-    // called without SolarMutex; if we can get rid of LazyDelete (with VclPtr)
-    // then the only remaining use of mnDispatchLevel is in OSX specific code
-    // so that would effectively eliminate the race on WNT
+    // there's a data race here on WNT only because ImplYield may be
+    // called without SolarMutex; but the only remaining use of mnDispatchLevel
+    // is in OSX specific code
     pSVData->maAppData.mnDispatchLevel++;
 
     // do not wait for events if application was already quit; in that
@@ -473,10 +442,6 @@ inline bool ImplYield(bool i_bWait, bool i_bAllEvents)
     pSVData->maAppData.mnDispatchLevel--;
 
     DBG_TESTSOLARMUTEX(); // must be locked on return from Yield
-
-    // flush lazy deleted objects
-    if( pSVData->maAppData.mnDispatchLevel == 0 )
-        vcl::LazyDelete::flush();
 
     SAL_INFO("vcl.schedule", "Leave ImplYield with return " << bProcessedEvent );
     return bProcessedEvent;
@@ -502,21 +467,24 @@ void Scheduler::ProcessEventsToIdle()
     // events were processed at some point, but our check can't prevent further
     // processing in the main thread, which may add new events, so skip it.
     const ImplSVData* pSVData = ImplGetSVData();
-    if ( !pSVData->mpDefInst->IsMainThread() )
+    if (!pSVData->mpDefInst->IsMainThread())
         return;
-    const ImplSchedulerData* pSchedulerData = pSVData->maSchedCtx.mpFirstSchedulerData;
-    while ( pSchedulerData )
+    for (int nTaskPriority = 0; nTaskPriority < PRIO_COUNT; ++nTaskPriority)
     {
-        if ( pSchedulerData->mpTask && !pSchedulerData->mbInScheduler )
+        const ImplSchedulerData* pSchedulerData = pSVData->maSchedCtx.mpFirstSchedulerData[nTaskPriority];
+        while (pSchedulerData)
         {
-            Idle *pIdle = dynamic_cast<Idle*>( pSchedulerData->mpTask );
-            if ( pIdle && pIdle->IsActive() )
+            if (pSchedulerData->mpTask && !pSchedulerData->mbInScheduler)
             {
-                SAL_WARN( "vcl.schedule", "Unprocessed Idle: "
-                          << pIdle << " " << pIdle->GetDebugName() );
+                Idle *pIdle = dynamic_cast<Idle*>(pSchedulerData->mpTask);
+                if (pIdle && pIdle->IsActive())
+                {
+                    SAL_WARN("vcl.schedule", "Unprocessed Idle: "
+                             << pIdle << " " << pIdle->GetDebugName());
+                }
             }
+            pSchedulerData = pSchedulerData->mpNext;
         }
-        pSchedulerData = pSchedulerData->mpNext;
     }
 #endif
 }
@@ -551,9 +519,9 @@ comphelper::SolarMutex& Application::GetSolarMutex()
     return *(pSVData->mpDefInst->GetYieldMutex());
 }
 
-oslThreadIdentifier Application::GetMainThreadIdentifier()
+bool Application::IsMainThread()
 {
-    return ImplGetSVData()->mnMainThreadId;
+    return ImplGetSVData()->mnMainThreadId == osl::Thread::getCurrentIdentifier();
 }
 
 sal_uInt32 Application::ReleaseSolarMutex()
@@ -744,7 +712,7 @@ void InitSettings(ImplSVData* pSVData)
 {
     assert(!pSVData->maAppData.mpSettings && "initialization should not happen twice!");
 
-    pSVData->maAppData.mpSettings = new AllSettings();
+    pSVData->maAppData.mpSettings.reset(new AllSettings());
     if (!utl::ConfigManager::IsFuzzing())
     {
         pSVData->maAppData.mpCfgListener = new LocaleConfigurationListener;
@@ -778,49 +746,38 @@ void Application::ImplCallEventListenersApplicationDataChanged( void* pData )
     ImplSVData* pSVData = ImplGetSVData();
     VclWindowEvent aEvent( nullptr, VclEventId::ApplicationDataChanged, pData );
 
-    if ( pSVData->maAppData.mpEventListeners )
-        pSVData->maAppData.mpEventListeners->Call( aEvent );
+    pSVData->maAppData.maEventListeners.Call( aEvent );
 }
 
 void Application::ImplCallEventListeners( VclSimpleEvent& rEvent )
 {
     ImplSVData* pSVData = ImplGetSVData();
-
-    if ( pSVData->maAppData.mpEventListeners )
-        pSVData->maAppData.mpEventListeners->Call( rEvent );
+    pSVData->maAppData.maEventListeners.Call( rEvent );
 }
 
 void Application::AddEventListener( const Link<VclSimpleEvent&,void>& rEventListener )
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( !pSVData->maAppData.mpEventListeners )
-        pSVData->maAppData.mpEventListeners = new VclEventListeners;
-    pSVData->maAppData.mpEventListeners->addListener( rEventListener );
+    pSVData->maAppData.maEventListeners.addListener( rEventListener );
 }
 
 void Application::RemoveEventListener( const Link<VclSimpleEvent&,void>& rEventListener )
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( pSVData->maAppData.mpEventListeners )
-        pSVData->maAppData.mpEventListeners->removeListener( rEventListener );
+    pSVData->maAppData.maEventListeners.removeListener( rEventListener );
 }
 
 void Application::AddKeyListener( const Link<VclWindowEvent&,bool>& rKeyListener )
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( !pSVData->maAppData.mpKeyListeners )
-        pSVData->maAppData.mpKeyListeners = new SVAppKeyListeners;
-    pSVData->maAppData.mpKeyListeners->push_back( rKeyListener );
+    pSVData->maAppData.maKeyListeners.push_back( rKeyListener );
 }
 
 void Application::RemoveKeyListener( const Link<VclWindowEvent&,bool>& rKeyListener )
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( pSVData->maAppData.mpKeyListeners )
-    {
-        auto pVec = pSVData->maAppData.mpKeyListeners;
-        pVec->erase( std::remove(pVec->begin(), pVec->end(), rKeyListener ), pVec->end() );
-    }
+    auto & rVec = pSVData->maAppData.maKeyListeners;
+    rVec.erase( std::remove(rVec.begin(), rVec.end(), rKeyListener ), rVec.end() );
 }
 
 bool Application::HandleKey( VclEventId nEvent, vcl::Window *pWin, KeyEvent* pKeyEvent )
@@ -830,15 +787,12 @@ bool Application::HandleKey( VclEventId nEvent, vcl::Window *pWin, KeyEvent* pKe
 
     ImplSVData* pSVData = ImplGetSVData();
 
-    if ( !pSVData->maAppData.mpKeyListeners )
-        return false;
-
-    if ( pSVData->maAppData.mpKeyListeners->empty() )
+    if ( pSVData->maAppData.maKeyListeners.empty() )
         return false;
 
     bool bProcessed = false;
     // Copy the list, because this can be destroyed when calling a Link...
-    std::vector<Link<VclWindowEvent&,bool>> aCopy( *pSVData->maAppData.mpKeyListeners );
+    std::vector<Link<VclWindowEvent&,bool>> aCopy( pSVData->maAppData.maKeyListeners );
     for ( Link<VclWindowEvent&,bool>& rLink : aCopy )
     {
         if( rLink.Call( aEvent ) )
@@ -995,7 +949,11 @@ void Application::RemoveMouseAndKeyEvents( vcl::Window* pWin )
 ImplSVEvent * Application::PostUserEvent( const Link<void*,void>& rLink, void* pCaller,
                                           bool bReferenceLink )
 {
-    ImplSVEvent* pSVEvent = new ImplSVEvent;
+    vcl::Window* pDefWindow = ImplGetDefaultWindow();
+    if ( pDefWindow == nullptr )
+        return nullptr;
+
+    std::unique_ptr<ImplSVEvent> pSVEvent(new ImplSVEvent);
     pSVEvent->mpData    = pCaller;
     pSVEvent->maLink    = rLink;
     pSVEvent->mpWindow  = nullptr;
@@ -1010,13 +968,10 @@ ImplSVEvent * Application::PostUserEvent( const Link<void*,void>& rLink, void* p
         pSVEvent->mpInstanceRef = static_cast<vcl::Window *>(rLink.GetInstance());
     }
 
-    vcl::Window* pDefWindow = ImplGetDefaultWindow();
-    if ( pDefWindow == nullptr || !pDefWindow->ImplGetFrame()->PostEvent( pSVEvent ) )
-    {
-        delete pSVEvent;
-        pSVEvent = nullptr;
-    }
-    return pSVEvent;
+    auto pTmpEvent = pSVEvent.get();
+    if (!pDefWindow->ImplGetFrame()->PostEvent( std::move(pSVEvent) ))
+        return nullptr;
+    return pTmpEvent;
 }
 
 void Application::RemoveUserEvent( ImplSVEvent * nUserEvent )
@@ -1108,19 +1063,14 @@ vcl::Window* Application::GetActiveTopWindow()
 void Application::SetAppName( const OUString& rUniqueName )
 {
     ImplSVData* pSVData = ImplGetSVData();
-
-    // create if does not exist
-    if ( !pSVData->maAppData.mpAppName )
-        pSVData->maAppData.mpAppName = new OUString( rUniqueName );
-    else
-        *(pSVData->maAppData.mpAppName) = rUniqueName;
+    pSVData->maAppData.mxAppName = rUniqueName;
 }
 
 OUString Application::GetAppName()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if ( pSVData->maAppData.mpAppName )
-        return *(pSVData->maAppData.mpAppName);
+    if ( pSVData->maAppData.mxAppName )
+        return *(pSVData->maAppData.mxAppName);
     else
         return OUString();
 }
@@ -1153,8 +1103,7 @@ OUString Application::GetHWOSConfInfo()
         aDetails.append( VclResId(SV_APP_DEFAULT) );
     aDetails.append( "; " );
 
-#ifdef LINUX
-    // Only linux has different backends, so don't show blank for others.
+#if (defined LINUX || defined _WIN32 || defined MACOSX)
     aDetails.append( SV_APP_VCLBACKEND );
     aDetails.append( GetToolkitName() );
     aDetails.append( "; " );
@@ -1166,19 +1115,14 @@ OUString Application::GetHWOSConfInfo()
 void Application::SetDisplayName( const OUString& rName )
 {
     ImplSVData* pSVData = ImplGetSVData();
-
-    // create if does not exist
-    if ( !pSVData->maAppData.mpDisplayName )
-        pSVData->maAppData.mpDisplayName = new OUString( rName );
-    else
-        *(pSVData->maAppData.mpDisplayName) = rName;
+    pSVData->maAppData.mxDisplayName = rName;
 }
 
 OUString Application::GetDisplayName()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if ( pSVData->maAppData.mpDisplayName )
-        return *(pSVData->maAppData.mpDisplayName);
+    if ( pSVData->maAppData.mxDisplayName )
+        return *(pSVData->maAppData.mxDisplayName);
     else if ( pSVData->maWinData.mpAppWin )
         return pSVData->maWinData.mpAppWin->GetText();
     else
@@ -1326,8 +1270,8 @@ Help* Application::GetHelp()
 OUString Application::GetToolkitName()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if ( pSVData->maAppData.mpToolkitName )
-        return *(pSVData->maAppData.mpToolkitName);
+    if ( pSVData->maAppData.mxToolkitName )
+        return *(pSVData->maAppData.mxToolkitName);
     else
         return OUString();
 }
@@ -1417,7 +1361,7 @@ SystemWindowFlags Application::GetSystemWindowMode()
 css::uno::Reference< css::awt::XToolkit > Application::GetVCLToolkit()
 {
     css::uno::Reference< css::awt::XToolkit > xT;
-    UnoWrapperBase* pWrapper = Application::GetUnoWrapper();
+    UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper();
     if ( pWrapper )
         xT = pWrapper->GetVCLToolkit();
     return xT;
@@ -1433,7 +1377,7 @@ extern "C" { static void thisModule() {} }
 
 #endif
 
-UnoWrapperBase* Application::GetUnoWrapper( bool bCreateIfNotExist )
+UnoWrapperBase* UnoWrapperBase::GetUnoWrapper( bool bCreateIfNotExist )
 {
     ImplSVData* pSVData = ImplGetSVData();
     static bool bAlreadyTriedToCreate = false;
@@ -1460,7 +1404,7 @@ UnoWrapperBase* Application::GetUnoWrapper( bool bCreateIfNotExist )
     return pSVData->mpUnoWrapper;
 }
 
-void Application::SetUnoWrapper( UnoWrapperBase* pWrapper )
+void UnoWrapperBase::SetUnoWrapper( UnoWrapperBase* pWrapper )
 {
     ImplSVData* pSVData = ImplGetSVData();
     SAL_WARN_IF( pSVData->mpUnoWrapper, "vcl", "SetUnoWrapper: Wrapper already exists" );

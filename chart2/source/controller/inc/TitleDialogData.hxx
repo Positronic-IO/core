@@ -20,10 +20,11 @@
 #define INCLUDED_CHART2_SOURCE_CONTROLLER_INC_TITLEDIALOGDATA_HXX
 
 #include <ReferenceSizeProvider.hxx>
-#include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
-
 #include <memory>
+#include <com/sun/star/uno/Sequence.hxx>
+
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 namespace chart
 {
@@ -35,7 +36,7 @@ struct TitleDialogData
     css::uno::Sequence< OUString > aTextList;
     std::unique_ptr< ReferenceSizeProvider > apReferenceSizeProvider;
 
-    TitleDialogData(ReferenceSizeProvider* pReferenzeSizeProvider = nullptr);
+    TitleDialogData(std::unique_ptr<ReferenceSizeProvider> pReferenzeSizeProvider = nullptr);
 
     void readFromModel( const css::uno::Reference< css::frame::XModel >& xChartModel );
     /* return true if anything has changed;

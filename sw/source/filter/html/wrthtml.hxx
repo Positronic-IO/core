@@ -200,10 +200,7 @@ struct HTMLControl
     }
 };
 
-class HTMLControls : public o3tl::sorted_vector<HTMLControl*, o3tl::less_ptr_to<HTMLControl> > {
-public:
-    // will free any items still in the vector
-    ~HTMLControls() { DeleteAndDestroyAll(); }
+class HTMLControls : public o3tl::sorted_vector<std::unique_ptr<HTMLControl>, o3tl::less_uniqueptr_to<HTMLControl> > {
 };
 
 struct SwHTMLFormatInfo
@@ -227,7 +224,6 @@ struct SwHTMLFormatInfo
     // ctor for a dummy to search
     explicit SwHTMLFormatInfo( const SwFormat *pF ) :
         pFormat( pF ),
-        pItemSet( nullptr ),
         nLeftMargin( 0 ),
         nRightMargin( 0 ),
         nFirstLineIndent(0),
@@ -257,9 +253,9 @@ class IDocumentStylePoolAccess;
 
 class SW_DLLPUBLIC SwHTMLWriter : public Writer
 {
-    SwHTMLPosFlyFrames *m_pHTMLPosFlyFrames;
+    std::unique_ptr<SwHTMLPosFlyFrames> m_pHTMLPosFlyFrames;
     std::unique_ptr<SwHTMLNumRuleInfo> m_pNumRuleInfo;// current numbering
-    SwHTMLNumRuleInfo *m_pNextNumRuleInfo;
+    std::unique_ptr<SwHTMLNumRuleInfo> m_pNextNumRuleInfo;
     sal_uInt32 m_nHTMLMode;               // description of export configuration
 
     FieldUnit m_eCSS1Unit;
@@ -287,7 +283,7 @@ public:
     SwHTMLFormatInfos m_CharFormatInfos;
     SwHTMLFormatInfos m_TextCollInfos;
     std::vector<SwFormatINetFormat*> m_aINetFormats; // the "open" INet attributes
-    std::vector<SwTextFootnote*> *m_pFootEndNotes;
+    std::unique_ptr<std::vector<SwTextFootnote*>> m_pFootEndNotes;
 
     OUString m_aCSS1Selector;           // style selector
     OUString m_aNonConvertableCharacters;
@@ -296,7 +292,7 @@ public:
     css::uno::Reference<css::container::XIndexContainer> mxFormComps; // current form
 
     rtl::Reference<SwDoc> m_xTemplate;               // HTML template
-    Color *m_pDfltColor;              // default colour
+    boost::optional<Color> m_xDfltColor;              // default colour
     SwNodeIndex *m_pStartNdIdx;       // index of first paragraph
     const SwPageDesc *m_pCurrPageDesc;// current page style
     const SwFormatFootnote *m_pFormatFootnote;
@@ -521,10 +517,11 @@ public:
 
     // Fetch current numbering information of next paragraph. They
     // don't have to exist yet!
-    SwHTMLNumRuleInfo *GetNextNumInfo() { return m_pNextNumRuleInfo; }
+    SwHTMLNumRuleInfo *GetNextNumInfo() { return m_pNextNumRuleInfo.get(); }
+    std::unique_ptr<SwHTMLNumRuleInfo> ReleaseNextNumInfo();
 
     // Set the numbering information of next paragraph.
-    void SetNextNumInfo( SwHTMLNumRuleInfo *pNxt ) { m_pNextNumRuleInfo=pNxt; }
+    void SetNextNumInfo( std::unique_ptr<SwHTMLNumRuleInfo> pNxt );
 
     // Fill the numbering information of next paragraph.
     void FillNextNumInfo();
@@ -620,14 +617,14 @@ struct HTMLSaveData
 {
     SwHTMLWriter& rWrt;
     SwPaM* pOldPam, *pOldEnd;
-    SwHTMLNumRuleInfo *pOldNumRuleInfo;     // Owner = this
-    SwHTMLNumRuleInfo *pOldNextNumRuleInfo; // Owner = HTML-Writer
-    sal_uInt16 nOldDefListLvl;
-    SvxFrameDirection nOldDirection;
+    std::unique_ptr<SwHTMLNumRuleInfo> pOldNumRuleInfo;     // Owner = this
+    std::unique_ptr<SwHTMLNumRuleInfo> pOldNextNumRuleInfo;
+    sal_uInt16 const nOldDefListLvl;
+    SvxFrameDirection const nOldDirection;
     bool bOldWriteAll : 1;
-    bool bOldOutHeader : 1;
-    bool bOldOutFooter : 1;
-    bool bOldOutFlyFrame : 1;
+    bool const bOldOutHeader : 1;
+    bool const bOldOutFooter : 1;
+    bool const bOldOutFlyFrame : 1;
 
     HTMLSaveData( SwHTMLWriter&, sal_uLong nStt, sal_uLong nEnd,
                   bool bSaveNum=true,
@@ -669,7 +666,7 @@ Writer& OutHTML_SwFormatField( Writer& rWrt, const SfxPoolItem& rHt );
 Writer& OutHTML_SwFormatFootnote( Writer& rWrt, const SfxPoolItem& rHt );
 Writer& OutHTML_INetFormat( Writer&, const SwFormatINetFormat& rINetFormat, bool bOn );
 
-Writer& OutCSS1_BodyTagStyleOpt( Writer& rWrt, const SfxItemSet& rItemSet, const OUString& rGraphicURL );
+Writer& OutCSS1_BodyTagStyleOpt( Writer& rWrt, const SfxItemSet& rItemSet );
 Writer& OutCSS1_ParaTagStyleOpt( Writer& rWrt, const SfxItemSet& rItemSet );
 
 Writer& OutCSS1_HintSpanTag( Writer& rWrt, const SfxPoolItem& rHt );

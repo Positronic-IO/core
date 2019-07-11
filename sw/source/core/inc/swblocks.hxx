@@ -35,9 +35,9 @@ class SwBlockName
     friend class SwImpBlocks;
     sal_uInt16 nHashS, nHashL;     // Hash codes for testing
 public:
-    OUString aShort;               /// Shortname
+    OUString const aShort;               /// Shortname
     OUString aLong;                /// Longname
-    OUString aPackageName;         /// Package name
+    OUString const aPackageName;         /// Package name
     bool bIsOnlyTextFlagInit : 1;   /// Is the Flag valid?
     bool bIsOnlyText : 1;           /// Unformatted text
 
@@ -48,13 +48,13 @@ public:
     bool operator< ( const SwBlockName& r ) const { return aShort <  r.aShort; }
 };
 
-class SwBlockNames : public o3tl::sorted_vector<SwBlockName*, o3tl::less_ptr_to<SwBlockName> > {};
+class SwBlockNames : public o3tl::sorted_vector<std::unique_ptr<SwBlockName>, o3tl::less_uniqueptr_to<SwBlockName> > {};
 
 class SwImpBlocks
 {
     friend class SwTextBlocks;
 protected:
-    OUString m_aFile;                     // Physical file name
+    OUString const m_aFile;                     // Physical file name
     OUString m_aName;                     // Logical file name
     OUString m_aCurrentText;                      // Current text
     OUString m_aShort, m_aLong;             // Short- and longname (PutDoc)
@@ -80,7 +80,7 @@ protected:
     virtual FileType GetFileType() const = 0;
 
     virtual void   ClearDoc();          // Delete Doc content
-    SwPaM* MakePaM();                   // Span PaM over Doc
+    std::unique_ptr<SwPaM> MakePaM();   // Span PaM over Doc
     virtual void   AddName( const OUString&, const OUString&, bool bOnlyText = false );
     bool   IsFileChanged() const;
     void   Touch();

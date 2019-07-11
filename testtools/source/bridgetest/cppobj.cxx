@@ -22,7 +22,7 @@
 #include <cppu/unotype.hxx>
 #include <osl/diagnose.h>
 #include <osl/diagnose.hxx>
-#include <osl/thread.h>
+#include <osl/thread.hxx>
 #include <osl/mutex.hxx>
 #include <osl/time.h>
 
@@ -34,6 +34,7 @@
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -66,7 +67,7 @@ namespace bridge_object
 {
 
 
-inline static Sequence< OUString > getSupportedServiceNames()
+static Sequence< OUString > getSupportedServiceNames()
 {
     OUString aName( SERVICENAME );
     return Sequence< OUString >( &aName, 1 );
@@ -465,10 +466,7 @@ namespace {
 
 void wait(sal_Int32 microSeconds) {
     OSL_ASSERT(microSeconds >= 0 && microSeconds <= SAL_MAX_INT32 / 1000);
-    TimeValue t = {
-        static_cast< sal_uInt32 >(microSeconds / 1000000),
-        static_cast< sal_uInt32 >(microSeconds * 1000) };
-    osl_waitThread(&t);
+    osl::Thread::wait(std::chrono::microseconds(microSeconds));
 }
 
 }
@@ -624,11 +622,11 @@ void Test_Impl::raiseRuntimeExceptionOneway( const OUString & rMsg, const Refere
     throw aExc;
 }
 
-void dothrow2(const RuntimeException& e)
+static void dothrow2(const RuntimeException& e)
 {
     throw e;
 }
-void dothrow(const RuntimeException& e)
+static void dothrow(const RuntimeException& e)
 {
 #if defined _MSC_VER
     // currently only for MSVC:

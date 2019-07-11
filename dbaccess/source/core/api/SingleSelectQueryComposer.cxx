@@ -18,6 +18,7 @@
  */
 
 #include <string.h>
+#include <sal/log.hxx>
 #include <composertools.hxx>
 #include <strings.hrc>
 #include <core_resource.hxx>
@@ -44,7 +45,6 @@
 #include <com/sun/star/uno/XAggregation.hpp>
 #include <com/sun/star/util/NumberFormatter.hpp>
 
-#include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/typeprovider.hxx>
@@ -177,28 +177,28 @@ namespace
         switch( i_nFilterOperator )
         {
             case SQLFilterOperator::EQUAL:
-                o_sRet.append(" = " + i_sValue);
+                o_sRet.append(" = " ).append( i_sValue);
                 break;
             case SQLFilterOperator::NOT_EQUAL:
-                o_sRet.append(" <> " + i_sValue);
+                o_sRet.append(" <> " ).append( i_sValue);
                 break;
             case SQLFilterOperator::LESS:
-                o_sRet.append(" < " + i_sValue);
+                o_sRet.append(" < " ).append( i_sValue);
                 break;
             case SQLFilterOperator::GREATER:
-                o_sRet.append(" > " + i_sValue);
+                o_sRet.append(" > " ).append( i_sValue);
                 break;
             case SQLFilterOperator::LESS_EQUAL:
-                o_sRet.append(" <= " + i_sValue);
+                o_sRet.append(" <= " ).append( i_sValue);
                 break;
             case SQLFilterOperator::GREATER_EQUAL:
-                o_sRet.append(" >= " + i_sValue);
+                o_sRet.append(" >= " ).append( i_sValue);
                 break;
             case SQLFilterOperator::LIKE:
-                o_sRet.append(" LIKE " + i_sValue);
+                o_sRet.append(" LIKE " ).append( i_sValue);
                 break;
             case SQLFilterOperator::NOT_LIKE:
-                o_sRet.append(" NOT LIKE " + i_sValue);
+                o_sRet.append(" NOT LIKE " ).append( i_sValue);
                 break;
             case SQLFilterOperator::SQLNULL:
                 o_sRet.append(" IS NULL");
@@ -227,7 +227,6 @@ OSingleSelectQueryComposer::OSingleSelectQueryComposer(const Reference< XNameAcc
     ,m_xMetaData(_xConnection->getMetaData())
     ,m_xConnectionTables( _rxTables )
     ,m_aContext( _rContext )
-    ,m_pTables(nullptr)
     ,m_nBoolCompareMode( BooleanComparisonMode::EQUAL_INTEGER )
     ,m_nCommandType(CommandType::COMMAND)
 {
@@ -763,7 +762,7 @@ Reference< XNameAccess > SAL_CALL OSingleSelectQueryComposer::getColumns(  )
         OUString sOriginalWhereClause = getSQLPart( Where, m_aSqlIterator, false );
         if ( !sOriginalWhereClause.isEmpty() )
         {
-            aSQL.append( " AND ( " + sOriginalWhereClause + " ) " );
+            aSQL.append( " AND ( " ).append( sOriginalWhereClause ).append( " ) " );
         }
 
         OUString sGroupBy = getSQLPart( Group, m_aSqlIterator, true );
@@ -774,8 +773,9 @@ Reference< XNameAccess > SAL_CALL OSingleSelectQueryComposer::getColumns(  )
         // normalize the statement so that it doesn't contain any application-level features anymore
         OUString sError;
         const std::unique_ptr< OSQLParseNode > pStatementTree( m_aSqlParser.parseTree( sError, sSQL ) );
-        OSL_ENSURE( pStatementTree.get(), "OSingleSelectQueryComposer::getColumns: could not parse the column retrieval statement!" );
-        if ( pStatementTree.get() )
+        OSL_ENSURE(pStatementTree, "OSingleSelectQueryComposer::getColumns: could not parse the "
+                                   "column retrieval statement!");
+        if (pStatementTree)
             if ( !pStatementTree->parseNodeToExecutableStatement( sSQL, m_xConnection, m_aSqlParser, nullptr ) )
                 break;
 
@@ -789,29 +789,36 @@ Reference< XNameAccess > SAL_CALL OSingleSelectQueryComposer::getColumns(  )
         }
         catch( const Exception& ) { }
 
-        try
+        if ( !xResultSetMeta.is() && xPreparedStatement.is() )
         {
-            if ( !xResultSetMeta.is() )
+            try
             {
-                xStatement.reset( Reference< XStatement >( m_xConnection->createStatement(), UNO_QUERY_THROW ) );
-                Reference< XPropertySet > xStatementProps( xStatement, UNO_QUERY_THROW );
-                try { xStatementProps->setPropertyValue( PROPERTY_ESCAPE_PROCESSING, makeAny( false ) ); }
-                catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
-                xResMetaDataSup.set( xStatement->executeQuery( sSQL ), UNO_QUERY_THROW );
+                //@see issue http://qa.openoffice.org/issues/show_bug.cgi?id=110111
+                // access returns a different order of column names when executing select * from
+                // and asking the columns from the metadata.
+                Reference< XParameters > xParameters( xPreparedStatement, UNO_QUERY_THROW );
+                Reference< XIndexAccess > xPara = getParameters();
+                for(sal_Int32 i = 1;i <= xPara->getCount();++i)
+                    xParameters->setNull(i,DataType::VARCHAR);
+                xResMetaDataSup.set(xPreparedStatement->executeQuery(), UNO_QUERY_THROW );
                 xResultSetMeta.set( xResMetaDataSup->getMetaData(), UNO_QUERY_THROW );
             }
+            catch( const Exception& ) { }
         }
-        catch( const Exception& )
+
+        if ( !xResultSetMeta.is() )
         {
-            //@see issue http://qa.openoffice.org/issues/show_bug.cgi?id=110111
-            // access returns a different order of column names when executing select * from
-            // and asking the columns from the metadata.
-            Reference< XParameters > xParameters( xPreparedStatement, UNO_QUERY_THROW );
-            Reference< XIndexAccess > xPara = getParameters();
-            for(sal_Int32 i = 1;i <= xPara->getCount();++i)
-                xParameters->setNull(i,DataType::VARCHAR);
-            xResMetaDataSup.set(xPreparedStatement->executeQuery(), UNO_QUERY_THROW );
+            xStatement.reset( Reference< XStatement >( m_xConnection->createStatement(), UNO_QUERY_THROW ) );
+            Reference< XPropertySet > xStatementProps( xStatement, UNO_QUERY_THROW );
+            try { xStatementProps->setPropertyValue( PROPERTY_ESCAPE_PROCESSING, makeAny( false ) ); }
+            catch ( const Exception& ) { DBG_UNHANDLED_EXCEPTION("dbaccess"); }
+            xResMetaDataSup.set( xStatement->executeQuery( sSQL ), UNO_QUERY_THROW );
             xResultSetMeta.set( xResMetaDataSup->getMetaData(), UNO_QUERY_THROW );
+
+            if (xResultSetMeta.is())
+            {
+                SAL_WARN("dbaccess", "OSingleSelectQueryComposer::getColumns failed to get xResultSetMeta from executed PreparedStatement, but got it from 'no escape processing' statement. SQL command:\n\t" << sSQL );
+            }
         }
 
         if ( aSelectColumns->get().empty() )
@@ -892,20 +899,15 @@ Reference< XNameAccess > SAL_CALL OSingleSelectQueryComposer::getColumns(  )
 
                 OUString sRealName;
                 xProp->getPropertyValue(PROPERTY_REALNAME) >>= sRealName;
-                std::vector< OUString>::const_iterator aFindName;
                 if ( sColumnName.isEmpty() )
                     xProp->getPropertyValue(PROPERTY_NAME) >>= sColumnName;
 
-                aFindName = std::find_if(aNames.begin(),aNames.end(),
-                                    [&aCaseCompare, &sColumnName](const OUString& lhs)
-                                    { return aCaseCompare(lhs, sColumnName); } );
                 sal_Int32 j = 0;
-                while ( aFindName != aNames.end() )
+                while ( std::any_of(aNames.begin(),aNames.end(),
+                                    [&aCaseCompare, &sColumnName](const OUString& lhs)
+                                    { return aCaseCompare(lhs, sColumnName); } ) )
                 {
                     sColumnName += OUString::number(++j);
-                    aFindName = std::find_if(aNames.begin(),aNames.end(),
-                                        [&aCaseCompare, &sColumnName](const OUString& lhs)
-                                        { return aCaseCompare(lhs, sColumnName); } );
                 }
 
                 pColumn->setName(sColumnName);
@@ -1666,7 +1668,7 @@ void OSingleSelectQueryComposer::setConditionByColumn( const Reference< XPropert
                         const ::sal_Int64 nLength = xClob->length();
                         if ( sal_Int64(nLength + aSQL.getLength() + STR_LIKE.getLength() ) < sal_Int64(SAL_MAX_INT32) )
                         {
-                            aSQL.append("'" + xClob->getSubString(1,static_cast<sal_Int32>(nLength)) + "'");
+                            aSQL.append("'").append(xClob->getSubString(1,static_cast<sal_Int32>(nLength))).append("'");
                         }
                     }
                     else
@@ -1730,7 +1732,7 @@ void OSingleSelectQueryComposer::setConditionByColumn( const Reference< XPropert
             sTemp += andCriteria ? OUString(STR_AND) : OUString(STR_OR);
             sFilter = sTemp;
         }
-        sFilter += aSQL.makeStringAndClear();
+        sFilter += aSQL;
 
         // add the filter and the sort order
         _aSetFunctor(this,sFilter);
@@ -1767,7 +1769,7 @@ Sequence< Sequence< PropertyValue > > OSingleSelectQueryComposer::getStructuredC
 
         OUString aErrorMsg;
         std::unique_ptr<OSQLParseNode> pSqlParseNode( m_aSqlParser.parseTree(aErrorMsg,aSql));
-        if ( pSqlParseNode.get() )
+        if (pSqlParseNode)
         {
             m_aAdditiveIterator.setParseTree(pSqlParseNode.get());
             // normalize the filter

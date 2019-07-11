@@ -81,8 +81,8 @@
 #include <oox/token/properties.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/storagehelper.hxx>
-#include <comphelper/string.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/font.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 
@@ -152,11 +152,8 @@ void DocxExport::AppendBookmarks( const SwTextNode& rNode, sal_Int32 nCurrentPos
     IMarkVector aMarks;
     if ( GetBookmarks( rNode, nCurrentPos, nCurrentPos + nLen, aMarks ) )
     {
-        for ( IMarkVector::const_iterator it = aMarks.begin(), end = aMarks.end();
-              it != end; ++it )
+        for ( IMark* pMark : aMarks )
         {
-            IMark* pMark = (*it);
-
             const sal_Int32 nStart = pMark->GetMarkStart().nContent.GetIndex();
             const sal_Int32 nEnd = pMark->GetMarkEnd().nContent.GetIndex();
 
@@ -196,11 +193,8 @@ void DocxExport::AppendAnnotationMarks( const SwTextNode& rNode, sal_Int32 nCurr
     IMarkVector aMarks;
     if ( GetAnnotationMarks( rNode, nCurrentPos, nCurrentPos + nLen, aMarks ) )
     {
-        for ( IMarkVector::const_iterator it = aMarks.begin(), end = aMarks.end();
-              it != end; ++it )
+        for ( IMark* pMark : aMarks )
         {
-            IMark* pMark = (*it);
-
             const sal_Int32 nStart = pMark->GetMarkStart().nContent.GetIndex();
             const sal_Int32 nEnd = pMark->GetMarkEnd().nContent.GetIndex();
 
@@ -257,12 +251,24 @@ void DocxExport::WriteHeadersFooters( sal_uInt8 nHeadFootFlags,
         const SwFrameFormat& rFormat, const SwFrameFormat& rLeftFormat, const SwFrameFormat& rFirstPageFormat, sal_uInt8 nBreakCode )
 {
     m_nHeadersFootersInSection = 1;
+
+    // document setting indicating the requirement of EVEN and ODD for both headers and footers
+    if ( nHeadFootFlags & ( nsHdFtFlags::WW8_FOOTER_EVEN | nsHdFtFlags::WW8_HEADER_EVEN ))
+        m_aSettings.evenAndOddHeaders = true;
+
     // Turn ON flag for 'Writing Headers \ Footers'
     m_pAttrOutput->SetWritingHeaderFooter( true );
 
     // headers
     if ( nHeadFootFlags & nsHdFtFlags::WW8_HEADER_EVEN )
         WriteHeaderFooter( &rLeftFormat, true, "even" );
+    else if ( m_aSettings.evenAndOddHeaders )
+    {
+        if ( nHeadFootFlags & nsHdFtFlags::WW8_HEADER_ODD )
+            WriteHeaderFooter( &rFormat, true, "even" );
+        else if ( m_bHasHdr && nBreakCode == 2 )
+            WriteHeaderFooter( nullptr, true, "even" );
+    }
 
     if ( nHeadFootFlags & nsHdFtFlags::WW8_HEADER_ODD )
         WriteHeaderFooter( &rFormat, true, "default" );
@@ -280,6 +286,13 @@ void DocxExport::WriteHeadersFooters( sal_uInt8 nHeadFootFlags,
     // footers
     if ( nHeadFootFlags & nsHdFtFlags::WW8_FOOTER_EVEN )
         WriteHeaderFooter( &rLeftFormat, false, "even" );
+    else if ( m_aSettings.evenAndOddHeaders )
+    {
+        if ( nHeadFootFlags & nsHdFtFlags::WW8_FOOTER_ODD )
+           WriteHeaderFooter( &rFormat, false, "even" );
+        else if ( m_bHasFtr && nBreakCode == 2 )
+            WriteHeaderFooter( nullptr, false, "even");
+    }
 
     if ( nHeadFootFlags & nsHdFtFlags::WW8_FOOTER_ODD )
         WriteHeaderFooter( &rFormat, false, "default" );
@@ -293,14 +306,8 @@ void DocxExport::WriteHeadersFooters( sal_uInt8 nHeadFootFlags,
             && m_bHasFtr && nBreakCode == 2 ) // 2: nexPage
         WriteHeaderFooter( nullptr, false, "default");
 
-    if ( nHeadFootFlags & ( nsHdFtFlags::WW8_FOOTER_EVEN | nsHdFtFlags::WW8_HEADER_EVEN ))
-        m_aSettings.evenAndOddHeaders = true;
-
     // Turn OFF flag for 'Writing Headers \ Footers'
     m_pAttrOutput->SetWritingHeaderFooter( false );
-#if OSL_DEBUG_LEVEL > 1
-    fprintf( stderr, "DocxExport::WriteHeadersFooters() - nBreakCode introduced, but ignored\n" );
-#endif
 }
 
 void DocxExport::OutputField( const SwField* pField, ww::eField eFieldType, const OUString& rFieldCmd, FieldFlags nMode )
@@ -375,9 +382,11 @@ void DocxExport::DoComboBox(const OUString& rName,
     m_pDocumentFS->endElementNS( XML_w, XML_ffData );
 }
 
-void DocxExport::DoFormText(const SwInputField* /*pField*/)
+void DocxExport::DoFormText(const SwInputField* pField)
 {
-    SAL_INFO("sw.ww8", "TODO DocxExport::ForFormText()" );
+    assert(pField);
+    const OUString sStr = FieldString(ww::eFORMTEXT);
+    OutputField(pField, ww::eFORMTEXT, sStr);
 }
 
 OString DocxExport::OutputChart( uno::Reference< frame::XModel > const & xModel, sal_Int32 nCount, ::sax_fastparser::FSHelperPtr const & m_pSerializer )
@@ -504,7 +513,7 @@ void DocxExport::OutputDML(uno::Reference<drawing::XShape> const & xShape)
     aExport.WriteShape(xShape);
 }
 
-void DocxExport::ExportDocument_Impl()
+ErrCode DocxExport::ExportDocument_Impl()
 {
     // Set the 'Track Revisions' flag in the settings structure
     m_aSettings.trackRevisions = bool( RedlineFlags::On & m_nOrigRedlineFlags );
@@ -512,7 +521,7 @@ void DocxExport::ExportDocument_Impl()
     InitStyles();
 
     // init sections
-    m_pSections = new MSWordSections( *this );
+    m_pSections.reset(new MSWordSections( *this ));
 
     // Make sure images are counted from one, even when exporting multiple documents.
     oox::drawingml::DrawingML::ResetCounters();
@@ -542,8 +551,9 @@ void DocxExport::ExportDocument_Impl()
     m_aLinkedTextboxesHelper.clear();   //final cleanup
     delete m_pStyles;
     m_pStyles = nullptr;
-    delete m_pSections;
-    m_pSections = nullptr;
+    m_pSections.reset();
+
+    return ERRCODE_NONE;
 }
 
 void DocxExport::AppendSection( const SwPageDesc *pPageDesc, const SwSectionFormat* pFormat, sal_uLong nLnNum )
@@ -682,11 +692,14 @@ void DocxExport::WriteFootnotesEndnotes()
         m_pAttrOutput->SetSerializer( pFootnotesFS );
         // tdf#99227
         m_pSdrExport->setSerializer( pFootnotesFS );
+        // tdf#107969
+        m_pVMLExport->SetFS(pFootnotesFS);
 
         // do the work
         m_pAttrOutput->FootnotesEndnotes( true );
 
         // switch the serializer back
+        m_pVMLExport->SetFS(m_pDocumentFS);
         m_pSdrExport->setSerializer( m_pDocumentFS );
         m_pAttrOutput->SetSerializer( m_pDocumentFS );
     }
@@ -706,11 +719,14 @@ void DocxExport::WriteFootnotesEndnotes()
         m_pAttrOutput->SetSerializer( pEndnotesFS );
         // tdf#99227
         m_pSdrExport->setSerializer( pEndnotesFS );
+        // tdf#107969
+        m_pVMLExport->SetFS(pEndnotesFS);
 
         // do the work
         m_pAttrOutput->FootnotesEndnotes( false );
 
         // switch the serializer back
+        m_pVMLExport->SetFS(m_pDocumentFS);
         m_pSdrExport->setSerializer( m_pDocumentFS );
         m_pAttrOutput->SetSerializer( m_pDocumentFS );
     }
@@ -881,14 +897,16 @@ void DocxExport::WriteProperties( )
     // Write the core properties
     SwDocShell* pDocShell( m_pDoc->GetDocShell( ) );
     uno::Reference<document::XDocumentProperties> xDocProps;
+    bool bSecurityOptOpenReadOnly = false;
     if ( pDocShell )
     {
         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
                pDocShell->GetModel( ), uno::UNO_QUERY );
         xDocProps = xDPS->getDocumentProperties();
+        bSecurityOptOpenReadOnly = pDocShell->IsSecurityOptOpenReadOnly();
     }
 
-    m_pFilter->exportDocumentProperties( xDocProps );
+    m_pFilter->exportDocumentProperties( xDocProps, bSecurityOptOpenReadOnly );
 }
 
 void DocxExport::WriteSettings()
@@ -918,8 +936,28 @@ void DocxExport::WriteSettings()
     // Zoom
     if (pViewShell)
     {
+        rtl::Reference<sax_fastparser::FastAttributeList> pAttributeList(
+            sax_fastparser::FastSerializerHelper::createAttrList());
+
+        switch (pViewShell->GetViewOptions()->GetZoomType())
+        {
+            case SvxZoomType::WHOLEPAGE:
+                pAttributeList->add(FSNS(XML_w, XML_val), "fullPage");
+                break;
+            case SvxZoomType::PAGEWIDTH:
+                pAttributeList->add(FSNS(XML_w, XML_val), "bestFit");
+                break;
+            case SvxZoomType::OPTIMAL:
+                pAttributeList->add(FSNS(XML_w, XML_val), "textFit");
+                break;
+            default:
+                break;
+        }
+
         OString aZoom(OString::number(pViewShell->GetViewOptions()->GetZoom()));
-        pFS->singleElementNS(XML_w, XML_zoom, FSNS(XML_w, XML_percent), aZoom.getStr(), FSEND);
+        pAttributeList->add(FSNS(XML_w, XML_percent), aZoom);
+        sax_fastparser::XFastAttributeListRef xAttributeList(pAttributeList.get());
+        pFS->singleElementNS(XML_w, XML_zoom, xAttributeList);
     }
 
     // Display Background Shape
@@ -1077,7 +1115,7 @@ void DocxExport::WriteSettings()
                             pAttributeList->add(FSNS(XML_w, nToken), rAttributeList[j].Value.get<OUString>().toUtf8());
                     }
 
-                    // we have document protection from from input DOCX file
+                    // we have document protection from input DOCX file
 
                     sax_fastparser::XFastAttributeListRef xAttributeList(pAttributeList);
                     pFS->singleElementNS(XML_w, XML_documentProtection, xAttributeList);
@@ -1428,6 +1466,11 @@ void DocxExport::WriteMainText()
     // setup the namespaces
     m_pDocumentFS->startElementNS( XML_w, XML_document, MainXmlNamespaces());
 
+    if ( getenv("SW_DEBUG_DOM") )
+    {
+        m_pDoc->dumpAsXml();
+    }
+
     // reset the incrementing linked-textboxes chain ID before re-saving.
     m_nLinkedTextboxesChainId=0;
     m_aLinkedTextboxesHelper.clear();
@@ -1546,15 +1589,11 @@ void DocxExport::SetFS( ::sax_fastparser::FSHelperPtr const & pFS )
 DocxExport::DocxExport( DocxExportFilter *pFilter, SwDoc *pDocument, SwPaM *pCurrentPam, SwPaM *pOriginalPam, bool bDocm )
     : MSWordExportBase( pDocument, pCurrentPam, pOriginalPam ),
       m_pFilter( pFilter ),
-      m_pAttrOutput( nullptr ),
-      m_pSections( nullptr ),
       m_nHeaders( 0 ),
       m_nFooters( 0 ),
       m_nOLEObjects( 0 ),
       m_nActiveXControls( 0 ),
       m_nHeadersFootersInSection(0),
-      m_pVMLExport( nullptr ),
-      m_pSdrExport( nullptr ),
       m_bDocm(bDocm)
 {
     // Write the document properties

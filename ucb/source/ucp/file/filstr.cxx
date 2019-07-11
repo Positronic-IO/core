@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/io/IOException.hpp>
@@ -170,7 +171,8 @@ XStream_impl::skipBytes( sal_Int32 nBytesToSkip )
 sal_Int32 SAL_CALL
 XStream_impl::available()
 {
-    return 0;
+    sal_Int64 avail = getLength() - getPosition();
+    return std::min<sal_Int64>(avail, SAL_MAX_INT32);
 }
 
 

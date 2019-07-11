@@ -2,7 +2,7 @@
 <!-- Generated with glade 3.16.1 -->
 <interface domain="svx">
   <requires lib="gtk+" version="3.18"/>
-  <!-- interface-requires LibreOffice 1.0 -->
+  <requires lib="LibreOffice" version="1.0"/>
   <object class="GtkGrid" id="SidebarTextPanel">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -23,7 +23,7 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="font">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <child>
                   <object class="GtkToolButton" id="fontname">
                     <property name="visible">True</property>
@@ -46,7 +46,7 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="fontheight">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <child>
                   <object class="GtkToolButton" id="fontsize">
                     <property name="visible">True</property>
@@ -82,11 +82,10 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="fonteffects">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="show_arrow">False</property>
                 <child>
                   <object class="GtkToolButton" id="bold">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -100,7 +99,6 @@
                 </child>
                 <child>
                   <object class="GtkToolButton" id="italic">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -114,7 +112,6 @@
                 </child>
                 <child>
                   <object class="GtkMenuToolButton" id="underline">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -128,7 +125,6 @@
                 </child>
                 <child>
                   <object class="GtkToolButton" id="strikeout">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -142,7 +138,6 @@
                 </child>
                 <child>
                   <object class="GtkToolButton" id="shadowed">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -164,11 +159,10 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="fontadjust">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="show_arrow">False</property>
                 <child>
                   <object class="GtkToolButton" id="grow">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -182,7 +176,6 @@
                 </child>
                 <child>
                   <object class="GtkToolButton" id="shrink">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -217,11 +210,10 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="colorbar_writer">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="show_arrow">False</property>
                 <child>
                   <object class="GtkMenuToolButton" id="fontcolor">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -235,7 +227,6 @@
                 </child>
                 <child>
                   <object class="GtkMenuToolButton" id="highlight">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -257,10 +248,9 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="colorbar_others">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <child>
                   <object class="GtkMenuToolButton" id="color">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -282,10 +272,9 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="colorbar_background">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                  <child>
                   <object class="GtkMenuToolButton" id="backgroundcolor">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>
@@ -307,11 +296,10 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="position">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="show_arrow">False</property>
                 <child>
                   <object class="GtkToolButton" id="superscript">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="action_name">.uno:SuperScript</property>
@@ -324,7 +312,6 @@
                 </child>
                 <child>
                   <object class="GtkToolButton" id="subscript">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="action_name">.uno:SubScript</property>
@@ -346,10 +333,9 @@
             <child>
               <object class="sfxlo-SidebarToolBox" id="spacingbar">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <child>
                   <object class="GtkToolButton" id="spacing">
-                    <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="is_important">True</property>

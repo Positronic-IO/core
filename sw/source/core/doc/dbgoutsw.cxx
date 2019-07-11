@@ -19,6 +19,7 @@
 
 #ifdef DBG_UTIL
 
+#include <osl/diagnose.h>
 #include <rtl/ustring.hxx>
 #include <svl/poolitem.hxx>
 #include <svl/itemiter.hxx>
@@ -53,22 +54,22 @@ bool bDbgOutPrintAttrSet = false;
 template<class T>
 static OUString lcl_dbg_out_SvPtrArr(const T & rArr)
 {
-    OUString aStr("[ ");
+    OUStringBuffer aStr("[ ");
 
     for (typename T::const_iterator i(rArr.begin()); i != rArr.end(); ++i)
     {
         if (i != rArr.begin())
-            aStr += ", ";
+            aStr.append(", ");
 
         if (*i)
-            aStr += lcl_dbg_out(**i);
+            aStr.append(lcl_dbg_out(**i));
         else
-            aStr += "(null)";
+            aStr.append("(null)");
     }
 
-    aStr += " ]";
+    aStr.append(" ]");
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 const char * dbg_out(const void * pVoid)
@@ -92,7 +93,7 @@ const char * dbg_out(const OUString & aStr)
     return aDbgOutResult.getStr();
 }
 
-map<sal_uInt16,OUString> & GetItemWhichMap()
+static map<sal_uInt16,OUString> & GetItemWhichMap()
 {
     static map<sal_uInt16,OUString> aItemWhichMap;
     static bool bInitialized = false;
@@ -257,28 +258,28 @@ static const OUString lcl_dbg_out(const SfxItemSet & rSet)
     SfxItemIter aIter(rSet);
     const SfxPoolItem * pItem;
     bool bFirst = true;
-    OUString aStr = "[ ";
+    OUStringBuffer aStr = "[ ";
 
     pItem = aIter.FirstItem();
 
     while (pItem )
     {
         if (!bFirst)
-            aStr += ", ";
+            aStr.append(", ");
 
         if (reinterpret_cast<sal_uIntPtr>(pItem) != SAL_MAX_SIZE)
-            aStr += lcl_dbg_out(*pItem);
+            aStr.append(lcl_dbg_out(*pItem));
         else
-            aStr += "invalid";
+            aStr.append("invalid");
 
         bFirst = false;
 
         pItem = aIter.NextItem();
     }
 
-    aStr += " ]";
+    aStr.append(" ]");
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 const char * dbg_out(const SfxItemSet & rSet)
@@ -308,18 +309,18 @@ const char * dbg_out(const SwTextAttr & rAttr)
 
 static const OUString lcl_dbg_out(const SwpHints & rHints)
 {
-    OUString aStr("[ SwpHints\n");
+    OUStringBuffer aStr("[ SwpHints\n");
 
     for (size_t i = 0; i < rHints.Count(); ++i)
     {
-        aStr += "  ";
-        aStr += lcl_dbg_out(*rHints.Get(i));
-        aStr += "\n";
+        aStr.append("  ");
+        aStr.append(lcl_dbg_out(*rHints.Get(i)));
+        aStr.append("\n");
     }
 
-    aStr += "]\n";
+    aStr.append("]\n");
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 const char * dbg_out(const SwpHints &rHints)
@@ -431,7 +432,7 @@ const char * dbg_out(const SwFrameFormat & rFrameFormat)
 
 static const OUString lcl_AnchoredFrames(const SwNode & rNode)
 {
-    OUString aResult("[");
+    OUStringBuffer aResult("[");
 
     const SwDoc * pDoc = rNode.GetDoc();
     if (pDoc)
@@ -450,19 +451,19 @@ static const OUString lcl_AnchoredFrames(const SwNode & rNode)
                 if (pPos && &pPos->nNode.GetNode() == &rNode)
                 {
                     if (! bFirst)
-                        aResult += ", ";
+                        aResult.append(", ");
 
                     if (*i)
-                        aResult += lcl_dbg_out(**i);
+                        aResult.append(lcl_dbg_out(**i));
                     bFirst = false;
                 }
             }
         }
     }
 
-    aResult += "]";
+    aResult.append("]");
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 static OUString lcl_dbg_out_NumType(sal_Int16 nType)
@@ -513,11 +514,9 @@ static OUString lcl_dbg_out(const SwNode & rNode)
     aTmpStr += OUString::number(rNode.GetIndex());
     aTmpStr += "\"";
 
-#ifdef DBG_UTIL
     aTmpStr += " serial=\"";
     aTmpStr += OUString::number(rNode.GetSerial());
     aTmpStr += "\"";
-#endif
 
     aTmpStr += " type=\"";
     aTmpStr += OUString::number(sal_Int32( rNode.GetNodeType() ) );
@@ -691,77 +690,6 @@ const char * dbg_out(const SwTextNode * pNode)
         return nullptr;
 }
 
-static void lcl_dbg_nodes_inner(OUString & aStr, SwNodes & rNodes, sal_uLong & nIndex)
-{
-    SwNode * pNode = rNodes[nIndex];
-    SwStartNode * pStartNode = dynamic_cast<SwStartNode *> (pNode);
-
-    SwNode * pEndNode = nullptr;
-    if (pStartNode != nullptr)
-        pEndNode = pStartNode->EndOfSectionNode();
-
-    sal_uLong nCount = rNodes.Count();
-    sal_uLong nStartIndex = nIndex;
-
-    bool bDone = false;
-
-    OUString aTag;
-    if (pNode->IsTableNode())
-        aTag += "table";
-    else if (pNode->IsSectionNode())
-        aTag += "section";
-    else
-        aTag += "nodes";
-
-    aStr += "<";
-    aStr += aTag;
-    aStr += ">";
-
-    while (! bDone)
-    {
-        if (pNode->IsStartNode() && nIndex != nStartIndex)
-            lcl_dbg_nodes_inner(aStr, rNodes, nIndex);
-        else
-        {
-            aStr += lcl_dbg_out(*pNode);
-            aStr += "\n";
-
-            nIndex++;
-        }
-
-        if (pNode == pEndNode || nIndex >= nCount)
-            bDone = true;
-        else
-            pNode = rNodes[nIndex];
-    }
-
-    aStr += "</";
-    aStr += aTag;
-    aStr += ">\n";
-}
-
-static OUString lcl_dbg_out(SwNodes & rNodes)
-{
-    OUString aStr("<nodes-array>");
-
-    sal_uLong nIndex = 0;
-    sal_uLong nCount = rNodes.Count();
-
-    while (nIndex < nCount)
-    {
-        lcl_dbg_nodes_inner(aStr, rNodes, nIndex);
-    }
-
-    aStr += "</nodes-array>\n";
-
-    return aStr;
-}
-
-const char * dbg_out(SwNodes & rNodes)
-{
-    return dbg_out(lcl_dbg_out(rNodes));
-}
-
 static OUString lcl_dbg_out(const SwUndo & rUndo)
 {
     return "[ " + OUString::number(static_cast<int>(rUndo.GetId()))
@@ -775,17 +703,17 @@ const char * dbg_out(const SwUndo & rUndo)
 
 static OUString lcl_dbg_out(SwOutlineNodes const & rNodes)
 {
-    OUString aStr("[\n");
+    OUStringBuffer aStr("[\n");
 
     for (size_t i = 0; i < rNodes.size(); i++)
     {
-        aStr += lcl_dbg_out(*rNodes[i]);
-        aStr += "\n";
+        aStr.append(lcl_dbg_out(*rNodes[i]));
+        aStr.append("\n");
     }
 
-    aStr += "]\n";
+    aStr.append("]\n");
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 const char * dbg_out( SwOutlineNodes const & rNodes)
@@ -804,24 +732,24 @@ static OUString lcl_dbg_out(const SvxNumberFormat & rFormat)
 
 static OUString lcl_dbg_out(const SwNumRule & rRule)
 {
-    OUString aResult("[ ");
+    OUStringBuffer aResult("[ ");
 
-    aResult += rRule.GetName();
-    aResult += " [";
+    aResult.append(rRule.GetName());
+    aResult.append(" [");
 
     for (sal_uInt8 n = 0; n < MAXLEVEL; n++)
     {
         if (n > 0)
-            aResult += ", ";
+            aResult.append(", ");
 
-        aResult += lcl_dbg_out(rRule.Get(n));
+        aResult.append(lcl_dbg_out(rRule.Get(n)));
     }
 
-    aResult += "]";
+    aResult.append("]");
 
-    aResult += "]";
+    aResult.append("]");
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 const char * dbg_out(const SwNumRule & rRule)
@@ -857,23 +785,23 @@ const char * dbg_out(const SwFrameFormats & rFrameFormats)
 
 static OUString lcl_dbg_out(const SwNumRuleTable & rTable)
 {
-    OUString aResult("[");
+    OUStringBuffer aResult("[");
 
     for (size_t n = 0; n < rTable.size(); n++)
     {
         if (n > 0)
-            aResult += ", ";
+            aResult.append(", ");
 
-        aResult += rTable[n]->GetName();
+        aResult.append(rTable[n]->GetName());
 
         char sBuffer[256];
         sprintf(sBuffer, "(%p)", rTable[n]);
-        aResult += OUString(sBuffer, strlen(sBuffer), RTL_TEXTENCODING_ASCII_US);
+        aResult.appendAscii(sBuffer);
     }
 
-    aResult += "]";
+    aResult.append("]");
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 const char * dbg_out(const SwNumRuleTable & rTable)
@@ -925,23 +853,23 @@ const char * dbg_out(const SwFormToken & rToken)
 
 static OUString lcl_dbg_out(const SwFormTokens & rTokens)
 {
-    OUString aStr("[");
+    OUStringBuffer aStr("[");
 
     SwFormTokens::const_iterator aIt;
 
     for (aIt = rTokens.begin(); aIt != rTokens.end(); ++aIt)
     {
         if (aIt != rTokens.begin())
-            aStr += ", ";
+            aStr.append(", ");
 
-        aStr += lcl_TokenType2Str(aIt->eTokenType);
-        aStr += ": ";
-        aStr += lcl_dbg_out(*aIt);
+        aStr.append(lcl_TokenType2Str(aIt->eTokenType));
+        aStr.append(": ");
+        aStr.append(lcl_dbg_out(*aIt));
     }
 
-    aStr += "]";
+    aStr.append("]");
 
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 const char * dbg_out(const SwFormTokens & rTokens)

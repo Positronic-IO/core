@@ -129,7 +129,7 @@ static SdPage* GetCurrentPage( sd::ViewShell const * pViewSh, EditFieldInfo cons
 
             if( pTextObj )
             {
-                pPage = dynamic_cast< SdPage* >( pTextObj->GetPage() );
+                pPage = dynamic_cast< SdPage* >( pTextObj->getSdrPageFromSdrObject() );
             }
         }
 
@@ -335,7 +335,7 @@ IMPL_LINK(SdModule, CalcFieldValueHdl, EditFieldInfo*, pInfo, void)
                 break;
         }
 
-        OUString aURL = pURLField->GetURL();
+        const OUString& aURL = pURLField->GetURL();
 
         svtools::ColorConfig aConfig;
         svtools::ColorConfigEntry eEntry =
@@ -744,73 +744,70 @@ VclPtr<SfxTabPage> SdModule::CreateTabPage( sal_uInt16 nId, TabPageParent pParen
     VclPtr<SfxTabPage> pRet;
     SfxAllItemSet aSet(*(rSet.GetPool()));
     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-    if( pFact )
+
+    switch(nId)
     {
-        switch(nId)
+        case SID_SD_TP_CONTENTS:
+        case SID_SI_TP_CONTENTS:
         {
-            case SID_SD_TP_CONTENTS:
-            case SID_SI_TP_CONTENTS:
-            {   ::CreateTabPage fnCreatePage = pFact->GetSdOptionsContentsTabPageCreatorFunc();
-                if( fnCreatePage )
-                    pRet = (*fnCreatePage)( pParent, &rSet );
-            }
-            break;
-            case SID_SD_TP_SNAP:
-            case SID_SI_TP_SNAP:
-            {   ::CreateTabPage fnCreatePage = pFact->GetSdOptionsSnapTabPageCreatorFunc();
-                if( fnCreatePage )
-                    pRet = (*fnCreatePage)( pParent, &rSet );
-            }
-            break;
-            case SID_SD_TP_PRINT:
-            case SID_SI_TP_PRINT:
-            {
-                ::CreateTabPage fnCreatePage = pFact->GetSdPrintOptionsTabPageCreatorFunc();
-                if( fnCreatePage )
-                {
-                    pRet = (*fnCreatePage)( pParent, &rSet );
-                    if(SID_SD_TP_PRINT == nId)
-                        aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_DRAW_MODE));
-                    pRet->PageCreated(aSet);
-                }
-            }
-            break;
-            case SID_SI_TP_MISC:
-            case SID_SD_TP_MISC:
-            {
-                ::CreateTabPage fnCreatePage = pFact->GetSdOptionsMiscTabPageCreatorFunc();
-                if( fnCreatePage )
-                {
-                    pRet = (*fnCreatePage)( pParent, &rSet );
-                    if(SID_SD_TP_MISC == nId)
-                        aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_DRAW_MODE));
-                    else
-                        aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_IMPRESS_MODE));
-                    pRet->PageCreated(aSet);
-                }
-            }
-            break;
-            case RID_SVXPAGE_TEXTANIMATION :
-            {
-                SfxAbstractDialogFactory* pSfxFact = SfxAbstractDialogFactory::Create();
-                if ( pSfxFact )
-                {
-                    ::CreateTabPage fnCreatePage = pSfxFact->GetTabPageCreatorFunc( nId );
-                    if ( fnCreatePage )
-                        pRet = (*fnCreatePage)( pParent, &rSet );
-                }
-            }
-            break;
+            ::CreateTabPage fnCreatePage = pFact->GetSdOptionsContentsTabPageCreatorFunc();
+            if( fnCreatePage )
+                pRet = (*fnCreatePage)( pParent, &rSet );
         }
-        DBG_ASSERT( pRet, "SdModule::CreateTabPage(): no valid ID for TabPage!" );
+        break;
+        case SID_SD_TP_SNAP:
+        case SID_SI_TP_SNAP:
+        {
+            ::CreateTabPage fnCreatePage = pFact->GetSdOptionsSnapTabPageCreatorFunc();
+            if( fnCreatePage )
+                pRet = (*fnCreatePage)( pParent, &rSet );
+        }
+        break;
+        case SID_SD_TP_PRINT:
+        case SID_SI_TP_PRINT:
+        {
+            ::CreateTabPage fnCreatePage = pFact->GetSdPrintOptionsTabPageCreatorFunc();
+            if( fnCreatePage )
+            {
+                pRet = (*fnCreatePage)( pParent, &rSet );
+                if(SID_SD_TP_PRINT == nId)
+                    aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_DRAW_MODE));
+                pRet->PageCreated(aSet);
+            }
+        }
+        break;
+        case SID_SI_TP_MISC:
+        case SID_SD_TP_MISC:
+        {
+            ::CreateTabPage fnCreatePage = pFact->GetSdOptionsMiscTabPageCreatorFunc();
+            if( fnCreatePage )
+            {
+                pRet = (*fnCreatePage)( pParent, &rSet );
+                if(SID_SD_TP_MISC == nId)
+                    aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_DRAW_MODE));
+                else
+                    aSet.Put (SfxUInt32Item(SID_SDMODE_FLAG,SD_IMPRESS_MODE));
+                pRet->PageCreated(aSet);
+            }
+        }
+        break;
+        case RID_SVXPAGE_TEXTANIMATION :
+        {
+            SfxAbstractDialogFactory* pSfxFact = SfxAbstractDialogFactory::Create();
+            ::CreateTabPage fnCreatePage = pSfxFact->GetTabPageCreatorFunc( nId );
+            if ( fnCreatePage )
+                pRet = (*fnCreatePage)( pParent, &rSet );
+        }
+        break;
     }
+    DBG_ASSERT( pRet, "SdModule::CreateTabPage(): no valid ID for TabPage!" );
 
     return pRet;
 }
 
-SfxStyleFamilies* SdModule::CreateStyleFamilies()
+std::unique_ptr<SfxStyleFamilies> SdModule::CreateStyleFamilies()
 {
-    SfxStyleFamilies *pStyleFamilies = new SfxStyleFamilies;
+    std::unique_ptr<SfxStyleFamilies> pStyleFamilies(new SfxStyleFamilies);
 
     pStyleFamilies->emplace_back(SfxStyleFamilyItem(SfxStyleFamily::Para,
                                                     SdResId(STR_GRAPHICS_STYLE_FAMILY),

@@ -28,6 +28,7 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <osl/diagnose.h>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <string.h>
 #include <vector>
@@ -68,6 +69,10 @@ namespace com { namespace sun { namespace star { namespace awt
 {
     struct Rectangle;
     class  XWindow2;
+} } } }
+
+namespace com { namespace sun { namespace star { namespace beans {
+    struct PropertyValue;
 } } } }
 
 class Color;
@@ -548,6 +553,9 @@ namespace canvas
                         const css::rendering::RenderState& renderState,
                         OutputDevice& rOutDev,
                         OutputDevice* p2ndOutDev=nullptr);
+
+        CANVASTOOLS_DLLPUBLIC void extractExtraFontProperties(const css::uno::Sequence<css::beans::PropertyValue>& rExtraFontProperties,
+                        sal_uInt32& rEmphasisMark);
     }
 }
 

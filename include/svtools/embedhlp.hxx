@@ -48,7 +48,7 @@ class SVT_DLLPUBLIC EmbeddedObjectRef
 {
     std::unique_ptr<EmbeddedObjectRef_Impl> mpImpl;
 
-    SVT_DLLPRIVATE SvStream* GetGraphicStream( bool bUpdate ) const;
+    SVT_DLLPRIVATE std::unique_ptr<SvStream> GetGraphicStream( bool bUpdate ) const;
     SVT_DLLPRIVATE void GetReplacement( bool bUpdate );
 
     EmbeddedObjectRef& operator = ( const EmbeddedObjectRef& ) = delete;
@@ -69,7 +69,6 @@ public:
                             throw();
 
     static bool IsChart(const css::uno::Reference < css::embed::XEmbeddedObject >& xObj);
-    static bool IsGLChart(const css::uno::Reference < css::embed::XEmbeddedObject >& xObj);
 
     const css::uno::Reference <css::embed::XEmbeddedObject>& operator->() const;
     const css::uno::Reference <css::embed::XEmbeddedObject>& GetObject() const;
@@ -111,7 +110,6 @@ public:
 
     bool IsLocked() const;
     bool IsChart() const;
-    bool IsGLChart() const;
 
     OUString GetChartType();
 

@@ -209,11 +209,11 @@ public: // Internal methods
     ~LtcBenContainer();
 
     sal_uLong remainingSize() const;
-    BenError Read(void * pBuffer, size_t MaxSize,
+    void Read(void * pBuffer, size_t MaxSize,
       size_t* pAmtRead);
     BenError ReadKnownSize(void * pBuffer, size_t Amt);
-    BenError SeekToPosition(BenContainerPos Pos);
-    BenError SeekFromEnd(long Offset);
+    void SeekToPosition(BenContainerPos Pos);
+    void SeekFromEnd(long Offset);
 
     void SetNextAvailObjectID(BenObjectID ID) { cNextAvailObjectID = ID; }
     CUtList& GetObjects() { return cObjects; }
@@ -309,11 +309,11 @@ class CBenValueSegment : public CUtListElmt
 public: // Internal methods
     CBenValueSegment(CBenValue * pValue, BenContainerPos Pos,
       size_t Size) : CUtListElmt(&pValue->GetValueSegments())
-      { cpValue = pValue; cImmediate = false; cPos = Pos;
+      { cImmediate = false; cPos = Pos;
       cSize = Size; }
     CBenValueSegment(CBenValue * pValue, const void  * pImmData,
       unsigned short Size) : CUtListElmt(&pValue->GetValueSegments())
-      { cpValue = pValue; cImmediate = true;
+      { cImmediate = true;
       std::memcpy(cImmData, pImmData, Size); cSize = Size; }
     bool IsImmediate() { return cImmediate; }
     BenContainerPos GetPosition() { return cPos; }
@@ -321,7 +321,6 @@ public: // Internal methods
     BenByte * GetImmediateData() { return cImmData; }
 
 private: // Data
-    CBenValue * cpValue;
     bool cImmediate;
     union
     {

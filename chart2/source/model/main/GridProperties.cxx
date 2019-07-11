@@ -21,12 +21,14 @@
 #include <LinePropertiesHelper.hxx>
 #include <UserDefinedProperties.hxx>
 #include <PropertyHelper.hxx>
-#include <com/sun/star/style/XStyle.hpp>
+#include <ModifyListenerHelper.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
+
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySetInfo; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 
@@ -131,7 +133,7 @@ GridProperties::GridProperties() :
 
 GridProperties::GridProperties( const GridProperties & rOther ) :
         MutexContainer(),
-        impl::GridProperties_Base(),
+        impl::GridProperties_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {

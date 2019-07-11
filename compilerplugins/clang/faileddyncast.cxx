@@ -90,11 +90,11 @@ bool isAlwaysNull(CXXDynamicCastExpr const * expr) {
 }
 
 class FailedDynCast:
-    public RecursiveASTVisitor<FailedDynCast>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<FailedDynCast>
 {
 public:
     explicit FailedDynCast(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     bool shouldVisitTemplateInstantiations() const { return true; }
 
@@ -116,7 +116,7 @@ bool FailedDynCast::VisitCXXDynamicCastExpr(CXXDynamicCastExpr const * expr) {
     if (isAlwaysNull(expr)) {
         report(
             DiagnosticsEngine::Warning,
-            "dynamic_cast from %0 to %1 always fails", expr->getLocStart())
+            "dynamic_cast from %0 to %1 always fails", compat::getBeginLoc(expr))
             << expr->getSubExpr()->getType() << expr->getType()
             << expr->getSourceRange();
     }

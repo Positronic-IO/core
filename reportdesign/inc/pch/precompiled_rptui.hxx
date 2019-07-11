@@ -432,19 +432,15 @@
 #include <svl/stylesheetuser.hxx>
 #include <svl/svldllapi.h>
 #include <svl/undo.hxx>
-#include <svtools/AccessibleBrowseBoxObjType.hxx>
 #include <svtools/accessibilityoptions.hxx>
 #include <svtools/colorcfg.hxx>
 #include <svtools/framestatuslistener.hxx>
-#include <svtools/headbar.hxx>
+#include <vcl/headbar.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
 #include <svtools/statusbarcontroller.hxx>
 #include <svtools/svtdllapi.h>
 #include <svtools/toolboxcontroller.hxx>
-#include <svtools/transfer.hxx>
-#include <svtools/treelistentries.hxx>
 #include <svtools/valueset.hxx>
-#include <svtools/viewdataentry.hxx>
 #include <svx/Palette.hxx>
 #include <svx/SvxColorValueSet.hxx>
 #include <svx/XPropertyEntry.hxx>
@@ -552,7 +548,6 @@
 #include <tools/lineend.hxx>
 #include <tools/link.hxx>
 #include <tools/mapunit.hxx>
-#include <tools/mempool.hxx>
 #include <tools/multisel.hxx>
 #include <tools/poly.hxx>
 #include <tools/ref.hxx>
@@ -579,5 +574,9 @@
 #include <unotools/resmgr.hxx>
 #include <unotools/syslocale.hxx>
 #include <unotools/unotoolsdllapi.h>
+#include <vcl/AccessibleBrowseBoxObjType.hxx>
+#include <vcl/transfer.hxx>
+#include <vcl/treelistentries.hxx>
+#include <vcl/viewdataentry.hxx>
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

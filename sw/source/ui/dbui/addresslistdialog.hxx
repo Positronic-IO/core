@@ -21,8 +21,8 @@
 
 #include <sfx2/basedlgs.hxx>
 #include <vcl/button.hxx>
-#include <svtools/svtabbx.hxx>
-#include <svtools/headbar.hxx>
+#include <vcl/svtabbx.hxx>
+#include <vcl/headbar.hxx>
 #include <swdbdata.hxx>
 #include <sharedconnection.hxx>
 
@@ -57,8 +57,6 @@ class SwAddressListDialog : public SfxModalDialog
 
     VclPtr<OKButton>       m_pOK;
 
-    OUString        m_sName;
-    OUString        m_sTable;
     OUString        m_sConnecting;
 
     SvTreeListEntry*    m_pCreatedDataSource;

@@ -28,11 +28,8 @@
 
 class SdPage;
 class SdrPage;
-class Paragraph;
 class SdrTextObj;
-class Outliner;
 class SfxProgress;
-struct PaintFirstLineInfo;
 struct PasteOrDropInfos;
 class EditView;
 
@@ -45,7 +42,6 @@ namespace sd {
 class DrawDocShell;
 class OutlineViewShell;
 class OutlineViewModelChangeGuard;
-class DrawDocShell;
 
 static const int MAX_OUTLINERVIEWS = 4;
 
@@ -111,7 +107,7 @@ public:
 
     sal_uLong         GetPaperWidth() { return mnPaperWidth;}
 
-    bool          PrepareClose();
+    void              PrepareClose();
 
     virtual void    GetAttributes( SfxItemSet& rTargetSet, bool bOnlyHardAttr = false ) const override;
     virtual bool    SetAttributes(const SfxItemSet& rSet, bool bReplaceAll = false) override;
@@ -207,7 +203,7 @@ private:
     /** holds a model guard during drag and drop between BeginMovingHdl and EndMovingHdl */
     std::unique_ptr<OutlineViewModelChangeGuard, o3tl::default_delete<OutlineViewModelChangeGuard>> maDragAndDropModelGuard;
 
-    SvxLRSpaceItem maLRSpaceItem;
+    SvxLRSpaceItem const maLRSpaceItem;
     Image maSlideImage;
 };
 

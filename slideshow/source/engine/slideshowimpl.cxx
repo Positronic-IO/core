@@ -28,7 +28,6 @@
 #include <cppuhelper/exc_hlp.hxx>
 
 #include <comphelper/anytostring.hxx>
-#include <comphelper/make_shared_from_uno.hxx>
 #include <comphelper/scopeguard.hxx>
 #include <comphelper/servicedecl.hxx>
 
@@ -47,6 +46,7 @@
 
 #include <vcl/font.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/util/XModifyListener.hpp>
@@ -150,7 +150,7 @@ private:
         one used by SlideShowImpl: it is not paused or modified by
         animations.
     */
-    canvas::tools::ElapsedTime maTimer;
+    canvas::tools::ElapsedTime const maTimer;
     /** Time between the display of frames.  Enforced only when mbIsActive
         is <TRUE/>.
     */
@@ -1531,7 +1531,7 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
                         "setProperty(): User paint overrides invisible mouse" );
 
             // enable user paint
-            maUserPaintColor.reset( unoColor2RGBColor( nColor ) );
+            maUserPaintColor = unoColor2RGBColor(nColor);
             if( mpCurrentSlide && !mpCurrentSlide->isPaintOverlayActive() )
                 mpCurrentSlide->enablePaintOverlay();
 
@@ -1561,7 +1561,7 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
                         "setProperty(): User paint overrides invisible mouse" );
 
             // enable user paint
-            maEraseAllInk.reset( bEraseAllInk );
+            maEraseAllInk = bEraseAllInk;
             maEventMultiplexer.notifyEraseAllInk( *maEraseAllInk );
         }
 
@@ -1578,7 +1578,7 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
 
             if(bSwitchPenMode){
             // Switch to Pen Mode
-            maSwitchPenMode.reset( bSwitchPenMode );
+            maSwitchPenMode = bSwitchPenMode;
             maEventMultiplexer.notifySwitchPenMode();
             }
         }
@@ -1594,7 +1594,7 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
                         "setProperty(): User paint overrides invisible mouse" );
             if(bSwitchEraserMode){
             // switch to Eraser mode
-            maSwitchEraserMode.reset( bSwitchEraserMode );
+            maSwitchEraserMode = bSwitchEraserMode;
             maEventMultiplexer.notifySwitchEraserMode();
             }
         }
@@ -1611,7 +1611,7 @@ sal_Bool SlideShowImpl::setProperty( beans::PropertyValue const& rProperty )
                         "setProperty(): User paint overrides invisible mouse" );
 
             // enable user paint
-            maEraseInk.reset( nEraseInk );
+            maEraseInk = nEraseInk;
             maEventMultiplexer.notifyEraseInkWidth( *maEraseInk );
         }
 

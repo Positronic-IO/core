@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/xdatapilottables.hxx>
 
 #include <com/sun/star/container/XIndexAccess.hpp>
@@ -30,7 +31,9 @@ using namespace com::sun::star;
 
 namespace sc_apitest
 {
-class ScDataPilotTablesObj : public CalcUnoApiTest, public apitest::XDataPilotTables
+class ScDataPilotTablesObj : public CalcUnoApiTest,
+                             public apitest::XDataPilotTables,
+                             public apitest::XEnumerationAccess
 {
 public:
     ScDataPilotTablesObj();
@@ -44,6 +47,9 @@ public:
 
     // XDataPilotTables
     CPPUNIT_TEST(testXDataPilotTables);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -59,7 +65,6 @@ ScDataPilotTablesObj::ScDataPilotTablesObj()
 uno::Reference<uno::XInterface> ScDataPilotTablesObj::init()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference<container::XIndexAccess> xIndex(xDoc->getSheets(), UNO_QUERY_THROW);
@@ -84,7 +89,6 @@ uno::Reference<uno::XInterface> ScDataPilotTablesObj::init()
 uno::Reference<uno::XInterface> ScDataPilotTablesObj::getXSpreadsheet()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference<container::XIndexAccess> xIndex(xDoc->getSheets(), UNO_QUERY_THROW);

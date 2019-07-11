@@ -21,6 +21,9 @@
 
 #include "cppuhelper/implbase_ex.hxx"
 #include "rtl/instance.hxx"
+#include "cppuhelper/weak.hxx"
+#include "cppuhelper/weakagg.hxx"
+#include "com/sun/star/lang/XTypeProvider.hpp"
 
 namespace cppu
 {
@@ -77,6 +80,14 @@ namespace cppu
     {
         struct cd : public rtl::StaticAggregate< class_data, ImplClassData8< Ifc1, Ifc2, Ifc3, Ifc4, Ifc5, Ifc6, Ifc7, Ifc8, ImplHelper8<Ifc1, Ifc2, Ifc3, Ifc4, Ifc5, Ifc6, Ifc7, Ifc8> > > {};
     public:
+#if defined LIBO_INTERNAL_ONLY
+        ImplHelper8() = default;
+        ImplHelper8(ImplHelper8 const &) = default;
+        ImplHelper8(ImplHelper8 &&) = default;
+        ImplHelper8 & operator =(ImplHelper8 const &) = default;
+        ImplHelper8 & operator =(ImplHelper8 &&) = default;
+#endif
+
         virtual css::uno::Any SAL_CALL queryInterface( css::uno::Type const & rType ) SAL_OVERRIDE
             { return ImplHelper_query( rType, cd::get(), this ); }
         virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes() SAL_OVERRIDE

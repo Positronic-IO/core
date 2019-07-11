@@ -19,28 +19,25 @@
 #ifndef INCLUDED_CHART2_SOURCE_CONTROLLER_INC_DLG_CHARTTYPE_HXX
 #define INCLUDED_CHART2_SOURCE_CONTROLLER_INC_DLG_CHARTTYPE_HXX
 
-#include <vcl/dialog.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/button.hxx>
-#include <com/sun/star/frame/XModel.hpp>
-#include <com/sun/star/uno/XComponentContext.hpp>
+#include <vcl/weld.hxx>
+
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
 
 namespace chart
 {
 
 class ChartTypeTabPage;
-class ChartTypeDialog : public ModalDialog
+class ChartTypeDialog : public weld::GenericDialogController
 {
 public:
-    ChartTypeDialog( vcl::Window* pWindow
-        , const css::uno::Reference< css::frame::XModel >& xChartModel );
+    ChartTypeDialog(weld::Window* pWindow,
+                    const css::uno::Reference< css::frame::XModel >& xChartModel);
     virtual ~ChartTypeDialog() override;
-    virtual void dispose() override;
 
 private:
-    VclPtr<ChartTypeTabPage>   m_pChartTypeTabPage;
-
-    css::uno::Reference< css::frame::XModel >            m_xChartModel;
+    css::uno::Reference<css::frame::XModel> m_xChartModel;
+    std::unique_ptr<weld::Container> m_xContentArea;
+    VclPtr<ChartTypeTabPage> m_xChartTypeTabPage;
 };
 
 } //namespace chart

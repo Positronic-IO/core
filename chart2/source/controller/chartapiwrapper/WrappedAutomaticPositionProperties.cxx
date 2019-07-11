@@ -18,8 +18,12 @@
  */
 
 #include "WrappedAutomaticPositionProperties.hxx"
+#include "Chart2ModelContact.hxx"
 #include <FastPropertyIdRanges.hxx>
+#include <WrappedProperty.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertyState.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/chart2/RelativePosition.hpp>
 #include <tools/diagnose_ex.h>
 
@@ -98,11 +102,6 @@ enum
     PROP_CHART_AUTOMATIC_POSITION = FAST_PROPERTY_ID_START_CHART_AUTOPOSITION_PROP
 };
 
-void lcl_addWrappedProperties( std::vector< WrappedProperty* >& rList )
-{
-    rList.push_back( new WrappedAutomaticPositionProperty() );
-}
-
 }//anonymous namespace
 
 void WrappedAutomaticPositionProperties::addProperties( std::vector< Property > & rOutProperties )
@@ -114,9 +113,9 @@ void WrappedAutomaticPositionProperties::addProperties( std::vector< Property > 
                   | beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-void WrappedAutomaticPositionProperties::addWrappedProperties( std::vector< WrappedProperty* >& rList )
+void WrappedAutomaticPositionProperties::addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList )
 {
-    lcl_addWrappedProperties( rList );
+    rList.emplace_back( new WrappedAutomaticPositionProperty() );
 }
 
 } //namespace wrapper

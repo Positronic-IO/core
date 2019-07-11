@@ -266,29 +266,24 @@ void MasterPageObserver::Implementation::AnalyzeUsedMasterPages (
             aCurrentMasterPages.insert (pMasterPage->GetName());
     }
 
-    typedef ::std::vector<OUString> StringList;
-    StringList aNewMasterPages;
-    StringList aRemovedMasterPages;
+    std::vector<OUString> aNewMasterPages;
+    std::vector<OUString> aRemovedMasterPages;
     MasterPageContainer::iterator aOldMasterPagesDescriptor (
         maUsedMasterPages.find(&rDocument));
     if (aOldMasterPagesDescriptor != maUsedMasterPages.end())
     {
-        StringList::iterator I;
-
-        ::std::set<OUString>::iterator J;
-
         // Send events about the newly used master pages.
         ::std::set_difference (
             aCurrentMasterPages.begin(),
             aCurrentMasterPages.end(),
             aOldMasterPagesDescriptor->second.begin(),
             aOldMasterPagesDescriptor->second.end(),
-            ::std::back_insert_iterator<StringList>(aNewMasterPages));
-        for (I=aNewMasterPages.begin(); I!=aNewMasterPages.end(); ++I)
+            std::back_inserter(aNewMasterPages));
+        for (auto& aNewMasterPage : aNewMasterPages)
         {
             MasterPageObserverEvent aEvent (
                 MasterPageObserverEvent::ET_MASTER_PAGE_ADDED,
-                *I);
+                aNewMasterPage);
             SendEvent (aEvent);
         }
 
@@ -298,12 +293,12 @@ void MasterPageObserver::Implementation::AnalyzeUsedMasterPages (
             aOldMasterPagesDescriptor->second.end(),
             aCurrentMasterPages.begin(),
             aCurrentMasterPages.end(),
-            ::std::back_insert_iterator<StringList>(aRemovedMasterPages));
-        for (I=aRemovedMasterPages.begin(); I!=aRemovedMasterPages.end(); ++I)
+            std::back_inserter(aRemovedMasterPages));
+        for (auto& aRemovedMasterPage : aRemovedMasterPages)
         {
             MasterPageObserverEvent aEvent (
                 MasterPageObserverEvent::ET_MASTER_PAGE_REMOVED,
-                *I);
+                aRemovedMasterPage);
             SendEvent (aEvent);
         }
 

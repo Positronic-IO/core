@@ -48,7 +48,7 @@ public:
     virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual SfxPoolItem*    Create(SvStream &, sal_uInt16) const override;
     virtual SvStream&       Store(SvStream &, sal_uInt16 nItemVersion) const override;
-    OUString                GetValueTextByPos( sal_uInt16 nPos ) const;
+    static OUString         GetValueTextByPos( sal_uInt16 nPos );
     virtual sal_uInt16      GetValueCount() const override;
     virtual bool            QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId = 0 ) const override;
     virtual bool            PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId ) override;
@@ -64,6 +64,7 @@ public:
             SetValue( rCross.GetValue() );
             return *this;
         }
+    SvxCrossedOutItem(SvxCrossedOutItem const &) = default; // SfxPoolItem copy function dichotomy
 
     // enum cast
     FontStrikeout           GetStrikeout() const

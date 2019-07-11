@@ -18,6 +18,8 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <cstddef>
 
@@ -116,7 +118,7 @@ void TETextPortionList::Reset()
 
 void TETextPortionList::DeleteFromPortion( std::size_t nDelFrom )
 {
-    SAL_WARN_IF( ( nDelFrom >= maPortions.size() ) && ( (nDelFrom != 0) || (maPortions.size() != 0) ), "vcl", "DeleteFromPortion: Out of range" );
+    SAL_WARN_IF( ( nDelFrom >= maPortions.size() ) && ( (nDelFrom != 0) || (!maPortions.empty()) ), "vcl", "DeleteFromPortion: Out of range" );
     maPortions.erase( maPortions.begin() + nDelFrom, maPortions.end() );
 }
 
@@ -266,9 +268,9 @@ TEParaPortions::~TEParaPortions()
 }
 
 IdleFormatter::IdleFormatter()
+    : mpView(nullptr)
+    , mnRestarts(0)
 {
-    mpView = nullptr;
-    mnRestarts = 0;
     SetPriority(TaskPriority::HIGH_IDLE);
 }
 
@@ -314,12 +316,11 @@ TextHint::TextHint( SfxHintId Id, sal_uLong nValue ) : SfxHint( Id ), mnValue(nV
 }
 
 TEIMEInfos::TEIMEInfos( const TextPaM& rPos, const OUString& rOldTextAfterStartPos )
-: aOldTextAfterStartPos( rOldTextAfterStartPos )
+    : aOldTextAfterStartPos(rOldTextAfterStartPos)
+    , aPos(rPos)
+    , nLen(0)
+    , bWasCursorOverwrite(false)
 {
-    aPos = rPos;
-    nLen = 0;
-    pAttribs = nullptr;
-    bWasCursorOverwrite = false;
 }
 
 TEIMEInfos::~TEIMEInfos()

@@ -655,8 +655,12 @@ DECLARE_RTFEXPORT_TEST(testFdo63428, "hello.rtf")
 
 DECLARE_RTFEXPORT_TEST(testFdo69384, "fdo69384-paste.rtf")
 {
-    // Check if the style is loaded
+    // Ensure non-default style is loaded
     getStyles("ParagraphStyles")->getByName("Text body justified");
+    // Ensure default styles were modified, vs testFdo69384Inserted where it is not
+    uno::Reference<beans::XPropertySet> xPropertySet(
+        getStyles("ParagraphStyles")->getByName("Text Body"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(68.f, getProperty<float>(xPropertySet, "CharHeight"));
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo69384Inserted, "hello.rtf")
@@ -666,8 +670,11 @@ DECLARE_RTFEXPORT_TEST(testFdo69384Inserted, "hello.rtf")
     uno::Reference<text::XTextRange> xEnd = xText->getEnd();
     paste("rtfexport/data/fdo69384-paste.rtf", xEnd);
 
-    // During insert of the RTF document we do not insert new styles
-    CPPUNIT_ASSERT(!getStyles("ParagraphStyles")->hasByName("Text body justified"));
+    // During insert of the RTF document we do not change pre-existing styles
+    // vs testFdo69384 where it is
+    uno::Reference<beans::XPropertySet> xPropertySet(
+        getStyles("ParagraphStyles")->getByName("Text Body"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(12.f, getProperty<float>(xPropertySet, "CharHeight"));
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo61193, "hello.rtf")
@@ -1096,6 +1103,33 @@ DECLARE_RTFEXPORT_TEST(testParaBottomMargin, "para-bottom-margin.rtf")
     // set an attribute with default value on the paragraph"
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(getParagraph(1), "ParaBottomMargin"));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2), getProperty<sal_Int32>(getParagraph(1), "ParaTopMargin"));
+}
+
+DECLARE_RTFIMPORT_TEST(testParaStyleBottomMargin2, "para-style-bottom-margin-2.rtf")
+{
+    uno::Reference<beans::XPropertySet> xPropertySet(
+        getStyles("ParagraphStyles")->getByName("Standard"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(353), getProperty<sal_Int32>(xPropertySet, "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(style::LineSpacingMode::PROP,
+                         getProperty<style::LineSpacing>(xPropertySet, "ParaLineSpacing").Mode);
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(115),
+                         getProperty<style::LineSpacing>(xPropertySet, "ParaLineSpacing").Height);
+
+    // the derived style contains \sa200, as does its parent
+    uno::Reference<beans::XPropertySet> xPropertySet1(
+        getStyles("ParagraphStyles")->getByName("List Paragraph"), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(353), getProperty<sal_Int32>(xPropertySet1, "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(style::LineSpacingMode::PROP,
+                         getProperty<style::LineSpacing>(xPropertySet1, "ParaLineSpacing").Mode);
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(115),
+                         getProperty<style::LineSpacing>(xPropertySet1, "ParaLineSpacing").Height);
+    // for the paragraph there is no \saN, so it should default to 0
+    auto const xPara(getParagraph(1));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), getProperty<sal_Int32>(xPara, "ParaBottomMargin"));
+    CPPUNIT_ASSERT_EQUAL(style::LineSpacingMode::PROP,
+                         getProperty<style::LineSpacing>(xPara, "ParaLineSpacing").Mode);
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(115),
+                         getProperty<style::LineSpacing>(xPara, "ParaLineSpacing").Height);
 }
 
 DECLARE_RTFEXPORT_TEST(testFdo66040, "fdo66040.rtf")
@@ -1824,7 +1858,7 @@ DECLARE_RTFEXPORT_TEST(testTdf97035, "tdf97035.rtf")
 
     // First cell width of the second row should be 2300
     uno::Reference<table::XTableRows> xTableRows(xTable->getRows(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(sal_Int16(2300), getProperty<uno::Sequence<text::TableColumnSeparator>>(
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(2299), getProperty<uno::Sequence<text::TableColumnSeparator>>(
                                               xTableRows->getByIndex(1), "TableColumnSeparators")[0]
                                               .Position);
 }

@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -188,7 +189,7 @@ int SalAquaPicker::runandwaitforresult()
     return status;
 }
 
-void SalAquaPicker::implsetDisplayDirectory( const rtl::OUString& aDirectory )
+void SalAquaPicker::implsetDisplayDirectory( const OUString& aDirectory )
 {
     SolarMutexGuard aGuard;
 
@@ -197,12 +198,12 @@ void SalAquaPicker::implsetDisplayDirectory( const rtl::OUString& aDirectory )
     }
 }
 
-rtl::OUString const & SalAquaPicker::implgetDisplayDirectory()
+OUString const & SalAquaPicker::implgetDisplayDirectory()
 {
     return m_sDisplayDirectory;
 }
 
-void SalAquaPicker::implsetTitle( const rtl::OUString& aTitle )
+void SalAquaPicker::implsetTitle( const OUString& aTitle )
 {
     SolarMutexGuard aGuard;
 

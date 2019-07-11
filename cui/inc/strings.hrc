@@ -19,7 +19,7 @@
 #ifndef INCLUDED_CUI_INC_STRINGS_HRC
 #define INCLUDED_CUI_INC_STRINGS_HRC
 
-#define NC_(Context, String) (Context "\004" u8##String)
+#define NC_(Context, String) reinterpret_cast<char const *>(Context "\004" u8##String)
 
 #define RID_SVXSTR_KEY_CONFIG_DIR                   NC_("RID_SVXSTR_KEY_CONFIG_DIR", "Configuration")
 #define RID_SVXSTR_KEY_WORK_PATH                    NC_("RID_SVXSTR_KEY_WORK_PATH", "My Documents")
@@ -96,12 +96,18 @@
 #define RID_SVXSTR_SELECTOR_ADD_COMMANDS            NC_("RID_SVXSTR_SELECTOR_ADD_COMMANDS", "Add Commands")
 #define RID_SVXSTR_SELECTOR_RUN                     NC_("RID_SVXSTR_SELECTOR_RUN", "Run")
 #define RID_SVXSTR_ROW                              NC_("RID_SVXSTR_ROW", "Insert Rows")
+// tdf#119293 Labels depending on row/col
+#define RID_SVXSTR_INSERTROW_BEFORE                 NC_("RID_SVXSTR_INSERTROW_BEFORE", "Above selection")
+#define RID_SVXSTR_INSERTROW_AFTER                  NC_("RID_SVXSTR_INSERTROW_AFTER", "Below selection")
 #define RID_SVXSTR_REMOVE_FAVORITES                 NC_("RID_SVXSTR_REMOVE_FAVORITES", "Remove from Favorites")
-#define RID_SVXSTR_MISSING_GLYPH                    NC_("RID_SVXSTR_MISSING_GLYPH", "Missing Glyph")
+#define RID_SVXSTR_MISSING_CHAR                     NC_("RID_SVXSTR_MISSING_CHAR", "Missing character")
 #define RID_SVXSTR_ADD_FAVORITES                    NC_("RID_SVXSTR_ADD_FAVORITES", "Add to Favorites")
 // PPI is pixel per inch, %1 is a number
 #define RID_SVXSTR_PPI                              NC_("RID_SVXSTR_PPI", "(%1 PPI)")
 #define RID_SVXSTR_COL                              NC_("RID_SVXSTR_COL", "Insert Columns")
+// tdf#119293 Labels depending on row/col
+#define RID_SVXSTR_INSERTCOL_BEFORE                 NC_("RID_SVXSTR_INSERTCOL_BEFORE", "Before selection")
+#define RID_SVXSTR_INSERTCOL_AFTER                  NC_("RID_SVXSTR_INSERTCOL_AFTER", "After selection")
 #define RID_SVXSTR_AUTO_ENTRY                       NC_("RID_SVXSTR_AUTO_ENTRY", "Automatic")
 #define RID_SVXSTR_EDIT_GRAPHIC                     NC_("RID_SVXSTR_EDIT_GRAPHIC", "Link")
 #define RID_SVXSTR_LOADACCELCONFIG                  NC_("RID_SVXSTR_LOADACCELCONFIG", "Load Keyboard Configuration")
@@ -346,9 +352,10 @@
 #define RID_SVXSTR_ORDINAL                          NC_("RID_SVXSTR_ORDINAL", "Format ordinal numbers suffixes (1st -> 1^st)")
 #define RID_SVXSTR_DEL_EMPTY_PARA                   NC_("RID_SVXSTR_DEL_EMPTY_PARA", "Remove blank paragraphs")
 #define RID_SVXSTR_USER_STYLE                       NC_("RID_SVXSTR_USER_STYLE", "Replace Custom Styles")
-#define RID_SVXSTR_BULLET                           NC_("RID_SVXSTR_BULLET", "Replace bullets with: ")
-#define RID_SVXSTR_RIGHT_MARGIN                     NC_("RID_SVXSTR_RIGHT_MARGIN", "Combine single line paragraphs if length greater than")
-#define RID_SVXSTR_NUM                              NC_("RID_SVXSTR_NUM", "Bulleted and numbered lists. Bullet symbol: ")
+#define RID_SVXSTR_BULLET                           NC_("RID_SVXSTR_BULLET", "Replace bullets with: %1")
+// To translators: %1 will be replaced with a percentage, e.g. "10%"
+#define RID_SVXSTR_RIGHT_MARGIN                     NC_("RID_SVXSTR_RIGHT_MARGIN", "Combine single line paragraphs if length greater than %1")
+#define RID_SVXSTR_NUM                              NC_("RID_SVXSTR_NUM", "Bulleted and numbered lists. Bullet symbol: %1")
 #define RID_SVXSTR_BORDER                           NC_("RID_SVXSTR_BORDER", "Apply border")
 #define RID_SVXSTR_CREATE_TABLE                     NC_("RID_SVXSTR_CREATE_TABLE", "Create table")
 #define RID_SVXSTR_REPLACE_TEMPLATES                NC_("RID_SVXSTR_REPLACE_TEMPLATES", "Apply Styles")
@@ -356,7 +363,6 @@
 #define RID_SVXSTR_DEL_SPACES_BETWEEN_LINES         NC_("RID_SVXSTR_DEL_SPACES_BETWEEN_LINES", "Delete spaces and tabs at end and start of line")
 #define RID_SVXSTR_CONNECTOR                        NC_("RID_SVXSTR_CONNECTOR", "Connector")
 #define RID_SVXSTR_DIMENSION_LINE                   NC_("RID_SVXSTR_DIMENSION_LINE", "Dimension line")
-#define RID_SVXSTR_LOAD_ERROR                       NC_("RID_SVXSTR_LOAD_ERROR", "The selected module could not be loaded.")
 #define RID_SVXSTR_STARTQUOTE                       NC_("RID_SVXSTR_STARTQUOTE", "Start Quote")
 #define RID_SVXSTR_ENDQUOTE                         NC_("RID_SVXSTR_ENDQUOTE", "End Quote")
 
@@ -365,6 +371,8 @@
 #define RID_SVXSTR_SEARCHERROR                      NC_("RID_SVXSTR_SEARCHERROR", "Cannot open %1, please try again later.")
 #define RID_SVXSTR_NORESULTS                        NC_("RID_SVXSTR_NORESULTS", "No results found.")
 #define RID_SVXSTR_APPLYPERSONA                     NC_("RID_SVXSTR_APPLYPERSONA", "Applying Theme...")
+#define RID_SVXSTR_INVALIDPERSONAURL                NC_("RID_SVXSTR_INVALIDPERSONAURL", "Please enter a valid theme address or a search term.")
+#define RID_SVXSTR_MOZAPIUNREACHABLE                NC_("RID_SVXSTR_MOZAPIUNREACHABLE", "The Mozilla Themes API is currently unavailable.")
 
 #define RID_SVXSTR_TABLE_PRESET_NONE                NC_("RID_SVXSTR_TABLE_PRESET_NONE", "Set No Borders")
 #define RID_SVXSTR_TABLE_PRESET_ONLYOUTER           NC_("RID_SVXSTR_TABLE_PRESET_ONLYOUTER", "Set Outer Border Only")
@@ -384,7 +392,7 @@
 #define RID_SVXSTR_SHADOW_STYLE_BOTTOMLEFT          NC_("RID_SVXSTR_SHADOW_STYLE_BOTTOMLEFT", "Cast Shadow to Bottom Left")
 #define RID_SVXSTR_SHADOW_STYLE_TOPLEFT             NC_("RID_SVXSTR_SHADOW_STYLE_TOPLEFT", "Cast Shadow to Top Left")
 #define RID_SVXSTR_SIGNATURELINE_SIGNED_BY          NC_("RID_SVXSTR_SIGNATURELINE_SIGNED_BY", "Signed by: %1")
-
+#define RID_SVXSTR_OPENCL_RESTART                   NC_("RID_SVXSTR_OPENCL_RESTART", "For the OpenCL changes to take effect, %PRODUCTNAME must be restarted.")
 #endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

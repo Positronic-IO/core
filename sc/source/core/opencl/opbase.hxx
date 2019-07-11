@@ -10,16 +10,16 @@
 #ifndef INCLUDED_SC_SOURCE_CORE_OPENCL_OPBASE_HXX
 #define INCLUDED_SC_SOURCE_CORE_OPENCL_OPBASE_HXX
 
-#include <sal/log.hxx>
-
 #include <clew/clew.h>
-
 #include <formula/token.hxx>
-#include <formula/vectortoken.hxx>
+#include <formula/types.hxx>
 #include <memory>
 #include <set>
+#include <vector>
 
-#include <calcconfig.hxx>
+namespace formula { class DoubleVectorRefToken; }
+namespace formula { class FormulaToken; }
+struct ScCalcConfig;
 
 namespace sc { namespace opencl {
 
@@ -35,7 +35,7 @@ public:
 
     std::string mMessage;
     std::string mFile;
-    int mLineNumber;
+    int const mLineNumber;
 };
 
 /// Failed in marshaling
@@ -47,7 +47,7 @@ public:
     std::string mFunction;
     cl_int mError;
     std::string mFile;
-    int mLineNumber;
+    int const mLineNumber;
 };
 
 /// Inconsistent state
@@ -57,8 +57,27 @@ public:
     Unhandled( const std::string& fn, int ln );
 
     std::string mFile;
-    int mLineNumber;
+    int const mLineNumber;
 };
+
+class InvalidParameterCount
+{
+public:
+    InvalidParameterCount( int parameterCount, const std::string& file, int ln );
+
+    int mParameterCount;
+    std::string mFile;
+    int const mLineNumber;
+};
+
+// Helper macro to be used in code emitting OpenCL code for Calc functions.
+// Requires the vSubArguments parameter.
+#define CHECK_PARAMETER_COUNT(min, max) \
+    do { \
+        const int count = vSubArguments.size(); \
+        if( count < ( min ) || count > ( max )) \
+            throw InvalidParameterCount( count, __FILE__, __LINE__ ); \
+    } while( false )
 
 typedef std::shared_ptr<FormulaTreeNode> FormulaTreeNodeRef;
 
@@ -76,7 +95,7 @@ public:
     }
 
 private:
-    formula::FormulaConstTokenRef mpCurrentFormula;
+    formula::FormulaConstTokenRef const mpCurrentFormula;
 };
 
 /// (Partially) abstract base class for an operand
@@ -125,7 +144,7 @@ public:
 protected:
     const ScCalcConfig& mCalcConfig;
     std::string mSymName;
-    FormulaTreeNodeRef mFormulaTree;
+    FormulaTreeNodeRef const mFormulaTree;
 };
 
 typedef std::shared_ptr<DynamicKernelArgument> DynamicKernelArgumentRef;

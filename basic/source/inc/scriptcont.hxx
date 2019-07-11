@@ -24,6 +24,7 @@
 #include <basic/basmgr.hxx>
 #include <com/sun/star/script/vba/XVBAModuleInfo.hpp>
 #include <comphelper/uno3.hxx>
+#include <cppuhelper/implbase1.hxx>
 
 namespace basic
 {
@@ -31,7 +32,6 @@ namespace basic
 
 class SfxScriptLibraryContainer : public SfxLibraryContainer, public OldBasicPassword
 {
-    OUString maScriptLanguage;
     css::uno::Reference< css::container::XNameAccess > mxCodeNameAccess;
 
     // Methods to distinguish between different library types

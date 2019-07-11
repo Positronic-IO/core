@@ -20,6 +20,7 @@
 #include <rangelst.hxx>
 #include <sfx2/dispatch.hxx>
 #include <vcl/waitobj.hxx>
+#include <sal/log.hxx>
 
 #include <uiitems.hxx>
 #include <dbdata.hxx>
@@ -58,15 +59,12 @@ ScFilterDlg::ScFilterDlg(SfxBindings* pB, SfxChildWindow* pCW, vcl::Window* pPar
     , aStrEmpty(ScResId(SCSTR_FILTER_EMPTY))
     , aStrNotEmpty(ScResId(SCSTR_FILTER_NOTEMPTY))
     , aStrColumn(ScResId(SCSTR_COLUMN))
-    , pOptionsMgr(nullptr)
     , nWhichQuery(rArgSet.GetPool()->GetWhich(SID_QUERY))
     , theQueryData(static_cast<const ScQueryItem&>(rArgSet.Get(nWhichQuery)).GetQueryData())
-    , pOutItem(nullptr)
     , pViewData(nullptr)
     , pDoc(nullptr)
     , nSrcTab(0)
     , bRefInputMode(false)
-    , pTimer(nullptr)
 {
     get(pLbConnect1,"connect1");
     get(pLbField1,"field1");
@@ -106,7 +104,7 @@ ScFilterDlg::ScFilterDlg(SfxBindings* pB, SfxChildWindow* pCW, vcl::Window* pPar
     Init( rArgSet );
 
     // Hack: RefInput control
-    pTimer = new Timer("ScFilterTimer");
+    pTimer.reset( new Timer("ScFilterTimer") );
     pTimer->SetTimeout( 50 ); // Wait 50ms
     pTimer->SetInvokeHandler( LINK( this, ScFilterDlg, TimeOutHdl ) );
 }
@@ -118,12 +116,12 @@ ScFilterDlg::~ScFilterDlg()
 
 void ScFilterDlg::dispose()
 {
-    delete pOptionsMgr;
-    delete pOutItem;
+    pOptionsMgr.reset();
+    pOutItem.reset();
 
     // Hack: RefInput control
     pTimer->Stop();
-    delete pTimer;
+    pTimer.reset();
 
     pLbConnect1.clear();
     pLbField1.clear();
@@ -219,7 +217,7 @@ void ScFilterDlg::Init( const SfxItemSet& rArgSet )
     maConnLbArr.push_back(pLbConnect4);
 
     // Option initialization:
-    pOptionsMgr  = new ScFilterOptionsMgr(
+    pOptionsMgr.reset( new ScFilterOptionsMgr(
                             pViewData,
                             theQueryData,
                             pBtnCase,
@@ -233,7 +231,7 @@ void ScFilterDlg::Init( const SfxItemSet& rArgSet )
                             pRbCopyArea,
                             pFtDbAreaLabel,
                             pFtDbArea,
-                            aStrUndefined );
+                            aStrUndefined ) );
     // Read in field lists and select entries
 
     FillFieldLists();
@@ -514,9 +512,7 @@ void ScFilterDlg::UpdateValueList( size_t nList )
                 {
                     // See if the header value is already in the list.
                     std::vector<ScTypedStrData>::iterator itBeg = pList->maFilterEntries.begin(), itEnd = pList->maFilterEntries.end();
-                    std::vector<ScTypedStrData>::iterator it = std::find_if(
-                        itBeg, itEnd, FindTypedStrData(aHdrColl.front(), bCaseSens));
-                    if (it == itEnd)
+                    if (std::none_of(itBeg, itEnd, FindTypedStrData(aHdrColl.front(), bCaseSens)))
                     {
                         // Not in the list. Insert it.
                         pList->maFilterEntries.push_back(aHdrColl.front());
@@ -528,7 +524,7 @@ void ScFilterDlg::UpdateValueList( size_t nList )
                         // Record its position.
                         itBeg = pList->maFilterEntries.begin();
                         itEnd = pList->maFilterEntries.end();
-                        it = std::find_if(itBeg, itEnd, FindTypedStrData(aHdrColl.front(), bCaseSens));
+                        auto it = std::find_if(itBeg, itEnd, FindTypedStrData(aHdrColl.front(), bCaseSens));
                         pList->mnHeaderPos = std::distance(itBeg, it);
                     }
                 }
@@ -654,10 +650,9 @@ ScQueryItem* ScFilterDlg::GetOutputItem()
 
     // only set the three - reset everything else
 
-    DELETEZ( pOutItem );
-    pOutItem = new ScQueryItem( nWhichQuery, &theParam );
+    pOutItem.reset( new ScQueryItem( nWhichQuery, &theParam ) );
 
-    return pOutItem;
+    return pOutItem.get();
 }
 
 bool ScFilterDlg::IsRefInputMode() const
@@ -722,7 +717,7 @@ IMPL_LINK( ScFilterDlg, TimeOutHdl, Timer*, _pTimer, void )
 {
     // Check if RefInputMode is still true every 50ms
 
-    if( _pTimer == pTimer && IsActive() )
+    if( _pTimer == pTimer.get() && IsActive() )
         bRefInputMode = (pEdCopyArea->HasFocus() || pRbCopyArea->HasFocus());
 
     if ( pExpander->get_expanded() )

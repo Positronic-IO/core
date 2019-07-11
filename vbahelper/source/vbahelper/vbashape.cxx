@@ -28,6 +28,7 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <com/sun/star/text/RelOrientation.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <ooo/vba/office/MsoShapeType.hpp>
 #include <ooo/vba/office/MsoAutoShapeType.hpp>
 #include <ooo/vba/word/WdRelativeHorizontalPosition.hpp>
@@ -38,6 +39,7 @@
 #include <vcl/svapp.hxx>
 #include <svx/unopage.hxx>
 #include <svx/unoshape.hxx>
+#include <sal/log.hxx>
 
 #include <vbahelper/vbashape.hxx>
 #include <vbahelper/vbatextframe.hxx>

@@ -23,7 +23,6 @@
 #include "sal/config.h"
 
 #include <cassert>
-#include <cstddef>
 #include <cstring>
 
 #include "rtl/ustrbuf.h"
@@ -59,6 +58,7 @@ namespace rtl
  */
 class SAL_WARN_UNUSED OUStringBuffer
 {
+friend class OUString;
 public:
     /**
         Constructs a string buffer with no characters in it and an
@@ -529,6 +529,47 @@ public:
     {
         return append( str.getStr(), str.getLength() );
     }
+
+#ifdef LIBO_INTERNAL_ONLY
+    /**
+        Appends a substring of an OUString, starting at position beginIndex.
+
+        The characters of the <code>OUString</code> argument are appended, in
+        order, to the contents of this string buffer.
+
+        @param   str   a string.
+        @param   beginIndex the beginning index, inclusive. Must be >= 0 and <= the length of str.
+        @return  this string buffer.
+
+        @since LibreOffice 6.2
+     */
+    OUStringBuffer & appendCopy(const OUString &str, sal_Int32 beginIndex)
+    {
+        assert(beginIndex >=0 && beginIndex <= str.getLength());
+        return append( str.getStr() + beginIndex, str.getLength() - beginIndex );
+    }
+
+    /**
+        Appends a substring of an OUString, starting at position beginIndex,
+        running for count characters.
+
+        The characters of the <code>OUString</code> argument are appended, in
+        order, to the contents of this string buffer.
+
+        @param   str    a string.
+        @param   beginIndex the beginning index, inclusive. Must be >= 0 and <= the length of str.
+        @param   count must be >= 0 and <= (str.length() - beginIndex).
+        @return  this string buffer.
+
+        @since LibreOffice 6.2
+     */
+    OUStringBuffer & appendCopy(const OUString &str, sal_Int32 beginIndex, sal_Int32 count)
+    {
+        assert(beginIndex >=0 && beginIndex <= str.getLength());
+        assert(count >=0 && count <= (str.getLength() - beginIndex));
+        return append( str.getStr() + beginIndex, count );
+    }
+#endif // LIBO_INTERNAL_ONLY
 
     /**
         Appends the content of a stringbuffer to this string buffer.
@@ -1615,6 +1656,18 @@ private:
     sal_Int32       nCapacity;
 };
 
+#if defined LIBO_INTERNAL_ONLY
+    // Define this here to avoid circular includes
+    inline OUString & OUString::operator+=( const OUStringBuffer & str ) &
+    {
+        // Call operator= if this is empty, otherwise rtl_uString_newConcat will attempt to
+        // acquire() the str.pData buffer, which is part of the OUStringBuffer mutable state.
+        if (isEmpty())
+            return operator=(str.toString());
+        else
+            return internalAppend(str.pData);
+    }
+#endif
 }
 
 #ifdef RTL_STRING_UNITTEST

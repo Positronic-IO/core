@@ -33,6 +33,7 @@
 
 #include <xmloff/maptype.hxx>
 #include <xmloff/xmlexppr.hxx>
+#include <xmloff/AutoStyleEntry.hxx>
 
 class SvXMLAutoStylePoolP;
 class XMLAutoStylePoolParent;
@@ -45,8 +46,8 @@ class SvXMLExport;
 class XMLAutoStylePoolProperties
 {
     OUString                     msName;
-    ::std::vector< XMLPropertyState >   maProperties;
-    sal_uInt32                          mnPos;
+    ::std::vector< XMLPropertyState > const   maProperties;
+    sal_uInt32 const                          mnPos;
 
 public:
 
@@ -66,7 +67,7 @@ public:
     typedef std::vector<std::unique_ptr<XMLAutoStylePoolProperties>> PropertiesListType;
 
 private:
-    OUString msParent;
+    OUString const msParent;
     PropertiesListType m_PropertiesList;
 
 public:
@@ -101,8 +102,8 @@ struct XMLAutoStyleFamily
     typedef std::set<std::unique_ptr<XMLAutoStylePoolParent>,
         comphelper::UniquePtrValueLess<XMLAutoStylePoolParent>> ParentSetType;
 
-    sal_uInt32 mnFamily;
-    OUString maStrFamilyName;
+    sal_uInt32 const mnFamily;
+    OUString const maStrFamilyName;
     rtl::Reference<SvXMLExportPropertyMapper> mxMapper;
 
     ParentSetType m_ParentSet;
@@ -110,8 +111,8 @@ struct XMLAutoStyleFamily
     std::set<OUString> maReservedNameSet;
     sal_uInt32 mnCount;
     sal_uInt32 mnName;
-    OUString maStrPrefix;
-    bool mbAsFamily;
+    OUString const maStrPrefix;
+    bool const mbAsFamily;
 
     XMLAutoStyleFamily( sal_Int32 nFamily, const OUString& rStrName,
             const rtl::Reference<SvXMLExportPropertyMapper>& rMapper,
@@ -174,6 +175,8 @@ public:
         const SvXMLAutoStylePoolP *pAntiImpl) const;
 
     void ClearEntries();
+
+    std::vector<xmloff::AutoStyleEntry> GetAutoStyleEntries() const;
 };
 
 #endif

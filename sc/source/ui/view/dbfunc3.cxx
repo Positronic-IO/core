@@ -25,6 +25,7 @@
 #include <vcl/weld.hxx>
 #include <svl/zforlist.hxx>
 #include <sfx2/app.hxx>
+#include <unotools/collatorwrapper.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/sheet/DataPilotFieldFilter.hpp>
@@ -68,6 +69,7 @@
 #include <stringutil.hxx>
 #include <tabvwsh.hxx>
 #include <generalfunction.hxx>
+#include <sortparam.hxx>
 
 #include <sfx2/lokhelper.hxx>
 #include <comphelper/lok.hxx>
@@ -253,9 +255,9 @@ void ScDBFunc::ShowOutline( bool bColumns, sal_uInt16 nLevel, sal_uInt16 nEntry,
     ScDocShell* pDocSh = GetViewData().GetDocShell();
     ScOutlineDocFunc aFunc(*pDocSh);
 
-    bool bOk = aFunc.ShowOutline( nTab, bColumns, nLevel, nEntry, bRecord, bPaint );
+    aFunc.ShowOutline( nTab, bColumns, nLevel, nEntry, bRecord, bPaint );
 
-    if ( bOk && bPaint )
+    if ( bPaint )
         UpdateScrollBars(bColumns ? COLUMN_HEADER : ROW_HEADER);
 }
 
@@ -437,20 +439,20 @@ void ScDBFunc::DoSubTotals( const ScSubTotalParam& rParam, bool bRecord,
         ScDocShellModificator aModificator( *pDocSh );
 
         ScSubTotalParam aNewParam( rParam );        // change end of range
-        ScDocument*     pUndoDoc = nullptr;
-        ScOutlineTable* pUndoTab = nullptr;
-        ScRangeName*    pUndoRange = nullptr;
-        ScDBCollection* pUndoDB = nullptr;
+        ScDocumentUniquePtr pUndoDoc;
+        std::unique_ptr<ScOutlineTable> pUndoTab;
+        std::unique_ptr<ScRangeName> pUndoRange;
+        std::unique_ptr<ScDBCollection> pUndoDB;
 
         if (bRecord)                                        // record old data
         {
             bool bOldFilter = bDo && rParam.bDoSort;
             SCTAB nTabCount = rDoc.GetTableCount();
-            pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+            pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
             ScOutlineTable* pTable = rDoc.GetOutlineTable( nTab );
             if (pTable)
             {
-                pUndoTab = new ScOutlineTable( *pTable );
+                pUndoTab.reset(new ScOutlineTable( *pTable ));
 
                 SCCOLROW nOutStartCol;                          // row/column status
                 SCCOLROW nOutStartRow;
@@ -474,13 +476,13 @@ void ScDBFunc::DoSubTotals( const ScSubTotalParam& rParam, bool bRecord,
             rDoc.CopyToDocument( 0,0,0, MAXCOL,MAXROW,nTabCount-1,
                                         InsertDeleteFlags::FORMULA, false, *pUndoDoc );
 
-            // data base and othe ranges
+            // database and other ranges
             ScRangeName* pDocRange = rDoc.GetRangeName();
             if (!pDocRange->empty())
-                pUndoRange = new ScRangeName( *pDocRange );
+                pUndoRange.reset(new ScRangeName( *pDocRange ));
             ScDBCollection* pDocDB = rDoc.GetDBCollection();
             if (!pDocDB->empty())
-                pUndoDB = new ScDBCollection( *pDocDB );
+                pUndoDB.reset(new ScDBCollection( *pDocDB ));
         }
 
         ScOutlineTable* pOut = rDoc.GetOutlineTable( nTab );
@@ -524,10 +526,10 @@ void ScDBFunc::DoSubTotals( const ScSubTotalParam& rParam, bool bRecord,
         if (bRecord)
         {
             pDocSh->GetUndoManager()->AddUndoAction(
-                new ScUndoSubTotals( pDocSh, nTab,
+                o3tl::make_unique<ScUndoSubTotals>( pDocSh, nTab,
                                         rParam, aNewParam.nRow2,
-                                        pUndoDoc, pUndoTab, // pUndoDBData,
-                                        pUndoRange, pUndoDB ) );
+                                        std::move(pUndoDoc), std::move(pUndoTab), // pUndoDBData,
+                                        std::move(pUndoRange), std::move(pUndoDB) ) );
         }
 
         if (!bSuccess)
@@ -611,7 +613,7 @@ bool ScDBFunc::MakePivotTable(
         if (bUndo)
         {
             pDocSh->GetUndoManager()->AddUndoAction(
-                        new ScUndoInsertTab( pDocSh, nNewTab, bAppend, lcl_MakePivotTabName( aName, i ) ));
+                        o3tl::make_unique<ScUndoInsertTab>( pDocSh, nNewTab, bAppend, lcl_MakePivotTabName( aName, i ) ));
         }
 
         GetViewData().InsertTab( nNewTab );
@@ -1637,7 +1639,7 @@ static void lcl_MoveToEnd( ScDPSaveDimension& rDim, const OUString& rItemName )
 
 struct ScOUStringCollate
 {
-    CollatorWrapper* mpCollator;
+    CollatorWrapper* const mpCollator;
 
     explicit ScOUStringCollate(CollatorWrapper* pColl) : mpCollator(pColl) {}
 
@@ -1697,29 +1699,26 @@ void ScDBFunc::DataPilotSort(ScDPObject* pDPObj, long nDimIndex, bool bAscending
         typedef std::unordered_map<OUString, sal_uInt16> UserSortMap;
         UserSortMap aSubStrs;
         sal_uInt16 nSubCount = 0;
-        if (pUserListId)
+        ScUserList* pUserList = ScGlobal::GetUserList();
+        if (!pUserList)
+            return;
+
         {
-            ScUserList* pUserList = ScGlobal::GetUserList();
-            if (!pUserList)
+            size_t n = pUserList->size();
+            if (!n || *pUserListId >= static_cast<sal_uInt16>(n))
                 return;
+        }
 
-            {
-                size_t n = pUserList->size();
-                if (!n || *pUserListId >= static_cast<sal_uInt16>(n))
-                    return;
-            }
+        const ScUserListData& rData = (*pUserList)[*pUserListId];
+        sal_uInt16 n = rData.GetSubCount();
+        for (sal_uInt16 i = 0; i < n; ++i)
+        {
+            OUString aSub = rData.GetSubStr(i);
+            if (!aMemberSet.count(aSub))
+                // This string doesn't exist in the member name set.  Don't add this.
+                continue;
 
-            const ScUserListData& rData = (*pUserList)[*pUserListId];
-            sal_uInt16 n = rData.GetSubCount();
-            for (sal_uInt16 i = 0; i < n; ++i)
-            {
-                OUString aSub = rData.GetSubStr(i);
-                if (!aMemberSet.count(aSub))
-                    // This string doesn't exist in the member name set.  Don't add this.
-                    continue;
-
-                aSubStrs.emplace(aSub, nSubCount++);
-            }
+            aSubStrs.emplace(aSub, nSubCount++);
         }
 
         // Rank all members.
@@ -2069,7 +2068,7 @@ void ScDBFunc::ShowDataPilotSourceData( ScDPObject& rDPObj, const Sequence<sheet
     pInsDoc->GetCellArea( nNewTab, nEndCol, nEndRow );
     pInsDoc->SetClipArea( ScRange( 0, 0, nNewTab, nEndCol, nEndRow, nNewTab ) );
 
-    ::svl::IUndoManager* pMgr = GetViewData().GetDocShell()->GetUndoManager();
+    SfxUndoManager* pMgr = GetViewData().GetDocShell()->GetUndoManager();
     OUString aUndo = ScResId( STR_UNDO_DOOUTLINE );
     pMgr->EnterListAction( aUndo, aUndo, 0, GetViewData().GetViewShell()->GetViewShellId() );
 
@@ -2130,19 +2129,19 @@ void ScDBFunc::RepeatDB( bool bRecord )
 
         //! undo only needed data ?
 
-        ScDocument* pUndoDoc = nullptr;
-        ScOutlineTable* pUndoTab = nullptr;
-        ScRangeName* pUndoRange = nullptr;
-        ScDBCollection* pUndoDB = nullptr;
+        ScDocumentUniquePtr pUndoDoc;
+        std::unique_ptr<ScOutlineTable> pUndoTab;
+        std::unique_ptr<ScRangeName> pUndoRange;
+        std::unique_ptr<ScDBCollection> pUndoDB;
 
         if (bRecord)
         {
             SCTAB nTabCount = pDoc->GetTableCount();
-            pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+            pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
             ScOutlineTable* pTable = pDoc->GetOutlineTable( nTab );
             if (pTable)
             {
-                pUndoTab = new ScOutlineTable( *pTable );
+                pUndoTab.reset(new ScOutlineTable( *pTable ));
 
                 SCCOLROW nOutStartCol;                          // row/column status
                 SCCOLROW nOutStartRow;
@@ -2167,10 +2166,10 @@ void ScDBFunc::RepeatDB( bool bRecord )
             // data base and other ranges
             ScRangeName* pDocRange = pDoc->GetRangeName();
             if (!pDocRange->empty())
-                pUndoRange = new ScRangeName( *pDocRange );
+                pUndoRange.reset(new ScRangeName( *pDocRange ));
             ScDBCollection* pDocDB = pDoc->GetDBCollection();
             if (!pDocDB->empty())
-                pUndoDB = new ScDBCollection( *pDocDB );
+                pUndoDB.reset(new ScDBCollection( *pDocDB ));
         }
 
         if (bSort && bSubTotal)
@@ -2231,12 +2230,12 @@ void ScDBFunc::RepeatDB( bool bRecord )
             }
 
             GetViewData().GetDocShell()->GetUndoManager()->AddUndoAction(
-                new ScUndoRepeatDB( GetViewData().GetDocShell(), nTab,
+                o3tl::make_unique<ScUndoRepeatDB>( GetViewData().GetDocShell(), nTab,
                                         nStartCol, nStartRow, nEndCol, nEndRow,
                                         nNewEndRow,
                                         nCurX, nCurY,
-                                        pUndoDoc, pUndoTab,
-                                        pUndoRange, pUndoDB,
+                                        std::move(pUndoDoc), std::move(pUndoTab),
+                                        std::move(pUndoRange), std::move(pUndoDB),
                                         pOld, pNew ) );
         }
 

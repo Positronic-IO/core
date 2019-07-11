@@ -21,12 +21,14 @@
 
 #include <scitems.hxx>
 #include <sfx2/basedlgs.hxx>
+#include <sfx2/sfxdlg.hxx>
 #include <svl/style.hxx>
 #include <vcl/svapp.hxx>
 
 #include <attrib.hxx>
 #include <tphf.hxx>
 #include <sc.hrc>
+#include <scres.hrc>
 #include <scabstdlg.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
@@ -41,24 +43,18 @@
 
 // class ScHFPage
 
-ScHFPage::ScHFPage( vcl::Window* pParent, const SfxItemSet& rSet, sal_uInt16 nSetId )
-
-    :   SvxHFPage   ( pParent, rSet, nSetId ),
-        aDataSet(
-            *rSet.GetPool(),
-            svl::Items<
-                ATTR_PAGE, ATTR_PAGE,
-                ATTR_PAGE_HEADERLEFT, ATTR_PAGE_FOOTERRIGHT>{}),
-        nPageUsage  ( SvxPageUsage::All ),
-        pStyleDlg   ( nullptr )
+ScHFPage::ScHFPage(TabPageParent pParent, const SfxItemSet& rSet, sal_uInt16 nSetId)
+    : SvxHFPage(pParent, rSet, nSetId)
+    , aDataSet(*rSet.GetPool(), svl::Items<ATTR_PAGE, ATTR_PAGE, ATTR_PAGE_HEADERLEFT, ATTR_PAGE_FOOTERRIGHT>{})
+    , nPageUsage(SvxPageUsage::All)
+    , pStyleDlg(nullptr)
+    , m_xBtnEdit(m_xBuilder->weld_button("buttonEdit"))
 {
-    get(m_pBtnEdit, "buttonEdit");
-
     SetExchangeSupport();
 
     SfxViewShell*   pSh = SfxViewShell::Current();
     ScTabViewShell* pViewSh = dynamic_cast< ScTabViewShell *>( pSh );
-    m_pBtnEdit->Show();
+    m_xBtnEdit->show();
 
     aDataSet.Put( rSet );
 
@@ -70,13 +66,13 @@ ScHFPage::ScHFPage( vcl::Window* pParent, const SfxItemSet& rSet, sal_uInt16 nSe
         aStrPageStyle = pDoc->GetPageStyle( rViewData.GetTabNo() );
     }
 
-    m_pBtnEdit->SetClickHdl    ( LINK( this, ScHFPage, BtnHdl ) );
-    m_pTurnOnBox->SetClickHdl  ( LINK( this, ScHFPage, TurnOnHdl ) );
+    m_xBtnEdit->connect_clicked(LINK(this, ScHFPage, BtnHdl));
+    m_xTurnOnBox->connect_toggled(LINK(this, ScHFPage, TurnOnHdl));
 
     if ( nId == SID_ATTR_PAGE_HEADERSET )
-        m_pBtnEdit->SetHelpId( HID_SC_HEADER_EDIT );
+        m_xBtnEdit->set_help_id(HID_SC_HEADER_EDIT);
     else
-        m_pBtnEdit->SetHelpId( HID_SC_FOOTER_EDIT );
+        m_xBtnEdit->set_help_id(HID_SC_FOOTER_EDIT);
 }
 
 ScHFPage::~ScHFPage()
@@ -86,15 +82,14 @@ ScHFPage::~ScHFPage()
 
 void ScHFPage::dispose()
 {
-    m_pBtnEdit.clear();
-    pStyleDlg.clear();
+    pStyleDlg = nullptr;
     SvxHFPage::dispose();
 }
 
 void ScHFPage::Reset( const SfxItemSet* rSet )
 {
     SvxHFPage::Reset( rSet );
-    TurnOnHdl( nullptr );
+    TurnOnHdl(*m_xTurnOnBox);
 }
 
 bool ScHFPage::FillItemSet( SfxItemSet* rOutSet )
@@ -150,17 +145,17 @@ void ScHFPage::DeactivatePage()
 
 // Handler:
 
-IMPL_LINK_NOARG(ScHFPage, TurnOnHdl, Button*, void)
+IMPL_LINK_NOARG(ScHFPage, TurnOnHdl, weld::ToggleButton&, void)
 {
-    SvxHFPage::TurnOnHdl( m_pTurnOnBox );
+    SvxHFPage::TurnOnHdl(*m_xTurnOnBox);
 
-    if ( m_pTurnOnBox->IsChecked() )
-        m_pBtnEdit->Enable();
+    if (m_xTurnOnBox->get_active())
+        m_xBtnEdit->set_sensitive(true);
     else
-        m_pBtnEdit->Disable();
+        m_xBtnEdit->set_sensitive(false);
 }
 
-IMPL_LINK_NOARG(ScHFPage, BtnHdl, Button*, void)
+IMPL_LINK_NOARG(ScHFPage, BtnHdl, weld::Button&, void)
 {
     // When the Edit-Dialog is directly called from the Button's Click-Handler,
     // the GrabFocus from the Edit-Dialog under OS/2 doesn't work.(Bug #41805#).
@@ -179,20 +174,17 @@ IMPL_LINK_NOARG(ScHFPage, HFEditHdl, void*, void)
         return;
     }
 
-    if (   m_pCntSharedBox->IsEnabled()
-        && !m_pCntSharedBox->IsChecked() )
+    if (m_xCntSharedBox->get_sensitive() && !m_xCntSharedBox->get_active())
     {
         sal_uInt16 nResId = ( nId == SID_ATTR_PAGE_HEADERSET )
                             ? RID_SCDLG_HFED_HEADER
                             : RID_SCDLG_HFED_FOOTER;
 
         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateScHFEditDlg(
             this, aDataSet, aStrPageStyle, nResId));
 
-        OSL_ENSURE(pDlg, "Dialog create fail!");
         if ( pDlg->Execute() == RET_OK )
         {
             aDataSet.Put( *pDlg->GetOutputItemSet() );
@@ -201,9 +193,8 @@ IMPL_LINK_NOARG(ScHFPage, HFEditHdl, void*, void)
     else
     {
         OUString  aText;
-        VclPtrInstance< SfxSingleTabDialog > pDlg(this, aDataSet);
-        bool bRightPage =   m_pCntSharedBox->IsChecked()
-                         || ( SvxPageUsage::Left != nPageUsage );
+        VclPtrInstance< SfxSingleTabDialog > pDlg(nullptr, aDataSet);
+        bool bRightPage = m_xCntSharedBox->get_active() || (SvxPageUsage::Left != nPageUsage);
 
         if ( nId == SID_ATTR_PAGE_HEADERSET )
         {
@@ -239,14 +230,14 @@ IMPL_LINK_NOARG(ScHFPage, HFEditHdl, void*, void)
 
 // class ScHeaderPage
 
-ScHeaderPage::ScHeaderPage( vcl::Window* pParent, const SfxItemSet& rSet )
-    : ScHFPage( pParent, rSet, SID_ATTR_PAGE_HEADERSET )
+ScHeaderPage::ScHeaderPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : ScHFPage(pParent, rSet, SID_ATTR_PAGE_HEADERSET)
 {
 }
 
-VclPtr<SfxTabPage> ScHeaderPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScHeaderPage::Create(TabPageParent pParent, const SfxItemSet* rCoreSet)
 {
-    return VclPtr<ScHeaderPage>::Create( pParent.pParent, *rCoreSet );
+    return VclPtr<ScHeaderPage>::Create(pParent, *rCoreSet);
 }
 
 const sal_uInt16* ScHeaderPage::GetRanges()
@@ -256,14 +247,14 @@ const sal_uInt16* ScHeaderPage::GetRanges()
 
 // class ScFooterPage
 
-ScFooterPage::ScFooterPage( vcl::Window* pParent, const SfxItemSet& rSet )
+ScFooterPage::ScFooterPage(TabPageParent pParent, const SfxItemSet& rSet)
     : ScHFPage( pParent, rSet, SID_ATTR_PAGE_FOOTERSET )
 {
 }
 
-VclPtr<SfxTabPage> ScFooterPage::Create( TabPageParent pParent, const SfxItemSet* rCoreSet )
+VclPtr<SfxTabPage> ScFooterPage::Create(TabPageParent pParent, const SfxItemSet* rCoreSet)
 {
-    return VclPtr<ScFooterPage>::Create( pParent.pParent, *rCoreSet );
+    return VclPtr<ScFooterPage>::Create(pParent, *rCoreSet);
 }
 
 const sal_uInt16* ScFooterPage::GetRanges()

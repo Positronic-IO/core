@@ -24,7 +24,7 @@
 #include <tools/fract.hxx>
 #include <svl/undo.hxx>
 #include <svl/fstathelper.hxx>
-#include <svtools/imap.hxx>
+#include <vcl/imap.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <sot/storage.hxx>
 #include <sfx2/docfile.hxx>
@@ -68,7 +68,6 @@ SwGrfNode::SwGrfNode(
         SwAttrSet const * pAutoAttr ) :
     SwNoTextNode( rWhere, SwNodeType::Grf, pGrfColl, pAutoAttr ),
     maGrfObj(),
-    mpReplacementGraphic(nullptr),
     // #i73788#
     mbLinkedInputStreamReady( false ),
     mbIsStreamReadOnly( false )
@@ -76,7 +75,6 @@ SwGrfNode::SwGrfNode(
     bInSwapIn = bChgTwipSize =
         bFrameInPaint = bScaleImageMap = false;
 
-    bGraphicArrived = true;
     ReRead(rGrfName, rFltName, pGraphic, false);
 }
 
@@ -86,14 +84,12 @@ SwGrfNode::SwGrfNode( const SwNodeIndex & rWhere,
                       SwAttrSet const * pAutoAttr ) :
     SwNoTextNode( rWhere, SwNodeType::Grf, pGrfColl, pAutoAttr ),
     maGrfObj(rGrfObj),
-    mpReplacementGraphic(nullptr),
     // #i73788#
     mbLinkedInputStreamReady( false ),
     mbIsStreamReadOnly( false )
 {
     bInSwapIn = bChgTwipSize  =
         bFrameInPaint = bScaleImageMap = false;
-    bGraphicArrived = true;
 }
 
 /** Create new SW/G reader.
@@ -109,7 +105,6 @@ SwGrfNode::SwGrfNode( const SwNodeIndex & rWhere,
                       SwAttrSet const * pAutoAttr ) :
     SwNoTextNode( rWhere, SwNodeType::Grf, pGrfColl, pAutoAttr ),
     maGrfObj(),
-    mpReplacementGraphic(nullptr),
     // #i73788#
     mbLinkedInputStreamReady( false ),
     mbIsStreamReadOnly( false )
@@ -119,7 +114,6 @@ SwGrfNode::SwGrfNode( const SwNodeIndex & rWhere,
 
     bInSwapIn = bChgTwipSize =
         bFrameInPaint = bScaleImageMap = false;
-    bGraphicArrived = false;
 
     InsertLink( rGrfName, rFltName );
     if( IsLinkedFile() )
@@ -141,8 +135,7 @@ bool SwGrfNode::ReRead(
 {
     bool bReadGrf = false;
     bool bSetTwipSize = true;
-    delete mpReplacementGraphic;
-    mpReplacementGraphic = nullptr;
+    mpReplacementGraphic.reset();
 
     OSL_ENSURE( pGraphic || !rGrfName.isEmpty(),
             "GraphicNode without a name, Graphic or GraphicObject" );
@@ -284,8 +277,7 @@ bool SwGrfNode::ReRead(
 
 SwGrfNode::~SwGrfNode()
 {
-    delete mpReplacementGraphic;
-    mpReplacementGraphic = nullptr;
+    mpReplacementGraphic.reset();
 
     // #i73788#
     mpThreadConsumer.reset();
@@ -311,7 +303,7 @@ SwGrfNode::~SwGrfNode()
     }
     //#39289# delete frames already here since the Frames' dtor needs the graphic for its StopAnimation
     if( HasWriterListeners() )
-        DelFrames();
+        DelFrames(nullptr);
 }
 
 /// allow reaction on change of content of GraphicObject
@@ -367,9 +359,9 @@ void SwGrfNode::onGraphicChanged()
     }
 }
 
-void SwGrfNode::SetGraphic(const Graphic& rGraphic, const OUString& rLink)
+void SwGrfNode::SetGraphic(const Graphic& rGraphic)
 {
-    maGrfObj.SetGraphic(rGraphic, rLink);
+    maGrfObj.SetGraphic(rGraphic, OUString());
     onGraphicChanged();
 }
 
@@ -393,22 +385,17 @@ const GraphicObject* SwGrfNode::GetReplacementGrfObj() const
 
         if(rVectorGraphicDataPtr.get())
         {
-            const_cast< SwGrfNode* >(this)->mpReplacementGraphic = new GraphicObject(rVectorGraphicDataPtr->getReplacement());
+            const_cast< SwGrfNode* >(this)->mpReplacementGraphic.reset( new GraphicObject(rVectorGraphicDataPtr->getReplacement()) );
         }
-        else if (GetGrfObj().GetGraphic().getPdfData().hasElements()
-                 || GetGrfObj().GetGraphic().GetType() == GraphicType::GdiMetafile)
+        else if (GetGrfObj().GetGraphic().hasPdfData() ||
+                 GetGrfObj().GetGraphic().GetType() == GraphicType::GdiMetafile)
         {
             // Replacement graphic for PDF and metafiles is just the bitmap.
-            const_cast<SwGrfNode*>(this)->mpReplacementGraphic = new GraphicObject(GetGrfObj().GetGraphic().GetBitmapEx());
+            const_cast<SwGrfNode*>(this)->mpReplacementGraphic.reset( new GraphicObject(GetGrfObj().GetGraphic().GetBitmapEx()) );
         }
     }
 
-    return mpReplacementGraphic;
-}
-
-SwContentNode *SwGrfNode::SplitContentNode( const SwPosition & )
-{
-    return this;
+    return mpReplacementGraphic.get();
 }
 
 SwGrfNode * SwNodes::MakeGrfNode( const SwNodeIndex & rWhere,
@@ -473,8 +460,7 @@ bool SwGrfNode::SwapIn(bool bWaitForData)
             else if( GraphicType::Default == maGrfObj.GetType() )
             {
                 // no default bitmap anymore, thus re-paint
-                delete mpReplacementGraphic;
-                mpReplacementGraphic = nullptr;
+                mpReplacementGraphic.reset();
 
                 maGrfObj.SetGraphic( Graphic() );
                 onGraphicChanged();
@@ -497,11 +483,6 @@ bool SwGrfNode::SwapIn(bool bWaitForData)
     }
     bInSwapIn = false;
     return bRet;
-}
-
-bool SwGrfNode::SwapOut()
-{
-    return true;
 }
 
 bool SwGrfNode::GetFileFilterNms( OUString* pFileNm, OUString* pFilterNm ) const
@@ -561,7 +542,7 @@ bool SwGrfNode::SavePersistentData()
     // Important note: see also fix for #i40014#
 
     // swap out into temp file
-    return SwapOut();
+    return true;
 }
 
 bool SwGrfNode::RestorePersistentData()
@@ -612,7 +593,7 @@ void SwGrfNode::ReleaseLink()
 {
     if( refLink.is() )
     {
-        const Graphic aLocalGraphic(maGrfObj.GetGraphic());
+        Graphic aLocalGraphic(maGrfObj.GetGraphic());
         const bool bHasOriginalData(aLocalGraphic.IsGfxLink());
 
         {
@@ -624,6 +605,7 @@ void SwGrfNode::ReleaseLink()
 
         getIDocumentLinksAdministration().GetLinkManager().Remove( refLink.get() );
         refLink.clear();
+        aLocalGraphic.setOriginURL("");
 
         // #i15508# added extra processing after getting rid of the link. Use whatever is
         // known from the formerly linked graphic to get to a state as close to a directly
@@ -716,7 +698,7 @@ void SwGrfNode::ScaleImageMap()
     }
 }
 
-SwContentNode* SwGrfNode::MakeCopy( SwDoc* pDoc, const SwNodeIndex& rIdx ) const
+SwContentNode* SwGrfNode::MakeCopy(SwDoc* pDoc, const SwNodeIndex& rIdx, bool) const
 {
     // copy formats into the other document
     SwGrfFormatColl* pColl = pDoc->CopyGrfColl( *GetGrfColl() );
@@ -826,7 +808,7 @@ void SwGrfNode::TriggerAsyncRetrieveInputStream()
         return;
     }
 
-    if ( mpThreadConsumer.get() == nullptr )
+    if (mpThreadConsumer == nullptr)
     {
         mpThreadConsumer.reset(new SwAsyncRetrieveInputStreamThreadConsumer(*this), o3tl::default_delete<SwAsyncRetrieveInputStreamThreadConsumer>());
 

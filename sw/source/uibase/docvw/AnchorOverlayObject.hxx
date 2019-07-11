@@ -40,13 +40,12 @@ enum class AnchorState
 class AnchorOverlayObject final : public sdr::overlay::OverlayObjectWithBasePosition
 {
     public:
-        static AnchorOverlayObject* CreateAnchorOverlayObject( SwView const & rDocView,
+        static std::unique_ptr<AnchorOverlayObject> CreateAnchorOverlayObject( SwView const & rDocView,
                                                                const SwRect& aAnchorRect,
                                                                long aPageBorder,
                                                                const Point& aLineStart,
                                                                const Point& aLineEnd,
                                                                const Color& aColorAnchor );
-        static void DestroyAnchorOverlayObject( AnchorOverlayObject* pAnchor );
 
         const basegfx::B2DPoint& GetSecondPosition() const { return maSecondPosition; }
         const basegfx::B2DPoint& GetThirdPosition() const { return maThirdPosition; }
@@ -113,6 +112,7 @@ class AnchorOverlayObject final : public sdr::overlay::OverlayObjectWithBasePosi
                              const basegfx::B2DPoint& rSixthPos,
                              const basegfx::B2DPoint& rSeventhPos,
                              const Color& rBaseColor );
+    public:
         virtual ~AnchorOverlayObject() override;
 };
 

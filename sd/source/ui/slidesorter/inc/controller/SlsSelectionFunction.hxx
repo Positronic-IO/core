@@ -20,16 +20,15 @@
 #ifndef INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSSELECTIONFUNCTION_HXX
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSSELECTIONFUNCTION_HXX
 
-#include <model/SlsSharedPageDescriptor.hxx>
 #include <controller/SlsFocusManager.hxx>
-#include <controller/SlsInsertionIndicatorHandler.hxx>
 #include <fupoor.hxx>
-#include <svtools/transfer.hxx>
 #include <memory>
 
 namespace sd { namespace slidesorter {
 class SlideSorter;
 } }
+
+struct AcceptDropEvent;
 
 namespace sd { namespace slidesorter { namespace controller {
 
@@ -116,6 +115,8 @@ private:
         exclusive modes.
     */
     std::shared_ptr<ModeHandler> mpModeHandler;
+
+    bool mbKDE4;
 
     /** Make the slide nOffset slides away of the current one the new
         current slide.  When the new index is outside the range of valid

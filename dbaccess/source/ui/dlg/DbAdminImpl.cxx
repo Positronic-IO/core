@@ -36,7 +36,6 @@
 #include <dsitems.hxx>
 #include "dsnItem.hxx"
 #include "optionalboolitem.hxx"
-#include <propertysetitem.hxx>
 #include <stringlistitem.hxx>
 #include <OAuthenticationContinuation.hxx>
 
@@ -52,16 +51,14 @@
 #include <com/sun/star/ucb/XInteractionSupplyAuthentication2.hpp>
 #include <com/sun/star/ucb/AuthenticationRequest.hpp>
 
-#include <comphelper/guarding.hxx>
 #include <comphelper/interaction.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/string.hxx>
 #include <connectivity/DriversConfig.hxx>
 #include <connectivity/dbexception.hxx>
 #include <osl/file.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <typelib/typedescription.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/stdtext.hxx>
@@ -136,9 +133,9 @@ namespace
 }
 
     // ODbDataSourceAdministrationHelper
-ODbDataSourceAdministrationHelper::ODbDataSourceAdministrationHelper(const Reference< XComponentContext >& _xORB, vcl::Window* _pParent,IItemSetHelper* _pItemSetHelper)
+ODbDataSourceAdministrationHelper::ODbDataSourceAdministrationHelper(const Reference< XComponentContext >& _xORB, weld::Window* pParent, weld::Window* pTopParent, IItemSetHelper* _pItemSetHelper)
         : m_xContext(_xORB)
-        , m_pParent(_pParent)
+        , m_pParent(pParent)
         , m_pItemSetHelper(_pItemSetHelper)
 {
     /// initialize the property translation map
@@ -203,8 +200,7 @@ ODbDataSourceAdministrationHelper::ODbDataSourceAdministrationHelper(const Refer
     }
     catch(const Exception&)
     {
-        vcl::Window* pTopParent = _pParent->GetParent();
-        ShowServiceNotAvailableError(pTopParent ? pTopParent->GetFrameWeld() : nullptr, "com.sun.star.sdb.DatabaseContext", true);
+        ShowServiceNotAvailableError(pTopParent, "com.sun.star.sdb.DatabaseContext", true);
     }
 }
 
@@ -262,7 +258,7 @@ bool ODbDataSourceAdministrationHelper::getCurrentSettings(Sequence< PropertyVal
             AuthenticationRequest aRequest;
             aRequest.ServerName = sName;
             aRequest.Diagnostic = sLoginRequest;
-            aRequest.HasRealm   = aRequest.HasAccount = false;
+            aRequest.HasRealm   = false;
             // aRequest.Realm
             aRequest.HasUserName = pUser != nullptr;
             aRequest.UserName    = pUser ? pUser->GetValue() : OUString();
@@ -355,7 +351,7 @@ std::pair< Reference<XConnection>,bool> ODbDataSourceAdministrationHelper::creat
         SQLExceptionInfo aErrorInfo;
         try
         {
-            WaitObject aWaitCursor(m_pParent);
+            weld::WaitObject aWaitCursor(m_pParent);
             aRet.first = getDriver()->connect(getConnectionURL(), aConnectionParams);
             aRet.second = true;
         }
@@ -363,7 +359,7 @@ std::pair< Reference<XConnection>,bool> ODbDataSourceAdministrationHelper::creat
         catch (const SQLWarning& e) { aErrorInfo = SQLExceptionInfo(e); }
         catch (const SQLException& e) { aErrorInfo = SQLExceptionInfo(e); }
 
-        showError(aErrorInfo,m_pParent,getORB());
+        showError(aErrorInfo,m_pParent->GetXWindow(),getORB());
     }
     if ( aRet.first.is() )
         successfullyConnected();// notify the admindlg to save the password
@@ -388,11 +384,11 @@ Reference< XDriver > ODbDataSourceAdministrationHelper::getDriver(const OUString
     {
         xDriverManager.set( ConnectionPool::create( getORB() ) );
     }
-    catch (const Exception& e)
+    catch (const Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         // wrap the exception into an SQLException
-        SQLException aSQLWrapper(e.Message, getORB(), "S1000", 0, Any());
-        throw SQLException(sCurrentActionError, getORB(), "S1000", 0, makeAny(aSQLWrapper));
+        throw SQLException(sCurrentActionError, getORB(), "S1000", 0, anyEx);
     }
 
     Reference< XDriver > xDriver = xDriverManager->getDriverByURL(_sURL);
@@ -619,7 +615,6 @@ void ODbDataSourceAdministrationHelper::translateProperties(const Reference< XPr
 
     try
     {
-        _rDest.Put(OPropertySetItem(DSID_DATASOURCE_UNO, _rxSource));
         Reference<XStorable> xStore(getDataSourceOrModel(_rxSource),UNO_QUERY);
         _rDest.Put(SfxBoolItem(DSID_READONLY, !xStore.is() || xStore->isReadonly() ));
     }
@@ -752,10 +747,10 @@ void ODbDataSourceAdministrationHelper::fillDatasourceInfo(const SfxItemSet& _rS
         // These settings have to be removed: If they're not relevant, we have no UI for changing them.
 
         // for this, we need a string-controlled quick access to m_aIndirectPropTranslator
-        StringSet aIndirectProps;
+        std::set<OUString> aIndirectProps;
         std::transform(m_aIndirectPropTranslator.begin(),
                          m_aIndirectPropTranslator.end(),
-                         std::insert_iterator<StringSet>(aIndirectProps,aIndirectProps.begin()),
+                         std::inserter(aIndirectProps,aIndirectProps.begin()),
                          ::o3tl::select2nd< MapInt2String::value_type >());
 
         // now check the to-be-preserved props
@@ -872,7 +867,7 @@ OString ODbDataSourceAdministrationHelper::translatePropertyId( sal_Int32 _nId )
     OString aReturn( aString.getStr(), aString.getLength(), RTL_TEXTENCODING_ASCII_US );
     return aReturn;
 }
-template<class T> bool checkItemType(const SfxPoolItem* pItem){ return dynamic_cast<const T*>(pItem) != nullptr;}
+template<class T> static bool checkItemType(const SfxPoolItem* pItem){ return dynamic_cast<const T*>(pItem) != nullptr;}
 
 void ODbDataSourceAdministrationHelper::implTranslateProperty( SfxItemSet& _rSet, sal_Int32  _nId, const Any& _rValue )
 {

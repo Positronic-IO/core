@@ -52,6 +52,7 @@
 #include <ndtxt.hxx>
 #include <redline.hxx>
 #include <docary.hxx>
+#include <rootfrm.hxx>
 #include <SwRewriter.hxx>
 #include <tools/color.hxx>
 #include <unotools/datetime.hxx>
@@ -202,7 +203,6 @@ SwPostItMgr::SwPostItMgr(SwView* pView)
     , mbDeleteNote(true)
     , mpAnswer(nullptr)
     , mbIsShowAnchor( false )
-    , mpFrameSidebarWinContainer( nullptr )
 {
     if(!mpView->GetDrawView() )
         mpView->GetWrtShell().MakeDrawView();
@@ -236,20 +236,20 @@ SwPostItMgr::~SwPostItMgr()
     RemoveSidebarWin();
     EndListening( *mpView->GetDocShell() );
 
-    for (auto const& page : mPages)
-        delete page;
     mPages.clear();
 }
 
 void SwPostItMgr::CheckForRemovedPostIts()
 {
+    IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
     bool bRemoved = false;
     auto currentIt = mvPostItFields.begin();
     while(currentIt != mvPostItFields.end())
     {
         auto it = currentIt++;
-        if ( !(*it)->UseElement() )
+        if (!(*it)->UseElement(*mpWrtShell->GetLayout(), rIDRA))
         {
+            EndListening(const_cast<SfxBroadcaster&>(*(*it)->GetBroadCaster()));
             SwSidebarItem* p = (*it);
             currentIt = mvPostItFields.erase(std::remove(mvPostItFields.begin(), mvPostItFields.end(), *it), mvPostItFields.end());
             if (GetActiveSidebarWin() == p->pPostIt)
@@ -302,18 +302,19 @@ SwSidebarItem* SwPostItMgr::InsertItem(SfxBroadcaster* pItem, bool bCheckExisten
 void SwPostItMgr::RemoveItem( SfxBroadcaster* pBroadcast )
 {
     EndListening(*pBroadcast);
-    for(auto i = mvPostItFields.begin(); i != mvPostItFields.end() ; ++i)
+    auto i = std::find_if(mvPostItFields.begin(), mvPostItFields.end(),
+        [&pBroadcast](const SwSidebarItem* pField) { return pField->GetBroadCaster() == pBroadcast; });
+    if (i != mvPostItFields.end())
     {
-        if ( (*i)->GetBroadCaster() == pBroadcast )
-        {
-            SwSidebarItem* p = (*i);
-            if (GetActiveSidebarWin() == p->pPostIt)
-                SetActiveSidebarWin(nullptr);
-            p->pPostIt.disposeAndClear();
-            mvPostItFields.erase(i);
-            delete p;
-            break;
-        }
+        SwSidebarItem* p = (*i);
+        if (GetActiveSidebarWin() == p->pPostIt)
+            SetActiveSidebarWin(nullptr);
+        // tdf#120487 remove from list before dispose, so comment window
+        // won't be recreated due to the entry still in the list if focus
+        // transferring from the pPostIt triggers relayout of postits
+        mvPostItFields.erase(i);
+        p->pPostIt.disposeAndClear();
+        delete p;
     }
     mbLayout = true;
     PrepareView();
@@ -533,9 +534,10 @@ bool SwPostItMgr::CalcRects()
     PreparePageContainer();
     if ( !mvPostItFields.empty() )
     {
+        IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
         for (auto const& pItem : mvPostItFields)
         {
-            if ( !pItem->UseElement() )
+            if (!pItem->UseElement(*mpWrtShell->GetLayout(), rIDRA))
             {
                 OSL_FAIL("PostIt is not in doc or other wrong use");
                 bRepair = true;
@@ -601,8 +603,9 @@ bool SwPostItMgr::CalcRects()
             if (aPageNum > mPages.size())
             {
                 const unsigned long nNumberOfPages = mPages.size();
-                for (unsigned int j=0; j<aPageNum - nNumberOfPages; ++j)
-                    mPages.push_back( new SwPostItPageItem());
+                mPages.reserve(aPageNum);
+                for (unsigned long j=0; j<aPageNum - nNumberOfPages; ++j)
+                    mPages.emplace_back( new SwPostItPageItem());
             }
             mPages[aPageNum-1]->mvSidebarItems.push_back(pItem);
             mPages[aPageNum-1]->mPageRect = pItem->maLayoutInfo.mPageFrame;
@@ -651,14 +654,14 @@ void SwPostItMgr::PreparePageContainer()
 
     if (lContainerSize < lPageSize)
     {
-        for (int i=0; i<lPageSize - lContainerSize;i++)
-            mPages.push_back( new SwPostItPageItem());
+        mPages.reserve(lPageSize);
+        for (long i=0; i<lPageSize - lContainerSize;i++)
+            mPages.emplace_back( new SwPostItPageItem());
     }
     else if (lContainerSize > lPageSize)
     {
         for (int i=mPages.size()-1; i >= lPageSize;--i)
         {
-            delete mPages[i];
             mPages.pop_back();
         }
     }
@@ -686,12 +689,12 @@ void SwPostItMgr::LayoutPostIts()
         // - place SwPostIts on their initial position
         // - calculate necessary height for all PostIts together
         bool bUpdate = false;
-        for (SwPostItPageItem* pPage : mPages)
+        for (std::unique_ptr<SwPostItPageItem>& pPage : mPages)
         {
             // only layout if there are notes on this page
-            if (pPage->mvSidebarItems.size()>0)
+            if (!pPage->mvSidebarItems.empty())
             {
-                std::list<SwAnnotationWin*> aVisiblePostItList;
+                std::vector<SwAnnotationWin*> aVisiblePostItList;
                 unsigned long           lNeededHeight = 0;
                 long                    mlPageBorder = 0;
                 long                    mlPageEnd = 0;
@@ -877,8 +880,6 @@ void SwPostItMgr::LayoutPostIts()
                     // Layout for this post it finished now
                     visiblePostIt->GetSidebarItem().bPendingLayout = false;
                 }
-
-                aVisiblePostItList.clear();
             }
             else
             {
@@ -890,10 +891,11 @@ void SwPostItMgr::LayoutPostIts()
 
         if (!ShowNotes())
         {       // we do not want to see the notes anymore -> Options-Writer-View-Notes
+            IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
             bool bRepair = false;
             for (auto const& postItField : mvPostItFields)
             {
-                if ( !postItField->UseElement() )
+                if (!postItField->UseElement(*mpWrtShell->GetLayout(), rIDRA))
                 {
                     OSL_FAIL("PostIt is not in doc!");
                     bRepair = true;
@@ -1119,7 +1121,7 @@ Color SwPostItMgr::GetArrowColor(sal_uInt16 aDirection,unsigned long aPage) cons
     }
 }
 
-bool SwPostItMgr::LayoutByPage(std::list<SwAnnotationWin*> &aVisiblePostItList, const tools::Rectangle& rBorder, long lNeededHeight)
+bool SwPostItMgr::LayoutByPage(std::vector<SwAnnotationWin*> &aVisiblePostItList, const tools::Rectangle& rBorder, long lNeededHeight)
 {
     /*** General layout idea:***/
     //  - if we have space left, we always move the current one up,
@@ -1301,8 +1303,13 @@ void SwPostItMgr::AddPostIts(bool bCheckExistence, bool bFocus)
     {
         if ( pSwFormatField->GetTextField())
         {
-            if ( pSwFormatField->IsFieldInDoc() )
+            IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
+            if (pSwFormatField->IsFieldInDoc()
+                && (!mpWrtShell->GetLayout()->IsHideRedlines()
+                    || !sw::IsFieldDeletedInModel(rIDRA, *pSwFormatField->GetTextField())))
+            {
                 InsertItem(pSwFormatField,bCheckExistence,bFocus);
+            }
         }
         pSwFormatField = aIter.Next();
     }
@@ -1347,7 +1354,7 @@ public:
 
 class IsPostitFieldWithAuthorOf : public FilterFunctor
 {
-    OUString m_sAuthor;
+    OUString const m_sAuthor;
 public:
     explicit IsPostitFieldWithAuthorOf(const OUString &rAuthor)
         : m_sAuthor(rAuthor)
@@ -1363,7 +1370,7 @@ public:
 
 class IsPostitFieldWithPostitId : public FilterFunctor
 {
-    sal_uInt32 m_nPostItId;
+    sal_uInt32 const m_nPostItId;
 public:
     explicit IsPostitFieldWithPostitId(sal_uInt32 nPostItId)
         : m_nPostItId(nPostItId)
@@ -1377,6 +1384,28 @@ public:
     }
 };
 
+class IsFieldNotDeleted : public FilterFunctor
+{
+private:
+    IDocumentRedlineAccess const& m_rIDRA;
+    FilterFunctor const& m_rNext;
+
+public:
+    IsFieldNotDeleted(IDocumentRedlineAccess const& rIDRA,
+            FilterFunctor & rNext)
+        : m_rIDRA(rIDRA)
+        , m_rNext(rNext)
+    {
+    }
+    bool operator()(const SwFormatField* pField) const override
+    {
+        if (!m_rNext(pField))
+            return false;
+        if (!pField->GetTextField())
+            return false;
+        return !sw::IsFieldDeletedInModel(m_rIDRA, *pField->GetTextField());
+    }
+};
 
 //Manages the passed in vector by automatically removing entries if they are deleted
 //and automatically adding entries if they appear in the document and match the
@@ -1487,7 +1516,9 @@ void SwPostItMgr::Delete(const OUString& rAuthor)
     mpWrtShell->StartUndo( SwUndoId::DELETE, &aRewriter );
 
     IsPostitFieldWithAuthorOf aFilter(rAuthor);
-    FieldDocWatchingStack aStack(mvPostItFields, *mpView->GetDocShell(), aFilter);
+    IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
+    IsFieldNotDeleted aFilter2(rIDRA, aFilter);
+    FieldDocWatchingStack aStack(mvPostItFields, *mpView->GetDocShell(), aFilter2);
     while (const SwFormatField* pField = aStack.pop())
     {
         if (mpWrtShell->GotoField(*pField))
@@ -1514,7 +1545,9 @@ void SwPostItMgr::Delete(sal_uInt32 nPostItId)
     mpWrtShell->StartUndo( SwUndoId::DELETE, &aRewriter );
 
     IsPostitFieldWithPostitId aFilter(nPostItId);
-    FieldDocWatchingStack aStack(mvPostItFields, *mpView->GetDocShell(), aFilter);
+    IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
+    IsFieldNotDeleted aFilter2(rIDRA, aFilter);
+    FieldDocWatchingStack aStack(mvPostItFields, *mpView->GetDocShell(), aFilter2);
     const SwFormatField* pField = aStack.pop();
     if (pField && mpWrtShell->GotoField(*pField))
         mpWrtShell->DelRight();
@@ -1535,8 +1568,10 @@ void SwPostItMgr::Delete()
     mpWrtShell->StartUndo( SwUndoId::DELETE, &aRewriter );
 
     IsPostitField aFilter;
+    IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
+    IsFieldNotDeleted aFilter2(rIDRA, aFilter);
     FieldDocWatchingStack aStack(mvPostItFields, *mpView->GetDocShell(),
-        aFilter);
+        aFilter2);
     while (const SwFormatField* pField = aStack.pop())
     {
         if (mpWrtShell->GotoField(*pField))
@@ -1575,7 +1610,7 @@ void SwPostItMgr::ExecuteFormatAllDialog(SwView& rView)
     SfxItemSet aDlgAttr(*pPool, svl::Items<EE_ITEMS_START, EE_ITEMS_END>{});
     aDlgAttr.Put(aEditAttr);
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(rView.GetWindow(), rView, aDlgAttr, SwCharDlgMode::Ann));
+    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(rView.GetFrameWeld(), rView, aDlgAttr, SwCharDlgMode::Ann));
     sal_uInt16 nRet = pDlg->Execute();
     if (RET_OK == nRet)
     {
@@ -1691,34 +1726,32 @@ SwAnnotationWin* SwPostItMgr::GetNextPostIt( sal_uInt16 aDirection,
 {
     if (mvPostItFields.size()>1)
     {
-        for(auto i = mvPostItFields.begin(); i != mvPostItFields.end() ; ++i)
+        auto i = std::find_if(mvPostItFields.begin(), mvPostItFields.end(),
+            [&aPostIt](const SwSidebarItem* pField) { return pField->pPostIt == aPostIt; });
+        if (i == mvPostItFields.end())
+            return nullptr;
+
+        auto iNextPostIt = i;
+        if (aDirection == KEY_PAGEUP)
         {
-            if ( (*i)->pPostIt == aPostIt)
+            if ( iNextPostIt == mvPostItFields.begin() )
             {
-                auto iNextPostIt  = i;
-                if (aDirection == KEY_PAGEUP)
-                {
-                    if ( iNextPostIt == mvPostItFields.begin() )
-                    {
-                        return nullptr;
-                    }
-                    --iNextPostIt;
-                }
-                else
-                {
-                    ++iNextPostIt;
-                    if ( iNextPostIt == mvPostItFields.end() )
-                    {
-                        return nullptr;
-                    }
-                }
-                // lets quit, we are back at the beginning
-                if ( (*iNextPostIt)->pPostIt == aPostIt)
-                    return nullptr;
-                return (*iNextPostIt)->pPostIt;
+                return nullptr;
+            }
+            --iNextPostIt;
+        }
+        else
+        {
+            ++iNextPostIt;
+            if ( iNextPostIt == mvPostItFields.end() )
+            {
+                return nullptr;
             }
         }
-        return nullptr;
+        // lets quit, we are back at the beginning
+        if ( (*iNextPostIt)->pPostIt == aPostIt)
+            return nullptr;
+        return (*iNextPostIt)->pPostIt;
     }
     else
         return nullptr;
@@ -1972,7 +2005,7 @@ void SwPostItMgr::CorrectPositions()
     {
         long aAnchorPosX = 0;
         long aAnchorPosY = 0;
-        for (SwPostItPageItem* pPage : mPages)
+        for (std::unique_ptr<SwPostItPageItem>& pPage : mPages)
         {
             for (auto const& item : pPage->mvSidebarItems)
             {

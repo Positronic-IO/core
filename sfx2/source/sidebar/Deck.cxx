@@ -30,7 +30,9 @@
 
 #include <vcl/dockwin.hxx>
 #include <vcl/scrbar.hxx>
+#include <vcl/commandevent.hxx>
 #include <tools/svborder.hxx>
+#include <sal/log.hxx>
 
 using namespace css;
 using namespace css::uno;
@@ -264,7 +266,7 @@ void Deck::ShowPanel(const Panel& rPanel)
     }
 }
 
-const OUString GetWindowClassification(const vcl::Window* pWindow)
+static const OUString GetWindowClassification(const vcl::Window* pWindow)
 {
     const OUString& rsName (pWindow->GetText());
     if (!rsName.isEmpty())

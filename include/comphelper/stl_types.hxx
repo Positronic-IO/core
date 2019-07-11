@@ -21,13 +21,12 @@
 
 #include <sal/config.h>
 
-#include <math.h>
 #include <memory>
 
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
-#include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/beans/PropertyValue.hpp>
+
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
 
 namespace comphelper
 {
@@ -52,7 +51,7 @@ public:
 
 class UStringMixEqual
 {
-    bool m_bCaseSensitive;
+    bool const m_bCaseSensitive;
 
 public:
     UStringMixEqual(bool bCaseSensitive = true):m_bCaseSensitive(bCaseSensitive){}
@@ -121,7 +120,7 @@ public:
     explicit mem_fun1_t(_fun_type pf) : M_f(pf) {}
     void operator()(Tp* p, Arg x) const { (p->*M_f)(x); }
 private:
-    _fun_type M_f;
+    _fun_type const M_f;
 };
 
 template <class Tp, class Arg>
@@ -132,8 +131,7 @@ inline mem_fun1_t<Tp,Arg> mem_fun(void (Tp::*f)(Arg))
 
 /** output iterator that appends OUStrings into an OUStringBuffer.
  */
-class OUStringBufferAppender :
-    public ::std::iterator< ::std::output_iterator_tag, void, void, void, void>
+class OUStringBufferAppender
 {
 public:
     typedef OUStringBufferAppender Self;
@@ -144,21 +142,17 @@ public:
     typedef size_t difference_type;
 
     OUStringBufferAppender(OUStringBuffer & i_rBuffer)
-        : m_rBuffer(i_rBuffer) { }
-    Self & operator=(Self const &)
-    {   // MSVC 2013 with non-debug runtime requires this in xutility.hpp:289
-        return *this;
-    }
+        : m_rBuffer(&i_rBuffer) { }
     Self & operator=(OUString const & i_rStr)
     {
-        m_rBuffer.append( i_rStr );
+        m_rBuffer->append( i_rStr );
         return *this;
     }
     Self & operator*() { return *this; } // so operator= works
     Self & operator++() { return *this; }
 
 private:
-    OUStringBuffer & m_rBuffer;
+    OUStringBuffer * m_rBuffer;
 };
 
 /** algorithm similar to std::copy, but inserts a separator between elements.

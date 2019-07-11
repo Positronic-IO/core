@@ -18,6 +18,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include <sal/types.h>
 #include <osl/endian.h>
@@ -35,10 +36,10 @@
      *((c)++) = static_cast<sal_uInt8>(((l)       ) & 0xff))
 
 #define RTL_DIGEST_LTOC(l,c) \
-    (*((c)++) = static_cast<sal_uInt8>(((l)       ) & 0xff), \
-     *((c)++) = static_cast<sal_uInt8>(((l) >>  8) & 0xff), \
-     *((c)++) = static_cast<sal_uInt8>(((l) >> 16) & 0xff), \
-     *((c)++) = static_cast<sal_uInt8>(((l) >> 24) & 0xff))
+    *((c)++) = static_cast<sal_uInt8>(((l)      ) & 0xff); \
+    *((c)++) = static_cast<sal_uInt8>(((l) >>  8) & 0xff); \
+    *((c)++) = static_cast<sal_uInt8>(((l) >> 16) & 0xff); \
+    *((c)++) = static_cast<sal_uInt8>(((l) >> 24) & 0xff);
 
 typedef rtlDigestError (Digest_init_t) (
     void *ctx, const sal_uInt8 *Data, sal_uInt32 DatLen);
@@ -282,7 +283,7 @@ static void updateMD2(DigestContextMD2 *ctx)
     }
 
     memcpy(sp1, state, 16 * sizeof(sal_uInt32));
-    memset(state, 0, 48 * sizeof(sal_uInt32));
+    rtl_secureZeroMemory(state, 48 * sizeof(sal_uInt32));
 }
 
 static void endMD2(DigestContextMD2 *ctx)
@@ -319,14 +320,13 @@ rtlDigestError SAL_CALL rtl_digest_MD2(
     if (result == rtl_Digest_E_None)
         result = rtl_digest_getMD2(&digest, pBuffer, nBufLen);
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createMD2() SAL_THROW_EXTERN_C()
 {
-    DigestMD2_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestMD2_Impl);
+    DigestMD2_Impl *pImpl = RTL_DIGEST_CREATE(DigestMD2_Impl);
     if (pImpl)
     {
         pImpl->m_digest = MD2;
@@ -430,7 +430,7 @@ void SAL_CALL rtl_digest_destroyMD2(rtlDigest Digest) SAL_THROW_EXTERN_C()
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmMD2)
             rtl_freeZeroMemory(pImpl, sizeof(DigestMD2_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -657,14 +657,13 @@ rtlDigestError SAL_CALL rtl_digest_MD5(
     if (result == rtl_Digest_E_None)
         result = rtl_digest_getMD5(&digest, pBuffer, nBufLen);
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createMD5() SAL_THROW_EXTERN_C()
 {
-    DigestMD5_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestMD5_Impl);
+    DigestMD5_Impl *pImpl = RTL_DIGEST_CREATE(DigestMD5_Impl);
     if (pImpl)
     {
         pImpl->m_digest = MD5;
@@ -813,7 +812,7 @@ void SAL_CALL rtl_digest_destroyMD5(rtlDigest Digest) SAL_THROW_EXTERN_C()
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmMD5)
             rtl_freeZeroMemory(pImpl, sizeof(DigestMD5_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -1100,14 +1099,13 @@ rtlDigestError SAL_CALL rtl_digest_SHA(
     if (result == rtl_Digest_E_None)
         result = rtl_digest_getSHA(&digest, pBuffer, nBufLen);
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createSHA() SAL_THROW_EXTERN_C()
 {
-    DigestSHA_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestSHA_Impl);
+    DigestSHA_Impl *pImpl = RTL_DIGEST_CREATE(DigestSHA_Impl);
     if (pImpl)
     {
         pImpl->m_digest = SHA_0;
@@ -1227,7 +1225,7 @@ void SAL_CALL rtl_digest_destroySHA(rtlDigest Digest) SAL_THROW_EXTERN_C()
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmSHA)
             rtl_freeZeroMemory(pImpl, sizeof(DigestSHA_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -1260,14 +1258,13 @@ rtlDigestError SAL_CALL rtl_digest_SHA1(
     if (result == rtl_Digest_E_None)
         result = rtl_digest_getSHA1(&digest, pBuffer, nBufLen);
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createSHA1() SAL_THROW_EXTERN_C()
 {
-    DigestSHA_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestSHA_Impl);
+    DigestSHA_Impl *pImpl = RTL_DIGEST_CREATE(DigestSHA_Impl);
     if (pImpl)
     {
         pImpl->m_digest = SHA_1;
@@ -1387,7 +1384,7 @@ void SAL_CALL rtl_digest_destroySHA1(rtlDigest Digest) SAL_THROW_EXTERN_C()
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmSHA1)
             rtl_freeZeroMemory(pImpl, sizeof(DigestSHA_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -1475,14 +1472,13 @@ rtlDigestError SAL_CALL rtl_digest_HMAC_MD5(
             result = rtl_digest_getHMAC_MD5(&digest, pBuffer, nBufLen);
     }
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createHMAC_MD5() SAL_THROW_EXTERN_C()
 {
-    DigestHMAC_MD5_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestHMAC_MD5_Impl);
+    DigestHMAC_MD5_Impl *pImpl = RTL_DIGEST_CREATE(DigestHMAC_MD5_Impl);
     if (pImpl)
     {
         pImpl->m_digest = HMAC_MD5;
@@ -1584,7 +1580,7 @@ void SAL_CALL rtl_digest_destroyHMAC_MD5(rtlDigest Digest) SAL_THROW_EXTERN_C()
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmHMAC_MD5)
             rtl_freeZeroMemory(pImpl, sizeof(DigestHMAC_MD5_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -1671,14 +1667,13 @@ rtlDigestError SAL_CALL rtl_digest_HMAC_SHA1(
             result = rtl_digest_getHMAC_SHA1(&digest, pBuffer, nBufLen);
     }
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return result;
 }
 
 rtlDigest SAL_CALL rtl_digest_createHMAC_SHA1() SAL_THROW_EXTERN_C()
 {
-    DigestHMAC_SHA1_Impl *pImpl = nullptr;
-    pImpl = RTL_DIGEST_CREATE(DigestHMAC_SHA1_Impl);
+    DigestHMAC_SHA1_Impl *pImpl = RTL_DIGEST_CREATE(DigestHMAC_SHA1_Impl);
     if (pImpl)
     {
         pImpl->m_digest = HMAC_SHA1;
@@ -1781,7 +1776,7 @@ void SAL_CALL rtl_digest_destroyHMAC_SHA1(rtlDigest Digest)
         if (pImpl->m_digest.m_algorithm == rtl_Digest_AlgorithmHMAC_SHA1)
             rtl_freeZeroMemory(pImpl, sizeof(DigestHMAC_SHA1_Impl));
         else
-            rtl_freeMemory(pImpl);
+            free(pImpl);
     }
 }
 
@@ -1871,7 +1866,7 @@ rtlDigestError SAL_CALL rtl_digest_PBKDF2(
         rtl_secureZeroMemory(T, DIGEST_CBLOCK_PBKDF2);
     }
 
-    memset(&digest, 0, sizeof(digest));
+    rtl_secureZeroMemory(&digest, sizeof(digest));
     return rtl_Digest_E_None;
 }
 

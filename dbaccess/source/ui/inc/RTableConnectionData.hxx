@@ -46,7 +46,7 @@ namespace dbaui
         bool IsSourcePrimKey()  const { return checkPrimaryKey(getReferencingTable()->getTable(),JTCS_FROM);    }
         bool IsDestPrimKey()    const { return checkPrimaryKey(getReferencedTable()->getTable(),JTCS_TO);       }
 
-        OConnectionLineDataRef CreateLineDataObj();
+        static OConnectionLineDataRef CreateLineDataObj();
 
         ORelationTableConnectionData& operator=( const ORelationTableConnectionData& rConnData );
     public:
@@ -74,9 +74,9 @@ namespace dbaui
         sal_Int32    GetDeleteRules() const { return m_nDeleteRules; }
         Cardinality  GetCardinality() const { return m_nCardinality; }
 
-        bool        IsConnectionPossible();
+        void        IsConnectionPossible();
         void        ChangeOrientation();
-        bool        DropRelation();
+        void        DropRelation();
     };
 }
 

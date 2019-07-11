@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <comphelper/string.hxx>
 #include <tools/solar.h>
@@ -70,6 +71,7 @@
 
 #include <frmatr.hxx>
 #include <itabenum.hxx>
+#include <unocrsr.hxx>
 
 #include <iostream>
 #include <memory>
@@ -197,8 +199,12 @@ sal_uInt16 SwWW8ImplReader::End_Footnote()
         sChar += OUStringLiteral1(pText->GetText()[--nPos]);
         m_pPaM->SetMark();
         --m_pPaM->GetMark()->nContent;
+        std::shared_ptr<SwUnoCursor> xLastAnchorCursor(m_pLastAnchorPos ? m_rDoc.CreateUnoCursor(*m_pLastAnchorPos) : nullptr);
+        m_pLastAnchorPos.reset();
         m_rDoc.getIDocumentContentOperations().DeleteRange( *m_pPaM );
         m_pPaM->DeleteMark();
+        if (xLastAnchorCursor)
+            m_pLastAnchorPos.reset(new SwPosition(*xLastAnchorCursor->GetPoint()));
         SwFormatFootnote aFootnote(rDesc.meType == MAN_EDN);
         pFN = pText->InsertItem(aFootnote, nPos, nPos);
     }
@@ -230,7 +236,7 @@ sal_uInt16 SwWW8ImplReader::End_Footnote()
         // If no automatic numbering use the following char from the main text
         // as the footnote number
         if (!rDesc.mbAutoNum)
-            static_cast<SwTextFootnote*>(pFN)->SetNumber(0, sChar);
+            static_cast<SwTextFootnote*>(pFN)->SetNumber(0, 0, sChar);
 
         /*
             Delete the footnote char from the footnote if its at the beginning
@@ -474,7 +480,7 @@ ApoTestResults SwWW8ImplReader::TestApo(int nCellLevel, bool bTableRowEnd,
             {
                 if (!m_xTableDesc)
                 {
-                    OSL_ENSURE(m_xTableDesc.get(), "What!");
+                    OSL_ENSURE(m_xTableDesc, "What!");
                     bTestAllowed = false;
                 }
                 else
@@ -594,9 +600,9 @@ void SwWW8ImplReader::SetAnlvStrings(SwNumFormat &rNum, WW8_ANLV const &rAV,
     rtl_TextEncoding eCharSet = m_eStructCharSet;
 
     const WW8_FFN* pF = m_xFonts->GetFont(SVBT16ToShort(rAV.ftc)); // FontInfo
-    bool bListSymbol = pF && ( pF->chs == 2 );      // Symbol/WingDings/...
+    bool bListSymbol = pF && ( pF->aFFNBase.chs == 2 );      // Symbol/WingDings/...
 
-    OUString sText;
+    OUStringBuffer sText;
     sal_uInt32 nLen = rAV.cbTextBefore + rAV.cbTextAfter;
     if (m_bVer67)
     {
@@ -618,7 +624,7 @@ void SwWW8ImplReader::SetAnlvStrings(SwNumFormat &rNum, WW8_ANLV const &rAV,
         }
         for(sal_uInt32 i = 0; i < nLen; ++i, pText += 2)
         {
-            sText += OUStringLiteral1(SVBT16ToShort(*reinterpret_cast<SVBT16 const *>(pText)));
+            sText.append(static_cast<sal_Unicode>(SVBT16ToShort(*reinterpret_cast<SVBT16 const *>(pText))));
         }
     }
 
@@ -637,7 +643,7 @@ void SwWW8ImplReader::SetAnlvStrings(SwNumFormat &rNum, WW8_ANLV const &rAV,
                 OUStringBuffer aBuf;
                 comphelper::string::padToLength(aBuf, rAV.cbTextBefore
                     + rAV.cbTextAfter, cBulletChar);
-                sText = aBuf.makeStringAndClear();
+                sText = aBuf;
             }
         }
     }
@@ -674,13 +680,13 @@ void SwWW8ImplReader::SetAnlvStrings(SwNumFormat &rNum, WW8_ANLV const &rAV,
     {
         if (rAV.cbTextBefore)
         {
-            OUString sP( sText.copy( 0, rAV.cbTextBefore ) );
+            OUString sP( sText.copy( 0, rAV.cbTextBefore ).makeStringAndClear() );
             rNum.SetPrefix( sP );
         }
         if( rAV.cbTextAfter )
         {
             OUString sP( rNum.GetSuffix() );
-            sP += sText.copy( rAV.cbTextBefore, rAV.cbTextAfter);
+            sP += sText.copy( rAV.cbTextBefore, rAV.cbTextAfter).makeStringAndClear();
             rNum.SetSuffix( sP );
         }
 // The characters before and after multiple digits do not apply because
@@ -723,7 +729,7 @@ SwNumRule* SwWW8ImplReader::GetStyRule()
     sal_uInt16 nRul = m_rDoc.MakeNumRule( aName, nullptr, false,
                                     SvxNumberFormat::LABEL_ALIGNMENT );
     m_xStyles->mpStyRule = m_rDoc.GetNumRuleTable()[nRul];
-    // Auto == false-> Nummerierungsvorlage
+    // Auto == false-> numbering style
     m_xStyles->mpStyRule->SetAutoRule(false);
 
     return m_xStyles->mpStyRule;
@@ -747,7 +753,7 @@ void SwWW8ImplReader::Read_ANLevelNo( sal_uInt16, const sal_uInt8* pData, short 
         {
             // Range WW:1..9 -> SW:0..8 no bullets / numbering
 
-            if (*pData <= MAXLEVEL && *pData <= 9)
+            if (*pData <= 9)
             {
                 m_nSwNumLevel = *pData - 1;
                 if (!m_bNoAttrImport)
@@ -792,8 +798,8 @@ void SwWW8ImplReader::Read_ANLevelDesc( sal_uInt16, const sal_uInt8* pData, shor
         return;
     }
 
-    if( m_nSwNumLevel <= MAXLEVEL         // Value range mapping WW:1..9 -> SW:0..8
-        && m_nSwNumLevel <= 9 ){          // No Bullets or Numbering
+    if (m_nSwNumLevel <= 9) // Value range mapping WW:1..9 -> SW:0..8
+    {
 
         // If NumRuleItems were set, either directly or through inheritance, disable them now
         m_pCurrentColl->SetFormatAttr( SwNumRuleItem() );
@@ -808,7 +814,8 @@ void SwWW8ImplReader::Read_ANLevelDesc( sal_uInt16, const sal_uInt8* pData, shor
 
         // Missing Levels need not be replenished
         m_rDoc.SetOutlineNumRule( aNR );
-    }else if( m_xStyles->mnWwNumLevel == 10 || m_xStyles->mnWwNumLevel == 11 ){
+    }
+    else if( m_xStyles->mnWwNumLevel == 10 || m_xStyles->mnWwNumLevel == 11 ){
         SwNumRule* pNR = GetStyRule();
         SetAnld(pNR, reinterpret_cast<WW8_ANLD const *>(pData), 0, false);
         m_pCurrentColl->SetFormatAttr( SwNumRuleItem( pNR->GetName() ) );
@@ -1224,10 +1231,16 @@ void WW8TabBandDesc::ReadDef(bool bVer67, const sal_uInt8* pS, short nLen)
     }
 }
 
-void WW8TabBandDesc::ProcessSprmTSetBRC(int nBrcVer, const sal_uInt8* pParamsTSetBRC)
+void WW8TabBandDesc::ProcessSprmTSetBRC(int nBrcVer, const sal_uInt8* pParamsTSetBRC, sal_uInt16 nParamsLen)
 {
     if( !pParamsTSetBRC || !pTCs ) // set one or more cell border(s)
         return;
+
+    if (nParamsLen < 3)
+    {
+        SAL_WARN("sw.ww8", "table border property is too short");
+        return;
+    }
 
     sal_uInt8 nitcFirst= pParamsTSetBRC[0];// first col to be changed
     sal_uInt8 nitcLim  = pParamsTSetBRC[1];// (last col to be changed)+1
@@ -1247,11 +1260,33 @@ void WW8TabBandDesc::ProcessSprmTSetBRC(int nBrcVer, const sal_uInt8* pParamsTSe
     WW8_TCell* pCurrentTC  = pTCs + nitcFirst;
     WW8_BRCVer9 brcVer9;
     if( nBrcVer == 6 )
+    {
+        if (nParamsLen < sizeof(WW8_BRCVer6) + 3)
+        {
+            SAL_WARN("sw.ww8", "table border property is too short");
+            return;
+        }
         brcVer9 = WW8_BRCVer9(WW8_BRC(*reinterpret_cast<WW8_BRCVer6 const *>(pParamsTSetBRC+3)));
+    }
     else if( nBrcVer == 8 )
+    {
+        static_assert(sizeof (WW8_BRC) == 4, "this has to match the msword size");
+        if (nParamsLen < sizeof(WW8_BRC) + 3)
+        {
+            SAL_WARN("sw.ww8", "table border property is too short");
+            return;
+        }
         brcVer9 = WW8_BRCVer9(*reinterpret_cast<WW8_BRC const *>(pParamsTSetBRC+3));
+    }
     else
+    {
+        if (nParamsLen < sizeof(WW8_BRCVer9) + 3)
+        {
+            SAL_WARN("sw.ww8", "table border property is too short");
+            return;
+        }
         brcVer9 = *reinterpret_cast<WW8_BRCVer9 const *>(pParamsTSetBRC+3);
+    }
 
     for( int i = nitcFirst; i < nitcLim; ++i, ++pCurrentTC )
     {
@@ -1264,7 +1299,6 @@ void WW8TabBandDesc::ProcessSprmTSetBRC(int nBrcVer, const sal_uInt8* pParamsTSe
         if( bChangeRight )
             pCurrentTC->rgbrc[ WW8_RIGHT ] = brcVer9;
     }
-
 }
 
 void WW8TabBandDesc::ProcessSprmTTableBorders(int nBrcVer, const sal_uInt8* pParams, sal_uInt16 nParamsLen)
@@ -1607,7 +1641,7 @@ enum wwTableSprm
     sprmTDefTableNewShd, sprmTCellPadding, sprmTCellPaddingDefault
 };
 
-wwTableSprm GetTableSprm(sal_uInt16 nId, ww::WordVersion eVer)
+static wwTableSprm GetTableSprm(sal_uInt16 nId, ww::WordVersion eVer)
 {
     switch (eVer)
     {
@@ -1782,7 +1816,8 @@ WW8TabDesc::WW8TabDesc(SwWW8ImplReader* pIoClass, WW8_CP nStartCp) :
         sal_uInt16 nTableBordersLen = 0;
         const sal_uInt8* pTableBorders90 = nullptr;
         sal_uInt16 nTableBorders90Len = 0;
-        std::vector<const sal_uInt8*> aTSetBrcs, aTSetBrc90s;
+        // params, len
+        std::vector<std::pair<const sal_uInt8*, sal_uInt16>> aTSetBrcs, aTSetBrc90s;
         WW8_TablePos *pTabPos  = nullptr;
 
         // search end of a tab row
@@ -1885,10 +1920,10 @@ WW8TabDesc::WW8TabDesc(SwWW8ImplReader* pIoClass, WW8_CP nStartCp) :
                         }
                         break;
                     case sprmTSetBrc:
-                        aTSetBrcs.push_back(pParams); // process at end
+                        aTSetBrcs.emplace_back(pParams, nLen); // process at end
                         break;
                     case sprmTSetBrc90:
-                        aTSetBrc90s.push_back(pParams); // process at end
+                        aTSetBrc90s.emplace_back(pParams, nLen); // process at end
                         break;
                     case sprmTDxaCol:
                         pNewBand->ProcessSprmTDxaCol(pParams);
@@ -1936,11 +1971,10 @@ WW8TabDesc::WW8TabDesc(SwWW8ImplReader* pIoClass, WW8_CP nStartCp) :
             else if (pTableBorders)
                 pNewBand->ProcessSprmTTableBorders(bOldVer ? 6 : 8,
                     pTableBorders, nTableBordersLen);
-            std::vector<const sal_uInt8*>::const_iterator iter;
-            for (iter = aTSetBrcs.begin(); iter != aTSetBrcs.end(); ++iter)
-                pNewBand->ProcessSprmTSetBRC(bOldVer ? 6 : 8, *iter);
-            for (iter = aTSetBrc90s.begin(); iter != aTSetBrc90s.end(); ++iter)
-                pNewBand->ProcessSprmTSetBRC(9, *iter);
+            for (const auto& a : aTSetBrcs)
+                pNewBand->ProcessSprmTSetBRC(bOldVer ? 6 : 8, a.first, a.second);
+            for (const auto& a : aTSetBrc90s)
+                pNewBand->ProcessSprmTSetBRC(9, a.first, a.second);
         }
 
         if( nTabeDxaNew < SHRT_MAX )
@@ -3066,7 +3100,7 @@ void WW8TabDesc::SetTabShades( SwTableBox* pBox, short nWwIdx )
     }
 }
 
-SvxFrameDirection MakeDirection(sal_uInt16 nCode, bool bIsBiDi)
+static SvxFrameDirection MakeDirection(sal_uInt16 nCode, bool bIsBiDi)
 {
     SvxFrameDirection eDir = SvxFrameDirection::Environment;
     // 1: Asian layout with rotated CJK characters
@@ -3167,8 +3201,8 @@ void WW8TabDesc::AdjustNewBand()
     m_pTabLine->GetFrameFormat()->SetFormatAttr(SwFormatRowSplit(!bSetCantSplit));
 
     //  if table is only a single row, and row is set as don't split, set the same value for the whole table.
-    if( bSetCantSplit && m_pTabLines->size() == 1 )
-        m_pTable->GetFrameFormat()->SetFormatAttr(SwFormatLayoutSplit( !bSetCantSplit ));
+    if (bSetCantSplit && m_pTabLines->size() == 1)
+        m_pTable->GetFrameFormat()->SetFormatAttr(SwFormatLayoutSplit(false));
 
     short i;    // SW-Index
     short j;    // WW-Index
@@ -3475,7 +3509,7 @@ bool SwWW8ImplReader::StartTable(WW8_CP nStartCp)
     delete pTableWFlyPara;
     delete pTableSFlyPara;
 
-    return m_xTableDesc.get() != nullptr;
+    return m_xTableDesc != nullptr;
 }
 
 void SwWW8ImplReader::TabCellEnd()
@@ -3516,7 +3550,7 @@ void SwWW8ImplReader::PopTableDesc()
 
 void SwWW8ImplReader::StopTable()
 {
-    OSL_ENSURE(m_xTableDesc.get(), "Panic, stop table with no table!");
+    OSL_ENSURE(m_xTableDesc, "Panic, stop table with no table!");
     if (!m_xTableDesc)
         return;
 
@@ -3626,7 +3660,7 @@ void WW8RStyle::ImportSprms(std::size_t nPosFc, short nLen, bool bPap)
     }
 }
 
-static inline short WW8SkipOdd(SvStream* pSt )
+static short WW8SkipOdd(SvStream* pSt )
 {
     if ( pSt->Tell() & 0x1 )
     {
@@ -3636,7 +3670,7 @@ static inline short WW8SkipOdd(SvStream* pSt )
     return 0;
 }
 
-static inline short WW8SkipEven(SvStream* pSt )
+static short WW8SkipEven(SvStream* pSt )
 {
     if (!(pSt->Tell() & 0x1))
     {
@@ -3991,7 +4025,7 @@ void WW8RStyle::ScanStyles()        // investigate style dependencies
         rSI.m_nFilePos = mpStStrm->Tell();        // remember FilePos
         sal_uInt16 nSkip;
         std::unique_ptr<WW8_STD> xStd(Read1Style(nSkip, nullptr));  // read STD
-        rSI.m_bValid = xStd.get() != nullptr;
+        rSI.m_bValid = xStd != nullptr;
         if (rSI.m_bValid)
         {
             rSI.m_nBase = xStd->istdBase; // remember Basis
@@ -4439,7 +4473,7 @@ void WW8RStyle::ImportOldFormatStyles()
         ImportSprms(aPAPXOffsets[stcp].mnOffset, aPAPXOffsets[stcp].mnSize,
             true);
 
-        if (aConvertedChpx[stcp].size() > 0)
+        if (!aConvertedChpx[stcp].empty())
             ImportSprms(&(aConvertedChpx[stcp][0]),
                         static_cast< short >(aConvertedChpx[stcp].size()),
                         false);

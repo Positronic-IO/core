@@ -19,12 +19,11 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_XML_XMLROWI_HXX
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLROWI_HXX
 
-#include <xmloff/xmlictxt.hxx>
-#include <xmloff/xmlimp.hxx>
-#include <address.hxx>
-#include "xmlimprt.hxx"
+#include <types.hxx>
 #include "importcontext.hxx"
 
+
+namespace sax_fastparser { class FastAttributeList; }
 
 class ScXMLTableRowContext : public ScXMLImportContext
 {
@@ -51,8 +50,8 @@ class ScXMLTableRowsContext : public ScXMLImportContext
 {
     SCROW nHeaderStartRow;
     SCROW nGroupStartRow;
-    bool bHeader;
-    bool bGroup;
+    bool const bHeader;
+    bool const bGroup;
     bool bGroupDisplay;
 
 public:

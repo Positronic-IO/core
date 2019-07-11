@@ -33,16 +33,10 @@
 #include <unoreflist.hxx>
 #include <scopetools.hxx>
 #include <refupdatecontext.hxx>
+#include <o3tl/make_unique.hxx>
 
 ScRefUndoData::ScRefUndoData( const ScDocument* pDoc ) :
-    pDBCollection(nullptr),
-    pRangeName(nullptr),
-    pPrintRanges(pDoc->CreatePrintRangeSaver()),
-    pDPCollection(nullptr),
-    pDetOpList(nullptr),
-    pChartListenerCollection(nullptr),
-    pAreaLinks(nullptr),
-    pUnoRefs(nullptr)
+    pPrintRanges(pDoc->CreatePrintRangeSaver())
 {
     const ScDBCollection* pOldDBColl = pDoc->GetDBCollection();
     if (pOldDBColl && !pOldDBColl->empty())
@@ -99,10 +93,9 @@ void ScRefUndoData::DeleteUnchanged( const ScDocument* pDoc )
 
     if (pPrintRanges)
     {
-        ScPrintRangeSaver* pNewRanges = pDoc->CreatePrintRangeSaver();
+        std::unique_ptr<ScPrintRangeSaver> pNewRanges = pDoc->CreatePrintRangeSaver();
         if ( pNewRanges && *pPrintRanges == *pNewRanges )
             pPrintRanges.reset();
-        delete pNewRanges;
     }
 
     if (pDPCollection)
@@ -166,7 +159,7 @@ void ScRefUndoData::DoUndo( ScDocument* pDoc, bool bUndoRefFirst )
 
     // bUndoRefFirst is bSetChartRangeLists
     if ( pChartListenerCollection )
-        pDoc->SetChartListenerCollection( new ScChartListenerCollection(
+        pDoc->SetChartListenerCollection( o3tl::make_unique<ScChartListenerCollection>(
             *pChartListenerCollection ), bUndoRefFirst );
 
     if (pDBCollection || pRangeName)

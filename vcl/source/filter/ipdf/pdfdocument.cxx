@@ -1824,6 +1824,8 @@ static void visitPages(PDFObjectElement* pPages, std::vector<PDFObjectElement*>&
         return;
     }
 
+    pPages->setVisiting(true);
+
     for (const auto& pKid : pKids->GetElements())
     {
         auto pReference = dynamic_cast<PDFReferenceElement*>(pKid);
@@ -1834,6 +1836,13 @@ static void visitPages(PDFObjectElement* pPages, std::vector<PDFObjectElement*>&
         if (!pKidObject)
             continue;
 
+        // detect if visiting reenters itself
+        if (pKidObject->alreadyVisiting())
+        {
+            SAL_WARN("vcl.filter", "visitPages: loop in hierarchy");
+            continue;
+        }
+
         auto pName = dynamic_cast<PDFNameElement*>(pKidObject->Lookup("Type"));
         if (pName && pName->GetValue() == "Pages")
             // Pages inside pages: recurse.
@@ -1842,6 +1851,8 @@ static void visitPages(PDFObjectElement* pPages, std::vector<PDFObjectElement*>&
             // Found an actual page.
             rRet.push_back(pKidObject);
     }
+
+    pPages->setVisiting(false);
 }
 
 std::vector<PDFObjectElement*> PDFDocument::GetPages()
@@ -2151,6 +2162,8 @@ size_t PDFDictionaryElement::Parse(const std::vector<std::unique_ptr<PDFElement>
     if (!rDictionary.empty())
         return nRet;
 
+    pThis->setParsing(true);
+
     auto pThisObject = dynamic_cast<PDFObjectElement*>(pThis);
     // This is set to non-nullptr here for nested dictionaries only.
     auto pThisDictionary = dynamic_cast<PDFDictionaryElement*>(pThis);
@@ -2196,12 +2209,17 @@ size_t PDFDictionaryElement::Parse(const std::vector<std::unique_ptr<PDFElement>
                     pThisObject->SetDictionaryOffset(nDictionaryOffset);
                 }
             }
-            else
+            else if (!pDictionary->alreadyParsing())
             {
                 // Nested dictionary.
-                i = PDFDictionaryElement::Parse(rElements, pDictionary, pDictionary->m_aItems);
-                rDictionary[aName] = pDictionary;
-                aName.clear();
+                const size_t nexti
+                    = PDFDictionaryElement::Parse(rElements, pDictionary, pDictionary->m_aItems);
+                if (nexti >= i) // ensure we go forwards and not endlessly loop
+                {
+                    i = nexti;
+                    rDictionary[aName] = pDictionary;
+                    aName.clear();
+                }
             }
         }
 
@@ -2256,8 +2274,9 @@ size_t PDFDictionaryElement::Parse(const std::vector<std::unique_ptr<PDFElement>
                     if (pThisDictionary)
                     {
                         pThisDictionary->SetKeyOffset(aName, nNameOffset);
-                        pThisDictionary->SetKeyValueLength(
-                            aName, pName->GetLocation() + pName->GetLength() - nNameOffset);
+                        pThisDictionary->SetKeyValueLength(aName, pName->GetLocation()
+                                                                      + PDFNameElement::GetLength()
+                                                                      - nNameOffset);
                     }
                     aName.clear();
                 }
@@ -2373,6 +2392,8 @@ size_t PDFDictionaryElement::Parse(const std::vector<std::unique_ptr<PDFElement>
         aName.clear();
         aNumbers.clear();
     }
+
+    pThis->setParsing(false);
 
     return nRet;
 }
@@ -2618,8 +2639,7 @@ void PDFObjectElement::ParseStoredObjects()
         return;
     }
 
-    aStream.Seek(STREAM_SEEK_TO_END);
-    nLength = aStream.Tell();
+    nLength = aStream.TellEnd();
     aStream.Seek(0);
     std::vector<size_t> aObjNums;
     std::vector<size_t> aOffsets;
@@ -2907,8 +2927,6 @@ bool PDFNameElement::Read(SvStream& rStream)
 const OString& PDFNameElement::GetValue() const { return m_aValue; }
 
 sal_uInt64 PDFNameElement::GetLocation() const { return m_nLocation; }
-
-sal_uInt64 PDFNameElement::GetLength() const { return m_nLength; }
 
 PDFStreamElement::PDFStreamElement(size_t nLength)
     : m_nLength(nLength)

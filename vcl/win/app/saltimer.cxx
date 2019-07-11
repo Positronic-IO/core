@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <tools/time.hxx>
 
@@ -41,8 +42,11 @@ void WinSalTimer::ImplStop()
     const WinSalInstance *pInst = pSalData->mpInstance;
     assert( !pInst || pSalData->mnAppThreadId == GetCurrentThreadId() );
 
-    if ( m_bForceRealTimer && m_bDirectTimeout )
+    if ( m_bSetTimerRunning )
+    {
+        m_bSetTimerRunning = false;
         KillTimer( GetSalData()->mpInstance->mhComWnd, m_aWmTimerId );
+    }
     m_bDirectTimeout = false;
 
     const HANDLE hTimer = m_nTimerId;
@@ -82,6 +86,7 @@ void WinSalTimer::ImplStart( sal_uLong nMS )
         // with posted 0ms SAL_MSG_TIMER_CALLBACK messages
         SetTimer( GetSalData()->mpInstance->mhComWnd, m_aWmTimerId,
                   USER_TIMER_MINIMUM, nullptr );
+        m_bSetTimerRunning = true;
     }
     // we don't need any wakeup message, as this code can just run in the
     // main thread!
@@ -91,6 +96,7 @@ WinSalTimer::WinSalTimer()
     : m_nTimerId( nullptr )
     , m_bDirectTimeout( false )
     , m_bForceRealTimer( false )
+    , m_bSetTimerRunning( false )
 {
 }
 
@@ -158,14 +164,13 @@ void WinSalTimer::ImplHandleElapsedTimer()
     ImplSalYieldMutexRelease();
 }
 
-bool WinSalTimer::ImplHandleTimerEvent( const WPARAM aWPARAM )
+void WinSalTimer::ImplHandleTimerEvent( const WPARAM aWPARAM )
 {
     assert( aWPARAM <= SAL_MAX_INT32 );
     if ( !IsValidEventVersion( static_cast<sal_Int32>( aWPARAM ) ) )
-        return false;
+        return;
 
     ImplHandleElapsedTimer();
-    return true;
 }
 
 void WinSalTimer::SetForceRealTimer( const bool bVal )
@@ -180,14 +185,15 @@ void WinSalTimer::SetForceRealTimer( const bool bVal )
         Start( 0 );
 }
 
-bool WinSalTimer::ImplHandle_WM_TIMER( const WPARAM aWPARAM )
+void WinSalTimer::ImplHandle_WM_TIMER( const WPARAM aWPARAM )
 {
     assert( m_aWmTimerId == aWPARAM );
-    if ( !(m_aWmTimerId == aWPARAM && m_bDirectTimeout && m_bForceRealTimer) )
-        return false;
+    if ( !(m_aWmTimerId == aWPARAM && m_bSetTimerRunning) )
+        return;
 
+    m_bSetTimerRunning = false;
+    KillTimer( GetSalData()->mpInstance->mhComWnd, m_aWmTimerId );
     ImplHandleElapsedTimer();
-    return true;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -21,6 +21,7 @@
 #include <postit.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <unotools/useroptions.hxx>
 #include <svx/svdpage.hxx>
 #include <svx/svdocapt.hxx>
@@ -38,17 +39,14 @@
 #include <svx/sdsxyitm.hxx>
 #include <tools/gen.hxx>
 
-#include <table.hxx>
 #include <document.hxx>
 #include <docpool.hxx>
 #include <patattr.hxx>
-#include <formulacell.hxx>
 #include <drwlayer.hxx>
 #include <userdat.hxx>
 #include <detfunc.hxx>
 #include <editutil.hxx>
-
-#include <utility>
+#include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star;
 
@@ -333,7 +331,7 @@ void ScCaptionCreator::UpdateCaptionPos()
     {
         // create drawing undo action
         if( pDrawLayer && pDrawLayer->IsRecording() )
-            pDrawLayer->AddCalcUndo( new SdrUndoGeoObj( *mxCaption ) );
+            pDrawLayer->AddCalcUndo( o3tl::make_unique<SdrUndoGeoObj>( *mxCaption ) );
         // calculate new caption rectangle (#i98141# handle LTR<->RTL switch correctly)
         tools::Rectangle aCaptRect = mxCaption->GetLogicRect();
         long nDiffX = (rOldTailPos.X() >= 0) ? (aCaptRect.Left() - rOldTailPos.X()) : (rOldTailPos.X() - aCaptRect.Right());
@@ -353,7 +351,7 @@ void ScCaptionCreator::UpdateCaptionPos()
     {
         // create drawing undo action
         if( pDrawLayer && pDrawLayer->IsRecording() )
-            pDrawLayer->AddCalcUndo( new ScUndoObjData( mxCaption.get(), pCaptData->maStart, pCaptData->maEnd, maPos, pCaptData->maEnd ) );
+            pDrawLayer->AddCalcUndo( o3tl::make_unique<ScUndoObjData>( mxCaption.get(), pCaptData->maStart, pCaptData->maEnd, maPos, pCaptData->maEnd ) );
         // set new position
         pCaptData->maStart = maPos;
     }
@@ -424,7 +422,7 @@ ScNoteCaptionCreator::ScNoteCaptionCreator( ScDocument& rDoc, const ScAddress& r
             // store note position in user data of caption object
             ScCaptionUtil::SetCaptionUserData( *rNoteData.mxCaption, rPos );
             // insert object into draw page
-            rNoteData.mxCaption.insertToDrawPage( *pDrawPage );
+            pDrawPage->InsertObject( rNoteData.mxCaption.get() );
         }
     }
 }
@@ -434,8 +432,8 @@ ScNoteCaptionCreator::ScNoteCaptionCreator( ScDocument& rDoc, const ScAddress& r
 {
     SdrPage* pDrawPage = GetDrawPage();
     OSL_ENSURE( pDrawPage, "ScNoteCaptionCreator::ScNoteCaptionCreator - no drawing page" );
-    OSL_ENSURE( xCaption->GetPage() == pDrawPage, "ScNoteCaptionCreator::ScNoteCaptionCreator - wrong drawing page in caption" );
-    if( pDrawPage && (xCaption->GetPage() == pDrawPage) )
+    OSL_ENSURE( xCaption->getSdrPageFromSdrObject() == pDrawPage, "ScNoteCaptionCreator::ScNoteCaptionCreator - wrong drawing page in caption" );
+    if( pDrawPage && (xCaption->getSdrPageFromSdrObject() == pDrawPage) )
     {
         // store note position in user data of caption object
         ScCaptionUtil::SetCaptionUserData( *xCaption, rPos );
@@ -448,7 +446,6 @@ ScNoteCaptionCreator::ScNoteCaptionCreator( ScDocument& rDoc, const ScAddress& r
 
 } // namespace
 
-
 ScCaptionPtr::ScCaptionPtr() :
     mpHead(nullptr), mpNext(nullptr), mpCaption(nullptr), mbNotOwner(false)
 {
@@ -460,7 +457,7 @@ ScCaptionPtr::ScCaptionPtr( SdrCaptionObj* p ) :
     if (p)
     {
         newHead();
-    }
+     }
 }
 
 ScCaptionPtr::ScCaptionPtr( const ScCaptionPtr& r ) :
@@ -750,20 +747,20 @@ void ScCaptionPtr::removeFromDrawPage( SdrPage& rDrawPage )
 void ScCaptionPtr::removeFromDrawPageAndFree( bool bIgnoreUndo )
 {
     assert(mpHead && mpCaption);
-    SdrPage* pDrawPage = mpCaption->GetPage();
+    SdrPage* pDrawPage(mpCaption->getSdrPageFromSdrObject());
     SAL_WARN_IF( !pDrawPage, "sc.core", "ScCaptionPtr::removeFromDrawPageAndFree - object without drawing page");
     if (pDrawPage)
     {
         pDrawPage->RecalcObjOrdNums();
         bool bRecording = false;
-        if (!bIgnoreUndo)
+        if(!bIgnoreUndo)
         {
             ScDrawLayer* pDrawLayer(dynamic_cast< ScDrawLayer* >(&mpCaption->getSdrModelFromSdrObject()));
             SAL_WARN_IF( !pDrawLayer, "sc.core", "ScCaptionPtr::removeFromDrawPageAndFree - object without drawing layer");
             // create drawing undo action (before removing the object to have valid draw page in undo action)
             bRecording = (pDrawLayer && pDrawLayer->IsRecording());
             if (bRecording)
-                pDrawLayer->AddCalcUndo( new SdrUndoDelObj( *mpCaption ));
+                pDrawLayer->AddCalcUndo( o3tl::make_unique<SdrUndoDelObj>( *mpCaption ));
         }
         // remove the object from the drawing page, delete if undo is disabled
         removeFromDrawPage( *pDrawPage );
@@ -803,7 +800,7 @@ void ScCaptionPtr::dissolve()
         ScCaptionPtr* p = pThat->mpNext;
         pThat->clear();
         pThat = p;
-    }
+     }
     assert(!mpHead && !mpNext && !mpCaption);       // should had been cleared during list walk
     delete pHead;
 }
@@ -815,7 +812,6 @@ void ScCaptionPtr::clear()
     mpCaption = nullptr;
     mbNotOwner = false;
 }
-
 
 struct ScCaptionInitData
 {
@@ -836,10 +832,6 @@ ScCaptionInitData::ScCaptionInitData() :
 
 ScNoteData::ScNoteData( bool bShown ) :
     mbShown( bShown )
-{
-}
-
-ScNoteData::~ScNoteData()
 {
 }
 
@@ -1042,21 +1034,20 @@ void ScPostIt::CreateCaptionFromInitData( const ScAddress& rPos ) const
             if( maNoteData.mxCaption )
             {
                 // Prevent triple change broadcasts of the same object.
-                SdrDelayBroadcastObjectChange aDelayChange( *maNoteData.mxCaption);
-
+                maNoteData.mxCaption->getSdrModelFromSdrObject().setLock(true);
                 ScCaptionInitData& rInitData = *maNoteData.mxInitData;
 
                 // transfer ownership of outliner object to caption, or set simple text
                 OSL_ENSURE( rInitData.mxOutlinerObj.get() || !rInitData.maSimpleText.isEmpty(),
                     "ScPostIt::CreateCaptionFromInitData - need either outliner para object or simple text" );
-                if( rInitData.mxOutlinerObj.get() )
-                    maNoteData.mxCaption->SetOutlinerParaObject( rInitData.mxOutlinerObj.release() );
+                if (rInitData.mxOutlinerObj)
+                    maNoteData.mxCaption->SetOutlinerParaObject( std::move(rInitData.mxOutlinerObj) );
                 else
                     maNoteData.mxCaption->SetText( rInitData.maSimpleText );
 
                 // copy all items or set default items; reset shadow items
                 ScCaptionUtil::SetDefaultItems( *maNoteData.mxCaption, mrDoc );
-                if( rInitData.mxItemSet.get() )
+                if (rInitData.mxItemSet)
                     ScCaptionUtil::SetCaptionItems( *maNoteData.mxCaption, *rInitData.mxItemSet );
 
                 // set position and size of the caption object
@@ -1078,6 +1069,10 @@ void ScPostIt::CreateCaptionFromInitData( const ScAddress& rPos ) const
                     maNoteData.mxCaption->SetLogicRect( aCaptRect );
                     aCreator.FitCaptionToRect();
                 }
+
+                // End prevent triple change broadcasts of the same object.
+                maNoteData.mxCaption->getSdrModelFromSdrObject().setLock(false);
+                maNoteData.mxCaption->BroadcastObjectChange();
             }
         }
         // forget the initial caption data struct
@@ -1109,7 +1104,7 @@ void ScPostIt::CreateCaption( const ScAddress& rPos, const SdrCaptionObj* pCapti
         {
             // copy edit text object (object must be inserted into page already)
             if( OutlinerParaObject* pOPO = pCaption->GetOutlinerParaObject() )
-                maNoteData.mxCaption->SetOutlinerParaObject( new OutlinerParaObject( *pOPO ) );
+                maNoteData.mxCaption->SetOutlinerParaObject( o3tl::make_unique<OutlinerParaObject>( *pOPO ) );
             // copy formatting items (after text has been copied to apply font formatting)
             maNoteData.mxCaption->SetMergedItemSetAndBroadcast( pCaption->GetMergedItemSet() );
             // move textbox position relative to new cell, copy textbox size
@@ -1129,7 +1124,7 @@ void ScPostIt::CreateCaption( const ScAddress& rPos, const SdrCaptionObj* pCapti
         // create undo action
         if( ScDrawLayer* pDrawLayer = mrDoc.GetDrawLayer() )
             if( pDrawLayer->IsRecording() )
-                pDrawLayer->AddCalcUndo( new SdrUndoNewObj( *maNoteData.mxCaption ) );
+                pDrawLayer->AddCalcUndo( o3tl::make_unique<SdrUndoNewObj>( *maNoteData.mxCaption ) );
     }
 }
 
@@ -1196,7 +1191,7 @@ ScCaptionPtr ScNoteUtil::CreateTempCaption(
     if( pNoteCaption && rUserText.isEmpty() )
     {
         if( OutlinerParaObject* pOPO = pNoteCaption->GetOutlinerParaObject() )
-            pCaption->SetOutlinerParaObject( new OutlinerParaObject( *pOPO ) );
+            pCaption->SetOutlinerParaObject( o3tl::make_unique<OutlinerParaObject>( *pOPO ) );
         // set formatting (must be done after setting text) and resize the box to fit the text
         pCaption->SetMergedItemSetAndBroadcast( pNoteCaption->GetMergedItemSet() );
         tools::Rectangle aCaptRect( pCaption->GetLogicRect().TopLeft(), pNoteCaption->GetLogicRect().GetSize() );

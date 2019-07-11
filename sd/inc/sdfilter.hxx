@@ -20,11 +20,10 @@
 #ifndef INCLUDED_SD_INC_SDFILTER_HXX
 #define INCLUDED_SD_INC_SDFILTER_HXX
 
-#include <sal/types.h>
+#include <osl/module.h>
 #include <rtl/ustring.hxx>
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/task/XStatusIndicator.hpp>
-#include <com/sun/star/task/XStatusIndicatorSupplier.hpp>
 
 // SdFilter
 class SfxMedium;
@@ -44,7 +43,9 @@ public:
     virtual bool            Export() = 0;
 
 #ifndef DISABLE_DYNLOADING
-    static ::osl::Module*       OpenLibrary( const OUString& rLibraryName );
+    static void Preload();
+    /// Open library @rLibraryName and lookup symbol @rFnSymbol
+    static oslGenericFunction GetLibrarySymbol( const OUString& rLibraryName, const OUString &rFnSymbol );
 #endif
 
 protected:
@@ -54,7 +55,7 @@ protected:
     SfxMedium&                  mrMedium;
     ::sd::DrawDocShell&         mrDocShell;
     SdDrawDocument&             mrDocument;
-    bool                        mbIsDraw : 1;
+    bool const                  mbIsDraw : 1;
     void                        CreateStatusIndicator();
 
 private:

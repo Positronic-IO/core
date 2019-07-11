@@ -18,20 +18,15 @@
  */
 
 #include <scitems.hxx>
-#include <svx/algitem.hxx>
 #include <editeng/boxitem.hxx>
-#include <editeng/brushitem.hxx>
 #include <editeng/wghtitem.hxx>
 #include <editeng/justifyitem.hxx>
-#include <unotools/transliterationwrapper.hxx>
+#include <osl/diagnose.h>
+#include <svl/itemset.hxx>
+#include <osl/diagnose.h>
 
 #include <dpoutput.hxx>
-#include <dptabsrc.hxx>
-#include <dpfilteredcache.hxx>
 #include <document.hxx>
-#include <patattr.hxx>
-#include <docpool.hxx>
-#include <markdata.hxx>
 #include <attrib.hxx>
 #include <formula/errorcodes.hxx>
 #include <miscuno.hxx>
@@ -53,7 +48,14 @@
 #include <com/sun/star/sheet/DataResultFlags.hpp>
 #include <com/sun/star/sheet/DataPilotTablePositionType.hpp>
 #include <com/sun/star/sheet/GeneralFunction2.hpp>
-
+#include <com/sun/star/sheet/MemberResult.hpp>
+#include <com/sun/star/sheet/XDataPilotMemberResults.hpp>
+#include <com/sun/star/sheet/XDataPilotResults.hpp>
+#include <com/sun/star/sheet/XDimensionsSupplier.hpp>
+#include <com/sun/star/sheet/XHierarchiesSupplier.hpp>
+#include <com/sun/star/sheet/XLevelsSupplier.hpp>
+#include <com/sun/star/sheet/XMembersAccess.hpp>
+#include <com/sun/star/sheet/XMembersSupplier.hpp>
 #include <vector>
 
 using namespace com::sun::star;
@@ -81,18 +83,16 @@ struct ScDPOutLevelData
     uno::Sequence<sheet::MemberResult>  maResult;
     OUString                            maName;     /// Name is the internal field name.
     OUString                            maCaption;  /// Caption is the name visible in the output table.
-    double                              mfValue;    /// Value is the underlying numeric value, if any, or NaN
     bool                                mbHasHiddenMember:1;
     bool                                mbDataLayout:1;
     bool                                mbPageDim:1;
 
     ScDPOutLevelData(long nDim, long nHier, long nLevel, long nDimPos, sal_uInt32 nSrcNumFmt, const uno::Sequence<sheet::MemberResult>  &aResult,
-                       const OUString &aName, const OUString &aCaption, double fValue, bool bHasHiddenMember, bool bDataLayout, bool bPageDim) :
+                       const OUString &aName, const OUString &aCaption, bool bHasHiddenMember, bool bDataLayout, bool bPageDim) :
         mnDim(nDim), mnHier(nHier), mnLevel(nLevel), mnDimPos(nDimPos), mnSrcNumFmt(nSrcNumFmt), maResult(aResult),
-        maName(aName), maCaption(aCaption), mfValue(fValue), mbHasHiddenMember(bHasHiddenMember), mbDataLayout(bDataLayout),
+        maName(aName), maCaption(aCaption), mbHasHiddenMember(bHasHiddenMember), mbDataLayout(bDataLayout),
         mbPageDim(bPageDim)
     {
-        rtl::math::setNan(&mfValue);
     }
 
     // bug (73840) in uno::Sequence - copy and then assign doesn't work!
@@ -114,20 +114,20 @@ namespace {
 class ScDPOutputImpl
 {
     ScDocument*         mpDoc;
-    sal_uInt16          mnTab;
+    sal_uInt16 const          mnTab;
     ::std::vector< bool > mbNeedLineCols;
     ::std::vector< SCCOL > mnCols;
 
     ::std::vector< bool > mbNeedLineRows;
     ::std::vector< SCROW > mnRows;
 
-    SCCOL   mnTabStartCol;
-    SCROW   mnTabStartRow;
+    SCCOL const   mnTabStartCol;
+    SCROW const   mnTabStartRow;
 
     SCCOL   mnDataStartCol;
     SCROW   mnDataStartRow;
-    SCCOL   mnTabEndCol;
-    SCROW   mnTabEndRow;
+    SCCOL const   mnTabEndCol;
+    SCROW const   mnTabEndRow;
 
 public:
     ScDPOutputImpl( ScDocument* pDoc, sal_uInt16 nTab,
@@ -258,7 +258,7 @@ void ScDPOutputImpl::OutputBlockFrame ( SCCOL nStartCol, SCROW nStartRow, SCCOL 
     else
         aBox.SetLine(&aLine,  SvxBoxItemLine::RIGHT);
 
-     if ( nEndRow == mnTabEndRow ) //bottom
+    if ( nEndRow == mnTabEndRow ) //bottom
         aBox.SetLine(&aOutLine,  SvxBoxItemLine::BOTTOM);
     else
         aBox.SetLine(&aLine,  SvxBoxItemLine::BOTTOM);
@@ -512,8 +512,6 @@ ScDPOutput::ScDPOutput( ScDocument* pD, const uno::Reference<sheet::XDimensionsS
     pDoc( pD ),
     xSource( xSrc ),
     aStartPos( rPos ),
-    pColNumFmt( nullptr ),
-    pRowNumFmt( nullptr ),
     nColFmtCount( 0 ),
     nRowFmtCount( 0 ),
     nSingleNumFmt( 0 ),
@@ -595,10 +593,6 @@ ScDPOutput::ScDPOutput( ScDocument* pD, const uno::Reference<sheet::XDimensionsS
                                 OUString aCaption = ScUnoHelpFunctions::GetStringProperty( xPropSet,
                                     SC_UNO_DP_LAYOUTNAME, aName );
 
-                                /* TODO: any numeric value to obtain? */
-                                double fValue;
-                                rtl::math::setNan(&fValue);
-
                                 switch ( eDimOrient )
                                 {
                                     case sheet::DataPilotFieldOrientation_COLUMN:
@@ -607,7 +601,7 @@ ScDPOutput::ScDPOutput( ScDocument* pD, const uno::Reference<sheet::XDimensionsS
                                         if (!lcl_MemberEmpty(aResult))
                                         {
                                             ScDPOutLevelData tmp(nDim, nHierarchy, nLev, nDimPos, nNumFmt, aResult, aName,
-                                                                   aCaption, fValue, bHasHiddenMember, bIsDataLayout, false);
+                                                                   aCaption, bHasHiddenMember, bIsDataLayout, false);
                                             pColFields.push_back(tmp);
                                         }
                                     }
@@ -618,7 +612,7 @@ ScDPOutput::ScDPOutput( ScDocument* pD, const uno::Reference<sheet::XDimensionsS
                                         if (!lcl_MemberEmpty(aResult))
                                         {
                                             ScDPOutLevelData tmp(nDim, nHierarchy, nLev, nDimPos, nNumFmt, aResult, aName,
-                                                                   aCaption, fValue, bHasHiddenMember, bIsDataLayout, false);
+                                                                   aCaption, bHasHiddenMember, bIsDataLayout, false);
                                             pRowFields.push_back(tmp);
                                         }
                                     }
@@ -628,7 +622,7 @@ ScDPOutput::ScDPOutput( ScDocument* pD, const uno::Reference<sheet::XDimensionsS
                                         uno::Sequence<sheet::MemberResult> aResult = getVisiblePageMembersAsResults(xLevel);
                                         // no check on results for page fields
                                         ScDPOutLevelData tmp(nDim, nHierarchy, nLev, nDimPos, nNumFmt, aResult, aName,
-                                                               aCaption, fValue, bHasHiddenMember, false, true);
+                                                               aCaption, bHasHiddenMember, false, true);
                                         pPageFields.push_back(tmp);
                                     }
                                     break;
@@ -866,7 +860,7 @@ void ScDPOutput::CalcSizes()
         //  calculate output positions and sizes
 
         long nPageSize = 0;     // use page fields!
-        if ( bDoFilter || pPageFields.size() )
+        if ( bDoFilter || !pPageFields.empty() )
         {
             nPageSize += pPageFields.size() + 1;   // plus one empty row
             if ( bDoFilter )

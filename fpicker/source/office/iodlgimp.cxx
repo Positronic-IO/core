@@ -18,7 +18,7 @@
  */
 
 #include "iodlgimp.hxx"
-#include <svtools/headbar.hxx>
+#include <vcl/headbar.hxx>
 #include <tools/debug.hxx>
 #include <unotools/resmgr.hxx>
 #include <tools/urlobj.hxx>
@@ -175,7 +175,6 @@ Size SvtUpButton_Impl::GetOptimalSize() const
 SvtExpFileDlg_Impl::SvtExpFileDlg_Impl()   :
 
     _pCurFilter         ( nullptr ),
-    _pUserFilter        ( nullptr ),
     _pFtFileName        ( nullptr ),
     _pEdFileName        ( nullptr ),
     _pFtFileVersion     ( nullptr ),

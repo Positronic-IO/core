@@ -29,14 +29,14 @@
 #include <customshowlist.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
+#include <unotools/charclass.hxx>
 
 // SdCustomShowDlg
 SdCustomShowDlg::SdCustomShowDlg(weld::Window* pWindow, SdDrawDocument& rDrawDoc)
     : GenericDialogController(pWindow, "modules/simpress/ui/customslideshows.ui", "CustomSlideShows")
     , rDoc(rDrawDoc)
     , pCustomShowList(nullptr)
-    , pCustomShow(nullptr)
     , bModified(false)
     , m_xLbCustomShows(m_xBuilder->weld_tree_view("customshowlist"))
     , m_xCbxUseCustomShow(m_xBuilder->weld_check_button("usecustomshows"))
@@ -67,7 +67,7 @@ SdCustomShowDlg::SdCustomShowDlg(weld::Window* pWindow, SdDrawDocument& rDrawDoc
     {
         long nPosToSelect = pCustomShowList->GetCurPos();
         // fill ListBox with CustomShows
-        for( pCustomShow = pCustomShowList->First();
+        for( SdCustomShow* pCustomShow = pCustomShowList->First();
              pCustomShow != nullptr;
              pCustomShow = pCustomShowList->Next() )
         {
@@ -116,7 +116,7 @@ void SdCustomShowDlg::SelectHdl(void const *p)
     // new CustomShow
     if (p == m_xBtnNew.get())
     {
-        pCustomShow = nullptr;
+        std::unique_ptr<SdCustomShow> pCustomShow;
         SdDefineCustomShowDlg aDlg(m_xDialog.get(), rDoc, pCustomShow);
         if (aDlg.run() == RET_OK)
         {
@@ -125,17 +125,16 @@ void SdCustomShowDlg::SelectHdl(void const *p)
                 if( !pCustomShowList )
                     pCustomShowList = rDoc.GetCustomShowList( true );
 
-                pCustomShowList->push_back( pCustomShow );
+                SdCustomShow* pCustomShowTmp = pCustomShow.get();
+                pCustomShowList->push_back( std::move(pCustomShow) );
                 pCustomShowList->Last();
-                m_xLbCustomShows->append_text( pCustomShow->GetName() );
-                m_xLbCustomShows->select_text( pCustomShow->GetName() );
+                m_xLbCustomShows->append_text( pCustomShowTmp->GetName() );
+                m_xLbCustomShows->select_text( pCustomShowTmp->GetName() );
             }
 
             if (aDlg.IsModified())
                 bModified = true;
         }
-        else if( pCustomShow )
-            DELETEZ( pCustomShow );
     }
     // edit CustomShow
     else if( p == m_xBtnEdit.get() )
@@ -144,19 +143,15 @@ void SdCustomShowDlg::SelectHdl(void const *p)
         if (nPos != -1)
         {
             DBG_ASSERT( pCustomShowList, "pCustomShowList does not exist" );
-            pCustomShow = (*pCustomShowList)[ nPos ];
+            std::unique_ptr<SdCustomShow>& pCustomShow = (*pCustomShowList)[ nPos ];
             SdDefineCustomShowDlg aDlg(m_xDialog.get(), rDoc, pCustomShow);
 
             if (aDlg.run() == RET_OK)
             {
-                if( pCustomShow )
-                {
-                    (*pCustomShowList)[nPos] = pCustomShow;
-                    pCustomShowList->Seek(nPos);
-                    m_xLbCustomShows->remove(nPos);
-                    m_xLbCustomShows->insert_text(pCustomShow->GetName(), nPos);
-                    m_xLbCustomShows->select(nPos);
-                }
+                pCustomShowList->Seek(nPos);
+                m_xLbCustomShows->remove(nPos);
+                m_xLbCustomShows->insert_text(nPos, pCustomShow->GetName());
+                m_xLbCustomShows->select(nPos);
                 if (aDlg.IsModified())
                     bModified = true;
             }
@@ -168,7 +163,6 @@ void SdCustomShowDlg::SelectHdl(void const *p)
         int nPos = m_xLbCustomShows->get_selected_index();
         if (nPos != -1)
         {
-            delete (*pCustomShowList)[nPos];
             pCustomShowList->erase( pCustomShowList->begin() + nPos );
             m_xLbCustomShows->remove(nPos);
             m_xLbCustomShows->select(nPos == 0 ? nPos : nPos - 1);
@@ -181,7 +175,7 @@ void SdCustomShowDlg::SelectHdl(void const *p)
         int nPos = m_xLbCustomShows->get_selected_index();
         if (nPos != -1)
         {
-            SdCustomShow* pShow = new SdCustomShow( *(*pCustomShowList)[nPos] );
+            std::unique_ptr<SdCustomShow> pShow(new SdCustomShow( *(*pCustomShowList)[nPos] ));
             OUString aStr( pShow->GetName() );
             OUString aStrCopy( SdResId( STR_COPY_CUSTOMSHOW ) );
 
@@ -205,7 +199,7 @@ void SdCustomShowDlg::SelectHdl(void const *p)
             while( !bDifferent )
             {
                 bDifferent = true;
-                for( pCustomShow = pCustomShowList->First();
+                for( SdCustomShow* pCustomShow = pCustomShowList->First();
                      pCustomShow != nullptr && bDifferent;
                      pCustomShow = pCustomShowList->Next() )
                 {
@@ -226,10 +220,11 @@ void SdCustomShowDlg::SelectHdl(void const *p)
             //pCustomShowList->Seek( nPosToSelect );
             pShow->SetName( aStr );
 
-            pCustomShowList->push_back( pShow );
+            auto pShowTmp = pShow.get();
+            pCustomShowList->push_back( std::move(pShow) );
             pCustomShowList->Last();
-            m_xLbCustomShows->append_text(pShow->GetName());
-            m_xLbCustomShows->select_text(pShow->GetName());
+            m_xLbCustomShows->append_text(pShowTmp->GetName());
+            m_xLbCustomShows->select_text(pShowTmp->GetName());
 
             bModified = true;
         }
@@ -263,7 +258,7 @@ bool SdCustomShowDlg::IsCustomShow() const
 }
 
 // SdDefineCustomShowDlg
-SdDefineCustomShowDlg::SdDefineCustomShowDlg(weld::Window* pWindow, SdDrawDocument& rDrawDoc, SdCustomShow*& rpCS)
+SdDefineCustomShowDlg::SdDefineCustomShowDlg(weld::Window* pWindow, SdDrawDocument& rDrawDoc, std::unique_ptr<SdCustomShow>& rpCS)
     : GenericDialogController(pWindow, "modules/simpress/ui/definecustomslideshow.ui", "DefineCustomSlideShow")
     , rDoc(rDrawDoc)
     , rpCustomShow(rpCS)
@@ -286,7 +281,7 @@ SdDefineCustomShowDlg::SdDefineCustomShowDlg(weld::Window* pWindow, SdDrawDocume
 
     m_xBtnOK->connect_clicked( LINK( this, SdDefineCustomShowDlg, OKHdl ) );
 
-    m_xLbPages->set_selection_mode(true);
+    m_xLbPages->set_selection_mode(SelectionMode::Multiple);
 
     // shape 'em a bit
     m_xLbPages->set_size_request(m_xLbPages->get_approximate_digit_width() * 24, m_xLbPages->get_height_rows(10));
@@ -316,7 +311,7 @@ SdDefineCustomShowDlg::SdDefineCustomShowDlg(weld::Window* pWindow, SdDrawDocume
     }
     else
     {
-        rpCustomShow = new SdCustomShow;
+        rpCustomShow.reset(new SdCustomShow);
         m_xEdtName->set_text( SdResId( STR_NEW_CUSTOMSHOW ) );
         m_xEdtName->select_region(0, -1);
         rpCustomShow->SetName( m_xEdtName->get_text() );
@@ -378,7 +373,8 @@ void SdDefineCustomShowDlg::ClickButtonHdl2(void const * p)
             {
                 OUString aStr = m_xLbPages->get_text(i);
                 SdPage* pPage = rDoc.GetSdPage(i, PageKind::Standard);
-                m_xLbCustomPages->insert(nPosCP, OUString::number(reinterpret_cast<sal_uInt64>(pPage)), aStr, "");
+                OUString sId(OUString::number(reinterpret_cast<sal_uInt64>(pPage)));
+                m_xLbCustomPages->insert(nPosCP, aStr, &sId, nullptr, nullptr);
                 m_xLbCustomPages->select(nPosCP != -1 ? nPosCP : m_xLbCustomPages->n_children() - 1);
 
                 if (nPosCP != -1)

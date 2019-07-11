@@ -86,8 +86,6 @@ static const OUStringLiteral gPropNames[CB_COUNT] =
 
 TableDesignWidget::TableDesignWidget( VclBuilderContainer* pParent, ViewShellBase& rBase )
     : mrBase(rBase)
-    , mbStyleSelected(false)
-    , mbOptionsChanged(false)
 {
     pParent->get(m_pValueSet, "previews");
     m_pValueSet->SetStyle(m_pValueSet->GetStyle() | WB_NO_DIRECTSELECT | WB_FLATVALUESET | WB_ITEMBORDER);
@@ -146,7 +144,6 @@ static SfxDispatcher* getDispatcher( ViewShellBase const & rBase )
 
 IMPL_LINK_NOARG(TableDesignWidget, implValueSetHdl, ValueSet*, void)
 {
-    mbStyleSelected = true;
     ApplyStyle();
 }
 
@@ -174,7 +171,7 @@ void TableDesignWidget::ApplyStyle()
                 SfxRequest aReq( SID_TABLE_STYLE, SfxCallMode::SYNCHRON, SfxGetpApp()->GetPool() );
                 aReq.AppendItem( SfxStringItem( SID_TABLE_STYLE, sStyleName ) );
 
-                rtl::Reference< sdr::SelectionController > xController( pView->getSelectionController() );
+                const rtl::Reference< sdr::SelectionController >& xController( pView->getSelectionController() );
                 if( xController.is() )
                     xController->Execute( aReq );
 
@@ -202,10 +199,7 @@ void TableDesignWidget::ApplyStyle()
 
 IMPL_LINK_NOARG(TableDesignWidget, implCheckBoxHdl, Button*, void)
 {
-    mbOptionsChanged = true;
-
     ApplyOptions();
-
     FillDesignPreviewControl();
 }
 
@@ -229,7 +223,7 @@ void TableDesignWidget::ApplyOptions()
         SdrView* pView = mrBase.GetDrawView();
         if( pView )
         {
-            rtl::Reference< sdr::SelectionController > xController( pView->getSelectionController() );
+            const rtl::Reference< sdr::SelectionController >& xController( pView->getSelectionController() );
             if( xController.is() )
             {
                 xController->Execute( aReq );
@@ -252,27 +246,24 @@ void TableDesignWidget::onSelectionChanged()
     if( mxView.is() ) try
     {
         Reference< XSelectionSupplier >  xSel( mxView, UNO_QUERY_THROW );
-        if (xSel.is())
+        Any aSel( xSel->getSelection() );
+        Sequence< XShape > xShapeSeq;
+        if( aSel >>= xShapeSeq )
         {
-            Any aSel( xSel->getSelection() );
-            Sequence< XShape > xShapeSeq;
-            if( aSel >>= xShapeSeq )
-            {
-                if( xShapeSeq.getLength() == 1 )
-                    aSel <<= xShapeSeq[0];
-            }
-            else
-            {
-                Reference< XShapes > xShapes( aSel, UNO_QUERY );
-                if( xShapes.is() && (xShapes->getCount() == 1) )
-                    aSel = xShapes->getByIndex(0);
-            }
+            if( xShapeSeq.getLength() == 1 )
+                aSel <<= xShapeSeq[0];
+        }
+        else
+        {
+            Reference< XShapes > xShapes( aSel, UNO_QUERY );
+            if( xShapes.is() && (xShapes->getCount() == 1) )
+                aSel = xShapes->getByIndex(0);
+        }
 
-            Reference< XShapeDescriptor > xDesc( aSel, UNO_QUERY );
-            if( xDesc.is() && ( xDesc->getShapeType() == "com.sun.star.drawing.TableShape" || xDesc->getShapeType() == "com.sun.star.presentation.TableShape" ) )
-            {
-                xNewSelection.set( xDesc, UNO_QUERY );
-            }
+        Reference< XShapeDescriptor > xDesc( aSel, UNO_QUERY );
+        if( xDesc.is() && ( xDesc->getShapeType() == "com.sun.star.drawing.TableShape" || xDesc->getShapeType() == "com.sun.star.presentation.TableShape" ) )
+        {
+            xNewSelection.set( xDesc, UNO_QUERY );
         }
     }
     catch( Exception& )
@@ -585,7 +576,7 @@ static void FillCellInfoMatrix( const CellInfoVector& rStyle, const TableStyleSe
     }
 }
 
-const BitmapEx CreateDesignPreview( const Reference< XIndexAccess >& xTableStyle, const TableStyleSettings& rSettings, bool bIsPageDark )
+static const BitmapEx CreateDesignPreview( const Reference< XIndexAccess >& xTableStyle, const TableStyleSettings& rSettings, bool bIsPageDark )
 {
     CellInfoVector aCellInfoVector(sdr::table::style_count);
     FillCellInfoVector( xTableStyle, aCellInfoVector );

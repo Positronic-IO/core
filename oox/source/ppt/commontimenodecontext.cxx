@@ -79,10 +79,10 @@ const convert_subtype* convert_subtype::getList()
     return aList;
 }
 
-const preset_maping* preset_maping::getList()
+const preset_mapping* preset_mapping::getList()
 {
 
-    static const preset_maping aList[] =
+    static const preset_mapping aList[] =
     {
         { css::presentation::EffectPresetClass::ENTRANCE, 1    ,"ooo-entrance-appear" },
         { css::presentation::EffectPresetClass::ENTRANCE, 2    ,"ooo-entrance-fly-in" },
@@ -528,7 +528,7 @@ OUString getConvertedSubType( sal_Int16 nPresetClass, sal_Int32 nPresetId, sal_I
             if( attribs.hasAttribute( XML_presetID ) )
             {
                 sal_Int32 nPresetId = attribs.getInteger( XML_presetID, 0 );
-                const preset_maping* p = preset_maping::getList();
+                const preset_mapping* p = preset_mapping::getList();
                 while( p->mpStrPresetId && ((p->mnPresetClass != nEffectPresetClass) || (p->mnPresetId != nPresetId )) )
                     p++;
 
@@ -647,14 +647,14 @@ OUString getConvertedSubType( sal_Int16 nPresetClass, sal_Int32 nPresetId, sal_I
         case PPT_TOKEN( tmAbs ):
             if( mbIterate )
             {
-                double fTime = rAttribs.getUnsigned( XML_val, 0 );
-                // time in ms. property is in % TODO
-                mpNode->getNodeProperties()[ NP_ITERATEINTERVAL ] <<= fTime;
+                double fTime = rAttribs.getUnsigned( XML_val, 0 ) / 1000.0; // convert ms. to second.
+                mpNode->getNodeProperties()[NP_ITERATEINTERVAL] <<= fTime;
             }
             return this;
         case PPT_TOKEN( tmPct ):
             if( mbIterate )
             {
+                // TODO: should use duration to get iterate interval in second.
                 double fPercent = static_cast<double>(rAttribs.getUnsigned( XML_val, 0 )) / 100000.0;
                 mpNode->getNodeProperties()[ NP_ITERATEINTERVAL ] <<= fPercent;
             }

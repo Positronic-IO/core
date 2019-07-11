@@ -1212,9 +1212,7 @@ sal_uInt64 StgTmpStrm::GetSize() const
     sal_uInt64 n;
     if( m_pStrm )
     {
-        sal_uInt64 old = m_pStrm->Tell();
-        n = m_pStrm->Seek( STREAM_SEEK_TO_END );
-        m_pStrm->Seek( old );
+        n = m_pStrm->TellEnd();
     }
     else
         n = nEndOfData;
@@ -1230,7 +1228,7 @@ void StgTmpStrm::SetSize(sal_uInt64 n)
         if( n > THRESHOLD )
         {
             m_aName = utl::TempFile(nullptr, false).GetURL();
-            SvFileStream* s = new SvFileStream( m_aName, StreamMode::READWRITE );
+            std::unique_ptr<SvFileStream> s(new SvFileStream( m_aName, StreamMode::READWRITE ));
             const sal_uInt64 nCur = Tell();
             sal_uInt64 i = nEndOfData;
             std::unique_ptr<sal_uInt8[]> p(new sal_uInt8[ 4096 ]);
@@ -1272,10 +1270,9 @@ void StgTmpStrm::SetSize(sal_uInt64 n)
             if( i )
             {
                 SetError( s->GetError() );
-                delete s;
                 return;
             }
-            m_pStrm = s;
+            m_pStrm = s.release();
             // Shrink the memory to 16 bytes, which seems to be the minimum
             ReAllocateMemory( - ( static_cast<long>(nEndOfData) - 16 ) );
         }
@@ -1329,7 +1326,7 @@ sal_uInt64 StgTmpStrm::SeekPos(sal_uInt64 n)
     assert(n != SAL_MAX_UINT32);
     if( n == STREAM_SEEK_TO_END )
         n = GetSize();
-    if( n && n > THRESHOLD && !m_pStrm )
+    if( n > THRESHOLD && !m_pStrm )
     {
         SetSize( n );
         if( GetError() != ERRCODE_NONE )

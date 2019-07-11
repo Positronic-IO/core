@@ -19,7 +19,6 @@
 
 #include <tools/diagnose_ex.h>
 #include <vcl/svapp.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/anytostring.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
@@ -64,6 +63,7 @@
 #include <tools.hxx>
 #include <outdevstate.hxx>
 #include <action.hxx>
+#include <sal/log.hxx>
 #include "bitmapaction.hxx"
 #include "lineaction.hxx"
 #include "pointaction.hxx"
@@ -306,7 +306,7 @@ namespace cppcanvas
                     aCalculatedNewState.textOverlineStyle       = rNewState.textOverlineStyle;
                     aCalculatedNewState.textUnderlineStyle      = rNewState.textUnderlineStyle;
                     aCalculatedNewState.textStrikeoutStyle      = rNewState.textStrikeoutStyle;
-                    aCalculatedNewState.textEmphasisMarkStyle   = rNewState.textEmphasisMarkStyle;
+                    aCalculatedNewState.textEmphasisMark        = rNewState.textEmphasisMark;
                     aCalculatedNewState.isTextEffectShadowSet   = rNewState.isTextEffectShadowSet;
                     aCalculatedNewState.isTextWordUnderlineSet  = rNewState.isTextWordUnderlineSet;
                     aCalculatedNewState.isTextOutlineModeSet    = rNewState.isTextOutlineModeSet;
@@ -354,6 +354,12 @@ namespace cppcanvas
                 {
                     aCalculatedNewState.textLineColor      = rNewState.textLineColor;
                     aCalculatedNewState.isTextLineColorSet = rNewState.isTextLineColorSet;
+                }
+
+                if( aCalculatedNewState.pushFlags & PushFlags::OVERLINECOLOR )
+                {
+                    aCalculatedNewState.textOverlineColor = rNewState.textOverlineColor;
+                    aCalculatedNewState.isTextOverlineColorSet = rNewState.isTextOverlineColorSet;
                 }
 
                 if( aCalculatedNewState.pushFlags & PushFlags::TEXTLAYOUTMODE )
@@ -840,6 +846,16 @@ namespace cppcanvas
             }
             aFontRequest.CellSize = (rState.mapModeTransform * vcl::unotools::b2DSizeFromSize(rFontSizeLog)).getY();
 
+            if (rFont.GetEmphasisMark() != FontEmphasisMark::NONE)
+            {
+                uno::Sequence< beans::PropertyValue > aProperties(1);
+                aProperties[0].Name = "EmphasisMark";
+                aProperties[0].Value <<= sal_uInt32(rFont.GetEmphasisMark());
+                return rParms.mrCanvas->getUNOCanvas()->createFont(aFontRequest,
+                                                                aProperties,
+                                                                aFontMatrix);
+            }
+
             return rParms.mrCanvas->getUNOCanvas()->createFont( aFontRequest,
                                                                 uno::Sequence< beans::PropertyValue >(),
                                                                 aFontMatrix );
@@ -865,6 +881,7 @@ namespace cppcanvas
             // TODO(F2): implement all text effects
             // if( rState.textAlignment );             // TODO(F2): NYI
 
+            ::Color aTextFillColor( COL_AUTO );
             ::Color aShadowColor( COL_AUTO );
             ::Color aReliefColor( COL_AUTO );
             ::Size  aShadowOffset;
@@ -930,6 +947,9 @@ namespace cppcanvas
                 aReliefColor.SetTransparency( aTextColor.GetTransparency() );
             }
 
+            if (rState.isTextFillColorSet)
+                aTextFillColor = vcl::unotools::doubleSequenceToColor(rState.textFillColor, xColorSpace);
+
             // create the actual text action
             std::shared_ptr<Action> pTextAction(
                 TextActionFactory::createTextAction(
@@ -938,6 +958,7 @@ namespace cppcanvas
                     aReliefColor,
                     aShadowOffset,
                     aShadowColor,
+                    aTextFillColor,
                     rString,
                     nIndex,
                     nLength,
@@ -973,9 +994,9 @@ namespace cppcanvas
                 nMaxWidth += nWidth + 1;
 
                 long nFullStrikeoutWidth = 0;
-                OUString aStrikeoutText;
+                OUStringBuffer aStrikeoutText;
                 while( (nFullStrikeoutWidth+=nStrikeoutWidth ) < nMaxWidth+1 )
-                    aStrikeoutText += OUStringLiteral1(pChars[0]);
+                    aStrikeoutText.append(pChars[0]);
 
                 sal_Int32 nLen = aStrikeoutText.getLength();
 
@@ -1002,9 +1023,10 @@ namespace cppcanvas
                             aReliefColor,
                             aShadowOffset,
                             aShadowColor,
-                            aStrikeoutText,
+                            aTextFillColor,
+                            aStrikeoutText.makeStringAndClear(),
                             0/*nStartPos*/,
-                            aStrikeoutText.getLength(),
+                            nLen,
                             pStrikeoutCharWidths,
                             rParms.mrVDev,
                             rParms.mrCanvas,
@@ -1457,6 +1479,22 @@ namespace cppcanvas
                         }
                         break;
 
+                    case MetaActionType::OVERLINECOLOR:
+                        if( !rParms.maTextColor.is_initialized() )
+                        {
+                            setStateColor( static_cast<MetaOverlineColorAction*>(pCurrAct),
+                                           rStates.getState().isTextOverlineColorSet,
+                                           rStates.getState().textOverlineColor,
+                                           rCanvas );
+                        }
+                        else
+                        {
+                            bool bSetting(static_cast<MetaOverlineColorAction*>(pCurrAct)->IsSetting());
+
+                            rStates.getState().isTextOverlineColorSet = bSetting;
+                        }
+                        break;
+
                     case MetaActionType::TEXTALIGN:
                     {
                         ::cppcanvas::internal::OutDevState& rState = rStates.getState();
@@ -1482,7 +1520,7 @@ namespace cppcanvas
                             (*rParms.maFontUnderline ? sal_Int8(LINESTYLE_SINGLE) : sal_Int8(LINESTYLE_NONE)) :
                             static_cast<sal_Int8>(rFont.GetUnderline());
                         rState.textStrikeoutStyle       = static_cast<sal_Int8>(rFont.GetStrikeout());
-                        rState.textEmphasisMarkStyle    = rFont.GetEmphasisMark() & FontEmphasisMark::Style;
+                        rState.textEmphasisMark         = rFont.GetEmphasisMark();
                         rState.isTextEffectShadowSet    = rFont.IsShadow();
                         rState.isTextWordUnderlineSet   = rFont.IsWordLineMode();
                         rState.isTextOutlineModeSet     = rFont.IsOutline();
@@ -1562,7 +1600,7 @@ namespace cppcanvas
                         // #i44110# correct null-sized output - there
                         // are metafiles which have zero size in at
                         // least one dimension
-                      
+
                         // Remark the 1L cannot be replaced, that would cause max to compare long/int
                         const Size aMtfSizePix( std::max( aMtfSizePixPre.Width(), 1L ),
                                                 std::max( aMtfSizePixPre.Height(), 1L ) );
@@ -2905,6 +2943,7 @@ namespace cppcanvas
                 // setup default text color to black
                 rState.textColor =
                     rState.textFillColor =
+                    rState.textOverlineColor =
                     rState.textLineColor = tools::intSRGBAToDoubleSequence( 0x000000FF );
             }
 
@@ -2925,9 +2964,11 @@ namespace cppcanvas
             {
                 ::cppcanvas::internal::OutDevState& rState = aStateStack.getState();
                 rState.isTextFillColorSet = true;
+                rState.isTextOverlineColorSet = true;
                 rState.isTextLineColorSet = true;
                 rState.textColor =
                     rState.textFillColor =
+                    rState.textOverlineColor =
                     rState.textLineColor = tools::intSRGBAToDoubleSequence( *rParams.maTextColor );
             }
             if( rParams.maFontName.is_initialized() ||

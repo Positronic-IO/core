@@ -13,33 +13,44 @@
 #include <comphelper/xmltools.hxx>
 #include <tools/stream.hxx>
 #include <unotools/streamwrap.hxx>
+#include <utility>
 #include <vcl/weld.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
 #include <com/sun/star/graphic/XGraphicProvider.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/sheet/XSpreadsheet.hpp>
+#include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
+#include <com/sun/star/sheet/XSpreadsheetView.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <com/sun/star/text/XTextContent.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
+#include <com/sun/star/text/XTextViewCursor.hpp>
+#include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 
 using namespace css;
 using namespace css::uno;
 using namespace css::beans;
+using namespace css::container;
 using namespace css::frame;
 using namespace css::io;
 using namespace css::lang;
 using namespace css::frame;
+using namespace css::sheet;
 using namespace css::text;
 using namespace css::drawing;
 using namespace css::graphic;
 
 SignatureLineDialog::SignatureLineDialog(weld::Widget* pParent, Reference<XModel> xModel,
                                          bool bEditExisting)
-    : SignatureLineDialogBase(pParent, xModel, "cui/ui/signatureline.ui", "SignatureLineDialog")
+    : SignatureLineDialogBase(pParent, std::move(xModel), "cui/ui/signatureline.ui",
+                              "SignatureLineDialog")
     , m_xEditName(m_xBuilder->weld_entry("edit_name"))
     , m_xEditTitle(m_xBuilder->weld_entry("edit_title"))
     , m_xEditEmail(m_xBuilder->weld_entry("edit_email"))
@@ -132,6 +143,7 @@ void SignatureLineDialog::Apply()
                         UNO_QUERY);
 
     xShapeProps->setPropertyValue("Graphic", Any(xGraphic));
+    xShapeProps->setPropertyValue("SignatureLineUnsignedImage", Any(xGraphic));
 
     // Set signature line properties
     xShapeProps->setPropertyValue("IsSignatureLine", Any(true));
@@ -160,11 +172,41 @@ void SignatureLineDialog::Apply()
         // Default anchoring
         xShapeProps->setPropertyValue("AnchorType", Any(TextContentAnchorType_AT_PARAGRAPH));
 
-        // Insert into document
-        Reference<XTextRange> const xEnd
-            = Reference<XTextDocument>(m_xModel, UNO_QUERY)->getText()->getEnd();
-        Reference<XTextContent> const xShapeContent(xShapeProps, UNO_QUERY);
-        xShapeContent->attach(xEnd);
+        const Reference<XServiceInfo> xServiceInfo(m_xModel, UNO_QUERY);
+
+        // Writer
+        const Reference<XTextDocument> xTextDocument(m_xModel, UNO_QUERY);
+        if (xTextDocument.is())
+        {
+            Reference<XTextContent> xTextContent(xShape, UNO_QUERY_THROW);
+            Reference<XTextViewCursorSupplier> xViewCursorSupplier(m_xModel->getCurrentController(),
+                                                                   UNO_QUERY_THROW);
+            Reference<XTextViewCursor> xCursor = xViewCursorSupplier->getViewCursor();
+            // use cursor's XText - it might be in table cell, frame, ...
+            Reference<XText> const xText(xCursor->getText());
+            assert(xText.is());
+            xText->insertTextContent(xCursor, xTextContent, true);
+            return;
+        }
+
+        // Calc
+        const Reference<XSpreadsheetDocument> xSpreadsheetDocument(m_xModel, UNO_QUERY);
+        if (xSpreadsheetDocument.is())
+        {
+            Reference<XPropertySet> xSheetCell(m_xModel->getCurrentSelection(), UNO_QUERY_THROW);
+            awt::Point aCellPosition;
+            xSheetCell->getPropertyValue("Position") >>= aCellPosition;
+            xShape->setPosition(aCellPosition);
+
+            Reference<XSpreadsheetView> xView(m_xModel->getCurrentController(), UNO_QUERY_THROW);
+            Reference<XSpreadsheet> xSheet(xView->getActiveSheet(), UNO_QUERY_THROW);
+            Reference<XDrawPageSupplier> xDrawPageSupplier(xSheet, UNO_QUERY_THROW);
+            Reference<XDrawPage> xDrawPage(xDrawPageSupplier->getDrawPage(), UNO_QUERY_THROW);
+            Reference<XShapes> xShapes(xDrawPage, UNO_QUERY_THROW);
+
+            xShapes->add(xShape);
+            return;
+        }
     }
 }
 

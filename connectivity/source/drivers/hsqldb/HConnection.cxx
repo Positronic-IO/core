@@ -33,10 +33,9 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/sdbc/XDatabaseMetaData2.hpp>
 
-#include <comphelper/listenernotification.hxx>
-#include <comphelper/sequence.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <resource/sharedresources.hxx>
@@ -231,9 +230,10 @@ namespace connectivity { namespace hsqldb
         catch( const RuntimeException& ) { throw; }
         catch( const Exception& )
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             ::connectivity::SharedResources aResources;
             const OUString sError( aResources.getResourceString(STR_NO_TABLE_CONTAINER));
-            throw WrappedTargetException( sError ,*this, ::cppu::getCaughtException() );
+            throw WrappedTargetException( sError ,*this, anyEx );
         }
 
         SAL_WARN_IF( !xTables.is(), "connectivity.hsqldb", "OHsqlConnection::impl_getTableContainer_throw: post condition not met!" );
@@ -248,8 +248,7 @@ namespace connectivity { namespace hsqldb
         try
         {
             Reference< XNameAccess > xTables( impl_getTableContainer_throw(), UNO_QUERY_THROW );
-            if ( xTables.is() )
-                bDoesExist = xTables->hasByName( _rTableName );
+            bDoesExist = xTables->hasByName( _rTableName );
         }
         catch( const Exception& )
         {

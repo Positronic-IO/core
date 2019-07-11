@@ -21,6 +21,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
 #include <svl/itemset.hxx>
+#include <svl/intitem.hxx>
 #include <vcl/svapp.hxx>
 
 #include <sdattr.hxx>
@@ -42,8 +43,8 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     , m_xRbtAll(m_xBuilder->weld_radio_button("allslides"))
     , m_xRbtAtDia(m_xBuilder->weld_radio_button("from"))
     , m_xRbtCustomshow(m_xBuilder->weld_radio_button("customslideshow"))
-    , m_xLbDias(m_xBuilder->weld_combo_box_text("from_cb"))
-    , m_xLbCustomshow(m_xBuilder->weld_combo_box_text("customslideshow_cb"))
+    , m_xLbDias(m_xBuilder->weld_combo_box("from_cb"))
+    , m_xLbCustomshow(m_xBuilder->weld_combo_box("customslideshow_cb"))
     , m_xRbtStandard(m_xBuilder->weld_radio_button("default"))
     , m_xRbtWindow(m_xBuilder->weld_radio_button("window"))
     , m_xRbtAuto(m_xBuilder->weld_radio_button("auto"))
@@ -56,7 +57,7 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     , m_xCbxChangePage(m_xBuilder->weld_check_button("changeslidesbyclick"))
     , m_xCbxAlwaysOnTop(m_xBuilder->weld_check_button("alwaysontop"))
     , m_xFtMonitor(m_xBuilder->weld_label("presdisplay_label"))
-    , m_xLBMonitor(m_xBuilder->weld_combo_box_text("presdisplay_cb"))
+    , m_xLBMonitor(m_xBuilder->weld_combo_box("presdisplay_cb"))
     , m_xMonitor(m_xBuilder->weld_label("monitor_str"))
     , m_xAllMonitors(m_xBuilder->weld_label("allmonitors_str"))
     , m_xMonitorExternal(m_xBuilder->weld_label("externalmonitor_str"))
@@ -164,7 +165,7 @@ OUString SdStartPresentationDlg::GetDisplayName( sal_Int32   nDisplay,
 }
 
 /// Store display index together with name in user data
-sal_Int32 SdStartPresentationDlg::InsertDisplayEntry(const rtl::OUString &aName,
+sal_Int32 SdStartPresentationDlg::InsertDisplayEntry(const OUString &aName,
                                                      sal_Int32            nDisplay)
 {
     m_xLBMonitor->append(OUString::number(nDisplay), aName);

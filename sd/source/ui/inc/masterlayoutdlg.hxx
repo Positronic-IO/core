@@ -21,9 +21,10 @@
 
 #include <vcl/weld.hxx>
 
-#include <sdpage.hxx>
+#include <pres.hxx>
 
 class SdDrawDocument;
+class SdPage;
 
 namespace sd
 {
@@ -53,7 +54,7 @@ public:
     MasterLayoutDialog(weld::Window* pParent, SdDrawDocument* pDoc, SdPage* pCurrentPage);
     virtual ~MasterLayoutDialog() override;
 
-    short execute();
+    virtual short run() override;
 };
 
 }

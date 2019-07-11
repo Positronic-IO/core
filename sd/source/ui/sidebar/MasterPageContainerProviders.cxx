@@ -21,7 +21,9 @@
 
 #include <DrawDocShell.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <PreviewRenderer.hxx>
+#include <svl/eitem.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/thumbnailview.hxx>
@@ -29,6 +31,7 @@
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/StorageFactory.hpp>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -139,10 +142,10 @@ SdPage* TemplatePageObjectProvider::operator() (SdDrawDocument*)
 ::sd::DrawDocShell* TemplatePageObjectProvider::LoadDocument (const OUString& sFileName)
 {
     SfxApplication* pSfxApp = SfxGetpApp();
-    SfxItemSet* pSet = new SfxAllItemSet (pSfxApp->GetPool());
+    std::unique_ptr<SfxItemSet> pSet(new SfxAllItemSet (pSfxApp->GetPool()));
     pSet->Put (SfxBoolItem (SID_TEMPLATE, true));
     pSet->Put (SfxBoolItem (SID_PREVIEW, true));
-    if (pSfxApp->LoadTemplate (mxDocumentShell, sFileName, pSet))
+    if (pSfxApp->LoadTemplate (mxDocumentShell, sFileName, std::move(pSet)))
     {
         mxDocumentShell = nullptr;
     }

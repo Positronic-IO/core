@@ -107,7 +107,7 @@ private:
     std::map< sal_uInt16, OUString > maPropertyValues;
     VclPtr<ListBox> mpControl;
     DECL_LINK(OnSelect, ListBox&, void);
-    Link<LinkParamNone*,void> maModifyLink;
+    Link<LinkParamNone*,void> const maModifyLink;
 };
 
 PresetPropertyBox::PresetPropertyBox( sal_Int32 nControlType, vcl::Window* pParent, const Any& rValue, const OUString& aPresetId, const Link<LinkParamNone*,void>& rModifyHdl )
@@ -141,18 +141,16 @@ void PresetPropertyBox::setValue( const Any& rValue, const OUString& rPresetId )
             OUString aPropertyValue;
             rValue >>= aPropertyValue;
 
-            UStringList aSubTypes( pDescriptor->getSubTypes() );
-            UStringList::iterator aIter( aSubTypes.begin() );
-            const UStringList::iterator aEnd( aSubTypes.end() );
+            std::vector<OUString> aSubTypes( pDescriptor->getSubTypes() );
 
-            mpControl->Enable( aIter != aEnd );
+            mpControl->Enable( !aSubTypes.empty() );
 
-            while( aIter != aEnd )
+            for( auto& aSubType : aSubTypes )
             {
-                sal_Int32 nPos = mpControl->InsertEntry( rPresets.getUINameForProperty( *aIter ) );
-                if( (*aIter) == aPropertyValue )
+                sal_Int32 nPos = mpControl->InsertEntry( rPresets.getUINameForProperty( aSubType ) );
+                if( aSubType == aPropertyValue )
                     mpControl->SelectEntryPos( nPos );
-                maPropertyValues[nPos] = (*aIter++);
+                maPropertyValues[nPos] = aSubType;
             }
         }
         else
@@ -177,6 +175,89 @@ Control* PresetPropertyBox::getControl()
     return mpControl;
 }
 
+SdPropertySubControl::~SdPropertySubControl()
+{
+}
+
+class SdPresetPropertyBox  : public SdPropertySubControl
+{
+public:
+    SdPresetPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const OUString& aPresetId, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& rPresetId ) override;
+
+private:
+    std::vector<OUString> maPropertyValues;
+    Link<LinkParamNone*,void> maModifyLink;
+    std::unique_ptr<weld::ComboBox> mxControl;
+
+    DECL_LINK(OnSelect, weld::ComboBox&, void);
+};
+
+SdPresetPropertyBox::SdPresetPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const OUString& aPresetId, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyLink(rModifyHdl)
+    , mxControl(mxBuilder->weld_combo_box("combo"))
+{
+    mxControl->connect_changed(LINK(this, SdPresetPropertyBox, OnSelect));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_PRESETPROPERTYBOX);
+    mxControl->show();
+    pLabel->set_mnemonic_widget(mxControl.get());
+    setValue(rValue, aPresetId);
+}
+
+IMPL_LINK_NOARG(SdPresetPropertyBox, OnSelect, weld::ComboBox&, void)
+{
+    maModifyLink.Call(nullptr);
+}
+
+void SdPresetPropertyBox::setValue( const Any& rValue, const OUString& rPresetId )
+{
+    if (mxControl)
+    {
+        mxControl->freeze();
+        mxControl->clear();
+        int nPos = -1;
+
+        const CustomAnimationPresets& rPresets = CustomAnimationPresets::getCustomAnimationPresets();
+        CustomAnimationPresetPtr pDescriptor = rPresets.getEffectDescriptor( rPresetId );
+        if( pDescriptor.get() )
+        {
+
+            OUString aPropertyValue;
+            rValue >>= aPropertyValue;
+
+            std::vector<OUString> aSubTypes( pDescriptor->getSubTypes() );
+
+            mxControl->set_sensitive(!aSubTypes.empty());
+
+            for( auto& aSubType : aSubTypes )
+            {
+                mxControl->append_text(rPresets.getUINameForProperty(aSubType));
+                maPropertyValues.push_back(aSubType);
+                if (aSubType == aPropertyValue)
+                    nPos = maPropertyValues.size() - 1;
+            }
+        }
+        else
+        {
+            mxControl->set_sensitive(false);
+        }
+        mxControl->thaw();
+        if (nPos != -1)
+            mxControl->set_active(nPos);
+    }
+}
+
+Any SdPresetPropertyBox::getValue()
+{
+    const int nIndex = mxControl->get_active();
+    if (nIndex == -1)
+        return Any();
+    return makeAny(maPropertyValues[nIndex]);
+}
+
 class ColorPropertyBox  : public PropertySubControl
 {
 public:
@@ -190,7 +271,7 @@ public:
 private:
     VclPtr<SvxColorListBox> mpControl;
     DECL_LINK(OnSelect, SvxColorListBox&, void);
-    Link<LinkParamNone*,void> maModifyLink;
+    Link<LinkParamNone*,void> const maModifyLink;
 };
 
 ColorPropertyBox::ColorPropertyBox( sal_Int32 nControlType, vcl::Window* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl )
@@ -238,6 +319,58 @@ Control* ColorPropertyBox::getControl()
     return mpControl;
 }
 
+class SdColorPropertyBox  : public SdPropertySubControl
+{
+public:
+    SdColorPropertyBox(weld::Label* pLabel, weld::Container* pParent, weld::Window* pTopLevel, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& rPresetId  ) override;
+
+private:
+    Link<LinkParamNone*,void> maModifyLink;
+    std::unique_ptr<ColorListBox> mxControl;
+
+    DECL_LINK(OnSelect, ColorListBox&, void);
+};
+
+SdColorPropertyBox::SdColorPropertyBox(weld::Label* pLabel, weld::Container* pParent, weld::Window* pTopLevel, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyLink(rModifyHdl)
+    , mxControl(new ColorListBox(mxBuilder->weld_menu_button("color"), pTopLevel))
+{
+    mxControl->SetSelectHdl(LINK(this, SdColorPropertyBox, OnSelect));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_COLORPROPERTYBOX);
+    pLabel->set_mnemonic_widget(&mxControl->get_widget());
+    mxControl->show();
+
+    sal_Int32 nColor = 0;
+    rValue >>= nColor;
+    mxControl->SelectEntry(Color(nColor));
+}
+
+IMPL_LINK_NOARG(SdColorPropertyBox, OnSelect, ColorListBox&, void)
+{
+    maModifyLink.Call(nullptr);
+}
+
+void SdColorPropertyBox::setValue( const Any& rValue, const OUString& )
+{
+    if (mxControl)
+    {
+        sal_Int32 nColor = 0;
+        rValue >>= nColor;
+
+        mxControl->SetNoSelection();
+        mxControl->SelectEntry(Color(nColor));
+    }
+}
+
+Any SdColorPropertyBox::getValue()
+{
+    return makeAny(sal_Int32(mxControl->GetSelectEntryColor().GetRGBColor()));
+}
+
 class FontPropertyBox : public PropertySubControl
 {
 public:
@@ -251,7 +384,7 @@ public:
 
 private:
     VclPtr<FontNameBox>         mpControl;
-    Link<LinkParamNone*,void>   maModifyHdl;
+    Link<LinkParamNone*,void> const   maModifyHdl;
     DECL_LINK(ControlSelectHdl, ComboBox&, void);
 };
 
@@ -316,6 +449,84 @@ Any FontPropertyBox::getValue()
 Control* FontPropertyBox::getControl()
 {
     return mpControl;
+}
+
+class SdFontPropertyBox : public SdPropertySubControl
+{
+public:
+    SdFontPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue(const Any& rValue, const OUString& rPresetId) override;
+
+private:
+    Link<LinkParamNone*,void>   maModifyHdl;
+    std::unique_ptr<weld::ComboBox> mxControl;
+
+    DECL_LINK(ControlSelectHdl, weld::ComboBox&, void);
+};
+
+SdFontPropertyBox::SdFontPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyHdl(rModifyHdl)
+    , mxControl(mxBuilder->weld_combo_box("fontname"))
+{
+    mxControl->connect_changed(LINK(this, SdFontPropertyBox, ControlSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_FONTPROPERTYBOX);
+    mxControl->show();
+    pLabel->set_mnemonic_widget(mxControl.get());
+
+    SfxObjectShell* pDocSh = SfxObjectShell::Current();
+    const SfxPoolItem* pItem;
+
+    const FontList* pFontList = nullptr;
+    bool bMustDelete = false;
+
+    if (pDocSh && ( (pItem = pDocSh->GetItem( SID_ATTR_CHAR_FONTLIST ) ) != nullptr))
+        pFontList = static_cast<const SvxFontListItem*>(pItem)->GetFontList();
+
+    if (!pFontList)
+    {
+        pFontList = new FontList(Application::GetDefaultDevice(), nullptr);
+        bMustDelete = true;
+    }
+
+    mxControl->freeze();
+
+    sal_uInt16 nFontCount = pFontList->GetFontNameCount();
+    for (sal_uInt16 i = 0; i < nFontCount; ++i)
+    {
+        const FontMetric& rFontMetric = pFontList->GetFontName(i);
+        mxControl->append_text(rFontMetric.GetFamilyName());
+    }
+
+    mxControl->thaw();
+
+    if( bMustDelete )
+        delete pFontList;
+
+    setValue( rValue, OUString() );
+}
+
+IMPL_LINK_NOARG(SdFontPropertyBox, ControlSelectHdl, weld::ComboBox&, void)
+{
+    maModifyHdl.Call(nullptr);
+}
+
+void SdFontPropertyBox::setValue( const Any& rValue, const OUString& )
+{
+    if (mxControl)
+    {
+        OUString aFontName;
+        rValue >>= aFontName;
+        mxControl->set_entry_text(aFontName);
+    }
+}
+
+Any SdFontPropertyBox::getValue()
+{
+    OUString aFontName(mxControl->get_active_text());
+    return makeAny(aFontName);
 }
 
 class DropdownMenuBox : public Edit
@@ -419,7 +630,7 @@ private:
     VclPtr<DropdownMenuBox> mpControl;
     VclPtr<PopupMenu> mpMenu;
     VclPtr<MetricField> mpMetric;
-    Link<LinkParamNone*,void> maModifyHdl;
+    Link<LinkParamNone*,void> const maModifyHdl;
 };
 
 CharHeightPropertyBox::CharHeightPropertyBox(sal_Int32 nControlType, vcl::Window* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
@@ -428,7 +639,7 @@ CharHeightPropertyBox::CharHeightPropertyBox(sal_Int32 nControlType, vcl::Window
     , maModifyHdl(rModifyHdl)
 {
     mpMetric.set( VclPtr<MetricField>::Create( pParent, WB_TABSTOP|WB_IGNORETAB| WB_NOBORDER) );
-    mpMetric->SetUnit( FUNIT_PERCENT );
+    mpMetric->SetUnit( FieldUnit::PERCENT );
     mpMetric->SetMin( 0 );
     mpMetric->SetMax( 1000 );
 
@@ -479,6 +690,69 @@ Control* CharHeightPropertyBox::getControl()
     return mpControl;
 }
 
+class SdCharHeightPropertyBox : public SdPropertySubControl
+{
+public:
+    SdCharHeightPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& ) override;
+
+    DECL_LINK(implMenuSelectHdl, const OString& rIdent, void);
+
+private:
+    Link<LinkParamNone*,void> maModifyHdl;
+    std::unique_ptr<weld::MetricSpinButton> mxMetric;
+    std::unique_ptr<weld::MenuButton> mxControl;
+
+    DECL_LINK(EditModifyHdl, weld::MetricSpinButton&, void);
+};
+
+SdCharHeightPropertyBox::SdCharHeightPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyHdl(rModifyHdl)
+    , mxMetric(mxBuilder->weld_metric_spin_button("fontsize", FieldUnit::PERCENT))
+    , mxControl(mxBuilder->weld_menu_button("fontsizemenu"))
+{
+    mxMetric->connect_value_changed(LINK(this, SdCharHeightPropertyBox, EditModifyHdl));
+    mxMetric->set_help_id(HID_SD_CUSTOMANIMATIONPANE_CHARHEIGHTPROPERTYBOX);
+    mxMetric->show();
+    pLabel->set_mnemonic_widget(&mxMetric->get_widget());
+
+    mxControl->connect_selected(LINK(this, SdCharHeightPropertyBox, implMenuSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_CHARHEIGHTPROPERTYBOX);
+    mxControl->show();
+
+    setValue(rValue, OUString());
+}
+
+IMPL_LINK_NOARG(SdCharHeightPropertyBox, EditModifyHdl, weld::MetricSpinButton&, void)
+{
+    maModifyHdl.Call(nullptr);
+}
+
+IMPL_LINK(SdCharHeightPropertyBox, implMenuSelectHdl, const OString&, rIdent, void)
+{
+    sal_Int32 nValue = rIdent.toInt32();
+    mxMetric->set_value(nValue, FieldUnit::PERCENT);
+    EditModifyHdl(*mxMetric);
+}
+
+void SdCharHeightPropertyBox::setValue( const Any& rValue, const OUString& )
+{
+    if (mxMetric)
+    {
+        double fValue = 0.0;
+        rValue >>= fValue;
+        mxMetric->set_value(static_cast<long>(fValue * 100.0), FieldUnit::PERCENT);
+    }
+}
+
+Any SdCharHeightPropertyBox::getValue()
+{
+    return makeAny(static_cast<double>(mxMetric->get_value(FieldUnit::PERCENT)) / 100.0);
+}
+
 class TransparencyPropertyBox : public PropertySubControl
 {
 public:
@@ -499,7 +773,7 @@ private:
     VclPtr<DropdownMenuBox>   mpControl;
     VclPtr<PopupMenu>         mpMenu;
     VclPtr<MetricField>       mpMetric;
-    Link<LinkParamNone*,void> maModifyHdl;
+    Link<LinkParamNone*,void> const maModifyHdl;
 };
 
 TransparencyPropertyBox::TransparencyPropertyBox( sal_Int32 nControlType, vcl::Window* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl )
@@ -507,7 +781,7 @@ TransparencyPropertyBox::TransparencyPropertyBox( sal_Int32 nControlType, vcl::W
 , maModifyHdl( rModifyHdl )
 {
     mpMetric.set( VclPtr<MetricField>::Create( pParent ,WB_TABSTOP|WB_IGNORETAB| WB_NOBORDER) );
-    mpMetric->SetUnit( FUNIT_PERCENT );
+    mpMetric->SetUnit( FieldUnit::PERCENT );
     mpMetric->SetMin( 0 );
     mpMetric->SetMax( 100 );
 
@@ -578,6 +852,91 @@ Control* TransparencyPropertyBox::getControl()
     return mpControl;
 }
 
+class SdTransparencyPropertyBox : public SdPropertySubControl
+{
+public:
+    SdTransparencyPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& rPresetId  ) override;
+
+    DECL_LINK(implMenuSelectHdl, const OString&, void);
+    DECL_LINK(implModifyHdl, weld::MetricSpinButton&, void);
+
+    void updateMenu();
+
+private:
+    Link<LinkParamNone*,void> maModifyHdl;
+
+    std::unique_ptr<weld::MetricSpinButton> mxMetric;
+    std::unique_ptr<weld::MenuButton> mxControl;
+};
+
+SdTransparencyPropertyBox::SdTransparencyPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyHdl(rModifyHdl)
+    , mxMetric(mxBuilder->weld_metric_spin_button("transparent", FieldUnit::PERCENT))
+    , mxControl(mxBuilder->weld_menu_button("transparentmenu"))
+{
+    for (sal_Int32 i = 25; i < 101; i += 25)
+    {
+        OUString aStr(unicode::formatPercent(i,
+            Application::GetSettings().GetUILanguageTag()));
+        mxControl->append_item_check(OUString::number(i), aStr);
+    }
+
+    mxControl->connect_selected(LINK(this, SdTransparencyPropertyBox, implMenuSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_TRANSPARENCYPROPERTYBOX);
+    mxControl->show();
+
+    mxMetric->connect_value_changed(LINK(this, SdTransparencyPropertyBox, implModifyHdl));
+    mxMetric->set_help_id(HID_SD_CUSTOMANIMATIONPANE_TRANSPARENCYPROPERTYBOX);
+    mxMetric->show();
+    pLabel->set_mnemonic_widget(&mxMetric->get_widget());
+
+    setValue(rValue, OUString());
+}
+
+void SdTransparencyPropertyBox::updateMenu()
+{
+    sal_Int64 nValue = mxMetric->get_value(FieldUnit::PERCENT);
+    for (sal_uInt16 i = 25; i < 101; i += 25)
+        mxControl->set_item_active(OString::number(i), nValue == i);
+}
+
+IMPL_LINK_NOARG(SdTransparencyPropertyBox, implModifyHdl, weld::MetricSpinButton&, void)
+{
+    updateMenu();
+    maModifyHdl.Call(nullptr);
+}
+
+IMPL_LINK(SdTransparencyPropertyBox, implMenuSelectHdl, const OString&, rIdent, void)
+{
+    auto nValue = rIdent.toInt32();
+    if (nValue != mxMetric->get_value(FieldUnit::PERCENT))
+    {
+        mxMetric->set_value(nValue, FieldUnit::PERCENT);
+        implModifyHdl(*mxMetric);
+    }
+}
+
+void SdTransparencyPropertyBox::setValue(const Any& rValue, const OUString&)
+{
+    if (mxMetric)
+    {
+        double fValue = 0.0;
+        rValue >>= fValue;
+        long nValue = static_cast<long>(fValue * 100);
+        mxMetric->set_value(nValue, FieldUnit::PERCENT);
+        updateMenu();
+    }
+}
+
+Any SdTransparencyPropertyBox::getValue()
+{
+    return makeAny(static_cast<double>(mxMetric->get_value(FieldUnit::PERCENT)) / 100.0);
+}
+
 class RotationPropertyBox : public PropertySubControl
 {
 public:
@@ -599,7 +958,7 @@ private:
     VclPtr<DropdownMenuBox>   mpControl;
     VclPtr<PopupMenu>         mpMenu;
     VclPtr<MetricField>       mpMetric;
-    Link<LinkParamNone*,void> maModifyHdl;
+    Link<LinkParamNone*,void> const maModifyHdl;
 };
 
 RotationPropertyBox::RotationPropertyBox( sal_Int32 nControlType, vcl::Window* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl )
@@ -608,7 +967,7 @@ RotationPropertyBox::RotationPropertyBox( sal_Int32 nControlType, vcl::Window* p
     , maModifyHdl(rModifyHdl)
 {
     mpMetric.set( VclPtr<MetricField>::Create( pParent ,WB_TABSTOP|WB_IGNORETAB| WB_NOBORDER) );
-    mpMetric->SetUnit( FUNIT_CUSTOM );
+    mpMetric->SetUnit( FieldUnit::CUSTOM );
     mpMetric->SetCustomUnitText( OUString( u'\x00b0') ); // degree sign
     mpMetric->SetMin( -10000 );
     mpMetric->SetMax( 10000 );
@@ -697,6 +1056,105 @@ Control* RotationPropertyBox::getControl()
     return mpControl;
 }
 
+class SdRotationPropertyBox : public SdPropertySubControl
+{
+public:
+    SdRotationPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& ) override;
+
+    DECL_LINK(implMenuSelectHdl, const OString&, void);
+    DECL_LINK(implModifyHdl, weld::MetricSpinButton&, void);
+
+    void updateMenu();
+
+private:
+    Link<LinkParamNone*,void> maModifyHdl;
+
+    std::unique_ptr<weld::MetricSpinButton> mxMetric;
+    std::unique_ptr<weld::MenuButton> mxControl;
+};
+
+SdRotationPropertyBox::SdRotationPropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyHdl(rModifyHdl)
+    , mxMetric(mxBuilder->weld_metric_spin_button("rotate", FieldUnit::DEGREE))
+    , mxControl(mxBuilder->weld_menu_button("rotatemenu"))
+{
+    mxMetric->connect_value_changed(LINK( this, SdRotationPropertyBox, implModifyHdl));
+    mxMetric->set_help_id(HID_SD_CUSTOMANIMATIONPANE_ROTATIONPROPERTYBOX);
+    mxMetric->show();
+    pLabel->set_mnemonic_widget(&mxMetric->get_widget());
+
+    mxControl->connect_selected(LINK(this, SdRotationPropertyBox, implMenuSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_ROTATIONPROPERTYBOX);
+    mxControl->show();
+
+    setValue(rValue, OUString());
+}
+
+void SdRotationPropertyBox::updateMenu()
+{
+    sal_Int64 nValue = mxMetric->get_value(FieldUnit::DEGREE);
+    bool bDirection = nValue >= 0;
+    nValue = (nValue < 0 ? -nValue : nValue);
+
+    mxControl->set_item_active("90", nValue == 90);
+    mxControl->set_item_active("180", nValue == 180);
+    mxControl->set_item_active("360", nValue == 360);
+    mxControl->set_item_active("720", nValue == 720);
+
+    mxControl->set_item_active("closewise", bDirection);
+    mxControl->set_item_active("counterclock", !bDirection);
+}
+
+IMPL_LINK_NOARG(SdRotationPropertyBox, implModifyHdl, weld::MetricSpinButton&, void)
+{
+    updateMenu();
+    maModifyHdl.Call(nullptr);
+}
+
+IMPL_LINK(SdRotationPropertyBox, implMenuSelectHdl, const OString&, rIdent, void)
+{
+    auto nValue = mxMetric->get_value(FieldUnit::DEGREE);
+    bool bDirection = nValue >= 0;
+    nValue = (nValue < 0 ? -nValue : nValue);
+
+    if (rIdent == "clockwise")
+        bDirection = true;
+    else if (rIdent == "counterclock")
+        bDirection = false;
+    else
+        nValue = rIdent.toInt32();
+
+    if( !bDirection )
+        nValue = -nValue;
+
+    if (nValue != mxMetric->get_value(FieldUnit::DEGREE))
+    {
+        mxMetric->set_value(nValue, FieldUnit::DEGREE);
+        implModifyHdl(*mxMetric);
+    }
+}
+
+void SdRotationPropertyBox::setValue( const Any& rValue, const OUString& )
+{
+    if (mxMetric)
+    {
+        double fValue = 0.0;
+        rValue >>= fValue;
+        long nValue = static_cast<long>(fValue);
+        mxMetric->set_value(nValue, FieldUnit::DEGREE);
+        updateMenu();
+    }
+}
+
+Any SdRotationPropertyBox::getValue()
+{
+    return makeAny(static_cast<double>(mxMetric->get_value(FieldUnit::DEGREE)));
+}
+
 class ScalePropertyBox : public PropertySubControl
 {
 public:
@@ -728,7 +1186,7 @@ ScalePropertyBox::ScalePropertyBox(sal_Int32 nControlType, vcl::Window* pParent,
     , maModifyHdl( rModifyHdl )
 {
     mpMetric.set( VclPtr<MetricField>::Create( pParent ,WB_TABSTOP|WB_IGNORETAB| WB_NOBORDER) );
-    mpMetric->SetUnit( FUNIT_PERCENT );
+    mpMetric->SetUnit( FieldUnit::PERCENT );
     mpMetric->SetMin( 0 );
     mpMetric->SetMax( 10000 );
 
@@ -875,6 +1333,165 @@ Control* ScalePropertyBox::getControl()
     return mpControl;
 }
 
+class SdScalePropertyBox : public SdPropertySubControl
+{
+public:
+    SdScalePropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& ) override;
+
+    DECL_LINK(implMenuSelectHdl, const OString&, void);
+    DECL_LINK(implModifyHdl, weld::MetricSpinButton&, void);
+
+    void updateMenu();
+
+private:
+    Link<LinkParamNone*,void> const maModifyHdl;
+    int                       mnDirection;
+
+    std::unique_ptr<weld::MetricSpinButton> mxMetric;
+    std::unique_ptr<weld::MenuButton> mxControl;
+};
+
+SdScalePropertyBox::SdScalePropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl)
+    : SdPropertySubControl(pParent)
+    , maModifyHdl( rModifyHdl )
+    , mxMetric(mxBuilder->weld_metric_spin_button("scale", FieldUnit::PERCENT))
+    , mxControl(mxBuilder->weld_menu_button("scalemenu"))
+{
+    mxControl->connect_selected(LINK(this, SdScalePropertyBox, implMenuSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_SCALEPROPERTYBOX);
+    mxControl->show();
+
+    mxMetric->connect_value_changed(LINK(this, SdScalePropertyBox, implModifyHdl));
+    mxMetric->set_help_id(HID_SD_CUSTOMANIMATIONPANE_SCALEPROPERTYBOX);
+    mxMetric->show();
+    pLabel->set_mnemonic_widget(&mxMetric->get_widget());
+
+    setValue(rValue, OUString());
+}
+
+void SdScalePropertyBox::updateMenu()
+{
+    auto nValue = mxMetric->get_value(FieldUnit::PERCENT);
+
+    mxControl->set_item_active("25scale", nValue == 25);
+    mxControl->set_item_active("50scale", nValue == 50);
+    mxControl->set_item_active("150scale", nValue == 150);
+    mxControl->set_item_active("400scale", nValue == 400);
+
+    mxControl->set_item_active("hori", mnDirection == 1);
+    mxControl->set_item_active("vert", mnDirection == 2);
+    mxControl->set_item_active("both", mnDirection == 3);
+}
+
+IMPL_LINK_NOARG(SdScalePropertyBox, implModifyHdl, weld::MetricSpinButton&, void)
+{
+    updateMenu();
+    maModifyHdl.Call(nullptr);
+}
+
+IMPL_LINK(SdScalePropertyBox, implMenuSelectHdl, const OString&, rIdent, void)
+{
+    auto nValue = mxMetric->get_value(FieldUnit::PERCENT);
+
+    int nDirection = mnDirection;
+
+    if (rIdent == "hori")
+        nDirection = 1;
+    else if (rIdent == "veri")
+        nDirection = 2;
+    else if (rIdent == "both")
+        nDirection = 3;
+    else
+        nValue = rIdent.toInt32();
+
+    bool bModified = false;
+
+    if( nDirection != mnDirection )
+    {
+        mnDirection = nDirection;
+        bModified = true;
+    }
+
+    if (nValue != mxMetric->get_value(FieldUnit::PERCENT))
+    {
+        mxMetric->set_value(nValue, FieldUnit::PERCENT);
+        bModified = true;
+    }
+
+    if(bModified)
+    {
+        implModifyHdl(*mxMetric);
+        updateMenu();
+    }
+}
+
+void SdScalePropertyBox::setValue(const Any& rValue, const OUString&)
+{
+    if (mxMetric)
+    {
+        ValuePair aValues;
+        rValue >>= aValues;
+
+        double fValue1 = 0.0;
+        double fValue2 = 0.0;
+
+        aValues.First >>= fValue1;
+        aValues.Second >>= fValue2;
+
+        if( fValue2 == 0.0 )
+            mnDirection = 1;
+        else if( fValue1 == 0.0 )
+            mnDirection = 2;
+        else
+            mnDirection = 3;
+
+        // Shrink animation is represented by negative value
+        // Shrink factor is calculated as (1 + $fValue)
+        // e.g 1 + (-0.75) = 0.25 => shrink to 25% of the size
+        // 0.25 = -0.75 + 1
+        if ( fValue1 < 0.0 )
+            fValue1 += 1;
+        if ( fValue2 < 0.0 )
+            fValue2 += 1;
+
+        long nValue;
+        if( fValue1 )
+            nValue = static_cast<long>(fValue1 * 100.0);
+        else
+            nValue = static_cast<long>(fValue2 * 100.0);
+        mxMetric->set_value(nValue, FieldUnit::PERCENT);
+        updateMenu();
+    }
+}
+
+Any SdScalePropertyBox::getValue()
+{
+    double fValue1 = static_cast<double>(mxMetric->get_value(FieldUnit::PERCENT)) / 100.0;
+
+    // Shrink animation is represented by value < 1 (< 100%)
+    // Shrink factor is calculated as (1 + $fValue)
+    // e.g shrink to 25% of the size: 0.25 = 1 + $fValue =>
+    // $fValue = -0.75; -0.75 = 0.25 -1
+    if ( fValue1 < 1.0 )
+        fValue1 -= 1;
+
+    double fValue2 = fValue1;
+
+    if( mnDirection == 1 )
+        fValue2 = 0.0;
+    else if( mnDirection == 2 )
+        fValue1 = 0.0;
+
+    ValuePair aValues;
+    aValues.First <<= fValue1;
+    aValues.Second <<= fValue2;
+
+    return makeAny( aValues );
+}
+
 class FontStylePropertyBox : public PropertySubControl
 {
 public:
@@ -895,7 +1512,7 @@ private:
     VclPtr<DropdownMenuBox>   mpControl;
     VclPtr<PopupMenu>         mpMenu;
     VclPtr<Edit>              mpEdit;
-    Link<LinkParamNone*,void> maModifyHdl;
+    Link<LinkParamNone*,void> const maModifyHdl;
 
     float mfFontWeight;
     awt::FontSlant meFontSlant;
@@ -995,17 +1612,119 @@ Control* FontStylePropertyBox::getControl()
     return mpControl;
 }
 
-class CustomAnimationEffectTabPage : public TabPage
+class SdFontStylePropertyBox : public SdPropertySubControl
 {
 public:
-    CustomAnimationEffectTabPage( vcl::Window* pParent, const STLPropertySet* pSet );
-    virtual ~CustomAnimationEffectTabPage() override;
-    virtual void dispose() override;
+    SdFontStylePropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl);
+
+    virtual Any getValue() override;
+    virtual void setValue( const Any& rValue, const OUString& ) override;
+
+    DECL_LINK(implMenuSelectHdl, const OString&, void);
+
+    void update();
+
+private:
+    float mfFontWeight;
+    awt::FontSlant meFontSlant;
+    sal_Int16 mnFontUnderline;
+    Link<LinkParamNone*,void> maModifyHdl;
+
+    std::unique_ptr<weld::Entry> mxEdit;
+    std::unique_ptr<weld::MenuButton> mxControl;
+};
+
+SdFontStylePropertyBox::SdFontStylePropertyBox(weld::Label* pLabel, weld::Container* pParent, const Any& rValue, const Link<LinkParamNone*,void>& rModifyHdl )
+    : SdPropertySubControl(pParent)
+    , maModifyHdl( rModifyHdl )
+    , mxEdit(mxBuilder->weld_entry("entry"))
+    , mxControl(mxBuilder->weld_menu_button("entrymenu"))
+{
+    mxEdit->set_text(SdResId(STR_CUSTOMANIMATION_SAMPLE));
+    mxEdit->set_help_id(HID_SD_CUSTOMANIMATIONPANE_FONTSTYLEPROPERTYBOX);
+    pLabel->set_mnemonic_widget(mxEdit.get());
+    mxEdit->show();
+
+    mxControl->connect_selected(LINK(this, SdFontStylePropertyBox, implMenuSelectHdl));
+    mxControl->set_help_id(HID_SD_CUSTOMANIMATIONPANE_FONTSTYLEPROPERTYBOX);
+    mxControl->show();
+
+    setValue(rValue, OUString());
+}
+
+void SdFontStylePropertyBox::update()
+{
+    // update menu
+    mxControl->set_item_active("bold", mfFontWeight == awt::FontWeight::BOLD);
+    mxControl->set_item_active("italic", meFontSlant == awt::FontSlant_ITALIC);
+    mxControl->set_item_active("underline", mnFontUnderline != awt::FontUnderline::NONE );
+
+    // update sample edit
+    vcl::Font aFont(mxEdit->get_font());
+    aFont.SetWeight(mfFontWeight == awt::FontWeight::BOLD ? WEIGHT_BOLD : WEIGHT_NORMAL);
+    aFont.SetItalic(meFontSlant == awt::FontSlant_ITALIC ? ITALIC_NORMAL : ITALIC_NONE);
+    aFont.SetUnderline(mnFontUnderline == awt::FontUnderline::NONE ? LINESTYLE_NONE : LINESTYLE_SINGLE);
+    mxEdit->set_font(aFont);
+}
+
+IMPL_LINK(SdFontStylePropertyBox, implMenuSelectHdl, const OString&, rIdent, void)
+{
+    if (rIdent == "bold")
+    {
+        if( mfFontWeight == awt::FontWeight::BOLD )
+            mfFontWeight = awt::FontWeight::NORMAL;
+        else
+            mfFontWeight = awt::FontWeight::BOLD;
+    }
+    else if (rIdent == "italic")
+    {
+        if( meFontSlant == awt::FontSlant_ITALIC )
+            meFontSlant = awt::FontSlant_NONE;
+        else
+            meFontSlant = awt::FontSlant_ITALIC;
+    }
+    else if (rIdent == "underline")
+    {
+        if( mnFontUnderline == awt::FontUnderline::SINGLE )
+            mnFontUnderline = awt::FontUnderline::NONE;
+        else
+            mnFontUnderline = awt::FontUnderline::SINGLE;
+    }
+
+    update();
+    maModifyHdl.Call(nullptr);
+}
+
+void SdFontStylePropertyBox::setValue( const Any& rValue, const OUString& )
+{
+    Sequence<Any> aValues;
+    rValue >>= aValues;
+
+    aValues[0] >>= mfFontWeight;
+    aValues[1] >>= meFontSlant;
+    aValues[2] >>= mnFontUnderline;
+
+    update();
+}
+
+Any SdFontStylePropertyBox::getValue()
+{
+    Sequence<Any> aValues(3);
+    aValues[0] <<= mfFontWeight;
+    aValues[1] <<= meFontSlant;
+    aValues[2] <<= mnFontUnderline;
+    return makeAny( aValues );
+}
+
+class CustomAnimationEffectTabPage
+{
+public:
+    CustomAnimationEffectTabPage(weld::Container* pParent, weld::Window* pDialog, const STLPropertySet* pSet);
 
     void update( STLPropertySet* pSet );
-    DECL_LINK( implSelectHdl, ListBox&, void );
-    DECL_LINK( implClickHdl, Button*, void );
-    void implHdl(Control const *);
+    DECL_LINK(implSelectHdl, weld::ComboBox&, void);
+    DECL_LINK(implClickHdl, weld::Button&, void);
+    void implHdl(const weld::Widget*);
 
 private:
     void updateControlStates();
@@ -1014,62 +1733,66 @@ private:
     sal_Int32 getSoundObject( const OUString& rStr );
     void openSoundFileDialog();
     void onSoundPreview();
+    weld::Window* GetFrameWeld() const { return mpDialog; }
 
 private:
     ::std::vector< OUString > maSoundList;
     bool mbHasText;
     const STLPropertySet* mpSet;
+    css::uno::Reference<css::media::XPlayer> mxPlayer;
 
-    VclPtr<VclFrame>       mpSettings;
-    VclPtr<FixedText>      mpFTProperty1;
-    VclPtr<PropertyControl> mpLBProperty1;
-    VclPtr<VclHBox>        mpPlaceholderBox;
-    VclPtr<CheckBox>       mpCBSmoothStart;
-    VclPtr<CheckBox>       mpCBSmoothEnd;
-
-    VclPtr<FixedText>      mpFTSound;
-    VclPtr<ListBox>        mpLBSound;
-    VclPtr<PushButton>     mpPBSoundPreview;
-    VclPtr<FixedText>      mpFTAfterEffect;
-    VclPtr<ListBox>        mpLBAfterEffect;
-    VclPtr<FixedText>      mpFTDimColor;
-    VclPtr<SvxColorListBox> mpCLBDimColor;
-    VclPtr<FixedText>      mpFTTextAnim;
-    VclPtr<ListBox>        mpLBTextAnim;
-    VclPtr<MetricField>    mpMFTextDelay;
-    VclPtr<FixedText>      mpFTTextDelay;
-
-    css::uno::Reference< css::media::XPlayer > mxPlayer;
+    weld::Window* mpDialog;
+    std::unique_ptr<weld::Builder> mxBuilder;
+    std::unique_ptr<weld::Container> mxContainer;
+    std::unique_ptr<weld::Widget> mxSettings;
+    std::unique_ptr<weld::Label> mxFTProperty1;
+    std::unique_ptr<weld::Container> mxPlaceholderBox;
+    std::unique_ptr<weld::CheckButton> mxCBSmoothStart;
+    std::unique_ptr<weld::CheckButton> mxCBSmoothEnd;
+    std::unique_ptr<weld::Label> mxFTSound;
+    std::unique_ptr<weld::ComboBox> mxLBSound;
+    std::unique_ptr<weld::Button> mxPBSoundPreview;
+    std::unique_ptr<weld::Label> mxFTAfterEffect;
+    std::unique_ptr<weld::ComboBox> mxLBAfterEffect;
+    std::unique_ptr<weld::Label> mxFTDimColor;
+    std::unique_ptr<ColorListBox> mxCLBDimColor;
+    std::unique_ptr<weld::Label> mxFTTextAnim;
+    std::unique_ptr<weld::ComboBox> mxLBTextAnim;
+    std::unique_ptr<weld::MetricSpinButton> mxMFTextDelay;
+    std::unique_ptr<weld::Label> mxFTTextDelay;
+    std::unique_ptr<SdPropertySubControl> mxLBSubControl;
 };
 
-CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent, const STLPropertySet* pSet )
-: TabPage( pParent, "EffectTab", "modules/simpress/ui/customanimationeffecttab.ui" ), mbHasText( false ), mpSet(pSet )
+CustomAnimationEffectTabPage::CustomAnimationEffectTabPage(weld::Container* pParent, weld::Window* pDialog, const STLPropertySet* pSet)
+    : mbHasText(false)
+    , mpSet(pSet)
+    , mpDialog(pDialog)
+    , mxBuilder(Application::CreateBuilder(pParent, "modules/simpress/ui/customanimationeffecttab.ui"))
+    , mxContainer(mxBuilder->weld_container("EffectTab"))
+    , mxSettings(mxBuilder->weld_widget("settings"))
+    , mxFTProperty1(mxBuilder->weld_label("prop_label1"))
+    , mxPlaceholderBox(mxBuilder->weld_container("placeholder"))
+    , mxCBSmoothStart(mxBuilder->weld_check_button("smooth_start"))
+    , mxCBSmoothEnd(mxBuilder->weld_check_button("smooth_end"))
+    , mxFTSound(mxBuilder->weld_label("sound_label"))
+    , mxLBSound(mxBuilder->weld_combo_box("sound_list"))
+    , mxPBSoundPreview(mxBuilder->weld_button("sound_preview"))
+    , mxFTAfterEffect(mxBuilder->weld_label("aeffect_label"))
+    , mxLBAfterEffect(mxBuilder->weld_combo_box("aeffect_list"))
+    , mxFTDimColor(mxBuilder->weld_label("dim_color_label"))
+    , mxCLBDimColor(new ColorListBox(mxBuilder->weld_menu_button("dim_color_list"), pDialog))
+    , mxFTTextAnim(mxBuilder->weld_label("text_animation_label"))
+    , mxLBTextAnim(mxBuilder->weld_combo_box("text_animation_list"))
+    , mxMFTextDelay(mxBuilder->weld_metric_spin_button("text_delay", FieldUnit::PERCENT))
+    , mxFTTextDelay(mxBuilder->weld_label("text_delay_label"))
 {
-    get(mpSettings, "settings" );
-    get(mpFTProperty1, "prop_label1" );
-    get(mpLBProperty1, "prop_list1" );
-    get(mpPlaceholderBox, "placeholder" );
-    get(mpCBSmoothStart, "smooth_start" );
-    get(mpCBSmoothEnd, "smooth_end" );
-    get(mpFTSound, "sound_label");
-    get(mpLBSound, "sound_list" );
-    get(mpPBSoundPreview, "sound_preview" );
-    get(mpFTAfterEffect, "aeffect_label" );
-    get(mpLBAfterEffect, "aeffect_list" );
-    get(mpFTDimColor, "dim_color_label" );
-    get(mpCLBDimColor, "dim_color_list" );
-    mpCLBDimColor->SelectEntry(COL_BLACK);
-    get(mpFTTextAnim, "text_animation_label" );
-    get(mpLBTextAnim, "text_animation_list" );
-    get(mpMFTextDelay,"text_delay" );
-    get(mpFTTextDelay,"text_delay_label" );
+    mxCLBDimColor->SelectEntry(COL_BLACK);
 
     // fill the soundbox
     fillSoundListBox();
 
-    mpLBSound->SetSelectHdl( LINK( this, CustomAnimationEffectTabPage, implSelectHdl ) );
-
-    mpPBSoundPreview->SetClickHdl( LINK( this, CustomAnimationEffectTabPage, implClickHdl ) );
+    mxLBSound->connect_changed(LINK(this, CustomAnimationEffectTabPage, implSelectHdl));
+    mxPBSoundPreview->connect_clicked(LINK(this, CustomAnimationEffectTabPage, implClickHdl));
 
     // only show settings if all selected effects have the same preset-id
     if( pSet->getPropertyState( nHandlePresetId ) != STLPropertyState::Ambiguous )
@@ -1091,40 +1814,40 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
 
                 if( !aPropertyName.isEmpty() )
                 {
-                    mpSettings->Show();
-                    mpFTProperty1->SetText( aPropertyName );
+                    mxSettings->show();
+                    mxFTProperty1->set_label(aPropertyName);
                 }
 
                 // get property value
                 const Any aValue( pSet->getPropertyValue( nHandleProperty1Value ) );
 
                 // create property sub control
-                mpLBProperty1->setSubControl( PropertySubControl::create( nType, mpPlaceholderBox, aValue, aPresetId, Link<LinkParamNone*,void>() ));
+                mxLBSubControl = SdPropertySubControl::create(nType, mxFTProperty1.get(), mxPlaceholderBox.get(), mpDialog, aValue, aPresetId, Link<LinkParamNone*,void>());
             }
         }
 
-        mpFTProperty1->Enable( mpLBProperty1->IsEnabled() );
+        mxFTProperty1->set_sensitive(mxPlaceholderBox->get_sensitive());
 
         // accelerate & decelerate
 
         if( pSet->getPropertyState( nHandleAccelerate ) == STLPropertyState::Direct )
         {
-            mpCBSmoothStart->Show();
-            mpCBSmoothEnd->Show();
+            mxCBSmoothStart->show();
+            mxCBSmoothEnd->show();
 
             double fTemp = 0.0;
             pSet->getPropertyValue( nHandleAccelerate ) >>= fTemp;
-            mpCBSmoothStart->Check( fTemp > 0.0 );
+            mxCBSmoothStart->set_active( fTemp > 0.0 );
 
             pSet->getPropertyValue( nHandleDecelerate ) >>= fTemp;
-            mpCBSmoothEnd->Check( fTemp > 0.0 );
+            mxCBSmoothEnd->set_active( fTemp > 0.0 );
         }
     }
 
     // init after effect controls
 
-    mpLBAfterEffect->SetSelectHdl( LINK( this, CustomAnimationEffectTabPage, implSelectHdl ) );
-    mpLBTextAnim->SetSelectHdl( LINK( this, CustomAnimationEffectTabPage, implSelectHdl ) );
+    mxLBAfterEffect->connect_changed(LINK(this, CustomAnimationEffectTabPage, implSelectHdl));
+    mxLBTextAnim->connect_changed(LINK(this, CustomAnimationEffectTabPage, implSelectHdl));
 
     if( (pSet->getPropertyState( nHandleHasAfterEffect ) != STLPropertyState::Ambiguous) &&
         (pSet->getPropertyState( nHandleAfterEffectOnNextEffect ) != STLPropertyState::Ambiguous) &&
@@ -1147,7 +1870,7 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
                 sal_Int32 nColor = 0;
                 aDimColor >>= nColor;
                 Color aColor = Color(nColor);
-                mpCLBDimColor->SelectEntry(aColor);
+                mxCLBDimColor->SelectEntry(aColor);
             }
             else
             {
@@ -1157,7 +1880,7 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
             }
         }
 
-        mpLBAfterEffect->SelectEntryPos( nPos );
+        mxLBAfterEffect->set_active(nPos);
     }
 
     if( pSet->getPropertyState( nHandleHasText ) != STLPropertyState::Ambiguous )
@@ -1167,7 +1890,7 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
     {
         if( pSet->getPropertyState( nHandleIterateType ) != STLPropertyState::Ambiguous)
         {
-            sal_Int32 nPos = LISTBOX_ENTRY_NOTFOUND;
+            int nPos = -1;
 
             sal_Int32 nIterateType = 0;
             pSet->getPropertyValue( nHandleIterateType ) >>= nIterateType;
@@ -1178,22 +1901,22 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
             case TextAnimationType::BY_LETTER:      nPos = 2; break;
             }
 
-            mpLBTextAnim->SelectEntryPos( nPos );
+            mxLBTextAnim->set_active(nPos);
         }
 
         if( pSet->getPropertyState( nHandleIterateInterval ) != STLPropertyState::Default )
         {
             double fIterateInterval = 0.0;
             pSet->getPropertyValue( nHandleIterateInterval ) >>= fIterateInterval;
-            mpMFTextDelay->SetValue( static_cast<long>(fIterateInterval*10) );
+            mxMFTextDelay->set_value(static_cast<long>(fIterateInterval*10), FieldUnit::NONE);
         }
     }
     else
     {
-        mpFTTextAnim->Enable( false );
-        mpLBTextAnim->Enable( false );
-        mpMFTextDelay->Enable( false );
-        mpFTTextDelay->Enable( false );
+        mxFTTextAnim->set_sensitive(false);
+        mxLBTextAnim->set_sensitive(false);
+        mxMFTextDelay->set_sensitive(false);
+        mxFTTextDelay->set_sensitive(false);
 
     }
 
@@ -1230,89 +1953,62 @@ CustomAnimationEffectTabPage::CustomAnimationEffectTabPage( vcl::Window* pParent
                     nPos = static_cast<sal_Int32>(maSoundList.size())+2;
                     maSoundList.push_back( aSoundURL );
                     INetURLObject aURL( aSoundURL );
-                    nPos = mpLBSound->InsertEntry( aURL.GetBase(), nPos );
+                    mxLBSound->insert_text(nPos, aURL.GetBase());
                 }
             }
         }
 
-        if( nPos != LISTBOX_ENTRY_NOTFOUND )
-            mpLBSound->SelectEntryPos( nPos );
+        if( nPos != -1)
+            mxLBSound->set_active(nPos);
     }
 
     updateControlStates();
 
 }
 
-CustomAnimationEffectTabPage::~CustomAnimationEffectTabPage()
-{
-    disposeOnce();
-}
-
-void CustomAnimationEffectTabPage::dispose()
-{
-    clearSoundListBox();
-    mpSettings.clear();
-    mpFTProperty1.clear();
-    mpLBProperty1.clear();
-    mpPlaceholderBox.clear();
-    mpCBSmoothStart.clear();
-    mpCBSmoothEnd.clear();
-    mpFTSound.clear();
-    mpLBSound.clear();
-    mpPBSoundPreview.clear();
-    mpFTAfterEffect.clear();
-    mpLBAfterEffect.clear();
-    mpFTDimColor.clear();
-    mpCLBDimColor.clear();
-    mpFTTextAnim.clear();
-    mpLBTextAnim.clear();
-    mpMFTextDelay.clear();
-    mpFTTextDelay.clear();
-    TabPage::dispose();
-}
-
 void CustomAnimationEffectTabPage::updateControlStates()
 {
-    sal_Int32 nPos = mpLBAfterEffect->GetSelectedEntryPos();
-    mpCLBDimColor->Enable( nPos == 1 );
-    mpFTDimColor->Enable( nPos == 1 );
+    auto nPos = mxLBAfterEffect->get_active();
+    mxCLBDimColor->set_sensitive( nPos == 1 );
+    mxFTDimColor->set_sensitive( nPos == 1 );
 
     if( mbHasText )
     {
-        nPos = mpLBTextAnim->GetSelectedEntryPos();
-        mpMFTextDelay->Enable( nPos != 0 );
-        mpFTTextDelay->Enable( nPos != 0 );
+        nPos = mxLBTextAnim->get_active();
+        mxMFTextDelay->set_sensitive( nPos != 0 );
+        mxFTTextDelay->set_sensitive( nPos != 0 );
     }
 
-    nPos = mpLBSound->GetSelectedEntryPos();
-    mpPBSoundPreview->Enable( nPos >= 2 );
+    nPos = mxLBSound->get_active();
+    mxPBSoundPreview->set_sensitive( nPos >= 2 );
 }
 
-IMPL_LINK( CustomAnimationEffectTabPage, implClickHdl, Button*, pBtn, void )
+IMPL_LINK(CustomAnimationEffectTabPage, implClickHdl, weld::Button&, rBtn, void)
 {
-    implHdl(pBtn);
+    implHdl(&rBtn);
 }
-IMPL_LINK( CustomAnimationEffectTabPage, implSelectHdl, ListBox&, rListBox, void )
+
+IMPL_LINK(CustomAnimationEffectTabPage, implSelectHdl, weld::ComboBox&, rListBox, void)
 {
     implHdl(&rListBox);
 }
 
-void CustomAnimationEffectTabPage::implHdl(Control const * pControl )
+void CustomAnimationEffectTabPage::implHdl(const weld::Widget* pControl)
 {
-    if( pControl == mpLBTextAnim )
+    if (pControl == mxLBTextAnim.get())
     {
-        if( mpMFTextDelay->GetValue() == 0 )
-            mpMFTextDelay->SetValue( 100 );
+        if (mxMFTextDelay->get_value(FieldUnit::NONE) == 0)
+            mxMFTextDelay->set_value(100, FieldUnit::NONE);
     }
-    else if( pControl == mpLBSound )
+    else if (pControl == mxLBSound.get())
     {
-        sal_Int32 nPos = mpLBSound->GetSelectedEntryPos();
-        if( nPos == (mpLBSound->GetEntryCount() - 1) )
+        auto nPos = mxLBSound->get_active();
+        if (nPos == (mxLBSound->get_count() - 1))
         {
             openSoundFileDialog();
         }
     }
-    else if( pControl == mpPBSoundPreview )
+    else if (pControl == mxPBSoundPreview.get())
     {
         onSoundPreview();
     }
@@ -1322,9 +2018,9 @@ void CustomAnimationEffectTabPage::implHdl(Control const * pControl )
 
 void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
 {
-    if( mpLBProperty1->getSubControl() )
+    if (mxLBSubControl)
     {
-        Any aNewValue( mpLBProperty1->getSubControl()->getValue() );
+        Any aNewValue(mxLBSubControl->getValue());
         Any aOldValue;
         if( mpSet->getPropertyState( nHandleProperty1Value ) != STLPropertyState::Ambiguous)
             aOldValue = mpSet->getPropertyValue( nHandleProperty1Value );
@@ -1333,11 +2029,11 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleProperty1Value, aNewValue );
     }
 
-    if( mpCBSmoothStart->IsVisible() )
+    if (mxCBSmoothStart->get_visible())
     {
-        // set selected value for accelerate if different then in original set
+        // set selected value for accelerate if different than in original set
 
-        double fTemp = mpCBSmoothStart->IsChecked() ? 0.5 : 0.0;
+        double fTemp = mxCBSmoothStart->get_active() ? 0.5 : 0.0;
 
         double fOldTemp = 0.0;
         if(mpSet->getPropertyState( nHandleAccelerate ) != STLPropertyState::Ambiguous)
@@ -1348,8 +2044,8 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
         if( fOldTemp != fTemp )
             pSet->setPropertyValue( nHandleAccelerate, makeAny( fTemp ) );
 
-        // set selected value for decelerate if different then in original set
-        fTemp = mpCBSmoothEnd->IsChecked() ? 0.5 : 0.0;
+        // set selected value for decelerate if different than in original set
+        fTemp = mxCBSmoothEnd->get_active() ? 0.5 : 0.0;
 
         if(mpSet->getPropertyState( nHandleDecelerate ) != STLPropertyState::Ambiguous)
             mpSet->getPropertyValue( nHandleDecelerate ) >>= fOldTemp;
@@ -1360,8 +2056,8 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleDecelerate, makeAny( fTemp ) );
     }
 
-    sal_Int32 nPos = mpLBAfterEffect->GetSelectedEntryPos();
-    if( nPos != LISTBOX_ENTRY_NOTFOUND )
+    auto nPos = mxLBAfterEffect->get_active();
+    if (nPos != -1)
     {
         bool bAfterEffect = nPos != 0;
 
@@ -1378,7 +2074,7 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
         Any aDimColor;
         if( nPos == 1 )
         {
-            Color aSelectedColor = mpCLBDimColor->GetSelectEntryColor();
+            Color aSelectedColor = mxCLBDimColor->GetSelectEntryColor();
             aDimColor <<= aSelectedColor.GetRGBColor();
         }
 
@@ -1396,8 +2092,8 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleAfterEffectOnNextEffect, makeAny( bAfterEffectOnNextEffect ) );
     }
 
-    nPos = mpLBTextAnim->GetSelectedEntryPos();
-    if( nPos != LISTBOX_ENTRY_NOTFOUND )
+    nPos = mxLBTextAnim->get_active();
+    if (nPos != -1)
     {
         sal_Int16 nIterateType;
 
@@ -1419,7 +2115,7 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
     }
 
     {
-        double fIterateInterval = static_cast< double >( mpMFTextDelay->GetValue() ) / 10;
+        double fIterateInterval = static_cast<double>(mxMFTextDelay->get_value(FieldUnit::NONE)) / 10;
         double fOldIterateInterval = -1.0;
 
         if( mpSet->getPropertyState( nHandleIterateInterval ) != STLPropertyState::Ambiguous )
@@ -1429,8 +2125,8 @@ void CustomAnimationEffectTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleIterateInterval, makeAny( fIterateInterval ) );
     }
 
-    nPos = mpLBSound->GetSelectedEntryPos();
-    if( nPos != LISTBOX_ENTRY_NOTFOUND )
+    nPos = mxLBSound->get_active();
+    if (nPos != -1)
     {
         Any aNewSoundURL, aOldSoundURL( makeAny( sal_Int32(0) ) );
 
@@ -1462,20 +2158,20 @@ void CustomAnimationEffectTabPage::fillSoundListBox()
     GalleryExplorer::FillObjList( GALLERY_THEME_SOUNDS, maSoundList );
     GalleryExplorer::FillObjList( GALLERY_THEME_USERSOUNDS, maSoundList );
 
-    mpLBSound->InsertEntry( SdResId(STR_CUSTOMANIMATION_NO_SOUND) );
-    mpLBSound->InsertEntry( SdResId(STR_CUSTOMANIMATION_STOP_PREVIOUS_SOUND) );
+    mxLBSound->append_text( SdResId(STR_CUSTOMANIMATION_NO_SOUND) );
+    mxLBSound->append_text( SdResId(STR_CUSTOMANIMATION_STOP_PREVIOUS_SOUND) );
     for(const OUString & rString : maSoundList)
     {
         INetURLObject aURL( rString );
-        mpLBSound->InsertEntry( aURL.GetBase() );
+        mxLBSound->append_text( aURL.GetBase() );
     }
-    mpLBSound->InsertEntry( SdResId(STR_CUSTOMANIMATION_BROWSE_SOUND) );
+    mxLBSound->append_text( SdResId(STR_CUSTOMANIMATION_BROWSE_SOUND) );
 }
 
 void CustomAnimationEffectTabPage::clearSoundListBox()
 {
     maSoundList.clear();
-    mpLBSound->Clear();
+    mxLBSound->clear();
 }
 
 sal_Int32 CustomAnimationEffectTabPage::getSoundObject( const OUString& rStr )
@@ -1542,12 +2238,12 @@ void CustomAnimationEffectTabPage::openSoundFileDialog()
     if( !bValidSoundFile )
         nPos = 0;
 
-    mpLBSound->SelectEntryPos( nPos );
+    mxLBSound->set_active(nPos);
 }
 
 void CustomAnimationEffectTabPage::onSoundPreview()
 {
-    const sal_Int32 nPos = mpLBSound->GetSelectedEntryPos();
+    const auto nPos = mxLBSound->get_active();
 
     if( nPos >= 2 ) try
     {
@@ -1561,67 +2257,61 @@ void CustomAnimationEffectTabPage::onSoundPreview()
     }
 }
 
-class CustomAnimationDurationTabPage : public TabPage
+class CustomAnimationDurationTabPage
 {
 public:
-    CustomAnimationDurationTabPage( vcl::Window* pParent, const STLPropertySet* pSet );
-    virtual ~CustomAnimationDurationTabPage() override;
-    virtual void dispose() override;
+    CustomAnimationDurationTabPage(weld::Container* pParent, const STLPropertySet* pSet);
 
     void update( STLPropertySet* pSet );
 
-    DECL_LINK( implControlHdl, ListBox&, void );
-    DECL_LINK( implClickHdl, Button*, void );
-    DECL_LINK( DurationModifiedHdl, Edit&, void );
-    void implHdl(Control const *);
+    DECL_LINK(implControlHdl, weld::ComboBox&, void);
+    DECL_LINK(implClickHdl, weld::Button&, void);
+    DECL_LINK(DurationModifiedHdl, weld::MetricSpinButton&, void);
+    void implHdl(const weld::Widget*);
 
 private:
     const STLPropertySet* mpSet;
 
-    VclPtr<FixedText> mpFTStart;
-    VclPtr<ListBox> mpLBStart;
-    VclPtr<FixedText> mpFTStartDelay;
-    VclPtr<MetricField> mpMFStartDelay;
-    VclPtr<FixedText> mpFTDuration;
-    VclPtr<MetricBox> mpCBXDuration;
-    VclPtr<FixedText> mpFTRepeat;
-    VclPtr<ListBox> mpCBRepeat;
-    VclPtr<CheckBox> mpCBXRewind;
-    VclPtr<RadioButton> mpRBClickSequence;
-    VclPtr<RadioButton> mpRBInteractive;
-    VclPtr<ListBox> mpLBTrigger;
+    std::unique_ptr<weld::Builder> mxBuilder;
+    std::unique_ptr<weld::Container> mxContainer;
+    std::unique_ptr<weld::Label> mxFTStart;
+    std::unique_ptr<weld::ComboBox> mxLBStart;
+    std::unique_ptr<weld::Label> mxFTStartDelay;
+    std::unique_ptr<weld::MetricSpinButton> mxMFStartDelay;
+    std::unique_ptr<weld::Label> mxFTDuration;
+    std::unique_ptr<weld::MetricSpinButton> mxCBXDuration;
+    std::unique_ptr<weld::Label> mxFTRepeat;
+    std::unique_ptr<weld::ComboBox> mxCBRepeat;
+    std::unique_ptr<weld::CheckButton> mxCBXRewind;
+    std::unique_ptr<weld::RadioButton> mxRBClickSequence;
+    std::unique_ptr<weld::RadioButton> mxRBInteractive;
+    std::unique_ptr<weld::ComboBox> mxLBTrigger;
 };
 
-CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pParent, const STLPropertySet* pSet)
-: TabPage( pParent, "TimingTab", "modules/simpress/ui/customanimationtimingtab.ui" ), mpSet( pSet )
+CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(weld::Container* pParent, const STLPropertySet* pSet)
+    : mpSet(pSet)
+    , mxBuilder(Application::CreateBuilder(pParent, "modules/simpress/ui/customanimationtimingtab.ui"))
+    , mxContainer(mxBuilder->weld_container("TimingTab"))
+    , mxFTStart(mxBuilder->weld_label("start_label"))
+    , mxLBStart(mxBuilder->weld_combo_box("start_list"))
+    , mxFTStartDelay(mxBuilder->weld_label("delay_label"))
+    , mxMFStartDelay(mxBuilder->weld_metric_spin_button("delay_value", FieldUnit::SECOND))
+    , mxFTDuration(mxBuilder->weld_label("duration_label"))
+    , mxCBXDuration(mxBuilder->weld_metric_spin_button("anim_duration", FieldUnit::SECOND))
+    , mxFTRepeat(mxBuilder->weld_label("repeat_label"))
+    , mxCBRepeat(mxBuilder->weld_combo_box("repeat_list"))
+    , mxCBXRewind(mxBuilder->weld_check_button("rewind"))
+    , mxRBClickSequence(mxBuilder->weld_radio_button("rb_click_sequence"))
+    , mxRBInteractive(mxBuilder->weld_radio_button("rb_interactive"))
+    , mxLBTrigger(mxBuilder->weld_combo_box("trigger_list"))
 {
-    get(mpFTStart,"start_label" );
-    get(mpLBStart, "start_list" );
-    get(mpFTStartDelay, "delay_label" );
-    get(mpMFStartDelay, "delay_value" );
-    get(mpFTDuration, "duration_label" );
-    get(mpCBXDuration, "anim_duration" );
-    get(mpFTRepeat, "repeat_label" );
-    get(mpCBRepeat, "repeat_list" );
-    get(mpCBXRewind, "rewind" );
-    get(mpRBClickSequence, "rb_click_sequence" );
-    get(mpRBInteractive, "rb_interactive" );
-    get(mpLBTrigger, "trigger_list");
-    mpLBTrigger->set_width_request(approximate_char_width() * 40);
+    mxLBTrigger->set_size_request(mxLBTrigger->get_approximate_digit_width() * 20, -1);
 
-    fillRepeatComboBox( mpCBRepeat );
+    fillRepeatComboBox(*mxCBRepeat);
 
-    //fillDurationMetricComboBox
-    mpCBXDuration->InsertValue(50, FUNIT_CUSTOM);
-    mpCBXDuration->InsertValue(100, FUNIT_CUSTOM);
-    mpCBXDuration->InsertValue(200, FUNIT_CUSTOM);
-    mpCBXDuration->InsertValue(300, FUNIT_CUSTOM);
-    mpCBXDuration->InsertValue(500, FUNIT_CUSTOM);
-    mpCBXDuration->AdaptDropDownLineCountToMaximum();
-
-    mpRBClickSequence->SetClickHdl( LINK( this, CustomAnimationDurationTabPage, implClickHdl ) );
-    mpLBTrigger->SetSelectHdl( LINK( this, CustomAnimationDurationTabPage, implControlHdl ) );
-    mpCBXDuration->SetModifyHdl(LINK( this, CustomAnimationDurationTabPage, DurationModifiedHdl));
+    mxRBClickSequence->connect_clicked(LINK(this, CustomAnimationDurationTabPage, implClickHdl));
+    mxLBTrigger->connect_changed(LINK(this, CustomAnimationDurationTabPage, implControlHdl));
+    mxCBXDuration->connect_value_changed(LINK( this, CustomAnimationDurationTabPage, DurationModifiedHdl));
 
     if( pSet->getPropertyState( nHandleStart ) != STLPropertyState::Ambiguous )
     {
@@ -1633,14 +2323,14 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
             case EffectNodeType::WITH_PREVIOUS:     nPos = 1; break;
             case EffectNodeType::AFTER_PREVIOUS:    nPos = 2; break;
         }
-        mpLBStart->SelectEntryPos( nPos );
+        mxLBStart->set_active(nPos);
     }
 
     if( pSet->getPropertyState( nHandleBegin ) != STLPropertyState::Ambiguous )
     {
         double fBegin = 0.0;
         pSet->getPropertyValue( nHandleBegin ) >>= fBegin;
-        mpMFStartDelay->SetValue( static_cast<long>(fBegin*10) );
+        mxMFStartDelay->set_value(static_cast<long>(fBegin*10), FieldUnit::NONE);
     }
 
     if( pSet->getPropertyState( nHandleDuration ) != STLPropertyState::Ambiguous )
@@ -1650,15 +2340,15 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
 
         if( fDuration == 0.001 )
         {
-            mpFTDuration->Disable();
-            mpCBXDuration->Disable();
-            mpFTRepeat->Disable();
-            mpCBRepeat->Disable();
-            mpCBXRewind->Disable();
+            mxFTDuration->set_sensitive(false);
+            mxCBXDuration->set_sensitive(false);
+            mxFTRepeat->set_sensitive(false);
+            mxCBRepeat->set_sensitive(false);
+            mxCBXRewind->set_sensitive(false);
         }
         else
         {
-            mpCBXDuration->SetValue( fDuration*100.0 );
+            mxCBXDuration->set_value(fDuration * 100.0, FieldUnit::NONE);
         }
     }
 
@@ -1671,7 +2361,7 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
             if( aRepeatCount.hasValue() )
                 aRepeatCount >>= fRepeat;
 
-            sal_Int32 nPos = LISTBOX_ENTRY_NOTFOUND;
+            auto nPos = -1;
 
             if( fRepeat == 0 )
                 nPos = 0;
@@ -1686,10 +2376,10 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
             else if( fRepeat == 10.0 )
                 nPos = 5;
 
-            if( nPos != LISTBOX_ENTRY_NOTFOUND )
-                mpCBRepeat->SelectEntryPos( nPos );
+            if (nPos != -1)
+                mxCBRepeat->set_active(nPos);
             else
-                mpCBRepeat->SetText(OUString::number(fRepeat));
+                mxCBRepeat->set_entry_text(OUString::number(fRepeat));
         }
         else if( aRepeatCount.getValueType() == ::cppu::UnoType<Timing>::get() )
         {
@@ -1697,7 +2387,7 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
             if( pSet->getPropertyState( nHandleEnd ) != STLPropertyState::Ambiguous )
                 aEnd = pSet->getPropertyValue( nHandleEnd );
 
-            mpCBRepeat->SelectEntryPos( aEnd.hasValue() ? 6 : 7 );
+            mxCBRepeat->set_active(aEnd.hasValue() ? 6 : 7);
         }
     }
 
@@ -1706,11 +2396,11 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
         sal_Int16 nFill = 0;
         if( pSet->getPropertyValue( nHandleRewind ) >>= nFill )
         {
-            mpCBXRewind->Check( nFill == AnimationFill::REMOVE );
+            mxCBXRewind->set_active(nFill == AnimationFill::REMOVE);
         }
         else
         {
-            mpCBXRewind->SetState( TRISTATE_INDET );
+            mxCBXRewind->set_state(TRISTATE_INDET);
         }
     }
 
@@ -1720,8 +2410,8 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
     {
         pSet->getPropertyValue( nHandleTrigger ) >>= xTrigger;
 
-        mpRBInteractive->Check( xTrigger.is() );
-        mpRBClickSequence->Check( !xTrigger.is() );
+        mxRBInteractive->set_active(xTrigger.is());
+        mxRBClickSequence->set_active(!xTrigger.is());
     }
 
     Reference< XDrawPage > xCurrentPage;
@@ -1748,72 +2438,49 @@ CustomAnimationDurationTabPage::CustomAnimationDurationTabPage(vcl::Window* pPar
             }
 
             OUString aDescription( getShapeDescription( xShape, true ) );
-            sal_Int32 nPos = mpLBTrigger->InsertEntry( aDescription );
-
-            mpLBTrigger->SetEntryData( nPos, reinterpret_cast<void*>(static_cast<sal_IntPtr>(nShape)) );
-            if( xShape == xTrigger )
-                mpLBTrigger->SelectEntryPos( nPos );
+            mxLBTrigger->append(OUString::number(nShape), aDescription);
+            auto nPos = mxLBTrigger->get_count() - 1;
+            if (xShape == xTrigger)
+                mxLBTrigger->set_active(nPos);
         }
     }
 }
 
-CustomAnimationDurationTabPage::~CustomAnimationDurationTabPage()
+IMPL_LINK(CustomAnimationDurationTabPage, implClickHdl, weld::Button&, rBtn, void)
 {
-    disposeOnce();
+    implHdl(&rBtn);
 }
 
-void CustomAnimationDurationTabPage::dispose()
-{
-    mpFTStart.clear();
-    mpLBStart.clear();
-    mpFTStartDelay.clear();
-    mpMFStartDelay.clear();
-    mpFTDuration.clear();
-    mpCBXDuration.clear();
-    mpFTRepeat.clear();
-    mpCBRepeat.clear();
-    mpCBXRewind.clear();
-    mpRBClickSequence.clear();
-    mpRBInteractive.clear();
-    mpLBTrigger.clear();
-    TabPage::dispose();
-}
-
-IMPL_LINK( CustomAnimationDurationTabPage, implClickHdl, Button*, pBtn, void )
-{
-    implHdl(pBtn);
-}
-
-IMPL_LINK( CustomAnimationDurationTabPage, implControlHdl, ListBox&, rListBox, void )
+IMPL_LINK(CustomAnimationDurationTabPage, implControlHdl, weld::ComboBox&, rListBox, void)
 {
     implHdl(&rListBox);
 }
 
-IMPL_LINK_NOARG(CustomAnimationDurationTabPage, DurationModifiedHdl, Edit&, void)
+IMPL_LINK_NOARG(CustomAnimationDurationTabPage, DurationModifiedHdl, weld::MetricSpinButton&, void)
 {
-    if(!(mpCBXDuration->GetText()).isEmpty() )
+    if (!mxCBXDuration->get_text().isEmpty())
     {
-        double duration_value = static_cast<double>(mpCBXDuration->GetValue());
+        double duration_value = static_cast<double>(mxCBXDuration->get_value(FieldUnit::NONE));
         if(duration_value <= 0.0)
-            mpCBXDuration->SetValue(1);
+            mxCBXDuration->set_value(1, FieldUnit::NONE);
         else
-            mpCBXDuration->SetValue(duration_value);
+            mxCBXDuration->set_value(duration_value, FieldUnit::NONE);
     }
 }
 
-void CustomAnimationDurationTabPage::implHdl( Control const * pControl )
+void CustomAnimationDurationTabPage::implHdl(const weld::Widget* pControl)
 {
-    if( pControl == mpLBTrigger )
+    if (pControl == mxLBTrigger.get())
     {
-        mpRBClickSequence->Check( false );
-        mpRBInteractive->Check();
+        mxRBClickSequence->set_active(false);
+        mxRBInteractive->set_active(true);
     }
 }
 
 void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
 {
-    sal_Int32 nPos = mpLBStart->GetSelectedEntryPos();
-    if( nPos != LISTBOX_ENTRY_NOTFOUND )
+    auto nPos = mxLBStart->get_active();
+    if (nPos != -1)
     {
         sal_Int16 nStart;
         sal_Int16 nOldStart = -1;
@@ -1834,7 +2501,7 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
     }
 
     {
-        double fBegin = static_cast<double>( mpMFStartDelay->GetValue()) / 10.0;
+        double fBegin = static_cast<double>(mxMFStartDelay->get_value(FieldUnit::NONE)) / 10.0;
         double fOldBegin = -1.0;
 
         if( mpSet->getPropertyState( nHandleBegin ) != STLPropertyState::Ambiguous )
@@ -1844,8 +2511,8 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleBegin, makeAny( fBegin ) );
     }
 
-    nPos = mpCBRepeat->GetSelectedEntryPos();
-    if( (nPos != LISTBOX_ENTRY_NOTFOUND) || (!mpCBRepeat->GetText().isEmpty()) )
+    nPos = mxCBRepeat->get_active();
+    if (nPos != -1 || !mxCBRepeat->get_active_text().isEmpty())
     {
         Any aRepeatCount;
         Any aEnd;
@@ -1868,7 +2535,7 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
             break;
         default:
             {
-                OUString aText(mpCBRepeat->GetEntry(nPos));
+                OUString aText(mxCBRepeat->get_text(nPos));
                 if( !aText.isEmpty() )
                     aRepeatCount <<= aText.toDouble();
             }
@@ -1891,9 +2558,9 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
 
     double fDuration = -1.0;
 
-    if(!(mpCBXDuration->GetText()).isEmpty() )
+    if (!mxCBXDuration->get_text().isEmpty())
     {
-        double duration_value = static_cast<double>(mpCBXDuration->GetValue());
+        double duration_value = static_cast<double>(mxCBXDuration->get_value(FieldUnit::NONE));
 
         if(duration_value > 0)
             fDuration = duration_value/100.0;
@@ -1910,9 +2577,9 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleDuration, makeAny( fDuration ) );
     }
 
-    if( mpCBXRewind->GetState() != TRISTATE_INDET )
+    if (mxCBXRewind->get_state() != TRISTATE_INDET)
     {
-        sal_Int16 nFill = mpCBXRewind->IsChecked() ? AnimationFill::REMOVE : AnimationFill::HOLD;
+        sal_Int16 nFill = mxCBXRewind->get_active() ? AnimationFill::REMOVE : AnimationFill::HOLD;
 
         bool bSet = true;
 
@@ -1929,12 +2596,12 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
 
     Reference< XShape > xTrigger;
 
-    if( mpRBInteractive->IsChecked() )
+    if (mxRBInteractive->get_active())
     {
-        nPos = mpLBTrigger->GetSelectedEntryPos();
-        if( nPos != LISTBOX_ENTRY_NOTFOUND )
+        nPos = mxLBTrigger->get_active();
+        if (nPos != -1)
         {
-            sal_Int32 nShape = static_cast<sal_Int32>(reinterpret_cast<sal_IntPtr>(mpLBTrigger->GetEntryData( nPos )));
+            sal_Int32 nShape = mxLBTrigger->get_id(nPos).toInt32();
 
             Reference< XDrawPage > xCurrentPage;
             mpSet->getPropertyValue( nHandleCurrentPage ) >>= xCurrentPage;
@@ -1944,7 +2611,7 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
         }
     }
 
-    if( xTrigger.is() || mpRBClickSequence->IsChecked() )
+    if (xTrigger.is() || mxRBClickSequence->get_active())
     {
         Any aNewValue( makeAny( xTrigger ) );
         Any aOldValue;
@@ -1957,50 +2624,49 @@ void CustomAnimationDurationTabPage::update( STLPropertySet* pSet )
     }
 }
 
-class CustomAnimationTextAnimTabPage : public TabPage
+class CustomAnimationTextAnimTabPage
 {
 public:
-    CustomAnimationTextAnimTabPage( vcl::Window* pParent, const STLPropertySet* pSet );
-    virtual ~CustomAnimationTextAnimTabPage() override;
-    virtual void dispose() override;
+    CustomAnimationTextAnimTabPage(weld::Container* pParent, const STLPropertySet* pSet);
 
     void update( STLPropertySet* pSet );
 
     void updateControlStates();
-    DECL_LINK(implSelectHdl, ListBox&, void);
+    DECL_LINK(implSelectHdl, weld::ComboBox&, void);
 
 private:
-    VclPtr<FixedText>   maFTGroupText;
-    VclPtr<ListBox>     maLBGroupText;
-    VclPtr<CheckBox>    maCBXGroupAuto;
-    VclPtr<MetricField> maMFGroupAuto;
-    VclPtr<CheckBox>    maCBXAnimateForm;
-    VclPtr<CheckBox>    maCBXReverse;
-
     const STLPropertySet* mpSet;
-
     bool mbHasVisibleShapes;
+
+    std::unique_ptr<weld::Builder> mxBuilder;
+    std::unique_ptr<weld::Container> mxContainer;
+    std::unique_ptr<weld::Label> mxFTGroupText;
+    std::unique_ptr<weld::ComboBox> mxLBGroupText;
+    std::unique_ptr<weld::CheckButton> mxCBXGroupAuto;
+    std::unique_ptr<weld::MetricSpinButton> mxMFGroupAuto;
+    std::unique_ptr<weld::CheckButton> mxCBXAnimateForm;
+    std::unique_ptr<weld::CheckButton> mxCBXReverse;
 };
 
-CustomAnimationTextAnimTabPage::CustomAnimationTextAnimTabPage(vcl::Window* pParent, const STLPropertySet* pSet)
-:   TabPage( pParent, "TextAnimationTab", "modules/simpress/ui/customanimationtexttab.ui" ),
-    mpSet( pSet ),
-    mbHasVisibleShapes(true)
+CustomAnimationTextAnimTabPage::CustomAnimationTextAnimTabPage(weld::Container* pParent, const STLPropertySet* pSet)
+    : mpSet(pSet)
+    , mbHasVisibleShapes(true)
+    , mxBuilder(Application::CreateBuilder(pParent, "modules/simpress/ui/customanimationtexttab.ui"))
+    , mxContainer(mxBuilder->weld_container("TextAnimationTab"))
+    , mxFTGroupText(mxBuilder->weld_label("group_text_label"))
+    , mxLBGroupText(mxBuilder->weld_combo_box("group_text_list"))
+    , mxCBXGroupAuto(mxBuilder->weld_check_button("auto_after"))
+    , mxMFGroupAuto(mxBuilder->weld_metric_spin_button("auto_after_value",FieldUnit::SECOND))
+    , mxCBXAnimateForm(mxBuilder->weld_check_button("animate_shape"))
+    , mxCBXReverse(mxBuilder->weld_check_button("reverse_order"))
 {
-    get( maFTGroupText, "group_text_label" );
-    get( maLBGroupText, "group_text_list" );
-    get( maCBXGroupAuto, "auto_after" );
-    get( maMFGroupAuto, "auto_after_value" );
-    get( maCBXAnimateForm, "animate_shape" );
-    get( maCBXReverse, "reverse_order" );
-
-    maLBGroupText->SetSelectHdl( LINK( this, CustomAnimationTextAnimTabPage, implSelectHdl ) );
+    mxLBGroupText->connect_changed(LINK(this, CustomAnimationTextAnimTabPage, implSelectHdl));
 
     if( pSet->getPropertyState( nHandleTextGrouping ) != STLPropertyState::Ambiguous )
     {
         sal_Int32 nTextGrouping = 0;
         if( pSet->getPropertyValue( nHandleTextGrouping ) >>= nTextGrouping )
-            maLBGroupText->SelectEntryPos( nTextGrouping + 1 );
+            mxLBGroupText->set_active(nTextGrouping + 1);
     }
 
     if( pSet->getPropertyState( nHandleHasVisibleShape ) != STLPropertyState::Ambiguous )
@@ -2011,37 +2677,37 @@ CustomAnimationTextAnimTabPage::CustomAnimationTextAnimTabPage(vcl::Window* pPar
         double fTextGroupingAuto = 0.0;
         if( pSet->getPropertyValue( nHandleTextGroupingAuto ) >>= fTextGroupingAuto )
         {
-            maCBXGroupAuto->Check( fTextGroupingAuto >= 0.0 );
+            mxCBXGroupAuto->set_active(fTextGroupingAuto >= 0.0);
             if( fTextGroupingAuto >= 0.0 )
-                maMFGroupAuto->SetValue( static_cast<long>(fTextGroupingAuto*10) );
+                mxMFGroupAuto->set_value(static_cast<long>(fTextGroupingAuto*10), FieldUnit::NONE);
         }
     }
     else
     {
-        maCBXGroupAuto->SetState( TRISTATE_INDET );
+        mxCBXGroupAuto->set_state( TRISTATE_INDET );
     }
 
-    maCBXAnimateForm->SetState( TRISTATE_INDET );
+    mxCBXAnimateForm->set_state( TRISTATE_INDET );
     if( pSet->getPropertyState( nHandleAnimateForm ) != STLPropertyState::Ambiguous )
     {
         bool bAnimateForm = false;
         if( pSet->getPropertyValue( nHandleAnimateForm ) >>= bAnimateForm )
         {
-            maCBXAnimateForm->Check( bAnimateForm );
+            mxCBXAnimateForm->set_active( bAnimateForm );
         }
     }
     else
     {
-        maCBXAnimateForm->Enable( false );
+        mxCBXAnimateForm->set_sensitive(false);
     }
 
-    maCBXReverse->SetState( TRISTATE_INDET );
+    mxCBXReverse->set_state(TRISTATE_INDET);
     if( pSet->getPropertyState( nHandleTextReverse ) != STLPropertyState::Ambiguous )
     {
         bool bTextReverse = false;
         if( pSet->getPropertyValue( nHandleTextReverse ) >>= bTextReverse )
         {
-            maCBXReverse->Check( bTextReverse );
+            mxCBXReverse->set_active( bTextReverse );
         }
     }
 
@@ -2054,7 +2720,7 @@ CustomAnimationTextAnimTabPage::CustomAnimationTextAnimTabPage(vcl::Window* pPar
         sal_Int32 nPos = 6;
         while( (nPos > 2) && (nPos > nMaxParaDepth) )
         {
-            maLBGroupText->RemoveEntry( nPos );
+            mxLBGroupText->remove(nPos);
             nPos--;
         }
     }
@@ -2062,26 +2728,10 @@ CustomAnimationTextAnimTabPage::CustomAnimationTextAnimTabPage(vcl::Window* pPar
     updateControlStates();
 }
 
-CustomAnimationTextAnimTabPage::~CustomAnimationTextAnimTabPage()
-{
-    disposeOnce();
-}
-
-void CustomAnimationTextAnimTabPage::dispose()
-{
-    maFTGroupText.clear();
-    maLBGroupText.clear();
-    maCBXGroupAuto.clear();
-    maMFGroupAuto.clear();
-    maCBXAnimateForm.clear();
-    maCBXReverse.clear();
-    TabPage::dispose();
-}
-
 void CustomAnimationTextAnimTabPage::update( STLPropertySet* pSet )
 {
-    sal_Int32 nPos = maLBGroupText->GetSelectedEntryPos();
-    if( nPos != LISTBOX_ENTRY_NOTFOUND )
+    auto nPos = mxLBGroupText->get_active();
+    if (nPos != -1)
     {
         sal_Int32 nTextGrouping = nPos - 1;
         sal_Int32 nOldGrouping = -2;
@@ -2093,9 +2743,9 @@ void CustomAnimationTextAnimTabPage::update( STLPropertySet* pSet )
             pSet->setPropertyValue( nHandleTextGrouping, makeAny( nTextGrouping ) );
     }
 
-    if( nPos > 0 )
+    if (nPos != 0)
     {
-        bool bTextReverse = maCBXReverse->IsChecked();
+        bool bTextReverse = mxCBXReverse->get_active();
         bool bOldTextReverse = !bTextReverse;
 
         if(mpSet->getPropertyState( nHandleTextReverse ) != STLPropertyState::Ambiguous)
@@ -2106,7 +2756,7 @@ void CustomAnimationTextAnimTabPage::update( STLPropertySet* pSet )
 
         if( nPos > 1 )
         {
-            double fTextGroupingAuto = maCBXGroupAuto->IsChecked() ? maMFGroupAuto->GetValue() / 10.0 : -1.0;
+            double fTextGroupingAuto = mxCBXGroupAuto->get_active() ? mxMFGroupAuto->get_value(FieldUnit::NONE) / 10.0 : -1.0;
             double fOldTextGroupingAuto = -2.0;
 
             if(mpSet->getPropertyState( nHandleTextGroupingAuto ) != STLPropertyState::Ambiguous)
@@ -2119,9 +2769,9 @@ void CustomAnimationTextAnimTabPage::update( STLPropertySet* pSet )
     //#i120049# impress crashes when modifying the "Random effects" animation
     //effect's trigger condition to "Start effect on click of".
     //If this control is disabled, we should ignore its value
-    if (maCBXAnimateForm->IsEnabled())
+    if (mxCBXAnimateForm->get_sensitive())
     {
-        bool bAnimateForm = maCBXAnimateForm->IsChecked();
+        bool bAnimateForm = mxCBXAnimateForm->get_active();
         bool bOldAnimateForm = !bAnimateForm;
 
         if(mpSet->getPropertyState( nHandleAnimateForm ) != STLPropertyState::Ambiguous)
@@ -2134,100 +2784,73 @@ void CustomAnimationTextAnimTabPage::update( STLPropertySet* pSet )
 
 void CustomAnimationTextAnimTabPage::updateControlStates()
 {
-    sal_Int32 nPos = maLBGroupText->GetSelectedEntryPos();
+    auto nPos = mxLBGroupText->get_active();
 
-    maCBXGroupAuto->Enable( nPos > 1 );
-    maMFGroupAuto->Enable( nPos > 1 );
-    maCBXReverse->Enable( nPos > 0 );
+    mxCBXGroupAuto->set_sensitive( nPos > 1 );
+    mxMFGroupAuto->set_sensitive( nPos > 1 );
+    mxCBXReverse->set_sensitive( nPos > 0 );
 
     if( !mbHasVisibleShapes && nPos > 0 )
     {
-        maCBXAnimateForm->Check(false);
-        maCBXAnimateForm->Enable(false);
+        mxCBXAnimateForm->set_active(false);
+        mxCBXAnimateForm->set_sensitive(false);
     }
     else
     {
-        maCBXAnimateForm->Enable();
+        mxCBXAnimateForm->set_sensitive(true);
     }
 }
 
-IMPL_LINK_NOARG(CustomAnimationTextAnimTabPage, implSelectHdl, ListBox&, void)
+IMPL_LINK_NOARG(CustomAnimationTextAnimTabPage, implSelectHdl, weld::ComboBox&, void)
 {
     updateControlStates();
 }
 
-CustomAnimationDialog::CustomAnimationDialog(vcl::Window* pParent, STLPropertySet* pSet, const OString& sPage)
-: TabDialog( pParent, "CustomAnimationProperties", "modules/simpress/ui/customanimationproperties.ui")
-, mpSet( pSet )
-, mpResultSet( nullptr )
+CustomAnimationDialog::CustomAnimationDialog(weld::Window* pParent, std::unique_ptr<STLPropertySet> pSet, const OString& rPage)
+    : GenericDialogController(pParent, "modules/simpress/ui/customanimationproperties.ui", "CustomAnimationProperties")
+    , mxSet(std::move(pSet))
+    , mxTabControl(m_xBuilder->weld_notebook("tabs"))
+    , mxDurationTabPage(new CustomAnimationDurationTabPage(mxTabControl->get_page("timing"), mxSet.get()))
+    , mxEffectTabPage(new CustomAnimationEffectTabPage(mxTabControl->get_page("effect"), m_xDialog.get(), mxSet.get()))
 {
-    get(mpTabControl, "tabs");
-
-    sal_uInt16 nEffectId = mpTabControl->GetPageId("effect");
-    sal_uInt16 nTimingId = mpTabControl->GetPageId("timing");
-    sal_uInt16 nTextAnimId = mpTabControl->GetPageId("textanim");
-
-    mpEffectTabPage = VclPtr<CustomAnimationEffectTabPage>::Create( mpTabControl, mpSet );
-    mpTabControl->SetTabPage( nEffectId, mpEffectTabPage );
-    mpDurationTabPage = VclPtr<CustomAnimationDurationTabPage>::Create( mpTabControl, mpSet );
-    mpTabControl->SetTabPage( nTimingId, mpDurationTabPage );
-
     bool bHasText = false;
-    if( pSet->getPropertyState( nHandleHasText ) != STLPropertyState::Ambiguous )
-        pSet->getPropertyValue( nHandleHasText ) >>= bHasText;
+    if( mxSet->getPropertyState( nHandleHasText ) != STLPropertyState::Ambiguous )
+        mxSet->getPropertyValue( nHandleHasText ) >>= bHasText;
 
     if( bHasText )
     {
-        mpTextAnimTabPage = VclPtr<CustomAnimationTextAnimTabPage>::Create( mpTabControl, mpSet );
-        mpTabControl->SetTabPage( nTextAnimId, mpTextAnimTabPage );
+        mxTextAnimTabPage.reset(new CustomAnimationTextAnimTabPage(mxTabControl->get_page("textanim"), mxSet.get()));
     }
     else
     {
-        mpTextAnimTabPage = nullptr;
-        mpTabControl->RemovePage( nTextAnimId );
+        mxTabControl->remove_page("textanim");
     }
 
-    if (!sPage.isEmpty())
-        mpTabControl->SelectTabPage(mpTabControl->GetPageId(sPage));
+    if (!rPage.isEmpty())
+        mxTabControl->set_current_page(rPage);
 }
 
 CustomAnimationDialog::~CustomAnimationDialog()
 {
-    disposeOnce();
-}
-
-void CustomAnimationDialog::dispose()
-{
-    mpEffectTabPage.disposeAndClear();
-    mpDurationTabPage.disposeAndClear();
-    mpTextAnimTabPage.disposeAndClear();
-
-    delete mpSet;
-    delete mpResultSet;
-
-    mpTabControl.clear();
-    TabDialog::dispose();
 }
 
 STLPropertySet* CustomAnimationDialog::getResultSet()
 {
-    delete mpResultSet;
+    mxResultSet = createDefaultSet();
 
-    mpResultSet = createDefaultSet();
+    mxEffectTabPage->update( mxResultSet.get() );
+    mxDurationTabPage->update( mxResultSet.get() );
+    if (mxTextAnimTabPage)
+        mxTextAnimTabPage->update( mxResultSet.get() );
 
-    mpEffectTabPage->update( mpResultSet );
-    mpDurationTabPage->update( mpResultSet );
-    if( mpTextAnimTabPage )
-        mpTextAnimTabPage->update( mpResultSet );
-
-    return mpResultSet;
+    return mxResultSet.get();
 }
 
-STLPropertySet* CustomAnimationDialog::createDefaultSet()
+std::unique_ptr<STLPropertySet> CustomAnimationDialog::createDefaultSet()
 {
     Any aEmpty;
 
-    STLPropertySet* pSet = new STLPropertySet();
+    std::unique_ptr<STLPropertySet> pSet(new STLPropertySet());
     pSet->setPropertyDefaultValue( nHandleMaxParaDepth, makeAny( sal_Int32(-1) ) );
 
     pSet->setPropertyDefaultValue( nHandleHasAfterEffect, makeAny( false ) );
@@ -2272,7 +2895,7 @@ STLPropertySet* CustomAnimationDialog::createDefaultSet()
 }
 
 PropertyControl::PropertyControl( vcl::Window* pParent )
-: ListBox( pParent, WB_TABSTOP | WB_BORDER | WB_DROPDOWN ), mpSubControl(nullptr)
+: ListBox( pParent, WB_TABSTOP | WB_BORDER | WB_DROPDOWN )
 {
 }
 
@@ -2285,18 +2908,15 @@ PropertyControl::~PropertyControl()
 
 void PropertyControl::dispose()
 {
-    delete mpSubControl;
+    mpSubControl.reset();
     ListBox::dispose();
 }
 
-void PropertyControl::setSubControl( PropertySubControl* pSubControl )
+void PropertyControl::setSubControl( std::unique_ptr<PropertySubControl> pSubControl )
 {
-    if( mpSubControl && mpSubControl != pSubControl )
-        delete mpSubControl;
+    mpSubControl = std::move(pSubControl);
 
-    mpSubControl = pSubControl;
-
-    Control* pControl = pSubControl ? pSubControl->getControl() : nullptr;
+    Control* pControl = mpSubControl ? mpSubControl->getControl() : nullptr;
 
     if( pControl )
     {
@@ -2323,15 +2943,15 @@ PropertySubControl::~PropertySubControl()
 {
 }
 
-PropertySubControl* PropertySubControl::create( sal_Int32 nType, vcl::Window* pParent, const Any& rValue, const OUString& rPresetId, const Link<LinkParamNone*,void>& rModifyHdl )
+std::unique_ptr<PropertySubControl> PropertySubControl::create( sal_Int32 nType, vcl::Window* pParent, const Any& rValue, const OUString& rPresetId, const Link<LinkParamNone*,void>& rModifyHdl )
 {
-    PropertySubControl* pSubControl = nullptr;
+    std::unique_ptr<PropertySubControl> pSubControl;
     switch( nType )
     {
     case nPropertyTypeDirection:
     case nPropertyTypeSpokes:
     case nPropertyTypeZoom:
-        pSubControl = new PresetPropertyBox( nType, pParent, rValue, rPresetId, rModifyHdl );
+        pSubControl.reset( new PresetPropertyBox( nType, pParent, rValue, rPresetId, rModifyHdl ) );
         break;
 
     case nPropertyTypeColor:
@@ -2339,31 +2959,78 @@ PropertySubControl* PropertySubControl::create( sal_Int32 nType, vcl::Window* pP
     case nPropertyTypeFirstColor:
     case nPropertyTypeCharColor:
     case nPropertyTypeLineColor:
-        pSubControl = new ColorPropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new ColorPropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeFont:
-        pSubControl = new FontPropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new FontPropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeCharHeight:
-        pSubControl = new CharHeightPropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new CharHeightPropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeRotate:
-        pSubControl = new RotationPropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new RotationPropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeTransparency:
-        pSubControl = new TransparencyPropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new TransparencyPropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeScale:
-        pSubControl = new ScalePropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new ScalePropertyBox( nType, pParent, rValue, rModifyHdl ) );
         break;
 
     case nPropertyTypeCharDecoration:
-        pSubControl = new FontStylePropertyBox( nType, pParent, rValue, rModifyHdl );
+        pSubControl.reset( new FontStylePropertyBox( nType, pParent, rValue, rModifyHdl ) );
+        break;
+    }
+
+    return pSubControl;
+}
+
+std::unique_ptr<SdPropertySubControl> SdPropertySubControl::create(sal_Int32 nType, weld::Label* pLabel, weld::Container* pParent, weld::Window* pTopLevel, const Any& rValue, const OUString& rPresetId, const Link<LinkParamNone*,void>& rModifyHdl)
+{
+    std::unique_ptr<SdPropertySubControl> pSubControl;
+    switch( nType )
+    {
+    case nPropertyTypeDirection:
+    case nPropertyTypeSpokes:
+    case nPropertyTypeZoom:
+        pSubControl.reset( new SdPresetPropertyBox( pLabel, pParent, rValue, rPresetId, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeColor:
+    case nPropertyTypeFillColor:
+    case nPropertyTypeFirstColor:
+    case nPropertyTypeCharColor:
+    case nPropertyTypeLineColor:
+        pSubControl.reset( new SdColorPropertyBox( pLabel, pParent, pTopLevel, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeFont:
+        pSubControl.reset( new SdFontPropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeCharHeight:
+        pSubControl.reset( new SdCharHeightPropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeRotate:
+        pSubControl.reset( new SdRotationPropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeTransparency:
+        pSubControl.reset( new SdTransparencyPropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeScale:
+        pSubControl.reset( new SdScalePropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
+        break;
+
+    case nPropertyTypeCharDecoration:
+        pSubControl.reset( new SdFontStylePropertyBox( pLabel, pParent, rValue, rModifyHdl ) );
         break;
     }
 

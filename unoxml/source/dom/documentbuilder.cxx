@@ -31,6 +31,7 @@
 #include <rtl/alloc.h>
 #include <rtl/ustrbuf.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -332,7 +333,7 @@ namespace DOM
     }
     } // extern "C"
 
-    void throwEx(xmlParserCtxtPtr ctxt)
+    static void throwEx(xmlParserCtxtPtr ctxt)
     {
         css::xml::sax::SAXParseException saxex;
         saxex.Message = make_error_message(ctxt);

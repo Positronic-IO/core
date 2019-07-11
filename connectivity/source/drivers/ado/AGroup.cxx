@@ -21,7 +21,6 @@
 #include <ado/AGroup.hxx>
 #include <ado/AUsers.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/sequence.hxx>
 #include <com/sun/star/sdbc/XRow.hpp>
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <ado/AConnection.hxx>
@@ -79,7 +78,7 @@ void OAdoGroup::refreshUsers()
     if(m_pUsers)
         m_pUsers->reFill(aVector);
     else
-        m_pUsers = new OUsers(m_pCatalog,m_aMutex,aVector,aUsers,isCaseSensitive());
+        m_pUsers.reset(new OUsers(m_pCatalog, m_aMutex, aVector, aUsers, isCaseSensitive()));
 }
 
 Sequence< sal_Int8 > OAdoGroup::getUnoTunnelImplementationId()

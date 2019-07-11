@@ -22,25 +22,16 @@
 
 #include <memory>
 #include <vector>
-#include <boost/intrusive_ptr.hpp>
 
 #include <formula/opcode.hxx>
 #include "refdata.hxx"
-#include <tools/mempool.hxx>
 #include "scdllapi.h"
-#include <formula/IFunctionDescription.hxx>
 #include <formula/token.hxx>
 #include "calcmacros.hxx"
 #include "types.hxx"
 
 // Matrix token constants.
 #define MATRIX_TOKEN_HAS_RANGE 1
-
-namespace sc {
-
-struct RangeMatrix;
-
-}
 
 class ScJumpMatrix;
 class ScMatrix;
@@ -77,8 +68,6 @@ public:
     virtual bool                TextEqual( const formula::FormulaToken& rToken ) const override;
     virtual bool                operator==( const formula::FormulaToken& rToken ) const override;
     virtual FormulaToken*       Clone() const override { return new ScSingleRefToken(*this); }
-
-    DECL_FIXEDMEMPOOL_NEWDEL( ScSingleRefToken );
 };
 
 class ScDoubleRefToken : public formula::FormulaToken
@@ -97,14 +86,12 @@ public:
     virtual bool                TextEqual( const formula::FormulaToken& rToken ) const override;
     virtual bool                operator==( const formula::FormulaToken& rToken ) const override;
     virtual FormulaToken*       Clone() const override { return new ScDoubleRefToken(*this); }
-
-    DECL_FIXEDMEMPOOL_NEWDEL( ScDoubleRefToken );
 };
 
 class ScMatrixToken : public formula::FormulaToken
 {
 private:
-            ScMatrixRef         pMatrix;
+            ScMatrixRef const         pMatrix;
 public:
     ScMatrixToken( const ScMatrixRef& p );
     ScMatrixToken( const ScMatrixToken& );
@@ -122,10 +109,9 @@ public:
  */
 class ScMatrixRangeToken : public formula::FormulaToken
 {
-    ScMatrixRef mpMatrix;
+    ScMatrixRef const mpMatrix;
     ScComplexRefData maRef;
 public:
-    ScMatrixRangeToken( const ScMatrixRef& p, const ScComplexRefData& rRef );
     ScMatrixRangeToken( const sc::RangeMatrix& rMat );
     ScMatrixRangeToken( const ScMatrixRangeToken& );
 
@@ -140,14 +126,19 @@ public:
 
 class ScExternalSingleRefToken : public formula::FormulaToken
 {
-    sal_uInt16                  mnFileId;
-    svl::SharedString           maTabName;
+    sal_uInt16 const            mnFileId;
+    svl::SharedString const     maTabName;
     ScSingleRefData             maSingleRef;
 
 public:
     ScExternalSingleRefToken( sal_uInt16 nFileId, const svl::SharedString& rTabName, const ScSingleRefData& r );
     ScExternalSingleRefToken() = delete;
     virtual ~ScExternalSingleRefToken() override;
+
+    ScExternalSingleRefToken(ScExternalSingleRefToken const &) = default;
+    ScExternalSingleRefToken(ScExternalSingleRefToken &&) = default;
+    ScExternalSingleRefToken & operator =(ScExternalSingleRefToken const &) = delete; // due to FormulaToken
+    ScExternalSingleRefToken & operator =(ScExternalSingleRefToken &&) = delete; // due to FormulaToken
 
     virtual sal_uInt16                  GetIndex() const override;
     virtual svl::SharedString GetString() const override;
@@ -159,14 +150,19 @@ public:
 
 class ScExternalDoubleRefToken : public formula::FormulaToken
 {
-    sal_uInt16                  mnFileId;
-    svl::SharedString           maTabName;  // name of the first sheet
+    sal_uInt16 const            mnFileId;
+    svl::SharedString const     maTabName;  // name of the first sheet
     ScComplexRefData            maDoubleRef;
 
 public:
     ScExternalDoubleRefToken() = delete;
     ScExternalDoubleRefToken( sal_uInt16 nFileId, const svl::SharedString& rTabName, const ScComplexRefData& r );
     virtual ~ScExternalDoubleRefToken() override;
+
+    ScExternalDoubleRefToken(ScExternalDoubleRefToken const &) = default;
+    ScExternalDoubleRefToken(ScExternalDoubleRefToken &&) = default;
+    ScExternalDoubleRefToken & operator =(ScExternalDoubleRefToken const &) = delete; // due to FormulaToken
+    ScExternalDoubleRefToken & operator =(ScExternalDoubleRefToken &&) = delete; // due to FormulaToken
 
     virtual sal_uInt16                 GetIndex() const override;
     virtual svl::SharedString GetString() const override;
@@ -182,13 +178,18 @@ public:
 
 class ScExternalNameToken : public formula::FormulaToken
 {
-    sal_uInt16                  mnFileId;
-    svl::SharedString           maName;
+    sal_uInt16 const                  mnFileId;
+    svl::SharedString const           maName;
 
 public:
     ScExternalNameToken() = delete;
     ScExternalNameToken( sal_uInt16 nFileId, const svl::SharedString& rName );
     virtual ~ScExternalNameToken() override;
+
+    ScExternalNameToken(ScExternalNameToken const &) = default;
+    ScExternalNameToken(ScExternalNameToken &&) = default;
+    ScExternalNameToken & operator =(ScExternalNameToken const &) = delete; // due to FormulaToken
+    ScExternalNameToken & operator =(ScExternalNameToken &&) = delete; // due to FormulaToken
 
     virtual sal_uInt16              GetIndex() const override;
     virtual svl::SharedString GetString() const override;
@@ -257,7 +258,7 @@ class ScRefListToken : public formula::FormulaToken
 {
 private:
             ScRefList           aRefList;
-            bool                mbArrayResult;  // whether RefList is an array result
+            bool const          mbArrayResult;  // whether RefList is an array result
 public:
                                 ScRefListToken() :
                                     FormulaToken( formula::svRefList ), mbArrayResult(false) {}
@@ -272,8 +273,8 @@ public:
 
 class SC_DLLPUBLIC ScEmptyCellToken : public formula::FormulaToken
 {
-            bool                bInherited          :1;
-            bool                bDisplayedAsString  :1;
+            bool const          bInherited          :1;
+            bool const          bDisplayedAsString  :1;
 public:
     explicit                    ScEmptyCellToken( bool bInheritedP, bool bDisplayAsString ) :
                                     FormulaToken( formula::svEmptyCell ),
@@ -375,10 +376,10 @@ private:
 class SC_DLLPUBLIC ScHybridCellToken : public formula::FormulaToken
 {
 private:
-    double mfDouble;
-    svl::SharedString maString;
-    OUString maFormula;
-    bool mbEmptyDisplayedAsString;
+    double const mfDouble;
+    svl::SharedString const maString;
+    OUString const maFormula;
+    bool const mbEmptyDisplayedAsString;
 public:
     ScHybridCellToken(
         double f, const svl::SharedString & rStr, const OUString & rFormula, bool bEmptyDisplayedAsString );

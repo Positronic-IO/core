@@ -37,7 +37,10 @@
 #include <string.h>
 
 #include <rtl/strbuf.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <rtl/alloc.h>
+#include <sal/log.hxx>
+#include <o3tl/make_unique.hxx>
 
 // disable warnings again because someone along the line has enabled them
 // (we have  included boost headers, what did you expect?)
@@ -320,7 +323,7 @@ public:
         pContainer->m_aSubElements.emplace_back( pComment );
     }
 
-    void insertNewValue( PDFEntry* pNewValue, iteratorT pPos )
+    void insertNewValue( std::unique_ptr<PDFEntry> pNewValue, iteratorT pPos )
     {
         PDFContainer* pContainer = nullptr;
         const char* pMsg = nullptr;
@@ -334,20 +337,20 @@ public:
                 if( pObj )
                 {
                     if( pObj->m_pObject == nullptr )
-                        pObj->m_pObject = pNewValue;
+                        pObj->m_pObject = pNewValue.get();
                     else
                     {
                         pMsg = "second value for object";
                         pContainer = nullptr;
                     }
                 }
-                else if( dynamic_cast<PDFDict*>(pNewValue) )
+                else if( dynamic_cast<PDFDict*>(pNewValue.get()) )
                 {
                     PDFTrailer* pTrailer = dynamic_cast<PDFTrailer*>(pContainer);
                     if( pTrailer )
                     {
                         if( pTrailer->m_pDict == nullptr )
-                            pTrailer->m_pDict = dynamic_cast<PDFDict*>(pNewValue);
+                            pTrailer->m_pDict = dynamic_cast<PDFDict*>(pNewValue.get());
                         else
                             pContainer = nullptr;
                     }
@@ -359,44 +362,43 @@ public:
             }
         }
         if( pContainer )
-            pContainer->m_aSubElements.emplace_back( pNewValue );
+            pContainer->m_aSubElements.emplace_back( std::move(pNewValue) );
         else
         {
             if( ! pMsg )
             {
-                if( dynamic_cast<PDFContainer*>(pNewValue) )
+                if( dynamic_cast<PDFContainer*>(pNewValue.get()) )
                     pMsg = "array without container";
                 else
                     pMsg = "value without container";
             }
-            delete pNewValue;
             parseError( pMsg, pPos );
         }
     }
 
     void pushName( iteratorT first, iteratorT last )
     {
-        insertNewValue( new PDFName(iteratorToString(first,last)), first );
+        insertNewValue( o3tl::make_unique<PDFName>(iteratorToString(first,last)), first );
     }
 
     void pushDouble( iteratorT first, SAL_UNUSED_PARAMETER iteratorT /*last*/ )
     {
-        insertNewValue( new PDFNumber(m_fDouble), first );
+        insertNewValue( o3tl::make_unique<PDFNumber>(m_fDouble), first );
     }
 
     void pushString( iteratorT first, iteratorT last )
     {
-        insertNewValue( new PDFString(iteratorToString(first,last)), first );
+        insertNewValue( o3tl::make_unique<PDFString>(iteratorToString(first,last)), first );
     }
 
     void pushBool( iteratorT first, iteratorT last )
     {
-        insertNewValue( new PDFBool( (last-first == 4) ), first );
+        insertNewValue( o3tl::make_unique<PDFBool>( last-first == 4 ), first );
     }
 
     void pushNull( iteratorT first, SAL_UNUSED_PARAMETER iteratorT )
     {
-        insertNewValue( new PDFNull(), first );
+        insertNewValue( o3tl::make_unique<PDFNull>(), first );
     }
 
 
@@ -441,7 +443,7 @@ public:
         m_aUIntStack.pop_back();
         unsigned int nObject = m_aUIntStack.back();
         m_aUIntStack.pop_back();
-        insertNewValue( new PDFObjectRef(nObject,nGeneration), first );
+        insertNewValue( o3tl::make_unique<PDFObjectRef>(nObject,nGeneration), first );
     }
 
     void beginDict( iteratorT first, SAL_UNUSED_PARAMETER iteratorT )
@@ -449,7 +451,7 @@ public:
         PDFDict* pDict = new PDFDict();
         pDict->m_nOffset = first - m_aGlobalBegin;
 
-        insertNewValue( pDict, first );
+        insertNewValue( std::unique_ptr<PDFEntry>(pDict), first );
         // will not come here if insertion fails (exception)
         m_aObjectStack.push_back( pDict );
     }
@@ -479,7 +481,7 @@ public:
         PDFArray* pArray = new PDFArray();
         pArray->m_nOffset = first - m_aGlobalBegin;
 
-        insertNewValue( pArray, first );
+        insertNewValue( std::unique_ptr<PDFEntry>(pArray), first );
         // will not come here if insertion fails (exception)
         m_aObjectStack.push_back( pArray );
     }
@@ -614,12 +616,12 @@ PDFEntry* PDFReader::read( const char* pFileName )
         fseek( fp, 0, SEEK_END );
         unsigned int nLen = static_cast<unsigned int>(ftell( fp ));
         fseek( fp, 0, SEEK_SET );
-        char* pBuf = static_cast<char*>(rtl_allocateMemory( nLen ));
+        char* pBuf = static_cast<char*>(std::malloc( nLen ));
         if( pBuf )
         {
             fread( pBuf, 1, nLen, fp );
             pRet = read( pBuf, nLen );
-            rtl_freeMemory( pBuf );
+            std::free( pBuf );
         }
         fclose( fp );
     }
@@ -648,16 +650,14 @@ PDFEntry* PDFReader::read( const char* pFileName )
     {
         SAL_WARN("sdext.pdfimport.pdfparse", "parse error: " << rError.descriptor << " at buffer pos " << rError.where - file_start);
 #if OSL_DEBUG_LEVEL > 0
-        OUString aTmp;
+        OUStringBuffer aTmp;
         unsigned int nElem = aGrammar.m_aObjectStack.size();
         for( unsigned int i = 0; i < nElem; i++ )
         {
-            aTmp += "   ";
-            aTmp += OUString(typeid( *(aGrammar.m_aObjectStack[i]) ).name(),
-                             strlen(typeid( *(aGrammar.m_aObjectStack[i]) ).name()),
-                             RTL_TEXTENCODING_ASCII_US);
+            aTmp.append("   ");
+            aTmp.appendAscii(typeid( *(aGrammar.m_aObjectStack[i]) ).name());
         }
-        SAL_WARN("sdext.pdfimport.pdfparse", "parse error object stack: " << aTmp);
+        SAL_WARN("sdext.pdfimport.pdfparse", "parse error object stack: " << aTmp.makeStringAndClear());
 #endif
     }
 

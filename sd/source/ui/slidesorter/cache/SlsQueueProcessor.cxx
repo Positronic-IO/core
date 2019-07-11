@@ -21,6 +21,8 @@
 #include "SlsCacheConfiguration.hxx"
 #include "SlsRequestQueue.hxx"
 
+#include <comphelper/profilezone.hxx>
+
 namespace sd { namespace slidesorter { namespace cache {
 
 //=====  QueueProcessor  ======================================================
@@ -144,18 +146,17 @@ void QueueProcessor::ProcessOneRequest (
         ::osl::MutexGuard aGuard (maMutex);
 
         // Create a new preview bitmap and store it in the cache.
-        if (mpCache.get() != nullptr
-            && mpCacheContext.get() != nullptr)
+        if (mpCache != nullptr && mpCacheContext.get() != nullptr)
         {
             const SdPage* pSdPage = dynamic_cast<const SdPage*>(mpCacheContext->GetPage(aKey));
             if (pSdPage != nullptr)
             {
-                const Bitmap aPreview (
+                const BitmapEx aPreview (
                     maBitmapFactory.CreateBitmap(*pSdPage, maPreviewSize, mbDoSuperSampling));
                 mpCache->SetBitmap (pSdPage, aPreview, ePriorityClass!=NOT_VISIBLE);
 
                 // Initiate a repaint of the new preview.
-                mpCacheContext->NotifyPreviewCreation(aKey, aPreview);
+                mpCacheContext->NotifyPreviewCreation(aKey);
             }
         }
     }

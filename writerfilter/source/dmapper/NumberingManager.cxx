@@ -38,6 +38,7 @@
 
 #include <osl/diagnose.h>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/propertyvalue.hxx>
 
@@ -48,12 +49,12 @@ namespace dmapper {
 
 //---------------------------------------------------  Utility functions
 template <typename T>
-beans::PropertyValue lcl_makePropVal(PropertyIds nNameID, T const & aValue)
+static beans::PropertyValue lcl_makePropVal(PropertyIds nNameID, T const & aValue)
 {
     return {getPropertyName(nNameID), 0, uno::makeAny(aValue), beans::PropertyState_DIRECT_VALUE};
 }
 
-sal_Int32 lcl_findProperty( const uno::Sequence< beans::PropertyValue >& aProps, const OUString& sName )
+static sal_Int32 lcl_findProperty( const uno::Sequence< beans::PropertyValue >& aProps, const OUString& sName )
 {
     sal_Int32 i = 0;
     sal_Int32 nLen = aProps.getLength( );
@@ -70,7 +71,7 @@ sal_Int32 lcl_findProperty( const uno::Sequence< beans::PropertyValue >& aProps,
     return nPos;
 }
 
-void lcl_mergeProperties( uno::Sequence< beans::PropertyValue >& aSrc,
+static void lcl_mergeProperties( uno::Sequence< beans::PropertyValue >& aSrc,
         uno::Sequence< beans::PropertyValue >& aDst )
 {
     for ( sal_Int32 i = 0, nSrcLen = aSrc.getLength( ); i < nSrcLen; i++ )
@@ -129,7 +130,7 @@ bool ListLevel::HasValues() const
     return m_bHasValues;
 }
 
-void ListLevel::SetParaStyle( const std::shared_ptr< StyleSheetEntry >& pStyle )
+void ListLevel::SetParaStyle( const tools::SvRef< StyleSheetEntry >& pStyle )
 {
     if (!pStyle)
         return;
@@ -196,7 +197,7 @@ sal_Int16 ListLevel::GetParentNumbering( const OUString& sText, sal_Int16 nLevel
 uno::Sequence<beans::PropertyValue> ListLevel::GetProperties(bool bDefaults)
 {
     uno::Sequence<beans::PropertyValue> aLevelProps = GetLevelProperties(bDefaults);
-    if ( m_pParaStyle.get( ) )
+    if (m_pParaStyle)
         AddParaProperties( &aLevelProps );
     return aLevelProps;
 }
@@ -228,13 +229,6 @@ uno::Sequence< beans::PropertyValue > ListLevel::GetCharStyleProperties( )
 
 uno::Sequence<beans::PropertyValue> ListLevel::GetLevelProperties(bool bDefaults)
 {
-    const sal_Int16 aWWToUnoAdjust[] =
-    {
-        text::HoriOrientation::LEFT,
-        text::HoriOrientation::CENTER,
-        text::HoriOrientation::RIGHT,
-    };
-
     std::vector<beans::PropertyValue> aNumberingProperties;
 
     if( m_nIStartAt >= 0)
@@ -252,8 +246,6 @@ uno::Sequence<beans::PropertyValue> ListLevel::GetLevelProperties(bool bDefaults
         aNumberingProperties.push_back(lcl_makePropVal(PROP_NUMBERING_TYPE, nNumberFormat));
     }
 
-    if( m_nJC >= 0 && m_nJC <= sal::static_int_cast<sal_Int32>(SAL_N_ELEMENTS(aWWToUnoAdjust)) )
-        aNumberingProperties.push_back(lcl_makePropVal(PROP_ADJUST, aWWToUnoAdjust[m_nJC]));
 
     if( !isOutlineNumbering())
     {
@@ -483,7 +475,7 @@ uno::Sequence<uno::Sequence<beans::PropertyValue>> ListDef::GetMergedPropertyVal
     return aAbstract;
 }
 
-uno::Reference< container::XNameContainer > lcl_getUnoNumberingStyles(
+static uno::Reference< container::XNameContainer > lcl_getUnoNumberingStyles(
        uno::Reference<lang::XMultiServiceFactory> const& xFactory)
 {
     uno::Reference< container::XNameContainer > xStyles;
@@ -543,9 +535,9 @@ void ListDef::CreateNumberingRules( DomainMapper& rDMapper,
 
                 // Get the char style
                 uno::Sequence< beans::PropertyValue > aAbsCharStyleProps = pAbsLevel->GetCharStyleProperties( );
-                uno::Sequence< beans::PropertyValue >& rAbsCharStyleProps = aAbsCharStyleProps;
                 if ( pLevel.get( ) )
                 {
+                    uno::Sequence< beans::PropertyValue >& rAbsCharStyleProps = aAbsCharStyleProps;
                     uno::Sequence< beans::PropertyValue > aCharStyleProps =
                         pLevel->GetCharStyleProperties( );
                     uno::Sequence< beans::PropertyValue >& rCharStyleProps = aCharStyleProps;
@@ -625,7 +617,6 @@ void ListDef::CreateNumberingRules( DomainMapper& rDMapper,
                         xOutlines->getChapterNumberingRules( );
 
                     StyleSheetEntryPtr pParaStyle = pAbsLevel->GetParaStyle( );
-                    pParaStyle->bIsChapterNumbering = true;
                     aLvlProps.push_back(comphelper::makePropertyValue(getPropertyName(PROP_HEADING_STYLE_NAME), pParaStyle->sConvertedStyleName));
 
                     xOutlineRules->replaceByIndex(nLevel, uno::makeAny(comphelper::containerToSequence(aLvlProps)));
@@ -676,9 +667,9 @@ ListsManager::~ListsManager( )
 void ListsManager::DisposeNumPicBullets( )
 {
     uno::Reference<drawing::XShape> xShape;
-    for (std::vector<NumPicBullet::Pointer>::iterator it = m_aNumPicBullets.begin(); it != m_aNumPicBullets.end(); ++it)
+    for (const auto& rNumPicBullet : m_aNumPicBullets)
     {
-        xShape = (*it)->GetShape();
+        xShape = rNumPicBullet->GetShape();
         if (xShape.is())
         {
             uno::Reference<lang::XComponent> xShapeComponent(xShape, uno::UNO_QUERY);
@@ -822,7 +813,7 @@ void ListsManager::lcl_sprm( Sprm& rSprm )
                 {
                     //create a new Abstract list entry
                     OSL_ENSURE( !m_pCurrentDefinition.get(), "current entry has to be NULL here");
-                    m_pCurrentDefinition.reset( new AbstractListDef );
+                    m_pCurrentDefinition = new AbstractListDef;
                     pProperties->resolve( *this );
                     //append it to the table
                     m_aAbstractLists.push_back( m_pCurrentDefinition );
@@ -838,7 +829,7 @@ void ListsManager::lcl_sprm( Sprm& rSprm )
                     // Create a new list entry
                     OSL_ENSURE( !m_pCurrentDefinition.get(), "current entry has to be NULL here");
                     ListDef::Pointer listDef( new ListDef );
-                    m_pCurrentDefinition = listDef;
+                    m_pCurrentDefinition = listDef.get();
                     pProperties->resolve( *this );
                     //append it to the table
                     m_aLists.push_back( listDef );
@@ -871,11 +862,11 @@ void ListsManager::lcl_sprm( Sprm& rSprm )
             if (ListLevel::Pointer pCurrentLevel = m_pCurrentDefinition->GetCurrentLevel())
             {
                 uno::Reference<drawing::XShape> xShape;
-                for (std::vector<NumPicBullet::Pointer>::iterator it = m_aNumPicBullets.begin(); it != m_aNumPicBullets.end(); ++it)
+                for (const auto& rNumPicBullet : m_aNumPicBullets)
                 {
-                    if ((*it)->GetId() == nIntValue)
+                    if (rNumPicBullet->GetId() == nIntValue)
                     {
-                        xShape = (*it)->GetShape();
+                        xShape = rNumPicBullet->GetShape();
                         break;
                     }
                 }
@@ -1089,7 +1080,7 @@ void ListsManager::lcl_sprm( Sprm& rSprm )
             default:
                 if (ListLevel::Pointer pCurrentLevel = m_pCurrentDefinition->GetCurrentLevel())
                 {
-                    m_rDMapper.PushListProperties(pCurrentLevel);
+                    m_rDMapper.PushListProperties(pCurrentLevel.get());
                     m_rDMapper.sprm( rSprm );
                     m_rDMapper.PopListProperties();
                 }
@@ -1108,7 +1099,7 @@ void ListsManager::lcl_entry( int /* pos */,
     {
         // Create AbstractListDef's
         OSL_ENSURE( !m_pCurrentDefinition.get(), "current entry has to be NULL here");
-        m_pCurrentDefinition.reset( new AbstractListDef( ) );
+        m_pCurrentDefinition = new AbstractListDef( );
         ref->resolve(*this);
         //append it to the table
         m_aAbstractLists.push_back( m_pCurrentDefinition );
@@ -1177,10 +1168,9 @@ ListDef::Pointer ListsManager::GetList( sal_Int32 nId )
 void ListsManager::CreateNumberingRules( )
 {
     // Loop over the definitions
-    std::vector< ListDef::Pointer >::iterator listIt = m_aLists.begin( );
-    for ( ; listIt != m_aLists.end( ); ++listIt )
+    for ( const auto& rList : m_aLists )
     {
-        (*listIt)->CreateNumberingRules( m_rDMapper, m_xFactory );
+        rList->CreateNumberingRules( m_rDMapper, m_xFactory );
     }
 }
 

@@ -92,15 +92,9 @@ Svx3DWin::Svx3DWin(SfxBindings* pInBindings, SfxChildWindow *pCW, vcl::Window* p
     , aImgLightOff(BitmapEx(RID_SVXBMP_LAMP_OFF))
     , bUpdate(false)
     , eViewType(ViewType3D::Geo)
-    , pModel(nullptr)
-    , pVDev(nullptr)
     , pBindings(pInBindings)
-    , pControllerItem(nullptr)
-    , pConvertTo3DItem(nullptr)
-    , pConvertTo3DLatheItem(nullptr)
     , mpImpl(new Svx3DWinImpl)
     , ePoolUnit(MapUnit::MapMM)
-    , mpRemember2DAttributes(nullptr)
 {
     get(m_pBtnGeo, "geometry");
     get(m_pBtnRepresentation, "representation");
@@ -212,9 +206,9 @@ Svx3DWin::Svx3DWin(SfxBindings* pInBindings, SfxChildWindow *pCW, vcl::Window* p
     m_pMtrDistance->SetUnit( eFUnit );
     m_pMtrFocalLength->SetUnit( eFUnit );
 
-    pControllerItem = new Svx3DCtrlItem(SID_3D_STATE, pBindings);
-    pConvertTo3DItem = new SvxConvertTo3DItem(SID_CONVERT_TO_3D, pBindings);
-    pConvertTo3DLatheItem = new SvxConvertTo3DItem(SID_CONVERT_TO_3D_LATHE_FAST, pBindings);
+    pControllerItem.reset( new Svx3DCtrlItem(SID_3D_STATE, pBindings) );
+    pConvertTo3DItem.reset( new SvxConvertTo3DItem(SID_CONVERT_TO_3D, pBindings) );
+    pConvertTo3DLatheItem.reset( new SvxConvertTo3DItem(SID_CONVERT_TO_3D_LATHE_FAST, pBindings) );
 
     m_pBtnAssign->SetClickHdl( LINK( this, Svx3DWin, ClickAssignHdl ) );
     m_pBtnUpdate->SetClickHdl( LINK( this, Svx3DWin, ClickUpdateHdl ) );
@@ -329,12 +323,11 @@ Svx3DWin::~Svx3DWin()
 
 void Svx3DWin::dispose()
 {
-    pVDev.disposeAndClear();
-    delete pModel;
+    pModel.reset();
 
-    DELETEZ( pControllerItem );
-    DELETEZ( pConvertTo3DItem );
-    DELETEZ( pConvertTo3DLatheItem );
+    pControllerItem.reset();
+    pConvertTo3DItem.reset();
+    pConvertTo3DLatheItem.reset();
 
     mpImpl.reset();
 
@@ -960,8 +953,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_1).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight1)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight1)) )
+        if (bOn != GetUILightState(*m_pBtnLight1))
         {
             SetUILightState(*m_pBtnLight1, bOn);
             bUpdate = true;
@@ -1009,8 +1001,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_2).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight2)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight2)) )
+        if (bOn != GetUILightState(*m_pBtnLight2))
         {
             SetUILightState(*m_pBtnLight2, bOn);
             bUpdate = true;
@@ -1058,8 +1049,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_3).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight3)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight3)) )
+        if (bOn != GetUILightState(*m_pBtnLight3))
         {
             SetUILightState(*m_pBtnLight3, bOn);
             bUpdate = true;
@@ -1107,8 +1097,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_4).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight4)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight4)) )
+        if (bOn != GetUILightState(*m_pBtnLight4))
         {
             SetUILightState(*m_pBtnLight4, bOn);
             bUpdate = true;
@@ -1156,8 +1145,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_5).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight5)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight5)) )
+        if (bOn != GetUILightState(*m_pBtnLight5))
         {
             SetUILightState(*m_pBtnLight5, bOn);
             bUpdate = true;
@@ -1205,8 +1193,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_6).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight6)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight6)) )
+        if (bOn != GetUILightState(*m_pBtnLight6))
         {
             SetUILightState(*m_pBtnLight6, bOn);
             bUpdate = true;
@@ -1254,8 +1241,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_7).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight7)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight7)) )
+        if (bOn != GetUILightState(*m_pBtnLight7))
         {
             SetUILightState(*m_pBtnLight7 , bOn);
             bUpdate = true;
@@ -1303,8 +1289,7 @@ void Svx3DWin::Update( SfxItemSet const & rAttrs )
     if( eState != SfxItemState::DONTCARE )
     {
         bool bOn = rAttrs.Get(SDRATTR_3DSCENE_LIGHTON_8).GetValue();
-        if( ( bOn && !GetUILightState(*m_pBtnLight8)) ||
-            ( !bOn && GetUILightState(*m_pBtnLight8)) )
+        if (bOn != GetUILightState(*m_pBtnLight8))
         {
             SetUILightState(*m_pBtnLight8, bOn);
             bUpdate = true;
@@ -2506,10 +2491,9 @@ IMPL_LINK( Svx3DWin, ClickHdl, Button *, pButton, void )
     }
 }
 
-
 IMPL_LINK( Svx3DWin, ClickColorHdl, Button *, pBtn, void)
 {
-    SvColorDialog aColorDlg( this );
+    SvColorDialog aColorDlg;
     SvxColorListBox* pLb;
 
     if( pBtn == m_pBtnLightColor )
@@ -2526,7 +2510,7 @@ IMPL_LINK( Svx3DWin, ClickColorHdl, Button *, pBtn, void)
     Color aColor = pLb->GetSelectEntryColor();
 
     aColorDlg.SetColor( aColor );
-    if( aColorDlg.Execute() == RET_OK )
+    if( aColorDlg.Execute(GetFrameWeld()) == RET_OK )
     {
         aColor = aColorDlg.GetColor();
         LBSelectColor(pLb, aColor);
@@ -2786,8 +2770,10 @@ void Svx3DWin::LBSelectColor( SvxColorListBox* pLb, const Color& rColor )
 
 void Svx3DWin::UpdatePreview()
 {
-    if( pModel == nullptr )
-        pModel = new FmFormModel();
+    if(!pModel)
+    {
+        pModel.reset(new FmFormModel());
+    }
 
     // Get Itemset
     SfxItemSet aSet( pModel->GetItemPool(), svl::Items<SDRATTR_START, SDRATTR_END>{});

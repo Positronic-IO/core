@@ -19,6 +19,7 @@
 
 #include <config_folders.h>
 
+#include <sal/log.hxx>
 #include <o3tl/make_unique.hxx>
 #include <osl/mutex.hxx>
 #include <comphelper/processfactory.hxx>
@@ -44,7 +45,7 @@
 #include <vcl/wmf.hxx>
 #include <vcl/settings.hxx>
 #include "igif/gifread.hxx"
-#include <pdfread.hxx>
+#include <vcl/pdfread.hxx>
 #include "jpeg/jpeg.hxx"
 #include "ixbm/xbmread.hxx"
 #include "ixpm/xpmread.hxx"
@@ -62,6 +63,7 @@
 #include <com/sun/star/xml/sax/XDocumentHandler.hpp>
 #include <com/sun/star/xml/sax/Writer.hpp>
 #include <com/sun/star/ucb/CommandAbortedException.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <unotools/ucbstreamhelper.hxx>
 #include <rtl/bootstrap.hxx>
 #include <rtl/instance.hxx>
@@ -165,7 +167,7 @@ sal_uInt8* ImplSearchEntry( sal_uInt8* pSource, sal_uInt8 const * pDest, sal_uLo
     return nullptr;
 }
 
-inline OUString ImpGetExtension( const OUString &rPath )
+static OUString ImpGetExtension( const OUString &rPath )
 {
     OUString        aExt;
     INetURLObject   aURL( rPath );
@@ -242,10 +244,7 @@ static bool ImpPeekGraphicFormat( SvStream& rStream, OUString& rFormatExtension,
     sal_uInt8   sFirstBytes[ 256 ];
     sal_uLong   nFirstLong(0), nSecondLong(0);
     sal_uLong   nStreamPos = rStream.Tell();
-
-    rStream.Seek( STREAM_SEEK_TO_END );
-    sal_uLong nStreamLen = rStream.Tell() - nStreamPos;
-    rStream.Seek( nStreamPos );
+    sal_uLong   nStreamLen = rStream.remainingSize();
 
     if ( !nStreamLen )
     {
@@ -253,9 +252,7 @@ static bool ImpPeekGraphicFormat( SvStream& rStream, OUString& rFormatExtension,
         if ( pLockBytes  )
             pLockBytes->SetSynchronMode();
 
-        rStream.Seek( STREAM_SEEK_TO_END );
-        nStreamLen = rStream.Tell() - nStreamPos;
-        rStream.Seek( nStreamPos );
+        nStreamLen = rStream.remainingSize();
     }
 
     if (!nStreamLen)
@@ -825,7 +822,7 @@ static Graphic ImpGetScaledGraphic( const Graphic& rGraphic, FilterConfigItem& r
             // Resolution is set
             if( nMode == 1 )
             {
-                Bitmap      aBitmap( rGraphic.GetBitmap() );
+                BitmapEx    aBitmap( rGraphic.GetBitmapEx() );
                 MapMode     aMap( MapUnit::Map100thInch );
 
                 sal_Int32   nDPI = rConfigItem.ReadInt32( "Resolution", 75 );
@@ -906,8 +903,8 @@ struct ImpFilterLibCacheEntry
 #ifndef DISABLE_DYNLOADING
     osl::Module             maLibrary;
 #endif
-    OUString                maFiltername;
-    OUString                maFormatName;
+    OUString const          maFiltername;
+    OUString const          maFormatName;
     PFilterCall             mpfnImport;
 
     ImpFilterLibCacheEntry(const OUString& rPathname, const OUString& rFiltername, const OUString& rFormatName);
@@ -1069,8 +1066,7 @@ ImpFilterLibCacheEntry* ImpFilterLibCache::GetFilter(const OUString& rFilterPath
 namespace { struct Cache : public rtl::Static<ImpFilterLibCache, Cache> {}; }
 
 GraphicFilter::GraphicFilter( bool bConfig )
-    : pErrorEx(nullptr)
-    , bUseConfig(bConfig)
+    : bUseConfig(bConfig)
 {
     ImplInit();
 }
@@ -1079,17 +1075,10 @@ GraphicFilter::~GraphicFilter()
 {
     {
         ::osl::MutexGuard aGuard( getListMutex() );
-        for(
-            FilterList_impl::iterator it = pFilterHdlList->begin();
-            it != pFilterHdlList->end();
-            ++it
-        ) {
-            if( *it == this )
-            {
-                pFilterHdlList->erase( it );
-                break;
-            }
-        }
+        auto it = std::find(pFilterHdlList->begin(), pFilterHdlList->end(), this);
+        if( it != pFilterHdlList->end() )
+            pFilterHdlList->erase( it );
+
         if( pFilterHdlList->empty() )
         {
             delete pFilterHdlList;
@@ -1297,7 +1286,7 @@ ErrCode GraphicFilter::ImportGraphic(
 struct GraphicImportContext
 {
     /// Pixel data is read from this stream.
-    std::shared_ptr<SvStream> m_pStream;
+    std::unique_ptr<SvStream> m_pStream;
     /// The Graphic the import filter gets.
     std::shared_ptr<Graphic> m_pGraphic;
     /// Write pixel data using this access.
@@ -1342,34 +1331,34 @@ void GraphicImportTask::doImport(GraphicImportContext& rContext)
         rContext.m_eLinkType = GfxLinkType::NativeJpg;
 }
 
-void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGraphics, const std::vector< std::shared_ptr<SvStream> >& rStreams)
+void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGraphics, std::vector< std::unique_ptr<SvStream> > vStreams)
 {
     static bool bThreads = !getenv("VCL_NO_THREAD_IMPORT");
     std::vector<GraphicImportContext> aContexts;
-    aContexts.reserve(rStreams.size());
+    aContexts.reserve(vStreams.size());
     comphelper::ThreadPool& rSharedPool = comphelper::ThreadPool::getSharedOptimalPool();
     std::shared_ptr<comphelper::ThreadTaskTag> pTag = comphelper::ThreadPool::createThreadTaskTag();
 
-    for (const auto& pStream : rStreams)
+    for (auto& pStream : vStreams)
     {
         aContexts.emplace_back();
         GraphicImportContext& rContext = aContexts.back();
 
         if (pStream)
         {
-            rContext.m_pStream = pStream;
+            rContext.m_pStream = std::move(pStream);
             rContext.m_pGraphic = std::make_shared<Graphic>();
             rContext.m_nStatus = ERRCODE_NONE;
 
             // Detect the format.
             ResetLastError();
-            rContext.m_nStreamBegin = pStream->Tell();
+            rContext.m_nStreamBegin = rContext.m_pStream->Tell();
             sal_uInt16 nFormat = GRFILTER_FORMAT_DONTKNOW;
-            rContext.m_nStatus = ImpTestOrFindFormat(OUString(), *pStream, nFormat);
-            pStream->Seek(rContext.m_nStreamBegin);
+            rContext.m_nStatus = ImpTestOrFindFormat(OUString(), *rContext.m_pStream, nFormat);
+            rContext.m_pStream->Seek(rContext.m_nStreamBegin);
 
             // Import the graphic.
-            if (rContext.m_nStatus == ERRCODE_NONE && !pStream->GetError())
+            if (rContext.m_nStatus == ERRCODE_NONE && !rContext.m_pStream->GetError())
             {
                 OUString aFilterName = pConfig->GetImportFilterName(nFormat);
 
@@ -1377,15 +1366,15 @@ void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGra
                 {
                     rContext.m_nImportFlags = GraphicFilterImportFlags::SetLogsizeForJpeg;
 
-                    if (!ImportJPEG( *pStream, *rContext.m_pGraphic, rContext.m_nImportFlags | GraphicFilterImportFlags::OnlyCreateBitmap, nullptr))
+                    if (!ImportJPEG( *rContext.m_pStream, *rContext.m_pGraphic, rContext.m_nImportFlags | GraphicFilterImportFlags::OnlyCreateBitmap, nullptr))
                         rContext.m_nStatus = ERRCODE_GRFILTER_FILTERERROR;
                     else
                     {
                         Bitmap& rBitmap = const_cast<Bitmap&>(rContext.m_pGraphic->GetBitmapExRef().GetBitmapRef());
                         rContext.m_pAccess = o3tl::make_unique<BitmapScopedWriteAccess>(rBitmap);
-                        pStream->Seek(rContext.m_nStreamBegin);
+                        rContext.m_pStream->Seek(rContext.m_nStreamBegin);
                         if (bThreads)
-                            rSharedPool.pushTask(new GraphicImportTask(pTag, rContext));
+                            rSharedPool.pushTask(o3tl::make_unique<GraphicImportTask>(pTag, rContext));
                         else
                             GraphicImportTask::doImport(rContext);
                     }
@@ -1429,7 +1418,7 @@ void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGra
             }
 
             if (rContext.m_nStatus == ERRCODE_NONE)
-                rContext.m_pGraphic->SetGfxLink(GfxLink(std::move(pGraphicContent), nGraphicContentSize, rContext.m_eLinkType));
+                rContext.m_pGraphic->SetGfxLink(std::make_shared<GfxLink>(std::move(pGraphicContent), nGraphicContentSize, rContext.m_eLinkType));
         }
 
         if (rContext.m_nStatus != ERRCODE_NONE)
@@ -1439,7 +1428,8 @@ void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGra
     }
 }
 
-Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream)
+Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream, sal_uInt64 sizeLimit,
+                                             Size* pSizeHint)
 {
     Graphic aGraphic;
     sal_uInt16 nFormat = GRFILTER_FORMAT_DONTKNOW;
@@ -1454,7 +1444,9 @@ Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream)
     ErrCode nStatus = ImpTestOrFindFormat("", rIStream, nFormat);
 
     rIStream.Seek(nStreamBegin);
-    const sal_uInt32 nStreamLength(rIStream.Seek(STREAM_SEEK_TO_END) - nStreamBegin);
+    sal_uInt32 nStreamLength(rIStream.remainingSize());
+    if (sizeLimit && sizeLimit < nStreamLength)
+        nStreamLength = sizeLimit;
 
     OUString aFilterName = pConfig->GetImportFilterName(nFormat);
     OUString aExternalFilterName = pConfig->GetExternalFilterName(nFormat, false);
@@ -1661,17 +1653,16 @@ Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream)
                 SvMemoryStream aMemoryStream(pGraphicContent.get(), nGraphicContentSize, StreamMode::READ);
                 bAnimated = IsGIFAnimated(aMemoryStream);
             }
-            aGraphic.SetGfxLink(GfxLink(std::move(pGraphicContent), nGraphicContentSize, eLinkType));
-            aGraphic.ImplGetImpGraphic()->ImplSetPrepared(bAnimated);
+            aGraphic.SetGfxLink(std::make_shared<GfxLink>(std::move(pGraphicContent), nGraphicContentSize, eLinkType));
+            aGraphic.ImplGetImpGraphic()->ImplSetPrepared(bAnimated, pSizeHint);
         }
     }
 
     // Set error code or try to set native buffer
-    if(nStatus != ERRCODE_NONE)
-    {
+    if (nStatus != ERRCODE_NONE)
         ImplSetError(nStatus, &rIStream);
+    if (nStatus != ERRCODE_NONE || eLinkType == GfxLinkType::NONE)
         rIStream.Seek(nStreamBegin);
-    }
 
     return aGraphic;
 }
@@ -1856,14 +1847,13 @@ ErrCode GraphicFilter::ImportGraphic( Graphic& rGraphic, const OUString& rPath, 
         else if( aFilterName.equalsIgnoreAsciiCase( IMP_SVG ) )
         {
             const sal_uInt32 nStreamPosition(rIStream.Tell());
-            const sal_uInt32 nStreamLength(rIStream.Seek(STREAM_SEEK_TO_END) - nStreamPosition);
+            const sal_uInt32 nStreamLength(rIStream.remainingSize());
 
             bool bOkay(false);
 
             if(nStreamLength > 0)
             {
                 std::vector<sal_uInt8> aTwoBytes(2);
-                rIStream.Seek(nStreamPosition);
                 rIStream.ReadBytes(&aTwoBytes[0], 2);
                 rIStream.Seek(nStreamPosition);
 
@@ -1899,7 +1889,6 @@ ErrCode GraphicFilter::ImportGraphic( Graphic& rGraphic, const OUString& rPath, 
                 else
                 {
                     VectorGraphicDataArray aNewData(nStreamLength);
-                    rIStream.Seek(nStreamPosition);
                     rIStream.ReadBytes(aNewData.begin(), nStreamLength);
 
                     if(!rIStream.GetError())
@@ -1964,12 +1953,10 @@ ErrCode GraphicFilter::ImportGraphic( Graphic& rGraphic, const OUString& rPath, 
             // Graphic that contains the original data and decomposes to
             // primitives on demand
 
-            const sal_uInt32 nStreamPosition(rIStream.Tell());
-            const sal_uInt32 nStreamLength(rIStream.Seek(STREAM_SEEK_TO_END) - nStreamPosition);
+            const sal_uInt32 nStreamLength(rIStream.remainingSize());
             VectorGraphicDataArray aNewData(nStreamLength);
             bool bOkay(false);
 
-            rIStream.Seek(nStreamPosition);
             rIStream.ReadBytes(aNewData.begin(), nStreamLength);
 
             if (!rIStream.GetError())
@@ -2090,7 +2077,7 @@ ErrCode GraphicFilter::ImportGraphic( Graphic& rGraphic, const OUString& rPath, 
         }
         if( nStatus == ERRCODE_NONE )
         {
-            rGraphic.SetGfxLink( GfxLink( std::move(pGraphicContent), nGraphicContentSize, eLinkType ) );
+            rGraphic.SetGfxLink(std::make_shared<GfxLink>(std::move(pGraphicContent), nGraphicContentSize, eLinkType));
         }
     }
 
@@ -2202,7 +2189,7 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, const OUString& r
             Graphic aGraphic2=aGraphic;
             aGraphic2.Draw(aVirDev.get(),Point(0,0),aSizePixel); // this changes the MapMode
             aVirDev->SetMapMode(MapMode(MapUnit::MapPixel));
-            aGraphic=Graphic(aVirDev->GetBitmap(Point(0,0),aSizePixel));
+            aGraphic=Graphic(aVirDev->GetBitmapEx(Point(0,0),aSizePixel));
         }
     }
     if( rOStm.GetError() )
@@ -2213,16 +2200,16 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, const OUString& r
         {
             if( aFilterName.equalsIgnoreAsciiCase( EXP_BMP ) )
             {
-                Bitmap aBmp( aGraphic.GetBitmap() );
+                BitmapEx aBmp( aGraphic.GetBitmapEx() );
                 BmpConversion nColorRes = static_cast<BmpConversion>(aConfigItem.ReadInt32( "Colors", 0 ));
                 if ( nColorRes != BmpConversion::NNONE && ( nColorRes <= BmpConversion::N24Bit) )
                 {
                     if( !aBmp.Convert( nColorRes ) )
-                        aBmp = aGraphic.GetBitmap();
+                        aBmp = aGraphic.GetBitmapEx();
                 }
                 bool    bRleCoding = aConfigItem.ReadBool( "RLE_Coding", true );
                 // save RLE encoded?
-                WriteDIB(aBmp, rOStm, bRleCoding, true);
+                WriteDIB(aBmp, rOStm, bRleCoding);
 
                 if( rOStm.GetError() )
                     nStatus = ERRCODE_GRFILTER_IOERROR;
@@ -2439,8 +2426,9 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, const OUString& r
         }
         else
         {
-            sal_Int32 nIdx{0};
-            do {
+            sal_Int32 nIdx {aFilterPath.isEmpty() ? -1 : 0};
+            while (nIdx>=0)
+            {
 #ifndef DISABLE_DYNLOADING
                 OUString aPhysicalName( ImpCreateFullFilterPath( aFilterPath.getToken(0, ';', nIdx), aFilterName ) );
                 osl::Module aLibrary( aPhysicalName );
@@ -2471,7 +2459,7 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, const OUString& r
                 }
                 else
                     nStatus = ERRCODE_GRFILTER_FILTERERROR;
-            } while (nIdx>=0);
+            }
         }
     }
     if( nStatus != ERRCODE_NONE )
@@ -2573,7 +2561,7 @@ ErrCode GraphicFilter::LoadGraphic( const OUString &rPath, const OUString &rFilt
 
     std::unique_ptr<SvStream> pStream;
     if ( INetProtocol::File != aURL.GetProtocol() )
-        pStream.reset(::utl::UcbStreamHelper::CreateStream( rPath, StreamMode::READ ));
+        pStream = ::utl::UcbStreamHelper::CreateStream( rPath, StreamMode::READ );
 
     ErrCode nRes = ERRCODE_NONE;
     if ( !pStream )

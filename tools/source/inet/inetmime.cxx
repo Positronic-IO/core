@@ -24,8 +24,10 @@
 #include <memory>
 
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <rtl/tencinfo.h>
 #include <tools/inetmime.hxx>
 #include <rtl/character.hxx>
@@ -42,7 +44,7 @@ rtl_TextEncoding getCharsetEncoding(const sal_Char * pBegin,
     @return  True if nChar is a US-ASCII white space character (US-ASCII
     0x09 or 0x20).
  */
-inline bool isWhiteSpace(sal_uInt32 nChar)
+bool isWhiteSpace(sal_uInt32 nChar)
 {
     return nChar == '\t' || nChar == ' ';
 }
@@ -56,7 +58,7 @@ inline bool isWhiteSpace(sal_uInt32 nChar)
     corresponding weight (0--63); if nChar is the US-ASCII Base 64 padding
     character (US-ASCII '='), return -1; otherwise, return -2.
  */
-inline int getBase64Weight(sal_uInt32 nChar)
+int getBase64Weight(sal_uInt32 nChar)
 {
     return rtl::isAsciiUpperCase(nChar) ? int(nChar - 'A') :
            rtl::isAsciiLowerCase(nChar) ? int(nChar - 'a' + 26) :
@@ -66,7 +68,7 @@ inline int getBase64Weight(sal_uInt32 nChar)
            nChar == '=' ? -1 : -2;
 }
 
-inline bool startsWithLineFolding(const sal_Unicode * pBegin,
+bool startsWithLineFolding(const sal_Unicode * pBegin,
                                             const sal_Unicode * pEnd)
 {
     DBG_ASSERT(pBegin && pBegin <= pEnd,
@@ -76,7 +78,7 @@ inline bool startsWithLineFolding(const sal_Unicode * pBegin,
            && isWhiteSpace(pBegin[2]); // CR, LF
 }
 
-inline rtl_TextEncoding translateFromMIME(rtl_TextEncoding
+rtl_TextEncoding translateFromMIME(rtl_TextEncoding
                                                         eEncoding)
 {
 #if defined(_WIN32)
@@ -87,12 +89,12 @@ inline rtl_TextEncoding translateFromMIME(rtl_TextEncoding
 #endif
 }
 
-inline bool isMIMECharsetEncoding(rtl_TextEncoding eEncoding)
+bool isMIMECharsetEncoding(rtl_TextEncoding eEncoding)
 {
     return rtl_isOctetTextEncoding(eEncoding);
 }
 
-sal_Unicode * convertToUnicode(const sal_Char * pBegin,
+std::unique_ptr<sal_Unicode[]> convertToUnicode(const sal_Char * pBegin,
                                          const sal_Char * pEnd,
                                          rtl_TextEncoding eEncoding,
                                          sal_Size & rSize)
@@ -103,15 +105,15 @@ sal_Unicode * convertToUnicode(const sal_Char * pBegin,
         = rtl_createTextToUnicodeConverter(eEncoding);
     rtl_TextToUnicodeContext hContext
         = rtl_createTextToUnicodeContext(hConverter);
-    sal_Unicode * pBuffer;
+    std::unique_ptr<sal_Unicode[]> pBuffer;
     sal_uInt32 nInfo;
     for (sal_Size nBufferSize = pEnd - pBegin;;
          nBufferSize += nBufferSize / 3 + 1)
     {
-        pBuffer = new sal_Unicode[nBufferSize];
+        pBuffer.reset(new sal_Unicode[nBufferSize]);
         sal_Size nSrcCvtBytes;
         rSize = rtl_convertTextToUnicode(
-                    hConverter, hContext, pBegin, pEnd - pBegin, pBuffer,
+                    hConverter, hContext, pBegin, pEnd - pBegin, pBuffer.get(),
                     nBufferSize,
                     RTL_TEXTTOUNICODE_FLAGS_UNDEFINED_ERROR
                         | RTL_TEXTTOUNICODE_FLAGS_MBUNDEFINED_ERROR
@@ -119,20 +121,19 @@ sal_Unicode * convertToUnicode(const sal_Char * pBegin,
                     &nInfo, &nSrcCvtBytes);
         if (nInfo != RTL_TEXTTOUNICODE_INFO_DESTBUFFERTOOSMALL)
             break;
-        delete[] pBuffer;
+        pBuffer.reset();
         rtl_resetTextToUnicodeContext(hConverter, hContext);
     }
     rtl_destroyTextToUnicodeContext(hConverter, hContext);
     rtl_destroyTextToUnicodeConverter(hConverter);
     if (nInfo != 0)
     {
-        delete[] pBuffer;
-        pBuffer = nullptr;
+        pBuffer.reset();
     }
     return pBuffer;
 }
 
-sal_Char * convertFromUnicode(const sal_Unicode * pBegin,
+std::unique_ptr<sal_Char[]> convertFromUnicode(const sal_Unicode * pBegin,
                                         const sal_Unicode * pEnd,
                                         rtl_TextEncoding eEncoding,
                                         sal_Size & rSize)
@@ -143,15 +144,15 @@ sal_Char * convertFromUnicode(const sal_Unicode * pBegin,
         = rtl_createUnicodeToTextConverter(eEncoding);
     rtl_UnicodeToTextContext hContext
         = rtl_createUnicodeToTextContext(hConverter);
-    sal_Char * pBuffer;
+    std::unique_ptr<sal_Char[]> pBuffer;
     sal_uInt32 nInfo;
     for (sal_Size nBufferSize = pEnd - pBegin;;
          nBufferSize += nBufferSize / 3 + 1)
     {
-        pBuffer = new sal_Char[nBufferSize];
+        pBuffer.reset(new sal_Char[nBufferSize]);
         sal_Size nSrcCvtBytes;
         rSize = rtl_convertUnicodeToText(
-                    hConverter, hContext, pBegin, pEnd - pBegin, pBuffer,
+                    hConverter, hContext, pBegin, pEnd - pBegin, pBuffer.get(),
                     nBufferSize,
                     RTL_UNICODETOTEXT_FLAGS_UNDEFINED_ERROR
                         | RTL_UNICODETOTEXT_FLAGS_INVALID_ERROR
@@ -160,15 +161,14 @@ sal_Char * convertFromUnicode(const sal_Unicode * pBegin,
                     &nInfo, &nSrcCvtBytes);
         if (nInfo != RTL_UNICODETOTEXT_INFO_DESTBUFFERTOSMALL)
             break;
-        delete[] pBuffer;
+        pBuffer.reset();
         rtl_resetUnicodeToTextContext(hConverter, hContext);
     }
     rtl_destroyUnicodeToTextContext(hConverter, hContext);
     rtl_destroyUnicodeToTextConverter(hConverter);
     if (nInfo != 0)
     {
-        delete[] pBuffer;
-        pBuffer = nullptr;
+        pBuffer.reset();
     }
     return pBuffer;
 }
@@ -182,7 +182,7 @@ sal_Char * convertFromUnicode(const sal_Unicode * pBegin,
     @return  A pointer past the UTF-16 characters put into the buffer
     (i.e., pBuffer + 1 or pBuffer + 2).
  */
-inline sal_Unicode * putUTF32Character(sal_Unicode * pBuffer,
+sal_Unicode * putUTF32Character(sal_Unicode * pBuffer,
                                                  sal_uInt32 nUTF32)
 {
     DBG_ASSERT(rtl::isUnicodeCodePoint(nUTF32), "putUTF32Character(): Bad char");
@@ -292,30 +292,29 @@ bool translateUTF8Char(const sal_Char *& rBegin,
         sal_Unicode aUTF16[2];
         const sal_Unicode * pUTF16End = putUTF32Character(aUTF16, nUCS4);
         sal_Size nSize;
-        sal_Char * pBuffer = convertFromUnicode(aUTF16, pUTF16End, eEncoding,
+        std::unique_ptr<sal_Char[]> pBuffer = convertFromUnicode(aUTF16, pUTF16End, eEncoding,
                                                 nSize);
         if (!pBuffer)
             return false;
         DBG_ASSERT(nSize == 1,
                    "translateUTF8Char(): Bad conversion");
-        rCharacter = *pBuffer;
-        delete[] pBuffer;
+        rCharacter = *pBuffer.get();
     }
     rBegin = p;
     return true;
 }
 
-void appendISO88591(OUString & rText, sal_Char const * pBegin,
+void appendISO88591(OUStringBuffer & rText, sal_Char const * pBegin,
                     sal_Char const * pEnd);
 
 struct Parameter
 {
-    OString m_aAttribute;
-    OString m_aCharset;
-    OString m_aLanguage;
-    OString m_aValue;
-    sal_uInt32 m_nSection;
-    bool m_bExtended;
+    OString const m_aAttribute;
+    OString const m_aCharset;
+    OString const m_aLanguage;
+    OString const m_aValue;
+    sal_uInt32 const m_nSection;
+    bool const m_bExtended;
 
     bool operator<(const Parameter& rhs) const // is used by std::list<Parameter>::sort
     {
@@ -339,14 +338,14 @@ bool parseParameters(ParameterList const & rInput,
 
 //  appendISO88591
 
-void appendISO88591(OUString & rText, sal_Char const * pBegin,
+void appendISO88591(OUStringBuffer & rText, sal_Char const * pBegin,
                     sal_Char const * pEnd)
 {
     sal_Int32 nLength = pEnd - pBegin;
     std::unique_ptr<sal_Unicode[]> pBuffer(new sal_Unicode[nLength]);
     for (sal_Unicode * p = pBuffer.get(); pBegin != pEnd;)
         *p++ = static_cast<unsigned char>(*pBegin++);
-    rText += OUString(pBuffer.get(), nLength);
+    rText.append(pBuffer.get(), nLength);
 }
 
 //  parseParameters
@@ -376,13 +375,13 @@ bool parseParameters(ParameterList const & rInput,
                     = getCharsetEncoding(it->m_aCharset.getStr(),
                                                    it->m_aCharset.getStr()
                                                        + it->m_aCharset.getLength());
-            OUString aValue;
+            OUStringBuffer aValue;
             bool bBadEncoding = false;
             itNext = it;
             do
             {
                 sal_Size nSize;
-                sal_Unicode * pUnicode
+                std::unique_ptr<sal_Unicode[]> pUnicode
                     = convertToUnicode(itNext->m_aValue.getStr(),
                                                  itNext->m_aValue.getStr()
                                                      + itNext->m_aValue.getLength(),
@@ -401,30 +400,29 @@ bool parseParameters(ParameterList const & rInput,
                     bBadEncoding = true;
                     break;
                 }
-                aValue += OUString(pUnicode, static_cast<sal_Int32>(nSize));
-                delete[] pUnicode;
+                aValue.append(pUnicode.get(), static_cast<sal_Int32>(nSize));
                 ++itNext;
             }
             while (itNext != rInput.end() && itNext->m_nSection != 0);
 
             if (bBadEncoding)
             {
-                aValue.clear();
+                aValue.setLength(0);
                 itNext = it;
                 do
                 {
                     if (itNext->m_bExtended)
                     {
                         for (sal_Int32 i = 0; i < itNext->m_aValue.getLength(); ++i)
-                            aValue += OUStringLiteral1(
-                                sal_Unicode(
-                                    static_cast<unsigned char>(itNext->m_aValue[i]))
-                                | 0xF800); // map to unicode corporate use sub area
+                            aValue.append(
+                                static_cast<sal_Unicode>(
+                                    static_cast<unsigned char>(itNext->m_aValue[i])
+                                    | 0xF800)); // map to unicode corporate use sub area
                     }
                     else
                     {
                         for (sal_Int32 i = 0; i < itNext->m_aValue.getLength(); ++i)
-                            aValue += OUStringLiteral1( static_cast<unsigned char>(itNext->m_aValue[i]) );
+                            aValue.append( static_cast<char>(itNext->m_aValue[i]) );
                     }
                     ++itNext;
                 }
@@ -432,7 +430,7 @@ bool parseParameters(ParameterList const & rInput,
             }
             auto const ret = pOutput->insert(
                 {it->m_aAttribute,
-                 {it->m_aCharset, it->m_aLanguage, aValue, !bBadEncoding}});
+                 {it->m_aCharset, it->m_aLanguage, aValue.makeStringAndClear(), !bBadEncoding}});
             SAL_INFO_IF(!ret.second, "tools",
                 "INetMIME: dropping duplicate parameter: " << it->m_aAttribute);
         }
@@ -802,7 +800,7 @@ bool equalIgnoreCase(const sal_Char * pBegin1,
 struct EncodingEntry
 {
     sal_Char const * m_aName;
-    rtl_TextEncoding m_eEncoding;
+    rtl_TextEncoding const m_eEncoding;
 };
 
 // The source for the following table is <ftp://ftp.iana.org/in-notes/iana/
@@ -1156,7 +1154,7 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
     const sal_Char * pBegin = rBody.getStr();
     const sal_Char * pEnd = pBegin + rBody.getLength();
 
-    OUString sDecoded;
+    OUStringBuffer sDecoded;
     const sal_Char * pCopyBegin = pBegin;
 
     /* bool bStartEncodedWord = true; */
@@ -1393,7 +1391,7 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
 
             bEncodedWord = bEncodedWord && q != pEnd && *q++ == '=';
 
-            sal_Unicode * pUnicodeBuffer = nullptr;
+            std::unique_ptr<sal_Unicode[]> pUnicodeBuffer;
             sal_Size nUnicodeSize = 0;
             if (bEncodedWord)
             {
@@ -1401,17 +1399,17 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
                     = convertToUnicode(sText.getStr(),
                                        sText.getStr() + sText.getLength(),
                                        eCharsetEncoding, nUnicodeSize);
-                if (pUnicodeBuffer == nullptr)
+                if (!pUnicodeBuffer)
                     bEncodedWord = false;
             }
 
             if (bEncodedWord)
             {
                 appendISO88591(sDecoded, pCopyBegin, pWSPBegin);
-                sDecoded += OUString(
-                    pUnicodeBuffer,
+                sDecoded.append(
+                    pUnicodeBuffer.get(),
                     static_cast< sal_Int32 >(nUnicodeSize));
-                delete[] pUnicodeBuffer;
+                pUnicodeBuffer.reset();
                 p = q;
                 pCopyBegin = p;
 
@@ -1424,7 +1422,7 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
         }
 
         if (!sEncodedText.isEmpty())
-            sDecoded += sEncodedText;
+            sDecoded.append(sEncodedText);
 
         if (p == pEnd)
             break;
@@ -1454,7 +1452,7 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
                     appendISO88591(sDecoded, pCopyBegin, p - 1);
                     sal_Unicode aUTF16Buf[2];
                     sal_Int32 nUTF16Len = putUTF32Character(aUTF16Buf, nCharacter) - aUTF16Buf;
-                    sDecoded += OUString(aUTF16Buf, nUTF16Len);
+                    sDecoded.append(aUTF16Buf, nUTF16Len);
                     p = pUTF8End;
                     pCopyBegin = p;
                 }
@@ -1466,7 +1464,7 @@ OUString INetMIME::decodeHeaderFieldBody(const OString& rBody)
     }
 
     appendISO88591(sDecoded, pCopyBegin, pEnd);
-    return sDecoded;
+    return sDecoded.makeStringAndClear();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

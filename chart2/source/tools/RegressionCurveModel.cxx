@@ -20,15 +20,15 @@
 #include "RegressionCurveModel.hxx"
 #include <LinePropertiesHelper.hxx>
 #include <RegressionCurveHelper.hxx>
-#include <RegressionCalculationHelper.hxx>
 #include "RegressionEquation.hxx"
 #include <CloneHelper.hxx>
 #include <PropertyHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <rtl/math.hxx>
-#include <rtl/ustrbuf.hxx>
 #include <tools/diagnose_ex.h>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 
@@ -184,7 +184,7 @@ RegressionCurveModel::RegressionCurveModel( tCurveType eCurveType ) :
 
 RegressionCurveModel::RegressionCurveModel( const RegressionCurveModel & rOther ) :
     MutexContainer(),
-    impl::RegressionCurveModel_Base(),
+    impl::RegressionCurveModel_Base(rOther),
     ::property::OPropertySet( rOther, m_aMutex ),
     m_eRegressionCurveType( rOther.m_eRegressionCurveType ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())

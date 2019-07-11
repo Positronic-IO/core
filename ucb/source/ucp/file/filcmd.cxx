@@ -18,6 +18,8 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <cppuhelper/queryinterface.hxx>
 
 #include <com/sun/star/ucb/UnsupportedCommandException.hpp>
 

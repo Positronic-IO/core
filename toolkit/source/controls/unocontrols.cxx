@@ -49,7 +49,6 @@
 #include <vcl/svapp.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/button.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/combobox.hxx>
@@ -57,6 +56,7 @@
 #include <tools/diagnose_ex.h>
 #include <tools/date.hxx>
 #include <tools/time.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 

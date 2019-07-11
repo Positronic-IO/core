@@ -22,9 +22,8 @@
 
 #include <map>
 #include <com/sun/star/awt/FontSlant.hpp>
-#include <com/sun/star/awt/FontStrikeout.hpp>
 #include <tools/color.hxx>
-#include <vcl/vclenum.hxx>
+#include <tools/fontenum.hxx>
 #include <editeng/svxenum.hxx>
 #include <editeng/frmdir.hxx>
 #include <svl/zforlist.hxx>
@@ -565,6 +564,11 @@ class XclXFBase
 public:
     explicit            XclXFBase( bool bCellXF );
     virtual             ~XclXFBase();
+
+    XclXFBase(XclXFBase const &) = default;
+    XclXFBase(XclXFBase &&) = default;
+    XclXFBase & operator =(XclXFBase const &) = default;
+    XclXFBase & operator =(XclXFBase &&) = default;
 
     /** Sets all "attribute used" flags to the passed state. */
     void                SetAllUsedFlags( bool bUsed );

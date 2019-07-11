@@ -22,11 +22,7 @@
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
-#include <com/sun/star/container/XNameContainer.hpp>
-#include <com/sun/star/container/XNamed.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
-#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <cppuhelper/implbase.hxx>
 #include <map>
@@ -37,10 +33,8 @@
 
 #include "sddllapi.h"
 
-class SdStyleSheet;
 class SdDrawDocument;
 class SdPage;
-class SfxStyleSheetBase;
 class SvxNumberFormat;
 
 typedef std::map< const SdPage*, SdStyleFamilyRef > SdStyleFamilyMap;
@@ -76,12 +70,12 @@ public:
     SD_DLLPUBLIC void                CreateLayoutStyleSheets(const OUString& rLayoutName, bool bCheck = false );
     static void         CreateLayoutSheetNames(const OUString& rLayoutName, std::vector<OUString> &aNameList);
     void                CreateLayoutSheetList(const OUString& rLayoutName, SdStyleSheetVector& rLayoutSheets);
-    void                CopyLayoutSheets(const OUString& rLayoutName, SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets );
+    void                CopyLayoutSheets(const OUString& rLayoutName, SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets);
     void                CopyGraphicSheets(SdStyleSheetPool& rSourcePool);
     void                CopyCellSheets(SdStyleSheetPool& rSourcePool);
     void                CopyTableStyles(SdStyleSheetPool const & rSourcePool);
-    void                CopyCellSheets(SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets);
-    void                RenameAndCopyGraphicSheets(SdStyleSheetPool& rSourcePool, SdStyleSheetVector& rCreatedSheets, OUString const &rRenameSuffix);
+    void                CopyCellSheets(SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets);
+    void                RenameAndCopyGraphicSheets(SdStyleSheetPool& rSourcePool, StyleSheetCopyResultVector& rCreatedSheets, OUString const &rRenameSuffix);
 
     void                CreatePseudosIfNecessary();
     void                UpdateStdNames();
@@ -123,8 +117,8 @@ public:
 
 private:
     void CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily );
-    void CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, SdStyleSheetVector& rCreatedSheets );
-    void CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, SdStyleSheetVector& rCreatedSheets, const OUString &rRenameSuffix );
+    void CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, StyleSheetCopyResultVector& rCreatedSheets );
+    void CopySheets(SdStyleSheetPool& rSourcePool, SfxStyleFamily eFamily, StyleSheetCopyResultVector& rCreatedSheets, const OUString &rRenameSuffix );
 
     virtual SfxStyleSheetBase* Create(const OUString& rName, SfxStyleFamily eFamily, SfxStyleSearchBits nMask) override;
 

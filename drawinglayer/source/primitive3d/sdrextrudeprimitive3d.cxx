@@ -154,7 +154,7 @@ namespace drawinglayer
                         for(a = 0; a < nCount; a++)
                         {
                             const sal_uInt32 nReducedCount(aReducedLoops.count());
-                            const basegfx::B3DPolygon aCandidate(aVerLine.getB3DPolygon(a));
+                            const basegfx::B3DPolygon& aCandidate(aVerLine.getB3DPolygon(a));
                             bool bAdd(true);
 
                             if(nReducedCount)
@@ -182,8 +182,8 @@ namespace drawinglayer
                             for(sal_uInt32 b(1); b < nReducedCount; b++)
                             {
                                 // get loop pair
-                                const basegfx::B3DPolygon aCandA(aReducedLoops.getB3DPolygon(b - 1));
-                                const basegfx::B3DPolygon aCandB(aReducedLoops.getB3DPolygon(b));
+                                const basegfx::B3DPolygon& aCandA(aReducedLoops.getB3DPolygon(b - 1));
+                                const basegfx::B3DPolygon& aCandB(aReducedLoops.getB3DPolygon(b));
 
                                 // for each loop pair create the connection edges
                                 createReducedOutlines(
@@ -377,7 +377,7 @@ namespace drawinglayer
         {
             // This can be made dependent of  getSdrLFSAttribute().getFill() and getSdrLFSAttribute().getLine()
             // again when no longer geometry is needed for non-visible 3D objects as it is now for chart
-            if(getPolyPolygon().count() && !maSlices.size())
+            if(getPolyPolygon().count() && maSlices.empty())
             {
                 ::osl::MutexGuard aGuard( m_aMutex );
 
@@ -408,7 +408,6 @@ namespace drawinglayer
             mfDepth(fDepth),
             mfDiagonal(fDiagonal),
             mfBackScale(fBackScale),
-            mpLastRLGViewInformation(nullptr),
             mbSmoothNormals(bSmoothNormals),
             mbSmoothLids(bSmoothLids),
             mbCharacterMode(bCharacterMode),

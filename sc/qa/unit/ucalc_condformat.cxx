@@ -112,7 +112,7 @@ void Test::testCondFormatINSDEL()
     CPPUNIT_ASSERT_EQUAL(static_cast<const ScRangeList&>(ScRange(2,0,0,2,3,0)), rRange);
 
     OUString aExpr = pEntry->GetExpression(ScAddress(2,0,0), 0);
-    CPPUNIT_ASSERT_EQUAL(aExpr, OUString("D2"));
+    CPPUNIT_ASSERT_EQUAL(OUString("D2"), aExpr);
 
     m_pDoc->DeleteTab(0);
 }
@@ -562,9 +562,9 @@ void Test::testIconSet()
     m_pDoc->AddCondFormatData(pFormat->GetRange(), 0, 1);
     pList->InsertNew(pFormat);
 
-    struct {
+    static struct {
         double nVal; sal_Int32 nIndex;
-    } aTests[] = {
+    } const aTests[] = {
         { -1.0, 0 },
         { 0.0, 0 },
         { 1.0, 1 },
@@ -574,9 +574,8 @@ void Test::testIconSet()
     for(size_t i = 0; i < SAL_N_ELEMENTS(aTests); ++i)
     {
         m_pDoc->SetValue(0,0,0,aTests[i].nVal);
-        ScIconSetInfo* pInfo = pEntry->GetIconSetInfo(ScAddress(0,0,0));
+        std::unique_ptr<ScIconSetInfo> pInfo = pEntry->GetIconSetInfo(ScAddress(0,0,0));
         CPPUNIT_ASSERT_EQUAL(aTests[i].nIndex, pInfo->nIconIndex);
-        delete pInfo;
     }
 
     delete pEntry;
@@ -587,11 +586,11 @@ namespace {
 
 struct ScDataBarLengthData
 {
-    double nVal;
-    double nLength;
+    double const nVal;
+    double const nLength;
 };
 
-void testDataBarLengthImpl(ScDocument* pDoc, ScDataBarLengthData* pData, const ScRange& rRange,
+void testDataBarLengthImpl(ScDocument* pDoc, const ScDataBarLengthData* pData, const ScRange& rRange,
         double nMinVal, ScColorScaleEntryType eMinType,
         double nMaxVal, ScColorScaleEntryType eMaxType,
         double nZeroPos, databar::ScAxisPosition eAxisPos)
@@ -624,7 +623,7 @@ void testDataBarLengthImpl(ScDocument* pDoc, ScDataBarLengthData* pData, const S
     for (size_t i = 0; pData[i].nLength != -200; ++i)
     {
         std::unique_ptr<ScDataBarInfo> xInfo(pDatabar->GetDataBarInfo(ScAddress(nCol, i, 0)));
-        CPPUNIT_ASSERT(xInfo.get());
+        CPPUNIT_ASSERT(xInfo);
         ASSERT_DOUBLES_EQUAL(pData[i].nLength, xInfo->mnLength);
         ASSERT_DOUBLES_EQUAL(nZeroPos, xInfo->mnZero);
     }
@@ -636,7 +635,7 @@ void Test::testDataBarLengthAutomaticAxis()
 {
     m_pDoc->InsertTab(0, "Test");
 
-    ScDataBarLengthData aValues[] = {
+    static const ScDataBarLengthData aValues[] = {
         { 2, 0 },
         { 3, 0 },
         { 4, 25.0 },
@@ -651,7 +650,7 @@ void Test::testDataBarLengthAutomaticAxis()
     testDataBarLengthImpl(m_pDoc, aValues, ScRange(0,0,0,0,7,0),
             3, COLORSCALE_VALUE, 7, COLORSCALE_VALUE, 0.0, databar::AUTOMATIC);
 
-    ScDataBarLengthData aValues2[] = {
+    static const ScDataBarLengthData aValues2[] = {
         { -6, -100 },
         { -5, -100 },
         { -4, -100 },
@@ -673,7 +672,7 @@ void Test::testDataBarLengthAutomaticAxis()
     testDataBarLengthImpl(m_pDoc, aValues2, ScRange(1,0,0,1,15,0),
             -4, COLORSCALE_VALUE, 8, COLORSCALE_VALUE, 1.0/3.0 * 100, databar::AUTOMATIC);
 
-    ScDataBarLengthData aValues3[] = {
+    static const ScDataBarLengthData aValues3[] = {
         { 2, 0.0 },
         { 3, 25.0 },
         { 4, 50.0 },
@@ -683,7 +682,7 @@ void Test::testDataBarLengthAutomaticAxis()
     testDataBarLengthImpl(m_pDoc, aValues3, ScRange(2,0,0,2,3,0),
             0, COLORSCALE_MIN, 0, COLORSCALE_MAX, 0, databar::AUTOMATIC);
 
-    ScDataBarLengthData aValues4[] = {
+    static const ScDataBarLengthData aValues4[] = {
         { 2, 40.0 },
         { 3, 60.0 },
         { 4, 80.0 },
@@ -700,7 +699,7 @@ void Test::testDataBarLengthMiddleAxis()
 {
     m_pDoc->InsertTab(0, "Test");
 
-    ScDataBarLengthData aValues[] = {
+    static const ScDataBarLengthData aValues[] = {
         { 1, 25.0 },
         { 2, 25.0 },
         { 3, 37.5 },
@@ -716,7 +715,7 @@ void Test::testDataBarLengthMiddleAxis()
     testDataBarLengthImpl(m_pDoc, aValues, ScRange(0,0,0,0,8,0),
             2, COLORSCALE_VALUE, 8, COLORSCALE_VALUE, 50.0, databar::MIDDLE);
 
-    ScDataBarLengthData aValues2[] = {
+    static const ScDataBarLengthData aValues2[] = {
         { -6, -50 },
         { -5, -50 },
         { -4, -50 },
@@ -1184,6 +1183,82 @@ void Test::testDeduplicateMultipleCondFormats()
             CPPUNIT_ASSERT(!pFormat);
         }
     }
+
+    m_pDoc->DeleteTab(0);
+}
+
+void Test::testCondFormatListenToOwnRange()
+{
+    m_pDoc->InsertTab(0, "Test");
+
+    ScConditionalFormatList* pList = m_pDoc->GetCondFormList(0);
+
+    ScConditionalFormat* pFormat = new ScConditionalFormat(1, m_pDoc);
+    ScRangeList aRangeList(ScRange(0,0,0,10,0,0));
+    pFormat->SetRange(aRangeList);
+
+    ScIconSetFormat* pEntry = new ScIconSetFormat(m_pDoc);
+    ScIconSetFormatData* pData = new ScIconSetFormatData;
+    pData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(0, COL_BLUE));
+    pData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(1, COL_GREEN));
+    pData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(2, COL_RED));
+    pEntry->SetIconSetData(pData);
+    pEntry->SetParent(pFormat);
+
+    m_pDoc->AddCondFormatData(pFormat->GetRange(), 0, 1);
+    pFormat->AddEntry(pEntry);
+    pList->InsertNew(pFormat);
+
+    bool bFirstCallbackCalled = false;
+    bool bSecondCallbackCalled = false;
+    bool bThirdCallbackCalled = false;
+    std::function<void()> aFirstCallback = [&]() {bFirstCallbackCalled = true;};
+    std::function<void()> aSecondCallback = [&]() {bSecondCallbackCalled = true;};
+    std::function<void()> aThirdCallback = [&]() {bThirdCallbackCalled = true;};
+    pData->m_Entries[0]->SetType(COLORSCALE_PERCENT);
+    pData->m_Entries[0]->SetRepaintCallback(aFirstCallback);
+
+    m_pDoc->SetValue(0, 0, 0, -1.0);
+
+    CPPUNIT_ASSERT(bFirstCallbackCalled);
+
+    m_pDoc->DeleteTab(0);
+}
+
+void Test::testCondFormatVolatileFunctionRecalc()
+{
+    m_pDoc->InsertTab(0, "Test");
+
+    m_pDoc->SetValue(0, 0, 0, 0.5);
+
+    ScConditionalFormatList* pList = m_pDoc->GetCondFormList(0);
+
+    ScConditionalFormat* pFormat = new ScConditionalFormat(1, m_pDoc);
+    ScRangeList aRangeList(ScRange(0,0,0,10,0,0));
+    pFormat->SetRange(aRangeList);
+
+    ScCondFormatEntry* pEntry = new ScCondFormatEntry(ScConditionMode::Greater,"RAND()","",m_pDoc,ScAddress(0,0,0),ScResId(STR_STYLENAME_RESULT));
+    pEntry->SetParent(pFormat);
+
+    m_pDoc->AddCondFormatData(pFormat->GetRange(), 0, 1);
+    pFormat->AddEntry(pEntry);
+    pList->InsertNew(pFormat);
+
+    ScRefCellValue aCell(*m_pDoc, ScAddress(0, 0, 0));
+    bool bValid = pEntry->IsCellValid(aCell, ScAddress(0, 0, 0));
+
+    bool bNewValid = bValid;
+    // chance of a random failure is 0.5^100, anyone hitting that will get a beer from me
+    for (size_t i = 0; i < 100; ++i)
+    {
+        pFormat->CalcAll();
+        bNewValid = pEntry->IsCellValid(aCell, ScAddress(0, 0, 0));
+
+        if (bValid != bNewValid)
+            break;
+    }
+
+    CPPUNIT_ASSERT(bValid != bNewValid);
 
     m_pDoc->DeleteTab(0);
 }

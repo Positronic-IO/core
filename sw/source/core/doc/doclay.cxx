@@ -22,6 +22,7 @@
 #include <hintids.hxx>
 #include <sfx2/progress.hxx>
 #include <svx/svdmodel.hxx>
+#include <svx/svdogrp.hxx>
 #include <svx/svdpage.hxx>
 #include <editeng/keepitem.hxx>
 #include <editeng/ulspitem.hxx>
@@ -71,6 +72,8 @@
 #include <rootfrm.hxx>
 #include <pagefrm.hxx>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <flyfrm.hxx>
 #include <fesh.hxx>
 #include <docsh.hxx>
@@ -288,7 +291,7 @@ SwFlyFrameFormat* SwDoc::MakeFlySection_( const SwPosition& rAnchPos,
         sal_uLong nNodeIdx = rAnchPos.nNode.GetIndex();
         const sal_Int32 nCntIdx = rAnchPos.nContent.GetIndex();
         GetIDocumentUndoRedo().AppendUndo(
-            new SwUndoInsLayFormat( pFormat, nNodeIdx, nCntIdx ));
+            o3tl::make_unique<SwUndoInsLayFormat>( pFormat, nNodeIdx, nCntIdx ));
     }
 
     getIDocumentState().SetModified();
@@ -580,7 +583,9 @@ SwPosFlyFrames SwDoc::GetAllFlyFormats( const SwPaM* pCmpRange, bool bDrawAlso,
                     }
                     if ( pContentFrame )
                     {
-                        SwNodeIndex aIdx( *pContentFrame->GetNode() );
+                        SwNodeIndex aIdx( pContentFrame->IsTextFrame()
+                            ? *static_cast<SwTextFrame const*>(pContentFrame)->GetTextNodeFirst()
+                            : *static_cast<SwNoTextFrame const*>(pContentFrame)->GetNode() );
                         aRetval.insert(std::make_shared<SwPosFlyFrame>(aIdx, pFly, aRetval.size()));
                     }
                 }
@@ -971,21 +976,21 @@ SwDoc::InsertLabel(
         OUString const& rCharacterStyle,
         bool const bCpyBrd )
 {
-    SwUndoInsertLabel * pUndo(nullptr);
+    std::unique_ptr<SwUndoInsertLabel> pUndo;
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        pUndo = new SwUndoInsertLabel(
+        pUndo.reset(new SwUndoInsertLabel(
                         eType, rText, rSeparator, rNumberingSeparator,
-                        bBefore, nId, rCharacterStyle, bCpyBrd, this );
+                        bBefore, nId, rCharacterStyle, bCpyBrd, this ));
     }
 
-    SwFlyFrameFormat *const pNewFormat = lcl_InsertLabel(*this, mpTextFormatCollTable, pUndo,
+    SwFlyFrameFormat *const pNewFormat = lcl_InsertLabel(*this, mpTextFormatCollTable.get(), pUndo.get(),
             eType, rText, rSeparator, rNumberingSeparator, bBefore,
             nId, nNdIdx, rCharacterStyle, bCpyBrd);
 
     if (pUndo)
     {
-        GetIDocumentUndoRedo().AppendUndo(pUndo);
+        GetIDocumentUndoRedo().AppendUndo(std::move(pUndo));
     }
     else
     {
@@ -1256,22 +1261,22 @@ SwFlyFrameFormat* SwDoc::InsertDrawLabel(
     if (!pOldFormat)
         return nullptr;
 
-    SwUndoInsertLabel * pUndo = nullptr;
+    std::unique_ptr<SwUndoInsertLabel> pUndo;
     if (GetIDocumentUndoRedo().DoesUndo())
     {
         GetIDocumentUndoRedo().ClearRedo();
-        pUndo = new SwUndoInsertLabel(
+        pUndo.reset(new SwUndoInsertLabel(
             LTYPE_DRAW, rText, rSeparator, rNumberSeparator, false,
-            nId, rCharacterStyle, false, this );
+            nId, rCharacterStyle, false, this ));
     }
 
     SwFlyFrameFormat *const pNewFormat = lcl_InsertDrawLabel(
-        *this, mpTextFormatCollTable, pUndo, pOldFormat,
+        *this, mpTextFormatCollTable.get(), pUndo.get(), pOldFormat,
         rText, rSeparator, rNumberSeparator, nId, rCharacterStyle, rSdrObj);
 
     if (pUndo)
     {
-        GetIDocumentUndoRedo().AppendUndo( pUndo );
+        GetIDocumentUndoRedo().AppendUndo( std::move(pUndo) );
     }
     else
     {
@@ -1279,6 +1284,36 @@ SwFlyFrameFormat* SwDoc::InsertDrawLabel(
     }
 
     return pNewFormat;
+}
+
+static void lcl_SetNumUsedBit(std::vector<sal_uInt8>& rSetFlags, size_t nFormatSize, sal_Int32 nNmLen, const OUString& rName, const OUString& rCmpName)
+{
+    if (rName.startsWith(rCmpName))
+    {
+        // Only get and set the Flag
+        const sal_Int32 nNum = rName.copy(nNmLen).toInt32()-1;
+        if (nNum >= 0 && static_cast<SwFrameFormats::size_type>(nNum) < nFormatSize)
+            rSetFlags[ nNum / 8 ] |= (0x01 << ( nNum & 0x07 ));
+    }
+}
+
+static void lcl_SetNumUsedBit(std::vector<sal_uInt8>& rSetFlags, size_t nFormatSize, sal_Int32 nNmLen, const SdrObject& rObj, const OUString& rCmpName)
+{
+    OUString sName = rObj.GetName();
+    lcl_SetNumUsedBit(rSetFlags, nFormatSize, nNmLen, sName, rCmpName);
+    // tdf#122487 take groups into account, interate and recurse through their
+    // contents for name collision check
+    if (rObj.IsGroupObject())
+    {
+        const SdrObjGroup &rGroupObj = static_cast<const SdrObjGroup&>(rObj);
+        for (size_t i = 0, nCount = rGroupObj.GetObjCount(); i < nCount; ++i)
+        {
+            SdrObject* pObj = rGroupObj.GetObj(i);
+            if (!pObj)
+                continue;
+            lcl_SetNumUsedBit(rSetFlags, nFormatSize, nNmLen, *pObj, rCmpName);
+        }
+    }
 }
 
 static OUString lcl_GetUniqueFlyName(const SwDoc* pDoc, const char* pDefStrId, sal_uInt16 eType)
@@ -1304,23 +1339,16 @@ static OUString lcl_GetUniqueFlyName(const SwDoc* pDoc, const char* pDefStrId, s
         const SwFrameFormat* pFlyFormat = rFormats[ n ];
         if (eType != pFlyFormat->Which())
             continue;
-        OUString sName;
         if (eType == RES_DRAWFRMFMT)
         {
             const SdrObject *pObj = pFlyFormat->FindSdrObject();
             if (pObj)
-                sName = pObj->GetName();
+                lcl_SetNumUsedBit(aSetFlags, rFormats.size(), nNmLen, *pObj, aName);
         }
         else
         {
-            sName = pFlyFormat->GetName();
-        }
-        if (sName.startsWith(aName))
-        {
-            // Only get and set the Flag
-            const sal_Int32 nNum = sName.copy(nNmLen).toInt32()-1;
-            if( nNum >= 0 && static_cast<SwFrameFormats::size_type>(nNum) < rFormats.size() )
-                aSetFlags[ nNum / 8 ] |= (0x01 << ( nNum & 0x07 ));
+            OUString sName = pFlyFormat->GetName();
+            lcl_SetNumUsedBit(aSetFlags, rFormats.size(), nNmLen, sName, aName);
         }
     }
 
@@ -1437,7 +1465,7 @@ void SwDoc::SetAllUniqueFlyNames()
     {
         if( RES_FLYFRMFMT == (pFlyFormat = (*GetSpzFrameFormats())[ --n ])->Which() )
         {
-            const OUString aNm = pFlyFormat->GetName();
+            const OUString& aNm = pFlyFormat->GetName();
             if ( !aNm.isEmpty() )
             {
                 sal_Int32 *pNum = nullptr;

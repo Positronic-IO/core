@@ -45,19 +45,19 @@
 #   define SLEEP(t) (sleep((t)))
 #endif
 
-void wait_for_seconds(char* time)
+static void wait_for_seconds(char* time)
 {
     SLEEP(atoi(time));
 }
 
 #ifdef _WIN32
 
-void w_to_a(LPCWSTR strW, LPSTR strA, DWORD size)
+static void w_to_a(LPCWSTR strW, LPSTR strA, DWORD size)
 {
     WideCharToMultiByte(CP_ACP, 0, strW, -1, strA, size, nullptr, nullptr);
 }
 
-    void dump_env(char* file_path)
+    static void dump_env(char* file_path)
     {
         LPWSTR env = GetEnvironmentStringsW();
         LPWSTR p   = env;
@@ -74,7 +74,7 @@ void w_to_a(LPCWSTR strW, LPSTR strA, DWORD size)
         FreeEnvironmentStringsW(env);
     }
 #else
-    void dump_env(char* file_path)
+    static void dump_env(char* file_path)
     {
         std::ofstream file(file_path);
         for (int i = 0; environ[i] != nullptr; ++i)

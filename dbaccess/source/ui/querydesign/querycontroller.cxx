@@ -23,7 +23,6 @@
 #include <strings.hrc>
 #include <query.hrc>
 #include <dbu_reghelper.hxx>
-#include <dbu_pageids.hxx>
 #include <stringconstants.hxx>
 #include <defaultobjectnamecheck.hxx>
 #include <dlgsave.hxx>
@@ -68,8 +67,6 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/seqstream.hxx>
-#include <comphelper/streamsection.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
@@ -239,8 +236,7 @@ OQueryController::OQueryController(const Reference< XComponentContext >& _rM)
     :OJoinController(_rM)
     ,OQueryController_PBase( getBroadcastHelper() )
     ,m_pParseContext( new svxform::OSystemParseContext )
-    ,m_aSqlParser( _rM, m_pParseContext )
-    ,m_pSqlIterator(nullptr)
+    ,m_aSqlParser( _rM, m_pParseContext.get() )
     ,m_nLimit(-1)
     ,m_nVisibleRows(0x400)
     ,m_nSplitPos(-1)
@@ -343,8 +339,7 @@ void OQueryController::deleteIterator()
     {
         delete m_pSqlIterator->getParseTree();
         m_pSqlIterator->dispose();
-        delete m_pSqlIterator;
-        m_pSqlIterator = nullptr;
+        m_pSqlIterator.reset();
     }
 }
 
@@ -354,7 +349,7 @@ void OQueryController::disposing()
 
     deleteIterator();
 
-    delete m_pParseContext;
+    m_pParseContext.reset();
 
     clearFields();
     OTableFields().swap(m_vUnUsedFieldsDesc);
@@ -942,7 +937,7 @@ void OQueryController::setQueryComposer()
             OSL_ENSURE(m_xComposer.is(),"No querycomposer available!");
             Reference<XTablesSupplier> xTablesSup(getConnection(), UNO_QUERY);
             deleteIterator();
-            m_pSqlIterator = new ::connectivity::OSQLParseTreeIterator( getConnection(), xTablesSup->getTables(), m_aSqlParser );
+            m_pSqlIterator.reset(new ::connectivity::OSQLParseTreeIterator( getConnection(), xTablesSup->getTables(), m_aSqlParser ));
         }
     }
 }
@@ -1071,13 +1066,12 @@ void OQueryController::loadViewSettings( const ::comphelper::NamedValueCollectio
 
 void OQueryController::execute_QueryPropDlg()
 {
-    ScopedVclPtrInstance<QueryPropertiesDialog> aQueryPropDlg(
-        getContainer(), m_bDistinct, m_nLimit );
+    QueryPropertiesDialog aQueryPropDlg(getContainer()->GetFrameWeld(), m_bDistinct, m_nLimit);
 
-    if( aQueryPropDlg->Execute() == RET_OK )
+    if (aQueryPropDlg.run() == RET_OK)
     {
-        m_bDistinct = aQueryPropDlg->getDistinct();
-        m_nLimit = aQueryPropDlg->getLimit();
+        m_bDistinct = aQueryPropDlg.getDistinct();
+        m_nLimit = aQueryPropDlg.getLimit();
         InvalidateFeature( SID_QUERY_DISTINCT_VALUES );
         InvalidateFeature( SID_QUERY_LIMIT, nullptr, true );
     }
@@ -1716,7 +1710,7 @@ void OQueryController::impl_reset( const bool i_bForceCurrentControllerSettings 
                 std::unique_ptr< ::connectivity::OSQLParseNode > pNode(
                     m_aSqlParser.parseTree( aErrorMsg, m_sStatement, m_bGraphicalDesign ) );
 
-                if ( pNode.get() )
+                if (pNode)
                 {
                     delete m_pSqlIterator->getParseTree();
                     m_pSqlIterator->setParseTree( pNode.release() );

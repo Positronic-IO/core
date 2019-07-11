@@ -21,7 +21,8 @@
 #define INCLUDED_SD_SOURCE_UI_INC_LAYERTABBAR_HXX
 
 #include <svtools/tabbar.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
+#include <sddllapi.h>
 
 namespace sd {
 
@@ -53,13 +54,32 @@ public:
     */
     void SendDeactivatePageEvent();
 
-private:
-    DrawViewShell* pDrViewSh;
+    // Expects not-localized, real layer name in rText. Generates a localized layer name
+    // that will be displayed on the tab of the LayerTabBar and writes the real name
+    // to maAuxiliaryText. In case you want no entry in maAuxiliaryText, use method from TabBar.
+    virtual void        InsertPage( sal_uInt16 nPageId, const OUString& rText,
+                                TabBarPageBits nBits = TabBarPageBits::NONE,
+                                sal_uInt16 nPos = TabBar::APPEND ) override;
+    virtual void        SetPageText( sal_uInt16 nPageId, const OUString& rText ) override;
+
+    // Returns the real layer name if exists and empty OUString otherwise.
+    OUString            GetLayerName(sal_uInt16 nPageId) const;
+
+    // Used e.g. in DeleteActualLayer() to test whether deleting is allowed.
+    static bool IsRealNameOfStandardLayer(const OUString& rName);
+
+    // Used e.g. in validity test of user entered names
+    static bool IsLocalizedNameOfStandardLayer(const OUString& rName);
+
+    // In case rName is one of the sUNO_LayerName_*, it generates a localized name,
+    // otherwise it returns value of rName.
+    static OUString convertToLocalizedName(const OUString& rName);
 
     // TabBar
     virtual void        Select() override;
     virtual void        DoubleClick() override;
-    virtual void        MouseButtonDown(const MouseEvent& rMEvt) override;
+
+    SD_DLLPUBLIC virtual void MouseButtonDown(const MouseEvent& rMEvt) override; // export for unit test
 
     virtual void        Command(const CommandEvent& rCEvt) override;
 
@@ -72,6 +92,12 @@ private:
     // DropTargetHelper
     virtual sal_Int8    AcceptDrop( const AcceptDropEvent& rEvt ) override;
     virtual sal_Int8    ExecuteDrop( const ExecuteDropEvent& rEvt ) override;
+
+private:
+    DrawViewShell* pDrViewSh;
+
+    // Expects not-localized, real layer name in rText and writes it to maAuxiliaryText.
+    void SetLayerName( sal_uInt16 nPageId, const OUString& rText );
 };
 
 } // end of namespace sd

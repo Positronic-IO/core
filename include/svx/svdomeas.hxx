@@ -52,8 +52,8 @@ private:
     friend class                SdrMeasureField;
 
 protected:
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     Point                       aPt1;
     Point                       aPt2;
@@ -95,7 +95,7 @@ public:
 
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
+    virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // special drag methods
     virtual bool hasSpecialDrag() const override;
@@ -136,7 +136,7 @@ public:
     virtual void TakeTextAnchorRect(tools::Rectangle& rAnchorRect) const override;
     virtual void TakeTextEditArea(Size* pPaperMin, Size* pPaperMax, tools::Rectangle* pViewInit, tools::Rectangle* pViewMin) const override;
     virtual EEAnchorMode GetOutlinerViewAnchorMode() const override;
-    virtual void NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject) override;
+    virtual void NbcSetOutlinerParaObject(std::unique_ptr<OutlinerParaObject> pTextObject) override;
     virtual OutlinerParaObject* GetOutlinerParaObject() const override;
 
     virtual bool CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_uInt16 nPos,

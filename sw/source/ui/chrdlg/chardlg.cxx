@@ -58,39 +58,41 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::uno;
 using namespace ::sfx2;
 
-SwCharDlg::SwCharDlg(vcl::Window* pParent, SwView& rVw, const SfxItemSet& rCoreSet,
+SwCharDlg::SwCharDlg(weld::Window* pParent, SwView& rVw, const SfxItemSet& rCoreSet,
     SwCharDlgMode nDialogMode, const OUString* pStr)
-    : SfxTabDialog(pParent, "CharacterPropertiesDialog",
-        "modules/swriter/ui/characterproperties.ui", &rCoreSet, pStr != nullptr)
+    : SfxTabDialogController(pParent, "modules/swriter/ui/characterproperties.ui",
+                             "CharacterPropertiesDialog", &rCoreSet, pStr != nullptr)
     , m_rView(rVw)
     , m_nDialogMode(nDialogMode)
 {
-    if(pStr)
+    if (pStr)
     {
-        SetText(GetText() + SwResId(STR_TEXTCOLL_HEADER) + *pStr + ")");
+        m_xDialog->set_title(m_xDialog->get_title() + SwResId(STR_TEXTCOLL_HEADER) + *pStr + ")");
     }
     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
-    m_nCharStdId = AddTabPage("font", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_CHAR_NAME), nullptr);
-    m_nCharExtId = AddTabPage("fonteffects", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_CHAR_EFFECTS), nullptr);
-    m_nCharPosId = AddTabPage("position", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_POSITION ), nullptr );
-    m_nCharTwoId = AddTabPage("asianlayout", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_TWOLINES ), nullptr );
-    m_nCharUrlId = AddTabPage("hyperlink", SwCharURLPage::Create, nullptr);
-    m_nCharBgdId = AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), nullptr );
-    m_nCharBrdId = AddTabPage("borders", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BORDER ), nullptr );
+    AddTabPage("font", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_CHAR_NAME), nullptr);
+    AddTabPage("fonteffects", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_CHAR_EFFECTS), nullptr);
+    AddTabPage("position", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_POSITION ), nullptr );
+    AddTabPage("asianlayout", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_CHAR_TWOLINES ), nullptr );
+    AddTabPage("hyperlink", SwCharURLPage::Create, nullptr);
+    AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), nullptr );
+    AddTabPage("borders", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BORDER ), nullptr );
 
-    SvtCJKOptions aCJKOptions;
-    if(m_nDialogMode == SwCharDlgMode::Draw || m_nDialogMode == SwCharDlgMode::Ann)
+    if (m_nDialogMode == SwCharDlgMode::Draw || m_nDialogMode == SwCharDlgMode::Ann)
     {
-        RemoveTabPage(m_nCharUrlId);
-        RemoveTabPage(m_nCharBgdId);
-        RemoveTabPage(m_nCharTwoId);
+        RemoveTabPage("hyperlink");
+        RemoveTabPage("background");
+        RemoveTabPage("asianlayout");
     }
-    else if(!aCJKOptions.IsDoubleLinesEnabled())
-        RemoveTabPage(m_nCharTwoId);
+    else
+    {
+        SvtCJKOptions aCJKOptions;
+        if (!aCJKOptions.IsDoubleLinesEnabled())
+            RemoveTabPage("asianlayout");
+    }
 
-    if(m_nDialogMode != SwCharDlgMode::Std)
-        RemoveTabPage(m_nCharBrdId);
+    if (m_nDialogMode != SwCharDlgMode::Std)
+        RemoveTabPage("borders");
 }
 
 SwCharDlg::~SwCharDlg()
@@ -98,10 +100,10 @@ SwCharDlg::~SwCharDlg()
 }
 
 // set FontList
-void SwCharDlg::PageCreated( sal_uInt16 nId, SfxTabPage &rPage )
+void SwCharDlg::PageCreated(const OString& rId, SfxTabPage &rPage)
 {
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
-    if (nId == m_nCharStdId)
+    if (rId == "font")
     {
         SvxFontListItem aFontListItem( *static_cast<const SvxFontListItem*>(
            ( m_rView.GetDocShell()->GetItem( SID_ATTR_CHAR_FONTLIST ) ) ) );
@@ -110,44 +112,46 @@ void SwCharDlg::PageCreated( sal_uInt16 nId, SfxTabPage &rPage )
             aSet.Put (SfxUInt32Item(SID_FLAG_TYPE,SVX_PREVIEW_CHARACTER));
         rPage.PageCreated(aSet);
     }
-    else if (nId == m_nCharExtId)
+    else if (rId == "fonteffects")
     {
         aSet.Put (SfxUInt32Item(SID_FLAG_TYPE,SVX_PREVIEW_CHARACTER|SVX_ENABLE_FLASH));
         rPage.PageCreated(aSet);
     }
-    else if (nId == m_nCharPosId)
+    else if (rId == "position")
     {
         aSet.Put (SfxUInt32Item(SID_FLAG_TYPE,SVX_PREVIEW_CHARACTER));
         rPage.PageCreated(aSet);
     }
-    else if (nId == m_nCharTwoId)
+    else if (rId == "asianlayout")
     {
         aSet.Put (SfxUInt32Item(SID_FLAG_TYPE,SVX_PREVIEW_CHARACTER));
         rPage.PageCreated(aSet);
     }
-    else if (nId == m_nCharBgdId)
+    else if (rId == "background")
     {
         aSet.Put(SfxUInt32Item(SID_FLAG_TYPE,static_cast<sal_uInt32>(SvxBackgroundTabFlags::SHOW_HIGHLIGHTING)));
         rPage.PageCreated(aSet);
     }
 }
 
-SwCharURLPage::SwCharURLPage(vcl::Window* pParent, const SfxItemSet& rCoreSet)
-    : SfxTabPage(pParent, "CharURLPage", "modules/swriter/ui/charurlpage.ui", &rCoreSet)
-    , pINetItem(nullptr)
+SwCharURLPage::SwCharURLPage(TabPageParent pParent, const SfxItemSet& rCoreSet)
+    : SfxTabPage(pParent, "modules/swriter/ui/charurlpage.ui", "CharURLPage", &rCoreSet)
     , bModified(false)
-
+    , m_xURLED(m_xBuilder->weld_entry("urled"))
+    , m_xTextFT(m_xBuilder->weld_label("textft"))
+    , m_xTextED(m_xBuilder->weld_entry("texted"))
+    , m_xNameED(m_xBuilder->weld_entry("nameed"))
+    , m_xTargetFrameLB(m_xBuilder->weld_combo_box("targetfrmlb"))
+    , m_xURLPB(m_xBuilder->weld_button("urlpb"))
+    , m_xEventPB(m_xBuilder->weld_button("eventpb"))
+    , m_xVisitedLB(m_xBuilder->weld_combo_box("visitedlb"))
+    , m_xNotVisitedLB(m_xBuilder->weld_combo_box("unvisitedlb"))
+    , m_xCharStyleContainer(m_xBuilder->weld_widget("charstyle"))
 {
-    get(m_pURLED, "urled");
-    get(m_pTextFT, "textft");
-    get(m_pTextED, "texted");
-    get(m_pNameED, "nameed");
-    get(m_pTargetFrameLB, "targetfrmlb");
-    get(m_pURLPB, "urlpb");
-    get(m_pEventPB, "eventpb");
-    get(m_pVisitedLB, "visitedlb");
-    get(m_pNotVisitedLB, "unvisitedlb");
-    get(m_pCharStyleContainer, "charstyle");
+    // tdf#120188 like SfxManageStyleSheetPage limit the width of the style combos
+    const int nMaxWidth(m_xVisitedLB->get_approximate_digit_width() * 50);
+    m_xVisitedLB->set_size_request(nMaxWidth , -1);
+    m_xNotVisitedLB->set_size_request(nMaxWidth , -1);
 
     const SfxPoolItem* pItem;
     SfxObjectShell* pShell;
@@ -156,32 +160,31 @@ SwCharURLPage::SwCharURLPage(vcl::Window* pParent, const SfxItemSet& rCoreSet)
                     nullptr != (pItem = pShell->GetItem(SID_HTML_MODE))))
     {
         sal_uInt16 nHtmlMode = static_cast<const SfxUInt16Item*>(pItem)->GetValue();
-        if(HTMLMODE_ON & nHtmlMode)
-            m_pCharStyleContainer->Hide();
+        if (HTMLMODE_ON & nHtmlMode)
+            m_xCharStyleContainer->hide();
     }
 
-    m_pURLPB->SetClickHdl  (LINK( this, SwCharURLPage, InsertFileHdl));
-    m_pEventPB->SetClickHdl(LINK( this, SwCharURLPage, EventHdl ));
+    m_xURLPB->connect_clicked(LINK( this, SwCharURLPage, InsertFileHdl));
+    m_xEventPB->connect_clicked(LINK( this, SwCharURLPage, EventHdl));
 
     SwView *pView = ::GetActiveView();
-    ::FillCharStyleListBox(*m_pVisitedLB, pView->GetDocShell());
-    ::FillCharStyleListBox(*m_pNotVisitedLB, pView->GetDocShell());
-    m_pVisitedLB->SelectEntryPos(m_pVisitedLB->GetEntryPos(reinterpret_cast<void*>(RES_POOLCHR_INET_VISIT)));
-    m_pVisitedLB->SaveValue();
-    m_pNotVisitedLB->SelectEntryPos(m_pNotVisitedLB->GetEntryPos(reinterpret_cast<void*>(RES_POOLCHR_INET_NORMAL)));
-    m_pNotVisitedLB->SaveValue();
+    ::FillCharStyleListBox(*m_xVisitedLB, pView->GetDocShell());
+    ::FillCharStyleListBox(*m_xNotVisitedLB, pView->GetDocShell());
+    m_xVisitedLB->set_active_id(OUString::number(RES_POOLCHR_INET_VISIT));
+    m_xVisitedLB->save_value();
+    m_xNotVisitedLB->set_active_id(OUString::number(RES_POOLCHR_INET_NORMAL));
+    m_xNotVisitedLB->save_value();
 
     std::unique_ptr<TargetList> pList( new TargetList );
     SfxFrame::GetDefaultTargetList(*pList);
-    if ( !pList->empty() )
-    {
-        size_t nCount = pList->size();
 
-        for ( size_t i = 0; i < nCount; i++ )
-        {
-            m_pTargetFrameLB->InsertEntry( pList->at( i ) );
-        }
+    m_xTargetFrameLB->freeze();
+    size_t nCount = pList->size();
+    for (size_t i = 0; i < nCount; ++i)
+    {
+        m_xTargetFrameLB->append_text(pList->at(i));
     }
+    m_xTargetFrameLB->thaw();
 }
 
 SwCharURLPage::~SwCharURLPage()
@@ -191,30 +194,21 @@ SwCharURLPage::~SwCharURLPage()
 
 void SwCharURLPage::dispose()
 {
-    delete pINetItem;
-    m_pURLED.clear();
-    m_pTextFT.clear();
-    m_pTextED.clear();
-    m_pNameED.clear();
-    m_pTargetFrameLB.clear();
-    m_pURLPB.clear();
-    m_pEventPB.clear();
-    m_pVisitedLB.clear();
-    m_pNotVisitedLB.clear();
-    m_pCharStyleContainer.clear();
+    pINetItem.reset();
     SfxTabPage::dispose();
 }
 
 void SwCharURLPage::Reset(const SfxItemSet* rSet)
 {
     const SfxPoolItem* pItem;
-    if ( SfxItemState::SET == rSet->GetItemState( RES_TXTATR_INETFMT, false, &pItem ) )
+    if (SfxItemState::SET == rSet->GetItemState(RES_TXTATR_INETFMT, false, &pItem))
     {
         const SwFormatINetFormat* pINetFormat = static_cast<const SwFormatINetFormat*>( pItem);
-        m_pURLED->SetText(INetURLObject::decode(pINetFormat->GetValue(),
+        m_xURLED->set_text(INetURLObject::decode(pINetFormat->GetValue(),
             INetURLObject::DecodeMechanism::Unambiguous));
-        m_pURLED->SaveValue();
-        m_pNameED->SetText(pINetFormat->GetName());
+        m_xURLED->save_value();
+        m_xNameED->set_text(pINetFormat->GetName());
+        m_xNameED->save_value();
 
         OUString sEntry = pINetFormat->GetVisitedFormat();
         if (sEntry.isEmpty())
@@ -222,7 +216,7 @@ void SwCharURLPage::Reset(const SfxItemSet* rSet)
             OSL_ENSURE( false, "<SwCharURLPage::Reset(..)> - missing visited character format at hyperlink attribute" );
             SwStyleNameMapper::FillUIName(RES_POOLCHR_INET_VISIT, sEntry);
         }
-        m_pVisitedLB->SelectEntry( sEntry );
+        m_xVisitedLB->set_active_text(sEntry);
 
         sEntry = pINetFormat->GetINetFormat();
         if (sEntry.isEmpty())
@@ -230,29 +224,29 @@ void SwCharURLPage::Reset(const SfxItemSet* rSet)
             OSL_ENSURE( false, "<SwCharURLPage::Reset(..)> - missing unvisited character format at hyperlink attribute" );
             SwStyleNameMapper::FillUIName(RES_POOLCHR_INET_NORMAL, sEntry);
         }
-        m_pNotVisitedLB->SelectEntry(sEntry);
+        m_xNotVisitedLB->set_active_text(sEntry);
 
-        m_pTargetFrameLB->SetText(pINetFormat->GetTargetFrame());
-        m_pVisitedLB->   SaveValue();
-        m_pNotVisitedLB->SaveValue();
-        m_pTargetFrameLB-> SaveValue();
-        pINetItem = new SvxMacroItem(FN_INET_FIELD_MACRO);
+        m_xTargetFrameLB->set_entry_text(pINetFormat->GetTargetFrame());
+        m_xVisitedLB->save_value();
+        m_xNotVisitedLB->save_value();
+        m_xTargetFrameLB->save_value();
+        pINetItem.reset( new SvxMacroItem(FN_INET_FIELD_MACRO) );
 
         if( pINetFormat->GetMacroTable() )
-            pINetItem->SetMacroTable( *pINetFormat->GetMacroTable() );
+            pINetItem->SetMacroTable(*pINetFormat->GetMacroTable());
     }
-    if(SfxItemState::SET == rSet->GetItemState(FN_PARAM_SELECTION, false, &pItem))
+    if (SfxItemState::SET == rSet->GetItemState(FN_PARAM_SELECTION, false, &pItem))
     {
-        m_pTextED->SetText(static_cast<const SfxStringItem*>(pItem)->GetValue());
-        m_pTextFT->Enable( false );
-        m_pTextED->Enable( false );
+        m_xTextED->set_text(static_cast<const SfxStringItem*>(pItem)->GetValue());
+        m_xTextFT->set_sensitive(false);
+        m_xTextED->set_sensitive(false);
     }
 }
 
 bool SwCharURLPage::FillItemSet(SfxItemSet* rSet)
 {
-    OUString sURL = m_pURLED->GetText();
-    if(!sURL.isEmpty())
+    OUString sURL = m_xURLED->get_text();
+    if (!sURL.isEmpty())
     {
         sURL = URIHelper::SmartRel2Abs(INetURLObject(), sURL, Link<OUString *, bool>(), false );
         // #i100683# file URLs should be normalized in the UI
@@ -260,62 +254,61 @@ bool SwCharURLPage::FillItemSet(SfxItemSet* rSet)
             sURL = URIHelper::simpleNormalizedMakeRelative(OUString(), sURL);
     }
 
-    SwFormatINetFormat aINetFormat(sURL, m_pTargetFrameLB->GetText());
-    aINetFormat.SetName(m_pNameED->GetText());
-    bool bURLModified = m_pURLED->IsValueChangedFromSaved();
-    bool bNameModified = m_pNameED->IsModified();
-    bool bTargetModified = m_pTargetFrameLB->IsValueChangedFromSaved();
+    SwFormatINetFormat aINetFormat(sURL, m_xTargetFrameLB->get_active_text());
+    aINetFormat.SetName(m_xNameED->get_text());
+    bool bURLModified = m_xURLED->get_value_changed_from_saved();
+    bool bNameModified = m_xNameED->get_value_changed_from_saved();
+    bool bTargetModified = m_xTargetFrameLB->get_value_changed_from_saved();
     bModified = bURLModified || bNameModified || bTargetModified;
 
     // set valid settings first
-    OUString sEntry = m_pVisitedLB->GetSelectedEntry();
+    OUString sEntry = m_xVisitedLB->get_active_text();
     sal_uInt16 nId = SwStyleNameMapper::GetPoolIdFromUIName( sEntry, SwGetPoolIdFromName::ChrFmt);
     aINetFormat.SetVisitedFormatAndId( sEntry, nId );
 
-    sEntry = m_pNotVisitedLB->GetSelectedEntry();
+    sEntry = m_xNotVisitedLB->get_active_text();
     nId = SwStyleNameMapper::GetPoolIdFromUIName( sEntry, SwGetPoolIdFromName::ChrFmt);
     aINetFormat.SetINetFormatAndId( sEntry, nId );
 
-    if( pINetItem && !pINetItem->GetMacroTable().empty() )
-        aINetFormat.SetMacroTable( &pINetItem->GetMacroTable() );
+    if (pINetItem && !pINetItem->GetMacroTable().empty())
+        aINetFormat.SetMacroTable(&pINetItem->GetMacroTable());
 
-    if(m_pVisitedLB->IsValueChangedFromSaved())
+    if (m_xVisitedLB->get_value_changed_from_saved())
         bModified = true;
 
-    if(m_pNotVisitedLB->IsValueChangedFromSaved())
+    if (m_xNotVisitedLB->get_value_changed_from_saved())
         bModified = true;
 
-    if(m_pTextED->IsModified())
+    if (bNameModified)
     {
         bModified = true;
-        rSet->Put(SfxStringItem(FN_PARAM_SELECTION, m_pTextED->GetText()));
+        rSet->Put(SfxStringItem(FN_PARAM_SELECTION, m_xTextED->get_text()));
     }
     if(bModified)
         rSet->Put(aINetFormat);
     return bModified;
 }
 
-VclPtr<SfxTabPage> SwCharURLPage::Create(  TabPageParent pParent,
-                                           const SfxItemSet* rAttrSet )
+VclPtr<SfxTabPage> SwCharURLPage::Create(TabPageParent pParent, const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwCharURLPage>::Create( pParent.pParent, *rAttrSet );
+    return VclPtr<SwCharURLPage>::Create(pParent, *rAttrSet);
 }
 
-IMPL_LINK_NOARG(SwCharURLPage, InsertFileHdl, Button*, void)
+IMPL_LINK_NOARG(SwCharURLPage, InsertFileHdl, weld::Button&, void)
 {
     FileDialogHelper aDlgHelper(TemplateDescription::FILEOPEN_SIMPLE,
                                 FileDialogFlags::NONE, GetFrameWeld());
     if( aDlgHelper.Execute() == ERRCODE_NONE )
     {
-        Reference < XFilePicker3 > xFP = aDlgHelper.GetFilePicker();
-        m_pURLED->SetText(xFP->getSelectedFiles().getConstArray()[0]);
+        const Reference<XFilePicker3>& xFP = aDlgHelper.GetFilePicker();
+        m_xURLED->set_text(xFP->getSelectedFiles().getConstArray()[0]);
     }
 }
 
-IMPL_LINK_NOARG(SwCharURLPage, EventHdl, Button*, void)
+IMPL_LINK_NOARG(SwCharURLPage, EventHdl, weld::Button&, void)
 {
-    bModified |= SwMacroAssignDlg::INetFormatDlg( this,
-                    ::GetActiveView()->GetWrtShell(), pINetItem );
+    bModified |= SwMacroAssignDlg::INetFormatDlg(GetDialogFrameWeld(),
+                    ::GetActiveView()->GetWrtShell(), pINetItem);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

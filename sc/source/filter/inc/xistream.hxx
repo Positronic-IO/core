@@ -21,7 +21,9 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_XISTREAM_HXX
 
 #include <comphelper/docpasswordhelper.hxx>
+#include <com/sun/star/beans/NamedValue.hpp>
 #include <filter/msfilter/mscodec.hxx>
+#include <tools/stream.hxx>
 #include <memory>
 #include "xlstream.hxx"
 #include "xlconst.hxx"
@@ -112,8 +114,8 @@ private:
 private:
     ::msfilter::MSCodec_XorXLS95 maCodec;       /// Crypto algorithm implementation.
     css::uno::Sequence< css::beans::NamedValue > maEncryptionData;
-    sal_uInt16          mnKey;
-    sal_uInt16          mnHash;
+    sal_uInt16 const          mnKey;
+    sal_uInt16 const          mnHash;
 };
 
 /** Decrypts BIFF8 stream contents using the given document identifier. */

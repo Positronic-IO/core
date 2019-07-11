@@ -21,6 +21,7 @@
 
 #include <View.hxx>
 #include <osl/file.hxx>
+#include <editeng/outlobj.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/docfilt.hxx>
@@ -106,7 +107,7 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
         if( IsUndoEnabled() )
             BegUndo(SdResId(STR_INSERTGRAPHIC));
 
-        SdPage* pPage = static_cast<SdPage*>( pPickObj->GetPage() );
+        SdPage* pPage = static_cast<SdPage*>( pPickObj->getSdrPageFromSdrObject() );
 
         if( bIsGraphic )
         {
@@ -214,7 +215,7 @@ SdrGrafObj* View::InsertGraphic( const Graphic& rGraphic, sal_Int8& rAction,
 
         if( ( mnAction & DND_ACTION_MOVE ) && pPickObj && (pPickObj->IsEmptyPresObj() || pPickObj->GetUserCall()) )
         {
-            SdPage* pP = static_cast< SdPage* >( pPickObj->GetPage() );
+            SdPage* pP = static_cast< SdPage* >( pPickObj->getSdrPageFromSdrObject() );
 
             if ( pP && pP->IsMasterPage() )
                 bIsPresTarget = pP->IsPresObj(pPickObj);
@@ -316,7 +317,7 @@ SdrMediaObj* View::InsertMediaObj( const OUString& rMediaURL, const OUString& rM
             pPV = nullptr;
     }
 
-    if( mnAction == DND_ACTION_LINK && pPickObj && pPV && dynamic_cast< SdrMediaObj *>( pPickObj ) !=  nullptr )
+    if( mnAction == DND_ACTION_LINK && pPV && dynamic_cast< SdrMediaObj *>( pPickObj ) )
     {
         pNewMediaObj = static_cast< SdrMediaObj* >( pPickObj->CloneSdrObject(pPickObj->getSdrModelFromSdrObject()) );
         pNewMediaObj->setURL( rMediaURL, ""/*TODO?*/, rMimeType );
@@ -342,7 +343,7 @@ SdrMediaObj* View::InsertMediaObj( const OUString& rMediaURL, const OUString& rM
         bool bIsPres = false;
         if( pPickObj )
         {
-            SdPage* pPage = static_cast< SdPage* >(pPickObj->GetPage());
+            SdPage* pPage = static_cast< SdPage* >(pPickObj->getSdrPageFromSdrObject());
             bIsPres = pPage && pPage->IsPresObj(pPickObj);
             if( bIsPres )
             {
@@ -491,7 +492,7 @@ IMPL_LINK_NOARG(View, DropInsertFileHdl, Timer *, void)
             }
             else
 #endif
-                if( mnAction & DND_ACTION_LINK )
+            if( mnAction & DND_ACTION_LINK )
                 static_cast< DrawViewShell* >( mpViewSh )->InsertURLButton( aCurrentDropFile, aCurrentDropFile, OUString(), &maDropPos );
             else
             {

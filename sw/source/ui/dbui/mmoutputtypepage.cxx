@@ -39,26 +39,24 @@
 
 using namespace ::com::sun::star;
 
-SwMailMergeOutputTypePage::SwMailMergeOutputTypePage(SwMailMergeWizard* pParent)
-    : svt::OWizardPage(pParent, "MMOutputTypePage",
-        "modules/swriter/ui/mmoutputtypepage.ui")
-    , m_pWizard(pParent)
+SwMailMergeOutputTypePage::SwMailMergeOutputTypePage(SwMailMergeWizard* pWizard, TabPageParent pParent)
+    : svt::OWizardPage(pParent, "modules/swriter/ui/mmoutputtypepage.ui", "MMOutputTypePage")
+    , m_pWizard(pWizard)
+    , m_xLetterRB(m_xBuilder->weld_radio_button("letter"))
+    , m_xMailRB(m_xBuilder->weld_radio_button("email"))
+    , m_xLetterHint(m_xBuilder->weld_label("letterft"))
+    , m_xMailHint(m_xBuilder->weld_label("emailft"))
 {
-    get(m_pLetterRB, "letter");
-    get(m_pMailRB, "email");
-    get(m_pLetterHint, "letterft");
-    get(m_pMailHint, "emailft");
-
-    Link<Button*,void> aLink = LINK(this, SwMailMergeOutputTypePage, TypeHdl_Impl);
-    m_pLetterRB->SetClickHdl(aLink);
-    m_pMailRB->SetClickHdl(aLink);
+    Link<weld::ToggleButton&,void> aLink = LINK(this, SwMailMergeOutputTypePage, TypeHdl_Impl);
+    m_xLetterRB->connect_toggled(aLink);
+    m_xMailRB->connect_toggled(aLink);
 
     SwMailMergeConfigItem& rConfigItem = m_pWizard->GetConfigItem();
     if(rConfigItem.IsOutputToLetter())
-        m_pLetterRB->Check();
+        m_xLetterRB->set_active(true);
     else
-        m_pMailRB->Check();
-    TypeHdl_Impl(m_pLetterRB);
+        m_xMailRB->set_active(true);
+    TypeHdl_Impl(*m_xLetterRB);
 }
 
 SwMailMergeOutputTypePage::~SwMailMergeOutputTypePage()
@@ -68,20 +66,15 @@ SwMailMergeOutputTypePage::~SwMailMergeOutputTypePage()
 
 void SwMailMergeOutputTypePage::dispose()
 {
-    m_pLetterRB.clear();
-    m_pMailRB.clear();
-    m_pLetterHint.clear();
-    m_pMailHint.clear();
     m_pWizard.clear();
     svt::OWizardPage::dispose();
 }
 
-
-IMPL_LINK_NOARG(SwMailMergeOutputTypePage, TypeHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SwMailMergeOutputTypePage, TypeHdl_Impl, weld::ToggleButton&, void)
 {
-    bool bLetter = m_pLetterRB->IsChecked();
-    m_pLetterHint->Show(bLetter);
-    m_pMailHint->Show(!bLetter);
+    bool bLetter = m_xLetterRB->get_active();
+    m_xLetterHint->show(bLetter);
+    m_xMailHint->show(!bLetter);
     m_pWizard->GetConfigItem().SetOutputToLetter(bLetter);
     m_pWizard->updateRoadmapItemLabel( MM_ADDRESSBLOCKPAGE );
     m_pWizard->UpdateRoadmap();
@@ -198,13 +191,10 @@ void SwMailDispatcherListener_Impl::DeleteAttachments( uno::Reference< mail::XMa
         try
         {
             uno::Reference< beans::XPropertySet > xTransferableProperties( aAttachments[nFile].Data, uno::UNO_QUERY_THROW);
-            if( xTransferableProperties.is() )
-            {
-                OUString sURL;
-                xTransferableProperties->getPropertyValue("URL") >>= sURL;
-                if(!sURL.isEmpty())
-                    SWUnoHelper::UCB_DeleteFile( sURL );
-            }
+            OUString sURL;
+            xTransferableProperties->getPropertyValue("URL") >>= sURL;
+            if(!sURL.isEmpty())
+                SWUnoHelper::UCB_DeleteFile( sURL );
         }
         catch (const uno::Exception&)
         {
@@ -312,7 +302,7 @@ void SwSendMailDialog::dispose()
         {
         }
     }
-    delete m_pImpl;
+    m_pImpl.reset();
     m_pStatus.disposeAndClear();
     m_pTransferStatus.clear();
     m_pPaused.clear();
@@ -421,7 +411,7 @@ void  SwSendMailDialog::SendMails()
     uno::Reference< mail::XSmtpService > xSmtpServer =
                 SwMailMergeHelper::ConnectToSmtpServer( *m_pConfigItem,
                                             m_pImpl->xConnectedInMailService,
-                                            aEmptyOUStr, aEmptyOUStr, this );
+                                            aEmptyOUStr, aEmptyOUStr, GetFrameWeld() );
     bool bIsLoggedIn = xSmtpServer.is() && xSmtpServer->isConnected();
     LeaveWait();
     if(!bIsLoggedIn)
@@ -562,7 +552,7 @@ void SwSendMailDialog::UpdateTransferStatus()
     sStatus = m_sErrorStatus.replaceFirst("%1", OUString::number(m_nErrorCount) );
     m_pErrorStatus->SetText(sStatus);
 
-    if (m_pImpl->aDescriptors.size())
+    if (!m_pImpl->aDescriptors.empty())
     {
         assert(m_nExpectedCount && "div-by-zero");
         m_pProgressBar->SetValue(static_cast<sal_uInt16>(m_nSendCount * 100 / m_nExpectedCount));

@@ -36,7 +36,7 @@
 #include <vcl/bitmapex.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/hatch.hxx>
-#include <vcl/outdev.hxx>
+#include <vcl/virdev.hxx>
 #include <vcl/pdfwriter.hxx>
 #include <vcl/wall.hxx>
 #include <o3tl/typed_flags_set.hxx>
@@ -45,7 +45,7 @@
 #include <sallayout.hxx>
 #include <outdata.hxx>
 #include "pdffontcache.hxx"
-#include <PhysicalFontFace.hxx>
+#include "pdfbuildin_fonts.hxx"
 
 class StyleSettings;
 class FontSelectPattern;
@@ -89,36 +89,17 @@ namespace vcl
 
 class PDFStreamIf;
 class Matrix3;
-class PdfBuiltinFontFace;
 
 namespace filter
 {
 class PDFObjectElement;
 }
 
-class PDFWriterImpl
+class PDFWriterImpl : public VirtualDevice
 {
     friend class PDFStreamIf;
+
 public:
-    // definition of structs
-    struct BuiltinFont
-    {
-        const char *                m_pName;                     // Name
-        const char *                m_pStyleName;                // StyleName
-        const char *                m_pPSName;                   // PSName
-        int                         m_nAscent;
-        int                         m_nDescent;
-        FontFamily                  m_eFamily;                   // Family
-        rtl_TextEncoding            m_eCharSet;                  // CharSet
-        FontPitch                   m_ePitch;                    // Pitch
-        FontWidth                   m_eWidthType;                // WidthType
-        FontWeight                  m_eWeight;                   // Weight
-        FontItalic                  m_eItalic;                   // Italic
-        int                         m_aWidths[256];              // character metrics
-
-        OString getNameObject() const;
-    };
-
     enum ResourceKind { ResXObject, ResExtGState, ResShading, ResPattern };
     typedef std::map< OString, sal_Int32 > ResourceMap;
     struct ResourceDict
@@ -134,10 +115,10 @@ public:
 
     struct PDFPage
     {
-        PDFWriterImpl*              m_pWriter;
-        double                      m_nPageWidth;           // in inch/72
-        double                      m_nPageHeight;          // in inch/72
-        PDFWriter::Orientation      m_eOrientation;
+        VclPtr<PDFWriterImpl>             m_pWriter;
+        double const                      m_nPageWidth;           // in inch/72
+        double const                      m_nPageHeight;          // in inch/72
+        PDFWriter::Orientation const      m_eOrientation;
         sal_Int32                   m_nPageObject;
         std::vector<sal_Int32>      m_aStreamObjects;
         sal_Int32                   m_nStreamLengthObject;
@@ -146,7 +127,6 @@ public:
         std::vector<sal_Int32>      m_aMCIDParents;
         PDFWriter::PageTransition   m_eTransition;
         sal_uInt32                  m_nTransTime;
-        sal_uInt32                  m_nDuration;
 
         PDFPage( PDFWriterImpl* pWriter, double nPageWidth, double nPageHeight, PDFWriter::Orientation eOrientation );
         ~PDFPage();
@@ -189,7 +169,7 @@ public:
         // appends a horizontal waveline with vertical offset (helper for drawWaveLine)
         void appendWaveLine( sal_Int32 nLength, sal_Int32 nYOffset, sal_Int32 nDelta, OStringBuffer& rBuffer ) const;
 
-        double getHeight() const { return m_nPageHeight ? m_nPageHeight : m_pWriter->m_nInheritedPageHeight; }
+        double getHeight() const { return m_nPageHeight ? m_nPageHeight : PDFWriterImpl::g_nInheritedPageHeight; }
     };
 
     friend struct PDFPage;
@@ -261,8 +241,7 @@ public:
         ReferenceXObjectEmit m_aReferenceXObject;
 
         JPGEmit()
-            : m_pStream(nullptr)
-            , m_nObject(0)
+            : m_nObject(0)
             , m_bTrueColor(false)
         {
         }
@@ -283,11 +262,10 @@ public:
         Size                        m_aCellSize;
         SvtGraphicFill::Transform   m_aTransform;
         ResourceDict                m_aResources;
-        SvMemoryStream*             m_pTilingStream;
+        std::unique_ptr<SvMemoryStream> m_pTilingStream;
 
         TilingEmit()
-                : m_nObject( 0 ),
-                  m_pTilingStream( nullptr )
+                : m_nObject( 0 )
         {}
     };
 
@@ -532,9 +510,9 @@ public:
 
     struct PDFStructureElementKid // for Kids entries
     {
-        sal_Int32 nObject;  // an object number if nMCID is -1,
+        sal_Int32 const nObject;  // an object number if nMCID is -1,
                             // else the page object relevant to MCID
-        sal_Int32 nMCID;    // an MCID if >= 0
+        sal_Int32 const nMCID;    // an MCID if >= 0
 
         explicit PDFStructureElementKid( sal_Int32 nObj ) : nObject( nObj ), nMCID( -1 ) {}
         PDFStructureElementKid( sal_Int32 MCID, sal_Int32 nPage ) : nObject( nPage ), nMCID( MCID ) {}
@@ -586,12 +564,12 @@ public:
     // helper structure for drawLayout and friends
     struct PDFGlyph
     {
-        Point       m_aPos;
+        Point const       m_aPos;
         const GlyphItem* m_pGlyph;
-        sal_Int32   m_nNativeWidth;
-        sal_Int32   m_nMappedFontId;
-        sal_uInt8   m_nMappedGlyphId;
-        int         m_nCharPos;
+        sal_Int32 const   m_nNativeWidth;
+        sal_Int32 const   m_nMappedFontId;
+        sal_uInt8 const   m_nMappedGlyphId;
+        int const         m_nCharPos;
 
         PDFGlyph( const Point& rPos,
                   const GlyphItem* pGlyph,
@@ -614,11 +592,8 @@ public:
     static bool compressStream( SvMemoryStream* );
 
     static void convertLineInfoToExtLineInfo( const LineInfo& rIn, PDFWriter::ExtLineInfo& rOut );
+
 private:
-    static const BuiltinFont m_aBuiltinFonts[14];
-
-    VclPtr<OutputDevice>                m_pReferenceDevice;
-
     MapMode                             m_aMapMode; // PDFWriterImpl scaled units
     std::vector< PDFPage >              m_aPages;
     /* maps object numbers to file offsets (needed for xref) */
@@ -696,8 +671,8 @@ private:
     sal_Int32                           m_nNextFID;
     PDFFontCache                        m_aFontCache;
 
-    sal_Int32                           m_nInheritedPageWidth;  // in inch/72
-    sal_Int32                           m_nInheritedPageHeight; // in inch/72
+    static constexpr sal_Int32          g_nInheritedPageWidth = 595;  // default A4 in inch/72
+    static constexpr sal_Int32          g_nInheritedPageHeight = 842; // default A4 in inch/72
     sal_Int32                           m_nCurrentPage;
 
     sal_Int32                           m_nCatalogObject;
@@ -708,7 +683,7 @@ private:
     sal_Int32                           m_nResourceDict;
     ResourceDict                        m_aGlobalResourceDict;
     sal_Int32                           m_nFontDictObject;
-    std::map< sal_Int32, sal_Int32 >    m_aBuiltinFontToObjectMap;
+    std::map< sal_Int32, sal_Int32 >    m_aBuildinFontToObjectMap;
 
     PDFWriter::PDFWriterContext         m_aContext;
     osl::File                           m_aFile;
@@ -789,12 +764,8 @@ i12626
     /* string to hold the PDF creation date, for PDF/A metadata */
     OString                            m_aCreationMetaDateString;
     /* the buffer where the data are encrypted, dynamically allocated */
-    sal_uInt8                               *m_pEncryptionBuffer;
-    /* size of the buffer */
-    sal_Int32                               m_nEncryptionBufferSize;
+    std::vector<sal_uInt8>                  m_vEncryptionBuffer;
 
-    /* check and reallocate the buffer for encryption */
-    bool checkEncryptionBufferSize( sal_Int32 newSize );
     /* this function implements part of the PDF spec algorithm 3.1 in encryption, the rest (the actual encryption) is in PDFWriterImpl::writeBuffer */
     void checkAndEnableStreamEncryption( sal_Int32 nObject );
 
@@ -862,7 +833,7 @@ i12626
     /* writes all gradient patterns */
     bool emitGradients();
     /* writes a builtin font object and returns its objectid (or 0 in case of failure ) */
-    sal_Int32 emitBuiltinFont( const PdfBuiltinFontFace*, sal_Int32 nObject );
+    sal_Int32 emitBuildinFont( const pdf::BuildinFontFace*, sal_Int32 nObject );
     /* writes a type1 system font object and returns its mapping from font ids to object ids (or 0 in case of failure ) */
     std::map< sal_Int32, sal_Int32 > emitSystemFont( const PhysicalFontFace*, EmbedFont const & );
     /* writes a font descriptor and returns its object id (or 0) */
@@ -888,7 +859,7 @@ i12626
     /* push resource into current (redirected) resource dict */
     void pushResource( ResourceKind eKind, const OString& rResource, sal_Int32 nObject );
 
-    void appendBuiltinFontsToDict( OStringBuffer& rDict ) const;
+    void appendBuildinFontsToDict( OStringBuffer& rDict ) const;
     /* writes a the font dictionary and emits all font objects
      * returns object id of font directory (or 0 on error)
      */
@@ -958,7 +929,7 @@ i12626
     // default appearances for widgets
     sal_Int32 findRadioGroupWidget( const PDFWriter::RadioButtonWidget& rRadio );
     Font replaceFont( const Font& rControlFont, const Font& rAppSetFont );
-    sal_Int32 getBestBuiltinFont( const Font& rFont );
+    sal_Int32 getBestBuildinFont( const Font& rFont );
     sal_Int32 getSystemFont( const Font& i_rFont );
 
     // used for edit and listbox
@@ -1056,16 +1027,12 @@ i12626
     void appendNonStrokingColor( const Color& rColor, OStringBuffer& rBuffer );
 public:
     PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext, const css::uno::Reference< css::beans::XMaterialHolder >&, PDFWriter& );
-    ~PDFWriterImpl();
+    ~PDFWriterImpl() override;
+    void dispose() override;
 
     static css::uno::Reference< css::beans::XMaterialHolder >
            initEncryption( const OUString& i_rOwnerPassword,
-                           const OUString& i_rUserPassword,
-                           bool b128Bit );
-
-    /* for documentation of public functions please see pdfwriter.hxx */
-
-    OutputDevice* getReferenceDevice();
+                           const OUString& i_rUserPassword );
 
     /* document structure */
     void newPage( double nPageWidth , double nPageHeight, PDFWriter::Orientation eOrientation );
@@ -1268,7 +1235,6 @@ public:
     void setAlternateText( const OUString& rText );
 
     // transitional effects
-    void setAutoAdvanceTime( sal_uInt32 nSeconds, sal_Int32 nPageNr );
     void setPageTransition( PDFWriter::PageTransition eType, sal_uInt32 nMilliSec, sal_Int32 nPageNr );
 
     // controls
@@ -1282,21 +1248,7 @@ public:
     void MARK( const char* pString );
 };
 
-class PdfBuiltinFontFace : public PhysicalFontFace
-{
-private:
-    const PDFWriterImpl::BuiltinFont& mrBuiltin;
-
-public:
-    explicit                            PdfBuiltinFontFace( const PDFWriterImpl::BuiltinFont& );
-    const PDFWriterImpl::BuiltinFont&   GetBuiltinFont() const  { return mrBuiltin; }
-
-    virtual PhysicalFontFace*           Clone() const override { return new PdfBuiltinFontFace(*this); }
-    virtual sal_IntPtr                  GetFontId() const override { return reinterpret_cast<sal_IntPtr>(&mrBuiltin); }
-};
-
-
-}
+} // namespace vcl
 
 #endif //_VCL_PDFEXPORT_HXX
 

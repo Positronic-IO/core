@@ -23,6 +23,7 @@
 #include <com/sun/star/bridge/BridgeFactory.hpp>
 #include <com/sun/star/connection/Acceptor.hpp>
 #include <com/sun/star/uno/XNamingService.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -36,11 +37,15 @@ using namespace css::uno;
 namespace desktop
 {
 
-extern "C" void offacc_workerfunc (void * acc)
+extern "C" {
+
+static void offacc_workerfunc (void * acc)
 {
     osl_setThreadName("URP Acceptor");
 
     static_cast<Acceptor*>(acc)->run();
+}
+
 }
 
 Acceptor::Acceptor( const Reference< XComponentContext >& rxContext )

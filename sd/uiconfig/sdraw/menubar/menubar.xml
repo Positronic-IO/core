@@ -79,7 +79,12 @@
       <menu:menuitem menu:id=".uno:Cut"/>
       <menu:menuitem menu:id=".uno:Copy"/>
       <menu:menuitem menu:id=".uno:Paste"/>
-      <menu:menuitem menu:id=".uno:PasteSpecial"/>
+      <menu:menu menu:id=".uno:PasteSpecialMenu">
+        <menu:menupopup>
+          <menu:menuitem menu:id=".uno:PasteUnformatted"/>
+          <menu:menuitem menu:id=".uno:PasteSpecial"/>
+        </menu:menupopup>
+      </menu:menu>
       <menu:menuitem menu:id=".uno:SelectAll"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id="vnd.sun.star.findbar:FocusToFindbar"/>
@@ -111,16 +116,21 @@
       <menu:menu menu:id=".uno:GridMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:GridVisible"/>
-          <menu:menuitem menu:id=".uno:GridUse"/>
           <menu:menuitem menu:id=".uno:GridFront"/>
+          <menu:menuseparator/>
           <menu:menuitem menu:id=".uno:HelplinesMove"/>
         </menu:menupopup>
       </menu:menu>
       <menu:menu menu:id=".uno:SnapLinesMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:HelplinesVisible"/>
-          <menu:menuitem menu:id=".uno:HelplinesUse"/>
           <menu:menuitem menu:id=".uno:HelplinesFront"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:GridUse"/>
+          <menu:menuitem menu:id=".uno:HelplinesUse"/>
+          <menu:menuitem menu:id=".uno:SnapFrame"/>
+          <menu:menuitem menu:id=".uno:SnapPoints"/>
+          <menu:menuitem menu:id=".uno:SnapBorder"/>
         </menu:menupopup>
       </menu:menu>
       <menu:menuseparator/>
@@ -132,13 +142,13 @@
         </menu:menupopup>
       </menu:menu>
       <menu:menuitem menu:id=".uno:ShowAnnotations"/>
-      <menu:menuitem menu:id=".uno:ShowImeStatusWindow"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:Sidebar"/>
       <menu:menuitem menu:id=".uno:ViewSidebarStyles"/>
       <menu:menuitem menu:id=".uno:Gallery"/>
       <menu:menuitem menu:id=".uno:Navigator"/>
       <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:ZoomPanning"/>
       <menu:menu menu:id=".uno:ZoomMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:ZoomPage"/>
@@ -149,6 +159,11 @@
           <menu:menuitem menu:id=".uno:Zoom100Percent"/>
           <menu:menuitem menu:id=".uno:Zoom150Percent"/>
           <menu:menuitem menu:id=".uno:Zoom200Percent"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:ZoomMode"/>
+          <menu:menuitem menu:id=".uno:ZoomPrevious"/>
+          <menu:menuitem menu:id=".uno:ZoomNext"/>
+          <menu:menuitem menu:id=".uno:ZoomObjects"/>
           <menu:menuseparator/>
           <menu:menuitem menu:id=".uno:Zoom"/>
         </menu:menupopup>
@@ -332,6 +347,29 @@
       <menu:menuitem menu:id=".uno:FontDialog"/>
       <menu:menuitem menu:id=".uno:ParagraphDialog"/>
       <menu:menuitem menu:id=".uno:OutlineBullet"/>
+      <menu:menu menu:id=".uno:TableMenu">
+        <menu:menupopup>
+          <menu:menuitem menu:id=".uno:SetMinimalRowHeight"/>
+          <menu:menuitem menu:id=".uno:SetOptimalRowHeight"/>
+          <menu:menuitem menu:id=".uno:DistributeRows"/>
+          <menu:menuitem menu:id=".uno:EntireRow"/>
+          <menu:menuitem menu:id=".uno:InsertRowDialog"/>
+          <menu:menuitem menu:id=".uno:DeleteRows"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:SetMinimalColumnWidth"/>
+          <menu:menuitem menu:id=".uno:SetOptimalColumnWidth"/>
+          <menu:menuitem menu:id=".uno:DistributeColumns"/>
+          <menu:menuitem menu:id=".uno:EntireColumn"/>
+          <menu:menuitem menu:id=".uno:InsertColumnDialog"/>
+          <menu:menuitem menu:id=".uno:DeleteColumns"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:MergeCells"/>
+          <menu:menuitem menu:id=".uno:SplitCell"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:SelectTable"/>
+          <menu:menuitem menu:id=".uno:TableDialog"/>
+        </menu:menupopup>
+      </menu:menu>
       <menu:menuitem menu:id=".uno:ModifyLayer"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:TransformDialog"/>
@@ -448,8 +486,31 @@
           <menu:menuitem menu:id=".uno:MirrorHorz"/>
         </menu:menupopup>
       </menu:menu>
-      <menu:menuitem menu:id=".uno:ToggleObjectRotateMode"/>
+      <menu:menuitem menu:id=".uno:AdvancedMode"/>
+      <menu:menu menu:id=".uno:ConvertMenu">
+        <menu:menupopup>
+          <menu:menuitem menu:id=".uno:ChangeBezier"/>
+          <menu:menuitem menu:id=".uno:ChangePolygon"/>
+          <menu:menuitem menu:id=".uno:convert_to_contour"/>
+          <menu:menuitem menu:id=".uno:ConvertInto3D"/>
+          <menu:menuitem menu:id=".uno:ConvertInto3DLatheFast"/>
+          <menu:menuitem menu:id=".uno:ConvertIntoBitmap"/>
+          <menu:menuitem menu:id=".uno:ConvertIntoMetaFile"/>
+        </menu:menupopup>
+      </menu:menu>
       <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:DistributeSelection"/>
+      <menu:menu menu:id=".uno:ObjectAlign">
+        <menu:menupopup>
+          <menu:menuitem menu:id=".uno:ObjectAlignLeft"/>
+          <menu:menuitem menu:id=".uno:AlignCenter"/>
+          <menu:menuitem menu:id=".uno:ObjectAlignRight"/>
+          <menu:menuseparator/>
+          <menu:menuitem menu:id=".uno:AlignUp"/>
+          <menu:menuitem menu:id=".uno:AlignMiddle"/>
+          <menu:menuitem menu:id=".uno:AlignDown"/>
+        </menu:menupopup>
+      </menu:menu>
       <menu:menu menu:id=".uno:ArrangeMenu">
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:BringToFront"/>
@@ -463,33 +524,12 @@
           <menu:menuitem menu:id=".uno:ReverseOrder"/>
         </menu:menupopup>
       </menu:menu>
-      <menu:menu menu:id=".uno:ObjectAlign">
+      <menu:menu menu:id=".uno:GroupMenu">
         <menu:menupopup>
-          <menu:menuitem menu:id=".uno:ObjectAlignLeft"/>
-          <menu:menuitem menu:id=".uno:AlignCenter"/>
-          <menu:menuitem menu:id=".uno:ObjectAlignRight"/>
-          <menu:menuseparator/>
-          <menu:menuitem menu:id=".uno:AlignUp"/>
-          <menu:menuitem menu:id=".uno:AlignMiddle"/>
-          <menu:menuitem menu:id=".uno:AlignDown"/>
-        </menu:menupopup>
-      </menu:menu>
-      <menu:menuitem menu:id=".uno:DistributeSelection"/>
-      <menu:menuseparator/>
-      <menu:menuitem menu:id=".uno:FormatGroup"/>
-      <menu:menuitem menu:id=".uno:FormatUngroup"/>
-      <menu:menuitem menu:id=".uno:EnterGroup"/>
-      <menu:menuitem menu:id=".uno:LeaveGroup"/>
-      <menu:menuseparator/>
-      <menu:menu menu:id=".uno:ConvertMenu">
-        <menu:menupopup>
-          <menu:menuitem menu:id=".uno:ChangeBezier"/>
-          <menu:menuitem menu:id=".uno:ChangePolygon"/>
-          <menu:menuitem menu:id=".uno:convert_to_contour"/>
-          <menu:menuitem menu:id=".uno:ConvertInto3D"/>
-          <menu:menuitem menu:id=".uno:ConvertInto3DLatheFast"/>
-          <menu:menuitem menu:id=".uno:ConvertIntoBitmap"/>
-          <menu:menuitem menu:id=".uno:ConvertIntoMetaFile"/>
+          <menu:menuitem menu:id=".uno:FormatGroup"/>
+          <menu:menuitem menu:id=".uno:FormatUngroup"/>
+          <menu:menuitem menu:id=".uno:EnterGroup"/>
+          <menu:menuitem menu:id=".uno:LeaveGroup"/>
         </menu:menupopup>
       </menu:menu>
       <menu:menuseparator/>
@@ -579,6 +619,7 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:SafeMode"/>
       <menu:menuseparator/>
+      <menu:menuitem menu:id=".uno:GetInvolved"/>
       <menu:menuitem menu:id=".uno:Donation"/>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:ShowLicense"/>

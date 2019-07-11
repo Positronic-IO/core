@@ -22,8 +22,7 @@
 #include <CharacterProperties.hxx>
 #include <UserDefinedProperties.hxx>
 #include <PropertyHelper.hxx>
-#include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <com/sun/star/style/XStyle.hpp>
+#include <ModifyListenerHelper.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -97,7 +96,7 @@ DataPoint::DataPoint( const uno::Reference< beans::XPropertySet > & rParentPrope
 
 DataPoint::DataPoint( const DataPoint & rOther ) :
         MutexContainer(),
-        impl::DataPoint_Base(),
+        impl::DataPoint_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
         m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder()),
         m_bNoParentPropAllowed( true )

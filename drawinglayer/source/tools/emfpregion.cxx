@@ -24,6 +24,7 @@
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
+#include <sal/log.hxx>
 #include "emfpregion.hxx"
 #include "emfppath.hxx"
 
@@ -59,7 +60,7 @@ namespace emfplushelper
         {
             ::basegfx::B2DPolyPolygon leftPolygon = ReadRegionNode(s, rR);
             ::basegfx::B2DPolyPolygon rightPolygon = ReadRegionNode(s, rR);
-            polygon = rR.combineClip(leftPolygon, dataType, rightPolygon);
+            polygon = EmfPlusHelperData::combineClip(leftPolygon, dataType, rightPolygon);
             break;
         }
         case RegionNodeDataTypeRect:

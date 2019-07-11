@@ -22,6 +22,7 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/linguistic2/LanguageGuessing.hpp>
 
+#include <sal/log.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <i18nlangtag/languagetag.hxx>
@@ -88,7 +89,7 @@ void FillLangItems( std::set< OUString > &rLangItems,
     }
 
     //4--guessed language
-    uno::Reference< linguistic2::XLanguageGuessing > xLangGuesser( rLangGuessHelper.GetGuesser() );
+    const uno::Reference< linguistic2::XLanguageGuessing >& xLangGuesser( rLangGuessHelper.GetGuesser() );
     if ( xLangGuesser.is() && !rGuessedTextLang.isEmpty())
     {
         css::lang::Locale aLocale(xLangGuesser->guessPrimaryLanguage( rGuessedTextLang, 0, rGuessedTextLang.getLength()) );

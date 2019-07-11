@@ -35,7 +35,6 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <svl/sharedstring.hxx>
-#include <tools/mempool.hxx>
 
 class ScJumpMatrix;
 class ScMatrix;
@@ -121,7 +120,7 @@ inline std::string StackVarEnumToString(StackVar const e)
     return os.str();
 }
 
-class FORMULA_DLLPUBLIC FormulaToken : public IFormulaToken
+class FORMULA_DLLPUBLIC FormulaToken
 {
     OpCode                      eOp;
             FormulaToken&            operator=( const FormulaToken& ) = delete;
@@ -139,7 +138,7 @@ public:
     void                Delete()                { delete this; }
     void                DeleteIfZeroRef()       { if (mnRefCnt == 0) delete this; }
     StackVar            GetType() const         { return eType; }
-            bool                IsFunction() const; // pure functions, no operators
+    bool                IsFunction() const; // pure functions, no operators
 
     bool IsExternalRef() const;
     bool IsRef() const;
@@ -214,16 +213,6 @@ public:
     virtual bool                TextEqual( const formula::FormulaToken& rToken ) const;
     virtual bool                operator==( const FormulaToken& rToken ) const;
 
-    virtual bool isFunction() const override
-    {
-        return IsFunction();
-    }
-
-    virtual sal_uInt32 getArgumentCount() const override
-    {
-        return GetParamCount();
-    }
-
     /** This is dirty and only the compiler should use it! */
     struct PrivateAccess { friend class FormulaCompiler; private: PrivateAccess() { }  };
     void                NewOpCode( OpCode e, const PrivateAccess&  ) { eOp = e; }
@@ -268,8 +257,6 @@ public:
     virtual ParamClass          GetInForceArray() const override;
     virtual void                SetInForceArray( ParamClass c ) override;
     virtual bool                operator==( const FormulaToken& rToken ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaByteToken )
 };
 
 
@@ -306,8 +293,6 @@ public:
     virtual double&             GetDoubleAsReference() override;
     virtual sal_Int16           GetDoubleType() const override;     ///< always returns 0 for "not typed"
     virtual bool                operator==( const FormulaToken& rToken ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaDoubleToken )
 };
 
 class FORMULA_DLLPUBLIC FormulaTypedDoubleToken : public FormulaDoubleToken
@@ -327,8 +312,6 @@ public:
     virtual sal_Int16           GetDoubleType() const override;
     virtual void                SetDoubleType( sal_Int16 nType ) override;
     virtual bool                operator==( const FormulaToken& rToken ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaTypedDoubleToken )
 };
 
 
@@ -343,8 +326,6 @@ public:
     virtual svl::SharedString GetString() const override;
     virtual void SetString( const svl::SharedString& rStr ) override;
     virtual bool operator==( const FormulaToken& rToken ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaStringToken )
 };
 
 

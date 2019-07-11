@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_CONDFORMATBUFFER_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_CONDFORMATBUFFER_HXX
 
-#include "formulaparser.hxx"
 #include "worksheethelper.hxx"
 #include <tools/color.hxx>
 #include <conditio.hxx>
@@ -32,10 +31,10 @@
 class ScColorScaleFormat;
 class ScDataBarFormat;
 struct ScDataBarFormatData;
-class ScConditionalFormat;
 class ScIconSetFormat;
-class ScFormatEntry;
 struct ScIconSetFormatData;
+
+namespace oox { class AttributeList; }
 
 namespace oox {
 namespace xls {
@@ -254,7 +253,7 @@ class ExtCfDataBarRule : public WorksheetHelper
     };
     ExCfRuleModel maModel;
     RuleType mnRuleType;
-    ScDataBarFormatData* mpTarget;
+    ScDataBarFormatData* const mpTarget;
 public:
 
     ExtCfDataBarRule(ScDataBarFormatData* pTarget, const WorksheetHelper& rParent);
@@ -277,7 +276,7 @@ public:
 
 private:
     std::vector< std::unique_ptr<ScFormatEntry> > maEntries;
-    ScRangeList maRange;
+    ScRangeList const maRange;
 };
 
 typedef std::shared_ptr< CondFormat > CondFormatRef;

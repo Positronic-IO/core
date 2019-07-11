@@ -112,6 +112,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/columndialog \
 	sw/uiconfig/swriter/ui/columnpage \
 	sw/uiconfig/swriter/ui/columnwidth \
+	sw/uiconfig/swriter/ui/comboboxfragment \
 	sw/uiconfig/swriter/ui/conditionpage \
 	sw/uiconfig/swriter/ui/converttexttable \
 	sw/uiconfig/swriter/ui/createaddresslist \
@@ -197,7 +198,6 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/queryredlinedialog \
 	sw/uiconfig/swriter/ui/queryrotateintostandarddialog \
 	sw/uiconfig/swriter/ui/querysavelabeldialog \
-	sw/uiconfig/swriter/ui/queryshowchangesdialog \
 	sw/uiconfig/swriter/ui/mailmerge \
 	sw/uiconfig/swriter/ui/managechangessidebar \
 	sw/uiconfig/swriter/ui/mmaddressblockpage \

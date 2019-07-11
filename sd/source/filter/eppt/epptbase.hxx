@@ -27,18 +27,26 @@
 #include <tools/stream.hxx>
 #include <tools/fract.hxx>
 #include <tools/gen.hxx>
-#include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
-#include <com/sun/star/drawing/XMasterPagesSupplier.hpp>
-#include <com/sun/star/frame/XModel.hpp>
+#include <com/sun/star/awt/Size.hpp>
+#include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/presentation/FadeEffect.hpp>
-#include <com/sun/star/task/XStatusIndicator.hpp>
-#include <com/sun/star/graphic/XGraphic.hpp>
 #include <vcl/vclptr.hxx>
-#include <vcl/virdev.hxx>
 #include <vcl/graph.hxx>
 
 #include "grouptable.hxx"
+
+namespace com { namespace sun { namespace star { namespace task { class XStatusIndicator; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
+namespace com { namespace sun { namespace star { namespace awt { struct Rectangle; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XMasterPagesSupplier; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XDrawPage; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XDrawPages; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XDrawPagesSupplier; } } } }
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySet; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XShape; } } } }
+namespace com { namespace sun { namespace star { namespace drawing { class XShapes; } } } }
+
+class VirtualDevice;
 
 // PLACEMENT_ID
 enum class EppLayout
@@ -69,7 +77,7 @@ enum class EppLayout
 struct PHLayout
 {
     EppLayout   nLayout;
-    sal_uInt8   nPlaceHolder[ 8 ];
+    sal_uInt8 nPlaceHolder[ 8 ];
 
     sal_uInt8   nUsedObjectPlaceHolder;
     sal_uInt8   nTypeOfTitle;
@@ -138,7 +146,7 @@ struct FontCollectionEntry
         sal_Int16               Pitch;
         sal_Int16               CharSet;
 
-        OUString                Original;
+        OUString const          Original;
 
         FontCollectionEntry( const OUString& rName, sal_Int16 nFamily, sal_Int16 nPitch, sal_Int16 nCharSet ) :
                             Scaling ( 1.0 ),
@@ -336,9 +344,9 @@ protected:
     sal_uInt32          mnPages;            ///< number of Slides ( w/o master pages & notes & handout )
     sal_uInt32          mnMasterPages;
 
-    Fraction                        maFraction;
-    MapMode                         maMapModeSrc;
-    MapMode                         maMapModeDest;
+    Fraction const     maFraction;
+    MapMode const      maMapModeSrc;
+    MapMode const      maMapModeDest;
     css::awt::Size     maDestPageSize;
     css::awt::Size     maPageSize; // #i121183# Keep size in logic coordinates (100th mm)
     css::awt::Size     maNotesPageSize;
@@ -387,8 +395,8 @@ public:
 
     bool GetPresObj() { return mbPresObj; }
 
-    static PHLayout& GetLayout( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
-    static PHLayout& GetLayout( sal_Int32 nOffset );
+    static PHLayout const & GetLayout( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
+    static PHLayout const & GetLayout( sal_Int32 nOffset );
     static sal_Int32 GetLayoutOffset( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
     static sal_Int32 GetLayoutOffsetFixed( const css::uno::Reference< css::beans::XPropertySet >& rXPropSet );
 

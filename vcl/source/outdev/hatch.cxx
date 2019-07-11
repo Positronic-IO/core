@@ -35,7 +35,9 @@
 
 #define HATCH_MAXPOINTS             1024
 
-extern "C" int HatchCmpFnc( const void* p1, const void* p2 )
+extern "C" {
+
+static int HatchCmpFnc( const void* p1, const void* p2 )
 {
     const long nX1 = static_cast<Point const *>(p1)->X();
     const long nX2 = static_cast<Point const *>(p2)->X();
@@ -43,6 +45,8 @@ extern "C" int HatchCmpFnc( const void* p1, const void* p2 )
     const long nY2 = static_cast<Point const *>(p2)->Y();
 
     return ( nX1 > nX2 ? 1 : nX1 == nX2 ? nY1 > nY2 ? 1: nY1 == nY2 ? 0 : -1 : -1 );
+}
+
 }
 
 void OutputDevice::DrawHatch( const tools::PolyPolygon& rPolyPoly, const Hatch& rHatch )
@@ -397,10 +401,8 @@ void OutputDevice::DrawHatchLine( const tools::Line& rLine, const tools::PolyPol
         {
             for( long i = 0; i < nPCounter; i += 2 )
             {
-                if( mpPDFWriter )
-                {
-                    mpPDFWriter->drawLine( pPtBuffer[ i ], pPtBuffer[ i+1 ] );
-                }
+                if (GetOutDevType() == OUTDEV_PDF)
+                    static_cast<vcl::PDFWriterImpl*>(this)->drawLine(pPtBuffer[ i ], pPtBuffer[ i+1 ]);
                 else
                 {
                     const Point aPt1( ImplLogicToDevicePixel( pPtBuffer[ i ] ) );

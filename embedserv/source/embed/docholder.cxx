@@ -499,7 +499,7 @@ void DocumentHolder::UIDeactivate()
     return;
 }
 
-void CopyToOLEMenu(HMENU hOrig,WORD origPos,HMENU hDest,WORD destPos)
+static void CopyToOLEMenu(HMENU hOrig,WORD origPos,HMENU hDest,WORD destPos)
 {
     HMENU subMenu(nullptr);
     wchar_t buffer[256];
@@ -965,10 +965,10 @@ void DocumentHolder::setTitle(const OUString& aDocumentName)
         // set the title
         static const sal_Unicode u[] = { ' ','(',0 };
         static const sal_Unicode c[] = { ')',0 };
-        rtl::OUString aTotalName(m_aFilterName);
-        aTotalName += rtl::OUString(u);
+        OUString aTotalName(m_aFilterName);
+        aTotalName += OUString(u);
         aTotalName += aDocumentName;
-        aTotalName += rtl::OUString(c);
+        aTotalName += OUString(c);
         try {
             m_xFrame->setTitle( aTotalName );
         }
@@ -1205,7 +1205,7 @@ css::uno::Reference< css::awt::XWindow> SAL_CALL DocumentHolder::getContainerWin
     if(m_xContainerWindow.is())
         return m_xContainerWindow;
 
-    uno::Reference<awt::XWindow> xWin(nullptr);
+    uno::Reference<awt::XWindow> xWin;
 
     uno::Reference<awt::XToolkit2> xToolkit = awt::Toolkit::create( comphelper::getComponentContext(m_xFactory) );
 

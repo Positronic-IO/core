@@ -41,7 +41,6 @@ namespace pcr
 
     OControlFontDialog::OControlFontDialog(const Reference< XComponentContext >& _rxContext )
         :OGenericUnoDialog( _rxContext )
-        ,m_pFontItems(nullptr)
         ,m_pItemPool(nullptr)
         ,m_pItemPoolDefaults(nullptr)
     {
@@ -138,18 +137,18 @@ namespace pcr
         return new ::cppu::OPropertyArrayHelper(aProps);
     }
 
-    svt::OGenericUnoDialog::Dialog OControlFontDialog::createDialog(vcl::Window* _pParent)
+    svt::OGenericUnoDialog::Dialog OControlFontDialog::createDialog(const css::uno::Reference<css::awt::XWindow>& rParent)
     {
         ControlCharacterDialog::createItemSet(m_pFontItems, m_pItemPool, m_pItemPoolDefaults);
 
         OSL_ENSURE(m_xControlModel.is(), "OControlFontDialog::createDialog: no introspectee set!");
         if (m_xControlModel.is())
-            ControlCharacterDialog::translatePropertiesToItems(m_xControlModel, m_pFontItems);
+            ControlCharacterDialog::translatePropertiesToItems(m_xControlModel, m_pFontItems.get());
         // TODO: we need a mechanism to prevent that somebody creates us, sets an introspectee, executes us,
         // sets a new introspectee and re-executes us. In this case, the dialog returned here (upon the first
         // execute) will be re-used upon the second execute, and thus it won't be initialized correctly.
 
-        return svt::OGenericUnoDialog::Dialog(VclPtr<ControlCharacterDialog>::Create(_pParent, *m_pFontItems));
+        return svt::OGenericUnoDialog::Dialog(o3tl::make_unique<ControlCharacterDialog>(Application::GetFrameWeld(rParent), *m_pFontItems));
     }
 
     void OControlFontDialog::executedDialog(sal_Int16 _nExecutionResult)
@@ -157,7 +156,7 @@ namespace pcr
         OSL_ENSURE(m_aDialog, "OControlFontDialog::executedDialog: no dialog anymore?!!");
         if (m_aDialog && (RET_OK == _nExecutionResult) && m_xControlModel.is())
         {
-            const SfxItemSet* pOutput = static_cast<ControlCharacterDialog*>(m_aDialog.m_xVclDialog.get())->GetOutputItemSet();
+            const SfxItemSet* pOutput = static_cast<ControlCharacterDialog*>(m_aDialog.m_xWeldDialog.get())->GetOutputItemSet();
             if (pOutput)
                 ControlCharacterDialog::translateItemsToProperties( *pOutput, m_xControlModel );
         }

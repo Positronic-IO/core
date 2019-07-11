@@ -70,7 +70,7 @@ protected:
     void SelectHdl(void const *);
 private:
     SlideLayoutController& mrController;
-    bool mbInsertPage;
+    bool const mbInsertPage;
     VclPtr<ValueSet> mpLayoutSet1;
     VclPtr<ValueSet> mpLayoutSet2;
 };
@@ -79,7 +79,7 @@ struct snewfoil_value_info_layout
 {
     const char* msBmpResId;
     const char* mpStrResId;
-    AutoLayout maAutoLayout;
+    AutoLayout const maAutoLayout;
 };
 
 static const snewfoil_value_info_layout notes[] =
@@ -304,26 +304,26 @@ void LayoutToolbarMenu::SelectHdl(void const * pControl)
 }
 
 /// @throws css::uno::RuntimeException
-OUString SlideLayoutController_getImplementationName()
+static OUString SlideLayoutController_getImplementationName()
 {
     return OUString( "com.sun.star.comp.sd.SlideLayoutController" );
 }
 
 /// @throws RuntimeException
-Sequence< OUString >  SlideLayoutController_getSupportedServiceNames()
+static Sequence< OUString >  SlideLayoutController_getSupportedServiceNames()
 {
     Sequence<OUString> aSNS { "com.sun.star.frame.ToolbarController" };
     return aSNS;
 }
 
 /// @throws css::uno::RuntimeException
-OUString InsertSlideController_getImplementationName()
+static OUString InsertSlideController_getImplementationName()
 {
     return OUString( "com.sun.star.comp.sd.InsertSlideController" );
 }
 
 /// @throws RuntimeException
-Sequence< OUString >  InsertSlideController_getSupportedServiceNames()
+static Sequence< OUString >  InsertSlideController_getSupportedServiceNames()
 {
     Sequence<OUString> aSNS { "com.sun.star.frame.ToolbarController" };
     return aSNS;

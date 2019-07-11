@@ -18,10 +18,9 @@
  */
 
 #include <extended/AccessibleBrowseBoxTableBase.hxx>
-#include <svtools/accessibletableprovider.hxx>
+#include <vcl/accessibletableprovider.hxx>
 #include <tools/multisel.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/servicehelper.hxx>
 
 
 using css::uno::Reference;
@@ -40,8 +39,8 @@ namespace accessibility {
 
 AccessibleBrowseBoxTableBase::AccessibleBrowseBoxTableBase(
         const Reference< XAccessible >& rxParent,
-        IAccessibleTableProvider&                      rBrowseBox,
-        AccessibleBrowseBoxObjType      eObjType ) :
+        vcl::IAccessibleTableProvider& rBrowseBox,
+        vcl::AccessibleBrowseBoxObjType eObjType ) :
     BrowseBoxAccessibleElement( rxParent, rBrowseBox,nullptr, eObjType )
 {
 }

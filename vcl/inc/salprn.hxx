@@ -41,7 +41,7 @@ struct VCL_PLUGIN_PUBLIC SalPrinterQueueInfo
     OUString               maComment;
     PrintQueueFlags        mnStatus;
     sal_uLong              mnJobs;
-    OUString*              mpSysData;
+    std::unique_ptr<OUString> mpPortName; // only used by Windows backend
 
                             SalPrinterQueueInfo();
                             ~SalPrinterQueueInfo();
@@ -86,6 +86,9 @@ public:
 
 class VCL_PLUGIN_PUBLIC SalPrinter
 {
+    SalPrinter( const SalPrinter& ) = delete;
+    SalPrinter& operator=( const SalPrinter& ) = delete;
+
 public:
     SalPrinter() {}
     virtual ~SalPrinter();

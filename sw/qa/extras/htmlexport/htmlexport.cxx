@@ -23,6 +23,8 @@
 #include <usrpref.hxx>
 
 #include <test/htmltesttools.hxx>
+#include <tools/urlobj.hxx>
+#include <svtools/rtfkeywd.hxx>
 
 class HtmlExportTest : public SwModelTestBase, public HtmlTestTools
 {
@@ -32,8 +34,22 @@ private:
 public:
     HtmlExportTest() :
         SwModelTestBase("/sw/qa/extras/htmlexport/data/", "HTML (StarWriter)"),
-        m_eUnit(FUNIT_NONE)
+        m_eUnit(FieldUnit::NONE)
     {}
+
+    /**
+     * Wraps a reqif-xhtml fragment into an XHTML file, so an XML parser can
+     * parse it.
+     */
+    void wrapFragment(SvMemoryStream& rStream)
+    {
+        rStream.WriteCharPtr(
+            "<reqif-xhtml:html xmlns:reqif-xhtml=\"http://www.w3.org/1999/xhtml\">\n");
+        SvFileStream aFileStream(maTempFile.GetURL(), StreamMode::READ);
+        rStream.WriteStream(aFileStream);
+        rStream.WriteCharPtr("</reqif-xhtml:html>\n");
+        rStream.Seek(0);
+    }
 
 private:
     bool mustCalcLayoutOf(const char* filename) override
@@ -79,7 +95,7 @@ private:
                 }));
             SwMasterUsrPref* pPref = const_cast<SwMasterUsrPref*>(SW_MOD()->GetUsrPref(false));
             m_eUnit = pPref->GetMetric();
-            pPref->SetMetric(FUNIT_CM);
+            pPref->SetMetric(FieldUnit::CM);
             return pResetter;
         }
         return nullptr;
@@ -342,9 +358,7 @@ DECLARE_HTMLEXPORT_TEST(testReqIfParagraph, "reqif-p.xhtml")
 {
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
 
     OString aExpected("<reqif-xhtml:div><reqif-xhtml:p>aaa<reqif-xhtml:br/>\nbbb"
                       "</reqif-xhtml:p>" SAL_NEWLINE_STRING);
@@ -369,6 +383,13 @@ DECLARE_HTMLEXPORT_TEST(testReqIfParagraph, "reqif-p.xhtml")
 
     // This was "<strike>" instead of CSS.
     CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:span style=\"text-decoration: line-through\"") != -1);
+
+    // This was "<font>" instead of CSS + namespace prefix was missing.
+    CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:span style=\"color: #ce181e\"") != -1);
+
+    // This was '<a name="Bookmark 1"': missing namespace prefix, wrong
+    // attribute name, wrong attribute value.
+    CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:a id=\"Bookmark_1\"></reqif-xhtml:a>") != -1);
 }
 
 DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOleData, "reqif-ole-data.xhtml")
@@ -391,6 +412,7 @@ DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOleImg, "reqif-ole-img.xhtml")
     // This failed, OLE object had no replacement image.
     // And then it also failed when the export lost the replacement image.
     uno::Reference<graphic::XGraphic> xGraphic = xObject->getReplacementGraphic();
+    // This failed when query and fragment of file:// URLs were not ignored.
     CPPUNIT_ASSERT(xGraphic.is());
 
     uno::Reference<drawing::XShape> xShape(xObject, uno::UNO_QUERY);
@@ -422,9 +444,7 @@ DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOleImg, "reqif-ole-img.xhtml")
     // "type" attribute was missing for the inner <object> element.
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     CPPUNIT_ASSERT(aStream.indexOf("type=\"image/png\"") != -1);
 }
@@ -434,30 +454,36 @@ DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfPngImg, "reqif-png-img.xhtml")
     uno::Reference<container::XNamed> xShape(getShape(1), uno::UNO_QUERY);
     CPPUNIT_ASSERT(xShape.is());
 
-    // This was Object1, PNG without fallback was imported as OLE object.
-    CPPUNIT_ASSERT_EQUAL(OUString("Image1"), xShape->getName());
-
     if (!mbExported)
+    {
+        // Imported PNG image is not an object.
+        CPPUNIT_ASSERT_EQUAL(OUString("Image1"), xShape->getName());
         return;
+    }
+
+    // All images are exported as objects in ReqIF mode.
+    CPPUNIT_ASSERT_EQUAL(OUString("Object1"), xShape->getName());
 
     // This was <img>, not <object>, which is not valid in the reqif-xhtml
     // subset.
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:object") != -1);
+
+    // Make sure that both RTF and PNG versions are written.
+    CPPUNIT_ASSERT(aStream.indexOf("text/rtf") != -1);
+    // This failed when images with a query in their file:// URL failed to
+    // import.
+    CPPUNIT_ASSERT(aStream.indexOf("image/png") != -1);
 }
 
 DECLARE_HTMLEXPORT_TEST(testReqIfJpgImg, "reqif-jpg-img.xhtml")
 {
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     // This was image/jpeg, JPG was not converted to PNG in ReqIF mode.
     CPPUNIT_ASSERT(aStream.indexOf("type=\"image/png\"") != -1);
@@ -482,21 +508,29 @@ DECLARE_HTMLEXPORT_TEST(testReqIfTable2, "reqif-table2.odt")
 {
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     // This failed, <reqif-xhtml:td width="..."> was written.
     CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:td>") != -1);
+}
+
+DECLARE_HTMLEXPORT_TEST(testReqIfWellFormed, "reqif.odt")
+{
+    SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
+    CPPUNIT_ASSERT(pStream);
+    sal_uInt64 nLength = pStream->TellEnd();
+    OString aStream(read_uInt8s_ToOString(*pStream, nLength));
+    // This failed, <font face="..."> was written.
+    CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:span style=\"font-family:") != -1);
+    // This failed, <font size="..."> was written.
+    CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:span style=\"font-size:") != -1);
 }
 
 DECLARE_HTMLEXPORT_TEST(testReqIfList, "reqif-list.xhtml")
 {
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     // This failed, <ul> was written.
     CPPUNIT_ASSERT(aStream.indexOf("<reqif-xhtml:ul>") != -1);
@@ -523,23 +557,121 @@ DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOle2, "reqif-ole2.xhtml")
     uno::Reference<io::XSeekable> xStream(xEmbeddedObject->getStream(), uno::UNO_QUERY);
     // This was 80913, the RTF hexdump -> OLE1 binary -> OLE2 conversion was
     // missing.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(38912), xStream->getLength());
+    // Also, this was 38912 when we re-generated the OLE2 preview, which is
+    // wrong, the OLE2 data is 38375 bytes in the ole2.ole (referenced by
+    // reqif-ole2.xhtml). To see that this is the correct value, convert the
+    // hexdump in ole2.ole to binary, remove the ole1 header and check the byte
+    // size.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int64>(38375), xStream->getLength());
     // Finally the export also failed as it tried to open the stream from the
     // document storage, but the embedded object already opened it, so an
     // exception of type com.sun.star.io.IOException was thrown.
+
+    if (mbExported)
+    {
+        // Check that the replacement graphic is exported at RTF level.
+        SvMemoryStream aStream;
+        wrapFragment(aStream);
+        xmlDocPtr pDoc = parseXmlStream(&aStream);
+        CPPUNIT_ASSERT(pDoc);
+        // Get the path of the RTF data.
+        OUString aOlePath = getXPath(
+            pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object", "data");
+        OUString aOleSuffix(".ole");
+        CPPUNIT_ASSERT(aOlePath.endsWith(aOleSuffix));
+        INetURLObject aUrl(maTempFile.GetURL());
+        aUrl.setBase(aOlePath.copy(0, aOlePath.getLength() - aOleSuffix.getLength()));
+        aUrl.setExtension("ole");
+        OUString aOleUrl = aUrl.GetMainURL(INetURLObject::DecodeMechanism::NONE);
+
+        // Search for \result in the RTF data.
+        SvFileStream aOleStream(aOleUrl, StreamMode::READ);
+        CPPUNIT_ASSERT(aOleStream.IsOpen());
+        OString aOleString(read_uInt8s_ToOString(aOleStream, aOleStream.TellEnd()));
+        // Without the accompanying fix in place, this test would have failed,
+        // replacement graphic was missing at RTF level.
+        CPPUNIT_ASSERT(aOleString.indexOf(OOO_STRING_SVTOOLS_RTF_RESULT) != -1);
+    }
+}
+
+DECLARE_HTMLEXPORT_ROUNDTRIP_TEST(testReqIfOle2Odg, "reqif-ole-odg.xhtml")
+{
+    uno::Reference<text::XTextEmbeddedObjectsSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xObjects(xSupplier->getEmbeddedObjects(),
+                                                     uno::UNO_QUERY);
+    uno::Reference<document::XEmbeddedObjectSupplier> xTextEmbeddedObject(xObjects->getByIndex(0),
+                                                                          uno::UNO_QUERY);
+    uno::Reference<lang::XServiceInfo> xObject(xTextEmbeddedObject->getEmbeddedObject(),
+                                               uno::UNO_QUERY);
+    // This failed, both import and export failed to handle OLE2 that contains
+    // just ODF.
+    CPPUNIT_ASSERT(xObject.is());
+    CPPUNIT_ASSERT(xObject->supportsService("com.sun.star.drawing.DrawingDocument"));
 }
 
 DECLARE_HTMLEXPORT_TEST(testList, "list.html")
 {
     SvStream* pStream = maTempFile.GetStream(StreamMode::READ);
     CPPUNIT_ASSERT(pStream);
-    pStream->Seek(STREAM_SEEK_TO_END);
-    sal_uInt64 nLength = pStream->Tell();
-    pStream->Seek(0);
+    sal_uInt64 nLength = pStream->TellEnd();
     OString aStream(read_uInt8s_ToOString(*pStream, nLength));
     // This failed, it was <li/>, i.e. list item was closed before content
     // started.
     CPPUNIT_ASSERT(aStream.indexOf("<li>") != -1);
+}
+
+DECLARE_HTMLEXPORT_TEST(testTransparentImage, "transparent-image.odt")
+{
+    htmlDocPtr pDoc = parseHtml(maTempFile);
+    CPPUNIT_ASSERT(pDoc);
+
+    OUString aSource = getXPath(pDoc, "/html/body/p/img", "src");
+    OUString aMessage = "src attribute is: " + aSource;
+    // This was a jpeg, transparency was lost.
+    CPPUNIT_ASSERT_MESSAGE(aMessage.toUtf8().getStr(), aSource.endsWith(".gif"));
+}
+
+DECLARE_HTMLEXPORT_TEST(testTransparentImageReqIf, "transparent-image.odt")
+{
+    SvMemoryStream aStream;
+    wrapFragment(aStream);
+    xmlDocPtr pDoc = parseXmlStream(&aStream);
+    CPPUNIT_ASSERT(pDoc);
+
+    OUString aSource = getXPath(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object",
+        "data");
+    OUString aMessage = "src attribute is: " + aSource;
+    // This was GIF, when the intention was to force PNG.
+    CPPUNIT_ASSERT_MESSAGE(aMessage.toUtf8().getStr(), aSource.endsWith(".png"));
+}
+
+DECLARE_HTMLEXPORT_TEST(testOleNodataReqIf, "reqif-ole-nodata.odt")
+{
+    // This failed, io::IOException was thrown during the filter() call.
+    SvMemoryStream aStream;
+    wrapFragment(aStream);
+    xmlDocPtr pDoc = parseXmlStream(&aStream);
+    CPPUNIT_ASSERT(pDoc);
+
+    // Make sure the native <object> element has the required data attribute.
+    OUString aSource = getXPath(
+        pDoc,
+        "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:p/reqif-xhtml:object/reqif-xhtml:object",
+        "data");
+    CPPUNIT_ASSERT(!aSource.isEmpty());
+}
+
+DECLARE_HTMLEXPORT_TEST(testNoLangReqIf, "reqif-no-lang.odt")
+{
+    SvMemoryStream aStream;
+    wrapFragment(aStream);
+    xmlDocPtr pDoc = parseXmlStream(&aStream);
+    CPPUNIT_ASSERT(pDoc);
+
+    // Make sure that xml:lang is not written in ReqIF mode.
+    assertXPathNoAttribute(pDoc, "/reqif-xhtml:html/reqif-xhtml:div/reqif-xhtml:h1", "lang");
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

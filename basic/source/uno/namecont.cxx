@@ -17,7 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <config_features.h>
+#include <config_extensions.h>
 #include <config_folders.h>
 
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -34,6 +34,7 @@
 #include <vcl/errinf.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/getexpandeduri.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/anytostring.hxx>
@@ -167,7 +168,7 @@ void NameContainer::replaceByName( const OUString& aName, const Any& aElement )
     }
 
     /*  After the container event has been fired (one listener will update the
-        core Basic manager), fire change event. Listeners can rely that the
+        core Basic manager), fire change event. Listeners can rely on that the
         Basic source code of the core Basic manager is up-to-date. */
     if( maChangesListeners.getLength() > 0 )
     {
@@ -218,7 +219,7 @@ void NameContainer::insertNoCheck(const OUString& aName, const Any& aElement)
     }
 
     /*  After the container event has been fired (one listener will update the
-        core Basic manager), fire change event. Listeners can rely that the
+        core Basic manager), fire change event. Listeners can rely on that the
         Basic source code of the core Basic manager is up-to-date. */
     if( maChangesListeners.getLength() > 0 )
     {
@@ -272,7 +273,7 @@ void NameContainer::removeByName( const OUString& aName )
     }
 
     /*  After the container event has been fired (one listener will update the
-        core Basic manager), fire change event. Listeners can rely that the
+        core Basic manager), fire change event. Listeners can rely on that the
         Basic source code of the core Basic manager is up-to-date. */
     if( maChangesListeners.getLength() > 0 )
     {
@@ -382,7 +383,7 @@ SfxLibraryContainer::~SfxLibraryContainer()
 {
     if( mbOwnBasMgr )
     {
-        BasicManager::LegacyDeleteBasicManager( mpBasMgr );
+        delete mpBasMgr;
     }
 }
 
@@ -3354,15 +3355,12 @@ Reference< deployment::XPackage > ScriptExtensionIterator::implGetNextUserScript
             m_pScriptSubPackageIterator = new ScriptSubPackageIterator( xPackage );
         }
 
-        if( m_pScriptSubPackageIterator != nullptr )
+        xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
+        if( !xScriptPackage.is() )
         {
-            xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
-            if( !xScriptPackage.is() )
-            {
-                delete m_pScriptSubPackageIterator;
-                m_pScriptSubPackageIterator = nullptr;
-                m_iUserPackage++;
-            }
+            delete m_pScriptSubPackageIterator;
+            m_pScriptSubPackageIterator = nullptr;
+            m_iUserPackage++;
         }
     }
 
@@ -3408,15 +3406,12 @@ Reference< deployment::XPackage > ScriptExtensionIterator::implGetNextSharedScri
             m_pScriptSubPackageIterator = new ScriptSubPackageIterator( xPackage );
         }
 
-        if( m_pScriptSubPackageIterator != nullptr )
+        xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
+        if( !xScriptPackage.is() )
         {
-            xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
-            if( !xScriptPackage.is() )
-            {
-                delete m_pScriptSubPackageIterator;
-                m_pScriptSubPackageIterator = nullptr;
-                m_iSharedPackage++;
-            }
+            delete m_pScriptSubPackageIterator;
+            m_pScriptSubPackageIterator = nullptr;
+            m_iSharedPackage++;
         }
     }
 
@@ -3462,15 +3457,12 @@ Reference< deployment::XPackage > ScriptExtensionIterator::implGetNextBundledScr
             m_pScriptSubPackageIterator = new ScriptSubPackageIterator( xPackage );
         }
 
-        if( m_pScriptSubPackageIterator != nullptr )
+        xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
+        if( !xScriptPackage.is() )
         {
-            xScriptPackage = m_pScriptSubPackageIterator->getNextScriptSubPackage( rbPureDialogLib );
-            if( !xScriptPackage.is() )
-            {
-                delete m_pScriptSubPackageIterator;
-                m_pScriptSubPackageIterator = nullptr;
-                m_iBundledPackage++;
-            }
+            delete m_pScriptSubPackageIterator;
+            m_pScriptSubPackageIterator = nullptr;
+            m_iBundledPackage++;
         }
     }
 

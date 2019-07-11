@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <com/sun/star/sheet/TableValidationVisibility.hpp>
 #include <xicontent.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/docfile.hxx>
@@ -36,6 +37,7 @@
 #include <editeng/postitem.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/crossedoutitem.hxx>
+#include <unotools/charclass.hxx>
 #include <stringutil.hxx>
 #include <cellform.hxx>
 #include <cellvalue.hxx>
@@ -49,6 +51,7 @@
 #include <arealink.hxx>
 #include <stlsheet.hxx>
 #include <scextopt.hxx>
+#include <xlcontent.hxx>
 #include <xlformula.hxx>
 #include <xltracer.hxx>
 #include <xistream.hxx>
@@ -65,6 +68,7 @@
 #include <utility>
 #include <o3tl/make_unique.hxx>
 #include <oox/helper/helper.hxx>
+#include <sal/log.hxx>
 
 using ::com::sun::star::uno::Sequence;
 using ::std::unique_ptr;
@@ -127,14 +131,12 @@ void lclAppendString32( OUString& rString, XclImpStream& rStrm, bool b16Bit )
     lclAppendString32( rString, rStrm, rStrm.ReaduInt32(), b16Bit );
 }
 
-/** Reads 32-bit string length and ignores following character array.
-    @param b16Bit  true = 16-bit characters, false = 8-bit characters. */
-void lclIgnoreString32( XclImpStream& rStrm, bool b16Bit )
+/** Reads 32-bit string length and ignores following 16-bit character array. */
+void lclIgnoreString32( XclImpStream& rStrm )
 {
     sal_uInt32 nChars(0);
     nChars = rStrm.ReaduInt32();
-    if( b16Bit )
-        nChars *= 2;
+    nChars *= 2;
     rStrm.Ignore( nChars );
 }
 
@@ -260,10 +262,10 @@ OUString XclImpHyperlink::ReadEmbeddedData( XclImpStream& rStrm )
 
     // description (ignore)
     if( ::get_flag( nFlags, EXC_HLINK_DESCR ) )
-        lclIgnoreString32( rStrm, true );
+        lclIgnoreString32( rStrm );
     // target frame (ignore) !! DESCR/FRAME - is this the right order? (never seen them together)
     if( ::get_flag( nFlags, EXC_HLINK_FRAME ) )
-        lclIgnoreString32( rStrm, true );
+        lclIgnoreString32( rStrm );
 
     // URL fields are zero-terminated - do not let the stream replace them
     // in the lclAppendString32() with the '?' character.
@@ -330,14 +332,14 @@ OUString XclImpHyperlink::ReadEmbeddedData( XclImpStream& rStrm )
 
     OSL_ENSURE( rStrm.GetRecLeft() == 0, "XclImpHyperlink::ReadEmbeddedData - record size mismatch" );
 
-    if( !xLongName.get() && xShortName.get() )
+    if (!xLongName && xShortName.get())
         xLongName = std::move(xShortName);
-    else if( !xLongName.get() && xTextMark.get() )
+    else if (!xLongName && xTextMark.get())
         xLongName.reset( new OUString );
 
-    if( xLongName.get() )
+    if (xLongName)
     {
-        if( xTextMark.get() )
+        if (xTextMark)
         {
             if( xLongName->isEmpty() )
             {
@@ -375,7 +377,8 @@ void XclImpHyperlink::ConvertToValidTabName(OUString& rUrl)
         // the 1st character must be '#'.
         return;
 
-    OUString aNewUrl('#'), aTabName;
+    OUStringBuffer aNewUrl("#");
+    OUStringBuffer aTabName;
 
     bool bInQuote = false;
     bool bQuoteTabName = false;
@@ -390,7 +393,7 @@ void XclImpHyperlink::ConvertToValidTabName(OUString& rUrl)
                 // quite.  When this occurs, the whole table name needs to be
                 // quoted.
                 bQuoteTabName = true;
-                aTabName += OUStringLiteral1(c) + OUStringLiteral1(c);
+                aTabName.append(c).append(c);
                 ++i;
                 continue;
             }
@@ -399,16 +402,16 @@ void XclImpHyperlink::ConvertToValidTabName(OUString& rUrl)
             if (!bInQuote && !aTabName.isEmpty())
             {
                 if (bQuoteTabName)
-                    aNewUrl += "'";
-                aNewUrl += aTabName;
+                    aNewUrl.append("'");
+                aNewUrl.append(aTabName);
                 if (bQuoteTabName)
-                    aNewUrl += "'";
+                    aNewUrl.append("'");
             }
         }
         else if (bInQuote)
-            aTabName += OUStringLiteral1(c);
+            aTabName.append(c);
         else
-            aNewUrl += OUStringLiteral1(c);
+            aNewUrl.append(c);
     }
 
     if (bInQuote)
@@ -416,7 +419,7 @@ void XclImpHyperlink::ConvertToValidTabName(OUString& rUrl)
         return;
 
     // All is good.  Pass the new URL.
-    rUrl = aNewUrl;
+    rUrl = aNewUrl.makeStringAndClear();
 }
 
 void XclImpHyperlink::InsertUrl( XclImpRoot& rRoot, const XclRange& rXclRange, const OUString& rUrl )
@@ -656,13 +659,13 @@ void XclImpCondFormat::ReadCF( XclImpStream& rStrm )
     ::std::unique_ptr< ScTokenArray > xTokArr1;
     if( nFmlaSize1 > 0 )
     {
-        const ScTokenArray* pTokArr = nullptr;
+        std::unique_ptr<ScTokenArray> pTokArr;
         rFmlaConv.Reset( rPos );
         rFmlaConv.Convert( pTokArr, rStrm, nFmlaSize1, false, FT_CondFormat );
         // formula converter owns pTokArr -> create a copy of the token array
         if( pTokArr )
         {
-            xTokArr1.reset( pTokArr->Clone() );
+            xTokArr1 = std::move( pTokArr );
             GetDocRef().CheckLinkFormulaNeedingCheck( *xTokArr1);
         }
     }
@@ -670,13 +673,13 @@ void XclImpCondFormat::ReadCF( XclImpStream& rStrm )
     ::std::unique_ptr< ScTokenArray > xTokArr2;
     if( nFmlaSize2 > 0 )
     {
-        const ScTokenArray* pTokArr = nullptr;
+        std::unique_ptr<ScTokenArray> pTokArr;
         rFmlaConv.Reset( rPos );
         rFmlaConv.Convert( pTokArr, rStrm, nFmlaSize2, false, FT_CondFormat );
         // formula converter owns pTokArr -> create a copy of the token array
         if( pTokArr )
         {
-            xTokArr2.reset( pTokArr->Clone() );
+            xTokArr2 = std::move( pTokArr );
             GetDocRef().CheckLinkFormulaNeedingCheck( *xTokArr2);
         }
     }
@@ -830,23 +833,23 @@ void XclImpValidationManager::ReadDV( XclImpStream& rStrm )
     rStrm.RestorePosition(aPosFormula1);
     if( nLenFormula1 > 0 )
     {
-        const ScTokenArray* pTokArr = nullptr;
+        std::unique_ptr<ScTokenArray> pTokArr;
         rFmlaConv.Reset(aCombinedRange.aStart);
         rFmlaConv.Convert( pTokArr, rStrm, nLenFormula1, false, FT_CondFormat );
         // formula converter owns pTokArr -> create a copy of the token array
         if( pTokArr )
-            xTokArr1.reset( pTokArr->Clone() );
+            xTokArr1 = std::move( pTokArr );
     }
     rStrm.SetNulSubstChar();    // back to default
     if (nLenFormula2 > 0)
     {
         rStrm.RestorePosition(aPosFormula2);
-        const ScTokenArray* pTokArr = nullptr;
+        std::unique_ptr<ScTokenArray> pTokArr;
         rFmlaConv.Reset(aCombinedRange.aStart);
         rFmlaConv.Convert( pTokArr, rStrm, nLenFormula2, false, FT_CondFormat );
         // formula converter owns pTokArr -> create a copy of the token array
         if( pTokArr )
-            xTokArr2.reset( pTokArr->Clone() );
+            xTokArr2 = std::move( pTokArr );
     }
 
     rStrm.RestorePosition(aCurrentPos);
@@ -885,6 +888,15 @@ void XclImpValidationManager::ReadDV( XclImpStream& rStrm )
     if ( !bIsValid )
         // No valid validation found.  Bail out.
         return;
+
+    // The default value for comparison is _BETWEEN. However, custom
+    // rules are a formula, and thus the comparator should be ignored
+    // and only a true or false from the formula is evaluated. In Calc,
+    // formulas use comparison SC_COND_DIRECT.
+    if( eValMode == SC_VALID_CUSTOM )
+    {
+        eCondMode = ScConditionMode::Direct;
+    }
 
     // first range for base address for relative references
     const ScRange& rScRange = aScRanges.front();    // aScRanges is not empty
@@ -928,7 +940,7 @@ void XclImpValidationManager::Apply()
     DVItemList::iterator itr = maDVItems.begin(), itrEnd = maDVItems.end();
     for (; itr != itrEnd; ++itr)
     {
-        DVItem& rItem = *itr->get();
+        DVItem& rItem = **itr;
         // set the handle ID
         sal_uLong nHandle = rDoc.AddValidationEntry( rItem.maValidData );
         ScPatternAttr aPattern( rDoc.GetPool() );

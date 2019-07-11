@@ -83,8 +83,6 @@ struct LocaleItem
 };
 
 typedef std::vector< LocaleItem* > LocaleItemVector;
-typedef std::vector< LocaleItem* >::iterator LocaleItemVectorIt;
-typedef std::vector< LocaleItem* >::const_iterator LocaleItemVectorConstIt;
 
 typedef ::cppu::WeakImplHelper<
     css::lang::XServiceInfo,
@@ -101,8 +99,8 @@ protected:
 
     ::comphelper::OInterfaceContainerHelper2                        m_aListenerContainer;
 
-    LocaleItemVector                                          m_aLocaleItemVector;
-    LocaleItemVector                                          m_aDeletedLocaleItemVector;
+    std::vector< std::unique_ptr<LocaleItem> >                m_aLocaleItemVector;
+    std::vector< std::unique_ptr<LocaleItem> >                m_aDeletedLocaleItemVector;
     LocaleItemVector                                          m_aChangedDefaultLocaleVector;
 
     bool                                                      m_bModified;

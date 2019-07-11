@@ -20,17 +20,16 @@
 #ifndef INCLUDED_SVX_GALCTRL_HXX
 #define INCLUDED_SVX_GALCTRL_HXX
 
-#include <vcl/dialog.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/button.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/combobox.hxx>
+#include <vcl/customweld.hxx>
 #include <svl/slstitm.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/valueset.hxx>
 #include <svtools/brwbox.hxx>
 #include <vcl/GraphicObject.hxx>
@@ -46,7 +45,7 @@ private:
 
     GraphicObject       aGraphicObj;
     tools::Rectangle           aPreviewRect;
-    GalleryTheme*       mpTheme;
+    GalleryTheme* const       mpTheme;
 
     SVX_DLLPRIVATE bool             ImplGetGraphicCenterRect( const Graphic& rGraphic, tools::Rectangle& rResultRect ) const;
     SVX_DLLPRIVATE void             InitSettings();
@@ -76,6 +75,26 @@ public:
     void                SetGraphic( const Graphic& rGraphic ) { aGraphicObj.SetGraphic( rGraphic ); }
     bool                SetGraphic( const INetURLObject& );
     static void         PreviewMedia( const INetURLObject& rURL );
+};
+
+class SVX_DLLPUBLIC SvxGalleryPreview : public weld::CustomWidgetController
+{
+private:
+    GraphicObject aGraphicObj;
+    tools::Rectangle aPreviewRect;
+
+    SVX_DLLPRIVATE bool             ImplGetGraphicCenterRect( const Graphic& rGraphic, tools::Rectangle& rResultRect ) const;
+    SVX_DLLPRIVATE void             InitSettings();
+
+    SVX_DLLPRIVATE virtual void     Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
+
+public:
+
+    SvxGalleryPreview();
+
+    virtual void        SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
+    void                SetGraphic( const Graphic& rGraphic ) { aGraphicObj.SetGraphic( rGraphic ); }
+    bool                SetGraphic( const INetURLObject& );
 };
 
 class GalleryIconView : public ValueSet, public DropTargetHelper, public DragSourceHelper

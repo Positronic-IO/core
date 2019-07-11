@@ -190,7 +190,7 @@ private:
     SfxStyleSheetBasePool* pStyleSheetPool;
     SfxStyleControllerItem_Impl* pBoundItems[MAX_FAMILIES];
     css::uno::Reference<css::lang::XComponent> m_xBoundItems[MAX_FAMILIES];
-    SfxTemplateItem* pFamilyState[MAX_FAMILIES];
+    std::unique_ptr<SfxTemplateItem> pFamilyState[MAX_FAMILIES];
     sal_uInt16 nActFamily; // Id in the ToolBox = Position - 1
 
     SVX_DLLPRIVATE void Update();
@@ -210,9 +210,8 @@ class SVX_DLLPUBLIC SvxColorToolBoxControl : public cppu::ImplInheritanceHelper<
 {
     std::unique_ptr<svx::ToolboxButtonColorUpdater> m_xBtnUpdater;
     std::shared_ptr<PaletteManager> m_xPaletteManager;
-    BorderColorStatus m_aBorderColorStatus;
+    ColorStatus m_aColorStatus;
     bool m_bSplitButton;
-    bool m_bIsNoFill;
     sal_uInt16 m_nSlotId;
     ColorSelectFunction m_aColorSelectFunction;
     DECL_LINK(SelectedHdl, const NamedColor&, void);

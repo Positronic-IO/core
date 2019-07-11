@@ -81,7 +81,7 @@ sal_Int16 SwXFilterOptions::execute()
 
     std::unique_ptr<SvStream> pInStream;
     if ( xInputStream.is() )
-        pInStream.reset(utl::UcbStreamHelper::CreateStream( xInputStream ));
+        pInStream = utl::UcbStreamHelper::CreateStream( xInputStream );
 
     uno::Reference< XUnoTunnel > xTunnel(xModel, uno::UNO_QUERY);
     SwDocShell* pDocShell = nullptr;
@@ -93,13 +93,9 @@ sal_Int16 SwXFilterOptions::execute()
     }
     if(pDocShell)
     {
-
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
-
         ScopedVclPtr<AbstractSwAsciiFilterDlg> pAsciiDlg(pFact->CreateSwAsciiFilterDlg(Application::GetFrameWeld(xDialogParent), *pDocShell,
             pInStream.get()));
-        OSL_ENSURE(pAsciiDlg, "Dialog creation failed!");
         if(RET_OK == pAsciiDlg->Execute())
         {
             SwAsciiOptions aOptions;

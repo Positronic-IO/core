@@ -32,6 +32,7 @@
 #include <progress.hxx>
 #include <rangenam.hxx>
 #include <editutil.hxx>
+#include <olinetab.hxx>
 
 #include <excrecds.hxx>
 #include <root.hxx>
@@ -50,14 +51,10 @@
 RootData::RootData()
 {
     eDateiTyp = BiffX;
-    pExtSheetBuff = nullptr;
-    pShrfmlaBuff = nullptr;
-    pExtNameBuff = nullptr;
     pFmlaConverter = nullptr;
 
-    pAutoFilterBuffer = nullptr;
-    pPrintRanges = new ScRangeListTabs;
-    pPrintTitles = new ScRangeListTabs;
+    pPrintRanges.reset( new ScRangeListTabs );
+    pPrintTitles.reset( new ScRangeListTabs );
 
     pTabId = nullptr;
     pUserBViewList = nullptr;
@@ -69,12 +66,12 @@ RootData::RootData()
 
 RootData::~RootData()
 {
-    delete pExtSheetBuff;
-    delete pShrfmlaBuff;
-    delete pExtNameBuff;
-    delete pAutoFilterBuffer;
-    delete pPrintRanges;
-    delete pPrintTitles;
+    pExtSheetBuff.reset();
+    pShrfmlaBuff.reset();
+    pExtNameBuff.reset();
+    pAutoFilterBuffer.reset();
+    pPrintRanges.reset();
+    pPrintTitles.reset();
 }
 
 XclImpOutlineBuffer::XclImpOutlineBuffer( SCSIZE nNewSize ) :

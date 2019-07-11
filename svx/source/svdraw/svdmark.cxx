@@ -123,8 +123,8 @@ static bool ImpSdrMarkListSorter(std::unique_ptr<SdrMark> const& lhs, std::uniqu
 {
     SdrObject* pObj1 = lhs->GetMarkedSdrObj();
     SdrObject* pObj2 = rhs->GetMarkedSdrObj();
-    SdrObjList* pOL1 = pObj1 ? pObj1->getParentOfSdrObject() : nullptr;
-    SdrObjList* pOL2 = pObj2 ? pObj2->getParentOfSdrObject() : nullptr;
+    SdrObjList* pOL1 = pObj1 ? pObj1->getParentSdrObjListFromSdrObject() : nullptr;
+    SdrObjList* pOL2 = pObj2 ? pObj2->getParentSdrObjListFromSdrObject() : nullptr;
 
     if (pOL1 == pOL2)
     {
@@ -217,20 +217,23 @@ void SdrMarkList::Clear()
 
 SdrMarkList& SdrMarkList::operator=(const SdrMarkList& rLst)
 {
-    Clear();
-
-    for(size_t i = 0; i < rLst.GetMarkCount(); ++i)
+    if (this != &rLst)
     {
-        SdrMark* pMark = rLst.GetMark(i);
-        maList.emplace_back(new SdrMark(*pMark));
-    }
+        Clear();
 
-    maMarkName = rLst.maMarkName;
-    mbNameOk = rLst.mbNameOk;
-    maPointName = rLst.maPointName;
-    mbPointNameOk = rLst.mbPointNameOk;
-    maGluePointName = rLst.maGluePointName;
-    mbSorted = rLst.mbSorted;
+        for(size_t i = 0; i < rLst.GetMarkCount(); ++i)
+        {
+            SdrMark* pMark = rLst.GetMark(i);
+            maList.emplace_back(new SdrMark(*pMark));
+        }
+
+        maMarkName = rLst.maMarkName;
+        mbNameOk = rLst.mbNameOk;
+        maPointName = rLst.maPointName;
+        mbPointNameOk = rLst.mbPointNameOk;
+        maGluePointName = rLst.maGluePointName;
+        mbSorted = rLst.mbSorted;
+    }
     return *this;
 }
 
@@ -297,8 +300,8 @@ void SdrMarkList::InsertEntry(const SdrMark& rMark, bool bChkSort)
             maList.emplace_back(new SdrMark(rMark));
 
             // now check if the sort is ok
-            const SdrObjList* pLastOL = pLastObj!=nullptr ? pLastObj->getParentOfSdrObject() : nullptr;
-            const SdrObjList* pNewOL = pNewObj !=nullptr ? pNewObj->getParentOfSdrObject() : nullptr;
+            const SdrObjList* pLastOL = pLastObj!=nullptr ? pLastObj->getParentSdrObjListFromSdrObject() : nullptr;
+            const SdrObjList* pNewOL = pNewObj !=nullptr ? pNewObj->getParentSdrObjListFromSdrObject() : nullptr;
 
             if(pLastOL == pNewOL)
             {
@@ -762,7 +765,7 @@ namespace sdr
                                 SfxListener* pLst = pBC->GetListener(nl);
                                 SdrEdgeObj* pEdge = dynamic_cast<SdrEdgeObj*>( pLst );
 
-                                if(pEdge && pEdge->IsInserted() && pEdge->GetPage() == pCandidate->GetPage())
+                                if(pEdge && pEdge->IsInserted() && pEdge->getSdrPageFromSdrObject() == pCandidate->getSdrPageFromSdrObject())
                                 {
                                     SdrMark aM(pEdge, maMarkedObjectList.GetMark(a)->GetPageView());
 

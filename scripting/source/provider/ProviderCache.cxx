@@ -20,8 +20,10 @@
 #include <cppuhelper/implementationentry.hxx>
 #include <cppuhelper/factory.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include "ProviderCache.hxx"
 
 using namespace com::sun::star;
@@ -69,11 +71,11 @@ ProviderCache::getProvider( const OUString& providerName )
         {
             provider = h_it->second.provider;
         }
-    else
-    {
-        // need to create provider and insert into hash
+        else
+        {
+            // need to create provider and insert into hash
             provider = createProvider( h_it->second );
-    }
+        }
     }
     return provider;
 }
@@ -86,16 +88,13 @@ ProviderCache::getAllProviders()
 
     ::osl::Guard< osl::Mutex > aGuard( m_mutex );
     Sequence < Reference< provider::XScriptProvider > > providers (  m_hProviderDetailsCache.size() );
-    ProviderDetails_hash::iterator h_itEnd =  m_hProviderDetailsCache.end();
-    ProviderDetails_hash::iterator h_it = m_hProviderDetailsCache.begin();
     // should assert if size !>  0
     if (  !m_hProviderDetailsCache.empty() )
     {
         sal_Int32 providerIndex = 0;
-        sal_Int32 index = 0;
-        for ( index = 0; h_it !=  h_itEnd; ++h_it, index++ )
+        for (auto& rDetail : m_hProviderDetailsCache)
         {
-            Reference< provider::XScriptProvider > xScriptProvider  = h_it->second.provider;
+            Reference<provider::XScriptProvider> xScriptProvider = rDetail.second.provider;
             if ( xScriptProvider.is() )
             {
                 providers[ providerIndex++ ] = xScriptProvider;
@@ -105,7 +104,7 @@ ProviderCache::getAllProviders()
                 // create provider
                 try
                 {
-                    xScriptProvider  = createProvider( h_it->second );
+                    xScriptProvider = createProvider(rDetail.second);
                     providers[ providerIndex++ ] = xScriptProvider;
                 }
                 catch ( const Exception& )
@@ -115,7 +114,7 @@ ProviderCache::getAllProviders()
             }
         }
 
-        if ( providerIndex < index )
+        if (providerIndex < providers.getLength())
         {
             providers.realloc( providerIndex );
         }
@@ -168,10 +167,11 @@ ProviderCache::populateCache()
     }
     catch ( const Exception &e )
     {
-        OUString temp =
-            "ProviderCache::populateCache: couldn't obtain XSingleComponentFactory for "
-            + serviceName;
-        throw RuntimeException( temp.concat( e.Message ) );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
+                "ProviderCache::populateCache: couldn't obtain XSingleComponentFactory for " + serviceName
+                + " " + e.Message,
+                nullptr, anyEx );
     }
 }
 
@@ -185,7 +185,10 @@ ProviderCache::createProvider( ProviderDetails& details )
     }
     catch ( const Exception& e )
     {
-        throw RuntimeException( "ProviderCache::createProvider() Error creating provider from factory. " + e.Message );
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
+                "ProviderCache::createProvider() Error creating provider from factory. " + e.Message,
+                nullptr, anyEx );
     }
 
     return details.provider;

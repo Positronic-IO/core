@@ -30,12 +30,15 @@
 
 #include <sfx2/sfxresid.hxx>
 
+#include <vcl/commandevent.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/image.hxx>
 #include <vcl/wrkwin.hxx>
 #include <tools/svborder.hxx>
 
 #include <com/sun/star/graphic/XGraphicProvider.hpp>
+
+#include <sfx2/app.hxx>
 
 using namespace css;
 using namespace css::uno;
@@ -229,7 +232,21 @@ void TabBar::DataChanged (const DataChangedEvent& rDataChangedEvent)
 
 bool TabBar::EventNotify(NotifyEvent& rEvent)
 {
-    if(rEvent.GetType() == MouseNotifyEvent::COMMAND)
+    MouseNotifyEvent nType = rEvent.GetType();
+    if(MouseNotifyEvent::KEYINPUT == nType)
+    {
+        const vcl::KeyCode& rKeyCode = rEvent.GetKeyEvent()->GetKeyCode();
+        if (!mpAccel)
+        {
+            mpAccel = svt::AcceleratorExecute::createAcceleratorHelper();
+            mpAccel->init(comphelper::getProcessComponentContext(), mxFrame);
+        }
+        const OUString aCommand(mpAccel->findCommand(svt::AcceleratorExecute::st_VCLKey2AWTKey(rKeyCode)));
+        if (".uno:Sidebar" == aCommand)
+            return vcl::Window::EventNotify(rEvent);
+        return true;
+    }
+    else if(MouseNotifyEvent::COMMAND == nType)
     {
         const CommandEvent& rCommandEvent = *rEvent.GetCommandEvent();
         if(rCommandEvent.GetCommand() == CommandEventId::Wheel)
@@ -283,9 +300,10 @@ Image TabBar::GetItemImage(const DeckDescriptor& rDeckDescriptor) const
         mxFrame);
 }
 
-IMPL_LINK(TabBar::Item, HandleClick, Button*, pBtn, void)
+IMPL_LINK_NOARG(TabBar::Item, HandleClick, Button*, void)
 {
-    pBtn->GrabFocus();
+    vcl::Window* pFocusWin = Application::GetFocusWindow();
+    pFocusWin->GrabFocusToDocument();
     try
     {
         maDeckActivationFunctor(msDeckId);

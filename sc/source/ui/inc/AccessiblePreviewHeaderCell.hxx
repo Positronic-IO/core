@@ -23,7 +23,6 @@
 #include "AccessibleContextBase.hxx"
 #include <com/sun/star/accessibility/XAccessibleValue.hpp>
 #include <tools/gen.hxx>
-#include <global.hxx>
 #include <address.hxx>
 #include <cppuhelper/implbase1.hxx>
 
@@ -115,11 +114,11 @@ protected:
 private:
     ScPreviewShell*     mpViewShell;
     accessibility::AccessibleTextHelper* mpTextHelper;
-    sal_Int32           mnIndex;
+    sal_Int32 const     mnIndex;
     ScAddress           maCellPos;
     bool                mbColumnHeader;
     bool                mbRowHeader;
-    mutable ScPreviewTableInfo* mpTableInfo;
+    mutable std::unique_ptr<ScPreviewTableInfo> mpTableInfo;
 
     bool IsDefunc(
         const css::uno::Reference<css::accessibility::XAccessibleStateSet>& rxParentStates);

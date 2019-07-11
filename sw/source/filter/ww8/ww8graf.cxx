@@ -21,6 +21,7 @@
 #include <svl/urihelper.hxx>
 #include <hintids.hxx>
 #include <osl/endian.h>
+#include <sal/log.hxx>
 #include <svx/fmglob.hxx>
 #include <svx/sdtaitm.hxx>
 #include <editeng/lrspitem.hxx>
@@ -104,7 +105,7 @@ using namespace sw::types;
 using namespace sw::util;
 
 // helper methods
-Color WW8TransCol(SVBT32 nWC)
+static Color WW8TransCol(SVBT32 nWC)
 {
 #if 1               // 1 = use predefined color, 0 = ignore
 
@@ -459,7 +460,7 @@ SdrObject* SwWW8ImplReader::ReadPolyLine(WW8_DPHEAD const * pHd, SfxAllItemSet &
     return pObj;
 }
 
-ESelection GetESelection(EditEngine const &rDrawEditEngine, long nCpStart, long nCpEnd)
+static ESelection GetESelection(EditEngine const &rDrawEditEngine, long nCpStart, long nCpEnd)
 {
     sal_Int32 nPCnt = rDrawEditEngine.GetParagraphCount();
     sal_Int32 nSP = 0;
@@ -511,10 +512,9 @@ void SwWW8ImplReader::InsertTxbxStyAttrs( SfxItemSet& rS, sal_uInt16 nColl )
                     ( SfxItemState::SET != rS.GetItemState(nWhich, false) )
                    )
                 {
-                    SfxPoolItem* pCopy = pItem->Clone();
+                    std::unique_ptr<SfxPoolItem> pCopy(pItem->Clone());
                     pCopy->SetWhich( nWhich );
                     rS.Put( *pCopy );
-                    delete pCopy;
                 }
             }
         }
@@ -581,7 +581,9 @@ namespace
     bool IsValidSel(const EditEngine& rEngine, const ESelection& rSel)
     {
         const auto nParaCount = rEngine.GetParagraphCount();
-        return rSel.nStartPara < nParaCount && rSel.nEndPara < nParaCount;
+        if (rSel.nStartPara < nParaCount && rSel.nEndPara < nParaCount)
+            return rSel.nStartPos >= 0 && rSel.nEndPos >= 0;
+        return false;
     }
 }
 
@@ -606,7 +608,7 @@ void SwWW8ImplReader::InsertAttrsAsDrawingAttrs(WW8_CP nStartCp, WW8_CP nEndCp,
     bool bDoingSymbol = false;
     sal_Unicode cReplaceSymbol = m_cSymbol;
 
-    SfxItemSet *pS = new SfxItemSet(m_pDrawEditEngine->GetEmptyItemSet());
+    std::unique_ptr<SfxItemSet> pS(new SfxItemSet(m_pDrawEditEngine->GetEmptyItemSet()));
     WW8PLCFManResult aRes;
 
     std::deque<Chunk> aChunks;
@@ -725,10 +727,9 @@ void SwWW8ImplReader::InsertAttrsAsDrawingAttrs(WW8_CP nStartCp, WW8_CP nEndCp,
                             nWhich != nSlotId
                         )
                         {
-                            SfxPoolItem* pCopy = pItem->Clone();
+                            std::unique_ptr<SfxPoolItem> pCopy(pItem->Clone());
                             pCopy->SetWhich( nWhich );
                             pS->Put( *pCopy );
-                            delete pCopy;
                         }
                     }
                 }
@@ -740,22 +741,20 @@ void SwWW8ImplReader::InsertAttrsAsDrawingAttrs(WW8_CP nStartCp, WW8_CP nEndCp,
             {
                 m_pDrawEditEngine->QuickSetAttribs( *pS,
                     GetESelection(*m_pDrawEditEngine, nTextStart - nStartCp, nEnd - nStartCp ) );
-                delete pS;
-                pS = new SfxItemSet(m_pDrawEditEngine->GetEmptyItemSet());
+                pS.reset( new SfxItemSet(m_pDrawEditEngine->GetEmptyItemSet()) );
             }
         }
         nStart = nNext;
     }
-    delete pS;
+    pS.reset();
 
     // pop off as far as recorded location just in case there were some left
     // unclosed
     for (size_t nI = m_xCtrlStck->size(); nI > nCurrentCount; --nI)
         m_xCtrlStck->DeleteAndDestroy(nI-1);
 
-    typedef std::deque<Chunk>::iterator myIter;
-    myIter aEnd = aChunks.end();
-    for (myIter aIter = aChunks.begin(); aIter != aEnd; ++aIter)
+    auto aEnd = aChunks.end();
+    for (auto aIter = aChunks.begin(); aIter != aEnd; ++aIter)
     {
         ESelection aSel(GetESelection(*m_pDrawEditEngine, aIter->GetStartPos()-nStartCp,
             aIter->GetEndPos()-nStartCp));
@@ -778,7 +777,7 @@ void SwWW8ImplReader::InsertAttrsAsDrawingAttrs(WW8_CP nStartCp, WW8_CP nEndCp,
             m_pDrawEditEngine->QuickInsertText(aString, aSel);
             nChanged = nOrigLen - aString.getLength();
         }
-        for (myIter aIter2 = aIter+1; aIter2 != aEnd; ++aIter2)
+        for (auto aIter2 = aIter+1; aIter2 != aEnd; ++aIter2)
             aIter2->Adjust(nChanged);
     }
 
@@ -918,7 +917,7 @@ sal_Int32 SwWW8ImplReader::GetRangeAsDrawingString(OUString& rString, long nStar
 //how EditEngine does it, but preserve the length and replace the extra
 //chars with placeholders, record the position of the placeholders and
 //remove those extra chars after attributes have been inserted
-std::vector<sal_Int32> replaceDosLineEndsButPreserveLength(OUString &rIn)
+static std::vector<sal_Int32> replaceDosLineEndsButPreserveLength(OUString &rIn)
 {
     OUStringBuffer aNewData(rIn);
     std::vector<sal_Int32> aDosLineEndDummies;
@@ -944,7 +943,7 @@ std::vector<sal_Int32> replaceDosLineEndsButPreserveLength(OUString &rIn)
     return aDosLineEndDummies;
 }
 
-void removePositions(EditEngine &rDrawEditEngine, const std::vector<sal_Int32>& rDosLineEndDummies)
+static void removePositions(EditEngine &rDrawEditEngine, const std::vector<sal_Int32>& rDosLineEndDummies)
 {
     for (auto aIter = rDosLineEndDummies.rbegin(); aIter != rDosLineEndDummies.rend(); ++aIter)
     {
@@ -953,9 +952,9 @@ void removePositions(EditEngine &rDrawEditEngine, const std::vector<sal_Int32>& 
     }
 }
 
-OutlinerParaObject* SwWW8ImplReader::ImportAsOutliner(OUString &rString, WW8_CP nStartCp, WW8_CP nEndCp, ManTypes eType)
+std::unique_ptr<OutlinerParaObject> SwWW8ImplReader::ImportAsOutliner(OUString &rString, WW8_CP nStartCp, WW8_CP nEndCp, ManTypes eType)
 {
-    OutlinerParaObject* pRet = nullptr;
+    std::unique_ptr<OutlinerParaObject> pRet;
 
     sal_Int32 nLen = GetRangeAsDrawingString(rString, nStartCp, nEndCp, eType);
     if (nLen > 0)
@@ -985,9 +984,8 @@ OutlinerParaObject* SwWW8ImplReader::ImportAsOutliner(OUString &rString, WW8_CP 
         }
 
         std::unique_ptr<EditTextObject> pTemporaryText = m_pDrawEditEngine->CreateTextObject();
-        pRet = new OutlinerParaObject(*pTemporaryText);
+        pRet.reset( new OutlinerParaObject( std::move(pTemporaryText) ) );
         pRet->SetOutlinerMode( OutlinerMode::TextObject );
-        pTemporaryText.reset();
 
         m_pDrawEditEngine->SetText( OUString() );
         m_pDrawEditEngine->SetParaAttribs(0, m_pDrawEditEngine->GetEmptyItemSet());
@@ -1053,7 +1051,7 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
                     {
                         WW8ReaderSave aSave(this, nNewStartCp -1);
                         bool bOldEmbeddObj = m_bEmbeddObj;
-                        // bEmbedd Ordinarily would have been set by field
+                        // bEmbeddObj Ordinarily would have been set by field
                         // parse, but this is impossible here so...
                         m_bEmbeddObj = true;
 
@@ -1102,7 +1100,7 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
                         if( m_bObj )
                         {
                             if( bMakeSdrGrafObj && pTextObj &&
-                                pTextObj->GetUpGroup() )
+                                pTextObj->getParentSdrObjectFromSdrObject() )
                             {
                                 // use SdrOleObj/SdrGrafObj instead of
                                 // SdrTextObj in this Group
@@ -1121,7 +1119,7 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
                                 pNew->SetLogicRect( pTextObj->GetCurrentBoundRect() );
                                 pNew->SetLayer( pTextObj->GetLayer() );
 
-                                pTextObj->GetUpGroup()->GetSubList()->
+                                pTextObj->getParentSdrObjectFromSdrObject()->GetSubList()->
                                     ReplaceObject(pNew, pTextObj->GetOrdNum());
                             }
                             else
@@ -1148,28 +1146,25 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
 
             if( bDone )
             {
-                if( pFlyFormat )
+                if( pFlyFormat && pRecord )
                 {
-                    if( pRecord )
-                    {
-                        SfxItemSet aFlySet( m_rDoc.GetAttrPool(),
-                            svl::Items<RES_FRMATR_BEGIN, RES_FRMATR_END-1>{} );
+                    SfxItemSet aFlySet( m_rDoc.GetAttrPool(),
+                        svl::Items<RES_FRMATR_BEGIN, RES_FRMATR_END-1>{} );
 
-                        tools::Rectangle aInnerDist(   pRecord->nDxTextLeft,
-                                                pRecord->nDyTextTop,
-                                                pRecord->nDxTextRight,
-                                                pRecord->nDyTextBottom  );
-                        MatchSdrItemsIntoFlySet( pTextObj,
-                                                 aFlySet,
-                                                 pRecord->eLineStyle,
-                                                 pRecord->eLineDashing,
-                                                 pRecord->eShapeType,
-                                                 aInnerDist );
+                    tools::Rectangle aInnerDist(   pRecord->nDxTextLeft,
+                                             pRecord->nDyTextTop,
+                                             pRecord->nDxTextRight,
+                                             pRecord->nDyTextBottom  );
+                    MatchSdrItemsIntoFlySet( pTextObj,
+                                             aFlySet,
+                                             pRecord->eLineStyle,
+                                             pRecord->eLineDashing,
+                                             pRecord->eShapeType,
+                                             aInnerDist );
 
-                        pFlyFormat->SetFormatAttr( aFlySet );
+                    pFlyFormat->SetFormatAttr( aFlySet );
 
-                        MapWrapIntoFlyFormat(pRecord, pFlyFormat);
-                    }
+                    MapWrapIntoFlyFormat(pRecord, pFlyFormat);
                 }
                 aString.clear();
                 rbEraseTextObj = (nullptr != pFlyFormat);
@@ -1194,11 +1189,11 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
 
         bool bVertical = pTextObj->IsVerticalWriting();
         std::unique_ptr<EditTextObject> pTemporaryText = m_pDrawEditEngine->CreateTextObject();
-        OutlinerParaObject* pOp = new OutlinerParaObject(*pTemporaryText);
+        std::unique_ptr<OutlinerParaObject> pOp( new OutlinerParaObject(*pTemporaryText) );
         pOp->SetOutlinerMode( OutlinerMode::TextObject );
         pOp->SetVertical( bVertical );
         pTemporaryText.reset();
-        pTextObj->NbcSetOutlinerParaObject( pOp );
+        pTextObj->NbcSetOutlinerParaObject( std::move(pOp) );
         pTextObj->SetVerticalWriting(bVertical);
 
         // For the next TextBox also remove the old paragraph attributes
@@ -2076,12 +2071,12 @@ SwWW8ImplReader::SetAttributesAtGrfNode(SvxMSDffImportRec const*const pRecord,
         Size aSz(pGrfNd->GetTwipSize());
         // use type <sal_uInt64> instead of sal_uLong to get correct results
         // in the following calculations.
-        sal_uInt64 rHeight = aSz.Height();
-        sal_uInt64 rWidth  = aSz.Width();
-        if( !rWidth && pF)
-            rWidth  = pF->nXaRight  - pF->nXaLeft;
-        else if( !rHeight && pF)
-            rHeight = pF->nYaBottom - pF->nYaTop;
+        sal_uInt64 nHeight = aSz.Height();
+        sal_uInt64 nWidth  = aSz.Width();
+        if (!nWidth && pF)
+            nWidth = o3tl::saturating_sub(pF->nXaRight, pF->nXaLeft);
+        else if (!nHeight && pF)
+            nHeight = o3tl::saturating_sub(pF->nYaBottom, pF->nYaTop);
 
         if( pRecord->nCropFromTop || pRecord->nCropFromBottom ||
             pRecord->nCropFromLeft || pRecord->nCropFromRight )
@@ -2090,19 +2085,19 @@ SwWW8ImplReader::SetAttributesAtGrfNode(SvxMSDffImportRec const*const pRecord,
                                         // 16.16 (fraction times total
             if( pRecord->nCropFromTop ) //        image width or height resp.)
             {
-                aCrop.SetTop(lcl_ConvertCrop(pRecord->nCropFromTop, rHeight));
+                aCrop.SetTop(lcl_ConvertCrop(pRecord->nCropFromTop, nHeight));
             }
             if( pRecord->nCropFromBottom )
             {
-                aCrop.SetBottom(lcl_ConvertCrop(pRecord->nCropFromBottom, rHeight));
+                aCrop.SetBottom(lcl_ConvertCrop(pRecord->nCropFromBottom, nHeight));
             }
             if( pRecord->nCropFromLeft )
             {
-                aCrop.SetLeft(lcl_ConvertCrop(pRecord->nCropFromLeft, rWidth));
+                aCrop.SetLeft(lcl_ConvertCrop(pRecord->nCropFromLeft, nWidth));
             }
             if( pRecord->nCropFromRight )
             {
-                aCrop.SetRight(lcl_ConvertCrop(pRecord->nCropFromRight,rWidth));
+                aCrop.SetRight(lcl_ConvertCrop(pRecord->nCropFromRight, nWidth));
             }
 
             pGrfNd->SetAttr( aCrop );
@@ -2831,7 +2826,7 @@ SwFrameFormat* SwWW8ImplReader::MungeTextIntoDrawBox(SvxMSDffImportRec *pRecord,
             pSdrTextObj->GetSnapRect().GetHeight());
 
         // Object is part of a group?
-        SdrObject* pGroupObject = pSdrTextObj->GetUpGroup();
+        SdrObject* pGroupObject = pSdrTextObj->getParentSdrObjectFromSdrObject();
 
         const size_t nOrdNum = pSdrTextObj->GetOrdNum();
         bool bEraseThisObject;
@@ -2865,7 +2860,7 @@ SwFrameFormat* SwWW8ImplReader::MungeTextIntoDrawBox(SvxMSDffImportRec *pRecord,
                 // remove the object from Z-Order list
                 m_xMSDffManager->RemoveFromShapeOrder( pSdrTextObj );
                 // take the object from the drawing page
-                if( pSdrTextObj->GetPage() )
+                if( pSdrTextObj->getSdrPageFromSdrObject() )
                     m_pDrawPg->RemoveObject( pSdrTextObj->GetOrdNum() );
                 // and delete FrameFormat, because replaced by graphic
                 // (this also deletes the object)
@@ -3093,7 +3088,7 @@ SwFlyFrameFormat* SwWW8ImplReader::ImportReplaceableDrawables( SdrObject* &rpObj
     // remove old object from Z-Order-List
     m_xMSDffManager->RemoveFromShapeOrder( rpObject );
     // remove from Drawing-Page
-    if( rpObject->GetPage() )
+    if( rpObject->getSdrPageFromSdrObject() )
         m_pDrawPg->RemoveObject( rpObject->GetOrdNum() );
 
     // and delete the object

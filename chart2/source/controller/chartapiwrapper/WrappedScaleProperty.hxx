@@ -20,10 +20,11 @@
 #define INCLUDED_CHART2_SOURCE_CONTROLLER_CHARTAPIWRAPPER_WRAPPEDSCALEPROPERTY_HXX
 
 #include <WrappedProperty.hxx>
-#include "Chart2ModelContact.hxx"
 
 #include <memory>
 #include <vector>
+
+namespace chart { namespace wrapper { class Chart2ModelContact; } }
 
 namespace chart
 {
@@ -56,7 +57,7 @@ public:
     WrappedScaleProperty(tScaleProperty eScaleProperty, const std::shared_ptr<Chart2ModelContact>& spChart2ModelContact);
     virtual ~WrappedScaleProperty() override;
 
-    static void addWrappedProperties( std::vector< WrappedProperty* >& rList, const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact );
+    static void addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList, const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact );
 
     virtual void setPropertyValue( const css::uno::Any& rOuterValue, const css::uno::Reference< css::beans::XPropertySet >& xInnerPropertySet ) const override;
 

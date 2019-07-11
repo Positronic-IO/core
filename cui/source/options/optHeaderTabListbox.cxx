@@ -20,9 +20,9 @@
 #include "optHeaderTabListbox.hxx"
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
-#include <svtools/headbar.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <o3tl/make_unique.hxx>
 namespace svx
 {

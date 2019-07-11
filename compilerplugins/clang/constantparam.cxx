@@ -62,8 +62,7 @@ public:
     virtual void run() override
     {
         // ignore some files that make clang crash inside EvaluateAsInt
-        std::string fn( compiler.getSourceManager().getFileEntryForID(
-                        compiler.getSourceManager().getMainFileID())->getName() );
+        std::string fn(handler.getMainFileName());
         loplugin::normalizeDotDotInFilePath(fn);
         if (loplugin::isSamePathname(fn, SRCDIR "/basegfx/source/matrix/b2dhommatrix.cxx")
             || loplugin::isSamePathname(fn, SRCDIR "/basegfx/source/matrix/b3dhommatrix.cxx"))
@@ -200,8 +199,8 @@ std::string ConstantParam::getCallValue(const Expr* arg)
     // Get the expression contents.
     // This helps us find params which are always initialised with something like "OUString()".
     SourceManager& SM = compiler.getSourceManager();
-    SourceLocation startLoc = arg->getLocStart();
-    SourceLocation endLoc = arg->getLocEnd();
+    SourceLocation startLoc = compat::getBeginLoc(arg);
+    SourceLocation endLoc = compat::getEndLoc(arg);
     const char *p1 = SM.getCharacterData( startLoc );
     const char *p2 = SM.getCharacterData( endLoc );
     if (!p1 || !p2 || (p2 - p1) < 0 || (p2 - p1) > 40) {

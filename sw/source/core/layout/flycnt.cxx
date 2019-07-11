@@ -18,8 +18,10 @@
  */
 
 #include <tools/bigint.hxx>
+#include <sal/log.hxx>
 #include <pagefrm.hxx>
 #include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <doc.hxx>
 #include <pam.hxx>
 #include <IDocumentUndoRedo.hxx>
@@ -50,7 +52,7 @@ using namespace ::com::sun::star;
 namespace
 {
 
-inline SwTwips lcl_GetTopForObjPos(const SwContentFrame* pCnt, const bool bVert, const bool bVertL2R)
+SwTwips lcl_GetTopForObjPos(const SwContentFrame* pCnt, const bool bVert, const bool bVertL2R)
 {
     if ( bVert )
     {
@@ -114,7 +116,11 @@ void SwFlyAtContentFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pN
         // Search the new anchor using the NodeIdx; the relation between old
         // and new NodeIdx determines the search direction
         const SwNodeIndex aNewIdx( pAnch->GetContentAnchor()->nNode );
-        SwNodeIndex aOldIdx( *pContent->GetNode() );
+        SwNodeIndex aOldIdx( pContent->IsTextFrame()
+                // sw_redlinehide: can pick any node here, the compare with
+                // FrameContainsNode should catch it
+                ? *static_cast<SwTextFrame *>(pContent)->GetTextNodeFirst()
+                : *static_cast<SwNoTextFrame *>(pContent)->GetNode() );
 
         //fix: depending on which index was smaller, searching in the do-while
         //loop previously was done forward or backwards respectively. This however
@@ -122,12 +128,12 @@ void SwFlyAtContentFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pN
         //is now done in only one direction. Getting hold of a frame from the node
         //is still possible if the new anchor could not be found. Chances are
         //good that this will be the correct one.
-        const bool bNext = aOldIdx < aNewIdx;
         // consider the case that at found anchor frame candidate already a
         // fly frame of the given fly format is registered.
         // consider, that <pContent> is the already
         // the new anchor frame.
-        bool bFound( aOldIdx == aNewIdx );
+        bool bFound( FrameContainsNode(*pContent, aNewIdx.GetIndex()) );
+        const bool bNext = !bFound && aOldIdx < aNewIdx;
         while ( pContent && !bFound )
         {
             do
@@ -140,11 +146,10 @@ void SwFlyAtContentFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pN
                       ( bBodyFootnote != ( pContent->IsInDocBody() ||
                                            pContent->IsInFootnote() ) ) );
             if ( pContent )
-                aOldIdx = *pContent->GetNode();
+                bFound = FrameContainsNode(*pContent, aNewIdx.GetIndex());
 
             // check, if at found anchor frame candidate already a fly frame
             // of the given fly frame format is registered.
-            bFound = aOldIdx == aNewIdx;
             if (bFound && pContent && pContent->GetDrawObjs())
             {
                 SwFrameFormat* pMyFlyFrameFormat( &GetFrameFormat() );
@@ -164,7 +169,8 @@ void SwFlyAtContentFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem *pN
         if ( !pContent )
         {
             SwContentNode *pNode = aNewIdx.GetNode().GetContentNode();
-            pContent = pNode->getLayoutFrame( getRootFrame(), &pOldAnchor->getFrameArea().Pos(), nullptr, false );
+            std::pair<Point, bool> const tmp(pOldAnchor->getFrameArea().Pos(), false);
+            pContent = pNode->getLayoutFrame(getRootFrame(), nullptr, &tmp);
             OSL_ENSURE( pContent, "New anchor not found" );
         }
         //Flys are never attached to a follow, but always on the master which
@@ -204,7 +210,7 @@ class SwOszControl
     static const SwFlyFrame *pStack5;
 
     const SwFlyFrame *pFly;
-    std::vector<Point*> maObjPositions;
+    std::vector<Point> maObjPositions;
 
 public:
     explicit SwOszControl( const SwFlyFrame *pFrame );
@@ -247,13 +253,7 @@ SwOszControl::~SwOszControl()
     else if ( SwOszControl::pStack5 == pFly )
         SwOszControl::pStack5 = nullptr;
     // #i3317#
-    while ( !maObjPositions.empty() )
-    {
-        Point* pPos = maObjPositions.back();
-        delete pPos;
-
-        maObjPositions.pop_back();
-    }
+    maObjPositions.clear();
 }
 
 bool SwOszControl::IsInProgress( const SwFlyFrame *pFly )
@@ -282,22 +282,19 @@ bool SwOszControl::ChkOsz()
     }
     else
     {
-        Point* pNewObjPos = new Point( pFly->GetObjRect().Pos() );
-        for ( std::vector<Point*>::iterator aObjPosIter = maObjPositions.begin();
-              aObjPosIter != maObjPositions.end();
-              ++aObjPosIter )
+        Point aNewObjPos = pFly->GetObjRect().Pos();
+        for ( auto const & pt : maObjPositions )
         {
-            if ( *pNewObjPos == *(*aObjPosIter) )
+            if ( aNewObjPos == pt )
             {
                 // position already occurred -> oscillation
                 bOscillationDetected = true;
-                delete pNewObjPos;
                 break;
             }
         }
         if ( !bOscillationDetected )
         {
-            maObjPositions.push_back( pNewObjPos );
+            maObjPositions.push_back( aNewObjPos );
         }
     }
 
@@ -678,13 +675,13 @@ static const SwFrame * lcl_CalcDownDist( SwDistance &rRet,
                             nPrtHeight = pLay->getFrameArea().Left() + pLay->getFramePrintArea().Left()
                                          + pLay->getFramePrintArea().Width() - pSect->getFrameArea().Left()
                                          - pSect->getFrameArea().Width();
-                         }
-                         else
-                         {
-                             nFrameTop = pSect->getFrameArea().Left();
-                             nPrtHeight = pSect->getFrameArea().Left() - pLay->getFrameArea().Left()
+                        }
+                        else
+                        {
+                            nFrameTop = pSect->getFrameArea().Left();
+                            nPrtHeight = pSect->getFrameArea().Left() - pLay->getFrameArea().Left()
                                      - pLay->getFramePrintArea().Left();
-                          }
+                        }
                     }
                     else
                     {
@@ -1327,19 +1324,18 @@ void SwFlyAtContentFrame::SetAbsPos( const Point &rNew )
         SwPosition pos = *aAnch.GetContentAnchor();
         if( IsAutoPos() && pCnt->IsTextFrame() )
         {
+            SwTextFrame const*const pTextFrame(static_cast<SwTextFrame const*>(pCnt));
             SwCursorMoveState eTmpState( MV_SETONLYTEXT );
             Point aPt( rNew );
             if( pCnt->GetCursorOfst( &pos, aPt, &eTmpState )
-                && pos.nNode == *pCnt->GetNode() )
+                && FrameContainsNode(*pTextFrame, pos.nNode.GetIndex()))
             {
-                if ( pCnt->GetNode()->GetTextNode() != nullptr )
+                const SwTextAttr *const pTextInputField =
+                    pos.nNode.GetNode().GetTextNode()->GetTextAttrAt(
+                        pos.nContent.GetIndex(), RES_TXTATR_INPUTFIELD, SwTextNode::PARENT );
+                if (pTextInputField != nullptr)
                 {
-                    const SwTextAttr* pTextInputField =
-                        pCnt->GetNode()->GetTextNode()->GetTextAttrAt( pos.nContent.GetIndex(), RES_TXTATR_INPUTFIELD, SwTextNode::PARENT );
-                    if ( pTextInputField != nullptr )
-                    {
-                        pos.nContent = pTextInputField->GetStart();
-                    }
+                    pos.nContent = pTextInputField->GetStart();
                 }
                 ResetLastCharRectHeight();
                 if( text::RelOrientation::CHAR == pFormat->GetVertOrient().GetRelationOrient() )
@@ -1349,14 +1345,18 @@ void SwFlyAtContentFrame::SetAbsPos( const Point &rNew )
             }
             else
             {
-                pos.nNode = *pCnt->GetNode();
-                pos.nContent.Assign( pCnt->GetNode(), 0 );
+                pos = pTextFrame->MapViewToModelPos(TextFrameIndex(0));
             }
         }
-        else
+        else if (pCnt->IsTextFrame())
         {
-            pos.nNode = *pCnt->GetNode();
-            pos.nContent.Assign( pCnt->GetNode(), 0 );
+            pos = static_cast<SwTextFrame const*>(pCnt)->MapViewToModelPos(TextFrameIndex(0));
+        }
+        else // is that even possible? maybe if there was a change of anchor type from AT_FLY or something?
+        {
+            assert(pCnt->IsNoTextFrame());
+            pos.nNode = *static_cast<SwNoTextFrame*>(pCnt)->GetNode();
+            pos.nContent.Assign(static_cast<SwNoTextFrame*>(pCnt)->GetNode(), 0);
         }
         aAnch.SetAnchor( &pos );
 

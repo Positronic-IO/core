@@ -14,6 +14,7 @@
 #include <docsh.hxx>
 #include <refundo.hxx>
 #include <undodat.hxx>
+#include <tabvwsh.hxx>
 
 #include <rtl/ustrbuf.hxx>
 
@@ -378,7 +379,7 @@ void ScDataFormDlg::SetButtonState()
         m_pBtnPrev->Enable();
 
     m_pBtnRestore->Enable( false );
-    if ( maEdits.size()>=1 && maEdits[0] != nullptr )
+    if ( !maEdits.empty() && maEdits[0] != nullptr )
         maEdits[0]->GrabFocus();
 }
 

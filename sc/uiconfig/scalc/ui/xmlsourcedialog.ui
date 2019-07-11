@@ -109,7 +109,7 @@
                     <property name="column_spacing">12</property>
                     <property name="row_homogeneous">True</property>
                     <child>
-                      <object class="svtlo-SvTreeListBox" id="tree:border">
+                      <object class="vcllo-SvTreeListBox" id="tree:border">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
@@ -256,6 +256,7 @@
     <action-widgets>
       <action-widget response="-5">ok</action-widget>
       <action-widget response="-6">cancel</action-widget>
+      <action-widget response="-11">help</action-widget>
     </action-widgets>
   </object>
 </interface>

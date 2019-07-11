@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <hintids.hxx>
 
 #include <doc.hxx>
@@ -62,6 +61,7 @@
 #include <fmtfld.hxx>
 
 #include <IDocumentMarkAccess.hxx>
+#include <txtfrm.hxx>
 #include <ndtxt.hxx>
 
 static OUString lcl_GetRedlineHelp( const SwRangeRedline& rRedl, bool bBalloon )
@@ -120,14 +120,11 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
 
     SdrView *pSdrView = rSh.GetDrawView();
 
-    if( bQuickBalloon )
+    if( bQuickBalloon && pSdrView )
     {
-        if( pSdrView )
-        {
-            SdrPageView* pPV = pSdrView->GetSdrPageView();
-            SwDPage* pPage = pPV ? static_cast<SwDPage*>(pPV->GetPage()) : nullptr;
-            bContinue = pPage && pPage->RequestHelp(this, pSdrView, rEvt);
-        }
+        SdrPageView* pPV = pSdrView->GetSdrPageView();
+        SwDPage* pPage = pPV ? static_cast<SwDPage*>(pPV->GetPage()) : nullptr;
+        bContinue = pPage && pPage->RequestHelp(this, pSdrView, rEvt);
     }
 
     if( bContinue && bQuickBalloon)
@@ -161,8 +158,8 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                 sText = OStringToOUString(OString::number(
                             static_cast<const SwTableBoxValue*>(aContentAtPos.aFnd.pAttr)->GetValue()),
                             osl_getThreadTextEncoding());
+                break;
             }
-            break;
             case IsAttrAtPos::CurrAttrs:
                 sText = aContentAtPos.sStr;
                 break;
@@ -170,7 +167,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
 
             case IsAttrAtPos::InetAttr:
             {
-                sText = static_cast<const SfxStringItem*>(aContentAtPos.aFnd.pAttr)->GetValue();
+                sText = static_cast<const SwFormatINetFormat*>(aContentAtPos.aFnd.pAttr)->GetValue();
                 sText = URIHelper::removePassword( sText,
                                         INetURLObject::EncodeMechanism::WasEncoded,
                                            INetURLObject::DecodeMechanism::Unambiguous);
@@ -202,7 +199,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                         SwTextNode* pTextNode = ppBkmk->get()->GetMarkStart().nNode.GetNode().GetTextNode();
                         if ( pTextNode )
                         {
-                            sText = pTextNode->GetExpandText( 0, pTextNode->Len(), true, true );
+                            sText = sw::GetExpandTextMerged(rSh.GetLayout(), *pTextNode, true, false, ExpandMode(0));
 
                             if( !sText.isEmpty() )
                             {
@@ -242,15 +239,14 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                 aModStr = aModStr.replaceFirst(aCode.GetName(), "");
                 aModStr = aModStr.replaceAll("+", "");
                 sText = SwResId(STR_SMARTTAG_CLICK).replaceAll("%s", aModStr);
+                break;
             }
-            break;
 
             case IsAttrAtPos::Ftn:
                 if( aContentAtPos.pFndTextAttr && aContentAtPos.aFnd.pAttr )
                 {
                     const SwFormatFootnote* pFootnote = static_cast<const SwFormatFootnote*>(aContentAtPos.aFnd.pAttr);
-                    OUString sTmp;
-                    pFootnote->GetFootnoteText( sTmp );
+                    OUString sTmp(pFootnote->GetFootnoteText(*rSh.GetLayout()));
                     sText = SwResId( pFootnote->IsEndNote()
                                     ? STR_ENDNOTE : STR_FTNNOTE ) + sTmp;
                     bBalloon = true;
@@ -265,8 +261,8 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                 const bool bShowInlineTooltips = rSh.GetViewOptions()->IsShowInlineTooltips();
                 if ( bShowTrackChanges && bShowInlineTooltips )
                      sText = lcl_GetRedlineHelp(*aContentAtPos.aFnd.pRedl, bBalloon);
+                break;
             }
-            break;
 
             case IsAttrAtPos::ToxMark:
                 sText = aContentAtPos.sStr;
@@ -281,6 +277,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                     }
                 }
                 break;
+
             case IsAttrAtPos::RefMark:
                 if(aContentAtPos.aFnd.pAttr)
                 {
@@ -304,7 +301,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                         {
                             sal_uInt16 nOldSubType = pField->GetSubType();
                             const_cast<SwField*>(pField)->SetSubType(nsSwExtendedSubType::SUB_CMD);
-                            sText = pField->ExpandField(true);
+                            sText = pField->ExpandField(true, rSh.GetLayout());
                             const_cast<SwField*>(pField)->SetSubType(nOldSubType);
                         }
                         break;
@@ -316,6 +313,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                         case SwFieldIds::Input:  // BubbleHelp, because the suggestion could be quite long
                             bBalloon = true;
                             SAL_FALLTHROUGH;
+                        case SwFieldIds::Dropdown:
                         case SwFieldIds::JumpEdit:
                             sText = pField->GetPar2();
                             break;
@@ -347,7 +345,7 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                                 if ( pRefField->IsRefToHeadingCrossRefBookmark() ||
                                      pRefField->IsRefToNumItemCrossRefBookmark() )
                                 {
-                                    sText = pRefField->GetExpandedTextOfReferencedTextNode();
+                                    sText = pRefField->GetExpandedTextOfReferencedTextNode(*rSh.GetLayout());
                                     if ( sText.getLength() > 80  )
                                     {
                                         sText = sText.copy(0, 80) + "...";
@@ -358,8 +356,9 @@ void SwEditWin::RequestHelp(const HelpEvent &rEvt)
                                     sText = static_cast<const SwGetRefField*>(pField)->GetSetRefName();
                                 }
                             }
+                            break;
                         }
-                        break;
+
                         default: break;
                         }
                     }
@@ -429,8 +428,7 @@ void SwEditWin::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle
         if( rRect.IsInside( aRect ) )
         {
             // then cancel
-            delete m_pShadCursor;
-            m_pShadCursor = nullptr;
+            m_pShadCursor.reset();
         }
         else if( rRect.IsOver( aRect ))
         {

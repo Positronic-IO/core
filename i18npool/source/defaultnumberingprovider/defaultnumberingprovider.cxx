@@ -283,7 +283,7 @@ static const sal_Unicode table_PersianWord_decadeX[][8]={
 };
 
 
-DefaultNumberingProvider::DefaultNumberingProvider( const Reference < XComponentContext >& rxContext ) : m_xContext(rxContext),translit(nullptr)
+DefaultNumberingProvider::DefaultNumberingProvider( const Reference < XComponentContext >& rxContext ) : m_xContext(rxContext)
 {
 
 }
@@ -304,7 +304,7 @@ DefaultNumberingProvider::getDefaultContinuousNumberingLevels( const Locale& rLo
      return LocaleDataImpl::get()->getContinuousNumberingLevels( rLocale );
 }
 
-OUString toRoman( sal_Int32 n )
+static OUString toRoman( sal_Int32 n )
 {
 
 //              i, ii, iii, iv, v, vi, vii, vii, viii, ix
@@ -459,7 +459,7 @@ void lcl_formatPersianWord( sal_Int32 nNumber, OUString& rsResult )
         nNumber /= 1000;
         nSection++;
     }
-    rsResult += aTemp.makeStringAndClear();
+    rsResult += aTemp;
 }
 
 
@@ -536,7 +536,7 @@ void lcl_formatCharsGR(const sal_Unicode table[], int n, OUString& s )
     }
     sb.append(gr_smallNum(table,n));
 
-    s += sb.makeStringAndClear();
+    s += sb;
 }
 
 static
@@ -584,7 +584,7 @@ DefaultNumberingProvider::makeNumberingString( const Sequence<beans::PropertyVal
      sal_Int16 tableSize = 0;
      const sal_Unicode *table = nullptr;     // initialize to avoid compiler warning
      bool bRecycleSymbol = false;
-     bool bCapitalize = false;
+     OUString sNatNumParams;
      Locale locale;
 
      OUString  prefix;
@@ -635,20 +635,20 @@ DefaultNumberingProvider::makeNumberingString( const Sequence<beans::PropertyVal
           case CHARS_LOWER_LETTER:
                lcl_formatChars( lowerLetter, 26, number-1, result );
                break;
-          case TEXT_NUMBER:
-               natNum = NativeNumberMode::NATNUM14; // ordinal indicators (1st, 2nd, 3rd, ...)
+          case TEXT_NUMBER: // ordinal indicators (1st, 2nd, 3rd, ...)
+               natNum = NativeNumberMode::NATNUM12;
+               sNatNumParams = "capitalize ordinal-number";
                locale = aLocale;
-               bCapitalize = true;
                break;
-          case TEXT_CARDINAL:
-               natNum = NativeNumberMode::NATNUM12; // cardinal number names (one, two, three, ...)
+          case TEXT_CARDINAL: // cardinal number names (One, Two, Three, ...)
+               natNum = NativeNumberMode::NATNUM12;
+               sNatNumParams = "capitalize";
                locale = aLocale;
-               bCapitalize = true;
                break;
-          case TEXT_ORDINAL:
-               natNum = NativeNumberMode::NATNUM13; // ordinal number names (first, second, third, ...)
+          case TEXT_ORDINAL: // ordinal number names (First, Second, Third, ...)
+               natNum = NativeNumberMode::NATNUM12;
+               sNatNumParams = "capitalize ordinal";
                locale = aLocale;
-               bCapitalize = true;
                break;
           case ROMAN_UPPER:
                result += toRoman( number );
@@ -909,17 +909,8 @@ DefaultNumberingProvider::makeNumberingString( const Sequence<beans::PropertyVal
 
         if (natNum) {
             rtl::Reference<NativeNumberSupplierService> xNatNum(new NativeNumberSupplierService);
-            OUString aNum
-                = xNatNum->getNativeNumberString(OUString::number(number), locale, natNum);
-            if (bCapitalize)
-            {
-                if (!xCharClass.is())
-                    xCharClass = CharacterClassification::create(m_xContext);
-                // capitalize first letter
-                result += xCharClass->toTitle(aNum, 0, 1, aLocale) + aNum.copy(1);
-            }
-            else
-                result += aNum;
+            result += xNatNum->getNativeNumberStringParams(OUString::number(number), locale,
+                                                                 natNum, sNatNumParams);
         } else if (tableSize) {
             if ( number > tableSize && !bRecycleSymbol)
                 result += OUString::number( number);
@@ -1018,7 +1009,7 @@ OUString DefaultNumberingProvider::makeNumberingIdentifier(sal_Int16 index)
     if (aSupportedTypes[index].cSymbol)
         return OUString(aSupportedTypes[index].cSymbol, strlen(aSupportedTypes[index].cSymbol), RTL_TEXTENCODING_UTF8);
     else {
-        OUString result;
+        OUStringBuffer result;
         Locale aLocale("en", OUString(), OUString());
         Sequence<beans::PropertyValue> aProperties(2);
         aProperties[0].Name = "NumberingType";
@@ -1026,11 +1017,11 @@ OUString DefaultNumberingProvider::makeNumberingIdentifier(sal_Int16 index)
         aProperties[1].Name = "Value";
         for (sal_Int32 j = 1; j <= 3; j++) {
             aProperties[1].Value <<= j;
-            result += makeNumberingString( aProperties, aLocale );
-            result += ", ";
+            result.append( makeNumberingString( aProperties, aLocale ) );
+            result.append(", ");
         }
-        result += "...";
-        return result;
+        result.append("...");
+        return result.makeStringAndClear();
     }
 }
 

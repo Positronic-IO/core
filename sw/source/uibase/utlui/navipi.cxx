@@ -598,7 +598,6 @@ SwNavigationPI::SwNavigationPI(SfxBindings* _pBindings,
                                vcl::Window* pParent)
     : PanelLayout(pParent, "NavigatorPanel", "modules/swriter/ui/navigatorpanel.ui", nullptr)
     , SfxControllerItem(SID_DOCFULLNAME, *_pBindings)
-    , m_pxObjectShell(nullptr)
     , m_pContentView(nullptr)
     , m_pContentWrtShell(nullptr)
     , m_pActContView(nullptr)
@@ -650,7 +649,7 @@ SwNavigationPI::SwNavigationPI(SfxBindings* _pBindings,
     tools::Rectangle aSecondRect = m_aContentToolBox->GetItemRect(m_aContentToolBox->GetItemId("header"));
     Size aItemWinSize( aFirstRect.Left() - aSecondRect.Left(),
                        aFirstRect.Bottom() - aFirstRect.Top() );
-    Size aOptimalSize(m_xEdit->get_preferred_size());
+    Size aOptimalSize(m_xEdit->CalcMinimumSizeForText(m_xEdit->CreateFieldText(9999)));
     aItemWinSize.setWidth( std::max(aItemWinSize.Width(), aOptimalSize.Width()) );
     m_xEdit->SetSizePixel(aItemWinSize);
     m_aContentToolBox->InsertSeparator(4);
@@ -805,6 +804,7 @@ void SwNavigationPI::dispose()
 
 void SwNavigationPI::SetPopupWindow( SfxPopupWindow* pWindow )
 {
+    m_pPopupWindow.disposeAndClear();
     m_pPopupWindow = pWindow;
     m_pPopupWindow->SetPopupModeEndHdl( LINK( this, SwNavigationPI, PopupModeEndHdl ));
     m_pPopupWindow->SetDeleteLink_Impl( LINK( this, SwNavigationPI, ClosePopupWindow ));
@@ -870,7 +870,7 @@ void SwNavigationPI::StateChanged(StateChangedType nStateChange)
     PanelLayout::StateChanged(nStateChange);
     if (nStateChange == StateChangedType::InitShow)
     {
-        // if the parent isn't a float, then then the navigator is displayed in
+        // if the parent isn't a float, then the navigator is displayed in
         // the sidebar or is otherwise docked. While the navigator could change
         // its size, the sidebar can not, and the navigator would just waste
         // space. Therefore hide this button.
@@ -1014,9 +1014,9 @@ void SwNavigationPI::UpdateListBox()
     m_aDocListBox->SetUpdateMode(true);
 }
 
-IMPL_LINK(SwNavigationPI, DoneLink, SfxPoolItem *, pItem, void)
+IMPL_LINK(SwNavigationPI, DoneLink, SfxPoolItem const *, pItem, void)
 {
-    const SfxViewFrameItem* pFrameItem = dynamic_cast<SfxViewFrameItem*>( pItem  );
+    const SfxViewFrameItem* pFrameItem = dynamic_cast<SfxViewFrameItem const *>( pItem  );
     if( pFrameItem )
     {
         SfxViewFrame* pFrame =  pFrameItem->GetFrame();
@@ -1242,6 +1242,13 @@ SwNavigationChild::SwNavigationChild( vcl::Window* pParent,
     {
         pNavi->m_aContentTree->SetRootType(nRootType);
         pNavi->m_aContentToolBox->CheckItem(pNavi->m_aContentToolBox->GetItemId("root"));
+        if (nRootType == ContentTypeId::OUTLINE)
+        {
+            pNavi->m_aContentTree->SetSelectionMode(SelectionMode::Multiple);
+            pNavi->m_aContentTree->SetDragDropMode(DragDropMode::CTRL_MOVE |
+                                                   DragDropMode::CTRL_COPY |
+                                                   DragDropMode::ENABLE_TOP);
+        }
     }
     pNavi->m_aContentTree->SetOutlineLevel( static_cast< sal_uInt8 >( pNaviConfig->GetOutlineLevel() ) );
     pNavi->SetRegionDropMode( pNaviConfig->GetRegionMode() );

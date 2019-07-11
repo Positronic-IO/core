@@ -40,7 +40,6 @@
 #include <svl/hint.hxx>
 #include <unotools/accessiblestatesethelper.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <o3tl/make_unique.hxx>
 #ifdef indices
@@ -66,8 +65,7 @@ ScAccessiblePreviewHeaderCell::ScAccessiblePreviewHeaderCell( const css::uno::Re
     mnIndex( nIndex ),
     maCellPos( rCellPos ),
     mbColumnHeader( bIsColHdr ),
-    mbRowHeader( bIsRowHdr ),
-    mpTableInfo( nullptr )
+    mbRowHeader( bIsRowHdr )
 {
     if (mpViewShell)
         mpViewShell->AddAccessibilityObject(*this);
@@ -88,8 +86,7 @@ void SAL_CALL ScAccessiblePreviewHeaderCell::disposing()
         mpViewShell = nullptr;
     }
 
-       if (mpTableInfo)
-        DELETEZ (mpTableInfo);
+    mpTableInfo.reset();
 
     ScAccessibleContextBase::disposing();
 }
@@ -108,7 +105,7 @@ void ScAccessiblePreviewHeaderCell::Notify( SfxBroadcaster& rBC, const SfxHint& 
     {
         //  column / row layout may change with any document change,
         //  so it must be invalidated
-        DELETEZ( mpTableInfo );
+        mpTableInfo.reset();
     }
 
     ScAccessibleContextBase::Notify(rBC, rHint);
@@ -405,7 +402,7 @@ void ScAccessiblePreviewHeaderCell::FillTableInfo() const
             aOutputSize = pWindow->GetOutputSizePixel();
         tools::Rectangle aVisRect( Point(), aOutputSize );
 
-        mpTableInfo = new ScPreviewTableInfo;
+        mpTableInfo.reset( new ScPreviewTableInfo );
         mpViewShell->GetLocationData().GetTableInfo( aVisRect, *mpTableInfo );
     }
 }

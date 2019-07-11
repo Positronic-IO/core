@@ -20,6 +20,8 @@
 #include <sal/config.h>
 
 #include <sal/log.hxx>
+#include <unotools/localedatawrapper.hxx>
+#include <unotools/charclass.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/syslocale.hxx>
 #include <unotools/syslocaleoptions.hxx>
@@ -59,7 +61,7 @@ private:
     void                        setDateAcceptancePatternsConfig();
 };
 
-SvtSysLocale_Impl::SvtSysLocale_Impl() : pCharClass(nullptr)
+SvtSysLocale_Impl::SvtSysLocale_Impl()
 {
     pLocaleData.reset(new LocaleDataWrapper( aSysLocaleOptions.GetRealLanguageTag() ));
     setDateAcceptancePatternsConfig();

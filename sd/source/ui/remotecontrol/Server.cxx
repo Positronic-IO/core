@@ -16,6 +16,7 @@
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/configuration.hxx>
@@ -49,8 +50,8 @@ namespace sd {
     struct ClientInfoInternal:
         ClientInfo
     {
-        BufferedStreamSocket *mpStreamSocket;
-        OUString mPin;
+        BufferedStreamSocket * const mpStreamSocket;
+        OUString const mPin;
 
         ClientInfoInternal( const OUString& rName,
                             BufferedStreamSocket *pSocket,
@@ -312,7 +313,7 @@ bool RemoteServer::connectClient( const std::shared_ptr< ClientInfo >& pClient, 
             aChanges->commit();
         }
 
-        Communicator* pCommunicator = new Communicator( apClient->mpStreamSocket );
+        Communicator* pCommunicator = new Communicator( std::unique_ptr<IBluetoothSocket>(apClient->mpStreamSocket) );
         MutexGuard aGuard( sDataMutex );
 
         sCommunicators.push_back( pCommunicator );

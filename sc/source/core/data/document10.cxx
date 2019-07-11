@@ -10,11 +10,9 @@
 #include <memory>
 #include <document.hxx>
 #include <clipcontext.hxx>
-#include <formulacell.hxx>
 #include <clipparam.hxx>
 #include <table.hxx>
 #include <tokenarray.hxx>
-#include <editutil.hxx>
 #include <listenercontext.hxx>
 #include <tokenstringcontext.hxx>
 #include <poolhelp.hxx>
@@ -23,10 +21,8 @@
 #include <docpool.hxx>
 #include <columniterator.hxx>
 
-#include <dociter.hxx>
-#include <patattr.hxx>
 #include <refupdatecontext.hxx>
-#include <svl/whiter.hxx>
+#include <sal/log.hxx>
 #include <editeng/colritem.hxx>
 #include <scitems.hxx>
 #include <datamapper.hxx>
@@ -292,7 +288,7 @@ void ScDocument::PreprocessAllRangeNamesUpdate( const std::map<OUString, std::un
     TableContainer::iterator it = maTabs.begin(), itEnd = maTabs.end();
     for (; it != itEnd; ++it)
     {
-        ScTable* p = *it;
+        ScTable* p = it->get();
         p->PreprocessRangeNameUpdate(aEndListenCxt, aCompileCxt);
     }
 }
@@ -305,7 +301,7 @@ void ScDocument::PreprocessRangeNameUpdate()
     TableContainer::iterator it = maTabs.begin(), itEnd = maTabs.end();
     for (; it != itEnd; ++it)
     {
-        ScTable* p = *it;
+        ScTable* p = it->get();
         p->PreprocessRangeNameUpdate(aEndListenCxt, aCompileCxt);
     }
 }
@@ -318,7 +314,7 @@ void ScDocument::PreprocessDBDataUpdate()
     TableContainer::iterator it = maTabs.begin(), itEnd = maTabs.end();
     for (; it != itEnd; ++it)
     {
-        ScTable* p = *it;
+        ScTable* p = it->get();
         p->PreprocessDBDataUpdate(aEndListenCxt, aCompileCxt);
     }
 }
@@ -330,7 +326,7 @@ void ScDocument::CompileHybridFormula()
     TableContainer::iterator it = maTabs.begin(), itEnd = maTabs.end();
     for (; it != itEnd; ++it)
     {
-        ScTable* p = *it;
+        ScTable* p = it->get();
         p->CompileHybridFormula(aStartListenCxt, aCompileCxt);
     }
 }
@@ -477,7 +473,7 @@ public:
         mpCxt->setColumnSet( rpColSet);
     }
 
-    void operator() (ScTable* p)
+    void operator() (ScTableUniquePtr & p)
     {
         if (p)
             p->StartListeners(*mpCxt, false);
@@ -522,7 +518,7 @@ void ScDocument::finalizeOutlineImport()
     TableContainer::iterator it = maTabs.begin(), itEnd = maTabs.end();
     for (; it != itEnd; ++it)
     {
-        ScTable* p = *it;
+        ScTable* p = it->get();
         p->finalizeOutlineImport();
     }
 }
@@ -656,8 +652,8 @@ ScRangeData* copyRangeName( const ScRangeData* pOldRangeData, ScDocument& rNewDo
 
 struct SheetIndex
 {
-    SCTAB       mnSheet;
-    sal_uInt16  mnIndex;
+    SCTAB const       mnSheet;
+    sal_uInt16 const  mnIndex;
 
     SheetIndex( SCTAB nSheet, sal_uInt16 nIndex ) : mnSheet(nSheet < -1 ? -1 : nSheet), mnIndex(nIndex) {}
     bool operator<( const SheetIndex& r ) const

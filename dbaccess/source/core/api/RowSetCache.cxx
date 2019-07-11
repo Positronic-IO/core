@@ -27,6 +27,7 @@
 #include "RowSetCache.hxx"
 #include "StaticSet.hxx"
 #include "WrappedResultSet.hxx"
+#include <sal/log.hxx>
 #include <core_resource.hxx>
 #include <strings.hrc>
 #include <strings.hxx>
@@ -43,7 +44,7 @@
 
 #include <comphelper/extract.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/seqstream.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/sqliterator.hxx>
@@ -91,8 +92,6 @@ ORowSetCache::ORowSetCache(const Reference< XResultSet >& _xRs,
     :m_xSet(_xRs)
     ,m_xMetaData(Reference< XResultSetMetaDataSupplier >(_xRs,UNO_QUERY)->getMetaData())
     ,m_aContext( _rContext )
-    ,m_pMatrix(nullptr)
-    ,m_pInsertMatrix(nullptr)
     ,m_nFetchSize(0)
     ,m_nRowCount(0)
     ,m_nPrivileges( Privilege::SELECT )
@@ -687,7 +686,7 @@ bool ORowSetCache::isLast(  )
     return m_nPosition == m_nRowCount;
 }
 
-bool ORowSetCache::beforeFirst(  )
+void ORowSetCache::beforeFirst(  )
 {
     if(!m_bBeforeFirst)
     {
@@ -698,10 +697,9 @@ bool ORowSetCache::beforeFirst(  )
         moveWindow();
         m_aMatrixIter = m_pMatrix->end();
     }
-    return true;
 }
 
-bool ORowSetCache::afterLast(  )
+void ORowSetCache::afterLast(  )
 {
     if(!m_bAfterLast)
     {
@@ -719,7 +717,6 @@ bool ORowSetCache::afterLast(  )
         m_nPosition = 0;
         m_aMatrixIter = m_pMatrix->end();
     }
-    return true;
 }
 
 bool ORowSetCache::fillMatrix(sal_Int32& _nNewStartPos, sal_Int32 &_nNewEndPos)

@@ -51,8 +51,8 @@ def factoryGetInstance(nsLabel):
 
 OOXMLFactory_ns::Pointer_t OOXMLFactory_%s::getInstance()
 {
-    if (m_pInstance.get() == NULL)
-        m_pInstance.reset(new OOXMLFactory_%s());
+    if (!m_pInstance)
+        m_pInstance = new OOXMLFactory_%s();
 
     return m_pInstance;
 }""" % (nsLabel, nsLabel, nsLabel))
@@ -94,6 +94,13 @@ def resourceForAttribute(nsNode, attrNode):
             resourceName = "Boolean"
         elif len([i for i in attrNode.getElementsByTagName("data") if i.getAttribute("type") in ("unsignedInt", "integer", "int")]):
             resourceName = "Integer"
+        else:
+            dataNodes = attrNode.getElementsByTagName("data")
+            if len(dataNodes):
+                t = dataNodes[0].getAttribute("type")
+                # Blacklist existing unexpected data types.
+                if t not in ("token", "long", "decimal", "float", "byte", "ST_DecimalNumber", "positiveInteger"):
+                    raise Exception("unexpected data type: " + dataNodes[0].getAttribute("type"))
     return resourceName
 
 
@@ -745,6 +752,7 @@ def main():
     modelNode = getChildByName(minidom.parse(modelPath), "model")
     nsName = filePath.split('OOXMLFactory_')[1].split('.cxx')[0]
     createImpl(modelNode, nsName)
+
 
 if __name__ == "__main__":
     main()

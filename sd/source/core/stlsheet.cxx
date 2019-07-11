@@ -19,10 +19,13 @@
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/style/XStyle.hpp>
 
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/interfacecontainer.hxx>
 
@@ -155,17 +158,6 @@ OUString const & SdStyleSheet::GetApiName() const
         return msApiName;
     else
         return GetName();
-}
-
-void SdStyleSheet::Load (SvStream& rIn, sal_uInt16 nVersion)
-{
-    SfxStyleSheetBase::Load(rIn, nVersion);
-
-    /* previously, the default mask was 0xAFFE. The needed flags were masked
-       from this mask. Now the flag SfxStyleSearchBits::ReadOnly was introduced and with
-       this, all style sheets are read only. Since no style sheet should be read
-       only in Draw, we reset the flag here.  */
-    nMask &= ~SfxStyleSearchBits::ReadOnly;
 }
 
 bool SdStyleSheet::SetParent(const OUString& rParentName)
@@ -580,56 +572,90 @@ bool SdStyleSheet::HasClearParentSupport() const
     return true;
 }
 
+namespace
+{
+struct ApiNameMap
+{
+    OUStringLiteral const mpApiName;
+    sal_uInt32 const mnHelpId;
+} const pApiNameMap[]
+    = { { OUStringLiteral("title"), HID_PSEUDOSHEET_TITLE },
+        { OUStringLiteral("subtitle"), HID_PSEUDOSHEET_SUBTITLE },
+        { OUStringLiteral("background"), HID_PSEUDOSHEET_BACKGROUND },
+        { OUStringLiteral("backgroundobjects"), HID_PSEUDOSHEET_BACKGROUNDOBJECTS },
+        { OUStringLiteral("notes"), HID_PSEUDOSHEET_NOTES },
+        { OUStringLiteral("standard"), HID_STANDARD_STYLESHEET_NAME },
+        { OUStringLiteral("objectwithoutfill"), HID_POOLSHEET_OBJWITHOUTFILL },
+
+        { OUStringLiteral("Text"), HID_POOLSHEET_TEXT },
+        { OUStringLiteral("A4"), HID_POOLSHEET_A4 },
+        { OUStringLiteral("Title A4"), HID_POOLSHEET_A4_TITLE },
+        { OUStringLiteral("Heading A4"), HID_POOLSHEET_A4_HEADLINE },
+        { OUStringLiteral("Text A4"), HID_POOLSHEET_A4_TEXT },
+        { OUStringLiteral("A4"), HID_POOLSHEET_A0 },
+        { OUStringLiteral("Title A0"), HID_POOLSHEET_A0_TITLE },
+        { OUStringLiteral("Heading A0"), HID_POOLSHEET_A0_HEADLINE },
+        { OUStringLiteral("Text A0"), HID_POOLSHEET_A0_TEXT },
+
+        { OUStringLiteral("Graphic"), HID_POOLSHEET_GRAPHIC },
+        { OUStringLiteral("Shapes"), HID_POOLSHEET_SHAPES },
+        { OUStringLiteral("Filled"), HID_POOLSHEET_FILLED },
+        { OUStringLiteral("Filled Blue"), HID_POOLSHEET_FILLED_BLUE },
+        { OUStringLiteral("Filled Green"), HID_POOLSHEET_FILLED_GREEN },
+        { OUStringLiteral("Filled Red"), HID_POOLSHEET_FILLED_RED },
+        { OUStringLiteral("Filled Yellow"), HID_POOLSHEET_FILLED_YELLOW },
+        { OUStringLiteral("Outlined"), HID_POOLSHEET_OUTLINE },
+        { OUStringLiteral("Outlined Blue"), HID_POOLSHEET_OUTLINE_BLUE },
+        { OUStringLiteral("Outlined Green"), HID_POOLSHEET_OUTLINE_GREEN },
+        { OUStringLiteral("Outlined Red"), HID_POOLSHEET_OUTLINE_RED },
+        { OUStringLiteral("Outlined Yellow"), HID_POOLSHEET_OUTLINE_YELLOW },
+        { OUStringLiteral("Lines"), HID_POOLSHEET_LINES },
+        { OUStringLiteral("Arrow Line"), HID_POOLSHEET_MEASURE },
+        { OUStringLiteral("Arrow Dashed"), HID_POOLSHEET_LINES_DASHED }
+      };
+
+OUString GetApiNameForHelpId(sal_uLong nId)
+{
+    if ((nId >= HID_PSEUDOSHEET_OUTLINE1) && (nId <= HID_PSEUDOSHEET_OUTLINE9))
+        return "outline" + OUStringLiteral1('1' + (nId - HID_PSEUDOSHEET_OUTLINE1));
+
+    for (const auto& i : pApiNameMap)
+        if (nId == i.mnHelpId)
+            return i.mpApiName;
+
+    return OUString();
+}
+
+sal_uInt32 GetHelpIdForApiName(const OUString& sName)
+{
+    OUString sRest;
+    if (sName.startsWith("outline", &sRest))
+    {
+        if (sRest.getLength() == 1)
+        {
+            sal_Unicode ch = sRest.toChar();
+            if ('1' <= ch && ch <= '9')
+                return HID_PSEUDOSHEET_OUTLINE1 + ch - '1';
+        }
+        // No other pre-defined names start with "outline"
+        return 0;
+    }
+
+    for (const auto& i : pApiNameMap)
+        if (sName == i.mpApiName)
+            return i.mnHelpId;
+
+    return 0;
+}
+}
+
 void SdStyleSheet::SetHelpId( const OUString& r, sal_uLong nId )
 {
     SfxStyleSheet::SetHelpId( r, nId );
 
-    if( (nId >= HID_PSEUDOSHEET_OUTLINE1) && ( nId <= HID_PSEUDOSHEET_OUTLINE9 ) )
-    {
-        msApiName = "outline";
-        msApiName += OUStringLiteral1( '1' + (nId - HID_PSEUDOSHEET_OUTLINE1) );
-    }
-    else
-    {
-        static struct ApiNameMap
-        {
-            OUStringLiteral mpApiName;
-            sal_uInt32      mnHelpId;
-        }
-        const pApiNameMap[] =
-        {
-            { OUStringLiteral("title"),            HID_PSEUDOSHEET_TITLE },
-            { OUStringLiteral("subtitle"),         HID_PSEUDOSHEET_SUBTITLE },
-            { OUStringLiteral("background"),       HID_PSEUDOSHEET_BACKGROUND },
-            { OUStringLiteral("backgroundobjects"),HID_PSEUDOSHEET_BACKGROUNDOBJECTS },
-            { OUStringLiteral("notes"),            HID_PSEUDOSHEET_NOTES },
-            { OUStringLiteral("standard"),         HID_STANDARD_STYLESHEET_NAME },
-            { OUStringLiteral("objectwithoutfill"),HID_POOLSHEET_OBJWITHOUTFILL },
-            { OUStringLiteral("text"),             HID_POOLSHEET_TEXT },
-            { OUStringLiteral("title"),            HID_POOLSHEET_TITLE },
-            { OUStringLiteral("headline"),         HID_POOLSHEET_HEADLINE },
-            { OUStringLiteral("measure"),          HID_POOLSHEET_MEASURE },
-            { OUStringLiteral("Filled"),           HID_POOLSHEET_FILLED },
-            { OUStringLiteral("Filled Blue"),      HID_POOLSHEET_FILLED_BLUE },
-            { OUStringLiteral("Filled Green"),     HID_POOLSHEET_FILLED_GREEN },
-            { OUStringLiteral("Filled Red"),       HID_POOLSHEET_FILLED_RED },
-            { OUStringLiteral("Filled Yellow"),    HID_POOLSHEET_FILLED_YELLOW },
-            { OUStringLiteral("Outlined"),          HID_POOLSHEET_OUTLINE },
-            { OUStringLiteral("Outlined Blue"),     HID_POOLSHEET_OUTLINE_BLUE },
-            { OUStringLiteral("Outlined Green"),    HID_POOLSHEET_OUTLINE_GREEN },
-            { OUStringLiteral("Outlined Red"),      HID_POOLSHEET_OUTLINE_RED },
-            { OUStringLiteral("Outlined Yellow"),   HID_POOLSHEET_OUTLINE_YELLOW }
-        };
-
-        for (std::size_t i = 0; i != SAL_N_ELEMENTS(pApiNameMap); ++i)
-        {
-            if( nId == pApiNameMap[i].mnHelpId )
-            {
-                msApiName = pApiNameMap[i].mpApiName;
-                break;
-            }
-        }
-    }
+    const OUString sNewApiName = GetApiNameForHelpId(nId);
+    if (!sNewApiName.isEmpty())
+        msApiName = sNewApiName;
 }
 
 OUString SdStyleSheet::GetFamilyString( SfxStyleFamily eFamily )
@@ -723,7 +749,10 @@ void SAL_CALL SdStyleSheet::dispose(  )
         }
         catch (const Exception & exc)
         {
-            throw RuntimeException( "unexpected UNO exception caught: " + exc.Message );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected UNO exception caught: " + exc.Message ,
+                nullptr, anyEx );
         }
     }
 }
@@ -773,7 +802,7 @@ void SAL_CALL SdStyleSheet::addModifyListener( const Reference< XModifyListener 
     }
     else
     {
-        if( !mpModifyListenerForewarder.get() )
+        if (!mpModifyListenerForewarder)
             mpModifyListenerForewarder.reset( new ModifyListenerForewarder( this ) );
         mrBHelper.addListener( cppu::UnoType<XModifyListener>::get(), xListener );
     }
@@ -829,6 +858,18 @@ Sequence< OUString > SAL_CALL SdStyleSheet::getSupportedServiceNames()
     return aNameSequence;
 }
 
+bool SdStyleSheet::SetName(const OUString& rNewName, bool bReindexNow)
+{
+    const bool bResult = SfxUnoStyleSheet::SetName(rNewName, bReindexNow);
+    // Don't overwrite predefined API names
+    if (bResult && GetHelpIdForApiName(msApiName) == 0)
+    {
+        msApiName = rNewName;
+        Broadcast(SfxHint(SfxHintId::DataChanged));
+    }
+    return bResult;
+}
+
 // XNamed
 OUString SAL_CALL SdStyleSheet::getName()
 {
@@ -841,12 +882,7 @@ void SAL_CALL SdStyleSheet::setName( const OUString& rName  )
 {
     SolarMutexGuard aGuard;
     throwIfDisposed();
-
-    if( SetName( rName ) )
-    {
-        msApiName = rName;
-        Broadcast(SfxHint(SfxHintId::DataChanged));
-    }
+    SetName(rName);
 }
 
 // XStyle
@@ -1191,7 +1227,7 @@ PropertyState SAL_CALL SdStyleSheet::getPropertyState( const OUString& PropertyN
             case XATTR_LINESTART:
             case XATTR_LINEDASH:
                 {
-                    const NameOrIndex* pItem = rStyleSet.GetItem<NameOrIndex>(static_cast<sal_uInt16>(pEntry->nWID));
+                    const NameOrIndex* pItem = rStyleSet.GetItem<NameOrIndex>(pEntry->nWID);
                     if( ( pItem == nullptr ) || pItem->GetName().isEmpty() )
                         eState = PropertyState_DEFAULT_VALUE;
                 }

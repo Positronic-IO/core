@@ -101,11 +101,11 @@ GtkWidget* GtvHelpers::createCommentBox(const boost::property_tree::ptree& aComm
     gchar *id = g_strndup(aComment.get<std::string>("id").c_str(), 20);
     g_object_set_data_full(G_OBJECT(pCommentVBox), "id", id, g_free);
 
-    // Set background if its a reply comment
+    // Set background if it's a reply comment
     if (aComment.get("parent", -1) > 0)
     {
         GtkStyleContext* pStyleContext = gtk_widget_get_style_context(pCommentVBox);
-        GtkCssProvider* pCssProvider = gtk_css_provider_get_default();
+        GtkCssProvider* pCssProvider = gtk_css_provider_new();
         gtk_style_context_add_class(pStyleContext, "commentbox");
         gtk_style_context_add_provider(pStyleContext, GTK_STYLE_PROVIDER(pCssProvider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
         gtk_css_provider_load_from_data(pCssProvider, ".commentbox {background-color: lightgreen;}", -1, nullptr);

@@ -33,6 +33,11 @@
 #include <unotools/calendarwrapper.hxx>
 #include <com/sun/star/i18n/KNumberFormatUsage.hpp>
 #include <com/sun/star/i18n/KNumberFormatType.hpp>
+#include <com/sun/star/i18n/FormatElement.hpp>
+#include <com/sun/star/i18n/Currency2.hpp>
+#include <com/sun/star/i18n/NumberFormatCode.hpp>
+#include <com/sun/star/i18n/XNumberFormatCode.hpp>
+#include <com/sun/star/i18n/NumberFormatMapper.hpp>
 #include <comphelper/processfactory.hxx>
 #include <unotools/misccfg.hxx>
 
@@ -462,7 +467,7 @@ void SvNumberFormatter::ReplaceSystemCL( LanguageType eOldLanguage )
     // convert additional and user defined from old system to new system
     SvNumberformat* pStdFormat = GetFormatEntry( nCLOffset + ZF_STANDARD );
     sal_uInt32 nLastKey = nMaxBuiltin;
-    pFormatScanner->SetConvertMode( eOldLanguage, LANGUAGE_SYSTEM, true );
+    pFormatScanner->SetConvertMode( eOldLanguage, LANGUAGE_SYSTEM, true , true);
     while ( !aOldTable.empty() )
     {
         nKey = aOldTable.begin()->first;
@@ -628,7 +633,7 @@ bool SvNumberFormatter::PutandConvertEntry(OUString& rString,
                                            sal_uInt32& nKey,
                                            LanguageType eLnge,
                                            LanguageType eNewLnge,
-                                           bool bForExcelExport )
+                                           bool bConvertDateOrder )
 {
     ::osl::MutexGuard aGuard( GetInstanceMutex() );
     bool bRes;
@@ -636,7 +641,7 @@ bool SvNumberFormatter::PutandConvertEntry(OUString& rString,
     {
         eNewLnge = IniLnge;
     }
-    pFormatScanner->SetConvertMode(eLnge, eNewLnge, false, bForExcelExport);
+    pFormatScanner->SetConvertMode(eLnge, eNewLnge, false, bConvertDateOrder);
     bRes = PutEntry(rString, nCheckPos, nType, nKey, eLnge);
     pFormatScanner->SetConvertMode(false);
     return bRes;
@@ -655,7 +660,7 @@ bool SvNumberFormatter::PutandConvertEntrySystem(OUString& rString,
     {
         eNewLnge = IniLnge;
     }
-    pFormatScanner->SetConvertMode(eLnge, eNewLnge, true);
+    pFormatScanner->SetConvertMode(eLnge, eNewLnge, true, true);
     bRes = PutEntry(rString, nCheckPos, nType, nKey, eLnge);
     pFormatScanner->SetConvertMode(false);
     return bRes;
@@ -811,16 +816,20 @@ OUString SvNumberFormatter::GetFormatStringForExcel( sal_uInt32 nKey, const NfKe
         }
         else
         {
+            bool bSystemLanguage = false;
             LanguageType nLang = pEntry->GetLanguage();
             if (nLang == LANGUAGE_SYSTEM)
+            {
+                bSystemLanguage = true;
                 nLang = SvtSysLocale().GetLanguageTag().getLanguageType();
+            }
             if (nLang != LANGUAGE_ENGLISH_US)
             {
                 sal_Int32 nCheckPos;
                 SvNumFormatType nType = SvNumFormatType::DEFINED;
                 sal_uInt32 nTempKey;
                 OUString aTemp( pEntry->GetFormatstring());
-                rTempFormatter.PutandConvertEntry( aTemp, nCheckPos, nType, nTempKey, nLang, LANGUAGE_ENGLISH_US, true);
+                rTempFormatter.PutandConvertEntry( aTemp, nCheckPos, nType, nTempKey, nLang, LANGUAGE_ENGLISH_US, false);
                 SAL_WARN_IF( nCheckPos != 0, "svl.numbers",
                         "SvNumberFormatter::GetFormatStringForExcel - format code not convertible");
                 if (nTempKey != NUMBERFORMAT_ENTRY_NOT_FOUND)
@@ -833,7 +842,8 @@ OUString SvNumberFormatter::GetFormatStringForExcel( sal_uInt32 nKey, const NfKe
                 // before (which doesn't do anything if it was the same locale
                 // already).
                 rTempFormatter.ChangeIntl( LANGUAGE_ENGLISH_US);
-                aFormatStr = pEntry->GetMappedFormatstring( rKeywords, *rTempFormatter.GetLocaleData(), nLang );
+                aFormatStr = pEntry->GetMappedFormatstring( rKeywords, *rTempFormatter.GetLocaleData(), nLang,
+                        bSystemLanguage);
             }
         }
     }
@@ -1492,6 +1502,9 @@ sal_uInt32 SvNumberFormatter::GetEditFormat( double fNumber, sal_uInt32 nFIndex,
         else
             nKey = GetFormatIndex( NF_DATETIME_SYS_DDMMYYYY_HHMMSS, eLang );
         break;
+    case SvNumFormatType::NUMBER:
+        nKey = GetStandardFormat( eType, eLang );
+        break;
     default:
         nKey = GetStandardFormat( fNumber, nFIndex, eType, eLang );
     }
@@ -1718,7 +1731,7 @@ bool SvNumberFormatter::GetPreviewStringGuess( const OUString& sFormatString,
 
         // Try English -> other or convert english to other
         LanguageType eFormatLang = LANGUAGE_ENGLISH_US;
-        pFormatScanner->SetConvertMode( LANGUAGE_ENGLISH_US, eLnge );
+        pFormatScanner->SetConvertMode( LANGUAGE_ENGLISH_US, eLnge, false, false);
         sTmpString = sFormatString;
         pEntry.reset(new SvNumberformat( sTmpString, pFormatScanner.get(),
                                      pStringScanner.get(), nCheckPos, eFormatLang ));
@@ -1743,7 +1756,7 @@ bool SvNumberFormatter::GetPreviewStringGuess( const OUString& sFormatString,
                 sal_Int32 nCheckPos2 = -1;
                 // try other --> english
                 eFormatLang = eLnge;
-                pFormatScanner->SetConvertMode( eLnge, LANGUAGE_ENGLISH_US );
+                pFormatScanner->SetConvertMode( eLnge, LANGUAGE_ENGLISH_US, false, false);
                 sTmpString = sFormatString;
                 std::unique_ptr<SvNumberformat> pEntry2(new SvNumberformat( sTmpString, pFormatScanner.get(),
                                                               pStringScanner.get(), nCheckPos2, eFormatLang ));
@@ -2855,15 +2868,16 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
     {
         eLnge = IniLnge;
     }
-    SvNumFormatType eType = GetType(nIndex);
+
+    const SvNumberformat* pFormat = GetFormatEntry( nIndex );
+    const SvNumFormatType eType = (pFormat ? pFormat->GetMaskedType() : SvNumFormatType::UNDEFINED);
+
     ImpGenerateCL(eLnge);           // create new standard formats if necessary
 
     utl::DigitGroupingIterator aGrouping( xLocaleData->getDigitGrouping());
     // always group of 3 for Engineering notation
     const sal_Int32 nDigitsInFirstGroup = ( bThousand && (eType == SvNumFormatType::SCIENTIFIC) ) ? 3 : aGrouping.get();
     const OUString& rThSep = GetNumThousandSep();
-
-    SvNumberformat* pFormat = GetFormatEntry( nIndex );
 
     OUStringBuffer sString;
     using comphelper::string::padToLength;
@@ -3012,7 +3026,7 @@ OUString SvNumberFormatter::GenerateFormat(sal_uInt32 nIndex,
         {
             OUStringBuffer sTmpStr(sString);
 
-            if ( pFormat->HasPositiveBracketPlaceholder() )
+            if (pFormat && pFormat->HasPositiveBracketPlaceholder())
             {
                  sTmpStr.append('_');
                  sTmpStr.append(')');

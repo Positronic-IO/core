@@ -20,7 +20,6 @@
 #define INCLUDED_CUI_SOURCE_INC_CFG_HXX
 
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/menubtn.hxx>
@@ -28,11 +27,10 @@
 #include <vcl/weld.hxx>
 #include <svtools/imgdef.hxx>
 #include <svtools/miscopt.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svtools/svmedit2.hxx>
 #include <svtools/svmedit.hxx>
 
-#include <comphelper/random.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -123,7 +121,7 @@ protected:
         css::uno::Reference< css::lang::XSingleComponentFactory >& rFactory,
         SvxConfigEntry *pMenuData );
 
-    bool LoadSubMenus(
+    void LoadSubMenus(
         const css::uno::Reference< css::container::XIndexAccess >& xMenuSettings,
         const OUString& rBaseTitle, SvxConfigEntry const * pParentData, bool bContextMenu );
 
@@ -285,8 +283,7 @@ public:
             bIsParentData( false ),
             bIsModified( false ),
             bIsVisible( true ),
-            nStyle( 0 ),
-            mpEntries( nullptr )
+            nStyle( 0 )
     {}
 
     ~SvxConfigEntry();
@@ -495,7 +492,6 @@ class SvxMainMenuOrganizerDialog : public weld::GenericDialogController
 {
     std::unique_ptr<SvxEntries> mpEntries;
     OUString m_sNewMenuEntryId;
-    bool            bModified;
 
     std::unique_ptr<weld::Widget> m_xMenuBox;
     std::unique_ptr<weld::Entry> m_xMenuNameEdit;
@@ -577,7 +573,7 @@ private:
     std::unique_ptr<weld::Entry> m_xEdtName;
     std::unique_ptr<weld::Button> m_xBtnOK;
 public:
-    std::unique_ptr<weld::ComboBoxText> m_xSaveInListBox;
+    std::unique_ptr<weld::ComboBox> m_xSaveInListBox;
 
     SvxNewToolbarDialog(weld::Window* pWindow, const OUString& rName);
     virtual ~SvxNewToolbarDialog() override;

@@ -66,6 +66,7 @@
 #include <com/sun/star/uno/TypeClass.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/uno/XInterface.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/propertysetmixin.hxx>
 #include <cppuhelper/weak.hxx>
@@ -89,31 +90,29 @@ struct PropertyData {
 };
 
 struct Data: public salhelper::SimpleReferenceObject {
-    typedef std::map< rtl::OUString, PropertyData > PropertyMap;
+    typedef std::map< OUString, PropertyData > PropertyMap;
 
     PropertyMap properties;
 
     PropertyMap::const_iterator get(
         css::uno::Reference< css::uno::XInterface > const & object,
-        rtl::OUString const & name) const;
+        OUString const & name) const;
 
 protected:
     void initProperties(
         css::uno::Reference< css::reflection::XTypeDescription > const & type,
-        css::uno::Sequence< rtl::OUString > const & absentOptional,
-        std::vector< rtl::OUString > * handleNames)
+        css::uno::Sequence< OUString > const & absentOptional,
+        std::vector< OUString > * handleNames)
     {
-        TypeSet seen;
+        std::set<OUString> seen;
         initProperties(type, absentOptional, handleNames, &seen);
     }
 
 private:
-    typedef std::set< rtl::OUString > TypeSet;
-
     void initProperties(
         css::uno::Reference< css::reflection::XTypeDescription > const & type,
-        css::uno::Sequence< rtl::OUString > const & absentOptional,
-        std::vector< rtl::OUString > * handleNames, TypeSet * seen);
+        css::uno::Sequence< OUString > const & absentOptional,
+        std::vector< OUString > * handleNames, std::set<OUString> * seen);
 
     static css::uno::Reference< css::reflection::XTypeDescription >
     resolveTypedefs(
@@ -122,7 +121,7 @@ private:
 
 Data::PropertyMap::const_iterator Data::get(
     css::uno::Reference< css::uno::XInterface > const & object,
-    rtl::OUString const & name) const
+    OUString const & name) const
 {
     PropertyMap::const_iterator i(properties.find(name));
     if (i == properties.end() || !i->second.present) {
@@ -133,8 +132,8 @@ Data::PropertyMap::const_iterator Data::get(
 
 void Data::initProperties(
     css::uno::Reference< css::reflection::XTypeDescription > const & type,
-    css::uno::Sequence< rtl::OUString > const & absentOptional,
-    std::vector< rtl::OUString > * handleNames, TypeSet * seen)
+    css::uno::Sequence< OUString > const & absentOptional,
+    std::vector< OUString > * handleNames, std::set<OUString> * seen)
 {
     css::uno::Reference< css::reflection::XInterfaceTypeDescription2 > ifc(
         resolveTypedefs(type), css::uno::UNO_QUERY_THROW);
@@ -149,8 +148,8 @@ void Data::initProperties(
         css::uno::Reference<
         css::reflection::XInterfaceMemberTypeDescription > > members(
             ifc->getMembers());
-        rtl::OUString const * absentBegin = absentOptional.getConstArray();
-        rtl::OUString const * absentEnd =
+        OUString const * absentBegin = absentOptional.getConstArray();
+        OUString const * absentEnd =
             absentBegin + absentOptional.getLength();
         for (sal_Int32 i = 0; i < members.getLength(); ++i) {
             if (members[i]->getTypeClass()
@@ -235,13 +234,13 @@ void Data::initProperties(
                     }
                     t = args[0];
                 }
-                std::vector< rtl::OUString >::size_type handles
+                std::vector< OUString >::size_type handles
                     = handleNames->size();
                 if (handles > SAL_MAX_INT32) {
                     throw css::uno::RuntimeException(
                         "interface type has too many attributes");
                 }
-                rtl::OUString name(members[i]->getMemberName());
+                OUString name(members[i]->getMemberName());
                 if (!properties.emplace(
                             name,
                             PropertyData(
@@ -281,9 +280,9 @@ public:
     virtual css::uno::Sequence< css::beans::Property > SAL_CALL getProperties() override;
 
     virtual css::beans::Property SAL_CALL getPropertyByName(
-        rtl::OUString const & name) override;
+        OUString const & name) override;
 
-    virtual sal_Bool SAL_CALL hasPropertyByName(rtl::OUString const & name) override;
+    virtual sal_Bool SAL_CALL hasPropertyByName(OUString const & name) override;
 
 private:
     rtl::Reference< Data > m_data;
@@ -306,13 +305,13 @@ css::uno::Sequence< css::beans::Property > Info::getProperties()
     return s;
 }
 
-css::beans::Property Info::getPropertyByName(rtl::OUString const & name)
+css::beans::Property Info::getPropertyByName(OUString const & name)
 {
     return m_data->get(static_cast< cppu::OWeakObject * >(this), name)->
         second.property;
 }
 
-sal_Bool Info::hasPropertyByName(rtl::OUString const & name)
+sal_Bool Info::hasPropertyByName(OUString const & name)
 {
     Data::PropertyMap::iterator i(m_data->properties.find(name));
     return i != m_data->properties.end() && i->second.present;
@@ -360,33 +359,33 @@ public:
     Impl(
         css::uno::Reference< css::uno::XComponentContext > const & context,
         Implements theImplements,
-        css::uno::Sequence< rtl::OUString > const & absentOptional,
+        css::uno::Sequence< OUString > const & absentOptional,
         css::uno::Type const & type);
 
-    rtl::OUString const & translateHandle(
+    OUString const & translateHandle(
         css::uno::Reference< css::uno::XInterface > const & object,
         sal_Int32 handle) const;
 
     void setProperty(
         css::uno::Reference< css::uno::XInterface > const & object,
-        rtl::OUString const & name, css::uno::Any const & value,
+        OUString const & name, css::uno::Any const & value,
         bool isAmbiguous, bool isDefaulted, sal_Int16 illegalArgumentPosition)
         const;
 
     css::uno::Any getProperty(
         css::uno::Reference< css::uno::XInterface > const & object,
-        rtl::OUString const & name, css::beans::PropertyState * state) const;
+        OUString const & name, css::beans::PropertyState * state) const;
 
     PropertySetMixinImpl::Implements implements;
-    css::uno::Sequence< rtl::OUString > handleMap;
+    css::uno::Sequence< OUString > handleMap;
 
-    typedef std::map< rtl::OUString, BoundListenerBag > BoundListenerMap;
+    typedef std::map< OUString, BoundListenerBag > BoundListenerMap;
 
     typedef
     std::multiset< css::uno::Reference< css::beans::XVetoableChangeListener > >
     VetoListenerBag;
 
-    typedef std::map< rtl::OUString, VetoListenerBag > VetoListenerMap;
+    typedef std::map< OUString, VetoListenerBag > VetoListenerMap;
 
     mutable osl::Mutex mutex;
     BoundListenerMap boundListeners;
@@ -395,7 +394,7 @@ public:
 
 private:
     css::uno::Reference< css::reflection::XIdlClass > getReflection(
-        rtl::OUString const & typeName) const;
+        OUString const & typeName) const;
 
     static css::uno::Any wrapValue(
         css::uno::Reference< css::uno::XInterface > const & object,
@@ -405,7 +404,6 @@ private:
         bool isDefaulted, bool wrapOptional);
 
     css::uno::Reference< css::uno::XComponentContext > const & m_context;
-    css::uno::Sequence< rtl::OUString > m_absentOptional;
     css::uno::Type m_type;
     css::uno::Reference< css::reflection::XIdlClass > m_idlClass;
 };
@@ -413,10 +411,10 @@ private:
 PropertySetMixinImpl::Impl::Impl(
     css::uno::Reference< css::uno::XComponentContext > const & context,
     Implements theImplements,
-    css::uno::Sequence< rtl::OUString > const & absentOptional,
+    css::uno::Sequence< OUString > const & absentOptional,
     css::uno::Type const & type):
     implements(theImplements), disposed(false), m_context(context),
-    m_absentOptional(absentOptional), m_type(type)
+    m_type(type)
 {
     assert(context.is());
     assert(
@@ -436,32 +434,34 @@ PropertySetMixinImpl::Impl::Impl(
                     m_type.getTypeName()),
             css::uno::UNO_QUERY_THROW);
     } catch (css::container::NoSuchElementException & e) {
-        throw css::uno::RuntimeException(
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
             "unexpected com.sun.star.container.NoSuchElementException: "
-             + e.Message);
+             + e.Message,
+             nullptr, anyEx );
     }
-    std::vector< rtl::OUString > handleNames;
-    initProperties(ifc, m_absentOptional, &handleNames);
-    std::vector< rtl::OUString >::size_type size = handleNames.size();
+    std::vector< OUString > handleNames;
+    initProperties(ifc, absentOptional, &handleNames);
+    std::vector< OUString >::size_type size = handleNames.size();
     assert(size <= SAL_MAX_INT32);
     handleMap.realloc(static_cast< sal_Int32 >(size));
     std::copy(handleNames.begin(), handleNames.end(), handleMap.getArray());
 }
 
-rtl::OUString const & PropertySetMixinImpl::Impl::translateHandle(
+OUString const & PropertySetMixinImpl::Impl::translateHandle(
     css::uno::Reference< css::uno::XInterface > const & object,
     sal_Int32 handle) const
 {
     if (handle < 0 || handle >= handleMap.getLength()) {
         throw css::beans::UnknownPropertyException(
-            "bad handle " + rtl::OUString::number(handle), object);
+            "bad handle " + OUString::number(handle), object);
     }
     return handleMap[handle];
 }
 
 void PropertySetMixinImpl::Impl::setProperty(
     css::uno::Reference< css::uno::XInterface > const & object,
-    rtl::OUString const & name, css::uno::Any const & value, bool isAmbiguous,
+    OUString const & name, css::uno::Any const & value, bool isAmbiguous,
     bool isDefaulted, sal_Int16 illegalArgumentPosition) const
 {
     PropertyMap::const_iterator i(properties.find(name));
@@ -509,10 +509,11 @@ void PropertySetMixinImpl::Impl::setProperty(
             throw css::lang::IllegalArgumentException(
                 e.Message, object, illegalArgumentPosition);
         } else {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalArgumentException: "
+                 + e.Message,
+                object, anyEx );
         }
     } catch (css::lang::IllegalAccessException &) {
         //TODO  Clarify whether PropertyVetoException is the correct exception
@@ -552,7 +553,7 @@ void PropertySetMixinImpl::Impl::setProperty(
 
 css::uno::Any PropertySetMixinImpl::Impl::getProperty(
     css::uno::Reference< css::uno::XInterface > const & object,
-    rtl::OUString const & name, css::beans::PropertyState * state) const
+    OUString const & name, css::beans::PropertyState * state) const
 {
     PropertyMap::const_iterator i(properties.find(name));
     if (i == properties.end()) {
@@ -564,10 +565,11 @@ css::uno::Any PropertySetMixinImpl::Impl::getProperty(
     try {
         value = field->get(object->queryInterface(m_type));
     } catch (css::lang::IllegalArgumentException & e) {
-        throw css::uno::RuntimeException(
-            ("unexpected com.sun.star.lang.IllegalArgumentException: "
-             + e.Message),
-            object);
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException(
+            "unexpected com.sun.star.lang.IllegalArgumentException: "
+             + e.Message,
+             object, anyEx );
     } catch (css::lang::WrappedTargetRuntimeException & e) {
         //FIXME  A WrappedTargetRuntimeException from XIdlField2.get is not
         // guaranteed to originate directly within XIdlField2.get (and thus have
@@ -621,10 +623,11 @@ css::uno::Any PropertySetMixinImpl::Impl::getProperty(
                     ambiguous->getField("Value"), css::uno::UNO_QUERY_THROW)->
                     get(value);
             } catch (css::lang::IllegalArgumentException & e) {
-                throw css::uno::RuntimeException(
-                    ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                     + e.Message),
-                    object);
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException(
+                    "unexpected com.sun.star.lang.IllegalArgumentException: "
+                     + e.Message,
+                     object, anyEx );
             }
             undoAmbiguous = false;
         } else if (undoDefaulted
@@ -649,10 +652,11 @@ css::uno::Any PropertySetMixinImpl::Impl::getProperty(
                     defaulted->getField("Value"), css::uno::UNO_QUERY_THROW)->
                     get(value);
             } catch (css::lang::IllegalArgumentException & e) {
-                throw css::uno::RuntimeException(
-                    ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                     + e.Message),
-                    object);
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException(
+                    "unexpected com.sun.star.lang.IllegalArgumentException: "
+                     + e.Message,
+                    object, anyEx );
             }
             undoDefaulted = false;
         } else if (undoOptional
@@ -681,10 +685,11 @@ css::uno::Any PropertySetMixinImpl::Impl::getProperty(
                     optional->getField("Value"), css::uno::UNO_QUERY_THROW)->
                     get(value);
             } catch (css::lang::IllegalArgumentException & e) {
-                throw css::uno::RuntimeException(
-                    ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                     + e.Message),
-                    object);
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException(
+                    "unexpected com.sun.star.lang.IllegalArgumentException: "
+                     + e.Message,
+                     object, anyEx );
             }
             undoOptional = false;
         } else {
@@ -705,7 +710,7 @@ css::uno::Any PropertySetMixinImpl::Impl::getProperty(
 }
 
 css::uno::Reference< css::reflection::XIdlClass >
-PropertySetMixinImpl::Impl::getReflection(rtl::OUString const & typeName) const
+PropertySetMixinImpl::Impl::getReflection(OUString const & typeName) const
 {
     return css::uno::Reference< css::reflection::XIdlClass >(
         css::reflection::theCoreReflection::get(m_context)->forName(typeName),
@@ -738,15 +743,17 @@ css::uno::Any PropertySetMixinImpl::Impl::wrapValue(
                 type->getField("IsAmbiguous"), css::uno::UNO_QUERY_THROW)->set(
                     strct, css::uno::Any(isAmbiguous));
         } catch (css::lang::IllegalArgumentException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalArgumentException: "
+                 + e.Message,
+                 object, anyEx );
         } catch (css::lang::IllegalAccessException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalAccessException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalAccessException: "
+                 + e.Message,
+                 object, anyEx );
         }
         return strct;
     }
@@ -767,15 +774,17 @@ css::uno::Any PropertySetMixinImpl::Impl::wrapValue(
                 type->getField("IsDefaulted"), css::uno::UNO_QUERY_THROW)->set(
                     strct, css::uno::Any(isDefaulted));
         } catch (css::lang::IllegalArgumentException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalArgumentException: "
+                 + e.Message,
+                 object, anyEx );
         } catch (css::lang::IllegalAccessException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalAccessException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalAccessException: "
+                 + e.Message,
+                 object, anyEx );
         }
         return strct;
     }
@@ -799,15 +808,17 @@ css::uno::Any PropertySetMixinImpl::Impl::wrapValue(
                         isAmbiguous, wrapDefaulted, isDefaulted, false));
             }
         } catch (css::lang::IllegalArgumentException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalArgumentException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalArgumentException: "
+                 + e.Message,
+                 object, anyEx );
         } catch (css::lang::IllegalAccessException & e) {
-            throw css::uno::RuntimeException(
-                ("unexpected com.sun.star.lang.IllegalAccessException: "
-                 + e.Message),
-                object);
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw css::lang::WrappedTargetRuntimeException(
+                "unexpected com.sun.star.lang.IllegalAccessException: "
+                 + e.Message,
+                object, anyEx );
         }
         return strct;
     }
@@ -821,7 +832,7 @@ css::uno::Any PropertySetMixinImpl::Impl::wrapValue(
 PropertySetMixinImpl::PropertySetMixinImpl(
     css::uno::Reference< css::uno::XComponentContext > const & context,
     Implements implements,
-    css::uno::Sequence< rtl::OUString > const & absentOptional,
+    css::uno::Sequence< OUString > const & absentOptional,
     css::uno::Type const & type)
 {
     m_impl = new Impl(context, implements, absentOptional, type);
@@ -832,7 +843,7 @@ PropertySetMixinImpl::~PropertySetMixinImpl() {
     m_impl->release();
 }
 
-void PropertySetMixinImpl::checkUnknown(rtl::OUString const & propertyName) {
+void PropertySetMixinImpl::checkUnknown(OUString const & propertyName) {
     if (!propertyName.isEmpty()) {
         m_impl->get(
             static_cast< css::beans::XPropertySet * >(this), propertyName);
@@ -840,7 +851,7 @@ void PropertySetMixinImpl::checkUnknown(rtl::OUString const & propertyName) {
 }
 
 void PropertySetMixinImpl::prepareSet(
-    rtl::OUString const & propertyName, css::uno::Any const & oldValue,
+    OUString const & propertyName, css::uno::Any const & oldValue,
     css::uno::Any const & newValue, BoundListeners * boundListeners)
 {
     Impl::PropertyMap::const_iterator it(m_impl->properties.find(propertyName));
@@ -979,7 +990,7 @@ PropertySetMixinImpl::getPropertySetInfo()
 }
 
 void PropertySetMixinImpl::setPropertyValue(
-    rtl::OUString const & propertyName, css::uno::Any const & value)
+    OUString const & propertyName, css::uno::Any const & value)
 {
     m_impl->setProperty(
         static_cast< css::beans::XPropertySet * >(this), propertyName, value,
@@ -987,14 +998,14 @@ void PropertySetMixinImpl::setPropertyValue(
 }
 
 css::uno::Any PropertySetMixinImpl::getPropertyValue(
-    rtl::OUString const & propertyName)
+    OUString const & propertyName)
 {
     return m_impl->getProperty(
         static_cast< css::beans::XPropertySet * >(this), propertyName, nullptr);
 }
 
 void PropertySetMixinImpl::addPropertyChangeListener(
-    rtl::OUString const & propertyName,
+    OUString const & propertyName,
     css::uno::Reference< css::beans::XPropertyChangeListener > const & listener)
 {
     css::uno::Reference< css::beans::XPropertyChangeListener >(
@@ -1016,7 +1027,7 @@ void PropertySetMixinImpl::addPropertyChangeListener(
 }
 
 void PropertySetMixinImpl::removePropertyChangeListener(
-    rtl::OUString const & propertyName,
+    OUString const & propertyName,
     css::uno::Reference< css::beans::XPropertyChangeListener > const & listener)
 {
     assert(listener.is());
@@ -1033,7 +1044,7 @@ void PropertySetMixinImpl::removePropertyChangeListener(
 }
 
 void PropertySetMixinImpl::addVetoableChangeListener(
-    rtl::OUString const & propertyName,
+    OUString const & propertyName,
     css::uno::Reference< css::beans::XVetoableChangeListener > const & listener)
 {
     css::uno::Reference< css::beans::XVetoableChangeListener >(
@@ -1055,7 +1066,7 @@ void PropertySetMixinImpl::addVetoableChangeListener(
 }
 
 void PropertySetMixinImpl::removeVetoableChangeListener(
-    rtl::OUString const & propertyName,
+    OUString const & propertyName,
     css::uno::Reference< css::beans::XVetoableChangeListener > const & listener)
 {
     assert(listener.is());
@@ -1127,7 +1138,7 @@ void PropertySetMixinImpl::setPropertyValues(
         {
             throw css::beans::UnknownPropertyException(
                 ("name " + props[i].Name + " does not match handle "
-                 + rtl::OUString::number(props[i].Handle)),
+                 + OUString::number(props[i].Handle)),
                 static_cast< css::beans::XPropertySet * >(this));
         }
         m_impl->setProperty(

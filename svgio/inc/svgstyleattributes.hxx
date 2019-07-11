@@ -231,6 +231,7 @@ namespace svgio
             BaselineShift               maBaselineShift;
             SvgNumber                   maBaselineShiftNumber;
 
+            mutable std::vector<sal_uInt16> maResolvingParent;
 
             // defines if this attributes are part of a ClipPath. If yes,
             // rough geometry will be created on decomposition by patching

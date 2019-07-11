@@ -32,9 +32,11 @@
 #include <editeng/langitem.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/fileformat.h>
+#include <unotools/collatorwrapper.hxx>
 #include <unotools/transliterationwrapper.hxx>
 #include <tools/tenccvt.hxx>
 #include <o3tl/make_unique.hxx>
+#include <osl/diagnose.h>
 
 #include <globstr.hrc>
 #include <scresid.hxx>
@@ -97,9 +99,9 @@ namespace
         // since it (naturally) doesn't have any writer-specific data to write.
         if (blobSize)
         {
-            blob.pData = new sal_uInt8[blobSize];
+            blob.pData.reset(new sal_uInt8[blobSize]);
             blob.size = static_cast<std::size_t>(blobSize);
-            stream.ReadBytes(blob.pData, blob.size);
+            stream.ReadBytes(blob.pData.get(), blob.size);
         }
 
         return stream;
@@ -111,7 +113,7 @@ namespace
         const sal_uInt64 endOfBlob = stream.Tell() + sizeof(sal_uInt64) + blob.size;
         stream.WriteUInt64( endOfBlob );
         if (blob.size)
-            stream.WriteBytes(blob.pData, blob.size);
+            stream.WriteBytes(blob.pData.get(), blob.size);
 
         return stream;
     }
@@ -422,7 +424,7 @@ bool ScAutoFormatDataField::Save( SvStream& rStream, sal_uInt16 fileVersion )
     aOrientation.Store  ( rStream, aOrientation.GetVersion( fileVersion ) );
     aMargin.Store       ( rStream, aMargin.GetVersion( fileVersion ) );
     aLinebreak.Store    ( rStream, aLinebreak.GetVersion( fileVersion ) );
-    // Rotation ab SO5
+    // rotation from SO5 on
     aRotateAngle.Store  ( rStream, aRotateAngle.GetVersion( fileVersion ) );
     aRotateMode.Store   ( rStream, aRotateMode.GetVersion( fileVersion ) );
 
@@ -1058,7 +1060,7 @@ void ScAutoFormat::Load()
             if( nVal == AUTOFORMAT_ID_358 || nVal == AUTOFORMAT_ID_X ||
                     (AUTOFORMAT_ID_504 <= nVal && nVal <= AUTOFORMAT_ID) )
             {
-                m_aVersions.Load( rStream, nVal );        // Item-Versionen
+                m_aVersions.Load( rStream, nVal );        // item versions
 
                 ScAutoFormatData* pData;
                 sal_uInt16 nCnt = 0;

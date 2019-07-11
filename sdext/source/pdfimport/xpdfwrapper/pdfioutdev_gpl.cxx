@@ -67,7 +67,7 @@ namespace pdfi
 {
 
 /// cut off very small numbers & clamp value to zero
-inline double normalize( double val )
+static double normalize( double val )
 {
     return fabs(val) < 0.0000001 ? 0.0 : val;
 }
@@ -118,12 +118,12 @@ std::vector<char> lcl_escapeLineFeeds(const char* const i_pStr)
 /// for the initial std::vector capacity when copying stream from xpdf
 #define WRITE_BUFFER_INITIAL_CAPACITY (1024*100)
 
-void initBuf(OutputBuffer& io_rBuffer)
+static void initBuf(OutputBuffer& io_rBuffer)
 {
     io_rBuffer.reserve(WRITE_BUFFER_INITIAL_CAPACITY);
 }
 
-void writeBinaryBuffer( const OutputBuffer& rBuffer )
+static void writeBinaryBuffer( const OutputBuffer& rBuffer )
 {
     // ---sync point--- see SYNC STREAMS above
     fflush(stdout);
@@ -138,7 +138,7 @@ void writeBinaryBuffer( const OutputBuffer& rBuffer )
     fflush(g_binary_out);
 }
 
-bool ExtractJpegData(Stream* str, OutputBuffer& outBuf)
+static bool ExtractJpegData(Stream* str, OutputBuffer& outBuf)
 {
     int bytesToMarker = 0;
     int bytesToLen = -1;
@@ -204,7 +204,7 @@ bool ExtractJpegData(Stream* str, OutputBuffer& outBuf)
     }
 }
 
-void writeJpeg_( OutputBuffer& o_rOutputBuf, Stream* str )
+static void writeJpeg_( OutputBuffer& o_rOutputBuf, Stream* str )
 {
     // dump JPEG file as-is
 #if POPPLER_CHECK_VERSION(0, 17, 3)
@@ -223,7 +223,7 @@ void writeJpeg_( OutputBuffer& o_rOutputBuf, Stream* str )
     str->close();
 }
 
-void writePbm_(OutputBuffer& o_rOutputBuf, Stream* str, int width, int height, bool bInvert )
+static void writePbm_(OutputBuffer& o_rOutputBuf, Stream* str, int width, int height, bool bInvert )
 {
     // write as PBM (char by char, to avoid stdlib lineend messing)
     o_rOutputBuf.clear();
@@ -265,7 +265,7 @@ void writePbm_(OutputBuffer& o_rOutputBuf, Stream* str, int width, int height, b
     str->close();
 }
 
-void writePpm_( OutputBuffer&     o_rOutputBuf,
+static void writePpm_( OutputBuffer&     o_rOutputBuf,
                 Stream*           str,
                 int               width,
                 int               height,
@@ -298,7 +298,7 @@ void writePpm_( OutputBuffer&     o_rOutputBuf,
     o_rOutputBuf.resize(header_size);
 
     // initialize stream
-    Guchar *p;
+    unsigned char *p;
     GfxRGB rgb;
     std::unique_ptr<ImageStream> imgStr(
         new ImageStream(str,
@@ -323,7 +323,7 @@ void writePpm_( OutputBuffer&     o_rOutputBuf,
 }
 
 // call this only for 1 bit image streams !
-void writePng_( OutputBuffer&     o_rOutputBuf,
+static void writePng_( OutputBuffer&     o_rOutputBuf,
                 Stream*           str,
                 int               width,
                 int               height,
@@ -340,7 +340,7 @@ void writePng_( OutputBuffer&     o_rOutputBuf,
     printf("\n");
 }
 
-void writePng_( OutputBuffer& o_rOutputBuf,
+static void writePng_( OutputBuffer& o_rOutputBuf,
                 Stream* str,
                 int width, int height, GfxImageColorMap* colorMap,
                 Stream* maskStr,
@@ -355,7 +355,7 @@ void writePng_( OutputBuffer& o_rOutputBuf,
     printf("\n");
 }
 
-void writePng_( OutputBuffer& o_rOutputBuf,
+static void writePng_( OutputBuffer& o_rOutputBuf,
                 Stream* str,
                 int width, int height, GfxImageColorMap* colorMap,
                 Stream* maskStr,
@@ -371,7 +371,7 @@ void writePng_( OutputBuffer& o_rOutputBuf,
 }
 
 // stolen from ImageOutputDev.cc
-void writeMask_( OutputBuffer& o_rOutputBuf, Stream* str, int width, int height, bool bInvert )
+static void writeMask_( OutputBuffer& o_rOutputBuf, Stream* str, int width, int height, bool bInvert )
 {
     if( str->getKind() == strDCT )
         writeJpeg_(o_rOutputBuf, str);
@@ -379,7 +379,7 @@ void writeMask_( OutputBuffer& o_rOutputBuf, Stream* str, int width, int height,
         writePbm_(o_rOutputBuf, str, width, height, bInvert );
 }
 
-void writeImage_( OutputBuffer&     o_rOutputBuf,
+static void writeImage_( OutputBuffer&     o_rOutputBuf,
                   Stream*           str,
                   int               width,
                   int               height,
@@ -401,7 +401,7 @@ void writeImage_( OutputBuffer&     o_rOutputBuf,
                 oneColor = { byteToCol( 0xff ), byteToCol( 0xff ), byteToCol( 0xff ) };
         if( colorMap->getColorSpace()->getMode() == csIndexed || colorMap->getColorSpace()->getMode() == csDeviceGray )
         {
-            Guchar nIndex = 0;
+            unsigned char nIndex = 0;
             colorMap->getRGB( &nIndex, &zeroColor );
             nIndex = 1;
             colorMap->getRGB( &nIndex, &oneColor );
@@ -415,12 +415,12 @@ void writeImage_( OutputBuffer&     o_rOutputBuf,
 // forwarders
 
 
-inline void writeImageLF( OutputBuffer&     o_rOutputBuf,
+static void writeImageLF( OutputBuffer&     o_rOutputBuf,
                           Stream*           str,
                           int               width,
                           int               height,
                           GfxImageColorMap* colorMap ) { writeImage_(o_rOutputBuf,str,width,height,colorMap); }
-inline void writeMaskLF( OutputBuffer&     o_rOutputBuf,
+static void writeMaskLF( OutputBuffer&     o_rOutputBuf,
                          Stream*           str,
                          int               width,
                          int               height,
@@ -514,7 +514,7 @@ void PDFOutDev::printPath( GfxPath* pPath )
 PDFOutDev::PDFOutDev( PDFDoc* pDoc ) :
     m_pDoc( pDoc ),
     m_aFontMap(),
-    m_pUtf8Map( new UnicodeMap("UTF-8", gTrue, &mapUTF8) ),
+    m_pUtf8Map( new UnicodeMap("UTF-8", true, &mapUTF8) ),
     m_bSkipImages(false)
 {
 }
@@ -555,7 +555,11 @@ void PDFOutDev::processLink(Link* link, Catalog*)
     LinkAction* pAction = link->getAction();
     if (pAction && pAction->getKind() == actionURI)
     {
+#if POPPLER_CHECK_VERSION(0, 72, 0)
+        const char* pURI = static_cast<LinkURI*>(pAction)->getURI()->c_str();
+#else
         const char* pURI = static_cast<LinkURI*>(pAction)->getURI()->getCString();
+#endif
 
         std::vector<char> aEsc( lcl_escapeLineFeeds(pURI) );
 
@@ -578,7 +582,11 @@ void PDFOutDev::restoreState(GfxState*)
     printf( "restoreState\n" );
 }
 
+#if POPPLER_CHECK_VERSION(0, 71, 0)
+void PDFOutDev::setDefaultCTM(const double *pMat)
+#else
 void PDFOutDev::setDefaultCTM(double *pMat)
+#endif
 {
     assert(pMat);
 
@@ -753,7 +761,11 @@ void PDFOutDev::updateFont(GfxState *state)
 
             aFont = it->second;
 
+#if POPPLER_CHECK_VERSION(0, 72, 0)
+            std::vector<char> aEsc( lcl_escapeLineFeeds(aFont.familyName.c_str()) );
+#else
             std::vector<char> aEsc( lcl_escapeLineFeeds(aFont.familyName.getCString()) );
+#endif
             printf( " %d %d %d %d %f %d %s",
                     aFont.isEmbedded,
                     aFont.isBold,
@@ -939,11 +951,9 @@ void PDFOutDev::endTextObject(GfxState*)
 }
 
 void PDFOutDev::drawImageMask(GfxState* pState, Object*, Stream* str,
-                              int width, int height, GBool invert,
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                              GBool /*interpolate*/,
-#endif
-                              GBool /*inlineImg*/ )
+                              int width, int height, poppler_bool invert,
+                              poppler_bool /*interpolate*/,
+                              poppler_bool /*inlineImg*/ )
 {
     if (m_bSkipImages)
         return;
@@ -971,10 +981,8 @@ void PDFOutDev::drawImageMask(GfxState* pState, Object*, Stream* str,
 
 void PDFOutDev::drawImage(GfxState*, Object*, Stream* str,
                           int width, int height, GfxImageColorMap* colorMap,
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                          GBool /*interpolate*/,
-#endif
-                          int* maskColors, GBool /*inlineImg*/ )
+                          poppler_bool /*interpolate*/,
+                          int* maskColors, poppler_bool /*inlineImg*/ )
 {
     if (m_bSkipImages)
         return;
@@ -1022,15 +1030,10 @@ void PDFOutDev::drawImage(GfxState*, Object*, Stream* str,
 void PDFOutDev::drawMaskedImage(GfxState*, Object*, Stream* str,
                                 int width, int height,
                                 GfxImageColorMap* colorMap,
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                                GBool /*interpolate*/,
-#endif
+                                poppler_bool /*interpolate*/,
                                 Stream* maskStr,
                                 int maskWidth, int maskHeight,
-                                GBool maskInvert
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                                , GBool /*maskInterpolate*/
-#endif
+                                poppler_bool maskInvert, poppler_bool /*maskInterpolate*/
                                )
 {
     if (m_bSkipImages)
@@ -1044,15 +1047,11 @@ void PDFOutDev::drawMaskedImage(GfxState*, Object*, Stream* str,
 void PDFOutDev::drawSoftMaskedImage(GfxState*, Object*, Stream* str,
                                     int width, int height,
                                     GfxImageColorMap* colorMap,
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                                    GBool /*interpolate*/,
-#endif
+                                    poppler_bool /*interpolate*/,
                                     Stream* maskStr,
                                     int maskWidth, int maskHeight,
                                     GfxImageColorMap* maskColorMap
-#if POPPLER_CHECK_VERSION(0, 12, 0)
-                                    , GBool /*maskInterpolate*/
-#endif
+                                    , poppler_bool /*maskInterpolate*/
                                    )
 {
     if (m_bSkipImages)

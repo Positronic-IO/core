@@ -224,7 +224,7 @@ void DrawDocShell::Execute( SfxRequest& rReq )
         case SID_GET_COLORLIST:
         {
             const SvxColorListItem* pColItem = GetItem( SID_COLOR_TABLE );
-            XColorListRef pList = pColItem->GetColorList();
+            const XColorListRef& pList = pColItem->GetColorList();
             rReq.SetReturnValue( OfaRefItem<XColorList>( SID_GET_COLORLIST, pList ) );
         }
         break;
@@ -267,9 +267,9 @@ void DrawDocShell::Execute( SfxRequest& rReq )
             if (aNewLangTxt == "*" )
             {
                 // open the dialog "Tools/Options/Language Settings - Language"
-                SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-                if (pFact && mpViewShell)
+                if (mpViewShell)
                 {
+                    SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
                     ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateVclDialog( mpViewShell->GetActiveWindow(), SID_LANGUAGE_OPTIONS ));
                     pDlg->Execute();
                 }

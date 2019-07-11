@@ -20,6 +20,7 @@
 #include "Splines.hxx"
 #include <rtl/math.hxx>
 #include <osl/diagnose.h>
+#include <com/sun/star/drawing/PolyPolygonShape3D.hpp>
 
 #include <vector>
 #include <algorithm>
@@ -205,7 +206,7 @@ void lcl_SplineCalculation::Calculate()
     // is always true.
     for( lcl_tSizeType k = n; k > 0; --k )
     {
-        ( m_aSecDerivY[ k - 1 ] *= m_aSecDerivY[ k ] ) += u[ k - 1 ];
+        m_aSecDerivY[ k - 1 ] = (m_aSecDerivY[ k - 1 ] * m_aSecDerivY[ k ] ) + u[ k - 1 ];
     }
 }
 
@@ -583,8 +584,8 @@ void SplineCalculater::CalculateCubicSplines(
 
         // generate a spline for each coordinate. It holds the complete
         // information to calculate each point of the curve
-        lcl_SplineCalculation* aSplineX;
-        lcl_SplineCalculation* aSplineY;
+        std::unique_ptr<lcl_SplineCalculation> aSplineX;
+        std::unique_ptr<lcl_SplineCalculation> aSplineY;
         // lcl_SplineCalculation* aSplineZ; the z-coordinates of all points in
         // a data series are equal. No spline calculation needed, but copy
         // coordinate to output
@@ -594,8 +595,8 @@ void SplineCalculater::CalculateCubicSplines(
             pOldZ[ 0 ] == pOldZ[nMaxIndexPoints] &&
             nMaxIndexPoints >=2 )
         {   // periodic spline
-            aSplineX = new lcl_SplineCalculation( aInputX) ;
-            aSplineY = new lcl_SplineCalculation( aInputY) ;
+            aSplineX.reset(new lcl_SplineCalculation( aInputX));
+            aSplineY.reset(new lcl_SplineCalculation( aInputY));
             // aSplineZ = new lcl_SplineCalculation( aInputZ) ;
         }
         else // generate the kind "natural spline"
@@ -604,8 +605,8 @@ void SplineCalculater::CalculateCubicSplines(
             ::rtl::math::setInf( &fInfty, false );
             double fXDerivation = fInfty;
             double fYDerivation = fInfty;
-            aSplineX = new lcl_SplineCalculation( aInputX, fXDerivation, fXDerivation );
-            aSplineY = new lcl_SplineCalculation( aInputY, fYDerivation, fYDerivation );
+            aSplineX.reset(new lcl_SplineCalculation( aInputX, fXDerivation, fXDerivation ));
+            aSplineY.reset(new lcl_SplineCalculation( aInputY, fYDerivation, fYDerivation ));
         }
 
         // fill result polygon with calculated values
@@ -644,9 +645,6 @@ void SplineCalculater::CalculateCubicSplines(
         pNewX[nNewPointIndex] = pOldX[nMaxIndexPoints];
         pNewY[nNewPointIndex] = pOldY[nMaxIndexPoints];
         pNewZ[nNewPointIndex] = pOldZ[nMaxIndexPoints];
-        delete aSplineX;
-        delete aSplineY;
-        // delete aSplineZ;
     }
 }
 

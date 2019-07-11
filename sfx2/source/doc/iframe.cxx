@@ -59,7 +59,7 @@ class IFrameObject : public ::cppu::WeakImplHelper <
     css::uno::Reference < css::uno::XComponentContext > mxContext;
     css::uno::Reference < css::frame::XFrame2 > mxFrame;
     css::uno::Reference < css::embed::XEmbeddedObject > mxObj;
-    SfxItemPropertyMap  maPropMap;
+    SfxItemPropertyMap const  maPropMap;
     SfxFrameDescriptor  maFrmDescr;
 
 public:
@@ -395,8 +395,7 @@ void SAL_CALL IFrameObject::removeVetoableChangeListener(const OUString&, const 
     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
     //we really should set a parent here
     ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateEditObjectDialog(nullptr, ".uno:InsertObjectFloatingFrame", mxObj));
-    if ( pDlg )
-        pDlg->Execute();
+    pDlg->Execute();
     return 0;
 }
 

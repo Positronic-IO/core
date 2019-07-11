@@ -28,9 +28,15 @@
 #include <unonames.hxx>
 
 #include <com/sun/star/chart/MissingValueTreatment.hpp>
+#include <com/sun/star/chart2/DataPointLabel.hpp>
 #include <com/sun/star/chart2/Symbol.hpp>
+#include <com/sun/star/chart2/XDataSeries.hpp>
+#include <com/sun/star/chart2/XRegressionCurveCalculator.hpp>
 
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
+#include <tools/color.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/drawing/LineStyle.hpp>
@@ -145,12 +151,6 @@ VDataSeries::VDataSeries( const uno::Reference< XDataSeries >& xDataSeries )
     , m_fLogicMinX(0.0)
     , m_fLogicMaxX(0.0)
     , m_fLogicZPos(0.0)
-    , m_xGroupShape(nullptr)
-    , m_xLabelsGroupShape(nullptr)
-    , m_xErrorXBarsGroupShape(nullptr)
-    , m_xErrorYBarsGroupShape(nullptr)
-    , m_xFrontSubGroupShape(nullptr)
-    , m_xBackSubGroupShape(nullptr)
     , m_xDataSeries(xDataSeries)
     , m_nPointCount(0)
 
@@ -169,16 +169,6 @@ VDataSeries::VDataSeries( const uno::Reference< XDataSeries >& xDataSeries )
 
     , m_nGlobalSeriesIndex(0)
 
-    , m_apLabel_Series(nullptr)
-    , m_apLabelPropNames_Series(nullptr)
-    , m_apLabelPropValues_Series(nullptr)
-    , m_apSymbolProperties_Series(nullptr)
-
-    , m_apLabel_AttributedPoint(nullptr)
-    , m_apLabelPropNames_AttributedPoint(nullptr)
-    , m_apLabelPropValues_AttributedPoint(nullptr)
-    , m_apSymbolProperties_AttributedPoint(nullptr)
-    , m_apSymbolProperties_InvisibleSymbolForSelection(nullptr)
     , m_nCurrentAttributedPoint(-1)
     , m_nMissingValueTreatment(css::chart::MissingValueTreatment::LEAVE_GAP)
     , m_bAllowPercentValueInDataLabel(false)
@@ -776,7 +766,7 @@ double VDataSeries::getYMeanValue() const
     return m_fYMeanValue;
 }
 
-std::unique_ptr<Symbol> getSymbolPropertiesFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
+static std::unique_ptr<Symbol> getSymbolPropertiesFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
 {
     std::unique_ptr< Symbol > apSymbolProps( new Symbol() );
     try
@@ -922,7 +912,7 @@ uno::Reference<beans::XPropertySet> VDataSeries::getPropertiesOfSeries() const
     return uno::Reference<css::beans::XPropertySet>(m_xDataSeries, css::uno::UNO_QUERY);
 }
 
-std::unique_ptr<DataPointLabel> getDataPointLabelFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
+static std::unique_ptr<DataPointLabel> getDataPointLabelFromPropertySet( const uno::Reference< beans::XPropertySet >& xProp )
 {
     std::unique_ptr< DataPointLabel > apLabel( new DataPointLabel() );
     try
@@ -955,7 +945,7 @@ DataPointLabel* VDataSeries::getDataPointLabel( sal_Int32 index ) const
     if( isAttributedDataPoint( index ) )
     {
         adaptPointCache( index );
-        if( !m_apLabel_AttributedPoint.get() )
+        if (!m_apLabel_AttributedPoint)
             m_apLabel_AttributedPoint
                 = getDataPointLabelFromPropertySet(getPropertiesOfPoint(index));
         pRet = m_apLabel_AttributedPoint.get();

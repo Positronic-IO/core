@@ -25,24 +25,27 @@
 #include <servicenames_coosystems.hxx>
 #include <DataSeriesHelper.hxx>
 #include <Scaling.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <DataSourceHelper.hxx>
+#include <ReferenceSizeProvider.hxx>
+#include <ExplicitCategoriesProvider.hxx>
 #include <unonames.hxx>
 
 #include <unotools/saveopt.hxx>
 
 #include <com/sun/star/chart/ChartAxisPosition.hpp>
-
+#include <com/sun/star/chart2/AxisType.hpp>
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XChartTypeContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
 #include <com/sun/star/chart2/data/XDataSource.hpp>
 
-#include <rtl/ustrbuf.hxx>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
-#include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/lang/XServiceName.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/sequence.hxx>
 #include <tools/diagnose_ex.h>
 
@@ -149,8 +152,6 @@ sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
     xProp->getPropertyValue(CHART_UNONAME_LINK_TO_SRC_NUMFMT) >>= bLinkToSource;
     xProp->getPropertyValue(CHART_UNONAME_NUMFMT) >>= nNumberFormatKey;
 
-    sal_Int32 nOldNumberFormat = nNumberFormatKey;
-
     if (bLinkToSource)
     {
         bool bFormatSet = false;
@@ -239,52 +240,49 @@ sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
             try
             {
                 Reference< XChartTypeContainer > xCTCnt( xCorrespondingCoordinateSystem, uno::UNO_QUERY_THROW );
-                if( xCTCnt.is() )
+                OUString aRoleToMatch;
+                if( nDimensionIndex == 0 )
+                    aRoleToMatch = "values-x";
+                Sequence< Reference< XChartType > > aChartTypes( xCTCnt->getChartTypes());
+                for( sal_Int32 nCTIdx=0; nCTIdx<aChartTypes.getLength(); ++nCTIdx )
                 {
-                    OUString aRoleToMatch;
-                    if( nDimensionIndex == 0 )
-                        aRoleToMatch = "values-x";
-                    Sequence< Reference< XChartType > > aChartTypes( xCTCnt->getChartTypes());
-                    for( sal_Int32 nCTIdx=0; nCTIdx<aChartTypes.getLength(); ++nCTIdx )
+                    if( nDimensionIndex != 0 )
+                        aRoleToMatch = ChartTypeHelper::getRoleOfSequenceForYAxisNumberFormatDetection( aChartTypes[nCTIdx] );
+                    Reference< XDataSeriesContainer > xDSCnt( aChartTypes[nCTIdx], uno::UNO_QUERY_THROW );
+                    Sequence< Reference< XDataSeries > > aDataSeriesSeq( xDSCnt->getDataSeries());
+                    for( sal_Int32 nSeriesIdx=0; nSeriesIdx<aDataSeriesSeq.getLength(); ++nSeriesIdx )
                     {
-                        if( nDimensionIndex != 0 )
-                            aRoleToMatch = ChartTypeHelper::getRoleOfSequenceForYAxisNumberFormatDetection( aChartTypes[nCTIdx] );
-                        Reference< XDataSeriesContainer > xDSCnt( aChartTypes[nCTIdx], uno::UNO_QUERY_THROW );
-                        Sequence< Reference< XDataSeries > > aDataSeriesSeq( xDSCnt->getDataSeries());
-                        for( sal_Int32 nSeriesIdx=0; nSeriesIdx<aDataSeriesSeq.getLength(); ++nSeriesIdx )
+                        Reference< chart2::XDataSeries > xDataSeries(aDataSeriesSeq[nSeriesIdx]);
+                        Reference< data::XDataSource > xSource( xDataSeries, uno::UNO_QUERY_THROW );
+
+                        if( nDimensionIndex == 1 )
                         {
-                            Reference< chart2::XDataSeries > xDataSeries(aDataSeriesSeq[nSeriesIdx]);
-                            Reference< data::XDataSource > xSource( xDataSeries, uno::UNO_QUERY_THROW );
+                            //only take those series into account that are attached to this axis
+                            sal_Int32 nAttachedAxisIndex = DataSeriesHelper::getAttachedAxisIndex(xDataSeries);
+                            if( nAttachedAxisIndex != nAxisIndex )
+                                continue;
+                        }
 
-                            if( nDimensionIndex == 1 )
+                        Reference< data::XLabeledDataSequence > xLabeledSeq(
+                            DataSeriesHelper::getDataSequenceByRole( xSource, aRoleToMatch ) );
+
+                        if( !xLabeledSeq.is() && nDimensionIndex==0 )
+                        {
+                            ScaleData aData = xAxis->getScaleData();
+                            xLabeledSeq = aData.Categories;
+                        }
+
+                        if( xLabeledSeq.is() )
+                        {
+                            Reference< data::XDataSequence > xSeq( xLabeledSeq->getValues());
+                            if( xSeq.is() )
                             {
-                                //only take those series into account that are attached to this axis
-                                sal_Int32 nAttachedAxisIndex = DataSeriesHelper::getAttachedAxisIndex(xDataSeries);
-                                if( nAttachedAxisIndex != nAxisIndex )
-                                    continue;
-                            }
-
-                            Reference< data::XLabeledDataSequence > xLabeledSeq(
-                                DataSeriesHelper::getDataSequenceByRole( xSource, aRoleToMatch ) );
-
-                            if( !xLabeledSeq.is() && nDimensionIndex==0 )
-                            {
-                                ScaleData aData = xAxis->getScaleData();
-                                xLabeledSeq = aData.Categories;
-                            }
-
-                            if( xLabeledSeq.is() )
-                            {
-                                Reference< data::XDataSequence > xSeq( xLabeledSeq->getValues());
-                                if( xSeq.is() )
-                                {
-                                    sal_Int32 nKey = xSeq->getNumberFormatKeyByIndex( -1 );
-                                    // initialize the value
-                                    if( aKeyMap.find( nKey ) == aKeyMap.end())
-                                        aKeyMap[ nKey ] = 0;
-                                    // increase frequency
-                                    aKeyMap[ nKey ] = (aKeyMap[ nKey ] + 1);
-                                }
+                                sal_Int32 nKey = xSeq->getNumberFormatKeyByIndex( -1 );
+                                // initialize the value
+                                if( aKeyMap.find( nKey ) == aKeyMap.end())
+                                    aKeyMap[ nKey ] = 0;
+                                // increase frequency
+                                aKeyMap[ nKey ] = (aKeyMap[ nKey ] + 1);
                             }
                         }
                     }
@@ -327,9 +325,6 @@ sal_Int32 AxisHelper::getExplicitNumberFormatKeyForAxis(
                 }
             }
         }
-
-        if (nOldNumberFormat != nNumberFormatKey)
-            xProp->setPropertyValue(CHART_UNONAME_NUMFMT, uno::Any(nNumberFormatKey));
     }
 
     return nNumberFormatKey;
@@ -725,7 +720,7 @@ Reference< beans::XPropertySet > AxisHelper::getGridProperties(
         else
         {
             Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-            if( nSubGridIndex >= 0 && nSubGridIndex < aSubGrids.getLength() )
+            if (nSubGridIndex < aSubGrids.getLength())
                 xRet.set( aSubGrids[nSubGridIndex] );
         }
     }

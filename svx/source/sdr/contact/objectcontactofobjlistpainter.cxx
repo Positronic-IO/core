@@ -128,12 +128,6 @@ void ObjectContactOfObjListPainter::ProcessDisplay(DisplayInfo& rDisplayInfo)
     }
 }
 
-// VirtualDevice?
-bool ObjectContactOfObjListPainter::isOutputToVirtualDevice() const
-{
-    return (OUTDEV_VIRDEV == mrTargetOutputDevice.GetOutDevType());
-}
-
 // recording MetaFile?
 bool ObjectContactOfObjListPainter::isOutputToRecordingMetaFile() const
 {
@@ -144,7 +138,7 @@ bool ObjectContactOfObjListPainter::isOutputToRecordingMetaFile() const
 // pdf export?
 bool ObjectContactOfObjListPainter::isOutputToPDFFile() const
 {
-    return (nullptr != mrTargetOutputDevice.GetPDFWriter());
+    return OUTDEV_PDF == mrTargetOutputDevice.GetOutDevType();
 }
 
 OutputDevice* ObjectContactOfObjListPainter::TryToGetOutputDevice() const

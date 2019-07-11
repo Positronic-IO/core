@@ -13,9 +13,16 @@
 #include <com/sun/star/io/XInputStream.hpp>
 #include <officecfg/Office/Calc.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
+#include <unotools/charclass.hxx>
 
 #include "htmldataprovider.hxx"
+#include "xmldataprovider.hxx"
+#include "sqldataprovider.hxx"
 #include <datatransformation.hxx>
+#include <datamapper.hxx>
+#include <dbdata.hxx>
+#include <docsh.hxx>
 
 using namespace com::sun::star;
 
@@ -60,12 +67,7 @@ ExternalDataSource::ExternalDataSource(const OUString& rURL,
         const OUString& rProvider, ScDocument* pDoc)
     : maURL(rURL)
     , maProvider(rProvider)
-    , mnUpdateFrequency(0.0)
     , mpDoc(pDoc)
-{
-}
-
-ExternalDataSource::~ExternalDataSource()
 {
 }
 
@@ -73,6 +75,13 @@ void ExternalDataSource::setID(const OUString& rID)
 {
     maID = rID;
 }
+
+void ExternalDataSource::setXMLImportParam(const ScOrcusImportXMLParam& rParam)
+{
+    maParam = rParam;
+}
+
+
 
 void ExternalDataSource::setURL(const OUString& rURL)
 {
@@ -100,6 +109,11 @@ const OUString& ExternalDataSource::getID() const
     return maID;
 }
 
+const ScOrcusImportXMLParam& ExternalDataSource::getXMLImportParam() const
+{
+    return maParam;
+}
+
 OUString ExternalDataSource::getDBName() const
 {
     if (mpDBDataManager)
@@ -111,21 +125,21 @@ OUString ExternalDataSource::getDBName() const
     return OUString();
 }
 
-void ExternalDataSource::setDBData(const ScDBData* pDBData)
+void ExternalDataSource::setDBData(const OUString& rDBName)
 {
     if (!mpDBDataManager)
     {
-        mpDBDataManager.reset(new ScDBDataManager(pDBData->GetName(), false, mpDoc));
+        mpDBDataManager.reset(new ScDBDataManager(rDBName, mpDoc));
     }
     else
     {
-        mpDBDataManager->SetDatabase(pDBData->GetName());
+        mpDBDataManager->SetDatabase(rDBName);
     }
 }
 
-double ExternalDataSource::getUpdateFrequency() const
+double ExternalDataSource::getUpdateFrequency()
 {
-    return mnUpdateFrequency;
+    return 0;
 }
 
 ScDBDataManager* ExternalDataSource::getDBManager()
@@ -153,7 +167,8 @@ void ExternalDataSource::refresh(ScDocument* pDoc, bool bDeterministic)
     mpDataProvider->Import();
 }
 
-void ExternalDataSource::AddDataTransformation(std::shared_ptr<sc::DataTransformation> mpDataTransformation)
+void ExternalDataSource::AddDataTransformation(
+    const std::shared_ptr<sc::DataTransformation>& mpDataTransformation)
 {
     maDataTransformations.push_back(mpDataTransformation);
 }
@@ -236,9 +251,8 @@ void ScDBDataManager::WriteToDoc(ScDocument& rDoc)
         pDocShell->PostPaint(aDestRange, PaintPartFlags::All);
 }
 
-ScDBDataManager::ScDBDataManager(const OUString& rDBName,  bool /*bAllowResize*/, ScDocument* pDoc):
+ScDBDataManager::ScDBDataManager(const OUString& rDBName, ScDocument* pDoc):
     maDBName(rDBName),
-    //mbAllowResize(bAllowResize),
     mpDoc(pDoc)
 {
 }
@@ -274,6 +288,10 @@ std::shared_ptr<DataProvider> DataProviderFactory::getDataProvider(ScDocument* p
             return std::shared_ptr<DataProvider>(new CSVDataProvider(pDoc, rDataSource));
         else if (rDataProvider == "org.libreoffice.calc.html")
             return std::shared_ptr<DataProvider>(new HTMLDataProvider(pDoc, rDataSource));
+        else if (rDataProvider == "org.libreoffice.calc.xml")
+            return std::shared_ptr<DataProvider>(new XMLDataProvider(pDoc, rDataSource));
+        else if (rDataProvider == "org.libreoffice.calc.sql")
+            return std::shared_ptr<DataProvider>(new SQLDataProvider(pDoc, rDataSource));
     }
     else
     {
@@ -289,6 +307,8 @@ std::vector<OUString> DataProviderFactory::getDataProviders()
     std::vector<OUString> aDataProviders;
     aDataProviders.emplace_back("org.libreoffice.calc.csv");
     aDataProviders.emplace_back("org.libreoffice.calc.html");
+    aDataProviders.emplace_back("org.libreoffice.calc.xml");
+    aDataProviders.emplace_back("org.libreoffice.calc.sql");
 
     return aDataProviders;
 }

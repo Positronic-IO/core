@@ -20,18 +20,16 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_TPHFEDIT_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_TPHFEDIT_HXX
 
-#include <sfx2/tabdlg.hxx>
-#include <svx/pageitem.hxx>
-#include <vcl/group.hxx>
-#include <vcl/lstbox.hxx>
-#include <vcl/timer.hxx>
-#include <vcl/virdev.hxx>
 #include <scdllapi.h>
-#include <scitems.hxx>
-#include <com/sun/star/accessibility/XAccessible.hpp>
 #include <cppuhelper/weakref.hxx>
+#include <tools/wintypes.hxx>
+#include <editeng/svxenum.hxx>
+#include <vcl/ctrl.hxx>
+#include <vcl/menu.hxx>
 
 #include <functional>
+
+namespace com { namespace sun { namespace star { namespace accessibility { class XAccessible; } } } }
 
 class ScHeaderEditEngine;
 class ScPatternAttr;
@@ -39,7 +37,7 @@ class EditView;
 class EditTextObject;
 class SvxFieldItem;
 class ScAccessibleEditObject;
-class ScEditWindow;
+namespace vcl { class Window; }
 
 enum ScEditWindowLocation
 {
@@ -68,7 +66,7 @@ public:
 
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 
-    ScHeaderEditEngine*  GetEditEngine() const { return pEdEngine; }
+    ScHeaderEditEngine*  GetEditEngine() const { return pEdEngine.get(); }
     void SetObjectSelectHdl( const Link<ScEditWindow&,void>& aLink) { aObjectSelectLink = aLink; }
     void SetGetFocusHdl(const std::function<void (ScEditWindow&)>& rLink) { m_GetFocusLink = rLink; }
 
@@ -85,8 +83,8 @@ protected:
     virtual void    Resize() override;
 
 private:
-    ScHeaderEditEngine* pEdEngine;
-    EditView*           pEdView;
+    std::unique_ptr<ScHeaderEditEngine> pEdEngine;
+    std::unique_ptr<EditView>           pEdView;
     ScEditWindowLocation eLocation;
     bool mbRTL;
 
@@ -95,38 +93,6 @@ private:
 
     Link<ScEditWindow&,void> aObjectSelectLink;
     std::function<void (ScEditWindow&)> m_GetFocusLink;
-};
-
-class SC_DLLPUBLIC ScExtIButton final : public ImageButton
-{
-    Idle            aIdle;
-    VclPtr<PopupMenu>        pPopupMenu;
-    Link<ScExtIButton&,void> aMLink;
-    sal_uInt16      nSelected;
-    OString         aSelectedIdent;
-
-                    DECL_DLLPRIVATE_LINK( TimerHdl, Timer*, void );
-
-    virtual void    MouseButtonDown( const MouseEvent& rMEvt ) override;
-    virtual void    MouseButtonUp( const MouseEvent& rMEvt) override;
-    virtual void    Click() override;
-
-    void            StartPopup();
-
-public:
-
-    ScExtIButton(vcl::Window* pParent, WinBits nBits );
-    virtual ~ScExtIButton() override;
-    virtual void dispose() override;
-
-    void            SetPopupMenu(PopupMenu* pPopUp);
-
-    sal_uInt16      GetSelected() const { return nSelected;}
-    const OString&  GetSelectedIdent() const { return aSelectedIdent;}
-
-    void            SetMenuHdl( const Link<ScExtIButton&,void>& rLink ) { aMLink = rLink; }
-
-    virtual bool    PreNotify( NotifyEvent& rNEvt ) override;
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_TPHFEDIT_HXX

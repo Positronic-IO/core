@@ -19,8 +19,10 @@
 
 #include <svx/svxids.hrc>
 #include <svx/rulritem.hxx>
+#include <tools/debug.hxx>
 #include <tools/mapunit.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/frame/status/LeftRightMargin.hpp>
 #include <com/sun/star/frame/status/UpperLowerMargin.hpp>

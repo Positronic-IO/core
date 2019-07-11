@@ -20,6 +20,7 @@
 #include <rtl/strbuf.hxx>
 #include <sal/config.h>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <qpro.hxx>
 
 #include <qproform.hxx>
@@ -157,8 +158,7 @@ void QProToSc::DoFunc( DefTokenId eOc, sal_uInt16 nArgs, const sal_Char* pExtStr
         aPool << eParam[ nLast ];
         for( nCount = nLast - 1 ; nCount >= 0 ; nCount-- )
         {
-            if( nCount != -1 )
-                aPool << ocSep << eParam[ nCount ];
+            aPool << ocSep << eParam[ nCount ];
         }
     }
 
@@ -192,7 +192,7 @@ do { \
         break;          /* switch */ \
     }
 
-ConvErr QProToSc::Convert( const ScTokenArray*& pArray )
+ConvErr QProToSc::Convert( std::unique_ptr<ScTokenArray>& pArray )
 {
     sal_uInt8 nFmla[ nBufSize ], nArg;
     sal_uInt8 nArgArray[ nBufSize ] = {0};
@@ -391,14 +391,14 @@ ConvErr QProToSc::Convert( const ScTokenArray*& pArray )
         }
         i++;
     }
-    pArray = aPool[ aStack.Get() ];
+    pArray = aPool.GetTokenArray( aStack.Get());
     return eRet;
 }
 
 static const struct
 {
-    DefTokenId nToken;
-    FUNC_TYPE   nType;
+    DefTokenId const nToken;
+    FUNC_TYPE const   nType;
 } aFuncMap[] = {
     { ocPush, FT_ConstFloat },
     { ocPush, FT_Cref },

@@ -18,6 +18,7 @@
  */
 
 #include <vcl/virdev.hxx>
+#include <svx/svdundo.hxx>
 
 #include <undobase.hxx>
 #include <refundo.hxx>
@@ -33,6 +34,7 @@
 #include <rowheightcontext.hxx>
 #include <column.hxx>
 #include <sortparam.hxx>
+#include <columnspanset.hxx>
 
 
 ScSimpleUndo::ScSimpleUndo( ScDocShell* pDocSh ) :
@@ -76,7 +78,7 @@ bool ScSimpleUndo::Merge( SfxUndoAction *pNextAction )
         // ScUndoDraw is later deleted by the UndoManager
 
         ScUndoDraw* pCalcUndo = static_cast<ScUndoDraw*>(pNextAction);
-        pDetectiveUndo.reset( pCalcUndo->ReleaseDrawUndo() );
+        pDetectiveUndo = pCalcUndo->ReleaseDrawUndo();
         return true;
     }
 
@@ -102,7 +104,7 @@ namespace
     {
     private:
         ScDocument& m_rDoc;
-        bool m_bUndoEnabled;
+        bool const m_bUndoEnabled;
     public:
         explicit DisableUndoGuard(ScDocShell *pDocShell)
             : m_rDoc(pDocShell->GetDocument())
@@ -244,12 +246,12 @@ ScBlockUndo::ScBlockUndo( ScDocShell* pDocSh, const ScRange& rRange,
     aBlockRange( rRange ),
     eMode( eBlockMode )
 {
-    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
+    pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
 }
 
 ScBlockUndo::~ScBlockUndo()
 {
-    DeleteSdrUndoAction( pDrawUndo );
+    pDrawUndo.reset();
 }
 
 void ScBlockUndo::BeginUndo()
@@ -264,7 +266,7 @@ void ScBlockUndo::EndUndo()
         AdjustHeight();
 
     EnableDrawAdjust( &pDocShell->GetDocument(), true );
-    DoSdrUndoAction( pDrawUndo, &pDocShell->GetDocument() );
+    DoSdrUndoAction( pDrawUndo.get(), &pDocShell->GetDocument() );
 
     ShowBlock();
     ScSimpleUndo::EndUndo();
@@ -345,12 +347,12 @@ ScMultiBlockUndo::ScMultiBlockUndo(
     ScSimpleUndo(pDocSh),
     maBlockRanges(rRanges)
 {
-    mpDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
+    mpDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
 }
 
 ScMultiBlockUndo::~ScMultiBlockUndo()
 {
-    DeleteSdrUndoAction( mpDrawUndo );
+    mpDrawUndo.reset();
 }
 
 void ScMultiBlockUndo::BeginUndo()
@@ -362,7 +364,7 @@ void ScMultiBlockUndo::BeginUndo()
 void ScMultiBlockUndo::EndUndo()
 {
     EnableDrawAdjust(&pDocShell->GetDocument(), true);
-    DoSdrUndoAction(mpDrawUndo, &pDocShell->GetDocument());
+    DoSdrUndoAction(mpDrawUndo.get(), &pDocShell->GetDocument());
 
     ShowBlock();
     ScSimpleUndo::EndUndo();
@@ -405,24 +407,24 @@ void ScMultiBlockUndo::ShowBlock()
     }
 }
 
-ScMoveUndo::ScMoveUndo( ScDocShell* pDocSh, ScDocument* pRefDoc, ScRefUndoData* pRefData,
+ScMoveUndo::ScMoveUndo( ScDocShell* pDocSh, ScDocumentUniquePtr pRefDoc, std::unique_ptr<ScRefUndoData> pRefData,
                                                 ScMoveUndoMode eRefMode ) :
     ScSimpleUndo( pDocSh ),
-    pRefUndoDoc( pRefDoc ),
-    pRefUndoData( pRefData ),
+    pRefUndoDoc( std::move(pRefDoc) ),
+    pRefUndoData( std::move(pRefData) ),
     eMode( eRefMode )
 {
     ScDocument& rDoc = pDocShell->GetDocument();
     if (pRefUndoData)
         pRefUndoData->DeleteUnchanged(&rDoc);
-    pDrawUndo = GetSdrUndoAction( &rDoc ).release();
+    pDrawUndo = GetSdrUndoAction( &rDoc );
 }
 
 ScMoveUndo::~ScMoveUndo()
 {
-    delete pRefUndoData;
-    delete pRefUndoDoc;
-    DeleteSdrUndoAction( pDrawUndo );
+    pRefUndoData.reset();
+    pRefUndoDoc.reset();
+    pDrawUndo.reset();
 }
 
 void ScMoveUndo::UndoRef()
@@ -449,7 +451,7 @@ void ScMoveUndo::BeginUndo()
 
 void ScMoveUndo::EndUndo()
 {
-    DoSdrUndoAction( pDrawUndo, &pDocShell->GetDocument() );     // must also be called when pointer is null
+    DoSdrUndoAction( pDrawUndo.get(), &pDocShell->GetDocument() );     // must also be called when pointer is null
 
     if (pRefUndoDoc && eMode == SC_UNDO_REFLAST)
         UndoRef();
@@ -468,8 +470,7 @@ ScDBFuncUndo::ScDBFuncUndo( ScDocShell* pDocSh, const ScRange& rOriginal ) :
 
 ScDBFuncUndo::~ScDBFuncUndo()
 {
-    DeleteSdrUndoAction( nullptr );
-    delete pAutoDBRange;
+    pAutoDBRange.reset();
 }
 
 void ScDBFuncUndo::BeginUndo()
@@ -552,8 +553,8 @@ void ScDBFuncUndo::EndRedo()
     ScSimpleUndo::EndRedo();
 }
 
-ScUndoWrapper::ScUndoWrapper( SfxUndoAction* pUndo ) :
-    pWrappedUndo( pUndo ),
+ScUndoWrapper::ScUndoWrapper( std::unique_ptr<SfxUndoAction> pUndo ) :
+    pWrappedUndo( std::move(pUndo) ),
     mnViewShellId( -1 )
 {
     if (pWrappedUndo)

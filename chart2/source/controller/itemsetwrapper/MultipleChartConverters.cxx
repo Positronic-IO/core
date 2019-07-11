@@ -31,6 +31,8 @@
 #include <AxisHelper.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
 #include <DiagramHelper.hxx>
+#include <com/sun/star/chart2/XChartDocument.hpp>
+#include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
@@ -51,7 +53,7 @@ AllAxisItemConverter::AllAxisItemConverter(
     for( sal_Int32 nA = 0; nA < aElementList.getLength(); nA++ )
     {
         uno::Reference< beans::XPropertySet > xObjectProperties(aElementList[nA], uno::UNO_QUERY);
-        m_aConverters.push_back( new ::chart::wrapper::AxisItemConverter(
+        m_aConverters.emplace_back( new ::chart::wrapper::AxisItemConverter(
             xObjectProperties, rItemPool, rDrawModel,
             uno::Reference< chart2::XChartDocument >( xChartModel, uno::UNO_QUERY ), nullptr, nullptr,
             pRefSize));
@@ -80,7 +82,7 @@ AllGridItemConverter::AllGridItemConverter(
     for( sal_Int32 nA = 0; nA < aElementList.getLength(); nA++ )
     {
         Reference< beans::XPropertySet > xObjectProperties(aElementList[nA]);
-        m_aConverters.push_back( new ::chart::wrapper::GraphicPropertyItemConverter(
+        m_aConverters.emplace_back( new ::chart::wrapper::GraphicPropertyItemConverter(
                                         xObjectProperties, rItemPool, rDrawModel, xNamedPropertyContainerFactory,
                                         ::chart::wrapper::GraphicObjectType::LineProperties ) );
     }
@@ -109,13 +111,13 @@ AllDataLabelItemConverter::AllDataLabelItemConverter(
     for (auto const& series : aSeriesList)
     {
         uno::Reference< beans::XPropertySet > xObjectProperties(series, uno::UNO_QUERY);
-        uno::Reference< uno::XComponentContext> xContext(nullptr);//do not need Context for label properties
+        uno::Reference< uno::XComponentContext> xContext;//do not need Context for label properties
 
         sal_Int32 nNumberFormat=ExplicitValueProvider::getExplicitNumberFormatKeyForDataLabel( xObjectProperties, series, -1/*nPointIndex*/, ChartModelHelper::findDiagram( xChartModel ) );
         sal_Int32 nPercentNumberFormat=ExplicitValueProvider::getExplicitPercentageNumberFormatKeyForDataLabel(
                 xObjectProperties,uno::Reference< util::XNumberFormatsSupplier >(xChartModel, uno::UNO_QUERY));
 
-        m_aConverters.push_back(
+        m_aConverters.emplace_back(
             new ::chart::wrapper::DataPointItemConverter(
                 xChartModel, xContext, xObjectProperties, series, rItemPool, rDrawModel,
                 xNamedPropertyContainerFactory, GraphicObjectType::FilledDataPoint,
@@ -146,7 +148,7 @@ AllTitleItemConverter::AllTitleItemConverter(
         if(!xTitle.is())
             continue;
         uno::Reference< beans::XPropertySet > xObjectProperties( xTitle, uno::UNO_QUERY);
-        m_aConverters.push_back(
+        m_aConverters.emplace_back(
             new ::chart::wrapper::TitleItemConverter(
                 xObjectProperties, rItemPool, rDrawModel, xNamedPropertyContainerFactory, nullptr));
     }
@@ -173,7 +175,7 @@ AllSeriesStatisticsConverter::AllSeriesStatisticsConverter(
     for (auto const& series : aSeriesList)
     {
         uno::Reference< beans::XPropertySet > xObjectProperties(series, uno::UNO_QUERY);
-        m_aConverters.push_back( new ::chart::wrapper::StatisticsItemConverter(
+        m_aConverters.emplace_back( new ::chart::wrapper::StatisticsItemConverter(
                                      xChartModel, xObjectProperties, rItemPool ));
     }
 }

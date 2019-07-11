@@ -20,10 +20,8 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_FORMEL_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_FORMEL_HXX
 
-#include <compiler.hxx>
-#include <global.hxx>
+#include <tools/stream.hxx>
 
-#include "root.hxx"
 #include "tokstack.hxx"
 
 #include <memory>
@@ -38,8 +36,6 @@ class SharedStringPool;
 
 class XclImpStream;
 class ScTokenArray;
-struct ScSingleRefData;
-struct ScComplexRefData;
 
 enum class ConvErr
 {
@@ -83,7 +79,6 @@ protected:
     TokenPool           aPool;          // user token + predefined token
     TokenStack          aStack;
     ScAddress           aEingPos;
-    ConvErr             eStatus;
     std::unique_ptr<sal_Char[]>
                         pBuffer;        // universal buffer
 
@@ -103,7 +98,7 @@ public:
     void                Reset();
     void                Reset( const ScAddress& rEingPos );
 
-    virtual ConvErr     Convert( const ScTokenArray*& rpErg, XclImpStream& rStrm, std::size_t nFormulaLen,
+    virtual ConvErr     Convert( std::unique_ptr<ScTokenArray>& rpErg, XclImpStream& rStrm, std::size_t nFormulaLen,
                                  bool bAllowArrays, const FORMULA_TYPE eFT = FT_CellFormula ) = 0;
     virtual ConvErr     Convert( ScRangeListTabs&, XclImpStream& rStrm, std::size_t nFormulaLen, SCTAB nTab,
                                     const FORMULA_TYPE eFT = FT_CellFormula ) = 0;
@@ -128,7 +123,7 @@ protected:
 public:
     void                Reset( const ScAddress& rEingPos );
 
-    virtual void        Convert( const ScTokenArray*& rpErg, sal_Int32& nRest ) = 0;
+    virtual void        Convert( std::unique_ptr<ScTokenArray>& rpErg, sal_Int32& nRest ) = 0;
 
     bool good() const { return aIn.good(); }
 

@@ -127,9 +127,9 @@ void SfxPoolItem::dumpAsXml(xmlTextWriterPtr pWriter) const
     xmlTextWriterEndElement(pWriter);
 }
 
-SfxPoolItem* SfxPoolItem::CloneSetWhich( sal_uInt16 nNewWhich ) const
+std::unique_ptr<SfxPoolItem> SfxPoolItem::CloneSetWhich( sal_uInt16 nNewWhich ) const
 {
-    SfxPoolItem* pItem = Clone();
+    std::unique_ptr<SfxPoolItem> pItem(Clone());
     pItem->SetWhich(nNewWhich);
     return pItem;
 }

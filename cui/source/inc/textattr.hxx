@@ -21,9 +21,6 @@
 
 #include <svx/dlgctrl.hxx>
 #include <svx/svdobj.hxx>
-
-#include <vcl/group.hxx>
-
 #include <vcl/fixed.hxx>
 #include <sfx2/basedlgs.hxx>
 
@@ -50,6 +47,8 @@ private:
     bool                bWordWrapTextEnabled;
     bool                bFitToSizeEnabled;
 
+    SvxRectCtl m_aCtlPosition;
+
     std::unique_ptr<weld::Widget> m_xDrawingText;
     std::unique_ptr<weld::Widget> m_xCustomShapeText;
     std::unique_ptr<weld::CheckButton> m_xTsbAutoGrowWidth;
@@ -64,7 +63,7 @@ private:
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldTop;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldBottom;
     std::unique_ptr<weld::Frame> m_xFlPosition;
-    std::unique_ptr<RectCtl> m_xCtlPosition;
+    std::unique_ptr<weld::CustomWeld> m_xCtlPosition;
     std::unique_ptr<weld::CheckButton> m_xTsbFullWidth;
 
     DECL_LINK(ClickFullWidthHdl_Impl, weld::Button&, void);
@@ -86,7 +85,6 @@ public:
     virtual bool        FillItemSet( SfxItemSet* ) override;
     virtual void        Reset( const SfxItemSet * ) override;
 
-    virtual void        PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
     virtual void        PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     void         Construct();

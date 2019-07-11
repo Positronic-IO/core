@@ -54,7 +54,6 @@
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <vcl/svapp.hxx>
 #include <sfx2/docfile.hxx>
-#include <comphelper/servicehelper.hxx>
 
 #include <utility>
 #include <vector>
@@ -98,7 +97,7 @@ public:
 
 private:
     ScPreviewShell*         mpViewShell;
-    ScAccessibleDocumentPagePreview* mpAccDoc;
+    ScAccessibleDocumentPagePreview* const mpAccDoc;
     typedef std::vector<ScAccNote> ScAccNotes;
     mutable ScAccNotes      maNotes;
     mutable ScAccNotes      maMarks;
@@ -259,7 +258,7 @@ uno::Reference<XAccessible> ScNotesChildren::GetChild(sal_Int32 nIndex) const
 
 struct ScPointFound
 {
-    tools::Rectangle maPoint;
+    tools::Rectangle const maPoint;
     sal_Int32 mnParagraphs;
     explicit ScPointFound(const Point& rPoint) : maPoint(rPoint, Size(0, 0)), mnParagraphs(0) {}
     bool operator() (const ScAccNote& rNote)
@@ -417,7 +416,7 @@ sal_Int32 ScNotesChildren::CheckChanges(const ScPreviewLocationData& rData,
 
 struct ScChildGone
 {
-    ScAccessibleDocumentPagePreview* mpAccDoc;
+    ScAccessibleDocumentPagePreview* const mpAccDoc;
     explicit ScChildGone(ScAccessibleDocumentPagePreview* pAccDoc) : mpAccDoc(pAccDoc) {}
     void operator() (const uno::Reference<XAccessible>& xAccessible) const
     {
@@ -435,7 +434,7 @@ struct ScChildGone
 
 struct ScChildNew
 {
-    ScAccessibleDocumentPagePreview* mpAccDoc;
+    ScAccessibleDocumentPagePreview* const mpAccDoc;
     explicit ScChildNew(ScAccessibleDocumentPagePreview* pAccDoc) : mpAccDoc(pAccDoc) {}
     void operator() (const uno::Reference<XAccessible>& xAccessible) const
     {
@@ -636,7 +635,7 @@ public:
 
     void SetDrawBroadcaster();
 private:
-    ScAccessibleDocumentPagePreview* mpAccDoc;
+    ScAccessibleDocumentPagePreview* const mpAccDoc;
     ScPreviewShell* mpViewShell;
     ScShapeRangeVec maShapeRanges;
 
@@ -691,7 +690,7 @@ void ScShapeChildren::Notify(SfxBroadcaster&, const SfxHint& rHint)
     if (pSdrHint)
     {
         SdrObject* pObj = const_cast<SdrObject*>(pSdrHint->GetObject());
-        if (pObj && (pObj->GetPage() == GetDrawPage()))
+        if (pObj && (pObj->getSdrPageFromSdrObject() == GetDrawPage()))
         {
             switch (pSdrHint->GetKind())
             {
@@ -928,7 +927,7 @@ uno::Reference<XAccessible> ScShapeChildren::GetControl(sal_Int32 nIndex) const
 
 struct ScShapePointFound
 {
-    Point maPoint;
+    Point const maPoint;
     explicit ScShapePointFound(const awt::Point& rPoint) : maPoint(VCLPoint(rPoint)) {}
     bool operator() (const ScShapeChild& rShape)
     {
@@ -1155,9 +1154,7 @@ ScPagePreviewCountData::ScPagePreviewCountData( const ScPreviewLocationData& rDa
 ScAccessibleDocumentPagePreview::ScAccessibleDocumentPagePreview(
         const uno::Reference<XAccessible>& rxParent, ScPreviewShell* pViewShell ) :
     ScAccessibleDocumentBase(rxParent),
-    mpViewShell(pViewShell),
-    mpNotesChildren(nullptr),
-    mpShapeChildren(nullptr)
+    mpViewShell(pViewShell)
 {
     if (pViewShell)
         pViewShell->AddAccessibilityObject(*this);
@@ -1190,11 +1187,9 @@ void SAL_CALL ScAccessibleDocumentPagePreview::disposing()
 
     // no need to Dispose the AccessibleTextHelper,
     // as long as mpNotesChildren are destructed here
-    if (mpNotesChildren)
-        DELETEZ(mpNotesChildren);
+    mpNotesChildren.reset();
 
-    if (mpShapeChildren)
-        DELETEZ(mpShapeChildren);
+    mpShapeChildren.reset();
 
     ScAccessibleDocumentBase::disposing();
 }
@@ -1542,7 +1537,7 @@ ScNotesChildren* ScAccessibleDocumentPagePreview::GetNotesChildren()
 {
     if (!mpNotesChildren && mpViewShell)
     {
-        mpNotesChildren = new ScNotesChildren(mpViewShell, this);
+        mpNotesChildren.reset( new ScNotesChildren(mpViewShell, this) );
 
         const ScPreviewLocationData& rData = mpViewShell->GetLocationData();
         ScPagePreviewCountData aCount( rData, mpViewShell->GetWindow(), GetNotesChildren(), GetShapeChildren() );
@@ -1550,18 +1545,18 @@ ScNotesChildren* ScAccessibleDocumentPagePreview::GetNotesChildren()
         //! order is background shapes, header, table or notes, footer, foreground shapes, controls
         mpNotesChildren->Init(aCount.aVisRect, aCount.nBackShapes + aCount.nHeaders);
     }
-    return mpNotesChildren;
+    return mpNotesChildren.get();
 }
 
 ScShapeChildren* ScAccessibleDocumentPagePreview::GetShapeChildren()
 {
     if (!mpShapeChildren && mpViewShell)
     {
-        mpShapeChildren = new ScShapeChildren(mpViewShell, this);
+        mpShapeChildren.reset( new ScShapeChildren(mpViewShell, this) );
         mpShapeChildren->Init();
     }
 
-    return mpShapeChildren;
+    return mpShapeChildren.get();
 }
 
 OUString ScAccessibleDocumentPagePreview::getAccessibleName()

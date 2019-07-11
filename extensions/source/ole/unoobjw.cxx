@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -17,16 +17,46 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+// Documentation pointers for recent work:
+//
+// https://www.codeproject.com/Articles/9014/Understanding-COM-Event-Handling
+// https://blogs.msdn.microsoft.com/ericlippert/2005/02/15/why-does-wscript-connectobject-not-always-work/
+
 #include "ole2uno.hxx"
 
 #include <stdio.h>
 #include <list>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
+
+#if defined _MSC_VER && defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
+#pragma clang diagnostic ignored "-Wattributes"
+#pragma clang diagnostic ignored "-Wdelete-incomplete"
+#pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
+#pragma clang diagnostic ignored "-Wextra"
+#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
+#pragma clang diagnostic ignored "-Winvalid-noreturn"
+#pragma clang diagnostic ignored "-Wmicrosoft"
+#pragma clang diagnostic ignored "-Wnon-pod-varargs"
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#pragma clang diagnostic ignored "-Wnonportable-include-path"
+#pragma clang diagnostic ignored "-Wsequence-point"
+#pragma clang diagnostic ignored "-Wtypename-missing"
+#endif
+#include <atlbase.h>
+#include <atlcom.h>
+#if defined _MSC_VER && defined __clang__
+#pragma clang diagnostic pop
+#endif
+#include <comdef.h>
 
 #include <osl/diagnose.h>
 #include <salhelper/simplereferenceobject.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/beans/MethodConcept.hpp>
 #include <com/sun/star/beans/PropertyConcept.hpp>
 #include <com/sun/star/lang/NoSuchMethodException.hpp>
@@ -36,15 +66,25 @@
 #include <com/sun/star/reflection/ParamInfo.hpp>
 #include <com/sun/star/beans/XExactName.hpp>
 #include <com/sun/star/container/NoSuchElementException.hpp>
+#include <com/sun/star/container/XEnumeration.hpp>
+#include <com/sun/star/container/XEnumerationAccess.hpp>
 
 #include <com/sun/star/beans/XMaterialHolder.hpp>
 #include <com/sun/star/script/XInvocation2.hpp>
 #include <com/sun/star/script/MemberType.hpp>
 #include <com/sun/star/reflection/XIdlReflection.hpp>
+#include <ooo/vba/XCollection.hpp>
+#include <ooo/vba/XConnectable.hpp>
+#include <ooo/vba/XConnectionPoint.hpp>
+#include <ooo/vba/XSink.hpp>
+#include <ooo/vba/msforms/XCheckBox.hpp>
 #include <osl/interlck.h>
 #include <com/sun/star/uno/genfunc.h>
+#include <comphelper/automationinvokedzone.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/profilezone.hxx>
+#include <comphelper/windowsdebugoutput.hxx>
+#include <comphelper/windowserrorstring.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
 #include "comifaces.hxx"
@@ -101,6 +141,10 @@ InterfaceOleWrapper::~InterfaceOleWrapper()
 
 STDMETHODIMP InterfaceOleWrapper::QueryInterface(REFIID riid, LPVOID FAR * ppv)
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::QueryInterface(" << riid << ")");
+
     HRESULT ret= S_OK;
 
     if( !ppv)
@@ -110,16 +154,37 @@ STDMETHODIMP InterfaceOleWrapper::QueryInterface(REFIID riid, LPVOID FAR * ppv)
     {
         AddRef();
         *ppv = static_cast<IUnknown*>(static_cast<IDispatch*>(this));
+        SAL_INFO("extensions.olebridge", "  " << *ppv);
     }
     else if (IsEqualIID(riid, IID_IDispatch))
     {
         AddRef();
         *ppv = static_cast<IDispatch*>(this);
+        SAL_INFO("extensions.olebridge", "  " << *ppv);
+    }
+    else if (IsEqualIID(riid, IID_IProvideClassInfo))
+    {
+        Reference<ooo::vba::XConnectable> xConnectable(m_xOrigin, UNO_QUERY);
+        if (!xConnectable.is())
+            return E_NOINTERFACE;
+        AddRef();
+        *ppv = static_cast<IProvideClassInfo*>(this);
+        SAL_INFO("extensions.olebridge", "  " << *ppv);
+    }
+    else if (IsEqualIID(riid, IID_IConnectionPointContainer))
+    {
+        Reference<ooo::vba::XConnectable> xConnectable(m_xOrigin, UNO_QUERY);
+        if (!xConnectable.is())
+            return E_NOINTERFACE;
+        AddRef();
+        *ppv = static_cast<IConnectionPointContainer*>(this);
+        SAL_INFO("extensions.olebridge", "  " << *ppv);
     }
     else if( IsEqualIID( riid, __uuidof( IUnoObjectWrapper)))
     {
         AddRef();
         *ppv= static_cast<IUnoObjectWrapper*>(this);
+        SAL_INFO("extensions.olebridge", "  " << *ppv);
     }
     else
         ret= E_NOINTERFACE;
@@ -154,6 +219,8 @@ STDMETHODIMP InterfaceOleWrapper::getOriginalUnoObject( Reference<XInterface>* p
 }
 STDMETHODIMP  InterfaceOleWrapper::getOriginalUnoStruct( Any * pStruct)
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
     HRESULT ret= E_FAIL;
     if( !m_xOrigin.is())
     {
@@ -171,14 +238,835 @@ STDMETHODIMP  InterfaceOleWrapper::getOriginalUnoStruct( Any * pStruct)
     return ret;
 }
 
-STDMETHODIMP InterfaceOleWrapper::GetTypeInfoCount( unsigned int * /*pctinfo*/ )
+STDMETHODIMP InterfaceOleWrapper::GetTypeInfoCount( unsigned int *pctinfo )
 {
-    return E_NOTIMPL ;
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::GetTypeInfoCount");
+
+    if (!pctinfo)
+        return E_POINTER;
+
+    *pctinfo = 1;
+
+    return S_OK;
 }
 
-STDMETHODIMP InterfaceOleWrapper::GetTypeInfo(unsigned int /*itinfo*/, LCID /*lcid*/, ITypeInfo ** /*pptinfo*/)
+class CXTypeInfo : public ITypeInfo,
+                   public CComObjectRoot
 {
+public:
+    enum class Kind { COCLASS, MAIN, OUTGOING };
+
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    BEGIN_COM_MAP(CXTypeInfo)
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+        COM_INTERFACE_ENTRY(ITypeInfo)
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    END_COM_MAP()
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
+    DECLARE_NOT_AGGREGATABLE(CXTypeInfo)
+
+    virtual ~CXTypeInfo() {}
+
+    void InitForCoclass(Reference<XInterface> xOrigin,
+                        const OUString& sImplementationName,
+                        const IID& rIID,
+                        Reference<XMultiServiceFactory> xMSF);
+    void InitForClassItself(Reference<XInterface> xOrigin,
+                            const OUString& sImplementationName,
+                            const IID& rIID,
+                            Reference<XMultiServiceFactory> xMSF);
+    void InitForOutgoing(Reference<XInterface> xOrigin,
+                         const OUString& sInterfaceName,
+                         const IID& rIID,
+                         Reference<XMultiServiceFactory> xMSF,
+                         Type aType);
+    virtual HRESULT STDMETHODCALLTYPE GetTypeAttr(TYPEATTR **ppTypeAttr) override;
+    virtual HRESULT STDMETHODCALLTYPE GetTypeComp(ITypeComp **ppTComp) override;
+    virtual HRESULT STDMETHODCALLTYPE GetFuncDesc(UINT index,
+                                                  FUNCDESC **ppFuncDesc) override;
+    virtual HRESULT STDMETHODCALLTYPE GetVarDesc(UINT index,
+                                                 VARDESC **ppVarDesc) override;
+    virtual HRESULT STDMETHODCALLTYPE GetNames(MEMBERID memid,
+                                               BSTR *rgBstrNames,
+                                               UINT cMaxNames,
+                                               UINT *pcNames) override;
+    virtual HRESULT STDMETHODCALLTYPE GetRefTypeOfImplType(UINT index,
+                                                           HREFTYPE *pRefType) override;
+    virtual HRESULT STDMETHODCALLTYPE GetImplTypeFlags(UINT index,
+                                                       INT *pImplTypeFlags) override;
+    virtual HRESULT STDMETHODCALLTYPE GetIDsOfNames(LPOLESTR *rgszNames,
+                                                    UINT cNames,
+                                                    MEMBERID *pMemId) override;
+    virtual HRESULT STDMETHODCALLTYPE Invoke(PVOID pvInstance,
+                                             MEMBERID memid,
+                                             WORD wFlags,
+                                             DISPPARAMS *pDispParams,
+                                             VARIANT *pVarResult,
+                                             EXCEPINFO *pExcepInfo,
+                                             UINT *puArgErr) override;
+    virtual HRESULT STDMETHODCALLTYPE GetDocumentation(MEMBERID memid,
+                                                       BSTR *pBstrName,
+                                                       BSTR *pBstrDocString,
+                                                       DWORD *pdwHelpContext,
+                                                       BSTR *pBstrHelpFile) override;
+    virtual HRESULT STDMETHODCALLTYPE GetDllEntry(MEMBERID memid,
+                                                  INVOKEKIND invKind,
+                                                  BSTR *pBstrDllName,
+                                                  BSTR *pBstrName,
+                                                  WORD *pwOrdinal) override;
+    virtual HRESULT STDMETHODCALLTYPE GetRefTypeInfo(HREFTYPE hRefType,
+                                                     ITypeInfo **ppTInfo) override;
+    virtual HRESULT STDMETHODCALLTYPE AddressOfMember(MEMBERID memid,
+                                                      INVOKEKIND invKind,
+                                                      PVOID *ppv) override;
+    virtual HRESULT STDMETHODCALLTYPE CreateInstance(IUnknown *pUnkOuter,
+                                                     REFIID riid,
+                                                     PVOID *ppvObj) override;
+    virtual HRESULT STDMETHODCALLTYPE GetMops(MEMBERID memid,
+                                              BSTR *pBstrMops) override;
+    virtual HRESULT STDMETHODCALLTYPE GetContainingTypeLib(ITypeLib **ppTLib,
+                                                           UINT *pIndex) override;
+    virtual void STDMETHODCALLTYPE ReleaseTypeAttr(TYPEATTR *pTypeAttr) override;
+    virtual void STDMETHODCALLTYPE ReleaseFuncDesc(FUNCDESC *pFuncDesc) override;
+    virtual void STDMETHODCALLTYPE ReleaseVarDesc(VARDESC *pVarDesc) override;
+
+private:
+    Kind meKind;
+    Reference<XInterface> mxOrigin;
+    OUString msImplementationName;
+    OUString msInterfaceName;
+    IID maIID;
+    Reference<XMultiServiceFactory> mxMSF;
+    Type maType;
+};
+
+class CXTypeLib : public ITypeLib,
+                  public CComObjectRoot
+{
+public:
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    BEGIN_COM_MAP(CXTypeLib)
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+        COM_INTERFACE_ENTRY(ITypeLib)
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    END_COM_MAP()
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
+    DECLARE_NOT_AGGREGATABLE(CXTypeLib)
+
+    virtual ~CXTypeLib() {}
+
+    void Init(Reference<XInterface> xOrigin,
+              const OUString& sImplementationName,
+              Reference<XMultiServiceFactory> xMSF)
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXTypeLib::Init for " << sImplementationName);
+        mxOrigin = xOrigin;
+        msImplementationName = sImplementationName;
+        mxMSF = xMSF;
+    }
+
+    virtual UINT STDMETHODCALLTYPE GetTypeInfoCount() override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetTypeInfoCount");
+        return 1;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetTypeInfo(UINT,
+                                                  ITypeInfo **) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetTypeInfo: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetTypeInfoType(UINT,
+                                                      TYPEKIND *) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetTypeInfoType: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetTypeInfoOfGuid(REFGUID guid,
+                                                        ITypeInfo **ppTInfo) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        SAL_INFO("extensions.olebridge", this << "@CXTypeLib::GetTypeInfoOfGuid(" << guid << ")");
+        if (!ppTInfo)
+            return E_POINTER;
+
+        Reference<ooo::vba::XConnectable> xConnectable(mxOrigin, UNO_QUERY);
+        if (!xConnectable.is())
+            return TYPE_E_ELEMENTNOTFOUND;
+
+        IID aIID;
+        if (SUCCEEDED(IIDFromString(reinterpret_cast<LPOLESTR>(xConnectable->getIID().pData->buffer), &aIID)))
+        {
+            if (IsEqualIID(guid, aIID))
+            {
+                HRESULT ret;
+
+                CComObject<CXTypeInfo>* pTypeInfo;
+
+                ret = CComObject<CXTypeInfo>::CreateInstance(&pTypeInfo);
+                if (FAILED(ret))
+                    return ret;
+
+                pTypeInfo->AddRef();
+
+                pTypeInfo->InitForCoclass(mxOrigin, msImplementationName, aIID, mxMSF);
+
+                *ppTInfo = pTypeInfo;
+
+                return S_OK;
+            }
+        }
+
+#if 0
+        ooo::vba::TypeAndIID aTypeAndIID = xConnectable->GetConnectionPoint();
+
+        IID aIID;
+        if (SUCCEEDED(IIDFromString((LPOLESTR)aTypeAndIID.IID.pData->buffer, &aIID)))
+        {
+            HRESULT ret;
+
+            CComObject<CXTypeInfo>* pTypeInfo;
+
+            ret = CComObject<CXTypeInfo>::CreateInstance(&pTypeInfo);
+            if (FAILED(ret))
+                return ret;
+
+            pTypeInfo->AddRef();
+
+            pTypeInfo->InitForOutgoing(mxOrigin, msImplementationName, aIID, mxMSF);
+
+            *ppTInfo = pTypeInfo;
+
+            return S_OK;
+        }
+#else
+        SAL_WARN("extensions.olebridge", "Not implemented: GetTypeInfoOfGuid(" << guid << ")");
+#endif
+
+        return TYPE_E_ELEMENTNOTFOUND;
+
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetLibAttr(TLIBATTR **) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetLibAttr: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetTypeComp(ITypeComp **) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetTypeComp: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetDocumentation(INT,
+                                                       BSTR *,
+                                                       BSTR *,
+                                                       DWORD *,
+                                                       BSTR *) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::GetDocumentation: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE IsName(LPOLESTR,
+                                             ULONG,
+                                             BOOL *) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib:IsName: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE FindName(LPOLESTR,
+                                               ULONG,
+                                               ITypeInfo **,
+                                               MEMBERID *,
+                                               USHORT *) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::FindName: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual void STDMETHODCALLTYPE ReleaseTLibAttr(TLIBATTR *) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXTypeLib::ReleaseTLibAttr: E_NOTIMPL");
+    }
+
+private:
+    Reference<XInterface> mxOrigin;
+    OUString msImplementationName;
+    Reference<XMultiServiceFactory> mxMSF;
+};
+
+void CXTypeInfo::InitForCoclass(Reference<XInterface> xOrigin,
+                                const OUString& sImplementationName,
+                                const IID& rIID,
+                                Reference<XMultiServiceFactory> xMSF)
+{
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::InitForCoclass(" << sImplementationName << "," << rIID << ")");
+    meKind = Kind::COCLASS;
+    mxOrigin = xOrigin;
+    msImplementationName = sImplementationName;
+    maIID = rIID;
+    mxMSF = xMSF;
+}
+
+void CXTypeInfo::InitForClassItself(Reference<XInterface> xOrigin,
+                                    const OUString& sImplementationName,
+                                    const IID& rIID,
+                                    Reference<XMultiServiceFactory> xMSF)
+{
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::InitForClassItself(" << sImplementationName << "," << rIID << ")");
+    meKind = Kind::MAIN;
+    mxOrigin = xOrigin;
+    msImplementationName = sImplementationName;
+    maIID = rIID;
+    mxMSF = xMSF;
+}
+
+void CXTypeInfo::InitForOutgoing(Reference<XInterface> xOrigin,
+                                 const OUString& sInterfaceName,
+                                 const IID& rIID,
+                                 Reference<XMultiServiceFactory> xMSF,
+                                 Type aType)
+{
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::InitForOutgoing(" << sInterfaceName << "," << rIID << ")");
+    meKind = Kind::OUTGOING;
+    mxOrigin = xOrigin;
+    msInterfaceName = sInterfaceName;
+    maIID = rIID;
+    mxMSF = xMSF;
+    maType = aType;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetTypeAttr(TYPEATTR **ppTypeAttr)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetTypeAttr");
+
+    if (!ppTypeAttr)
+        return E_POINTER;
+
+    assert(!IsEqualIID(maIID, IID_NULL));
+
+    TYPEATTR *pTypeAttr = new TYPEATTR;
+    memset(pTypeAttr, 0, sizeof(*pTypeAttr));
+
+    pTypeAttr->guid = maIID;
+
+    if (meKind == Kind::COCLASS)
+    {
+        pTypeAttr->typekind = TKIND_COCLASS;
+        pTypeAttr->cFuncs = 0;
+        pTypeAttr->cVars = 0;
+        pTypeAttr->cImplTypes = 3;
+        pTypeAttr->cbSizeVft = 0;
+        pTypeAttr->cbAlignment = 8;
+        pTypeAttr->wTypeFlags = TYPEFLAG_FCANCREATE;
+    }
+    else if (meKind == Kind::MAIN)
+    {
+        pTypeAttr->typekind = TKIND_DISPATCH;
+        pTypeAttr->cFuncs = 10; // FIXME, dummy
+        pTypeAttr->cVars = 0;
+        pTypeAttr->cImplTypes = 1;
+        // FIXME: I think this is always supposed to be as if just for the seven methods in
+        // IDIspatch?
+        pTypeAttr->cbSizeVft = 7 * sizeof(void*);
+        pTypeAttr->cbAlignment = 8;
+        pTypeAttr->wTypeFlags = TYPEFLAG_FHIDDEN|TYPEFLAG_FDISPATCHABLE;
+    }
+    else if (meKind == Kind::OUTGOING)
+    {
+        pTypeAttr->typekind = TKIND_DISPATCH;
+
+        Reference<XIdlReflection> xRefl = theCoreReflection::get(comphelper::getComponentContext(mxMSF));
+        assert(xRefl.is());
+
+        Reference<XIdlClass> xClass = xRefl->forName(maType.getTypeName());
+        assert(xClass.is());
+
+        auto aMethods = xClass->getMethods();
+        assert(xClass->getTypeClass() == TypeClass_INTERFACE &&
+               aMethods.getLength() > 0);
+
+        // Drop the three XInterface methods, add the three corresponding IUnknown ones plus the
+        // four IDispatch ones on top of that.
+        pTypeAttr->cFuncs = aMethods.getLength() - 3 + 3 + 4;
+        pTypeAttr->cVars = 0;
+        pTypeAttr->cImplTypes = 1;
+        // FIXME: I think this, too, is always supposed to be as if just for the seven methods in
+        // IDIspatch?
+        pTypeAttr->cbSizeVft = 7 * sizeof(void*);
+        pTypeAttr->cbAlignment = 8;
+        pTypeAttr->wTypeFlags = TYPEFLAG_FHIDDEN|TYPEFLAG_FNONEXTENSIBLE|TYPEFLAG_FDISPATCHABLE;
+    }
+    else
+        assert(false);
+
+    pTypeAttr->lcid = LOCALE_USER_DEFAULT;
+    pTypeAttr->memidConstructor = MEMBERID_NIL;
+    pTypeAttr->memidDestructor = MEMBERID_NIL;
+    // FIXME: Is this correct, just the vtable pointer, right?
+    pTypeAttr->cbSizeInstance = sizeof(void*);
+    pTypeAttr->wMajorVerNum = 0;
+    pTypeAttr->wMinorVerNum = 0;
+    pTypeAttr->idldescType.wIDLFlags = IDLFLAG_NONE;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetTypeAttr: " << pTypeAttr);
+
+    *ppTypeAttr = pTypeAttr;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetTypeComp(ITypeComp **)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::GetTypeComp: E_NOTIMPL");
     return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetFuncDesc(UINT index,
+                                                  FUNCDESC **ppFuncDesc)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    if (!ppFuncDesc)
+        return E_POINTER;
+
+    if (meKind != Kind::OUTGOING)
+        return E_NOTIMPL;
+
+    if (index <= 6)
+    {
+        *ppFuncDesc = new FUNCDESC;
+        (*ppFuncDesc)->memid = 0x60000000 + index;
+        (*ppFuncDesc)->lprgscode = nullptr;
+        (*ppFuncDesc)->lprgelemdescParam = nullptr;
+        (*ppFuncDesc)->funckind = FUNC_DISPATCH;
+        (*ppFuncDesc)->invkind = INVOKE_FUNC;
+        (*ppFuncDesc)->callconv = CC_STDCALL;
+        switch (index)
+        {
+        case 0: // QueryInterface
+            (*ppFuncDesc)->cParams = 2;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID;
+            break;
+        case 1: // AddRef
+            (*ppFuncDesc)->cParams = 0;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_UI4;
+            break;
+        case 2: // Release
+            (*ppFuncDesc)->cParams = 1;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_UI4;
+            break;
+        case 3: // GetTypeInfoCount
+            (*ppFuncDesc)->cParams = 1;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID;
+            break;
+        case 4: // GetTypeInfo
+            (*ppFuncDesc)->cParams = 3;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID;
+            break;
+        case 5: // GetIDsOfNames
+            (*ppFuncDesc)->cParams = 5;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID;
+            break;
+        case 6: // Invoke
+            (*ppFuncDesc)->cParams = 8;
+            (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr;
+            (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID;
+            break;
+        }
+        (*ppFuncDesc)->cParamsOpt = 0;
+        (*ppFuncDesc)->oVft = index * sizeof(void*);
+        (*ppFuncDesc)->cScodes = 0;
+        (*ppFuncDesc)->wFuncFlags = FUNCFLAG_FRESTRICTED;
+
+        SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetFuncDesc(" << index << "): S_OK: " << *ppFuncDesc);
+
+        return S_OK;
+    }
+
+    Reference<XIdlReflection> xRefl = theCoreReflection::get(comphelper::getComponentContext(mxMSF));
+    assert(xRefl.is());
+
+    Reference<XIdlClass> xClass = xRefl->forName(maType.getTypeName());
+    assert(xClass.is());
+
+    auto aMethods = xClass->getMethods();
+    assert(xClass->getTypeClass() == TypeClass_INTERFACE &&
+           aMethods.getLength() > 0);
+
+    if (index > static_cast<UINT>(aMethods.getLength() - 3 + 3 + 4))
+        return E_INVALIDARG;
+
+    *ppFuncDesc = new FUNCDESC;
+
+    (*ppFuncDesc)->memid = index - 6;
+    (*ppFuncDesc)->lprgscode = nullptr;
+    (*ppFuncDesc)->lprgelemdescParam = nullptr;
+    (*ppFuncDesc)->funckind = FUNC_DISPATCH;
+    (*ppFuncDesc)->invkind = INVOKE_FUNC;
+    (*ppFuncDesc)->callconv = CC_STDCALL;
+    (*ppFuncDesc)->cParams = aMethods[index - 4]->getParameterInfos().getLength();
+    (*ppFuncDesc)->cParamsOpt = 0;
+    (*ppFuncDesc)->oVft = index * sizeof(void*);
+    (*ppFuncDesc)->cScodes = 0;
+    (*ppFuncDesc)->elemdescFunc.tdesc.lptdesc = nullptr; // ???
+    (*ppFuncDesc)->elemdescFunc.tdesc.vt = VT_VOID; // ???
+    (*ppFuncDesc)->wFuncFlags = 0;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetFuncDesc(" << index << "): S_OK: " << *ppFuncDesc);
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetVarDesc(UINT,
+                                                 VARDESC **)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::GetVarDesc: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetNames(MEMBERID memid,
+                                               BSTR *rgBstrNames,
+                                               UINT cMaxNames,
+                                               UINT *pcNames)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetNames(" << memid << ")");
+    assert(meKind != Kind::COCLASS);
+
+    if (!rgBstrNames)
+        return E_POINTER;
+
+    if (!pcNames)
+        return E_POINTER;
+
+    if (memid < 1)
+        return E_INVALIDARG;
+
+    if (cMaxNames < 1)
+        return E_INVALIDARG;
+
+    if (meKind == Kind::MAIN)
+    {
+        SAL_WARN("extensions.olebridge", "GetNames() for MAIN not implemented");
+        return E_NOTIMPL;
+    }
+
+    Reference<XIdlReflection> xRefl = theCoreReflection::get(comphelper::getComponentContext(mxMSF));
+    assert(xRefl.is());
+
+    Reference<XIdlClass> xClass = xRefl->forName(maType.getTypeName());
+    assert(xClass.is());
+
+    auto aMethods = xClass->getMethods();
+    assert(xClass->getTypeClass() == TypeClass_INTERFACE &&
+           aMethods.getLength() > 0);
+
+    // Subtract the three XInterface methods. Memid for the first following method is 1.
+    if (memid > aMethods.getLength() - 3)
+        return E_INVALIDARG;
+
+    SAL_INFO("extensions.olebridge", "..." << this << "@CXTypeInfo::GetNames(" << memid << "): " << aMethods[memid + 2]->getName());
+    rgBstrNames[0] = SysAllocString(reinterpret_cast<LPOLESTR>(aMethods[memid + 2]->getName().pData->buffer));
+    *pcNames = 1;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetRefTypeOfImplType(UINT index,
+                                                           HREFTYPE *pRefType)
+{
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetRefTypeOfImplType(" << index << ")");
+
+    if (!pRefType)
+        return E_POINTER;
+
+    assert(index == 0 || index == 1);
+
+    *pRefType = 1000+index;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetImplTypeFlags(UINT index,
+                                                       INT *pImplTypeFlags)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetImplTypeFlags(" << index << ")");
+
+    if (!pImplTypeFlags)
+        return E_POINTER;
+
+    assert(meKind == Kind::COCLASS);
+    assert(index == 0 || index == 1);
+
+    if (index == 0)
+        *pImplTypeFlags = IMPLTYPEFLAG_FDEFAULT;
+    else if (index == 1)
+        *pImplTypeFlags = IMPLTYPEFLAG_FDEFAULT|IMPLTYPEFLAG_FSOURCE;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetIDsOfNames(LPOLESTR *,
+                                                    UINT,
+                                                    MEMBERID *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::GetIDsOfNames: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::Invoke(PVOID,
+                                             MEMBERID,
+                                             WORD,
+                                             DISPPARAMS *,
+                                             VARIANT *,
+                                             EXCEPINFO *,
+                                             UINT *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::Invoke: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetDocumentation(MEMBERID memid,
+                                                       BSTR *pBstrName,
+                                                       BSTR *pBstrDocString,
+                                                       DWORD *pdwHelpContext,
+                                                       BSTR *pBstrHelpFile)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetDocumentation(" << memid << ")");
+
+    if (pBstrName)
+    {
+        if (memid == MEMBERID_NIL)
+        {
+            *pBstrName = SysAllocString(o3tl::toW(msImplementationName.getStr()));
+        }
+        else if (memid == DISPID_VALUE)
+        {
+            // MEMBERIDs are the same as DISPIDs, apparently?
+            *pBstrName = SysAllocString(L"Value");
+        }
+        else
+        {
+            *pBstrName = SysAllocString(L"Unknown");
+        }
+    }
+    if (pBstrDocString)
+        *pBstrDocString = SysAllocString(L"");
+    if (pdwHelpContext)
+        *pdwHelpContext = 0;
+    if (pBstrHelpFile)
+        *pBstrHelpFile = nullptr;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetDllEntry(MEMBERID,
+                                                  INVOKEKIND,
+                                                  BSTR *,
+                                                  BSTR *,
+                                                  WORD *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::GetDllEntry: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetRefTypeInfo(HREFTYPE hRefType,
+                                                     ITypeInfo **ppTInfo)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetRefTypeInfo(" << hRefType << ")");
+
+    if (!ppTInfo)
+        return E_POINTER;
+
+    // FIXME: Is it correct to assume that the only interfaces on which GetRefTypeInfo() would be
+    // called are those that implement ooo::vba::XConnectable?
+
+    Reference<ooo::vba::XConnectable> xConnectable(mxOrigin, UNO_QUERY);
+    if (!xConnectable.is())
+        return E_NOTIMPL;
+
+    ooo::vba::TypeAndIID aTypeAndIID = xConnectable->GetConnectionPoint();
+
+    IID aIID;
+    if (!SUCCEEDED(IIDFromString(reinterpret_cast<LPOLESTR>(aTypeAndIID.IID.pData->buffer), &aIID)))
+        return E_NOTIMPL;
+
+    HRESULT ret;
+
+    CComObject<CXTypeInfo>* pTypeInfo;
+
+    ret = CComObject<CXTypeInfo>::CreateInstance(&pTypeInfo);
+    if (FAILED(ret))
+        return ret;
+
+    pTypeInfo->AddRef();
+
+    pTypeInfo->InitForOutgoing(mxOrigin, aTypeAndIID.Type.getTypeName(), aIID, mxMSF, aTypeAndIID.Type);
+
+    *ppTInfo = pTypeInfo;
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::AddressOfMember(MEMBERID,
+                                                      INVOKEKIND,
+                                                      PVOID *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::AddressOfMember: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::CreateInstance(IUnknown *,
+                                                     REFIID,
+                                                     PVOID *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::CreateInstance: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetMops(MEMBERID,
+                                              BSTR *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::GetMops: E_NOTIMPL");
+    return E_NOTIMPL;
+}
+
+// This is not actually called any more by my vbscript test after I added the IProvideClassInfo
+// thing... so all the CXTypeLib stuff is dead code at the moment.
+
+HRESULT STDMETHODCALLTYPE CXTypeInfo::GetContainingTypeLib(ITypeLib **ppTLib,
+                                                           UINT *pIndex)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::GetContainingTypeLib");
+
+    if (!ppTLib || !pIndex)
+        return E_POINTER;
+
+    HRESULT ret;
+
+    CComObject<CXTypeLib>* pTypeLib;
+
+    ret = CComObject<CXTypeLib>::CreateInstance(&pTypeLib);
+    if (FAILED(ret))
+        return ret;
+
+    pTypeLib->AddRef();
+
+    pTypeLib->Init(mxOrigin, msImplementationName, mxMSF);
+
+    *ppTLib = pTypeLib;
+
+    return S_OK;
+}
+
+void STDMETHODCALLTYPE CXTypeInfo::ReleaseTypeAttr(TYPEATTR *pTypeAttr)
+{
+    SAL_INFO("extensions.olebridge", this << "@CXTypeInfo::ReleaseTypeAttr(" << pTypeAttr << ")");
+
+    delete pTypeAttr;
+}
+
+void STDMETHODCALLTYPE CXTypeInfo::ReleaseFuncDesc(FUNCDESC *pFuncDesc)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::ReleaseFuncDesc(" << pFuncDesc << ")");
+
+    delete pFuncDesc;
+}
+
+void STDMETHODCALLTYPE CXTypeInfo::ReleaseVarDesc(VARDESC *)
+{
+    SAL_WARN("extensions.olebridge", this << "@CXTypeInfo::ReleaseVarDesc: E_NOTIMPL");
+}
+
+STDMETHODIMP InterfaceOleWrapper::GetTypeInfo(unsigned int iTInfo, LCID, ITypeInfo ** ppTInfo)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::GetTypeInfo(" << iTInfo << ")");
+
+    if (!ppTInfo)
+        return E_POINTER;
+
+    if (iTInfo != 0)
+        return E_NOTIMPL;
+
+    // FIXME: This is surely incorrect. Why is being able to handle GetTypeInfo() here coupled to
+    // being a source for outgoing events, i.e. implementing XConnectable? What would break if we
+    // would use XInterfaceWithIID and its getIID instead?
+
+    Reference<ooo::vba::XConnectable> xConnectable(m_xOrigin, UNO_QUERY);
+    if (!xConnectable.is())
+        return E_NOTIMPL;
+
+    OUString sIID = xConnectable->GetIIDForClassItselfNotCoclass();
+    IID aIID;
+    if (!SUCCEEDED(IIDFromString(reinterpret_cast<LPOLESTR>(sIID.pData->buffer), &aIID)))
+        return E_NOTIMPL;
+
+    HRESULT ret;
+
+    CComObject<CXTypeInfo>* pTypeInfo;
+
+    ret = CComObject<CXTypeInfo>::CreateInstance(&pTypeInfo);
+    if (FAILED(ret))
+        return ret;
+
+    pTypeInfo->AddRef();
+
+    pTypeInfo->InitForClassItself(m_xOrigin, m_sImplementationName, aIID, m_smgr);
+
+    *ppTInfo = pTypeInfo;
+
+    return S_OK;
 }
 
 STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
@@ -187,12 +1075,31 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
                                                 LCID /*lcid*/,
                                                 DISPID * rgdispid )
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    if( ! rgdispid)
+        return E_POINTER;
+
+    OUString sNames;
+    sNames += "[";
+    for (unsigned int i = 0; i < cNames; ++i)
+    {
+        // Initialise returned rgdispid values.
+        rgdispid[i] = DISPID_UNKNOWN;
+        if (i > 0)
+            sNames += ",";
+        sNames += "\"" + OUString(o3tl::toU(rgszNames[i])) + "\"";
+    }
+    sNames += "]";
+
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::GetIDsOfNames(" << sNames);
+
     HRESULT ret = DISP_E_UNKNOWNNAME;
     try
     {
         MutexGuard guard( getBridgeMutex());
-        if( ! rgdispid)
-            return E_POINTER;
+
+        // FIXME: Handle the cNames > 1 case? Note that the rest of the names mean the names of *arguments*.
 
         if( ! _wcsicmp( *rgszNames, JSCRIPT_VALUE_FUNC) ||
             ! _wcsicmp( *rgszNames, BRIDGE_VALUE_FUNC))
@@ -217,17 +1124,17 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
             OUString name(o3tl::toU(rgszNames[0]));
             NameToIdMap::iterator iter = m_nameToDispIdMap.find(name);
 
+            bool bIsMethod = false;
+
+            OUString exactName = name;
+
             if (iter == m_nameToDispIdMap.end())
             {
-                OUString exactName;
-
                 if (m_xExactName.is())
                 {
                     exactName = m_xExactName->getExactName(name);
-                }
-                else
-                {
-                    exactName = name;
+                    if (exactName.isEmpty())
+                        exactName = name;
                 }
 
                 MemberInfo d(0, exactName);
@@ -242,6 +1149,7 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
                 if (m_xInvocation->hasMethod(exactName))
                 {
                     d.flags |= DISPATCH_METHOD;
+                    bIsMethod = true;
                 }
 
                 if (d.flags != 0)
@@ -259,11 +1167,50 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
             if (iter == m_nameToDispIdMap.end())
             {
                 ret = DISP_E_UNKNOWNNAME;
+                SAL_INFO("extensions.olebridge", "  " << name << ": UNKNOWN");
             }
             else
             {
-                *rgdispid = (*iter).second;
-                ret = S_OK;
+                rgdispid[0] = (*iter).second;
+                SAL_INFO("extensions.olebridge", "  " << name << ": " << rgdispid[0]);
+
+                if (bIsMethod && cNames > 1)
+                {
+                    Reference<XIdlMethod> xIdlMethod;
+                    Reference<XIntrospectionAccess> xIntrospectionAccess = m_xInvocation->getIntrospection();
+                    try
+                    {
+                        if (xIntrospectionAccess.is())
+                            xIdlMethod = xIntrospectionAccess->getMethod(exactName, MethodConcept::ALL);
+                    }
+                    catch (const NoSuchMethodException&)
+                    {
+                    }
+                    if (xIdlMethod.is())
+                    {
+                        auto aParamInfos = xIdlMethod->getParameterInfos();
+                        for (unsigned int i = 1; i < cNames; ++i)
+                        {
+                            for (int j = 0; j < aParamInfos.getLength(); ++j)
+                            {
+                                if (aParamInfos[j].aName.equalsIgnoreAsciiCase(OUString(o3tl::toU(rgszNames[i]))))
+                                {
+                                    rgdispid[i] = j;
+                                    SAL_INFO("extensions.olebridge", "  " << OUString(o3tl::toU(rgszNames[i])) << ": " << rgdispid[i]);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Return value should be S_OK only if *all* the names were found.
+                unsigned int i;
+                for (i = 0; i < cNames; ++i)
+                    if (rgdispid[i] == DISPID_UNKNOWN)
+                        break;
+                if (i == cNames)
+                    ret = S_OK;
             }
         }
     }
@@ -282,6 +1229,10 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
 
     return ret;
 }
+
+// Note: What the comments here say about JScript possibly holds for Automation clients in general,
+// like VBScript ones, too. Or not. Hard to say. What is the relevance of JScript nowadays anyway,
+// and can LO really be used from JScript code on web pages any longer?
 
 // "convertDispparamsArgs" converts VARIANTS to their respecting Any counterparts
 // The parameters "id", "wFlags" and "pdispparams" equal those as used in
@@ -323,15 +1274,35 @@ STDMETHODIMP InterfaceOleWrapper::GetIDsOfNames(REFIID /*riid*/,
 void InterfaceOleWrapper::convertDispparamsArgs(DISPID id,
     unsigned short /*wFlags*/, DISPPARAMS* pdispparams, Sequence<Any>& rSeq)
 {
-    HRESULT hr= S_OK;
-    sal_Int32 countArgs= pdispparams->cArgs;
-    if( countArgs == 0)
-        return;
+    // Parameters come in in reverse order in pdispparams. There might be less parameters than
+    // expected. In that case, assume they are "optional" (but can't be marked as such in UNO IDL),
+    // and fill in the rest with empty Anys. There might also be more than expected. In that case,
+    // assume the oovbaapi UNO IDL hasn't kept up with added optional parameters in MSO, and just
+    // ignore the extra ones, as long as they are empty.
 
-    rSeq.realloc( countArgs);
-    Any*    pParams = rSeq.getArray();
+    // An example: incoming parameters: <12, 13, "foo/bar.tem">
+    //
+    // Expected parameters: (string filename, int something, int somethingElse, Any whatever, Any
+    // whateverElse)
+    //
+    // Here the existing incoming parameters are placed in reverse order in the first three outgoing
+    // parameters, and the rest of the outgoing parameters are kept as empty Anys.
+    //
+    // Another example: incoming parameters: <EMPTY, TRUE>
+    //
+    // Expected parameters: (bool flag)
+    //
+    // Here the TRUE is passed as the sole outgoing parameter, and the incoming EMPTY is ignored.
+    //
+    // Still an example: incoming parameters: <"foo.doc", TRUE>
+    //
+    // Expected parameters: (bool flag)
+    //
+    // This throws an error as the incoming string parameter presumably should do something important,
+    // but there is no corresponding outgoing parameter.
 
-    Any anyParam;
+    HRESULT hr = S_OK;
+    const int countIncomingArgs = pdispparams->cArgs;
 
     //Get type information for the current call
     InvocationInfo info;
@@ -340,17 +1311,59 @@ void InterfaceOleWrapper::convertDispparamsArgs(DISPID id,
                   "[automation bridge]InterfaceOleWrapper::convertDispparamsArgs \n"
                   "Could not obtain type information for current call.");
 
-    for (int i = 0; i < countArgs; i++)
+    // Size rSeq according to the number of expected parameters.
+    const int expectedArgs = info.aParamTypes.getLength() + (info.eMemberType == MemberType_PROPERTY ? 1 : 0);
+    rSeq.realloc( expectedArgs );
+    Any* pParams = rSeq.getArray();
+
+    Any anyParam;
+
+    int outgoingArgIndex = 0;
+
+    // Go through incoming parameters in reverse order, i.e. in the order as declared in IDL
+    for (int i = std::max(countIncomingArgs, expectedArgs) - 1; i >= 0; i--)
     {
-        if (info.eMemberType == MemberType_METHOD &&
-            info.aParamModes[ countArgs - i -1 ]  == ParamMode_OUT)
+        // Ignore too many parameters if they are VT_EMPTY anyway
+        if ( outgoingArgIndex >= expectedArgs && pdispparams->rgvarg[i].vt == VT_EMPTY )
             continue;
 
-         if(convertValueObject( & pdispparams->rgvarg[i], anyParam))
-         { //a param is a ValueObject and could be converted
-            pParams[countArgs - (i + 1)] = anyParam;
-             continue;
-         }
+        // But otherwise too many parameters is an error
+        if ( outgoingArgIndex >= expectedArgs )
+            throw BridgeRuntimeError( "[automation bridge] Too many parameters" );
+
+        if (info.eMemberType == MemberType_METHOD &&
+            info.aParamModes[ outgoingArgIndex ] == ParamMode_OUT)
+        {
+            outgoingArgIndex++;
+            continue;
+        }
+
+        if (i < countIncomingArgs)
+        {
+            // A missing (and hopefully optional) arg (in the middle of the argument list) is passed
+            // as an empty Any.
+            if (pdispparams->rgvarg[i].vt == VT_ERROR && pdispparams->rgvarg[i].scode == DISP_E_PARAMNOTFOUND)
+            {
+                Any aEmpty;
+                pParams[ outgoingArgIndex ] = aEmpty;
+                outgoingArgIndex++;
+                continue;
+            }
+
+            if(convertValueObject( & pdispparams->rgvarg[i], anyParam))
+            { //a param is a ValueObject and could be converted
+                pParams[ outgoingArgIndex ] = anyParam;
+                outgoingArgIndex++;
+                continue;
+            }
+        }
+        else
+        {
+            // A missing arg. Let's hope it is de facto optional (there is no way in UNO IDL to mark
+            // a parameter as optional). The corresponding slot in pParams is already a void Any.
+            // Here we don't increase outgoingArgIndex!
+            continue;
+        }
 
         // If the param is an out, in/out parameter in
         // JScript (Array object, with value at index 0) then we
@@ -361,9 +1374,13 @@ void InterfaceOleWrapper::convertDispparamsArgs(DISPID id,
 
         // Check for JScript out and in/out paramsobjects (VT_DISPATCH).
         // To find them out we use typeinformation of the function being called.
+
+        // No idea how this stuff, originally written for JScript, works for other Automation
+        // clients.
+
         if( pdispparams->rgvarg[i].vt == VT_DISPATCH )
         {
-            if( info.eMemberType == MemberType_METHOD && info.aParamModes[ countArgs - i -1 ]  == ParamMode_INOUT)
+            if( info.eMemberType == MemberType_METHOD && info.aParamModes[ outgoingArgIndex ] == ParamMode_INOUT)
             {
                 // INOUT-param
                 // Index ( property) "0" contains the actual IN-param. The object is a JScript
@@ -388,17 +1405,19 @@ void InterfaceOleWrapper::convertDispparamsArgs(DISPID id,
         }
 
         if( varParam.vt == VT_EMPTY) // then it was no in/out parameter
-                 varParam= pdispparams->rgvarg[i];
+            varParam= pdispparams->rgvarg[i];
 
         if(info.eMemberType == MemberType_METHOD)
             variantToAny( & varParam, anyParam,
-                           info.aParamTypes[ countArgs - i - 1]);
+                           info.aParamTypes[ outgoingArgIndex ]);
         else if(info.eMemberType == MemberType_PROPERTY)
             variantToAny( & varParam, anyParam, info.aType);
         else
             OSL_ASSERT(false);
 
-        pParams[countArgs - (i + 1)]= anyParam;
+        if (outgoingArgIndex < expectedArgs)
+            pParams[ outgoingArgIndex ]= anyParam;
+        outgoingArgIndex++;
     }// end for / iterating over all parameters
 }
 
@@ -419,17 +1438,12 @@ bool  InterfaceOleWrapper::getInvocationInfoForCall( DISPID id, InvocationInfo& 
         // m_nameToDispIdMap can contain several names for one DISPID but only one is
         // the exact one. If there's no m_xExactName and therefore no exact name then
         // there's only one entry in the map.
-        typedef NameToIdMap::const_iterator cit;
         OUString sMemberName;
 
-        for(cit ci1= m_nameToDispIdMap.begin(); ci1 != m_nameToDispIdMap.end(); ++ci1)
-        {
-            if( (*ci1).second == id) // iterator is a pair< OUString, DISPID>
-            {
-                sMemberName= (*ci1).first;
-                break;
-            }
-        }
+        auto ci1 = std::find_if(m_nameToDispIdMap.cbegin(), m_nameToDispIdMap.cend(),
+            [&id](const NameToIdMap::value_type& nameToDispId) { return nameToDispId.second == id; }); // item is a pair<OUString, DISPID>
+        if (ci1 != m_nameToDispIdMap.cend())
+            sMemberName= (*ci1).first;
         // Get information for the current call ( property or method).
         // There could be similar names which only differ in the cases
         // of letters. First we assume that the name which was passed into
@@ -507,6 +1521,13 @@ void SAL_CALL InterfaceOleWrapper::initialize( const Sequence< Any >& aArguments
         aArguments[0] >>= m_xInvocation;
         aArguments[1] >>= m_xOrigin;
         aArguments[2] >>= m_defaultValueType;
+
+        Reference<XServiceInfo> xServiceInfo(m_xOrigin, UNO_QUERY);
+        if (xServiceInfo.is())
+            m_sImplementationName = xServiceInfo->getImplementationName();
+
+        SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::initialize for "
+                 << (m_sImplementationName.isEmpty()?"an unknown implementation":m_sImplementationName));
         break;
     }
 
@@ -626,7 +1647,7 @@ static bool writeBackOutParameter(VARIANTARG* pDest, VARIANT* pSource)
         // if caller accept VARIANT as out parameter, any value must be converted
         if (V_VT(pDest) == (VT_VARIANT | VT_BYREF))
         {
-            // When the user provides a VARIANT rather then a concrete type
+            // When the user provides a VARIANT rather than a concrete type
             // we just copy the source to the out, in/out parameter
             // VT_DISPATCH, VT_UNKNOWN, VT_ARRAY, VT_BSTR in the VARIANT that
             // is contained in pDest are released by VariantCopy
@@ -781,6 +1802,23 @@ STDMETHODIMP InterfaceOleWrapper::Invoke(DISPID dispidMember,
                                          EXCEPINFO * pexcepinfo,
                                          unsigned int * puArgErr )
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    OUString sParams;
+#if defined SAL_LOG_INFO
+    sParams += "[";
+    for (unsigned int i = 0; i < pdispparams->cArgs; ++i)
+    {
+        if (i > 0)
+            sParams += ",";
+        std::stringstream aStringStream;
+        aStringStream << pdispparams->rgvarg[i];
+        sParams += OUString::createFromAscii(aStringStream.str().c_str());
+    }
+    sParams += "]";
+#endif
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::Invoke(" << dispidMember << "," << sParams << ")");
+
     comphelper::ProfileZone aZone("COM Bridge");
     HRESULT ret = S_OK;
 
@@ -801,28 +1839,88 @@ STDMETHODIMP InterfaceOleWrapper::Invoke(DISPID dispidMember,
             {
                 if ((flags & DISPATCH_METHOD) != 0)
                 {
+                    std::unique_ptr<DISPPARAMS> pNewDispParams;
+                    std::vector<VARIANTARG> vNewArgs;
+
                     if (pdispparams->cNamedArgs > 0)
-                        ret = DISP_E_NONAMEDARGS;
-                    else
                     {
-                        Sequence<Any> params;
+                        // Convert named arguments to positional ones.
 
-                        convertDispparamsArgs(dispidMember, wFlags, pdispparams , params );
+                        // An example:
+                        //
+                        // Function declaration (in pseudo-code):
+                        // int foo(int A, int B, optional int C, optional int D, optional int E, optional int F, optional int G)
+                        //
+                        // Corresponding parameter numbers (DISPIDs):
+                        //             0      1               2               3               4               5               6
+                        //
+                        // Actual call:
+                        // foo(10, 20, E:=50, D:=40, F:=60)
+                        //
+                        // That is, A and B are passed positionally, D, E, and F as named arguments,
+                        // and the optional C and G parameters are left out.
+                        //
+                        // Incoming DISPPARAMS:
+                        //     cArgs=5, cNamedArgs=3
+                        //     rgvarg: [60, 40, 50, 20, 10]
+                        //     rgdispidNamedArgs: [5, 3, 4]
+                        //
+                        // We calculate nLowestNamedArgDispid = 3 and nHighestNamedArgDispid = 5.
+                        //
+                        // Result of conversion, no named args:
+                        //     cArgs=6, cNamedArgs=0
+                        //     rgvarg: [60, 50, 40, DISP_E_PARAMNOTFOUND, 20, 10]
 
-                        // Pass missing (hopefully optional) parameters as Any().
-                        InvocationInfo aInvocationInfo;
-                        getInvocationInfoForCall(dispidMember, aInvocationInfo);
-                        if (pdispparams->cArgs < sal_uInt32(aInvocationInfo.aParamTypes.getLength()))
+                        // First find the lowest and highest DISPID of the named arguments.
+                        DISPID nLowestNamedArgDispid = 1000000;
+                        DISPID nHighestNamedArgDispid = -1;
+                        for (unsigned int i = 0; i < pdispparams->cNamedArgs; ++i)
                         {
-                            params.realloc(aInvocationInfo.aParamTypes.getLength());
-                            Any* pParams = params.getArray();
-                            for (int i = pdispparams->cArgs; i < aInvocationInfo.aParamTypes.getLength(); ++i)
-                                pParams[i] = Any();
+                            if (pdispparams->rgdispidNamedArgs[i] < nLowestNamedArgDispid)
+                                nLowestNamedArgDispid = pdispparams->rgdispidNamedArgs[i];
+                            if (pdispparams->rgdispidNamedArgs[i] > nHighestNamedArgDispid)
+                                nHighestNamedArgDispid = pdispparams->rgdispidNamedArgs[i];
                         }
 
-                        ret= doInvoke(pdispparams, pvarResult,
-                                      pexcepinfo, puArgErr, d.name, params);
+                        // Make sure named arguments don't overlap with positional ones. The lowest
+                        // DISPID of the named arguments should be >= the number of positional
+                        // arguments.
+                        if (nLowestNamedArgDispid < static_cast<DISPID>(pdispparams->cArgs - pdispparams->cNamedArgs))
+                            return DISP_E_NONAMEDARGS;
+
+                        // Do the actual conversion.
+                        pNewDispParams.reset(new DISPPARAMS);
+                        vNewArgs.resize(nHighestNamedArgDispid + 1);
+                        pNewDispParams->rgvarg = vNewArgs.data();
+                        pNewDispParams->rgdispidNamedArgs = nullptr;
+                        pNewDispParams->cArgs = nHighestNamedArgDispid + 1;
+                        pNewDispParams->cNamedArgs = 0;
+
+                        // Initialise all parameter slots as missing
+                        for (int i = 0; i < nHighestNamedArgDispid; ++i)
+                        {
+                            pNewDispParams->rgvarg[i].vt = VT_ERROR;
+                            pNewDispParams->rgvarg[i].scode = DISP_E_PARAMNOTFOUND;
+                        }
+
+                        // Then set the value of those actually present.
+                        for (unsigned int i = 0; i < pdispparams->cNamedArgs; ++i)
+                            pNewDispParams->rgvarg[nHighestNamedArgDispid - pdispparams->rgdispidNamedArgs[i]] = pdispparams->rgvarg[i];
+
+                        const int nFirstUnnamedArg = pdispparams->cNamedArgs + (nLowestNamedArgDispid-(pdispparams->cArgs - pdispparams->cNamedArgs));
+
+                        for (unsigned int i = pdispparams->cNamedArgs; i < pdispparams->cArgs; ++i)
+                            pNewDispParams->rgvarg[nFirstUnnamedArg + (i-pdispparams->cNamedArgs)] = pdispparams->rgvarg[i];
+
+                        pdispparams = pNewDispParams.get();
                     }
+
+                    Sequence<Any> params;
+
+                    convertDispparamsArgs(dispidMember, wFlags, pdispparams , params );
+
+                    ret= doInvoke(pdispparams, pvarResult,
+                                  pexcepinfo, puArgErr, d.name, params);
                 }
                 else if ((flags & DISPATCH_PROPERTYGET) != 0)
                 {
@@ -1040,6 +2138,596 @@ HRESULT InterfaceOleWrapper::doSetProperty( DISPPARAMS * /*pdispparams*/, VARIAN
     return ret;
 }
 
+class CXEnumVariant : public IEnumVARIANT,
+                      public CComObjectRoot
+{
+public:
+    CXEnumVariant()
+        : mnIndex(1)            // ooo::vba::XCollection index starts at one
+    {
+    }
+
+    virtual ~CXEnumVariant()
+    {
+    }
+
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    BEGIN_COM_MAP(CXEnumVariant)
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+        COM_INTERFACE_ENTRY(IEnumVARIANT)
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    END_COM_MAP()
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
+    DECLARE_NOT_AGGREGATABLE(CXEnumVariant)
+
+    // Creates and initializes the enumerator
+    void Init(InterfaceOleWrapper* pInterfaceOleWrapper,
+              const Reference<ooo::vba::XCollection > xCollection)
+    {
+        mpInterfaceOleWrapper = pInterfaceOleWrapper;
+        mxCollection = xCollection;
+    }
+
+    // IEnumVARIANT
+    virtual HRESULT STDMETHODCALLTYPE Clone(IEnumVARIANT **) override
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Clone: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Next(ULONG const celt,
+                                           VARIANT *rgVar,
+                                           ULONG *pCeltFetched) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        if (pCeltFetched)
+            *pCeltFetched = 0;
+
+        if (celt == 0)
+        {
+            SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Next(" << celt << "): E_INVALIDARG");
+            return E_INVALIDARG;
+        }
+
+        if (rgVar == nullptr || (celt != 1 && pCeltFetched == nullptr))
+        {
+            SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Next(" << celt << "): E_FAIL");
+            return E_FAIL;
+        }
+
+        for (ULONG i = 0; i < celt; i++)
+            VariantInit(&rgVar[i]);
+
+        ULONG nLeft = celt;
+        ULONG nReturned = 0;
+        while (nLeft > 0)
+        {
+            if (mnIndex > mxCollection->getCount())
+            {
+                SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Next(" << celt << "): got " << nReturned << ": S_FALSE");
+                return S_FALSE;
+            }
+            Any aIndex;
+            aIndex <<= mnIndex;
+            Any aElement = mxCollection->Item(aIndex, Any());
+            mpInterfaceOleWrapper->anyToVariant(rgVar, aElement);
+            // rgVar->pdispVal->AddRef(); ??
+            if (pCeltFetched)
+                (*pCeltFetched)++;
+            rgVar++;
+            nReturned++;
+            mnIndex++;
+            nLeft--;
+        }
+        SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Next(" << celt << "): S_OK");
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Reset() override
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Reset: S_OK");
+        mnIndex = 1;
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE STDMETHODCALLTYPE Skip(ULONG const celt) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        ULONG nLeft = celt;
+        ULONG nSkipped = 0;
+        while (nLeft > 0)
+        {
+            if (mnIndex > mxCollection->getCount())
+            {
+                SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Skip(" << celt << "): skipped " << nSkipped << ": S_FALSE");
+                return S_FALSE;
+            }
+            mnIndex++;
+            nLeft--;
+        }
+        SAL_INFO("extensions.olebridge", this << "@CXEnumVariant::Skip(" << celt << "): S_OK");
+        return S_OK;
+    }
+
+private:
+    InterfaceOleWrapper* mpInterfaceOleWrapper;
+    Reference<ooo::vba::XCollection> mxCollection;
+    sal_Int32 mnIndex;
+};
+
+class Sink : public cppu::WeakImplHelper<ooo::vba::XSink>
+{
+public:
+    Sink(IUnknown* pUnkSink,
+         Reference<XMultiServiceFactory> xMSF,
+         ooo::vba::TypeAndIID aTypeAndIID,
+         InterfaceOleWrapper* pInterfaceOleWrapper);
+
+    // XSink
+    void SAL_CALL Call( const OUString& Method, Sequence< Any >& Arguments ) override;
+
+private:
+    IUnknown* mpUnkSink;
+    Reference<XMultiServiceFactory> mxMSF;
+    ooo::vba::TypeAndIID maTypeAndIID;
+    InterfaceOleWrapper* mpInterfaceOleWrapper;
+};
+
+Sink::Sink(IUnknown* pUnkSink,
+           Reference<XMultiServiceFactory> xMSF,
+           ooo::vba::TypeAndIID aTypeAndIID,
+           InterfaceOleWrapper* pInterfaceOleWrapper) :
+    mpUnkSink(pUnkSink),
+    mxMSF(xMSF),
+    maTypeAndIID(aTypeAndIID),
+    mpInterfaceOleWrapper(pInterfaceOleWrapper)
+{
+    mpUnkSink->AddRef();
+}
+
+void SAL_CALL
+Sink::Call( const OUString& Method, Sequence< Any >& Arguments )
+{
+    SAL_INFO("extensions.olebridge", "Sink::Call(" << Method << ", " << Arguments.getLength() << " arguments)");
+
+    IDispatch* pDispatch;
+    HRESULT nResult = mpUnkSink->QueryInterface(IID_IDispatch, reinterpret_cast<void **>(&pDispatch));
+    if (!SUCCEEDED(nResult))
+    {
+        SAL_WARN("extensions.olebridge", "Sink::Call: Not IDispatch: " << WindowsErrorStringFromHRESULT(nResult));
+        return;
+    }
+
+    Reference<XIdlReflection> xRefl = theCoreReflection::get(comphelper::getComponentContext(mxMSF));
+    assert(xRefl.is());
+
+    Reference<XIdlClass> xClass = xRefl->forName(maTypeAndIID.Type.getTypeName());
+    assert(xClass.is());
+
+    auto aMethods = xClass->getMethods();
+    assert(xClass->getTypeClass() == TypeClass_INTERFACE &&
+           aMethods.getLength() > 0);
+
+    int nMemId = 1;
+    // Skip the three XInterface methods
+    for (int i = 3; i < aMethods.getLength(); i++)
+    {
+        if (aMethods[i]->getName() == Method)
+        {
+            // FIXME: Handle mismatch in type of actual argument and parameter of the method.
+
+            // FIXME: Handle mismatch in number of arguments passed and actual number of parameters
+            // of the method.
+
+            auto aParamInfos = aMethods[i]->getParameterInfos();
+
+            assert(Arguments.getLength() == aParamInfos.getLength());
+
+            DISPPARAMS aDispParams;
+            aDispParams.rgdispidNamedArgs = nullptr;
+            aDispParams.cArgs = Arguments.getLength();
+            aDispParams.cNamedArgs = 0;
+            aDispParams.rgvarg = new VARIANT[aDispParams.cArgs];
+            for (unsigned j = 0; j < aDispParams.cArgs; j++)
+            {
+                VariantInit(aDispParams.rgvarg+j);
+                // Note: Reverse order of arguments in Arguments and aDispParams.rgvarg!
+                const unsigned nIncomingArgIndex = aDispParams.cArgs - j - 1;
+                mpInterfaceOleWrapper->anyToVariant(aDispParams.rgvarg+j, Arguments[nIncomingArgIndex]);
+
+                // Handle OUT and INOUT arguments. For instance, the second ('Cancel') parameter to
+                // DocumentBeforeClose() should be a VT_BYREF|VT_BOOL parameter. Need to handle that
+                // here.
+
+                if (aParamInfos[nIncomingArgIndex].aMode == ParamMode_OUT ||
+                    aParamInfos[nIncomingArgIndex].aMode == ParamMode_INOUT)
+                {
+                    switch (aDispParams.rgvarg[j].vt)
+                    {
+                    case VT_I2:
+                        aDispParams.rgvarg[j].byref = new SHORT(aDispParams.rgvarg[j].iVal);
+                        aDispParams.rgvarg[j].vt |= VT_BYREF;
+                        break;
+                    case VT_I4:
+                        aDispParams.rgvarg[j].byref = new LONG(aDispParams.rgvarg[j].lVal);
+                        aDispParams.rgvarg[j].vt |= VT_BYREF;
+                        break;
+                    case VT_BSTR:
+                        aDispParams.rgvarg[j].byref = new BSTR(aDispParams.rgvarg[j].bstrVal);
+                        aDispParams.rgvarg[j].vt |= VT_BYREF;
+                        break;
+                    case VT_BOOL:
+                        // SAL_ DEBUG("===> VT_BOOL is initially " << (int)aDispParams.rgvarg[j].boolVal);
+                        aDispParams.rgvarg[j].byref = new VARIANT_BOOL(aDispParams.rgvarg[j].boolVal);
+                        // SAL_ DEBUG("     byref=" << aDispParams.rgvarg[j].byref);
+                        aDispParams.rgvarg[j].vt |= VT_BYREF;
+                        break;
+                    default:
+                        assert(false && "Not handled yet");
+                        break;
+                    }
+                }
+            }
+
+            VARIANT aVarResult;
+            VariantInit(&aVarResult);
+            UINT uArgErr;
+
+            // In the case of a VBScript client, which uses "late binding", calling Invoke on the
+            // sink it provides will cause a callback to our CXTypeInfo::GetNames for the given
+            // member id, and in that we will tell it the name of the corresponding method, and the
+            // client will know what event handler to invoke based on that name.
+            //
+            // As the outgoing interfaces used (ooo::vba::word::XApplicationOutgoing and others) are
+            // totally not stable and not published in any way, there can be no client that would
+            // have done "compile-time binding" and where the sink would actually be an object with
+            // a vtbl corresponding to the outgoing interface. Late binding clients that work like
+            // VBScript is all we support.
+            SAL_INFO("extensions.olebridge", "Sink::Call(" << Method << "): Calling Invoke(" << nMemId << ")");
+
+            nResult = pDispatch->Invoke(nMemId, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &aDispParams, &aVarResult, nullptr, &uArgErr);
+            SAL_INFO("extensions.olebridge", "Sink::Call(" << Method << "): Invoke() returned");
+
+            SAL_WARN_IF(!SUCCEEDED(nResult), "extensions.olebridge", "Call to " << Method << " failed: " << WindowsErrorStringFromHRESULT(nResult));
+
+            // Undo VT_BYREF magic done above. Copy out parameters back to the Anys in Arguments
+            for (unsigned j = 0; j < aDispParams.cArgs; j++)
+            {
+                const unsigned nIncomingArgIndex = aDispParams.cArgs - j - 1;
+                if (aParamInfos[nIncomingArgIndex].aMode == ParamMode_OUT ||
+                    aParamInfos[nIncomingArgIndex].aMode == ParamMode_INOUT)
+                {
+                    switch (aDispParams.rgvarg[j].vt)
+                    {
+                    case VT_BYREF|VT_I2:
+                        {
+                            SHORT *pI = static_cast<SHORT*>(aDispParams.rgvarg[j].byref);
+                            Arguments[nIncomingArgIndex] <<= static_cast<sal_Int16>(*pI);
+                            delete pI;
+                        }
+                        break;
+                    case VT_BYREF|VT_I4:
+                        {
+                            LONG *pL = static_cast<LONG*>(aDispParams.rgvarg[j].byref);
+                            Arguments[nIncomingArgIndex] <<= static_cast<sal_Int32>(*pL);
+                            delete pL;
+                        }
+                        break;
+                    case VT_BYREF|VT_BSTR:
+                        {
+                            BSTR *pBstr = static_cast<BSTR*>(aDispParams.rgvarg[j].byref);
+                            Arguments[nIncomingArgIndex] <<= OUString(o3tl::toU(*pBstr));
+                            // Undo SysAllocString() done in anyToVariant()
+                            SysFreeString(*pBstr);
+                            delete pBstr;
+                        }
+                        break;
+                    case VT_BYREF|VT_BOOL:
+                        {
+                            VARIANT_BOOL *pBool = static_cast<VARIANT_BOOL*>(aDispParams.rgvarg[j].byref);
+                            // SAL_ DEBUG("===> VT_BOOL: byref is now " << aDispParams.rgvarg[j].byref << ", " << (int)*pBool);
+                            Arguments[nIncomingArgIndex] <<= (*pBool != VARIANT_FALSE);
+                            delete pBool;
+                        }
+                        break;
+                    default:
+                        assert(false && "Not handled yet");
+                        break;
+                    }
+                }
+                else
+                {
+                    switch (aDispParams.rgvarg[j].vt)
+                    {
+                    case VT_BSTR:
+                        // Undo SysAllocString() done in anyToVariant()
+                        SysFreeString(aDispParams.rgvarg[j].bstrVal);
+                        break;
+                    }
+                }
+            }
+
+            delete[] aDispParams.rgvarg;
+            return;
+        }
+        nMemId++;
+    }
+    SAL_WARN("extensions.olebridge", "Sink::Call: Unknown method '" << Method << "'");
+}
+
+class CXEnumConnections : public IEnumConnections,
+                          public CComObjectRoot
+{
+public:
+    CXEnumConnections()
+    {
+    }
+
+    virtual ~CXEnumConnections()
+    {
+    }
+
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    BEGIN_COM_MAP(CXEnumConnections)
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+        COM_INTERFACE_ENTRY(IEnumConnections)
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    END_COM_MAP()
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
+    DECLARE_NOT_AGGREGATABLE(CXEnumConnections)
+
+    void Init(std::vector<IUnknown*>& rUnknowns, std::vector<DWORD>& rCookies)
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Init");
+        SAL_WARN_IF(rUnknowns.size() != rCookies.size(), "extensions.olebridge", "Vectors of different size");
+        mvUnknowns = rUnknowns;
+        mvCookies = rCookies;
+        mnIndex = 0;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Next(ULONG cConnections,
+                                           LPCONNECTDATA rgcd,
+                                           ULONG *pcFetched) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        if (!rgcd)
+        {
+            SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Next(" << cConnections << "): E_POINTER");
+            return E_POINTER;
+        }
+
+        if (pcFetched && cConnections != 1)
+        {
+            SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Next(" << cConnections << "): E_INVALIDARG");
+            return E_INVALIDARG;
+        }
+
+        ULONG nFetched = 0;
+        while (nFetched < cConnections && mnIndex < mvUnknowns.size())
+        {
+            rgcd[nFetched].pUnk = mvUnknowns[mnIndex];
+            rgcd[nFetched].pUnk->AddRef();
+            rgcd[nFetched].dwCookie = mvCookies[mnIndex];
+            ++nFetched;
+            ++mnIndex;
+        }
+        if (nFetched != cConnections)
+        {
+            SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Next(" << cConnections << "): S_FALSE");
+            if (pcFetched)
+                *pcFetched = nFetched;
+            return S_FALSE;
+        }
+        SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Next(" << cConnections << "): S_OK");
+        if (pcFetched)
+            *pcFetched = nFetched;
+
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Skip(ULONG cConnections) override
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Skip(" << cConnections << "): E_NOTIMPL");
+
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Reset() override
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Reset: E_NOTIMPL");
+
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Clone(IEnumConnections** /* ppEnum */) override
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXEnumConnections::Clone: E_NOTIMPL");
+
+        return E_NOTIMPL;
+    }
+
+private:
+    std::vector<IUnknown*> mvUnknowns;
+    std::vector<DWORD> mvCookies;
+    ULONG mnIndex;
+};
+
+class CXConnectionPoint : public IConnectionPoint,
+                          public CComObjectRoot
+{
+public:
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    BEGIN_COM_MAP(CXConnectionPoint)
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+        COM_INTERFACE_ENTRY(IConnectionPoint)
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+    END_COM_MAP()
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
+
+    DECLARE_NOT_AGGREGATABLE(CXConnectionPoint)
+
+    virtual ~CXConnectionPoint() {}
+
+    void Init(InterfaceOleWrapper* pInterfaceOleWrapper,
+              Reference<ooo::vba::XConnectionPoint>& xCP,
+              Reference<XMultiServiceFactory>& xMSF,
+              ooo::vba::TypeAndIID aTypeAndIID)
+    {
+        SAL_INFO("extensions.olebridge", this << "@CXConnectionPoint::Init for " << pInterfaceOleWrapper->getImplementationName());
+
+        IUnknown *pUnknown;
+        if (SUCCEEDED(QueryInterface(IID_IUnknown, reinterpret_cast<void **>(&pUnknown))))
+        {
+            // In case QI for IUnknown returns a different pointer, but nah, it doesn't
+            SAL_INFO("extensions.olebridge", "  (IUnknown@" << pUnknown << ")");
+        }
+
+        mpInterfaceOleWrapper = pInterfaceOleWrapper;
+        mxCP = xCP;
+        mxMSF = xMSF;
+        maTypeAndIID = aTypeAndIID;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetConnectionInterface(IID *pIID) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXConnectionPoint::GetConnectionInterface(" << *pIID << "): E_NOTIMPL");
+
+        // FIXME: Needed?
+
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE GetConnectionPointContainer(IConnectionPointContainer **) override
+    {
+        SAL_WARN("extensions.olebridge", this << "@CXConnectionPoint::GetConnectionInterface: E_NOTIMPL");
+
+        // FIXME: Needed?
+
+        return E_NOTIMPL;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Advise(IUnknown *pUnkSink,
+                                             DWORD *pdwCookie) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        SAL_INFO("extensions.olebridge", this << "@CXConnectionPoint::Advise(" << pUnkSink << ")");
+
+        if (!pdwCookie)
+            return E_POINTER;
+
+        Reference<ooo::vba::XSink> xSink(new Sink(pUnkSink, mxMSF, maTypeAndIID, mpInterfaceOleWrapper));
+
+        mvISinks.push_back(pUnkSink);
+        *pdwCookie = mvISinks.size();
+
+        mvCookies.push_back(mxCP->Advise(xSink));
+
+        mvXSinks.push_back(xSink);
+
+        SAL_INFO("extensions.olebridge", "  *pdwCookie: " << *pdwCookie);
+
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Unadvise(DWORD dwCookie) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        SAL_INFO("extensions.olebridge", this << "@CXConnectionPoint::Unadvise(" << dwCookie << ")");
+
+        if (dwCookie == 0 || dwCookie > mvISinks.size())
+            return E_POINTER;
+
+        mvISinks[dwCookie-1] = nullptr;
+
+        mxCP->Unadvise(mvCookies[dwCookie-1]);
+
+        mvXSinks[dwCookie-1] = Reference<ooo::vba::XSink>();
+
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE EnumConnections(IEnumConnections **ppEnum) override
+    {
+        comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+        HRESULT nResult;
+
+        SAL_INFO("extensions.olebridge", this << "@CXConnectionPoint::EnumConnections...");
+
+        if (!ppEnum)
+        {
+            SAL_INFO("extensions.olebridge", "..." << this << "@CXConnectionPoint::EnumConnections: E_POINTER");
+            return E_POINTER;
+        }
+
+        CComObject<CXEnumConnections>* pEnumConnections;
+
+        nResult = CComObject<CXEnumConnections>::CreateInstance(&pEnumConnections);
+        if (FAILED(nResult))
+        {
+            SAL_INFO("extensions.olebridge", "..." << this << "@CXConnectionPoint::EnumConnections: " << WindowsErrorStringFromHRESULT(nResult));
+            return nResult;
+        }
+
+        pEnumConnections->AddRef();
+
+        pEnumConnections->Init(mvISinks, mvCookies);
+        *ppEnum = pEnumConnections;
+
+        SAL_INFO("extensions.olebridge", "..." << this << "@CXConnectionPoint::EnumConnections: S_OK");
+
+        return S_OK;
+    }
+
+    InterfaceOleWrapper* mpInterfaceOleWrapper;
+    std::vector<IUnknown*> mvISinks;
+    std::vector<Reference<ooo::vba::XSink>> mvXSinks;
+    std::vector<DWORD> mvCookies;
+    Reference<XMultiServiceFactory> mxMSF;
+    Reference<ooo::vba::XConnectionPoint> mxCP;
+    ooo::vba::TypeAndIID maTypeAndIID;
+};
+
 HRESULT InterfaceOleWrapper::InvokeGeneral( DISPID dispidMember, unsigned short wFlags,
                          DISPPARAMS * pdispparams, VARIANT * pvarResult, EXCEPINFO * pexcepinfo,
                          unsigned int * /*puArgErr*/, bool& bHandled)
@@ -1050,9 +2738,19 @@ HRESULT InterfaceOleWrapper::InvokeGeneral( DISPID dispidMember, unsigned short 
 // DISPID_VALUE | The DEFAULT Value is required in JScript when the situation
 // is that we put an object into an Array object ( out parameter). We have to return
 // IDispatch otherwise the object cannot be accessed from the Script.
-        if( dispidMember == DISPID_VALUE && wFlags == DISPATCH_PROPERTYGET
+        if( dispidMember == DISPID_VALUE && (wFlags & DISPATCH_PROPERTYGET) != 0
             && m_defaultValueType != VT_EMPTY && pvarResult != nullptr)
         {
+            // Special case hack: If it is a ScVbaCheckBox, return the boolean value
+            Reference<ooo::vba::msforms::XCheckBox> xCheckBox(m_xOrigin, UNO_QUERY);
+            if (xCheckBox.is())
+            {
+                bHandled = true;
+                Any aValue = xCheckBox->getValue();
+                anyToVariant(pvarResult, aValue);
+                return S_OK;
+            }
+
             bHandled= true;
             if( m_defaultValueType == VT_DISPATCH)
             {
@@ -1136,6 +2834,36 @@ HRESULT InterfaceOleWrapper::InvokeGeneral( DISPID dispidMember, unsigned short 
                 return DISP_E_EXCEPTION;
             }
         }
+        else if (dispidMember == DISPID_NEWENUM)
+        {
+            bHandled = true;
+            if( !pvarResult)
+                return E_POINTER;
+
+            Reference< ooo::vba::XCollection> xCollection(m_xOrigin, UNO_QUERY);
+            if (!xCollection.is())
+                return DISP_E_MEMBERNOTFOUND;
+
+            CComObject<CXEnumVariant>* pEnumVar;
+
+            ret = CComObject<CXEnumVariant>::CreateInstance(&pEnumVar);
+            if (FAILED(ret))
+                return ret;
+
+            pEnumVar->AddRef();
+
+            pEnumVar->Init(this, xCollection);
+
+            pvarResult->vt = VT_UNKNOWN;
+            pvarResult->punkVal = nullptr;
+
+            ret = pEnumVar->QueryInterface(IID_IUnknown, reinterpret_cast<void**>(&pvarResult->punkVal));
+            if (FAILED(ret))
+            {
+                pEnumVar->Release();
+                return ret;
+            }
+        }
     }
     catch(const BridgeRuntimeError & e)
     {
@@ -1217,6 +2945,99 @@ STDMETHODIMP InterfaceOleWrapper::GetNameSpaceParent(
     return ResultFromScode(E_NOTIMPL);
 }
 
+// IProvideClassInfo
+HRESULT STDMETHODCALLTYPE InterfaceOleWrapper::GetClassInfo (
+    /* [out] */ ITypeInfo **ppTI)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::GetClassInfo");
+
+    if (!ppTI)
+        return E_POINTER;
+
+    Reference<ooo::vba::XInterfaceWithIID> xIID(m_xOrigin, UNO_QUERY);
+    if (!xIID.is())
+        return E_NOTIMPL;
+
+    OUString sIID = xIID->getIID();
+    IID aIID;
+    if (!SUCCEEDED(IIDFromString(reinterpret_cast<LPOLESTR>(sIID.pData->buffer), &aIID)))
+        return E_NOTIMPL;
+
+    HRESULT ret;
+
+    CComObject<CXTypeInfo>* pTypeInfo;
+
+    ret = CComObject<CXTypeInfo>::CreateInstance(&pTypeInfo);
+    if (FAILED(ret))
+        return ret;
+
+    pTypeInfo->AddRef();
+
+    pTypeInfo->InitForCoclass(m_xOrigin, m_sImplementationName, aIID, m_smgr);
+
+    *ppTI = pTypeInfo;
+
+    return S_OK;
+}
+
+// IConnectionPointContainer
+HRESULT STDMETHODCALLTYPE InterfaceOleWrapper::EnumConnectionPoints(
+    /* [out] */ IEnumConnectionPoints **)
+{
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::EnumConnectionPoints");
+    return ResultFromScode(E_NOTIMPL);
+}
+
+HRESULT STDMETHODCALLTYPE InterfaceOleWrapper::FindConnectionPoint(
+    /* [in] */ REFIID riid,
+    /* [out] */ IConnectionPoint **ppCP)
+{
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", this << "@InterfaceOleWrapper::FindConnectionPoint(" << riid << ")");
+
+    if (!ppCP)
+        return E_POINTER;
+
+    Reference<ooo::vba::XConnectable> xConnectable(m_xOrigin, UNO_QUERY);
+
+    // We checked already
+    assert(xConnectable.is());
+    if (!xConnectable.is())
+        return E_NOTIMPL;
+
+    ooo::vba::TypeAndIID aTypeAndIID = xConnectable->GetConnectionPoint();
+
+    IID aIID;
+    if (!SUCCEEDED(IIDFromString(reinterpret_cast<LPOLESTR>(aTypeAndIID.IID.pData->buffer), &aIID)))
+        return E_INVALIDARG;
+
+    if (!IsEqualIID(riid, aIID))
+        return E_INVALIDARG;
+
+    Reference<ooo::vba::XConnectionPoint> xCP = xConnectable->FindConnectionPoint();
+    if (!xCP.is())
+        return E_INVALIDARG;
+
+    HRESULT ret;
+
+    CComObject<CXConnectionPoint>* pConnectionPoint;
+
+    ret = CComObject<CXConnectionPoint>::CreateInstance(&pConnectionPoint);
+    if (FAILED(ret))
+        return ret;
+
+    pConnectionPoint->AddRef();
+
+    pConnectionPoint->Init(this, xCP, m_smgr, aTypeAndIID);
+
+    *ppCP = pConnectionPoint;
+
+    return S_OK;
+}
+
 // UnoObjectWrapperRemoteOpt ---------------------------------------------------
 
 UnoObjectWrapperRemoteOpt::UnoObjectWrapperRemoteOpt( Reference<XMultiServiceFactory> const & aFactory,
@@ -1289,6 +3110,8 @@ STDMETHODIMP  UnoObjectWrapperRemoteOpt::Invoke ( DISPID dispidMember, REFIID /*
                          DISPPARAMS * pdispparams, VARIANT * pvarResult, EXCEPINFO * pexcepinfo,
                          unsigned int * puArgErr )
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
     HRESULT ret = S_OK;
     try
     {

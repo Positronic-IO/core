@@ -23,6 +23,7 @@
 
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/sdbc/XRow.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/XDynamicResultSet.hpp>
 #include <com/sun/star/ucb/XContentAccess.hpp>
 #include <com/sun/star/util/DateTime.hpp>
@@ -31,6 +32,8 @@
 #include <comphelper/processfactory.hxx>
 #include <vcl/svapp.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 namespace svt
 {

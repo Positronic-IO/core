@@ -53,6 +53,7 @@
 #include <assclass.hxx>
 #include <sdenumdef.hxx>
 #include <sdresid.hxx>
+#include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
 #include <ViewShellBase.hxx>
 #include <FrameView.hxx>
@@ -127,11 +128,11 @@ void SdModule::Execute(SfxRequest& rReq)
                 FieldUnit eUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>(pItem)->GetValue());
                 switch( eUnit )
                 {
-                    case FUNIT_MM:      // only the units which are also in the dialog
-                    case FUNIT_CM:
-                    case FUNIT_INCH:
-                    case FUNIT_PICA:
-                    case FUNIT_POINT:
+                    case FieldUnit::MM:      // only the units which are also in the dialog
+                    case FieldUnit::CM:
+                    case FieldUnit::INCH:
+                    case FieldUnit::PICA:
+                    case FieldUnit::POINT:
                         {
                             ::sd::DrawDocShell* pDocSh = dynamic_cast< ::sd::DrawDocShell *>( SfxObjectShell::Current() );
                             if(pDocSh)
@@ -431,10 +432,10 @@ SfxFrame* SdModule::CreateFromTemplate( const OUString& rTemplatePath, const Ref
 
     SfxObjectShellLock xDocShell;
 
-    SfxItemSet* pSet = new SfxAllItemSet( SfxGetpApp()->GetPool() );
+    std::unique_ptr<SfxItemSet> pSet(new SfxAllItemSet( SfxGetpApp()->GetPool() ));
     pSet->Put( SfxBoolItem( SID_TEMPLATE, true ) );
 
-    ErrCode lErr = SfxGetpApp()->LoadTemplate( xDocShell, rTemplatePath, pSet );
+    ErrCode lErr = SfxGetpApp()->LoadTemplate( xDocShell, rTemplatePath, std::move(pSet) );
 
     SfxObjectShell* pDocShell = xDocShell;
 
@@ -600,7 +601,7 @@ void OutlineToImpressFinalizer::operator() (bool)
     ::sd::OutlineViewShell* pOutlineShell
         = dynamic_cast<sd::OutlineViewShell*>(FrameworkHelper::Instance(mrBase)->GetViewShell(FrameworkHelper::msCenterPaneURL).get());
 
-    if (pOutlineShell != nullptr && mpStream.get() != nullptr)
+    if (pOutlineShell != nullptr && mpStream != nullptr)
     {
         sd::OutlineView* pView = static_cast<sd::OutlineView*>(pOutlineShell->GetView());
         // mba: the stream can't contain any relative URLs, because we don't

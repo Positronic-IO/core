@@ -39,34 +39,12 @@ namespace dbaui
     #define TC_HEADER       (short(0x04))   // a section containing the "Text contains header" check box only
     #define TC_CHARSET      (short(0x08))   // not yet implemented
 
-    // OTextConnectionPage
-    class OTextConnectionHelper final : public TabPage
+    class OTextConnectionHelper final
     {
     public:
-        OTextConnectionHelper( vcl::Window* pParent, const short _nAvailableSections );
-        virtual ~OTextConnectionHelper() override;
-        virtual void dispose() override;
+        OTextConnectionHelper(weld::Widget* pParent , const short _nAvailableSections);
 
     private:
-        VclPtr<FixedText>        m_pExtensionHeader;
-        VclPtr<RadioButton>      m_pAccessTextFiles;
-        VclPtr<RadioButton>      m_pAccessCSVFiles;
-        VclPtr<RadioButton>      m_pAccessOtherFiles;
-        VclPtr<Edit>             m_pOwnExtension;
-        VclPtr<FixedText>        m_pExtensionExample;
-        VclPtr<FixedText>        m_pFormatHeader;
-        VclPtr<FixedText>        m_pFieldSeparatorLabel;
-        VclPtr<ComboBox>         m_pFieldSeparator;
-        VclPtr<FixedText>        m_pTextSeparatorLabel;
-        VclPtr<ComboBox>         m_pTextSeparator;
-        VclPtr<FixedText>        m_pDecimalSeparatorLabel;
-        VclPtr<ComboBox>         m_pDecimalSeparator;
-        VclPtr<FixedText>        m_pThousandsSeparatorLabel;
-        VclPtr<ComboBox>         m_pThousandsSeparator;
-        VclPtr<CheckBox>         m_pRowHeader;
-        VclPtr<FixedText>        m_pCharSetHeader;
-        VclPtr<FixedText>        m_pCharSetLabel;
-        VclPtr<CharSetListBox>   m_pCharSet;
         OUString    m_aFieldSeparatorList;
         OUString    m_aTextSeparatorList;
         OUString    m_aTextNone;
@@ -75,23 +53,44 @@ namespace dbaui
 
         short       m_nAvailableSections;
 
-        DECL_LINK(OnSetExtensionHdl,RadioButton&,void);
-        DECL_LINK(OnEditModified, Edit&, void);
+        std::unique_ptr<weld::Builder> m_xBuilder;
+        std::unique_ptr<weld::Widget> m_xContainer;
+        std::unique_ptr<weld::Widget> m_xExtensionHeader;
+        std::unique_ptr<weld::RadioButton> m_xAccessTextFiles;
+        std::unique_ptr<weld::RadioButton> m_xAccessCSVFiles;
+        std::unique_ptr<weld::RadioButton> m_xAccessOtherFiles;
+        std::unique_ptr<weld::Entry> m_xOwnExtension;
+        std::unique_ptr<weld::Label> m_xExtensionExample;
+        std::unique_ptr<weld::Widget> m_xFormatHeader;
+        std::unique_ptr<weld::Label> m_xFieldSeparatorLabel;
+        std::unique_ptr<weld::ComboBox> m_xFieldSeparator;
+        std::unique_ptr<weld::Label> m_xTextSeparatorLabel;
+        std::unique_ptr<weld::ComboBox> m_xTextSeparator;
+        std::unique_ptr<weld::Label> m_xDecimalSeparatorLabel;
+        std::unique_ptr<weld::ComboBox> m_xDecimalSeparator;
+        std::unique_ptr<weld::Label> m_xThousandsSeparatorLabel;
+        std::unique_ptr<weld::ComboBox> m_xThousandsSeparator;
+        std::unique_ptr<weld::CheckButton> m_xRowHeader;
+        std::unique_ptr<weld::Widget> m_xCharSetHeader;
+        std::unique_ptr<weld::Label> m_xCharSetLabel;
+        std::unique_ptr<CharSetListBox> m_xCharSet;
 
-        OUString    GetSeparator( const ComboBox& rBox, const OUString& rList );
-        void        SetSeparator( ComboBox& rBox, const OUString& rList, const OUString& rVal );
+        DECL_LINK(OnSetExtensionHdl, weld::ToggleButton&, void);
+        DECL_LINK(OnEditModified, weld::Entry&, void);
+
+        OUString    GetSeparator(const weld::ComboBox& rBox, const OUString& rList);
+        void        SetSeparator(weld::ComboBox& rBox, const OUString& rList, const OUString& rVal);
         void        SetExtension(const OUString& _rVal);
 
     public:
         void        implInitControls(const SfxItemSet& _rSet, bool _bValid);
-        void        fillControls(std::vector< ISaveValueWrapper* >& _rControlList);
-        void        fillWindows(std::vector< ISaveValueWrapper* >& _rControlList);
+        void        fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList);
+        void        fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList);
         void        SetClickHandler(const Link<OTextConnectionHelper*, void>& _rHandler) { m_aGetExtensionHandler = _rHandler; }
         OUString    GetExtension();
         bool        FillItemSet( SfxItemSet& rSet, const bool bChangedSomething );
         bool        prepareLeave();
     };
-
 }   // namespace dbaui
 
 #endif // INCLUDED_DBACCESS_SOURCE_UI_DLG_TEXTCONNECTIONHELPER_HXX

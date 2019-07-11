@@ -25,10 +25,13 @@
 #include <drawingml/textliststylecontext.hxx>
 #include <drawingml/textfield.hxx>
 #include <drawingml/textfieldcontext.hxx>
+#include <oox/drawingml/shape.hxx>
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
 
 #include <oox/mathml/import.hxx>
+
+#include <sal/log.hxx>
 
 using namespace ::oox::core;
 using namespace ::com::sun::star::uno;
@@ -161,12 +164,21 @@ TextBodyContext::TextBodyContext( ContextHandler2Helper const & rParent, TextBod
 {
 }
 
+TextBodyContext::TextBodyContext(ContextHandler2Helper const& rParent, const ShapePtr& pShapePtr)
+    : TextBodyContext(rParent, *pShapePtr->getTextBody())
+{
+    mpShapePtr = pShapePtr;
+}
+
 ContextHandlerRef TextBodyContext::onCreateContext( sal_Int32 aElementToken, const AttributeList& rAttribs )
 {
     switch( aElementToken )
     {
         case A_TOKEN( bodyPr ):     // CT_TextBodyPropertyBag
-            return new TextBodyPropertiesContext( *this, rAttribs, mrTextBody.getTextProperties() );
+            if ( mpShapePtr )
+                return new TextBodyPropertiesContext( *this, rAttribs, mpShapePtr );
+            else
+                return new TextBodyPropertiesContext( *this, rAttribs, mrTextBody.getTextProperties() );
         case A_TOKEN( lstStyle ):   // CT_TextListStyle
             return new TextListStyleContext( *this, mrTextBody.getTextListStyle() );
         case A_TOKEN( p ):          // CT_TextParagraph

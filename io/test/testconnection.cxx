@@ -127,8 +127,7 @@ void testConnection( const OUString &sConnectionDescription  ,
             try
             {
                 // Why is this wait necessary ????
-                TimeValue value = {1,0};
-                osl_waitThread( &value );
+                osl::Thread::wait(std::chrono::seconds(1));
                 r = rConnector->connect( sConnectionDescription );
                 OSL_ASSERT( r.is() );
                 doWrite( r );
@@ -238,8 +237,7 @@ int SAL_CALL main( int argc, char * argv[] )
     MyThread thread( rAcceptor , OUString("socket,host=localhost,port=2001") );
     thread.create();
 
-    TimeValue value = {0,1};
-    osl_waitThread( &value );
+    osl::Thread::wait(std::chrono::nanoseconds(1));
     try
     {
         rAcceptor->accept( OUString("socket,host=localhost,port=2001") );
@@ -251,7 +249,7 @@ int SAL_CALL main( int argc, char * argv[] )
     }
     catch( ... )
     {
-        OSL_FAIL( "unknown exception, already existing existing expected" );
+        OSL_FAIL( "unknown exception, already existing exception expected" );
     }
 
     rAcceptor->stopAccepting();

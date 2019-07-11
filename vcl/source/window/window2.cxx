@@ -19,6 +19,7 @@
 
 #include <limits.h>
 #include <tools/poly.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/bitmap.hxx>
 #include <vcl/dialog.hxx>
@@ -33,6 +34,7 @@
 #include <vcl/dockwin.hxx>
 #include <vcl/tabctrl.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/builder.hxx>
 
 #include <window.h>
 #include <fontinstance.hxx>
@@ -42,6 +44,8 @@
 #include <salgdi.hxx>
 #include <salframe.hxx>
 #include <scrwnd.hxx>
+
+#include <com/sun/star/accessibility/AccessibleRole.hpp>
 
 using namespace com::sun::star;
 
@@ -218,57 +222,6 @@ void Window::InvertTracking( const tools::Rectangle& rRect, ShowTrackFlags nFlag
     }
 }
 
-void Window::InvertTracking( const tools::Polygon& rPoly, ShowTrackFlags nFlags )
-{
-    sal_uInt16 nPoints = rPoly.GetSize();
-
-    if ( nPoints < 2 )
-        return;
-
-    OutputDevice *pOutDev = GetOutDev();
-
-    tools::Polygon aPoly( pOutDev->ImplLogicToDevicePixel( rPoly ) );
-
-    SalGraphics* pGraphics;
-
-    if ( nFlags & ShowTrackFlags::TrackWindow )
-    {
-        if ( !IsDeviceOutputNecessary() )
-            return;
-
-        // we need a graphics
-        if ( !mpGraphics )
-        {
-            if ( !pOutDev->AcquireGraphics() )
-                return;
-        }
-
-        if ( mbInitClipRegion )
-            InitClipRegion();
-
-        if ( mbOutputClipped )
-            return;
-
-        pGraphics = mpGraphics;
-    }
-    else
-    {
-        pGraphics = ImplGetFrameGraphics();
-
-        if ( nFlags & ShowTrackFlags::Clip )
-        {
-            Point aPoint( mnOutOffX, mnOutOffY );
-            vcl::Region aRegion( tools::Rectangle( aPoint,
-                                       Size( mnOutWidth, mnOutHeight ) ) );
-            ImplClipBoundaries( aRegion, false, false );
-            pOutDev->SelectClipRegion( aRegion, pGraphics );
-        }
-    }
-
-    const SalPoint* pPtAry = reinterpret_cast<const SalPoint*>(aPoly.GetConstPointAry());
-    pGraphics->Invert( nPoints, pPtAry, SalInvert::TrackFrame, this );
-}
-
 IMPL_LINK( Window, ImplTrackTimerHdl, Timer*, pTimer, void )
 {
     ImplSVData* pSVData = ImplGetSVData();
@@ -308,9 +261,9 @@ void Window::StartTracking( StartTrackingFlags nFlags )
         pSVData->maWinData.mpTrackTimer = new AutoTimer;
 
         if ( nFlags & StartTrackingFlags::ScrollRepeat )
-            pSVData->maWinData.mpTrackTimer->SetTimeout( GetSettings().GetMouseSettings().GetScrollRepeat() );
+            pSVData->maWinData.mpTrackTimer->SetTimeout( MouseSettings::GetScrollRepeat() );
         else
-            pSVData->maWinData.mpTrackTimer->SetTimeout( GetSettings().GetMouseSettings().GetButtonStartRepeat() );
+            pSVData->maWinData.mpTrackTimer->SetTimeout( MouseSettings::GetButtonStartRepeat() );
         pSVData->maWinData.mpTrackTimer->SetInvokeHandler( LINK( this, Window, ImplTrackTimerHdl ) );
         pSVData->maWinData.mpTrackTimer->SetDebugName( "vcl::Window pSVData->maWinData.mpTrackTimer" );
         pSVData->maWinData.mpTrackTimer->Start();
@@ -396,8 +349,8 @@ void Window::EndAutoScroll()
         pSVData->maWinData.mpAutoScrollWin = nullptr;
         pSVData->maWinData.mnAutoScrollFlags = StartAutoScrollFlags::NONE;
         pSVData->maAppData.mpWheelWindow->ImplStop();
-        pSVData->maAppData.mpWheelWindow->doLazyDelete();
-        pSVData->maAppData.mpWheelWindow = nullptr;
+        pSVData->maAppData.mpWheelWindow->SetParentToDefaultWindow();
+        pSVData->maAppData.mpWheelWindow.disposeAndClear();
     }
 }
 
@@ -429,7 +382,7 @@ void Window::SetZoom( const Fraction& rZoom )
     }
 }
 
-inline long WinFloatRound( double fVal )
+static long WinFloatRound( double fVal )
 {
     return( fVal > 0.0 ? static_cast<long>( fVal + 0.5 ) : -static_cast<long>( -fVal + 0.5 ) );
 }
@@ -872,12 +825,12 @@ OString Window::GetScreenshotId() const
 
 // --------- old inline methods ---------------
 
-vcl::Window* Window::ImplGetWindow()
+vcl::Window* Window::ImplGetWindow() const
 {
     if ( mpWindowImpl->mpClientWindow )
         return mpWindowImpl->mpClientWindow;
     else
-        return this;
+        return const_cast<vcl::Window*>(this);
 }
 
 ImplFrameData* Window::ImplGetFrameData()
@@ -977,19 +930,6 @@ void Window::SetCompoundControl( bool bCompound )
 {
     if (mpWindowImpl)
         mpWindowImpl->mbCompoundControl = bCompound;
-}
-
-void Window::IncrementLockCount()
-{
-    assert( mpWindowImpl != nullptr );
-    mpWindowImpl->mnLockCount++;
-}
-
-void Window::DecrementLockCount()
-{
-    assert( mpWindowImpl != nullptr );
-    if (mpWindowImpl)
-        mpWindowImpl->mnLockCount--;
 }
 
 WinBits Window::GetStyle() const
@@ -1388,7 +1328,7 @@ void Window::queue_resize(StateChangedType eReason)
 
     if (VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier())
     {
-        if (GetParentDialog())
+        if (!pParent->IsInInitShow())
             LogicInvalidate(nullptr);
     }
 }
@@ -1594,6 +1534,12 @@ bool Window::set_property(const OString &rKey, const OUString &rValue)
     {
         SetAccessibleDescription(rValue);
     }
+    else if (rKey == "accessible-role")
+    {
+        sal_Int16 role = BuilderUtils::getRoleFromName(rValue.toUtf8());
+        if (role != com::sun::star::accessibility::AccessibleRole::UNKNOWN)
+            SetAccessibleRole(role);
+    }
     else if (rKey == "use-markup")
     {
         //https://live.gnome.org/GnomeGoals/RemoveMarkupInMessages
@@ -1607,9 +1553,11 @@ bool Window::set_property(const OString &rKey, const OUString &rValue)
     else if (rKey == "can-focus")
     {
         WinBits nBits = GetStyle();
-        nBits &= ~WB_TABSTOP;
+        nBits &= ~(WB_TABSTOP|WB_NOTABSTOP);
         if (toBool(rValue))
             nBits |= WB_TABSTOP;
+        else
+            nBits |= WB_NOTABSTOP;
         SetStyle(nBits);
     }
     else
@@ -2006,5 +1954,13 @@ const std::vector<VclPtr<FixedText> >& Window::list_mnemonic_labels() const
 
 } /* namespace vcl */
 
+void DrawFocusRect(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
+{
+    const int nBorder = 1;
+    rRenderContext.Invert(tools::Rectangle(Point(rRect.Left(), rRect.Top()), Size(rRect.GetWidth(), nBorder)), InvertFlags::N50);
+    rRenderContext.Invert(tools::Rectangle(Point(rRect.Left(), rRect.Bottom()-nBorder+1), Size(rRect.GetWidth(), nBorder)), InvertFlags::N50);
+    rRenderContext.Invert(tools::Rectangle(Point(rRect.Left(), rRect.Top()+nBorder), Size(nBorder, rRect.GetHeight()-(nBorder*2))), InvertFlags::N50);
+    rRenderContext.Invert(tools::Rectangle(Point(rRect.Right()-nBorder+1, rRect.Top()+nBorder), Size(nBorder, rRect.GetHeight()-(nBorder*2))), InvertFlags::N50);
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

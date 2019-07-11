@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 
@@ -41,6 +42,7 @@
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/script/XScriptEventsSupplier.hpp>
 #include <com/sun/star/table/CellAddress.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 #include <o3tl/functional.hxx>
 #include <unotools/sharedunocomponent.hxx>
 #include <vcl/svapp.hxx>
@@ -946,6 +948,22 @@ bool DlgEdObj::EndCreate(SdrDragStat& rStat, SdrCreateCmd eCmd)
 {
     bool bResult = SdrUnoObj::EndCreate(rStat, eCmd);
 
+    // tdf#120674 after interactive creation, the SdrObject (this) has no SdrPage yet
+    // due to not being inserted. Usually this should be handled in a ::handlePageChange
+    // implementation. For historical reasons, the SdrPage (which is the DlgEdPage) was
+    // already set. For now, get it from the SdrDragStat and use it to access and set
+    // the local pDlgEdForm
+    if(nullptr == pDlgEdForm && nullptr != rStat.GetPageView())
+    {
+        const DlgEdPage* pDlgEdPage(dynamic_cast<const DlgEdPage*>(rStat.GetPageView()->GetPage()));
+
+        if(nullptr != pDlgEdPage)
+        {
+            // set parent form
+            pDlgEdForm = pDlgEdPage->GetDlgEdForm();
+        }
+    }
+
     SetDefaults();
     StartListening();
 
@@ -954,9 +972,6 @@ bool DlgEdObj::EndCreate(SdrDragStat& rStat, SdrCreateCmd eCmd)
 
 void DlgEdObj::SetDefaults()
 {
-    // set parent form
-    pDlgEdForm = static_cast<DlgEdPage*>(GetPage())->GetDlgEdForm();
-
     if ( pDlgEdForm )
     {
         // add child to parent form
@@ -1136,10 +1151,11 @@ void DlgEdObj::_propertyChange( const  css::beans::PropertyChangeEvent& evt )
                 {
                     NameChange(evt);
                 }
-                catch (container::NoSuchElementException const& e)
+                catch (container::NoSuchElementException const&)
                 {
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     throw lang::WrappedTargetRuntimeException("", nullptr,
-                            uno::Any(e));
+                            anyEx);
                 }
             }
         }
@@ -1379,7 +1395,7 @@ void DlgEdForm::PositionAndSizeChange( const beans::PropertyChangeEvent& evt )
 
 void DlgEdForm::UpdateStep()
 {
-    SdrPage* pSdrPage = GetPage();
+    SdrPage* pSdrPage = getSdrPageFromSdrObject();
 
     if ( pSdrPage )
     {

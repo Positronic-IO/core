@@ -22,24 +22,16 @@
 
 #include <sfx2/tabdlg.hxx>
 
-namespace vcl { class Window; }
-class SfxViewFrame;
+namespace weld { class Window; }
 class SfxItemSet;
 
-class ScAttrDlg : public SfxTabDialog
+class ScAttrDlg : public SfxTabDialogController
 {
 public:
-                ScAttrDlg( vcl::Window*           pParent,
-                           const SfxItemSet* pCellAttrs );
-                virtual ~ScAttrDlg() override;
-
+    ScAttrDlg(weld::Window* pParent, const SfxItemSet* pCellAttrs);
+    virtual ~ScAttrDlg() override;
 protected:
-    virtual void    PageCreated( sal_uInt16 nPageId, SfxTabPage& rTabPage ) override;
-
-private:
-    DECL_LINK( OkHandler, SfxPoolItem*, void ); // for closing by double clicking in TabPages
-    sal_uInt16 m_nNumberPageId;
-    sal_uInt16 m_nFontPageId;
+    virtual void PageCreated(const OString& rPageId, SfxTabPage& rTabPage) override;
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_ATTRDLG_HXX

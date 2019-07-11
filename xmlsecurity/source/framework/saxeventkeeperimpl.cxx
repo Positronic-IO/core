@@ -27,6 +27,7 @@
 #include <com/sun/star/xml/crypto/sax/ConstOfSecurityId.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/diagnose.h>
+#include <rtl/ustrbuf.hxx>
 
 namespace cssu = com::sun::star::uno;
 namespace cssl = com::sun::star::lang;
@@ -38,8 +39,7 @@ namespace cssxs = com::sun::star::xml::sax;
 #define IMPLEMENTATION_NAME "com.sun.star.xml.security.framework.SAXEventKeeperImpl"
 
 SAXEventKeeperImpl::SAXEventKeeperImpl( )
-    :m_pRootBufferNode(nullptr),
-     m_pCurrentBufferNode(nullptr),
+    :m_pCurrentBufferNode(nullptr),
      m_nNextElementMarkId(1),
      m_pNewBlocker(nullptr),
      m_pCurrentBlockingBufferNode(nullptr),
@@ -56,11 +56,7 @@ SAXEventKeeperImpl::~SAXEventKeeperImpl()
     /*
      * delete the BufferNode tree
      */
-    if (m_pRootBufferNode != nullptr)
-    {
-        m_pRootBufferNode->freeAllChildren();
-        m_pRootBufferNode.reset();
-    }
+    m_pRootBufferNode.reset();
 
     m_pCurrentBufferNode = m_pCurrentBlockingBufferNode = nullptr;
 
@@ -103,7 +99,7 @@ void SAXEventKeeperImpl::setCurrentBufferNode(BufferNode* pBufferNode)
 
         if (pBufferNode->getParent() == nullptr)
         {
-            m_pCurrentBufferNode->addChild(pBufferNode);
+            m_pCurrentBufferNode->addChild(std::unique_ptr<BufferNode>(pBufferNode));
             pBufferNode->setParent(m_pCurrentBufferNode);
         }
 
@@ -175,10 +171,9 @@ BufferNode* SAXEventKeeperImpl::addNewElementMarkBuffers()
 
         if (!m_vNewElementCollectors.empty())
         {
-            for( auto ii = m_vNewElementCollectors.begin();
-                 ii != m_vNewElementCollectors.end(); ++ii )
+            for( const auto& i : m_vNewElementCollectors )
             {
-                pBufferNode->addElementCollector(*ii);
+                pBufferNode->addElementCollector(i);
             }
 
             m_vNewElementCollectors.clear();
@@ -239,36 +234,30 @@ void SAXEventKeeperImpl::removeElementMarkBuffer(sal_Int32 nId)
  *  nId - the Id of the ElementMark to be removed.
  ******************************************************************************/
 {
-    for( auto ii = m_vElementMarkBuffers.begin();
-         ii != m_vElementMarkBuffers.end(); ++ii )
+    auto ii = std::find_if(m_vElementMarkBuffers.begin(), m_vElementMarkBuffers.end(),
+        [nId](std::unique_ptr<const ElementMark>& rElementMark) { return nId == rElementMark->getBufferId(); }
+    );
+    if (ii == m_vElementMarkBuffers.end())
+        return;
+
+    /*
+     * checks whether this ElementMark still in the new ElementCollect array
+     */
+    auto jj = std::find_if(m_vNewElementCollectors.begin(), m_vNewElementCollectors.end(),
+        [&ii](const ElementCollector* pElementCollector) { return ii->get() == pElementCollector; }
+    );
+    if (jj != m_vNewElementCollectors.end())
+        m_vNewElementCollectors.erase(jj);
+
+    /*
+     * checks whether this ElementMark is the new Blocker
+     */
+    if (ii->get() == m_pNewBlocker)
     {
-        if ( nId == (*ii)->getBufferId())
-        {
-            /*
-             * checks whether this ElementMark still in the new ElementCollect array
-             */
-            for( auto jj = m_vNewElementCollectors.begin();
-                 jj != m_vNewElementCollectors.end(); ++jj )
-            {
-                if (ii->get() == (*jj))
-                {
-                    m_vNewElementCollectors.erase(jj);
-                    break;
-                }
-            }
-
-            /*
-             * checks whether this ElementMark is the new Blocker
-             */
-            if (ii->get() == m_pNewBlocker)
-            {
-                m_pNewBlocker = nullptr;
-            }
-
-            m_vElementMarkBuffers.erase( ii );
-            break;
-        }
+        m_pNewBlocker = nullptr;
     }
+
+    m_vElementMarkBuffers.erase( ii );
 }
 
 OUString SAXEventKeeperImpl::printBufferNode(
@@ -301,51 +290,48 @@ OUString SAXEventKeeperImpl::printBufferNode(
  *  info - the information string
  ******************************************************************************/
 {
-    OUString rc;
+    OUStringBuffer rc;
 
     for ( int i=0; i<nIndent; ++i )
     {
-        rc += " ";
+        rc.append(" ");
     }
 
     if (pBufferNode == m_pCurrentBufferNode)
     {
-        rc += "[%]";
+        rc.append("[%]");
     }
 
     if (pBufferNode == m_pCurrentBlockingBufferNode)
     {
-        rc += "[B]";
+        rc.append("[B]");
     }
 
-    rc += " " + m_xXMLDocument->getNodeName(pBufferNode->getXMLElement());
+    rc.append(" ").append(m_xXMLDocument->getNodeName(pBufferNode->getXMLElement()));
 
     BufferNode* pParent = const_cast<BufferNode*>(pBufferNode->getParent());
     if (pParent != nullptr)
     {
-        rc += "[" + m_xXMLDocument->getNodeName(pParent->getXMLElement()) + "]";
+        rc.append("[").append(m_xXMLDocument->getNodeName(pParent->getXMLElement())).append("]");
     }
 
-    rc += ":EC=" + pBufferNode->printChildren() + " BR=";
+    rc.append(":EC=").append(pBufferNode->printChildren()).append(" BR=");
 
     ElementMark * pBlocker = pBufferNode->getBlocker();
     if (pBlocker != nullptr)
     {
-        rc += OUString::number( pBlocker->getBufferId() ) + "(SecId="
-            + OUString::number( pBlocker->getSecurityId() ) + ") ";
+        rc.append(OUString::number( pBlocker->getBufferId() )).append("(SecId=")
+            .append(OUString::number( pBlocker->getSecurityId() )).append(") ");
     }
-    rc += "\n";
+    rc.append("\n");
 
-    std::vector< const BufferNode* >* vChildren = pBufferNode->getChildren();
-    for( auto jj = vChildren->begin();
-         jj != vChildren->end(); ++jj )
+    std::vector< std::unique_ptr<BufferNode> > const & vChildren = pBufferNode->getChildren();
+    for( const auto& jj : vChildren )
     {
-        rc += printBufferNode(*jj, nIndent+4);
+        rc.append(printBufferNode(jj.get(), nIndent+4));
     }
 
-    delete vChildren;
-
-    return rc;
+    return rc.makeStringAndClear();
 }
 
 cssu::Sequence< cssu::Reference< cssxw::XXMLElementWrapper > >
@@ -366,20 +352,17 @@ cssu::Sequence< cssu::Reference< cssxw::XXMLElementWrapper > >
  *  list - the child Elements list.
  ******************************************************************************/
 {
-    std::vector< const BufferNode* >* vChildren = pBufferNode->getChildren();
+    std::vector< std::unique_ptr<BufferNode> > const & vChildren = pBufferNode->getChildren();
 
     cssu::Sequence < cssu::Reference<
-        cssxw::XXMLElementWrapper > > aChildrenCollection ( vChildren->size());
+        cssxw::XXMLElementWrapper > > aChildrenCollection ( vChildren.size());
 
     sal_Int32 nIndex = 0;
-    for( auto ii = vChildren->begin();
-         ii != vChildren->end(); ++ii )
+    for( const auto& i : vChildren )
     {
-        aChildrenCollection[nIndex] = (*ii)->getXMLElement();
+        aChildrenCollection[nIndex] = i->getXMLElement();
         nIndex++;
     }
-
-    delete vChildren;
 
     return aChildrenCollection;
 }
@@ -510,24 +493,16 @@ void SAXEventKeeperImpl::smashBufferNode(
 
         sal_Int32 nIndex = pParent->indexOfChild(pBufferNode);
 
-        std::vector< const BufferNode* >* vChildren = pBufferNode->getChildren();
-        pParent->removeChild(pBufferNode);
-        pBufferNode->setParent(nullptr);
+        std::vector< std::unique_ptr<BufferNode> > vChildren = pBufferNode->releaseChildren();
+        pParent->removeChild(pBufferNode); // delete buffernode
 
-        for( auto ii = vChildren->begin();
-             ii != vChildren->end(); ++ii )
+        for( auto& i : vChildren )
         {
-            const_cast<BufferNode *>(*ii)->setParent(pParent);
-            pParent->addChild(*ii, nIndex);
+            i->setParent(pParent);
+            pParent->addChild(std::move(i), nIndex);
             nIndex++;
         }
 
-        delete vChildren;
-
-        /*
-         * delete the BufferNode
-         */
-        delete pBufferNode;
     }
 }
 

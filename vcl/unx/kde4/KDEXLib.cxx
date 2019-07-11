@@ -39,6 +39,7 @@
 #include <unx/saldata.hxx>
 #include <o3tl/make_unique.hxx>
 #include <osl/process.h>
+#include <sal/log.hxx>
 
 #include "KDESalDisplay.hxx"
 
@@ -209,8 +210,15 @@ static GPollFunc old_gpoll = nullptr;
 
 static gint gpoll_wrapper( GPollFD* ufds, guint nfds, gint timeout )
 {
-    SolarMutexReleaser aReleaser;
-    return old_gpoll( ufds, nfds, timeout );
+    if (GetSalData()->m_pInstance->GetYieldMutex()->IsCurrentThread())
+    {
+        SolarMutexReleaser aReleaser;
+        return old_gpoll( ufds, nfds, timeout );
+    }
+    else
+    {
+        return old_gpoll( ufds, nfds, timeout );
+    }
 }
 #endif
 

@@ -20,6 +20,7 @@
 #ifndef INCLUDED_VCL_INC_GENERIC_GENINST_H
 #define INCLUDED_VCL_INC_GENERIC_GENINST_H
 
+#include <memory>
 #include <comphelper/solarmutex.hxx>
 #include <tools/solar.h>
 #include <osl/thread.hxx>
@@ -28,7 +29,7 @@
 #include <saldatabasic.hxx>
 #include <unx/genprn.h>
 
-class VCL_DLLPUBLIC SalYieldMutex : public comphelper::GenericSolarMutex
+class VCL_DLLPUBLIC SalYieldMutex : public comphelper::SolarMutex
 {
 public:
     SalYieldMutex();
@@ -44,27 +45,19 @@ class VCL_DLLPUBLIC SalGenericInstance : public SalInstance
 {
 protected:
     bool           mbPrinterInit;
-    std::unique_ptr<SalYieldMutex> mpSalYieldMutex;
 
 public:
-    SalGenericInstance( SalYieldMutex* pMutex )
-        : mbPrinterInit( false ), mpSalYieldMutex( pMutex ) {}
+    SalGenericInstance( std::unique_ptr<comphelper::SolarMutex> pMutex )
+        : SalInstance(std::move(pMutex)), mbPrinterInit(false) {}
     virtual ~SalGenericInstance() override;
-
-    // Yield mutex
-    virtual comphelper::SolarMutex* GetYieldMutex() override;
-    virtual sal_uInt32         ReleaseYieldMutexAll() override;
-    virtual void               AcquireYieldMutex( sal_uInt32 nCount = 1 ) override;
 
     // Printing
     virtual SalInfoPrinter*     CreateInfoPrinter      ( SalPrinterQueueInfo* pQueueInfo,
                                                          ImplJobSetup* pSetupData ) override;
     virtual void                DestroyInfoPrinter     ( SalInfoPrinter* pPrinter ) override;
-    virtual SalPrinter*         CreatePrinter          ( SalInfoPrinter* pInfoPrinter ) override;
-    virtual void                DestroyPrinter         ( SalPrinter* pPrinter ) override;
+    virtual std::unique_ptr<SalPrinter> CreatePrinter  ( SalInfoPrinter* pInfoPrinter ) override;
     virtual void                GetPrinterQueueInfo    ( ImplPrnQueueList* pList ) override;
     virtual void                GetPrinterQueueState   ( SalPrinterQueueInfo* pInfo ) override;
-    virtual void                DeletePrinterQueueInfo ( SalPrinterQueueInfo* pInfo ) override;
     virtual OUString            GetDefaultPrinter() override;
     virtual void                PostPrintersChanged() = 0;
     virtual void                updatePrinterUpdate() override;

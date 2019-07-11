@@ -26,25 +26,26 @@
 #include <vcl/settings.hxx>
 
 #include <comphelper/string.hxx>
+#include <sal/log.hxx>
 #include <controldata.hxx>
 #include <window.h>
 
 #define FIXEDLINE_TEXT_BORDER    4
 
-#define FIXEDTEXT_VIEW_STYLE    (WB_3DLOOK |                        \
-                                 WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                 WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                 WB_WORDBREAK | WB_NOLABEL |        \
-                                 WB_PATHELLIPSIS)
-#define FIXEDLINE_VIEW_STYLE    (WB_3DLOOK | WB_NOLABEL)
-#define FIXEDBITMAP_VIEW_STYLE  (WB_3DLOOK |                        \
-                                 WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                 WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                 WB_SCALE)
-#define FIXEDIMAGE_VIEW_STYLE   (WB_3DLOOK |                        \
-                                 WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                 WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                 WB_SCALE)
+static constexpr auto FIXEDTEXT_VIEW_STYLE = WB_3DLOOK |
+                                 WB_LEFT | WB_CENTER | WB_RIGHT |
+                                 WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                 WB_WORDBREAK | WB_NOLABEL |
+                                 WB_PATHELLIPSIS;
+static constexpr auto FIXEDLINE_VIEW_STYLE = WB_3DLOOK | WB_NOLABEL;
+static constexpr auto FIXEDBITMAP_VIEW_STYLE = WB_3DLOOK |
+                                 WB_LEFT | WB_CENTER | WB_RIGHT |
+                                 WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                 WB_SCALE;
+static constexpr auto FIXEDIMAGE_VIEW_STYLE = WB_3DLOOK |
+                                 WB_LEFT | WB_CENTER | WB_RIGHT |
+                                 WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                 WB_SCALE;
 
 static Point ImplCalcPos( WinBits nStyle, const Point& rPos,
                           const Size& rObjSize, const Size& rWinSize )
@@ -531,11 +532,11 @@ void FixedLine::ImplDraw(vcl::RenderContext& rRenderContext)
         rRenderContext.DrawText(aTextPt, aText, 0, aText.getLength());
         rRenderContext.Pop();
         if (aOutSize.Height() - aStartPt.Y() > FIXEDLINE_TEXT_BORDER)
-            aDecoView.DrawSeparator(Point(aStartPt.X(), aOutSize.Height() - 1),
-                                    Point(aStartPt.X(), aStartPt.Y() + FIXEDLINE_TEXT_BORDER));
+            aDecoView.DrawSeparator(Point(aStartPt.X(), aStartPt.Y() + FIXEDLINE_TEXT_BORDER),
+                                    Point(aStartPt.X(), aOutSize.Height() - 1));
         if (aStartPt.Y() - nWidth - FIXEDLINE_TEXT_BORDER > 0)
-            aDecoView.DrawSeparator(Point(aStartPt.X(), aStartPt.Y() - nWidth - FIXEDLINE_TEXT_BORDER),
-                                    Point(aStartPt.X(), 0));
+            aDecoView.DrawSeparator(Point(aStartPt.X(), 0),
+                                    Point(aStartPt.X(), aStartPt.Y() - nWidth - FIXEDLINE_TEXT_BORDER));
     }
     else
     {
@@ -692,17 +693,15 @@ FixedBitmap::FixedBitmap( vcl::Window* pParent, WinBits nStyle ) :
 
 void FixedBitmap::ImplDraw( OutputDevice* pDev, const Point& rPos, const Size& rSize )
 {
-    Bitmap* pBitmap = &maBitmap;
-
     // do we have a Bitmap?
-    if ( !(!(*pBitmap)) )
+    if ( !!maBitmap )
     {
         if ( GetStyle() & WB_SCALE )
-            pDev->DrawBitmap( rPos, rSize, *pBitmap );
+            pDev->DrawBitmapEx( rPos, rSize, maBitmap );
         else
         {
-            Point aPos = ImplCalcPos( GetStyle(), rPos, pBitmap->GetSizePixel(), rSize );
-            pDev->DrawBitmap( aPos, *pBitmap );
+            Point aPos = ImplCalcPos( GetStyle(), rPos, maBitmap.GetSizePixel(), rSize );
+            pDev->DrawBitmapEx( aPos, maBitmap );
         }
     }
 }
@@ -799,7 +798,7 @@ void FixedBitmap::DataChanged( const DataChangedEvent& rDCEvt )
     }
 }
 
-void FixedBitmap::SetBitmap( const Bitmap& rBitmap )
+void FixedBitmap::SetBitmap( const BitmapEx& rBitmap )
 {
     maBitmap = rBitmap;
     CompatStateChanged( StateChangedType::Data );

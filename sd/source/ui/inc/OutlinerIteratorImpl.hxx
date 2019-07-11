@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_OUTLINERITERATORIMPL_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_OUTLINERITERATORIMPL_HXX
 
-#include <svx/svdobj.hxx>
 #include <OutlinerIterator.hxx>
 #include <memory>
 
@@ -33,8 +32,6 @@ namespace sd {
 class ViewShell;
 
 namespace outliner {
-
-class IteratorImplBase;
 
 /** Base class for the polymorphic implementation class of the
     <type>Iterator</type> class.  The iterators based on this class are
@@ -203,7 +200,7 @@ private:
     /// Pointer to the page associated with the current page index. May be NULL.
     SdPage* mpPage;
     /// Iterator of all objects on the current page.
-    SdrObjListIter* mpObjectIterator;
+    std::unique_ptr<SdrObjListIter> mpObjectIterator;
 
     // Don't use this operator.
     ViewIteratorImpl& operator= (const ViewIteratorImpl&) = delete;

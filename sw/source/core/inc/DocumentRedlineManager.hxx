@@ -33,6 +33,10 @@ class DocumentRedlineManager : public IDocumentRedlineAccess
 public:
     DocumentRedlineManager( SwDoc& i_rSwdoc );
 
+    /**
+     * Replaced by SwRootFrame::IsHideRedlines() (this is model-level redline
+     * hiding).
+     */
     virtual RedlineFlags GetRedlineFlags() const override;
 
     virtual void SetRedlineFlags_intern(/*[in]*/RedlineFlags eMode) override;
@@ -86,6 +90,8 @@ public:
 
     virtual bool AcceptRedline(/*[in]*/const SwPaM& rPam, /*[in]*/bool bCallDelete) override;
 
+    virtual void AcceptRedlineParagraphFormatting(/*[in]*/const SwPaM& rPam) override;
+
     virtual bool RejectRedline(/*[in]*/SwRedlineTable::size_type nPos, /*[in]*/bool bCallDelete) override;
 
     virtual bool RejectRedline(/*[in]*/const SwPaM& rPam, /*[in]*/bool bCallDelete) override;
@@ -118,8 +124,8 @@ public:
      Sequence number is for conjoining of Redlines by the UI. */
     void SetAutoFormatRedlineComment( const OUString* pText, sal_uInt16 nSeqNo = 0 );
 
-    void checkRedlining(RedlineFlags& _rReadlineMode);
-
+    bool IsHideRedlines() const { return m_bHideRedlines; }
+    void SetHideRedlines(bool const bHideRedlines) { m_bHideRedlines = bHideRedlines; }
 
     virtual ~DocumentRedlineManager() override;
 
@@ -135,10 +141,13 @@ private:
     std::unique_ptr<SwExtraRedlineTable> mpExtraRedlineTable;      //< List of all Extra Redlines.
     std::unique_ptr<OUString> mpAutoFormatRedlnComment;  //< Comment for Redlines inserted via AutoFormat.
     bool mbIsRedlineMove;    //< true: Redlines are moved into to / out of the section.
-    bool mbReadlineChecked;    //< true: if the query was already shown
     sal_uInt16 mnAutoFormatRedlnCommentNo;  /**< SeqNo for conjoining of AutoFormat-Redlines.
                                          by the UI. Managed by SwAutoFormat! */
     css::uno::Sequence <sal_Int8 > maRedlinePasswd;
+
+    /// this flag is necessary for file import because the ViewShell/layout is
+    /// created "too late" and the ShowRedlineChanges item is not below "Views"
+    bool m_bHideRedlines = false;
 };
 
 }

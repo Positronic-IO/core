@@ -15,6 +15,7 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/DispatchHelper.hpp>
+#include <com/sun/star/datatransfer/clipboard/SystemClipboard.hpp>
 #include <comphelper/dispatchcommand.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
@@ -44,10 +45,11 @@
 #include <docsh.hxx>
 #include <document.hxx>
 #include <docuno.hxx>
+#include <drwlayer.hxx>
 
 using namespace css;
 
-std::ostream& operator<<(std::ostream& os, ViewShellId const & id)
+static std::ostream& operator<<(std::ostream& os, ViewShellId const & id)
 {
     os << static_cast<sal_Int32>(id); return os;
 }
@@ -61,8 +63,8 @@ class ScTiledRenderingTest : public test::BootstrapFixture, public unotest::Macr
 {
 public:
     ScTiledRenderingTest();
-    virtual void setUp() SAL_OVERRIDE;
-    virtual void tearDown() SAL_OVERRIDE;
+    virtual void setUp() override;
+    virtual void tearDown() override;
 
     void testRowColumnSelections();
     void testSortAscendingDescending();
@@ -94,6 +96,7 @@ public:
     void testMultiViewCopyPaste();
     void testIMESupport();
     void testFilterDlg();
+    void testVbaRangeCopyPaste();
 
     CPPUNIT_TEST_SUITE(ScTiledRenderingTest);
     CPPUNIT_TEST(testRowColumnSelections);
@@ -126,6 +129,7 @@ public:
     CPPUNIT_TEST(testMultiViewCopyPaste);
     CPPUNIT_TEST(testIMESupport);
     CPPUNIT_TEST(testFilterDlg);
+    CPPUNIT_TEST(testVbaRangeCopyPaste);
     CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -386,13 +390,13 @@ void ScTiledRenderingTest::testDocumentSize()
     pViewShell->SetCursor(100, 0);
     // 2 seconds
     osl::Condition::Result aResult = m_aDocSizeCondition.wait(std::chrono::seconds(2));
-    CPPUNIT_ASSERT_EQUAL(aResult, osl::Condition::result_ok);
+    CPPUNIT_ASSERT_EQUAL(osl::Condition::result_ok, aResult);
 
     // Set cursor row
     pViewShell->SetCursor(0, 100);
     // 2 seconds
     aResult = m_aDocSizeCondition.wait(std::chrono::seconds(2));
-    CPPUNIT_ASSERT_EQUAL(aResult, osl::Condition::result_ok);
+    CPPUNIT_ASSERT_EQUAL(osl::Condition::result_ok, aResult);
 
     comphelper::LibreOfficeKit::setActive(false);
 }
@@ -1548,12 +1552,17 @@ void ScTiledRenderingTest::testMultiViewCopyPaste()
     // view #1
     ScTabViewShell* pView1 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
     CPPUNIT_ASSERT(pView1);
+    // emulate clipboard
+    pView1->GetViewData().GetActiveWin()->SetClipboard(css::datatransfer::clipboard::SystemClipboard::create(comphelper::getProcessComponentContext()));
 
     // view #2
     SfxLokHelper::createView();
     ScTabViewShell* pView2 = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+    // emulate clipboard
+    pView2->GetViewData().GetActiveWin()->SetClipboard(css::datatransfer::clipboard::SystemClipboard::create(comphelper::getProcessComponentContext()));
     CPPUNIT_ASSERT(pView2);
     CPPUNIT_ASSERT(pView1 != pView2);
+    CPPUNIT_ASSERT(pView1->GetViewData().GetActiveWin()->GetClipboard() != pView2->GetViewData().GetActiveWin()->GetClipboard());
 
     // copy text view 1
     pView1->SetCursor(0, 0);
@@ -1647,6 +1656,28 @@ void ScTiledRenderingTest::testFilterDlg()
     Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(false, pView2->GetViewFrame()->GetDispatcher()->IsLocked());
     CPPUNIT_ASSERT_EQUAL(false, pView1->GetViewFrame()->GetDispatcher()->IsLocked());
+
+    comphelper::LibreOfficeKit::setActive(false);
+}
+
+void ScTiledRenderingTest::testVbaRangeCopyPaste()
+{
+    comphelper::LibreOfficeKit::setActive();
+    ScModelObj* pModelObj = createDoc("RangeCopyPaste.ods");
+    ScDocShell* pDocShell = dynamic_cast< ScDocShell* >( pModelObj->GetEmbeddedObject() );
+    CPPUNIT_ASSERT(pDocShell);
+
+    uno::Any aRet;
+    uno::Sequence< uno::Any > aOutParam;
+    uno::Sequence< uno::Any > aParams;
+    uno::Sequence< sal_Int16 > aOutParamIndex;
+
+    SfxObjectShell::CallXScript(
+        mxComponent,
+        "vnd.sun.Star.script:Standard.Module1.Test_RangeCopyPaste?language=Basic&location=document",
+        aParams, aRet, aOutParamIndex, aOutParam);
+
+    CPPUNIT_ASSERT(!pDocShell->GetClipData().is());
 
     comphelper::LibreOfficeKit::setActive(false);
 }

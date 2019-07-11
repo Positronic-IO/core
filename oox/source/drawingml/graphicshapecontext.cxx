@@ -21,6 +21,7 @@
 #include <oox/drawingml/graphicshapecontext.hxx>
 
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <drawingml/embeddedwavaudiofile.hxx>
 #include <drawingml/misccontexts.hxx>
@@ -262,7 +263,8 @@ ContextHandlerRef DiagramGraphicDataContext::onCreateContext( ::sal_Int32 aEleme
                     getFragmentPathFromRelId( msDm ),
                     getFragmentPathFromRelId( msLo ),
                     getFragmentPathFromRelId( msQs ),
-                    getFragmentPathFromRelId( msCs ));
+                    getFragmentPathFromRelId( msCs ),
+                    getRelations());
         SAL_INFO("oox.drawingml", "DiagramGraphicDataContext::onCreateContext: added shape " << mpShapePtr->getName()
                  << " of type " << mpShapePtr->getServiceName()
                  << ", position: " << mpShapePtr->getPosition().X

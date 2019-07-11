@@ -203,7 +203,6 @@ public:
     LwpColumnInfo();
     ~LwpColumnInfo();
     void Read(LwpObjectStream *pStrm);
-    double GetWidth(){return LwpTools::ConvertFromUnitsToMetric(m_nWidth);}
     double GetGap(){return LwpTools::ConvertFromUnitsToMetric(m_nGap);}
 private:
     sal_Int32 m_nWidth;
@@ -216,7 +215,6 @@ public:
     LwpLayoutColumns(LwpObjectHeader const & objHdr, LwpSvStream* pStrm);
     virtual void Parse(IXFStream* pOutputStream) override;
     sal_uInt16 GetNumCols(){return m_nNumCols;}
-    double GetColWidth(sal_uInt16 nIndex);
     double GetColGap(sal_uInt16 nIndex);
 private:
     virtual void Read() override;

@@ -21,6 +21,7 @@
 #include <cppuhelper/factory.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <osl/file.hxx>
+#include <tools/debug.hxx>
 #include <tools/stream.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/pathoptions.hxx>
@@ -32,11 +33,15 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/lang/Locale.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/linguistic2/DictionaryEventFlags.hpp>
 #include <com/sun/star/linguistic2/DictionaryListEventFlags.hpp>
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
+#include <svtools/strings.hrc>
+#include <unotools/resmgr.hxx>
+#include <sal/log.hxx>
 
 #include "defs.hxx"
 #include "dlistimp.hxx"
@@ -66,12 +71,10 @@ class DicEvtListenerHelper :
     >
 {
     comphelper::OInterfaceContainerHelper2  aDicListEvtListeners;
-    std::vector< DictionaryEvent >          aCollectDicEvt;
     uno::Reference< XDictionaryList >       xMyDicList;
 
     sal_Int16                               nCondensedEvt;
-    sal_Int16                               nNumCollectEvtListeners,
-                                         nNumVerboseListeners;
+    sal_Int16                               nNumCollectEvtListeners;
 
 public:
     explicit DicEvtListenerHelper( const uno::Reference< XDictionaryList > &rxDicList );
@@ -105,7 +108,7 @@ DicEvtListenerHelper::DicEvtListenerHelper(
     xMyDicList              ( rxDicList )
 {
     nCondensedEvt   = 0;
-    nNumCollectEvtListeners = nNumVerboseListeners  = 0;
+    nNumCollectEvtListeners = 0;
 }
 
 
@@ -190,12 +193,6 @@ void SAL_CALL DicEvtListenerHelper::processDictionaryEvent(
             DictionaryListEventFlags::DEACTIVATE_NEG_DIC :
             DictionaryListEventFlags::DEACTIVATE_POS_DIC;
 
-    // update list of collected events if needs to be
-    if (nNumVerboseListeners > 0)
-    {
-        aCollectDicEvt.push_back(rDicEvent);
-    }
-
     if (nNumCollectEvtListeners == 0 && nCondensedEvt != 0)
         FlushEvents();
 }
@@ -238,8 +235,6 @@ sal_Int16 DicEvtListenerHelper::FlushEvents()
     {
         // build DictionaryListEvent to pass on to listeners
         uno::Sequence< DictionaryEvent > aDicEvents;
-        if (nNumVerboseListeners > 0)
-            aDicEvents = comphelper::containerToSequence(aCollectDicEvt);
         DictionaryListEvent aEvent( xMyDicList, nCondensedEvt, aDicEvents );
 
         // pass on event
@@ -247,7 +242,6 @@ sal_Int16 DicEvtListenerHelper::FlushEvents()
 
         // clear "list" of events
         nCondensedEvt = 0;
-        aCollectDicEvt.clear();
     }
 
     return nNumCollectEvtListeners;
@@ -360,7 +354,7 @@ sal_Int32 DicList::GetDicPos(const uno::Reference< XDictionary > &xDic)
 }
 
 /// @throws Exception
-uno::Reference< XInterface >
+static uno::Reference< XInterface >
     DicList_CreateInstance( const uno::Reference< XMultiServiceFactory > & /*rSMgr*/ )
 {
     uno::Reference< XInterface > xService = static_cast<cppu::OWeakObject *>(new DicList);
@@ -611,8 +605,9 @@ void DicList::CreateDicList()
 
     // create IgnoreAllList dictionary with empty URL (non persistent)
     // and add it to list
+    std::locale loc(Translate::Create("svt"));
     uno::Reference< XDictionary > xIgnAll(
-            createDictionary( "IgnoreAllList", LinguLanguageToLocale( LANGUAGE_NONE ),
+            createDictionary( Translate::get(STR_DESCRIPTION_IGNOREALLLIST, loc), LinguLanguageToLocale( LANGUAGE_NONE ),
                               DictionaryType_POSITIVE, OUString() ) );
     if (xIgnAll.is())
     {

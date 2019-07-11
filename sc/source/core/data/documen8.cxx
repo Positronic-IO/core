@@ -18,17 +18,13 @@
  */
 
 #include <scitems.hxx>
-#include <editeng/eeitem.hxx>
 #include <o3tl/make_unique.hxx>
 #include <comphelper/fileformat.h>
 #include <tools/urlobj.hxx>
 #include <editeng/editobj.hxx>
-#include <editeng/editstat.hxx>
 #include <editeng/frmdiritem.hxx>
 #include <editeng/langitem.hxx>
 #include <sfx2/linkmgr.hxx>
-#include <editeng/scripttypeitem.hxx>
-#include <editeng/unolingu.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/printer.hxx>
@@ -39,9 +35,8 @@
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
 #include <unotools/misccfg.hxx>
-#include <sfx2/app.hxx>
 #include <unotools/transliterationwrapper.hxx>
-#include <unotools/securityoptions.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/virdev.hxx>
 #include <vcl/weld.hxx>
@@ -61,26 +56,21 @@
 #include <ddelink.hxx>
 #include <scmatrix.hxx>
 #include <arealink.hxx>
-#include <dociter.hxx>
 #include <patattr.hxx>
-#include <hints.hxx>
 #include <editutil.hxx>
 #include <progress.hxx>
 #include <document.hxx>
 #include <chartlis.hxx>
 #include <chartlock.hxx>
 #include <refupdat.hxx>
-#include <validat.hxx>
 #include <markdata.hxx>
 #include <scmod.hxx>
-#include <printopt.hxx>
 #include <externalrefmgr.hxx>
 #include <globstr.hrc>
 #include <strings.hrc>
 #include <sc.hrc>
 #include <charthelper.hxx>
 #include <macromgr.hxx>
-#include <dpobject.hxx>
 #include <docuno.hxx>
 #include <scresid.hxx>
 #include <columniterator.hxx>
@@ -97,7 +87,7 @@ using namespace com::sun::star;
 
 namespace {
 
-inline sal_uInt16 getScaleValue(SfxStyleSheetBase& rStyle, sal_uInt16 nWhich)
+sal_uInt16 getScaleValue(SfxStyleSheetBase& rStyle, sal_uInt16 nWhich)
 {
     return static_cast<const SfxUInt16Item&>(rStyle.GetItemSet().Get(nWhich)).GetValue();
 }
@@ -106,15 +96,15 @@ inline sal_uInt16 getScaleValue(SfxStyleSheetBase& rStyle, sal_uInt16 nWhich)
 
 void ScDocument::ImplCreateOptions()
 {
-    pDocOptions  = new ScDocOptions();
-    pViewOptions = new ScViewOptions();
+    pDocOptions.reset( new ScDocOptions() );
+    pViewOptions.reset( new ScViewOptions() );
 }
 
 void ScDocument::ImplDeleteOptions()
 {
-    delete pDocOptions;
-    delete pViewOptions;
-    delete pExtDocOptions;
+    pDocOptions.reset();
+    pViewOptions.reset();
+    pExtDocOptions.reset();
 }
 
 SfxPrinter* ScDocument::GetPrinter(bool bCreateIfNotExist)
@@ -385,7 +375,7 @@ EEHorizontalTextDirection ScDocument::GetEditTextDirection(SCTAB nTab) const
 
 ScMacroManager* ScDocument::GetMacroManager()
 {
-    if (!mpMacroMgr.get())
+    if (!mpMacroMgr)
         mpMacroMgr.reset(new ScMacroManager(this));
     return mpMacroMgr.get();
 }
@@ -417,34 +407,31 @@ void ScDocument::SetFormulaResults( const ScAddress& rTopPos, const double* pRes
     pTab->SetFormulaResults(rTopPos.Col(), rTopPos.Row(), pResults, nLen);
 }
 
-void ScDocument::SetFormulaResults(
-    const ScAddress& rTopPos, const formula::FormulaConstTokenRef* pResults, size_t nLen )
-{
-    ScTable* pTab = FetchTable(rTopPos.Tab());
-    if (!pTab)
-        return;
-
-    pTab->SetFormulaResults(rTopPos.Col(), rTopPos.Row(), pResults, nLen);
-}
-
 const ScDocumentThreadSpecific& ScDocument::CalculateInColumnInThread( ScInterpreterContext& rContext, const ScAddress& rTopPos, size_t nLen, unsigned nThisThread, unsigned nThreadsTotal)
 {
     ScTable* pTab = FetchTable(rTopPos.Tab());
     if (!pTab)
         return maNonThreaded;
 
-    assert(mbThreadedGroupCalcInProgress);
+    assert(IsThreadedGroupCalcInProgress());
 
-    maThreadSpecific.SetupFromNonThreadedData(maNonThreaded);
+    maThreadSpecific.pContext = &rContext;
+    ScDocumentThreadSpecific::SetupFromNonThreadedData(maNonThreaded);
     pTab->CalculateInColumnInThread(rContext, rTopPos.Col(), rTopPos.Row(), nLen, nThisThread, nThreadsTotal);
 
-    assert(mbThreadedGroupCalcInProgress);
+    assert(IsThreadedGroupCalcInProgress());
+    maThreadSpecific.pContext = nullptr;
 
     return maThreadSpecific;
 }
 
 void ScDocument::HandleStuffAfterParallelCalculation( const ScAddress& rTopPos, size_t nLen )
 {
+    assert(!IsThreadedGroupCalcInProgress());
+    for( DelayedSetNumberFormat& data : GetNonThreadedContext().maDelayedSetNumberFormat)
+        SetNumberFormat( ScAddress( rTopPos.Col(), data.mRow, rTopPos.Tab()), data.mnNumberFormat );
+    GetNonThreadedContext().maDelayedSetNumberFormat.clear();
+
     ScTable* pTab = FetchTable(rTopPos.Tab());
     if (!pTab)
         return;
@@ -483,10 +470,10 @@ class IdleCalcTextWidthScope
     ScDocument& mrDoc;
     ScAddress& mrCalcPos;
     MapMode maOldMapMode;
-    sal_uInt64 mnStartTime;
+    sal_uInt64 const mnStartTime;
     ScStyleSheetPool* mpStylePool;
-    SfxStyleSearchBits mnOldSearchMask;
-    SfxStyleFamily meOldFamily;
+    SfxStyleSearchBits const mnOldSearchMask;
+    SfxStyleFamily const meOldFamily;
     bool mbNeedMore;
     bool mbProgress;
 
@@ -576,7 +563,7 @@ bool ScDocument::IdleCalcTextWidth()            // true = try next again
     if (!ValidTab(aScope.Tab()) || aScope.Tab() >= static_cast<SCTAB>(maTabs.size()) || !maTabs[aScope.Tab()])
         aScope.setTab(0);
 
-    ScTable* pTab = maTabs[aScope.Tab()];
+    ScTable* pTab = maTabs[aScope.Tab()].get();
     ScStyleSheet* pStyle = static_cast<ScStyleSheet*>(aScope.getStylePool()->Find(pTab->aPageStyle, SfxStyleFamily::Page));
     OSL_ENSURE( pStyle, "Missing StyleSheet :-/" );
 
@@ -663,7 +650,7 @@ bool ScDocument::IdleCalcTextWidth()            // true = try next again
             {
                 if ( bNewTab )
                 {
-                    pTab = maTabs[aScope.Tab()];
+                    pTab = maTabs[aScope.Tab()].get();
                     pStyle = static_cast<ScStyleSheet*>(aScope.getStylePool()->Find(
                         pTab->aPageStyle, SfxStyleFamily::Page));
 
@@ -815,7 +802,7 @@ bool ScDocument::IsInLinkUpdate() const
 
 void ScDocument::UpdateExternalRefLinks(vcl::Window* pWin)
 {
-    if (!pExternalRefMgr.get())
+    if (!pExternalRefMgr)
         return;
 
     sfx2::LinkManager* pMgr = GetDocLinkManager().getLinkManager(bAutoCalc);
@@ -1209,7 +1196,7 @@ void ScDocument::KeyInput()
 {
     if ( pChartListenerCollection->hasListeners() )
         pChartListenerCollection->StartTimer();
-    if( apTemporaryChartLock.get() )
+    if (apTemporaryChartLock)
         apTemporaryChartLock->StartOrContinueLocking();
 }
 

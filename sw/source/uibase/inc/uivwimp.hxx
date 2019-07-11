@@ -92,7 +92,7 @@ class SwView_Impl
 
     // temporary document for printing text of selection / multi selection
     // in PDF export.
-    SfxObjectShellLock          xTmpSelDocSh;
+    SfxObjectShellLock const    xTmpSelDocSh;
 
     SwView*                     pView;
     rtl::Reference<SwScannerEventListener>
@@ -104,8 +104,8 @@ class SwView_Impl
     std::shared_ptr<SwMailMergeConfigItem>
                                 xConfigItem;
 
-    sfx2::DocumentInserter*     m_pDocInserter;
-    SfxRequest*                 m_pRequest;
+    std::unique_ptr<sfx2::DocumentInserter> m_pDocInserter;
+    std::unique_ptr<SfxRequest>             m_pRequest;
     sal_Int16                   m_nParam;
 
     Point                       m_aEditingPosition;
@@ -159,10 +159,10 @@ public:
                                 const Link<sfx2::FileDialogHelper*,void>& rEndDialogHdl,
                                 const sal_uInt16 nSlotId
                             );
-    SfxMedium*              CreateMedium();
+    std::unique_ptr<SfxMedium> CreateMedium();
     void                    InitRequest( const SfxRequest& rRequest );
 
-    SfxRequest*      GetRequest() const { return m_pRequest; }
+    SfxRequest*      GetRequest() const { return m_pRequest.get(); }
     sal_Int16        GetParam() const { return m_nParam; }
     void             SetParam( sal_Int16 nParam ) { m_nParam = nParam; }
 };

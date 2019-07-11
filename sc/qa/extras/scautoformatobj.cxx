@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/tableautoformat.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -25,7 +26,10 @@ using namespace com::sun::star;
 
 namespace sc_apitest
 {
-class ScAutoFormatObj : public CalcUnoApiTest, public apitest::TableAutoFormat
+class ScAutoFormatObj : public CalcUnoApiTest,
+                        public apitest::XEnumerationAccess,
+                        public apitest::TableAutoFormat
+
 {
 public:
     ScAutoFormatObj();
@@ -35,6 +39,9 @@ public:
     virtual void tearDown() override;
 
     CPPUNIT_TEST_SUITE(ScAutoFormatObj);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     // TableAutoFormat
     CPPUNIT_TEST(testTableAutoFormatProperties);
@@ -53,7 +60,6 @@ ScAutoFormatObj::ScAutoFormatObj()
 uno::Reference<uno::XInterface> ScAutoFormatObj::init()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<lang::XMultiServiceFactory> xMSF(xDoc, UNO_QUERY_THROW);
     uno::Reference<container::XIndexAccess> xIA(

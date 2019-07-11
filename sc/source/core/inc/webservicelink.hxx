@@ -10,18 +10,29 @@
 #ifndef INCLUDED_SC_SOURCE_CORE_INC_WEBSERVICE_HXX
 #define INCLUDED_SC_SOURCE_CORE_INC_WEBSERVICE_HXX
 
-#include <address.hxx>
 #include <sfx2/lnkbase.hxx>
 #include <svl/broadcast.hxx>
-#include <types.hxx>
 
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace uno
+{
+class Any;
+}
+}
+}
+}
 class ScDocument;
 
 class ScWebServiceLink : public ::sfx2::SvBaseLink, public SvtBroadcaster
 {
 private:
     ScDocument* pDoc;
-    OUString aURL; // connection/ link data
+    OUString const aURL; // connection/ link data
     bool bHasResult; // is set aResult is useful
     OUString aResult;
 

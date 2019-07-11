@@ -38,29 +38,6 @@ struct TColumn
 
 class SwFormatTablePage : public SfxTabPage
 {
-    VclPtr<Edit>           m_pNameED;
-    VclPtr<FixedText>      m_pWidthFT;
-    PercentField           m_aWidthMF;
-    VclPtr<CheckBox>       m_pRelWidthCB;
-
-    VclPtr<RadioButton>    m_pFullBtn;
-    VclPtr<RadioButton>    m_pLeftBtn;
-    VclPtr<RadioButton>    m_pFromLeftBtn;
-    VclPtr<RadioButton>    m_pRightBtn;
-    VclPtr<RadioButton>    m_pCenterBtn;
-    VclPtr<RadioButton>    m_pFreeBtn;
-
-    VclPtr<FixedText>      m_pLeftFT;
-    PercentField m_aLeftMF;
-    VclPtr<FixedText>      m_pRightFT;
-    PercentField m_aRightMF;
-    VclPtr<FixedText>      m_pTopFT;
-    VclPtr<MetricField>    m_pTopMF;
-    VclPtr<FixedText>      m_pBottomFT;
-    VclPtr<MetricField>    m_pBottomMF;
-
-    VclPtr<svx::FrameDirectionListBox>        m_pTextDirectionLB;
-
     SwTableRep*     pTableData;
     SwTwips         nSaveWidth;
     SwTwips         nMinTableWidth;
@@ -68,22 +45,44 @@ class SwFormatTablePage : public SfxTabPage
     bool            bFull:1;
     bool            bHtmlMode : 1;
 
-    void        Init();
-    void        ModifyHdl(const Edit* pEdit);
+    std::unique_ptr<weld::Entry> m_xNameED;
+    std::unique_ptr<weld::Label> m_xWidthFT;
+    std::unique_ptr<SwPercentField> m_xWidthMF;
+    std::unique_ptr<weld::CheckButton> m_xRelWidthCB;
 
-    DECL_LINK( AutoClickHdl, Button*, void );
-    DECL_LINK( RelWidthClickHdl, Button*, void );
+    std::unique_ptr<weld::RadioButton> m_xFullBtn;
+    std::unique_ptr<weld::RadioButton> m_xLeftBtn;
+    std::unique_ptr<weld::RadioButton> m_xFromLeftBtn;
+    std::unique_ptr<weld::RadioButton> m_xRightBtn;
+    std::unique_ptr<weld::RadioButton> m_xCenterBtn;
+    std::unique_ptr<weld::RadioButton> m_xFreeBtn;
+
+    std::unique_ptr<weld::Label> m_xLeftFT;
+    std::unique_ptr<SwPercentField> m_xLeftMF;
+    std::unique_ptr<weld::Label> m_xRightFT;
+    std::unique_ptr<SwPercentField> m_xRightMF;
+    std::unique_ptr<weld::Label> m_xTopFT;
+    std::unique_ptr<weld::MetricSpinButton> m_xTopMF;
+    std::unique_ptr<weld::Label> m_xBottomFT;
+    std::unique_ptr<weld::MetricSpinButton> m_xBottomMF;
+
+    std::unique_ptr<svx::FrameDirectionListBox> m_xTextDirectionLB;
+    std::unique_ptr<weld::Widget> m_xProperties;
+
+    void        Init();
+    void        ModifyHdl(const weld::MetricSpinButton& rEdit);
+
+    DECL_LINK(AutoClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(RelWidthClickHdl, weld::ToggleButton&, void);
     void RightModify();
-    DECL_LINK( UpDownHdl, SpinField&, void );
-    DECL_LINK( LoseFocusHdl, Control&, void );
+    DECL_LINK(ValueChangedHdl, weld::MetricSpinButton&, void);
 
     using TabPage::ActivatePage;
     using TabPage::DeactivatePage;
 
 public:
-    SwFormatTablePage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SwFormatTablePage(TabPageParent pParent, const SfxItemSet& rSet );
     virtual ~SwFormatTablePage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet);
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
@@ -97,33 +96,32 @@ public:
 
 class SwTableColumnPage : public SfxTabPage
 {
-    VclPtr<CheckBox>       m_pModifyTableCB;
-    VclPtr<CheckBox>       m_pProportionalCB;
-    VclPtr<FixedText>      m_pSpaceFT;
-    VclPtr<MetricField>    m_pSpaceED;
-    VclPtr<PushButton>     m_pUpBtn;
-    VclPtr<PushButton>     m_pDownBtn;
-
     SwTableRep*     pTableData;
-    PercentField  m_aFieldArr[MET_FIELDS];
-    VclPtr<FixedText>      m_pTextArr[MET_FIELDS];
     SwTwips         nTableWidth;
     SwTwips         nMinWidth;
-    sal_uInt16          nNoOfCols;
-    sal_uInt16          nNoOfVisibleCols;
+    sal_uInt16      nMetFields;
+    sal_uInt16      nNoOfCols;
+    sal_uInt16      nNoOfVisibleCols;
     // Remember the width, when switching to autoalign
-    sal_uInt16          aValueTable[MET_FIELDS];// primary assignment of the MetricFields
+    sal_uInt16      aValueTable[MET_FIELDS];// primary assignment of the MetricFields
     bool            bModified:1;
     bool            bModifyTable:1;
     bool            bPercentMode:1;
 
+    SwPercentField  m_aFieldArr[MET_FIELDS];
+    std::unique_ptr<weld::Label> m_aTextArr[MET_FIELDS];
+    std::unique_ptr<weld::CheckButton> m_xModifyTableCB;
+    std::unique_ptr<weld::CheckButton> m_xProportionalCB;
+    std::unique_ptr<weld::Label> m_xSpaceFT;
+    std::unique_ptr<weld::MetricSpinButton> m_xSpaceED;
+    std::unique_ptr<weld::Button> m_xUpBtn;
+    std::unique_ptr<weld::Button> m_xDownBtn;
+
     void        Init(bool bWeb);
-    DECL_LINK( AutoClickHdl, Button *, void );
-    void        ModifyHdl( MetricField const * pEdit );
-    DECL_LINK( UpHdl, SpinField&, void );
-    DECL_LINK( DownHdl, SpinField&, void );
-    DECL_LINK( LoseFocusHdl, Control&, void );
-    DECL_LINK( ModeHdl, Button *, void );
+    DECL_LINK(AutoClickHdl, weld::Button&, void);
+    void        ModifyHdl(const weld::MetricSpinButton* pEdit);
+    DECL_LINK(ValueChangedHdl, weld::MetricSpinButton&, void);
+    DECL_LINK(ModeHdl, weld::ToggleButton&, void);
     void        UpdateCols( sal_uInt16 nCurrentPos );
     SwTwips     GetVisibleWidth(sal_uInt16 nPos);
     void        SetVisibleWidth(sal_uInt16 nPos, SwTwips nNewWidth);
@@ -132,9 +130,8 @@ class SwTableColumnPage : public SfxTabPage
     using TabPage::DeactivatePage;
 
 public:
-    SwTableColumnPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SwTableColumnPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual ~SwTableColumnPage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet);
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
@@ -146,46 +143,39 @@ public:
 
 class SwTextFlowPage : public SfxTabPage
 {
-    VclPtr<CheckBox>       m_pPgBrkCB;
-
-    VclPtr<RadioButton>    m_pPgBrkRB;
-    VclPtr<RadioButton>    m_pColBrkRB;
-
-    VclPtr<RadioButton>    m_pPgBrkBeforeRB;
-    VclPtr<RadioButton>    m_pPgBrkAfterRB;
-
-    VclPtr<CheckBox>       m_pPageCollCB;
-    VclPtr<ListBox>        m_pPageCollLB;
-    VclPtr<CheckBox>       m_pPageNoCB;
-    VclPtr<NumericField>   m_pPageNoNF;
-    VclPtr<CheckBox>       m_pSplitCB;
-    VclPtr<TriStateBox>    m_pSplitRowCB;
-    VclPtr<CheckBox>       m_pKeepCB;
-    VclPtr<CheckBox>       m_pHeadLineCB;
-    VclPtr<NumericField>   m_pRepeatHeaderNF;
-    VclPtr<VclContainer>   m_pRepeatHeaderCombo;
-    VclPtr<ListBox>        m_pTextDirectionLB;
-
-    VclPtr<ListBox>        m_pVertOrientLB;
-
     SwWrtShell*     pShell;
-
     bool            bPageBreak;
     bool            bHtmlMode;
 
-    DECL_LINK(PageBreakHdl_Impl, Button*, void);
-    DECL_LINK(ApplyCollClickHdl_Impl, Button*, void);
-    DECL_LINK( PageBreakPosHdl_Impl, Button*, void );
-    DECL_LINK( PageBreakTypeHdl_Impl, Button*, void );
-    DECL_LINK(PageNoClickHdl_Impl, Button*, void);
-    DECL_LINK( SplitHdl_Impl, Button*, void );
-    DECL_STATIC_LINK( SwTextFlowPage, SplitRowHdl_Impl, Button*, void );
-    DECL_LINK( HeadLineCBClickHdl, Button*, void );
+    std::unique_ptr<weld::CheckButton> m_xPgBrkCB;
+    std::unique_ptr<weld::RadioButton> m_xPgBrkRB;
+    std::unique_ptr<weld::RadioButton> m_xColBrkRB;
+    std::unique_ptr<weld::RadioButton> m_xPgBrkBeforeRB;
+    std::unique_ptr<weld::RadioButton> m_xPgBrkAfterRB;
+    std::unique_ptr<weld::CheckButton> m_xPageCollCB;
+    std::unique_ptr<weld::ComboBox> m_xPageCollLB;
+    std::unique_ptr<weld::CheckButton> m_xPageNoCB;
+    std::unique_ptr<weld::SpinButton> m_xPageNoNF;
+    std::unique_ptr<weld::CheckButton> m_xSplitCB;
+    std::unique_ptr<weld::CheckButton> m_xSplitRowCB;
+    std::unique_ptr<weld::CheckButton> m_xKeepCB;
+    std::unique_ptr<weld::CheckButton> m_xHeadLineCB;
+    std::unique_ptr<weld::Widget> m_xRepeatHeaderCombo;
+    std::unique_ptr<weld::SpinButton> m_xRepeatHeaderNF;
+    std::unique_ptr<weld::ComboBox> m_xTextDirectionLB;
+    std::unique_ptr<weld::ComboBox> m_xVertOrientLB;
+
+    DECL_LINK(PageBreakHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(ApplyCollClickHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(PageBreakPosHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(PageBreakTypeHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(PageNoClickHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(SplitHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(HeadLineCBClickHdl, weld::ToggleButton&, void);
 
 public:
-    SwTextFlowPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    SwTextFlowPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual ~SwTextFlowPage() override;
-    virtual void dispose() override;
     static VclPtr<SfxTabPage>  Create( TabPageParent pParent, const SfxItemSet* rAttrSet);
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

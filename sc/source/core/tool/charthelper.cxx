@@ -29,7 +29,9 @@
 #include <svx/svdpage.hxx>
 #include <svtools/embedhlp.hxx>
 
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/data/XDataReceiver.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/util/XModifiable.hpp>
 
 using namespace com::sun::star;
@@ -52,7 +54,7 @@ sal_uInt16 lcl_DoUpdateCharts( ScDocument* pDoc )
         SdrPage* pPage = pModel->GetPage(nPageNo);
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -118,7 +120,7 @@ void ScChartHelper::AdjustRangesOfChartsOnDestinationPage( const ScDocument* pSr
     SdrPage* pDestPage = pDrawLayer->GetPage(static_cast<sal_uInt16>(nDestTab));
     if( pDestPage )
     {
-        SdrObjListIter aIter( *pDestPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pDestPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while( pObject )
         {
@@ -158,7 +160,7 @@ void ScChartHelper::UpdateChartsOnDestinationPage( ScDocument* pDestDoc, const S
     SdrPage* pDestPage = pDrawLayer->GetPage(static_cast<sal_uInt16>(nDestTab));
     if( pDestPage )
     {
-        SdrObjListIter aIter( *pDestPage, SdrIterMode::Flat );
+        SdrObjListIter aIter( pDestPage, SdrIterMode::Flat );
         SdrObject* pObject = aIter.Next();
         while( pObject )
         {
@@ -290,7 +292,7 @@ void ScChartHelper::AddRangesIfProtectedChart( ScRangeListVector& rRangesVector,
         SdrOle2Obj* pSdrOle2Obj = dynamic_cast< SdrOle2Obj* >( pObject );
         if ( pSdrOle2Obj && pSdrOle2Obj->IsChart() )
         {
-            uno::Reference< embed::XEmbeddedObject > xEmbeddedObj = pSdrOle2Obj->GetObjRef();
+            const uno::Reference< embed::XEmbeddedObject >& xEmbeddedObj = pSdrOle2Obj->GetObjRef();
             if ( xEmbeddedObj.is() )
             {
                 bool bDisableDataTableDialog = false;
@@ -304,7 +306,7 @@ void ScChartHelper::AddRangesIfProtectedChart( ScRangeListVector& rRangesVector,
                     ScChartListenerCollection* pCollection = pDocument->GetChartListenerCollection();
                     if (pCollection)
                     {
-                        OUString aChartName = pSdrOle2Obj->GetPersistName();
+                        const OUString& aChartName = pSdrOle2Obj->GetPersistName();
                         const ScChartListener* pListener = pCollection->findByName(aChartName);
                         if (pListener)
                         {
@@ -329,7 +331,7 @@ void ScChartHelper::FillProtectedChartRangesVector( ScRangeListVector& rRangesVe
 {
     if ( pDocument && pPage )
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while ( pObject )
         {
@@ -343,7 +345,7 @@ void ScChartHelper::GetChartNames( ::std::vector< OUString >& rChartNames, const
 {
     if ( pPage )
     {
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while ( pObject )
         {
@@ -367,7 +369,7 @@ void ScChartHelper::CreateProtectedChartListenersAndNotify( ScDocument* pDoc, co
     {
         size_t nRangeListCount = rRangesVector.size();
         size_t nRangeList = 0;
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while ( pObject )
         {
@@ -376,12 +378,12 @@ void ScChartHelper::CreateProtectedChartListenersAndNotify( ScDocument* pDoc, co
                 SdrOle2Obj* pSdrOle2Obj = dynamic_cast< SdrOle2Obj* >( pObject );
                 if ( pSdrOle2Obj && pSdrOle2Obj->IsChart() )
                 {
-                    OUString aChartName = pSdrOle2Obj->GetPersistName();
+                    const OUString& aChartName = pSdrOle2Obj->GetPersistName();
                     ::std::vector< OUString >::const_iterator aEnd = rExcludedChartNames.end();
                     ::std::vector< OUString >::const_iterator aFound = ::std::find( rExcludedChartNames.begin(), aEnd, aChartName );
                     if ( aFound == aEnd )
                     {
-                        uno::Reference< embed::XEmbeddedObject > xEmbeddedObj = pSdrOle2Obj->GetObjRef();
+                        const uno::Reference< embed::XEmbeddedObject >& xEmbeddedObj = pSdrOle2Obj->GetObjRef();
                         if ( xEmbeddedObj.is() && ( nRangeList < nRangeListCount ) )
                         {
                             bool bDisableDataTableDialog = false;

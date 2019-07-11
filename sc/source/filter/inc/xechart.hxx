@@ -83,6 +83,11 @@ public:
     explicit            XclExpChRoot( const XclExpRoot& rRoot, XclExpChChart& rChartData );
     virtual             ~XclExpChRoot() override;
 
+    XclExpChRoot(XclExpChRoot const &) = default;
+    XclExpChRoot(XclExpChRoot &&) = default;
+    XclExpChRoot & operator =(XclExpChRoot const &) = delete; // due to XclExpRoot
+    XclExpChRoot & operator =(XclExpChRoot &&) = delete; // due to XclExpRoot
+
     /** Returns this root instance - for code readability in derived classes. */
     const XclExpChRoot& GetChRoot() const { return *this; }
     /** Returns the API Chart document model. */

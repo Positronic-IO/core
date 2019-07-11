@@ -10,6 +10,7 @@
 #include "XBufferedThreadedStream.hxx"
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
 #include <cppuhelper/exc_hlp.hxx>
+#include <sal/log.hxx>
 
 using namespace css::uno;
 using com::sun::star::packages::zip::ZipIOException;
@@ -28,10 +29,9 @@ private:
         {
             mxStream.produce();
         }
-        catch (const css::uno::Exception &e)
+        catch (...)
         {
-            SAL_WARN("package", "Unexpected " << e );
-            mxStream.saveException(cppu::getCaughtException());
+            mxStream.saveException(std::current_exception());
         }
 
         mxStream.setTerminateThread();
@@ -106,8 +106,8 @@ const Buffer& XBufferedThreadedStream::getNextBlock()
         if( maPendingBuffers.empty() )
         {
             maInUseBuffer = Buffer();
-            if (maSavedException.hasValue())
-                cppu::throwException(maSavedException);
+            if (maSavedException)
+                std::rethrow_exception(maSavedException);
         }
         else
         {

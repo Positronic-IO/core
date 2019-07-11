@@ -19,6 +19,8 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <cstddef>
 
@@ -100,10 +102,10 @@ static OUString lcl_getTypePath(OUString& rType)
 }
 
 // Stack entry for all text attributes
-SwFltStackEntry::SwFltStackEntry(const SwPosition& rStartPos, SfxPoolItem* pHt)
+SwFltStackEntry::SwFltStackEntry(const SwPosition& rStartPos, std::unique_ptr<SfxPoolItem> pHt)
     : m_aMkPos(rStartPos)
     , m_aPtPos(rStartPos)
-    , pAttr( pHt )            // store a copy of the attribute
+    , pAttr( std::move(pHt) )
     , m_isAnnotationOnEnd(false)
     , mnStartCP(-1)
     , mnEndCP(-1)
@@ -294,7 +296,7 @@ void SwFltControlStack::NewAttr(const SwPosition& rPos, const SfxPoolItem& rAttr
     }
     else
     {
-        SwFltStackEntry *pTmp = new SwFltStackEntry(rPos, rAttr.Clone() );
+        SwFltStackEntry *pTmp = new SwFltStackEntry(rPos, std::unique_ptr<SfxPoolItem>(rAttr.Clone()) );
         pTmp->SetStartCP(GetCurrAttrCP());
         m_Entries.push_back(std::unique_ptr<SwFltStackEntry>(pTmp));
     }
@@ -305,7 +307,7 @@ void SwFltControlStack::DeleteAndDestroy(Entries::size_type nCnt)
     OSL_ENSURE(nCnt < m_Entries.size(), "Out of range!");
     if (nCnt < m_Entries.size())
     {
-        myEIter aElement = m_Entries.begin() + nCnt;
+        auto aElement = m_Entries.begin() + nCnt;
         m_Entries.erase(aElement);
     }
     //Clear the para end position recorded in reader intermittently for the least impact on loading performance
@@ -377,7 +379,7 @@ SwFltStackEntry* SwFltControlStack::SetAttr(const SwPosition& rPos,
         (RES_FLTRATTR_BEGIN <= nAttrId && sal_uInt16(RES_FLTRATTR_END) > nAttrId),
         "Wrong id for attribute");
 
-    myEIter aI = m_Entries.begin();
+    auto aI = m_Entries.begin();
     while (aI != m_Entries.end())
     {
         bool bLastEntry = aI == m_Entries.end() - 1;
@@ -794,7 +796,7 @@ void SwFltControlStack::SetAttrInDoc(const SwPosition& rTmpPos,
             {
                 if (rEntry.IsParaEnd())
                 {
-                    pDoc->getIDocumentContentOperations().InsertPoolItem(aRegion, *rEntry.pAttr, SetAttrMode::DEFAULT, true);
+                    pDoc->getIDocumentContentOperations().InsertPoolItem(aRegion, *rEntry.pAttr, SetAttrMode::DEFAULT, nullptr, true);
                 }
                 else
                 {

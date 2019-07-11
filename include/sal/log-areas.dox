@@ -22,7 +22,8 @@ certain functionality.
 
 @li @c sal.bootstrap - SAL bootstrap
 @li @c sal.debug - SAL debugging functionality
-@li @c sal.file
+@li @c sal.file - file system operations
+@li @c sal.fileio - file I/O
 @li @c sal.osl - SAL OSL library
 @li @c sal.osl.condition
 @li @c sal.osl.mutex
@@ -85,6 +86,7 @@ certain functionality.
 @li @c connectivity.manager
 @li @c connectivity.mork
 @li @c connectivity.mozab
+@li @c connectivity.mysqlc
 @li @c connectivity.odbc
 @li @c connectivity.parse
 @li @c connectivity.postgresql
@@ -96,6 +98,7 @@ certain functionality.
 @li @c comphelper.backupfilehelper
 @li @c comphelper.container - EmbeddedObjectContainer
 @li @c comphelper.crypto
+@li @c comphelper.lok
 
 @section cppu
 
@@ -476,6 +479,7 @@ certain functionality.
 @li @c vcl.layout - Widget layout
 @li @c vcl.lazydelete
 @li @c vcl.opengl
+@li @c vcl.opengl.qt5 - QT5 OpenGL
 @li @c vcl.osx
 @li @c vcl.osx.print
 @li @c vcl.pdfwriter
@@ -605,7 +609,6 @@ certain functionality.
 @li @c lingucomponent
 @li @c linguistic
 @li @c lwp - lotuswordpro
-@li @c mysqlc
 @li @c opencl
 @li @c opencl.device
 @li @c opencl.file

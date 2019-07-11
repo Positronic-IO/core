@@ -116,8 +116,8 @@ class SwHistorySetText : public SwHistoryHint
     const sal_uLong m_nNodeIndex;
     const sal_Int32 m_nStart;
     const sal_Int32 m_nEnd;
-    bool m_bFormatIgnoreStart : 1;
-    bool m_bFormatIgnoreEnd   : 1;
+    bool const m_bFormatIgnoreStart : 1;
+    bool const m_bFormatIgnoreEnd   : 1;
 
 public:
     SwHistorySetText( SwTextAttr* pTextHt, sal_uLong nNode );
@@ -311,16 +311,13 @@ class SwHistory
     friend class SwDoc;         // actually only SwDoc::DelUndoObj may access
     friend class SwRegHistory;  // for inserting History attributes
 
-    std::vector<SwHistoryHint*> m_SwpHstry;
+    std::vector<std::unique_ptr<SwHistoryHint>> m_SwpHstry;
     sal_uInt16 m_nEndDiff;
 
 public:
-    typedef std::vector<SwHistoryHint*>::iterator SwpHstry_iterator;
     SwHistory();
     ~SwHistory();
 
-    // delete History
-    void Delete();
     // call and delete all objects between nStart and array end
     bool Rollback( SwDoc* pDoc, sal_uInt16 nStart = 0 );
     // call all objects between nStart and TmpEnd; store nStart as TmpEnd
@@ -339,18 +336,19 @@ public:
     sal_uInt16 Count() const { return m_SwpHstry.size(); }
     sal_uInt16 GetTmpEnd() const { return m_SwpHstry.size() - m_nEndDiff; }
     sal_uInt16 SetTmpEnd( sal_uInt16 nTmpEnd );        // return previous value
-    SwHistoryHint      * operator[]( sal_uInt16 nPos ) { return m_SwpHstry[nPos]; }
+    SwHistoryHint      * operator[]( sal_uInt16 nPos ) { return m_SwpHstry[nPos].get(); }
     SwHistoryHint const* operator[]( sal_uInt16 nPos ) const
-        { return m_SwpHstry[nPos]; }
+        { return m_SwpHstry[nPos].get(); }
 
     // for SwUndoDelete::Undo/Redo
     void Move( sal_uInt16 nPos, SwHistory *pIns,
                sal_uInt16 const nStart = 0)
     {
-        SwpHstry_iterator itSourceBegin = pIns->m_SwpHstry.begin() + nStart;
-        SwpHstry_iterator itSourceEnd = pIns->m_SwpHstry.end();
-        if (itSourceBegin == itSourceEnd) return;
-        m_SwpHstry.insert(m_SwpHstry.begin() + nPos, itSourceBegin, itSourceEnd);
+        auto itSourceBegin = pIns->m_SwpHstry.begin() + nStart;
+        auto itSourceEnd = pIns->m_SwpHstry.end();
+        if (itSourceBegin == itSourceEnd)
+            return;
+        m_SwpHstry.insert(m_SwpHstry.begin() + nPos, std::make_move_iterator(itSourceBegin), std::make_move_iterator(itSourceEnd));
         pIns->m_SwpHstry.erase( itSourceBegin, itSourceEnd );
     }
 

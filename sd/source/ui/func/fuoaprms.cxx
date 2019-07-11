@@ -23,13 +23,14 @@
 #include <svx/svdpagv.hxx>
 #include <editeng/colritem.hxx>
 #include <svx/svdundo.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/viewfrm.hxx>
+#include <sfx2/sfxdlg.hxx>
 #include <svl/aeitem.hxx>
 #include <svx/xtable.hxx>
+#include <svx/svdopath.hxx>
 
 #include <strings.hrc>
 #include <drawdoc.hxx>
@@ -74,7 +75,7 @@ rtl::Reference<FuPoor> FuObjectAnimationParameters::Create( ViewShell* pViewSh, 
 
 void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 {
-    ::svl::IUndoManager* pUndoMgr = mpViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager();
+    SfxUndoManager* pUndoMgr = mpViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager();
 
     const SdrMarkList& rMarkList  = mpView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
@@ -445,18 +446,15 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
             aSet.Put(SfxBoolItem(ATTR_ACTION_PLAYFULL, false));
 
         SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact ? pFact->CreatSdActionDialog(mpViewShell->GetActiveWindow(), &aSet, mpView) : nullptr);
+        ScopedVclPtr<SfxAbstractDialog> pDlg( pFact->CreatSdActionDialog(mpViewShell->GetActiveWindow(), &aSet, mpView) );
 
-        short nResult = pDlg ? pDlg->Execute() : static_cast<short>(RET_CANCEL);
-
-        if( nResult == RET_OK )
-        {
-            rReq.Done( *( pDlg->GetOutputItemSet() ) );
-            pArgs = rReq.GetArgs();
-        }
+        short nResult = pDlg->Execute();
 
         if( nResult != RET_OK )
             return;
+
+        rReq.Done( *( pDlg->GetOutputItemSet() ) );
+        pArgs = rReq.GetArgs();
     }
 
     // evaluation of the ItemSets
@@ -621,7 +619,7 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
         pUndoMgr->EnterListAction(aComment, aComment, 0, mpViewShell->GetViewShellBase().GetViewShellId());
 
         // create undo group
-        SdUndoGroup* pUndoGroup = new SdUndoGroup(mpDoc);
+        std::unique_ptr<SdUndoGroup> pUndoGroup(new SdUndoGroup(mpDoc));
         pUndoGroup->SetComment(aComment);
 
         // for the path effect, remember some stuff
@@ -662,7 +660,7 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
                 Point     aCurCenter(aCurRect.Center());
                 const ::basegfx::B2DPolyPolygon& rPolyPolygon = pPath->GetPathPoly();
                 sal_uInt32 nNoOfPolygons(rPolyPolygon.count());
-                const ::basegfx::B2DPolygon aPolygon(rPolyPolygon.getB2DPolygon(nNoOfPolygons - 1));
+                const ::basegfx::B2DPolygon& aPolygon(rPolyPolygon.getB2DPolygon(nNoOfPolygons - 1));
                 sal_uInt32 nPoints(aPolygon.count());
                 const ::basegfx::B2DPoint aNewB2DCenter(aPolygon.getB2DPoint(nPoints - 1));
                 const Point aNewCenter(FRound(aNewB2DCenter.getX()), FRound(aNewB2DCenter.getY()));
@@ -790,7 +788,7 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
             }
         }
         // Set the Undo Group in of the Undo Manager
-        pUndoMgr->AddUndoAction(pUndoGroup);
+        pUndoMgr->AddUndoAction(std::move(pUndoGroup));
         pUndoMgr->LeaveListAction();
 
         // Model changed

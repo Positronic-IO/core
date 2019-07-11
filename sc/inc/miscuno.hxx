@@ -24,7 +24,6 @@
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
@@ -79,7 +78,7 @@ class ScIndexEnumeration : public cppu::WeakImplHelper<
 {
 private:
     css::uno::Reference<css::container::XIndexAccess> xIndex;
-    OUString                sServiceName;
+    OUString const          sServiceName;
     sal_Int32               nPos;
 
 public:

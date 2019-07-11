@@ -21,6 +21,7 @@
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <osl/file.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <sot/stg.hxx>
 #include <sfx2/docfile.hxx>
 #include <tools/urlobj.hxx>
@@ -147,13 +148,12 @@ void SwXMLTextBlocks::AddName( const OUString& rShort, const OUString& rLong,
     sal_uInt16 nIdx = GetIndex( rShort );
     if (nIdx != USHRT_MAX)
     {
-        delete m_aNames[nIdx];
         m_aNames.erase( m_aNames.begin() + nIdx );
     }
-    SwBlockName* pNew = new SwBlockName( rShort, rLong, rPackageName );
+    std::unique_ptr<SwBlockName> pNew(new SwBlockName( rShort, rLong, rPackageName ));
     pNew->bIsOnlyTextFlagInit = true;
     pNew->bIsOnlyText = bOnlyText;
-    m_aNames.insert( pNew );
+    m_aNames.insert( std::move(pNew) );
     m_bInfoChanged = true;
 }
 
@@ -238,7 +238,8 @@ ErrCode SwXMLTextBlocks::CopyBlock( SwImpBlocks& rDestImp, OUString& rShort,
     const OUString aGroup( rShort );
     bool bTextOnly = IsOnlyTextBlock ( rShort ) ;//pImp->pBlkRoot->IsStream( aGroup );
     sal_uInt16 nIndex = GetIndex ( rShort );
-    OUString sDestShortName( GetPackageName (nIndex) );
+    OUString sPackageName( GetPackageName (nIndex) );
+    OUString sDestShortName( sPackageName );
     sal_uInt16 nIdx = 0;
 
     OSL_ENSURE( xBlkRoot.is(), "No storage set" );
@@ -256,7 +257,7 @@ ErrCode SwXMLTextBlocks::CopyBlock( SwImpBlocks& rDestImp, OUString& rShort,
             rDestImp.CloseFile();
             return ERR_SWG_WRITE_ERROR;
         }
-        sDestShortName += OUString::number( nIdx );
+        sDestShortName = sPackageName + OUString::number( nIdx );
     }
 
     try
@@ -386,9 +387,8 @@ ErrCode SwXMLTextBlocks::PutBlock()
 
 ErrCode SwXMLTextBlocks::PutDoc()
 {
-    SwPaM* pPaM = MakePaM();
+    std::unique_ptr<SwPaM> pPaM = MakePaM();
     ErrCode nErr = PutBlock();
-    delete pPaM;
     return nErr;
 }
 
@@ -505,9 +505,8 @@ bool SwXMLTextBlocks::IsFileUCBStorage( const OUString & rFileName)
         aName = aObj.GetMainURL( INetURLObject::DecodeMechanism::NONE );
     }
 
-    SvStream * pStm = ::utl::UcbStreamHelper::CreateStream( aName, StreamMode::STD_READ );
-    bool bRet = UCBStorage::IsStorageFile( pStm );
-    delete pStm;
+    std::unique_ptr<SvStream> pStm = ::utl::UcbStreamHelper::CreateStream( aName, StreamMode::STD_READ );
+    bool bRet = UCBStorage::IsStorageFile( pStm.get() );
     return bRet;
 }
 

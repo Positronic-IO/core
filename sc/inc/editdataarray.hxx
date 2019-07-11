@@ -37,7 +37,7 @@ public:
         Item() = delete;
         explicit Item(SCTAB nTab, SCCOL nCol, SCROW nRow,
                       std::unique_ptr<EditTextObject> pOldData, std::unique_ptr<EditTextObject> pNewData);
-        Item(Item const &) = default;
+        Item(Item const &) = delete; // due to mpOldData
         Item(Item&&) = default;
         ~Item();
 
@@ -50,9 +50,9 @@ public:
     private:
         std::unique_ptr<EditTextObject> mpOldData;
         std::unique_ptr<EditTextObject> mpNewData;
-        SCTAB mnTab;
-        SCCOL mnCol;
-        SCROW mnRow;
+        SCTAB const mnTab;
+        SCCOL const mnCol;
+        SCROW const mnRow;
 
     };
 

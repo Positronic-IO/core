@@ -31,21 +31,22 @@
 #include <svl/itemset.hxx>
 #include <sdr/properties/pageproperties.hxx>
 #include <svx/sdr/contact/viewcontactofpageobj.hxx>
+#include <o3tl/make_unique.hxx>
 
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrPageObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrPageObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::PageProperties(*this);
+    return o3tl::make_unique<sdr::properties::PageProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrPageObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrPageObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfPageObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfPageObj>(*this);
 }
 
 

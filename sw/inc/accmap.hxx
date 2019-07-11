@@ -91,14 +91,14 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
 {
     mutable ::osl::Mutex maMutex;
     ::osl::Mutex maEventMutex;
-    SwAccessibleContextMap_Impl *mpFrameMap;
-    SwAccessibleShapeMap_Impl *mpShapeMap;
+    std::unique_ptr<SwAccessibleContextMap_Impl> mpFrameMap;
+    std::unique_ptr<SwAccessibleShapeMap_Impl> mpShapeMap;
     SwShapeList_Impl mvShapes;
-    SwAccessibleEventList_Impl *mpEvents;
-    SwAccessibleEventMap_Impl *mpEventMap;
+    std::unique_ptr<SwAccessibleEventList_Impl> mpEvents;
+    std::unique_ptr<SwAccessibleEventMap_Impl> mpEventMap;
     // #i27301 data structure to keep information about
     // accessible paragraph, which have a selection.
-    SwAccessibleSelectedParas_Impl* mpSelectedParas;
+    std::unique_ptr<SwAccessibleSelectedParas_Impl> mpSelectedParas;
     SwViewShell *mpVSh;
     /// for page preview: store preview data, VisArea, and mapping of
     /// preview-to-display coordinates
@@ -120,7 +120,7 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
     //mpSelectedFrameMap contains the old selected objects.
     std::unique_ptr<SwAccessibleContextMap_Impl> mpSeletedFrameMap;
 
-    OUString maDocName;
+    OUString const maDocName;
 
     //InvalidateShapeInParaSelection() method is responsible for the updating the selected states of the objects.
     void InvalidateShapeInParaSelection();
@@ -135,7 +135,7 @@ class SwAccessibleMap : public ::accessibility::IAccessibleViewForwarder,
 
         Important note: method has to used inside a mutual exclusive section
     */
-    SwAccessibleSelectedParas_Impl* BuildSelectedParas();
+    std::unique_ptr<SwAccessibleSelectedParas_Impl> BuildSelectedParas();
 
 public:
 
@@ -145,7 +145,7 @@ public:
     css::uno::Reference<css::accessibility::XAccessible> GetDocumentView();
 
     css::uno::Reference<css::accessibility::XAccessible> GetDocumentPreview(
-                            const std::vector<PreviewPage*>& _rPreviewPages,
+                            const std::vector<std::unique_ptr<PreviewPage>>& _rPreviewPages,
                             const Fraction&  _rScale,
                             const SwPageFrame* _pSelectedPageFrame,
                             const Size&      _rPreviewWinSize );
@@ -242,7 +242,7 @@ public:
                              vcl::Window& rChild ) const;
 
     // update preview data (and fire events if necessary)
-    void UpdatePreview( const std::vector<PreviewPage*>& _rPreviewPages,
+    void UpdatePreview( const std::vector<std::unique_ptr<PreviewPage>>& _rPreviewPages,
                         const Fraction&  _rScale,
                         const SwPageFrame* _pSelectedPageFrame,
                         const Size&      _rPreviewWinSize );
@@ -276,6 +276,9 @@ public:
     // for preview
     Point PixelToCore (const Point& rPoint) const;
     tools::Rectangle CoreToPixel (const tools::Rectangle& rRect) const;
+
+    // is there a known accessibility impl cached for the frame
+    bool Contains(const SwFrame *pFrame) const;
 
 private:
     /** get mapping mode for LogicToPixel and PixelToLogic conversions

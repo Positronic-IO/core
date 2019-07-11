@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
@@ -44,7 +45,7 @@ using namespace ::com::sun::star;
 #define THROW_WHERE ""
 #endif
 
-bool CheckPackageSignature_Impl( const uno::Reference< io::XInputStream >& xInputStream,
+static bool CheckPackageSignature_Impl( const uno::Reference< io::XInputStream >& xInputStream,
                                      const uno::Reference< io::XSeekable >& xSeekable )
 {
     if ( !xInputStream.is() || !xSeekable.is() )

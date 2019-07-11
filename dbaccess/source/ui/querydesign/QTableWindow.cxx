@@ -35,9 +35,9 @@
 #include <com/sun/star/sdbcx/KeyType.hpp>
 #include <com/sun/star/sdbcx/XColumnsSupplier.hpp>
 #include "TableFieldInfo.hxx"
-#include <comphelper/string.hxx>
 #include <UITools.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
+#include <comphelper/types.hxx>
 
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::sdbcx;

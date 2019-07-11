@@ -83,6 +83,7 @@
 #include <xfilter/xfparastyle.hxx>
 #include <memory>
 #include <set>
+#include <sal/log.hxx>
 
 LwpSuperTableLayout::LwpSuperTableLayout(LwpObjectHeader const &objHdr, LwpSvStream* pStrm)
     : LwpPlacableLayout(objHdr, pStrm)
@@ -772,7 +773,7 @@ void LwpTableLayout::ParseTable()
         throw std::runtime_error("missing super table");
     }
 
-    if (m_pXFTable.get())
+    if (m_pXFTable)
     {
         throw std::runtime_error("this table is already parsed");
     }
@@ -1203,54 +1204,52 @@ void LwpTableLayout::PostProcessParagraph(XFCell *pCell, sal_uInt16 nRowID, sal_
             return;
         XFColor aNullColor = XFColor();
 
-        if ( pXFPara)
+        OUString sNumfmt = pCellLayout->GetNumfmtName();
+        bool bColorMod = false;
+        XFNumberStyle* pNumStyle = nullptr;
+        XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
+        if (!sNumfmt.isEmpty())
         {
-            OUString sNumfmt = pCellLayout->GetNumfmtName();
-            bool bColorMod = false;
-            XFNumberStyle* pNumStyle = nullptr;
-            XFStyleManager* pXFStyleManager = LwpGlobalMgr::GetInstance()->GetXFStyleManager();
-            if (!sNumfmt.isEmpty())
+            pNumStyle = static_cast<XFNumberStyle*>(pXFStyleManager->FindStyle(sNumfmt));
+            XFColor aColor = pNumStyle->GetColor();
+            if ( aColor != aNullColor )
+                bColorMod = true;//end
+        }
+
+        XFParaStyle * pStyle = pXFStyleManager->FindParaStyle(pXFPara->GetStyleName());
+        if ((pStyle && pStyle->GetNumberRight()) || bColorMod)
+        {
+            std::unique_ptr<XFParaStyle> xOverStyle(new XFParaStyle);
+
+            if (pStyle)
             {
-                pNumStyle = static_cast<XFNumberStyle*>(pXFStyleManager->FindStyle( sNumfmt));
-                XFColor aColor = pNumStyle->GetColor();
-                if ( aColor != aNullColor )
-                    bColorMod = true;//end
+                *xOverStyle = *pStyle;
+
+                if (pStyle->GetNumberRight())
+                    xOverStyle->SetAlignType(enumXFAlignEnd);
             }
 
-            XFParaStyle * pStyle = pXFStyleManager->FindParaStyle(pXFPara->GetStyleName());
-            if ((pStyle && pStyle->GetNumberRight()) || bColorMod)
+            if (bColorMod)
             {
-                std::unique_ptr<XFParaStyle> xOverStyle(new XFParaStyle);
-
-                if (pStyle)
+                rtl::Reference<XFFont> xFont = xOverStyle->GetFont();
+                if (xFont.is())
                 {
-                    *xOverStyle = *pStyle;
-
-                    if (pStyle->GetNumberRight())
-                        xOverStyle->SetAlignType(enumXFAlignEnd);
-                }
-
-                if (bColorMod)
-                {
-                    rtl::Reference<XFFont> xFont = xOverStyle->GetFont();
-                    if (xFont.is())
+                    XFColor aColor = xFont->GetColor();
+                    if (aColor == aNullColor)
                     {
-                        XFColor aColor = xFont->GetColor();
-                        if ( aColor == aNullColor )
-                        {
-                            rtl::Reference<XFFont> pNewFont(new XFFont);
-                            aColor = pNumStyle->GetColor();
-                            pNewFont->SetColor(aColor);
-                            xOverStyle->SetFont(pNewFont);
-                        }
+                        rtl::Reference<XFFont> pNewFont(new XFFont);
+                        aColor = pNumStyle->GetColor();
+                        pNewFont->SetColor(aColor);
+                        xOverStyle->SetFont(pNewFont);
                     }
                 }
-
-                xOverStyle->SetStyleName("");
-                OUString StyleName = pXFStyleManager->AddStyle(std::move(xOverStyle)).m_pStyle->GetStyleName();
-
-                pXFPara->SetStyleName(StyleName);
             }
+
+            xOverStyle->SetStyleName("");
+            OUString StyleName
+                = pXFStyleManager->AddStyle(std::move(xOverStyle)).m_pStyle->GetStyleName();
+
+            pXFPara->SetStyleName(StyleName);
         }
     }
 }

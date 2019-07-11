@@ -29,6 +29,7 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 
 #include <cppuhelper/interfacecontainer.h>
+#include <comphelper/sequenceashashmap.hxx>
 
 #include <oleembobj.hxx>
 #include "olepersist.hxx"
@@ -46,7 +47,6 @@ OleEmbeddedObject::OleEmbeddedObject( const uno::Reference< lang::XMultiServiceF
                                       const uno::Sequence< sal_Int8 >& aClassID,
                                       const OUString& aClassName )
 : m_pOleComponent( nullptr )
-, m_pInterfaceContainer( nullptr )
 , m_bReadOnly( false )
 , m_bDisposed( false )
 , m_nObjectState( -1 )
@@ -79,7 +79,6 @@ OleEmbeddedObject::OleEmbeddedObject( const uno::Reference< lang::XMultiServiceF
 // will be retrieved from the entry, during construction it is unknown
 OleEmbeddedObject::OleEmbeddedObject( const uno::Reference< lang::XMultiServiceFactory >& xFactory, bool bLink )
 : m_pOleComponent( nullptr )
-, m_pInterfaceContainer( nullptr )
 , m_bReadOnly( false )
 , m_bDisposed( false )
 , m_nObjectState( -1 )
@@ -109,7 +108,6 @@ OleEmbeddedObject::OleEmbeddedObject( const uno::Reference< lang::XMultiServiceF
 // this constructor let object be initialized from clipboard
 OleEmbeddedObject::OleEmbeddedObject( const uno::Reference< lang::XMultiServiceFactory >& xFactory )
 : m_pOleComponent( nullptr )
-, m_pInterfaceContainer( nullptr )
 , m_bReadOnly( false )
 , m_bDisposed( false )
 , m_nObjectState( -1 )
@@ -677,6 +675,19 @@ void OleEmbeddedObject::setStream(const css::uno::Reference<css::io::XStream>& x
 css::uno::Reference<css::io::XStream> OleEmbeddedObject::getStream()
 {
     return m_xObjectStream;
+}
+
+void OleEmbeddedObject::initialize(const uno::Sequence<uno::Any>& rArguments)
+{
+    if (!rArguments.hasElements())
+        return;
+
+    comphelper::SequenceAsHashMap aValues(rArguments[0]);
+    for (const auto& rValue : aValues)
+    {
+        if (rValue.first == "StreamReadOnly")
+            rValue.second >>= m_bStreamReadOnly;
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

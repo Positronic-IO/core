@@ -20,11 +20,8 @@
 #ifndef INCLUDED_SD_INC_UNDO_UNDOMANAGER_HXX
 #define INCLUDED_SD_INC_UNDO_UNDOMANAGER_HXX
 
-#include <misc/scopelock.hxx>
 #include <svx/sdrundomanager.hxx>
 #include <sddllapi.h>
-
-class SfxViewShell;
 
 namespace sd
 {
@@ -36,11 +33,11 @@ public:
 
     virtual void            EnterListAction(const OUString &rComment, const OUString& rRepeatComment, sal_uInt16 nId, ViewShellId nViewShellId) override;
 
-    virtual void            AddUndoAction( SfxUndoAction *pAction, bool bTryMerg=false ) override;
+    virtual void            AddUndoAction( std::unique_ptr<SfxUndoAction> pAction, bool bTryMerg=false ) override;
 
     /** Set or reset the undo manager linked with the called undo manager.
     */
-    void SetLinkedUndoManager (::svl::IUndoManager* pLinkedUndoManager);
+    void SetLinkedUndoManager (SfxUndoManager* pLinkedUndoManager);
 
 private:
     using SdrUndoManager::Undo;
@@ -49,7 +46,7 @@ private:
     /** Used when the outline view is visible as a last resort to
         synchronize the undo managers.
     */
-    ::svl::IUndoManager* mpLinkedUndoManager;
+    SfxUndoManager* mpLinkedUndoManager;
 
     /** Call ClearRedo() at the linked undo manager, when present.
 

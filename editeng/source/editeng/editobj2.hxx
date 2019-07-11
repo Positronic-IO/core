@@ -111,11 +111,11 @@ public:
 
     OutputDevice*       GetRefDevPtr() const        { return nRefDevPtr; }
     sal_uLong           GetPaperWidth() const       { return nPaperWidth; }
-    OutDevType      GetRefDevType() const       { return eRefDevType; }
+    bool RefDevIsVirtual() const
+        { return (eRefDevType == OUTDEV_VIRDEV) || (eRefDevType == OUTDEV_PDF); }
     const MapMode&  GetRefMapMode() const       { return aRefMapMode; }
     sal_uInt16  GetStretchX() const         { return nStretchX; }
     sal_uInt16  GetStretchY() const         { return nStretchY; }
-
 };
 
 class ContentInfo
@@ -219,8 +219,8 @@ public:
     void                    SetScriptType( SvtScriptType nType );
 
     ContentInfo*            CreateAndInsertContent();
-    XEditAttribute*         CreateAttrib( const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd );
-    void                    DestroyAttrib( XEditAttribute* pAttr );
+    std::unique_ptr<XEditAttribute> CreateAttrib( const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd );
+    void                    DestroyAttrib( std::unique_ptr<XEditAttribute> pAttr );
 
     ContentInfosType&       GetContents() { return aContents;}
     const ContentInfosType& GetContents() const { return aContents;}

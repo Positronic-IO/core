@@ -39,9 +39,7 @@
 
 
 ImpXPolygon::ImpXPolygon(sal_uInt16 nInitSize, sal_uInt16 _nResize)
-    : pPointAry(nullptr)
-    , pFlagAry(nullptr)
-    , pOldPointAry(nullptr)
+    : pOldPointAry(nullptr)
     , bDeleteOldPoints(false)
     , nSize(0)
     , nResize(_nResize)
@@ -51,9 +49,7 @@ ImpXPolygon::ImpXPolygon(sal_uInt16 nInitSize, sal_uInt16 _nResize)
 }
 
 ImpXPolygon::ImpXPolygon( const ImpXPolygon& rImpXPoly )
-    : pPointAry(nullptr)
-    , pFlagAry(nullptr)
-    , pOldPointAry(nullptr)
+    : pOldPointAry(nullptr)
     , bDeleteOldPoints(false)
     , nSize(0)
     , nResize(rImpXPoly.nResize)
@@ -859,10 +855,9 @@ XPolyPolygon::XPolyPolygon( XPolyPolygon&& ) = default;
 XPolyPolygon::XPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPolygon)
     : pImpXPolyPolygon()
 {
-    for(sal_uInt32 a(0); a < rPolyPolygon.count(); a++)
+    for(auto const& rCandidate : rPolyPolygon)
     {
-        const basegfx::B2DPolygon aCandidate = rPolyPolygon.getB2DPolygon(a);
-        Insert(XPolygon(aCandidate));
+        Insert(XPolygon(rCandidate));
     }
 }
 

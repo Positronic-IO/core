@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.0 -->
+<!-- Generated with glade 3.20.4 -->
 <interface domain="sd">
   <requires lib="gtk+" version="3.18"/>
   <requires lib="LibreOffice" version="1.0"/>
@@ -25,6 +25,7 @@
             <property name="halign">end</property>
             <property name="label" translatable="yes" context="sidebarslidebackground|label2">_Format:</property>
             <property name="use_underline">True</property>
+            <property name="mnemonic_widget">paperformat</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
@@ -37,6 +38,8 @@
             <property name="can_focus">False</property>
             <property name="halign">end</property>
             <property name="label" translatable="yes" context="sidebarslidebackground|label3">Background:</property>
+            <property name="use_underline">True</property>
+            <property name="mnemonic_widget">fillstyle</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
@@ -84,12 +87,11 @@
         <child>
           <object class="GtkCheckButton" id="displaymasterobjects">
             <property name="label" translatable="yes" context="sidebarslidebackground|displaymasterobjects">Master Objects</property>
-            <property name="use_action_appearance">True</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">False</property>
-            <property name="use_underline">True</property>
             <property name="hexpand">True</property>
+            <property name="use_underline">True</property>
             <property name="xalign">0</property>
             <property name="draw_indicator">True</property>
           </object>
@@ -123,7 +125,7 @@
         </child>
         <child>
           <object class="GtkButton" id="button2">
-            <property name="label" translatable="yes" context="sidebarslidebackground|button2">Insert Image</property>
+            <property name="label" translatable="yes" context="sidebarslidebackground|button2">Insert Image...</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
@@ -165,8 +167,8 @@
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">False</property>
-            <property name="use_underline">True</property>
             <property name="hexpand">True</property>
+            <property name="use_underline">True</property>
             <property name="xalign">0</property>
             <property name="draw_indicator">True</property>
           </object>
@@ -192,6 +194,8 @@
             <property name="can_focus">False</property>
             <property name="halign">end</property>
             <property name="label" translatable="yes" context="sidebarslidebackground|label4">Orientation:</property>
+            <property name="use_underline">True</property>
+            <property name="mnemonic_widget">orientation</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
@@ -221,7 +225,6 @@
             <child>
               <object class="GtkButton" id="closemasterslide">
                 <property name="label" translatable="yes" context="sidebarslidebackground|closemasterslide">Close Master View</property>
-                <property name="visible">False</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
               </object>
@@ -241,15 +244,6 @@
           <object class="GtkComboBoxText" id="marginLB">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <items>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">None</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Narrow</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Moderate</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Normal 0.75"</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Normal 1"</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Normal 1.25"</item>
-              <item translatable="yes" context="sidebarslidebackground|marginLB">Wide</item>
-            </items>
           </object>
           <packing>
             <property name="left_attach">1</property>
@@ -262,6 +256,8 @@
             <property name="can_focus">False</property>
             <property name="halign">end</property>
             <property name="label" translatable="yes" context="sidebarslidebackground|labelmargin">Margin:</property>
+            <property name="use_underline">True</property>
+            <property name="mnemonic_widget">marginLB</property>
           </object>
           <packing>
             <property name="left_attach">0</property>

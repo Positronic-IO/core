@@ -24,8 +24,8 @@
 #include <strings.hrc>
 #include <dialmgr.hxx>
 
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 
 enum MSFltrPg2_CheckBoxEntries {
     Math,
@@ -202,7 +202,7 @@ bool OfaMSFilterTabPage2::FillItemSet( SfxItemSet* )
         MSFltrPg2_CheckBoxEntries eType;
         bool (SvtFilterOptions:: *FnIs)() const;
         void (SvtFilterOptions:: *FnSet)( bool bFlag );
-    } aChkArr[] = {
+    } const aChkArr[] = {
         { Math,     &SvtFilterOptions::IsMathType2Math,
                         &SvtFilterOptions::SetMathType2Math },
         { Math,     &SvtFilterOptions::IsMath2MathType,
@@ -279,7 +279,7 @@ void OfaMSFilterTabPage2::Reset( const SfxItemSet* )
     static struct ChkCBoxEntries{
         MSFltrPg2_CheckBoxEntries eType;
         bool (SvtFilterOptions:: *FnIs)() const;
-    } aChkArr[] = {
+    } const aChkArr[] = {
         { Math,     &SvtFilterOptions::IsMathType2Math },
         { Math,     &SvtFilterOptions::IsMath2MathType },
         { Writer,   &SvtFilterOptions::IsWinWord2Writer },
@@ -368,13 +368,13 @@ void OfaMSFilterTabPage2::MSFltrSimpleTable::SetTabs()
 
     if( aTabs.size() > 1 )
     {
-        SvLBoxTab* pTab = aTabs[1];
+        SvLBoxTab* pTab = aTabs[1].get();
         pTab->nFlags &= ~nAdjust;
         pTab->nFlags |= SvLBoxTabFlags::PUSHABLE|SvLBoxTabFlags::ADJUST_CENTER|SvLBoxTabFlags::FORCE;
     }
     if( aTabs.size() > 2 )
     {
-        SvLBoxTab* pTab = aTabs[2];
+        SvLBoxTab* pTab = aTabs[2].get();
         pTab->nFlags &= ~nAdjust;
         pTab->nFlags |= SvLBoxTabFlags::PUSHABLE|SvLBoxTabFlags::ADJUST_CENTER|SvLBoxTabFlags::FORCE;
     }

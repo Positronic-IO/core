@@ -23,6 +23,7 @@
 #include <unotools/saveopt.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/lang/Locale.hpp>
 
@@ -146,7 +147,7 @@ bool XMLCharScriptHdl::equals( const css::uno::Any& r1, const css::uno::Any& r2 
         bool bEmptyVariant2 = aLocale2.Variant.isEmpty();
         if (bEmptyVariant1 && bEmptyVariant2)
             bRet = true;
-        else if ((bEmptyVariant1 && !bEmptyVariant2) || (!bEmptyVariant1 && bEmptyVariant2))
+        else if (bEmptyVariant1 != bEmptyVariant2)
             ;   // stays false
         else
         {

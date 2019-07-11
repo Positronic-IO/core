@@ -24,7 +24,7 @@
 #include <docsh.hxx>
 #include <sc.hrc>
 
-static inline sal_uLong TimeNow()          // seconds
+static sal_uLong TimeNow()          // seconds
 {
     return static_cast<sal_uLong>(time(nullptr));
 }
@@ -33,7 +33,7 @@ namespace {
 
 class FindByRange
 {
-    ScRange maRange;
+    ScRange const maRange;
 public:
     explicit FindByRange(const ScRange& r) : maRange(r) {}
     bool operator() (const ScAutoStyleData& rData) const { return rData.aRange == maRange; }
@@ -41,7 +41,7 @@ public:
 
 class FindByTimeout
 {
-    sal_uLong mnTimeout;
+    sal_uLong const mnTimeout;
 public:
     explicit FindByTimeout(sal_uLong n) : mnTimeout(n) {}
     bool operator() (const ScAutoStyleData& rData) const { return rData.nTimeout >= mnTimeout; }
@@ -113,7 +113,7 @@ void ScAutoStyleList::AddEntry( sal_uLong nTimeout, const ScRange& rRange, const
 
     if (!aEntries.empty() && nNow != nTimerStart)
     {
-        OSL_ENSURE(nNow>nTimerStart, "Zeit laeuft rueckwaerts?");
+        OSL_ENSURE(nNow>nTimerStart, "Time is running backwards?");
         AdjustEntries((nNow-nTimerStart)*1000);
     }
 
@@ -187,7 +187,7 @@ void ScAutoStyleList::StartTimer( sal_uLong nNow )      // seconds
 IMPL_LINK_NOARG(ScAutoStyleList, TimerHdl, Timer *, void)
 {
     sal_uLong nNow = TimeNow();
-    AdjustEntries(aTimer.GetTimeout());             // eingestellte Wartezeit
+    AdjustEntries(aTimer.GetTimeout());             // the set waiting time
     ExecuteEntries();
     StartTimer(nNow);
 }

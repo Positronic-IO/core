@@ -43,6 +43,7 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <svtools/statusbarcontroller.hxx>
 
+#include <vcl/commandevent.hxx>
 #include <vcl/status.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -112,6 +113,9 @@ StatusBarItemBits impl_convertItemStyleToItemBits( sal_Int16 nStyle )
         nItemBits |= StatusBarItemBits::AutoSize;
     if ( nStyle & css::ui::ItemStyle::OWNER_DRAW )
         nItemBits |= StatusBarItemBits::UserDraw;
+
+    if ( nStyle & css::ui::ItemStyle::MANDATORY )
+        nItemBits |= StatusBarItemBits::Mandatory;
 
     return nItemBits;
 }
@@ -367,9 +371,8 @@ void StatusBarManager::CreateControllers()
                 }
             }
 
-            if ( pController )
-                xController.set(static_cast< ::cppu::OWeakObject *>( pController ),
-                                uno::UNO_QUERY );
+            xController.set(static_cast< ::cppu::OWeakObject *>( pController ),
+                            uno::UNO_QUERY );
         }
 
         m_aControllerMap[nId] = xController;
@@ -474,7 +477,7 @@ void StatusBarManager::FillStatusBar( const uno::Reference< container::XIndexAcc
         for ( sal_uInt32 i = 0; i < nCount; i++ )
         {
             MergeStatusbarInstruction &rInstruction = aMergeInstructions[i];
-            if ( !StatusbarMerger::IsCorrectContext( rInstruction.aMergeContext, "" ) )
+            if ( !StatusbarMerger::IsCorrectContext( rInstruction.aMergeContext ) )
                 continue;
 
             AddonStatusbarItemContainer aItems;

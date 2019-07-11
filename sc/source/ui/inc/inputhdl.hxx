@@ -22,17 +22,18 @@
 
 #include <global.hxx>
 #include <address.hxx>
+#include <tools/solar.h>
 #include <typedstrdata.hxx>
 
 #include <tools/fract.hxx>
 #include <tools/gen.hxx>
 #include <tools/link.hxx>
-#include <vcl/vclevent.hxx>
 #include <vcl/vclptr.hxx>
 #include <editeng/svxenum.hxx>
 
 #include <set>
 #include <memory>
+#include <vector>
 
 class ScDocument;
 class ScTabViewShell;
@@ -46,8 +47,8 @@ class ScRangeFindList;
 class Timer;
 class KeyEvent;
 class CommandEvent;
-
-struct ESelection;
+class VclWindowEvent;
+namespace vcl { class Window; }
 
 //  ScInputHandler
 

@@ -29,6 +29,7 @@
 #include <basegfx/polygon/b2dpolygontriangulator.hxx>
 #include <basegfx/polygon/b2dpolypolygoncutter.hxx>
 #include <basegfx/polygon/b2dtrapezoid.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/opengl/OpenGLHelper.hxx>
 #include <salgdi.hxx>
@@ -68,8 +69,7 @@ public:
 };
 
 OpenGLSalGraphicsImpl::OpenGLSalGraphicsImpl(SalGraphics& rParent, SalGeometryProvider *pProvider)
-    : mpContext(nullptr)
-    , mrParent(rParent)
+    : mrParent(rParent)
     , mpProvider(pProvider)
     , mpProgram(nullptr)
     , mpFlush(new OpenGLFlushIdle(this))
@@ -132,11 +132,9 @@ bool OpenGLSalGraphicsImpl::AcquireContext( bool bForceCreate )
     return mpContext.is();
 }
 
-bool OpenGLSalGraphicsImpl::ReleaseContext()
+void OpenGLSalGraphicsImpl::ReleaseContext()
 {
     mpContext.clear();
-
-    return true;
 }
 
 void OpenGLSalGraphicsImpl::Init()
@@ -474,7 +472,7 @@ void OpenGLSalGraphicsImpl::SetFillColor( Color nColor )
 }
 
 // enable/disable XOR drawing
-void OpenGLSalGraphicsImpl::SetXORMode( bool bSet )
+void OpenGLSalGraphicsImpl::SetXORMode( bool bSet, bool )
 {
     if (mbXORMode != bSet)
     {
@@ -901,7 +899,7 @@ void OpenGLSalGraphicsImpl::DrawPolyPolygon( const basegfx::B2DPolyPolygon& rPol
     basegfx::B2DTrapezoidVector aB2DTrapVector;
     basegfx::utils::trapezoidSubdivide( aB2DTrapVector, aSimplePolyPolygon );
     // draw tessellation result
-    if( aB2DTrapVector.size())
+    if( !aB2DTrapVector.empty())
     {
         for(basegfx::B2DTrapezoid & i : aB2DTrapVector)
             DrawTrapezoid( i, blockAA );
@@ -1550,8 +1548,15 @@ void OpenGLSalGraphicsImpl::drawPolyLine( sal_uInt32 nPoints, const SalPoint* pP
         aPoly.setB2DPoint(i, basegfx::B2DPoint(pPtAry[i].mnX, pPtAry[i].mnY));
     aPoly.setClosed(false);
 
-    drawPolyLine(aPoly, 0.0, basegfx::B2DVector(1.0, 1.0), basegfx::B2DLineJoin::Miter,
-                 css::drawing::LineCap_BUTT, 15.0 * F_PI180 /*default*/);
+    drawPolyLine(
+        basegfx::B2DHomMatrix(),
+        aPoly,
+        0.0,
+        basegfx::B2DVector(1.0, 1.0),
+        basegfx::B2DLineJoin::Miter,
+        css::drawing::LineCap_BUTT,
+        basegfx::deg2rad(15.0) /*default*/,
+        false);
 }
 
 void OpenGLSalGraphicsImpl::drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry )
@@ -1562,7 +1567,10 @@ void OpenGLSalGraphicsImpl::drawPolygon( sal_uInt32 nPoints, const SalPoint* pPt
     for (sal_uInt32 i = 1; i < nPoints; ++i)
         aPoly.setB2DPoint(i, basegfx::B2DPoint(pPtAry[i].mnX, pPtAry[i].mnY));
 
-    drawPolyPolygon(basegfx::B2DPolyPolygon(aPoly), 0.0);
+    drawPolyPolygon(
+        basegfx::B2DHomMatrix(),
+        basegfx::B2DPolyPolygon(aPoly),
+        0.0);
 }
 
 void OpenGLSalGraphicsImpl::drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPointCounts, PCONSTSALPOINT* pPtAry )
@@ -1584,25 +1592,72 @@ void OpenGLSalGraphicsImpl::drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32*
         }
     }
 
-    drawPolyPolygon(aPolyPoly, 0.0);
+    drawPolyPolygon(
+        basegfx::B2DHomMatrix(),
+        aPolyPoly,
+        0.0);
 }
 
-bool OpenGLSalGraphicsImpl::drawPolyPolygon(const basegfx::B2DPolyPolygon& rPolyPolygon, double fTransparency)
+bool OpenGLSalGraphicsImpl::drawPolyPolygon(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolyPolygon& rPolyPolygon,
+    double fTransparency)
 {
     VCL_GL_INFO("::drawPolyPolygon " << rPolyPolygon.getB2DRange());
-    mpRenderList->addDrawPolyPolygon(rPolyPolygon, fTransparency, mnLineColor, mnFillColor, mrParent.getAntiAliasB2DDraw());
+
+    // Fallback: Transform to DeviceCoordinates
+    basegfx::B2DPolyPolygon aPolyPolygon(rPolyPolygon);
+    aPolyPolygon.transform(rObjectToDevice);
+
+    // FlushLinesOrTriangles() works with a 0.5 pixel offset, compensate for that here.
+    basegfx::B2DHomMatrix aMatrix;
+    aMatrix.translate(-0.5f, -0.5f);
+    aPolyPolygon.transform(aMatrix);
+
+    mpRenderList->addDrawPolyPolygon(
+        aPolyPolygon,
+        fTransparency,
+        mnLineColor,
+        mnFillColor,
+        mrParent.getAntiAliasB2DDraw());
+
     PostBatchDraw();
     return true;
 }
 
-bool OpenGLSalGraphicsImpl::drawPolyLine(const basegfx::B2DPolygon& rPolygon, double fTransparency,
-                                         const basegfx::B2DVector& rLineWidth, basegfx::B2DLineJoin eLineJoin,
-                                         css::drawing::LineCap eLineCap, double fMiterMinimumAngle)
+bool OpenGLSalGraphicsImpl::drawPolyLine(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolygon& rPolygon,
+    double fTransparency,
+    const basegfx::B2DVector& rLineWidth,
+    basegfx::B2DLineJoin eLineJoin,
+    css::drawing::LineCap eLineCap,
+    double fMiterMinimumAngle,
+    bool bPixelSnapHairline)
 {
     VCL_GL_INFO("::drawPolyLine " << rPolygon.getB2DRange());
 
-    mpRenderList->addDrawPolyLine(rPolygon, fTransparency, rLineWidth, eLineJoin, eLineCap,
-                                  fMiterMinimumAngle, mnLineColor, mrParent.getAntiAliasB2DDraw());
+    // Transform to DeviceCoordinates, get DeviceLineWidth, execute PixelSnapHairline
+    basegfx::B2DPolygon aPolyLine(rPolygon);
+    aPolyLine.transform(rObjectToDevice);
+    if(bPixelSnapHairline) { aPolyLine = basegfx::utils::snapPointsOfHorizontalOrVerticalEdges(aPolyLine); }
+    const basegfx::B2DVector aLineWidth(rObjectToDevice * rLineWidth);
+
+    // addDrawPolyLine() assumes that there are no duplicate points in the
+    // polygon.
+    // basegfx::B2DPolygon aPolygon(rPolygon);
+    aPolyLine.removeDoublePoints();
+
+    mpRenderList->addDrawPolyLine(
+        aPolyLine,
+        fTransparency,
+        aLineWidth,
+        eLineJoin,
+        eLineCap,
+        fMiterMinimumAngle,
+        mnLineColor,
+        mrParent.getAntiAliasB2DDraw());
+
     PostBatchDraw();
     return true;
 }
@@ -1696,7 +1751,19 @@ void OpenGLSalGraphicsImpl::drawBitmap( const SalTwoRect& rPosAry, const SalBitm
 
     VCL_GL_INFO( "::drawBitmap" );
     PreDraw();
-    DrawTexture( rTexture, rPosAry );
+    if (rPosAry.mnSrcWidth  != rPosAry.mnDestWidth ||
+        rPosAry.mnSrcHeight != rPosAry.mnDestHeight)
+    {
+        basegfx::B2DPoint aNull(rPosAry.mnDestX,rPosAry.mnDestY);
+        basegfx::B2DPoint aX(rPosAry.mnDestX + rPosAry.mnDestWidth, rPosAry.mnDestY);
+        basegfx::B2DPoint aY(rPosAry.mnDestX, rPosAry.mnDestY + rPosAry.mnDestHeight);
+        OpenGLTexture mask; // no mask set
+        DrawTransformedTexture(rTexture, mask, aNull, aX, aY);
+    }
+    else
+    {
+        DrawTexture( rTexture, rPosAry );
+    }
     PostDraw();
 }
 
@@ -1722,22 +1789,18 @@ void OpenGLSalGraphicsImpl::drawMask(
     PostBatchDraw();
 }
 
-SalBitmap* OpenGLSalGraphicsImpl::getBitmap( long nX, long nY, long nWidth, long nHeight )
+std::shared_ptr<SalBitmap> OpenGLSalGraphicsImpl::getBitmap( long nX, long nY, long nWidth, long nHeight )
 {
     FlushDeferredDrawing();
 
     OpenGLZone aZone;
 
-    OpenGLSalBitmap* pBitmap = new OpenGLSalBitmap;
+    std::shared_ptr<OpenGLSalBitmap> pBitmap(std::make_shared<OpenGLSalBitmap>());
     VCL_GL_INFO( "::getBitmap " << nX << "," << nY <<
               " " << nWidth << "x" << nHeight );
     //TODO really needed?
     PreDraw();
-    if( !pBitmap->Create( maOffscreenTex, nX, nY, nWidth, nHeight ) )
-    {
-        delete pBitmap;
-        pBitmap = nullptr;
-    }
+    pBitmap->Create( maOffscreenTex, nX, nY, nWidth, nHeight );
     PostDraw();
     return pBitmap;
 }
@@ -1786,7 +1849,41 @@ void OpenGLSalGraphicsImpl::invert( sal_uInt32 nPoints, const SalPoint* pPtAry, 
     PreDraw();
 
     if( UseInvert( nFlags ) )
-        DrawPolygon( nPoints, pPtAry );
+    {
+        if (nFlags & SalInvert::TrackFrame)
+        {
+            // Track frame means the invert50FragmentShader must remain active
+            // (to draw what looks like a dashed line), so DrawLineSegment()
+            // can't be used. Draw the edge of the polygon as polygons instead.
+            for (size_t nPoint = 0; nPoint < nPoints; ++nPoint)
+            {
+                const SalPoint& rFrom = pPtAry[nPoint];
+                const SalPoint& rTo = pPtAry[(nPoint + 1) % nPoints];
+                if (rFrom.mnX == rTo.mnX)
+                {
+                    // Extend to the right, comments assuming "to" is above
+                    // "from":
+                    const SalPoint aPoints[] = { { rFrom.mnX + 1, rFrom.mnY }, // bottom right
+                                                 { rFrom.mnX, rFrom.mnY }, // bottom left
+                                                 { rTo.mnX, rTo.mnY }, // top left
+                                                 { rTo.mnX + 1, rTo.mnY } }; // top right
+                    DrawConvexPolygon(4, aPoints, true);
+                }
+                else
+                {
+                    // Otherwise can extend downwards, comments assuming "to"
+                    // is above and on the right of "from":
+                    const SalPoint aPoints[] = { { rFrom.mnX, rFrom.mnY + 1 }, // bottom left
+                                                 { rFrom.mnX, rFrom.mnY }, // top left
+                                                 { rTo.mnX, rTo.mnY }, // top right
+                                                 { rTo.mnX, rTo.mnY + 1 } }; // bottom right
+                    DrawConvexPolygon(4, aPoints, true);
+                }
+            }
+        }
+        else
+            DrawPolygon(nPoints, pPtAry);
+    }
 
     PostDraw();
 }

@@ -26,11 +26,13 @@
 #include <tools/globname.hxx>
 #include <editeng/outliner.hxx>
 #include <com/sun/star/embed/EmbedMisc.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 
 #include <swtypes.hxx>
 #include <pagefrm.hxx>
 #include <rootfrm.hxx>
 #include <cntfrm.hxx>
+#include <notxtfrm.hxx>
 #include <flyfrm.hxx>
 #include <frmfmt.hxx>
 #include <dflyobj.hxx>
@@ -58,6 +60,7 @@
 #include <sortedobjs.hxx>
 #include <flyfrms.hxx>
 #include <UndoManager.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star;
 
@@ -129,7 +132,7 @@ bool SwDrawView::IsAntiAliasing() const
     return getOptionsDrawinglayer().IsAntiAliasing();
 }
 
-SdrObject* impLocalHitCorrection(SdrObject* pRetval, const Point& rPnt, sal_uInt16 nTol, const SdrMarkList &rMrkList)
+static SdrObject* impLocalHitCorrection(SdrObject* pRetval, const Point& rPnt, sal_uInt16 nTol, const SdrMarkList &rMrkList)
 {
     if(!nTol)
     {
@@ -242,7 +245,7 @@ void SwDrawView::AddCustomHdl()
     }
 
     // add anchor handle:
-    maHdlList.AddHdl( new SwSdrHdl( aPos, ( pAnch->IsVertical() && !pAnch->IsVertLR() ) ||
+    maHdlList.AddHdl( o3tl::make_unique<SwSdrHdl>( aPos, ( pAnch->IsVertical() && !pAnch->IsVertLR() ) ||
                                      pAnch->IsRightToLeft() ) );
 }
 
@@ -315,7 +318,7 @@ sal_uInt32 SwDrawView::GetMaxChildOrdNum( const SwFlyFrame& _rParentObj,
 {
     sal_uInt32 nMaxChildOrdNum = _rParentObj.GetDrawObj()->GetOrdNum();
 
-    const SdrPage* pDrawPage = _rParentObj.GetDrawObj()->GetPage();
+    const SdrPage* pDrawPage = _rParentObj.GetDrawObj()->getSdrPageFromSdrObject();
     OSL_ENSURE( pDrawPage,
             "<SwDrawView::GetMaxChildOrdNum(..) - missing drawing page at parent object - crash!" );
 
@@ -385,10 +388,8 @@ void SwDrawView::MoveRepeatedObjs( const SwAnchoredObject& _rMovedAnchoredObj,
         }
 
         // move 'repeated' ones of 'child' objects
-        for ( std::vector<SdrObject*>::const_iterator aObjIter = _rMovedChildObjs.begin();
-              aObjIter != _rMovedChildObjs.end(); ++aObjIter )
+        for ( SdrObject* pChildObj : _rMovedChildObjs )
         {
-            SdrObject* pChildObj = (*aObjIter);
             {
                 const SwContact* pContact = ::GetUserCall( pChildObj );
                 assert(pContact && "SwDrawView::MoveRepeatedObjs(..) - missing contact object -> crash.");
@@ -428,7 +429,7 @@ void SwDrawView::ObjOrderChanged( SdrObject* pObj, size_t nOldPos,
                                           size_t nNewPos )
 {
     // nothing to do for group members
-    if ( pObj->GetUpGroup() )
+    if ( pObj->getParentSdrObjectFromSdrObject() )
     {
         return;
     }
@@ -832,9 +833,9 @@ void SwDrawView::CheckPossibilities()
                 pFrame = pFly->GetAnchorFrame();
                 if ( pFly->Lower() && pFly->Lower()->IsNoTextFrame() )
                 {
-                    const SwContentFrame* pCntFr(static_cast<const SwContentFrame*>(pFly->Lower()));
-                    const SwOLENode* pOLENd = pCntFr->GetNode()->GetOLENode();
-                    const SwGrfNode* pGrfNd = pCntFr->GetNode()->GetGrfNode();
+                    const SwNoTextFrame *const pNTF(static_cast<const SwNoTextFrame*>(pFly->Lower()));
+                    const SwOLENode *const pOLENd = pNTF->GetNode()->GetOLENode();
+                    const SwGrfNode *const pGrfNd = pNTF->GetNode()->GetGrfNode();
 
                     if ( pOLENd )
                     {
@@ -854,7 +855,7 @@ void SwDrawView::CheckPossibilities()
                                     && RndStdIds::FLY_AS_CHAR == pFly->GetFormat()->GetAnchor().GetAnchorId()
                                     && pDoc->GetDocumentSettingManager().get( DocumentSettingId::MATH_BASELINE_ALIGNMENT );
                             if (bProtectMathPos)
-                                bMoveProtect = true;
+                                m_bMoveProtect = true;
                         }
                     }
                     else if(pGrfNd)
@@ -889,12 +890,12 @@ void SwDrawView::CheckPossibilities()
             }
         }
     }
-    bMoveProtect    |= bProtect;
-    bResizeProtect  |= bProtect || bSzProtect;
+    m_bMoveProtect    |= bProtect;
+    m_bResizeProtect  |= bProtect || bSzProtect;
 
     // RotGrfFlyFrame: allow rotation when SwGrfNode is selected and not size protected
-    bRotateFreeAllowed |= bRotate && !bProtect;
-    bRotate90Allowed |= bRotateFreeAllowed;
+    m_bRotateFreeAllowed |= bRotate && !bProtect;
+    m_bRotate90Allowed |= m_bRotateFreeAllowed;
 }
 
 /// replace marked <SwDrawVirtObj>-objects by its reference object for delete marked objects.
@@ -952,16 +953,9 @@ void SwDrawView::DeleteMarked()
         pTmpRoot->StartAllAction();
     pDoc->GetIDocumentUndoRedo().StartUndo(SwUndoId::EMPTY, nullptr);
     // replace marked <SwDrawVirtObj>-objects by its reference objects.
+    if (SdrPageView* pDrawPageView = m_rImp.GetPageView())
     {
-        SdrPageView* pDrawPageView = m_rImp.GetPageView();
-        if ( pDrawPageView )
-        {
-            SdrMarkView* pMarkView = &(pDrawPageView->GetView());
-            if ( pMarkView )
-            {
-                ReplaceMarkedDrawVirtObjs( *pMarkView );
-            }
-        }
+        ReplaceMarkedDrawVirtObjs(pDrawPageView->GetView());
     }
 
     // Check what textboxes have to be deleted afterwards.
@@ -982,8 +976,8 @@ void SwDrawView::DeleteMarked()
         ::FrameNotify( Imp().GetShell(), FLY_DRAG_END );
 
         // Only delete these now: earlier deletion would clear the mark list as well.
-        for (std::vector<SwFrameFormat*>::iterator i = aTextBoxesToDelete.begin(); i != aTextBoxesToDelete.end(); ++i)
-            pDoc->getIDocumentLayoutAccess().DelLayoutFormat(*i);
+        for (auto& rpTextBox : aTextBoxesToDelete)
+            pDoc->getIDocumentLayoutAccess().DelLayoutFormat(rpTextBox);
     }
     pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::EMPTY, nullptr);
     if( pTmpRoot )

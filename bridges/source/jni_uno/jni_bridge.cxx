@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 #include <memory>
@@ -421,7 +422,7 @@ using namespace ::jni_uno;
 
 extern "C" {
 
-void java_env_dispose(uno_Environment * env) {
+static void java_env_dispose(uno_Environment * env) {
     auto * envData
         = static_cast<jni_uno::JniUnoEnvironmentData *>(env->pContext);
     if (envData != nullptr) {
@@ -455,7 +456,7 @@ void java_env_dispose(uno_Environment * env) {
     }
 }
 
-void java_env_disposing(uno_Environment * env) {
+static void java_env_disposing(uno_Environment * env) {
     java_env_dispose(env);
     delete static_cast<jni_uno::JniUnoEnvironmentData *>(env->pContext);
 }
@@ -551,7 +552,7 @@ SAL_DLLPUBLIC_EXPORT void uno_ext_getMapping(
             uno_registerMapping(
                 &mapping, Bridge_free,
                 pFrom, &pTo->pExtEnv->aBase, nullptr );
-            // coverity[leaked_storage]
+            // coverity[leaked_storage] - on purpose
         }
         else if ( from_env_typename == UNO_LB_UNO && to_env_typename == UNO_LB_JAVA )
         {
@@ -561,7 +562,7 @@ SAL_DLLPUBLIC_EXPORT void uno_ext_getMapping(
             uno_registerMapping(
                 &mapping, Bridge_free,
                 &pFrom->pExtEnv->aBase, pTo, nullptr );
-            // coverity[leaked_storage]
+            // coverity[leaked_storage] - on purpose
         }
     }
     catch (const BridgeRuntimeError & err)

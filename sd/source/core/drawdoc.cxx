@@ -100,6 +100,7 @@
 #include <undopage.hxx>
 #include <tools/tenccvt.hxx>
 #include <vcl/settings.hxx>
+#include <unokywds.hxx>
 
 using namespace ::sd;
 using namespace ::com::sun::star;
@@ -131,14 +132,9 @@ PresentationSettings::PresentationSettings()
 }
 
 SdDrawDocument::SdDrawDocument(DocumentType eType, SfxObjectShell* pDrDocSh)
-: FmFormModel( !utl::ConfigManager::IsFuzzing() ? SvtPathOptions().GetPalettePath() : OUString(), nullptr, pDrDocSh )
-, mpOutliner(nullptr)
-, mpInternalOutliner(nullptr)
-, mpWorkStartupTimer(nullptr)
-, mpOnlineSpellingIdle(nullptr)
-, mpOnlineSpellingList(nullptr)
-, mpOnlineSearchItem(nullptr)
-, mpCustomShowList(nullptr)
+:   FmFormModel(
+        nullptr,
+        pDrDocSh)
 , mpDocSh(static_cast< ::sd::DrawDocShell*>(pDrDocSh))
 , mpCreatingTransferable( nullptr )
 , mbHasOnlineSpellErrors(false)
@@ -153,8 +149,11 @@ SdDrawDocument::SdDrawDocument(DocumentType eType, SfxObjectShell* pDrDocSh)
 , mePageNumType(SVX_NUM_ARABIC)
 , mbAllocDocSh(false)
 , meDocType(eType)
-, mpCharClass(nullptr)
-, mbUseEmbedFonts(false)
+, mbEmbedFonts(false)
+, mbEmbedUsedFontsOnly(false)
+, mbEmbedFontScriptLatin(true)
+, mbEmbedFontScriptAsian(true)
+, mbEmbedFontScriptComplex(true)
 {
     mpDrawPageListWatcher.reset(new ImpDrawPageListWatcher(*this));
     mpMasterPageListWatcher.reset(new ImpMasterPageListWatcher(*this));
@@ -315,28 +314,34 @@ SdDrawDocument::SdDrawDocument(DocumentType eType, SfxObjectShell* pDrDocSh)
       *
       * We create the following default layers on all pages and master pages:
       *
-      * STR_LAYOUT    : default layer for drawing objects
+      * sUNO_LayerName_layout; "layout": default layer for drawing objects of normal pages
+      * localized by SdResId(STR_LAYER_LAYOUT)
       *
-      * STR_BCKGRND   : background of the master page
-      *                 (currently unused within normal pages)
+      * sUNO_LayerName_background; "background": background of the master page
+      * localized by SdResId(STR_LAYER_BCKGRND)
+      *           (currently unused within normal pages and not visible to users)
       *
-      * STR_BCKGRNDOBJ: objects on the background of master pages
-      *                 (currently unused within normal pages)
+      * sUNO_LayerName_background_objects; "backgroundobjects": objects on the background of master pages
+      * localized by SdResId(STR_LAYER_BCKGRNDOBJ)
+      *           (currently unused within normal pages)
       *
-      * STR_CONTROLS  : default layer for controls
+      * sUNO_LayerName_controls; "controls": default layer for controls
+      * localized by SdResId(STR_LAYER_CONTROLS)
+      *           (currently special handling in regard to z-order)
+      *
+      * sUNO_LayerName_measurelines; "measurelines" : default layer for measure lines
+      * localized by SdResId(STR_LAYER_MEASURELINES)
       */
 
     {
-        OUString aControlLayerName( SdResId(STR_LAYER_CONTROLS) );
-
         SdrLayerAdmin& rLayerAdmin = GetLayerAdmin();
-        rLayerAdmin.NewLayer( SdResId(STR_LAYER_LAYOUT) );
-        rLayerAdmin.NewLayer( SdResId(STR_LAYER_BCKGRND) );
-        rLayerAdmin.NewLayer( SdResId(STR_LAYER_BCKGRNDOBJ) );
-        rLayerAdmin.NewLayer( aControlLayerName );
-        rLayerAdmin.NewLayer( SdResId(STR_LAYER_MEASURELINES) );
+        rLayerAdmin.NewLayer( sUNO_LayerName_layout );
+        rLayerAdmin.NewLayer( sUNO_LayerName_background );
+        rLayerAdmin.NewLayer( sUNO_LayerName_background_objects );
+        rLayerAdmin.NewLayer( sUNO_LayerName_controls);
+        rLayerAdmin.NewLayer( sUNO_LayerName_measurelines );
 
-        rLayerAdmin.SetControlLayerName(aControlLayerName);
+        rLayerAdmin.SetControlLayerName(sUNO_LayerName_controls);
     }
 
 }
@@ -375,19 +380,7 @@ SdDrawDocument::~SdDrawDocument()
     }
 
     maFrameViewList.clear();
-
-    if (mpCustomShowList)
-    {
-        for (sal_uLong j = 0; j < mpCustomShowList->size(); j++)
-        {
-            // If necessary, delete CustomShows
-            SdCustomShow* pCustomShow = (*mpCustomShowList)[j];
-            delete pCustomShow;
-        }
-
-        mpCustomShowList.reset();
-    }
-
+    mpCustomShowList.reset();
     mpOutliner.reset();
     mpInternalOutliner.reset();
     mpCharClass.reset();
@@ -617,9 +610,10 @@ SdDrawDocument* SdDrawDocument::AllocSdDrawDocument() const
                 SfxObjectCreateMode::EMBEDDED, true, meDocType ) );
         else
             mpCreatingTransferable->SetDocShell( new ::sd::GraphicDocShell(
-                SfxObjectCreateMode::EMBEDDED, true, meDocType ) );
+                SfxObjectCreateMode::EMBEDDED ) );
 
-        pNewDocSh = static_cast< ::sd::DrawDocShell*>( pObj = mpCreatingTransferable->GetDocShell().get() );
+        pObj = mpCreatingTransferable->GetDocShell().get();
+        pNewDocSh = static_cast< ::sd::DrawDocShell*>( pObj );
         pNewDocSh->DoInitNew();
         pNewModel = pNewDocSh->GetDoc();
 
@@ -637,7 +631,7 @@ SdDrawDocument* SdDrawDocument::AllocSdDrawDocument() const
             // Move with all of the master page's layouts
             OUString aOldLayoutName(const_cast<SdDrawDocument*>(this)->GetMasterSdPage(i, PageKind::Standard)->GetLayoutName());
             aOldLayoutName = aOldLayoutName.copy( 0, aOldLayoutName.indexOf( SD_LT_SEPARATOR ) );
-            SdStyleSheetVector aCreatedSheets;
+            StyleSheetCopyResultVector aCreatedSheets;
             pNewStylePool->CopyLayoutSheets(aOldLayoutName, *pOldStylePool, aCreatedSheets );
         }
 
@@ -755,9 +749,6 @@ void SdDrawDocument::NewOrLoadCompleted(DocCreationMode eMode)
                 pPage->SetName( aName );
         }
 
-        // Create names of the default layers in the user's language
-        RestoreLayerNames();
-
         // Create names of the styles in the user's language
         static_cast<SdStyleSheetPool*>(mxStyleSheetPool.get())->UpdateStdNames();
 
@@ -805,7 +796,7 @@ void SdDrawDocument::NewOrLoadCompleted(DocCreationMode eMode)
         sal_uInt16 nPage, nPageCount;
 
         // create missing layout style sheets for broken documents
-        //         that where created with the 5.2
+        //         that were created with the 5.2
         nPageCount = GetMasterSdPageCount( PageKind::Standard );
         for (nPage = 0; nPage < nPageCount; nPage++)
         {
@@ -1142,10 +1133,10 @@ void SdDrawDocument::InitLayoutVector()
         ::comphelper::getProcessComponentContext() );
 
     // get file list from configuration
-    Sequence< rtl::OUString > aFiles(
+    Sequence< OUString > aFiles(
         officecfg::Office::Impress::Misc::LayoutListFiles::get(xContext) );
 
-    rtl::OUString sFilename;
+    OUString sFilename;
     for( sal_Int32 i=0; i < aFiles.getLength(); ++i )
     {
         sFilename = comphelper::getExpandedUri(xContext, aFiles[i]);
@@ -1181,10 +1172,10 @@ void SdDrawDocument::InitObjectVector()
         ::comphelper::getProcessComponentContext() );
 
     // get file list from configuration
-    Sequence< rtl::OUString > aFiles(
+    Sequence< OUString > aFiles(
        officecfg::Office::Impress::Misc::PresObjListFiles::get(xContext) );
 
-    rtl::OUString sFilename;
+    OUString sFilename;
     for( sal_Int32 i=0; i < aFiles.getLength(); ++i )
     {
         sFilename = comphelper::getExpandedUri(xContext, aFiles[i]);

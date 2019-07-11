@@ -13,11 +13,13 @@
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <sax/tools/documenthandleradapter.hxx>
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
 

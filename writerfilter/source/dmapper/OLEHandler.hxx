@@ -20,7 +20,6 @@
 #define INCLUDED_WRITERFILTER_SOURCE_DMAPPER_OLEHANDLER_HXX
 
 #include "LoggedResources.hxx"
-#include <memory>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
@@ -53,6 +52,8 @@ class OLEHandler : public LoggedProperties
     OUString     m_sProgId;
     OUString     m_sShapeId;
     OUString     m_sDrawAspect;
+    OUString     m_sVisAreaWidth;
+    OUString     m_sVisAreaHeight;
     OUString     m_sObjectId;
     OUString     m_sr_id;
     /// The stream URL right after the import of the raw data.
@@ -91,6 +92,8 @@ public:
     OUString getCLSID(const css::uno::Reference<css::uno::XComponentContext>& xComponentContext) const;
 
     OUString const & GetDrawAspect() const;
+    OUString const & GetVisAreaWidth() const;
+    OUString const & GetVisAreaHeight() const;
 
     OUString copyOLEOStream(css::uno::Reference<css::text::XTextDocument> const& xTextDocument);
 
@@ -98,7 +101,6 @@ public:
     const css::uno::Reference<css::graphic::XGraphic>& getReplacement() const { return m_xReplacement; }
 
 };
-typedef std::shared_ptr< OLEHandler >  OLEHandlerPtr;
 }}
 
 #endif

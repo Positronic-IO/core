@@ -23,6 +23,7 @@
 
 #include <rtl/strbuf.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <object.hxx>
 #include <globals.hxx>
@@ -250,7 +251,7 @@ void SvMetaClass::FillClasses( SvMetaClassList & rList )
 
 void SvMetaClass::WriteSlotStubs( const OString& rShellName,
                                 SvSlotElementList & rSlotList,
-                                ByteStringList & rList,
+                                std::vector<OString> & rList,
                                 SvStream & rOutStm )
 {
     // write all attributes
@@ -305,10 +306,8 @@ void SvMetaClass::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
     rOutStm << endl;
     rOutStm.WriteCharPtr( "};" ) << endl << endl;
 
-    ByteStringList aStringList;
+    std::vector<OString> aStringList;
     WriteSlotStubs( GetName(), aSlotList, aStringList, rOutStm );
-    for ( size_t i = 0, n = aStringList.size(); i < n; ++i )
-        delete aStringList[ i ];
     aStringList.clear();
 
     rOutStm << endl;

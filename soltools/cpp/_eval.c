@@ -43,12 +43,12 @@ struct value
 /* operator priority, arity, and conversion type, indexed by tokentype */
 struct pri
 {
-    char pri;
-    char arity;
-    char ctype;
+    char const pri;
+    char const arity;
+    char const ctype;
 };
 
-static struct pri priority[] =
+static const struct pri priority[] =
 {
     {
         0, 0, 0
@@ -238,10 +238,10 @@ static struct pri priority[] =
     },                                  /* ARCHITECTURE */
 };
 
-int evalop(struct pri);
-struct value tokval(Token *);
-struct value vals[NSTAK], *vp;
-enum toktype ops[NSTAK], *op;
+static int evalop(struct pri);
+static struct value tokval(Token *);
+static struct value vals[NSTAK], *vp;
+static enum toktype ops[NSTAK], *op;
 
 /*
  * Evaluate an #if #elif #ifdef #ifndef line.  trp->tp points to the keyword.

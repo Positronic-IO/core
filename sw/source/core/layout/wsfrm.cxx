@@ -30,15 +30,19 @@
 #include <viewopt.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
+#include <IDocumentRedlineAccess.hxx>
+#include <redline.hxx>
 #include <fesh.hxx>
 #include <docsh.hxx>
 #include <ftninfo.hxx>
+#include <ftnidx.hxx>
 #include <fmtclbl.hxx>
 #include <fmtfsize.hxx>
 #include <fmtpdsc.hxx>
 #include <txtftn.hxx>
 #include <fmtftn.hxx>
 #include <fmtsrnd.hxx>
+#include <fmtcntnt.hxx>
 #include <ftnfrm.hxx>
 #include <tabfrm.hxx>
 #include <flyfrms.hxx>
@@ -61,7 +65,8 @@ SwFrameAreaDefinition::SwFrameAreaDefinition()
     maFramePrintArea(),
     mbFrameAreaPositionValid(false),
     mbFrameAreaSizeValid(false),
-    mbFramePrintAreaValid(false)
+    mbFramePrintAreaValid(false),
+    mnFrameId(SwFrameAreaDefinition::mnLastFrameId++)
 {
 }
 
@@ -272,27 +277,16 @@ void TransformableSwFrame::restoreFrameAreas()
 }
 
 // transform by given B2DHomMatrix
-void TransformableSwFrame::transform(const basegfx::B2DHomMatrix aTransform)
+void TransformableSwFrame::transform(const basegfx::B2DHomMatrix& aTransform)
 {
-    if(!aTransform.isIdentity())
-    {
-        if(!maFrameAreaTransformation.isIdentity())
-        {
-            maFrameAreaTransformation *= aTransform;
-        }
-
-        if(!maFramePrintAreaTransformation.isIdentity())
-        {
-            maFramePrintAreaTransformation *= aTransform;
-        }
-    }
+    maFrameAreaTransformation *= aTransform;
+    maFramePrintAreaTransformation *= aTransform;
 }
 
 SwFrame::SwFrame( SwModify *pMod, SwFrame* pSib )
 :   SwFrameAreaDefinition(),
     SwClient( pMod ),
     SfxBroadcaster(),
-    mnFrameId( SwFrame::mnLastFrameId++ ),
     mpRoot( pSib ? pSib->getRootFrame() : nullptr ),
     mpUpper(nullptr),
     mpNext(nullptr),
@@ -357,12 +351,12 @@ void SwFrame::CheckDir( SvxFrameDirection nDir, bool bVert, bool bOnlyBiDi, bool
             mbVertLR = false;
         }
         else
-           {
+        {
             mbVertical = true;
             if(SvxFrameDirection::Vertical_RL_TB == nDir)
                 mbVertLR = false;
-               else if(SvxFrameDirection::Vertical_LR_TB==nDir)
-                       mbVertLR = true;
+            else if(SvxFrameDirection::Vertical_LR_TB==nDir)
+                mbVertLR = true;
         }
     }
     else
@@ -456,8 +450,8 @@ void SwTextFrame::CheckDirection( bool bVert )
 {
     const SwViewShell *pSh = getRootFrame()->GetCurrShell();
     const bool bBrowseMode = pSh && pSh->GetViewOptions()->getBrowseMode();
-    CheckDir( GetNode()->GetSwAttrSet().GetFrameDir().GetValue(), bVert,
-              true, bBrowseMode );
+    CheckDir(GetTextNodeForParaProps()->GetSwAttrSet().GetFrameDir().GetValue(),
+             bVert, true, bBrowseMode);
 }
 
 void SwFrame::Modify( const SfxPoolItem* pOld, const SfxPoolItem * pNew )
@@ -678,9 +672,33 @@ void SwFrame::InvalidatePage( const SwPageFrame *pPage ) const
         }
         pRoot->SetIdleFlags();
 
-        const SwTextNode *pTextNode = dynamic_cast< const SwTextNode * >(GetDep());
-        if (pTextNode && pTextNode->IsGrammarCheckDirty())
-            pRoot->SetNeedGrammarCheck( true );
+        if (IsTextFrame())
+        {
+            SwTextFrame const*const pText(static_cast<SwTextFrame const*>(this));
+            if (sw::MergedPara const*const pMergedPara = pText->GetMergedPara())
+            {
+                SwTextNode const* pNode(nullptr);
+                for (auto const& e : pMergedPara->extents)
+                {
+                    if (e.pNode != pNode)
+                    {
+                        pNode = e.pNode;
+                        if (pNode->IsGrammarCheckDirty())
+                        {
+                            pRoot->SetNeedGrammarCheck( true );
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (pText->GetTextNodeFirst()->IsGrammarCheckDirty())
+                {
+                    pRoot->SetNeedGrammarCheck( true );
+                }
+            }
+        }
     }
 }
 
@@ -2358,7 +2376,7 @@ void SwContentFrame::UpdateAttr_( const SfxPoolItem* pOld, const SfxPoolItem* pN
                 SwPageFrame *pPage = FindPageFrame();
                 if ( !GetPrev() )
                     CheckPageDescs( pPage );
-                if ( GetAttrSet()->GetPageDesc().GetNumOffset() )
+                if (GetPageDescItem().GetNumOffset())
                     static_cast<SwRootFrame*>(pPage->GetUpper())->SetVirtPageNum( true );
                 SwDocPosUpdate aMsgHint( pPage->getFrameArea().Top() );
                 pPage->GetFormat()->GetDoc()->getIDocumentFieldsAccess().UpdatePageFields( &aMsgHint );
@@ -2864,8 +2882,7 @@ SwTwips SwLayoutFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
                 SetRetouche();
             if ( IsTabFrame() )
             {
-                if( IsTabFrame() )
-                    static_cast<SwTabFrame*>(this)->SetComplete();
+                static_cast<SwTabFrame*>(this)->SetComplete();
                 if ( Lower() )  // Can also be in the Join and be empty!
                     InvalidateNextPos();
             }
@@ -2900,7 +2917,7 @@ SwTwips SwLayoutFrame::ShrinkFrame( SwTwips nDist, bool bTst, bool bInfo )
               nullptr != (pCnt = static_cast<SwFootnoteFrame*>(this)->GetRefFromAttr() ) )
         {
             if ( pCnt->IsFollow() )
-            {   // If we are in an other column/page than the frame with the
+            {   // If we are in another column/page than the frame with the
                 // reference, we don't need to invalidate its master.
                 SwFrame *pTmp = pCnt->FindFootnoteBossFrame(true) == FindFootnoteBossFrame(true)
                               ?  &pCnt->FindMaster()->GetFrame() : pCnt;
@@ -4138,6 +4155,430 @@ void SwRootFrame::InvalidateAllObjPos()
 
         pPageFrame = static_cast<const SwPageFrame*>(pPageFrame->GetNext());
     }
+}
+
+static void AddRemoveFlysForNode(
+        SwTextFrame & rFrame, SwTextNode & rTextNode,
+        std::set<sal_uLong> *const pSkipped,
+        SwFrameFormats & rTable,
+        SwPageFrame *const pPage,
+        SwTextNode const*const pNode,
+        std::vector<sw::Extent>::const_iterator & rIterFirst,
+        std::vector<sw::Extent>::const_iterator const& rIterEnd)
+{
+    if (pNode == &rTextNode)
+    {   // remove existing hidden at-char anchored flys
+        RemoveHiddenObjsOfNode(rTextNode, &rIterFirst, &rIterEnd);
+    }
+    else if (rTextNode.GetIndex() < pNode->GetIndex())
+    {
+        // pNode's frame has been deleted by CheckParaRedlineMerge()
+        AppendObjsOfNode(&rTable,
+            pNode->GetIndex(), &rFrame, pPage, rTextNode.GetDoc(),
+            &rIterFirst, &rIterEnd);
+        if (pSkipped)
+        {
+            // if a fly has been added by AppendObjsOfNode, it must be skipped; if not, then it doesn't matter if it's skipped or not because it has no frames and because of that it would be skipped anyway
+            if (auto const pFlys = pNode->GetAnchoredFlys())
+            {
+                for (auto const pFly : *pFlys)
+                {
+                    if (pFly->Which() != RES_DRAWFRMFMT)
+                    {
+                        pSkipped->insert(pFly->GetContent().GetContentIdx()->GetIndex());
+                    }
+                }
+            }
+        }
+    }
+}
+
+namespace sw {
+
+/// rTextNode is the first one of the "new" merge - if rTextNode isn't the same
+/// as MergedPara::pFirstNode, then nodes before rTextNode have their flys
+/// already properly attached, so only the other nodes need handling here.
+void AddRemoveFlysAnchoredToFrameStartingAtNode(
+        SwTextFrame & rFrame, SwTextNode & rTextNode,
+        std::set<sal_uLong> *const pSkipped)
+{
+    auto const pMerged(rFrame.GetMergedPara());
+    if (pMerged
+        // do this only *once*, for the *last* frame
+        // otherwise AppendObj would create multiple frames for fly-frames!
+        && !rFrame.GetFollow())
+    {
+        assert(pMerged->pFirstNode->GetIndex() <= rTextNode.GetIndex()
+            && rTextNode.GetIndex() <= pMerged->pLastNode->GetIndex());
+        // add visible flys in non-first node to merged frame
+        // (hidden flys remain and are deleted via DelFrames())
+        SwFrameFormats& rTable(*rTextNode.GetDoc()->GetSpzFrameFormats());
+        SwPageFrame *const pPage(rFrame.FindPageFrame());
+        std::vector<sw::Extent>::const_iterator iterFirst(pMerged->extents.begin());
+        std::vector<sw::Extent>::const_iterator iter(iterFirst);
+        SwTextNode const* pNode(pMerged->pFirstNode);
+        for ( ; ; ++iter)
+        {
+            if (iter == pMerged->extents.end()
+                || iter->pNode != pNode)
+            {
+                AddRemoveFlysForNode(rFrame, rTextNode, pSkipped, rTable, pPage,
+                        pNode, iterFirst, iter);
+                sal_uLong const until = iter == pMerged->extents.end()
+                    ? pMerged->pLastNode->GetIndex() + 1
+                    : iter->pNode->GetIndex();
+                for (sal_uLong i = pNode->GetIndex() + 1; i < until; ++i)
+                {
+                    // let's show at-para flys on nodes that contain start/end of
+                    // redline too, even if there's no text there
+                    SwNode const*const pTmp(pNode->GetNodes()[i]);
+                    if (pTmp->GetRedlineMergeFlag() == SwNode::Merge::NonFirst)
+                    {
+                        AddRemoveFlysForNode(rFrame, rTextNode, pSkipped,
+                            rTable, pPage, pTmp->GetTextNode(), iter, iter);
+                    }
+                }
+                if (iter == pMerged->extents.end())
+                {
+                    break;
+                }
+                pNode = iter->pNode;
+                iterFirst = iter;
+            }
+        }
+    }
+}
+
+} // namespace sw
+
+static void UnHideRedlines(SwRootFrame & rLayout,
+        SwNodes & rNodes, SwNode const& rEndOfSectionNode,
+        std::set<sal_uLong> *const pSkipped)
+{
+    assert(rEndOfSectionNode.IsEndNode());
+    assert(rNodes[rEndOfSectionNode.StartOfSectionNode()->GetIndex() + 1]->IsCreateFrameWhenHidingRedlines()); // first node is never hidden
+    for (sal_uLong i = rEndOfSectionNode.StartOfSectionNode()->GetIndex() + 1;
+         i < rEndOfSectionNode.GetIndex(); ++i)
+    {
+        SwNode & rNode(*rNodes[i]);
+        if (rNode.IsTextNode()) // only text nodes are 1st node of a merge
+        {
+            SwTextNode & rTextNode(*rNode.GetTextNode());
+            SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(rTextNode);
+            std::vector<SwTextFrame*> frames;
+            for (SwTextFrame * pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+            {
+                if (pFrame->getRootFrame() == &rLayout)
+                {
+                    if (pFrame->IsFollow())
+                    {
+                        frames.push_back(pFrame);
+                    }    // when hiding, the loop must remove the anchored flys
+                    else // *before* resetting SetMergedPara anywhere - else
+                    {    // the fly deletion code will access multiple of the
+                         // frames with inconsistent MergedPara and assert
+                        frames.insert(frames.begin(), pFrame);
+                    }
+                }
+            }
+            // this messes with pRegisteredIn so do it outside SwIterator
+            auto eMode(sw::FrameMode::Existing);
+            for (SwTextFrame * pFrame : frames)
+            {
+                if (rLayout.IsHideRedlines())
+                {
+                    assert(!pFrame->GetMergedPara() ||
+                        !rNode.IsCreateFrameWhenHidingRedlines());
+                    if (rNode.IsCreateFrameWhenHidingRedlines())
+                    {
+                        {
+                            auto pMerged(CheckParaRedlineMerge(*pFrame,
+                                    rTextNode, eMode));
+                            pFrame->SetMergedPara(std::move(pMerged));
+                        }
+                        auto const pMerged(pFrame->GetMergedPara());
+                        if (pMerged)
+                        {
+                            // invalidate SwInvalidateFlags::Size
+                            pFrame->Prepare(PREP_CLEAR, nullptr, false);
+                            pFrame->InvalidatePage();
+                            if (auto const pObjs = pFrame->GetDrawObjs())
+                            {   // also invalidate position of existing flys
+                                // because they may need to be moved
+                                for (auto const pObject : *pObjs)
+                                {
+                                    pObject->InvalidateObjPos();
+                                }
+                            }
+                        }
+                        sw::AddRemoveFlysAnchoredToFrameStartingAtNode(*pFrame, rTextNode, pSkipped);
+                        // only *first* frame of node gets Existing because it
+                        eMode = sw::FrameMode::New; // is not idempotent!
+                    }
+                }
+                else
+                {
+                    if (auto const& pMergedPara = pFrame->GetMergedPara())
+                    {
+                        // invalidate SwInvalidateFlags::Size
+                        pFrame->Prepare(PREP_CLEAR, nullptr, false);
+                        pFrame->InvalidatePage();
+                        if (auto const pObjs = pFrame->GetDrawObjs())
+                        {   // also invalidate position of existing flys
+                            for (auto const pObject : *pObjs)
+                            {
+                                pObject->InvalidateObjPos();
+                            }
+                        }
+                        // SwFlyAtContentFrame::Modify() always appends to
+                        // the master frame, so do the same here.
+                        // (RemoveFootnotesForNode must be called at least once)
+                        if (!pFrame->IsFollow())
+                        {
+                            // the new text frames don't exist yet, so at this point
+                            // we can only delete the footnote frames so they don't
+                            // point to the merged SwTextFrame any more...
+                            assert(&rTextNode == pMergedPara->pFirstNode);
+                            // iterate over nodes, not extents: if a node has
+                            // no extents now but did have extents initially,
+                            // its flys need their frames deleted too!
+                            for (sal_uLong j = rTextNode.GetIndex() + 1;
+                                 j <= pMergedPara->pLastNode->GetIndex(); ++j)
+                            {
+                                SwNode *const pNode(rTextNode.GetNodes()[j]);
+                                assert(!pNode->IsEndNode());
+                                if (pNode->IsStartNode())
+                                {
+                                    j = pNode->EndOfSectionIndex();
+                                }
+                                else if (pNode->IsTextNode())
+                                {
+                                    sw::RemoveFootnotesForNode(rLayout, *pNode->GetTextNode(), nullptr);
+                                    // similarly, remove the anchored flys
+                                    if (auto const pFlys = pNode->GetAnchoredFlys())
+                                    {
+                                        for (SwFrameFormat * pFormat : *pFlys)
+                                        {
+                                            pFormat->DelFrames(/*&rLayout*/);
+                                        }
+                                    }
+                                }
+                            }
+                            // rely on AppendAllObjs call at the end to add
+                            // all flys in first node that are hidden
+                        }
+                        pFrame->SetMergedPara(nullptr);
+                    }
+                }
+                pFrame->Broadcast(SfxHint()); // notify SwAccessibleParagraph
+            }
+            // all nodes, not just merged ones! it may be in the same list as
+            if (rTextNode.IsNumbered(nullptr)) // a preceding merged one...
+            {   // notify frames so they reformat numbering portions
+                rTextNode.NumRuleChgd();
+            }
+        }
+        else if (rNode.IsTableNode() && rLayout.IsHideRedlines())
+        {
+            SwPosition const tmp(rNode);
+            SwRangeRedline const*const pRedline(
+                rLayout.GetFormat()->GetDoc()->getIDocumentRedlineAccess().GetRedline(tmp, nullptr));
+            // pathology: redline that starts on a TableNode; cannot
+            // be created in UI but by import filters...
+            if (pRedline
+                && pRedline->GetType() == nsRedlineType_t::REDLINE_DELETE
+                && &pRedline->Start()->nNode.GetNode() == &rNode)
+            {
+                for (sal_uLong j = rNode.GetIndex(); j <= rNode.EndOfSectionIndex(); ++j)
+                {
+                    rNode.GetNodes()[j]->SetRedlineMergeFlag(SwNode::Merge::Hidden);
+                }
+                rNode.GetTableNode()->DelFrames(&rLayout);
+            }
+        }
+        if (!rNode.IsCreateFrameWhenHidingRedlines())
+        {
+            if (rLayout.IsHideRedlines())
+            {
+                if (rNode.IsContentNode())
+                {
+                    // note: nothing to do here, already done
+#ifndef NDEBUG
+                    auto const pFrame(static_cast<SwContentNode&>(rNode).getLayoutFrame(&rLayout));
+                    assert(!pFrame || static_cast<SwTextFrame*>(pFrame)->GetMergedPara()->pFirstNode != &rNode);
+#endif
+                }
+            }
+            else
+            {
+                assert(!rNode.IsContentNode() || !rNode.GetContentNode()->getLayoutFrame(&rLayout));
+                sal_uLong j = i + 1;
+                for ( ; j < rEndOfSectionNode.GetIndex(); ++j)
+                {
+                    if (rNodes[j]->IsCreateFrameWhenHidingRedlines())
+                    {
+                        break;
+                    }
+                }
+                // call MakeFrames once, because sections/tables
+                // InsertCnt_ also checks for hidden sections
+                SwNodeIndex const start(rNodes, i);
+                SwNodeIndex const end(rNodes, j);
+                assert(!bDontCreateObjects);
+                bDontCreateObjects = true; // suppress here, to be called once
+                ::MakeFrames(rLayout.GetFormat()->GetDoc(), start, end);
+                bDontCreateObjects = false;
+                i = j - 1; // will be incremented again
+            }
+        }
+    }
+}
+
+static void UnHideRedlinesExtras(SwRootFrame & rLayout,
+        SwNodes & rNodes, SwNode const& rEndOfExtraSectionNode,
+        std::set<sal_uLong> *const pSkipped)
+{
+    assert(rEndOfExtraSectionNode.IsEndNode());
+    for (sal_uLong i = rEndOfExtraSectionNode.StartOfSectionNode()->GetIndex()
+            + 1; i < rEndOfExtraSectionNode.GetIndex(); ++i)
+    {
+        SwNode const& rStartNode(*rNodes[i]);
+        assert(rStartNode.IsStartNode());
+        assert(rStartNode.GetRedlineMergeFlag() == SwNode::Merge::None);
+        SwNode const& rEndNode(*rStartNode.EndOfSectionNode());
+        bool bSkip(pSkipped && pSkipped->find(i) != pSkipped->end());
+        i = rEndNode.GetIndex();
+        for (sal_uLong j = rStartNode.GetIndex() + 1; j < i; ++j)
+        {
+            // note: SwStartNode has no way to access the frames, so check
+            // whether the first content-node inside the section has frames
+            SwNode const& rNode(*rNodes[j]);
+            if (rNode.IsSectionNode() &&
+                static_cast<SwSectionNode const&>(rNode).GetSection().IsHiddenFlag())
+            {   // skip hidden sections - they can be inserted in fly-frames :(
+                j = rNode.EndOfSectionNode()->GetIndex();
+                continue;
+            }
+            if (rNode.IsContentNode())
+            {
+                SwContentNode const& rCNode(static_cast<SwContentNode const&>(rNode));
+                if (!rCNode.getLayoutFrame(&rLayout))
+                {   // ignore footnote/fly/header/footer with no layout frame
+                    bSkip = true; // they will be created from scratch later if needed
+                }
+                break;
+            }
+        }
+        if (!bSkip)
+        {
+            UnHideRedlines(rLayout, rNodes, rEndNode, pSkipped);
+        }
+    }
+}
+
+void SwRootFrame::SetHideRedlines(bool const bHideRedlines)
+{
+    if (bHideRedlines == mbHideRedlines)
+    {
+        return;
+    }
+    mbHideRedlines = bHideRedlines;
+    SwDoc & rDoc(*GetFormat()->GetDoc());
+    // don't do early return if there are no redlines:
+    // Show->Hide must init hidden number trees
+    // Hide->Show may be called after all redlines have been deleted but there
+    //            may still be MergedParas because those aren't deleted yet...
+#if 0
+    if (!bHideRedlines
+        && rDoc.getIDocumentRedlineAccess().GetRedlineTable().empty())
+    {
+        return;
+    }
+#endif
+    // Hide->Show: clear MergedPara, create frames
+    // Show->Hide: call CheckParaRedlineMerge, delete frames
+    // Traverse the document via the nodes-array; traversing via the layout
+    // wouldn't find the nodes that don't have frames in the ->Show case.
+    // In-order traversal of each nodes array section should init the flags
+    // in nodes before they are iterated.
+    // Actual creation of frames should be done with existing functions
+    // if possible, particularly InsertCnt_() or its wrapper ::MakeFrames().
+    SwNodes /*const*/& rNodes(rDoc.GetNodes());
+    // Flys/footnotes: must iterate and find all the ones that already exist
+    // with frames and have redlines inside them; if any don't have frames at
+    // all, they will be created (if necessary) from scratch and completely by
+    // MakeFrames().
+    //
+    // Flys before footnotes: because footnotes may contain flys but not
+    // vice-versa; alas flys may contain flys, so we skip some of them
+    // if they have already been created from scratch via their anchor flys.
+    std::set<sal_uLong> skippedFlys;
+    UnHideRedlinesExtras(*this, rNodes, rNodes.GetEndOfAutotext(),
+        // when un-hiding, delay all fly frame creation to AppendAllObjs below
+                         IsHideRedlines() ? &skippedFlys : nullptr);
+    // Footnotes are created automatically (after invalidation etc.) by
+    // ConnectFootnote(), but need to be deleted manually. Footnotes do not
+    // occur in flys or headers/footers.
+    UnHideRedlinesExtras(*this, rNodes, rNodes.GetEndOfInserts(), nullptr);
+    UnHideRedlines(*this, rNodes, rNodes.GetEndOfContent(), nullptr);
+
+    if (!IsHideRedlines())
+    {   // create all previously hidden flys at once:
+        // * Flys on first node of pre-existing merged frames that are hidden
+        //   (in delete redline), to be added to the existing frame
+        // * Flys on non-first (hidden/merged) nodes of pre-existing merged
+        //   frames, to be added to the new frame of their node
+        // * Flys anchored in other flys that are hidden
+        AppendAllObjs(rDoc.GetSpzFrameFormats(), this);
+    }
+
+    for (auto const pRedline : rDoc.getIDocumentRedlineAccess().GetRedlineTable())
+    {   // DELETE are handled by the code above; for other types, need to
+        // trigger repaint of text frames to add/remove the redline color font
+        if (pRedline->GetType() != nsRedlineType_t::REDLINE_DELETE)
+        {
+            pRedline->InvalidateRange(SwRangeRedline::Invalidation::Add);
+        }
+    }
+
+    SwFootnoteIdxs & rFootnotes(rDoc.GetFootnoteIdxs());
+    if (rDoc.GetFootnoteInfo().eNum == FTNNUM_CHAPTER)
+    {
+        // sadly determining which node is outline node requires hidden layout
+        rFootnotes.UpdateAllFootnote();
+    }
+    // invalidate all footnotes to reformat their numbers
+    for (SwTextFootnote *const pFootnote : rFootnotes)
+    {
+        SwFormatFootnote const& rFootnote(pFootnote->GetFootnote());
+        if (rFootnote.GetNumber() != rFootnote.GetNumberRLHidden()
+            && rFootnote.GetNumStr().isEmpty())
+        {
+            pFootnote->InvalidateNumberInLayout();
+        }
+    }
+    // update various fields to re-expand them with the new layout
+    IDocumentFieldsAccess & rIDFA(rDoc.getIDocumentFieldsAccess());
+    auto const pAuthType(rIDFA.GetFieldType(
+        SwFieldIds::TableOfAuthorities, OUString(), false));
+    if (pAuthType) // created on demand...
+    {   // calling DelSequenceArray() should be unnecessary here since the
+        // sequence doesn't depend on frames
+        pAuthType->UpdateFields();
+    }
+    rIDFA.GetFieldType(SwFieldIds::RefPageGet, OUString(), false)->UpdateFields();
+    rIDFA.GetSysFieldType(SwFieldIds::Chapter)->UpdateFields();
+    rIDFA.UpdateExpFields(nullptr, false);
+    rIDFA.UpdateRefFields();
+
+    // update SwPostItMgr / notes in the margin
+    // note: as long as all shells share layout, broadcast to all shells!
+    rDoc.GetDocShell()->Broadcast( SwFormatFieldHint(nullptr, bHideRedlines
+            ? SwFormatFieldHintWhich::REMOVED
+            : SwFormatFieldHintWhich::INSERTED) );
+
+
+//    InvalidateAllContent(SwInvalidateFlags::Size); // ??? TODO what to invalidate?  this is the big hammer
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

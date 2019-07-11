@@ -59,6 +59,7 @@
 #include <com/sun/star/document/UpdateDocMode.hpp>
 #include <com/sun/star/frame/XTerminateListener2.hpp>
 
+#include <comphelper/numberedcollection.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/lok.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -66,6 +67,7 @@
 #include <vcl/svapp.hxx>
 #include <desktop/crashreport.hxx>
 #include <vcl/scheduler.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/errinf.hxx>
 #include <unotools/configmgr.hxx>
@@ -1746,15 +1748,15 @@ bool Desktop::impl_closeFrames(bool bAllowUI)
                     ++nNonClosedFrames;
 
                     // Reactivate controller.
-                    // It can happen that XController.suspend() returned true ... but a registered close listener
-                    // throwed these veto exception. Then the controller has to be reactivated. Otherwise
+                    // It can happen that XController.suspend() returned true... but a registered close listener
+                    // threw these veto exception. Then the controller has to be reactivated. Otherwise
                     // these document doesn't work any more.
                     if ( bSuspended && xController.is())
                         xController->suspend(false);
                 }
 
-                // If interface XClosable interface exists and was used ...
-                // it's not allowed to use XComponent->dispose() also !
+                // If interface XClosable interface exists and was used...
+                // it's not allowed to use XComponent->dispose() also!
                 continue;
             }
 

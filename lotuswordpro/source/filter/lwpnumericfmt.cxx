@@ -117,9 +117,6 @@ LwpColor LwpNumericFormatSubset::GetColor()
 LwpNumericFormatSubset::LwpNumericFormatSubset():cSubFlags(0)
 {
 }
-LwpNumericFormatSubset::~LwpNumericFormatSubset()
-{
-}
 
 LwpNumericFormat::LwpNumericFormat(LwpObjectStream * pStrm)
     : m_pObjStrm(pStrm)
@@ -356,7 +353,7 @@ XFStyle* LwpNumericFormat::Convert()
                                    static_cast<sal_uInt8>(aColor.GetGreen()),
                                    static_cast<sal_uInt8>(aColor.GetBlue())) );
     }
-    {//Negtive
+    {//Negative
         pStyle->SetNegativeStyle( aNegPrefix, aNegSuffix, XFColor(static_cast<sal_uInt8>(aNegativeColor.GetRed()),
                                                                     static_cast<sal_uInt8>(aNegativeColor.GetGreen()),
                                                                     static_cast<sal_uInt8>(aNegativeColor.GetBlue())) );
@@ -374,7 +371,7 @@ OUString    LwpNumericFormat::reencode(const OUString& sCode)
     const sal_Unicode * pString = sCode.getStr();
     sal_uInt16 nLen = sCode.getLength();
     bool bFound = false;
-    sal_uInt16 i;
+    sal_Int32 i;
     std::unique_ptr<sal_Unicode[]> pBuff( new sal_Unicode[sCode.getLength()] );
 
     for (i=0; i< sCode.getLength() - 1; i++)

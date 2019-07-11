@@ -18,11 +18,8 @@
  */
 
 #include <memory>
-#include <comphelper/string.hxx>
 #include <rtl/strbuf.hxx>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
+#include <sal/log.hxx>
 
 #include <tools/stream.hxx>
 
@@ -34,7 +31,6 @@
 #include <editattr.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/fontitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/flditem.hxx>
 #include <editeng/lrspitem.hxx>
 #include <editeng/tstpitem.hxx>
@@ -61,20 +57,20 @@ using std::endl;
 using namespace com::sun::star;
 
 
-XEditAttribute* MakeXEditAttribute( SfxItemPool& rPool, const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd )
+static std::unique_ptr<XEditAttribute> MakeXEditAttribute( SfxItemPool& rPool, const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd )
 {
     // Create thw new attribute in the pool
     const SfxPoolItem& rNew = rPool.Put( rItem );
 
-    XEditAttribute* pNew = new XEditAttribute( rNew, nStart, nEnd );
+    std::unique_ptr<XEditAttribute> pNew(new XEditAttribute( rNew, nStart, nEnd ));
     return pNew;
 }
 
 XEditAttribute::XEditAttribute( const SfxPoolItem& rAttr, sal_Int32 nS, sal_Int32 nE )
+    : pItem(&rAttr)
+    , nStart(nS)
+    , nEnd(nE)
 {
-    pItem = &rAttr;
-    nStart = nS;
-    nEnd = nE;
 }
 
 XEditAttribute::~XEditAttribute()
@@ -94,12 +90,14 @@ void XEditAttribute::SetItem(const SfxPoolItem& rNew)
 }
 
 XParaPortionList::XParaPortionList(
-    OutputDevice* pRefDev, sal_uLong nPW, sal_uInt16 _nStretchX, sal_uInt16 _nStretchY) :
-    aRefMapMode(pRefDev->GetMapMode()), nStretchX(_nStretchX), nStretchY(_nStretchY)
+    OutputDevice* pRefDev, sal_uLong nPW, sal_uInt16 _nStretchX, sal_uInt16 _nStretchY)
+    : nRefDevPtr(pRefDev)
+    , eRefDevType(pRefDev->GetOutDevType())
+    , aRefMapMode(pRefDev->GetMapMode())
+    , nStretchX(_nStretchX)
+    , nStretchY(_nStretchY)
+    , nPaperWidth(nPW)
 {
-    nRefDevPtr = pRefDev;
-    nPaperWidth = nPW;
-    eRefDevType = pRefDev->GetOutDevType();
 }
 
 void XParaPortionList::push_back(XParaPortion* p)
@@ -130,10 +128,10 @@ ContentInfo::ContentInfo( const ContentInfo& rCopyFrom, SfxItemPool& rPoolToUse 
 
     for (const auto & aAttrib : rCopyFrom.maCharAttribs)
     {
-        const XEditAttribute& rAttr = *aAttrib.get();
-        XEditAttribute* pMyAttr = MakeXEditAttribute(
+        const XEditAttribute& rAttr = *aAttrib;
+        std::unique_ptr<XEditAttribute> pMyAttr = MakeXEditAttribute(
             rPoolToUse, *rAttr.GetItem(), rAttr.GetStart(), rAttr.GetEnd());
-        maCharAttribs.push_back(std::unique_ptr<XEditAttribute>(pMyAttr));
+        maCharAttribs.push_back(std::move(pMyAttr));
     }
 
     if ( rCopyFrom.GetWrongList() )
@@ -465,7 +463,7 @@ void EditTextObjectImpl::ObjectInDestruction(const SfxItemPool& rSfxItemPool)
         ContentInfosType aReplaced;
         aReplaced.reserve(aContents.size());
         for (auto const& content : aContents)
-            aReplaced.push_back(std::unique_ptr<ContentInfo>(new ContentInfo(*content.get(), *pNewPool)));
+            aReplaced.push_back(std::unique_ptr<ContentInfo>(new ContentInfo(*content, *pNewPool)));
         aReplaced.swap(aContents);
 
         // set local variables
@@ -482,7 +480,7 @@ void EditTextObjectImpl::Dump() const
 }
 #endif
 
-EditEngineItemPool* getEditEngineItemPool(SfxItemPool* pPool)
+static EditEngineItemPool* getEditEngineItemPool(SfxItemPool* pPool)
 {
     EditEngineItemPool* pRetval = dynamic_cast< EditEngineItemPool* >(pPool);
 
@@ -499,13 +497,14 @@ EditEngineItemPool* getEditEngineItemPool(SfxItemPool* pPool)
     return pRetval;
 }
 
-EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, SfxItemPool* pP ) :
-    mpFront(pFront)
+EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, SfxItemPool* pP )
+    : mpFront(pFront)
+    , nMetric(0xFFFF)
+    , nUserType(OutlinerMode::DontKnow)
+    , nScriptType(SvtScriptType::NONE)
+    , bVertical(false)
+    , bIsTopToBottomVert(false)
 {
-    nMetric = 0xFFFF;
-    nUserType = OutlinerMode::DontKnow;
-    pPortionInfo = nullptr;
-
     // #i101239# ensure target is a EditEngineItemPool, else
     // fallback to pool ownership. This is needed to ensure that at
     // pool destruction time of an alien pool, the pool is still alive.
@@ -529,21 +528,17 @@ EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, SfxItemPool* pP 
         // it is sure now that the pool is an EditEngineItemPool
         pPool->AddSfxItemPoolUser(*mpFront);
     }
-
-    bVertical = false;
-    bIsTopToBottomVert = false;
-    nScriptType = SvtScriptType::NONE;
 }
 
-EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, const EditTextObjectImpl& r ) :
-    mpFront(pFront)
+EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, const EditTextObjectImpl& r )
+    : mpFront(pFront)
+    , nMetric(r.nMetric)
+    , nUserType(r.nUserType)
+    , nScriptType(r.nScriptType)
+    , bVertical(r.bVertical)
+    , bIsTopToBottomVert(r.bIsTopToBottomVert)
 {
-    nMetric = r.nMetric;
-    nUserType = r.nUserType;
-    bVertical = r.bVertical;
-    bIsTopToBottomVert = r.bIsTopToBottomVert;
-    nScriptType = r.nScriptType;
-    pPortionInfo = nullptr;    // Do not copy PortionInfo
+    // Do not copy PortionInfo
 
     if ( !r.bOwnerOfPool )
     {
@@ -571,7 +566,7 @@ EditTextObjectImpl::EditTextObjectImpl( EditTextObject* pFront, const EditTextOb
 
     aContents.reserve(r.aContents.size());
     for (auto const& content : r.aContents)
-        aContents.push_back(std::unique_ptr<ContentInfo>(new ContentInfo(*content.get(), *pPool)));
+        aContents.push_back(std::unique_ptr<ContentInfo>(new ContentInfo(*content, *pPool)));
 }
 
 EditTextObjectImpl::~EditTextObjectImpl()
@@ -602,7 +597,7 @@ void EditTextObjectImpl::NormalizeString( svl::SharedStringPool& rPool )
 {
     for (auto const& content : aContents)
     {
-        ContentInfo& rInfo = *content.get();
+        ContentInfo& rInfo = *content;
         rInfo.NormalizeString(rPool);
     }
 }
@@ -613,7 +608,7 @@ std::vector<svl::SharedString> EditTextObjectImpl::GetSharedStrings() const
     aSSs.reserve(aContents.size());
     for (auto const& content : aContents)
     {
-        const ContentInfo& rInfo = *content.get();
+        const ContentInfo& rInfo = *content;
         aSSs.push_back(rInfo.GetSharedString());
     }
     return aSSs;
@@ -645,15 +640,14 @@ void EditTextObjectImpl::SetScriptType( SvtScriptType nType )
     nScriptType = nType;
 }
 
-XEditAttribute* EditTextObjectImpl::CreateAttrib( const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd )
+std::unique_ptr<XEditAttribute> EditTextObjectImpl::CreateAttrib( const SfxPoolItem& rItem, sal_Int32 nStart, sal_Int32 nEnd )
 {
     return MakeXEditAttribute( *pPool, rItem, nStart, nEnd );
 }
 
-void EditTextObjectImpl::DestroyAttrib( XEditAttribute* pAttr )
+void EditTextObjectImpl::DestroyAttrib( std::unique_ptr<XEditAttribute> pAttr )
 {
     pPool->Remove( *pAttr->GetItem() );
-    delete pAttr;
 }
 
 
@@ -706,7 +700,7 @@ void EditTextObjectImpl::GetCharAttribs( sal_Int32 nPara, std::vector<EECharAttr
     const ContentInfo& rC = *aContents[nPara].get();
     for (const auto & aAttrib : rC.maCharAttribs)
     {
-        const XEditAttribute& rAttr = *aAttrib.get();
+        const XEditAttribute& rAttr = *aAttrib;
         EECharAttrib aEEAttr;
         aEEAttr.pAttr = rAttr.GetItem();
         aEEAttr.nStart = rAttr.GetStart();
@@ -752,7 +746,7 @@ const SvxFieldData* EditTextObjectImpl::GetFieldData(sal_Int32 nPara, size_t nPo
     size_t nCurPos = 0;
     for (auto const& charAttrib : rC.maCharAttribs)
     {
-        const XEditAttribute& rAttr = *charAttrib.get();
+        const XEditAttribute& rAttr = *charAttrib;
         if (rAttr.GetItem()->Which() != EE_FEATURE_FIELD)
             // Skip attributes that are not fields.
             continue;
@@ -870,7 +864,7 @@ void EditTextObjectImpl::GetAllSections( std::vector<editeng::Section>& rAttrs )
         rBorders.push_back(rC.GetText().getLength());
         for (const auto & aAttrib : rC.maCharAttribs)
         {
-            const XEditAttribute& rAttr = *aAttrib.get();
+            const XEditAttribute& rAttr = *aAttrib;
             const SfxPoolItem* pItem = rAttr.GetItem();
             if (!pItem)
                 continue;
@@ -934,7 +928,7 @@ void EditTextObjectImpl::GetAllSections( std::vector<editeng::Section>& rAttrs )
 
         for (const auto & aAttrib : rC.maCharAttribs)
         {
-            const XEditAttribute& rXAttr = *aAttrib.get();
+            const XEditAttribute& rXAttr = *aAttrib;
             const SfxPoolItem* pItem = rXAttr.GetItem();
             if (!pItem)
                 continue;
@@ -955,11 +949,9 @@ void EditTextObjectImpl::GetAllSections( std::vector<editeng::Section>& rAttrs )
             {
                 editeng::Section& rSecAttr = *itCurAttr;
                 // serious bug: will cause duplicate attributes to be exported
-                auto iter(std::find_if(
-                    rSecAttr.maAttributes.begin(), rSecAttr.maAttributes.end(),
+                if (std::none_of(rSecAttr.maAttributes.begin(), rSecAttr.maAttributes.end(),
                     [&pItem](SfxPoolItem const*const pIt)
-                        { return pIt->Which() == pItem->Which(); }));
-                if (rSecAttr.maAttributes.end() == iter)
+                        { return pIt->Which() == pItem->Which(); }))
                 {
                     rSecAttr.maAttributes.push_back(pItem);
                 }

@@ -20,6 +20,7 @@
 
 #include <rtl/uri.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/implementationentry.hxx>
@@ -59,7 +60,7 @@ class ExpandContentProviderImpl : protected MutexHolder, public t_impl_helper
         uno::Reference< ucb::XContentIdentifier > const & xIdentifier ) const;
 
 protected:
-    inline void check() const;
+    void check() const;
     virtual void SAL_CALL disposing() override;
 
 public:
@@ -84,7 +85,7 @@ public:
 };
 
 
-inline void ExpandContentProviderImpl::check() const
+void ExpandContentProviderImpl::check() const
 {
     // xxx todo guard?
 //     MutexGuard guard( m_mutex );

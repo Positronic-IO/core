@@ -26,6 +26,7 @@
 #include <rtl/bootstrap.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/process.h>
 #include <osl/file.hxx>
 #include <osl/thread.hxx>
@@ -222,7 +223,7 @@ OUString makeAbsoluteFileUrl(
 namespace {
 
 
-inline void printf_space( sal_Int32 space )
+void printf_space( sal_Int32 space )
 {
     while (space--)
         dp_misc::writeConsole("  ");
@@ -290,7 +291,7 @@ void printf_package(
 
 } // anon namespace
 
-void printf_unaccepted_licenses(
+static void printf_unaccepted_licenses(
     Reference<deployment::XPackage> const & ext)
 {
         OUString id(
@@ -323,6 +324,7 @@ void printf_packages(
             else
                 printf_package( extension, xCmdEnv, level );
             dp_misc::writeConsole("\n");
+            ++index;
         }
     }
 }
@@ -353,16 +355,13 @@ Reference<XComponentContext> connectToOffice(
     Reference<XComponentContext> const & xLocalComponentContext,
     bool verbose )
 {
-    Sequence<OUString> args( 3 );
-    args[ 0 ] = "--nologo";
-    args[ 1 ] = "--nodefault";
-
     OUString pipeId( ::dp_misc::generateRandomPipeId() );
     OUStringBuffer buf;
     buf.append( "--accept=pipe,name=" );
     buf.append( pipeId );
     buf.append( ";urp;" );
-    args[ 2 ] = buf.makeStringAndClear();
+
+    Sequence<OUString> args { "--nologo", "--nodefault", buf.makeStringAndClear() };
     OUString appURL( getExecutableDir() + "/soffice" );
 
     if (verbose)
@@ -397,7 +396,7 @@ Reference<XComponentContext> connectToOffice(
 /** returns the path to the lock file used by unopkg.
     @return the path. An empty string signifies an error.
 */
-OUString getLockFilePath()
+static OUString getLockFilePath()
 {
     OUString ret;
     OUString sBootstrap("${$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("bootstrap") ":UserInstallation}");

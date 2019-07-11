@@ -96,9 +96,9 @@ class CPDManager : public PrinterInfoManager
 public:
 #if ENABLE_DBUS && ENABLE_GIO
     // Functions involved in initialization
-    GDBusProxy * getProxy( std::string target );
+    GDBusProxy* getProxy(const std::string& target);
     void addBackend( std::pair< std::string, GDBusProxy * > pair );
-    void addTempBackend( std::pair< std::string, gchar* > pair );
+    void addTempBackend(const std::pair<std::string, gchar*>& pair);
     std::vector<std::pair<std::string, gchar*>> const & getTempBackends();
     void addNewPrinter( const OUString&, const OUString&, CPDPrinter * );
 #endif
@@ -116,12 +116,6 @@ public:
 
     // check if the printer configuration has changed
     virtual bool checkPrintersChanged( bool bWait ) override;
-
-    // members for administration
-    // disable for CPD
-    virtual bool addPrinter( const OUString& rPrinterName, const OUString& rDriverName ) override;
-    virtual bool removePrinter( const OUString& rPrinterName, bool bCheckOnly ) override;
-    virtual bool setDefaultPrinter( const OUString& rPrinterName ) override;
 };
 
 } // namespace psp

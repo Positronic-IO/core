@@ -32,7 +32,6 @@ $(eval $(call gb_CppunitTest_use_libraries,chart2_export, \
     forui \
     i18nlangtag \
     msfilter \
-    vcl \
     oox \
     sal \
     salhelper \
@@ -54,8 +53,8 @@ $(eval $(call gb_CppunitTest_use_libraries,chart2_export, \
     unotest \
     utl \
     vbahelper \
+    vcl \
     xo \
-    sw \
 ))
 
 $(eval $(call gb_CppunitTest_set_include,chart2_export,\
@@ -127,6 +126,10 @@ $(eval $(call gb_CppunitTest_use_components,chart2_export,\
     writerfilter/util/writerfilter \
     xmloff/util/xo \
     xmlscript/util/xmlscript \
+))
+
+$(eval $(call gb_CppunitTest_use_uiconfigs,chart2_export, \
+    modules/swriter \
 ))
 
 $(eval $(call gb_CppunitTest_use_configuration,chart2_export))

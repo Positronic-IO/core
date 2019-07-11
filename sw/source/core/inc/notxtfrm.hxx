@@ -47,12 +47,22 @@ private:
     friend double getLocalFrameRotation_from_SwNoTextFrame(const SwNoTextFrame& rNoTextFrame);
     double getLocalFrameRotation() const;
 
+    void ClearCache();
+
 protected:
     virtual void MakeAll(vcl::RenderContext* pRenderContext) override;
     virtual void Modify( const SfxPoolItem*, const SfxPoolItem* ) override;
 
 public:
     SwNoTextFrame( SwNoTextNode * const, SwFrame* );
+
+    const SwContentNode *GetNode() const
+        { return static_cast<SwContentNode const*>(GetDep()); }
+          SwContentNode *GetNode()
+        { return static_cast<SwContentNode      *>(GetDep()); }
+
+    virtual bool LeftMargin(SwPaM *) const override;
+    virtual bool RightMargin(SwPaM *, bool bAPI = false) const override;
 
     virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&,
                         SwPrintData const*const pPrintData = nullptr ) const override;

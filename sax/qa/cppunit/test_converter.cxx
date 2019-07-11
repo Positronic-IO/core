@@ -33,7 +33,6 @@
 #include <com/sun/star/util/MeasureUnit.hpp>
 
 #include <sax/tools/converter.hxx>
-#include <comphelper/sequence.hxx>
 #include <sal/log.hxx>
 
 
@@ -79,7 +78,7 @@ void doTest(util::Duration const & rid, char const*const pis,
 {
     char const*const pos(i_pos ? i_pos : pis);
     util::Duration od;
-    OUString is(::rtl::OUString::createFromAscii(pis));
+    OUString is(OUString::createFromAscii(pis));
     SAL_INFO("sax.cppunit","about to convert '" << is << "'");
     bool bSuccess = Converter::convertDuration(od, is);
     SAL_INFO("sax.cppunit","" << (od.Negative ? "-" : "+")  << " " << od.Years << "Y " << od.Months << "M " << od.Days << "D " << od.Hours << "H " << od.Minutes << "M " << od.Seconds << "S " << od.NanoSeconds << "n");
@@ -503,6 +502,7 @@ void ConverterTest::testMeasure()
     doTestMeasureToString("979.928cm", 555550, MeasureUnit::TWIP, MeasureUnit::CM);
     doTestMeasureToString("111.1pt", 2222, MeasureUnit::TWIP, MeasureUnit::POINT);
     doTestMeasureToString("385.7986in", 555550, MeasureUnit::TWIP, MeasureUnit::INCH);
+    doTestMeasureToString("-2147483.648cm", std::numeric_limits<sal_Int32>::min(), MeasureUnit::MM_100TH, MeasureUnit::CM);
 }
 
 void doTestStringToBool(bool bBool, char const*const pis)

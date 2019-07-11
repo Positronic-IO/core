@@ -25,6 +25,7 @@
 #include <string.h>
 #include <limits.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/sheet/FormulaToken.hpp>
 #include <formula/errorcodes.hxx>
@@ -39,21 +40,10 @@ namespace formula
 {
     using namespace com::sun::star;
 
-// Align MemPools on 4k boundaries - 64 bytes (4k is a MUST for OS/2)
-
-// Need a lot of FormulaDoubleToken
-IMPL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaDoubleToken )
-// Need quite some FormulaTypedDoubleToken
-IMPL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaTypedDoubleToken )
-// Need a lot of FormulaByteToken
-IMPL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaByteToken )
-// Need several FormulaStringToken
-IMPL_FIXEDMEMPOOL_NEWDEL_DLL( FormulaStringToken )
-
 
 // --- helpers --------------------------------------------------------------
 
-inline bool lcl_IsReference( OpCode eOp, StackVar eType )
+static bool lcl_IsReference( OpCode eOp, StackVar eType )
 {
     return
         (eOp == ocPush && (eType == svSingleRef || eType == svDoubleRef))
@@ -71,7 +61,7 @@ FormulaToken::FormulaToken( StackVar eTypeP, OpCode e ) :
 }
 
 FormulaToken::FormulaToken( const FormulaToken& r ) :
-    IFormulaToken(), eOp(r.eOp), eType( r.eType ), mnRefCnt(0)
+    eOp(r.eOp), eType( r.eType ), mnRefCnt(0)
 {
 }
 
@@ -160,7 +150,8 @@ bool FormulaToken::IsRef() const
 bool FormulaToken::IsInForceArray() const
 {
     ParamClass eParam = GetInForceArray();
-    return eParam == ParamClass::ForceArray || eParam == ParamClass::ReferenceOrForceArray;
+    return eParam == ParamClass::ForceArray || eParam == ParamClass::ReferenceOrForceArray
+        || eParam == ParamClass::ReferenceOrRefArray || eParam == ParamClass::ForceArrayReturn;
 }
 
 bool FormulaToken::operator==( const FormulaToken& rToken ) const
@@ -567,7 +558,6 @@ bool FormulaTokenArray::HasOpCodes(const unordered_opcode_set& rOpCodes) const
 }
 
 FormulaTokenArray::FormulaTokenArray() :
-    pCode(nullptr),
     pRPN(nullptr),
     nLen(0),
     nRPN(0),
@@ -588,6 +578,18 @@ FormulaTokenArray::FormulaTokenArray( const FormulaTokenArray& rArr )
 FormulaTokenArray::~FormulaTokenArray()
 {
     Clear();
+}
+
+void FormulaTokenArray::Finalize()
+{
+    if( nLen && !mbFinalized )
+    {
+        // Add() overallocates, so reallocate to the minimum needed size.
+        std::unique_ptr<FormulaToken*[]> newCode(new FormulaToken*[ nLen ]);
+        std::copy(&pCode[0], &pCode[nLen], newCode.get());
+        pCode = std::move( newCode );
+        mbFinalized = true;
+    }
 }
 
 void FormulaTokenArray::Assign( const FormulaTokenArray& r )
@@ -787,8 +789,20 @@ FormulaToken* FormulaTokenArray::Add( FormulaToken* t )
         return nullptr;
     }
 
+// Allocating an array of size FORMULA_MAXTOKENS is simple, but that results in relatively large
+// allocations that malloc() implementations usually do not handle as efficiently as smaller
+// sizes (not only in terms of memory usage but also speed). Since most token arrays are going
+// to be small, start with a small array and resize only if needed. Eventually Finalize() will
+// reallocate the memory to size exactly matching the requirements.
+    const size_t MAX_FAST_TOKENS = 32;
     if( !pCode )
-        pCode.reset(new FormulaToken*[ FORMULA_MAXTOKENS ]);
+        pCode.reset(new FormulaToken*[ MAX_FAST_TOKENS ]);
+    if( nLen == MAX_FAST_TOKENS )
+    {
+        FormulaToken** tmp = new FormulaToken*[ FORMULA_MAXTOKENS ];
+        std::copy(&pCode[0], &pCode[MAX_FAST_TOKENS], tmp);
+        pCode.reset(tmp);
+    }
     if( nLen < FORMULA_MAXTOKENS - 1 )
     {
         CheckToken(*t);
@@ -845,15 +859,27 @@ FormulaToken* FormulaTokenArray::AddStringXML( const OUString& rStr )
 
 void FormulaTokenArray::AddRecalcMode( ScRecalcMode nBits )
 {
-    //! Order is important.
-    if ( nBits & ScRecalcMode::ALWAYS )
-        SetExclusiveRecalcModeAlways();
-    else if ( !IsRecalcModeAlways() )
+    const unsigned nExclusive = static_cast<sal_uInt8>(nBits & ScRecalcMode::EMask);
+    if (nExclusive)
     {
-        if ( nBits & ScRecalcMode::ONLOAD )
-            SetExclusiveRecalcModeOnLoad();
-        else if ( nBits & ScRecalcMode::ONLOAD_ONCE && !IsRecalcModeOnLoad() )
-            SetExclusiveRecalcModeOnLoadOnce();
+        unsigned nExBit;
+        if (nExclusive & (nExclusive - 1))
+        {
+            // More than one bit set, use highest priority.
+            for (nExBit = 1; (nExBit & static_cast<sal_uInt8>(ScRecalcMode::EMask)) != 0; nExBit <<= 1)
+            {
+                if (nExclusive & nExBit)
+                    break;
+            }
+        }
+        else
+        {
+            // Only one bit is set.
+            nExBit = nExclusive;
+        }
+        // Set exclusive bit if priority is higher than existing.
+        if (nExBit < static_cast<sal_uInt8>(nMode & ScRecalcMode::EMask))
+            SetMaskedRecalcMode( static_cast<ScRecalcMode>(nExBit));
     }
     SetCombinedBitsRecalcMode( nBits );
 }

@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include <com/sun/star/xml/sax/SAXException.hpp>
+#include <com/sun/star/xml/sax/XFastTokenHandler.hpp>
 #include <sax/fastattribs.hxx>
 
 using namespace ::com::sun::star::uno;
@@ -74,8 +75,7 @@ void FastAttributeList::clear()
     maAttributeTokens.clear();
     maAttributeValues.resize(1);
     assert(maAttributeValues[0] == 0);
-    if (!maUnknownAttributes.empty())
-        maUnknownAttributes.clear();
+    maUnknownAttributes.clear();
 }
 
 void FastAttributeList::add( sal_Int32 nToken, const sal_Char* pValue, size_t nValueLength )
@@ -86,8 +86,14 @@ void FastAttributeList::add( sal_Int32 nToken, const sal_Char* pValue, size_t nV
     maAttributeValues.push_back( maAttributeValues.back() + nValueLength + 1 );
     if (maAttributeValues.back() > mnChunkLength)
     {
-        mnChunkLength = maAttributeValues.back();
-        mpChunk = static_cast<sal_Char *>(realloc( mpChunk, mnChunkLength ));
+        const sal_Int32 newLen = std::max(mnChunkLength * 2, maAttributeValues.back());
+        if (auto p = static_cast<sal_Char*>(realloc(mpChunk, newLen)))
+        {
+            mnChunkLength = newLen;
+            mpChunk = p;
+        }
+        else
+            throw std::bad_alloc();
     }
     strncpy(mpChunk + nWritePosition, pValue, nValueLength);
     mpChunk[nWritePosition + nValueLength] = '\0';
@@ -166,6 +172,11 @@ bool FastAttributeList::getAsInteger( sal_Int32 nToken, sal_Int32 &rInt) const
     return false;
 }
 
+sal_Int32 FastAttributeList::getAsIntegerByIndex( sal_Int32 nTokenIndex ) const
+{
+    return rtl_str_toInt32( getFastAttributeValue(nTokenIndex), 10 );
+}
+
 bool FastAttributeList::getAsDouble( sal_Int32 nToken, double &rDouble) const
 {
     rDouble = 0.0;
@@ -193,6 +204,12 @@ bool FastAttributeList::getAsChar( sal_Int32 nToken, const char*& rPos ) const
     return false;
 }
 
+const char* FastAttributeList::getAsCharByIndex( sal_Int32 nTokenIndex ) const
+{
+    sal_Int32 nOffset = maAttributeValues[nTokenIndex];
+    return mpChunk + nOffset;
+}
+
 OUString FastAttributeList::getValue( ::sal_Int32 Token )
 {
     for (size_t i = 0; i < maAttributeTokens.size(); ++i)
@@ -200,6 +217,11 @@ OUString FastAttributeList::getValue( ::sal_Int32 Token )
             return OUString( getFastAttributeValue(i), AttributeValueLength(i), RTL_TEXTENCODING_UTF8 );
 
     throw SAXException();
+}
+
+OUString FastAttributeList::getValueByIndex( ::sal_Int32 nTokenIndex ) const
+{
+    return OUString( getFastAttributeValue(nTokenIndex), AttributeValueLength(nTokenIndex), RTL_TEXTENCODING_UTF8 );
 }
 
 OUString FastAttributeList::getOptionalValue( ::sal_Int32 Token )

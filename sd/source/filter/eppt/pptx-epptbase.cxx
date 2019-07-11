@@ -19,6 +19,8 @@
 
 #include "eppt.hxx"
 #include "epptdef.hxx"
+#include "pptexanimations.hxx"
+#include "../ppt/pptanimations.hxx"
 
 #include <o3tl/any.hxx>
 #include <tools/globname.hxx>
@@ -31,6 +33,7 @@
 #include <vcl/virdev.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/fltcall.hxx>
 #include <vcl/wmf.hxx>
 #include <sfx2/docfile.hxx>
@@ -43,6 +46,10 @@
 #include <com/sun/star/view/PaperOrientation.hpp>
 #include <com/sun/star/view/PaperFormat.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
+#include <com/sun/star/drawing/XMasterPageTarget.hpp>
+#include <com/sun/star/drawing/XMasterPagesSupplier.hpp>
+#include <com/sun/star/drawing/XDrawPagesSupplier.hpp>
+#include <com/sun/star/drawing/XDrawPages.hpp>
 #include <com/sun/star/office/XAnnotation.hpp>
 #include <com/sun/star/office/XAnnotationAccess.hpp>
 #include <com/sun/star/office/XAnnotationEnumeration.hpp>
@@ -88,7 +95,7 @@ using ::com::sun::star::uno::Exception;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::UNO_QUERY;
 
-static PHLayout pPHLayout[] =
+static PHLayout const pPHLayout[] =
 {
     { EppLayout::TITLESLIDE,            { 0x0d, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, 0x00, 0x0d, 0x10, true, true, false },
     { EppLayout::TITLEANDBODYSLIDE,     { 0x0d, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, 0x00, 0x0d, 0x0e, true, true, false },
@@ -118,9 +125,7 @@ static PHLayout pPHLayout[] =
 };
 
 PPTWriterBase::PPTWriterBase()
-    : mXModel(nullptr)
-    , mXStatusIndicator(nullptr)
-    , mbStatusIndicator(false)
+    : mbStatusIndicator(false)
     , mbPresObj(false)
     , mbEmptyPresObj(false)
     , mbIsBackgroundDark(false)
@@ -447,12 +452,12 @@ sal_Int32 PPTWriterBase::GetLayoutOffsetFixed( const css::uno::Reference< css::b
     return nLayout;
 }
 
-PHLayout& PPTWriterBase::GetLayout(  const css::uno::Reference< css::beans::XPropertySet >& rXPropSet )
+PHLayout const & PPTWriterBase::GetLayout(  const css::uno::Reference< css::beans::XPropertySet >& rXPropSet )
 {
     return pPHLayout[ GetLayoutOffsetFixed( rXPropSet ) ];
 }
 
-PHLayout& PPTWriterBase::GetLayout( sal_Int32 nOffset )
+PHLayout const & PPTWriterBase::GetLayout( sal_Int32 nOffset )
 {
     if( nOffset >= 0 && nOffset < EPP_LAYOUT_SIZE )
         return pPHLayout[ nOffset ];

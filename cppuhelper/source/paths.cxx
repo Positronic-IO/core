@@ -37,42 +37,37 @@
 namespace {
 
 #ifndef ANDROID
-rtl::OUString get_this_libpath() {
-    static rtl::OUString s_uri;
-    if (s_uri.isEmpty()) {
-        rtl::OUString uri;
-        osl::Module::getUrlFromAddress(
-            reinterpret_cast< oslGenericFunction >(get_this_libpath), uri);
+OUString get_this_libpath() {
+    static OUString s_uri = []() {
+        OUString uri;
+        osl::Module::getUrlFromAddress(reinterpret_cast<oslGenericFunction>(get_this_libpath), uri);
         sal_Int32 i = uri.lastIndexOf('/');
-        if (i == -1) {
-            throw css::uno::DeploymentException(
-                "URI " + uri + " is expected to contain a slash");
+        if (i == -1)
+        {
+            throw css::uno::DeploymentException("URI " + uri + " is expected to contain a slash");
         }
-        uri = uri.copy(0, i);
-        osl::MutexGuard guard(osl::Mutex::getGlobalMutex());
-        if (s_uri.isEmpty()) {
-            s_uri = uri;
-        }
-    }
+        return uri.copy(0, i);
+    }();
+
     return s_uri;
 }
 #endif
 }
 
-rtl::OUString cppu::getUnoIniUri() {
+OUString cppu::getUnoIniUri() {
 #if defined ANDROID
     // Wouldn't it be lovely to avoid this ugly hard-coding.
     // The problem is that the 'create_bootstrap_macro_expander_factory()'
     // required for bootstrapping services, calls cppu::get_unorc directly
-    // instead of re-using the BoostrapHandle from:
+    // instead of re-using the BootstrapHandle from:
     //     defaultBootstrap_InitialComponentContext
     // and since rtlBootstrapHandle is not ref-counted doing anything
     // clean here is hardish.
-    rtl::OUString uri("file:///assets/program");
+    OUString uri("file:///assets/program");
 #else
-    rtl::OUString uri(get_this_libpath());
+    OUString uri(get_this_libpath());
 #ifdef MACOSX
-    // We keep both the LO and URE dylibs direcly in "Frameworks"
+    // We keep both the LO and URE dylibs directly in "Frameworks"
     // (that is, LIBO_LIB_FOLDER) and rc files in "Resources"
     // (LIBO_ETC_FOLDER). Except for unorc, of which there are two,
     // the "LO" one (which is in "Resources") and the "URE" one (which
@@ -88,7 +83,7 @@ rtl::OUString cppu::getUnoIniUri() {
     return uri + "/" SAL_CONFIGFILE("uno");
 }
 
-bool cppu::nextDirectoryItem(osl::Directory & directory, rtl::OUString * url) {
+bool cppu::nextDirectoryItem(osl::Directory & directory, OUString * url) {
     assert(url != nullptr);
     for (;;) {
         osl::DirectoryItem i;
@@ -110,7 +105,7 @@ bool cppu::nextDirectoryItem(osl::Directory & directory, rtl::OUString * url) {
         }
         if (stat.getFileType() != osl::FileStatus::Directory) { //TODO: symlinks
             // Ignore backup files:
-            rtl::OUString name(stat.getFileName());
+            OUString name(stat.getFileName());
             if (!(name.match(".") || name.endsWith("~"))) {
                 *url = stat.getFileURL();
                 return true;
@@ -119,7 +114,7 @@ bool cppu::nextDirectoryItem(osl::Directory & directory, rtl::OUString * url) {
     }
 }
 
-void cppu::decodeRdbUri(rtl::OUString * uri, bool * optional, bool * directory)
+void cppu::decodeRdbUri(OUString * uri, bool * optional, bool * directory)
 {
     assert(uri != nullptr && optional != nullptr && directory != nullptr);
     if(!(uri->isEmpty()))

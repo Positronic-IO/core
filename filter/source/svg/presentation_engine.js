@@ -2432,7 +2432,7 @@ initMasterPage : function()
     var sMasterPageId = this.element.getAttributeNS( NSS['ooo'], aOOOAttrMaster );
 
     // Check that the master page handler object has not already been
-    // created by an other slide that target the same master page.
+    // created by another slide that target the same master page.
     if( !this.theMetaDoc.aMasterPageSet.hasOwnProperty( sMasterPageId ) )
     {
         this.theMetaDoc.aMasterPageSet[ sMasterPageId ] = new MasterPage( sMasterPageId, this );
@@ -7321,7 +7321,7 @@ BaseNode.prototype.registerDeactivatingListener = function( aNotifiee )
 
     if( !aNotifiee )
     {
-        log( 'BaseNode.registerDeactivatingListener(): invalid notifee' );
+        log( 'BaseNode.registerDeactivatingListener(): invalid notifiee' );
         return false;
     }
     this.aDeactivatingListenerArray.push( aNotifiee );
@@ -7987,7 +7987,7 @@ AnimationBaseNode3.prototype.info = function( bVerbose )
             sInfo += ';  keyTimes: ' + this.getKeyTimes().join( ',' );
 
         // values
-        if( this.getKeyTimes().length )
+        if( this.getValues().length )
             sInfo += ';  values: ' + this.getValues().join( ',' );
 
         // formula
@@ -12170,7 +12170,6 @@ SlideTransition.prototype.createSlideTransition = function( aLeavingSlide, aEnte
 
                 case PUSHWIPE_TRANSITION:
                 {
-                    var bCombined = false;
                     var aDirection = null;
                     switch( this.eTransitionSubType )
                     {
@@ -12192,10 +12191,7 @@ SlideTransition.prototype.createSlideTransition = function( aLeavingSlide, aEnte
                             aDirection = { x: -1.0, y: 0.0 };
                             break;
                     }
-                    if( bCombined )
-                        return null;
-                    else
-                        return new MovingSlideChange( aLeavingSlide, aEnteringSlide, aDirection, aDirection );
+                    return new MovingSlideChange( aLeavingSlide, aEnteringSlide, aDirection, aDirection );
                 }
 
                 case SLIDEWIPE_TRANSITION:

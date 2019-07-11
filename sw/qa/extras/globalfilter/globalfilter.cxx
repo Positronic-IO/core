@@ -272,7 +272,7 @@ void Test::testImageWithSpecialID()
 }
 
 /// Gives the first embedded or linked image in a document.
-uno::Reference<drawing::XShape> lcl_getShape(const uno::Reference<lang::XComponent>& xComponent, bool bEmbedded)
+static uno::Reference<drawing::XShape> lcl_getShape(const uno::Reference<lang::XComponent>& xComponent, bool bEmbedded)
 {
     uno::Reference<drawing::XShape> xShape;
 
@@ -287,8 +287,7 @@ uno::Reference<drawing::XShape> lcl_getShape(const uno::Reference<lang::XCompone
         {
             Graphic aGraphic(xGraphic);
 
-            if ((bEmbedded  && aGraphic.getOriginURL().isEmpty()) ||
-                (!bEmbedded && !aGraphic.getOriginURL().isEmpty()))
+            if (bEmbedded == aGraphic.getOriginURL().isEmpty())
             {
                 xShape.set(xShapeProperties, uno::UNO_QUERY);
                 return xShape;

@@ -20,6 +20,7 @@
 #include <hintids.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <svl/itemiter.hxx>
+#include <sal/log.hxx>
 #include <fmtcntnt.hxx>
 #include <fmtanchr.hxx>
 #include <txtftn.hxx>
@@ -57,6 +58,7 @@
 #include <hints.hxx>
 #include <memory>
 #include "ndsect.hxx"
+#include <o3tl/make_unique.hxx>
 #include <tools/datetimeutils.hxx>
 
 // #i21457# - new implementation of local method <lcl_IsInSameTableBox(..)>.
@@ -151,7 +153,7 @@ static void lcl_CheckEmptyLayFrame( SwNodes const & rNds, SwSectionData& rSectio
 
 SwSection *
 SwDoc::InsertSwSection(SwPaM const& rRange, SwSectionData & rNewData,
-                       SwTOXBase const*const pTOXBase,
+       std::pair<SwTOXBase const*, sw::RedlineMode> const*const pTOXBaseAndMode,
                        SfxItemSet const*const pAttr, bool const bUpdate)
 {
     const SwNode* pPrvNd = nullptr;
@@ -184,8 +186,8 @@ SwDoc::InsertSwSection(SwPaM const& rRange, SwSectionData & rNewData,
     bool const bUndo(GetIDocumentUndoRedo().DoesUndo());
     if (bUndo)
     {
-        pUndoInsSect = new SwUndoInsSection(rRange, rNewData, pAttr, pTOXBase);
-        GetIDocumentUndoRedo().AppendUndo( pUndoInsSect );
+        pUndoInsSect = new SwUndoInsSection(rRange, rNewData, pAttr, pTOXBaseAndMode);
+        GetIDocumentUndoRedo().AppendUndo( std::unique_ptr<SwUndo>(pUndoInsSect) );
         GetIDocumentUndoRedo().DoUndo(false);
     }
 
@@ -195,6 +197,7 @@ SwDoc::InsertSwSection(SwPaM const& rRange, SwSectionData & rNewData,
         pFormat->SetFormatAttr( *pAttr );
     }
 
+    SwTOXBase const*const pTOXBase(pTOXBaseAndMode ? pTOXBaseAndMode->first : nullptr);
     SwSectionNode* pNewSectNode = nullptr;
 
     RedlineFlags eOld = getIDocumentRedlineAccess().GetRedlineFlags();
@@ -349,7 +352,7 @@ SwDoc::InsertSwSection(SwPaM const& rRange, SwSectionData & rNewData,
     }
 
     bool bUpdateFootnote = false;
-    if( GetFootnoteIdxs().size() && pAttr )
+    if( !GetFootnoteIdxs().empty() && pAttr )
     {
         sal_uInt16 nVal = pAttr->Get( RES_FTN_AT_TXTEND ).GetValue();
            if( ( FTNEND_ATTXTEND_OWNNUMSEQ == nVal ||
@@ -505,7 +508,7 @@ SwSection* SwDoc::GetCurrSection( const SwPosition& rPos )
 
 SwSectionFormat* SwDoc::MakeSectionFormat()
 {
-    SwSectionFormat* pNew = new SwSectionFormat( mpDfltFrameFormat, this );
+    SwSectionFormat* pNew = new SwSectionFormat( mpDfltFrameFormat.get(), this );
     mpSectionFormatTable->push_back( pNew );
     return pNew;
 }
@@ -535,7 +538,7 @@ void SwDoc::DelSectionFormat( SwSectionFormat *pFormat, bool bDelNodes )
             {
                 SwNodeIndex aUpdIdx( *pIdx );
                 SwPaM aPaM( *pSectNd->EndOfSectionNode(), *pSectNd );
-                GetIDocumentUndoRedo().AppendUndo( new SwUndoDelete( aPaM ));
+                GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoDelete>( aPaM ));
                 if( pFootnoteEndAtTextEnd )
                     GetFootnoteIdxs().UpdateFootnote( aUpdIdx );
                 getIDocumentState().SetModified();
@@ -747,7 +750,7 @@ void SwDoc::UpdateSection( size_t const nPos, SwSectionData & rNewData,
 void sw_DeleteFootnote( SwSectionNode *pNd, sal_uLong nStt, sal_uLong nEnd )
 {
     SwFootnoteIdxs& rFootnoteArr = pNd->GetDoc()->GetFootnoteIdxs();
-    if( rFootnoteArr.size() )
+    if( !rFootnoteArr.empty() )
     {
         size_t nPos = 0;
         rFootnoteArr.SeekEntry( SwNodeIndex( *pNd ), &nPos );
@@ -773,7 +776,7 @@ void sw_DeleteFootnote( SwSectionNode *pNd, sal_uLong nStt, sal_uLong nEnd )
     }
 }
 
-static inline bool lcl_IsTOXSection(SwSectionData const& rSectionData)
+static bool lcl_IsTOXSection(SwSectionData const& rSectionData)
 {
     return (TOX_CONTENT_SECTION == rSectionData.GetType())
         || (TOX_HEADER_SECTION  == rSectionData.GetType());
@@ -878,7 +881,7 @@ SwSectionNode* SwNodes::InsertTextSection(SwNodeIndex const& rNdIdx,
                     pTNd->SetAttr( rSet );
             }
             // Do not forget to create the Frame!
-            pCpyTNd->MakeFrames( *pTNd );
+            pCpyTNd->MakeFramesForAdjacentContentNode(*pTNd);
         }
         else
             new SwTextNode( aInsPos, GetDoc()->GetDfltTextFormatColl() );
@@ -892,13 +895,13 @@ SwSectionNode* SwNodes::InsertTextSection(SwNodeIndex const& rNdIdx,
     // but by simply rewiring them
     bool bInsFrame = bCreateFrames && !pSectNd->GetSection().IsHidden() &&
                    GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
-    SwNode2Layout *pNode2Layout = nullptr;
+    SwNode2LayoutSaveUpperFrames *pNode2Layout = nullptr;
     if( bInsFrame )
     {
         SwNodeIndex aTmp( *pSectNd );
         if( !pSectNd->GetNodes().FindPrvNxtFrameNode( aTmp, pSectNd->EndOfSectionNode() ) )
             // Collect all Uppers
-            pNode2Layout = new SwNode2Layout( *pSectNd );
+            pNode2Layout = new SwNode2LayoutSaveUpperFrames(*pSectNd);
     }
 
     // Set the right StartNode for all in this Area
@@ -935,7 +938,7 @@ SwSectionNode* SwNodes::InsertTextSection(SwNodeIndex const& rNdIdx,
             }
         }
         else if( pNd->IsContentNode() )
-            static_cast<SwContentNode*>(pNd)->DelFrames();
+            static_cast<SwContentNode*>(pNd)->DelFrames(nullptr);
     }
 
     sw_DeleteFootnote( pSectNd, nStart, nEnde );
@@ -949,7 +952,7 @@ SwSectionNode* SwNodes::InsertTextSection(SwNodeIndex const& rNdIdx,
             delete pNode2Layout;
         }
         else
-            pSectNd->MakeFrames( &aInsPos );
+            pSectNd->MakeOwnFrames(&aInsPos);
     }
 
     return pSectNd;
@@ -1020,9 +1023,9 @@ SwFrame *SwSectionNode::MakeFrame( SwFrame *pSib )
 
 // Creates all Document Views for the preceding Node.
 // The created ContentFrames are attached to the corresponding Layout
-void SwSectionNode::MakeFrames(const SwNodeIndex & rIdx )
+void SwSectionNode::MakeFramesForAdjacentContentNode(const SwNodeIndex & rIdx)
 {
-    // Take my succsessive or preceding ContentFrame
+    // Take my successive or preceding ContentFrame
     SwNodes& rNds = GetNodes();
     if( rNds.IsDocNodes() && rNds.GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell() )
     {
@@ -1038,7 +1041,7 @@ void SwSectionNode::MakeFrames(const SwNodeIndex & rIdx )
                     return;
             }
             pCNd = aIdx.GetNode().GetContentNode();
-            pCNd->MakeFrames( static_cast<SwContentNode&>(rIdx.GetNode()) );
+            pCNd->MakeFramesForAdjacentContentNode(static_cast<SwContentNode&>(rIdx.GetNode()));
         }
         else
         {
@@ -1047,6 +1050,11 @@ void SwSectionNode::MakeFrames(const SwNodeIndex & rIdx )
             while( nullptr != (pFrame = aNode2Layout.NextFrame()) )
             {
                 OSL_ENSURE( pFrame->IsSctFrame(), "Depend of Section not a Section." );
+                if (pFrame->getRootFrame()->IsHideRedlines()
+                    && !rIdx.GetNode().IsCreateFrameWhenHidingRedlines())
+                {
+                    continue;
+                }
                 SwFrame *pNew = rIdx.GetNode().GetContentNode()->MakeFrame( pFrame );
 
                 SwSectionNode* pS = rIdx.GetNode().FindSectionNode();
@@ -1130,7 +1138,7 @@ void SwSectionNode::MakeFrames(const SwNodeIndex & rIdx )
 
 // Create a new SectionFrame for every occurrence in the Layout and insert before
 // the corresponding ContentFrame
-void SwSectionNode::MakeFrames( SwNodeIndex* pIdxBehind, SwNodeIndex* pEndIdx )
+void SwSectionNode::MakeOwnFrames(SwNodeIndex* pIdxBehind, SwNodeIndex* pEndIdx)
 {
     OSL_ENSURE( pIdxBehind, "no Index" );
     SwNodes& rNds = GetNodes();
@@ -1150,7 +1158,7 @@ void SwSectionNode::MakeFrames( SwNodeIndex* pIdxBehind, SwNodeIndex* pEndIdx )
     }
 }
 
-void SwSectionNode::DelFrames()
+void SwSectionNode::DelFrames(SwRootFrame const*const /*FIXME TODO*/)
 {
     sal_uLong nStt = GetIndex()+1, nEnd = EndOfSectionIndex();
     if( nStt >= nEnd )
@@ -1362,8 +1370,8 @@ OUString SwDoc::GetUniqueSectionName( const OUString* pChkStr ) const
 
     SwSectionFormats::size_type nNum = 0;
     const SwSectionFormats::size_type nFlagSize = ( mpSectionFormatTable->size() / 8 ) + 2;
-    sal_uInt8* pSetFlags = new sal_uInt8[ nFlagSize ];
-    memset( pSetFlags, 0, nFlagSize );
+    std::unique_ptr<sal_uInt8[]> pSetFlags(new sal_uInt8[ nFlagSize ]);
+    memset( pSetFlags.get(), 0, nFlagSize );
 
     for( auto pFormat : *mpSectionFormatTable )
     {
@@ -1403,7 +1411,7 @@ OUString SwDoc::GetUniqueSectionName( const OUString* pChkStr ) const
             }
         }
     }
-    delete [] pSetFlags;
+    pSetFlags.reset();
     if( pChkStr )
         return *pChkStr;
     return aName + OUString::number( ++nNum );

@@ -26,6 +26,7 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <typeinfo>
@@ -76,17 +77,14 @@ using ::com::sun::star::uno::Sequence;
     sal_Int32 nIndex=0;
 
     ::std::vector< Reference< chart2::XDataSeries > > aSeriesVector( SchXMLSeriesHelper::getDataSeriesFromDiagram( xDiagram ));
-    const ::std::vector< Reference< chart2::XDataSeries > >::const_iterator aSeriesEnd( aSeriesVector.end() );
-    for( ::std::vector< Reference< chart2::XDataSeries > >::const_iterator aSeriesIt( aSeriesVector.begin() )
-        ; aSeriesIt != aSeriesEnd
-        ; ++aSeriesIt, nIndex++ )
+    for( const Reference< chart2::XDataSeries >& xSeries : aSeriesVector )
     {
-        Reference< chart2::XDataSeries > xSeries( *aSeriesIt );
         if( xSeries.is() )
         {
             if( aRet.end() == aRet.find(xSeries) )
                 aRet[xSeries]=nIndex;
         }
+        nIndex++;
     }
     return aRet;
 }

@@ -104,14 +104,14 @@ SfxEventNamesItem SwMacroAssignDlg::AddEvents( DlgEventType eType )
     return aItem;
 }
 
-bool SwMacroAssignDlg::INetFormatDlg( vcl::Window* pParent, SwWrtShell& rSh,
-                                    SvxMacroItem*& rpINetItem )
+bool SwMacroAssignDlg::INetFormatDlg(weld::Window* pParent, SwWrtShell& rSh,
+                                     std::unique_ptr<SvxMacroItem>& rpINetItem )
 {
     bool bRet = false;
     SfxItemSet aSet( rSh.GetAttrPool(), svl::Items<RES_FRMMACRO, RES_FRMMACRO, SID_EVENTCONFIG, SID_EVENTCONFIG>{} );
     SvxMacroItem aItem( RES_FRMMACRO );
     if( !rpINetItem )
-        rpINetItem = new SvxMacroItem( RES_FRMMACRO );
+        rpINetItem.reset(new SvxMacroItem( RES_FRMMACRO ));
     else
         aItem.SetMacroTable( rpINetItem->GetMacroTable() );
 
@@ -119,7 +119,7 @@ bool SwMacroAssignDlg::INetFormatDlg( vcl::Window* pParent, SwWrtShell& rSh,
     aSet.Put( AddEvents( MACASSGN_INETFMT ) );
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<SfxAbstractDialog> pMacroDlg( pFact->CreateEventConfigDialog( pParent, aSet,
+    ScopedVclPtr<SfxAbstractDialog> pMacroDlg( pFact->CreateEventConfigDialog(pParent, aSet,
         rSh.GetView().GetViewFrame()->GetFrame().GetFrameInterface() ) );
     if ( pMacroDlg && pMacroDlg->Execute() == RET_OK )
     {

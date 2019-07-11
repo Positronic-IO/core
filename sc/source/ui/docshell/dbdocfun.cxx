@@ -17,12 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <o3tl/make_unique.hxx>
 #include <sfx2/app.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/waitobj.hxx>
 #include <svx/dataaccessdescriptor.hxx>
 #include <svx/svdpage.hxx>
+#include <svx/svdoole2.hxx>
 #include <com/sun/star/sdb/CommandType.hpp>
+#include <unotools/charclass.hxx>
 
 #include <dbdocfun.hxx>
 #include <sc.hrc>
@@ -50,6 +53,7 @@
 #include <progress.hxx>
 #include <undosort.hxx>
 #include <inputopt.hxx>
+#include <scmod.hxx>
 
 #include <chartlis.hxx>
 #include <ChartTools.hxx>
@@ -68,9 +72,9 @@ bool ScDBDocFunc::AddDBRange( const OUString& rName, const ScRange& rRange )
     ScDBCollection* pDocColl = rDoc.GetDBCollection();
     bool bUndo (rDoc.IsUndoEnabled());
 
-    ScDBCollection* pUndoColl = nullptr;
+    std::unique_ptr<ScDBCollection> pUndoColl;
     if (bUndo)
-        pUndoColl = new ScDBCollection( *pDocColl );
+        pUndoColl.reset( new ScDBCollection( *pDocColl ) );
 
     std::unique_ptr<ScDBData> pNew(new ScDBData( rName, rRange.aStart.Tab(),
                                     rRange.aStart.Col(), rRange.aStart.Row(),
@@ -90,22 +94,21 @@ bool ScDBDocFunc::AddDBRange( const OUString& rName, const ScRange& rRange )
     }
     else
     {
-        bOk = pDocColl->getNamedDBs().insert(pNew.release());
+        bOk = pDocColl->getNamedDBs().insert(std::move(pNew));
     }
     if ( bCompile )
         rDoc.CompileHybridFormula();
 
     if (!bOk)
     {
-        delete pUndoColl;
         return false;
     }
 
     if (bUndo)
     {
-        ScDBCollection* pRedoColl = new ScDBCollection( *pDocColl );
         rDocShell.GetUndoManager()->AddUndoAction(
-                        new ScUndoDBData( &rDocShell, pUndoColl, pRedoColl ) );
+                        o3tl::make_unique<ScUndoDBData>( &rDocShell, std::move(pUndoColl),
+                            o3tl::make_unique<ScDBCollection>( *pDocColl ) ) );
     }
 
     aModificator.SetDocumentModified();
@@ -126,9 +129,9 @@ bool ScDBDocFunc::DeleteDBRange(const OUString& rName)
     {
         ScDocShellModificator aModificator( rDocShell );
 
-        ScDBCollection* pUndoColl = nullptr;
+        std::unique_ptr<ScDBCollection> pUndoColl;
         if (bUndo)
-            pUndoColl = new ScDBCollection( *pDocColl );
+            pUndoColl.reset( new ScDBCollection( *pDocColl ) );
 
         rDoc.PreprocessDBDataUpdate();
         rDBs.erase(iter);
@@ -136,9 +139,9 @@ bool ScDBDocFunc::DeleteDBRange(const OUString& rName)
 
         if (bUndo)
         {
-            ScDBCollection* pRedoColl = new ScDBCollection( *pDocColl );
             rDocShell.GetUndoManager()->AddUndoAction(
-                            new ScUndoDBData( &rDocShell, pUndoColl, pRedoColl ) );
+                            o3tl::make_unique<ScUndoDBData>( &rDocShell, std::move(pUndoColl),
+                                o3tl::make_unique<ScDBCollection>( *pDocColl ) ) );
         }
 
         aModificator.SetDocumentModified();
@@ -162,13 +165,13 @@ bool ScDBDocFunc::RenameDBRange( const OUString& rOld, const OUString& rNew )
     {
         ScDocShellModificator aModificator( rDocShell );
 
-        ScDBData* pNewData = new ScDBData(rNew, **iterOld);
+        std::unique_ptr<ScDBData> pNewData(new ScDBData(rNew, **iterOld));
 
         std::unique_ptr<ScDBCollection> pUndoColl( new ScDBCollection( *pDocColl ) );
 
         rDoc.PreprocessDBDataUpdate();
         rDBs.erase(iterOld);
-        bool bInserted = rDBs.insert(pNewData);
+        bool bInserted = rDBs.insert(std::move(pNewData));
         if (!bInserted)                             // error -> restore old state
         {
             rDoc.SetDBCollection(std::move(pUndoColl));       // belongs to the document then
@@ -180,9 +183,9 @@ bool ScDBDocFunc::RenameDBRange( const OUString& rOld, const OUString& rNew )
         {
             if (bUndo)
             {
-                ScDBCollection* pRedoColl = new ScDBCollection( *pDocColl );
                 rDocShell.GetUndoManager()->AddUndoAction(
-                                new ScUndoDBData( &rDocShell, pUndoColl.release(), pRedoColl ) );
+                                o3tl::make_unique<ScUndoDBData>( &rDocShell, std::move(pUndoColl),
+                                    o3tl::make_unique<ScDBCollection>( *pDocColl ) ) );
             }
             else
                 pUndoColl.reset();
@@ -221,9 +224,9 @@ void ScDBDocFunc::ModifyDBData( const ScDBData& rNewData )
         rNewData.GetArea(aNewRange);
         bool bAreaChanged = ( aOldRange != aNewRange );     // then a recompilation is needed
 
-        ScDBCollection* pUndoColl = nullptr;
+        std::unique_ptr<ScDBCollection> pUndoColl;
         if (bUndo)
-            pUndoColl = new ScDBCollection( *pDocColl );
+            pUndoColl.reset( new ScDBCollection( *pDocColl ) );
 
         *pData = rNewData;
         if (bAreaChanged)
@@ -231,9 +234,9 @@ void ScDBDocFunc::ModifyDBData( const ScDBData& rNewData )
 
         if (bUndo)
         {
-            ScDBCollection* pRedoColl = new ScDBCollection( *pDocColl );
             rDocShell.GetUndoManager()->AddUndoAction(
-                            new ScUndoDBData( &rDocShell, pUndoColl, pRedoColl ) );
+                            o3tl::make_unique<ScUndoDBData>( &rDocShell, std::move(pUndoColl),
+                                o3tl::make_unique<ScDBCollection>( *pDocColl ) ) );
         }
 
         aModificator.SetDocumentModified();
@@ -245,7 +248,7 @@ void ScDBDocFunc::ModifyAllDBData( const ScDBCollection& rNewColl, const std::ve
     ScDocShellModificator aModificator(rDocShell);
     ScDocument& rDoc = rDocShell.GetDocument();
     ScDBCollection* pOldColl = rDoc.GetDBCollection();
-    ScDBCollection* pUndoColl = nullptr;
+    std::unique_ptr<ScDBCollection> pUndoColl;
     bool bRecord = rDoc.IsUndoEnabled();
 
     std::vector<ScRange>::const_iterator iter;
@@ -259,7 +262,7 @@ void ScDBDocFunc::ModifyAllDBData( const ScDBCollection& rNewColl, const std::ve
     }
 
     if (bRecord)
-        pUndoColl = new ScDBCollection( *pOldColl );
+        pUndoColl.reset( new ScDBCollection( *pOldColl ) );
 
     //  register target in SBA no longer necessary
 
@@ -273,9 +276,9 @@ void ScDBDocFunc::ModifyAllDBData( const ScDBCollection& rNewColl, const std::ve
 
     if (bRecord)
     {
-        ScDBCollection* pRedoColl = new ScDBCollection(rNewColl);
         rDocShell.GetUndoManager()->AddUndoAction(
-            new ScUndoDBData(&rDocShell, pUndoColl, pRedoColl));
+            o3tl::make_unique<ScUndoDBData>(&rDocShell, std::move(pUndoColl),
+                o3tl::make_unique<ScDBCollection>(rNewColl)));
     }
 }
 
@@ -339,19 +342,19 @@ bool ScDBDocFunc::RepeatDB( const OUString& rDBName, bool bApi, bool bIsUnnamed,
 
             //!     Undo needed data only ?
 
-            ScDocument* pUndoDoc = nullptr;
-            ScOutlineTable* pUndoTab = nullptr;
-            ScRangeName* pUndoRange = nullptr;
-            ScDBCollection* pUndoDB = nullptr;
+            ScDocumentUniquePtr pUndoDoc;
+            std::unique_ptr<ScOutlineTable> pUndoTab;
+            std::unique_ptr<ScRangeName> pUndoRange;
+            std::unique_ptr<ScDBCollection> pUndoDB;
 
             if (bRecord)
             {
                 SCTAB nTabCount = rDoc.GetTableCount();
-                pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+                pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
                 ScOutlineTable* pTable = rDoc.GetOutlineTable( nTab );
                 if (pTable)
                 {
-                    pUndoTab = new ScOutlineTable( *pTable );
+                    pUndoTab.reset(new ScOutlineTable( *pTable ));
 
                     // column/row state
                     SCCOLROW nOutStartCol, nOutEndCol;
@@ -379,10 +382,10 @@ bool ScDBDocFunc::RepeatDB( const OUString& rDBName, bool bApi, bool bIsUnnamed,
                 //  ranges of DB and other
                 ScRangeName* pDocRange = rDoc.GetRangeName();
                 if (!pDocRange->empty())
-                    pUndoRange = new ScRangeName( *pDocRange );
+                    pUndoRange.reset(new ScRangeName( *pDocRange ));
                 ScDBCollection* pDocDB = rDoc.GetDBCollection();
                 if (!pDocDB->empty())
-                    pUndoDB = new ScDBCollection( *pDocDB );
+                    pUndoDB.reset(new ScDBCollection( *pDocDB ));
             }
 
             if (bSort && bSubTotal)
@@ -441,13 +444,13 @@ bool ScDBDocFunc::RepeatDB( const OUString& rDBName, bool bApi, bool bIsUnnamed,
                 }
 
                 rDocShell.GetUndoManager()->AddUndoAction(
-                    new ScUndoRepeatDB( &rDocShell, nTab,
+                    o3tl::make_unique<ScUndoRepeatDB>( &rDocShell, nTab,
                                             nStartCol, nStartRow, nEndCol, nEndRow,
                                             nNewEndRow,
                                             //nCurX, nCurY,
                                             nStartCol, nStartRow,
-                                            pUndoDoc, pUndoTab,
-                                            pUndoRange, pUndoDB,
+                                            std::move(pUndoDoc), std::move(pUndoTab),
+                                            std::move(pUndoRange), std::move(pUndoDB),
                                             pOld, pNew ) );
             }
 
@@ -569,8 +572,8 @@ bool ScDBDocFunc::Sort( SCTAB nTab, const ScSortParam& rSortParam,
     if (bRecord)
     {
         // Set up an undo object.
-        sc::UndoSort* pUndoAction = new sc::UndoSort(&rDocShell, aUndoParam);
-        rDocShell.GetUndoManager()->AddUndoAction(pUndoAction);
+        rDocShell.GetUndoManager()->AddUndoAction(
+            o3tl::make_unique<sc::UndoSort>(&rDocShell, aUndoParam));
     }
 
     pDBData->SetSortParam(rSortParam);
@@ -734,13 +737,13 @@ bool ScDBDocFunc::Query( SCTAB nTab, const ScQueryParam& rQueryParam,
             bKeepSub = true;
     }
 
-    ScDocument* pUndoDoc = nullptr;
-    ScDBCollection* pUndoDB = nullptr;
+    ScDocumentUniquePtr pUndoDoc;
+    std::unique_ptr<ScDBCollection> pUndoDB;
     const ScRange* pOld = nullptr;
 
     if ( bRecord )
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
         if (bCopy)
         {
             pUndoDoc->InitUndo( &rDoc, nDestTab, nDestTab, false, true );
@@ -764,7 +767,7 @@ bool ScDBDocFunc::Query( SCTAB nTab, const ScQueryParam& rQueryParam,
 
         ScDBCollection* pDocDB = rDoc.GetDBCollection();
         if (!pDocDB->empty())
-            pUndoDB = new ScDBCollection( *pDocDB );
+            pUndoDB.reset(new ScDBCollection( *pDocDB ));
 
         rDoc.BeginDrawUndo();
     }
@@ -928,7 +931,7 @@ bool ScDBDocFunc::Query( SCTAB nTab, const ScQueryParam& rQueryParam,
     {
         // create undo action after executing, because of drawing layer undo
         rDocShell.GetUndoManager()->AddUndoAction(
-                    new ScUndoQuery( &rDocShell, nTab, rQueryParam, pUndoDoc, pUndoDB,
+                    o3tl::make_unique<ScUndoQuery>( &rDocShell, nTab, rQueryParam, std::move(pUndoDoc), std::move(pUndoDB),
                                         pOld, bDoSize, pAdvSource ) );
     }
 
@@ -1025,21 +1028,21 @@ void ScDBDocFunc::DoSubTotals( SCTAB nTab, const ScSubTotalParam& rParam,
         ScDocShellModificator aModificator( rDocShell );
 
         ScSubTotalParam aNewParam( rParam );        // end of range is being changed
-        ScDocument*     pUndoDoc = nullptr;
-        ScOutlineTable* pUndoTab = nullptr;
-        ScRangeName*    pUndoRange = nullptr;
-        ScDBCollection* pUndoDB = nullptr;
+        ScDocumentUniquePtr pUndoDoc;
+        std::unique_ptr<ScOutlineTable> pUndoTab;
+        std::unique_ptr<ScRangeName> pUndoRange;
+        std::unique_ptr<ScDBCollection> pUndoDB;
 
         if (bRecord)                                        // secure old data
         {
             bool bOldFilter = bDo && rParam.bDoSort;
 
             SCTAB nTabCount = rDoc.GetTableCount();
-            pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+            pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
             ScOutlineTable* pTable = rDoc.GetOutlineTable( nTab );
             if (pTable)
             {
-                pUndoTab = new ScOutlineTable( *pTable );
+                pUndoTab.reset(new ScOutlineTable( *pTable ));
 
                 // column/row state
                 SCCOLROW nOutStartCol, nOutEndCol;
@@ -1065,10 +1068,10 @@ void ScDBDocFunc::DoSubTotals( SCTAB nTab, const ScSubTotalParam& rParam,
             //  ranges of DB and other
             ScRangeName* pDocRange = rDoc.GetRangeName();
             if (!pDocRange->empty())
-                pUndoRange = new ScRangeName( *pDocRange );
+                pUndoRange.reset(new ScRangeName( *pDocRange ));
             ScDBCollection* pDocDB = rDoc.GetDBCollection();
             if (!pDocDB->empty())
-                pUndoDB = new ScDBCollection( *pDocDB );
+                pUndoDB.reset(new ScDBCollection( *pDocDB ));
         }
 
 //      rDoc.SetOutlineTable( nTab, NULL );
@@ -1106,10 +1109,10 @@ void ScDBDocFunc::DoSubTotals( SCTAB nTab, const ScSubTotalParam& rParam,
         {
 //          ScDBData* pUndoDBData = pDBData ? new ScDBData( *pDBData ) : NULL;
             rDocShell.GetUndoManager()->AddUndoAction(
-                new ScUndoSubTotals( &rDocShell, nTab,
+                o3tl::make_unique<ScUndoSubTotals>( &rDocShell, nTab,
                                         rParam, aNewParam.nRow2,
-                                        pUndoDoc, pUndoTab, // pUndoDBData,
-                                        pUndoRange, pUndoDB ) );
+                                        std::move(pUndoDoc), std::move(pUndoTab), // pUndoDBData,
+                                        std::move(pUndoRange), std::move(pUndoDB) ) );
         }
 
         if (!bSuccess)
@@ -1239,14 +1242,11 @@ bool ScDBDocFunc::DataPilotUpdate( ScDPObject* pOldObj, const ScDPObject* pNewOb
         return CreatePivotTable(*pNewObj, bRecord, bApi);
     }
 
-    if (pOldObj)
-    {
-        if (!pNewObj)
-            return RemovePivotTable(*pOldObj, bRecord, bApi);
+    if (!pNewObj)
+        return RemovePivotTable(*pOldObj, bRecord, bApi);
 
-        if (pOldObj == pNewObj)
-            return UpdatePivotTable(*pOldObj, bRecord, bApi);
-    }
+    if (pOldObj == pNewObj)
+        return UpdatePivotTable(*pOldObj, bRecord, bApi);
 
     OSL_ASSERT(pOldObj && pNewObj && pOldObj != pNewObj);
 
@@ -1323,8 +1323,8 @@ bool ScDBDocFunc::DataPilotUpdate( ScDPObject* pOldObj, const ScDPObject* pNewOb
     if (bRecord)
     {
         rDocShell.GetUndoManager()->AddUndoAction(
-            new ScUndoDataPilot(
-                &rDocShell, pOldUndoDoc.release(), pNewUndoDoc.release(), &aUndoDPObj, pOldObj, bAllowMove));
+            o3tl::make_unique<ScUndoDataPilot>(
+                &rDocShell, std::move(pOldUndoDoc), std::move(pNewUndoDoc), &aUndoDPObj, pOldObj, bAllowMove));
     }
 
     // notify API objects
@@ -1368,8 +1368,8 @@ bool ScDBDocFunc::RemovePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
                 for (SdrOle2Obj* pChartObject : aListOfObjects)
                 {
                     rDoc.GetChartListenerCollection()->removeByName(pChartObject->GetName());
-                    pModel->AddUndo(new SdrUndoDelObj(*pChartObject));
-                    pChartObject->GetPage()->RemoveObject(pChartObject->GetOrdNum());
+                    pModel->AddUndo(o3tl::make_unique<SdrUndoDelObj>(*pChartObject));
+                    pChartObject->getSdrPageFromSdrObject()->RemoveObject(pChartObject->GetOrdNum());
                 }
             }
         }
@@ -1407,8 +1407,8 @@ bool ScDBDocFunc::RemovePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
     if (bRecord)
     {
         rDocShell.GetUndoManager()->AddUndoAction(
-            new ScUndoDataPilot(
-                &rDocShell, pOldUndoDoc.release(), nullptr, pUndoDPObj.get(), nullptr, false));
+            o3tl::make_unique<ScUndoDataPilot>(
+                &rDocShell, std::move(pOldUndoDoc), nullptr, pUndoDPObj.get(), nullptr, false));
 
         // pUndoDPObj is copied
     }
@@ -1445,9 +1445,8 @@ bool ScDBDocFunc::CreatePivotTable(const ScDPObject& rDPObj, bool bRecord, bool 
 
     // Synchronize groups between linked tables
     {
-        bool bRefFound = false;
         const ScDPDimensionSaveData* pGroups = nullptr;
-        bRefFound = rDoc.GetDPCollection()->GetReferenceGroups(rDestObj, &pGroups);
+        bool bRefFound = rDoc.GetDPCollection()->GetReferenceGroups(rDestObj, &pGroups);
         if (bRefFound)
         {
             ScDPSaveData* pSaveData = rDestObj.GetSaveData();
@@ -1456,9 +1455,7 @@ bool ScDBDocFunc::CreatePivotTable(const ScDPObject& rDPObj, bool bRecord, bool 
         }
     }
 
-    if (!rDoc.GetDPCollection()->InsertNewTable(pDestObj.release()))
-        // Insertion into collection failed.
-        return false;
+    rDoc.GetDPCollection()->InsertNewTable(std::move(pDestObj));
 
     rDestObj.ReloadGroupTableData();
     rDestObj.SyncAllDimensionMembers();
@@ -1522,7 +1519,7 @@ bool ScDBDocFunc::CreatePivotTable(const ScDPObject& rDPObj, bool bRecord, bool 
     if (bRecord)
     {
         rDocShell.GetUndoManager()->AddUndoAction(
-            new ScUndoDataPilot(&rDocShell, nullptr, pNewUndoDoc.release(), nullptr, &rDestObj, false));
+            o3tl::make_unique<ScUndoDataPilot>(&rDocShell, nullptr, std::move(pNewUndoDoc), nullptr, &rDestObj, false));
     }
 
     // notify API objects
@@ -1597,8 +1594,8 @@ bool ScDBDocFunc::UpdatePivotTable(ScDPObject& rDPObj, bool bRecord, bool bApi)
     if (bRecord)
     {
         rDocShell.GetUndoManager()->AddUndoAction(
-            new ScUndoDataPilot(
-                &rDocShell, pOldUndoDoc.release(), pNewUndoDoc.release(), &aUndoDPObj, &rDPObj, false));
+            o3tl::make_unique<ScUndoDataPilot>(
+                &rDocShell, std::move(pOldUndoDoc), std::move(pNewUndoDoc), &aUndoDPObj, &rDPObj, false));
     }
 
     // notify API objects

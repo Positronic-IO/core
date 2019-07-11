@@ -25,8 +25,8 @@
 #include "NPreparedStatement.hxx"
 #include "NStatement.hxx"
 #include <connectivity/dbexception.hxx>
-#include <comphelper/sequence.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 using namespace connectivity::evoab;
 using namespace dbtools;
@@ -41,7 +41,6 @@ using namespace ::com::sun::star::lang;
 OEvoabConnection::OEvoabConnection(OEvoabDriver const & _rDriver)
     : m_rDriver(_rDriver)
     , m_eSDBCAddressType(SDBCAddress::EVO_LOCAL)
-    , m_xCatalog(nullptr)
 {
 }
 

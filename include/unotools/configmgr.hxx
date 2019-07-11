@@ -43,7 +43,9 @@ public:
 
     static OUString getDefaultCurrency();
 
-    static OUString getLocale();
+    static OUString getUILocale();
+
+    static OUString getWorkLocale();
 
     static OUString getProductExtension();
 
@@ -74,7 +76,11 @@ public:
     // Avoid using the config layer and rely on defaults which is only useful
     // for special test tool targets (typically fuzzing) where start-up speed
     // is of the essence
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+    static constexpr bool IsFuzzing() { return true; }
+#else
     static bool IsFuzzing();
+#endif
     static void EnableFuzzing();
 
 private:

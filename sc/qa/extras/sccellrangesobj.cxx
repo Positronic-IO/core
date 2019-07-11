@@ -8,10 +8,13 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/sheetcellranges.hxx>
+#include <test/sheet/xformulaquery.hxx>
 #include <test/sheet/xsheetcellrangecontainer.hxx>
 #include <test/sheet/xsheetcellranges.hxx>
 #include <test/sheet/xsheetoperation.hxx>
+#include <test/util/xindent.hxx>
 
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
@@ -30,6 +33,9 @@ namespace sc_apitest {
 
 class ScCellRangesObj : public CalcUnoApiTest,
                         public apitest::SheetCellRanges,
+                        public apitest::XEnumerationAccess,
+                        public apitest::XFormulaQuery,
+                        public apitest::XIndent,
                         public apitest::XSheetCellRangeContainer,
                         public apitest::XSheetCellRanges,
                         public apitest::XSheetOperation
@@ -40,12 +46,24 @@ public:
     virtual void setUp() override;
     virtual void tearDown() override;
 
+    virtual uno::Reference< uno::XInterface > getXSpreadsheet() override;
     virtual uno::Reference< uno::XInterface > init() override;
 
     CPPUNIT_TEST_SUITE(ScCellRangesObj);
 
     // SheetCellRanges
     CPPUNIT_TEST(testSheetCellRangesProperties);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
+
+    // XFormulaQuery
+    CPPUNIT_TEST(testQueryDependents);
+    CPPUNIT_TEST(testQueryPrecedents);
+
+    // XIndent
+    CPPUNIT_TEST(testIncrementIndent);
+    CPPUNIT_TEST(testDecrementIndent);
 
     // XSheetCellRangeContainer
     CPPUNIT_TEST(testAddRemoveRangeAddress);
@@ -67,14 +85,14 @@ private:
 };
 
 ScCellRangesObj::ScCellRangesObj():
-    CalcUnoApiTest("/sc/qa/extras/testdocuments")
+    CalcUnoApiTest("/sc/qa/extras/testdocuments"),
+    apitest::XFormulaQuery(table::CellRangeAddress(0, 4, 1, 5, 4), table::CellRangeAddress(0, 4, 1, 5, 4))
 {
 }
 
 uno::Reference< uno::XInterface > ScCellRangesObj::init()
 {
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference< container::XIndexAccess > xIndexAccess(xDoc->getSheets(), uno::UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet(xIndexAccess->getByIndex(0), uno::UNO_QUERY_THROW);
@@ -100,6 +118,19 @@ uno::Reference< uno::XInterface > ScCellRangesObj::init()
     }
 
     return xRanges;
+}
+
+uno::Reference<uno::XInterface> ScCellRangesObj::getXSpreadsheet()
+{
+    uno::Reference< sheet::XSpreadsheetDocument > xSheetDoc(mxComponent, uno::UNO_QUERY_THROW);
+
+    uno::Reference<sheet::XSpreadsheets> xSheets (xSheetDoc->getSheets(), UNO_QUERY_THROW);
+    uno::Reference<container::XIndexAccess> xIndex(xSheets, UNO_QUERY_THROW);
+    uno::Reference<sheet::XSpreadsheet> xSheet(xIndex->getByIndex(0), UNO_QUERY_THROW);
+
+    setXCell(xSheet->getCellByPosition(15, 15));
+
+    return xSheet;
 }
 
 void ScCellRangesObj::setUp()

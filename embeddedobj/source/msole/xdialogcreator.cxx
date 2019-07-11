@@ -43,6 +43,7 @@
 #ifdef _WIN32
 
 #include <oledlg.h>
+#include <vcl/winscheduler.hxx>
 
 class InitializedOleGuard
 {
@@ -69,7 +70,7 @@ typedef UINT STDAPICALLTYPE OleUIInsertObjectA_Type(LPOLEUIINSERTOBJECTA);
 using namespace ::com::sun::star;
 using namespace ::comphelper;
 
-uno::Sequence< sal_Int8 > GetRelatedInternalID_Impl( const uno::Sequence< sal_Int8 >& aClassID )
+static uno::Sequence< sal_Int8 > GetRelatedInternalID_Impl( const uno::Sequence< sal_Int8 >& aClassID )
 {
     // Writer
     if ( MimeConfigurationHelper::ClassIDsEqual( aClassID, MimeConfigurationHelper::GetSequenceClassID( SO3_SW_OLE_EMBED_CLASSID_60 ) )
@@ -173,6 +174,10 @@ embed::InsertedObjectInfo SAL_CALL MSOLEDialogObjectCreator::createInstanceByDia
                                 aOleDlgLib.getSymbol( "OleUIInsertObjectA" ));
     if( !pInsertFct )
         throw uno::RuntimeException();
+
+    // Disable any event loop shortcuts by enabling a real timer.
+    // This way the native windows dialog won't block our own processing.
+    WinScheduler::SetForceRealTimer();
 
     uTemp=pInsertFct(&io);
 

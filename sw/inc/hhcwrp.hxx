@@ -23,7 +23,6 @@
 #include "swdllapi.h"
 
 class SwView;
-namespace vcl { class Window; }
 class SwWrtShell;
 struct SwConversionArgs;
 class SwPaM;
@@ -34,8 +33,8 @@ class SW_DLLPUBLIC SwHHCWrapper : public editeng::HangulHanjaConversion
     VclPtr<vcl::Window>     m_pWin;
     SwWrtShell &m_rWrtShell;
 
-    SwConversionArgs *m_pConvArgs;    /**< object for arguments (and results) needed
-                                       to find of next convertible text portion */
+    std::unique_ptr<SwConversionArgs> m_pConvArgs;    /**< object for arguments (and results) needed
+                                                       to find of next convertible text portion */
 
     sal_Int32       m_nLastPos;       /**< starting position of the last found text part
                                        (needs to be sth that gets not moved like
@@ -48,7 +47,7 @@ class SW_DLLPUBLIC SwHHCWrapper : public editeng::HangulHanjaConversion
     bool        m_bIsDrawObj;
     bool        m_bIsOtherContent;
     bool        m_bStartChk;
-    bool        m_bIsSelection;       ///< true if only the selected text should be converted
+    bool const  m_bIsSelection;       ///< true if only the selected text should be converted
     bool        m_bStartDone;
     bool        m_bEndDone;
 

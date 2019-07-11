@@ -143,7 +143,8 @@ class VCL_DLLPUBLIC GraphicDescriptor final
     sal_uInt16          nBitsPerPixel;
     sal_uInt16          nPlanes;
     GraphicFileFormat   nFormat;
-    bool                bOwnStream;
+    bool const          bOwnStream;
+    sal_uInt8 mnNumberOfImageComponents;
 
     void                ImpConstruct();
 
@@ -151,7 +152,7 @@ class VCL_DLLPUBLIC GraphicDescriptor final
     bool            ImpDetectGIF( SvStream& rStm, bool bExtendedInfo );
     bool            ImpDetectJPG( SvStream& rStm, bool bExtendedInfo );
     bool            ImpDetectPCD( SvStream& rStm, bool bExtendedInfo );
-    bool            ImpDetectPCX( SvStream& rStm, bool bExtendedInfo );
+    bool            ImpDetectPCX( SvStream& rStm );
     bool            ImpDetectPNG( SvStream& rStm, bool bExtendedInfo );
     bool            ImpDetectTIF( SvStream& rStm, bool bExtendedInfo );
     bool            ImpDetectXBM( SvStream& rStm, bool bExtendedInfo );
@@ -209,6 +210,9 @@ public:
 
     /** @return bits/pixel or 0 **/
     sal_uInt16          GetBitsPerPixel() const { return nBitsPerPixel; }
+
+    /** @return number of color channels */
+    sal_uInt8 GetNumberOfImageComponents() const { return mnNumberOfImageComponents; }
 
     /** @return filter number that is needed by the GraphFilter to read this format */
     static OUString GetImportFormatShortName( GraphicFileFormat nFormat );
@@ -281,7 +285,7 @@ public:
     /// Imports multiple graphics.
     ///
     /// The resulting graphic is added to rGraphics on success, nullptr is added on failure.
-    void ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGraphics, const std::vector< std::shared_ptr<SvStream> >& rStreams);
+    void ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGraphics, std::vector< std::unique_ptr<SvStream> > vStreams);
 
     ErrCode             ImportGraphic( Graphic& rGraphic, const OUString& rPath,
                                    SvStream& rStream,
@@ -290,7 +294,8 @@ public:
                                    css::uno::Sequence< css::beans::PropertyValue >* pFilterData,
                                    WmfExternal const *pExtHeader = nullptr );
 
-    Graphic ImportUnloadedGraphic(SvStream& rIStream);
+    // Setting sizeLimit limits how much will be read from the stream.
+    Graphic ImportUnloadedGraphic(SvStream& rIStream, sal_uInt64 sizeLimit = 0, Size* pSizeHint = nullptr);
 
     const FilterErrorEx&    GetLastError() const { return *pErrorEx;}
     void                    ResetLastError();
@@ -315,7 +320,7 @@ private:
                     DECL_LINK( FilterCallback, ConvertData&, bool );
 
     std::unique_ptr<FilterErrorEx> pErrorEx;
-    bool                bUseConfig;
+    bool const                     bUseConfig;
 };
 
 #endif // INCLUDED_VCL_GRAPHICFILTER_HXX

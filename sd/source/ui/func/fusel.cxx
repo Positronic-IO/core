@@ -19,6 +19,7 @@
 
 #include <config_features.h>
 
+#include <com/sun/star/media/XPlayer.hpp>
 #include <fusel.hxx>
 #include <basic/sbstar.hxx>
 #include <svx/svddrgmt.hxx>
@@ -26,7 +27,7 @@
 #include <svx/svdogrp.hxx>
 #include <svx/scene3d.hxx>
 #include <drawview.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imapobj.hxx>
 #include <svl/urihelper.hxx>
 #include <unotools/localfilehelper.hxx>
 #include <unotools/securityoptions.hxx>
@@ -177,7 +178,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
 
         long nAngle0  = GetAngle(aMDPos - mpView->GetRef1());
         nAngle0 -= 27000;
-        nAngle0 = NormAngle360(nAngle0);
+        nAngle0 = NormAngle36000(nAngle0);
         bMirrorSide0 = nAngle0 < 18000;
 
         if (!pHdl && mpView->Is3DRotationCreationActive())
@@ -331,7 +332,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                             // New: double click on selected Group object
                             // enter group
                             if ( ! bSelectionOnly
-                                && pObj->GetPage() == pPV->GetPage())
+                                && pObj->getSdrPageFromSdrObject() == pPV->GetPage())
                                 bReturn = pPV->EnterGroup(pObj);
                         }
                     }
@@ -339,7 +340,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
 
                 // #i71727# replaced else here with two possibilities, once the original else (!pObj)
                 // and also ignoring the found object when it's on a masterpage
-                if(!pObj || (pObj->GetPage() && pObj->GetPage()->IsMasterPage()))
+                if(!pObj || (pObj->getSdrPageFromSdrObject() && pObj->getSdrPageFromSdrObject()->IsMasterPage()))
                 {
                     if(mpView->IsGroupEntered() && 2 == rMEvt.GetClicks())
                     {
@@ -521,9 +522,8 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                 // Point IS marked and NO shift is pressed. Start
                 // dragging of selected point(s)
                 pHdl = mpView->PickHandle(aMDPos);
-                if(pHdl)
-                    if ( ! rMEvt.IsRight())
-                        mpView->BegDragObj(aMDPos, nullptr, pHdl, nDrgLog);
+                if(pHdl && ! rMEvt.IsRight())
+                    mpView->BegDragObj(aMDPos, nullptr, pHdl, nDrgLog);
             }
         }
         else
@@ -682,14 +682,11 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                 **************************************************************/
                 SdrPageView* pPV;
                 SdrObject* pObj = mpView->PickObj(aMDPos, mpView->getHitTolLog(), pPV, SdrSearchOptions::ALSOONMASTER | SdrSearchOptions::BEFOREMARK);
-                if (pObj)
+                if (pObj && pPV->IsObjMarkable(pObj))
                 {
-                    if (pPV->IsObjMarkable(pObj))
-                    {
-                        mpView->UnmarkAllObj();
-                        mpView->MarkObj(pObj,pPV);
-                        return true;
-                    }
+                    mpView->UnmarkAllObj();
+                    mpView->MarkObj(pObj,pPV);
+                    return true;
                 }
                 /**************************************************************
                 * Toggle between selection and rotation
@@ -739,7 +736,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                     **********************************************************/
                      long nAngle1  = GetAngle(aPnt - mpView->GetRef1());
                      nAngle1 -= 27000;
-                     nAngle1 = NormAngle360(nAngle1);
+                     nAngle1 = NormAngle36000(nAngle1);
                      bool bMirrorSide1 = nAngle1 < 18000;
 
                      if (bMirrorSide0 != bMirrorSide1)
@@ -791,10 +788,10 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
                         {
                             // Added UNDOs for the WaterCan mode. This was never done in
                             // the past, thus it was missing all the time.
-                            SdrUndoAction* pUndoAttr = mpDoc->GetSdrUndoFactory().CreateUndoAttrObject(*pWaterCanCandidate, true, true);
+                            std::unique_ptr<SdrUndoAction> pUndoAttr = mpDoc->GetSdrUndoFactory().CreateUndoAttrObject(*pWaterCanCandidate, true, true);
                             mpView->BegUndo(pUndoAttr->GetComment());
                             mpView->AddUndo(mpDoc->GetSdrUndoFactory().CreateUndoGeoObject(*pWaterCanCandidate));
-                            mpView->AddUndo(pUndoAttr);
+                            mpView->AddUndo(std::move(pUndoAttr));
 
                             pWaterCanCandidate->SetStyleSheet (pStyleSheet, false);
 

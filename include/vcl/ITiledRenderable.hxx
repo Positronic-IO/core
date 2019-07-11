@@ -14,6 +14,7 @@
 #include <LibreOfficeKit/LibreOfficeKitTypes.h>
 #include <tools/gen.hxx>
 #include <svx/ruler.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/event.hxx>
 #include <vcl/vclevent.hxx>
 #include <vcl/pointr.hxx>
@@ -59,7 +60,7 @@ namespace vcl
     { PointerStyle::HSizeBar, "col-resize" },
     { PointerStyle::VSizeBar, "row-resize" },
     { PointerStyle::Hand, "grab" },
-    { PointerStyle::RefHand, "grabbing" },
+    { PointerStyle::RefHand, "pointer" },
     // Pen, Magnify, Fill, Rotate
     // HShear, VShear
     // Mirror, Crook, Crop, MovePoint, MoveBezierWeight

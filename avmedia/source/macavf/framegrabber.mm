@@ -20,6 +20,7 @@
 #include "framegrabber.hxx"
 #include "player.hxx"
 
+#include <sal/log.hxx>
 #include <tools/stream.hxx>
 #include <vcl/graph.hxx>
 #include <vcl/cvtgrf.hxx>
@@ -85,17 +86,17 @@ uno::Reference< graphic::XGraphic > SAL_CALL FrameGrabber::grabFrame( double fMe
 }
 
 
-::rtl::OUString SAL_CALL FrameGrabber::getImplementationName(  )
+OUString SAL_CALL FrameGrabber::getImplementationName(  )
 {
-    return ::rtl::OUString( AVMEDIA_MACAVF_FRAMEGRABBER_IMPLEMENTATIONNAME );
+    return OUString( AVMEDIA_MACAVF_FRAMEGRABBER_IMPLEMENTATIONNAME );
 }
 
-sal_Bool SAL_CALL FrameGrabber::supportsService( const ::rtl::OUString& ServiceName )
+sal_Bool SAL_CALL FrameGrabber::supportsService( const OUString& ServiceName )
 {
     return ServiceName == AVMEDIA_MACAVF_FRAMEGRABBER_SERVICENAME;
 }
 
-uno::Sequence< ::rtl::OUString > SAL_CALL FrameGrabber::getSupportedServiceNames(  )
+uno::Sequence< OUString > SAL_CALL FrameGrabber::getSupportedServiceNames(  )
 {
     return { AVMEDIA_MACAVF_FRAMEGRABBER_SERVICENAME };
 }

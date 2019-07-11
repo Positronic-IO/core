@@ -19,6 +19,7 @@
 
 
 #include <algorithm>
+#include <osl/diagnose.h>
 #include <editeng/eeitem.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
 
@@ -409,7 +410,8 @@ bool SvxEditEngineForwarder::GetWordIndices( sal_Int32 nPara, sal_Int32 nIndex, 
 
 bool SvxEditEngineForwarder::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nEndIndex, sal_Int32 nPara, sal_Int32 nIndex, bool bInCell ) const
 {
-    return SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, rEditEngine, nPara, nIndex, bInCell );
+    SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, rEditEngine, nPara, nIndex, bInCell );
+    return true;
 }
 
 sal_Int32 SvxEditEngineForwarder::GetLineCount( sal_Int32 nPara ) const

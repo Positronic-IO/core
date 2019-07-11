@@ -42,6 +42,7 @@
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
+#include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/presentation/EffectNodeType.hpp>
 #include <com/sun/star/presentation/EffectPresetClass.hpp>
@@ -52,6 +53,8 @@
 #include <com/sun/star/drawing/XShape.hpp>
 #include <o3tl/any.hxx>
 #include <sax/tools/converter.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <xmloff/unointerfacetouniqueidentifiermapper.hxx>
 #include "sdxmlexp_impl.hxx"
@@ -67,8 +70,6 @@
 
 #include <animations.hxx>
 #include <xmloff/animationexport.hxx>
-#include <comphelper/storagehelper.hxx>
-
 
 using namespace css;
 using namespace ::std;
@@ -478,12 +479,12 @@ AnimationsExporterImpl::AnimationsExporterImpl( SvXMLExport& rExport, const Refe
 
 
 /** split a uri hierarchy into first segment and rest */
-static bool splitPath(::rtl::OUString const & i_rPath,
-    ::rtl::OUString & o_rDir, ::rtl::OUString& o_rRest)
+static bool splitPath(OUString const & i_rPath,
+    OUString & o_rDir, OUString& o_rRest)
 {
     const sal_Int32 idx(i_rPath.indexOf(u'/'));
     if (idx < 0 || idx >= i_rPath.getLength()) {
-        o_rDir = ::rtl::OUString();
+        o_rDir = OUString();
         o_rRest = i_rPath;
         return true;
     } else if (idx == 0 || idx == i_rPath.getLength() - 1) {
@@ -499,10 +500,10 @@ static bool splitPath(::rtl::OUString const & i_rPath,
 static void lcl_CopyStream(
         uno::Reference<embed::XStorage> const& xSource,
         uno::Reference<embed::XStorage> const& xTarget,
-         ::rtl::OUString const& rPath)
+         OUString const& rPath)
 {
-    ::rtl::OUString dir;
-    ::rtl::OUString rest;
+    OUString dir;
+    OUString rest;
     if (!splitPath(rPath, dir, rest))
         throw uno::RuntimeException();
 
@@ -586,42 +587,45 @@ void AnimationsExporterImpl::exportTransitionNode()
 
             SvXMLElementExport aElement( mrExport, XML_NAMESPACE_ANIMATION, XML_PAR, true, true );
 
-            sal_Int16 nSubtype = 0;
-            bool bDirection = false;
-            sal_Int32 nFadeColor = 0;
-            double fDuration = 0.0;
-            mxPageProps->getPropertyValue("TransitionSubtype") >>= nSubtype;
-            mxPageProps->getPropertyValue("TransitionDirection") >>= bDirection;
-            mxPageProps->getPropertyValue("TransitionFadeColor") >>= nFadeColor;
-            mxPageProps->getPropertyValue("TransitionDuration") >>= fDuration;
-
-            ::sax::Converter::convertDouble( sTmp, fDuration );
-            sTmp.append( 's');
-            mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_DUR, sTmp.makeStringAndClear() );
-
-            SvXMLUnitConverter::convertEnum( sTmp, nTransition, aAnimations_EnumMap_TransitionType );
-            mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_TYPE, sTmp.makeStringAndClear() );
-
-            if( nSubtype != TransitionSubType::DEFAULT )
+            if( nTransition != 0 )
             {
-                SvXMLUnitConverter::convertEnum( sTmp, nSubtype, aAnimations_EnumMap_TransitionSubType );
-                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_SUBTYPE, sTmp.makeStringAndClear() );
-            }
+                sal_Int16 nSubtype = 0;
+                bool bDirection = false;
+                sal_Int32 nFadeColor = 0;
+                double fDuration = 0.0;
+                mxPageProps->getPropertyValue("TransitionSubtype") >>= nSubtype;
+                mxPageProps->getPropertyValue("TransitionDirection") >>= bDirection;
+                mxPageProps->getPropertyValue("TransitionFadeColor") >>= nFadeColor;
+                mxPageProps->getPropertyValue("TransitionDuration") >>= fDuration;
 
-            if( !bDirection )
-                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_DIRECTION, XML_REVERSE );
+                ::sax::Converter::convertDouble( sTmp, fDuration );
+                sTmp.append( 's');
+                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_DUR, sTmp.makeStringAndClear() );
 
-            if( (nTransition == TransitionType::FADE) && ((nSubtype == TransitionSubType::FADETOCOLOR) || (nSubtype == TransitionSubType::FADEFROMCOLOR) ))
-            {
-                ::sax::Converter::convertColor( sTmp, nFadeColor );
-                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_FADECOLOR, sTmp.makeStringAndClear() );
+                SvXMLUnitConverter::convertEnum( sTmp, nTransition, aAnimations_EnumMap_TransitionType );
+                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_TYPE, sTmp.makeStringAndClear() );
+
+                if( nSubtype != TransitionSubType::DEFAULT )
+                {
+                    SvXMLUnitConverter::convertEnum( sTmp, nSubtype, aAnimations_EnumMap_TransitionSubType );
+                    mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_SUBTYPE, sTmp.makeStringAndClear() );
+                }
+
+                if( !bDirection )
+                    mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_DIRECTION, XML_REVERSE );
+
+                if( (nTransition == TransitionType::FADE) && ((nSubtype == TransitionSubType::FADETOCOLOR) || (nSubtype == TransitionSubType::FADEFROMCOLOR) ))
+                {
+                    ::sax::Converter::convertColor( sTmp, nFadeColor );
+                    mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_FADECOLOR, sTmp.makeStringAndClear() );
+                }
+                SvXMLElementExport aElement2( mrExport, XML_NAMESPACE_ANIMATION, XML_TRANSITIONFILTER, true, true );
             }
-            SvXMLElementExport aElement2( mrExport, XML_NAMESPACE_ANIMATION, XML_TRANSITIONFILTER, true, true );
 
             if( bStopSound )
             {
                 mrExport.AddAttribute( XML_NAMESPACE_ANIMATION, XML_COMMAND, XML_STOP_AUDIO );
-                SvXMLElementExport aElement3( mrExport, XML_NAMESPACE_ANIMATION, XML_COMMAND, true, true );
+                SvXMLElementExport aElement2( mrExport, XML_NAMESPACE_ANIMATION, XML_COMMAND, true, true );
             }
             else if( !sSoundURL.isEmpty())
             {
@@ -633,7 +637,7 @@ void AnimationsExporterImpl::exportTransitionNode()
 
                 if( bLoopSound )
                     mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_REPEATCOUNT, XML_INDEFINITE );
-                SvXMLElementExport aElement4( mrExport, XML_NAMESPACE_ANIMATION, XML_AUDIO, true, true );
+                SvXMLElementExport aElement2( mrExport, XML_NAMESPACE_ANIMATION, XML_AUDIO, true, true );
             }
         }
     }
@@ -877,13 +881,10 @@ void AnimationsExporterImpl::exportNode( const Reference< XAnimationNode >& xNod
         }
 
         aTemp = xNode->getEndSync();
-        if( aTemp.hasValue() )
+        if( aTemp.hasValue() && (aTemp >>= nTemp) )
         {
-            if( aTemp >>= nTemp )
-            {
-                SvXMLUnitConverter::convertEnum( sTmp, nTemp, aAnimations_EnumMap_Endsync );
-                mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_ENDSYNC, sTmp.makeStringAndClear() );
-            }
+            SvXMLUnitConverter::convertEnum( sTmp, nTemp, aAnimations_EnumMap_Endsync );
+            mrExport.AddAttribute( XML_NAMESPACE_SMIL, XML_ENDSYNC, sTmp.makeStringAndClear() );
         }
 
         sal_Int16 nContainerNodeType = EffectNodeType::DEFAULT;
@@ -1235,7 +1236,7 @@ void AnimationsExporterImpl::exportAnimate( const Reference< XAnimate >& xAnimat
                     if( !sTmp.isEmpty() )
                         sTmp.append( ';' );
 
-                    sTmp.append( OUString::number(p->Time) + "," + OUString::number(p->Progress) );
+                    sTmp.append( OUString::number(p->Time) ).append( "," ).append( OUString::number(p->Progress) );
 
                     p++;
                 }

@@ -18,12 +18,10 @@
  */
 
 #include <scitems.hxx>
-#include <sfx2/objsh.hxx>
-#include <svl/itemset.hxx>
 #include <svl/zforlist.hxx>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 #include <unotools/collatorwrapper.hxx>
-#include <comphelper/stl_types.hxx>
 
 #include <com/sun/star/sheet/ConditionOperator2.hpp>
 
@@ -31,17 +29,15 @@
 #include <conditio.hxx>
 #include <formulacell.hxx>
 #include <document.hxx>
-#include <hints.hxx>
 #include <compiler.hxx>
-#include <rechead.hxx>
 #include <rangelst.hxx>
-#include <stlpool.hxx>
 #include <rangenam.hxx>
 #include <rangeutl.hxx>
 #include <colorscale.hxx>
 #include <cellvalue.hxx>
 #include <editutil.hxx>
 #include <tokenarray.hxx>
+#include <fillinfo.hxx>
 #include <refupdatecontext.hxx>
 #include <formula/errorcodes.hxx>
 #include <svl/sharedstring.hxx>
@@ -186,12 +182,8 @@ ScConditionEntry::ScConditionEntry( const ScConditionEntry& r ) :
     eTempGrammar2(r.eTempGrammar2),
     bIsStr1(r.bIsStr1),
     bIsStr2(r.bIsStr2),
-    pFormula1(nullptr),
-    pFormula2(nullptr),
     aSrcPos(r.aSrcPos),
     aSrcString(r.aSrcString),
-    pFCell1(nullptr),
-    pFCell2(nullptr),
     bRelRef1(r.bRelRef1),
     bRelRef2(r.bRelRef2),
     bFirstRun(true),
@@ -222,12 +214,8 @@ ScConditionEntry::ScConditionEntry( ScDocument* pDocument, const ScConditionEntr
     eTempGrammar2(r.eTempGrammar2),
     bIsStr1(r.bIsStr1),
     bIsStr2(r.bIsStr2),
-    pFormula1(nullptr),
-    pFormula2(nullptr),
     aSrcPos(r.aSrcPos),
     aSrcString(r.aSrcString),
-    pFCell1(nullptr),
-    pFCell2(nullptr),
     bRelRef1(r.bRelRef1),
     bRelRef2(r.bRelRef2),
     bFirstRun(true),
@@ -259,11 +247,7 @@ ScConditionEntry::ScConditionEntry( ScConditionMode eOper,
     eTempGrammar2(eGrammar2),
     bIsStr1(false),
     bIsStr2(false),
-    pFormula1(nullptr),
-    pFormula2(nullptr),
     aSrcPos(rPos),
-    pFCell1(nullptr),
-    pFCell2(nullptr),
     bRelRef1(false),
     bRelRef2(false),
     bFirstRun(true),
@@ -287,11 +271,7 @@ ScConditionEntry::ScConditionEntry( ScConditionMode eOper,
     eTempGrammar2(FormulaGrammar::GRAM_DEFAULT),
     bIsStr1(false),
     bIsStr2(false),
-    pFormula1(nullptr),
-    pFormula2(nullptr),
     aSrcPos(rPos),
-    pFCell1(nullptr),
-    pFCell2(nullptr),
     bRelRef1(false),
     bRelRef2(false),
     bFirstRun(true),
@@ -1242,6 +1222,9 @@ bool ScConditionEntry::IsCellValid( ScRefCellValue& rCell, const ScAddress& rPos
 {
     const_cast<ScConditionEntry*>(this)->Interpret(rPos); // Evaluate formula
 
+    if ( eOp == ScConditionMode::Direct )
+        return nVal1 != 0.0;
+
     double nArg = 0.0;
     OUString aArgStr;
     bool bVal = lcl_GetCellContent( rCell, bIsStr1, nArg, aArgStr, mpDoc );
@@ -1530,6 +1513,18 @@ ScFormatEntry* ScCondFormatEntry::Clone( ScDocument* pDoc ) const
     return new ScCondFormatEntry( pDoc, *this );
 }
 
+void ScConditionEntry::CalcAll()
+{
+    if (pFCell1 || pFCell2)
+    {
+        if (pFCell1)
+            pFCell1->SetDirty();
+        if (pFCell2)
+            pFCell2->SetDirty();
+        pCondFormat->DoRepaint();
+    }
+}
+
 ScCondDateFormatEntry::ScCondDateFormatEntry( ScDocument* pDoc )
     : ScFormatEntry( pDoc )
     , meType(condformat::TODAY)
@@ -1604,7 +1599,7 @@ bool ScCondDateFormatEntry::IsValid( const ScAddress& rPos ) const
                 if( eDay != SUNDAY )
                 {
                     Date aBegin(rActDate - (1 + static_cast<sal_Int32>(eDay)));
-                    Date aEnd(rActDate + (5 + static_cast<sal_Int32>(eDay)));
+                    Date aEnd(rActDate + (5 - static_cast<sal_Int32>(eDay)));
                     return aCellDate.IsBetween( aBegin, aEnd );
                 }
                 else
@@ -1776,6 +1771,11 @@ size_t ScConditionalFormat::size() const
     return maEntries.size();
 }
 
+ScDocument* ScConditionalFormat::GetDocument()
+{
+    return pDoc;
+}
+
 ScConditionalFormat::~ScConditionalFormat()
 {
 }
@@ -1820,10 +1820,10 @@ ScCondFormatData ScConditionalFormat::GetData( ScRefCellValue& rCell, const ScAd
             if (rEntry.IsCellValid(rCell, rPos))
                 aData.aStyleName = rEntry.GetStyle();
         }
-        else if((*itr)->GetType() == ScFormatEntry::Type::Colorscale && !aData.pColorScale)
+        else if((*itr)->GetType() == ScFormatEntry::Type::Colorscale && !aData.mxColorScale)
         {
             const ScColorScaleFormat& rEntry = static_cast<const ScColorScaleFormat&>(**itr);
-            aData.pColorScale = rEntry.GetColor(rPos);
+            aData.mxColorScale = rEntry.GetColor(rPos);
         }
         else if((*itr)->GetType() == ScFormatEntry::Type::Databar && !aData.pDataBar)
         {
@@ -2018,6 +2018,18 @@ void ScConditionalFormat::endRendering()
     for(auto itr = maEntries.cbegin(); itr != maEntries.cend(); ++itr)
     {
         (*itr)->endRendering();
+    }
+}
+
+void ScConditionalFormat::CalcAll()
+{
+    for(auto itr = maEntries.cbegin(); itr != maEntries.cend(); ++itr)
+    {
+        if ((*itr)->GetType() == ScFormatEntry::Type::Condition)
+        {
+            ScCondFormatEntry& rFormat = static_cast<ScCondFormatEntry&>(**itr);
+            rFormat.CalcAll();
+        }
     }
 }
 
@@ -2229,6 +2241,11 @@ size_t ScConditionalFormatList::size() const
     return m_ConditionalFormats.size();
 }
 
+bool ScConditionalFormatList::empty() const
+{
+    return m_ConditionalFormats.empty();
+}
+
 void ScConditionalFormatList::erase( sal_uLong nIndex )
 {
     for( iterator itr = begin(); itr != end(); ++itr )
@@ -2273,5 +2290,21 @@ sal_uInt32 ScConditionalFormatList::getMaxKey() const
 
     return nMax;
 }
+
+void ScConditionalFormatList::CalcAll()
+{
+    for (const auto& aEntry : m_ConditionalFormats)
+    {
+        aEntry->CalcAll();
+    }
+
+}
+
+ScCondFormatData::ScCondFormatData() {}
+
+ScCondFormatData::ScCondFormatData(ScCondFormatData&&) = default;
+
+ScCondFormatData::~ScCondFormatData() {}
+
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

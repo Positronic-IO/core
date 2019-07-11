@@ -85,6 +85,8 @@ SwASCWriter::~SwASCWriter() {}
 
 ErrCode SwASCWriter::WriteStream()
 {
+    bool bIncludeBOM = GetAsciiOptions().GetIncludeBOM();
+
     if( m_bASCII_ParaAsCR )           // If predefined
         m_sLineEnd = "\015";
     else if( m_bASCII_ParaAsBlank )
@@ -126,7 +128,7 @@ ErrCode SwASCWriter::WriteStream()
                 if( bTstFly && m_bWriteAll &&
                     pNd->GetText().isEmpty() &&
                     // Frame exists
-                    m_pDoc->GetSpzFrameFormats()->size() &&
+                    !m_pDoc->GetSpzFrameFormats()->empty() &&
                     // Only one node in the array
                     m_pDoc->GetNodes().GetEndOfExtras().GetIndex() + 3 ==
                     m_pDoc->GetNodes().GetEndOfContent().GetIndex() &&
@@ -154,15 +156,25 @@ ErrCode SwASCWriter::WriteStream()
                         switch(GetAsciiOptions().GetCharSet())
                         {
                             case RTL_TEXTENCODING_UTF8:
-                                Strm().WriteUChar( 0xEF ).WriteUChar( 0xBB ).WriteUChar( 0xBF );
+                                if( bIncludeBOM )
+                                {
+                                    Strm().WriteUChar( 0xEF ).WriteUChar( 0xBB ).WriteUChar( 0xBF );
+                                }
+
                                 break;
                             case RTL_TEXTENCODING_UCS2:
 #ifdef OSL_LITENDIAN
                                 Strm().SetEndian(SvStreamEndian::LITTLE);
-                                Strm().WriteUChar( 0xFF ).WriteUChar( 0xFE );
+                                if( bIncludeBOM )
+                                {
+                                    Strm().WriteUChar( 0xFF ).WriteUChar( 0xFE );
+                                }
 #else
                                 Strm().SetEndian(SvStreamEndian::BIG);
-                                Strm().WriteUChar( 0xFE ).WriteUChar( 0xFF );
+                                if( bIncludeBOM )
+                                {
+                                    Strm().WriteUChar( 0xFE ).WriteUChar( 0xFF );
+                                }
 #endif
                                 break;
 

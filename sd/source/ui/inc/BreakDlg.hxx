@@ -20,10 +20,10 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_BREAKDLG_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_BREAKDLG_HXX
 
+#include <sfx2/basedlgs.hxx>
 #include <sfx2/progress.hxx>
 #include <svx/svdetc.hxx>
 #include <vcl/idle.hxx>
-#include <vcl/weld.hxx>
 
 namespace sd {
 
@@ -33,13 +33,13 @@ class DrawView;
 /**
  * dialog to break meta files
  */
-class BreakDlg : public weld::GenericDialogController
+class BreakDlg : public SfxDialogController
 {
 public:
     BreakDlg(weld::Window* pWindow, DrawView* pDrView, DrawDocShell* pShell,
              sal_uLong nSumActionCount, sal_uLong nObjCount);
 
-    short execute();
+    virtual short run() override;
 
 private:
     std::unique_ptr<weld::Label> m_xFiObjInfo;

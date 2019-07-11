@@ -10,6 +10,8 @@
 #include <sal/config.h>
 #include <rtl/ustring.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
+#include <osl/file.hxx>
 #include <comphelper/backupfilehelper.hxx>
 #include <rtl/crc.h>
 #include <algorithm>
@@ -19,6 +21,7 @@
 #include <zlib.h>
 
 #include <comphelper/processfactory.hxx>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -38,6 +41,7 @@
 #include <com/sun/star/io/XOutputStream.hpp>
 #include <com/sun/star/xml/sax/XDocumentHandler.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 
 using namespace css;
 using namespace css::xml::dom;
@@ -542,16 +546,16 @@ namespace
 
     typedef std::vector< ExtensionInfoEntry > ExtensionInfoEntryVector;
 
+    static const OUStringLiteral gaRegPath { "/registry/com.sun.star.comp.deployment.bundle.PackageRegistryBackend/backenddb.xml" };
+
     class ExtensionInfo
     {
     private:
         ExtensionInfoEntryVector    maEntries;
-        OUString maRegPath;
 
     public:
         ExtensionInfo()
-            : maEntries(),
-              maRegPath("/registry/com.sun.star.comp.deployment.bundle.PackageRegistryBackend/backenddb.xml")
+            : maEntries()
         {
         }
 
@@ -595,7 +599,9 @@ namespace
             }
             catch (const lang::IllegalArgumentException & e)
             {
-                throw uno::RuntimeException(e.Message, e.Context);
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException( e.Message,
+                                e.Context, anyEx );
             }
 
             for (sal_Int32 i = 0; i < xAllPackages.getLength(); ++i)
@@ -672,19 +678,19 @@ namespace
     public:
         void createUserExtensionRegistryEntriesFromXML(const OUString& rUserConfigWorkURL)
         {
-            const OUString aPath(rUserConfigWorkURL + "/uno_packages/cache" + maRegPath);
+            const OUString aPath(rUserConfigWorkURL + "/uno_packages/cache" + gaRegPath);
             createExtensionRegistryEntriesFromXML(aPath);
         }
 
         void createSharedExtensionRegistryEntriesFromXML(const OUString& rUserConfigWorkURL)
         {
-            const OUString aPath(rUserConfigWorkURL + "/extensions/shared" + maRegPath);
+            const OUString aPath(rUserConfigWorkURL + "/extensions/shared" + gaRegPath);
             createExtensionRegistryEntriesFromXML(aPath);
         }
 
         void createBundledExtensionRegistryEntriesFromXML(const OUString& rUserConfigWorkURL)
         {
-            const OUString aPath(rUserConfigWorkURL + "/extensions/bundled" + maRegPath);
+            const OUString aPath(rUserConfigWorkURL + "/extensions/bundled" + gaRegPath);
             createExtensionRegistryEntriesFromXML(aPath);
         }
 
@@ -993,7 +999,7 @@ namespace
         sal_uInt32          mnOffset;           // offset in File (zero identifies new file)
         sal_uInt32          mnCrc32;            // checksum
         FileSharedPtr       maFile;             // file where to find the data (at offset)
-        bool                mbDoCompress;       // flag if this file is scheduled to be compressed when written
+        bool const          mbDoCompress;       // flag if this file is scheduled to be compressed when written
 
         bool copy_content_straight(oslFileHandle& rTargetHandle)
         {
@@ -1468,24 +1474,21 @@ namespace
                         // write number of entries
                         if (write_sal_uInt32(aHandle, nSize))
                         {
-                            if (bRetval)
+                            // write placeholder for headers. Due to the fact that
+                            // PackFileSize for newly added files gets set during
+                            // writing the content entry, write headers after content
+                            // is written. To do so, write placeholders here
+                            sal_uInt32 nWriteSize(0);
+
+                            nWriteSize += maPackedFileEntryVector.size() * PackedFileEntry::getEntrySize();
+
+                            aArray[0] = aArray[1] = aArray[2] = aArray[3] = 0;
+
+                            for (sal_uInt32 a(0); bRetval && a < nWriteSize; a++)
                             {
-                                // write placeholder for headers. Due to the fact that
-                                // PackFileSize for newly added files gets set during
-                                // writing the content entry, write headers after content
-                                // is written. To do so, write placeholders here
-                                sal_uInt32 nWriteSize(0);
-
-                                nWriteSize += maPackedFileEntryVector.size() * PackedFileEntry::getEntrySize();
-
-                                aArray[0] = aArray[1] = aArray[2] = aArray[3] = 0;
-
-                                for (sal_uInt32 a(0); bRetval && a < nWriteSize; a++)
+                                if (osl_File_E_None != osl_writeFile(aHandle, static_cast<const void*>(aArray), 1, &nBaseWritten) || 1 != nBaseWritten)
                                 {
-                                    if (osl_File_E_None != osl_writeFile(aHandle, static_cast<const void*>(aArray), 1, &nBaseWritten) || 1 != nBaseWritten)
-                                    {
-                                        bRetval = false;
-                                    }
+                                    bRetval = false;
                                 }
                             }
 
@@ -2107,8 +2110,6 @@ namespace comphelper
                                                        "ForceOpenGL", "false"));
         xRootElement->appendChild(lcl_getConfigElement(xDocument, "/org.openoffice.Office.Common/Misc",
                                                        "UseOpenCL", "false"));
-        xRootElement->appendChild(lcl_getConfigElement(xDocument, "/org.openoffice.Office.Common/Misc",
-                                                       "UseSwInterpreter", "false"));
 
         // write back
         uno::Reference< xml::sax::XSAXSerializable > xSerializer(xDocument, uno::UNO_QUERY);
@@ -2206,9 +2207,9 @@ namespace comphelper
 
     /////////////////// helpers ///////////////////////
 
-    const rtl::OUString BackupFileHelper::getPackURL()
+    const OUString BackupFileHelper::getPackURL()
     {
-        return rtl::OUString(maUserConfigWorkURL + "/pack");
+        return OUString(maUserConfigWorkURL + "/pack");
     }
 
     /////////////////// file push helpers ///////////////////////

@@ -207,7 +207,6 @@ bool SdrDragView::BegDragObj(const Point& rPnt, OutputDevice* pOut, SdrHdl* pHdl
         SetDragWithCopy(false);
         //TODO: aAni.Reset();
         mpCurrentSdrDragMethod=nullptr;
-        mbDragLimit=false;
         SdrDragMode eTmpMode=meDragMode;
         if (eTmpMode==SdrDragMode::Move && pHdl!=nullptr && pHdl->GetKind()!=SdrHdlKind::Move) {
             eTmpMode=SdrDragMode::Resize;
@@ -271,7 +270,7 @@ bool SdrDragView::BegDragObj(const Point& rPnt, OutputDevice* pOut, SdrHdl* pHdl
                             for(size_t a=0; !b3DObjSelected && a<GetMarkedObjectCount(); ++a)
                             {
                                 SdrObject* pObj = GetMarkedObjectByIndex(a);
-                                if(pObj && dynamic_cast< const E3dObject* >(pObj) !=  nullptr)
+                                if(dynamic_cast< const E3dObject* >(pObj))
                                     b3DObjSelected = true;
                             }
                             // If yes, allow shear even when !IsShearAllowed,
@@ -532,7 +531,7 @@ bool SdrDragView::EndDragObj(bool bCopy)
         if (IsInsertGluePoint() && bUndo)
         {
             BegUndo(maInsPointUndoStr);
-            AddUndo(mpInsPointUndo);
+            AddUndo(std::unique_ptr<SdrUndoAction>(mpInsPointUndo));
         }
 
         bRet = mpCurrentSdrDragMethod->EndSdrDrag(bCopy);
@@ -557,7 +556,7 @@ bool SdrDragView::EndDragObj(bool bCopy)
             if( bUndo )
             {
                 BegUndo(maInsPointUndoStr);
-                AddUndo(mpInsPointUndo);
+                AddUndo(std::unique_ptr<SdrUndoAction>(mpInsPointUndo));
                 EndUndo();
             }
         }
@@ -624,11 +623,10 @@ bool SdrDragView::ImpBegInsObjPoint(bool bIdxZwang, const Point& rPnt, bool bNew
 {
     bool bRet(false);
 
-    if(mpMarkedObj && dynamic_cast<const SdrPathObj*>( mpMarkedObj) !=  nullptr)
+    if(auto pMarkedPath = dynamic_cast<SdrPathObj*>( mpMarkedObj))
     {
-        SdrPathObj* pMarkedPath = static_cast<SdrPathObj*>(mpMarkedObj);
         BrkAction();
-        mpInsPointUndo = dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*mpMarkedObj) );
+        mpInsPointUndo = dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*mpMarkedObj).release() );
         DBG_ASSERT( mpInsPointUndo, "svx::SdrDragView::BegInsObjPoint(), could not create correct undo object!" );
 
         OUString aStr(SvxResId(STR_DragInsertPoint));
@@ -726,7 +724,7 @@ bool SdrDragView::BegInsGluePoint(const Point& rPnt)
     {
         BrkAction();
         UnmarkAllGluePoints();
-        mpInsPointUndo= dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pObj) );
+        mpInsPointUndo= dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pObj).release() );
         DBG_ASSERT( mpInsPointUndo, "svx::SdrDragView::BegInsObjPoint(), could not create correct undo object!" );
         OUString aStr(SvxResId(STR_DragInsertGluePoint));
 
@@ -785,7 +783,7 @@ void SdrDragView::ShowDragObj()
         for(sal_uInt32 a(0); a < PaintWindowCount(); a++)
         {
             SdrPaintWindow* pCandidate = GetPaintWindow(a);
-            rtl::Reference<sdr::overlay::OverlayManager> xOverlayManager = pCandidate->GetOverlayManager();
+            const rtl::Reference<sdr::overlay::OverlayManager>& xOverlayManager = pCandidate->GetOverlayManager();
 
             if (xOverlayManager.is())
             {
@@ -853,10 +851,10 @@ void SdrDragView::SetDragStripes(bool bOn)
 
 bool SdrDragView::IsOrthoDesired() const
 {
-    if(mpCurrentSdrDragMethod && (dynamic_cast< const SdrDragObjOwn* >( mpCurrentSdrDragMethod.get() ) !=  nullptr
-                                                || dynamic_cast< const SdrDragResize* >(mpCurrentSdrDragMethod.get()) !=  nullptr))
+    if( dynamic_cast< const SdrDragObjOwn* >( mpCurrentSdrDragMethod.get() )
+       || dynamic_cast< const SdrDragResize* >(mpCurrentSdrDragMethod.get() ))
     {
-        return bOrthoDesiredOnMarked;
+        return m_bOrthoDesiredOnMarked;
     }
 
     return false;

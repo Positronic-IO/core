@@ -29,6 +29,7 @@
 #include <win/salgdi.h>
 #include <win/salframe.h>
 #include <win/salvd.h>
+#include <win/winlayout.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 
 #include <salgdiimpl.hxx>
@@ -607,7 +608,6 @@ WinSalGraphics::WinSalGraphics(WinSalGraphics::Type eType, bool bScreen, HWND hW
     mbWindow(eType == WinSalGraphics::WINDOW),
     mbScreen(bScreen),
     mhWnd(hWnd),
-    mfCurrentFontScale(1.0),
     mhRegion(nullptr),
     mhDefPen(nullptr),
     mhDefBrush(nullptr),
@@ -620,13 +620,6 @@ WinSalGraphics::WinSalGraphics(WinSalGraphics::Type eType, bool bScreen, HWND hW
         mpImpl.reset(new WinOpenGLSalGraphicsImpl(*this, pProvider));
     else
         mpImpl.reset(new WinSalGraphicsImpl(*this));
-
-    for( int i = 0; i < MAX_FALLBACK; ++i )
-    {
-        mhFonts[ i ] = nullptr;
-        mpWinFontEntry[ i ] = nullptr;
-        mfFontScale[ i ] = 1.0;
-    }
 }
 
 WinSalGraphics::~WinSalGraphics()
@@ -746,9 +739,9 @@ void WinSalGraphics::SetFillColor( Color nColor )
     mpImpl->SetFillColor( nColor );
 }
 
-void WinSalGraphics::SetXORMode( bool bSet)
+void WinSalGraphics::SetXORMode( bool bSet, bool bInvertOnly )
 {
-    mpImpl->SetXORMode( bSet);
+    mpImpl->SetXORMode( bSet, bInvertOnly );
 }
 
 void WinSalGraphics::SetROPLineColor( SalROPColor nROPColor )

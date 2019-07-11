@@ -25,6 +25,7 @@
 #include <unotools/accessiblestatesethelper.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
@@ -560,31 +561,6 @@ ThumbnailViewItemAcc::ThumbnailViewItemAcc( ThumbnailViewItem* pParent, bool bIs
 
 ThumbnailViewItemAcc::~ThumbnailViewItemAcc()
 {
-}
-
-void ThumbnailViewItemAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOldValue, const uno::Any& rNewValue )
-{
-    if( nEventId )
-    {
-        ::std::vector< uno::Reference< accessibility::XAccessibleEventListener > > aTmpListeners( mxEventListeners );
-        accessibility::AccessibleEventObject aEvtObject;
-
-        aEvtObject.EventId = nEventId;
-        aEvtObject.Source = static_cast<uno::XWeak*>(this);
-        aEvtObject.NewValue = rNewValue;
-        aEvtObject.OldValue = rOldValue;
-
-        for (auto const& tmpListener : aTmpListeners)
-        {
-            try
-            {
-                tmpListener->notifyEvent( aEvtObject );
-            }
-            catch(const uno::Exception&)
-            {
-            }
-        }
-    }
 }
 
 void ThumbnailViewItemAcc::ParentDestroyed()

@@ -34,6 +34,8 @@
 
 #include <tools/poly.hxx>
 #include <svl/imageitm.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <svdata.hxx>
 #include <window.h>
@@ -144,7 +146,7 @@ int ToolBox::ImplGetDragWidth() const
     return ToolBox::ImplGetDragWidth( *this, mbHorz );
 }
 
-ButtonType determineButtonType( ImplToolItem const * pItem, ButtonType defaultType )
+static ButtonType determineButtonType( ImplToolItem const * pItem, ButtonType defaultType )
 {
     ButtonType tmpButtonType = defaultType;
     ToolBoxItemBits nBits = pItem->mnBits & ( ToolBoxItemBits::TEXT_ONLY | ToolBoxItemBits::ICON_ONLY );
@@ -1043,7 +1045,7 @@ void ImplTBDragMgr::StartDragging( ToolBox* pToolBox,
     mnLineMode = nDragLineMode;
     mnStartLines = pToolBox->mnDockLines;
 
-    // MouseOffset berechnen
+    // calculate MouseOffset
     maMouseOff.setX( rRect.Left() - rPos.X() );
     maMouseOff.setY( rRect.Top() - rPos.Y() );
     maRect = rRect;
@@ -1341,10 +1343,6 @@ ToolBox::~ToolBox()
 
 void ToolBox::dispose()
 {
-    // custom menu event still running?
-    if( mpData && mpData->mnEventId )
-        Application::RemoveUserEvent( mpData->mnEventId );
-
     // #103005# make sure our activate/deactivate balance is right
     while( mnActivateCount > 0 )
         Deactivate();
@@ -1919,16 +1917,9 @@ void lcl_hideDoubleSeparators( ToolBox::ImplToolItems& rItems )
             if ( !bLastSep )
             {
                 // check if any visible items have to appear behind it
-                ToolBox::ImplToolItems::iterator temp_it;
-                for ( temp_it = it+1; temp_it != rItems.end(); ++temp_it )
-                {
-                    if ( (temp_it->meType == ToolBoxItemType::BUTTON) &&
-                         temp_it->mbVisible )
-                    {
-                        it->mbVisible = true;
-                        break;
-                    }
-                }
+                if (std::any_of(it + 1, rItems.end(), [](const ImplToolItem& rItem) {
+                        return (rItem.meType == ToolBoxItemType::BUTTON) && rItem.mbVisible; }))
+                    it->mbVisible = true;
             }
             bLastSep = true;
         }
@@ -3810,6 +3801,17 @@ void ToolBox::Resize()
     }
 }
 
+namespace
+{
+    bool DispatchableCommand(const OUString& rName)
+    {
+        return rName.startsWith(".uno")  ||
+               rName.startsWith("slot:")  ||
+               rName.startsWith("macro:")  ||
+               rName.startsWith("vnd.sun.star.script");
+    }
+}
+
 const OUString& ToolBox::ImplGetHelpText( sal_uInt16 nItemId ) const
 {
     ImplToolItem* pItem = ImplGetItem( nItemId );
@@ -3821,7 +3823,7 @@ const OUString& ToolBox::ImplGetHelpText( sal_uInt16 nItemId ) const
         Help* pHelp = Application::GetHelp();
         if ( pHelp )
         {
-            if ( pItem->maCommandStr.getLength() )
+            if (DispatchableCommand(pItem->maCommandStr))
                 pItem->maHelpText = pHelp->GetHelpText( pItem->maCommandStr, this );
             if ( pItem->maHelpText.isEmpty() && !pItem->maHelpId.isEmpty() )
                 pItem->maHelpText = pHelp->GetHelpText( OStringToOUString( pItem->maHelpId, RTL_TEXTENCODING_UTF8 ), this );
@@ -4469,7 +4471,7 @@ bool ToolBox::ImplActivateItem( vcl::KeyCode aKeyCode )
     return bRet;
 }
 
-bool ImplCloseLastPopup( vcl::Window const *pParent )
+static bool ImplCloseLastPopup( vcl::Window const *pParent )
 {
     // close last popup toolbox (see also:
     // ImplHandleMouseFloatMode(...) in winproc.cxx )
@@ -4892,30 +4894,20 @@ bool ToolBox::ImplChangeHighlightUpDn( bool bUp, bool bNoCycle )
             if( bUp )
             {
                 // select last valid non-clipped item
-                ImplToolItems::iterator it = mpData->m_aItems.end();
                 ImplToolItem* pItem = nullptr;
-                while( it != mpData->m_aItems.begin() )
-                {
-                    --it;
-                    if ( ImplIsValidItem( &(*it), true ) )
-                    {
-                        pItem = &(*it);
-                        break;
-                    }
-                }
+                auto it = std::find_if(mpData->m_aItems.rbegin(), mpData->m_aItems.rend(),
+                    [](const ImplToolItem& rItem) { return ImplIsValidItem( &rItem, true ); });
+                if( it != mpData->m_aItems.rend() )
+                    pItem = &(*it);
+
                 InvalidateMenuButton();
                 ImplChangeHighlight( pItem );
             }
             else
             {
                 // select first valid non-clipped item
-                ImplToolItems::iterator it = mpData->m_aItems.begin();
-                while( it != mpData->m_aItems.end() )
-                {
-                    if ( ImplIsValidItem( &(*it), true ) )
-                        break;
-                    ++it;
-                }
+                ImplToolItems::iterator it = std::find_if(mpData->m_aItems.begin(), mpData->m_aItems.end(),
+                    [](const ImplToolItem& rItem) { return ImplIsValidItem( &rItem, true ); });
                 if( it != mpData->m_aItems.end() )
                 {
                     InvalidateMenuButton();
@@ -4928,13 +4920,8 @@ bool ToolBox::ImplChangeHighlightUpDn( bool bUp, bool bNoCycle )
         if( bUp )
         {
             // Select first valid item
-            ImplToolItems::iterator it = mpData->m_aItems.begin();
-            while( it != mpData->m_aItems.end() )
-            {
-                if ( ImplIsValidItem( &(*it), false ) )
-                    break;
-                ++it;
-            }
+            ImplToolItems::iterator it = std::find_if(mpData->m_aItems.begin(), mpData->m_aItems.end(),
+                [](const ImplToolItem& rItem) { return ImplIsValidItem( &rItem, false ); });
 
             // select the menu button if a clipped item would be selected
             if( (it != mpData->m_aItems.end() && &(*it) == ImplGetFirstClippedItem()) && IsMenuEnabled() )
@@ -4958,86 +4945,81 @@ bool ToolBox::ImplChangeHighlightUpDn( bool bUp, bool bNoCycle )
             }
             else
             {
-                ImplToolItems::iterator it = mpData->m_aItems.end();
                 ImplToolItem* pItem = nullptr;
-                while( it != mpData->m_aItems.begin() )
-                {
-                    --it;
-                    if ( ImplIsValidItem( &(*it), false ) )
-                    {
-                        pItem = &(*it);
-                        break;
-                    }
-                }
+                auto it = std::find_if(mpData->m_aItems.rbegin(), mpData->m_aItems.rend(),
+                    [](const ImplToolItem& rItem) { return ImplIsValidItem( &rItem, false ); });
+                if( it != mpData->m_aItems.rend() )
+                    pItem = &(*it);
+
                 ImplChangeHighlight( pItem );
             }
             return true;
         }
     }
 
-    if( pToolItem )
+    assert(pToolItem);
+
+    ImplToolItems::size_type pos = ToolBox::ImplFindItemPos( pToolItem, mpData->m_aItems );
+    ImplToolItems::size_type nCount = mpData->m_aItems.size();
+
+    ImplToolItems::size_type i=0;
+    do
     {
-        ImplToolItems::size_type pos = ToolBox::ImplFindItemPos( pToolItem, mpData->m_aItems );
-        ImplToolItems::size_type nCount = mpData->m_aItems.size();
-
-        ImplToolItems::size_type i=0;
-        do
+        if( bUp )
         {
-            if( bUp )
+            if( !pos-- )
             {
-                if( !pos-- )
+                if( bNoCycle )
+                    return false;
+
+                // highlight the menu button if it is the last item
+                if( IsMenuEnabled() && !ImplIsFloatingMode() )
                 {
-                    if( bNoCycle )
-                        return false;
-
-                    // highlight the menu button if it is the last item
-                    if( IsMenuEnabled() && !ImplIsFloatingMode() )
-                    {
-                        ImplChangeHighlight( nullptr );
-                        InvalidateMenuButton();
-                        return true;
-                    }
-                    else
-                        pos = nCount-1;
+                    ImplChangeHighlight( nullptr );
+                    InvalidateMenuButton();
+                    return true;
                 }
+                else
+                    pos = nCount-1;
             }
-            else
-            {
-                if( ++pos >= nCount )
-                {
-                    if( bNoCycle )
-                        return false;
-
-                    // highlight the menu button if it is the last item
-                    if( IsMenuEnabled() && !ImplIsFloatingMode() )
-                    {
-                        ImplChangeHighlight( nullptr );
-                        InvalidateMenuButton();
-                        return true;
-                    }
-                    else
-                        pos = 0;
-                }
-            }
-
-            pToolItem = &mpData->m_aItems[pos];
-
-            if ( ImplIsValidItem( pToolItem, false ) )
-                break;
-
-        } while( ++i < nCount);
-
-        if( pToolItem->IsClipped() && IsMenuEnabled() )
-        {
-            // select the menu button if a clipped item would be selected
-            ImplChangeHighlight( nullptr );
-            InvalidateMenuButton();
         }
-        else if( i != nCount )
-            ImplChangeHighlight( pToolItem );
         else
-            return false;
+        {
+            if( ++pos >= nCount )
+            {
+                if( bNoCycle )
+                    return false;
+
+                // highlight the menu button if it is the last item
+                if( IsMenuEnabled() && !ImplIsFloatingMode() )
+                {
+                    ImplChangeHighlight( nullptr );
+                    InvalidateMenuButton();
+                    return true;
+                }
+                else
+                    pos = 0;
+            }
+        }
+
+        pToolItem = &mpData->m_aItems[pos];
+
+        if ( ImplIsValidItem( pToolItem, false ) )
+            break;
+
+    } while( ++i < nCount);
+
+    if( pToolItem->IsClipped() && IsMenuEnabled() )
+    {
+        // select the menu button if a clipped item would be selected
+        ImplChangeHighlight( nullptr );
+        InvalidateMenuButton();
     }
+    else if( i != nCount )
+        ImplChangeHighlight( pToolItem );
+    else
+        return false;
+
     return true;
 }
 

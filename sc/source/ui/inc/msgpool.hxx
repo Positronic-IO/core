@@ -20,12 +20,10 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_MSGPOOL_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_MSGPOOL_HXX
 
-#include <scitems.hxx>
 #include <svl/srchitem.hxx>
 
 #include <svl/itempool.hxx>
 #include <svl/stritem.hxx>
-#include <svl/eitem.hxx>
 
 #include "uiitems.hxx"
 #include "condformatdlgitem.hxx"
@@ -46,7 +44,7 @@ class ScMessagePool: public SfxItemPool
     ScCondFormatDlgItem aCondFormatDlgItem;
 
     std::vector<SfxPoolItem*>    mvPoolDefaults;
-    ScDocumentPool*              pDocPool;
+    ScDocumentPool* const        pDocPool;
 
 public:
     ScMessagePool();

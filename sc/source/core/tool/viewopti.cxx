@@ -18,6 +18,7 @@
  */
 
 #include <vcl/svapp.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -59,22 +60,6 @@ void ScGridOptions::SetDefaults()
     }
     nFldDivisionX = 1;
     nFldDivisionY = 1;
-}
-
-ScGridOptions& ScGridOptions::operator=( const ScGridOptions& rCpy )
-{
-    nFldDrawX       = rCpy.nFldDrawX;       // UINT32
-    nFldDivisionX   = rCpy.nFldDivisionX;
-    nFldDrawY       = rCpy.nFldDrawY;
-    nFldDivisionY   = rCpy.nFldDivisionY;
-    nFldSnapX       = rCpy.nFldSnapX;
-    nFldSnapY       = rCpy.nFldSnapY;
-    bUseGridsnap    = rCpy.bUseGridsnap;    // BitBool
-    bSynchronize    = rCpy.bSynchronize;
-    bGridVisible    = rCpy.bGridVisible;
-    bEqualGrid      = rCpy.bEqualGrid;
-
-    return *this;
 }
 
 bool ScGridOptions::operator==( const ScGridOptions& rCpy ) const
@@ -130,7 +115,6 @@ void ScViewOptions::SetDefaults()
     aModeArr[VOBJ_TYPE_DRAW ] = VOBJ_MODE_SHOW;
 
     aGridCol     = SC_STD_GRIDCOLOR;
-    aGridColName = ScResId( STR_GRIDCOLOR );
 
     aGridOpt.SetDefaults();
 }

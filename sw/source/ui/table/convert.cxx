@@ -91,7 +91,7 @@ void SwConvertTableDlg::GetValues(  sal_Unicode& rDelim,
 }
 
 SwConvertTableDlg::SwConvertTableDlg(SwView& rView, bool bToTable)
-    : GenericDialogController(rView.GetFrameWeld(),
+    : SfxDialogController(rView.GetFrameWeld(),
             "modules/swriter/ui/converttexttable.ui", "ConvertTextTableDialog")
     , m_xTabBtn(m_xBuilder->weld_radio_button("tabs"))
     , m_xSemiBtn(m_xBuilder->weld_radio_button("semicolons"))
@@ -106,7 +106,6 @@ SwConvertTableDlg::SwConvertTableDlg(SwView& rView, bool bToTable)
     , m_xRepeatHeaderNF(m_xBuilder->weld_spin_button("repeatheadersb"))
     , m_xDontSplitCB(m_xBuilder->weld_check_button("dontsplitcb"))
     , m_xAutoFormatBtn(m_xBuilder->weld_button("autofmt"))
-    , sConvertTextTable(SwResId(STR_CONVERT_TEXT_TABLE))
     , pShell(&rView.GetWrtShell())
 {
     if (nSaveButtonState > -1)
@@ -133,7 +132,7 @@ SwConvertTableDlg::SwConvertTableDlg(SwView& rView, bool bToTable)
     }
     if( bToTable )
     {
-        m_xDialog->set_title(sConvertTextTable);
+        m_xDialog->set_title(SwResId(STR_CONVERT_TEXT_TABLE));
         m_xAutoFormatBtn->connect_clicked(LINK(this, SwConvertTableDlg, AutoFormatHdl));
         m_xAutoFormatBtn->show();
         m_xKeepColumn->show();
@@ -176,7 +175,6 @@ IMPL_LINK_NOARG(SwConvertTableDlg, AutoFormatHdl, weld::Button&, void)
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
     ScopedVclPtr<AbstractSwAutoFormatDlg> pDlg(pFact->CreateSwAutoFormatDlg(m_xDialog.get(), pShell, false, mxTAutoFormat.get()));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
     if (RET_OK == pDlg->Execute())
         mxTAutoFormat.reset(pDlg->FillAutoFormatOfIndex());
 }

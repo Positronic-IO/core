@@ -17,12 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <tools/debug.hxx>
 #include <svtools/brwbox.hxx>
 #include "datwin.hxx"
 #include <svtools/colorcfg.hxx>
 #include <vcl/salgtype.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <tools/multisel.hxx>
 #include <tools/fract.hxx>
@@ -257,7 +260,7 @@ void BrowseBox::ToggleSelection()
         tools::Rectangle aAddRect(
             Point( nOfsX, (nRow-nTopRow)*GetDataRowHeight() ),
             Size( pDataWin->GetSizePixel().Width(), GetDataRowHeight() ) );
-        if ( aHighlightList.size() && nLastRowInRect == ( nRow - 1 ) )
+        if ( !aHighlightList.empty() && nLastRowInRect == ( nRow - 1 ) )
             aHighlightList[ 0 ].Union( aAddRect );
         else
             aHighlightList.emplace( aHighlightList.begin(), aAddRect );
@@ -452,7 +455,7 @@ void BrowseBox::ExpandRowSelection( const BrowserMouseEvent& rEvt )
         }
     }
     else
-        if ( !bMultiSelection || !IsRowSelected( rEvt.GetRow() ) )
+        if (!IsRowSelected(rEvt.GetRow()))
             SelectRow( rEvt.GetRow() );
 
     GoToRow( rEvt.GetRow(), false );
@@ -472,9 +475,7 @@ void BrowseBox::Resize()
     pDataWin->bResizeOnPaint = false;
 
     // calc the size of the scrollbars
-    // (we can't ask the scrollbars for their widths cause if we're zoomed they still have to be
-    // resized - which is done in UpdateScrollbars)
-    sal_uLong nSBSize = GetSettings().GetStyleSettings().GetScrollBarSize();
+    sal_uLong nSBSize = GetBarHeight();
     if (IsZoom())
         nSBSize = static_cast<sal_uLong>(nSBSize * static_cast<double>(GetZoom()));
 
@@ -1029,6 +1030,17 @@ void BrowseBox::PaintData( vcl::Window const & rWin, vcl::RenderContext& rRender
     ImplPaintData(rRenderContext, rRect, false, true);
 }
 
+long BrowseBox::GetBarHeight() const
+{
+    // tdf#115941 because some platforms have things like overlay scrollbars, take a max
+    // of a statusbar height and a scrollbar height as the control area height
+
+    // (we can't ask the scrollbars for their size cause if we're zoomed they still have to be
+    // resized - which is done in UpdateScrollbars)
+
+    return std::max(aStatusBar->GetSizePixel().Height(), GetSettings().GetStyleSettings().GetScrollBarSize());
+}
+
 void BrowseBox::UpdateScrollbars()
 {
 
@@ -1044,7 +1056,7 @@ void BrowseBox::UpdateScrollbars()
     pDataWin->bInUpdateScrollbars = true;
 
     // the size of the corner window (and the width of the VSB/height of the HSB)
-    sal_uLong nCornerSize = GetSettings().GetStyleSettings().GetScrollBarSize();
+    sal_uLong nCornerSize = GetBarHeight();
     if (IsZoom())
         nCornerSize = static_cast<sal_uLong>(nCornerSize * static_cast<double>(GetZoom()));
 
@@ -1959,7 +1971,7 @@ tools::Rectangle BrowseBox::calcTableRect(bool _bOnScreen)
     long nY = aRowBar.Top() - aRect.Top();
     Size aSize(aRect.GetSize());
 
-    return tools::Rectangle(aRowBar.TopRight(), Size(aSize.Width() - nX, aSize.Height() - nY - aHScroll->GetSizePixel().Height()) );
+    return tools::Rectangle(aRowBar.TopRight(), Size(aSize.Width() - nX, aSize.Height() - nY - GetBarHeight()) );
 }
 
 tools::Rectangle BrowseBox::GetFieldRectPixelAbs( sal_Int32 _nRowId, sal_uInt16 _nColId, bool /*_bIsHeader*/, bool _bOnScreen )

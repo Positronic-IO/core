@@ -24,7 +24,7 @@
 #include <osl/diagnose.h>
 
 
-bool isGlobal(const OString& scopedName)
+static bool isGlobal(const OString& scopedName)
 {
     return scopedName.isEmpty() || scopedName.startsWith(":");
 }
@@ -150,11 +150,8 @@ AstDeclaration* AstScope::lookupByName(const OString& scopedName)
 
              // Special case for scope which is an interface. We
              // have to look in the inherited interfaces as well.
-            if ( !pDecl )
-            {
-                if (m_nodeType == NT_interface)
-                    pDecl = lookupInInherited(scopedName);
-            }
+            if ( !pDecl && m_nodeType == NT_interface )
+                pDecl = lookupInInherited(scopedName);
        }
     }
 

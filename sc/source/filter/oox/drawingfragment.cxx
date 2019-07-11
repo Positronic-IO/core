@@ -316,8 +316,8 @@ public:
     bool                operator()( const ::oox::vml::ShapeBase& rShape ) const;
 
 private:
-    sal_Int32           mnCol;
-    sal_Int32           mnRow;
+    sal_Int32 const           mnCol;
+    sal_Int32 const           mnRow;
 };
 
 VmlFindNoteFunc::VmlFindNoteFunc( const ScAddress& rPos ) :
@@ -536,6 +536,9 @@ Reference< XShape > VmlDrawing::createAndInsertClientXShape( const ::oox::vml::S
             case XML_Radio:
             {
                 AxOptionButtonModel& rAxModel = aControl.createModel< AxOptionButtonModel >();
+
+                // unique name to prevent autoGrouping with ActiveX controls and which a GroupBox may override - see vmldrawing.cxx.
+                rAxModel.maGroupName = "autoGroup_formControl";
                 convertControlText( rAxModel.maFontData, rAxModel.mnTextColor, rAxModel.maCaption, pTextBox, pClientData->mnTextHAlign );
                 convertControlBackground( rAxModel, rShape );
                 rAxModel.maValue = OUString::number( pClientData->mnChecked );

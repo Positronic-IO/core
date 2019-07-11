@@ -20,7 +20,6 @@
 #define INCLUDED_CUI_SOURCE_OPTIONS_OPTCOLOR_HXX
 
 #include <sfx2/tabdlg.hxx>
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
 
@@ -38,8 +37,8 @@ class SvxColorOptionsTabPage : public SfxTabPage
 
     bool bFillItemSetCalled;
 
-    svtools::EditableColorConfig* pColorConfig;
-    svtools::EditableExtendedColorConfig* pExtColorConfig;
+    std::unique_ptr<svtools::EditableColorConfig> pColorConfig;
+    std::unique_ptr<svtools::EditableExtendedColorConfig> pExtColorConfig;
 
     DECL_LINK(SchemeChangedHdl_Impl, ListBox&, void);
     DECL_LINK(SaveDeleteHdl_Impl, Button*, void);

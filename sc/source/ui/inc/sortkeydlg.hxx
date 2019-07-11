@@ -13,17 +13,14 @@
 #include <vector>
 #include <memory>
 
-#include "anyrefdg.hxx"
-
 #include <vcl/weld.hxx>
-#include <svx/langbox.hxx>
 
 struct ScSortKeyItem
 {
     std::unique_ptr<weld::Builder> m_xBuilder;
 
     std::unique_ptr<weld::Frame> m_xFrame;
-    std::unique_ptr<weld::ComboBoxText> m_xLbSort;
+    std::unique_ptr<weld::ComboBox> m_xLbSort;
     std::unique_ptr<weld::RadioButton> m_xBtnUp;
     std::unique_ptr<weld::RadioButton> m_xBtnDown;
 
@@ -31,8 +28,6 @@ struct ScSortKeyItem
 
     void DisableField();
     void EnableField();
-
-    long getItemHeight() const;
 };
 
 typedef std::vector<std::unique_ptr<ScSortKeyItem> > ScSortKeyItems;
@@ -42,16 +37,13 @@ class ScSortKeyWindow
 public:
     ScSortKeyItems m_aSortKeyItems;
 private:
-    weld::Container* m_pBox;
-    sal_Int32 m_nItemHeight;
+    weld::Container* const m_pBox;
 
 public:
     ScSortKeyWindow(weld::Container* pBox);
     ~ScSortKeyWindow();
 
     void AddSortKey( sal_uInt16 nItem );
-    void DoScroll( sal_Int32 nNewPos );
-    sal_Int32 GetItemHeight() const { return m_nItemHeight; }
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_SORTKEYDLG_HXX

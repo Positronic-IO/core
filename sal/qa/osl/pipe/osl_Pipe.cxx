@@ -39,12 +39,9 @@
 
 using namespace osl;
 
-using ::rtl::OUString;
-using ::rtl::OString;
-
 /** print last error of pipe system.
  */
-inline void printPipeError( ::osl::Pipe const & aPipe )
+static void printPipeError( ::osl::Pipe const & aPipe )
 {
     oslPipeError nError = aPipe.getError( );
     printf("#printPipeError# " );
@@ -90,9 +87,9 @@ inline void printPipeError( ::osl::Pipe const & aPipe )
 
 // pipe name and transfer contents
 
-const rtl::OUString aTestPipeName("testpipe2");
-const rtl::OUString aTestPipe1("testpipe1");
-const rtl::OUString aTestString("Sun Microsystems");
+const OUString aTestPipeName("testpipe2");
+const OUString aTestPipe1("testpipe1");
+const OUString aTestString("Sun Microsystems");
 
 const OString m_pTestString1("Sun Microsystems");
 const OString m_pTestString2("test pipe PASS/OK");
@@ -108,8 +105,8 @@ namespace osl_Pipe
 
     /** testing the methods:
         inline Pipe();
-        inline Pipe(const ::rtl::OUString& strName, oslPipeOptions Options);
-        inline Pipe(const ::rtl::OUString& strName, oslPipeOptions Options,const Security & rSecurity);
+        inline Pipe(const OUString& strName, oslPipeOptions Options);
+        inline Pipe(const OUString& strName, oslPipeOptions Options,const Security & rSecurity);
         inline Pipe(const Pipe& pipe);
         inline Pipe(oslPipe pipe, __sal_NoAcquire noacquire );
         inline Pipe(oslPipe Pipe);
@@ -264,9 +261,9 @@ namespace osl_Pipe
     };
 
     /** testing the methods:
-        inline sal_Bool create( const ::rtl::OUString & strName,
+        inline sal_Bool create( const OUString & strName,
         oslPipeOptions Options, const Security &rSec );
-        nline sal_Bool create( const ::rtl::OUString & strName,
+        nline sal_Bool create( const OUString & strName,
         oslPipeOptions Options = osl_Pipe_OPEN );
     */
     class create : public CppUnit::TestFixture
@@ -441,7 +438,7 @@ namespace osl_Pipe
             {
                 ::osl::Pipe aPipe;
                 aPipe.create( test::uniquePipeName(aTestPipeName), osl_Pipe_CREATE );
-                bRes  = aPipe == aPipe;
+                bRes  = aPipe == aPipe; // NOLINT(misc-redundant-expression)
                 aPipe.close( );
 
                 CPPUNIT_ASSERT_MESSAGE( "#test comment#: test isEqual(), compare itself.",
@@ -504,7 +501,7 @@ namespace osl_Pipe
                 int nRet = aPipe.send( m_pTestString1.getStr(), 3 );
 
                 CPPUNIT_ASSERT_EQUAL_MESSAGE( "#test comment#: use after close.",
-                                        nRet, OSL_PIPE_FAIL );
+                                        OSL_PIPE_FAIL, nRet );
             }
 
         CPPUNIT_TEST_SUITE( close );
@@ -611,8 +608,8 @@ namespace osl_StreamPipe
         inline StreamPipe();
         inline StreamPipe(oslPipe Pipe);
         inline StreamPipe(const StreamPipe& Pipe);
-        inline StreamPipe(const ::rtl::OUString& strName, oslPipeOptions Options = osl_Pipe_OPEN);
-        inline StreamPipe(const ::rtl::OUString& strName, oslPipeOptions Options, const Security &rSec );
+        inline StreamPipe(const OUString& strName, oslPipeOptions Options = osl_Pipe_OPEN);
+        inline StreamPipe(const OUString& strName, oslPipeOptions Options, const Security &rSec );
         inline StreamPipe( oslPipe pipe, __sal_NoAcquire noacquire );
     */
     class ctors : public CppUnit::TestFixture
@@ -738,15 +735,12 @@ namespace osl_StreamPipe
 
     /** wait _nSec seconds.
      */
-    void thread_sleep( sal_uInt32 _nSec )
+    static void thread_sleep( sal_uInt32 _nSec )
     {
         /// print statement in thread process must use fflush() to force display.
         fflush(stdout);
 
-        TimeValue nTV;
-        nTV.Seconds = _nSec;
-        nTV.Nanosec = 0;
-        osl_waitThread(&nTV);
+        osl::Thread::wait(std::chrono::seconds(_nSec));
     }
     // test read/write & send/recv data to pipe
 

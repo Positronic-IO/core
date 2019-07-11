@@ -19,6 +19,7 @@
 #include <vcl/graph.hxx>
 
 #include <osl/thread.hxx>
+#include <sal/log.hxx>
 
 #include <svdata.hxx>
 #include <salgdi.hxx>
@@ -54,7 +55,6 @@ OpenGLContext::OpenGLContext():
     mbInitialized(false),
     mnRefCount(0),
     mbRequestLegacyContext(false),
-    mbUseDoubleBufferedRendering(true),
     mbVCLOnly(false),
     mnFramebufferCount(0),
     mpCurrentFramebuffer(nullptr),
@@ -231,29 +231,13 @@ bool OpenGLContext::init( vcl::Window* pParent )
     return ImplInit();
 }
 
-bool OpenGLContext::init(SystemChildWindow* pChildWindow)
-{
-    if(mbInitialized)
-        return true;
-
-    if( !pChildWindow )
-        return false;
-
-    OpenGLZone aZone;
-
-    mpWindow = pChildWindow->GetParent();
-    m_pChildWindow = pChildWindow;
-    initWindow();
-    return ImplInit();
-}
-
 bool OpenGLContext::ImplInit()
 {
     VCL_GL_INFO("OpenGLContext not implemented for this platform");
     return false;
 }
 
-OUString getGLString(GLenum eGlEnum)
+static OUString getGLString(GLenum eGlEnum)
 {
     OUString sString;
     const GLubyte* pString = glGetString(eGlEnum);
@@ -344,18 +328,6 @@ void OpenGLContext::adjustToNewSize()
 {
     const GLWindow& rGLWin = getOpenGLWindow();
     glViewport(0, 0, rGLWin.Width, rGLWin.Height);
-}
-
-void OpenGLContext::setWinSize(const Size& rSize)
-{
-    if(m_xWindow)
-        m_xWindow->SetSizePixel(rSize);
-    if( m_pChildWindow )
-        m_pChildWindow->SetSizePixel(rSize);
-
-    GLWindow& rGLWin = getModifiableOpenGLWindow();
-    rGLWin.Width = rSize.Width();
-    rGLWin.Height = rSize.Height();
 }
 
 void OpenGLContext::InitChildWindow(SystemChildWindow *pChildWindow)
@@ -617,7 +589,7 @@ const SystemChildWindow* OpenGLContext::getChildWindow() const
     return m_pChildWindow;
 }
 
-bool OpenGLContext::BindFramebuffer( OpenGLFramebuffer* pFramebuffer )
+void OpenGLContext::BindFramebuffer( OpenGLFramebuffer* pFramebuffer )
 {
     OpenGLZone aZone;
 
@@ -629,8 +601,6 @@ bool OpenGLContext::BindFramebuffer( OpenGLFramebuffer* pFramebuffer )
             OpenGLFramebuffer::Unbind();
         mpCurrentFramebuffer = pFramebuffer;
     }
-
-    return true;
 }
 
 void OpenGLContext::AcquireDefaultFramebuffer()
@@ -786,7 +756,7 @@ void OpenGLContext::ReleaseFramebuffers()
     BindFramebuffer( nullptr );
 }
 
-OpenGLProgram* OpenGLContext::GetProgram( const OUString& rVertexShader, const OUString& rFragmentShader, const rtl::OString& preamble )
+OpenGLProgram* OpenGLContext::GetProgram( const OUString& rVertexShader, const OUString& rFragmentShader, const OString& preamble )
 {
     OpenGLZone aZone;
 
@@ -794,7 +764,7 @@ OpenGLProgram* OpenGLContext::GetProgram( const OUString& rVertexShader, const O
     // based on only the names and the preamble. We don't expect
     // shader source files to change during the lifetime of a
     // LibreOffice process.
-    rtl::OString aNameBasedKey = OUStringToOString(rVertexShader + "+" + rFragmentShader, RTL_TEXTENCODING_UTF8) + "+" + preamble;
+    OString aNameBasedKey = OUStringToOString(rVertexShader + "+" + rFragmentShader, RTL_TEXTENCODING_UTF8) + "+" + preamble;
     if( !aNameBasedKey.isEmpty() )
     {
         ProgramCollection::iterator it = maPrograms.find( aNameBasedKey );
@@ -806,7 +776,7 @@ OpenGLProgram* OpenGLContext::GetProgram( const OUString& rVertexShader, const O
     // LibreOffice process instances) based on a hash of their source
     // code, as the source code can and will change between
     // LibreOffice versions even if the shader names don't change.
-    rtl::OString aPersistentKey = OpenGLHelper::GetDigest( rVertexShader, rFragmentShader, preamble );
+    OString aPersistentKey = OpenGLHelper::GetDigest( rVertexShader, rFragmentShader, preamble );
     std::shared_ptr<OpenGLProgram> pProgram = std::make_shared<OpenGLProgram>();
     if( !pProgram->Load( rVertexShader, rFragmentShader, preamble, aPersistentKey ) )
         return nullptr;
@@ -839,16 +809,6 @@ OpenGLProgram* OpenGLContext::UseProgram( const OUString& rVertexShader, const O
     mpCurrentProgram->Use();
 
     return mpCurrentProgram;
-}
-
-void OpenGLContext::UseNoProgram()
-{
-    if( mpCurrentProgram == nullptr )
-        return;
-
-    mpCurrentProgram = nullptr;
-    glUseProgram( 0 );
-    CHECK_GL_ERROR();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

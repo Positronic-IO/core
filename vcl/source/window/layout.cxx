@@ -21,6 +21,7 @@
 #include <boost/multi_array.hpp>
 #include <officecfg/Office/Common.hxx>
 #include <vcl/abstdlg.hxx>
+#include <sal/log.hxx>
 
 #include <svdata.hxx>
 #include <strings.hrc>
@@ -182,7 +183,7 @@ void VclContainer::queue_resize(StateChangedType eReason)
 }
 
 
-Button* isVisibleButtonWithText(vcl::Window* pCandidate)
+static Button* isVisibleButtonWithText(vcl::Window* pCandidate)
 {
     if (!pCandidate)
         return nullptr;
@@ -548,9 +549,8 @@ Size VclButtonBox::addReqGroups(const VclButtonBox::Requisition &rReq) const
 static long getMaxNonOutlier(const std::vector<long> &rG, long nAvgDimension)
 {
     long nMaxDimensionNonOutlier = 0;
-    for (auto const& elem : rG)
+    for (auto const& nPrimaryChildDimension : rG)
     {
-        long nPrimaryChildDimension = elem;
         if (nPrimaryChildDimension < nAvgDimension * 1.5)
         {
             nMaxDimensionNonOutlier = std::max(nPrimaryChildDimension,
@@ -568,13 +568,13 @@ static std::vector<long> setButtonSizes(const std::vector<long> &rG,
     //set everything < 1.5 times the average to the same width, leave the
     //outliers un-touched
     std::vector<bool>::const_iterator aJ = rNonHomogeneous.begin();
-    for (auto const& elem : rG)
+    auto nNonOutlierWidth = std::max(nMaxNonOutlier, nMinWidth);
+    for (auto const& nPrimaryChildDimension : rG)
     {
-        long nPrimaryChildDimension = elem;
         bool bNonHomogeneous = *aJ;
         if (!bNonHomogeneous && nPrimaryChildDimension < nAvgDimension * 1.5)
         {
-            aVec.push_back(std::max(nMaxNonOutlier, nMinWidth));
+            aVec.push_back(nNonOutlierWidth);
         }
         else
         {
@@ -824,8 +824,8 @@ void VclButtonBox::setAllocation(const Size &rAllocation)
 
 struct ButtonOrder
 {
-    OString m_aType;
-    int m_nPriority;
+    const char* m_aType;
+    int const m_nPriority;
 };
 
 static int getButtonPriority(const OString &rType)
@@ -873,7 +873,7 @@ static int getButtonPriority(const OString &rType)
 
 class sortButtons
 {
-    bool m_bVerticalContainer;
+    bool const m_bVerticalContainer;
 public:
     explicit sortButtons(bool bVerticalContainer)
         : m_bVerticalContainer(bVerticalContainer)
@@ -1233,12 +1233,12 @@ static void calcMaxs(const array_type &A, std::vector<VclGrid::Value> &rWidths, 
     }
 }
 
-bool compareValues(const VclGrid::Value &i, const VclGrid::Value &j)
+static bool compareValues(const VclGrid::Value &i, const VclGrid::Value &j)
 {
     return i.m_nValue < j.m_nValue;
 }
 
-VclGrid::Value accumulateValues(const VclGrid::Value &i, const VclGrid::Value &j)
+static VclGrid::Value accumulateValues(const VclGrid::Value &i, const VclGrid::Value &j)
 {
     VclGrid::Value aRet;
     aRet.m_nValue = i.m_nValue + j.m_nValue;
@@ -1578,9 +1578,9 @@ vcl::Window *VclFrame::get_label_widget()
 
 const vcl::Window *VclFrame::get_child() const
 {
-    assert(GetChildCount() == 2);
     //The child widget is the normally the last (of two) children
     const WindowImpl* pWindowImpl = ImplGetWindowImpl();
+    assert(GetChildCount() == 2 || pWindowImpl->mbInDispose);
     if (!m_pLabel)
         return pWindowImpl->mpLastChild;
     if (pWindowImpl->mpFirstChild == pWindowImpl->mpLastChild) //only label exists
@@ -1858,8 +1858,8 @@ IMPL_LINK_NOARG(VclScrolledWindow, ScrollBarHdl, ScrollBar*, void)
 
 const vcl::Window *VclScrolledWindow::get_child() const
 {
-    assert(GetChildCount() == 4);
     const WindowImpl* pWindowImpl = ImplGetWindowImpl();
+    assert(GetChildCount() == 4 || pWindowImpl->mbInDispose);
     return pWindowImpl->mpLastChild;
 }
 
@@ -1926,6 +1926,8 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
     {
         m_pVScroll->Show(nAvailHeight < aChildReq.Height());
     }
+    else if (m_pVScroll->IsVisible() != bool(GetStyle() & WB_VSCROLL))
+        m_pVScroll->Show((GetStyle() & WB_VSCROLL) != 0);
 
     if (m_pVScroll->IsVisible())
         nAvailWidth -= getLayoutRequisition(*m_pVScroll).Width();
@@ -1942,6 +1944,8 @@ void VclScrolledWindow::setAllocation(const Size &rAllocation)
         if (GetStyle() & WB_AUTOVSCROLL)
             m_pVScroll->Show(nAvailHeight < aChildReq.Height());
     }
+    else if (m_pHScroll->IsVisible() != bool(GetStyle() & WB_HSCROLL))
+        m_pHScroll->Show((GetStyle() & WB_HSCROLL) != 0);
 
     Size aInnerSize(rAllocation);
     aInnerSize.AdjustWidth(-2);
@@ -2227,7 +2231,7 @@ void MessageDialog::create_message_area()
         assert(pButtonBox);
 
         VclPtr<PushButton> pBtn;
-        short nDefaultResponse = RET_CANCEL;
+        short nDefaultResponse = get_default_response();
         switch (m_eButtonsType)
         {
             case VclButtonsType::NONE:
@@ -2318,19 +2322,6 @@ MessageDialog::MessageDialog(vcl::Window* pParent, WinBits nStyle)
     , m_pSecondaryMessage(nullptr)
 {
     SetType(WindowType::MESSBOX);
-}
-
-MessageDialog::MessageDialog(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription)
-    : Dialog(pParent, OStringToOUString(rID, RTL_TEXTENCODING_UTF8), rUIXMLDescription, WindowType::MESSBOX)
-    , m_eButtonsType(VclButtonsType::NONE)
-    , m_eMessageType(VclMessageType::Info)
-    , m_pOwnedContentArea(nullptr)
-    , m_pOwnedActionArea(nullptr)
-    , m_pGrid(nullptr)
-    , m_pImage(nullptr)
-    , m_pPrimaryMessage(nullptr)
-    , m_pSecondaryMessage(nullptr)
-{
 }
 
 MessageDialog::MessageDialog(vcl::Window* pParent,
@@ -2485,6 +2476,23 @@ void MessageDialog::set_secondary_text(const OUString &rSecondaryString)
         m_pSecondaryMessage->SetText("\n" + m_sSecondaryString);
         m_pSecondaryMessage->Show(!m_sSecondaryString.isEmpty());
         MessageDialog::SetMessagesWidths(this, m_pPrimaryMessage, !m_sSecondaryString.isEmpty() ? m_pSecondaryMessage.get() : nullptr);
+    }
+}
+
+void MessageDialog::StateChanged(StateChangedType nType)
+{
+    Dialog::StateChanged(nType);
+    if (nType == StateChangedType::InitShow)
+    {
+        // MessageBox should be at least as wide as to see the title
+        auto nTitleWidth = CalcTitleWidth();
+        // Extra-Width for Close button
+        nTitleWidth += mpWindowImpl->mnTopBorder;
+        if (get_preferred_size().Width() < nTitleWidth)
+        {
+            set_width_request(nTitleWidth);
+            DoInitialLayout();
+        }
     }
 }
 

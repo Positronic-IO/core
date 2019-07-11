@@ -55,13 +55,13 @@
 
 SFX_IMPL_DOCKINGWINDOW_WITHID( SvxBmpMaskChildWindow, SID_BMPMASK )
 
-class ColorWindow : public Control
+class BmpColorWindow : public Control
 {
     Color       aColor;
 
 
 public:
-    explicit ColorWindow(vcl::Window* pParent)
+    explicit BmpColorWindow(vcl::Window* pParent)
         : Control(pParent, WB_BORDER)
         , aColor( COL_WHITE )
     {
@@ -147,14 +147,13 @@ void MaskSet::KeyInput( const KeyEvent& rKEvt )
 
 void MaskSet::onEditColor()
 {
-    std::unique_ptr<SvColorDialog> pColorDlg(new SvColorDialog( GetParent() ));
+    SvColorDialog aColorDlg;
 
-    pColorDlg->SetColor(GetItemColor(1));
+    aColorDlg.SetColor(GetItemColor(1));
 
-    if( pColorDlg->Execute() )
-        SetItemColor( 1, pColorDlg->GetColor() );
+    if (aColorDlg.Execute(GetFrameWeld()))
+        SetItemColor(1, aColorDlg.GetColor());
 }
-
 
 class MaskData
 {
@@ -310,7 +309,7 @@ IMPL_LINK_NOARG(MaskData, ExecHdl, Button*, void)
             { &aBItem });
 }
 
-void ColorWindow::Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& /*Rect*/)
+void BmpColorWindow::Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& /*Rect*/)
 {
     rRenderContext.Push(PushFlags::LINECOLOR | PushFlags::FILLCOLOR);
     rRenderContext.SetLineColor(aColor);
@@ -332,7 +331,7 @@ void SvxBmpMaskSelectItem::StateChanged( sal_uInt16 nSID, SfxItemState /*eState*
     if ( ( nSID == SID_BMPMASK_EXEC ) && pItem )
     {
         const SfxBoolItem* pStateItem = dynamic_cast<const SfxBoolItem*>( pItem  );
-        assert(pStateItem); //SfxBoolItem erwartet
+        assert(pStateItem); // SfxBoolItem expected
         if (pStateItem)
             rBmpMask.SetExecState( pStateItem->GetValue() );
     }
@@ -361,7 +360,7 @@ SvxBmpMask::SvxBmpMask(SfxBindings *pBindinx, SfxChildWindow *pCW, vcl::Window* 
     m_pTbxPipette->SetItemBits(m_pTbxPipette->GetItemId(0),
         ToolBoxItemBits::AUTOCHECK);
     get(m_pBtnExec, "replace");
-    m_pCtlPipette = VclPtr<ColorWindow>::Create(get<Window>("toolgrid"));
+    m_pCtlPipette = VclPtr<BmpColorWindow>::Create(get<Window>("toolgrid"));
     m_pCtlPipette->Show();
     m_pCtlPipette->set_grid_left_attach(1);
     m_pCtlPipette->set_grid_top_attach(0);
@@ -408,21 +407,21 @@ SvxBmpMask::SvxBmpMask(SfxBindings *pBindinx, SfxChildWindow *pCW, vcl::Window* 
     m_pLbColor3->SelectEntry(COL_TRANSPARENT);
     m_pLbColor4->SelectEntry(COL_TRANSPARENT);
 
-    m_pTbxPipette->SetSelectHdl( LINK( pData, MaskData, PipetteHdl ) );
-    m_pBtnExec->SetClickHdl( LINK( pData, MaskData, ExecHdl ) );
+    m_pTbxPipette->SetSelectHdl( LINK( pData.get(), MaskData, PipetteHdl ) );
+    m_pBtnExec->SetClickHdl( LINK( pData.get(), MaskData, ExecHdl ) );
 
-    m_pCbx1->SetClickHdl( LINK( pData, MaskData, CbxHdl ) );
-    m_pCbx2->SetClickHdl( LINK( pData, MaskData, CbxHdl ) );
-    m_pCbx3->SetClickHdl( LINK( pData, MaskData, CbxHdl ) );
-    m_pCbx4->SetClickHdl( LINK( pData, MaskData, CbxHdl ) );
-    m_pCbxTrans->SetClickHdl( LINK( pData, MaskData, CbxTransHdl ) );
+    m_pCbx1->SetClickHdl( LINK( pData.get(), MaskData, CbxHdl ) );
+    m_pCbx2->SetClickHdl( LINK( pData.get(), MaskData, CbxHdl ) );
+    m_pCbx3->SetClickHdl( LINK( pData.get(), MaskData, CbxHdl ) );
+    m_pCbx4->SetClickHdl( LINK( pData.get(), MaskData, CbxHdl ) );
+    m_pCbxTrans->SetClickHdl( LINK( pData.get(), MaskData, CbxTransHdl ) );
 
     SetAccessibleNames ();
 
-    m_pLbColor1->SetGetFocusHdl( LINK( pData, MaskData, FocusLbHdl ) );
-    m_pLbColor2->SetGetFocusHdl( LINK( pData, MaskData, FocusLbHdl ) );
-    m_pLbColor3->SetGetFocusHdl( LINK( pData, MaskData, FocusLbHdl ) );
-    m_pLbColor4->SetGetFocusHdl( LINK( pData, MaskData, FocusLbHdl ) );
+    m_pLbColor1->SetGetFocusHdl( LINK( pData.get(), MaskData, FocusLbHdl ) );
+    m_pLbColor2->SetGetFocusHdl( LINK( pData.get(), MaskData, FocusLbHdl ) );
+    m_pLbColor3->SetGetFocusHdl( LINK( pData.get(), MaskData, FocusLbHdl ) );
+    m_pLbColor4->SetGetFocusHdl( LINK( pData.get(), MaskData, FocusLbHdl ) );
     m_pLbColorTrans->Disable();
 
     OUString sColorPalette (SvxResId( RID_SVXDLG_BMPMASK_STR_PALETTE));
@@ -474,8 +473,7 @@ void SvxBmpMask::dispose()
     m_pQSet3.disposeAndClear();
     m_pQSet4.disposeAndClear();
     m_pCtlPipette.disposeAndClear();
-    delete pData;
-    pData = nullptr;
+    pData.reset();
     m_pTbxPipette.clear();
     m_pBtnExec.clear();
     m_pCbx1.clear();
@@ -828,7 +826,7 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
                 case MetaActionType::BMP:
                 {
                     MetaBmpAction*  pAct = static_cast<MetaBmpAction*>(pAction);
-                    const Bitmap    aBmp( Mask( pAct->GetBitmap() ).GetBitmap() );
+                    const Bitmap    aBmp( Mask( pAct->GetBitmap() ).GetBitmapEx().GetBitmap() );
 
                     pAct = new MetaBmpAction( pAct->GetPoint(), aBmp );
                     aMtf.AddAction( pAct );
@@ -838,7 +836,7 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
                 case MetaActionType::BMPSCALE:
                 {
                     MetaBmpScaleAction* pAct = static_cast<MetaBmpScaleAction*>(pAction);
-                    const Bitmap        aBmp( Mask( pAct->GetBitmap() ).GetBitmap() );
+                    const Bitmap        aBmp( Mask( pAct->GetBitmap() ).GetBitmapEx().GetBitmap() );
 
                     pAct = new MetaBmpScaleAction( pAct->GetPoint(), pAct->GetSize(), aBmp );
                     aMtf.AddAction( pAct );
@@ -848,7 +846,7 @@ GDIMetaFile SvxBmpMask::ImpMask( const GDIMetaFile& rMtf )
                 case MetaActionType::BMPSCALEPART:
                 {
                     MetaBmpScalePartAction* pAct = static_cast<MetaBmpScalePartAction*>(pAction);
-                    const Bitmap            aBmp( Mask( pAct->GetBitmap() ).GetBitmap() );
+                    const Bitmap            aBmp( Mask( pAct->GetBitmap() ).GetBitmapEx().GetBitmap() );
 
                     pAct = new MetaBmpScalePartAction( pAct->GetDestPoint(), pAct->GetDestSize(),
                                                        pAct->GetSrcPoint(), pAct->GetSrcSize(), aBmp );
@@ -1025,7 +1023,7 @@ Graphic SvxBmpMask::Mask( const Graphic& rGraphic )
                         }
 
                         // now replace it again with the normal colors
-                        Bitmap  aBitmap( ImpMask( aGraphic.GetBitmap() ) );
+                        Bitmap  aBitmap( ImpMask( aGraphic.GetBitmapEx().GetBitmap() ) );
                         Size    aSize( aBitmap.GetSizePixel() );
 
                         if ( aSize.Width() && aSize.Height() )

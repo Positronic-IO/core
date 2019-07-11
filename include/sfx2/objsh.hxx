@@ -339,7 +339,7 @@ public:
     // called for a few slots like SID_SAVE[AS]DOC, SID_PRINTDOC[DIRECT], derived classes may abort the action
     virtual bool                QuerySlotExecutable( sal_uInt16 nSlotId );
 
-    bool                        SaveChildren(bool bObjectsOnly=false);
+    void                        SaveChildren(bool bObjectsOnly=false);
     bool                        SaveAsChildren( SfxMedium &rMedium );
     bool                        SwitchChildrenPersistance(
                                     const css::uno::Reference< css::embed::XStorage >& xStorage,
@@ -354,20 +354,28 @@ public:
             css::uno::Reference<css::text::XTextRange> const& xInsertPosition);
     bool                        ExportTo( SfxMedium &rMedium );
 
-    /** Returns to if preparing was succesful, else false. */
-    bool PrepareForSigning();
+    /** Returns to if preparing was successful, else false. */
+    bool PrepareForSigning(weld::Window* pDialogParent);
     bool CheckIsReadonly(bool bSignScriptingContent);
+    void RecheckSignature(bool bAlsoRecheckScriptingSignature);
     void AfterSigning(bool bSignSuccess, bool bSignScriptingContent);
     bool HasValidSignatures();
     SignatureState              GetDocumentSignatureState();
-    void                        SignDocumentContent();
-    void SignSignatureLine(const OUString& aSignatureLineId,
-                           const css::uno::Reference<css::security::XCertificate> xCert,
-                           const css::uno::Reference<css::graphic::XGraphic> xValidGraphic,
-                           const css::uno::Reference<css::graphic::XGraphic> xInvalidGraphic,
+    void                        SignDocumentContent(weld::Window* pDialogParent);
+    css::uno::Sequence<css::security::DocumentSignatureInformation> GetDocumentSignatureInformation(
+        bool bScriptingContent,
+        const css::uno::Reference<css::security::XDocumentDigitalSignatures>& xSigner
+        = css::uno::Reference<css::security::XDocumentDigitalSignatures>());
+
+    bool SignDocumentContentUsingCertificate(const css::uno::Reference<css::security::XCertificate>& xCertificate);
+
+    void SignSignatureLine(weld::Window* pDialogParent, const OUString& aSignatureLineId,
+                           const css::uno::Reference<css::security::XCertificate>& xCert,
+                           const css::uno::Reference<css::graphic::XGraphic>& xValidGraphic,
+                           const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic,
                            const OUString& aComment);
     SignatureState              GetScriptingSignatureState();
-    void                        SignScriptingContent();
+    void                        SignScriptingContent(weld::Window* pDialogParent);
     DECL_LINK(SignDocumentHandler, Button*, void);
 
     virtual VclPtr<SfxDocumentInfoDialog> CreateDocumentInfoDialog( const SfxItemSet& );
@@ -437,7 +445,6 @@ public:
 
     Size                        GetFirstPageSize();
     bool                        DoClose();
-    virtual void                PrepareReload();
     std::shared_ptr<GDIMetaFile> GetPreviewMetaFile( bool bFullContent = false ) const;
     virtual void                CancelTransfers();
 
@@ -580,11 +587,11 @@ public:
     static OUString             GetServiceNameFromFactory( const OUString& rFact );
     bool                        IsInPlaceActive();
     bool                        IsUIActive();
-    virtual void                InPlaceActivate( bool );
 
     static bool                 CopyStoragesOfUnknownMediaType(
                                     const css::uno::Reference< css::embed::XStorage >& xSource,
-                                    const css::uno::Reference< css::embed::XStorage >& xTarget );
+                                    const css::uno::Reference<css::embed::XStorage>& xTarget,
+                                    const css::uno::Sequence<OUString>& rExceptions = css::uno::Sequence<OUString>());
 
     // The functions from SvPersist
     void            EnableSetModified( bool bEnable = true );
@@ -597,7 +604,7 @@ public:
      */
     void            SetupStorage(
                         const css::uno::Reference< css::embed::XStorage >& xStorage,
-                        sal_Int32 nVersion, bool bTemplate, bool bChart = false ) const;
+                        sal_Int32 nVersion, bool bTemplate ) const;
 
     css::uno::Reference< css::embed::XStorage > const & GetStorage();
 
@@ -742,14 +749,8 @@ public:
     // configuration items
     SAL_DLLPRIVATE SignatureState ImplGetSignatureState( bool bScriptingContent = false );
 
-    SAL_DLLPRIVATE css::uno::Sequence< css::security::DocumentSignatureInformation >
-        ImplAnalyzeSignature(
-            bool bScriptingContent,
-            const css::uno::Reference< css::security::XDocumentDigitalSignatures >& xSigner
-                = css::uno::Reference< css::security::XDocumentDigitalSignatures >() );
-
     SAL_DLLPRIVATE bool QuerySaveSizeExceededModules_Impl( const css::uno::Reference< css::task::XInteractionHandler >& xHandler );
-    SAL_DLLPRIVATE bool QueryAllowExoticFormat_Impl( const css::uno::Reference< css::task::XInteractionHandler >& xHandler,
+    SAL_DLLPRIVATE static bool QueryAllowExoticFormat_Impl( const css::uno::Reference< css::task::XInteractionHandler >& xHandler,
                                                      const OUString& rURL,
                                                      const OUString& rFilterUIName);
 

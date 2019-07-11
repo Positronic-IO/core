@@ -22,6 +22,7 @@
 
 #include <basegfx/range/b2drange.hxx>
 #include <tools/date.hxx>
+#include <tools/time.hxx>
 #include <vcl/builder.hxx>
 #include <vcl/window.hxx>
 
@@ -59,7 +60,6 @@ class SwAnnotationWin : public vcl::Window
 {
     public:
         SwAnnotationWin( SwEditWin& rEditWin,
-                         WinBits nBits,
                          SwPostItMgr& aMgr,
                          SwSidebarItem& rSidebarItem,
                          SwFormatField* aField );
@@ -104,13 +104,13 @@ class SwAnnotationWin : public vcl::Window
         SwEditWin& EditWin();
         SwSidebarItem& GetSidebarItem() { return mrSidebarItem; }
 
-        OutlinerView* GetOutlinerView() { return mpOutlinerView;}
+        OutlinerView* GetOutlinerView() { return mpOutlinerView.get();}
         bool HasScrollbar() const;
         bool IsScrollbarVisible() const;
         ScrollBar* Scrollbar() { return mpVScrollbar; }
-        ::sw::sidebarwindows::AnchorOverlayObject* Anchor() { return mpAnchor;}
-        ::sw::sidebarwindows::ShadowOverlayObject* Shadow() { return mpShadow;}
-        ::sw::overlay::OverlayRanges* TextRange() { return mpTextRangeOverlay;}
+        ::sw::sidebarwindows::AnchorOverlayObject* Anchor() { return mpAnchor.get();}
+        ::sw::sidebarwindows::ShadowOverlayObject* Shadow() { return mpShadow.get();}
+        ::sw::overlay::OverlayRanges* TextRange() { return mpTextRangeOverlay.get();}
 
         long            GetPostItTextHeight();
 
@@ -212,8 +212,8 @@ class SwAnnotationWin : public vcl::Window
 
         ImplSVEvent *   mnEventId;
 
-        OutlinerView*   mpOutlinerView;
-        Outliner*       mpOutliner;
+        std::unique_ptr<OutlinerView>   mpOutlinerView;
+        std::unique_ptr<Outliner>       mpOutliner;
 
         VclPtr<sw::sidebarwindows::SidebarTextControl> mpSidebarTextControl;
         VclPtr<ScrollBar>      mpVScrollbar;
@@ -221,9 +221,9 @@ class SwAnnotationWin : public vcl::Window
         VclPtr<Edit>           mpMetadataDate;
         VclPtr<MenuButton>     mpMenuButton;
 
-        sw::sidebarwindows::AnchorOverlayObject* mpAnchor;
-        sw::sidebarwindows::ShadowOverlayObject* mpShadow;
-        sw::overlay::OverlayRanges* mpTextRangeOverlay;
+        std::unique_ptr<sw::sidebarwindows::AnchorOverlayObject> mpAnchor;
+        std::unique_ptr<sw::sidebarwindows::ShadowOverlayObject> mpShadow;
+        std::unique_ptr<sw::overlay::OverlayRanges> mpTextRangeOverlay;
 
         Color           mColorAnchor;
         Color           mColorDark;

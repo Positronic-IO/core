@@ -1020,7 +1020,7 @@ void SdrPaintView::SetDefaultAttr(const SfxItemSet& rAttr, bool bReplaceAll)
 
         if(bHasEEFeatureItems)
         {
-            OUString aMessage("SdrPaintView::SetDefaultAttr(): Setting EE_FEATURE items at the SdrView does not make sense! It only leads to overhead and unreadable documents.");
+            const OUString aMessage("SdrPaintView::SetDefaultAttr(): Setting EE_FEATURE items at the SdrView does not make sense! It only leads to overhead and unreadable documents.");
             std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
                                                           VclMessageType::Info, VclButtonsType::Ok,
                                                           aMessage));
@@ -1059,7 +1059,7 @@ void SdrPaintView::SetDefaultStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRe
 #endif
 }
 
-bool SdrPaintView::GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const
+void SdrPaintView::GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const
 {
     if(bOnlyHardAttr || !mpDefaultStyleSheet)
     {
@@ -1072,13 +1072,11 @@ bool SdrPaintView::GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) con
         rTargetSet.Put(maDefaultAttr, false);
     }
     MergeNotPersistDefaultAttr(rTargetSet);
-    return true;
 }
 
-bool SdrPaintView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
+void SdrPaintView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
 {
     SetDefaultAttr(rSet,bReplaceAll);
-    return true;
 }
 
 SfxStyleSheet* SdrPaintView::GetStyleSheet() const
@@ -1086,10 +1084,9 @@ SfxStyleSheet* SdrPaintView::GetStyleSheet() const
     return mpDefaultStyleSheet;
 }
 
-bool SdrPaintView::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr)
+void SdrPaintView::SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr)
 {
     SetDefaultStyleSheet(pStyleSheet,bDontRemoveHardAttr);
-    return true;
 }
 
 

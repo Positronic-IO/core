@@ -20,6 +20,7 @@
 
 #include <salmenu.hxx>
 #include <unx/gtk/gtkframe.hxx>
+#include <unotools/tempfile.hxx>
 #include <vcl/idle.hxx>
 
 #if GTK_CHECK_VERSION(3,0,0)
@@ -40,6 +41,10 @@
 #  endif
 #endif
 
+#if !GTK_CHECK_VERSION(3,0,0)
+typedef void GtkCssProvider;
+#endif
+
 class MenuItemList;
 class GtkSalMenuItem;
 
@@ -50,12 +55,17 @@ private:
     Idle                            maUpdateMenuBarIdle;
 
     bool                            mbInActivateCallback;
-    bool                            mbMenuBar;
+    bool const                      mbMenuBar;
     bool                            mbNeedsUpdate;
     bool                            mbReturnFocusToDocument;
     bool                            mbAddedGrab;
     GtkWidget*                      mpMenuBarContainerWidget;
+    std::unique_ptr<utl::TempFile>  mxPersonaImage;
+    BitmapEx                        maPersonaBitmap;
+    GtkWidget*                      mpMenuAllowShrinkWidget;
     GtkWidget*                      mpMenuBarWidget;
+    GtkCssProvider*                 mpMenuBarContainerProvider;
+    GtkCssProvider*                 mpMenuBarProvider;
     GtkWidget*                      mpCloseButton;
     VclPtr<Menu>                    mpVCLMenu;
     GtkSalMenu*                     mpParentSalMenu;
@@ -136,6 +146,8 @@ public:
     virtual void ShowCloseButton(bool bShow) override;
     virtual bool CanGetFocus() const override;
     virtual bool TakeFocus() override;
+    virtual int GetMenuBarHeight() const override;
+    virtual void ApplyPersona() override;
 };
 
 class GtkSalMenuItem : public SalMenuItem
@@ -144,8 +156,8 @@ public:
     GtkSalMenuItem( const SalItemParams* );
     virtual ~GtkSalMenuItem() override;
 
-    sal_uInt16          mnId;               // Item ID
-    MenuItemType        mnType;             // Item type
+    sal_uInt16 const    mnId;               // Item ID
+    MenuItemType const  mnType;             // Item type
     bool                mbVisible;          // Item visibility.
     GtkSalMenu*         mpParentMenu;       // The menu into which this menu item is inserted
     GtkSalMenu*         mpSubMenu;          // Submenu of this item (if defined)

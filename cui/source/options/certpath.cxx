@@ -11,7 +11,8 @@
 #include <osl/file.hxx>
 #include <osl/security.hxx>
 #include <osl/thread.h>
-#include <svtools/treelistentry.hxx>
+#include <sal/log.hxx>
+#include <vcl/treelistentry.hxx>
 #include <unotools/securityoptions.hxx>
 #include "certpath.hxx"
 

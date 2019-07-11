@@ -34,10 +34,12 @@
 #include <algorithm>
 #include <iterator>
 
+#include <com/sun/star/drawing/XDrawPage.hpp>
 #include <com/sun/star/chart2/XTitled.hpp>
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XChartTypeContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
 
 #include <com/sun/star/container/XIndexAccess.hpp>

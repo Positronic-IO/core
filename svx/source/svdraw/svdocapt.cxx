@@ -58,6 +58,7 @@
 #include <svx/xlnwtit.hxx>
 #include <svx/xpoly.hxx>
 #include <svx/xpool.hxx>
+#include <o3tl/make_unique.hxx>
 
 
 enum EscDir {LKS,RTS,OBN,UNT};
@@ -174,17 +175,17 @@ void ImpCaptParams::CalcEscPos(const Point& rTailPt, const tools::Rectangle& rRe
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrCaptionObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrCaptionObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::CaptionProperties(*this);
+    return o3tl::make_unique<sdr::properties::CaptionProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrCaptionObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrCaptionObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrCaptionObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrCaptionObj>(*this);
 }
 
 
@@ -192,7 +193,9 @@ SdrCaptionObj::SdrCaptionObj(SdrModel& rSdrModel)
 :   SdrRectObj(rSdrModel, OBJ_TEXT),
     aTailPoly(3),  // default size: 3 points = 2 lines
     mbSpecialTextBoxShadow(false),
-    mbFixedTail(false)
+    mbFixedTail(false),
+    mbSuppressGetBitmap(false),
+    maFixedTailPos()
 {
 }
 
@@ -203,7 +206,9 @@ SdrCaptionObj::SdrCaptionObj(
 :   SdrRectObj(rSdrModel, OBJ_TEXT,rRect),
     aTailPoly(3),  // default size: 3 points = 2 lines
     mbSpecialTextBoxShadow(false),
-    mbFixedTail(false)
+    mbFixedTail(false),
+    mbSuppressGetBitmap(false),
+    maFixedTailPos()
 {
     aTailPoly[0]=maFixedTailPos=rTail;
 }
@@ -289,33 +294,15 @@ sal_uInt32 SdrCaptionObj::GetHdlCount() const
     return nCount1 + 1;
 }
 
-SdrHdl* SdrCaptionObj::GetHdl(sal_uInt32 nHdlNum) const
+void SdrCaptionObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
-    const sal_uInt32 nRectHdlCnt(SdrRectObj::GetHdlCount());
-
-    if(nHdlNum < nRectHdlCnt)
-    {
-        return SdrRectObj::GetHdl(nHdlNum);
-    }
-    else
-    {
-        sal_uInt32 nPntNum(nHdlNum);
-        nPntNum -= nRectHdlCnt;
-
-        if(nPntNum < aTailPoly.GetSize())
-        {
-            SdrHdl* pHdl = new SdrHdl(aTailPoly.GetPoint(static_cast<sal_uInt16>(nPntNum)), SdrHdlKind::Poly);
-            pHdl->SetPolyNum(1);
-            pHdl->SetPointNum(nPntNum);
-            return pHdl;
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
+    SdrRectObj::AddToHdlList(rHdlList);
+    // Currently only dragging the tail's end is implemented.
+    std::unique_ptr<SdrHdl> pHdl(new SdrHdl(aTailPoly.GetPoint(0), SdrHdlKind::Poly));
+    pHdl->SetPolyNum(1);
+    pHdl->SetPointNum(0);
+    rHdlList.AddHdl(std::move(pHdl));
 }
-
 
 bool SdrCaptionObj::hasSpecialDrag() const
 {

@@ -38,13 +38,13 @@ using namespace ::com::sun::star::sdb;
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::uno;
 
-void normaliseTimeValue(TimeValue* pVal)
+static void normaliseTimeValue(TimeValue* pVal)
 {
     pVal->Seconds += pVal->Nanosec / 1000000000;
     pVal->Nanosec %= 1000000000;
 }
 
-void getTimeDifference(const TimeValue* pTimeStart,
+static void getTimeDifference(const TimeValue* pTimeStart,
                        const TimeValue* pTimeEnd,
                        TimeValue* pTimeDifference)
 {
@@ -56,7 +56,7 @@ void getTimeDifference(const TimeValue* pTimeStart,
     normaliseTimeValue(pTimeDifference);
 }
 
-OUString getPrintableTimeValue(const TimeValue* pTimeValue)
+static OUString getPrintableTimeValue(const TimeValue* pTimeValue)
 {
     return OUString::number(
         (sal_uInt64(pTimeValue->Seconds) * SAL_CONST_UINT64(1000000000)
@@ -137,12 +137,11 @@ void EmbeddedDBPerformanceTest::printTimes(
     const TimeValue* pTime2,
     const TimeValue* pTime3)
 {
-    m_aOutputBuffer.append(
-        getPrintableTimeValue(pTime1) + "\t" +
-        getPrintableTimeValue(pTime2) + "\t" +
-        getPrintableTimeValue(pTime3) + "\t"
-        "\n"
-   );
+    m_aOutputBuffer
+        .append(getPrintableTimeValue(pTime1)).append("\t")
+        .append(getPrintableTimeValue(pTime2)).append("\t")
+        .append(getPrintableTimeValue(pTime3)).append("\t")
+        .append("\n");
 }
 
 const char EmbeddedDBPerformanceTest::our_sEnableTestEnvVar[] = "DBA_PERFTEST";
@@ -284,7 +283,7 @@ void EmbeddedDBPerformanceTest::performPreparedStatementInsertTest(
     getTimeDifference(&aStart, &aMiddle, &aTimeInsert);
     getTimeDifference(&aMiddle, &aEnd, &aTimeCommit);
     getTimeDifference(&aStart, &aEnd, &aTimeTotal);
-    m_aOutputBuffer.append("Insert: " + rDBName + "\n");
+    m_aOutputBuffer.append("Insert: ").append(rDBName).append("\n");
     printTimes(&aTimeInsert, &aTimeCommit, &aTimeTotal);
 
     pFile->Close();
@@ -322,7 +321,7 @@ void EmbeddedDBPerformanceTest::performStatementInsertTest(
     getTimeDifference(&aStart, &aMiddle, &aTimeInsert);
     getTimeDifference(&aMiddle, &aEnd, &aTimeCommit);
     getTimeDifference(&aStart, &aEnd, &aTimeTotal);
-    m_aOutputBuffer.append("Insert: " + rDBName + "\n");
+    m_aOutputBuffer.append("Insert: ").append(rDBName).append("\n");
     printTimes(&aTimeInsert, &aTimeCommit, &aTimeTotal);
 
     pFile->Close();
@@ -353,7 +352,7 @@ void EmbeddedDBPerformanceTest::performReadTest(
     getTimeDifference(&aStart, &aMiddle, &aTimeSelect);
     getTimeDifference(&aMiddle, &aEnd, &aTimeIterate);
     getTimeDifference(&aStart, &aEnd, &aTimeTotal);
-    m_aOutputBuffer.append("Read from: " + rDBName + "\n");
+    m_aOutputBuffer.append("Read from: ").append(rDBName).append("\n");
     printTimes(&aTimeSelect, &aTimeIterate, &aTimeTotal);
 }
 

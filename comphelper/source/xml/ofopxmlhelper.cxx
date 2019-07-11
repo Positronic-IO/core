@@ -45,23 +45,7 @@ namespace comphelper {
 class OFOPXMLHelper_Impl
     : public cppu::WeakImplHelper< css::xml::sax::XDocumentHandler >
 {
-    sal_uInt16 m_nFormat; // which format to parse
-
-    // Relations info related strings
-    OUString m_aRelListElement;
-    OUString m_aRelElement;
-    OUString m_aIDAttr;
-    OUString m_aTypeAttr;
-    OUString m_aTargetModeAttr;
-    OUString m_aTargetAttr;
-
-    // ContentType related strings
-    OUString m_aTypesElement;
-    OUString m_aDefaultElement;
-    OUString m_aOverrideElement;
-    OUString m_aExtensionAttr;
-    OUString m_aPartNameAttr;
-    OUString m_aContentTypeAttr;
+    sal_uInt16 const m_nFormat; // which format to parse
 
     css::uno::Sequence< css::uno::Sequence< css::beans::StringPair > > m_aResultSeq;
     std::vector< OUString > m_aElementsSeq; // stack of elements being parsed
@@ -284,26 +268,30 @@ uno::Sequence< uno::Sequence< beans::StringPair > > ReadSequence_Impl(
 
 } // namespace OFOPXMLHelper
 
+// Relations info related strings
+static OUString const g_aRelListElement("Relationships");
+static OUString const g_aRelElement( "Relationship" );
+static OUString const g_aIDAttr( "Id" );
+static OUString const g_aTypeAttr( "Type" );
+static OUString const g_aTargetModeAttr( "TargetMode" );
+static OUString const g_aTargetAttr( "Target" );
+
+// ContentType related strings
+static OUString const g_aTypesElement( "Types" );
+static OUString const g_aDefaultElement( "Default" );
+static OUString const g_aOverrideElement( "Override" );
+static OUString const g_aExtensionAttr( "Extension" );
+static OUString const g_aPartNameAttr( "PartName" );
+static OUString const g_aContentTypeAttr( "ContentType" );
+
 OFOPXMLHelper_Impl::OFOPXMLHelper_Impl( sal_uInt16 nFormat )
 : m_nFormat( nFormat )
-, m_aRelListElement( "Relationships" )
-, m_aRelElement( "Relationship" )
-, m_aIDAttr( "Id" )
-, m_aTypeAttr( "Type" )
-, m_aTargetModeAttr( "TargetMode" )
-, m_aTargetAttr( "Target" )
-, m_aTypesElement( "Types" )
-, m_aDefaultElement( "Default" )
-, m_aOverrideElement( "Override" )
-, m_aExtensionAttr( "Extension" )
-, m_aPartNameAttr( "PartName" )
-, m_aContentTypeAttr( "ContentType" )
 {
 }
 
 uno::Sequence< uno::Sequence< beans::StringPair > > const & OFOPXMLHelper_Impl::GetParsingResult() const
 {
-    if ( m_aElementsSeq.size() )
+    if ( !m_aElementsSeq.empty() )
         throw uno::RuntimeException(); // the parsing has still not finished!
 
     return m_aResultSeq;
@@ -324,7 +312,7 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
 {
     if ( m_nFormat == RELATIONINFO_FORMAT )
     {
-        if ( aName == m_aRelListElement )
+        if ( aName == g_aRelListElement )
         {
             sal_Int32 nNewLength = m_aElementsSeq.size() + 1;
 
@@ -335,7 +323,7 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
 
             return; // nothing to do
         }
-        else if ( aName == m_aRelElement )
+        else if ( aName == g_aRelElement )
         {
             sal_Int32 nNewLength = m_aElementsSeq.size() + 1;
             if ( nNewLength != 2 )
@@ -348,32 +336,32 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
             sal_Int32 nAttrNum = 0;
             m_aResultSeq[nNewEntryNum-1].realloc( 4 ); // the maximal expected number of arguments is 4
 
-            OUString aIDValue = xAttribs->getValueByName( m_aIDAttr );
+            OUString aIDValue = xAttribs->getValueByName( g_aIDAttr );
             if ( aIDValue.isEmpty() )
                 throw css::xml::sax::SAXException(); // TODO: the ID value must present
 
-            OUString aTypeValue = xAttribs->getValueByName( m_aTypeAttr );
-            OUString aTargetValue = xAttribs->getValueByName( m_aTargetAttr );
-            OUString aTargetModeValue = xAttribs->getValueByName( m_aTargetModeAttr );
+            OUString aTypeValue = xAttribs->getValueByName( g_aTypeAttr );
+            OUString aTargetValue = xAttribs->getValueByName( g_aTargetAttr );
+            OUString aTargetModeValue = xAttribs->getValueByName( g_aTargetModeAttr );
 
-            m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = m_aIDAttr;
+            m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = g_aIDAttr;
             m_aResultSeq[nNewEntryNum-1][nAttrNum - 1].Second = aIDValue;
 
             if ( !aTypeValue.isEmpty() )
             {
-                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = m_aTypeAttr;
+                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = g_aTypeAttr;
                 m_aResultSeq[nNewEntryNum-1][nAttrNum - 1].Second = aTypeValue;
             }
 
             if ( !aTargetValue.isEmpty() )
             {
-                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = m_aTargetAttr;
+                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = g_aTargetAttr;
                 m_aResultSeq[nNewEntryNum-1][nAttrNum - 1].Second = aTargetValue;
             }
 
             if ( !aTargetModeValue.isEmpty() )
             {
-                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = m_aTargetModeAttr;
+                m_aResultSeq[nNewEntryNum-1][++nAttrNum - 1].First = g_aTargetModeAttr;
                 m_aResultSeq[nNewEntryNum-1][nAttrNum - 1].Second = aTargetModeValue;
             }
 
@@ -384,7 +372,7 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
     }
     else if ( m_nFormat == CONTENTTYPE_FORMAT )
     {
-        if ( aName == m_aTypesElement )
+        if ( aName == g_aTypesElement )
         {
             sal_Int32 nNewLength = m_aElementsSeq.size() + 1;
 
@@ -398,7 +386,7 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
 
             return; // nothing to do
         }
-        else if ( aName == m_aDefaultElement )
+        else if ( aName == g_aDefaultElement )
         {
             sal_Int32 nNewLength = m_aElementsSeq.size() + 1;
             if ( nNewLength != 2 )
@@ -412,11 +400,11 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
             if ( m_aResultSeq.getLength() != 2 )
                 throw uno::RuntimeException();
 
-            const OUString aExtensionValue = xAttribs->getValueByName( m_aExtensionAttr );
+            const OUString aExtensionValue = xAttribs->getValueByName( g_aExtensionAttr );
             if ( aExtensionValue.isEmpty() )
                 throw css::xml::sax::SAXException(); // TODO: the Extension value must present
 
-            const OUString aContentTypeValue = xAttribs->getValueByName( m_aContentTypeAttr );
+            const OUString aContentTypeValue = xAttribs->getValueByName( g_aContentTypeAttr );
             if ( aContentTypeValue.isEmpty() )
                 throw css::xml::sax::SAXException(); // TODO: the ContentType value must present
 
@@ -426,7 +414,7 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
             m_aResultSeq[0][nNewResultLen-1].First = aExtensionValue;
             m_aResultSeq[0][nNewResultLen-1].Second = aContentTypeValue;
         }
-        else if ( aName == m_aOverrideElement )
+        else if ( aName == g_aOverrideElement )
         {
             sal_Int32 nNewLength = m_aElementsSeq.size() + 1;
             if ( nNewLength != 2 )
@@ -440,11 +428,11 @@ void SAL_CALL OFOPXMLHelper_Impl::startElement( const OUString& aName, const uno
             if ( m_aResultSeq.getLength() != 2 )
                 throw uno::RuntimeException();
 
-            OUString aPartNameValue = xAttribs->getValueByName( m_aPartNameAttr );
+            OUString aPartNameValue = xAttribs->getValueByName( g_aPartNameAttr );
             if ( aPartNameValue.isEmpty() )
                 throw css::xml::sax::SAXException(); // TODO: the PartName value must present
 
-            OUString aContentTypeValue = xAttribs->getValueByName( m_aContentTypeAttr );
+            OUString aContentTypeValue = xAttribs->getValueByName( g_aContentTypeAttr );
             if ( aContentTypeValue.isEmpty() )
                 throw css::xml::sax::SAXException(); // TODO: the ContentType value must present
 

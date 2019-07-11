@@ -26,7 +26,6 @@
 #include <unotools/accessiblestatesethelper.hxx>
 #include <sfx2/viewsh.hxx>
 #include <vcl/svapp.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <viewsh.hxx>
 #include <doc.hxx>
@@ -583,7 +582,10 @@ uno::Any SAL_CALL SwAccessibleDocument::getExtendedAttributes()
             }
         }
         else
+        {
+            assert(dynamic_cast<SwTextFrame*>(pCurrFrame));
             pCurrTextFrame = static_cast<SwTextFrame* >(pCurrFrame);
+        }
         //check whether the text frame where the Graph/OLE/Frame anchored is in the Header/Footer
         SwFrame* pFrame = pCurrTextFrame;
         while ( pFrame && !pFrame->IsHeaderFrame() && !pFrame->IsFooterFrame() )
@@ -626,29 +628,25 @@ uno::Any SAL_CALL SwAccessibleDocument::getExtendedAttributes()
                 SwPaM* pCaret = pCursorShell->GetCursor();
                 if (!pCurrTextFrame->IsEmpty() && pCaret)
                 {
-                    if (pCurrTextFrame->IsTextFrame())
+                    assert(pCurrTextFrame->IsTextFrame());
+                    const SwPosition* pPoint = nullptr;
+                    if (pCurrTextFrame->IsInFly())
                     {
-                        const SwPosition* pPoint = nullptr;
-                        if(pCurrTextFrame->IsInFly())
-                        {
-                            SwFlyFrame *pFlyFrame = pCurrTextFrame->FindFlyFrame();
-                            const SwFormatAnchor& rAnchor = pFlyFrame->GetFormat()->GetAnchor();
-                            pPoint= rAnchor.GetContentAnchor();
-                        }
-                        else
-                            pPoint = pCaret->GetPoint();
-                        const sal_Int32 nActPos = pPoint->nContent.GetIndex();
-                        nLineNum += pCurrTextFrame->GetLineCount( nActPos );
+                        SwFlyFrame *pFlyFrame = pCurrTextFrame->FindFlyFrame();
+                        const SwFormatAnchor& rAnchor = pFlyFrame->GetFormat()->GetAnchor();
+                        pPoint = rAnchor.GetContentAnchor();
+                        SwContentNode *const pNode(pPoint->nNode.GetNode().GetContentNode());
+                        pCurrTextFrame = pNode
+                            ? static_cast<SwTextFrame*>(pNode->getLayoutFrame(
+                                        pCurrTextFrame->getRootFrame(), pPoint))
+                            : nullptr;
                     }
-                    else//graphic, form, shape, etc.
+                    else
+                        pPoint = pCaret->GetPoint();
+                    if (pCurrTextFrame)
                     {
-                        SwPosition* pPoint =  pCaret->GetPoint();
-                        Point aPt = pCursorShell->GetCursor_()->GetPtPos();
-                        if( pCursorShell->GetLayout()->GetCursorOfst( pPoint, aPt/*,* &eTmpState*/ ) )
-                        {
-                            const sal_Int32 nActPos = pPoint->nContent.GetIndex();
-                            nLineNum += pCurrTextFrame->GetLineCount( nActPos );
-                        }
+                        TextFrameIndex const nActPos(pCurrTextFrame->MapModelToViewPos(*pPoint));
+                        nLineNum += pCurrTextFrame->GetLineCount( nActPos );
                     }
                 }
                 else
@@ -836,36 +834,31 @@ css::uno::Sequence< css::uno::Any >
         if ( pCursorShell )
         {
             SwPaM *_pStartCursor = pCursorShell->GetCursor(), *_pStartCursor2 = _pStartCursor;
-            SwContentNode* pPrevNode = nullptr;
-            std::vector<SwFrame*> vFrameList;
+            std::set<SwFrame*> vFrameList;
             do
             {
                 if ( _pStartCursor && _pStartCursor->HasMark() )
                 {
                     SwContentNode* pContentNode = _pStartCursor->GetContentNode();
-                    if ( pContentNode == pPrevNode )
-                    {
-                        continue;
-                    }
-                    SwFrame* pFrame = pContentNode ? pContentNode->getLayoutFrame( pCursorShell->GetLayout() ) : nullptr;
+                    SwFrame *const pFrame = pContentNode
+                        ? pContentNode->getLayoutFrame(pCursorShell->GetLayout(), _pStartCursor->GetPoint())
+                        : nullptr;
                     if ( pFrame )
                     {
-                        vFrameList.push_back( pFrame );
+                        vFrameList.insert( pFrame );
                     }
-
-                    pPrevNode = pContentNode;
                 }
             }
 
             while( _pStartCursor && ( (_pStartCursor = _pStartCursor->GetNext()) != _pStartCursor2) );
 
-            if ( vFrameList.size() )
+            if ( !vFrameList.empty() )
             {
                 uno::Sequence< uno::Any > aRet(vFrameList.size());
-                std::vector<SwFrame*>::iterator aIter = vFrameList.begin();
-                for ( sal_Int32 nIndex = 0; aIter != vFrameList.end(); ++aIter, nIndex++ )
+                sal_Int32 nIndex = 0;
+                for ( const auto& rpFrame : vFrameList )
                 {
-                    uno::Reference< XAccessible > xAcc = pAccMap->GetContext(*aIter, false);
+                    uno::Reference< XAccessible > xAcc = pAccMap->GetContext(rpFrame, false);
                     if ( xAcc.is() )
                     {
                         SwAccessibleContext *pAccImpl = static_cast< SwAccessibleContext *>( xAcc.get() );
@@ -874,6 +867,7 @@ css::uno::Sequence< css::uno::Any >
                             aRet[nIndex] <<= xAcc;
                         }
                     }
+                    nIndex++;
                 }
 
                 return aRet;

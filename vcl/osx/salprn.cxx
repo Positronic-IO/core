@@ -21,6 +21,7 @@
 
 #include <vcl/print.hxx>
 #include <sal/macros.h>
+#include <osl/diagnose.h>
 
 #include <osx/salinst.h>
 #include <osx/salprn.h>
@@ -71,8 +72,7 @@ AquaSalInfoPrinter::AquaSalInfoPrinter( const SalPrinterQueueInfo& i_rQueue ) :
     mpGraphics = new AquaSalGraphics();
 
     const int nWidth = 100, nHeight = 100;
-    mpContextMemory.reset(static_cast<sal_uInt8*>(rtl_allocateMemory(nWidth * 4 * nHeight)),
-                          &rtl_freeMemory);
+    mpContextMemory.reset(new (std::nothrow) sal_uInt8[nWidth * 4 * nHeight]);
 
     if (mpContextMemory)
     {
@@ -188,7 +188,7 @@ bool AquaSalInfoPrinter::SetPrinterData( ImplJobSetup* io_pSetupData )
         io_pSetupData->SetOrientation( mePageOrientation );
 
         io_pSetupData->SetPaperBin( 0 );
-        io_pSetupData->SetDriverData( static_cast<sal_uInt8*>(rtl_allocateMemory( 4 )) );
+        io_pSetupData->SetDriverData( static_cast<sal_uInt8*>(std::malloc( 4 )) );
         io_pSetupData->SetDriverDataLen( 4 );
     }
     else
@@ -548,7 +548,9 @@ SalGraphics* AquaSalInfoPrinter::StartPage( ImplJobSetup* i_pSetupData, bool i_b
     if( i_bNewJobData && i_pSetupData )
         SetPrinterData( i_pSetupData );
 
+SAL_WNODEPRECATED_DECLARATIONS_PUSH // 'graphicsPort' is deprecated: first deprecated in macOS 10.14
     CGContextRef rContext = static_cast<CGContextRef>([[NSGraphicsContext currentContext] graphicsPort]);
+SAL_WNODEPRECATED_DECLARATIONS_POP
 
     SetupPrinterGraphics( rContext );
 

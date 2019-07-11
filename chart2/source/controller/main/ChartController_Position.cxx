@@ -22,6 +22,7 @@
 #include <ChartWindow.hxx>
 #include <DrawViewWrapper.hxx>
 #include <PositionAndSizeHelper.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include "UndoGuard.hxx"
 #include <ObjectNameProvider.hxx>
@@ -30,6 +31,7 @@
 #include <CommonConverters.hxx>
 #include <svx/ActionDescriptionProvider.hxx>
 
+#include <sal/log.hxx>
 #include <svx/svxids.hrc>
 #include <svx/rectenum.hxx>
 #include <svl/aeitem.hxx>
@@ -43,7 +45,7 @@ namespace chart
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
-void lcl_getPositionAndSizeFromItemSet( const SfxItemSet& rItemSet, awt::Rectangle& rPosAndSize, const awt::Size& rOriginalSize )
+static void lcl_getPositionAndSizeFromItemSet( const SfxItemSet& rItemSet, awt::Rectangle& rPosAndSize, const awt::Size& rOriginalSize )
 {
     long nPosX(0);
     long nPosY(0);
@@ -130,15 +132,14 @@ void ChartController::executeDispatch_PositionAndSize()
         SfxItemSet aItemSet = m_pDrawViewWrapper->getPositionAndSizeItemSetFromMarkedObject();
 
         //prepare and open dialog
-        SdrView* pSdrView = m_pDrawViewWrapper;
+        SdrView* pSdrView = m_pDrawViewWrapper.get();
         bool bResizePossible = m_aSelection.isResizeableObjectSelected();
 
         SolarMutexGuard aGuard;
         SvxAbstractDialogFactory * pFact = SvxAbstractDialogFactory::Create();
-        OSL_ENSURE( pFact, "No dialog factory" );
+        vcl::Window* pWin = GetChartWindow();
         ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSchTransformTabDialog(
-            GetChartWindow(), &aItemSet, pSdrView, bResizePossible ));
-        OSL_ENSURE( pDlg, "Couldn't create SchTransformTabDialog" );
+            pWin ? pWin->GetFrameWeld() : nullptr, &aItemSet, pSdrView, bResizePossible));
 
         if( pDlg->Execute() == RET_OK )
         {

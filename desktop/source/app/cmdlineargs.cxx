@@ -40,6 +40,7 @@
 
 #include <rtl/strbuf.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star::lang;
 using namespace com::sun::star::uri;
@@ -62,6 +63,7 @@ std::vector< OUString > translateExternalUris(
     std::vector< OUString > const & input)
 {
     std::vector< OUString > t;
+    t.reserve(input.size());
     for (auto const& elem : input)
     {
         t.push_back(translateExternalUris(elem));
@@ -216,7 +218,7 @@ CommandLineEvent CheckWebQuery(/* in,out */ OUString& arg, CommandLineEvent curE
         if (!SkipNewline(pPos))
             return curEvt;
 
-        rtl::OStringBuffer aResult(static_cast<unsigned int>(nRead));
+        OStringBuffer aResult(static_cast<unsigned int>(nRead));
         do
         {
             const char* pPos1 = pPos;
@@ -287,9 +289,12 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
         {
             m_bEmpty = false;
             OUString oArg;
-            bool bDeprecated = !aArg.startsWith("--", &oArg)
-                && aArg.startsWith("-", &oArg) && aArg.getLength() > 2;
-                // -h, -?, -n, -o, -p are still valid
+            OUString oDeprecatedArg;
+            if (!aArg.startsWith("--", &oArg) && aArg.startsWith("-", &oArg)
+                && aArg.getLength() > 2) // -h, -?, -n, -o, -p are still valid
+            {
+                oDeprecatedArg = aArg; // save here, since aArg can change later
+            }
 
             OUString rest;
             if ( oArg == "minimized" )
@@ -423,7 +428,7 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
             */
             else if ( aArg.startsWith("-psn") )
             {
-                bDeprecated = false;
+                oDeprecatedArg.clear();
             }
 #endif
 #if HAVE_FEATURE_MACOSX_SANDBOX
@@ -439,7 +444,7 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
             */
             else if ( oArg == "Embedding" )
             {
-                bDeprecated = false;
+                oDeprecatedArg.clear();
             }
 #endif
             else if ( oArg.startsWith("infilter=", &rest))
@@ -622,7 +627,7 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
                 {
                     m_unknown = aArg;
                 }
-                bDeprecated = false;
+                oDeprecatedArg.clear();
             }
             else
             {
@@ -673,9 +678,9 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
                 }
             }
 
-            if (bDeprecated)
+            if (!oDeprecatedArg.isEmpty())
             {
-                OString sArg(OUStringToOString(aArg, osl_getThreadTextEncoding()));
+                OString sArg(OUStringToOString(oDeprecatedArg, osl_getThreadTextEncoding()));
                 fprintf(stderr, "Warning: %s is deprecated.  Use -%s instead.\n", sArg.getStr(), sArg.getStr());
             }
         }

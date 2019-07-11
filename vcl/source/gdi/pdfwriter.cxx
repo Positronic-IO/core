@@ -29,7 +29,7 @@ PDFWriter::AnyWidget::~AnyWidget()
 
 PDFWriter::PDFWriter( const PDFWriter::PDFWriterContext& rContext, const css::uno::Reference< css::beans::XMaterialHolder >& xEnc )
         :
-        xImplementation( new PDFWriterImpl( rContext, xEnc, *this ) )
+        xImplementation( VclPtr<PDFWriterImpl>::Create(rContext, xEnc, *this) )
 {
 }
 
@@ -39,7 +39,7 @@ PDFWriter::~PDFWriter()
 
 OutputDevice* PDFWriter::GetReferenceDevice()
 {
-    return xImplementation->getReferenceDevice();
+    return xImplementation.get();
 }
 
 void PDFWriter::NewPage( double nPageWidth, double nPageHeight, Orientation eOrientation )
@@ -456,7 +456,7 @@ PDFWriter::InitEncryption( const OUString& i_rOwnerPassword,
                            const OUString& i_rUserPassword
                           )
 {
-    return PDFWriterImpl::initEncryption( i_rOwnerPassword, i_rUserPassword, /*b128Bit*/true );
+    return PDFWriterImpl::initEncryption( i_rOwnerPassword, i_rUserPassword );
 }
 
 void PDFWriter::PlayMetafile( const GDIMetaFile& i_rMTF, const vcl::PDFWriter::PlayMetafileContext& i_rPlayContext, PDFExtOutDevData* i_pData )

@@ -75,14 +75,11 @@ public:
 class SVX_DLLPUBLIC E3dObject : public SdrAttrObj
 {
 private:
-    // to allow sdr::properties::E3dProperties access to StructureChanged()
-    friend class sdr::properties::E3dProperties;
-
     // Allow everything for E3dObjList and E3dDragMethod
     friend class E3dDragMethod;
 
  protected:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     basegfx::B3DRange           maLocalBoundVol;    // surrounding volume of the object (from the geometry generation)
     basegfx::B3DHomMatrix       maTransformation;   // local transformation
@@ -93,11 +90,8 @@ private:
     bool            mbIsSelected            : 1;
 
 protected:
-    virtual void NewObjectInserted(const E3dObject* p3DObj);
-    virtual void StructureChanged();
     virtual basegfx::B3DRange RecalcBoundVolume() const;
 
-protected:
     // E3dObject is only a helper class (for E3DScene and E3DCompoundObject)
     // and no instances should be created from anyone, so i move the constructors
     // to protected area
@@ -107,6 +101,7 @@ protected:
     virtual ~E3dObject() override;
 
 public:
+    virtual void StructureChanged();
     virtual void SetTransformChanged();
     virtual void RecalcSnapRect() override;
 
@@ -115,8 +110,10 @@ public:
     virtual void        TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
     virtual void        NbcMove(const Size& rSize) override;
     virtual void NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact) override;
-    E3dObject* GetParentObj() const;
-    virtual E3dScene* GetScene() const;
+
+    E3dScene* getParentE3dSceneFromE3dObject() const;
+    virtual E3dScene* getRootE3dSceneFromE3dObject() const;
+
     const basegfx::B3DRange& GetBoundVolume() const;
     void InvalidateBoundVolume();
 
@@ -153,7 +150,7 @@ public:
 
     // break up
     virtual bool IsBreakObjPossible();
-    virtual SdrAttrObj* GetBreakObj();
+    virtual std::unique_ptr<SdrAttrObj,SdrObjectFreeOp> GetBreakObj();
 };
 
 /*************************************************************************
@@ -176,7 +173,7 @@ private:
     friend class sdr::properties::E3dSphereProperties;
 
 protected:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     // material of the object
     Color                   aMaterialAmbientColor;
@@ -204,8 +201,6 @@ public:
 
     // implemented mainly for the purposes of Clone()
     E3dCompoundObject& operator=(const E3dCompoundObject& rObj);
-
-    bool IsAOrdNumRemapCandidate(E3dScene*& prScene) const;
 };
 
 #endif // INCLUDED_SVX_OBJ3D_HXX

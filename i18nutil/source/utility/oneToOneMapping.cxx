@@ -18,6 +18,7 @@
  */
 
 #include <i18nutil/oneToOneMapping.hxx>
+#include <string.h>
 
 namespace i18nutil {
 
@@ -56,7 +57,7 @@ sal_Unicode oneToOneMapping::find(const sal_Unicode nKey) const
         return nKey;
 }
 
-oneToOneMappingWithFlag::oneToOneMappingWithFlag( UnicodePairWithFlag *rpTableWF, const size_t rnSize, const UnicodePairFlag rnFlag )
+oneToOneMappingWithFlag::oneToOneMappingWithFlag( UnicodePairWithFlag const *rpTableWF, const size_t rnSize, const UnicodePairFlag rnFlag )
     : oneToOneMapping( nullptr, rnSize, sizeof(UnicodePairWithFlag) ),
       mpTableWF ( rpTableWF ),
       mnFlag    ( rnFlag ),
@@ -67,11 +68,6 @@ oneToOneMappingWithFlag::oneToOneMappingWithFlag( UnicodePairWithFlag *rpTableWF
 
 oneToOneMappingWithFlag::~oneToOneMappingWithFlag()
 {
-    if( mbHasIndex )
-    {
-        for (UnicodePairWithFlag** i : mpIndex)
-            delete [] i;
-    }
 }
 
 void oneToOneMappingWithFlag::makeIndex()
@@ -80,9 +76,6 @@ void oneToOneMappingWithFlag::makeIndex()
     {
         int current = -1;
 
-        for (UnicodePairWithFlag**& i : mpIndex)
-            i = nullptr;
-
         for( size_t k = 0; k < mnSize; k++ )
         {
             const int high = (mpTableWF[k].first >> 8) & 0xFF;
@@ -90,7 +83,7 @@ void oneToOneMappingWithFlag::makeIndex()
             if( high != current )
             {
                 current = high;
-                mpIndex[high] = new UnicodePairWithFlag*[256];
+                mpIndex[high].reset(new UnicodePairWithFlag const *[256]);
 
                 for (int j = 0; j < 256; ++j)
                     mpIndex[high][j] = nullptr;

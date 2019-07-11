@@ -21,8 +21,7 @@
 #include <utility>
 
 #include <comphelper/lok.hxx>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
+#include <config_global.h>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 
@@ -59,7 +58,6 @@
 #include <editeng/wghtitem.hxx>
 #include <editeng/wrlmitem.hxx>
 #include <editeng/brushitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/langitem.hxx>
 #include <editeng/emphasismarkitem.hxx>
 #include <editeng/charscaleitem.hxx>
@@ -74,6 +72,7 @@
 #include <linguistic/lngprops.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/help.hxx>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/i18n/InputSequenceCheckMode.hpp>
@@ -120,12 +119,12 @@ bool EditEngine::IsInUndo()
     return pImpEditEngine->IsInUndo();
 }
 
-::svl::IUndoManager& EditEngine::GetUndoManager()
+SfxUndoManager& EditEngine::GetUndoManager()
 {
     return pImpEditEngine->GetUndoManager();
 }
 
-::svl::IUndoManager* EditEngine::SetUndoManager(::svl::IUndoManager* pNew)
+SfxUndoManager* EditEngine::SetUndoManager(SfxUndoManager* pNew)
 {
     return pImpEditEngine->SetUndoManager(pNew);
 }
@@ -1023,14 +1022,6 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
         }
     }
 
-    pImpEditEngine->EnterBlockNotifications();
-
-    if ( GetNotifyHdl().IsSet() )
-    {
-        EENotify aNotify( EE_NOTIFY_INPUT_START );
-        pImpEditEngine->CallNotify( aNotify );
-    }
-
     if ( eFunc == KeyFuncType::DONTKNOW )
     {
         switch ( nCode )
@@ -1067,7 +1058,7 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
                     bDebugPaint = !bDebugPaint;
                     OStringBuffer aInfo("DebugPaint: ");
                     aInfo.append(bDebugPaint ? "On" : "Off");
-                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(nullptr,
+                    std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pEditView->GetWindow()->GetFrameWeld(),
                                                                   VclMessageType::Info, VclButtonsType::Ok,
                                                                   OStringToOUString(aInfo.makeStringAndClear(), RTL_TEXTENCODING_ASCII_US)));
                     xInfoBox->run();
@@ -1429,14 +1420,6 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
         pImpEditEngine->CallStatusHdl();
     }
 
-    if ( GetNotifyHdl().IsSet() )
-    {
-        EENotify aNotify( EE_NOTIFY_INPUT_END );
-        pImpEditEngine->CallNotify( aNotify );
-    }
-
-    pImpEditEngine->LeaveBlockNotifications();
-
     return bDone;
 }
 
@@ -1533,10 +1516,8 @@ std::unique_ptr<EditTextObject> EditEngine::GetEmptyTextObject() const
 
 void EditEngine::SetText( const EditTextObject& rTextObject )
 {
-    pImpEditEngine->EnterBlockNotifications();
     pImpEditEngine->SetText( rTextObject );
     pImpEditEngine->FormatAndUpdate();
-    pImpEditEngine->LeaveBlockNotifications();
 }
 
 void EditEngine::ShowParagraph( sal_Int32 nParagraph, bool bShow )
@@ -2320,7 +2301,7 @@ EFieldInfo EditEngine::GetFieldInfo( sal_Int32 nPara, sal_uInt16 nField ) const
         sal_uInt16 nCurrentField = 0;
         for (auto const& attrib : pNode->GetCharAttribs().GetAttribs())
         {
-            const EditCharAttrib& rAttr = *attrib.get();
+            const EditCharAttrib& rAttr = *attrib;
             if (rAttr.Which() == EE_FEATURE_FIELD)
             {
                 if ( nCurrentField == nField )
@@ -2499,7 +2480,7 @@ void EditEngine::ParagraphInserted( sal_Int32 nPara )
     {
         EENotify aNotify( EE_NOTIFY_PARAGRAPHINSERTED );
         aNotify.nParagraph = nPara;
-        pImpEditEngine->CallNotify( aNotify );
+        pImpEditEngine->GetNotifyHdl().Call( aNotify );
     }
 }
 
@@ -2510,7 +2491,7 @@ void EditEngine::ParagraphDeleted( sal_Int32 nPara )
     {
         EENotify aNotify( EE_NOTIFY_PARAGRAPHREMOVED );
         aNotify.nParagraph = nPara;
-        pImpEditEngine->CallNotify( aNotify );
+        pImpEditEngine->GetNotifyHdl().Call( aNotify );
     }
 }
 void EditEngine::ParagraphConnected( sal_Int32 /*nLeftParagraph*/, sal_Int32 /*nRightParagraph*/ )
@@ -2532,7 +2513,7 @@ void EditEngine::ParagraphHeightChanged( sal_Int32 nPara )
     {
         EENotify aNotify( EE_NOTIFY_TextHeightChanged );
         aNotify.nParagraph = nPara;
-        pImpEditEngine->CallNotify( aNotify );
+        pImpEditEngine->GetNotifyHdl().Call( aNotify );
     }
 }
 
@@ -2650,7 +2631,11 @@ vcl::Font EditEngine::CreateFontFromItemSet( const SfxItemSet& rItemSet, SvtScri
 {
     SvxFont aFont;
     CreateFont( aFont, rItemSet, true, nScriptType );
+#if HAVE_GCC_BUG_87150
+    return aFont;
+#else
     return std::move(aFont);
+#endif
 }
 
 SvxFont EditEngine::CreateSvxFontFromItemSet( const SfxItemSet& rItemSet )
@@ -2828,11 +2813,6 @@ void EditEngine::ClearOverflowingParaNum() {
 bool EditEngine::IsPageOverflow() {
     pImpEditEngine->CheckPageOverflow();
     return pImpEditEngine->IsPageOverflow();
-}
-
-void EditEngine::SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled)
-{
-    pImpEditEngine->SetHoriAlignIgnoreTrailingWhitespace(bEnabled);
 }
 
 EFieldInfo::EFieldInfo()

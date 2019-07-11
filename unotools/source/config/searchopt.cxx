@@ -65,9 +65,10 @@ public:
 };
 
 SvtSearchOptions_Impl::SvtSearchOptions_Impl() :
-    ConfigItem( "Office.Common/SearchOptions" )
+    ConfigItem( "Office.Common/SearchOptions" ),
+    nFlags(0x0003FFFF) // set all options values to 'true'
+
 {
-    nFlags = 0x0003FFFF;    // set all options values to 'true'
     Load();
     SetModified( false );
 }
@@ -239,7 +240,7 @@ bool SvtSearchOptions_Impl::Save()
 
     DBG_ASSERT( nProps == MAX_FLAGS_OFFSET + 1,
             "unexpected size of index" );
-    if (nProps  &&  nProps == MAX_FLAGS_OFFSET + 1)
+    if (nProps == MAX_FLAGS_OFFSET + 1)
     {
         for (sal_Int32 i = 0;  i < nProps;  ++i)
             pValue[i] <<= GetFlag(i);

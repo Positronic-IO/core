@@ -49,6 +49,7 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/syswin.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -343,10 +344,9 @@ SystemWindow* SfxFrame::GetTopWindow_Impl() const
 }
 
 
-bool SfxFrame::Close()
+void SfxFrame::Close()
 {
     delete this;
-    return true;
 }
 
 void SfxFrame::LockResize_Impl( bool bLock )

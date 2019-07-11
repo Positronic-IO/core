@@ -133,10 +133,7 @@ void SAL_CALL CancelJobsThread::run()
         mbAllJobsCancelled = true;
 
         {
-            TimeValue aSleepTime;
-            aSleepTime.Seconds = 1;
-            aSleepTime.Nanosec = 0;
-            osl_waitThread( &aSleepTime );
+            osl::Thread::wait(std::chrono::seconds(1));
         }
     }
 }
@@ -232,9 +229,7 @@ FinalThreadManager::FinalThreadManager(css::uno::Reference< css::uno::XComponent
     : m_xContext(context),
       maMutex(),
       maThreads(),
-      mpCancelJobsThread( nullptr ),
       mpTerminateOfficeThread( nullptr ),
-      mpPauseThreadStarting( nullptr ),
       mbRegisteredAtDesktop( false )
 {
 
@@ -357,10 +352,7 @@ void SAL_CALL FinalThreadManager::queryTermination( const css::lang::EventObject
     if ( mpCancelJobsThread != nullptr &&
          !mpCancelJobsThread->allJobsCancelled() )
     {
-        TimeValue aSleepTime;
-        aSleepTime.Seconds = 1;
-        aSleepTime.Nanosec = 0;
-        osl_waitThread( &aSleepTime );
+        osl::Thread::wait(std::chrono::seconds(1));
     }
 
     if ( mpCancelJobsThread != nullptr &&

@@ -59,7 +59,6 @@ PPTShapeGroupContext::PPTShapeGroupContext(
 : ShapeGroupContext( rParent, pMasterShapePtr, pGroupShapePtr )
 , mpSlidePersistPtr( rSlidePersistPtr )
 , meShapeLocation( eShapeLocation )
-, pGraphicShape( nullptr )
 {
 }
 
@@ -72,9 +71,12 @@ ContextHandlerRef PPTShapeGroupContext::onCreateContext( sal_Int32 aElementToken
     {
     case PPT_TOKEN( cNvPr ):
     {
+        // don't override SmartArt properties for embedded drawing's spTree
         mpGroupShapePtr->setHidden( rAttribs.getBool( XML_hidden, false ) );
-        mpGroupShapePtr->setId( rAttribs.getString( XML_id ).get() );
-        mpGroupShapePtr->setName( rAttribs.getString( XML_name ).get() );
+        if (mpGroupShapePtr->getId().isEmpty())
+            mpGroupShapePtr->setId(rAttribs.getString(XML_id).get());
+        if (mpGroupShapePtr->getName().isEmpty())
+            mpGroupShapePtr->setName( rAttribs.getString( XML_name ).get() );
         break;
     }
     case PPT_TOKEN( ph ):
@@ -104,14 +106,26 @@ ContextHandlerRef PPTShapeGroupContext::onCreateContext( sal_Int32 aElementToken
                 oox::drawingml::FillPropertiesPtr pBackgroundPropertiesPtr = mpSlidePersistPtr->getBackgroundProperties();
                 if (!pBackgroundPropertiesPtr)
                 {
-                    // The shape wants a background, but the slide doesn't have
-                    // one: default to white.
-                    pBackgroundPropertiesPtr.reset(new oox::drawingml::FillProperties);
-                    pBackgroundPropertiesPtr->moFillType = XML_solidFill;
-                    pBackgroundPropertiesPtr->maFillColor.setSrgbClr(0xFFFFFF);
+                    // The shape wants a background, but the slide doesn't have one.
+                    SlidePersistPtr pMaster = mpSlidePersistPtr->getMasterPersist();
+                    if (pMaster)
+                    {
+                        oox::drawingml::FillPropertiesPtr pMasterBackground
+                            = pMaster->getBackgroundProperties();
+                        if (pMasterBackground)
+                        {
+                            if (pMasterBackground->moFillType.has()
+                                && pMasterBackground->moFillType.get() == XML_solidFill)
+                            {
+                                // Master has a solid background, use that.
+                                pBackgroundPropertiesPtr = pMasterBackground;
+                            }
+                        }
+                    }
                 }
-                if ( pBackgroundPropertiesPtr ) {
-                    pShape->getFillProperties().assignUsed( *pBackgroundPropertiesPtr );
+                if (pBackgroundPropertiesPtr)
+                {
+                    pShape->getFillProperties().assignUsed(*pBackgroundPropertiesPtr);
                 }
             }
             pShape->setModelId(rAttribs.getString( XML_modelId ).get());
@@ -134,17 +148,20 @@ void PPTShapeGroupContext::importExtDrawings( )
     if( pGraphicShape )
     {
         for (auto const& extDrawing : pGraphicShape->getExtDrawings())
-            {
-                getFilter().importFragment( new ExtDrawingFragmentHandler( getFilter(), getFragmentPathFromRelId(extDrawing),
-                                                                           mpSlidePersistPtr,
-                                                                           meShapeLocation,
-                                                                           mpGroupShapePtr,
-                                                                           pGraphicShape ) );
-                // Apply font color imported from color fragment
-                if( pGraphicShape->getFontRefColorForNodes().isUsed() )
-                    applyFontRefColor(mpGroupShapePtr, pGraphicShape->getFontRefColorForNodes());
-            }
-            pGraphicShape = oox::drawingml::ShapePtr( nullptr );
+        {
+            OUString aFragmentPath = getFragmentPathFromRelId(extDrawing);
+            getFilter().importFragment( new ExtDrawingFragmentHandler( getFilter(), aFragmentPath,
+                                                                       mpSlidePersistPtr,
+                                                                       meShapeLocation,
+                                                                       mpGroupShapePtr,
+                                                                       pGraphicShape ) );
+            pGraphicShape->keepDiagramDrawing(getFilter(), aFragmentPath);
+
+            // Apply font color imported from color fragment
+            if( pGraphicShape->getFontRefColorForNodes().isUsed() )
+                applyFontRefColor(mpGroupShapePtr, pGraphicShape->getFontRefColorForNodes());
+        }
+        pGraphicShape = oox::drawingml::ShapePtr( nullptr );
     }
 }
 

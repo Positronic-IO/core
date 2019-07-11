@@ -34,6 +34,7 @@
 #include <com/sun/star/embed/XStateChangeListener.hpp>
 #include <com/sun/star/embed/StateChangeInProgressException.hpp>
 #include <com/sun/star/embed/XLinkageSupport.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/task/ErrorCodeIOException.hpp>
 #include <com/sun/star/task/StatusIndicatorFactory.hpp>
@@ -52,6 +53,7 @@
 #include <guisaveas.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <svtools/ehdl.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/timer.hxx>
 #include <vcl/window.hxx>
@@ -62,7 +64,9 @@
 #include <tools/gen.hxx>
 #include <svl/rectitem.hxx>
 #include <svtools/soerr.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 
 #include <sfx2/lokhelper.hxx>
 
@@ -75,18 +79,16 @@ using namespace com::sun::star;
 class SfxBooleanFlagGuard
 {
     bool& m_rFlag;
-    bool  m_bLifeValue;
 public:
     explicit SfxBooleanFlagGuard(bool& bFlag)
         : m_rFlag( bFlag )
-        , m_bLifeValue( true )
     {
-        m_rFlag = m_bLifeValue;
+        m_rFlag = true;
     }
 
     ~SfxBooleanFlagGuard()
     {
-        m_rFlag = !m_bLifeValue;
+        m_rFlag = false;
     }
 };
 
@@ -371,9 +373,11 @@ uno::Reference< css::frame::XLayoutManager > SAL_CALL SfxInPlaceClient_Impl::get
         uno::Any aAny = xFrame->getPropertyValue( "LayoutManager" );
         aAny >>= xMan;
     }
-    catch ( uno::Exception& )
+    catch ( uno::Exception& ex )
     {
-        throw uno::RuntimeException();
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                        nullptr, anyEx );
     }
 
     return xMan;
@@ -1040,8 +1044,7 @@ void SfxInPlaceClient::DeactivateObject()
 
             m_pViewSh->GetViewFrame()->GetFrame().LockResize_Impl(true);
 
-            if ( (m_xImp->m_xObject->getStatus( m_xImp->m_nAspect ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE) ||
-                 svt::EmbeddedObjectRef::IsGLChart(m_xImp->m_xObject) )
+            if ( m_xImp->m_xObject->getStatus( m_xImp->m_nAspect ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE )
             {
                 m_xImp->m_xObject->changeState( embed::EmbedStates::INPLACE_ACTIVE );
                 if (bHasFocus)
@@ -1074,8 +1077,7 @@ void SfxInPlaceClient::ResetObject()
         try
         {
             m_xImp->m_bUIActive = false;
-            if ( (m_xImp->m_xObject->getStatus( m_xImp->m_nAspect ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE) ||
-                svt::EmbeddedObjectRef::IsGLChart(m_xImp->m_xObject) )
+            if ( m_xImp->m_xObject->getStatus( m_xImp->m_nAspect ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE )
                 m_xImp->m_xObject->changeState( embed::EmbedStates::INPLACE_ACTIVE );
             else
             {

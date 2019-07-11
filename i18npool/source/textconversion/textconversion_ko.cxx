@@ -79,7 +79,7 @@ TextConversion_ko::TextConversion_ko( const Reference < XComponentContext >& xCo
     }
 }
 
-sal_Int16 checkScriptType(sal_Unicode c)
+static sal_Int16 checkScriptType(sal_Unicode c)
 {
     typedef struct {
         UBlockCode from;
@@ -99,7 +99,7 @@ sal_Int16 checkScriptType(sal_Unicode c)
     };
 
     UBlockCode block=ublock_getCode(static_cast<sal_uInt32>(c));
-    sal_uInt16 i;
+    size_t i;
     for ( i = 0; i < SAL_N_ELEMENTS(scriptList); i++) {
         if (block <= scriptList[i].to) break;
     }
@@ -325,8 +325,7 @@ TextConversion_ko::getConversion( const OUString& aText, sal_Int32 nStartPos, sa
                 aBuf.append(str + start, result.Boundary.startPos - start); // append skip portion
             aBuf.append(result.Candidates[0]); // append converted portion
         } else {
-            if (length + nStartPos > start)
-                aBuf.append(str + start, length + nStartPos - start); // append last portion
+            aBuf.append(str + start, length + nStartPos - start); // append last portion
             break;
         }
     }

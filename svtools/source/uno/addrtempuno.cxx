@@ -20,9 +20,10 @@
 #include <svtools/addresstemplate.hxx>
 #include <svtools/genericunodialog.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/property.hxx>
+#include <comphelper/proparrhlp.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <com/sun/star/sdbc/XDataSource.hpp>
+#include <toolkit/helper/vclunohelper.hxx>
 #include <rtl/ref.hxx>
 
 using namespace svt;
@@ -69,7 +70,7 @@ namespace {
 
     protected:
     // OGenericUnoDialog overridables
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
 
         virtual void implInitialize(const css::uno::Any& _rValue) override;
 
@@ -129,9 +130,8 @@ namespace {
     {
         OGenericUnoDialog::executedDialog(_nExecutionResult);
 
-        if ( _nExecutionResult )
-            if ( m_aDialog )
-                static_cast< AddressBookSourceDialog* >( m_aDialog.m_xVclDialog.get() )->getFieldMapping( m_aAliases );
+        if ( _nExecutionResult && m_aDialog )
+            static_cast< AddressBookSourceDialog* >( m_aDialog.m_xVclDialog.get() )->getFieldMapping( m_aAliases );
     }
 
     void SAL_CALL OAddressBookSourceDialogUno::initialize(const Sequence< Any >& rArguments)
@@ -197,8 +197,9 @@ namespace {
     }
 
 
-    svt::OGenericUnoDialog::Dialog OAddressBookSourceDialogUno::createDialog(vcl::Window* _pParent)
+    svt::OGenericUnoDialog::Dialog OAddressBookSourceDialogUno::createDialog(const css::uno::Reference<css::awt::XWindow>& rParent)
     {
+        auto _pParent = VCLUnoHelper::GetWindow(rParent);
         if ( m_xDataSource.is() && !m_sTable.isEmpty() )
             return svt::OGenericUnoDialog::Dialog(VclPtr<AddressBookSourceDialog>::Create(_pParent, m_aContext, m_xDataSource, m_sDataSourceName, m_sTable, m_aAliases));
         else

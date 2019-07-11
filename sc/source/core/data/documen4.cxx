@@ -17,10 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <svl/intitem.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
 #include <formula/token.hxx>
+#include <sal/log.hxx>
+#include <unotools/configmgr.hxx>
 
 #include <document.hxx>
 #include <table.hxx>
@@ -28,7 +29,6 @@
 #include <scresid.hxx>
 #include <subtotal.hxx>
 #include <docoptio.hxx>
-#include <interpre.hxx>
 #include <markdata.hxx>
 #include <validat.hxx>
 #include <scitems.hxx>
@@ -41,11 +41,9 @@
 #include <paramisc.hxx>
 #include <compiler.hxx>
 #include <externalrefmgr.hxx>
-#include <colorscale.hxx>
 #include <attrib.hxx>
 #include <formulacell.hxx>
 #include <tokenarray.hxx>
-#include <scmatrix.hxx>
 #include <tokenstringcontext.hxx>
 #include <memory>
 
@@ -154,7 +152,7 @@ bool ScDocument::Solver(SCCOL nFCol, SCROW nFRow, SCTAB nFTab,
                     while ( !bDoneHorMove && !bHorMoveError && nHorIter++ < nHorMaxIter )
                     {
                         double fHorAngle = fHorStepAngle * static_cast<double>( nHorIter );
-                        double fHorTangent = ::rtl::math::tan( fHorAngle * F_PI / 180 );
+                        double fHorTangent = ::rtl::math::tan(basegfx::deg2rad(fHorAngle));
 
                         sal_uInt16 nIdx = 0;
                         while( nIdx++ < 2 && !bDoneHorMove )
@@ -272,6 +270,8 @@ void ScDocument::InsertMatrixFormula(SCCOL nCol1, SCROW nRow1,
         SAL_WARN("sc", "ScDocument::InsertMatrixFormula: No table marked");
         return;
     }
+    if (utl::ConfigManager::IsFuzzing()) //just too slow
+        return;
     assert( ValidColRow( nCol1, nRow1) && ValidColRow( nCol2, nRow2));
 
     SCTAB nTab1 = *rMark.begin();
@@ -642,10 +642,43 @@ bool ScDocument::GetSelectionFunction( ScSubTotalFunc eFunc,
                 else
                     aData.bError = true;
                 break;
+            case SUBTOTAL_FUNC_VAR:
+            case SUBTOTAL_FUNC_STD:
+                if (aData.maWelford.getCount() < 2)
+                    aData.bError = true;
+                else
+                {
+                    rResult = aData.maWelford.getVarianceSample();
+                    if (eFunc == SUBTOTAL_FUNC_STD)
+                    {
+                        if (rResult < 0.0)
+                            aData.bError = true;
+                        else
+                            rResult = sqrt( rResult);
+                    }
+                }
+                break;
+            case SUBTOTAL_FUNC_VARP:
+            case SUBTOTAL_FUNC_STDP:
+                if (aData.maWelford.getCount() < 1)
+                    aData.bError = true;
+                else if (aData.maWelford.getCount() == 1)
+                    rResult = 0.0;
+                else
+                {
+                    rResult = aData.maWelford.getVariancePopulation();
+                    if (eFunc == SUBTOTAL_FUNC_STDP)
+                    {
+                        if (rResult < 0.0)
+                            aData.bError = true;
+                        else
+                            rResult = sqrt( rResult);
+                    }
+                }
+                break;
             default:
-            {
-                // added to avoid warnings
-            }
+                // unhandled unknown
+                aData.bError = true;
         }
 
     if (aData.bError)
@@ -744,13 +777,13 @@ sal_uLong ScDocument::AddValidationEntry( const ScValidationData& rNew )
     if (!pValidationList)
     {
         ScMutationGuard aGuard(this, ScMutationGuardFlags::CORE);
-        pValidationList = new ScValidationDataList;
+        pValidationList.reset(new ScValidationDataList);
     }
 
     sal_uLong nMax = 0;
     for( ScValidationDataList::iterator it = pValidationList->begin(); it != pValidationList->end(); ++it )
     {
-        const ScValidationData* pData = *it;
+        const ScValidationData* pData = it->get();
         sal_uLong nKey = pData->GetKey();
         if ( pData->EqualEntries( rNew ) )
             return nKey;
@@ -761,10 +794,10 @@ sal_uLong ScDocument::AddValidationEntry( const ScValidationData& rNew )
     // might be called from ScPatternAttr::PutInPool; thus clone (real copy)
 
     sal_uLong nNewKey = nMax + 1;
-    ScValidationData* pInsert = rNew.Clone(this);
+    std::unique_ptr<ScValidationData> pInsert(rNew.Clone(this));
     pInsert->SetKey( nNewKey );
     ScMutationGuard aGuard(this, ScMutationGuardFlags::CORE);
-    pValidationList->InsertNew( pInsert );
+    pValidationList->InsertNew( std::move(pInsert) );
     return nNewKey;
 }
 
@@ -790,7 +823,7 @@ const SfxPoolItem* ScDocument::GetEffItem(
                     {
                         ScAddress aPos(nCol, nRow, nTab);
                         ScRefCellValue aCell(const_cast<ScDocument&>(*this), aPos);
-                        OUString aStyle = pForm->GetCellStyle(aCell, aPos);
+                        const OUString& aStyle = pForm->GetCellStyle(aCell, aPos);
                         if (!aStyle.isEmpty())
                         {
                             SfxStyleSheetBase* pStyleSheet = mxPoolHelper->GetStylePool()->Find(

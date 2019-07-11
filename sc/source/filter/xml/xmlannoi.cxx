@@ -46,16 +46,15 @@ ScXMLAnnotationContext::ScXMLAnnotationContext( ScXMLImport& rImport,
                                       const uno::Reference<xml::sax::XAttributeList>& xAttrList,
                                       ScXMLAnnotationData& rAnnotationData) :
     ScXMLImportContext( rImport, nPrfx, rLName ),
-    mrAnnotationData( rAnnotationData ),
-    pShapeContext(nullptr)
+    mrAnnotationData( rAnnotationData )
 {
     uno::Reference<drawing::XShapes> xLocalShapes (GetScImport().GetTables().GetCurrentXShapes());
     if (xLocalShapes.is())
     {
         XMLTableShapeImportHelper* pTableShapeImport = static_cast<XMLTableShapeImportHelper*>(GetScImport().GetShapeImport().get());
         pTableShapeImport->SetAnnotation(this);
-        pShapeContext = GetScImport().GetShapeImport()->CreateGroupChildContext(
-            GetScImport(), nPrfx, rLName, xAttrList, xLocalShapes, true);
+        pShapeContext.reset( GetScImport().GetShapeImport()->CreateGroupChildContext(
+            GetScImport(), nPrfx, rLName, xAttrList, xLocalShapes, true) );
     }
 
     sal_Int16 nAttrCount = xAttrList.is() ? xAttrList->getLength() : 0;
@@ -155,8 +154,7 @@ void ScXMLAnnotationContext::EndElement()
     if (pShapeContext)
     {
         pShapeContext->EndElement();
-        delete pShapeContext;
-        pShapeContext = nullptr;
+        pShapeContext.reset();
     }
 
     mrAnnotationData.maAuthor = maAuthorBuffer.makeStringAndClear();

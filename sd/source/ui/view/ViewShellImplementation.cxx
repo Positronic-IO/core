@@ -24,6 +24,7 @@
 #include <sdpage.hxx>
 #include <drawdoc.hxx>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <strings.hrc>
 #include <app.hrc>
 #include <sdattr.hxx>
@@ -73,7 +74,7 @@ ViewShell::Implementation::~Implementation() COVERITY_NOEXCEPT_FALSE
     if ( ! mpUpdateLockForMouse.expired())
     {
         std::shared_ptr<ToolBarManagerLock> pLock(mpUpdateLockForMouse);
-        if (pLock.get() != nullptr)
+        if (pLock != nullptr)
         {
             // Force the ToolBarManagerLock to be released even when the
             // IsUICaptured() returns <TRUE/>.
@@ -162,16 +163,16 @@ void ViewShell::Implementation::ProcessModifyPageSlot (
         SdPage* pUndoPage =
             bHandoutMode ? pHandoutMPage : pCurrentPage;
 
-        ::svl::IUndoManager* pUndoManager = mrViewShell.GetDocSh()->GetUndoManager();
+        SfxUndoManager* pUndoManager = mrViewShell.GetDocSh()->GetUndoManager();
         DBG_ASSERT(pUndoManager, "No UNDO MANAGER ?!?");
 
         if( pUndoManager )
         {
             OUString aComment( SdResId(STR_UNDO_MODIFY_PAGE) );
             pUndoManager->EnterListAction(aComment, aComment, 0, mrViewShell.GetViewShellBase().GetViewShellId());
-            ModifyPageUndoAction* pAction = new ModifyPageUndoAction(
-                pDocument, pUndoPage, aNewName, aNewAutoLayout, bBVisible, bBObjsVisible);
-            pUndoManager->AddUndoAction(pAction);
+            pUndoManager->AddUndoAction(
+                o3tl::make_unique<ModifyPageUndoAction>(
+                    pDocument, pUndoPage, aNewName, aNewAutoLayout, bBVisible, bBObjsVisible));
 
             // Clear the selection because the selected object may be removed as
             // a result of the assignment of the layout.
@@ -194,8 +195,8 @@ void ViewShell::Implementation::ProcessModifyPageSlot (
 
                 pCurrentPage->SetAutoLayout(aNewAutoLayout, true);
 
-                SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND));
-                SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ));
+                SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(sUNO_LayerName_background);
+                SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects);
                 aVisibleLayers.Set(aBckgrnd, bBVisible);
                 aVisibleLayers.Set(aBckgrndObj, bBObjsVisible);
                 pCurrentPage->TRG_SetMasterPageVisibleLayers(aVisibleLayers);
@@ -215,7 +216,7 @@ void ViewShell::Implementation::ProcessModifyPageSlot (
                 bSetModified = static_cast<const SfxBoolItem&>(pArgs->Get(SID_MODIFYPAGE)).GetValue();
             }
 
-            pUndoManager->AddUndoAction( new UndoAutoLayoutPosAndSize( *pUndoPage ) );
+            pUndoManager->AddUndoAction( o3tl::make_unique<UndoAutoLayoutPosAndSize>( *pUndoPage ) );
             pUndoManager->LeaveListAction();
 
             pDocument->SetChanged(bSetModified);
@@ -255,8 +256,8 @@ void ViewShell::Implementation::AssignLayout ( SfxRequest const & rRequest, Page
         // Transform the given request into the four argument form that is
         // understood by ProcessModifyPageSlot().
         SdrLayerAdmin& rLayerAdmin (mrViewShell.GetViewShellBase().GetDocument()->GetLayerAdmin());
-        SdrLayerID aBackground (rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND)));
-        SdrLayerID aBackgroundObject (rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ)));
+        SdrLayerID aBackground (rLayerAdmin.GetLayerID(sUNO_LayerName_background));
+        SdrLayerID aBackgroundObject (rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects));
 
         SdrLayerIDSet aVisibleLayers;
 

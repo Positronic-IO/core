@@ -19,9 +19,11 @@
 
 #include <osl/diagnose.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/errinf.hxx>
 #include <vcl/window.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <vector>
 #include <limits.h>
@@ -96,15 +98,14 @@ bool ErrorHandler::GetErrorString(ErrCode nErrCodeId, OUString& rErrStr)
     if(!nErrCodeId || nErrCodeId == ERRCODE_ABORT)
         return false;
 
-    ErrorInfo *pInfo = ErrorInfo::GetErrorInfo(nErrCodeId);
+    std::unique_ptr<ErrorInfo> pInfo = ErrorInfo::GetErrorInfo(nErrCodeId);
 
-    if (ErrorStringFactory::CreateString(pInfo,aErr))
+    if (ErrorStringFactory::CreateString(pInfo.get(),aErr))
     {
         rErrStr = aErr;
         return true;
     }
 
-    delete pInfo;
     return false;
 }
 
@@ -114,7 +115,7 @@ DialogMask ErrorHandler::HandleError(ErrCode nErrCodeId, weld::Window *pParent, 
         return DialogMask::NONE;
 
     ErrorRegistry &rData = TheErrorRegistry::get();
-    ErrorInfo *pInfo = ErrorInfo::GetErrorInfo(nErrCodeId);
+    std::unique_ptr<ErrorInfo> pInfo = ErrorInfo::GetErrorInfo(nErrCodeId);
     OUString aAction;
 
     if (!rData.contexts.empty())
@@ -138,7 +139,7 @@ DialogMask ErrorHandler::HandleError(ErrCode nErrCodeId, weld::Window *pParent, 
     else
         nErrFlags |= DialogMask::MessageError;
 
-    DynamicErrorInfo* pDynPtr = dynamic_cast<DynamicErrorInfo*>(pInfo);
+    DynamicErrorInfo* pDynPtr = dynamic_cast<DynamicErrorInfo*>(pInfo.get());
     if(pDynPtr)
     {
         DialogMask nDynFlags = pDynPtr->GetDialogMask();
@@ -147,7 +148,7 @@ DialogMask ErrorHandler::HandleError(ErrCode nErrCodeId, weld::Window *pParent, 
     }
 
     OUString aErr;
-    if (ErrorStringFactory::CreateString(pInfo, aErr))
+    if (ErrorStringFactory::CreateString(pInfo.get(), aErr))
     {
         if(!rData.pDsp)
         {
@@ -155,8 +156,6 @@ DialogMask ErrorHandler::HandleError(ErrCode nErrCodeId, weld::Window *pParent, 
         }
         else
         {
-            delete pInfo;
-
             if(!rData.bIsWindowDsp)
             {
                 (*reinterpret_cast<BasicDisplayErrorFunc*>(rData.pDsp))(aErr,aAction);
@@ -180,7 +179,6 @@ DialogMask ErrorHandler::HandleError(ErrCode nErrCodeId, weld::Window *pParent, 
     else
         OSL_FAIL("ERRCODE_ABORT not handled");
 
-    delete pInfo;
     return DialogMask::NONE;
 }
 
@@ -224,10 +222,10 @@ private:
     }
     void                        RegisterError(DynamicErrorInfo *);
     static void                 UnRegisterError(DynamicErrorInfo const *);
-    static ErrorInfo*           GetDynamicErrorInfo(ErrCode nId);
+    static std::unique_ptr<ErrorInfo> GetDynamicErrorInfo(ErrCode nId);
 
     ErrCode                     nErrId;
-    DialogMask                  nMask;
+    DialogMask const            nMask;
 
 };
 
@@ -257,23 +255,23 @@ void ImplDynamicErrorInfo::UnRegisterError(DynamicErrorInfo const *pDynErrInfo)
         ppDynErrInfo[nIdx]=nullptr;
 }
 
-ErrorInfo* ImplDynamicErrorInfo::GetDynamicErrorInfo(ErrCode nId)
+std::unique_ptr<ErrorInfo> ImplDynamicErrorInfo::GetDynamicErrorInfo(ErrCode nId)
 {
     sal_uInt32 nIdx = nId.GetDynamic() - 1;
     DynamicErrorInfo* pDynErrInfo = TheErrorRegistry::get().ppDynErrInfo[nIdx];
 
     if(pDynErrInfo && ErrCode(*pDynErrInfo)==nId)
-        return pDynErrInfo;
+        return std::unique_ptr<ErrorInfo>(pDynErrInfo);
     else
-        return new ErrorInfo(nId.StripDynamic());
+        return o3tl::make_unique<ErrorInfo>(nId.StripDynamic());
 }
 
-ErrorInfo *ErrorInfo::GetErrorInfo(ErrCode nId)
+std::unique_ptr<ErrorInfo> ErrorInfo::GetErrorInfo(ErrCode nId)
 {
     if(nId.IsDynamic())
         return ImplDynamicErrorInfo::GetDynamicErrorInfo(nId);
     else
-        return new ErrorInfo(nId);
+        return o3tl::make_unique<ErrorInfo>(nId);
 }
 
 ErrorInfo::~ErrorInfo()

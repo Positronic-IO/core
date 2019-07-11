@@ -56,6 +56,8 @@
 #include <sfx2/classificationhelper.hxx>
 #include <svx/ClassificationCommon.hxx>
 #include <svl/cryptosign.hxx>
+#include <svl/sigstruct.hxx>
+#include <utility>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 
@@ -75,6 +77,7 @@
 #include <unoprnms.hxx>
 #include <rootfrm.hxx>
 #include <pagefrm.hxx>
+#include <txtfrm.hxx>
 #include <rdfhelper.hxx>
 #include <sfx2/watermarkitem.hxx>
 
@@ -90,6 +93,7 @@
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <tools/diagnose_ex.h>
+#include <IDocumentRedlineAccess.hxx>
 
 #define WATERMARK_NAME "PowerPlusWaterMarkObject"
 #define WATERMARK_AUTO_SIZE sal_uInt32(1)
@@ -665,8 +669,8 @@ void lcl_ValidateParagraphSignatures(SwDoc* pDoc, const uno::Reference<text::XTe
         else if (!lcl_MakeParagraphSignatureFieldText(xModel, xParagraph, xField, utf8Text).first)
         {
             pDoc->GetIDocumentUndoRedo().StartUndo(SwUndoId::PARA_SIGN_ADD, nullptr);
-            SwUndoParagraphSigning* pUndo = new SwUndoParagraphSigning(pDoc, xField, xParagraph, false);
-            pDoc->GetIDocumentUndoRedo().AppendUndo(pUndo);
+            pDoc->GetIDocumentUndoRedo().AppendUndo(
+                o3tl::make_unique<SwUndoParagraphSigning>(pDoc, xField, xParagraph, false));
             lcl_RemoveParagraphMetadataField(xField);
             pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::PARA_SIGN_ADD, nullptr);
         }
@@ -690,7 +694,7 @@ SwTextFormatColl& SwEditShell::GetTextFormatColl(sal_uInt16 nFormatColl) const
     return *((*(GetDoc()->GetTextFormatColls()))[nFormatColl]);
 }
 
-void insertFieldToDocument(uno::Reference<lang::XMultiServiceFactory> const & rxMultiServiceFactory,
+static void insertFieldToDocument(uno::Reference<lang::XMultiServiceFactory> const & rxMultiServiceFactory,
                            uno::Reference<text::XText> const & rxText, uno::Reference<text::XParagraphCursor> const & rxParagraphCursor,
                            OUString const & rsKey)
 {
@@ -701,7 +705,7 @@ void insertFieldToDocument(uno::Reference<lang::XMultiServiceFactory> const & rx
     rxText->insertTextContent(rxParagraphCursor, xTextContent, false);
 }
 
-void removeAllClassificationFields(OUString const & rPolicy, uno::Reference<text::XText> const & rxText)
+static void removeAllClassificationFields(OUString const & rPolicy, uno::Reference<text::XText> const & rxText)
 {
     uno::Reference<container::XEnumerationAccess> xParagraphEnumerationAccess(rxText, uno::UNO_QUERY);
     uno::Reference<container::XEnumeration> xParagraphs = xParagraphEnumerationAccess->createEnumeration();
@@ -734,7 +738,7 @@ void removeAllClassificationFields(OUString const & rPolicy, uno::Reference<text
     }
 }
 
-sal_Int32 getNumberOfParagraphs(uno::Reference<text::XText> const & xText)
+static sal_Int32 getNumberOfParagraphs(uno::Reference<text::XText> const & xText)
 {
     uno::Reference<container::XEnumerationAccess> xParagraphEnumAccess(xText, uno::UNO_QUERY);
     uno::Reference<container::XEnumeration> xParagraphEnum = xParagraphEnumAccess->createEnumeration();
@@ -747,7 +751,7 @@ sal_Int32 getNumberOfParagraphs(uno::Reference<text::XText> const & xText)
     return nResult;
 }
 
-void equaliseNumberOfParagraph(std::vector<svx::ClassificationResult> const & rResults, uno::Reference<text::XText> const & xText)
+static void equaliseNumberOfParagraph(std::vector<svx::ClassificationResult> const & rResults, uno::Reference<text::XText> const & xText)
 {
     sal_Int32 nNumberOfParagraphs = 0;
     for (svx::ClassificationResult const & rResult : rResults)
@@ -1144,7 +1148,7 @@ void SwEditShell::SetClassification(const OUString& rName, SfxClassificationPoli
     }
 }
 
-void lcl_ApplyParagraphClassification(SwDoc* pDoc,
+static void lcl_ApplyParagraphClassification(SwDoc* pDoc,
                                       const uno::Reference<frame::XModel>& xModel,
                                       const uno::Reference<text::XTextContent>& xParent,
                                       std::vector<svx::ClassificationResult> aResults)
@@ -1236,19 +1240,19 @@ void lcl_ApplyParagraphClassification(SwDoc* pDoc,
 
     // Correct the order
     std::reverse(aFieldNames.begin(), aFieldNames.end());
-    OUString sFieldNames;
+    OUStringBuffer sFieldNames;
     bool first = true;
     for (const OUString& rFieldName : aFieldNames)
     {
         if (!first)
-            sFieldNames += "/";
-        sFieldNames += rFieldName;
+            sFieldNames.append("/");
+        sFieldNames.append(rFieldName);
         first = false;
     }
 
     const OUString sOldFieldNames = lcl_getRDF(xModel, xNodeSubject, ParagraphClassificationFieldNamesRDFName).second;
     SwRDFHelper::removeStatement(xModel, MetaNS, xNodeSubject, ParagraphClassificationFieldNamesRDFName, sOldFieldNames);
-    SwRDFHelper::addStatement(xModel, MetaNS, MetaFilename, xNodeSubject, ParagraphClassificationFieldNamesRDFName, sFieldNames);
+    SwRDFHelper::addStatement(xModel, MetaNS, MetaFilename, xNodeSubject, ParagraphClassificationFieldNamesRDFName, sFieldNames.makeStringAndClear());
 }
 
 void SwEditShell::ApplyParagraphClassification(std::vector<svx::ClassificationResult> aResults)
@@ -1269,10 +1273,10 @@ void SwEditShell::ApplyParagraphClassification(std::vector<svx::ClassificationRe
 
     uno::Reference<frame::XModel> xModel = pDocShell->GetBaseModel();
     uno::Reference<text::XTextContent> xParent = SwXParagraph::CreateXParagraph(*pNode->GetDoc(), pNode);
-    lcl_ApplyParagraphClassification(GetDoc(), xModel, xParent, aResults);
+    lcl_ApplyParagraphClassification(GetDoc(), xModel, xParent, std::move(aResults));
 }
 
-std::vector<svx::ClassificationResult> lcl_CollectParagraphClassification(const uno::Reference<frame::XModel>& xModel, const uno::Reference<text::XTextContent>& xParagraph)
+static std::vector<svx::ClassificationResult> lcl_CollectParagraphClassification(const uno::Reference<frame::XModel>& xModel, const uno::Reference<text::XTextContent>& xParagraph)
 {
     std::vector<svx::ClassificationResult> aResult;
 
@@ -1347,7 +1351,7 @@ std::vector<svx::ClassificationResult> SwEditShell::CollectParagraphClassificati
     return lcl_CollectParagraphClassification(xModel, xParent);
 }
 
-sal_Int16 lcl_GetAngle(const drawing::HomogenMatrix3& rMatrix)
+static sal_Int16 lcl_GetAngle(const drawing::HomogenMatrix3& rMatrix)
 {
     basegfx::B2DHomMatrix aTransformation;
     basegfx::B2DTuple aScale;
@@ -1426,7 +1430,7 @@ SfxWatermarkItem SwEditShell::GetWatermark()
     return SfxWatermarkItem();
 }
 
-void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
+static void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
                             const uno::Reference<frame::XModel>& xModel,
                             const uno::Reference<beans::XPropertySet>& xPageStyle,
                             const uno::Reference<text::XText>& xHeaderText)
@@ -1475,7 +1479,7 @@ void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     if (!bSuccess || xWatermark.is() || bDeleteWatermark)
         return;
 
-    OUString sFont = rWatermark.GetFont();
+    const OUString& sFont = rWatermark.GetFont();
     sal_Int16 nAngle = rWatermark.GetAngle();
     sal_Int16 nTransparency = rWatermark.GetTransparency();
     Color nColor = rWatermark.GetColor();
@@ -1483,7 +1487,7 @@ void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     // Calc the ratio.
     double fRatio = 0;
 
-    VclPtr<VirtualDevice> pDevice = VclPtr<VirtualDevice>::Create();
+    ScopedVclPtrInstance<VirtualDevice> pDevice;
     vcl::Font aFont = pDevice->GetFont();
     aFont.SetFamilyName(sFont);
     aFont.SetFontSize(Size(0, 96));
@@ -1525,7 +1529,7 @@ void lcl_placeWatermarkInHeader(const SfxWatermarkItem& rWatermark,
     basegfx::B2DHomMatrix aTransformation;
     aTransformation.identity();
     aTransformation.scale(nWidth, nHeight);
-    aTransformation.rotate(F_PI180 * -1 * nAngle);
+    aTransformation.rotate(-basegfx::deg2rad(nAngle));
     drawing::HomogenMatrix3 aMatrix;
     aMatrix.Line1.Column1 = aTransformation.get(0, 0);
     aMatrix.Line1.Column2 = aTransformation.get(0, 1);
@@ -1600,6 +1604,7 @@ void SwEditShell::SetWatermark(const SfxWatermarkItem& rWatermark)
     SwDocShell* pDocShell = GetDoc()->GetDocShell();
     if (!pDocShell)
         return;
+    const bool bNoWatermark = rWatermark.GetText().isEmpty();
 
     uno::Reference<frame::XModel> xModel = pDocShell->GetBaseModel();
     uno::Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(xModel, uno::UNO_QUERY);
@@ -1615,7 +1620,12 @@ void SwEditShell::SetWatermark(const SfxWatermarkItem& rWatermark)
         bool bHeaderIsOn = false;
         xPageStyle->getPropertyValue(UNO_NAME_HEADER_IS_ON) >>= bHeaderIsOn;
         if (!bHeaderIsOn)
+        {
+            if (bNoWatermark)
+                continue; // the style doesn't have any watermark - no need to do anything
+
             xPageStyle->setPropertyValue(UNO_NAME_HEADER_IS_ON, uno::makeAny(true));
+        }
 
         // backup header height
         bool bDynamicHeight = true;
@@ -1798,8 +1808,8 @@ void SwEditShell::SignParagraph()
 
     lcl_UpdateParagraphSignatureField(GetDoc(), xModel, xParagraph, xField, utf8Text);
 
-    SwUndoParagraphSigning* pUndo = new SwUndoParagraphSigning(GetDoc(), xField, xParagraph, true);
-    GetDoc()->GetIDocumentUndoRedo().AppendUndo(pUndo);
+    GetDoc()->GetIDocumentUndoRedo().AppendUndo(
+        o3tl::make_unique<SwUndoParagraphSigning>(GetDoc(), xField, xParagraph, true));
 
     GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::PARA_SIGN_ADD, nullptr);
 }
@@ -1858,7 +1868,7 @@ void SwEditShell::ValidateAllParagraphSignatures(bool updateDontRemove)
     }
 }
 
-uno::Reference<text::XTextField> lcl_GetParagraphMetadataFieldAtIndex(const SwDocShell* pDocSh, SwTextNode const * pNode, const sal_uLong index)
+static uno::Reference<text::XTextField> lcl_GetParagraphMetadataFieldAtIndex(const SwDocShell* pDocSh, SwTextNode const * pNode, const sal_uLong index)
 {
     uno::Reference<text::XTextField> xTextField;
     if (pNode != nullptr && pDocSh != nullptr)
@@ -2049,7 +2059,7 @@ bool SwEditShell::RemoveParagraphMetadataFieldAtCursor()
     return false;
 }
 
-OUString lcl_GetParagraphClassification(SfxClassificationHelper & rHelper, sfx::ClassificationKeyCreator const & rKeyCreator,
+static OUString lcl_GetParagraphClassification(SfxClassificationHelper & rHelper, sfx::ClassificationKeyCreator const & rKeyCreator,
                                         const uno::Reference<frame::XModel>& xModel, const uno::Reference<text::XTextContent>& xParagraph)
 {
     uno::Reference<text::XTextField> xTextField;
@@ -2070,7 +2080,7 @@ OUString lcl_GetParagraphClassification(SfxClassificationHelper & rHelper, sfx::
     return OUString();
 }
 
-OUString lcl_GetHighestClassificationParagraphClass(SwPaM* pCursor)
+static OUString lcl_GetHighestClassificationParagraphClass(SwPaM* pCursor)
 {
     OUString sHighestClass;
 
@@ -2156,6 +2166,8 @@ void SwEditShell::SetTextFormatColl(SwTextFormatColl *pFormat,
     SwTextFormatColl *pLocal = pFormat? pFormat: (*GetDoc()->GetTextFormatColls())[0];
     StartAllAction();
 
+    RedlineFlags eRedlMode = GetDoc()->getIDocumentRedlineAccess().GetRedlineFlags(), eOldMode = eRedlMode;
+
     SwRewriter aRewriter;
     aRewriter.AddRule(UndoArg1, pLocal->GetName());
 
@@ -2165,8 +2177,19 @@ void SwEditShell::SetTextFormatColl(SwTextFormatColl *pFormat,
 
         if ( !rPaM.HasReadonlySel( GetViewOptions()->IsFormView() ) )
         {
+            // tdf#105413 turn off ShowChanges mode for the next loops to apply styles permanently with redlining,
+            // ie. in all directly preceding deleted paragraphs at the actual cursor positions
+            if ( IDocumentRedlineAccess::IsShowChanges(eRedlMode) &&
+               // is there redlining at beginning of the position (possible redline block before the modified node)
+               GetDoc()->getIDocumentRedlineAccess().GetRedlinePos( (*rPaM.Start()).nNode.GetNode(), USHRT_MAX ) <
+                   GetDoc()->getIDocumentRedlineAccess().GetRedlineTable().size() )
+            {
+                eRedlMode = RedlineFlags::ShowInsert | RedlineFlags::Ignore;
+                GetDoc()->getIDocumentRedlineAccess().SetRedlineFlags( eRedlMode );
+            }
+
             // Change the paragraph style to pLocal and remove all direct paragraph formatting.
-            GetDoc()->SetTextFormatColl( rPaM, pLocal, true, bResetListAttrs );
+            GetDoc()->SetTextFormatColl(rPaM, pLocal, true, bResetListAttrs, GetLayout());
 
             // If there are hints on the nodes which cover the whole node, then remove those, too.
             SwPaM aPaM(*rPaM.Start(), *rPaM.End());
@@ -2175,12 +2198,14 @@ void SwEditShell::SetTextFormatColl(SwTextFormatColl *pFormat,
                 aPaM.Start()->nContent = 0;
                 aPaM.End()->nContent = pEndTextNode->GetText().getLength();
             }
-            GetDoc()->RstTextAttrs(aPaM, /*bInclRefToxMark=*/false, /*bExactRange=*/true);
+            GetDoc()->RstTextAttrs(aPaM, /*bInclRefToxMark=*/false, /*bExactRange=*/true, GetLayout());
         }
 
     }
     GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::SETFMTCOLL, &aRewriter);
     EndAllAction();
+
+    GetDoc()->getIDocumentRedlineAccess().SetRedlineFlags( eOldMode );
 }
 
 SwTextFormatColl* SwEditShell::MakeTextFormatColl(const OUString& rFormatCollName,
@@ -2201,6 +2226,10 @@ void SwEditShell::FillByEx(SwTextFormatColl* pColl)
 {
     SwPaM * pCursor = GetCursor();
     SwContentNode * pCnt = pCursor->GetContentNode();
+    if (pCnt->IsTextNode()) // uhm... what nonsense would happen if not?
+    {   // only need properties-node because BREAK/PAGEDESC filtered anyway!
+        pCnt = sw::GetParaPropsNode(*GetLayout(), pCursor->GetPoint()->nNode);
+    }
     const SfxItemSet* pSet = pCnt->GetpSwAttrSet();
     if( pSet )
     {

@@ -27,7 +27,6 @@
 #include <com/sun/star/rendering/PanoseProportion.hpp>
 #include <com/sun/star/rendering/XCanvasFont.hpp>
 #include <comphelper/scopeguard.hxx>
-#include <comphelper/sequence.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <tools/color.hxx>
 #include <tools/diagnose_ex.h>
@@ -69,7 +68,8 @@ namespace dxcanvas
         const css::uno::Reference<
             css::rendering::XCanvasFont >&     rCanvasFont,
         const css::geometry::Matrix2D&         rFontMatrix,
-        bool                                   bAlphaSurface )
+        bool                                   bAlphaSurface,
+        bool bIsRTL)
     {
         HDC hdc = rGraphics->GetHDC();
 
@@ -124,6 +124,10 @@ namespace dxcanvas
             // setup font color
             aFont.SetColor( aColor );
             aFont.SetFillColor( aColor );
+
+            CanvasFont::ImplRef pFont(tools::canvasFontFromXFont(rCanvasFont));
+            if (pFont.is() && pFont->getEmphasisMark())
+                aFont.SetEmphasisMark(FontEmphasisMark(pFont->getEmphasisMark()));
 
             // adjust to stretched font
             if(!::rtl::math::approxEqual(rFontMatrix.m00, rFontMatrix.m11))
@@ -210,7 +214,8 @@ namespace dxcanvas
                                               aText,
                                               pDXArray.get(),
                                               rText.StartPosition,
-                                              rText.Length );
+                                              rText.Length,
+                                              bIsRTL ? SalLayoutFlags::BiDiRtl : SalLayoutFlags::NONE);
             }
             else
             {
@@ -268,6 +273,10 @@ namespace dxcanvas
 
             aFont.SetAverageFontWidth( nNewWidth );
         }
+
+        CanvasFont::ImplRef pFont(tools::canvasFontFromXFont(rCanvasFont));
+        if (pFont.is() && pFont->getEmphasisMark())
+            aFont.SetEmphasisMark(FontEmphasisMark(pFont->getEmphasisMark()));
 
         // set font
         xVirtualDevice->SetFont(aFont);

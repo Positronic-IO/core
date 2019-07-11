@@ -21,6 +21,7 @@
 #define INCLUDED_SC_SOURCE_UI_INC_SCUITPHFEDIT_HXX
 
 #include "tphfedit.hxx"
+#include <vcl/menubtn.hxx>
 
 enum ScHFEntryId
 {
@@ -67,7 +68,7 @@ private:
     VclPtr<ListBox>         m_pLbDefined;
     VclPtr<FixedText>       m_pFtCustomHF;
     VclPtr<PushButton>      m_pBtnText;
-    VclPtr<ScExtIButton>    m_pBtnFile;
+    VclPtr<MenuButton>      m_pBtnFile;
     VclPtr<PushButton>      m_pBtnTable;
     VclPtr<PushButton>      m_pBtnPage;
     VclPtr<PushButton>      m_pBtnLastPage;
@@ -84,7 +85,7 @@ private:
 
     ScEditWindow * m_pEditFocus; ///one of m_pWndLeft, m_pWndCenter, m_pWndRight
 
-    sal_uInt16       nWhich;
+    sal_uInt16 const       nWhich;
 
     DECL_LINK( ObjectSelectHdl, ScEditWindow&, void );
 
@@ -99,7 +100,7 @@ private:
     static bool IsExtFileNameEntry(const EditTextObject* pTextObj);
     DECL_LINK( ListHdl_Impl, ListBox&, void);
     DECL_LINK( ClickHdl, Button*, void );
-    DECL_LINK( MenuHdl, ScExtIButton&, void );
+    DECL_LINK( MenuHdl, MenuButton*, void );
 };
 
 class ScRightHeaderEditPage : public ScHFEditPage

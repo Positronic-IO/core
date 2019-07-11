@@ -18,14 +18,17 @@
  */
 
 #include <scitems.hxx>
+#include <osl/diagnose.h>
 #include <comphelper/string.hxx>
 #include <editeng/eeitem.hxx>
+#include <unotools/charclass.hxx>
 
 #include <editeng/lrspitem.hxx>
 #include <editeng/paperinf.hxx>
 #include <editeng/sizeitem.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/boxitem.hxx>
+#include <o3tl/make_unique.hxx>
 #include <vcl/svapp.hxx>
 
 #include <htmlimp.hxx>
@@ -54,9 +57,9 @@ ErrCode ScFormatFilterPluginImpl::ScImportHTML( SvStream &rStream, const OUStrin
     return nErr;
 }
 
-ScEEAbsImport *ScFormatFilterPluginImpl::CreateHTMLImport( ScDocument* pDocP, const OUString& rBaseURL, const ScRange& rRange )
+std::unique_ptr<ScEEAbsImport> ScFormatFilterPluginImpl::CreateHTMLImport( ScDocument* pDocP, const OUString& rBaseURL, const ScRange& rRange )
 {
-    return new ScHTMLImport( pDocP, rBaseURL, rRange, true/*bCalcWidthHeight*/ );
+    return o3tl::make_unique<ScHTMLImport>( pDocP, rBaseURL, rRange, true/*bCalcWidthHeight*/ );
 }
 
 ScHTMLImport::ScHTMLImport( ScDocument* pDocP, const OUString& rBaseURL, const ScRange& rRange, bool bCalcWidthHeight ) :
@@ -102,6 +105,8 @@ void ScHTMLImport::InsertRangeName( ScDocument* pDoc, const OUString& rName, con
 {
     ScComplexRefData aRefData;
     aRefData.InitRange( rRange );
+    aRefData.Ref1.SetFlag3D( true );
+    aRefData.Ref2.SetFlag3D( aRefData.Ref2.Tab() != aRefData.Ref1.Tab() );
     ScTokenArray aTokArray;
     aTokArray.AddDoubleReference( aRefData );
     ScRangeData* pRangeData = new ScRangeData( pDoc, rName, aTokArray );
@@ -199,38 +204,37 @@ OUString ScHTMLImport::GetHTMLRangeNameList( const ScDocument* pDoc, const OUStr
 {
     OSL_ENSURE( pDoc, "ScHTMLImport::GetHTMLRangeNameList - missing document" );
 
+    if (rOrigName.isEmpty())
+        return OUString();
+
     OUString aNewName;
     ScRangeName* pRangeNames = pDoc->GetRangeName();
     ScRangeList aRangeList;
-    sal_Int32 nTokenCnt = comphelper::string::getTokenCount(rOrigName, ';');
     sal_Int32 nStringIx = 0;
-    for( sal_Int32 nToken = 0; nToken < nTokenCnt; nToken++ )
+    do
     {
         OUString aToken( rOrigName.getToken( 0, ';', nStringIx ) );
         if( pRangeNames && ScfTools::IsHTMLTablesName( aToken ) )
         {   // build list with all HTML tables
             sal_uLong nIndex = 1;
-            bool bLoop = true;
-            while( bLoop )
+            for(;;)
             {
                 aToken = ScfTools::GetNameFromHTMLIndex( nIndex++ );
                 const ScRangeData* pRangeData = pRangeNames->findByUpperName(ScGlobal::pCharClass->uppercase(aToken));
-                if (pRangeData)
+                if (!pRangeData)
+                    break;
+                ScRange aRange;
+                if( pRangeData->IsReference( aRange ) && !aRangeList.In( aRange ) )
                 {
-                    ScRange aRange;
-                    if( pRangeData->IsReference( aRange ) && !aRangeList.In( aRange ) )
-                    {
-                        aNewName = ScGlobal::addToken(aNewName, aToken, ';');
-                        aRangeList.push_back( aRange );
-                    }
+                    aNewName = ScGlobal::addToken(aNewName, aToken, ';');
+                    aRangeList.push_back( aRange );
                 }
-                else
-                    bLoop = false;
             }
         }
         else
             aNewName = ScGlobal::addToken(aNewName, aToken, ';');
     }
+    while (nStringIx>0);
     return aNewName;
 }
 

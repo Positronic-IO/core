@@ -41,7 +41,6 @@
 #include <com/sun/star/xml/dom/XDocument.hpp>
 #include <com/sun/star/style/BreakType.hpp>
 #include <unotools/tempfile.hxx>
-#include <comphelper/sequenceashashmap.hxx>
 #include <com/sun/star/text/XDocumentIndex.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegment.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegmentCommand.hpp>
@@ -76,7 +75,7 @@ DECLARE_OOXMLEXPORT_TEST(testRelorientation, "relorientation.docx")
 {
     uno::Reference<drawing::XShape> xShape = getShape(1);
     // This was text::RelOrientation::FRAME, when handling relativeFrom=page, align=right
-    CPPUNIT_ASSERT_EQUAL(text::RelOrientation::PAGE_RIGHT, getProperty<sal_Int16>(xShape, "HoriOrientRelation"));
+    CPPUNIT_ASSERT_EQUAL(text::RelOrientation::PAGE_FRAME, getProperty<sal_Int16>(xShape, "HoriOrientRelation"));
 
     uno::Reference<drawing::XShapes> xGroup(xShape, uno::UNO_QUERY);
     // This resulted in lang::IndexOutOfBoundsException, as nested groupshapes weren't handled.
@@ -299,7 +298,10 @@ DECLARE_OOXMLEXPORT_TEST(testSegFaultWhileSave, "test_segfault_while_save.docx")
     xmlDocPtr pXmlDoc = parseExport("word/document.xml");
     if (!pXmlDoc)
         return;
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(6137), getXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblGrid/w:gridCol[2]", "w").toInt32());
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(6138), getXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblGrid/w:gridCol[2]", "w").toInt32());
+
+    // tdf#106572 - preventative test matching danger conditions, but imported OK anyway
+    CPPUNIT_ASSERT_EQUAL(OUString("First Page"), getProperty<OUString>(getParagraphOrTable(1), "PageDescName"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(fdo69656, "Table_cell_auto_width_fdo69656.docx")
@@ -367,14 +369,31 @@ DECLARE_OOXMLEXPORT_TEST(testFDO74215, "FDO74215.docx")
         return;
     // tdf#106849 NumPicBullet xShape should not to be resized.
 
-// Seems this is dependent on the running system, which is - unfortunate
-// see: MSWordExportBase::BulletDefinitions
-// FIXME: the size of a bullet is defined by GraphicSize property
-// (stored in SvxNumberFormat::aGraphicSize) so use that for the size
-// (properly convert from 100mm to pt (1 inch is 72 pt, 1 pt is 20 twips).
-#if !defined(MACOSX)
-    assertXPath(pXmlDoc, "/w:numbering/w:numPicBullet[2]/w:pict/v:shape", "style", "width:11.25pt;height:11.25pt");
-#endif
+    // This is dependent on the running system: see MSWordExportBase::BulletDefinitions
+    // FIXME: the size of a bullet is defined by GraphicSize property
+    // (stored in SvxNumberFormat::aGraphicSize) so use that for the size
+    // (properly convert from 100mm to pt (1 inch is 72 pt, 1 pt is 20 twips).
+
+    // On 96 DPI "width:11.25pt;height:11.25pt"; on 120 DPI "width:9pt;height:9pt"
+    const OUString sStyle
+        = getXPath(pXmlDoc, "/w:numbering/w:numPicBullet[2]/w:pict/v:shape", "style");
+    {
+        const OUString sWidth = sStyle.getToken(0, ';');
+        CPPUNIT_ASSERT(sWidth.startsWith("width:"));
+        CPPUNIT_ASSERT(sWidth.endsWith("pt"));
+        const double fWidth = sWidth.copy(6, sWidth.getLength() - 8).toDouble();
+        const double fXScaleFactor = 96.0 / Application::GetDefaultDevice()->GetDPIX();
+        // note: used to fail on Mac with 14.7945205479452 vs. 14.8
+        CPPUNIT_ASSERT_DOUBLES_EQUAL(11.25 * fXScaleFactor, fWidth, 0.01);
+    }
+    {
+        const OUString sHeight = sStyle.getToken(1, ';');
+        CPPUNIT_ASSERT(sHeight.startsWith("height:"));
+        CPPUNIT_ASSERT(sHeight.endsWith("pt"));
+        const double fHeight = sHeight.copy(7, sHeight.getLength() - 9).toDouble();
+        const double fYScaleFactor = 96.0 / Application::GetDefaultDevice()->GetDPIY();
+        CPPUNIT_ASSERT_DOUBLES_EQUAL(11.25 * fYScaleFactor, fHeight, 0.01);
+    }
 }
 
 DECLARE_OOXMLEXPORT_TEST(testColumnBreak_ColumnCountIsZero,"fdo74153.docx")
@@ -661,6 +680,11 @@ DECLARE_OOXMLEXPORT_TEST(testTableCurruption, "tableCurrupt.docx")
         return;
     CPPUNIT_ASSERT(pXmlDoc) ;
     assertXPath(pXmlDoc, "/w:hdr/w:tbl[1]/w:tr[1]/w:tc[1]",1);
+
+    // tdf#116549: header paragraph should not have a bottom border.
+    uno::Reference<text::XText> xHeaderText = getProperty< uno::Reference<text::XText> >(getStyles("PageStyles")->getByName("First Page"), "HeaderText");
+    table::BorderLine2 aHeaderBottomBorder = getProperty<table::BorderLine2>( getParagraphOfText( 1, xHeaderText ), "BottomBorder");
+    CPPUNIT_ASSERT_EQUAL(sal_uInt32(0), aHeaderBottomBorder.LineWidth);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testDateControl, "date-control.docx")
@@ -1159,7 +1183,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf90697_continuousBreaksComplex2,"tdf92724_continu
         CPPUNIT_ASSERT( xHeaderText->getString() != "Third section - First page header. No follow defined" );
 // Same test stated differently: Pages 4 and 5 OUGHT to use "Second section header", but currently don't.  Page 6 does.
         if( nPages <= 3 )
-            CPPUNIT_ASSERT_EQUAL( xHeaderText->getString(), OUString("First section header") );
+            CPPUNIT_ASSERT_EQUAL( OUString("First section header"), xHeaderText->getString() );
         else
             CPPUNIT_ASSERT( xHeaderText->getString() == "First section header" || xHeaderText->getString() == "Second section header" );
 
@@ -1210,6 +1234,17 @@ DECLARE_OOXMLEXPORT_TEST(testTdf81345_045Original,"tdf81345.docx")
     uno::Reference<container::XNameAccess> xParaStyles(getStyles("ParagraphStyles"));
     uno::Reference<beans::XPropertySet> xStyle(xParaStyles->getByName("Pull quote"), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(6736947), getProperty<sal_Int32>(xStyle, "CharColor"));
+}
+
+DECLARE_OOXMLEXPORT_TEST(testDocxTablePosition, "floating-table-position.docx")
+{
+    xmlDocPtr pXmlDoc = parseExport("word/document.xml");
+    if (!pXmlDoc)
+        return;
+
+    // the exported positions were wrong due to some missing shifting in the export code
+    assertXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblpPr", "tblpX", "3494");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblpPr", "tblpY", "4611");
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -38,7 +38,7 @@
 
 using namespace ::com::sun::star;
 
-css::uno::Reference< css::awt::XWindowPeer > CreateXWindow( vcl::Window const * pWindow )
+static css::uno::Reference< css::awt::XWindowPeer > CreateXWindow( vcl::Window const * pWindow )
 {
     switch ( pWindow->GetType() )
     {
@@ -95,6 +95,8 @@ css::uno::Reference< css::awt::XWindowPeer > CreateXWindow( vcl::Window const * 
 
         case WindowType::TOOLBOX:        return new VCLXToolBox;
         case WindowType::TABCONTROL:     return new VCLXMultiPage;
+
+        case WindowType::HEADERBAR:     return new VCLXHeaderBar;
 
         // case WindowType::FIXEDLINE:
         // case WindowType::FIXEDBITMAP:
@@ -275,7 +277,7 @@ void UnoWrapper::WindowDestroyed( vcl::Window* pWindow )
         xWindowPeerComp->dispose();
 
     // #102132# Iterate over frames after setting Window peer to NULL,
-    // because while destroying other frames, we get get into the method again and try
+    // because while destroying other frames, we get into the method again and try
     // to destroy this window again...
     // #i42462#/#116855# no, don't loop: Instead, just ensure that all our top-window-children
     // are disposed, too (which should also be a valid fix for #102132#, but doesn't have the extreme
@@ -288,11 +290,7 @@ void UnoWrapper::WindowDestroyed( vcl::Window* pWindow )
 
         VclPtr< vcl::Window > pNextTopChild = pTopWindowChild->GetWindow( GetWindowType::NextTopWindowSibling );
 
-        //the window still could be on the stack, so we have to
-        // use lazy delete ( it will automatically
-        // disconnect from the currently destroyed parent window )
-        pTopWindowChild->doLazyDelete();
-
+        pTopWindowChild.disposeAndClear();
         pTopWindowChild = pNextTopChild;
     }
 }

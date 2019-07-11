@@ -62,8 +62,8 @@ private:
     SVX_DLLPRIVATE void Init();
 
 protected:
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     // protected destructor
     virtual ~SdrOle2Obj() override;
@@ -120,7 +120,8 @@ public:
 
     void AbandonObject();
 
-    virtual void SetPage(SdrPage* pNewPage) override;
+    // react on model/page change
+    virtual void handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage) override;
 
     /** Change the IsClosedObj attribute
 
@@ -159,7 +160,6 @@ public:
     css::uno::Reference< css::frame::XModel > getXModel() const;
 
     bool IsChart() const;
-    bool IsReal3DChart() const;
     bool IsCalc() const;
 
     bool UpdateLinkURL_Impl();
@@ -168,7 +168,7 @@ public:
     void CheckFileLink_Impl();
 
     // allows to transfer the graphics to the object helper
-    void SetGraphicToObj( const Graphic& aGraphic, const OUString& aMediaType );
+    void SetGraphicToObj( const Graphic& aGraphic );
     void SetGraphicToObj( const css::uno::Reference< css::io::XInputStream >& xGrStream,
                           const OUString& aMediaType );
 

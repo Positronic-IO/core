@@ -457,7 +457,7 @@ namespace
     {
         bool bResult = false;
         TrueTypeFont* pTTF = nullptr;
-        if( OpenTTFontBuffer( i_pBuffer, i_nSize, 0, &pTTF ) == SF_OK )
+        if( OpenTTFontBuffer( i_pBuffer, i_nSize, 0, &pTTF ) == SFErrCodes::Ok )
         {
             TTGlobalFontInfo aInfo;
             GetTTGlobalFontInfo( pTTF, &aInfo );
@@ -532,7 +532,7 @@ namespace
         return bResult;
     }
 
-    struct WeightSearchEntry
+    static struct WeightSearchEntry
     {
         const char* string;
         int         string_len;
@@ -543,7 +543,7 @@ namespace
             return rtl_str_compareIgnoreAsciiCase_WithLength( string, string_len, rRight.string, rRight.string_len ) < 0;
         }
     }
-    weight_table[] =
+    const weight_table[] =
     {
         { "black", 5, WEIGHT_BLACK },
         { "bold", 4, WEIGHT_BOLD },
@@ -610,9 +610,8 @@ namespace
                     aEnt.string = pOpen+1;
                     aEnt.string_len = (pClose-pOpen)-1;
                     aEnt.weight = WEIGHT_NORMAL;
-                    const int nEnt = SAL_N_ELEMENTS( weight_table );
-                    WeightSearchEntry* pFound = std::lower_bound( weight_table, weight_table+nEnt, aEnt );
-                    if( pFound != (weight_table+nEnt) )
+                    WeightSearchEntry const * pFound = std::lower_bound( std::begin(weight_table), std::end(weight_table), aEnt );
+                    if( pFound != std::end(weight_table) && !(*pFound < aEnt))
                         o_rResult.SetWeight( pFound->weight );
                 }
             }

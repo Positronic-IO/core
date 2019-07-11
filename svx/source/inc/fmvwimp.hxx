@@ -25,6 +25,7 @@
 #include <memory>
 
 #include <svx/svdmark.hxx>
+#include <svx/svdobj.hxx>
 #include "fmdocumentclassification.hxx"
 
 #include <com/sun/star/form/XForm.hpp>
@@ -246,8 +247,8 @@ private:
     void Activate(bool bSync = false);
     void Deactivate(bool bDeactivateController = true);
 
-    SdrObject*  implCreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor );
-    SdrObject*  implCreateXFormsControl( const svx::OXFormsDescriptor &_rDesc );
+    SdrObjectUniquePtr implCreateFieldControl( const svx::ODataAccessDescriptor& _rColumnDescriptor );
+    SdrObjectUniquePtr implCreateXFormsControl( const svx::OXFormsDescriptor &_rDesc );
 
     static bool createControlLabelPair(
         OutputDevice const & _rOutDev,
@@ -259,11 +260,13 @@ private:
         const OUString& _rFieldPostfix,
         SdrInventor _nInventor,
         sal_uInt16 _nLabelObjectID,
-        SdrPage* _pLabelPage,
-        SdrPage* _pControlPage,
-        SdrModel* _pModel,
-        SdrUnoObj*& _rpLabel,
-        SdrUnoObj*& _rpControl
+
+        // tdf#118963 Need a SdrModel for SdrObject creation. To make the
+        // demand clear, hand over a SdrMldel&
+        SdrModel& _rModel,
+
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl
     );
 
     bool    createControlLabelPair(
@@ -274,8 +277,8 @@ private:
         const css::uno::Reference< css::util::XNumberFormats >& _rxNumberFormats,
         sal_uInt16 _nControlObjectID,
         const OUString& _rFieldPostfix,
-        SdrUnoObj*& _rpLabel,
-        SdrUnoObj*& _rpControl,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel,
+        std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl,
         const css::uno::Reference< css::sdbc::XDataSource >& _rxDataSource,
         const OUString& _rDataSourceName,
         const OUString& _rCommand,

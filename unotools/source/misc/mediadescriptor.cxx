@@ -26,6 +26,7 @@
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/stillreadwriteinteraction.hxx>
 
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/XContent.hpp>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
 #include <com/sun/star/task/XInteractionHandler.hpp>
@@ -322,6 +323,12 @@ const OUString& MediaDescriptor::PROP_VIEWONLY()
 const OUString& MediaDescriptor::PROP_DOCUMENTBASEURL()
 {
     static const OUString sProp("DocumentBaseURL");
+    return sProp;
+}
+
+const OUString& MediaDescriptor::PROP_SUGGESTEDSAVEASNAME()
+{
+    static const OUString sProp("SuggestedSaveAsName");
     return sProp;
 }
 

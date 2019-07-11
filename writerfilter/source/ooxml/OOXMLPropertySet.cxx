@@ -23,6 +23,7 @@
 #include <ooxml/QNameToString.hxx>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <oox/token/tokens.hxx>
+#include <sax/tools/converter.hxx>
 #include <tools/color.hxx>
 
 namespace writerfilter {
@@ -34,11 +35,6 @@ using namespace com::sun::star;
 OOXMLProperty::OOXMLProperty(Id id, const OOXMLValue::Pointer_t& pValue,
                              OOXMLProperty::Type_t eType)
     : mId(id), mpValue(pValue), meType(eType)
-{
-}
-
-OOXMLProperty::OOXMLProperty(const OOXMLProperty & rSprm)
-: mId(rSprm.mId), mpValue(rSprm.mpValue), meType(rSprm.meType)
 {
 }
 
@@ -331,7 +327,6 @@ OOXMLValue * OOXMLInputStreamValue::clone() const
 
 OOXMLPropertySet::OOXMLPropertySet()
 {
-    maType = "OOXMLPropertySet";
 }
 
 OOXMLPropertySet::~OOXMLPropertySet()
@@ -395,9 +390,9 @@ void OOXMLPropertySet::add(const OOXMLPropertySet::Pointer_t& pPropertySet)
 
     if (pSet != nullptr)
     {
-        mProperties.reserve(mProperties.size() + pSet->mProperties.size());
-        for (const auto& aIt: pSet->mProperties)
-            add(aIt);
+        int x = mProperties.size();
+        mProperties.resize(mProperties.size() + pSet->mProperties.size());
+        std::copy(pSet->mProperties.begin(), pSet->mProperties.end(), mProperties.begin() + x);
     }
 }
 
@@ -550,8 +545,8 @@ OOXMLHexValue::OOXMLHexValue(sal_uInt32 nValue)
 }
 
 OOXMLHexValue::OOXMLHexValue(const char * pValue)
+: mnValue(rtl_str_toUInt32(pValue, 16))
 {
-    mnValue = rtl_str_toUInt32(pValue, 16);
 }
 
 OOXMLHexValue::~OOXMLHexValue()
@@ -587,6 +582,20 @@ OOXMLHexColorValue::OOXMLHexColorValue(const char * pValue)
     if (strcmp(pValue, "auto"))
     {
         mnValue = rtl_str_toUInt32(pValue, 16);
+
+        // Convert hash-encoded values (like #FF0080)
+        const sal_Int32 nLen = strlen(pValue);
+        if ( !mnValue && nLen > 1 && pValue[0] == '#' )
+        {
+            sal_Int32 nColor(COL_AUTO);
+            // Word appears to require strict 6 digit length, else it ignores it
+            if ( nLen == 7 )
+            {
+                const OUString sHashColor(pValue, nLen, RTL_TEXTENCODING_ASCII_US);
+                sax::Converter::convertColor( nColor, sHashColor );
+            }
+            mnValue = nColor;
+        }
     }
 }
 
@@ -760,19 +769,15 @@ void OOXMLTable::resolve(Table & rTable)
 
     int nPos = 0;
 
-    PropertySets_t::iterator it = mPropertySets.begin();
-    PropertySets_t::iterator itEnd = mPropertySets.end();
-
-    while (it != itEnd)
+    for (const auto& rPropSet : mPropertySets)
     {
         writerfilter::Reference<Properties>::Pointer_t pProperties
-            ((*it)->getProperties());
+            (rPropSet->getProperties());
 
         if (pProperties.get() != nullptr)
             pTable->entry(nPos, pProperties);
 
         ++nPos;
-        ++it;
     }
 }
 

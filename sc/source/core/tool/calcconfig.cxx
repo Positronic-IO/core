@@ -14,6 +14,7 @@
 #include <formula/grammar.hxx>
 #include <formula/opcode.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <sfx2/objsh.hxx>
 #include <unotools/configmgr.hxx>
 
@@ -22,6 +23,7 @@
 #include <docsh.hxx>
 
 #include <comphelper/configurationlistener.hxx>
+#include <com/sun/star/datatransfer/XTransferable2.hpp>
 
 using comphelper::ConfigurationListener;
 
@@ -41,10 +43,44 @@ static rtl::Reference<ConfigurationListener> const & getFormulaCalculationListen
     return xListener;
 }
 
+static ForceCalculationType forceCalculationTypeInit()
+{
+    const char* env = getenv( "SC_FORCE_CALCULATION" );
+    if( env != nullptr )
+    {
+        if( strcmp( env, "opencl" ) == 0 )
+        {
+            SAL_INFO("sc.core.formulagroup", "Forcing calculations to use OpenCL");
+            return ForceCalculationOpenCL;
+        }
+        if( strcmp( env, "threads" ) == 0 )
+        {
+            SAL_INFO("sc.core.formulagroup", "Forcing calculations to use threads");
+            return ForceCalculationThreads;
+        }
+        if( strcmp( env, "core" ) == 0 )
+        {
+            SAL_INFO("sc.core.formulagroup", "Forcing calculations to use core");
+            return ForceCalculationCore;
+        }
+        SAL_WARN("sc.core.formulagroup", "Unrecognized value of SC_TEST_CALCULATION");
+    }
+    return ForceCalculationNone;
+}
+
+ForceCalculationType ScCalcConfig::getForceCalculationType()
+{
+    static const ForceCalculationType type = forceCalculationTypeInit();
+    return type;
+}
+
 bool ScCalcConfig::isOpenCLEnabled()
 {
     if (utl::ConfigManager::IsFuzzing())
         return false;
+    static ForceCalculationType force = getForceCalculationType();
+    if( force != ForceCalculationNone )
+        return force == ForceCalculationOpenCL;
     static comphelper::ConfigurationListenerProperty<bool> gOpenCLEnabled(getMiscListener(), "UseOpenCL");
     return gOpenCLEnabled.get();
 }
@@ -53,16 +89,11 @@ bool ScCalcConfig::isThreadingEnabled()
 {
     if (utl::ConfigManager::IsFuzzing())
         return false;
+    static ForceCalculationType force = getForceCalculationType();
+    if( force != ForceCalculationNone )
+        return force == ForceCalculationThreads;
     static comphelper::ConfigurationListenerProperty<bool> gThreadingEnabled(getFormulaCalculationListener(), "UseThreadedCalculationForFormulaGroups");
     return gThreadingEnabled.get();
-}
-
-bool ScCalcConfig::isSwInterpreterEnabled()
-{
-    if (utl::ConfigManager::IsFuzzing())
-        return false;
-    static comphelper::ConfigurationListenerProperty<bool> gSwInterpreterEnabled(getMiscListener(), "UseSwInterpreter");
-    return gSwInterpreterEnabled.get();
 }
 
 ScCalcConfig::ScCalcConfig() :
@@ -83,8 +114,10 @@ void ScCalcConfig::setOpenCLConfigToDefault()
     static OpCodeSet pDefaultOpenCLSubsetOpCodes(new std::set<OpCode>({
         ocAdd,
         ocSub,
+        ocNegSub,
         ocMul,
         ocDiv,
+        ocPow,
         ocRandom,
         ocSin,
         ocCos,
@@ -113,15 +146,6 @@ void ScCalcConfig::setOpenCLConfigToDefault()
         ocSlope,
         ocSumIfs}));
 
-    // opcodes that are known to work well with the software interpreter
-    static OpCodeSet pDefaultSwInterpreterSubsetOpCodes(new std::set<OpCode>({
-        ocAdd,
-        ocSub,
-        ocMul,
-        ocDiv,
-        ocSum,
-        ocProduct}));
-
     // Note that these defaults better be kept in sync with those in
     // officecfg/registry/schema/org/openoffice/Office/Calc.xcs.
     // Crazy.
@@ -129,7 +153,6 @@ void ScCalcConfig::setOpenCLConfigToDefault()
     mbOpenCLAutoSelect = true;
     mnOpenCLMinimumFormulaGroupSize = 100;
     mpOpenCLSubsetOpCodes = pDefaultOpenCLSubsetOpCodes;
-    mpSwInterpreterSubsetOpCodes = pDefaultSwInterpreterSubsetOpCodes;
 }
 
 void ScCalcConfig::reset()
@@ -163,8 +186,7 @@ bool ScCalcConfig::operator== (const ScCalcConfig& r) const
            mbOpenCLAutoSelect == r.mbOpenCLAutoSelect &&
            maOpenCLDevice == r.maOpenCLDevice &&
            mnOpenCLMinimumFormulaGroupSize == r.mnOpenCLMinimumFormulaGroupSize &&
-           *mpOpenCLSubsetOpCodes == *r.mpOpenCLSubsetOpCodes &&
-           *mpSwInterpreterSubsetOpCodes == *r.mpSwInterpreterSubsetOpCodes;
+           *mpOpenCLSubsetOpCodes == *r.mpOpenCLSubsetOpCodes;
 }
 
 bool ScCalcConfig::operator!= (const ScCalcConfig& r) const
@@ -219,6 +241,9 @@ ScCalcConfig::OpCodeSet ScStringToOpCodeSet(const OUString& rOpCodes)
         }
         fromIndex = semicolon+1;
     }
+    // HACK: Both unary and binary minus have the same string but different opcodes.
+    if( result->find( ocSub ) != result->end())
+        result->insert( ocNegSub );
     return result;
 }
 

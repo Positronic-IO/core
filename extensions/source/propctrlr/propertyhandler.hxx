@@ -38,6 +38,7 @@
 #include <com/sun/star/inspection/XPropertyHandler.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <osl/interlck.h>
+#include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/implbase1.hxx>
 #include <comphelper/uno3.hxx>
@@ -53,6 +54,7 @@ namespace com { namespace sun { namespace star {
 } } }
 
 namespace vcl { class Window; }
+namespace weld { class Window; }
 
 namespace pcr
 {
@@ -68,7 +70,8 @@ namespace pcr
                                                 >   PropertyHandler_Base;
     /** the base class for property handlers
     */
-    class PropertyHandler : public PropertyHandler_Base
+    class PropertyHandler : public ::cppu::BaseMutex
+                          , public PropertyHandler_Base
     {
     private:
         /// cache for getSupportedProperties
@@ -81,7 +84,6 @@ namespace pcr
         PropertyChangeListeners                               m_aPropertyListeners;
 
     protected:
-        mutable ::osl::Mutex                                  m_aMutex;
         /// the context in which the instance was created
         css::uno::Reference< css::uno::XComponentContext >    m_xContext;
         /// the component we're inspecting
@@ -136,6 +138,7 @@ namespace pcr
         /** retrieves a window which can be used as parent for dialogs
         */
         vcl::Window* impl_getDefaultDialogParent_nothrow() const;
+        weld::Window* impl_getDefaultDialogFrame_nothrow() const;
 
         /** retrieves the property id for a given property name
             @throw css::beans::UnknownPropertyException

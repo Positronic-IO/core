@@ -21,8 +21,8 @@
 #define INCLUDED_SC_SOURCE_UI_INC_HDRCONT_HXX
 
 #include <vcl/window.hxx>
-#include <vcl/seleng.hxx>
-#include <address.hxx>
+#include <scdllapi.h>
+#include <types.hxx>
 
 #define HDR_SIZE_OPTIMUM    0xFFFF
 
@@ -30,6 +30,7 @@
 #define HDR_SLIDERSIZE      2
 
 class ScTabView;
+class SelectionEngine;
 
 class SC_DLLPUBLIC ScHeaderControl : public vcl::Window
 {
@@ -39,13 +40,13 @@ private:
     vcl::Font           aBoldFont;
     bool                bBoldSet;
 
-    bool            bVertical;              // Vertical = Row header
+    bool const          bVertical;              // Vertical = Row header
 
     long            nWidth;
     long            nSmallWidth;
     long            nBigWidth;
 
-    SCCOLROW        nSize;
+    SCCOLROW const  nSize;
 
     SCCOLROW        nMarkStart;
     SCCOLROW        nMarkEnd;

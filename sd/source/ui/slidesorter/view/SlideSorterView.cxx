@@ -46,6 +46,7 @@
 #include <sdpage.hxx>
 #include <Window.hxx>
 
+#include <sal/log.hxx>
 #include <svl/itempool.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdopage.hxx>
@@ -219,10 +220,7 @@ sal_Int32 SlideSorterView::GetPageIndexAtPoint (const Point& rWindowPosition) co
     return nIndex;
 }
 
-Layouter& SlideSorterView::GetLayouter()
-{
-    return *mpLayouter.get();
-}
+Layouter& SlideSorterView::GetLayouter() { return *mpLayouter; }
 
 void SlideSorterView::ModelHasChanged()
 {
@@ -611,11 +609,9 @@ void SlideSorterView::CompleteRedraw (
 
     if (mnLockRedrawSmph == 0)
     {
-        mrSlideSorter.GetContentWindow()->IncrementLockCount();
         if (mpLayeredDevice->HandleMapModeChange())
             DeterminePageObjectVisibilities();
         mpLayeredDevice->Repaint(rPaintArea);
-        mrSlideSorter.GetContentWindow()->DecrementLockCount();
     }
     else
     {
@@ -689,7 +685,7 @@ void SlideSorterView::ConfigurationChanged (
 std::shared_ptr<cache::PageCache> const & SlideSorterView::GetPreviewCache()
 {
     sd::Window *pWindow (mrSlideSorter.GetContentWindow().get());
-    if (pWindow && mpPreviewCache.get() == nullptr)
+    if (pWindow && mpPreviewCache == nullptr)
     {
         mpPreviewCache.reset(
             new cache::PageCache(

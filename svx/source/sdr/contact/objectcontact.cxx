@@ -34,7 +34,6 @@ namespace sdr { namespace contact {
 ObjectContact::ObjectContact()
 :   maViewObjectContactVector(),
     maPrimitiveAnimator(),
-    mpEventHandler(nullptr),
     mpViewObjectContactRedirector(nullptr),
     maViewInformation2D(uno::Sequence< beans::PropertyValue >()),
     mbIsPreviewRenderer(false)
@@ -64,10 +63,6 @@ ObjectContact::~ObjectContact() COVERITY_NOEXCEPT_FALSE
 
     // assert when there were new entries added during deletion
     DBG_ASSERT(maViewObjectContactVector.empty(), "Corrupted ViewObjectContactList (!)");
-
-    // delete the EventHandler. This will destroy all still contained events.
-    mpEventHandler.reset();
-    // If there are still Events registered, something has went wrong
 }
 
 // LazyInvalidate request. Default implementation directly handles
@@ -126,36 +121,10 @@ void ObjectContact::InvalidatePartOfView(const basegfx::B2DRange& /*rRange*/) co
     // nothing to do here in the default version
 }
 
-// Get info if given Rectangle is visible in this view
-bool ObjectContact::IsAreaVisible(const basegfx::B2DRange& /*rRange*/) const
-{
-    // always visible in default version
-    return true;
-}
-
 // Get info about the need to visualize GluePoints
 bool ObjectContact::AreGluePointsVisible() const
 {
     return false;
-}
-
-// method to get the primitiveAnimator
-
-// method to get the EventHandler. It will
-// return a existing one or create a new one using CreateEventHandler().
-sdr::event::TimerEventHandler& ObjectContact::GetEventHandler() const
-{
-    if(!HasEventHandler())
-    {
-        const_cast< ObjectContact* >(this)->mpEventHandler.reset( new sdr::event::TimerEventHandler() );
-    }
-    return *mpEventHandler;
-}
-
-// test if there is an EventHandler without creating one on demand
-bool ObjectContact::HasEventHandler() const
-{
-    return (nullptr != mpEventHandler);
 }
 
 // check if text animation is allowed. Default is sal_true.
@@ -170,12 +139,6 @@ bool ObjectContact::IsGraphicAnimationAllowed() const
     return true;
 }
 
-// check if asynchronous graphics loading is allowed. Default is false.
-bool ObjectContact::IsAsynchronGraphicsLoadingAllowed() const
-{
-    return false;
-}
-
 void ObjectContact::SetViewObjectContactRedirector(ViewObjectContactRedirector* pNew)
 {
     if(mpViewObjectContactRedirector != pNew)
@@ -186,18 +149,6 @@ void ObjectContact::SetViewObjectContactRedirector(ViewObjectContactRedirector* 
 
 // print? Default is false
 bool ObjectContact::isOutputToPrinter() const
-{
-    return false;
-}
-
-// window? Default is true
-bool ObjectContact::isOutputToWindow() const
-{
-    return true;
-}
-
-// VirtualDevice? Default is false
-bool ObjectContact::isOutputToVirtualDevice() const
 {
     return false;
 }
@@ -216,12 +167,6 @@ bool ObjectContact::isOutputToPDFFile() const
 
 // gray display mode
 bool ObjectContact::isDrawModeGray() const
-{
-    return false;
-}
-
-// gray display mode
-bool ObjectContact::isDrawModeBlackWhite() const
 {
     return false;
 }

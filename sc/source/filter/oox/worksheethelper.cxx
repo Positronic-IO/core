@@ -25,6 +25,7 @@
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
+#include <com/sun/star/sheet/ConditionOperator2.hpp>
 #include <com/sun/star/sheet/TableValidationVisibility.hpp>
 #include <com/sun/star/sheet/ValidationType.hpp>
 #include <com/sun/star/sheet/ValidationAlertStyle.hpp>
@@ -36,6 +37,7 @@
 #include <com/sun/star/sheet/XSpreadsheet.hpp>
 #include <com/sun/star/table/XColumnRowRange.hpp>
 #include <com/sun/star/text/WritingMode2.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
 #include <oox/core/filterbase.hxx>
@@ -361,7 +363,6 @@ private:
 private:
     typedef ::std::unique_ptr< VmlDrawing >       VmlDrawingPtr;
 
-    const OUString      maSheetCellRanges;  /// Service name for a SheetCellRanges object.
     const ScAddress&    mrMaxApiPos;        /// Reference to maximum Calc cell address from address converter.
     ScRange             maUsedArea;         /// Used area of the sheet, and sheet index of the sheet.
     ColumnModel         maDefColModel;      /// Default column formatting.
@@ -388,14 +389,15 @@ private:
     bool                   mbFastRowProgress; /// Do we have a progress bar thread ?
     ISegmentProgressBarRef mxRowProgress;   /// Progress bar for row/cell processing.
     ISegmentProgressBarRef mxFinalProgress; /// Progress bar for finalization.
-    WorksheetType       meSheetType;        /// Type of this sheet.
+    WorksheetType const       meSheetType;        /// Type of this sheet.
     Reference< XSpreadsheet > mxSheet;      /// Reference to the current sheet.
     bool                mbHasDefWidth;      /// True = default column width is set from defaultColWidth attribute.
 };
 
+static const OUStringLiteral gaSheetCellRanges( "com.sun.star.sheet.SheetCellRanges" ); /// Service name for a SheetCellRanges object.
+
 WorksheetGlobals::WorksheetGlobals( const WorkbookHelper& rHelper, const ISegmentProgressBarRef& rxProgressBar, WorksheetType eSheetType, SCTAB nSheet ) :
     WorkbookHelper( rHelper ),
-    maSheetCellRanges( "com.sun.star.sheet.SheetCellRanges" ),
     mrMaxApiPos( rHelper.getAddressConverter().getMaxApiAddress() ),
     maUsedArea( SCCOL_MAX, SCROW_MAX, nSheet, -1, -1, nSheet ), // Set start address to largest possible value, and end address to smallest
     maSheetData( *this ),
@@ -474,7 +476,7 @@ Reference< XSheetCellRanges > WorksheetGlobals::getCellRangeList( const ScRangeL
     Reference< XSheetCellRanges > xRanges;
     if( mxSheet.is() && !rRanges.empty() ) try
     {
-        xRanges.set( getBaseFilter().getModelFactory()->createInstance( maSheetCellRanges ), UNO_QUERY_THROW );
+        xRanges.set( getBaseFilter().getModelFactory()->createInstance( gaSheetCellRanges ), UNO_QUERY_THROW );
         Reference< XSheetCellRangeContainer > xRangeCont( xRanges, UNO_QUERY_THROW );
         xRangeCont->addRangeAddresses( AddressConverter::toApiSequence(rRanges), false );
     }
@@ -543,7 +545,7 @@ awt::Point WorksheetGlobals::getCellPosition( sal_Int32 nCol, sal_Int32 nRow ) c
 
 namespace {
 
-inline sal_Int32 lclGetMidAddr( sal_Int32 nBegAddr, sal_Int32 nEndAddr, sal_Int32 nBegPos, sal_Int32 nEndPos, sal_Int32 nSearchPos )
+sal_Int32 lclGetMidAddr( sal_Int32 nBegAddr, sal_Int32 nEndAddr, sal_Int32 nBegPos, sal_Int32 nEndPos, sal_Int32 nSearchPos )
 {
     // use sal_Int64 to prevent integer overflow
     return nBegAddr + 1 + static_cast< sal_Int32 >( static_cast< sal_Int64 >( nEndAddr - nBegAddr - 2 ) * (nSearchPos - nBegPos) / (nEndPos - nBegPos) );
@@ -1124,7 +1126,10 @@ void WorksheetGlobals::finalizeValidationRanges() const
             {
                 // condition operator
                 Reference< XSheetCondition2 > xSheetCond( xValidation, UNO_QUERY_THROW );
-                xSheetCond->setConditionOperator( CondFormatBuffer::convertToApiOperator( validation.mnOperator ) );
+                if( eType == ValidationType_CUSTOM )
+                    xSheetCond->setConditionOperator( ConditionOperator2::FORMULA );
+                else
+                    xSheetCond->setConditionOperator( CondFormatBuffer::convertToApiOperator( validation.mnOperator ) );
 
                 // condition formulas
                 Reference< XMultiFormulaTokens > xTokens( xValidation, UNO_QUERY_THROW );

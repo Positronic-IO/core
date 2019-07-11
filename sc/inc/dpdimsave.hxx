@@ -22,7 +22,8 @@
 
 #include <vector>
 #include <map>
-#include "dpgroup.hxx"
+#include "dpitemdata.hxx"
+#include "dpnumgroupinfo.hxx"
 #include "scdllapi.h"
 #include "dptypes.hxx"
 
@@ -89,7 +90,6 @@ class SC_DLLPUBLIC ScDPSaveGroupDimension
 public:
                 ScDPSaveGroupDimension( const OUString& rSource, const OUString& rName );
                 ScDPSaveGroupDimension( const OUString& rSource, const OUString& rName, const ScDPNumGroupInfo& rDateInfo, sal_Int32 nPart );
-                ~ScDPSaveGroupDimension();
 
     void    AddToData( ScDPGroupTableData& rData ) const;
     void AddToCache(ScDPCache& rCache) const;
@@ -134,7 +134,6 @@ class SC_DLLPUBLIC ScDPSaveNumGroupDimension
 public:
                 ScDPSaveNumGroupDimension( const OUString& rName, const ScDPNumGroupInfo& rInfo );
                 ScDPSaveNumGroupDimension( const OUString& rName, const ScDPNumGroupInfo& rDateInfo, sal_Int32 nPart );
-                ~ScDPSaveNumGroupDimension();
 
     void        AddToData( ScDPGroupTableData& rData ) const;
     void AddToCache(ScDPCache& rCache) const;
@@ -157,7 +156,6 @@ class SC_DLLPUBLIC ScDPDimensionSaveData
 {
 public:
             ScDPDimensionSaveData();
-            ~ScDPDimensionSaveData();
 
     bool    operator==( const ScDPDimensionSaveData& r ) const;
 

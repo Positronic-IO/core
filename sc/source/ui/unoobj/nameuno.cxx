@@ -26,6 +26,7 @@
 
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <unotools/charclass.hxx>
 
 using namespace ::com::sun::star;
 using ::com::sun::star::uno::Reference;
@@ -320,7 +321,7 @@ uno::Sequence<sheet::FormulaToken> SAL_CALL ScNamedRangeObj::getTokens()
     {
         ScTokenArray* pTokenArray = pData->GetCode();
         if ( pTokenArray )
-            (void)ScTokenConversion::ConvertToTokenSequence( pDocShell->GetDocument(), aSequence, *pTokenArray );
+            ScTokenConversion::ConvertToTokenSequence( pDocShell->GetDocument(), aSequence, *pTokenArray );
     }
     return aSequence;
 }

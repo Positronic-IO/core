@@ -76,6 +76,7 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 #include <vcl/cvtgrf.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <svx/SvxNumOptionsTabPageHelper.hxx>
@@ -169,21 +170,19 @@ static const vcl::Font& lcl_GetDefaultBulletFont()
     return aDefBulletFont;
 }
 
-SvxSingleNumPickTabPage::SvxSingleNumPickTabPage(vcl::Window* pParent,
-                               const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "PickNumberingPage", "cui/ui/picknumberingpage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+SvxSingleNumPickTabPage::SvxSingleNumPickTabPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : SfxTabPage(pParent, "cui/ui/picknumberingpage.ui", "PickNumberingPage", &rSet)
     , nActNumLvl(SAL_MAX_UINT16)
     , bModified(false)
     , bPreset(false)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
+    , m_xExamplesVS(new NumValueSet(nullptr))
+    , m_xExamplesVSWin(new weld::CustomWeld(*m_xBuilder, "valueset", *m_xExamplesVS))
 {
     SetExchangeSupport();
-    get(m_pExamplesVS, "valueset");
-    m_pExamplesVS->init(NumberingPageType::SINGLENUM);
-    m_pExamplesVS->SetSelectHdl(LINK(this, SvxSingleNumPickTabPage, NumSelectHdl_Impl));
-    m_pExamplesVS->SetDoubleClickHdl(LINK(this, SvxSingleNumPickTabPage, DoubleClickHdl_Impl));
+    m_xExamplesVS->init(NumberingPageType::SINGLENUM);
+    m_xExamplesVS->SetSelectHdl(LINK(this, SvxSingleNumPickTabPage, NumSelectHdl_Impl));
+    m_xExamplesVS->SetDoubleClickHdl(LINK(this, SvxSingleNumPickTabPage, DoubleClickHdl_Impl));
 
     Reference<XDefaultNumberingProvider> xDefNum = SvxNumOptionsTabPageHelper::GetNumberingProvider();
     if(xDefNum.is())
@@ -209,7 +208,7 @@ SvxSingleNumPickTabPage::SvxSingleNumPickTabPage(vcl::Window* pParent,
         {
         }
         Reference<XNumberingFormatter> xFormat(xDefNum, UNO_QUERY);
-        m_pExamplesVS->SetNumberingSettings(aNumberings, xFormat, rLocale);
+        m_xExamplesVS->SetNumberingSettings(aNumberings, xFormat, rLocale);
     }
 }
 
@@ -220,18 +219,15 @@ SvxSingleNumPickTabPage::~SvxSingleNumPickTabPage()
 
 void SvxSingleNumPickTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pExamplesVS.clear();
+    m_xExamplesVSWin.reset();
+    m_xExamplesVS.reset();
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxSingleNumPickTabPage::Create( TabPageParent pParent,
-                                                    const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxSingleNumPickTabPage::Create(TabPageParent pParent,
+                                                   const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxSingleNumPickTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxSingleNumPickTabPage>::Create(pParent, *rAttrSet);
 }
 
 bool  SvxSingleNumPickTabPage::FillItemSet( SfxItemSet* rSet )
@@ -251,7 +247,7 @@ void  SvxSingleNumPickTabPage::ActivatePage(const SfxItemSet& rSet)
     const SfxPoolItem* pItem;
     bPreset = false;
     bool bIsPreset = false;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet)
     {
         if(SfxItemState::SET == pExampleSet->GetItemState(SID_PARAM_NUM_PRESET, false, &pItem))
@@ -261,19 +257,18 @@ void  SvxSingleNumPickTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
     if(pActNum && *pSaveNum != *pActNum)
     {
         *pActNum = *pSaveNum;
-        m_pExamplesVS->SetNoSelection();
+        m_xExamplesVS->SetNoSelection();
     }
 
-    if(pActNum && (!lcl_IsNumFmtSet(pActNum, nActNumLvl) || bIsPreset))
+    if(pActNum && (!lcl_IsNumFmtSet(pActNum.get(), nActNumLvl) || bIsPreset))
     {
-        m_pExamplesVS->SelectItem(1);
-        NumSelectHdl_Impl(m_pExamplesVS);
+        m_xExamplesVS->SelectItem(1);
+        NumSelectHdl_Impl(m_xExamplesVS.get());
         bPreset = true;
     }
     bPreset |= bIsPreset;
@@ -306,22 +301,21 @@ void  SvxSingleNumPickTabPage::Reset( const SfxItemSet* rSet )
         }
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
 }
 
-IMPL_LINK_NOARG(SvxSingleNumPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxSingleNumPickTabPage, NumSelectHdl_Impl, SvtValueSet*, void)
 {
     if(pActNum)
     {
         bPreset = false;
         bModified = true;
-        sal_uInt16 nIdx = m_pExamplesVS->GetSelectedItemId() - 1;
+        sal_uInt16 nIdx = m_xExamplesVS->GetSelectedItemId() - 1;
         DBG_ASSERT(aNumSettingsArr.size() > nIdx, "wrong index");
         if(aNumSettingsArr.size() <= nIdx)
             return;
@@ -354,29 +348,26 @@ IMPL_LINK_NOARG(SvxSingleNumPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
     }
 }
 
-IMPL_LINK_NOARG(SvxSingleNumPickTabPage, DoubleClickHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxSingleNumPickTabPage, DoubleClickHdl_Impl, SvtValueSet*, void)
 {
-    NumSelectHdl_Impl(m_pExamplesVS);
-    PushButton& rOk = GetTabDialog()->GetOKButton();
-    rOk.GetClickHdl().Call(&rOk);
+    NumSelectHdl_Impl(m_xExamplesVS.get());
+    weld::Button& rOk = GetDialogController()->GetOKButton();
+    rOk.clicked();
 }
 
-
-SvxBulletPickTabPage::SvxBulletPickTabPage(vcl::Window* pParent,
-                               const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "PickBulletPage", "cui/ui/pickbulletpage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+SvxBulletPickTabPage::SvxBulletPickTabPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : SfxTabPage(pParent, "cui/ui/pickbulletpage.ui", "PickBulletPage", &rSet)
     , nActNumLvl(SAL_MAX_UINT16)
     , bModified(false)
     , bPreset(false)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
+    , m_xExamplesVS(new NumValueSet(nullptr))
+    , m_xExamplesVSWin(new weld::CustomWeld(*m_xBuilder, "valueset", *m_xExamplesVS))
 {
     SetExchangeSupport();
-    get(m_pExamplesVS, "valueset");
-    m_pExamplesVS->init(NumberingPageType::BULLET);
-    m_pExamplesVS->SetSelectHdl(LINK(this, SvxBulletPickTabPage, NumSelectHdl_Impl));
-    m_pExamplesVS->SetDoubleClickHdl(LINK(this, SvxBulletPickTabPage, DoubleClickHdl_Impl));
+    m_xExamplesVS->init(NumberingPageType::BULLET);
+    m_xExamplesVS->SetSelectHdl(LINK(this, SvxBulletPickTabPage, NumSelectHdl_Impl));
+    m_xExamplesVS->SetDoubleClickHdl(LINK(this, SvxBulletPickTabPage, DoubleClickHdl_Impl));
 }
 
 SvxBulletPickTabPage::~SvxBulletPickTabPage()
@@ -386,18 +377,15 @@ SvxBulletPickTabPage::~SvxBulletPickTabPage()
 
 void SvxBulletPickTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pExamplesVS.clear();
+    m_xExamplesVSWin.reset();
+    m_xExamplesVS.reset();
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxBulletPickTabPage::Create( TabPageParent pParent,
-                                                 const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxBulletPickTabPage::Create(TabPageParent pParent,
+                                                const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxBulletPickTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxBulletPickTabPage>::Create(pParent, *rAttrSet);
 }
 
 bool  SvxBulletPickTabPage::FillItemSet( SfxItemSet* rSet )
@@ -416,7 +404,7 @@ void  SvxBulletPickTabPage::ActivatePage(const SfxItemSet& rSet)
     const SfxPoolItem* pItem;
     bPreset = false;
     bool bIsPreset = false;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet)
     {
         if(SfxItemState::SET == pExampleSet->GetItemState(SID_PARAM_NUM_PRESET, false, &pItem))
@@ -426,19 +414,18 @@ void  SvxBulletPickTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
     if(pActNum && *pSaveNum != *pActNum)
     {
         *pActNum = *pSaveNum;
-        m_pExamplesVS->SetNoSelection();
+        m_xExamplesVS->SetNoSelection();
     }
 
-    if(pActNum && (!lcl_IsNumFmtSet(pActNum, nActNumLvl) || bIsPreset))
+    if(pActNum && (!lcl_IsNumFmtSet(pActNum.get(), nActNumLvl) || bIsPreset))
     {
-        m_pExamplesVS->SelectItem(1);
-        NumSelectHdl_Impl(m_pExamplesVS);
+        m_xExamplesVS->SelectItem(1);
+        NumSelectHdl_Impl(m_xExamplesVS.get());
         bPreset = true;
     }
     bPreset |= bIsPreset;
@@ -470,22 +457,21 @@ void  SvxBulletPickTabPage::Reset( const SfxItemSet* rSet )
 
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
 }
 
-IMPL_LINK_NOARG(SvxBulletPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBulletPickTabPage, NumSelectHdl_Impl, SvtValueSet*, void)
 {
     if(pActNum)
     {
         bPreset = false;
         bModified = true;
-        sal_Unicode cChar = aBulletTypes[m_pExamplesVS->GetSelectedItemId() - 1];
+        sal_Unicode cChar = aBulletTypes[m_xExamplesVS->GetSelectedItemId() - 1];
         const vcl::Font& rActBulletFont = lcl_GetDefaultBulletFont();
 
         sal_uInt16 nMask = 1;
@@ -509,14 +495,12 @@ IMPL_LINK_NOARG(SvxBulletPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
     }
 }
 
-
-IMPL_LINK_NOARG(SvxBulletPickTabPage, DoubleClickHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBulletPickTabPage, DoubleClickHdl_Impl, SvtValueSet*, void)
 {
-    NumSelectHdl_Impl(m_pExamplesVS);
-    PushButton& rOk = GetTabDialog()->GetOKButton();
-    rOk.GetClickHdl().Call(&rOk);
+    NumSelectHdl_Impl(m_xExamplesVS.get());
+    weld::Button& rOk = GetDialogController()->GetOKButton();
+    rOk.clicked();
 }
-
 
 void SvxBulletPickTabPage::PageCreated(const SfxAllItemSet& aSet)
 {
@@ -526,23 +510,20 @@ void SvxBulletPickTabPage::PageCreated(const SfxAllItemSet& aSet)
         sBulletCharFormatName = pBulletCharFmt->GetValue();
 }
 
-
-SvxNumPickTabPage::SvxNumPickTabPage(vcl::Window* pParent,
-                               const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "PickOutlinePage", "cui/ui/pickoutlinepage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+SvxNumPickTabPage::SvxNumPickTabPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : SfxTabPage(pParent, "cui/ui/pickoutlinepage.ui", "PickOutlinePage", &rSet)
     , nActNumLvl(SAL_MAX_UINT16)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
     , bModified(false)
     , bPreset(false)
+    , m_xExamplesVS(new NumValueSet(nullptr))
+    , m_xExamplesVSWin(new weld::CustomWeld(*m_xBuilder, "valueset", *m_xExamplesVS))
 {
     SetExchangeSupport();
 
-    get(m_pExamplesVS, "valueset");
-    m_pExamplesVS->init(NumberingPageType::OUTLINE);
-    m_pExamplesVS->SetSelectHdl(LINK(this, SvxNumPickTabPage, NumSelectHdl_Impl));
-    m_pExamplesVS->SetDoubleClickHdl(LINK(this, SvxNumPickTabPage, DoubleClickHdl_Impl));
+    m_xExamplesVS->init(NumberingPageType::OUTLINE);
+    m_xExamplesVS->SetSelectHdl(LINK(this, SvxNumPickTabPage, NumSelectHdl_Impl));
+    m_xExamplesVS->SetDoubleClickHdl(LINK(this, SvxNumPickTabPage, DoubleClickHdl_Impl));
 
     Reference<XDefaultNumberingProvider> xDefNum = SvxNumOptionsTabPageHelper::GetNumberingProvider();
     if(xDefNum.is())
@@ -574,7 +555,7 @@ SvxNumPickTabPage::SvxNumPickTabPage(vcl::Window* pParent,
         {
         }
         Reference<XNumberingFormatter> xFormat(xDefNum, UNO_QUERY);
-        m_pExamplesVS->SetOutlineNumberingSettings(aOutlineAccess, xFormat, rLocale);
+        m_xExamplesVS->SetOutlineNumberingSettings(aOutlineAccess, xFormat, rLocale);
     }
 }
 
@@ -585,18 +566,15 @@ SvxNumPickTabPage::~SvxNumPickTabPage()
 
 void SvxNumPickTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pExamplesVS.clear();
+    m_xExamplesVSWin.reset();
+    m_xExamplesVS.reset();
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxNumPickTabPage::Create( TabPageParent pParent,
-                                              const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxNumPickTabPage::Create(TabPageParent pParent,
+                                             const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxNumPickTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxNumPickTabPage>::Create(pParent, *rAttrSet);
 }
 
 bool  SvxNumPickTabPage::FillItemSet( SfxItemSet* rSet )
@@ -615,7 +593,7 @@ void  SvxNumPickTabPage::ActivatePage(const SfxItemSet& rSet)
     const SfxPoolItem* pItem;
     bPreset = false;
     bool bIsPreset = false;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet)
     {
         if(SfxItemState::SET == pExampleSet->GetItemState(SID_PARAM_NUM_PRESET, false, &pItem))
@@ -625,19 +603,18 @@ void  SvxNumPickTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
     if(pActNum && *pSaveNum != *pActNum)
     {
         *pActNum = *pSaveNum;
-        m_pExamplesVS->SetNoSelection();
+        m_xExamplesVS->SetNoSelection();
     }
 
-    if(pActNum && (!lcl_IsNumFmtSet(pActNum, nActNumLvl) || bIsPreset))
+    if(pActNum && (!lcl_IsNumFmtSet(pActNum.get(), nActNumLvl) || bIsPreset))
     {
-        m_pExamplesVS->SelectItem(1);
-        NumSelectHdl_Impl(m_pExamplesVS);
+        m_xExamplesVS->SelectItem(1);
+        NumSelectHdl_Impl(m_xExamplesVS.get());
         bPreset = true;
     }
     bPreset |= bIsPreset;
@@ -669,18 +646,17 @@ void  SvxNumPickTabPage::Reset( const SfxItemSet* rSet )
 
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
 
 }
 
 // all levels are changed here
-IMPL_LINK_NOARG(SvxNumPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxNumPickTabPage, NumSelectHdl_Impl, SvtValueSet*, void)
 {
     if(pActNum)
     {
@@ -689,7 +665,7 @@ IMPL_LINK_NOARG(SvxNumPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
 
         const FontList*  pList = nullptr;
 
-        SvxNumSettingsArr_Impl& rItemArr = aNumSettingsArrays[m_pExamplesVS->GetSelectedItemId() - 1];
+        SvxNumSettingsArr_Impl& rItemArr = aNumSettingsArrays[m_xExamplesVS->GetSelectedItemId() - 1];
 
         const vcl::Font& rActBulletFont = lcl_GetDefaultBulletFont();
         SvxNumSettings_Impl* pLevelSettings = nullptr;
@@ -762,11 +738,11 @@ IMPL_LINK_NOARG(SvxNumPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
     }
 }
 
-IMPL_LINK_NOARG(SvxNumPickTabPage, DoubleClickHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxNumPickTabPage, DoubleClickHdl_Impl, SvtValueSet*, void)
 {
-    NumSelectHdl_Impl(m_pExamplesVS);
-    PushButton& rOk = GetTabDialog()->GetOKButton();
-    rOk.GetClickHdl().Call(&rOk);
+    NumSelectHdl_Impl(m_xExamplesVS.get());
+    weld::Button& rOk = GetDialogController()->GetOKButton();
+    rOk.clicked();
 }
 
 void SvxNumPickTabPage::PageCreated(const SfxAllItemSet& aSet)
@@ -779,24 +755,23 @@ void SvxNumPickTabPage::PageCreated(const SfxAllItemSet& aSet)
         SetCharFormatNames( pNumCharFmt->GetValue(),pBulletCharFmt->GetValue());
 }
 
-SvxBitmapPickTabPage::SvxBitmapPickTabPage(vcl::Window* pParent,
-                               const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "PickGraphicPage", "cui/ui/pickgraphicpage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+SvxBitmapPickTabPage::SvxBitmapPickTabPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : SfxTabPage(pParent, "cui/ui/pickgraphicpage.ui", "PickGraphicPage", &rSet)
     , nActNumLvl(SAL_MAX_UINT16)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
     , bModified(false)
     , bPreset(false)
+    , m_xErrorText(m_xBuilder->weld_label("errorft"))
+    , m_xBtBrowseFile(m_xBuilder->weld_button("browseBtn"))
+    , m_xExamplesVS(new SvxBmpNumValueSet(m_xBuilder->weld_scrolled_window("valuesetwin")))
+    , m_xExamplesVSWin(new weld::CustomWeld(*m_xBuilder, "valueset", *m_xExamplesVS))
 {
     SetExchangeSupport();
-    get(m_pErrorText, "errorft");
-    get(m_pExamplesVS, "valueset");
-    get(m_pBtBrowseFile, "browseBtn");
 
-    m_pExamplesVS->SetSelectHdl(LINK(this, SvxBitmapPickTabPage, NumSelectHdl_Impl));
-    m_pExamplesVS->SetDoubleClickHdl(LINK(this, SvxBitmapPickTabPage, DoubleClickHdl_Impl));
-    m_pBtBrowseFile->SetClickHdl(LINK(this, SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl));
+    m_xExamplesVS->init();
+    m_xExamplesVS->SetSelectHdl(LINK(this, SvxBitmapPickTabPage, NumSelectHdl_Impl));
+    m_xExamplesVS->SetDoubleClickHdl(LINK(this, SvxBitmapPickTabPage, DoubleClickHdl_Impl));
+    m_xBtBrowseFile->connect_clicked(LINK(this, SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl));
 
     eCoreUnit = rSet.GetPool()->GetMetric(rSet.GetPool()->GetWhich(SID_ATTR_NUMBERING_RULE));
 
@@ -806,25 +781,25 @@ SvxBitmapPickTabPage::SvxBitmapPickTabPage(vcl::Window* pParent,
     size_t i = 0;
     for (auto & grfName : aGrfNames)
     {
-        m_pExamplesVS->InsertItem( i + 1, i);
+        m_xExamplesVS->InsertItem( i + 1, i);
 
         INetURLObject aObj(grfName);
         if(aObj.GetProtocol() == INetProtocol::File)
             grfName = aObj.PathToFileName();
 
-        m_pExamplesVS->SetItemText( i + 1, grfName );
+        m_xExamplesVS->SetItemText( i + 1, grfName );
         ++i;
     }
 
     if(aGrfNames.empty())
     {
-        m_pErrorText->Show();
+        m_xErrorText->show();
     }
     else
     {
-        m_pExamplesVS->Show();
-        m_pExamplesVS->SetFormat();
-        m_pExamplesVS->Invalidate();
+        m_xExamplesVS->Show();
+        m_xExamplesVS->SetFormat();
+        m_xExamplesVS->Invalidate();
     }
 }
 
@@ -835,20 +810,15 @@ SvxBitmapPickTabPage::~SvxBitmapPickTabPage()
 
 void SvxBitmapPickTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pBtBrowseFile.clear();
-    m_pErrorText.clear();
-    m_pExamplesVS.clear();
+    m_xExamplesVSWin.reset();
+    m_xExamplesVS.reset();
     SfxTabPage::dispose();
 }
 
-VclPtr<SfxTabPage> SvxBitmapPickTabPage::Create( TabPageParent pParent,
-                                                 const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxBitmapPickTabPage::Create(TabPageParent pParent,
+                                                const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxBitmapPickTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxBitmapPickTabPage>::Create(pParent, *rAttrSet);
 }
 
 void  SvxBitmapPickTabPage::ActivatePage(const SfxItemSet& rSet)
@@ -856,7 +826,7 @@ void  SvxBitmapPickTabPage::ActivatePage(const SfxItemSet& rSet)
     const SfxPoolItem* pItem;
     bPreset = false;
     bool bIsPreset = false;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet)
     {
         if(SfxItemState::SET == pExampleSet->GetItemState(SID_PARAM_NUM_PRESET, false, &pItem))
@@ -866,20 +836,19 @@ void  SvxBitmapPickTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
     if(pActNum && *pSaveNum != *pActNum)
     {
         *pActNum = *pSaveNum;
-        m_pExamplesVS->SetNoSelection();
+        m_xExamplesVS->SetNoSelection();
     }
 
     if(!aGrfNames.empty() &&
-        (pActNum && (!lcl_IsNumFmtSet(pActNum, nActNumLvl) || bIsPreset)))
+        (pActNum && (!lcl_IsNumFmtSet(pActNum.get(), nActNumLvl) || bIsPreset)))
     {
-        m_pExamplesVS->SelectItem(1);
-        NumSelectHdl_Impl(m_pExamplesVS);
+        m_xExamplesVS->SelectItem(1);
+        NumSelectHdl_Impl(m_xExamplesVS.get());
         bPreset = true;
     }
     bPreset |= bIsPreset;
@@ -927,22 +896,21 @@ void  SvxBitmapPickTabPage::Reset( const SfxItemSet* rSet )
 
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
 }
 
-IMPL_LINK_NOARG(SvxBitmapPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBitmapPickTabPage, NumSelectHdl_Impl, SvtValueSet*, void)
 {
     if(pActNum)
     {
         bPreset = false;
         bModified = true;
-        sal_uInt16 nIdx = m_pExamplesVS->GetSelectedItemId() - 1;
+        sal_uInt16 nIdx = m_xExamplesVS->GetSelectedItemId() - 1;
 
         sal_uInt16 nMask = 1;
         for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
@@ -973,16 +941,16 @@ IMPL_LINK_NOARG(SvxBitmapPickTabPage, NumSelectHdl_Impl, ValueSet*, void)
     }
 }
 
-IMPL_LINK_NOARG(SvxBitmapPickTabPage, DoubleClickHdl_Impl, ValueSet*, void)
+IMPL_LINK_NOARG(SvxBitmapPickTabPage, DoubleClickHdl_Impl, SvtValueSet*, void)
 {
-    NumSelectHdl_Impl(m_pExamplesVS);
-    PushButton& rOk = GetTabDialog()->GetOKButton();
-    rOk.GetClickHdl().Call(&rOk);
+    NumSelectHdl_Impl(m_xExamplesVS.get());
+    weld::Button& rOk = GetDialogController()->GetOKButton();
+    rOk.clicked();
 }
 
-IMPL_LINK_NOARG(SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl, weld::Button&, void)
 {
-    sfx2::FileDialogHelper aFileDialog(0, FileDialogFlags::NONE, GetFrameWeld());
+    sfx2::FileDialogHelper aFileDialog(0, FileDialogFlags::NONE, GetDialogFrameWeld());
     aFileDialog.SetTitle(CuiResId(RID_SVXSTR_ADD_IMAGE));
     if ( aFileDialog.Execute() != ERRCODE_NONE )
         return;
@@ -1053,22 +1021,22 @@ IMPL_LINK_NOARG(SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl, Button*, void)
                 size_t i = 0;
                 for (auto & grfName : aGrfNames)
                 {
-                    m_pExamplesVS->InsertItem( i + 1, i);
+                    m_xExamplesVS->InsertItem( i + 1, i);
                     INetURLObject aObj(grfName);
                     if(aObj.GetProtocol() == INetProtocol::File)
                         grfName = aObj.PathToFileName();
-                    m_pExamplesVS->SetItemText( i + 1, grfName );
+                    m_xExamplesVS->SetItemText( i + 1, grfName );
                     ++i;
                 }
 
                 if(aGrfNames.empty())
                 {
-                    m_pErrorText->Show();
+                    m_xErrorText->show();
                 }
                 else
                 {
-                    m_pExamplesVS->Show();
-                    m_pExamplesVS->SetFormat();
+                    m_xExamplesVS->Show();
+                    m_xExamplesVS->SetFormat();
                 }
 
             }
@@ -1078,98 +1046,76 @@ IMPL_LINK_NOARG(SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl, Button*, void)
 }
 
 // tabpage numbering options
-SvxNumOptionsTabPage::SvxNumOptionsTabPage(vcl::Window* pParent,
+SvxNumOptionsTabPage::SvxNumOptionsTabPage(TabPageParent pParent,
                                const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "NumberingOptionsPage", "cui/ui/numberingoptionspage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+    : SfxTabPage(pParent, "cui/ui/numberingoptionspage.ui", "NumberingOptionsPage", &rSet)
     , bLastWidthModified(false)
     , bModified(false)
     , bPreset(false)
     , bAutomaticCharStyles(true)
     , bHTMLMode(false)
-    , bMenuButtonInitialized(false)
     , nBullet(0xff)
     , nActNumLvl(1)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
+    , m_xGrid(m_xBuilder->weld_widget("grid2"))
+    , m_xLevelLB(m_xBuilder->weld_tree_view("levellb"))
+    , m_xFmtLB(m_xBuilder->weld_combo_box("numfmtlb"))
+    , m_xSeparatorFT(m_xBuilder->weld_label("separator"))
+    , m_xPrefixFT(m_xBuilder->weld_label("prefixft"))
+    , m_xPrefixED(m_xBuilder->weld_entry("prefix"))
+    , m_xSuffixFT(m_xBuilder->weld_label("suffixft"))
+    , m_xSuffixED(m_xBuilder->weld_entry("suffix"))
+    , m_xCharFmtFT(m_xBuilder->weld_label("charstyleft"))
+    , m_xCharFmtLB(m_xBuilder->weld_combo_box("charstyle"))
+    , m_xBulColorFT(m_xBuilder->weld_label("colorft"))
+    , m_xBulColLB(new ColorListBox(m_xBuilder->weld_menu_button("color"), pParent.GetFrameWeld()))
+    , m_xBulRelSizeFT(m_xBuilder->weld_label("relsizeft"))
+    , m_xBulRelSizeMF(m_xBuilder->weld_metric_spin_button("relsize", FieldUnit::PERCENT))
+    , m_xAllLevelFT(m_xBuilder->weld_label("sublevelsft"))
+    , m_xAllLevelNF(m_xBuilder->weld_spin_button("sublevels"))
+    , m_xStartFT(m_xBuilder->weld_label("startatft"))
+    , m_xStartED(m_xBuilder->weld_spin_button("startat"))
+    , m_xBulletFT(m_xBuilder->weld_label("bulletft"))
+    , m_xBulletPB(m_xBuilder->weld_button("bullet"))
+    , m_xBitmapFT(m_xBuilder->weld_label("bitmapft"))
+    , m_xBitmapMB(m_xBuilder->weld_menu_button("bitmap"))
+    , m_xWidthFT(m_xBuilder->weld_label("widthft"))
+    , m_xWidthMF(m_xBuilder->weld_metric_spin_button("widthmf", FieldUnit::CM))
+    , m_xHeightFT(m_xBuilder->weld_label("heightft"))
+    , m_xHeightMF(m_xBuilder->weld_metric_spin_button("heightmf", FieldUnit::CM))
+    , m_xRatioCB(m_xBuilder->weld_check_button("keepratio"))
+    , m_xOrientFT(m_xBuilder->weld_label("orientft"))
+    , m_xOrientLB(m_xBuilder->weld_combo_box("orientlb"))
+    , m_xAllLevelsFrame(m_xBuilder->weld_widget("levelsframe"))
+    , m_xSameLevelCB(m_xBuilder->weld_check_button("allsame"))
+    , m_xPreviewWIN(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreviewWIN))
 {
-    get(m_pLevelLB, "levellb");
-    get(m_pFmtLB, "numfmtlb");
-
-    get(m_pSeparatorFT, "separator");
-    get(m_pPrefixFT, "prefixft");
-    get(m_pPrefixED, "prefix");
-    get(m_pSuffixFT, "suffixft");
-    get(m_pSuffixED, "suffix");
-
-    get(m_pCharFmtFT, "charstyleft");
-    get(m_pCharFmtLB, "charstyle");
-
-    get(m_pBulColorFT, "colorft");
-    get(m_pBulColLB, "color");
-    m_pBulColLB->SetSlotId(SID_ATTR_CHAR_COLOR);
-
-    get(m_pBulRelSizeFT, "relsizeft");
-    get(m_pBulRelSizeMF, "relsize");
-    m_pBulRelSizeMF->SetMin(SVX_NUM_REL_SIZE_MIN);
-    m_pBulRelSizeMF->SetSpinSize(5);
-
-    get(m_pAllLevelFT, "sublevelsft");
-    get(m_pAllLevelNF, "sublevels");
-
-    get(m_pStartFT, "startatft");
-    get(m_pStartED, "startat");
-
-    get(m_pBulletFT, "bulletft");
-    get(m_pBulletPB, "bullet");
-    get(m_pBitmapFT, "bitmapft");
-    get(m_pBitmapMB, "bitmap");
-
-    get(m_pWidthFT, "widthft");
-    get(m_pWidthMF, "widthmf");
-    get(m_pHeightFT, "heightft");
-    get(m_pHeightMF, "heightmf");
-
-    get(m_pRatioCB, "keepratio");
-
-    get(m_pOrientFT, "orientft");
-    get(m_pOrientLB, "orientlb");
-
-    get(m_pAllLevelsFrame, "levelsframe");
-    get(m_pSameLevelCB, "allsame");
-
-    get(m_pPreviewWIN, "preview");
-
-    m_pPreviewWIN->SetBackground(Wallpaper(COL_TRANSPARENT));
+    m_xBulColLB->SetSlotId(SID_ATTR_CHAR_COLOR);
+    m_xBulRelSizeMF->set_min(SVX_NUM_REL_SIZE_MIN, FieldUnit::PERCENT);
+    m_xBulRelSizeMF->set_increments(5, 50, FieldUnit::PERCENT);
     SetExchangeSupport();
     aActBulletFont = lcl_GetDefaultBulletFont();
 
-    m_pBulletPB->SetClickHdl(LINK(this, SvxNumOptionsTabPage, BulletHdl_Impl));
-    m_pFmtLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl));
-    m_pBitmapMB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, GraphicHdl_Impl));
-    m_pBitmapMB->SetActivateHdl(LINK(this, SvxNumOptionsTabPage, PopupActivateHdl_Impl));
-    m_pLevelLB->EnableMultiSelection(true);
-    m_pLevelLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, LevelHdl_Impl));
-    m_pCharFmtLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, CharFmtHdl_Impl));
-    m_pWidthMF->SetModifyHdl(LINK(this, SvxNumOptionsTabPage, SizeHdl_Impl));
-    m_pHeightMF->SetModifyHdl(LINK(this, SvxNumOptionsTabPage, SizeHdl_Impl));
-    m_pRatioCB->SetClickHdl(LINK(this, SvxNumOptionsTabPage, RatioHdl_Impl));
-    m_pStartED->SetModifyHdl(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
-    m_pPrefixED->SetModifyHdl(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
-    m_pSuffixED->SetModifyHdl(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
-    m_pAllLevelNF->SetModifyHdl(LINK(this,SvxNumOptionsTabPage, AllLevelHdl_Impl));
-    m_pOrientLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, OrientHdl_Impl));
-    m_pSameLevelCB->SetClickHdl(LINK(this, SvxNumOptionsTabPage, SameLevelHdl_Impl));
-    m_pBulRelSizeMF->SetModifyHdl(LINK(this,SvxNumOptionsTabPage, BulRelSizeHdl_Impl));
-    m_pBulColLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, BulColorHdl_Impl));
+    m_xBulletPB->connect_clicked(LINK(this, SvxNumOptionsTabPage, BulletHdl_Impl));
+    m_xFmtLB->connect_changed(LINK(this, SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl));
+    m_xBitmapMB->connect_selected(LINK(this, SvxNumOptionsTabPage, GraphicHdl_Impl));
+    m_xBitmapMB->connect_toggled(LINK(this, SvxNumOptionsTabPage, PopupActivateHdl_Impl));
+    m_xLevelLB->set_selection_mode(SelectionMode::Multiple);
+    m_xLevelLB->connect_changed(LINK(this, SvxNumOptionsTabPage, LevelHdl_Impl));
+    m_xCharFmtLB->connect_changed(LINK(this, SvxNumOptionsTabPage, CharFmtHdl_Impl));
+    m_xWidthMF->connect_value_changed(LINK(this, SvxNumOptionsTabPage, SizeHdl_Impl));
+    m_xHeightMF->connect_value_changed(LINK(this, SvxNumOptionsTabPage, SizeHdl_Impl));
+    m_xRatioCB->connect_toggled(LINK(this, SvxNumOptionsTabPage, RatioHdl_Impl));
+    m_xStartED->connect_changed(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
+    m_xPrefixED->connect_changed(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
+    m_xSuffixED->connect_changed(LINK(this, SvxNumOptionsTabPage, EditModifyHdl_Impl));
+    m_xAllLevelNF->connect_value_changed(LINK(this,SvxNumOptionsTabPage, AllLevelHdl_Impl));
+    m_xOrientLB->connect_changed(LINK(this, SvxNumOptionsTabPage, OrientHdl_Impl));
+    m_xSameLevelCB->connect_toggled(LINK(this, SvxNumOptionsTabPage, SameLevelHdl_Impl));
+    m_xBulRelSizeMF->connect_value_changed(LINK(this,SvxNumOptionsTabPage, BulRelSizeHdl_Impl));
+    m_xBulColLB->SetSelectHdl(LINK(this, SvxNumOptionsTabPage, BulColorHdl_Impl));
     aInvalidateTimer.SetInvokeHandler(LINK(this, SvxNumOptionsTabPage, PreviewInvalidateHdl_Impl));
     aInvalidateTimer.SetTimeout(50);
-
-    Menu *pBitmapMenu = m_pBitmapMB->GetPopupMenu();
-    m_nGalleryId = pBitmapMenu->GetItemId("gallery");
-    assert(m_nGalleryId != MENU_ITEM_NOTFOUND);
-    VclPtrInstance<PopupMenu> pPopup;
-    pBitmapMenu->SetPopupMenu(m_nGalleryId, pPopup);
 
     eCoreUnit = rSet.GetPool()->GetMetric(rSet.GetPool()->GetWhich(SID_ATTR_NUMBERING_RULE));
 
@@ -1177,15 +1123,20 @@ SvxNumOptionsTabPage::SvxNumOptionsTabPage(vcl::Window* pParent,
     sal_uInt32 nCount = SvxNumberingTypeTable::Count();
     for (sal_uInt32 i = 0; i < nCount; ++i)
     {
-        sal_Int32 nPos = m_pFmtLB->InsertEntry(SvxNumberingTypeTable::GetString(i));
-        m_pFmtLB->SetEntryData( nPos, reinterpret_cast<void*>(static_cast<sal_uIntPtr>(SvxNumberingTypeTable::GetValue(i))));
+        m_xFmtLB->append(OUString::number(SvxNumberingTypeTable::GetValue(i)), SvxNumberingTypeTable::GetString(i));
     }
 
     // Get advanced numbering types from the component.
     // Watch out for the ugly
     // 136 == 0x88 == SVX_NUM_BITMAP|0x80 == SVX_NUM_BITMAP|LINK_TOKEN
     // to not remove that.
-    SvxNumOptionsTabPageHelper::GetI18nNumbering( *m_pFmtLB, (SVX_NUM_BITMAP | LINK_TOKEN));
+    SvxNumOptionsTabPageHelper::GetI18nNumbering( *m_xFmtLB, (SVX_NUM_BITMAP | LINK_TOKEN));
+
+    m_xFmtLB->set_active(0);
+
+    m_xCharFmtLB->set_size_request(m_xCharFmtLB->get_approximate_digit_width() * 10, -1);
+    Size aSize(m_xGrid->get_preferred_size());
+    m_xGrid->set_size_request(aSize.Width(), -1);
 }
 
 SvxNumOptionsTabPage::~SvxNumOptionsTabPage()
@@ -1195,65 +1146,34 @@ SvxNumOptionsTabPage::~SvxNumOptionsTabPage()
 
 void SvxNumOptionsTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pLevelLB.clear();
-    m_pFmtLB.clear();
-    m_pSeparatorFT.clear();
-    m_pPrefixFT.clear();
-    m_pPrefixED.clear();
-    m_pSuffixFT.clear();
-    m_pSuffixED.clear();
-    m_pCharFmtFT.clear();
-    m_pCharFmtLB.clear();
-    m_pBulColorFT.clear();
-    m_pBulColLB.clear();
-    m_pBulRelSizeFT.clear();
-    m_pBulRelSizeMF.clear();
-    m_pAllLevelFT.clear();
-    m_pAllLevelNF.clear();
-    m_pStartFT.clear();
-    m_pStartED.clear();
-    m_pBulletFT.clear();
-    m_pBulletPB.clear();
-    m_pBitmapFT.clear();
-    m_pBitmapMB.clear();
-    m_pWidthFT.clear();
-    m_pWidthMF.clear();
-    m_pHeightFT.clear();
-    m_pHeightMF.clear();
-    m_pRatioCB.clear();
-    m_pOrientFT.clear();
-    m_pOrientLB.clear();
-    m_pAllLevelsFrame.clear();
-    m_pSameLevelCB.clear();
-    m_pPreviewWIN.clear();
+    m_xPreviewWIN.reset();
+    m_xBulColLB.reset();
+    pActNum.reset();
+    pSaveNum.reset();
     SfxTabPage::dispose();
 }
 
 void SvxNumOptionsTabPage::SetMetric(FieldUnit eMetric)
 {
-    if(eMetric == FUNIT_MM)
+    if(eMetric == FieldUnit::MM)
     {
-        m_pWidthMF->SetDecimalDigits(1);
-        m_pHeightMF->SetDecimalDigits(1);
+        m_xWidthMF->set_digits(1);
+        m_xHeightMF->set_digits(1);
     }
-    m_pWidthMF->SetUnit( eMetric );
-    m_pHeightMF->SetUnit( eMetric );
+    m_xWidthMF->set_unit(eMetric);
+    m_xHeightMF->set_unit(eMetric);
 }
 
-VclPtr<SfxTabPage> SvxNumOptionsTabPage::Create( TabPageParent pParent,
-                                                 const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxNumOptionsTabPage::Create(TabPageParent pParent,
+                                                const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxNumOptionsTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxNumOptionsTabPage>::Create(pParent, *rAttrSet);
 };
 
 void    SvxNumOptionsTabPage::ActivatePage(const SfxItemSet& rSet)
 {
     const SfxPoolItem* pItem;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     sal_uInt16 nTmpNumLvl = 1;
     if(pExampleSet)
     {
@@ -1264,8 +1184,7 @@ void    SvxNumOptionsTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
 
     bModified = (!pActNum->Get( 0 ) || bPreset);
@@ -1274,22 +1193,21 @@ void    SvxNumOptionsTabPage::ActivatePage(const SfxItemSet& rSet)
     {
         nActNumLvl = nTmpNumLvl;
         sal_uInt16 nMask = 1;
-        m_pLevelLB->SetUpdateMode(false);
-        m_pLevelLB->SetNoSelection();
-        m_pLevelLB->SelectEntryPos( pActNum->GetLevelCount(), nActNumLvl == SAL_MAX_UINT16);
+        if (nActNumLvl == SAL_MAX_UINT16)
+            m_xLevelLB->select(pActNum->GetLevelCount());
         if(nActNumLvl != SAL_MAX_UINT16)
+        {
             for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
             {
                 if(nActNumLvl & nMask)
-                    m_pLevelLB->SelectEntryPos( i );
+                    m_xLevelLB->select(i);
                 nMask <<= 1 ;
             }
-        m_pLevelLB->SetUpdateMode(true);
+        }
         *pActNum = *pSaveNum;
 
         InitControls();
     }
-
 }
 
 DeactivateRC SvxNumOptionsTabPage::DeactivatePage(SfxItemSet * _pSet)
@@ -1329,48 +1247,47 @@ void    SvxNumOptionsTabPage::Reset( const SfxItemSet* rSet )
 
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     // insert levels
-    if(!m_pLevelLB->GetEntryCount())
+    if (!m_xLevelLB->n_children())
     {
         for(sal_uInt16 i = 1; i <= pSaveNum->GetLevelCount(); i++)
-            m_pLevelLB->InsertEntry( OUString::number(i));
+            m_xLevelLB->append_text(OUString::number(i));
         if(pSaveNum->GetLevelCount() > 1)
         {
             OUString sEntry = "1 - " + OUString::number( pSaveNum->GetLevelCount() );
-            m_pLevelLB->InsertEntry(sEntry);
-            m_pLevelLB->SelectEntry(sEntry);
+            m_xLevelLB->append_text(sEntry);
+            m_xLevelLB->select_text(sEntry);
         }
         else
-            m_pLevelLB->SelectEntryPos(0);
+            m_xLevelLB->select(0);
     }
     else
-        m_pLevelLB->SelectEntryPos(m_pLevelLB->GetEntryCount() - 1);
+        m_xLevelLB->select(m_xLevelLB->n_children() - 1);
 
     sal_uInt16 nMask = 1;
-    m_pLevelLB->SetUpdateMode(false);
-    m_pLevelLB->SetNoSelection();
+    m_xLevelLB->unselect_all();
     if (nActNumLvl == SAL_MAX_UINT16)
     {
-        m_pLevelLB->SelectEntryPos( pSaveNum->GetLevelCount() );
+        m_xLevelLB->select( pSaveNum->GetLevelCount() );
     }
     else
+    {
         for(sal_uInt16 i = 0; i < pSaveNum->GetLevelCount(); i++)
         {
             if(nActNumLvl & nMask)
-                m_pLevelLB->SelectEntryPos( i );
+                m_xLevelLB->select( i );
             nMask <<= 1 ;
         }
-    m_pLevelLB->SetUpdateMode(true);
+    }
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
-    m_pPreviewWIN->SetNumRule(pActNum);
-    m_pSameLevelCB->Check(pActNum->IsContinuousNumbering());
+    m_aPreviewWIN.SetNumRule(pActNum.get());
+    m_xSameLevelCB->set_active(pActNum->IsContinuousNumbering());
 
     SfxObjectShell* pShell;
     if ( SfxItemState::SET == rSet->GetItemState( SID_HTML_MODE, false, &pItem )
@@ -1382,61 +1299,60 @@ void    SvxNumOptionsTabPage::Reset( const SfxItemSet* rSet )
     }
 
     bool bCharFmt = pActNum->IsFeatureSupported(SvxNumRuleFlags::CHAR_STYLE);
-    m_pCharFmtFT->Show(bCharFmt);
-    m_pCharFmtLB->Show(bCharFmt);
+    m_xCharFmtFT->show(bCharFmt);
+    m_xCharFmtLB->show(bCharFmt);
 
     bool bContinuous = pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS);
 
     bool bAllLevel = bContinuous && !bHTMLMode;
-    m_pAllLevelFT->Show(bAllLevel);
-    m_pAllLevelNF->Show(bAllLevel);
+    m_xAllLevelFT->show(bAllLevel);
+    m_xAllLevelNF->show(bAllLevel);
 
-    m_pAllLevelsFrame->Show(bContinuous);
+    m_xAllLevelsFrame->show(bContinuous);
 
     // again misusage: in Draw there is numeration only until the bitmap
     // without SVX_NUM_NUMBER_NONE
     //remove types that are unsupported by Draw/Impress
     if(!bContinuous)
     {
-        sal_Int32 nFmtCount = m_pFmtLB->GetEntryCount();
+        sal_Int32 nFmtCount = m_xFmtLB->get_count();
         for(sal_Int32 i = nFmtCount; i; i--)
         {
-            sal_uInt16 nEntryData = static_cast<sal_uInt16>(reinterpret_cast<sal_uLong>(m_pFmtLB->GetEntryData(i - 1)));
+            sal_uInt16 nEntryData = m_xFmtLB->get_id(i - 1).toUInt32();
             if(/*SVX_NUM_NUMBER_NONE == nEntryData ||*/
                 (SVX_NUM_BITMAP|LINK_TOKEN) ==  nEntryData)
-                m_pFmtLB->RemoveEntry(i - 1);
+                m_xFmtLB->remove(i - 1);
         }
     }
     //one must be enabled
     if(!pActNum->IsFeatureSupported(SvxNumRuleFlags::ENABLE_LINKED_BMP))
     {
-        sal_Int32 nPos = m_pFmtLB->GetEntryPos(reinterpret_cast<void*>(SVX_NUM_BITMAP|LINK_TOKEN));
-        if(LISTBOX_ENTRY_NOTFOUND != nPos)
-            m_pFmtLB->RemoveEntry(nPos);
+        auto nPos = m_xFmtLB->find_id(OUString::number(SVX_NUM_BITMAP|LINK_TOKEN));
+        if (nPos != -1)
+            m_xFmtLB->remove(nPos);
     }
     else if(!pActNum->IsFeatureSupported(SvxNumRuleFlags::ENABLE_EMBEDDED_BMP))
     {
-        sal_Int32 nPos = m_pFmtLB->GetEntryPos(reinterpret_cast<void*>(SVX_NUM_BITMAP));
-        if(LISTBOX_ENTRY_NOTFOUND != nPos)
-            m_pFmtLB->RemoveEntry(nPos);
+        auto nPos = m_xFmtLB->find_id(OUString::number(SVX_NUM_BITMAP));
+        if (nPos != -1)
+            m_xFmtLB->remove(nPos);
     }
 
     // MegaHack: because of a not-fixable 'design mistake/error' in Impress
     // delete all kinds of numeric enumerations
     if(pActNum->IsFeatureSupported(SvxNumRuleFlags::NO_NUMBERS))
     {
-        sal_Int32 nFmtCount = m_pFmtLB->GetEntryCount();
+        sal_Int32 nFmtCount = m_xFmtLB->get_count();
         for(sal_Int32 i = nFmtCount; i; i--)
         {
-            sal_uInt16 nEntryData = static_cast<sal_uInt16>(reinterpret_cast<sal_uLong>(m_pFmtLB->GetEntryData(i - 1)));
+            sal_uInt16 nEntryData = m_xFmtLB->get_id(i - 1).toUInt32();
             if( /*nEntryData >= SVX_NUM_CHARS_UPPER_LETTER &&*/  nEntryData <= SVX_NUM_NUMBER_NONE)
-                m_pFmtLB->RemoveEntry(i - 1);
+                m_xFmtLB->remove(i - 1);
         }
     }
 
     InitControls();
     bModified = false;
-
 }
 
 void SvxNumOptionsTabPage::InitControls()
@@ -1522,66 +1438,66 @@ void SvxNumOptionsTabPage::InitControls()
     if(bShowBitmap)
     {
         if(!bSameVOrient || eFirstOrient == text::VertOrientation::NONE)
-            m_pOrientLB->SetNoSelection();
+            m_xOrientLB->set_active(-1);
         else
-            m_pOrientLB->SelectEntryPos(
+            m_xOrientLB->set_active(
                 sal::static_int_cast< sal_Int32 >(eFirstOrient - 1));
                 // no text::VertOrientation::NONE
 
         if(bSameSize)
         {
-            SetMetricValue(*m_pHeightMF, aFirstSize.Height(), eCoreUnit);
-            SetMetricValue(*m_pWidthMF, aFirstSize.Width(), eCoreUnit);
+            SetMetricValue(*m_xHeightMF, aFirstSize.Height(), eCoreUnit);
+            SetMetricValue(*m_xWidthMF, aFirstSize.Width(), eCoreUnit);
         }
         else
         {
-            m_pHeightMF->SetText("");
-            m_pWidthMF->SetText("");
+            m_xHeightMF->set_text("");
+            m_xWidthMF->set_text("");
         }
     }
 
     if(bSameType)
     {
         sal_uInt16 nLBData = nNumberingType;
-        m_pFmtLB->SelectEntryPos(m_pFmtLB->GetEntryPos( reinterpret_cast<void*>(sal::static_int_cast<sal_uIntPtr>( nLBData ) )));
+        m_xFmtLB->set_active_id(OUString::number(nLBData));
     }
     else
-        m_pFmtLB->SetNoSelection();
+        m_xFmtLB->set_active(-1);
 
-    m_pAllLevelNF->Enable(nHighestLevel > 0 && !m_pSameLevelCB->IsChecked());
-    m_pAllLevelNF->SetMax(nHighestLevel + 1);
+    m_xAllLevelNF->set_sensitive(nHighestLevel > 0 && !m_xSameLevelCB->get_active());
+    m_xAllLevelNF->set_max(nHighestLevel + 1);
     if(bAllLevel)
     {
-        m_pAllLevelNF->SetValue(aNumFmtArr[nLvl]->GetIncludeUpperLevels());
+        m_xAllLevelNF->set_value(aNumFmtArr[nLvl]->GetIncludeUpperLevels());
     }
     else
     {
-        m_pAllLevelNF->SetText("");
+        m_xAllLevelNF->set_text("");
     }
 
     if(bBullRelSize)
     {
         if(bSameBulRelSize)
-            m_pBulRelSizeMF->SetValue(aNumFmtArr[nLvl]->GetBulletRelSize());
+            m_xBulRelSizeMF->set_value(aNumFmtArr[nLvl]->GetBulletRelSize(), FieldUnit::PERCENT);
         else
-            m_pBulRelSizeMF->SetText("");
+            m_xBulRelSizeMF->set_text("");
     }
     if(bBullColor)
     {
         if(bSameBulColor)
-            m_pBulColLB->SelectEntry(aNumFmtArr[nLvl]->GetBulletColor());
+            m_xBulColLB->SelectEntry(aNumFmtArr[nLvl]->GetBulletColor());
         else
-            m_pBulColLB->SetNoSelection();
+            m_xBulColLB->SetNoSelection();
     }
     switch(nBullet)
     {
         case SHOW_NUMBERING:
             if(bSameStart)
             {
-                m_pStartED->SetValue(aNumFmtArr[nLvl]->GetStart());
+                m_xStartED->set_value(aNumFmtArr[nLvl]->GetStart());
             }
             else
-                m_pStartED->SetText("");
+                m_xStartED->set_text("");
         break;
         case SHOW_BULLET:
         break;
@@ -1590,26 +1506,26 @@ void SvxNumOptionsTabPage::InitControls()
     }
 
     if(bSamePrefix)
-        m_pPrefixED->SetText(aNumFmtArr[nLvl]->GetPrefix());
+        m_xPrefixED->set_text(aNumFmtArr[nLvl]->GetPrefix());
     else
-        m_pPrefixED->SetText("");
+        m_xPrefixED->set_text("");
     if(bSameSuffix)
-        m_pSuffixED->SetText(aNumFmtArr[nLvl]->GetSuffix());
+        m_xSuffixED->set_text(aNumFmtArr[nLvl]->GetSuffix());
     else
-        m_pSuffixED->SetText("");
+        m_xSuffixED->set_text("");
 
     if(bSameCharFmt)
     {
-        if(!sFirstCharFmt.isEmpty())
-                m_pCharFmtLB->SelectEntry(sFirstCharFmt);
+        if (!sFirstCharFmt.isEmpty())
+            m_xCharFmtLB->set_active_text(sFirstCharFmt);
         else
-            m_pCharFmtLB->SelectEntryPos( 0 );
+            m_xCharFmtLB->set_active(0);
     }
     else
-        m_pCharFmtLB->SetNoSelection();
+        m_xCharFmtLB->set_active(-1);
 
-    m_pPreviewWIN->SetLevel(nActNumLvl);
-    m_pPreviewWIN->Invalidate();
+    m_aPreviewWIN.SetLevel(nActNumLvl);
+    m_aPreviewWIN.Invalidate();
 }
 
 // 0 - Number; 1 - Bullet; 2 - Bitmap
@@ -1622,79 +1538,78 @@ void SvxNumOptionsTabPage::SwitchNumberType( sal_uInt8 nType )
     bool bBitmap = (nType == SHOW_BITMAP);
     bool bEnableBitmap = (nType == SHOW_BITMAP);
     bool bNumeric = !(bBitmap||bBullet);
-    m_pSeparatorFT->Show(bNumeric);
-    m_pPrefixFT->Show(bNumeric);
-    m_pPrefixED->Show(bNumeric);
-    m_pSuffixFT->Show(bNumeric);
-    m_pSuffixED->Show(bNumeric);
+    m_xSeparatorFT->show(bNumeric);
+    m_xPrefixFT->show(bNumeric);
+    m_xPrefixED->show(bNumeric);
+    m_xSuffixFT->show(bNumeric);
+    m_xSuffixED->show(bNumeric);
 
     bool bCharFmt = pActNum->IsFeatureSupported(SvxNumRuleFlags::CHAR_STYLE);
-    m_pCharFmtFT->Show(!bBitmap && bCharFmt);
-    m_pCharFmtLB->Show(!bBitmap && bCharFmt);
+    m_xCharFmtFT->show(!bBitmap && bCharFmt);
+    m_xCharFmtLB->show(!bBitmap && bCharFmt);
 
     // this is rather misusage, as there is no own flag
     // for complete numeration
     bool bAllLevelFeature = pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS);
     bool bAllLevel = bNumeric && bAllLevelFeature && !bHTMLMode;
-    m_pAllLevelFT->Show(bAllLevel);
-    m_pAllLevelNF->Show(bAllLevel);
+    m_xAllLevelFT->show(bAllLevel);
+    m_xAllLevelNF->show(bAllLevel);
 
-    m_pStartFT->Show(!(bBullet||bBitmap));
-    m_pStartED->Show(!(bBullet||bBitmap));
+    m_xStartFT->show(!(bBullet||bBitmap));
+    m_xStartED->show(!(bBullet||bBitmap));
 
-    m_pBulletFT->Show(bBullet);
-    m_pBulletPB->Show(bBullet);
+    m_xBulletFT->show(bBullet);
+    m_xBulletPB->show(bBullet);
     bool bBullColor = pActNum->IsFeatureSupported(SvxNumRuleFlags::BULLET_COLOR);
-    m_pBulColorFT->Show(!bBitmap && bBullColor);
-    m_pBulColLB->Show(!bBitmap && bBullColor);
+    m_xBulColorFT->show(!bBitmap && bBullColor);
+    m_xBulColLB->show(!bBitmap && bBullColor);
     bool bBullResSize = pActNum->IsFeatureSupported(SvxNumRuleFlags::BULLET_REL_SIZE);
-    m_pBulRelSizeFT->Show(!bBitmap && bBullResSize);
-    m_pBulRelSizeMF->Show(!bBitmap && bBullResSize);
+    m_xBulRelSizeFT->show(!bBitmap && bBullResSize);
+    m_xBulRelSizeMF->show(!bBitmap && bBullResSize);
 
-    m_pBitmapFT->Show(bBitmap);
-    m_pBitmapMB->Show(bBitmap);
+    m_xBitmapFT->show(bBitmap);
+    m_xBitmapMB->show(bBitmap);
 
-    m_pWidthFT->Show(bBitmap);
-    m_pWidthMF->Show(bBitmap);
-    m_pHeightFT->Show(bBitmap);
-    m_pHeightMF->Show(bBitmap);
-    m_pRatioCB->Show(bBitmap);
+    m_xWidthFT->show(bBitmap);
+    m_xWidthMF->show(bBitmap);
+    m_xHeightFT->show(bBitmap);
+    m_xHeightMF->show(bBitmap);
+    m_xRatioCB->show(bBitmap);
 
-    m_pOrientFT->Show(bBitmap &&  bAllLevelFeature);
-    m_pOrientLB->Show(bBitmap &&  bAllLevelFeature);
+    m_xOrientFT->show(bBitmap && bAllLevelFeature);
+    m_xOrientLB->show(bBitmap && bAllLevelFeature);
 
-    m_pWidthFT->Enable(bEnableBitmap);
-    m_pWidthMF->Enable(bEnableBitmap);
-    m_pHeightFT->Enable(bEnableBitmap);
-    m_pHeightMF->Enable(bEnableBitmap);
-    m_pRatioCB->Enable(bEnableBitmap);
-    m_pOrientFT->Enable(bEnableBitmap);
-    m_pOrientLB->Enable(bEnableBitmap);
+    m_xWidthFT->set_sensitive(bEnableBitmap);
+    m_xWidthMF->set_sensitive(bEnableBitmap);
+    m_xHeightFT->set_sensitive(bEnableBitmap);
+    m_xHeightMF->set_sensitive(bEnableBitmap);
+    m_xRatioCB->set_sensitive(bEnableBitmap);
+    m_xOrientFT->set_sensitive(bEnableBitmap);
+    m_xOrientLB->set_sensitive(bEnableBitmap);
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, LevelHdl_Impl, ListBox&, rBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, LevelHdl_Impl, weld::TreeView&, rBox, void)
 {
     sal_uInt16 nSaveNumLvl = nActNumLvl;
     nActNumLvl = 0;
-    if(rBox.IsEntryPosSelected( pActNum->GetLevelCount() ) &&
-        (rBox.GetSelectedEntryCount() == 1 || nSaveNumLvl != 0xffff))
+    auto aSelectedRows = rBox.get_selected_rows();
+    if (std::find(aSelectedRows.begin(), aSelectedRows.end(), pActNum->GetLevelCount()) != aSelectedRows.end() &&
+        (aSelectedRows.size() == 1 || nSaveNumLvl != 0xffff))
     {
         nActNumLvl = 0xFFFF;
-        rBox.SetUpdateMode(false);
         for( sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++ )
-            rBox.SelectEntryPos( i, false );
-        rBox.SetUpdateMode(true);
+            rBox.unselect(i);
     }
-    else if(rBox.GetSelectedEntryCount())
+    else if (!aSelectedRows.empty())
     {
         sal_uInt16 nMask = 1;
         for( sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++ )
         {
-            if(rBox.IsEntryPosSelected( i ))
+            if (std::find(aSelectedRows.begin(), aSelectedRows.end(), i) != aSelectedRows.end())
                 nActNumLvl |= nMask;
             nMask <<= 1;
         }
-        rBox.SelectEntryPos( pActNum->GetLevelCount(), false );
+        rBox.unselect(pActNum->GetLevelCount());
     }
     else
     {
@@ -1704,7 +1619,7 @@ IMPL_LINK( SvxNumOptionsTabPage, LevelHdl_Impl, ListBox&, rBox, void )
         {
             if(nActNumLvl & nMask)
             {
-                rBox.SelectEntryPos(i);
+                rBox.select(i);
                 break;
             }
             nMask <<=1;
@@ -1715,10 +1630,10 @@ IMPL_LINK( SvxNumOptionsTabPage, LevelHdl_Impl, ListBox&, rBox, void )
 
 IMPL_LINK_NOARG(SvxNumOptionsTabPage, PreviewInvalidateHdl_Impl, Timer *, void)
 {
-    m_pPreviewWIN->Invalidate();
+    m_aPreviewWIN.Invalidate();
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, AllLevelHdl_Impl, Edit&, rBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, AllLevelHdl_Impl, weld::SpinButton&, rBox, void)
 {
     sal_uInt16 nMask = 1;
     for(sal_uInt16 e = 0; e < pActNum->GetLevelCount(); e++)
@@ -1726,7 +1641,7 @@ IMPL_LINK( SvxNumOptionsTabPage, AllLevelHdl_Impl, Edit&, rBox, void )
         if(nActNumLvl & nMask)
         {
             SvxNumberFormat aNumFmt(pActNum->GetLevel(e));
-            aNumFmt.SetIncludeUpperLevels(static_cast<sal_uInt8>(std::min(static_cast<NumericField&>(rBox).GetValue(), sal_Int64(e + 1))) );
+            aNumFmt.SetIncludeUpperLevels(static_cast<sal_uInt8>(std::min(rBox.get_value(), int(e + 1))) );
             pActNum->SetLevel(e, aNumFmt);
         }
         nMask <<= 1;
@@ -1734,7 +1649,7 @@ IMPL_LINK( SvxNumOptionsTabPage, AllLevelHdl_Impl, Edit&, rBox, void )
     SetModified();
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl, ListBox&, rBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl, weld::ComboBox&, rBox, void)
 {
     OUString sSelectStyle;
     bool bShowOrient = false;
@@ -1746,7 +1661,7 @@ IMPL_LINK( SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl, ListBox&, rBox, void 
         {
             SvxNumberFormat aNumFmt(pActNum->GetLevel(i));
             // PAGEDESC does not exist
-            SvxNumType nNumType = static_cast<SvxNumType>(reinterpret_cast<sal_uLong>(rBox.GetSelectedEntryData()));
+            SvxNumType nNumType = static_cast<SvxNumType>(rBox.get_active_id().toUInt32());
             aNumFmt.SetNumberingType(nNumType);
             sal_uInt16 nNumberingType = aNumFmt.GetNumberingType();
             if(SVX_NUM_BITMAP == (nNumberingType&(~LINK_TOKEN)))
@@ -1780,8 +1695,8 @@ IMPL_LINK( SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl, ListBox&, rBox, void 
             }
             else
             {
-                aNumFmt.SetPrefix( m_pPrefixED->GetText() );
-                aNumFmt.SetSuffix( m_pSuffixED->GetText() );
+                aNumFmt.SetPrefix( m_xPrefixED->get_text() );
+                aNumFmt.SetSuffix( m_xSuffixED->get_text() );
                 SwitchNumberType(SHOW_NUMBERING);
                 pActNum->SetLevel(i, aNumFmt);
                 CheckForStartValue_Impl(nNumberingType);
@@ -1798,37 +1713,37 @@ IMPL_LINK( SvxNumOptionsTabPage, NumberTypeSelectHdl_Impl, ListBox&, rBox, void 
     bool bAllLevelFeature = pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS);
     if(bShowOrient && bAllLevelFeature)
     {
-        m_pOrientFT->Show();
-        m_pOrientLB->Show();
+        m_xOrientFT->show();
+        m_xOrientLB->show();
     }
     else
     {
-        m_pOrientFT->Hide();
-        m_pOrientLB->Hide();
+        m_xOrientFT->hide();
+        m_xOrientLB->hide();
     }
     SetModified();
     if(!sSelectStyle.isEmpty())
     {
-        m_pCharFmtLB->SelectEntry(sSelectStyle);
-        CharFmtHdl_Impl(*m_pCharFmtLB);
+        m_xCharFmtLB->set_active_text(sSelectStyle);
+        CharFmtHdl_Impl(*m_xCharFmtLB);
         bAutomaticCharStyles = true;
     }
 }
 
 void SvxNumOptionsTabPage::CheckForStartValue_Impl(sal_uInt16 nNumberingType)
 {
-    bool bIsNull = m_pStartED->GetValue() == 0;
+    bool bIsNull = m_xStartED->get_value() == 0;
     bool bNoZeroAllowed = nNumberingType < SVX_NUM_ARABIC ||
                         SVX_NUM_CHARS_UPPER_LETTER_N == nNumberingType ||
                         SVX_NUM_CHARS_LOWER_LETTER_N == nNumberingType;
-    m_pStartED->SetMin(bNoZeroAllowed ? 1 : 0);
-    if(bIsNull && bNoZeroAllowed)
-        m_pStartED->GetModifyHdl().Call(*m_pStartED);
+    m_xStartED->set_min(bNoZeroAllowed ? 1 : 0);
+    if (bIsNull && bNoZeroAllowed)
+        EditModifyHdl_Impl(*m_xStartED);
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, OrientHdl_Impl, ListBox&, rBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, OrientHdl_Impl, weld::ComboBox&, rBox, void)
 {
-    sal_Int32 nPos = rBox.GetSelectedEntryPos();
+    sal_Int32 nPos = rBox.get_active();
     nPos ++; // no VERT_NONE
 
     sal_uInt16 nMask = 1;
@@ -1851,9 +1766,9 @@ IMPL_LINK( SvxNumOptionsTabPage, OrientHdl_Impl, ListBox&, rBox, void )
     SetModified(false);
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, SameLevelHdl_Impl, Button*, pBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, SameLevelHdl_Impl, weld::ToggleButton&, rBox, void)
 {
-    bool bSet = static_cast<CheckBox*>(pBox)->IsChecked();
+    bool bSet = rBox.get_active();
     pActNum->SetContinuousNumbering(bSet);
     bool bRepaint = false;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
@@ -1869,7 +1784,7 @@ IMPL_LINK( SvxNumOptionsTabPage, SameLevelHdl_Impl, Button*, pBox, void )
     InitControls();
 }
 
-IMPL_LINK(SvxNumOptionsTabPage, BulColorHdl_Impl, SvxColorListBox&, rColorBox, void)
+IMPL_LINK(SvxNumOptionsTabPage, BulColorHdl_Impl, ColorListBox&, rColorBox, void)
 {
     Color nSetColor = rColorBox.GetSelectEntryColor();
 
@@ -1887,9 +1802,9 @@ IMPL_LINK(SvxNumOptionsTabPage, BulColorHdl_Impl, SvxColorListBox&, rColorBox, v
     SetModified();
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, BulRelSizeHdl_Impl, Edit&, rField, void)
+IMPL_LINK(SvxNumOptionsTabPage, BulRelSizeHdl_Impl, weld::MetricSpinButton&, rField, void)
 {
-    sal_uInt16 nRelSize = static_cast<sal_uInt16>(static_cast<MetricField&>(rField).GetValue());
+    sal_uInt16 nRelSize = rField.get_value(FieldUnit::PERCENT);
 
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
@@ -1905,17 +1820,17 @@ IMPL_LINK( SvxNumOptionsTabPage, BulRelSizeHdl_Impl, Edit&, rField, void)
     SetModified();
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, GraphicHdl_Impl, MenuButton *, pButton, void )
+IMPL_LINK(SvxNumOptionsTabPage, GraphicHdl_Impl, const OString&, rIdent, void)
 {
-    sal_uInt16                  nItemId = pButton->GetCurItemId();
     OUString                aGrfName;
     Size                    aSize;
     bool                bSucc(false);
-    SvxOpenGraphicDialog aGrfDlg(CuiResId(RID_SVXSTR_EDIT_GRAPHIC), GetFrameWeld());
+    SvxOpenGraphicDialog aGrfDlg(CuiResId(RID_SVXSTR_EDIT_GRAPHIC), GetDialogFrameWeld());
 
-    if(MN_GALLERY_ENTRY <= nItemId )
+    OString sNumber;
+    if (rIdent.startsWith("gallery", &sNumber))
     {
-        sal_uInt16 idx = nItemId - MN_GALLERY_ENTRY;
+        auto idx = sNumber.toUInt32();
         if (idx < aGrfNames.size())
         {
             aGrfName = aGrfNames[idx];
@@ -1927,7 +1842,7 @@ IMPL_LINK( SvxNumOptionsTabPage, GraphicHdl_Impl, MenuButton *, pButton, void )
             }
         }
     }
-    else
+    else if (rIdent == "fromfile")
     {
         aGrfDlg.EnableLink( false );
         aGrfDlg.AsLink( false );
@@ -1968,46 +1883,46 @@ IMPL_LINK( SvxNumOptionsTabPage, GraphicHdl_Impl, MenuButton *, pButton, void )
             }
             nMask <<= 1;
         }
-        m_pRatioCB->Enable();
-        m_pWidthFT->Enable();
-        m_pHeightFT->Enable();
-        m_pWidthMF->Enable();
-        m_pHeightMF->Enable();
-        SetMetricValue(*m_pWidthMF, aSize.Width(), eCoreUnit);
-        SetMetricValue(*m_pHeightMF, aSize.Height(), eCoreUnit);
-        m_pOrientFT->Enable();
-        m_pOrientLB->Enable();
+        m_xRatioCB->set_sensitive(true);
+        m_xWidthFT->set_sensitive(true);
+        m_xHeightFT->set_sensitive(true);
+        m_xWidthMF->set_sensitive(true);
+        m_xHeightMF->set_sensitive(true);
+        SetMetricValue(*m_xWidthMF, aSize.Width(), eCoreUnit);
+        SetMetricValue(*m_xHeightMF, aSize.Height(), eCoreUnit);
+        m_xOrientFT->set_sensitive(true);
+        m_xOrientLB->set_sensitive(true);
         SetModified();
         //needed due to asynchronous loading of graphics in the SvxBrushItem
         aInvalidateTimer.Start();
     }
 }
 
-IMPL_LINK_NOARG(SvxNumOptionsTabPage, PopupActivateHdl_Impl, MenuButton *, void)
+IMPL_LINK_NOARG(SvxNumOptionsTabPage, PopupActivateHdl_Impl, weld::ToggleButton&, void)
 {
-    if(!bMenuButtonInitialized)
+    if (!m_xGalleryMenu)
     {
-        bMenuButtonInitialized = true;
-        EnterWait();
-        PopupMenu* pMenu = m_pBitmapMB->GetPopupMenu();
-        PopupMenu* pPopup = pMenu->GetPopupMenu(m_nGalleryId);
+        m_xGalleryMenu = m_xBuilder->weld_menu("gallerysubmenu");
+        weld::WaitObject aWait(GetDialogFrameWeld());
 
         if (GalleryExplorer::FillObjList(GALLERY_THEME_BULLETS, aGrfNames))
         {
-            pPopup->Clear();
             GalleryExplorer::BeginLocking(GALLERY_THEME_BULLETS);
 
             Graphic aGraphic;
+            OUString sGrfName;
+            ScopedVclPtrInstance< VirtualDevice > pVD;
             size_t i = 0;
             for (auto & grfName : aGrfNames)
             {
-                INetURLObject aObj(grfName);
+                sGrfName = grfName;
+                OUString sItemId = "gallery" + OUString::number(i);
+                INetURLObject aObj(sGrfName);
                 if(aObj.GetProtocol() == INetProtocol::File)
-                    grfName = aObj.PathToFileName();
-
+                    sGrfName = aObj.PathToFileName();
                 if(GalleryExplorer::GetGraphicObj( GALLERY_THEME_BULLETS, i, &aGraphic))
                 {
-                    Bitmap aBitmap(aGraphic.GetBitmap());
+                    BitmapEx aBitmap(aGraphic.GetBitmapEx());
                     Size aSize(aBitmap.GetSizePixel());
                     if(aSize.Width() > MAX_BMP_WIDTH ||
                         aSize.Height() > MAX_BMP_HEIGHT)
@@ -2018,27 +1933,24 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, PopupActivateHdl_Impl, MenuButton *, void)
                                                 double(MAX_BMP_HEIGHT) / static_cast<double>(aSize.Height());
                         aBitmap.Scale(nScale, nScale);
                     }
-                    Image aImage(aBitmap);
-
-                    pPopup->InsertItem(MN_GALLERY_ENTRY + i, grfName, aImage );
+                    pVD->SetOutputSizePixel(aBitmap.GetSizePixel(), false);
+                    pVD->DrawBitmapEx(Point(), aBitmap);
+                    m_xGalleryMenu->append(sItemId, sGrfName, *pVD);
                 }
                 else
                 {
-                    Image aImage;
-                    pPopup->InsertItem(
-                        MN_GALLERY_ENTRY + i, grfName, aImage );
+                    m_xGalleryMenu->append(sItemId, sGrfName);
                 }
                 ++i;
             }
             GalleryExplorer::EndLocking(GALLERY_THEME_BULLETS);
         }
-        LeaveWait();
     }
 }
 
-IMPL_LINK_NOARG(SvxNumOptionsTabPage, BulletHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SvxNumOptionsTabPage, BulletHdl_Impl, weld::Button&, void)
 {
-    SvxCharacterMap aMap(GetFrameWeld(), nullptr, false);
+    SvxCharacterMap aMap(GetDialogFrameWeld(), nullptr, nullptr);
 
     sal_uInt16 nMask = 1;
     const vcl::Font* pFmtFont = nullptr;
@@ -2073,7 +1985,7 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, BulletHdl_Impl, Button*, void)
         aMap.SetCharFont(aActBulletFont);
     if (bSameBullet)
         aMap.SetChar(cBullet);
-    if (aMap.execute() == RET_OK)
+    if (aMap.run() == RET_OK)
     {
         // change Font Numrules
         aActBulletFont = aMap.GetCharFont();
@@ -2095,13 +2007,13 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, BulletHdl_Impl, Button*, void)
     }
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
+IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, weld::MetricSpinButton&, rField, void)
 {
-    bool bWidth = &rField == m_pWidthMF;
+    bool bWidth = &rField == m_xWidthMF.get();
     bLastWidthModified = bWidth;
-    bool bRatio = m_pRatioCB->IsChecked();
-    long nWidthVal = static_cast<long>(m_pWidthMF->Denormalize(m_pWidthMF->GetValue(FUNIT_100TH_MM)));
-    long nHeightVal = static_cast<long>(m_pHeightMF->Denormalize(m_pHeightMF->GetValue(FUNIT_100TH_MM)));
+    bool bRatio = m_xRatioCB->get_active();
+    long nWidthVal = static_cast<long>(m_xWidthMF->denormalize(m_xWidthMF->get_value(FieldUnit::MM_100TH)));
+    long nHeightVal = static_cast<long>(m_xHeightMF->denormalize(m_xHeightMF->get_value(FieldUnit::MM_100TH)));
     nWidthVal = OutputDevice::LogicToLogic( nWidthVal ,
                                                 MapUnit::Map100thMM, eCoreUnit );
     nHeightVal = OutputDevice::LogicToLogic( nHeightVal,
@@ -2132,9 +2044,9 @@ IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
                     if (bRatio)
                     {
                         aSize.setHeight( aInitSize[i].Height() + static_cast<long>(static_cast<double>(nDelta) / fSizeRatio) );
-                        m_pHeightMF->SetUserValue(m_pHeightMF->Normalize(
+                        m_xHeightMF->set_value(m_xHeightMF->normalize(
                             OutputDevice::LogicToLogic( aSize.Height(), eCoreUnit, MapUnit::Map100thMM )),
-                                FUNIT_100TH_MM);
+                                FieldUnit::MM_100TH);
                     }
                 }
                 else
@@ -2144,9 +2056,9 @@ IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
                     if (bRatio)
                     {
                         aSize.setWidth( aInitSize[i].Width() + static_cast<long>(static_cast<double>(nDelta) * fSizeRatio) );
-                        m_pWidthMF->SetUserValue(m_pWidthMF->Normalize(
+                        m_xWidthMF->set_value(m_xWidthMF->normalize(
                             OutputDevice::LogicToLogic( aSize.Width(), eCoreUnit, MapUnit::Map100thMM )),
-                                FUNIT_100TH_MM);
+                                FieldUnit::MM_100TH);
                     }
                 }
                 const SvxBrushItem* pBrushItem =  aNumFmt.GetBrush();
@@ -2162,22 +2074,22 @@ IMPL_LINK( SvxNumOptionsTabPage, SizeHdl_Impl, Edit&, rField, void)
     SetModified(bRepaint);
 }
 
-IMPL_LINK( SvxNumOptionsTabPage, RatioHdl_Impl, Button*, pBox, void )
+IMPL_LINK(SvxNumOptionsTabPage, RatioHdl_Impl, weld::ToggleButton&, rBox, void)
 {
-    if (static_cast<CheckBox*>(pBox)->IsChecked())
+    if (rBox.get_active())
     {
         if (bLastWidthModified)
-            SizeHdl_Impl(*m_pWidthMF);
+            SizeHdl_Impl(*m_xWidthMF);
         else
-            SizeHdl_Impl(*m_pHeightMF);
+            SizeHdl_Impl(*m_xHeightMF);
     }
 }
 
-IMPL_LINK_NOARG(SvxNumOptionsTabPage, CharFmtHdl_Impl, ListBox&, void)
+IMPL_LINK_NOARG(SvxNumOptionsTabPage, CharFmtHdl_Impl, weld::ComboBox&, void)
 {
     bAutomaticCharStyles = false;
-    sal_Int32 nEntryPos = m_pCharFmtLB->GetSelectedEntryPos();
-    OUString sEntry = m_pCharFmtLB->GetSelectedEntry();
+    sal_Int32 nEntryPos = m_xCharFmtLB->get_active();
+    OUString sEntry = m_xCharFmtLB->get_active_text();
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
     {
@@ -2198,19 +2110,21 @@ IMPL_LINK_NOARG(SvxNumOptionsTabPage, CharFmtHdl_Impl, ListBox&, void)
     SetModified(false);
 };
 
-IMPL_LINK_NOARG( SvxNumOptionsTabPage, EditListBoxHdl_Impl, ListBox&, void )
+IMPL_LINK_NOARG(SvxNumOptionsTabPage, EditListBoxHdl_Impl, weld::ComboBox&, void)
 {
     EditModifyHdl_Impl(nullptr);
 }
-IMPL_LINK( SvxNumOptionsTabPage, EditModifyHdl_Impl, Edit&, rEdit, void )
+
+IMPL_LINK(SvxNumOptionsTabPage, EditModifyHdl_Impl, weld::Entry&, rEdit, void)
 {
     EditModifyHdl_Impl(&rEdit);
 }
-void SvxNumOptionsTabPage::EditModifyHdl_Impl( Edit* pEdit )
+
+void SvxNumOptionsTabPage::EditModifyHdl_Impl(weld::Entry* pEdit)
 {
-    bool bPrefix = pEdit == m_pPrefixED;
-    bool bSuffix = pEdit == m_pSuffixED;
-    bool bStart = pEdit == m_pStartED;
+    bool bPrefix = pEdit == m_xPrefixED.get();
+    bool bSuffix = pEdit == m_xSuffixED.get();
+    bool bStart = pEdit == m_xStartED.get();
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
     {
@@ -2218,11 +2132,11 @@ void SvxNumOptionsTabPage::EditModifyHdl_Impl( Edit* pEdit )
         {
             SvxNumberFormat aNumFmt(pActNum->GetLevel(i));
             if(bPrefix)
-                aNumFmt.SetPrefix( m_pPrefixED->GetText() );
+                aNumFmt.SetPrefix(m_xPrefixED->get_text());
             else if(bSuffix)
-                aNumFmt.SetSuffix( m_pSuffixED->GetText() );
+                aNumFmt.SetSuffix(m_xSuffixED->get_text());
             else if(bStart)
-                aNumFmt.SetStart( static_cast<sal_uInt16>(m_pStartED->GetValue()) );
+                aNumFmt.SetStart(m_xStartED->get_value());
             pActNum->SetLevel(i, aNumFmt);
         }
         nMask <<= 1;
@@ -2265,7 +2179,7 @@ static long lcl_DrawBullet(VirtualDevice* pVDev,
     aTmpSize.setWidth( aTmpSize.Width() / 100 ) ;
     aTmpSize.setHeight( aTmpSize.Height() * ( rFmt.GetBulletRelSize()) );
     aTmpSize.setHeight( aTmpSize.Height() / 100 ) ;
-    // in case of a height of zero it is drawed in original height
+    // in case of a height of zero it is drawn in original height
     if(!aTmpSize.Height())
         aTmpSize.setHeight( 1 );
     aFont.SetFontSize(aTmpSize);
@@ -2287,16 +2201,12 @@ static long lcl_DrawBullet(VirtualDevice* pVDev,
     return nRet;
 }
 
-SvxNumberingPreview::SvxNumberingPreview(vcl::Window* pParent, WinBits nWinBits)
-    : Window(pParent, nWinBits)
-    , pActNum(nullptr)
+SvxNumberingPreview::SvxNumberingPreview()
+    : pActNum(nullptr)
     , bPosition(false)
     , nActLevel(SAL_MAX_UINT16)
 {
-    SetBorderStyle(WindowBorderStyle::MONO);
 }
-
-VCL_BUILDER_FACTORY_ARGS(SvxNumberingPreview, WB_BORDER)
 
 // paint preview of numeration
 void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tools::Rectangle& /*rRect*/)
@@ -2566,104 +2476,70 @@ void SvxNumberingPreview::Paint(vcl::RenderContext& rRenderContext, const ::tool
     rRenderContext.DrawOutDev(Point(), aSize, Point(), aSize, *pVDev);
 }
 
+
 //See uiconfig/swriter/ui/outlinepositionpage.ui for effectively a duplicate
 //dialog to this one, except with a different preview window impl.
 //TODO, determine if SwNumPositionTabPage and SvxNumPositionTabPage can be
 //merged
-SvxNumPositionTabPage::SvxNumPositionTabPage(vcl::Window* pParent,
-                               const SfxItemSet& rSet)
-    : SfxTabPage(pParent, "NumberingPositionPage", "cui/ui/numberingpositionpage.ui", &rSet)
-    , pActNum(nullptr)
-    , pSaveNum(nullptr)
+SvxNumPositionTabPage::SvxNumPositionTabPage(TabPageParent pParent, const SfxItemSet& rSet)
+    : SfxTabPage(pParent, "cui/ui/numberingpositionpage.ui", "NumberingPositionPage", &rSet)
     , nActNumLvl(1)
     , nNumItemId(SID_ATTR_NUMBERING_RULE)
     , bModified(false)
     , bPreset(false)
     , bInInintControl(false)
     , bLabelAlignmentPosAndSpaceModeActive(false)
+    , m_xLevelLB(m_xBuilder->weld_tree_view("levellb"))
+    , m_xDistBorderFT(m_xBuilder->weld_label("indent"))
+    , m_xDistBorderMF(m_xBuilder->weld_metric_spin_button("indentmf", FieldUnit::CM))
+    , m_xRelativeCB(m_xBuilder->weld_check_button("relative"))
+    , m_xIndentFT(m_xBuilder->weld_label("numberingwidth"))
+    , m_xIndentMF(m_xBuilder->weld_metric_spin_button("numberingwidthmf", FieldUnit::CM))
+    , m_xDistNumFT(m_xBuilder->weld_label("numdist"))
+    , m_xDistNumMF(m_xBuilder->weld_metric_spin_button("numdistmf", FieldUnit::CM))
+    , m_xAlignFT(m_xBuilder->weld_label("numalign"))
+    , m_xAlignLB(m_xBuilder->weld_combo_box("numalignlb"))
+    , m_xLabelFollowedByFT(m_xBuilder->weld_label("numfollowedby"))
+    , m_xLabelFollowedByLB(m_xBuilder->weld_combo_box("numfollowedbylb"))
+    , m_xListtabFT(m_xBuilder->weld_label("at"))
+    , m_xListtabMF(m_xBuilder->weld_metric_spin_button("atmf", FieldUnit::CM))
+    , m_xAlign2FT(m_xBuilder->weld_label("num2align"))
+    , m_xAlign2LB(m_xBuilder->weld_combo_box("num2alignlb"))
+    , m_xAlignedAtFT(m_xBuilder->weld_label("alignedat"))
+    , m_xAlignedAtMF(m_xBuilder->weld_metric_spin_button("alignedatmf", FieldUnit::CM))
+    , m_xIndentAtFT(m_xBuilder->weld_label("indentat"))
+    , m_xIndentAtMF(m_xBuilder->weld_metric_spin_button("indentatmf", FieldUnit::CM))
+    , m_xStandardPB(m_xBuilder->weld_button("standard"))
+    , m_xPreviewWIN(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreviewWIN))
 {
     SetExchangeSupport();
 
-    get(m_pLevelLB, "levellb");
-    get(m_pDistBorderFT, "indent");
-    get(m_pDistBorderMF, "indentmf");
-    get(m_pRelativeCB, "relative");
-    get(m_pIndentFT, "numberingwidth");
-    get(m_pIndentMF, "numberingwidthmf");
-    get(m_pDistNumFT, "numdist");
-    get(m_pDistNumMF, "numdistmf");
-    get(m_pAlignFT, "numalign");
-    get(m_pAlignLB, "numalignlb");
-
-    get(m_pLabelFollowedByFT, "numfollowedby");
-    get(m_pLabelFollowedByLB, "numfollowedbylb");
-    get(m_pListtabFT, "at");
-    get(m_pListtabMF, "atmf");
-    get(m_pAlign2FT, "num2align");
-    get(m_pAlign2LB, "num2alignlb");
-    get(m_pAlignedAtFT, "alignedat");
-    get(m_pAlignedAtMF, "alignedatmf");
-    get(m_pIndentAtFT, "indentat");
-    get(m_pIndentAtMF, "indentatmf");
-
-    get(m_pStandardPB, "standard");
-    get(m_pPreviewWIN, "preview");
-
-    m_pPreviewWIN->SetBackground(Wallpaper(COL_TRANSPARENT));
-
-    m_pRelativeCB->Check();
-    m_pAlignLB->SetSelectHdl(LINK(this, SvxNumPositionTabPage, EditModifyHdl_Impl));
-    m_pAlign2LB->SetSelectHdl(LINK(this, SvxNumPositionTabPage, EditModifyHdl_Impl));
-    for ( sal_Int32 i = 0; i < m_pAlignLB->GetEntryCount(); ++i )
+    m_xRelativeCB->set_active(true);
+    m_xAlignLB->connect_changed(LINK(this, SvxNumPositionTabPage, EditModifyHdl_Impl));
+    m_xAlign2LB->connect_changed(LINK(this, SvxNumPositionTabPage, EditModifyHdl_Impl));
+    for ( sal_Int32 i = 0; i < m_xAlignLB->get_count(); ++i )
     {
-        m_pAlign2LB->InsertEntry( m_pAlignLB->GetEntry( i ) );
+        m_xAlign2LB->append_text(m_xAlignLB->get_text(i));
     }
-    m_pAlign2LB->SetDropDownLineCount( m_pAlign2LB->GetEntryCount() );
 
-    Link<SpinField&,void> aLk3 = LINK(this, SvxNumPositionTabPage, DistanceHdl_Impl);
-    Link<Control&,void> aLk2 = LINK(this, SvxNumPositionTabPage, DistanceFocusHdl_Impl);
+    Link<weld::MetricSpinButton&,void> aLk3 = LINK(this, SvxNumPositionTabPage, DistanceHdl_Impl);
+    m_xDistBorderMF->connect_value_changed(aLk3);
+    m_xDistNumMF->connect_value_changed(aLk3);
+    m_xIndentMF->connect_value_changed(aLk3);
 
-    m_pDistBorderMF->SetUpHdl(aLk3);
-    m_pDistBorderMF->SetDownHdl(aLk3);
-    m_pDistBorderMF->SetLoseFocusHdl(aLk2);
+    m_xLabelFollowedByLB->connect_changed(LINK(this, SvxNumPositionTabPage, LabelFollowedByHdl_Impl));
 
-    m_pDistNumMF->SetUpHdl(aLk3);
-    m_pDistNumMF->SetDownHdl(aLk3);
-    m_pDistNumMF->SetLoseFocusHdl(aLk2);
+    m_xListtabMF->connect_value_changed(LINK(this, SvxNumPositionTabPage, ListtabPosHdl_Impl));
+    m_xAlignedAtMF->connect_value_changed(LINK(this, SvxNumPositionTabPage, AlignAtHdl_Impl));
+    m_xIndentAtMF->connect_value_changed(LINK(this, SvxNumPositionTabPage, IndentAtHdl_Impl));
 
-    m_pIndentMF->SetUpHdl(aLk3);
-    m_pIndentMF->SetDownHdl(aLk3);
-    m_pIndentMF->SetLoseFocusHdl(aLk2);
+    m_xLevelLB->set_selection_mode(SelectionMode::Multiple);
+    m_xLevelLB->connect_changed(LINK(this, SvxNumPositionTabPage, LevelHdl_Impl));
+    m_xRelativeCB->connect_toggled(LINK(this, SvxNumPositionTabPage, RelativeHdl_Impl));
+    m_xStandardPB->connect_clicked(LINK(this, SvxNumPositionTabPage, StandardHdl_Impl));
 
-    m_pLabelFollowedByLB->SetDropDownLineCount( m_pLabelFollowedByLB->GetEntryCount() );
-    m_pLabelFollowedByLB->SetSelectHdl( LINK(this, SvxNumPositionTabPage, LabelFollowedByHdl_Impl) );
-
-    aLk3 = LINK(this, SvxNumPositionTabPage, ListtabPosHdl_Impl);
-    aLk2 = LINK(this, SvxNumPositionTabPage, ListtabPosFocusHdl_Impl);
-    m_pListtabMF->SetUpHdl(aLk3);
-    m_pListtabMF->SetDownHdl(aLk3);
-    m_pListtabMF->SetLoseFocusHdl(aLk2);
-
-    aLk3 = LINK(this, SvxNumPositionTabPage, AlignAtHdl_Impl);
-    aLk2 = LINK(this, SvxNumPositionTabPage, AlignAtFocusHdl_Impl);
-    m_pAlignedAtMF->SetUpHdl(aLk3);
-    m_pAlignedAtMF->SetDownHdl(aLk3);
-    m_pAlignedAtMF->SetLoseFocusHdl(aLk2);
-
-    aLk3 = LINK(this, SvxNumPositionTabPage, IndentAtHdl_Impl);
-    aLk2 = LINK(this, SvxNumPositionTabPage, IndentAtFocusHdl_Impl);
-    m_pIndentAtMF->SetUpHdl(aLk3);
-    m_pIndentAtMF->SetDownHdl(aLk3);
-    m_pIndentAtMF->SetLoseFocusHdl(aLk2);
-
-    m_pLevelLB->EnableMultiSelection(true);
-    m_pLevelLB->SetSelectHdl(LINK(this, SvxNumPositionTabPage, LevelHdl_Impl));
-    m_pRelativeCB->SetClickHdl(LINK(this, SvxNumPositionTabPage, RelativeHdl_Impl));
-    m_pStandardPB->SetClickHdl(LINK(this, SvxNumPositionTabPage, StandardHdl_Impl));
-
-
-    m_pRelativeCB->Check(bLastRelative);
-    m_pPreviewWIN->SetPositionMode();
+    m_xRelativeCB->set_active(bLastRelative);
+    m_aPreviewWIN.SetPositionMode();
     eCoreUnit = rSet.GetPool()->GetMetric(rSet.GetPool()->GetWhich(SID_ATTR_NUMBERING_RULE));
 }
 
@@ -2674,70 +2550,23 @@ SvxNumPositionTabPage::~SvxNumPositionTabPage()
 
 void SvxNumPositionTabPage::dispose()
 {
-    delete pActNum;
-    pActNum = nullptr;
-    delete pSaveNum;
-    pSaveNum = nullptr;
-    m_pLevelLB.clear();
-    m_pDistBorderFT.clear();
-    m_pDistBorderMF.clear();
-    m_pRelativeCB.clear();
-    m_pIndentFT.clear();
-    m_pIndentMF.clear();
-    m_pDistNumFT.clear();
-    m_pDistNumMF.clear();
-    m_pAlignFT.clear();
-    m_pAlignLB.clear();
-    m_pLabelFollowedByFT.clear();
-    m_pLabelFollowedByLB.clear();
-    m_pListtabFT.clear();
-    m_pListtabMF.clear();
-    m_pAlign2FT.clear();
-    m_pAlign2LB.clear();
-    m_pAlignedAtFT.clear();
-    m_pAlignedAtMF.clear();
-    m_pIndentAtFT.clear();
-    m_pIndentAtMF.clear();
-    m_pStandardPB.clear();
-    m_pPreviewWIN.clear();
+    m_xPreviewWIN.reset();
     SfxTabPage::dispose();
 }
 
 /*-------------------------------------------------------*/
 
-#if OSL_DEBUG_LEVEL > 1
-void lcl_PrintDebugOutput(FixedText& rFixed, const SvxNumberFormat& rNumFmt)
-{
-    OUString const sHash( " # " );
-    if ( rNumFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
-    {
-        OUString sDebugText = OUString::number( convertTwipToMm100(rNumFmt.GetAbsLSpace() ) ) + sHash
-                            + OUString::number( convertTwipToMm100(rNumFmt.GetCharTextDistance() )) + sHash
-                            + OUString::number( convertTwipToMm100(rNumFmt.GetFirstLineOffset() ) );
-        rFixed.SetText(sDebugText);
-    }
-    else if ( rNumFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
-    {
-        OUString sDebugText = OUString::number( convertTwipToMm100(rNumFmt.GetListtabPos() ) ) + sHash
-                            + OUString::number( convertTwipToMm100(rNumFmt.GetFirstLineIndent() ) ) + sHash
-                            + OUString::number( convertTwipToMm100(rNumFmt.GetIndentAt() ) );
-        rFixed.SetText(sDebugText);
-    }
-
-}
-#endif
-
 void SvxNumPositionTabPage::InitControls()
 {
     bInInintControl = true;
     const bool bRelative = !bLabelAlignmentPosAndSpaceModeActive &&
-                     m_pRelativeCB->IsEnabled() && m_pRelativeCB->IsChecked();
-    const bool bSingleSelection = m_pLevelLB->GetSelectedEntryCount() == 1 &&
+                     m_xRelativeCB->get_sensitive() && m_xRelativeCB->get_active();
+    const bool bSingleSelection = m_xLevelLB->count_selected_rows() == 1 &&
                             SAL_MAX_UINT16 != nActNumLvl;
 
-    m_pDistBorderMF->Enable( !bLabelAlignmentPosAndSpaceModeActive &&
+    m_xDistBorderMF->set_sensitive( !bLabelAlignmentPosAndSpaceModeActive &&
                           ( bSingleSelection || bRelative ) );
-    m_pDistBorderFT->Enable( !bLabelAlignmentPosAndSpaceModeActive &&
+    m_xDistBorderFT->set_sensitive( !bLabelAlignmentPosAndSpaceModeActive &&
                           ( bSingleSelection || bRelative ) );
 
     bool bSetDistEmpty = false;
@@ -2823,19 +2652,19 @@ void SvxNumPositionTabPage::InitControls()
         {
             nDistBorderNum = static_cast<long>(aNumFmtArr[nLvl]->GetAbsLSpace())+ aNumFmtArr[nLvl]->GetFirstLineOffset();
         }
-        SetMetricValue(*m_pDistBorderMF, nDistBorderNum, eCoreUnit);
+        SetMetricValue(*m_xDistBorderMF, nDistBorderNum, eCoreUnit);
     }
     else
         bSetDistEmpty = true;
 
     if(bSameDist)
-        SetMetricValue(*m_pDistNumMF, aNumFmtArr[nLvl]->GetCharTextDistance(), eCoreUnit);
+        SetMetricValue(*m_xDistNumMF, aNumFmtArr[nLvl]->GetCharTextDistance(), eCoreUnit);
     else
-        m_pDistNumMF->SetText("");
+        m_xDistNumMF->set_text("");
     if(bSameIndent)
-        SetMetricValue(*m_pIndentMF, - aNumFmtArr[nLvl]->GetFirstLineOffset(), eCoreUnit);
+        SetMetricValue(*m_xIndentMF, - aNumFmtArr[nLvl]->GetFirstLineOffset(), eCoreUnit);
     else
-        m_pIndentMF->SetText("");
+        m_xIndentMF->set_text("");
 
     if(bSameAdjust)
     {
@@ -2844,13 +2673,13 @@ void SvxNumPositionTabPage::InitControls()
             nPos = 0;
         else if(aNumFmtArr[nLvl]->GetNumAdjust() == SvxAdjust::Right)
             nPos = 2;
-        m_pAlignLB->SelectEntryPos(nPos);
-        m_pAlign2LB->SelectEntryPos( nPos );
+        m_xAlignLB->set_active(nPos);
+        m_xAlign2LB->set_active(nPos);
     }
     else
     {
-        m_pAlignLB->SetNoSelection();
-        m_pAlign2LB->SetNoSelection();
+        m_xAlignLB->set_active(-1);
+        m_xAlign2LB->set_active(-1);
     }
 
     if ( bSameLabelFollowedBy )
@@ -2868,55 +2697,55 @@ void SvxNumPositionTabPage::InitControls()
         {
             nPos = 3;
         }
-        m_pLabelFollowedByLB->SelectEntryPos( nPos );
+        m_xLabelFollowedByLB->set_active(nPos);
     }
     else
     {
-        m_pLabelFollowedByLB->SetNoSelection();
+        m_xLabelFollowedByLB->set_active(-1);
     }
 
     if ( aNumFmtArr[nLvl]->GetLabelFollowedBy() == SvxNumberFormat::LISTTAB )
     {
-        m_pListtabFT->Enable();
-        m_pListtabMF->Enable();
+        m_xListtabFT->set_sensitive(true);
+        m_xListtabMF->set_sensitive(true);
         if ( bSameListtab )
         {
-            SetMetricValue(*m_pListtabMF, aNumFmtArr[nLvl]->GetListtabPos(), eCoreUnit);
+            SetMetricValue(*m_xListtabMF, aNumFmtArr[nLvl]->GetListtabPos(), eCoreUnit);
         }
         else
         {
-            m_pListtabMF->SetText("");
+            m_xListtabMF->set_text("");
         }
     }
     else
     {
-        m_pListtabFT->Enable( false );
-        m_pListtabMF->Enable( false );
-        m_pListtabMF->SetText("");
+        m_xListtabFT->set_sensitive(false);
+        m_xListtabMF->set_sensitive(false);
+        m_xListtabMF->set_text("");
     }
 
     if ( bSameAlignAt )
     {
-        SetMetricValue(*m_pAlignedAtMF,
+        SetMetricValue(*m_xAlignedAtMF,
                         aNumFmtArr[nLvl]->GetIndentAt() + aNumFmtArr[nLvl]->GetFirstLineIndent(),
                         eCoreUnit);
     }
     else
     {
-        m_pAlignedAtMF->SetText("");
+        m_xAlignedAtMF->set_text("");
     }
 
     if ( bSameIndentAt )
     {
-        SetMetricValue(*m_pIndentAtMF, aNumFmtArr[nLvl]->GetIndentAt(), eCoreUnit);
+        SetMetricValue(*m_xIndentAtMF, aNumFmtArr[nLvl]->GetIndentAt(), eCoreUnit);
     }
     else
     {
-        m_pIndentAtMF->SetText("");
+        m_xIndentAtMF->set_text("");
     }
 
     if ( bSetDistEmpty )
-        m_pDistBorderMF->SetText("");
+        m_xDistBorderMF->set_text("");
 
     bInInintControl = false;
 }
@@ -2925,7 +2754,7 @@ void SvxNumPositionTabPage::ActivatePage(const SfxItemSet& rSet)
 {
     const SfxPoolItem* pItem;
     sal_uInt16 nTmpNumLvl = 1;
-    const SfxItemSet* pExampleSet = GetTabDialog()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet)
     {
         if(SfxItemState::SET == pExampleSet->GetItemState(SID_PARAM_NUM_PRESET, false, &pItem))
@@ -2935,8 +2764,7 @@ void SvxNumPositionTabPage::ActivatePage(const SfxItemSet& rSet)
     }
     if(SfxItemState::SET == rSet.GetItemState(nNumItemId, false, &pItem))
     {
-        delete pSaveNum;
-        pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+        pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
     }
     bModified = (!pActNum->Get( 0 ) || bPreset);
     if(*pSaveNum != *pActNum ||
@@ -2945,35 +2773,34 @@ void SvxNumPositionTabPage::ActivatePage(const SfxItemSet& rSet)
         *pActNum = *pSaveNum;
         nActNumLvl = nTmpNumLvl;
         sal_uInt16 nMask = 1;
-        m_pLevelLB->SetUpdateMode(false);
-        m_pLevelLB->SetNoSelection();
-        m_pLevelLB->SelectEntryPos( pActNum->GetLevelCount(), nActNumLvl == SAL_MAX_UINT16);
-        if(nActNumLvl != SAL_MAX_UINT16)
-            for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
+        m_xLevelLB->unselect_all();
+        if (nActNumLvl == SAL_MAX_UINT16)
+            m_xLevelLB->select(pActNum->GetLevelCount());
+        if (nActNumLvl != SAL_MAX_UINT16)
+            for (sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
             {
-                if(nActNumLvl & nMask)
-                    m_pLevelLB->SelectEntryPos( i );
+                if (nActNumLvl & nMask)
+                    m_xLevelLB->select(i);
                 nMask <<= 1 ;
             }
-        m_pRelativeCB->Enable(nActNumLvl != 1);
-        m_pLevelLB->SetUpdateMode(true);
+        m_xRelativeCB->set_sensitive(nActNumLvl != 1);
 
         InitPosAndSpaceMode();
         ShowControlsDependingOnPosAndSpaceMode();
 
         InitControls();
     }
-    m_pPreviewWIN->SetLevel(nActNumLvl);
-    m_pPreviewWIN->Invalidate();
+    m_aPreviewWIN.SetLevel(nActNumLvl);
+    m_aPreviewWIN.Invalidate();
 }
 
 DeactivateRC SvxNumPositionTabPage::DeactivatePage(SfxItemSet *_pSet)
 {
     if(_pSet)
     {
-        if(m_pDistBorderMF->IsEnabled())
-            DistanceHdl_Impl(*m_pDistBorderMF);
-        DistanceHdl_Impl(*m_pIndentMF);
+        if (m_xDistBorderMF->get_sensitive())
+            DistanceHdl_Impl(*m_xDistBorderMF);
+        DistanceHdl_Impl(*m_xIndentMF);
         FillItemSet(_pSet);
     }
     return DeactivateRC::LeavePage;
@@ -3010,48 +2837,45 @@ void SvxNumPositionTabPage::Reset( const SfxItemSet* rSet )
 
     }
     DBG_ASSERT(eState == SfxItemState::SET, "no item found!");
-    delete pSaveNum;
-    pSaveNum = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule());
+    pSaveNum.reset( new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pItem)->GetNumRule()) );
 
     // insert levels
-    if(!m_pLevelLB->GetEntryCount())
+    if (!m_xLevelLB->count_selected_rows())
     {
         for(sal_uInt16 i = 1; i <= pSaveNum->GetLevelCount(); i++)
-            m_pLevelLB->InsertEntry( OUString::number(i) );
+            m_xLevelLB->append_text(OUString::number(i));
         if(pSaveNum->GetLevelCount() > 1)
         {
             OUString sEntry = "1 - " + OUString::number( pSaveNum->GetLevelCount() );
-            m_pLevelLB->InsertEntry(sEntry);
-            m_pLevelLB->SelectEntry(sEntry);
+            m_xLevelLB->append_text(sEntry);
+            m_xLevelLB->select_text(sEntry);
         }
         else
-            m_pLevelLB->SelectEntryPos(0);
+            m_xLevelLB->select(0);
     }
     else
-        m_pLevelLB->SelectEntryPos(m_pLevelLB->GetEntryCount() - 1);
+        m_xLevelLB->select(m_xLevelLB->count_selected_rows() - 1);
     sal_uInt16 nMask = 1;
-    m_pLevelLB->SetUpdateMode(false);
-    m_pLevelLB->SetNoSelection();
+    m_xLevelLB->unselect_all();
     if (nActNumLvl == SAL_MAX_UINT16)
     {
-        m_pLevelLB->SelectEntryPos( pSaveNum->GetLevelCount() );
+        m_xLevelLB->select(pSaveNum->GetLevelCount());
     }
     else
     {
         for(sal_uInt16 i = 0; i < pSaveNum->GetLevelCount(); i++)
         {
             if(nActNumLvl & nMask)
-                m_pLevelLB->SelectEntryPos( i );
+                m_xLevelLB->select(i);
             nMask <<= 1;
         }
     }
-    m_pLevelLB->SetUpdateMode(true);
 
     if(!pActNum)
-        pActNum = new  SvxNumRule(*pSaveNum);
+        pActNum.reset( new SvxNumRule(*pSaveNum) );
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
-    m_pPreviewWIN->SetNumRule(pActNum);
+    m_aPreviewWIN.SetNumRule(pActNum.get());
 
     InitPosAndSpaceMode();
     ShowControlsDependingOnPosAndSpaceMode();
@@ -3092,56 +2916,56 @@ void SvxNumPositionTabPage::InitPosAndSpaceMode()
 
 void SvxNumPositionTabPage::ShowControlsDependingOnPosAndSpaceMode()
 {
-    m_pDistBorderFT->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pDistBorderMF->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pRelativeCB->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pIndentFT->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pIndentMF->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pDistNumFT->Show( !bLabelAlignmentPosAndSpaceModeActive &&
-                     pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS) );
-    m_pDistNumMF->Show( !bLabelAlignmentPosAndSpaceModeActive &&
-                     pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS));
-    m_pAlignFT->Show( !bLabelAlignmentPosAndSpaceModeActive );
-    m_pAlignLB->Show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xDistBorderFT->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xDistBorderMF->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xRelativeCB->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xIndentFT->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xIndentMF->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xDistNumFT->show( !bLabelAlignmentPosAndSpaceModeActive &&
+                    pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS) );
+    m_xDistNumMF->show( !bLabelAlignmentPosAndSpaceModeActive &&
+                    pActNum->IsFeatureSupported(SvxNumRuleFlags::CONTINUOUS));
+    m_xAlignFT->show( !bLabelAlignmentPosAndSpaceModeActive );
+    m_xAlignLB->show( !bLabelAlignmentPosAndSpaceModeActive );
 
-    m_pLabelFollowedByFT->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pLabelFollowedByLB->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pListtabFT->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pListtabMF->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pAlign2FT->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pAlign2LB->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pAlignedAtFT->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pAlignedAtMF->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pIndentAtFT->Show( bLabelAlignmentPosAndSpaceModeActive );
-    m_pIndentAtMF->Show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xLabelFollowedByFT->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xLabelFollowedByLB->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xListtabFT->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xListtabMF->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xAlign2FT->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xAlign2LB->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xAlignedAtFT->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xAlignedAtMF->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xIndentAtFT->show( bLabelAlignmentPosAndSpaceModeActive );
+    m_xIndentAtMF->show( bLabelAlignmentPosAndSpaceModeActive );
 }
 
-VclPtr<SfxTabPage> SvxNumPositionTabPage::Create( TabPageParent pParent,
-                                                  const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SvxNumPositionTabPage::Create(TabPageParent pParent,
+                                                 const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SvxNumPositionTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SvxNumPositionTabPage>::Create(pParent, *rAttrSet);
 }
 
-void    SvxNumPositionTabPage::SetMetric(FieldUnit eMetric)
+void SvxNumPositionTabPage::SetMetric(FieldUnit eMetric)
 {
-    if(eMetric == FUNIT_MM)
+    if (eMetric == FieldUnit::MM)
     {
-        m_pDistBorderMF->SetDecimalDigits(1);
-        m_pDistNumMF->SetDecimalDigits(1);
-        m_pIndentMF->SetDecimalDigits(1);
-        m_pListtabMF->SetDecimalDigits(1);
-        m_pAlignedAtMF->SetDecimalDigits(1);
-        m_pIndentAtMF->SetDecimalDigits(1);
+        m_xDistBorderMF->set_digits(1);
+        m_xDistNumMF->set_digits(1);
+        m_xIndentMF->set_digits(1);
+        m_xListtabMF->set_digits(1);
+        m_xAlignedAtMF->set_digits(1);
+        m_xIndentAtMF->set_digits(1);
     }
-    m_pDistBorderMF->SetUnit( eMetric );
-    m_pDistNumMF->SetUnit( eMetric );
-    m_pIndentMF->SetUnit( eMetric );
-    m_pListtabMF->SetUnit( eMetric );
-    m_pAlignedAtMF->SetUnit( eMetric );
-    m_pIndentAtMF->SetUnit( eMetric );
+    m_xDistBorderMF->set_unit(eMetric);
+    m_xDistNumMF->set_unit(eMetric);
+    m_xIndentMF->set_unit(eMetric);
+    m_xListtabMF->set_unit(eMetric);
+    m_xAlignedAtMF->set_unit(eMetric);
+    m_xIndentAtMF->set_unit(eMetric);
 }
 
-IMPL_LINK_NOARG(SvxNumPositionTabPage, EditModifyHdl_Impl, ListBox&, void)
+IMPL_LINK_NOARG(SvxNumPositionTabPage, EditModifyHdl_Impl, weld::ComboBox&, void)
 {
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
@@ -3150,9 +2974,9 @@ IMPL_LINK_NOARG(SvxNumPositionTabPage, EditModifyHdl_Impl, ListBox&, void)
         {
             SvxNumberFormat aNumFmt(pActNum->GetLevel(i));
 
-            const sal_Int32 nPos = m_pAlignLB->IsVisible()
-                                ? m_pAlignLB->GetSelectedEntryPos()
-                                : m_pAlign2LB->GetSelectedEntryPos();
+            const sal_Int32 nPos = m_xAlignLB->get_visible()
+                                ? m_xAlignLB->get_active()
+                                : m_xAlign2LB->get_active();
             SvxAdjust eAdjust = SvxAdjust::Center;
             if(nPos == 0)
                 eAdjust = SvxAdjust::Left;
@@ -3166,29 +2990,28 @@ IMPL_LINK_NOARG(SvxNumPositionTabPage, EditModifyHdl_Impl, ListBox&, void)
     SetModified();
 }
 
-IMPL_LINK( SvxNumPositionTabPage, LevelHdl_Impl, ListBox&, rBox, void )
+IMPL_LINK(SvxNumPositionTabPage, LevelHdl_Impl, weld::TreeView&, rBox, void)
 {
     sal_uInt16 nSaveNumLvl = nActNumLvl;
     nActNumLvl = 0;
-    if(rBox.IsEntryPosSelected( pActNum->GetLevelCount() ) &&
-            (rBox.GetSelectedEntryCount() == 1 || nSaveNumLvl != 0xffff))
+    std::vector<int> aSelectedRows = rBox.get_selected_rows();
+    if (std::find(aSelectedRows.begin(), aSelectedRows.end(), pActNum->GetLevelCount()) != aSelectedRows.end() &&
+            (aSelectedRows.size() == 1 || nSaveNumLvl != 0xffff))
     {
         nActNumLvl = 0xFFFF;
-        rBox.SetUpdateMode(false);
         for( sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++ )
-            rBox.SelectEntryPos( i, false );
-        rBox.SetUpdateMode(true);
+            rBox.unselect(i);
     }
-    else if(rBox.GetSelectedEntryCount())
+    else if (!aSelectedRows.empty())
     {
         sal_uInt16 nMask = 1;
         for( sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++ )
         {
-            if(rBox.IsEntryPosSelected( i ))
+            if (std::find(aSelectedRows.begin(), aSelectedRows.end(), i) != aSelectedRows.end())
                 nActNumLvl |= nMask;
             nMask <<= 1;
         }
-        rBox.SelectEntryPos( pActNum->GetLevelCount(), false );
+        rBox.unselect(pActNum->GetLevelCount());
     }
     else
     {
@@ -3198,42 +3021,38 @@ IMPL_LINK( SvxNumPositionTabPage, LevelHdl_Impl, ListBox&, rBox, void )
         {
             if(nActNumLvl & nMask)
             {
-                rBox.SelectEntryPos(i);
+                rBox.select(i);
                 break;
             }
             nMask <<=1;
         }
     }
-    m_pRelativeCB->Enable(nActNumLvl != 1);
+    m_xRelativeCB->set_sensitive(nActNumLvl != 1);
     SetModified();
     InitPosAndSpaceMode();
     ShowControlsDependingOnPosAndSpaceMode();
     InitControls();
 }
 
-IMPL_LINK( SvxNumPositionTabPage, DistanceFocusHdl_Impl, Control&, rControl, void )
-{
-    DistanceHdl_Impl(static_cast<SpinField&>(rControl));
-}
-IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
+IMPL_LINK(SvxNumPositionTabPage, DistanceHdl_Impl, weld::MetricSpinButton&, rFld, void)
 {
     if(bInInintControl)
         return;
-    long nValue = GetCoreValue(static_cast<MetricField&>(rFld), eCoreUnit);
+    long nValue = GetCoreValue(rFld, eCoreUnit);
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < pActNum->GetLevelCount(); i++)
     {
         if(nActNumLvl & nMask)
         {
             SvxNumberFormat aNumFmt( pActNum->GetLevel( i ) );
-            if (&rFld == m_pDistBorderMF)
+            if (&rFld == m_xDistBorderMF.get())
             {
 
-                if(m_pRelativeCB->IsChecked())
+                if (m_xRelativeCB->get_active())
                 {
                     if(0 == i)
                     {
-                        long nTmp = aNumFmt.GetFirstLineOffset();
+                        auto const nTmp = aNumFmt.GetFirstLineOffset();
                         aNumFmt.SetAbsLSpace( nValue - nTmp);
                     }
                     else
@@ -3247,20 +3066,20 @@ IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
                 }
                 else
                 {
-                    aNumFmt.SetAbsLSpace( static_cast<short>(nValue) - aNumFmt.GetFirstLineOffset());
+                    aNumFmt.SetAbsLSpace( nValue - aNumFmt.GetFirstLineOffset());
                 }
             }
-            else if (&rFld == m_pDistNumMF)
+            else if (&rFld == m_xDistNumMF.get())
             {
                 aNumFmt.SetCharTextDistance( static_cast<short>(nValue) );
             }
-            else if (&rFld == m_pIndentMF)
+            else if (&rFld == m_xIndentMF.get())
             {
                 // together with the FirstLineOffset the AbsLSpace must be changed, too
                 long nDiff = nValue + aNumFmt.GetFirstLineOffset();
-                long nAbsLSpace = aNumFmt.GetAbsLSpace();
+                auto const nAbsLSpace = aNumFmt.GetAbsLSpace();
                 aNumFmt.SetAbsLSpace(nAbsLSpace + nDiff);
-                aNumFmt.SetFirstLineOffset( -static_cast<short>(nValue) );
+                aNumFmt.SetFirstLineOffset( -nValue );
             }
 
             pActNum->SetLevel( i, aNumFmt );
@@ -3269,16 +3088,16 @@ IMPL_LINK( SvxNumPositionTabPage, DistanceHdl_Impl, SpinField&, rFld, void )
     }
 
     SetModified();
-    if(!m_pDistBorderMF->IsEnabled())
+    if (!m_xDistBorderMF->get_sensitive())
     {
-        m_pDistBorderMF->SetText("");
+        m_xDistBorderMF->set_text("");
     }
 }
 
-IMPL_LINK( SvxNumPositionTabPage, RelativeHdl_Impl, Button*, pBox, void )
+IMPL_LINK(SvxNumPositionTabPage, RelativeHdl_Impl, weld::ToggleButton&, rBox, void)
 {
-    bool bOn = static_cast<CheckBox*>(pBox)->IsChecked();
-    bool bSingleSelection = m_pLevelLB->GetSelectedEntryCount() == 1 && SAL_MAX_UINT16 != nActNumLvl;
+    bool bOn = rBox.get_active();
+    bool bSingleSelection = m_xLevelLB->count_selected_rows() == 1 && SAL_MAX_UINT16 != nActNumLvl;
     bool bSetValue = false;
     long nValue = 0;
     if(bOn || bSingleSelection)
@@ -3308,20 +3127,20 @@ IMPL_LINK( SvxNumPositionTabPage, RelativeHdl_Impl, Button*, pBox, void )
 
     }
     if(bSetValue)
-        SetMetricValue(*m_pDistBorderMF, nValue,   eCoreUnit);
+        SetMetricValue(*m_xDistBorderMF, nValue,   eCoreUnit);
     else
-        m_pDistBorderMF->SetText("");
-    m_pDistBorderMF->Enable(bOn || bSingleSelection);
-    m_pDistBorderFT->Enable(bOn || bSingleSelection);
+        m_xDistBorderMF->set_text("");
+    m_xDistBorderMF->set_sensitive(bOn || bSingleSelection);
+    m_xDistBorderFT->set_sensitive(bOn || bSingleSelection);
     bLastRelative = bOn;
 }
 
-IMPL_LINK_NOARG(SvxNumPositionTabPage, LabelFollowedByHdl_Impl, ListBox&, void)
+IMPL_LINK_NOARG(SvxNumPositionTabPage, LabelFollowedByHdl_Impl, weld::ComboBox&, void)
 {
     // determine value to be set at the chosen list levels
     SvxNumberFormat::LabelFollowedBy eLabelFollowedBy = SvxNumberFormat::LISTTAB;
     {
-        const sal_Int32 nPos = m_pLabelFollowedByLB->GetSelectedEntryPos();
+        const auto nPos = m_xLabelFollowedByLB->get_active();
         if ( nPos == 1 )
         {
             eLabelFollowedBy = SvxNumberFormat::SPACE;
@@ -3363,28 +3182,24 @@ IMPL_LINK_NOARG(SvxNumPositionTabPage, LabelFollowedByHdl_Impl, ListBox&, void)
 
     // enable/disable metric field for list tab stop position depending on
     // selected item following the list label.
-    m_pListtabFT->Enable( eLabelFollowedBy == SvxNumberFormat::LISTTAB );
-    m_pListtabMF->Enable( eLabelFollowedBy == SvxNumberFormat::LISTTAB );
+    m_xListtabFT->set_sensitive( eLabelFollowedBy == SvxNumberFormat::LISTTAB );
+    m_xListtabMF->set_sensitive( eLabelFollowedBy == SvxNumberFormat::LISTTAB );
     if ( bSameListtabPos && eLabelFollowedBy == SvxNumberFormat::LISTTAB )
     {
-        SetMetricValue(*m_pListtabMF, pActNum->GetLevel( nFirstLvl ).GetListtabPos(), eCoreUnit);
+        SetMetricValue(*m_xListtabMF, pActNum->GetLevel( nFirstLvl ).GetListtabPos(), eCoreUnit);
     }
     else
     {
-        m_pListtabMF->SetText( OUString() );
+        m_xListtabMF->set_text(OUString());
     }
 
     SetModified();
 }
 
-IMPL_LINK( SvxNumPositionTabPage, ListtabPosFocusHdl_Impl, Control&, rControl, void )
-{
-    ListtabPosHdl_Impl(static_cast<SpinField&>(rControl));
-}
-IMPL_LINK( SvxNumPositionTabPage, ListtabPosHdl_Impl, SpinField&, rFld, void )
+IMPL_LINK(SvxNumPositionTabPage, ListtabPosHdl_Impl, weld::MetricSpinButton&, rFld, void)
 {
     // determine value to be set at the chosen list levels
-    const long nValue = GetCoreValue( static_cast<MetricField&>(rFld), eCoreUnit );
+    const long nValue = GetCoreValue(rFld, eCoreUnit);
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -3402,14 +3217,10 @@ IMPL_LINK( SvxNumPositionTabPage, ListtabPosHdl_Impl, SpinField&, rFld, void )
     SetModified();
 }
 
-IMPL_LINK( SvxNumPositionTabPage, AlignAtFocusHdl_Impl, Control&, rControl, void )
-{
-    AlignAtHdl_Impl(static_cast<SpinField&>(rControl));
-}
-IMPL_LINK( SvxNumPositionTabPage, AlignAtHdl_Impl, SpinField&, rFld, void )
+IMPL_LINK(SvxNumPositionTabPage, AlignAtHdl_Impl, weld::MetricSpinButton&, rFld, void)
 {
     // determine value to be set at the chosen list levels
-    const long nValue = GetCoreValue( static_cast<MetricField&>(rFld), eCoreUnit );
+    const long nValue = GetCoreValue(rFld, eCoreUnit);
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -3428,14 +3239,10 @@ IMPL_LINK( SvxNumPositionTabPage, AlignAtHdl_Impl, SpinField&, rFld, void )
     SetModified();
 }
 
-IMPL_LINK( SvxNumPositionTabPage, IndentAtFocusHdl_Impl, Control&, rControl, void )
-{
-    IndentAtHdl_Impl(static_cast<SpinField&>(rControl));
-}
-IMPL_LINK( SvxNumPositionTabPage, IndentAtHdl_Impl, SpinField&, rFld, void )
+IMPL_LINK(SvxNumPositionTabPage, IndentAtHdl_Impl, weld::MetricSpinButton&, rFld, void)
 {
     // determine value to be set at the chosen list levels
-    const long nValue = GetCoreValue( static_cast<MetricField&>(rFld), eCoreUnit );
+    const long nValue = GetCoreValue(rFld, eCoreUnit);
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -3457,7 +3264,7 @@ IMPL_LINK( SvxNumPositionTabPage, IndentAtHdl_Impl, SpinField&, rFld, void )
     SetModified();
 }
 
-IMPL_LINK_NOARG(SvxNumPositionTabPage, StandardHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SvxNumPositionTabPage, StandardHdl_Impl, weld::Button&, void)
 {
     sal_uInt16 nMask = 1;
     SvxNumRule aTmpNumRule( pActNum->GetFeatureFlags(),
@@ -3470,7 +3277,7 @@ IMPL_LINK_NOARG(SvxNumPositionTabPage, StandardHdl_Impl, Button*, void)
         if(nActNumLvl & nMask)
         {
             SvxNumberFormat aNumFmt( pActNum->GetLevel( i ) );
-            SvxNumberFormat aTempFmt(aTmpNumRule.GetLevel( i ));
+            const SvxNumberFormat& aTempFmt(aTmpNumRule.GetLevel( i ));
             aNumFmt.SetPositionAndSpaceMode( aTempFmt.GetPositionAndSpaceMode() );
             if ( aTempFmt.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
             {
@@ -3499,17 +3306,17 @@ IMPL_LINK_NOARG(SvxNumPositionTabPage, StandardHdl_Impl, Button*, void)
 void SvxNumPositionTabPage::SetModified()
 {
     bModified = true;
-    m_pPreviewWIN->SetLevel(nActNumLvl);
-    m_pPreviewWIN->Invalidate();
+    m_aPreviewWIN.SetLevel(nActNumLvl);
+    m_aPreviewWIN.Invalidate();
 }
 
 void SvxNumOptionsTabPage::SetModified(bool bRepaint)
 {
     bModified = true;
-    if(bRepaint)
+    if (bRepaint)
     {
-        m_pPreviewWIN->SetLevel(nActNumLvl);
-        m_pPreviewWIN->Invalidate();
+        m_aPreviewWIN.SetLevel(nActNumLvl);
+        m_aPreviewWIN.Invalidate();
     }
 }
 
@@ -3528,7 +3335,7 @@ void SvxNumOptionsTabPage::PageCreated(const SfxAllItemSet& aSet)
         const std::vector<OUString> &aList = pListItem->GetList();
         sal_uInt32 nCount = aList.size();
         for(sal_uInt32 i = 0; i < nCount; i++)
-            m_pCharFmtLB->InsertEntry(aList[i]);
+            m_xCharFmtLB->append_text(aList[i]);
     }
     if (pMetricItem)
         SetMetric(static_cast<FieldUnit>(pMetricItem->GetValue()));

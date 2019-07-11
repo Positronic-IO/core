@@ -30,6 +30,7 @@
 #include <editeng/tstpitem.hxx>
 #include <svl/urihelper.hxx>
 #include <svl/ctloptions.hxx>
+#include <sal/log.hxx>
 #include <swmodule.hxx>
 #include <txtfld.hxx>
 #include <txtinet.hxx>
@@ -104,14 +105,14 @@ typedef std::vector<SwTextAttr*> SwpHts;
                                   pNd->GetpSwpHints()->Check(true); }
 #define CHECK_SWPHINTS_IF_FRM(pNd)  { if( pNd->GetpSwpHints() && \
                                    !pNd->GetDoc()->IsInReading() ) \
-    pNd->GetpSwpHints()->Check(getLayoutFrame(nullptr, nullptr, nullptr, false) != nullptr); }
+    pNd->GetpSwpHints()->Check(getLayoutFrame(nullptr, nullptr, nullptr) != nullptr); }
 #else
 #define CHECK_SWPHINTS(pNd)
 #define CHECK_SWPHINTS_IF_FRM(pNd)
 #endif
 
 SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
-                                 SwTextFormatColl *pColl )
+                                 SwTextFormatColl *pColl, bool const bNewFrames)
 {
     OSL_ENSURE( pColl, "Collection pointer is 0." );
 
@@ -125,7 +126,8 @@ SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
 
     // if there is no layout or it is in a hidden section, MakeFrames is not needed
     const SwSectionNode* pSectNd;
-    if( !GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell() ||
+    if (!bNewFrames ||
+        !GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell() ||
         ( nullptr != (pSectNd = pNode->FindSectionNode()) &&
             pSectNd->GetSection().IsHiddenFlag() ))
         return pNode;
@@ -140,7 +142,7 @@ SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
         switch (pNd->GetNodeType())
         {
         case SwNodeType::Table:
-            static_cast<SwTableNode*>(pNd)->MakeFrames( aIdx );
+            static_cast<SwTableNode*>(pNd)->MakeFramesForAdjacentContentNode(aIdx);
             return pNode;
 
         case SwNodeType::Section:
@@ -154,13 +156,13 @@ SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
                 aTmp = *pNd;
                 break;
             }
-            static_cast<SwSectionNode*>(pNd)->MakeFrames( aIdx );
+            static_cast<SwSectionNode*>(pNd)->MakeFramesForAdjacentContentNode(aIdx);
             return pNode;
 
         case SwNodeType::Text:
         case SwNodeType::Grf:
         case SwNodeType::Ole:
-            static_cast<SwContentNode*>(pNd)->MakeFrames( *pNode );
+            static_cast<SwContentNode*>(pNd)->MakeFramesForAdjacentContentNode(*pNode);
             return pNode;
 
         case SwNodeType::End:
@@ -199,6 +201,7 @@ SwTextNode *SwNodes::MakeTextNode( const SwNodeIndex & rWhere,
 SwTextNode::SwTextNode( const SwNodeIndex &rWhere, SwTextFormatColl *pTextColl, const SfxItemSet* pAutoAttr )
 :   SwContentNode( rWhere, SwNodeType::Text, pTextColl ),
     mpNodeNum( nullptr ),
+    mpNodeNumRLHidden(nullptr),
     m_Text(),
     m_pParaIdleData_Impl(nullptr),
     m_bContainsHiddenChars(false),
@@ -254,7 +257,7 @@ SwTextNode::~SwTextNode()
     }
 
     // must be removed from outline nodes by now
-#if OSL_DEBUG_LEVEL > 0
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     SwOutlineNodes::size_type foo;
     assert(!GetNodes().GetOutLineNds().Seek_Entry(this, &foo));
 #endif
@@ -262,11 +265,8 @@ SwTextNode::~SwTextNode()
     RemoveFromList();
 
     InitSwParaStatistics( false );
-
-    if (HasWriterListeners())
-    {
-        DelFrames_TextNodePart();
-    }
+    DelFrames(nullptr); // must be called here while it's still a SwTextNode
+    DelFrames_TextNodePart();
 }
 
 void SwTextNode::FileLoadedInitHints()
@@ -279,9 +279,6 @@ void SwTextNode::FileLoadedInitHints()
 
 SwContentFrame *SwTextNode::MakeFrame( SwFrame* pSib )
 {
-    // fdo#52028: ODF file import does not result in MergePortions being called
-    // for every attribute, since that would be inefficient.  So call it here.
-    FileLoadedInitHints();
     SwContentFrame *pFrame = new SwTextFrame( this, pSib );
     return pFrame;
 }
@@ -309,7 +306,7 @@ static void lcl_ChangeFootnoteRef( SwTextNode &rNode )
             {
                 if( !pFrame )
                 {
-                    pFrame = SwIterator<SwContentFrame,SwTextNode>(rNode).First();
+                    pFrame = SwIterator<SwContentFrame, SwTextNode, sw::IteratorMode::UnwrapMulti>(rNode).First();
                     if (!pFrame)
                         return;
                 }
@@ -323,7 +320,7 @@ static void lcl_ChangeFootnoteRef( SwTextNode &rNode )
                 if ( !pNd )
                     continue;
 
-                SwIterator<SwContentFrame,SwContentNode> aIter( *pNd );
+                SwIterator<SwContentFrame, SwContentNode, sw::IteratorMode::UnwrapMulti> aIter(*pNd);
                 SwContentFrame* pContent = aIter.First();
                 if( pContent )
                 {
@@ -366,8 +363,68 @@ static void lcl_ChangeFootnoteRef( SwTextNode &rNode )
     }
 }
 
-SwContentNode *SwTextNode::SplitContentNode( const SwPosition &rPos )
+namespace sw {
+
+// check if there are flys on the existing frames (now on "pNode")
+// that need to be moved to the new frames of "this"
+void MoveMergedFlysAndFootnotes(std::vector<SwTextFrame*> const& rFrames,
+        SwTextNode const& rFirstNode, SwTextNode & rSecondNode,
+        bool isSplitNode)
 {
+    if (!isSplitNode)
+    {
+        lcl_ChangeFootnoteRef(rSecondNode);
+    }
+    for (sal_uLong nIndex = rSecondNode.GetIndex() + 1; ; ++nIndex)
+    {
+        SwNode *const pTmp(rSecondNode.GetNodes()[nIndex]);
+        if (pTmp->IsCreateFrameWhenHidingRedlines() || pTmp->IsEndNode())
+        {
+            break;
+        }
+        else if (pTmp->IsStartNode())
+        {
+            nIndex = pTmp->EndOfSectionIndex();
+        }
+        else if (pTmp->GetRedlineMergeFlag() == SwNode::Merge::NonFirst
+              && pTmp->IsTextNode())
+        {
+            lcl_ChangeFootnoteRef(*pTmp->GetTextNode());
+        }
+    }
+    for (SwTextFrame *const pFrame : rFrames)
+    {
+        if (SwSortedObjs *const pObjs = pFrame->GetDrawObjs())
+        {
+            std::vector<SwAnchoredObject*> objs;
+            objs.reserve(pObjs->size());
+            for (SwAnchoredObject *const pObj : *pObjs)
+            {
+                objs.push_back(pObj);
+            }
+            for (SwAnchoredObject *const pObj : objs)
+            {
+                SwFrameFormat & rFormat(pObj->GetFrameFormat());
+                SwFormatAnchor const& rAnchor(rFormat.GetAnchor());
+                if (rFirstNode.GetIndex() < rAnchor.GetContentAnchor()->nNode.GetIndex())
+                {
+                    // move it to the new frame of "this"
+                    rFormat.NotifyClients(&rAnchor, &rAnchor);
+                    // note pObjs will be deleted if it becomes empty
+                    assert(!pFrame->GetDrawObjs() || !pObjs->Contains(*pObj));
+                }
+            }
+        }
+    }
+}
+
+} // namespace
+
+SwTextNode *SwTextNode::SplitContentNode(const SwPosition & rPos,
+        std::function<void (SwTextNode *, sw::mark::RestoreMode)> const*const pContentIndexRestore)
+{
+    bool isHide(false);
+    SwNode::Merge const eOldMergeFlag(GetRedlineMergeFlag());
     bool parentIsOutline = IsOutline();
 
     // create a node "in front" of me
@@ -477,12 +534,32 @@ SwContentNode *SwTextNode::SplitContentNode( const SwPosition &rPos )
 
         }
 
-        SwIterator<SwContentFrame,SwTextNode> aIter( *this );
-        for( SwContentFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next() )
+        if (pContentIndexRestore)
+        {   // call before making frames and before RegisterToNode
+            (*pContentIndexRestore)(pNode, sw::mark::RestoreMode::NonFlys);
+        }
+        if (eOldMergeFlag != SwNode::Merge::None)
+        {   // clear before making frames and before RegisterToNode
+            SetRedlineMergeFlag(SwNode::Merge::None);
+        }   // now RegisterToNode will set merge flags in both nodes properly!
+
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*this);
+        for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                isHide = true;
+            }
+            frames.push_back(pFrame);
+        }
+        for (SwTextFrame * pFrame : frames)
         {
             pFrame->RegisterToNode( *pNode );
-            if( pFrame->IsTextFrame() && !pFrame->IsFollow() && static_cast<SwTextFrame*>(pFrame)->GetOfst() )
-                static_cast<SwTextFrame*>(pFrame)->SetOfst( 0 );
+            if (!pFrame->IsFollow() && pFrame->GetOfst())
+            {
+                pFrame->SetOfst( TextFrameIndex(0) );
+            }
         }
 
         if ( IsInCache() )
@@ -517,8 +594,17 @@ SwContentNode *SwTextNode::SplitContentNode( const SwPosition &rPos )
         {
             MoveTextAttr_To_AttrSet();
         }
-        pNode->MakeFrames( *this );
+        // in case there are frames, the RegisterToNode has set the merge flag
+        pNode->MakeFramesForAdjacentContentNode(*this);
         lcl_ChangeFootnoteRef( *this );
+        if (pContentIndexRestore)
+        {   // call after making frames; listeners will take care of adding to the right frame
+            (*pContentIndexRestore)(pNode, sw::mark::RestoreMode::Flys);
+        }
+        if (eOldMergeFlag != SwNode::Merge::None)
+        {
+            MoveMergedFlysAndFootnotes(frames, *pNode, *this, true);
+        }
     }
     else
     {
@@ -574,12 +660,134 @@ SwContentNode *SwTextNode::SplitContentNode( const SwPosition &rPos )
             SetSmartTags( pList2, false );
         }
 
-        if ( HasWriterListeners() )
-        {
-            MakeFrames( *pNode );
+        if (pContentIndexRestore)
+        {   // call before making frames and before RegisterToNode
+            (*pContentIndexRestore)(pNode, sw::mark::RestoreMode::NonFlys);
         }
-        lcl_ChangeFootnoteRef( *pNode );
+
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*this);
+        for (SwTextFrame * pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            frames.push_back(pFrame);
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                isHide = true;
+            }
+        }
+        bool bNonMerged(false);
+        bool bRecreateThis(false);
+        for (SwTextFrame * pFrame : frames)
+        {
+            // sw_redlinehide: for this to work properly with hidden nodes,
+            // the frame needs to listen on them too.
+            // also: have to check the frame; this->GetRedlineMergeFlag()
+            // is None in case there's a delete redline inside the paragraph,
+            // but that could still result in a merged frame after split...
+            if (pFrame->GetMergedPara())
+            {
+                // Can't special case this == First here - that could (if
+                // both nodes are still merged by redline) lead to
+                // duplicate frames on "this".
+                // Update the extents with new node; also inits merge flag,
+                // so the MakeFramesForAdjacentContentNode below respects it
+                pFrame->RegisterToNode(*pNode);
+                if (pFrame->GetText().isEmpty())
+                {
+                    // turns out it's empty - in this case, it was not
+                    // invalidated because Cut didn't sent it any hints,
+                    // so we have to invalidate it here!
+                    pFrame->Prepare(PREP_CLEAR, nullptr, false);
+                }
+                if (!pFrame->GetMergedPara() ||
+                    !pFrame->GetMergedPara()->listener.IsListeningTo(this))
+                {
+                    // it's no longer listening - need to recreate frame
+                    // (note this is idempotent, can be done once per frame)
+                    SetRedlineMergeFlag(SwNode::Merge::None);
+                    bRecreateThis = true;
+                }
+            }
+            else
+            {
+                bNonMerged = true;
+            }
+        }
+        assert(!(bNonMerged && bRecreateThis)); // 2 layouts not handled yet - maybe best to simply use the other branch then?
+        if (!frames.empty() && bNonMerged)
+        {
+            // the existing frame on "this" should have been updated by Cut
+            MakeFramesForAdjacentContentNode(*pNode);
+            lcl_ChangeFootnoteRef(*pNode);
+        }
+        else if (bRecreateThis)
+        {
+            assert(pNode->HasWriterListeners()); // was just moved there
+            pNode->MakeFramesForAdjacentContentNode(*this);
+            lcl_ChangeFootnoteRef(*this);
+        }
+
+        if (pContentIndexRestore)
+        {   // call after making frames; listeners will take care of adding to the right frame
+            (*pContentIndexRestore)(pNode, sw::mark::RestoreMode::Flys);
+        }
+
+        if (bRecreateThis)
+        {
+            MoveMergedFlysAndFootnotes(frames, *pNode, *this, true);
+        }
     }
+
+#ifndef NDEBUG
+    if (isHide) // otherwise flags won't be set anyway
+    {
+        // First
+        // -> First,NonFirst
+        // -> First,Hidden
+        // -> None,First
+        // Hidden
+        // -> Hidden,Hidden (if still inside merge rl)
+        // -> NonFirst,First (if redline was split)
+        // NonFirst
+        // -> NonFirst,First (if split after end of "incoming" redline &
+        //                    before start of "outgoing" redline)
+        // -> NonFirst,None (if split after end of "incoming" redline)
+        // -> NonFirst,Hidden (if split after start of "outgoing" redline)
+        // -> Hidden, NonFirst (if split before end of "incoming" redline)
+        // None
+        // -> None,None
+        // -> First,NonFirst (if splitting inside a delete redline)
+        SwNode::Merge const eFirst(pNode->GetRedlineMergeFlag());
+        SwNode::Merge const eSecond(GetRedlineMergeFlag());
+        switch (eOldMergeFlag)
+        {
+            case Merge::First:
+                assert((eFirst == Merge::First && eSecond == Merge::NonFirst)
+                    || (eFirst == Merge::First && eSecond == Merge::Hidden)
+                    || (eFirst == Merge::None && eSecond == Merge::First));
+            break;
+            case Merge::Hidden:
+                assert((eFirst == Merge::Hidden && eSecond == Merge::Hidden)
+                    || (eFirst == Merge::NonFirst && eSecond == Merge::First)
+                        // next ones can happen temp. in UndoDelete :(
+                    || (eFirst == Merge::Hidden && eSecond == Merge::NonFirst)
+                    || (eFirst == Merge::NonFirst && eSecond == Merge::None));
+            break;
+            case Merge::NonFirst:
+                assert((eFirst == Merge::NonFirst && eSecond == Merge::First)
+                    || (eFirst == Merge::NonFirst && eSecond == Merge::None)
+                    || (eFirst == Merge::NonFirst && eSecond == Merge::Hidden)
+                    || (eFirst == Merge::Hidden && eSecond == Merge::NonFirst));
+            break;
+            case Merge::None:
+                assert((eFirst == Merge::None && eSecond == Merge::None)
+                    || (eFirst == Merge::First && eSecond == Merge::NonFirst));
+            break;
+        }
+    }
+#else
+    (void) isHide;
+#endif
 
     {
         // Send Hint for PageDesc. This should be done in the Layout when
@@ -623,6 +831,122 @@ void SwTextNode::MoveTextAttr_To_AttrSet()
     }
 
 }
+
+namespace sw {
+
+/// if first node is deleted & second survives, then the first node's frame
+/// will be deleted too; prevent this by moving the frame to the second node
+/// if necessary.
+void MoveDeletedPrevFrames(SwTextNode & rDeletedPrev, SwTextNode & rNode)
+{
+    std::vector<SwTextFrame*> frames;
+    SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(rDeletedPrev);
+    for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+    {
+        if (pFrame->getRootFrame()->IsHideRedlines())
+        {
+            frames.push_back(pFrame);
+        }
+    }
+    {
+        auto frames2(frames);
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIt(rNode);
+        for (SwTextFrame* pFrame = aIt.First(); pFrame; pFrame = aIt.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                auto const it(std::find(frames2.begin(), frames2.end(), pFrame));
+                assert(it != frames2.end());
+                frames2.erase(it);
+            }
+        }
+        assert(frames2.empty());
+    }
+    for (SwTextFrame *const pFrame : frames)
+    {
+        pFrame->RegisterToNode(rNode, true);
+    }
+}
+
+// typical Join:
+// None,Node->None
+// None,First->First
+// First,NonFirst->First
+// NonFirst,First->NonFirst
+// NonFirst,None->NonFirst
+
+/// if first node is First, its frames may need to be moved, never deleted.
+/// if first node is NonFirst, second node's own frames (First/None) must be deleted
+void CheckResetRedlineMergeFlag(SwTextNode & rNode, Recreate const eRecreateMerged)
+{
+    if (eRecreateMerged != sw::Recreate::No)
+    {
+        SwTextNode * pMergeNode(&rNode);
+        if (eRecreateMerged == sw::Recreate::Predecessor)
+        {
+            for (sal_uLong i = rNode.GetIndex() - 1; ; --i)
+            {
+                SwNode *const pNode(rNode.GetNodes()[i]);
+                assert(!pNode->IsStartNode());
+                if (pNode->IsEndNode())
+                {
+                    i = pNode->StartOfSectionIndex();
+                }
+                else if (pNode->IsTextNode())
+                {
+                    pMergeNode = pNode->GetTextNode(); // use predecessor to merge
+                    break;
+                }
+            }
+        }
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pMergeNode);
+        for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                frames.push_back(pFrame);
+            }
+        }
+        auto eMode(sw::FrameMode::Existing);
+        for (SwTextFrame * pFrame : frames)
+        {
+            SwTextNode & rFirstNode(pFrame->GetMergedPara()
+                ? *pFrame->GetMergedPara()->pFirstNode
+                : *pMergeNode);
+            assert(rFirstNode.GetIndex() <= rNode.GetIndex());
+            pFrame->SetMergedPara(sw::CheckParaRedlineMerge(
+                        *pFrame, rFirstNode, eMode));
+            assert(pFrame->GetMergedPara());
+            assert(pFrame->GetMergedPara()->listener.IsListeningTo(&rNode));
+            assert(rNode.GetIndex() <= pFrame->GetMergedPara()->pLastNode->GetIndex());
+            eMode = sw::FrameMode::New; // Existing is not idempotent!
+        }
+    }
+    else if (rNode.GetRedlineMergeFlag() != SwNode::Merge::None)
+    {
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(rNode);
+        for (SwTextFrame * pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (auto const pMergedPara = pFrame->GetMergedPara())
+            {
+                if (pMergedPara->pFirstNode == pMergedPara->pLastNode)
+                {
+                    assert(pMergedPara->pFirstNode == &rNode);
+                    rNode.SetRedlineMergeFlag(SwNode::Merge::None);
+                }
+                break; // checking once is enough
+            }
+            else if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                rNode.SetRedlineMergeFlag(SwNode::Merge::None);
+                break; // checking once is enough
+            }
+        }
+    }
+}
+
+} // namespace
 
 SwContentNode *SwTextNode::JoinNext()
 {
@@ -705,11 +1029,15 @@ SwContentNode *SwTextNode::JoinNext()
             // move all ShellCursor/StackCursor/UnoCursor out of delete range
             pDoc->CorrAbs( aIdx, SwPosition( *this ), nOldLen, true );
         }
+        SwNode::Merge const eOldMergeFlag(pTextNode->GetRedlineMergeFlag());
         rNds.Delete(aIdx);
         SetWrong( pList, false );
         SetGrammarCheck( pList3, false );
         SetSmartTags( pList2, false );
         InvalidateNumRule();
+        CheckResetRedlineMergeFlag(*this, eOldMergeFlag == SwNode::Merge::First
+                                            ? sw::Recreate::ThisNode
+                                            : sw::Recreate::No);
     }
     else {
         OSL_FAIL( "No TextNode." );
@@ -799,11 +1127,20 @@ void SwTextNode::JoinPrev()
             // move all ShellCursor/StackCursor/UnoCursor out of delete range
             pDoc->CorrAbs( aIdx, SwPosition( *this ), nLen, true );
         }
+        SwNode::Merge const eOldMergeFlag(pTextNode->GetRedlineMergeFlag());
+        if (eOldMergeFlag == SwNode::Merge::First)
+        {
+            sw::MoveDeletedPrevFrames(*pTextNode, *this);
+        }
         rNds.Delete(aIdx);
         SetWrong( pList, false );
         SetGrammarCheck( pList3, false );
         SetSmartTags( pList2, false );
         InvalidateNumRule();
+        sw::CheckResetRedlineMergeFlag(*this,
+                eOldMergeFlag == SwNode::Merge::NonFirst
+                    ? sw::Recreate::Predecessor
+                    : sw::Recreate::No);
     }
     else {
         OSL_FAIL( "No TextNode." );
@@ -871,20 +1208,17 @@ void SwTextNode::Update(
                 }
 
                 sal_Int32 * const pEnd = pHint->GetEnd();
-                if (pEnd)
+                if (pEnd && *pEnd > nChangePos )
                 {
-                    if ( *pEnd > nChangePos )
+                    if( *pEnd > nChangeEnd )
                     {
-                        if( *pEnd > nChangeEnd )
-                        {
-                            *pEnd = *pEnd - nChangeLen;
-                        }
-                        else
-                        {
-                            *pEnd = nChangePos;
-                        }
-                        bTextAttrChanged = !bStartOfTextAttrChanged;
+                        *pEnd = *pEnd - nChangeLen;
                     }
+                    else
+                    {
+                        *pEnd = nChangePos;
+                    }
+                    bTextAttrChanged = !bStartOfTextAttrChanged;
                 }
 
                 if ( bTextAttrChanged
@@ -970,20 +1304,17 @@ void SwTextNode::Update(
                         }
                         else if( bNoExp )
                         {
-                            if ( !pCollector.get() )
+                            if (!pCollector)
                             {
                                pCollector.reset( new SwpHts );
                             }
-                            for(SwpHts::iterator it =  pCollector->begin(); it != pCollector->end(); ++it)
+                            auto it = std::find_if(pCollector->begin(), pCollector->end(),
+                                [nWhich](const SwTextAttr *pTmp) { return nWhich == pTmp->Which(); });
+                            if (it != pCollector->end())
                             {
-                               SwTextAttr *pTmp = *it;
-                               if( nWhich == pTmp->Which() )
-                               {
-                                   pCollector->erase( it );
-                                   SwTextAttr::Destroy( pTmp,
-                                       GetDoc()->GetAttrPool() );
-                                   break;
-                               }
+                                SwTextAttr *pTmp = *it;
+                                pCollector->erase( it );
+                                SwTextAttr::Destroy( pTmp, GetDoc()->GetAttrPool() );
                             }
                             SwTextAttr * const pTmp =
                             MakeTextAttr( *GetDoc(),
@@ -1065,7 +1396,7 @@ void SwTextNode::Update(
             bool bAtLeastOneBookmarkMoved = false;
             bool bAtLeastOneExpandedBookmarkAtInsertionPosition = false;
             // A text node already knows its marks via its SwIndexes.
-            std::set<const sw::mark::IMark*> aSeenMarks;
+            o3tl::sorted_vector<const sw::mark::IMark*> aSeenMarks;
             const SwIndex* next;
             for (const SwIndex* pIndex = GetFirstIndex(); pIndex; pIndex = next )
             {
@@ -1074,9 +1405,8 @@ void SwTextNode::Update(
                 if (!pMark)
                     continue;
                 // Only handle bookmarks once, if they start and end at this node as well.
-                if (aSeenMarks.find(pMark) != aSeenMarks.end())
+                if (!aSeenMarks.insert(pMark).second)
                     continue;
-                aSeenMarks.insert(pMark);
                 const SwPosition* pEnd = &pMark->GetMarkEnd();
                 SwIndex & rEndIdx = const_cast<SwIndex&>(pEnd->nContent);
                 if( this == &pEnd->nNode.GetNode() &&
@@ -1110,9 +1440,9 @@ void SwTextNode::Update(
 #if OSL_DEBUG_LEVEL > 0
         std::vector<SwFrameFormat*> checkFormats;
         const SwFrameFormats& rFormats = *GetDoc()->GetSpzFrameFormats();
-        for (SwFrameFormats::const_iterator pFormat = rFormats.begin(); pFormat != rFormats.end(); ++pFormat)
+        for (auto& rpFormat : rFormats)
         {
-            const SwFormatAnchor& rAnchor = (*pFormat)->GetAnchor();
+            const SwFormatAnchor& rAnchor = rpFormat->GetAnchor();
             const SwPosition* pContentAnchor = rAnchor.GetContentAnchor();
             if (rAnchor.GetAnchorId() == RndStdIds::FLY_AT_CHAR && pContentAnchor)
             {
@@ -1124,7 +1454,7 @@ void SwTextNode::Update(
                     #if 0
                     rEndIdx.Assign(&aTmpIdxReg, rEndIdx.GetIndex());
                     #endif
-                    checkFormats.push_back( *pFormat );
+                    checkFormats.push_back( rpFormat );
                 }
             }
         }
@@ -1184,7 +1514,7 @@ void SwTextNode::Update(
     // base class
     SwIndexReg::Update( rPos, nChangeLen, bNegative, bDelete );
 
-    if ( pCollector.get() )
+    if (pCollector)
     {
         const size_t nCount = pCollector->size();
         for ( size_t i = 0; i < nCount; ++i )
@@ -1482,7 +1812,7 @@ static SwCharFormat* lcl_FindCharFormat( const SwCharFormats* pCharFormats, cons
     return nullptr;
 }
 
-void lcl_CopyHint(
+static void lcl_CopyHint(
     const sal_uInt16 nWhich,
     const SwTextAttr * const pHt,
     SwTextAttr *const pNewHt,
@@ -1991,6 +2321,12 @@ OUString SwTextNode::InsertText( const OUString & rStr, const SwIndex & rIdx,
         SetIgnoreDontExpand( bOldExpFlg );
     }
 
+    if ( HasWriterListeners() )
+    {   // send this before messing with hints, which will send RES_UPDATE_ATTR
+        SwInsText aHint( aPos, nLen );
+        NotifyClients( nullptr, &aHint );
+    }
+
     if ( HasHints() )
     {
         bool const bHadHints(!m_pSwpHints->CanBeDeleted());
@@ -2062,12 +2398,6 @@ OUString SwTextNode::InsertText( const OUString & rStr, const SwIndex & rIdx,
                 "SwTextNode::InsertText: unexpected loss of hints");
     }
 
-    if ( HasWriterListeners() )
-    {
-        SwInsText aHint( aPos, nLen );
-        NotifyClients( nullptr, &aHint );
-    }
-
     // By inserting a character, the hidden flags
     // at the TextNode can become invalid:
     SetCalcHiddenCharFlags();
@@ -2111,7 +2441,7 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwIndex & rDestStart,
     }
     pDest->m_Text = pDest->m_Text.replaceAt(nDestStart, 0,
                         m_Text.copy(nTextStartIdx, nLen));
-    m_Text = m_Text.replaceAt(nTextStartIdx, nLen, "");
+    OUString const newText = m_Text.replaceAt(nTextStartIdx, nLen, "");
     nLen = pDest->m_Text.getLength() - nInitSize; // update w/ current size!
     if (!nLen)                 // String didn't grow?
         return;
@@ -2131,8 +2461,49 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwIndex & rDestStart,
     // copy hard attributes on whole paragraph
     if (HasSwAttrSet())
     {
+        bool hasSwAttrSet = pDest->HasSwAttrSet();
+        if (hasSwAttrSet)
+        {
+            // if we have our own property set it doesn't mean
+            // that this set defines any style different to Standard one.
+            hasSwAttrSet = false;
+
+            // so, let's check deeper if property set has defined any property
+            if (pDest->GetpSwAttrSet())
+            {
+                // check all items in the property set
+                SfxItemIter aIter( *pDest->GetpSwAttrSet() );
+                const SfxPoolItem* pItem = aIter.GetCurItem();
+                while( true )
+                {
+                    // check current item
+                    sal_uInt16 nWhich = IsInvalidItem( pItem )
+                        ? pDest->GetpSwAttrSet()->GetWhichByPos( aIter.GetCurPos() )
+                        : pItem->Which();
+                    if( RES_FRMATR_STYLE_NAME != nWhich &&
+                        RES_FRMATR_CONDITIONAL_STYLE_NAME != nWhich &&
+                        SfxItemState::SET == pDest->GetpSwAttrSet()->GetItemState( nWhich, false ) )
+                    {
+                        // check if parent value (original value in style) has the same value as in [pItem]
+                        const SfxPoolItem&  rParentItem = pDest->GetpSwAttrSet()->GetParent()->Get( nWhich, true );
+
+                        hasSwAttrSet = (rParentItem != *pItem);
+
+                        // property set is not empty => no need to make anymore checks
+                        if (hasSwAttrSet)
+                            break;
+                    }
+
+                    // let's check next item
+                    if( aIter.IsAtEnd() )
+                        break;
+                    pItem = aIter.NextItem();
+                }
+            }
+        }
+
         // all or just the Char attributes?
-        if( nInitSize || pDest->HasSwAttrSet() ||
+        if( nInitSize || hasSwAttrSet ||
             nLen != pDest->GetText().getLength())
         {
             SfxItemSet aCharSet(
@@ -2150,6 +2521,15 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwIndex & rDestStart,
             GetpSwAttrSet()->CopyToModify( *pDest );
         }
     }
+
+    // notify frames - before moving hints, because footnotes
+    // want to find their anchor text frame in the follow chain
+    SwInsText aInsHint( nDestStart, nLen );
+    pDest->ModifyNotification( nullptr, &aInsHint );
+    sw::MoveText const moveHint(pDest, nDestStart, nTextStartIdx, nLen);
+    CallSwClientNotify(moveHint);
+    SwDelText aDelHint( nTextStartIdx, nLen );
+    ModifyNotification( nullptr, &aDelHint );
 
     // 2. move attributes
     // Iterate over attribute array until the start of the attribute
@@ -2278,6 +2658,9 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwIndex & rDestStart,
         Update( rStart, nLen, true, true );
     }
 
+    // set after moving hints
+    m_Text = newText;
+
     if (bMergePortionsNeeded)
     {
         m_pSwpHints->MergePortions(*this);
@@ -2286,12 +2669,6 @@ void SwTextNode::CutImpl( SwTextNode * const pDest, const SwIndex & rDestStart,
     CHECK_SWPHINTS(this);
 
     TryDeleteSwpHints();
-
-    // notify layout frames
-    SwInsText aInsHint( nDestStart, nLen );
-    pDest->ModifyNotification( nullptr, &aInsHint );
-    SwDelText aDelHint( nTextStartIdx, nLen );
-    ModifyNotification( nullptr, &aDelHint );
 }
 
 void SwTextNode::EraseText(const SwIndex &rIdx, const sal_Int32 nCount,
@@ -2303,7 +2680,8 @@ void SwTextNode::EraseText(const SwIndex &rIdx, const sal_Int32 nCount,
     const sal_Int32 nCnt = (nCount==SAL_MAX_INT32)
                       ? m_Text.getLength() - nStartIdx : nCount;
     const sal_Int32 nEndIdx = nStartIdx + nCnt;
-    m_Text = m_Text.replaceAt(nStartIdx, nCnt, "");
+    if (nEndIdx <= m_Text.getLength())
+        m_Text = m_Text.replaceAt(nStartIdx, nCnt, "");
 
     // GCAttr(); don't remove all empty ones, just the ones that are in the
     // range but not at the end of the range.
@@ -2327,8 +2705,7 @@ void SwTextNode::EraseText(const SwIndex &rIdx, const sal_Int32 nCount,
         {
                     // attribute with neither end nor CH_TXTATR?
             assert(pHt->HasDummyChar());
-            if (isTXTATR(nWhich) &&
-                (nHintStart >= nStartIdx) && (nHintStart < nEndIdx))
+            if (isTXTATR(nWhich) && (nHintStart < nEndIdx))
             {
                 m_pSwpHints->DeleteAtPos(i);
                 DestroyAttr( pHt );
@@ -2439,8 +2816,7 @@ void SwTextNode::GCAttr()
     }
 }
 
-// #i23726#
-SwNumRule* SwTextNode::GetNumRule_(bool bInParent) const
+SwNumRule* SwTextNode::GetNumRule(bool bInParent) const
 {
     SwNumRule* pRet = nullptr;
 
@@ -2480,11 +2856,6 @@ SwNumRule* SwTextNode::GetNumRule_(bool bInParent) const
     return pRet;
 }
 
-SwNumRule* SwTextNode::GetNumRule(bool bInParent) const
-{
-    return GetNumRule_(bInParent);
-}
-
 void SwTextNode::NumRuleChgd()
 {
     if ( IsInList() )
@@ -2493,6 +2864,10 @@ void SwTextNode::NumRuleChgd()
         if ( pNumRule && pNumRule != GetNum()->GetNumRule() )
         {
             mpNodeNum->ChangeNumRule( *pNumRule );
+            if (mpNodeNumRLHidden)
+            {
+                mpNodeNumRLHidden->ChangeNumRule(*pNumRule);
+            }
         }
     }
 
@@ -2516,9 +2891,9 @@ void SwTextNode::NumRuleChgd()
 }
 
 // -> #i27615#
-bool SwTextNode::IsNumbered() const
+bool SwTextNode::IsNumbered(SwRootFrame const*const pLayout) const
 {
-    SwNumRule* pRule = GetNum() ? GetNum()->GetNumRule() : nullptr;
+    SwNumRule* pRule = GetNum(pLayout) ? GetNum(pLayout)->GetNumRule() : nullptr;
     return pRule && IsCountedInList();
 }
 
@@ -2540,16 +2915,16 @@ SwTextNode* SwTextNode::MakeNewTextNode( const SwNodeIndex& rPos, bool bNext,
                                        bool bChgFollow )
 {
     // ignore hard PageBreak/PageDesc/ColumnBreak from Auto-Set
-    SwAttrSet* pNewAttrSet = nullptr;
+    std::unique_ptr<SwAttrSet> pNewAttrSet;
     // #i75353#
     bool bClearHardSetNumRuleWhenFormatCollChanges( false );
     if( HasSwAttrSet() )
     {
-        pNewAttrSet = new SwAttrSet( *GetpSwAttrSet() );
+        pNewAttrSet.reset(new SwAttrSet( *GetpSwAttrSet() ));
         const SfxItemSet* pTmpSet = GetpSwAttrSet();
 
         if (bNext)     // successor doesn't inherit breaks!
-            pTmpSet = pNewAttrSet;
+            pTmpSet = pNewAttrSet.get();
 
         // !bNext: remove PageBreaks/PageDesc/ColBreak from this
         bool bRemoveFromCache = false;
@@ -2615,9 +2990,9 @@ SwTextNode* SwTextNode::MakeNewTextNode( const SwNodeIndex& rPos, bool bNext,
 
     SwTextFormatColl* pColl = GetTextColl();
 
-    SwTextNode *pNode = new SwTextNode( rPos, pColl, pNewAttrSet );
+    SwTextNode *pNode = new SwTextNode( rPos, pColl, pNewAttrSet.get() );
 
-    delete pNewAttrSet;
+    pNewAttrSet.reset();
 
     const SwNumRule* pRule = GetNumRule();
     if( pRule && pRule == pNode->GetNumRule() && rNds.IsDocNodes() )
@@ -2683,7 +3058,7 @@ SwContentNode* SwTextNode::AppendNode( const SwPosition & rPos )
     }
 
     if( HasWriterListeners() )
-        MakeFrames( *pNew );
+        MakeFramesForAdjacentContentNode(*pNew);
     return pNew;
 }
 
@@ -2715,7 +3090,7 @@ SwTextAttr * SwTextNode::GetTextAttrForCharAt(
 namespace
 {
 
-inline sal_uInt16 lcl_BoundListLevel(const int nActualLevel)
+sal_uInt16 lcl_BoundListLevel(const int nActualLevel)
 {
     return static_cast<sal_uInt16>( std::min( std::max(nActualLevel, 0), MAXLEVEL-1 ) );
 }
@@ -2730,7 +3105,7 @@ bool SwTextNode::HasNumber() const
     const SwNumRule* pRule = GetNum() ? GetNum()->GetNumRule() : nullptr;
     if ( pRule )
     {
-        SwNumFormat aFormat(pRule->Get(lcl_BoundListLevel(GetActualListLevel())));
+        const SwNumFormat& aFormat(pRule->Get(lcl_BoundListLevel(GetActualListLevel())));
 
         // #i40041#
         bResult = aFormat.IsEnumeration() &&
@@ -2747,7 +3122,7 @@ bool SwTextNode::HasBullet() const
     const SwNumRule* pRule = GetNum() ? GetNum()->GetNumRule() : nullptr;
     if ( pRule )
     {
-        SwNumFormat aFormat(pRule->Get(lcl_BoundListLevel(GetActualListLevel())));
+        const SwNumFormat& aFormat(pRule->Get(lcl_BoundListLevel(GetActualListLevel())));
 
         bResult = aFormat.IsItemize();
     }
@@ -2759,14 +3134,15 @@ bool SwTextNode::HasBullet() const
 // #128041# - introduce parameter <_bInclPrefixAndSuffixStrings>
 //i53420 added max outline parameter
 OUString SwTextNode::GetNumString( const bool _bInclPrefixAndSuffixStrings,
-        const unsigned int _nRestrictToThisLevel ) const
+        const unsigned int _nRestrictToThisLevel,
+        SwRootFrame const*const pLayout) const
 {
     if (GetDoc()->IsClipBoard() && m_pNumStringCache.get())
     {
         // #i111677# do not expand number strings in clipboard documents
         return *m_pNumStringCache;
     }
-    const SwNumRule* pRule = GetNum() ? GetNum()->GetNumRule() : nullptr;
+    const SwNumRule* pRule = GetNum(pLayout) ? GetNum(pLayout)->GetNumRule() : nullptr;
     if ( pRule &&
          IsCountedInList() )
     {
@@ -2776,7 +3152,7 @@ OUString SwTextNode::GetNumString( const bool _bInclPrefixAndSuffixStrings,
 
             (style::NumberingType::NUMBER_NONE == rNumberType.GetNumberingType()))
         {
-            return pRule->MakeNumString( GetNum()->GetNumberVector(),
+            return pRule->MakeNumString( GetNum(pLayout)->GetNumberVector(),
                                      _bInclPrefixAndSuffixStrings,
                                      false,
                                      _nRestrictToThisLevel,
@@ -2845,7 +3221,7 @@ bool SwTextNode::GetFirstLineOfsWithNum( short& rFLOffset ) const
             const SwNumFormat& rFormat = pRule->Get(lcl_BoundListLevel(GetActualListLevel()));
             if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
             {
-                rFLOffset = rFormat.GetFirstLineOffset();
+                rFLOffset = rFormat.GetFirstLineOffset(); //TODO: overflow
 
                 if (!getIDocumentSettingAccess()->get(DocumentSettingId::IGNORE_FIRST_LINE_INDENT_IN_NUMBERING))
                 {
@@ -3011,19 +3387,22 @@ static void Replace0xFF(
 
 // Expand fields
 // #i83479# - handling of new parameters
-OUString SwTextNode::GetExpandText(  const sal_Int32 nIdx,
+OUString SwTextNode::GetExpandText(SwRootFrame const*const pLayout,
+                                   const sal_Int32 nIdx,
                                    const sal_Int32 nLen,
                                    const bool bWithNum,
                                    const bool bAddSpaceAfterListLabelStr,
                                    const bool bWithSpacesForLevel,
-                                   const bool bWithFootnote ) const
+                                   const ExpandMode eAdditionalMode) const
 
 {
-    ExpandMode eMode = ExpandMode::ExpandFields;
-    if (bWithFootnote)
-        eMode |= ExpandMode::ExpandFootnote;
+    ExpandMode eMode = ExpandMode::ExpandFields | eAdditionalMode;
+    if (pLayout && pLayout->IsHideRedlines())
+    {
+        eMode |= ExpandMode::HideDeletions;
+    }
 
-    ModelToViewHelper aConversionMap(*this, eMode);
+    ModelToViewHelper aConversionMap(*this, pLayout, eMode);
     const OUString aExpandText = aConversionMap.getViewText();
     const sal_Int32 nExpandBegin = aConversionMap.ConvertToViewPosition( nIdx );
     sal_Int32 nEnd = nLen == -1 ? GetText().getLength() : nIdx + nLen;
@@ -3036,14 +3415,14 @@ OUString SwTextNode::GetExpandText(  const sal_Int32 nIdx,
 
     if( bWithNum )
     {
-        if ( !GetNumString().isEmpty() )
+        if (!GetNumString(true, MAXLEVEL, pLayout).isEmpty())
         {
             if ( bAddSpaceAfterListLabelStr )
             {
                 const sal_Unicode aSpace = ' ';
                 aText.insert(0, aSpace);
             }
-            aText.insert(0, GetNumString());
+            aText.insert(0, GetNumString(true, MAXLEVEL, pLayout));
         }
     }
 
@@ -3060,8 +3439,9 @@ OUString SwTextNode::GetExpandText(  const sal_Int32 nIdx,
     return aText.makeStringAndClear();
 }
 
-bool SwTextNode::GetExpandText( SwTextNode& rDestNd, const SwIndex* pDestIdx,
-                        sal_Int32 nIdx, sal_Int32 nLen, bool bWithNum,
+bool SwTextNode::CopyExpandText(SwTextNode& rDestNd, const SwIndex* pDestIdx,
+                        sal_Int32 nIdx, sal_Int32 nLen,
+                        SwRootFrame const*const pLayout, bool bWithNum,
                         bool bWithFootnote, bool bReplaceTabsWithSpaces ) const
 {
     if( &rDestNd == this )
@@ -3130,7 +3510,7 @@ bool SwTextNode::GetExpandText( SwTextNode& rDestNd, const SwIndex* pDestIdx,
                 case RES_TXTATR_ANNOTATION:
                     {
                         OUString const aExpand(
-                            static_txtattr_cast<SwTextField const*>(pHt)->GetFormatField().GetField()->ExpandField(true));
+                            static_txtattr_cast<SwTextField const*>(pHt)->GetFormatField().GetField()->ExpandField(true, pLayout));
                         if (!aExpand.isEmpty())
                         {
                             ++aDestIdx;     // insert behind
@@ -3152,14 +3532,17 @@ bool SwTextNode::GetExpandText( SwTextNode& rDestNd, const SwIndex* pDestIdx,
                         {
                             const SwFormatFootnote& rFootnote = pHt->GetFootnote();
                             OUString sExpand;
+                            auto const number(pLayout && pLayout->IsHideRedlines()
+                                    ? rFootnote.GetNumberRLHidden()
+                                    : rFootnote.GetNumber());
                             if( !rFootnote.GetNumStr().isEmpty() )
                                 sExpand = rFootnote.GetNumStr();
                             else if( rFootnote.IsEndNote() )
                                 sExpand = GetDoc()->GetEndNoteInfo().aFormat.
-                                GetNumStr( rFootnote.GetNumber() );
+                                            GetNumStr(number);
                             else
                                 sExpand = GetDoc()->GetFootnoteInfo().aFormat.
-                                                GetNumStr( rFootnote.GetNumber() );
+                                            GetNumStr(number);
                             if( !sExpand.isEmpty() )
                             {
                                 ++aDestIdx;     // insert behind
@@ -3191,7 +3574,7 @@ bool SwTextNode::GetExpandText( SwTextNode& rDestNd, const SwIndex* pDestIdx,
     if( bWithNum )
     {
         aDestIdx = nDestStt;
-        rDestNd.InsertText( GetNumString(), aDestIdx );
+        rDestNd.InsertText( GetNumString(true, MAXLEVEL, pLayout), aDestIdx );
     }
 
     aDestIdx = 0;
@@ -3587,20 +3970,34 @@ SwFormatColl* SwTextNode::ChgFormatColl( SwFormatColl *pNewColl )
     return pOldColl;
 }
 
-SwNodeNum* SwTextNode::CreateNum() const
+const SwNodeNum* SwTextNode::GetNum(SwRootFrame const*const pLayout) const
 {
-    if ( !mpNodeNum )
-    {
-        mpNodeNum = new SwNodeNum( const_cast<SwTextNode*>(this) );
-    }
-    return mpNodeNum;
+    // invariant: it's only in list in Hide mode if it's in list in normal mode
+    assert(mpNodeNum || !mpNodeNumRLHidden);
+    return pLayout && pLayout->IsHideRedlines() ? mpNodeNumRLHidden : mpNodeNum;
 }
 
-SwNumberTree::tNumberVector SwTextNode::GetNumberVector() const
+void SwTextNode::DoNum(std::function<void (SwNodeNum &)> const& rFunc)
 {
-    if ( GetNum() )
+    // temp. clear because GetActualListLevel() may be called and the assert
+    // there triggered during update, which is unhelpful
+    SwNodeNum * pBackup(mpNodeNumRLHidden);
+    mpNodeNumRLHidden = nullptr;
+    assert(mpNodeNum);
+    rFunc(*mpNodeNum);
+    if (pBackup)
     {
-        return GetNum()->GetNumberVector();
+        mpNodeNumRLHidden = pBackup;
+        rFunc(*mpNodeNumRLHidden);
+    }
+}
+
+SwNumberTree::tNumberVector
+SwTextNode::GetNumberVector(SwRootFrame const*const pLayout) const
+{
+    if (SwNodeNum const*const pNum = GetNum(pLayout))
+    {
+        return pNum->GetNumberVector();
     }
     else
     {
@@ -3706,6 +4103,8 @@ int SwTextNode::GetAttrListLevel() const
 
 int SwTextNode::GetActualListLevel() const
 {
+    assert(!GetNum() || !mpNodeNumRLHidden || // must be in sync
+        GetNum()->GetLevelInListTree() == mpNodeNumRLHidden->GetLevelInListTree());
     return GetNum() ? GetNum()->GetLevelInListTree() : -1;
 }
 
@@ -3853,6 +4252,29 @@ bool SwTextNode::IsCountedInList() const
     return aIsCountedInListItem.GetValue();
 }
 
+static SwList * FindList(SwTextNode *const pNode)
+{
+    const OUString sListId = pNode->GetListId();
+    if (!sListId.isEmpty())
+    {
+        auto & rIDLA(pNode->GetDoc()->getIDocumentListsAccess());
+        SwList* pList = rIDLA.getListByName( sListId );
+        if ( pList == nullptr )
+        {
+            // Create corresponding list.
+            SwNumRule* pNumRule = pNode->GetNumRule();
+            if ( pNumRule )
+            {
+                pList = rIDLA.createList(sListId, pNode->GetNumRule()->GetName());
+            }
+        }
+        OSL_ENSURE( pList != nullptr,
+                "<SwTextNode::AddToList()> - no list for given list id. Serious defect" );
+        return pList;
+    }
+    return nullptr;
+}
+
 void SwTextNode::AddToList()
 {
     if ( IsInList() )
@@ -3861,30 +4283,50 @@ void SwTextNode::AddToList()
         return;
     }
 
-    const OUString sListId = GetListId();
-    if (!sListId.isEmpty())
+    SwList *const pList(FindList(this));
+    if (pList && GetNodes().IsDocNodes()) // not for undo nodes
     {
-        SwList* pList = GetDoc()->getIDocumentListsAccess().getListByName( sListId );
-        if ( pList == nullptr )
+        assert(!mpNodeNum);
+        mpNodeNum = new SwNodeNum(this, false);
+        pList->InsertListItem(*mpNodeNum, false, GetAttrListLevel());
+        // iterate all frames & if there's one with hidden layout...
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> iter(*this);
+        for (SwTextFrame* pFrame = iter.First(); pFrame; pFrame = iter.Next())
         {
-            // Create corresponding list.
-            SwNumRule* pNumRule = GetNumRule();
-            if ( pNumRule )
+            if (pFrame->getRootFrame()->IsHideRedlines())
             {
-                pList = GetDoc()->getIDocumentListsAccess().createList( sListId, GetNumRule()->GetName() );
+                if (pFrame->GetTextNodeForParaProps() == this)
+                {
+                    AddToListRLHidden();
+                }
+                break; // assume it's consistent, need to check only once
             }
         }
-        OSL_ENSURE( pList != nullptr,
-                "<SwTextNode::AddToList()> - no list for given list id. Serious defect" );
-        if ( pList )
-        {
-            pList->InsertListItem( *CreateNum(), GetAttrListLevel() );
-        }
+    }
+}
+
+void SwTextNode::AddToListRLHidden()
+{
+    if (mpNodeNumRLHidden)
+    {
+        assert(false);
+        OSL_FAIL( "<SwTextNode::AddToListRLHidden()> - the text node is already added to a list. Serious defect" );
+        return;
+    }
+
+    SwList *const pList(FindList(this));
+    if (pList)
+    {
+        assert(!mpNodeNumRLHidden);
+        mpNodeNumRLHidden = new SwNodeNum(this, true);
+        pList->InsertListItem(*mpNodeNumRLHidden, true, GetAttrListLevel());
     }
 }
 
 void SwTextNode::RemoveFromList()
 {
+    // sw_redlinehide: ensure it's removed from the other half too!
+    RemoveFromListRLHidden();
     if ( IsInList() )
     {
         SwList::RemoveListItem( *mpNodeNum );
@@ -3895,17 +4337,31 @@ void SwTextNode::RemoveFromList()
     }
 }
 
+void SwTextNode::RemoveFromListRLHidden()
+{
+    if (mpNodeNumRLHidden) // direct access because RemoveFromList doesn't have layout
+    {
+        assert(mpNodeNumRLHidden->GetParent() || !GetNodes().IsDocNodes());
+        SwList::RemoveListItem(*mpNodeNumRLHidden);
+        delete mpNodeNumRLHidden;
+        mpNodeNumRLHidden = nullptr;
+
+        SetWordCountDirty( true );
+    }
+}
+
 bool SwTextNode::IsInList() const
 {
     return GetNum() != nullptr && GetNum()->GetParent() != nullptr;
 }
 
-bool SwTextNode::IsFirstOfNumRule() const
+bool SwTextNode::IsFirstOfNumRule(SwRootFrame const& rLayout) const
 {
     bool bResult = false;
 
-    if ( GetNum() && GetNum()->GetNumRule())
-        bResult = GetNum()->IsFirst();
+    SwNodeNum const*const pNum(GetNum(&rLayout));
+    if (pNum && pNum->GetNumRule())
+        bResult = pNum->IsFirst();
 
     return bResult;
 }
@@ -3932,7 +4388,7 @@ OUString SwTextNode::GetListId() const
 {
     const SfxStringItem& rListIdItem =
                 dynamic_cast<const SfxStringItem&>(GetAttr( RES_PARATR_LIST_ID ));
-    const OUString sListId {rListIdItem.GetValue()};
+    const OUString& sListId {rListIdItem.GetValue()};
 
     // As long as no explicit list id attribute is set, use the list id of
     // the list, which has been created for the applied list style.
@@ -4397,20 +4853,24 @@ namespace {
         {
             if ( mbUpdateListLevel && mrTextNode.IsInList() )
             {
-                const_cast<SwNodeNum*>(mrTextNode.GetNum())->SetLevelInListTree(
-                                                    mrTextNode.GetAttrListLevel() );
+                auto const nLevel(mrTextNode.GetAttrListLevel());
+                mrTextNode.DoNum(
+                    [nLevel](SwNodeNum & rNum) { rNum.SetLevelInListTree(nLevel); });
             }
 
             if ( mbUpdateListRestart && mrTextNode.IsInList() )
             {
-                SwNodeNum* pNodeNum = const_cast<SwNodeNum*>(mrTextNode.GetNum());
-                pNodeNum->InvalidateMe();
-                pNodeNum->NotifyInvalidSiblings();
+                mrTextNode.DoNum(
+                    [](SwNodeNum & rNum) {
+                        rNum.InvalidateMe();
+                        rNum.NotifyInvalidSiblings();
+                    });
             }
 
             if ( mbUpdateListCount && mrTextNode.IsInList() )
             {
-                const_cast<SwNodeNum*>(mrTextNode.GetNum())->InvalidateAndNotifyTree();
+                mrTextNode.DoNum(
+                    [](SwNodeNum & rNum) { rNum.InvalidateAndNotifyTree(); });
             }
         }
 
@@ -4611,17 +5071,16 @@ namespace {
     {
         bool bRemoveFromList( false );
         {
-            std::vector<sal_uInt16>::const_iterator it;
-            for ( it = rWhichArr.begin(); it != rWhichArr.end(); ++it)
+            for (const auto& rWhich : rWhichArr)
             {
                 // RES_PARATR_NUMRULE and RES_PARATR_LIST_ID
-                if ( *it == RES_PARATR_NUMRULE )
+                if ( rWhich == RES_PARATR_NUMRULE )
                 {
                     bRemoveFromList = bRemoveFromList ||
                                       mrTextNode.GetNumRule() != nullptr;
                     mbListStyleOrIdReset = true;
                 }
-                else if ( *it == RES_PARATR_LIST_ID )
+                else if ( rWhich == RES_PARATR_LIST_ID )
                 {
                     bRemoveFromList = bRemoveFromList ||
                         ( mrTextNode.GetpSwAttrSet() &&
@@ -4631,7 +5090,7 @@ namespace {
                 }
                 // #i70748#
                 // RES_PARATR_OUTLINELEVEL
-                else if ( *it == RES_PARATR_OUTLINELEVEL )
+                else if ( rWhich == RES_PARATR_OUTLINELEVEL )
                 {
                     mrTextNode.ResetEmptyListStyleDueToResetOutlineLevelAttr();
                 }
@@ -4640,19 +5099,19 @@ namespace {
                 {
                     // RES_PARATR_LIST_LEVEL
                     mbUpdateListLevel = mbUpdateListLevel ||
-                                        ( *it == RES_PARATR_LIST_LEVEL &&
+                                        ( rWhich == RES_PARATR_LIST_LEVEL &&
                                           mrTextNode.HasAttrListLevel() );
 
                     // RES_PARATR_LIST_ISRESTART and RES_PARATR_LIST_RESTARTVALUE
                     mbUpdateListRestart = mbUpdateListRestart ||
-                                          ( *it == RES_PARATR_LIST_ISRESTART &&
+                                          ( rWhich == RES_PARATR_LIST_ISRESTART &&
                                             mrTextNode.IsListRestart() ) ||
-                                          ( *it == RES_PARATR_LIST_RESTARTVALUE &&
+                                          ( rWhich == RES_PARATR_LIST_RESTARTVALUE &&
                                             mrTextNode.HasAttrListRestartValue() );
 
                     // RES_PARATR_LIST_ISCOUNTED
                     mbUpdateListCount = mbUpdateListCount ||
-                                        ( *it == RES_PARATR_LIST_ISCOUNTED &&
+                                        ( rWhich == RES_PARATR_LIST_ISCOUNTED &&
                                           !mrTextNode.IsCountedInList() );
                 }
             }
@@ -4705,10 +5164,17 @@ namespace {
             }
             // #i70748#
             // #i105562#
-            else if ( mrTextNode.GetpSwAttrSet() &&
-                      dynamic_cast<const SfxUInt16Item &>(mrTextNode.GetAttr( RES_PARATR_OUTLINELEVEL, false )).GetValue() > 0 )
+            else
             {
-                mrTextNode.SetEmptyListStyleDueToSetOutlineLevelAttr();
+                assert(!mrTextNode.GetpSwAttrSet()
+                       || dynamic_cast<const SfxUInt16Item*>(
+                              &mrTextNode.GetAttr(RES_PARATR_OUTLINELEVEL, false)));
+                if (mrTextNode.GetpSwAttrSet()
+                    && static_cast<const SfxUInt16Item&>(
+                           mrTextNode.GetAttr(RES_PARATR_OUTLINELEVEL, false)).GetValue() > 0)
+                {
+                    mrTextNode.SetEmptyListStyleDueToSetOutlineLevelAttr();
+                }
             }
         }
 
@@ -4716,21 +5182,24 @@ namespace {
         {
             if ( mbUpdateListLevel )
             {
-                SwNodeNum* pNodeNum = const_cast<SwNodeNum*>(mrTextNode.GetNum());
-                pNodeNum->SetLevelInListTree( mrTextNode.GetAttrListLevel() );
+                auto const nLevel(mrTextNode.GetAttrListLevel());
+                mrTextNode.DoNum(
+                    [nLevel](SwNodeNum & rNum) { rNum.SetLevelInListTree(nLevel); });
             }
 
             if ( mbUpdateListRestart )
             {
-                SwNodeNum* pNodeNum = const_cast<SwNodeNum*>(mrTextNode.GetNum());
-                pNodeNum->InvalidateMe();
-                pNodeNum->NotifyInvalidSiblings();
+                mrTextNode.DoNum(
+                    [](SwNodeNum & rNum) {
+                        rNum.InvalidateMe();
+                        rNum.NotifyInvalidSiblings();
+                    });
             }
 
             if ( mbUpdateListCount )
             {
-                SwNodeNum* pNodeNum = const_cast<SwNodeNum*>(mrTextNode.GetNum());
-                pNodeNum->InvalidateAndNotifyTree();
+                mrTextNode.DoNum(
+                    [](SwNodeNum & rNum) { rNum.InvalidateAndNotifyTree(); });
             }
         }
     }
@@ -4824,7 +5293,7 @@ void SwTextNode::dumpAsXml(xmlTextWriterPtr pWriter) const
 sal_uInt32 SwTextNode::GetRsid( sal_Int32 nStt, sal_Int32 nEnd ) const
 {
     SfxItemSet aSet( const_cast<SfxItemPool&>(static_cast<SfxItemPool const &>(GetDoc()->GetAttrPool())), svl::Items<RES_CHRATR_RSID, RES_CHRATR_RSID>{} );
-    if ( GetAttr(aSet, nStt, nEnd) )
+    if (GetParaAttr(aSet, nStt, nEnd))
     {
         const SvxRsidItem* pRsid = aSet.GetItem<SvxRsidItem>(RES_CHRATR_RSID);
         if( pRsid )
@@ -4942,9 +5411,9 @@ void SwTextNode::SwClientNotify( const SwModify& rModify, const SfxHint& rHint )
             SetXParagraph(css::uno::Reference<css::text::XTextContent>(nullptr));
         }
     }
-    else if (auto pHint = dynamic_cast<const SwAttrHint*>(&rHint))
+    else if (dynamic_cast<const SwAttrHint*>(&rHint))
     {
-        if ( pHint && &rModify == GetRegisteredIn() )
+        if (&rModify == GetRegisteredIn())
             ChkCondColl();
     }
 }

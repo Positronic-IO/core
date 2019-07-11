@@ -30,11 +30,12 @@
 #include "osl/mutex.hxx"
 #include "rtl/alloc.h"
 #include "com/sun/star/uno/Sequence.hxx"
-#include "com/sun/star/uno/XInterface.hpp"
 #include "com/sun/star/lang/EventObject.hpp"
 
 #include "com/sun/star/lang/DisposedException.hpp"
 #include "cppuhelper/cppuhelperdllapi.h"
+
+namespace com { namespace sun { namespace star { namespace uno { class XInterface; } } } }
 
 /** */ //for docpp
 namespace cppu
@@ -188,7 +189,7 @@ public:
     sal_Int32 SAL_CALL removeInterface( const css::uno::Reference< css::uno::XInterface > & rxIFace );
     /**
       Call disposing on all object in the container that
-      support XEventListener. Than clear the container.
+      support XEventListener. Then clear the container.
      */
     void SAL_CALL disposeAndClear( const css::lang::EventObject & rEvt );
     /**
@@ -584,7 +585,7 @@ public:
 
     /**
       Call disposing on all object in the container that
-      support XEventListener. Than clear the container.
+      support XEventListener. Then clear the container.
      */
     void SAL_CALL disposeAndClear( const css::lang::EventObject & rEvt );
     /**

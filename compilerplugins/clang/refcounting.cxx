@@ -38,10 +38,10 @@ not delete on last 'release'.
 namespace {
 
 class RefCounting:
-    public RecursiveASTVisitor<RefCounting>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<RefCounting>
 {
 public:
-    explicit RefCounting(loplugin::InstantiationData const & data): Plugin(data)
+    explicit RefCounting(loplugin::InstantiationData const & data): FilteringPlugin(data)
     {}
 
     virtual void run() override { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -357,7 +357,7 @@ bool RefCounting::visitTemporaryObjectExpr(Expr const * expr) {
             DiagnosticsEngine::Warning,
             ("Temporary object of SvRefBase subclass %0 being directly stack"
              " managed, should be managed via tools::SvRef"),
-            expr->getLocStart())
+            compat::getBeginLoc(expr))
             << t.getUnqualifiedType() << expr->getSourceRange();
     } else if (containsSalhelperReferenceObjectSubclass(t.getTypePtr())) {
         report(
@@ -365,7 +365,7 @@ bool RefCounting::visitTemporaryObjectExpr(Expr const * expr) {
             ("Temporary object of salhelper::SimpleReferenceObject subclass %0"
              " being directly stack managed, should be managed via"
              " rtl::Reference"),
-            expr->getLocStart())
+            compat::getBeginLoc(expr))
             << t.getUnqualifiedType() << expr->getSourceRange();
     } else if (containsXInterfaceSubclass(t)) {
         report(
@@ -373,7 +373,7 @@ bool RefCounting::visitTemporaryObjectExpr(Expr const * expr) {
             ("Temporary object of css::uno::XInterface subclass %0 being"
              " directly stack managed, should be managed via"
              " css::uno::Reference"),
-            expr->getLocStart())
+            compat::getBeginLoc(expr))
             << t.getUnqualifiedType() << expr->getSourceRange();
     }
     return true;
@@ -507,7 +507,8 @@ bool RefCounting::VisitVarDecl(const VarDecl * varDecl) {
               << varDecl->getSourceRange();
         }
         if (containsSalhelperReferenceObjectSubclass(varDecl->getType().getTypePtr())) {
-            StringRef name { compiler.getSourceManager().getFilename(compiler.getSourceManager().getSpellingLoc(varDecl->getLocation())) };
+            StringRef name { getFileNameOfSpellingLoc(
+                compiler.getSourceManager().getSpellingLoc(varDecl->getLocation())) };
             // this is playing games that it believes is safe
             if (loplugin::isSamePathname(name, SRCDIR "/stoc/source/security/permissions.cxx"))
                 return true;

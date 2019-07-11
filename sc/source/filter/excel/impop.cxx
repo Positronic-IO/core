@@ -34,8 +34,10 @@
 #include <sfx2/printer.hxx>
 #include <sfx2/docfile.hxx>
 #include <svx/pageitem.hxx>
+#include <svx/svxids.hrc>
 #include <svl/zforlist.hxx>
 #include <unotools/configmgr.hxx>
+#include <sal/log.hxx>
 
 #include <sfx2/objsh.hxx>
 #include <tools/urlobj.hxx>
@@ -63,6 +65,9 @@
 #include <unonames.hxx>
 #include <paramisc.hxx>
 #include <postit.hxx>
+#include <colrowst.hxx>
+#include <otlnbuff.hxx>
+#include <xistyle.hxx>
 
 #include <fapihelper.hxx>
 #include <namebuff.hxx>
@@ -80,6 +85,7 @@
 #include <excimp8.hxx>
 #include <excform.hxx>
 #include <documentimport.hxx>
+#include <o3tl/make_unique.hxx>
 
 #if defined(_WIN32)
 #include <math.h>
@@ -123,14 +129,15 @@ ImportExcel::ImportExcel( XclImpRootData& rImpData, SvStream& rStrm ):
     pExcRoot = &GetOldRoot();
     pExcRoot->pIR = this;   // ExcRoot -> XclImpRoot
     pExcRoot->eDateiTyp = BiffX;
-    pExcRoot->pExtSheetBuff = new ExtSheetBuffer( pExcRoot );   //&aExtSheetBuff;
-    pExcRoot->pShrfmlaBuff = new SharedFormulaBuffer( pExcRoot );     //&aShrfrmlaBuff;
-    pExcRoot->pExtNameBuff = new ExtNameBuff ( *this );
+    pExcRoot->pExtSheetBuff.reset( new ExtSheetBuffer( pExcRoot ) );   //&aExtSheetBuff;
+    pExcRoot->pShrfmlaBuff.reset( new SharedFormulaBuffer( pExcRoot ) );     //&aShrfrmlaBuff;
+    pExcRoot->pExtNameBuff.reset( new ExtNameBuff ( *this ) );
 
-    pOutlineListBuffer = new XclImpOutlineListBuffer;
+    pOutlineListBuffer.reset(new XclImpOutlineListBuffer);
 
-    // ab Biff8
-    pFormConv = pExcRoot->pFmlaConverter = new ExcelToSc( GetRoot() );
+    // from Biff8 on
+    pFormConv.reset(new ExcelToSc( GetRoot() ));
+    pExcRoot->pFmlaConverter = pFormConv.get();
 
     bTabTruncated = false;
 
@@ -152,9 +159,9 @@ ImportExcel::~ImportExcel()
 {
     GetDoc().SetSrcCharSet( GetTextEncoding() );
 
-    delete pOutlineListBuffer;
+    pOutlineListBuffer.reset();
 
-    delete pFormConv;
+    pFormConv.reset();
 }
 
 void ImportExcel::SetLastFormula( SCCOL nCol, SCROW nRow, double fVal, sal_uInt16 nXF, ScFormulaCell* pCell )
@@ -379,8 +386,10 @@ void ImportExcel::ReadBoolErr()
             GetXFRangeBuffer().SetXF( aScPos, nXFIdx );
 
         double fValue;
-        const ScTokenArray* pScTokArr = ErrorToFormula( nType != EXC_BOOLERR_BOOL, nValue, fValue );
-        ScFormulaCell* pCell = pScTokArr ? new ScFormulaCell(pD, aScPos, *pScTokArr) : new ScFormulaCell(pD, aScPos);
+        std::unique_ptr<ScTokenArray> pScTokArr = ErrorToFormula( nType != EXC_BOOLERR_BOOL, nValue, fValue );
+        ScFormulaCell* pCell = pScTokArr
+            ? new ScFormulaCell(pD, aScPos, pScTokArr.release())
+            : new ScFormulaCell(pD, aScPos);
         pCell->SetHybridDouble( fValue );
         GetDocImport().setFormulaCell(aScPos, pCell);
     }
@@ -530,7 +539,7 @@ void ImportExcel::Array25()
         nFormLen = aIn.ReaduInt16();
     }
 
-    const ScTokenArray* pResult = nullptr;
+    std::unique_ptr<ScTokenArray> pResult;
 
     if (ValidColRow(nLastCol, nLastRow))
     {
@@ -837,7 +846,7 @@ void ImportExcel::Shrfmla()
 
     // read mark is now on the formula
 
-    const ScTokenArray* pResult;
+    std::unique_ptr<ScTokenArray> pResult;
 
     // The shared range in this record is erroneous more than half the time.
     // Don't ever rely on it. Use the one from the formula cell above.
@@ -860,7 +869,7 @@ void ImportExcel::Shrfmla()
 
     ScDocumentImport& rDoc = GetDocImport();
 
-    ScFormulaCell* pCell = new ScFormulaCell(pD, aPos, *pResult);
+    ScFormulaCell* pCell = new ScFormulaCell(pD, aPos, pResult.release());
     pCell->GetCode()->WrapReference(aPos, EXC_MAXCOL8, EXC_MAXROW8);
     rDoc.getDoc().CheckLinkFormulaNeedingCheck( *pCell->GetCode());
     rDoc.getDoc().EnsureTable(aPos.Tab());
@@ -1028,7 +1037,7 @@ void ImportExcel::Array34()
     aIn.Ignore( (GetBiff() >= EXC_BIFF5) ? 6 : 2 );
     nFormLen = aIn.ReaduInt16();
 
-    const ScTokenArray* pResult = nullptr;
+    std::unique_ptr<ScTokenArray> pResult;
 
     if( ValidColRow( nLastCol, nLastRow ) )
     {
@@ -1237,7 +1246,7 @@ void ImportExcel::NewTable()
     pRowOutlineBuff = pNewItem->GetRowOutline();
 }
 
-const ScTokenArray* ImportExcel::ErrorToFormula( bool bErrOrVal, sal_uInt8 nError, double& rVal )
+std::unique_ptr<ScTokenArray> ImportExcel::ErrorToFormula( bool bErrOrVal, sal_uInt8 nError, double& rVal )
 {
     return pFormConv->GetBoolErr( XclTools::ErrorToEnum( rVal, bErrOrVal, nError ) );
 }
@@ -1309,7 +1318,7 @@ void ImportExcel::PostDocLoad()
     GetExtDocOptions().SetChanged( true );
 
     // root data owns the extended document options -> create a new object
-    GetDoc().SetExtDocOptions( new ScExtDocOptions( GetExtDocOptions() ) );
+    GetDoc().SetExtDocOptions( o3tl::make_unique<ScExtDocOptions>( GetExtDocOptions() ) );
 
     const SCTAB     nLast = pD->GetTableCount();
     const ScRange*      p;

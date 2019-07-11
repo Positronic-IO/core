@@ -24,6 +24,7 @@
 #include <view/SlsPageObjectLayouter.hxx>
 #include <view/SlsLayouter.hxx>
 #include <view/SlsTheme.hxx>
+#include <SlideSorter.hxx>
 #include "SlsFramePainter.hxx"
 #include <cache/SlsPageCache.hxx>
 #include <controller/SlsProperties.hxx>
@@ -141,20 +142,20 @@ void PageObjectPainter::PaintPreview (
         const SdrPage* pPage = rpDescriptor->GetPage();
         mpCache->SetPreciousFlag(pPage, true);
 
-        const Bitmap aPreview (GetPreviewBitmap(rpDescriptor, &rDevice));
+        const BitmapEx aPreview (GetPreviewBitmap(rpDescriptor, &rDevice));
         if ( ! aPreview.IsEmpty())
         {
             if (aPreview.GetSizePixel() != aBox.GetSize())
-                rDevice.DrawBitmap(aBox.TopLeft(), aBox.GetSize(), aPreview);
+                rDevice.DrawBitmapEx(aBox.TopLeft(), aBox.GetSize(), aPreview);
             else
-                rDevice.DrawBitmap(aBox.TopLeft(), aPreview);
+                rDevice.DrawBitmapEx(aBox.TopLeft(), aPreview);
         }
     }
 }
 
-Bitmap PageObjectPainter::CreateMarkedPreview (
+BitmapEx PageObjectPainter::CreateMarkedPreview (
     const Size& rSize,
-    const Bitmap& rPreview,
+    const BitmapEx& rPreview,
     const BitmapEx& rOverlay,
     const OutputDevice* pReferenceDevice)
 {
@@ -165,7 +166,7 @@ Bitmap PageObjectPainter::CreateMarkedPreview (
         pDevice.disposeAndReset(VclPtr<VirtualDevice>::Create());
     pDevice->SetOutputSizePixel(rSize);
 
-    pDevice->DrawBitmap(Point(0,0), rSize, rPreview);
+    pDevice->DrawBitmapEx(Point(0,0), rSize, rPreview);
 
     // Paint bitmap tiled over the preview to mark it as excluded.
     const sal_Int32 nIconWidth (rOverlay.GetSizePixel().Width());
@@ -176,10 +177,10 @@ Bitmap PageObjectPainter::CreateMarkedPreview (
             for (long nY=0; nY<rSize.Height(); nY+=nIconHeight)
                 pDevice->DrawBitmapEx(Point(nX,nY), rOverlay);
     }
-    return pDevice->GetBitmap(Point(0,0), rSize);
+    return pDevice->GetBitmapEx(Point(0,0), rSize);
 }
 
-Bitmap PageObjectPainter::GetPreviewBitmap (
+BitmapEx PageObjectPainter::GetPreviewBitmap (
     const model::SharedPageDescriptor& rpDescriptor,
     const OutputDevice* pReferenceDevice) const
 {
@@ -190,7 +191,7 @@ Bitmap PageObjectPainter::GetPreviewBitmap (
     {
         PageObjectLayouter *pPageObjectLayouter = mrLayouter.GetPageObjectLayouter().get();
 
-        Bitmap aMarkedPreview (mpCache->GetMarkedPreviewBitmap(pPage));
+        BitmapEx aMarkedPreview (mpCache->GetMarkedPreviewBitmap(pPage));
         const ::tools::Rectangle aPreviewBox (pPageObjectLayouter->GetBoundingBox(
             rpDescriptor,
             PageObjectLayouter::Part::Preview,

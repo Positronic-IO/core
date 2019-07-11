@@ -41,6 +41,7 @@
 #endif
 
 #include "system.hxx"
+#include "unixerrnostring.hxx"
 #if defined(__sun)
 # include <sys/procfs.h>
 #endif
@@ -96,7 +97,7 @@ static oslMutex        ChildListMutex;
 
 } //Anonymous namespace
 
-oslProcessError osl_psz_executeProcess(sal_Char *pszImageName,
+static oslProcessError osl_psz_executeProcess(sal_Char *pszImageName,
                                                 sal_Char *pszArguments[],
                                                 oslProcessOption Options,
                                                 oslSecurity Security,
@@ -174,9 +175,9 @@ static void ChildStatusProc(void *pData)
             OSL_ASSERT(geteuid() == 0);     /* must be root */
 
             if (! INIT_GROUPS(data.m_name, data.m_gid) || (setuid(data.m_uid) != 0))
-                SAL_WARN("sal.osl", "Failed to change uid and guid, errno=" << errno << " (" << strerror(errno) << ")" );
+                SAL_WARN("sal.osl", "Failed to change uid and guid: " << UnixErrnoString(errno));
 
-            const rtl::OUString envVar("HOME");
+            const OUString envVar("HOME");
             osl_clearEnvironment(envVar.pData);
         }
 
@@ -234,14 +235,14 @@ static void ChildStatusProc(void *pData)
             execv(data.m_pszArgs[0], const_cast<char **>(data.m_pszArgs));
         }
 
-        SAL_WARN("sal.osl", "Failed to exec, errno=" << errno << " (" << strerror(errno) << ")");
+        SAL_WARN("sal.osl", "Failed to exec: " << UnixErrnoString(errno));
 
         SAL_WARN("sal.osl", "ChildStatusProc : starting '" << data.m_pszArgs[0] << "' failed");
 
         /* if we reach here, something went wrong */
         errno_copy = errno;
         if ( !safeWrite(channel[1], &errno_copy, sizeof(errno_copy)) )
-            SAL_WARN("sal.osl", "sendFdPipe : sending failed (" << strerror(errno) << ")");
+            SAL_WARN("sal.osl", "sendFdPipe : sending failed:  " << UnixErrnoString(errno));
 
         if ( channel[1] != -1 )
             close(channel[1]);
@@ -300,10 +301,10 @@ static void ChildStatusProc(void *pData)
 
             if ( child_pid < 0)
             {
-                SAL_WARN("sal.osl", "Failed to wait for child process, errno=" << errno << " (" << strerror(errno) << ")");
+                SAL_WARN("sal.osl", "Failed to wait for child process: " << UnixErrnoString(errno));
 
                 /*
-                We got an other error than EINTR. Anyway we have to wake up the
+                We got another error than EINTR. Anyway we have to wake up the
                 waiting thread under any circumstances */
 
                 child_pid = pid;
@@ -341,7 +342,7 @@ static void ChildStatusProc(void *pData)
         else
         {
             SAL_WARN("sal.osl", "ChildStatusProc : starting '" << data.m_pszArgs[0] << "' failed");
-            SAL_WARN("sal.osl", "Failed to launch child process, child reports errno=" << status << " (" << strerror(status) << ")");
+            SAL_WARN("sal.osl", "Failed to launch child process, child reports " << UnixErrnoString(status));
 
             /* Close pipe ends */
             if ( pdata->m_pInputWrite )
@@ -392,25 +393,25 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
                                             oslFileHandle   *pErrorRead
                                             )
 {
-    rtl::OUString image;
+    OUString image;
     if (ustrImageName == nullptr)
     {
         if (nArguments == 0)
         {
             return osl_Process_E_InvalidError;
         }
-        image = rtl::OUString::unacquired(ustrArguments);
+        image = OUString::unacquired(ustrArguments);
     }
     else
     {
         osl::FileBase::RC e = osl::FileBase::getSystemPathFromFileURL(
-            rtl::OUString::unacquired(&ustrImageName), image);
+            OUString::unacquired(&ustrImageName), image);
         if (e != osl::FileBase::E_None)
         {
             SAL_INFO(
                 "sal.osl",
                 "getSystemPathFromFileURL("
-                    << rtl::OUString::unacquired(&ustrImageName)
+                    << OUString::unacquired(&ustrImageName)
                     << ") failed with " << e);
             return osl_Process_E_Unknown;
         }
@@ -418,7 +419,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
 
     if ((Options & osl_Process_SEARCHPATH) != 0)
     {
-        rtl::OUString path;
+        OUString path;
         if (osl::detail::find_in_PATH(image, path))
         {
             image = path;
@@ -451,7 +452,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
         {
             SAL_INFO(
                 "sal.osl",
-                "FileURLToPath(" << rtl::OUString::unacquired(&ustrWorkDir)
+                "FileURLToPath(" << OUString::unacquired(&ustrWorkDir)
                     << ") failed with " << e);
             return osl_Process_E_Unknown;
         }
@@ -848,7 +849,7 @@ struct osl_procStat
     unsigned long vm_lib;     /* library size */
 };
 
-bool osl_getProcStat(pid_t pid, struct osl_procStat* procstat)
+static bool osl_getProcStat(pid_t pid, struct osl_procStat* procstat)
 {
     int fd = 0;
     bool bRet = false;
@@ -904,7 +905,7 @@ bool osl_getProcStat(pid_t pid, struct osl_procStat* procstat)
     return bRet;
 }
 
-bool osl_getProcStatus(pid_t pid, struct osl_procStat* procstat)
+static bool osl_getProcStatus(pid_t pid, struct osl_procStat* procstat)
 {
     int fd = 0;
     char name[PATH_MAX + 1];

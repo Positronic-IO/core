@@ -20,6 +20,7 @@
 #include <com/sun/star/xml/sax/SAXParseException.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
+#include <sal/log.hxx>
 #include <sfx2/infobar.hxx>
 #include <sfx2/objsh.hxx>
 #include <o3tl/make_unique.hxx>
@@ -355,7 +356,7 @@ public:
 
     uno::Reference<document::XDocumentProperties> m_xDocumentProperties;
 
-    bool m_bUseLocalized;
+    bool const m_bUseLocalized;
 
     explicit Impl(uno::Reference<document::XDocumentProperties> xDocumentProperties, bool bUseLocalized);
     void parsePolicy();
@@ -390,8 +391,8 @@ void SfxClassificationHelper::Impl::parsePolicy()
             aPath = aLocalized;
     }
 
-    SvStream* pStream = utl::UcbStreamHelper::CreateStream(aPath, StreamMode::READ);
-    uno::Reference<io::XInputStream> xInputStream(new utl::OStreamWrapper(*pStream));
+    std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream(aPath, StreamMode::READ);
+    uno::Reference<io::XInputStream> xInputStream(new utl::OStreamWrapper(std::move(pStream)));
     xml::sax::InputSource aParserInput;
     aParserInput.aInputStream = xInputStream;
 
@@ -415,10 +416,10 @@ void SfxClassificationHelper::Impl::parsePolicy()
 
 static bool lcl_containsProperty(const uno::Sequence<beans::Property>& rProperties, const OUString& rName)
 {
-    return std::find_if(rProperties.begin(), rProperties.end(), [&](const beans::Property& rProperty)
+    return std::any_of(rProperties.begin(), rProperties.end(), [&](const beans::Property& rProperty)
     {
         return rProperty.Name == rName;
-    }) != rProperties.end();
+    });
 }
 
 void SfxClassificationHelper::Impl::setStartValidity(SfxClassificationPolicyType eType)

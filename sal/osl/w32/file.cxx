@@ -22,8 +22,10 @@
 #include <osl/file.hxx>
 #include <rtl/alloc.h>
 #include <rtl/byteseq.h>
+#include <sal/log.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
+#include "file-impl.hxx"
 #include "file_url.hxx"
 #include "file_error.hxx"
 
@@ -116,27 +118,6 @@ struct FileHandle_Impl
 
     oslFileError syncFile();
 
-    /** Buffer cache / allocator.
-     */
-    class Allocator
-    {
-        rtl_cache_type * m_cache;
-        SIZE_T           m_bufsiz;
-
-        Allocator(Allocator const &) = delete;
-        Allocator & operator= (Allocator const &) = delete;
-
-    public:
-        static Allocator & get();
-
-        void allocate(sal_uInt8 ** ppBuffer, SIZE_T * pnSize);
-        void deallocate(sal_uInt8 * pBuffer);
-
-    protected:
-        Allocator();
-        ~Allocator();
-    };
-
     /** Guard.
      */
     class Guard
@@ -148,44 +129,6 @@ struct FileHandle_Impl
         ~Guard();
     };
 };
-
-FileHandle_Impl::Allocator& FileHandle_Impl::Allocator::get()
-{
-    static Allocator g_aBufferAllocator;
-    return g_aBufferAllocator;
-}
-
-FileHandle_Impl::Allocator::Allocator()
-    : m_cache  (nullptr),
-      m_bufsiz (0)
-{
-    SIZE_T const pagesize = FileHandle_Impl::getpagesize();
-    m_cache = rtl_cache_create(
-        "osl_file_buffer_cache", pagesize, 0, nullptr, nullptr, nullptr,
-        nullptr, nullptr, 0);
-    if (m_cache)
-        m_bufsiz = pagesize;
-}
-
-FileHandle_Impl::Allocator::~Allocator()
-{
-    rtl_cache_destroy(m_cache);
-    m_cache = nullptr;
-}
-
-void FileHandle_Impl::Allocator::allocate (sal_uInt8 **ppBuffer, SIZE_T * pnSize)
-{
-    assert(ppBuffer);
-    assert(pnSize);
-    *ppBuffer = static_cast< sal_uInt8* >(rtl_cache_alloc(m_cache));
-    *pnSize = m_bufsiz;
-}
-
-void FileHandle_Impl::Allocator::deallocate (sal_uInt8 * pBuffer)
-{
-    if (pBuffer)
-        rtl_cache_free (m_cache, pBuffer);
-}
 
 FileHandle_Impl::Guard::Guard(LPCRITICAL_SECTION pMutex)
     : m_mutex (pMutex)
@@ -207,30 +150,30 @@ FileHandle_Impl::FileHandle_Impl(HANDLE hFile)
       m_filepos (0),
       m_bufptr  (-1),
       m_buflen  (0),
-      m_bufsiz  (0),
+      m_bufsiz  (getpagesize()),
       m_buffer  (nullptr)
 {
     ::InitializeCriticalSection (&m_mutex);
-    Allocator::get().allocate (&m_buffer, &m_bufsiz);
+    m_buffer = static_cast<sal_uInt8 *>(malloc(m_bufsiz));
     if (m_buffer)
         memset (m_buffer, 0, m_bufsiz);
 }
 
 FileHandle_Impl::~FileHandle_Impl()
 {
-    Allocator::get().deallocate(m_buffer);
+    free(m_buffer);
     m_buffer = nullptr;
     ::DeleteCriticalSection (&m_mutex);
 }
 
 void * FileHandle_Impl::operator new(size_t n)
 {
-    return rtl_allocateMemory(n);
+    return malloc(n);
 }
 
 void FileHandle_Impl::operator delete(void * p, size_t)
 {
-    rtl_freeMemory(p);
+    free(p);
 }
 
 SIZE_T FileHandle_Impl::getpagesize()
@@ -532,7 +475,7 @@ oslFileError FileHandle_Impl::readLineAt(
         if (curpos >= m_buflen)
         {
             /* buffer examined */
-            if ((curpos - bufpos) > 0)
+            if (curpos > bufpos) // actually, curpos can't become less than bufpos, so != could do
             {
                 /* flush buffer to sequence */
                 result = writeSequence_Impl(
@@ -776,7 +719,7 @@ oslFileError SAL_CALL osl_closeFile(oslFileHandle Handle)
 
 namespace {
 
-//coverity[result_independent_of_operands]
+// coverity[result_independent_of_operands] - crossplatform requirement
 template<typename T> bool exceedsMaxSIZE_T(T n)
 { return n > std::numeric_limits< SIZE_T >::max(); }
 
@@ -930,7 +873,7 @@ LONGLONG const g_limit_longlong = std::numeric_limits< LONGLONG >::max();
 
 namespace {
 
-//coverity[result_independent_of_operands]
+// coverity[result_independent_of_operands] - crossplatform requirement
 template<typename T> bool exceedsMaxLONGLONG(T n)
 { return n > g_limit_longlong; }
 
@@ -1146,6 +1089,40 @@ oslFileError SAL_CALL osl_moveFile(rtl_uString* strPath, rtl_uString *strDestPat
             error = osl_File_E_None;
         else
             error = oslTranslateFileError(GetLastError());
+    }
+
+    if (strSysPath)
+        rtl_uString_release(strSysPath);
+    if (strSysDestPath)
+        rtl_uString_release(strSysDestPath);
+
+    return error;
+}
+
+oslFileError SAL_CALL osl_replaceFile(rtl_uString* strPath, rtl_uString* strDestPath)
+{
+    rtl_uString *strSysPath = nullptr, *strSysDestPath = nullptr;
+    oslFileError    error = osl_getSystemPathFromFileURL_(strPath, &strSysPath, false);
+
+    if (error == osl_File_E_None)
+        error = osl_getSystemPathFromFileURL_(strDestPath, &strSysDestPath, false);
+
+    if (error == osl_File_E_None)
+    {
+        LPCWSTR src = o3tl::toW(rtl_uString_getStr(strSysPath));
+        LPCWSTR dst = o3tl::toW(rtl_uString_getStr(strSysDestPath));
+
+        if (!ReplaceFileW(dst, src, nullptr,
+                          REPLACEFILE_WRITE_THROUGH | REPLACEFILE_IGNORE_MERGE_ERRORS
+                              | REPLACEFILE_IGNORE_ACL_ERRORS,
+                          nullptr, nullptr))
+        {
+            DWORD dwError = GetLastError();
+            if (dwError == ERROR_FILE_NOT_FOUND) // no strDestPath file?
+                error = osl_moveFile(strPath, strDestPath);
+            else
+                error = oslTranslateFileError(dwError);
+        }
     }
 
     if (strSysPath)

@@ -21,9 +21,6 @@
 #include <memory>
 #include <sal/macros.h>
 #include <vcl/image.hxx>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
 
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
@@ -1217,7 +1214,7 @@ const SvxFieldItem* EditView::GetFieldAtSelection() const
             if (rAttr.GetStart() == nXPos)
                 if (rAttr.Which() == EE_FEATURE_FIELD)
                 {
-                    DBG_ASSERT(dynamic_cast<const SvxFieldItem* >(rAttr.GetItem() ) != nullptr, "No FeldItem...");
+                    DBG_ASSERT(dynamic_cast<const SvxFieldItem* >(rAttr.GetItem() ) != nullptr, "No FieldItem...");
                     return static_cast<const SvxFieldItem*>(rAttr.GetItem());
                 }
         }

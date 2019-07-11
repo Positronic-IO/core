@@ -40,7 +40,7 @@ using namespace com::sun::star;
 
 namespace
 {
-    BitmapEx BPixelRasterToBitmapEx(const basegfx::BPixelRaster& rRaster, sal_uInt16 mnAntiAlialize)
+    BitmapEx BPixelRasterToBitmapEx(const basegfx::BZPixelRaster& rRaster, sal_uInt16 mnAntiAlialize)
     {
         BitmapEx aRetval;
         const sal_uInt32 nWidth(mnAntiAlialize ? rRaster.getWidth()/mnAntiAlialize : rRaster.getWidth());
@@ -140,7 +140,7 @@ namespace drawinglayer
                 const double fShadowSlant(getSdrSceneAttribute().getShadowSlant());
                 const basegfx::B3DRange aScene3DRange(getChildren3D().getB3DRange(getViewInformation3D()));
 
-                if(maSdrLightingAttribute.getLightVector().size())
+                if(!maSdrLightingAttribute.getLightVector().empty())
                 {
                     // get light normal from first light and normalize
                     aLightNormal = maSdrLightingAttribute.getLightVector()[0].getDirection();
@@ -424,8 +424,8 @@ namespace drawinglayer
                                 aBZPixelRaster,
                                 nLinesPerThread * a,
                                 a + 1 == nThreadCount ? aBZPixelRaster.getHeight() : nLinesPerThread * (a + 1)));
-                            Executor* pExecutor = new Executor(aTag, std::move(pNewZBufferProcessor3D), getChildren3D());
-                            rThreadPool.pushTask(pExecutor);
+                            std::unique_ptr<Executor> pExecutor(new Executor(aTag, std::move(pNewZBufferProcessor3D), getChildren3D()));
+                            rThreadPool.pushTask(std::move(pExecutor));
                         }
 
                         rThreadPool.waitUntilDone(aTag);

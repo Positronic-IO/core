@@ -58,7 +58,7 @@ const DeviceInfo& GraphicCollector::GetDeviceInfo( const Reference< XComponentCo
     return aDeviceInfo;
 }
 
-void ImpAddEntity( std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities, const GraphicSettings& rGraphicSettings, const GraphicCollector::GraphicUser& rUser )
+static void ImpAddEntity( std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities, const GraphicSettings& rGraphicSettings, const GraphicCollector::GraphicUser& rUser )
 {
     if ( rGraphicSettings.mbEmbedLinkedGraphics )
     {
@@ -84,7 +84,7 @@ void ImpAddEntity( std::vector< GraphicCollector::GraphicEntity >& rGraphicEntit
     }
 }
 
-void ImpAddGraphicEntity( const Reference< XComponentContext >& rxMSF, Reference< XShape > const & rxShape, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
+static void ImpAddGraphicEntity( const Reference< XComponentContext >& rxMSF, Reference< XShape > const & rxShape, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
 {
     Reference< XGraphic > xGraphic;
     Reference< XPropertySet > xShapePropertySet( rxShape, UNO_QUERY_THROW );
@@ -121,7 +121,7 @@ void ImpAddGraphicEntity( const Reference< XComponentContext >& rxMSF, Reference
     }
 }
 
-void ImpAddFillBitmapEntity( const Reference< XComponentContext >& rxMSF, const Reference< XPropertySet >& rxPropertySet, const awt::Size& rLogicalSize,
+static void ImpAddFillBitmapEntity( const Reference< XComponentContext >& rxMSF, const Reference< XPropertySet >& rxPropertySet, const awt::Size& rLogicalSize,
     std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities, const GraphicSettings& rGraphicSettings, const Reference< XPropertySet >& rxPagePropertySet )
 {
     try
@@ -135,54 +135,51 @@ void ImpAddFillBitmapEntity( const Reference< XComponentContext >& rxMSF, const 
                 if ( rxPropertySet->getPropertyValue( "FillBitmap" ) >>= xFillBitmap )
                 {
                     Reference< XGraphic > xGraphic( xFillBitmap, UNO_QUERY_THROW );
-                    if ( xGraphic.is() )
+                    awt::Size aLogicalSize( rLogicalSize );
+                    Reference< XPropertySetInfo > axPropSetInfo( rxPropertySet->getPropertySetInfo() );
+                    if ( axPropSetInfo.is() )
                     {
-                        awt::Size aLogicalSize( rLogicalSize );
-                        Reference< XPropertySetInfo > axPropSetInfo( rxPropertySet->getPropertySetInfo() );
-                        if ( axPropSetInfo.is() )
+                        if ( axPropSetInfo->hasPropertyByName( "FillBitmapMode" ) )
                         {
-                            if ( axPropSetInfo->hasPropertyByName( "FillBitmapMode" ) )
+                            BitmapMode eBitmapMode;
+                            if ( rxPropertySet->getPropertyValue( "FillBitmapMode" ) >>= eBitmapMode )
                             {
-                                BitmapMode eBitmapMode;
-                                if ( rxPropertySet->getPropertyValue( "FillBitmapMode" ) >>= eBitmapMode )
+                                if ( ( eBitmapMode == BitmapMode_REPEAT ) || ( eBitmapMode == BitmapMode_NO_REPEAT ) )
                                 {
-                                    if ( ( eBitmapMode == BitmapMode_REPEAT ) || ( eBitmapMode == BitmapMode_NO_REPEAT ) )
+                                    bool bLogicalSize = false;
+                                    awt::Size aSize( 0, 0 );
+                                    if ( ( rxPropertySet->getPropertyValue( "FillBitmapLogicalSize" ) >>= bLogicalSize )
+                                      && ( rxPropertySet->getPropertyValue( "FillBitmapSizeX" ) >>= aSize.Width )
+                                      && ( rxPropertySet->getPropertyValue( "FillBitmapSizeY" ) >>= aSize.Height ) )
                                     {
-                                        bool bLogicalSize = false;
-                                        awt::Size aSize( 0, 0 );
-                                        if ( ( rxPropertySet->getPropertyValue( "FillBitmapLogicalSize" ) >>= bLogicalSize )
-                                          && ( rxPropertySet->getPropertyValue( "FillBitmapSizeX" ) >>= aSize.Width )
-                                          && ( rxPropertySet->getPropertyValue( "FillBitmapSizeY" ) >>= aSize.Height ) )
+                                        if ( bLogicalSize )
                                         {
-                                            if ( bLogicalSize )
+                                            if ( !aSize.Width || !aSize.Height )
                                             {
-                                                if ( !aSize.Width || !aSize.Height )
-                                                {
-                                                    awt::Size aSize100thMM( GraphicCollector::GetOriginalSize( rxMSF, xGraphic ) );
-                                                    if ( aSize100thMM.Width && aSize100thMM.Height )
-                                                        aLogicalSize = aSize100thMM;
-                                                }
-                                                else
-                                                    aLogicalSize = aSize;
+                                                awt::Size aSize100thMM( GraphicCollector::GetOriginalSize( rxMSF, xGraphic ) );
+                                                if ( aSize100thMM.Width && aSize100thMM.Height )
+                                                    aLogicalSize = aSize100thMM;
                                             }
                                             else
-                                            {
-                                                aLogicalSize.Width = sal::static_int_cast< sal_Int32 >( ( static_cast< double >( aLogicalSize.Width ) * aSize.Width ) / -100.0 );
-                                                aLogicalSize.Height = sal::static_int_cast< sal_Int32 >( ( static_cast< double >( aLogicalSize.Height ) * aSize.Height ) / -100.0 );
-                                            }
+                                                aLogicalSize = aSize;
+                                        }
+                                        else
+                                        {
+                                            aLogicalSize.Width = sal::static_int_cast< sal_Int32 >( ( static_cast< double >( aLogicalSize.Width ) * aSize.Width ) / -100.0 );
+                                            aLogicalSize.Height = sal::static_int_cast< sal_Int32 >( ( static_cast< double >( aLogicalSize.Height ) * aSize.Height ) / -100.0 );
                                         }
                                     }
                                 }
                             }
                         }
-                        GraphicCollector::GraphicUser aUser;
-                        aUser.mxPropertySet = rxPropertySet;
-                        aUser.mxGraphic = xGraphic;
-                        aUser.mbFillBitmap = true;
-                        aUser.maLogicalSize = aLogicalSize;
-                        aUser.mxPagePropertySet = rxPagePropertySet;
-                        ImpAddEntity( rGraphicEntities, rGraphicSettings, aUser );
                     }
+                    GraphicCollector::GraphicUser aUser;
+                    aUser.mxPropertySet = rxPropertySet;
+                    aUser.mxGraphic = xGraphic;
+                    aUser.mbFillBitmap = true;
+                    aUser.maLogicalSize = aLogicalSize;
+                    aUser.mxPagePropertySet = rxPagePropertySet;
+                    ImpAddEntity( rGraphicEntities, rGraphicSettings, aUser );
                 }
             }
         }
@@ -192,7 +189,7 @@ void ImpAddFillBitmapEntity( const Reference< XComponentContext >& rxMSF, const 
     }
 }
 
-void ImpCollectBackgroundGraphic( const Reference< XComponentContext >& rxMSF, const Reference< XDrawPage >& rxDrawPage, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
+static void ImpCollectBackgroundGraphic( const Reference< XComponentContext >& rxMSF, const Reference< XDrawPage >& rxDrawPage, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
 {
     try
     {
@@ -210,7 +207,7 @@ void ImpCollectBackgroundGraphic( const Reference< XComponentContext >& rxMSF, c
     }
 }
 
-void ImpCollectGraphicObjects( const Reference< XComponentContext >& rxMSF, const Reference< XShapes >& rxShapes, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
+static void ImpCollectGraphicObjects( const Reference< XComponentContext >& rxMSF, const Reference< XShapes >& rxShapes, const GraphicSettings& rGraphicSettings, std::vector< GraphicCollector::GraphicEntity >& rGraphicEntities )
 {
     for ( sal_Int32 i = 0; i < rxShapes->getCount(); i++ )
     {
@@ -225,7 +222,8 @@ void ImpCollectGraphicObjects( const Reference< XComponentContext >& rxMSF, cons
                 continue;
             }
 
-            if ( sShapeType == "com.sun.star.drawing.GraphicObjectShape" )
+            if ( sShapeType == "com.sun.star.drawing.GraphicObjectShape" ||
+                 sShapeType == "com.sun.star.presentation.GraphicObjectShape" )
                 ImpAddGraphicEntity( rxMSF, xShape, rGraphicSettings, rGraphicEntities );
 
             // now check for a fillstyle
@@ -330,7 +328,7 @@ void GraphicCollector::CollectGraphics( const Reference< XComponentContext >& rx
     }
 }
 
-void ImpCountGraphicObjects( const Reference< XComponentContext >& rxMSF, const Reference< XShapes >& rxShapes, const GraphicSettings& rGraphicSettings, sal_Int32& rnGraphics )
+static void ImpCountGraphicObjects( const Reference< XComponentContext >& rxMSF, const Reference< XShapes >& rxShapes, const GraphicSettings& rGraphicSettings, sal_Int32& rnGraphics )
 {
     for ( sal_Int32 i = 0; i < rxShapes->getCount(); i++ )
     {
@@ -345,7 +343,8 @@ void ImpCountGraphicObjects( const Reference< XComponentContext >& rxMSF, const 
                 continue;
             }
 
-            if ( sShapeType == "com.sun.star.drawing.GraphicObjectShape" )
+            if ( sShapeType == "com.sun.star.drawing.GraphicObjectShape" ||
+                 sShapeType == "com.sun.star.presentation.GraphicObjectShape" )
             {
                 rnGraphics++;
             }
@@ -367,7 +366,7 @@ void ImpCountGraphicObjects( const Reference< XComponentContext >& rxMSF, const 
     }
 }
 
-void ImpCountBackgroundGraphic(
+static void ImpCountBackgroundGraphic(
     const Reference< XDrawPage >& rxDrawPage, sal_Int32& rnGraphics )
 {
     try

@@ -112,14 +112,14 @@ namespace svgio
                     }
                 }
 
-                if(aSelectorParts.size())
+                if(!aSelectorParts.empty())
                 {
-                    OUString aConcatenatedSelector;
+                    OUStringBuffer aConcatenatedSelector;
 
                     // re-combine without spaces, create a unique name (for now)
                     for(size_t a(0); a < aSelectorParts.size(); a++)
                     {
-                        aConcatenatedSelector += aSelectorParts[a];
+                        aConcatenatedSelector.append(aSelectorParts[a]);
                     }
 
                     // CssStyles in SVG are currently not completely supported; the current idea for
@@ -127,7 +127,7 @@ namespace svgio
                     // which is just the space-char cleaned, concatenated Selectors. The part to 'match'
                     // these is in fillCssStyleVectorUsingHierarchyAndSelectors. There, the same string is
                     // built up using the priorities of local CssStyle, Id, Class and other info combined
-                    // with the existing hierarchy. This creates a specificity- and priority-sorted local
+                    // with the existing hierarchy. This creates a specificity and priority-sorted local
                     // list for each node which is then chained using get/setCssStyleParent.
                     // The current solution is capable of solving space-separated selectors which can be
                     // mixed between Id, Class and type specifiers.
@@ -138,7 +138,7 @@ namespace svgio
                     // SvgStyleAttributes will not do it) will have to be adapted to make use of it.
 
                     // register new style at document for (evtl. concatenated) stylename
-                    const_cast< SvgDocument& >(getDocument()).addSvgStyleAttributesToMapper(aConcatenatedSelector, rNewStyle);
+                    const_cast< SvgDocument& >(getDocument()).addSvgStyleAttributesToMapper(aConcatenatedSelector.makeStringAndClear(), rNewStyle);
                 }
             }
         }

@@ -292,7 +292,9 @@ typedef void *                   sal_Handle;
     Compilers that support a construct of this nature will emit a compile
     time warning on unchecked return value.
 */
-#if (defined __GNUC__ \
+#if defined __cplusplus && HAVE_CPP_ATTRIBUTE_NODISCARD
+#define SAL_WARN_UNUSED_RESULT [[nodiscard]]
+#elif (defined __GNUC__ \
      && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1))) \
     || defined __clang__
 #   define SAL_WARN_UNUSED_RESULT __attribute__((warn_unused_result))
@@ -407,23 +409,13 @@ namespace css = ::com::sun::star;
 #define SAL_OVERRIDE
 #endif
 
-/** C++11 "final" feature.
-
-    For LIBO_INTERNAL_ONLY, mark a class as non-derivable or a method as non-overridable.
-
-    @since LibreOffice 4.1
-*/
 #if defined LIBO_INTERNAL_ONLY
-#define SAL_FINAL final
-#else
-#define SAL_FINAL
-#endif
-
-#if defined LIBO_INTERNAL_ONLY
-#if defined __clang__
-#define SAL_FALLTHROUGH [[clang::fallthrough]]
-#elif defined __GNUC__ && __GNUC__ >= 7
+#if HAVE_CPP_ATTRIBUTE_FALLTHROUGH
 #define SAL_FALLTHROUGH [[fallthrough]]
+#elif defined __clang__
+    /* before Clang 3.9, according to
+       <https://en.cppreference.com/w/cpp/compiler_support#C.2B.2B17_features> */
+#define SAL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define SAL_FALLTHROUGH
 #endif
@@ -690,6 +682,20 @@ template< typename T1, typename T2 > inline T1 static_int_cast(T2 n) {
 #define SAL_RETURNS_NONNULL  __attribute__((returns_nonnull))
 #else
 #define SAL_RETURNS_NONNULL
+#endif
+/// @endcond
+
+/// @cond INTERNAL
+/** Inline variables, where supported.
+
+    @since LibreOffice 6.2
+*/
+#if defined LIBO_INTERNAL_ONLY
+#if HAVE_CPP_INLINE_VARIABLES
+#define SAL_INLINE_VARIABLE inline
+#else
+#define SAL_INLINE_VARIABLE
+#endif
 #endif
 /// @endcond
 

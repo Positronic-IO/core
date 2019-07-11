@@ -61,6 +61,7 @@
 #include <com/sun/star/loader/CannotActivateFactoryException.hpp>
 
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/conditn.hxx>
 #include <unotools/resmgr.hxx>
 #include <vcl/errinf.hxx>
@@ -161,12 +162,8 @@ bool
 UUIInteractionHelper::handleRequest(
     uno::Reference< task::XInteractionRequest > const & rRequest)
 {
-    if(
-        Application::GetMainThreadIdentifier()
-        != osl::Thread::getCurrentIdentifier()
-        &&
-        GetpApp()
-    ) {
+    if(!Application::IsMainThread() && GetpApp())
+    {
         // we are not in the main thread, let it handle that stuff
         HandleData aHD(rRequest);
         Link<void*,void> aLink(&aHD,handlerequest);
@@ -216,12 +213,8 @@ beans::Optional< OUString >
 UUIInteractionHelper::getStringFromRequest(
     uno::Reference< task::XInteractionRequest > const & rRequest)
 {
-    if(
-        Application::GetMainThreadIdentifier()
-        != osl::Thread::getCurrentIdentifier()
-        &&
-        GetpApp()
-    ) {
+    if(!Application::IsMainThread() && GetpApp())
+    {
         // we are not in the main thread, let it handle that stuff
         HandleData aHD(rRequest);
         Link<void*,void> aLink(&aHD,getstringfromrequest);
@@ -244,7 +237,7 @@ UUIInteractionHelper::replaceMessageWithArguments(
 {
     OUString aMessage = _aMessage;
 
-    SAL_WARN_IF(rArguments.size() == 0, "uui", "replaceMessageWithArguments: No arguments passed!");
+    SAL_WARN_IF(rArguments.empty(), "uui", "replaceMessageWithArguments: No arguments passed!");
     for (size_t i = 0; i < rArguments.size(); ++i)
     {
         const OUString sReplaceTemplate = "$(ARG" + OUString::number(i+1) + ")";
@@ -283,15 +276,8 @@ UUIInteractionHelper::tryOtherInteractionHandler(
     InteractionHandlerDataList dataList;
     getInteractionHandlerList(dataList);
 
-    InteractionHandlerDataList::const_iterator aEnd(dataList.end());
-    for (InteractionHandlerDataList::const_iterator aIt(dataList.begin());
-         aIt != aEnd;
-         ++aIt)
-    {
-        if ( handleCustomRequest( rRequest, aIt->ServiceName ) )
-            return true;
-    }
-    return false;
+    return std::any_of(dataList.cbegin(), dataList.cend(),
+        [&](const InteractionHandlerData& rData) { return handleCustomRequest( rRequest, rData.ServiceName ); });
 }
 
 namespace
@@ -413,15 +399,14 @@ UUIInteractionHelper::handleRequest_impl(
                 = aModSizeException.Names;
             if ( sModules.getLength() )
             {
-                OUString aName;
+                OUStringBuffer aName;
                 for ( sal_Int32 index=0; index< sModules.getLength(); ++index )
                 {
                     if ( index )
-                        aName += "," + sModules[index];
-                    else
-                        aName = sModules[index]; // 1st name
+                        aName.append(",");
+                    aName.append(sModules[index]);
                 }
-                aArguments.push_back( aName );
+                aArguments.push_back( aName.makeStringAndClear() );
             }
             handleErrorHandlerRequest( task::InteractionClassification_WARNING,
                                        ERRCODE_UUI_IO_MODULESIZEEXCEEDED,

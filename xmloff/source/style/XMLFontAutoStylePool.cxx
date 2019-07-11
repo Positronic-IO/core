@@ -27,13 +27,19 @@
 #include <xmloff/XMLFontAutoStylePool.hxx>
 #include <vcl/embeddedfontshelper.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
+#include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
+#include <com/sun/star/style/XStyle.hpp>
+#include <com/sun/star/container/XNameAccess.hpp>
 
 #include <XMLBase64Export.hxx>
+#include <xmloff/AutoStyleEntry.hxx>
+#include <comphelper/hash.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -41,12 +47,12 @@ using namespace ::xmloff::token;
 
 class XMLFontAutoStylePoolEntry_Impl
 {
-    OUString    sName;
-    OUString    sFamilyName;
-    OUString    sStyleName;
-    FontFamily  nFamily;
-    FontPitch   nPitch;
-    rtl_TextEncoding eEnc;
+    OUString const    sName;
+    OUString const    sFamilyName;
+    OUString const    sStyleName;
+    FontFamily const  nFamily;
+    FontPitch const   nPitch;
+    rtl_TextEncoding const eEnc;
 
 public:
 
@@ -106,8 +112,8 @@ inline XMLFontAutoStylePoolEntry_Impl::XMLFontAutoStylePoolEntry_Impl(
 
 struct XMLFontAutoStylePoolEntryCmp_Impl {
     bool operator()(
-        XMLFontAutoStylePoolEntry_Impl* const& r1,
-        XMLFontAutoStylePoolEntry_Impl* const& r2 ) const
+        std::unique_ptr<XMLFontAutoStylePoolEntry_Impl> const& r1,
+        std::unique_ptr<XMLFontAutoStylePoolEntry_Impl> const& r2 ) const
     {
         bool bEnc1(r1->GetEncoding() != RTL_TEXTENCODING_SYMBOL);
         bool bEnc2(r2->GetEncoding() != RTL_TEXTENCODING_SYMBOL);
@@ -128,19 +134,18 @@ struct XMLFontAutoStylePoolEntryCmp_Impl {
     }
 };
 
-class XMLFontAutoStylePool_Impl : public o3tl::sorted_vector<XMLFontAutoStylePoolEntry_Impl*, XMLFontAutoStylePoolEntryCmp_Impl>
+class XMLFontAutoStylePool_Impl : public o3tl::sorted_vector<std::unique_ptr<XMLFontAutoStylePoolEntry_Impl>, XMLFontAutoStylePoolEntryCmp_Impl>
 {
-public:
-    ~XMLFontAutoStylePool_Impl()
-    {
-        DeleteAndDestroyAll();
-    }
 };
 
-XMLFontAutoStylePool::XMLFontAutoStylePool( SvXMLExport& rExp, bool _tryToEmbedFonts ) :
+XMLFontAutoStylePool::XMLFontAutoStylePool(SvXMLExport& rExp, bool bTryToEmbedFonts) :
     rExport( rExp ),
-    pPool( new XMLFontAutoStylePool_Impl ),
-    tryToEmbedFonts( _tryToEmbedFonts )
+    m_pFontAutoStylePool( new XMLFontAutoStylePool_Impl ),
+    m_bTryToEmbedFonts( bTryToEmbedFonts ),
+    m_bEmbedUsedOnly(false),
+    m_bEmbedLatinScript(true),
+    m_bEmbedAsianScript(true),
+    m_bEmbedComplexScript(true)
 {
 }
 
@@ -158,8 +163,8 @@ OUString XMLFontAutoStylePool::Add(
     OUString sPoolName;
     XMLFontAutoStylePoolEntry_Impl aTmp( rFamilyName, rStyleName, nFamily,
                                           nPitch, eEnc );
-    XMLFontAutoStylePool_Impl::const_iterator it = pPool->find( &aTmp );
-    if( it != pPool->end() )
+    XMLFontAutoStylePool_Impl::const_iterator it = m_pFontAutoStylePool->find( &aTmp );
+    if( it != m_pFontAutoStylePool->end() )
     {
         sPoolName = (*it)->GetName();
     }
@@ -184,18 +189,17 @@ OUString XMLFontAutoStylePool::Add(
         {
             sal_Int32 nCount = 1;
             OUString sPrefix( sName );
-            sName += OUString::number( nCount );
+            sName = sPrefix + OUString::number( nCount );
             while( m_aNames.find(sName) != m_aNames.end() )
             {
-                sName = sPrefix;
-                sName += OUString::number( ++nCount );
+                sName = sPrefix + OUString::number( ++nCount );
             }
         }
 
-        XMLFontAutoStylePoolEntry_Impl *pEntry =
+        std::unique_ptr<XMLFontAutoStylePoolEntry_Impl> pEntry(
             new XMLFontAutoStylePoolEntry_Impl( sName, rFamilyName, rStyleName,
-                                                nFamily, nPitch, eEnc );
-        pPool->insert( pEntry );
+                                                nFamily, nPitch, eEnc ));
+        m_pFontAutoStylePool->insert( std::move(pEntry) );
         m_aNames.insert(sName);
     }
 
@@ -212,8 +216,8 @@ OUString XMLFontAutoStylePool::Find(
     OUString sName;
     XMLFontAutoStylePoolEntry_Impl aTmp( rFamilyName, rStyleName, nFamily,
                                           nPitch, eEnc );
-    XMLFontAutoStylePool_Impl::const_iterator it = pPool->find( &aTmp );
-    if( it != pPool->end() )
+    XMLFontAutoStylePool_Impl::const_iterator it = m_pFontAutoStylePool->find( &aTmp );
+    if( it != m_pFontAutoStylePool->end() )
     {
         sName = (*it)->GetName();
     }
@@ -285,11 +289,98 @@ OUString FontItalicToString(FontItalic eWeight)
 
 }
 
+std::unordered_set<OUString> XMLFontAutoStylePool::getUsedFontList()
+{
+    std::unordered_set<OUString> aReturnSet;
+
+    uno::Reference<style::XStyleFamiliesSupplier> xFamiliesSupp(GetExport().GetModel(), UNO_QUERY);
+    if (!xFamiliesSupp.is())
+        return aReturnSet;
+
+    // Check styles first
+    uno::Reference<container::XNameAccess> xFamilies(xFamiliesSupp->getStyleFamilies());
+    if (xFamilies.is())
+    {
+        for (OUString const & sFamilyName : xFamilies->getElementNames())
+        {
+            uno::Reference<container::XNameAccess> xStyleContainer;
+            xFamilies->getByName(sFamilyName) >>= xStyleContainer;
+
+            if (xStyleContainer.is())
+            {
+                for (OUString const & rName : xStyleContainer->getElementNames())
+                {
+                    uno::Reference<style::XStyle> xStyle;
+                    xStyleContainer->getByName(rName) >>= xStyle;
+                    if (xStyle->isInUse())
+                    {
+                        uno::Reference<beans::XPropertySet> xPropertySet(xStyle, UNO_QUERY);
+                        if (xPropertySet.is())
+                        {
+                            uno::Reference<beans::XPropertySetInfo> xInfo(xPropertySet->getPropertySetInfo());
+                            if (m_bEmbedLatinScript && xInfo->hasPropertyByName("CharFontName"))
+                            {
+                                OUString sCharFontName;
+                                Any aFontAny = xPropertySet->getPropertyValue("CharFontName");
+                                aFontAny >>= sCharFontName;
+                                if (!sCharFontName.isEmpty())
+                                    aReturnSet.insert(sCharFontName);
+                            }
+                            if (m_bEmbedAsianScript && xInfo->hasPropertyByName("CharFontNameAsian"))
+                            {
+                                OUString sCharFontNameAsian;
+                                Any aFontAny = xPropertySet->getPropertyValue("CharFontNameAsian");
+                                aFontAny >>= sCharFontNameAsian;
+                                if (!sCharFontNameAsian.isEmpty())
+                                    aReturnSet.insert(sCharFontNameAsian);
+                            }
+                            if (m_bEmbedComplexScript && xInfo->hasPropertyByName("CharFontNameComplex"))
+                            {
+                                OUString sCharFontNameComplex;
+                                Any aFontAny = xPropertySet->getPropertyValue("CharFontNameComplex");
+                                aFontAny >>= sCharFontNameComplex;
+                                if (!sCharFontNameComplex.isEmpty())
+                                    aReturnSet.insert(sCharFontNameComplex);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // make sure auto-styles are collected
+    GetExport().collectAutoStyles();
+
+    // Check auto-styles for fonts
+    std::vector<xmloff::AutoStyleEntry> aAutoStyleEntries;
+    aAutoStyleEntries = GetExport().GetAutoStylePool()->GetAutoStyleEntries();
+    for (auto const & rAutoStyleEntry : aAutoStyleEntries)
+    {
+        for (auto const & rPair : rAutoStyleEntry.m_aXmlProperties)
+        {
+            if (rPair.first == "font-name" ||
+                rPair.first == "font-weight-asian" ||
+                rPair.first == "font-weight-complex")
+            {
+                if (rPair.second.has<OUString>())
+                {
+                    OUString sFontName = rPair.second.get<OUString>();
+                    if (!sFontName.isEmpty())
+                        aReturnSet.insert(sFontName);
+                }
+            }
+        }
+    }
+
+    return aReturnSet;
+}
+
 void XMLFontAutoStylePool::exportXML()
 {
-    SvXMLElementExport aElem( GetExport(), XML_NAMESPACE_OFFICE,
-                              XML_FONT_FACE_DECLS,
-                              true, true );
+    SvXMLElementExport aElem(GetExport(), XML_NAMESPACE_OFFICE,
+                             XML_FONT_FACE_DECLS,
+                             true, true);
     Any aAny;
     OUString sTmp;
     XMLFontFamilyNamePropHdl aFamilyNameHdl;
@@ -298,119 +389,139 @@ void XMLFontAutoStylePool::exportXML()
     XMLFontEncodingPropHdl aEncHdl;
     const SvXMLUnitConverter& rUnitConv = GetExport().GetMM100UnitConverter();
 
-    std::map< OUString, OUString > fontFilesMap; // our url to document url
-    sal_uInt32 nCount = pPool->size();
-    for( sal_uInt32 i=0; i<nCount; i++ )
-    {
-        const XMLFontAutoStylePoolEntry_Impl *pEntry = (*pPool)[ i ];
+    std::map<OUString, OUString> fontFilesMap; // our url to document url
+    sal_uInt32 nCount = m_pFontAutoStylePool->size();
 
-        GetExport().AddAttribute( XML_NAMESPACE_STYLE,
-                                  XML_NAME, pEntry->GetName() );
+    std::unordered_set<OUString> aUsedFontNames;
+    if (m_bEmbedUsedOnly)
+        aUsedFontNames = getUsedFontList();
+
+    for (sal_uInt32 i = 0; i < nCount; i++)
+    {
+        const XMLFontAutoStylePoolEntry_Impl* pEntry = (*m_pFontAutoStylePool)[i].get();
+
+        GetExport().AddAttribute(XML_NAMESPACE_STYLE, XML_NAME, pEntry->GetName());
 
         aAny <<= pEntry->GetFamilyName();
-        if( aFamilyNameHdl.exportXML( sTmp, aAny, rUnitConv ) )
-            GetExport().AddAttribute( XML_NAMESPACE_SVG,
-                                      XML_FONT_FAMILY, sTmp );
+        if (aFamilyNameHdl.exportXML(sTmp, aAny, rUnitConv))
+            GetExport().AddAttribute(XML_NAMESPACE_SVG,
+                                     XML_FONT_FAMILY, sTmp);
 
         const OUString& rStyleName = pEntry->GetStyleName();
-        if( !rStyleName.isEmpty() )
-            GetExport().AddAttribute( XML_NAMESPACE_STYLE,
-                                      XML_FONT_ADORNMENTS,
-                                      rStyleName );
+        if (!rStyleName.isEmpty())
+            GetExport().AddAttribute(XML_NAMESPACE_STYLE,
+                                     XML_FONT_ADORNMENTS,
+                                     rStyleName);
 
         aAny <<= static_cast<sal_Int16>(pEntry->GetFamily());
-        if( aFamilyHdl.exportXML( sTmp, aAny, rUnitConv  ) )
-            GetExport().AddAttribute( XML_NAMESPACE_STYLE,
-                                      XML_FONT_FAMILY_GENERIC, sTmp );
-
+        if (aFamilyHdl.exportXML(sTmp, aAny, rUnitConv))
+        {
+            GetExport().AddAttribute(XML_NAMESPACE_STYLE,
+                                     XML_FONT_FAMILY_GENERIC, sTmp);
+        }
         aAny <<= static_cast<sal_Int16>(pEntry->GetPitch());
-        if( aPitchHdl.exportXML( sTmp, aAny, rUnitConv  ) )
-            GetExport().AddAttribute( XML_NAMESPACE_STYLE,
-                                      XML_FONT_PITCH, sTmp );
+        if (aPitchHdl.exportXML(sTmp, aAny, rUnitConv))
+        {
+            GetExport().AddAttribute(XML_NAMESPACE_STYLE,
+                                     XML_FONT_PITCH, sTmp);
+        }
 
         aAny <<= static_cast<sal_Int16>(pEntry->GetEncoding());
-        if( aEncHdl.exportXML( sTmp, aAny, rUnitConv  ) )
-            GetExport().AddAttribute( XML_NAMESPACE_STYLE,
-                                      XML_FONT_CHARSET, sTmp );
-
-        SvXMLElementExport aElement( GetExport(), XML_NAMESPACE_STYLE,
-                                  XML_FONT_FACE,
-                                  true, true );
-
-        if( tryToEmbedFonts )
+        if (aEncHdl.exportXML( sTmp, aAny, rUnitConv))
         {
-            const bool bExportFlat( GetExport().getExportFlags() & SvXMLExportFlags::EMBEDDED );
-            std::vector< EmbeddedFontInfo > aEmbeddedFonts;
-            static const FontWeight weight[] = { WEIGHT_NORMAL, WEIGHT_BOLD, WEIGHT_NORMAL, WEIGHT_BOLD };
-            static const FontItalic italic[] = { ITALIC_NONE, ITALIC_NONE, ITALIC_NORMAL, ITALIC_NORMAL };
-            assert( SAL_N_ELEMENTS( weight ) == SAL_N_ELEMENTS( italic ));
-            for( unsigned int j = 0;
-                 j < SAL_N_ELEMENTS( weight );
-                 ++j )
+            GetExport().AddAttribute(XML_NAMESPACE_STYLE,
+                                     XML_FONT_CHARSET, sTmp);
+        }
+
+        SvXMLElementExport aElement(GetExport(), XML_NAMESPACE_STYLE,
+                                    XML_FONT_FACE, true, true);
+
+        if (m_bTryToEmbedFonts)
+        {
+            const bool bExportFlat(GetExport().getExportFlags() & SvXMLExportFlags::EMBEDDED);
+            std::vector<EmbeddedFontInfo> aEmbeddedFonts;
+            static const std::vector<std::pair<FontWeight, FontItalic>> aCombinations =
+            {
+                { WEIGHT_NORMAL, ITALIC_NONE },
+                { WEIGHT_BOLD,   ITALIC_NONE },
+                { WEIGHT_NORMAL, ITALIC_NORMAL },
+                { WEIGHT_BOLD,   ITALIC_NORMAL },
+            };
+
+            for (auto const & aCombinationPair : aCombinations)
             {
                 // Embed font if at least viewing is allowed (in which case the opening app must check
                 // the font license rights too and open either read-only or not use the font for editing).
-                OUString fileUrl = EmbeddedFontsHelper::fontFileUrl( pEntry->GetFamilyName(), pEntry->GetFamily(),
-                    italic[ j ], weight[ j ], pEntry->GetPitch(),
-                    EmbeddedFontsHelper::FontRights::ViewingAllowed );
-                if( fileUrl.isEmpty())
+                OUString sFileUrl = EmbeddedFontsHelper::fontFileUrl(
+                                        pEntry->GetFamilyName(), pEntry->GetFamily(),
+                                        aCombinationPair.second, aCombinationPair.first, pEntry->GetPitch(),
+                                        EmbeddedFontsHelper::FontRights::ViewingAllowed);
+                if (sFileUrl.isEmpty())
                     continue;
-                if( !fontFilesMap.count( fileUrl ))
+
+                // When embedded only is not set or font is used
+                if (!m_bEmbedUsedOnly ||
+                    aUsedFontNames.find(pEntry->GetFamilyName()) != aUsedFontNames.end())
                 {
-                    const OUString docUrl = bExportFlat ? lcl_checkFontFile( fileUrl ) : embedFontFile( fileUrl );
-                    if( !docUrl.isEmpty())
-                        fontFilesMap[ fileUrl ] = docUrl;
-                    else
-                        continue; // --> failed to embed
+                    if (!fontFilesMap.count(sFileUrl))
+                    {
+                        const OUString docUrl = bExportFlat ?
+                                                    lcl_checkFontFile(sFileUrl) : embedFontFile(sFileUrl, pEntry->GetFamilyName());
+                        if (!docUrl.isEmpty())
+                            fontFilesMap[sFileUrl] = docUrl;
+                        else
+                            continue; // --> failed to embed
+                    }
+                    EmbeddedFontInfo aEmbeddedFont;
+                    aEmbeddedFont.aURL = sFileUrl;
+                    aEmbeddedFont.eWeight = aCombinationPair.first;
+                    aEmbeddedFont.eItalic = aCombinationPair.second;
+                    aEmbeddedFonts.push_back(aEmbeddedFont);
                 }
-                EmbeddedFontInfo aEmbeddedFont;
-                aEmbeddedFont.aURL = fileUrl;
-                aEmbeddedFont.eWeight = weight[j];
-                aEmbeddedFont.eItalic = italic[j];
-                aEmbeddedFonts.push_back(aEmbeddedFont);
             }
             if (!aEmbeddedFonts.empty())
             {
-                SvXMLElementExport fontFaceSrc( GetExport(), XML_NAMESPACE_SVG,
-                    XML_FONT_FACE_SRC, true, true );
-                for( auto it = aEmbeddedFonts.begin();
-                     it != aEmbeddedFonts.end();
-                     ++it )
+                SvXMLElementExport fontFaceSrc(GetExport(), XML_NAMESPACE_SVG, XML_FONT_FACE_SRC, true, true);
+                for (EmbeddedFontInfo const & rEmbeddedFont : aEmbeddedFonts)
                 {
-                    if (fontFilesMap.count(it->aURL))
+                    if (fontFilesMap.count(rEmbeddedFont.aURL))
                     {
-                        if( !bExportFlat )
+                        if (!bExportFlat)
                         {
-                            GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_HREF, fontFilesMap[it->aURL]);
-                            GetExport().AddAttribute( XML_NAMESPACE_XLINK, XML_TYPE, "simple" );
+                            GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_HREF,
+                                                     fontFilesMap[rEmbeddedFont.aURL]);
+                            GetExport().AddAttribute(XML_NAMESPACE_XLINK, XML_TYPE, "simple");
                         }
 
                         // Help consumers of our output by telling them which
                         // font file is which one.
-                        GetExport().AddAttribute( XML_NAMESPACE_LO_EXT, XML_FONT_STYLE, FontItalicToString(it->eItalic) );
-                        GetExport().AddAttribute( XML_NAMESPACE_LO_EXT, XML_FONT_WEIGHT, FontWeightToString(it->eWeight) );
+                        GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, XML_FONT_STYLE,
+                                                 FontItalicToString(rEmbeddedFont.eItalic));
+                        GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, XML_FONT_WEIGHT,
+                                                 FontWeightToString(rEmbeddedFont.eWeight));
 
-                        SvXMLElementExport fontFaceUri( GetExport(), XML_NAMESPACE_SVG,
-                            XML_FONT_FACE_URI, true, true );
+                        SvXMLElementExport fontFaceUri(GetExport(), XML_NAMESPACE_SVG,
+                                                       XML_FONT_FACE_URI, true, true);
 
-                        if( bExportFlat )
+                        if (bExportFlat)
                         {
-                            const uno::Reference< ucb::XSimpleFileAccess > xFileAccess( ucb::SimpleFileAccess::create( GetExport().getComponentContext() ) );
+                            const uno::Reference<ucb::XSimpleFileAccess> xFileAccess(
+                                ucb::SimpleFileAccess::create(GetExport().getComponentContext()));
                             try
                             {
-                                const uno::Reference< io::XInputStream > xInput( xFileAccess->openFileRead( fontFilesMap[ it->aURL ] ) );
-                                XMLBase64Export aBase64Exp( GetExport() );
-                                aBase64Exp.exportOfficeBinaryDataElement( xInput );
+                                const uno::Reference<io::XInputStream> xInput(xFileAccess->openFileRead(fontFilesMap[rEmbeddedFont.aURL]));
+                                XMLBase64Export aBase64Exp(GetExport());
+                                aBase64Exp.exportOfficeBinaryDataElement(xInput);
                             }
-                            catch( const uno::Exception & )
+                            catch (const uno::Exception &)
                             {
                                 // opening the file failed, ignore
                             }
                         }
 
-                        GetExport().AddAttribute( XML_NAMESPACE_SVG, XML_STRING, "truetype" );
-                        SvXMLElementExport fontFaceFormat( GetExport(), XML_NAMESPACE_SVG,
-                            XML_FONT_FACE_FORMAT, true, true );
+                        GetExport().AddAttribute(XML_NAMESPACE_SVG, XML_STRING, "truetype");
+                        SvXMLElementExport fontFaceFormat(GetExport(), XML_NAMESPACE_SVG,
+                                                          XML_FONT_FACE_FORMAT, true, true);
                     }
                 }
             }
@@ -418,10 +529,72 @@ void XMLFontAutoStylePool::exportXML()
     }
 }
 
-OUString XMLFontAutoStylePool::embedFontFile( const OUString& fileUrl )
+static OUString getFreeFontName(uno::Reference<embed::XStorage> const & rxStorage, OUString const & rFamilyName)
+{
+    OUString sName;
+    int nIndex = 1;
+    do
+    {
+        sName = "Font_" +
+                rFamilyName.replaceAll(" ", "_") + "_" +
+                OUString::number(nIndex) + ".ttf";
+        nIndex++;
+    } while (rxStorage->hasByName(sName));
+
+    return sName;
+}
+
+static OString convertToHashString(std::vector<unsigned char> const & rHash)
+{
+    std::stringstream aStringStream;
+    for (auto const & rByte : rHash)
+    {
+        aStringStream << std::setw(2) << std::setfill('0') << std::hex << int(rByte);
+    }
+
+    return OString(aStringStream.str().c_str());
+}
+
+static OString getFileHash(OUString const & rFileUrl)
+{
+    OString aHash;
+    osl::File aFile(rFileUrl);
+    if (aFile.open(osl_File_OpenFlag_Read) != osl::File::E_None)
+        return aHash;
+
+    comphelper::Hash aHashEngine(comphelper::HashType::SHA512);
+    for (;;)
+    {
+        sal_Int8 aBuffer[4096];
+        sal_uInt64 nReadSize;
+        sal_Bool bEof;
+        if (aFile.isEndOfFile(&bEof) != osl::File::E_None)
+        {
+            SAL_WARN("xmloff", "Error reading font file " << rFileUrl);
+            return aHash;
+        }
+        if (bEof)
+            break;
+        if (aFile.read(aBuffer, 4096, nReadSize) != osl::File::E_None)
+        {
+            SAL_WARN("xmloff", "Error reading font file " << rFileUrl);
+            return aHash;
+        }
+        if (nReadSize == 0)
+            break;
+        aHashEngine.update(reinterpret_cast<unsigned char*>(aBuffer), nReadSize);
+    }
+    return convertToHashString(aHashEngine.finalize());
+}
+
+OUString XMLFontAutoStylePool::embedFontFile(OUString const & fileUrl, OUString const & rFamilyName)
 {
     try
     {
+        OString sHashString = getFileHash(fileUrl);
+        if (m_aEmbeddedFontFiles.find(sHashString) != m_aEmbeddedFontFiles.end())
+            return m_aEmbeddedFontFiles.at(sHashString);
+
         osl::File file( fileUrl );
         if( file.open( osl_File_OpenFlag_Read ) != osl::File::E_None )
             return OUString();
@@ -432,12 +605,9 @@ OUString XMLFontAutoStylePool::embedFontFile( const OUString& fileUrl )
         uno::Reference< embed::XStorage > storage;
         storage.set( GetExport().GetTargetStorage()->openStorageElement( "Fonts",
             ::embed::ElementModes::WRITE ), uno::UNO_QUERY_THROW );
-        int index = 0;
-        OUString name;
-        do
-        {
-            name = "font" + OUString::number( ++index ) + ".ttf";
-        } while( storage->hasByName( name ) );
+
+        OUString name = getFreeFontName(storage, rFamilyName);
+
         uno::Reference< io::XOutputStream > outputStream;
         outputStream.set( storage->openStreamElement( name, ::embed::ElementModes::WRITE ), UNO_QUERY_THROW );
         uno::Reference < beans::XPropertySet > propertySet( outputStream, uno::UNO_QUERY );
@@ -473,7 +643,9 @@ OUString XMLFontAutoStylePool::embedFontFile( const OUString& fileUrl )
             if( transaction.is())
             {
                 transaction->commit();
-                return "Fonts/" + name;
+                OUString sInternalName = "Fonts/" + name;
+                m_aEmbeddedFontFiles.emplace(sHashString, sInternalName);
+                return sInternalName;
             }
         }
     } catch( const Exception& e )

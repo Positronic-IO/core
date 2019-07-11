@@ -443,6 +443,7 @@ class SystemWindow;
 class WorkWindow;
 class Dialog;
 class MessBox;
+class MessageDialog;
 class DockingWindow;
 class FloatingWindow;
 class GroupBox;
@@ -505,6 +506,7 @@ class VCL_DLLPUBLIC Window : public ::OutputDevice
     friend class ::WorkWindow;
     friend class ::Dialog;
     friend class ::MessBox;
+    friend class ::MessageDialog;
     friend class ::DockingWindow;
     friend class ::FloatingWindow;
     friend class ::GroupBox;
@@ -555,7 +557,7 @@ public:
     SalFrame*                           ImplGetFrame() const;
     SAL_DLLPRIVATE ImplFrameData*       ImplGetFrameData();
 
-    SAL_DLLPRIVATE vcl::Window*         ImplGetWindow();
+                   vcl::Window*         ImplGetWindow() const; ///< if this is a proxy return the client, otherwise itself
     SAL_DLLPRIVATE ImplWinData*         ImplGetWinData() const;
     SAL_DLLPRIVATE vcl::Window*         ImplGetClientWindow() const;
     SAL_DLLPRIVATE vcl::Window*         ImplGetDlgWindow( sal_uInt16 n, GetDlgWindowType nType, sal_uInt16 nStart = 0, sal_uInt16 nEnd = 0xFFFF, sal_uInt16* pIndex = nullptr );
@@ -831,9 +833,6 @@ public:
 
     ImplSVEvent *                       PostUserEvent( const Link<void*,void>& rLink, void* pCaller = nullptr, bool bReferenceLink = false );
     void                                RemoveUserEvent( ImplSVEvent * nUserEvent );
-
-    void                                IncrementLockCount();
-    void                                DecrementLockCount();
 
                                         // returns the input language used for the last key stroke
                                         // may be LANGUAGE_DONTKNOW if not supported by the OS
@@ -1184,7 +1183,7 @@ public:
     sal_uInt16                          GetChildCount() const;
     vcl::Window*                        GetChild( sal_uInt16 nChild ) const;
     vcl::Window*                        GetWindow( GetWindowType nType ) const;
-    bool                                IsChild( const vcl::Window* pWindow, bool bSystemWindow = false ) const;
+    bool                                IsChild( const vcl::Window* pWindow ) const;
     bool                                IsWindowOrChild( const vcl::Window* pWindow, bool bSystemWindow = false  ) const;
 
     /// Add all children to rAllChildren recursively.
@@ -1200,7 +1199,6 @@ public:
                                                       ShowTrackFlags nFlags = ShowTrackFlags::Small );
     void                                HideTracking();
     void                                InvertTracking( const tools::Rectangle& rRect, ShowTrackFlags nFlags );
-    void                                InvertTracking( const tools::Polygon& rPoly, ShowTrackFlags nFlags );
 
     void                                StartTracking( StartTrackingFlags nFlags = StartTrackingFlags::NONE );
     void                                EndTracking( TrackingEventFlags nFlags = TrackingEventFlags::NONE );
@@ -1575,13 +1573,15 @@ public:
     // a helper method for a Control's Draw method
     void PaintToDevice( ::OutputDevice* pDevice, const Point& rPos, const Size& rSize );
 
-    /* mark Window for deletion in top of event queue
+    /* tdf#119390 set parent to default window. Typically for use in advance of destroying
+     * a floating windows which has the current focus so focus will revert to the main
+     * document window and not the first widget in the current parent of the floating
+     * window.
     */
-    void doLazyDelete();
+    void SetParentToDefaultWindow();
 
 
     //  Keyboard access functions
-
 
     /** Query the states of keyboard indicators - Caps Lock, Num Lock and
         Scroll Lock.  Use the following mask to retrieve the state of each

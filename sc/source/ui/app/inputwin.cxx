@@ -45,6 +45,7 @@
 #include <vcl/settings.hxx>
 #include <svl/stritem.hxx>
 #include <o3tl/make_unique.hxx>
+#include <unotools/charclass.hxx>
 
 #include <inputwin.hxx>
 #include <scmod.hxx>
@@ -1017,10 +1018,7 @@ EditView* ScTextWnd::GetEditView()
     return mpEditView.get();
 }
 
-bool ScTextWnd::HasEditView() const
-{
-    return mpEditView.get() != nullptr;
-}
+bool ScTextWnd::HasEditView() const { return mpEditView != nullptr; }
 
 long ScTextWnd::GetPixelHeightForLines(long nLines)
 {
@@ -1259,8 +1257,6 @@ void ScTextWnd::InitEditEngine()
 ScTextWnd::ScTextWnd(ScInputBarGroup* pParent, ScTabViewShell* pViewSh)
     :   ScTextWndBase(pParent, WinBits(WB_HIDE | WB_BORDER)),
         DragSourceHelper(this),
-        mpEditEngine  (nullptr),
-        mpEditView    (nullptr),
         bIsInsertMode(true),
         bFormulaMode (false),
         bInputMode   (false),
@@ -1304,6 +1300,8 @@ ScTextWnd::ScTextWnd(ScInputBarGroup* pParent, ScTabViewShell* pViewSh)
     Size aBorder;
     aBorder = CalcWindowSize(aBorder);
     mnBorderHeight = aBorder.Height();
+
+    set_id("sc_input_window");
 }
 
 ScTextWnd::~ScTextWnd()
@@ -1633,10 +1631,10 @@ void ScTextWnd::SetTextString( const OUString& rNewString )
                 SvtScriptType nOldScript = SvtScriptType::NONE;
                 SvtScriptType nNewScript = SvtScriptType::NONE;
                 SfxObjectShell* pObjSh = SfxObjectShell::Current();
-                if ( pObjSh && dynamic_cast<const ScDocShell*>( pObjSh) !=  nullptr )
+                if ( auto pDocShell = dynamic_cast<ScDocShell*>( pObjSh) )
                 {
                     //  any document can be used (used only for its break iterator)
-                    ScDocument& rDoc = static_cast<ScDocShell*>(pObjSh)->GetDocument();
+                    ScDocument& rDoc = pDocShell->GetDocument();
                     nOldScript = rDoc.GetStringScriptType( aString );
                     nNewScript = rDoc.GetStringScriptType( rNewString );
                 }
@@ -1810,7 +1808,7 @@ ScPosWnd::ScPosWnd( vcl::Window* pParent ) :
     Size aSize( GetTextWidth( "GW99999:GW99999" ),
                 GetTextHeight() );
     aSize.AdjustWidth(25 );    // FIXME: ??
-    aSize.setHeight( CalcWindowSizePixel(11) ); // Functions: 10 MRU + "others..."
+    aSize.setHeight( CalcWindowSizePixel(21) ); // Functions: 20 MRU + "others..."
     SetSizePixel( aSize );
 
     FillRangeNames();
@@ -1874,9 +1872,9 @@ void ScPosWnd::FillRangeNames()
     Clear();
 
     SfxObjectShell* pObjSh = SfxObjectShell::Current();
-    if ( pObjSh && dynamic_cast<const ScDocShell*>( pObjSh) !=  nullptr )
+    if ( auto pDocShell = dynamic_cast<ScDocShell*>( pObjSh) )
     {
-        ScDocument& rDoc = static_cast<ScDocShell*>(pObjSh)->GetDocument();
+        ScDocument& rDoc = pDocShell->GetDocument();
 
         InsertEntry(ScResId( STR_MANAGE_NAMES ));
         SetSeparatorPos(0);
@@ -1931,18 +1929,18 @@ void ScPosWnd::FillFunctions()
     if (pMRUList)
     {
         const ScFunctionList* pFuncList = ScGlobal::GetStarCalcFunctionList();
-        sal_uLong nListCount = pFuncList->GetCount();
+        sal_uInt32 nListCount = pFuncList->GetCount();
         for (sal_uInt16 i=0; i<nMRUCount; i++)
         {
             sal_uInt16 nId = pMRUList[i];
-            for (sal_uLong j=0; j<nListCount; j++)
+            for (sal_uInt32 j=0; j<nListCount; j++)
             {
                 const ScFuncDesc* pDesc = pFuncList->GetFunction( j );
-                if ( pDesc->nFIndex == nId && pDesc->pFuncName )
+                if ( pDesc->nFIndex == nId && pDesc->mxFuncName )
                 {
-                    InsertEntry( *pDesc->pFuncName );
+                    InsertEntry( *pDesc->mxFuncName );
                     if (aFirstName.isEmpty())
-                        aFirstName = *pDesc->pFuncName;
+                        aFirstName = *pDesc->mxFuncName;
                     break; // Stop searching
                 }
             }

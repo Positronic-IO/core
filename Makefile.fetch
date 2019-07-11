@@ -52,7 +52,7 @@ $(filter 32,$(words $(shell echo $(1) | sed -e 's/./& /g')))
 endef
 
 define fetch_Download__subst_var
-$(subst _DLL,_SHA256SUM,$(subst _TARBALL,_SHA256SUM,$(subst _PACK,_SHA256SUM,$(subst _JAR,_SHA256SUM,$(1)))))
+$(subst _TTF,_SHA256SUM,$(subst _DLL,_SHA256SUM,$(subst _TARBALL,_SHA256SUM,$(subst _PACK,_SHA256SUM,$(subst _JAR,_SHA256SUM,$(1))))))
 endef
 
 # fetch_Download_item url variable-name
@@ -161,7 +161,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,LIBPNG,LIBPNG_TARBALL) \
 		$(call fetch_Optional,LIBTOMMATH,LIBTOMMATH_TARBALL) \
 		$(call fetch_Optional,LIBXML2,LIBXML_TARBALL) \
-		XMLSEC_TARBALL \
+		$(call fetch_Optional,XMLSEC,XMLSEC_TARBALL) \
 		$(call fetch_Optional,LIBXSLT,LIBXSLT_TARBALL) \
 		$(call fetch_Optional,LPSOLVE,LPSOLVE_TARBALL) \
 		$(call fetch_Optional,LXML,LXML_TARBALL) \
@@ -177,6 +177,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,MORE_FONTS,FONT_LINLIBERTINEG_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_SOURCECODE_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_SOURCESANS_TARBALL) \
+		$(call fetch_Optional,MORE_FONTS,FONT_SOURCESERIF_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_EMOJIONE_COLOR_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_NOTO_TARBALL) \
 		$(call fetch_Optional,MORE_FONTS,FONT_CULMUS_TARBALL) \
@@ -188,7 +189,6 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 		$(call fetch_Optional,MORE_FONTS,FONT_SCHEHERAZADE_TARBALL) \
 		$(call fetch_Optional,MSPUB,MSPUB_TARBALL) \
 		$(call fetch_Optional,MWAW,MWAW_TARBALL) \
-		$(call fetch_Optional,MYSQL_CONNECTOR_CPP,MYSQL_CONNECTOR_CPP_TARBALL) \
 		$(call fetch_Optional,MYTHES,MYTHES_TARBALL) \
 		$(call fetch_Optional,NEON,NEON_TARBALL) \
 		$(call fetch_Optional,NSS,NSS_TARBALL) \
@@ -224,6 +224,7 @@ $(WORKDIR)/download: $(BUILDDIR)/config_$(gb_Side).mk $(SRCDIR)/download.lst $(S
 	,$(call fetch_Download_item,https://dev-www.libreoffice.org/src,$(item)))
 	$(foreach item, \
 		$(call fetch_Optional,ODK,UNOWINREG_DLL) \
+		$(call fetch_Optional,OPENSYMBOL,OPENSYMBOL_TTF) \
 		$(call fetch_Optional,ODFVALIDATOR,ODFVALIDATOR_JAR) \
 		$(call fetch_Optional,OFFICEOTRON,OFFICEOTRON_JAR) \
 	,$(call fetch_Download_item,https://dev-www.libreoffice.org/extern,$(item)))

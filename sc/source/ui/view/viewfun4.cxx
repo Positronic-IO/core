@@ -38,7 +38,7 @@
 #include <svtools/langtab.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <svl/stritem.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svl/urlbmk.hxx>
 #include <svl/sharedstringpool.hxx>
 #include <vcl/weld.hxx>
@@ -70,6 +70,7 @@
 #include <tokenarray.hxx>
 #include <refupdatecontext.hxx>
 #include <gridwin.hxx>
+#include <refundo.hxx>
 
 using namespace com::sun::star;
 
@@ -89,7 +90,7 @@ void ScViewFunc::PasteRTF( SCCOL nStartCol, SCROW nStartRow,
         const bool bRecord (rDoc.IsUndoEnabled());
 
         const ScPatternAttr* pPattern = rDoc.GetPattern( nStartCol, nStartRow, nTab );
-        std::unique_ptr<ScTabEditEngine> pEngine(new ScTabEditEngine( *pPattern, rDoc.GetEnginePool() ));
+        std::unique_ptr<ScTabEditEngine> pEngine(new ScTabEditEngine( *pPattern, rDoc.GetEnginePool(), &rDoc ));
         pEngine->EnableUndo( false );
 
         vcl::Window* pActWin = GetActiveWin();
@@ -112,10 +113,10 @@ void ScViewFunc::PasteRTF( SCCOL nStartCol, SCROW nStartRow,
             if (nEndRow > MAXROW)
                 nEndRow = MAXROW;
 
-            ScDocument* pUndoDoc = nullptr;
+            ScDocumentUniquePtr pUndoDoc;
             if (bRecord)
             {
-                pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+                pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
                 pUndoDoc->InitUndo( &rDoc, nTab, nTab );
                 rDoc.CopyToDocument( nStartCol,nStartRow,nTab, nStartCol,nEndRow,nTab, InsertDeleteFlags::ALL, false, *pUndoDoc );
             }
@@ -136,7 +137,7 @@ void ScViewFunc::PasteRTF( SCCOL nStartCol, SCROW nStartRow,
 
             if (bRecord)
             {
-                ScDocument* pRedoDoc = new ScDocument( SCDOCMODE_UNDO );
+                ScDocumentUniquePtr pRedoDoc(new ScDocument( SCDOCMODE_UNDO ));
                 pRedoDoc->InitUndo( &rDoc, nTab, nTab );
                 rDoc.CopyToDocument( nStartCol,nStartRow,nTab, nStartCol,nEndRow,nTab, InsertDeleteFlags::ALL|InsertDeleteFlags::NOCAPTIONS, false, *pRedoDoc );
 
@@ -144,8 +145,8 @@ void ScViewFunc::PasteRTF( SCCOL nStartCol, SCROW nStartRow,
                 ScMarkData aDestMark;
                 aDestMark.SetMarkArea( aMarkRange );
                 pDocSh->GetUndoManager()->AddUndoAction(
-                    new ScUndoPaste( pDocSh, aMarkRange, aDestMark,
-                                     pUndoDoc, pRedoDoc, InsertDeleteFlags::ALL, nullptr));
+                    o3tl::make_unique<ScUndoPaste>( pDocSh, aMarkRange, aDestMark,
+                                     std::move(pUndoDoc), std::move(pRedoDoc), InsertDeleteFlags::ALL, nullptr));
             }
         }
 
@@ -209,10 +210,10 @@ void ScViewFunc::DoRefConversion()
     ScDocShell* pDocSh = GetViewData().GetDocShell();
     bool bOk = false;
 
-    ScDocument* pUndoDoc = nullptr;
+    ScDocumentUniquePtr pUndoDoc;
     if (bRecord)
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset( new ScDocument( SCDOCMODE_UNDO ) );
         SCTAB nTab = aMarkRange.aStart.Tab();
         pUndoDoc->InitUndo( pDoc, nTab, nTab );
 
@@ -267,7 +268,7 @@ void ScViewFunc::DoRefConversion()
                 if (aFinder.GetFound())
                 {
                     ScAddress aPos = pCell->aPos;
-                    OUString aNew = aFinder.GetText();
+                    const OUString& aNew = aFinder.GetText();
                     ScCompiler aComp( pDoc, aPos, pDoc->GetGrammar());
                     std::unique_ptr<ScTokenArray> pArr(aComp.CompileString(aNew));
                     ScFormulaCell* pNewCell =
@@ -282,7 +283,7 @@ void ScViewFunc::DoRefConversion()
     }
     if (bRecord)
     {
-        ScDocument* pRedoDoc = new ScDocument( SCDOCMODE_UNDO );
+        ScDocumentUniquePtr pRedoDoc(new ScDocument( SCDOCMODE_UNDO ));
         SCTAB nTab = aMarkRange.aStart.Tab();
         pRedoDoc->InitUndo( pDoc, nTab, nTab );
 
@@ -299,8 +300,8 @@ void ScViewFunc::DoRefConversion()
         pDoc->CopyToDocument( aCopyRange, InsertDeleteFlags::ALL, bMulti, *pRedoDoc, &rMark );
 
         pDocSh->GetUndoManager()->AddUndoAction(
-            new ScUndoRefConversion( pDocSh,
-                                    aMarkRange, rMark, pUndoDoc, pRedoDoc, bMulti) );
+            o3tl::make_unique<ScUndoRefConversion>( pDocSh,
+                                    aMarkRange, rMark, std::move(pUndoDoc), std::move(pRedoDoc), bMulti) );
     }
 
     pDocSh->PostPaint( aMarkRange, PaintPartFlags::Grid );
@@ -366,10 +367,9 @@ void ScViewFunc::DoThesaurus()
     pThesaurusEngine->SetRefDevice(GetViewData().GetActiveWin());
     pThesaurusEngine->SetSpeller(xSpeller);
     MakeEditView(pThesaurusEngine.get(), nCol, nRow );
-    const ScPatternAttr* pPattern = nullptr;
     std::unique_ptr<SfxItemSet> pEditDefaults(
         new SfxItemSet(pThesaurusEngine->GetEmptyItemSet()));
-    pPattern = rDoc.GetPattern(nCol, nRow, nTab);
+    const ScPatternAttr* pPattern = rDoc.GetPattern(nCol, nRow, nTab);
     if (pPattern)
     {
         pPattern->FillEditItemSet( pEditDefaults.get() );
@@ -429,7 +429,7 @@ void ScViewFunc::DoThesaurus()
         if (bRecord)
         {
             GetViewData().GetDocShell()->GetUndoManager()->AddUndoAction(
-                new ScUndoThesaurus(
+                o3tl::make_unique<ScUndoThesaurus>(
                     GetViewData().GetDocShell(), nCol, nRow, nTab, aOldText, aNewText));
         }
     }
@@ -485,13 +485,13 @@ void ScViewFunc::DoSheetConversion( const ScConversionParam& rConvParam )
         }
     }
 
-    ScDocument* pUndoDoc = nullptr;
-    ScDocument* pRedoDoc = nullptr;
+    ScDocumentUniquePtr pUndoDoc;
+    ScDocumentUniquePtr pRedoDoc;
     if (bRecord)
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset( new ScDocument( SCDOCMODE_UNDO ) );
         pUndoDoc->InitUndo( &rDoc, nTab, nTab );
-        pRedoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pRedoDoc.reset( new ScDocument( SCDOCMODE_UNDO ) );
         pRedoDoc->InitUndo( &rDoc, nTab, nTab );
 
         if ( rMark.GetSelectCount() > 1 )
@@ -518,12 +518,12 @@ void ScViewFunc::DoSheetConversion( const ScConversionParam& rConvParam )
     {
         case SC_CONVERSION_SPELLCHECK:
             pEngine.reset(new ScSpellingEngine(
-                rDoc.GetEnginePool(), rViewData, pUndoDoc, pRedoDoc, LinguMgr::GetSpellChecker() ));
+                rDoc.GetEnginePool(), rViewData, pUndoDoc.get(), pRedoDoc.get(), LinguMgr::GetSpellChecker() ));
         break;
         case SC_CONVERSION_HANGULHANJA:
         case SC_CONVERSION_CHINESE_TRANSL:
             pEngine.reset(new ScTextConversionEngine(
-                rDoc.GetEnginePool(), rViewData, rConvParam, pUndoDoc, pRedoDoc ));
+                rDoc.GetEnginePool(), rViewData, rConvParam, pUndoDoc.get(), pRedoDoc.get() ));
         break;
         default:
             OSL_FAIL( "ScViewFunc::DoSheetConversion - unknown conversion type" );
@@ -555,10 +555,10 @@ void ScViewFunc::DoSheetConversion( const ScConversionParam& rConvParam )
             SCCOL nNewCol = rViewData.GetCurX();
             SCROW nNewRow = rViewData.GetCurY();
             rViewData.GetDocShell()->GetUndoManager()->AddUndoAction(
-                new ScUndoConversion(
+                o3tl::make_unique<ScUndoConversion>(
                         pDocSh, rMark,
-                        nCol, nRow, nTab, pUndoDoc,
-                        nNewCol, nNewRow, nTab, pRedoDoc, rConvParam ) );
+                        nCol, nRow, nTab, std::move(pUndoDoc),
+                        nNewCol, nNewRow, nTab, std::move(pRedoDoc), rConvParam ) );
         }
 
         sc::SetFormulaDirtyContext aCxt;
@@ -568,8 +568,8 @@ void ScViewFunc::DoSheetConversion( const ScConversionParam& rConvParam )
     }
     else
     {
-        delete pUndoDoc;
-        delete pRedoDoc;
+        pUndoDoc.reset();
+        pRedoDoc.reset();
     }
 
     // *** final cleanup *** --------------------------------------------------

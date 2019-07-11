@@ -65,8 +65,8 @@ GlyphSet::GetGlyphID (
                       sal_Int32* nOutGlyphSetID
                      )
 {
-    if (LookupGlyphID(nGlyph, nOutGlyphID, nOutGlyphSetID))
-           AddGlyphID(nGlyph, nOutGlyphID, nOutGlyphSetID);
+    if (!LookupGlyphID(nGlyph, nOutGlyphID, nOutGlyphSetID))
+        AddGlyphID(nGlyph, nOutGlyphID, nOutGlyphSetID);
 }
 
 bool
@@ -105,7 +105,7 @@ GlyphSet::AddNotdef (glyph_map_t &rGlyphMap)
         rGlyphMap[0] = 0;
 }
 
-bool
+void
 GlyphSet::AddGlyphID (
                      sal_GlyphId nGlyph,
                      unsigned char* nOutGlyphID,
@@ -136,8 +136,6 @@ GlyphSet::AddGlyphID (
     aGlyphSet [nGlyph] = nSize;
     *nOutGlyphSetID   = maGlyphList.size();
     *nOutGlyphID      = aGlyphSet [nGlyph];
-
-    return true;
 }
 
 OString
@@ -176,8 +174,7 @@ GlyphSet::GetReencodedFontName (rtl_TextEncoding nEnc, const OString &rFontName)
 
 void GlyphSet::DrawGlyph(PrinterGfx& rGfx,
                          const Point& rPoint,
-                         const sal_GlyphId nGlyphId,
-                         const sal_Int32 nDelta)
+                         const sal_GlyphId nGlyphId)
 {
     unsigned char nGlyphID;
     sal_Int32 nGlyphSetID;
@@ -185,14 +182,10 @@ void GlyphSet::DrawGlyph(PrinterGfx& rGfx,
     // convert to font glyph id and font subset
     GetGlyphID (nGlyphId, &nGlyphID, &nGlyphSetID);
 
-    // show the text using the PrinterGfx text api
-    Point aPoint = rPoint;
-    aPoint.Move (nDelta, 0);
-
     OString aGlyphSetName = GetGlyphSetName(nGlyphSetID);
 
     rGfx.PSSetFont  (aGlyphSetName, RTL_TEXTENCODING_DONTKNOW);
-    rGfx.PSMoveTo   (aPoint);
+    rGfx.PSMoveTo   (rPoint);
     rGfx.PSShowGlyph(nGlyphID);
 }
 
@@ -249,8 +242,8 @@ GlyphSet::PSUploadFont (osl::File& rOutFile, PrinterGfx &rGfx, bool bAllowType42
     TrueTypeFont *pTTFont;
     OString aTTFileName (rGfx.GetFontMgr().getFontFileSysPath(mnFontID));
     int nFace = rGfx.GetFontMgr().getFontFaceNumber(mnFontID);
-    sal_Int32 nSuccess = OpenTTFontFile(aTTFileName.getStr(), nFace, &pTTFont);
-    if (nSuccess != SF_OK)
+    SFErrCodes nSuccess = OpenTTFontFile(aTTFileName.getStr(), nFace, &pTTFont);
+    if (nSuccess != SFErrCodes::Ok)
         return;
 
     utl::TempFile aTmpFile;

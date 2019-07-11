@@ -26,7 +26,6 @@
 #include <cstddef>
 #include <new>
 #include <ostream>
-#include <utility>
 #include <string.h>
 
 #include "rtl/textenc.h"
@@ -36,8 +35,6 @@
 #ifdef LIBO_INTERNAL_ONLY // "RTL_FAST_STRING"
 #include "rtl/stringconcat.hxx"
 #endif
-
-#include "sal/log.hxx"
 
 #ifdef RTL_STRING_UNITTEST
 extern bool rtl_string_unittest_const_literal;
@@ -71,7 +68,7 @@ namespace rtl
 /**
   This String class provide base functionality for C++ like 8-Bit
   character array handling. The advantage of this class is, that it
-  handle all the memory managament for you - and it do it
+  handle all the memory management for you - and it do it
   more efficient. If you assign a string to another string, the
   data of both strings are shared (without any copy operation or
   memory allocation) as long as you do not change the string. This class
@@ -1807,6 +1804,10 @@ struct SAL_WARN_UNUSED OStringLiteral
 {
     template< int N >
     explicit OStringLiteral( const char (&str)[ N ] ) : size( N - 1 ), data( str ) { assert( strlen( str ) == N - 1 ); }
+#if defined __cpp_char8_t
+    template< int N >
+    explicit OStringLiteral( const char8_t (&str)[ N ] ) : size( N - 1 ), data( reinterpret_cast<char const *>(str) ) { assert( strlen( data ) == N - 1 ); }
+#endif
     int size;
     const char* data;
 };

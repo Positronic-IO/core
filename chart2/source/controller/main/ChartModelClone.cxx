@@ -18,11 +18,13 @@
  */
 
 #include "ChartModelClone.hxx"
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <ControllerLockGuard.hxx>
 #include <DataSourceHelper.hxx>
 
 #include <com/sun/star/chart2/XAnyDescriptionAccess.hpp>
+#include <com/sun/star/chart2/XInternalDataProvider.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>

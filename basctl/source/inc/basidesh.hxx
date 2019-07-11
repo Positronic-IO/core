@@ -55,7 +55,6 @@ class Shell :
 {
 public:
     typedef std::map<sal_uInt16, VclPtr<BaseWindow> > WindowTable;
-    typedef WindowTable::const_iterator WindowTableIt;
 
 private:
     friend class JavaDebuggingListenerImpl;
@@ -163,7 +162,7 @@ public:
 
     SdrView*            GetCurDlgView() const;
 
-    svl::IUndoManager*  GetUndoManager() override;
+    SfxUndoManager*     GetUndoManager() override;
 
     virtual css::uno::Reference< css::view::XRenderable > GetRenderable() override;
 

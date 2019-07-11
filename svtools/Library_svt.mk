@@ -97,14 +97,7 @@ $(eval $(call gb_Library_add_exception_objects,svt,\
     svtools/source/contnr/imivctl2 \
     svtools/source/contnr/ivctrl \
     svtools/source/contnr/simptabl \
-    svtools/source/contnr/svimpbox \
-    svtools/source/contnr/svlbitm \
-    svtools/source/contnr/svtabbx \
     svtools/source/contnr/templwin \
-    svtools/source/contnr/treelist \
-    svtools/source/contnr/treelistbox \
-    svtools/source/contnr/treelistentry \
-    svtools/source/contnr/viewdataentry \
     svtools/source/control/accessibleruler \
     svtools/source/control/asynclink \
     svtools/source/control/autocmpledit \
@@ -115,8 +108,6 @@ $(eval $(call gb_Library_add_exception_objects,svt,\
     svtools/source/control/ctrltool \
     svtools/source/control/filectrl \
     svtools/source/control/fileurlbox \
-    svtools/source/control/fmtfield \
-    svtools/source/control/headbar \
     svtools/source/control/hyperlabel \
     svtools/source/control/indexentryres \
     svtools/source/control/inettbc \
@@ -131,8 +122,6 @@ $(eval $(call gb_Library_add_exception_objects,svt,\
     svtools/source/control/urlcontrol \
     svtools/source/control/valueacc \
     svtools/source/control/valueset \
-    svtools/source/control/vclxaccessibleheaderbar \
-    svtools/source/control/vclxaccessibleheaderbaritem \
     svtools/source/dialogs/addresstemplate \
     svtools/source/dialogs/colrdlg \
     svtools/source/dialogs/insdlg \
@@ -169,19 +158,13 @@ $(eval $(call gb_Library_add_exception_objects,svt,\
     svtools/source/misc/filechangedchecker \
     svtools/source/misc/imagemgr \
     svtools/source/misc/imageresourceaccess \
-    svtools/source/misc/imap \
-    svtools/source/misc/imap2 \
-    svtools/source/misc/imap3 \
     svtools/source/misc/langtab \
     svtools/source/misc/langhelp \
     svtools/source/misc/openfiledroptargetlistener \
     svtools/source/misc/sampletext \
     svtools/source/misc/stringtransfer \
-    svtools/source/misc/svtaccessiblefactory \
     svtools/source/misc/svtresid \
     svtools/source/misc/templatefoldercache \
-    svtools/source/misc/transfer \
-    svtools/source/misc/transfer2 \
     svtools/source/misc/unitconv \
     svtools/source/svhtml/htmlkywd \
     svtools/source/svhtml/htmlout \
@@ -221,7 +204,6 @@ $(eval $(call gb_Library_add_exception_objects,svt,\
     svtools/source/uno/wizard/unowizard \
     svtools/source/uno/wizard/wizardpagecontroller \
     svtools/source/uno/wizard/wizardshell \
-    svtools/source/urlobj/inetimg \
 ))
 
 ifeq ($(OS),WNT)

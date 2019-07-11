@@ -321,6 +321,21 @@ DECLARE_HTMLIMPORT_TEST(testReqIfBr, "reqif-br.xhtml")
     CPPUNIT_ASSERT(getParagraph(1)->getString().startsWith("aaa\nbbb"));
 }
 
+DECLARE_HTMLIMPORT_TEST(testReqIfTable, "reqif-table.xhtml")
+{
+    // Load a table with xhtmlns=reqif-xhtml filter param.
+    uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), xTables->getCount());
+    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xCell(xTable->getCellByName("A1"), uno::UNO_QUERY);
+    auto aBorder = getProperty<table::BorderLine2>(xCell, "TopBorder");
+    // This was 0, tables had no borders, even if the default autoformat has
+    // borders and the markup allows no custom borders.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(18), aBorder.LineWidth);
+}
+
 DECLARE_HTMLIMPORT_TEST(testImageSize, "image-size.html")
 {
     awt::Size aSize = getShape(1)->getSize();
@@ -332,6 +347,25 @@ DECLARE_HTMLIMPORT_TEST(testImageSize, "image-size.html")
     // header when the HTML markup declared no size.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aExpected.getWidth()), aSize.Width);
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(aExpected.getHeight()), aSize.Height);
+}
+
+DECLARE_HTMLIMPORT_TEST(testTdf122789, "tdf122789.html")
+{
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rFormats.size());
+    // This failed, the image had an absolute size, not a relative one.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(70), rFormats[0]->GetAttrSet().GetFrameSize().GetWidthPercent());
+}
+
+DECLARE_HTMLIMPORT_TEST(testReqIfPageStyle, "reqif-page-style.xhtml")
+{
+    // Without the accompanying fix in place, this test would have failed with
+    // 'Expected: Standard, Actual  : HTML'.
+    CPPUNIT_ASSERT_EQUAL(OUString("Standard"),
+                         getProperty<OUString>(getParagraph(1), "PageStyleName"));
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

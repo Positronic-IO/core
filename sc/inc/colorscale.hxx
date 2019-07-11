@@ -12,7 +12,6 @@
 
 #include <formula/grammar.hxx>
 #include <tools/color.hxx>
-#include "rangelst.hxx"
 #include "conditio.hxx"
 #include "document.hxx"
 
@@ -21,7 +20,6 @@
 
 //TODO: merge this with conditio.hxx
 
-class ScDocument;
 class ScFormulaCell;
 class ScTokenArray;
 struct ScDataBarInfo;
@@ -51,8 +49,10 @@ private:
     ScColorScaleEntryType meType;
     ScConditionalFormat* mpFormat;
 
+    void setListener();
+
 public:
-    ScColorScaleEntry(double nVal, const Color& rCol);
+    ScColorScaleEntry(double nVal, const Color& rCol, ScColorScaleEntryType eType = COLORSCALE_VALUE);
     ScColorScaleEntry();
     ScColorScaleEntry(const ScColorScaleEntry& rEntry);
     ScColorScaleEntry(ScDocument* pDoc, const ScColorScaleEntry& rEntry);
@@ -77,6 +77,7 @@ public:
     void SetType( ScColorScaleEntryType eType );
 
     void SetRepaintCallback(ScConditionalFormat* pParent);
+    void SetRepaintCallback(const std::function<void()>& func);
 };
 
 namespace databar
@@ -213,8 +214,8 @@ enum ScIconSetType
 
 struct ScIconSetMap {
     const char* pName;
-    ScIconSetType eType;
-    sal_Int32 nElements;
+    ScIconSetType const eType;
+    sal_Int32 const nElements;
 };
 
 class SC_DLLPUBLIC ScColorFormat : public ScFormatEntry
@@ -267,7 +268,7 @@ public:
 
     virtual void SetParent(ScConditionalFormat* pParent) override;
 
-    Color* GetColor(const ScAddress& rAddr) const;
+    boost::optional<Color> GetColor(const ScAddress& rAddr) const;
     void AddEntry(ScColorScaleEntry* pEntry);
 
     virtual void UpdateReference( sc::RefUpdateContext& rCxt ) override;
@@ -302,7 +303,7 @@ public:
 
     virtual void SetParent(ScConditionalFormat* pParent) override;
 
-    ScDataBarInfo* GetDataBarInfo(const ScAddress& rAddr) const;
+    std::unique_ptr<ScDataBarInfo> GetDataBarInfo(const ScAddress& rAddr) const;
 
     void SetDataBarData( ScDataBarFormatData* pData );
     const ScDataBarFormatData* GetDataBarData() const;
@@ -343,8 +344,8 @@ struct ScIconSetFormatData
     // std..pair::second == -1 means no image
     std::vector<std::pair<ScIconSetType, sal_Int32> > maCustomVector;
 
-    ScIconSetFormatData():
-        eIconSetType(IconSet_3Arrows),
+    ScIconSetFormatData(ScIconSetType eType = IconSet_3Arrows):
+        eIconSetType(eType),
         mbShowValue(true),
         mbReverse(false),
         mbCustom(false)
@@ -364,7 +365,7 @@ public:
 
     virtual void SetParent(ScConditionalFormat* pParent) override;
 
-    ScIconSetInfo* GetIconSetInfo(const ScAddress& rAddr) const;
+    std::unique_ptr<ScIconSetInfo> GetIconSetInfo(const ScAddress& rAddr) const;
 
     void SetIconSetData( ScIconSetFormatData* pData );
     const ScIconSetFormatData* GetIconSetData() const;
@@ -378,6 +379,8 @@ public:
     virtual Type GetType() const override;
 
     static const ScIconSetMap g_IconSetMap[];
+    static const char* getIconSetName( ScIconSetType eType );
+    static sal_Int32 getIconSetElements( ScIconSetType eType );
     static BitmapEx& getBitmap(sc::IconSetBitmapMap& rBitmapMap, ScIconSetType eType, sal_Int32 nIndex);
 
     typedef ScIconSetFormatData::Entries_t::iterator iterator;

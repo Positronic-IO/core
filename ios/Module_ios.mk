@@ -8,16 +8,19 @@
 
 $(eval $(call gb_Module_Module,ios))
 
-ifeq ($(OS),IOS)
+ifeq ($(OS),iOS)
 
 $(eval $(call gb_Module_add_targets,ios,\
+	StaticLibrary_ios \
 	CustomTarget_iOS_setup \
+))
+
+ifneq ($(ENABLE_IOS_LIBREOFFICELIGHT_APP),)
+$(eval $(call gb_Module_add_targets,ios,\
 	CustomTarget_iOS_link \
 ))
 
-
-
-
+endif
 endif
 
 # vim: set noet sw=4 ts=4:

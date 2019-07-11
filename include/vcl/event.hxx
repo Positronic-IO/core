@@ -20,23 +20,15 @@
 #ifndef INCLUDED_VCL_EVENT_HXX
 #define INCLUDED_VCL_EVENT_HXX
 
-#include <tools/solar.h>
 #include <vcl/dllapi.h>
 #include <tools/gen.hxx>
 #include <vcl/keycod.hxx>
-#include <vcl/commandevent.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/vclptr.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/window.hxx>
 
-class AllSettings;
-struct IDataObject;
-
-namespace com { namespace sun { namespace star { namespace awt {
-    struct KeyEvent;
-    struct MouseEvent;
-} } } }
+class CommandEvent;
 
 enum class TextDirectionality {
     LeftToRight_TopToBottom,
@@ -62,8 +54,6 @@ public:
     sal_uInt16          GetRepeat() const       { return mnRepeat;   }
 
     KeyEvent        LogicalTextDirectionality (TextDirectionality eMode) const;
-                    KeyEvent (const KeyEvent& rKeyEvent);
-
 };
 
 inline KeyEvent::KeyEvent()
@@ -192,7 +182,7 @@ namespace o3tl
 class VCL_DLLPUBLIC HelpEvent
 {
 private:
-    Point           maPos;
+    Point const     maPos;
     HelpEventMode   mnMode;
     bool            mbKeyboardActivated;
 
@@ -222,9 +212,9 @@ private:
     /// RenderContext to which we should draw - can be a VirtualDevice or anything.
     VclPtr<vcl::RenderContext> mpRenderContext;
 
-    tools::Rectangle           maOutRect;
-    sal_uInt16          mnItemId;
-    sal_uInt16          mnStyle;
+    tools::Rectangle const    maOutRect;
+    sal_uInt16 const          mnItemId;
+    sal_uInt16 const          mnStyle;
 
 public:
     UserDrawEvent(vcl::Window* pWindow, vcl::RenderContext* pRenderContext,
@@ -251,7 +241,7 @@ inline UserDrawEvent::UserDrawEvent(vcl::Window* pWindow, vcl::RenderContext* pR
 class VCL_DLLPUBLIC TrackingEvent
 {
 private:
-    MouseEvent          maMEvt;
+    MouseEvent const    maMEvt;
     TrackingEventFlags  mnFlags;
 
 public:

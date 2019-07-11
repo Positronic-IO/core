@@ -23,14 +23,16 @@
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/vector/b2dvector.hxx>
 #include <basegfx/range/b2drectangle.hxx>
-#include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <basegfx/polygon/b3dpolygon.hxx>
+#include <basegfx/polygon/b2dpolygontriangulator.hxx>
 #include <com/sun/star/drawing/PointSequence.hpp>
 #include <com/sun/star/drawing/FlagSequence.hpp>
 #include <vector>
 #include <basegfx/basegfxdllapi.h>
 #include <o3tl/typed_flags_set.hxx>
 
+
+namespace basegfx { class B2DPolyPolygon; }
 
 // Definitions for the cut flags used from the findCut methods
 enum class CutFlagValue
@@ -229,7 +231,7 @@ namespace basegfx
         /** Create a circle polygon with given radius.
 
             This method creates a circle approximation consisting of
-            four cubic bezier segments, which approximate the given
+            12 cubic bezier segments, which approximate the given
             circle with an error of less than 0.5 percent.
 
             @param rCenter
@@ -258,7 +260,7 @@ namespace basegfx
         /** Create an ellipse polygon with given radii.
 
             This method creates an ellipse approximation consisting of
-            four cubic bezier segments, which approximate the given
+            12 cubic bezier segments, which approximate the given
             ellipse with an error of less than 0.5 percent.
 
             @param rCenter
@@ -269,8 +271,11 @@ namespace basegfx
 
             @param fRadiusY
             Radius of the ellipse in Y direction
+
+            @param nStartQuadrant
+            With Y down on screens, 0 = 3 o'clock, 1 = 6 o'clock, 2 = 9 o'clock, 3 = 12 o'clock
          */
-        BASEGFX_DLLPUBLIC B2DPolygon createPolygonFromEllipse( const B2DPoint& rCenter, double fRadiusX, double fRadiusY );
+        BASEGFX_DLLPUBLIC B2DPolygon createPolygonFromEllipse( const B2DPoint& rCenter, double fRadiusX, double fRadiusY, sal_uInt32 nStartQuadrant = 0);
 
         /** Create an unit ellipse polygon with the given angles, from start to end
          */
@@ -356,7 +361,9 @@ namespace basegfx
         // add triangles for given rCandidate to rTarget. For each triangle, 3 points will be added to rCandidate.
         // All triangles will go from the start point of rCandidate to two consecutive points, building (rCandidate.count() - 2)
         // triangles.
-        BASEGFX_DLLPUBLIC void addTriangleFan(const B2DPolygon& rCandidate, B2DPolygon& rTarget);
+        BASEGFX_DLLPUBLIC void addTriangleFan(
+            const B2DPolygon& rCandidate,
+            triangulator::B2DTriangleVector& rTarget);
 
         // grow for polygon. Move all geometry in each point in the direction of the normal in that point
         // with the given amount. Value may be negative.

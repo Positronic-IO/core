@@ -23,11 +23,11 @@
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <comphelper/property.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/classids.hxx>
 #include <comphelper/propertysequence.hxx>
+#include <comphelper/types.hxx>
 #include <com/sun/star/frame/XUntitledNumbers.hpp>
 #include <com/sun/star/awt/XTopWindow.hpp>
 #include <com/sun/star/awt/Size.hpp>
@@ -93,9 +93,7 @@
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/mimeconfighelper.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/io/WrongFormatException.hpp>
 #include <com/sun/star/sdb/application/XDatabaseDocumentUI.hpp>
@@ -801,7 +799,7 @@ Any ODocumentDefinition::onCommandOpenSomething( const Any& _rOpenArgument, cons
                 {
                     sal_Int16 nMacroExecMode( !aDocumentMacroMode ? MacroExecMode::USE_CONFIG : *aDocumentMacroMode );
                     OSL_VERIFY( pIter->Value >>= nMacroExecMode );
-                    aDocumentMacroMode.reset( nMacroExecMode );
+                    aDocumentMacroMode = nMacroExecMode;
                     continue;
                 }
 
@@ -852,7 +850,7 @@ Any ODocumentDefinition::onCommandOpenSomething( const Any& _rOpenArgument, cons
             // sub document, in case the settings require this, *and* the document
             // contains scripts in the content.xml. But this is better than the security
             // issue we had before ...
-            aDocumentMacroMode.reset( MacroExecMode::USE_CONFIG );
+            aDocumentMacroMode = MacroExecMode::USE_CONFIG;
         }
     }
 
@@ -860,7 +858,8 @@ Any ODocumentDefinition::onCommandOpenSomething( const Any& _rOpenArgument, cons
     {
         // nobody so far felt responsible for setting it
         // => use the DBDoc-wide macro exec mode for the document, too
-        aDocumentMacroMode.reset( bExecuteDBDocMacros ? MacroExecMode::ALWAYS_EXECUTE_NO_WARN : MacroExecMode::NEVER_EXECUTE );
+        aDocumentMacroMode = bExecuteDBDocMacros ? MacroExecMode::ALWAYS_EXECUTE_NO_WARN
+                                                 : MacroExecMode::NEVER_EXECUTE;
     }
     aDocumentArgs.put( "MacroExecutionMode", *aDocumentMacroMode );
 
@@ -1971,8 +1970,7 @@ bool ODocumentDefinition::prepareClose()
             // document has not yet been activated, i.e. has no UI, yet
             return true;
 
-        bool bCouldSuspend = xController->suspend( true );
-        if ( !bCouldSuspend )
+        if (!xController->suspend(true))
             // controller vetoed the closing
             return false;
 
@@ -1986,9 +1984,8 @@ bool ODocumentDefinition::prepareClose()
             }
             if ( !save( true ) )
             {
-                if ( bCouldSuspend )
-                    // revert suspension
-                    xController->suspend( false );
+                // revert suspension
+                xController->suspend(false);
                 // saving failed or was cancelled
                 return false;
             }

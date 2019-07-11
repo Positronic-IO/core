@@ -64,16 +64,14 @@ enum state
     S_STNL, S_COMNL, S_EOFCOM, S_COMMENT, S_EOB, S_WS, S_NAME
 };
 
-int tottok;
-int tokkind[256];
 struct fsm
 {
     int state;                          /* if in this state */
     uchar ch[4];                        /* and see one of these characters */
-    int nextstate;                      /* enter this state if +ve */
+    int const nextstate;                /* enter this state if +ve */
 };
 
-static /*const*/ struct fsm fsm[] = {
+static const struct fsm fsm[] = {
     /* start state */
          {START, {C_XX}, ACT(UNCLASS, S_SELF)},
          {START, {' ', '\t', '\v'}, WS1},
@@ -256,12 +254,12 @@ static /*const*/ struct fsm fsm[] = {
 
 /* first index is char, second is state */
 /* increase #states to power of 2 to encourage use of shift */
-short bigfsm[256][MAXSTATE];
+static short bigfsm[256][MAXSTATE];
 
 void
     expandlex(void)
 {
-     /* const */ struct fsm *fp;
+    const struct fsm *fp;
     int i, j, nstate;
 
     for (fp = fsm; fp->state >= 0; fp++)
@@ -670,7 +668,7 @@ Source *
         len = strlen(str);
         s->inb = domalloc(len + 4);
         s->inp = s->inb;
-        strncpy((char *) s->inp, str, len);
+        memcpy((char *) s->inp, str, len);
     }
     else
     {

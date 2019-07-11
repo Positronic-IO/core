@@ -48,7 +48,9 @@ gb_COMPILERDEFS := \
 	-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE \
 	-DBOOST_SYSTEM_NO_DEPRECATED \
 	-D_HAS_AUTO_PTR_ETC \
+	-D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING \
 	-D_SILENCE_CXX17_OLD_ALLOCATOR_MEMBERS_DEPRECATION_WARNING \
+	-D_SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING \
 	-D_CRT_NON_CONFORMING_SWPRINTFS \
 	-D_CRT_NONSTDC_NO_DEPRECATE \
 	-D_CRT_SECURE_NO_DEPRECATE \
@@ -64,8 +66,7 @@ gb_COMPILERDEFS += \
 endif
 
 gb_RCDEFS := \
-	-DWINVER=0x0502 \
-	-DWIN32 \
+	$(gb_WIN_VERSION_DEFS) \
 
 gb_RCFLAGS :=
 
@@ -165,7 +166,7 @@ endif
 
 gb_CXXFLAGS := \
 	-utf-8 \
-	$(if $(filter-out 140,$(VCVER)),-std:c++17) \
+	$(CXXFLAGS_CXX11) \
 	-Gd \
 	-GR \
 	-Gs \
@@ -207,8 +208,13 @@ endif
 
 ifneq ($(COM_IS_CLANG),TRUE)
 
+# clang-cl doesn't support -Wv:18 for now
+# Work around MSVC 2017 C4702 compiler bug with release builds
+# http://document-foundation-mail-archive.969070.n3.nabble.com/Windows-32-bit-build-failure-unreachable-code-tp4243848.html
+# http://document-foundation-mail-archive.969070.n3.nabble.com/64-bit-Windows-build-failure-after-MSVC-Update-tp4246816.html
 gb_CXXFLAGS += \
 	-Wv:18 \
+	$(if $(filter 0,$(gb_DEBUGLEVEL)),-wd4702) \
 
 endif
 

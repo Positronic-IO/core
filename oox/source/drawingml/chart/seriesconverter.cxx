@@ -124,6 +124,14 @@ Reference< XLabeledDataSequence > lclCreateLabeledDataSequence(
     return xLabeledSeq;
 }
 
+void convertTextProperty(PropertySet& rPropSet, ObjectFormatter& rFormatter,
+        DataLabelModelBase::TextBodyRef xTextProps)
+{
+    rFormatter.convertTextFormatting( rPropSet, xTextProps, OBJECTTYPE_DATALABEL );
+    ObjectFormatter::convertTextRotation( rPropSet, xTextProps, false );
+    ObjectFormatter::convertTextWrap( rPropSet, xTextProps );
+}
+
 void lclConvertLabelFormatting( PropertySet& rPropSet, ObjectFormatter& rFormatter,
                                 const DataLabelModelBase& rDataLabel, const TypeGroupConverter& rTypeGroup,
                                 bool bDataSeriesLabel, bool bMSO2007Doc, const PropertySet* pSeriesPropSet )
@@ -171,13 +179,14 @@ void lclConvertLabelFormatting( PropertySet& rPropSet, ObjectFormatter& rFormatt
         rFormatter.convertNumberFormat( rPropSet, rDataLabel.maNumberFormat, false, bShowPercent );
 
         // data label text formatting (frame formatting not supported by Chart2)
-        rFormatter.convertTextFormatting( rPropSet, rDataLabel.mxTextProp, OBJECTTYPE_DATALABEL );
-        ObjectFormatter::convertTextRotation( rPropSet, rDataLabel.mxTextProp, false );
-        ObjectFormatter::convertTextWrap( rPropSet, rDataLabel.mxTextProp );
-
+        convertTextProperty(rPropSet, rFormatter, rDataLabel.mxTextProp);
 
         // data label separator (do not overwrite series separator, if no explicit point separator is present)
-        if( bDataSeriesLabel || rDataLabel.moaSeparator.has() )
+        // Set the data label separator to "new line" if the value is shown as percentage with a category name,
+        // just like in MS-Office. In any other case the default separator will be a semicolon.
+        if( bShowPercent && !bShowValue && ( bDataSeriesLabel || rDataLabel.moaSeparator.has() ) )
+            rPropSet.setProperty( PROP_LabelSeparator, rDataLabel.moaSeparator.get( "\n" ) );
+        else if( bDataSeriesLabel || rDataLabel.moaSeparator.has() )
             rPropSet.setProperty( PROP_LabelSeparator, rDataLabel.moaSeparator.get( "; " ) );
 
         // data label placement (do not overwrite series placement, if no explicit point placement is present)
@@ -285,7 +294,7 @@ void DataLabelConverter::convertFromModel( const Reference< XDataSeries >& rxDat
         if (mrModel.mxShapeProp)
             importBorderProperties(aPropSet, *mrModel.mxShapeProp, getFilter().getGraphicHelper());
 
-        if( mrModel.mxText && mrModel.mxText->mxTextBody && mrModel.mxText->mxTextBody->getParagraphs().size() )
+        if( mrModel.mxText && mrModel.mxText->mxTextBody && !mrModel.mxText->mxTextBody->getParagraphs().empty() )
         {
             css::uno::Reference< XComponentContext > xContext = getComponentContext();
             uno::Sequence< css::uno::Reference< XDataPointCustomLabelField > > aSequence;
@@ -338,6 +347,7 @@ void DataLabelConverter::convertFromModel( const Reference< XDataSeries >& rxDat
             }
 
             aPropSet.setProperty( PROP_CustomLabelFields, makeAny( aSequence ) );
+            convertTextProperty(aPropSet, getFormatter(), mrModel.mxText->mxTextBody);
         }
     }
     catch( Exception& )
@@ -638,6 +648,10 @@ void DataPointConverter::convertFromModel( const Reference< XDataSeries >& rxDat
                 getFormatter().convertFrameFormatting( aPropSet, mrModel.mxShapeProp, mrModel.mxPicOptions.getOrCreate(bMSO2007Doc), rTypeGroup.getSeriesObjectType(), rSeries.mnIndex );
             else
                 getFormatter().convertFrameFormatting( aPropSet, mrModel.mxShapeProp, rTypeGroup.getSeriesObjectType(), rSeries.mnIndex );
+        }
+        else if (rSeries.mxShapeProp.is())
+        {
+            getFormatter().convertFrameFormatting( aPropSet, rSeries.mxShapeProp, rTypeGroup.getSeriesObjectType(), rSeries.mnIndex );
         }
     }
     catch( Exception& )

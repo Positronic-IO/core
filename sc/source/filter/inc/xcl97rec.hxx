@@ -22,8 +22,8 @@
 
 #include <memory>
 #include "excrecds.hxx"
-#include "xcl97esc.hxx"
-#include "xlstyle.hxx"
+#include "xlescher.hxx"
+#include "xestring.hxx"
 #include <tabprotection.hxx>
 #include <svx/svdobj.hxx>
 
@@ -32,29 +32,25 @@ class XclExpMsoDrawing;
 class SdrCaptionObj;
 class SdrTextObj;
 class XclTxo;
+class XclEscherEx;
 
 class XclExpObjList : public ExcEmptyRec, protected XclExpRoot
 {
 public:
 
-    typedef std::vector<XclObj*>::iterator iterator;
+    typedef std::vector<std::unique_ptr<XclObj>>::iterator iterator;
 
     explicit            XclExpObjList( const XclExpRoot& rRoot, XclEscherEx& rEscherEx );
     virtual             ~XclExpObjList() override;
 
     /// return: 1-based ObjId
     ///! count>=0xFFFF: Obj will be deleted, return 0
-    sal_uInt16              Add( XclObj* );
-
-    XclObj* back () { return maObjs.empty() ? nullptr : maObjs.back(); }
+    sal_uInt16              Add( std::unique_ptr<XclObj> );
 
     /**
-     *
      * @brief Remove last element in the list.
-     *
      */
-
-    void pop_back ();
+    std::unique_ptr<XclObj> pop_back ();
 
     bool empty () const { return maObjs.empty(); }
 
@@ -64,7 +60,7 @@ public:
 
     iterator end () { return maObjs.end(); }
 
-    XclExpMsoDrawing* GetMsodrawingPerSheet() { return pMsodrawingPerSheet; }
+    XclExpMsoDrawing* GetMsodrawingPerSheet() { return pMsodrawingPerSheet.get(); }
 
                                 /// close groups and DgContainer opened in ctor
     void                EndSheet();
@@ -76,13 +72,13 @@ public:
 
 private:
     static  sal_Int32   mnDrawingMLCount, mnVmlCount;
-    SCTAB               mnScTab;
+    SCTAB const         mnScTab;
 
     XclEscherEx&        mrEscherEx;
-    XclExpMsoDrawing*   pMsodrawingPerSheet;
-    XclExpMsoDrawing*   pSolverContainer;
+    std::unique_ptr<XclExpMsoDrawing> pMsodrawingPerSheet;
+    std::unique_ptr<XclExpMsoDrawing> pSolverContainer;
 
-    std::vector<XclObj*> maObjs;
+    std::vector<std::unique_ptr<XclObj>> maObjs;
 };
 
 // --- class XclObj --------------------------------------------------
@@ -92,15 +88,15 @@ class XclObj : public XclExpRecord
 protected:
         XclEscherEx&        mrEscherEx;
         XclExpMsoDrawing*   pMsodrawing;
-        XclExpMsoDrawing*   pClientTextbox;
-        XclTxo*             pTxo;
+        std::unique_ptr<XclExpMsoDrawing> pClientTextbox;
+        std::unique_ptr<XclTxo> pTxo;
         sal_uInt16          mnObjType;
         sal_uInt16          nObjId;
         sal_uInt16          nGrbit;
         SCTAB               mnScTab;
-        bool                bFirstOnSheet;
+        bool const          bFirstOnSheet;
 
-        bool                    mbOwnEscher;    /// true = Escher part created on the fly.
+        bool const          mbOwnEscher;    /// true = Escher part created on the fly.
 
     /** @param bOwnEscher  If set to true, this object will create its escher data.
         See SetOwnEscher() for details. */
@@ -123,14 +119,17 @@ public:
     void                SetTab( SCTAB nScTab )  { mnScTab = nScTab; }
     SCTAB               GetTab() const          { return mnScTab; }
 
-    void                SetLocked( bool b )
-                                    { b ? nGrbit |= 0x0001 : nGrbit &= ~0x0001; }
-    void                SetPrintable( bool b )
-                                    { b ? nGrbit |= 0x0010 : nGrbit &= ~0x0010; }
-    void                SetAutoFill( bool b )
-                                    { b ? nGrbit |= 0x2000 : nGrbit &= ~0x2000; }
-    void                SetAutoLine( bool b )
-                                    { b ? nGrbit |= 0x4000 : nGrbit &= ~0x4000; }
+    void                SetLocked( bool b ) { SetGrBit(b, 0x0001); }
+    void                SetPrintable( bool b ) { SetGrBit(b, 0x0010); }
+    void                SetAutoFill( bool b ) { SetGrBit(b, 0x2000); }
+    void                SetAutoLine( bool b ) { SetGrBit(b, 0x4000); }
+    void                SetGrBit( bool b, int f )
+    {
+        if (b)
+            nGrbit |= f;
+        else
+            nGrbit &= ~f;
+    }
 
                                 // set corresponding Excel object type in OBJ/ftCmo
             void                SetEscherShapeType( sal_uInt16 nType );
@@ -157,12 +156,14 @@ public:
 
 class XclObjComment : public XclObj
 {
-    ScAddress                   maScPos;
-    std::unique_ptr< SdrCaptionObj, SdrObjectFreeOp >
-                                mpCaption;
-    bool                        mbVisible;
-    tools::Rectangle                   maFrom;
-    tools::Rectangle                   maTo;
+    ScAddress const                   maScPos;
+
+    // no need to use std::unique_ptr< SdrCaptionObj, SdrObjectFreeOp >
+    SdrCaptionObj* const              mpCaption;
+
+    bool const                        mbVisible;
+    tools::Rectangle const            maFrom;
+    tools::Rectangle const            maTo;
 
 public:
                                 XclObjComment( XclExpObjectManager& rObjMgr,
@@ -183,7 +184,7 @@ public:
 class XclObjDropDown : public XclObj
 {
 private:
-    bool                        bIsFiltered;
+    bool const                  bIsFiltered;
 
     virtual void                WriteSubRecs( XclExpStream& rStrm ) override;
 
@@ -302,7 +303,7 @@ public:
 class ExcBundlesheet8 : public ExcBundlesheetBase
 {
 private:
-    OUString                    sUnicodeName;
+    OUString const              sUnicodeName;
     XclExpString                GetName() const { return XclExpString( sUnicodeName, XclStrFlags::EightBitLength );}
 
     virtual void                SaveCont( XclExpStream& rStrm ) override;
@@ -330,7 +331,7 @@ public:
 class XclCodename : public ExcRecord
 {
 private:
-    XclExpString                aName;
+    XclExpString const                aName;
     virtual void                SaveCont( XclExpStream& rStrm ) override;
 public:
                                 XclCodename( const OUString& );
@@ -347,9 +348,9 @@ public:
 class ExcEScenarioCell
 {
 private:
-    sal_uInt16                      nCol;
-    sal_uInt16                      nRow;
-    XclExpString                sText;
+    sal_uInt16 const            nCol;
+    sal_uInt16                  nRow;
+    XclExpString const          sText;
 
 protected:
 public:

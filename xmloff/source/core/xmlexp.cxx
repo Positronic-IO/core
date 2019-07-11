@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <stack>
 #include <string.h>
@@ -38,6 +39,7 @@
 #include <com/sun/star/util/MeasureUnit.hpp>
 #include <i18nlangtag/languagetag.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/propertysetinfo.hxx>
 #include <xmloff/attrlist.hxx>
 #include <xmloff/nmspmap.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -94,6 +96,7 @@
 
 #include <comphelper/xmltools.hxx>
 #include <comphelper/graphicmimetype.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::osl;
 using namespace ::com::sun::star;
@@ -126,9 +129,9 @@ namespace {
 struct XMLServiceMapEntry_Impl
 {
     const sal_Char *sModelService;
-    sal_Int32      nModelServiceLen;
+    sal_Int32 const      nModelServiceLen;
     const sal_Char *sFilterService;
-    sal_Int32      nFilterServiceLen;
+    sal_Int32 const      nFilterServiceLen;
 };
 
 }
@@ -254,7 +257,7 @@ public:
 
     uno::Reference< embed::XStorage >                   mxTargetStorage;
 
-    SvtSaveOptions                                      maSaveOptions;
+    SvtSaveOptions const                                maSaveOptions;
 
     /// name of stream in package, e.g., "content.xml"
     OUString mStreamName;
@@ -282,17 +285,14 @@ public:
 };
 
 SvXMLExport_Impl::SvXMLExport_Impl()
+:    mxUriReferenceFactory( uri::UriReferenceFactory::create(comphelper::getProcessComponentContext()) ),
     // Written OpenDocument file format doesn't fit to the created text document (#i69627#)
-    : mbOutlineStyleAsNormalListStyle( false )
-        ,mbSaveBackwardCompatibleODF( true )
-        ,mStreamName()
-        ,mNamespaceMaps()
-        ,mDepth(0)
-        ,mpRDFaHelper() // lazy
-        ,mbExportTextNumberElement( false )
-        ,mbNullDateInitialized( false )
+    mbOutlineStyleAsNormalListStyle( false ),
+    mbSaveBackwardCompatibleODF( true ),
+    mDepth( 0 ),
+    mbExportTextNumberElement( false ),
+    mbNullDateInitialized( false )
 {
-    mxUriReferenceFactory = uri::UriReferenceFactory::create( comphelper::getProcessComponentContext() );
 }
 
 void SvXMLExport::SetDocHandler( const uno::Reference< xml::sax::XDocumentHandler > &rHandler )
@@ -438,16 +438,12 @@ SvXMLExport::SvXMLExport(
     mxAttrList( new SvXMLAttributeList ),
     mpNamespaceMap( new SvXMLNamespaceMap ),
     maUnitConv( xContext, util::MeasureUnit::MM_100TH, eDefaultMeasureUnit ),
-    mpNumExport(nullptr),
-    mpProgressBarHelper( nullptr ),
-    mpEventExport( nullptr ),
-    mpImageMapExport( nullptr ),
-    mpXMLErrors( nullptr ),
     meClass( eClass ),
     mnExportFlags( nExportFlags ),
     mnErrorFlags( SvXMLErrorFlags::NO ),
     msWS( GetXMLToken(XML_WS) ),
-    mbSaveLinkedSections(true)
+    mbSaveLinkedSections(true),
+    mbAutoStylesCollected(false)
 {
     SAL_WARN_IF( !xContext.is(), "xmloff.core", "got no service manager" );
     InitCtor_();
@@ -467,16 +463,12 @@ SvXMLExport::SvXMLExport(
     msOrigFileName( rFileName ),
     mpNamespaceMap( new SvXMLNamespaceMap ),
     maUnitConv( xContext, util::MeasureUnit::MM_100TH, eDefaultMeasureUnit ),
-    mpNumExport(nullptr),
-    mpProgressBarHelper( nullptr ),
-    mpEventExport( nullptr ),
-    mpImageMapExport( nullptr ),
-    mpXMLErrors( nullptr ),
     meClass( XML_TOKEN_INVALID ),
     mnExportFlags( SvXMLExportFlags::NONE ),
     mnErrorFlags( SvXMLErrorFlags::NO ),
     msWS( GetXMLToken(XML_WS) ),
-    mbSaveLinkedSections(true)
+    mbSaveLinkedSections(true),
+    mbAutoStylesCollected(false)
 {
     SAL_WARN_IF( !xContext.is(), "xmloff.core", "got no service manager" );
     mpImpl->SetSchemeOf( msOrigFileName );
@@ -506,16 +498,12 @@ SvXMLExport::SvXMLExport(
     maUnitConv( xContext,
                 util::MeasureUnit::MM_100TH,
                 SvXMLUnitConverter::GetMeasureUnit(eDefaultFieldUnit) ),
-    mpNumExport(nullptr),
-    mpProgressBarHelper( nullptr ),
-    mpEventExport( nullptr ),
-    mpImageMapExport( nullptr ),
-    mpXMLErrors( nullptr ),
     meClass( XML_TOKEN_INVALID ),
     mnExportFlags( nExportFlag ),
     mnErrorFlags( SvXMLErrorFlags::NO ),
     msWS( GetXMLToken(XML_WS) ),
-    mbSaveLinkedSections(true)
+    mbSaveLinkedSections(true),
+    mbAutoStylesCollected(false)
 {
     SAL_WARN_IF(!xContext.is(), "xmloff.core", "got no service manager" );
     mpImpl->SetSchemeOf( msOrigFileName );
@@ -1752,6 +1740,10 @@ SvXMLAutoStylePoolP* SvXMLExport::CreateAutoStylePool()
     return new SvXMLAutoStylePoolP(*this);
 }
 
+void SvXMLExport::collectAutoStyles()
+{
+}
+
 XMLPageExport* SvXMLExport::CreatePageExport()
 {
     return new XMLPageExport( *this );
@@ -1759,7 +1751,7 @@ XMLPageExport* SvXMLExport::CreatePageExport()
 
 SchXMLExportHelper* SvXMLExport::CreateChartExport()
 {
-    return new SchXMLExportHelper(*this,*GetAutoStylePool().get());
+    return new SchXMLExportHelper(*this, *GetAutoStylePool());
 }
 
 XMLFontAutoStylePool* SvXMLExport::CreateFontAutoStylePool()
@@ -1910,8 +1902,12 @@ bool SvXMLExport::AddEmbeddedXGraphicAsBase64(uno::Reference<graphic::XGraphic> 
         Reference<XInputStream> xInputStream(mxGraphicStorageHandler->createInputStream(rxGraphic));
         if (xInputStream.is())
         {
-            XMLBase64Export aBase64Exp(*this);
-            return aBase64Exp.exportOfficeBinaryDataElement(xInputStream);
+            Graphic aGraphic(rxGraphic);
+            if (aGraphic.getOriginURL().isEmpty()) // don't add the base64 if the origin URL is set (image is from an external URL)
+            {
+                XMLBase64Export aBase64Exp(*this);
+                return aBase64Exp.exportOfficeBinaryDataElement(xInputStream);
+            }
         }
     }
 
@@ -2020,8 +2016,8 @@ XMLEventExport& SvXMLExport::GetEventExport()
         mpEventExport.reset( new XMLEventExport(*this) );
 
         // and register standard handlers + names
-        mpEventExport->AddHandler("StarBasic", new XMLStarBasicExportHandler());
-        mpEventExport->AddHandler("Script", new XMLScriptExportHandler());
+        mpEventExport->AddHandler("StarBasic", o3tl::make_unique<XMLStarBasicExportHandler>());
+        mpEventExport->AddHandler("Script", o3tl::make_unique<XMLScriptExportHandler>());
         mpEventExport->AddTranslationTable(aStandardEventTable);
     }
 
@@ -2436,7 +2432,7 @@ SvXMLExport::AddAttributesRDFa(
         return; // no xml:id => no RDFa
     }
 
-    if (!mpImpl->mpRDFaHelper.get())
+    if (!mpImpl->mpRDFaHelper)
     {
         mpImpl->mpRDFaHelper.reset( new ::xmloff::RDFaExportHelper(*this) );
     }

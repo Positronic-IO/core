@@ -356,29 +356,14 @@ DdeTopic* DdeInternal::FindTopic( DdeService& rService, HSZ hTopic )
 {
     std::vector<DdeTopic*>::iterator iter;
     std::vector<DdeTopic*> &rTopics = rService.aTopics;
-    bool bContinue = false;
     DdeInstData* pInst = ImpGetInstData();
     assert(pInst);
 
-    do
-    {   // middle check loop
-        for ( iter = rTopics.begin(); iter != rTopics.end(); ++iter )
-        {
-            if ( *(*iter)->pName == hTopic )
-                return *iter;
-        }
-
-        bContinue = !bContinue;
-        if( !bContinue )
-            break;
-
-        // Let's query our subclass
-        WCHAR chBuf[250];
-        DdeQueryStringW(pInst->hDdeInstSvr,hTopic,chBuf,SAL_N_ELEMENTS(chBuf),CP_WINUNICODE );
-        bContinue = false;
-        // We need to search again
+    for ( iter = rTopics.begin(); iter != rTopics.end(); ++iter )
+    {
+        if ( *(*iter)->pName == hTopic )
+            return *iter;
     }
-    while( bContinue );
 
     return nullptr;
 }
@@ -592,11 +577,8 @@ DdeItem* DdeTopic::AddItem( const DdeItem& r )
     else
         s = new DdeItem( r );
 
-    if ( s )
-    {
-        aItems.push_back( s );
-        s->pMyTopic = this;
-    }
+    aItems.push_back( s );
+    s->pMyTopic = this;
     return s;
 }
 
@@ -785,9 +767,9 @@ short DdeItem::GetLinks()
     short nCnt = 0;
     if( pImpData )
     {
-        for( sal_uInt16 n = pImpData->size(); n; )
+        for (const auto& rData : *pImpData)
         {
-            nCnt = nCnt + (*pImpData)[ --n ].nCnt;
+            nCnt += rData.nCnt;
         }
     }
     return nCnt;

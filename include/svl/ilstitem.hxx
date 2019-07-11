@@ -22,8 +22,9 @@
 
 #include <svl/svldllapi.h>
 #include <svl/poolitem.hxx>
-#include <com/sun/star/uno/Sequence.hxx>
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace uno { template <class E> class Sequence; } } } }
 
 class SVL_DLLPUBLIC SfxIntegerListItem : public SfxPoolItem
 {
@@ -35,6 +36,11 @@ public:
     SfxIntegerListItem( sal_uInt16 nWhich, const ::std::vector < sal_Int32 >& rList );
     SfxIntegerListItem( sal_uInt16 nWhich, const css::uno::Sequence < sal_Int32 >& rList );
     virtual ~SfxIntegerListItem() override;
+
+    SfxIntegerListItem(SfxIntegerListItem const &) = default;
+    SfxIntegerListItem(SfxIntegerListItem &&) = default;
+    SfxIntegerListItem & operator =(SfxIntegerListItem const &) = delete; // due to SfxPoolItem
+    SfxIntegerListItem & operator =(SfxIntegerListItem &&) = delete; // due to SfxPoolItem
 
     const std::vector< sal_Int32 >& GetList() const { return m_aList; }
 

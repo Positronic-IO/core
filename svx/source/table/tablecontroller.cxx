@@ -30,6 +30,7 @@
 #include <com/sun/star/table/XMergeableCell.hpp>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -174,7 +175,6 @@ SvxTableController::SvxTableController(
 :   mbCellSelectionMode(false)
     ,mbHasJustMerged(false)
     ,mbLeftButtonDown(false)
-    ,mpSelectionOverlay(nullptr)
     ,mrView(rView)
     ,mxTableObj(const_cast< SdrTableObj* >(&rObj))
     ,mnUpdateEvent( nullptr )
@@ -476,7 +476,7 @@ void SvxTableController::GetState( SfxItemSet& rSet )
                     rSet.DisableItem(SID_TABLE_SPLIT_CELLS);
                 break;
 
-            case SID_OPTIMIZE_TABLE:
+            case SID_TABLE_OPTIMAL_ROW_HEIGHT:
             case SID_TABLE_DISTRIBUTE_COLUMNS:
             case SID_TABLE_DISTRIBUTE_ROWS:
             {
@@ -490,12 +490,13 @@ void SvxTableController::GetState( SfxItemSet& rSet )
                     bDistributeColumns = aStart.mnCol != aEnd.mnCol;
                     bDistributeRows = aStart.mnRow != aEnd.mnRow;
                 }
-                if( !bDistributeColumns && !bDistributeRows )
-                    rSet.DisableItem(SID_OPTIMIZE_TABLE);
                 if( !bDistributeColumns )
                     rSet.DisableItem(SID_TABLE_DISTRIBUTE_COLUMNS);
                 if( !bDistributeRows )
+                {
+                    rSet.DisableItem(SID_TABLE_OPTIMAL_ROW_HEIGHT);
                     rSet.DisableItem(SID_TABLE_DISTRIBUTE_ROWS);
+                }
                 break;
             }
 
@@ -887,7 +888,7 @@ namespace
     }
 }
 
-void SvxTableController::onFormatTable( SfxRequest const & rReq )
+void SvxTableController::onFormatTable(const SfxRequest& rReq)
 {
     if(!mxTableObj.is())
         return;
@@ -911,13 +912,14 @@ void SvxTableController::onFormatTable( SfxRequest const & rReq )
         aNewAttr.Put( aBoxInfoItem );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractTabDialog> xDlg( pFact ? pFact->CreateSvxFormatCellsDialog(
+        ScopedVclPtr<SfxAbstractTabDialog> xDlg( pFact->CreateSvxFormatCellsDialog(
+            rReq.GetFrameWeld(),
             &aNewAttr,
             rModel,
-            &rTableObj) : nullptr );
+            &rTableObj) );
 
         // Even Cancel Button is returning positive(101) value,
-        if (xDlg.get() && xDlg->Execute() == RET_OK)
+        if (xDlg->Execute() == RET_OK)
         {
             SfxItemSet aNewSet(*(xDlg->GetOutputItemSet()));
 
@@ -999,15 +1001,31 @@ void SvxTableController::Execute( SfxRequest& rReq )
         break;
 
     case SID_TABLE_SPLIT_CELLS:
-        SplitMarkedCells();
+        SplitMarkedCells(rReq);
+        break;
+
+    case SID_TABLE_MINIMAL_COLUMN_WIDTH:
+        DistributeColumns(/*bOptimize=*/true, /*bMinimize=*/true);
+        break;
+
+    case SID_TABLE_OPTIMAL_COLUMN_WIDTH:
+        DistributeColumns(/*bOptimize=*/true, /*bMinimize=*/false);
         break;
 
     case SID_TABLE_DISTRIBUTE_COLUMNS:
-        DistributeColumns();
+        DistributeColumns(/*bOptimize=*/false, /*bMinimize=*/false);
+        break;
+
+    case SID_TABLE_MINIMAL_ROW_HEIGHT:
+        DistributeRows(/*bOptimize=*/true, /*bMinimize=*/true);
+        break;
+
+    case SID_TABLE_OPTIMAL_ROW_HEIGHT:
+        DistributeRows(/*bOptimize=*/true, /*bMinimize=*/false);
         break;
 
     case SID_TABLE_DISTRIBUTE_ROWS:
-        DistributeRows();
+        DistributeRows(/*bOptimize=*/false, /*bMinimize=*/false);
         break;
 
     case SID_TABLE_VERT_BOTTOM:
@@ -1061,7 +1079,7 @@ void SvxTableController::SetTableStyle( const SfxItemSet* pArgs )
             if( bUndo )
             {
                 rModel.BegUndo(SvxResId(STR_TABLE_STYLE));
-                rModel.AddUndo(new TableStyleUndo(rTableObj));
+                rModel.AddUndo(o3tl::make_unique<TableStyleUndo>(rTableObj));
             }
 
             rTableObj.setTableStyle( xNewTableStyle );
@@ -1155,7 +1173,7 @@ void SvxTableController::SetTableStyleSettings( const SfxItemSet* pArgs )
     if( bUndo )
     {
         rModel.BegUndo( SvxResId(STR_TABLE_STYLE_SETTINGS) );
-        rModel.AddUndo(new TableStyleUndo(rTableObj));
+        rModel.AddUndo(o3tl::make_unique<TableStyleUndo>(rTableObj));
     }
 
     rTableObj.setTableStyleSettings( aSettings );
@@ -1238,15 +1256,15 @@ void SvxTableController::MergeMarkedCells()
     }
 }
 
-void SvxTableController::SplitMarkedCells()
+void SvxTableController::SplitMarkedCells(const SfxRequest& rReq)
 {
     if(!checkTableObject() || !mxTable.is())
         return;
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr< SvxAbstractSplitTableDialog > xDlg( pFact ? pFact->CreateSvxSplitTableDialog( nullptr, false, 99 ) : nullptr );
+    ScopedVclPtr<SvxAbstractSplitTableDialog> xDlg(pFact->CreateSvxSplitTableDialog(rReq.GetFrameWeld(), false, 99));
 
-    if( xDlg.get() && xDlg->Execute() )
+    if( xDlg->Execute() )
     {
         const sal_Int32 nCount = xDlg->GetCount() - 1;
 
@@ -1292,7 +1310,7 @@ void SvxTableController::SplitMarkedCells()
     }
 }
 
-void SvxTableController::DistributeColumns()
+void SvxTableController::DistributeColumns(const bool bOptimize, const bool bMinimize)
 {
     if(!checkTableObject())
         return;
@@ -1309,13 +1327,13 @@ void SvxTableController::DistributeColumns()
 
     CellPos aStart, aEnd;
     getSelectedCells( aStart, aEnd );
-    rTableObj.DistributeColumns( aStart.mnCol, aEnd.mnCol );
+    rTableObj.DistributeColumns( aStart.mnCol, aEnd.mnCol, bOptimize, bMinimize );
 
     if( bUndo )
         rModel.EndUndo();
 }
 
-void SvxTableController::DistributeRows()
+void SvxTableController::DistributeRows(const bool bOptimize, const bool bMinimize)
 {
     if(!checkTableObject())
         return;
@@ -1332,7 +1350,7 @@ void SvxTableController::DistributeRows()
 
     CellPos aStart, aEnd;
     getSelectedCells( aStart, aEnd );
-    rTableObj.DistributeRows( aStart.mnRow, aEnd.mnRow );
+    rTableObj.DistributeRows( aStart.mnRow, aEnd.mnRow, bOptimize, bMinimize );
 
     if( bUndo )
         rModel.EndUndo();
@@ -1857,7 +1875,7 @@ void SvxTableController::findMergeOrigin( CellPos& rPos )
     if( mxTable.is() ) try
     {
         Reference< XMergeableCell > xCell( mxTable->getCellByPosition( rPos.mnCol, rPos.mnRow ), UNO_QUERY_THROW );
-        if( xCell.is() && xCell->isMerged() )
+        if( xCell->isMerged() )
         {
             ::findMergeOrigin( mxTable, rPos.mnCol, rPos.mnRow, rPos.mnCol, rPos.mnRow );
         }
@@ -1878,7 +1896,7 @@ void SvxTableController::EditCell(const CellPos& rPos, vcl::Window* pWindow, Tbl
 
     SdrTableObj& rTableObj(*mxTableObj.get());
 
-    if(rTableObj.GetPage() == pPV->GetPage())
+    if(rTableObj.getSdrPageFromSdrObject() == pPV->GetPage())
     {
         bool bEmptyOutliner = false;
 
@@ -2185,14 +2203,14 @@ void SvxTableController::updateSelectionOverlay()
                 SdrPaintWindow* pPaintWindow = mrView.GetPaintWindow(nIndex);
                 if( pPaintWindow )
                 {
-                    rtl::Reference < sdr::overlay::OverlayManager > xOverlayManager = pPaintWindow->GetOverlayManager();
+                    const rtl::Reference < sdr::overlay::OverlayManager >& xOverlayManager = pPaintWindow->GetOverlayManager();
                     if( xOverlayManager.is() )
                     {
-                        sdr::overlay::OverlayObjectCell* pOverlay = new sdr::overlay::OverlayObjectCell( aHighlight, aRanges );
+                        std::unique_ptr<sdr::overlay::OverlayObjectCell> pOverlay(new sdr::overlay::OverlayObjectCell( aHighlight, aRanges ));
 
                         xOverlayManager->add(*pOverlay);
                         mpSelectionOverlay.reset(new sdr::overlay::OverlayObjectList);
-                        mpSelectionOverlay->append(pOverlay);
+                        mpSelectionOverlay->append(std::move(pOverlay));
                     }
                 }
             }
@@ -2303,13 +2321,13 @@ static void ImplSetLinePreserveColor( SvxBoxItem& rNewFrame, const SvxBorderLine
 }
 
 
-void ImplApplyBoxItem( CellPosFlag nCellPosFlags, const SvxBoxItem* pBoxItem, const SvxBoxInfoItem* pBoxInfoItem, SvxBoxItem& rNewFrame )
+static void ImplApplyBoxItem( CellPosFlag nCellPosFlags, const SvxBoxItem* pBoxItem, const SvxBoxInfoItem* pBoxInfoItem, SvxBoxItem& rNewFrame )
 {
     if (nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After|CellPosFlag::Upper|CellPosFlag::Lower))
     {
         // current cell is outside the selection
 
-        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if its not any corner
+        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Upper)
             {
@@ -2322,7 +2340,7 @@ void ImplApplyBoxItem( CellPosFlag nCellPosFlags, const SvxBoxItem* pBoxItem, co
                     rNewFrame.SetLine( nullptr, SvxBoxItemLine::TOP );
             }
         }
-        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if its not any corner
+        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Before)
             {
@@ -2395,7 +2413,7 @@ static void ImplApplyBorderLineItem( CellPosFlag nCellPosFlags, const SvxBorderL
 {
     if (nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After|CellPosFlag::Upper|CellPosFlag::Lower))
     {
-        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if its not any corner
+        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Upper)
             {
@@ -2408,7 +2426,7 @@ static void ImplApplyBorderLineItem( CellPosFlag nCellPosFlags, const SvxBorderL
                     ImplSetLinePreserveColor( rNewFrame, pBorderLineItem, SvxBoxItemLine::TOP );
             }
         }
-        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if its not any corner
+        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Before)
             {
@@ -2941,14 +2959,14 @@ void lcl_MergeCommonBorderAttr(LinesState& rLinesState, const SvxBoxItem& rCellB
     {
         // current cell is outside the selection
 
-        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if its not any corner
+        if (!(nCellPosFlags & (CellPosFlag::Before|CellPosFlag::After))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Upper)
                 lcl_MergeBorderLine(rLinesState, rCellBoxItem.GetBottom(), SvxBoxItemLine::TOP, SvxBoxInfoItemValidFlags::TOP);
             else if (nCellPosFlags & CellPosFlag::Lower)
                 lcl_MergeBorderLine(rLinesState, rCellBoxItem.GetTop(), SvxBoxItemLine::BOTTOM, SvxBoxInfoItemValidFlags::BOTTOM);
         }
-        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if its not any corner
+        else if (!(nCellPosFlags & (CellPosFlag::Upper|CellPosFlag::Lower))) // check if it's not any corner
         {
             if (nCellPosFlags & CellPosFlag::Before)
                 lcl_MergeBorderLine(rLinesState, rCellBoxItem.GetRight(), SvxBoxItemLine::LEFT, SvxBoxInfoItemValidFlags::LEFT);
@@ -3167,7 +3185,7 @@ bool SvxTableController::setCursorLogicPosition(const Point& rPosition, bool bPo
         }
         else if (aCellPos != maMouseDownPos)
         {
-            // No selection, but rPosition is at an other cell: start table selection.
+            // No selection, but rPosition is at another cell: start table selection.
             StartSelection(maMouseDownPos);
             // Update graphic selection, should be hidden now.
             mrView.AdjustMarkHdl();

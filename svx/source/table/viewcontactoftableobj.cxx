@@ -56,8 +56,8 @@ namespace drawinglayer
         class SdrCellPrimitive2D : public BufferedDecompositionPrimitive2D
         {
         private:
-            basegfx::B2DHomMatrix                       maTransform;
-            attribute::SdrFillTextAttribute             maSdrFTAttribute;
+            basegfx::B2DHomMatrix const                       maTransform;
+            attribute::SdrFillTextAttribute const             maSdrFTAttribute;
 
         protected:
             // local decomposition.
@@ -148,7 +148,7 @@ namespace sdr
 {
     namespace contact
     {
-        svx::frame::Style impGetLineStyle(
+        static svx::frame::Style impGetLineStyle(
             const sdr::table::TableLayouter& rLayouter,
             sal_Int32 nX,
             sal_Int32 nY,

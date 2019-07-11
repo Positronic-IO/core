@@ -26,6 +26,7 @@
 
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <uno/current_context.h>
 #include <uno/lbnames.h>
@@ -37,6 +38,7 @@
 
 #include <com/sun/star/uno/XCurrentContext.hpp>
 #include <com/sun/star/uno/DeploymentException.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -74,12 +76,12 @@ class acc_Intersection
 {
     Reference< security::XAccessControlContext > m_x1, m_x2;
 
-    inline acc_Intersection(
+    acc_Intersection(
         Reference< security::XAccessControlContext > const & x1,
         Reference< security::XAccessControlContext > const & x2 );
 
 public:
-    static inline Reference< security::XAccessControlContext > create(
+    static Reference< security::XAccessControlContext > create(
         Reference< security::XAccessControlContext > const & x1,
         Reference< security::XAccessControlContext > const & x2 );
 
@@ -88,14 +90,14 @@ public:
         Any const & perm ) override;
 };
 
-inline acc_Intersection::acc_Intersection(
+acc_Intersection::acc_Intersection(
     Reference< security::XAccessControlContext > const & x1,
     Reference< security::XAccessControlContext > const & x2 )
     : m_x1( x1 )
     , m_x2( x2 )
 {}
 
-inline Reference< security::XAccessControlContext > acc_Intersection::create(
+Reference< security::XAccessControlContext > acc_Intersection::create(
     Reference< security::XAccessControlContext > const & x1,
     Reference< security::XAccessControlContext > const & x2 )
 {
@@ -120,12 +122,12 @@ class acc_Union
 {
     Reference< security::XAccessControlContext > m_x1, m_x2;
 
-    inline acc_Union(
+    acc_Union(
         Reference< security::XAccessControlContext > const & x1,
         Reference< security::XAccessControlContext > const & x2 );
 
 public:
-    static inline Reference< security::XAccessControlContext > create(
+    static Reference< security::XAccessControlContext > create(
         Reference< security::XAccessControlContext > const & x1,
         Reference< security::XAccessControlContext > const & x2 );
 
@@ -134,14 +136,14 @@ public:
         Any const & perm ) override;
 };
 
-inline acc_Union::acc_Union(
+acc_Union::acc_Union(
     Reference< security::XAccessControlContext > const & x1,
     Reference< security::XAccessControlContext > const & x2 )
     : m_x1( x1 )
     , m_x2( x2 )
 {}
 
-inline Reference< security::XAccessControlContext > acc_Union::create(
+Reference< security::XAccessControlContext > acc_Union::create(
     Reference< security::XAccessControlContext > const & x1,
     Reference< security::XAccessControlContext > const & x2 )
 {
@@ -198,7 +200,7 @@ class acc_CurrentContext
     Any m_restriction;
 
 public:
-    inline acc_CurrentContext(
+    acc_CurrentContext(
         Reference< XCurrentContext > const & xDelegate,
         Reference< security::XAccessControlContext > const & xRestriction );
 
@@ -206,7 +208,7 @@ public:
     virtual Any SAL_CALL getValueByName( OUString const & name ) override;
 };
 
-inline acc_CurrentContext::acc_CurrentContext(
+acc_CurrentContext::acc_CurrentContext(
     Reference< XCurrentContext > const & xDelegate,
     Reference< security::XAccessControlContext > const & xRestriction )
     : m_xDelegate( xDelegate )
@@ -235,7 +237,7 @@ Any acc_CurrentContext::getValueByName( OUString const & name )
 }
 
 
-inline Reference< security::XAccessControlContext > getDynamicRestriction(
+Reference< security::XAccessControlContext > getDynamicRestriction(
     Reference< XCurrentContext > const & xContext )
 {
     if (xContext.is())
@@ -303,7 +305,7 @@ class AccessController
 
     ThreadData m_rec;
     typedef vector< pair< OUString, Any > > t_rec_vec;
-    inline void clearPostPoned();
+    void clearPostPoned();
     void checkAndClearPostPoned();
 
     PermissionCollection getEffectivePermissions(
@@ -481,7 +483,7 @@ static void dumpPermissions(
 #endif
 
 
-inline void AccessController::clearPostPoned()
+void AccessController::clearPostPoned()
 {
     delete static_cast< t_rec_vec * >( m_rec.getData() );
     m_rec.setData( nullptr );
@@ -492,10 +494,10 @@ void AccessController::checkAndClearPostPoned()
     // check postponed permissions
     std::unique_ptr< t_rec_vec > rec( static_cast< t_rec_vec * >( m_rec.getData() ) );
     m_rec.setData( nullptr ); // takeover ownership
-    OSL_ASSERT( rec.get() );
-    if (rec.get())
+    OSL_ASSERT(rec);
+    if (rec)
     {
-        t_rec_vec const & vec = *rec.get();
+        t_rec_vec const& vec = *rec;
         switch (m_mode)
         {
         case SINGLE_USER:

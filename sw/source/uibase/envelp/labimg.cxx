@@ -21,6 +21,7 @@
 
 #include <o3tl/any.hxx>
 #include <tools/stream.hxx>
+#include <osl/diagnose.h>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <unotools/useroptions.hxx>
@@ -67,7 +68,6 @@ SwLabItem& SwLabItem::operator =(const SwLabItem& rItem)
     m_aType    = rItem.m_aType;
     m_bPage    = rItem.m_bPage;
     m_bSynchron = rItem.m_bSynchron;
-    m_aBin     = rItem.m_aBin;
     m_nCol     = rItem.m_nCol;
     m_nRow     = rItem.m_nRow;
     m_lHDist   = rItem.m_lHDist;
@@ -125,7 +125,6 @@ bool SwLabItem::operator ==(const SfxPoolItem& rItem) const
            m_bCont    == rLab.m_bCont   &&
            m_bPage    == rLab.m_bPage   &&
            m_bSynchron == rLab.m_bSynchron &&
-           m_aBin     == rLab.m_aBin    &&
            m_nCol     == rLab.m_nCol    &&
            m_nRow     == rLab.m_nRow    &&
            m_lHDist   == rLab.m_lHDist  &&

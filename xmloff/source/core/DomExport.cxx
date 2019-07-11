@@ -37,6 +37,8 @@
 
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 
 #include <vector>
@@ -59,11 +61,11 @@ public:
     virtual void endElement( const Reference<XElement>& ) {}
 };
 
-void visit( DomVisitor&, const Reference<XDocument>& );
-void visit( DomVisitor&, const Reference<XNode>& );
+static void visit( DomVisitor&, const Reference<XDocument>& );
+static void visit( DomVisitor&, const Reference<XNode>& );
 
 
-void visitNode( DomVisitor& rVisitor, const Reference<XNode>& xNode )
+static void visitNode( DomVisitor& rVisitor, const Reference<XNode>& xNode )
 {
     switch( xNode->getNodeType() )
     {

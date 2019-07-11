@@ -248,7 +248,7 @@ static oslFileError osl_create_temp_file_impl_(
 
         /* in case of error osl_File_E_EXIST we simply try again else we give up */
 
-        if ((osl_error == osl_File_E_None) || (osl_error != osl_File_E_EXIST))
+        if (osl_error != osl_File_E_EXIST)
         {
             rtl_uString_release(rand_name);
 
@@ -305,22 +305,27 @@ oslFileError SAL_CALL osl_createTempFile(
             osl_error = osl_removeFile(temp_file_url);
 
             if (osl_error == osl_File_E_None)
+            {
                 *pHandle = temp_file_handle;
-            else
-                osl_closeFile(temp_file_handle);
+                temp_file_handle = nullptr;
+            }
         }
         else
         {
             if (pHandle)
+            {
                 *pHandle = temp_file_handle;
-            else
-                osl_closeFile(temp_file_handle);
+                temp_file_handle = nullptr;
+            }
 
             rtl_uString_assign(ppustrTempFileURL, temp_file_url);
         }
 
         rtl_uString_release(temp_file_url);
     }
+
+    if (temp_file_handle)
+        osl_closeFile(temp_file_handle);
 
     rtl_uString_release(base_directory);
 

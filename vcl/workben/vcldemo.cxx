@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <rtl/math.hxx>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
@@ -349,11 +350,11 @@ public:
                 tools::Rectangle aBottom(aToplevelRegions[1].TopLeft(),
                                   aToplevelRegions[2].BottomRight());
                 DemoRenderer::clearRects(rDev,aSubRegions);
-                struct {
-                    bool mbClip;
-                    bool mbArabicText;
-                    bool mbRotate;
-                } aRenderData[] = {
+                static struct {
+                    bool const mbClip;
+                    bool const mbArabicText;
+                    bool const mbRotate;
+                } const aRenderData[] = {
                     { false, false, false },
                     { false, true,  false },
                     { false, true,  true },
@@ -517,10 +518,10 @@ public:
                 0xf0, 0x9f, 0x82, 0xa1, 0xc2, 0xa2, 0xc2, 0xa2, 0
             };
 
-            struct {
+            static struct {
                 const char *mpFont;
                 const char *mpString;
-            } aRuns[] = {
+            } const aRuns[] = {
 #define SET(font,string) { font, reinterpret_cast<const char *>(string) }
                 SET("sans", "a"),           // logical font - no 'sans' font.
                 SET("opensymbol", "#$%"),   // font fallback - $ is missing.
@@ -635,8 +636,8 @@ public:
                 }
 
                 // DX array rendering
-                long *pItems = new long[aText.getLength()+10];
-                rDev.GetTextArray(aText, pItems);
+                std::unique_ptr<long[]> pItems(new long[aText.getLength()+10]);
+                rDev.GetTextArray(aText, pItems.get());
                 for (long j = 0; j < aText.getLength(); ++j)
                 {
                     Point aTop = aTextRect.TopLeft();
@@ -648,7 +649,6 @@ public:
                     rDev.DrawLine(aTop,aBottom);
                     rDev.SetRasterOp(RasterOp::OverPaint);
                 }
-                delete[] pItems;
 
                 aPos.Move(aTextRect.GetWidth() + 16, 0);
             }
@@ -766,9 +766,13 @@ public:
             {
                 auto aRegions = partition(rCtx, 2, 2);
                 doInvert(rDev, aRegions[0], InvertFlags::NONE);
+                rDev.DrawText(aRegions[0], "InvertFlags::NONE");
                 doInvert(rDev, aRegions[1], InvertFlags::N50);
+                rDev.DrawText(aRegions[1], "InvertFlags::N50");
                 doInvert(rDev, aRegions[2], InvertFlags::Highlight);
-                doInvert(rDev, aRegions[3], InvertFlags(0xffff));
+                rDev.DrawText(aRegions[2], "InvertFlags::Highlight");
+                doInvert(rDev, aRegions[3], InvertFlags::TrackFrame);
+                rDev.DrawText(aRegions[3], "InvertFlags::TrackFrame");
             }
         }
     };
@@ -927,9 +931,9 @@ public:
         virtual void RenderRegion(OutputDevice &rDev, tools::Rectangle r,
                                   const RenderContext &) override
         {
-            struct {
+            static struct {
                 double nX, nY;
-            } aPoints[] = { { 0.1, 0.1 }, { 0.9, 0.9 },
+            } const aPoints[] = { { 0.1, 0.1 }, { 0.9, 0.9 },
 #if FIXME_SELF_INTERSECTING_WORKING
                             { 0.9, 0.1 }, { 0.1, 0.9 },
                             { 0.1, 0.1 }
@@ -1504,14 +1508,9 @@ public:
     void addInvalidate(vcl::Window *pWindow) { maInvalidates.emplace_back(pWindow); };
     void removeInvalidate(vcl::Window *pWindow)
     {
-        for (auto aIt = maInvalidates.begin(); aIt != maInvalidates.end(); ++aIt)
-        {
-            if (*aIt == pWindow)
-            {
-                maInvalidates.erase(aIt);
-                return;
-            }
-        }
+        auto aIt = std::find(maInvalidates.begin(), maInvalidates.end(), pWindow);
+        if (aIt != maInvalidates.end())
+            maInvalidates.erase(aIt);
     }
     void Invalidate()
     {
@@ -1658,7 +1657,7 @@ double DemoRenderer::getAndResetBenchmark(const RenderStyle style)
         double avgtime = maRenderers[i]->sumTime / maRenderers[i]->countTime;
         geomean *= avgtime;
         fprintf(stderr, "%s: %f (iteration: %d*%d*%d)\n",
-                rtl::OUStringToOString(maRenderers[i]->getName(),
+                OUStringToOString(maRenderers[i]->getName(),
                 RTL_TEXTENCODING_UTF8).getStr(), avgtime,
                 maRenderers[i]->countTime, maRenderers[i]->getTestRepeatCount(),
                 (style == RENDER_THUMB) ? THUMB_REPEAT_FACTOR : 1);
@@ -1716,14 +1715,13 @@ class DemoWin : public WorkWindow
 
     class RenderThread : public salhelper::Thread {
         DemoWin  &mrWin;
-        TimeValue maDelay;
+        sal_uInt32 const mnDelaySecs = 0;
     public:
         RenderThread(DemoWin &rWin, sal_uInt32 nDelaySecs)
             : Thread("vcldemo render thread")
             , mrWin(rWin)
+            , mnDelaySecs(nDelaySecs)
         {
-            maDelay.Seconds = nDelaySecs;
-            maDelay.Nanosec = 0;
             launch();
         }
         virtual ~RenderThread() override
@@ -1732,7 +1730,7 @@ class DemoWin : public WorkWindow
         }
         virtual void execute() override
         {
-            osl_waitThread(&maDelay);
+            wait(std::chrono::seconds(mnDelaySecs));
 
             SolarMutexGuard aGuard;
             fprintf (stderr, "render from a different thread\n");
@@ -1933,20 +1931,18 @@ public:
 IMPL_LINK_NOARG(DemoWidgets, GLTestClick, Button*, void)
 {
     sal_Int32 nSelected = mpGLCombo->GetSelectedEntryPos();
+    sal_uInt32 nDelaySeconds = 0;
 
-    TimeValue aDelay;
-    aDelay.Seconds = 0;
-    aDelay.Nanosec = 0;
     switch (nSelected)
     {
     case 0:
-        aDelay.Seconds = 1;
+        nDelaySeconds = 1;
         break;
     case 1:
-        aDelay.Seconds = 3;
+        nDelaySeconds = 3;
         break;
     case 2:
-        aDelay.Seconds = 7;
+        nDelaySeconds = 7;
         break;
     default:
         break;
@@ -1956,7 +1952,7 @@ IMPL_LINK_NOARG(DemoWidgets, GLTestClick, Button*, void)
     if (bEnterLeave)
         OpenGLZoneTest::enter();
 
-    osl_waitThread(&aDelay);
+    osl::Thread::wait(std::chrono::seconds(nDelaySeconds));
 
     if (bEnterLeave)
         OpenGLZoneTest::leave();
@@ -2178,7 +2174,7 @@ class DemoApp : public Application
         fprintf(stderr,"  --show <renderer>  - start with a given renderer, options are:\n");
         OUString aRenderers(rRenderer.getRendererList());
         fprintf(stderr,"         %s\n",
-                rtl::OUStringToOString(aRenderers, RTL_TEXTENCODING_UTF8).getStr());
+                OUStringToOString(aRenderers, RTL_TEXTENCODING_UTF8).getStr());
         fprintf(stderr,"  --test <iterCount> - create benchmark data\n");
         fprintf(stderr,"  --widgets          - launch the widget test.\n");
         fprintf(stderr,"  --threads          - render from multiple threads.\n");
@@ -2232,7 +2228,7 @@ public:
                 else if (aArg.startsWith("--"))
                 {
                     fprintf(stderr,"Unknown argument '%s'\n",
-                            rtl::OUStringToOString(aArg, RTL_TEXTENCODING_UTF8).getStr());
+                            OUStringToOString(aArg, RTL_TEXTENCODING_UTF8).getStr());
                     return showHelp(aRenderer);
                 }
             }
@@ -2254,7 +2250,7 @@ public:
                 xWidgets = VclPtr< DemoWidgets >::Create ();
             else if (bPopup)
                 xPopup = VclPtrInstance< DemoPopup> ();
-            else if (aFontNames.size() > 0)
+            else if (!aFontNames.empty())
                 renderFonts(aFontNames);
             else
                 aMainWin->Show();

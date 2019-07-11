@@ -47,8 +47,6 @@
 #include <unordered_map>
 #include <hb-ot.h>
 
-#include "fontinstance.hxx"
-
 class AquaSalFrame;
 class FontAttributes;
 class CoreTextStyle;
@@ -61,7 +59,6 @@ public:
                                     CoreTextFontFace( const FontAttributes&, sal_IntPtr nFontID );
     virtual                         ~CoreTextFontFace() override;
 
-    PhysicalFontFace*               Clone() const override;
     sal_IntPtr                      GetFontId() const override;
 
     int                             GetFontTable( uint32_t nTagCode, unsigned char* ) const;
@@ -71,10 +68,7 @@ public:
     bool                            GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const;
     bool                            HasChar( sal_uInt32 cChar ) const;
 
-    LogicalFontInstance*            CreateFontInstance(const FontSelectPattern&) const override;
-
-protected:
-                                    CoreTextFontFace( const CoreTextFontFace& );
+    rtl::Reference<LogicalFontInstance> CreateFontInstance(const FontSelectPattern&) const override;
 
 private:
     const sal_IntPtr                mnFontId;
@@ -83,28 +77,30 @@ private:
     mutable bool                    mbFontCapabilitiesRead;
 };
 
-class CoreTextStyle : public LogicalFontInstance
+class CoreTextStyle final : public LogicalFontInstance
 {
-    friend LogicalFontInstance* CoreTextFontFace::CreateFontInstance(const FontSelectPattern&) const;
+    friend rtl::Reference<LogicalFontInstance> CoreTextFontFace::CreateFontInstance(const FontSelectPattern&) const;
 
 public:
-    ~CoreTextStyle();
+    ~CoreTextStyle() override;
 
     void       GetFontMetric( ImplFontMetricDataRef const & );
-    bool       GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) const;
-    bool       GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) const;
+    bool GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const override;
 
     CFMutableDictionaryRef  GetStyleDict( void ) const { return mpStyleDict; }
 
     /// <1.0: font is squeezed, >1.0 font is stretched, else 1.0
-    float               mfFontStretch;
+    float mfFontStretch;
     /// text rotation in radian
-    float               mfFontRotation;
+    float mfFontRotation;
+    /// faux bold - true, if font doesn't have proper bold variants
+    float mbFauxBold;
 
 private:
     explicit CoreTextStyle(const PhysicalFontFace&, const FontSelectPattern&);
 
-    virtual hb_font_t* ImplInitHbFont() override;
+    hb_font_t* ImplInitHbFont() override;
+    bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const override;
 
     /// CoreText text style object
     CFMutableDictionaryRef  mpStyleDict;
@@ -128,7 +124,7 @@ private:
     CTFontCollectionRef mpCTFontCollection;
     CFArrayRef mpCTFontArray;
 
-    std::unordered_map<sal_IntPtr,CoreTextFontFace*> maFontContainer;
+    std::unordered_map<sal_IntPtr, rtl::Reference<CoreTextFontFace>> maFontContainer;
 };
 
 
@@ -159,7 +155,7 @@ class AquaSalGraphics : public SalGraphics
     RGBAColor                               maFillColor;
 
     // Device Font settings
-    CoreTextStyle*                          mpTextStyle[MAX_FALLBACK];
+    rtl::Reference<CoreTextStyle>           mpTextStyle[MAX_FALLBACK];
     RGBAColor                               maTextColor;
     /// allows text to be rendered without antialiasing
     bool                                    mbNonAntialiasedText;
@@ -230,17 +226,22 @@ public:
     virtual void            drawPolyLine( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
     virtual void            drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
     virtual void            drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, PCONSTSALPOINT* pPtAry ) override;
-    virtual bool            drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) override;
+    virtual bool            drawPolyPolygon(
+                                const basegfx::B2DHomMatrix& rObjectToDevice,
+                                const basegfx::B2DPolyPolygon&,
+                                double fTransparency) override;
     virtual bool            drawPolyLineBezier( sal_uInt32 nPoints, const SalPoint* pPtAry, const PolyFlags* pFlgAry ) override;
     virtual bool            drawPolygonBezier( sal_uInt32 nPoints, const SalPoint* pPtAry, const PolyFlags* pFlgAry ) override;
     virtual bool            drawPolyPolygonBezier( sal_uInt32 nPoly, const sal_uInt32* pPoints, const SalPoint* const* pPtAry, const PolyFlags* const* pFlgAry ) override;
     virtual bool            drawPolyLine(
+                                const basegfx::B2DHomMatrix& rObjectToDevice,
                                 const basegfx::B2DPolygon&,
                                 double fTransparency,
                                 const basegfx::B2DVector& rLineWidths,
                                 basegfx::B2DLineJoin,
                                 css::drawing::LineCap eLineCap,
-                                double fMiterMinimumAngle) override;
+                                double fMiterMinimumAngle,
+                                bool bPixelSnapHairline) override;
     virtual bool            drawGradient( const tools::PolyPolygon&, const Gradient& ) override { return false; };
 
     // CopyArea --> No RasterOp, but ClipRegion
@@ -258,7 +259,7 @@ public:
                                       const SalBitmap& rSalBitmap,
                                       Color nMaskColor ) override;
 
-    virtual SalBitmap*      getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
     virtual Color           getPixel( long nX, long nY ) override;
 
     // invert --> ClipRegion (only Windows or VirDevs)
@@ -321,7 +322,7 @@ public:
     // filled accordingly
     virtual void            SetFillColor( Color nColor ) override;
     // enable/disable XOR drawing
-    virtual void            SetXORMode( bool bSet ) override;
+    virtual void            SetXORMode( bool bSet, bool bInvertOnly ) override;
     // set line color for raster operations
     virtual void            SetROPLineColor( SalROPColor nROPColor ) override;
     // set fill color for raster operations
@@ -329,7 +330,7 @@ public:
     // set the text color to a specific color
     virtual void            SetTextColor( Color nColor ) override;
     // set the font
-    virtual void            SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
+    virtual void            SetFont( LogicalFontInstance*, int nFallbackLevel ) override;
     // get the current font's metrics
     virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
     // get the repertoire of the current font
@@ -373,9 +374,6 @@ public:
                                             bool bVertical,
                                             std::vector< sal_Int32 >& rWidths,
                                             Ucs2UIntMap& rUnicodeEnc ) override;
-
-    virtual bool            GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) override;
-    virtual bool            GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) override;
 
     virtual std::unique_ptr<SalLayout>
                             GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;

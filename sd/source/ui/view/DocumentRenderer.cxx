@@ -21,8 +21,10 @@
 
 #include <DocumentRenderer.hxx>
 #include <DocumentRenderer.hrc>
+#include <ViewShellBase.hxx>
 
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <optsitem.hxx>
 #include <sdresid.hxx>
 #include <strings.hrc>
@@ -34,6 +36,7 @@
 #include <Outliner.hxx>
 #include <OutlineViewShell.hxx>
 #include <SlideSorterViewShell.hxx>
+#include <DrawDocShell.hxx>
 
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
@@ -54,6 +57,7 @@
 #include <vcl/weld.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <xmloff/autolayout.hxx>
+#include <sfx2/objsh.hxx>
 
 #include <memory>
 #include <vector>
@@ -360,8 +364,8 @@ namespace {
         ViewShellBase &mrBase;
         std::vector<beans::PropertyValue> maProperties;
         std::vector<sal_Int32> maSlidesPerPage;
-        bool mbImpress;
-        sal_Int32 mnCurPage;
+        bool const mbImpress;
+        sal_Int32 const mnCurPage;
 
         void ProcessResource()
         {
@@ -952,7 +956,7 @@ namespace {
 
             // Collect the page objects of the handout master.
             std::vector<SdrPageObj*> aHandoutPageObjects;
-            SdrObjListIter aShapeIter (rHandoutPage);
+            SdrObjListIter aShapeIter (&rHandoutPage);
             while (aShapeIter.IsMore())
             {
                 SdrPageObj* pPageObj = dynamic_cast<SdrPageObj*>(aShapeIter.Next());
@@ -1064,7 +1068,7 @@ namespace {
     {
     public:
         OutlinerPrinterPage (
-            OutlinerParaObject* pParaObject,
+            std::unique_ptr<OutlinerParaObject> pParaObject,
             const MapMode& rMapMode,
             const OUString& rsPageString,
             const Point& rPageStringOffset,
@@ -1073,13 +1077,8 @@ namespace {
             const sal_uInt16 nPaperTray)
             : PrinterPage(PageKind::Handout, rMapMode, false, rsPageString,
                 rPageStringOffset, nDrawMode, eOrientation, nPaperTray),
-              mpParaObject(pParaObject)
+              mpParaObject(std::move(pParaObject))
         {
-        }
-
-        virtual ~OutlinerPrinterPage() override
-        {
-            mpParaObject.reset();
         }
 
         virtual void Print (
@@ -1197,11 +1196,8 @@ public:
             }
         }
 
-        if (bIsValueChanged)
-        {
-            if ( ! mpOptions )
-                mpOptions.reset(new PrintOptions(*this, maSlidesPerPage));
-        }
+        if (bIsValueChanged && ! mpOptions )
+            mpOptions.reset(new PrintOptions(*this, maSlidesPerPage));
         if( bIsValueChanged || bIsPaperChanged )
             PreparePages();
     }
@@ -1281,15 +1277,12 @@ public:
             {
                 mbHasOrientationWarningBeenShown = true;
                 // Show warning that the orientation could not be set.
-                if (pViewShell)
-                {
-                    std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(pViewShell->GetFrameWeld(),
-                                                               VclMessageType::Warning, VclButtonsType::OkCancel,
-                                                               SdResId(STR_WARN_PRINTFORMAT_FAILURE)));
-                    xWarn->set_default_response(RET_CANCEL);
-                    if (xWarn->run() != RET_OK)
-                        return;
-                }
+                std::unique_ptr<weld::MessageDialog> xWarn(Application::CreateMessageDialog(
+                    pViewShell->GetFrameWeld(), VclMessageType::Warning, VclButtonsType::OkCancel,
+                    SdResId(STR_WARN_PRINTFORMAT_FAILURE)));
+                xWarn->set_default_response(RET_CANCEL);
+                if (xWarn->run() != RET_OK)
+                    return;
             }
         }
 
@@ -1317,7 +1310,7 @@ public:
 
 private:
     // rhbz#657394: keep the document alive: prevents crash when
-    SfxObjectShellRef mxObjectShell; // destroying mpPrintView
+    SfxObjectShellRef const mxObjectShell; // destroying mpPrintView
     ViewShellBase& mrBase;
     bool mbIsDisposed;
     VclPtr<Printer> mpPrinter;
@@ -1338,7 +1331,7 @@ private:
 
     /** Determine and set the paper orientation.
     */
-    bool SetupPaperOrientation (
+    void SetupPaperOrientation (
         const PageKind ePageKind,
         PrintInfo& rInfo)
     {
@@ -1379,8 +1372,6 @@ private:
                 maPrintSize = awt::Size(aPaperSize.Height(), aPaperSize.Width());
             }
         }
-
-        return true;
     }
 
     /** Top most method for preparing printer pages.  In this and the other
@@ -1604,10 +1595,12 @@ private:
             Size aPaperSize( rInfo.mpPrinter->PixelToLogic( rInfo.mpPrinter->GetPaperSizePixel(), MapMode( MapUnit::Map100thMM ) ) );
             maPrintSize.Width  = aPaperSize.Height();
             maPrintSize.Height = aPaperSize.Width();
-            const long nRotatedWidth = aOutRect.GetHeight();
-            const long nRotatedHeight = aOutRect.GetWidth();
-            aOutRect = ::tools::Rectangle( Point( aPageOfs.Y(), aPageOfs.X() ),
-                                  Size( nRotatedWidth, nRotatedHeight ) );
+            const auto nRotatedWidth = aOutRect.GetHeight();
+            const auto nRotatedHeight = aOutRect.GetWidth();
+            const auto nRotatedX = aPageOfs.Y();
+            const auto nRotatedY = aPageOfs.X();
+            aOutRect = ::tools::Rectangle(Point( nRotatedX, nRotatedY),
+                                  Size(nRotatedWidth, nRotatedHeight));
         }
 
         Outliner* pOutliner = mrBase.GetDocument()->GetInternalOutliner();
@@ -1803,7 +1796,7 @@ private:
 
         // Count page shapes.
         sal_uInt32 nShapeCount (0);
-        SdrObjListIter aShapeIter (rHandoutPage);
+        SdrObjListIter aShapeIter (&rHandoutPage);
         while (aShapeIter.IsMore())
         {
             SdrPageObj* pPageObj = dynamic_cast<SdrPageObj*>(aShapeIter.Next());
@@ -1870,8 +1863,7 @@ private:
         SdPage* pRefPage = pDocument->GetSdPage(0, ePageKind);
         rInfo.maPageSize = pRefPage->GetSize();
 
-        if ( ! SetupPaperOrientation(ePageKind, rInfo))
-            return;
+        SetupPaperOrientation(ePageKind, rInfo);
 
         MapMode aMap (rInfo.maMap);
         rInfo.maMap = aMap;
@@ -1928,8 +1920,7 @@ private:
 
             if (mpOptions->IsPrintPageName())
             {
-                rInfo.msPageString = pPage->GetName();
-                rInfo.msPageString += " ";
+                rInfo.msPageString = pPage->GetName() + " ";
             }
             else
                 rInfo.msPageString.clear();

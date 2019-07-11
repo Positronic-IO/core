@@ -40,6 +40,8 @@
 #include <com/sun/star/util/XNumberFormatTypes.hpp>
 #include <com/sun/star/sdbc/XRowSet.hpp>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/types.hxx>
+#include <sal/log.hxx>
 #include <editeng/langitem.hxx>
 #include <svl/numuno.hxx>
 #include <svl/stritem.hxx>
@@ -54,6 +56,7 @@
 #include <editeng/brushitem.hxx>
 #include <editeng/boxitem.hxx>
 #include <svx/rulritem.hxx>
+#include <unotools/collatorwrapper.hxx>
 #include <tabledlg.hxx>
 #include <fmtclds.hxx>
 #include <tabcol.hxx>
@@ -111,9 +114,9 @@ struct DB_Column
     const enum class Type { FILLTEXT, COL_FIELD, COL_TEXT, SPLITPARA } eColType;
 
     union {
-        OUString* pText;
+        OUString* const pText;
         SwField* pField;
-        sal_uInt32 nFormat;
+        sal_uInt32 const nFormat;
     };
     const SwInsDBColumn* pColInfo;
 
@@ -189,8 +192,6 @@ SwInsertDBColAutoPilot::SwInsertDBColAutoPilot( SwView& rView,
     , aDBData(rData)
     , sNoTmpl(SwResId(SW_STR_NONE))
     , pView(&rView)
-    , pTableSet(nullptr)
-    , pRep(nullptr)
 {
     get(m_pRbAsTable, "astable");
     get(m_pRbAsField, "asfields");
@@ -256,7 +257,7 @@ SwInsertDBColAutoPilot::SwInsertDBColAutoPilot( SwView& rView,
         sal_Int32 nCount = aColNames.getLength();
         for (sal_Int32 n = 0; n < nCount; ++n)
         {
-            SwInsDBColumn* pNew = new SwInsDBColumn( pColNames[n] );
+            std::unique_ptr<SwInsDBColumn> pNew(new SwInsDBColumn( pColNames[n] ));
             Any aCol = xCols->getByName(pColNames[n]);
             Reference <XPropertySet> xCol;
             aCol >>= xCol;
@@ -319,10 +320,9 @@ SwInsertDBColAutoPilot::SwInsertDBColAutoPilot( SwView& rView,
                 }
                 break;
             }
-            if( !aDBColumns.insert( pNew ).second )
+            if( !aDBColumns.insert( std::move(pNew) ).second )
             {
                 OSL_ENSURE( false, "Spaltenname mehrfach vergeben?" );
-                delete pNew;
             }
         }
     }
@@ -415,8 +415,8 @@ SwInsertDBColAutoPilot::~SwInsertDBColAutoPilot()
 
 void SwInsertDBColAutoPilot::dispose()
 {
-    delete pTableSet;
-    delete pRep;
+    pTableSet.reset();
+    pRep.reset();
 
     m_xTAutoFormat.reset();
     m_pRbAsTable.clear();
@@ -651,14 +651,14 @@ IMPL_LINK( SwInsertDBColAutoPilot, DblClickHdl, ListBox&, rBox, void )
         TableToFromHdl( pButton );
 }
 
-IMPL_LINK( SwInsertDBColAutoPilot, TableFormatHdl, Button*, pButton, void )
+IMPL_LINK_NOARG(SwInsertDBColAutoPilot, TableFormatHdl, Button*, void)
 {
     SwWrtShell& rSh = pView->GetWrtShell();
     bool bNewSet = false;
     if( !pTableSet )
     {
         bNewSet = true;
-        pTableSet = new SfxItemSet( rSh.GetAttrPool(), SwuiGetUITableAttrRange() );
+        pTableSet.reset(new SfxItemSet( rSh.GetAttrPool(), SwuiGetUITableAttrRange() ));
 
         // At first acquire the simple attributes
         pTableSet->Put( SfxStringItem( FN_PARAM_TABLE_NAME, rSh.GetUniqueTableName() ));
@@ -720,12 +720,12 @@ IMPL_LINK( SwInsertDBColAutoPilot, TableFormatHdl, Button*, pButton, void )
         SwTabCols aTabCols;
         aTabCols.SetRight( nWidth );
         aTabCols.SetRightMax( nWidth );
-        pRep = new SwTableRep( aTabCols );
+        pRep.reset(new SwTableRep( aTabCols ));
         pRep->SetAlign( text::HoriOrientation::NONE );
         pRep->SetSpace( nWidth );
         pRep->SetWidth( nWidth );
         pRep->SetWidthPercent( 100 );
-        pTableSet->Put( SwPtrItem( FN_TABLE_REP, pRep ));
+        pTableSet->Put( SwPtrItem( FN_TABLE_REP, pRep.get() ));
 
         pTableSet->Put( SfxUInt16Item( SID_HTML_MODE,
                     ::GetHtmlMode( pView->GetDocShell() )));
@@ -748,28 +748,24 @@ IMPL_LINK( SwInsertDBColAutoPilot, TableFormatHdl, Button*, pButton, void )
                 aTabCols.Insert( nStep*(n+1), false, n );
             }
         }
-        delete pRep;
-        pRep = new SwTableRep( aTabCols );
+        pRep.reset(new SwTableRep( aTabCols ));
         pRep->SetAlign( text::HoriOrientation::NONE );
         pRep->SetSpace( nWidth );
         pRep->SetWidth( nWidth );
         pRep->SetWidthPercent( 100 );
-        pTableSet->Put( SwPtrItem( FN_TABLE_REP, pRep ));
+        pTableSet->Put( SwPtrItem( FN_TABLE_REP, pRep.get() ));
     }
 
     SwAbstractDialogFactory* pFact = swui::GetFactory();
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
-    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwTableTabDlg(pButton, pTableSet, &rSh));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
+    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwTableTabDlg(GetFrameWeld(), pTableSet.get(), &rSh));
     if( RET_OK == pDlg->Execute() )
         pTableSet->Put( *pDlg->GetOutputItemSet() );
     else if( bNewSet )
     {
-        delete pTableSet;
-        pTableSet = nullptr;
-        delete pRep;
-        pRep = nullptr;
+        pTableSet.reset();
+        pRep.reset();
     }
 }
 
@@ -779,7 +775,6 @@ IMPL_LINK( SwInsertDBColAutoPilot, AutoFormatHdl, Button*, pButton, void )
     OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
     ScopedVclPtr<AbstractSwAutoFormatDlg> pDlg(pFact->CreateSwAutoFormatDlg(pButton->GetFrameWeld(), pView->GetWrtShellPtr(), false, m_xTAutoFormat.get()));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
     if( RET_OK == pDlg->Execute())
         m_xTAutoFormat.reset(pDlg->FillAutoFormatOfIndex());
 }
@@ -964,7 +959,7 @@ void SwInsertDBColAutoPilot::DataToDoc( const Sequence<Any>& rSelection,
     // we don't have a cursor, so we have to create our own RowSet
     if ( !xResultSet.is() )
     {
-        xResultSet = SwDBManager::createCursor(aDBData.sDataSource,aDBData.sCommand,aDBData.nCommandType,xConnection);
+        xResultSet = SwDBManager::createCursor(aDBData.sDataSource,aDBData.sCommand,aDBData.nCommandType,xConnection,pView);
         bDisposeResultSet = xResultSet.is();
     }
 
@@ -1018,7 +1013,7 @@ void SwInsertDBColAutoPilot::DataToDoc( const Sequence<Any>& rSelection,
             SwInsDBColumn aSrch( m_pLbTableCol->GetEntry( n ) );
             SwInsDBColumns::const_iterator it = aDBColumns.find( &aSrch );
             if (it != aDBColumns.end())
-                aColFields.push_back(*it);
+                aColFields.push_back(it->get());
             else {
                 OSL_ENSURE( false, "database column not found" );
             }
@@ -1315,7 +1310,7 @@ void SwInsertDBColAutoPilot::DataToDoc( const Sequence<Any>& rSelection,
                     case DB_Column::Type::COL_FIELD:
                         {
                             std::unique_ptr<SwDBField> pField(static_cast<SwDBField *>(
-                                pDBCol->pField->CopyField()));
+                                pDBCol->pField->CopyField().release()));
                             double nValue = DBL_MAX;
 
                             Reference< XPropertySet > xColumnProps;
@@ -1608,7 +1603,7 @@ void SwInsertDBColAutoPilot::ImplCommit()
     SvNumberFormatter& rNFormatr = *pView->GetWrtShell().GetNumberFormatter();
     for(size_t nCol = 0; nCol < aDBColumns.size(); nCol++)
     {
-        SwInsDBColumn* pColumn = aDBColumns[nCol];
+        SwInsDBColumn* pColumn = aDBColumns[nCol].get();
         OUString sColumnInsertNode(sNewNode + "/__");
         if( nCol < 10 )
             sColumnInsertNode += "00";
@@ -1716,7 +1711,7 @@ void SwInsertDBColAutoPilot::Load()
                     continue;
                 sal_Int16 nIndex = 0;
                 pSubProps[1] >>= nIndex;
-                SwInsDBColumn* pInsDBColumn = new SwInsDBColumn(sColumn);
+                std::unique_ptr<SwInsDBColumn> pInsDBColumn(new SwInsDBColumn(sColumn));
                 if(pSubProps[2].hasValue())
                     pInsDBColumn->bHasFormat = *o3tl::doAccess<bool>(pSubProps[2]);
                 if(pSubProps[3].hasValue())
@@ -1739,7 +1734,7 @@ void SwInsertDBColAutoPilot::Load()
                 pInsDBColumn->nUsrNumFormat = rNFormatr.GetEntryKey( pInsDBColumn->sUsrNumFormat,
                                                         pInsDBColumn->eUsrNumFormatLng );
 
-                pNewData->aDBColumns.insert(pInsDBColumn);
+                pNewData->aDBColumns.insert(std::move(pInsDBColumn));
             }
             OUString sTmp( pNewData->sTableList );
             if( !sTmp.isEmpty() )

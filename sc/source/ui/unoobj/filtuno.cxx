@@ -179,7 +179,6 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
     OUString aFilterString( aFilterName );
 
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
     if ( !bExport && aFilterString == ScDocShell::GetAsciiFilterName() )
     {
@@ -189,10 +188,9 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
         OUString aPrivDatName(aURL.getName());
         std::unique_ptr<SvStream> pInStream;
         if ( xInputStream.is() )
-            pInStream.reset(utl::UcbStreamHelper::CreateStream( xInputStream ));
+            pInStream = utl::UcbStreamHelper::CreateStream( xInputStream );
 
-        ScopedVclPtr<AbstractScImportAsciiDlg> pDlg(pFact->CreateScImportAsciiDlg( aPrivDatName, pInStream.get(), SC_IMPORTFILE));
-        OSL_ENSURE(pDlg, "Dialog create fail!");
+        ScopedVclPtr<AbstractScImportAsciiDlg> pDlg(pFact->CreateScImportAsciiDlg(nullptr, aPrivDatName, pInStream.get(), SC_IMPORTFILE));
         if ( pDlg->Execute() == RET_OK )
         {
             ScAsciiOptions aOptions;
@@ -274,7 +272,7 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
 
             std::unique_ptr<SvStream> pInStream;
             if ( xInputStream.is() )
-                pInStream.reset(utl::UcbStreamHelper::CreateStream( xInputStream ));
+                pInStream = utl::UcbStreamHelper::CreateStream( xInputStream );
             switch(load_CharSet( eEncoding, bExport, pInStream.get()))
             {
                 case charsetSource::charset_from_file:
@@ -320,7 +318,6 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
             ScopedVclPtr<AbstractScImportOptionsDlg> pDlg(pFact->CreateScImportOptionsDlg(
                                                                             bAscii, &aOptions, &aTitle,
                                                                             bDBEnc, !bExport));
-            OSL_ENSURE(pDlg, "Dialog create fail!");
             if ( pDlg->Execute() == RET_OK )
             {
                 pDlg->SaveImportOptions();

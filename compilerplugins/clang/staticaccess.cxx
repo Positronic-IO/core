@@ -43,11 +43,11 @@ bool isStatic(ValueDecl const * decl, bool * memberEnumerator) {
 }
 
 class StaticAccess:
-    public RecursiveASTVisitor<StaticAccess>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<StaticAccess>
 {
 public:
     explicit StaticAccess(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -64,11 +64,27 @@ bool StaticAccess::VisitMemberExpr(MemberExpr const * expr) {
     if (!isStatic(decl, &me)) {
         return true;
     }
+    auto const loc = expr->getExprLoc();
+    if (compiler.getSourceManager().isMacroBodyExpansion(loc)) {
+        auto const name = Lexer::getImmediateMacroName(
+            loc, compiler.getSourceManager(), compiler.getLangOpts());
+        if (name == "BEGIN_COM_MAP" || name == "DEFAULT_REFLECTION_HANDLER") {
+            // .../VC/Tools/MSVC/14.14.26428/atlmfc/include\atlcom.h(2226,10):  note: expanded from
+            //   macro 'BEGIN_COM_MAP'
+            //     return this->InternalQueryInterface(this, _GetEntries(), iid, ppvObject);
+            //            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            // .../VC/Tools/MSVC/14.14.26428/atlmfc/include\atlwin.h(2890,5):  note: expanded from
+            //   macro 'DEFAULT_REFLECTION_HANDLER'
+            //     if(this->DefaultReflectionHandler(hWnd, uMsg, wParam, lParam, lResult))
+            //        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            return true;
+        }
+    }
     report(
         DiagnosticsEngine::Warning,
         ("accessing %select{static class member|member enumerator}0 through"
          " class member access syntax, use a qualified name like '%1' instead"),
-        expr->getLocStart())
+        compat::getBeginLoc(expr))
         << me << decl->getQualifiedNameAsString() << expr->getSourceRange();
     return true;
 }

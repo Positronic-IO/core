@@ -88,11 +88,8 @@ void OutputDevice::DrawRect( const tools::Rectangle& rRect,
     nVertRound = ImplLogicHeightToDevicePixel( nVertRound );
 
     // we need a graphics
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-            return;
-    }
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -142,11 +139,8 @@ void OutputDevice::Invert( const tools::Rectangle& rRect, InvertFlags nFlags )
     aRect.Justify();
 
     // we need a graphics
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-            return;
-    }
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -159,8 +153,8 @@ void OutputDevice::Invert( const tools::Rectangle& rRect, InvertFlags nFlags )
         nSalFlags |= SalInvert::Highlight;
     if ( nFlags & InvertFlags::N50 )
         nSalFlags |= SalInvert::N50;
-    if ( nFlags == InvertFlags(0xffff) ) // vcldemo trackframe test
-        nSalFlags = SalInvert::TrackFrame;
+    if ( nFlags & InvertFlags::TrackFrame )
+        nSalFlags |= SalInvert::TrackFrame;
     mpGraphics->Invert( aRect.Left(), aRect.Top(), aRect.GetWidth(), aRect.GetHeight(), nSalFlags, this );
 }
 
@@ -178,11 +172,8 @@ void OutputDevice::Invert( const tools::Polygon& rPoly, InvertFlags nFlags )
     tools::Polygon aPoly( ImplLogicToDevicePixel( rPoly ) );
 
     // we need a graphics
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-            return;
-    }
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -195,6 +186,8 @@ void OutputDevice::Invert( const tools::Polygon& rPoly, InvertFlags nFlags )
         nSalFlags |= SalInvert::Highlight;
     if ( nFlags & InvertFlags::N50 )
         nSalFlags |= SalInvert::N50;
+    if ( nFlags & InvertFlags::TrackFrame )
+        nSalFlags |= SalInvert::TrackFrame;
     const SalPoint* pPtAry = reinterpret_cast<const SalPoint*>(aPoly.GetConstPointAry());
     mpGraphics->Invert( nPoints, pPtAry, nSalFlags, this );
 }

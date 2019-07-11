@@ -79,7 +79,7 @@ void RestFlyInRange( SaveFlyArr & rArr, const SwNodeIndex& rSttIdx,
         // SetFormatAttr should call Modify() and add it to the node
         pFormat->SetFormatAttr( aAnchor );
         SwContentNode* pCNd = aPos.nNode.GetNode().GetContentNode();
-        if( pCNd && pCNd->getLayoutFrame( pFormat->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr, false ) )
+        if (pCNd && pCNd->getLayoutFrame(pFormat->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, nullptr))
             pFormat->MakeFrames();
     }
     sw::CheckAnchoredFlyConsistency(*rSttIdx.GetNode().GetDoc());
@@ -412,7 +412,16 @@ bool sw_JoinText( SwPaM& rPam, bool bJoinPrev )
                     rPam.GetBound( false ) = aAlphaPos;
             }
             // delete the Node, at last!
+            SwNode::Merge const eOldMergeFlag(pOldTextNd->GetRedlineMergeFlag());
+            if (eOldMergeFlag == SwNode::Merge::First)
+            {
+                sw::MoveDeletedPrevFrames(*pOldTextNd, *pTextNd);
+            }
             pDoc->GetNodes().Delete( aOldIdx );
+            sw::CheckResetRedlineMergeFlag(*pTextNd,
+                    eOldMergeFlag == SwNode::Merge::NonFirst
+                        ? sw::Recreate::Predecessor
+                        : sw::Recreate::No);
         }
         else
         {
@@ -492,21 +501,22 @@ uno::Any SwDoc::Spell( SwPaM& rPaM,
                     uno::Reference< XSpellChecker1 > const &xSpeller,
                     sal_uInt16* pPageCnt, sal_uInt16* pPageSt,
                     bool bGrammarCheck,
+                    SwRootFrame const*const pLayout,
                     SwConversionArgs *pConvArgs  ) const
 {
     SwPosition* pSttPos = rPaM.Start(), *pEndPos = rPaM.End();
 
-    SwSpellArgs      *pSpellArgs = nullptr;
+    std::unique_ptr<SwSpellArgs> pSpellArgs;
     if (pConvArgs)
     {
         pConvArgs->SetStart(pSttPos->nNode.GetNode().GetTextNode(), pSttPos->nContent);
         pConvArgs->SetEnd(  pEndPos->nNode.GetNode().GetTextNode(), pEndPos->nContent );
     }
     else
-        pSpellArgs = new SwSpellArgs( xSpeller,
+        pSpellArgs.reset(new SwSpellArgs( xSpeller,
                             pSttPos->nNode.GetNode().GetTextNode(), pSttPos->nContent,
                             pEndPos->nNode.GetNode().GetTextNode(), pEndPos->nContent,
-                            bGrammarCheck );
+                            bGrammarCheck ));
 
     sal_uLong nCurrNd = pSttPos->nNode.GetIndex();
     sal_uLong nEndNd = pEndPos->nNode.GetIndex();
@@ -573,7 +583,7 @@ uno::Any SwDoc::Spell( SwPaM& rPaM,
                         }
 
                         sal_Int32 nSpellErrorPosition = pNd->GetTextNode()->GetText().getLength();
-                        if( (!pConvArgs && pNd->GetTextNode()->Spell( pSpellArgs )) ||
+                        if( (!pConvArgs && pNd->GetTextNode()->Spell( pSpellArgs.get() )) ||
                             ( pConvArgs && pNd->GetTextNode()->Convert( *pConvArgs )))
                         {
                             // Cancel and remember position
@@ -593,7 +603,7 @@ uno::Any SwDoc::Spell( SwPaM& rPaM,
                             {
                                 uno::Reference< lang::XComponent > xDoc( GetDocShell()->GetBaseModel(), uno::UNO_QUERY );
                                 // Expand the string:
-                                const ModelToViewHelper aConversionMap(*pNd->GetTextNode());
+                                const ModelToViewHelper aConversionMap(*pNd->GetTextNode(), pLayout);
                                 const OUString& aExpandText = aConversionMap.getViewText();
 
                                 // get XFlatParagraph to use...
@@ -663,7 +673,6 @@ uno::Any SwDoc::Spell( SwPaM& rPaM,
         else
             aRet <<= pSpellArgs->xSpellAlt;
     }
-    delete pSpellArgs;
 
     return aRet;
 }
@@ -673,8 +682,8 @@ class SwHyphArgs : public SwInterHyphInfo
     const SwNode *pStart;
     const SwNode *pEnd;
           SwNode *pNode;
-    sal_uInt16 *pPageCnt;
-    sal_uInt16 *pPageSt;
+    sal_uInt16 * const pPageCnt;
+    sal_uInt16 * const pPageSt;
 
     sal_uInt32 nNode;
     sal_Int32 nPamStart;
@@ -748,6 +757,8 @@ static bool lcl_HyphenateNode( const SwNodePtr& rpNd, void* pArgs )
     SwHyphArgs *pHyphArgs = static_cast<SwHyphArgs*>(pArgs);
     if( pNode )
     {
+        // sw_redlinehide: this will be called once per node for merged nodes;
+        // the fully deleted ones won't have frames so are skipped.
         SwContentFrame* pContentFrame = pNode->getLayoutFrame( pNode->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout() );
         if( pContentFrame && !static_cast<SwTextFrame*>(pContentFrame)->IsHiddenNow() )
         {
@@ -796,17 +807,14 @@ uno::Reference< XHyphenatedWord >  SwDoc::Hyphenate(
 }
 
 // Save the current values to add them as automatic entries to AutoCorrect.
-void SwDoc::SetAutoCorrExceptWord( SwAutoCorrExceptWord* pNew )
+void SwDoc::SetAutoCorrExceptWord( std::unique_ptr<SwAutoCorrExceptWord> pNew )
 {
-    if( pNew != mpACEWord )
-        delete mpACEWord;
-    mpACEWord = pNew;
+    mpACEWord = std::move(pNew);
 }
 
 void SwDoc::DeleteAutoCorrExceptWord()
 {
-    delete mpACEWord;
-    mpACEWord = nullptr;
+    mpACEWord.reset();
 }
 
 void SwDoc::CountWords( const SwPaM& rPaM, SwDocStat& rStat )

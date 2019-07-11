@@ -96,12 +96,14 @@ public:
 
     NamePassRecord& operator=( const NamePassRecord& aRecord )
     {
-        m_aName = aRecord.m_aName;
+        if (this != &aRecord)
+        {
+            m_aName = aRecord.m_aName;
 
-        m_aMemPass.clear();
-        m_aPersPass.clear();
-        InitArrays( aRecord.m_bHasMemPass, aRecord.m_aMemPass, aRecord.m_bHasPersPass, aRecord.m_aPersPass );
-
+            m_aMemPass.clear();
+            m_aPersPass.clear();
+            InitArrays( aRecord.m_bHasMemPass, aRecord.m_aMemPass, aRecord.m_bHasPersPass, aRecord.m_aPersPass );
+        }
         return *this;
     }
 
@@ -268,7 +270,7 @@ css::task::UrlRecord find(
                               const css::uno::Reference< css::task::XInteractionHandler >& Handler );
 
     /// @throws css::uno::RuntimeException
-    static ::std::vector< OUString > DecodePasswords( const OUString& aLine, const OUString& aMasterPassword );
+    static ::std::vector< OUString > DecodePasswords( const OUString& aLine, const OUString& aMasterPassword, css::task::PasswordRequestMode mode );
 
     /// @throws css::uno::RuntimeException
     static OUString EncodePasswords(const std::vector< OUString >& lines, const OUString& aMasterPassword );

@@ -10,16 +10,9 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_FORMULABUFFER_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_FORMULABUFFER_HXX
 
-#include <utility>
-#include <oox/helper/refmap.hxx>
-#include <oox/helper/refvector.hxx>
-#include <salhelper/thread.hxx>
 #include <osl/mutex.hxx>
 #include "workbookhelper.hxx"
-#include <map>
 #include <vector>
-#include "worksheethelper.hxx"
-#include "sheetdatabuffer.hxx"
 
 namespace oox { namespace xls {
 
@@ -31,9 +24,9 @@ public:
      */
     struct SharedFormulaEntry
     {
-        ScAddress maAddress;
-        OUString maTokenStr;
-        sal_Int32 mnSharedId;
+        ScAddress const maAddress;
+        OUString const maTokenStr;
+        sal_Int32 const mnSharedId;
 
         SharedFormulaEntry(
             const ScAddress& rAddress,
@@ -45,10 +38,10 @@ public:
      */
     struct SharedFormulaDesc
     {
-        ScAddress maAddress;
-        sal_Int32 mnSharedId;
-        OUString maCellValue;
-        sal_Int32 mnValueType;
+        ScAddress const maAddress;
+        sal_Int32 const mnSharedId;
+        OUString const maCellValue;
+        sal_Int32 const mnValueType;
 
         SharedFormulaDesc(
             const ScAddress& rAddr, sal_Int32 nSharedId,
@@ -57,15 +50,15 @@ public:
 
     struct TokenAddressItem
     {
-        OUString maTokenStr;
-        ScAddress maAddress;
+        OUString const maTokenStr;
+        ScAddress const maAddress;
         TokenAddressItem( const OUString& rTokenStr, const ScAddress& rAddress ) : maTokenStr( rTokenStr ), maAddress( rAddress ) {}
     };
 
     struct TokenRangeAddressItem
     {
-        TokenAddressItem maTokenAndAddress;
-        ScRange maRange;
+        TokenAddressItem const maTokenAndAddress;
+        ScRange const maRange;
         TokenRangeAddressItem( const TokenAddressItem& rTokenAndAddress, const ScRange& rRange ) : maTokenAndAddress( rTokenAndAddress ), maRange( rRange ) {}
     };
 

@@ -14,6 +14,7 @@
 #include <tools/urlobj.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <sfx2/strings.hrc>
 #include <bitmaps.hlst>
@@ -216,7 +217,7 @@ void TemplateSearchView::AppendItem(sal_uInt16 nAssocItemId, sal_uInt16 nRegionI
                                     const OUString &rPath,
                                     const BitmapEx &rImage)
 {
-    TemplateSearchViewItem *pItem = new TemplateSearchViewItem(*this, getNextItemId());
+    std::unique_ptr<TemplateSearchViewItem> pItem(new TemplateSearchViewItem(*this, getNextItemId()));
     pItem->mnAssocId = nAssocItemId;
     pItem->mnDocId = nIdx;
     pItem->mnRegionId = nRegionId;
@@ -233,7 +234,7 @@ void TemplateSearchView::AppendItem(sal_uInt16 nAssocItemId, sal_uInt16 nRegionI
     if(TemplateLocalView::IsDefaultTemplate(rPath))
         pItem->showDefaultIcon(true);
 
-    ThumbnailView::AppendItem(pItem);
+    ThumbnailView::AppendItem(std::move(pItem));
 
     CalculateItemPositions();
 }

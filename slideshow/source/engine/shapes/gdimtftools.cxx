@@ -19,6 +19,7 @@
 
 
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include "gdimtftools.hxx"
 
 #include <com/sun/star/document/XExporter.hpp>
@@ -67,7 +68,7 @@ namespace internal
 // calling GetBitmapEx on such a Graphic (see below) will
 // result in one poorly scaled bitmap into another,
 // somewhat arbitrarily sized bitmap.
-bool hasUnsupportedActions( const GDIMetaFile& rMtf )
+static bool hasUnsupportedActions( const GDIMetaFile& rMtf )
 {
     // search metafile for RasterOp action
     MetaAction* pCurrAct;

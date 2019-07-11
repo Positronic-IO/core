@@ -44,6 +44,7 @@ using namespace com::sun::star;
 
 // DAVAuthListener_Impl Implementation.
 
+static constexpr sal_uInt32 g_nRedirectLimit = 5;
 
 // virtual
 int DAVAuthListener_Impl::authenticate(
@@ -131,8 +132,7 @@ DAVResourceAccess::DAVResourceAccess(
     const OUString & rURL )
 : m_aURL( rURL ),
   m_xSessionFactory( rSessionFactory ),
-  m_xContext( rxContext ),
-  m_nRedirectLimit( 5 )
+  m_xContext( rxContext )
 {
 }
 
@@ -144,8 +144,7 @@ DAVResourceAccess::DAVResourceAccess( const DAVResourceAccess & rOther )
   m_xSession( rOther.m_xSession ),
   m_xSessionFactory( rOther.m_xSessionFactory ),
   m_xContext( rOther.m_xContext ),
-  m_aRedirectURIs( rOther.m_aRedirectURIs ),
-  m_nRedirectLimit( rOther.m_nRedirectLimit )
+  m_aRedirectURIs( rOther.m_aRedirectURIs )
 {
 }
 
@@ -160,7 +159,6 @@ DAVResourceAccess & DAVResourceAccess::operator=(
     m_xSessionFactory = rOther.m_xSessionFactory;
     m_xContext        = rOther.m_xContext;
     m_aRedirectURIs   = rOther.m_aRedirectURIs;
-    m_nRedirectLimit = rOther.m_nRedirectLimit;
 
     return *this;
 }
@@ -1023,7 +1021,7 @@ void DAVResourceAccess::initialize()
     if ( m_aPath.isEmpty() )
     {
         NeonUri aURI( m_aURL );
-        OUString aPath( aURI.GetPath() );
+        const OUString& aPath( aURI.GetPath() );
 
         /* #134089# - Check URI */
         if ( aPath.isEmpty() )
@@ -1099,13 +1097,10 @@ void DAVResourceAccess::getUserRequestHeaders(
     // en.wikipedia.org:80 forces back 403 "Scripts should use an informative
     // User-Agent string with contact information, or they may be IP-blocked
     // without notice" otherwise:
-    for ( DAVRequestHeaders::iterator i(rRequestHeaders.begin());
-          i != rRequestHeaders.end(); ++i )
+    if ( std::any_of(rRequestHeaders.begin(), rRequestHeaders.end(),
+            [](const DAVRequestHeader& rHeader) { return rHeader.first.equalsIgnoreAsciiCase( "User-Agent" ); }) )
     {
-        if ( i->first.equalsIgnoreAsciiCase( "User-Agent" ) )
-        {
-            return;
-        }
+        return;
     }
     rRequestHeaders.emplace_back( "User-Agent", "LibreOffice" );
 }
@@ -1118,28 +1113,19 @@ bool DAVResourceAccess::detectRedirectCycle(
 
     NeonUri aUri( rRedirectURL );
 
-    std::vector< NeonUri >::const_iterator it  = m_aRedirectURIs.begin();
-    std::vector< NeonUri >::const_iterator end = m_aRedirectURIs.end();
-
     // Check for maximum number of redirections
     // according to <https://tools.ietf.org/html/rfc7231#section-6.4>.
     // A pratical limit may be 5, due to earlier specifications:
     // <https://tools.ietf.org/html/rfc2068#section-10.3>
     // it can be raised keeping in mind the added net activity.
-    if( static_cast< size_t >( m_nRedirectLimit ) <= m_aRedirectURIs.size() )
+    if( static_cast< size_t >( g_nRedirectLimit ) <= m_aRedirectURIs.size() )
         return true;
 
     // try to detect a cyclical redirection
-    while ( it != end )
-    {
-        // if equal, cyclical redirection detected
-        if ( aUri == (*it) )
-            return true;
-
-        ++it;
-    }
-
-    return false;
+    return std::any_of(m_aRedirectURIs.begin(), m_aRedirectURIs.end(),
+        [&aUri](const NeonUri& rUri) {
+            // if equal, cyclical redirection detected
+            return aUri == rUri; });
 }
 
 

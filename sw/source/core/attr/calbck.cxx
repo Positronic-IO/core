@@ -23,55 +23,34 @@
 #include <swcache.hxx>
 #include <swfntcch.hxx>
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
 #include <algorithm>
 
 namespace sw
 {
-    class ListenerEntry final : public SwClient
+    bool ListenerEntry::GetInfo(SfxPoolItem& rInfo) const
+        { return m_pToTell == nullptr || m_pToTell->GetInfo( rInfo ); }
+    void ListenerEntry::Modify(const SfxPoolItem *const pOldValue,
+                               const SfxPoolItem *const pNewValue)
     {
-        SwClient *m_pToTell;
-
-    public:
-        ListenerEntry(SwClient* pTellHim, SwModify * pDepend) : SwClient(pDepend), m_pToTell(pTellHim) {}
-        ListenerEntry(ListenerEntry&) = delete;
-        ListenerEntry& operator=(ListenerEntry const&) = delete;
-        ListenerEntry(ListenerEntry&& other) noexcept
-            : SwClient(std::move(other))
-            , m_pToTell(other.m_pToTell)
-        { }
-        ListenerEntry& operator=(ListenerEntry&& other) noexcept
+        SwClientNotify(*GetRegisteredIn(), sw::LegacyModifyHint(pOldValue, pNewValue));
+    }
+    void ListenerEntry::SwClientNotify(const SwModify& rModify, const SfxHint& rHint)
+    {
+        if (auto pLegacyHint = dynamic_cast<const sw::LegacyModifyHint*>(&rHint))
         {
-            m_pToTell = other.m_pToTell;
-            other.GetRegisteredIn()->Add(this);
-            other.EndListeningAll();
-            return *this;
-        }
-
-        /** get Client information */
-        virtual bool GetInfo( SfxPoolItem& rInfo) const override
-            { return m_pToTell == nullptr || m_pToTell->GetInfo( rInfo ); }
-    private:
-        virtual void Modify( const SfxPoolItem* pOldValue, const SfxPoolItem *pNewValue ) override
-        {
-            SwClientNotify(*GetRegisteredIn(), sw::LegacyModifyHint(pOldValue, pNewValue));
-        }
-        virtual void SwClientNotify( const SwModify& rModify, const SfxHint& rHint ) override
-        {
-            if (auto pLegacyHint = dynamic_cast<const sw::LegacyModifyHint*>(&rHint))
+            if (pLegacyHint->m_pNew && pLegacyHint->m_pNew->Which() == RES_OBJECTDYING)
             {
-                if( pLegacyHint->m_pNew && pLegacyHint->m_pNew->Which() == RES_OBJECTDYING )
-                {
-                    auto pModifyChanged = CheckRegistration(pLegacyHint->m_pOld);
-                    if(pModifyChanged)
-                        m_pToTell->SwClientNotify(rModify, *pModifyChanged);
-                }
-                else if( m_pToTell )
-                    m_pToTell->ModifyNotification(pLegacyHint->m_pOld, pLegacyHint->m_pNew);
+                auto pModifyChanged = CheckRegistration(pLegacyHint->m_pOld);
+                if (pModifyChanged)
+                    m_pToTell->SwClientNotify(rModify, *pModifyChanged);
             }
-            else if(m_pToTell)
+            else if (m_pToTell)
                 m_pToTell->SwClientNotifyCall(rModify, rHint);
         }
-    };
+        else if (m_pToTell)
+            m_pToTell->SwClientNotifyCall(rModify, rHint);
+    }
 }
 
 sw::LegacyModifyHint::~LegacyModifyHint() {}
@@ -103,8 +82,9 @@ std::unique_ptr<sw::ModifyChangedHint> SwClient::CheckRegistration( const SfxPoo
     if( !pOld || pOld->Which() != RES_OBJECTDYING )
         return nullptr;
 
+    assert(dynamic_cast<const SwPtrMsgPoolItem*>(pOld));
     const SwPtrMsgPoolItem* pDead = static_cast<const SwPtrMsgPoolItem*>(pOld);
-    if(!pDead || pDead->pObject != m_pRegisteredIn)
+    if(pDead->pObject != m_pRegisteredIn)
     {
         // we should only care received death notes from objects we are following
         return nullptr;
@@ -242,9 +222,9 @@ void SwModify::Add( SwClient* pDepend )
     if(pDepend->m_pRegisteredIn != this )
     {
 #if OSL_DEBUG_LEVEL > 0
-        if(sw::ClientIteratorBase::our_pClientIters)
+        if(sw::ClientIteratorBase::s_pClientIters)
         {
-            for(auto& rIter : sw::ClientIteratorBase::our_pClientIters->GetRingContainer())
+            for(auto& rIter : sw::ClientIteratorBase::s_pClientIters->GetRingContainer())
             {
                 SAL_WARN_IF(&rIter.m_rRoot == m_pWriterListeners, "sw.core", "a " << typeid(*pDepend).name() << " client added as listener to a " << typeid(*this).name() << " during client iteration.");
             }
@@ -294,9 +274,9 @@ SwClient* SwModify::Remove( SwClient* pDepend )
         pR->m_pLeft = pL;
 
     // update ClientIterators
-    if(sw::ClientIteratorBase::our_pClientIters)
+    if(sw::ClientIteratorBase::s_pClientIters)
     {
-        for(auto& rIter : sw::ClientIteratorBase::our_pClientIters->GetRingContainer())
+        for(auto& rIter : sw::ClientIteratorBase::s_pClientIters->GetRingContainer())
         {
             if (&rIter.m_rRoot == this &&
                 (rIter.m_pCurrent == pDepend || rIter.m_pPosition == pDepend))
@@ -359,7 +339,7 @@ void sw::WriterMultiListener::StartListening(SwModify* pDepend)
 }
 
 
-bool sw::WriterMultiListener::IsListeningTo(const SwModify* const pBroadcaster)
+bool sw::WriterMultiListener::IsListeningTo(const SwModify* const pBroadcaster) const
 {
     return std::any_of(m_vDepends.begin(), m_vDepends.end(),
         [&pBroadcaster](const ListenerEntry& aListener)
@@ -384,5 +364,5 @@ void sw::WriterMultiListener::EndListeningAll()
     m_vDepends.clear();
 }
 
-sw::ClientIteratorBase* sw::ClientIteratorBase::our_pClientIters = nullptr;
+sw::ClientIteratorBase* sw::ClientIteratorBase::s_pClientIters = nullptr;
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

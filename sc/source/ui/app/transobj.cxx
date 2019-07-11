@@ -24,6 +24,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
+#include <com/sun/star/datatransfer/clipboard/SystemClipboard.hpp>
 
 #include <unotools/tempfile.hxx>
 #include <unotools/ucbstreamhelper.hxx>
@@ -33,8 +34,10 @@
 #include <sot/storage.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/virdev.hxx>
+#include <vcl/wrkwin.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/docfile.hxx>
+#include <sfx2/viewfrm.hxx>
 
 #include <transobj.hxx>
 #include <patattr.hxx>
@@ -114,8 +117,8 @@ void ScTransferObj::PaintToDev( OutputDevice* pDev, ScDocument* pDoc, double nPr
     ScPrintFunc::DrawToDev( pDoc, pDev, nPrintFactor, aBound, &aViewData, false/*bMetaFile*/ );
 }
 
-ScTransferObj::ScTransferObj( ScDocument* pClipDoc, const TransferableObjectDescriptor& rDesc ) :
-    m_pDoc( pClipDoc ),
+ScTransferObj::ScTransferObj( ScDocumentUniquePtr pClipDoc, const TransferableObjectDescriptor& rDesc ) :
+    m_pDoc( std::move(pClipDoc ) ),
     m_nNonFiltered(0),
     m_aObjDesc( rDesc ),
     m_nDragHandleX( 0 ),
@@ -164,7 +167,7 @@ ScTransferObj::ScTransferObj( ScDocument* pClipDoc, const TransferableObjectDesc
     {
         SCROW nMaxRow;
         SCCOL nMaxCol;
-        GetAreaSize( m_pDoc, nTab1, nTab2, nMaxRow, nMaxCol );
+        GetAreaSize( m_pDoc.get(), nTab1, nTab2, nMaxRow, nMaxCol );
         if( nMaxRow < nRow2 )
             nRow2 = nMaxRow;
         if( nMaxCol < nCol2 )
@@ -190,7 +193,7 @@ ScTransferObj::~ScTransferObj()
         pScMod->ResetDragObject();
     }
 
-    delete m_pDoc;        // ScTransferObj is owner of clipboard document
+    m_pDoc.reset();        // ScTransferObj is owner of clipboard document
 
     m_aDocShellRef.clear();   // before releasing the mutex
 
@@ -198,18 +201,11 @@ ScTransferObj::~ScTransferObj()
 
 }
 
-ScTransferObj* ScTransferObj::GetOwnClipboard( vcl::Window* pUIWin )
+ScTransferObj* ScTransferObj::GetOwnClipboard(const uno::Reference<datatransfer::XTransferable2>& xTransferable)
 {
     ScTransferObj* pObj = nullptr;
-    uno::Reference<XTransferable> xTransferable;
-    uno::Reference<datatransfer::clipboard::XClipboard> xClipboard;
-
-    if( pUIWin )
-        xClipboard = pUIWin->GetClipboard();
-
-    if( xClipboard.is() )
+    if (xTransferable.is())
     {
-        xTransferable = xClipboard->getContents();
         uno::Reference<XUnoTunnel> xTunnel( xTransferable, uno::UNO_QUERY );
         if ( xTunnel.is() )
         {
@@ -253,6 +249,49 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
 
     if( HasFormat( nFormat ) )
     {
+        ScRange aReducedBlock = m_aBlock;
+
+        bool bReduceBlockFormat =
+            nFormat == SotClipboardFormatId::HTML
+            || nFormat == SotClipboardFormatId::RTF
+            || nFormat == SotClipboardFormatId::RICHTEXT
+            || nFormat == SotClipboardFormatId::BITMAP
+            || nFormat == SotClipboardFormatId::PNG;
+
+        if (bReduceBlockFormat && (m_aBlock.aEnd.Col() == MAXCOL || m_aBlock.aEnd.Row() == MAXROW) &&
+                m_aBlock.aStart.Tab() == m_aBlock.aEnd.Tab())
+        {
+            // Shrink the block here so we don't waste time creating huge
+            // output when whole columns or rows are selected.
+
+            SCCOL nPrintAreaEndCol = 0;
+            SCROW nPrintAreaEndRow = 0;
+            const bool bIncludeVisual = (nFormat == SotClipboardFormatId::BITMAP ||
+                    nFormat == SotClipboardFormatId::PNG);
+            if (bIncludeVisual)
+                m_pDoc->GetPrintArea( m_aBlock.aStart.Tab(), nPrintAreaEndCol, nPrintAreaEndRow, true );
+
+            // Shrink the area to allow pasting to external applications.
+            // Shrink to real data area for HTML, RTF and RICHTEXT, but include
+            // all objects and top-left area for BITMAP and PNG.
+            SCCOL nStartCol = aReducedBlock.aStart.Col();
+            SCROW nStartRow = aReducedBlock.aStart.Row();
+            SCCOL nEndCol = aReducedBlock.aEnd.Col();
+            SCROW nEndRow = aReducedBlock.aEnd.Row();
+            bool bShrunk = false;
+            m_pDoc->ShrinkToUsedDataArea( bShrunk, aReducedBlock.aStart.Tab(), nStartCol, nStartRow, nEndCol, nEndRow,
+                    false, bIncludeVisual /*bStickyTopRow*/, bIncludeVisual /*bStickyLeftCol*/,
+                    bIncludeVisual /*bConsiderCellNotes*/, bIncludeVisual /*bConsiderCellDrawObjects*/);
+
+            if ( nPrintAreaEndRow > nEndRow )
+                nEndRow = nPrintAreaEndRow;
+
+            if ( nPrintAreaEndCol > nEndCol )
+                nEndCol = nPrintAreaEndCol;
+
+            aReducedBlock = ScRange(nStartCol, nStartRow, aReducedBlock.aStart.Tab(), nEndCol, nEndRow, aReducedBlock.aEnd.Tab());
+        }
+
         if ( nFormat == SotClipboardFormatId::LINKSRCDESCRIPTOR || nFormat == SotClipboardFormatId::OBJECTDESCRIPTOR )
         {
             bOK = SetTransferableObjectDescriptor( m_aObjDesc );
@@ -268,7 +307,7 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
             ScAddress aPos(nCol, nRow, nTab);
 
             const ScPatternAttr* pPattern = m_pDoc->GetPattern( nCol, nRow, nTab );
-            ScTabEditEngine aEngine( *pPattern, m_pDoc->GetEditPool() );
+            ScTabEditEngine aEngine( *pPattern, m_pDoc->GetEditPool(), m_pDoc.get() );
             ScRefCellValue aCell(*m_pDoc, aPos);
             if (aCell.meType == CELLTYPE_EDIT)
             {
@@ -281,7 +320,7 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
                 sal_uInt32 nNumFmt = pPattern->GetNumberFormat(pFormatter);
                 OUString aText;
                 Color* pColor;
-                ScCellFormat::GetString(aCell, nNumFmt, aText, &pColor, *pFormatter, m_pDoc);
+                ScCellFormat::GetString(aCell, nNumFmt, aText, &pColor, *pFormatter, m_pDoc.get());
                 if (!aText.isEmpty())
                     aEngine.SetText(aText);
             }
@@ -302,22 +341,7 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
 
             bool bIncludeFiltered = m_pDoc->IsCutMode() || m_bUsedForLink;
 
-            bool bReduceBlockFormat = nFormat == SotClipboardFormatId::HTML || nFormat == SotClipboardFormatId::RTF
-                || nFormat == SotClipboardFormatId::RICHTEXT;
-            ScRange aReducedBlock = m_aBlock;
-            if (bReduceBlockFormat && (m_aBlock.aEnd.Col() == MAXCOL || m_aBlock.aEnd.Row() == MAXROW) && m_aBlock.aStart.Tab() == m_aBlock.aEnd.Tab())
-            {
-                bool bShrunk = false;
-                //shrink the area to allow pasting to external applications
-                SCCOL aStartCol = aReducedBlock.aStart.Col();
-                SCROW aStartRow = aReducedBlock.aStart.Row();
-                SCCOL aEndCol = aReducedBlock.aEnd.Col();
-                SCROW aEndRow = aReducedBlock.aEnd.Row();
-                m_pDoc->ShrinkToUsedDataArea( bShrunk, aReducedBlock.aStart.Tab(), aStartCol, aStartRow, aEndCol, aEndRow, false);
-                aReducedBlock = ScRange(aStartCol, aStartRow, aReducedBlock.aStart.Tab(), aEndCol, aEndRow, aReducedBlock.aEnd.Tab());
-            }
-
-            ScImportExport aObj( m_pDoc, aReducedBlock );
+            ScImportExport aObj( m_pDoc.get(), aReducedBlock );
             // Plain text ("Unformatted text") may contain embedded tabs and
             // line breaks but is not enclosed in quotes. Which makes it
             // unsuitable for multiple cells, especially if one of them is
@@ -367,13 +391,13 @@ bool ScTransferObj::GetData( const datatransfer::DataFlavor& rFlavor, const OUSt
         }
         else if ( nFormat == SotClipboardFormatId::BITMAP || nFormat == SotClipboardFormatId::PNG )
         {
-            tools::Rectangle aMMRect = m_pDoc->GetMMRect( m_aBlock.aStart.Col(), m_aBlock.aStart.Row(),
-                                                 m_aBlock.aEnd.Col(), m_aBlock.aEnd.Row(),
-                                                 m_aBlock.aStart.Tab() );
+            tools::Rectangle aMMRect = m_pDoc->GetMMRect( aReducedBlock.aStart.Col(), aReducedBlock.aStart.Row(),
+                                                 aReducedBlock.aEnd.Col(), aReducedBlock.aEnd.Row(),
+                                                 aReducedBlock.aStart.Tab() );
             ScopedVclPtrInstance< VirtualDevice > pVirtDev;
             pVirtDev->SetOutputSizePixel(pVirtDev->LogicToPixel(aMMRect.GetSize(), MapMode(MapUnit::Map100thMM)));
 
-            PaintToDev( pVirtDev, m_pDoc, 1.0, m_aBlock );
+            PaintToDev( pVirtDev, m_pDoc.get(), 1.0, aReducedBlock );
 
             pVirtDev->SetMapMode( MapMode( MapUnit::MapPixel ) );
             BitmapEx aBmp = pVirtDev->GetBitmapEx( Point(), pVirtDev->GetOutputSize() );
@@ -471,11 +495,8 @@ bool ScTransferObj::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, void* p
         case SCTRANS_TYPE_EDIT_ODF_TEXT_FLAT:
             {
                 ScTabEditEngine* pEngine = static_cast<ScTabEditEngine*>(pUserObject);
-                if ( nUserObjectId == SCTRANS_TYPE_EDIT_ODF_TEXT_FLAT )
-                {
-                    pEngine->Write( *rxOStm, EETextFormat::Xml );
-                    bRet = ( rxOStm->GetError() == ERRCODE_NONE );
-                }
+                pEngine->Write(*rxOStm, EETextFormat::Xml);
+                bRet = (rxOStm->GetError() == ERRCODE_NONE);
             }
             break;
 
@@ -500,12 +521,12 @@ bool ScTransferObj::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, void* p
                 if ( xTransact.is() )
                     xTransact->commit();
 
-                SvStream* pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
+                std::unique_ptr<SvStream> pSrcStm = ::utl::UcbStreamHelper::CreateStream( aTempFile.GetURL(), StreamMode::READ );
                 if( pSrcStm )
                 {
                     rxOStm->SetBufferSize( 0xff00 );
                     rxOStm->WriteStream( *pSrcStm );
-                    delete pSrcStm;
+                    pSrcStm.reset();
                 }
 
                 bRet = true;
@@ -650,7 +671,7 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
         m_pDoc->GetName( m_aBlock.aStart.Tab(), aTabName );
         rDestDoc.RenameTab( 0, aTabName );
 
-        rDestDoc.CopyStdStylesFrom( m_pDoc );
+        rDestDoc.CopyStdStylesFrom( m_pDoc.get() );
 
         SCCOL nStartX = m_aBlock.aStart.Col();
         SCROW nStartY = m_aBlock.aStart.Row();
@@ -669,6 +690,12 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
             else
                 rDestDoc.SetColWidth( nCol, 0, m_pDoc->GetColWidth( nCol, nSrcTab ) );
 
+        if (nStartY > 0)
+        {
+            // Set manual height for all previous rows so we can ensure
+            // that visible area will not change due to autoheight
+            rDestDoc.SetManualHeight(0, nStartY - 1, 0, true);
+        }
         for (SCROW nRow = nStartY; nRow <= nEndY; ++nRow)
         {
             if ( m_pDoc->RowHidden(nRow, nSrcTab) )
@@ -694,10 +721,10 @@ void ScTransferObj::InitDocShell(bool bLimitToPageSize)
         bool bWasCut = m_pDoc->IsCutMode();
         if (!bWasCut)
             m_pDoc->SetClipArea( aDestRange, true );          // Cut
-        rDestDoc.CopyFromClip( aDestRange, aDestMark, InsertDeleteFlags::ALL, nullptr, m_pDoc, false );
+        rDestDoc.CopyFromClip( aDestRange, aDestMark, InsertDeleteFlags::ALL, nullptr, m_pDoc.get(), false );
         m_pDoc->SetClipArea( aDestRange, bWasCut );
 
-        StripRefs( m_pDoc, nStartX,nStartY, nEndX,nEndY, &rDestDoc );
+        StripRefs( m_pDoc.get(), nStartX,nStartY, nEndX,nEndY, &rDestDoc );
 
         ScRange aMergeRange = aDestRange;
         rDestDoc.ExtendMerge( aMergeRange, true );

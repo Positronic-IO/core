@@ -337,7 +337,7 @@ public:
     /// Set size of draw objects.
     void SetObjRect( const SwRect& rRect );
 
-    long BeginDrag( const Point *pPt, bool bProp );
+    void BeginDrag( const Point *pPt, bool bProp );
     void Drag     ( const Point *pPt, bool bProp );
     void EndDrag  ();
     void BreakDrag();
@@ -385,7 +385,7 @@ public:
     Point FindAnchorPos( const Point &rAbsPos, bool bMoveIt = false );
 
     /** Determines whether a frame or its environment is vertically formatted and right-to-left.
-     also determines, if frame or its environment is in mongolianlayout (vertical left-to-right)
+     also determines, if frame or its environment is in Mongolian layout (vertical left-to-right)
      - add output parameter <bVertL2R> */
     bool IsFrameVertical(const bool bEnvironment, bool& bRightToLeft, bool& bVertL2R) const;
 
@@ -535,7 +535,6 @@ public:
     bool BeginMark( const Point &rPos );
     void MoveMark ( const Point &rPos );
     bool EndMark  ();
-    void BreakMark();
 
     /// Create and destroy group, don't when frame is selected.
     bool IsGroupSelected();     ///< Can be a mixed selection!
@@ -643,21 +642,20 @@ public:
 
     /// Split cell vertically or horizontally.
     void SplitTab( bool bVert, sal_uInt16 nCnt, bool bSameHeight );
-    bool Sort(const SwSortOptions&);    //Sortieren.
+    bool Sort(const SwSortOptions&);    // sorting
 
     void SetRowHeight( const SwFormatFrameSize &rSz );
 
     /// Pointer must be destroyed by caller != 0.
-    void GetRowHeight( SwFormatFrameSize *&rpSz ) const;
+    std::unique_ptr<SwFormatFrameSize> GetRowHeight() const;
 
     void SetRowSplit( const SwFormatRowSplit &rSz );
-    void GetRowSplit( SwFormatRowSplit *&rpSz ) const;
+    std::unique_ptr<SwFormatRowSplit> GetRowSplit() const;
 
     void   SetBoxAlign( sal_uInt16 nOrient );
     sal_uInt16 GetBoxAlign() const;         ///< USHRT_MAX if ambiguous.
 
-    /// Adjustment of Rowheights. Determine via bTstOnly if more than one row is selected.
-    bool BalanceRowHeight( bool bTstOnly );
+    bool BalanceRowHeight( bool bTstOnly, const bool bOptimize = false );
 
     void SetTabBorders( const SfxItemSet& rSet );
     void GetTabBorders(       SfxItemSet& rSet) const;
@@ -709,10 +707,7 @@ public:
     bool IsInRepeatedHeadline() const { return CheckHeadline( true ); }
     bool IsInHeadline() const { return CheckHeadline( false ); }
 
-    /** Adjusts cell widths in such a way, that their content
-     does not need to be wrapped (if possible).
-     bBalance provides for adjustment of selected columns. */
-    void AdjustCellWidth( bool bBalance );
+    void AdjustCellWidth( bool bBalance, const bool bNoShrink, const bool bColumnWidth );
 
     /// Not allowed if only empty cells are selected.
     bool IsAdjustCellWidthAllowed( bool bBalance = false ) const;

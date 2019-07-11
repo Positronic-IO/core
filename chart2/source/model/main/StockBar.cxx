@@ -23,13 +23,12 @@
 #include <UserDefinedProperties.hxx>
 #include <PropertyHelper.hxx>
 #include <ModifyListenerHelper.hxx>
-#include <com/sun/star/beans/PropertyAttribute.hpp>
-#include <com/sun/star/style/XStyle.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
+
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySetInfo; } } } }
 
 using namespace ::com::sun::star;
 
@@ -126,7 +125,7 @@ StockBar::StockBar( bool bRisingCourse ) :
 
 StockBar::StockBar( const StockBar & rOther ) :
         MutexContainer(),
-        impl::StockBar_Base(),
+        impl::StockBar_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {}

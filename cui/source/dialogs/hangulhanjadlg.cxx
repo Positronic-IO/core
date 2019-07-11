@@ -24,6 +24,8 @@
 #include <strings.hrc>
 
 #include <algorithm>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <vcl/controllayout.hxx>
 #include <vcl/builderfactory.hxx>
 #include <vcl/decoview.hxx>
@@ -38,8 +40,8 @@
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 
 #define HHC editeng::HangulHanjaConversion
 #define LINE_CNT        static_cast< sal_uInt16 >(2)
@@ -1097,7 +1099,6 @@ namespace svx
     HangulHanjaOptionsDialog::HangulHanjaOptionsDialog(vcl::Window* _pParent)
         : ModalDialog( _pParent, "HangulHanjaOptDialog",
             "cui/ui/hangulhanjaoptdialog.ui" )
-        , m_xConversionDictionaryList(nullptr)
     {
         get(m_pDictsLB, "dicts");
         get(m_pIgnorepostCB, "ignorepost");
@@ -1663,7 +1664,7 @@ namespace svx
             if( nCnt )
             {
                 if( !m_pSuggestions )
-                    m_pSuggestions = new SuggestionList;
+                    m_pSuggestions.reset(new SuggestionList);
 
                 const OUString* pSugg = aEntries.getConstArray();
                 sal_uInt32 n = 0;
@@ -1710,7 +1711,7 @@ namespace svx
         {
             //set suggestion
             if( !m_pSuggestions )
-                m_pSuggestions = new SuggestionList;
+                m_pSuggestions.reset(new SuggestionList);
             m_pSuggestions->Set( aTxt, nEntryNum );
         }
 
@@ -1722,7 +1723,6 @@ namespace svx
         ,m_aEditHintText        ( CuiResId(RID_SVXSTR_EDITHINT) )
         ,m_rDictList            ( _rDictList )
         ,m_nCurrentDict         ( 0xFFFFFFFF )
-        ,m_pSuggestions         ( nullptr )
         ,m_nTopPos              ( 0 )
         ,m_bModifiedSuggestions ( false )
         ,m_bModifiedOriginal    ( false )
@@ -1787,8 +1787,7 @@ namespace svx
 
     void HangulHanjaEditDictDialog::dispose()
     {
-        delete m_pSuggestions;
-        m_pSuggestions = nullptr;
+        m_pSuggestions.reset();
         m_aBookLB.clear();
         m_aOriginalLB.clear();
         m_aEdit1.clear();

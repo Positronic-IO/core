@@ -35,6 +35,7 @@
 #include <drawdoc.hxx>
 #include <ViewShell.hxx>
 #include <DrawDocShell.hxx>
+#include <sdmod.hxx>
 #include <sdresid.hxx>
 #include <optsitem.hxx>
 #include <DrawViewShell.hxx>
@@ -63,7 +64,7 @@ rtl::Reference<FuPoor> FuSummaryPage::Create( ViewShell* pViewSh, ::sd::Window* 
 
 void FuSummaryPage::DoExecute( SfxRequest& )
 {
-    SdOutliner* pOutl = nullptr;
+    std::unique_ptr<SdOutliner> pOutl;
     SdPage* pSummaryPage = nullptr;
     sal_uInt16 i = 0;
     sal_uInt16 nFirstPage = SDRPAGE_NOTFOUND;
@@ -160,7 +161,7 @@ void FuSummaryPage::DoExecute( SfxRequest& )
                     pNotesPage->TRG_SetMasterPageVisibleLayers(aVisibleLayers);
                     pNotesPage->setHeaderFooterSettings(pActualNotesPage->getHeaderFooterSettings());
 
-                    pOutl = new SdOutliner( mpDoc, OutlinerMode::OutlineObject );
+                    pOutl.reset(new SdOutliner( mpDoc, OutlinerMode::OutlineObject ));
                     pOutl->SetUpdateMode(false);
                     pOutl->EnableUndo(false);
 
@@ -216,7 +217,7 @@ void FuSummaryPage::DoExecute( SfxRequest& )
 
     if( bBegUndo )
         mpView->EndUndo();
-    delete pOutl;
+    pOutl.reset();
 
     DrawViewShell* pDrawViewShell= dynamic_cast< DrawViewShell* >( mpViewShell );
     if(pDrawViewShell)

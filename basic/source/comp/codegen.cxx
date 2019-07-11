@@ -189,7 +189,7 @@ void SbiCodeGen::Save()
         if( pProc && pProc->IsDefined() )
         {
             OUString aProcName = pProc->GetName();
-            OUString aIfaceProcName;
+            OUStringBuffer aIfaceProcName;
             OUString aIfaceName;
             sal_uInt16 nPassCount = 1;
             if( nIfaceCount )
@@ -210,9 +210,9 @@ void SbiCodeGen::Save()
                     {
                         if( nPropPrefixFound == 0 )
                         {
-                            aIfaceProcName += aPropPrefix;
+                            aIfaceProcName.append(aPropPrefix);
                         }
-                        aIfaceProcName += aPureProcName.copy( rIfaceName.getLength() + 1 );
+                        aIfaceProcName.appendCopy(aPureProcName, rIfaceName.getLength() + 1 );
                         aIfaceName = rIfaceName;
                         nPassCount = 2;
                         break;
@@ -224,7 +224,7 @@ void SbiCodeGen::Save()
             {
                 if( nPass == 1 )
                 {
-                    aProcName = aIfaceProcName;
+                    aProcName = aIfaceProcName.toString();
                 }
                 PropertyMode ePropMode = pProc->getPropertyMode();
                 if( ePropMode != PropertyMode::NONE )
@@ -515,9 +515,8 @@ public:
     virtual void processOpCode2( SbiOpcode eOp, T nOp1, T nOp2 ) override
     {
         m_ConvertedBuf += static_cast<sal_uInt8>(eOp);
-        if ( eOp == SbiOpcode::CASEIS_ )
-                if ( nOp1 )
-                    nOp1 = static_cast<T>( convertBufferOffSet(m_pStart, nOp1) );
+        if ( eOp == SbiOpcode::CASEIS_  && nOp1 )
+            nOp1 = static_cast<T>( convertBufferOffSet(m_pStart, nOp1) );
         m_ConvertedBuf += static_cast<S>(nOp1);
         m_ConvertedBuf += static_cast<S>(nOp2);
 

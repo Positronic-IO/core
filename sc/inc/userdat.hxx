@@ -21,9 +21,7 @@
 #define INCLUDED_SC_INC_USERDAT_HXX
 
 #include <svx/svdobj.hxx>
-#include <tools/link.hxx>
-#include <svtools/imap.hxx>
-#include "global.hxx"
+#include <vcl/imap.hxx>
 #include "address.hxx"
 #include "drwlayer.hxx"
 
@@ -47,8 +45,8 @@ public:
 
     explicit            ScDrawObjData();
 
-    tools::Rectangle getShapeRect() { return maShapeRect; };
-    tools::Rectangle getLastCellRect() { return maLastCellRect; };
+    const tools::Rectangle & getShapeRect() { return maShapeRect; };
+    const tools::Rectangle & getLastCellRect() { return maLastCellRect; };
     void setShapeRect(const ScDocument* rDoc, tools::Rectangle rNewRect, bool bIsVisible=true)
     {
         // bIsVisible should be false when the object is hidden obviously. we dont want to store the old cell rect in that
@@ -89,6 +87,11 @@ class ScMacroInfo : public SdrObjUserData
 public:
                     ScMacroInfo();
     virtual         ~ScMacroInfo() override;
+
+    ScMacroInfo(ScMacroInfo const &) = default;
+    ScMacroInfo(ScMacroInfo &&) = default;
+    ScMacroInfo & operator =(ScMacroInfo const &) = delete; // due to SdrObjUserData
+    ScMacroInfo & operator =(ScMacroInfo &&) = delete; // due to SdrObjUserData
 
     virtual std::unique_ptr<SdrObjUserData> Clone( SdrObject* pObj ) const override;
 

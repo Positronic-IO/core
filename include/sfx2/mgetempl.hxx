@@ -37,24 +37,6 @@ class SfxStyleSheetBase;
 
 class SfxManageStyleSheetPage final : public SfxTabPage
 {
-    VclPtr<VclMultiLineEdit> m_pNameRo;
-    VclPtr<Edit>             m_pNameRw;
-
-    VclPtr<CheckBox>         m_pAutoCB;
-
-    VclPtr<FixedText>        m_pFollowFt;
-    VclPtr<ListBox>          m_pFollowLb;
-    VclPtr<PushButton>       m_pEditStyleBtn;
-
-    VclPtr<FixedText>        m_pBaseFt;
-    VclPtr<ListBox>          m_pBaseLb;
-    VclPtr<PushButton>       m_pEditLinkStyleBtn;
-
-    VclPtr<FixedText>        m_pFilterFt;
-    VclPtr<ListBox>          m_pFilterLb;
-
-    VclPtr<FixedText>        m_pDescFt;
-
     SfxStyleSheetBase *pStyle;
     std::unique_ptr<SfxStyleFamilies> pFamilies;
     const SfxStyleFamilyItem *pItem;
@@ -65,18 +47,31 @@ class SfxManageStyleSheetPage final : public SfxTabPage
     OUString aName;
     OUString aFollow;
     OUString aParent;
-    SfxStyleSearchBits nFlags;
+    SfxStyleSearchBits const nFlags;
 
-friend class SfxStyleDialog;
+    std::unique_ptr<weld::Entry> m_xName;
+    std::unique_ptr<weld::CheckButton> m_xAutoCB;
+    std::unique_ptr<weld::Label> m_xFollowFt;
+    std::unique_ptr<weld::ComboBox> m_xFollowLb;
+    std::unique_ptr<weld::Button> m_xEditStyleBtn;
+    std::unique_ptr<weld::Label> m_xBaseFt;
+    std::unique_ptr<weld::ComboBox>          m_xBaseLb;
+    std::unique_ptr<weld::Button> m_xEditLinkStyleBtn;
+    std::unique_ptr<weld::Label> m_xFilterFt;
+    std::unique_ptr<weld::ComboBox> m_xFilterLb;
+    std::unique_ptr<weld::Label> m_xDescFt;
+    std::unique_ptr<weld::Label> m_xNameFt;
 
-    DECL_LINK( GetFocusHdl, Control&, void );
-    DECL_LINK( LoseFocusHdl, Control&, void );
-    DECL_LINK( EditStyleSelectHdl_Impl, ListBox&, void );
-    DECL_LINK( EditStyleHdl_Impl, Button*, void );
-    DECL_LINK( EditLinkStyleSelectHdl_Impl, ListBox&, void );
-    DECL_LINK( EditLinkStyleHdl_Impl, Button*, void );
+friend class SfxStyleDialogController;
 
-    void    UpdateName_Impl(ListBox *, const OUString &rNew);
+    DECL_LINK(GetFocusHdl, weld::Widget&, void);
+    DECL_LINK(LoseFocusHdl, weld::Widget&, void);
+    DECL_LINK(EditStyleSelectHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(EditStyleHdl_Impl, weld::Button&, void);
+    DECL_LINK(EditLinkStyleSelectHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(EditLinkStyleHdl_Impl, weld::Button&, void);
+
+    void    UpdateName_Impl(weld::ComboBox*, const OUString &rNew);
     void    SetDescriptionText_Impl();
 
     virtual ~SfxManageStyleSheetPage() override;
@@ -94,7 +89,7 @@ friend class SfxStyleDialog;
     virtual DeactivateRC DeactivatePage(SfxItemSet *) override;
 
 public:
-    SfxManageStyleSheetPage(vcl::Window *pParent, const SfxItemSet &rAttrSet );
+    SfxManageStyleSheetPage(TabPageParent pParent, const SfxItemSet &rAttrSet);
 };
 
 #endif

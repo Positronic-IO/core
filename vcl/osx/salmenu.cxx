@@ -18,10 +18,11 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <objc/objc-runtime.h>
 
-#include <comphelper/string.hxx>
 #include <rtl/ustrbuf.hxx>
 
 #include <vcl/commandevent.hxx>
@@ -112,141 +113,109 @@ static MainMenuSelector* pMainMenuSelector = nil;
 
 static void initAppMenu()
 {
-    static bool bOnce = true;
-    if( bOnce )
-    {
-        bOnce = false;
+    static bool bInitialized = false;
+    if (bInitialized)
+        return;
+    bInitialized = true;
 
-        // get the main menu
-        NSMenu* pMainMenu = [NSApp mainMenu];
-        if( pMainMenu != nil )
-        {
-            // create the action selector
-            pMainMenuSelector = [[MainMenuSelector alloc] init];
+    NSMenu* pAppMenu = nil;
+    NSMenuItem* pNewItem = nil;
 
-            // get the proper submenu
-            NSMenu* pAppMenu = [[pMainMenu itemAtIndex: 0] submenu];
-            if( pAppMenu )
-            {
-                // insert about entry
-                OUString aAbout(VclResId(SV_STDTEXT_ABOUT));
-                NSString* pString = CreateNSString( aAbout );
-                NSMenuItem* pNewItem = [pAppMenu insertItemWithTitle: pString
-                                                 action: @selector(showAbout:)
-                                                 keyEquivalent: @""
-                                                 atIndex: 0];
-                if (pString)
-                    [pString release];
-                if( pNewItem )
-                {
-                    [pNewItem setTarget: pMainMenuSelector];
-                    [pAppMenu insertItem: [NSMenuItem separatorItem] atIndex: 1];
-                }
+    NSMenu* pMainMenu = [[[NSMenu alloc] initWithTitle: @"Main Menu"] autorelease];
+    pNewItem = [pMainMenu addItemWithTitle: @"Application"
+        action: nil
+        keyEquivalent: @""];
+    pAppMenu = [[[NSMenu alloc] initWithTitle: @"Application"] autorelease];
+    [pNewItem setSubmenu: pAppMenu];
+    [NSApp setMainMenu: pMainMenu];
 
-                // insert preferences entry
-                OUString aPref(VclResId(SV_STDTEXT_PREFERENCES));
-                pString = CreateNSString( aPref );
-                pNewItem = [pAppMenu insertItemWithTitle: pString
-                                     action: @selector(showPreferences:)
-                                     keyEquivalent: @","
-                                     atIndex: 2];
-                if (pString)
-                    [pString release];
-                if( pNewItem )
-                {
+    pMainMenuSelector = [[MainMenuSelector alloc] init];
+
+    // about
+    NSString* pString = CreateNSString(VclResId(SV_STDTEXT_ABOUT));
+    pNewItem = [pAppMenu addItemWithTitle: pString
+        action: @selector(showAbout:)
+        keyEquivalent: @""];
+    [pString release];
+    [pNewItem setTarget: pMainMenuSelector];
+
+    [pAppMenu addItem:[NSMenuItem separatorItem]];
+
+    // preferences
+    pString = CreateNSString(VclResId(SV_STDTEXT_PREFERENCES));
+    pNewItem = [pAppMenu addItemWithTitle: pString
+        action: @selector(showPreferences:)
+        keyEquivalent: @","];
+    [pString release];
 SAL_WNODEPRECATED_DECLARATIONS_PUSH
-// 'NSCommandKeyMask' is deprecated: first deprecated in macOS 10.12
-                    [pNewItem setKeyEquivalentModifierMask: NSCommandKeyMask];
+    // 'NSCommandKeyMask' is deprecated: first deprecated in macOS 10.12
+    [pNewItem setKeyEquivalentModifierMask: NSCommandKeyMask];
 SAL_WNODEPRECATED_DECLARATIONS_POP
-                    [pNewItem setTarget: pMainMenuSelector];
-                    [pAppMenu insertItem: [NSMenuItem separatorItem] atIndex: 3];
-                }
+    [pNewItem setTarget: pMainMenuSelector];
 
-                // WARNING: ultra ugly code ahead
+    [pAppMenu addItem:[NSMenuItem separatorItem]];
 
-                // rename standard entries
-                // rename "Services"
-                pNewItem = [pAppMenu itemAtIndex: 4];
-                if( pNewItem )
-                {
-                    pString = CreateNSString(VclResId(SV_MENU_MAC_SERVICES));
-                    [pNewItem  setTitle: pString];
-                    if( pString )
-                        [pString release];
-                }
+    // Services item and menu
+    pString = CreateNSString(VclResId(SV_MENU_MAC_SERVICES));
+    pNewItem = [pAppMenu addItemWithTitle: pString
+        action: nil
+        keyEquivalent: @""];
+    NSMenu *servicesMenu = [[[NSMenu alloc] initWithTitle:@"Services"] autorelease];
+    [pNewItem setSubmenu: servicesMenu];
+    [NSApp setServicesMenu: servicesMenu];
 
-                // rename "Hide NewApplication"
-                pNewItem = [pAppMenu itemAtIndex: 6];
-                if( pNewItem )
-                {
-                    pString = CreateNSString(VclResId(SV_MENU_MAC_HIDEAPP));
-                    [pNewItem  setTitle: pString];
-                    if( pString )
-                        [pString release];
-                }
+    [pAppMenu addItem:[NSMenuItem separatorItem]];
 
-                // rename "Hide Others"
-                pNewItem = [pAppMenu itemAtIndex: 7];
-                if( pNewItem )
-                {
-                    pString = CreateNSString(VclResId(SV_MENU_MAC_HIDEALL));
-                    [pNewItem  setTitle: pString];
-                    if( pString )
-                        [pString release];
-                }
+    // Hide Application
+    pString = CreateNSString(VclResId(SV_MENU_MAC_HIDEAPP));
+    [pAppMenu addItemWithTitle: pString
+        action:@selector(hide:)
+        keyEquivalent:@"h"];
+    [pString release];
 
-                // rename "Show all"
-                pNewItem = [pAppMenu itemAtIndex: 8];
-                if( pNewItem )
-                {
-                    pString = CreateNSString(VclResId(SV_MENU_MAC_SHOWALL));
-                    [pNewItem  setTitle: pString];
-                    if( pString )
-                        [pString release];
-                }
+    // Hide Others
+    pString = CreateNSString(VclResId(SV_MENU_MAC_HIDEALL));
+    [pAppMenu addItemWithTitle: pString
+        action:@selector(hideOtherApplications:)
+        keyEquivalent:@"h"];
+    [pString release];
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+    // 'NSCommandKeyMask' is deprecated: first deprecated in macOS 10.12
+    [pNewItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSAlternateKeyMask];
+SAL_WNODEPRECATED_DECLARATIONS_POP
 
-                // rename "Quit NewApplication"
-                pNewItem = [pAppMenu itemAtIndex: 10];
-                if( pNewItem )
-                {
-                    pString = CreateNSString(VclResId(SV_MENU_MAC_QUITAPP));
-                    [pNewItem  setTitle: pString];
-                    if( pString )
-                        [pString release];
-                }
-            }
-        }
-    }
+    // Show All
+    pString = CreateNSString(VclResId(SV_MENU_MAC_SHOWALL));
+    [pAppMenu addItemWithTitle: pString
+        action:@selector(unhideAllApplications:)
+        keyEquivalent:@""];
+    [pString release];
+
+    [pAppMenu addItem:[NSMenuItem separatorItem]];
+
+    // Quit
+    pString = CreateNSString(VclResId(SV_MENU_MAC_QUITAPP));
+    [pAppMenu addItemWithTitle: pString
+        action:@selector(terminate:)
+        keyEquivalent:@"q"];
+    [pString release];
 }
 
-SalMenu* AquaSalInstance::CreateMenu( bool bMenuBar, Menu* pVCLMenu )
+std::unique_ptr<SalMenu> AquaSalInstance::CreateMenu( bool bMenuBar, Menu* pVCLMenu )
 {
     initAppMenu();
 
     AquaSalMenu *pAquaSalMenu = new AquaSalMenu( bMenuBar );
     pAquaSalMenu->mpVCLMenu = pVCLMenu;
 
-    return pAquaSalMenu;
+    return std::unique_ptr<SalMenu>(pAquaSalMenu);
 }
 
-void AquaSalInstance::DestroyMenu( SalMenu* pSalMenu )
+std::unique_ptr<SalMenuItem> AquaSalInstance::CreateMenuItem( const SalItemParams & rItemData )
 {
-    delete pSalMenu;
-}
+    AquaSalMenuItem *pSalMenuItem = new AquaSalMenuItem( &rItemData );
 
-SalMenuItem* AquaSalInstance::CreateMenuItem( const SalItemParams* pItemData )
-{
-    if( !pItemData )
-        return nullptr;
-
-    AquaSalMenuItem *pSalMenuItem = new AquaSalMenuItem( pItemData );
-
-    return pSalMenuItem;
-}
-
-void AquaSalInstance::DestroyMenuItem( SalMenuItem* pSalMenuItem )
-{
-    delete pSalMenuItem;
+    return std::unique_ptr<SalMenuItem>(pSalMenuItem);
 }
 
 /*
@@ -317,11 +286,6 @@ AquaSalMenu::~AquaSalMenu()
 
 bool AquaSalMenu::ShowNativePopupMenu(FloatingWindow * pWin, const tools::Rectangle& rRect, FloatWinPopupFlags nFlags)
 {
-    // do not use native popup menu when AQUA_NATIVE_MENUS is set to false
-    if( ! VisibleMenuBar() ) {
-        return false;
-    }
-
     // set offsets for positioning
     const float offset = 9.0;
 
@@ -488,17 +452,6 @@ void AquaSalMenu::removeFallbackMenuItem( NSMenuItem* pOldItem )
 
 bool AquaSalMenu::VisibleMenuBar()
 {
-    // Enable/disable experimental native menus code?
-
-    // To disable native menus, set the environment variable AQUA_NATIVE_MENUS to FALSE
-
-    static const char *pExperimental = getenv ("AQUA_NATIVE_MENUS");
-
-    if ( pExperimental && !strcasecmp(pExperimental, "FALSE") )
-        return false;
-
-    // End of experimental code enable/disable part
-
     return true;
 }
 
@@ -603,7 +556,7 @@ void AquaSalMenu::CheckItem( unsigned nPos, bool bCheck )
     if( nPos < maItems.size() )
     {
         NSMenuItem* pItem = maItems[nPos]->mpMenuItem;
-        [pItem setState: bCheck ? NSOnState : NSOffState];
+        [pItem setState: bCheck ? NSControlStateValueOn : NSControlStateValueOff];
     }
 }
 
@@ -801,7 +754,11 @@ void AquaSalMenu::statusLayout()
 {
     if( GetSalData()->mpStatusItem )
     {
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+            // "'view' is deprecated: first deprecated in macOS 10.14 - Use the standard button
+            // property instead"
         NSView* pNSView = [GetSalData()->mpStatusItem view];
+SAL_WNODEPRECATED_DECLARATIONS_POP
         if( [pNSView isMemberOfClass: [OOStatusItemView class]] ) // well of course it is
             [static_cast<OOStatusItemView*>(pNSView) layout];
         else
@@ -811,7 +768,7 @@ void AquaSalMenu::statusLayout()
 
 bool AquaSalMenu::AddMenuBarButton( const SalMenuButtonItem& i_rNewItem )
 {
-    if( ! mbMenuBar || ! VisibleMenuBar() )
+    if( ! mbMenuBar  )
         return false;
 
     MenuBarButtonEntry* pEntry = findButtonItem( i_rNewItem.mnId );
@@ -867,7 +824,11 @@ tools::Rectangle AquaSalMenu::GetMenuBarButtonRectPixel( sal_uInt16 i_nItemId, S
     if( ! pItem )
         return tools::Rectangle();
 
+SAL_WNODEPRECATED_DECLARATIONS_PUSH
+        // "'view' is deprecated: first deprecated in macOS 10.14 - Use the standard button property
+        // instead"
     NSView* pNSView = [pItem view];
+SAL_WNODEPRECATED_DECLARATIONS_POP
     if( ! pNSView )
         return tools::Rectangle();
     NSWindow* pNSWin = [pNSView window];

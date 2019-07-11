@@ -28,7 +28,7 @@
 #include <blink.hxx>
 #if OSL_DEBUG_LEVEL > 0
 
-bool ChkChain( SwLinePortion *pStart )
+static bool ChkChain( SwLinePortion *pStart )
 {
     SwLinePortion *pPor = pStart->GetPortion();
     sal_uInt16 nCount = 0;
@@ -222,12 +222,12 @@ SwLinePortion *SwLinePortion::FindPrevPortion( const SwLinePortion *pRoot )
     return pPos;
 }
 
-sal_Int32 SwLinePortion::GetCursorOfst( const sal_uInt16 nOfst ) const
+TextFrameIndex SwLinePortion::GetCursorOfst(const sal_uInt16 nOfst) const
 {
     if( nOfst > ( PrtWidth() / 2 ) )
         return GetLen();
     else
-        return 0;
+        return TextFrameIndex(0);
 }
 
 SwPosSize SwLinePortion::GetTextSize( const SwTextSizeInfo & ) const

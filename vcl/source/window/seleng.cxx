@@ -17,9 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <vcl/commandevent.hxx>
 #include <vcl/window.hxx>
 #include <vcl/seleng.hxx>
 #include <comphelper/lok.hxx>
+#include <sal/log.hxx>
 
 FunctionSet::~FunctionSet()
 {
@@ -251,7 +253,7 @@ bool SelectionEngine::SelMouseButtonUp( const MouseEvent& rMEvt )
         eSelMode != SelectionMode::Single)
     {
         // MouseButtonDown in Sel but no CommandEvent yet
-        // ==> deselektieren
+        // ==> deselect
         sal_uInt16 nModifier = aLastMove.GetModifier() | nLockedMods;
         if( nModifier == KEY_MOD1 || IsAlwaysAdding() )
         {

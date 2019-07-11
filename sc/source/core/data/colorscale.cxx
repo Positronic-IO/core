@@ -19,6 +19,7 @@
 
 #include <formula/token.hxx>
 #include <o3tl/make_unique.hxx>
+#include <vcl/bitmapex.hxx>
 
 #include <algorithm>
 #include <cassert>
@@ -34,6 +35,13 @@ ScFormulaListener::ScFormulaListener(ScDocument* pDoc):
     mbDirty(false),
     mpDoc(pDoc)
 {
+}
+
+ScFormulaListener::ScFormulaListener(ScDocument* pDoc, const ScRangeList& rRange):
+    mbDirty(false),
+    mpDoc(pDoc)
+{
+    startListening(rRange);
 }
 
 void ScFormulaListener::startListening(const ScTokenArray* pArr, const ScRange& rRange)
@@ -88,6 +96,19 @@ void ScFormulaListener::startListening(const ScTokenArray* pArr, const ScRange& 
     }
 }
 
+void ScFormulaListener::startListening(const ScRangeList& rRange)
+{
+    if (mpDoc->IsClipOrUndo())
+        return;
+
+    size_t nLength = rRange.size();
+    for (size_t i = 0; i < nLength; ++i)
+    {
+        const ScRange& aRange = rRange[i];
+        mpDoc->StartListeningArea(aRange, false, this);
+    }
+}
+
 void ScFormulaListener::addTokenArray(const ScTokenArray* pArray, const ScRange& rRange)
 {
     startListening(pArray, rRange);
@@ -136,10 +157,10 @@ ScColorScaleEntry::ScColorScaleEntry():
 {
 }
 
-ScColorScaleEntry::ScColorScaleEntry(double nVal, const Color& rCol):
+ScColorScaleEntry::ScColorScaleEntry(double nVal, const Color& rCol, ScColorScaleEntryType eType):
     mnVal(nVal),
     maColor(rCol),
-    meType(COLORSCALE_VALUE),
+    meType(eType),
     mpFormat(nullptr)
 {
 }
@@ -150,6 +171,7 @@ ScColorScaleEntry::ScColorScaleEntry(const ScColorScaleEntry& rEntry):
     meType(rEntry.meType),
     mpFormat(rEntry.mpFormat)
 {
+    setListener();
     if(rEntry.mpCell)
     {
         mpCell.reset(new ScFormulaCell(*rEntry.mpCell, *rEntry.mpCell->GetDocument(), rEntry.mpCell->aPos, ScCloneFlags::NoMakeAbsExternal));
@@ -165,6 +187,7 @@ ScColorScaleEntry::ScColorScaleEntry(ScDocument* pDoc, const ScColorScaleEntry& 
     meType(rEntry.meType),
     mpFormat(rEntry.mpFormat)
 {
+    setListener();
     if(rEntry.mpCell)
     {
         mpCell.reset(new ScFormulaCell(*rEntry.mpCell, *rEntry.mpCell->GetDocument(), rEntry.mpCell->aPos, ScCloneFlags::NoMakeAbsExternal));
@@ -229,12 +252,16 @@ void ScColorScaleEntry::SetValue(double nValue)
 {
     mnVal = nValue;
     mpCell.reset();
+    setListener();
 }
 
 void ScColorScaleEntry::UpdateReference( const sc::RefUpdateContext& rCxt )
 {
     if (!mpCell)
+    {
+        setListener();
         return;
+    }
 
     mpCell->UpdateReference(rCxt);
     mpListener.reset(new ScFormulaListener(mpCell.get()));
@@ -244,7 +271,10 @@ void ScColorScaleEntry::UpdateReference( const sc::RefUpdateContext& rCxt )
 void ScColorScaleEntry::UpdateInsertTab( const sc::RefUpdateInsertTabContext& rCxt )
 {
     if (!mpCell)
+    {
+        setListener();
         return;
+    }
 
     mpCell->UpdateInsertTab(rCxt);
     mpListener.reset(new ScFormulaListener(mpCell.get()));
@@ -254,7 +284,10 @@ void ScColorScaleEntry::UpdateInsertTab( const sc::RefUpdateInsertTabContext& rC
 void ScColorScaleEntry::UpdateDeleteTab( const sc::RefUpdateDeleteTabContext& rCxt )
 {
     if (!mpCell)
+    {
+        setListener();
         return;
+    }
 
     mpCell->UpdateDeleteTab(rCxt);
     mpListener.reset(new ScFormulaListener(mpCell.get()));
@@ -264,7 +297,10 @@ void ScColorScaleEntry::UpdateDeleteTab( const sc::RefUpdateDeleteTabContext& rC
 void ScColorScaleEntry::UpdateMoveTab( const sc::RefUpdateMoveTabContext& rCxt )
 {
     if (!mpCell)
+    {
+        setListener();
         return;
+    }
 
     SCTAB nTabNo = rCxt.getNewTab(mpCell->aPos.Tab());
     mpCell->UpdateMoveTab(rCxt, nTabNo);
@@ -280,8 +316,40 @@ void ScColorScaleEntry::SetColor(const Color& rColor)
 void ScColorScaleEntry::SetRepaintCallback(ScConditionalFormat* pFormat)
 {
     mpFormat = pFormat;
+    setListener();
     if (mpFormat && mpListener)
         mpListener->setCallback([&]() { mpFormat->DoRepaint();});
+}
+
+void ScColorScaleEntry::SetType( ScColorScaleEntryType eType )
+{
+    meType = eType;
+    if(eType != COLORSCALE_FORMULA)
+    {
+        mpCell.reset();
+        mpListener.reset();
+    }
+
+    setListener();
+}
+
+void ScColorScaleEntry::setListener()
+{
+    if (!mpFormat)
+        return;
+
+    if (meType == COLORSCALE_PERCENT || meType == COLORSCALE_PERCENTILE
+            || meType == COLORSCALE_MIN || meType == COLORSCALE_MAX
+            || meType == COLORSCALE_AUTO)
+    {
+        mpListener.reset(new ScFormulaListener(mpFormat->GetDocument(), mpFormat->GetRange()));
+        mpListener->setCallback([&]() { mpFormat->DoRepaint();});
+    }
+}
+
+void ScColorScaleEntry::SetRepaintCallback(const std::function<void()>& func)
+{
+    mpListener->setCallback(func);
 }
 
 ScColorFormat::ScColorFormat(ScDocument* pDoc)
@@ -335,16 +403,6 @@ void ScColorScaleFormat::AddEntry( ScColorScaleEntry* pEntry )
 {
     maColorScales.push_back(std::unique_ptr<ScColorScaleEntry>( pEntry ));
     maColorScales.back()->SetRepaintCallback(mpParent);
-}
-
-void ScColorScaleEntry::SetType( ScColorScaleEntryType eType )
-{
-    meType = eType;
-    if(eType != COLORSCALE_FORMULA)
-    {
-        mpCell.reset();
-        mpListener.reset();
-    }
 }
 
 double ScColorScaleFormat::GetMinValue() const
@@ -464,7 +522,7 @@ sal_uInt8 GetColorValue( double nVal, double nVal1, sal_uInt8 nColVal1, double n
     if (nVal >= nVal2)
         return nColVal2;
 
-    sal_uInt8 nColVal = static_cast<sal_uInt8>((nVal - nVal1)/(nVal2-nVal1)*(nColVal2-nColVal1))+nColVal1;
+    sal_uInt8 nColVal = static_cast<int>((nVal - nVal1)/(nVal2-nVal1)*(nColVal2-nColVal1))+nColVal1;
     return nColVal;
 }
 
@@ -528,17 +586,17 @@ double ScColorScaleFormat::CalcValue(double nMin, double nMax, const ScColorScal
     return (*itr)->GetValue();
 }
 
-Color* ScColorScaleFormat::GetColor( const ScAddress& rAddr ) const
+boost::optional<Color> ScColorScaleFormat::GetColor( const ScAddress& rAddr ) const
 {
     ScRefCellValue rCell(*mpDoc, rAddr);
     if(!rCell.hasNumeric())
-        return nullptr;
+        return boost::optional<Color>();
 
     // now we have for sure a value
     double nVal = rCell.getValue();
 
     if (maColorScales.size() < 2)
-        return nullptr;
+        return boost::optional<Color>();
 
     double nMin = std::numeric_limits<double>::max();
     double nMax = std::numeric_limits<double>::min();
@@ -546,7 +604,7 @@ Color* ScColorScaleFormat::GetColor( const ScAddress& rAddr ) const
 
     // this check is for safety
     if(nMin >= nMax)
-        return nullptr;
+        return boost::optional<Color>();
 
     ScColorScaleEntries::const_iterator itr = begin();
     double nValMin = CalcValue(nMin, nMax, itr);
@@ -567,7 +625,7 @@ Color* ScColorScaleFormat::GetColor( const ScAddress& rAddr ) const
 
     Color aColor = CalcColor(nVal, nValMin, rColMin, nValMax, rColMax);
 
-    return new Color(aColor);
+    return aColor;
 }
 
 void ScColorScaleFormat::UpdateReference( sc::RefUpdateContext& rCxt )
@@ -775,7 +833,7 @@ double ScDataBarFormat::getMax(double nMin, double nMax) const
     return mpFormatData->mpUpperLimit->GetValue();
 }
 
-ScDataBarInfo* ScDataBarFormat::GetDataBarInfo(const ScAddress& rAddr) const
+std::unique_ptr<ScDataBarInfo> ScDataBarFormat::GetDataBarInfo(const ScAddress& rAddr) const
 {
     ScRefCellValue rCell(*mpDoc, rAddr);
     if(!rCell.hasNumeric())
@@ -792,7 +850,7 @@ ScDataBarInfo* ScDataBarFormat::GetDataBarInfo(const ScAddress& rAddr) const
 
     double nValue = rCell.getValue();
 
-    ScDataBarInfo* pInfo = new ScDataBarInfo;
+    std::unique_ptr<ScDataBarInfo> pInfo(new ScDataBarInfo);
     if(mpFormatData->meAxisPosition == databar::NONE)
     {
         if(nValue <= nMin)
@@ -879,7 +937,7 @@ ScDataBarInfo* ScDataBarFormat::GetDataBarInfo(const ScAddress& rAddr) const
     {
         if(mpFormatData->mpNegativeColor)
         {
-            pInfo->maColor = *mpFormatData->mpNegativeColor.get();
+            pInfo->maColor = *mpFormatData->mpNegativeColor;
         }
         else
         {
@@ -966,7 +1024,7 @@ const ScIconSetFormatData* ScIconSetFormat::GetIconSetData() const
     return mpFormatData.get();
 }
 
-ScIconSetInfo* ScIconSetFormat::GetIconSetInfo(const ScAddress& rAddr) const
+std::unique_ptr<ScIconSetInfo> ScIconSetFormat::GetIconSetInfo(const ScAddress& rAddr) const
 {
     ScRefCellValue rCell(*mpDoc, rAddr);
     if(!rCell.hasNumeric())
@@ -997,7 +1055,7 @@ ScIconSetInfo* ScIconSetFormat::GetIconSetInfo(const ScAddress& rAddr) const
     if(nVal >= nValMax)
         ++nIndex;
 
-    ScIconSetInfo* pInfo = new ScIconSetInfo;
+    std::unique_ptr<ScIconSetInfo> pInfo(new ScIconSetInfo);
 
     if(mpFormatData->mbReverse)
     {
@@ -1011,7 +1069,6 @@ ScIconSetInfo* ScIconSetFormat::GetIconSetInfo(const ScAddress& rAddr) const
         sal_Int32 nCustomIndex = mpFormatData->maCustomVector[nIndex].second;
         if (nCustomIndex == -1)
         {
-            delete pInfo;
             return nullptr;
         }
 
@@ -1266,7 +1323,7 @@ const OUStringLiteral a5Ratings[] = {
 };
 
 struct ScIconSetBitmapMap {
-    ScIconSetType eType;
+    ScIconSetType const eType;
     const OUStringLiteral* pBitmaps;
 };
 
@@ -1295,6 +1352,36 @@ static const ScIconSetBitmapMap aBitmapMap[] = {
     { IconSet_5Boxes, a5Boxes }
 };
 
+const ScIconSetMap* findIconSetType(ScIconSetType eType)
+{
+    const ScIconSetMap* pMap = ScIconSetFormat::g_IconSetMap;
+    for (; pMap->pName; ++pMap)
+    {
+        if (pMap->eType == eType)
+            return pMap;
+    }
+
+    return nullptr;
+}
+
+}
+
+const char* ScIconSetFormat::getIconSetName( ScIconSetType eType )
+{
+    const ScIconSetMap* pMap = findIconSetType(eType);
+    if (pMap)
+        return pMap->pName;
+
+    return "";
+}
+
+sal_Int32 ScIconSetFormat::getIconSetElements( ScIconSetType eType )
+{
+    const ScIconSetMap* pMap = findIconSetType(eType);
+    if (pMap)
+        return pMap->nElements;
+
+    return 0;
 }
 
 BitmapEx& ScIconSetFormat::getBitmap(sc::IconSetBitmapMap & rIconSetBitmapMap,

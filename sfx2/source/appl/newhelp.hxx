@@ -32,9 +32,8 @@
 #include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/weld.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <unotools/moduleoptions.hxx>
 
 #include <srchdlg.hxx>
@@ -54,9 +53,9 @@ namespace com { namespace sun { namespace star { namespace text { class XTextRan
 class ContentListBox_Impl : public SvTreeListBox
 {
 private:
-    Image           aOpenBookImage;
-    Image           aClosedBookImage;
-    Image           aDocumentImage;
+    Image const     aOpenBookImage;
+    Image const     aClosedBookImage;
+    Image const     aDocumentImage;
 
     void            InitRoot();
     void            ClearChildren( SvTreeListEntry* pParent );
@@ -294,7 +293,7 @@ private:
 
     Link<SfxHelpIndexWindow_Impl*,void> aSelectFactoryLink;
     Link<Control*,bool>                 aPageDoubleClickLink;
-    Link<IndexTabPage_Impl&,void>       aIndexKeywordLink;
+    Link<IndexTabPage_Impl&,void> const aIndexKeywordLink;
     OUString                            sKeyword;
 
     VclPtr<SfxHelpWindow_Impl>     pParentWin;
@@ -425,15 +424,15 @@ private:
     Idle                    aSelectIdle;
     Image                   aIndexOnImage;
     Image                   aIndexOffImage;
-    OUString                aIndexOnText;
-    OUString                aIndexOffText;
+    OUString const          aIndexOnText;
+    OUString const          aIndexOffText;
     OUString                aSearchText;
-    OUString                aOnStartupText;
+    OUString const          aOnStartupText;
     OUString                sCurrentFactory;
 
     VclPtr<SfxHelpWindow_Impl>     pHelpWin;
     VclPtr<vcl::Window>            pTextWin;
-    VclPtr<sfx2::SearchDialog>     pSrchDlg;
+    std::shared_ptr<sfx2::SearchDialog> m_xSrchDlg;
     css::uno::Reference < css::frame::XFrame2 >
                             xFrame;
     css::uno::Reference< css::i18n::XBreakIterator >
@@ -503,7 +502,7 @@ friend class SfxHelpIndexWindow_Impl;
     VclPtr<SfxHelpIndexWindow_Impl>    pIndexWin;
     VclPtr<SfxHelpTextWindow_Impl>     pTextWin;
     HelpInterceptor_Impl*       pHelpInterceptor;
-    std::unique_ptr<HelpListener_Impl> pHelpListener;
+    rtl::Reference<HelpListener_Impl> pHelpListener;
 
     sal_Int32           nExpandWidth;
     sal_Int32           nCollapseWidth;

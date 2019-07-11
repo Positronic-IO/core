@@ -27,14 +27,15 @@
 #include <com/sun/star/linguistic2/XConversionPropertyType.hpp>
 #include <com/sun/star/util/XFlushable.hpp>
 #include <com/sun/star/lang/Locale.hpp>
-#include <svtools/headbar.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <vcl/settings.hxx>
 #include <unotools/lingucfg.hxx>
 #include <unotools/linguprops.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <vcl/svapp.hxx>
+#include <osl/diagnose.h>
 
 
 namespace textconversiondlgs
@@ -48,7 +49,6 @@ using namespace ::com::sun::star::uno;
 
 DictionaryList::DictionaryList(SvSimpleTableContainer& rParent, WinBits nBits)
     : SvSimpleTable(rParent, nBits)
-    , m_xDictionary(nullptr)
     , m_pED_Term(nullptr)
     , m_pED_Mapping(nullptr)
     , m_pLB_Property(nullptr)
@@ -431,7 +431,6 @@ ChineseDictionaryDialog::ChineseDictionaryDialog( vcl::Window* pParent )
     : ModalDialog(pParent, "ChineseDictionaryDialog",
          "svx/ui/chinesedictionary.ui")
     , m_nTextConversionOptions(i18n::TextConversionOption::NONE)
-    , m_xContext(nullptr)
 {
     get(m_pRB_To_Simplified, "tradtosimple");
     get(m_pRB_To_Traditional, "simpletotrad");
@@ -463,8 +462,8 @@ ChineseDictionaryDialog::ChineseDictionaryDialog( vcl::Window* pParent )
     m_pLB_Property->SetDropDownLineCount( m_pLB_Property->GetEntryCount() );
     m_pLB_Property->SelectEntryPos(0);
 
-    Reference< linguistic2::XConversionDictionary > xDictionary_To_Simplified(nullptr);
-    Reference< linguistic2::XConversionDictionary > xDictionary_To_Traditional(nullptr);
+    Reference< linguistic2::XConversionDictionary > xDictionary_To_Simplified;
+    Reference< linguistic2::XConversionDictionary > xDictionary_To_Traditional;
     //get dictionaries
     {
         if(!m_xContext.is())
@@ -589,7 +588,7 @@ IMPL_LINK_NOARG(ChineseDictionaryDialog, DirectionHdl, Button*, void)
 
 void ChineseDictionaryDialog::updateAfterDirectionChange()
 {
-    Reference< linguistic2::XConversionDictionary > xDictionary(nullptr);
+    Reference< linguistic2::XConversionDictionary > xDictionary;
 
     if( m_pRB_To_Simplified->IsChecked() )
     {

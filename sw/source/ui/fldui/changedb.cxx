@@ -24,7 +24,7 @@
 #include <com/sun/star/sdb/XDatabaseAccess.hpp>
 #include <comphelper/processfactory.hxx>
 #include <sfx2/viewfrm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <view.hxx>
 #include <wrtsh.hxx>
@@ -94,7 +94,8 @@ void SwChangeDBDlg::FillDBPopup()
     Sequence< OUString > aDBNames = xDBContext->getElementNames();
     const OUString* pDBNames = aDBNames.getConstArray();
     sal_Int32 nDBCount = aDBNames.getLength();
-    for(sal_Int32 i = 0; i < nDBCount; i++)
+    aAllDBNames.reserve(nDBCount);
+    for (sal_Int32 i = 0; i < nDBCount; i++)
     {
         aAllDBNames.push_back(pDBNames[i]);
     }

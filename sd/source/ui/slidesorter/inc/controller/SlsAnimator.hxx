@@ -20,17 +20,17 @@
 #ifndef INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSANIMATOR_HXX
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSANIMATOR_HXX
 
-#include <SlideSorter.hxx>
 #include <view/SlideSorterView.hxx>
 #include <canvas/elapsedtime.hxx>
-#include <o3tl/deleter.hxx>
-#include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
 #include <sal/types.h>
 
 #include <functional>
 #include <memory>
 #include <vector>
+
+namespace sd { namespace slidesorter { class SlideSorter; } }
+namespace o3tl { template <typename T> struct default_delete; }
 
 namespace sd { namespace slidesorter { namespace controller {
 
@@ -94,7 +94,7 @@ private:
     class Animation;
     typedef ::std::vector<std::shared_ptr<Animation> > AnimationList;
     AnimationList maAnimations;
-    ::canvas::tools::ElapsedTime maElapsedTime;
+    ::canvas::tools::ElapsedTime const maElapsedTime;
 
     std::unique_ptr<view::SlideSorterView::DrawLock, o3tl::default_delete<view::SlideSorterView::DrawLock>> mpDrawLock;
 

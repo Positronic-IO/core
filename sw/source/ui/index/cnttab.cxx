@@ -19,7 +19,7 @@
 
 #include <config_folders.h>
 
-#include <comphelper/string.hxx>
+#include <sal/log.hxx>
 #include <vcl/builderfactory.hxx>
 #include <svl/style.hxx>
 #include <vcl/help.hxx>
@@ -32,7 +32,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/docfile.hxx>
 #include <svtools/simptabl.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/svxdlg.hxx>
 #include <svx/flagsdef.hxx>
@@ -219,7 +219,6 @@ SwMultiTOXTabDialog::SwMultiTOXTabDialog(vcl::Window* pParent, const SfxItemSet&
         "modules/swriter/ui/tocdialog.ui", &rSet)
     , m_pMgr( new SwTOXMgr( &rShell ) )
     , m_rWrtShell(rShell)
-    , m_pExampleFrame(nullptr)
     , m_pParamTOXBase(pCurTOX)
     , m_sUserDefinedIndex(SwResId(STR_USER_DEFINED_INDEX))
     , m_nInitialTOXType(nToxType)
@@ -238,21 +237,16 @@ SwMultiTOXTabDialog::SwMultiTOXTabDialog(vcl::Window* pParent, const SfxItemSet&
     m_eCurrentTOXType.nIndex = 0;
 
     const sal_uInt16 nUserTypeCount = m_rWrtShell.GetTOXTypeCount(TOX_USER);
-    m_nTypeCount = nUserTypeCount + 6;
-    m_pFormArray = new SwForm*[m_nTypeCount];
-    m_pDescriptionArray = new SwTOXDescription*[m_nTypeCount];
-    m_pxIndexSectionsArray = new SwIndexSections_Impl*[m_nTypeCount];
+    m_vTypeData.resize(nUserTypeCount + 6);
     //the standard user index is on position TOX_USER
     //all user indexes follow after position TOX_AUTHORITIES
     if(pCurTOX)
     {
         m_bEditTOX = true;
     }
-    for(int i = m_nTypeCount - 1; i > -1; i--)
+    for(int i = m_vTypeData.size() - 1; i > -1; i--)
     {
-        m_pFormArray[i] = nullptr;
-        m_pDescriptionArray[i] = nullptr;
-        m_pxIndexSectionsArray[i] = new SwIndexSections_Impl;
+        m_vTypeData[i].m_pxIndexSections.reset(new SwIndexSections_Impl);
         if(pCurTOX)
         {
             m_eCurrentTOXType.eType = pCurTOX->GetType();
@@ -271,8 +265,8 @@ SwMultiTOXTabDialog::SwMultiTOXTabDialog(vcl::Window* pParent, const SfxItemSet&
                     }
                 }
             }
-            m_pFormArray[nArrayIndex] = new SwForm(pCurTOX->GetTOXForm());
-            m_pDescriptionArray[nArrayIndex] = CreateTOXDescFromTOXBase(pCurTOX);
+            m_vTypeData[nArrayIndex].m_pForm.reset(new SwForm(pCurTOX->GetTOXForm()));
+            m_vTypeData[nArrayIndex].m_pDescription = CreateTOXDescFromTOXBase(pCurTOX);
             if(TOX_AUTHORITIES == m_eCurrentTOXType.eType)
             {
                 const SwAuthorityFieldType* pFType = static_cast<const SwAuthorityFieldType*>(
@@ -284,22 +278,21 @@ SwMultiTOXTabDialog::SwMultiTOXTabDialog(vcl::Window* pParent, const SfxItemSet&
                         sBrackets += OUStringLiteral1(pFType->GetPrefix());
                     if(pFType->GetSuffix())
                         sBrackets += OUStringLiteral1(pFType->GetSuffix());
-                    m_pDescriptionArray[nArrayIndex]->SetAuthBrackets(sBrackets);
-                    m_pDescriptionArray[nArrayIndex]->SetAuthSequence(pFType->IsSequence());
+                    m_vTypeData[nArrayIndex].m_pDescription->SetAuthBrackets(sBrackets);
+                    m_vTypeData[nArrayIndex].m_pDescription->SetAuthSequence(pFType->IsSequence());
                 }
                 else
                 {
-                    m_pDescriptionArray[nArrayIndex]->SetAuthBrackets("[]");
+                    m_vTypeData[nArrayIndex].m_pDescription->SetAuthBrackets("[]");
                 }
             }
         }
     }
     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
     m_nSelectId = AddTabPage("index", SwTOXSelectTabPage::Create, nullptr);
     AddTabPage("styles", SwTOXStylesTabPage::Create, nullptr);
     m_nColumnId = AddTabPage("columns", SwColumnPage::Create, nullptr);
-    m_nBackGroundId = AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BACKGROUND ), nullptr);
+    m_nBackGroundId = AddTabPage("background", pFact->GetTabPageCreatorFunc( RID_SVXPAGE_BKG ), nullptr);
     m_nEntriesId = AddTabPage("entries", SwTOXEntryTabPage::Create, nullptr);
     if(!pCurTOX)
         SetCurPageId(m_nSelectId);
@@ -329,18 +322,9 @@ void SwMultiTOXTabDialog::dispose()
     // fdo#38515 Avoid setting focus on deleted controls in the destructors
     EnableInput( false );
 
-    for(sal_uInt16 i = 0; i < m_nTypeCount; i++)
-    {
-        delete m_pFormArray[i];
-        delete m_pDescriptionArray[i];
-        delete m_pxIndexSectionsArray[i];
-    }
-    delete[] m_pxIndexSectionsArray;
-
-    delete[] m_pFormArray;
-    delete[] m_pDescriptionArray;
-    delete m_pMgr;
-    delete m_pExampleFrame;
+    m_vTypeData.clear();
+    m_pMgr.reset();
+    m_pExampleFrame.reset();
     m_pExampleContainerWIN.clear();
     m_pShowExampleCB.clear();
     SfxTabDialog::dispose();
@@ -377,10 +361,10 @@ short SwMultiTOXTabDialog::Ok()
     SwTOXBase aNewDef(*m_rWrtShell.GetDefaultTOXBase( m_eCurrentTOXType.eType, true ));
 
     const sal_uInt16 nIndex = m_eCurrentTOXType.GetFlatIndex();
-    if(m_pFormArray[nIndex])
+    if(m_vTypeData[nIndex].m_pForm)
     {
-        rDesc.SetForm(*m_pFormArray[nIndex]);
-        aNewDef.SetTOXForm(*m_pFormArray[nIndex]);
+        rDesc.SetForm(*m_vTypeData[nIndex].m_pForm);
+        aNewDef.SetTOXForm(*m_vTypeData[nIndex].m_pForm);
     }
     rDesc.ApplyTo(aNewDef);
     if(!m_bGlobalFlag)
@@ -399,26 +383,26 @@ short SwMultiTOXTabDialog::Ok()
 SwForm* SwMultiTOXTabDialog::GetForm(CurTOXType eType)
 {
     const sal_uInt16 nIndex = eType.GetFlatIndex();
-    if(!m_pFormArray[nIndex])
-        m_pFormArray[nIndex] = new SwForm(eType.eType);
-    return m_pFormArray[nIndex];
+    if(!m_vTypeData[nIndex].m_pForm)
+        m_vTypeData[nIndex].m_pForm.reset(new SwForm(eType.eType));
+    return m_vTypeData[nIndex].m_pForm.get();
 }
 
 SwTOXDescription& SwMultiTOXTabDialog::GetTOXDescription(CurTOXType eType)
 {
     const sal_uInt16 nIndex = eType.GetFlatIndex();
-    if(!m_pDescriptionArray[nIndex])
+    if(!m_vTypeData[nIndex].m_pDescription)
     {
         const SwTOXBase* pDef = m_rWrtShell.GetDefaultTOXBase( eType.eType );
         if(pDef)
-            m_pDescriptionArray[nIndex] = CreateTOXDescFromTOXBase(pDef);
+            m_vTypeData[nIndex].m_pDescription = CreateTOXDescFromTOXBase(pDef);
         else
         {
-            m_pDescriptionArray[nIndex] = new SwTOXDescription(eType.eType);
+            m_vTypeData[nIndex].m_pDescription.reset(new SwTOXDescription(eType.eType));
             if(eType.eType == TOX_USER)
-                m_pDescriptionArray[nIndex]->SetTitle(m_sUserDefinedIndex);
+                m_vTypeData[nIndex].m_pDescription->SetTitle(m_sUserDefinedIndex);
             else
-                m_pDescriptionArray[nIndex]->SetTitle(
+                m_vTypeData[nIndex].m_pDescription->SetTitle(
                     m_rWrtShell.GetTOXType(eType.eType, 0)->GetTypeName());
         }
         if(TOX_AUTHORITIES == eType.eType)
@@ -427,26 +411,26 @@ SwTOXDescription& SwMultiTOXTabDialog::GetTOXDescription(CurTOXType eType)
                                             m_rWrtShell.GetFieldType(SwFieldIds::TableOfAuthorities, aEmptyOUStr));
             if(pFType)
             {
-                m_pDescriptionArray[nIndex]->SetAuthBrackets(OUStringLiteral1(pFType->GetPrefix()) +
+                m_vTypeData[nIndex].m_pDescription->SetAuthBrackets(OUStringLiteral1(pFType->GetPrefix()) +
                                                   OUStringLiteral1(pFType->GetSuffix()));
-                m_pDescriptionArray[nIndex]->SetAuthSequence(pFType->IsSequence());
+                m_vTypeData[nIndex].m_pDescription->SetAuthSequence(pFType->IsSequence());
             }
             else
             {
-                m_pDescriptionArray[nIndex]->SetAuthBrackets("[]");
+                m_vTypeData[nIndex].m_pDescription->SetAuthBrackets("[]");
             }
         }
         else if(TOX_INDEX == eType.eType)
-            m_pDescriptionArray[nIndex]->SetMainEntryCharStyle(SwResId(STR_POOLCHR_IDX_MAIN_ENTRY));
+            m_vTypeData[nIndex].m_pDescription->SetMainEntryCharStyle(SwResId(STR_POOLCHR_IDX_MAIN_ENTRY));
 
     }
-    return *m_pDescriptionArray[nIndex];
+    return *m_vTypeData[nIndex].m_pDescription;
 }
 
-SwTOXDescription* SwMultiTOXTabDialog::CreateTOXDescFromTOXBase(
+std::unique_ptr<SwTOXDescription> SwMultiTOXTabDialog::CreateTOXDescFromTOXBase(
             const SwTOXBase*pCurTOX)
 {
-    SwTOXDescription * pDesc = new SwTOXDescription(pCurTOX->GetType());
+    std::unique_ptr<SwTOXDescription> pDesc(new SwTOXDescription(pCurTOX->GetType()));
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
         pDesc->SetStyleNames(pCurTOX->GetStyleNames(i), i);
     pDesc->SetAutoMarkURL(m_rWrtShell.GetTOIAutoMarkURL());
@@ -487,8 +471,7 @@ IMPL_LINK_NOARG( SwMultiTOXTabDialog, ShowPreviewHdl, Button*, void )
                 OUString sInfo(SwResId(STR_FILE_NOT_FOUND));
                 sInfo = sInfo.replaceFirst( "%1", sTemplate );
                 sInfo = sInfo.replaceFirst( "%2", aOpt.GetTemplatePath() );
-                vcl::Window* pWin = GetParent();
-                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                std::unique_ptr<weld::MessageDialog> xInfoBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                               VclMessageType::Info, VclButtonsType::Ok,
                                                               sInfo));
                 xInfoBox->run();
@@ -496,8 +479,8 @@ IMPL_LINK_NOARG( SwMultiTOXTabDialog, ShowPreviewHdl, Button*, void )
             else
             {
                 Link<SwOneExampleFrame&,void> aLink(LINK(this, SwMultiTOXTabDialog, CreateExample_Hdl));
-                m_pExampleFrame = new SwOneExampleFrame(
-                        *m_pExampleContainerWIN, EX_SHOW_ONLINE_LAYOUT, &aLink, &sTemplate);
+                m_pExampleFrame.reset(new SwOneExampleFrame(
+                        *m_pExampleContainerWIN, EX_SHOW_ONLINE_LAYOUT, &aLink, &sTemplate));
 
                 if(!m_pExampleFrame->IsServiceAvailable())
                 {
@@ -528,313 +511,267 @@ bool SwMultiTOXTabDialog::IsNoNum(SwWrtShell& rSh, const OUString& rName)
         ! rSh.GetTextCollFromPool(nId)->IsAssignedToListLevelOfOutlineStyle();
 }
 
-class SwIndexTreeLB : public SvSimpleTable
+class SwAddStylesDlg_Impl : public SfxDialogController
 {
-public:
-    explicit SwIndexTreeLB(SvSimpleTableContainer& rParent);
-    virtual void KeyInput( const KeyEvent& rKEvt ) override;
-    virtual void Resize() override;
-    virtual sal_IntPtr GetTabPos( SvTreeListEntry*, SvLBoxTab* ) override;
-    void setColSizes();
-};
-
-SwIndexTreeLB::SwIndexTreeLB(SvSimpleTableContainer& rParent)
-    : SvSimpleTable(rParent, 0)
-{
-    HeaderBar& rStylesHB = GetTheHeaderBar();
-    rStylesHB.SetStyle(rStylesHB.GetStyle()|WB_BUTTONSTYLE);
-    SetStyle(GetStyle() & ~(WB_AUTOHSCROLL|WB_HSCROLL));
-}
-
-sal_IntPtr SwIndexTreeLB::GetTabPos( SvTreeListEntry* pEntry, SvLBoxTab* pTab)
-{
-    sal_IntPtr nData = reinterpret_cast<sal_IntPtr>(pEntry->GetUserData());
-    if(nData != USHRT_MAX)
-    {
-        HeaderBar& rStylesHB = GetTheHeaderBar();
-        sal_IntPtr  nPos = rStylesHB.GetItemRect( static_cast< sal_uInt16 >(2 + nData) ).TopLeft().X();
-        nData = nPos;
-    }
-    else
-        nData = 0;
-    nData += pTab->GetPos();
-    return nData;
-}
-
-void SwIndexTreeLB::KeyInput( const KeyEvent& rKEvt )
-{
-    SvTreeListEntry* pEntry = FirstSelected();
-    vcl::KeyCode aCode = rKEvt.GetKeyCode();
-    bool bChanged = false;
-    if(pEntry)
-    {
-        sal_IntPtr nLevel = reinterpret_cast<sal_IntPtr>(pEntry->GetUserData());
-        if(aCode.GetCode() == KEY_ADD )
-        {
-            if(nLevel < MAXLEVEL - 1)
-                nLevel++;
-            else if(nLevel == USHRT_MAX)
-                nLevel = 0;
-            bChanged = true;
-        }
-        else if(aCode.GetCode() == KEY_SUBTRACT)
-        {
-            if(!nLevel)
-                nLevel = USHRT_MAX;
-            else if(nLevel != USHRT_MAX)
-                nLevel--;
-            bChanged = true;
-        }
-        if(bChanged)
-        {
-            pEntry->SetUserData(reinterpret_cast<void*>(nLevel));
-            Invalidate();
-        }
-    }
-    if(!bChanged)
-        SvTreeListBox::KeyInput(rKEvt);
-}
-
-void SwIndexTreeLB::Resize()
-{
-    SvSimpleTable::Resize();
-    setColSizes();
-}
-
-void SwIndexTreeLB::setColSizes()
-{
-    HeaderBar &rHB = GetTheHeaderBar();
-    if (rHB.GetItemCount() < MAXLEVEL+1)
-        return;
-
-    long nWidth = rHB.GetSizePixel().Width();
-    nWidth /= 14;
-    nWidth--;
-
-    long nTabs[MAXLEVEL+1];
-    nTabs[0] = 3 * nWidth;
-    for(sal_uInt16 i = 1; i <= MAXLEVEL; ++i)
-        nTabs[i] = nTabs[i-1] + nWidth;
-    SvSimpleTable::SetTabs(SAL_N_ELEMENTS(nTabs), nTabs, MapUnit::MapPixel);
-}
-
-class SwAddStylesDlg_Impl : public SfxModalDialog
-{
-    VclPtr<OKButton>       m_pOk;
-
-    VclPtr<SwIndexTreeLB>  m_pHeaderTree;
-    VclPtr<PushButton>     m_pLeftPB;
-    VclPtr<PushButton>     m_pRightPB;
-
     OUString*       pStyleArr;
 
-    DECL_LINK(OkHdl, Button*, void);
-    DECL_LINK(LeftRightHdl, Button*, void);
-    DECL_LINK(HeaderDragHdl, HeaderBar*, void);
+    std::unique_ptr<weld::Button> m_xOk;
+    std::unique_ptr<weld::Button> m_xLeftPB;
+    std::unique_ptr<weld::Button> m_xRightPB;
+    std::unique_ptr<weld::TreeView> m_xHeaderTree;
+
+    DECL_LINK(OkHdl, weld::Button&, void);
+    DECL_LINK(LeftRightHdl, weld::Button&, void);
+    DECL_LINK(KeyInput, const KeyEvent&, bool);
+    DECL_LINK(TreeSizeAllocHdl, const Size&, void);
+    typedef std::pair<int, int> row_col;
+    DECL_LINK(RadioToggleOnHdl, const row_col&, void);
 
 public:
-    SwAddStylesDlg_Impl(vcl::Window* pParent, SwWrtShell const & rWrtSh, OUString rStringArr[]);
-    virtual ~SwAddStylesDlg_Impl() override;
-    virtual void dispose() override;
+    SwAddStylesDlg_Impl(weld::Window* pParent, SwWrtShell const & rWrtSh, OUString rStringArr[]);
 };
 
-SwAddStylesDlg_Impl::SwAddStylesDlg_Impl(vcl::Window* pParent,
+SwAddStylesDlg_Impl::SwAddStylesDlg_Impl(weld::Window* pParent,
             SwWrtShell const & rWrtSh, OUString rStringArr[])
-    : SfxModalDialog(pParent, "AssignStylesDialog",
-        "modules/swriter/ui/assignstylesdialog.ui")
+    : SfxDialogController(pParent, "modules/swriter/ui/assignstylesdialog.ui", "AssignStylesDialog")
     , pStyleArr(rStringArr)
+    , m_xOk(m_xBuilder->weld_button("ok"))
+    , m_xLeftPB(m_xBuilder->weld_button("left"))
+    , m_xRightPB(m_xBuilder->weld_button("right"))
+    , m_xHeaderTree(m_xBuilder->weld_tree_view("styles"))
 {
-    get(m_pOk, "ok");
-    get(m_pLeftPB, "left");
-    get(m_pRightPB, "right");
-    OUString sHBFirst = get<FixedText>("notapplied")->GetText();
-    SvSimpleTableContainer *pHeaderTreeContainer = get<SvSimpleTableContainer>("styles");
-    Size aSize = pHeaderTreeContainer->LogicToPixel(Size(273, 164), MapMode(MapUnit::MapAppFont));
-    pHeaderTreeContainer->set_width_request(aSize.Width());
-    pHeaderTreeContainer->set_height_request(aSize.Height());
-    m_pHeaderTree = VclPtr<SwIndexTreeLB>::Create(*pHeaderTreeContainer);
+    m_xOk->connect_clicked(LINK(this, SwAddStylesDlg_Impl, OkHdl));
+    m_xLeftPB->connect_clicked(LINK(this, SwAddStylesDlg_Impl, LeftRightHdl));
+    m_xRightPB->connect_clicked(LINK(this, SwAddStylesDlg_Impl, LeftRightHdl));
+    m_xHeaderTree->connect_size_allocate(LINK(this, SwAddStylesDlg_Impl, TreeSizeAllocHdl));
 
-    m_pOk->SetClickHdl(LINK(this, SwAddStylesDlg_Impl, OkHdl));
-    m_pLeftPB->SetClickHdl(LINK(this, SwAddStylesDlg_Impl, LeftRightHdl));
-    m_pRightPB->SetClickHdl(LINK(this, SwAddStylesDlg_Impl, LeftRightHdl));
+    std::vector<int> aRadioColumns;
+    for (sal_uInt16 i = 0; i <= MAXLEVEL; ++i)
+        aRadioColumns.push_back(i + 1);
+    m_xHeaderTree->set_toggle_columns_as_radio(aRadioColumns);
+    m_xHeaderTree->connect_toggled(LINK(this, SwAddStylesDlg_Impl, RadioToggleOnHdl));
 
-    HeaderBar& rHB = m_pHeaderTree->GetTheHeaderBar();
-    rHB.SetEndDragHdl(LINK(this, SwAddStylesDlg_Impl, HeaderDragHdl));
+    std::vector<int> aWidths;
+    aWidths.push_back(m_xHeaderTree->get_approximate_digit_width() * 30);
+    int nPadding = m_xHeaderTree->get_approximate_digit_width() * 2;
+    OUString sTitle(m_xHeaderTree->get_column_title(1));
+    for (sal_uInt16 i = 0; i <= MAXLEVEL; ++i)
+    {
+        sTitle = OUString::number(i);
+        m_xHeaderTree->set_column_title(i + 1, sTitle);
+        aWidths.push_back(m_xHeaderTree->get_pixel_size(sTitle).Width() + nPadding);
+    }
+    m_xHeaderTree->set_column_fixed_widths(aWidths);
+    auto nWidth = std::accumulate(aWidths.begin(), aWidths.end(), 0);
+    m_xHeaderTree->set_size_request(nWidth, m_xHeaderTree->get_height_rows(15));
 
-    for(sal_uInt16 i = 1; i <= MAXLEVEL; ++i)
-        sHBFirst += "\t" + OUString::number(i);
-    m_pHeaderTree->InsertHeaderEntry(sHBFirst);
-    m_pHeaderTree->setColSizes();
-
-    m_pHeaderTree->SetStyle(m_pHeaderTree->GetStyle()|WB_CLIPCHILDREN|WB_SORT);
-    m_pHeaderTree->GetModel()->SetSortMode(SortAscending);
+    int nRow(0);
     for (sal_uInt16 i = 0; i < MAXLEVEL; ++i)
     {
         const OUString &rStyles{rStringArr[i]};
         if (rStyles.isEmpty())
             continue;
-        sal_Int32 nPos {0};
-        do {
-            SvTreeListEntry* pEntry = m_pHeaderTree->InsertEntry(rStyles.getToken(0, TOX_STYLE_DELIMITER, nPos));
-            pEntry->SetUserData(reinterpret_cast<void*>(i));
+        sal_Int32 nPos(0);
+        do
+        {
+            OUString sEntry = rStyles.getToken(0, TOX_STYLE_DELIMITER, nPos);
+            m_xHeaderTree->append_text(sEntry);
+            for (sal_uInt16 j = 0; j <= MAXLEVEL; ++j)
+                m_xHeaderTree->set_toggle(nRow, i == j - 1, j + 1);
+            ++nRow;
         } while (nPos>=0);
     }
     // now the other styles
 
-    const SwTextFormatColl *pColl   = nullptr;
     const sal_uInt16 nSz = rWrtSh.GetTextFormatCollCount();
-
-    for ( sal_uInt16 j = 0;j < nSz; ++j )
+    for (sal_uInt16 j = 0; j < nSz; ++j)
     {
-        pColl = &rWrtSh.GetTextFormatColl(j);
-        if(pColl->IsDefault())
+        const SwTextFormatColl& rColl = rWrtSh.GetTextFormatColl(j);
+        if (rColl.IsDefault())
             continue;
 
-        const OUString aName = pColl->GetName();
+        const OUString aName = rColl.GetName();
         if (!aName.isEmpty())
         {
-            SvTreeListEntry* pEntry = m_pHeaderTree->First();
-            while (pEntry && SvTabListBox::GetEntryText(pEntry, 0) != aName)
+            bool bEntry = false;
+            int nChildren = m_xHeaderTree->n_children();
+            for (int i = 0; i < nChildren; ++i)
             {
-                pEntry = m_pHeaderTree->Next(pEntry);
+                if (m_xHeaderTree->get_text(i, 0) == aName)
+                {
+                    bEntry = true;
+                    break;
+                }
             }
-            if (!pEntry)
+            if (!bEntry)
             {
-                m_pHeaderTree->InsertEntry(aName)->SetUserData(reinterpret_cast<void*>(USHRT_MAX));
+                m_xHeaderTree->append_text(aName);
+                for (sal_uInt16 k = 0; k <= MAXLEVEL; ++k)
+                    m_xHeaderTree->set_toggle(nRow, k == 0, k + 1);
+                ++nRow;
             }
         }
     }
-    m_pHeaderTree->GetModel()->Resort();
+    m_xHeaderTree->make_sorted();
+    m_xHeaderTree->select(0);
+    m_xHeaderTree->connect_key_release(LINK(this, SwAddStylesDlg_Impl, KeyInput));
 }
 
-SwAddStylesDlg_Impl::~SwAddStylesDlg_Impl()
+IMPL_LINK(SwAddStylesDlg_Impl, TreeSizeAllocHdl, const Size&, rSize, void)
 {
-    disposeOnce();
+    auto nWidth = rSize.Width();
+
+    std::vector<int> aWidths;
+    aWidths.push_back(0);
+    int nPadding = m_xHeaderTree->get_approximate_digit_width() * 2;
+    for (sal_uInt16 i = 0; i <= MAXLEVEL; ++i)
+    {
+        OUString sTitle(m_xHeaderTree->get_column_title(i + 1));
+        aWidths.push_back(m_xHeaderTree->get_pixel_size(sTitle).Width() + nPadding);
+    }
+    auto nOtherWidth = std::accumulate(aWidths.begin(), aWidths.end(), 0);
+    aWidths[0] = nWidth - nOtherWidth;
+    m_xHeaderTree->set_column_fixed_widths(aWidths);
 }
 
-void SwAddStylesDlg_Impl::dispose()
+IMPL_LINK(SwAddStylesDlg_Impl, RadioToggleOnHdl, const row_col&, rRowCol, void)
 {
-    m_pHeaderTree.disposeAndClear();
-    m_pOk.clear();
-    m_pLeftPB.clear();
-    m_pRightPB.clear();
-    SfxModalDialog::dispose();
+    for (sal_uInt16 i = 0; i <= MAXLEVEL; ++i)
+        m_xHeaderTree->set_toggle(rRowCol.first, rRowCol.second == i + 1, i + 1);
 }
 
-IMPL_LINK_NOARG(SwAddStylesDlg_Impl, OkHdl, Button*, void)
+IMPL_LINK(SwAddStylesDlg_Impl, KeyInput, const KeyEvent&, rKEvt, bool)
+{
+    vcl::KeyCode aCode = rKEvt.GetKeyCode();
+    bool bHandled = false;
+
+    if (aCode.GetCode() == KEY_ADD || aCode.GetCode() == KEY_RIGHT)
+    {
+        LeftRightHdl(*m_xRightPB);
+        bHandled = true;
+    }
+    else if (aCode.GetCode() == KEY_SUBTRACT || aCode.GetCode() == KEY_LEFT)
+    {
+        LeftRightHdl(*m_xLeftPB);
+        bHandled = true;
+    }
+
+    return bHandled;
+}
+
+IMPL_LINK_NOARG(SwAddStylesDlg_Impl, OkHdl, weld::Button&, void)
 {
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
         pStyleArr[i].clear();
 
-    SvTreeListEntry* pEntry = m_pHeaderTree->First();
-    while(pEntry)
+    int nChildren = m_xHeaderTree->n_children();
+    for (int i = 0; i < nChildren; ++i)
     {
-        sal_IntPtr nLevel = reinterpret_cast<sal_IntPtr>(pEntry->GetUserData());
-        if(nLevel != USHRT_MAX)
+        int nToggleColumn = 0;
+        for (sal_uInt16 j = 0; j <= MAXLEVEL; ++j)
         {
+            if (m_xHeaderTree->get_toggle(i, j + 1))
+            {
+                nToggleColumn = j;
+                break;
+            }
+        }
+        if (nToggleColumn)
+        {
+            int nLevel = nToggleColumn - 1;
             if(!pStyleArr[nLevel].isEmpty())
                 pStyleArr[nLevel] += OUStringLiteral1(TOX_STYLE_DELIMITER);
-            pStyleArr[nLevel] += SvTabListBox::GetEntryText(pEntry, 0);
+            pStyleArr[nLevel] += m_xHeaderTree->get_text(i, 0);
         }
-        pEntry = m_pHeaderTree->Next(pEntry);
     }
 
     //TODO write back style names
-    EndDialog(RET_OK);
+    m_xDialog->response(RET_OK);
 }
 
-IMPL_LINK_NOARG(SwAddStylesDlg_Impl, HeaderDragHdl, HeaderBar*, void)
+IMPL_LINK(SwAddStylesDlg_Impl, LeftRightHdl, weld::Button&, rBtn, void)
 {
-    m_pHeaderTree->Invalidate();
-}
-
-IMPL_LINK(SwAddStylesDlg_Impl, LeftRightHdl, Button*, pBtn, void)
-{
-    bool bLeft = pBtn == m_pLeftPB;
-    SvTreeListEntry* pEntry = m_pHeaderTree->FirstSelected();
-    if(pEntry)
+    bool bLeft = &rBtn == m_xLeftPB.get();
+    int nEntry = m_xHeaderTree->get_selected_index();
+    if (nEntry != -1)
     {
-        sal_IntPtr nLevel = reinterpret_cast<sal_IntPtr>(pEntry->GetUserData());
-        if(bLeft)
+        int nToggleColumn = 0;
+        for (sal_uInt16 j = 0; j <= MAXLEVEL; ++j)
         {
-            if(!nLevel)
-                nLevel = USHRT_MAX;
-            else if(nLevel != USHRT_MAX)
-                nLevel--;
+            if (m_xHeaderTree->get_toggle(nEntry, j + 1))
+            {
+                nToggleColumn = j;
+                break;
+            }
+        }
+
+        if (bLeft)
+        {
+            if (nToggleColumn)
+                --nToggleColumn;
         }
         else
         {
-            if(nLevel < MAXLEVEL - 1)
-                nLevel++;
-            else if(nLevel == USHRT_MAX)
-                nLevel = 0;
+            if (nToggleColumn < MAXLEVEL)
+                ++nToggleColumn;
         }
-        pEntry->SetUserData(reinterpret_cast<void*>(nLevel));
-        m_pHeaderTree->Invalidate();
+
+        for (sal_uInt16 j = 0; j <= MAXLEVEL; ++j)
+            m_xHeaderTree->set_toggle(nEntry, j == nToggleColumn, j + 1);
     }
 }
 
-SwTOXSelectTabPage::SwTOXSelectTabPage(vcl::Window* pParent, const SfxItemSet& rAttrSet)
-    : SfxTabPage(pParent, "TocIndexPage",
-        "modules/swriter/ui/tocindexpage.ui", &rAttrSet)
-    , pIndexRes(nullptr)
+SwTOXSelectTabPage::SwTOXSelectTabPage(TabPageParent pParent, const SfxItemSet& rAttrSet)
+    : SfxTabPage(pParent, "modules/swriter/ui/tocindexpage.ui", "TocIndexPage", &rAttrSet)
     , sAutoMarkType(SwResId(STR_AUTOMARK_TYPE))
     , m_bWaitingInitialSettings(true)
+    , m_xTitleED(m_xBuilder->weld_entry("title"))
+    , m_xTypeFT(m_xBuilder->weld_label("typeft"))
+    , m_xTypeLB(m_xBuilder->weld_combo_box("type"))
+    , m_xReadOnlyCB(m_xBuilder->weld_check_button("readonly"))
+    , m_xAreaFrame(m_xBuilder->weld_widget("areaframe"))
+    , m_xAreaLB(m_xBuilder->weld_combo_box("scope"))
+    , m_xLevelFT(m_xBuilder->weld_label("levelft"))
+    , m_xLevelNF(m_xBuilder->weld_spin_button("level"))
+    , m_xCreateFrame(m_xBuilder->weld_widget("createframe"))
+    , m_xFromHeadingsCB(m_xBuilder->weld_check_button("fromheadings"))
+    , m_xStylesCB(m_xBuilder->weld_check_button("stylescb"))
+    , m_xAddStylesCB(m_xBuilder->weld_check_button("addstylescb"))
+    , m_xAddStylesPB(m_xBuilder->weld_button("styles"))
+    , m_xFromTablesCB(m_xBuilder->weld_check_button("fromtables"))
+    , m_xFromFramesCB(m_xBuilder->weld_check_button("fromframes"))
+    , m_xFromGraphicsCB(m_xBuilder->weld_check_button("fromgraphics"))
+    , m_xFromOLECB(m_xBuilder->weld_check_button("fromoles"))
+    , m_xLevelFromChapterCB(m_xBuilder->weld_check_button("uselevel"))
+    , m_xFromCaptionsRB(m_xBuilder->weld_radio_button("captions"))
+    , m_xFromObjectNamesRB(m_xBuilder->weld_radio_button("objnames"))
+    , m_xCaptionSequenceFT(m_xBuilder->weld_label("categoryft"))
+    , m_xCaptionSequenceLB(m_xBuilder->weld_combo_box("category"))
+    , m_xDisplayTypeFT(m_xBuilder->weld_label("displayft"))
+    , m_xDisplayTypeLB(m_xBuilder->weld_combo_box("display"))
+    , m_xTOXMarksCB(m_xBuilder->weld_check_button("indexmarks"))
+    , m_xIdxOptionsFrame(m_xBuilder->weld_widget("optionsframe"))
+    , m_xCollectSameCB(m_xBuilder->weld_check_button("combinesame"))
+    , m_xUseFFCB(m_xBuilder->weld_check_button("useff"))
+    , m_xUseDashCB(m_xBuilder->weld_check_button("usedash"))
+    , m_xCaseSensitiveCB(m_xBuilder->weld_check_button("casesens"))
+    , m_xInitialCapsCB(m_xBuilder->weld_check_button("initcaps"))
+    , m_xKeyAsEntryCB(m_xBuilder->weld_check_button("keyasentry"))
+    , m_xFromFileCB(m_xBuilder->weld_check_button("fromfile"))
+    , m_xAutoMarkPB(m_xBuilder->weld_menu_button("file"))
+    , m_xFromObjCLB(m_xBuilder->weld_tree_view("objects"))
+    , m_xFromObjFrame(m_xBuilder->weld_widget("objectframe"))
+    , m_xSequenceCB(m_xBuilder->weld_check_button("numberentries"))
+    , m_xBracketLB(m_xBuilder->weld_combo_box("brackets"))
+    , m_xAuthorityFrame(m_xBuilder->weld_widget("authframe"))
+    , m_xSortFrame(m_xBuilder->weld_widget("sortframe"))
+    , m_xLanguageLB(new LanguageBox(m_xBuilder->weld_combo_box("lang")))
+    , m_xSortAlgorithmLB(m_xBuilder->weld_combo_box("keytype"))
 {
-    get(m_pTitleED, "title");
-    get(m_pTypeFT, "typeft");
-    get(m_pTypeLB, "type");
-    get(m_pReadOnlyCB, "readonly");
+    sAddStyleUser = m_xStylesCB->get_label();
+    pIndexEntryWrapper.reset(new IndexEntrySupplierWrapper());
 
-    get(m_pAreaFrame, "areaframe");
-    get(m_pAreaLB, "scope");
-    get(m_pLevelFT, "levelft");
-    get(m_pLevelNF, "level");
-
-    get(m_pCreateFrame, "createframe");
-    get(m_pFromHeadingsCB, "fromheadings");
-    get(m_pAddStylesCB, "addstylescb");
-    sAddStyleUser = get<vcl::Window>("stylescb")->GetText();
-    get(m_pAddStylesPB, "styles");
-    get(m_pFromTablesCB, "fromtables");
-    get(m_pFromFramesCB, "fromframes");
-    get(m_pFromGraphicsCB, "fromgraphics");
-    get(m_pFromOLECB, "fromoles");
-    get(m_pLevelFromChapterCB, "uselevel");
-
-    get(m_pFromCaptionsRB, "captions");
-    get(m_pFromObjectNamesRB, "objnames");
-
-    get(m_pCaptionSequenceFT, "categoryft");
-    get(m_pCaptionSequenceLB, "category");
-    get(m_pDisplayTypeFT, "displayft");
-    get(m_pDisplayTypeLB, "display");
-    get(m_pTOXMarksCB, "indexmarks");
-
-    get(m_pIdxOptionsFrame, "optionsframe");
-    get(m_pCollectSameCB, "combinesame");
-    get(m_pUseFFCB, "useff");
-    get(m_pUseDashCB, "usedash");
-    get(m_pCaseSensitiveCB, "casesens");
-    get(m_pInitialCapsCB, "initcaps");
-    get(m_pKeyAsEntryCB, "keyasentry");
-    get(m_pFromFileCB, "fromfile");
-    get(m_pAutoMarkPB, "file");
-
-    get(m_pFromObjFrame, "objectframe");
-    get(m_pFromObjCLB, "objects");
-
-    get(m_pAuthorityFrame, "authframe");
-    get(m_pSequenceCB, "numberentries");
-    get(m_pBracketLB, "brackets");
-
-    get(m_pSortFrame, "sortframe");
-    get(m_pLanguageLB, "lang");
-    get(m_pSortAlgorithmLB, "keytype");
-
-    pIndexEntryWrapper = new IndexEntrySupplierWrapper();
-
-    m_pLanguageLB->SetLanguageList( SvxLanguageListFlags::ALL | SvxLanguageListFlags::ONLY_KNOWN,
+    m_xLanguageLB->SetLanguageList( SvxLanguageListFlags::ALL | SvxLanguageListFlags::ONLY_KNOWN,
                                  false );
 
     //Default mode is arranged to be the tallest mode
@@ -843,47 +780,52 @@ SwTOXSelectTabPage::SwTOXSelectTabPage(vcl::Window* pParent, const SfxItemSet& r
     Size aPrefSize(get_preferred_size());
     set_height_request(aPrefSize.Height());
 
-    sAddStyleContent = m_pAddStylesCB->GetText();
+    sAddStyleContent = m_xAddStylesCB->get_label();
+
+    std::vector<int> aWidths;
+    aWidths.push_back(m_xFromObjCLB->get_approximate_digit_width() * 3 + 6);
+    m_xFromObjCLB->set_column_fixed_widths(aWidths);
 
     for (size_t i = 0; i < SAL_N_ELEMENTS(RES_SRCTYPES); ++i)
     {
-        m_pFromObjCLB->InsertEntry(SwResId(RES_SRCTYPES[i].first));
-        m_pFromObjCLB->SetEntryData(i, reinterpret_cast<void*>(RES_SRCTYPES[i].second));
+        OUString sId(OUString::number(static_cast<sal_uInt32>(RES_SRCTYPES[i].second)));
+        m_xFromObjCLB->insert(nullptr, -1, nullptr, &sId,
+                              nullptr, nullptr, nullptr, false);
+        m_xFromObjCLB->set_toggle(i, false, 0);
+        m_xFromObjCLB->set_text(i, SwResId(RES_SRCTYPES[i].first), 1);
     }
 
     SetExchangeSupport();
-    m_pTypeLB->SetSelectHdl(LINK(this, SwTOXSelectTabPage, TOXTypeHdl));
+    m_xTypeLB->connect_changed(LINK(this, SwTOXSelectTabPage, TOXTypeHdl));
 
-    m_pAddStylesPB->SetClickHdl(LINK(this, SwTOXSelectTabPage, AddStylesHdl));
+    m_xAddStylesPB->connect_clicked(LINK(this, SwTOXSelectTabPage, AddStylesHdl));
 
-    PopupMenu*  pMenu = m_pAutoMarkPB->GetPopupMenu();
-    pMenu->SetActivateHdl(LINK(this, SwTOXSelectTabPage, MenuEnableHdl));
-    pMenu->SetSelectHdl(LINK(this, SwTOXSelectTabPage, MenuExecuteHdl));
+    m_xAutoMarkPB->connect_toggled(LINK(this, SwTOXSelectTabPage, MenuEnableHdl));
+    m_xAutoMarkPB->connect_selected(LINK(this, SwTOXSelectTabPage, MenuExecuteHdl));
 
-    Link<Button*,void> aLk =  LINK(this, SwTOXSelectTabPage, CheckBoxHdl);
-    m_pAddStylesCB->SetClickHdl(aLk);
-    m_pFromHeadingsCB->SetClickHdl(aLk);
-    m_pTOXMarksCB->SetClickHdl(aLk);
-    m_pFromFileCB->SetClickHdl(aLk);
-    m_pCollectSameCB->SetClickHdl(aLk);
-    m_pUseFFCB->SetClickHdl(aLk);
-    m_pUseDashCB->SetClickHdl(aLk);
-    m_pInitialCapsCB->SetClickHdl(aLk);
-    m_pKeyAsEntryCB->SetClickHdl(aLk);
+    Link<weld::ToggleButton&,void> aLk =  LINK(this, SwTOXSelectTabPage, CheckBoxHdl);
+    m_xAddStylesCB->connect_toggled(aLk);
+    m_xFromHeadingsCB->connect_toggled(aLk);
+    m_xTOXMarksCB->connect_toggled(aLk);
+    m_xFromFileCB->connect_toggled(aLk);
+    m_xCollectSameCB->connect_toggled(aLk);
+    m_xUseFFCB->connect_toggled(aLk);
+    m_xUseDashCB->connect_toggled(aLk);
+    m_xInitialCapsCB->connect_toggled(aLk);
+    m_xKeyAsEntryCB->connect_toggled(aLk);
 
-    Link<Edit&,void> aModifyLk = LINK(this, SwTOXSelectTabPage, ModifyHdl);
-    m_pTitleED->SetModifyHdl(aModifyLk);
-    m_pLevelNF->SetModifyHdl(aModifyLk);
-    m_pSortAlgorithmLB->SetSelectHdl(LINK(this, SwTOXSelectTabPage, ModifyListBoxHdl));
+    m_xTitleED->connect_changed(LINK(this, SwTOXSelectTabPage, ModifyEntryHdl));
+    m_xLevelNF->connect_value_changed(LINK(this, SwTOXSelectTabPage, ModifySpinHdl));
+    m_xSortAlgorithmLB->connect_changed(LINK(this, SwTOXSelectTabPage, ModifyListBoxHdl));
 
     aLk =  LINK(this, SwTOXSelectTabPage, RadioButtonHdl);
-    m_pFromCaptionsRB->SetClickHdl(aLk);
-    m_pFromObjectNamesRB->SetClickHdl(aLk);
-    RadioButtonHdl(m_pFromCaptionsRB);
+    m_xFromCaptionsRB->connect_toggled(aLk);
+    m_xFromObjectNamesRB->connect_toggled(aLk);
+    RadioButtonHdl(*m_xFromCaptionsRB);
 
-    m_pLanguageLB->SetSelectHdl(LINK(this, SwTOXSelectTabPage, LanguageListBoxHdl));
-    m_pTypeLB->SelectEntryPos(0);
-    m_pTitleED->SaveValue();
+    m_xLanguageLB->connect_changed(LINK(this, SwTOXSelectTabPage, LanguageListBoxHdl));
+    m_xTypeLB->set_active(0);
+    m_xTitleED->save_value();
 }
 
 SwTOXSelectTabPage::~SwTOXSelectTabPage()
@@ -893,49 +835,9 @@ SwTOXSelectTabPage::~SwTOXSelectTabPage()
 
 void SwTOXSelectTabPage::dispose()
 {
-    delete pIndexRes;
-    delete pIndexEntryWrapper;
-    m_pTitleED.clear();
-    m_pTypeFT.clear();
-    m_pTypeLB.clear();
-    m_pReadOnlyCB.clear();
-    m_pAreaFrame.clear();
-    m_pAreaLB.clear();
-    m_pLevelFT.clear();
-    m_pLevelNF.clear();
-    m_pCreateFrame.clear();
-    m_pFromHeadingsCB.clear();
-    m_pAddStylesCB.clear();
-    m_pAddStylesPB.clear();
-    m_pFromTablesCB.clear();
-    m_pFromFramesCB.clear();
-    m_pFromGraphicsCB.clear();
-    m_pFromOLECB.clear();
-    m_pLevelFromChapterCB.clear();
-    m_pFromCaptionsRB.clear();
-    m_pFromObjectNamesRB.clear();
-    m_pCaptionSequenceFT.clear();
-    m_pCaptionSequenceLB.clear();
-    m_pDisplayTypeFT.clear();
-    m_pDisplayTypeLB.clear();
-    m_pTOXMarksCB.clear();
-    m_pIdxOptionsFrame.clear();
-    m_pCollectSameCB.clear();
-    m_pUseFFCB.clear();
-    m_pUseDashCB.clear();
-    m_pCaseSensitiveCB.clear();
-    m_pInitialCapsCB.clear();
-    m_pKeyAsEntryCB.clear();
-    m_pFromFileCB.clear();
-    m_pAutoMarkPB.clear();
-    m_pFromObjCLB.clear();
-    m_pFromObjFrame.clear();
-    m_pSequenceCB.clear();
-    m_pBracketLB.clear();
-    m_pAuthorityFrame.clear();
-    m_pSortFrame.clear();
-    m_pLanguageLB.clear();
-    m_pSortAlgorithmLB.clear();
+    pIndexRes.reset();
+    pIndexEntryWrapper.reset();
+    m_xLanguageLB.reset();
     SfxTabPage::dispose();
 }
 
@@ -945,13 +847,14 @@ void SwTOXSelectTabPage::SetWrtShell(SwWrtShell const & rSh)
     if(nUserTypeCount > 1)
     {
         //insert all new user indexes names after the standard user index
-        sal_Int32 nPos = m_pTypeLB->GetEntryPos(reinterpret_cast<void*>(sal_uInt32(TO_USER))) + 1;
-        for(sal_uInt16 nUser = 1; nUser < nUserTypeCount; nUser++)
+        sal_Int32 nPos = m_xTypeLB->find_id(OUString::number(sal_uInt32(TO_USER))) + 1;
+        for (sal_uInt16 nUser = 1; nUser < nUserTypeCount; nUser++)
         {
-            nPos = m_pTypeLB->InsertEntry(rSh.GetTOXType(TOX_USER, nUser)->GetTypeName(), nPos);
-            sal_uIntPtr nEntryData = nUser << 8;
+            sal_uInt32 nEntryData = nUser << 8;
             nEntryData |= TO_USER;
-            m_pTypeLB->SetEntryData(nPos, reinterpret_cast<void*>(nEntryData));
+            OUString sId(OUString::number(nEntryData));
+            m_xTypeLB->insert(nPos++, rSh.GetTOXType(TOX_USER, nUser)->GetTypeName(),
+                              &sId, nullptr, nullptr);
         }
     }
 }
@@ -988,11 +891,11 @@ void SwTOXSelectTabPage::SelectType(TOXTypes eSet)
 {
     CurTOXType eCurType (eSet);
 
-    sal_IntPtr nData = lcl_TOXTypesToUserData(eCurType);
-    m_pTypeLB->SelectEntryPos(m_pTypeLB->GetEntryPos(reinterpret_cast<void*>(nData)));
-    m_pTypeFT->Enable(false);
-    m_pTypeLB->Enable(false);
-    TOXTypeHdl(*m_pTypeLB);
+    sal_uInt32 nData = lcl_TOXTypesToUserData(eCurType);
+    m_xTypeLB->set_active_id(OUString::number(nData));
+    m_xTypeFT->set_sensitive(false);
+    m_xTypeLB->set_sensitive(false);
+    TOXTypeHdl(*m_xTypeLB);
 }
 
 static CurTOXType lcl_UserData2TOXTypes(sal_uInt16 nData)
@@ -1024,20 +927,20 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetTabDialog());
     const CurTOXType aCurType = pTOXDlg->GetCurrentTOXType();
     SwTOXDescription& rDesc = pTOXDlg->GetTOXDescription(aCurType);
-    m_pReadOnlyCB->Check(rDesc.IsReadonly());
-    if(m_pTitleED->GetText() == m_pTitleED->GetSavedValue())
+    m_xReadOnlyCB->set_active(rDesc.IsReadonly());
+    if (!m_xTitleED->get_value_changed_from_saved())
     {
-        if(rDesc.GetTitle())
-            m_pTitleED->SetText(*rDesc.GetTitle());
+        if (rDesc.GetTitle())
+            m_xTitleED->set_text(*rDesc.GetTitle());
         else
-            m_pTitleED->SetText(aEmptyOUStr);
-        m_pTitleED->SaveValue();
+            m_xTitleED->set_text(aEmptyOUStr);
+        m_xTitleED->save_value();
     }
 
-    m_pAreaLB->SelectEntryPos(rDesc.IsFromChapter() ? 1 : 0);
+    m_xAreaLB->set_active(rDesc.IsFromChapter() ? 1 : 0);
 
-    if(aCurType.eType != TOX_INDEX)
-        m_pLevelNF->SetValue(rDesc.GetLevel());   //content, user
+    if (aCurType.eType != TOX_INDEX)
+        m_xLevelNF->set_value(rDesc.GetLevel());   //content, user
 
     SwTOXElement nCreateType = rDesc.GetContentOptions();
 
@@ -1050,83 +953,86 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
             bHasStyleNames = true;
             break;
         }
-    m_pAddStylesCB->Check(bHasStyleNames && (nCreateType & SwTOXElement::Template));
+    m_xAddStylesCB->set_active(bHasStyleNames && (nCreateType & SwTOXElement::Template));
 
-    m_pFromOLECB->     Check( bool(nCreateType & SwTOXElement::Ole) );
-    m_pFromTablesCB->  Check( bool(nCreateType & SwTOXElement::Table) );
-    m_pFromGraphicsCB->Check( bool(nCreateType & SwTOXElement::Graphic) );
-    m_pFromFramesCB->  Check( bool(nCreateType & SwTOXElement::Frame) );
+    m_xFromOLECB->set_active( bool(nCreateType & SwTOXElement::Ole) );
+    m_xFromTablesCB->set_active( bool(nCreateType & SwTOXElement::Table) );
+    m_xFromGraphicsCB->set_active( bool(nCreateType & SwTOXElement::Graphic) );
+    m_xFromFramesCB->set_active( bool(nCreateType & SwTOXElement::Frame) );
 
-    m_pLevelFromChapterCB->Check(rDesc.IsLevelFromChapter());
+    m_xLevelFromChapterCB->set_active(rDesc.IsLevelFromChapter());
 
     //all but illustration and table
-    m_pTOXMarksCB->Check( bool(nCreateType & SwTOXElement::Mark) );
+    m_xTOXMarksCB->set_active( bool(nCreateType & SwTOXElement::Mark) );
 
     //content
     if(TOX_CONTENT == aCurType.eType)
     {
-        m_pFromHeadingsCB->Check( bool(nCreateType & SwTOXElement::OutlineLevel) );
-        m_pAddStylesCB->SetText(sAddStyleContent);
-        m_pAddStylesPB->Enable(m_pAddStylesCB->IsChecked());
+        m_xFromHeadingsCB->set_active( bool(nCreateType & SwTOXElement::OutlineLevel) );
+        m_xAddStylesCB->set_label(sAddStyleContent);
+        m_xAddStylesPB->set_sensitive(m_xAddStylesCB->get_active());
     }
     //index only
     else if(TOX_INDEX == aCurType.eType)
     {
         const SwTOIOptions nIndexOptions = rDesc.GetIndexOptions();
-        m_pCollectSameCB->     Check( bool(nIndexOptions & SwTOIOptions::SameEntry) );
-        m_pUseFFCB->           Check( bool(nIndexOptions & SwTOIOptions::FF) );
-        m_pUseDashCB->         Check( bool(nIndexOptions & SwTOIOptions::Dash) );
-        if(m_pUseFFCB->IsChecked())
-            m_pUseDashCB->Enable(false);
-        else if(m_pUseDashCB->IsChecked())
-            m_pUseFFCB->Enable(false);
+        m_xCollectSameCB->set_active( bool(nIndexOptions & SwTOIOptions::SameEntry) );
+        m_xUseFFCB->set_active( bool(nIndexOptions & SwTOIOptions::FF) );
+        m_xUseDashCB->set_active( bool(nIndexOptions & SwTOIOptions::Dash) );
+        if (m_xUseFFCB->get_active())
+            m_xUseDashCB->set_sensitive(false);
+        else if (m_xUseDashCB->get_active())
+            m_xUseFFCB->set_sensitive(false);
 
-        m_pCaseSensitiveCB->   Check( bool(nIndexOptions & SwTOIOptions::CaseSensitive) );
-        m_pInitialCapsCB->     Check( bool(nIndexOptions & SwTOIOptions::InitialCaps) );
-        m_pKeyAsEntryCB->      Check( bool(nIndexOptions & SwTOIOptions::KeyAsEntry) );
+        m_xCaseSensitiveCB->set_active( bool(nIndexOptions & SwTOIOptions::CaseSensitive) );
+        m_xInitialCapsCB->set_active( bool(nIndexOptions & SwTOIOptions::InitialCaps) );
+        m_xKeyAsEntryCB->set_active( bool(nIndexOptions & SwTOIOptions::KeyAsEntry) );
     }
-    else if(TOX_ILLUSTRATIONS == aCurType.eType ||
-        TOX_TABLES == aCurType.eType)
+    else if (TOX_ILLUSTRATIONS == aCurType.eType || TOX_TABLES == aCurType.eType)
     {
-        m_pFromObjectNamesRB->Check(rDesc.IsCreateFromObjectNames());
-        m_pFromCaptionsRB->Check(!rDesc.IsCreateFromObjectNames());
-        m_pCaptionSequenceLB->SelectEntry(rDesc.GetSequenceName());
-        m_pDisplayTypeLB->SelectEntryPos( static_cast< sal_Int32 >(rDesc.GetCaptionDisplay()) );
-        RadioButtonHdl(m_pFromCaptionsRB);
+        m_xFromObjectNamesRB->set_active(rDesc.IsCreateFromObjectNames());
+        m_xFromCaptionsRB->set_active(!rDesc.IsCreateFromObjectNames());
+        OUString sName(rDesc.GetSequenceName());
+        int nIndex = m_xCaptionSequenceLB->find_text(sName);
+        if (nIndex != -1)
+            m_xCaptionSequenceLB->set_active(nIndex);
+        m_xDisplayTypeLB->set_active(static_cast<sal_Int32>(rDesc.GetCaptionDisplay()));
+        if (m_xDisplayTypeLB->get_active() == -1)
+            m_xDisplayTypeLB->set_active(0);
+        RadioButtonHdl(*m_xFromCaptionsRB);
 
     }
     else if(TOX_OBJECTS == aCurType.eType)
     {
         SwTOOElements nOLEData = rDesc.GetOLEOptions();
-        for(sal_uLong nFromObj = 0; nFromObj < m_pFromObjCLB->GetEntryCount(); nFromObj++)
+        for (int nFromObj = 0, nCount = m_xFromObjCLB->n_children(); nFromObj < nCount; ++nFromObj)
         {
-            SwTOOElements nData = static_cast<SwTOOElements>(reinterpret_cast<sal_IntPtr>(m_pFromObjCLB->GetEntryData(nFromObj)));
-            m_pFromObjCLB->CheckEntryPos(nFromObj, bool(nData & nOLEData));
+            SwTOOElements nData = static_cast<SwTOOElements>(m_xFromObjCLB->get_id(nFromObj).toInt32());
+            m_xFromObjCLB->set_toggle(nFromObj, bool(nData & nOLEData), 0);
         }
     }
     else if(TOX_AUTHORITIES == aCurType.eType)
     {
-        const OUString sBrackets(rDesc.GetAuthBrackets());
+        const OUString& sBrackets(rDesc.GetAuthBrackets());
         if(sBrackets.isEmpty() || sBrackets == "  ")
-            m_pBracketLB->SelectEntryPos(0);
+            m_xBracketLB->set_active(0);
         else
-            m_pBracketLB->SelectEntry(sBrackets);
-        m_pSequenceCB->Check(rDesc.IsAuthSequence());
+            m_xBracketLB->set_active_text(sBrackets);
+        m_xSequenceCB->set_active(rDesc.IsAuthSequence());
     }
-    m_pAutoMarkPB->Enable(m_pFromFileCB->IsChecked());
+    m_xAutoMarkPB->set_sensitive(m_xFromFileCB->get_active());
 
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
         aStyleArr[i] = rDesc.GetStyleNames(i);
 
-    m_pLanguageLB->SelectLanguage(rDesc.GetLanguage());
+    m_xLanguageLB->set_active_id(rDesc.GetLanguage());
     LanguageHdl(nullptr);
-    for( sal_Int32 nCnt = 0; nCnt < m_pSortAlgorithmLB->GetEntryCount(); ++nCnt )
+    for (int nCnt = 0, nEntryCount = m_xSortAlgorithmLB->get_count(); nCnt < nEntryCount; ++nCnt)
     {
-        const OUString* pEntryData = static_cast<const OUString*>(m_pSortAlgorithmLB->GetEntryData( nCnt ));
-        OSL_ENSURE(pEntryData, "no entry data available");
-        if( pEntryData && *pEntryData == rDesc.GetSortAlgorithm())
+        const OUString& rEntryData = m_xSortAlgorithmLB->get_id(nCnt);
+        if (rEntryData == rDesc.GetSortAlgorithm())
         {
-            m_pSortAlgorithmLB->SelectEntryPos( nCnt );
+            m_xSortAlgorithmLB->set_active(nCnt);
             break;
         }
     }
@@ -1137,30 +1043,30 @@ void SwTOXSelectTabPage::FillTOXDescription()
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetTabDialog());
     CurTOXType aCurType = pTOXDlg->GetCurrentTOXType();
     SwTOXDescription& rDesc = pTOXDlg->GetTOXDescription(aCurType);
-    rDesc.SetTitle(m_pTitleED->GetText());
-    rDesc.SetFromChapter(1 == m_pAreaLB->GetSelectedEntryPos());
+    rDesc.SetTitle(m_xTitleED->get_text());
+    rDesc.SetFromChapter(1 == m_xAreaLB->get_active());
     SwTOXElement nContentOptions = SwTOXElement::NONE;
-    if(m_pTOXMarksCB->IsVisible() && m_pTOXMarksCB->IsChecked())
+    if (m_xTOXMarksCB->get_visible() && m_xTOXMarksCB->get_active())
         nContentOptions |= SwTOXElement::Mark;
 
     SwTOIOptions nIndexOptions = rDesc.GetIndexOptions()&SwTOIOptions::AlphaDelimiter;
     switch(rDesc.GetTOXType())
     {
         case TOX_CONTENT:
-            if(m_pFromHeadingsCB->IsChecked())
+            if(m_xFromHeadingsCB->get_active())
                 nContentOptions |= SwTOXElement::OutlineLevel;
         break;
         case TOX_USER:
         {
-            rDesc.SetTOUName(m_pTypeLB->GetSelectedEntry());
+            rDesc.SetTOUName(m_xTypeLB->get_active_text());
 
-            if(m_pFromOLECB->IsChecked())
+            if(m_xFromOLECB->get_active())
                 nContentOptions |= SwTOXElement::Ole;
-            if(m_pFromTablesCB->IsChecked())
+            if(m_xFromTablesCB->get_active())
                 nContentOptions |= SwTOXElement::Table;
-            if(m_pFromFramesCB->IsChecked())
+            if(m_xFromFramesCB->get_active())
                 nContentOptions |= SwTOXElement::Frame;
-            if(m_pFromGraphicsCB->IsChecked())
+            if(m_xFromGraphicsCB->get_active())
                 nContentOptions |= SwTOXElement::Graphic;
         }
         break;
@@ -1168,19 +1074,19 @@ void SwTOXSelectTabPage::FillTOXDescription()
         {
             nContentOptions = SwTOXElement::Mark;
 
-            if(m_pCollectSameCB->IsChecked())
+            if(m_xCollectSameCB->get_active())
                 nIndexOptions |= SwTOIOptions::SameEntry;
-            if(m_pUseFFCB->IsChecked())
+            if(m_xUseFFCB->get_active())
                 nIndexOptions |= SwTOIOptions::FF;
-            if(m_pUseDashCB->IsChecked())
+            if(m_xUseDashCB->get_active())
                 nIndexOptions |= SwTOIOptions::Dash;
-            if(m_pCaseSensitiveCB->IsChecked())
+            if(m_xCaseSensitiveCB->get_active())
                 nIndexOptions |= SwTOIOptions::CaseSensitive;
-            if(m_pInitialCapsCB->IsChecked())
+            if(m_xInitialCapsCB->get_active())
                 nIndexOptions |= SwTOIOptions::InitialCaps;
-            if(m_pKeyAsEntryCB->IsChecked())
+            if(m_xKeyAsEntryCB->get_active())
                 nIndexOptions |= SwTOIOptions::KeyAsEntry;
-            if(m_pFromFileCB->IsChecked())
+            if(m_xFromFileCB->get_active())
                 rDesc.SetAutoMarkURL(sAutoMarkURL);
             else
                 rDesc.SetAutoMarkURL(aEmptyOUStr);
@@ -1188,18 +1094,18 @@ void SwTOXSelectTabPage::FillTOXDescription()
         break;
         case TOX_ILLUSTRATIONS:
         case TOX_TABLES :
-            rDesc.SetCreateFromObjectNames(m_pFromObjectNamesRB->IsChecked());
-            rDesc.SetSequenceName(m_pCaptionSequenceLB->GetSelectedEntry());
-            rDesc.SetCaptionDisplay(static_cast<SwCaptionDisplay>(m_pDisplayTypeLB->GetSelectedEntryPos()));
+            rDesc.SetCreateFromObjectNames(m_xFromObjectNamesRB->get_active());
+            rDesc.SetSequenceName(m_xCaptionSequenceLB->get_active_text());
+            rDesc.SetCaptionDisplay(static_cast<SwCaptionDisplay>(m_xDisplayTypeLB->get_active()));
         break;
         case TOX_OBJECTS:
         {
             SwTOOElements nOLEData = SwTOOElements::NONE;
-            for(sal_uLong i = 0; i < m_pFromObjCLB->GetEntryCount(); i++)
+            for (int i = 0, nCount = m_xFromObjCLB->n_children(); i < nCount; ++i)
             {
-                if(m_pFromObjCLB->IsChecked(i))
+                if (m_xFromObjCLB->get_toggle(i, 0))
                 {
-                    SwTOOElements nData = static_cast<SwTOOElements>(reinterpret_cast<sal_IntPtr>(m_pFromObjCLB->GetEntryData(i)));
+                    SwTOOElements nData = static_cast<SwTOOElements>(m_xFromObjCLB->get_id(i).toInt32());
                     nOLEData |= nData;
                 }
             }
@@ -1209,40 +1115,38 @@ void SwTOXSelectTabPage::FillTOXDescription()
         case TOX_AUTHORITIES:
         case TOX_BIBLIOGRAPHY :
         {
-            if(m_pBracketLB->GetSelectedEntryPos())
-                rDesc.SetAuthBrackets(m_pBracketLB->GetSelectedEntry());
+            if (m_xBracketLB->get_active())
+                rDesc.SetAuthBrackets(m_xBracketLB->get_active_text());
             else
                 rDesc.SetAuthBrackets(aEmptyOUStr);
-            rDesc.SetAuthSequence(m_pSequenceCB->IsChecked());
+            rDesc.SetAuthSequence(m_xSequenceCB->get_active());
         }
         break;
         case TOX_CITATION :
         break;
     }
 
-    rDesc.SetLevelFromChapter(  m_pLevelFromChapterCB->IsVisible() &&
-                                m_pLevelFromChapterCB->IsChecked());
-    if(m_pTOXMarksCB->IsChecked() && m_pTOXMarksCB->IsVisible())
+    rDesc.SetLevelFromChapter(  m_xLevelFromChapterCB->get_visible() &&
+                                m_xLevelFromChapterCB->get_active());
+    if (m_xTOXMarksCB->get_active() && m_xTOXMarksCB->get_visible())
         nContentOptions |= SwTOXElement::Mark;
-    if(m_pFromHeadingsCB->IsChecked() && m_pFromHeadingsCB->IsVisible())
+    if (m_xFromHeadingsCB->get_active() && m_xFromHeadingsCB->get_visible())
         nContentOptions |= SwTOXElement::OutlineLevel;
-    if(m_pAddStylesCB->IsChecked() && m_pAddStylesCB->IsVisible())
+    if (m_xAddStylesCB->get_active() && m_xAddStylesCB->get_visible())
         nContentOptions |= SwTOXElement::Template;
 
     rDesc.SetContentOptions(nContentOptions);
     rDesc.SetIndexOptions(nIndexOptions);
-    rDesc.SetLevel( static_cast< sal_uInt8 >(m_pLevelNF->GetValue()) );
+    rDesc.SetLevel(m_xLevelNF->get_value());
 
-    rDesc.SetReadonly(m_pReadOnlyCB->IsChecked());
+    rDesc.SetReadonly(m_xReadOnlyCB->get_active());
 
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
         rDesc.SetStyleNames(aStyleArr[i], i);
 
-    rDesc.SetLanguage(m_pLanguageLB->GetSelectedLanguage());
-    const OUString* pEntryData = static_cast<const OUString*>(m_pSortAlgorithmLB->GetSelectedEntryData());
-    OSL_ENSURE(pEntryData, "no entry data available");
-    if(pEntryData)
-        rDesc.SetSortAlgorithm(*pEntryData);
+    rDesc.SetLanguage(m_xLanguageLB->get_active_id());
+    const OUString& rEntryData = m_xSortAlgorithmLB->get_active_id();
+    rDesc.SetSortAlgorithm(rEntryData);
 }
 
 void SwTOXSelectTabPage::Reset( const SfxItemSet* )
@@ -1250,27 +1154,27 @@ void SwTOXSelectTabPage::Reset( const SfxItemSet* )
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetTabDialog());
     SwWrtShell& rSh = pTOXDlg->GetWrtShell();
     const CurTOXType aCurType = pTOXDlg->GetCurrentTOXType();
-    sal_IntPtr nData = lcl_TOXTypesToUserData(aCurType);
-    m_pTypeLB->SelectEntryPos(m_pTypeLB->GetEntryPos(reinterpret_cast<void*>(nData)));
+    sal_uInt32 nData = lcl_TOXTypesToUserData(aCurType);
+    m_xTypeLB->set_active_id(OUString::number(nData));
 
     sAutoMarkURL = INetURLObject::decode( rSh.GetTOIAutoMarkURL(),
                                            INetURLObject::DecodeMechanism::Unambiguous );
-    m_pFromFileCB->Check( !sAutoMarkURL.isEmpty() );
+    m_xFromFileCB->set_active(!sAutoMarkURL.isEmpty());
 
-    m_pCaptionSequenceLB->Clear();
+    m_xCaptionSequenceLB->clear();
     const size_t nCount = rSh.GetFieldTypeCount(SwFieldIds::SetExp);
     for (size_t i = 0; i < nCount; ++i)
     {
         SwFieldType *pType = rSh.GetFieldType( i, SwFieldIds::SetExp );
         if( pType->Which() == SwFieldIds::SetExp &&
             static_cast<SwSetExpFieldType *>( pType)->GetType() & nsSwGetSetExpType::GSE_SEQ )
-            m_pCaptionSequenceLB->InsertEntry(pType->GetName());
+            m_xCaptionSequenceLB->append_text(pType->GetName());
     }
 
     if(pTOXDlg->IsTOXEditMode())
     {
-        m_pTypeFT->Enable(false);
-        m_pTypeLB->Enable(false);
+        m_xTypeFT->set_sensitive(false);
+        m_xTypeLB->set_sensitive(false);
     }
 
     if(!m_bWaitingInitialSettings)
@@ -1280,8 +1184,8 @@ void SwTOXSelectTabPage::Reset( const SfxItemSet* )
     }
     m_bWaitingInitialSettings = false;
 
-    TOXTypeHdl(*m_pTypeLB);
-    CheckBoxHdl(m_pAddStylesCB);
+    TOXTypeHdl(*m_xTypeLB);
+    CheckBoxHdl(*m_xAddStylesCB);
 }
 
 void SwTOXSelectTabPage::ActivatePage( const SfxItemSet& )
@@ -1289,91 +1193,85 @@ void SwTOXSelectTabPage::ActivatePage( const SfxItemSet& )
     //nothing to do
 }
 
-DeactivateRC SwTOXSelectTabPage::DeactivatePage( SfxItemSet* _pSet )
+DeactivateRC SwTOXSelectTabPage::DeactivatePage(SfxItemSet* _pSet)
 {
-    if(_pSet)
-        _pSet->Put(SfxUInt16Item(FN_PARAM_TOX_TYPE,
-            static_cast<sal_uInt16>(reinterpret_cast<sal_IntPtr>(m_pTypeLB->GetSelectedEntryData()))));
+    if (_pSet)
+        _pSet->Put(SfxUInt16Item(FN_PARAM_TOX_TYPE, m_xTypeLB->get_active_id().toUInt32()));
     FillTOXDescription();
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SwTOXSelectTabPage::Create( TabPageParent pParent, const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SwTOXSelectTabPage::Create(TabPageParent pParent, const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTOXSelectTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SwTOXSelectTabPage>::Create(pParent, *rAttrSet);
 }
 
-IMPL_LINK(SwTOXSelectTabPage, TOXTypeHdl, ListBox&, rBox, void)
+IMPL_LINK(SwTOXSelectTabPage, TOXTypeHdl, weld::ComboBox&, rBox, void)
 {
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetTabDialog());
-    const sal_uInt16 nType =  sal::static_int_cast< sal_uInt16 >(reinterpret_cast< sal_uIntPtr >(
-                                rBox.GetSelectedEntryData()));
+    const sal_uInt16 nType = rBox.get_active_id().toUInt32();
     CurTOXType eCurType = lcl_UserData2TOXTypes(nType);
     pTOXDlg->SetCurrentTOXType(eCurType);
 
-    m_pAreaLB->Show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_INDEX|TO_TABLE|TO_OBJECT)) );
-    m_pLevelFT->Show( 0 != (nType & (TO_CONTENT)) );
-    m_pLevelNF->Show( 0 != (nType & (TO_CONTENT)) );
-    m_pLevelFromChapterCB->Show( 0 != (nType & (TO_USER)) );
-    m_pAreaFrame->Show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_INDEX|TO_TABLE|TO_OBJECT)) );
+    m_xAreaLB->show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_INDEX|TO_TABLE|TO_OBJECT)) );
+    m_xLevelFT->show( 0 != (nType & (TO_CONTENT)) );
+    m_xLevelNF->show( 0 != (nType & (TO_CONTENT)) );
+    m_xLevelFromChapterCB->show( 0 != (nType & (TO_USER)) );
+    m_xAreaFrame->show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_INDEX|TO_TABLE|TO_OBJECT)) );
 
-    m_pFromHeadingsCB->Show( 0 != (nType & (TO_CONTENT)) );
-    m_pAddStylesCB->Show( 0 != (nType & (TO_CONTENT|TO_USER)) );
-    m_pAddStylesPB->Show( 0 != (nType & (TO_CONTENT|TO_USER)) );
+    m_xFromHeadingsCB->show( 0 != (nType & (TO_CONTENT)) );
+    m_xAddStylesCB->show( 0 != (nType & (TO_CONTENT|TO_USER)) );
+    m_xAddStylesPB->show( 0 != (nType & (TO_CONTENT|TO_USER)) );
 
-    m_pFromTablesCB->Show( 0 != (nType & (TO_USER)) );
-    m_pFromFramesCB->Show( 0 != (nType & (TO_USER)) );
-    m_pFromGraphicsCB->Show( 0 != (nType & (TO_USER)) );
-    m_pFromOLECB->Show( 0 != (nType & (TO_USER)) );
+    m_xFromTablesCB->show( 0 != (nType & (TO_USER)) );
+    m_xFromFramesCB->show( 0 != (nType & (TO_USER)) );
+    m_xFromGraphicsCB->show( 0 != (nType & (TO_USER)) );
+    m_xFromOLECB->show( 0 != (nType & (TO_USER)) );
 
-    m_pFromCaptionsRB->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
-    m_pFromObjectNamesRB->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xFromCaptionsRB->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xFromObjectNamesRB->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
 
-    m_pTOXMarksCB->Show( 0 != (nType & (TO_CONTENT|TO_USER)) );
+    m_xTOXMarksCB->show( 0 != (nType & (TO_CONTENT|TO_USER)) );
 
-    m_pCreateFrame->Show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_TABLE)) );
-    m_pCaptionSequenceFT->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
-    m_pCaptionSequenceLB->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
-    m_pDisplayTypeFT->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
-    m_pDisplayTypeLB->Show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xCreateFrame->show( 0 != (nType & (TO_CONTENT|TO_ILLUSTRATION|TO_USER|TO_TABLE)) );
+    m_xCaptionSequenceFT->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xCaptionSequenceLB->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xDisplayTypeFT->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xDisplayTypeLB->show( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
 
-    m_pAuthorityFrame->Show( 0 != (nType & TO_AUTHORITIES) );
+    m_xAuthorityFrame->show( 0 != (nType & TO_AUTHORITIES) );
 
     bool bEnableSortLanguage = 0 != (nType & (TO_INDEX|TO_AUTHORITIES));
-    m_pSortFrame->Show(bEnableSortLanguage);
+    m_xSortFrame->show(bEnableSortLanguage);
 
     if( nType & TO_ILLUSTRATION )
     {
-        m_pCaptionSequenceLB->SelectEntry( SwStyleNameMapper::GetUIName(
-                                    RES_POOLCOLL_LABEL_ABB, OUString() ));
+        OUString sName(SwStyleNameMapper::GetUIName(RES_POOLCOLL_LABEL_FIGURE, OUString()));
+        m_xCaptionSequenceLB->set_active_text(sName);
     }
     else if( nType & TO_TABLE )
     {
-        m_pCaptionSequenceLB->SelectEntry( SwStyleNameMapper::GetUIName(
-                                    RES_POOLCOLL_LABEL_TABLE, OUString() ));
+        OUString sName(SwStyleNameMapper::GetUIName(RES_POOLCOLL_LABEL_TABLE, OUString()));
+        m_xCaptionSequenceLB->set_active_text(sName);
     }
     else if( nType & TO_USER )
     {
-        m_pAddStylesCB->SetText(sAddStyleUser);
+        m_xAddStylesCB->set_label(sAddStyleUser);
     }
 
-    m_pIdxOptionsFrame->Show( 0 != (nType & TO_INDEX) );
+    m_xIdxOptionsFrame->show( 0 != (nType & TO_INDEX) );
 
     //object index
-    m_pFromObjFrame->Show( 0 != (nType & TO_OBJECT) );
+    m_xFromObjFrame->show( 0 != (nType & TO_OBJECT) );
 
     //set control values from the proper TOXDescription
     {
         ApplyTOXDescription();
     }
-    ModifyHdl(*m_pTitleED);
+    ModifyHdl();
 }
 
-IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifyListBoxHdl, ListBox&, void)
-{
-    ModifyHdl(*m_pTitleED);
-}
-IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifyHdl, Edit&, void)
+void SwTOXSelectTabPage::ModifyHdl()
 {
     if(!m_bWaitingInitialSettings)
     {
@@ -1383,132 +1281,131 @@ IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifyHdl, Edit&, void)
     }
 }
 
-IMPL_LINK(SwTOXSelectTabPage, CheckBoxHdl, Button*, pButton, void )
+IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifyListBoxHdl, weld::ComboBox&, void)
 {
-    CheckBox* pBox = static_cast<CheckBox*>(pButton);
+    ModifyHdl();
+}
+
+IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifyEntryHdl, weld::Entry&, void)
+{
+    ModifyHdl();
+}
+
+IMPL_LINK_NOARG(SwTOXSelectTabPage, ModifySpinHdl, weld::SpinButton&, void)
+{
+    ModifyHdl();
+}
+
+IMPL_LINK(SwTOXSelectTabPage, CheckBoxHdl, weld::ToggleButton&, rButton, void)
+{
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetTabDialog());
     const CurTOXType aCurType = pTOXDlg->GetCurrentTOXType();
     if(TOX_CONTENT == aCurType.eType)
     {
         //at least one of the three CheckBoxes must be checked
-        if(!m_pAddStylesCB->IsChecked() && !m_pFromHeadingsCB->IsChecked() && !m_pTOXMarksCB->IsChecked())
+        if (!m_xAddStylesCB->get_active() && !m_xFromHeadingsCB->get_active() && !m_xTOXMarksCB->get_active())
         {
             //TODO: InfoBox?
-            pBox->Check();
+            rButton.set_active(true);
         }
-        m_pAddStylesPB->Enable(m_pAddStylesCB->IsChecked());
+        m_xAddStylesPB->set_sensitive(m_xAddStylesCB->get_active());
     }
-    if(TOX_USER == aCurType.eType)
+    if (TOX_USER == aCurType.eType)
     {
-        m_pAddStylesPB->Enable(m_pAddStylesCB->IsChecked());
+        m_xAddStylesPB->set_sensitive(m_xAddStylesCB->get_active());
     }
-    else if(TOX_INDEX == aCurType.eType)
+    else if (TOX_INDEX == aCurType.eType)
     {
-        m_pAutoMarkPB->Enable(m_pFromFileCB->IsChecked());
-        m_pUseFFCB->Enable(m_pCollectSameCB->IsChecked() && !m_pUseDashCB->IsChecked());
-        m_pUseDashCB->Enable(m_pCollectSameCB->IsChecked() && !m_pUseFFCB->IsChecked());
-        m_pCaseSensitiveCB->Enable(m_pCollectSameCB->IsChecked());
+        m_xAutoMarkPB->set_sensitive(m_xFromFileCB->get_active());
+        m_xUseFFCB->set_sensitive(m_xCollectSameCB->get_active() && !m_xUseDashCB->get_active());
+        m_xUseDashCB->set_sensitive(m_xCollectSameCB->get_active() && !m_xUseFFCB->get_active());
+        m_xCaseSensitiveCB->set_sensitive(m_xCollectSameCB->get_active());
     }
-    ModifyHdl(*m_pTitleED);
+    ModifyHdl();
 };
 
-IMPL_LINK_NOARG(SwTOXSelectTabPage, RadioButtonHdl, Button*, void)
+IMPL_LINK_NOARG(SwTOXSelectTabPage, RadioButtonHdl, weld::ToggleButton&, void)
 {
-    bool bEnable = m_pFromCaptionsRB->IsChecked();
-    m_pCaptionSequenceFT->Enable(bEnable);
-    m_pCaptionSequenceLB->Enable(bEnable);
-    m_pDisplayTypeFT->Enable(bEnable);
-    m_pDisplayTypeLB->Enable(bEnable);
-    ModifyHdl(*m_pTitleED);
+    bool bEnable = m_xFromCaptionsRB->get_active();
+    m_xCaptionSequenceFT->set_sensitive(bEnable);
+    m_xCaptionSequenceLB->set_sensitive(bEnable);
+    m_xDisplayTypeFT->set_sensitive(bEnable);
+    m_xDisplayTypeLB->set_sensitive(bEnable);
+    ModifyHdl();
 }
 
-IMPL_LINK(SwTOXSelectTabPage, LanguageListBoxHdl, ListBox&, rBox, void)
+IMPL_LINK(SwTOXSelectTabPage, LanguageListBoxHdl, weld::ComboBox&, rBox, void)
 {
     LanguageHdl(&rBox);
 }
-void SwTOXSelectTabPage::LanguageHdl( ListBox const * pBox )
+
+void SwTOXSelectTabPage::LanguageHdl(const weld::ComboBox* pBox)
 {
-    lang::Locale aLcl( LanguageTag( m_pLanguageLB->GetSelectedLanguage() ).getLocale() );
+    lang::Locale aLcl( LanguageTag( m_xLanguageLB->get_active_id() ).getLocale() );
     Sequence< OUString > aSeq = pIndexEntryWrapper->GetAlgorithmList( aLcl );
 
     if( !pIndexRes )
-        pIndexRes = new IndexEntryResource();
+        pIndexRes.reset(new IndexEntryResource());
 
-    OUString sOldString;
-    void* pUserData;
-    if( nullptr != (pUserData = m_pSortAlgorithmLB->GetSelectedEntryData()) )
-        sOldString = *static_cast<OUString*>(pUserData);
-    sal_Int32 nEnd = m_pSortAlgorithmLB->GetEntryCount();
-    for( sal_Int32 n = 0; n < nEnd; ++n )
-    {
-        void* pDel = m_pSortAlgorithmLB->GetEntryData( n );
-        if( nullptr != pDel )
-            delete static_cast<OUString*>(pDel);
-    }
-    m_pSortAlgorithmLB->Clear();
+    OUString sOldString = m_xSortAlgorithmLB->get_active_id();
+    m_xSortAlgorithmLB->clear();
 
-    nEnd = aSeq.getLength();
+    sal_Int32 nEnd = aSeq.getLength();
     for( sal_Int32 nCnt = 0; nCnt < nEnd; ++nCnt )
     {
         const OUString sAlg(aSeq[ nCnt ]);
         const OUString sUINm = pIndexRes->GetTranslation( sAlg );
-        sal_Int32 nInsPos = m_pSortAlgorithmLB->InsertEntry( sUINm );
-        m_pSortAlgorithmLB->SetEntryData( nInsPos, new OUString( sAlg ));
+        m_xSortAlgorithmLB->append(sAlg, sUINm);
         if( sAlg == sOldString )
-            m_pSortAlgorithmLB->SelectEntryPos( nInsPos );
+            m_xSortAlgorithmLB->set_active(nCnt);
     }
 
-    if( LISTBOX_ENTRY_NOTFOUND == m_pSortAlgorithmLB->GetSelectedEntryPos() )
-        m_pSortAlgorithmLB->SelectEntryPos( 0 );
+    if (m_xSortAlgorithmLB->get_active() == -1)
+        m_xSortAlgorithmLB->set_active(0);
 
-    if(pBox)
-        ModifyHdl(*m_pTitleED);
+    if (pBox)
+        ModifyHdl();
 };
 
-IMPL_LINK(SwTOXSelectTabPage, AddStylesHdl, Button*, pButton, void)
+IMPL_LINK_NOARG(SwTOXSelectTabPage, AddStylesHdl, weld::Button&, void)
 {
-    ScopedVclPtrInstance<SwAddStylesDlg_Impl> pDlg(
-        pButton, static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell(),
+    SwAddStylesDlg_Impl aDlg(GetDialogFrameWeld(), static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell(),
         aStyleArr);
-    pDlg->Execute();
-    pDlg.disposeAndClear();
-    ModifyHdl(*m_pTitleED);
+    aDlg.run();
+    ModifyHdl();
 }
 
-IMPL_LINK(SwTOXSelectTabPage, MenuEnableHdl, Menu*, pMenu, bool)
+IMPL_LINK_NOARG(SwTOXSelectTabPage, MenuEnableHdl, weld::ToggleButton&, void)
 {
-    pMenu->EnableItem("edit", !sAutoMarkURL.isEmpty());
-    return false;
+    m_xAutoMarkPB->set_item_sensitive("edit", !sAutoMarkURL.isEmpty());
 }
 
-IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, Menu*, pMenu, bool)
+IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, const OString&, rIdent, void)
 {
     const OUString sSaveAutoMarkURL = sAutoMarkURL;
-    OString sIdent(pMenu->GetCurItemIdent());
 
-    if (sIdent == "open")
+    if (rIdent == "open")
     {
-        sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetFrameWeld(),
+        sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetDialogFrameWeld(),
                                 sAutoMarkURL, sAutoMarkType, true);
     }
-    else if ((sIdent == "new") || (sIdent == "edit"))
+    else if (rIdent == "new" || rIdent == "edit")
     {
-        bool bNew = (sIdent == "new");
+        bool bNew = (rIdent == "new");
         if (bNew)
         {
-            sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetFrameWeld(),
+            sAutoMarkURL = lcl_CreateAutoMarkFileDlg(GetDialogFrameWeld(),
                                     sAutoMarkURL, sAutoMarkType, false);
-            if( sAutoMarkURL.isEmpty() )
-                return false;
+            if (sAutoMarkURL.isEmpty())
+                return;
         }
 
         VclPtrInstance<SwAutoMarkDlg_Impl> pAutoMarkDlg(
-                m_pAutoMarkPB, sAutoMarkURL, bNew );
+                GetTabDialog(), sAutoMarkURL, bNew);
 
         if( RET_OK != pAutoMarkDlg->Execute() && bNew )
             sAutoMarkURL = sSaveAutoMarkURL;
     }
-    return false;
 }
 
 class SwTOXEdit : public Edit
@@ -2073,7 +1970,7 @@ void SwTOXEntryTabPage::Reset( const SfxItemSet* )
     if(TOX_INDEX == aCurType.eType)
     {
         SwTOXDescription& rDesc = pTOXDlg->GetTOXDescription(aCurType);
-        const OUString sMainEntryCharStyle = rDesc.GetMainEntryCharStyle();
+        const OUString& sMainEntryCharStyle = rDesc.GetMainEntryCharStyle();
         if(!sMainEntryCharStyle.isEmpty())
         {
             if( LISTBOX_ENTRY_NOTFOUND ==
@@ -2229,11 +2126,9 @@ void SwTOXEntryTabPage::UpdateDescriptor()
         rDesc.SetSortKeys(aKey1, aKey2, aKey3);
     }
     SwForm* pCurrentForm = pTOXDlg->GetForm(aLastTOXType);
-    if(m_pRelToStyleCB->IsVisible())
-    {
+    if (m_pRelToStyleCB->IsVisible())
         pCurrentForm->SetRelTabPos(m_pRelToStyleCB->IsChecked());
-    }
-    if(m_pCommaSeparatedCB->IsVisible())
+    if (m_pCommaSeparatedCB->IsVisible())
         pCurrentForm->SetCommaSeparated(m_pCommaSeparatedCB->IsChecked());
 }
 
@@ -2424,11 +2319,9 @@ IMPL_LINK(SwTOXEntryTabPage, LevelHdl, SvTreeListBox*, pBox, void)
 
         // #i21237#
         SwFormTokens aPattern = m_pCurrentForm->GetPattern(nLevel + 1);
-        SwFormTokens::iterator aIt = aPattern.begin();
 
-        while(aIt != aPattern.end())
+        for(const auto& aToken : aPattern)
         {
-            SwFormToken aToken = *aIt; // #i21237#
             if(TOKEN_AUTHORITY == aToken.eTokenType)
             {
                 sal_uInt32 nSearch = aToken.nAuthorityField;
@@ -2436,8 +2329,6 @@ IMPL_LINK(SwTOXEntryTabPage, LevelHdl, SvTreeListBox*, pBox, void)
                 OSL_ENSURE(LISTBOX_ENTRY_NOTFOUND != nLstBoxPos, "Entry not found?");
                 m_pAuthFieldsLB->RemoveEntry(nLstBoxPos);
             }
-
-            ++aIt; // #i21237#
         }
         m_pAuthFieldsLB->SelectEntryPos(0);
     }
@@ -2502,7 +2393,7 @@ IMPL_LINK(SwTOXEntryTabPage, TokenSelectedHdl, SwFormToken&, rToken, void)
     m_pAutoRightCB->Enable(bTabStop);
     if(bTabStop)
     {
-        m_pTabPosMF->SetValue(m_pTabPosMF->Normalize(rToken.nTabStopPosition), FUNIT_TWIP);
+        m_pTabPosMF->SetValue(m_pTabPosMF->Normalize(rToken.nTabStopPosition), FieldUnit::TWIP);
         m_pAutoRightCB->Check(SvxTabAdjust::End == rToken.eTabAlign);
         m_pFillCharCB->SetText(OUString(rToken.cTabFillChar));
         m_pTabPosFT->Enable(!m_pAutoRightCB->IsChecked());
@@ -2637,7 +2528,7 @@ IMPL_LINK(SwTOXEntryTabPage, TabPosHdl, Edit&, rEdit, void)
     if( pCtrl && WindowType::EDIT != pCtrl->GetType() )
     {
         static_cast<SwTOXButton*>(pCtrl)->SetTabPosition( static_cast< SwTwips >(
-                pField->Denormalize( pField->GetValue( FUNIT_TWIP ))));
+                pField->Denormalize( pField->GetValue( FieldUnit::TWIP ))));
     }
     ModifyHdl(nullptr);
 }
@@ -2826,11 +2717,9 @@ void SwTokenWindow::SetForm(SwForm& rForm, sal_uInt16 nL)
 
     if(m_pForm)
     {
-        for (ctrl_iterator iter = m_aControlList.begin(); iter != m_aControlList.end(); ++iter)
-            iter->disposeAndClear();
         //apply current level settings to the form
-        for (auto it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
-             it->disposeAndClear();
+        for (auto& aControl : m_aControlList)
+            aControl.disposeAndClear();
         m_aControlList.clear();
     }
 
@@ -2841,14 +2730,11 @@ void SwTokenWindow::SetForm(SwForm& rForm, sal_uInt16 nL)
     {
         // #i21237#
         SwFormTokens aPattern = m_pForm->GetPattern(m_nLevel + 1);
-        SwFormTokens::iterator aIt = aPattern.begin();
         bool bLastWasText = false; //assure alternating text - code - text
 
         Control* pSetActiveControl = nullptr;
-        while(aIt != aPattern.end()) // #i21237#
+        for (const auto& aToken : aPattern) // #i21237#
         {
-            SwFormToken aToken(*aIt); // #i21237#
-
             if(TOKEN_TEXT == aToken.eTokenType)
             {
                 SAL_WARN_IF(bLastWasText, "sw", "text following text is invalid");
@@ -2885,8 +2771,6 @@ void SwTokenWindow::SetForm(SwForm& rForm, sal_uInt16 nL)
                 InsertItem( sForm, aToken );
                 bLastWasText = false;
             }
-
-            ++aIt; // #i21237#
         }
         if(!bLastWasText)
         {
@@ -3029,8 +2913,8 @@ void SwTokenWindow::InsertAtSelection(const OUString& rText, const SwFormToken& 
         const Control* pControl = nullptr;
         const Control* pExchange = nullptr;
 
-        ctrl_const_iterator it = m_aControlList.begin();
-        for( ; it != m_aControlList.end() && m_pActiveCtrl != (*it); ++it )
+        auto it = m_aControlList.cbegin();
+        for( ; it != m_aControlList.cend() && m_pActiveCtrl != (*it); ++it )
         {
             pControl = *it;
 
@@ -3061,7 +2945,7 @@ void SwTokenWindow::InsertAtSelection(const OUString& rText, const SwFormToken& 
 
         if(!bPreStartLinkFound && !bPreEndLinkFound)
         {
-            for( ; it != m_aControlList.end(); ++it )
+            for( ; it != m_aControlList.cend(); ++it )
             {
                 pControl = *it;
 
@@ -3121,7 +3005,7 @@ void SwTokenWindow::InsertAtSelection(const OUString& rText, const SwFormToken& 
 
     //if the active control is text then insert a new button at the selection
     //else replace the button
-    ctrl_iterator iterActive = std::find(m_aControlList.begin(),
+    auto iterActive = std::find(m_aControlList.begin(),
                                          m_aControlList.end(), m_pActiveCtrl);
 
     assert(iterActive != m_aControlList.end());
@@ -3211,7 +3095,7 @@ void SwTokenWindow::RemoveControl(SwTOXButton* pDel, bool bInternalCall )
     if(bInternalCall && TOX_AUTHORITIES == m_pForm->GetTOXType())
         m_pParent->PreTokenButtonRemoved(pDel->GetFormToken());
 
-    ctrl_iterator it = std::find(m_aControlList.begin(), m_aControlList.end(), pDel);
+    auto it = std::find(m_aControlList.begin(), m_aControlList.end(), pDel);
 
     assert(it != m_aControlList.end()); //Control does not exist!
     if (it == m_aControlList.end())
@@ -3223,7 +3107,7 @@ void SwTokenWindow::RemoveControl(SwTOXButton* pDel, bool bInternalCall )
     if (it == m_aControlList.begin() || it == m_aControlList.end() - 1)
         return;
 
-    ctrl_iterator itLeft = it, itRight = it;
+    auto itLeft = it, itRight = it;
     --itLeft;
     ++itRight;
     VclPtr<Control> pLeftEdit = *itLeft;
@@ -3249,7 +3133,7 @@ void SwTokenWindow::AdjustPositions()
 {
     if(m_aControlList.size() > 1)
     {
-        ctrl_iterator it = m_aControlList.begin();
+        auto it = m_aControlList.begin();
         Control* pCtrl = it->get();
         ++it;
 
@@ -3336,56 +3220,48 @@ IMPL_LINK(SwTokenWindow, ScrollHdl, Button*, pBtn, void )
     if(pBtn == m_pLeftScrollWin)
     {
         //find the first completely visible control (left edge visible)
-        for (ctrl_iterator it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
+        auto it = std::find_if(m_aControlList.begin(), m_aControlList.end(),
+            [](const VclPtr<Control>& rControl) {
+                Control *pCtrl = rControl.get();
+                return pCtrl->GetPosPixel().X() >= 0;
+            });
+        if (it != m_aControlList.end())
         {
-            Control *pCtrl = it->get();
-
-            long nXPos = pCtrl->GetPosPixel().X();
-
-            if (nXPos >= 0)
+            if (it == m_aControlList.begin())
             {
-                if (it == m_aControlList.begin())
-                {
-                    //move the current control to the left edge
-                    nMove = -nXPos;
-                }
-                else
-                {
-                    //move the left neighbor to the start position
-                    ctrl_iterator itLeft = it;
-                    --itLeft;
-                    Control *pLeft = itLeft->get();
+                //move the current control to the left edge
+                Control *pCtrl = it->get();
 
-                    nMove = -pLeft->GetPosPixel().X();
-                }
+                nMove = -pCtrl->GetPosPixel().X();
+            }
+            else
+            {
+                //move the left neighbor to the start position
+                auto itLeft = it;
+                --itLeft;
+                Control *pLeft = itLeft->get();
 
-                break;
+                nMove = -pLeft->GetPosPixel().X();
             }
         }
     }
     else
     {
         //find the first completely visible control (right edge visible)
-        for (ctrl_reverse_iterator it = m_aControlList.rbegin(); it != m_aControlList.rend(); ++it)
+        auto it = std::find_if(m_aControlList.rbegin(), m_aControlList.rend(),
+            [&nSpace](const VclPtr<Control>& rControl) {
+                Control *pCtrl = rControl.get();
+                long nCtrlWidth = pCtrl->GetSizePixel().Width();
+                long nXPos = pCtrl->GetPosPixel().X() + nCtrlWidth;
+                return nXPos <= nSpace;
+            });
+        if (it != m_aControlList.rend() && it != m_aControlList.rbegin())
         {
-            Control *pCtrl = it->get();
-
-            long nCtrlWidth = pCtrl->GetSizePixel().Width();
-            long nXPos = pCtrl->GetPosPixel().X() + nCtrlWidth;
-
-            if (nXPos <= nSpace)
-            {
-                if (it != m_aControlList.rbegin())
-                {
-                    //move the right neighbor  to the right edge right aligned
-                    ctrl_reverse_iterator itRight = it;
-                    --itRight;
-                    Control *pRight = itRight->get();
-                    nMove = nSpace - pRight->GetPosPixel().X() - pRight->GetSizePixel().Width();
-                }
-
-                break;
-            }
+            //move the right neighbor  to the right edge right aligned
+            auto itRight = it;
+            --itRight;
+            Control *pRight = itRight->get();
+            nMove = nSpace - pRight->GetPosPixel().X() - pRight->GetSizePixel().Width();
         }
 
         //move it left until it's completely visible
@@ -3408,21 +3284,19 @@ IMPL_LINK(SwTokenWindow, ScrollHdl, Button*, pBtn, void )
 
 OUString SwTokenWindow::GetPattern() const
 {
-    OUString sRet;
+    OUStringBuffer sRet;
 
-    for (ctrl_const_iterator it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
+    for (const Control* pCtrl : m_aControlList)
     {
-        const Control *pCtrl = *it;
-
         const SwFormToken &rNewToken = pCtrl->GetType() == WindowType::EDIT
                 ? const_cast<SwTOXEdit*>(static_cast<const SwTOXEdit*>(pCtrl))->GetFormToken()
                 : static_cast<const SwTOXButton*>(pCtrl)->GetFormToken();
 
         //TODO: prevent input of TOX_STYLE_DELIMITER in KeyInput
-        sRet += rNewToken.GetString();
+        sRet.append(rNewToken.GetString());
     }
 
-    return sRet;
+    return sRet.makeStringAndClear();
 }
 
 // Check if a control of the specified TokenType is already contained in the list
@@ -3430,10 +3304,8 @@ bool SwTokenWindow::Contains(FormTokenType eSearchFor) const
 {
     bool bRet = false;
 
-    for (ctrl_const_iterator it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
+    for (const Control* pCtrl : m_aControlList)
     {
-        const Control *pCtrl = *it;
-
         const SwFormToken &rNewToken = pCtrl->GetType() == WindowType::EDIT
                 ? const_cast<SwTOXEdit*>(static_cast<const SwTOXEdit*>(pCtrl))->GetFormToken()
                 : static_cast<const SwTOXButton*>(pCtrl)->GetFormToken();
@@ -3496,18 +3368,18 @@ IMPL_LINK(SwTokenWindow, EditResize, Edit&, rEdit, void)
 
 IMPL_LINK(SwTokenWindow, NextItemHdl, SwTOXEdit&, rEdit, void)
 {
-    ctrl_iterator it = std::find(m_aControlList.begin(),m_aControlList.end(),&rEdit);
+    auto it = std::find(m_aControlList.begin(),m_aControlList.end(),&rEdit);
 
     if (it == m_aControlList.end())
         return;
 
-    ctrl_iterator itTest = it;
+    auto itTest = it;
     ++itTest;
 
     if ((it != m_aControlList.begin() && !rEdit.IsNextControl()) ||
         (itTest != m_aControlList.end() && rEdit.IsNextControl()))
     {
-        ctrl_iterator iterFocus = it;
+        auto iterFocus = it;
         rEdit.IsNextControl() ? ++iterFocus : --iterFocus;
 
         Control *pCtrlFocus = iterFocus->get();
@@ -3532,19 +3404,19 @@ IMPL_LINK(SwTokenWindow, TbxFocusHdl, Control&, rControl, void)
 
 IMPL_LINK(SwTokenWindow, NextItemBtnHdl, SwTOXButton&, rBtn, void )
 {
-    ctrl_iterator it = std::find(m_aControlList.begin(),m_aControlList.end(),&rBtn);
+    auto it = std::find(m_aControlList.begin(),m_aControlList.end(),&rBtn);
 
     if (it == m_aControlList.end())
         return;
 
-    ctrl_iterator itTest = it;
+    auto itTest = it;
     ++itTest;
 
     if (!rBtn.IsNextControl() || (itTest != m_aControlList.end() && rBtn.IsNextControl()))
     {
         bool isNext = rBtn.IsNextControl();
 
-        ctrl_iterator iterFocus = it;
+        auto iterFocus = it;
         isNext ? ++iterFocus : --iterFocus;
 
         Control *pCtrlFocus = iterFocus->get();
@@ -3570,9 +3442,9 @@ IMPL_LINK(SwTokenWindow, NextItemBtnHdl, SwTOXButton&, rBtn, void )
 IMPL_LINK(SwTokenWindow, TbxFocusBtnHdl, Control&, rControl, void )
 {
     SwTOXButton* pBtn = static_cast<SwTOXButton*>(&rControl);
-    for (ctrl_iterator it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
+    for (auto& aControl : m_aControlList)
     {
-        Control *pControl = it->get();
+        Control *pControl = aControl.get();
 
         if (pControl && WindowType::EDIT != pControl->GetType())
             static_cast<SwTOXButton*>(pControl)->Check(pBtn == pControl);
@@ -3617,9 +3489,8 @@ sal_uInt32 SwTokenWindow::GetControlIndex(FormTokenType eType) const
     }
 
     sal_uInt32 nIndex = 0;
-    for (ctrl_const_iterator it = m_aControlList.begin(); it != m_aControlList.end(); ++it)
+    for (const Control* pControl : m_aControlList)
     {
-        const Control* pControl = *it;
         const SwFormToken& rNewToken = WindowType::EDIT == pControl->GetType()
             ? const_cast<SwTOXEdit*>(static_cast<const SwTOXEdit*>(pControl))->GetFormToken()
             : static_cast<const SwTOXButton*>(pControl)->GetFormToken();
@@ -3633,45 +3504,31 @@ sal_uInt32 SwTokenWindow::GetControlIndex(FormTokenType eType) const
     return nIndex;
 }
 
-SwTOXStylesTabPage::SwTOXStylesTabPage(vcl::Window* pParent, const SfxItemSet& rAttrSet )
-    : SfxTabPage(pParent, "TocStylesPage",
-        "modules/swriter/ui/tocstylespage.ui", &rAttrSet)
-    , m_pCurrentForm(nullptr)
+SwTOXStylesTabPage::SwTOXStylesTabPage(TabPageParent pParent, const SfxItemSet& rAttrSet)
+    : SfxTabPage(pParent, "modules/swriter/ui/tocstylespage.ui", "TocStylesPage", &rAttrSet)
+    , m_xLevelLB(m_xBuilder->weld_tree_view("levels"))
+    , m_xAssignBT(m_xBuilder->weld_button("assign"))
+    , m_xParaLayLB(m_xBuilder->weld_tree_view("styles"))
+    , m_xStdBT(m_xBuilder->weld_button("default"))
+    , m_xEditStyleBT(m_xBuilder->weld_button("edit"))
 {
-    get(m_pLevelLB, "levels");
-    get(m_pAssignBT, "assign");
-    get(m_pParaLayLB, "styles");
-    m_pParaLayLB->SetStyle(m_pParaLayLB->GetStyle() | WB_SORT);
-    get(m_pStdBT, "default");
-    get(m_pEditStyleBT, "edit");
-    long nHeight = m_pLevelLB->GetTextHeight() * 16;
-    m_pLevelLB->set_height_request(nHeight);
-    m_pParaLayLB->set_height_request(nHeight);
+    m_xParaLayLB->make_sorted();
+    auto nHeight = m_xLevelLB->get_height_rows(16);
+    m_xLevelLB->set_size_request(-1, nHeight);
+    m_xParaLayLB->set_size_request(-1, nHeight);
 
     SetExchangeSupport();
 
-    m_pEditStyleBT->SetClickHdl   (LINK(   this, SwTOXStylesTabPage, EditStyleHdl));
-    m_pAssignBT->SetClickHdl      (LINK(   this, SwTOXStylesTabPage, AssignHdl));
-    m_pStdBT->SetClickHdl         (LINK(   this, SwTOXStylesTabPage, StdHdl));
-    m_pParaLayLB->SetSelectHdl    (LINK(   this, SwTOXStylesTabPage, EnableSelectHdl));
-    m_pLevelLB->SetSelectHdl(LINK(this, SwTOXStylesTabPage, EnableSelectHdl));
-    m_pParaLayLB->SetDoubleClickHdl(LINK(  this, SwTOXStylesTabPage, DoubleClickHdl));
+    m_xEditStyleBT->connect_clicked(LINK(this, SwTOXStylesTabPage, EditStyleHdl));
+    m_xAssignBT->connect_clicked(LINK(this, SwTOXStylesTabPage, AssignHdl));
+    m_xStdBT->connect_clicked(LINK(this, SwTOXStylesTabPage, StdHdl));
+    m_xParaLayLB->connect_changed(LINK(this, SwTOXStylesTabPage, EnableSelectHdl));
+    m_xLevelLB->connect_changed(LINK(this, SwTOXStylesTabPage, EnableSelectHdl));
+    m_xParaLayLB->connect_row_activated(LINK(this, SwTOXStylesTabPage, DoubleClickHdl));
 }
 
 SwTOXStylesTabPage::~SwTOXStylesTabPage()
 {
-    disposeOnce();
-}
-
-void SwTOXStylesTabPage::dispose()
-{
-    delete m_pCurrentForm;
-    m_pLevelLB.clear();
-    m_pAssignBT.clear();
-    m_pParaLayLB.clear();
-    m_pStdBT.clear();
-    m_pEditStyleBT.clear();
-    SfxTabPage::dispose();
 }
 
 bool SwTOXStylesTabPage::FillItemSet( SfxItemSet* )
@@ -3686,16 +3543,15 @@ void SwTOXStylesTabPage::Reset( const SfxItemSet* rSet )
 
 void SwTOXStylesTabPage::ActivatePage( const SfxItemSet& )
 {
-    m_pCurrentForm = new SwForm(GetForm());
-    m_pParaLayLB->Clear();
-    m_pLevelLB->Clear();
+    m_pCurrentForm.reset(new SwForm(GetForm()));
 
     // not hyperlink for user directories
-
     const sal_uInt16 nSize = m_pCurrentForm->GetFormMax();
 
     // display form pattern without title
 
+    m_xLevelLB->freeze();
+    m_xLevelLB->clear();
     // display 1st TemplateEntry
     OUString aStr( SwResId( STR_TITLE ));
     if( !m_pCurrentForm->GetTemplate( 0 ).isEmpty() )
@@ -3704,7 +3560,7 @@ void SwTOXStylesTabPage::ActivatePage( const SfxItemSet& )
               + m_pCurrentForm->GetTemplate( 0 )
               + OUStringLiteral1(aDeliEnd);
     }
-    m_pLevelLB->InsertEntry(aStr);
+    m_xLevelLB->append_text(aStr);
 
     for( sal_uInt16 i=1; i < nSize; ++i )
     {
@@ -3724,30 +3580,33 @@ void SwTOXStylesTabPage::ActivatePage( const SfxItemSet& )
                   + m_pCurrentForm->GetTemplate( i )
                   + OUStringLiteral1(aDeliEnd);
         }
-        m_pLevelLB->InsertEntry( aStr );
+        m_xLevelLB->append_text(aStr);
     }
+    m_xLevelLB->thaw();
 
     // initialise templates
     SwWrtShell& rSh = static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell();
     const sal_uInt16 nSz = rSh.GetTextFormatCollCount();
 
+    m_xParaLayLB->freeze();
+    m_xParaLayLB->clear();
     for( sal_uInt16 i = 0; i < nSz; ++i )
     {
         const SwTextFormatColl *pColl = &rSh.GetTextFormatColl( i );
         if( !pColl->IsDefault() )
-            m_pParaLayLB->InsertEntry( pColl->GetName() );
+            m_xParaLayLB->append_text( pColl->GetName() );
     }
 
     // query pool collections and set them for the directory
     for( sal_uInt16 i = 0; i < m_pCurrentForm->GetFormMax(); ++i )
     {
         aStr = m_pCurrentForm->GetTemplate( i );
-        if( !aStr.isEmpty() &&
-            LISTBOX_ENTRY_NOTFOUND == m_pParaLayLB->GetEntryPos( aStr ))
-            m_pParaLayLB->InsertEntry( aStr );
+        if (!aStr.isEmpty() && m_xParaLayLB->find_text(aStr) == -1)
+            m_xParaLayLB->append_text(aStr);
     }
+    m_xParaLayLB->thaw();
 
-    EnableSelectHdl(*m_pParaLayLB);
+    EnableSelectHdl(*m_xParaLayLB);
 }
 
 DeactivateRC SwTOXStylesTabPage::DeactivatePage( SfxItemSet* /*pSet*/  )
@@ -3756,17 +3615,17 @@ DeactivateRC SwTOXStylesTabPage::DeactivatePage( SfxItemSet* /*pSet*/  )
     return DeactivateRC::LeavePage;
 }
 
-VclPtr<SfxTabPage> SwTOXStylesTabPage::Create( TabPageParent pParent,
-                                               const SfxItemSet* rAttrSet)
+VclPtr<SfxTabPage> SwTOXStylesTabPage::Create(TabPageParent pParent,
+                                              const SfxItemSet* rAttrSet)
 {
-    return VclPtr<SwTOXStylesTabPage>::Create(pParent.pParent, *rAttrSet);
+    return VclPtr<SwTOXStylesTabPage>::Create(pParent, *rAttrSet);
 }
 
-IMPL_LINK_NOARG(SwTOXStylesTabPage, EditStyleHdl, Button *, void)
+IMPL_LINK_NOARG(SwTOXStylesTabPage, EditStyleHdl, weld::Button&, void)
 {
-    if( LISTBOX_ENTRY_NOTFOUND != m_pParaLayLB->GetSelectedEntryPos())
+    if (m_xParaLayLB->get_selected_index() != -1)
     {
-        SfxStringItem aStyle(SID_STYLE_EDIT, m_pParaLayLB->GetSelectedEntry());
+        SfxStringItem aStyle(SID_STYLE_EDIT, m_xParaLayLB->get_selected_text());
         SfxUInt16Item aFamily(SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Para));
         SwWrtShell& rSh = static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell();
         rSh.GetView().GetViewFrame()->GetDispatcher()->ExecuteList(SID_STYLE_EDIT,
@@ -3776,62 +3635,61 @@ IMPL_LINK_NOARG(SwTOXStylesTabPage, EditStyleHdl, Button *, void)
 }
 
 // allocate templates
-IMPL_LINK_NOARG(SwTOXStylesTabPage, AssignHdl, Button*, void)
+IMPL_LINK_NOARG(SwTOXStylesTabPage, AssignHdl, weld::Button&, void)
 {
-    sal_Int32 nLevPos   = m_pLevelLB->GetSelectedEntryPos();
-    sal_Int32 nTemplPos = m_pParaLayLB->GetSelectedEntryPos();
-    if(nLevPos   != LISTBOX_ENTRY_NOTFOUND &&
-       nTemplPos != LISTBOX_ENTRY_NOTFOUND)
+    auto nLevPos = m_xLevelLB->get_selected_index();
+    auto nTemplPos = m_xParaLayLB->get_selected_index();
+    if (nLevPos != -1 && nTemplPos != -1)
     {
-        const OUString aStr(m_pLevelLB->GetEntry(nLevPos).getToken(0, aDeliStart)
+        const OUString aStr(m_xLevelLB->get_text(nLevPos).getToken(0, aDeliStart)
             + OUStringLiteral1(aDeliStart)
-            + m_pParaLayLB->GetSelectedEntry()
+            + m_xParaLayLB->get_selected_text()
             + OUStringLiteral1(aDeliEnd));
 
-        m_pCurrentForm->SetTemplate(nLevPos, m_pParaLayLB->GetSelectedEntry());
+        m_pCurrentForm->SetTemplate(nLevPos, m_xParaLayLB->get_selected_text());
 
-        m_pLevelLB->RemoveEntry(nLevPos);
-        m_pLevelLB->InsertEntry(aStr, nLevPos);
-        m_pLevelLB->SelectEntry(aStr);
+        m_xLevelLB->remove(nLevPos);
+        m_xLevelLB->insert_text(nLevPos, aStr);
+        m_xLevelLB->select_text(aStr);
         Modify();
     }
 }
 
-IMPL_LINK_NOARG(SwTOXStylesTabPage, StdHdl, Button*, void)
+IMPL_LINK_NOARG(SwTOXStylesTabPage, StdHdl, weld::Button&, void)
 {
-    const sal_Int32 nPos = m_pLevelLB->GetSelectedEntryPos();
-    if(nPos != LISTBOX_ENTRY_NOTFOUND)
+    const auto nPos = m_xLevelLB->get_selected_index();
+    if (nPos != -1)
     {
-        const OUString aStr(m_pLevelLB->GetEntry(nPos).getToken(0, aDeliStart));
-        m_pLevelLB->RemoveEntry(nPos);
-        m_pLevelLB->InsertEntry(aStr, nPos);
-        m_pLevelLB->SelectEntry(aStr);
+        const OUString aStr(m_xLevelLB->get_text(nPos).getToken(0, aDeliStart));
+        m_xLevelLB->remove(nPos);
+        m_xLevelLB->insert_text(nPos, aStr);
+        m_xLevelLB->select_text(aStr);
         m_pCurrentForm->SetTemplate(nPos, aEmptyOUStr);
         Modify();
     }
 }
 
-IMPL_LINK_NOARG(SwTOXStylesTabPage, DoubleClickHdl, ListBox&, void)
+IMPL_LINK_NOARG(SwTOXStylesTabPage, DoubleClickHdl, weld::TreeView&, void)
 {
-    const OUString aTmpName( m_pParaLayLB->GetSelectedEntry() );
+    const OUString aTmpName(m_xParaLayLB->get_selected_text());
     SwWrtShell& rSh = static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell();
 
-    if(m_pParaLayLB->GetSelectedEntryPos() != LISTBOX_ENTRY_NOTFOUND &&
-       (m_pLevelLB->GetSelectedEntryPos() == 0 || SwMultiTOXTabDialog::IsNoNum(rSh, aTmpName)))
-        AssignHdl(m_pAssignBT);
+    if(m_xParaLayLB->get_selected_index() != -1 &&
+       (m_xLevelLB->get_selected_index() == 0 || SwMultiTOXTabDialog::IsNoNum(rSh, aTmpName)))
+        AssignHdl(*m_xAssignBT);
 }
 
 // enable only when selected
-IMPL_LINK_NOARG(SwTOXStylesTabPage, EnableSelectHdl, ListBox&, void)
+IMPL_LINK_NOARG(SwTOXStylesTabPage, EnableSelectHdl, weld::TreeView&, void)
 {
-    m_pStdBT->Enable(m_pLevelLB->GetSelectedEntryPos()  != LISTBOX_ENTRY_NOTFOUND);
+    m_xStdBT->set_sensitive(m_xLevelLB->get_selected_index() != -1);
 
     SwWrtShell& rSh = static_cast<SwMultiTOXTabDialog*>(GetTabDialog())->GetWrtShell();
-    const OUString aTmpName(m_pParaLayLB->GetSelectedEntry());
-    m_pAssignBT->Enable(m_pParaLayLB->GetSelectedEntryPos() != LISTBOX_ENTRY_NOTFOUND &&
-                     LISTBOX_ENTRY_NOTFOUND != m_pLevelLB->GetSelectedEntryPos() &&
-       (m_pLevelLB->GetSelectedEntryPos() == 0 || SwMultiTOXTabDialog::IsNoNum(rSh, aTmpName)));
-    m_pEditStyleBT->Enable(m_pParaLayLB->GetSelectedEntryPos() != LISTBOX_ENTRY_NOTFOUND );
+    const OUString aTmpName(m_xParaLayLB->get_selected_text());
+    m_xAssignBT->set_sensitive(m_xParaLayLB->get_selected_index() != -1 &&
+                               m_xLevelLB->get_selected_index() != -1 &&
+       (m_xLevelLB->get_selected_index() == 0 || SwMultiTOXTabDialog::IsNoNum(rSh, aTmpName)));
+    m_xEditStyleBT->set_sensitive(m_xParaLayLB->get_selected_index() != -1);
 }
 
 void SwTOXStylesTabPage::Modify()
@@ -4035,8 +3893,9 @@ bool SwEntryBrowseBox::SaveModified()
         pController = m_xCheckController.get();
         bVal = static_cast< ::svt::CheckBoxCellController*>(pController)->GetCheckBox().IsChecked();
     }
-    AutoMarkEntry* pEntry = (nRow >= m_Entries.size()) ? new AutoMarkEntry
-                                                       : m_Entries[nRow].get();
+    const bool bAddEntry = nRow >= m_Entries.size();
+    std::unique_ptr<AutoMarkEntry> xNewEntry(bAddEntry ? new AutoMarkEntry : nullptr);
+    AutoMarkEntry* pEntry = bAddEntry ? xNewEntry.get() : m_Entries[nRow].get();
     switch(nCol)
     {
         case  ITEM_SEARCH       : pEntry->sSearch = sNew; break;
@@ -4047,9 +3906,9 @@ bool SwEntryBrowseBox::SaveModified()
         case  ITEM_CASE         : pEntry->bCase = bVal; break;
         case  ITEM_WORDONLY     : pEntry->bWord = bVal; break;
     }
-    if (nRow >= m_Entries.size())
+    if (bAddEntry)
     {
-        m_Entries.push_back(std::unique_ptr<AutoMarkEntry>(pEntry));
+        m_Entries.push_back(std::move(xNewEntry));
         RowInserted(nRow, 1, true, true);
         if(nCol < ITEM_WORDONLY)
         {

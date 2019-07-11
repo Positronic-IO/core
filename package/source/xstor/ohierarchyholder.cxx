@@ -27,6 +27,7 @@
 #include <com/sun/star/embed/XTransactionBroadcaster.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 
 #include "ohierarchyholder.hxx"
 
@@ -34,7 +35,7 @@ using namespace ::com::sun::star;
 
 // OHierarchyHolder_Impl
 
-uno::Reference< embed::XExtendedStorageStream > OHierarchyHolder_Impl::GetStreamHierarchically( sal_Int32 nStorageMode, OStringList_Impl& aListPath, sal_Int32 nStreamMode, const ::comphelper::SequenceAsHashMap& aEncryptionData )
+uno::Reference< embed::XExtendedStorageStream > OHierarchyHolder_Impl::GetStreamHierarchically( sal_Int32 nStorageMode, std::vector<OUString>& aListPath, sal_Int32 nStreamMode, const ::comphelper::SequenceAsHashMap& aEncryptionData )
 {
     uno::Reference< embed::XStorage > xOwnStor( m_xWeakOwnStorage.get(), uno::UNO_QUERY_THROW );
 
@@ -49,7 +50,7 @@ uno::Reference< embed::XExtendedStorageStream > OHierarchyHolder_Impl::GetStream
     return xResult;
 }
 
-void OHierarchyHolder_Impl::RemoveStreamHierarchically( OStringList_Impl& aListPath )
+void OHierarchyHolder_Impl::RemoveStreamHierarchically( std::vector<OUString>& aListPath )
 {
     uno::Reference< embed::XStorage > xOwnStor( m_xWeakOwnStorage.get(), uno::UNO_QUERY_THROW );
 
@@ -57,9 +58,9 @@ void OHierarchyHolder_Impl::RemoveStreamHierarchically( OStringList_Impl& aListP
 }
 
 // static
-OStringList_Impl OHierarchyHolder_Impl::GetListPathFromString( const OUString& aPath )
+std::vector<OUString> OHierarchyHolder_Impl::GetListPathFromString( const OUString& aPath )
 {
-    OStringList_Impl aResult;
+    std::vector<OUString> aResult;
     sal_Int32 nIndex = 0;
     do
     {
@@ -76,7 +77,7 @@ OStringList_Impl OHierarchyHolder_Impl::GetListPathFromString( const OUString& a
 
 // OHierarchyElement_Impl
 
-uno::Reference< embed::XExtendedStorageStream > OHierarchyElement_Impl::GetStreamHierarchically( sal_Int32 nStorageMode, OStringList_Impl& aListPath, sal_Int32 nStreamMode, const ::comphelper::SequenceAsHashMap& aEncryptionData )
+uno::Reference< embed::XExtendedStorageStream > OHierarchyElement_Impl::GetStreamHierarchically( sal_Int32 nStorageMode, std::vector<OUString>& aListPath, sal_Int32 nStreamMode, const ::comphelper::SequenceAsHashMap& aEncryptionData )
 {
     ::osl::MutexGuard aGuard( m_aMutex );
 
@@ -160,7 +161,7 @@ uno::Reference< embed::XExtendedStorageStream > OHierarchyElement_Impl::GetStrea
     return xResult;
 }
 
-void OHierarchyElement_Impl::RemoveStreamHierarchically( OStringList_Impl& aListPath )
+void OHierarchyElement_Impl::RemoveStreamHierarchically( std::vector<OUString>& aListPath )
 {
     ::osl::MutexGuard aGuard( m_aMutex );
 
@@ -275,9 +276,11 @@ void SAL_CALL OHierarchyElement_Impl::disposing( const lang::EventObject& Source
 
         TestForClosing();
     }
-    catch( uno::Exception& )
+    catch( uno::Exception& ex )
     {
-        throw uno::RuntimeException(); // no exception must happen here, usually an exception means disaster
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw lang::WrappedTargetRuntimeException( ex.Message,
+                        nullptr, anyEx ); // no exception must happen here, usually an exception means disaster
     }
 }
 
@@ -309,12 +312,13 @@ void SAL_CALL OHierarchyElement_Impl::commited( const css::lang::EventObject& /*
     {
         Commit();
     }
-    catch( const uno::Exception& e )
+    catch( const uno::Exception& )
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetRuntimeException(
                             "Can not commit storage sequence!",
                             uno::Reference< uno::XInterface >(),
-                            uno::makeAny( e ) );
+                            anyEx );
     }
 }
 

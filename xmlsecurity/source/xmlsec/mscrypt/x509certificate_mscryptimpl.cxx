@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/windowserrorstring.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -54,7 +55,7 @@ using ::com::sun::star::util::DateTime ;
     "S" or "CN" (without ""). Do not use spaces at the beginning of the type name.
     If the type name is not found then pair.first and pair.second are -1.
 */
-std::pair< sal_Int32, sal_Int32 >
+static std::pair< sal_Int32, sal_Int32 >
 findTypeInDN(const OUString& rRawString, const OUString& sTypeName)
 {
     std::pair< sal_Int32, sal_Int32 > retVal;
@@ -157,7 +158,7 @@ findTypeInDN(const OUString& rRawString, const OUString& sTypeName)
   strings for type names. Instead it uses OIDs.
  */
 
-OUString replaceTagSWithTagST(OUString const & oldDN)
+static OUString replaceTagSWithTagST(OUString const & oldDN)
 {
     std::pair<sal_Int32, sal_Int32 > pairIndex = findTypeInDN(oldDN, "S");
 
@@ -368,8 +369,6 @@ css::uno::Sequence< css::uno::Reference< css::security::XCertificateExtension > 
                 xExtn = reinterpret_cast<CertificateExtension_XmlSecImpl*>(new SanExtensionImpl());
             else
                 xExtn = new CertificateExtension_XmlSecImpl;
-            if( xExtn == nullptr )
-                throw RuntimeException() ;
 
             xExtn->setCertExtn( pExtn->Value.pbData, pExtn->Value.cbData, reinterpret_cast<unsigned char*>(pExtn->pszObjId), strlen( pExtn->pszObjId ), pExtn->fCritical ) ;
 
@@ -393,9 +392,6 @@ css::uno::Reference< css::security::XCertificateExtension > SAL_CALL X509Certifi
             //TODO: Compare the oid
             if( false ) {
                 xExtn = new CertificateExtension_XmlSecImpl;
-                if( xExtn == nullptr )
-                    throw RuntimeException() ;
-
                 xExtn->setCertExtn( pExtn->Value.pbData, pExtn->Value.cbData, reinterpret_cast<unsigned char*>(pExtn->pszObjId), strlen( pExtn->pszObjId ), pExtn->fCritical ) ;
             }
         }
@@ -479,7 +475,7 @@ X509Certificate_MSCryptImpl* X509Certificate_MSCryptImpl::getImplementation( con
         return nullptr ;
 }
 
-OUString findOIDDescription(char const *oid)
+static OUString findOIDDescription(char const *oid)
 {
     OUString ouOID = OUString::createFromAscii( oid );
     for (int i=0; i<nOID; i++)
@@ -494,7 +490,7 @@ OUString findOIDDescription(char const *oid)
     return OUString() ;
 }
 
-css::uno::Sequence< sal_Int8 > getThumbprint(const CERT_CONTEXT* pCertContext, DWORD dwPropId)
+static css::uno::Sequence< sal_Int8 > getThumbprint(const CERT_CONTEXT* pCertContext, DWORD dwPropId)
 {
     if( pCertContext != nullptr )
     {
@@ -573,7 +569,17 @@ uno::Sequence<sal_Int8> X509Certificate_MSCryptImpl::getSHA256Thumbprint()
 
 svl::crypto::SignatureMethodAlgorithm X509Certificate_MSCryptImpl::getSignatureMethodAlgorithm()
 {
-    return svl::crypto::SignatureMethodAlgorithm::RSA;
+    svl::crypto::SignatureMethodAlgorithm nRet = svl::crypto::SignatureMethodAlgorithm::RSA;
+
+    if (!m_pCertContext || !m_pCertContext->pCertInfo)
+        return nRet;
+
+    CRYPT_ALGORITHM_IDENTIFIER algorithm = m_pCertContext->pCertInfo->SubjectPublicKeyInfo.Algorithm;
+    OString aObjId(algorithm.pszObjId);
+    if (aObjId == szOID_ECC_PUBLIC_KEY)
+        nRet = svl::crypto::SignatureMethodAlgorithm::ECDSA;
+
+    return nRet;
 }
 
 css::uno::Sequence< sal_Int8 > SAL_CALL X509Certificate_MSCryptImpl::getSHA1Thumbprint()

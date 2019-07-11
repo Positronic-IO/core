@@ -41,6 +41,13 @@ class SwSelectionList;
 struct SwPosition;
 struct SwCursorMoveState;
 
+namespace sw {
+    enum class RedlineMode
+    {
+        Shown, Hidden
+    };
+};
+
 enum class SwInvalidateFlags
 {
     Size      = 0x01,
@@ -110,6 +117,7 @@ class SwRootFrame: public SwLayoutFrame
     bool    mbCallbackActionEnabled:1; // No Action in Notification desired
                                       // @see dcontact.cxx, ::Changed()
     bool    mbLayoutFreezed;
+    bool    mbHideRedlines;
 
     /**
      * For BrowseMode
@@ -151,12 +159,12 @@ class SwRootFrame: public SwLayoutFrame
     friend void InitCurrShells( SwRootFrame *pRoot );
     SwViewShell *mpCurrShell;
     SwViewShell *mpWaitingCurrShell;
-    SwCurrShells *mpCurrShells;
+    std::unique_ptr<SwCurrShells> mpCurrShells;
 
     /// One Page per DrawModel per Document; is always the size of the Root
     SdrPage *mpDrawPage;
 
-    SwDestroyList* mpDestroy;
+    std::unique_ptr<SwDestroyList> mpDestroy;
 
     sal_uInt16  mnPhyPageNums; /// Page count
     sal_uInt16 mnAccessibleShells; // Number of accessible shells
@@ -244,7 +252,7 @@ public:
         // May be NULL if called from SfxBaseModel::dispose
         // (this happens in the build test 'rtfexport').
         if (pCurrShell != nullptr)
-            pCurrShell->GetDoc()->getIDocumentTimerAccess().StartBackgroundJobs();
+            pCurrShell->GetDoc()->getIDocumentTimerAccess().StartIdling();
     }
     bool IsIdleFormat()  const { return mbIdleFormat; }
     void ResetIdleFormat()     { mbIdleFormat = false; }
@@ -260,7 +268,7 @@ public:
             // May be NULL if called from SfxBaseModel::dispose
             // (this happens in the build test 'rtfexport').
             if (pCurrShell != nullptr)
-                pCurrShell->GetDoc()->getIDocumentTimerAccess().StartBackgroundJobs();
+                pCurrShell->GetDoc()->getIDocumentTimerAccess().StartIdling();
         }
     }
 
@@ -339,8 +347,8 @@ public:
     void ResetTurbo() { mpTurbo = nullptr; }
     const SwContentFrame *GetTurbo() { return mpTurbo; }
 
-    /// Update the footernumbers of all Pages
-    void UpdateFootnoteNums(); // Only for page by page numnbering!
+    /// Update the footnote numbers of all Pages
+    void UpdateFootnoteNums(); // Only for page by page numbering!
 
     /// Remove all footnotes (but no references)
     void RemoveFootnotes( SwPageFrame *pPage = nullptr, bool bPageOnly = false,
@@ -401,6 +409,13 @@ public:
     void FreezeLayout( bool freeze ) { mbLayoutFreezed = freeze; }
 
     void RemovePage( SwPageFrame **pDel, SwRemoveResult eResult );
+
+    /**
+     * Replacement for sw::DocumentRedlineManager::GetRedlineFlags()
+     * (this is layout-level redline hiding).
+     */
+    bool IsHideRedlines() const { return mbHideRedlines; }
+    void SetHideRedlines(bool);
 };
 
 inline long SwRootFrame::GetBrowseWidth() const
@@ -427,7 +442,7 @@ class DisableCallbackAction
 {
     private:
         SwRootFrame & m_rRootFrame;
-        bool m_bOldCallbackActionState;
+        bool const m_bOldCallbackActionState;
 
     public:
         explicit DisableCallbackAction(SwRootFrame & rRootFrame)

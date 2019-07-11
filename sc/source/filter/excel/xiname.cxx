@@ -18,6 +18,7 @@
  */
 
 #include <xiname.hxx>
+#include <xlname.hxx>
 #include <rangenam.hxx>
 #include <xistream.hxx>
 #include <excform.hxx>
@@ -34,14 +35,12 @@ XclImpName::TokenStrmData::TokenStrmData( XclImpStream& rStrm ) :
 XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
     XclImpRoot( rStrm.GetRoot() ),
     mpScData( nullptr ),
-    mcBuiltIn( EXC_BUILTIN_UNKNOWN ),
     mnScTab( SCTAB_MAX ),
     meNameType( ScRangeData::Type::Name ),
     mnXclTab( EXC_NAME_GLOBAL ),
     mnNameIndex( nXclNameIdx ),
     mbVBName( false ),
-    mbMacro( false ),
-    mpTokensData( nullptr )
+    mbMacro( false )
 {
     ExcelToSc& rFmlaConv = GetOldFmlaConverter();
 
@@ -49,6 +48,7 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
 
     sal_uInt16 nFlags = 0, nFmlaSize = 0, nExtSheet = EXC_NAME_GLOBAL;
     sal_uInt8 nNameLen = 0;
+    sal_Unicode cBuiltIn(EXC_BUILTIN_UNKNOWN);      /// Excel built-in name index.
 
     switch( GetBiff() )
     {
@@ -122,10 +122,10 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
     {
         // built-in name
         if( !maXclName.isEmpty() )
-            mcBuiltIn = maXclName[0];
-        if( mcBuiltIn == '?' )      // NUL character is imported as '?'
-            mcBuiltIn = '\0';
-        maScName = XclTools::GetBuiltInDefName( mcBuiltIn );
+            cBuiltIn = maXclName[0];
+        if( cBuiltIn == '?' )      // NUL character is imported as '?'
+            cBuiltIn = '\0';
+        maScName = XclTools::GetBuiltInDefName( cBuiltIn );
     }
     else
     {
@@ -144,12 +144,12 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
     // 3) *** convert the name definition formula *** -------------------------
 
     rFmlaConv.Reset();
-    const ScTokenArray* pTokArr = nullptr; // pointer to token array, owned by rFmlaConv
+    std::unique_ptr<ScTokenArray> pTokArr;
 
     if( ::get_flag( nFlags, EXC_NAME_BIG ) )
     {
         // special, unsupported name
-        rFmlaConv.GetDummy( pTokArr );
+        pTokArr = rFmlaConv.GetDummy();
     }
     else if( bBuiltIn )
     {
@@ -157,7 +157,7 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
 
         // --- print ranges or title ranges ---
         rStrm.PushPosition();
-        switch( mcBuiltIn )
+        switch( cBuiltIn )
         {
             case EXC_BUILTIN_PRINTAREA:
                 if( rFmlaConv.Convert( GetPrintAreaBuffer(), rStrm, nFmlaSize, nLocalTab, FT_RangeName ) == ConvErr::OK )
@@ -181,7 +181,7 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
             ScRange aRange;
             if (pTokArr->IsReference(aRange, ScAddress()))
             {
-                switch( mcBuiltIn )
+                switch( cBuiltIn )
                 {
                     case EXC_BUILTIN_FILTERDATABASE:
                         GetFilterManager().Insert( &GetOldRoot(), aRange);
@@ -209,7 +209,7 @@ XclImpName::XclImpName( XclImpStream& rStrm, sal_uInt16 nXclNameIdx ) :
     }
 
     if (pTokArr && !bFunction && !mbVBName)
-        InsertName(pTokArr);
+        InsertName(pTokArr.get());
 }
 
 void XclImpName::ConvertTokens()
@@ -219,7 +219,7 @@ void XclImpName::ConvertTokens()
 
     ExcelToSc& rFmlaConv = GetOldFmlaConverter();
     rFmlaConv.Reset();
-    const ScTokenArray* pArray = nullptr;
+    std::unique_ptr<ScTokenArray> pArray;
 
     XclImpStreamPos aOldPos;
     XclImpStream& rStrm = mpTokensData->mrStrm;
@@ -229,7 +229,7 @@ void XclImpName::ConvertTokens()
     rStrm.RestorePosition(aOldPos);
 
     if (pArray)
-        InsertName(pArray);
+        InsertName(pArray.get());
 
     mpTokensData.reset();
 }

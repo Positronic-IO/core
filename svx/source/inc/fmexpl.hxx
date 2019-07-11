@@ -38,14 +38,8 @@
 #include <com/sun/star/beans/XPropertyChangeListener.hpp>
 #include <com/sun/star/container/XIndexContainer.hpp>
 
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
-#include <vcl/dialog.hxx>
-#include <vcl/group.hxx>
-#include <vcl/button.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/dockwin.hxx>
 #include <svx/fmview.hxx>
 
 #include "fmexch.hxx"
@@ -64,8 +58,8 @@ class SdrMarkList;
 class FmEntryData;
 class FmNavInsertedHint : public SfxHint
 {
-    FmEntryData* pEntryData;
-    sal_uInt32 nPos;
+    FmEntryData* const pEntryData;
+    sal_uInt32 const nPos;
 
 public:
     FmNavInsertedHint( FmEntryData* pInsertedEntryData, sal_uInt32 nRelPos );
@@ -78,7 +72,7 @@ public:
 
 class FmNavModelReplacedHint : public SfxHint
 {
-    FmEntryData* pEntryData;    // the data of the entry that has got a new model
+    FmEntryData* const pEntryData;    // the data of the entry that has got a new model
 
 public:
     FmNavModelReplacedHint( FmEntryData* pAffectedEntryData );
@@ -90,7 +84,7 @@ public:
 
 class FmNavRemovedHint : public SfxHint
 {
-    FmEntryData* pEntryData;
+    FmEntryData* const pEntryData;
 
 public:
     FmNavRemovedHint( FmEntryData* pInsertedEntryData );
@@ -102,8 +96,8 @@ public:
 
 class FmNavNameChangedHint : public SfxHint
 {
-    FmEntryData*    pEntryData;
-    OUString          aNewName;
+    FmEntryData* const    pEntryData;
+    OUString const          aNewName;
 
 public:
     FmNavNameChangedHint( FmEntryData* pData, const OUString& rNewName );
@@ -167,7 +161,7 @@ public:
     FmEntryDataList* GetChildList() const { return pChildList.get(); }
 
     virtual bool IsEqualWithoutChildren( FmEntryData* pEntryData );
-    virtual FmEntryData* Clone() = 0;
+    virtual std::unique_ptr<FmEntryData> Clone() = 0;
 
     // note that the interface returned is normalized, i.e. querying the given XInterface of the object
     // for XInterface must return the interface itself.
@@ -193,18 +187,18 @@ typedef ::std::vector< FmEntryData* > FmEntryDataBaseList;
 class FmEntryDataList final
 {
 private:
-    FmEntryDataBaseList maEntryDataList;
+    std::vector< std::unique_ptr<FmEntryData> > maEntryDataList;
 
 public:
     FmEntryDataList();
     ~FmEntryDataList();
 
     FmEntryData*    at( size_t Index )
-        { return ( Index < maEntryDataList.size() ) ? maEntryDataList[ Index ] : nullptr; }
+        { return maEntryDataList.at(Index).get(); }
 
     size_t          size() const { return maEntryDataList.size(); }
-    FmEntryData*    remove( FmEntryData* pItem );
-    void            insert( FmEntryData* pItem, size_t Index );
+    void            removeNoDelete( FmEntryData* pItem );
+    void            insert( std::unique_ptr<FmEntryData> pItem, size_t Index );
     void            clear();
 };
 
@@ -243,7 +237,7 @@ public:
     const css::uno::Reference< css::form::XForm >& GetFormIface() const { return m_xForm; }
 
     virtual bool IsEqualWithoutChildren( FmEntryData* pEntryData ) override;
-    virtual FmEntryData* Clone() override;
+    virtual std::unique_ptr<FmEntryData> Clone() override;
 };
 
 
@@ -264,7 +258,7 @@ public:
 
     const css::uno::Reference< css::form::XFormComponent >& GetFormComponent() const { return m_xFormComponent; }
     virtual bool IsEqualWithoutChildren( FmEntryData* pEntryData ) override;
-    virtual FmEntryData* Clone() override;
+    virtual std::unique_ptr<FmEntryData> Clone() override;
 
     void ModelReplaced(const css::uno::Reference< css::form::XFormComponent >& _rxNew);
 };
@@ -386,7 +380,7 @@ namespace svxform
 
         ::svxform::OControlExchangeHelper   m_aControlExchange;
 
-        NavigatorTreeModel* m_pNavModel;
+        std::unique_ptr<NavigatorTreeModel> m_pNavModel;
         SvTreeListEntry*        m_pRootEntry;
         SvTreeListEntry*        m_pEditEntry;
 
@@ -479,7 +473,7 @@ namespace svxform
 
         OUString GenerateName( FmEntryData const * pEntryData );
 
-        NavigatorTreeModel*    GetNavModel() const { return m_pNavModel; }
+        NavigatorTreeModel*    GetNavModel() const { return m_pNavModel.get(); }
         SvTreeListEntry*        FindEntry( FmEntryData* pEntryData );
 
         virtual bool EditedEntry( SvTreeListEntry* pEntry, const OUString& rNewText ) override;

@@ -90,6 +90,7 @@
 #include <osl/time.h>
 #include <vcl/weld.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 #include <unotools/bootstrap.hxx>
 #include <unotools/configmgr.hxx>
 #include <svl/documentlockfile.hxx>
@@ -207,7 +208,7 @@ public:
         /// the Auto/Emergency saved document is not really up-to-date (some changes can be missing)
         E_INCOMPLETE = 128,
         /// the Auto/Emergency saved document was processed successfully
-        E_SUCCEDED = 512
+        E_SUCCEEDED = 512
     };
 
     /** @short  indicates the results of a FAILURE_SAFE operation
@@ -390,7 +391,7 @@ private:
     Timer m_aTimer;
 
     /** @short  make our dispatch asynchronous ... if required to do so! */
-    vcl::EventPoster m_aAsyncDispatcher;
+    std::unique_ptr<vcl::EventPoster> m_xAsyncDispatcher;
 
     /** @see    DispatchParams
      */
@@ -736,7 +737,7 @@ private:
                 Note further: it patches the info struct
                 more than ones. E.g. the new temp URL is set
                 before the file is saved. And the old URL is removed
-                only if removing oft he old file was successfully.
+                only if removing of the old file was successfully.
                 If this method returns without an exception - everything
                 was OK. Otherwise the info struct can be analyzed to
                 get more information, e.g. when the problem occurs.
@@ -1091,8 +1092,8 @@ class CacheLockGuard
         // this variable knows the state of the "cache lock"
         sal_Int32& m_rCacheLock;
 
-        // to prevent increasing/decreasing of m_rCacheLock more than ones
-        // we must know if THIS guard has an actual lock set there !
+        // to prevent increasing/decreasing of m_rCacheLock more than once
+        // we must know if THIS guard has an actual lock set there!
         bool m_bLockedByThisGuard;
 
     public:
@@ -1208,7 +1209,7 @@ AutoRecovery::AutoRecovery(const css::uno::Reference< css::uno::XComponentContex
     , m_nAutoSaveTimeIntervall  (0                                                  )
     , m_eJob                    (AutoRecovery::E_NO_JOB                             )
     , m_aTimer                  ( "Auto save timer" )
-    , m_aAsyncDispatcher        ( LINK( this, AutoRecovery, implts_asyncDispatch )  )
+    , m_xAsyncDispatcher        (new vcl::EventPoster( LINK( this, AutoRecovery, implts_asyncDispatch )  ))
     , m_eTimerType              (E_DONT_START_TIMER                                 )
     , m_nIdPool                 (0                                                  )
     , m_lListener               (cppu::WeakComponentImplHelperBase::rBHelper.rMutex)
@@ -1240,6 +1241,8 @@ AutoRecovery::~AutoRecovery()
 void AutoRecovery::disposing()
 {
     implts_stopTimer();
+    SolarMutexGuard g;
+    m_xAsyncDispatcher.reset();
 }
 
 Any SAL_CALL AutoRecovery::queryInterface( const css::uno::Type& _rType )
@@ -1334,7 +1337,7 @@ void SAL_CALL AutoRecovery::dispatch(const css::util::URL&                      
     } /* SAFE */
 
     if (bAsync)
-        m_aAsyncDispatcher.Post();
+        m_xAsyncDispatcher->Post();
     else
         implts_dispatch(aParams);
 }
@@ -2000,7 +2003,7 @@ void AutoRecovery::implts_flushConfigItem(const AutoRecovery::TDocumentInfo& rIn
 
         OUStringBuffer sIDBuf;
         sIDBuf.append(RECOVERY_ITEM_BASE_IDENTIFIER);
-        sIDBuf.append(static_cast<sal_Int32>(rInfo.ID));
+        sIDBuf.append(rInfo.ID);
         OUString sID = sIDBuf.makeStringAndClear();
 
         // remove
@@ -3100,7 +3103,7 @@ void AutoRecovery::implts_saveOneDoc(const OUString&                            
         // ... you know the reason: to know it on recovery time if next line crash .-)
         rInfo.DocumentState &= ~AutoRecovery::E_TRY_SAVE;
         rInfo.DocumentState |=  AutoRecovery::E_HANDLED;
-        rInfo.DocumentState |=  AutoRecovery::E_SUCCEDED;
+        rInfo.DocumentState |=  AutoRecovery::E_SUCCEEDED;
     }
     else
     {
@@ -3142,7 +3145,7 @@ AutoRecovery::ETimerType AutoRecovery::implts_openDocs(const DispatchParams& aPa
     for (auto & info : m_lDocCache)
     {
         // Such documents are already loaded by the last loop.
-        // Don't check E_SUCCEDED here! It may be the final state of an AutoSave
+        // Don't check E_SUCCEEDED here! It may be the final state of an AutoSave
         // operation before!!!
         if ((info.DocumentState & AutoRecovery::E_HANDLED) == AutoRecovery::E_HANDLED)
             continue;
@@ -3293,7 +3296,7 @@ AutoRecovery::ETimerType AutoRecovery::implts_openDocs(const DispatchParams& aPa
         info.DocumentState &= ~AutoRecovery::E_TRY_LOAD_BACKUP;
         info.DocumentState &= ~AutoRecovery::E_TRY_LOAD_ORIGINAL;
         info.DocumentState |=  AutoRecovery::E_HANDLED;
-        info.DocumentState |=  AutoRecovery::E_SUCCEDED;
+        info.DocumentState |=  AutoRecovery::E_SUCCEEDED;
 
         implts_flushConfigItem(info);
         implts_informListener(eJob,
@@ -3623,7 +3626,7 @@ void AutoRecovery::implts_doEmergencySave(const DispatchParams& aParams)
     officecfg::Office::Recovery::RecoveryInfo::Crashed::set(true, batch);
     batch->commit();
 
-    // for all docs, store their current view/names in the configurtion
+    // for all docs, store their current view/names in the configuration
     implts_persistAllActiveViewNames();
 
     // The called method for saving documents runs
@@ -3688,7 +3691,7 @@ void AutoRecovery::implts_doSessionSave(const DispatchParams& aParams)
     // Be sure to know all open documents really .-)
     implts_verifyCacheAgainstDesktopDocumentList();
 
-    // for all docs, store their current view/names in the configurtion
+    // for all docs, store their current view/names in the configuration
     implts_persistAllActiveViewNames();
 
     // The called method for saving documents runs
@@ -3893,7 +3896,7 @@ void SAL_CALL AutoRecovery::getFastPropertyValue(css::uno::Any& aValue ,
         case AUTORECOVERY_PROPHANDLE_EXISTS_RECOVERYDATA :
                 {
                     bool bSessionData = officecfg::Office::Recovery::RecoveryInfo::SessionData::get(m_xContext);
-                    bool bRecoveryData = m_lDocCache.size() > 0;
+                    bool bRecoveryData = !m_lDocCache.empty();
 
                     // exists session data ... => then we can't say, that these
                     // data are valid for recovery. So we have to return sal_False then!

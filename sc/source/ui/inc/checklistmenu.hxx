@@ -13,15 +13,14 @@
 #include <vcl/popupmenuwindow.hxx>
 #include <vcl/button.hxx>
 #include <vcl/edit.hxx>
-#include <vcl/scrbar.hxx>
 #include <vcl/timer.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svx/checklbx.hxx>
+#include <vcl/svlbitm.hxx>
 
 #include <memory>
 #include <unordered_set>
 #include <unordered_map>
 #include <map>
+#include <set>
 
 namespace com { namespace sun { namespace star {
 
@@ -226,7 +225,7 @@ struct ScCheckListMember;
 
 class ScCheckListBox : public SvTreeListBox
 {
-    SvLBoxButtonData*   mpCheckButton;
+    std::unique_ptr<SvLBoxButtonData> mpCheckButton;
     ScTabStops*         mpTabStops;
     bool                mbSeenMouseButtonDown;
     void            CountCheckedEntries( SvTreeListEntry* pParent, sal_uLong& nCount ) const;
@@ -236,7 +235,7 @@ class ScCheckListBox : public SvTreeListBox
 
     ScCheckListBox( vcl::Window* pParent );
     virtual ~ScCheckListBox() override { disposeOnce(); }
-    virtual void dispose() override { delete mpCheckButton; SvTreeListBox::dispose(); }
+    virtual void dispose() override { mpCheckButton.reset(); SvTreeListBox::dispose(); }
     void Init();
     void CheckEntry( const OUString& sName, SvTreeListEntry* pParent, bool bCheck );
     void CheckEntry( SvTreeListEntry* pEntry, bool bCheck );
@@ -355,7 +354,7 @@ public:
      * popup window class manages its life time; no explicit deletion of the
      * instance is needed in the client code.
      */
-    void setExtendedData(ExtendedData* p);
+    void setExtendedData(std::unique_ptr<ExtendedData> p);
 
     /**
      * Get the store auxiliary data, or NULL if no such data is stored.

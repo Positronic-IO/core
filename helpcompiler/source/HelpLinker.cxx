@@ -35,6 +35,7 @@
 #include <osl/time.h>
 #include <rtl/bootstrap.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <sal/log.hxx>
 
 #include <expat.h>
 #include <memory>
@@ -74,7 +75,7 @@ IndexerPreProcessor::~IndexerPreProcessor()
         xsltFreeStylesheet( m_xsltStylesheetPtrContent );
 }
 
-std::string getEncodedPath( const std::string& Path )
+static std::string getEncodedPath( const std::string& Path )
 {
     OString aOStr_Path( Path.c_str() );
     OUString aOUStr_Path( OStringToOUString
@@ -130,7 +131,6 @@ void IndexerPreProcessor::processDocument
 struct Data
 {
     std::vector<std::string> _idList;
-    typedef std::vector<std::string>::const_iterator cIter;
 
     void append(const std::string &id)
     {
@@ -146,7 +146,7 @@ struct Data
     }
 };
 
-void writeKeyValue_DBHelp( FILE* pFile, const std::string& aKeyStr, const std::string& aValueStr )
+static void writeKeyValue_DBHelp( FILE* pFile, const std::string& aKeyStr, const std::string& aValueStr )
 {
     if( pFile == nullptr )
         return;
@@ -348,20 +348,8 @@ void HelpLinker::link()
                 compactStylesheet, embeddStylesheet, module, lang, bExtensionMode );
 
             HCDBG(std::cerr << "before compile of " << xhpFileName << std::endl);
-            bool success = hc.compile();
+            hc.compile();
             HCDBG(std::cerr << "after compile of " << xhpFileName << std::endl);
-
-            if (!success && !bExtensionMode)
-            {
-                std::stringstream aStrStream;
-                aStrStream <<
-                    "\nERROR: compiling help particle '"
-                        << xhpFileName
-                        << "' for language '"
-                        << lang
-                        << "' failed!";
-                throw HelpProcessingException( HelpProcessingErrorClass::General, aStrStream.str() );
-            }
 
             if (!m_bCreateIndex)
                 continue;
@@ -383,7 +371,7 @@ void HelpLinker::link()
             // add once this as its own id.
             addBookmark( pFileDbBase_DBHelp, documentPath, fileB, std::string(), jarfileB, titleB);
 
-            const HashSet *hidlist = streamTable.appl_hidlist.get();
+            const std::vector<std::string> *hidlist = streamTable.appl_hidlist.get();
             if (hidlist && !hidlist->empty())
             {
                 // now iterate over all elements of the hidlist
@@ -825,7 +813,9 @@ void HelpLinker::main( std::vector<std::string> &args,
 // Variable to set an exception in "C" StructuredXMLErrorFunction
 static const HelpProcessingException* GpXMLParsingException = nullptr;
 
-extern "C" void StructuredXMLErrorFunction(SAL_UNUSED_PARAMETER void *, xmlErrorPtr error)
+extern "C" {
+
+static void StructuredXMLErrorFunction(SAL_UNUSED_PARAMETER void *, xmlErrorPtr error)
 {
     std::string aErrorMsg = error->message;
     std::string aXMLParsingFile;
@@ -837,6 +827,8 @@ extern "C" void StructuredXMLErrorFunction(SAL_UNUSED_PARAMETER void *, xmlError
 
     // Reset error handler
     xmlSetStructuredErrorFunc( nullptr, nullptr );
+}
+
 }
 
 HelpProcessingErrorInfo& HelpProcessingErrorInfo::operator=( const struct HelpProcessingException& e )

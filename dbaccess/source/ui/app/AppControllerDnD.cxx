@@ -19,7 +19,6 @@
 
 #include <memory>
 #include "AppController.hxx"
-#include <comphelper/sequence.hxx>
 #include <comphelper/property.hxx>
 #include <core_resource.hxx>
 #include <stringconstants.hxx>
@@ -43,13 +42,13 @@
 #include <com/sun/star/sdbcx/XDrop.hpp>
 #include <unotools/ucbhelper.hxx>
 #include <dlgsave.hxx>
-#include <comphelper/types.hxx>
 #include <vcl/weld.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <connectivity/dbexception.hxx>
 #include <vcl/waitobj.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include "AppView.hxx"
 #include <svx/dataaccessdescriptor.hxx>
 #include <svx/dbaobjectex.hxx>
@@ -58,7 +57,7 @@
 #include <strings.hrc>
 #include <vcl/menu.hxx>
 #include <vcl/svapp.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <listviewitems.hxx>
 #include "AppDetailView.hxx"
 #include <linkeddocuments.hxx>
@@ -69,7 +68,7 @@
 #include <UITools.hxx>
 #include <algorithm>
 #include <iterator>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <com/sun/star/sdb/XReportDocumentsSupplier.hpp>
 #include <com/sun/star/sdb/XFormDocumentsSupplier.hpp>
 #include <unotools/pathoptions.hxx>
@@ -80,6 +79,7 @@
 #include <defaultobjectnamecheck.hxx>
 #include <osl/mutex.hxx>
 #include "subcomponentmanager.hxx"
+#include <set>
 
 namespace dbaui
 {

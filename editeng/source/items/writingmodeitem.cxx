@@ -23,6 +23,8 @@
 #include <editeng/editrids.hrc>
 #include <osl/diagnose.h>
 
+#include <climits>
+
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::text;
 
@@ -103,12 +105,6 @@ bool SvxWritingModeItem::QueryValue( css::uno::Any& rVal,
 {
     rVal <<= GetValue();
     return true;
-}
-
-SvxWritingModeItem& SvxWritingModeItem::operator=( const SvxWritingModeItem& rItem )
-{
-    SetValue( static_cast<sal_uInt16>(rItem.GetValue()) );
-    return *this;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

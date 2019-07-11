@@ -30,7 +30,7 @@
 #include <sfx2/minfitem.hxx>
 #include <sfx2/sfxresid.hxx>
 #include <svl/stritem.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <sal/macros.h>
 #include <vcl/builderfactory.hxx>
@@ -66,7 +66,7 @@
 // include other projects
 #include <comphelper/processfactory.hxx>
 #include <svtools/acceleratorexecute.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/help.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -886,7 +886,6 @@ void SfxAccCfgTabListBox_Impl::KeyInput(const KeyEvent& aKey)
 SfxAcceleratorConfigPage::SfxAcceleratorConfigPage( vcl::Window* pParent, const SfxItemSet& aSet )
     : SfxTabPage(pParent, "AccelConfigPage", "cui/ui/accelconfigpage.ui", &aSet)
     , m_pMacroInfoItem()
-    , m_pFileDlg(nullptr)
     , aLoadAccelConfigStr(CuiResId(RID_SVXSTR_LOADACCELCONFIG))
     , aSaveAccelConfigStr(CuiResId(RID_SVXSTR_SAVEACCELCONFIG))
     , aFilterCfgStr(CuiResId(RID_SVXSTR_FILTERNAME_CFG))
@@ -999,9 +998,7 @@ void SfxAcceleratorConfigPage::dispose()
     m_pEntriesBox->Clear();
     m_pKeyBox->Clear();
 
-    delete m_pFileDlg;
-    m_pFileDlg = nullptr;
-
+    m_pFileDlg.reset();
     m_pEntriesBox.clear();
     m_pOfficeButton.clear();
     m_pModuleButton.clear();
@@ -1557,8 +1554,7 @@ void SfxAcceleratorConfigPage::StartFileDialog( StartFileDialogType nType, const
     bool bSave = nType == StartFileDialogType::SaveAs;
     short nDialogType = bSave ? ui::dialogs::TemplateDescription::FILESAVE_AUTOEXTENSION
                               : ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE;
-    delete m_pFileDlg;
-    m_pFileDlg = new sfx2::FileDialogHelper(nDialogType, FileDialogFlags::NONE, GetFrameWeld());
+    m_pFileDlg.reset(new sfx2::FileDialogHelper(nDialogType, FileDialogFlags::NONE, GetFrameWeld()));
 
     m_pFileDlg->SetTitle( rTitle );
     m_pFileDlg->AddFilter( aFilterAllStr, FILEDIALOG_FILTER_ALL );

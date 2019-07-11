@@ -25,9 +25,12 @@
 #include <sys/poll.h>
 
 #include <sal/types.h>
+#include <sal/log.hxx>
 
 #include <vcl/inputtypes.hxx>
-#include <vcl/opengl/OpenGLContext.hxx>
+#ifndef LIBO_HEADLESS
+# include <vcl/opengl/OpenGLContext.hxx>
+#endif
 
 #include <headless/svpinst.hxx>
 #include <headless/svpframe.hxx>
@@ -37,9 +40,10 @@
 #include <quartz/salbmp.h>
 #include <quartz/salgdi.h>
 #include <quartz/salvd.h>
+#else
+#include <headless/svpgdi.hxx>
 #endif
 #include <headless/svpbmp.hxx>
-#include <headless/svpgdi.hxx>
 
 #include <salframe.hxx>
 #include <svdata.hxx>
@@ -62,15 +66,15 @@ static void atfork_child()
 
 #endif
 
-SvpSalInstance::SvpSalInstance( SalYieldMutex *pMutex )
-    : SalGenericInstance( pMutex )
+SvpSalInstance::SvpSalInstance( std::unique_ptr<SalYieldMutex> pMutex )
+    : SalGenericInstance( std::move(pMutex) )
 {
     m_aTimeout.tv_sec       = 0;
     m_aTimeout.tv_usec      = 0;
     m_nTimeoutMS            = 0;
 
-#ifndef IOS
     m_MainThread = osl::Thread::getCurrentIdentifier();
+#ifndef IOS
     CreateWakeupPipe(true);
 #endif
     if( s_pDefaultInstance == nullptr )
@@ -93,7 +97,7 @@ SvpSalInstance::~SvpSalInstance()
 
 void SvpSalInstance::CloseWakeupPipe(bool log)
 {
-    SvpSalYieldMutex *const pMutex(dynamic_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()));
+    SvpSalYieldMutex *const pMutex(dynamic_cast<SvpSalYieldMutex*>(GetYieldMutex()));
     if (!pMutex)
         return;
     if (pMutex->m_FeedbackFDs[0] != -1)
@@ -110,7 +114,7 @@ void SvpSalInstance::CloseWakeupPipe(bool log)
 
 void SvpSalInstance::CreateWakeupPipe(bool log)
 {
-    SvpSalYieldMutex *const pMutex(dynamic_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()));
+    SvpSalYieldMutex *const pMutex(dynamic_cast<SvpSalYieldMutex*>(GetYieldMutex()));
     if (!pMutex)
         return;
     if (pipe (pMutex->m_FeedbackFDs) == -1)
@@ -162,7 +166,7 @@ void SvpSalInstance::Wakeup(SvpRequest const request)
 #ifndef NDEBUG
     if (!g_CheckedMutex)
     {
-        assert(dynamic_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()) != nullptr
+        assert(dynamic_cast<SvpSalYieldMutex*>(GetYieldMutex()) != nullptr
             && "This SvpSalInstance function requires use of SvpSalYieldMutex");
         g_CheckedMutex = true;
     }
@@ -170,7 +174,7 @@ void SvpSalInstance::Wakeup(SvpRequest const request)
 #ifdef IOS
     (void)request;
 #else
-    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()));
+    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(GetYieldMutex()));
     std::unique_lock<std::mutex> g(pMutex->m_WakeUpMainMutex);
     if (request != SvpRequest::NONE)
     {
@@ -197,7 +201,7 @@ bool SvpSalInstance::CheckTimeout( bool bExecuteTimers )
                 m_aTimeout = aTimeOfDay;
                 m_aTimeout += m_nTimeoutMS;
 
-                osl::Guard< comphelper::SolarMutex > aGuard( mpSalYieldMutex.get() );
+                osl::Guard< comphelper::SolarMutex > aGuard( GetYieldMutex() );
 
                 // notify
                 ImplSVData* pSVData = ImplGetSVData();
@@ -248,6 +252,11 @@ std::unique_ptr<SalVirtualDevice> SvpSalInstance::CreateVirtualDevice( SalGraphi
     return pNew;
 }
 
+cairo_surface_t* get_underlying_cairo_surface(VirtualDevice& rDevice)
+{
+    return static_cast<SvpSalVirtualDevice*>(rDevice.mpVirDev.get())->GetSurface();
+}
+
 #endif
 
 SalTimer* SvpSalInstance::CreateSalTimer()
@@ -260,12 +269,12 @@ SalSystem* SvpSalInstance::CreateSalSystem()
     return new SvpSalSystem();
 }
 
-SalBitmap* SvpSalInstance::CreateSalBitmap()
+std::shared_ptr<SalBitmap> SvpSalInstance::CreateSalBitmap()
 {
 #ifdef IOS
-    return new QuartzSalBitmap();
+    return std::make_shared<QuartzSalBitmap>();
 #else
-    return new SvpSalBitmap();
+    return std::make_shared<SvpSalBitmap>();
 #endif
 }
 
@@ -281,18 +290,20 @@ void SvpSalInstance::ProcessEvent( SalUserEvent aEvent )
 #ifndef NDEBUG
     if (!g_CheckedMutex)
     {
-        assert(dynamic_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()) != nullptr
+        assert(dynamic_cast<SvpSalYieldMutex*>(GetYieldMutex()) != nullptr
             && "This SvpSalInstance function requires use of SvpSalYieldMutex");
         g_CheckedMutex = true;
     }
 #endif
-    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()));
+    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(GetYieldMutex()));
     pMutex->m_NonMainWaitingYieldCond.set();
 }
 
 SvpSalYieldMutex::SvpSalYieldMutex()
 {
+#ifndef IOS
     m_FeedbackFDs[0] = m_FeedbackFDs[1] = -1;
+#endif
 }
 
 SvpSalYieldMutex::~SvpSalYieldMutex()
@@ -360,7 +371,7 @@ sal_uInt32 SvpSalYieldMutex::doRelease(bool const bUnlockAll)
     {
         // read m_nCount before doRelease
         bool const isReleased(bUnlockAll || m_nCount == 1);
-        nCount = comphelper::GenericSolarMutex::doRelease( bUnlockAll );
+        nCount = comphelper::SolarMutex::doRelease( bUnlockAll );
         if (isReleased) {
             std::unique_lock<std::mutex> g(m_WakeUpMainMutex);
             m_wakeUpMain = true;
@@ -390,7 +401,10 @@ bool SvpSalInstance::IsMainThread() const
 void SvpSalInstance::updateMainThread()
 {
     if (!IsMainThread())
+    {
         m_MainThread = osl::Thread::getCurrentIdentifier();
+        ImplGetSVData()->mnMainThreadId = osl::Thread::getCurrentIdentifier();
+    }
 }
 
 bool SvpSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
@@ -398,7 +412,7 @@ bool SvpSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
 #ifndef NDEBUG
     if (!g_CheckedMutex)
     {
-        assert(dynamic_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()) != nullptr
+        assert(dynamic_cast<SvpSalYieldMutex*>(GetYieldMutex()) != nullptr
             && "This SvpSalInstance function requires use of SvpSalYieldMutex");
         g_CheckedMutex = true;
     }
@@ -411,7 +425,7 @@ bool SvpSalInstance::DoYield(bool bWait, bool bHandleAllCurrentEvents)
 
     bEvent = CheckTimeout() || bEvent;
 
-    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(mpSalYieldMutex.get()));
+    SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(GetYieldMutex()));
 
     if (IsMainThread())
     {
@@ -489,11 +503,6 @@ bool SvpSalInstance::AnyInput( VclInputFlags nType )
     if( nType & VclInputFlags::TIMER )
         return CheckTimeout( false );
     return false;
-}
-
-SalSession* SvpSalInstance::CreateSalSession()
-{
-    return nullptr;
 }
 
 OUString SvpSalInstance::GetConnectionIdentifier()

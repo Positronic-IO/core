@@ -72,7 +72,7 @@ namespace
             /* 11 SotClipboardFormatId::DRAWING*/                { "application/x-openoffice-drawing;windows_formatname=\"Drawing Format\"", "Drawing Format", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /* 12 SotClipboardFormatId::SVXB*/                   { "application/x-openoffice-svxb;windows_formatname=\"SVXB (StarView Bitmap/Animation)\"", "SVXB (StarView Bitmap/Animation)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /* 13 SotClipboardFormatId::SVIM*/                   { "application/x-openoffice-svim;windows_formatname=\"SVIM (StarView ImageMap)\"", "SVIM (StarView ImageMap)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
-            /* 14 SotClipboardFormatId::XFA*/                    { "application/x-openoffice-xfa;windows_formatname=\"XFA (XOutDev FillAttr)\"", "XFA (XOutDev FillAttr)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
+            /* 14 SotClipboardFormatId::XFA*/                    { "application/x-libreoffice-xfa;windows_formatname=\"XFA (XOutDev FillAttr Any)\"", "XFA (XOutDev FillAttr Any)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /* 15 SotClipboardFormatId::EDITENGINE_ODF_TEXT_FLAT*/ { "application/vnd.oasis.opendocument.text-flat-xml", "Flat XML format (EditEngine ODF)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /* 16 SotClipboardFormatId::INTERNALLINK_STATE*/     { "application/x-openoffice-internallink-state;windows_formatname=\"StatusInfo vom SvxInternalLink\"", "StatusInfo vom SvxInternalLink", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /* 17 SotClipboardFormatId::SOLK*/                   { "application/x-openoffice-solk;windows_formatname=\"SOLK (StarOffice Link)\"", "SOLK (StarOffice Link)", &cppu::UnoType<Sequence<sal_Int8>>::get() },
@@ -204,7 +204,8 @@ namespace
             /*143 SotClipboardFormatId::MATHML*/   { "application/mathml+xml", "MathML", &::cppu::UnoType<const Sequence< sal_Int8 >>::get() },
             /*144 SotClipboardFormatId::JPEG*/ { "image/jpeg", "JPEG Bitmap", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             /*145 SotClipboardFormatId::RICHTEXT*/ { "text/richtext", "Richtext Format", &cppu::UnoType<Sequence<sal_Int8>>::get() },
-            /*146 SotClipboardFormatId::STRING_TSVC*/            { "application/x-libreoffice-tsvc", "Text TSV-Calc", &cppu::UnoType<OUString>::get() }
+            /*146 SotClipboardFormatId::STRING_TSVC*/            { "application/x-libreoffice-tsvc", "Text TSV-Calc", &cppu::UnoType<OUString>::get() },
+            /*147 SotClipboardFormatId::PDF*/            { "application/pdf", "PDF Document", &cppu::UnoType<Sequence<sal_Int8>>::get() },
             };
         return &aInstance[0];
         }

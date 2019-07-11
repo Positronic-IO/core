@@ -39,7 +39,6 @@ ScInsertTableDlg::ScInsertTableDlg(weld::Window* pParent, ScViewData& rData, SCT
     , rViewData(rData)
     , rDoc(*rData.GetDocument())
     , pDocShTables(nullptr)
-    , pDocInserter(nullptr)
     , bMustClose(false)
     , nSelTabIndex(0)
     , nTableCount(nTabCount)
@@ -66,12 +65,12 @@ ScInsertTableDlg::~ScInsertTableDlg()
 {
     if (pDocShTables)
         pDocShTables->DoClose();
-    delete pDocInserter;
+    pDocInserter.reset();
 }
 
 void ScInsertTableDlg::Init_Impl( bool bFromFile )
 {
-    m_xLbTables->set_selection_mode(true);
+    m_xLbTables->set_selection_mode(SelectionMode::Multiple);
     m_xBtnBrowse->connect_clicked( LINK( this, ScInsertTableDlg, BrowseHdl_Impl ) );
     m_xBtnNew->connect_clicked( LINK( this, ScInsertTableDlg, ChoiceHdl_Impl ) );
     m_xBtnFromFile->connect_clicked( LINK( this, ScInsertTableDlg, ChoiceHdl_Impl ) );
@@ -117,12 +116,12 @@ void ScInsertTableDlg::Init_Impl( bool bFromFile )
     }
 }
 
-short ScInsertTableDlg::execute()
+short ScInsertTableDlg::run()
 {
     if (m_xBtnFromFile->get_active())
         aBrowseTimer.Start();
 
-    return m_xDialog->run();
+    return GenericDialogController::run();
 }
 
 void ScInsertTableDlg::SetNewTable_Impl()
@@ -262,8 +261,8 @@ IMPL_LINK_NOARG(ScInsertTableDlg, ChoiceHdl_Impl, weld::Button&, void)
 
 IMPL_LINK_NOARG(ScInsertTableDlg, BrowseHdl_Impl, weld::Button&, void)
 {
-    delete pDocInserter;
-    pDocInserter = new ::sfx2::DocumentInserter(m_xDialog.get(), ScDocShell::Factory().GetFactoryName());
+    pDocInserter.reset();
+    pDocInserter.reset( new ::sfx2::DocumentInserter(m_xDialog.get(), ScDocShell::Factory().GetFactoryName()) );
     pDocInserter->StartExecuteModal( LINK( this, ScInsertTableDlg, DialogClosedHdl ) );
 }
 
@@ -305,7 +304,7 @@ IMPL_LINK( ScInsertTableDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg
 {
     if ( ERRCODE_NONE == _pFileDlg->GetError() )
     {
-        SfxMedium* pMed = pDocInserter->CreateMedium();
+        std::unique_ptr<SfxMedium> pMed = pDocInserter->CreateMedium();
         if ( pMed )
         {
             //  ERRCTX_SFX_OPENDOC -> "Error loading document"
@@ -321,7 +320,7 @@ IMPL_LINK( ScInsertTableDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg
 
             {
                 weld::WaitObject aWait(m_xDialog.get());
-                pDocShTables->DoLoad(pMed);
+                pDocShTables->DoLoad(pMed.release());
             }
 
             ErrCode nErr = pDocShTables->GetErrorCode();

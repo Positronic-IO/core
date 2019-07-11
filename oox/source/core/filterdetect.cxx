@@ -35,8 +35,9 @@
 #include <oox/crypto/DocumentDecryption.hxx>
 
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
+#include <com/sun/star/beans/NamedValue.hpp>
 
-#include <services.hxx>
+using namespace ::com::sun::star;
 
 namespace oox {
 namespace core {
@@ -228,25 +229,6 @@ void FilterDetectDocHandler::parseContentTypesOverride( const AttributeList& rAt
         mrFilterName = getFilterNameFromContentType( rAttribs.getString( XML_ContentType, OUString() ), maFileName );
 }
 
-/* Helper for XServiceInfo */
-Sequence< OUString > FilterDetect_getSupportedServiceNames()
-{
-    Sequence<OUString> aServiceNames { "com.sun.star.frame.ExtendedTypeDetection" };
-    return aServiceNames;
-}
-
-/* Helper for XServiceInfo */
-OUString FilterDetect_getImplementationName()
-{
-    return OUString( "com.sun.star.comp.oox.FormatDetector" );
-}
-
-/* Helper for registry */
-Reference< XInterface > FilterDetect_createInstance( const Reference< XComponentContext >& rxContext )
-{
-    return static_cast< ::cppu::OWeakObject* >( new FilterDetect( rxContext ) );
-}
-
 FilterDetect::FilterDetect( const Reference< XComponentContext >& rxContext ) :
     mxContext( rxContext, UNO_SET_THROW )
 {
@@ -318,7 +300,7 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
     {
         try
         {
-            DocumentDecryption aDecryptor(aOleStorage, mxContext);
+            DocumentDecryption aDecryptor(aOleStorage);
 
             if( aDecryptor.readEncryptionInfo() )
             {
@@ -348,14 +330,21 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
                 {
                     // create temporary file for unencrypted package
                     Reference<XStream> xTempFile( TempFile::create(mxContext), UNO_QUERY_THROW );
-                    aDecryptor.decrypt( xTempFile );
 
-                    // store temp file in media descriptor to keep it alive
-                    rMediaDescriptor.setComponentDataEntry( "DecryptedPackage", Any( xTempFile ) );
+                    // if decryption was unsuccessful (corrupted file or any other reason)
+                    if (!aDecryptor.decrypt(xTempFile))
+                    {
+                        rMediaDescriptor[ MediaDescriptor::PROP_ABORTED() ] <<= true;
+                    }
+                    else
+                    {
+                        // store temp file in media descriptor to keep it alive
+                        rMediaDescriptor.setComponentDataEntry( "DecryptedPackage", Any( xTempFile ) );
 
-                    Reference<XInputStream> xDecryptedInputStream = xTempFile->getInputStream();
-                    if( lclIsZipPackage( mxContext, xDecryptedInputStream ) )
-                        return xDecryptedInputStream;
+                        Reference<XInputStream> xDecryptedInputStream = xTempFile->getInputStream();
+                        if( lclIsZipPackage( mxContext, xDecryptedInputStream ) )
+                            return xDecryptedInputStream;
+                    }
                 }
             }
         }
@@ -370,7 +359,7 @@ Reference< XInputStream > FilterDetect::extractUnencryptedPackage( MediaDescript
 
 OUString SAL_CALL FilterDetect::getImplementationName()
 {
-    return FilterDetect_getImplementationName();
+    return OUString( "com.sun.star.comp.oox.FormatDetector" );
 }
 
 sal_Bool SAL_CALL FilterDetect::supportsService( const OUString& rServiceName )
@@ -380,7 +369,8 @@ sal_Bool SAL_CALL FilterDetect::supportsService( const OUString& rServiceName )
 
 Sequence< OUString > SAL_CALL FilterDetect::getSupportedServiceNames()
 {
-    return FilterDetect_getSupportedServiceNames();
+    Sequence<OUString> aServiceNames { "com.sun.star.frame.ExtendedTypeDetection" };
+    return aServiceNames;
 }
 
 // com.sun.star.document.XExtendedFilterDetection interface -------------------
@@ -444,5 +434,12 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
 
 } // namespace core
 } // namespace oox
+
+extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
+com_sun_star_comp_oox_FormatDetector_get_implementation(uno::XComponentContext* pCtx,
+                                                        uno::Sequence<uno::Any> const& /*rSeq*/)
+{
+    return cppu::acquire(new oox::core::FilterDetect(pCtx));
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -27,14 +27,11 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/property.hxx>
 #include <osl/diagnose.h>
 #include <tools/diagnose_ex.h>
 #include <osl/mutex.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/svapp.hxx>
 
-using namespace ::comphelper;
 using namespace css::uno;
 using namespace css::lang;
 using namespace css::beans;
@@ -166,16 +163,10 @@ bool OGenericUnoDialog::impl_ensureDialog_lck()
 
     // get the parameters for the dialog from the current settings
 
-    // the parent window
-    VclPtr<vcl::Window> pParent;
-    VCLXWindow* pImplementation = VCLXWindow::GetImplementation(m_xParent);
-    if (pImplementation)
-        pParent = pImplementation->GetWindow();
-
     // the title
     OUString sTitle = m_sTitle;
 
-    OGenericUnoDialog::Dialog aDialog(createDialog(pParent));
+    OGenericUnoDialog::Dialog aDialog(createDialog(m_xParent));
     OSL_ENSURE(aDialog, "OGenericUnoDialog::impl_ensureDialog_lck: createDialog returned nonsense!");
     if (!aDialog)
         return false;

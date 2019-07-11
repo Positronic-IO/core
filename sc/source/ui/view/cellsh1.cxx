@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <globalnames.hxx>
 #include <config_features.h>
 
 #include <com/sun/star/i18n/TextConversionOption.hpp>
@@ -51,6 +52,7 @@
 #include <svtools/cliplistener.hxx>
 
 #include <cellsh.hxx>
+#include <ftools.hxx>
 #include <sc.hrc>
 #include <document.hxx>
 #include <patattr.hxx>
@@ -79,6 +81,7 @@
 #include <cliputil.hxx>
 #include <markdata.hxx>
 #include <docpool.hxx>
+#include <colorscale.hxx>
 #include <condformatdlg.hxx>
 #include <attrib.hxx>
 #include <condformatdlgitem.hxx>
@@ -101,6 +104,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <cppuhelper/bootstrap.hxx>
 
+#include <o3tl/make_unique.hxx>
 #include <memory>
 
 using namespace ::com::sun::star;
@@ -291,10 +295,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                         bool bTheFlag=(pDoc->GetChangeTrack()!=nullptr);
 
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                         ScopedVclPtr<AbstractScInsertCellDlg> pDlg(pFact->CreateScInsertCellDlg(pTabViewShell->GetFrameWeld(), bTheFlag));
-                        OSL_ENSURE(pDlg, "Dialog create fail!");
                         if (pDlg->Execute() == RET_OK)
                             eCmd = pDlg->GetInsCellCmd();
                     }
@@ -363,10 +365,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                             (pDoc->GetChangeTrack() != nullptr);
 
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                         ScopedVclPtr<AbstractScDeleteCellDlg> pDlg(pFact->CreateScDeleteCellDlg( pTabViewShell->GetFrameWeld(), bTheFlag ));
-                        OSL_ENSURE(pDlg, "Dialog create fail!");
 
                         if (pDlg->Execute() == RET_OK)
                             eCmd = pDlg->GetDelCellCmd();
@@ -426,10 +426,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     if (aTester.IsEditable())
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                         ScopedVclPtr<AbstractScDeleteContentsDlg> pDlg(pFact->CreateScDeleteContentsDlg(pTabViewShell->GetFrameWeld()));
-                        OSL_ENSURE(pDlg, "Dialog create fail!");
                         ScDocument* pDoc = GetViewData()->GetDocument();
                         SCTAB nTab = GetViewData()->GetTabNo();
                         if ( pDoc->IsTabProtected(nTab) )
@@ -500,11 +498,9 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 else
                 {
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     ScopedVclPtr<AbstractScInsertContentsDlg> pDlg(pFact->CreateScInsertContentsDlg(pTabViewShell->GetFrameWeld(),
                                                                                                     new OUString(ScResId(STR_FILL_TAB))));
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
                     pDlg->SetFillMode(true);
 
                     if (pDlg->Execute() == RET_OK)
@@ -719,14 +715,12 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                         }
                     }
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     ScopedVclPtr<AbstractScFillSeriesDlg> pDlg(pFact->CreateScFillSeriesDlg( pTabViewShell->GetFrameWeld(),
                                                             *pDoc,
                                                             eFillDir, eFillCmd, eFillDateCmd,
                                                             aStartStr, fIncVal, fMaxVal,
                                                             nPossDir));
-                    OSL_ENSURE(pDlg, "Dialog create fail!");
 
                     if ( nStartCol != nEndCol && nStartRow != nEndRow )
                     {
@@ -1083,10 +1077,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     if ( pTabViewShell->HasSelectionForDrillDown( nOrientation ) )
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        assert(pFact && "ScAbstractFactory create fail!");
                         ScopedVclPtr<AbstractScDPShowDetailDlg> pDlg( pFact->CreateScDPShowDetailDlg(
                             pTabViewShell->GetFrameWeld(), *pDPObj, nOrientation ) );
-                        assert(pDlg && "Dialog create fail!");
                         if ( pDlg->Execute() == RET_OK )
                         {
                             OUString aNewDimName( pDlg->GetDimensionName() );
@@ -1123,12 +1115,10 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     if ( pTabViewShell->HasSelectionForDateGroup( aNumInfo, nParts ) )
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE( pFact, "ScAbstractFactory create fail!" );
                         const Date& rNullDate( GetViewData()->GetDocument()->GetFormatTable()->GetNullDate() );
                         ScopedVclPtr<AbstractScDPDateGroupDlg> pDlg( pFact->CreateScDPDateGroupDlg(
                             pTabViewShell->GetDialogParent(),
                             aNumInfo, nParts, rNullDate ) );
-                        OSL_ENSURE( pDlg, "Dialog create fail!" );
                         if( pDlg->Execute() == RET_OK )
                         {
                             aNumInfo = pDlg->GetGroupInfo();
@@ -1138,10 +1128,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     else if ( pTabViewShell->HasSelectionForNumGroup( aNumInfo ) )
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE( pFact, "ScAbstractFactory create fail!" );
                         ScopedVclPtr<AbstractScDPNumGroupDlg> pDlg( pFact->CreateScDPNumGroupDlg(
                             pTabViewShell->GetDialogParent(), aNumInfo ) );
-                        OSL_ENSURE( pDlg, "Dialog create fail!" );
                         if( pDlg->Execute() == RET_OK )
                             pTabViewShell->NumGroupDataPilot( pDlg->GetGroupInfo() );
                     }
@@ -1176,10 +1164,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     else
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                         ScopedVclPtr<AbstractScGroupDlg> pDlg(pFact->CreateAbstractScGroupDlg(pTabViewShell->GetFrameWeld()));
-                        OSL_ENSURE(pDlg, "Dialog create fail!");
                         if ( pDlg->Execute() == RET_OK )
                             bColumns = pDlg->GetColsChecked();
                         else
@@ -1236,10 +1222,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     if ( bColPoss && bRowPoss && !comphelper::LibreOfficeKit::isActive() )
                     {
                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                         ScopedVclPtr<AbstractScGroupDlg> pDlg(pFact->CreateAbstractScGroupDlg(pTabViewShell->GetFrameWeld(), true));
-                        OSL_ENSURE(pDlg, "Dialog create fail!");
                         if ( pDlg->Execute() == RET_OK )
                             bColumns = pDlg->GetColsChecked();
                         else
@@ -1312,9 +1296,9 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
 
                 if ( nFormat != SotClipboardFormatId::NONE )
                 {
-                    vcl::Window* pWin = GetViewData()->GetActiveWin();
-                    bool bCells = ( ScTransferObj::GetOwnClipboard( pWin ) != nullptr );
-                    bool bDraw = ( ScDrawTransferObj::GetOwnClipboard( pWin ) != nullptr );
+                    css::uno::Reference<css::datatransfer::XTransferable2> xTransferable(ScTabViewShell::GetClipData(GetViewData()->GetActiveWin()));
+                    bool bCells = ( ScTransferObj::GetOwnClipboard(xTransferable) != nullptr );
+                    bool bDraw = ( ScDrawTransferObj::GetOwnClipboard(xTransferable) != nullptr );
                     bool bOle = ( nFormat == SotClipboardFormatId::EMBED_SOURCE );
 
                     if ( bCells && bOle )
@@ -1338,11 +1322,10 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 ScPasteFunc nFunction = ScPasteFunc::NONE;
                 InsCellCmd eMoveMode = INS_NONE;
 
-                vcl::Window* pWin = GetViewData()->GetActiveWin();
                 ScDocument* pDoc = GetViewData()->GetDocument();
                 bool bOtherDoc = !pDoc->IsClipboardSource();
                 // keep a reference in case the clipboard is changed during dialog or PasteFromClip
-                rtl::Reference<ScTransferObj> pOwnClip = ScTransferObj::GetOwnClipboard( pWin );
+                const ScTransferObj* pOwnClip = ScTransferObj::GetOwnClipboard(ScTabViewShell::GetClipData(GetViewData()->GetActiveWin()));
                 if ( pOwnClip )
                 {
                     bool bSkipEmpty = false;
@@ -1381,15 +1364,13 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                         if (aTester.IsEditable())
                         {
                             ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                            OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                             ScopedVclPtr<AbstractScInsertContentsDlg> pDlg(pFact->CreateScInsertContentsDlg(pTabViewShell->GetFrameWeld()));
-                            OSL_ENSURE(pDlg, "Dialog create fail!");
                             pDlg->SetOtherDoc( bOtherDoc );
                             // if ChangeTrack MoveMode disable
                             pDlg->SetChangeTrack( pDoc->GetChangeTrack() != nullptr );
                             // fdo#56098  disable shift if necessary
-                            if ( !bOtherDoc  && pOwnClip )
+                            if (!bOtherDoc)
                             {
                                 ScViewData* pData = GetViewData();
                                 if ( pData->GetMarkData().GetTableSelect( pData->GetTabNo() ) )
@@ -1497,8 +1478,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
         case SID_PASTE_ONLY_TEXT:
         case SID_PASTE_ONLY_FORMULA:
         {
-            vcl::Window* pWin = GetViewData()->GetActiveWin();
-            if ( ScTransferObj::GetOwnClipboard( pWin ) )  // own cell data
+            if ( ScTransferObj::GetOwnClipboard(ScTabViewShell::GetClipData(GetViewData()->GetActiveWin())) )  // own cell data
             {
                 rReq.SetSlot( FID_INS_CELL_CONTENTS );
                 OUString aFlags;
@@ -1522,6 +1502,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             // this makes FID_INS_CELL_CONTENTS superfluous
             {
                 vcl::Window* pWin = GetViewData()->GetActiveWin();
+                css::uno::Reference<css::datatransfer::XTransferable2> xTransferable(ScTabViewShell::GetClipData(pWin));
 
                 //  Clipboard-ID given as parameter? Basic "PasteSpecial(Format)"
                 const SfxPoolItem* pItem=nullptr;
@@ -1533,7 +1514,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     bool bRet=true;
                     {
                         WaitObject aWait( GetViewData()->GetDialogParent() );
-                        bool bDraw = ( ScDrawTransferObj::GetOwnClipboard( pWin ) != nullptr );
+                        bool bDraw = ( ScDrawTransferObj::GetOwnClipboard(xTransferable) != nullptr );
                         if ( bDraw && nFormat == SotClipboardFormatId::EMBED_SOURCE )
                             pTabViewShell->PasteDraw();
                         else
@@ -1542,7 +1523,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
 
                     if ( bRet )
                     {
-                        rReq.SetReturnValue(SfxInt16Item(nSlot, bRet ? 1 : 0)); // 1 = success, 0 = fail
+                        rReq.SetReturnValue(SfxInt16Item(nSlot, 1)); // 1 = success, 0 = fail
                         rReq.Done();
                     }
                     else
@@ -1552,7 +1533,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
 
                 if ( !pItem )
                 {
-                    if ( ScTransferObj::GetOwnClipboard( pWin ) )  // own cell data
+                    if ( ScTransferObj::GetOwnClipboard(xTransferable) )  // own cell data
                     {
                         rReq.SetSlot( FID_INS_CELL_CONTENTS );
                         ExecuteSlot( rReq, GetInterface() );
@@ -1560,7 +1541,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     }
                     else                                    // draw objects or external data
                     {
-                        bool bDraw = ( ScDrawTransferObj::GetOwnClipboard( pWin ) != nullptr );
+                        bool bDraw = ( ScDrawTransferObj::GetOwnClipboard(xTransferable) != nullptr );
 
                         SvxClipboardFormatItem aFormats( SID_CLIPBOARD_FORMAT_ITEMS );
                         GetPossibleClipboardFormats( aFormats );
@@ -1570,8 +1551,6 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                         {
                             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                             ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(pTabViewShell->GetFrameWeld()));
-                            if ( pDlg )
-                            {
                             for (sal_uInt16 i=0; i<nFormatCount; i++)
                             {
                                 SotClipboardFormatId nFormatId = aFormats.GetClipbrdFormatId( i );
@@ -1602,7 +1581,6 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                             {
                                 rReq.SetReturnValue(SfxInt16Item(nSlot, 0));    // 0 = fail
                                 rReq.Ignore();
-                            }
                             }
                         }
                         else
@@ -1827,10 +1805,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 CreateNameFlags nFlags = pTabViewShell->GetCreateNameFlags();
 
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                 ScopedVclPtr<AbstractScNameCreateDlg> pDlg(pFact->CreateScNameCreateDlg(pTabViewShell->GetFrameWeld(), nFlags));
-                OSL_ENSURE(pDlg, "Dialog create fail!");
 
                 if( pDlg->Execute() )
                 {
@@ -1980,15 +1956,16 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     aRangeList.push_back(ScRange(aPos));
                 }
 
+                // try to find an existing conditional format
                 const ScConditionalFormat* pCondFormat = nullptr;
                 const ScPatternAttr* pPattern = pDoc->GetPattern(aPos.Col(), aPos.Row(), aPos.Tab());
+                ScConditionalFormatList* pList = pDoc->GetCondFormList(aPos.Tab());
                 const std::vector<sal_uInt32>& rCondFormats = pPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData();
                 bool bContainsCondFormat = !rCondFormats.empty();
                 bool bCondFormatDlg = false;
+                bool bContainsExistingCondFormat = false;
                 if(bContainsCondFormat)
                 {
-                    bool bContainsExistingCondFormat = false;
-                    ScConditionalFormatList* pList = pDoc->GetCondFormList(aPos.Tab());
                     for (std::vector<sal_uInt32>::const_iterator itr = rCondFormats.begin(), itrEnd = rCondFormats.end();
                                             itr != itrEnd; ++itr)
                     {
@@ -2007,41 +1984,71 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                             break;
                         }
                     }
+                }
 
-                    // if not found a conditional format ask whether we should edit one of the existing
-                    // or should create a new overlapping conditional format
-                    if(!bCondFormatDlg && bContainsExistingCondFormat)
+                // do we have a parameter with the conditional formatting type?
+                const SfxInt16Item* pParam = rReq.GetArg<SfxInt16Item>(FN_PARAM_1);
+                if (pParam && nSlot == SID_OPENDLG_ICONSET)
+                {
+                    ScConditionalFormat* pFormat = new ScConditionalFormat(0, pDoc);
+                    pFormat->SetRange(aRangeList);
+
+                    ScIconSetType eIconSetType = limit_cast<ScIconSetType>(pParam->GetValue(), IconSet_3Arrows, IconSet_5Boxes);
+                    const int nSteps = ScIconSetFormat::getIconSetElements(eIconSetType);
+
+                    ScIconSetFormat* pEntry = new ScIconSetFormat(pDoc);
+                    ScIconSetFormatData* pIconSetFormatData = new ScIconSetFormatData(eIconSetType);
+
+                    pIconSetFormatData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(0, COL_RED, COLORSCALE_PERCENT));
+                    pIconSetFormatData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(round(100. / nSteps), COL_BROWN, COLORSCALE_PERCENT));
+                    pIconSetFormatData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(round(200. / nSteps), COL_YELLOW, COLORSCALE_PERCENT));
+                    if (nSteps > 3)
+                        pIconSetFormatData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(round(300. / nSteps), COL_WHITE, COLORSCALE_PERCENT));
+                    if (nSteps > 4)
+                        pIconSetFormatData->m_Entries.push_back(o3tl::make_unique<ScColorScaleEntry>(round(400. / nSteps), COL_GREEN, COLORSCALE_PERCENT));
+
+                    pEntry->SetIconSetData(pIconSetFormatData);
+                    pFormat->AddEntry(pEntry);
+
+                    // use the new conditional formatting
+                    GetViewData()->GetDocShell()->GetDocFunc().ReplaceConditionalFormat(nIndex, pFormat, aPos.Tab(), aRangeList);
+
+                    break;
+                }
+
+                // if not found a conditional format ask whether we should edit one of the existing
+                // or should create a new overlapping conditional format
+                if(bContainsCondFormat && !bCondFormatDlg && bContainsExistingCondFormat)
+                {
+                    vcl::Window* pWin = pTabViewShell->GetDialogParent();
+                    std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
+                                                                   VclMessageType::Question, VclButtonsType::YesNo,
+                                                                   ScResId(STR_EDIT_EXISTING_COND_FORMATS)));
+                    xQueryBox->set_default_response(RET_YES);
+                    bool bEditExisting = xQueryBox->run() == RET_YES;
+                    if (bEditExisting)
                     {
-                        vcl::Window* pWin = pTabViewShell->GetDialogParent();
-                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pWin ? pWin->GetFrameWeld() : nullptr,
-                                                                       VclMessageType::Question, VclButtonsType::YesNo,
-                                                                       ScResId(STR_EDIT_EXISTING_COND_FORMATS)));
-                        xQueryBox->set_default_response(RET_YES);
-                        bool bEditExisting = xQueryBox->run() == RET_YES;
-                        if(bEditExisting)
+                        // differentiate between ranges where one conditional format is defined
+                        // and several formats are defined
+                        // if we have only one => open the cond format dlg to edit it
+                        // otherwise open the manage cond format dlg
+                        if (rCondFormats.size() == 1)
                         {
-                            // differentiate between ranges where one conditional format is defined
-                            // and several formats are defined
-                            // if we have only one => open the cond format dlg to edit it
-                            // otherwise open the manage cond format dlg
-                            if(rCondFormats.size() == 1)
-                            {
-                                pCondFormat = pList->GetFormat(rCondFormats[0]);
-                                assert(pCondFormat);
-                                bCondFormatDlg = true;
-                            }
-                            else
-                            {
-                                // Queue message to open Conditional Format Manager Dialog.
-                                GetViewData()->GetDispatcher().Execute( SID_OPENDLG_CONDFRMT_MANAGER, SfxCallMode::ASYNCHRON );
-                                break;
-                            }
+                            pCondFormat = pList->GetFormat(rCondFormats[0]);
+                            assert(pCondFormat);
+                            bCondFormatDlg = true;
                         }
                         else
                         {
-                            // define an overlapping conditional format
-                            // does not need to be handled here
+                            // Queue message to open Conditional Format Manager Dialog.
+                            GetViewData()->GetDispatcher().Execute( SID_OPENDLG_CONDFRMT_MANAGER, SfxCallMode::ASYNCHRON );
+                            break;
                         }
+                    }
+                    else
+                    {
+                        // define an overlapping conditional format
+                        // does not need to be handled here
                     }
                 }
 
@@ -2150,10 +2157,8 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
         case FID_INSERT_NAME:
             {
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                 ScopedVclPtr<AbstractScNamePasteDlg> pDlg(pFact->CreateScNamePasteDlg( pTabViewShell->GetDialogParent(), GetViewData()->GetDocShell() ));
-                OSL_ENSURE(pDlg, "Dialog create fail!");
                 switch( pDlg->Execute() )
                 {
                     case BTN_PASTE_LIST:
@@ -2392,7 +2397,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             if ( pReqArgs && pReqArgs->HasItem( SID_ATTR_POSTIT_ID, &pId) )
             {
                 const SvxPostItIdItem* pIdItem = static_cast<const SvxPostItIdItem*>(pId);
-                OUString aCellId = pIdItem->GetValue();
+                const OUString& aCellId = pIdItem->GetValue();
                 if (!aCellId.isEmpty())
                 {
                     SetTabNoAndCursor( GetViewData(), aCellId );
@@ -2465,8 +2470,9 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 SfxAllItemSet aSet( GetPool() );
                 aSet.Put( SfxBoolItem( FN_PARAM_1, false ) );
                 aSet.Put( SvxFontItem( aCurFont.GetFamilyType(), aCurFont.GetFamilyName(), aCurFont.GetStyleName(), aCurFont.GetPitch(), aCurFont.GetCharSet(), GetPool().GetWhich(SID_ATTR_CHAR_FONT) ) );
-
-                ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(pTabViewShell->GetFrameWeld(), aSet, true));
+                SfxViewFrame* pViewFrame = pTabViewShell->GetViewFrame();
+                auto xFrame = pViewFrame->GetFrame().GetFrameInterface();
+                ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(pTabViewShell->GetFrameWeld(), aSet, xFrame));
                 pDlg->Execute();
             }
             break;
@@ -2477,20 +2483,12 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
 
                 if ( pReqArgs )
                 {
-                    const SfxStringItem* pItem =
-                        static_cast<const SfxStringItem*>(&pReqArgs->Get( SID_SELECT_SCENARIO ));
-
-                    if( pItem )
-                    {
-                        pTabViewShell->UseScenario( pItem->GetValue() );
-                        //! why should the return value be valid?!?!
-                        rReq.SetReturnValue( SfxStringItem( SID_SELECT_SCENARIO, pItem->GetValue() ) );
-                        rReq.Done();
-                    }
-                    else
-                    {
-                        OSL_FAIL("nullptr");
-                    }
+                    const SfxStringItem& rItem
+                        = static_cast<const SfxStringItem&>(pReqArgs->Get(SID_SELECT_SCENARIO));
+                    pTabViewShell->UseScenario(rItem.GetValue());
+                    //! why should the return value be valid?!?!
+                    rReq.SetReturnValue(SfxStringItem(SID_SELECT_SCENARIO, rItem.GetValue()));
+                    rReq.Done();
                 }
             }
             break;
@@ -2519,7 +2517,6 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
         case SID_OPENDLG_CURRENTCONDFRMT_MANAGER:
             {
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                assert(pFact);
 
                 ScViewData* pData = GetViewData();
                 ScDocument* pDoc = pData->GetDocument();
@@ -2557,17 +2554,17 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     pDlg->SetModified();
 
                 short nRet = pDlg->Execute();
-                ScConditionalFormatList* pCondFormatList = pDlg->GetConditionalFormatList();
+                std::unique_ptr<ScConditionalFormatList> pCondFormatList = pDlg->GetConditionalFormatList();
                 if(nRet == RET_OK && pDlg->CondFormatsChanged())
                 {
-                    pData->GetDocShell()->GetDocFunc().SetConditionalFormatList(pCondFormatList, aPos.Tab());
+                    pData->GetDocShell()->GetDocFunc().SetConditionalFormatList(pCondFormatList.release(), aPos.Tab());
                 }
                 else if(nRet == DLG_RET_ADD)
                 {
                     // Put the xml string parameter to initialize the
                     // Conditional Format Dialog. ( add new )
                     pTabViewShell->GetPool().Put(ScCondFormatDlgItem(
-                                std::shared_ptr<ScConditionalFormatList>(pCondFormatList), -1, true));
+                                std::shared_ptr<ScConditionalFormatList>(pCondFormatList.release()), -1, true));
                     // Queue message to open Conditional Format Dialog
                     GetViewData()->GetDispatcher().Execute( SID_OPENDLG_CONDFRMT, SfxCallMode::ASYNCHRON );
                 }
@@ -2578,13 +2575,13 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     // Put the xml string parameter to initialize the
                     // Conditional Format Dialog. ( edit selected conditional format )
                     pTabViewShell->GetPool().Put(ScCondFormatDlgItem(
-                                std::shared_ptr<ScConditionalFormatList>(pCondFormatList), nIndex, true));
+                                std::shared_ptr<ScConditionalFormatList>(pCondFormatList.release()), nIndex, true));
 
                     // Queue message to open Conditional Format Dialog
                     GetViewData()->GetDispatcher().Execute( SID_OPENDLG_CONDFRMT, SfxCallMode::ASYNCHRON );
                 }
                 else
-                    delete pCondFormatList;
+                    pCondFormatList.reset();
 
                 if (pDlgItem)
                     pTabViewShell->GetPool().Remove(*pDlgItem);
@@ -2620,12 +2617,10 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 else
                 {
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                     pImpl->m_pLinkedDlg.disposeAndClear();
                     pImpl->m_pLinkedDlg =
                         pFact->CreateScLinkedAreaDlg(pTabViewShell->GetFrameWeld());
-                    OSL_ENSURE(pImpl->m_pLinkedDlg, "Dialog create fail!");
                     delete pImpl->m_pRequest;
                     pImpl->m_pRequest = new SfxRequest( rReq );
                     OUString sFile, sFilter, sOptions, sSource;
@@ -2694,7 +2689,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
             }
             break;
 
-            case SID_SELECT_UNPROTECTED_CELLS:
+        case SID_SELECT_UNPROTECTED_CELLS:
             {
                 ScViewData* pData = GetViewData();
                 SCTAB aTab = pData->GetTabNo();
@@ -2791,7 +2786,7 @@ void ScCellShell::ExecuteDataPilotDialog()
     ScViewData* pData = GetViewData();
     ScDocument* pDoc = pData->GetDocument();
 
-    std::unique_ptr<ScDPObject> pNewDPObject(nullptr);
+    std::unique_ptr<ScDPObject> pNewDPObject;
 
     // ScPivot is no longer used...
     ScDPObject* pDPObj = pDoc->GetDPAtCursor(
@@ -2821,22 +2816,39 @@ void ScCellShell::ExecuteDataPilotDialog()
         bool bEnableExt = ScDPObject::HasRegisteredSources();
 
         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-        OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
         ScopedVclPtr<AbstractScDataPilotSourceTypeDlg> pTypeDlg(
             pFact->CreateScDataPilotSourceTypeDlg(
                 pTabViewShell->GetFrameWeld(), bEnableExt));
 
         // Populate named ranges (if any).
-        ScRangeName* pRangeName = pDoc->GetRangeName();
-        if (pRangeName)
+        // We must take into account 2 types of scope : global doc and sheets
+        // for global doc: <name of the range>
+        // for sheets: <sheetname>.<name of the range>
+        std::map<OUString, ScRangeName*> aRangeMap;
+        pDoc->GetRangeNameMap(aRangeMap);
+        for (auto const& elemRangeMap : aRangeMap)
         {
-            ScRangeName::const_iterator itr = pRangeName->begin(), itrEnd = pRangeName->end();
-            for (; itr != itrEnd; ++itr)
-                pTypeDlg->AppendNamedRange(itr->second->GetName());
+            ScRangeName* pRangeName = elemRangeMap.second;
+            if (pRangeName)
+            {
+                if (elemRangeMap.first == STR_GLOBAL_RANGE_NAME)
+                {
+                    for (auto const& elem : *pRangeName)
+                        pTypeDlg->AppendNamedRange(elem.second->GetName());
+                }
+                else
+                {
+                    OUString aScope(elemRangeMap.first);
+                    ScGlobal::AddQuotes(aScope, '\'');
+                    for (auto const& elem : *pRangeName)
+                    {
+                        pTypeDlg->AppendNamedRange(aScope + "." + elem.second->GetName());
+                    }
+                }
+            }
         }
 
-        OSL_ENSURE(pTypeDlg, "Dialog create fail!");
         if ( pTypeDlg->Execute() == RET_OK )
         {
             if ( pTypeDlg->IsExternal() )
@@ -2846,7 +2858,6 @@ void ScCellShell::ExecuteDataPilotDialog()
                     pFact->CreateScDataPilotServiceDlg(
                         pTabViewShell->GetFrameWeld(), aSources));
 
-                OSL_ENSURE(pServDlg, "Dialog create fail!");
                 if ( pServDlg->Execute() == RET_OK )
                 {
                     ScDPServiceDesc aServDesc(
@@ -2953,8 +2964,9 @@ void ScCellShell::ExecuteDataPilotDialog()
             pNewDPObject->SetOutRange( aDestPos );
     }
 
-    pTabViewShell->SetDialogDPObject( pNewDPObject.get() );   // is copied
-    if ( pNewDPObject )
+    bool bHadNewDPObject = pNewDPObject != nullptr;
+    pTabViewShell->SetDialogDPObject( std::move(pNewDPObject) );
+    if ( bHadNewDPObject )
     {
         //  start layout dialog
 
@@ -2967,10 +2979,6 @@ void ScCellShell::ExecuteDataPilotDialog()
 
 void ScCellShell::ExecuteXMLSourceDialog()
 {
-    ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    if (!pFact)
-        return;
-
     ScTabViewShell* pTabViewShell = GetViewData()->GetViewShell();
     if (!pTabViewShell)
         return;
@@ -2999,12 +3007,17 @@ void ScCellShell::ExecuteSubtotals(SfxRequest& rReq)
     ScSubTotalParam aSubTotalParam;
     SfxItemSet aArgSet( GetPool(), svl::Items<SCITEM_SUBTDATA, SCITEM_SUBTDATA>{} );
 
+    bool bAnonymous;
+
     // Only get existing named database range.
     ScDBData* pDBData = pTabViewShell->GetDBData(true, SC_DB_OLD);
-    if (!pDBData)
+    if (pDBData)
+        bAnonymous = false;
+    else
     {
         // No existing DB data at this position.  Create an
         // anonymous DB.
+        bAnonymous = true;
         pDBData = pTabViewShell->GetAnonymousDBData();
         ScRange aDataRange;
         pDBData->GetArea(aDataRange);
@@ -3013,13 +3026,17 @@ void ScCellShell::ExecuteSubtotals(SfxRequest& rReq)
 
     pDBData->GetSubTotalParam( aSubTotalParam );
     aSubTotalParam.bRemoveOnly = false;
+    if (bAnonymous)
+    {
+        // Preset sort formatting along with values and also create formula
+        // cells with "needs formatting". Subtotals on data of different types
+        // doesn't make much sense anyway.
+        aSubTotalParam.bIncludePattern = true;
+    }
 
     aArgSet.Put( ScSubTotalItem( SCITEM_SUBTDATA, GetViewData(), &aSubTotalParam ) );
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    assert(pFact); //"ScAbstractFactory create fail
-
     pDlg.disposeAndReset(pFact->CreateScSubTotalDlg(pTabViewShell->GetDialogParent(), &aArgSet));
-    assert(pDlg); // "Dialog create fail
     pDlg->SetCurPageId("1stgroup");
 
     short bResult = pDlg->Execute();

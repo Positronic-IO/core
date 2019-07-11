@@ -12,11 +12,15 @@
 #define INCLUDED_SC_INC_CHARTTOOLS_HXX
 
 #include <memory>
-#include <svx/svdoole2.hxx>
-#include <svx/svditer.hxx>
+#include <vector>
 
-#include <docsh.hxx>
-#include "drwlayer.hxx"
+#include <svx/svditer.hxx>
+#include <rtl/ustring.hxx>
+
+#include "types.hxx"
+
+class ScDocShell;
+class SdrOle2Obj;
 
 namespace sc {
 namespace tools {
@@ -31,7 +35,7 @@ class ChartIterator
 {
 private:
     std::unique_ptr<SdrObjListIter> m_pIterator;
-    ChartSourceType m_eChartSourceType;
+    ChartSourceType const m_eChartSourceType;
 public:
     ChartIterator(ScDocShell* pDocShell, SCTAB nTab, ChartSourceType eChartSourceType);
     SdrOle2Obj* next();

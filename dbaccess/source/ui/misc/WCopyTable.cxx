@@ -53,6 +53,7 @@
 #include <connectivity/dbexception.hxx>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
 #include <vcl/lstbox.hxx>
@@ -158,7 +159,7 @@ void ObjectCopySource::copyFilterAndSortingTo( const Reference< XConnection >& _
         const OUString sTargetName = ::dbtools::composeTableNameForSelect(_xConnection,_rxObject);
         const OUString sTargetNameTemp = sTargetName + ".";
 
-        OUString sStatement = "SELECT * FROM " + sTargetName + " WHERE 0=1";
+        OUStringBuffer sStatement = "SELECT * FROM " + sTargetName + " WHERE 0=1";
 
         for (const std::pair<OUString,OUString> & aPropertie : aProperties)
         {
@@ -168,17 +169,17 @@ void ObjectCopySource::copyFilterAndSortingTo( const Reference< XConnection >& _
                 m_xObject->getPropertyValue( aPropertie.first ) >>= sFilter;
                 if ( !sFilter.isEmpty() )
                 {
-                    sStatement += aPropertie.second;
+                    sStatement.append(aPropertie.second);
                     OUString sReplace = sFilter;
                     sReplace = sReplace.replaceFirst(sSourceName,sTargetNameTemp);
                     sFilter = sReplace;
                     _rxObject->setPropertyValue( aPropertie.first, makeAny(sFilter) );
-                    sStatement += sFilter;
+                    sStatement.append(sFilter);
                 }
             }
         }
 
-        _xConnection->createStatement()->executeQuery(sStatement);
+        _xConnection->createStatement()->executeQuery(sStatement.makeStringAndClear());
 
         if ( m_xObjectPSI->hasPropertyByName( PROPERTY_APPLYFILTER ) )
             _rxObject->setPropertyValue( PROPERTY_APPLYFILTER, m_xObject->getPropertyValue( PROPERTY_APPLYFILTER ) );
@@ -237,7 +238,7 @@ OUString ObjectCopySource::getSelectStatement() const
                 aSQL.append( ", " );
         }
 
-        aSQL.append( "FROM " + ::dbtools::composeTableNameForSelect( m_xConnection, m_xObject ) );
+        aSQL.append( "FROM " ).append( ::dbtools::composeTableNameForSelect( m_xConnection, m_xObject ) );
 
         sSelectStatement = aSQL.makeStringAndClear();
     }
@@ -627,11 +628,16 @@ void OCopyTableWizard::construct()
 {
     SetSizePixel(Size(700, 350));
 
-    AddButton( m_pbHelp = VclPtr<HelpButton>::Create(this, WB_TABSTOP) );
-    AddButton( m_pbCancel = VclPtr<CancelButton>::Create(this, WB_TABSTOP) );
-    AddButton( m_pbPrev = VclPtr<PushButton>::Create(this, WB_TABSTOP));
-    AddButton( m_pbNext = VclPtr<PushButton>::Create(this, WB_TABSTOP));
-    AddButton( m_pbFinish = VclPtr<PushButton>::Create(this, WB_TABSTOP));
+    m_pbHelp = VclPtr<HelpButton>::Create(this, WB_TABSTOP);
+    AddButton(m_pbHelp);
+    m_pbCancel = VclPtr<CancelButton>::Create(this, WB_TABSTOP);
+    AddButton(m_pbCancel);
+    m_pbPrev = VclPtr<PushButton>::Create(this, WB_TABSTOP);
+    AddButton(m_pbPrev);
+    m_pbNext = VclPtr<PushButton>::Create(this, WB_TABSTOP);
+    AddButton(m_pbNext);
+    m_pbFinish = VclPtr<PushButton>::Create(this, WB_TABSTOP);
+    AddButton(m_pbFinish);
 
     m_pbHelp->SetSizePixel( LogicToPixel(Size(50, 14), MapMode(MapUnit::MapAppFont)) );
     m_pbCancel->SetSizePixel( LogicToPixel(Size(50, 14), MapMode(MapUnit::MapAppFont)) );
@@ -660,7 +666,7 @@ void OCopyTableWizard::construct()
 
     m_pbNext->GrabFocus();
 
-    if (m_vDestColumns.size())
+    if (!m_vDestColumns.empty())
         // source is a html or rtf table
         m_pbNext->SetStyle(m_pbFinish->GetStyle() | WB_DEFBUTTON);
     else
@@ -865,9 +871,9 @@ IMPL_LINK_NOARG(OCopyTableWizard, ImplOKHdl, Button*, void)
                 {
                     if ( supportsPrimaryKey() )
                     {
-                        ODatabaseExport::TColumns::const_iterator aFind = std::find_if(m_vDestColumns.begin(),m_vDestColumns.end(),
+                        bool noPrimaryKey = std::none_of(m_vDestColumns.begin(),m_vDestColumns.end(),
                             [] (const ODatabaseExport::TColumns::value_type& tCol) { return tCol.second->IsPrimaryKey(); });
-                        if ( aFind == m_vDestColumns.end() && m_xInteractionHandler.is() )
+                        if ( noPrimaryKey && m_xInteractionHandler.is() )
                         {
 
                             OUString sMsg(DBA_RES(STR_TABLEDESIGN_NO_PRIM_KEY));
@@ -1384,8 +1390,7 @@ OUString OCopyTableWizard::convertColumnName(const TColumnFindFunctor&   _rCmpFu
 
             while(_rCmpFunctor(sName))
             {
-                sName = sAlias;
-                sName += OUString::number(++nPos);
+                sName = sAlias + OUString::number(++nPos);
             }
             sAlias = sName;
             // we have to check again, it could happen that the name is already to long
@@ -1521,8 +1526,7 @@ OUString OCopyTableWizard::createUniqueName(const OUString& _sName)
             sal_Int32 nPos = 0;
             while(m_vSourceColumns.find(sName) != m_vSourceColumns.end())
             {
-                sName = _sName;
-                sName += OUString::number(++nPos);
+                sName = _sName + OUString::number(++nPos);
             }
         }
     }

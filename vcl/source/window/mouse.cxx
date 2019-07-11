@@ -46,6 +46,7 @@
 
 #include <com/sun/star/datatransfer/dnd/XDragSource.hpp>
 #include <com/sun/star/datatransfer/dnd/XDropTarget.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <comphelper/processfactory.hxx>
 
@@ -755,9 +756,9 @@ Reference< css::datatransfer::dnd::XDragSource > Window::GetDragSource()
                     aDropTargetSN = "com.sun.star.datatransfer.dnd.X11DropTarget";
 
                     aDragSourceAL[ 0 ] <<= Application::GetDisplayConnection();
-                    aDragSourceAL[ 1 ] <<= static_cast<sal_IntPtr>(pEnvData->aShellWindow);
+                    aDragSourceAL[ 1 ] <<= pEnvData->aShellWindow;
                     aDropTargetAL[ 0 ] <<= Application::GetDisplayConnection();
-                    aDropTargetAL[ 1 ] <<= static_cast<sal_IntPtr>(pEnvData->aShellWindow);
+                    aDropTargetAL[ 1 ] <<= pEnvData->aShellWindow;
 #endif
                     if( !aDragSourceSN.isEmpty() )
                         mpWindowImpl->mpFrameData->mxDragSource.set(

@@ -19,6 +19,7 @@
 
 #include "recently_used_file.hxx"
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <osl/process.h>
 #include <osl/security.hxx>
 #include <osl/thread.h>
@@ -34,7 +35,7 @@ const char SLASH[] = "/";
 
 namespace {
 
-inline void ensure_final_slash(/*inout*/ OUString& path)
+void ensure_final_slash(/*inout*/ OUString& path)
 {
     if (!path.isEmpty() &&
         (SLASH[0] != path.pData->buffer[path.getLength() - 1]))

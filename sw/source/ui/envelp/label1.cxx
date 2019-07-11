@@ -21,7 +21,7 @@
 #include <vcl/waitobj.hxx>
 #include <rtl/ustring.hxx>
 #include <sfx2/sfxsids.hrc>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <com/sun/star/uno/Sequence.h>
 #include <swtypes.hxx>
 #include <wrtsh.hxx>
@@ -163,7 +163,7 @@ SwLabDlg::SwLabDlg(weld::Window* pParent, const SfxItemSet& rSet,
 
 SwLabDlg::~SwLabDlg()
 {
-    delete m_pRecs;
+    m_pRecs.reset();
 }
 
 void SwLabDlg::GetLabItem(SwLabItem &rItem)
@@ -225,15 +225,15 @@ SwLabPage::SwLabPage(TabPageParent pParent, const SfxItemSet& rSet)
     , m_xAddressFrame(m_xBuilder->weld_widget("addressframe"))
     , m_xAddrBox(m_xBuilder->weld_check_button("address"))
     , m_xWritingEdit(m_xBuilder->weld_text_view("textview"))
-    , m_xDatabaseLB(m_xBuilder->weld_combo_box_text("database"))
-    , m_xTableLB(m_xBuilder->weld_combo_box_text("table"))
+    , m_xDatabaseLB(m_xBuilder->weld_combo_box("database"))
+    , m_xTableLB(m_xBuilder->weld_combo_box("table"))
     , m_xInsertBT(m_xBuilder->weld_button("insert"))
-    , m_xDBFieldLB(m_xBuilder->weld_combo_box_text("field"))
+    , m_xDBFieldLB(m_xBuilder->weld_combo_box("field"))
     , m_xContButton(m_xBuilder->weld_radio_button("continuous"))
     , m_xSheetButton(m_xBuilder->weld_radio_button("sheet"))
-    , m_xMakeBox(m_xBuilder->weld_combo_box_text("brand"))
-    , m_xTypeBox(m_xBuilder->weld_combo_box_text("type"))
-    , m_xHiddenSortTypeBox(m_xBuilder->weld_combo_box_text("hiddentype"))
+    , m_xMakeBox(m_xBuilder->weld_combo_box("brand"))
+    , m_xTypeBox(m_xBuilder->weld_combo_box("type"))
+    , m_xHiddenSortTypeBox(m_xBuilder->weld_combo_box("hiddentype"))
     , m_xFormatInfo(m_xBuilder->weld_label("formatinfo"))
 {
     WaitObject aWait(pParent.pParent);
@@ -294,7 +294,7 @@ IMPL_LINK_NOARG(SwLabPage, AddrHdl, weld::ToggleButton&, void)
     m_xWritingEdit->grab_focus();
 }
 
-IMPL_LINK( SwLabPage, DatabaseHdl, weld::ComboBoxText&, rListBox, void )
+IMPL_LINK( SwLabPage, DatabaseHdl, weld::ComboBox&, rListBox, void )
 {
     sActDBName = m_xDatabaseLB->get_active_text();
 
@@ -331,7 +331,7 @@ IMPL_LINK_NOARG(SwLabPage, PageHdl, weld::ToggleButton&, void)
     MakeHdl(*m_xMakeBox);
 }
 
-IMPL_LINK_NOARG(SwLabPage, MakeHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwLabPage, MakeHdl, weld::ComboBox&, void)
 {
     weld::WaitObject aWait(GetParentSwLabDlg()->getDialog());
 
@@ -384,7 +384,7 @@ IMPL_LINK_NOARG(SwLabPage, MakeHdl, weld::ComboBoxText&, void)
     TypeHdl(*m_xTypeBox);
 }
 
-IMPL_LINK_NOARG(SwLabPage, TypeHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwLabPage, TypeHdl, weld::ComboBox&, void)
 {
     DisplayFormat();
     aItem.m_aType = m_xTypeBox->get_active_text();
@@ -513,10 +513,10 @@ void SwLabPage::Reset(const SfxItemSet* rSet)
     m_xAddrBox->set_active( aItem.m_bAddr );
     m_xWritingEdit->set_text( aWriting );
 
-    for(std::vector<OUString>::const_iterator i = GetParentSwLabDlg()->Makes().begin(); i != GetParentSwLabDlg()->Makes().end(); ++i)
+    for(const auto& rMake : GetParentSwLabDlg()->Makes())
     {
-        if (m_xMakeBox->find_text(*i) == -1)
-            m_xMakeBox->append_text(*i);
+        if (m_xMakeBox->find_text(rMake) == -1)
+            m_xMakeBox->append_text(rMake);
     }
 
     m_xMakeBox->set_active_text(aItem.m_aMake);
@@ -591,7 +591,10 @@ DeactivateRC SwPrivateDataPage::DeactivatePage(SfxItemSet* _pSet)
 
 bool SwPrivateDataPage::FillItemSet(SfxItemSet* rSet)
 {
-    SwLabItem aItem = static_cast<const SwLabItem&>(GetDialogController()->GetExampleSet()->Get(FN_LABEL));
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
+    assert(pExampleSet);
+    SwLabItem aItem = static_cast<const SwLabItem&>(pExampleSet->Get(FN_LABEL));
+
     aItem.m_aPrivFirstName = m_xFirstNameED->get_text();
     aItem.m_aPrivName      = m_xNameED->get_text();
     aItem.m_aPrivShortCut  = m_xShortCutED->get_text();
@@ -681,7 +684,9 @@ DeactivateRC SwBusinessDataPage::DeactivatePage(SfxItemSet* _pSet)
 
 bool SwBusinessDataPage::FillItemSet(SfxItemSet* rSet)
 {
-    SwLabItem aItem = static_cast<const SwLabItem&>(GetDialogController()->GetExampleSet()->Get(FN_LABEL));
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
+    assert(pExampleSet);
+    SwLabItem aItem = static_cast<const SwLabItem&>(pExampleSet->Get(FN_LABEL));
 
     aItem.m_aCompCompany   = m_xCompanyED->get_text();
     aItem.m_aCompCompanyExt= m_xCompanyExtED->get_text();

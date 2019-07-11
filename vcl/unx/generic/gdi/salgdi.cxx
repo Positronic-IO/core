@@ -39,9 +39,12 @@
 #include <basegfx/polygon/b2dtrapezoid.hxx>
 #include <basegfx/curve/b2dcubicbezier.hxx>
 
+#include <headless/svpgdi.hxx>
+
 #include <vcl/jobdata.hxx>
 #include <vcl/sysdata.hxx>
 #include <vcl/virdev.hxx>
+#include <sal/log.hxx>
 
 #include <unx/salunx.h>
 #include <unx/saldisp.hxx>
@@ -59,7 +62,7 @@
 #include "openglx11cairotextrender.hxx"
 
 #include <unx/printergfx.hxx>
-#include "xrender_peer.hxx"
+#include <unx/x11/xrender_peer.hxx>
 #include "cairo_xlib_cairo.hxx"
 #include <cairo-xlib.h>
 
@@ -69,7 +72,6 @@ X11SalGraphics::X11SalGraphics():
     m_pFrame(nullptr),
     m_pVDev(nullptr),
     m_pColormap(nullptr),
-    m_pDeleteColormap(nullptr),
     hDrawable_(None),
     m_nXScreen( 0 ),
     m_pXRenderFormat(nullptr),
@@ -349,6 +351,9 @@ long X11SalGraphics::GetGraphicsWidth() const
 
 void X11SalGraphics::ResetClipRegion()
 {
+#if ENABLE_CAIRO_CANVAS
+    maClipRegion.SetNull();
+#endif
     mxImpl->ResetClipRegion();
 }
 
@@ -406,9 +411,9 @@ void X11SalGraphics::SetROPFillColor( SalROPColor nROPColor )
     mxImpl->SetROPFillColor( nROPColor );
 }
 
-void X11SalGraphics::SetXORMode( bool bSet )
+void X11SalGraphics::SetXORMode( bool bSet, bool bInvertOnly )
 {
-    mxImpl->SetXORMode( bSet );
+    mxImpl->SetXORMode( bSet, bInvertOnly );
 }
 
 void X11SalGraphics::drawPixel( long nX, long nY )
@@ -535,7 +540,7 @@ cairo::SurfaceSharedPtr X11SalGraphics::CreateSurface( const OutputDevice& rRefD
     if( rRefDevice.GetOutDevType() == OUTDEV_WINDOW )
         return cairo::SurfaceSharedPtr(new cairo::X11Surface(getSysData(static_cast<const vcl::Window&>(rRefDevice)),
                                                x,y,width,height));
-    if( rRefDevice.GetOutDevType() == OUTDEV_VIRDEV )
+    if( rRefDevice.IsVirtual() )
         return cairo::SurfaceSharedPtr(new cairo::X11Surface(getSysData(static_cast<const VirtualDevice&>(rRefDevice)),
                                                x,y,width,height));
     return cairo::SurfaceSharedPtr();
@@ -552,7 +557,7 @@ cairo::SurfaceSharedPtr X11SalGraphics::CreateBitmapSurface( const OutputDevice&
     {
         if( rRefDevice.GetOutDevType() == OUTDEV_WINDOW )
             return cairo::SurfaceSharedPtr(new cairo::X11Surface(getSysData(static_cast<const vcl::Window&>(rRefDevice)), rData ));
-        else if( rRefDevice.GetOutDevType() == OUTDEV_VIRDEV )
+        else if( rRefDevice.IsVirtual() )
             return cairo::SurfaceSharedPtr(new cairo::X11Surface(getSysData(static_cast<const VirtualDevice&>(rRefDevice)), rData ));
     }
 
@@ -572,50 +577,54 @@ css::uno::Any X11SalGraphics::GetNativeSurfaceHandle(cairo::SurfaceSharedPtr& rS
 #endif // ENABLE_CAIRO_CANVAS
 
 // draw a poly-polygon
-bool X11SalGraphics::drawPolyPolygon( const basegfx::B2DPolyPolygon& rOrigPolyPoly, double fTransparency )
+bool X11SalGraphics::drawPolyPolygon(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
+    const basegfx::B2DPolyPolygon& rPolyPolygon,
+    double fTransparency)
 {
     if(fTransparency >= 1.0)
     {
         return true;
     }
 
-    const sal_uInt32 nPolyCount(rOrigPolyPoly.count());
-
-    if(nPolyCount <= 0)
+    if(rPolyPolygon.count() == 0)
     {
         return true;
     }
 
 #if ENABLE_CAIRO_CANVAS
+    // Fallback: Transform to DeviceCoordinates
+    basegfx::B2DPolyPolygon aPolyPolygon(rPolyPolygon);
+    aPolyPolygon.transform(rObjectToDevice);
+
     if(SALCOLOR_NONE == mnFillColor && SALCOLOR_NONE == mnPenColor)
     {
         return true;
     }
 
-    static bool bUseCairoForPolygons = false;
+    // enable by setting to something
+    static const char* pUseCairoForPolygons(getenv("SAL_ENABLE_USE_CAIRO_FOR_POLYGONS"));
 
-    if (!m_bOpenGL && bUseCairoForPolygons && SupportsCairo())
+    if (!m_bOpenGL && nullptr != pUseCairoForPolygons && SupportsCairo())
     {
         // snap to raster if requested
-        basegfx::B2DPolyPolygon aPolyPoly(rOrigPolyPoly);
         const bool bSnapPoints(!getAntiAliasB2DDraw());
 
         if(bSnapPoints)
         {
-            aPolyPoly = basegfx::utils::snapPointsOfHorizontalOrVerticalEdges(aPolyPoly);
+            aPolyPolygon = basegfx::utils::snapPointsOfHorizontalOrVerticalEdges(aPolyPolygon);
         }
 
         cairo_t* cr = getCairoContext();
         clipRegion(cr);
 
-        for(sal_uInt32 a(0); a < nPolyCount; ++a)
+        for(auto const& rPolygon : aPolyPolygon)
         {
-            const basegfx::B2DPolygon aPolygon(aPolyPoly.getB2DPolygon(a));
-            const sal_uInt32 nPointCount(aPolygon.count());
+            const sal_uInt32 nPointCount(rPolygon.count());
 
             if(nPointCount)
             {
-                const sal_uInt32 nEdgeCount(aPolygon.isClosed() ? nPointCount : nPointCount - 1);
+                const sal_uInt32 nEdgeCount(rPolygon.isClosed() ? nPointCount : nPointCount - 1);
 
                 if(nEdgeCount)
                 {
@@ -623,7 +632,7 @@ bool X11SalGraphics::drawPolyPolygon( const basegfx::B2DPolyPolygon& rOrigPolyPo
 
                     for(sal_uInt32 b = 0; b < nEdgeCount; ++b)
                     {
-                        aPolygon.getBezierSegment(b, aEdge);
+                        rPolygon.getBezierSegment(b, aEdge);
 
                         if(!b)
                         {
@@ -679,40 +688,30 @@ bool X11SalGraphics::drawPolyPolygon( const basegfx::B2DPolyPolygon& rOrigPolyPo
     }
 #endif // ENABLE_CAIRO_CANVAS
 
-    return mxImpl->drawPolyPolygon( rOrigPolyPoly, fTransparency );
+    return mxImpl->drawPolyPolygon(
+        rObjectToDevice,
+        rPolyPolygon,
+        fTransparency);
 }
 
 #if ENABLE_CAIRO_CANVAS
 void X11SalGraphics::clipRegion(cairo_t* cr)
 {
-    if(!maClipRegion.IsEmpty())
-    {
-        RectangleVector aRectangles;
-        maClipRegion.GetRegionRectangles(aRectangles);
-
-        if (!aRectangles.empty())
-        {
-            for (auto const& rectangle : aRectangles)
-            {
-                cairo_rectangle(cr, rectangle.Left(), rectangle.Top(), rectangle.GetWidth(), rectangle.GetHeight());
-            }
-            cairo_clip(cr);
-        }
-    }
+    SvpSalGraphics::clipRegion(cr, maClipRegion);
 }
 #endif // ENABLE_CAIRO_CANVAS
 
 bool X11SalGraphics::drawPolyLine(
+    const basegfx::B2DHomMatrix& rObjectToDevice,
     const basegfx::B2DPolygon& rPolygon,
     double fTransparency,
     const basegfx::B2DVector& rLineWidth,
     basegfx::B2DLineJoin eLineJoin,
     css::drawing::LineCap eLineCap,
-    double fMiterMinimumAngle)
+    double fMiterMinimumAngle,
+    bool bPixelSnapHairline)
 {
-    const int nPointCount(rPolygon.count());
-
-    if(nPointCount <= 0)
+    if(0 == rPolygon.count())
     {
         return true;
     }
@@ -723,143 +722,49 @@ bool X11SalGraphics::drawPolyLine(
     }
 
 #if ENABLE_CAIRO_CANVAS
-    static bool bUseCairoForFatLines = true;
+    // disable by setting to something
+    static const char* pUseCairoForFatLines(getenv("SAL_DISABLE_USE_CAIRO_FOR_FATLINES"));
 
-    if (!m_bOpenGL && bUseCairoForFatLines && SupportsCairo())
+    if (!m_bOpenGL && nullptr == pUseCairoForFatLines && SupportsCairo())
     {
         cairo_t* cr = getCairoContext();
         clipRegion(cr);
-        cairo_line_join_t eCairoLineJoin(CAIRO_LINE_JOIN_MITER);
-        bool bNoJoin(false);
 
-        switch(eLineJoin)
-        {
-            case basegfx::B2DLineJoin::Bevel:
-                eCairoLineJoin = CAIRO_LINE_JOIN_BEVEL;
-                break;
-            case basegfx::B2DLineJoin::Round:
-                eCairoLineJoin = CAIRO_LINE_JOIN_ROUND;
-                break;
-            case basegfx::B2DLineJoin::NONE:
-                bNoJoin = true;
-                SAL_FALLTHROUGH;
-            case basegfx::B2DLineJoin::Miter:
-                eCairoLineJoin = CAIRO_LINE_JOIN_MITER;
-                break;
-        }
-
-        // setup cap attribute
-        cairo_line_cap_t eCairoLineCap(CAIRO_LINE_CAP_BUTT);
-        switch(eLineCap)
-        {
-            default: // css::drawing::LineCap_BUTT:
-            {
-                eCairoLineCap = CAIRO_LINE_CAP_BUTT;
-                break;
-            }
-            case css::drawing::LineCap_ROUND:
-            {
-                eCairoLineCap = CAIRO_LINE_CAP_ROUND;
-                break;
-            }
-            case css::drawing::LineCap_SQUARE:
-            {
-                eCairoLineCap = CAIRO_LINE_CAP_SQUARE;
-                break;
-            }
-        }
-
-        cairo_set_source_rgba(cr,
-            mnPenColor.GetRed()/255.0,
-            mnPenColor.GetGreen()/255.0,
-            mnPenColor.GetBlue()/255.0,
-            1.0 - fTransparency);
-        cairo_set_line_join(cr, eCairoLineJoin);
-        cairo_set_line_cap(cr, eCairoLineCap);
-        cairo_set_line_width(cr, (fabs(rLineWidth.getX()) + fabs(rLineWidth.getY())) * 0.5);
-
-        if(CAIRO_LINE_JOIN_MITER == eCairoLineJoin)
-        {
-            cairo_set_miter_limit(cr, 15.0);
-        }
-
-        const sal_uInt32 nEdgeCount(rPolygon.isClosed() ? nPointCount : nPointCount - 1);
-
-        if(nEdgeCount)
-        {
-            const bool bSnapPoints(!getAntiAliasB2DDraw());
-            static basegfx::B2DHomMatrix aHalfPointTransform(basegfx::utils::createTranslateB2DHomMatrix(0.5, 0.5));
-            basegfx::B2DCubicBezier aEdge;
-            basegfx::B2DPoint aStart;
-
-            for(sal_uInt32 i = 0; i < nEdgeCount; ++i)
-            {
-                rPolygon.getBezierSegment(i, aEdge);
-
-                aEdge.transform(aHalfPointTransform);
-
-                if(bSnapPoints)
-                {
-                    aEdge.fround();
-                }
-
-                if(!i || bNoJoin)
-                {
-                    aStart = aEdge.getStartPoint();
-                    cairo_move_to(cr, aStart.getX(), aStart.getY());
-                }
-
-                const basegfx::B2DPoint aEnd(aEdge.getEndPoint());
-
-                if(aEdge.isBezier())
-                {
-                    basegfx::B2DPoint aCP1(aEdge.getControlPointA());
-                    basegfx::B2DPoint aCP2(aEdge.getControlPointB());
-
-                    // tdf#99165 cairo has problems in creating the evtl. needed
-                    // miter graphics (and maybe others) when empty control points
-                    // are used, so fallback to the mathematical 'default' control
-                    // points in that case
-                    // tdf#101026 The 1st attempt to create a mathematically correct replacement control
-                    // vector was wrong. Best alternative is one as close as possible which means short.
-                    if (aStart.equal(aCP1))
-                    {
-                        aCP1 = aStart + ((aCP2 - aStart) * 0.0005);
-                    }
-
-                    if(aEnd.equal(aCP2))
-                    {
-                        aCP2 = aEnd + ((aCP1 - aEnd) * 0.0005);
-                    }
-
-                    cairo_curve_to(cr,
-                        aCP1.getX(), aCP1.getY(),
-                        aCP2.getX(), aCP2.getY(),
-                        aEnd.getX(), aEnd.getY());
-                }
-                else
-                {
-                    cairo_line_to(cr, aEnd.getX(), aEnd.getY());
-                }
-
-                aStart = aEnd;
-            }
-
-            if(rPolygon.isClosed() && !bNoJoin)
-            {
-                cairo_close_path(cr);
-            }
-
-            cairo_stroke(cr);
-        }
+        // Use the now available static drawPolyLine from the Cairo-Headless-Fallback
+        // that will take care of all needed stuff
+        const bool bRetval(
+            SvpSalGraphics::drawPolyLine(
+                cr,
+                nullptr,
+                mnPenColor,
+                getAntiAliasB2DDraw(),
+                rObjectToDevice,
+                rPolygon,
+                fTransparency,
+                rLineWidth,
+                eLineJoin,
+                eLineCap,
+                fMiterMinimumAngle,
+                bPixelSnapHairline));
 
         releaseCairoContext(cr);
-        return true;
+
+        if(bRetval)
+        {
+            return true;
+        }
     }
 #endif // ENABLE_CAIRO_CANVAS
 
-    return mxImpl->drawPolyLine( rPolygon, fTransparency, rLineWidth,
-            eLineJoin, eLineCap, fMiterMinimumAngle );
+    return mxImpl->drawPolyLine(
+        rObjectToDevice,
+        rPolygon,
+        fTransparency,
+        rLineWidth,
+        eLineJoin,
+        eLineCap,
+        fMiterMinimumAngle,
+        bPixelSnapHairline);
 }
 
 bool X11SalGraphics::drawGradient(const tools::PolyPolygon& rPoly, const Gradient& rGradient)

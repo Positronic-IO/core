@@ -50,12 +50,12 @@ public:
 private:
     class RetryContinuation;
 
-    InteractionRequest(InteractionRequest &) = delete;
+    InteractionRequest(InteractionRequest const &) = delete;
     void operator =(const InteractionRequest&) = delete;
 
     virtual ~InteractionRequest() override;
 
-    css::uno::Any m_aRequest;
+    css::uno::Any const m_aRequest;
     css::uno::Sequence< css::uno::Reference<
         css::task::XInteractionContinuation > > m_aContinuations;
     rtl::Reference< RetryContinuation > m_xRetryContinuation;

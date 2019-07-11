@@ -27,7 +27,7 @@
 #include <vcl/vclptr.hxx>
 #include <vcl/seleng.hxx>
 #include <tools/debug.hxx>
-#include <svtaccessiblefactory.hxx>
+#include <vcl/svtaccessiblefactory.hxx>
 
 #include <limits.h>
 
@@ -100,12 +100,10 @@ struct LocalFocus
 
 // Entry-List
 
-typedef ::std::vector< SvxIconChoiceCtrlEntry* > SvxIconChoiceCtrlEntryList_impl;
-
 class EntryList_Impl
 {
 private:
-    SvxIconChoiceCtrlEntryList_impl maIconChoiceCtrlEntryList;
+    std::vector< SvxIconChoiceCtrlEntry* > maIconChoiceCtrlEntryList;
     SvxIconChoiceCtrl_Impl*         _pOwner;
 
 public:
@@ -157,14 +155,13 @@ class SvxIconChoiceCtrl_Impl
     VclPtr<ScrollBar>       aHorSBar;
     VclPtr<ScrollBarBox>    aScrBarBox;
     tools::Rectangle               aCurSelectionRect;
-    std::vector<tools::Rectangle*> aSelectedRectList;
-    Idle                    aEditIdle;                 // for editing in place
+    std::vector<tools::Rectangle> aSelectedRectList;
     Idle                    aAutoArrangeIdle;
     Idle                    aDocRectChangedIdle;
     Idle                    aVisRectChangedIdle;
     Idle                    aCallSelectHdlIdle;
     Size                    aVirtOutputSize;
-    Size                    aImageSize;
+    Size const              aImageSize;
     Size                    aDefaultTextSize;
     Size                    aOutputSize; // Pixel
     VclPtr<SvtIconChoiceCtrl>  pView;
@@ -172,15 +169,13 @@ class SvxIconChoiceCtrl_Impl
     std::unique_ptr<IcnGridMap_Impl> pGridMap;
     long                    nMaxVirtWidth;  // max. width aVirtOutputSize for ALIGN_TOP
     long                    nMaxVirtHeight; // max. height aVirtOutputSize for ALIGN_LEFT
-    std::unique_ptr<SvxIconChoiceCtrlEntryList_impl> pZOrderList;
+    std::vector< SvxIconChoiceCtrlEntry* > maZOrderList;
     std::unique_ptr<SvxIconChoiceCtrlColumnInfoMap> m_pColumns;
-    VclPtr<IcnViewEdit_Impl>   pEdit;
     WinBits                 nWinBits;
     long                    nMaxBoundHeight;            // height of highest BoundRects
     IconChoiceFlags         nFlags;
     DrawTextFlags           nCurTextDrawFlags;
     ImplSVEvent *           nUserEventAdjustScrBars;
-    ImplSVEvent *           nUserEventShowCursor;
     SvxIconChoiceCtrlEntry* pCurHighlightFrame;
     bool                    bHighlightFramePressed;
     SvxIconChoiceCtrlEntry* pHead;                      // top left entry
@@ -192,7 +187,7 @@ class SvxIconChoiceCtrl_Impl
     VclPtr<VirtualDevice>   pEntryPaintDev;
     SvxIconChoiceCtrlEntry* pAnchor;                    // for selection
     LocalFocus              aFocus;                             // Data for focusrect
-    ::svt::AccessibleFactoryAccess aAccFactory;
+    ::vcl::AccessibleFactoryAccess aAccFactory;
 
     SvxIconChoiceCtrlEntry* pCurEditedEntry;
     SvxIconChoiceCtrlTextMode eTextMode;
@@ -201,7 +196,6 @@ class SvxIconChoiceCtrl_Impl
     SvxIconChoiceCtrlPositionMode ePositionMode;
     bool                    bBoundRectsDirty;
     bool                    bUpdateMode;
-    bool                    bEntryEditingEnabled;
 
     void                ShowCursor( bool bShow );
 
@@ -212,7 +206,6 @@ class SvxIconChoiceCtrl_Impl
 
                         DECL_LINK( ScrollUpDownHdl, ScrollBar*, void );
                         DECL_LINK( ScrollLeftRightHdl, ScrollBar*, void );
-                        DECL_LINK( EditTimeoutHdl, Timer *, void);
                         DECL_LINK( UserEventHdl, void*, void );
                         DECL_LINK( AutoArrangeHdl, Timer*, void );
                         DECL_LINK( DocRectChangedHdl, Timer*, void );
@@ -238,14 +231,12 @@ class SvxIconChoiceCtrl_Impl
     void                ToggleSelection( SvxIconChoiceCtrlEntry* );
     void                DeselectAllBut( SvxIconChoiceCtrlEntry const * );
     void                Center( SvxIconChoiceCtrlEntry* pEntry ) const;
-    void                StopEditTimer() { aEditIdle.Stop(); }
-    void                StartEditTimer() { aEditIdle.Start(); }
     void                CallSelectHandler();
     void                SelectRect(
                             SvxIconChoiceCtrlEntry* pEntry1,
                             SvxIconChoiceCtrlEntry* pEntry2,
                             bool bAdd,
-                            std::vector<tools::Rectangle*>* pOtherRects
+                            std::vector<tools::Rectangle>* pOtherRects
                         );
 
     void                SelectRange(
@@ -411,17 +402,16 @@ public:
     void                HideDDIcon();
 
     static bool         IsOver(
-                            std::vector<tools::Rectangle*>* pSelectedRectList,
+                            std::vector<tools::Rectangle>* pSelectedRectList,
                             const tools::Rectangle& rEntryBoundRect
                         );
 
     void                SelectRect(
                             const tools::Rectangle&,
                             bool bAdd,
-                            std::vector<tools::Rectangle*>* pOtherRects
+                            std::vector<tools::Rectangle>* pOtherRects
                         );
 
-    bool               IsTextHit( SvxIconChoiceCtrlEntry* pEntry, const Point& rDocPos );
     void               MakeVisible(
                             const tools::Rectangle& rDocPos,
                             bool bInScrollBarEvent=false
@@ -434,8 +424,6 @@ public:
                         );
 #endif
     bool                IsEntryEditing() const { return (pCurEditedEntry!=nullptr); }
-    void                EditEntry( SvxIconChoiceCtrlEntry* pEntry );
-    void                StopEntryEditing();
     size_t              GetEntryCount() const { return aEntries.size(); }
     SvxIconChoiceCtrlEntry* GetEntry( size_t nPos )
                             {
@@ -468,7 +456,7 @@ public:
 
     void                CallEventListeners( VclEventId nEvent, void* pData );
 
-    ::svt::IAccessibleFactory& GetAccessibleFactory()
+    ::vcl::IAccessibleFactory& GetAccessibleFactory()
     {
         return aAccFactory.getFactory();
     }

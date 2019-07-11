@@ -19,7 +19,6 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_INC_TABFRM_HXX
 #define INCLUDED_SW_SOURCE_CORE_INC_TABFRM_HXX
 
-#include <tools/mempool.hxx>
 #include "layfrm.hxx"
 #include "flowfrm.hxx"
 
@@ -91,7 +90,7 @@ class SwTabFrame: public SwLayoutFrame, public SwFlowFrame
      * Join() gets the Follow's content and destroys it.
      */
     bool Split( const SwTwips nCutPos, bool bTryToSplit, bool bTableRowKeep );
-    bool Join();
+    void Join();
 
     void UpdateAttr_(
         const SfxPoolItem*,
@@ -217,8 +216,6 @@ public:
     sal_uInt16 GetBottomLineSize() const;
 
     virtual void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwTabFrame)
 };
 
 inline const SwContentFrame *SwTabFrame::FindLastContent() const

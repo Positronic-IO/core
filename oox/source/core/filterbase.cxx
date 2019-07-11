@@ -236,11 +236,6 @@ const Reference< XFrame >& FilterBase::getTargetFrame() const
     return mxImpl->mxTargetFrame;
 }
 
-const Reference< XShape >& FilterBase::getParentShape() const
-{
-    return mxImpl->mxParentShape;
-}
-
 const Reference< XStatusIndicator >& FilterBase::getStatusIndicator() const
 {
     return mxImpl->mxStatusIndicator;
@@ -263,7 +258,7 @@ const OUString& FilterBase::getFileUrl() const
 
 namespace {
 
-inline bool lclIsDosDrive( const OUString& rUrl, sal_Int32 nPos = 0 )
+bool lclIsDosDrive( const OUString& rUrl, sal_Int32 nPos = 0 )
 {
     return
         (rUrl.getLength() >= nPos + 3) &&

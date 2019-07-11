@@ -51,6 +51,8 @@
     <string name="pref_experimental_editing_summary">Enable the experimental editing mode. Use at your own risk.</string>
     <string name="pref_show_hidden_files">Hidden Files/Folders</string>
     <string name="pref_show_hidden_files_summary">Enable to show hidden files/folders</string>
+    <string name="pref_developer_mode">Developer Mode</string>
+    <string name="pref_developer_mode_summary">Enable developer mode where you can send UNO commands within app. Use at your own risk.</string>
 
     <string name="action_about">About</string>
     <string name="action_parts">Parts</string>
@@ -93,6 +95,7 @@
     <string name="action_save">Save</string>
     <string name="action_fromat">Enable Format</string>
     <string name="action_search">Search</string>
+    <string name="action_UNO_commands">Send UNO Cmd</string>
 
     <!-- Feedback messages -->
     <string name="message_saved">Save complete</string>
@@ -179,5 +182,63 @@
     <string name="action_cut">Cut</string>
     <string name="action_back">Back</string>
     <string name="action_text_copied">Text copied to the clipboard</string>
+    <string name="insert_table">Insert table</string>
+    <string name="select_insert_options">Select insert options:</string>
+    <string name="select_delete_options">Select delete options:</string>
+    <string name="action_rename_worksheet">Rename worksheet</string>
+    <string name="action_delete_worksheet">Delete worksheet</string>
+    <string name="action_delete_slide">Delete slide</string>
+    <string name="name_already_used">Given name is already being used.</string>
+    <string name="part_name_changed">Part name has been changed.</string>
+    <string name="part_deleted">Part has been deleted.</string>
+    <string-array name="insertrowscolumns">
+        <item>Insert Rows Before</item>
+        <item>Insert Rows After</item>
+        <item>Insert Columns Before</item>
+        <item>Insert Columns After</item>
+        <item>Insert Table</item>
+    </string-array>
+    <string-array name="deleterowcolumns">
+        <item>Delete Rows</item>
+        <item>Delete Columns</item>
+        <item>Delete Table</item>
+    </string-array>
 
+    <!-- UNO cmd controller Strings -->
+    <string name="UNO_commands_string_hint">UNO Command</string>
+    <string name="UNO_commands_string_type_hint">Type</string>
+    <string name="UNO_commands_string_value_hint">Value</string>
+    <string name="UNO_commands_string_parent_value_hint">Parent Value</string>
+    <string name="action_exportToPDF">Export To PDF</string>
+    <string name="action_print">Print</string>
+    <string name="tabhost_character">Character</string>
+    <string name="tabhost_paragraph">Paragraph</string>
+    <string name="tabhost_insert">Insert</string>
+    <string name="tabhost_style">Style</string>
+    <string name="alert_ok">OK</string>
+    <string name="alert_cancel">Cancel</string>
+    <string name="unable_to_go_further">Unable to go further.</string>
+    <string name="current_uno_command">Current UNO command</string>
+    <string name="pref_sort_summary">Select how to order files: A-Z, by size or by date.</string>
+    <string name="pref_viewmode_summary">View files as a grid or in a list.</string>
+    <string name="pref_file_explorer_title">File explorer layout</string>
+    <string name="pref_sort_title">File Order</string>
+    <string name="pref_filter_title">Default File Filter</string>
+    <string name="pref_filter_summary">Set which file filter should be used by default.</string>
+    <string name="display_language">Display Language</string>
+    <string name="display_language_summary">Set the default display language</string>
+    <string name="unable_to_export_pdf">Unable to export to pdf</string>
+    <string name="pdf_exported_at">Exported to PDF at</string>
+    <string name="printing_not_supported">Your device does not support printing</string>
+    <string name="error">Error</string>
+    <string name="enter_part_name">Enter a part name</string>
+    <string name="bmp_null">Bmp is null!</string>
+    <string name="directory_not_saved">Directory not saved.</string>
+    <string name="page">Page</string>
+    <string name="sheet">Sheet</string>
+    <string name="slide">Slide</string>
+    <string name="part">Part</string>
+    <string name="highlight_color">Highlight Color</string>
+    <string name="font_color">Font Color</string>
+    <string name="action_rename_slide">Rename Slide</string>
 </resources>

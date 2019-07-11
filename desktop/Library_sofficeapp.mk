@@ -31,7 +31,7 @@ $(eval $(call gb_Library_use_externals,sofficeapp, \
     icu_headers \
     icui18n \
     icuuc \
-    $(if $(filter-out IOS,$(OS)), \
+    $(if $(filter-out iOS,$(OS)), \
     curl \
     )\
     $(if $(ENABLE_ONLINE_UPDATE_MAR),\
@@ -43,13 +43,15 @@ $(eval $(call gb_Library_use_custom_headers,sofficeapp,\
 	officecfg/registry \
 ))
 
-$(eval $(call gb_Library_use_sdk_api,sofficeapp))
+$(eval $(call gb_Library_use_api,sofficeapp,\
+	udkapi \
+	offapi \
+))
 
 $(eval $(call gb_Library_add_defs,sofficeapp,\
     -DDESKTOP_DLLIMPLEMENTATION \
     $(if $(filter WNT,$(OS)),-DENABLE_QUICKSTART_APPLET) \
     $(if $(filter MACOSX,$(OS)),-DENABLE_QUICKSTART_APPLET) \
-    $(if $(filter TRUE,$(ENABLE_SYSTRAY_GTK)),-DENABLE_QUICKSTART_APPLET) \
 ))
 
 $(eval $(call gb_Library_set_precompiled_header,sofficeapp,$(SRCDIR)/desktop/inc/pch/precompiled_sofficeapp))
@@ -99,10 +101,16 @@ $(eval $(call gb_Library_use_system_darwin_frameworks,sofficeapp,\
 
 endif
 
-ifeq ($(OS),IOS)
+ifeq ($(OS),iOS)
+
 $(eval $(call gb_Library_add_cflags,sofficeapp,\
     $(gb_OBJCFLAGS) \
 ))
+
+$(eval $(call gb_Library_add_cxxflags,sofficeapp,\
+    $(gb_OBJCXXFLAGS) \
+))
+
 endif
 
 $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
@@ -124,7 +132,7 @@ $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
     desktop/source/migration/migration \
 ))
 
-ifeq ($(ENABLE_HEADLESS),TRUE)
+ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_add_libs,sofficeapp,\
 	-lm $(DLOPEN_LIBS) \
 	-lpthread \
@@ -146,7 +154,7 @@ endif
 endif
 
 # LibreOfficeKit bits
-ifneq ($(filter $(OS),ANDROID IOS MACOSX WNT),)
+ifneq ($(filter $(OS),ANDROID iOS MACOSX WNT),)
 $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
 	desktop/source/lib/init \
 	desktop/source/lib/lokinteractionhandler \
@@ -162,7 +170,7 @@ $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
 	desktop/source/lib/lokclipboard \
 ))
 endif
-ifeq ($(ENABLE_HEADLESS),TRUE)
+ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
     desktop/source/lib/init \
     desktop/source/lib/lokinteractionhandler \

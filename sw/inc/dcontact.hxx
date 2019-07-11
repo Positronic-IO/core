@@ -38,7 +38,6 @@ class SwFlyDrawObj;
 class SwRect;
 class SwDrawContact;
 struct SwPosition;
-class SwIndex;
 class SdrTextObj;
 class SwContact;
 
@@ -156,8 +155,6 @@ public:
         return *(GetAnchorFormat().GetContentAnchor());
     }
 
-    const SwIndex&     GetContentAnchorIndex() const;
-
     /** get data collection of anchored objects, handled by with contact */
     virtual void GetAnchoredObjs( std::vector<SwAnchoredObject*>& _roAnchoredObjs ) const = 0;
 
@@ -227,7 +224,7 @@ class SwDrawVirtObj : public SdrVirtObj
         /** AW: Need own sdr::contact::ViewContact since AnchorPos from parent is
          not used but something own (top left of new SnapRect minus top left
          of original SnapRect) */
-        virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+        virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
         // protected destructor
         virtual ~SwDrawVirtObj() override;
@@ -265,7 +262,7 @@ class SwDrawVirtObj : public SdrVirtObj
         virtual void RecalcBoundRect() override;
         virtual ::basegfx::B2DPolyPolygon TakeXorPoly() const override;
         virtual ::basegfx::B2DPolyPolygon TakeContour() const override;
-        virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
+        virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
         virtual void NbcMove(const Size& rSiz) override;
         virtual void NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact) override;
         virtual void NbcRotate(const Point& rRef, long nAngle, double sn, double cs) override;

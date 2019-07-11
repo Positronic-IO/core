@@ -47,8 +47,6 @@ protected:
     Color                       aDefaultLightColor;             // The parameters for the last colors
     Color                       aDefaultAmbientColor;
 
-    E3dDragConstraint           eDragConstraint;
-
     // Migrate selections
     std::unique_ptr<Impl3DMirrorConstructOverlay> mpMirrorOverlay;
 
@@ -83,7 +81,7 @@ public:
     const MouseEvent& GetMouseEvent() { return aMouseEvent; }
 
     // Override getting the model, as we need to supply a Scene together with individual 3D Objects.
-    virtual SdrModel* GetMarkedObjModel() const override;
+    virtual std::unique_ptr<SdrModel> CreateMarkedObjModel() const override;
 
     // On Paste: We need to insert the objects of the Scene, but not the Scene itself
     using SdrView::Paste;

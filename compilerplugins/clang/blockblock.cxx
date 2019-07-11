@@ -20,16 +20,15 @@
 namespace {
 
 class BlockBlock:
-    public RecursiveASTVisitor<BlockBlock>, public loplugin::RewritePlugin
+    public loplugin::FilteringRewritePlugin<BlockBlock>
 {
 public:
     explicit BlockBlock(loplugin::InstantiationData const & data):
-        RewritePlugin(data) {}
+        FilteringRewritePlugin(data) {}
 
     virtual void run() override
     {
-        StringRef fn( compiler.getSourceManager().getFileEntryForID(
-                          compiler.getSourceManager().getMainFileID())->getName() );
+        StringRef fn(handler.getMainFileName());
         if (loplugin::isSamePathname(fn, SRCDIR "/sal/osl/unx/file_misc.cxx"))
              return;
 
@@ -48,9 +47,9 @@ bool BlockBlock::VisitCompoundStmt(CompoundStmt const * compound)
     auto inner = *compound->body_begin();
     if (!isa<CompoundStmt>(inner))
         return true;
-    if (compiler.getSourceManager().isMacroBodyExpansion(compound->getLocStart()))
+    if (compiler.getSourceManager().isMacroBodyExpansion(compat::getBeginLoc(compound)))
         return true;
-    if (compiler.getSourceManager().isMacroBodyExpansion(inner->getLocStart()))
+    if (compiler.getSourceManager().isMacroBodyExpansion(compat::getBeginLoc(inner)))
         return true;
     if (containsPreprocessingConditionalInclusion(compound->getSourceRange())) {
         return true;
@@ -58,12 +57,12 @@ bool BlockBlock::VisitCompoundStmt(CompoundStmt const * compound)
     report(
         DiagnosticsEngine::Warning,
         "block directly inside block",
-         compound->getLocStart())
+         compat::getBeginLoc(compound))
         << compound->getSourceRange();
     report(
         DiagnosticsEngine::Note,
         "inner block here",
-         inner->getLocStart())
+         compat::getBeginLoc(inner))
         << inner->getSourceRange();
     return true;
 }

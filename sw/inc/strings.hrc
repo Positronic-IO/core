@@ -20,7 +20,8 @@
 #ifndef INCLUDED_SW_INC_STRINGS_HRC
 #define INCLUDED_SW_INC_STRINGS_HRC
 
-#define NC_(Context, String) (Context "\004" u8##String)
+#define NC_(Context, String) reinterpret_cast<char const *>(Context "\004" u8##String)
+#define NNC_(Context, StringSingular, StringPlural) reinterpret_cast<char const *>(Context "\004" u8##StringSingular "\004" u8##StringPlural)
 
 // Format names
 #define STR_POOLCHR_FOOTNOTE                    NC_("STR_POOLCHR_FOOTNOTE", "Footnote Characters")
@@ -59,7 +60,6 @@
 #define STR_POOLFRM_WATERSIGN                   NC_("STR_POOLFRM_WATERSIGN", "Watermark")
 #define STR_POOLFRM_LABEL                       NC_("STR_POOLFRM_LABEL", "Labels")
 // Template names
-// tdf#107211 please don't change STANDARD, except back to "Default"
 #define STR_POOLCOLL_STANDARD                   NC_("STR_POOLCOLL_STANDARD", "Default Style")
 #define STR_POOLCOLL_TEXT                       NC_("STR_POOLCOLL_TEXT", "Text Body")
 #define STR_POOLCOLL_TEXT_IDENT                 NC_("STR_POOLCOLL_TEXT_IDENT", "First Line Indent")
@@ -169,8 +169,8 @@
 #define STR_POOLCOLL_TOX_USER9                  NC_("STR_POOLCOLL_TOX_USER9", "User Index 9")
 #define STR_POOLCOLL_TOX_USER10                 NC_("STR_POOLCOLL_TOX_USER10", "User Index 10")
 #define STR_POOLCOLL_TOX_CITATION               NC_("STR_POOLCOLL_TOX_CITATION", "Citation")
-#define STR_POOLCOLL_TOX_ILLUSH                 NC_("STR_POOLCOLL_TOX_ILLUSH", "Illustration Index Heading")
-#define STR_POOLCOLL_TOX_ILLUS1                 NC_("STR_POOLCOLL_TOX_ILLUS1", "Illustration Index 1")
+#define STR_POOLCOLL_TOX_ILLUSH                 NC_("STR_POOLCOLL_TOX_ILLUSH", "Figure Index Heading")
+#define STR_POOLCOLL_TOX_ILLUS1                 NC_("STR_POOLCOLL_TOX_ILLUS1", "Figure Index 1")
 #define STR_POOLCOLL_TOX_OBJECTH                NC_("STR_POOLCOLL_TOX_OBJECTH", "Object Index Heading")
 #define STR_POOLCOLL_TOX_OBJECT1                NC_("STR_POOLCOLL_TOX_OBJECT1", "Object Index 1")
 #define STR_POOLCOLL_TOX_TABLESH                NC_("STR_POOLCOLL_TOX_TABLESH", "Table Index Heading")
@@ -236,6 +236,8 @@
 #define STR_BOOKMARK_DEF_NAME                   NC_("STR_BOOKMARK_DEF_NAME", "Bookmark")
 #define STR_BOOKMARK_NAME                       NC_("STR_BOOKMARK_NAME", "Name")
 #define STR_BOOKMARK_TEXT                       NC_("STR_BOOKMARK_TEXT", "Text")
+#define STR_BOOKMARK_HIDDEN                     NC_("STR_BOOKMARK_HIDDEN", "Hidden")
+#define STR_BOOKMARK_CONDITION                  NC_("STR_BOOKMARK_CONDITION", "Condition")
 #define SW_STR_NONE                             NC_("SW_STR_NONE", "[None]")
 #define STR_CAPTION_BEGINNING                   NC_("STR_CAPTION_BEGINNING", "Start")
 #define STR_CAPTION_END                         NC_("STR_CAPTION_END", "End")
@@ -279,8 +281,22 @@
 #define STR_DELETE_NOTE_AUTHOR                  NC_("STR_DELETE_NOTE_AUTHOR", "Delete ~All Comments by $1")
 #define STR_HIDE_NOTE_AUTHOR                    NC_("STR_HIDE_NOTE_AUTHOR", "H~ide All Comments by $1")
 #define STR_OUTLINE_NUMBERING                   NC_("STR_OUTLINE_NUMBERING", "Outline Numbering")
-#define STR_STATUSBAR_WORDCOUNT_NO_SELECTION    NC_("STR_STATUSBAR_WORDCOUNT_NO_SELECTION", "%1 words, %2 characters")
-#define STR_STATUSBAR_WORDCOUNT                 NC_("STR_STATUSBAR_WORDCOUNT", "%1 words, %2 characters selected")
+/* To translators: $1 == will be replaced by STR_WORDCOUNT_WORDARG, and $2 by STR_WORDCOUNT_COLARG
+   e.g. Selected: 1 word, 2 characters */
+#define STR_WORDCOUNT                           NC_("STR_WORDCOUNT", "Selected: $1, $2")
+// To translators: STR_WORDCOUNT_WORDARG is $1 of STR_WORDCOUNT. $1 of STR_WORDCOUNT is number of words
+#define STR_WORDCOUNT_WORDARG                   NNC_("STR_WORDCOUNT_WORDARG", "$1 word", "$1 words")
+// To translators: STR_WORDCOUNT_CHARARG is $1 of STR_WORDCOUNT. $1 of STR_WORDCOUNT_CHARARG is number of characters
+#define STR_WORDCOUNT_CHARARG                   NNC_("STR_WORDCOUNT_CHARARG", "$1 character", "$1 characters")
+/* To translators: $1 == will be replaced by STR_WORDCOUNT_WORDARG, and $2 by STR_WORDCOUNT_COLARG
+   e.g. 1 word, 2 characters */
+#define STR_WORDCOUNT_NO_SELECTION              NC_("STR_WORDCOUNT_NO_SELECTION", "$1, $2")
+/* To translators: STR_WORDCOUNT_WORDARG_NO_SELECTION is $1 of STR_WORDCOUNT_NO_SELECTION.
+   $1 of STR_WORDCOUNT_NO_SELECTION is number of words */
+#define STR_WORDCOUNT_WORDARG_NO_SELECTION      NNC_("STR_WORDCOUNT_WORDARG_NO_SELECTION", "$1 word", "$1 words")
+/* To translators: STR_WORDCOUNT_CHARARG_NO_SELECTION is $1 of STR_WORDCOUNT_NO_SELECTION.
+   $1 of STR_WORDCOUNT_CHARARG_NO_SELECTION is number of characters */
+#define STR_WORDCOUNT_CHARARG_NO_SELECTION      NNC_("STR_WORDCOUNT_CHARARG_NO_SELECTION", "$1 character", "$1 characters")
 #define STR_CONVERT_TEXT_TABLE                  NC_("STR_CONVERT_TEXT_TABLE", "Convert Text to Table")
 #define STR_ADD_AUTOFORMAT_TITLE                NC_("STR_ADD_AUTOFORMAT_TITLE", "Add AutoFormat")
 #define STR_ADD_AUTOFORMAT_LABEL                NC_("STR_ADD_AUTOFORMAT_LABEL", "Name")
@@ -463,8 +479,8 @@
 #define STR_PASTE_CLIPBOARD_UNDO                NC_("STR_PASTE_CLIPBOARD_UNDO", "Paste clipboard")
 #define STR_YIELDS                              NC_("STR_YIELDS", "→")
 #define STR_OCCURRENCES_OF                      NC_("STR_OCCURRENCES_OF", "occurrences of")
-#define STR_UNDO_TABS                           NC_("STR_UNDO_TABS", "$1 tab(s)")
-#define STR_UNDO_NLS                            NC_("STR_UNDO_NLS", "$1 line break(s)")
+#define STR_UNDO_TABS                           NNC_("STR_UNDO_TABS", "One tab", "$1 tabs")
+#define STR_UNDO_NLS                            NNC_("STR_UNDO_NLS", "One line break","$1 line breaks")
 #define STR_UNDO_PAGEBREAKS                     NC_("STR_UNDO_PAGEBREAKS", "page break")
 #define STR_UNDO_COLBRKS                        NC_("STR_UNDO_COLBRKS", "column break")
 #define STR_UNDO_REDLINE_INSERT                 NC_("STR_UNDO_REDLINE_INSERT", "Insert $1")
@@ -669,7 +685,7 @@
 #define STR_TOX_CITATION                        NC_("STR_TOX_CITATION", "Citation")
 #define STR_TOX_TBL                             NC_("STR_TOX_TBL", "Index of Tables")
 #define STR_TOX_OBJ                             NC_("STR_TOX_OBJ", "Table of Objects")
-#define STR_TOX_ILL                             NC_("STR_TOX_ILL", "Illustration Index")
+#define STR_TOX_ILL                             NC_("STR_TOX_ILL", "Table of Figures")
 #define STR_LINK_CTRL_CLICK                     NC_("STR_LINK_CTRL_CLICK", "%s-Click to follow link")
 #define STR_LINK_CLICK                          NC_("STR_LINK_CLICK", "Click to follow link")
 // SubType DocInfo
@@ -833,7 +849,7 @@
 #define STR_FILENAMEFLD                         NC_("STR_FILENAMEFLD", "File name")
 #define STR_DBNAMEFLD                           NC_("STR_DBNAMEFLD", "Database Name")
 #define STR_CHAPTERFLD                          NC_("STR_CHAPTERFLD", "Chapter")
-#define STR_PAGENUMBERFLD                       NC_("STR_PAGENUMBERFLD", "Page numbers")
+#define STR_PAGENUMBERFLD                       NC_("STR_PAGENUMBERFLD", "Page number")
 #define STR_DOCSTATFLD                          NC_("STR_DOCSTATFLD", "Statistics")
 #define STR_AUTHORFLD                           NC_("STR_AUTHORFLD", "Author")
 #define STR_TEMPLNAMEFLD                        NC_("STR_TEMPLNAMEFLD", "Templates")

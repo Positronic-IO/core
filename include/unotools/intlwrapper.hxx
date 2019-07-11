@@ -21,13 +21,15 @@
 #define INCLUDED_UNOTOOLS_INTLWRAPPER_HXX
 
 #include <unotools/unotoolsdllapi.h>
-#include <unotools/charclass.hxx>
-#include <unotools/localedatawrapper.hxx>
-#include <unotools/calendarwrapper.hxx>
-#include <unotools/collatorwrapper.hxx>
-#include <i18nlangtag/lang.h>
+#include <com/sun/star/uno/Reference.h>
+
 #include <i18nlangtag/languagetag.hxx>
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
+class CollatorWrapper;
+class LocaleDataWrapper;
 
 /**
     A wrapper of I18N wrappers. Using this is more expensive than using some
@@ -48,7 +50,7 @@
 class UNOTOOLS_DLLPUBLIC IntlWrapper
 {
 private:
-    LanguageTag         maLanguageTag;
+    LanguageTag const         maLanguageTag;
     css::uno::Reference< css::uno::XComponentContext > m_xContext;
 
     std::unique_ptr<LocaleDataWrapper>  pLocaleData;

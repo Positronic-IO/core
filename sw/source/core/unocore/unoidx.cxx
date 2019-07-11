@@ -36,6 +36,7 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <editeng/unolingu.hxx>
+#include <editeng/memberids.h>
 #include <hints.hxx>
 #include <cmdid.h>
 #include <swtypes.hxx>
@@ -105,7 +106,7 @@ lcl_AnyToBool(uno::Any const& rVal)
 
 /// @throws lang::IllegalArgumentException
 template<typename T>
-void lcl_AnyToBitMask(uno::Any const& rValue,
+static void lcl_AnyToBitMask(uno::Any const& rValue,
         T & rBitMask, const T nBit)
 {
     rBitMask = lcl_AnyToBool(rValue)
@@ -114,7 +115,7 @@ void lcl_AnyToBitMask(uno::Any const& rValue,
 }
 
 template<typename T>
-void lcl_BitMaskToAny(uno::Any & o_rValue,
+static void lcl_BitMaskToAny(uno::Any & o_rValue,
         const T nBitMask, const T nBit)
 {
     const bool bRet(nBitMask & nBit);
@@ -886,6 +887,11 @@ SwXDocumentIndex::getPropertyValue(const OUString& rPropertyName)
             "Unknown property: " + rPropertyName,
             static_cast< cppu::OWeakObject * >(this));
     }
+    // TODO: is this the best approach to tell API clients about the change?
+    if (pEntry->nWID == RES_BACKGROUND && pEntry->nMemberId == MID_GRAPHIC_URL)
+    {
+        throw uno::RuntimeException("Getting GraphicURL property is not supported");
+    }
 
     SwSectionFormat *const pSectionFormat( m_pImpl->GetSectionFormat() );
     SwTOXBase* pTOXBase = nullptr;
@@ -1230,7 +1236,7 @@ SwXDocumentIndex::removeVetoableChangeListener(
     OSL_FAIL("SwXDocumentIndex::removeVetoableChangeListener(): not implemented");
 }
 
-void lcl_CalcLayout(SwDoc *pDoc)
+static void lcl_CalcLayout(SwDoc *pDoc)
 {
     SwViewShell *pViewShell = nullptr;
     SwEditShell* pEditShell = nullptr;
@@ -1265,7 +1271,7 @@ void SAL_CALL SwXDocumentIndex::refresh()
                     "SwXDocumentIndex::refresh: must be in attached state",
                      static_cast< ::cppu::OWeakObject*>(this));
         }
-        pTOXBase->Update();
+        pTOXBase->Update(nullptr, m_pImpl->m_pDoc->getIDocumentLayoutAccess().GetCurrentLayout());
 
         // the insertion of TOC will affect the document layout
         lcl_CalcLayout(m_pImpl->m_pDoc);
@@ -1333,10 +1339,6 @@ SwXDocumentIndex::attach(const uno::Reference< text::XTextRange > & xTextRange)
     }
 
     UnoActionContext aAction(pDoc);
-    if (aPam.HasMark())
-    {
-        pDoc->getIDocumentContentOperations().DeleteAndJoin(aPam);
-    }
 
     SwTOXBase & rTOXBase = m_pImpl->m_pProps->GetTOXBase();
     SwTOXType const*const pTOXType = rTOXBase.GetTOXType();
@@ -1347,7 +1349,8 @@ SwXDocumentIndex::attach(const uno::Reference< text::XTextRange > & xTextRange)
     }
     //TODO: apply Section attributes (columns and background)
     SwTOXBaseSection *const pTOX =
-        pDoc->InsertTableOf( *aPam.GetPoint(), rTOXBase );
+        pDoc->InsertTableOf( aPam, rTOXBase, nullptr, false,
+                m_pImpl->m_pDoc->getIDocumentLayoutAccess().GetCurrentLayout());
 
     pDoc->SetTOXBaseName(*pTOX, m_pImpl->m_pProps->GetTOXBase().GetTOXName());
 
@@ -2606,19 +2609,19 @@ SwXDocumentIndex::StyleAccess_Impl::replaceByIndex(
 
     const sal_Int32 nStyles = aSeq.getLength();
     const OUString* pStyles = aSeq.getConstArray();
-    OUString sSetStyles;
+    OUStringBuffer sSetStyles;
     OUString aString;
     for(sal_Int32 i = 0; i < nStyles; i++)
     {
         if(i)
         {
-            sSetStyles += OUStringLiteral1(TOX_STYLE_DELIMITER);
+            sSetStyles.append(TOX_STYLE_DELIMITER);
         }
         SwStyleNameMapper::FillUIName(pStyles[i], aString,
                 SwGetPoolIdFromName::TxtColl);
-        sSetStyles +=  aString;
+        sSetStyles.append(aString);
     }
-    rTOXBase.SetStyleNames(sSetStyles, static_cast<sal_uInt16>(nIndex));
+    rTOXBase.SetStyleNames(sSetStyles.makeStringAndClear(), static_cast<sal_uInt16>(nIndex));
 }
 
 sal_Int32 SAL_CALL
@@ -2707,7 +2710,7 @@ SwXDocumentIndex::TokenAccess_Impl::getSupportedServiceNames()
 
 struct TokenType_ {
     const char *pName;
-    enum FormTokenType eTokenType;
+    enum FormTokenType const eTokenType;
 };
 
 static const struct TokenType_ g_TokenTypes[] =
@@ -2743,7 +2746,7 @@ SwXDocumentIndex::TokenAccess_Impl::replaceByIndex(
         throw lang::IllegalArgumentException();
     }
 
-    OUString sPattern;
+    OUStringBuffer sPattern;
     const sal_Int32 nTokens = aSeq.getLength();
     const beans::PropertyValues* pTokens = aSeq.getConstArray();
     for(sal_Int32 i = 0; i < nTokens; i++)
@@ -2896,10 +2899,10 @@ SwXDocumentIndex::TokenAccess_Impl::replaceByIndex(
                 throw lang::IllegalArgumentException();
             }
         }
-        sPattern += aToken.GetString();
+        sPattern.append(aToken.GetString());
     }
     SwForm aForm(rTOXBase.GetTOXForm());
-    aForm.SetPattern(static_cast<sal_uInt16>(nIndex), sPattern);
+    aForm.SetPattern(static_cast<sal_uInt16>(nIndex), sPattern.makeStringAndClear());
     rTOXBase.SetTOXForm(aForm);
 }
 
@@ -2927,17 +2930,15 @@ SwXDocumentIndex::TokenAccess_Impl::getByIndex(sal_Int32 nIndex)
     // #i21237#
     SwFormTokens aPattern = rTOXBase.GetTOXForm().
         GetPattern(static_cast<sal_uInt16>(nIndex));
-    SwFormTokens::iterator aIt = aPattern.begin();
 
     sal_Int32 nTokenCount = 0;
     uno::Sequence< beans::PropertyValues > aRetSeq;
     OUString aProgCharStyle;
-    while(aIt != aPattern.end()) // #i21237#
+    for(const SwFormToken& aToken : aPattern) // #i21237#
     {
         nTokenCount++;
         aRetSeq.realloc(nTokenCount);
         beans::PropertyValues* pTokenProps = aRetSeq.getArray();
-        SwFormToken  aToken = *aIt; // #i21237#
 
         uno::Sequence< beans::PropertyValue >& rCurTokenSeq =
             pTokenProps[nTokenCount-1];
@@ -3151,8 +3152,6 @@ SwXDocumentIndex::TokenAccess_Impl::getByIndex(sal_Int32 nIndex)
             default:
                 ;
         }
-
-        ++aIt; // #i21237#
     }
 
     uno::Any aRet;

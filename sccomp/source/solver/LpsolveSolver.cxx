@@ -100,6 +100,7 @@ void SAL_CALL LpsolveSolver::solve()
     // collect variables in vector (?)
 
     std::vector<table::CellAddress> aVariableCells;
+    aVariableCells.reserve(maVariables.getLength());
     for (sal_Int32 nPos=0; nPos<maVariables.getLength(); nPos++)
         aVariableCells.push_back( maVariables[nPos] );
     size_t nVariables = aVariableCells.size();
@@ -185,12 +186,12 @@ void SAL_CALL LpsolveSolver::solve()
     // set objective function
 
     const std::vector<double>& rObjCoeff = aCellsHash[maObjective];
-    REAL* pObjVal = new REAL[nVariables+1];
+    std::unique_ptr<REAL[]> pObjVal(new REAL[nVariables+1]);
     pObjVal[0] = 0.0;                           // ignored
     for (nVar=0; nVar<nVariables; nVar++)
         pObjVal[nVar+1] = rObjCoeff[nVar+1];
-    set_obj_fn( lp, pObjVal );
-    delete[] pObjVal;
+    set_obj_fn( lp, pObjVal.get() );
+    pObjVal.reset();
     set_rh( lp, 0, rObjCoeff[0] );              // constant term of objective
 
     // add rows

@@ -20,7 +20,7 @@
 
 struct Node
 {
-    tools::Rectangle mRectangle;
+    tools::Rectangle const mRectangle;
     std::unique_ptr<Node> mLeftNode;
     std::unique_ptr<Node> mRightNode;
     bool mOccupied;
@@ -46,11 +46,7 @@ Node::Node(tools::Rectangle const & aRectangle)
     , mOccupied(false)
 {}
 
-bool Node::isLeaf()
-{
-    return mLeftNode.get()  == nullptr &&
-           mRightNode.get() == nullptr;
-}
+bool Node::isLeaf() { return mLeftNode == nullptr && mRightNode == nullptr; }
 
 Node* Node::insert(int nWidth, int nHeight, int nPadding)
 {

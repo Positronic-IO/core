@@ -21,13 +21,10 @@
 #define INCLUDED_SC_SOURCE_UI_INC_DRWTRANS_HXX
 
 #include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
 #include <sfx2/objsh.hxx>
-#include <global.hxx>
 #include <charthelper.hxx>
-#include <rangelst.hxx>
 
 class SdrModel;
 class ScDocShell;
@@ -61,7 +58,7 @@ private:
 
     ScRangeListVector               m_aProtectedChartRangesVector;
 
-    OUString maShellID;
+    OUString const maShellID;
 
     void                InitDocShell();
     SdrOle2Obj* GetSingleObject();
@@ -69,7 +66,7 @@ private:
     void CreateOLEData();
 
 public:
-            ScDrawTransferObj( SdrModel* pClipModel, ScDocShell* pContainerShell,
+            ScDrawTransferObj( std::unique_ptr<SdrModel> pClipModel, ScDocShell* pContainerShell,
                                 const TransferableObjectDescriptor& rDesc );
     virtual ~ScDrawTransferObj() override;
 
@@ -79,7 +76,7 @@ public:
                                         const css::datatransfer::DataFlavor& rFlavor ) override;
     virtual void        DragFinished( sal_Int8 nDropAction ) override;
 
-    SdrModel*           GetModel()  { return m_pModel.get(); }
+    SdrModel*           GetModel() const { return m_pModel.get(); }
 
     void                SetDrawPersist( const SfxObjectShellRef& rRef );
     void                SetDragSource( const ScDrawView* pView );
@@ -92,7 +89,7 @@ public:
     SdrView*            GetDragSourceView()             { return m_pDragSourceView.get(); }
     ScDragSrc           GetDragSourceFlags() const      { return m_nDragSourceFlags; }
 
-    static ScDrawTransferObj* GetOwnClipboard( vcl::Window* );
+    static ScDrawTransferObj* GetOwnClipboard(const css::uno::Reference<css::datatransfer::XTransferable2>&);
 
     virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
     static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();

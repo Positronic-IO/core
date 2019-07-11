@@ -25,10 +25,12 @@
 #include <comphelper/classids.hxx>
 #include <comphelper/embeddedobjectcontainer.hxx>
 #include <comphelper/documentconstants.hxx>
+#include <editeng/outlobj.hxx>
 
 #include <svx/svdmodel.hxx>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <tools/diagnose_ex.h>
 #include <svx/unoshape.hxx>
 #include <svx/svdpage.hxx>
@@ -73,7 +75,7 @@ uno::Reference< drawing::XShape >  OReportDrawPage::CreateShape( SdrObject *pObj
     if ( xFactory.is() )
     {
         bool bChangeOrientation = false;
-        OUString sServiceName = pBaseObj->getServiceName();
+        const OUString& sServiceName = pBaseObj->getServiceName();
         OSL_ENSURE(!sServiceName.isEmpty(),"No Service Name given!");
 
         if (dynamic_cast< const OUnoObject* >(pObj) != nullptr)

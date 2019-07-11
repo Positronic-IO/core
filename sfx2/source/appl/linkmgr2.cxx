@@ -40,6 +40,7 @@
 #include <sfx2/request.hxx>
 #include <vcl/dibtools.hxx>
 #include <unotools/charclass.hxx>
+#include <unotools/securityoptions.hxx>
 #include <vcl/GraphicLoader.hxx>
 
 #include "fileobj.hxx"
@@ -216,7 +217,7 @@ bool LinkManager::GetDisplayNames( const SvBaseLink * pLink,
                                         OUString* pFilter )
 {
     bool bRet = false;
-    const OUString sLNm( pLink->GetLinkSourceName() );
+    const OUString& sLNm( pLink->GetLinkSourceName() );
     if( !sLNm.isEmpty() )
     {
         switch( pLink->GetObjType() )
@@ -497,9 +498,11 @@ SotClipboardFormatId LinkManager::RegisterStatusInfoId()
     return nFormat;
 }
 
-bool LinkManager::GetGraphicFromAny( const OUString& rMimeType,
-                                const css::uno::Any & rValue,
-                                Graphic& rGraphic )
+bool LinkManager::GetGraphicFromAny(const OUString& rMimeType,
+                                    const css::uno::Any & rValue,
+                                    const OUString& rReferer,
+                                    Graphic& rGraphic,
+                                    weld::Window* pParentWin)
 {
     bool bRet = false;
 
@@ -509,7 +512,8 @@ bool LinkManager::GetGraphicFromAny( const OUString& rMimeType,
     if (rValue.has<OUString>())
     {
         OUString sURL = rValue.get<OUString>();
-        rGraphic = vcl::graphic::loadFromURL(sURL);
+        if (!SvtSecurityOptions().isUntrustedReferer(rReferer))
+            rGraphic = vcl::graphic::loadFromURL(sURL, pParentWin);
         if (!rGraphic)
             rGraphic.SetDefaultType();
         rGraphic.setOriginURL(sURL);
@@ -553,7 +557,7 @@ bool LinkManager::GetGraphicFromAny( const OUString& rMimeType,
     return bRet;
 }
 
-OUString lcl_DDE_RelToAbs( const OUString& rTopic, const OUString& rBaseURL )
+static OUString lcl_DDE_RelToAbs( const OUString& rTopic, const OUString& rBaseURL )
 {
     OUString sRet;
     INetURLObject aURL( rTopic );
@@ -648,7 +652,8 @@ bool SvxInternalLink::Connect( sfx2::SvBaseLink* pLink )
         // then try to download the file:
         INetURLObject aURL( sTopic );
         INetProtocol eOld = aURL.GetProtocol();
-        aURL.SetURL( sTopic = lcl_DDE_RelToAbs( sTopic, sReferer ) );
+        sTopic = lcl_DDE_RelToAbs( sTopic, sReferer );
+        aURL.SetURL( sTopic );
         if( INetProtocol::NotValid != eOld ||
             INetProtocol::Http != aURL.GetProtocol() )
         {

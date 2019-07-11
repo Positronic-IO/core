@@ -56,6 +56,12 @@ typedef std::vector< SvxUnoTextRangeBase* > SvxUnoTextRangeBaseVec;
 class EDITENG_DLLPUBLIC SvxEditSource
 {
 public:
+    SvxEditSource() = default;
+    SvxEditSource(SvxEditSource const &) = default;
+    SvxEditSource(SvxEditSource &&) = default;
+    SvxEditSource & operator =(SvxEditSource const &) = default;
+    SvxEditSource & operator =(SvxEditSource &&) = default;
+
     virtual                 ~SvxEditSource();
 
     /// Returns a new reference to the same object. This is a shallow copy
@@ -208,9 +214,6 @@ public:
         Index of paragraph to query bullet info on
      */
     virtual EBulletInfo     GetBulletInfo( sal_Int32 nPara ) const = 0;
-
-    virtual void            SetUpdateModeForAcc(bool) {}
-    virtual bool            GetUpdateModeForAcc() const { return true; }
 
     /** Query the bounding rectangle of the given character
 
@@ -453,15 +456,6 @@ public:
         @return sal_False, if no longer valid
      */
     virtual bool        IsValid() const = 0;
-
-    /** Query visible area of the view containing the text
-
-        @return the visible rectangle of the text, i.e. the part of
-        the EditEngine or Outliner that is currently on screen. The
-        values are already in screen coordinates (pixel), and have to
-        be relative to the EditEngine/Outliner's upper left corner.
-     */
-    virtual tools::Rectangle   GetVisArea() const = 0;
 
     /** Convert from logical, EditEngine-relative coordinates to screen coordinates
 

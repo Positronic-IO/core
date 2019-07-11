@@ -37,29 +37,29 @@ namespace dbaui
 
     class OConnectionHelper : public OGenericAdministrationPage
     {
-        bool            m_bUserGrabFocus : 1;
+        bool            m_bUserGrabFocus;
 
     public:
-        OConnectionHelper( vcl::Window* pParent, const OString& _rId, const OUString& _rUIXMLDescription, const SfxItemSet& _rCoreAttrs);
+        OConnectionHelper(TabPageParent pParent, const OUString& _rUIXMLDescription, const OString& _rId, const SfxItemSet& _rCoreAttrs);
         virtual ~OConnectionHelper() override;
         virtual void dispose() override;
-        VclPtr<FixedText>           m_pFT_Connection;
-        VclPtr<OConnectionURLEdit>  m_pConnectionURL;
-        VclPtr<PushButton>          m_pPB_Connection;
-        VclPtr<PushButton>          m_pPB_CreateDB;
+
         OUString     m_eType;          // the type can't be changed in this class, so we hold it as member.
-
-    public:
-
         // setting/retrieving the current connection URL
         // necessary because for some types, the URL must be decoded for display purposes
         ::dbaccess::ODsnTypeCollection* m_pCollection;  /// the DSN type collection instance
-        virtual bool    PreNotify( NotifyEvent& _rNEvt ) override;
+
+        std::unique_ptr<weld::Label> m_xFT_Connection;
+        std::unique_ptr<weld::Button> m_xPB_Connection;
+        std::unique_ptr<weld::Button> m_xPB_CreateDB;
+        std::unique_ptr<OConnectionURLEdit> m_xConnectionURL;
+
+    public:
 
         // <method>OGenericAdministrationPage::fillControls</method>
-        virtual void    fillControls(std::vector< ISaveValueWrapper* >& _rControlList) override;
+        virtual void    fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList) override;
         // <method>OGenericAdministrationPage::fillWindows</method>
-        virtual void    fillWindows(std::vector< ISaveValueWrapper* >& _rControlList) override;
+        virtual void    fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList) override;
         virtual void    implInitControls(const SfxItemSet& _rSet, bool _bSaveValue) override;
 
         // setting/retrieving the current connection URL
@@ -91,12 +91,15 @@ namespace dbaui
         virtual bool    checkTestConnection();
 
     private:
-        DECL_LINK(OnBrowseConnections, Button*, void);
-        DECL_LINK(OnCreateDatabase, Button*, void);
+        DECL_LINK(OnBrowseConnections, weld::Button&, void);
+        DECL_LINK(OnCreateDatabase, weld::Button&, void);
+        DECL_LINK(GetFocusHdl, weld::Widget&, void);
+        DECL_LINK(LoseFocusHdl, weld::Widget&, void);
         OUString    impl_getURL() const;
         void        impl_setURL( const OUString& _rURL, bool _bPrefix );
         void        implUpdateURLDependentStates() const;
     };
+
 
 }   // namespace dbaui
 

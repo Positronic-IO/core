@@ -30,10 +30,6 @@ namespace tools { class Rectangle; }
 class SdrPageView;
 class OutputDevice;
 
-namespace sdr { namespace event {
-    class TimerEventHandler;
-}}
-
 namespace basegfx {
     class B2DRange;
     class B2DHomMatrix;
@@ -66,9 +62,6 @@ private:
     // the primitiveAnimator which is used if this View and/or the contained primitives
     // support animatedSwitchPrimitives
     sdr::animation::primitiveAnimator               maPrimitiveAnimator;
-
-    // the EventHandler for e.g. asynchronious loading of graphics
-    std::unique_ptr<sdr::event::TimerEventHandler>  mpEventHandler;
 
     // The redirector. If set it is used to pipe all supported calls
     // to the redirector
@@ -119,9 +112,6 @@ public:
     // this ObjectContact. Default does nothing.
     virtual void InvalidatePartOfView(const basegfx::B2DRange& rRange) const;
 
-    // Get info if given Rectangle is visible in this view
-    virtual bool IsAreaVisible(const basegfx::B2DRange& rRange) const;
-
     // Get info about the need to visualize GluePoints. The default
     // is that it is not necessary.
     virtual bool AreGluePointsVisible() const;
@@ -129,21 +119,11 @@ public:
     // method to get the primitiveAnimator
     sdr::animation::primitiveAnimator& getPrimitiveAnimator() {  return maPrimitiveAnimator; }
 
-    // method to get the EventHandler. It will
-    // return a existing one or create a new one using CreateEventHandler().
-    sdr::event::TimerEventHandler& GetEventHandler() const;
-
-    // test if there is an EventHandler without creating one on demand
-    bool HasEventHandler() const;
-
     // check if text animation is allowed. Default is sal_true.
     virtual bool IsTextAnimationAllowed() const;
 
     // check if graphic animation is allowed. Default is sal_true.
     virtual bool IsGraphicAnimationAllowed() const;
-
-    // check if asynchronious graphis loading is allowed. Default is sal_False.
-    virtual bool IsAsynchronGraphicsLoadingAllowed() const;
 
     // access to ViewObjectContactRedirector
     ViewObjectContactRedirector* GetViewObjectContactRedirector() const {  return mpViewObjectContactRedirector; }
@@ -151,12 +131,6 @@ public:
 
     // print? Default is false
     virtual bool isOutputToPrinter() const;
-
-    // window? Default is true
-    virtual bool isOutputToWindow() const;
-
-    // VirtualDevice? Default is false
-    virtual bool isOutputToVirtualDevice() const;
 
     // recording MetaFile? Default is false
     virtual bool isOutputToRecordingMetaFile() const;
@@ -166,9 +140,6 @@ public:
 
     // gray display mode
     virtual bool isDrawModeGray() const;
-
-    // gray display mode
-    virtual bool isDrawModeBlackWhite() const;
 
     // high contrast display mode
     virtual bool isDrawModeHighContrast() const;

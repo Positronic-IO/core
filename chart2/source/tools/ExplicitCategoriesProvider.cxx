@@ -21,15 +21,13 @@
 #include <DiagramHelper.hxx>
 #include <ChartTypeHelper.hxx>
 #include <AxisHelper.hxx>
-#include <CommonConverters.hxx>
 #include <DataSourceHelper.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <NumberFormatterWrapper.hxx>
 #include <unonames.hxx>
 
 #include <com/sun/star/chart2/AxisType.hpp>
-#include <com/sun/star/util/NumberFormat.hpp>
-#include <com/sun/star/util/XNumberFormatsSupplier.hpp>
 #include <tools/diagnose_ex.h>
 
 namespace chart
@@ -151,7 +149,7 @@ sal_Int32 ExplicitCategoriesProvider::getCategoryLevelCount() const
     return nCount;
 }
 
-std::vector<sal_Int32> lcl_getLimitingBorders( const std::vector< ComplexCategory >& rComplexCategories )
+static std::vector<sal_Int32> lcl_getLimitingBorders( const std::vector< ComplexCategory >& rComplexCategories )
 {
     std::vector<sal_Int32> aLimitingBorders;
     sal_Int32 nBorderIndex = 0; /*border below the index*/
@@ -249,7 +247,7 @@ uno::Sequence< OUString > SplitCategoriesProvider_ForLabeledDataSequences::getSt
     return aRet;
 }
 
-std::vector< ComplexCategory > lcl_DataSequenceToComplexCategoryVector(
+static std::vector< ComplexCategory > lcl_DataSequenceToComplexCategoryVector(
     const uno::Sequence< OUString >& rStrings
     , const std::vector<sal_Int32>& rLimitingBorders, bool bCreateSingleCategories )
 {
@@ -289,7 +287,7 @@ std::vector< ComplexCategory > lcl_DataSequenceToComplexCategoryVector(
     return aResult;
 }
 
-sal_Int32 lcl_getCategoryCount( std::vector< ComplexCategory >& rComplexCategories )
+static sal_Int32 lcl_getCategoryCount( std::vector< ComplexCategory >& rComplexCategories )
 {
     sal_Int32 nCount = 0;
     for (auto const& complexCategory : rComplexCategories)
@@ -297,7 +295,7 @@ sal_Int32 lcl_getCategoryCount( std::vector< ComplexCategory >& rComplexCategori
     return nCount;
 }
 
-Sequence< OUString > lcl_getExplicitSimpleCategories(
+static Sequence< OUString > lcl_getExplicitSimpleCategories(
     const SplitCategoriesProvider& rSplitCategoriesProvider,
     std::vector< std::vector< ComplexCategory > >& rComplexCats )
 {
@@ -355,7 +353,7 @@ Sequence< OUString > lcl_getExplicitSimpleCategories(
         aRet.realloc(nMaxCategoryCount);
         for(sal_Int32 nN=0; nN<nMaxCategoryCount; nN++)
         {
-            OUString aText;
+            OUStringBuffer aText;
             for (auto const& complexCatPerIndex : aComplexCatsPerIndex)
             {
                 if ( static_cast<size_t>(nN) < complexCatPerIndex.size() )
@@ -364,12 +362,12 @@ Sequence< OUString > lcl_getExplicitSimpleCategories(
                     if( !aAddText.isEmpty() )
                     {
                         if(!aText.isEmpty())
-                            aText += " ";
-                        aText += aAddText;
+                            aText.append(" ");
+                        aText.append(aAddText);
                     }
                 }
             }
-            aRet[nN]=aText;
+            aRet[nN]=aText.makeStringAndClear();
         }
     }
     return aRet;
@@ -382,7 +380,7 @@ Sequence< OUString > ExplicitCategoriesProvider::getExplicitSimpleCategories(
     return lcl_getExplicitSimpleCategories( rSplitCategoriesProvider, aComplexCats );
 }
 
-bool lcl_fillDateCategories( const uno::Reference< data::XDataSequence >& xDataSequence, std::vector< double >& rDateCategories, bool bIsAutoDate, ChartModel& rModel )
+static bool lcl_fillDateCategories( const uno::Reference< data::XDataSequence >& xDataSequence, std::vector< double >& rDateCategories, bool bIsAutoDate, ChartModel& rModel )
 {
     bool bOnlyDatesFound = true;
     bool bAnyDataFound = false;

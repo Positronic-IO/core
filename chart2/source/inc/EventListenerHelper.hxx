@@ -19,12 +19,11 @@
 #ifndef INCLUDED_CHART2_SOURCE_INC_EVENTLISTENERHELPER_HXX
 #define INCLUDED_CHART2_SOURCE_INC_EVENTLISTENERHELPER_HXX
 
-#include <com/sun/star/lang/XEventListener.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 
-#include <list>
 #include <algorithm>
-#include <utility>
+
+namespace com { namespace sun { namespace star { namespace lang { class XEventListener; } } } }
 
 namespace chart
 {

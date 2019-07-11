@@ -66,14 +66,13 @@ class SW_DLLPUBLIC SwTOXDescription
     //TODO: TemplateNames
     //const String* pTemplateName = 0, ???
 
-    SwTOXDescription(SwTOXDescription&) = delete;
-    SwTOXDescription & operator= (SwTOXDescription&) = delete;
+    SwTOXDescription(SwTOXDescription const &) = delete;
+    SwTOXDescription & operator= (SwTOXDescription const &) = delete;
 
 public:
     // single argument ctors shall be explicit.
     explicit SwTOXDescription(TOXTypes eType) :
         m_eTOXType(eType),
-        m_pForm(nullptr),
         m_nContent(SwTOXElement::Mark | SwTOXElement::OutlineLevel),
         m_nIndexOptions(SwTOIOptions::SameEntry|SwTOIOptions::FF|SwTOIOptions::CaseSensitive),
         m_nOLEOptions(SwTOOElements::NONE),
@@ -169,9 +168,9 @@ public:
 
 class SwTOXMarkDescription
 {
-    TOXTypes    eTOXType;
-    int         nLevel;
-    bool        bMainEntry;
+    TOXTypes    meTOXType;
+    int         mnLevel;
+    bool        mbMainEntry;
 
     boost::optional<OUString>  maPrimKey;
     boost::optional<OUString>  maSecKey;
@@ -182,25 +181,25 @@ class SwTOXMarkDescription
     boost::optional<OUString>  maPhoneticReadingOfPrimKey;
     boost::optional<OUString>  maPhoneticReadingOfSecKey;
 
-    SwTOXMarkDescription(SwTOXMarkDescription&) = delete;
-    SwTOXMarkDescription & operator= (SwTOXMarkDescription&) = delete;
+    SwTOXMarkDescription(SwTOXMarkDescription const &) = delete;
+    SwTOXMarkDescription & operator= (SwTOXMarkDescription const &) = delete;
 
 public:
     // single argument ctors shall be explicit.
     explicit SwTOXMarkDescription(TOXTypes eType) :
-        eTOXType(eType),
-        nLevel(0),
-        bMainEntry(false)
+        meTOXType(eType),
+        mnLevel(0),
+        mbMainEntry(false)
         {
         }
 
-    TOXTypes        GetTOXType()const {return eTOXType;}
+    TOXTypes        GetTOXType()const {return meTOXType;}
 
-    void            SetLevel(int nSet) {nLevel = nSet;}
-    int             GetLevel() const {return nLevel;}
+    void            SetLevel(int nSet) {mnLevel = nSet;}
+    int             GetLevel() const {return mnLevel;}
 
-    void            SetMainEntry(bool bSet) {bMainEntry = bSet;}
-    bool            IsMainEntry() const {return bMainEntry;}
+    void            SetMainEntry(bool bSet) {mbMainEntry = bSet;}
+    bool            IsMainEntry() const {return mbMainEntry;}
 
     void            SetPrimKey(const OUString& rSet) { maPrimKey = rSet; }
     boost::optional<OUString> const & GetPrimKey() const { return maPrimKey; }
@@ -257,6 +256,7 @@ public:
     bool    UpdateOrInsertTOX(const SwTOXDescription& rDesc, SwTOXBase** ppBase, const SfxItemSet* pSet);
 
     const SwTOXType*    GetTOXType(TOXTypes eTyp) const;
+    SwWrtShell * GetShell() { return pSh; }
 };
 
 // inlines

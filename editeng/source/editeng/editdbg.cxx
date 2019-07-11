@@ -19,10 +19,8 @@
 
 
 #include <memory>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/weld.hxx>
 
 #include <editeng/lspcitem.hxx>
 #include <editeng/lrspitem.hxx>
@@ -56,6 +54,7 @@
 #include "editdbg.hxx"
 
 #include <rtl/strbuf.hxx>
+#include <osl/diagnose.h>
 
 #if defined( DBG_UTIL ) || ( OSL_DEBUG_LEVEL > 1 )
 
@@ -88,9 +87,9 @@ OString DbgOutItem(const SfxItemPool& rPool, const SfxPoolItem& rItem)
                 if ( pFmt )
                 {
                     aDebStr.append('(');
-                    aDebStr.append(static_cast<sal_Int32>(pFmt->GetFirstLineOffset()));
+                    aDebStr.append(pFmt->GetFirstLineOffset());
                     aDebStr.append(',');
-                    aDebStr.append(static_cast<sal_Int32>(pFmt->GetAbsLSpace()));
+                    aDebStr.append(pFmt->GetAbsLSpace());
                     aDebStr.append(',');
                     if ( pFmt->GetNumberingType() == SVX_NUM_BITMAP )
                         aDebStr.append("Bitmap");
@@ -374,7 +373,7 @@ void EditDbg::ShowEditEngineData( EditEngine* pEE, bool bInfoBox )
 
         const sal_Int32 nTextPortions = pPPortion->GetTextPortions().Count();
         OStringBuffer aPortionStr("\nText portions: #");
-        aPortionStr.append(static_cast<sal_Int32>(nTextPortions));
+        aPortionStr.append(nTextPortions);
         aPortionStr.append(" \nA");
         aPortionStr.append(nPortion);
         aPortionStr.append(": Paragraph Length = ");
@@ -502,7 +501,9 @@ bool ParaPortion::DbgCheckTextPortions(ParaPortion const& rPara)
     }
     return nXLen == rPara.pNode->Len();
 }
+#endif
 
+#if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
 void CheckOrderedList(const CharAttribList::AttribsType& rAttribs)
 {
     sal_Int32 nPrev = 0;

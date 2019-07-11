@@ -35,6 +35,7 @@
 
 #include <sdabstdlg.hxx>
 
+#include <sal/log.hxx>
 #include <fupoor.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svx/svdopage.hxx>
@@ -43,6 +44,7 @@
 #include <sfx2/bindings.hxx>
 #include <svx/svdpagv.hxx>
 #include <svx/svdetc.hxx>
+#include <svx/svdundo.hxx>
 #include <editeng/outliner.hxx>
 #include <editeng/editstat.hxx>
 #include <tools/multisel.hxx>
@@ -67,6 +69,7 @@
 #include <framework/FrameworkHelper.hxx>
 #include <optsitem.hxx>
 #include <sdresid.hxx>
+#include <unokywds.hxx>
 #include <undo/undomanager.hxx>
 
 #include <svx/svxids.hrc>
@@ -75,6 +78,7 @@
 #include <svl/aeitem.hxx>
 #include <basic/sbstar.hxx>
 #include <xmloff/autolayout.hxx>
+#include <vcl/mnemonic.hxx>
 
 using namespace ::com::sun::star;
 
@@ -121,12 +125,12 @@ void  ViewShell::GetMenuState( SfxItemSet &rSet )
 
     if(SfxItemState::DEFAULT == rSet.GetItemState(SID_UNDO))
     {
-        ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+        SfxUndoManager* pUndoManager = ImpGetUndoManager();
         if(pUndoManager)
         {
             if(pUndoManager->GetUndoActionCount() != 0)
             {
-                // If an other view created the first undo action, prevent redoing it from this view.
+                // If another view created the first undo action, prevent redoing it from this view.
                 const SfxUndoAction* pAction = pUndoManager->GetUndoAction();
                 if (pAction->GetViewShellId() != GetViewShellBase().GetViewShellId())
                 {
@@ -150,12 +154,12 @@ void  ViewShell::GetMenuState( SfxItemSet &rSet )
 
     if(SfxItemState::DEFAULT == rSet.GetItemState(SID_REDO))
     {
-        ::svl::IUndoManager* pUndoManager = ImpGetUndoManager();
+        SfxUndoManager* pUndoManager = ImpGetUndoManager();
         if(pUndoManager)
         {
             if(pUndoManager->GetRedoActionCount() != 0)
             {
-                // If an other view created the first undo action, prevent redoing it from this view.
+                // If another view created the first undo action, prevent redoing it from this view.
                 const SfxUndoAction* pAction = pUndoManager->GetRedoAction();
                 if (pAction->GetViewShellId() != GetViewShellBase().GetViewShellId())
                 {
@@ -165,7 +169,7 @@ void  ViewShell::GetMenuState( SfxItemSet &rSet )
                 {
                     // Set the necessary string like in
                     // sfx2/source/view/viewfrm.cxx ver 1.23 ln 1081 ff.
-                    OUString aTmp(SvtResId(STR_REDO));
+                    OUString aTmp(MnemonicGenerator::EraseAllMnemonicChars(SvtResId(STR_REDO)));
                     aTmp += pUndoManager->GetRedoActionComment();
                     rSet.Put(SfxStringItem(SID_REDO, aTmp));
                 }
@@ -192,8 +196,8 @@ SdPage* ViewShell::CreateOrDuplicatePage (
     sal_uInt16 nSId = rRequest.GetSlot();
     SdDrawDocument* pDocument = GetDoc();
     SdrLayerAdmin& rLayerAdmin = pDocument->GetLayerAdmin();
-    SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRND));
-    SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(SdResId(STR_LAYER_BCKGRNDOBJ));
+    SdrLayerID aBckgrnd = rLayerAdmin.GetLayerID(sUNO_LayerName_background);
+    SdrLayerID aBckgrndObj = rLayerAdmin.GetLayerID(sUNO_LayerName_background_objects);
     SdrLayerIDSet aVisibleLayers;
     // Determine the page from which to copy some values, such as layers,
     // size, master page, to the new page.  This is usually the given page.

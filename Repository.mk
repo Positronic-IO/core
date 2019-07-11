@@ -37,7 +37,7 @@ $(eval $(call gb_Helper_register_executables,NONE, \
 	helpex \
 	idxdict \
 	langsupport \
-	$(if $(filter IOS,$(OS)),LibreOffice) \
+	$(if $(filter iOS,$(OS)),LibreOffice) \
 	libtest \
 	lngconvex \
 	localize \
@@ -62,12 +62,11 @@ $(eval $(call gb_Helper_register_executables,NONE, \
 	unoidl-read \
 	unoidl-write \
 	xrmex \
-	$(if $(filter-out ANDROID IOS WNT,$(OS)), \
+	$(if $(filter-out ANDROID iOS WNT,$(OS)), \
         svdemo \
         fftester \
         svptest \
-        svpclient \
-        pixelctl ) \
+        svpclient ) \
 	$(if $(filter LINUX %BSD SOLARIS,$(OS)), tilebench) \
 	$(if $(filter LINUX MACOSX SOLARIS WNT %BSD,$(OS)),icontest \
 	    outdevgrind) \
@@ -142,7 +141,7 @@ $(eval $(call gb_Helper_register_executables_for_install,OOO,brand, \
 	$(call gb_Helper_optional,FUZZERS,mtpfuzzer) \
 	$(call gb_Helper_optional,FUZZERS,htmlfuzzer) \
 	$(call gb_Helper_optional,FUZZERS,sftfuzzer) \
-	$(if $(filter-out ANDROID IOS MACOSX WNT,$(OS)),oosplash) \
+	$(if $(filter-out ANDROID HAIKU iOS MACOSX WNT,$(OS)),oosplash) \
 	soffice_bin \
 	$(if $(filter DESKTOP,$(BUILD_TYPE)),unopkg_bin) \
 	$(if $(filter WNT,$(OS)), \
@@ -200,7 +199,7 @@ $(eval $(call gb_Helper_register_executables_for_install,OOO,ooo, \
 	gengal \
 	$(if $(filter WNT,$(OS)),,uri-encode) \
 	$(if $(ENABLE_MACOSX_SANDBOX),, \
-		$(if $(ENABLE_HEADLESS),, \
+		$(if $(DISABLE_GUI),, \
 			ui-previewer \
 		) \
 	) \
@@ -236,7 +235,7 @@ $(eval $(call gb_Helper_register_executables_for_install,OOO,pdfimport, \
 endif
 
 $(eval $(call gb_Helper_register_executables_for_install,UREBIN,ure,\
-	$(if $(and $(ENABLE_JAVA),$(filter-out MACOSX WNT,$(OS)),$(filter DESKTOP,$(BUILD_TYPE))),javaldx) \
+	$(if $(and $(ENABLE_JAVA),$(filter-out HAIKU MACOSX WNT,$(OS)),$(filter DESKTOP,$(BUILD_TYPE))),javaldx) \
 	$(if $(ENABLE_MACOSX_SANDBOX),, \
 		regmerge \
 		regview \
@@ -289,7 +288,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,gnome, \
 	$(if $(ENABLE_EVOAB2),evoab) \
 	$(if $(ENABLE_GTK),vclplug_gtk) \
 	$(if $(ENABLE_GTK3),vclplug_gtk3) \
-	$(if $(ENABLE_SYSTRAY_GTK),qstart_gtk) \
 	$(if $(ENABLE_GIO),losessioninstall) \
 	$(if $(ENABLE_GIO),ucpgio1) \
 ))
@@ -313,6 +311,7 @@ endif
 ifeq ($(OS),HAIKU)
 $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,haiku, \
     $(if $(ENABLE_QT5),vclplug_qt5) \
+    $(if $(ENABLE_KDE5),vclplug_kde5) \
 ))
 endif
 
@@ -330,9 +329,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	$(call gb_Helper_optional,AVMEDIA,avmedia) \
 	$(if $(filter MACOSX,$(OS)),\
 		avmediaMacAVF \
-		$(if $(ENABLE_MACOSX_SANDBOX),,\
-			$(if $(shell test $(MACOSX_SDK_VERSION) -ge 101200 || echo not),avmediaQuickTime) \
-		) \
 	) \
 	$(call gb_Helper_optional,SCRIPTING, \
 		basctl \
@@ -345,9 +341,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	canvastools \
 	chartcore \
 	chartcontroller \
-	$(if $(ENABLE_HEADLESS),, \
-		chartopengl \
-	) \
 	$(call gb_Helper_optional,OPENCL,clew) \
 	$(if $(filter $(OS),WNT),,cmdmail) \
 	cppcanvas \
@@ -405,10 +398,13 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	$(if $(MERGELIBS),merged) \
 	migrationoo2 \
 	migrationoo3 \
+	mork \
+	mozbootstrap \
 	msfilter \
 	$(call gb_Helper_optional,SCRIPTING,msforms) \
 	mtfrenderer \
-	$(call gb_Helper_optional,DBCONNECTIVITY,mysql) \
+	$(if $(ENABLE_JAVA),mysql_jdbc) \
+	$(call gb_Helper_optional,MARIADBC,$(call gb_Helper_optional,DBCONNECTIVITY,mysqlc)) \
 	numbertext \
 	odbc \
 	odfflatxml \
@@ -432,7 +428,7 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	slideshow \
 	sot \
 	spell \
-	$(if $(ENABLE_HEADLESS),,spl) \
+	$(if $(DISABLE_GUI),,spl) \
 	storagefd \
 	$(call gb_Helper_optional,SCRIPTING,stringresource) \
 	svgio \
@@ -463,9 +459,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	) \
 	vcl \
 	vclcanvas \
-	$(if $(USING_X11), \
-		vclplug_gen \
-	) \
 	writerperfect \
 	xmlscript \
 	xmlfa \
@@ -474,12 +467,14 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 	xof \
 	xsltdlg \
 	xsltfilter \
-	mork \
-	mozbootstrap \
+	$(if $(USING_X11), \
+		vclplug_gen \
+	) \
 	$(if $(filter $(OS),WNT), \
 		ado \
 		oleautobridge \
 		smplmail \
+		vclplug_win \
 		wininetbe1 \
 	) \
 	$(if $(filter $(OS),MACOSX), \
@@ -487,6 +482,7 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 			AppleRemote \
 		) \
 		fps_aqua \
+		vclplug_osx \
 		MacOSXSpell \
 	) \
 ))
@@ -725,7 +721,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,UNOVERLIBS,ure, \
 
 $(eval $(call gb_Helper_register_libraries,EXTENSIONLIBS, \
 	active_native \
-	mysqlc \
 	passive_native \
 ))
 
@@ -892,6 +887,13 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	extras_labels \
 	$(if $(filter WNT,$(OS)),extras_newfiles) \
 	extras_palettes \
+	extras_personas \
+	extras_persona_dark \
+	extras_persona_gray \
+	extras_persona_green \
+	extras_persona_pink \
+	extras_persona_sand \
+	extras_persona_white \
 	extras_tplofficorr \
 	extras_tploffimisc \
 	extras_tplpresnt \
@@ -941,9 +943,6 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	wizards_basicusr \
 	wizards_properties \
 	wizards_wizardshare \
-	$(if $(ENABLE_HEADLESS),, \
-		chart2_opengl_shader \
-	) \
 	vcl_opengl_shader \
 	$(if $(filter WNT,$(OS)), \
 		vcl_opengl_blacklist \
@@ -962,13 +961,14 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo,\
 	$(if $(ENABLE_HTMLHELP),\
 		helpcontent2_html_dynamic \
 		helpcontent2_html_media \
+		helpcontent2_html_icon-themes \
 		helpcontent2_html_static \
 	) \
 ))
 
 $(eval $(call gb_Helper_register_packages_for_install,ooo_fonts,\
 	extras_fonts \
-	$(if $(USING_X11)$(ENABLE_HEADLESS)$(filter ANDROID,$(OS)), \
+	$(if $(USING_X11)$(DISABLE_GUI)$(filter ANDROID,$(OS)), \
 		postprocess_fontconfig) \
 	$(call gb_Helper_optional,MORE_FONTS,\
 		fonts_alef \
@@ -988,6 +988,7 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo_fonts,\
 		fonts_reem \
 		fonts_sourcecode \
 		fonts_sourcesans \
+		fonts_sourceserif \
 		fonts_scheherazade \
 	) \
 ))
@@ -1022,8 +1023,8 @@ $(eval $(call gb_Helper_register_packages_for_install,brand,\
 	desktop_branding \
 	$(if $(CUSTOM_BRAND_DIR),desktop_branding_custom) \
 	$(if $(filter DESKTOP,$(BUILD_TYPE)),desktop_scripts_install) \
-	$(if $(and $(filter-out MACOSX WNT,$(OS)),$(filter DESKTOP,$(BUILD_TYPE))),\
-		$(if $(ENABLE_HEADLESS),, \
+	$(if $(and $(filter-out MACOSX HAIKU WNT,$(OS)),$(filter DESKTOP,$(BUILD_TYPE))),\
+		$(if $(DISABLE_GUI),, \
 			desktop_soffice_sh \
 		) \
 	) \
@@ -1136,6 +1137,7 @@ $(eval $(call gb_Helper_register_uiconfigs,\
 	filter \
 	formula \
 	fps \
+	libreofficekit \
 	$(call gb_Helper_optional,SCRIPTING,modules/BasicIDE) \
 	$(call gb_Helper_optional,DBCONNECTIVITY,\
 		modules/dbapp \

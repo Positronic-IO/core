@@ -17,10 +17,10 @@
 namespace {
 
 class ExternAndNotDefined:
-    public RecursiveASTVisitor<ExternAndNotDefined>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<ExternAndNotDefined>
 {
 public:
-    explicit ExternAndNotDefined(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit ExternAndNotDefined(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
 
@@ -57,7 +57,7 @@ bool ExternAndNotDefined::VisitFunctionDecl(const FunctionDecl * functionDecl) {
     {
         return true;
     }
-    StringRef fileName { compiler.getSourceManager().getFilename(functionDecl->getLocation()) };
+    StringRef fileName { getFileNameOfSpellingLoc(functionDecl->getLocation()) };
     // the filters use some kind of dynamic loading stunt
     if (loplugin::hasPathnamePrefix(fileName, SRCDIR "/filter/qa/")) {
         return true;

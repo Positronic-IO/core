@@ -20,13 +20,13 @@
 #ifndef INCLUDED_SC_SOURCE_CORE_INC_JUMPMATRIX_HXX
 #define INCLUDED_SC_SOURCE_CORE_INC_JUMPMATRIX_HXX
 
-#include <formula/token.hxx>
-#include <formula/errorcodes.hxx>
 #include <limits.h>
 #include <vector>
 #include <types.hxx>
 #include <address.hxx>
 #include <token.hxx>
+
+namespace formula { class FormulaToken; }
 
 typedef ::std::vector< const formula::FormulaToken*> ScTokenVec;
 
@@ -61,13 +61,13 @@ class ScJumpMatrix
     ScMatrixRef         pMat;       // the results
     ScRefList           mvRefList;  // array of references result, if any
     ScTokenVec          mvParams;    // parameter stack
-    SCSIZE              nCols;
+    SCSIZE const        nCols;
     SCSIZE              nRows;
     SCSIZE              nCurCol;
     SCSIZE              nCurRow;
     SCSIZE              nResMatCols;
     SCSIZE              nResMatRows;
-    OpCode              meOp;
+    OpCode const        meOp;
     bool                bStarted;
 
     // Buffer result ranges to be able to set a range of identically typed

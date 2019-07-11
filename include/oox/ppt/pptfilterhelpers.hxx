@@ -24,6 +24,7 @@
 #include <oox/dllapi.h>
 #include <sal/types.h>
 #include <rtl/ustring.hxx>
+#include <com/sun/star/uno/Any.hxx>
 
 namespace com { namespace sun { namespace star {
     namespace animations { class XAnimationNode; }
@@ -32,17 +33,17 @@ namespace com { namespace sun { namespace star {
 namespace oox { namespace ppt {
 
     // conversion of MS to OOo attributes.
-    enum MS_AttributeNames
+    enum class AnimationAttributeEnum
     {
-        MS_PPT_X, MS_PPT_Y, MS_PPT_W, MS_PPT_H, MS_PPT_C, MS_R, MS_XSHEAR, MS_FILLCOLOR, MS_FILLTYPE,
-        MS_STROKECOLOR, MS_STROKEON, MS_STYLECOLOR, MS_STYLEROTATION, MS_FONTWEIGHT,
-        MS_STYLEUNDERLINE, MS_STYLEFONTFAMILY, MS_STYLEFONTSIZE, MS_STYLEFONTSTYLE,
-        MS_STYLEVISIBILITY, MS_STYLEOPACITY, MS_UNKNOWN
+        PPT_X, PPT_Y, PPT_W, PPT_H, PPT_C, R, XSHEAR, FILLCOLOR, FILLTYPE,
+        FILLON, STROKECOLOR, STROKEON, STYLECOLOR, STYLEROTATION, FONTWEIGHT,
+        STYLEUNDERLINE, STYLEFONTFAMILY, STYLEFONTSIZE, STYLEFONTSTYLE,
+        STYLEVISIBILITY, STYLEOPACITY, UNKNOWN
     };
 
     struct ImplAttributeNameConversion
     {
-        MS_AttributeNames meAttribute;
+        AnimationAttributeEnum const meAttribute;
         const char* mpMSName;
         const char* mpAPIName;
     };
@@ -52,9 +53,9 @@ namespace oox { namespace ppt {
     struct OOX_DLLPUBLIC transition
     {
         const sal_Char* mpName;
-        sal_Int16 mnType;
-        sal_Int16 mnSubType;
-        bool mbDirection; // true: default geometric direction
+        sal_Int16 const mnType;
+        sal_Int16 const mnSubType;
+        bool const mbDirection; // true: default geometric direction
 
         static const transition* getList();
         static const transition* find( const OUString& rName );
@@ -62,19 +63,19 @@ namespace oox { namespace ppt {
 
     struct OOX_DLLPUBLIC convert_subtype
     {
-        sal_Int32 mnID;
+        sal_Int32 const mnID;
         const sal_Char* mpStrSubType;
 
         static const convert_subtype* getList();
     };
 
-    struct OOX_DLLPUBLIC preset_maping
+    struct OOX_DLLPUBLIC preset_mapping
     {
         sal_Int32   mnPresetClass;
         sal_Int32   mnPresetId;
         const sal_Char* mpStrPresetId;
 
-        static const preset_maping* getList();
+        static const preset_mapping* getList();
     };
 
     OOX_DLLPUBLIC OUString getConvertedSubType( sal_Int16 nPresetClass, sal_Int32 nPresetId, sal_Int32 nPresetSubType );
@@ -82,6 +83,15 @@ namespace oox { namespace ppt {
     OOX_DLLPUBLIC void fixMainSequenceTiming( const css::uno::Reference< css::animations::XAnimationNode >& xNode );
 
     OOX_DLLPUBLIC void fixInteractiveSequenceTiming( const css::uno::Reference< css::animations::XAnimationNode >& xNode );
+
+    /** convert attribute values of the animation target so that LibreOffice understand.
+     */
+    OOX_DLLPUBLIC bool convertAnimationValue(AnimationAttributeEnum eAttribute, css::uno::Any& rValue);
+
+    /** convert the measure string to LibreOffice format.
+     * i.e. convert occurrence of #{0,1}ppt_[xywh] to x,y, width, height.
+     */
+    OOX_DLLPUBLIC bool convertMeasure(OUString& rString);
 } }
 
 #endif

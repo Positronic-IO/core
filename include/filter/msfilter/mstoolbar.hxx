@@ -19,7 +19,7 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <tools/stream.hxx>
-#include <vcl/bitmap.hxx>
+#include <vcl/bitmapex.hxx>
 
 namespace com { namespace sun { namespace star {
     namespace beans { struct PropertyValue; }
@@ -84,6 +84,11 @@ protected:
 public:
     TBBase() : nOffSet( 0 ) {}
     virtual ~TBBase(){}
+
+    TBBase(TBBase const &) = default;
+    TBBase(TBBase &&) = default;
+    TBBase & operator =(TBBase const &) = default;
+    TBBase & operator =(TBBase &&) = default;
 
     virtual bool Read(SvStream &rS) = 0;
 #ifdef DEBUG_FILTER_MSTOOLBAR
@@ -156,7 +161,7 @@ class MSFILTER_DLLPUBLIC TBCBitMap : public TBBase
 {
 friend class TBCBSpecific; // #FIXME hacky access, need to fix
     sal_Int32 cbDIB;
-    Bitmap mBitMap;
+    BitmapEx mBitMap;
 public:
     TBCBitMap();
     virtual ~TBCBitMap() override;
@@ -165,7 +170,7 @@ public:
     virtual void Print( FILE* ) override;
 #endif
    // #FIXME Const-ness
-    Bitmap& getBitMap() { return mBitMap;}
+    BitmapEx& getBitMap() { return mBitMap;}
 };
 
 class MSFILTER_DLLPUBLIC TBCMenuSpecific : public TBBase
@@ -255,6 +260,12 @@ class MSFILTER_DLLPUBLIC TBCHeader : public TBBase
 public:
     TBCHeader();
     virtual ~TBCHeader() override;
+
+    TBCHeader(TBCHeader const &) = default;
+    TBCHeader(TBCHeader &&) = default;
+    TBCHeader & operator =(TBCHeader const &) = default;
+    TBCHeader & operator =(TBCHeader &&) = default;
+
     sal_uInt8 getTct() const { return tct; }
     sal_uInt16 getTcID() const { return tcid; }
     bool isVisible() { return !( bFlagsTCR & 0x1 ); }
@@ -279,7 +290,7 @@ public:
 #ifdef DEBUG_FILTER_MSTOOLBAR
     virtual void Print( FILE* ) override;
 #endif
-    bool ImportToolBarControl( CustomToolBarImportHelper&, std::vector< css::beans::PropertyValue >&, bool& bBeginGroup, bool bIsMenuBar );
+    void ImportToolBarControl( CustomToolBarImportHelper&, std::vector< css::beans::PropertyValue >&, bool& bBeginGroup, bool bIsMenuBar );
     TBCGeneralInfo& getGeneralInfo() { return controlGeneralInfo; }
     TBCMenuSpecific* getMenuSpecific();
 };

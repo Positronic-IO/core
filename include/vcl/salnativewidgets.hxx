@@ -249,7 +249,7 @@ class VCL_DLLPUBLIC ImplControlValue
     friend class SalFrame;
 
     private:
-        ControlType     mType;
+        ControlType const mType;
         ButtonValue     mTristate;    // Tristate value: on, off, mixed
         long            mNumber;      // numeric value
     protected:
@@ -268,6 +268,11 @@ class VCL_DLLPUBLIC ImplControlValue
             : mType( ControlType::Generic ), mTristate(ButtonValue::DontKnow), mNumber(0) {}
 
         virtual ~ImplControlValue();
+
+        ImplControlValue(ImplControlValue const &) = default;
+        ImplControlValue(ImplControlValue &&) = default;
+        ImplControlValue & operator =(ImplControlValue const &) = delete; // due to const mType
+        ImplControlValue & operator =(ImplControlValue &&) = delete; // due to const mType
 
         virtual ImplControlValue* clone() const;
 
@@ -309,6 +314,11 @@ class VCL_DLLPUBLIC ScrollbarValue : public ImplControlValue
         };
         virtual ~ScrollbarValue() override;
         virtual ScrollbarValue* clone() const override;
+
+        ScrollbarValue(ScrollbarValue const &) = default;
+        ScrollbarValue(ScrollbarValue &&) = default;
+        ScrollbarValue & operator =(ScrollbarValue const &) = delete; // due to ImplControlValue
+        ScrollbarValue & operator =(ScrollbarValue &&) = delete; // due to ImplControlValue
 };
 
 class VCL_DLLPUBLIC SliderValue : public ImplControlValue
@@ -326,6 +336,11 @@ class VCL_DLLPUBLIC SliderValue : public ImplControlValue
         {}
         virtual ~SliderValue() override;
         virtual SliderValue* clone() const override;
+
+        SliderValue(SliderValue const &) = default;
+        SliderValue(SliderValue &&) = default;
+        SliderValue & operator =(SliderValue const &) = delete; // due to ImplControlValue
+        SliderValue & operator =(SliderValue &&) = delete; // due to ImplControlValue
 };
 
 /* TabitemValue:
@@ -361,6 +376,11 @@ class VCL_DLLPUBLIC TabitemValue : public ImplControlValue
         }
         virtual ~TabitemValue() override;
         virtual TabitemValue* clone() const override;
+
+        TabitemValue(TabitemValue const &) = default;
+        TabitemValue(TabitemValue &&) = default;
+        TabitemValue & operator =(TabitemValue const &) = delete; // due to ImplControlValue
+        TabitemValue & operator =(TabitemValue &&) = delete; // due to ImplControlValue
 
         bool isLeftAligned() const  { return bool(mnAlignment & TabitemFlags::LeftAligned); }
         bool isRightAligned() const { return bool(mnAlignment & TabitemFlags::RightAligned); }
@@ -398,6 +418,11 @@ class VCL_DLLPUBLIC SpinbuttonValue : public ImplControlValue
 
         virtual ~SpinbuttonValue() override;
         virtual SpinbuttonValue* clone() const override;
+
+        SpinbuttonValue(SpinbuttonValue const &) = default;
+        SpinbuttonValue(SpinbuttonValue &&) = default;
+        SpinbuttonValue & operator =(SpinbuttonValue const &) = delete; // due to ImplControlValue
+        SpinbuttonValue & operator =(SpinbuttonValue &&) = delete; // due to ImplControlValue
 };
 
 /*  Toolbarvalue:
@@ -411,6 +436,12 @@ public:
     { mbIsTopDockingArea = false; }
     virtual ~ToolbarValue() override;
     virtual ToolbarValue* clone() const override;
+
+    ToolbarValue(ToolbarValue const &) = default;
+    ToolbarValue(ToolbarValue &&) = default;
+    ToolbarValue & operator =(ToolbarValue const &) = delete; // due to ImplControlValue
+    ToolbarValue & operator =(ToolbarValue &&) = delete; // due to ImplControlValue
+
     tools::Rectangle           maGripRect;
     bool                mbIsTopDockingArea; // indicates that this is the top aligned dockingarea
                                             // adjacent to the menubar, only used on Windows
@@ -427,6 +458,10 @@ public:
     { maTopDockingAreaHeight=0; }
     virtual ~MenubarValue() override;
     virtual MenubarValue* clone() const override;
+    MenubarValue(MenubarValue const &) = default;
+    MenubarValue(MenubarValue &&) = default;
+    MenubarValue & operator =(MenubarValue const &) = delete; // due to ImplControlValue
+    MenubarValue & operator =(MenubarValue &&) = delete; // due to ImplControlValue
     int             maTopDockingAreaHeight;
 };
 
@@ -444,6 +479,10 @@ public:
     {}
     virtual ~MenupopupValue() override;
     virtual MenupopupValue* clone() const override;
+    MenupopupValue(MenupopupValue const &) = default;
+    MenupopupValue(MenupopupValue &&) = default;
+    MenupopupValue & operator =(MenupopupValue const &) = delete; // due to ImplControlValue
+    MenupopupValue & operator =(MenupopupValue &&) = delete; // due to ImplControlValue
     tools::Rectangle       maItemRect;
 };
 
@@ -455,13 +494,23 @@ class VCL_DLLPUBLIC PushButtonValue : public ImplControlValue
 {
 public:
     PushButtonValue()
-    : ImplControlValue( ControlType::Pushbutton, 0 )
-    , mbBevelButton( false ), mbSingleLine( true ) {}
+        : ImplControlValue( ControlType::Pushbutton, 0 )
+        , mbBevelButton(false)
+        , mbSingleLine(true)
+        , mbIsStock(false)
+    {}
+
     virtual ~PushButtonValue() override;
     virtual PushButtonValue* clone() const override;
 
-    bool            mbBevelButton:1; // only used on OSX
-    bool            mbSingleLine:1;  // only used on OSX
+    PushButtonValue(PushButtonValue const &) = default;
+    PushButtonValue(PushButtonValue &&) = default;
+    PushButtonValue & operator =(PushButtonValue const &) = delete; // due to ImplControlValue
+    PushButtonValue & operator =(PushButtonValue &&) = delete; // due to ImplControlValue
+
+    bool mbBevelButton:1; // only used on OSX
+    bool mbSingleLine:1;  // only used on OSX
+    bool mbIsStock:1;
 };
 
 

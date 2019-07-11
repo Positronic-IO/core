@@ -34,13 +34,13 @@
 #include <malloc.h>
 #include <memory.h>
 
-bool SofficeRuns()
+static bool SofficeRuns()
 {
     // check for soffice by searching the communication window
     return FindWindowExW( nullptr, nullptr, QUICKSTART_CLASSNAME, nullptr ) != nullptr;
 }
 
-bool launchSoffice( )
+static bool launchSoffice( )
 {
     if ( !SofficeRuns() )
     {
@@ -83,7 +83,7 @@ int APIENTRY wWinMain(HINSTANCE /*hInstance*/,
 
     for ( int i = 1; i < __argc; i++ )
     {
-        if ( 0 == strcmp( __argv[i], "--killtray" ) )
+        if ( 0 == wcscmp( __wargv[i], L"--killtray" ) )
         {
             HWND hwndTray = FindWindowW( QUICKSTART_CLASSNAME, nullptr );
 

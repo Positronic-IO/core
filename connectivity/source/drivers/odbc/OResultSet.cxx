@@ -35,6 +35,7 @@
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/dbexception.hxx>
+#include <sal/log.hxx>
 
 using namespace ::comphelper;
 using namespace connectivity;
@@ -87,10 +88,7 @@ OResultSet::OResultSet(SQLHANDLE _pStatementHandle ,OStatement_Base* pStmt) :   
                         ,m_aStatementHandle(_pStatementHandle)
                         ,m_aConnectionHandle(pStmt->getConnectionHandle())
                         ,m_pStatement(pStmt)
-                        ,m_pSkipDeletedSet(nullptr)
                         ,m_xStatement(*pStmt)
-                        ,m_xMetaData(nullptr)
-                        ,m_pRowStatusArray( nullptr )
                         ,m_nTextEncoding(pStmt->getOwnConnection()->getTextEncoding())
                         ,m_nRowPos(0)
                         ,m_nUseBookmarks(ODBC_SQL_NOT_DEFINED)
@@ -192,7 +190,7 @@ SQLRETURN OResultSet::unbind(bool _bUnbindHandle)
     if ( _bUnbindHandle )
         nRet = N3SQLFreeStmt(m_aStatementHandle,SQL_UNBIND);
 
-    if ( m_aBindVector.size() > 0 )
+    if ( !m_aBindVector.empty() )
     {
         TVoidVector::iterator pValue = m_aBindVector.begin();
         TVoidVector::const_iterator pEnd = m_aBindVector.end();
@@ -917,14 +915,16 @@ void SAL_CALL OResultSet::updateRow(  )
                                 &nRealLen
                                 );
             OTools::ThrowException(m_pStatement->getOwnConnection(),nRet,m_aStatementHandle,SQL_HANDLE_STMT,*this);
-            fillNeededData(nRet = N3SQLBulkOperations(m_aStatementHandle, SQL_UPDATE_BY_BOOKMARK));
+            nRet = N3SQLBulkOperations(m_aStatementHandle, SQL_UPDATE_BY_BOOKMARK);
+            fillNeededData(nRet);
             // the driver should not have touched this
             // (neither the contents of aBookmark FWIW)
             assert(nRealLen == aBookmark.getLength());
         }
         else
         {
-            fillNeededData(nRet = N3SQLSetPos(m_aStatementHandle,1,SQL_UPDATE,SQL_LOCK_NO_CHANGE));
+            nRet = N3SQLSetPos(m_aStatementHandle,1,SQL_UPDATE,SQL_LOCK_NO_CHANGE);
+            fillNeededData(nRet);
         }
         OTools::ThrowException(m_pStatement->getOwnConnection(),nRet,m_aStatementHandle,SQL_HANDLE_STMT,*this);
         // unbind all columns so we can fetch all columns again with SQLGetData
@@ -1384,12 +1384,9 @@ void OResultSet::setFetchSize(sal_Int32 _par0)
     {
         throw css::beans::PropertyVetoException("SDBC/ODBC layer not prepared for fetchSize > 1", *this);
     }
-    if ( _par0 > 0 )
-    {
-        setStmtOption<SQLULEN, SQL_IS_UINTEGER>(SQL_ATTR_ROW_ARRAY_SIZE, _par0);
-        m_pRowStatusArray.reset( new SQLUSMALLINT[_par0] );
-        setStmtOption<SQLUSMALLINT*, SQL_IS_POINTER>(SQL_ATTR_ROW_STATUS_PTR, m_pRowStatusArray.get());
-    }
+    setStmtOption<SQLULEN, SQL_IS_UINTEGER>(SQL_ATTR_ROW_ARRAY_SIZE, _par0);
+    m_pRowStatusArray.reset( new SQLUSMALLINT[_par0] );
+    setStmtOption<SQLUSMALLINT*, SQL_IS_POINTER>(SQL_ATTR_ROW_STATUS_PTR, m_pRowStatusArray.get());
 }
 
 IPropertyArrayHelper* OResultSet::createArrayHelper( ) const

@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.1 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="cui">
   <requires lib="gtk+" version="3.18"/>
-  <!-- interface-requires LibreOffice 1.0 -->
   <object class="GtkAdjustment" id="adjustment1">
     <property name="upper">100</property>
     <property name="step_increment">1</property>
@@ -13,10 +12,35 @@
     <property name="step_increment">1</property>
     <property name="page_increment">10</property>
   </object>
+  <object class="GtkAdjustment" id="adjustment3">
+    <property name="upper">100</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment4">
+    <property name="upper">100</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment5">
+    <property name="upper">100</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment6">
+    <property name="upper">255</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment7">
+    <property name="upper">255</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
   <object class="GtkImage" id="image3">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
-    <property name="pixbuf">res/sc10350.png</property>
+    <property name="icon_name">res/sc10350.png</property>
   </object>
   <object class="GtkBox" id="ColorPage">
     <property name="visible">True</property>
@@ -55,11 +79,11 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="valign">center</property>
-                        <property name="xalign">0</property>
-                        <property name="yalign">0</property>
                         <property name="label" translatable="yes" context="colorpage|label21">Palette:</property>
                         <property name="use_underline">True</property>
                         <property name="mnemonic_widget">paletteselector</property>
+                        <property name="xalign">0</property>
+                        <property name="yalign">0</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -68,7 +92,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkComboBox" id="paletteselector">
+                      <object class="GtkComboBoxText" id="paletteselector">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                       </object>
@@ -82,8 +106,6 @@
                   <packing>
                     <property name="left_attach">0</property>
                     <property name="top_attach">0</property>
-                    <property name="width">1</property>
-                    <property name="height">1</property>
                   </packing>
                 </child>
                 <child>
@@ -97,10 +119,10 @@
                       <object class="GtkLabel" id="label20">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="xalign">0</property>
                         <property name="label" translatable="yes" context="colorpage|label20">Recent Colors</property>
                         <property name="use_underline">True</property>
                         <property name="mnemonic_widget">recentcolorset</property>
+                        <property name="xalign">0</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -109,9 +131,10 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="svxcorelo-SvxColorValueSet" id="recentcolorset">
+                      <object class="GtkDrawingArea" id="recentcolorset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="events">GDK_BUTTON_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_STRUCTURE_MASK</property>
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
                       </object>
@@ -125,8 +148,6 @@
                   <packing>
                     <property name="left_attach">0</property>
                     <property name="top_attach">2</property>
-                    <property name="width">1</property>
-                    <property name="height">1</property>
                   </packing>
                 </child>
                 <child>
@@ -147,8 +168,6 @@
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -164,8 +183,6 @@
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -175,14 +192,12 @@
                         <property name="receives_default">False</property>
                         <property name="use_underline">True</property>
                         <property name="xalign">0</property>
-                        <property name="active">True</property>
                         <property name="draw_indicator">True</property>
+                        <property name="group">RGB</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -195,8 +210,6 @@
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -204,22 +217,21 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="margin_bottom">3</property>
-                        <property name="xalign">0</property>
                         <property name="label" translatable="yes" context="colorpage|label22">Custom Palette</property>
+                        <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">colorset</property>
+                        <property name="xalign">0</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">0</property>
                         <property name="width">2</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
                     <property name="top_attach">3</property>
-                    <property name="width">1</property>
-                    <property name="height">1</property>
                   </packing>
                 </child>
                 <child>
@@ -229,11 +241,27 @@
                     <property name="valign">start</property>
                     <property name="orientation">vertical</property>
                     <child>
-                      <object class="svxcorelo-SvxColorValueSet" id="colorset">
+                      <object class="GtkScrolledWindow" id="colorsetwin">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="hexpand">True</property>
-                        <property name="vexpand">True</property>
+                        <property name="hscrollbar_policy">never</property>
+                        <property name="vscrollbar_policy">never</property>
+                        <property name="shadow_type">in</property>
+                        <child>
+                          <object class="GtkViewport">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <child>
+                              <object class="GtkDrawingArea" id="colorset">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="events">GDK_BUTTON_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_STRUCTURE_MASK</property>
+                                <property name="hexpand">True</property>
+                                <property name="vexpand">True</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -245,8 +273,6 @@
                   <packing>
                     <property name="left_attach">0</property>
                     <property name="top_attach">1</property>
-                    <property name="width">1</property>
-                    <property name="height">1</property>
                   </packing>
                 </child>
               </object>
@@ -287,6 +313,7 @@
               <object class="GtkBox" id="box1">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="valign">start</property>
                 <property name="orientation">vertical</property>
                 <property name="spacing">12</property>
                 <child>
@@ -295,14 +322,31 @@
                     <property name="can_focus">False</property>
                     <property name="orientation">vertical</property>
                     <child>
-                      <object class="svxlo-SvxXRectPreview" id="oldpreview">
+                      <object class="GtkScrolledWindow">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
-                        <child internal-child="accessible">
-                          <object class="AtkObject" id="oldpreview-atkobject">
-                            <property name="AtkObject::accessible-name" translatable="yes" context="colorpage|oldpreview-atkobject">Old Color</property>
+                        <property name="hscrollbar_policy">never</property>
+                        <property name="vscrollbar_policy">never</property>
+                        <property name="shadow_type">in</property>
+                        <child>
+                          <object class="GtkViewport">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <child>
+                              <object class="GtkDrawingArea" id="oldpreview">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="hexpand">True</property>
+                                <property name="vexpand">True</property>
+                                <child internal-child="accessible">
+                                  <object class="AtkObject" id="oldpreview-atkobject">
+                                    <property name="AtkObject::accessible-name" translatable="yes" context="colorpage|oldpreview-atkobject">Old Color</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -334,13 +378,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label7">B</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">B_custom</property>
+                        <property name="mnemonic_widget">B_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -349,13 +391,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label8">G</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">G_custom</property>
+                        <property name="mnemonic_widget">G_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -364,13 +404,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label9">R</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">R_custom</property>
+                        <property name="mnemonic_widget">R_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -378,64 +416,60 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label18">Hex</property>
+                        <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">hex_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="svxcorelo-HexColorControl" id="hex_preset">
+                      <object class="GtkEntry" id="hex_preset">
                         <property name="width_request">6</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="editable">False</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="R_preset-nospin">
+                      <object class="GtkEntry" id="R_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment2</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="G_preset-nospin">
+                      <object class="GtkEntry" id="G_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment2</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="B_preset-nospin">
+                      <object class="GtkEntry" id="B_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment2</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                   </object>
@@ -459,13 +493,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label10">_C</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">C_custom:0%</property>
+                        <property name="mnemonic_widget">C_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -474,13 +506,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label16">_K</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">K_custom:0%</property>
+                        <property name="mnemonic_widget">K_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -489,64 +519,59 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label17">_Y</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">Y_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="C_preset-nospin:0%">
+                      <object class="GtkEntry" id="C_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="M_preset-nospin:0%">
+                      <object class="GtkEntry" id="M_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="Y_preset-nospin:0%">
+                      <object class="GtkEntry" id="Y_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="K_preset-nospin:0%">
+                      <object class="GtkEntry" id="K_preset">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="editable">False</property>
+                        <property name="width_chars">3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -555,12 +580,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label15">_M</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">M_preset</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                   </object>
@@ -617,14 +641,31 @@
                     <property name="can_focus">False</property>
                     <property name="orientation">vertical</property>
                     <child>
-                      <object class="svxlo-SvxXRectPreview" id="newpreview">
+                      <object class="GtkScrolledWindow">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
-                        <child internal-child="accessible">
-                          <object class="AtkObject" id="newpreview-atkobject">
-                            <property name="AtkObject::accessible-name" translatable="yes" context="colorpage|newpreview-atkobject">New Color</property>
+                        <property name="hscrollbar_policy">never</property>
+                        <property name="vscrollbar_policy">never</property>
+                        <property name="shadow_type">in</property>
+                        <child>
+                          <object class="GtkViewport">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <child>
+                              <object class="GtkDrawingArea" id="newpreview">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="hexpand">True</property>
+                                <property name="vexpand">True</property>
+                                <child internal-child="accessible">
+                                  <object class="AtkObject" id="newpreview-atkobject">
+                                    <property name="AtkObject::accessible-name" translatable="yes" context="colorpage|newpreview-atkobject">New Color</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -654,28 +695,26 @@
                       <object class="GtkSpinButton" id="B_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="activates_default">True</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|B_custom">Blue</property>
-                        <property name="adjustment">adjustment2</property>
+                        <property name="adjustment">adjustment7</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
                       <object class="GtkSpinButton" id="R_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="activates_default">True</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|R_custom">Red</property>
                         <property name="adjustment">adjustment2</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -684,12 +723,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label4">_B</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">B_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -698,12 +736,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label3">_G</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">G_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -712,26 +749,24 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label2">_R</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">R_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
                       <object class="GtkSpinButton" id="G_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="activates_default">True</property>
                         <property name="primary_icon_tooltip_text" translatable="yes" context="colorpage|G_custom">Green</property>
-                        <property name="adjustment">adjustment2</property>
+                        <property name="adjustment">adjustment6</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -745,21 +780,19 @@
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="svxcorelo-HexColorControl" id="hex_custom">
+                      <object class="GtkEntry" id="hex_custom">
                         <property name="width_request">6</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="activates_default">True</property>
+                        <property name="overwrite_mode">True</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                   </object>
@@ -784,13 +817,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label11">_C</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">C_custom:0%</property>
+                        <property name="mnemonic_widget">C_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -799,12 +830,11 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label12">_M</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">M_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -813,39 +843,35 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label13">_K</property>
                         <property name="use_underline">True</property>
-                        <property name="mnemonic_widget">K_custom:0%</property>
+                        <property name="mnemonic_widget">K_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="C_custom:0%">
+                      <object class="GtkSpinButton" id="C_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="activates_default">True</property>
                         <property name="adjustment">adjustment1</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">0</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="K_custom:0%">
+                      <object class="GtkSpinButton" id="K_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="activates_default">True</property>
+                        <property name="adjustment">adjustment5</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">3</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
@@ -854,38 +880,35 @@
                         <property name="can_focus">False</property>
                         <property name="label" translatable="yes" context="colorpage|label14">_Y</property>
                         <property name="use_underline">True</property>
+                        <property name="mnemonic_widget">Y_custom</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="Y_custom:0%">
+                      <object class="GtkSpinButton" id="Y_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="activates_default">True</property>
+                        <property name="adjustment">adjustment4</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">2</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="M_custom:0%">
+                      <object class="GtkSpinButton" id="M_custom">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="adjustment">adjustment1</property>
+                        <property name="activates_default">True</property>
+                        <property name="adjustment">adjustment3</property>
                       </object>
                       <packing>
                         <property name="left_attach">1</property>
                         <property name="top_attach">1</property>
-                        <property name="width">1</property>
-                        <property name="height">1</property>
                       </packing>
                     </child>
                   </object>
@@ -904,6 +927,7 @@
                     <property name="valign">start</property>
                     <property name="image">image3</property>
                     <property name="image_position">right</property>
+                    <property name="always_show_image">True</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -937,10 +961,10 @@
     <widgets>
       <widget name="R_custom"/>
       <widget name="hex_custom"/>
-      <widget name="C_custom:0%"/>
-      <widget name="C_preset-nospin:0%"/>
+      <widget name="C_custom"/>
+      <widget name="C_preset"/>
       <widget name="hex_preset"/>
-      <widget name="R_preset-nospin"/>
+      <widget name="R_preset"/>
     </widgets>
   </object>
 </interface>

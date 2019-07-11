@@ -20,12 +20,16 @@
 #include <sal/config.h>
 
 #include <com/sun/star/lang/IllegalAccessException.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
+#include <com/sun/star/container/ElementExistException.hpp>
+#include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/sdb/XDatabaseRegistrations.hpp>
 
 #include <cppuhelper/basemutex.hxx>
 #include <comphelper/interfacecontainer2.hxx>
 #include <cppuhelper/implbase1.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <osl/diagnose.h>
 #include <unotools/pathoptions.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/confignode.hxx>

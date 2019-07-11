@@ -53,11 +53,32 @@ def ignoreRemoval(include, toAdd, absFileName, moduleRules):
         if include == k and v in toAdd:
             return True
 
+    # Avoid proposing to use libstdc++ internal headers.
+    bits = {
+        "exception": "bits/exception.h",
+        "memory": "bits/shared_ptr.h",
+        "functional": "bits/std_function.h",
+    }
+    for k, v in bits.items():
+        if include == k and v in toAdd:
+            return True
+
     # Follow boost documentation.
     if include == "boost/optional.hpp" and "boost/optional/optional.hpp" in toAdd:
         return True
     if include == "boost/intrusive_ptr.hpp" and "boost/smart_ptr/intrusive_ptr.hpp" in toAdd:
         return True
+
+    # Avoid .hxx to .h proposals in basic css/uno/* API
+    unoapi = {
+        "com/sun/star/uno/Any.hxx": "com/sun/star/uno/Any.h",
+        "com/sun/star/uno/Reference.hxx": "com/sun/star/uno/Reference.h",
+        "com/sun/star/uno/Sequence.hxx": "com/sun/star/uno/Sequence.h",
+        "com/sun/star/uno/Type.hxx": "com/sun/star/uno/Type.h"
+    }
+    for k, v in unoapi.items():
+        if include == k and v in toAdd:
+            return True
 
     # 3rd-party, non-self-contained headers.
     if include == "libepubgen/libepubgen.h" and "libepubgen/libepubgen-decls.h" in toAdd:
@@ -145,14 +166,17 @@ def processIWYUOutput(iwyuOutput, moduleRules):
                     toRemove.append("%s:%s: %s" % (currentFileName, lineno, include))
                 continue
 
-            match = re.match("- (.*);  // lines (.*)-.*", line)
+            match = re.match("- (.*;(?: })*)*  // lines (.*)-.*", line)
             if match:
                 fwdDecl = match.group(1)
+                if fwdDecl.endswith(";"):
+                    # Remove trailing semicolon.
+                    fwdDecl = fwdDecl[:-1]
                 lineno = match.group(2)
                 if not ignoreRemoval(fwdDecl, toAdd, currentFileName, moduleRules):
                     toRemove.append("%s:%s: %s" % (currentFileName, lineno, fwdDecl))
 
-    for remove in toRemove:
+    for remove in sorted(toRemove):
         print("ERROR: %s: remove not needed include / forward declaration" % remove)
     return len(toRemove)
 
@@ -165,9 +189,22 @@ def run_tool(task_queue, failed_files):
             p = subprocess.Popen(invocation, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             retcode = processIWYUOutput(p.communicate()[0].decode('utf-8').splitlines(), moduleRules)
             if retcode != 0:
-                print("ERROR: '" + invocation + "' found unused includes.")
+                print("ERROR: The following command found unused includes:\n" + invocation)
                 failed_files.append(invocation)
         task_queue.task_done()
+
+
+def isInUnoIncludeFile(path):
+    return path.startswith("include/com/") \
+            or path.startswith("include/cppu/") \
+            or path.startswith("include/cppuhelper/") \
+            or path.startswith("include/osl/") \
+            or path.startswith("include/rtl/") \
+            or path.startswith("include/sal/") \
+            or path.startswith("include/salhelper/") \
+            or path.startswith("include/systools/") \
+            or path.startswith("include/typelib/") \
+            or path.startswith("include/uno/")
 
 
 def tidy(compileCommands, paths):
@@ -182,6 +219,9 @@ def tidy(compileCommands, paths):
             t.start()
 
         for path in sorted(paths):
+            if isInUnoIncludeFile(path):
+                continue
+
             moduleName = path.split("/")[0]
 
             rulePath = os.path.join(moduleName, "IwyuFilter_" + moduleName + ".yaml")

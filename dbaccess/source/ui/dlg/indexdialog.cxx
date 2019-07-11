@@ -34,7 +34,7 @@
 #include <com/sun/star/sdb/SQLContext.hpp>
 #include <UITools.hxx>
 #include <svtools/imgdef.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <browserids.hxx>
 #include <connectivity/dbtools.hxx>
 #include <osl/diagnose.h>
@@ -50,18 +50,18 @@ namespace dbaui
     using namespace ::dbtools;
 
     // helper
-    bool operator ==(const OIndexField& _rLHS, const OIndexField& _rRHS)
+    static bool operator ==(const OIndexField& _rLHS, const OIndexField& _rRHS)
     {
         return  (_rLHS.sFieldName == _rRHS.sFieldName)
             &&  (_rLHS.bSortAscending == _rRHS.bSortAscending);
     }
 
-    bool operator !=(const OIndexField& _rLHS, const OIndexField& _rRHS)
+    static bool operator !=(const OIndexField& _rLHS, const OIndexField& _rRHS)
     {
         return !(_rLHS == _rRHS);
     }
 
-    bool operator ==(const IndexFields& _rLHS, const IndexFields& _rRHS)
+    static bool operator ==(const IndexFields& _rLHS, const IndexFields& _rRHS)
     {
         if (_rLHS.size() != _rRHS.size())
             return false;
@@ -77,7 +77,7 @@ namespace dbaui
         return true;
     }
 
-    bool operator !=(const IndexFields& _rLHS, const IndexFields& _rRHS)
+    static bool operator !=(const IndexFields& _rLHS, const IndexFields& _rRHS)
     {
         return !(_rLHS == _rRHS);
     }
@@ -163,7 +163,6 @@ namespace dbaui
                                     const Reference< XComponentContext >& _rxContext)
         :ModalDialog( _pParent, "IndexDesignDialog", "dbaccess/ui/indexdesigndialog.ui")
         ,m_xConnection(_rxConnection)
-        ,m_pIndexes(nullptr)
         ,m_pPreviousSelection(nullptr)
         ,m_bEditAgain(false)
         ,m_xContext(_rxContext)
@@ -215,14 +214,14 @@ namespace dbaui
 
         setToolBox(m_pActions);
 
-        m_pIndexes = new OIndexCollection();
+        m_pIndexes.reset(new OIndexCollection());
         try
         {
             m_pIndexes->attach(_rxIndexes);
         }
         catch(SQLException& e)
         {
-            ::dbaui::showError(SQLExceptionInfo(e),_pParent,_rxContext);
+            ::dbtools::showError(SQLExceptionInfo(e),VCLUnoHelper::GetInterface(_pParent),_rxContext);
         }
         catch(Exception&)
         {
@@ -307,7 +306,7 @@ namespace dbaui
     void DbaIndexDialog::dispose()
     {
         setToolBox(nullptr);
-        delete m_pIndexes;
+        m_pIndexes.reset();
         m_pActions.clear();
         m_pIndexList.clear();
         m_pIndexDetails.clear();
@@ -346,7 +345,7 @@ namespace dbaui
         updateToolbox();
 
         if (aExceptionInfo.isValid())
-            showError(aExceptionInfo, this, m_xContext);
+            showError(aExceptionInfo, VCLUnoHelper::GetInterface(this), m_xContext);
         else
         {
             m_pUnique->SaveValue();
@@ -388,7 +387,7 @@ namespace dbaui
         for (SvTreeListEntry* pAdjust = m_pIndexList->First(); pAdjust; pAdjust = m_pIndexList->Next(pAdjust))
         {
             Indexes::const_iterator aAfterInsertPos = m_pIndexes->find(m_pIndexList->GetEntryText(pAdjust));
-            OSL_ENSURE(aAfterInsertPos != m_pIndexes->end(), "DbaIndexDialog::OnNewIndex: problems with on of the entries!");
+            OSL_ENSURE(aAfterInsertPos != m_pIndexes->end(), "DbaIndexDialog::OnNewIndex: problems with one of the entries!");
             pAdjust->SetUserData(reinterpret_cast< void* >(sal_Int32(aAfterInsertPos - m_pIndexes->begin())));
         }
 
@@ -446,7 +445,7 @@ namespace dbaui
         catch(SQLException& e) { aExceptionInfo = SQLExceptionInfo(e); }
 
         if (aExceptionInfo.isValid())
-            showError(aExceptionInfo, this, m_xContext);
+            showError(aExceptionInfo, VCLUnoHelper::GetInterface(this), m_xContext);
         else if (bSuccess && _bRemoveFromCollection)
         {
             SvTreeList* pModel = m_pIndexList->GetModel();
@@ -460,7 +459,7 @@ namespace dbaui
             for (SvTreeListEntry* pAdjust = m_pIndexList->First(); pAdjust; pAdjust = m_pIndexList->Next(pAdjust))
             {
                 Indexes::const_iterator aAfterDropPos = m_pIndexes->find(m_pIndexList->GetEntryText(pAdjust));
-                OSL_ENSURE(aAfterDropPos != m_pIndexes->end(), "DbaIndexDialog::OnDropIndex: problems with on of the remaining entries!");
+                OSL_ENSURE(aAfterDropPos != m_pIndexes->end(), "DbaIndexDialog::OnDropIndex: problems with one of the remaining entries!");
                 pAdjust->SetUserData(reinterpret_cast< void* >(sal_Int32(aAfterDropPos - m_pIndexes->begin())));
             }
 
@@ -527,7 +526,7 @@ namespace dbaui
         catch(SQLException& e) { aExceptionInfo = SQLExceptionInfo(e); }
 
         if (aExceptionInfo.isValid())
-            showError(aExceptionInfo, this, m_xContext);
+            showError(aExceptionInfo, VCLUnoHelper::GetInterface(this), m_xContext);
         else
             m_pIndexList->SetEntryText(pSelected, aResetPos->sName);
 
@@ -678,7 +677,7 @@ namespace dbaui
     bool DbaIndexDialog::implCheckPlausibility(const Indexes::const_iterator& _rPos)
     {
         // need at least one field
-        if (0 == _rPos->aFields.size())
+        if (_rPos->aFields.empty())
         {
             std::unique_ptr<weld::MessageDialog> xError(Application::CreateMessageDialog(GetFrameWeld(),
                                                         VclMessageType::Warning, VclButtonsType::Ok,

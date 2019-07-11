@@ -20,16 +20,14 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_XCLIMPCHANGETRACK_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_XCLIMPCHANGETRACK_HXX
 
-#include <tools/datetime.hxx>
 #include "xiroot.hxx"
 #include "xistream.hxx"
 #include "excform.hxx"
-#include "imp_op.hxx"
 
 struct ScCellValue;
 class ScChangeAction;
 class ScChangeTrack;
-class XclImpChTrFmlConverter;
+class DateTime;
 
 struct XclImpChTrRecHeader
 {
@@ -55,8 +53,8 @@ private:
     OUString                    sOldUsername;
 
     std::unique_ptr<ScChangeTrack> pChangeTrack;
-    tools::SvRef<SotStorageStream>          xInStrm;        // input stream
-    XclImpStream*               pStrm;          // stream import class
+    tools::SvRef<SotStorageStream> xInStrm;        // input stream
+    std::unique_ptr<XclImpStream>  pStrm;          // stream import class
     sal_uInt16                  nTabIdCount;
     bool                        bGlobExit;      // global exit loop
 
@@ -80,7 +78,7 @@ private:
     bool                        CheckRecord( sal_uInt16 nOpCode );
 
     void                        ReadFormula(
-                                    ScTokenArray*& rpTokenArray,
+                                    std::unique_ptr<ScTokenArray>& rpTokenArray,
                                     const ScAddress& rPosition );
     void ReadCell( ScCellValue& rCell, sal_uInt32& rFormat, sal_uInt16 nFlags, const ScAddress& rPosition );
 
@@ -102,7 +100,7 @@ public:
 
                                 // reads extended 3D ref info following the formulas, returns sc tab nums
                                 // ( called by XclImpChTrFmlConverter::Read3DTabReference() )
-    bool                        Read3DTabRefInfo( SCTAB& rFirstTab, SCTAB& rLastTab, ExcelToSc8::ExternalTabInfo& rExtInfo );
+    void                        Read3DTabRefInfo( SCTAB& rFirstTab, SCTAB& rLastTab, ExcelToSc8::ExternalTabInfo& rExtInfo );
 
     void                        Apply();
 };

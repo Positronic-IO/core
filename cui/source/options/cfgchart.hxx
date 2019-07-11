@@ -30,14 +30,8 @@ class SvxChartColorTable
 {
 private:
     std::vector< XColorEntry >     m_aColorEntries;
-    int                              nNextElementNumber;
-    OUString                         sDefaultNamePrefix;
-    OUString                         sDefaultNamePostfix;
 
 public:
-    SvxChartColorTable();
-    explicit SvxChartColorTable( const SvxChartColorTable & _rSource );
-
     // accessors
     size_t size() const;
     const XColorEntry & operator[]( size_t _nIndex ) const;
@@ -49,7 +43,7 @@ public:
     void remove( size_t _nIndex );
     void replace( size_t _nIndex, const XColorEntry & _rEntry );
     void useDefault();
-    OUString getDefaultName(size_t _nIndex);
+    static OUString getDefaultName(size_t _nIndex);
 
     // comparison
     bool operator==( const SvxChartColorTable & _rOther ) const;

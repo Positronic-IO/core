@@ -113,7 +113,6 @@ void DlgEdFunc::ForceScroll( const Point& rPos )
 DlgEdFunc::DlgEdFunc( OReportSection* _pParent )
     : m_pParent(_pParent)
     , m_rView(_pParent->getSectionView())
-    , m_xOverlappingObj(nullptr)
     , m_pOverlappingObj(nullptr)
     , m_nOverlappedControlColor(0)
     , m_nOldColor(0)
@@ -131,7 +130,7 @@ void DlgEdFunc::setOverlappedControlColor(Color _nColor)
     m_nOverlappedControlColor = _nColor;
 }
 
-Color lcl_setColorOfObject(const uno::Reference< uno::XInterface >& _xObj, Color _nColorTRGB)
+static Color lcl_setColorOfObject(const uno::Reference< uno::XInterface >& _xObj, Color _nColorTRGB)
 {
     Color nBackColor;
     try
@@ -420,7 +419,7 @@ void DlgEdFunc::deactivateOle(bool _bSelect)
     for(sal_uLong i = 0 ; i< nCount;++i)
     {
         SdrOle2Obj* pObj = rObjCache[i];
-        if ( m_pParent->getPage() == pObj->GetPage() )
+        if ( m_pParent->getPage() == pObj->getSdrPageFromSdrObject() )
         {
             uno::Reference< embed::XEmbeddedObject > xObj = pObj->GetObjRef();
             if ( xObj.is() && xObj->getCurrentState() == embed::EmbedStates::UI_ACTIVE )
@@ -447,7 +446,7 @@ void DlgEdFunc::colorizeOverlappedObject(SdrObject* _pOverlappedObj)
     OObjectBase* pObj = dynamic_cast<OObjectBase*>(_pOverlappedObj);
     if ( pObj )
     {
-        uno::Reference<report::XReportComponent> xComponent = pObj->getReportComponent();
+        const uno::Reference<report::XReportComponent>& xComponent = pObj->getReportComponent();
         if (xComponent.is() && xComponent != m_xOverlappingObj)
         {
             OReportModel& rRptModel(static_cast< OReportModel& >(_pOverlappedObj->getSdrModelFromSdrObject()));
@@ -499,7 +498,7 @@ void DlgEdFunc::checkMovementAllowed(const MouseEvent& rMEvt)
     {
         if ( isRectangleHit(rMEvt) )
         {
-            // there is an other component under use, break action
+            // there is another component under use, break action
             m_pParent->getSectionWindow()->getViewsWindow()->BrkAction();
         }
         // object was dragged
@@ -567,7 +566,7 @@ bool DlgEdFunc::isRectangleHit(const MouseEvent& rMEvt)
         const SdrDragStat& rDragStat = m_rView.GetDragStat();
         if (rDragStat.GetDragMethod() != nullptr)
         {
-            SdrObjListIter aIter(*m_pParent->getPage(),SdrIterMode::DeepNoGroups);
+            SdrObjListIter aIter(m_pParent->getPage(),SdrIterMode::DeepNoGroups);
             SdrObject* pObjIter = nullptr;
             // loop through all marked objects and check if there new rect overlapps an old one.
             while( (pObjIter = aIter.Next()) != nullptr && !bIsSetPoint)

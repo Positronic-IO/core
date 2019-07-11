@@ -419,7 +419,6 @@ void WriterXmlOptimizer::visit( PolyPolyElement& elem, const std::list< std::uni
 #else
         elem.Parent->Children.erase(next_it);
 #endif
-        delete pNext;
     }
 }
 
@@ -492,7 +491,7 @@ void WriterXmlOptimizer::visit( PageElement& elem, const std::list< std::unique_
 
     // FIXME: until hyperlinks and font effects are adjusted for
     // geometrical search handle them before sorting
-    m_rProcessor.sortElements( &elem );
+    PDFIProcessor::sortElements( &elem );
 
     // find paragraphs in text
     ParagraphElement* pCurPara = nullptr;
@@ -812,14 +811,13 @@ void WriterXmlOptimizer::optimizeTextElements(Element& rParent)
                 {
                     pCur->updateGeometryWith( pNext );
                     // append text to current element
-                    pCur->Text.append( pNext->Text.getStr(), pNext->Text.getLength() );
+                    pCur->Text.append( pNext->Text );
                     // append eventual children to current element
                     // and clear children (else the children just
                     // appended to pCur would be destroyed)
                     pCur->Children.splice( pCur->Children.end(), pNext->Children );
                     // get rid of the now useless element
                     rParent.Children.erase( next );
-                    delete pNext;
                     bConcat = true;
                 }
             }

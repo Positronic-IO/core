@@ -267,7 +267,6 @@ class SfxStringItem;
 #define SID_OBJECT_ALIGN_UP                             ( SID_SVX_START + 134 )
 #define SID_OBJECT_ALIGN_MIDDLE                         ( SID_SVX_START + 135 )
 #define SID_OBJECT_ALIGN_DOWN                           ( SID_SVX_START + 136 )
-#define SID_INSERT_DIAGRAM_FROM_FILE                    ( SID_SVX_START + 139 )
 #define SID_INSERT_DIAGRAM                              ( SID_SVX_START + 140 )
 #define SID_INSERT_TABLE                                ( SID_SVX_START + 141 )
 #define SID_ATTRIBUTES_AREA                             ( SID_SVX_START + 142 )
@@ -469,6 +468,7 @@ class SfxStringItem;
 #define SID_ATTR_3D_INTERN                              ( SID_SVX_START + 422 )
 #define SID_PSZ_FUNCTION                                ( SID_SVX_START + 423 )
 
+// CAUTION! <424 > used by sfxids (!)
 #define SID_TABLE_INSERT_COL_DLG                        ( SID_SVX_START + 426 )
 #define SID_TABLE_INSERT_ROW_DLG                        ( SID_SVX_START + 427 )
 #define SID_TABLE_PARAM_INSERT_AFTER                    ( SID_SVX_START + 428 )
@@ -816,7 +816,7 @@ class SfxStringItem;
 #define SID_FLAG_TYPE                                   ( SID_SVX_START + 1034 )
 #define SID_SWMODE_TYPE                                 ( SID_SVX_START + 1035 )
 #define SID_DISABLE_CTL                                 ( SID_SVX_START + 1036 )
-#define SID_LINK_TYPE                                   ( SID_SVX_START + 1037 )
+//FREE
 #define SID_ENUM_PAGE_MODE                              ( SID_SVX_START + 1038 )
 #define SID_PAPER_START                                 ( SID_SVX_START + 1039 )
 #define SID_PAPER_END                                   ( SID_SVX_START + 1040 )
@@ -967,10 +967,16 @@ class SfxStringItem;
 #define SID_INSERT_SIGNATURELINE                        ( SID_SVX_START + 1173 )
 #define SID_EDIT_SIGNATURELINE                          ( SID_SVX_START + 1174 )
 #define SID_SIGN_SIGNATURELINE                          ( SID_SVX_START + 1175 )
+#define SID_MEASURE_DLG                                 ( SID_SVX_START + 1176 )
+
+#define SID_TABLE_MINIMAL_COLUMN_WIDTH                  ( SID_SVX_START + 1185 )
+#define SID_TABLE_MINIMAL_ROW_HEIGHT                    ( SID_SVX_START + 1186 )
+#define SID_TABLE_OPTIMAL_COLUMN_WIDTH                  ( SID_SVX_START + 1187 )
+#define SID_TABLE_OPTIMAL_ROW_HEIGHT                    ( SID_SVX_START + 1188 )
 
 
 // IMPORTANT NOTE: adjust SID_SVX_FIRSTFREE, when adding new slot id
-#define SID_SVX_FIRSTFREE                               ( SID_SIGN_SIGNATURELINE + 1 )
+#define SID_SVX_FIRSTFREE                               ( SID_TABLE_OPTIMAL_ROW_HEIGHT + 1 )
 
 // Overflow check for slot IDs
 #if SID_SVX_FIRSTFREE > SID_SVX_END

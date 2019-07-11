@@ -34,8 +34,6 @@ namespace vcl {
 class VCL_DLLPUBLIC IconThemeScanner
 {
 public:
-    ~IconThemeScanner();
-
     /** Factory method to create the object.
      * Provide a path to search for IconThemes.
      */
@@ -69,7 +67,7 @@ private:
      * @return
      * There are several cases when this method will fail:
      * - The directory does not exist
-     * - There are no files which which match the pattern images_xxx.zip
+     * - There are no files which match the pattern images_xxx.zip
      */
     void ScanDirectoryForIconThemes(const OUString &path);
 

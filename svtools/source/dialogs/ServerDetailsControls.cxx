@@ -24,6 +24,7 @@
 #include <svtools/PlaceEditDialog.hxx>
 #include <svtools/ServerDetailsControls.hxx>
 #include <vcl/lstbox.hxx>
+#include <sal/log.hxx>
 
 #include <config_oauth2.h>
 
@@ -41,7 +42,7 @@ DetailsContainer::DetailsContainer(PlaceEditDialog* pDialog)
 }
 
 //format without thousand separator
-IMPL_LINK(DetailsContainer, FormatPortHdl, weld::SpinButton&, rSpinButton, void)
+IMPL_STATIC_LINK(DetailsContainer, FormatPortHdl, weld::SpinButton&, rSpinButton, void)
 {
     rSpinButton.set_text(OUString::number(rSpinButton.get_value()));
 }
@@ -247,7 +248,8 @@ bool SmbDetailsContainer::setUrl( const INetURLObject& rUrl )
             sPath = sFullPath.copy( nPos );
         }
 
-        m_pDialog->m_xEDHost->set_text( rUrl.GetHost( ) );
+        m_sHost = rUrl.GetHost( );
+        m_pDialog->m_xEDHost->set_text( m_sHost );
         m_pDialog->m_xEDShare->set_text( sShare );
         m_pDialog->m_xEDRoot->set_text( sPath );
     }
@@ -266,6 +268,9 @@ void SmbDetailsContainer::show( bool bShow )
     m_pDialog->m_xHostBox->show( bShow );
     m_pDialog->m_xEDPort->set_sensitive( !bShow );
     m_pDialog->m_xFTPort->set_sensitive( !bShow );
+
+    if ( bShow )
+        m_pDialog->m_xEDHost->set_text( m_sHost );
 }
 
 CmisDetailsContainer::CmisDetailsContainer(PlaceEditDialog* pParentDialog, OUString const & sBinding) :
@@ -441,12 +446,11 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, weld::Button&, void  )
     catch( const Exception& )
     {}
 
-    // Get the Content
-    ::ucbhelper::Content aCnt( sUrl, m_xCmdEnv, comphelper::getProcessComponentContext() );
-    Sequence<OUString> aProps { "Title" };
-
     try
     {
+        // Get the Content
+        ::ucbhelper::Content aCnt( sUrl, m_xCmdEnv, comphelper::getProcessComponentContext() );
+        Sequence<OUString> aProps { "Title" };
         Reference< XResultSet > xResultSet( aCnt.createCursor( aProps ), UNO_QUERY_THROW );
         Reference< XContentAccess > xAccess( xResultSet, UNO_QUERY_THROW );
         while ( xResultSet->next() )
@@ -462,8 +466,9 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, weld::Button&, void  )
             m_pDialog->m_xLBRepository->append_text(sName);
         }
     }
-    catch ( const Exception& )
+    catch ( const Exception& e)
     {
+        SAL_WARN( "svtools.dialogs", "RefreshReposHdl exception=" << e );
     }
 
     // Auto-select the first one
@@ -482,7 +487,7 @@ IMPL_LINK_NOARG( CmisDetailsContainer, RefreshReposHdl, weld::Button&, void  )
     {}
 }
 
-IMPL_LINK_NOARG( CmisDetailsContainer, SelectRepoHdl, weld::ComboBoxText&, void )
+IMPL_LINK_NOARG( CmisDetailsContainer, SelectRepoHdl, weld::ComboBox&, void )
 {
     selectRepository( );
 }

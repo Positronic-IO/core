@@ -411,16 +411,13 @@ enum MSOPATHTYPE
 #define ESCHER_Prop_shadowOffsetX               517  /*  LONG              Offset shadow             */
 #define ESCHER_Prop_shadowOffsetY               518  /*  LONG              Offset shadow             */
 #define ESCHER_Prop_fshadowObscured             575  /*  bool              Excel5-style shadow       */
-// PerspectiveStyle
 // 3D Object
 #define ESCHER_Prop_fc3DLightFace               703  /*  bool                                                                                                                             */
-// 3D Style
 // Shape
 #define ESCHER_Prop_hspMaster                   769  /*  MSOHSP          master shape                                        */
 #define ESCHER_Prop_cxstyle                     771  /*  MSOCXSTYLE      Type of connector                                   */
 #define ESCHER_Prop_bWMode                      772  /*  ESCHERwMode     Settings for modifications to                       */
 #define ESCHER_Prop_fBackground                 831  /*  bool            If sal_True, this is the background shape.              */
-// Callout
 // GroupShape
 #define ESCHER_Prop_wzName                      896  /*  WCHAR*          Shape Name (present only if explicitly set)                                                            */
 #define ESCHER_Prop_wzDescription               897  /*  WCHAR*          alternate text                                                                                         */
@@ -656,8 +653,7 @@ class SdrObjCustomShape;
 
 struct EscherPropSortStruct
 {
-    sal_uInt8*  pBuf;
-    sal_uInt32  nPropSize;
+    std::vector<sal_uInt8>    nProp;
     sal_uInt32  nPropValue;
     sal_uInt16  nPropId;
 };
@@ -703,21 +699,26 @@ public:
                                                     // GraphicObjects are saved to PowerPoint
     ~EscherPropertyContainer();
 
-    void        AddOpt( sal_uInt16 nPropertyID, const OUString& rString );
+    void AddOpt(
+        sal_uInt16 nPropID,
+        bool bBlib,
+        sal_uInt32 nSizeReduction,
+        SvMemoryStream& rStream);
 
-    void        AddOpt(
-                    sal_uInt16 nPropertyID,
-                    sal_uInt32 nPropValue,
-                    bool bBlib = false
-                );
+    void AddOpt(
+        sal_uInt16 nPropertyID,
+        const OUString& rString);
 
-    void        AddOpt(
-                    sal_uInt16 nPropertyID,
-                    bool bBlib,
-                    sal_uInt32 nPropValue,
-                    sal_uInt8* pProp,
-                    sal_uInt32 nPropSize
-                );
+    void AddOpt(
+        sal_uInt16 nPropertyID,
+        sal_uInt32 nPropValue,
+        bool bBlib = false);
+
+    void AddOpt(
+        sal_uInt16 nPropertyID,
+        bool bBlib,
+        sal_uInt32 nPropValue,
+        const std::vector<sal_uInt8>& rProp);
 
     bool        GetOpt( sal_uInt16 nPropertyID, sal_uInt32& rPropValue ) const;
 
@@ -814,7 +815,7 @@ public:
                 );
 
                 // Because shadow properties depends to the line and fillstyle, the CreateShadowProperties method should be called at last.
-                // It activ only when at least a FillStyle or LineStyle is set.
+                // It's active only when at least a FillStyle or LineStyle is set.
     void        CreateShadowProperties(
                     const css::uno::Reference< css::beans::XPropertySet > &
                 );

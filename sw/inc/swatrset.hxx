@@ -18,7 +18,7 @@
  */
 #ifndef INCLUDED_SW_INC_SWATRSET_HXX
 #define INCLUDED_SW_INC_SWATRSET_HXX
-#include <tools/mempool.hxx>
+
 #include <svl/itemset.hxx>
 #include <svl/itempool.hxx>
 #include "swdllapi.h"
@@ -141,7 +141,7 @@ private:
     friend void InitCore();            // For creating/deleting of version maps.
     friend void FinitCore();
 
-    SwDoc* m_pDoc;
+    SwDoc* const m_pDoc;
 
 public:
     SwAttrPool( SwDoc* pDoc );
@@ -313,8 +313,6 @@ public:
     inline  const SwTableBoxNumFormat       &GetTableBoxNumFormat( bool = true ) const;
     inline  const SwTableBoxFormula     &GetTableBoxFormula( bool = true ) const;
     inline  const SwTableBoxValue           &GetTableBoxValue( bool = true ) const;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwAttrSet)
 };
 
 //Helper for filters to find true lineheight of a font

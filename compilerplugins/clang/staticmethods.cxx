@@ -18,12 +18,12 @@
 namespace {
 
 class StaticMethods:
-    public RecursiveASTVisitor<StaticMethods>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<StaticMethods>
 {
 private:
     bool bVisitedThis;
 public:
-    explicit StaticMethods(loplugin::InstantiationData const & data): Plugin(data), bVisitedThis(false) {}
+    explicit StaticMethods(loplugin::InstantiationData const & data): FilteringPlugin(data), bVisitedThis(false) {}
 
     void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -60,7 +60,7 @@ bool isDerivedFromTestFixture(const CXXRecordDecl *decl) {
 StringRef StaticMethods::getFilename(SourceLocation loc)
 {
     SourceLocation spellingLocation = compiler.getSourceManager().getSpellingLoc(loc);
-    return compiler.getSourceManager().getFilename(spellingLocation);
+    return getFileNameOfSpellingLoc(spellingLocation);
 }
 
 bool startsWith(const std::string& rStr, const char* pSubStr) {
@@ -83,20 +83,19 @@ bool StaticMethods::TraverseCXXMethodDecl(const CXXMethodDecl * pCXXMethodDecl) 
     if (isInUnoIncludeFile(pCXXMethodDecl)) {
         return true;
     }
-    if ( pCXXMethodDecl != pCXXMethodDecl->getCanonicalDecl() ) {
+    if (pCXXMethodDecl->getTemplateSpecializationKind() == TSK_ExplicitSpecialization)
         return true;
-    }
 
     // the CppUnit stuff uses macros and methods that can't be changed
     if (isDerivedFromTestFixture(pCXXMethodDecl->getParent())) {
         return true;
     }
     // don't mess with the backwards compatibility stuff
-    if (loplugin::isSamePathname(getFilename(pCXXMethodDecl->getLocStart()), SRCDIR "/cppuhelper/source/compat.cxx")) {
+    if (loplugin::isSamePathname(getFilename(compat::getBeginLoc(pCXXMethodDecl)), SRCDIR "/cppuhelper/source/compat.cxx")) {
         return true;
     }
     // the DDE has a dummy implementation on Linux and a real one on Windows
-    auto aFilename = getFilename(pCXXMethodDecl->getCanonicalDecl()->getLocStart());
+    auto aFilename = getFilename(compat::getBeginLoc(pCXXMethodDecl->getCanonicalDecl()));
     if (loplugin::isSamePathname(aFilename, SRCDIR "/include/svl/svdde.hxx")) {
         return true;
     }

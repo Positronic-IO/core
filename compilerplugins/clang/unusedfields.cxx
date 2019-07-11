@@ -135,11 +135,11 @@ public:
 };
 
 class UnusedFields:
-    public RecursiveASTVisitor<UnusedFields>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<UnusedFields>
 {
 public:
     explicit UnusedFields(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override;
 
@@ -159,9 +159,10 @@ public:
 private:
     MyFieldInfo niceName(const FieldDecl*);
     void checkTouchedFromOutside(const FieldDecl* fieldDecl, const Expr* memberExpr);
-    void checkWriteOnly(const FieldDecl* fieldDecl, const Expr* memberExpr);
-    void checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberExpr);
+    void checkIfReadFrom(const FieldDecl* fieldDecl, const Expr* memberExpr);
+    void checkIfWrittenTo(const FieldDecl* fieldDecl, const Expr* memberExpr);
     bool isSomeKindOfZero(const Expr* arg);
+    bool checkForWriteWhenUsingCollectionType(const CXXMethodDecl * calleeMethodDecl);
     bool IsPassedByNonConst(const FieldDecl* fieldDecl, const Stmt * child, CallerWrapper callExpr,
                                         CalleeWrapper calleeFunctionDecl);
     llvm::Optional<CalleeWrapper> getCallee(CallExpr const *);
@@ -206,13 +207,13 @@ void UnusedFields::run()
             report(
                 DiagnosticsEngine::Warning,
                 "read %0",
-                s.parentRecord->getLocStart())
+                compat::getBeginLoc(s.parentRecord))
                 << s.fieldName;
         for (const MyFieldInfo & s : writeToSet)
             report(
                 DiagnosticsEngine::Warning,
                 "write %0",
-                s.parentRecord->getLocStart())
+                compat::getBeginLoc(s.parentRecord))
                 << s.fieldName;
     }
 }
@@ -329,8 +330,8 @@ bool UnusedFields::isSomeKindOfZero(const Expr* arg)
     // Get the expression contents.
     // This helps us find params which are always initialised with something like "OUString()".
     SourceManager& SM = compiler.getSourceManager();
-    SourceLocation startLoc = arg->getLocStart();
-    SourceLocation endLoc = arg->getLocEnd();
+    SourceLocation startLoc = compat::getBeginLoc(arg);
+    SourceLocation endLoc = compat::getEndLoc(arg);
     const char *p1 = SM.getCharacterData( startLoc );
     const char *p2 = SM.getCharacterData( endLoc );
     if (!p1 || !p2 || (p2 - p1) < 0 || (p2 - p1) > 40) {
@@ -390,7 +391,12 @@ bool UnusedFields::TraverseCXXMethodDecl(CXXMethodDecl* cxxMethodDecl)
     {
         if (cxxMethodDecl->isCopyAssignmentOperator()
             || cxxMethodDecl->isMoveAssignmentOperator()
-            || (cxxMethodDecl->getIdentifier() && cxxMethodDecl->getName() == "Clone"))
+            || (cxxMethodDecl->getIdentifier() && (cxxMethodDecl->getName().startswith("Clone") || cxxMethodDecl->getName().startswith("clone"))))
+            insideMoveOrCopyOrCloneDeclParent = cxxMethodDecl->getParent();
+        // these are similar in that they tend to simply enumerate all the fields of an object without putting
+        // them to some useful purpose
+        auto op = cxxMethodDecl->getOverloadedOperator();
+        if (op == OO_EqualEqual || op == OO_ExclaimEqual)
             insideMoveOrCopyOrCloneDeclParent = cxxMethodDecl->getParent();
     }
     insideFunctionDecl = cxxMethodDecl;
@@ -404,19 +410,29 @@ bool UnusedFields::TraverseFunctionDecl(FunctionDecl* functionDecl)
 {
     auto copy1 = insideStreamOutputOperator;
     auto copy2 = insideFunctionDecl;
+    auto copy3 = insideMoveOrCopyOrCloneDeclParent;
     if (functionDecl->getLocation().isValid() && !ignoreLocation(functionDecl) && functionDecl->isThisDeclarationADefinition())
     {
-        if (functionDecl->getOverloadedOperator() == OO_LessLess
+        auto op = functionDecl->getOverloadedOperator();
+        if (op == OO_LessLess
             && functionDecl->getNumParams() == 2)
         {
             QualType qt = functionDecl->getParamDecl(1)->getType();
             insideStreamOutputOperator = qt.getNonReferenceType().getUnqualifiedType()->getAsCXXRecordDecl();
+        }
+        // these are similar in that they tend to simply enumerate all the fields of an object without putting
+        // them to some useful purpose
+        if (op == OO_EqualEqual || op == OO_ExclaimEqual)
+        {
+            QualType qt = functionDecl->getParamDecl(1)->getType();
+            insideMoveOrCopyOrCloneDeclParent = qt.getNonReferenceType().getUnqualifiedType()->getAsCXXRecordDecl();
         }
     }
     insideFunctionDecl = functionDecl;
     bool ret = RecursiveASTVisitor::TraverseFunctionDecl(functionDecl);
     insideStreamOutputOperator = copy1;
     insideFunctionDecl = copy2;
+    insideMoveOrCopyOrCloneDeclParent = copy3;
     return ret;
 }
 
@@ -453,14 +469,14 @@ bool UnusedFields::VisitMemberExpr( const MemberExpr* memberExpr )
 
     checkTouchedFromOutside(fieldDecl, memberExpr);
 
-    checkWriteOnly(fieldDecl, memberExpr);
+    checkIfReadFrom(fieldDecl, memberExpr);
 
-    checkReadOnly(fieldDecl, memberExpr);
+    checkIfWrittenTo(fieldDecl, memberExpr);
 
     return true;
 }
 
-void UnusedFields::checkWriteOnly(const FieldDecl* fieldDecl, const Expr* memberExpr)
+void UnusedFields::checkIfReadFrom(const FieldDecl* fieldDecl, const Expr* memberExpr)
 {
     if (insideMoveOrCopyOrCloneDeclParent || insideStreamOutputOperator)
     {
@@ -524,13 +540,16 @@ void UnusedFields::checkWriteOnly(const FieldDecl* fieldDecl, const Expr* member
             }
             else if (op == UO_AddrOf || op == UO_Deref
                 || op == UO_Plus || op == UO_Minus
-                || op == UO_Not || op == UO_LNot
-                || op == UO_PreInc || op == UO_PostInc
-                || op == UO_PreDec || op == UO_PostDec)
+                || op == UO_Not || op == UO_LNot)
             {
                 bPotentiallyReadFrom = true;
                 break;
             }
+            /* The following are technically reads, but from a code-sense they're more of a write/modify, so
+                ignore them to find interesting fields that only modified, not usefully read:
+                UO_PreInc / UO_PostInc / UO_PreDec / UO_PostDec
+                But we still walk up in case the result of the expression is used in a read sense.
+            */
             walkupUp();
         }
         else if (auto caseStmt = dyn_cast<CaseStmt>(parent))
@@ -638,12 +657,12 @@ void UnusedFields::checkWriteOnly(const FieldDecl* fieldDecl, const Expr* member
         report(
              DiagnosticsEngine::Warning,
              "oh dear, what can the matter be?",
-              memberExpr->getLocStart())
+              compat::getBeginLoc(memberExpr))
               << memberExpr->getSourceRange();
         report(
              DiagnosticsEngine::Note,
              "parent over here",
-              parent->getLocStart())
+              compat::getBeginLoc(parent))
               << parent->getSourceRange();
         parent->dump();
         memberExpr->dump();
@@ -651,17 +670,21 @@ void UnusedFields::checkWriteOnly(const FieldDecl* fieldDecl, const Expr* member
 
     MyFieldInfo fieldInfo = niceName(fieldDecl);
     if (bPotentiallyReadFrom)
+    {
         readFromSet.insert(fieldInfo);
+    }
 }
 
-void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberExpr)
+void UnusedFields::checkIfWrittenTo(const FieldDecl* fieldDecl, const Expr* memberExpr)
 {
     if (insideMoveOrCopyOrCloneDeclParent)
     {
         RecordDecl const * cxxRecordDecl1 = fieldDecl->getParent();
         // we don't care about writes to a field when inside the copy/move constructor/operator= for that field
         if (cxxRecordDecl1 && (cxxRecordDecl1 == insideMoveOrCopyOrCloneDeclParent))
+        {
             return;
+        }
     }
 
     // if we're inside a block that looks like
@@ -737,10 +760,10 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
             {
                 // if calling a non-const operator on the field
                 auto calleeMethodDecl = callee->getAsCXXMethodDecl();
-                if (calleeMethodDecl
-                    && operatorCallExpr->getArg(0) == child && !calleeMethodDecl->isConst())
+                if (calleeMethodDecl && operatorCallExpr->getArg(0) == child)
                 {
-                    bPotentiallyWrittenTo = true;
+                    if (!calleeMethodDecl->isConst())
+                        bPotentiallyWrittenTo = checkForWriteWhenUsingCollectionType(calleeMethodDecl);
                 }
                 else if (IsPassedByNonConst(fieldDecl, child, operatorCallExpr, *callee))
                 {
@@ -761,13 +784,13 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
                 if (tmp->isBoundMemberFunction(compiler.getASTContext())) {
                     tmp = dyn_cast<MemberExpr>(tmp)->getBase();
                 }
-                if (cxxMemberCallExpr->getImplicitObjectArgument() == tmp
-                     && !calleeMethodDecl->isConst())
+                if (cxxMemberCallExpr->getImplicitObjectArgument() == tmp)
                 {
-                    bPotentiallyWrittenTo = true;
+                    if (!calleeMethodDecl->isConst())
+                        bPotentiallyWrittenTo = checkForWriteWhenUsingCollectionType(calleeMethodDecl);
                     break;
                 }
-                if (IsPassedByNonConst(fieldDecl, child, cxxMemberCallExpr, CalleeWrapper(calleeMethodDecl)))
+                else if (IsPassedByNonConst(fieldDecl, child, cxxMemberCallExpr, CalleeWrapper(calleeMethodDecl)))
                     bPotentiallyWrittenTo = true;
             }
             else
@@ -853,7 +876,7 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
         report(
              DiagnosticsEngine::Warning,
              "oh dear, what can the matter be? writtenTo=%0",
-              memberExpr->getLocStart())
+              compat::getBeginLoc(memberExpr))
               << bPotentiallyWrittenTo
               << memberExpr->getSourceRange();
         if (parent)
@@ -861,7 +884,7 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
             report(
                  DiagnosticsEngine::Note,
                  "parent over here",
-                  parent->getLocStart())
+                  compat::getBeginLoc(parent))
                   << parent->getSourceRange();
             parent->dump();
         }
@@ -871,7 +894,74 @@ void UnusedFields::checkReadOnly(const FieldDecl* fieldDecl, const Expr* memberE
 
     MyFieldInfo fieldInfo = niceName(fieldDecl);
     if (bPotentiallyWrittenTo)
+    {
         writeToSet.insert(fieldInfo);
+    }
+}
+
+// return true if this not a collection type, or if it is a collection type, and we might be writing to it
+bool UnusedFields::checkForWriteWhenUsingCollectionType(const CXXMethodDecl * calleeMethodDecl)
+{
+    auto const tc = loplugin::TypeCheck(calleeMethodDecl->getParent());
+    bool listLike = false, setLike = false, mapLike = false, cssSequence = false;
+    if (tc.Class("deque").StdNamespace()
+        || tc.Class("list").StdNamespace()
+        || tc.Class("queue").StdNamespace()
+        || tc.Class("vector").StdNamespace())
+    {
+        listLike = true;
+    }
+    else if (tc.Class("set").StdNamespace()
+        || tc.Class("unordered_set").StdNamespace())
+    {
+        setLike = true;
+    }
+    else if (tc.Class("map").StdNamespace()
+        || tc.Class("unordered_map").StdNamespace())
+    {
+        mapLike = true;
+    }
+    else if (tc.Class("Sequence").Namespace("uno").Namespace("star").Namespace("sun").Namespace("com").GlobalNamespace())
+    {
+        cssSequence = true;
+    }
+    else
+        return true;
+
+    if (calleeMethodDecl->isOverloadedOperator())
+    {
+        auto oo = calleeMethodDecl->getOverloadedOperator();
+        if (oo == OO_Equal)
+            return true;
+        // This is operator[]. We only care about things that add elements to the collection.
+        // if nothing modifies the size of the collection, then nothing useful
+        // is stored in it.
+        if (listLike)
+            return false;
+        return true;
+    }
+
+    auto name = calleeMethodDecl->getName();
+    if (listLike || setLike || mapLike)
+    {
+        if (name == "reserve" || name == "shrink_to_fit" || name == "clear"
+            || name == "erase" || name == "pop_back" || name == "pop_front"
+            || name == "front" || name == "back" || name == "data"
+            || name == "remove" || name == "remove_if"
+            || name == "unique" || name == "sort"
+            || name == "begin" || name == "end"
+            || name == "rbegin" || name == "rend"
+            || name == "at" || name == "find" || name == "equal_range"
+            || name == "lower_bound" || name == "upper_bound")
+            return false;
+    }
+    if (cssSequence)
+    {
+        if (name == "getArray" || name == "begin" || name == "end")
+            return false;
+    }
+
+    return true;
 }
 
 bool UnusedFields::IsPassedByNonConst(const FieldDecl* fieldDecl, const Stmt * child, CallerWrapper callExpr,

@@ -109,7 +109,7 @@ public:
 void Test::testCondition() {
     osl::Mutex mutex;
     std::unique_ptr< salhelper::Condition > p(new DerivedCondition(mutex));
-    CPPUNIT_ASSERT(typeid (*p.get()) != typeid (salhelper::Condition));
+    CPPUNIT_ASSERT(typeid(*p) != typeid(salhelper::Condition));
     CPPUNIT_ASSERT(bool(typeid (p.get()) == typeid (salhelper::Condition *)));
     CPPUNIT_ASSERT(bool(
         typeid (const_cast< salhelper::Condition const * >(p.get()))
@@ -220,15 +220,14 @@ void Test::testSimpleReferenceObject() {
 
 void Test::testDerivedCondition() {
     osl::Mutex mutex;
+    // Next line tests that new doesn't throw
     std::unique_ptr< salhelper::Condition > p(new DerivedCondition(mutex));
-    CPPUNIT_ASSERT(dynamic_cast< DerivedCondition * >(p.get()) != nullptr);
 }
 
 void Test::testDerivedConditionWaiterTimedout() {
+    // Next line tests that new doesn't throw
     std::unique_ptr< salhelper::ConditionWaiter::timedout > p(
         new DerivedConditionWaiterTimedout);
-    CPPUNIT_ASSERT(
-        dynamic_cast< DerivedConditionWaiterTimedout * >(p.get()) != nullptr);
     try {
         throw DerivedConditionWaiterTimedout();
     } catch (salhelper::ConditionWaiter::timedout &) {

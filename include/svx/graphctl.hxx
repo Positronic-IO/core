@@ -21,6 +21,7 @@
 
 #include <vcl/ctrl.hxx>
 #include <vcl/graph.hxx>
+#include <vcl/customweld.hxx>
 #include <vcl/weld.hxx>
 #include <svx/svxdllapi.h>
 
@@ -54,10 +55,10 @@ class SVX_DLLPUBLIC GraphCtrl : public Control
     Link<GraphCtrl*,void>  aMousePosLink;
     Link<GraphCtrl*,void>  aGraphSizeLink;
     Link<GraphCtrl*,void>  aUpdateLink;
-    MapMode             aMap100;
+    MapMode const          aMap100;
     Size                aGraphSize;
     Point               aMousePos;
-    GraphCtrlUserCall*  pUserCall;
+    std::unique_ptr<GraphCtrlUserCall> pUserCall;
     SdrObjKind          eObjKind;
     sal_uInt16          nPolyEdit;
     bool                bEditMode;
@@ -70,8 +71,8 @@ class SVX_DLLPUBLIC GraphCtrl : public Control
 
 protected:
 
-    SdrModel*           pModel;
-    SdrView*            pView;
+    std::unique_ptr<SdrModel>  pModel;
+    std::unique_ptr<SdrView>   pView;
 
     virtual void        Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
     virtual void        Resize() override;
@@ -86,7 +87,7 @@ protected:
     virtual void        SdrObjChanged( const SdrObject& rObj );
     virtual void        MarkListHasChanged();
 
-    SdrObjUserCall* GetSdrUserCall() { return pUserCall; }
+    SdrObjUserCall* GetSdrUserCall() { return pUserCall.get(); }
 
 public:
 
@@ -107,8 +108,8 @@ public:
 
     void                SetObjKind( const SdrObjKind eObjKind );
 
-    SdrModel*           GetSdrModel() const { return pModel; }
-    SdrView*            GetSdrView() const { return pView; }
+    SdrModel*           GetSdrModel() const { return pModel.get(); }
+    SdrView*            GetSdrView() const { return pView.get(); }
     SdrObject*          GetSelectedSdrObject() const;
     bool                IsChanged() const { return mbSdrMode && pModel->IsChanged(); }
 
@@ -124,31 +125,19 @@ public:
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 };
 
-class SVX_DLLPUBLIC SvxGraphCtrl
+class SVX_DLLPUBLIC SvxGraphCtrl : public weld::CustomWidgetController
 {
-    MapMode             aMap100;
+    MapMode const       aMap100;
     Graphic             aGraphic;
     Size                aGraphSize;
-    Size                maSize;
 
-    std::unique_ptr<weld::DrawingArea> mxDrawingArea;
-
-    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
-    DECL_LINK(DoResize, const Size& rSize, void);
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
 
 public:
 
-    SvxGraphCtrl(weld::Builder& rBuilder, const OString& rDrawingId);
-    virtual ~SvxGraphCtrl();
-
+    SvxGraphCtrl();
+    virtual ~SvxGraphCtrl() override;
     void                SetGraphic( const Graphic& rGraphic );
-
-    const Size&         GetSize() const { return maSize; }
-
-    void set_size_request(int nWidth, int nHeight)
-    {
-        mxDrawingArea->set_size_request(nWidth, nHeight);
-    }
 };
 
 class GraphCtrlView : public SdrView

@@ -73,12 +73,16 @@ using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::frame;
 using namespace ::com::sun::star::container;
 
-SfxPoolItem* SfxUnoAnyItem::CreateDefault() { SAL_WARN( "sfx", "No SfxUnoAnyItem factory available"); return nullptr; }
+SfxPoolItem* SfxUnoAnyItem::CreateDefault()
+{
+    return new SfxUnoAnyItem();
+}
 
 SfxPoolItem* SfxUnoFrameItem::CreateDefault()
 {
     return new SfxUnoFrameItem();
 }
+
 void SfxFrame::Construct_Impl()
 {
     pImpl.reset(new SfxFrame_Impl);
@@ -123,7 +127,7 @@ bool SfxFrame::DoClose()
                 xFrame->dispose();
             }
             else
-                bRet = DoClose_Impl();
+                DoClose_Impl();
         }
         catch( css::util::CloseVetoException& )
         {
@@ -138,7 +142,7 @@ bool SfxFrame::DoClose()
     return bRet;
 }
 
-bool SfxFrame::DoClose_Impl()
+void SfxFrame::DoClose_Impl()
 {
     SfxBindings* pBindings = nullptr;
     if ( pImpl->pCurrentViewFrame )
@@ -154,17 +158,13 @@ bool SfxFrame::DoClose_Impl()
     if ( pImpl->bOwnsBindings )
         DELETEZ( pBindings );
 
-    bool bRet = Close();
-    DBG_ASSERT( bRet, "Impossible state: frame closes, but controller refuses!");
-    return bRet;
+    Close();
 }
 
 bool SfxFrame::DocIsModified_Impl()
 {
-    if ( pImpl->pCurrentViewFrame && pImpl->pCurrentViewFrame->GetObjectShell() &&
-            pImpl->pCurrentViewFrame->GetObjectShell()->IsModified() )
-        return true;
-    return false;
+    return pImpl->pCurrentViewFrame && pImpl->pCurrentViewFrame->GetObjectShell() &&
+            pImpl->pCurrentViewFrame->GetObjectShell()->IsModified();
 }
 
 bool SfxFrame::PrepareClose_Impl( bool bUI )
@@ -324,7 +324,7 @@ void SfxFrame::UpdateDescriptor( SfxObjectShell const *pDoc )
     // Mark FileOpen parameter
     SfxItemSet* pItemSet = pMed->GetItemSet();
 
-    std::shared_ptr<const SfxFilter> pFilter = pMed->GetOrigFilter();
+    const std::shared_ptr<const SfxFilter>& pFilter = pMed->GetFilter();
     OUString aFilter;
     if ( pFilter )
         aFilter = pFilter->GetFilterName();
@@ -456,6 +456,10 @@ bool SfxFrameItem::PutValue( const css::uno::Any& rVal, sal_uInt8 )
     return false;
 }
 
+SfxUnoAnyItem::SfxUnoAnyItem()
+    : SfxPoolItem( 0 )
+{
+}
 
 SfxUnoAnyItem::SfxUnoAnyItem( sal_uInt16 nWhichId, const css::uno::Any& rAny )
     : SfxPoolItem( nWhichId )

@@ -22,7 +22,9 @@
 #include <DateHelper.hxx>
 #include "DateScaling.hxx"
 #include <AxisHelper.hxx>
+#include "VAxisProperties.hxx"
 #include <com/sun/star/chart/TimeUnit.hpp>
+#include <com/sun/star/chart2/AxisType.hpp>
 
 #include <rtl/math.hxx>
 #include <limits>
@@ -38,7 +40,7 @@ using ::com::sun::star::chart::TimeUnit::YEAR;
 const sal_Int32 MAXIMUM_MANUAL_INCREMENT_COUNT = 500;
 const sal_Int32 MAXIMUM_SUB_INCREMENT_COUNT = 100;
 
-sal_Int32 lcl_getMaximumAutoIncrementCount( sal_Int32 nAxisType )
+static sal_Int32 lcl_getMaximumAutoIncrementCount( sal_Int32 nAxisType )
 {
     sal_Int32 nMaximumAutoIncrementCount = 10;
     if( nAxisType==AxisType::DATE )

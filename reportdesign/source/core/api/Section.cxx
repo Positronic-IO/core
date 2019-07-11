@@ -20,6 +20,7 @@
 #include <comphelper/enumhelper.hxx>
 #include <connectivity/dbtools.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <cppuhelper/typeprovider.hxx>
 #include <com/sun/star/report/XReportComponent.hpp>
 #include <com/sun/star/report/ForceNewPage.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
@@ -35,7 +36,6 @@
 #include <vcl/svapp.hxx>
 #include <RptObject.hxx>
 #include <ReportDrawPage.hxx>
-#include <comphelper/property.hxx>
 
 namespace reportdesign
 {
@@ -44,7 +44,7 @@ namespace reportdesign
     using namespace comphelper;
 
 
-uno::Sequence< OUString> lcl_getGroupAbsent()
+static uno::Sequence< OUString> lcl_getGroupAbsent()
 {
     const OUString pProps[] = {
                 OUString(PROPERTY_CANGROW)
@@ -55,7 +55,7 @@ uno::Sequence< OUString> lcl_getGroupAbsent()
 }
 
 
-uno::Sequence< OUString> lcl_getAbsent(bool _bPageSection)
+static uno::Sequence< OUString> lcl_getAbsent(bool _bPageSection)
 {
     if ( _bPageSection )
     {

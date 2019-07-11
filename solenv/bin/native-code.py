@@ -36,7 +36,6 @@ core_factory_list = [
     ("liblnglo.a", "lng_component_getFactory"),
     ("liblnthlo.a", "lnth_component_getFactory"),
     ("liblocalebe1lo.a", "localebe1_component_getFactory"),
-    ("libooxlo.a", "oox_component_getFactory"),
     ("libpackage2.a", "package2_component_getFactory"),
     ("libsmlo.a", "sm_component_getFactory"),
     ("libsrtrs1.a", "srtrs1_component_getFactory"),
@@ -50,7 +49,6 @@ core_factory_list = [
     ("libutllo.a", "utl_component_getFactory"),
     ("libxoflo.a", "xof_component_getFactory"),
     ("libxolo.a", "xo_component_getFactory"),
-    ("libxsec_xmlsec.a", "xsec_xmlsec_component_getFactory", "#if HAVE_FEATURE_NSS"),
     ("libxstor.a", "xstor_component_getFactory"),
     ("libvclcanvaslo.a", "vclcanvas_component_getFactory"),
     ("libmtfrendererlo.a", "mtfrenderer_component_getFactory"),
@@ -61,6 +59,7 @@ core_factory_list = [
     ("libmcnttype.a", "mcnttype_component_getFactory"),
     ("libvcllo.a", "vcl_component_getFactory"),
     ("libspelllo.a", "spell_component_getFactory"),
+    ("libpdffilterlo.a", "pdffilter_component_getFactory"),
     ("libsvgiolo.a", "svgio_component_getFactory")
     ]
 
@@ -78,7 +77,6 @@ core_constructor_list = [
     "com_sun_star_comp_chart_DataSeries_get_implementation",
     "com_sun_star_comp_chart_DataSource_get_implementation",
     "com_sun_star_comp_chart_FilledNetChartType_get_implementation",
-    "com_sun_star_comp_chart_GL3DBarChartType_get_implementation",
     "com_sun_star_comp_chart_FormattedString_get_implementation",
     "com_sun_star_comp_chart_LineChartType_get_implementation",
     "com_sun_star_comp_chart_NetChartType_get_implementation",
@@ -244,6 +242,21 @@ core_constructor_list = [
 # xmlsecurity/util/xmlsecurity.component
     ("com_sun_star_security_CertificateContainer_get_implementation", "#if HAVE_FEATURE_NSS"),
     ("com_sun_star_security_DocumentDigitalSignatures_get_implementation", "#if HAVE_FEATURE_NSS"),
+# xmlsecurity/util/xsec_xmlsec.component
+    ("com_sun_star_xml_crypto_NSSInitializer_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_crypto_SEInitializer_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_security_SEInitializer_Gpg_get_implementation", "#if HAVE_FEATURE_GPGME"),
+    ("com_sun_star_xml_crypto_SecurityEnvironment_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_wrapper_XMLDocumentWrapper_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_wrapper_XMLElementWrapper_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_crypto_XMLSecurityContext_get_implementation", "#if HAVE_FEATURE_NSS"),
+    ("com_sun_star_xml_crypto_XMLSignature_get_implementation", "#if HAVE_FEATURE_NSS"),
+# oox/util/oox.component
+    "com_sun_star_comp_oox_core_FastTokenHandler_get_implementation",
+    "com_sun_star_comp_oox_FormatDetector_get_implementation",
+    "com_sun_star_comp_oox_docprop_DocumentPropertiesImporter_get_implementation",
+    "com_sun_star_comp_oox_ppt_PowerPointImport_get_implementation",
+    "com_sun_star_comp_oox_ShapeContextHandler_get_implementation",
     ]
 
 # edit group for apps, where you can edit documents
@@ -265,11 +278,14 @@ edit_constructor_list = [
 # starmath/util/sm.component
     "Math_XMLOasisMetaExporter_get_implementation",
     "Math_XMLOasisSettingsExporter_get_implementation",
+    "Math_XMLImporter_get_implementation",
+    "Math_XMLOasisMetaImporter_get_implementation",
 # sw/util/sw.component
     "com_sun_star_comp_Writer_XMLOasisContentExporter_get_implementation",
     "com_sun_star_comp_Writer_XMLOasisMetaExporter_get_implementation",
     "com_sun_star_comp_Writer_XMLOasisSettingsExporter_get_implementation",
     "com_sun_star_comp_Writer_XMLOasisStylesExporter_get_implementation",
+    "com_sun_star_comp_Writer_WriterModule_get_implementation",
     ]
 
 # math
@@ -356,6 +372,9 @@ writer_constructor_list = [
     "com_sun_star_util_comp_FinalThreadManager_get_implementation",
 # sw/util/swd.component
     "com_sun_star_comp_writer_FormatDetector_get_implementation",
+# sw/util/msword.component
+    "com_sun_star_comp_Writer_RtfExport_get_implementation",
+    "com_sun_star_comp_Writer_DocxExport_get_implementation",
 # writerfilter/util/writerfilter.component
     "com_sun_star_comp_Writer_RtfFilter_get_implementation",
     "com_sun_star_comp_Writer_WriterFilter_get_implementation",
@@ -378,6 +397,130 @@ constructor_map = {
     'draw' : draw_constructor_list,
     'writer' : writer_constructor_list,
     }
+
+custom_widgets = [
+    'ArgEdit',
+    'BookmarksBox',
+    'CategoryListBox',
+    'ClassificationEditView',
+    'ColorConfigCtrl',
+    'ColumnEdit',
+    'CommandCategoryListBox',
+    'ConditionEdit',
+    'ContentListBox',
+    'ContextVBox',
+    'CuiCustomMultilineEdit',
+    'CustomAnimationList',
+    'CustomPropertiesControl',
+    'DataTreeListBox',
+    'DriverListControl',
+    'DropdownBox',
+    'EditBox',
+    'EmojiView',
+    'ExtBoxWithBtns',
+    'ExtensionBox',
+    'FontNameBox',
+    'FontSizeBox',
+    'FontStyleBox',
+    'FormattedField',
+    'FormulaListBox',
+    'GalleryPreview',
+    'IndexBox',
+    'IndexBox',
+    'IntellectualPropertyPartEdit',
+    'LightButton',
+    'LookUpComboBox',
+    'MacroEventListBox',
+    'ManagedMenuButton',
+    'MultiLineEditSyntaxHighlight',
+    'NumFormatListBox',
+    'OFileURLControl',
+    'OptionalBox',
+    'PageNumberListBox',
+    'PaperSizeListBox',
+    'PriorityHBox',
+    'PriorityMergedHBox',
+    'PropertyControl',
+    'RecentDocsView',
+    'RefButton',
+    'RefEdit',
+    'ReplaceEdit',
+    'ReturnActionEdit',
+    'RowEdit',
+    'RubyEdit',
+    'RubyPreview',
+    'RubyRadioButton',
+    'SFTreeListBox',
+    'SameContentListBox',
+    'ScAutoFmtPreview',
+    'ScCondFormatList',
+    'ScCsvTableBox',
+    'ScCursorRefEdit',
+    'ScDPFunctionListBox',
+    'ScDataTableView',
+    'ScDoubleField',
+    'ScEditWindow',
+    'ScPivotLayoutTreeList',
+    'ScPivotLayoutTreeListData',
+    'ScPivotLayoutTreeListLabel',
+    'ScRefButtonEx',
+    'SdPageObjsTLB',
+    'SearchBox',
+    'SearchResultsBox',
+    'SelectionListBox',
+    'SentenceEditWindow',
+    'SfxAccCfgTabListBox',
+    'SfxConfigFunctionListBox',
+    'SfxConfigGroupListBox',
+    'ShowNupOrderWindow',
+    'ShowNupOrderWindow',
+    'SidebarDialControl',
+    'SidebarToolBox',
+    'SmallButton',
+    'SpacingListBox',
+    'StatusBar',
+    'StructListBox',
+    'SuggestionDisplay',
+    'SuggestionEdit',
+    'SvSimpleTableContainer',
+    'SvTabListBox',
+    'SvTreeListBox',
+    'SvtFileView',
+    'SvtIconChoiceCtrl',
+    'SvtURLBox',
+    'Svx3DPreviewControl',
+    'SvxCharViewControl',
+    'SvxCheckListBox',
+    'SvxColorListBox',
+    'SvxColorValueSet',
+    'SvxDictEdit',
+    'SvxFillAttrBox',
+    'SvxFillTypeBox',
+    'SvxFontPrevWindow',
+    'SvxHlmarkTreeLBox',
+    'SvxHyperURLBox',
+    'SvxLanguageBox',
+    'SvxLanguageComboBox',
+    'SvxLightCtl3D',
+    'SvxNoSpaceEdit',
+    'SvxPathControl',
+    'SvxRelativeField',
+    'SvxTextEncodingBox',
+    'SvxTextEncodingBox',
+    'SwAddressPreview',
+    'SwFieldRefTreeListBox',
+    'SwGlTreeListBox',
+    'SwIdxTreeListBox',
+    'SwMarkPreview',
+    'SwNavHelpToolBox',
+    'SwTokenWindow',
+    'TableValueSet',
+    'TemplateDefaultView',
+    'TemplateLocalView',
+    'TemplateSearchView',
+    'ThesaurusAlternativesCtrl',
+    'ValueSet',
+    ]
 
 def get_constructor_guard(constructor):
     if type(full_constructor_map[constructor]) is bool:
@@ -459,7 +602,10 @@ print ("""/*
  */
 
 #include <config_features.h>
+#include <config_fuzzers.h>
+#include <config_gpgme.h>
 #include <osl/detail/component-mapping.h>
+#include <string.h>
 
 """)
 if not options.pure_c:
@@ -482,6 +628,32 @@ for constructor in sorted(full_constructor_map.keys()):
     print ('void * '+constructor+'( void *, void * );')
     if constructor_guard:
         print ('#endif')
+
+print ('')
+for entry in sorted(custom_widgets):
+    print ('void make' + entry + '();')
+print ('typedef void (*custom_widget_func)();')
+print ('#if !ENABLE_FUZZERS')
+print ('static struct { const char *name; custom_widget_func func; } custom_widgets[] = {')
+for entry in sorted(custom_widgets):
+    print ('    { "make' + entry + '", make' + entry + ' },')
+print ('};')
+print ('#endif')
+print ('')
+print ("""
+custom_widget_func lo_get_custom_widget_func(const char* name)
+{
+#if ENABLE_FUZZERS
+    (void)name;
+    return nullptr;
+#else
+    for (size_t i = 0; i < sizeof(custom_widgets) / sizeof(custom_widgets[0]); i++)
+        if (strcmp(name, custom_widgets[i].name) == 0)
+            return custom_widgets[i].func;
+    return nullptr;
+#endif
+}
+""")
 
 print ("""
 const lib_to_factory_mapping *

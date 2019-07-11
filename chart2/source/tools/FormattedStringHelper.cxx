@@ -18,9 +18,9 @@
  */
 
 #include <FormattedStringHelper.hxx>
-#include <PropertyHelper.hxx>
 #include <com/sun/star/chart2/FormattedString.hpp>
 #include <tools/diagnose_ex.h>
+#include <comphelper/property.hxx>
 
 namespace chart
 {

@@ -26,6 +26,8 @@
 
 #include <ftninfo.hxx>
 #include <pagedesc.hxx>
+#include <svx/svdpage.hxx>
+#include <drawdoc.hxx>
 #include <editeng/unoprnms.hxx>
 
 class Test : public SwModelTestBase
@@ -64,6 +66,19 @@ DECLARE_WW8EXPORT_TEST(testTdf55528_relativeTableWidth, "tdf55528_relativeTableW
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Table relative width percent", sal_Int16(98), getProperty<sal_Int16>(xTable, "RelativeWidth"));
  }
+
+DECLARE_WW8EXPORT_TEST(testTdf116436_tableBackground, "tdf116436_tableBackground.odt")
+{
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(), uno::UNO_QUERY);
+    uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    uno::Reference<table::XCell> xCell = xTable->getCellByName("A1");
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0xF8DF7C), getProperty<sal_Int32>(xCell, "BackColor"));
+    xCell.set(xTable->getCellByName("A6"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0x81D41A), getProperty<sal_Int32>(xCell, "BackColor"));
+    xCell.set(xTable->getCellByName("B6"));
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0xFFFBCC), getProperty<sal_Int32>(xCell, "BackColor"));
+}
 
 DECLARE_WW8EXPORT_TEST(testTdf37153, "tdf37153_considerWrapOnObjPos.doc")
 {
@@ -240,6 +255,11 @@ DECLARE_WW8EXPORT_TEST(testTdf112074_RTLtableJustification, "tdf112074_RTLtableJ
     CPPUNIT_ASSERT_MESSAGE("Table Indent is 3750", getProperty<long>(xTable, "LeftMargin") < 4000 );
 }
 
+DECLARE_WW8EXPORT_TEST(testTdf119232_startEvenPage, "tdf119232_startEvenPage.doc")
+{
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(2), getProperty<sal_Int16>(getParagraph(1), "PageNumberOffset"));
+}
+
 DECLARE_WW8EXPORT_TEST(testTdf104805, "tdf104805.doc")
 {
     uno::Reference<beans::XPropertySet> xPropertySet(getStyles("NumberingStyles")->getByName("WW8Num1"), uno::UNO_QUERY);
@@ -301,6 +321,29 @@ DECLARE_WW8EXPORT_TEST(testTdf111480, "tdf111480.doc")
 
     CPPUNIT_ASSERT(xText->getSize().Height > 11000);
     CPPUNIT_ASSERT(xText->getSize().Width  > 11000);
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf70838, "tdf70838.odt")
+{
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    SdrPage* pPage = pDoc->getIDocumentDrawModelAccess().GetDrawModel()->GetPage(0);
+    tools::Rectangle aRect = pPage->GetObj(0)->GetSnapRect();
+    CPPUNIT_ASSERT(aRect.GetHeight() > aRect.GetWidth());
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf70838b_verticalRotation, "tdf70838b_verticalRotation.odt")
+{
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument *>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    SdrPage* pPage = pDoc->getIDocumentDrawModelAccess().GetDrawModel()->GetPage(0);
+    tools::Rectangle aGroupShape = pPage->GetObj(0)->GetSnapRect();
+    tools::Rectangle aLine = pPage->GetObj(2)->GetSnapRect();
+
+    CPPUNIT_ASSERT_MESSAGE("Smiley faces are round", aGroupShape.GetHeight() > aGroupShape.GetWidth());
+    CPPUNIT_ASSERT_MESSAGE("Line is taller, not wider", aLine.GetHeight() > aLine.GetWidth());
 }
 
 DECLARE_WW8EXPORT_TEST( testActiveXCheckbox, "checkbox_control.odt" )
@@ -755,7 +798,7 @@ DECLARE_OOXMLEXPORT_TEST( testObjectCrossReference, "object_cross_reference.odt"
 
 DECLARE_WW8EXPORT_TEST(testTdf112118_DOC, "tdf112118.doc")
 {
-    struct {
+    static const struct {
         const char* styleName;
         struct {
             const char* sideName;
@@ -812,6 +855,49 @@ DECLARE_WW8EXPORT_TEST(testTdf112118_DOC, "tdf112118.doc")
                 sal_Int32(COL_BLACK), aBorder.Color);
         }
     }
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf117503, "tdf117503.docx")
+{
+    // This was 3, first page + standard page styles were not merged together
+    // on export.
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf117885, "tdf117885.doc")
+{
+    xmlDocPtr pXmlDoc = parseLayoutDump();
+
+    /* Get the vertical position of the paragraph containing the text "Start" */
+    sal_Int32 nParaA_Top = getXPath(pXmlDoc,
+        "/root/page/body/column[1]/body/txt[text()='Start']/infos/bounds", "top"
+        ).toInt32();
+
+    /* Get the vertical position of the paragraph containing the text "Top B" */
+    sal_Int32 nParaB_Top = getXPath(pXmlDoc,
+        "/root/page/body/column[2]/body/txt[text()='Top B']/infos/bounds", "top"
+        ).toInt32();
+
+    /* These two paragraphs are supposed to be at the top of the left
+     * and right columns respectively.  Check that they actually line up: */
+    CPPUNIT_ASSERT_EQUAL(nParaA_Top, nParaB_Top);
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf118133, "tdf118133.docx")
+{
+    // This was 0, doc import + doc export resulted in lost image due to broken
+    // lazy-loading of tiff images.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(15240), getShape(1)->getSize().Width);
+}
+
+DECLARE_WW8EXPORT_TEST(testTdf118412, "tdf118412.doc")
+{
+    /* Check that the first page's bottom margin is 1.251cm (not 2.540cm) */
+    OUString sPageStyleName = getProperty<OUString>(getParagraph(1), "PageStyleName");
+    uno::Reference<style::XStyle> xPageStyle(
+        getStyles("PageStyles")->getByName(sPageStyleName), uno::UNO_QUERY);
+    sal_Int32 nBottomMargin = getProperty<sal_Int32>(xPageStyle, "BottomMargin");
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1251), nBottomMargin);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

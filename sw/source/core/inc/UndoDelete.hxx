@@ -22,7 +22,6 @@
 
 #include <undobj.hxx>
 #include <rtl/ustring.hxx>
-#include <tools/mempool.hxx>
 #include <memory>
 #include <boost/optional.hpp>
 
@@ -38,9 +37,9 @@ class SwUndoDelete
     , private SwUndRng
     , private SwUndoSaveContent
 {
-    SwNodeIndex* m_pMvStt;            // Position of Nodes in UndoNodes-Array
+    std::unique_ptr<SwNodeIndex> m_pMvStt;            // Position of Nodes in UndoNodes-Array
     boost::optional<OUString> m_aSttStr, m_aEndStr;
-    SwRedlineSaveDatas* m_pRedlSaveData;
+    std::unique_ptr<SwRedlineSaveDatas> m_pRedlSaveData;
     std::shared_ptr< ::sfx2::MetadatableUndo > m_pMetadataUndoStart;
     std::shared_ptr< ::sfx2::MetadatableUndo > m_pMetadataUndoEnd;
 
@@ -56,10 +55,10 @@ class SwUndoDelete
     bool m_bBackSp : 1;        // TRUE: if Grouped and preceding content deleted
     bool m_bJoinNext: 1;       // TRUE: if range is selected forwards
     bool m_bTableDelLastNd : 1;  // TRUE: TextNode following Table inserted/deleted
-    bool m_bDelFullPara : 1;   // TRUE: entire Nodes were deleted
+    bool const m_bDelFullPara : 1;   // TRUE: entire Nodes were deleted
     bool m_bResetPgDesc : 1;   // TRUE: reset PgDsc on following node
     bool m_bResetPgBrk : 1;    // TRUE: reset PgBreak on following node
-    bool m_bFromTableCopy : 1; // TRUE: called by SwUndoTableCpyTable
+    bool const m_bFromTableCopy : 1; // TRUE: called by SwUndoTableCpyTable
 
     bool SaveContent( const SwPosition* pStt, const SwPosition* pEnd,
                     SwTextNode* pSttTextNd, SwTextNode* pEndTextNd );
@@ -99,8 +98,6 @@ public:
 
     // SwUndoTableCpyTable needs this information:
     bool IsDelFullPara() const { return m_bDelFullPara; }
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwUndoDelete)
 };
 
 #endif // INCLUDED_SW_SOURCE_CORE_INC_UNDODELETE_HXX

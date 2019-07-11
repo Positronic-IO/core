@@ -20,7 +20,7 @@
 #include "service.hxx"
 #include "vbaglobals.hxx"
 #include <sal/macros.h>
-#include <comphelper/unwrapargs.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>

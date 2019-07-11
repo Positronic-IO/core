@@ -919,7 +919,6 @@ namespace xmloff { namespace token {
         XML_GCD,
         XML_GENERATOR,
         XML_GEQ,
-        XML_GL3DBAR,
         XML_GOURAUD,
         XML_GRADIENT,
         XML_GRADIENT_ANGLE,
@@ -1569,7 +1568,6 @@ namespace xmloff { namespace token {
         XML_ROTATION_ALIGN,
         XML_ROTATION_ANGLE,
         XML_ROUND,
-        XML_ROUNDED_EDGE,
         XML_ROW,
         XML_ROW_HEIGHT,
         XML_ROW_NUMBER,
@@ -3278,6 +3276,38 @@ namespace xmloff { namespace token {
         XML_DATA_MAPPINGS,
         XML_DATA_MAPPING,
         XML_DATA_FREQUENCY,
+        XML_DATA_TRANSFORMATIONS,
+        XML_COLUMN_REMOVE_TRANSFORMATION,
+        XML_COLUMN_SPLIT_TRANSFORMATION,
+        XML_COLUMN_MERGE_TRANSFORMATION,
+        XML_COLUMN_SORT_TRANSFORMATION,
+        XML_COLUMN_TEXT_TRANSFORMATION,
+        XML_COLUMN_AGGREGATE_TRANSFORMATION,
+        XML_COLUMN_NUMBER_TRANSFORMATION,
+        XML_SORT_PARAM,
+        XML_MERGE_STRING,
+        XML_TRIM,
+        XML_ROUND_UP,
+        XML_ROUND_DOWN,
+        XML_LOG_10,
+        XML_SQUARE,
+        XML_SQUARE_ROOT,
+        XML_EVEN,
+        XML_ODD,
+        XML_SIGN,
+        XML_REPLACE_STRING,
+        XML_COLUMN_REPLACENULL_TRANSFORMATION,
+        XML_COLUMN_DATETIME_TRANSFORMATION,
+        XML_START_OF_YEAR,
+        XML_END_OF_YEAR,
+        XML_MONTH_NAME,
+        XML_START_OF_MONTH,
+        XML_END_OF_MONTH,
+        XML_DAY_OF_YEAR,
+        XML_START_OF_QUARTER,
+        XML_END_OF_QUARTER,
+
+        //Already defined XML_SEPARATOR,
 
         // regina, ODF1.2 additional symbols in charts
         XML_STAR,
@@ -3315,6 +3345,9 @@ namespace xmloff { namespace token {
         XML_NEWLINE,
 
         XML_CREATOR_INITIALS,
+
+        // tdf#115007
+        XML_TRANSLITERATION_SPELLOUT,
 
         XML_TOKEN_END
     };

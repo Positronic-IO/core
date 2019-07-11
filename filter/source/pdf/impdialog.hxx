@@ -22,14 +22,6 @@
 
 #include <sfx2/tabdlg.hxx>
 
-#include <vcl/dialog.hxx>
-#include <vcl/button.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/field.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/lstbox.hxx>
-#include <vcl/combobox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/pdfwriter.hxx>
 #include <vcl/FilterConfigItem.hxx>
 #include <vcl/weld.hxx>
@@ -61,21 +53,14 @@ class ImpPDFTabLinksPage;
 
 
 /// Class tabbed dialog
-class ImpPDFTabDialog final : public SfxTabDialog
+class ImpPDFTabDialog final : public SfxTabDialogController
 {
     FilterConfigItem            maConfigItem;
     FilterConfigItem            maConfigI18N;
 
     Any                         maSelection;
 
-    DECL_LINK(CancelHdl, Button*, void);
-
-    sal_uInt16                  mnSigningPageId;
-    sal_uInt16                  mnSecurityPageId;
-    sal_uInt16                  mnLinksPage;
-    sal_uInt16                  mnInterfacePageId;
-    sal_uInt16                  mnViewPageId;
-    sal_uInt16                  mnGeneralPageId;
+    DECL_LINK(CancelHdl, weld::Button&, void);
 
     // the following data are the configuration used throughout the dialog and pages
     bool                        mbIsPresentation;
@@ -158,12 +143,9 @@ public:
     friend class                ImpPDFTabLinksPage;
     friend class                ImpPDFTabSigningPage;
 
-                                ImpPDFTabDialog( vcl::Window* pParent,
-                                                 Sequence< PropertyValue >& rFilterData,
-                                                 const css::uno::Reference< XComponent >& rDoc);
+    ImpPDFTabDialog(weld::Window* pParent, Sequence< PropertyValue >& rFilterData,
+                    const css::uno::Reference< XComponent >& rDoc);
     virtual                     ~ImpPDFTabDialog() override;
-
-    virtual void                dispose() override;
 
     Sequence< PropertyValue >   GetFilterData();
 
@@ -172,7 +154,7 @@ public:
     ImpPDFTabGeneralPage*       getGeneralPage() const;
 
 private:
-    virtual void                PageCreated( sal_uInt16 _nId, SfxTabPage& _rPage ) override;
+    virtual void                PageCreated(const OString& rId, SfxTabPage& rPage) override;
     virtual short               Ok() override;
 };
 
@@ -182,111 +164,102 @@ class ImpPDFTabGeneralPage : public SfxTabPage
 {
     friend class ImpPDFTabLinksPage;
 
-    VclPtr<RadioButton>          mpRbAll;
-    VclPtr<RadioButton>          mpRbRange;
-    VclPtr<RadioButton>          mpRbSelection;
-    VclPtr<Edit>                 mpEdPages;
-    VclPtr<FixedText>            mpSelectedSheets;
-
-    VclPtr<RadioButton>          mpRbLosslessCompression;
-    VclPtr<RadioButton>          mpRbJPEGCompression;
-    VclPtr<VclContainer>         mpQualityFrame;
-    VclPtr<MetricField>          mpNfQuality;
-    VclPtr<CheckBox>             mpCbReduceImageResolution;
-    VclPtr<ComboBox>             mpCoReduceImageResolution;
-
-    VclPtr<CheckBox>             mpCbPDFA1b;
-    VclPtr<CheckBox>             mpCbTaggedPDF;
     bool                         mbTaggedPDFUserSelection;
-
-    VclPtr<CheckBox>             mpCbExportFormFields;
     bool                         mbExportFormFieldsUserSelection;
-    VclPtr<VclContainer>         mpFormsFrame;
-    VclPtr<ListBox>              mpLbFormsFormat;
-    VclPtr<CheckBox>             mpCbAllowDuplicateFieldNames;
+    bool                         mbIsPresentation;
+    bool                         mbIsSpreadsheet;
+    bool                         mbIsWriter;
+    ImpPDFTabDialog*             mpParent;
 
-    VclPtr<CheckBox>             mpCbExportBookmarks;
-    VclPtr<CheckBox>             mpCbExportHiddenSlides;
-    VclPtr<CheckBox>             mpCbExportNotes;
-    VclPtr<CheckBox>             mpCbViewPDF;
-    VclPtr<CheckBox>             mpCbUseReferenceXObject;
-    VclPtr<CheckBox>             mpCbExportNotesPages;
-    VclPtr<CheckBox>             mpCbExportOnlyNotesPages;
+    std::unique_ptr<weld::RadioButton> mxRbAll;
+    std::unique_ptr<weld::RadioButton> mxRbRange;
+    std::unique_ptr<weld::RadioButton> mxRbSelection;
+    std::unique_ptr<weld::Entry> mxEdPages;
+    std::unique_ptr<weld::Label> mxSelectedSheets;
+    std::unique_ptr<weld::RadioButton> mxRbLosslessCompression;
+    std::unique_ptr<weld::RadioButton> mxRbJPEGCompression;
+    std::unique_ptr<weld::Widget> mxQualityFrame;
+    std::unique_ptr<weld::MetricSpinButton> mxNfQuality;
+    std::unique_ptr<weld::CheckButton> mxCbReduceImageResolution;
+    std::unique_ptr<weld::ComboBox> mxCoReduceImageResolution;
+    std::unique_ptr<weld::CheckButton> mxCbPDFA1b;
+    std::unique_ptr<weld::CheckButton> mxCbTaggedPDF;
+    std::unique_ptr<weld::CheckButton> mxCbExportFormFields;
+    std::unique_ptr<weld::Widget> mxFormsFrame;
+    std::unique_ptr<weld::ComboBox> mxLbFormsFormat;
+    std::unique_ptr<weld::CheckButton> mxCbAllowDuplicateFieldNames;
+    std::unique_ptr<weld::CheckButton> mxCbExportBookmarks;
+    std::unique_ptr<weld::CheckButton> mxCbExportHiddenSlides;
+    std::unique_ptr<weld::CheckButton> mxCbExportNotes;
+    std::unique_ptr<weld::CheckButton> mxCbViewPDF;
+    std::unique_ptr<weld::CheckButton> mxCbUseReferenceXObject;
+    std::unique_ptr<weld::CheckButton> mxCbExportNotesPages;
+    std::unique_ptr<weld::CheckButton> mxCbExportOnlyNotesPages;
+    std::unique_ptr<weld::CheckButton> mxCbExportEmptyPages;
+    std::unique_ptr<weld::CheckButton> mxCbExportPlaceholders;
+    std::unique_ptr<weld::CheckButton> mxCbAddStream;
+    std::unique_ptr<weld::CheckButton> mxCbWatermark;
+    std::unique_ptr<weld::Label> mxFtWatermark;
+    std::unique_ptr<weld::Entry> mxEdWatermark;
+    std::unique_ptr<weld::Label> mxSlidesFt;
+    std::unique_ptr<weld::Label> mxSheetsFt;
 
-    VclPtr<CheckBox>             mpCbExportEmptyPages;
-    VclPtr<CheckBox>             mpCbExportPlaceholders;
-    VclPtr<CheckBox>             mpCbAddStream;
-
-    VclPtr<CheckBox>             mpCbWatermark;
-    VclPtr<FixedText>            mpFtWatermark;
-    VclPtr<Edit>                mpEdWatermark;
-
-    bool                        mbIsPresentation;
-    bool                        mbIsSpreadsheet;
-    bool                        mbIsWriter;
-
-    VclPtr<ImpPDFTabDialog>     mpaParent;
-
-    DECL_LINK( ToggleAllHdl, RadioButton&, void );
-    DECL_LINK( TogglePagesHdl, RadioButton&, void );
-    DECL_LINK( ToggleSelectionHdl, RadioButton&, void );
-    DECL_LINK( ToggleCompressionHdl, RadioButton&, void );
-    DECL_LINK( ToggleReduceImageResolutionHdl, CheckBox&, void );
-    DECL_LINK( ToggleWatermarkHdl, CheckBox&, void );
-    DECL_LINK( ToggleAddStreamHdl, CheckBox&, void );
-    DECL_LINK( ToggleExportFormFieldsHdl, CheckBox&, void );
-    DECL_LINK( ToggleExportNotesPagesHdl, CheckBox&, void );
+    DECL_LINK(ToggleAllHdl, weld::ToggleButton&, void);
+    DECL_LINK(TogglePagesHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleSelectionHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleCompressionHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleReduceImageResolutionHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleWatermarkHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleAddStreamHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleExportFormFieldsHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleExportNotesPagesHdl, weld::ToggleButton&, void);
 
     void                        TogglePagesHdl();
     void                        EnableExportNotesPages();
 
 public:
-    DECL_LINK( ToggleExportPDFAHdl, CheckBox&, void );
+    DECL_LINK(ToggleExportPDFAHdl, weld::ToggleButton&, void);
 
-                                ImpPDFTabGeneralPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabGeneralPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabGeneralPage() override;
 
-    virtual void                dispose() override;
     static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet);
 
     void                        GetFilterConfigItem(ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem(ImpPDFTabDialog* paParent);
-    bool                        IsPdfaSelected() const { return mpCbPDFA1b->IsChecked(); }
+    bool                        IsPdfaSelected() const { return mxCbPDFA1b->get_active(); }
 };
 
 /// Class tab page viewer
 class ImpPDFTabOpnFtrPage : public SfxTabPage
 {
-    VclPtr<RadioButton>         mpRbOpnPageOnly;
-    VclPtr<RadioButton>         mpRbOpnOutline;
-    VclPtr<RadioButton>         mpRbOpnThumbs;
-    VclPtr<NumericField>        mpNumInitialPage;
-
-    VclPtr<RadioButton>         mpRbMagnDefault;
-    VclPtr<RadioButton>         mpRbMagnFitWin;
-    VclPtr<RadioButton>         mpRbMagnFitWidth;
-    VclPtr<RadioButton>         mpRbMagnFitVisible;
-    VclPtr<RadioButton>         mpRbMagnZoom;
-    VclPtr<NumericField>        mpNumZoom;
-
-    VclPtr<RadioButton>         mpRbPgLyDefault;
-    VclPtr<RadioButton>         mpRbPgLySinglePage;
-    VclPtr<RadioButton>         mpRbPgLyContinue;
-    VclPtr<RadioButton>         mpRbPgLyContinueFacing;
-    VclPtr<CheckBox>            mpCbPgLyFirstOnLeft;
-
     bool                        mbUseCTLFont;
 
-    DECL_LINK( ToggleRbPgLyContinueFacingHdl, RadioButton&, void );
-    DECL_LINK( ToggleRbMagnHdl, RadioButton&, void );
+    std::unique_ptr<weld::RadioButton> mxRbOpnPageOnly;
+    std::unique_ptr<weld::RadioButton> mxRbOpnOutline;
+    std::unique_ptr<weld::RadioButton> mxRbOpnThumbs;
+    std::unique_ptr<weld::SpinButton> mxNumInitialPage;
+    std::unique_ptr<weld::RadioButton> mxRbMagnDefault;
+    std::unique_ptr<weld::RadioButton> mxRbMagnFitWin;
+    std::unique_ptr<weld::RadioButton> mxRbMagnFitWidth;
+    std::unique_ptr<weld::RadioButton> mxRbMagnFitVisible;
+    std::unique_ptr<weld::RadioButton> mxRbMagnZoom;
+    std::unique_ptr<weld::SpinButton> mxNumZoom;
+    std::unique_ptr<weld::RadioButton> mxRbPgLyDefault;
+    std::unique_ptr<weld::RadioButton> mxRbPgLySinglePage;
+    std::unique_ptr<weld::RadioButton> mxRbPgLyContinue;
+    std::unique_ptr<weld::RadioButton> mxRbPgLyContinueFacing;
+    std::unique_ptr<weld::CheckButton> mxCbPgLyFirstOnLeft;
+
+    DECL_LINK(ToggleRbPgLyContinueFacingHdl, weld::ToggleButton&, void);
+    DECL_LINK(ToggleRbMagnHdl, weld::ToggleButton&, void);
 
     void                        ToggleRbPgLyContinueFacingHdl();
 
 public:
-                                ImpPDFTabOpnFtrPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabOpnFtrPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabOpnFtrPage() override;
 
-    virtual void                dispose() override;
     static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
@@ -296,30 +269,26 @@ public:
 /// Class tab page viewer
 class ImpPDFTabViewerPage : public SfxTabPage
 {
-    VclPtr<CheckBox>            m_pCbResWinInit;
-    VclPtr<CheckBox>            m_pCbCenterWindow;
-    VclPtr<CheckBox>            m_pCbOpenFullScreen;
-    VclPtr<CheckBox>            m_pCbDispDocTitle;
-
-
-    VclPtr<CheckBox>            m_pCbHideViewerMenubar;
-    VclPtr<CheckBox>            m_pCbHideViewerToolbar;
-    VclPtr<CheckBox>            m_pCbHideViewerWindowControls;
-
-    VclPtr<CheckBox>            m_pCbTransitionEffects;
     bool                        mbIsPresentation;
 
-    VclPtr<RadioButton>         m_pRbAllBookmarkLevels;
-    VclPtr<RadioButton>         m_pRbVisibleBookmarkLevels;
-    VclPtr<NumericField>        m_pNumBookmarkLevels;
+    std::unique_ptr<weld::CheckButton> m_xCbResWinInit;
+    std::unique_ptr<weld::CheckButton> m_xCbCenterWindow;
+    std::unique_ptr<weld::CheckButton> m_xCbOpenFullScreen;
+    std::unique_ptr<weld::CheckButton> m_xCbDispDocTitle;
+    std::unique_ptr<weld::CheckButton> m_xCbHideViewerMenubar;
+    std::unique_ptr<weld::CheckButton> m_xCbHideViewerToolbar;
+    std::unique_ptr<weld::CheckButton> m_xCbHideViewerWindowControls;
+    std::unique_ptr<weld::CheckButton> m_xCbTransitionEffects;
+    std::unique_ptr<weld::RadioButton> m_xRbAllBookmarkLevels;
+    std::unique_ptr<weld::RadioButton> m_xRbVisibleBookmarkLevels;
+    std::unique_ptr<weld::SpinButton>m_xNumBookmarkLevels;
 
-    DECL_LINK( ToggleRbBookmarksHdl, RadioButton&, void );
+    DECL_LINK(ToggleRbBookmarksHdl, weld::ToggleButton&, void);
 
 public:
-                                ImpPDFTabViewerPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabViewerPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabViewerPage() override;
 
-    virtual void                dispose() override;
     static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
@@ -329,35 +298,8 @@ public:
 /// Class security tab page
 class ImpPDFTabSecurityPage : public SfxTabPage
 {
-    VclPtr<PushButton>          mpPbSetPwd;
     OUString                    msStrSetPwd;
-
-    VclPtr<VclContainer>        mpUserPwdSet;
-    VclPtr<VclContainer>        mpUserPwdUnset;
-    VclPtr<VclContainer>        mpUserPwdPdfa;
-
-    VclPtr<VclContainer>        mpOwnerPwdSet;
-    VclPtr<VclContainer>        mpOwnerPwdUnset;
-    VclPtr<VclContainer>        mpOwnerPwdPdfa;
-
-    VclPtr<VclContainer>        mpPrintPermissions;
-    VclPtr<RadioButton>         mpRbPrintNone;
-    VclPtr<RadioButton>         mpRbPrintLowRes;
-    VclPtr<RadioButton>         mpRbPrintHighRes;
-
-    VclPtr<VclContainer>        mpChangesAllowed;
-    VclPtr<RadioButton>         mpRbChangesNone;
-    VclPtr<RadioButton>         mpRbChangesInsDel;
-    VclPtr<RadioButton>         mpRbChangesFillForm;
-    VclPtr<RadioButton>         mpRbChangesComment;
-    VclPtr<RadioButton>         mpRbChangesAnyNoCopy;
-
-    VclPtr<VclContainer>        mpContent;
-    VclPtr<CheckBox>            mpCbEnableCopy;
-    VclPtr<CheckBox>            mpCbEnableAccessibility;
-
     OUString                    msUserPwdTitle;
-
     bool                        mbHaveOwnerPassword;
     bool                        mbHaveUserPassword;
     css::uno::Sequence< css::beans::NamedValue > maPreparedOwnerPassword;
@@ -365,16 +307,37 @@ class ImpPDFTabSecurityPage : public SfxTabPage
 
     css::uno::Reference< css::beans::XMaterialHolder > mxPreparedPasswords;
 
-    DECL_LINK( ClickmaPbSetPwdHdl, Button*, void );
+    std::unique_ptr<weld::Button> mxPbSetPwd;
+    std::unique_ptr<weld::Widget> mxUserPwdSet;
+    std::unique_ptr<weld::Widget> mxUserPwdUnset;
+    std::unique_ptr<weld::Widget> mxUserPwdPdfa;
+    std::unique_ptr<weld::Widget> mxOwnerPwdSet;
+    std::unique_ptr<weld::Widget> mxOwnerPwdUnset;
+    std::unique_ptr<weld::Widget> mxOwnerPwdPdfa;
+    std::unique_ptr<weld::Widget> mxPrintPermissions;
+    std::unique_ptr<weld::RadioButton> mxRbPrintNone;
+    std::unique_ptr<weld::RadioButton> mxRbPrintLowRes;
+    std::unique_ptr<weld::RadioButton> mxRbPrintHighRes;
+    std::unique_ptr<weld::Widget> mxChangesAllowed;
+    std::unique_ptr<weld::RadioButton> mxRbChangesNone;
+    std::unique_ptr<weld::RadioButton> mxRbChangesInsDel;
+    std::unique_ptr<weld::RadioButton> mxRbChangesFillForm;
+    std::unique_ptr<weld::RadioButton> mxRbChangesComment;
+    std::unique_ptr<weld::RadioButton> mxRbChangesAnyNoCopy;
+    std::unique_ptr<weld::Widget> mxContent;
+    std::unique_ptr<weld::CheckButton> mxCbEnableCopy;
+    std::unique_ptr<weld::CheckButton> mxCbEnableAccessibility;
+    std::unique_ptr<weld::Label> mxPasswordTitle;
+
+    DECL_LINK(ClickmaPbSetPwdHdl, weld::Button&, void);
 
     void                        enablePermissionControls();
 
 public:
-                                ImpPDFTabSecurityPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabSecurityPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabSecurityPage() override;
 
-    virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create(TabPageParent pParent, const SfxItemSet* rAttrSet);
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -382,30 +345,28 @@ public:
     bool                        hasPassword() const { return mbHaveOwnerPassword || mbHaveUserPassword; }
 };
 
-
 /// Implements the relative link stuff
 class ImpPDFTabLinksPage : public SfxTabPage
 {
-    VclPtr<CheckBox>            m_pCbExprtBmkrToNmDst;
-    VclPtr<CheckBox>            m_pCbOOoToPDFTargets;
-    VclPtr<CheckBox>            m_pCbExportRelativeFsysLinks;
-
-    VclPtr<RadioButton>         m_pRbOpnLnksDefault;
     bool                        mbOpnLnksDefaultUserState;
-    VclPtr<RadioButton>         m_pRbOpnLnksLaunch;
     bool                        mbOpnLnksLaunchUserState;
-    VclPtr<RadioButton>         m_pRbOpnLnksBrowser;
     bool                        mbOpnLnksBrowserUserState;
 
-    DECL_LINK( ClickRbOpnLnksDefaultHdl, Button*, void );
-    DECL_LINK( ClickRbOpnLnksBrowserHdl, Button*, void );
+    std::unique_ptr<weld::CheckButton> m_xCbExprtBmkrToNmDst;
+    std::unique_ptr<weld::CheckButton> m_xCbOOoToPDFTargets;
+    std::unique_ptr<weld::CheckButton> m_xCbExportRelativeFsysLinks;
+    std::unique_ptr<weld::RadioButton> m_xRbOpnLnksDefault;
+    std::unique_ptr<weld::RadioButton> m_xRbOpnLnksLaunch;
+    std::unique_ptr<weld::RadioButton> m_xRbOpnLnksBrowser;
+
+    DECL_LINK(ClickRbOpnLnksDefaultHdl, weld::ToggleButton&, void);
+    DECL_LINK(ClickRbOpnLnksBrowserHdl, weld::ToggleButton&, void);
 
 public:
-                                ImpPDFTabLinksPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabLinksPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabLinksPage() override;
 
-    virtual void                dispose() override;
-    static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
+    static VclPtr<SfxTabPage>   Create(TabPageParent pParent, const SfxItemSet* rAttrSet);
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
@@ -416,24 +377,24 @@ public:
 //class to implement the digital signing
 class ImpPDFTabSigningPage : public SfxTabPage
 {
-    VclPtr<Edit>                mpEdSignCert;
-    VclPtr<PushButton>          mpPbSignCertSelect;
-    VclPtr<PushButton>          mpPbSignCertClear;
-    VclPtr<Edit>                mpEdSignPassword;
-    VclPtr<Edit>                mpEdSignLocation;
-    VclPtr<Edit>                mpEdSignContactInfo;
-    VclPtr<Edit>                mpEdSignReason;
-    VclPtr<ListBox>             mpLBSignTSA;
     css::uno::Reference< css::security::XCertificate > maSignCertificate;
 
-    DECL_LINK( ClickmaPbSignCertSelect, Button*, void );
-    DECL_LINK( ClickmaPbSignCertClear, Button*, void );
+    std::unique_ptr<weld::Entry> mxEdSignCert;
+    std::unique_ptr<weld::Button> mxPbSignCertSelect;
+    std::unique_ptr<weld::Button> mxPbSignCertClear;
+    std::unique_ptr<weld::Entry> mxEdSignPassword;
+    std::unique_ptr<weld::Entry> mxEdSignLocation;
+    std::unique_ptr<weld::Entry> mxEdSignContactInfo;
+    std::unique_ptr<weld::Entry> mxEdSignReason;
+    std::unique_ptr<weld::ComboBox> mxLBSignTSA;
+
+    DECL_LINK(ClickmaPbSignCertSelect, weld::Button&, void);
+    DECL_LINK(ClickmaPbSignCertClear, weld::Button&, void);
 
 public:
-                                ImpPDFTabSigningPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ImpPDFTabSigningPage(TabPageParent pParent, const SfxItemSet& rSet);
     virtual                     ~ImpPDFTabSigningPage() override;
 
-    virtual void                dispose() override;
     static VclPtr<SfxTabPage>   Create( TabPageParent pParent, const SfxItemSet* rAttrSet );
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
@@ -441,6 +402,5 @@ public:
 };
 
 #endif // INCLUDED_FILTER_SOURCE_PDF_IMPDIALOG_HXX
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

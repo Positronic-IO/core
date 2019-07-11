@@ -24,6 +24,8 @@
 #include <com/sun/star/script/Converter.hpp>
 #include <com/sun/star/sdbc/SQLException.hpp>
 
+#include <sal/log.hxx>
+
 using namespace fileaccess;
 using namespace com::sun::star;
 using namespace css::uno;
@@ -37,7 +39,7 @@ using namespace css::uno;
 // Function for TypeConverting
 
 template< class _type_ >
-bool convert( TaskManager* pShell,
+static bool convert( TaskManager* pShell,
                   uno::Reference< script::XTypeConverter >& xConverter,
                   uno::Any& rValue,
                   _type_& aReturn  )
@@ -79,8 +81,7 @@ bool convert( TaskManager* pShell,
 XRow_impl::XRow_impl( TaskManager* pMyShell,const uno::Sequence< uno::Any >& seq )
     : m_aValueMap( seq ),
       m_nWasNull(false),
-      m_pMyShell( pMyShell ),
-      m_xTypeConverter( nullptr )
+      m_pMyShell( pMyShell )
 {
 }
 

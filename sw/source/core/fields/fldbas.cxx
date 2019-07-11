@@ -154,17 +154,24 @@ void SwFieldType::PutValue( const uno::Any& , sal_uInt16 )
 {
 }
 
+void SwFieldType::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    SwIterator<SwFormatField, SwFieldType> aIter(*this);
+    if (!aIter.First())
+        return;
+    xmlTextWriterStartElement(pWriter, BAD_CAST("SwFieldType"));
+    for (const SwFormatField* pFormatField = aIter.First(); pFormatField;
+         pFormatField = aIter.Next())
+        pFormatField->dumpAsXml(pWriter);
+    xmlTextWriterEndElement(pWriter);
+}
+
 void SwFieldTypes::dumpAsXml(xmlTextWriterPtr pWriter) const
 {
     xmlTextWriterStartElement(pWriter, BAD_CAST("SwFieldTypes"));
     sal_uInt16 nCount = size();
     for (sal_uInt16 nType = 0; nType < nCount; ++nType)
-    {
-        const SwFieldType *pCurType = (*this)[nType];
-        SwIterator<SwFormatField, SwFieldType> aIter(*pCurType);
-        for (const SwFormatField* pFormatField = aIter.First(); pFormatField; pFormatField = aIter.Next())
-            pFormatField->dumpAsXml(pWriter);
-    }
+        (*this)[nType]->dumpAsXml(pWriter);
     xmlTextWriterEndElement(pWriter);
 }
 
@@ -401,7 +408,8 @@ bool SwField::IsFixed() const
     return bRet;
 }
 
-OUString SwField::ExpandField(bool const bCached) const
+OUString
+SwField::ExpandField(bool const bCached, SwRootFrame const*const pLayout) const
 {
     if ( m_bUseFieldValueCache )
     {
@@ -410,20 +418,20 @@ OUString SwField::ExpandField(bool const bCached) const
             if (GetTypeId() == TYP_AUTHORITY)
             {
                 const SwAuthorityField* pAuthorityField = static_cast<const SwAuthorityField*>(this);
-                m_Cache = pAuthorityField->ConditionalExpandAuthIdentifier();
+                m_Cache = pAuthorityField->ConditionalExpandAuthIdentifier(pLayout);
             }
             else
-                m_Cache = Expand();
+                m_Cache = ExpandImpl(pLayout);
         }
         return m_Cache;
     }
 
-    return Expand();
+    return ExpandImpl(pLayout);
 }
 
-SwField * SwField::CopyField() const
+std::unique_ptr<SwField> SwField::CopyField() const
 {
-    SwField *const pNew = Copy();
+    std::unique_ptr<SwField> pNew = Copy();
     // #i85766# cache expansion of source (for clipboard)
     // use this->cache, not this->Expand(): only text formatting calls Expand()
     pNew->m_Cache = m_Cache;
@@ -495,7 +503,7 @@ OUString SwValueFieldType::ExpandValue( const double& rVal,
                 OUString sFormat(pEntry->GetFormatstring());
 
                 pFormatter->PutandConvertEntry(sFormat, nDummy, nType, nFormat,
-                                        pEntry->GetLanguage(), nFormatLng );
+                                        pEntry->GetLanguage(), nFormatLng, false);
             }
             else
                 nFormat = nNewFormat;
@@ -603,7 +611,7 @@ sal_uInt32 SwValueField::GetSystemFormat(SvNumberFormatter* pFormatter, sal_uInt
 
             sal_uInt32 nTempFormat = nFormat;
             pFormatter->PutandConvertEntry(sFormat, nDummy, nType,
-                                           nTempFormat, pEntry->GetLanguage(), nLng);
+                                           nTempFormat, pEntry->GetLanguage(), nLng, true);
             nFormat = nTempFormat;
         }
         else
@@ -611,6 +619,14 @@ sal_uInt32 SwValueField::GetSystemFormat(SvNumberFormatter* pFormatter, sal_uInt
     }
 
     return nFormat;
+}
+
+void SwValueField::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    xmlTextWriterStartElement(pWriter, BAD_CAST("SwValueField"));
+    xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_fValue"), BAD_CAST(OString::number(m_fValue).getStr()));
+    SwField::dumpAsXml(pWriter);
+    xmlTextWriterEndElement(pWriter);
 }
 
 /// set language of the format
@@ -645,7 +661,7 @@ void SwValueField::SetLanguage( LanguageType nLng )
                     pFormatter->PutandConvertEntry( sFormat, nDummy, nType,
                                                     nNewFormat,
                                                     pEntry->GetLanguage(),
-                                                    nFormatLng );
+                                                    nFormatLng, false);
                 }
                 SetFormat( nNewFormat );
             }
@@ -768,6 +784,8 @@ void SwField::dumpAsXml(xmlTextWriterPtr pWriter) const
     xmlTextWriterStartElement(pWriter, BAD_CAST("SwField"));
     xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("symbol"), "%s", BAD_CAST(typeid(*this).name()));
     xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
+    xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nFormat"), BAD_CAST(OString::number(m_nFormat).getStr()));
+    xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nLang"), BAD_CAST(OString::number(m_nLang.get()).getStr()));
 
     xmlTextWriterEndElement(pWriter);
 }

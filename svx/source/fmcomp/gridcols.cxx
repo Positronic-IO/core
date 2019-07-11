@@ -19,13 +19,12 @@
 
 #include <gridcols.hxx>
 #include <tools/debug.hxx>
-#include <comphelper/types.hxx>
 #include <fmservs.hxx>
 #include <svx/fmtools.hxx>
 using namespace ::com::sun::star::uno;
 
 
-const css::uno::Sequence<OUString>& getColumnTypes()
+static const css::uno::Sequence<OUString>& getColumnTypes()
 {
     static css::uno::Sequence<OUString> aColumnTypes(10);
     if (aColumnTypes.getConstArray()[0].isEmpty())
@@ -46,10 +45,14 @@ const css::uno::Sequence<OUString>& getColumnTypes()
 }
 
 
+extern "C" {
+
 // comparison of PropertyInfo
-extern "C" int NameCompare(const void* pFirst, const void* pSecond)
+static int NameCompare(const void* pFirst, const void* pSecond)
 {
     return static_cast<OUString const *>(pFirst)->compareTo(*static_cast<OUString const *>(pSecond));
+}
+
 }
 
 namespace

@@ -69,7 +69,7 @@ XFStyleManager::XFStyleManager() : s_aStdArrowStyles( "arrow" ), s_aTextStyles( 
     s_aParaStyles( "P" ),s_aListStyles( "L" ),s_aSectionStyles( "Sect" ),
     s_aPageMasters( "PM" ),s_aMasterpages( "MP" ),s_aDateStyles( "N" ),
     s_aGraphicsStyles( "fr" ),s_aTableStyles( "table" ),s_aTableCellStyles( "cell" ),
-    s_aTableRowStyles( "row" ),s_aTableColStyles( "col" ),s_pOutlineStyle(nullptr)
+    s_aTableRowStyles( "row" ),s_aTableColStyles( "col" )
 {
 }
 
@@ -80,11 +80,7 @@ XFStyleManager::~XFStyleManager()
 
 void    XFStyleManager::Reset()
 {
-    if( s_pOutlineStyle )
-    {
-        delete s_pOutlineStyle;
-        s_pOutlineStyle = nullptr;
-    }
+    s_pOutlineStyle.reset();
 
     s_aStdTextStyles.Reset();
     s_aStdParaStyles.Reset();
@@ -203,8 +199,7 @@ IXFStyleRet XFStyleManager::AddStyle(std::unique_ptr<IXFStyle> pStyle)
     }
     else if( pStyle->GetStyleFamily() == enumXFStyleOutline )
     {
-        delete s_pOutlineStyle;
-        s_pOutlineStyle = pStyle.release();
+        s_pOutlineStyle = std::move(pStyle);
     }
     else if( pStyle->GetStyleFamily() == enumXFStyleStrokeDash )
     {
@@ -265,7 +260,7 @@ IXFStyle*   XFStyleManager::FindStyle(const OUString& name)
     if( pStyle )
         return pStyle;
     if(s_pOutlineStyle && s_pOutlineStyle->GetStyleName() == name )
-        return s_pOutlineStyle;
+        return s_pOutlineStyle.get();
     pStyle = s_aStdStrokeDashStyles.FindStyle(name);
     if( pStyle )
         return pStyle;
@@ -325,10 +320,7 @@ void    XFStyleManager::ToXml(IXFStream *pStrm)
         pAttrList->Clear();
         pAttrList->AddAttribute( "style:name", fontDecl.GetFontName() );
         pAttrList->AddAttribute( "fo:font-family", fontDecl.GetFontFamily() );
-        if( fontDecl.GetFontPitchFixed() )
-            pAttrList->AddAttribute( "style:font-pitch", "fixed" );
-        else
-            pAttrList->AddAttribute( "style:font-pitch", "variable" );
+        pAttrList->AddAttribute( "style:font-pitch", "variable" );
         pStrm->StartElement( "style:font-decl" );
         pStrm->EndElement( "style:font-decl" );
     }

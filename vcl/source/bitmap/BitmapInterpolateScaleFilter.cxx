@@ -18,6 +18,7 @@
  */
 
 #include <tools/helpers.hxx>
+#include <osl/diagnose.h>
 
 #include <vcl/bitmapex.hxx>
 #include <vcl/bitmapaccess.hxx>
@@ -26,7 +27,7 @@
 #include <BitmapFastScaleFilter.hxx>
 #include <BitmapInterpolateScaleFilter.hxx>
 
-BitmapEx BitmapInterpolateScaleFilter::execute(BitmapEx const& rBitmapEx)
+BitmapEx BitmapInterpolateScaleFilter::execute(BitmapEx const& rBitmapEx) const
 {
     Bitmap aBitmap(rBitmapEx.GetBitmap());
 

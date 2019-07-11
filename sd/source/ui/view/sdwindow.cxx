@@ -31,6 +31,8 @@
 #include <app.hrc>
 #include <ViewShell.hxx>
 #include <DrawViewShell.hxx>
+#include <DrawDocShell.hxx>
+#include <PresentationViewShell.hxx>
 #include <View.hxx>
 #include <FrameView.hxx>
 #include <OutlineViewShell.hxx>
@@ -40,6 +42,7 @@
 #include <ViewShellBase.hxx>
 #include <uiobject.hxx>
 
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -58,7 +61,6 @@ namespace sd {
 Window::Window(vcl::Window* pParent)
     : vcl::Window(pParent, WinBits(WB_CLIPCHILDREN | WB_DIALOGCONTROL)),
       DropTargetHelper( this ),
-      mpShareWin(nullptr),
       maWinPos(0, 0),           // precautionary; but the values should be set
       maViewOrigin(0, 0),       // again from the owner of the window
       maViewSize(1000, 1000),
@@ -103,7 +105,6 @@ void Window::dispose()
         if (pWindowUpdater != nullptr)
             pWindowUpdater->UnregisterWindow (this);
     }
-    mpShareWin.clear();
     DropTargetHelper::dispose();
     vcl::Window::dispose();
 }
@@ -143,30 +144,23 @@ void Window::CalcMinZoom()
         // Get current zoom factor.
         long nZoom = GetZoom();
 
-        if ( mpShareWin )
-        {
-            mpShareWin->CalcMinZoom();
-            mnMinZoom = mpShareWin->mnMinZoom;
-        }
-        else
-        {
-            // Get the rectangle of the output area in logical coordinates
-            // and calculate the scaling factors that would lead to the view
-            // area (also called application area) to completely fill the
-            // window.
-            Size aWinSize = PixelToLogic(GetOutputSizePixel());
-            sal_uLong nX = static_cast<sal_uLong>(static_cast<double>(aWinSize.Width())
-                * double(ZOOM_MULTIPLICATOR) / static_cast<double>(maViewSize.Width()));
-            sal_uLong nY = static_cast<sal_uLong>(static_cast<double>(aWinSize.Height())
-                * double(ZOOM_MULTIPLICATOR) / static_cast<double>(maViewSize.Height()));
+        // Get the rectangle of the output area in logical coordinates
+        // and calculate the scaling factors that would lead to the view
+        // area (also called application area) to completely fill the
+        // window.
+        Size aWinSize = PixelToLogic(GetOutputSizePixel());
+        sal_uLong nX = static_cast<sal_uLong>(static_cast<double>(aWinSize.Width())
+            * double(ZOOM_MULTIPLICATOR) / static_cast<double>(maViewSize.Width()));
+        sal_uLong nY = static_cast<sal_uLong>(static_cast<double>(aWinSize.Height())
+            * double(ZOOM_MULTIPLICATOR) / static_cast<double>(maViewSize.Height()));
 
-            // Decide whether to take the larger or the smaller factor.
-            sal_uLong nFact = std::min(nX, nY);
+        // Decide whether to take the larger or the smaller factor.
+        sal_uLong nFact = std::min(nX, nY);
 
-            // The factor is transformed according to the current zoom factor.
-            nFact = nFact * nZoom / ZOOM_MULTIPLICATOR;
-            mnMinZoom = std::max(sal_uInt16(MIN_ZOOM), static_cast<sal_uInt16>(nFact));
-        }
+        // The factor is transformed according to the current zoom factor.
+        nFact = nFact * nZoom / ZOOM_MULTIPLICATOR;
+        mnMinZoom = std::max(sal_uInt16(MIN_ZOOM), static_cast<sal_uInt16>(nFact));
+
         // If the current zoom factor is smaller than the calculated minimal
         // zoom factor then set the new minimal factor as the current zoom
         // factor.
@@ -351,9 +345,8 @@ long Window::SetZoomFactor(long nZoom)
     UpdateMapOrigin();
 
     // Update the view's snapping to the new zoom factor.
-    if ( mpViewShell && dynamic_cast< DrawViewShell *>( mpViewShell ) !=  nullptr )
-        static_cast<DrawViewShell*>(mpViewShell)->GetView()->
-                                        RecalcLogicSnapMagnetic(*this);
+    if ( auto pDrawViewShell = dynamic_cast< DrawViewShell *>( mpViewShell ) )
+        pDrawViewShell->GetView()->RecalcLogicSnapMagnetic(*this);
 
     // Return the zoom factor just in case it has been changed above to lie
     // inside the valid range.
@@ -421,7 +414,7 @@ long Window::GetZoomForRect( const ::tools::Rectangle& rZoomRect )
         // Calculate the new origin.
         if ( nFact == 0 )
         {
-            // Don't change anything if the scale factor is degenrate.
+            // Don't change anything if the scale factor is degenerate.
             nRetZoom = GetZoom();
         }
         else
@@ -494,7 +487,7 @@ long Window::SetZoomRect (const ::tools::Rectangle& rZoomRect)
         // Calculate the new origin.
         if ( nFact == 0 )
         {
-            // Don't change anything if the scale factor is degenrate.
+            // Don't change anything if the scale factor is degenerate.
             nNewZoom = GetZoom();
         }
         else
@@ -590,7 +583,7 @@ void Window::UpdateMapMode()
     // removed old stuff here which still forced zoom to be
     // %BRUSH_SIZE which is outdated now
 
-    if (mpViewShell && dynamic_cast< DrawViewShell *>( mpViewShell ) !=  nullptr)
+    if (dynamic_cast< DrawViewShell *>( mpViewShell ))
     {
         // page should not "stick" to the window border
         if (aPix.Width() == 0)
@@ -884,8 +877,7 @@ sal_Int8 Window::AcceptDrop( const AcceptDropEvent& rEvt )
 
     if( mpViewShell && !mpViewShell->GetDocSh()->IsReadOnly() )
     {
-        if( mpViewShell )
-            nRet = mpViewShell->AcceptDrop( rEvt, *this, this, SDRPAGE_NOTFOUND, SDRLAYER_NOTFOUND );
+        nRet = mpViewShell->AcceptDrop( rEvt, *this, this, SDRPAGE_NOTFOUND, SDRLAYER_NOTFOUND );
 
         if (mbUseDropScroll && dynamic_cast< OutlineViewShell *>( mpViewShell ) ==  nullptr)
             DropScroll( rEvt.maPosPixel );
@@ -957,7 +949,7 @@ css::uno::Reference<css::accessibility::XAccessible>
     Window::CreateAccessible()
 {
     // If current viewshell is PresentationViewShell, just return empty because the correct ShowWin will be created later.
-    if (mpViewShell && dynamic_cast< PresentationViewShell *>( mpViewShell ) !=  nullptr)
+    if (dynamic_cast< PresentationViewShell *>( mpViewShell ))
     {
         return vcl::Window::CreateAccessible ();
     }
@@ -1011,7 +1003,7 @@ Selection Window::GetSurroundingTextSelection() const
 void Window::LogicInvalidate(const ::tools::Rectangle* pRectangle)
 {
     DrawViewShell* pDrawViewShell = dynamic_cast<DrawViewShell*>(mpViewShell);
-    if (pDrawViewShell && pDrawViewShell->IsInSwitchPage())
+    if (!pDrawViewShell || pDrawViewShell->IsInSwitchPage())
         return;
 
     OString sRectangle;
@@ -1024,7 +1016,7 @@ void Window::LogicInvalidate(const ::tools::Rectangle* pRectangle)
             aRectangle = OutputDevice::LogicToLogic(aRectangle, MapMode(MapUnit::Map100thMM), MapMode(MapUnit::MapTwip));
         sRectangle = aRectangle.toString();
     }
-    SfxViewShell& rSfxViewShell = mpViewShell->GetViewShellBase();
+    SfxViewShell& rSfxViewShell = pDrawViewShell->GetViewShellBase();
     SfxLokHelper::notifyInvalidation(&rSfxViewShell, sRectangle);
 }
 

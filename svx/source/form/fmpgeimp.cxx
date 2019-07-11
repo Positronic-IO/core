@@ -35,6 +35,7 @@
 #include <com/sun/star/drawing/XControlShape.hpp>
 #include <com/sun/star/form/Forms.hpp>
 
+#include <sal/log.hxx>
 #include <sfx2/objsh.hxx>
 #include <svx/fmglob.hxx>
 #include <svx/fmpage.hxx>
@@ -46,6 +47,7 @@
 #include <comphelper/types.hxx>
 #include <unotools/streamwrap.hxx>
 #include <connectivity/dbtools.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
@@ -166,8 +168,8 @@ void FmFormPageImpl::initFrom( FmFormPageImpl& i_foreignImpl )
         aVisitor.process( FormComponentPair( xForeignForms, m_xForms ), aAssignmentProcessor );
 
         // assign the cloned models to their SdrObjects
-        SdrObjListIter aForeignIter( i_foreignImpl.m_rPage );
-        SdrObjListIter aOwnIter( m_rPage );
+        SdrObjListIter aForeignIter( &i_foreignImpl.m_rPage );
+        SdrObjListIter aOwnIter( &m_rPage );
 
         OSL_ENSURE( aForeignIter.IsMore() == aOwnIter.IsMore(), "FmFormPageImpl::FmFormPageImpl: inconsistent number of objects (1)!" );
         while ( aForeignIter.IsMore() && aOwnIter.IsMore() )
@@ -278,7 +280,7 @@ Reference< XMap > FmFormPageImpl::impl_createControlShapeMap_nothrow()
             ::cppu::UnoType< XControlShape >::get()
         ).get(), UNO_SET_THROW );
 
-        SdrObjListIter aPageIter( m_rPage );
+        SdrObjListIter aPageIter( &m_rPage );
         while ( aPageIter.IsMore() )
         {
             // only FmFormObjs are what we're interested in
@@ -418,7 +420,7 @@ Reference< XForm >  FmFormPageImpl::getDefaultForm()
             if( rModel.IsUndoEnabled() )
             {
                 rModel.AddUndo(
-                    new FmUndoContainerAction(
+                    o3tl::make_unique<FmUndoContainerAction>(
                         static_cast< FmFormModel& >(rModel),
                         FmUndoContainerAction::Inserted,
                         xForms,
@@ -515,7 +517,7 @@ Reference< css::form::XForm >  FmFormPageImpl::findPlaceInFormComponentHierarchy
             {
                 Reference< css::container::XIndexContainer >  xContainer( getForms(), UNO_QUERY );
                 rModel.AddUndo(
-                    new FmUndoContainerAction(
+                    o3tl::make_unique<FmUndoContainerAction>(
                         static_cast< FmFormModel& >(rModel),
                         FmUndoContainerAction::Inserted,
                         xContainer,

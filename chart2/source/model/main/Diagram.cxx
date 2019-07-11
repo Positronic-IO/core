@@ -20,15 +20,13 @@
 #include <Diagram.hxx>
 #include <PropertyHelper.hxx>
 #include "Wall.hxx"
+#include <ModifyListenerHelper.hxx>
 #include <UserDefinedProperties.hxx>
 #include <ConfigColorScheme.hxx>
 #include <DiagramHelper.hxx>
 #include <ThreeDHelper.hxx>
 #include <CloneHelper.hxx>
-#include <AxisHelper.hxx>
 #include <SceneProperties.hxx>
-#include <DisposeHelper.hxx>
-#include <BaseGFXHelper.hxx>
 #include <unonames.hxx>
 
 #include <basegfx/numeric/ftools.hxx>
@@ -36,15 +34,14 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/chart2/RelativePosition.hpp>
 #include <com/sun/star/chart2/RelativeSize.hpp>
-#include <com/sun/star/drawing/CameraGeometry.hpp>
+#include <com/sun/star/container/NoSuchElementException.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
-#include <com/sun/star/drawing/HomogenMatrix.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
-#include <iterator>
-#include <functional>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans::PropertyAttribute;
@@ -298,7 +295,7 @@ Diagram::Diagram( uno::Reference< uno::XComponentContext > const & xContext ) :
 
 Diagram::Diagram( const Diagram & rOther ) :
         MutexContainer(),
-        impl::Diagram_Base(),
+        impl::Diagram_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xContext( rOther.m_xContext ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
@@ -485,7 +482,7 @@ void SAL_CALL Diagram::addCoordinateSystem(
             != m_aCoordSystems.end())
             throw lang::IllegalArgumentException();
 
-        if( m_aCoordSystems.size()>=1 )
+        if( !m_aCoordSystems.empty() )
         {
             OSL_FAIL( "more than one coordinatesystem is not supported yet by the fileformat" );
             return;

@@ -20,7 +20,6 @@
 #define INCLUDED_CUI_SOURCE_OPTIONS_OPTGDLG_HXX
 #include <memory>
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/field.hxx>
 #include <vcl/fixed.hxx>
 #include <sfx2/tabdlg.hxx>
@@ -41,6 +40,7 @@ class OfaMiscTabPage : public SfxTabPage
 {
     using TabPage::DeactivatePage;
 private:
+    VclPtr<CheckBox>     m_pPopUpNoHelpCB;
     VclPtr<CheckBox>     m_pExtHelpCB;
 
     VclPtr<FixedImage>   m_pFileDlgROImage;
@@ -111,9 +111,9 @@ private:
     sal_Int32      nNotebookbarSizeLB_InitialSelection;
     sal_Int32      nStyleLB_InitialSelection;
 
-    SvtTabAppearanceCfg*    pAppearanceCfg;
-    CanvasSettings*         pCanvasSettings;
-    SvtOptionsDrawinglayer* mpDrawinglayerOpt;
+    std::unique_ptr<SvtTabAppearanceCfg>    pAppearanceCfg;
+    std::unique_ptr<CanvasSettings>         pCanvasSettings;
+    std::unique_ptr<SvtOptionsDrawinglayer> mpDrawinglayerOpt;
     std::unique_ptr<svt::OpenGLCfg> mpOpenGLConfig;
 
     std::vector<vcl::IconThemeInfo> mInstalledIconThemes;
@@ -121,6 +121,7 @@ private:
 #if defined( UNX )
     DECL_LINK( OnAntialiasingToggled, CheckBox&, void );
 #endif
+    DECL_LINK(OnForceOpenGLToggled, CheckBox&, void);
     void UpdateOGLStatus();
 
 public:
@@ -158,7 +159,7 @@ class OfaLanguagesTabPage : public SfxTabPage
 
     bool        m_bOldAsian;
     bool        m_bOldCtl;
-    LanguageConfig_Impl*    pLangConfig;
+    std::unique_ptr<LanguageConfig_Impl> pLangConfig;
 
     OUString        m_sUserLocaleValue;
     OUString        m_sSystemDefaultString;

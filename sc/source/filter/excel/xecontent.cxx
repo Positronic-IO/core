@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <com/sun/star/sheet/XAreaLinks.hpp>
 #include <com/sun/star/sheet/XAreaLink.hpp>
-#include <comphelper/string.hxx>
+#include <com/sun/star/sheet/TableValidationVisibility.hpp>
 #include <sfx2/objsh.hxx>
 #include <tools/urlobj.hxx>
 #include <svl/itemset.hxx>
@@ -44,7 +44,11 @@
 #include <xehelper.hxx>
 #include <xestyle.hxx>
 #include <xename.hxx>
+#include <xlcontent.hxx>
+#include <xltools.hxx>
+#include <xeformula.hxx>
 #include <rtl/uuid.h>
+#include <sal/log.hxx>
 #include <oox/export/utils.hxx>
 #include <oox/token/namespaces.hxx>
 #include <oox/token/relationship.hxx>
@@ -121,7 +125,7 @@ sal_uInt32 XclExpSstImpl::Insert( XclExpStringRef xString )
 
     // calculate hash value in range [0,EXC_SST_HASHTABLE_SIZE)
     sal_uInt16 nHash = xString->GetHash();
-    (nHash ^= (nHash / EXC_SST_HASHTABLE_SIZE)) %= EXC_SST_HASHTABLE_SIZE;
+    nHash = (nHash ^ (nHash / EXC_SST_HASHTABLE_SIZE)) % EXC_SST_HASHTABLE_SIZE;
 
     XclExpHashVec& rVec = maHashTab[ nHash ];
     XclExpHashEntry aEntry( xString.get(), mnSize );
@@ -202,7 +206,7 @@ void XclExpSstImpl::SaveXml( XclExpXmlStream& rStrm )
             "sharedStrings.xml",
             rStrm.GetCurrentStream()->getOutputStream(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml",
-            rtl::OUStringToOString(oox::getRelationship(Relationship::SHAREDSTRINGS), RTL_TEXTENCODING_UTF8).getStr());
+            OUStringToOString(oox::getRelationship(Relationship::SHAREDSTRINGS), RTL_TEXTENCODING_UTF8).getStr());
     rStrm.PushStream( pSst );
 
     pSst->startElement( XML_sst,
@@ -414,11 +418,14 @@ XclExpHyperlink::XclExpHyperlink( const XclExpRoot& rRoot, const SvxURLField& rU
     {
         OUString aTextMark( rUrl.copy( 1 ) );
 
-        sal_Int32 nSepPos = aTextMark.lastIndexOf( '.' );
-        if(nSepPos != -1)
-            aTextMark = aTextMark.replaceAt( nSepPos, 1, "!" );
-        else
-            nSepPos = aTextMark.lastIndexOf( '!' );
+        sal_Int32 nSepPos = aTextMark.lastIndexOf( '!' );
+        sal_Int32 nPointPos = aTextMark.lastIndexOf( '.' );
+        // last dot is the separator, if there is no ! after it
+        if(nSepPos < nPointPos)
+        {
+           nSepPos = nPointPos;
+           aTextMark = aTextMark.replaceAt( nSepPos, 1, "!" );
+        }
 
         if(nSepPos != -1)
         {
@@ -457,7 +464,8 @@ OUString XclExpHyperlink::BuildFileName(
         sal_uInt16& rnLevel, bool& rbRel, const OUString& rUrl, const XclExpRoot& rRoot, bool bEncoded )
 {
     INetURLObject aURLObject( rUrl );
-    OUString aDosName( bEncoded ? aURLObject.GetURLPath() : aURLObject.getFSysPath( FSysStyle::Dos ) );
+    OUString aDosName(bEncoded ? aURLObject.GetMainURL(INetURLObject::DecodeMechanism::ToIUri)
+                               : aURLObject.getFSysPath(FSysStyle::Dos));
     rnLevel = 0;
     rbRel = rRoot.IsRelUrl();
 
@@ -936,6 +944,71 @@ bool IsTextRule(ScConditionMode eMode)
     return false;
 }
 
+bool RequiresFormula(ScConditionMode eMode)
+{
+    if (IsTopBottomRule(eMode))
+        return false;
+    else if (IsTextRule(eMode))
+        return false;
+
+    switch (eMode)
+    {
+        case ScConditionMode::NoError:
+        case ScConditionMode::Error:
+        case ScConditionMode::Duplicate:
+        case ScConditionMode::NotDuplicate:
+            return false;
+        default:
+        break;
+    }
+
+    return true;
+}
+
+bool RequiresFixedFormula(ScConditionMode eMode)
+{
+    switch(eMode)
+    {
+        case ScConditionMode::NoError:
+        case ScConditionMode::Error:
+        case ScConditionMode::BeginsWith:
+        case ScConditionMode::EndsWith:
+        case ScConditionMode::ContainsText:
+        case ScConditionMode::NotContainsText:
+            return true;
+        default:
+        break;
+    }
+
+    return false;
+}
+
+OString GetFixedFormula(ScConditionMode eMode, const ScAddress& rAddress, const OString& rText)
+{
+    OStringBuffer aBuffer;
+    OStringBuffer aPosBuffer = XclXmlUtils::ToOString(aBuffer, rAddress);
+    OString aPos = aPosBuffer.makeStringAndClear();
+    switch (eMode)
+    {
+        case ScConditionMode::Error:
+            return OString("ISERROR(" + aPos + ")") ;
+        case ScConditionMode::NoError:
+            return OString("NOT(ISERROR(" + aPos + "))") ;
+        case ScConditionMode::BeginsWith:
+            return OString("LEFT(" + aPos + ",LEN(\"" + rText + "\"))=\"" + rText + "\"");
+        case ScConditionMode::EndsWith:
+            return OString("RIGHT(" + aPos +",LEN(\"" + rText + "\"))=\"" + rText + "\"");
+        case ScConditionMode::ContainsText:
+            return OString("NOT(ISERROR(SEARCH(\"" + rText + "\"," + aPos + ")))");
+        case ScConditionMode::NotContainsText:
+            return OString("ISERROR(SEARCH(\"" +  rText + "\"," + aPos + "))");
+        default:
+        break;
+    }
+
+    return OString("");
+}
+
 }
 
 void XclExpCFImpl::SaveXml( XclExpXmlStream& rStrm )
@@ -981,7 +1054,15 @@ void XclExpCFImpl::SaveXml( XclExpXmlStream& rStrm )
             XML_text, aText.getStr(),
             XML_dxfId, OString::number( GetDxfs().GetDxfId( mrFormatEntry.GetStyle() ) ).getStr(),
             FSEND );
-    if(!IsTextRule(eOperation) && !IsTopBottomRule(eOperation))
+
+    if (RequiresFixedFormula(eOperation))
+    {
+        rWorksheet->startElement( XML_formula, FSEND );
+        OString aFormula = GetFixedFormula(eOperation, mrFormatEntry.GetValidSrcPos(), aText);
+        rWorksheet->writeEscaped(aFormula.getStr());
+        rWorksheet->endElement( XML_formula );
+    }
+    else if(RequiresFormula(eOperation))
     {
         rWorksheet->startElement( XML_formula, FSEND );
         std::unique_ptr<ScTokenArray> pTokenArray(mrFormatEntry.CreateFlatCopiedTokenArray(0));
@@ -1386,8 +1467,10 @@ XclExpDataBar::XclExpDataBar( const XclExpRoot& rRoot, const ScDataBarFormat& rF
     const ScRange & rRange = rFormat.GetRange().front();
     ScAddress aAddr = rRange.aStart;
     // exact position is not important, we allow only absolute refs
-    mpCfvoLowerLimit.reset( new XclExpCfvo( GetRoot(), *mrFormat.GetDataBarData()->mpLowerLimit.get(), aAddr, true ) );
-    mpCfvoUpperLimit.reset( new XclExpCfvo( GetRoot(), *mrFormat.GetDataBarData()->mpUpperLimit.get(), aAddr, false ) );
+    mpCfvoLowerLimit.reset(
+        new XclExpCfvo(GetRoot(), *mrFormat.GetDataBarData()->mpLowerLimit, aAddr, true));
+    mpCfvoUpperLimit.reset(
+        new XclExpCfvo(GetRoot(), *mrFormat.GetDataBarData()->mpUpperLimit, aAddr, false));
 
     mpCol.reset( new XclExpColScaleCol( GetRoot(), mrFormat.GetDataBarData()->maPositiveColor ) );
 }
@@ -1447,22 +1530,6 @@ XclExpIconSet::XclExpIconSet( const XclExpRoot& rRoot, const ScIconSetFormat& rF
     }
 }
 
-namespace {
-
-const char* getIconSetName( ScIconSetType eType )
-{
-    const ScIconSetMap* pMap = ScIconSetFormat::g_IconSetMap;
-    for(; pMap->pName; ++pMap)
-    {
-        if(pMap->eType == eType)
-            return pMap->pName;
-    }
-
-    return "";
-}
-
-}
-
 void XclExpIconSet::SaveXml( XclExpXmlStream& rStrm )
 {
     sax_fastparser::FSHelperPtr& rWorksheet = rStrm.GetCurrentStream();
@@ -1472,7 +1539,7 @@ void XclExpIconSet::SaveXml( XclExpXmlStream& rStrm )
             XML_priority, OString::number( mnPriority + 1 ).getStr(),
             FSEND );
 
-    const char* pIconSetName = getIconSetName(mrFormat.GetIconSetData()->eIconSetType);
+    const char* pIconSetName = ScIconSetFormat::getIconSetName(mrFormat.GetIconSetData()->eIconSetType);
     rWorksheet->startElement( XML_iconSet,
             XML_iconSet, pIconSetName,
             XML_showValue, mrFormat.GetIconSetData()->mbShowValue ? nullptr : "0",
@@ -1650,7 +1717,7 @@ XclExpDV::XclExpDV( const XclExpRoot& rRoot, sal_uLong nScHandle ) :
 
         // first formula
         xScTokArr.reset( pValData->CreateFlatCopiedTokenArray( 0 ) );
-        if( xScTokArr.get() )
+        if (xScTokArr)
         {
             if( pValData->GetDataMode() == SC_VALID_LIST )
             {
@@ -1663,18 +1730,19 @@ XclExpDV::XclExpDV( const XclExpRoot& rRoot, sal_uLong nScHandle ) :
                         Data validity is BIFF8 only (important for the XclExpString object).
                         Excel uses the NUL character as string list separator. */
                     mxString1.reset( new XclExpString( XclStrFlags::EightBitLength ) );
-                    sal_Int32 nTokenCnt = comphelper::string::getTokenCount(aString, '\n');
-                    sal_Int32 nStringIx = 0;
-                    for( sal_Int32 nToken = 0; nToken < nTokenCnt; ++nToken )
+                    if (!aString.isEmpty())
                     {
-                        OUString aToken( aString.getToken( 0, '\n', nStringIx ) );
-                        if( nToken > 0 )
+                        sal_Int32 nStringIx = 0;
+                        for(;;)
                         {
+                            const OUString aToken( aString.getToken( 0, '\n', nStringIx ) );
+                            mxString1->Append( aToken );
+                            sFormulaBuf.append( aToken );
+                            if (nStringIx<0)
+                                break;
                             mxString1->Append(OUString(u'\0'));
                             sFormulaBuf.append( ',' );
                         }
-                        mxString1->Append( aToken );
-                        sFormulaBuf.append( aToken );
                     }
                     ::set_flag( mnFlags, EXC_DV_STRINGLIST );
 
@@ -1722,7 +1790,7 @@ XclExpDV::XclExpDV( const XclExpRoot& rRoot, sal_uLong nScHandle ) :
 
         // second formula
         xScTokArr.reset( pValData->CreateFlatCopiedTokenArray( 1 ) );
-        if( xScTokArr.get() )
+        if (xScTokArr)
         {
             if(GetOutput() == EXC_OUTPUT_BINARY)
                 mxTokArr2 = rFmlaComp.CreateFormula( EXC_FMLATYPE_DATAVAL, *xScTokArr );
@@ -1916,18 +1984,21 @@ XclExpWebQuery::XclExpWebQuery(
     mbEntireDoc( false )
 {
     // comma separated list of HTML table names or indexes
-    sal_Int32 nTokenCnt = comphelper::string::getTokenCount(rSource, ';');
     OUString aNewTables;
     OUString aAppendTable;
-    sal_Int32 nStringIx = 0;
     bool bExitLoop = false;
-    for( sal_Int32 nToken = 0; (nToken < nTokenCnt) && !bExitLoop; ++nToken )
+    if (!rSource.isEmpty())
     {
-        OUString aToken( rSource.getToken( 0, ';', nStringIx ) );
-        mbEntireDoc = ScfTools::IsHTMLDocName( aToken );
-        bExitLoop = mbEntireDoc || ScfTools::IsHTMLTablesName( aToken );
-        if( !bExitLoop && ScfTools::GetHTMLNameFromName( aToken, aAppendTable ) )
-            aNewTables = ScGlobal::addToken( aNewTables, aAppendTable, ',' );
+        sal_Int32 nStringIx = 0;
+        do
+        {
+            OUString aToken( rSource.getToken( 0, ';', nStringIx ) );
+            mbEntireDoc = ScfTools::IsHTMLDocName( aToken );
+            bExitLoop = mbEntireDoc || ScfTools::IsHTMLTablesName( aToken );
+            if( !bExitLoop && ScfTools::GetHTMLNameFromName( aToken, aAppendTable ) )
+                aNewTables = ScGlobal::addToken( aNewTables, aAppendTable, ',' );
+        }
+        while (nStringIx>0 && !bExitLoop);
     }
 
     if( !bExitLoop )    // neither HTML_all nor HTML_tables found

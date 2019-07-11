@@ -35,6 +35,7 @@
 #include <cppuhelper/basemutex.hxx>
 #include <svtools/svmedit.hxx>
 #include <rtl/ref.hxx>
+#include <osl/diagnose.h>
 
 #include <vector>
 
@@ -80,7 +81,7 @@ class OGroupsSortingDialog :    public FloatingWindow
     ::rtl::Reference< comphelper::OPropertyChangeMultiplexer>                       m_pReportListener;
     css::uno::Reference< css::report::XGroups>            m_xGroups;
     css::uno::Reference< css::container::XNameAccess >    m_xColumns;
-    bool                                                  m_bReadOnly;
+    bool const                                            m_bReadOnly;
 private:
     DECL_LINK( OnControlFocusLost, Control&, void );
     DECL_LINK( OnControlFocusGot, Control&, void );
@@ -131,8 +132,8 @@ private:
     *
     */
     void fillColumns();
-    OGroupsSortingDialog(OGroupsSortingDialog&) = delete;
-    void operator =(OGroupsSortingDialog&) = delete;
+    OGroupsSortingDialog(OGroupsSortingDialog const &) = delete;
+    void operator =(OGroupsSortingDialog const &) = delete;
 protected:
     // OPropertyChangeListener
     virtual void    _propertyChanged(const css::beans::PropertyChangeEvent& _rEvent) override;

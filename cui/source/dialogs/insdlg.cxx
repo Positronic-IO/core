@@ -38,12 +38,12 @@
 #include <svtools/strings.hrc>
 #include <svtools/svtresid.hxx>
 
+#include <sal/log.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/debug.hxx>
 #include <svl/urihelper.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/svapp.hxx>
@@ -95,7 +95,7 @@ IMPL_LINK_NOARG(SvInsertOleDlg, DoubleClickHdl, weld::TreeView&, void)
 IMPL_LINK_NOARG(SvInsertOleDlg, BrowseHdl, weld::Button&, void)
 {
     sfx2::FileDialogHelper aHelper(ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE, FileDialogFlags::NONE, m_xDialog.get());
-    Reference< XFilePicker3 > xFilePicker = aHelper.GetFilePicker();
+    const Reference< XFilePicker3 >& xFilePicker = aHelper.GetFilePicker();
 
     // add filter
     try
@@ -156,7 +156,7 @@ SvInsertOleDlg::SvInsertOleDlg(weld::Window* pParent, const Reference<embed::XSt
     m_xRbNewObject->set_active(true);
 }
 
-short SvInsertOleDlg::execute()
+short SvInsertOleDlg::run()
 {
     short nRet = RET_OK;
     SvObjectServerList  aObjS;
@@ -176,7 +176,7 @@ short SvInsertOleDlg::execute()
     OUString aName;
 
     DBG_ASSERT( m_xStorage.is(), "No storage!");
-    if ( m_xStorage.is() && ( nRet = run() ) == RET_OK )
+    if ( m_xStorage.is() && ( nRet = InsertObjectDialog_Impl::run() ) == RET_OK )
     {
         OUString aFileName;
         bool bCreateNew = IsCreateNew();
@@ -311,7 +311,7 @@ short SvInsertOleDlg::execute()
                     Image aImage = SvFileInformationManager::GetImage(aURL, true);
                     SvMemoryStream aTemp;
                     WriteDIBBitmapEx(aImage.GetBitmapEx(), aTemp);
-                    m_aIconMetaFile = Sequence<sal_Int8>(static_cast<const sal_Int8*>(aTemp.GetData()), aTemp.Seek(STREAM_SEEK_TO_END));
+                    m_aIconMetaFile = Sequence<sal_Int8>(static_cast<const sal_Int8*>(aTemp.GetData()), aTemp.TellEnd());
                     m_aIconMediaType = "application/x-openoffice-bitmap;windows_formatname=\"Bitmap\"";
                 }
             }
@@ -356,20 +356,20 @@ SfxInsertFloatingFrameDialog::SfxInsertFloatingFrameDialog(weld::Window *pParent
 
 void SfxInsertFloatingFrameDialog::Init()
 {
-    m_xEDName.reset(m_xBuilder->weld_entry("edname"));
-    m_xEDURL.reset(m_xBuilder->weld_entry("edurl"));
-    m_xBTOpen.reset(m_xBuilder->weld_button("buttonbrowse"));
-    m_xRBScrollingOn.reset(m_xBuilder->weld_radio_button("scrollbaron"));
-    m_xRBScrollingOff.reset(m_xBuilder->weld_radio_button("scrollbaroff"));
-    m_xRBScrollingAuto.reset(m_xBuilder->weld_radio_button("scrollbarauto"));
-    m_xRBFrameBorderOn.reset(m_xBuilder->weld_radio_button("borderon"));
-    m_xRBFrameBorderOff.reset(m_xBuilder->weld_radio_button("borderoff"));
-    m_xFTMarginWidth.reset(m_xBuilder->weld_label("widthlabel"));
-    m_xNMMarginWidth.reset(m_xBuilder->weld_spin_button("width"));
-    m_xCBMarginWidthDefault.reset(m_xBuilder->weld_check_button("defaultwidth"));
-    m_xFTMarginHeight.reset(m_xBuilder->weld_label("heightlabel"));
-    m_xNMMarginHeight.reset(m_xBuilder->weld_spin_button("height"));
-    m_xCBMarginHeightDefault.reset(m_xBuilder->weld_check_button("defaultheight"));
+    m_xEDName = m_xBuilder->weld_entry("edname");
+    m_xEDURL = m_xBuilder->weld_entry("edurl");
+    m_xBTOpen = m_xBuilder->weld_button("buttonbrowse");
+    m_xRBScrollingOn = m_xBuilder->weld_radio_button("scrollbaron");
+    m_xRBScrollingOff = m_xBuilder->weld_radio_button("scrollbaroff");
+    m_xRBScrollingAuto = m_xBuilder->weld_radio_button("scrollbarauto");
+    m_xRBFrameBorderOn = m_xBuilder->weld_radio_button("borderon");
+    m_xRBFrameBorderOff = m_xBuilder->weld_radio_button("borderoff");
+    m_xFTMarginWidth = m_xBuilder->weld_label("widthlabel");
+    m_xNMMarginWidth = m_xBuilder->weld_spin_button("width");
+    m_xCBMarginWidthDefault = m_xBuilder->weld_check_button("defaultwidth");
+    m_xFTMarginHeight = m_xBuilder->weld_label("heightlabel");
+    m_xNMMarginHeight = m_xBuilder->weld_spin_button("height");
+    m_xCBMarginHeightDefault = m_xBuilder->weld_check_button("defaultheight");
 
     Link<weld::Button&, void> aLink(LINK(this, SfxInsertFloatingFrameDialog, CheckHdl));
     m_xCBMarginWidthDefault->connect_clicked(aLink);
@@ -383,7 +383,7 @@ void SfxInsertFloatingFrameDialog::Init()
     m_xBTOpen->connect_clicked(LINK(this, SfxInsertFloatingFrameDialog, OpenHdl));
 }
 
-short SfxInsertFloatingFrameDialog::execute()
+short SfxInsertFloatingFrameDialog::run()
 {
     short nRet = RET_OK;
     bool bOK = false;
@@ -475,7 +475,7 @@ short SfxInsertFloatingFrameDialog::execute()
         bOK = m_xStorage.is();
     }
 
-    if ( bOK && ( nRet = run() ) == RET_OK )
+    if ( bOK && ( nRet = InsertObjectDialog_Impl::run() ) == RET_OK )
     {
         OUString aURL;
         if (!m_xEDURL->get_text().isEmpty())

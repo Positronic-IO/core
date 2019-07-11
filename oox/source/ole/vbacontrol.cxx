@@ -29,6 +29,7 @@
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <xmlscript/xmldlg_imexp.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/binaryinputstream.hxx>
@@ -97,12 +98,12 @@ public:
 private:
     ::std::set< OUString >
                         maCtrlNames;
-    const OUString      maDummyBaseName;
     sal_Int32           mnIndex;
 };
 
+static const OUStringLiteral gaDummyBaseName( "DummyGroupSep" );
+
 VbaControlNamesSet::VbaControlNamesSet() :
-    maDummyBaseName( "DummyGroupSep" ),
     mnIndex( 0 )
 {
 }
@@ -119,7 +120,7 @@ OUString VbaControlNamesSet::generateDummyName()
     OUString aCtrlName;
     do
     {
-        aCtrlName = maDummyBaseName + OUString::number( ++mnIndex );
+        aCtrlName = gaDummyBaseName + OUString::number( ++mnIndex );
     }
     while( maCtrlNames.count( aCtrlName ) > 0 );
     maCtrlNames.insert( aCtrlName );

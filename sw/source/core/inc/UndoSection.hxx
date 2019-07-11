@@ -30,11 +30,15 @@ class SwSectionData;
 class SwSectionFormat;
 class SwTOXBase;
 
+namespace sw {
+    enum class RedlineMode;
+};
+
 class SwUndoInsSection : public SwUndo, private SwUndRng
 {
 private:
     const std::unique_ptr<SwSectionData> m_pSectionData;
-    const std::unique_ptr<SwTOXBase> m_pTOXBase; /// set iff section is TOX
+    const std::unique_ptr<std::pair<SwTOXBase *, sw::RedlineMode>> m_pTOXBase; /// set iff section is TOX
     const std::unique_ptr<SfxItemSet> m_pAttrSet;
     std::unique_ptr<SwHistory> m_pHistory;
     std::unique_ptr<SwRedlineData> m_pRedlData;
@@ -48,7 +52,8 @@ private:
 
 public:
     SwUndoInsSection(SwPaM const&, SwSectionData const&,
-        SfxItemSet const*const pSet, SwTOXBase const*const pTOXBase);
+        SfxItemSet const* pSet,
+        std::pair<SwTOXBase const*, sw::RedlineMode> const* pTOXBase);
 
     virtual ~SwUndoInsSection() override;
 
@@ -61,9 +66,9 @@ public:
     void SetUpdateFootnoteFlag(bool const bFlag)   { m_bUpdateFootnote = bFlag; }
 };
 
-SwUndo * MakeUndoDelSection(SwSectionFormat const&);
+std::unique_ptr<SwUndo> MakeUndoDelSection(SwSectionFormat const&);
 
-SwUndo * MakeUndoUpdateSection(SwSectionFormat const&, bool const);
+std::unique_ptr<SwUndo> MakeUndoUpdateSection(SwSectionFormat const&, bool const);
 
 #endif // INCLUDED_SW_SOURCE_CORE_INC_UNDOSECTION_HXX
 

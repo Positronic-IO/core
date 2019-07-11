@@ -28,11 +28,15 @@
 #include <DrawDocShell.hxx>
 #include <SlideSorterViewShell.hxx>
 #include <drawdoc.hxx>
+#include <sdmod.hxx>
+#include <sdpage.hxx>
 #include <filedlg.hxx>
 #include <strings.hrc>
 #include <DrawController.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <EventMultiplexer.hxx>
 
+#include <sal/log.hxx>
 #include <svtools/controldims.hxx>
 #include <svx/gallery.hxx>
 #include <unotools/pathoptions.hxx>
@@ -237,7 +241,7 @@ void lcl_CreateUndoForPages(
     ::sd::DrawDocShell* pDocSh      = rBase.GetDocShell();
     if (!pDocSh)
         return;
-    ::svl::IUndoManager* pManager   = pDocSh->GetUndoManager();
+    SfxUndoManager* pManager   = pDocSh->GetUndoManager();
     if (!pManager)
         return;
     SdDrawDocument* pDoc            = pDocSh->GetDoc();
@@ -246,7 +250,7 @@ void lcl_CreateUndoForPages(
 
     OUString aComment( SdResId(STR_UNDO_SLIDE_PARAMS) );
     pManager->EnterListAction(aComment, aComment, 0, rBase.GetViewShellId());
-    SdUndoGroup* pUndoGroup = new SdUndoGroup( pDoc );
+    std::unique_ptr<SdUndoGroup> pUndoGroup(new SdUndoGroup( pDoc ));
     pUndoGroup->SetComment( aComment );
 
     ::std::vector< SdPage * >::const_iterator aIt( rpPages->begin());
@@ -256,7 +260,7 @@ void lcl_CreateUndoForPages(
         pUndoGroup->AddAction( new sd::UndoTransition( pDoc, (*aIt) ) );
     }
 
-    pManager->AddUndoAction( pUndoGroup );
+    pManager->AddUndoAction( std::move(pUndoGroup) );
     pManager->LeaveListAction();
 }
 
@@ -279,7 +283,7 @@ struct lcl_EqualsSoundFileName
     }
 
 private:
-    OUString maStr;
+    OUString const maStr;
 };
 
 // returns -1 if no object was found
@@ -473,9 +477,9 @@ void SlideTransitionPane::Initialize(SdDrawDocument* pDoc)
         VALUESET_APPEND, /* show legend */ true );
     mpVS_TRANSITION_ICONS->RecalculateItemSizes();
 
-    mpCBX_duration->InsertValue(100, FUNIT_CUSTOM);
-    mpCBX_duration->InsertValue(200, FUNIT_CUSTOM);
-    mpCBX_duration->InsertValue(300, FUNIT_CUSTOM);
+    mpCBX_duration->InsertValue(100, FieldUnit::CUSTOM);
+    mpCBX_duration->InsertValue(200, FieldUnit::CUSTOM);
+    mpCBX_duration->InsertValue(300, FieldUnit::CUSTOM);
     mpCBX_duration->AdaptDropDownLineCountToMaximum();
 
     // set defaults
@@ -660,7 +664,7 @@ void SlideTransitionPane::updateControls()
         }
         else if( aEffect.mbSoundOn && !aEffect.maSound.isEmpty() )
         {
-            tSoundListType::size_type nPos = 0;
+            std::vector<OUString>::size_type nPos = 0;
             if( lcl_findSoundInList( maSoundList, aEffect.maSound, nPos ))
             {
                 mpLB_SOUND->SelectEntryPos( nPos + 3 );
@@ -745,7 +749,7 @@ void SlideTransitionPane::openSoundFileDialog()
            aFileDialog.Execute() == ERRCODE_NONE )
     {
         OUString aFile = aFileDialog.GetPath();
-        tSoundListType::size_type nPos = 0;
+        std::vector<OUString>::size_type nPos = 0;
         bValidSoundFile = lcl_findSoundInList( maSoundList, aFile, nPos );
 
         if( bValidSoundFile )
@@ -787,7 +791,7 @@ void SlideTransitionPane::openSoundFileDialog()
     {
         if( !maCurrentSoundFile.isEmpty() )
         {
-            tSoundListType::size_type nPos = 0;
+            std::vector<OUString>::size_type nPos = 0;
             if( lcl_findSoundInList( maSoundList, maCurrentSoundFile, nPos ))
                 mpLB_SOUND->SelectEntryPos( nPos + 3 );
             else

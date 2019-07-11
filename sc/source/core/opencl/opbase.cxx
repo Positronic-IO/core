@@ -8,6 +8,8 @@
  */
 
 #include <opencl/openclwrapper.hxx>
+#include <formula/vectortoken.hxx>
+#include <sal/log.hxx>
 
 #include "opbase.hxx"
 
@@ -31,6 +33,9 @@ OpenCLError::OpenCLError( const std::string& function, cl_int error, const std::
 
 Unhandled::Unhandled( const std::string& fn, int ln ) :
     mFile(fn), mLineNumber(ln) {}
+
+InvalidParameterCount::InvalidParameterCount( int parameterCount, const std::string& file, int ln ) :
+    mParameterCount(parameterCount), mFile(file), mLineNumber(ln) {}
 
 DynamicKernelArgument::DynamicKernelArgument( const ScCalcConfig& config, const std::string& s,
     const FormulaTreeNodeRef& ft ) :

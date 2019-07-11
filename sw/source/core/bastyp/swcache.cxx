@@ -22,6 +22,7 @@
 #include <o3tl/safeint.hxx>
 #include <rtl/strbuf.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 #include <limits.h>
 
@@ -125,8 +126,8 @@ SwCache::~SwCache()
     Check();
 #endif
 
-    for(SwCacheObjArr::const_iterator it = m_aCacheObjects.begin(); it != m_aCacheObjects.end(); ++it)
-        delete *it;
+    for(const auto& rpObj : m_aCacheObjects)
+        delete rpObj;
 }
 
 void SwCache::IncreaseMax( const sal_uInt16 nAdd )

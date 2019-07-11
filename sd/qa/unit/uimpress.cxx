@@ -23,6 +23,10 @@
 #include <iostream>
 #include <vector>
 
+#include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XMultiComponentFactory.hpp>
+
 using namespace ::com::sun::star;
 
 namespace {
@@ -45,11 +49,10 @@ public:
 
 private:
     uno::Reference< uno::XComponentContext > m_xContext;
-    SdDrawDocument* m_pDoc;
+    std::unique_ptr<SdDrawDocument> m_pDoc;
 };
 
 Test::Test()
-    : m_pDoc(nullptr)
 {
     m_xContext = cppu::defaultBootstrap_InitialComponentContext();
 
@@ -68,12 +71,12 @@ Test::Test()
 
 void Test::setUp()
 {
-    m_pDoc = new SdDrawDocument(DocumentType::Impress, nullptr);
+    m_pDoc.reset(new SdDrawDocument(DocumentType::Impress, nullptr));
 }
 
 void Test::tearDown()
 {
-    delete m_pDoc;
+    m_pDoc.reset();
 }
 
 Test::~Test()

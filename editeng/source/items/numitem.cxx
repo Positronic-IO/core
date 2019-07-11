@@ -24,6 +24,7 @@
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/RelOrientation.hpp>
 #include <editeng/brushitem.hxx>
+#include <o3tl/clamp.hxx>
 #include <vcl/font.hxx>
 #include <vcl/settings.hxx>
 #include <editeng/editids.hrc>
@@ -45,6 +46,7 @@
 #include <unotools/configmgr.hxx>
 #include <libxml/xmlwriter.h>
 #include <editeng/unonrule.hxx>
+#include <sal/log.hxx>
 
 #define DEF_WRITER_LSPACE   500     //Standard Indentation
 #define DEF_DRAW_LSPACE     800     //Standard Indentation
@@ -60,7 +62,7 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::style;
 
 sal_Int32 SvxNumberType::nRefCount = 0;
-css::uno::Reference<css::text::XNumberingFormatter> SvxNumberType::xFormatter = nullptr;
+css::uno::Reference<css::text::XNumberingFormatter> SvxNumberType::xFormatter;
 static void lcl_getFormatter(css::uno::Reference<css::text::XNumberingFormatter>& _xFormatter)
 {
     if(!_xFormatter.is())
@@ -163,17 +165,13 @@ SvxNumberFormat::SvxNumberFormat( SvxNumType eType )
       mnListtabPos( 0 ),
       mnFirstLineIndent( 0 ),
       mnIndentAt( 0 ),
-      pGraphicBrush(nullptr),
-      eVertOrient(text::VertOrientation::NONE),
-      pBulletFont(nullptr)
+      eVertOrient(text::VertOrientation::NONE)
 {
 }
 
 SvxNumberFormat::SvxNumberFormat(const SvxNumberFormat& rFormat) :
     SvxNumberType(rFormat),
-    mePositionAndSpaceMode( rFormat.mePositionAndSpaceMode ),
-    pGraphicBrush(nullptr),
-    pBulletFont(nullptr)
+    mePositionAndSpaceMode( rFormat.mePositionAndSpaceMode )
 {
     *this = rFormat;
 }
@@ -195,8 +193,12 @@ SvxNumberFormat::SvxNumberFormat( SvStream &rStream )
     rStream.ReadUInt16( nStart );
     rStream.ReadUInt16( nTmp16 ); cBullet = static_cast<sal_Unicode>(nTmp16);
 
-    rStream.ReadInt16( nFirstLineOffset );
-    rStream.ReadInt16( nAbsLSpace );
+    sal_Int16 temp = 0;
+    rStream.ReadInt16( temp );
+    nFirstLineOffset = temp;
+    temp = 0;
+    rStream.ReadInt16( temp );
+    nAbsLSpace = temp;
     rStream.SeekRel(2); //skip old now unused nLSpace;
 
     rStream.ReadInt16( nCharTextDistance );
@@ -257,8 +259,12 @@ void SvxNumberFormat::Store(SvStream &rStream, FontToSubsFontConverter pConverte
     rStream.WriteUInt16( nStart );
     rStream.WriteUInt16( cBullet );
 
-    rStream.WriteInt16( nFirstLineOffset );
-    rStream.WriteInt16( nAbsLSpace );
+    rStream.WriteInt16(
+        sal_Int16(o3tl::clamp<sal_Int32>(nFirstLineOffset, SAL_MIN_INT16, SAL_MAX_INT16)) );
+        //TODO: better way to handle out-of-bounds value?
+    rStream.WriteInt16(
+        sal_Int16(o3tl::clamp<sal_Int32>(nAbsLSpace, SAL_MIN_INT16, SAL_MAX_INT16)) );
+        //TODO: better way to handle out-of-bounds value?
     rStream.WriteInt16( 0 ); // write a dummy for old now unused nLSpace
 
     rStream.WriteInt16( nCharTextDistance );
@@ -440,17 +446,17 @@ void SvxNumberFormat::SetPositionAndSpaceMode( SvxNumPositionAndSpaceMode ePosit
     mePositionAndSpaceMode = ePositionAndSpaceMode;
 }
 
-short SvxNumberFormat::GetAbsLSpace() const
+sal_Int32 SvxNumberFormat::GetAbsLSpace() const
 {
     return mePositionAndSpaceMode == LABEL_WIDTH_AND_POSITION
            ? nAbsLSpace
-           : static_cast<short>( GetFirstLineIndent() + GetIndentAt() );
+           : static_cast<sal_Int32>( GetFirstLineIndent() + GetIndentAt() );
 }
-short SvxNumberFormat::GetFirstLineOffset() const
+sal_Int32 SvxNumberFormat::GetFirstLineOffset() const
 {
     return mePositionAndSpaceMode == LABEL_WIDTH_AND_POSITION
            ? nFirstLineOffset
-           : static_cast<short>( GetFirstLineIndent() );
+           : static_cast<sal_Int32>( GetFirstLineIndent() );
 }
 short SvxNumberFormat::GetCharTextDistance() const
 {
@@ -501,7 +507,7 @@ OUString SvxNumberFormat::CreateRomanString( sal_uLong nNo, bool bUpper )
                         ? "MDCLXVI--"   // +2 Dummy entries!
                         : "mdclxvi--";  // +2 Dummy entries!
 
-    OUString sRet;
+    OUStringBuffer sRet;
     sal_uInt16 nMask = 1000;
     while( nMask )
     {
@@ -512,30 +518,30 @@ OUString SvxNumberFormat::CreateRomanString( sal_uLong nNo, bool bUpper )
         if( 5 < nNumber )
         {
             if( nNumber < 9 )
-                sRet += OUString(*(cRomanArr-1));
+                sRet.append(*(cRomanArr-1));
             ++nDiff;
             nNumber -= 5;
         }
         switch( nNumber )
         {
-        case 3:     { sRet += OUString(*cRomanArr); SAL_FALLTHROUGH; }
-        case 2:     { sRet += OUString(*cRomanArr); SAL_FALLTHROUGH; }
-        case 1:     { sRet += OUString(*cRomanArr); }
+        case 3:     { sRet.append(*cRomanArr); SAL_FALLTHROUGH; }
+        case 2:     { sRet.append(*cRomanArr); SAL_FALLTHROUGH; }
+        case 1:     { sRet.append(*cRomanArr); }
                     break;
 
         case 4:     {
-                        sRet += OUString(*cRomanArr);
-                        sRet += OUString(*(cRomanArr-nDiff));
+                        sRet.append(*cRomanArr);
+                        sRet.append(*(cRomanArr-nDiff));
                     }
                     break;
-        case 5:     { sRet += OUString(*(cRomanArr-nDiff)); }
+        case 5:     { sRet.append(*(cRomanArr-nDiff)); }
                     break;
         }
 
         nMask /= 10;            // for the next decade
         cRomanArr += 2;
     }
-    return sRet;
+    return sRet.makeStringAndClear();
 }
 
 OUString SvxNumberFormat::GetCharFormatName()const
@@ -712,17 +718,20 @@ SvxNumRule::~SvxNumRule()
 
 SvxNumRule& SvxNumRule::operator=( const SvxNumRule& rCopy )
 {
-    nLevelCount          = rCopy.nLevelCount;
-    nFeatureFlags        = rCopy.nFeatureFlags;
-    bContinuousNumbering = rCopy.bContinuousNumbering;
-    eNumberingType       = rCopy.eNumberingType;
-    for(sal_uInt16 i = 0; i < SVX_MAX_NUM; i++)
+    if (this != &rCopy)
     {
-        if(rCopy.aFmts[i])
-            aFmts[i].reset( new SvxNumberFormat(*rCopy.aFmts[i]) );
-        else
-            aFmts[i].reset();
-        aFmtsSet[i] = rCopy.aFmtsSet[i];
+        nLevelCount          = rCopy.nLevelCount;
+        nFeatureFlags        = rCopy.nFeatureFlags;
+        bContinuousNumbering = rCopy.bContinuousNumbering;
+        eNumberingType       = rCopy.eNumberingType;
+        for(sal_uInt16 i = 0; i < SVX_MAX_NUM; i++)
+        {
+            if(rCopy.aFmts[i])
+                aFmts[i].reset( new SvxNumberFormat(*rCopy.aFmts[i]) );
+            else
+                aFmts[i].reset();
+            aFmtsSet[i] = rCopy.aFmtsSet[i];
+        }
     }
     return *this;
 }
@@ -812,10 +821,11 @@ void SvxNumRule::SetLevel(sal_uInt16 nLevel, const SvxNumberFormat* pFmt)
 
 OUString SvxNumRule::MakeNumString( const SvxNodeNum& rNum ) const
 {
-    OUString aStr;
+    OUStringBuffer aStr;
     if( SVX_NO_NUM > rNum.GetLevel() && !( SVX_NO_NUMLEVEL & rNum.GetLevel() ) )
     {
         const SvxNumberFormat& rMyNFmt = GetLevel( rNum.GetLevel() );
+        aStr.append(rMyNFmt.GetPrefix());
         if( SVX_NUM_NUMBER_NONE != rMyNFmt.GetNumberingType() )
         {
             sal_uInt8 i = rNum.GetLevel();
@@ -847,21 +857,21 @@ OUString SvxNumRule::MakeNumString( const SvxNodeNum& rNum ) const
                     if(SVX_NUM_BITMAP != rNFmt.GetNumberingType())
                     {
                         const LanguageTag& rLang = Application::GetSettings().GetLanguageTag();
-                        aStr += rNFmt.GetNumStr( rNum.GetLevelVal()[ i ], rLang.getLocale()  );
+                        aStr.append(rNFmt.GetNumStr( rNum.GetLevelVal()[ i ], rLang.getLocale()  ));
                     }
                     else
                         bDot = false;
                 }
                 else
-                    aStr += "0";       // all 0-levels are a 0
+                    aStr.append("0");       // all 0-levels are a 0
                 if( i != rNum.GetLevel() && bDot)
-                    aStr += ".";
+                    aStr.append(".");
             }
         }
 
-        aStr = rMyNFmt.GetPrefix() + aStr + rMyNFmt.GetSuffix();
+        aStr.append(rMyNFmt.GetSuffix());
     }
-    return aStr;
+    return aStr.makeStringAndClear();
 }
 
 // changes linked to embedded bitmaps
@@ -904,9 +914,9 @@ SvxNumBulletItem::SvxNumBulletItem(SvxNumRule const & rRule, sal_uInt16 _nWhich 
 }
 
 SvxNumBulletItem::SvxNumBulletItem(const SvxNumBulletItem& rCopy) :
-    SfxPoolItem(rCopy.Which())
+    SfxPoolItem(rCopy),
+    pNumRule(new SvxNumRule(*rCopy.pNumRule))
 {
-    pNumRule.reset( new SvxNumRule(*rCopy.pNumRule) );
 }
 
 SvxNumBulletItem::~SvxNumBulletItem()

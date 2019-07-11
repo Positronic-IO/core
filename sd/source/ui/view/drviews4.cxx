@@ -99,11 +99,18 @@ void DrawViewShell::DeleteActualLayer()
     }
 
     SdrLayerAdmin& rAdmin = GetDoc()->GetLayerAdmin();
-    const OUString& rName = GetLayerTabControl()->GetPageText(GetLayerTabControl()->GetCurPageId());
+    sal_uInt16 nId = GetLayerTabControl()->GetCurPageId();
+    const OUString& rName = GetLayerTabControl()->GetLayerName(nId);
+    if(LayerTabBar::IsRealNameOfStandardLayer(rName))
+    {
+        assert(false && "Standard layer may not be deleted.");
+        return;
+    }
+    const OUString& rDisplayName(GetLayerTabControl()->GetPageText(nId));
     OUString aString(SdResId(STR_ASK_DELETE_LAYER));
 
     // replace placeholder
-    aString = aString.replaceFirst("$", rName);
+    aString = aString.replaceFirst("$", rDisplayName);
 
     std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                    VclMessageType::Question, VclButtonsType::YesNo,
@@ -148,14 +155,14 @@ bool DrawViewShell::KeyInput (const KeyEvent& rKEvt, ::sd::Window* pWin)
                 GetView()->SdrEndTextEdit();
 
                 // look for a new candidate, a successor of pOldObj
-                SdrObjListIter aIter(*pActualPage, SdrIterMode::DeepNoGroups);
+                SdrObjListIter aIter(pActualPage, SdrIterMode::DeepNoGroups);
                 bool bDidVisitOldObject(false);
 
                 while(aIter.IsMore() && !pCandidate)
                 {
                     SdrObject* pObj = aIter.Next();
 
-                    if(pObj && dynamic_cast< const SdrTextObj *>( pObj ) !=  nullptr)
+                    if(auto pSdrTextObj = dynamic_cast<SdrTextObj *>( pObj ))
                     {
                         SdrInventor nInv(pObj->GetObjInventor());
                         sal_uInt16  nKnd(pObj->GetObjIdentifier());
@@ -164,7 +171,7 @@ bool DrawViewShell::KeyInput (const KeyEvent& rKEvt, ::sd::Window* pWin)
                             (OBJ_TITLETEXT == nKnd || OBJ_OUTLINETEXT == nKnd || OBJ_TEXT == nKnd)
                             && bDidVisitOldObject)
                         {
-                            pCandidate = static_cast<SdrTextObj*>(pObj);
+                            pCandidate = pSdrTextObj;
                         }
 
                         if(pObj == pOldObj)
@@ -269,6 +276,9 @@ void DrawViewShell::FreshNavigatrTree()
 void DrawViewShell::MouseButtonDown(const MouseEvent& rMEvt,
     ::sd::Window* pWin)
 {
+    mbMouseButtonDown = true;
+    mbMouseSelecting = false;
+
     // We have to check if a context menu is shown and we have an UI
     // active inplace client. In that case we have to ignore the mouse
     // button down event. Otherwise we would crash (context menu has been
@@ -300,6 +310,9 @@ void DrawViewShell::MouseButtonDown(const MouseEvent& rMEvt,
 
 void DrawViewShell::MouseMove(const MouseEvent& rMEvt, ::sd::Window* pWin)
 {
+    if ( IsMouseButtonDown() )
+        mbMouseSelecting = true;
+
     if ( !IsInputLocked() )
     {
         if ( mpDrawView->IsAction() )
@@ -409,6 +422,8 @@ void DrawViewShell::MouseMove(const MouseEvent& rMEvt, ::sd::Window* pWin)
 
 void DrawViewShell::MouseButtonUp(const MouseEvent& rMEvt, ::sd::Window* pWin)
 {
+    mbMouseButtonDown = false;
+
     if ( !IsInputLocked() )
     {
         bool bIsSetPageOrg = mpDrawView->IsSetPageOrg();
@@ -446,6 +461,7 @@ void DrawViewShell::MouseButtonUp(const MouseEvent& rMEvt, ::sd::Window* pWin)
         //else the corresponding entry is set false .
         FreshNavigatrTree();
     }
+    mbMouseSelecting = false;
 }
 
 void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
@@ -644,9 +660,6 @@ void DrawViewShell::Command(const CommandEvent& rCEvt, ::sd::Window* pWin)
                                 switch ( nId )
                                 {
                                     case OBJ_OUTLINETEXT:
-                                        aPopupId = "outlinetext";
-                                        break;
-
                                     case OBJ_CAPTION:
                                     case OBJ_TITLETEXT:
                                     case OBJ_TEXT:
@@ -813,15 +826,11 @@ void DrawViewShell::ShowMousePosInfo(const ::tools::Rectangle& rRect,
         nCnt = 1;
         pHLines[0].nPos = rRect.Left() - nHOffs;
         pVLines[0].nPos = rRect.Top()  - nVOffs;
-        pHLines[0].nStyle = 0;
-        pVLines[0].nStyle = 0;
 
         if ( rRect.Right() != rRect.Left() || rRect.Bottom() != rRect.Top() )
         {
             pHLines[1].nPos = rRect.Right()  - nHOffs;
             pVLines[1].nPos = rRect.Bottom() - nVOffs;
-            pHLines[1].nStyle = 0;
-            pVLines[1].nStyle = 0;
             nCnt++;
         }
 

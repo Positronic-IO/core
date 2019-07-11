@@ -20,7 +20,6 @@
             <child>
               <object class="GtkButton" id="ok">
                 <property name="label">gtk-ok</property>
-                <property name="use_action_appearance">False</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
@@ -37,7 +36,6 @@
             <child>
               <object class="GtkButton" id="cancel">
                 <property name="label">gtk-cancel</property>
-                <property name="use_action_appearance">False</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
@@ -100,7 +98,7 @@
               </packing>
             </child>
             <child>
-              <object class="svtlo-SvTreeListBox" id="control:border">
+              <object class="vcllo-SvTreeListBox" id="control:border">
                 <property name="width_request">200</property>
                 <property name="height_request">150</property>
                 <property name="visible">True</property>
@@ -120,7 +118,6 @@
             <child>
               <object class="GtkCheckButton" id="noassignment">
                 <property name="label" translatable="yes" context="labelselectiondialog|noassignment">_No assignment</property>
-                <property name="use_action_appearance">False</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">False</property>
@@ -147,6 +144,7 @@
     <action-widgets>
       <action-widget response="-5">ok</action-widget>
       <action-widget response="-6">cancel</action-widget>
+      <action-widget response="-11">help</action-widget>
     </action-widgets>
   </object>
 </interface>

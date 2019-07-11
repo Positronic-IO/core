@@ -22,6 +22,7 @@
 #include <iconcdlg.hxx>
 #include <cuihyperdlg.hxx>
 
+#include <sal/log.hxx>
 #include <unotools/viewoptions.hxx>
 #include <svtools/apearcfg.hxx>
 #include <vcl/mnemonic.hxx>
@@ -149,8 +150,7 @@ IconChoiceDialog::IconChoiceDialog ( vcl::Window* pParent, const OUString& rID,
     mnCurrentPageId ( HyperLinkPageType::NONE ),
 
     pSet            ( nullptr ),
-    pExampleSet     ( nullptr ),
-    pRanges         ( nullptr )
+    pExampleSet     ( nullptr )
 {
     get(m_pOKBtn, "ok");
     get(m_pApplyBtn, "apply");
@@ -197,16 +197,14 @@ void IconChoiceDialog::dispose()
     //aTabDlgOpt.SetWindowState(OStringToOUString(GetWindowState((WindowStateMask::X | WindowStateMask::Y | WindowStateMask::State | WindowStateMask::Minimized)), RTL_TEXTENCODING_ASCII_US));
     //aTabDlgOpt.SetPageID( mnCurrentPageId );
 
-    for (IconChoicePageData* pData : maPageList)
+    for (std::unique_ptr<IconChoicePageData> & pData : maPageList)
     {
         if ( pData->pPage )
             pData->pPage.disposeAndClear();
-        delete pData;
     }
     maPageList.clear();
 
-    delete pRanges;
-    pRanges = nullptr;
+    pRanges.reset();
     pOutSet.reset();
 
     m_pIconCtrl.clear();
@@ -232,8 +230,7 @@ SvxIconChoiceCtrlEntry* IconChoiceDialog::AddTabPage(
     CreatePage      pCreateFunc /* != 0 */
 )
 {
-    IconChoicePageData* pData = new IconChoicePageData ( nId, pCreateFunc );
-    maPageList.push_back( pData );
+    maPageList.emplace_back( new IconChoicePageData ( nId, pCreateFunc ) );
 
     SvxIconChoiceCtrlEntry* pEntry = m_pIconCtrl->InsertEntry( rIconText, rChoiceIcon );
     pEntry->SetUserData ( reinterpret_cast<void*>(nId) );
@@ -431,7 +428,7 @@ void IconChoiceDialog::DeActivatePageImpl ()
         {
             // TODO refresh input set
             // flag all pages to be newly initialized
-            for (IconChoicePageData* pObj : maPageList)
+            for (auto & pObj : maPageList)
             {
                 if ( pObj->pPage.get() != pPage )
                     pObj->bRefresh = true;
@@ -458,7 +455,7 @@ void IconChoiceDialog::ResetPageImpl ()
 |
 \**********************************************************************/
 
-const sal_uInt16* IconChoiceDialog::GetInputRanges( const SfxItemPool& rPool )
+const sal_uInt16* IconChoiceDialog::GetInputRanges( const SfxItemPool& )
 {
     if ( pSet )
     {
@@ -467,28 +464,12 @@ const sal_uInt16* IconChoiceDialog::GetInputRanges( const SfxItemPool& rPool )
     }
 
     if ( pRanges )
-        return pRanges;
-    std::vector<sal_uInt16> aUS;
+        return pRanges.get();
 
-    size_t nCount = maPageList.size();
+    pRanges.reset(new sal_uInt16[1]);
+    pRanges[0] = 0;
 
-    // remove double Id's
-    {
-        nCount = aUS.size();
-        for ( size_t i = 0; i < nCount; ++i )
-            aUS[i] = rPool.GetWhich( aUS[i] );
-    }
-
-    if ( aUS.size() > 1 )
-    {
-        std::sort( aUS.begin(), aUS.end() );
-    }
-
-    pRanges = new sal_uInt16[aUS.size() + 1];
-    std::copy( aUS.begin(), aUS.end(), pRanges );
-    pRanges[aUS.size()] = 0;
-
-    return pRanges;
+    return pRanges.get();
 }
 
 
@@ -540,7 +521,7 @@ void IconChoiceDialog::Start()
 bool IconChoiceDialog::QueryClose()
 {
     bool bRet = true;
-    for (IconChoicePageData* pData : maPageList)
+    for (auto & pData : maPageList)
     {
         if ( pData->pPage && !pData->pPage->QueryClose() )
         {
@@ -566,11 +547,11 @@ void IconChoiceDialog::Start_Impl()
 IconChoicePageData* IconChoiceDialog::GetPageData ( HyperLinkPageType nId )
 {
     IconChoicePageData *pRet = nullptr;
-    for (IconChoicePageData* pData : maPageList)
+    for (auto & pData : maPageList)
     {
         if ( pData->nId == nId )
         {
-            pRet = pData;
+            pRet = pData.get();
             break;
         }
     }

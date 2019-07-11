@@ -663,7 +663,7 @@ class ImplIntrospectionAccess : public IntrospectionAccessHelper
     friend class Implementation;
 
     // Object under examination
-    Any maInspectedObject;
+    Any const maInspectedObject;
 
     // As interface
     Reference<XInterface> mxIface;
@@ -1885,7 +1885,7 @@ css::uno::Reference<css::beans::XIntrospectionAccess> Implementation::inspect(
                         // Catalogue methods
                         // Filter all (?) methods of XInterface so e.g. acquire and release
                         // can not be called from scripting
-                        rtl::OUString className(
+                        OUString className(
                             rxMethod_i->getDeclaringClass()->getName());
                         if (className == "com.sun.star.uno.XInterface") {
                             bFoundXInterface = true;

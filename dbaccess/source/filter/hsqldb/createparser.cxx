@@ -18,6 +18,7 @@
  */
 
 #include <comphelper/string.hxx>
+#include <sal/log.hxx>
 #include "createparser.hxx"
 #include "utils.hxx"
 #include <com/sun/star/sdbc/DataType.hpp>
@@ -74,23 +75,24 @@ sal_Int32 lcl_getAutoIncrementDefault(const OUString& sColumnDef)
     return -1;
 }
 
-bool lcl_isNullable(const OUString& sColumnDef)
+OUString lcl_getDefaultValue(const OUString& sColumnDef)
 {
-    if (sColumnDef.indexOf("NOT NULL") >= 0)
+    constexpr char DEFAULT_KW[] = "DEFAULT";
+    auto nDefPos = sColumnDef.indexOf(DEFAULT_KW);
+    if (nDefPos > 0 && lcl_getAutoIncrementDefault(sColumnDef) < 0)
     {
-        return false;
+        const OUString& fromDefault = sColumnDef.copy(nDefPos + sizeof(DEFAULT_KW)).trim();
+
+        // next word is the value
+        auto nNextSpace = fromDefault.indexOf(" ");
+        return nNextSpace > 0 ? fromDefault.copy(0, fromDefault.indexOf(" ")) : fromDefault;
     }
-    return true;
+    return OUString{};
 }
 
-bool lcl_isPrimaryKey(const OUString& sColumnDef)
-{
-    if (sColumnDef.indexOf("PRIMARY KEY") >= 0)
-    {
-        return true;
-    }
-    return false;
-}
+bool lcl_isNullable(const OUString& sColumnDef) { return sColumnDef.indexOf("NOT NULL") < 0; }
+
+bool lcl_isPrimaryKey(const OUString& sColumnDef) { return sColumnDef.indexOf("PRIMARY KEY") >= 0; }
 
 sal_Int32 lcl_getDataTypeFromHsql(const OUString& sTypeName)
 {
@@ -148,6 +150,39 @@ void lcl_addDefaultParameters(std::vector<sal_Int32>& aParams, sal_Int32 eType)
         aParams.push_back(8000); // from SQL standard
 }
 
+struct ColumnTypeParts
+{
+    OUString typeName;
+    std::vector<sal_Int32> params;
+};
+
+/**
+ * Separates full type descriptions (e.g. NUMERIC(5,4)) to type name (NUMERIC) and
+ * parameters (5,4)
+ */
+ColumnTypeParts lcl_getColumnTypeParts(const OUString& sFullTypeName)
+{
+    ColumnTypeParts parts;
+    auto nParenPos = sFullTypeName.indexOf("(");
+    if (nParenPos > 0)
+    {
+        parts.typeName = sFullTypeName.copy(0, nParenPos).trim();
+        OUString sParamStr
+            = sFullTypeName.copy(nParenPos + 1, sFullTypeName.indexOf(")") - nParenPos - 1);
+        auto sParams = string::split(sParamStr, sal_Unicode(u','));
+        for (auto& sParam : sParams)
+        {
+            parts.params.push_back(sParam.toInt32());
+        }
+    }
+    else
+    {
+        parts.typeName = sFullTypeName.trim();
+        lcl_addDefaultParameters(parts.params, lcl_getDataTypeFromHsql(parts.typeName));
+    }
+    return parts;
+}
+
 } // unnamed namespace
 
 namespace dbahsql
@@ -180,46 +215,48 @@ void CreateStmtParser::parseColumnPart(const OUString& sColumnPart)
             continue;
         }
 
-        std::vector<OUString> words = string::split(sColumn, sal_Unicode(u' '));
-
-        if (words[0] == "CONSTRAINT")
+        if (sColumn.startsWithIgnoreAsciiCase("CONSTRAINT"))
         {
             m_aForeignParts.push_back(sColumn);
             continue;
         }
 
-        std::vector<sal_Int32> aParams;
-        OUString sTypeName = words[1];
+        bool bIsQuoteUsedForColumnName(sColumn[0] == '\"');
 
-        // TODO what if there is a whitespace between type name and param?
-        sal_Int32 nParenPos = words[1].indexOf("(");
-        if (nParenPos > 0)
-        {
-            sTypeName = words[1].copy(0, nParenPos);
+        // find next quote after the initial quote
+        // or next space if quote isn't used as delimiter
+        auto nEndColumnName
+            = bIsQuoteUsedForColumnName ? sColumn.indexOf("\"", 1) + 1 : sColumn.indexOf(" ");
+        OUString rColumnName = sColumn.copy(0, nEndColumnName);
 
-            OUString sParamStr
-                = words[1].copy(nParenPos + 1, words[1].lastIndexOf(")") - nParenPos - 1);
-            auto sParams = string::split(sParamStr, sal_Unicode(u','));
-            for (auto& sParam : sParams)
-            {
-                aParams.push_back(sParam.toInt32());
-            }
-        }
+        const OUString& sFromTypeName = sColumn.copy(nEndColumnName).trim();
+
+        // Now let's manage the column type
+        // search next space to get the whole type name
+        // eg: INTEGER, VARCHAR(10), DECIMAL(6,3)
+        auto nNextSpace = sFromTypeName.indexOf(" ");
+        OUString sFullTypeName;
+        if (nNextSpace > 0)
+            sFullTypeName = sFromTypeName.copy(0, nNextSpace);
+        // perhaps column type corresponds to the last info here
         else
-        {
-            lcl_addDefaultParameters(aParams, lcl_getDataTypeFromHsql(sTypeName));
-        }
+            sFullTypeName = sFromTypeName;
 
-        bool bCaseInsensitive = sTypeName.indexOf("IGNORECASE") >= 0;
-        const OUString& rTableName = words[0];
+        ColumnTypeParts typeParts = lcl_getColumnTypeParts(sFullTypeName);
+
+        bool bCaseInsensitive = typeParts.typeName.indexOf("IGNORECASE") >= 0;
         bool isPrimaryKey = lcl_isPrimaryKey(sColumn);
 
         if (isPrimaryKey)
-            m_PrimaryKeys.push_back(rTableName);
+            m_PrimaryKeys.push_back(rColumnName);
 
-        ColumnDefinition aColDef(rTableName, lcl_getDataTypeFromHsql(sTypeName), aParams,
-                                 isPrimaryKey, lcl_getAutoIncrementDefault(sColumn),
-                                 lcl_isNullable(sColumn), bCaseInsensitive);
+        const OUString sColumnWithoutName = sColumn.copy(sColumn.indexOf(typeParts.typeName));
+
+        ColumnDefinition aColDef(rColumnName, lcl_getDataTypeFromHsql(typeParts.typeName),
+                                 typeParts.params, isPrimaryKey,
+                                 lcl_getAutoIncrementDefault(sColumnWithoutName),
+                                 lcl_isNullable(sColumnWithoutName), bCaseInsensitive,
+                                 lcl_getDefaultValue(sColumnWithoutName));
 
         m_aColumns.push_back(aColDef);
     }

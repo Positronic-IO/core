@@ -290,14 +290,14 @@ struct INetURLObject::SchemeInfo
 {
     sal_Char const * m_pScheme;
     sal_Char const * m_pPrefix;
-    bool m_bAuthority;
-    bool m_bUser;
-    bool m_bAuth;
-    bool m_bPassword;
-    bool m_bHost;
-    bool m_bPort;
-    bool m_bHierarchical;
-    bool m_bQuery;
+    bool const m_bAuthority;
+    bool const m_bUser;
+    bool const m_bAuth;
+    bool const m_bPassword;
+    bool const m_bHost;
+    bool const m_bPort;
+    bool const m_bHierarchical;
+    bool const m_bQuery;
 };
 
 struct INetURLObject::PrefixInfo
@@ -306,8 +306,8 @@ struct INetURLObject::PrefixInfo
 
     sal_Char const * m_pPrefix;
     sal_Char const * m_pTranslatedPrefix;
-    INetProtocol m_eScheme;
-    Kind m_eKind;
+    INetProtocol const m_eScheme;
+    Kind const m_eKind;
 };
 
 // static
@@ -552,7 +552,7 @@ static sal_uInt32 const aMustEncodeMap[128]
 /* ~ */ PA   +PD+PE+PF+PG+PH+PI+PJ+PK+PL+PM+PN+PO+PP+PQ,
         0 };
 
-inline bool mustEncode(sal_uInt32 nUTF32, INetURLObject::Part ePart)
+bool mustEncode(sal_uInt32 nUTF32, INetURLObject::Part ePart)
 {
     return !rtl::isAscii(nUTF32) || !(aMustEncodeMap[nUTF32] & ePart);
 }
@@ -1452,15 +1452,6 @@ bool INetURLObject::setAbsURIRef(OUString const & rTheAbsURIRef,
         // Linux
         // Leave "file::path" URIs unchanged.
         changeScheme(INetProtocol::Smb);
-    }
-#endif
-
-#ifdef _WIN32
-    if (m_eScheme==INetProtocol::Smb) {
-        // Change "smb://server/path" URIs to "file://server/path"
-        // URIs on Windows, since Windows doesn't understand the
-        // SMB scheme.
-        changeScheme(INetProtocol::File);
     }
 #endif
 
@@ -3304,17 +3295,16 @@ bool INetURLObject::insertName(OUString const & rTheName,
         RTL_TEXTENCODING_UTF8);
 }
 
-bool INetURLObject::clearQuery()
+void INetURLObject::clearQuery()
 {
     if (HasError())
-        return false;
+        return;
     if (m_aQuery.isPresent())
     {
         lcl_Erase(m_aAbsURIRef, m_aQuery.getBegin() - 1,
             m_aQuery.getLength() + 1);
         m_aFragment += m_aQuery.clear() - 1;
     }
-    return false;
 }
 
 bool INetURLObject::setQuery(OUString const & rTheQuery,

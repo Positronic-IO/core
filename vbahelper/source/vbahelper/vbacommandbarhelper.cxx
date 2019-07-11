@@ -18,6 +18,7 @@
  */
 #include "vbacommandbarhelper.hxx"
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/ui/theModuleUIConfigurationManagerSupplier.hpp>
 #include <com/sun/star/ui/XUIConfigurationManagerSupplier.hpp>
 #include <com/sun/star/ui/XUIConfigurationStorage.hpp>
@@ -29,6 +30,7 @@
 #include <comphelper/random.hxx>
 #include <vbahelper/vbahelper.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <time.h>
 #include <map>
 
@@ -71,13 +73,10 @@ public:
 
     OUString findBuildinToolbar( const OUString& sToolbarName )
     {
-        MSO2OOCommandbarMap::iterator it = maBuildinToolbarMap.begin();
-        for(; it != maBuildinToolbarMap.end(); ++it )
-        {
-            OUString sName = it->first;
-            if( sName.equalsIgnoreAsciiCase( sToolbarName ) )
-                return it->second;
-        }
+        auto it = std::find_if(maBuildinToolbarMap.begin(), maBuildinToolbarMap.end(),
+            [&sToolbarName](const MSO2OOCommandbarMap::value_type& rItem) { return rItem.first.equalsIgnoreAsciiCase( sToolbarName ); });
+        if( it != maBuildinToolbarMap.end() )
+            return it->second;
         return OUString();
     }
 };
@@ -224,10 +223,10 @@ sal_Int32 VbaCommandBarHelper::findControlByName( const css::uno::Reference< css
         }
         else
         {
-            aBuffer.append( sLabel.copy( 0, index ) );
+            aBuffer.appendCopy( sLabel, 0, index );
             if( bMenu )
                 aBuffer.append( '&' );
-            aBuffer.append( sLabel.copy( index + 1 ) );
+            aBuffer.appendCopy( sLabel, index + 1 );
         }
         OUString sNewLabel = aBuffer.makeStringAndClear();
         SAL_INFO("vbahelper", "VbaCommandBarHelper::findControlByName, control name: " << sNewLabel);

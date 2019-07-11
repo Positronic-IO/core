@@ -26,6 +26,7 @@
 #include <osl/thread.h>
 #include <rtl/digest.h>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -236,7 +237,7 @@ OUString SAL_CALL PDFDetector::detect( uno::Sequence< beans::PropertyValue >& rF
             if( nBytes > 5 )
             {
                 const sal_Int8* pBytes = aBuf.getConstArray();
-                for( unsigned int i = 0; i < nBytes-5; i++ )
+                for( sal_uInt64 i = 0; i < nBytes-5; i++ )
                 {
                     if( pBytes[i]   == '%' &&
                         pBytes[i+1] == 'P' &&

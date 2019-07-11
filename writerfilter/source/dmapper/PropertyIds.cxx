@@ -172,6 +172,7 @@ OUString getPropertyName( PropertyIds eId )
         case PROP_FOOTER_IS_SHARED     :    sName = "FooterIsShared"; break;
         case PROP_FOOTER_IS_ON         :    sName = "FooterIsOn"; break;
         case PROP_FOOTNOTE_COUNTING    :    sName = "FootnoteCounting"; break;
+        case PROP_FOOTNOTE_LINE_ADJUST :    sName = "FootnoteLineAdjust"; break;
         case PROP_WIDTH                :    sName = "Width"; break;
         case PROP_HEIGHT               :    sName = "Height"; break;
         case PROP_TEXT_COLUMNS         :    sName = "TextColumns"; break;
@@ -233,6 +234,7 @@ OUString getPropertyName( PropertyIds eId )
         case PROP_REDLINE_DATE_TIME     :    sName = "RedlineDateTime"; break;
         case PROP_REDLINE_TYPE          :    sName = "RedlineType"; break;
         case PROP_REDLINE_REVERT_PROPERTIES: sName = "RedlineRevertProperties"; break;
+        case PROP_IS_PROTECTED          :    sName = "IsProtected"; break;
         case PROP_SIZE_PROTECTED        :    sName = "SizeProtected"; break;
         case PROP_POSITION_PROTECTED    :    sName = "PositionProtected"; break;
         case PROP_OPAQUE                :    sName = "Opaque"; break;
@@ -353,6 +355,7 @@ OUString getPropertyName( PropertyIds eId )
         case PROP_RUBY_TEXT: sName = "RubyText"; break;
         case PROP_RUBY_ADJUST: sName = "RubyAdjust"; break;
         case PROP_RUBY_POSITION: sName = "RubyPosition"; break;
+        case PROP_LAYOUT_IN_CELL: sName = "IsLayoutInCell"; break;
     }
     assert(sName.getLength()>0);
     return sName;

@@ -19,8 +19,6 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_TEXT_PORTXT_HXX
 #define INCLUDED_SW_SOURCE_CORE_TEXT_PORTXT_HXX
 
-#include <tools/mempool.hxx>
-
 #include "porlin.hxx"
 
 class SwTextGuess;
@@ -38,20 +36,18 @@ public:
     virtual void Paint( const SwTextPaintInfo &rInf ) const override;
     virtual bool Format( SwTextFormatInfo &rInf ) override;
     virtual void FormatEOL( SwTextFormatInfo &rInf ) override;
-    virtual sal_Int32 GetCursorOfst( const sal_uInt16 nOfst ) const override;
+    virtual TextFrameIndex GetCursorOfst(sal_uInt16 nOfst) const override;
     virtual SwPosSize GetTextSize( const SwTextSizeInfo &rInfo ) const override;
     virtual bool GetExpText( const SwTextSizeInfo &rInf, OUString &rText ) const override;
     virtual long CalcSpacing( long nSpaceAdd, const SwTextSizeInfo &rInf ) const override;
 
     // Counts the spaces for justified paragraph
-    sal_Int32 GetSpaceCnt( const SwTextSizeInfo &rInf, sal_Int32& rCnt ) const;
+    TextFrameIndex GetSpaceCnt(const SwTextSizeInfo &rInf, TextFrameIndex& rCnt) const;
 
     bool CreateHyphen( SwTextFormatInfo &rInf, SwTextGuess const &rGuess );
 
     // Accessibility: pass information about this portion to the PortionHandler
     virtual void HandlePortion( SwPortionHandler& rPH ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwTextPortion)
 };
 
 class SwTextInputFieldPortion : public SwTextPortion
@@ -78,8 +74,6 @@ public:
 
     // Accessibility: pass information about this portion to the PortionHandler
     virtual void HandlePortion( SwPortionHandler& rPH ) const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwHolePortion)
 };
 
 class SwFieldMarkPortion : public SwTextPortion

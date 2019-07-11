@@ -26,6 +26,7 @@
 
 #include "richstring.hxx"
 #include "worksheethelper.hxx"
+#include "addressconverter.hxx"
 
 namespace com { namespace sun { namespace star {
     namespace util { struct DateTime; }
@@ -151,7 +152,6 @@ public:
                             const ScAddress& rCellAddr,
                             const ApiTokenSequence& rTokens );
 private:
-    struct XfIdRowRange;
 
     /** Creates a formula token array representing the shared formula with the
         passed identifier. */
@@ -210,7 +210,7 @@ private:
     struct MergedRange
     {
         ScRange             maRange;            /// The formatted cell range.
-        sal_Int32           mnHorAlign;         /// Horizontal alignment in the range.
+        sal_Int32 const     mnHorAlign;         /// Horizontal alignment in the range.
 
         explicit            MergedRange( const ScRange& rRange );
         explicit            MergedRange( const ScAddress& rAddress, sal_Int32 nHorAlign );

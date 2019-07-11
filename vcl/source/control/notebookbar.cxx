@@ -13,7 +13,8 @@
 #include <vcl/taskpanelist.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/implbase.hxx>
-
+#include <vcl/vclevent.hxx>
+#include <com/sun/star/ui/ContextChangeEventMultiplexer.hpp>
 /**
  * split from the main class since it needs different ref-counting mana
  */
@@ -36,7 +37,7 @@ NotebookBar::NotebookBar(Window* pParent, const OString& rID, const OUString& rU
 {
     SetStyle(GetStyle() | WB_DIALOGCONTROL);
     m_pUIBuilder.reset( new VclBuilder(this, getUIRootDir(), rUIXMLDescription, rID, rFrame) );
-
+    mxFrame = rFrame;
     // In the Notebookbar's .ui file must exist control handling context
     // - implementing NotebookbarContextControl interface with id "ContextContainer"
     // or "ContextContainerX" where X is a number >= 1
@@ -48,7 +49,7 @@ NotebookBar::NotebookBar(Window* pParent, const OString& rID, const OUString& rU
         if (i)
             aName += OUString::number(i);
 
-        pContextContainer = dynamic_cast<NotebookbarContextControl*>(m_pUIBuilder->get<Window>(rtl::OUStringToOString(aName, RTL_TEXTENCODING_UTF8)));
+        pContextContainer = dynamic_cast<NotebookbarContextControl*>(m_pUIBuilder->get<Window>(OUStringToOString(aName, RTL_TEXTENCODING_UTF8)));
         if (pContextContainer)
             m_pContextContainers.push_back(pContextContainer);
         i++;
@@ -146,13 +147,30 @@ void NotebookBar::SetSystemWindow(SystemWindow* pSystemWindow)
 
 void SAL_CALL NotebookBarContextChangeEventListener::notifyContextChangeEvent(const css::ui::ContextChangeEventObject& rEvent)
 {
-    if (mpParent && mpParent->m_pContextContainers.size() > 0)
+    if (mpParent && !mpParent->m_pContextContainers.empty())
     {
         for (NotebookbarContextControl* pControl : mpParent->m_pContextContainers)
             pControl->SetContext(vcl::EnumContext::GetContextEnum(rEvent.ContextName));
     }
 }
 
+void NotebookBar::ControlListener(bool bListen)
+{
+    if(bListen)
+    {
+        // remove listeners
+        css::uno::Reference<css::ui::XContextChangeEventMultiplexer> xMultiplexer (css::ui::ContextChangeEventMultiplexer::get(
+                ::comphelper::getProcessComponentContext()));
+        xMultiplexer->removeContextChangeEventListener(getContextChangeEventListener(),mxFrame->getController());
+    }
+    else
+    {
+        // add listeners
+        css::uno::Reference<css::ui::XContextChangeEventMultiplexer> xMultiplexer (css::ui::ContextChangeEventMultiplexer::get(
+                ::comphelper::getProcessComponentContext()));
+        xMultiplexer->addContextChangeEventListener(getContextChangeEventListener(),mxFrame->getController());
+    }
+}
 
 void SAL_CALL NotebookBarContextChangeEventListener::disposing(const ::css::lang::EventObject&)
 {
@@ -165,17 +183,70 @@ void NotebookBar::DataChanged(const DataChangedEvent& rDCEvt)
     Control::DataChanged(rDCEvt);
 }
 
+void NotebookBar::StateChanged(const  StateChangedType nStateChange )
+{
+    UpdateBackground();
+    Control::StateChanged(nStateChange);
+    Invalidate();
+}
+
 void NotebookBar::UpdateBackground()
 {
     const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
-    const BitmapEx aPersona = rStyleSettings.GetPersonaHeader();
-
+    const BitmapEx& aPersona = rStyleSettings.GetPersonaHeader();
+        Wallpaper aWallpaper(aPersona);
+        aWallpaper.SetStyle(WallpaperStyle::TopRight);
     if (!aPersona.IsEmpty())
-        SetBackground(Wallpaper(aPersona));
+        {
+            SetBackground(aWallpaper);
+            UpdatePersonaSettings();
+            SetSettings( PersonaSettings );
+        }
     else
-        SetBackground(rStyleSettings.GetDialogColor());
+        {
+            SetBackground(rStyleSettings.GetDialogColor());
+            UpdateDefaultSettings();
+            SetSettings( DefaultSettings );
+        }
 
     Invalidate(tools::Rectangle(Point(0,0), GetSizePixel()));
 }
 
+void NotebookBar::UpdateDefaultSettings()
+{
+    AllSettings aAllSettings( GetSettings() );
+    StyleSettings aStyleSet( aAllSettings.GetStyleSettings() );
+
+    ::Color aTextColor = aStyleSet.GetFieldTextColor();
+    aStyleSet.SetDialogTextColor( aTextColor );
+    aStyleSet.SetButtonTextColor( aTextColor );
+    aStyleSet.SetRadioCheckTextColor( aTextColor );
+    aStyleSet.SetGroupTextColor( aTextColor );
+    aStyleSet.SetLabelTextColor( aTextColor );
+    aStyleSet.SetWindowTextColor( aTextColor );
+    aStyleSet.SetTabTextColor(aTextColor);
+    aStyleSet.SetToolTextColor(aTextColor);
+
+    aAllSettings.SetStyleSettings(aStyleSet);
+    DefaultSettings = aAllSettings;
+}
+
+void NotebookBar::UpdatePersonaSettings()
+{
+    AllSettings aAllSettings( GetSettings() );
+    StyleSettings aStyleSet( aAllSettings.GetStyleSettings() );
+
+    ::Color aTextColor = aStyleSet.GetPersonaMenuBarTextColor().get_value_or(COL_BLACK );
+    aStyleSet.SetDialogTextColor( aTextColor );
+    aStyleSet.SetButtonTextColor( aTextColor );
+    aStyleSet.SetRadioCheckTextColor( aTextColor );
+    aStyleSet.SetGroupTextColor( aTextColor );
+    aStyleSet.SetLabelTextColor( aTextColor );
+    aStyleSet.SetWindowTextColor( aTextColor );
+    aStyleSet.SetTabTextColor(aTextColor);
+    aStyleSet.SetToolTextColor(aTextColor);
+
+    aAllSettings.SetStyleSettings(aStyleSet);
+    PersonaSettings = aAllSettings;
+}
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

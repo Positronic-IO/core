@@ -51,6 +51,7 @@
 #include <vcl/toolbox.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <vcl/idle.hxx>
 
 #include <sfx2/app.hxx>
@@ -76,7 +77,7 @@ using namespace ::com::sun::star::beans;
 
 class SfxEventAsyncer_Impl : public SfxListener
 {
-    SfxEventHint           aHint;
+    SfxEventHint const     aHint;
     std::unique_ptr<Idle>  pIdle;
 
 public:
@@ -622,7 +623,7 @@ void SfxApplication::SetOptions_Impl( const SfxItemSet& rSet )
                   pSh;
                   ++nIdx, pSh = pDispat->GetShell(nIdx) )
             {
-                ::svl::IUndoManager *pShUndoMgr = pSh->GetUndoManager();
+                SfxUndoManager *pShUndoMgr = pSh->GetUndoManager();
                 if ( pShUndoMgr )
                     pShUndoMgr->SetMaxUndoActionCount( nUndoCount );
             }
@@ -732,7 +733,7 @@ void SfxApplication::SetOptions(const SfxItemSet &rSet)
         OUString aNoChangeStr( ' ' );
         for( sal_uInt32 nPath=0; nPath<nCount; ++nPath )
         {
-            OUString sValue = pEnumItem->GetValueTextByPos(static_cast<sal_uInt16>(nPath));
+            const OUString& sValue = pEnumItem->GetValueTextByPos(static_cast<sal_uInt16>(nPath));
             if ( sValue != aNoChangeStr )
             {
                 switch( nPath )

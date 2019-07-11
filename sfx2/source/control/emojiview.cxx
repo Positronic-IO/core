@@ -13,6 +13,7 @@
 #include <tools/urlobj.hxx>
 #include <vcl/layout.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 #include <config_folders.h>
 #include <officecfg/Office/Common.hxx>
 #include <comphelper/processfactory.hxx>
@@ -132,15 +133,15 @@ void EmojiView::Populate()
                 // get values of parameters in AppendItem() function
                 if(emojiParam == "unicode")
                 {
-                    sTitle = rtl::OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
+                    sTitle = OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
                 }
                 else if(emojiParam == "category")
                 {
-                    sCategory = rtl::OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
+                    sCategory = OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
                 }
                 else if(emojiParam == "name")
                 {
-                    sName = rtl::OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
+                    sName = OStringToOUString(OString( prop.string_value().get(), prop.string_value().size() ), RTL_TEXTENCODING_UTF8);
                 }
                 else if(emojiParam == "duplicate")
                 {
@@ -208,13 +209,13 @@ void EmojiView::setInsertEmojiHdl(const Link<ThumbnailViewItem*, void> &rLink)
 
 void EmojiView::AppendItem(const OUString &rTitle, const OUString &rCategory, const OUString &rName)
 {
-    EmojiViewItem *pItem = new EmojiViewItem(*this, getNextItemId());
+    std::unique_ptr<EmojiViewItem> pItem(new EmojiViewItem(*this, getNextItemId()));
 
     pItem->maTitle = rTitle;
     pItem->setCategory(rCategory);
     pItem->setHelpText(rName);
 
-    ThumbnailView::AppendItem(pItem);
+    ThumbnailView::AppendItem(std::move(pItem));
 
     CalculateItemPositions();
 }

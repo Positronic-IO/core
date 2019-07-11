@@ -22,6 +22,8 @@
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <cppuhelper/supportsservice.hxx>
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
 namespace
 {
 

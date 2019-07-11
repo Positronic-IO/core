@@ -36,10 +36,10 @@
 namespace {
 
 class RedundantPointerOps:
-    public RecursiveASTVisitor<RedundantPointerOps>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<RedundantPointerOps>
 {
 public:
-    explicit RedundantPointerOps(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit RedundantPointerOps(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override
     {
@@ -63,7 +63,7 @@ bool RedundantPointerOps::VisitMemberExpr(MemberExpr const * memberExpr)
 {
     if (ignoreLocation(memberExpr))
         return true;
-    if (memberExpr->getLocStart().isMacroID())
+    if (compat::getBeginLoc(memberExpr).isMacroID())
         return true;
     auto base = memberExpr->getBase()->IgnoreParenImpCasts();
             //parentStmt(parentStmt(memberExpr))->dump();
@@ -74,7 +74,7 @@ bool RedundantPointerOps::VisitMemberExpr(MemberExpr const * memberExpr)
             if (unaryOp->getOpcode() == UO_AddrOf)
                 report(
                     DiagnosticsEngine::Warning, "'&' followed by '->', rather use '.'",
-                    memberExpr->getLocStart())
+                    compat::getBeginLoc(memberExpr))
                     << memberExpr->getSourceRange();
 
         }
@@ -83,7 +83,7 @@ bool RedundantPointerOps::VisitMemberExpr(MemberExpr const * memberExpr)
             if (operatorCallExpr->getOperator() == OO_Amp)
                 report(
                     DiagnosticsEngine::Warning, "'&' followed by '->', rather use '.'",
-                    memberExpr->getLocStart())
+                    compat::getBeginLoc(memberExpr))
                     << memberExpr->getSourceRange();
 
         }
@@ -107,7 +107,7 @@ bool RedundantPointerOps::VisitUnaryOperator(UnaryOperator const * unaryOperator
 {
     if (ignoreLocation(unaryOperator))
         return true;
-    if (unaryOperator->getLocStart().isMacroID())
+    if (compat::getBeginLoc(unaryOperator).isMacroID())
         return true;
     if (unaryOperator->getOpcode() != UO_Deref)
         return true;
@@ -117,7 +117,7 @@ bool RedundantPointerOps::VisitUnaryOperator(UnaryOperator const * unaryOperator
 
     report(
         DiagnosticsEngine::Warning, "'&' followed by '*', rather use '.'",
-        unaryOperator->getLocStart())
+        compat::getBeginLoc(unaryOperator))
         << unaryOperator->getSourceRange();
     return true;
 }

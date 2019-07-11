@@ -43,6 +43,7 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/container/XChild.hpp>
 
+#include <comphelper/types.hxx>
 #include <tools/diagnose_ex.h>
 #include <unotools/sharedunocomponent.hxx>
 #include <algorithm>
@@ -131,7 +132,7 @@ OUString createStandardTypePart(const Reference< XPropertySet >& xColProp,const 
         }
         else
         {
-            aSql.append(sTypeName.copy(0,++nParenPos));
+            aSql.appendCopy(sTypeName, 0, ++nParenPos);
         }
 
         if ( nPrecision > 0 && nDataType != DataType::TIMESTAMP )
@@ -148,7 +149,7 @@ OUString createStandardTypePart(const Reference< XPropertySet >& xColProp,const 
         else
         {
             nParenPos = sTypeName.indexOf(')',nParenPos);
-            aSql.append(sTypeName.copy(nParenPos));
+            aSql.appendCopy(sTypeName, nParenPos);
         }
     }
     else
@@ -250,20 +251,20 @@ namespace
         ::dbtools::OPropertyMap& rPropMap = OMetaConnection::getPropMap();
 
         const OUString sQuote(_xMetaData->getIdentifierQuoteString());
-        OUString sSql( " (" );
+        OUStringBuffer sSql( " (" );
         Reference< XPropertySet > xColProp;
 
         sal_Int32 nColCount  = _xColumns->getCount();
         for(sal_Int32 i=0;i<nColCount;++i)
         {
             if ( (_xColumns->getByIndex(i) >>= xColProp) && xColProp.is() )
-                sSql += ::dbtools::quoteName(sQuote,::comphelper::getString(xColProp->getPropertyValue(rPropMap.getNameByIndex(PROPERTY_ID_NAME))))
-                        + ",";
+                sSql.append( ::dbtools::quoteName(sQuote,::comphelper::getString(xColProp->getPropertyValue(rPropMap.getNameByIndex(PROPERTY_ID_NAME)))) )
+                        .append(",");
         }
 
         if ( nColCount )
-            sSql = sSql.replaceAt(sSql.getLength()-1, 1, ")");
-        return sSql;
+            sSql[sSql.getLength()-1] = ')';
+        return sSql.makeStringAndClear();
     }
 }
 
@@ -374,11 +375,9 @@ OUString createStandardKeyStatement(const Reference< XPropertySet >& descriptor,
 }
 
 OUString createSqlCreateTableStatement(  const Reference< XPropertySet >& descriptor,
-                                                const Reference< XConnection>& _xConnection,
-                                                ISQLStatementHelper* _pHelper,
-                                                const OUString& _sCreatePattern)
+                                         const Reference< XConnection>& _xConnection)
 {
-    OUString aSql = ::dbtools::createStandardCreateStatement(descriptor,_xConnection,_pHelper,_sCreatePattern);
+    OUString aSql = ::dbtools::createStandardCreateStatement(descriptor,_xConnection,nullptr,OUString());
     const OUString sKeyStmt = ::dbtools::createStandardKeyStatement(descriptor,_xConnection);
     if ( !sKeyStmt.isEmpty() )
         aSql += sKeyStmt;
@@ -941,17 +940,17 @@ sal_Int32 DBTypeConversion::convertUnicodeStringToLength( const OUString& _rSour
 
    return nLen;
 }
-OUString lcl_getReportEngines()
+static OUString lcl_getReportEngines()
 {
     return OUString("org.openoffice.Office.DataAccess/ReportEngines");
 }
 
-OUString lcl_getDefaultReportEngine()
+static OUString lcl_getDefaultReportEngine()
 {
     return OUString("DefaultReportEngine");
 }
 
-OUString lcl_getReportEngineNames()
+static OUString lcl_getReportEngineNames()
 {
     return OUString("ReportEngineNames");
 }
@@ -996,10 +995,10 @@ bool isAggregateColumn(const Reference< XSingleSelectQueryComposer > &_xParser, 
     if (xColumnsSupplier.is())
         xCols = xColumnsSupplier->getColumns();
 
-    return isAggregateColumn(xCols, sName, false/*whenNotFound*/);
+    return isAggregateColumn(xCols, sName);
 }
 
-bool isAggregateColumn(const Reference< XNameAccess > &_xColumns, const OUString &_sName, bool whenNotFound)
+bool isAggregateColumn(const Reference< XNameAccess > &_xColumns, const OUString &_sName)
 {
     if ( _xColumns.is() && _xColumns->hasByName(_sName) )
     {
@@ -1007,7 +1006,7 @@ bool isAggregateColumn(const Reference< XNameAccess > &_xColumns, const OUString
         assert(xProp.is());
         return isAggregateColumn( xProp );
     }
-    return  whenNotFound;
+    return false;
 }
 
 bool isAggregateColumn( const Reference< XPropertySet > &_xColumn )

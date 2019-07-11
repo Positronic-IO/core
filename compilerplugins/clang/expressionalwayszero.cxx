@@ -28,15 +28,16 @@ static bool startswith(const std::string& rStr, const char* pSubStr) {
 }
 
 class ExpressionAlwaysZero:
-    public RecursiveASTVisitor<ExpressionAlwaysZero>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<ExpressionAlwaysZero>
 {
 public:
-    explicit ExpressionAlwaysZero(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit ExpressionAlwaysZero(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override
     {
-        std::string fn( compiler.getSourceManager().getFileEntryForID(
-                        compiler.getSourceManager().getMainFileID())->getName() );
+        // don't use getMainFileID, it may return "<stdin>"
+        std::string fn(handler.getMainFileName());
+
         loplugin::normalizeDotDotInFilePath(fn);
         // encoding of constant value for binary file format
         if (startswith(fn, SRCDIR "/package/source/zipapi/ZipFile.cxx"))
@@ -72,7 +73,7 @@ bool ExpressionAlwaysZero::VisitBinaryOperator( BinaryOperator const * binaryOpe
 {
     if (ignoreLocation(binaryOperator))
         return true;
-    if (binaryOperator->getLocStart().isMacroID())
+    if (compat::getBeginLoc(binaryOperator).isMacroID())
         return true;
 
     auto op = binaryOperator->getOpcode();
@@ -91,7 +92,7 @@ bool ExpressionAlwaysZero::VisitBinaryOperator( BinaryOperator const * binaryOpe
         return true;
     report(
         DiagnosticsEngine::Warning, "expression always evaluates to zero, lhs=%0 rhs=%1",
-        binaryOperator->getLocStart())
+        compat::getBeginLoc(binaryOperator))
         << (lhsValue ? lhsValue->toString(10) : "unknown")
         << (rhsValue ? rhsValue->toString(10) : "unknown")
         << binaryOperator->getSourceRange();
@@ -102,7 +103,7 @@ bool ExpressionAlwaysZero::VisitCXXOperatorCallExpr( CXXOperatorCallExpr const *
 {
     if (ignoreLocation(cxxOperatorCallExpr))
         return true;
-    if (cxxOperatorCallExpr->getLocStart().isMacroID())
+    if (compat::getBeginLoc(cxxOperatorCallExpr).isMacroID())
         return true;
 
     auto op = cxxOperatorCallExpr->getOperator();
@@ -123,7 +124,7 @@ bool ExpressionAlwaysZero::VisitCXXOperatorCallExpr( CXXOperatorCallExpr const *
         return true;
     report(
         DiagnosticsEngine::Warning, "expression always evaluates to zero, lhs=%0 rhs=%1",
-        cxxOperatorCallExpr->getLocStart())
+        compat::getBeginLoc(cxxOperatorCallExpr))
         << (lhsValue ? lhsValue->toString(10) : "unknown")
         << (rhsValue ? rhsValue->toString(10) : "unknown")
         << cxxOperatorCallExpr->getSourceRange();
@@ -149,12 +150,7 @@ bool ExpressionAlwaysZero::TraverseStaticAssertDecl( StaticAssertDecl * )
     return true;
 }
 
-// on clang-3.8, this plugin can generate OOM
-#if CLANG_VERSION >= 30900
-loplugin::Plugin::Registration< ExpressionAlwaysZero > X("expressionalwayszero");
-#else
 loplugin::Plugin::Registration< ExpressionAlwaysZero > X("expressionalwayszero", false);
-#endif
 
 }
 

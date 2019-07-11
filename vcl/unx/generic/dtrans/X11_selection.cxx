@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cstdlib>
 
@@ -72,11 +73,11 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <algorithm>
 
-#define DRAG_EVENT_MASK ButtonPressMask         |\
-                              ButtonReleaseMask     |\
-                              PointerMotionMask     |\
-                              EnterWindowMask           |\
-                              LeaveWindowMask
+static constexpr auto DRAG_EVENT_MASK = ButtonPressMask |
+                              ButtonReleaseMask |
+                              PointerMotionMask |
+                              EnterWindowMask |
+                              LeaveWindowMask;
 
 using namespace com::sun::star::datatransfer;
 using namespace com::sun::star::datatransfer::dnd;
@@ -112,7 +113,7 @@ struct NativeTypeEntry
     Atom            nAtom;
     const char*     pType;              // Mime encoding on our side
     const char*     pNativeType;        // string corresponding to nAtom for the case of nAtom being uninitialized
-    int             nFormat;            // the corresponding format
+    int const       nFormat;            // the corresponding format
 };
 
 // the convention for Xdnd is mime types as specified by the corresponding
@@ -456,13 +457,10 @@ SelectionManager::~SelectionManager()
     {
         osl::MutexGuard aGuard( *osl::Mutex::getGlobalMutex() );
 
-        std::unordered_map< OUString, SelectionManager* >::iterator it;
-        for( it = getInstances().begin(); it != getInstances().end(); ++it )
-            if( it->second == this )
-            {
-                getInstances().erase( it );
-                break;
-            }
+        auto it = std::find_if(getInstances().begin(), getInstances().end(),
+            [&](const std::pair< OUString, SelectionManager* >& rInstance) { return rInstance.second == this; });
+        if( it != getInstances().end() )
+            getInstances().erase( it );
     }
 
     if( m_aThread )
@@ -521,7 +519,7 @@ SelectionAdaptor* SelectionManager::getAdaptor( Atom selection )
 OUString SelectionManager::convertFromCompound( const char* pText, int nLen )
 {
     osl::MutexGuard aGuard( m_aMutex );
-    OUString aRet;
+    OUStringBuffer aRet;
     if( nLen < 0 )
         nLen = strlen( pText );
 
@@ -539,12 +537,12 @@ OUString SelectionManager::convertFromCompound( const char* pText, int nLen )
                                &nTexts );
     rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
     for( int i = 0; i < nTexts; i++ )
-        aRet += OStringToOUString( pTextList[i], aEncoding );
+        aRet.append(OStringToOUString( pTextList[i], aEncoding ));
 
     if( pTextList )
         XFreeStringList( pTextList );
 
-    return aRet;
+    return aRet.makeStringAndClear();
 }
 
 OString SelectionManager::convertToCompound( const OUString& rText )
@@ -943,11 +941,8 @@ bool SelectionManager::getPasteData( Atom selection, Atom type, Sequence< sal_In
             }
             else
             {
-                TimeValue aTVal;
-                aTVal.Seconds = 0;
-                aTVal.Nanosec = 100000000;
                 aGuard.clear();
-                osl_waitThread( &aTVal );
+                osl::Thread::wait(std::chrono::milliseconds(100));
                 aGuard.reset();
             }
             if( bHandle )
@@ -1158,7 +1153,7 @@ bool SelectionManager::getPasteData( Atom selection, const OUString& rType, Sequ
                         memcpy( rData.getArray(), pBytes, nOutSize );
                         bSuccess = true;
                     }
-                    X11_freeBmp( pBytes );
+                    std::free( pBytes );
                 }
             }
         }
@@ -3369,15 +3364,12 @@ void SelectionManager::dragDoDispatch()
 #if OSL_DEBUG_LEVEL > 1
     fprintf( stderr, "begin executeDrag dispatching\n" );
 #endif
-    TimeValue aTVal;
-    aTVal.Seconds = 0;
-    aTVal.Nanosec = 200000000;
     oslThread aThread = m_aDragExecuteThread;
     while( m_xDragSourceListener.is() && ( ! m_bDropSent || time(nullptr)-m_nDropTimeout < 5 ) && osl_scheduleThread( aThread ) )
     {
         // let the thread in the run method do the dispatching
         // just look occasionally here whether drop timed out or is completed
-        osl_waitThread( &aTVal );
+        osl::Thread::wait(std::chrono::milliseconds(200));
     }
 #if OSL_DEBUG_LEVEL > 1
     fprintf( stderr, "end executeDrag dispatching\n" );
@@ -3831,7 +3823,7 @@ static bool bWasError = false;
 
 extern "C"
 {
-    int local_xerror_handler(Display* , XErrorEvent*)
+    static int local_xerror_handler(Display* , XErrorEvent*)
     {
         bWasError = true;
         return 0;

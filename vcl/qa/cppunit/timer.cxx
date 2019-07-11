@@ -31,7 +31,7 @@
 /// Avoid our timer tests just wedging the build if they fail.
 class WatchDog : public osl::Thread
 {
-    sal_Int32 mnSeconds;
+    sal_Int32 const mnSeconds;
 public:
     explicit WatchDog(sal_Int32 nSeconds) :
         Thread(),
@@ -444,21 +444,22 @@ void TimerTest::testInvokedReStart()
     sal_Int32 nCount = 0;
     IdleInvokedReStart aIdle( nCount );
     Scheduler::ProcessEventsToIdle();
-    CPPUNIT_ASSERT_EQUAL( nCount, sal_Int32(2) );
+    CPPUNIT_ASSERT_EQUAL( sal_Int32(2), nCount );
 }
 
 
 class IdleSerializer : public Idle
 {
-    sal_uInt32 mnPosition;
+    sal_uInt32 const mnPosition;
     sal_uInt32 &mrProcesed;
 public:
-    IdleSerializer( const sal_Char *pDebugName,
-                    sal_uInt32 nPosition, sal_uInt32 &rProcesed )
+    IdleSerializer(const sal_Char *pDebugName, TaskPriority ePrio,
+                   sal_uInt32 nPosition, sal_uInt32 &rProcesed)
         : Idle( pDebugName )
         , mnPosition( nPosition )
         , mrProcesed( rProcesed )
     {
+        SetPriority(ePrio);
         Start();
     }
     virtual void Invoke() override
@@ -474,10 +475,10 @@ void TimerTest::testPriority()
     {
         // Start: 1st Idle low, 2nd high
         sal_uInt32 nProcessed = 0;
-        IdleSerializer aLowPrioIdle( "IdleSerializer LowPrio", 2, nProcessed );
-        aLowPrioIdle.SetPriority( TaskPriority::LOWEST );
-        IdleSerializer aHighPrioIdle( "IdleSerializer HighPrio", 1, nProcessed );
-        aHighPrioIdle.SetPriority( TaskPriority::HIGHEST );
+        IdleSerializer aLowPrioIdle("IdleSerializer LowPrio",
+                                    TaskPriority::LOWEST, 2, nProcessed);
+        IdleSerializer aHighPrioIdle("IdleSerializer HighPrio",
+                                     TaskPriority::HIGHEST, 1, nProcessed);
         Scheduler::ProcessEventsToIdle();
         CPPUNIT_ASSERT_EQUAL_MESSAGE( "Not all idles processed", sal_uInt32(2), nProcessed );
     }
@@ -485,10 +486,10 @@ void TimerTest::testPriority()
     {
         // Start: 1st Idle high, 2nd low
         sal_uInt32 nProcessed = 0;
-        IdleSerializer aHighPrioIdle( "IdleSerializer HighPrio", 1, nProcessed );
-        aHighPrioIdle.SetPriority( TaskPriority::HIGHEST );
-        IdleSerializer aLowPrioIdle( "IdleSerializer LowPrio", 2, nProcessed );
-        aLowPrioIdle.SetPriority( TaskPriority::LOWEST );
+        IdleSerializer aHighPrioIdle("IdleSerializer HighPrio",
+                                     TaskPriority::HIGHEST, 1, nProcessed);
+        IdleSerializer aLowPrioIdle("IdleSerializer LowPrio",
+                                    TaskPriority::LOWEST, 2, nProcessed);
         Scheduler::ProcessEventsToIdle();
         CPPUNIT_ASSERT_EQUAL_MESSAGE( "Not all idles processed", sal_uInt32(2), nProcessed );
     }
@@ -507,7 +508,7 @@ public:
         : AutoIdle( pDebugName )
         , mrCount( rCount )
     {
-        CPPUNIT_ASSERT_EQUAL( mrCount, sal_uInt32(0) );
+        CPPUNIT_ASSERT_EQUAL( sal_uInt32(0), mrCount );
         SetInvokeHandler( LINK( this, TestAutoIdleRR, IdleRRHdl ) );
         Start();
     }

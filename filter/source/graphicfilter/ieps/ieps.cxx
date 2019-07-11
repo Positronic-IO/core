@@ -35,6 +35,8 @@
 #include <osl/process.h>
 #include <osl/file.hxx>
 #include <osl/thread.h>
+#include <rtl/byteseq.hxx>
+#include <sal/log.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 #include <o3tl/safeint.hxx>
 #include <memory>
@@ -130,19 +132,18 @@ static void MakeAsMeta(Graphic &rGraphic)
 {
     ScopedVclPtrInstance< VirtualDevice > pVDev;
     GDIMetaFile     aMtf;
-    Bitmap          aBmp( rGraphic.GetBitmap() );
-    Size            aSize = aBmp.GetPrefSize();
+    Size            aSize = rGraphic.GetPrefSize();
 
     if( !aSize.Width() || !aSize.Height() )
         aSize = Application::GetDefaultDevice()->PixelToLogic(
-            aBmp.GetSizePixel(), MapMode(MapUnit::Map100thMM));
+            rGraphic.GetSizePixel(), MapMode(MapUnit::Map100thMM));
     else
         aSize = OutputDevice::LogicToLogic( aSize,
-            aBmp.GetPrefMapMode(), MapMode(MapUnit::Map100thMM));
+            rGraphic.GetPrefMapMode(), MapMode(MapUnit::Map100thMM));
 
     pVDev->EnableOutput( false );
     aMtf.Record( pVDev );
-    pVDev->DrawBitmap( Point(), aSize, rGraphic.GetBitmap() );
+    pVDev->DrawBitmapEx( Point(), aSize, rGraphic.GetBitmapEx() );
     aMtf.Stop();
     aMtf.WindStart();
     aMtf.SetPrefMapMode(MapMode(MapUnit::Map100thMM));
@@ -407,7 +408,7 @@ static bool RenderAsBMP(const sal_uInt8* pBuf, sal_uInt32 nBytesRead, Graphic &r
 
 // this method adds a replacement action containing the original wmf or tiff replacement,
 // so the original eps can be written when storing to ODF.
-void CreateMtfReplacementAction( GDIMetaFile& rMtf, SvStream& rStrm, sal_uInt32 nOrigPos, sal_uInt32 nPSSize,
+static void CreateMtfReplacementAction( GDIMetaFile& rMtf, SvStream& rStrm, sal_uInt32 nOrigPos, sal_uInt32 nPSSize,
                                 sal_uInt32 nPosWMF, sal_uInt32 nSizeWMF, sal_uInt32 nPosTIFF, sal_uInt32 nSizeTIFF )
 {
     OString aComment("EPSReplacementGraphic");
@@ -448,7 +449,7 @@ void CreateMtfReplacementAction( GDIMetaFile& rMtf, SvStream& rStrm, sal_uInt32 
 }
 
 //there is no preview -> make a red box
-void MakePreview(sal_uInt8* pBuf, sal_uInt32 nBytesRead,
+static void MakePreview(sal_uInt8* pBuf, sal_uInt32 nBytesRead,
     long nWidth, long nHeight, Graphic &rGraphic)
 {
     GDIMetaFile aMtf;

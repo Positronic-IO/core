@@ -12,6 +12,7 @@
 
 #include <unotools/ucbstreamhelper.hxx>
 #include <vcl/graphicfilter.hxx>
+#include <vcl/weld.hxx>
 #include <vcl/wmf.hxx>
 
 using namespace css;
@@ -20,22 +21,12 @@ namespace vcl
 {
 namespace graphic
 {
-Graphic loadFromURL(OUString const& rURL, sal_Int16 nExtWidth, sal_Int16 nExtHeight,
-                    sal_Int16 nExtMapMode)
+Graphic loadFromURL(OUString const& rURL, weld::Window* pParentWin)
 {
-    // Define APM Header if goal height and width are defined
-    WmfExternal aExtHeader;
-    aExtHeader.xExt = nExtWidth;
-    aExtHeader.yExt = nExtHeight;
-    aExtHeader.mapMode = nExtMapMode;
-    WmfExternal* pExtHeader = nullptr;
-    if (nExtMapMode > 0)
-        pExtHeader = &aExtHeader;
-
     Graphic aGraphic;
 
-    std::unique_ptr<SvStream> pInputStream;
-    pInputStream.reset(utl::UcbStreamHelper::CreateStream(rURL, StreamMode::READ));
+    std::unique_ptr<SvStream> pInputStream = utl::UcbStreamHelper::CreateStream(
+        rURL, StreamMode::READ, pParentWin ? pParentWin->GetXWindow() : nullptr);
 
     if (pInputStream)
     {
@@ -43,15 +34,14 @@ Graphic loadFromURL(OUString const& rURL, sal_Int16 nExtWidth, sal_Int16 nExtHei
 
         ErrCode nError
             = rFilter.ImportGraphic(aGraphic, rURL, *pInputStream, GRFILTER_FORMAT_DONTKNOW,
-                                    nullptr, GraphicFilterImportFlags::NONE, pExtHeader);
+                                    nullptr, GraphicFilterImportFlags::NONE,
+                                    /*pExtHeader*/ static_cast<WmfExternal const*>(nullptr));
         if (nError != ERRCODE_NONE || aGraphic.GetType() == GraphicType::NONE)
             return Graphic();
     }
 
     return aGraphic;
 }
-
-Graphic loadFromURL(OUString const& rURL) { return loadFromURL(rURL, 0, 0, 0); }
 }
 } // end vcl::graphic
 

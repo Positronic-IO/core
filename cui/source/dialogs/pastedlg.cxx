@@ -23,11 +23,6 @@
 #include <pastedlg.hxx>
 #include <svtools/svmedit.hxx>
 #include <svtools/insdlg.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/button.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
-#include <vcl/lstbox.hxx>
 #include <sot/exchange.hxx>
 #include <sot/formats.hxx>
 #include <svtools/strings.hrc>
@@ -143,19 +138,18 @@ SotClipboardFormatId SvPasteObjectDialog::GetFormat( const TransferableDataHelpe
                 aName = SvPasteObjectHelper::GetSotFormatUIName( nFormat );
 
             // Show RICHTEXT only in case RTF is not present.
-            if (nFormat == SotClipboardFormatId::RICHTEXT)
+            if (nFormat == SotClipboardFormatId::RICHTEXT &&
+                std::any_of(pFormats->begin(), pFormats->end(),
+                            [](const DataFlavorEx& rFlavor) {
+                                return rFlavor.mnSotId == SotClipboardFormatId::RTF;
+                            }))
             {
-                auto it = std::find_if(pFormats->begin(), pFormats->end(),
-                                       [](const DataFlavorEx& rFlavor) {
-                                           return rFlavor.mnSotId == SotClipboardFormatId::RTF;
-                                       });
-                if (it != pFormats->end())
-                    continue;
+                continue;
             }
 
             if (ObjectLB().find_text(aName) == -1)
             {
-                ObjectLB().append(OUString::number(static_cast<sal_uInt32>(nFormat)), aName, "");
+                ObjectLB().append(OUString::number(static_cast<sal_uInt32>(nFormat)), aName);
             }
         }
     }

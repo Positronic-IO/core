@@ -113,8 +113,8 @@ public:
     void CropTableModelToSelection(const CellPos& rStart, const CellPos& rEnd);
 
     // Table stuff
-    void DistributeColumns( sal_Int32 nFirstColumn, sal_Int32 nLastColumn );
-    void DistributeRows( sal_Int32 nFirstRow, sal_Int32 nLastRow );
+    void DistributeColumns( sal_Int32 nFirstColumn, sal_Int32 nLastColumn, const bool bOptimize, const bool bMinimize );
+    void DistributeRows( sal_Int32 nFirstRow, sal_Int32 nLastRow, const bool bOptimize, const bool bMinimize );
 
     css::uno::Reference< css::table::XTable > getTable() const;
 
@@ -211,7 +211,6 @@ public:
     virtual void AdjustToMaxRect( const tools::Rectangle& rMaxRect, bool bShrinkOnly = false ) override;
 
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
     virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // Special drag methods
@@ -237,12 +236,11 @@ public:
     void TakeTextEditArea(const sdr::table::CellPos& rPos, Size* pPaperMin, Size* pPaperMax, tools::Rectangle* pViewInit, tools::Rectangle* pViewMin) const;
     virtual EEAnchorMode GetOutlinerViewAnchorMode() const override;
 
-    virtual void NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject) override;
+    virtual void NbcSetOutlinerParaObject(std::unique_ptr<OutlinerParaObject> pTextObject) override;
 
     virtual OutlinerParaObject* GetOutlinerParaObject() const override;
 
     virtual void NbcReformatText() override;
-    virtual void ReformatText() override;
 
     virtual bool IsVerticalWriting() const override;
     virtual void SetVerticalWriting(bool bVertical) override;
@@ -267,8 +265,8 @@ private:
     void init( sal_Int32 nColumns, sal_Int32 nRows );
 
 protected:
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
     virtual SdrObjGeoData* NewGeoData() const override;
     virtual void SaveGeoData(SdrObjGeoData& rGeo) const override;

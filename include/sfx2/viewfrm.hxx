@@ -66,7 +66,7 @@ class SFX2_DLLPUBLIC SfxViewFrame: public SfxShell, public SfxListener
     std::unique_ptr<struct SfxViewFrame_Impl>   m_pImpl;
 
     SfxObjectShellRef           m_xObjSh;
-    SfxDispatcher*              m_pDispatcher;
+    std::unique_ptr<SfxDispatcher> m_pDispatcher;
     SfxBindings*                m_pBindings;
     sal_uInt16                  m_nAdjustPosPixelLock;
 
@@ -76,7 +76,9 @@ private:
 protected:
     virtual void            Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
 
-    DECL_LINK( SwitchReadOnlyHandler, Button*, void );
+    DECL_LINK(GetInvolvedHandler, Button*, void);
+    DECL_LINK(GetDonateHandler, Button*, void);
+    DECL_LINK(SwitchReadOnlyHandler, Button*, void);
     DECL_LINK(SignDocumentHandler, Button*, void);
     SAL_DLLPRIVATE void KillDispatcher_Impl();
 
@@ -111,7 +113,7 @@ public:
             void            DoDeactivate(bool bMDI, SfxViewFrame const *pOld);
 
     using SfxShell::GetDispatcher;
-    SfxDispatcher*          GetDispatcher() { return m_pDispatcher; }
+    SfxDispatcher*          GetDispatcher() { return m_pDispatcher.get(); }
     SfxBindings&            GetBindings() { return *m_pBindings; }
     const SfxBindings&      GetBindings() const  { return *m_pBindings; }
     vcl::Window&            GetWindow() const;
@@ -129,7 +131,7 @@ public:
     bool                    IsVisible() const;
     void                    ToTop();
     void                    Enable( bool bEnable );
-    bool                    Close();
+    void                    Close();
     virtual void            Activate( bool bUI ) override;
     virtual void            Deactivate( bool bUI ) override;
 
@@ -263,7 +265,7 @@ private:
 
 class SFX2_DLLPUBLIC SfxViewFrameItem: public SfxPoolItem
 {
-    SfxViewFrame*           pFrame;
+    SfxViewFrame* const     pFrame;
 
 public:
                             SfxViewFrameItem( SfxViewFrame *pViewFrame ):

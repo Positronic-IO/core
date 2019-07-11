@@ -46,6 +46,7 @@
 #include <charfmt.hxx>
 #include <docary.hxx>
 #include <svx/svxids.hrc>
+#include <osl/diagnose.h>
 
 #include <doc.hxx>
 #include <IDocumentStylePoolAccess.hxx>
@@ -72,19 +73,12 @@ using namespace ::com::sun::star;
 static void lcl_swcss1_setEncoding( SwFormat& rFormat, rtl_TextEncoding eEnc );
 
 // Implementation of SwCSS1Parsers (actually swcss1.cxx)
-static struct SwCSS1ItemIds
+static const sal_uInt16 aItemIds[] =
 {
-    sal_uInt16 nFormatBreak;
-    sal_uInt16 nFormatPageDesc;
-    sal_uInt16 nFormatKeep;
-
-    SwCSS1ItemIds() :
-        nFormatBreak( RES_BREAK ),
-        nFormatPageDesc( RES_PAGEDESC ),
-        nFormatKeep( RES_KEEP )
-    {}
-
-} aItemIds;
+    RES_BREAK,
+    RES_PAGEDESC,
+    RES_KEEP,
+};
 
 void SwCSS1Parser::ChgPageDesc( const SwPageDesc *pPageDesc,
                                 const SwPageDesc& rNewPageDesc )
@@ -98,7 +92,7 @@ void SwCSS1Parser::ChgPageDesc( const SwPageDesc *pPageDesc,
 
 SwCSS1Parser::SwCSS1Parser( SwDoc *pD, const sal_uInt32 aFHeights[7], const OUString& rBaseURL, bool bNewDoc ) :
     SvxCSS1Parser( pD->GetAttrPool(), rBaseURL,
-                   reinterpret_cast<sal_uInt16*>(&aItemIds), sizeof(aItemIds) / sizeof(sal_uInt16) ),
+                   aItemIds, SAL_N_ELEMENTS(aItemIds)),
     m_pDoc( pD ),
     m_nDropCapCnt( 0 ),
     m_bIsNewDoc( bNewDoc ),
@@ -1701,8 +1695,7 @@ bool SwHTMLParser::FileDownload( const OUString& rURL,
         SvMemoryStream aStream;
         aStream.WriteStream( *pStream );
 
-        aStream.Seek( STREAM_SEEK_TO_END );
-        rStr = OUString(static_cast<const sal_Char *>(aStream.GetData()), aStream.Tell(),
+        rStr = OUString(static_cast<const sal_Char *>(aStream.GetData()), aStream.TellEnd(),
             GetSrcEncoding());
     }
 
@@ -1725,15 +1718,13 @@ bool SwHTMLParser::FileDownload( const OUString& rURL,
 void SwHTMLParser::InsertLink()
 {
     bool bFinishDownload = false;
-    if( m_pPendStack )
+    if( !m_vPendingStack.empty() )
     {
         OSL_ENSURE( ShouldFinishFileDownload(),
                 "Pending-Stack without File-Download?" );
 
-        SwPendingStack* pTmp = m_pPendStack->pNext;
-        delete m_pPendStack;
-        m_pPendStack = pTmp;
-        OSL_ENSURE( !m_pPendStack, "Where does the Pending-Stack come from?" );
+        m_vPendingStack.pop_back();
+        assert( m_vPendingStack.empty() && "Where does the Pending-Stack come from?" );
 
         bFinishDownload = true;
     }
@@ -1778,7 +1769,7 @@ void SwHTMLParser::InsertLink()
                     // The style was load asynchronously and is only available
                     // on the next continue call. Therefore we must create a
                     // Pending stack, so that we will return to here.
-                    m_pPendStack = new SwPendingStack( HtmlTokenId::LINK, m_pPendStack );
+                    m_vPendingStack.emplace_back( HtmlTokenId::LINK );
                 }
             }
             else
@@ -2187,8 +2178,8 @@ void SwHTMLParser::GetMarginsFromContextWithNumBul( sal_uInt16& nLeft,
         sal_uInt8 nLevel = static_cast<sal_uInt8>( (rInfo.GetDepth() <= MAXLEVEL ? rInfo.GetDepth()
                                                             : MAXLEVEL) - 1 );
         const SwNumFormat& rNumFormat = rInfo.GetNumRule()->Get(nLevel);
-        nLeft = nLeft + rNumFormat.GetAbsLSpace();
-        nIndent = rNumFormat.GetFirstLineOffset();
+        nLeft = nLeft + rNumFormat.GetAbsLSpace(); //TODO: overflow
+        nIndent = rNumFormat.GetFirstLineOffset(); //TODO: overflow
     }
 }
 

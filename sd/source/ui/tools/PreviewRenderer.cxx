@@ -120,7 +120,7 @@ Image PreviewRenderer::RenderPage (
                 PaintFrame();
 
                 Size aSize (mpPreviewDevice->GetOutputSizePixel());
-                aPreview = Image(mpPreviewDevice->GetBitmap (
+                aPreview = Image(mpPreviewDevice->GetBitmapEx(
                     mpPreviewDevice->PixelToLogic(Point(0,0)),
                     mpPreviewDevice->PixelToLogic(aSize)));
 
@@ -182,7 +182,7 @@ Image PreviewRenderer::RenderSubstitution (
         PaintFrame();
 
         const Size aSize (mpPreviewDevice->GetOutputSizePixel());
-        aPreview = Image(mpPreviewDevice->GetBitmap(
+        aPreview = Image(mpPreviewDevice->GetBitmapEx(
             mpPreviewDevice->PixelToLogic(Point(0,0)),
             mpPreviewDevice->PixelToLogic(aSize)));
     }
@@ -199,16 +199,19 @@ bool PreviewRenderer::Initialize (
     const Size& rPixelSize,
     const bool bObeyHighContrastMode)
 {
-    if (pPage == nullptr)
+    if (!pPage)
         return false;
 
     SetupOutputSize(*pPage, rPixelSize);
     SdDrawDocument& rDocument(static_cast< SdDrawDocument& >(pPage->getSdrModelFromSdrPage()));
     DrawDocShell* pDocShell = rDocument.GetDocSh();
 
+    if (!pDocShell)
+        return false;
+
     // Create view
     ProvideView (pDocShell);
-    if (mpView.get() == nullptr)
+    if (mpView == nullptr)
         return false;
 
     // Adjust contrast mode.
@@ -390,7 +393,7 @@ void PreviewRenderer::ProvideView (DrawDocShell* pDocShell)
         if (mpDocShellOfView != nullptr)
             StartListening (*mpDocShellOfView);
     }
-    if (mpView.get() == nullptr)
+    if (mpView == nullptr)
     {
         mpView.reset (new DrawView (pDocShell, mpPreviewDevice.get(), nullptr));
     }
@@ -456,7 +459,7 @@ Image PreviewRenderer::ScaleBitmap (
             aScaledBitmap.GetBitmap());
 
         // Get the resulting bitmap.
-        aPreview = Image(mpPreviewDevice->GetBitmap(Point(0,0), aFrameSize));
+        aPreview = Image(mpPreviewDevice->GetBitmapEx(Point(0,0), aFrameSize));
     }
     while (false);
 
@@ -493,7 +496,7 @@ drawinglayer::primitive2d::Primitive2DContainer ViewRedirector::createRedirected
 {
     SdrObject* pObject = rOriginal.GetViewContact().TryToGetSdrObject();
 
-    if (pObject==nullptr || pObject->GetPage() == nullptr)
+    if (pObject==nullptr || pObject->getSdrPageFromSdrObject() == nullptr)
     {
         // not a SdrObject visualisation (maybe e.g. page) or no page
         return sdr::contact::ViewObjectContactRedirector::createRedirectedPrimitive2DSequence(
@@ -501,7 +504,7 @@ drawinglayer::primitive2d::Primitive2DContainer ViewRedirector::createRedirected
             rDisplayInfo);
     }
 
-    const bool bDoCreateGeometry (pObject->GetPage()->checkVisibility( rOriginal, rDisplayInfo, true));
+    const bool bDoCreateGeometry (pObject->getSdrPageFromSdrObject()->checkVisibility( rOriginal, rDisplayInfo, true));
 
     if ( ! bDoCreateGeometry
         && (pObject->GetObjInventor() != SdrInventor::Default || pObject->GetObjIdentifier() != OBJ_PAGE))

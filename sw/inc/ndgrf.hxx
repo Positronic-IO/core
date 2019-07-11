@@ -29,7 +29,6 @@ class SwAsyncRetrieveInputStreamThreadConsumer;
 
 class SwGrfFormatColl;
 class SwDoc;
-namespace com { namespace sun { namespace star { namespace embed { class XStorage; } } } }
 
 // SwGrfNode
 class SW_DLLPUBLIC SwGrfNode: public SwNoTextNode
@@ -37,12 +36,11 @@ class SW_DLLPUBLIC SwGrfNode: public SwNoTextNode
     friend class SwNodes;
 
     GraphicObject maGrfObj;
-    GraphicObject *mpReplacementGraphic;
+    std::unique_ptr<GraphicObject> mpReplacementGraphic;
     tools::SvRef<sfx2::SvBaseLink> refLink;       ///< If graphics only as link then pointer is set.
     Size nGrfSize;
     bool bInSwapIn              :1;
 
-    bool bGraphicArrived        :1;
     bool bChgTwipSize           :1;
     bool bFrameInPaint          :1; ///< To avoid Start-/EndActions in Paint via SwapIn.
     bool bScaleImageMap         :1; ///< Scale image map in SetTwipSize.
@@ -81,10 +79,9 @@ public:
     const Graphic&          GetGrf(bool bWait = false) const;
     const GraphicObject&    GetGrfObj(bool bWait = false) const;
     const GraphicObject* GetReplacementGrfObj() const;
-    virtual SwContentNode *SplitContentNode( const SwPosition & ) override;
 
     /// isolated only way to set GraphicObject to allow more actions when doing so
-    void SetGraphic(const Graphic& rGraphic, const OUString& rLink);
+    void SetGraphic(const Graphic& rGraphic);
 
     /// wrappers for non-const calls at GraphicObject
     void StartGraphicAnimation(OutputDevice* pOut, const Point& rPt, const Size& rSz, long nExtraData, OutputDevice* pFirstFrameOutDev)
@@ -104,9 +101,6 @@ public:
         bChgTwipSize = b;
     }
 
-    bool IsGraphicArrived() const        { return bGraphicArrived; }
-    void SetGraphicArrived( bool b )     { bGraphicArrived = b; }
-
     bool IsFrameInPaint() const          { return bFrameInPaint; }
     void SetFrameInPaint( bool b )       { bFrameInPaint = b; }
 
@@ -114,7 +108,7 @@ public:
     void SetScaleImageMap( bool b )      { bScaleImageMap = b; }
 
     /// in ndcopy.cxx
-    virtual SwContentNode* MakeCopy( SwDoc*, const SwNodeIndex& ) const override;
+    virtual SwContentNode* MakeCopy(SwDoc*, const SwNodeIndex&, bool bNewFrames) const override;
 
     /** Re-read in case graphic was not OK. The current one
        gets replaced by the new one. */
@@ -124,8 +118,6 @@ public:
 private:
     /// Loading of graphic immediately before displaying.
     bool SwapIn( bool bWaitForData = false );
-    /// Remove graphic in order to free memory.
-    bool SwapOut();
 
 public:
     bool HasEmbeddedStreamName() const { return maGrfObj.HasUserData(); }

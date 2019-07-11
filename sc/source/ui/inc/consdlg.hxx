@@ -20,11 +20,8 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_CONSDLG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_CONSDLG_HXX
 
-#include <vcl/fixed.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/layout.hxx>
-#include <vcl/morebtn.hxx>
 #include <global.hxx>
 #include "anyrefdg.hxx"
 
@@ -74,15 +71,15 @@ private:
     VclPtr<PushButton>      pBtnAdd;
     VclPtr<PushButton>      pBtnRemove;
 
-    OUString         aStrUndefined;
+    OUString const         aStrUndefined;
 
-    ScConsolidateParam  theConsData;
+    ScConsolidateParam const  theConsData;
     ScViewData&         rViewData;
-    ScDocument*         pDoc;
-    ScRangeUtil*        pRangeUtil;
-    ScAreaData*         pAreaData;
+    ScDocument* const         pDoc;
+    std::unique_ptr<ScRangeUtil>  pRangeUtil;
+    std::unique_ptr<ScAreaData[]> pAreaData;
     size_t              nAreaDataCount;
-    sal_uInt16          nWhichCons;
+    sal_uInt16 const          nWhichCons;
 
     VclPtr<formula::RefEdit>   pRefInputEdit;
     bool                bDlgLostFocus;

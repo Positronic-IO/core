@@ -26,6 +26,7 @@
 #include <reffld.hxx>
 #include <wrtsh.hxx>
 
+#include <fldref.hrc>
 #include <globals.hrc>
 #include <strings.hrc>
 #include <SwNodeNum.hxx>
@@ -33,10 +34,11 @@
 #include <ndtxt.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/syslocaleoptions.hxx>
+#include <unotools/charclass.hxx>
 
 #include <comphelper/string.hxx>
 
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #define REFFLDFLAG          0x4000
 #define REFFLDFLAG_BOOKMARK 0x4800
@@ -67,6 +69,11 @@ SwFieldRefPage::SwFieldRefPage(vcl::Window* pParent, const SfxItemSet *const pCo
     get(m_pSelectionToolTipLB, "selecttip");
     get(m_pFormat, "formatframe");
     get(m_pFormatLB, "format");
+    for (size_t i = 0; i < SAL_N_ELEMENTS(FLD_REF_PAGE_TYPES); ++i)
+    {
+        m_pTypeLB->InsertEntry(SwResId(FLD_REF_PAGE_TYPES[i]));
+        m_pFormatLB->InsertEntry(SwResId(FLD_REF_PAGE_TYPES[i]));
+    }
     get(m_pNameFT, "nameft");
     get(m_pNameED, "name");
     get(m_pValueED, "value");
@@ -555,13 +562,13 @@ void SwFieldRefPage::UpdateSubType(const OUString& filterString)
 
             for( size_t n = 0; n < nCnt; ++n )
             {
-                bool isSubstring = MatchSubstring(aArr[ n ]->sDlgEntry, filterString);
+                bool isSubstring = MatchSubstring(aArr[ n ].sDlgEntry, filterString);
                 if(isSubstring)
                 {
-                    m_pSelectionLB->InsertEntry( aArr[ n ]->sDlgEntry );
+                    m_pSelectionLB->InsertEntry( aArr[ n ].sDlgEntry );
                 }
-                if (IsFieldEdit() && pRefField->GetSeqNo() == aArr[ n ]->nSeqNo)
-                    sOldSel = aArr[n]->sDlgEntry;
+                if (IsFieldEdit() && pRefField->GetSeqNo() == aArr[ n ].nSeqNo)
+                    sOldSel = aArr[n].sDlgEntry;
             }
         }
         else if (nTypeId == REFFLDFLAG_ENDNOTE)
@@ -572,13 +579,13 @@ void SwFieldRefPage::UpdateSubType(const OUString& filterString)
 
             for( size_t n = 0; n < nCnt; ++n )
             {
-                bool isSubstring = MatchSubstring(aArr[ n ]->sDlgEntry, filterString);
+                bool isSubstring = MatchSubstring(aArr[ n ].sDlgEntry, filterString);
                 if(isSubstring)
                 {
-                    m_pSelectionLB->InsertEntry( aArr[ n ]->sDlgEntry );
+                    m_pSelectionLB->InsertEntry( aArr[ n ].sDlgEntry );
                 }
-                if (IsFieldEdit() && pRefField->GetSeqNo() == aArr[ n ]->nSeqNo)
-                    sOldSel = aArr[n]->sDlgEntry;
+                if (IsFieldEdit() && pRefField->GetSeqNo() == aArr[ n ].nSeqNo)
+                    sOldSel = aArr[n].sDlgEntry;
             }
         }
         // #i83479#
@@ -591,11 +598,15 @@ void SwFieldRefPage::UpdateSubType(const OUString& filterString)
             bool bCertainTextNodeSelected( false );
             for ( size_t nOutlIdx = 0; nOutlIdx < maOutlineNodes.size(); ++nOutlIdx )
             {
-                bool isSubstring = MatchSubstring(pIDoc->getOutlineText( nOutlIdx, true, true, false ), filterString);
+                if (!pIDoc->isOutlineInLayout(nOutlIdx, *pSh->GetLayout()))
+                {
+                    continue; // skip it
+                }
+                bool isSubstring = MatchSubstring(pIDoc->getOutlineText(nOutlIdx, pSh->GetLayout(), true, true, false), filterString);
                 if(isSubstring)
                 {
                     SvTreeListEntry* pEntry = m_pSelectionToolTipLB->InsertEntry(
-                    pIDoc->getOutlineText( nOutlIdx, true, true, false ) );
+                    pIDoc->getOutlineText(nOutlIdx, pSh->GetLayout(), true, true, false));
                     pEntry->SetUserData( reinterpret_cast<void*>(nOutlIdx) );
                     if ( ( IsFieldEdit() &&
                        pRefField->GetReferencedTextNode() == maOutlineNodes[nOutlIdx] ) ||
@@ -622,11 +633,15 @@ void SwFieldRefPage::UpdateSubType(const OUString& filterString)
             bool bCertainTextNodeSelected( false );
             for ( size_t nNumItemIdx = 0; nNumItemIdx < maNumItems.size(); ++nNumItemIdx )
             {
-                bool isSubstring = MatchSubstring(pIDoc->getListItemText( *maNumItems[nNumItemIdx] ), filterString);
+                if (!pIDoc->isNumberedInLayout(*maNumItems[nNumItemIdx], *pSh->GetLayout()))
+                {
+                    continue; // skip it
+                }
+                bool isSubstring = MatchSubstring(pIDoc->getListItemText(*maNumItems[nNumItemIdx], *pSh->GetLayout()), filterString);
                 if(isSubstring)
                 {
                     SvTreeListEntry* pEntry = m_pSelectionToolTipLB->InsertEntry(
-                    pIDoc->getListItemText( *maNumItems[nNumItemIdx] ) );
+                        pIDoc->getListItemText(*maNumItems[nNumItemIdx], *pSh->GetLayout()));
                     pEntry->SetUserData( reinterpret_cast<void*>(nNumItemIdx) );
                     if ( ( IsFieldEdit() &&
                            pRefField->GetReferencedTextNode() == maNumItems[nNumItemIdx]->GetTextNode() ) ||
@@ -658,17 +673,17 @@ void SwFieldRefPage::UpdateSubType(const OUString& filterString)
                 if(IsFieldEdit())
                     sOldSel.clear();
 
-                const size_t nCnt = pType->GetSeqFieldList( aArr );
+                const size_t nCnt = pType->GetSeqFieldList(aArr, pSh->GetLayout());
                 for( size_t n = 0; n < nCnt; ++n )
                 {
-                    bool isSubstring = MatchSubstring(aArr[ n ]->sDlgEntry, filterString);
+                    bool isSubstring = MatchSubstring(aArr[ n ].sDlgEntry, filterString);
                     if(isSubstring)
                     {
-                        m_pSelectionLB->InsertEntry( aArr[ n ]->sDlgEntry );
+                        m_pSelectionLB->InsertEntry( aArr[ n ].sDlgEntry );
                     }
                     if (IsFieldEdit() && sOldSel.isEmpty() &&
-                        aArr[ n ]->nSeqNo == pRefField->GetSeqNo())
-                        sOldSel = aArr[ n ]->sDlgEntry;
+                        aArr[ n ].nSeqNo == pRefField->GetSeqNo())
+                        sOldSel = aArr[ n ].sDlgEntry;
                 }
 
                 if (IsFieldEdit() && sOldSel.isEmpty())
@@ -988,9 +1003,9 @@ bool SwFieldRefPage::FillItemSet(SfxItemSet* )
 
             if (pSh->GetSeqFootnoteList(aArr) && aArr.SeekEntry(aElem, &nPos))
             {
-                aVal = OUString::number( aArr[nPos]->nSeqNo );
+                aVal = OUString::number( aArr[nPos].nSeqNo );
 
-                if (IsFieldEdit() && aArr[nPos]->nSeqNo == pRefField->GetSeqNo())
+                if (IsFieldEdit() && aArr[nPos].nSeqNo == pRefField->GetSeqNo())
                     bModified = true; // can happen with fields of which the references were deleted
             }
             else if (IsFieldEdit())
@@ -1009,9 +1024,9 @@ bool SwFieldRefPage::FillItemSet(SfxItemSet* )
 
             if (pSh->GetSeqFootnoteList(aArr, true) && aArr.SeekEntry(aElem, &nPos))
             {
-                aVal = OUString::number( aArr[nPos]->nSeqNo );
+                aVal = OUString::number( aArr[nPos].nSeqNo );
 
-                if (IsFieldEdit() && aArr[nPos]->nSeqNo == pRefField->GetSeqNo())
+                if (IsFieldEdit() && aArr[nPos].nSeqNo == pRefField->GetSeqNo())
                     bModified = true; // can happen with fields of which the reference was deleted
             }
             else if (IsFieldEdit())
@@ -1076,11 +1091,12 @@ bool SwFieldRefPage::FillItemSet(SfxItemSet* )
                 nSubType = REF_SEQUENCEFLD;
                 aName = pType->GetName();
 
-                if (pType->GetSeqFieldList(aArr) && aArr.SeekEntry(aElem, &nPos))
+                if (pType->GetSeqFieldList(aArr, pSh->GetLayout())
+                    && aArr.SeekEntry(aElem, &nPos))
                 {
-                    aVal = OUString::number( aArr[nPos]->nSeqNo );
+                    aVal = OUString::number( aArr[nPos].nSeqNo );
 
-                    if (IsFieldEdit() && aArr[nPos]->nSeqNo == pRefField->GetSeqNo())
+                    if (IsFieldEdit() && aArr[nPos].nSeqNo == pRefField->GetSeqNo())
                         bModified = true; // can happen with fields of which the reference was deleted
                 }
                 else if (IsFieldEdit())

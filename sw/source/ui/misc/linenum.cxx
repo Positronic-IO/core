@@ -20,6 +20,7 @@
 #include <sfx2/viewfrm.hxx>
 #include <svl/style.hxx>
 #include <svtools/unitconv.hxx>
+#include <sal/log.hxx>
 #include <view.hxx>
 #include <wrtsh.hxx>
 #include <docsh.hxx>
@@ -63,7 +64,7 @@ static void lcl_setLineNumbering(const OUString& rName, SwWrtShell* pSh, bool bL
 }
 
 SwLineNumberingDlg::SwLineNumberingDlg(const SwView& rVw)
-    : GenericDialogController(rVw.GetViewFrame()->GetWindow().GetFrameWeld(),
+    : SfxDialogController(rVw.GetViewFrame()->GetWindow().GetFrameWeld(),
             "modules/swriter/ui/linenumbering.ui", "LineNumberingDialog")
     , m_pSh(rVw.GetWrtShellPtr())
     , m_xBodyContent(m_xBuilder->weld_widget("content"))
@@ -71,10 +72,10 @@ SwLineNumberingDlg::SwLineNumberingDlg(const SwView& rVw)
     , m_xDivIntervalNF(m_xBuilder->weld_spin_button("linesspin"))
     , m_xDivRowsFT(m_xBuilder->weld_widget("lines"))
     , m_xNumIntervalNF(m_xBuilder->weld_spin_button("intervalspin"))
-    , m_xCharStyleLB(m_xBuilder->weld_combo_box_text("styledropdown"))
-    , m_xFormatLB(new NumberingTypeListBox(m_xBuilder->weld_combo_box_text("formatdropdown")))
-    , m_xPosLB(m_xBuilder->weld_combo_box_text("positiondropdown"))
-    , m_xOffsetMF(m_xBuilder->weld_metric_spin_button("spacingspin", FUNIT_CM))
+    , m_xCharStyleLB(m_xBuilder->weld_combo_box("styledropdown"))
+    , m_xFormatLB(new SwNumberingTypeListBox(m_xBuilder->weld_combo_box("formatdropdown")))
+    , m_xPosLB(m_xBuilder->weld_combo_box("positiondropdown"))
+    , m_xOffsetMF(m_xBuilder->weld_metric_spin_button("spacingspin", FieldUnit::CM))
     , m_xDivisorED(m_xBuilder->weld_entry("textentry"))
     , m_xCountEmptyLinesCB(m_xBuilder->weld_check_button("blanklines"))
     , m_xCountFrameLinesCB(m_xBuilder->weld_check_button("linesintextframes"))
@@ -135,7 +136,7 @@ SwLineNumberingDlg::SwLineNumberingDlg(const SwView& rVw)
     FieldUnit eFieldUnit = SW_MOD()->GetUsrPref(dynamic_cast< const SwWebDocShell*>(
                                 rVw.GetDocShell()) != nullptr)->GetMetric();
     ::SetFieldUnit(*m_xOffsetMF, eFieldUnit);
-    m_xOffsetMF->set_value(m_xOffsetMF->normalize(nOffset), FUNIT_TWIP);
+    m_xOffsetMF->set_value(m_xOffsetMF->normalize(nOffset), FieldUnit::TWIP);
 
     // numbering offset
     m_xNumIntervalNF->set_value(rInf.GetCountBy());
@@ -208,7 +209,7 @@ IMPL_LINK_NOARG(SwLineNumberingDlg, OKHdl, weld::Button&, void)
     aInf.SetPos(static_cast<LineNumberPosition>(m_xPosLB->get_active()));
 
     // offset
-    aInf.SetPosFromLeft(static_cast<sal_uInt16>(m_xOffsetMF->denormalize(m_xOffsetMF->get_value(FUNIT_TWIP))));
+    aInf.SetPosFromLeft(static_cast<sal_uInt16>(m_xOffsetMF->denormalize(m_xOffsetMF->get_value(FieldUnit::TWIP))));
 
     // numbering offset
     aInf.SetCountBy(static_cast<sal_uInt16>(m_xNumIntervalNF->get_value()));

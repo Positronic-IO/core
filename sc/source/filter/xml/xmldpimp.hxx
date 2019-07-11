@@ -20,24 +20,23 @@
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLDPIMP_HXX
 
 #include <memory>
-#include <xmloff/xmlictxt.hxx>
-#include <xmloff/xmlimp.hxx>
-#include <com/sun/star/sheet/DataPilotFieldReference.hpp>
-#include <com/sun/star/sheet/DataPilotFieldSortInfo.hpp>
-#include <com/sun/star/sheet/DataPilotFieldAutoShowInfo.hpp>
-#include <com/sun/star/sheet/DataPilotFieldLayoutInfo.hpp>
+#include <xmloff/xmltoken.hxx>
 
-#include <global.hxx>
-#include <dpobject.hxx>
 #include <dpsave.hxx>
 #include <queryparam.hxx>
-#include "xmlimprt.hxx"
 #include "importcontext.hxx"
 
 #include <unordered_map>
 
+namespace com { namespace sun { namespace star { namespace sheet { struct DataPilotFieldAutoShowInfo; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct DataPilotFieldLayoutInfo; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct DataPilotFieldReference; } } } }
+namespace com { namespace sun { namespace star { namespace sheet { struct DataPilotFieldSortInfo; } } } }
+namespace sax_fastparser { class FastAttributeList; }
+
 class ScDPSaveNumGroupDimension;
 class ScDPSaveGroupDimension;
+class ScDPObject;
 
 enum ScMySourceType
 {
@@ -71,7 +70,6 @@ class ScXMLDataPilotTableContext : public ScXMLImportContext
         GrandTotalItem();
     };
     ScDocument*     pDoc;
-    ScDPObject*     pDPObject;
     std::unique_ptr<ScDPSaveData> pDPSave;
     std::unique_ptr<ScDPDimensionSaveData> pDPDimSaveData;
     GrandTotalItem  maRowGrandTotal;
@@ -139,14 +137,12 @@ public:
     void AddDimension(ScDPSaveDimension* pDim);
     void AddGroupDim(const ScDPSaveNumGroupDimension& aNumGroupDim);
     void AddGroupDim(const ScDPSaveGroupDimension& aGroupDim);
-    void SetButtons();
+    void SetButtons(ScDPObject* pDPObject);
     void SetSelectedPage( const OUString& rDimName, const OUString& rSelected );
 };
 
 class ScXMLDPSourceSQLContext : public ScXMLImportContext
 {
-    ScXMLDataPilotTableContext* pDataPilotTable;
-
 public:
 
     ScXMLDPSourceSQLContext( ScXMLImport& rImport,
@@ -158,8 +154,6 @@ public:
 
 class ScXMLDPSourceTableContext : public ScXMLImportContext
 {
-    ScXMLDataPilotTableContext* pDataPilotTable;
-
 public:
 
     ScXMLDPSourceTableContext( ScXMLImport& rImport,
@@ -171,8 +165,6 @@ public:
 
 class ScXMLDPSourceQueryContext : public ScXMLImportContext
 {
-    ScXMLDataPilotTableContext* pDataPilotTable;
-
 public:
 
     ScXMLDPSourceQueryContext( ScXMLImport& rImport,
@@ -184,8 +176,6 @@ public:
 
 class ScXMLSourceServiceContext : public ScXMLImportContext
 {
-    ScXMLDataPilotTableContext* pDataPilotTable;
-
 public:
 
     ScXMLSourceServiceContext( ScXMLImport& rImport,
@@ -382,8 +372,6 @@ public:
 
 class ScXMLDataPilotSubTotalContext : public ScXMLImportContext
 {
-    ScXMLDataPilotSubTotalsContext* pDataPilotSubTotals;
-
 public:
 
     ScXMLDataPilotSubTotalContext( ScXMLImport& rImport,
@@ -395,7 +383,7 @@ public:
 
 class ScXMLDataPilotMembersContext : public ScXMLImportContext
 {
-    ScXMLDataPilotFieldContext* pDataPilotField;
+    ScXMLDataPilotFieldContext* const pDataPilotField;
 
 public:
 

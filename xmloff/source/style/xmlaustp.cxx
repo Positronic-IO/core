@@ -30,6 +30,7 @@
 #include <xmloff/PageMasterStyleMap.hxx>
 #include "PageMasterExportPropMapper.hxx"
 #include <XMLBackgroundImageExport.hxx>
+#include <osl/diagnose.h>
 
 
 using namespace ::std;
@@ -70,16 +71,13 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
     {   // it's a control-related style
         const rtl::Reference< XMLPropertySetMapper >& aPropertyMapper = rPropExp.getPropertySetMapper();
 
-        for (   vector< XMLPropertyState >::const_iterator pProp = rProperties.begin();
-                pProp != rProperties.end();
-                ++pProp
-            )
+        for (const auto& rProp : rProperties)
         {
-            if  (   ( pProp->mnIndex > -1 )
-                &&  ( CTF_FORMS_DATA_STYLE == aPropertyMapper->GetEntryContextId( pProp->mnIndex ) )
+            if  (   ( rProp.mnIndex > -1 )
+                &&  ( CTF_FORMS_DATA_STYLE == aPropertyMapper->GetEntryContextId( rProp.mnIndex ) )
                 )
             {   // it's the data-style for a grid column
-                lcl_exportDataStyle( GetExport(), aPropertyMapper, *pProp );
+                lcl_exportDataStyle( GetExport(), aPropertyMapper, rProp );
             }
         }
     }
@@ -92,14 +90,11 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
         bool bFoundControlShapeDataStyle = false;
         bool bFoundNumberingRulesName = false;
 
-        for (   vector< XMLPropertyState >::const_iterator pProp = rProperties.begin();
-                pProp != rProperties.end();
-                ++pProp
-            )
+        for (const auto& rProp : rProperties)
         {
-            if (pProp->mnIndex > -1)
+            if (rProp.mnIndex > -1)
             {   // it's a valid property
-                switch( aPropertyMapper->GetEntryContextId(pProp->mnIndex) )
+                switch( aPropertyMapper->GetEntryContextId(rProp.mnIndex) )
                 {
                 case CTF_SD_CONTROL_SHAPE_DATA_STYLE:
                     {   // it's the control shape data style property
@@ -111,7 +106,7 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
                             break;
                         }
 
-                        lcl_exportDataStyle( GetExport(), aPropertyMapper, *pProp );
+                        lcl_exportDataStyle( GetExport(), aPropertyMapper, rProp );
 
                         // check if there is another property with the special context id we're handling here
                         bFoundControlShapeDataStyle = true;
@@ -127,7 +122,7 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
                         }
 
                         uno::Reference< container::XIndexReplace > xNumRule;
-                        pProp->maValue >>= xNumRule;
+                        rProp.maValue >>= xNumRule;
                         if( xNumRule.is() && (xNumRule->getCount() > 0 ) )
                         {
                             const OUString sName(const_cast<XMLTextListAutoStylePool*>(&GetExport().GetTextParagraphExport()->GetListAutoStylePool())->Add( xNumRule ));
@@ -145,12 +140,12 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
 
     if( nFamily == XML_STYLE_FAMILY_PAGE_MASTER )
     {
-        for( vector< XMLPropertyState >::const_iterator pProp = rProperties.begin(); pProp != rProperties.end(); ++pProp )
+        for( const auto& rProp : rProperties )
         {
-            if (pProp->mnIndex > -1)
+            if (rProp.mnIndex > -1)
             {
                 const rtl::Reference< XMLPropertySetMapper >& aPropMapper = rPropExp.getPropertySetMapper();
-                sal_Int32 nIndex = pProp->mnIndex;
+                sal_Int32 nIndex = rProp.mnIndex;
                 sal_Int16 nContextID = aPropMapper->GetEntryContextId( nIndex );
                 switch( nContextID )
                 {
@@ -159,7 +154,7 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
                         OUString sValue;
                         const XMLPropertyHandler* pPropHdl = aPropMapper->GetPropertyHandler( nIndex );
                         if( pPropHdl &&
-                            pPropHdl->exportXML( sValue, pProp->maValue,
+                            pPropHdl->exportXML( sValue, rProp.maValue,
                                                  GetExport().GetMM100UnitConverter() ) &&
                             ( ! IsXMLToken( sValue, XML_ALL ) ) )
                         {
@@ -380,6 +375,11 @@ void SvXMLAutoStylePoolP::exportXML( sal_Int32 nFamily ) const
 void SvXMLAutoStylePoolP::ClearEntries()
 {
     pImpl->ClearEntries();
+}
+
+std::vector<xmloff::AutoStyleEntry> SvXMLAutoStylePoolP::GetAutoStyleEntries() const
+{
+    return pImpl->GetAutoStyleEntries();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

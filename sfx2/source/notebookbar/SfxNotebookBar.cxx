@@ -17,6 +17,7 @@
 #include <vcl/tabctrl.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <comphelper/processfactory.hxx>
+#include <com/sun/star/frame/UnknownModuleException.hpp>
 #include <com/sun/star/ui/ContextChangeEventMultiplexer.hpp>
 #include <com/sun/star/ui/XContextChangeEventMultiplexer.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
@@ -70,6 +71,9 @@ static OUString lcl_getAppName( vcl::EnumContext::Application eApp )
             break;
         case vcl::EnumContext::Application::Draw:
             return OUString( "Draw" );
+            break;
+        case vcl::EnumContext::Application::Formula:
+            return OUString( "Formula" );
             break;
         default:
             return OUString();
@@ -176,18 +180,21 @@ void SfxNotebookBar::CloseMethod(SystemWindow* pSysWindow)
         RemoveListeners(pSysWindow);
         if(pSysWindow->GetNotebookBar())
             pSysWindow->CloseNotebookBar();
-        SfxNotebookBar::ShowMenubar(true);
+        if (SfxViewFrame::Current())
+            SfxNotebookBar::ShowMenubar(SfxViewFrame::Current(), true);
     }
 }
 
 void SfxNotebookBar::LockNotebookBar()
 {
     m_bHide = true;
+    m_bLock = true;
 }
 
 void SfxNotebookBar::UnlockNotebookBar()
 {
     m_bHide = false;
+    m_bLock = false;
 }
 
 bool SfxNotebookBar::IsActive()
@@ -204,11 +211,27 @@ bool SfxNotebookBar::IsActive()
             return false;
 
         const Reference<frame::XModuleManager> xModuleManager  = frame::ModuleManager::create( ::comphelper::getProcessComponentContext() );
-        eApp = vcl::EnumContext::GetApplicationEnum(xModuleManager->identify(xFrame));
+        try
+        {
+            eApp = vcl::EnumContext::GetApplicationEnum(xModuleManager->identify(xFrame));
+        }
+        catch (css::frame::UnknownModuleException& e)
+        {
+            SAL_WARN("sfx.appl", "SfxNotebookBar::IsActive(): " + e.Message);
+            return false;
+        }
     }
+    else
+        return false;
+
+    OUString appName(lcl_getAppName( eApp ));
+
+    if (appName.isEmpty())
+        return false;
+
 
     OUStringBuffer aPath("org.openoffice.Office.UI.ToolbarMode/Applications/");
-    aPath.append( lcl_getAppName( eApp ) );
+    aPath.append( appName );
 
     const utl::OConfigurationTreeRoot aAppNode(
                                         ::comphelper::getProcessComponentContext(),
@@ -410,6 +433,38 @@ void SfxNotebookBar::ShowMenubar(bool bShow)
         }
         m_bLock = false;
     }
+}
+
+void SfxNotebookBar::ShowMenubar(SfxViewFrame* pViewFrame, bool bShow)
+{
+    if (m_bLock)
+        return;
+
+    m_bLock = true;
+
+    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+    const Reference<frame::XModuleManager> xModuleManager = frame::ModuleManager::create(xContext);
+
+    Reference<frame::XFrame> xFrame = pViewFrame->GetFrame().GetFrameInterface();
+    if (xFrame.is())
+    {
+        const Reference<frame::XLayoutManager>& xLayoutManager = lcl_getLayoutManager(xFrame);
+        if (xLayoutManager.is())
+        {
+            xLayoutManager->lock();
+
+            if (xLayoutManager->getElement(MENUBAR_STR).is())
+            {
+                if (xLayoutManager->isElementVisible(MENUBAR_STR) && !bShow)
+                    xLayoutManager->hideElement(MENUBAR_STR);
+                else if (!xLayoutManager->isElementVisible(MENUBAR_STR) && bShow)
+                    xLayoutManager->showElement(MENUBAR_STR);
+            }
+
+            xLayoutManager->unlock();
+        }
+    }
+    m_bLock = false;
 }
 
 void SfxNotebookBar::ToggleMenubar()

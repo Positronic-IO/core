@@ -21,6 +21,7 @@
 #include <svl/itemiter.hxx>
 #include <svl/grabbagitem.hxx>
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 
 #include <hintids.hxx>
 #include <editeng/lspcitem.hxx>
@@ -67,6 +68,8 @@
 #include <editeng/frmdiritem.hxx>
 #include <editeng/charhiddenitem.hxx>
 #include <i18nlangtag/mslangid.hxx>
+#include <svx/xfillit0.hxx>
+#include <svx/xflclit.hxx>
 #include "sprmids.hxx"
 #include <fmtpdsc.hxx>
 #include <node.hxx>
@@ -129,7 +132,7 @@ Color SwWW8ImplReader::GetCol(sal_uInt8 nIco)
     return nIco < SAL_N_ELEMENTS(eSwWW8ColA) ? eSwWW8ColA[nIco] : COL_AUTO;
 }
 
-inline sal_uInt32 MSRoundTweak(sal_uInt32 x)
+static sal_uInt32 MSRoundTweak(sal_uInt32 x)
 {
     return x;
 }
@@ -496,8 +499,17 @@ void wwSectionManager::GetPageULData(const wwSection &rSection,
         nWWUp += rSection.maSep.dzaGutter;
     }
 
-    rData.bHasHeader = (rSection.maSep.grpfIhdt &
-        (WW8_HEADER_EVEN | WW8_HEADER_ODD | WW8_HEADER_FIRST)) != 0;
+    /* Check whether this section has headers / footers */
+    sal_uInt16 nHeaderMask = WW8_HEADER_EVEN | WW8_HEADER_ODD;
+    sal_uInt16 nFooterMask = WW8_FOOTER_EVEN | WW8_FOOTER_ODD;
+    /* Ignore the presence of a first-page header/footer unless it is enabled */
+    if( rSection.HasTitlePage() )
+    {
+        nHeaderMask |= WW8_HEADER_FIRST;
+        nFooterMask |= WW8_FOOTER_FIRST;
+    }
+    rData.bHasHeader = (rSection.maSep.grpfIhdt & nHeaderMask) != 0;
+    rData.bHasFooter = (rSection.maSep.grpfIhdt & nFooterMask) != 0;
 
     if( rData.bHasHeader )
     {
@@ -517,9 +529,6 @@ void wwSectionManager::GetPageULData(const wwSection &rSection,
     }
     else // no header -> just use Up as-is
         rData.nSwUp = std::abs(nWWUp);
-
-    rData.bHasFooter = (rSection.maSep.grpfIhdt &
-        (WW8_FOOTER_EVEN | WW8_FOOTER_ODD | WW8_FOOTER_FIRST)) != 0;
 
     if( rData.bHasFooter )
     {
@@ -629,20 +638,15 @@ SwSectionFormat *wwSectionManager::InsertSection(
         return nullptr;
 
     SwPageDesc *pPage = nullptr;
-    mySegrIter aEnd = maSegments.rend();
-    for (mySegrIter aIter = maSegments.rbegin(); aIter != aEnd; ++aIter)
-    {
-        if (nullptr != (pPage = aIter->mpPage))
-            break;
-    }
+    auto aIter = std::find_if(maSegments.rbegin(), maSegments.rend(),
+        [](const wwSection& rSegment) { return rSegment.mpPage != nullptr; });
+    if (aIter != maSegments.rend())
+        pPage = aIter->mpPage;
 
     OSL_ENSURE(pPage, "no page outside this section!");
 
     if (!pPage)
         pPage = &mrReader.m_rDoc.GetPageDesc(0);
-
-    if (!pPage)
-        return nullptr;
 
     SwSectionFormat *pFormat = rSection.mpSection->GetFormat();
     OSL_ENSURE(pFormat, "impossible");
@@ -840,6 +844,8 @@ void wwSectionManager::CreateSep(const long nTextPos)
 
     const sal_uInt16* pIds = eVer <= ww::eWW2 ? aVer2Ids0 : eVer <= ww::eWW7 ? aVer67Ids0 : aVer8Ids0;
 
+    SprmResult aRes = pSep->HasSprm(pIds[0]);
+    const sal_uInt8* pSprmBkc = aRes.pSprm;
     if (!maSegments.empty())
     {
         // Type of break: break codes are:
@@ -848,8 +854,6 @@ void wwSectionManager::CreateSep(const long nTextPos)
         // 2 New page
         // 3 Even page
         // 4 Odd page
-        SprmResult aRes = pSep->HasSprm(pIds[0]);
-        const sal_uInt8* pSprmBkc = aRes.pSprm;
         if (pSprmBkc && aRes.nRemainingData >= 1)
             aNewSection.maSep.bkc = *pSprmBkc;
     }
@@ -1002,7 +1006,13 @@ void wwSectionManager::CreateSep(const long nTextPos)
 
     aNewSection.maSep.pgnStart = ReadUSprm( pSep, pIds[7], 0 );
 
-    SprmResult aRes;
+    // if the document's first page number is unspecified, but it starts with an even page break,
+    // then set the first page number to two
+    if ( maSegments.empty() && !aNewSection.maSep.fPgnRestart && pSprmBkc && *pSprmBkc == 3 )
+    {
+        aNewSection.maSep.pgnStart = 2;
+        aNewSection.maSep.fPgnRestart = 1;
+    }
 
     if (eVer >= ww::eWW6)
     {
@@ -1085,8 +1095,7 @@ void wwSectionManager::CreateSep(const long nTextPos)
         aNewSection.maSep.pgbPageDepth = (pgbProp & 0x0018) >> 3;
         aNewSection.maSep.pgbOffsetFrom = (pgbProp & 0x00E0) >> 5;
 
-        aNewSection.mnBorders =
-            ::lcl_ReadBorders(eVer <= ww::eWW7, aNewSection.brc, nullptr, nullptr, pSep);
+        aNewSection.mnBorders = ::lcl_ReadBorders(false, aNewSection.brc, nullptr, nullptr, pSep);
     }
 
     // check if Line Numbering must be activated or reset
@@ -1338,7 +1347,7 @@ static sal_uInt8 lcl_ReadBorders(bool bVer67, WW8_BRCVer9* brc, WW8PLCFx_Cp_FKP*
     return nBorder;
 }
 
-void GetLineIndex(SvxBoxItem &rBox, short nLineThickness, short nSpace,
+static void GetLineIndex(SvxBoxItem &rBox, short nLineThickness, short nSpace,
     sal_uInt32 cv, short nIdx, SvxBoxItemLine nOOIndex, sal_uInt16 nWWIndex,
     short *pSize)
 {
@@ -1371,7 +1380,7 @@ void GetLineIndex(SvxBoxItem &rBox, short nLineThickness, short nSpace,
 
 }
 
-void Set1Border(SvxBoxItem &rBox, const WW8_BRCVer9& rBor, SvxBoxItemLine nOOIndex,
+static void Set1Border(SvxBoxItem &rBox, const WW8_BRCVer9& rBor, SvxBoxItemLine nOOIndex,
     sal_uInt16 nWWIndex, short *pSize, const bool bIgnoreSpace)
 {
     short nSpace;
@@ -1502,7 +1511,7 @@ static void FlySecur1(short& rSize, const bool bBorder)
         rSize = nMin;
 }
 
-inline bool SetValSprm( sal_Int16* pVar, WW8PLCFx_Cp_FKP* pPap, sal_uInt16 nId )
+static bool SetValSprm( sal_Int16* pVar, WW8PLCFx_Cp_FKP* pPap, sal_uInt16 nId )
 {
     SprmResult aS = pPap->HasSprm(nId);
     if (aS.pSprm && aS.nRemainingData >= 2)
@@ -1510,7 +1519,7 @@ inline bool SetValSprm( sal_Int16* pVar, WW8PLCFx_Cp_FKP* pPap, sal_uInt16 nId )
     return aS.pSprm != nullptr;
 }
 
-inline bool SetValSprm( sal_Int16* pVar, const WW8RStyle* pStyle, sal_uInt16 nId )
+static bool SetValSprm( sal_Int16* pVar, const WW8RStyle* pStyle, sal_uInt16 nId )
 {
     SprmResult aS = pStyle->HasParaSprm(nId);
     if (aS.pSprm && aS.nRemainingData >= 2)
@@ -1781,7 +1790,6 @@ eSurround(( rWW.nSp37 > 1 ) ? css::text::WrapTextMode_DYNAMIC : css::text::WrapT
 nXBind(( rWW.nSp29 & 0xc0 ) >> 6),
 nYBind(( rWW.nSp29 & 0x30 ) >> 4),
 nNewNetWidth(MINFLY),
-xMainTextPos(nullptr),
 nLineSpace(0),
 bAutoWidth(false),
 bToggelPos(false)
@@ -1909,7 +1917,7 @@ bToggelPos(false)
     // #i36649# - adjustments for certain horizontal alignments
     // Note: These special adjustments found by an investigation of documents
     //       containing frames with different left/right border distances and
-    //       distances to text. The outcome is some how strange.
+    //       distances to text. The outcome is somehow strange.
     // Note: These adjustments causes wrong horizontal positions for frames,
     //       which are aligned inside|outside to page|margin on even pages,
     //       the left and right border distances are different.
@@ -2492,7 +2500,7 @@ void SwWW8ImplReader::StopApo()
     {
         if (!m_xSFlyPara->xMainTextPos)
         {
-            OSL_ENSURE(m_xSFlyPara->xMainTextPos.get(), "StopApo: xMainTextPos is nullptr");
+            OSL_ENSURE(m_xSFlyPara->xMainTextPos, "StopApo: xMainTextPos is nullptr");
             return;
         }
 
@@ -2520,6 +2528,7 @@ void SwWW8ImplReader::StopApo()
         Color aBg(0xFE, 0xFF, 0xFF, 0xFF);  //Transparent by default
 
         SwTextNode* pNd = aPref.GetNode().GetTextNode();
+        SwTextNode* pJoinNext = nullptr;
         if (pNd && m_xSFlyPara->pFlyFormat)
         {
             /*
@@ -2533,7 +2542,7 @@ void SwWW8ImplReader::StopApo()
             if (rBrush.GetColor() != COL_AUTO)
                 aBg = rBrush.GetColor();
 
-            if (m_pLastAnchorPos.get())
+            if (m_pLastAnchorPos)
             {
                 //If the last anchor pos is here, then clear the anchor pos.
                 //This "last anchor pos" is only used for fixing up the
@@ -2549,13 +2558,16 @@ void SwWW8ImplReader::StopApo()
             }
 
             //Get rid of extra empty paragraph
-            pNd->JoinNext();
+            pJoinNext = pNd;
         }
 
         if (m_xSFlyPara->pFlyFormat)
             m_xSFlyPara->pFlyFormat->SetFormatAttr(SvxBrushItem(aBg, RES_BACKGROUND));
 
         DeleteAnchorStack();
+        if (pJoinNext)
+            pJoinNext->JoinNext();
+
         m_xAnchorStck = std::move(m_xSFlyPara->xOldAnchorStck);
 
         // When inserting a graphic into the fly frame using the auto
@@ -3498,14 +3510,13 @@ void SwWW8ImplReader::Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, sh
         {
             if( SfxItemState::SET == m_pCurrentColl->GetItemState( RES_CHRATR_UNDERLINE, false ) )
             {
-                const SwAttrSet& aSet = m_pCurrentColl->GetAttrSet();
-                SvxUnderlineItem *pUnderline
-                    = static_cast<SvxUnderlineItem *>(aSet.Get( RES_CHRATR_UNDERLINE, false ).Clone());
-                if (pUnderline && nLen >= 4)
+                if (nLen >= 4)
                 {
+                    const SwAttrSet& aSet = m_pCurrentColl->GetAttrSet();
+                    std::unique_ptr<SvxUnderlineItem> pUnderline(
+                            static_cast<SvxUnderlineItem *>(aSet.Get( RES_CHRATR_UNDERLINE, false ).Clone()));
                     pUnderline->SetColor( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) );
                     m_pCurrentColl->SetFormatAttr( *pUnderline );
-                    delete pUnderline;
                 }
             }
         }
@@ -3513,13 +3524,11 @@ void SwWW8ImplReader::Read_UnderlineColor(sal_uInt16, const sal_uInt8* pData, sh
         {
             if ( SfxItemState::SET == m_xCurrentItemSet->GetItemState( RES_CHRATR_UNDERLINE, false ) )
             {
-                SvxUnderlineItem *pUnderline
-                    = static_cast<SvxUnderlineItem*>(m_xCurrentItemSet->Get(RES_CHRATR_UNDERLINE, false).Clone());
-                if (pUnderline && nLen >= 4)
+                if (nLen >= 4)
                 {
+                    std::unique_ptr<SvxUnderlineItem> pUnderline(static_cast<SvxUnderlineItem*>(m_xCurrentItemSet->Get(RES_CHRATR_UNDERLINE, false).Clone()));
                     pUnderline->SetColor( msfilter::util::BGRToRGB(SVBT32ToUInt32(pData)) );
                     m_xCurrentItemSet->Put( *pUnderline );
-                    delete pUnderline;
                 }
             }
         }
@@ -3553,20 +3562,20 @@ bool SwWW8ImplReader::GetFontParams( sal_uInt16 nFCode, FontFamily& reFamily,
     rName = pF->sFontname;
 
     // pF->prg : Pitch
-    rePitch = ePitchA[pF->prg];
+    rePitch = ePitchA[pF->aFFNBase.prg];
 
     // pF->chs: Charset
-    if( 77 == pF->chs )             // Mac font in Mac Charset or
+    if( 77 == pF->aFFNBase.chs )             // Mac font in Mac Charset or
         reCharSet = m_eTextCharSet;   // translated to ANSI charset
     else
     {
         // #i52786#, for word 67 we'll assume that ANSI is basically invalid,
         // might be true for (above) mac as well, but would need a mac example
         // that exercises this to be sure
-        if (m_bVer67 && pF->chs == 0)
+        if (m_bVer67 && pF->aFFNBase.chs == 0)
             reCharSet = RTL_TEXTENCODING_DONTKNOW;
         else
-            reCharSet = rtl_getTextEncodingFromWindowsCharset( pF->chs );
+            reCharSet = rtl_getTextEncodingFromWindowsCharset(pF->aFFNBase.chs);
     }
 
     // make sure Font Family Code is set correctly
@@ -3595,7 +3604,7 @@ bool SwWW8ImplReader::GetFontParams( sal_uInt16 nFCode, FontFamily& reFamily,
     }
     else
     {
-        reFamily = eFamilyA[pF->ff];
+        reFamily = eFamilyA[pF->aFFNBase.ff];
     }
 
     return true;
@@ -4017,7 +4026,7 @@ void SwWW8ImplReader::Read_NoLineNumb(sal_uInt16 , const sal_uInt8* pData, short
     NewAttr( aLN );
 }
 
-bool lcl_HasExplicitLeft(const WW8PLCFMan *pPlcxMan, bool bVer67)
+static bool lcl_HasExplicitLeft(const WW8PLCFMan *pPlcxMan, bool bVer67)
 {
     WW8PLCFx_Cp_FKP *pPap = pPlcxMan ? pPlcxMan->GetPapPLCF() : nullptr;
     if (pPap)
@@ -4224,7 +4233,7 @@ void SwWW8ImplReader::Read_LineSpace( sal_uInt16, const sal_uInt8* pData, short 
     {
         long n = nSpace * 10 / 24;  // WW: 240 = 100%, SW: 100 = 100%
 
-        if( n>SAL_MAX_UINT16 ) n = SAL_MAX_UINT16;
+        // here n is in [0..13653]
         aLSpc.SetPropLineSpace( static_cast<sal_uInt16>(n) );
         const SvxFontHeightItem* pH = static_cast<const SvxFontHeightItem*>(
             GetFormatAttr( RES_CHRATR_FONTSIZE ));
@@ -4499,10 +4508,9 @@ void SwWW8ImplReader::Read_BoolItem( sal_uInt16 nId, const sal_uInt8* pData, sho
         m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), nId );
     else
     {
-        SfxBoolItem* pI = static_cast<SfxBoolItem*>(GetDfltAttr( nId )->Clone());
+        std::unique_ptr<SfxBoolItem> pI(static_cast<SfxBoolItem*>(GetDfltAttr( nId )->Clone()));
         pI->SetValue( 0 != *pData );
         NewAttr( *pI );
-        delete pI;
     }
 }
 
@@ -4727,7 +4735,7 @@ void SwWW8Shade::SetShade(Color nFore, Color nBack, sal_uInt16 nIndex)
     if (nFore == COL_AUTO)
         nFore = COL_BLACK;
 
-    //NO auto for shading so background: Auto = Weiss
+    //NO auto for shading so background: Auto = White
     Color nUseBack = nBack;
     if (nUseBack == COL_AUTO)
         nUseBack = COL_WHITE;
@@ -4768,7 +4776,8 @@ void SwWW8ImplReader::Read_Shade( sal_uInt16, const sal_uInt8* pData, short nLen
     if (nLen < 2)
     {
         // end of attribute
-        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), RES_BACKGROUND );
+        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), XATTR_FILLSTYLE );
+        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), XATTR_FILLCOLOR );
     }
     else
     {
@@ -4776,7 +4785,8 @@ void SwWW8ImplReader::Read_Shade( sal_uInt16, const sal_uInt8* pData, short nLen
         aSHD.SetWWValue( *reinterpret_cast<SVBT16 const *>(pData) );
         SwWW8Shade aSh( m_bVer67, aSHD );
 
-        NewAttr(SvxBrushItem(aSh.aColor, RES_BACKGROUND));
+        NewAttr( XFillStyleItem(drawing::FillStyle_SOLID) );
+        NewAttr( XFillColorItem(OUString(), aSh.aColor) );
     }
 }
 
@@ -4785,14 +4795,17 @@ void SwWW8ImplReader::Read_ParaBackColor(sal_uInt16, const sal_uInt8* pData, sho
     if (nLen <= 0)
     {
         // end of attribute
-        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), RES_BACKGROUND );
+        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), XATTR_FILLSTYLE );
+        m_xCtrlStck->SetAttr( *m_pPaM->GetPoint(), XATTR_FILLCOLOR );
     }
     else
     {
         OSL_ENSURE(nLen == 10, "Len of para back colour not 10!");
         if (nLen != 10)
             return;
-        NewAttr(SvxBrushItem(ExtractColour(pData, m_bVer67), RES_BACKGROUND));
+
+        NewAttr( XFillStyleItem(drawing::FillStyle_SOLID) );
+        NewAttr( XFillColorItem(OUString(), ExtractColour(pData, m_bVer67)) );
     }
 }
 
@@ -5179,14 +5192,14 @@ struct SprmReadInfo
     FNReadRecord pReadFnc;
 };
 
-bool operator<(const SprmReadInfo &rFirst, const SprmReadInfo &rSecond)
+static bool operator<(const SprmReadInfo &rFirst, const SprmReadInfo &rSecond)
 {
     return (rFirst.nId < rSecond.nId);
 }
 
 typedef ww::SortedArray<SprmReadInfo> wwSprmDispatcher;
 
-const wwSprmDispatcher *GetWW2SprmDispatcher()
+static const wwSprmDispatcher *GetWW2SprmDispatcher()
 {
     static SprmReadInfo aSprms[] =
     {
@@ -5342,7 +5355,7 @@ const wwSprmDispatcher *GetWW2SprmDispatcher()
     return &aSprmSrch;
 }
 
-const wwSprmDispatcher *GetWW6SprmDispatcher()
+static const wwSprmDispatcher *GetWW6SprmDispatcher()
 {
     static SprmReadInfo aSprms[] =
     {
@@ -5554,7 +5567,7 @@ const wwSprmDispatcher *GetWW6SprmDispatcher()
     return &aSprmSrch;
 }
 
-const wwSprmDispatcher *GetWW8SprmDispatcher()
+static const wwSprmDispatcher *GetWW8SprmDispatcher()
 {
     static SprmReadInfo aSprms[] =
     {

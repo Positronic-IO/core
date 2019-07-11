@@ -25,6 +25,7 @@
 #include "sbxconv.hxx"
 
 #include <unotools/syslocale.hxx>
+#include <unotools/charclass.hxx>
 
 #include <stdlib.h>
 
@@ -46,6 +47,7 @@
 
 #include <rtl/strbuf.hxx>
 #include <rtl/character.hxx>
+#include <sal/log.hxx>
 #include <svl/zforlist.hxx>
 
 #include <o3tl/make_unique.hxx>
@@ -65,7 +67,7 @@ void ImpGetIntntlSep( sal_Unicode& rcDecimalSep, sal_Unicode& rcThousandSep, sal
     terminating NULL character to be part of the string and returns bool
     instead of pointer, if character is 0 returns false.
  */
-bool ImpStrChr( const sal_Unicode* p, sal_Unicode c )
+static bool ImpStrChr( const sal_Unicode* p, sal_Unicode c )
 {
     if (!c)
         return false;
@@ -120,6 +122,8 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
                     (cIntntlDecSep && *p == cIntntlGrpSep) || (cIntntlDecSepAlt && *p == cIntntlDecSepAlt)) &&
                 rtl::isAsciiDigit( *(p+1) )))
     {
+        // tdf#118442: Whitespace and minus are skipped; store the position to calculate index
+        const sal_Unicode* const pDigitsStart = p;
         short exp = 0;
         short decsep = 0;
         short ndig = 0;
@@ -145,7 +149,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
             if( *p == cNonIntntlDecSep || *p == cIntntlDecSep || (cIntntlDecSepAlt && *p == cIntntlDecSepAlt) )
             {
                 // Use the separator that is passed to stringToDouble()
-                aBuf[ p - pStart ] = cIntntlDecSep;
+                aBuf[p - pDigitsStart] = cIntntlDecSep;
                 p++;
                 if( ++decsep > 1 )
                     continue;
@@ -159,7 +163,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
                 }
                 if( *p == 'D' || *p == 'd' )
                     eScanType = SbxDOUBLE;
-                aBuf[ p - pStart ] = 'E';
+                aBuf[p - pDigitsStart] = 'E';
                 p++;
                 if (*p == '+')
                     ++p;
@@ -404,7 +408,13 @@ static void myftoa( double nNum, char * pBuf, short nPrec, short nExpWidth,
         if( nExpWidth < 3 ) nExpWidth = 3;
         nExpWidth -= 2;
         *pBuf++ = 'E';
-        *pBuf++ =( nExp < 0 ) ?( (nExp = -nExp ), '-' ) : '+';
+        if ( nExp < 0 )
+        {
+            nExp = -nExp;
+            *pBuf++ = '-';
+        }
+        else
+            *pBuf++ = '+';
         while( nExpWidth > 3 )
         {
             *pBuf++ = '0';
@@ -612,6 +622,7 @@ struct VbaFormatInfo
     const char* mpOOoFormat;     // if meType = VbaFormatType::UserDefined
 };
 
+#if HAVE_FEATURE_SCRIPTING
 const VbaFormatInfo pFormatInfoTable[] =
 {
     { VbaFormatType::Offset,      OUStringLiteral("Long Date"),   NF_DATE_SYSTEM_LONG,    nullptr },
@@ -627,7 +638,6 @@ const VbaFormatInfo pFormatInfoTable[] =
     { VbaFormatType::Null,        OUStringLiteral(""),            NF_INDEX_TABLE_ENTRIES, nullptr }
 };
 
-#if HAVE_FEATURE_SCRIPTING
 const VbaFormatInfo* getFormatInfo( const OUString& rFmt )
 {
     const VbaFormatInfo* pInfo = pFormatInfoTable;
@@ -717,7 +727,7 @@ void SbxValue::Format( OUString& rRes, const OUString* pFmt ) const
                 else
                 {
                     aFmtStr = OUString::createFromAscii(pInfo->mpOOoFormat);
-                    pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType );
+                    pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType, true);
                 }
                 pFormatter->GetOutputString( nNumber, nIndex, rRes, &pCol );
             }
@@ -734,7 +744,7 @@ void SbxValue::Format( OUString& rRes, const OUString* pFmt ) const
                     if( floor( nNumber ) != nNumber )
                     {
                         aFmtStr = "H:MM:SS AM/PM";
-                        pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType );
+                        pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType, true);
                         OUString aTime;
                         pFormatter->GetOutputString( nNumber, nIndex, aTime, &pCol );
                         rRes += " " + aTime;
@@ -744,7 +754,7 @@ void SbxValue::Format( OUString& rRes, const OUString* pFmt ) const
                 {
                     // long time only
                     aFmtStr = "H:MM:SS AM/PM";
-                    pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType );
+                    pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType, true);
                     pFormatter->GetOutputString( nNumber, nIndex, rRes, &pCol );
                 }
             }
@@ -780,7 +790,7 @@ void SbxValue::Format( OUString& rRes, const OUString* pFmt ) const
             }
             else
             {
-                pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType );
+                pFormatter->PutandConvertEntry( aFmtStr, nCheckPos, nType, nIndex, LANGUAGE_ENGLISH, eLangType, true);
                 pFormatter->GetOutputString( nNumber, nIndex, rRes, &pCol );
             }
 

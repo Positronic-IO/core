@@ -9,10 +9,14 @@
 
 #include <swmodeltestbase.hxx>
 
+#include <com/sun/star/text/XTextColumns.hpp>
 #include <com/sun/star/text/XTextTablesSupplier.hpp>
 #include <ndtxt.hxx>
 #include <viscrs.hxx>
 #include <wrtsh.hxx>
+#include <ndgrf.hxx>
+#include <sfx2/docfile.hxx>
+#include <sfx2/docfilt.hxx>
 
 class Test : public SwModelTestBase
 {
@@ -28,12 +32,23 @@ DECLARE_WW8IMPORT_TEST(testFloatingTableSectionMargins, "floating-table-section-
 {
     sal_Int32 pageLeft = parseDump("/root/page[2]/infos/bounds", "left").toInt32();
     sal_Int32 pageWidth = parseDump("/root/page[2]/infos/bounds", "width").toInt32();
-    sal_Int32 tableLeft = parseDump("/root/page[2]/body/column/body/section/column/body/txt[2]/anchored/fly/tab/infos/bounds", "left").toInt32();
-    sal_Int32 tableWidth = parseDump("/root/page[2]/body/column/body/section/column/body/txt[2]/anchored/fly/tab/infos/bounds", "width").toInt32();
+    sal_Int32 tableLeft = parseDump("//tab/infos/bounds", "left").toInt32();
+    sal_Int32 tableWidth = parseDump("//tab/infos/bounds", "width").toInt32();
     CPPUNIT_ASSERT( pageWidth > 0 );
     CPPUNIT_ASSERT( tableWidth > 0 );
     // The table's resulting position should be roughly centered.
     CPPUNIT_ASSERT( abs(( pageLeft + pageWidth / 2 ) - ( tableLeft + tableWidth / 2 )) < 20 );
+
+    uno::Reference<beans::XPropertySet> xTextSection = getProperty< uno::Reference<beans::XPropertySet> >(getParagraph(2), "TextSection");
+    CPPUNIT_ASSERT(xTextSection.is());
+    uno::Reference<text::XTextColumns> xTextColumns = getProperty< uno::Reference<text::XTextColumns> >(xTextSection, "TextColumns");
+    OUString pageStyleName = getProperty<OUString>(getParagraph(2), "PageStyleName");
+    uno::Reference<style::XStyle> pageStyle( getStyles("PageStyles")->getByName(pageStyleName), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPageStyle(getStyles("PageStyles")->getByName(pageStyleName), uno::UNO_QUERY);
+    uno::Reference<text::XTextColumns> xPageColumns = getProperty< uno::Reference<text::XTextColumns> >(xPageStyle, "TextColumns");
+
+    //either one or the other should get the column's, not both.
+    CPPUNIT_ASSERT( xTextColumns->getColumnCount() != xPageColumns->getColumnCount());
 }
 
 DECLARE_WW8IMPORT_TEST(testN816593, "n816593.doc")
@@ -145,6 +160,42 @@ DECLARE_WW8IMPORT_TEST(testTdf112346, "tdf112346.doc")
     uno::Reference<drawing::XDrawPage> xDrawPage = xDrawPageSupplier->getDrawPage();
     // This was 1, multi-page table was imported as a floating one.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), xDrawPage->getCount());
+}
+
+DECLARE_WW8IMPORT_TEST(testTdf125281, "tdf125281.doc")
+{
+#if !defined(_WIN32)
+    // Windows fails with actual == 26171 for some reason; also lazy load isn't lazy in Windows
+    // debug builds, reason is not known at the moment.
+
+    // Load a .doc file which has an embedded .emf image.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    SwNode* pNode = pDoc->GetNodes()[6];
+    CPPUNIT_ASSERT(pNode->IsGrfNode());
+    SwGrfNode* pGrfNode = pNode->GetGrfNode();
+    const Graphic& rGraphic = pGrfNode->GetGrf();
+
+    // Without the accompanying fix in place, this test would have failed, as pref size was 0 till
+    // an actual Paint() was performed (and even then, it was wrong).
+    long nExpected = 25664;
+    CPPUNIT_ASSERT_EQUAL(nExpected, rGraphic.GetPrefSize().getWidth());
+
+    // Without the accompanying fix in place, this test would have failed, as setting the pref size
+    // swapped the image in.
+    CPPUNIT_ASSERT(!rGraphic.isAvailable());
+#endif
+}
+
+DECLARE_WW8IMPORT_TEST(testTdf110987, "tdf110987")
+{
+    // The input document is an empty .doc, but without file name
+    // extension. Check that it was loaded as a normal .doc document,
+    // and not a template.
+    SwXTextDocument* pTextDoc     = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    OUString sFilterName = pTextDoc->GetDocShell()->GetMedium()->GetFilter()->GetFilterName();
+    CPPUNIT_ASSERT(sFilterName != "MS Word 97 Vorlage");
 }
 
 // tests should only be added to ww8IMPORT *if* they fail round-tripping in ww8EXPORT

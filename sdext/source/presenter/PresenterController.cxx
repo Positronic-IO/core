@@ -364,7 +364,7 @@ void PresenterController::UpdatePaneTitles()
     PresenterPaneContainer::PaneList::const_iterator iPane;
     for (iPane=mpPaneContainer->maPanes.begin(); iPane!=mpPaneContainer->maPanes.end(); ++iPane)
     {
-        OSL_ASSERT((*iPane).get() != nullptr);
+        OSL_ASSERT(*iPane != nullptr);
 
         OUString sTemplate (IsAccessibilityActive()
             ? (*iPane)->msAccessibleTitleTemplate
@@ -382,13 +382,13 @@ void PresenterController::UpdatePaneTitles()
             if (nStartIndex < 0)
             {
                 // Add the remaining part of the string.
-                sResult.append(sTemplate.copy(nIndex));
+                sResult.appendCopy(sTemplate, nIndex);
                 break;
             }
             else
             {
                 // Add the part preceding the next %.
-                sResult.append(sTemplate.copy(nIndex, nStartIndex-nIndex));
+                sResult.appendCopy(sTemplate, nIndex, nStartIndex-nIndex);
 
                 // Get the placeholder
                 ++nStartIndex;
@@ -427,7 +427,7 @@ void PresenterController::UpdateViews()
 SharedBitmapDescriptor
     PresenterController::GetViewBackground (const OUString& rsViewURL) const
 {
-    if (mpTheme.get() != nullptr)
+    if (mpTheme != nullptr)
     {
         const OUString sStyleName (mpTheme->GetStyleName(rsViewURL));
         return mpTheme->GetBitmap(sStyleName, "Background");
@@ -438,7 +438,7 @@ SharedBitmapDescriptor
 PresenterTheme::SharedFontDescriptor
     PresenterController::GetViewFont (const OUString& rsViewURL) const
 {
-    if (mpTheme.get() != nullptr)
+    if (mpTheme != nullptr)
     {
         const OUString sStyleName (mpTheme->GetStyleName(rsViewURL));
         return mpTheme->GetFont(sStyleName);
@@ -1150,7 +1150,7 @@ void PresenterController::UpdatePendingSlideNumber (const sal_Int32 nPendingSlid
 {
     mnPendingSlideNumber = nPendingSlideNumber;
 
-    if (mpTheme.get() == nullptr)
+    if (mpTheme == nullptr)
         return;
 
     if ( ! mxMainWindow.is())

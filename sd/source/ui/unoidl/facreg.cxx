@@ -18,6 +18,7 @@
  */
 
 #include <com/sun/star/registry/XRegistryKey.hpp>
+#include <com/sun/star/lang/XSingleComponentFactory.hpp>
 
 #include <facreg.hxx>
 #include <sddll.hxx>
@@ -46,7 +47,7 @@ namespace {
 static std::shared_ptr<FactoryMap> spFactoryMap;
 std::shared_ptr<FactoryMap> const & GetFactoryMap()
 {
-    if (spFactoryMap.get() == nullptr)
+    if (spFactoryMap == nullptr)
     {
         spFactoryMap.reset(new FactoryMap);
         (*spFactoryMap)[SdDrawingDocument_getImplementationName()] = SdDrawingDocumentFactoryId;
@@ -73,7 +74,7 @@ SAL_DLLPUBLIC_EXPORT void * sd_component_getFactory(
         uno::Reference<lang::XSingleServiceFactory> xFactory;
         uno::Reference<lang::XSingleComponentFactory> xComponentFactory;
 
-        std::shared_ptr<FactoryMap> pFactoryMap (GetFactoryMap());
+        const std::shared_ptr<FactoryMap>& pFactoryMap (GetFactoryMap());
         OUString sImplementationName (OUString::createFromAscii(pImplName));
         FactoryMap::const_iterator iFactory (pFactoryMap->find(sImplementationName));
         if (iFactory != pFactoryMap->end())

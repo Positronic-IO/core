@@ -35,6 +35,8 @@
 #include <osl/file.hxx>
 #include <osl/process.h>
 #include <rtl/bootstrap.hxx>
+#include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 #include <tools/helpers.hxx>
 #include <tools/stream.hxx>
@@ -44,6 +46,7 @@
 #include <vcl/metric.hxx>
 #include <vcl/fontcharmap.hxx>
 #include <vcl/opengl/OpenGLWrapper.hxx>
+#include <comphelper/scopeguard.hxx>
 
 #include <fontsubset.hxx>
 #include <outdev.h>
@@ -55,23 +58,19 @@
 #include <win/winlayout.hxx>
 #include <impfontcharmap.hxx>
 #include <impfontmetricdata.hxx>
+#include <impglyphitem.hxx>
 
 using namespace vcl;
 
-// GetGlyphOutlineW() seems to be a little slow, and doesn't seem to do its own caching (tested on Windows10).
-// TODO include the font as part of the cache key, then we won't need to clear it on font change
-// The cache limit is set by the rough number of characters needed to read your average Asian newspaper.
-static o3tl::lru_map<sal_GlyphId, tools::Rectangle> g_BoundRectCache(3000);
-
 static const int MAXFONTHEIGHT = 2048;
 
-inline FIXED FixedFromDouble( double d )
+static inline FIXED FixedFromDouble( double d )
 {
     const long l = static_cast<long>( d * 65536. );
     return *reinterpret_cast<FIXED const *>(&l);
 }
 
-inline int IntTimes256FromFixed(FIXED f)
+static inline int IntTimes256FromFixed(FIXED f)
 {
     int nFixedTimes256 = (f.value << 8) + ((f.fract+0x80) >> 8);
     return nFixedTimes256;
@@ -155,8 +154,8 @@ class WinGlyphFallbackSubstititution
 {
 public:
     explicit WinGlyphFallbackSubstititution()
+        : mhDC(GetDC(nullptr))
     {
-        mhDC = GetDC(nullptr);
     };
 
     ~WinGlyphFallbackSubstititution() override
@@ -164,7 +163,7 @@ public:
         ReleaseDC(nullptr, mhDC);
     };
 
-    bool FindFontSubstitute( FontSelectPattern&, OUString& rMissingChars ) const override;
+    bool FindFontSubstitute(FontSelectPattern&, LogicalFontInstance* pLogicalFont, OUString& rMissingChars) const override;
 private:
     HDC mhDC;
     bool HasMissingChars(PhysicalFontFace*, OUString& rMissingChars) const;
@@ -183,7 +182,7 @@ bool WinGlyphFallbackSubstititution::HasMissingChars(PhysicalFontFace* pFace, OU
         const FontSelectPattern aFSD( *pFace, aSize, static_cast<float>(aSize.Height()), 0, false );
         // construct log font
         LOGFONTW aLogFont;
-        ImplGetLogFontFromFontSelect( mhDC, &aFSD, pFace, aLogFont );
+        ImplGetLogFontFromFontSelect( mhDC, aFSD, pFace, aLogFont );
 
         // create HFONT from log font
         HFONT hNewFont = ::CreateFontIndirectW( &aLogFont );
@@ -274,7 +273,7 @@ bool WinPreMatchFontSubstititution::FindFontSubstitute(FontSelectPattern& rFontS
 
 // find a fallback font for missing characters
 // TODO: should stylistic matches be searched and preferred?
-bool WinGlyphFallbackSubstititution::FindFontSubstitute( FontSelectPattern& rFontSelData, OUString& rMissingChars ) const
+bool WinGlyphFallbackSubstititution::FindFontSubstitute(FontSelectPattern& rFontSelData, LogicalFontInstance* /*pLogicalFont*/, OUString& rMissingChars) const
 {
     // guess a locale matching to the missing chars
     LanguageType eLang = rFontSelData.meLanguage;
@@ -286,7 +285,7 @@ bool WinGlyphFallbackSubstititution::FindFontSubstitute( FontSelectPattern& rFon
 
     // first level fallback:
     // try use the locale specific default fonts defined in VCL.xcu
-    const PhysicalFontCollection* pFontCollection = ImplGetSVData()->maGDIData.mpScreenFontList;
+    const PhysicalFontCollection* pFontCollection = ImplGetSVData()->maGDIData.mxScreenFontList.get();
     PhysicalFontFamily* pFontFamily = findDevFontListByLocale(*pFontCollection, aLanguageTag);
     if( pFontFamily )
     {
@@ -491,7 +490,7 @@ static int ImplWeightToWin( FontWeight eWeight )
     return 0;
 }
 
-inline FontPitch ImplLogPitchToSal( BYTE nPitch )
+static inline FontPitch ImplLogPitchToSal( BYTE nPitch )
 {
     if ( nPitch & FIXED_PITCH )
         return PITCH_FIXED;
@@ -499,7 +498,7 @@ inline FontPitch ImplLogPitchToSal( BYTE nPitch )
         return PITCH_VARIABLE;
 }
 
-inline FontPitch ImplMetricPitchToSal( BYTE nPitch )
+static inline FontPitch ImplMetricPitchToSal( BYTE nPitch )
 {
     // Grrrr! See NT help
     if ( !(nPitch & TMPF_FIXED_PITCH) )
@@ -508,7 +507,7 @@ inline FontPitch ImplMetricPitchToSal( BYTE nPitch )
         return PITCH_VARIABLE;
 }
 
-inline BYTE ImplPitchToWin( FontPitch ePitch )
+static inline BYTE ImplPitchToWin( FontPitch ePitch )
 {
     if ( ePitch == PITCH_FIXED )
         return FIXED_PITCH;
@@ -559,7 +558,7 @@ static FontAttributes WinFont2DevFontAttributes( const ENUMLOGFONTEXW& rEnumFont
 }
 
 
-static WinFontFace* ImplLogMetricToDevFontDataW( const ENUMLOGFONTEXW* pLogFont,
+static rtl::Reference<WinFontFace> ImplLogMetricToDevFontDataW( const ENUMLOGFONTEXW* pLogFont,
                                          const NEWTEXTMETRICW* pMetric,
                                          DWORD nFontType )
 {
@@ -567,7 +566,7 @@ static WinFontFace* ImplLogMetricToDevFontDataW( const ENUMLOGFONTEXW* pLogFont,
     if ( nFontType & RASTER_FONTTYPE )
         nHeight = pMetric->tmHeight - pMetric->tmInternalLeading;
 
-    WinFontFace* pData = new WinFontFace(
+    rtl::Reference<WinFontFace> pData = new WinFontFace(
         WinFont2DevFontAttributes(*pLogFont, *pMetric),
         nHeight,
         pLogFont->elfLogFont.lfCharSet,
@@ -618,7 +617,6 @@ WinFontFace::WinFontFace( const FontAttributes& rDFS,
 :   PhysicalFontFace( rDFS ),
     mnId( 0 ),
     mbFontCapabilitiesRead( false ),
-    mxUnicodeMap( nullptr ),
     meWinCharSet( eWinCharSet ),
     mnPitchAndFamily( nPitchAndFamily ),
     mbAliasSymbolsHigh( false ),
@@ -658,12 +656,7 @@ sal_IntPtr WinFontFace::GetFontId() const
     return mnId;
 }
 
-PhysicalFontFace* WinFontFace::Clone() const
-{
-    return new WinFontFace(*this);
-}
-
-LogicalFontInstance* WinFontFace::CreateFontInstance(const FontSelectPattern& rFSD) const
+rtl::Reference<LogicalFontInstance> WinFontFace::CreateFontInstance(const FontSelectPattern& rFSD) const
 {
     return new WinFontInstance(*this, rFSD);
 }
@@ -754,7 +747,7 @@ void WinSalGraphics::SetTextColor( Color nColor )
     ::SetTextColor( getHDC(), aCol );
 }
 
-int CALLBACK SalEnumQueryFontProcExW( const LOGFONTW*,
+static int CALLBACK SalEnumQueryFontProcExW( const LOGFONTW*,
                                       const TEXTMETRICW*,
                                       DWORD, LPARAM lParam )
 {
@@ -763,22 +756,19 @@ int CALLBACK SalEnumQueryFontProcExW( const LOGFONTW*,
 }
 
 void ImplGetLogFontFromFontSelect( HDC hDC,
-                                   const FontSelectPattern* pFont,
+                                   const FontSelectPattern& rFont,
                                    const PhysicalFontFace* pFontFace,
                                    LOGFONTW& rLogFont )
 {
     OUString aName;
-    if (!pFontFace && pFont->mpFontInstance)
-        pFontFace = pFont->mpFontInstance->GetFontFace();
-
     if (pFontFace)
         aName = pFontFace->GetFamilyName();
     else
-        aName = pFont->GetFamilyName().getToken( 0, ';' );
+        aName = rFont.GetFamilyName().getToken( 0, ';' );
 
     UINT nNameLen = aName.getLength();
-    if ( nNameLen > (sizeof( rLogFont.lfFaceName )/sizeof( wchar_t ))-1 )
-        nNameLen = (sizeof( rLogFont.lfFaceName )/sizeof( wchar_t ))-1;
+    if (nNameLen >= LF_FACESIZE)
+        nNameLen = LF_FACESIZE - 1;
     memcpy( rLogFont.lfFaceName, aName.getStr(), nNameLen*sizeof( wchar_t ) );
     rLogFont.lfFaceName[nNameLen] = 0;
 
@@ -790,9 +780,9 @@ void ImplGetLogFontFromFontSelect( HDC hDC,
     }
     else
     {
-        rLogFont.lfCharSet = pFont->IsSymbolFont() ? SYMBOL_CHARSET : DEFAULT_CHARSET;
-        rLogFont.lfPitchAndFamily = ImplPitchToWin( pFont->GetPitch() )
-                                  | ImplFamilyToWin( pFont->GetFamilyType() );
+        rLogFont.lfCharSet = rFont.IsSymbolFont() ? SYMBOL_CHARSET : DEFAULT_CHARSET;
+        rLogFont.lfPitchAndFamily = ImplPitchToWin( rFont.GetPitch() )
+                                  | ImplFamilyToWin( rFont.GetFamilyType() );
     }
 
     static BYTE nDefaultQuality = NONANTIALIASED_QUALITY;
@@ -804,26 +794,26 @@ void ImplGetLogFontFromFontSelect( HDC hDC,
             nDefaultQuality = DEFAULT_QUALITY;
     }
 
-    rLogFont.lfWeight          = ImplWeightToWin( pFont->GetWeight() );
-    rLogFont.lfHeight          = static_cast<LONG>(-pFont->mnHeight);
-    rLogFont.lfWidth           = static_cast<LONG>(pFont->mnWidth);
+    rLogFont.lfWeight          = ImplWeightToWin( rFont.GetWeight() );
+    rLogFont.lfHeight          = static_cast<LONG>(-rFont.mnHeight);
+    rLogFont.lfWidth           = static_cast<LONG>(rFont.mnWidth);
     rLogFont.lfUnderline       = 0;
     rLogFont.lfStrikeOut       = 0;
-    rLogFont.lfItalic          = BYTE(pFont->GetItalic() != ITALIC_NONE);
-    rLogFont.lfEscapement      = pFont->mnOrientation;
+    rLogFont.lfItalic          = BYTE(rFont.GetItalic() != ITALIC_NONE);
+    rLogFont.lfEscapement      = rFont.mnOrientation;
     rLogFont.lfOrientation     = rLogFont.lfEscapement;
     rLogFont.lfClipPrecision   = CLIP_DEFAULT_PRECIS;
     rLogFont.lfQuality         = nDefaultQuality;
     rLogFont.lfOutPrecision    = OUT_TT_PRECIS;
-    if ( pFont->mnOrientation )
+    if ( rFont.mnOrientation )
         rLogFont.lfClipPrecision |= CLIP_LH_ANGLES;
 
     // disable antialiasing if requested
-    if ( pFont->mbNonAntialiased )
+    if ( rFont.mbNonAntialiased )
         rLogFont.lfQuality = NONANTIALIASED_QUALITY;
 
     // select vertical mode if requested and available
-    if ( pFont->mbVertical && nNameLen )
+    if ( rFont.mbVertical && nNameLen )
     {
         // vertical fonts start with an '@'
         memmove( &rLogFont.lfFaceName[1], &rLogFont.lfFaceName[0],
@@ -839,8 +829,7 @@ void ImplGetLogFontFromFontSelect( HDC hDC,
         {
             // restore non-vertical name if not vertical mode isn't available
             memcpy( &rLogFont.lfFaceName[0], aName.getStr(), nNameLen*sizeof(wchar_t) );
-            if( nNameLen < LF_FACESIZE )
-                rLogFont.lfFaceName[nNameLen] = '\0';
+            rLogFont.lfFaceName[nNameLen] = '\0';
             // keep it upright and create the font for sideway glyphs later.
             rLogFont.lfEscapement = rLogFont.lfEscapement - 2700;
             rLogFont.lfOrientation = rLogFont.lfEscapement;
@@ -848,22 +837,15 @@ void ImplGetLogFontFromFontSelect( HDC hDC,
     }
 }
 
-HFONT WinSalGraphics::ImplDoSetFont(FontSelectPattern const * i_pFont,
+HFONT WinSalGraphics::ImplDoSetFont(FontSelectPattern const & i_rFont,
                                     const PhysicalFontFace * i_pFontFace,
                                     float& o_rFontScale,
                                     HFONT& o_rOldFont)
 {
-    // clear the cache on font change
-    g_BoundRectCache.clear();
     HFONT hNewFont = nullptr;
 
-    HDC hdcScreen = nullptr;
-    if( mbVirDev )
-        // only required for virtual devices, see below for details
-        hdcScreen = GetDC(nullptr);
-
     LOGFONTW aLogFont;
-    ImplGetLogFontFromFontSelect( getHDC(), i_pFont, i_pFontFace, aLogFont );
+    ImplGetLogFontFromFontSelect( getHDC(), i_rFont, i_pFontFace, aLogFont );
 
     // #i47675# limit font requests to MAXFONTHEIGHT
     // TODO: share MAXFONTHEIGHT font instance
@@ -884,11 +866,16 @@ HFONT WinSalGraphics::ImplDoSetFont(FontSelectPattern const * i_pFont,
         aLogFont.lfWidth = +MAXFONTHEIGHT;
         aLogFont.lfHeight = FRound( aLogFont.lfHeight / o_rFontScale );
     }
-
     hNewFont = ::CreateFontIndirectW( &aLogFont );
+
+    HDC hdcScreen = nullptr;
+    if( mbVirDev )
+        // only required for virtual devices, see below for details
+        hdcScreen = GetDC(nullptr);
     if( hdcScreen )
     {
         // select font into screen hdc first to get an antialiased font
+        // and instantly restore the default font!
         // see knowledge base article 305290:
         // "PRB: Fonts Not Drawn Antialiased on Device Context for DirectDraw Surface"
         SelectFont( hdcScreen, SelectFont( hdcScreen , hNewFont ) );
@@ -914,79 +901,57 @@ HFONT WinSalGraphics::ImplDoSetFont(FontSelectPattern const * i_pFont,
     return hNewFont;
 }
 
-void WinSalGraphics::SetFont( const FontSelectPattern* pFont, int nFallbackLevel )
+void WinSalGraphics::SetFont(LogicalFontInstance* pFont, int nFallbackLevel)
 {
     // return early if there is no new font
     if( !pFont )
     {
-        // deselect still active font
-        if( mhDefFont )
-            ::SelectFont( getHDC(), mhDefFont );
-        mfCurrentFontScale = mfFontScale[nFallbackLevel];
+        if (!mpWinFontEntry[nFallbackLevel].is())
+            return;
+
+        // select original DC font
+        assert(mhDefFont);
+        ::SelectFont(getHDC(), mhDefFont);
+        mhDefFont = nullptr;
+
         // release no longer referenced font handles
         for( int i = nFallbackLevel; i < MAX_FALLBACK; ++i )
-        {
-            if( mhFonts[i] )
-                ::DeleteFont( mhFonts[i] );
-            mhFonts[ i ] = nullptr;
-            if (mpWinFontEntry[i])
-                GetWinFontEntry(i)->Release();
             mpWinFontEntry[i] = nullptr;
-        }
-        mhDefFont = nullptr;
         return;
     }
 
-    if (mpWinFontEntry[nFallbackLevel])
-    {
-        GetWinFontEntry(nFallbackLevel)->Release();
-    }
-    // WinSalGraphics::GetEmbedFontData does not set mpFontInstance
-    // since it is interested in font file data only.
-    if (pFont->mpFontInstance)
-    {
-        pFont->mpFontInstance->Acquire();
-    }
-    mpWinFontEntry[ nFallbackLevel ] = reinterpret_cast<WinFontInstance*>( pFont->mpFontInstance );
+    WinFontInstance *pFontInstance = static_cast<WinFontInstance*>(pFont);
+    mpWinFontEntry[ nFallbackLevel ] = pFontInstance;
 
     HFONT hOldFont = nullptr;
-    HFONT hNewFont = ImplDoSetFont(pFont, nullptr, mfFontScale[ nFallbackLevel ], hOldFont);
-    mfCurrentFontScale = mfFontScale[nFallbackLevel];
-
-    if( !mhDefFont )
+    HFONT hNewFont = pFontInstance->GetHFONT();
+    if (!hNewFont)
     {
-        // keep default font
-        mhDefFont = hOldFont;
+        pFontInstance->SetGraphics(this);
+        hNewFont = pFontInstance->GetHFONT();
     }
+    hOldFont = ::SelectFont(getHDC(), hNewFont);
+
+    // keep default font
+    if( !mhDefFont )
+        mhDefFont = hOldFont;
     else
     {
         // release no longer referenced font handles
-        for( int i = nFallbackLevel; i < MAX_FALLBACK; ++i )
-        {
-            if( mhFonts[i] )
-            {
-                ::DeleteFont( mhFonts[i] );
-                mhFonts[i] = nullptr;
-            }
-            // note: removing mpWinFontEntry[i] here has obviously bad effects
-        }
+        for( int i = nFallbackLevel + 1; i < MAX_FALLBACK && mpWinFontEntry[i].is(); ++i )
+            mpWinFontEntry[i] = nullptr;
     }
-
-    // store new font in correct layer
-    mhFonts[ nFallbackLevel ] = hNewFont;
 
     // now the font is live => update font face
-    if (mpWinFontEntry[nFallbackLevel])
-    {
-        const WinFontFace* pFontFace = static_cast<const WinFontFace*>(mpWinFontEntry[nFallbackLevel]->GetFontFace());
-        pFontFace->UpdateFromHDC(getHDC());
-    }
+    const WinFontFace* pFontFace = pFontInstance->GetFontFace();
+    pFontFace->UpdateFromHDC(getHDC());
 }
 
 void WinSalGraphics::GetFontMetric( ImplFontMetricDataRef& rxFontMetric, int nFallbackLevel )
 {
     // temporarily change the HDC to the font in the fallback level
-    HFONT hOldFont = SelectFont( getHDC(), mhFonts[nFallbackLevel] );
+    rtl::Reference<WinFontInstance> pFontInstance = mpWinFontEntry[nFallbackLevel];
+    const HFONT hOldFont = SelectFont(getHDC(), pFontInstance->GetHFONT());
 
     wchar_t aFaceName[LF_FACESIZE+60];
     if( GetTextFaceW( getHDC(), SAL_N_ELEMENTS(aFaceName), aFaceName ) )
@@ -997,8 +962,7 @@ void WinSalGraphics::GetFontMetric( ImplFontMetricDataRef& rxFontMetric, int nFa
     const RawFontData aHheaRawData(getHDC(), nHheaTag);
     const RawFontData aOS2RawData(getHDC(), nOS2Tag);
 
-    mpWinFontEntry[nFallbackLevel]->SetHDC(getHDC());
-    rxFontMetric->SetMinKashida(mpWinFontEntry[nFallbackLevel]->GetKashidaWidth());
+    rxFontMetric->SetMinKashida(pFontInstance->GetKashidaWidth());
 
     // get the font metric
     OUTLINETEXTMETRICW aOutlineMetric;
@@ -1019,7 +983,7 @@ void WinSalGraphics::GetFontMetric( ImplFontMetricDataRef& rxFontMetric, int nFa
     rxFontMetric->SetSlant( 0 );
 
     // transformation dependent font metrics
-    rxFontMetric->SetWidth(static_cast<int>( mfFontScale[nFallbackLevel] * aWinMetric.tmAveCharWidth ));
+    rxFontMetric->SetWidth(static_cast<int>(pFontInstance->GetScale() * aWinMetric.tmAveCharWidth));
 
     const std::vector<uint8_t> rHhea(aHheaRawData.get(), aHheaRawData.get() + aHheaRawData.size());
     const std::vector<uint8_t> rOS2(aOS2RawData.get(), aOS2RawData.get() + aOS2RawData.size());
@@ -1033,17 +997,17 @@ const FontCharMapRef WinSalGraphics::GetFontCharMap() const
         FontCharMapRef xDefFontCharMap( new FontCharMap() );
         return xDefFontCharMap;
     }
-    return static_cast<const WinFontFace*>(mpWinFontEntry[0]->GetFontFace())->GetFontCharMap();
+    return mpWinFontEntry[0]->GetFontFace()->GetFontCharMap();
 }
 
 bool WinSalGraphics::GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const
 {
     if (!mpWinFontEntry[0])
         return false;
-    return static_cast<const WinFontFace*>(mpWinFontEntry[0]->GetFontFace())->GetFontCapabilities(rFontCapabilities);
+    return mpWinFontEntry[0]->GetFontFace()->GetFontCapabilities(rFontCapabilities);
 }
 
-int CALLBACK SalEnumFontsProcExW( const LOGFONTW* lpelfe,
+static int CALLBACK SalEnumFontsProcExW( const LOGFONTW* lpelfe,
                                   const TEXTMETRICW* lpntme,
                                   DWORD nFontType, LPARAM lParam )
 {
@@ -1075,7 +1039,7 @@ int CALLBACK SalEnumFontsProcExW( const LOGFONTW* lpelfe,
         {
             if ((nFontType & RASTER_FONTTYPE) && !(nFontType & DEVICE_FONTTYPE))
             {
-                SAL_INFO("vcl.gdi", "Unsupported printer font ignored: " << OUString(o3tl::toU(pLogFont->elfLogFont.lfFaceName)));
+                SAL_INFO("vcl.fonts", "Unsupported printer font ignored: " << OUString(o3tl::toU(pLogFont->elfLogFont.lfFaceName)));
                 return 1;
             }
         }
@@ -1084,14 +1048,15 @@ int CALLBACK SalEnumFontsProcExW( const LOGFONTW* lpelfe,
                  !(pMetric->ntmTm.ntmFlags & NTM_PS_OPENTYPE) &&
                  !(pMetric->ntmTm.ntmFlags & NTM_TT_OPENTYPE))
         {
-            SAL_INFO("vcl.gdi", "Unsupported font ignored: " << OUString(o3tl::toU(pLogFont->elfLogFont.lfFaceName)));
+            SAL_INFO("vcl.fonts", "Unsupported font ignored: " << OUString(o3tl::toU(pLogFont->elfLogFont.lfFaceName)));
             return 1;
         }
 
-        WinFontFace* pData = ImplLogMetricToDevFontDataW( pLogFont, &(pMetric->ntmTm), nFontType );
+        rtl::Reference<WinFontFace> pData = ImplLogMetricToDevFontDataW( pLogFont, &(pMetric->ntmTm), nFontType );
         pData->SetFontId( sal_IntPtr( pInfo->mnFontCount++ ) );
 
-        pInfo->mpList->Add( pData );
+        pInfo->mpList->Add( pData.get() );
+        SAL_INFO("vcl.fonts", "SalEnumFontsProcExW: font added: " << pData->GetFamilyName() << " " << pData->GetStyleName());
     }
 
     return 1;
@@ -1258,7 +1223,7 @@ static bool ImplGetFontAttrFromFile( const OUString& rFontFileURL,
 bool WinSalGraphics::AddTempDevFont( PhysicalFontCollection* pFontCollection,
     const OUString& rFontFileURL, const OUString& rFontName )
 {
-    SAL_INFO( "vcl.gdi", "WinSalGraphics::AddTempDevFont(): " << rFontFileURL );
+    SAL_INFO("vcl.fonts", "WinSalGraphics::AddTempDevFont(): " << rFontFileURL);
 
     FontAttributes aDFA;
     aDFA.SetFamilyName(rFontName);
@@ -1292,16 +1257,18 @@ bool WinSalGraphics::AddTempDevFont( PhysicalFontCollection* pFontCollection,
         aDFS.maMapName = aFontName;
     */
 
-    WinFontFace* pFontData = new WinFontFace( aDFA, 0,
+    rtl::Reference<WinFontFace> pFontData = new WinFontFace( aDFA, 0,
         sal::static_int_cast<BYTE>(DEFAULT_CHARSET),
         sal::static_int_cast<BYTE>(TMPF_VECTOR|TMPF_TRUETYPE) );
-    pFontData->SetFontId( reinterpret_cast<sal_IntPtr>(pFontData) );
-    pFontCollection->Add( pFontData );
+    pFontData->SetFontId( reinterpret_cast<sal_IntPtr>(pFontData.get()) );
+    pFontCollection->Add( pFontData.get() );
     return true;
 }
 
 void WinSalGraphics::GetDevFontList( PhysicalFontCollection* pFontCollection )
 {
+    SAL_INFO("vcl.fonts", "WinSalGraphics::GetDevFontList(): enter");
+
     // make sure all fonts are registered at least temporarily
     static bool bOnce = true;
     if( bOnce )
@@ -1351,6 +1318,8 @@ void WinSalGraphics::GetDevFontList( PhysicalFontCollection* pFontCollection )
     static WinPreMatchFontSubstititution aPreMatchFont;
     pFontCollection->SetFallbackHook( &aSubstFallback );
     pFontCollection->SetPreMatchHook(&aPreMatchFont);
+
+    SAL_INFO("vcl.fonts", "WinSalGraphics::GetDevFontList(): leave");
 }
 
 void WinSalGraphics::ClearDevFontCache()
@@ -1358,16 +1327,18 @@ void WinSalGraphics::ClearDevFontCache()
     //anything to do here ?
 }
 
-bool WinSalGraphics::GetGlyphBoundRect(const GlyphItem& rGlyph, tools::Rectangle& rRect)
+bool WinFontInstance::ImplGetGlyphBoundRect(sal_GlyphId nId, tools::Rectangle& rRect, bool) const
 {
-    auto it = g_BoundRectCache.find(rGlyph.maGlyphId);
-    if (it != g_BoundRectCache.end())
-    {
-        rRect = it->second;
-        return true;
-    }
+    assert(m_pGraphics);
+    HDC hDC = m_pGraphics->getHDC();
+    const HFONT hOrigFont = static_cast<HFONT>(GetCurrentObject(hDC, OBJ_FONT));
+    const HFONT hFont = GetHFONT();
+    if (hFont != hOrigFont)
+        SelectObject(hDC, hFont);
 
-    HDC hDC = getHDC();
+    const ::comphelper::ScopeGuard aFontRestoreScopeGuard([hFont, hOrigFont, hDC]()
+        { if (hFont != hOrigFont) SelectObject(hDC, hOrigFont); });
+    const float fFontScale = GetScale();
 
     // use unity matrix
     MAT2 aMat;
@@ -1380,28 +1351,32 @@ bool WinSalGraphics::GetGlyphBoundRect(const GlyphItem& rGlyph, tools::Rectangle
     GLYPHMETRICS aGM;
     aGM.gmptGlyphOrigin.x = aGM.gmptGlyphOrigin.y = 0;
     aGM.gmBlackBoxX = aGM.gmBlackBoxY = 0;
-    DWORD nSize = ::GetGlyphOutlineW(hDC, rGlyph.maGlyphId, nGGOFlags, &aGM, 0, nullptr, &aMat);
-    if( nSize == GDI_ERROR )
+    DWORD nSize = ::GetGlyphOutlineW(hDC, nId, nGGOFlags, &aGM, 0, nullptr, &aMat);
+    if (nSize == GDI_ERROR)
         return false;
 
     rRect = tools::Rectangle( Point( +aGM.gmptGlyphOrigin.x, -aGM.gmptGlyphOrigin.y ),
         Size( aGM.gmBlackBoxX, aGM.gmBlackBoxY ) );
-    rRect.SetLeft(static_cast<int>( mfCurrentFontScale * rRect.Left() ));
-    rRect.SetRight(static_cast<int>( mfCurrentFontScale * rRect.Right() ) + 1);
-    rRect.SetTop(static_cast<int>( mfCurrentFontScale * rRect.Top() ));
-    rRect.SetBottom(static_cast<int>( mfCurrentFontScale * rRect.Bottom() ) + 1);
-
-    g_BoundRectCache.insert({rGlyph.maGlyphId, rRect});
-
+    rRect.SetLeft(static_cast<int>( fFontScale * rRect.Left() ));
+    rRect.SetRight(static_cast<int>( fFontScale * rRect.Right() ) + 1);
+    rRect.SetTop(static_cast<int>( fFontScale * rRect.Top() ));
+    rRect.SetBottom(static_cast<int>( fFontScale * rRect.Bottom() ) + 1);
     return true;
 }
 
-bool WinSalGraphics::GetGlyphOutline(const GlyphItem& rGlyph,
-    basegfx::B2DPolyPolygon& rB2DPolyPoly )
+bool WinFontInstance::GetGlyphOutline(sal_GlyphId nId, basegfx::B2DPolyPolygon& rB2DPolyPoly, bool) const
 {
     rB2DPolyPoly.clear();
 
-    HDC  hDC = getHDC();
+    assert(m_pGraphics);
+    HDC hDC = m_pGraphics->getHDC();
+    const HFONT hOrigFont = static_cast<HFONT>(GetCurrentObject(hDC, OBJ_FONT));
+    const HFONT hFont = GetHFONT();
+    if (hFont != hOrigFont)
+        SelectObject(hDC, hFont);
+
+    const ::comphelper::ScopeGuard aFontRestoreScopeGuard([hFont, hOrigFont, hDC]()
+        { if (hFont != hOrigFont) SelectObject(hDC, hOrigFont); });
 
     // use unity matrix
     MAT2 aMat;
@@ -1412,14 +1387,14 @@ bool WinSalGraphics::GetGlyphOutline(const GlyphItem& rGlyph,
     nGGOFlags |= GGO_GLYPH_INDEX;
 
     GLYPHMETRICS aGlyphMetrics;
-    const DWORD nSize1 = ::GetGlyphOutlineW(hDC, rGlyph.maGlyphId, nGGOFlags, &aGlyphMetrics, 0, nullptr, &aMat);
+    const DWORD nSize1 = ::GetGlyphOutlineW(hDC, nId, nGGOFlags, &aGlyphMetrics, 0, nullptr, &aMat);
     if( !nSize1 )       // blank glyphs are ok
         return true;
     else if( nSize1 == GDI_ERROR )
         return false;
 
     BYTE* pData = new BYTE[ nSize1 ];
-    const DWORD nSize2 = ::GetGlyphOutlineW(hDC, rGlyph.maGlyphId, nGGOFlags,
+    const DWORD nSize2 = ::GetGlyphOutlineW(hDC, nId, nGGOFlags,
               &aGlyphMetrics, nSize1, pData, &aMat );
 
     if( nSize1 != nSize2 )
@@ -1569,7 +1544,7 @@ bool WinSalGraphics::GetGlyphOutline(const GlyphItem& rGlyph,
     // rescaling needed for the tools::PolyPolygon conversion
     if( rB2DPolyPoly.count() )
     {
-        const double fFactor(mfCurrentFontScale/256);
+        const double fFactor(GetScale()/256);
         rB2DPolyPoly.transform(basegfx::utils::createScaleB2DHomMatrix(fFactor, fFactor));
     }
 
@@ -1588,10 +1563,13 @@ private:
     HFONT m_hOrigFont;
 };
 
-ScopedFont::ScopedFont(WinSalGraphics & rData): m_rData(rData)
+ScopedFont::ScopedFont(WinSalGraphics & rData): m_rData(rData), m_hOrigFont(nullptr)
 {
-    m_hOrigFont = m_rData.mhFonts[0];
-    m_rData.mhFonts[0] = nullptr; // avoid deletion of current font
+    if (m_rData.mpWinFontEntry[0])
+    {
+        m_hOrigFont = m_rData.mpWinFontEntry[0]->GetHFONT();
+        m_rData.mpWinFontEntry[0]->SetHFONT(nullptr);
+    }
 }
 
 ScopedFont::~ScopedFont()
@@ -1599,8 +1577,8 @@ ScopedFont::~ScopedFont()
     if( m_hOrigFont )
     {
         // restore original font, destroy temporary font
-        HFONT hTempFont = m_rData.mhFonts[0];
-        m_rData.mhFonts[0] = m_hOrigFont;
+        HFONT hTempFont = m_rData.mpWinFontEntry[0]->GetHFONT();
+        m_rData.mpWinFontEntry[0]->SetHFONT(m_hOrigFont);
         SelectObject( m_rData.getHDC(), m_hOrigFont );
         DeleteObject( hTempFont );
     }
@@ -1613,7 +1591,7 @@ public:
 
     ~ScopedTrueTypeFont();
 
-    int open(void const * pBuffer, sal_uInt32 nLen, sal_uInt32 nFaceNum);
+    SFErrCodes open(void const * pBuffer, sal_uInt32 nLen, sal_uInt32 nFaceNum);
 
     TrueTypeFont * get() const { return m_pFont; }
 
@@ -1627,7 +1605,7 @@ ScopedTrueTypeFont::~ScopedTrueTypeFont()
         CloseTTFont(m_pFont);
 }
 
-int ScopedTrueTypeFont::open(void const * pBuffer, sal_uInt32 nLen,
+SFErrCodes ScopedTrueTypeFont::open(void const * pBuffer, sal_uInt32 nLen,
                              sal_uInt32 nFaceNum)
 {
     OSL_ENSURE(m_pFont == nullptr, "already open");
@@ -1649,7 +1627,7 @@ bool WinSalGraphics::CreateFontSubset( const OUString& rToFile,
     ScopedFont aOldFont(*this);
     float fScale = 1.0;
     HFONT hOldFont = nullptr;
-    ImplDoSetFont(&aIFSD, pFont, fScale, hOldFont);
+    ImplDoSetFont(aIFSD, pFont, fScale, hOldFont);
 
     WinFontFace const * pWinFontData = static_cast<WinFontFace const *>(pFont);
 
@@ -1675,8 +1653,6 @@ bool WinSalGraphics::CreateFontSubset( const OUString& rToFile,
     if( aRawCffData.get() )
     {
         pWinFontData->UpdateFromHDC( getHDC() );
-        FontCharMapRef xFontCharMap = pWinFontData->GetFontCharMap();
-        xFontCharMap = nullptr;
 
         // provide a font subset from the CFF-table
         FILE* pOutFile = fopen( aToFile.getStr(), "wb" );
@@ -1698,8 +1674,8 @@ bool WinSalGraphics::CreateFontSubset( const OUString& rToFile,
         nFaceNum = ~0U;  // indicate "TTC font extracts only"
 
     ScopedTrueTypeFont aSftTTF;
-    int nRC = aSftTTF.open( xRawFontData.get(), xRawFontData.size(), nFaceNum );
-    if( nRC != SF_OK )
+    SFErrCodes nRC = aSftTTF.open( xRawFontData.get(), xRawFontData.size(), nFaceNum );
+    if( nRC != SFErrCodes::Ok )
         return FALSE;
 
     TTGlobalFontInfo aTTInfo;
@@ -1743,21 +1719,21 @@ bool WinSalGraphics::CreateFontSubset( const OUString& rToFile,
     SAL_WARN_IF( nGlyphCount >= 257, "vcl", "too many glyphs for subsetting" );
 
     // fill pWidth array
-    TTSimpleGlyphMetrics* pMetrics =
+    std::unique_ptr<sal_uInt16[]> pMetrics =
         ::GetTTSimpleGlyphMetrics( aSftTTF.get(), aShortIDs, nGlyphCount, aIFSD.mbVertical );
     if( !pMetrics )
         return FALSE;
-    sal_uInt16 nNotDefAdv   = pMetrics[0].adv;
-    pMetrics[0].adv         = pMetrics[nNotDef].adv;
-    pMetrics[nNotDef].adv   = nNotDefAdv;
+    sal_uInt16 nNotDefAdv = pMetrics[0];
+    pMetrics[0]         = pMetrics[nNotDef];
+    pMetrics[nNotDef]   = nNotDefAdv;
     for( i = 0; i < nOrigCount; ++i )
-        pGlyphWidths[i] = pMetrics[i].adv;
-    free( pMetrics );
+        pGlyphWidths[i] = pMetrics[i];
+    pMetrics.reset();
 
     // write subset into destination file
     nRC = ::CreateTTFromTTGlyphs( aSftTTF.get(), aToFile.getStr(), aShortIDs,
             aTempEncs, nGlyphCount );
-    return (nRC == SF_OK);
+    return (nRC == SFErrCodes::Ok);
 }
 
 const void* WinSalGraphics::GetEmbedFontData(const PhysicalFontFace* pFont, long* pDataLen)
@@ -1767,7 +1743,10 @@ const void* WinSalGraphics::GetEmbedFontData(const PhysicalFontFace* pFont, long
     FontSelectPattern aIFSD( *pFont, Size(0,1000), 1000.0, 0, false );
 
     ScopedFont aOldFont(*this);
-    SetFont( &aIFSD, 0 );
+
+    float fScale = 0.0;
+    HFONT hOldFont = nullptr;
+    ImplDoSetFont(aIFSD, pFont, fScale, hOldFont);
 
     // get the raw font file data
     RawFontData aRawFontData( getHDC() );
@@ -1798,7 +1777,7 @@ void WinSalGraphics::GetGlyphWidths( const PhysicalFontFace* pFont,
 
     float fScale = 0.0;
     HFONT hOldFont = nullptr;
-    ImplDoSetFont(&aIFSD, pFont, fScale, hOldFont);
+    ImplDoSetFont(aIFSD, pFont, fScale, hOldFont);
 
     // get raw font file data
     const RawFontData xRawFontData( getHDC() );
@@ -1811,8 +1790,8 @@ void WinSalGraphics::GetGlyphWidths( const PhysicalFontFace* pFont,
         nFaceNum = ~0U;  // indicate "TTC font extracts only"
 
     ScopedTrueTypeFont aSftTTF;
-    int nRC = aSftTTF.open( xRawFontData.get(), xRawFontData.size(), nFaceNum );
-    if( nRC != SF_OK )
+    SFErrCodes nRC = aSftTTF.open( xRawFontData.get(), xRawFontData.size(), nFaceNum );
+    if( nRC != SFErrCodes::Ok )
         return;
 
     int nGlyphs = GetTTGlyphCount( aSftTTF.get() );
@@ -1822,15 +1801,15 @@ void WinSalGraphics::GetGlyphWidths( const PhysicalFontFace* pFont,
         std::vector<sal_uInt16> aGlyphIds(nGlyphs);
         for( int i = 0; i < nGlyphs; i++ )
             aGlyphIds[i] = sal_uInt16(i);
-        TTSimpleGlyphMetrics* pMetrics = ::GetTTSimpleGlyphMetrics( aSftTTF.get(),
+        std::unique_ptr<sal_uInt16[]> pMetrics = ::GetTTSimpleGlyphMetrics( aSftTTF.get(),
                                                                     &aGlyphIds[0],
                                                                     nGlyphs,
                                                                     bVertical );
         if( pMetrics )
         {
             for( int i = 0; i< nGlyphs; i++ )
-                rWidths[i] = pMetrics[i].adv;
-            free( pMetrics );
+                rWidths[i] = pMetrics[i];
+            pMetrics.reset();
             rUnicodeEnc.clear();
         }
         const WinFontFace* pWinFont = static_cast<const WinFontFace*>(pFont);

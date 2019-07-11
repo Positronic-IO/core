@@ -22,6 +22,7 @@
 #include <editeng/outliner.hxx>
 #include <editeng/eeitem.hxx>
 #include <sfx2/request.hxx>
+#include <sfx2/sfxdlg.hxx>
 #include <editeng/numitem.hxx>
 #include <strings.hxx>
 
@@ -29,6 +30,7 @@
 #include <svx/svxids.hrc>
 #include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
+#include <DrawDocShell.hxx>
 #include <DrawViewShell.hxx>
 #include <Window.hxx>
 #include <drawdoc.hxx>
@@ -37,6 +39,7 @@
 #include <svx/nbdtmgfact.hxx>
 #include <svx/svdoutl.hxx>
 #include <memory>
+
 using namespace svx::sidebar;
 namespace sd {
 
@@ -79,41 +82,31 @@ void FuOutlineBullet::DoExecute( SfxRequest& rReq )
 
         // create and execute dialog
         SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact ? pFact->CreateSdOutlineBulletTabDlg(mpViewShell->GetActiveWindow(), &aNewAttr, mpView) : nullptr);
-        if( pDlg )
+        ScopedVclPtr<SfxAbstractTabDialog> pDlg( pFact->CreateSdOutlineBulletTabDlg(mpViewShell->GetFrameWeld(), &aNewAttr, mpView) );
+        if ( pPageItem )
+            pDlg->SetCurPageId( OUStringToOString( pPageItem->GetValue(), RTL_TEXTENCODING_UTF8 ) );
+        sal_uInt16 nResult = pDlg->Execute();
+
+        if( nResult != RET_OK )
+            return;
+
+        SfxItemSet aSet( *pDlg->GetOutputItemSet() );
+
+        OutlinerView* pOLV = mpView->GetTextEditOutlinerView();
+
+        std::unique_ptr<OutlineViewModelChangeGuard, o3tl::default_delete<OutlineViewModelChangeGuard>> aGuard;
+
+        if (OutlineView* pView = dynamic_cast<OutlineView*>(mpView))
         {
-            if ( pPageItem )
-                pDlg->SetCurPageId( OUStringToOString( pPageItem->GetValue(), RTL_TEXTENCODING_UTF8 ) );
-            sal_uInt16 nResult = pDlg->Execute();
-
-            switch( nResult )
-            {
-                case RET_OK:
-                {
-                    SfxItemSet aSet( *pDlg->GetOutputItemSet() );
-
-                    OutlinerView* pOLV = mpView->GetTextEditOutlinerView();
-
-                    std::unique_ptr<OutlineViewModelChangeGuard, o3tl::default_delete<OutlineViewModelChangeGuard>> aGuard;
-
-                    if (OutlineView* pView = dynamic_cast<OutlineView*>(mpView))
-                    {
-                        pOLV = pView->GetViewByWindow(mpViewShell->GetActiveWindow());
-                        aGuard.reset(new OutlineViewModelChangeGuard(*pView));
-                    }
-
-                    if( pOLV )
-                        pOLV->EnableBullets();
-
-                    rReq.Done( aSet );
-                    pArgs = rReq.GetArgs();
-                }
-                break;
-
-                default:
-                    return;
-            }
+            pOLV = pView->GetViewByWindow(mpViewShell->GetActiveWindow());
+            aGuard.reset(new OutlineViewModelChangeGuard(*pView));
         }
+
+        if( pOLV )
+            pOLV->EnableBullets();
+
+        rReq.Done( aSet );
+        pArgs = rReq.GetArgs();
     }
 
     /* not direct to pOlView; therefore, SdDrawView::SetAttributes can catch
@@ -187,10 +180,10 @@ void FuOutlineBullet::SetCurrentBulletsNumbering(SfxRequest& rReq)
 
     sal_uInt32 nNumItemId = SID_ATTR_NUMBERING_RULE;
     const SfxPoolItem* pTmpItem = GetNumBulletItem( aNewAttr, nNumItemId );
-    SvxNumRule* pNumRule = nullptr;
+    std::unique_ptr<SvxNumRule> pNumRule;
     if ( pTmpItem )
     {
-        pNumRule = new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pTmpItem)->GetNumRule());
+        pNumRule.reset(new SvxNumRule(*static_cast<const SvxNumBulletItem*>(pTmpItem)->GetNumRule()));
 
         // get numbering rule corresponding to <nIdx> and apply the needed number formats to <pNumRule>
         NBOTypeMgrBase* pNumRuleMgr =
@@ -220,7 +213,7 @@ void FuOutlineBullet::SetCurrentBulletsNumbering(SfxRequest& rReq)
             {
                 if(nActNumLvl & nMask)
                 {
-                    SvxNumberFormat aFmt(aTmpRule.GetLevel(i));
+                    const SvxNumberFormat& aFmt(aTmpRule.GetLevel(i));
                     pNumRule->SetLevel(i, aFmt);
                 }
                 nMask <<= 1;
@@ -252,11 +245,11 @@ void FuOutlineBullet::SetCurrentBulletsNumbering(SfxRequest& rReq)
 
     if ( pOLV )
     {
-        pOLV->ToggleBulletsNumbering( bToggle, nSId == FN_SVX_SET_BULLET, bInMasterView ? nullptr : pNumRule );
+        pOLV->ToggleBulletsNumbering( bToggle, nSId == FN_SVX_SET_BULLET, bInMasterView ? nullptr : pNumRule.get() );
     }
     else
     {
-        mpView->ChangeMarkedObjectsBulletsNumbering( bToggle, nSId == FN_SVX_SET_BULLET, bInMasterView ? nullptr : pNumRule );
+        mpView->ChangeMarkedObjectsBulletsNumbering( bToggle, nSId == FN_SVX_SET_BULLET, bInMasterView ? nullptr : pNumRule.get() );
     }
 
     if (bInMasterView && pNumRule)
@@ -275,7 +268,7 @@ void FuOutlineBullet::SetCurrentBulletsNumbering(SfxRequest& rReq)
         pSdrModel->EndUndo();
     }
 
-    delete pNumRule;
+    pNumRule.reset();
     rReq.Done();
 }
 

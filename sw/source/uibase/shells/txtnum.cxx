@@ -182,13 +182,8 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
         pDocSh->PutItem(SfxUInt16Item(SID_HTML_MODE, ::GetHtmlMode(pDocSh)));
 
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        assert(pFact && "Dialog creation failed!");
-        vcl::Window *pParent = rReq.GetFrameWindow();
-        if (!pParent)
-            pParent = GetView().GetWindow();
-
+        weld::Window *pParent = rReq.GetFrameWeld();
         VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxNumBulletTabDialog(pParent, &aSet, GetShell()));
-        assert(pDlg && "Dialog creation failed!");
         const SfxStringItem* pPageItem = rReq.GetArg<SfxStringItem>(FN_PARAM_1);
         if ( pPageItem )
             pDlg->SetCurPageId( OUStringToOString( pPageItem->GetValue(), RTL_TEXTENCODING_UTF8 ) );
@@ -196,7 +191,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
         std::shared_ptr<SfxRequest> pRequest(new SfxRequest(rReq));
         rReq.Ignore(); // the 'old' request is not relevant any more
 
-        pDlg->StartExecuteAsync([=](sal_Int32 nResult){
+        pDlg->StartExecuteAsync([aSet, pDlg, pNumRuleAtCurrentSelection, pRequest, this](sal_Int32 nResult){
             if (RET_OK == nResult)
             {
                 const SfxPoolItem* pItem;
@@ -236,6 +231,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
             }
             else if (RET_USER == nResult)
                 GetShell().DelNumRules();
+            pDlg->disposeOnce();
         });
     }
     break;

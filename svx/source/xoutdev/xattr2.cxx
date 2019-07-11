@@ -21,6 +21,7 @@
 #include <com/sun/star/drawing/LineCap.hpp>
 #include <com/sun/star/uno/Any.hxx>
 
+#include <osl/diagnose.h>
 #include <i18nutil/unicode.hxx>
 #include <svx/strings.hrc>
 #include <svx/svxids.hrc>
@@ -178,7 +179,7 @@ AffineMatrixItem::AffineMatrixItem(const css::geometry::AffineMatrix2D* pMatrix)
 }
 
 AffineMatrixItem::AffineMatrixItem(const AffineMatrixItem& rRef)
-:   SfxPoolItem(SID_ATTR_TRANSFORM_MATRIX)
+:   SfxPoolItem(rRef)
 {
     maMatrix = rRef.maMatrix;
 }
@@ -252,9 +253,7 @@ SfxPoolItem* XLineCapItem::Clone(SfxItemPool* /*pPool*/) const
 bool XLineCapItem::GetPresentation( SfxItemPresentation /*ePres*/, MapUnit /*eCoreUnit*/,
                                                      MapUnit /*ePresUnit*/, OUString& rText, const IntlWrapper&) const
 {
-    rText.clear();
-
-    const char* pId = nullptr;
+    const char* pId;
 
     switch( GetValue() )
     {
@@ -271,8 +270,7 @@ bool XLineCapItem::GetPresentation( SfxItemPresentation /*ePres*/, MapUnit /*eCo
         break;
     }
 
-    if (pId)
-        rText = SvxResId(pId);
+    rText = SvxResId(pId);
 
     return true;
 }

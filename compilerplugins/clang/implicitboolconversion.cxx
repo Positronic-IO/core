@@ -221,11 +221,11 @@ bool hasCLanguageLinkageType(FunctionDecl const * decl) {
 }
 
 class ImplicitBoolConversion:
-    public RecursiveASTVisitor<ImplicitBoolConversion>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<ImplicitBoolConversion>
 {
 public:
     explicit ImplicitBoolConversion(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -641,10 +641,12 @@ bool ImplicitBoolConversion::TraverseBinNE(BinaryOperator * expr) {
 bool ImplicitBoolConversion::TraverseBinAssign(BinaryOperator * expr) {
     nested.push(std::vector<ImplicitCastExpr const *>());
     bool bRet = RecursiveASTVisitor::TraverseBinAssign(expr);
-    // /usr/include/gtk-2.0/gtk/gtktogglebutton.h: struct _GtkToggleButton:
+    // gtk-2.0/gtk/gtktogglebutton.h: struct _GtkToggleButton:
     //  guint GSEAL (active) : 1;
     // even though <http://www.gtk.org/api/2.6/gtk/GtkToggleButton.html>:
     //  "active"               gboolean              : Read / Write
+    // qt5/QtGui/qaccessible.h: struct State:
+    //  quint64 disabled : 1;
     bool bExt = false;
     MemberExpr const * me = dyn_cast<MemberExpr>(expr->getLHS());
     if (me != nullptr) {
@@ -653,7 +655,11 @@ bool ImplicitBoolConversion::TraverseBinAssign(BinaryOperator * expr) {
             && fd->getBitWidthValue(compiler.getASTContext()) == 1)
         {
             TypedefType const * t = fd->getType()->getAs<TypedefType>();
-            bExt = t != nullptr && t->getDecl()->getNameAsString() == "guint";
+            if (t != nullptr)
+            {
+                std::string sTypeName = t->getDecl()->getNameAsString();
+                bExt = (sTypeName == "guint" || sTypeName == "quint64");
+            }
         }
     }
     assert(!nested.empty());
@@ -686,7 +692,7 @@ bool ImplicitBoolConversion::TraverseBinAndAssign(CompoundAssignOperator * expr)
     {
         report(
             DiagnosticsEngine::Warning, "mix of %0 and %1 in operator &=",
-            expr->getRHS()->getLocStart())
+            compat::getBeginLoc(expr->getRHS()))
             << expr->getLHS()->getType()
             << expr->getRHS()->IgnoreParenImpCasts()->getType()
             << expr->getSourceRange();
@@ -712,7 +718,7 @@ bool ImplicitBoolConversion::TraverseBinOrAssign(CompoundAssignOperator * expr)
     {
         report(
             DiagnosticsEngine::Warning, "mix of %0 and %1 in operator |=",
-            expr->getRHS()->getLocStart())
+            compat::getBeginLoc(expr->getRHS()))
             << expr->getLHS()->getType()
             << expr->getRHS()->IgnoreParenImpCasts()->getType()
             << expr->getSourceRange();
@@ -738,7 +744,7 @@ bool ImplicitBoolConversion::TraverseBinXorAssign(CompoundAssignOperator * expr)
     {
         report(
             DiagnosticsEngine::Warning, "mix of %0 and %1 in operator ^=",
-            expr->getRHS()->getLocStart())
+            compat::getBeginLoc(expr->getRHS()))
             << expr->getLHS()->getType()
             << expr->getRHS()->IgnoreParenImpCasts()->getType()
             << expr->getSourceRange();
@@ -870,7 +876,7 @@ bool ImplicitBoolConversion::VisitImplicitCastExpr(
                 DiagnosticsEngine::Warning,
                 ("explicit conversion (%0) from %1 to %2 implicitly cast back"
                  " to %3"),
-                expr->getLocStart())
+                compat::getBeginLoc(expr))
                 << sub->getCastKindName() << subsub->getType() << sub->getType()
                 << expr->getType() << expr->getSourceRange();
             return true;
@@ -880,15 +886,14 @@ bool ImplicitBoolConversion::VisitImplicitCastExpr(
         && !calls.empty())
     {
         CallExpr const * call = calls.top();
-        if (std::find_if(
+        if (std::any_of(
                 call->arg_begin(), call->arg_end(),
-                [expr](Expr const * e) { return expr == e->IgnoreParens(); })
-            != call->arg_end())
+                [expr](Expr const * e) { return expr == e->IgnoreParens(); }))
         {
             report(
                 DiagnosticsEngine::Warning,
                 "implicit conversion (%0) of call argument from %1 to %2",
-                expr->getLocStart())
+                compat::getBeginLoc(expr))
                 << expr->getCastKindName() << expr->getSubExpr()->getType()
                 << expr->getType() << expr->getSourceRange();
             return true;
@@ -912,7 +917,7 @@ bool ImplicitBoolConversion::VisitMaterializeTemporaryExpr(
                 DiagnosticsEngine::Warning,
                 ("explicit conversion (%0) from %1 to %2 implicitly converted"
                  " back to %3"),
-                expr->getLocStart())
+                compat::getBeginLoc(expr))
                 << sub->getCastKindName() << subsub->getType() << sub->getType()
                 << expr->getType() << expr->getSourceRange();
             return true;
@@ -1017,7 +1022,7 @@ void ImplicitBoolConversion::reportWarning(ImplicitCastExpr const * expr) {
     if (compiler.getLangOpts().CPlusPlus) {
         report(
             DiagnosticsEngine::Warning,
-            "implicit conversion (%0) from %1 to %2", expr->getLocStart())
+            "implicit conversion (%0) from %1 to %2", compat::getBeginLoc(expr))
             << expr->getCastKindName() << expr->getSubExprAsWritten()->getType()
             << expr->getType() << expr->getSourceRange();
     }

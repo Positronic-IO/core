@@ -20,12 +20,15 @@
 #include <datatableview.hxx>
 
 #include <document.hxx>
+#include <utility>
 #include <viewdata.hxx>
 #include <output.hxx>
 #include <fillinfo.hxx>
 #include <table.hxx>
 
 #include <vcl/builderfactory.hxx>
+#include <vcl/seleng.hxx>
+#include <sal/log.hxx>
 
 constexpr double nPPTX = 0.06666;
 constexpr double nPPTY = 0.06666;
@@ -164,7 +167,7 @@ ScDataTableView::ScDataTableView(vcl::Window* pParent):
 
 void ScDataTableView::Init(std::shared_ptr<ScDocument> pDoc)
 {
-    mpDoc = pDoc;
+    mpDoc = std::move(pDoc);
     mpColView->Init(mpDoc.get());
     mpRowView->Init(mpDoc.get());
 }
@@ -240,6 +243,8 @@ SCROW findRowFromPos(sal_uInt16 nPixelPos, const ScDocument* pDoc, SCROW nStartR
 void ScDataTableView::MouseButtonUp(const MouseEvent& rMEvt)
 {
     if (!rMEvt.IsLeft())
+        return;
+    if (!mpMouseEvent) // tdf#120528 The event originated in another window, like context menu
         return;
 
     SCCOL nStartCol = findColFromPos(mpMouseEvent->GetPosPixel().getX(), mpDoc.get());

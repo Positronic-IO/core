@@ -24,7 +24,6 @@
 #include <core_resource.hxx>
 #include <Tools.hxx>
 #include <tools/color.hxx>
-#include <comphelper/property.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <FormatCondition.hxx>
 #include <com/sun/star/text/ParagraphVertAlign.hpp>
@@ -34,9 +33,8 @@ namespace reportdesign
 {
 
     using namespace com::sun::star;
-    using namespace comphelper;
 
-uno::Sequence< OUString > lcl_getFixedTextOptionals()
+static uno::Sequence< OUString > lcl_getFixedTextOptionals()
 {
     OUString pProps[] = { OUString(PROPERTY_DATAFIELD),OUString(PROPERTY_MASTERFIELDS),OUString(PROPERTY_DETAILFIELDS) };
     return uno::Sequence< OUString >(pProps,SAL_N_ELEMENTS(pProps));

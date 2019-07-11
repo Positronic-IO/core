@@ -24,6 +24,7 @@
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
 #include <oox/drawingml/shape.hxx>
+#include <sal/log.hxx>
 
 #include <boost/optional.hpp>
 
@@ -104,7 +105,7 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
 
                     // If the text is not rotated the way the shape wants it already, set the angle.
                     const sal_Int32 nRotation = -270;
-                    if (static_cast<long>(basegfx::rad2deg(fRotate)) != NormAngle360(static_cast<long>(nRotation) * 100) / 100)
+                    if (static_cast<long>(basegfx::rad2deg(fRotate)) != NormAngle36000(static_cast<long>(nRotation) * 100) / 100)
                     {
                         comphelper::SequenceAsHashMap aCustomShapeGeometry(xPropertySet->getPropertyValue("CustomShapeGeometry"));
                         aCustomShapeGeometry["TextPreRotateAngle"] <<= nRotation;
@@ -115,7 +116,6 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
 
             if (xServiceInfo.is())
             {
-                bool bTextFrame = xServiceInfo->supportsService("com.sun.star.text.TextFrame");
                 // Handle inset attributes for Writer textframes.
                 sal_Int32 aInsets[] = { XML_lIns, XML_tIns, XML_rIns, XML_bIns };
                 boost::optional<sal_Int32> oInsets[4];
@@ -128,11 +128,10 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
                         // Defaults from the spec: left/right: 91440 EMU, top/bottom: 45720 EMU
                         oInsets[i] = (aInsets[i] == XML_lIns || aInsets[i] == XML_rIns) ? 254 : 127;
                 }
-                OUString aProps[] = { OUString("LeftBorderDistance"), OUString("TopBorderDistance"), OUString("RightBorderDistance"), OUString("BottomBorderDistance") };
-                OUString aShapeProps[] = { OUString("TextLeftDistance"), OUString("TextUpperDistance"), OUString("TextRightDistance"), OUString("TextLowerDistance") };
-                for (std::size_t i = 0; i < SAL_N_ELEMENTS(bTextFrame ? aProps : aShapeProps); ++i)
+                const OUString aShapeProps[] = { OUString("TextLeftDistance"), OUString("TextUpperDistance"), OUString("TextRightDistance"), OUString("TextLowerDistance") };
+                for (std::size_t i = 0; i < SAL_N_ELEMENTS(aShapeProps); ++i)
                     if (oInsets[i])
-                        xPropertySet->setPropertyValue((bTextFrame ? aProps : aShapeProps)[i], uno::makeAny(*oInsets[i]));
+                        xPropertySet->setPropertyValue(aShapeProps[i], uno::makeAny(*oInsets[i]));
             }
 
             // Handle text vertical adjustment inside a text frame
@@ -152,7 +151,13 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
             if (ePropertyState == beans::PropertyState_DEFAULT_VALUE)
             {
                 uno::Reference<beans::XPropertySet> xTextBoxPropertySet(xTextCursor, uno::UNO_QUERY);
-                xTextBoxPropertySet->setPropertyValue("CharColor", xPropertySet->getPropertyValue("CharColor"));
+                uno::Any xCharColor = xPropertySet->getPropertyValue("CharColor");
+                Color aColor = COL_AUTO;
+                if (xCharColor >>= aColor)
+                {
+                    if (aColor != COL_AUTO)
+                        xTextBoxPropertySet->setPropertyValue("CharColor", xCharColor);
+                }
             }
             return this;
         }
@@ -178,11 +183,14 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
         if (rAttribs.hasAttribute(XML_prst))
         {
             uno::Reference<beans::XPropertySet> xPropertySet(mxShape, uno::UNO_QUERY);
-            oox::OptValue<OUString> presetShapeName = rAttribs.getString(XML_prst);
-            const OUString& preset = presetShapeName.get();
-            comphelper::SequenceAsHashMap aCustomShapeGeometry(xPropertySet->getPropertyValue("CustomShapeGeometry"));
-            aCustomShapeGeometry["PresetTextWarp"] <<= preset;
-            xPropertySet->setPropertyValue("CustomShapeGeometry", uno::makeAny(aCustomShapeGeometry.getAsConstPropertyValueList()));
+            if (xPropertySet.is())
+            {
+                oox::OptValue<OUString> presetShapeName = rAttribs.getString(XML_prst);
+                const OUString& preset = presetShapeName.get();
+                comphelper::SequenceAsHashMap aCustomShapeGeometry(xPropertySet->getPropertyValue("CustomShapeGeometry"));
+                aCustomShapeGeometry["PresetTextWarp"] <<= preset;
+                xPropertySet->setPropertyValue("CustomShapeGeometry", uno::makeAny(aCustomShapeGeometry.getAsConstPropertyValueList()));
+            }
         }
         break;
     case XML_txbx:

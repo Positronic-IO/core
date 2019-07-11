@@ -33,6 +33,7 @@
 #include <com/sun/star/xforms/XModel2.hpp>
 
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 
 using com::sun::star::uno::Reference;
 using com::sun::star::uno::makeAny;
@@ -66,8 +67,7 @@ XFormsBindContext::XFormsBindContext(
     const OUString& rLocalName,
     const Reference<XModel2>& xModel ) :
         TokenContext( rImport, nPrefix, rLocalName, aAttributeMap, aEmptyMap ),
-        mxModel( xModel ),
-        mxBinding( nullptr )
+        mxModel( xModel )
 {
     // attach binding to model
     mxBinding = mxModel->createBinding();

@@ -121,26 +121,6 @@ namespace accessibility
         return false;
     }
 
-    ::tools::Rectangle AccessibleOutlineEditSource::GetVisArea() const
-    {
-        if( IsValid() )
-        {
-            SdrPaintWindow* pPaintWindow = mrView.FindPaintWindow(mrWindow);
-            ::tools::Rectangle aVisArea;
-
-            if(pPaintWindow)
-            {
-                aVisArea = pPaintWindow->GetVisibleArea();
-            }
-
-            MapMode aMapMode(mrWindow.GetMapMode());
-            aMapMode.SetOrigin(Point());
-            return mrWindow.LogicToPixel( aVisArea, aMapMode );
-        }
-
-        return ::tools::Rectangle();
-    }
-
     Point AccessibleOutlineEditSource::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const
     {
         if( IsValid() && mrView.GetModel() )
@@ -207,9 +187,9 @@ namespace accessibility
     {
         ::std::unique_ptr< SfxHint > aHint( SvxEditSourceHelper::EENotification2Hint( &rNotify) );
 
-         if( aHint.get() )
-         {
-             Broadcast( *aHint.get() );
+        if (aHint)
+        {
+            Broadcast(*aHint);
          }
     }
 

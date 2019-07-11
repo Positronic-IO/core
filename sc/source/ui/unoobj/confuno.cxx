@@ -29,9 +29,11 @@
 #include <docsh.hxx>
 #include <miscuno.hxx>
 #include <forbiuno.hxx>
+#include <appoptio.hxx>
 #include <viewopti.hxx>
 #include <docpool.hxx>
 #include <sc.hrc>
+#include <scmod.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/document/LinkUpdateModes.hpp>
@@ -71,7 +73,8 @@ static const SfxItemPropertyMapEntry* lcl_GetConfigPropertyMap()
         {OUString(SC_UNO_PRINTERNAME),  0,  cppu::UnoType<OUString>::get(),    0, 0},
         {OUString(SC_UNO_PRINTERSETUP), 0,  cppu::UnoType<uno::Sequence<sal_Int8>>::get(), 0, 0},
         {OUString(SC_UNO_PRINTERPAPER), 0,  cppu::UnoType<bool>::get(),              0, 0},
-        {OUString(SC_UNO_APPLYDOCINF),  0,  cppu::UnoType<bool>::get(),              0, 0},
+        {OUString(SC_UNO_APPLYDOCINF),  0,  cppu::UnoType<bool>::get(),              0, 0 },
+        {OUString(SC_UNO_SAVE_THUMBNAIL),  0,  cppu::UnoType<bool>::get(),              0, 0 },
         {OUString(SC_UNO_FORBIDDEN),    0,  cppu::UnoType<i18n::XForbiddenCharacters>::get(), beans::PropertyAttribute::READONLY, 0},
         {OUString(SC_UNO_CHARCOMP),     0,  cppu::UnoType<sal_Int16>::get(),        0, 0},
         {OUString(SC_UNO_ASIANKERN),    0,  cppu::UnoType<bool>::get(),              0, 0},
@@ -82,7 +85,11 @@ static const SfxItemPropertyMapEntry* lcl_GetConfigPropertyMap()
         {OUString(SC_UNO_LOADREADONLY), 0,  cppu::UnoType<bool>::get(),              0, 0},
         {OUString(SC_UNO_SHAREDOC),     0,  cppu::UnoType<bool>::get(),              0, 0},
         {OUString(SC_UNO_MODIFYPASSWORDINFO), 0,  cppu::UnoType<uno::Sequence< beans::PropertyValue >>::get(),              0, 0},
-        {OUString(SC_UNO_EMBED_FONTS), 0,  cppu::UnoType<bool>::get(),              0, 0},
+        {OUString(SC_UNO_EMBED_FONTS),               0,  cppu::UnoType<bool>::get(), 0, 0},
+        {OUString(SC_UNO_EMBED_ONLY_USED_FONTS),     0,  cppu::UnoType<bool>::get(), 0, 0},
+        {OUString(SC_UNO_EMBED_FONT_SCRIPT_LATIN),   0,  cppu::UnoType<bool>::get(), 0, 0},
+        {OUString(SC_UNO_EMBED_FONT_SCRIPT_ASIAN),   0,  cppu::UnoType<bool>::get(), 0, 0},
+        {OUString(SC_UNO_EMBED_FONT_SCRIPT_COMPLEX), 0,  cppu::UnoType<bool>::get(), 0, 0},
         {OUString(SC_UNO_SYNTAXSTRINGREF), 0,  cppu::UnoType<sal_Int16>::get(),     0, 0},
         { OUString(), 0, css::uno::Type(), 0, 0 }
     };
@@ -272,6 +279,12 @@ void SAL_CALL ScDocumentConfiguration::setPropertyValue(
         if ( aValue >>= bTmp )
             pDocShell->SetUseUserData( bTmp );
     }
+    else if ( aPropertyName == SC_UNO_SAVE_THUMBNAIL)
+    {
+        bool bTmp = true;
+        if (aValue >>= bTmp)
+            pDocShell->SetUseThumbnailSave( bTmp );
+    }
     else if ( aPropertyName == SC_UNO_FORBIDDEN )
     {
         //  read-only - should not be set
@@ -329,13 +342,30 @@ void SAL_CALL ScDocumentConfiguration::setPropertyValue(
             throw beans::PropertyVetoException(
                 "The hash is not allowed to be changed now!" );
     }
-    else if ( aPropertyName == SC_UNO_EMBED_FONTS )
+    else if (aPropertyName == SC_UNO_EMBED_FONTS)
     {
-        bool bVal = false;
-        if ( aValue >>=bVal )
-        {
-            rDoc.SetIsUsingEmbededFonts(bVal);
-        }
+        bool bVal = aValue.has<bool>() && aValue.get<bool>();
+        rDoc.SetEmbedFonts(bVal);
+    }
+    else if (aPropertyName == SC_UNO_EMBED_ONLY_USED_FONTS)
+    {
+        bool bVal = aValue.has<bool>() && aValue.get<bool>();
+        rDoc.SetEmbedUsedFontsOnly(bVal);
+    }
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_LATIN)
+    {
+        bool bVal = aValue.has<bool>() && aValue.get<bool>();
+        rDoc.SetEmbedFontScriptLatin(bVal);
+    }
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_ASIAN)
+    {
+        bool bVal = aValue.has<bool>() && aValue.get<bool>();
+        rDoc.SetEmbedFontScriptAsian(bVal);
+    }
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_COMPLEX)
+    {
+        bool bVal = aValue.has<bool>() && aValue.get<bool>();
+        rDoc.SetEmbedFontScriptComplex(bVal);
     }
     else if ( aPropertyName == SC_UNO_SYNTAXSTRINGREF )
     {
@@ -474,12 +504,8 @@ uno::Any SAL_CALL ScDocumentConfiguration::getPropertyValue( const OUString& aPr
         {
             SvMemoryStream aStream;
             pPrinter->Store( aStream );
-            aStream.Seek ( STREAM_SEEK_TO_END );
-            sal_uInt32 nSize = aStream.Tell();
-            aStream.Seek ( STREAM_SEEK_TO_BEGIN );
-            uno::Sequence < sal_Int8 > aSequence( nSize );
-            aStream.ReadBytes(aSequence.getArray(), nSize);
-            aRet <<= aSequence;
+            aRet <<= uno::Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aStream.GetData() ),
+                                                        aStream.TellEnd() );
         }
         else
             aRet <<= uno::Sequence<sal_Int8>();
@@ -492,6 +518,8 @@ uno::Any SAL_CALL ScDocumentConfiguration::getPropertyValue( const OUString& aPr
     }
     else if ( aPropertyName == SC_UNO_APPLYDOCINF )
         aRet <<= pDocShell->IsUseUserData();
+    else if ( aPropertyName == SC_UNO_SAVE_THUMBNAIL )
+        aRet <<= pDocShell->IsUseThumbnailSave();
     else if ( aPropertyName == SC_UNO_FORBIDDEN )
     {
         aRet <<= uno::Reference<i18n::XForbiddenCharacters>(new ScForbiddenCharsObj( pDocShell ));
@@ -514,10 +542,16 @@ uno::Any SAL_CALL ScDocumentConfiguration::getPropertyValue( const OUString& aPr
     }
     else if ( aPropertyName == SC_UNO_MODIFYPASSWORDINFO )
         aRet <<= pDocShell->GetModifyPasswordInfo();
-    else if ( aPropertyName == SC_UNO_EMBED_FONTS )
-    {
-        aRet <<= rDoc.IsUsingEmbededFonts();
-    }
+    else if (aPropertyName == SC_UNO_EMBED_FONTS)
+        aRet <<= rDoc.IsEmbedFonts();
+    else if (aPropertyName == SC_UNO_EMBED_ONLY_USED_FONTS)
+        aRet <<= rDoc.IsEmbedUsedFontsOnly();
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_LATIN)
+        aRet <<= rDoc.IsEmbedFontScriptLatin();
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_ASIAN)
+        aRet <<= rDoc.IsEmbedFontScriptAsian();
+    else if (aPropertyName == SC_UNO_EMBED_FONT_SCRIPT_COMPLEX)
+        aRet <<= rDoc.IsEmbedFontScriptComplex();
     else if ( aPropertyName == SC_UNO_SYNTAXSTRINGREF )
     {
         ScCalcConfig aCalcConfig = rDoc.GetCalcConfig();

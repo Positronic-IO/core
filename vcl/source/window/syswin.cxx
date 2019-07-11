@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cstdlib>
 
@@ -30,7 +31,7 @@
 #include <vcl/event.hxx>
 #include <vcl/syswin.hxx>
 #include <vcl/taskpanelist.hxx>
-#include <vcl/unowrap.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/tabctrl.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/mnemonic.hxx>
@@ -111,7 +112,7 @@ void SystemWindow::dispose()
     Window::dispose();
 }
 
-void ImplHandleControlAccelerator( vcl::Window* pWindow, bool bShow )
+static void ImplHandleControlAccelerator( vcl::Window* pWindow, bool bShow )
 {
     Control *pControl = dynamic_cast<Control*>(pWindow->ImplGetWindow());
     if (pControl && pControl->GetText().indexOf('~') != -1)
@@ -430,7 +431,7 @@ const Size& SystemWindow::GetMaxOutputSizePixel() const
     return mpImplData->maMaxOutSize;
 }
 
-static void ImplWindowStateFromStr(WindowStateData& rData,
+void ImplWindowStateFromStr(WindowStateData& rData,
     const OString& rStr)
 {
     WindowStateMask nValidMask = WindowStateMask::NONE;
@@ -544,7 +545,7 @@ static void ImplWindowStateFromStr(WindowStateData& rData,
     rData.SetMask( nValidMask );
 }
 
-static OString ImplWindowStateToStr(const WindowStateData& rData)
+OString ImplWindowStateToStr(const WindowStateData& rData)
 {
     const WindowStateMask nValidMask = rData.GetMask();
     if ( nValidMask == WindowStateMask::NONE )

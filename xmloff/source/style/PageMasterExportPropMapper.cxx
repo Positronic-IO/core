@@ -32,7 +32,7 @@ using namespace ::com::sun::star::beans;
 using namespace ::comphelper;
 using namespace ::xmloff::token;
 
-static inline bool lcl_HasSameLineWidth( const table::BorderLine2& rLine1, const table::BorderLine2& rLine2 )
+static bool lcl_HasSameLineWidth( const table::BorderLine2& rLine1, const table::BorderLine2& rLine2 )
 {
     return  (rLine1.InnerLineWidth == rLine2.InnerLineWidth) &&
             (rLine1.OuterLineWidth == rLine2.OuterLineWidth) &&
@@ -40,7 +40,7 @@ static inline bool lcl_HasSameLineWidth( const table::BorderLine2& rLine1, const
             (rLine1.LineWidth == rLine2.LineWidth);
 }
 
-static inline void lcl_RemoveState( XMLPropertyState* pState )
+static void lcl_RemoveState( XMLPropertyState* pState )
 {
     pState->mnIndex = -1;
     pState->maValue.clear();
@@ -325,9 +325,9 @@ void XMLPageMasterExportPropMapper::ContextFilter(
 
     rtl::Reference < XMLPropertySetMapper > aPropMapper(getPropertySetMapper());
 
-    for( ::std::vector< XMLPropertyState >::iterator aIter = rPropState.begin(); aIter != rPropState.end(); ++aIter )
+    for( auto& rProp : rPropState )
     {
-        XMLPropertyState *pProp = &(*aIter);
+        XMLPropertyState *pProp = &rProp;
         sal_Int16 nContextId    = aPropMapper->GetEntryContextId( pProp->mnIndex );
         sal_Int16 nFlag         = nContextId & CTF_PM_FLAGMASK;
         sal_Int16 nSimpleId     = nContextId & (~CTF_PM_FLAGMASK | XML_PM_CTF_START);
@@ -418,7 +418,7 @@ void XMLPageMasterExportPropMapper::ContextFilter(
             case CTF_PM_FOOTERFILLBITMAPNAME:
             case CTF_PM_FOOTERFILLTRANSNAME:
             {
-                rtl::OUString aStr;
+                OUString aStr;
 
                 if( (pProp->maValue >>= aStr) && 0 == aStr.getLength() )
                 {

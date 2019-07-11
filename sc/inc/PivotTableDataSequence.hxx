@@ -25,10 +25,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <rtl/math.hxx>
 
-#include "unonames.hxx"
-#include "document.hxx"
-
-#include "dpsave.hxx"
+class ScDocument;
 
 namespace sc
 {
@@ -159,10 +156,10 @@ public:
 
 private:
     ScDocument* m_pDocument;
-    OUString m_sPivotTableName;
-    OUString m_aID;
+    OUString const m_sPivotTableName;
+    OUString const m_aID;
     std::vector<ValueAndFormat> m_aData;
-    SfxItemPropertySet m_aPropSet;
+    SfxItemPropertySet const m_aPropSet;
     css::chart2::data::DataSequenceRole m_aRole;
     std::vector<css::uno::Reference<css::util::XModifyListener>> m_aValueListeners;
 };

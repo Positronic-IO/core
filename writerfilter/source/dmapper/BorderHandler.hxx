@@ -24,6 +24,7 @@
 #include <memory>
 #include <com/sun/star/table/BorderLine2.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <o3tl/enumarray.hxx>
 
 namespace writerfilter {
 namespace dmapper
@@ -31,30 +32,29 @@ namespace dmapper
 class PropertyMap;
 class BorderHandler : public LoggedProperties
 {
-public:
+private:
     //todo: order is a guess
-    enum BorderPosition
+    enum class BorderPosition
     {
-        BORDER_TOP,
-        BORDER_LEFT,
-        BORDER_BOTTOM,
-        BORDER_RIGHT,
-        BORDER_HORIZONTAL,
-        BORDER_VERTICAL,
-        BORDER_COUNT
+        Top,
+        Left,
+        Bottom,
+        Right,
+        Horizontal,
+        Vertical,
+        LAST = Vertical
     };
 
-private:
     //values of the current border
     sal_Int32       m_nLineWidth;
     sal_Int32       m_nLineType;
     sal_Int32       m_nLineColor;
     sal_Int32       m_nLineDistance;
     bool            m_bShadow;
-    bool            m_bOOXML;
+    bool const      m_bOOXML;
 
-    bool                                        m_aFilledLines[BORDER_COUNT];
-    css::table::BorderLine2 m_aBorderLines[BORDER_COUNT];
+    o3tl::enumarray<BorderPosition, bool> m_aFilledLines;
+    o3tl::enumarray<BorderPosition, css::table::BorderLine2> m_aBorderLines;
     OUString m_aInteropGrabBagName;
     std::vector<css::beans::PropertyValue> m_aInteropGrabBag;
     void appendGrabBag(const OUString& aKey, const OUString& aValue);
@@ -67,14 +67,13 @@ public:
     explicit BorderHandler( bool bOOXML );
     virtual ~BorderHandler() override;
 
-    ::std::shared_ptr<PropertyMap>            getProperties();
+    ::tools::SvRef<PropertyMap>            getProperties();
     css::table::BorderLine2 getBorderLine();
     sal_Int32                                   getLineDistance() const { return m_nLineDistance;}
     bool                                        getShadow() { return m_bShadow;}
     void enableInteropGrabBag(const OUString& aName);
     css::beans::PropertyValue getInteropGrabBag(const OUString& aName = OUString());
 };
-typedef std::shared_ptr< BorderHandler >          BorderHandlerPtr;
 }}
 
 #endif

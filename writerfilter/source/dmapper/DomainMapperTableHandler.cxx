@@ -36,6 +36,7 @@
 #include "ConversionHelper.hxx"
 #include "util.hxx"
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <comphelper/sequence.hxx>
 
 #ifdef DEBUG_WRITERFILTER
@@ -77,37 +78,7 @@ void DomainMapperTableHandler::startTable(const TablePropertyMapPtr& pProps)
 #endif
 }
 
-
-PropertyMapPtr lcl_SearchParentStyleSheetAndMergeProperties(const StyleSheetEntryPtr& rStyleSheet, const StyleSheetTablePtr& pStyleSheetTable)
-{
-    PropertyMapPtr pRet;
-
-    if (!rStyleSheet)
-        return pRet;
-
-    if(!rStyleSheet->sBaseStyleIdentifier.isEmpty())
-    {
-        const StyleSheetEntryPtr pParentStyleSheet = pStyleSheetTable->FindStyleSheetByISTD(rStyleSheet->sBaseStyleIdentifier);
-        //a loop in the style hierarchy, bail out
-        if (pParentStyleSheet == rStyleSheet)
-            return pRet;
-
-        pRet = lcl_SearchParentStyleSheetAndMergeProperties( pParentStyleSheet, pStyleSheetTable );
-    }
-    else
-    {
-        pRet.reset( new PropertyMap );
-    }
-
-    if (pRet)
-    {
-        pRet->InsertProps(rStyleSheet->pProperties);
-    }
-
-    return pRet;
-}
-
-void lcl_mergeBorder( PropertyIds nId, const PropertyMapPtr& pOrig, const PropertyMapPtr& pDest )
+static void lcl_mergeBorder( PropertyIds nId, const PropertyMapPtr& pOrig, const PropertyMapPtr& pDest )
 {
     boost::optional<PropertyMap::Property> pOrigVal = pOrig->getProperty(nId);
 
@@ -117,7 +88,7 @@ void lcl_mergeBorder( PropertyIds nId, const PropertyMapPtr& pOrig, const Proper
     }
 }
 
-void lcl_computeCellBorders( const PropertyMapPtr& pTableBorders, const PropertyMapPtr& pCellProps,
+static void lcl_computeCellBorders( const PropertyMapPtr& pTableBorders, const PropertyMapPtr& pCellProps,
         sal_Int32 nCell, sal_Int32 nRow, bool bIsEndCol, bool bIsEndRow )
 {
     boost::optional<PropertyMap::Property> pVerticalVal = pCellProps->getProperty(META_PROP_VERTICAL_BORDER);
@@ -199,7 +170,7 @@ void lcl_computeCellBorders( const PropertyMapPtr& pTableBorders, const Property
 
 #ifdef DEBUG_WRITERFILTER
 
-void lcl_debug_BorderLine(table::BorderLine const & rLine)
+static void lcl_debug_BorderLine(table::BorderLine const & rLine)
 {
     TagLogger::getInstance().startElement("BorderLine");
     TagLogger::getInstance().attribute("Color", rLine.Color);
@@ -209,7 +180,7 @@ void lcl_debug_BorderLine(table::BorderLine const & rLine)
     TagLogger::getInstance().endElement();
 }
 
-void lcl_debug_TableBorder(table::TableBorder const & rBorder)
+static void lcl_debug_TableBorder(table::TableBorder const & rBorder)
 {
     TagLogger::getInstance().startElement("TableBorder");
     lcl_debug_BorderLine(rBorder.TopLine);
@@ -295,8 +266,6 @@ void lcl_extractHoriOrient(std::vector<beans::PropertyValue>& rFrameProperties, 
     }
 }
 
-}
-
 void lcl_DecrementHoriOrientPosition(std::vector<beans::PropertyValue>& rFrameProperties, sal_Int32 nAmount)
 {
     // Shifts the frame left by the given value.
@@ -310,6 +279,42 @@ void lcl_DecrementHoriOrientPosition(std::vector<beans::PropertyValue>& rFramePr
             return;
         }
     }
+}
+
+void lcl_adjustBorderDistance(TableInfo& rInfo, const table::BorderLine2& rLeftBorder,
+                              const table::BorderLine2& rRightBorder)
+{
+    // MS Word appears to do these things to adjust the cell horizontal area:
+    //
+    // bll = left borderline width
+    // blr = right borderline width
+    // cea = cell's edit area rectangle
+    // cea_w = cea width
+    // cml = cell's left margin (padding) defined in cell settings
+    // cmr = cell's right margin (padding) defined in cell settings
+    // cw  = cell width (distance between middles of left borderline and right borderline)
+    // pad_l = actual cea left padding = (its left pos relative to middle of bll)
+    // pad_r = actual cea right padding = abs (its right pos relative to middle of blr)
+    //
+    // pad_l = max(bll/2, cml) -> cea does not overlap left borderline
+    // cea_w = cw-max(pad_l+blr/2, cml+cmr) -> cea does not overlap right borderline
+    // pad_r = max(pad_l+blr/2, cml+cmr) - pad_l
+    //
+    // It means that e.g. for border widths of 6 pt (~2.12 mm), left margin 0 mm, and right margin
+    // 2 mm, actual left and right margins will (unexpectedly) coincide with inner edges of cell's
+    // borderlines - the right margin won't create spacing between right of edit rectangle and the
+    // inner edge of right borderline.
+
+    const sal_Int32 nActualL
+        = std::max<sal_Int32>(rLeftBorder.LineWidth / 2, rInfo.nLeftBorderDistance);
+    const sal_Int32 nActualR
+        = std::max<sal_Int32>(nActualL + rRightBorder.LineWidth / 2,
+                              rInfo.nLeftBorderDistance + rInfo.nRightBorderDistance)
+          - nActualL;
+    rInfo.nLeftBorderDistance = nActualL;
+    rInfo.nRightBorderDistance = nActualR;
+}
+
 }
 
 TableStyleSheetEntry * DomainMapperTableHandler::endTableGetTableStyle(TableInfo & rInfo, std::vector<beans::PropertyValue>& rFrameProperties)
@@ -382,12 +387,12 @@ TableStyleSheetEntry * DomainMapperTableHandler::endTableGetTableStyle(TableInfo
             if( pStyleSheet )
             {
                 // First get the style properties, then the table ones
-                PropertyMapPtr pTableProps( m_aTableProperties );
+                PropertyMapPtr pTableProps( m_aTableProperties.get() );
                 TablePropertyMapPtr pEmptyProps( new TablePropertyMap );
 
                 m_aTableProperties = pEmptyProps;
 
-                PropertyMapPtr pMergedProperties = lcl_SearchParentStyleSheetAndMergeProperties(pStyleSheet, pStyleSheetTable);
+                PropertyMapPtr pMergedProperties = pStyleSheet->GetMergedInheritedProperties(pStyleSheetTable);
 
                 table::BorderLine2 aBorderLine;
                 TableInfo rStyleInfo;
@@ -443,7 +448,7 @@ TableStyleSheetEntry * DomainMapperTableHandler::endTableGetTableStyle(TableInfo
         }
 
         // Set the table default attributes for the cells
-        rInfo.pTableDefaults->InsertProps(m_aTableProperties);
+        rInfo.pTableDefaults->InsertProps(m_aTableProperties.get());
 
 #ifdef DEBUG_WRITERFILTER
         TagLogger::getInstance().startElement("TableDefaults");
@@ -489,42 +494,35 @@ TableStyleSheetEntry * DomainMapperTableHandler::endTableGetTableStyle(TableInfo
 
         //table border settings
         table::TableBorder aTableBorder;
-        table::BorderLine2 aBorderLine, aLeftBorder;
+        table::BorderLine2 aBorderLine, aLeftBorder, aRightBorder;
 
-        if (lcl_extractTableBorderProperty(m_aTableProperties, PROP_TOP_BORDER, rInfo, aBorderLine))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), PROP_TOP_BORDER, rInfo, aBorderLine))
         {
             aTableBorder.TopLine = aBorderLine;
             aTableBorder.IsTopLineValid = true;
         }
-        if (lcl_extractTableBorderProperty(m_aTableProperties, PROP_BOTTOM_BORDER, rInfo, aBorderLine))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), PROP_BOTTOM_BORDER, rInfo, aBorderLine))
         {
             aTableBorder.BottomLine = aBorderLine;
             aTableBorder.IsBottomLineValid = true;
         }
-        if (lcl_extractTableBorderProperty(m_aTableProperties, PROP_LEFT_BORDER, rInfo, aLeftBorder))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), PROP_LEFT_BORDER, rInfo, aLeftBorder))
         {
             aTableBorder.LeftLine = aLeftBorder;
             aTableBorder.IsLeftLineValid = true;
-            // Only top level table position depends on border width
-            if (rInfo.nNestLevel == 1)
-            {
-                if (rFrameProperties.empty())
-                    rInfo.nLeftBorderDistance += aLeftBorder.LineWidth * 0.5;
-                else
-                    lcl_DecrementHoriOrientPosition(rFrameProperties, aLeftBorder.LineWidth * 0.5);
-            }
         }
-        if (lcl_extractTableBorderProperty(m_aTableProperties, PROP_RIGHT_BORDER, rInfo, aBorderLine))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), PROP_RIGHT_BORDER, rInfo,
+                                           aRightBorder))
         {
-            aTableBorder.RightLine = aBorderLine;
+            aTableBorder.RightLine = aRightBorder;
             aTableBorder.IsRightLineValid = true;
         }
-        if (lcl_extractTableBorderProperty(m_aTableProperties, META_PROP_HORIZONTAL_BORDER, rInfo, aBorderLine))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), META_PROP_HORIZONTAL_BORDER, rInfo, aBorderLine))
         {
             aTableBorder.HorizontalLine = aBorderLine;
             aTableBorder.IsHorizontalLineValid = true;
         }
-        if (lcl_extractTableBorderProperty(m_aTableProperties, META_PROP_VERTICAL_BORDER, rInfo, aBorderLine))
+        if (lcl_extractTableBorderProperty(m_aTableProperties.get(), META_PROP_VERTICAL_BORDER, rInfo, aBorderLine))
         {
             aTableBorder.VerticalLine = aBorderLine;
             aTableBorder.IsVerticalLineValid = true;
@@ -543,6 +541,26 @@ TableStyleSheetEntry * DomainMapperTableHandler::endTableGetTableStyle(TableInfo
         // - top level tables: the goal is to have in-cell text starting at table indent pos (tblInd),
         //   so table's position depends on table's cells margin
         // - nested tables: the goal is to have left-most border starting at table_indent pos
+
+        // Only top level table position depends on border width of Column A.
+        // TODO: Position based on last row (at least in MSOffice 2016), but first row in Office 2003.
+        //       Export code is also based on first cell, so using first row here...
+        if ( !m_aCellProperties.empty() && !m_aCellProperties[0].empty() )
+        {
+            // aLeftBorder already contains tblBorder; overwrite if cell is different.
+            boost::optional<PropertyMap::Property> aCellBorder
+                = m_aCellProperties[0][0]->getProperty(PROP_LEFT_BORDER);
+            if ( aCellBorder )
+                aCellBorder->second >>= aLeftBorder;
+            aCellBorder = m_aCellProperties[0][0]->getProperty(PROP_RIGHT_BORDER);
+            if (aCellBorder)
+                aCellBorder->second >>= aRightBorder;
+        }
+        if (rInfo.nNestLevel == 1 && aLeftBorder.LineWidth && !rFrameProperties.empty())
+        {
+            lcl_DecrementHoriOrientPosition(rFrameProperties, aLeftBorder.LineWidth * 0.5);
+        }
+        lcl_adjustBorderDistance(rInfo, aLeftBorder, aRightBorder);
 
         // tdf#106742: since MS Word 2013 (compatibilityMode >= 15), top-level tables are handled the same as nested tables;
         // this is also the default behavior in LO when DOCX doesn't define "compatibilityMode" option
@@ -698,6 +716,10 @@ CellPropertyValuesSeq_t DomainMapperTableHandler::endTableGetCellProperties(Tabl
             //aCellIterator points to a PropertyMapPtr;
             if( *aCellIterator )
             {
+                // remove directly applied insideV/H borders since they are meaningless without a context (tdf#82177)
+                (*aCellIterator)->Erase(META_PROP_VERTICAL_BORDER);
+                (*aCellIterator)->Erase(META_PROP_HORIZONTAL_BORDER);
+
                 pAllCellProps->InsertProps(rInfo.pTableDefaults);
 
                 sal_Int32 nCellStyleMask = 0;
@@ -862,7 +884,7 @@ CellPropertyValuesSeq_t DomainMapperTableHandler::endTableGetCellProperties(Tabl
 }
 
 /// Do all cells in this row have a CellHideMark property?
-bool lcl_hideMarks(PropertyMapVector1& rCellProperties)
+static bool lcl_hideMarks(PropertyMapVector1& rCellProperties)
 {
     for (PropertyMapPtr & p : rCellProperties)
     {
@@ -875,7 +897,7 @@ bool lcl_hideMarks(PropertyMapVector1& rCellProperties)
 }
 
 /// Are all cells in this row empty?
-bool lcl_emptyRow(std::vector<RowSequence_t>& rTableRanges, sal_Int32 nRow)
+static bool lcl_emptyRow(std::vector<RowSequence_t>& rTableRanges, sal_Int32 nRow)
 {
     if (nRow >= static_cast<sal_Int32>(rTableRanges.size()))
     {
@@ -923,36 +945,33 @@ css::uno::Sequence<css::beans::PropertyValues> DomainMapperTableHandler::endTabl
 #endif
 
     css::uno::Sequence<css::beans::PropertyValues> aRowProperties( m_aRowProperties.size() );
-    PropertyMapVector1::const_iterator aRowIter = m_aRowProperties.begin();
-    PropertyMapVector1::const_iterator aRowIterEnd = m_aRowProperties.end();
     sal_Int32 nRow = 0;
-    while( aRowIter != aRowIterEnd )
+    for( const auto& rRow : m_aRowProperties )
     {
 #ifdef DEBUG_WRITERFILTER
         TagLogger::getInstance().startElement("rowProps.row");
 #endif
-        if( aRowIter->get() )
+        if (rRow)
         {
             //set default to 'break across pages"
-            (*aRowIter)->Insert( PROP_IS_SPLIT_ALLOWED, uno::makeAny(true ), false );
+            rRow->Insert( PROP_IS_SPLIT_ALLOWED, uno::makeAny(true ), false );
             // tblHeader is only our property, remove before the property map hits UNO
-            (*aRowIter)->Erase(PROP_TBL_HEADER);
+            rRow->Erase(PROP_TBL_HEADER);
 
             if (lcl_hideMarks(m_aCellProperties[nRow]) && lcl_emptyRow(m_aTableRanges, nRow))
             {
                 // We have CellHideMark on all cells, and also all cells are empty:
                 // Force the row height to be exactly as specified, and not just as the minimum suggestion.
-                (*aRowIter)->Insert(PROP_SIZE_TYPE, uno::makeAny(text::SizeType::FIX));
+                rRow->Insert(PROP_SIZE_TYPE, uno::makeAny(text::SizeType::FIX));
             }
 
-            aRowProperties[nRow] = (*aRowIter)->GetPropertyValues();
+            aRowProperties[nRow] = rRow->GetPropertyValues();
 #ifdef DEBUG_WRITERFILTER
-            (*aRowIter)->dumpXml();
+            rRow->dumpXml();
             lcl_DumpPropertyValues(aRowProperties[nRow]);
 #endif
         }
         ++nRow;
-        ++aRowIter;
 #ifdef DEBUG_WRITERFILTER
         TagLogger::getInstance().endElement();
 #endif
@@ -1016,8 +1035,11 @@ void DomainMapperTableHandler::endTable(unsigned int nestedTableLevel, bool bTab
         {
             xStart = m_aTableRanges[0][0][0];
             uno::Sequence< uno::Sequence< uno::Reference<text::XTextRange> > >& rLastRow = m_aTableRanges[m_aTableRanges.size() - 1];
-            uno::Sequence< uno::Reference<text::XTextRange> >& rLastCell = rLastRow[rLastRow.getLength() - 1];
-            xEnd = rLastCell[1];
+            if (rLastRow.getLength())
+            {
+                uno::Sequence< uno::Reference<text::XTextRange> >& rLastCell = rLastRow[rLastRow.getLength() - 1];
+                xEnd = rLastCell[1];
+            }
         }
         uno::Reference<text::XTextTable> xTable;
         try
@@ -1170,7 +1192,7 @@ void DomainMapperTableHandler::endTable(unsigned int nestedTableLevel, bool bTab
         m_rDMapper_Impl.m_bConvertedTable = true;
     }
 
-    m_aTableProperties.reset();
+    m_aTableProperties.clear();
     m_aCellProperties.clear();
     m_aRowProperties.clear();
     m_bHadFootOrEndnote = false;
@@ -1183,7 +1205,7 @@ void DomainMapperTableHandler::endTable(unsigned int nestedTableLevel, bool bTab
 
 void DomainMapperTableHandler::startRow(const TablePropertyMapPtr& pProps)
 {
-    m_aRowProperties.push_back( pProps );
+    m_aRowProperties.push_back( pProps.get() );
     m_aCellProperties.emplace_back( );
 
 #ifdef DEBUG_WRITERFILTER
@@ -1208,13 +1230,13 @@ void DomainMapperTableHandler::startCell(const css::uno::Reference< css::text::X
 {
     sal_uInt32 nRow = m_aRowProperties.size();
     if ( pProps.get( ) )
-        m_aCellProperties[nRow - 1].push_back( pProps );
+        m_aCellProperties[nRow - 1].push_back( pProps.get() );
     else
     {
         // Adding an empty cell properties map to be able to get
         // the table defaults properties
         TablePropertyMapPtr pEmptyProps( new TablePropertyMap( ) );
-        m_aCellProperties[nRow - 1].push_back( pEmptyProps );
+        m_aCellProperties[nRow - 1].push_back( pEmptyProps.get() );
     }
 
 #ifdef DEBUG_WRITERFILTER

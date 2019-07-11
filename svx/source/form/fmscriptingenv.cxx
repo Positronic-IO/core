@@ -890,8 +890,7 @@ namespace svxform
     }
 
     FormScriptingEnvironment::FormScriptingEnvironment( FmFormModel& _rModel )
-        :m_pScriptListener( nullptr )
-        ,m_rFormModel( _rModel )
+        :m_rFormModel( _rModel )
         ,m_bDisposed( false )
     {
         m_pScriptListener = ListenerImplementation( new FormScriptListener( this ) );
@@ -1045,10 +1044,7 @@ namespace svxform
             pScript.reset( new NewStyleUNOScript( *xObjectShell, sScriptURI ) );
         }
 
-        OSL_ENSURE( pScript.get(), "FormScriptingEnvironment::doFireScriptEvent: no script to execute!" );
-        if ( !pScript.get() )
-            // this is an internal error in the above code
-            throw RuntimeException();
+        assert(pScript && "FormScriptingEnvironment::doFireScriptEvent: no script to execute!");
 
         aGuard.clear();
         aSolarGuard.clear();

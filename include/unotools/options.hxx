@@ -80,6 +80,7 @@ namespace utl {
         ConfigurationBroadcaster();
         ConfigurationBroadcaster(ConfigurationBroadcaster const & );
         virtual ~ConfigurationBroadcaster();
+        ConfigurationBroadcaster & operator =(ConfigurationBroadcaster const & other);
         virtual void BlockBroadcasts( bool bBlock );
     };
 
@@ -99,8 +100,8 @@ public:
     virtual ~Options() override = 0;
 
 private:
-    Options(Options &) = delete;
-    void operator =(Options &) = delete;
+    Options(Options const &) = delete;
+    Options& operator =(Options const &) = delete;
 
 protected:
     virtual void ConfigurationChanged( ::utl::ConfigurationBroadcaster* p, ConfigurationHints nHint ) override;

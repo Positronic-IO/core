@@ -9,6 +9,7 @@
 
 #include <xepivotxml.hxx>
 #include <dpcache.hxx>
+#include <dpitemdata.hxx>
 #include <dpobject.hxx>
 #include <dpsave.hxx>
 #include <dputil.hxx>
@@ -19,6 +20,7 @@
 #include <oox/export/utils.hxx>
 #include <oox/token/namespaces.hxx>
 #include <sax/tools/converter.hxx>
+#include <sax/fastattribs.hxx>
 
 #include <com/sun/star/sheet/DataPilotFieldOrientation.hpp>
 #include <com/sun/star/sheet/DataPilotFieldLayoutMode.hpp>
@@ -226,21 +228,18 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
         XML_createdVersion, "3", // MS Excel 2007, tdf#112936: setting version number makes MSO to handle the pivot table differently
         FSEND);
 
-    if (rEntry.meType == Worksheet)
-    {
-        pDefStrm->startElement(XML_cacheSource,
-            XML_type, "worksheet",
-            FSEND);
+    pDefStrm->startElement(XML_cacheSource,
+        XML_type, "worksheet",
+        FSEND);
 
-        OUString aSheetName;
-        GetDoc().GetName(rEntry.maSrcRange.aStart.Tab(), aSheetName);
-        pDefStrm->singleElement(XML_worksheetSource,
-            XML_ref, XclXmlUtils::ToOString(rEntry.maSrcRange).getStr(),
-            XML_sheet, XclXmlUtils::ToOString(aSheetName).getStr(),
-            FSEND);
+    OUString aSheetName;
+    GetDoc().GetName(rEntry.maSrcRange.aStart.Tab(), aSheetName);
+    pDefStrm->singleElement(XML_worksheetSource,
+        XML_ref, XclXmlUtils::ToOString(rEntry.maSrcRange).getStr(),
+        XML_sheet, XclXmlUtils::ToOString(aSheetName).getStr(),
+        FSEND);
 
-        pDefStrm->endElement(XML_cacheSource);
-    }
+    pDefStrm->endElement(XML_cacheSource);
 
     size_t nCount = rCache.GetFieldCount();
     pDefStrm->startElement(XML_cacheFields,
@@ -287,7 +286,7 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
         auto pAttList = sax_fastparser::FastSerializerHelper::createAttrList();
         // TODO In same cases, disable listing of items, as it is done in MS Excel.
         // Exporting savePivotCacheRecordsXml method needs to be updated accordingly
-        bool bListItems = true;
+        //bool bListItems = true;
 
         std::set<ScDPItemData::Type> aDPTypesWithoutBlank = aDPTypes;
         aDPTypesWithoutBlank.erase(ScDPItemData::Empty);
@@ -302,7 +301,7 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
         // 1 - (Default) at least one text value, or can also contain a mix of other data types and blank values,
         //     or blank values only
         // 0 - the field does not have a mix of text and other values
-        if (!(isContainsString || (aDPTypes.size() > 1) || (isContainsBlank && aDPTypesWithoutBlank.size() == 0)))
+        if (!(isContainsString || (aDPTypes.size() > 1) || (isContainsBlank && aDPTypesWithoutBlank.empty())))
             pAttList->add(XML_containsSemiMixedTypes, ToPsz10(false));
 
         if (!isContainsNonDate)
@@ -353,7 +352,7 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
             pAttList->add(XML_maxDate, XclXmlUtils::ToOString(GetExcelFormattedDate(fMax, GetFormatter())));
         }
 
-        if (bListItems)
+        //if (bListItems) // see TODO above
         {
             pAttList->add(XML_count, OString::number(static_cast<long>(rFieldItems.size())));
         }
@@ -361,7 +360,7 @@ void XclExpXmlPivotCaches::SavePivotCacheXml( XclExpXmlStream& rStrm, const Entr
 
         pDefStrm->startElement(XML_sharedItems, xAttributeList);
 
-        if (bListItems)
+        //if (bListItems) // see TODO above
         {
             it = rFieldItems.begin();
             for (; it != itEnd; ++it)
@@ -419,14 +418,22 @@ XclExpXmlPivotTableManager::XclExpXmlPivotTableManager( const XclExpRoot& rRoot 
 
 void XclExpXmlPivotTableManager::Initialize()
 {
-    const ScDocument& rDoc = GetDoc();
+    ScDocument& rDoc = GetDoc();
     if (!rDoc.HasPivotTable())
         // No pivot table to export.
         return;
 
-    const ScDPCollection* pDPColl = rDoc.GetDPCollection();
+    ScDPCollection* pDPColl = rDoc.GetDPCollection();
     if (!pDPColl)
         return;
+
+    // Update caches from DPObject
+    for (size_t i = 0; i < pDPColl->GetCount(); ++i)
+    {
+        ScDPObject& rDPObj = (*pDPColl)[i];
+        rDPObj.SyncAllDimensionMembers();
+        (void)rDPObj.GetOutputRangeByType(sheet::DataPilotOutputRangeType::TABLE);
+    }
 
     // Go through the caches first.
 
@@ -447,7 +454,6 @@ void XclExpXmlPivotTableManager::Initialize()
             maCacheIdMap.emplace(*it, aCaches.size()+1);
 
         XclExpXmlPivotCaches::Entry aEntry;
-        aEntry.meType = XclExpXmlPivotCaches::Worksheet;
         aEntry.mpCache = pCache;
         aEntry.maSrcRange = rRange;
         aCaches.push_back(aEntry); // Cache ID equals position + 1.
@@ -530,7 +536,7 @@ namespace {
 
 struct DataField
 {
-    long mnPos; // field index in pivot cache.
+    long const mnPos; // field index in pivot cache.
     const ScDPSaveDimension* mpDim;
 
     DataField( long nPos, const ScDPSaveDimension* pDim ) : mnPos(nPos), mpDim(pDim) {}
@@ -610,6 +616,7 @@ void XclExpXmlPivotTables::SavePivotTableXml( XclExpXmlStream& rStrm, const ScDP
     std::vector<long> aPageFields;
     std::vector<DataField> aDataFields;
 
+    long nDataDimCount = rSaveData.GetDataDimensionCount();
     // Use dimensions in the save data to get their correct ordering.
     // Dimension order here is significant as they specify the order of
     // appearance in each axis.
@@ -641,6 +648,8 @@ void XclExpXmlPivotTables::SavePivotTableXml( XclExpXmlStream& rStrm, const ScDP
         switch (eOrient)
         {
             case sheet::DataPilotFieldOrientation_COLUMN:
+                if (nPos == -2 && nDataDimCount <= 1)
+                    break;
                 aColFields.push_back(nPos);
             break;
             case sheet::DataPilotFieldOrientation_ROW:
@@ -688,14 +697,15 @@ void XclExpXmlPivotTables::SavePivotTableXml( XclExpXmlStream& rStrm, const ScDP
     sal_Int32 nFirstDataRow = 2;
     sal_Int32 nFirstDataCol = 1;
     ScRange aResRange = rDPObj.GetOutputRangeByType(sheet::DataPilotOutputRangeType::RESULT);
+
+    if (!aOutRange.IsValid())
+        aOutRange = rDPObj.GetOutRange();
+
     if (aOutRange.IsValid() && aResRange.IsValid())
     {
         nFirstDataRow = aResRange.aStart.Row() - aOutRange.aStart.Row();
         nFirstDataCol = aResRange.aStart.Col() - aOutRange.aStart.Col();
     }
-
-    if (!aOutRange.IsValid())
-        aOutRange = rDPObj.GetOutRange();
 
     pPivotStrm->write("<")->writeId(XML_location);
     rStrm.WriteAttributes(XML_ref,

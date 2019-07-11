@@ -43,7 +43,6 @@ class SVX_DLLPUBLIC PaletteManager
     svx::ToolboxButtonColorUpdater* mpBtnUpdater;
 
     XColorListRef           pColorList;
-    Color                   mLastColor;
     std::deque<NamedColor>  maRecentColors;
     std::vector<std::unique_ptr<Palette>> m_Palettes;
 
@@ -56,7 +55,9 @@ public:
     PaletteManager& operator=(const PaletteManager&) = delete;
     void        LoadPalettes();
     void        ReloadColorSet(SvxColorValueSet& rColorSet);
+    void        ReloadColorSet(ColorValueSet& rColorSet);
     void        ReloadRecentColorSet(SvxColorValueSet& rColorSet);
+    void        ReloadRecentColorSet(ColorValueSet& rColorSet);
     std::vector<OUString> GetPaletteList();
     void        SetPalette( sal_Int32 nPos );
     sal_Int32   GetPalette();
@@ -66,13 +67,10 @@ public:
 
     long        GetColorCount();
     long        GetRecentColorCount();
-
-    const Color& GetLastColor();
-    void        SetLastColor(const Color& rLastColor);
     void        AddRecentColor(const Color& rRecentColor, const OUString& rColorName, bool bFront = true);
 
     void        SetBtnUpdater(svx::ToolboxButtonColorUpdater* pBtnUpdater);
-    void        PopupColorPicker(vcl::Window* pParent, const OUString& aCommand, const Color& rInitialColor);
+    void        PopupColorPicker(weld::Window* pParent, const OUString& aCommand, const Color& rInitialColor);
 
     void        SetColorSelectFunction(const std::function<void(const OUString&, const NamedColor&)>& aColorSelectFunction);
 

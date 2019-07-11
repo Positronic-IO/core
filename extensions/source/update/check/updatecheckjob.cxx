@@ -28,6 +28,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/implementationentry.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XTerminateListener.hpp>
@@ -282,7 +283,7 @@ void SAL_CALL UpdateCheckJob::queryTermination( lang::EventObject const & )
 
 void UpdateCheckJob::terminateAndJoinThread()
 {
-    if ( m_pInitThread.get() != nullptr )
+    if (m_pInitThread != nullptr)
     {
         m_pInitThread->setTerminating();
         m_pInitThread->join();

@@ -37,7 +37,6 @@
 #include <svx/xattr.hxx>
 #include <svx/xtable.hxx>
 #include <svx/dialmgr.hxx>
-#include <svx/xexch.hxx>
 #include <helpids.h>
 #include <vcl/svapp.hxx>
 
@@ -48,18 +47,18 @@ class SvxColorValueSetData : public TransferableHelper
 {
 private:
 
-    XFillExchangeData       maData;
+    uno::Sequence<beans::NamedValue> m_Data;
 
 protected:
 
     virtual void            AddSupportedFormats() override;
     virtual bool GetData( const css::datatransfer::DataFlavor& rFlavor, const OUString& rDestDoc ) override;
-    virtual bool            WriteObject( tools::SvRef<SotStorageStream>& rxOStm, void* pUserObject, sal_uInt32 nUserObjectId, const css::datatransfer::DataFlavor& rFlavor ) override;
 
 public:
 
-    explicit SvxColorValueSetData( const XFillAttrSetItem& rSetItem ) :
-        maData( rSetItem ) {}
+    explicit SvxColorValueSetData(const uno::Sequence<beans::NamedValue>& rProps)
+        : m_Data(rProps)
+    {}
 };
 
 void SvxColorValueSetData::AddSupportedFormats()
@@ -73,17 +72,11 @@ bool SvxColorValueSetData::GetData( const css::datatransfer::DataFlavor& rFlavor
 
     if( SotExchange::GetFormat( rFlavor ) == SotClipboardFormatId::XFA )
     {
-        SetObject( &maData, 0, rFlavor );
+        SetAny(uno::makeAny(m_Data));
         bRet = true;
     }
 
     return bRet;
-}
-
-bool SvxColorValueSetData::WriteObject( tools::SvRef<SotStorageStream>& rxOStm, void*, sal_uInt32, const css::datatransfer::DataFlavor&  )
-{
-    WriteXFillExchangeData( *rxOStm, maData );
-    return( rxOStm->GetError() == ERRCODE_NONE );
 }
 
 SvxColorValueSet_docking::SvxColorValueSet_docking( vcl::Window* _pParent ) :
@@ -149,14 +142,18 @@ void SvxColorValueSet_docking::DoDrag()
 
     if( pDocSh && nItemId )
     {
-        XFillAttrSetItem    aXFillSetItem( &pDocSh->GetPool() );
-        SfxItemSet&         rSet = aXFillSetItem.GetItemSet();
-
-        rSet.Put( XFillColorItem( GetItemText( nItemId ), GetItemColor( nItemId ) ) );
-        rSet.Put(XFillStyleItem( ( 1 == nItemId ) ? drawing::FillStyle_NONE : drawing::FillStyle_SOLID ) );
+        uno::Sequence<beans::NamedValue> props(2);
+        XFillColorItem const color(GetItemText(nItemId), GetItemColor(nItemId));
+        props[0].Name = "FillColor";
+        color.QueryValue(props[0].Value, 0);
+        XFillStyleItem const style((1 == nItemId)
+                ? drawing::FillStyle_NONE
+                : drawing::FillStyle_SOLID);
+        props[1].Name = "FillStyle";
+        style.QueryValue(props[1].Value, 0);
 
         EndSelection();
-        ( new SvxColorValueSetData( aXFillSetItem ) )->StartDrag( this, DND_ACTION_COPY );
+        ( new SvxColorValueSetData(props) )->StartDrag( this, DND_ACTION_COPY );
         ReleaseMouse();
     }
 }
@@ -168,6 +165,9 @@ IMPL_LINK_NOARG(SvxColorValueSet_docking, ExecDragHdl, void*, void)
     DoDrag();
 }
 
+static constexpr sal_uInt16 gnLeftSlot = SID_ATTR_FILL_COLOR;
+static constexpr sal_uInt16 gnRightSlot = SID_ATTR_LINE_COLOR;
+
 SvxColorDockingWindow::SvxColorDockingWindow
 (
     SfxBindings* _pBindings,
@@ -178,8 +178,6 @@ SvxColorDockingWindow::SvxColorDockingWindow
     SfxDockingWindow( _pBindings, pCW, _pParent, WB_MOVEABLE|WB_CLOSEABLE|WB_SIZEABLE|WB_DOCKABLE ),
     pColorList      (),
     aColorSet       ( VclPtr<SvxColorValueSet_docking>::Create(this) ),
-    nLeftSlot       ( SID_ATTR_FILL_COLOR ),
-    nRightSlot      ( SID_ATTR_LINE_COLOR ),
     nCols           ( 20 ),
     nLines          ( 1 ),
     nCount          ( 0 )
@@ -277,7 +275,7 @@ void SvxColorDockingWindow::FillValueSet()
     pVD->DrawLine( Point(), Point( nPtX, nPtY ) );
     pVD->DrawLine( Point( 0, nPtY ), Point( nPtX, 0 ) );
 
-    Bitmap aBmp( pVD->GetBitmap( Point(), aColorSize ) );
+    BitmapEx aBmp( pVD->GetBitmapEx( Point(), aColorSize ) );
 
     aColorSet->InsertItem( sal_uInt16(1), Image(aBmp), SvxResId( RID_SVXSTR_INVISIBLE ) );
 
@@ -343,12 +341,12 @@ IMPL_LINK_NOARG(SvxColorDockingWindow, SelectHdl, ValueSet*, void)
 
     if (aColorSet->IsLeftButton())
     {
-        if ( nLeftSlot == SID_ATTR_FILL_COLOR )
+        if ( gnLeftSlot == SID_ATTR_FILL_COLOR )
         {
             if ( nPos == 1 )        // invisible
             {
                 XFillStyleItem aXFillStyleItem( drawing::FillStyle_NONE );
-                pDispatcher->ExecuteList(nLeftSlot, SfxCallMode::RECORD,
+                pDispatcher->ExecuteList(gnLeftSlot, SfxCallMode::RECORD,
                         { &aXFillStyleItem });
             }
             else
@@ -373,26 +371,26 @@ IMPL_LINK_NOARG(SvxColorDockingWindow, SelectHdl, ValueSet*, void)
                 {
                     XFillStyleItem aXFillStyleItem( drawing::FillStyle_SOLID );
                     XFillColorItem aXFillColorItem( aStr, aColor );
-                    pDispatcher->ExecuteList(nLeftSlot, SfxCallMode::RECORD,
+                    pDispatcher->ExecuteList(gnLeftSlot, SfxCallMode::RECORD,
                             { &aXFillColorItem, &aXFillStyleItem });
                 }
             }
         }
         else if ( nPos != 1 )       // invisible
         {
-            SvxColorItem aLeftColorItem( aColor, nLeftSlot );
-            pDispatcher->ExecuteList(nLeftSlot, SfxCallMode::RECORD,
+            SvxColorItem aLeftColorItem( aColor, gnLeftSlot );
+            pDispatcher->ExecuteList(gnLeftSlot, SfxCallMode::RECORD,
                     { &aLeftColorItem });
         }
     }
     else
     {
-        if ( nRightSlot == SID_ATTR_LINE_COLOR )
+        if ( gnRightSlot == SID_ATTR_LINE_COLOR )
         {
             if( nPos == 1 )     // invisible
             {
                 XLineStyleItem aXLineStyleItem( drawing::LineStyle_NONE );
-                pDispatcher->ExecuteList(nRightSlot, SfxCallMode::RECORD,
+                pDispatcher->ExecuteList(gnRightSlot, SfxCallMode::RECORD,
                         { &aXLineStyleItem });
             }
             else
@@ -413,7 +411,7 @@ IMPL_LINK_NOARG(SvxColorDockingWindow, SelectHdl, ValueSet*, void)
                             if ( eXLS == drawing::LineStyle_NONE )
                             {
                                 XLineStyleItem aXLineStyleItem( drawing::LineStyle_SOLID );
-                                pDispatcher->ExecuteList(nRightSlot,
+                                pDispatcher->ExecuteList(gnRightSlot,
                                     SfxCallMode::RECORD, { &aXLineStyleItem });
                             }
                         }
@@ -421,14 +419,14 @@ IMPL_LINK_NOARG(SvxColorDockingWindow, SelectHdl, ValueSet*, void)
                 }
 
                 XLineColorItem aXLineColorItem( aStr, aColor );
-                pDispatcher->ExecuteList(nRightSlot, SfxCallMode::RECORD,
+                pDispatcher->ExecuteList(gnRightSlot, SfxCallMode::RECORD,
                         { &aXLineColorItem });
             }
         }
         else if ( nPos != 1 )       // invisible
         {
-            SvxColorItem aRightColorItem( aColor, nRightSlot );
-            pDispatcher->ExecuteList(nRightSlot, SfxCallMode::RECORD,
+            SvxColorItem aRightColorItem( aColor, gnRightSlot );
+            pDispatcher->ExecuteList(gnRightSlot, SfxCallMode::RECORD,
                     { &aRightColorItem });
         }
     }

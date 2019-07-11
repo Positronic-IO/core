@@ -160,7 +160,8 @@ static void cpp_call(
 
         if (!rParam.bOut && bridges::cpp_uno::shared::isSimpleType( pParamTypeDescr ))
         {
-            uno_copyAndConvertData( pCppArgs[nPos] = alloca( 8 ), pUnoArgs[nPos], pParamTypeDescr,
+            pCppArgs[nPos] = alloca( 8 );
+            uno_copyAndConvertData( pCppArgs[nPos], pUnoArgs[nPos], pParamTypeDescr,
                                     pThis->getBridge()->getUno2Cpp() );
 
             switch (pParamTypeDescr->eTypeClass)
@@ -199,9 +200,8 @@ static void cpp_call(
             if (! rParam.bIn) // is pure out
             {
                 // cpp out is constructed mem, uno out is not!
-                uno_constructData(
-                    pCppArgs[nPos] = alloca( pParamTypeDescr->nSize ),
-                    pParamTypeDescr );
+                pCppArgs[nPos] = alloca( pParamTypeDescr->nSize );
+                uno_constructData( pCppArgs[nPos], pParamTypeDescr );
                 pTempIndices[nTempIndices] = nPos; // default constructed for cpp call
                 // will be released at reconversion
                 ppTempParamTypeDescr[nTempIndices++] = pParamTypeDescr;
@@ -209,9 +209,9 @@ static void cpp_call(
             // is in/inout
             else if (bridges::cpp_uno::shared::relatesToInterfaceType( pParamTypeDescr ))
             {
+                pCppArgs[nPos] = alloca( pParamTypeDescr->nSize );
                 uno_copyAndConvertData(
-                    pCppArgs[nPos] = alloca( pParamTypeDescr->nSize ),
-                    pUnoArgs[nPos], pParamTypeDescr, pThis->getBridge()->getUno2Cpp() );
+                    pCppArgs[nPos], pUnoArgs[nPos], pParamTypeDescr, pThis->getBridge()->getUno2Cpp() );
 
                 pTempIndices[nTempIndices] = nPos; // has to be reconverted
                 // will be released at reconversion
@@ -283,9 +283,7 @@ static void cpp_call(
      catch (...)
      {
          // fill uno exception
-         CPPU_CURRENT_NAMESPACE::fillUnoException(
-             __cxxabiv1::__cxa_get_globals()->caughtExceptions,
-             *ppUnoExc, pThis->getBridge()->getCpp2Uno());
+         CPPU_CURRENT_NAMESPACE::fillUnoException(*ppUnoExc, pThis->getBridge()->getCpp2Uno());
 
         // temporary params
         for ( ; nTempIndices--; )
@@ -311,19 +309,15 @@ void unoInterfaceProxyDispatch(
     // is my surrogate
     bridges::cpp_uno::shared::UnoInterfaceProxy * pThis
         = static_cast< bridges::cpp_uno::shared::UnoInterfaceProxy * >(pUnoI);
-#if OSL_DEBUG_LEVEL > 0
-    typelib_InterfaceTypeDescription * pTypeDescr = pThis->pTypeDescr;
-#endif
 
     switch (pMemberDescr->eTypeClass)
     {
     case typelib_TypeClass_INTERFACE_ATTRIBUTE:
     {
-#if OSL_DEBUG_LEVEL > 0
-        // determine vtable call index
-        sal_Int32 nMemberPos = reinterpret_cast<typelib_InterfaceMemberTypeDescription const *>(pMemberDescr)->nPosition;
-        assert(nMemberPos < pTypeDescr->nAllMembers);
-#endif
+        assert(
+            (reinterpret_cast<typelib_InterfaceMemberTypeDescription const *>(pMemberDescr)
+             ->nPosition)
+            < pThis->pTypeDescr->nAllMembers);
         VtableSlot aVtableSlot(
                 getVtableSlot(
                     reinterpret_cast<
@@ -368,11 +362,10 @@ void unoInterfaceProxyDispatch(
     }
     case typelib_TypeClass_INTERFACE_METHOD:
     {
-#if OSL_DEBUG_LEVEL > 0
-        // determine vtable call index
-        sal_Int32 nMemberPos = reinterpret_cast<typelib_InterfaceMemberTypeDescription const *>(pMemberDescr)->nPosition;
-        assert(nMemberPos < pTypeDescr->nAllMembers);
-#endif
+        assert(
+            (reinterpret_cast<typelib_InterfaceMemberTypeDescription const *>(pMemberDescr)
+             ->nPosition)
+            < pThis->pTypeDescr->nAllMembers);
         VtableSlot aVtableSlot(
                 getVtableSlot(
                     reinterpret_cast<

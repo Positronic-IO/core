@@ -170,11 +170,11 @@ struct SuperBlockPage
      */
     static void * operator new (size_t n)
     {
-        return rtl_allocateMemory (sal::static_int_cast<sal_Size>(n));
+        return std::malloc(sal::static_int_cast<sal_Size>(n));
     }
     static void operator delete (void * p)
     {
-        rtl_freeMemory (p);
+        std::free (p);
     }
 
     static void * operator new (SAL_UNUSED_PARAMETER size_t, sal_uInt16 nPageSize)
@@ -183,7 +183,7 @@ struct SuperBlockPage
     }
     static void operator delete (void * p, SAL_UNUSED_PARAMETER sal_uInt16)
     {
-        rtl_freeMemory (p);
+        std::free (p);
     }
 
     /** Construction.
@@ -460,7 +460,6 @@ protected:
  * OStorePageBIOS::AceCache implementation.
  *
  *======================================================================*/
-extern "C"  typedef  int (* ace_constructor_type)(void*,void*);
 
 OStorePageBIOS::AceCache &
 OStorePageBIOS::AceCache::get()
@@ -475,7 +474,7 @@ OStorePageBIOS::AceCache::AceCache()
     "store_ace_cache",
     sizeof (OStorePageBIOS::Ace),
     0, // objalign
-   reinterpret_cast<ace_constructor_type>( OStorePageBIOS::Ace::constructor),
+    OStorePageBIOS::Ace::constructor,
     nullptr, // destructor,
     nullptr, // reclaim,
     nullptr, // userarg,
@@ -532,9 +531,7 @@ OStorePageBIOS::AceCache::destroy (OStorePageBIOS::Ace * ace)
  * OStorePageBIOS.
  */
 OStorePageBIOS::OStorePageBIOS()
-    : m_xLockBytes (nullptr),
-      m_pSuper     (nullptr),
-      m_bWriteable (false)
+    : m_bWriteable (false)
 {
 }
 

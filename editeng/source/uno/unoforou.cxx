@@ -19,6 +19,7 @@
 
 
 #include <algorithm>
+#include <osl/diagnose.h>
 #include <svl/style.hxx>
 #include <com/sun/star/i18n/WordType.hpp>
 
@@ -42,8 +43,6 @@ using namespace ::com::sun::star;
 SvxOutlinerForwarder::SvxOutlinerForwarder( Outliner& rOutl, bool bOutlText /* = false */ ) :
     rOutliner( rOutl ),
     bOutlinerText( bOutlText ),
-    mpAttribsCache( nullptr ),
-    mpParaAttribsCache( nullptr ),
     mnParaAttribsCache( 0 )
 {
 }
@@ -377,7 +376,8 @@ bool SvxOutlinerForwarder::GetWordIndices( sal_Int32 nPara, sal_Int32 nIndex, sa
 
 bool SvxOutlinerForwarder::GetAttributeRun( sal_Int32& nStartIndex, sal_Int32& nEndIndex, sal_Int32 nPara, sal_Int32 nIndex, bool bInCell ) const
 {
-    return SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, rOutliner.GetEditEngine(), nPara, nIndex, bInCell );
+    SvxEditSourceHelper::GetAttributeRun( nStartIndex, nEndIndex, rOutliner.GetEditEngine(), nPara, nIndex, bInCell );
+    return true;
 }
 
 sal_Int32 SvxOutlinerForwarder::GetLineCount( sal_Int32 nPara ) const
@@ -544,9 +544,8 @@ void  SvxOutlinerForwarder::CopyText(const SvxTextForwarder& rSource)
     const SvxOutlinerForwarder* pSourceForwarder = dynamic_cast< const SvxOutlinerForwarder* >( &rSource );
     if( !pSourceForwarder )
         return;
-    OutlinerParaObject* pNewOutlinerParaObject = pSourceForwarder->rOutliner.CreateParaObject();
+    std::unique_ptr<OutlinerParaObject> pNewOutlinerParaObject = pSourceForwarder->rOutliner.CreateParaObject();
     rOutliner.SetText( *pNewOutlinerParaObject );
-    delete pNewOutlinerParaObject;
 }
 
 

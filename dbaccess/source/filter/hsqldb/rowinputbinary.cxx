@@ -83,10 +83,10 @@ OUString lcl_double_dabble(const std::vector<sal_uInt8>& bytes)
         digit += '0';
 
     /* Resize and return the resulting string. */
-    return rtl::OStringToOUString(OString(scratch.data(), scratch.size()), RTL_TEXTENCODING_UTF8);
+    return OStringToOUString(OString(scratch.data(), scratch.size()), RTL_TEXTENCODING_UTF8);
 }
 
-OUString lcl_makeStringFromBigint(const std::vector<sal_uInt8> bytes)
+OUString lcl_makeStringFromBigint(const std::vector<sal_uInt8>& bytes)
 {
     std::vector<sal_uInt8> aBytes{ bytes };
 
@@ -99,7 +99,7 @@ OUString lcl_makeStringFromBigint(const std::vector<sal_uInt8> bytes)
             byte = ~byte;
         // add 1 to byte array
         // FIXME e.g. 10000 valid ?
-        for (size_t i = aBytes.size() - 1; i != 0; ++i)
+        for (size_t i = aBytes.size() - 1; i != 0; --i)
         {
             aBytes[i] += 1;
             if (aBytes[i] != 0)
@@ -114,13 +114,12 @@ OUString lcl_makeStringFromBigint(const std::vector<sal_uInt8> bytes)
 
 OUString lcl_putDot(const OUString& sNum, sal_Int32 nScale)
 {
+    // e.g. sNum = "0", nScale = 2 -> "0.00"
     OUStringBuffer sBuf{ sNum };
-    if (nScale >= sNum.getLength())
-    {
-        sal_Int32 nNullsToAppend = nScale - sNum.getLength();
-        for (sal_Int32 i = 0; i < nNullsToAppend; ++i)
-            sBuf.insert(0, "0");
-    }
+    sal_Int32 nNullsToAppend = nScale - sNum.getLength() + 1;
+    for (sal_Int32 i = 0; i < nNullsToAppend; ++i)
+        sBuf.insert(0, "0");
+
     if (nScale > 0)
         sBuf.insert(sBuf.getLength() - 1 - nScale, ".");
     return sBuf.makeStringAndClear();
@@ -141,7 +140,7 @@ HsqlRowInputStream::HsqlRowInputStream() {}
 
 void HsqlRowInputStream::setInputStream(Reference<XInputStream> const& rStream)
 {
-    m_pStream.reset(utl::UcbStreamHelper::CreateStream(rStream, true));
+    m_pStream = utl::UcbStreamHelper::CreateStream(rStream, true);
     m_pStream->SetEndian(SvStreamEndian::BIG);
 }
 
@@ -333,7 +332,18 @@ std::vector<Any> HsqlRowInputStream::readOneRow(const ColumnTypeVector& nColType
             {
                 sal_Int64 value = 0;
                 m_pStream->ReadInt64(value);
-                css::util::Time time((value % 1000) * 1000000, value / 1000, 0, 0, true);
+                auto valueInSecs = value / 1000;
+                /* Observed valueInSecs fall in the range from
+                   negative one day to positive two days.  Coerce
+                   valueInSecs between zero and positive one day.*/
+                const int secPerDay = 24 * 60 * 60;
+                valueInSecs = (valueInSecs + secPerDay) % secPerDay;
+
+                auto nHours = valueInSecs / (60 * 60);
+                valueInSecs = valueInSecs % 3600;
+                const sal_uInt16 nMins = valueInSecs / 60;
+                const sal_uInt16 nSecs = valueInSecs % 60;
+                css::util::Time time((value % 1000) * 1000000, nSecs, nMins, nHours, true);
                 aData.push_back(makeAny(time));
             }
             break;

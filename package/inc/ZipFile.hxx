@@ -62,7 +62,7 @@ class ZipFile
     css::uno::Reference < css::io::XInputStream > xStream;
     const css::uno::Reference < css::uno::XComponentContext > m_xContext;
 
-    bool bRecoveryMode;
+    bool const bRecoveryMode;
 
     // aMediaType parameter is used only for raw stream header creation
     css::uno::Reference < css::io::XInputStream >  createStreamForZipEntry(
@@ -82,7 +82,7 @@ class ZipFile
 
     void getSizeAndCRC( sal_Int64 nOffset, sal_Int64 nCompressedSize, sal_Int64 *nSize, sal_Int32 *nCRC );
 
-    bool readLOC( ZipEntry &rEntry );
+    void readLOC( ZipEntry &rEntry );
     sal_Int32 readCEN();
     sal_Int32 findEND();
     void recover();

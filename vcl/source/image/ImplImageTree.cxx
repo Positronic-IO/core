@@ -20,6 +20,7 @@
 #include <config_folders.h>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <deque>
 
@@ -181,6 +182,8 @@ void loadImageFromStream(std::shared_ptr<SvStream> const & xStream, OUString con
     {
         rParameters.mbWriteImageToCache = true; // Cache the scaled variant
         double aScaleFactor(aScalePercentage / 100.0);
+        // when scaling use the full 24bit RGB values
+        rParameters.mrBitmap.Convert(BmpConversion::N24Bit);
         rParameters.mrBitmap.Scale(aScaleFactor, aScaleFactor, BmpScaleFlag::Fast);
     }
 }
@@ -331,7 +334,7 @@ bool ImplImageTree::loadImage(OUString const & rName, OUString const & rStyle, B
     return false;
 }
 
-OUString createVariant(ImageRequestParameters& rParameters)
+static OUString createVariant(ImageRequestParameters& rParameters)
 {
     bool bConvertToDarkTheme = rParameters.convertToDarkTheme();
     sal_Int32 aScalePercentage = rParameters.scalePercentage();
@@ -344,7 +347,7 @@ OUString createVariant(ImageRequestParameters& rParameters)
     return aVariant;
 }
 
-bool loadDiskCachedVersion(OUString const & sVariant, ImageRequestParameters& rParameters)
+static bool loadDiskCachedVersion(OUString const & sVariant, ImageRequestParameters& rParameters)
 {
     OUString sUrl(getIconCacheUrl(rParameters.msStyle, sVariant, rParameters.msName));
     if (!urlExists(sUrl))
@@ -356,7 +359,7 @@ bool loadDiskCachedVersion(OUString const & sVariant, ImageRequestParameters& rP
     return true;
 }
 
-void cacheBitmapToDisk(OUString const & sVariant, ImageRequestParameters const & rParameters)
+static void cacheBitmapToDisk(OUString const & sVariant, ImageRequestParameters const & rParameters)
 {
     OUString sUrl(createIconCacheUrl(rParameters.msStyle, sVariant, rParameters.msName));
     vcl::PNGWriter aWriter(rParameters.mrBitmap);

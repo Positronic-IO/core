@@ -84,7 +84,7 @@ public:
     // Access to (anyway) private buffers, used by the sdr exporter
     OStringBuffer& RunText();
     OStringBuffer& Styles() { return m_aStyles; }
-    OStringBuffer& StylesEnd();
+    OString MoveCharacterProperties(bool aAutoWriteRtlLtr = false);
 
     /// Output text (without markup).
     void RawText(const OUString& rText, rtl_TextEncoding eCharSet) override;
@@ -511,9 +511,12 @@ private:
      */
     OStringBuffer m_aStyles;
     /*
-     * This is the same as m_aStyles but the contents of it is written last.
+     * This is the same as m_aStyles but the contents of it is Assoc.
      */
-    OStringBuffer m_aStylesEnd;
+    OStringBuffer m_aStylesAssoc;
+    bool m_bIsRTL;
+    sal_uInt16 m_nScript;
+    bool m_bControlLtrRtl;
 
     sal_Int32 m_nNextAnnotationMarkId;
     sal_Int32 m_nCurrentAnnotationMarkId;
@@ -583,6 +586,8 @@ private:
 
     /// Number of cells from the table definition, by depth.
     std::map<sal_uInt32, sal_uInt32> m_aCells;
+
+    bool m_bIsBeforeFirstParagraph;
 
     /// If we're in a paragraph that has a single empty run only.
     bool m_bSingleEmptyRun;

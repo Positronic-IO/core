@@ -25,6 +25,7 @@
 #include <com/sun/star/document/XImporter.hpp>
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/frame/XLoadable.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <tools/diagnose_ex.h>
 
 namespace chart
@@ -104,8 +105,8 @@ sal_Bool SAL_CALL ChartFrameLoader::load( const uno::Sequence< beans::PropertyVa
     }
 
     //create the controller(+XWindow)
-    uno::Reference< frame::XController >    xController = nullptr;
-    uno::Reference< awt::XWindow >          xComponentWindow = nullptr;
+    uno::Reference< frame::XController >    xController;
+    uno::Reference< awt::XWindow >          xComponentWindow;
     {
         xController.set(
             m_xCC->getServiceManager()->createInstanceWithContext(

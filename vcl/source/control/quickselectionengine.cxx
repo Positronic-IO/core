@@ -23,6 +23,7 @@
 #include <vcl/i18nhelp.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include <boost/optional.hpp>
 
@@ -123,7 +124,7 @@ namespace vcl
 
                 if ( m_pData->sCurrentSearchString.getLength() == 1 )
                 {   // first character in the search -> remember
-                    m_pData->aSingleSearchChar.reset( c );
+                    m_pData->aSingleSearchChar = c;
                 }
                 else if ( m_pData->sCurrentSearchString.getLength() > 1 )
                 {

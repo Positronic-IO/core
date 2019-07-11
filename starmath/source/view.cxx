@@ -42,7 +42,7 @@
 #include <svl/itemset.hxx>
 #include <svl/poolitem.hxx>
 #include <svl/stritem.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/miscopt.hxx>
 #include <svl/whiter.hxx>
 #include <svx/zoomslideritem.hxx>
@@ -53,6 +53,7 @@
 #include <vcl/decoview.hxx>
 #include <vcl/menu.hxx>
 #include <vcl/settings.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/streamwrap.hxx>
 
@@ -850,11 +851,15 @@ SmCmdBoxWrapper::SmCmdBoxWrapper(vcl::Window *pParentWindow, sal_uInt16 nId,
 
 struct SmViewShell_Impl
 {
+private:
+    SmViewShell_Impl& operator=(const SmViewShell_Impl&) = delete;
+    SmViewShell_Impl(const SmViewShell_Impl&) = delete;
+public:
+    SmViewShell_Impl() = default;
     std::unique_ptr<sfx2::DocumentInserter> pDocInserter;
     std::unique_ptr<SfxRequest> pRequest;
-    SvtMiscOptions          aOpts;
+    SvtMiscOptions const        aOpts;
 };
-
 
 SFX_IMPL_SUPERCLASS_INTERFACE(SmViewShell, SfxViewShell)
 
@@ -1260,10 +1265,10 @@ bool SmViewShell::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> SmViewShell::CreatePrintOptionsPage(weld::Container* pPage,
+VclPtr<SfxTabPage> SmViewShell::CreatePrintOptionsPage(TabPageParent pParent,
                                                        const SfxItemSet &rOptions)
 {
-    return SmPrintOptionsTabPage::Create(pPage, rOptions);
+    return SmPrintOptionsTabPage::Create(pParent, rOptions);
 }
 
 SmEditWindow *SmViewShell::GetEditWindow()
@@ -1603,9 +1608,13 @@ void SmViewShell::Execute(SfxRequest& rReq)
                     if (aDataHelper.HasFormat(nId = SotClipboardFormatId::STRING))
                     {
                         // In case of FORMAT_STRING no stream exists, need to generate one
-                        ::rtl::OUString aString;
+                        OUString aString;
                         if (aDataHelper.GetString( nId, aString))
                         {
+                            // tdf#117091 force xml declaration to exist
+                            if (!aString.startsWith("<?xml"))
+                                aString = "<?xml version=\"1.0\"?>\n" + aString;
+
                             std::unique_ptr<SfxMedium> pClipboardMedium(new SfxMedium());
                             pClipboardMedium->GetItemSet(); //generates initial itemset, not sure if necessary
                             std::shared_ptr<const SfxFilter> pMathFilter =
@@ -1689,8 +1698,8 @@ void SmViewShell::Execute(SfxRequest& rReq)
         }
 
         case SID_GETEDITTEXT:
-            if (pWin)
-                if (!pWin->GetText().isEmpty()) GetDoc()->SetText( pWin->GetText() );
+            if (pWin && !pWin->GetText().isEmpty())
+                GetDoc()->SetText( pWin->GetText() );
             break;
 
         case SID_ATTR_ZOOM:
@@ -1707,14 +1716,10 @@ void SmViewShell::Execute(SfxRequest& rReq)
                     SfxItemSet aSet( SmDocShell::GetPool(), svl::Items<SID_ATTR_ZOOM, SID_ATTR_ZOOM>{});
                     aSet.Put( SvxZoomItem( SvxZoomType::PERCENT, mpGraphic->GetZoom()));
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                    if(pFact)
-                    {
-                        ScopedVclPtr<AbstractSvxZoomDialog> xDlg(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aSet));
-                        assert(xDlg);
-                        xDlg->SetLimits( MINZOOM, MAXZOOM );
-                        if (xDlg->Execute() != RET_CANCEL)
-                            ZoomByItemSet(xDlg->GetOutputItemSet());
-                    }
+                    ScopedVclPtr<AbstractSvxZoomDialog> xDlg(pFact->CreateSvxZoomDialog(GetViewFrame()->GetWindow().GetFrameWeld(), aSet));
+                    xDlg->SetLimits( MINZOOM, MAXZOOM );
+                    if (xDlg->Execute() != RET_CANCEL)
+                        ZoomByItemSet(xDlg->GetOutputItemSet());
                 }
             }
         }
@@ -1956,15 +1961,15 @@ IMPL_LINK( SmViewShell, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg, voi
 
     if ( ERRCODE_NONE == _pFileDlg->GetError() )
     {
-        SfxMedium* pMedium = mpImpl->pDocInserter->CreateMedium();
+        std::unique_ptr<SfxMedium> pMedium = mpImpl->pDocInserter->CreateMedium();
 
-        if ( pMedium != nullptr )
+        if ( pMedium )
         {
             if ( pMedium->IsStorage() )
                 Insert( *pMedium );
             else
                 InsertFrom( *pMedium );
-            delete pMedium;
+            pMedium.reset();
 
             SmDocShell* pDoc = GetDoc();
             pDoc->UpdateText();

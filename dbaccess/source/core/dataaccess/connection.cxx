@@ -48,6 +48,7 @@
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
 #include <comphelper/sequence.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
 
@@ -89,7 +90,7 @@ Sequence< OUString > OConnection::getSupportedServiceNames(  )
 {
     Sequence< OUString > aSupported = OConnectionWrapper::getSupportedServiceNames();
 
-    if ( 0 == findValue( aSupported, SERVICE_SDB_CONNECTION, true ).getLength() )
+    if ( comphelper::findValue( aSupported, SERVICE_SDB_CONNECTION ) == -1 )
     {
         sal_Int32 nLen = aSupported.getLength();
         aSupported.realloc( nLen + 1 );
@@ -270,8 +271,6 @@ OConnection::OConnection(ODatabaseSource& _rDB
             ,m_aTableTypeFilter(_rDB.m_pImpl->m_aTableTypeFilter)
             ,m_aContext( _rxORB )
             ,m_xMasterConnection(_rxMaster)
-            ,m_pTables(nullptr)
-            ,m_pViews(nullptr)
             ,m_aWarnings( Reference< XWarningsSupplier >( _rxMaster, UNO_QUERY ) )
             ,m_nInAppend(0)
             ,m_bSupportsViews(false)

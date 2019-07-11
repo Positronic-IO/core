@@ -83,7 +83,7 @@ DialogWindow::DialogWindow(DialogWindowLayout* pParent, ScriptDocument const& rD
     InitSettings();
 
     m_pEditor->GetModel().SetNotifyUndoActionHdl(
-        LINK(this, DialogWindow, NotifyUndoActionHdl)
+        &DialogWindow::NotifyUndoActionHdl
     );
 
     SetHelpId( HID_BASICIDE_DIALOGWINDOW );
@@ -217,13 +217,11 @@ void DialogWindow::Command( const CommandEvent& rCEvt )
 }
 
 
-IMPL_STATIC_LINK(
-    DialogWindow, NotifyUndoActionHdl, SdrUndoAction *, pUndoAction, void )
+void DialogWindow::NotifyUndoActionHdl( std::unique_ptr<SdrUndoAction> )
 {
     // #i120515# pUndoAction needs to be deleted, this hand over is an ownership
     // change. As long as it does not get added to the undo manager, it needs at
     // least to be deleted.
-    delete pUndoAction;
 }
 
 void DialogWindow::DoInit()
@@ -746,7 +744,7 @@ void DialogWindow::SaveDialog()
     }
 }
 
-std::vector< lang::Locale > implGetLanguagesOnlyContainedInFirstSeq
+static std::vector< lang::Locale > implGetLanguagesOnlyContainedInFirstSeq
     ( const Sequence< lang::Locale >& aFirstSeq, const Sequence< lang::Locale >& aSecondSeq )
 {
     std::vector< lang::Locale > avRet;
@@ -985,7 +983,7 @@ bool implImportDialog(weld::Window* pWin, const OUString& rCurPath, const Script
                 bool bCopyResourcesForDialog = true;
                 if( bAddDialogLanguagesToLib )
                 {
-                    std::shared_ptr<LocalizationMgr> pCurMgr = pShell->GetCurLocalizationMgr();
+                    const std::shared_ptr<LocalizationMgr>& pCurMgr = pShell->GetCurLocalizationMgr();
 
                     lang::Locale aFirstLocale;
                     aFirstLocale = aOnlyInImportLanguages[0];
@@ -1131,7 +1129,7 @@ bool DialogWindow::IsModified()
     return m_pEditor->IsModified();
 }
 
-::svl::IUndoManager* DialogWindow::GetUndoManager()
+SfxUndoManager* DialogWindow::GetUndoManager()
 {
     return m_pUndoMgr.get();
 }

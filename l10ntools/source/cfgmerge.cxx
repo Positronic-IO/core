@@ -158,6 +158,9 @@ void CfgParser::AddText(
     pStackData->sText[ rIsoLang ] = rText;
 }
 
+#if defined _MSC_VER
+#pragma warning(disable: 4702) // unreachable code, bug in MSVC2015, it thinks the std::exit is unreachable
+#endif
 void CfgParser::ExecuteAnalyzedToken( int nToken, char *pToken )
 {
     OString sToken( pToken );
@@ -184,7 +187,7 @@ void CfgParser::ExecuteAnalyzedToken( int nToken, char *pToken )
             sTokenName = sToken.getToken(1, '<').getToken(0, '>').
                 getToken(0, ' ');
 
-              if ( !IsTokenClosed( sToken )) {
+            if ( !IsTokenClosed( sToken )) {
                 OString sSearch;
                 switch ( nToken ) {
                     case CFG_TOKEN_PACKAGE:
@@ -393,8 +396,7 @@ void CfgExport::WorkOnText(
 CfgMerge::CfgMerge(
     const OString &rMergeSource, const OString &rOutputFile,
     const OString &rFilename, const OString &rLanguage )
-                : pMergeDataFile( nullptr ),
-                sFilename( rFilename ),
+                : sFilename( rFilename ),
                 bEnglish( false )
 {
     pOutputStream.open(

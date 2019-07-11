@@ -43,7 +43,6 @@ PaletteManager::PaletteManager() :
     mnCurrentPalette(0),
     mnColorCount(0),
     mpBtnUpdater(nullptr),
-    mLastColor(COL_AUTO),
     maColorSelectFunction(PaletteManager::DispatchColorCommand),
     m_context(comphelper::getProcessComponentContext())
 {
@@ -155,7 +154,59 @@ void PaletteManager::ReloadColorSet(SvxColorValueSet &rColorSet)
     }
 }
 
+void PaletteManager::ReloadColorSet(ColorValueSet &rColorSet)
+{
+    if( mnCurrentPalette == 0)
+    {
+        rColorSet.Clear();
+        css::uno::Sequence< sal_Int32 > CustomColorList( officecfg::Office::Common::UserColors::CustomColor::get() );
+        css::uno::Sequence< OUString > CustomColorNameList( officecfg::Office::Common::UserColors::CustomColorName::get() );
+        int nIx = 1;
+        for (int i = 0; i < CustomColorList.getLength(); ++i)
+        {
+            Color aColor(CustomColorList[i]);
+            rColorSet.InsertItem(nIx, aColor, CustomColorNameList[i]);
+            ++nIx;
+        }
+    }
+    else if( mnCurrentPalette == mnNumOfPalettes - 1 )
+    {
+        // Add doc colors to palette
+        SfxObjectShell* pDocSh = SfxObjectShell::Current();
+        if (pDocSh)
+        {
+            std::set<Color> aColors = pDocSh->GetDocColors();
+            mnColorCount = aColors.size();
+            rColorSet.Clear();
+            rColorSet.addEntriesForColorSet(aColors, SvxResId( RID_SVXSTR_DOC_COLOR_PREFIX ) + " " );
+        }
+    }
+    else
+    {
+        m_Palettes[mnCurrentPalette - 1]->LoadColorSet( rColorSet );
+        mnColorCount = rColorSet.GetItemCount();
+    }
+}
+
 void PaletteManager::ReloadRecentColorSet(SvxColorValueSet& rColorSet)
+{
+    maRecentColors.clear();
+    rColorSet.Clear();
+    css::uno::Sequence< sal_Int32 > Colorlist(officecfg::Office::Common::UserColors::RecentColor::get());
+    css::uno::Sequence< OUString > ColorNamelist(officecfg::Office::Common::UserColors::RecentColorName::get());
+    int nIx = 1;
+    const bool bHasColorNames = Colorlist.getLength() == ColorNamelist.getLength();
+    for (int i = 0; i < Colorlist.getLength(); ++i)
+    {
+        Color aColor(Colorlist[i]);
+        OUString sColorName = bHasColorNames ? ColorNamelist[i] : ("#" + aColor.AsRGBHexString().toAsciiUpperCase());
+        maRecentColors.emplace_back(aColor, sColorName);
+        rColorSet.InsertItem(nIx, aColor, sColorName);
+        ++nIx;
+    }
+}
+
+void PaletteManager::ReloadRecentColorSet(ColorValueSet& rColorSet)
 {
     maRecentColors.clear();
     rColorSet.Clear();
@@ -255,16 +306,6 @@ long PaletteManager::GetRecentColorCount()
     return maRecentColors.size();
 }
 
-const Color& PaletteManager::GetLastColor()
-{
-    return mLastColor;
-}
-
-void PaletteManager::SetLastColor(const Color& rLastColor)
-{
-    mLastColor = rLastColor;
-}
-
 void PaletteManager::AddRecentColor(const Color& rRecentColor, const OUString& rName, bool bFront)
 {
     auto itColor = std::find_if(maRecentColors.begin(),
@@ -296,8 +337,6 @@ void PaletteManager::AddRecentColor(const Color& rRecentColor, const OUString& r
 void PaletteManager::SetBtnUpdater(svx::ToolboxButtonColorUpdater* pBtnUpdater)
 {
     mpBtnUpdater = pBtnUpdater;
-    if (mpBtnUpdater)
-        mLastColor = mpBtnUpdater->GetCurrentColor();
 }
 
 void PaletteManager::SetColorSelectFunction(const std::function<void(const OUString&, const NamedColor&)>& aColorSelectFunction)
@@ -305,21 +344,21 @@ void PaletteManager::SetColorSelectFunction(const std::function<void(const OUStr
     maColorSelectFunction = aColorSelectFunction;
 }
 
-void PaletteManager::PopupColorPicker(vcl::Window* pParent, const OUString& aCommand, const Color& rInitialColor)
+void PaletteManager::PopupColorPicker(weld::Window* pParent, const OUString& aCommand, const Color& rInitialColor)
 {
     // The calling object goes away during aColorDlg.Execute(), so we must copy this
     OUString aCommandCopy = aCommand;
-    SvColorDialog aColorDlg(pParent);
+    SvColorDialog aColorDlg;
     aColorDlg.SetColor(rInitialColor);
     aColorDlg.SetMode(svtools::ColorPickerMode::Modify);
-    if( aColorDlg.Execute() == RET_OK )
+    if (aColorDlg.Execute(pParent) == RET_OK)
     {
+        Color aLastColor = aColorDlg.GetColor();
+        OUString sColorName = ("#" + aLastColor.AsRGBHexString().toAsciiUpperCase());
+        NamedColor aNamedColor = std::make_pair(aLastColor, sColorName);
         if (mpBtnUpdater)
-            mpBtnUpdater->Update( aColorDlg.GetColor() );
-        mLastColor = aColorDlg.GetColor();
-        OUString sColorName = ("#" + mLastColor.AsRGBHexString().toAsciiUpperCase());
-        NamedColor aNamedColor = std::make_pair(mLastColor, sColorName);
-        AddRecentColor(mLastColor, sColorName);
+            mpBtnUpdater->Update(aNamedColor);
+        AddRecentColor(aLastColor, sColorName);
         maColorSelectFunction(aCommandCopy, aNamedColor);
     }
 }

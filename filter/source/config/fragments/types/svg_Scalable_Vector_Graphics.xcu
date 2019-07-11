@@ -20,7 +20,7 @@
         <prop oor:name="URLPattern"/>
         <prop oor:name="Extensions"><value>svg svgz</value></prop>
         <prop oor:name="MediaType"><value>image/svg+xml</value></prop>
-        <prop oor:name="Preferred"><value>true</value></prop>
+        <prop oor:name="Preferred"><value>false</value></prop>
         <prop oor:name="PreferredFilter"><value>SVG - Scalable Vector Graphics</value></prop>
         <prop oor:name="UIName">
             <value>SVG - Scalable Vector Graphics</value>

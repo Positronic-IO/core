@@ -196,6 +196,9 @@ The current presentation contains no OLE objects.</value>
         <prop oor:name="STR_FILESIZESEPARATOR">
             <value xml:lang="en-US">.</value>
         </prop>
+        <prop oor:name="STR_FILENAME_SUFFIX">
+            <value xml:lang="en-US">(minimized)</value>
+        </prop>
     </node>
     <node oor:name="LastUsedSettings">
         <prop oor:name="Name">
@@ -205,7 +208,7 @@ The current presentation contains no OLE objects.</value>
             <value>true</value>
         </prop>
         <prop oor:name="JPEGQuality">
-            <value>50</value>
+            <value>75</value>
         </prop>
         <prop oor:name="RemoveCropArea">
             <value>true</value>
@@ -248,7 +251,7 @@ The current presentation contains no OLE objects.</value>
                     <value>true</value>
                 </prop>
                 <prop oor:name="JPEGQuality">
-                    <value>25</value>
+                    <value>70</value>
                 </prop>
                 <prop oor:name="RemoveCropArea">
                     <value>true</value>
@@ -289,7 +292,7 @@ The current presentation contains no OLE objects.</value>
                     <value>true</value>
                 </prop>
                 <prop oor:name="JPEGQuality">
-                    <value>50</value>
+                    <value>75</value>
                 </prop>
                 <prop oor:name="RemoveCropArea">
                     <value>true</value>
@@ -330,7 +333,7 @@ The current presentation contains no OLE objects.</value>
                     <value>true</value>
                 </prop>
                 <prop oor:name="JPEGQuality">
-                    <value>75</value>
+                    <value>80</value>
                 </prop>
                 <prop oor:name="RemoveCropArea">
                     <value>true</value>

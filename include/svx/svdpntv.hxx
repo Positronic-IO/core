@@ -167,7 +167,7 @@ protected:
     sal_uInt16                  mnMinMovLog;
 
     // Hold an incarnation of Drawinglayer configuration options
-    SvtOptionsDrawinglayer      maDrawinglayerOpt;
+    SvtOptionsDrawinglayer const maDrawinglayerOpt;
 
     bool                        mbPageVisible : 1;
     bool                        mbPageShadowVisible : 1;
@@ -466,13 +466,14 @@ public:
     virtual bool MouseButtonDown(const MouseEvent& /*rMEvt*/, vcl::Window* /*pWin*/) { return false; }
     virtual bool MouseButtonUp(const MouseEvent& /*rMEvt*/, vcl::Window* /*pWin*/) { return false; }
     virtual bool MouseMove(const MouseEvent& /*rMEvt*/, vcl::Window* /*pWin*/) { return false; }
+    virtual bool RequestHelp(const HelpEvent& /*rHEvt*/) { return false; }
     virtual bool Command(const CommandEvent& /*rCEvt*/, vcl::Window* /*pWin*/) { return false; }
 
-    bool GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const;
+    void GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const;
 
-    bool SetAttributes(const SfxItemSet& rSet, bool bReplaceAll);
+    void SetAttributes(const SfxItemSet& rSet, bool bReplaceAll);
     SfxStyleSheet* GetStyleSheet() const; // SfxStyleSheet* GetStyleSheet(bool& rOk) const;
-    bool SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr);
+    void SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr);
 
     virtual void MakeVisible(const tools::Rectangle& rRect, vcl::Window& rWin);
 
@@ -503,7 +504,7 @@ public:
 #endif
 
     /// Must be called by the App when scrolling etc. in order for
-    /// an active FormularControl to be moved too
+    /// an active FormControl to be moved too
     void VisAreaChanged(const OutputDevice* pOut);
     void VisAreaChanged();
 

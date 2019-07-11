@@ -90,7 +90,7 @@ namespace pdfi
         const FontAttributes& getFont( sal_Int32 nFontId ) const;
         sal_Int32 getFontId( const FontAttributes& rAttr ) const;
 
-        void sortElements( Element* pElement );
+        static void sortElements( Element* pElement );
 
         static OUString mirrorString( const OUString& i_rInString );
 
@@ -214,10 +214,10 @@ namespace pdfi
             Element*  getCurElement(){ return m_pCurElement; }
 
         private:
-            Element*                    m_pCurElement ;
+            Element* const              m_pCurElement ;
             GraphicsContext             m_rCurrentContext ;
-            double                      m_Width ;
-            double                      m_PrevSpaceWidth ;
+            double const                m_Width ;
+            double const                m_PrevSpaceWidth ;
             OUString                    m_rGlyphs ;
     };
 }

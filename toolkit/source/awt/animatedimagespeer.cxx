@@ -117,9 +117,9 @@ namespace toolkit
             ENSURE_OR_RETURN( separatorPos != -1, "lcl_getHighContrastURL: unsupported URL scheme - cannot automatically determine HC version!", i_imageURL );
 
             OUStringBuffer composer;
-            composer.append( i_imageURL.copy( 0, separatorPos ) );
+            composer.appendCopy( i_imageURL, 0, separatorPos );
             composer.append( "/sifr" );
-            composer.append( i_imageURL.copy( separatorPos ) );
+            composer.appendCopy( i_imageURL, separatorPos );
             return composer.makeStringAndClear();
         }
 
@@ -247,13 +247,10 @@ namespace toolkit
                     ::std::vector< CachedImage > const& rImageSet( i_data.aCachedImageSets[ nPreferredSet ] );
                     aImages.resize( rImageSet.size() );
                     sal_Int32 imageIndex = 0;
-                    for (   ::std::vector< CachedImage >::const_iterator cachedImage = rImageSet.begin();
-                            cachedImage != rImageSet.end();
-                            ++cachedImage, ++imageIndex
-                        )
+                    for ( const auto& rCachedImage : rImageSet )
                     {
-                        lcl_ensureImage_throw( xGraphicProvider, isHighContrast, *cachedImage );
-                        aImages[ imageIndex ] = Image(cachedImage->xGraphic);
+                        lcl_ensureImage_throw( xGraphicProvider, isHighContrast, rCachedImage );
+                        aImages[ imageIndex++ ] = Image(rCachedImage.xGraphic);
                     }
                 }
                 pThrobber->setImageList( aImages );

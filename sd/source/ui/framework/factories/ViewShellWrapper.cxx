@@ -36,12 +36,12 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 
 #include <toolkit/helper/vclunohelper.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <vcl/svapp.hxx>
 #include <osl/mutex.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -196,7 +196,7 @@ sal_Bool SAL_CALL ViewShellWrapper::relocateToAnchor (
             xWindow->removeWindowListener(this);
         mxWindow = nullptr;
 
-        if (mpViewShell.get() != nullptr)
+        if (mpViewShell != nullptr)
         {
             VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xPane->getWindow());
             if (pWindow && mpViewShell->RelocateToParentWindow(pWindow))

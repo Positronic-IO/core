@@ -22,6 +22,7 @@
 
 #include <svl/itempool.hxx>
 #include <svl/SfxBroadcaster.hxx>
+#include <tools/debug.hxx>
 #include <deque>
 #include <memory>
 #include <unordered_map>
@@ -40,13 +41,12 @@ static const sal_uInt32 SFX_ITEMS_DEFAULT = 0xfffffffe;
  */
 struct SfxPoolItemArray_Impl
 {
-    typedef std::vector<sal_uInt32> FreeList;
     typedef std::unordered_map<SfxPoolItem*,sal_uInt32> PoolItemPtrToIndexMap;
 private:
     std::vector<SfxPoolItem*> maPoolItemVector;
 public:
     /// Track list of indices into our array that contain an empty slot
-    FreeList maFree;
+    std::vector<sal_uInt32> maFree;
     /// Hash of SfxPoolItem pointer to index into our array that contains that slot
     PoolItemPtrToIndexMap     maPtrToIndex;
 
@@ -86,7 +86,6 @@ struct SfxItemPool_Impl
         , mpStaticDefaults(nullptr)
         , mpMaster(pMaster)
         , mpSecondary(nullptr)
-        , mpPoolRanges(nullptr)
         , mnStart(nStart)
         , mnEnd(nEnd)
         , eDefMetric(MapUnit::MapCM)

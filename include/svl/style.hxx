@@ -33,6 +33,7 @@
 #include <svl/SfxBroadcaster.hxx>
 #include <svl/stylesheetuser.hxx>
 #include <o3tl/typed_flags_set.hxx>
+#include <tools/solar.h>
 
 #include <memory>
 
@@ -132,7 +133,6 @@ protected:
     SfxStyleSheetBase( const OUString&, SfxStyleSheetBasePool*, SfxStyleFamily eFam, SfxStyleSearchBits mask );
     SfxStyleSheetBase( const SfxStyleSheetBase& );
     virtual ~SfxStyleSheetBase() override;
-    virtual void Load( SvStream&, sal_uInt16 );
 
 public:
 
@@ -176,6 +176,9 @@ public:
     /// If the style has parents, it is _not_ required that the returned item
     /// set has parents (i.e. use it for display purposes only).
     virtual std::unique_ptr<SfxItemSet> GetItemSetForPreview();
+
+    /// Fix for expensive dynamic_cast
+    virtual bool isScStyleSheet() const { return false; }
 };
 
 /* Class to iterate and search on a SfxStyleSheetBasePool */
@@ -243,8 +246,7 @@ protected:
      */
     const svl::IndexedStyleSheets&
                                 GetIndexedStyleSheets() const;
-    rtl::Reference<SfxStyleSheetBase>
-                                GetStyleSheetByPositionInIndex(unsigned pos);
+    SfxStyleSheetBase*          GetStyleSheetByPositionInIndex(unsigned pos);
 
 public:
                                 SfxStyleSheetBasePool( SfxItemPool& );
@@ -253,7 +255,7 @@ public:
     SfxItemPool&                GetPool() { return rPool;}
     const SfxItemPool&          GetPool() const { return rPool;}
 
-    virtual std::shared_ptr<SfxStyleSheetIterator> CreateIterator(SfxStyleFamily, SfxStyleSearchBits nMask);
+    virtual std::unique_ptr<SfxStyleSheetIterator> CreateIterator(SfxStyleFamily, SfxStyleSearchBits nMask);
     sal_uInt16              Count();
     SfxStyleSheetBase*  operator[](sal_uInt16 nIdx);
 

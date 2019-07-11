@@ -218,7 +218,7 @@ int getBitsInFracPart(double fAbsValue)
 }
 
 template< typename T >
-inline void doubleToString(typename T::String ** pResult,
+void doubleToString(typename T::String ** pResult,
                            sal_Int32 * pResultCapacity, sal_Int32 nResultOffset,
                            double fValue, rtl_math_StringFormat eFormat,
                            sal_Int32 nDecPlaces, typename T::Char cDecSeparator,
@@ -464,7 +464,7 @@ inline void doubleToString(typename T::String ** pResult,
     if (nBuf > nBufMax)
     {
         pBuf = static_cast< typename T::Char * >(
-            rtl_allocateMemory(nBuf * sizeof (typename T::Char)));
+            malloc(nBuf * sizeof (typename T::Char)));
         OSL_ENSURE(pBuf, "Out of memory");
     }
     else
@@ -707,7 +707,7 @@ inline void doubleToString(typename T::String ** pResult,
         T::appendChars(pResult, pResultCapacity, &nResultOffset, pBuf, p - pBuf);
 
     if (pBuf != &aBuf[0])
-        rtl_freeMemory(pBuf);
+        free(pBuf);
 }
 
 }
@@ -747,7 +747,7 @@ void SAL_CALL rtl_math_doubleToUString(rtl_uString ** pResult,
 namespace {
 
 // if nExp * 10 + nAdd would result in overflow
-inline bool long10Overflow( long& nExp, int nAdd )
+bool long10Overflow( long& nExp, int nAdd )
 {
     if ( nExp > (LONG_MAX/10)
          || (nExp == (LONG_MAX/10) && nAdd > (LONG_MAX%10)) )
@@ -759,7 +759,7 @@ inline bool long10Overflow( long& nExp, int nAdd )
 }
 
 template< typename CharT >
-inline double stringToDouble(CharT const * pBegin, CharT const * pEnd,
+double stringToDouble(CharT const * pBegin, CharT const * pEnd,
                              CharT cDecSeparator, CharT cGroupSeparator,
                              rtl_math_ConversionStatus * pStatus,
                              CharT const ** pParsedEnd)
@@ -811,13 +811,17 @@ inline double stringToDouble(CharT const * pBegin, CharT const * pEnd,
 
     if (!bDone) // do not recognize e.g. NaN1.23
     {
-        // leading zeros and group separators may be safely ignored
-        while (p != pEnd && (*p == CharT('0') || *p == cGroupSeparator))
+        // Leading zeros and group separators between digits may be safely
+        // ignored. p0 < p implies that there was a leading 0 already,
+        // consecutive group separators may not happen as *(p+1) is checked for
+        // digit.
+        while (p != pEnd && (*p == CharT('0') || (*p == cGroupSeparator
+                        && p0 < p && p+1 < pEnd && rtl::isAsciiDigit(*(p+1)))))
         {
             ++p;
         }
 
-        CharT const * pFirstSignificant = p;
+        CharT const * pFirstSignificant = ((p > pBegin && *(p-1) == CharT('0')) ? p-1 : p);
         long nValExp = 0;       // carry along exponent of mantissa
 
         // integer part of mantissa
@@ -831,6 +835,12 @@ inline double stringToDouble(CharT const * pBegin, CharT const * pEnd,
             }
             else if (c != cGroupSeparator)
             {
+                break;
+            }
+            else if (p == p0 || (p+1 == pEnd) || !rtl::isAsciiDigit(*(p+1)))
+            {
+                // A leading or trailing (not followed by a digit) group
+                // separator character is not a group separator.
                 break;
             }
         }

@@ -20,6 +20,7 @@
 #include "tp_3D_SceneIllumination.hxx"
 #include <bitmaps.hlst>
 #include <CommonConverters.hxx>
+#include <ControllerLockGuard.hxx>
 
 #include <svx/colorbox.hxx>
 #include <svx/dialogs.hrc>
@@ -208,7 +209,6 @@ ThreeD_SceneIllumination_TabPage::ThreeD_SceneIllumination_TabPage( vcl::Window*
                 : TabPage ( pWindow
                           ,"tp_3D_SceneIllumination"
                           ,"modules/schart/ui/tp_3D_SceneIllumination.ui")
-                , m_pLightSourceInfoList(nullptr)
                 , m_xSceneProperties( xSceneProperties )
                 , m_aTimerTriggeredControllerLock( xChartModel )
                 , m_bInCommitToModel( false )
@@ -230,7 +230,7 @@ ThreeD_SceneIllumination_TabPage::ThreeD_SceneIllumination_TabPage( vcl::Window*
 
     get(m_pCtl_Preview, "CTL_LIGHT_PREVIEW");
 
-    m_pLightSourceInfoList = new LightSourceInfo[8];
+    m_pLightSourceInfoList.reset(new LightSourceInfo[8]);
     m_pLightSourceInfoList[0].pButton = m_pBtn_Light1;
     m_pLightSourceInfoList[1].pButton = m_pBtn_Light2;
     m_pLightSourceInfoList[2].pButton = m_pBtn_Light3;
@@ -270,8 +270,7 @@ ThreeD_SceneIllumination_TabPage::~ThreeD_SceneIllumination_TabPage()
 
 void ThreeD_SceneIllumination_TabPage::dispose()
 {
-    delete[] m_pLightSourceInfoList;
-    m_pLightSourceInfoList = nullptr;
+    m_pLightSourceInfoList.reset();
     m_pBtn_Light1.clear();
     m_pBtn_Light2.clear();
     m_pBtn_Light3.clear();
@@ -390,9 +389,9 @@ IMPL_LINK( ThreeD_SceneIllumination_TabPage, ColorDialogHdl, Button*, pButton, v
     bool bIsAmbientLight = (pButton==m_pBtn_AmbientLight_Color);
     SvxColorListBox* pListBox = bIsAmbientLight ? m_pLB_AmbientLight.get() : m_pLB_LightSource.get();
 
-    SvColorDialog aColorDlg( this );
+    SvColorDialog aColorDlg;
     aColorDlg.SetColor( pListBox->GetSelectEntryColor() );
-    if( aColorDlg.Execute() == RET_OK )
+    if( aColorDlg.Execute(GetFrameWeld()) == RET_OK )
     {
         Color aColor( aColorDlg.GetColor());
         lcl_selectColor( *pListBox, aColor );

@@ -42,7 +42,7 @@ extern "C" {
 
 std::vector<Node*> nodelist;
 
-void yyerror(const char *);
+static void yyerror(const char *);
 
 static Node *top=nullptr;
 
@@ -51,7 +51,7 @@ int Node::count = 0;
 #ifdef PARSE_DEBUG
 #define debug printf
 #else
-int debug(const char *format, ...);
+static int debug(const char *format, ...);
 #endif
 
 #include <stdio.h>
@@ -441,11 +441,11 @@ int yydebug;            /*  nonzero means print parse trace */
 #ifdef YYPARSE_PARAM
 int yyparse (void *);
 #else
-int yyparse();
+static int yyparse();
 #endif
 #endif
 
-int
+static int
 yyparse(YYPARSE_PARAM_ARG)
      YYPARSE_PARAM_DECL
 {
@@ -771,10 +771,10 @@ case 11:
 { yyval.ptr = new Node(ID_IDENTIFIER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);
     break;}
 case 12:
-{ yyval.ptr = new Node(ID_DELIMETER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);
+{ yyval.ptr = new Node(ID_DELIMITER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);
     break;}
 case 13:
-{ yyval.ptr = new Node(ID_DELIMETER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);
+{ yyval.ptr = new Node(ID_DELIMITER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);
     break;}
 case 14:
 { yyval.ptr = new Node(ID_IDENTIFIER); yyval.ptr->value = strdup(yyvsp[0].str); debug("Identifier : %s\n",yyvsp[0].str); nodelist.push_back(yyval.ptr);

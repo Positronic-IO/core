@@ -28,7 +28,6 @@
 #include <com/sun/star/form/XForm.hpp>
 #include <com/sun/star/form/FormComponentType.hpp>
 #include <com/sun/star/awt/XTextLayoutConstrains.hpp>
-#include <comphelper/string.hxx>
 #include <hintids.hxx>
 #include <o3tl/any.hxx>
 #include <vcl/svapp.hxx>
@@ -144,9 +143,21 @@ static void lcl_html_outEvents( SvStream& rStrm,
             continue;
 
         OUString sListener( pDescs[i].ListenerType );
-        sal_Int32 nTok = comphelper::string::getTokenCount(sListener, '.');
-        if( nTok )
-            sListener = sListener.getToken( nTok-1, '.' );
+        if (!sListener.isEmpty())
+        {
+            const sal_Int32 nIdx { sListener.lastIndexOf('.')+1 };
+            if (nIdx>0)
+            {
+                if (nIdx<sListener.getLength())
+                {
+                    sListener = sListener.copy(nIdx);
+                }
+                else
+                {
+                    sListener.clear();
+                }
+            }
+        }
         OUString sMethod( pDescs[i].EventMethod );
 
         const sal_Char *pOpt = nullptr;
@@ -1299,7 +1310,7 @@ static void AddControl( HTMLControls& rControls,
         std::unique_ptr<HTMLControl> pHCntrl(new HTMLControl( xFormComps, nNodeIdx ));
         HTMLControls::const_iterator it = rControls.find( pHCntrl.get() );
         if( it == rControls.end() )
-            rControls.insert( pHCntrl.release() );
+            rControls.insert( std::move(pHCntrl) );
         else
         {
             if( (*it)->xFormComps==xFormComps )
@@ -1321,7 +1332,7 @@ void SwHTMLWriter::GetControls()
         // collect the paragraph-bound controls
         for( size_t i=0; i<m_pHTMLPosFlyFrames->size(); i++ )
         {
-            const SwHTMLPosFlyFrame* pPosFlyFrame = (*m_pHTMLPosFlyFrames)[ i ];
+            const SwHTMLPosFlyFrame* pPosFlyFrame = (*m_pHTMLPosFlyFrames)[ i ].get();
             if( HtmlOut::Control != pPosFlyFrame->GetOutFn() )
                 continue;
 

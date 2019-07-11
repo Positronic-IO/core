@@ -28,6 +28,7 @@
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/ucb/ContentInfo.hpp>
 #include <com/sun/star/ucb/ContentInfoAttribute.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <comphelper/processfactory.hxx>
 
 using namespace ::com::sun::star;
@@ -102,7 +103,7 @@ bool create_folder(
         // invalid: has to be at least "auth:/..."
         if (throw_exc)
             throw ContentCreationException(
-                "Cannot create folder (invalid path): " + url,
+                "Cannot create folder (invalid path): '" + url + "'",
                 Reference<XInterface>(), ContentCreationError_UNKNOWN );
         return false;
     }
@@ -153,7 +154,7 @@ bool create_folder(
     }
     if (throw_exc)
         throw ContentCreationException(
-            "Cannot create folder: " + url,
+            "Cannot create folder: '" + url + "'",
             Reference<XInterface>(), ContentCreationError_UNKNOWN );
     return false;
 }
@@ -215,18 +216,18 @@ bool readLine( OUString * res, OUString const & startingWith,
             {
                 pos = file.indexOf( LF, pos );
                 if (pos < 0) { // EOF
-                    buf.append( file.copy( start ) );
+                    buf.appendCopy( file, start );
                 }
                 else
                 {
                     if (pos > 0 && file[ pos - 1 ] == CR)
                     {
                         // consume extra CR
-                        buf.append( file.copy( start, pos - start - 1 ) );
+                        buf.appendCopy( file, start, pos - start - 1 );
                         ++pos;
                     }
                     else
-                        buf.append( file.copy( start, pos - start ) );
+                        buf.appendCopy( file, start, pos - start );
                     ++pos; // consume LF
                     // check next line:
                     if (pos < file.getLength() &&
@@ -270,16 +271,16 @@ bool readProperties( std::vector< std::pair< OUString, OUString> > & out_result,
         bool bEOF = false;
         pos = file.indexOf( LF, pos );
         if (pos < 0) { // EOF
-            buf.append( file.copy( start ) );
+            buf.appendCopy( file, start );
             bEOF = true;
         }
         else
         {
             if (pos > 0 && file[ pos - 1 ] == CR)
                 // consume extra CR
-                buf.append( file.copy( start, pos - start - 1 ) );
+                buf.appendCopy( file, start, pos - start - 1 );
             else
-                buf.append( file.copy( start, pos - start ) );
+                buf.appendCopy( file, start, pos - start );
             pos++;
         }
         OUString aLine = buf.makeStringAndClear();

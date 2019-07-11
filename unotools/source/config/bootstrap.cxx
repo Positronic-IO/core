@@ -298,11 +298,8 @@ static PathStatus checkStatusAndNormalizeURL(OUString & _sURL)
 
         eStatus = implCheckStatusOfURL(_sURL,aDirItem);
 
-        if (eStatus == Bootstrap::PATH_EXISTS)
-        {
-            if (!implNormalizeURL(_sURL,aDirItem))
-                OSL_FAIL("Unexpected failure getting actual URL for existing object");
-        }
+        if (eStatus == Bootstrap::PATH_EXISTS && !implNormalizeURL(_sURL,aDirItem))
+            OSL_FAIL("Unexpected failure getting actual URL for existing object");
     }
     return eStatus;
 }
@@ -354,7 +351,7 @@ static PathStatus getDerivedPath(
     return aStatus;
 }
 
-static inline PathStatus getDerivedPath(
+static PathStatus getDerivedPath(
                       OUString& _rURL,
                       Bootstrap::Impl::PathData const& _aBaseData,
                       OUString const& _sRelativeURL,
@@ -389,7 +386,7 @@ static OUString getExecutableBaseName()
     return sExecutable;
 }
 
-static inline Bootstrap::PathStatus updateStatus(Bootstrap::Impl::PathData & _rResult)
+static Bootstrap::PathStatus updateStatus(Bootstrap::Impl::PathData & _rResult)
 {
     return _rResult.status = checkStatusAndNormalizeURL(_rResult.path);
 }

@@ -31,6 +31,7 @@
 #include <sfx2/bindings.hxx>
 #include <vcl/virdev.hxx>
 #include <sfx2/app.hxx>
+#include <svx/svdundo.hxx>
 
 #include <undoblk.hxx>
 #include <sc.hrc>
@@ -71,12 +72,11 @@ ScUndoDeleteContents::ScUndoDeleteContents(
         aRange      ( rRange ),
         aMarkData   ( rMark ),
         pUndoDoc    ( std::move(pNewUndoDoc) ),
-        pDrawUndo   ( nullptr ),
         nFlags      ( nNewFlags ),
         bMulti      ( bNewMulti )   // unnecessary
 {
     if (bObjects)
-        pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() ).release();
+        pDrawUndo = GetSdrUndoAction( &pDocShell->GetDocument() );
 
     if ( !(aMarkData.IsMarked() || aMarkData.IsMultiMarked()) )     // if no cell is selected:
         aMarkData.SetMarkArea( aRange );                            // select cell under cursor
@@ -87,7 +87,7 @@ ScUndoDeleteContents::ScUndoDeleteContents(
 ScUndoDeleteContents::~ScUndoDeleteContents()
 {
     pUndoDoc.reset();
-    DeleteSdrUndoAction( pDrawUndo );
+    pDrawUndo.reset();
 }
 
 OUString ScUndoDeleteContents::GetComment() const
@@ -137,7 +137,7 @@ void ScUndoDeleteContents::DoChange( const bool bUndo )
 
         pUndoDoc->CopyToDocument(aCopyRange, nUndoFlags, bMulti, rDoc, &aMarkData);
 
-        DoSdrUndoAction( pDrawUndo, &rDoc );
+        DoSdrUndoAction( pDrawUndo.get(), &rDoc );
 
         ScChangeTrack* pChangeTrack = rDoc.GetChangeTrack();
         if ( pChangeTrack )
@@ -150,7 +150,7 @@ void ScUndoDeleteContents::DoChange( const bool bUndo )
         pDocShell->UpdatePaintExt( nExtFlags, aRange );             // content before the change
 
         aMarkData.MarkToMulti();
-        RedoSdrUndoAction( pDrawUndo );
+        RedoSdrUndoAction( pDrawUndo.get() );
         // do not delete objects and note captions, they have been removed via drawing undo
         InsertDeleteFlags nRedoFlags = (nFlags & ~InsertDeleteFlags::OBJECTS) | InsertDeleteFlags::NOCAPTIONS;
         rDoc.DeleteSelection( nRedoFlags, aMarkData );
@@ -212,12 +212,12 @@ ScUndoFillTable::ScUndoFillTable( ScDocShell* pNewDocShell,
                 const ScMarkData& rMark,
                 SCCOL nStartX, SCROW nStartY, SCTAB nStartZ,
                 SCCOL nEndX, SCROW nEndY, SCTAB nEndZ,
-                ScDocument* pNewUndoDoc, bool bNewMulti, SCTAB nSrc,
+                ScDocumentUniquePtr pNewUndoDoc, bool bNewMulti, SCTAB nSrc,
                 InsertDeleteFlags nFlg, ScPasteFunc nFunc, bool bSkip, bool bLink )
     :   ScSimpleUndo( pNewDocShell ),
         aRange      ( nStartX, nStartY, nStartZ, nEndX, nEndY, nEndZ ),
         aMarkData   ( rMark ),
-        pUndoDoc    ( pNewUndoDoc ),
+        pUndoDoc    ( std::move(pNewUndoDoc) ),
         nFlags      ( nFlg ),
         nFunction   ( nFunc ),
         nSrcTab     ( nSrc ),
@@ -344,7 +344,7 @@ ScUndoSelectionAttr::ScUndoSelectionAttr( ScDocShell* pNewDocShell,
                 const ScMarkData& rMark,
                 SCCOL nStartX, SCROW nStartY, SCTAB nStartZ,
                 SCCOL nEndX, SCROW nEndY, SCTAB nEndZ,
-                ScDocument* pNewUndoDoc, bool bNewMulti,
+                ScDocumentUniquePtr pNewUndoDoc, bool bNewMulti,
                 const ScPatternAttr* pNewApply,
                 const SvxBoxItem* pNewOuter, const SvxBoxInfoItem* pNewInner,
                 const ScRange* pRangeCover )
@@ -352,7 +352,7 @@ ScUndoSelectionAttr::ScUndoSelectionAttr( ScDocShell* pNewDocShell,
         aMarkData   ( rMark ),
         aRange      ( nStartX, nStartY, nStartZ, nEndX, nEndY, nEndZ ),
         mpDataArray(new ScEditDataArray),
-        pUndoDoc    ( pNewUndoDoc ),
+        pUndoDoc    ( std::move(pNewUndoDoc) ),
         bMulti      ( bNewMulti )
 {
     ScDocumentPool* pPool = pDocShell->GetDocument().GetPool();
@@ -371,7 +371,7 @@ ScUndoSelectionAttr::~ScUndoSelectionAttr()
     if (pLineInner)
         pPool->Remove(*pLineInner);
 
-    delete pUndoDoc;
+    pUndoDoc.reset();
 }
 
 OUString ScUndoSelectionAttr::GetComment() const
@@ -484,13 +484,13 @@ bool ScUndoSelectionAttr::CanRepeat(SfxRepeatTarget& rTarget) const
 
 ScUndoAutoFill::ScUndoAutoFill( ScDocShell* pNewDocShell,
                 const ScRange& rRange, const ScRange& rSourceArea,
-                ScDocument* pNewUndoDoc, const ScMarkData& rMark,
+                ScDocumentUniquePtr pNewUndoDoc, const ScMarkData& rMark,
                 FillDir eNewFillDir, FillCmd eNewFillCmd, FillDateCmd eNewFillDateCmd,
                 double fNewStartValue, double fNewStepValue, double fNewMaxValue )
     :   ScBlockUndo( pNewDocShell, rRange, SC_UNDO_AUTOHEIGHT ),
         aSource         ( rSourceArea ),
         aMarkData       ( rMark ),
-        pUndoDoc        ( pNewUndoDoc ),
+        pUndoDoc        ( std::move(pNewUndoDoc) ),
         eFillDir        ( eNewFillDir ),
         eFillCmd        ( eNewFillCmd ),
         eFillDateCmd    ( eNewFillDateCmd ),
@@ -636,18 +636,18 @@ bool ScUndoAutoFill::CanRepeat(SfxRepeatTarget& rTarget) const
 }
 
 ScUndoMerge::ScUndoMerge(ScDocShell* pNewDocShell, const ScCellMergeOption& rOption,
-                         bool bMergeContents, ScDocument* pUndoDoc, SdrUndoAction* pDrawUndo)
+                         bool bMergeContents, ScDocumentUniquePtr pUndoDoc, std::unique_ptr<SdrUndoAction> pDrawUndo)
     : ScSimpleUndo(pNewDocShell)
     , maOption(rOption)
     , mbMergeContents(bMergeContents)
-    , mxUndoDoc(pUndoDoc)
-    , mpDrawUndo(pDrawUndo)
+    , mxUndoDoc(std::move(pUndoDoc))
+    , mpDrawUndo(std::move(pDrawUndo))
 {
 }
 
 ScUndoMerge::~ScUndoMerge()
 {
-    DeleteSdrUndoAction( mpDrawUndo );
+    mpDrawUndo.reset();
 }
 
 OUString ScUndoMerge::GetComment() const
@@ -718,9 +718,9 @@ void ScUndoMerge::DoChange( bool bUndo ) const
         }
 
         if (bUndo)
-            DoSdrUndoAction( mpDrawUndo, &rDoc );
+            DoSdrUndoAction( mpDrawUndo.get(), &rDoc );
         else
-            RedoSdrUndoAction( mpDrawUndo );
+            RedoSdrUndoAction( mpDrawUndo.get() );
 
         bool bDidPaint = false;
         if ( pViewShell )
@@ -768,10 +768,10 @@ bool ScUndoMerge::CanRepeat(SfxRepeatTarget& rTarget) const
 }
 
 ScUndoAutoFormat::ScUndoAutoFormat( ScDocShell* pNewDocShell,
-                        const ScRange& rRange, ScDocument* pNewUndoDoc,
+                        const ScRange& rRange, ScDocumentUniquePtr pNewUndoDoc,
                         const ScMarkData& rMark, bool bNewSize, sal_uInt16 nNewFormatNo )
     :   ScBlockUndo( pNewDocShell, rRange, bNewSize ? SC_UNDO_MANUALHEIGHT : SC_UNDO_AUTOHEIGHT ),
-        pUndoDoc    ( pNewUndoDoc ),
+        pUndoDoc    ( std::move(pNewUndoDoc) ),
         aMarkData   ( rMark ),
         bSize       ( bNewSize ),
         nFormatNo   ( nNewFormatNo )
@@ -919,22 +919,22 @@ bool ScUndoAutoFormat::CanRepeat(SfxRepeatTarget& rTarget) const
 
 ScUndoReplace::ScUndoReplace( ScDocShell* pNewDocShell, const ScMarkData& rMark,
                                     SCCOL nCurX, SCROW nCurY, SCTAB nCurZ,
-                                    const OUString& rNewUndoStr, ScDocument* pNewUndoDoc,
+                                    const OUString& rNewUndoStr, ScDocumentUniquePtr pNewUndoDoc,
                                     const SvxSearchItem* pItem )
     :   ScSimpleUndo( pNewDocShell ),
         aCursorPos  ( nCurX, nCurY, nCurZ ),
         aMarkData   ( rMark ),
         aUndoStr    ( rNewUndoStr ),
-        pUndoDoc    ( pNewUndoDoc )
+        pUndoDoc    ( std::move(pNewUndoDoc) )
 {
-    pSearchItem = new SvxSearchItem( *pItem );
+    pSearchItem.reset( new SvxSearchItem( *pItem ) );
     SetChangeTrack();
 }
 
 ScUndoReplace::~ScUndoReplace()
 {
-    delete pUndoDoc;
-    delete pSearchItem;
+    pUndoDoc.reset();
+    pSearchItem.reset();
 }
 
 void ScUndoReplace::SetChangeTrack()
@@ -946,7 +946,7 @@ void ScUndoReplace::SetChangeTrack()
         if ( pUndoDoc )
         {   //! UndoDoc includes only the changed cells,
             // that is why an Iterator can be used
-            pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc,
+            pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc.get(),
                 nStartChangeAction, nEndChangeAction );
         }
         else
@@ -1065,7 +1065,7 @@ void ScUndoReplace::Redo()
         {
             SetViewMarkData( aMarkData );
 
-            pViewShell->SearchAndReplace( pSearchItem, false, true );
+            pViewShell->SearchAndReplace( pSearchItem.get(), false, true );
         }
     }
     else if (pSearchItem->GetPattern() &&
@@ -1078,7 +1078,7 @@ void ScUndoReplace::Redo()
     }
     else
         if (pViewShell)
-            pViewShell->SearchAndReplace( pSearchItem, false, true );
+            pViewShell->SearchAndReplace( pSearchItem.get(), false, true );
 
     SetChangeTrack();
 
@@ -1088,7 +1088,7 @@ void ScUndoReplace::Redo()
 void ScUndoReplace::Repeat(SfxRepeatTarget& rTarget)
 {
     if (dynamic_cast<const ScTabViewTarget*>( &rTarget) !=  nullptr)
-        static_cast<ScTabViewTarget&>(rTarget).GetViewShell()->SearchAndReplace( pSearchItem, true, false );
+        static_cast<ScTabViewTarget&>(rTarget).GetViewShell()->SearchAndReplace( pSearchItem.get(), true, false );
 }
 
 bool ScUndoReplace::CanRepeat(SfxRepeatTarget& rTarget) const
@@ -1099,7 +1099,7 @@ bool ScUndoReplace::CanRepeat(SfxRepeatTarget& rTarget) const
 // multi-operation (only simple blocks)
 ScUndoTabOp::ScUndoTabOp( ScDocShell* pNewDocShell,
                 SCCOL nStartX, SCROW nStartY, SCTAB nStartZ,
-                SCCOL nEndX, SCROW nEndY, SCTAB nEndZ, ScDocument* pNewUndoDoc,
+                SCCOL nEndX, SCROW nEndY, SCTAB nEndZ, ScDocumentUniquePtr pNewUndoDoc,
                 const ScRefAddress& rFormulaCell,
                 const ScRefAddress& rFormulaEnd,
                 const ScRefAddress& rRowCell,
@@ -1107,7 +1107,7 @@ ScUndoTabOp::ScUndoTabOp( ScDocShell* pNewDocShell,
                 ScTabOpParam::Mode eMode )
     :   ScSimpleUndo( pNewDocShell ),
         aRange          ( nStartX, nStartY, nStartZ, nEndX, nEndY, nEndZ ),
-        pUndoDoc        ( pNewUndoDoc ),
+        pUndoDoc        ( std::move(pNewUndoDoc) ),
         theFormulaCell  ( rFormulaCell ),
         theFormulaEnd   ( rFormulaEnd ),
         theRowCell      ( rRowCell ),
@@ -1172,15 +1172,15 @@ bool ScUndoTabOp::CanRepeat(SfxRepeatTarget& /* rTarget */) const
 
 ScUndoConversion::ScUndoConversion(
         ScDocShell* pNewDocShell, const ScMarkData& rMark,
-        SCCOL nCurX, SCROW nCurY, SCTAB nCurZ, ScDocument* pNewUndoDoc,
-        SCCOL nNewX, SCROW nNewY, SCTAB nNewZ, ScDocument* pNewRedoDoc,
+        SCCOL nCurX, SCROW nCurY, SCTAB nCurZ, ScDocumentUniquePtr pNewUndoDoc,
+        SCCOL nNewX, SCROW nNewY, SCTAB nNewZ, ScDocumentUniquePtr pNewRedoDoc,
         const ScConversionParam& rConvParam ) :
     ScSimpleUndo( pNewDocShell ),
     aMarkData( rMark ),
     aCursorPos( nCurX, nCurY, nCurZ ),
-    pUndoDoc( pNewUndoDoc ),
+    pUndoDoc( std::move(pNewUndoDoc) ),
     aNewCursorPos( nNewX, nNewY, nNewZ ),
-    pRedoDoc( pNewRedoDoc ),
+    pRedoDoc( std::move(pNewRedoDoc) ),
     maConvParam( rConvParam )
 {
     SetChangeTrack();
@@ -1188,8 +1188,8 @@ ScUndoConversion::ScUndoConversion(
 
 ScUndoConversion::~ScUndoConversion()
 {
-    delete pUndoDoc;
-    delete pRedoDoc;
+    pUndoDoc.reset();
+    pRedoDoc.reset();
 }
 
 void ScUndoConversion::SetChangeTrack()
@@ -1199,7 +1199,7 @@ void ScUndoConversion::SetChangeTrack()
     if ( pChangeTrack )
     {
         if ( pUndoDoc )
-            pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc,
+            pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc.get(),
                 nStartChangeAction, nEndChangeAction );
         else
         {
@@ -1251,7 +1251,7 @@ void ScUndoConversion::DoChange( ScDocument* pRefDoc, const ScAddress& rCursorPo
 void ScUndoConversion::Undo()
 {
     BeginUndo();
-    DoChange( pUndoDoc, aCursorPos );
+    DoChange( pUndoDoc.get(), aCursorPos );
     ScChangeTrack* pChangeTrack = pDocShell->GetDocument().GetChangeTrack();
     if ( pChangeTrack )
         pChangeTrack->Undo( nStartChangeAction, nEndChangeAction );
@@ -1261,7 +1261,7 @@ void ScUndoConversion::Undo()
 void ScUndoConversion::Redo()
 {
     BeginRedo();
-    DoChange( pRedoDoc, aNewCursorPos );
+    DoChange( pRedoDoc.get(), aNewCursorPos );
     SetChangeTrack();
     EndRedo();
 }
@@ -1279,11 +1279,11 @@ bool ScUndoConversion::CanRepeat(SfxRepeatTarget& rTarget) const
 
 ScUndoRefConversion::ScUndoRefConversion( ScDocShell* pNewDocShell,
                                          const ScRange& aMarkRange, const ScMarkData& rMark,
-                                         ScDocument* pNewUndoDoc, ScDocument* pNewRedoDoc, bool bNewMulti) :
+                                         ScDocumentUniquePtr pNewUndoDoc, ScDocumentUniquePtr pNewRedoDoc, bool bNewMulti) :
 ScSimpleUndo( pNewDocShell ),
 aMarkData   ( rMark ),
-pUndoDoc    ( pNewUndoDoc ),
-pRedoDoc    ( pNewRedoDoc ),
+pUndoDoc    ( std::move(pNewUndoDoc) ),
+pRedoDoc    ( std::move(pNewRedoDoc) ),
 aRange      ( aMarkRange ),
 bMulti      ( bNewMulti )
 {
@@ -1292,8 +1292,8 @@ bMulti      ( bNewMulti )
 
 ScUndoRefConversion::~ScUndoRefConversion()
 {
-    delete pUndoDoc;
-    delete pRedoDoc;
+    pUndoDoc.reset();
+    pRedoDoc.reset();
 }
 
 OUString ScUndoRefConversion::GetComment() const
@@ -1305,7 +1305,7 @@ void ScUndoRefConversion::SetChangeTrack()
 {
     ScChangeTrack* pChangeTrack = pDocShell->GetDocument().GetChangeTrack();
     if ( pChangeTrack )
-        pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc,
+        pChangeTrack->AppendContentsIfInRefDoc( pUndoDoc.get(),
             nStartChangeAction, nEndChangeAction );
     else
         nStartChangeAction = nEndChangeAction = 0;
@@ -1335,7 +1335,7 @@ void ScUndoRefConversion::Undo()
 {
     BeginUndo();
     if (pUndoDoc)
-        DoChange(pUndoDoc);
+        DoChange(pUndoDoc.get());
     ScChangeTrack* pChangeTrack = pDocShell->GetDocument().GetChangeTrack();
     if ( pChangeTrack )
         pChangeTrack->Undo( nStartChangeAction, nEndChangeAction );
@@ -1346,7 +1346,7 @@ void ScUndoRefConversion::Redo()
 {
     BeginRedo();
     if (pRedoDoc)
-        DoChange(pRedoDoc);
+        DoChange(pRedoDoc.get());
     SetChangeTrack();
     EndRedo();
 }
@@ -1363,9 +1363,9 @@ bool ScUndoRefConversion::CanRepeat(SfxRepeatTarget& rTarget) const
 }
 
 ScUndoRefreshLink::ScUndoRefreshLink(ScDocShell* pNewDocShell,
-                                     ScDocument* pNewUndoDoc)
+                                     ScDocumentUniquePtr pNewUndoDoc)
     : ScSimpleUndo(pNewDocShell)
-    , xUndoDoc(pNewUndoDoc)
+    , xUndoDoc(std::move(pNewUndoDoc))
 {
 }
 
@@ -1611,7 +1611,7 @@ ScUndoUpdateAreaLink::ScUndoUpdateAreaLink( ScDocShell* pShell,
                             const OUString& rOldA, const ScRange& rOldR, sal_uLong nOldRD,
                             const OUString& rNewD, const OUString& rNewF, const OUString& rNewO,
                             const OUString& rNewA, const ScRange& rNewR, sal_uLong nNewRD,
-                            ScDocument* pUndo, ScDocument* pRedo, bool bDoInsert )
+                            ScDocumentUniquePtr pUndo, ScDocumentUniquePtr pRedo, bool bDoInsert )
     :   ScSimpleUndo( pShell ),
         aOldDoc     ( rOldD ),
         aOldFlt     ( rOldF ),
@@ -1623,8 +1623,8 @@ ScUndoUpdateAreaLink::ScUndoUpdateAreaLink( ScDocShell* pShell,
         aNewOpt     ( rNewO ),
         aNewArea    ( rNewA ),
         aNewRange   ( rNewR ),
-        xUndoDoc    ( pUndo ),
-        xRedoDoc    ( pRedo ),
+        xUndoDoc    ( std::move(pUndo) ),
+        xRedoDoc    ( std::move(pRedo) ),
         nOldRefresh ( nOldRD ),
         nNewRefresh ( nNewRD ),
         bWithInsert ( bDoInsert )

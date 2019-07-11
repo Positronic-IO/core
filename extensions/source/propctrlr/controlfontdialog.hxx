@@ -20,6 +20,7 @@
 #ifndef INCLUDED_EXTENSIONS_SOURCE_PROPCTRLR_CONTROLFONTDIALOG_HXX
 #define INCLUDED_EXTENSIONS_SOURCE_PROPCTRLR_CONTROLFONTDIALOG_HXX
 
+#include <comphelper/proparrhlp.hxx>
 #include <svtools/genericunodialog.hxx>
 #include "modulepcr.hxx"
 
@@ -44,7 +45,7 @@ namespace pcr
                                 m_xControlModel;
         // </properties>
 
-        SfxItemSet*             m_pFontItems;           // item set for the dialog
+        std::unique_ptr<SfxItemSet> m_pFontItems;       // item set for the dialog
         SfxItemPool*            m_pItemPool;            // item pool for the item set for the dialog
         std::vector<SfxPoolItem*>*
                                 m_pItemPoolDefaults;    // pool defaults
@@ -80,7 +81,7 @@ namespace pcr
 
     protected:
         // OGenericUnoDialog overridables
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
         virtual void    executedDialog(sal_Int16 _nExecutionResult) override;
     };
 

@@ -23,7 +23,6 @@
 #include <com/sun/star/i18n/KCharacterType.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <unicode/uchar.h>
-#include <comphelper/string.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <breakiteratorImpl.hxx>
@@ -42,9 +41,6 @@ namespace i18npool {
 cclass_Unicode::cclass_Unicode( const uno::Reference < XComponentContext >& rxContext ) :
         trans( new Transliteration_casemapping() ),
         m_xContext( rxContext ),
-        pTable( nullptr ),
-        pStart( nullptr ),
-        pCont( nullptr ),
         nStartTypes( 0 ),
         nContTypes( 0 ),
         eState( ssGetChar ),

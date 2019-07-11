@@ -36,7 +36,6 @@
 #include <editeng/charreliefitem.hxx>
 #include <editeng/contouritem.hxx>
 #include <editeng/colritem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/crossedoutitem.hxx>
 #include <editeng/udlnitem.hxx>
 #include <editeng/wghtitem.hxx>
@@ -71,7 +70,7 @@ void SwFont::SetBackColor( Color* pNewColor )
 {
     m_pBackColor.reset( pNewColor );
     m_bFontChg = true;
-    m_aSub[SwFontScript::Latin].m_pMagic = m_aSub[SwFontScript::CJK].m_pMagic = m_aSub[SwFontScript::CTL].m_pMagic = nullptr;
+    m_aSub[SwFontScript::Latin].m_nFontCacheId = m_aSub[SwFontScript::CJK].m_nFontCacheId = m_aSub[SwFontScript::CTL].m_nFontCacheId = nullptr;
 }
 
 void SwFont::SetTopBorder( const editeng::SvxBorderLine* pTopBorder )
@@ -80,11 +79,11 @@ void SwFont::SetTopBorder( const editeng::SvxBorderLine* pTopBorder )
         m_aTopBorder = *pTopBorder;
     else
     {
-        m_aTopBorder = boost::none;
+        m_aTopBorder.reset();
         m_nTopBorderDist = 0;
     }
     m_bFontChg = true;
-    m_aSub[SwFontScript::Latin].m_pMagic = m_aSub[SwFontScript::CJK].m_pMagic = m_aSub[SwFontScript::CTL].m_pMagic = nullptr;
+    m_aSub[SwFontScript::Latin].m_nFontCacheId = m_aSub[SwFontScript::CJK].m_nFontCacheId = m_aSub[SwFontScript::CTL].m_nFontCacheId = nullptr;
 }
 
 void SwFont::SetBottomBorder( const editeng::SvxBorderLine* pBottomBorder )
@@ -93,11 +92,11 @@ void SwFont::SetBottomBorder( const editeng::SvxBorderLine* pBottomBorder )
         m_aBottomBorder = *pBottomBorder;
     else
     {
-        m_aBottomBorder = boost::none;
+        m_aBottomBorder.reset();
         m_nBottomBorderDist = 0;
     }
     m_bFontChg = true;
-    m_aSub[SwFontScript::Latin].m_pMagic = m_aSub[SwFontScript::CJK].m_pMagic = m_aSub[SwFontScript::CTL].m_pMagic = nullptr;
+    m_aSub[SwFontScript::Latin].m_nFontCacheId = m_aSub[SwFontScript::CJK].m_nFontCacheId = m_aSub[SwFontScript::CTL].m_nFontCacheId = nullptr;
 }
 
 void SwFont::SetRightBorder( const editeng::SvxBorderLine* pRightBorder )
@@ -106,11 +105,11 @@ void SwFont::SetRightBorder( const editeng::SvxBorderLine* pRightBorder )
         m_aRightBorder = *pRightBorder;
     else
     {
-        m_aRightBorder = boost::none;
+        m_aRightBorder.reset();
         m_nRightBorderDist = 0;
     }
     m_bFontChg = true;
-    m_aSub[SwFontScript::Latin].m_pMagic = m_aSub[SwFontScript::CJK].m_pMagic = m_aSub[SwFontScript::CTL].m_pMagic = nullptr;
+    m_aSub[SwFontScript::Latin].m_nFontCacheId = m_aSub[SwFontScript::CJK].m_nFontCacheId = m_aSub[SwFontScript::CTL].m_nFontCacheId = nullptr;
 }
 
 void SwFont::SetLeftBorder( const editeng::SvxBorderLine* pLeftBorder )
@@ -119,11 +118,11 @@ void SwFont::SetLeftBorder( const editeng::SvxBorderLine* pLeftBorder )
         m_aLeftBorder = *pLeftBorder;
     else
     {
-        m_aLeftBorder = boost::none;
+        m_aLeftBorder.reset();
         m_nLeftBorderDist = 0;
     }
     m_bFontChg = true;
-    m_aSub[SwFontScript::Latin].m_pMagic = m_aSub[SwFontScript::CJK].m_pMagic = m_aSub[SwFontScript::CTL].m_pMagic = nullptr;
+    m_aSub[SwFontScript::Latin].m_nFontCacheId = m_aSub[SwFontScript::CJK].m_nFontCacheId = m_aSub[SwFontScript::CTL].m_nFontCacheId = nullptr;
 }
 
 const boost::optional<editeng::SvxBorderLine>&
@@ -365,7 +364,7 @@ sal_uInt16 SwFont::CalcShadowSpace(
 }
 
 // maps directions for vertical layout
-sal_uInt16 MapDirection( sal_uInt16 nDir, const bool bVertFormat )
+static sal_uInt16 MapDirection( sal_uInt16 nDir, const bool bVertFormat )
 {
     if ( bVertFormat )
     {
@@ -888,50 +887,51 @@ SwFont::~SwFont()
 {
 }
 
-SwSubFont& SwSubFont::operator=( const SwSubFont& ) = default;
-
 SwFont& SwFont::operator=( const SwFont &rFont )
 {
-    m_aSub[SwFontScript::Latin] = rFont.m_aSub[SwFontScript::Latin];
-    m_aSub[SwFontScript::CJK] = rFont.m_aSub[SwFontScript::CJK];
-    m_aSub[SwFontScript::CTL] = rFont.m_aSub[SwFontScript::CTL];
-    m_nActual = rFont.m_nActual;
-    m_pBackColor.reset( rFont.m_pBackColor ? new Color( *rFont.m_pBackColor ) : nullptr );
-    m_aHighlightColor = rFont.m_aHighlightColor;
-    m_aTopBorder = rFont.m_aTopBorder;
-    m_aBottomBorder = rFont.m_aBottomBorder;
-    m_aRightBorder = rFont.m_aRightBorder;
-    m_aLeftBorder = rFont.m_aLeftBorder;
-    m_nTopBorderDist = rFont.m_nTopBorderDist;
-    m_nBottomBorderDist = rFont.m_nBottomBorderDist;
-    m_nRightBorderDist = rFont.m_nRightBorderDist;
-    m_nLeftBorderDist = rFont.m_nLeftBorderDist;
-    m_aShadowColor = rFont.m_aShadowColor;
-    m_nShadowWidth = rFont.m_nShadowWidth;
-    m_aShadowLocation = rFont.m_aShadowLocation;
-    m_aUnderColor = rFont.GetUnderColor();
-    m_aOverColor  = rFont.GetOverColor();
-    m_nToxCount = 0;
-    m_nRefCount = 0;
-    m_nMetaCount = 0;
-    m_nInputFieldCount = 0;
-    m_bFontChg = rFont.m_bFontChg;
-    m_bOrgChg = rFont.m_bOrgChg;
-    m_bPaintBlank = rFont.m_bPaintBlank;
-    m_bGreyWave = rFont.m_bGreyWave;
-    m_bBlink = rFont.m_bBlink;
+    if (this != &rFont)
+    {
+        m_aSub[SwFontScript::Latin] = rFont.m_aSub[SwFontScript::Latin];
+        m_aSub[SwFontScript::CJK] = rFont.m_aSub[SwFontScript::CJK];
+        m_aSub[SwFontScript::CTL] = rFont.m_aSub[SwFontScript::CTL];
+        m_nActual = rFont.m_nActual;
+        m_pBackColor.reset( rFont.m_pBackColor ? new Color( *rFont.m_pBackColor ) : nullptr );
+        m_aHighlightColor = rFont.m_aHighlightColor;
+        m_aTopBorder = rFont.m_aTopBorder;
+        m_aBottomBorder = rFont.m_aBottomBorder;
+        m_aRightBorder = rFont.m_aRightBorder;
+        m_aLeftBorder = rFont.m_aLeftBorder;
+        m_nTopBorderDist = rFont.m_nTopBorderDist;
+        m_nBottomBorderDist = rFont.m_nBottomBorderDist;
+        m_nRightBorderDist = rFont.m_nRightBorderDist;
+        m_nLeftBorderDist = rFont.m_nLeftBorderDist;
+        m_aShadowColor = rFont.m_aShadowColor;
+        m_nShadowWidth = rFont.m_nShadowWidth;
+        m_aShadowLocation = rFont.m_aShadowLocation;
+        m_aUnderColor = rFont.GetUnderColor();
+        m_aOverColor  = rFont.GetOverColor();
+        m_nToxCount = 0;
+        m_nRefCount = 0;
+        m_nMetaCount = 0;
+        m_nInputFieldCount = 0;
+        m_bFontChg = rFont.m_bFontChg;
+        m_bOrgChg = rFont.m_bOrgChg;
+        m_bPaintBlank = rFont.m_bPaintBlank;
+        m_bGreyWave = rFont.m_bGreyWave;
+        m_bBlink = rFont.m_bBlink;
+    }
     return *this;
 }
 
-void SwFont::GoMagic( SwViewShell const *pSh, SwFontScript nWhich )
+void SwFont::AllocFontCacheId( SwViewShell const *pSh, SwFontScript nWhich )
 {
-    SwFntAccess aFntAccess( m_aSub[nWhich].m_pMagic, m_aSub[nWhich].m_nFontIndex,
+    SwFntAccess aFntAccess( m_aSub[nWhich].m_nFontCacheId, m_aSub[nWhich].m_nFontIndex,
                             &m_aSub[nWhich], pSh, true );
 }
 
 bool SwSubFont::IsSymbol( SwViewShell const *pSh )
 {
-    SwFntAccess aFntAccess( m_pMagic, m_nFontIndex, this, pSh, false );
+    SwFntAccess aFntAccess( m_nFontCacheId, m_nFontIndex, this, pSh, false );
     return aFntAccess.Get()->IsSymbol();
 }
 
@@ -939,7 +939,7 @@ bool SwSubFont::ChgFnt( SwViewShell const *pSh, OutputDevice& rOut )
 {
     if ( pLastFont )
         pLastFont->Unlock();
-    SwFntAccess aFntAccess( m_pMagic, m_nFontIndex, this, pSh, true );
+    SwFntAccess aFntAccess( m_nFontCacheId, m_nFontIndex, this, pSh, true );
     SV_STAT( nChangeFont );
 
     pLastFont = aFntAccess.Get();
@@ -959,7 +959,7 @@ void SwFont::ChgPhysFnt( SwViewShell const *pSh, OutputDevice& rOut )
         const sal_uInt8 nOldProp = m_aSub[m_nActual].GetPropr();
         SetProportion( 100 );
         ChgFnt( pSh, rOut );
-        SwFntAccess aFntAccess( m_aSub[m_nActual].m_pMagic, m_aSub[m_nActual].m_nFontIndex,
+        SwFntAccess aFntAccess( m_aSub[m_nActual].m_nFontCacheId, m_aSub[m_nActual].m_nFontIndex,
                                 &m_aSub[m_nActual], pSh );
         m_aSub[m_nActual].m_nOrgHeight = aFntAccess.Get()->GetFontHeight( pSh, rOut );
         m_aSub[m_nActual].m_nOrgAscent = aFntAccess.Get()->GetFontAscent( pSh, rOut );
@@ -1009,7 +1009,7 @@ short SwSubFont::CheckKerning_( )
 
 sal_uInt16 SwSubFont::GetAscent( SwViewShell const *pSh, const OutputDevice& rOut )
 {
-    SwFntAccess aFntAccess( m_pMagic, m_nFontIndex, this, pSh );
+    SwFntAccess aFntAccess( m_nFontCacheId, m_nFontIndex, this, pSh );
     const sal_uInt16 nAscent = aFntAccess.Get()->GetFontAscent( pSh, rOut );
     return GetEscapement() ? CalcEscAscent( nAscent ) : nAscent;
 }
@@ -1017,7 +1017,7 @@ sal_uInt16 SwSubFont::GetAscent( SwViewShell const *pSh, const OutputDevice& rOu
 sal_uInt16 SwSubFont::GetHeight( SwViewShell const *pSh, const OutputDevice& rOut )
 {
     SV_STAT( nGetTextSize );
-    SwFntAccess aFntAccess( m_pMagic, m_nFontIndex, this, pSh );
+    SwFntAccess aFntAccess( m_nFontCacheId, m_nFontIndex, this, pSh );
     const sal_uInt16 nHeight = aFntAccess.Get()->GetFontHeight( pSh, rOut );
     if ( GetEscapement() )
     {
@@ -1031,15 +1031,16 @@ Size SwSubFont::GetTextSize_( SwDrawTextInfo& rInf )
 {
     // Robust: the font is supposed to be set already, but better safe than
     // sorry...
-    if ( !pLastFont || pLastFont->GetOwner()!=m_pMagic ||
+    if ( !pLastFont || pLastFont->GetOwner() != reinterpret_cast<const void*>(m_nFontCacheId) ||
          !IsSameInstance( rInf.GetpOut()->GetFont() ) )
         ChgFnt( rInf.GetShell(), rInf.GetOut() );
 
     SwDigitModeModifier aDigitModeModifier( rInf.GetOut(), rInf.GetFont()->GetLanguage() );
 
     Size aTextSize;
-    sal_Int32 nLn = ( rInf.GetLen() == COMPLETE_STRING ? rInf.GetText().getLength()
-                                                   : rInf.GetLen() );
+    TextFrameIndex const nLn = rInf.GetLen() == TextFrameIndex(COMPLETE_STRING)
+            ? TextFrameIndex(rInf.GetText().getLength())
+            : rInf.GetLen();
     rInf.SetLen( nLn );
     if( IsCapital() && nLn )
         aTextSize = GetCapitalSize( rInf );
@@ -1062,14 +1063,14 @@ Size SwSubFont::GetTextSize_( SwDrawTextInfo& rInf )
                 // If the length of the original string and the CaseMapped one
                 // are different, it is necessary to handle the given text part as
                 // a single snippet since its size may differ, too.
-                sal_Int32 nOldIdx(rInf.GetIdx());
-                sal_Int32 nOldLen(rInf.GetLen());
-                const OUString aSnippet(oldStr.copy(nOldIdx, nOldLen));
+                TextFrameIndex const nOldIdx(rInf.GetIdx());
+                TextFrameIndex const nOldLen(rInf.GetLen());
+                const OUString aSnippet(oldStr.copy(sal_Int32(nOldIdx), sal_Int32(nOldLen)));
                 const OUString aNewText(CalcCaseMap(aSnippet));
 
                 rInf.SetText( aNewText );
-                rInf.SetIdx( 0 );
-                rInf.SetLen( aNewText.getLength() );
+                rInf.SetIdx( TextFrameIndex(0) );
+                rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
 
                 aTextSize = pLastFont->GetTextSize( rInf );
 
@@ -1097,26 +1098,28 @@ Size SwSubFont::GetTextSize_( SwDrawTextInfo& rInf )
         }
     }
 
-    if (1==rInf.GetLen() && CH_TXT_ATR_FIELDSTART==rInf.GetText()[rInf.GetIdx()])
+    if (TextFrameIndex(1) == rInf.GetLen()
+        && CH_TXT_ATR_FIELDSTART == rInf.GetText()[sal_Int32(rInf.GetIdx())])
     {
-        sal_Int32 nOldIdx(rInf.GetIdx());
-        sal_Int32 nOldLen(rInf.GetLen());
+        TextFrameIndex const nOldIdx(rInf.GetIdx());
+        TextFrameIndex const nOldLen(rInf.GetLen());
         const OUString aNewText(CH_TXT_ATR_SUBST_FIELDSTART);
         rInf.SetText( aNewText );
-        rInf.SetIdx( 0 );
-        rInf.SetLen( aNewText.getLength() );
+        rInf.SetIdx( TextFrameIndex(0) );
+        rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
         aTextSize = pLastFont->GetTextSize( rInf );
         rInf.SetIdx( nOldIdx );
         rInf.SetLen( nOldLen );
     }
-    else if (1==rInf.GetLen() && CH_TXT_ATR_FIELDEND==rInf.GetText()[ rInf.GetIdx() ])
+    else if (TextFrameIndex(1) == rInf.GetLen()
+            && CH_TXT_ATR_FIELDEND == rInf.GetText()[sal_Int32(rInf.GetIdx())])
     {
-        sal_Int32 nOldIdx(rInf.GetIdx());
-        sal_Int32 nOldLen(rInf.GetLen());
+        TextFrameIndex const nOldIdx(rInf.GetIdx());
+        TextFrameIndex const nOldLen(rInf.GetLen());
         const OUString aNewText(CH_TXT_ATR_SUBST_FIELDEND);
         rInf.SetText( aNewText );
-        rInf.SetIdx( 0 );
-        rInf.SetLen( aNewText.getLength() );
+        rInf.SetIdx( TextFrameIndex(0) );
+        rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
         aTextSize = pLastFont->GetTextSize( rInf );
         rInf.SetIdx( nOldIdx );
         rInf.SetLen( nOldLen );
@@ -1128,10 +1131,10 @@ Size SwSubFont::GetTextSize_( SwDrawTextInfo& rInf )
 void SwSubFont::DrawText_( SwDrawTextInfo &rInf, const bool bGrey )
 {
     rInf.SetGreyWave( bGrey );
-    sal_Int32 nLn = rInf.GetText().getLength();
+    TextFrameIndex const nLn(rInf.GetText().getLength());
     if( !rInf.GetLen() || !nLn )
         return;
-    if( COMPLETE_STRING == rInf.GetLen() )
+    if (TextFrameIndex(COMPLETE_STRING) == rInf.GetLen())
         rInf.SetLen( nLn );
 
     FontLineStyle nOldUnder = LINESTYLE_NONE;
@@ -1144,7 +1147,7 @@ void SwSubFont::DrawText_( SwDrawTextInfo &rInf, const bool bGrey )
         pUnderFnt = rInf.GetUnderFnt();
     }
 
-    if( !pLastFont || pLastFont->GetOwner()!=m_pMagic )
+    if( !pLastFont || pLastFont->GetOwner() != reinterpret_cast<const void*>(m_nFontCacheId) )
         ChgFnt( rInf.GetShell(), rInf.GetOut() );
 
     SwDigitModeModifier aDigitModeModifier( rInf.GetOut(), rInf.GetFont()->GetLanguage() );
@@ -1176,14 +1179,14 @@ void SwSubFont::DrawText_( SwDrawTextInfo &rInf, const bool bGrey )
                 // If the length of the original string and the CaseMapped one
                 // are different, it is necessary to handle the given text part as
                 // a single snippet since its size may differ, too.
-                sal_Int32 nOldIdx(rInf.GetIdx());
-                sal_Int32 nOldLen(rInf.GetLen());
-                const OUString aSnippet(oldStr.copy(nOldIdx, nOldLen));
+                TextFrameIndex const nOldIdx(rInf.GetIdx());
+                TextFrameIndex const nOldLen(rInf.GetLen());
+                const OUString aSnippet(oldStr.copy(sal_Int32(nOldIdx), sal_Int32(nOldLen)));
                 const OUString aNewText = CalcCaseMap(aSnippet);
 
                 rInf.SetText( aNewText );
-                rInf.SetIdx( 0 );
-                rInf.SetLen( aNewText.getLength() );
+                rInf.SetIdx( TextFrameIndex(0) );
+                rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
 
                 pLastFont->DrawText( rInf );
 
@@ -1205,25 +1208,28 @@ void SwSubFont::DrawText_( SwDrawTextInfo &rInf, const bool bGrey )
         Size aFontSize = GetTextSize_( rInf );
         const OUString oldStr = rInf.GetText();
 
-        sal_Int32 nOldIdx = rInf.GetIdx();
-        sal_Int32 nOldLen = rInf.GetLen();
+        TextFrameIndex const nOldIdx = rInf.GetIdx();
+        TextFrameIndex const nOldLen = rInf.GetLen();
         long nSpace = 0;
         if( rInf.GetSpace() )
         {
-            sal_Int32 nTmpEnd = nOldIdx + nOldLen;
-            if (nTmpEnd > oldStr.getLength())
-                nTmpEnd = oldStr.getLength();
+            TextFrameIndex nTmpEnd = nOldIdx + nOldLen;
+            if (nTmpEnd > TextFrameIndex(oldStr.getLength()))
+                nTmpEnd = TextFrameIndex(oldStr.getLength());
 
             const SwScriptInfo* pSI = rInf.GetScriptInfo();
 
             const bool bAsianFont =
                 ( rInf.GetFont() && SwFontScript::CJK == rInf.GetFont()->GetActual() );
-            for( sal_Int32 nTmp = nOldIdx; nTmp < nTmpEnd; ++nTmp )
+            for (TextFrameIndex nTmp = nOldIdx; nTmp < nTmpEnd; ++nTmp)
             {
-                if (CH_BLANK == oldStr[nTmp] || bAsianFont ||
-                    ( nTmp + 1 < oldStr.getLength() && pSI &&
-                      i18n::ScriptType::ASIAN == pSI->ScriptType( nTmp + 1 ) ) )
+                if (CH_BLANK == oldStr[sal_Int32(nTmp)] || bAsianFont ||
+                    (nTmp + TextFrameIndex(1) < TextFrameIndex(oldStr.getLength())
+                     && pSI
+                     && i18n::ScriptType::ASIAN == pSI->ScriptType(nTmp + TextFrameIndex(1))))
+                {
                     ++nSpace;
+                }
             }
 
             // if next portion if a hole portion we do not consider any
@@ -1236,8 +1242,8 @@ void SwSubFont::DrawText_( SwDrawTextInfo &rInf, const bool bGrey )
 
         rInf.SetWidth( sal_uInt16(aFontSize.Width() + nSpace) );
         rInf.SetText( "  " );
-        rInf.SetIdx( 0 );
-        rInf.SetLen( 2 );
+        rInf.SetIdx( TextFrameIndex(0) );
+        rInf.SetLen( TextFrameIndex(2) );
         SetUnderline( nOldUnder );
         rInf.SetUnderFnt( nullptr );
 
@@ -1270,7 +1276,7 @@ void SwSubFont::DrawStretchText_( SwDrawTextInfo &rInf )
         pUnderFnt = rInf.GetUnderFnt();
     }
 
-    if ( !pLastFont || pLastFont->GetOwner() != m_pMagic )
+    if ( !pLastFont || pLastFont->GetOwner() != reinterpret_cast<const void*>(m_nFontCacheId) )
         ChgFnt( rInf.GetShell(), rInf.GetOut() );
 
     SwDigitModeModifier aDigitModeModifier( rInf.GetOut(), rInf.GetFont()->GetLanguage() );
@@ -1305,20 +1311,21 @@ void SwSubFont::DrawStretchText_( SwDrawTextInfo &rInf )
 
         if ( !IsCaseMap() )
             rInf.GetOut().DrawStretchText( aPos, rInf.GetWidth(),
-                            rInf.GetText(), rInf.GetIdx(), rInf.GetLen() );
+                rInf.GetText(), sal_Int32(rInf.GetIdx()), sal_Int32(rInf.GetLen()));
         else
-            rInf.GetOut().DrawStretchText( aPos, rInf.GetWidth(), CalcCaseMap(
-                            rInf.GetText() ), rInf.GetIdx(), rInf.GetLen() );
+            rInf.GetOut().DrawStretchText( aPos, rInf.GetWidth(),
+                    CalcCaseMap(rInf.GetText()),
+                    sal_Int32(rInf.GetIdx()), sal_Int32(rInf.GetLen()));
     }
 
     if( pUnderFnt && nOldUnder != LINESTYLE_NONE )
     {
         const OUString oldStr = rInf.GetText();
-        sal_Int32 nOldIdx = rInf.GetIdx();
-        sal_Int32 nOldLen = rInf.GetLen();
+        TextFrameIndex const nOldIdx = rInf.GetIdx();
+        TextFrameIndex const nOldLen = rInf.GetLen();
         rInf.SetText( "  " );
-        rInf.SetIdx( 0 );
-        rInf.SetLen( 2 );
+        rInf.SetIdx( TextFrameIndex(0) );
+        rInf.SetLen( TextFrameIndex(2) );
         SetUnderline( nOldUnder );
         rInf.SetUnderFnt( nullptr );
 
@@ -1336,17 +1343,18 @@ void SwSubFont::DrawStretchText_( SwDrawTextInfo &rInf )
     rInf.SetPos(aOldPos);
 }
 
-sal_Int32 SwSubFont::GetCursorOfst_( SwDrawTextInfo& rInf )
+TextFrameIndex SwSubFont::GetCursorOfst_( SwDrawTextInfo& rInf )
 {
-    if ( !pLastFont || pLastFont->GetOwner()!=m_pMagic )
+    if ( !pLastFont || pLastFont->GetOwner() != reinterpret_cast<const void*>(m_nFontCacheId) )
         ChgFnt( rInf.GetShell(), rInf.GetOut() );
 
     SwDigitModeModifier aDigitModeModifier( rInf.GetOut(), rInf.GetFont()->GetLanguage() );
 
-    sal_Int32 nLn = rInf.GetLen() == COMPLETE_STRING ? rInf.GetText().getLength()
-                                                 : rInf.GetLen();
+    TextFrameIndex const nLn = rInf.GetLen() == TextFrameIndex(COMPLETE_STRING)
+            ? TextFrameIndex(rInf.GetText().getLength())
+            : rInf.GetLen();
     rInf.SetLen( nLn );
-    sal_Int32 nCursor = 0;
+    TextFrameIndex nCursor(0);
     if( IsCapital() && nLn )
         nCursor = GetCapitalCursorOfst( rInf );
     else
@@ -1468,7 +1476,7 @@ void SwDrawTextInfo::Shift( sal_uInt16 nDir )
 /**
  * @note Used for the "continuous underline" feature.
  **/
-SwUnderlineFont::SwUnderlineFont( SwFont& rFnt, sal_Int32 nEnd, const Point& rPoint )
+SwUnderlineFont::SwUnderlineFont(SwFont& rFnt, TextFrameIndex const nEnd, const Point& rPoint)
         : m_aPos( rPoint ), m_nEnd( nEnd ), m_pFont( &rFnt )
 {
 };

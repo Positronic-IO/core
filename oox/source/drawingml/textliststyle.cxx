@@ -18,6 +18,7 @@
  */
 
 #include <drawingml/textliststyle.hxx>
+#include <sal/log.hxx>
 
 namespace oox { namespace drawingml {
 
@@ -62,7 +63,7 @@ TextListStyle& TextListStyle::operator=(const TextListStyle& rStyle)
     return *this;
 }
 
-void applyStyleList( const TextParagraphPropertiesVector& rSourceListStyle, TextParagraphPropertiesVector& rDestListStyle )
+static void applyStyleList( const TextParagraphPropertiesVector& rSourceListStyle, TextParagraphPropertiesVector& rDestListStyle )
 {
     TextParagraphPropertiesVector::iterator aDestListStyleIter( rDestListStyle.begin() );
     for (auto const& elemSource : rSourceListStyle)

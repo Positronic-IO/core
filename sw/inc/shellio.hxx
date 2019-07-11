@@ -29,6 +29,8 @@
 #include <tools/ref.hxx>
 #include <rtl/ref.hxx>
 #include <osl/thread.h>
+#include <o3tl/deleter.hxx>
+#include <o3tl/typed_flags_set.hxx>
 #include "swdllapi.h"
 #include "docfac.hxx"
 
@@ -64,6 +66,7 @@ class SW_DLLPUBLIC SwAsciiOptions
     rtl_TextEncoding eCharSet;
     LanguageType nLanguage;
     LineEnd eCRLF_Flag;
+    bool bIncludeBOM;   // Whether to include a byte-order-mark in the output.
 
 public:
 
@@ -79,12 +82,16 @@ public:
     LineEnd GetParaFlags() const { return eCRLF_Flag; }
     void SetParaFlags( LineEnd eVal ) { eCRLF_Flag = eVal; }
 
+    bool GetIncludeBOM() const { return bIncludeBOM; }
+    void SetIncludeBOM( bool bVal ) { bIncludeBOM = bVal; }
+
     void Reset()
     {
         sFont.clear();
         eCRLF_Flag = GetSystemLineEnd();
         eCharSet = ::osl_getThreadTextEncoding();
         nLanguage = LANGUAGE_SYSTEM;
+        bIncludeBOM = true;
     }
     // for the automatic conversion (mail/news/...)
     void ReadUserData( const OUString& );
@@ -137,12 +144,12 @@ public:
 class SW_DLLPUBLIC SwReader: public SwDocFac
 {
     SvStream* pStrm;
-    tools::SvRef<SotStorage> pStg;
+    tools::SvRef<SotStorage> const pStg;
     css::uno::Reference < css::embed::XStorage > xStg;
-    SfxMedium* pMedium;     // Who wants to obtain a Medium (W4W).
+    SfxMedium* const pMedium;     // Who wants to obtain a Medium (W4W).
 
-    SwPaM* pCursor;
-    OUString aFileName;
+    SwPaM* const pCursor;
+    OUString const aFileName;
     OUString sBaseURL;
     bool mbSkipImages;
 
@@ -171,9 +178,17 @@ protected:
     void                SetSkipImages( bool bSkipImages ) { mbSkipImages = bSkipImages; }
 };
 
+typedef std::unique_ptr<SwReader, o3tl::default_delete<SwReader>> SwReaderPtr;
+
 // Special Readers can be both!! (Excel, W4W, .. ).
-#define SW_STREAM_READER    1
-#define SW_STORAGE_READER   2
+enum class SwReaderType {
+    NONE = 0x00,
+    Stream = 0x01,
+    Storage = 0x02
+};
+namespace o3tl {
+    template<> struct typed_flags<SwReaderType> : is_typed_flags<SwReaderType, 0x03> {};
+};
 
 extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportDOC(SvStream &rStream, const OUString &rFltName);
 extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportRTF(SvStream &rStream);
@@ -202,7 +217,7 @@ protected:
     SwgReaderOption m_aOption;
     bool m_bInsertMode : 1;
     bool m_bTemplateBrowseMode : 1;
-    bool m_bReadUTF8: 1;      // Interprete stream as UTF-8.
+    bool m_bReadUTF8: 1;      // Interpret stream as UTF-8.
     bool m_bBlockMode: 1;
     bool m_bOrganizerMode : 1;
     bool m_bHasAskTemplateName : 1;
@@ -215,7 +230,7 @@ public:
     Reader();
     virtual ~Reader();
 
-    virtual int GetReaderType();
+    virtual SwReaderType GetReaderType();
     SwgReaderOption& GetReaderOpt() { return m_aOption; }
 
     virtual void SetFltName( const OUString& rFltNm );
@@ -277,7 +292,7 @@ class SW_DLLPUBLIC StgReader : public Reader
     OUString aFltName;
 
 public:
-    virtual int GetReaderType() override;
+    virtual SwReaderType GetReaderType() override;
     const OUString& GetFltName() { return aFltName; }
     virtual void SetFltName( const OUString& r ) override;
 };
@@ -403,6 +418,7 @@ public:
 
     bool m_bBlock : 1;
     bool m_bOrganizerMode : 1;
+    bool m_bHideDeleteRedlines : 1;
 
     Writer();
     virtual ~Writer() override;
@@ -489,7 +505,7 @@ class SW_DLLPUBLIC SwWriter
     css::uno::Reference < css::embed::XStorage > xStg;
     SfxMedium* pMedium;
 
-    SwPaM* pOutPam;
+    SwPaM* const pOutPam;
     SwCursorShell *pShell;
     SwDoc &rDoc;
 
@@ -516,9 +532,9 @@ ErrCode GetSaveWarningOfMSVBAStorage( SfxObjectShell &rDocS );
 struct SwReaderWriterEntry
 {
     Reader* pReader;
-    FnGetReader fnGetReader;
-    FnGetWriter fnGetWriter;
-    bool bDelReader;
+    FnGetReader const fnGetReader;
+    FnGetWriter const fnGetWriter;
+    bool const bDelReader;
 
     SwReaderWriterEntry( const FnGetReader fnReader, const FnGetWriter fnWriter, bool bDel )
         : pReader( nullptr ), fnGetReader( fnReader ), fnGetWriter( fnWriter ), bDelReader( bDel )

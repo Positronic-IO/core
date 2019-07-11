@@ -35,6 +35,7 @@
 
 #include <fmtlsplt.hxx>
 #include <xmloff/xmluconv.hxx>
+#include <osl/diagnose.h>
 
 using ::editeng::SvxBorderLine;
 using namespace ::xmloff::token;
@@ -132,7 +133,7 @@ bool sw_frmitems_parseXMLBorder( const OUString& rValue,
     return rHasStyle || rHasWidth || rHasColor;
 }
 
-void sw_frmitems_setXMLBorderStyle( SvxBorderLine& rLine, sal_uInt16 nStyle )
+static void sw_frmitems_setXMLBorderStyle( SvxBorderLine& rLine, sal_uInt16 nStyle )
 {
     SvxBorderLineStyle eStyle = SvxBorderLineStyle::NONE;
     if ( nStyle != table::BorderLineStyle::NONE )
@@ -140,7 +141,7 @@ void sw_frmitems_setXMLBorderStyle( SvxBorderLine& rLine, sal_uInt16 nStyle )
     rLine.SetBorderLineStyle(eStyle);
 }
 
-bool sw_frmitems_setXMLBorder( SvxBorderLine*& rpLine,
+bool sw_frmitems_setXMLBorder( std::unique_ptr<SvxBorderLine>& rpLine,
                                     bool bHasStyle, sal_uInt16 nStyle,
                                     bool bHasWidth, sal_uInt16 nWidth,
                                     sal_uInt16 nNamedWidth,
@@ -151,12 +152,7 @@ bool sw_frmitems_setXMLBorder( SvxBorderLine*& rpLine,
         (bHasWidth && USHRT_MAX == nNamedWidth && 0 == nWidth) )
     {
         bool bRet = nullptr != rpLine;
-        if( rpLine )
-        {
-            delete rpLine;
-            rpLine = nullptr;
-        }
-
+        rpLine.reset();
         return bRet;
     }
 
@@ -166,7 +162,7 @@ bool sw_frmitems_setXMLBorder( SvxBorderLine*& rpLine,
 
     // We now do know that there will be a line
     if( !rpLine )
-        rpLine = new SvxBorderLine;
+        rpLine.reset(new SvxBorderLine);
 
     if( ( bHasWidth &&
           (USHRT_MAX != nNamedWidth || (nWidth != rpLine->GetWidth() ) ) ) ||
@@ -208,12 +204,12 @@ bool sw_frmitems_setXMLBorder( SvxBorderLine*& rpLine,
     return true;
 }
 
-void sw_frmitems_setXMLBorder( SvxBorderLine*& rpLine,
+void sw_frmitems_setXMLBorder( std::unique_ptr<SvxBorderLine>& rpLine,
   sal_uInt16 nWidth, sal_uInt16 nOutWidth,
   sal_uInt16 nInWidth, sal_uInt16 nDistance )
 {
     if( !rpLine )
-        rpLine = new SvxBorderLine;
+        rpLine.reset(new SvxBorderLine);
 
     if( nWidth > 0 )
         rpLine->SetWidth( nWidth );

@@ -23,15 +23,12 @@
 #include <memory>
 #include <pres.hxx>
 #include <tools/gen.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svx/fmview.hxx>
-#include <svx/svdmark.hxx>
 #include <svx/svdpage.hxx>
 #include <vcl/idle.hxx>
-#include "fupoor.hxx"
 
 #include "smarttag.hxx"
-#include <editeng/numitem.hxx>
 
 class SdDrawDocument;
 class SdPage;
@@ -40,16 +37,12 @@ class SdrGrafObj;
 class SdrMediaObj;
 class OutputDevice;
 class ImageMap;
-class Point;
 class Graphic;
 class SdrOutliner;
-class TransferableDataHelper;
-class Outliner;
 
 namespace sd {
 
 class DrawDocShell;
-struct SdNavigatorDropEvent;
 class ViewShell;
 class Window;
 class ViewClipboard;
@@ -187,7 +180,6 @@ public:
     virtual bool HasMarkablePoints() const override;
     virtual sal_Int32 GetMarkablePointCount() const override;
     virtual bool HasMarkedPoints() const override;
-    virtual sal_Int32 GetMarkedPointCount() const override;
     virtual bool IsPointMarkable(const SdrHdl& rHdl) const override;
     virtual bool MarkPoint(SdrHdl& rHdl, bool bUnmark=false) override;
     virtual void CheckPossibilities() override;
@@ -215,12 +207,12 @@ public:
         const bool bHandleBullets,
         const SvxNumRule* pNumRule);
 
-    void SetPossibilitiesDirty() { bPossibilitiesDirty = true; }
-    void SetMoveAllowed( bool bSet ) { bMoveAllowed = bSet; }
-    void SetMoveProtected( bool bSet ) { bMoveProtect = bSet; }
-    void SetResizeFreeAllowed( bool bSet ) { bResizeFreeAllowed = bSet; }
-    void SetResizePropAllowed( bool bSet ) { bResizePropAllowed = bSet; }
-    void SetResizeProtected( bool bSet ) { bResizeProtect = bSet; }
+    void SetPossibilitiesDirty() { m_bPossibilitiesDirty = true; }
+    void SetMoveAllowed( bool bSet ) { m_bMoveAllowed = bSet; }
+    void SetMoveProtected( bool bSet ) { m_bMoveProtect = bSet; }
+    void SetResizeFreeAllowed( bool bSet ) { m_bResizeFreeAllowed = bSet; }
+    void SetResizePropAllowed( bool bSet ) { m_bResizePropAllowed = bSet; }
+    void SetResizeProtected( bool bSet ) { m_bResizeProtect = bSet; }
 
     SdrObject* GetEmptyPresentationObject( PresObjKind eKind );
     SdPage* GetPage();
@@ -238,9 +230,9 @@ protected:
     SdDrawDocument&         mrDoc;
     DrawDocShell*           mpDocSh;
     ViewShell*              mpViewSh;
-    SdrMarkList*            mpDragSrcMarkList;
+    std::unique_ptr<SdrMarkList> mpDragSrcMarkList;
     SdrObject*              mpDropMarkerObj;
-    SdrDropMarkerOverlay*   mpDropMarker;
+    std::unique_ptr<SdrDropMarkerOverlay> mpDropMarker;
     sal_uInt16              mnDragSrcPgNum;
     Point                   maDropPos;
     ::std::vector<OUString> maDropFileVector;

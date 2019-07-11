@@ -17,17 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <sfx2/objsh.hxx>
-
 #include <drawpage.hxx>
 #include <drwlayer.hxx>
-#include <document.hxx>
 #include <pageuno.hxx>
 
 ScDrawPage::ScDrawPage(ScDrawLayer& rNewModel, bool bMasterPage)
 :   FmFormPage(rNewModel, bMasterPage)
 {
-    SetSize( Size( LONG_MAX, LONG_MAX ) );
+    SetSize( Size( SAL_MAX_INT32, SAL_MAX_INT32 ) );
+        // largest size supported by sal_Int32 SdrPage::mnWidth/Height
 }
 
 ScDrawPage::~ScDrawPage()

@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <config_features.h>
 
 #include <vcl/svapp.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -50,8 +51,6 @@ GalleryPreview::GalleryPreview(vcl::Window* pParent, WinBits nStyle, GalleryThem
     InitSettings();
 }
 
-VCL_BUILDER_FACTORY_CONSTRUCTOR(GalleryPreview, WB_TABSTOP)
-
 Size GalleryPreview::GetOptimalSize() const
 {
     return LogicToPixel(Size(70, 88), MapMode(MapUnit::MapAppFont));
@@ -61,11 +60,13 @@ bool GalleryPreview::SetGraphic( const INetURLObject& _aURL )
 {
     bool bRet = true;
     Graphic aGraphic;
+#if HAVE_FEATURE_AVMEDIA
     if( ::avmedia::MediaWindow::isMediaURL( _aURL.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous ), "" ) )
     {
         aGraphic = BitmapEx(RID_SVXBMP_GALLERY_MEDIA);
     }
     else
+#endif
     {
         GraphicFilter& rFilter = GraphicFilter::GetGraphicFilter();
         GalleryProgress aProgress( &rFilter );
@@ -235,6 +236,7 @@ void GalleryPreview::StartDrag( sal_Int8, const Point& )
 
 void GalleryPreview::PreviewMedia( const INetURLObject& rURL )
 {
+#if HAVE_FEATURE_AVMEDIA
     if (rURL.GetProtocol() != INetProtocol::NotValid)
     {
         ::avmedia::MediaFloater* pFloater = avmedia::getMediaFloater();
@@ -248,9 +250,96 @@ void GalleryPreview::PreviewMedia( const INetURLObject& rURL )
         if (pFloater)
             pFloater->setURL( rURL.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous ), "", true );
     }
+#else
+    (void) rURL;
+#endif
 }
 
-void drawTransparenceBackground(vcl::RenderContext& rOut, const Point& rPos, const Size& rSize)
+SvxGalleryPreview::SvxGalleryPreview()
+{
+}
+
+void SvxGalleryPreview::SetDrawingArea(weld::DrawingArea* pDrawingArea)
+{
+    CustomWidgetController::SetDrawingArea(pDrawingArea);
+    Size aSize(pDrawingArea->get_ref_device().LogicToPixel(Size(70, 88), MapMode(MapUnit::MapAppFont)));
+    pDrawingArea->set_size_request(aSize.Width(), aSize.Height());
+    pDrawingArea->set_help_id(HID_GALLERY_WINDOW);
+}
+
+bool SvxGalleryPreview::SetGraphic( const INetURLObject& _aURL )
+{
+    bool bRet = true;
+    Graphic aGraphic;
+#if HAVE_FEATURE_AVMEDIA
+    if( ::avmedia::MediaWindow::isMediaURL( _aURL.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous ), "" ) )
+    {
+        aGraphic = BitmapEx(RID_SVXBMP_GALLERY_MEDIA);
+    }
+    else
+#endif
+    {
+        GraphicFilter& rFilter = GraphicFilter::GetGraphicFilter();
+        GalleryProgress aProgress( &rFilter );
+        if( rFilter.ImportGraphic( aGraphic, _aURL ) )
+            bRet = false;
+    }
+
+    SetGraphic( aGraphic );
+    Invalidate();
+    return bRet;
+}
+
+bool SvxGalleryPreview::ImplGetGraphicCenterRect( const Graphic& rGraphic, tools::Rectangle& rResultRect ) const
+{
+    const Size  aWinSize(GetOutputSizePixel());
+    Size        aNewSize(GetDrawingArea()->get_ref_device().LogicToPixel(rGraphic.GetPrefSize(), rGraphic.GetPrefMapMode()));
+    bool        bRet = false;
+
+    if( aNewSize.Width() && aNewSize.Height() )
+    {
+        // scale to fit window
+        const double fGrfWH = static_cast<double>(aNewSize.Width()) / aNewSize.Height();
+        const double fWinWH = static_cast<double>(aWinSize.Width()) / aWinSize.Height();
+
+        if ( fGrfWH < fWinWH )
+        {
+            aNewSize.setWidth( static_cast<long>( aWinSize.Height() * fGrfWH ) );
+            aNewSize.setHeight( aWinSize.Height() );
+        }
+        else
+        {
+            aNewSize.setWidth( aWinSize.Width() );
+            aNewSize.setHeight( static_cast<long>( aWinSize.Width() / fGrfWH) );
+        }
+
+        const Point aNewPos( ( aWinSize.Width()  - aNewSize.Width() ) >> 1,
+                             ( aWinSize.Height() - aNewSize.Height() ) >> 1 );
+
+        rResultRect = tools::Rectangle( aNewPos, aNewSize );
+        bRet = true;
+    }
+
+    return bRet;
+}
+
+void SvxGalleryPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
+{
+    rRenderContext.SetBackground(Wallpaper(GALLERY_BG_COLOR));
+
+    if (ImplGetGraphicCenterRect(aGraphicObj.GetGraphic(), aPreviewRect))
+    {
+        const Point aPos( aPreviewRect.TopLeft() );
+        const Size  aSize( aPreviewRect.GetSize() );
+
+        if( aGraphicObj.IsAnimated() )
+            aGraphicObj.StartAnimation(&rRenderContext, aPos, aSize);
+        else
+            aGraphicObj.Draw(&rRenderContext, aPos, aSize);
+    }
+}
+
+static void drawTransparenceBackground(vcl::RenderContext& rOut, const Point& rPos, const Size& rSize)
 {
 
     // draw checkered background
@@ -323,7 +412,7 @@ void GalleryIconView::UserDraw(const UserDrawEvent& rUDEvt)
 
     if (bNeedToCreate)
     {
-        SgaObject* pObj = mpTheme->AcquireObject(nId - 1);
+        std::unique_ptr<SgaObject> pObj = mpTheme->AcquireObject(nId - 1);
 
         if(pObj)
         {
@@ -331,7 +420,6 @@ void GalleryIconView::UserDraw(const UserDrawEvent& rUDEvt)
             aItemTextTitle = GalleryBrowser2::GetItemText(*mpTheme, *pObj, GalleryItemFlags::Title);
 
             mpTheme->SetPreviewBitmapExAndStrings(nId - 1, aBitmapEx, aSize, aItemTextTitle, aItemTextPath);
-            GalleryTheme::ReleaseObject(pObj);
         }
     }
 
@@ -441,12 +529,11 @@ OUString GalleryListView::GetCellText(long _nRow, sal_uInt16 /*nColumnId*/) cons
     OUString sRet;
     if( mpTheme && ( _nRow < static_cast< long >( mpTheme->GetObjectCount() ) ) )
     {
-        SgaObject* pObj = mpTheme->AcquireObject( _nRow );
+        std::unique_ptr<SgaObject> pObj = mpTheme->AcquireObject( _nRow );
 
         if( pObj )
         {
             sRet = GalleryBrowser2::GetItemText( *mpTheme, *pObj, GalleryItemFlags::Title );
-            GalleryTheme::ReleaseObject( pObj );
         }
     }
 
@@ -505,7 +592,7 @@ void GalleryListView::PaintField(vcl::RenderContext& rDev, const tools::Rectangl
 
         if(bNeedToCreate)
         {
-            SgaObject* pObj = mpTheme->AcquireObject(mnCurRow);
+            std::unique_ptr<SgaObject> pObj = mpTheme->AcquireObject(mnCurRow);
 
             if(pObj)
             {
@@ -514,7 +601,6 @@ void GalleryListView::PaintField(vcl::RenderContext& rDev, const tools::Rectangl
                 aItemTextPath = GalleryBrowser2::GetItemText(*mpTheme, *pObj, GalleryItemFlags::Path);
 
                 mpTheme->SetPreviewBitmapExAndStrings(mnCurRow, aBitmapEx, aSize, aItemTextTitle, aItemTextPath);
-                GalleryTheme::ReleaseObject(pObj);
             }
         }
 

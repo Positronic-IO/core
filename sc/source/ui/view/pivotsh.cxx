@@ -55,7 +55,7 @@ ScPivotShell::ScPivotShell( ScTabViewShell* pViewSh ) :
 {
     SetPool( &pViewSh->GetPool() );
     ScViewData& rViewData = pViewSh->GetViewData();
-    ::svl::IUndoManager* pMgr = rViewData.GetSfxDocShell()->GetUndoManager();
+    SfxUndoManager* pMgr = rViewData.GetSfxDocShell()->GetUndoManager();
     SetUndoManager( pMgr );
     if ( !rViewData.GetDocument()->IsUndoEnabled() )
     {
@@ -102,11 +102,9 @@ void ScPivotShell::Execute( const SfxRequest& rReq )
                 aArgSet.Put( ScQueryItem( SCITEM_QUERYDATA, &rViewData, &aQueryParam ) );
 
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                 ScopedVclPtr<AbstractScPivotFilterDlg> pDlg(pFact->CreateScPivotFilterDlg(
                     pViewShell->GetDialogParent(), aArgSet, nSrcTab));
-                OSL_ENSURE(pDlg, "Dialog create fail!");
 
                 if( pDlg->Execute() == RET_OK )
                 {

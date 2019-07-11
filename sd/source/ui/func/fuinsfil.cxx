@@ -51,10 +51,12 @@
 #include <View.hxx>
 #include <strings.hrc>
 #include <stlpool.hxx>
+#include <sdmod.hxx>
 #include <sdpage.hxx>
 #include <strmname.h>
 #include <ViewShellBase.hxx>
 #include <DrawViewShell.hxx>
+#include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
 #include <DrawDocShell.hxx>
 #include <GraphicDocShell.hxx>
@@ -76,7 +78,7 @@ namespace
 
 OUString lcl_GetExtensionsList ( ::std::vector< FilterDesc > const& rFilterDescList )
 {
-    OUString aExtensions;
+    OUStringBuffer aExtensions;
     ::std::vector< FilterDesc >::const_iterator aIter( rFilterDescList.begin() );
 
     while (aIter != rFilterDescList.end())
@@ -86,14 +88,14 @@ OUString lcl_GetExtensionsList ( ::std::vector< FilterDesc > const& rFilterDescL
         if ( aExtensions.indexOf( sWildcard ) == -1 )
         {
             if ( !aExtensions.isEmpty() )
-                aExtensions += ";";
-            aExtensions += sWildcard;
+                aExtensions.append(";");
+            aExtensions.append(sWildcard);
         }
 
         ++aIter;
     }
 
-    return aExtensions;
+    return aExtensions.makeStringAndClear();
 }
 
 void lcl_AddFilter ( ::std::vector< FilterDesc >& rFilterDescList,
@@ -265,7 +267,7 @@ void FuInsertFile::DoExecute( SfxRequest& rReq )
 
     SfxGetpApp()->GetFilterMatcher().GuessFilter(*xMedium, pFilter);
 
-    bool                bDrawMode = mpViewShell && dynamic_cast< const DrawViewShell *>( mpViewShell ) !=  nullptr;
+    bool                bDrawMode = dynamic_cast< const DrawViewShell *>( mpViewShell ) != nullptr;
     bool                bInserted = false;
 
     if( pFilter )
@@ -331,10 +333,7 @@ bool FuInsertFile::InsSDDinDrMode(SfxMedium* pMedium)
     mpDocSh->SetWaitCursor( false );
     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
     vcl::Window* pParent = mpViewShell ? mpViewShell->GetActiveWindow() : nullptr;
-    ScopedVclPtr<AbstractSdInsertPagesObjsDlg> pDlg(pFact ? pFact->CreateSdInsertPagesObjsDlg(pParent, mpDoc, pMedium, aFile) : nullptr);
-
-    if( !pDlg )
-        return false;
+    ScopedVclPtr<AbstractSdInsertPagesObjsDlg> pDlg( pFact->CreateSdInsertPagesObjsDlg(pParent, mpDoc, pMedium, aFile) );
 
     sal_uInt16 nRet = pDlg->Execute();
 
@@ -415,9 +414,7 @@ bool FuInsertFile::InsSDDinDrMode(SfxMedium* pMedium)
 void FuInsertFile::InsTextOrRTFinDrMode(SfxMedium* pMedium)
 {
     SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-    ScopedVclPtr<AbstractSdInsertPagesObjsDlg> pDlg(pFact ? pFact->CreateSdInsertPagesObjsDlg(mpViewShell->GetActiveWindow(), mpDoc, nullptr, aFile) : nullptr);
-    if( !pDlg )
-        return;
+    ScopedVclPtr<AbstractSdInsertPagesObjsDlg> pDlg( pFact->CreateSdInsertPagesObjsDlg(mpViewShell->GetActiveWindow(), mpDoc, nullptr, aFile) );
 
     mpDocSh->SetWaitCursor( false );
 
@@ -497,19 +494,18 @@ void FuInsertFile::InsTextOrRTFinDrMode(SfxMedium* pMedium)
                 }
             }
 
-            OutlinerParaObject* pOPO = pOutliner->CreateParaObject();
+            std::unique_ptr<OutlinerParaObject> pOPO = pOutliner->CreateParaObject();
 
             if (pOutlinerView)
             {
                 pOutlinerView->InsertText(*pOPO);
-                delete pOPO;
             }
             else
             {
                 SdrRectObj* pTO = new SdrRectObj(
                     mpView->getSdrModelFromSdrView(),
                     OBJ_TEXT);
-                pTO->SetOutlinerParaObject(pOPO);
+                pTO->SetOutlinerParaObject(std::move(pOPO));
 
                 const bool bUndo = mpView->IsUndoEnabled();
                 if( bUndo )
@@ -630,8 +626,7 @@ void FuInsertFile::InsTextOrRTFinOlMode(SfxMedium* pMedium)
         mpDocSh->SetWaitCursor( false );
 
         std::unique_ptr<SfxProgress> pProgress(new SfxProgress( mpDocSh, SdResId(STR_CREATE_PAGES), nNewPages));
-        if( pProgress )
-            pProgress->SetState( 0, 100 );
+        pProgress->SetState( 0, 100 );
 
         nNewPages = 0;
 
@@ -663,8 +658,7 @@ void FuInsertFile::InsTextOrRTFinOlMode(SfxMedium* pMedium)
             if( Outliner::HasParaFlag( pSourcePara, ParaFlag::ISPAGE ) )
             {
                 nNewPages++;
-                if( pProgress )
-                    pProgress->SetState( nNewPages );
+                pProgress->SetState( nNewPages );
             }
 
             pSourcePara = pOutliner->GetParagraph( ++nPos );

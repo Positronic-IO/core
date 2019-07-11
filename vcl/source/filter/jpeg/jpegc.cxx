@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +55,9 @@ struct ErrorManagerStruct
 #pragma warning(pop)
 #endif
 
-extern "C" void errorExit (j_common_ptr cinfo)
+extern "C" {
+
+static void errorExit (j_common_ptr cinfo)
 {
     char buffer[JMSG_LENGTH_MAX];
     (*cinfo->err->format_message) (cinfo, buffer);
@@ -63,11 +66,13 @@ extern "C" void errorExit (j_common_ptr cinfo)
     longjmp(error->setjmp_buffer, 1);
 }
 
-extern "C" void outputMessage (j_common_ptr cinfo)
+static void outputMessage (j_common_ptr cinfo)
 {
     char buffer[JMSG_LENGTH_MAX];
     (*cinfo->err->format_message) (cinfo, buffer);
     SAL_WARN("vcl.filter", "failure reading JPEG: " << buffer);
+}
+
 }
 
 static int GetWarningLimit()
@@ -75,7 +80,9 @@ static int GetWarningLimit()
     return utl::ConfigManager::IsFuzzing() ? 5 : 1000;
 }
 
-extern "C" void emitMessage (j_common_ptr cinfo, int msg_level)
+extern "C" {
+
+static void emitMessage (j_common_ptr cinfo, int msg_level)
 {
     if (msg_level < 0)
     {
@@ -90,6 +97,8 @@ extern "C" void emitMessage (j_common_ptr cinfo, int msg_level)
     }
     else if (cinfo->err->trace_level >= msg_level)
         cinfo->err->output_message(cinfo);
+}
+
 }
 
 class JpegDecompressOwner
@@ -138,7 +147,7 @@ struct JpegStuff
     std::vector<sal_uInt8> pCYMKBuffer;
 };
 
-void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, long* pLines,
+static void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, long* pLines,
               Size const & previewSize, GraphicFilterImportFlags nImportFlags,
               BitmapScopedWriteAccess* ppAccess)
 {
@@ -236,7 +245,7 @@ void ReadJPEG(JpegStuff& rContext, JPEGReader* pJPEGReader, void* pInputStream, 
         else
             rContext.pScopedAccess.reset(new BitmapScopedWriteAccess(pJPEGReader->GetBitmap()));
 
-        BitmapScopedWriteAccess& pAccess = bUseExistingBitmap ? *ppAccess : *rContext.pScopedAccess.get();
+        BitmapScopedWriteAccess& pAccess = bUseExistingBitmap ? *ppAccess : *rContext.pScopedAccess;
 
         if (pAccess)
         {

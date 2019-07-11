@@ -32,6 +32,7 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
@@ -319,7 +320,7 @@ void DocumentFocusListener::attachRecursive(
         return;
 
     // If not already done, add the broadcaster to the list and attach as listener.
-    uno::Reference< uno::XInterface > xInterface = xBroadcaster;
+    const uno::Reference< uno::XInterface >& xInterface = xBroadcaster;
     if( m_aRefList.insert(xInterface).second )
     {
         xBroadcaster->addAccessibleEventListener(static_cast< accessibility::XAccessibleEventListener *>(this));
@@ -619,7 +620,7 @@ static void handle_menu_highlighted(::VclMenuEvent const * pEvent)
 
 /*****************************************************************************/
 
-void WindowEventHandler(void *, VclSimpleEvent& rEvent)
+static void WindowEventHandler(void *, VclSimpleEvent& rEvent)
 {
     try
     {
@@ -653,7 +654,7 @@ void WindowEventHandler(void *, VclSimpleEvent& rEvent)
             }
             else if (const VclAccessibleEvent* pAccEvent = dynamic_cast<const VclAccessibleEvent*>(&rEvent))
             {
-                uno::Reference< accessibility::XAccessible > xAccessible = pAccEvent->GetAccessible();
+                const uno::Reference< accessibility::XAccessible >& xAccessible = pAccEvent->GetAccessible();
                 if (xAccessible.is())
                     atk_wrapper_focus_tracker_notify_when_idle(xAccessible);
             }

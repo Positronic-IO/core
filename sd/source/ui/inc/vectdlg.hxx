@@ -35,18 +35,21 @@ class DrawDocShell;
 
 class SdVectorizeDlg : public weld::GenericDialogController
 {
-    ::sd::DrawDocShell* m_pDocSh;
-    Bitmap              aBmp;
+    ::sd::DrawDocShell* const m_pDocSh;
+    Bitmap const              aBmp;
     Bitmap              aPreviewBmp;
     GDIMetaFile         aMtf;
+
+    SvxGraphCtrl m_aBmpWin;
+    SvxGraphCtrl m_aMtfWin;
 
     std::unique_ptr<weld::SpinButton> m_xNmLayers;
     std::unique_ptr<weld::MetricSpinButton> m_xMtReduce;
     std::unique_ptr<weld::Label> m_xFtFillHoles;
     std::unique_ptr<weld::MetricSpinButton> m_xMtFillHoles;
     std::unique_ptr<weld::CheckButton> m_xCbFillHoles;
-    std::unique_ptr<SvxGraphCtrl> m_xBmpWin;
-    std::unique_ptr<SvxGraphCtrl> m_xMtfWin;
+    std::unique_ptr<weld::CustomWeld> m_xBmpWin;
+    std::unique_ptr<weld::CustomWeld> m_xMtfWin;
     std::unique_ptr<weld::ProgressBar> m_xPrgs;
     std::unique_ptr<weld::Button> m_xBtnOK;
     std::unique_ptr<weld::Button> m_xBtnPreview;
@@ -58,7 +61,7 @@ class SdVectorizeDlg : public weld::GenericDialogController
     static ::tools::Rectangle    GetRect( const Size& rDispSize, const Size& rBmpSize );
     Bitmap              GetPreparedBitmap( Bitmap const & rBmp, Fraction& rScale );
     void                Calculate( Bitmap const & rBmp, GDIMetaFile& rMtf );
-    void                AddTile( BitmapReadAccess const * pRAcc, GDIMetaFile& rMtf,
+    static void         AddTile( BitmapReadAccess const * pRAcc, GDIMetaFile& rMtf,
                                  long nPosX, long nPosY, long nWidth, long nHeight );
 
     DECL_LINK( ProgressHdl, long, void );

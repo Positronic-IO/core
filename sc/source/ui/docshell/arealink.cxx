@@ -17,13 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/string.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <svl/stritem.hxx>
 #include <vcl/weld.hxx>
+#include <unotools/charclass.hxx>
 
 #include <arealink.hxx>
 
@@ -78,10 +78,8 @@ void ScAreaLink::Edit(weld::Window* pParent, const Link<SvBaseLink&,void>& /* rE
 {
     //  use own dialog instead of SvBaseLink::Edit...
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
     ScopedVclPtr<AbstractScLinkedAreaDlg> pDlg(pFact->CreateScLinkedAreaDlg(pParent));
-    OSL_ENSURE(pDlg, "Dialog create fail!");
     pDlg->InitFromOldLink( aFileName, aFilterName, aOptions, aSourceArea, GetRefreshDelay() );
     if ( pDlg->Execute() == RET_OK )
     {
@@ -143,7 +141,7 @@ void ScAreaLink::Closed()
     bool bUndo (rDoc.IsUndoEnabled());
     if (bAddUndo && bUndo)
     {
-        m_pDocSh->GetUndoManager()->AddUndoAction( new ScUndoRemoveAreaLink( m_pDocSh,
+        m_pDocSh->GetUndoManager()->AddUndoAction( o3tl::make_unique<ScUndoRemoveAreaLink>( m_pDocSh,
                                                         aFileName, aFilterName, aOptions,
                                                         aSourceArea, aDestArea, GetRefreshDelay() ) );
 
@@ -288,20 +286,22 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
         }
     }
 
-    sal_Int32 nTokenCnt = comphelper::string::getTokenCount(aTempArea, ';');
-    sal_Int32 nStringIx = 0;
-    for (sal_Int32 nToken = 0; nToken < nTokenCnt; ++nToken)
+    if (!aTempArea.isEmpty())
     {
-        OUString aToken( aTempArea.getToken( 0, ';', nStringIx ) );
-        ScRange aTokenRange;
-        if( FindExtRange( aTokenRange, &rSrcDoc, aToken ) )
+        sal_Int32 nIdx {0};
+        do
         {
-            aSourceRanges.push_back( aTokenRange);
-            // columns: find maximum
-            nWidth = std::max( nWidth, static_cast<SCCOL>(aTokenRange.aEnd.Col() - aTokenRange.aStart.Col() + 1) );
-            // rows: add row range + 1 empty row
-            nHeight += aTokenRange.aEnd.Row() - aTokenRange.aStart.Row() + 2;
+            ScRange aTokenRange;
+            if( FindExtRange( aTokenRange, &rSrcDoc, aTempArea.getToken( 0, ';', nIdx ) ) )
+            {
+                aSourceRanges.push_back( aTokenRange);
+                // columns: find maximum
+                nWidth = std::max( nWidth, static_cast<SCCOL>(aTokenRange.aEnd.Col() - aTokenRange.aStart.Col() + 1) );
+                // rows: add row range + 1 empty row
+                nHeight += aTokenRange.aEnd.Row() - aTokenRange.aStart.Row() + 2;
+            }
         }
+        while (nIdx>0);
     }
     // remove the last empty row
     if( nHeight > 0 )
@@ -335,10 +335,10 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
 
         //  initialise Undo
 
-        ScDocument* pUndoDoc = nullptr;
+        ScDocumentUniquePtr pUndoDoc;
         if ( bAddUndo && bUndo )
         {
-            pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+            pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
             if ( bDoInsert )
             {
                 if ( nNewEndX != nOldEndX || nNewEndY != nOldEndY )             // range changed?
@@ -413,17 +413,17 @@ bool ScAreaLink::Refresh( const OUString& rNewFile, const OUString& rNewFilter,
 
         if ( bAddUndo && bUndo)
         {
-            ScDocument* pRedoDoc = new ScDocument( SCDOCMODE_UNDO );
+            ScDocumentUniquePtr pRedoDoc(new ScDocument( SCDOCMODE_UNDO ));
             pRedoDoc->InitUndo( &rDoc, nDestTab, nDestTab );
             rDoc.CopyToDocument(aNewRange, InsertDeleteFlags::ALL & ~InsertDeleteFlags::NOTE, false, *pRedoDoc);
 
             m_pDocSh->GetUndoManager()->AddUndoAction(
-                new ScUndoUpdateAreaLink( m_pDocSh,
+                o3tl::make_unique<ScUndoUpdateAreaLink>( m_pDocSh,
                                             aFileName, aFilterName, aOptions,
                                             aSourceArea, aOldRange, GetRefreshDelay(),
                                             aNewUrl, rNewFilter, aNewOpt,
                                             rNewArea, aNewRange, nNewRefresh,
-                                            pUndoDoc, pRedoDoc, bDoInsert ) );
+                                            std::move(pUndoDoc), std::move(pRedoDoc), bDoInsert ) );
         }
 
         //  remember new settings

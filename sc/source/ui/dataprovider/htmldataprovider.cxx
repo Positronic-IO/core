@@ -8,8 +8,11 @@
  */
 
 #include "htmldataprovider.hxx"
+#include <datamapper.hxx>
 #include <datatransformation.hxx>
 #include <salhelper/thread.hxx>
+#include <vcl/svapp.hxx>
+#include <tools/stream.hxx>
 
 #include <libxml/HTMLparser.h>
 #include <libxml/HTMLtree.h>
@@ -18,16 +21,17 @@
 #include <libxml/xpathInternals.h>
 
 #include <comphelper/string.hxx>
+#include <utility>
 
 namespace sc {
 
 class HTMLFetchThread : public salhelper::Thread
 {
     ScDocument& mrDocument;
-    OUString maURL;
-    OUString maID;
+    OUString const maURL;
+    OUString const maID;
     const std::vector<std::shared_ptr<sc::DataTransformation>> maDataTransformations;
-    std::function<void()> maImportFinishedHdl;
+    std::function<void()> const maImportFinishedHdl;
 
     void handleTable(xmlNodePtr pTable);
     void handleRow(xmlNodePtr pRow, SCROW nRow);
@@ -41,14 +45,16 @@ public:
     virtual void execute() override;
 };
 
-HTMLFetchThread::HTMLFetchThread(ScDocument& rDoc, const OUString& rURL, const OUString& rID, std::function<void()> aImportFinishedHdl,
-        const std::vector<std::shared_ptr<sc::DataTransformation>>& rTransformations):
-    salhelper::Thread("HTML Fetch Thread"),
-    mrDocument(rDoc),
-    maURL(rURL),
-    maID(rID),
-    maDataTransformations(rTransformations),
-    maImportFinishedHdl(aImportFinishedHdl)
+HTMLFetchThread::HTMLFetchThread(
+    ScDocument& rDoc, const OUString& rURL, const OUString& rID,
+    std::function<void()> aImportFinishedHdl,
+    const std::vector<std::shared_ptr<sc::DataTransformation>>& rTransformations)
+    : salhelper::Thread("HTML Fetch Thread")
+    , mrDocument(rDoc)
+    , maURL(rURL)
+    , maID(rID)
+    , maDataTransformations(rTransformations)
+    , maImportFinishedHdl(std::move(aImportFinishedHdl))
 {
 }
 

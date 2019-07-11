@@ -20,9 +20,8 @@
 #ifndef INCLUDED_CUI_SOURCE_INC_HEADERTABLISTBOX_HXX
 #define INCLUDED_CUI_SOURCE_INC_HEADERTABLISTBOX_HXX
 
-#include <svtools/headbar.hxx>
-#include <svtools/svtabbx.hxx>
-
+#include <vcl/headbar.hxx>
+#include <vcl/svtabbx.hxx>
 
 class MacroEventListBox final : public Control
 {
@@ -53,6 +52,22 @@ public:
                                                              calcs real sizes depending on sizes of this */
     void                        Show();    ///< same meaning as Windows::Show()
     void                        Enable();  ///< same meaning as Windows::Enable()
+};
+
+class CuiMacroEventListBox final
+{
+private:
+    std::unique_ptr<weld::TreeView> m_xTreeView;
+public:
+    CuiMacroEventListBox(std::unique_ptr<weld::TreeView> xTreeView);
+    void set_sensitive(bool bSensitive) { m_xTreeView->set_sensitive(bSensitive); }
+    void show() { m_xTreeView->show(); }
+    ~CuiMacroEventListBox();
+
+    weld::TreeView& GetListBox()
+    {
+        return *m_xTreeView;
+    }
 };
 
 #endif

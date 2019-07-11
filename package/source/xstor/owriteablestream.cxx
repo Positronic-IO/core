@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -65,7 +66,7 @@ struct WSInternalData_Impl
     rtl::Reference<comphelper::RefCountedMutex> m_xSharedMutex;
     ::std::unique_ptr< ::cppu::OTypeCollection> m_pTypeCollection;
     ::cppu::OMultiTypeInterfaceContainerHelper m_aListenersContainer; // list of listeners
-    sal_Int32 m_nStorageType;
+    sal_Int32 const m_nStorageType;
 
     // the mutex reference MUST NOT be empty
     WSInternalData_Impl( const rtl::Reference<comphelper::RefCountedMutex>& rMutexRef, sal_Int32 nStorageType )
@@ -1594,7 +1595,7 @@ void OWriteStream_Impl::CommitStreamRelInfo( const uno::Reference< embed::XStora
                 xPropSet->setPropertyValue("MediaType",
                     uno::makeAny( OUString("application/vnd.openxmlformats-package.relationships+xml" ) ) );
 
-                  if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM )
+                if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM )
                     m_nRelInfoStatus = RELINFO_NO_INIT;
                 else
                 {
@@ -3112,7 +3113,7 @@ void OWriteStream::BroadcastTransaction( sal_Int8 nMessage )
                 case STOR_MESS_PRECOMMIT:
                        static_cast<embed::XTransactionListener*>( pIterator.next( ) )->preCommit( aSource );
                     break;
-                case STOR_MESS_COMMITED:
+                case STOR_MESS_COMMITTED:
                        static_cast<embed::XTransactionListener*>( pIterator.next( ) )->commited( aSource );
                     break;
                 case STOR_MESS_PREREVERT:
@@ -3178,7 +3179,7 @@ void SAL_CALL OWriteStream::commit()
                                   aCaught );
     }
 
-    BroadcastTransaction( STOR_MESS_COMMITED );
+    BroadcastTransaction( STOR_MESS_COMMITTED );
 }
 
 void SAL_CALL OWriteStream::revert()

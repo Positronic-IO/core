@@ -72,13 +72,13 @@ const o3tl::enumarray<SvxAdjust, unsigned short> aSvxToUnoAdjust
     text::HoriOrientation::LEFT
 };
 
-SvxAdjust ConvertUnoAdjust( unsigned short nAdjust )
+static SvxAdjust ConvertUnoAdjust( unsigned short nAdjust )
 {
     DBG_ASSERT( nAdjust <= 7, "Enum has changed! [CL]" );
     return aUnoToSvxAdjust[nAdjust];
 }
 
-unsigned short ConvertUnoAdjust( SvxAdjust eAdjust )
+static unsigned short ConvertUnoAdjust( SvxAdjust eAdjust )
 {
     DBG_ASSERT( static_cast<int>(eAdjust) <= 6, "Enum has changed! [CL]" );
     return aSvxToUnoAdjust[eAdjust];
@@ -245,10 +245,10 @@ Sequence<beans::PropertyValue> SvxUnoNumberingRules::getNumberingRuleByIndex(sal
     aVal <<= static_cast<sal_Int16>(rFmt.GetStart());
     pArray[nIdx++] = beans::PropertyValue(UNO_NAME_NRULE_START_WITH, -1, aVal, beans::PropertyState_DIRECT_VALUE);
 
-    aVal <<= static_cast<sal_Int32>(rFmt.GetAbsLSpace());
+    aVal <<= rFmt.GetAbsLSpace();
     pArray[nIdx++] = beans::PropertyValue(UNO_NAME_NRULE_LEFT_MARGIN, -1, aVal, beans::PropertyState_DIRECT_VALUE);
 
-    aVal <<= static_cast<sal_Int32>(rFmt.GetFirstLineOffset());
+    aVal <<= rFmt.GetFirstLineOffset();
     pArray[nIdx++] = beans::PropertyValue(UNO_NAME_NRULE_FIRST_LINE_OFFSET, -1, aVal, beans::PropertyState_DIRECT_VALUE);
 
     pArray[nIdx++] = beans::PropertyValue("SymbolTextDistance", -1, aVal, beans::PropertyState_DIRECT_VALUE);
@@ -411,7 +411,7 @@ void SvxUnoNumberingRules::setNumberingRuleByIndex(const Sequence<beans::Propert
             sal_Int32 nMargin = 0;
             if( aVal >>= nMargin )
             {
-                aFmt.SetFirstLineOffset(static_cast<sal_uInt16>(nMargin));
+                aFmt.SetFirstLineOffset(nMargin);
                 continue;
             }
         }

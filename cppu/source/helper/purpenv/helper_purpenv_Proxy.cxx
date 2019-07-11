@@ -21,6 +21,7 @@
 #include "Proxy.hxx"
 
 #include <sal/alloca.h>
+#include <sal/log.hxx>
 #include <uno/dispatcher.h>
 #include <typelib/typedescription.hxx>
 #include <cppu/EnvDcp.hxx>
@@ -194,7 +195,7 @@ Proxy::Proxy(uno::Mapping                  const & to_from,
              uno_Environment                     * pFrom,
              uno_Interface                       * pUnoI,
              typelib_InterfaceTypeDescription    * pTypeDescr,
-             rtl::OUString                 const & rOId,
+             OUString                      const & rOId,
              cppu::helper::purpenv::ProbeFun     * probeFun,
              void                                * pProbeContext
 )

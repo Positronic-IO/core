@@ -79,9 +79,9 @@ bool XLineEndList::Create()
     return true;
 }
 
-Bitmap XLineEndList::CreateBitmapForUI( long nIndex )
+BitmapEx XLineEndList::CreateBitmapForUI( long nIndex )
 {
-    Bitmap aRetval;
+    BitmapEx aRetval;
     OSL_ENSURE(nIndex < Count(), "OOps, access out of range (!)");
 
     if(nIndex < Count())
@@ -100,7 +100,7 @@ Bitmap XLineEndList::CreateBitmapForUI( long nIndex )
 
         // prepare LineAttribute
         const basegfx::BColor aLineColor(rStyleSettings.GetFieldTextColor().getBColor());
-        const double fLineWidth(rStyleSettings.GetListBoxPreviewDefaultLineWidth() * 1.1);
+        const double fLineWidth(StyleSettings::GetListBoxPreviewDefaultLineWidth() * 1.1);
         const drawinglayer::attribute::LineAttribute aLineAttribute(
             aLineColor,
             fLineWidth);
@@ -157,7 +157,7 @@ Bitmap XLineEndList::CreateBitmapForUI( long nIndex )
         }
 
         // get result bitmap and scale
-        aRetval = pVirtualDevice->GetBitmap(Point(0, 0), pVirtualDevice->GetOutputSizePixel());
+        aRetval = pVirtualDevice->GetBitmapEx(Point(0, 0), pVirtualDevice->GetOutputSizePixel());
     }
 
     return aRetval;

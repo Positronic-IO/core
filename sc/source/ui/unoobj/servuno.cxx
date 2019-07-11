@@ -28,6 +28,7 @@
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <com/sun/star/text/textfield/Type.hpp>
 
+#include <editsrc.hxx>
 #include <servuno.hxx>
 #include <unonames.hxx>
 #include <appluno.hxx>
@@ -70,7 +71,9 @@
 
 using namespace ::com::sun::star;
 
-bool isInVBAMode( ScDocShell& rDocSh )
+#if HAVE_FEATURE_SCRIPTING
+
+static bool isInVBAMode( ScDocShell& rDocSh )
 {
     uno::Reference<script::XLibraryContainer> xLibContainer = rDocSh.GetBasicContainer();
     uno::Reference<script::vba::XVBACompatibility> xVBACompat( xLibContainer, uno::UNO_QUERY );
@@ -78,6 +81,8 @@ bool isInVBAMode( ScDocShell& rDocSh )
         return xVBACompat->getVBACompatibilityMode();
     return false;
 }
+
+#endif
 
 class ScVbaObjectForCodeNameProvider : public ::cppu::WeakImplHelper< container::XNameAccess >
 {
@@ -245,7 +250,7 @@ using Type = ScServiceProvider::Type;
 struct ProvNamesId_Type
 {
     const char *            pName;
-    ScServiceProvider::Type nType;
+    ScServiceProvider::Type const nType;
 };
 
 const ProvNamesId_Type aProvNamesId[] =

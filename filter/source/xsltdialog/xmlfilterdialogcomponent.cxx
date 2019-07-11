@@ -164,20 +164,20 @@ void SAL_CALL XMLFilterDialogComponent::release() throw ()
 }
 
 /// @throws RuntimeException
-OUString XMLFilterDialogComponent_getImplementationName()
+static OUString XMLFilterDialogComponent_getImplementationName()
 {
     return OUString( "com.sun.star.comp.ui.XSLTFilterDialog" );
 }
 
 /// @throws RuntimeException
-Sequence< OUString > XMLFilterDialogComponent_getSupportedServiceNames()
+static Sequence< OUString > XMLFilterDialogComponent_getSupportedServiceNames()
 {
     Sequence< OUString > aSupported { "com.sun.star.ui.dialogs.XSLTFilterDialog" };
     return aSupported;
 }
 
 /// @throws Exception
-Reference< XInterface > XMLFilterDialogComponent_createInstance( const Reference< XMultiServiceFactory > & rSMgr)
+static Reference< XInterface > XMLFilterDialogComponent_createInstance( const Reference< XMultiServiceFactory > & rSMgr)
 {
     return static_cast<OWeakObject*>(new XMLFilterDialogComponent( comphelper::getComponentContext(rSMgr) ));
 }
@@ -249,25 +249,20 @@ void SAL_CALL XMLFilterDialogComponent::disposing()
 void SAL_CALL XMLFilterDialogComponent::queryTermination( const EventObject& /* Event */ )
 {
     ::SolarMutexGuard aGuard;
-
     if (!mpDialog)
         return;
-
-    // we will never give a veto here
-    if (!mpDialog->isClosable())
-    {
-        mpDialog->ToTop();
-        throw TerminationVetoException(
-            "The office cannot be closed while the XMLFilterDialog is running",
-            static_cast<XTerminateListener*>(this));
-    }
-    else
-        mpDialog->Close();
+    mpDialog->ToTop();
 }
-
 
 void SAL_CALL XMLFilterDialogComponent::notifyTermination( const EventObject& /* Event */ )
 {
+    {
+        ::SolarMutexGuard aGuard;
+        if (!mpDialog)
+            return;
+        mpDialog->Close();
+    }
+
     // we are going down, so dispose us!
     dispose();
 }
@@ -276,34 +271,40 @@ void SAL_CALL XMLFilterDialogComponent::disposing( const EventObject& /* Source 
 {
 }
 
-
 void SAL_CALL XMLFilterDialogComponent::setTitle( const OUString& /* _rTitle */ )
 {
 }
 
-
-sal_Int16 SAL_CALL XMLFilterDialogComponent::execute(  )
+sal_Int16 SAL_CALL XMLFilterDialogComponent::execute()
 {
     ::SolarMutexGuard aGuard;
 
-    if( nullptr == mpDialog )
+    bool bLaunch = false;
+    if (!mpDialog)
     {
         Reference< XComponent > xComp( this );
         if (mxParent.is())
             mpDialog = VclPtr<XMLFilterSettingsDialog>::Create(VCLUnoHelper::GetWindow(mxParent), mxContext);
         else
             mpDialog = VclPtr<XMLFilterSettingsDialog>::Create(nullptr, mxContext, Dialog::InitFlag::NoParent);
-        mpDialog->Execute();
+        bLaunch = true;
     }
-    else if( !mpDialog->IsVisible() )
+
+    mpDialog->UpdateWindow();
+
+    if (!bLaunch)
     {
-        mpDialog->Execute();
+        mpDialog->ToTop();
+        return 0;
     }
-    mpDialog->ToTop();
+
+    mpDialog->StartExecuteAsync([this](sal_Int32)
+    {
+        mpDialog.reset();
+    });
 
     return 0;
 }
-
 
 void SAL_CALL XMLFilterDialogComponent::initialize( const Sequence< Any >& aArguments )
 {
@@ -319,7 +320,6 @@ void SAL_CALL XMLFilterDialogComponent::initialize( const Sequence< Any >& aArgu
         }
     }
 }
-
 
 extern "C"
 {

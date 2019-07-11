@@ -30,6 +30,9 @@
 #include <sfx2/lokhelper.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <vcl/cursor.hxx>
+#include <vcl/uitest/logger.hxx>
+#include <vcl/uitest/eventdescription.hxx>
+#include <sal/log.hxx>
 
 #include <tabview.hxx>
 #include <tabvwsh.hxx>
@@ -326,6 +329,22 @@ void ScTabView::InvalidateAttribs()
     rBindings.Invalidate( SID_NUMBER_THOUSANDS );
 }
 
+namespace {
+
+void collectUIInformation(const std::map<OUString, OUString>& aParameters)
+{
+    EventDescription aDescription;
+    aDescription.aID = "grid_window";
+    aDescription.aAction = "SELECT";
+    aDescription.aParameters = aParameters;
+    aDescription.aParent = "MainWindow";
+    aDescription.aKeyWord = "ScGridWinUIObject";
+
+    UITestLogger::getInstance().logEvent(aDescription);
+}
+
+}
+
 // SetCursor - Cursor, set, draw, update InputWin
 // or send reference
 // Optimising breaks the functionality
@@ -360,6 +379,9 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
         ShowAllCursors();
 
         CursorPosChanged();
+
+        OUString aCurrAddress = ScAddress(nPosX,nPosY,0).GetColRowString();
+        collectUIInformation({{"CELL", aCurrAddress}});
 
         if (comphelper::LibreOfficeKit::isActive())
         {
@@ -430,6 +452,17 @@ void ScTabView::CheckSelectionTransfer()
 
             pScMod->SetSelectionTransfer( pNew.get() );
             pNew->CopyToSelection( GetActiveWin() );                    // may delete pOld
+
+            // Log the selection change
+            ScMarkData& rMark = aViewData.GetMarkData();
+            if (rMark.IsMarked())
+            {
+                ScRange aMarkRange;
+                rMark.GetMarkArea( aMarkRange );
+                OUString aStartAddress =  aMarkRange.aStart.GetColRowString();
+                OUString aEndAddress = aMarkRange.aEnd.GetColRowString();
+                collectUIInformation({{"RANGE", aStartAddress + ":" + aEndAddress}});
+            }
         }
         else if ( pOld && pOld->GetView() == this )
         {
@@ -751,7 +784,7 @@ void ScTabView::TestHintWindow()
                 ScOverlayHint* pOverlay = new ScOverlayHint(aTitle, aMessage, aCommentColor, pFrameWin->GetFont());
 
                 mxInputHintOO.reset(new sdr::overlay::OverlayObjectList);
-                mxInputHintOO->append(pOverlay);
+                mxInputHintOO->append(std::unique_ptr<sdr::overlay::OverlayObject>(pOverlay));
 
                 Size aHintWndSize = pOverlay->GetSizePixel();
                 long nCellSizeX = 0;
@@ -782,11 +815,11 @@ void ScTabView::TestHintWindow()
                         //missing portions will be displayed in the other split windows to form an apparent
                         //single tip, albeit "under" the split lines
                         Point aOtherPos(pWindow->ScreenToOutputPixel(pWin->OutputToScreenPixel(aHintPos)));
-                        ScOverlayHint* pOtherOverlay = new ScOverlayHint(aTitle, aMessage, aCommentColor, pFrameWin->GetFont());
+                        std::unique_ptr<ScOverlayHint> pOtherOverlay(new ScOverlayHint(aTitle, aMessage, aCommentColor, pFrameWin->GetFont()));
                         Point aFooPos(pWindow->PixelToLogic(aOtherPos, pWindow->GetDrawMapMode()));
                         pOtherOverlay->SetPos(aFooPos, pWindow->GetDrawMapMode());
-                        mxInputHintOO->append(pOtherOverlay);
                         xOverlayManager->add(*pOtherOverlay);
+                        mxInputHintOO->append(std::move(pOtherOverlay));
                     }
                 }
             }
@@ -807,10 +840,7 @@ void ScTabView::TestHintWindow()
     }
 }
 
-bool ScTabView::HasHintWindow() const
-{
-    return mxInputHintOO.get() != nullptr;
-}
+bool ScTabView::HasHintWindow() const { return mxInputHintOO != nullptr; }
 
 void ScTabView::RemoveHintWindow()
 {
@@ -1388,10 +1418,10 @@ void ScTabView::MoveCursorEnter( bool bShift )          // bShift -> up/down
     }
     else
     {
+        pDoc->GetNextPos( nNewX, nNewY, nTab, nMoveX, nMoveY, false, true, rMark );
+
         if ( nMoveY != 0 && !nMoveX )
         {
-            pDoc->GetNextPos( nNewX, nNewY, nTab, nMoveX, nMoveY, true, false, rMark );
-
             // after Tab and Enter back to the starting column again
             SCCOL nTabCol = aViewData.GetTabStartCol();
             if (nTabCol != SC_TABSTART_NONE)
@@ -1400,7 +1430,7 @@ void ScTabView::MoveCursorEnter( bool bShift )          // bShift -> up/down
             }
         }
 
-        MoveCursorRel( nNewX - nCurX, nNewY - nCurY, SC_FOLLOW_LINE, false, true );
+        MoveCursorRel( nNewX - nCurX, nNewY - nCurY, SC_FOLLOW_LINE, false);
     }
 }
 
@@ -1810,7 +1840,7 @@ void ScTabView::SetTabNo( SCTAB nTab, bool bNew, bool bExtendSelection, bool bSa
         }
 
         ScSplitPos eOldActive = aViewData.GetActivePart();      // before switching
-        bool bFocus = pGridWin[eOldActive]->HasFocus();
+        bool bFocus = pGridWin[eOldActive] && pGridWin[eOldActive]->HasFocus();
 
         aViewData.SetTabNo( nTab );
         // UpdateShow before SetCursor, so that UpdateAutoFillMark finds the correct
@@ -1868,6 +1898,7 @@ void ScTabView::SetTabNo( SCTAB nTab, bool bNew, bool bExtendSelection, bool bSa
         }
 
         TabChanged(bSameTabButMoved);                                       // DrawView
+        collectUIInformation({{"TABLE", OUString::number(nTab)}});
         UpdateVisibleRange();
 
         aViewData.GetViewShell()->WindowChanged();          // if the active window has changed
@@ -2206,7 +2237,7 @@ void ScTabView::KillEditView( bool bNoPaint )
     }
 }
 
-void ScTabView::UpdateFormulas()
+void ScTabView::UpdateFormulas(SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCROW nEndRow)
 {
     if ( aViewData.GetDocument()->IsAutoCalcShellDisabled() )
         return;
@@ -2214,7 +2245,7 @@ void ScTabView::UpdateFormulas()
     for (sal_uInt16 i = 0; i < 4; i++)
     {
         if (pGridWin[i] && pGridWin[i]->IsVisible())
-            pGridWin[i]->UpdateFormulas();
+            pGridWin[i]->UpdateFormulas(nStartCol, nStartRow, nEndCol, nEndRow);
     }
 
     if ( aViewData.IsPagebreakMode() )

@@ -24,11 +24,17 @@
 #include "servprov.hxx"
 #include "unoobjw.hxx"
 #include "oleobjw.hxx"
+
 #include <com/sun/star/script/CannotConvertException.hpp>
+#include <comphelper/automationinvokedzone.hxx>
+#include <comphelper/windowsdebugoutput.hxx>
+#include <comphelper/windowserrorstring.hxx>
 #include <cppuhelper/queryinterface.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <o3tl/any.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
+#include <ooo/vba/XHelperInterface.hpp>
+#include <sal/log.hxx>
 
 using namespace cppu;
 using namespace osl;
@@ -43,10 +49,19 @@ using namespace com::sun::star::bridge::ModelDependent;
 // {82154420-0FBF-11d4-8313-005004526AB4}
 DEFINE_GUID(OID_ServiceManager, 0x82154420, 0xfbf, 0x11d4, 0x83, 0x13, 0x0, 0x50, 0x4, 0x52, 0x6a, 0xb4);
 
+// FIXME: This GUID is just the above OID_ServiceManager with the
+// initial part bumped by one. Is that good enough?
+// {82154421-0FBF-11d4-8313-005004526AB4}
+DEFINE_GUID(OID_LibreOfficeWriterApplication, 0x82154421, 0xfbf, 0x11d4, 0x83, 0x13, 0x0, 0x50, 0x4, 0x52, 0x6a, 0xb4);
+
+// For Calc
+// {82154425-0FBF-11d4-8313-005004526AB4}
+DEFINE_GUID(OID_LibreOfficeCalcApplication, 0x82154425, 0xfbf, 0x11d4, 0x83, 0x13, 0x0, 0x50, 0x4, 0x52, 0x6a, 0xb4);
+
 OneInstanceOleWrapper::OneInstanceOleWrapper(  const Reference<XMultiServiceFactory>& smgr,
-                                               const Reference<XInterface>& xInst )
+                                               std::function<const Reference<XInterface>()> xInstFunction )
     : m_refCount(0)
-    , m_xInst(xInst)
+    , m_xInstFunction(xInstFunction)
     , m_factoryHandle(0)
     , m_smgr(smgr)
 {
@@ -75,6 +90,8 @@ bool OneInstanceOleWrapper::registerClass(GUID const * pGuid)
             CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER,
             REGCLS_MULTIPLEUSE,
             &m_factoryHandle);
+
+    SAL_INFO("extensions.olebridge", "CoRegisterClassObject(" << *pGuid << "): " << WindowsErrorStringFromHRESULT(hresult));
 
     return (hresult == NOERROR);
 }
@@ -124,12 +141,17 @@ STDMETHODIMP OneInstanceOleWrapper::CreateInstance(IUnknown FAR* punkOuter,
                                                    REFIID riid,
                                                    void FAR* FAR* ppv)
 {
+    comphelper::Automation::AutomationInvokedZone aAutomationActive;
+
+    SAL_INFO("extensions.olebridge", "OneInstanceOleWrapper::CreateInstance(" << riid << ")");
+
     HRESULT ret = ResultFromScode(E_UNEXPECTED);
     punkOuter = nullptr;
 
-    if (m_xInst.is())
+    const Reference<XInterface>& xInst = m_xInstFunction();
+    if (xInst.is())
     {
-        Any usrAny(&m_xInst, cppu::UnoType<decltype(m_xInst)>::get());
+        Any usrAny(&xInst, cppu::UnoType<decltype(xInst)>::get());
         sal_uInt8 arId[16];
         rtl_getGlobalProcessId( arId);
         Any oleAny = m_bridgeSupplier->createBridge(usrAny,
@@ -144,6 +166,7 @@ STDMETHODIMP OneInstanceOleWrapper::CreateInstance(IUnknown FAR* punkOuter,
 
             if ((pVariant->vt == VT_UNKNOWN) || (pVariant->vt == VT_DISPATCH))
             {
+                SAL_INFO("extensions.olebridge", "OneInstanceOleWrapper::Createbridge: punkVal=" << pVariant->punkVal);
                 ret = pVariant->punkVal->QueryInterface(riid, ppv);
             }
 
@@ -456,7 +479,35 @@ OleServer::OleServer( const Reference<XMultiServiceFactory>& smgr):
         a >>= m_bridgeSupplier;
     }
 
-    (void) provideInstance( m_smgr, &OID_ServiceManager );
+    (void) provideInstance( [&]
+                            {
+                                return m_smgr;
+                            },
+                            &OID_ServiceManager );
+
+    (void) provideInstance( [&]
+                            {
+                                // We want just one SwVbaGlobals for all Automation clients
+                                static const Reference<XInterface> xWordGlobals = m_smgr->createInstance("ooo.vba.word.Globals");
+                                const Reference<ooo::vba::XHelperInterface> xHelperInterface(xWordGlobals, UNO_QUERY);
+                                Any aApplication = xHelperInterface->Application();
+                                Reference<XInterface> xApplication;
+                                aApplication >>= xApplication;
+                                return xApplication;
+                            },
+                            &OID_LibreOfficeWriterApplication );
+
+    (void) provideInstance( [&]
+                            {
+                                // Ditto for sc
+                                static const Reference<XInterface> xCalcGlobals = m_smgr->createInstance("ooo.vba.excel.Globals");
+                                const Reference<ooo::vba::XHelperInterface> xHelperInterface(xCalcGlobals, UNO_QUERY);
+                                Any aApplication = xHelperInterface->Application();
+                                Reference<XInterface> xApplication;
+                                aApplication >>= xApplication;
+                                return xApplication;
+                            },
+                            &OID_LibreOfficeCalcApplication );
 }
 
 OleServer::~OleServer()
@@ -486,14 +537,14 @@ css::uno::Sequence<OUString> OleServer::getSupportedServiceNames()
         "com.sun.star.bridge.oleautomation.ApplicationRegistration"};
 }
 
-bool OleServer::provideInstance(const Reference<XInterface>& xInst, GUID const * guid)
+bool OleServer::provideInstance(std::function<const Reference<XInterface>()> xInstFunction, GUID const * guid)
 {
-    IClassFactoryWrapper* pFac = new OneInstanceOleWrapper( m_smgr, xInst );
+    OneInstanceOleWrapper* pWrapper = new OneInstanceOleWrapper( m_smgr, xInstFunction );
 
-    pFac->AddRef();
-    m_wrapperList.push_back(pFac);
+    pWrapper->AddRef();
+    m_wrapperList.push_back(pWrapper);
 
-    return pFac->registerClass(guid);
+    return pWrapper->registerClass(guid);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

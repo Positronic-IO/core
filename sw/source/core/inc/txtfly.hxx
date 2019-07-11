@@ -19,6 +19,7 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_INC_TXTFLY_HXX
 #define INCLUDED_SW_SOURCE_CORE_INC_TXTFLY_HXX
 
+#include <tools/solar.h>
 #include <swtypes.hxx>
 #include <swrect.hxx>
 #include <com/sun/star/text/WrapTextMode.hpp>
@@ -54,10 +55,13 @@ void ClrContourCache( const SdrObject *pObj );
 class SwContourCache
 {
     friend void ClrContourCache();
-    const SdrObject *pSdrObj[ POLY_CNT ];
-    TextRanger *pTextRanger[ POLY_CNT ];
+    struct CacheItem
+    {
+        const SdrObject *mpSdrObj;
+        std::unique_ptr<TextRanger> mxTextRanger;
+    };
+    std::vector<CacheItem> mvItems;
     long nPntCnt;
-    sal_uInt16 nObjCnt;
     const SwRect ContourRect( const SwFormat* pFormat, const SdrObject* pObj,
         const SwTextFrame* pFrame, const SwRect &rLine, const long nXPos,
         const bool bRight );
@@ -65,8 +69,8 @@ class SwContourCache
 public:
     SwContourCache();
     ~SwContourCache();
-    const SdrObject* GetObject( sal_uInt16 nPos ) const{ return pSdrObj[ nPos ]; }
-    sal_uInt16 GetCount() const { return nObjCnt; }
+    const SdrObject* GetObject( sal_uInt16 nPos ) const{ return mvItems[ nPos ].mpSdrObj; }
+    sal_uInt16 GetCount() const { return mvItems.size(); }
     void ClrObject( sal_uInt16 nPos );
 
     /**
@@ -119,13 +123,13 @@ class SwTextFly
 {
     const SwPageFrame                * pPage;
     const SwAnchoredObject           * mpCurrAnchoredObj;
-    const SwTextFrame                * pCurrFrame;
-    const SwContentFrame             * pMaster;
+    const SwTextFrame                * m_pCurrFrame;
+    const SwTextFrame                * m_pMaster;
     std::unique_ptr<SwAnchoredObjList> mpAnchoredObjList;
 
     long nMinBottom;
     long nNextTop;  /// Stores the upper edge of the "next" frame
-    sal_uLong nIndex;
+    sal_uLong m_nCurrFrameNodeIndex;
 
     bool bOn : 1;
     bool bTopRule: 1;
@@ -200,7 +204,7 @@ class SwTextFly
 
     SwTwips CalcMinBottom() const;
 
-    const SwContentFrame* GetMaster_();
+    const SwTextFrame* GetMaster_();
 
 public:
 
@@ -226,7 +230,7 @@ public:
     bool Relax();
 
     SwTwips GetMinBottom() const;
-    const SwContentFrame* GetMaster() const;
+    const SwTextFrame* GetMaster() const;
 
     // This temporary variable needs to be manipulated in const methods
     long GetNextTop() const;
@@ -337,9 +341,9 @@ inline SwTwips SwTextFly::GetMinBottom() const
     return mpAnchoredObjList ? nMinBottom : CalcMinBottom();
 }
 
-inline const SwContentFrame* SwTextFly::GetMaster() const
+inline const SwTextFrame* SwTextFly::GetMaster() const
 {
-    return pMaster ? pMaster : const_cast<SwTextFly*>(this)->GetMaster_();
+    return m_pMaster ? m_pMaster : const_cast<SwTextFly*>(this)->GetMaster_();
 }
 
 inline long SwTextFly::GetNextTop() const

@@ -21,7 +21,6 @@
 #define INCLUDED_SD_SOURCE_FILTER_PPT_PPTIN_HXX
 
 #include <filter/msfilter/svdfppt.hxx>
-#include <svx/msdffdef.hxx>
 #include <diadef.h>
 #include <svx/svdtypes.hxx>
 #include <memory>
@@ -37,7 +36,6 @@ class SfxMedium;
 
 class SdPage;
 class SdAnimationInfo;
-struct PptInteractiveInfoAtom;
 class Ppt97Animation;
 
 typedef std::shared_ptr< Ppt97Animation > Ppt97AnimationPtr;
@@ -63,7 +61,7 @@ class ImplSdPPTImport : public SdrPowerPointImport
 
     void            FillSdAnimationInfo( SdAnimationInfo* pInfo, PptInteractiveInfoAtom const * pIAtom, const OUString& aMacroName );
 
-    virtual         SdrObject* ProcessObj( SvStream& rSt, DffObjData& rData, void* pData, ::tools::Rectangle& rTextRect, SdrObject* pObj ) override;
+    virtual         SdrObject* ProcessObj( SvStream& rSt, DffObjData& rData, SvxMSDffClientData& rClientData, ::tools::Rectangle& rTextRect, SdrObject* pObj ) override;
     virtual         SdrObject* ApplyTextObj( PPTTextObj* pTextObj, SdrTextObj* pText, SdPageCapsule pPage,
                                             SfxStyleSheet*, SfxStyleSheet** ) const override;
 

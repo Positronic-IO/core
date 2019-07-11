@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 #include <stdlib.h>
@@ -45,9 +46,9 @@
 #include <sfx2/filedlghelper.hxx>
 #include <svl/stritem.hxx>
 #include <svtools/miscopt.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
-#include <svtools/viewdataentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
+#include <vcl/viewdataentry.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
@@ -58,11 +59,9 @@
 #include <cfg.hxx>
 #include <SvxToolbarConfigPage.hxx>
 #include <SvxConfigPageHelper.hxx>
-#include "eventdlg.hxx"
 #include <dialmgr.hxx>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/random.hxx>
 #include <unotools/configmgr.hxx>
 #include <o3tl/make_unique.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -74,7 +73,6 @@
 #include <com/sun/star/frame/ModuleManager.hpp>
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
-#include <com/sun/star/frame/theUICommandDescription.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/lang/IllegalAccessException.hpp>
@@ -516,8 +514,13 @@ IMPL_LINK( SvxToolbarConfigPage, ModifyItemHdl, MenuButton *, pButton, void )
 
     // get currently selected toolbar
     SvxConfigEntry* pToolbar = GetTopLevelSelection();
-
     OString sIdent = pButton->GetCurItemIdent();
+
+    if (sIdent.isEmpty() || pToolbar == nullptr)
+    {
+        SAL_WARN("cui.customize", "No toolbar selected, or empty sIdent!");
+        return;
+    }
 
     if (sIdent == "renameItem")
     {
@@ -857,9 +860,17 @@ IMPL_LINK_NOARG( SvxToolbarConfigPage, SelectToolbar, ListBox&, void )
 void SvxToolbarConfigPage::AddFunction(
     SvTreeListEntry* pTarget, bool bFront )
 {
+    SvxConfigEntry* pToolbar = GetTopLevelSelection();
+
+    if (pToolbar == nullptr)
+        return;
+
     // Add the command to the contents listbox of the selected toolbar
     SvTreeListEntry* pNewLBEntry =
         SvxConfigPage::AddFunction( pTarget, bFront, true/*bAllowDuplicates*/ );
+
+    if (pNewLBEntry == nullptr)
+        return;
 
     SvxConfigEntry* pEntry = static_cast<SvxConfigEntry*>(pNewLBEntry->GetUserData());
 
@@ -879,8 +890,6 @@ void SvxToolbarConfigPage::AddFunction(
     // TODO: Figure out a way to show the changes on the toolbar, but revert if
     //       the dialog is closed by pressing "Cancel"
     // get currently selected toolbar and apply change
-    SvxConfigEntry* pToolbar = GetTopLevelSelection();
-
     if ( pToolbar != nullptr )
     {
         static_cast<ToolbarSaveInData*>( GetSaveInData() )->ApplyToolbar( pToolbar );
@@ -891,9 +900,9 @@ SvxToolbarEntriesListBox::SvxToolbarEntriesListBox(vcl::Window* pParent, SvxTool
     : SvxMenuEntriesListBox(pParent, pPg)
     , pPage(pPg)
 {
-    m_pButtonData = new SvLBoxButtonData( this );
-    BuildCheckBoxButtonImages( m_pButtonData );
-    EnableCheckButton( m_pButtonData );
+    m_pButtonData.reset(new SvLBoxButtonData( this ));
+    BuildCheckBoxButtonImages( m_pButtonData.get() );
+    EnableCheckButton( m_pButtonData.get() );
 }
 
 SvxToolbarEntriesListBox::~SvxToolbarEntriesListBox()
@@ -903,8 +912,7 @@ SvxToolbarEntriesListBox::~SvxToolbarEntriesListBox()
 
 void SvxToolbarEntriesListBox::dispose()
 {
-    delete m_pButtonData;
-    m_pButtonData = nullptr;
+    m_pButtonData.reset();
 
     pPage.clear();
     SvxMenuEntriesListBox::dispose();
@@ -963,7 +971,7 @@ Image SvxToolbarEntriesListBox::GetSizedImage(
     rVDev.DrawLine( Point( aNewSize.Width()-3, 0 ), Point( aNewSize.Width()-3, aNewSize.Height()-1 ));
 
     // Create new image that uses the fillcolor as transparent
-    return Image(BitmapEx(rVDev.GetBitmap(Point(), aNewSize), aFillColor));
+    return Image(BitmapEx(rVDev.GetBitmapEx(Point(), aNewSize).GetBitmap(), aFillColor));
 }
 
 void SvxToolbarEntriesListBox::DataChanged( const DataChangedEvent& rDCEvt )
@@ -973,7 +981,7 @@ void SvxToolbarEntriesListBox::DataChanged( const DataChangedEvent& rDCEvt )
     if (( rDCEvt.GetType() == DataChangedEventType::SETTINGS ) &&
         ( rDCEvt.GetFlags() & AllSettingsFlags::STYLE ))
     {
-        BuildCheckBoxButtonImages( m_pButtonData );
+        BuildCheckBoxButtonImages( m_pButtonData.get() );
         Invalidate();
     }
 }

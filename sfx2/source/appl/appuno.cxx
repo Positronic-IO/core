@@ -38,6 +38,7 @@
 #include <sfxtypes.hxx>
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 #include <basic/basmgr.hxx>
 #include <basic/sberrors.hxx>
 #include <basic/sbmeth.hxx>
@@ -107,6 +108,7 @@ SfxFormalArgument const aFormalArgs[] = {
     { reinterpret_cast<SfxType*>(&aSfxBoolItem_Impl), "SaveACopy", SID_SAVEACOPYITEM },
     { reinterpret_cast<SfxType*>(&aSfxBoolItem_Impl), "NoFileSync", SID_NO_FILE_SYNC },
     { reinterpret_cast<SfxType*>(&aSfxBoolItem_Impl), "NoThumbnail", SID_NO_THUMBNAIL },
+    { reinterpret_cast<SfxType*>(&aSfxBoolItem_Impl), "NoEmbDataSet", SID_NO_EMBEDDED_DS },
 };
 
 static sal_uInt16 nMediaArgsCount = SAL_N_ELEMENTS(aFormalArgs);

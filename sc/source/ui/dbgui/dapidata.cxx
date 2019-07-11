@@ -21,6 +21,7 @@
 
 #include <vcl/waitobj.hxx>
 #include <comphelper/processfactory.hxx>
+#include <osl/diagnose.h>
 
 #include <com/sun/star/sheet/DataImportMode.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -44,9 +45,9 @@ using namespace com::sun::star;
 
 ScDataPilotDatabaseDlg::ScDataPilotDatabaseDlg(weld::Window* pParent)
     : GenericDialogController(pParent, "modules/scalc/ui/selectdatasource.ui", "SelectDataSourceDialog")
-    , m_xLbDatabase(m_xBuilder->weld_combo_box_text("database"))
-    , m_xCbObject(m_xBuilder->weld_combo_box_text("datasource"))
-    , m_xLbType(m_xBuilder->weld_combo_box_text("type"))
+    , m_xLbDatabase(m_xBuilder->weld_combo_box("database"))
+    , m_xCbObject(m_xBuilder->weld_combo_box("datasource"))
+    , m_xLbType(m_xBuilder->weld_combo_box("type"))
 {
     weld::WaitObject aWait(pParent);       // initializing the database service the first time takes a while
 
@@ -102,7 +103,7 @@ void ScDataPilotDatabaseDlg::GetValues( ScImportSourceDesc& rDesc )
     rDesc.bNative = ( nSelect == DP_TYPELIST_SQLNAT );
 }
 
-IMPL_LINK_NOARG(ScDataPilotDatabaseDlg, SelectHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(ScDataPilotDatabaseDlg, SelectHdl, weld::ComboBox&, void)
 {
     FillObjects();
 }

@@ -27,6 +27,7 @@
 
 #include <formula/errorcodes.hxx>
 #include <svl/sharedstringpool.hxx>
+#include <sal/log.hxx>
 
 #include <imp_op.hxx>
 #include <namebuff.hxx>
@@ -35,6 +36,7 @@
 #include <xihelper.hxx>
 #include <xilink.hxx>
 #include <xiname.hxx>
+#include <xistyle.hxx>
 #include <documentimport.hxx>
 
 using ::std::vector;
@@ -105,7 +107,7 @@ void ImportExcel::Formula(
         return;
 
     // Formula will be read next, length in nFormLen
-    const ScTokenArray* pResult = nullptr;
+    std::unique_ptr<ScTokenArray> pResult;
 
     pFormConv->Reset( aScPos );
     ScDocumentImport& rDoc = GetDocImport();
@@ -155,7 +157,7 @@ void ImportExcel::Formula(
 
     if (pResult)
     {
-        pCell = new ScFormulaCell(&rDoc.getDoc(), aScPos, *pResult);
+        pCell = new ScFormulaCell(&rDoc.getDoc(), aScPos, pResult.release());
         pCell->GetCode()->WrapReference(aScPos, EXC_MAXCOL8, EXC_MAXROW8);
         rDoc.getDoc().CheckLinkFormulaNeedingCheck( *pCell->GetCode());
         rDoc.getDoc().EnsureTable(aScPos.Tab());
@@ -194,17 +196,17 @@ ExcelToSc::~ExcelToSc()
 {
 }
 
-void ExcelToSc::GetDummy( const ScTokenArray*& pResult )
+std::unique_ptr<ScTokenArray> ExcelToSc::GetDummy()
 {
     aPool.Store( OUString("Dummy()") );
     aPool >> aStack;
-    pResult = aPool[ aStack.Get() ];
+    return aPool.GetTokenArray( aStack.Get());
 }
 
 // if bAllowArrays is false stream seeks to first byte after <nFormulaLen>
 // otherwise it will seek to the first byte after the additional content (eg
 // inline arrays) following <nFormulaLen>
-ConvErr ExcelToSc::Convert( const ScTokenArray*& pResult, XclImpStream& aIn, std::size_t nFormulaLen, bool bAllowArrays, const FORMULA_TYPE eFT )
+ConvErr ExcelToSc::Convert( std::unique_ptr<ScTokenArray>& pResult, XclImpStream& aIn, std::size_t nFormulaLen, bool bAllowArrays, const FORMULA_TYPE eFT )
 {
     RootData&       rR = GetOldRoot();
     sal_uInt8           nOp, nLen;
@@ -220,17 +222,11 @@ ConvErr ExcelToSc::Convert( const ScTokenArray*& pResult, XclImpStream& aIn, std
     ScComplexRefData        aCRD;
     ExtensionTypeVec    aExtensions;
 
-    if( eStatus != ConvErr::OK )
-    {
-        aIn.Ignore( nFormulaLen );
-        return eStatus;
-    }
-
     if( nFormulaLen == 0 )
     {
         aPool.Store( OUString("-/-") );
         aPool >> aStack;
-        pResult = aPool[ aStack.Get() ];
+        pResult = aPool.GetTokenArray( aStack.Get());
         return ConvErr::OK;
     }
 
@@ -868,14 +864,14 @@ ConvErr ExcelToSc::Convert( const ScTokenArray*& pResult, XclImpStream& aIn, std
     {
         aPool << ocBad;
         aPool >> aStack;
-        pResult = aPool[ aStack.Get() ];
+        pResult = aPool.GetTokenArray( aStack.Get());
         eRet = ConvErr::Ni;
     }
     else if( aIn.GetRecPos() != nEndPos )
     {
         aPool << ocBad;
         aPool >> aStack;
-        pResult = aPool[ aStack.Get() ];
+        pResult = aPool.GetTokenArray( aStack.Get());
         eRet = ConvErr::Count;
     }
     else if( bArrayFormula )
@@ -885,7 +881,7 @@ ConvErr ExcelToSc::Convert( const ScTokenArray*& pResult, XclImpStream& aIn, std
     }
     else
     {
-        pResult = aPool[ aStack.Get() ];
+        pResult = aPool.GetTokenArray( aStack.Get());
         eRet = ConvErr::OK;
     }
 
@@ -903,7 +899,6 @@ ConvErr ExcelToSc::Convert( ScRangeListTabs& rRangeList, XclImpStream& aIn, std:
 {
     RootData&       rR = GetOldRoot();
     sal_uInt8           nOp, nLen;
-    std::size_t        nIgnore;
     bool            bError = false;
     const bool      bRangeName = eFT == FT_RangeName;
     const bool      bSharedFormula = eFT == FT_SharedFormula;
@@ -914,12 +909,6 @@ ConvErr ExcelToSc::Convert( ScRangeListTabs& rRangeList, XclImpStream& aIn, std:
     aCRD.Ref1.SetAbsTab(aEingPos.Tab());
     aCRD.Ref2.SetAbsTab(aEingPos.Tab());
 
-    if( eStatus != ConvErr::OK )
-    {
-        aIn.Ignore( nFormulaLen );
-        return eStatus;
-    }
-
     if( nFormulaLen == 0 )
         return ConvErr::OK;
 
@@ -928,7 +917,7 @@ ConvErr ExcelToSc::Convert( ScRangeListTabs& rRangeList, XclImpStream& aIn, std:
     while( (aIn.GetRecPos() < nEndPos) && !bError )
     {
         nOp = aIn.ReaduInt8();
-        nIgnore = 0;
+        std::size_t nIgnore = 0;
 
         // always reset flags
         aSRD.InitFlags();
@@ -1325,7 +1314,7 @@ ConvErr ExcelToSc::Convert( ScRangeListTabs& rRangeList, XclImpStream& aIn, std:
     return eRet;
 }
 
-void ExcelToSc::ConvertExternName( const ScTokenArray*& /*rpArray*/, XclImpStream& /*rStrm*/, std::size_t /*nFormulaLen*/,
+void ExcelToSc::ConvertExternName( std::unique_ptr<ScTokenArray>& /*rpArray*/, XclImpStream& /*rStrm*/, std::size_t /*nFormulaLen*/,
                                       const OUString& /*rUrl*/, const vector<OUString>& /*rTabNames*/ )
 {
 }
@@ -1548,7 +1537,7 @@ void ExcelToSc::GetAbsRefs( ScRangeList& rRangeList, XclImpStream& rStrm, std::s
 void ExcelToSc::DoMulArgs( DefTokenId eId, sal_uInt8 nCnt )
 {
     TokenId                 eParam[ 256 ];
-    sal_Int32                   nLauf;
+    sal_Int32               nPass;
 
     if( eId == ocCeil || eId == ocFloor )
     {
@@ -1556,11 +1545,11 @@ void ExcelToSc::DoMulArgs( DefTokenId eId, sal_uInt8 nCnt )
         nCnt++;
     }
 
-    for( nLauf = 0; aStack.HasMoreTokens() && (nLauf < nCnt); nLauf++ )
-        aStack >> eParam[ nLauf ];
+    for( nPass = 0; aStack.HasMoreTokens() && (nPass < nCnt); nPass++ )
+        aStack >> eParam[ nPass ];
     // #i70925# reduce parameter count, if no more tokens available on token stack
-    if( nLauf < nCnt )
-        nCnt = static_cast< sal_uInt8 >( nLauf );
+    if( nPass < nCnt )
+        nCnt = static_cast< sal_uInt8 >( nPass );
 
     if( nCnt > 0 && eId == ocExternal )
     {
@@ -1597,13 +1586,13 @@ void ExcelToSc::DoMulArgs( DefTokenId eId, sal_uInt8 nCnt )
         else if( eId == ocIf )
         {
             sal_uInt16          nNullParam = 0;
-            for( nLauf = 0 ; nLauf < nCnt ; nLauf++ )
+            for( nPass = 0 ; nPass < nCnt ; nPass++ )
             {
-                if( aPool.IsSingleOp( eParam[ nLauf ], ocMissing ) )
+                if( aPool.IsSingleOp( eParam[ nPass ], ocMissing ) )
                 {
                     if( !nNullParam )
                         nNullParam = static_cast<sal_uInt16>(aPool.Store( 0.0 ));
-                    eParam[ nLauf ] = nNullParam;
+                    eParam[ nPass ] = nNullParam;
                 }
             }
         }
@@ -1611,11 +1600,12 @@ void ExcelToSc::DoMulArgs( DefTokenId eId, sal_uInt8 nCnt )
         // [Parameter{;Parameter}]
         if( nLast > nSkipEnd )
         {
+            // nSkipEnd is either 0 or -1 => nLast >= 0
             aPool << eParam[ nLast ];
-            for( nLauf = nLast - 1 ; nLauf > nSkipEnd ; nLauf-- )
+            for( nPass = nLast - 1 ; nPass > nSkipEnd ; nPass-- )
             {
-                if( nLauf != -1 ) // skip this parameter
-                    aPool << ocSep << eParam[ nLauf ];
+                // nPass > nSkipEnd => nPass >= 0
+                aPool << ocSep << eParam[nPass];
             }
         }
     }
@@ -1675,7 +1665,7 @@ void ExcelToSc::ExcRelToScRel( sal_uInt16 nRow, sal_uInt8 nCol, ScSingleRefData 
     }
 }
 
-const ScTokenArray* ExcelToSc::GetBoolErr( XclBoolError eType )
+std::unique_ptr<ScTokenArray> ExcelToSc::GetBoolErr( XclBoolError eType )
 {
     FormulaError nError;
     aPool.Reset();
@@ -1707,11 +1697,11 @@ const ScTokenArray* ExcelToSc::GetBoolErr( XclBoolError eType )
 
     aPool >> aStack;
 
-    const ScTokenArray*     pResult = aPool[ aStack.Get() ];
+    std::unique_ptr<ScTokenArray> pResult = aPool.GetTokenArray( aStack.Get());
     if( nError != FormulaError::NONE )
-        const_cast<ScTokenArray*>(pResult)->SetCodeError( nError );
+        pResult->SetCodeError( nError );
 
-    const_cast<ScTokenArray*>(pResult)->SetExclusiveRecalcModeNormal();
+    pResult->SetExclusiveRecalcModeNormal();
 
     return pResult;
 }
@@ -1810,7 +1800,7 @@ void ExcelToSc::ReadExtensionArray( unsigned int n, XclImpStream& aIn )
         OSL_FAIL( "ExcelToSc::ReadExtensionArray - missing matrix" );
     }
 
-    //assuming worse case scenario of unknown types
+    //assuming worst case scenario of unknown types
     const size_t nMinRecordSize = 1;
     const size_t nMaxRows = aIn.GetRecLeft() / (nMinRecordSize * nCols);
     if (nRows > nMaxRows)

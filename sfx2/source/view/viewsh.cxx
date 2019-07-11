@@ -19,6 +19,7 @@
 
 #include <config_features.h>
 
+#include <sal/log.hxx>
 #include <svl/stritem.hxx>
 #include <svl/eitem.hxx>
 #include <svl/whiter.hxx>
@@ -50,6 +51,7 @@
 #include <basic/basmgr.hxx>
 #include <basic/sbuno.hxx>
 #include <framework/actiontriggerhelper.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
@@ -59,6 +61,7 @@
 
 #include <officecfg/Setup.hxx>
 #include <sfx2/app.hxx>
+#include <sfx2/flatpak.hxx>
 #include <sfx2/viewsh.hxx>
 #include "viewimp.hxx"
 #include <sfx2/sfxresid.hxx>
@@ -124,7 +127,7 @@ public:
         AsyncExecuteInfo( AsyncExecuteCmd eCmd, SfxClipboardChangeListener* pListener ) :
             m_eCmd( eCmd ), m_xListener( pListener ) {}
 
-        AsyncExecuteCmd m_eCmd;
+        AsyncExecuteCmd const m_eCmd;
         rtl::Reference<SfxClipboardChangeListener> m_xListener;
     };
 
@@ -221,7 +224,6 @@ SfxViewShell_Impl::SfxViewShell_Impl(SfxViewShellFlags const nFlags)
 ,   m_bHasPrintOptions(nFlags & SfxViewShellFlags::HAS_PRINTOPTIONS)
 ,   m_bIsShowView(!(nFlags & SfxViewShellFlags::NO_SHOW))
 ,   m_nFamily(0xFFFF)   // undefined, default set by TemplateDialog
-,   m_pController(nullptr)
 ,   m_pLibreOfficeKitViewCallback(nullptr)
 ,   m_pLibreOfficeKitViewData(nullptr)
 ,   m_bTiledSearching(false)
@@ -295,7 +297,7 @@ enum ETypeFamily
     E_OOO_DOC
 };
 
-OUString impl_searchFormatTypeForApp(const css::uno::Reference< css::frame::XFrame >& xFrame     ,
+static OUString impl_searchFormatTypeForApp(const css::uno::Reference< css::frame::XFrame >& xFrame     ,
                                                   ETypeFamily                                eTypeFamily)
 {
     try
@@ -311,16 +313,13 @@ OUString impl_searchFormatTypeForApp(const css::uno::Reference< css::frame::XFra
             case E_MS_DOC:
             {
                 if ( sModule == "com.sun.star.text.TextDocument" )
-                    sType = "writer_MS_Word_97";
+                    sType = "writer_MS_Word_2007";
                 else
                 if ( sModule == "com.sun.star.sheet.SpreadsheetDocument" )
-                    sType = "calc_MS_Excel_97";
-                else
-                if ( sModule == "com.sun.star.drawing.DrawingDocument" )
-                    sType = "impress_MS_PowerPoint_97";
+                    sType = "MS Excel 2007 XML";
                 else
                 if ( sModule == "com.sun.star.presentation.PresentationDocument" )
-                    sType = "impress_MS_PowerPoint_97";
+                    sType = "MS PowerPoint 2007 XML";
             }
             break;
 
@@ -620,8 +619,15 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
                 OSL_ASSERT( !aFilterName.isEmpty() );
                 OSL_ASSERT( !aFileName.isEmpty() );
 
-                // Creates a temporary directory to store our predefined file into it.
-                ::utl::TempFile aTempDir( nullptr, true );
+                // Creates a temporary directory to store our predefined file into it (for the
+                // flatpak case, create it in XDG_CACHE_HOME instead of /tmp for technical reasons,
+                // so that it can be accessed by the browser running outside the sandbox):
+                OUString * parent = nullptr;
+                if (flatpak::isFlatpak() && !flatpak::createTemporaryHtmlDirectory(&parent))
+                {
+                    SAL_WARN("sfx.view", "cannot create Flatpak html temp dir");
+                }
+                ::utl::TempFile aTempDir( parent, true );
 
                 INetURLObject aFilePathObj( aTempDir.GetURL() );
                 aFilePathObj.insertName( aFileName );
@@ -1437,7 +1443,7 @@ void SfxViewShell::Notify( SfxBroadcaster& rBC,
 
 bool SfxViewShell::ExecKey_Impl(const KeyEvent& aKey)
 {
-    if (!pImpl->m_xAccExec.get())
+    if (!pImpl->m_xAccExec)
     {
         pImpl->m_xAccExec = ::svt::AcceleratorExecute::createAcceleratorHelper();
         pImpl->m_xAccExec->init(::comphelper::getProcessComponentContext(),
@@ -1648,8 +1654,7 @@ void SfxViewShell::CheckIPClient_Impl(
     bool bAlwaysActive =
         ( ( pIPClient->GetObjectMiscStatus() & embed::EmbedMisc::EMBED_ACTIVATEIMMEDIATELY ) != 0 );
     bool bActiveWhenVisible =
-        ( (( pIPClient->GetObjectMiscStatus() & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE ) != 0 ) ||
-         svt::EmbeddedObjectRef::IsGLChart(pIPClient->GetObject()));
+        ( pIPClient->GetObjectMiscStatus() & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE ) != 0;
 
     // this method is called when a client is created
     if (!pIPClient->IsObjectInPlaceActive())
@@ -1769,7 +1774,7 @@ void SfxViewShell::RemoveContextMenuInterceptor_Impl( const uno::Reference< ui::
     pImpl->aInterceptorContainer.removeInterface( xInterceptor );
 }
 
-void Change( Menu* pMenu, SfxViewShell* pView )
+static void Change( Menu* pMenu, SfxViewShell* pView )
 {
     SfxDispatcher *pDisp = pView->GetViewFrame()->GetDispatcher();
     sal_uInt16 nCount = pMenu->GetItemCount();

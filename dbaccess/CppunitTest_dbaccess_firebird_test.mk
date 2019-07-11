@@ -7,15 +7,15 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 
-$(eval $(call gb_CppunitTest_CppunitTest,dbaccess_firebird_test))
+$(eval $(call gb_CppunitTest_CppunitTest,dbaccess_firebird))
 
-$(eval $(call gb_CppunitTest_use_external,dbaccess_firebird_test,boost_headers))
+$(eval $(call gb_CppunitTest_use_external,dbaccess_firebird,boost_headers))
 
-$(eval $(call gb_CppunitTest_add_exception_objects,dbaccess_firebird_test, \
+$(eval $(call gb_CppunitTest_add_exception_objects,dbaccess_firebird, \
     dbaccess/qa/unit/firebird \
 ))
 
-$(eval $(call gb_CppunitTest_use_libraries,dbaccess_firebird_test, \
+$(eval $(call gb_CppunitTest_use_libraries,dbaccess_firebird, \
     comphelper \
     cppu \
     dbaxml \
@@ -29,16 +29,16 @@ $(eval $(call gb_CppunitTest_use_libraries,dbaccess_firebird_test, \
     xo \
 ))
 
-$(eval $(call gb_CppunitTest_use_api,dbaccess_firebird_test,\
+$(eval $(call gb_CppunitTest_use_api,dbaccess_firebird,\
     offapi \
     oovbaapi \
     udkapi \
 ))
 
-$(eval $(call gb_CppunitTest_use_ure,dbaccess_firebird_test))
-$(eval $(call gb_CppunitTest_use_vcl,dbaccess_firebird_test))
+$(eval $(call gb_CppunitTest_use_ure,dbaccess_firebird))
+$(eval $(call gb_CppunitTest_use_vcl,dbaccess_firebird))
 
-$(eval $(call gb_CppunitTest_use_components,dbaccess_firebird_test,\
+$(eval $(call gb_CppunitTest_use_components,dbaccess_firebird,\
     basic/util/sb \
     comphelper/util/comphelp \
     configmgr/source/configmgr \
@@ -65,6 +65,6 @@ $(eval $(call gb_CppunitTest_use_components,dbaccess_firebird_test,\
     xmloff/util/xo \
 ))
 
-$(eval $(call gb_CppunitTest_use_configuration,dbaccess_firebird_test))
+$(eval $(call gb_CppunitTest_use_configuration,dbaccess_firebird))
 
 # vim: set noet sw=4 ts=4:

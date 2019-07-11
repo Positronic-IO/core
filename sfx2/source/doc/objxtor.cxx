@@ -34,6 +34,7 @@
 #include <com/sun/star/frame/XTitle.hpp>
 #include <osl/file.hxx>
 #include <rtl/instance.hxx>
+#include <sal/log.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/svapp.hxx>
@@ -55,13 +56,13 @@
 #include <svtools/ehdl.hxx>
 #include <unotools/printwarningoptions.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
 #include <com/sun/star/script/DocumentDialogLibraryContainer.hpp>
 #include <com/sun/star/script/DocumentScriptLibraryContainer.hpp>
 #include <com/sun/star/document/XEmbeddedScripts.hpp>
 #include <com/sun/star/document/XScriptInvocationContext.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 
 #include <svl/urihelper.hxx>
 #include <unotools/pathoptions.hxx>
@@ -313,13 +314,13 @@ SfxObjectShell::~SfxObjectShell()
     DELETEZ( pImpl->pReloadTimer );
 
     SfxApplication *pSfxApp = SfxGetpApp();
-    if ( USHRT_MAX != pImpl->nVisualDocumentNumber )
+    if ( USHRT_MAX != pImpl->nVisualDocumentNumber && pSfxApp )
         pSfxApp->ReleaseIndex(pImpl->nVisualDocumentNumber);
 
     // Destroy Basic-Manager
     pImpl->aBasicManager.reset( nullptr );
 
-    if ( pSfxApp->GetDdeService() )
+    if ( pSfxApp && pSfxApp->GetDdeService() )
         pSfxApp->RemoveDdeTopic( this );
 
     pImpl->pBaseModel.set( nullptr );
@@ -574,7 +575,7 @@ bool SfxObjectShell::PrepareClose
         // Ask if to save
         short nRet = RET_YES;
         {
-            const Reference< XTitle > xTitle( *pImpl->pBaseModel.get(), UNO_QUERY_THROW );
+            const Reference<XTitle> xTitle(*pImpl->pBaseModel, UNO_QUERY_THROW);
             const OUString     sTitle = xTitle->getTitle ();
             nRet = ExecuteQuerySaveDocument(pFrame->GetWindow().GetFrameWeld(), sTitle);
         }
@@ -837,19 +838,9 @@ SfxObjectShell* SfxObjectShell::GetObjectShell()
 
 uno::Sequence< OUString > SfxObjectShell::GetEventNames()
 {
-    static uno::Sequence< OUString >* pEventNameContainer = nullptr;
+    static uno::Sequence< OUString > s_EventNameContainer(rtl::Reference<GlobalEventConfig>(new GlobalEventConfig)->getElementNames());
 
-    if ( !pEventNameContainer )
-    {
-        SolarMutexGuard aGuard;
-        if ( !pEventNameContainer )
-        {
-            static uno::Sequence< OUString > aEventNameContainer = rtl::Reference<GlobalEventConfig>(new GlobalEventConfig)->getElementNames();
-            pEventNameContainer = &aEventNameContainer;
-        }
-    }
-
-    return *pEventNameContainer;
+    return s_EventNameContainer;
 }
 
 

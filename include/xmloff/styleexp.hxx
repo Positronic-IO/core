@@ -52,11 +52,6 @@ class SvXMLExport;
 class XMLOFF_DLLPUBLIC XMLStyleExport : public salhelper::SimpleReferenceObject
 {
     SvXMLExport& rExport;
-    const OUString sIsPhysical;
-    const OUString sIsAutoUpdate;
-    const OUString sFollowStyle;
-    const OUString sNumberingStyleName;
-    const OUString sOutlineLevel;
     SvXMLAutoStylePoolP *pAutoStylePool;
 
 protected:
@@ -93,7 +88,7 @@ public:
 //      bool bUsed, sal_uInt16 nFamily = 0,
 //      const OUString* pPrefix = 0);
 
-    bool exportDefaultStyle(
+    void exportDefaultStyle(
         const css::uno::Reference< css::beans::XPropertySet > & xPropSet,
         const OUString& rXMLFamily,
         const rtl::Reference < SvXMLExportPropertyMapper >& rPropMapper );

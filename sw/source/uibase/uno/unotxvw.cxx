@@ -294,7 +294,7 @@ sal_Bool SwXTextView::select(const uno::Any& aInterface)
         // sdrObjects handled below
     }
     bool bRet(false);
-    if (sdrObjects.size())
+    if (!sdrObjects.empty())
     {
 
         SdrView *const pDrawView = rSh.GetDrawView();
@@ -306,10 +306,37 @@ sal_Bool SwXTextView::select(const uno::Any& aInterface)
         for (SdrObject* pSdrObject : sdrObjects)
         {
             // GetSelectableFromAny did not check pSdrObject is in right doc!
-            if (pPV && pSdrObject->GetPage() == pPV->GetPage())
+            if (pPV && pSdrObject->getSdrPageFromSdrObject() == pPV->GetPage())
             {
                 pDrawView->MarkObj(pSdrObject, pPV);
                 bRet = true;
+            }
+        }
+
+        // tdf#112696 if we selected every individual element of a group, then
+        // select that group instead
+        const SdrMarkList &rMrkList = pDrawView->GetMarkedObjectList();
+        size_t nMarkCount = rMrkList.GetMarkCount();
+        if (nMarkCount > 1)
+        {
+            SdrObject* pObject = rMrkList.GetMark(0)->GetMarkedSdrObj();
+            SdrObject* pGroupParent = pObject->getParentSdrObjectFromSdrObject();
+            for (size_t i = 1; i < nMarkCount; ++i)
+            {
+                pObject = rMrkList.GetMark(i)->GetMarkedSdrObj();
+                SdrObject* pParent = pObject->getParentSdrObjectFromSdrObject();
+                if (pParent != pGroupParent)
+                {
+                    pGroupParent = nullptr;
+                    break;
+                }
+            }
+
+            if (pGroupParent && pGroupParent->IsGroupObject() &&
+                pGroupParent->getChildrenOfSdrObject()->GetObjCount() == nMarkCount)
+            {
+                pDrawView->UnmarkAll();
+                pDrawView->MarkObj(pGroupParent, pPV);
             }
         }
     }
@@ -1143,7 +1170,7 @@ void SwXTextViewCursor::gotoStart(sal_Bool bExpand)
     if (!IsTextSelection())
         throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
 
-    m_pView->GetWrtShell().SttDoc( bExpand );
+    m_pView->GetWrtShell().StartOfSection( bExpand );
 
 }
 
@@ -1157,7 +1184,7 @@ void SwXTextViewCursor::gotoEnd(sal_Bool bExpand)
     if (!IsTextSelection())
         throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
 
-    m_pView->GetWrtShell().EndDoc( bExpand );
+    m_pView->GetWrtShell().EndOfSection( bExpand );
 
 }
 
@@ -1381,7 +1408,8 @@ OUString SwXTextViewCursor::getString()
             {
                 SwWrtShell& rSh = m_pView->GetWrtShell();
                 SwPaM* pShellCursor = rSh.GetCursor();
-                SwUnoCursorHelper::GetTextFromPam(*pShellCursor, uRet);
+                SwUnoCursorHelper::GetTextFromPam(*pShellCursor, uRet,
+                        rSh.GetLayout());
                 break;
             }
             default:;//prevent warning

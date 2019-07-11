@@ -19,8 +19,8 @@
 
 #include <extended/accessiblelistbox.hxx>
 #include <extended/accessiblelistboxentry.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/awt/Size.hpp>
@@ -265,7 +265,7 @@ namespace accessibility
         while (pEntryChild)
         {
             RemoveChildEntries(pEntryChild);
-            pEntryChild = SvTreeListBox::NextSibling(pEntryChild);
+            pEntryChild = pEntryChild->NextSibling();
         }
     }
 
@@ -384,7 +384,7 @@ namespace accessibility
         {
             if( bHasButtons )
                 nCase = 2;
-             else
+            else
                 nCase = 3;
         }
         return nCase;

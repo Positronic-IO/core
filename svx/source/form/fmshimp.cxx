@@ -19,7 +19,7 @@
 
 
 #include <sal/macros.h>
-#include <fmitems.hxx>
+#include <sal/log.hxx>
 #include <fmobj.hxx>
 #include <fmpgeimp.hxx>
 #include <svx/fmtools.hxx>
@@ -83,6 +83,7 @@
 #include <comphelper/property.hxx>
 #include <comphelper/solarmutex.hxx>
 #include <comphelper/string.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/docfile.hxx>
@@ -288,7 +289,7 @@ namespace
             std::unique_ptr<SdrObjListIter> pGroupIterator;
             if ( pCurrent->IsGroupObject() )
             {
-                pGroupIterator.reset(new SdrObjListIter( *pCurrent->GetSubList() ));
+                pGroupIterator.reset(new SdrObjListIter( pCurrent->GetSubList() ));
                 pCurrent = pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
             }
 
@@ -407,9 +408,8 @@ namespace
                 for (j=0; j<pCurrentArray->getLength(); ++j, ++pCurrentListeners)
                 {
                     OUString aListener = (*pCurrentListeners).getTypeName();
-                    sal_Int32 nTokens = comphelper::string::getTokenCount(aListener, '.');
-                    if (nTokens)
-                        aListener = aListener.getToken(nTokens - 1, '.');
+                    if (!aListener.isEmpty())
+                        aListener = aListener.copy(aListener.lastIndexOf('.')+1);
 
                     if (aListener == pCurrent->ListenerType)
                         // the current ScriptEventDescriptor doesn't match the current listeners class
@@ -553,7 +553,7 @@ bool FmXBoundFormFieldIterator::ShouldHandleElement(const Reference< XInterface>
 }
 
 
-bool isControlList(const SdrMarkList& rMarkList)
+static bool isControlList(const SdrMarkList& rMarkList)
 {
     // the list contains only controls and at least one control
     const size_t nMarkCount = rMarkList.GetMarkCount();
@@ -577,7 +577,7 @@ bool isControlList(const SdrMarkList& rMarkList)
         {
             if (pObj->IsGroupObject())
             {
-                SdrObjListIter aIter(*pObj->GetSubList());
+                SdrObjListIter aIter(pObj->GetSubList());
                 while (aIter.IsMore() && bControlList)
                 {
                     bControlList = SdrInventor::FmForm == aIter.Next()->GetObjInventor();
@@ -596,7 +596,7 @@ bool isControlList(const SdrMarkList& rMarkList)
 }
 
 
-Reference< XForm > GetForm(const Reference< XInterface>& _rxElement)
+static Reference< XForm > GetForm(const Reference< XInterface>& _rxElement)
 {
     Reference< XForm > xForm( _rxElement, UNO_QUERY );
     if ( xForm.is() )
@@ -820,7 +820,7 @@ void FmXFormShell::invalidateFeatures( const ::std::vector< sal_Int32 >& _rFeatu
     if (impl_checkDisposed_Lock())
         return;
 
-    OSL_ENSURE( _rFeatures.size() > 0, "FmXFormShell::invalidateFeatures: invalid arguments!" );
+    OSL_ENSURE( !_rFeatures.empty(), "FmXFormShell::invalidateFeatures: invalid arguments!" );
 
     if ( m_pShell->GetViewShell() && m_pShell->GetViewShell()->GetViewFrame() )
     {
@@ -888,7 +888,7 @@ void FmXFormShell::disposing()
 
     CloseExternalFormViewer_Lock();
 
-    while ( m_aLoadingPages.size() )
+    while ( !m_aLoadingPages.empty() )
     {
         Application::RemoveUserEvent( m_aLoadingPages.front().nEventId );
         m_aLoadingPages.pop();
@@ -931,7 +931,6 @@ void FmXFormShell::disposing()
     m_xExternalViewController   = nullptr;
     m_xExtViewTriggerController = nullptr;
     m_xExternalDisplayedForm    = nullptr;
-    m_xLastGridFound            = nullptr;
 
     InterfaceBag aEmpty;
     m_aCurrentSelection.swap( aEmpty );
@@ -1085,7 +1084,7 @@ bool FmXFormShell::executeControlConversionSlot_Lock(const Reference<XFormCompon
         return false;
 
     SdrPage* pPage = m_pShell->GetCurPage();
-    FmFormPage* pFormPage = pPage ? dynamic_cast< FmFormPage* >( pPage ) : nullptr;
+    FmFormPage* pFormPage = dynamic_cast< FmFormPage* >( pPage );
     OSL_ENSURE( pFormPage, "FmXFormShell::executeControlConversionSlot: no current (form) page!" );
     if ( !pFormPage )
         return false;
@@ -1100,7 +1099,7 @@ bool FmXFormShell::executeControlConversionSlot_Lock(const Reference<XFormCompon
             Reference< XInterface > xNormalizedObject( _rxObject, UNO_QUERY );
 
             FmFormObj* pFormObject = nullptr;
-            SdrObjListIter aPageIter( *pFormPage );
+            SdrObjListIter aPageIter( pFormPage );
             while ( aPageIter.IsMore() )
             {
                 SdrObject* pCurrent = aPageIter.Next();
@@ -1267,7 +1266,7 @@ bool FmXFormShell::executeControlConversionSlot_Lock(const Reference<XFormCompon
             DBG_ASSERT(pModel != nullptr, "FmXFormShell::executeControlConversionSlot: my shell has no model !");
             if (pModel && pModel->IsUndoEnabled() )
             {
-                pModel->AddUndo(new FmUndoModelReplaceAction(*pModel, pFormObject, xOldModel));
+                pModel->AddUndo(o3tl::make_unique<FmUndoModelReplaceAction>(*pModel, pFormObject, xOldModel));
             }
             else
             {
@@ -1319,7 +1318,7 @@ bool FmXFormShell::canConvertCurrentSelectionToControl_Lock(const OString& rIden
 
 void FmXFormShell::checkControlConversionSlotsForCurrentSelection_Lock(Menu& rMenu)
 {
-    for (sal_Int16 i = 0; i < rMenu.GetItemCount(); ++i)
+    for (sal_uInt16 i = 0; i < rMenu.GetItemCount(); ++i)
     {
         // the context is already of a type that corresponds to the entry -> disable
         const sal_uInt16 nId = rMenu.GetItemId(i);
@@ -1568,18 +1567,16 @@ void FmXFormShell::ExecuteSearch_Lock()
     // somewhat more fluid. Should be, however, somehow made dependent of the
     // underlying cursor. DAO for example is not thread-safe.
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    ScopedVclPtr<AbstractFmSearchDialog> pDialog;
-    if ( pFact )
-        pDialog.disposeAndReset(pFact->CreateFmSearchDialog( &m_pShell->GetViewShell()->GetViewFrame()->GetWindow(), strInitialText, aContextNames, nInitialContext, LINK(this, FmXFormShell, OnSearchContextRequest_Lock) ));
-    DBG_ASSERT( pDialog, "FmXFormShell::ExecuteSearch: could not create the search dialog!" );
-    if ( pDialog )
-    {
-        pDialog->SetActiveField( strActiveField );
-        pDialog->SetFoundHandler(LINK(this, FmXFormShell, OnFoundData_Lock));
-        pDialog->SetCanceledNotFoundHdl(LINK(this, FmXFormShell, OnCanceledNotFound_Lock));
-        pDialog->Execute();
-        pDialog.disposeAndClear();
-    }
+    ScopedVclPtr<AbstractFmSearchDialog> pDialog(
+            pFact->CreateFmSearchDialog(
+                &m_pShell->GetViewShell()->GetViewFrame()->GetWindow(),
+                strInitialText, aContextNames, nInitialContext,
+                LINK(this, FmXFormShell, OnSearchContextRequest_Lock) ));
+    pDialog->SetActiveField( strActiveField );
+    pDialog->SetFoundHandler(LINK(this, FmXFormShell, OnFoundData_Lock));
+    pDialog->SetCanceledNotFoundHdl(LINK(this, FmXFormShell, OnCanceledNotFound_Lock));
+    pDialog->Execute();
+    pDialog.disposeAndClear();
 
     // restore GridControls again
     LoopGrids_Lock(LoopGridsSync::ENABLE_SYNC, LoopGridsFlags::DISABLE_ROCTRLR);
@@ -2349,7 +2346,7 @@ IMPL_LINK(FmXFormShell, OnSearchContextRequest_Lock, FmSearchContext&, rfmscCont
     // Search all SdrControls of this page...
     OUString sControlSource, aName;
 
-    SdrObjListIter aPageIter( *pCurrentPage );
+    SdrObjListIter aPageIter( pCurrentPage );
     while ( aPageIter.IsMore() )
     {
         SdrObject* pCurrent = aPageIter.Next();
@@ -2562,11 +2559,8 @@ void FmXFormShell::UpdateForms_Lock(bool _bInvalidate)
     Reference< XIndexAccess > xForms;
 
     FmFormPage* pPage = m_pShell->GetCurPage();
-    if ( pPage )
-    {
-        if ( m_pShell->m_bDesignMode )
-            xForms.set(pPage->GetForms( false ), css::uno::UNO_QUERY);
-    }
+    if ( pPage && m_pShell->m_bDesignMode )
+        xForms.set(pPage->GetForms( false ), css::uno::UNO_QUERY);
 
     if ( m_xForms != xForms )
     {
@@ -2987,7 +2981,7 @@ void FmXFormShell::startFiltering_Lock()
 }
 
 
-void saveFilter(const Reference< runtime::XFormController >& _rxController)
+static void saveFilter(const Reference< runtime::XFormController >& _rxController)
 {
     Reference< XPropertySet> xFormAsSet(_rxController->getModel(), UNO_QUERY);
     Reference< XPropertySet> xControllerAsSet(_rxController, UNO_QUERY);
@@ -3046,24 +3040,22 @@ void FmXFormShell::stopFiltering_Lock(bool bSave)
             for (::std::vector< Reference< runtime::XFormController > > ::const_iterator j = rControllerList.begin();
                  j != rControllerList.end(); ++j)
             {
-                if (bSave)
-                {   // remember the current filter settings in case we're going to reload the forms below (which may fail)
-                    try
-                    {
-                        Reference< XPropertySet > xFormAsSet((*j)->getModel(), UNO_QUERY);
-                        aOriginalFilters.push_back(::comphelper::getString(xFormAsSet->getPropertyValue(FM_PROP_FILTER)));
-                        aOriginalApplyFlags.push_back(::comphelper::getBOOL(xFormAsSet->getPropertyValue(FM_PROP_APPLYFILTER)));
-                    }
-                    catch(Exception&)
-                    {
-                        OSL_FAIL("FmXFormShell::stopFiltering : could not get the original filter !");
-                        // put dummies into the arrays so the they have the right size
+                // remember the current filter settings in case we're going to reload the forms below (which may fail)
+                try
+                {
+                    Reference< XPropertySet > xFormAsSet((*j)->getModel(), UNO_QUERY);
+                    aOriginalFilters.push_back(::comphelper::getString(xFormAsSet->getPropertyValue(FM_PROP_FILTER)));
+                    aOriginalApplyFlags.push_back(::comphelper::getBOOL(xFormAsSet->getPropertyValue(FM_PROP_APPLYFILTER)));
+                }
+                catch(Exception&)
+                {
+                    OSL_FAIL("FmXFormShell::stopFiltering : could not get the original filter !");
+                    // put dummies into the arrays so the they have the right size
 
-                        if (aOriginalFilters.size() == aOriginalApplyFlags.size())
-                            // the first getPropertyValue failed -> use two dummies
-                            aOriginalFilters.emplace_back( );
-                        aOriginalApplyFlags.push_back( false );
-                    }
+                    if (aOriginalFilters.size() == aOriginalApplyFlags.size())
+                        // the first getPropertyValue failed -> use two dummies
+                        aOriginalFilters.emplace_back( );
+                    aOriginalApplyFlags.push_back( false );
                 }
                 saveFilter(*j);
             }

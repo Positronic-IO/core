@@ -38,7 +38,7 @@ class OOXMLDocumentImpl;
 class OOXMLFastContextHandler: public ::cppu::WeakImplHelper<css::xml::sax::XFastContextHandler>
 {
 public:
-    typedef std::shared_ptr<OOXMLFastContextHandler> Pointer_t;
+    typedef tools::SvRef<OOXMLFastContextHandler> Pointer_t;
 
     enum ResourceEnum_t { UNKNOWN, STREAM, PROPERTIES, TABLE, SHAPE };
 
@@ -46,10 +46,12 @@ public:
 
     explicit OOXMLFastContextHandler(OOXMLFastContextHandler * pContext);
 
+    OOXMLFastContextHandler(OOXMLFastContextHandler const &) = default;
+
     virtual ~OOXMLFastContextHandler() override;
 
     // css::xml::sax::XFastContextHandler:
-    virtual void SAL_CALL startFastElement (Token_t Element, const css::uno::Reference< css::xml::sax::XFastAttributeList >& Attribs) override;
+    virtual void SAL_CALL startFastElement (Token_t Element, const css::uno::Reference< css::xml::sax::XFastAttributeList >& Attribs) override final;
 
     virtual void SAL_CALL startUnknownElement(const OUString & Namespace, const OUString & Name, const css::uno::Reference< css::xml::sax::XFastAttributeList > & Attribs) override;
 
@@ -117,7 +119,6 @@ public:
     sal_Int32 getXNoteId() const;
     void setForwardEvents(bool bForwardEvents);
     bool isForwardEvents() const;
-    virtual void setParent(OOXMLFastContextHandler * pParent);
     virtual void setId(Id nId);
     virtual Id getId() const;
 
@@ -137,6 +138,8 @@ public:
     void endParagraphGroup();
     void startCharacterGroup();
     void endCharacterGroup();
+    virtual void pushBiDiEmbedLevel();
+    virtual void popBiDiEmbedLevel();
     void startSdt();
     void endSdt();
 
@@ -144,7 +147,7 @@ public:
     void fieldSeparator();
     void endField();
     void lockField();
-    void ftnednref();
+    static void ftnednref();
     void ftnedncont();
     void ftnednsep();
     void pgNum();
@@ -221,22 +224,24 @@ protected:
     void startAction();
     void endAction();
 
-    // 2.10 of XML 1.0 specification
-    virtual bool IsPreserveSpace() const;
-
     const css::uno::Reference< css::uno::XComponentContext >& getComponentContext() { return m_xContext;}
 
     bool inPositionV;
     OOXMLValue::Pointer_t mpGridAfter;
 
 private:
-    void operator =(OOXMLFastContextHandler &) = delete;
+    void operator =(OOXMLFastContextHandler const &) = delete;
     /// Handles AlternateContent. Returns true, if children of the current element should be ignored.
     bool prepareMceContext(Token_t nElement, const css::uno::Reference<css::xml::sax::XFastAttributeList>& Attribs);
+
+    // 2.10 of XML 1.0 specification
+    bool IsPreserveSpace() const;
 
     css::uno::Reference< css::uno::XComponentContext > m_xContext;
     bool m_bDiscardChildren;
     bool m_bTookChoice; ///< Did we take the Choice or want Fallback instead?
+    bool mbPreserveSpace = false;
+    bool mbPreserveSpaceSet = false;
 
 };
 
@@ -256,13 +261,8 @@ public:
 
     void handleHyperlink();
 
-protected:
-    virtual bool IsPreserveSpace() const override;
-
 private:
     mutable OOXMLPropertySet::Pointer_t mpPropertySetAttrs;
-    bool mbPreserveSpace    : 1;
-    bool mbPreserveSpaceSet : 1;
 };
 
 class OOXMLFastContextHandlerProperties : public OOXMLFastContextHandler
@@ -294,7 +294,6 @@ protected:
     OOXMLPropertySet::Pointer_t mpPropertySet;
 
     virtual void lcl_endFastElement(Token_t Element) override;
-    virtual void setParent(OOXMLFastContextHandler * pParent) override;
 
 private:
 
@@ -332,6 +331,9 @@ public:
     virtual void setDefaultIntegerValue() override;
     virtual void setDefaultHexValue() override;
     virtual void setDefaultStringValue() override;
+
+    virtual void pushBiDiEmbedLevel() override;
+    virtual void popBiDiEmbedLevel() override;
 
 private:
     OOXMLValue::Pointer_t mpValue;

@@ -14,15 +14,16 @@
 #include <vcl/bitmapex.hxx>
 #include <vcl/ImageTree.hxx>
 #include <vcl/salbtype.hxx>
-#include <tools/stream.hxx>
 #if ENABLE_CAIRO_CANVAS
 #include <vcl/cairo.hxx>
 #endif
-#include <com/sun/star/geometry/IntegerPoint2D.hpp>
-#include <com/sun/star/geometry/IntegerRectangle2D.hpp>
 #include <basegfx/range/b2drectangle.hxx>
-#include <basegfx/matrix/b2dhommatrix.hxx>
 #include <o3tl/safeint.hxx>
+#include <array>
+
+class SvStream;
+namespace basegfx { class B2DHomMatrix; }
+namespace com { namespace sun { namespace star { namespace geometry { struct IntegerRectangle2D; } } } }
 
 namespace vcl {
 namespace bitmap {
@@ -34,8 +35,8 @@ class VCL_DLLPUBLIC RawBitmap
 {
 friend BitmapEx VCL_DLLPUBLIC CreateFromData( RawBitmap&& rawBitmap );
     std::unique_ptr<sal_uInt8[]> mpData;
-    Size maSize;
-    sal_uInt8 mnBitCount;
+    Size const maSize;
+    sal_uInt8 const mnBitCount;
 public:
     RawBitmap(Size const & rSize, sal_uInt8 nBitCount)
         : maSize(rSize),
@@ -112,6 +113,11 @@ VCL_DLLPUBLIC css::uno::Sequence< sal_Int8 > GetMaskDIB(BitmapEx const & aBmpEx)
 VCL_DLLPUBLIC void CanvasCairoExtractBitmapData( BitmapEx const & rBmpEx, Bitmap & rBitmap, unsigned char*& data, bool& bHasAlpha, long& rnWidth, long& rnHeight );
 
 VCL_DLLPUBLIC css::uno::Sequence< sal_Int8 > CanvasExtractBitmapData(BitmapEx const & rBitmapEx, const css::geometry::IntegerRectangle2D& rect);
+
+// helper to construct historical 8x8 bitmaps with two colors
+
+BitmapEx VCL_DLLPUBLIC createHistorical8x8FromArray(std::array<sal_uInt8,64> const & pArray, Color aColorPix, Color aColorBack);
+bool VCL_DLLPUBLIC isHistorical8x8(const BitmapEx& rBitmapEx, BitmapColor& o_rBack, BitmapColor& o_rFront);
 
 }} // end vcl::bitmap
 

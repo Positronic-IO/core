@@ -19,6 +19,7 @@
 
 #include <ChartController.hxx>
 #include <ChartWindow.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <TitleHelper.hxx>
 #include <ThreeDHelper.hxx>
@@ -50,11 +51,13 @@
 #include <com/sun/star/drawing/TextVerticalAdjust.hpp>
 #include <com/sun/star/drawing/TextHorizontalAdjust.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 
 #include <editeng/editview.hxx>
 #include <editeng/outliner.hxx>
 #include <svx/ActionDescriptionProvider.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <sot/storage.hxx>
 #include <vcl/graph.hxx>
 #include <svx/unomodel.hxx>
@@ -69,6 +72,7 @@
 #include <svx/svdundo.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/unopage.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <tools/diagnose_ex.h>
@@ -155,11 +159,11 @@ bool lcl_deleteDataCurve(
 
 } // anonymous namespace
 
-ReferenceSizeProvider* ChartController::impl_createReferenceSizeProvider()
+std::unique_ptr<ReferenceSizeProvider> ChartController::impl_createReferenceSizeProvider()
 {
     awt::Size aPageSize( ChartModelHelper::getPageSize( getModel() ) );
 
-    return new ReferenceSizeProvider(
+    return o3tl::make_unique<ReferenceSizeProvider>(
         aPageSize, Reference<chart2::XChartDocument>(getModel(), uno::UNO_QUERY));
 }
 
@@ -242,7 +246,7 @@ void ChartController::executeDispatch_ScaleText()
     ControllerLockGuardUNO aCtlLockGuard( getModel() );
 
     std::unique_ptr<ReferenceSizeProvider> pRefSizeProv(impl_createReferenceSizeProvider());
-    OSL_ASSERT( pRefSizeProv.get());
+    OSL_ASSERT(pRefSizeProv);
     if (pRefSizeProv)
         pRefSizeProv->toggleAutoResizeState();
 
@@ -271,7 +275,10 @@ void ChartController::executeDispatch_Paste()
                 {
                     xStm->Seek( 0 );
                     Reference< io::XInputStream > xInputStream( new utl::OInputStreamWrapper( *xStm ) );
-                    std::unique_ptr< SdrModel > spModel( new SdrModel() );
+
+                    std::unique_ptr< SdrModel > spModel(
+                        new SdrModel());
+
                     if ( SvxDrawingLayerImport( spModel.get(), xInputStream ) )
                     {
                         impl_PasteShapes( spModel.get() );
@@ -358,7 +365,7 @@ void ChartController::impl_PasteGraphic(
             }
             //select new shape
             m_aSelection.setSelection( xGraphicShape );
-            m_aSelection.applySelection( m_pDrawViewWrapper );
+            m_aSelection.applySelection( m_pDrawViewWrapper.get() );
         }
         xGraphicShapeProp->setPropertyValue( "Graphic", uno::Any( xGraphic ));
         uno::Reference< beans::XPropertySet > xGraphicProp( xGraphic, uno::UNO_QUERY );
@@ -393,7 +400,7 @@ void ChartController::impl_PasteShapes( SdrModel* pModel )
             for ( sal_uInt16 i = 0; i < nCount; ++i )
             {
                 const SdrPage* pPage = pModel->GetPage( i );
-                SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+                SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
                 while ( aIter.IsMore() )
                 {
                     SdrObject* pObj(aIter.Next());
@@ -402,8 +409,6 @@ void ChartController::impl_PasteShapes( SdrModel* pModel )
 
                     if ( pNewObj )
                     {
-                        pNewObj->SetPage( pDestPage );
-
                         // set position
                         Reference< drawing::XShape > xShape( pNewObj->getUnoShape(), uno::UNO_QUERY );
                         if ( xShape.is() )
@@ -412,7 +417,7 @@ void ChartController::impl_PasteShapes( SdrModel* pModel )
                         }
 
                         pDestPage->InsertObject( pNewObj );
-                        m_pDrawViewWrapper->AddUndo( new SdrUndoInsertObj( *pNewObj ) );
+                        m_pDrawViewWrapper->AddUndo( o3tl::make_unique<SdrUndoInsertObj>( *pNewObj ) );
                         xSelShape = xShape;
                     }
                 }
@@ -426,7 +431,7 @@ void ChartController::impl_PasteShapes( SdrModel* pModel )
 
             // select last inserted shape
             m_aSelection.setSelection( xSelShape );
-            m_aSelection.applySelection( m_pDrawViewWrapper );
+            m_aSelection.applySelection( m_pDrawViewWrapper.get() );
 
             m_pDrawViewWrapper->EndUndo();
 
@@ -469,13 +474,13 @@ void ChartController::impl_PasteStringAsTextShape( const OUString& rString, cons
                 xTextShape->setPosition( rPosition );
 
                 m_aSelection.setSelection( xTextShape );
-                m_aSelection.applySelection( m_pDrawViewWrapper );
+                m_aSelection.applySelection( m_pDrawViewWrapper.get() );
 
                 SdrObject* pObj = DrawViewWrapper::getSdrObject( xTextShape );
                 if ( pObj )
                 {
                     m_pDrawViewWrapper->BegUndo( SvxResId( RID_SVX_3D_UNDO_EXCHANGE_PASTE ) );
-                    m_pDrawViewWrapper->AddUndo( new SdrUndoInsertObj( *pObj ) );
+                    m_pDrawViewWrapper->AddUndo( o3tl::make_unique<SdrUndoInsertObj>( *pObj ) );
                     m_pDrawViewWrapper->EndUndo();
 
                     impl_switchDiagramPositioningToExcludingPositioning();
@@ -491,46 +496,32 @@ void ChartController::impl_PasteStringAsTextShape( const OUString& rString, cons
 
 void ChartController::executeDispatch_Copy()
 {
-    if ( m_pDrawViewWrapper )
+    SolarMutexGuard aSolarGuard;
+    if (!m_pDrawViewWrapper)
+        return;
+
+    OutlinerView* pOutlinerView = m_pDrawViewWrapper->GetTextEditOutlinerView();
+    if (pOutlinerView)
+        pOutlinerView->Copy();
+    else
     {
-        OutlinerView* pOutlinerView = m_pDrawViewWrapper->GetTextEditOutlinerView();
-        if ( pOutlinerView )
+        SdrObject* pSelectedObj = nullptr;
+        ObjectIdentifier aSelOID(m_aSelection.getSelectedOID());
+
+        if (aSelOID.isAutoGeneratedObject())
+            pSelectedObj = m_pDrawModelWrapper->getNamedSdrObject( aSelOID.getObjectCID() );
+        else if (aSelOID.isAdditionalShape())
+            pSelectedObj = DrawViewWrapper::getSdrObject( aSelOID.getAdditionalShape() );
+
+        if (pSelectedObj)
         {
-            pOutlinerView->Copy();
-        }
-        else
-        {
-            Reference< datatransfer::XTransferable > xTransferable;
+            Reference<datatransfer::clipboard::XClipboard> xClipboard(GetChartWindow()->GetClipboard());
+            if (xClipboard.is())
             {
-                SolarMutexGuard aSolarGuard;
-                if ( m_pDrawModelWrapper )
-                {
-                    SdrObject* pSelectedObj = nullptr;
-                    ObjectIdentifier aSelOID( m_aSelection.getSelectedOID() );
-                    if ( aSelOID.isAutoGeneratedObject() )
-                    {
-                        pSelectedObj = m_pDrawModelWrapper->getNamedSdrObject( aSelOID.getObjectCID() );
-                    }
-                    else if ( aSelOID.isAdditionalShape() )
-                    {
-                        pSelectedObj = DrawViewWrapper::getSdrObject( aSelOID.getAdditionalShape() );
-                    }
-                    if ( pSelectedObj )
-                    {
-                        xTransferable.set( new ChartTransferable(
-                                m_pDrawModelWrapper->getSdrModel(),
-                                pSelectedObj,
-                                aSelOID.isAdditionalShape() ) );
-                    }
-                }
-            }
-            if ( xTransferable.is() )
-            {
-                Reference< datatransfer::clipboard::XClipboard > xClipboard( TransferableHelper::GetSystemClipboard() );
-                if ( xClipboard.is() )
-                {
-                    xClipboard->setContents( xTransferable, Reference< datatransfer::clipboard::XClipboardOwner >() );
-                }
+                Reference< datatransfer::XTransferable > xTransferable(
+                    new ChartTransferable(m_pDrawModelWrapper->getSdrModel(),
+                                          pSelectedObj, aSelOID.isAdditionalShape()));
+                xClipboard->setContents(xTransferable, Reference< datatransfer::clipboard::XClipboardOwner >());
             }
         }
     }
@@ -547,7 +538,7 @@ bool ChartController::isObjectDeleteable( const uno::Any& rSelection )
     ObjectIdentifier aSelOID( rSelection );
     if ( aSelOID.isAutoGeneratedObject() )
     {
-        OUString aSelObjCID( aSelOID.getObjectCID() );
+        const OUString& aSelObjCID( aSelOID.getObjectCID() );
         ObjectType aObjectType(ObjectIdentifier::getObjectType( aSelObjCID ));
 
         switch(aObjectType)

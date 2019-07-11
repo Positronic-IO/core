@@ -89,19 +89,19 @@ public:
     void clearFragment();
 
     osl::Mutex m_mutex;
-    OUString m_scheme;
-    OUString m_authority;
+    OUString const m_scheme;
+    OUString const m_authority;
     OUString m_path;
-    OUString m_query;
+    OUString const m_query;
     OUString m_fragment;
-    bool m_isHierarchical;
-    bool m_hasAuthority;
-    bool m_hasQuery;
+    bool const m_isHierarchical;
+    bool const m_hasAuthority;
+    bool const m_hasQuery;
     bool m_hasFragment;
 
 private:
-    UriReference(UriReference &) = delete;
-    void operator =(UriReference) = delete;
+    UriReference(UriReference const &) = delete;
+    void operator =(UriReference const &) = delete;
 
     void appendSchemeSpecificPart(OUStringBuffer & buffer) const;
 };

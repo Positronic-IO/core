@@ -23,6 +23,12 @@
 #include "fontselect.hxx"
 #include "impfontmetricdata.hxx"
 
+#include <rtl/ref.hxx>
+#include <salhelper/simplereferenceobject.hxx>
+#include <tools/gen.hxx>
+#include <vcl/glyphitem.hxx>
+#include <vcl/vcllayout.hxx>
+
 #include <unordered_map>
 #include <memory>
 
@@ -34,7 +40,7 @@ class PhysicalFontFace;
 
 // TODO: allow sharing of metrics for related fonts
 
-class VCL_PLUGIN_PUBLIC LogicalFontInstance
+class VCL_PLUGIN_PUBLIC LogicalFontInstance : public salhelper::SimpleReferenceObject
 {
     // just declaring the factory function doesn't work AKA
     // friend LogicalFontInstance* PhysicalFontFace::CreateFontInstance(const FontSelectPattern&) const;
@@ -42,7 +48,7 @@ class VCL_PLUGIN_PUBLIC LogicalFontInstance
     friend class ImplFontCache;
 
 public: // TODO: make data members private
-    virtual ~LogicalFontInstance();
+    virtual ~LogicalFontInstance() override;
 
     ImplFontMetricDataRef mxFontMetric;        // Font attributes
     const ConvertChar* mpConversion;        // used e.g. for StarBats->StarSymbol
@@ -56,16 +62,16 @@ public: // TODO: make data members private
     bool            GetFallbackForUnicode( sal_UCS4, FontWeight eWeight, OUString* pFontName ) const;
     void            IgnoreFallbackForUnicode( sal_UCS4, FontWeight eWeight, const OUString& rFontName );
 
-    void            Acquire();
-    void            Release();
-
     inline hb_font_t* GetHbFont();
     void SetAverageWidthFactor(double nFactor) { m_nAveWidthFactor = nFactor; }
     double GetAverageWidthFactor() const { return m_nAveWidthFactor; }
     const FontSelectPattern& GetFontSelectPattern() const { return m_aFontSelData; }
 
-    const PhysicalFontFace* GetFontFace() const { return m_pFontFace; }
+    const PhysicalFontFace* GetFontFace() const { return m_pFontFace.get(); }
     const ImplFontCache* GetFontCache() const { return mpFontCache; }
+
+    bool GetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const;
+    virtual bool GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const = 0;
 
     int GetKashidaWidth();
 
@@ -75,8 +81,10 @@ public: // TODO: make data members private
 protected:
     explicit LogicalFontInstance(const PhysicalFontFace&, const FontSelectPattern&);
 
+    virtual bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const = 0;
+
     // Takes ownership of pHbFace.
-    hb_font_t* InitHbFont(hb_face_t* pHbFace) const;
+    static hb_font_t* InitHbFont(hb_face_t* pHbFace);
     virtual hb_font_t* ImplInitHbFont() { assert(false); return nullptr; }
     inline void ReleaseHbFont();
 
@@ -86,12 +94,11 @@ private:
     // TODO: at least the ones which just differ in orientation, stretching or height
     typedef ::std::unordered_map< ::std::pair<sal_UCS4,FontWeight>, OUString > UnicodeFallbackList;
     std::unique_ptr<UnicodeFallbackList> mpUnicodeFallbackList;
-    ImplFontCache * mpFontCache;
-    sal_uInt32      mnRefCount;
+    mutable ImplFontCache * mpFontCache;
     const FontSelectPattern m_aFontSelData;
     hb_font_t* m_pHbFont;
     double m_nAveWidthFactor;
-    const PhysicalFontFace* m_pFontFace;
+    rtl::Reference<PhysicalFontFace> m_pFontFace;
 };
 
 inline hb_font_t* LogicalFontInstance::GetHbFont()

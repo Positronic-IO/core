@@ -26,11 +26,11 @@
 namespace {
 
 class OverrideParam:
-    public RecursiveASTVisitor<OverrideParam>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<OverrideParam>
 {
 public:
     explicit OverrideParam(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     virtual void run() override;
 
@@ -43,8 +43,7 @@ private:
 void OverrideParam::run()
 {
     /*
-    StringRef fn( compiler.getSourceManager().getFileEntryForID(
-                      compiler.getSourceManager().getMainFileID())->getName() );
+    StringRef fn(handler.getMainFileName());
     if (fn == SRCDIR "/include/svx/checklbx.hxx")
          return;
 */

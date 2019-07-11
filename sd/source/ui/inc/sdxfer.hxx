@@ -20,8 +20,7 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_SDXFER_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_SDXFER_HXX
 
-#include <svtools/transfer.hxx>
-#include <vcl/graph.hxx>
+#include <vcl/transfer.hxx>
 #include <sfx2/objsh.hxx>
 #include <svl/lstner.hxx>
 
@@ -132,7 +131,7 @@ private:
     bool                            mbInternalMove               : 1;
     bool                            mbOwnDocument                : 1;
     bool                            mbOwnView                    : 1;
-    bool                            mbLateInit                   : 1;
+    bool const                      mbLateInit                   : 1;
     bool                            mbPageTransferable           : 1;
     bool                            mbPageTransferablePersistent : 1;
     ::std::vector<std::shared_ptr<UserData> > maUserData;

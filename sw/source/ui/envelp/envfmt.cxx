@@ -117,16 +117,16 @@ static long lUserH = 5669; // 10 cm
 SwEnvFormatPage::SwEnvFormatPage(TabPageParent pParent, const SfxItemSet& rSet)
     : SfxTabPage(pParent, "modules/swriter/ui/envformatpage.ui", "EnvFormatPage", &rSet)
     , m_pDialog(nullptr)
-    , m_xAddrLeftField(m_xBuilder->weld_metric_spin_button("leftaddr", FUNIT_CM))
-    , m_xAddrTopField(m_xBuilder->weld_metric_spin_button("topaddr", FUNIT_CM))
+    , m_xAddrLeftField(m_xBuilder->weld_metric_spin_button("leftaddr", FieldUnit::CM))
+    , m_xAddrTopField(m_xBuilder->weld_metric_spin_button("topaddr", FieldUnit::CM))
     , m_xAddrEditButton(m_xBuilder->weld_menu_button("addredit"))
-    , m_xSendLeftField(m_xBuilder->weld_metric_spin_button("leftsender", FUNIT_CM))
-    , m_xSendTopField(m_xBuilder->weld_metric_spin_button("topsender", FUNIT_CM))
+    , m_xSendLeftField(m_xBuilder->weld_metric_spin_button("leftsender", FieldUnit::CM))
+    , m_xSendTopField(m_xBuilder->weld_metric_spin_button("topsender", FieldUnit::CM))
     , m_xSendEditButton(m_xBuilder->weld_menu_button("senderedit"))
-    , m_xSizeFormatBox(m_xBuilder->weld_combo_box_text("format"))
-    , m_xSizeWidthField(m_xBuilder->weld_metric_spin_button("width", FUNIT_CM))
-    , m_xSizeHeightField(m_xBuilder->weld_metric_spin_button("height", FUNIT_CM))
-    , m_xPreview(new SwEnvPreview(m_xBuilder->weld_drawing_area("preview")))
+    , m_xSizeFormatBox(m_xBuilder->weld_combo_box("format"))
+    , m_xSizeWidthField(m_xBuilder->weld_metric_spin_button("width", FieldUnit::CM))
+    , m_xSizeHeightField(m_xBuilder->weld_metric_spin_button("height", FieldUnit::CM))
+    , m_xPreview(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreview))
 {
     SetExchangeSupport();
 
@@ -180,7 +180,7 @@ SwEnvFormatPage::SwEnvFormatPage(TabPageParent pParent, const SfxItemSet& rSet)
 void SwEnvFormatPage::Init(SwEnvDlg* pDialog)
 {
     m_pDialog = pDialog;
-    m_xPreview->SetDialog(m_pDialog);
+    m_aPreview.SetDialog(m_pDialog);
 }
 
 SwEnvFormatPage::~SwEnvFormatPage()
@@ -225,12 +225,12 @@ IMPL_LINK( SwEnvFormatPage, ModifyHdl, weld::MetricSpinButton&, rEdit, void )
 
 IMPL_LINK(SwEnvFormatPage, AddrEditHdl, const OString&, rIdent, void)
 {
-    Edit(rIdent, true);
+    Edit(rIdent, false);
 }
 
 IMPL_LINK(SwEnvFormatPage, SendEditHdl, const OString&, rIdent, void)
 {
-    Edit(rIdent, false);
+    Edit(rIdent, true);
 }
 
 void SwEnvFormatPage::Edit(const OString& rIdent, bool bSender)
@@ -254,9 +254,7 @@ void SwEnvFormatPage::Edit(const OString& rIdent, bool bSender)
         OSL_ENSURE(pFact, "SwAbstractDialogFactory fail!");
 
         const OUString sFormatStr = pColl->GetName();
-        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(nullptr /*TODO*/, pSh->GetView(), aTmpSet, SwCharDlgMode::Env, &sFormatStr));
-        //ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(GetParentSwEnvDlg(), pSh->GetView(), aTmpSet, SwCharDlgMode::Env, &sFormatStr));
-        OSL_ENSURE(pDlg, "Dialog creation failed!");
+        ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSwCharDlg(GetDialogFrameWeld(), pSh->GetView(), aTmpSet, SwCharDlgMode::Env, &sFormatStr));
         if (pDlg->Execute() == RET_OK)
         {
             SfxItemSet aOutputSet( *pDlg->GetOutputItemSet() );
@@ -292,14 +290,13 @@ void SwEnvFormatPage::Edit(const OString& rIdent, bool bSender)
         ::PrepareBoxInfo( aTmpSet, *pSh );
 
         const OUString sFormatStr = pColl->GetName();
-        VclPtrInstance< SwParaDlg > pDlg(nullptr /*TODO*/, pSh->GetView(), aTmpSet, DLG_ENVELOP, &sFormatStr);
-        //VclPtrInstance< SwParaDlg > pDlg(GetParentSwEnvDlg(), pSh->GetView(), aTmpSet, DLG_ENVELOP, &sFormatStr);
+        SwParaDlg aDlg(GetDialogFrameWeld(), pSh->GetView(), aTmpSet, DLG_ENVELOP, &sFormatStr);
 
-        if ( pDlg->Execute() == RET_OK )
+        if (aDlg.run() == RET_OK)
         {
             // maybe relocate defaults
             const SfxPoolItem* pItem = nullptr;
-            SfxItemSet* pOutputSet = const_cast<SfxItemSet*>(pDlg->GetOutputItemSet());
+            SfxItemSet* pOutputSet = const_cast<SfxItemSet*>(aDlg.GetOutputItemSet());
             sal_uInt16 nNewDist;
 
             if( SfxItemState::SET == pOutputSet->GetItemState( SID_ATTR_TABSTOP_DEFAULTS,
@@ -322,7 +319,7 @@ void SwEnvFormatPage::Edit(const OString& rIdent, bool bSender)
 // A temporary Itemset that gets discarded at abort
 SfxItemSet *SwEnvFormatPage::GetCollItemSet(SwTextFormatColl const * pColl, bool bSender)
 {
-    SfxItemSet *&pAddrSet = bSender ? GetParentSwEnvDlg()->pSenderSet : GetParentSwEnvDlg()->pAddresseeSet;
+    std::unique_ptr<SfxItemSet>& pAddrSet = bSender ? GetParentSwEnvDlg()->pSenderSet : GetParentSwEnvDlg()->pAddresseeSet;
     if (!pAddrSet)
     {
         // determine range (merge both Itemsets' ranges)
@@ -347,15 +344,15 @@ SfxItemSet *SwEnvFormatPage::GetCollItemSet(SwTextFormatColl const * pColl, bool
         aVec2.insert(aVec2.end(), aVec.begin(), aVec.end());
         std::unique_ptr<sal_uInt16[]> pNewRanges(::lcl_convertListToRanges(aVec2));
 
-        pAddrSet = new SfxItemSet(GetParentSwEnvDlg()->pSh->GetView().GetCurShell()->GetPool(),
-                                  pNewRanges.get());
+        pAddrSet.reset(new SfxItemSet(GetParentSwEnvDlg()->pSh->GetView().GetCurShell()->GetPool(),
+                                  pNewRanges.get()));
         pAddrSet->Put(pColl->GetAttrSet());
     }
 
-    return pAddrSet;
+    return pAddrSet.get();
 }
 
-IMPL_LINK_NOARG(SwEnvFormatPage, FormatHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwEnvFormatPage, FormatHdl, weld::ComboBox&, void)
 {
     long lWidth;
     long lHeight;
@@ -406,13 +403,13 @@ void SwEnvFormatPage::SetMinMax()
 
     // Min and Max
     m_xAddrLeftField->set_range(100 * (getfieldval(*m_xSendLeftField) + 566),
-                                100 * (lWidth  - 2 * 566), FUNIT_TWIP);
+                                100 * (lWidth  - 2 * 566), FieldUnit::TWIP);
     m_xAddrTopField->set_range(100 * (getfieldval(*m_xSendTopField ) + 2 * 566),
-                               100 * (lHeight - 2 * 566), FUNIT_TWIP);
+                               100 * (lHeight - 2 * 566), FieldUnit::TWIP);
     m_xSendLeftField->set_range(100 * 566,
-                                100 * (getfieldval(*m_xAddrLeftField) - 566), FUNIT_TWIP);
+                                100 * (getfieldval(*m_xAddrLeftField) - 566), FieldUnit::TWIP);
     m_xSendTopField->set_range(100 * 566,
-                               100 * (getfieldval(*m_xAddrTopField ) - 2 * 566), FUNIT_TWIP);
+                               100 * (getfieldval(*m_xAddrTopField ) - 2 * 566), FieldUnit::TWIP);
 }
 
 VclPtr<SfxTabPage> SwEnvFormatPage::Create(TabPageParent pParent, const SfxItemSet* rSet)
@@ -485,8 +482,8 @@ void SwEnvFormatPage::Reset(const SfxItemSet* rSet)
     setfieldval(*m_xSizeHeightField , std::min(rItem.m_nWidth, rItem.m_nHeight));
     SetMinMax();
 
-    DELETEZ(GetParentSwEnvDlg()->pSenderSet);
-    DELETEZ(GetParentSwEnvDlg()->pAddresseeSet);
+    GetParentSwEnvDlg()->pSenderSet.reset();
+    GetParentSwEnvDlg()->pAddresseeSet.reset();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

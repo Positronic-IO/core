@@ -42,7 +42,9 @@
 
 #include <comphelper/propmultiplex.hxx>
 #include <comphelper/interfacecontainer2.hxx>
+#include <comphelper/uno3.hxx>
 #include <cppuhelper/component.hxx>
+#include <cppuhelper/implbase1.hxx>
 #include <cppuhelper/implbase2.hxx>
 #include <tools/diagnose_ex.h>
 
@@ -81,7 +83,7 @@ private:
     sal_Int32               m_nFormatKey;
     sal_Int16               m_nFieldType;
     sal_Int16               m_nTypeId;
-    sal_uInt16              m_nId;
+    sal_uInt16 const        m_nId;
     sal_Int16               m_nFieldPos;
     sal_Int16               m_nAlign;                       // specified with TXT_ALIGN_LEFT ....
     bool                m_bReadOnly : 1;
@@ -96,8 +98,7 @@ private:
         // used by locked columns
 public:
     DbGridColumn(sal_uInt16 _nId, DbGridControl& rParent)
-        :m_pCell(nullptr)
-        ,m_rParent(rParent)
+        :m_rParent(rParent)
         ,m_nLastVisibleWidth(-1)
         ,m_nFormatKey(0)
         ,m_nFieldType(0)
@@ -377,8 +378,8 @@ protected:
 
 class DbTextField : public DbLimitedLengthField
 {
-    ::svt::IEditImplementation* m_pEdit;
-    ::svt::IEditImplementation* m_pPainterImplementation;
+    std::unique_ptr<::svt::IEditImplementation> m_pEdit;
+    std::unique_ptr<::svt::IEditImplementation> m_pPainterImplementation;
     bool                    m_bIsSimpleEdit;
 
 protected:
@@ -387,7 +388,7 @@ protected:
 public:
     DbTextField(DbGridColumn& _rColumn);
 
-    ::svt::IEditImplementation* GetEditImplementation() { return m_pEdit; }
+    ::svt::IEditImplementation* GetEditImplementation() { return m_pEdit.get(); }
     bool                    IsSimpleEdit() const { return m_bIsSimpleEdit; }
 
     virtual void Init( vcl::Window& rParent, const css::uno::Reference< css::sdbc::XRowSet >& xCursor ) override;
@@ -531,7 +532,7 @@ private:
 class DbSpinField : public DbCellControl
 {
 private:
-    sal_Int16   m_nStandardAlign;
+    sal_Int16 const   m_nStandardAlign;
 
 public:
 
@@ -703,7 +704,7 @@ class FmXGridCell   :public ::cppu::OComponentHelper
 protected:
     ::osl::Mutex        m_aMutex;
     DbGridColumn*       m_pColumn;
-    DbCellControl*      m_pCellControl;
+    std::unique_ptr<DbCellControl> m_pCellControl;
 
 private:
     ::comphelper::OInterfaceContainerHelper2   m_aWindowListeners;
@@ -716,7 +717,7 @@ protected:
     virtual ~FmXGridCell() override;
 
 public:
-    FmXGridCell( DbGridColumn* pColumn, DbCellControl* pControl );
+    FmXGridCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
     void init();
 
     DECLARE_UNO3_AGG_DEFAULTS(FmXGridCell, OComponentHelper)
@@ -797,8 +798,8 @@ private:
 class FmXDataCell : public FmXGridCell
 {
 public:
-    FmXDataCell( DbGridColumn* pColumn, DbCellControl& _rControl )
-        :FmXGridCell( pColumn, &_rControl )
+    FmXDataCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl )
+        :FmXGridCell( pColumn, std::move(pControl) )
     {
     }
 
@@ -835,7 +836,7 @@ protected:
     bool    m_bFastPaint;
 
 public:
-    FmXTextCell( DbGridColumn* pColumn, DbCellControl& _rControl );
+    FmXTextCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
 
     virtual void PaintFieldToCell(OutputDevice& rDev,
                const tools::Rectangle& rRect,
@@ -856,7 +857,7 @@ class FmXEditCell final : public FmXTextCell,
                     public FmXEditCell_Base
 {
 public:
-    FmXEditCell( DbGridColumn* pColumn, DbCellControl& _rControl );
+    FmXEditCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
 
     DECLARE_UNO3_AGG_DEFAULTS(FmXEditCell, FmXTextCell)
     virtual css::uno::Any SAL_CALL queryAggregation( const css::uno::Type& _rType ) override;
@@ -919,7 +920,7 @@ protected:
     virtual ~FmXCheckBoxCell() override;
 
 public:
-    FmXCheckBoxCell( DbGridColumn* pColumn, DbCellControl& _rControl );
+    FmXCheckBoxCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
 
 // UNO
     DECLARE_UNO3_AGG_DEFAULTS(FmXCheckBoxCell, FmXDataCell)
@@ -956,7 +957,7 @@ class FmXListBoxCell final :public FmXTextCell
                         ,public FmXListBoxCell_Base
 {
 public:
-    FmXListBoxCell( DbGridColumn* pColumn, DbCellControl& _rControl );
+    FmXListBoxCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
 
     DECLARE_UNO3_AGG_DEFAULTS(FmXListBoxCell, FmXTextCell)
     virtual css::uno::Any SAL_CALL queryAggregation( const css::uno::Type& _rType ) override;
@@ -1016,7 +1017,7 @@ protected:
     virtual ~FmXComboBoxCell() override;
 
 public:
-    FmXComboBoxCell( DbGridColumn* pColumn, DbCellControl& _rControl );
+    FmXComboBoxCell( DbGridColumn* pColumn, std::unique_ptr<DbCellControl> pControl );
 
     DECLARE_UNO3_AGG_DEFAULTS(FmXListBoxCell, FmXTextCell)
     virtual css::uno::Any SAL_CALL queryAggregation( const css::uno::Type& _rType ) override;
@@ -1052,7 +1053,7 @@ class FmXFilterCell final : public FmXGridCell
                     ,public FmXFilterCell_Base
 {
 public:
-    FmXFilterCell(DbGridColumn* pColumn, DbFilterField* pControl);
+    FmXFilterCell(DbGridColumn* pColumn, std::unique_ptr<DbFilterField> pControl);
 
 
     DECLARE_UNO3_AGG_DEFAULTS(FmXFilterCell, FmXGridCell)

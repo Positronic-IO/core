@@ -23,6 +23,8 @@
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/wrkwin.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <svdata.hxx>
 #include <window.h>
@@ -312,7 +314,7 @@ static void ImplCalcMapResolution( const MapMode& rMapMode,
     rMapRes.mnMapScDenomY = aTempY.GetDenominator();
 }
 
-inline void ImplCalcMapResolution( const MapMode& rMapMode,
+static void ImplCalcMapResolution( const MapMode& rMapMode,
                                    long nDPIX, long nDPIY,
                                    ImplMapRes& rMapRes,
                                    ImplThresholdRes& rThresRes )

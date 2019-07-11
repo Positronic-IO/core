@@ -20,6 +20,7 @@
 #include <sal/config.h>
 
 #include <o3tl/any.hxx>
+#include <o3tl/make_unique.hxx>
 #include <osl/thread.h>
 #include <sfx2/linkmgr.hxx>
 #include <doc.hxx>
@@ -161,7 +162,7 @@ void SwIntrnlRefLink::Closed()
         else
         {
             pSh->StartAction();
-            // am Doc aufrufen ??
+            // to call at the doc ??
             pSh->EndAction();
         }
     }
@@ -314,7 +315,7 @@ void SwDDEFieldType::PutValue( const uno::Any& rVal, sal_uInt16 nWhichId )
     if( nPart>=0 )
     {
         const OUString sOldCmd( GetCmd() );
-        OUString sNewCmd;
+        OUStringBuffer sNewCmd;
         sal_Int32 nIndex = 0;
         for (sal_Int32 i=0; i<3; ++i)
         {
@@ -323,10 +324,10 @@ void SwDDEFieldType::PutValue( const uno::Any& rVal, sal_uInt16 nWhichId )
             {
                 rVal >>= sToken;
             }
-            sNewCmd += (i < 2)
-                ? sToken + OUStringLiteral1(sfx2::cTokenSeparator) : sToken;
+            sNewCmd.append((i < 2)
+                ? sToken + OUStringLiteral1(sfx2::cTokenSeparator) : sToken);
         }
-        SetCmd( sNewCmd );
+        SetCmd( sNewCmd.makeStringAndClear() );
     }
 }
 
@@ -341,7 +342,7 @@ SwDDEField::~SwDDEField()
         static_cast<SwDDEFieldType*>(GetTyp())->Disconnect();
 }
 
-OUString SwDDEField::Expand() const
+OUString SwDDEField::ExpandImpl(SwRootFrame const*const) const
 {
     OUString aStr = static_cast<SwDDEFieldType*>(GetTyp())->GetExpansion();
     aStr = aStr.replaceAll("\r", "");
@@ -354,9 +355,9 @@ OUString SwDDEField::Expand() const
     return aStr;
 }
 
-SwField* SwDDEField::Copy() const
+std::unique_ptr<SwField> SwDDEField::Copy() const
 {
-    return new SwDDEField(static_cast<SwDDEFieldType*>(GetTyp()));
+    return o3tl::make_unique<SwDDEField>(static_cast<SwDDEFieldType*>(GetTyp()));
 }
 
 /// get field type name

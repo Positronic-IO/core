@@ -23,6 +23,8 @@
 export MAX_CONCURRENCY=4
 # Disable searching for certificates by default
 export MOZILLA_CERTIFICATE_FOLDER=0
+# Avoid hanging if the cups daemon requests a password.
+export SAL_DISABLE_SYNCHRONOUS_PRINTER_DETECTION=1
 
 gb_CppunitTest_UNITTESTFAILED ?= $(GBUILDDIR)/platform/unittest-failed-default.sh
 gb_CppunitTest_PYTHONDEPS ?= $(call gb_Library_get_target,pyuno_wrapper) $(if $(SYSTEM_PYTHON),,$(call gb_Package_get_target,python3))
@@ -54,11 +56,15 @@ endif
 endif
 
 ifneq (,$(filter perfcheck,$(MAKECMDGOALS)))
-$(if $(ENABLE_VALGRIND),,$(call gb_Output_error,Running performance tests with empty $$(ENABLE_VALGRIND) does not make sense))
+$(if $(ENABLE_VALGRIND),,$(call gb_Output_error,Running performance tests with empty $$(ENABLE_VALGRIND) does not make sense. Please install valgrind-dev and re-run autogen.))
 gb_CppunitTest_VALGRINDTOOL := valgrind --tool=callgrind --dump-instr=yes --instr-atstart=no --simulate-cache=yes --dump-instr=yes --collect-bus=yes --branch-sim=yes
 ifneq ($(strip $(VALGRIND_GDB)),)
 gb_CppunitTest_VALGRINDTOOL += --vgdb=yes --vgdb-error=0
 endif
+endif
+
+ifneq ($(strip $(RR)),)
+gb_CppunitTest_RR := rr record
 endif
 
 # defined by platform
@@ -132,7 +138,8 @@ else
 		$(gb_CppunitTest_malloc_check) \
 		$(if $(strip $(PYTHON_URE)),\
 			PYTHONDONTWRITEBYTECODE=1) \
-		$(ICECREAM_RUN) $(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) $(gb_CppunitTest_CPPTESTCOMMAND) \
+		$(ICECREAM_RUN) $(gb_CppunitTest_GDBTRACE) $(gb_CppunitTest_VALGRINDTOOL) $(gb_CppunitTest_RR) \
+			$(gb_CppunitTest_CPPTESTCOMMAND) \
 		$(call gb_LinkTarget_get_target,$(call gb_CppunitTest_get_linktarget,$*)) \
 		$(call gb_CppunitTest__make_args) "-env:CPPUNITTESTTARGET=$@" \
 		$(if $(gb_CppunitTest_POSTGDBTRACE), \
@@ -229,6 +236,10 @@ $(call gb_CppunitTest_get_target,$(1)) : $(if $(filter $(2),$(true)),, \
         $(if $(ENABLE_KDE4),$(call gb_Library_get_target,vclplug_kde4)) \
         $(if $(ENABLE_QT5),$(call gb_Library_get_target,vclplug_qt5)) \
 	 )
+else ifeq ($(OS),MACOSX)
+$(call gb_CppunitTest_get_target,$(1)): $(call gb_Library_get_target,vclplug_osx)
+else ifeq ($(OS),WNT)
+$(call gb_CppunitTest_get_target,$(1)): $(call gb_Library_get_target,vclplug_win)
 endif
 
 endef
@@ -363,6 +374,14 @@ endef
 
 define gb_CppunitTest_use_executable
 $(call gb_CppunitTest_get_target,$(1)) : $(call gb_Executable_get_target,$(2))
+
+endef
+
+define gb_CppunitTest_use_more_fonts
+ifneq ($(filter MORE_FONTS,$(BUILD_TYPE)),)
+$(call gb_CppunitTest_get_target,$(1)) : \
+    $(foreach font,$(gb_Package_MODULE_ooo_fonts),$(call gb_Package_get_target,$(font)))
+endif
 
 endef
 

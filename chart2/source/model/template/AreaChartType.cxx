@@ -21,6 +21,8 @@
 #include <servicenames_charttypes.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
 using namespace ::com::sun::star;
 
 namespace chart

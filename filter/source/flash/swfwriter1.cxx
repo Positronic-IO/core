@@ -30,6 +30,7 @@
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <vcl/graphictools.hxx>
+#include <sal/log.hxx>
 
 #include <zlib.h>
 
@@ -352,7 +353,7 @@ void Writer::setClipping( const tools::PolyPolygon* pClipPolyPolygon )
 //  differences in font that actually require different glyphs to be defined,
 //  and some that don't.  This function is meant to capture all the differences
 //  that we care about.
-bool compare_fonts_for_me(const vcl::Font& rFont1, const vcl::Font& rFont2)
+static bool compare_fonts_for_me(const vcl::Font& rFont1, const vcl::Font& rFont2)
 {
     return rFont1.GetFamilyName() == rFont2.GetFamilyName() &&
             rFont1.GetWeight() == rFont2.GetWeight() &&
@@ -375,7 +376,7 @@ FlashFont& Writer::Impl_getFont( const vcl::Font& rFont )
     }
 
     FlashFont* pFont = new FlashFont( rFont, createID() );
-    maFonts.push_back( pFont );
+    maFonts.emplace_back( pFont );
     return *pFont;
 }
 
@@ -772,7 +773,7 @@ sal_uInt16 Writer::defineBitmap( const BitmapEx &bmpSource, sal_Int32 nJPEGQuali
                                 aFilter.GetExportFormatNumberForShortName( JPG_SHORTNAME ), &aFilterData ) == ERRCODE_NONE )
     {
         pJpgData = static_cast<const sal_uInt8*>(aDstStm.GetData());
-        nJpgDataLength = aDstStm.Seek( STREAM_SEEK_TO_END );
+        nJpgDataLength = aDstStm.TellEnd();
     }
 
     // AS: Ok, now go ahead and use whichever is smaller.  If JPEG is smaller, then
@@ -997,12 +998,10 @@ void Writer::Impl_writeJPEG(sal_uInt16 nBitmapId, const sal_uInt8* pJpgData, sal
         }
     }
 
-    EncodingTableStream.Seek( STREAM_SEEK_TO_END );
-    sal_uInt32 nEncodingTableSize = EncodingTableStream.Tell();
+    sal_uInt32 nEncodingTableSize = EncodingTableStream.TellEnd();
     EncodingTableStream.Seek( STREAM_SEEK_TO_BEGIN );
 
-    ImageBitsStream.Seek( STREAM_SEEK_TO_END );
-    sal_uInt32 nImageBitsSize = ImageBitsStream.Tell();
+    sal_uInt32 nImageBitsSize = ImageBitsStream.TellEnd();
     ImageBitsStream.Seek( STREAM_SEEK_TO_BEGIN );
 
     // AS: If we need alpha support, use TAG_DEFINEBITSJPEG3.
@@ -1100,7 +1099,7 @@ bool Writer::Impl_writeStroke( SvtGraphicStroke const & rStroke )
 
     SvtGraphicStroke::DashArray aDashArray;
     rStroke.getDashArray( aDashArray );
-    if( 0 != aDashArray.size() )
+    if( !aDashArray.empty() )
         return false;       // todo: implement dashes
 
     Color aColor( mpVDev->GetLineColor() );
@@ -1251,7 +1250,7 @@ void Writer::Impl_handleLineInfoPolyPolygons(const LineInfo& rInfo, const basegf
         {
             for(sal_uInt32 a(0); a < aLinePolyPolygon.count(); a++)
             {
-                const basegfx::B2DPolygon aCandidate(aLinePolyPolygon.getB2DPolygon(a));
+                const basegfx::B2DPolygon& aCandidate(aLinePolyPolygon.getB2DPolygon(a));
                 Impl_writePolygon( tools::Polygon(aCandidate), false );
             }
         }
@@ -1501,7 +1500,7 @@ void Writer::Impl_writeActions( const GDIMetaFile& rMtf )
             case MetaActionType::EPS:
             {
                 const MetaEPSAction*    pA = static_cast<const MetaEPSAction*>(pAction);
-                const GDIMetaFile       aGDIMetaFile( pA->GetSubstitute() );
+                const GDIMetaFile&      aGDIMetaFile( pA->GetSubstitute() );
                 bool                bFound = false;
 
                 for( size_t j = 0, nC = aGDIMetaFile.GetActionSize(); ( j < nC ) && !bFound; j++ )

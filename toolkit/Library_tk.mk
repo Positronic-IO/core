@@ -25,7 +25,7 @@ $(eval $(call gb_Library_use_externals,tk,\
     boost_headers \
 ))
 
-ifeq ($(ENABLE_HEADLESS),)
+ifeq ($(DISABLE_GUI),)
 $(eval $(call gb_Library_use_externals,tk,\
     epoxy \
 ))
@@ -130,7 +130,7 @@ $(eval $(call gb_Library_add_libs,tk,\
 ))
 endif
 
-ifeq ($(OS),IOS)
+ifeq ($(OS),iOS)
 $(eval $(call gb_Library_add_cxxflags,tk,\
     $(gb_OBJCXXFLAGS)))
 endif

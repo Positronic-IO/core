@@ -31,12 +31,13 @@
 
 #include <basic/sbx.hxx>
 #include <basic/sbxvar.hxx>
-#include "runtime.hxx"
+#include <runtime.hxx>
 #include <osl/thread.h>
 #include <osl/diagnose.h>
 #include <rtl/ref.hxx>
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <salhelper/simplereferenceobject.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
 
@@ -475,7 +476,7 @@ ErrCode call(
     OUString const & dll, ProcData const & proc, SbxArray * arguments,
     SbxVariable & result)
 {
-    if (arguments->Count() > 20)
+    if (arguments && arguments->Count() > 20)
         return ERRCODE_BASIC_NOT_IMPLEMENTED;
 
     std::vector< char > stack;

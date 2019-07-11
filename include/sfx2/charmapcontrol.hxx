@@ -26,6 +26,7 @@
 #include <com/sun/star/frame/XFrame.hpp>
 #include <sfx2/charwin.hxx>
 #include <vcl/button.hxx>
+#include <deque>
 
 class SvxCharViewControl;
 
@@ -39,6 +40,8 @@ public:
 
     virtual void dispose() override;
 
+    virtual bool EventNotify( NotifyEvent& rNEvt ) override;
+
 private:
     VclPtr<SvxCharViewControl> m_pRecentCharView[16];
     VclPtr<SvxCharViewControl> m_pFavCharView[16];
@@ -47,9 +50,10 @@ private:
     std::deque<OUString>   maFavCharList;
     std::deque<OUString>   maFavCharFontList;
     VclPtr<Button>         maDlgBtn;
+    bool                   mbNeedsInit = true;
 
     DECL_LINK(CharClickHdl, SvxCharViewControl*, void);
-    DECL_STATIC_LINK(SfxCharmapCtrl, LoseFocusHdl, Control&, void);
+    DECL_STATIC_LINK(SfxCharmapCtrl, FocusHdl, Control&, void);
     DECL_LINK(OpenDlgHdl, Button*, void);
 
     void            getFavCharacterList();

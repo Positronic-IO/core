@@ -52,6 +52,8 @@
 #include <com/sun/star/document/DocumentProperties.hpp>
 #include <com/sun/star/frame/XTransientDocumentsDocumentContentFactory.hpp>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
+#include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
 #include <comphelper/enumhelper.hxx>
 
@@ -59,6 +61,7 @@
 #include <cppuhelper/interfacecontainer.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <svl/itemset.hxx>
 #include <svl/stritem.hxx>
@@ -78,15 +81,17 @@
 #include <comphelper/fileformat.h>
 #include <comphelper/storagehelper.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/ehdl.hxx>
 #include <svtools/sfxecode.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <framework/configimporter.hxx>
 #include <framework/interaction.hxx>
 #include <framework/titlehelper.hxx>
 #include <comphelper/numberedcollection.hxx>
 #include <unotools/ucbhelper.hxx>
+#include <vcl/threadex.hxx>
 
 #include <sfx2/sfxbasecontroller.hxx>
 #include <sfx2/viewfac.hxx>
@@ -219,7 +224,6 @@ struct IMPL_SfxBaseModel_DataContainer : public ::sfx2::IModifiableDocument
             ,   m_bSuicide              ( false     )
             ,   m_bExternalTitle        ( false     )
             ,   m_bModifiedSinceLastSave( false     )
-            ,   m_pStorageModifyListen  ( nullptr          )
             ,   m_xTitleHelper          ()
             ,   m_xNumberedControllers  ()
             ,   m_xDocumentMetadata     () // lazy
@@ -356,7 +360,7 @@ SfxOwnFramesLocker::SfxOwnFramesLocker( SfxObjectShell const * pObjectShell )
         try
         {
             // get vcl window related to the frame and lock it if it is still not locked
-            Reference< frame::XFrame > xFrame = rSfxFrame.GetFrameInterface();
+            const Reference< frame::XFrame >& xFrame = rSfxFrame.GetFrameInterface();
             vcl::Window* pWindow = GetVCLWindow( xFrame );
             if ( !pWindow )
                 throw RuntimeException();
@@ -430,9 +434,9 @@ class SfxSaveGuard
     private:
         Reference< frame::XModel > m_xModel;
         IMPL_SfxBaseModel_DataContainer* m_pData;
-        SfxOwnFramesLocker* m_pFramesLock;
+        std::unique_ptr<SfxOwnFramesLocker> m_pFramesLock;
 
-        SfxSaveGuard(SfxSaveGuard &) = delete;
+        SfxSaveGuard(SfxSaveGuard const &) = delete;
         void operator =(const SfxSaveGuard&) = delete;
 
     public:
@@ -445,20 +449,17 @@ SfxSaveGuard::SfxSaveGuard(const Reference< frame::XModel >&             xModel 
                                  IMPL_SfxBaseModel_DataContainer* pData)
     : m_xModel     ( xModel )
     , m_pData      ( pData )
-    , m_pFramesLock( nullptr )
 {
     if ( m_pData->m_bClosed )
         throw lang::DisposedException("Object already disposed.");
 
     m_pData->m_bSaving = true;
-    m_pFramesLock = new SfxOwnFramesLocker( m_pData->m_pObjectShell.get() );
+    m_pFramesLock.reset(new SfxOwnFramesLocker( m_pData->m_pObjectShell.get() ));
 }
 
 SfxSaveGuard::~SfxSaveGuard()
 {
-    SfxOwnFramesLocker* pFramesLock = m_pFramesLock;
-    m_pFramesLock = nullptr;
-    delete pFramesLock;
+    m_pFramesLock.reset();
 
     m_pData->m_bSaving = false;
 
@@ -579,8 +580,9 @@ Sequence< sal_Int8 > SAL_CALL SfxBaseModel::getImplementationId()
 
 //  XStarBasicAccess
 
+#if HAVE_FEATURE_SCRIPTING
 
-Reference< script::XStarBasicAccess > implGetStarBasicAccess( SfxObjectShell const * pObjectShell )
+static Reference< script::XStarBasicAccess > implGetStarBasicAccess( SfxObjectShell const * pObjectShell )
 {
     Reference< script::XStarBasicAccess > xRet;
 
@@ -595,6 +597,8 @@ Reference< script::XStarBasicAccess > implGetStarBasicAccess( SfxObjectShell con
 #endif
     return xRet;
 }
+
+#endif
 
 Reference< container::XNameContainer > SAL_CALL SfxBaseModel::getLibraryContainer()
 {
@@ -1396,28 +1400,34 @@ Sequence< beans::PropertyValue > SAL_CALL SfxBaseModel::getPrinter()
 {
     SfxModelGuard aGuard( *this );
 
-    if ( impl_getPrintHelper() )
-        return m_pData->m_xPrintable->getPrinter();
-    else
-        return Sequence< beans::PropertyValue >();
+    impl_getPrintHelper();
+    return m_pData->m_xPrintable->getPrinter();
 }
 
 void SAL_CALL SfxBaseModel::setPrinter(const Sequence< beans::PropertyValue >& rPrinter)
 {
     SfxModelGuard aGuard( *this );
 
-    if ( impl_getPrintHelper() )
-        m_pData->m_xPrintable->setPrinter( rPrinter );
+    impl_getPrintHelper();
+    m_pData->m_xPrintable->setPrinter( rPrinter );
+}
+
+static bool ImplPrintStatic(const Reference<view::XPrintable>& m_xPrintable,
+                            const Sequence<beans::PropertyValue>& rOptions)
+{
+    m_xPrintable->print(rOptions);
+    return true;
 }
 
 void SAL_CALL SfxBaseModel::print(const Sequence< beans::PropertyValue >& rOptions)
 {
     SfxModelGuard aGuard( *this );
 
-    if ( impl_getPrintHelper() )
-        m_pData->m_xPrintable->print( rOptions );
-}
+    impl_getPrintHelper();
 
+    // tdf#123728 Always print on main thread to avoid deadlocks
+    vcl::solarthread::syncExecute(std::bind(&ImplPrintStatic, m_pData->m_xPrintable, rOptions));
+}
 
 //  XStorable
 
@@ -1725,7 +1735,7 @@ namespace {
 
 OUString getFilterProvider( SfxMedium const & rMedium )
 {
-    std::shared_ptr<const SfxFilter> pFilter = rMedium.GetFilter();
+    const std::shared_ptr<const SfxFilter>& pFilter = rMedium.GetFilter();
     if (!pFilter)
         return OUString();
 
@@ -1918,9 +1928,8 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
                 aTmp.EnableKillingFile();
                 storeToURL( aTmp.GetURL(), Sequence < beans::PropertyValue >() );
                 SvStream* pStream = aTmp.GetStream( StreamMode::READ );
-                const sal_uInt32 nLen = pStream->Seek( STREAM_SEEK_TO_END );
+                const sal_uInt32 nLen = pStream->TellEnd();
                 Sequence< sal_Int8 > aSeq( nLen );
-                pStream->Seek( STREAM_SEEK_TO_BEGIN );
                 pStream->ReadBytes(aSeq.getArray(), nLen);
                 delete pStream;
                 if( aSeq.getLength() )
@@ -1946,7 +1955,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
 
                 xMetaFile->Write( aMemStm );
                 aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aMemStm.GetData() ),
-                                                aMemStm.Seek( STREAM_SEEK_TO_END ) );
+                                                aMemStm.TellEnd() );
             }
         }
         else if ( aFlavor.MimeType == "application/x-openoffice-highcontrast-gdimetafile;windows_formatname=\"GDIMetaFile\"" )
@@ -1964,7 +1973,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
 
                 xMetaFile->Write( aMemStm );
                 aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( aMemStm.GetData() ),
-                                                aMemStm.Seek( STREAM_SEEK_TO_END ) );
+                                                aMemStm.TellEnd() );
             }
         }
         else if ( aFlavor.MimeType == "application/x-openoffice-emf;windows_formatname=\"Image EMF\"" )
@@ -1983,7 +1992,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
                     {
                         xStream->SetVersion( SOFFICE_FILEFORMAT_CURRENT );
                         aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( xStream->GetData() ),
-                                                        xStream->Seek( STREAM_SEEK_TO_END ) );
+                                                        xStream->TellEnd() );
                     }
                 }
             }
@@ -2019,7 +2028,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
                     {
                         xStream->SetVersion( SOFFICE_FILEFORMAT_CURRENT );
                         aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( xStream->GetData() ),
-                                                        xStream->Seek( STREAM_SEEK_TO_END ) );
+                                                        xStream->TellEnd() );
                     }
                 }
             }
@@ -2060,7 +2069,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
                 {
                     xStream->SetVersion( SOFFICE_FILEFORMAT_CURRENT );
                     aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( xStream->GetData() ),
-                                                    xStream->Seek( STREAM_SEEK_TO_END ) );
+                                                    xStream->TellEnd() );
                 }
             }
         }
@@ -2082,7 +2091,7 @@ Any SAL_CALL SfxBaseModel::getTransferData( const datatransfer::DataFlavor& aFla
                 {
                     xStream->SetVersion( SOFFICE_FILEFORMAT_CURRENT );
                     aAny <<= Sequence< sal_Int8 >( static_cast< const sal_Int8* >( xStream->GetData() ),
-                                                    xStream->Seek( STREAM_SEEK_TO_END ) );
+                                                    xStream->TellEnd() );
                 }
             }
         }
@@ -2101,7 +2110,7 @@ Sequence< datatransfer::DataFlavor > SAL_CALL SfxBaseModel::getTransferDataFlavo
 {
     SfxModelGuard aGuard( *this );
 
-    sal_Int32 nSuppFlavors = GraphicHelper::supportsMetaFileHandle_Impl() ? 10 : 8;
+    const sal_Int32 nSuppFlavors = GraphicHelper::supportsMetaFileHandle_Impl() ? 10 : 8;
     Sequence< datatransfer::DataFlavor > aFlavorSeq( nSuppFlavors );
 
     aFlavorSeq[0].MimeType =
@@ -2373,7 +2382,9 @@ void SAL_CALL SfxBaseModel::updateCmisProperties( const Sequence< document::Cmis
         }
         catch (const Exception & e)
         {
-            throw RuntimeException( e.Message, e.Context );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            e.Context, anyEx );
         }
     }
 
@@ -2406,7 +2417,9 @@ void SAL_CALL SfxBaseModel::checkOut(  )
         }
         catch ( const Exception & e )
         {
-            throw RuntimeException( e.Message, e.Context );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            e.Context, anyEx );
         }
     }
 }
@@ -2430,7 +2443,9 @@ void SAL_CALL SfxBaseModel::cancelCheckOut(  )
         }
         catch ( const Exception & e )
         {
-            throw RuntimeException( e.Message, e.Context );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            e.Context, anyEx );
         }
     }
 }
@@ -2471,7 +2486,9 @@ void SAL_CALL SfxBaseModel::checkIn( sal_Bool bIsMajor, const OUString& rMessage
         }
         catch ( const Exception & e )
         {
-            throw RuntimeException( e.Message, e.Context );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            e.Context, anyEx );
         }
     }
 }
@@ -2493,7 +2510,9 @@ uno::Sequence< document::CmisVersion > SAL_CALL SfxBaseModel::getAllVersions( )
         }
         catch ( const Exception & e )
         {
-            throw RuntimeException( e.Message, e.Context );
+            css::uno::Any anyEx = cppu::getCaughtException();
+            throw lang::WrappedTargetRuntimeException( e.Message,
+                            e.Context, anyEx );
         }
     }
     return aVersions;
@@ -2623,7 +2642,7 @@ SfxMedium* SfxBaseModel::handleLoadError( ErrCode nError, SfxMedium* pMedium )
 //  SfxListener
 
 
-void addTitle_Impl( Sequence < beans::PropertyValue >& rSeq, const OUString& rTitle )
+static void addTitle_Impl( Sequence < beans::PropertyValue >& rSeq, const OUString& rTitle )
 {
     sal_Int32 nCount = rSeq.getLength();
     sal_Int32 nArg;
@@ -2846,7 +2865,7 @@ void SfxBaseModel::impl_store(  const   OUString&                   sURL        
             SfxMedium* pMedium = m_pData->m_pObjectShell->GetMedium();
             if ( pMedium )
             {
-                std::shared_ptr<const SfxFilter> pFilter = pMedium->GetFilter();
+                const std::shared_ptr<const SfxFilter>& pFilter = pMedium->GetFilter();
                 if ( pFilter && aFilterName == pFilter->GetFilterName() )
                 {
                     // #i119366# - If the former file saving with password, do not trying in StoreSelf anyway...
@@ -3182,24 +3201,20 @@ void SAL_CALL SfxBaseModel::addPrintJobListener( const Reference< view::XPrintJo
 {
     SfxModelGuard aGuard( *this, SfxModelGuard::E_INITIALIZING );
 
-    if ( impl_getPrintHelper() )
-    {
-        Reference < view::XPrintJobBroadcaster > xPJB( m_pData->m_xPrintable, UNO_QUERY );
-        if ( xPJB.is() )
-            xPJB->addPrintJobListener( xListener );
-    }
+    impl_getPrintHelper();
+    Reference < view::XPrintJobBroadcaster > xPJB( m_pData->m_xPrintable, UNO_QUERY );
+    if ( xPJB.is() )
+        xPJB->addPrintJobListener( xListener );
 }
 
 void SAL_CALL SfxBaseModel::removePrintJobListener( const Reference< view::XPrintJobListener >& xListener )
 {
     SfxModelGuard aGuard( *this );
 
-    if ( impl_getPrintHelper() )
-    {
-        Reference < view::XPrintJobBroadcaster > xPJB( m_pData->m_xPrintable, UNO_QUERY );
-        if ( xPJB.is() )
-            xPJB->removePrintJobListener( xListener );
-    }
+    impl_getPrintHelper();
+    Reference < view::XPrintJobBroadcaster > xPJB( m_pData->m_xPrintable, UNO_QUERY );
+    if ( xPJB.is() )
+        xPJB->removePrintJobListener( xListener );
 }
 
 sal_Int64 SAL_CALL SfxBaseModel::getSomething( const Sequence< sal_Int8 >& aIdentifier )
@@ -3714,10 +3729,10 @@ void SAL_CALL SfxBaseModel::removeStorageChangeListener(
                                     cppu::UnoType<document::XStorageChangeListener>::get(), xListener );
 }
 
-bool SfxBaseModel::impl_getPrintHelper()
+void SfxBaseModel::impl_getPrintHelper()
 {
     if ( m_pData->m_xPrintable.is() )
-        return true;
+        return;
     m_pData->m_xPrintable = new SfxPrintHelper();
     Reference < lang::XInitialization > xInit( m_pData->m_xPrintable, UNO_QUERY );
     Sequence < Any > aValues(1);
@@ -3725,7 +3740,6 @@ bool SfxBaseModel::impl_getPrintHelper()
     xInit->initialize( aValues );
     Reference < view::XPrintJobBroadcaster > xBrd( m_pData->m_xPrintable, UNO_QUERY );
     xBrd->addPrintJobListener( new SfxPrintHelperListener_Impl( m_pData.get() ) );
-    return true;
 }
 
 

@@ -1,4 +1,4 @@
-/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4; fill-column: 100 -*- */
 /*
  * This file is part of the LibreOffice project.
  *
@@ -12,6 +12,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+#ifdef IOS
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unicode/udata.h>
+#include <unicode/ucnv.h>
+#include <premac.h>
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
+#include <postmac.h>
+#endif
 
 #include <algorithm>
 #include <memory>
@@ -36,6 +47,7 @@
 #include <comphelper/string.hxx>
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/scopeguard.hxx>
+#include <comphelper/threadpool.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -43,11 +55,15 @@
 #include <com/sun/star/frame/DispatchResultEvent.hpp>
 #include <com/sun/star/frame/DispatchResultState.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
+#include <com/sun/star/frame/XDispatchResultListener.hpp>
 #include <com/sun/star/frame/XSynchronousDispatch.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/reflection/theCoreReflection.hpp>
+#include <com/sun/star/reflection/XIdlClass.hpp>
+#include <com/sun/star/reflection/XIdlReflection.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
 #include <com/sun/star/ucb/XContentProvider.hpp>
 #include <com/sun/star/ucb/XUniversalContentBroker.hpp>
@@ -57,8 +73,17 @@
 #include <com/sun/star/document/XRedlinesSupplier.hpp>
 #include <com/sun/star/ui/GlobalAcceleratorConfiguration.hpp>
 
+#include <com/sun/star/xml/crypto/SEInitializer.hpp>
+#include <com/sun/star/xml/crypto/XSEInitializer.hpp>
+#include <com/sun/star/xml/crypto/XSecurityEnvironment.hpp>
+#include <com/sun/star/xml/crypto/XCertificateCreator.hpp>
+#include <com/sun/star/security/DocumentDigitalSignatures.hpp>
+#include <com/sun/star/security/XDocumentDigitalSignatures.hpp>
+#include <com/sun/star/security/XCertificate.hpp>
+
 #include <com/sun/star/linguistic2/LinguServiceManager.hpp>
 #include <com/sun/star/linguistic2/XSpellChecker.hpp>
+#include <com/sun/star/i18n/ScriptType.hpp>
 
 #include <editeng/fontitem.hxx>
 #include <editeng/flstitem.hxx>
@@ -100,6 +125,7 @@
 #include <sfx2/sfxbasemodel.hxx>
 #include <svl/undo.hxx>
 #include <unotools/datetime.hxx>
+#include <i18nlangtag/mslangid.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <vcl/builder.hxx>
 #include <vcl/abstdlg.hxx>
@@ -140,6 +166,7 @@ static const ExtensionMap aWriterExtensionMap[] =
     { "odt",   "writer8" },
     { "ott",   "writer8_template" },
     { "pdf",   "writer_pdf_Export" },
+    { "epub",  "EPUB" },
     { "rtf",   "Rich Text Format" },
     { "txt",   "Text" },
     { "xhtml", "XHTML Writer File" },
@@ -230,19 +257,79 @@ static OUString getAbsoluteURL(const char* pURL)
     return OUString();
 }
 
-static std::vector<beans::PropertyValue> jsonToPropertyValuesVector(const char* pJSON)
+static uno::Any jsonToUnoAny(const boost::property_tree::ptree& aTree)
+{
+    uno::Any aAny;
+    uno::Any aValue;
+    sal_Int32 nFields;
+    uno::TypeClass aTypeClass;
+    uno::Reference< reflection::XIdlField > aField;
+    boost::property_tree::ptree aNodeNull, aNodeValue, aNodeField;
+    const std::string& rType = aTree.get<std::string>("type", "");
+    const std::string& rValue = aTree.get<std::string>("value", "");
+    uno::Sequence< uno::Reference< reflection::XIdlField > > aFields;
+    uno::Reference< reflection:: XIdlClass > xIdlClass =
+        css::reflection::theCoreReflection::get(comphelper::getProcessComponentContext())->forName(OUString::fromUtf8(rType.c_str()));
+    if (xIdlClass.is())
+    {
+        aTypeClass = xIdlClass->getTypeClass();
+        xIdlClass->createObject(aAny);
+        aFields = xIdlClass->getFields();
+        nFields = aFields.getLength();
+        aNodeValue = aTree.get_child("value", aNodeNull);
+        if (nFields > 0 && aNodeValue != aNodeNull)
+        {
+            for (sal_Int32 itField = 0; itField < nFields; ++itField)
+            {
+                aField = aFields[itField];
+                aNodeField = aNodeValue.get_child(aField->getName().toUtf8().getStr(), aNodeNull);
+                if (aNodeField != aNodeNull)
+                {
+                    aValue = jsonToUnoAny(aNodeField);
+                    aField->set(aAny, aValue);
+                }
+            }
+        }
+        else if (!rValue.empty())
+        {
+            if (aTypeClass == uno::TypeClass_VOID)
+                aAny.clear();
+            else if (aTypeClass == uno::TypeClass_BYTE)
+                aAny <<= static_cast<sal_Int8>(OString(rValue.c_str()).toInt32());
+            else if (aTypeClass == uno::TypeClass_BOOLEAN)
+                aAny <<= OString(rValue.c_str()).toBoolean();
+            else if (aTypeClass == uno::TypeClass_SHORT)
+                aAny <<= static_cast<sal_Int16>(OString(rValue.c_str()).toInt32());
+            else if (aTypeClass == uno::TypeClass_UNSIGNED_SHORT)
+                aAny <<= static_cast<sal_uInt16>(OString(rValue.c_str()).toUInt32());
+            else if (aTypeClass == uno::TypeClass_LONG)
+                aAny <<= OString(rValue.c_str()).toInt32();
+            else if (aTypeClass == uno::TypeClass_UNSIGNED_LONG)
+                aAny <<= static_cast<sal_uInt32>(OString(rValue.c_str()).toInt32());
+            else if (aTypeClass == uno::TypeClass_FLOAT)
+                aAny <<= OString(rValue.c_str()).toFloat();
+            else if (aTypeClass == uno::TypeClass_DOUBLE)
+                aAny <<= OString(rValue.c_str()).toDouble();
+            else if (aTypeClass == uno::TypeClass_STRING)
+                aAny <<= OUString::fromUtf8(rValue.c_str());
+        }
+    }
+    return aAny;
+}
+
+std::vector<beans::PropertyValue> desktop::jsonToPropertyValuesVector(const char* pJSON)
 {
     std::vector<beans::PropertyValue> aArguments;
     if (pJSON && pJSON[0] != '\0')
     {
-        boost::property_tree::ptree aTree;
+        boost::property_tree::ptree aTree, aNodeNull, aNodeValue;
         std::stringstream aStream(pJSON);
         boost::property_tree::read_json(aStream, aTree);
 
         for (const auto& rPair : aTree)
         {
-            const std::string& rType = rPair.second.get<std::string>("type");
-            const std::string& rValue = rPair.second.get<std::string>("value");
+            const std::string& rType = rPair.second.get<std::string>("type", "");
+            const std::string& rValue = rPair.second.get<std::string>("value", "");
 
             beans::PropertyValue aValue;
             aValue.Name = OUString::fromUtf8(rPair.first.c_str());
@@ -254,8 +341,22 @@ static std::vector<beans::PropertyValue> jsonToPropertyValuesVector(const char* 
                 aValue.Value <<= OString(rValue.c_str()).toFloat();
             else if (rType == "long")
                 aValue.Value <<= OString(rValue.c_str()).toInt32();
+            else if (rType == "short")
+                aValue.Value <<= static_cast<sal_Int16>(OString(rValue.c_str()).toInt32());
             else if (rType == "unsigned short")
                 aValue.Value <<= static_cast<sal_uInt16>(OString(rValue.c_str()).toUInt32());
+            else if (rType == "[]any")
+            {
+                aNodeValue = rPair.second.get_child("value", aNodeNull);
+                if (aNodeValue != aNodeNull && !aNodeValue.empty())
+                {
+                    sal_Int32 itSeq = 0;
+                    uno::Sequence< uno::Any > aSeq(aNodeValue.size());
+                    for (const auto& rSeqPair : aNodeValue)
+                        aSeq[itSeq++] = jsonToUnoAny(rSeqPair.second);
+                    aValue.Value <<= aSeq;
+                }
+            }
             else
                 SAL_WARN("desktop.lib", "jsonToPropertyValuesVector: unhandled type '"<<rType<<"'");
             aArguments.push_back(aValue);
@@ -488,6 +589,13 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
                           const int nCanvasWidth, const int nCanvasHeight,
                           const int nTilePosX, const int nTilePosY,
                           const int nTileWidth, const int nTileHeight);
+#ifdef IOS
+static void doc_paintTileToCGContext(LibreOfficeKitDocument* pThis,
+                                     void* rCGContext,
+                                     const int nCanvasWidth, const int nCanvasHeight,
+                                     const int nTilePosX, const int nTilePosY,
+                                     const int nTileWidth, const int nTileHeight);
+#endif
 static void doc_paintPartTile(LibreOfficeKitDocument* pThis,
                               unsigned char* pBuffer,
                               const int nPart,
@@ -578,9 +686,26 @@ static void doc_paintWindow(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId
                             const int nX, const int nY,
                             const int nWidth, const int nHeight);
 
+static void doc_paintWindowDPI(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId, unsigned char* pBuffer,
+                               const int nX, const int nY,
+                               const int nWidth, const int nHeight,
+                               const double fDPIScale);
+
 static void doc_postWindow(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId, int nAction);
 
 static char* doc_getPartInfo(LibreOfficeKitDocument* pThis, int nPart);
+
+static bool doc_insertCertificate(LibreOfficeKitDocument* pThis,
+                                  const unsigned char* pCertificateBinary,
+                                  const int nCertificateBinarySize,
+                                  const unsigned char* pPrivateKeyBinary,
+                                  const int nPrivateKeyBinarySize);
+
+static bool doc_addCertificate(LibreOfficeKitDocument* pThis,
+                                 const unsigned char* pCertificateBinary,
+                                 const int nCertificateBinarySize);
+
+static int doc_getSignatureState(LibreOfficeKitDocument* pThis);
 
 LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XComponent> &xComponent)
     : mxComponent(xComponent)
@@ -589,7 +714,7 @@ LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XCompone
     {
         m_pDocumentClass.reset(new LibreOfficeKitDocumentClass);
 
-        m_pDocumentClass->nSize = sizeof(LibreOfficeKitDocument);
+        m_pDocumentClass->nSize = sizeof(LibreOfficeKitDocumentClass);
 
         m_pDocumentClass->destroy = doc_destroy;
         m_pDocumentClass->saveAs = doc_saveAs;
@@ -601,6 +726,9 @@ LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XCompone
         m_pDocumentClass->getPartName = doc_getPartName;
         m_pDocumentClass->setPartMode = doc_setPartMode;
         m_pDocumentClass->paintTile = doc_paintTile;
+#ifdef IOS
+        m_pDocumentClass->paintTileToCGContext = doc_paintTileToCGContext;
+#endif
         m_pDocumentClass->paintPartTile = doc_paintPartTile;
         m_pDocumentClass->getTileMode = doc_getTileMode;
         m_pDocumentClass->getDocumentSize = doc_getDocumentSize;
@@ -633,11 +761,16 @@ LibLODocument_Impl::LibLODocument_Impl(const uno::Reference <css::lang::XCompone
         m_pDocumentClass->getPartHash = doc_getPartHash;
 
         m_pDocumentClass->paintWindow = doc_paintWindow;
+        m_pDocumentClass->paintWindowDPI = doc_paintWindowDPI;
         m_pDocumentClass->postWindow = doc_postWindow;
 
         m_pDocumentClass->setViewLanguage = doc_setViewLanguage;
 
         m_pDocumentClass->getPartInfo = doc_getPartInfo;
+
+        m_pDocumentClass->insertCertificate = doc_insertCertificate;
+        m_pDocumentClass->addCertificate = doc_addCertificate;
+        m_pDocumentClass->getSignatureState = doc_getSignatureState;
 
         gDocumentClass = m_pDocumentClass;
     }
@@ -1023,7 +1156,7 @@ void CallbackFlushHandler::queue(const int type, const char* data)
                     {
                         // if we have to invalidate all of the window, ignore
                         // any part invalidation message
-                        const auto& pos = std::find_if(m_queue.rbegin(), m_queue.rend(),
+                        auto invAllExist = std::any_of(m_queue.rbegin(), m_queue.rend(),
                                                        [&nLOKWindowId] (const queue_type::value_type& elem)
                                                        {
                                                            if (elem.first != LOK_CALLBACK_WINDOW)
@@ -1033,17 +1166,13 @@ void CallbackFlushHandler::queue(const int type, const char* data)
                                                            std::stringstream aOldStream(elem.second);
                                                            boost::property_tree::read_json(aOldStream, aOldTree);
                                                            const unsigned nOldDialogId = aOldTree.get<unsigned>("id", 0);
-                                                           if (aOldTree.get<std::string>("action", "") == "invalidate" &&
+                                                           return aOldTree.get<std::string>("action", "") == "invalidate" &&
                                                                nLOKWindowId == nOldDialogId &&
-                                                               aOldTree.get<std::string>("rectangle", "").empty())
-                                                           {
-                                                               return true;
-                                                           }
-                                                           return false;
+                                                               aOldTree.get<std::string>("rectangle", "").empty();
                                                        });
 
                         // we found a invalidate-all window callback
-                        if (pos != m_queue.rend())
+                        if (invAllExist)
                         {
                             SAL_INFO("lok.dialog", "Skipping queue [" << type << "]: [" << payload << "] since whole window needs to be invalidated.");
                             return;
@@ -1392,8 +1521,13 @@ static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis,
             return nullptr;
         }
 
-        return new LibLODocument_Impl(xComponent);
-
+        LibLODocument_Impl* pDocument = new LibLODocument_Impl(xComponent);
+        if (pLib->mpCallback)
+        {
+            int nState = doc_getSignatureState(pDocument);
+            pLib->mpCallback(LOK_CALLBACK_SIGNATURE_STATUS, OString::number(nState).getStr(), pLib->mpCallbackData);
+        }
+        return pDocument;
     }
     catch (const uno::Exception& exception)
     {
@@ -2001,16 +2135,32 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
         return;
     }
 
-#if defined(UNX) && !defined(MACOSX)
+#if defined(UNX) && !defined(MACOSX) && !defined(ENABLE_HEADLESS)
+
+    // Painting of zoomed or hi-dpi spreadsheets is special, we actually draw everything at 100%,
+    // and only set cairo's (or CoreGraphic's, in the iOS case) scale factor accordingly, so that
+    // everything is painted bigger or smaller. This is different to what Calc's internal scaling
+    // would do - because that one is trying to fit the lines between cells to integer multiples of
+    // pixels.
+    comphelper::ScopeGuard dpiScaleGuard([]() { comphelper::LibreOfficeKit::setDPIScale(1.0); });
+    double fDPIScaleX = 1;
+    if (doc_getDocumentType(pThis) == LOK_DOCTYPE_SPREADSHEET)
+    {
+        fDPIScaleX = (nCanvasWidth * 3840.0) / (256.0 * nTileWidth);
+        assert(fabs(fDPIScaleX - ((nCanvasHeight * 3840.0) / (256.0 * nTileHeight))) < 0.0001);
+        comphelper::LibreOfficeKit::setDPIScale(fDPIScaleX);
+    }
 
 #if defined(IOS)
-    SystemGraphicsData aData;
-    aData.rCGContext = reinterpret_cast<CGContextRef>(pBuffer);
-    // the Size argument is irrelevant, I hope
-    ScopedVclPtrInstance<VirtualDevice> pDevice(&aData, Size(1, 1), DeviceFormat::DEFAULT);
+    CGContextRef cgc = CGBitmapContextCreate(pBuffer, nCanvasWidth, nCanvasHeight, 8, nCanvasWidth*4, CGColorSpaceCreateDeviceRGB(), kCGImageAlphaNoneSkipFirst | kCGImageByteOrder32Little);
 
-    pDoc->paintTile(*pDevice.get(), nCanvasWidth, nCanvasHeight,
-                    nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+    CGContextTranslateCTM(cgc, 0, nCanvasHeight);
+    CGContextScaleCTM(cgc, fDPIScaleX, -fDPIScaleX);
+
+    doc_paintTileToCGContext(pThis, (void*) cgc, nCanvasWidth, nCanvasHeight, nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+
+    CGContextRelease(cgc);
+
 #else
     ScopedVclPtrInstance< VirtualDevice > pDevice(nullptr, Size(1, 1), DeviceFormat::DEFAULT) ;
 
@@ -2025,6 +2175,19 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
 
     pDoc->paintTile(*pDevice.get(), nCanvasWidth, nCanvasHeight,
                     nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+
+    static bool bDebug = getenv("LOK_DEBUG_TILES") != nullptr;
+    if (bDebug)
+    {
+        // Draw a small red rectangle in the top left corner so that it's easy to see where a new tile begins.
+        tools::Rectangle aRect(0, 0, 5, 5);
+        aRect = pDevice->PixelToLogic(aRect);
+        pDevice->Push(PushFlags::FILLCOLOR | PushFlags::LINECOLOR);
+        pDevice->SetFillColor(COL_LIGHTRED);
+        pDevice->SetLineColor();
+        pDevice->DrawRect(aRect);
+        pDevice->Pop();
+    }
 #endif
 
 #else
@@ -2032,6 +2195,47 @@ static void doc_paintTile(LibreOfficeKitDocument* pThis,
 #endif
 }
 
+#ifdef IOS
+
+// This function is separate only to be used by LibreOfficeLight. If that app can be retired, this
+// function's code can be inlined into the iOS part of doc_paintTile().
+
+static void doc_paintTileToCGContext(LibreOfficeKitDocument* pThis,
+                                     void* rCGContext,
+                                     const int nCanvasWidth, const int nCanvasHeight,
+                                     const int nTilePosX, const int nTilePosY,
+                                     const int nTileWidth, const int nTileHeight)
+{
+    SolarMutexGuard aGuard;
+    if (gImpl)
+        gImpl->maLastExceptionMsg.clear();
+
+    SAL_INFO( "lok.tiledrendering", "paintTileToCGContext: painting [" << nTileWidth << "x" << nTileHeight <<
+              "]@(" << nTilePosX << ", " << nTilePosY << ") to [" <<
+              nCanvasWidth << "x" << nCanvasHeight << "]px" );
+
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        gImpl->maLastExceptionMsg = "Document doesn't support tiled rendering";
+        return;
+    }
+
+    SystemGraphicsData aData;
+    aData.rCGContext = reinterpret_cast<CGContextRef>(rCGContext);
+    // the Size argument is irrelevant, I hope
+    ScopedVclPtrInstance<VirtualDevice> pDevice(&aData, Size(1, 1), DeviceFormat::DEFAULT);
+
+    pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
+
+    pDevice->SetOutputSizePixel(Size(nCanvasWidth, nCanvasHeight));
+
+    pDoc->paintTile(*pDevice.get(), nCanvasWidth, nCanvasHeight,
+                    nTilePosX, nTilePosY, nTileWidth, nTileHeight);
+
+}
+
+#endif
 
 static void doc_paintPartTile(LibreOfficeKitDocument* pThis,
                               unsigned char* pBuffer,
@@ -2080,7 +2284,7 @@ static void doc_paintPartTile(LibreOfficeKitDocument* pThis,
         int nViewId = nOrigViewId;
         if (!isText)
         {
-            // Check if just switching to an other view is enough, that has
+            // Check if just switching to another view is enough, that has
             // less side-effects.
             if (nPart != doc_getPart(pThis))
             {
@@ -2749,7 +2953,7 @@ static char* getFontSubset (const OString& aFontName)
         {
             FontCharMapRef xFontCharMap (new FontCharMap());
             auto aDevice(VclPtr<VirtualDevice>::Create(nullptr, Size(1, 1), DeviceFormat::DEFAULT));
-            vcl::Font aFont(pList->GetFontName(nItFont));
+            const vcl::Font& aFont(pList->GetFontName(nItFont));
 
             aDevice->SetFont(aFont);
             aDevice->GetFontCharMap(xFontCharMap);
@@ -2916,7 +3120,7 @@ static char* getUndoOrRedo(LibreOfficeKitDocument* pThis, UndoOrRedo eCommand)
     if (!pObjectShell)
         return nullptr;
 
-    svl::IUndoManager* pUndoManager = pObjectShell->GetUndoManager();
+    SfxUndoManager* pUndoManager = pObjectShell->GetUndoManager();
     if (!pUndoManager)
         return nullptr;
 
@@ -3393,10 +3597,19 @@ unsigned char* doc_renderFont(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* /*pTh
     return nullptr;
 }
 
-static void doc_paintWindow(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWindowId,
+static void doc_paintWindow(LibreOfficeKitDocument* pThis, unsigned nLOKWindowId,
                             unsigned char* pBuffer,
                             const int nX, const int nY,
                             const int nWidth, const int nHeight)
+{
+    doc_paintWindowDPI(pThis, nLOKWindowId, pBuffer, nX, nY, nWidth, nHeight, 1.0);
+}
+
+static void doc_paintWindowDPI(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWindowId,
+                               unsigned char* pBuffer,
+                               const int nX, const int nY,
+                               const int nWidth, const int nHeight,
+                               const double fDPIScale)
 {
     SolarMutexGuard aGuard;
     if (gImpl)
@@ -3409,18 +3622,52 @@ static void doc_paintWindow(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWind
         return;
     }
 
+    // Setup cairo (or CoreGraphics, in the iOS case) to draw with the changed DPI scale (and return
+    // back to 1.0 when the painting finishes)
+    comphelper::ScopeGuard dpiScaleGuard([]() { comphelper::LibreOfficeKit::setDPIScale(1.0); });
+    comphelper::LibreOfficeKit::setDPIScale(fDPIScale);
+
+#if defined(IOS)
+
+    CGContextRef cgc = CGBitmapContextCreate(pBuffer, nWidth, nHeight, 8, nWidth*4, CGColorSpaceCreateDeviceRGB(), kCGImageAlphaNoneSkipFirst | kCGImageByteOrder32Little);
+
+    CGContextTranslateCTM(cgc, 0, nHeight);
+    CGContextScaleCTM(cgc, fDPIScale, -fDPIScale);
+
+    SystemGraphicsData aData;
+    aData.rCGContext = cgc;
+
+    ScopedVclPtrInstance<VirtualDevice> pDevice(&aData, Size(1, 1), DeviceFormat::DEFAULT);
+    pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
+
+    pDevice->SetOutputSizePixel(Size(nWidth, nHeight));
+
+    MapMode aMapMode(pDevice->GetMapMode());
+    aMapMode.SetOrigin(Point(-(nX / fDPIScale), -(nY / fDPIScale)));
+    pDevice->SetMapMode(aMapMode);
+
+    comphelper::LibreOfficeKit::setDialogPainting(true);
+    pWindow->PaintToDevice(pDevice.get(), Point(0, 0), Size());
+    comphelper::LibreOfficeKit::setDialogPainting(false);
+
+    CGContextRelease(cgc);
+
+#else
+
     ScopedVclPtrInstance<VirtualDevice> pDevice(nullptr, Size(1, 1), DeviceFormat::DEFAULT);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
 
     pDevice->SetOutputSizePixelScaleOffsetAndBuffer(Size(nWidth, nHeight), Fraction(1.0), Point(), pBuffer);
 
     MapMode aMapMode(pDevice->GetMapMode());
-    aMapMode.SetOrigin(Point(-nX, -nY));
+    aMapMode.SetOrigin(Point(-(nX / fDPIScale), -(nY / fDPIScale)));
     pDevice->SetMapMode(aMapMode);
 
     comphelper::LibreOfficeKit::setDialogPainting(true);
     pWindow->PaintToDevice(pDevice.get(), Point(0, 0), Size());
     comphelper::LibreOfficeKit::setDialogPainting(false);
+
+#endif
 }
 
 static void doc_postWindow(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWindowId, int nAction)
@@ -3443,6 +3690,123 @@ static void doc_postWindow(LibreOfficeKitDocument* /*pThis*/, unsigned nLOKWindo
         else if (FloatingWindow* pFloatWin = dynamic_cast<FloatingWindow*>(pWindow.get()))
             pFloatWin->EndPopupMode(FloatWinPopupEndFlags::Cancel | FloatWinPopupEndFlags::CloseAll);
     }
+}
+
+// CERTIFICATE AND DOCUMENT SIGNING
+static bool doc_insertCertificate(LibreOfficeKitDocument* pThis,
+                                  const unsigned char* pCertificateBinary, const int nCertificateBinarySize,
+                                  const unsigned char* pPrivateKeyBinary, const int nPrivateKeySize)
+{
+    if (!xContext.is())
+        return false;
+
+    LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
+
+    if (!pDocument->mxComponent.is())
+        return false;
+
+    SfxBaseModel* pBaseModel = dynamic_cast<SfxBaseModel*>(pDocument->mxComponent.get());
+    if (!pBaseModel)
+        return false;
+
+    SfxObjectShell* pObjectShell = pBaseModel->GetObjectShell();
+
+    if (!pObjectShell)
+        return false;
+
+    uno::Reference<xml::crypto::XSEInitializer> xSEInitializer = xml::crypto::SEInitializer::create(xContext);
+    uno::Reference<xml::crypto::XXMLSecurityContext> xSecurityContext;
+    xSecurityContext = xSEInitializer->createSecurityContext(OUString());
+    if (!xSecurityContext.is())
+        return false;
+
+    uno::Reference<xml::crypto::XSecurityEnvironment> xSecurityEnvironment;
+    xSecurityEnvironment = xSecurityContext->getSecurityEnvironment();
+    uno::Reference<xml::crypto::XCertificateCreator> xCertificateCreator(xSecurityEnvironment, uno::UNO_QUERY);
+
+    if (!xCertificateCreator.is())
+        return false;
+
+    uno::Sequence<sal_Int8> aCertificateSequence(nCertificateBinarySize);
+    std::copy(pCertificateBinary, pCertificateBinary + nCertificateBinarySize, aCertificateSequence.begin());
+
+    uno::Sequence<sal_Int8> aPrivateKeySequence(nPrivateKeySize);
+    std::copy(pPrivateKeyBinary, pPrivateKeyBinary + nPrivateKeySize, aPrivateKeySequence.begin());
+
+    uno::Reference<security::XCertificate> xCertificate;
+    xCertificate = xCertificateCreator->createDERCertificateWithPrivateKey(aCertificateSequence, aPrivateKeySequence);
+
+    if (!xCertificate.is())
+        return false;
+
+    return pObjectShell->SignDocumentContentUsingCertificate(xCertificate);
+}
+
+static bool doc_addCertificate(LibreOfficeKitDocument* pThis,
+                                  const unsigned char* pCertificateBinary, const int nCertificateBinarySize)
+{
+    if (!xContext.is())
+        return false;
+
+    LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
+
+    if (!pDocument->mxComponent.is())
+        return false;
+
+    SfxBaseModel* pBaseModel = dynamic_cast<SfxBaseModel*>(pDocument->mxComponent.get());
+    if (!pBaseModel)
+        return false;
+
+    SfxObjectShell* pObjectShell = pBaseModel->GetObjectShell();
+
+    if (!pObjectShell)
+        return false;
+
+    uno::Reference<xml::crypto::XSEInitializer> xSEInitializer = xml::crypto::SEInitializer::create(xContext);
+    uno::Reference<xml::crypto::XXMLSecurityContext> xSecurityContext;
+    xSecurityContext = xSEInitializer->createSecurityContext(OUString());
+    if (!xSecurityContext.is())
+        return false;
+
+    uno::Reference<xml::crypto::XSecurityEnvironment> xSecurityEnvironment;
+    xSecurityEnvironment = xSecurityContext->getSecurityEnvironment();
+    uno::Reference<xml::crypto::XCertificateCreator> xCertificateCreator(xSecurityEnvironment, uno::UNO_QUERY);
+
+    if (!xCertificateCreator.is())
+        return false;
+
+    uno::Sequence<sal_Int8> aCertificateSequence(nCertificateBinarySize);
+    std::copy(pCertificateBinary, pCertificateBinary + nCertificateBinarySize, aCertificateSequence.begin());
+
+    uno::Reference<security::XCertificate> xCertificate;
+    xCertificate = xCertificateCreator->addDERCertificateToTheDatabase(aCertificateSequence, "TCu,Cu,Tu");
+
+    if (!xCertificate.is())
+        return false;
+
+    SAL_INFO("lok", "Certificate Added = IssuerName: " << xCertificate->getIssuerName() << " SubjectName: " << xCertificate->getSubjectName());
+
+    return true;
+}
+
+static int doc_getSignatureState(LibreOfficeKitDocument* pThis)
+{
+    LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
+
+    if (!pDocument->mxComponent.is())
+        return int(SignatureState::UNKNOWN);
+
+    SfxBaseModel* pBaseModel = dynamic_cast<SfxBaseModel*>(pDocument->mxComponent.get());
+    if (!pBaseModel)
+        return int(SignatureState::UNKNOWN);
+
+    SfxObjectShell* pObjectShell = pBaseModel->GetObjectShell();
+    if (!pObjectShell)
+        return int(SignatureState::UNKNOWN);
+
+    pObjectShell->RecheckSignature(false);
+
+    return int(pObjectShell->GetDocumentSignatureState());
 }
 
 static char* lo_getError (LibreOfficeKit *pThis)
@@ -3708,9 +4072,35 @@ static void preloadData()
     images.getImageUrl("forcefed.png", "style", "FO_oo");
 
     std::cerr << "Preload languages\n";
+
     // force load language singleton
     SvtLanguageTable::HasLanguageType(LANGUAGE_SYSTEM);
     (void)LanguageTag::isValidBcp47("foo", nullptr);
+
+    std::cerr << "Preload fonts\n";
+
+    // Initialize fonts.
+    css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv = css::linguistic2::LinguServiceManager::create(xContext);
+    if (xLangSrv.is())
+    {
+        css::uno::Reference<css::linguistic2::XSpellChecker> xSpell(xLangSrv->getSpellChecker(), css::uno::UNO_QUERY);
+        css::uno::Reference<css::linguistic2::XSupportedLocales> xLocales(xSpell, css::uno::UNO_QUERY);
+        if (xLocales.is())
+            aLocales = xLocales->getLocales();
+    }
+
+    for (const auto& aLocale : aLocales)
+    {
+        //TODO: Add more types and cache more aggressively. For now this initializes the fontcache.
+        using namespace ::com::sun::star::i18n::ScriptType;
+        LanguageType nLang;
+        nLang = MsLangId::resolveSystemLanguageByScriptType(LanguageTag::convertToLanguageType(aLocale, false), LATIN);
+        OutputDevice::GetDefaultFont(DefaultFontType::LATIN_SPREADSHEET, nLang, GetDefaultFontFlags::OnlyOne);
+        nLang = MsLangId::resolveSystemLanguageByScriptType(LanguageTag::convertToLanguageType(aLocale, false), ASIAN);
+        OutputDevice::GetDefaultFont(DefaultFontType::CJK_SPREADSHEET, nLang, GetDefaultFontFlags::OnlyOne);
+        nLang = MsLangId::resolveSystemLanguageByScriptType(LanguageTag::convertToLanguageType(aLocale, false), COMPLEX);
+        OutputDevice::GetDefaultFont(DefaultFontType::CTL_SPREADSHEET, nLang, GetDefaultFontFlags::OnlyOne);
+    }
 }
 
 static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char* pUserProfileUrl)
@@ -3738,9 +4128,9 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
         return 1;
 
     if (eStage == PRE_INIT)
-        rtl_alloc_preInit(rtlAllocPreInitStart);
+        rtl_alloc_preInit(true);
     else if (eStage == SECOND_INIT)
-        rtl_alloc_preInit(rtlAllocPreInitEnd);
+        rtl_alloc_preInit(false);
 
     if (eStage != SECOND_INIT)
         comphelper::LibreOfficeKit::setActive();
@@ -3780,11 +4170,58 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
         ::osl::Module::getUrlFromAddress( reinterpret_cast< oslGenericFunction >(lo_initialize),
                                           aAppURL);
         osl::FileBase::getSystemPathFromFileURL( aAppURL, aAppPath );
+#ifdef IOS
+        // The above gives something like
+        // "/private/var/containers/Bundle/Application/953AA851-CC15-4C60-A2CB-C2C6F24E6F71/Foo.app/Foo",
+        // and we want to drop the final component (the binary name).
+        sal_Int32 lastSlash = aAppPath.lastIndexOf('/');
+        assert(lastSlash > 0);
+        aAppPath = aAppPath.copy(0, lastSlash);
+#endif
     }
 
     OUString aAppURL;
     if (osl::FileBase::getFileURLFromSystemPath(aAppPath, aAppURL) != osl::FileBase::E_None)
         return 0;
+
+#ifdef IOS
+    // A LibreOffice-using iOS app should have the ICU data file in the app bundle. Initialize ICU
+    // to use that.
+    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+
+    int fd = open([[bundlePath stringByAppendingPathComponent:@"ICU.dat"] UTF8String], O_RDONLY);
+    if (fd == -1)
+        NSLog(@"Could not open ICU data file %s", [[bundlePath stringByAppendingPathComponent:@"ICU.dat"] UTF8String]);
+    else
+    {
+        struct stat st;
+        if (fstat(fd, &st) == -1)
+            NSLog(@"fstat on ICU data file failed: %s", strerror(errno));
+        else
+        {
+            void *icudata = mmap(0, (size_t) st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
+            if (icudata == MAP_FAILED)
+                NSLog(@"mmap failed: %s", strerror(errno));
+            else
+            {
+                UErrorCode icuStatus = U_ZERO_ERROR;
+                udata_setCommonData(icudata, &icuStatus);
+                if (U_FAILURE(icuStatus))
+                    NSLog(@"udata_setCommonData failed");
+                else
+                {
+                    // Quick test that ICU works...
+                    UConverter *cnv = ucnv_open("iso-8859-3", &icuStatus);
+                    NSLog(@"ucnv_open(iso-8859-3)-> %p, err = %s, name=%s",
+                          (void *)cnv, u_errorName(icuStatus), (!cnv)?"?":ucnv_getName(cnv,&icuStatus));
+                    if (U_SUCCESS(icuStatus))
+                        ucnv_close(cnv);
+                }
+            }
+        }
+        close(fd);
+    }
+#endif
 
     try
     {
@@ -3830,6 +4267,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 // Force load some modules
                 VclBuilder::preload();
                 VclAbstractDialogFactory::Create();
+
                 preloadData();
 
                 // Release Solar Mutex, lo_startmain thread should acquire it.
@@ -3892,32 +4330,22 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     }
 
     if (eStage == PRE_INIT)
-        rtl_alloc_preInit(rtlAllocPostInit);
+    {
+        comphelper::ThreadPool::getSharedOptimalPool().shutdown();
+    }
 
     return bInitialized;
 }
 
-// Undo our clever trick of having SAL_DLLPUBLIC_EXPORT actually not
-// meaning what is says in for the DISABLE_DYNLOADING case. See
-// <sal/types.h>. Normally, when building just one big dylib (Android)
-// or executable (iOS), most of our "public" symbols don't need to be
-// visible outside that resulting dylib/executable. But
-// libreofficekit_hook must be exported for dlsym() to find it,
-// though, at least on iOS.
-
-#if defined(__GNUC__) && defined(DISABLE_DYNLOADING)
-__attribute__ ((visibility("default")))
-#else
 SAL_DLLPUBLIC_EXPORT
-#endif
-LibreOfficeKit *libreofficekit_hook_2(const char* install_path, const char* user_profile_path)
+LibreOfficeKit *libreofficekit_hook_2(const char* install_path, const char* user_profile_url)
 {
     if (!gImpl)
     {
         SAL_INFO("lok", "Create libreoffice object");
 
         gImpl = new LibLibreOffice_Impl();
-        if (!lo_initialize(gImpl, install_path, user_profile_path))
+        if (!lo_initialize(gImpl, install_path, user_profile_url))
         {
             lo_destroy(gImpl);
         }
@@ -3925,27 +4353,22 @@ LibreOfficeKit *libreofficekit_hook_2(const char* install_path, const char* user
     return static_cast<LibreOfficeKit*>(gImpl);
 }
 
-#if defined(__GNUC__) && defined(DISABLE_DYNLOADING)
-__attribute__ ((visibility("default")))
-#else
 SAL_DLLPUBLIC_EXPORT
-#endif
 LibreOfficeKit *libreofficekit_hook(const char* install_path)
 {
     return libreofficekit_hook_2(install_path, nullptr);
 }
 
 SAL_JNI_EXPORT
-int lok_preinit(const char* install_path, const char* user_profile_path)
+int lok_preinit(const char* install_path, const char* user_profile_url)
 {
-    return lo_initialize(nullptr, install_path, user_profile_path);
+    return lo_initialize(nullptr, install_path, user_profile_url);
 }
 
 static void lo_destroy(LibreOfficeKit* pThis)
 {
     SolarMutexClearableGuard aGuard;
 
-    bool bSuccess = false;
     LibLibreOffice_Impl* pLib = static_cast<LibLibreOffice_Impl*>(pThis);
     gImpl = nullptr;
 
@@ -3955,7 +4378,7 @@ static void lo_destroy(LibreOfficeKit* pThis)
     uno::Reference <frame::XDesktop2> xDesktop = frame::Desktop::create ( ::comphelper::getProcessComponentContext() );
     // FIXME: the terminate() call here is a no-op because it detects
     // that LibreOfficeKit::isActive() and then returns early!
-    bSuccess = xDesktop.is() && xDesktop->terminate();
+    bool bSuccess = xDesktop.is() && xDesktop->terminate();
 
     if (!bSuccess)
     {

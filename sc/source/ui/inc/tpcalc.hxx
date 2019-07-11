@@ -23,7 +23,6 @@
 #include <sfx2/tabdlg.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/field.hxx>
-#include <vcl/group.hxx>
 #include "editfield.hxx"
 
 class ScDocOptions;
@@ -70,9 +69,9 @@ private:
 
     VclPtr<CheckBox>       m_pBtnThread;
 
-    ScDocOptions*          pOldOptions;
-    ScDocOptions*          pLocalOptions;
-    sal_uInt16             nWhichCalc;
+    std::unique_ptr<ScDocOptions> pOldOptions;
+    std::unique_ptr<ScDocOptions> pLocalOptions;
+    sal_uInt16 const             nWhichCalc;
 
 private:
     void            Init();

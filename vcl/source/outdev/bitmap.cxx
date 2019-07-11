@@ -43,6 +43,8 @@
 #include <memory>
 #include <comphelper/lok.hxx>
 #include <bitmapwriteaccess.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 void OutputDevice::DrawBitmap( const Point& rDestPt, const Bitmap& rBitmap )
 {
@@ -135,9 +137,8 @@ void OutputDevice::DrawBitmap( const Point& rDestPt, const Size& rDestSize,
     if ( !IsDeviceOutputNecessary() )
         return;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -371,9 +372,8 @@ void OutputDevice::DrawBitmapEx( const Point& rDestPt, const Size& rDestSize,
         if ( !IsDeviceOutputNecessary() )
             return;
 
-        if ( !mpGraphics )
-            if ( !AcquireGraphics() )
-                return;
+        if ( !mpGraphics && !AcquireGraphics() )
+            return;
 
         if ( mbInitClipRegion )
             InitClipRegion();
@@ -455,8 +455,8 @@ Bitmap OutputDevice::GetBitmap( const Point& rSrcPt, const Size& rSize ) const
                         }
 
                         aBmp = aVDev->GetBitmap( Point(), aVDev->GetOutputSizePixel() );
-                     }
-                     else
+                    }
+                    else
                         bClipped = false;
                 }
                 else
@@ -465,12 +465,11 @@ Bitmap OutputDevice::GetBitmap( const Point& rSrcPt, const Size& rSize ) const
 
             if ( !bClipped )
             {
-                SalBitmap* pSalBmp = mpGraphics->GetBitmap( nX, nY, nWidth, nHeight, this );
+                std::shared_ptr<SalBitmap> pSalBmp = mpGraphics->GetBitmap( nX, nY, nWidth, nHeight, this );
 
                 if( pSalBmp )
                 {
-                    std::shared_ptr<SalBitmap> xImpBmp(pSalBmp);
-                    aBmp.ImplSetSalBitmap(xImpBmp);
+                    aBmp.ImplSetSalBitmap(pSalBmp);
                 }
             }
         }
@@ -1340,7 +1339,7 @@ namespace
 {
     // Co = Cs + Cd*(1-As) premultiplied alpha -or-
     // Co = (AsCs + AdCd*(1-As)) / Ao
-    inline sal_uInt8 CalcColor( const sal_uInt8 nSourceColor, const sal_uInt8 nSourceAlpha,
+    sal_uInt8 CalcColor( const sal_uInt8 nSourceColor, const sal_uInt8 nSourceAlpha,
                                 const sal_uInt8 nDstAlpha, const sal_uInt8 nResAlpha, const sal_uInt8 nDestColor )
     {
         int c = nResAlpha ? ( static_cast<int>(nSourceAlpha)*nSourceColor + static_cast<int>(nDstAlpha)*nDestColor -
@@ -1348,7 +1347,7 @@ namespace
         return sal_uInt8( c );
     }
 
-    inline BitmapColor AlphaBlend( int nX,               int nY,
+    BitmapColor AlphaBlend( int nX,               int nY,
                                    const long            nMapX,
                                    const long            nMapY,
                                    BitmapReadAccess const *  pP,

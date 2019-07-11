@@ -18,6 +18,8 @@
  */
 
 #include <formulabase.hxx>
+#include <rangelst.hxx>
+#include <addressconverter.hxx>
 
 #include <map>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -139,11 +141,10 @@ ApiTokenSequence ApiTokenVector::toSequence() const
 
 // token sequence iterator ====================================================
 
-ApiTokenIterator::ApiTokenIterator( const ApiTokenSequence& rTokens, sal_Int32 nSpacesOpCode, bool bSkipSpaces ) :
+ApiTokenIterator::ApiTokenIterator( const ApiTokenSequence& rTokens, sal_Int32 nSpacesOpCode ) :
     mpToken( rTokens.getConstArray() ),
     mpTokenEnd( rTokens.getConstArray() + rTokens.getLength() ),
-    mnSpacesOpCode( nSpacesOpCode ),
-    mbSkipSpaces( bSkipSpaces )
+    mnSpacesOpCode( nSpacesOpCode )
 {
     skipSpaces();
 }
@@ -160,9 +161,8 @@ ApiTokenIterator& ApiTokenIterator::operator++()
 
 void ApiTokenIterator::skipSpaces()
 {
-    if( mbSkipSpaces )
-        while( is() && (mpToken->OpCode == mnSpacesOpCode) )
-            ++mpToken;
+    while( is() && (mpToken->OpCode == mnSpacesOpCode) )
+        ++mpToken;
 }
 
 // function data ==============================================================
@@ -177,18 +177,18 @@ struct FunctionData
 {
     const sal_Char*     mpcOdfFuncName;     /// ODF function name.
     const sal_Char*     mpcOoxFuncName;     /// OOXML function name.
-    sal_uInt16          mnBiff12FuncId;     /// BIFF12 function identifier.
-    sal_uInt16          mnBiffFuncId;       /// BIFF2-BIFF8 function identifier.
-    sal_uInt8           mnMinParamCount;    /// Minimum number of parameters.
-    sal_uInt8           mnMaxParamCount;    /// Maximum number of parameters.
-    sal_uInt8           mnRetClass;         /// BIFF token class of the return value.
-    FunctionParamInfo   mpParamInfos[ FUNCINFO_PARAMINFOCOUNT ]; /// Information about all parameters.
-    FuncFlags           mnFlags;            /// Additional flags.
+    sal_uInt16 const          mnBiff12FuncId;     /// BIFF12 function identifier.
+    sal_uInt16 const          mnBiffFuncId;       /// BIFF2-BIFF8 function identifier.
+    sal_uInt8 const           mnMinParamCount;    /// Minimum number of parameters.
+    sal_uInt8 const           mnMaxParamCount;    /// Maximum number of parameters.
+    sal_uInt8 const           mnRetClass;         /// BIFF token class of the return value.
+    FunctionParamInfo const   mpParamInfos[ FUNCINFO_PARAMINFOCOUNT ]; /// Information about all parameters.
+    FuncFlags const           mnFlags;            /// Additional flags.
 
-    inline bool         isSupported(bool bImportFilter) const;
+    bool         isSupported(bool bImportFilter) const;
 };
 
-inline bool FunctionData::isSupported(bool bImportFilter) const
+bool FunctionData::isSupported(bool bImportFilter) const
 {
     /*  For import filters: the FuncFlags::EXPORTONLY, FuncFlags::BIFFEXPORTONLY
                             and FuncFlags::BIFFIMPORTONLY flag must not be set.
@@ -910,7 +910,8 @@ static const FunctionData saFuncTableOOoLO[] =
     { "ORG.LIBREOFFICE.FORECAST.ETS.MULT",      "ORG.LIBREOFFICE.FORECAST.ETS.MULT",      NOID,   NOID,   3,  6,  V, { VR, VA, VR }, FuncFlags::MACROCALL_NEW },
     { "ORG.LIBREOFFICE.FORECAST.ETS.PI.MULT",   "ORG.LIBREOFFICE.FORECAST.ETS.PI.MULT",   NOID,   NOID,   4,  7,  V, { VR, VA, VR }, FuncFlags::MACROCALL_NEW },
     { "ORG.LIBREOFFICE.FORECAST.ETS.STAT.MULT", "ORG.LIBREOFFICE.FORECAST.ETS.STAT.MULT", NOID,   NOID,   3,  6,  V, { VR, VA, VR }, FuncFlags::MACROCALL_NEW },
-    { "ORG.LIBREOFFICE.ROUNDSIG",  "ORG.LIBREOFFICE.ROUNDSIG",  NOID,   NOID,   2,  2,  V, { RX }, FuncFlags::MACROCALL_NEW }
+    { "ORG.LIBREOFFICE.ROUNDSIG",   "ORG.LIBREOFFICE.ROUNDSIG", NOID, NOID,  2,  2,  V, { RX }, FuncFlags::MACROCALL_NEW },
+    { "ORG.LIBREOFFICE.REGEX",      "ORG.LIBREOFFICE.REGEX", NOID, NOID,  2,  4,  V, { RX }, FuncFlags::MACROCALL_NEW }
 
 };
 
@@ -1593,7 +1594,7 @@ OUString FormulaProcessorBase::generateApiArray( const Matrix< Any >& rMatrix )
 
 Any FormulaProcessorBase::extractReference( const ApiTokenSequence& rTokens ) const
 {
-    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES, true );
+    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES );
     if( aTokenIt.is() && (aTokenIt->OpCode == OPCODE_PUSH) )
     {
         Any aRefAny = aTokenIt->Data;
@@ -1622,7 +1623,7 @@ void FormulaProcessorBase::extractCellRangeList( ScRangeList& orRanges,
     orRanges.RemoveAll();
     TokenToRangeListState eState = STATE_OPEN;
     sal_Int32 nParenLevel = 0;
-    for( ApiTokenIterator aIt( rTokens, OPCODE_SPACES, true ); aIt.is() && (eState != STATE_ERROR); ++aIt )
+    for( ApiTokenIterator aIt( rTokens, OPCODE_SPACES ); aIt.is() && (eState != STATE_ERROR); ++aIt )
     {
         sal_Int32 nOpCode = aIt->OpCode;
         switch( eState )
@@ -1668,13 +1669,13 @@ void FormulaProcessorBase::extractCellRangeList( ScRangeList& orRanges,
 
 bool FormulaProcessorBase::extractString( OUString& orString, const ApiTokenSequence& rTokens ) const
 {
-    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES, true );
+    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES );
     return aTokenIt.is() && (aTokenIt->OpCode == OPCODE_PUSH) && (aTokenIt->Data >>= orString) && !(++aTokenIt).is();
 }
 
 bool FormulaProcessorBase::extractSpecialTokenInfo( ApiSpecialTokenInfo& orTokenInfo, const ApiTokenSequence& rTokens ) const
 {
-    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES, true );
+    ApiTokenIterator aTokenIt( rTokens, OPCODE_SPACES );
     return aTokenIt.is() && (aTokenIt->OpCode == OPCODE_BAD) && (aTokenIt->Data >>= orTokenInfo);
 }
 

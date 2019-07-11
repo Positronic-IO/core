@@ -24,11 +24,12 @@
 #include <ndnotxt.hxx>
 #include <flyfrm.hxx>
 #include <cntfrm.hxx>
+#include <notxtfrm.hxx>
 #include <hints.hxx>
 #include "accnotextframe.hxx"
 #include <fmturl.hxx>
 #include "accnotexthyperlink.hxx"
-#include <svtools/imap.hxx>
+#include <vcl/imap.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <com/sun/star/accessibility/XAccessibleRelationSet.hpp>
 #include <doc.hxx>
@@ -43,8 +44,8 @@ const SwNoTextNode *SwAccessibleNoTextFrame::GetNoTextNode() const
     const SwFlyFrame *pFlyFrame = static_cast< const SwFlyFrame *>( GetFrame() );
     if( pFlyFrame->Lower() && pFlyFrame->Lower()->IsNoTextFrame() )
     {
-        const SwContentFrame *pContentFrame =
-            static_cast<const SwContentFrame *>( pFlyFrame->Lower() );
+        const SwNoTextFrame *pContentFrame =
+            static_cast<const SwNoTextFrame *>(pFlyFrame->Lower());
         const SwContentNode* pSwContentNode = pContentFrame->GetNode();
         if(pSwContentNode != nullptr)
         {

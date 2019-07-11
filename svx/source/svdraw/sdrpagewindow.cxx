@@ -22,6 +22,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/awt/PosSize.hpp>
 #include <com/sun/star/util/XModeChangeBroadcaster.hpp>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <vcl/svapp.hxx>
@@ -254,7 +255,7 @@ namespace
             SdrPage* pPage = rPageView.GetPage();
             SdrObject* pObjA = pPage->GetObj(0);
 
-            if(pObjA && dynamic_cast<const SdrPathObj*>( pObjA) !=  nullptr)
+            if(dynamic_cast<const SdrPathObj*>( pObjA))
             {
                 basegfx::B2DPolyPolygon aPolyA(pObjA->GetPathPoly());
                 aPolyA = basegfx::utils::correctOrientations(aPolyA);
@@ -265,7 +266,7 @@ namespace
                 {
                     SdrObject* pObjB = pPage->GetObj(a);
 
-                    if(pObjB && dynamic_cast<const SdrPathObj*>( pObjB) !=  nullptr)
+                    if(dynamic_cast<const SdrPathObj*>( pObjB))
                     {
                         basegfx::B2DPolyPolygon aCandidate(pObjB->GetPathPoly());
                         aCandidate = basegfx::utils::correctOrientations(aCandidate);
@@ -279,13 +280,13 @@ namespace
                     // poly b being closed.
                     basegfx::B2DPolyPolygon aResult(basegfx::utils::clipPolyPolygonOnPolyPolygon(aPolyB, aPolyA));
 
-                    for(sal_uInt32 a(0); a < aResult.count(); a++)
+                    for(auto const& rPolygon : aResult)
                     {
                         int nR = comphelper::rng::uniform_int_distribution(0, 254);
                         int nG = comphelper::rng::uniform_int_distribution(0, 254);
                         int nB = comphelper::rng::uniform_int_distribution(0, 254);
                         Color aColor(nR, nG, nB);
-                        impPaintStrokePolygon(aResult.getB2DPolygon(a), rOutDev, aColor);
+                        impPaintStrokePolygon(rPolygon, rOutDev, aColor);
                     }
                 }
             }

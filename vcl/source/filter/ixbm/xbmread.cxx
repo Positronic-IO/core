@@ -20,7 +20,6 @@
 #include <memory>
 #include <sal/config.h>
 
-#include <comphelper/string.hxx>
 #include <rtl/character.hxx>
 #include <bitmapwriteaccess.hxx>
 
@@ -48,7 +47,7 @@ class XBMReader : public GraphicReader
                         pHexTable;
     BitmapColor         aWhite;
     BitmapColor         aBlack;
-    long                nLastPos;
+    long const          nLastPos;
     long                nWidth;
     long                nHeight;
     bool                bStatus;
@@ -56,7 +55,7 @@ class XBMReader : public GraphicReader
     void            InitTable();
     OString         FindTokenLine( SvStream* pInStm, const char* pTok1, const char* pTok2 );
     int             ParseDefine( const sal_Char* pDefine );
-    bool            ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat eFormat );
+    void            ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat eFormat );
 
 public:
 
@@ -185,7 +184,7 @@ int XBMReader::ParseDefine( const sal_Char* pDefine )
     return nRet;
 }
 
-bool XBMReader::ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat eFormat )
+void XBMReader::ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat eFormat )
 {
     OString    aLine;
     long            nRow = 0;
@@ -258,8 +257,6 @@ bool XBMReader::ParseData( SvStream* pInStm, const OString& aLastLine, XBMFormat
             }
         }
     }
-
-    return true;
 }
 
 ReadState XBMReader::ReadXBM( Graphic& rGraphic )
@@ -317,7 +314,7 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
                             bStatus = false;
 
                         //xbms are a minimum of one character per 8 pixels, so if the file isn't
-                        //even that long, its not all there
+                        //even that long, it's not all there
                         if (rIStm.remainingSize() < (static_cast<sal_uInt64>(nWidth) * nHeight) / 8)
                             bStatus = false;
 
@@ -330,7 +327,7 @@ ReadState XBMReader::ReadXBM( Graphic& rGraphic )
                             {
                                 aWhite = pAcc1->GetBestMatchingColor( COL_WHITE );
                                 aBlack = pAcc1->GetBestMatchingColor( COL_BLACK );
-                                bStatus = ParseData( &rIStm, aLine, eFormat );
+                                ParseData( &rIStm, aLine, eFormat );
                             }
                             else
                                 bStatus = false;

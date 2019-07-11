@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 
@@ -144,13 +145,11 @@ WMFWriter::WMFWriter()
     , nActRecordPos(0)
     , eSrcRasterOp(RasterOp::OverPaint)
     , eSrcTextAlign(ALIGN_BASELINE)
-    , bSrcIsClipping(false)
     , pAttrStack(nullptr)
     , eSrcHorTextAlign(W_TA_LEFT)
     , eDstROP2(RasterOp::OverPaint)
     , eDstTextAlign(ALIGN_BASELINE)
     , eDstHorTextAlign(W_TA_LEFT)
-    , bDstIsClipping(false)
     , bHandleAllocated{}
     , nDstPenHandle(0)
     , nDstFontHandle(0)
@@ -530,10 +529,9 @@ bool WMFWriter::WMFRecord_Escape_Unicode( const Point& rPoint, const OUString& r
                     aMemoryStream.WriteUInt32( nSkipActions );
                     WMFRecord_Escape( PRIVATE_ESCAPE_UNICODE, nStrmLen, static_cast<const sal_Int8*>(aMemoryStream.GetData()) );
 
-                    std::vector<tools::PolyPolygon>::iterator aIter( aPolyPolyVec.begin() );
-                    while ( aIter != aPolyPolyVec.end() )
+                    for ( const auto& rPolyPoly : aPolyPolyVec )
                     {
-                        tools::PolyPolygon aPolyPoly( *aIter++ );
+                        tools::PolyPolygon aPolyPoly( rPolyPoly );
                         aPolyPoly.Move( rPoint.X(), rPoint.Y() );
                         WMFRecord_PolyPolygon( aPolyPoly );
                     }
@@ -929,11 +927,6 @@ void WMFWriter::SetLineAndFillAttr()
         aDstFillColor = aSrcFillColor;
         CreateSelectDeleteBrush( aDstFillColor );
     }
-    if ( bDstIsClipping != bSrcIsClipping ||
-        (bSrcIsClipping && aDstClipRegion!=aSrcClipRegion)) {
-        bDstIsClipping=bSrcIsClipping;
-        aDstClipRegion=aSrcClipRegion;
-    }
 }
 
 void WMFWriter::SetAllAttr()
@@ -984,10 +977,9 @@ void WMFWriter::HandleLineInfoPolyPolygons(const LineInfo& rInfo, const basegfx:
             aSrcLineInfo = rInfo;
             SetLineAndFillAttr();
 
-            for(sal_uInt32 a(0); a < aLinePolyPolygon.count(); a++)
+            for(auto const& rB2DPolygon : aLinePolyPolygon)
             {
-                const basegfx::B2DPolygon aCandidate(aLinePolyPolygon.getB2DPolygon(a));
-                WMFRecord_PolyLine( tools::Polygon(aCandidate) );
+                WMFRecord_PolyLine( tools::Polygon(rB2DPolygon) );
             }
         }
 
@@ -1000,10 +992,9 @@ void WMFWriter::HandleLineInfoPolyPolygons(const LineInfo& rInfo, const basegfx:
             aSrcFillColor = aOldLineColor;
             SetLineAndFillAttr();
 
-            for(sal_uInt32 a(0); a < aFillPolyPolygon.count(); a++)
+            for(auto const& rB2DPolygon : aFillPolyPolygon)
             {
-                const tools::Polygon aPolygon(aFillPolyPolygon.getB2DPolygon(a));
-                WMFRecord_Polygon( aPolygon );
+                WMFRecord_Polygon( tools::Polygon(rB2DPolygon) );
             }
 
             aSrcLineColor = aOldLineColor;
@@ -1403,7 +1394,7 @@ void WMFWriter::WriteRecords( const GDIMetaFile & rMTF )
                     {
                         if( pA->GetMapMode().GetMapUnit() == MapUnit::MapRelative )
                         {
-                            MapMode aMM = pA->GetMapMode();
+                            const MapMode& aMM = pA->GetMapMode();
                             Fraction aScaleX = aMM.GetScaleX();
                             Fraction aScaleY = aMM.GetScaleY();
 
@@ -1531,7 +1522,7 @@ void WMFWriter::WriteRecords( const GDIMetaFile & rMTF )
                 case MetaActionType::EPS :
                 {
                     const MetaEPSAction* pA = static_cast<const MetaEPSAction*>(pMA);
-                    const GDIMetaFile aGDIMetaFile( pA->GetSubstitute() );
+                    const GDIMetaFile& aGDIMetaFile( pA->GetSubstitute() );
 
                     size_t nCount = aGDIMetaFile.GetActionSize();
                     for ( size_t i = 0; i < nCount; i++ )
@@ -1768,7 +1759,6 @@ bool WMFWriter::WriteWMF( const GDIMetaFile& rMTF, SvStream& rTargetStream,
     CreateSelectDeleteBrush( aDstFillColor );
 
     aDstClipRegion = aSrcClipRegion = vcl::Region();
-    bDstIsClipping = bSrcIsClipping = false;
 
     vcl::Font aFont;
     aFont.SetCharSet( GetExtendedTextEncoding( RTL_TEXTENCODING_MS_1252 ) );

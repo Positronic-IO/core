@@ -23,7 +23,6 @@
 #include <sdxfer.hxx>
 
 #include <vector>
-#include <functional>
 
 class SdDrawDocument;
 namespace sd { namespace slidesorter {
@@ -43,11 +42,11 @@ public:
     class Representative
     {
     public:
-        Representative (const Bitmap& rBitmap, const bool bIsExcluded)
+        Representative (const BitmapEx& rBitmap, const bool bIsExcluded)
             : maBitmap(rBitmap), mbIsExcluded(bIsExcluded) {}
 
-        Bitmap maBitmap;
-        bool mbIsExcluded;
+        BitmapEx const maBitmap;
+        bool const mbIsExcluded;
     };
 
     static SdTransferable* CreateTransferable (

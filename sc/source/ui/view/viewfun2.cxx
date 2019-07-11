@@ -83,12 +83,12 @@
 #include <prnsave.hxx>
 #include <searchresults.hxx>
 #include <tokenarray.hxx>
-#include <columnspanset.hxx>
 #include <rowheightcontext.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
 #include <mergecellsdialog.hxx>
 #include <sheetevents.hxx>
+#include <columnspanset.hxx>
 
 #include <vector>
 #include <memory>
@@ -809,7 +809,7 @@ void ScViewFunc::EnterBlock( const OUString& rString, const EditTextObject* pDat
     if ( pData )
     {
         const ScPatternAttr* pOldPattern = pDoc->GetPattern( nCol, nRow, nTab );
-        ScTabEditEngine aEngine( *pOldPattern, pDoc->GetEnginePool() );
+        ScTabEditEngine aEngine( *pOldPattern, pDoc->GetEnginePool(), pDoc );
         aEngine.SetText(*pData);
 
         ScEditAttrTester aTester( &aEngine );
@@ -908,11 +908,11 @@ void ScViewFunc::RemoveManualBreaks()
 
     if (bUndo)
     {
-        ScDocument* pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        ScDocumentUniquePtr pUndoDoc(new ScDocument( SCDOCMODE_UNDO ));
         pUndoDoc->InitUndo( &rDoc, nTab, nTab, true, true );
         rDoc.CopyToDocument( 0,0,nTab, MAXCOL,MAXROW,nTab, InsertDeleteFlags::NONE, false, *pUndoDoc );
         pDocSh->GetUndoManager()->AddUndoAction(
-                                new ScUndoRemoveBreaks( pDocSh, nTab, pUndoDoc ) );
+                                o3tl::make_unique<ScUndoRemoveBreaks>( pDocSh, nTab, std::move(pUndoDoc) ) );
     }
 
     rDoc.RemoveManualBreaks(nTab);
@@ -950,7 +950,7 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
     SCTAB nTab;
     bool bUndo (rDoc.IsUndoEnabled());
 
-    ScPrintRangeSaver* pOldRanges = rDoc.CreatePrintRangeSaver();
+    std::unique_ptr<ScPrintRangeSaver> pOldRanges = rDoc.CreatePrintRangeSaver();
 
     ScAddress::Details aDetails(rDoc.GetAddressConvention(), 0, 0);
 
@@ -1030,12 +1030,12 @@ void ScViewFunc::SetPrintRanges( bool bEntireSheet, const OUString* pPrint,
     if (bUndo)
     {
         SCTAB nCurTab = GetViewData().GetTabNo();
-        ScPrintRangeSaver* pNewRanges = rDoc.CreatePrintRangeSaver();
+        std::unique_ptr<ScPrintRangeSaver> pNewRanges = rDoc.CreatePrintRangeSaver();
         pDocSh->GetUndoManager()->AddUndoAction(
-                    new ScUndoPrintRange( pDocSh, nCurTab, pOldRanges, pNewRanges ) );
+                    o3tl::make_unique<ScUndoPrintRange>( pDocSh, nCurTab, std::move(pOldRanges), std::move(pNewRanges) ) );
     }
     else
-        delete pOldRanges;
+        pOldRanges.reset();
 
     //  update page breaks
 
@@ -1558,11 +1558,11 @@ void ScViewFunc::FillTab( InsertDeleteFlags nFlags, ScPasteFunc nFunction, bool 
     else
         aMarkRange = ScRange( GetViewData().GetCurX(), GetViewData().GetCurY(), nTab );
 
-    ScDocument* pUndoDoc = nullptr;
+    ScDocumentUniquePtr pUndoDoc;
 
     if (bUndo)
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
         pUndoDoc->InitUndo( &rDoc, nTab, nTab );
 
         ScMarkData::iterator itr = rMark.begin(), itrEnd = rMark.end();
@@ -1589,10 +1589,10 @@ void ScViewFunc::FillTab( InsertDeleteFlags nFlags, ScPasteFunc nFunction, bool 
     if (bUndo)
     {   //! for ChangeTrack not until the end
         pDocSh->GetUndoManager()->AddUndoAction(
-            new ScUndoFillTable( pDocSh, rMark,
+            o3tl::make_unique<ScUndoFillTable>( pDocSh, rMark,
                                 aMarkRange.aStart.Col(), aMarkRange.aStart.Row(), nTab,
                                 aMarkRange.aEnd.Col(), aMarkRange.aEnd.Row(), nTab,
-                                pUndoDoc, bMulti, nTab, nFlags, nFunction, bSkipEmpty, bAsLink ) );
+                                std::move(pUndoDoc), bMulti, nTab, nFlags, nFunction, bSkipEmpty, bAsLink ) );
     }
 
     pDocSh->PostPaintGridAll();
@@ -1605,8 +1605,6 @@ void ScViewFunc::FillTab( InsertDeleteFlags nFlags, ScPasteFunc nFunction, bool 
     column when the lower-right corner of the selection is double-clicked.  It
     uses a left-adjoining non-empty column as a guide if such is available,
     otherwise a right-adjoining non-empty column is used.
-
-    @author Kohei Yoshida (kohei@openoffice.org)
 
     @return No return value
 
@@ -1841,9 +1839,9 @@ bool ScViewFunc::SearchAndReplace( const SvxSearchItem* pSearchItem,
             if (bAddUndo)
             {
                 GetViewData().GetDocShell()->GetUndoManager()->AddUndoAction(
-                    new ScUndoReplace( GetViewData().GetDocShell(), *pUndoMark,
+                    o3tl::make_unique<ScUndoReplace>( GetViewData().GetDocShell(), *pUndoMark,
                                         nCol, nRow, nTab,
-                                        aUndoStr, pUndoDoc.release(), pSearchItem ) );
+                                        aUndoStr, std::move(pUndoDoc), pSearchItem ) );
             }
 
             if (nCommand == SvxSearchCmd::FIND_ALL || nCommand == SvxSearchCmd::REPLACE_ALL)
@@ -2101,7 +2099,7 @@ void ScViewFunc::Solve( const ScSolveParam& rParam )
                                                   VclMessageType::Question, VclButtonsType::YesNo, aMsgStr));
         xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0));
         xBox->set_default_response(RET_NO);
-        if (xBox->run() == RET_NO)
+        if (xBox->run() == RET_YES)
             EnterValue( nDestCol, nDestRow, nDestTab, nSolveResult );
 
         GetViewData().GetViewShell()->UpdateInputHandler( true );
@@ -2218,7 +2216,7 @@ void ScViewFunc::InsertTables(std::vector<OUString>& aNames, SCTAB nTab,
     {
         if (bRecord)
             pDocSh->GetUndoManager()->AddUndoAction(
-                        new ScUndoInsertTables( pDocSh, nTab, aNames));
+                        o3tl::make_unique<ScUndoInsertTables>( pDocSh, nTab, aNames));
 
         //    Update views
 
@@ -2246,7 +2244,7 @@ bool ScViewFunc::AppendTable( const OUString& rName, bool bRecord )
         SCTAB nTab = rDoc.GetTableCount()-1;
         if (bRecord)
             pDocSh->GetUndoManager()->AddUndoAction(
-                        new ScUndoInsertTab( pDocSh, nTab, true, rName));
+                        o3tl::make_unique<ScUndoInsertTab>( pDocSh, nTab, true, rName));
         GetViewData().InsertTab( nTab );
         SetTabNo( nTab, true );
         pDocSh->PostPaintExtras();
@@ -2332,11 +2330,11 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
         --nNewTab;
 
     bool bWasLinked = false;
-    ScDocument* pUndoDoc = nullptr;
-    ScRefUndoData* pUndoData = nullptr;
+    ScDocumentUniquePtr pUndoDoc;
+    std::unique_ptr<ScRefUndoData> pUndoData;
     if (bRecord)
     {
-        pUndoDoc = new ScDocument( SCDOCMODE_UNDO );
+        pUndoDoc.reset(new ScDocument( SCDOCMODE_UNDO ));
         SCTAB nCount = rDoc.GetTableCount();
 
         OUString aOldName;
@@ -2387,7 +2385,7 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
 
         rDoc.BeginDrawUndo();                          //  DeleteTab creates a SdrUndoDelPage
 
-        pUndoData = new ScRefUndoData( &rDoc );
+        pUndoData.reset(new ScRefUndoData( &rDoc ));
     }
 
     bool bDelDone = false;
@@ -2399,12 +2397,9 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
         if (rDoc.DeleteTab(TheTabs[i]))
         {
             bDelDone = true;
-            if( bVbaEnabled )
+            if( bVbaEnabled && bHasCodeName )
             {
-                if( bHasCodeName )
-                {
-                    VBA_DeleteModule( *pDocSh, sCodeName );
-                }
+                VBA_DeleteModule( *pDocSh, sCodeName );
             }
             pDocSh->Broadcast( ScTablesHint( SC_TAB_DELETED, TheTabs[i] ) );
         }
@@ -2412,8 +2407,8 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
     if (bRecord)
     {
         pDocSh->GetUndoManager()->AddUndoAction(
-                    new ScUndoDeleteTab( GetViewData().GetDocShell(), TheTabs,
-                                            pUndoDoc, pUndoData ));
+                    o3tl::make_unique<ScUndoDeleteTab>( GetViewData().GetDocShell(), TheTabs,
+                                            std::move(pUndoDoc), std::move(pUndoData) ));
     }
 
     if (bDelDone)
@@ -2436,11 +2431,6 @@ bool ScViewFunc::DeleteTables(const vector<SCTAB> &TheTabs, bool bRecord )
         pSfxApp->Broadcast( SfxHint( SfxHintId::ScTablesChanged ) );
         pSfxApp->Broadcast( SfxHint( SfxHintId::ScDbAreasChanged ) );
         pSfxApp->Broadcast( SfxHint( SfxHintId::ScAreaLinksChanged ) );
-    }
-    else
-    {
-        delete pUndoDoc;
-        delete pUndoData;
     }
     return bDelDone;
 }
@@ -2621,7 +2611,7 @@ void ScViewFunc::ImportTables( ScDocShell* pSrcShell,
     if (bUndo)
     {
         pDocSh->GetUndoManager()->AddUndoAction(
-                new ScUndoImportTab( pDocSh, nTab, nCount ) );
+                o3tl::make_unique<ScUndoImportTab>( pDocSh, nTab, nCount ) );
     }
 
     for (i=0; i<nInsCount; i++)
@@ -2782,7 +2772,7 @@ void ScViewFunc::MoveTable(
         {
             pDestDoc->GetName(nDestTab, sName);
             pDestShell->GetUndoManager()->AddUndoAction(
-                            new ScUndoImportTab( pDestShell, nDestTab,
+                            o3tl::make_unique<ScUndoImportTab>( pDestShell, nDestTab,
                                 static_cast<SCTAB>(TheTabs.size())));
 
         }
@@ -2972,14 +2962,14 @@ void ScViewFunc::MoveTable(
             if (bCopy)
             {
                 pDocShell->GetUndoManager()->AddUndoAction(
-                        new ScUndoCopyTab(
-                            pDocShell, pSrcTabs.release(), pDestTabs.release(), pDestNames.release()));
+                        o3tl::make_unique<ScUndoCopyTab>(
+                            pDocShell, std::move(pSrcTabs), std::move(pDestTabs), std::move(pDestNames)));
             }
             else
             {
                 pDocShell->GetUndoManager()->AddUndoAction(
-                        new ScUndoMoveTab(
-                            pDocShell, pSrcTabs.release(), pDestTabs.release(), pTabNames.release(), pDestNames.release()));
+                        o3tl::make_unique<ScUndoMoveTab>(
+                            pDocShell, std::move(pSrcTabs), std::move(pDestTabs), std::move(pTabNames), std::move(pDestNames)));
             }
         }
 
@@ -3027,7 +3017,7 @@ void ScViewFunc::ShowTable( const std::vector<OUString>& rNames )
     {
         if (bUndo)
         {
-            pDocSh->GetUndoManager()->AddUndoAction( new ScUndoShowHideTab( pDocSh, undoTabs, true ) );
+            pDocSh->GetUndoManager()->AddUndoAction( o3tl::make_unique<ScUndoShowHideTab>( pDocSh, undoTabs, true ) );
         }
         pDocSh->PostPaint(0,0,0,MAXCOL,MAXROW,MAXTAB, PaintPartFlags::Extras);
         pDocSh->SetDocumentModified();
@@ -3055,7 +3045,8 @@ void ScViewFunc::HideTable( const ScMarkData& rMark )
         ScMarkData::MarkedTabsType::const_iterator it;
         std::vector<SCTAB> undoTabs;
 
-        ScMarkData::MarkedTabsType selectedTabs = rMark.GetSelectedTabs();
+        // need to take a copy of selectedtabs since it is modified in the loop
+        const ScMarkData::MarkedTabsType selectedTabs = rMark.GetSelectedTabs();
         for (it=selectedTabs.begin(); it!=selectedTabs.end(); ++it)
         {
             nTab = *it;
@@ -3072,7 +3063,7 @@ void ScViewFunc::HideTable( const ScMarkData& rMark )
         }
         if (bUndo)
         {
-            pDocSh->GetUndoManager()->AddUndoAction( new ScUndoShowHideTab( pDocSh, undoTabs, false ) );
+            pDocSh->GetUndoManager()->AddUndoAction( o3tl::make_unique<ScUndoShowHideTab>( pDocSh, undoTabs, false ) );
         }
 
         //  Update views

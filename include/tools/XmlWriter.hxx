@@ -11,8 +11,11 @@
 #define INCLUDED_TOOLS_XMLWRITER_HXX
 
 #include <tools/toolsdllapi.h>
-#include <tools/stream.hxx>
+#include <rtl/ustring.hxx>
 #include <memory>
+#include <vector>
+
+class SvStream;
 
 namespace tools
 {
@@ -23,8 +26,8 @@ struct XmlWriterImpl;
  * all the internal libxml2 workings and uses types that are native for LO
  * development.
  *
- * The codepage used for XML is always "utf-8" and the output is indented so it
- * is easier to read.
+ * The codepage used for XML is always "utf-8" and the output is indented by
+ * default so it is easier to read.
  *
  */
 class TOOLS_DLLPUBLIC XmlWriter final
@@ -37,15 +40,18 @@ public:
 
     ~XmlWriter();
 
-    bool startDocument();
+    bool startDocument(sal_Int32 nIndent = 2);
     void endDocument();
 
     void startElement(const OString& sName);
+    void startElement(const OString& sPrefix, const OString& sName, const OString& sNamespaceUri);
     void endElement();
 
     void attribute(const OString& sTagName, const OString& aValue);
     void attribute(const OString& sTagName, const OUString& aValue);
     void attribute(const OString& sTagName, sal_Int32 aNumber);
+    void attributeBase64(const OString& sTagName, std::vector<sal_uInt8> const& rValueInBytes);
+    void attributeBase64(const OString& sTagName, std::vector<char> const& rValueInBytes);
 
     void content(const OString& sValue);
     void content(const OUString& sValue);

@@ -20,12 +20,11 @@
 #define INCLUDED_CUI_SOURCE_INC_SVXTOOLBARCONFIGPAGE_HXX
 
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/menubtn.hxx>
 #include <vcl/toolbox.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svtools/svmedit2.hxx>
 #include <svtools/svmedit.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -92,7 +91,7 @@ public:
 class SvxToolbarEntriesListBox final : public SvxMenuEntriesListBox
 {
     Size            m_aCheckBoxImageSizePixel;
-    SvLBoxButtonData*   m_pButtonData;
+    std::unique_ptr<SvLBoxButtonData> m_pButtonData;
     VclPtr<SvxConfigPage>  pPage;
 
     void            ChangeVisibility( SvTreeListEntry* pEntry );

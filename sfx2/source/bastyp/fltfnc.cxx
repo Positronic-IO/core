@@ -39,6 +39,7 @@
 #include <vcl/weld.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
@@ -62,6 +63,7 @@
 
 #include <svtools/sfxecode.hxx>
 #include <unotools/syslocale.hxx>
+#include <unotools/charclass.hxx>
 
 #include <sfx2/sfxhelp.hxx>
 #include <sfx2/docfilt.hxx>
@@ -118,7 +120,7 @@ static void CreateFilterArr()
     theSfxFilterListener::get();
 }
 
-inline OUString ToUpper_Impl( const OUString &rStr )
+static OUString ToUpper_Impl( const OUString &rStr )
 {
     return SvtSysLocale().GetCharClass().uppercase( rStr );
 }
@@ -126,7 +128,7 @@ inline OUString ToUpper_Impl( const OUString &rStr )
 class SfxFilterContainer_Impl
 {
 public:
-    OUString            aName;
+    OUString const      aName;
 
     explicit SfxFilterContainer_Impl( const OUString& rName )
         : aName( rName )
@@ -232,7 +234,7 @@ std::shared_ptr<const SfxFilter> SfxFilterContainer::GetDefaultFilter_Impl( cons
 class SfxFilterMatcher_Impl
 {
 public:
-    OUString     aName;
+    OUString const              aName;
     mutable SfxFilterList_Impl* pList;      // is created on demand
 
     void InitForIterating() const;
@@ -268,7 +270,7 @@ namespace
         // previously
         for (std::unique_ptr<SfxFilterMatcher_Impl>& aImpl : aImplArr)
             if (aImpl->aName == aName)
-                return *aImpl.get();
+                return *aImpl;
 
         // first Matcher created for this factory
         aImplArr.push_back(o3tl::make_unique<SfxFilterMatcher_Impl>(aName));
@@ -858,7 +860,7 @@ std::shared_ptr<const SfxFilter> SfxFilterMatcherIter::Next()
     helper to build own formatted string from given stringlist by
     using given separator
   ---------------------------------------------------------------*/
-OUString implc_convertStringlistToString( const uno::Sequence< OUString >& lList     ,
+static OUString implc_convertStringlistToString( const uno::Sequence< OUString >& lList     ,
                                                  sal_Unicode                                        cSeparator,
                                                  const OUString&                                    sPrefix   )
 {

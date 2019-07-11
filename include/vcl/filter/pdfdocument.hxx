@@ -51,9 +51,17 @@ class PDFNumberElement;
 /// A byte range in a PDF file.
 class VCL_DLLPUBLIC PDFElement
 {
+    bool m_bVisiting = false;
+    bool m_bParsing = false;
+
 public:
+    PDFElement() = default;
     virtual bool Read(SvStream& rStream) = 0;
     virtual ~PDFElement() = default;
+    void setVisiting(bool bVisiting) { m_bVisiting = bVisiting; }
+    bool alreadyVisiting() const { return m_bVisiting; }
+    void setParsing(bool bParsing) { m_bParsing = bParsing; }
+    bool alreadyParsing() const { return m_bParsing; }
 };
 
 /// Indirect object: something with a unique ID.
@@ -129,7 +137,7 @@ class VCL_DLLPUBLIC PDFArrayElement : public PDFElement
 {
     std::vector<PDFElement*> m_aElements;
     /// The object that contains this array.
-    PDFObjectElement* m_pObject;
+    PDFObjectElement* const m_pObject;
 
 public:
     PDFArrayElement(PDFObjectElement* pObject);
@@ -166,7 +174,7 @@ public:
 /// Stream object: a byte array with a known length.
 class VCL_DLLPUBLIC PDFStreamElement : public PDFElement
 {
-    size_t m_nLength;
+    size_t const m_nLength;
     sal_uInt64 m_nOffset;
     /// The byte array itself.
     SvMemoryStream m_aMemory;
@@ -184,15 +192,13 @@ class VCL_DLLPUBLIC PDFNameElement : public PDFElement
     OString m_aValue;
     /// Offset after the '/' token.
     sal_uInt64 m_nLocation = 0;
-    /// Length till the next token start.
-    sal_uInt64 m_nLength = 0;
 
 public:
     PDFNameElement();
     bool Read(SvStream& rStream) override;
     const OString& GetValue() const;
     sal_uInt64 GetLocation() const;
-    sal_uInt64 GetLength() const;
+    static sal_uInt64 GetLength() { return 0; }
 };
 
 /// Dictionary object: a set key-value pairs.

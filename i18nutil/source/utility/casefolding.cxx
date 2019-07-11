@@ -19,24 +19,27 @@
 
 #include <i18nutil/casefolding.hxx>
 #include "casefolding_data.h"
+#include <i18nutil/oneToOneMapping.hxx>
 #include <i18nutil/widthfolding.hxx>
 #include <i18nutil/transliteration.hxx>
+#include <com/sun/star/lang/Locale.hpp>
+#include <com/sun/star/uno/RuntimeException.hpp>
 
 using namespace com::sun::star::lang;
 using namespace com::sun::star::uno;
 
 namespace i18nutil {
 
-static Mapping mapping_03a3[] = {{0, 1, {0x03c2, 0, 0}},{0, 1, {0x03c3, 0, 0}}};
-static Mapping mapping_0307[] = {{0, 0, {0, 0, 0}},{0, 1, {0x0307, 0, 0}}};
-static Mapping mapping_004a[] = {{0, 2, {0x006a, 0x0307, 0}},{0, 1, {0x006a, 0, 0}}};
-static Mapping mapping_012e[] = {{0, 2, {0x012f, 0x0307, 0}},{0, 1, {0x012f, 0, 0}}};
-static Mapping mapping_00cc[] = {{0, 3, {0x0069, 0x0307, 0x0300}},{0, 1, {0x00ec, 0, 0}}};
-static Mapping mapping_00cd[] = {{0, 3, {0x0069, 0x0307, 0x0301}},{0, 1, {0x00ed, 0, 0}}};
-static Mapping mapping_0128[] = {{0, 3, {0x0069, 0x0307, 0x0303}},{0, 1, {0x0129, 0, 0}}};
-static Mapping mapping_0049[] = {{0, 2, {0x0069, 0x0307, 0}},{0, 1, {0x0131, 0, 0}},{0, 1, {0x0069, 0, 0}}};
-static Mapping mapping_0069[] = {{0, 1, {0x0130, 0, 0}},{0, 1, {0x0049, 0, 0}}};
-static Mapping mapping_0130[] = {{0, 1, {0x0069, 0, 0}},{0, 1, {0x0130, 0, 0}}};
+static const Mapping mapping_03a3[] = {{0, 1, {0x03c2, 0, 0}},{0, 1, {0x03c3, 0, 0}}};
+static const Mapping mapping_0307[] = {{0, 0, {0, 0, 0}},{0, 1, {0x0307, 0, 0}}};
+static const Mapping mapping_004a[] = {{0, 2, {0x006a, 0x0307, 0}},{0, 1, {0x006a, 0, 0}}};
+static const Mapping mapping_012e[] = {{0, 2, {0x012f, 0x0307, 0}},{0, 1, {0x012f, 0, 0}}};
+static const Mapping mapping_00cc[] = {{0, 3, {0x0069, 0x0307, 0x0300}},{0, 1, {0x00ec, 0, 0}}};
+static const Mapping mapping_00cd[] = {{0, 3, {0x0069, 0x0307, 0x0301}},{0, 1, {0x00ed, 0, 0}}};
+static const Mapping mapping_0128[] = {{0, 3, {0x0069, 0x0307, 0x0303}},{0, 1, {0x0129, 0, 0}}};
+static const Mapping mapping_0049[] = {{0, 2, {0x0069, 0x0307, 0}},{0, 1, {0x0131, 0, 0}},{0, 1, {0x0069, 0, 0}}};
+static const Mapping mapping_0069[] = {{0, 1, {0x0130, 0, 0}},{0, 1, {0x0049, 0, 0}}};
+static const Mapping mapping_0130[] = {{0, 1, {0x0069, 0, 0}},{0, 1, {0x0130, 0, 0}}};
 
 #define langIs(lang) (aLocale.Language == lang)
 
@@ -57,7 +60,7 @@ static bool cased_letter(sal_Unicode ch)
 // whenever there are more accents above.
 #define accent_above(ch) (((ch) >= 0x0300 && (ch) <= 0x0314) || ((ch) >= 0x033D && (ch) <= 0x0344) || (ch) == 0x0346 || ((ch) >= 0x034A && (ch) <= 0x034C))
 
-Mapping& casefolding::getConditionalValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 len, Locale const & aLocale, MappingType nMappingType)
+const Mapping& casefolding::getConditionalValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 len, Locale const & aLocale, MappingType nMappingType)
 {
         switch(str[pos]) {
         case 0x03a3:
@@ -86,9 +89,9 @@ Mapping& casefolding::getConditionalValue(const sal_Unicode* str, sal_Int32 pos,
         throw RuntimeException();
 }
 
-Mapping& casefolding::getValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 len, Locale const & aLocale, MappingType nMappingType)
+Mapping casefolding::getValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 len, Locale const & aLocale, MappingType nMappingType)
 {
-    static Mapping dummy = { 0, 1, { 0, 0, 0 } };
+    Mapping dummy = { 0, 1, { 0, 0, 0 } };
     sal_Int16 address = CaseMappingIndex[str[pos] >> 8];
 
     dummy.map[0] = str[pos];
@@ -120,7 +123,7 @@ Mapping& casefolding::getValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 
     return dummy;
 }
 
-inline bool
+static bool
 is_ja_voice_sound_mark(sal_Unicode& current, sal_Unicode next)
 {
         sal_Unicode c = 0;

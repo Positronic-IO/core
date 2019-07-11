@@ -27,6 +27,7 @@
 #include "constraintlistcontext.hxx"
 #include <oox/token/namespaces.hxx>
 #include <oox/token/tokens.hxx>
+#include <sal/log.hxx>
 
 using namespace ::oox::core;
 using namespace ::com::sun::star::uno;
@@ -66,10 +67,18 @@ public:
             {
                 case DGM_TOKEN( param ):
                 {
-                    const sal_Int32 nValTok = rAttribs.getToken( XML_val, 0 );
-                    mpNode->addParam(
-                        rAttribs.getToken( XML_type, 0 ),
-                        nValTok>0 ? nValTok : rAttribs.getInteger( XML_val, 0 ) );
+                    sal_Int32 nType = rAttribs.getToken(XML_type, 0);
+                    switch (nType)
+                    {
+                        case XML_ar:
+                            mpNode->setAspectRatio(rAttribs.getDouble(XML_val, 0));
+                            break;
+                        default:
+                            const sal_Int32 nValTok = rAttribs.getToken(XML_val, 0);
+                            mpNode->addParam(nType, nValTok > 0 ? nValTok
+                                                                : rAttribs.getInteger(XML_val, 0));
+                            break;
+                    }
                     break;
                 }
                 default:
@@ -105,14 +114,14 @@ public:
             {
                 // CT_When
                 ConditionAtomPtr pNode( new ConditionAtom(mpNode->getLayoutNode(), false, rAttribs.getFastAttributeList()) );
-                mpNode->addChild( pNode );
+                LayoutAtom::connect(mpNode, pNode);
                 return new IfContext( *this, rAttribs, pNode );
             }
             case DGM_TOKEN( else ):
             {
                 // CT_Otherwise
                 ConditionAtomPtr pNode( new ConditionAtom(mpNode->getLayoutNode(), true, rAttribs.getFastAttributeList()) );
-                mpNode->addChild( pNode );
+                LayoutAtom::connect(mpNode, pNode);
                 return new IfContext( *this, rAttribs, pNode );
             }
             default:
@@ -182,7 +191,7 @@ LayoutNodeContext::onCreateContext( ::sal_Int32 aElement,
     case DGM_TOKEN( layoutNode ):
     {
         LayoutNodePtr pNode( new LayoutNode(mpNode->getLayoutNode().getDiagram()) );
-        mpNode->addChild( pNode );
+        LayoutAtom::connect(mpNode, pNode);
         pNode->setChildOrder( rAttribs.getToken( XML_chOrder, XML_b ) );
         pNode->setMoveWith( rAttribs.getString( XML_moveWith ).get() );
         pNode->setStyleLabel( rAttribs.getString( XML_styleLbl ).get() );
@@ -209,8 +218,10 @@ LayoutNodeContext::onCreateContext( ::sal_Int32 aElement,
 
         pShape->setDiagramRotation(rAttribs.getInteger(XML_rot, 0) * PER_DEGREE);
 
+        pShape->setZOrderOff(rAttribs.getInteger(XML_zOrderOff, 0));
+
         ShapeAtomPtr pAtom( new ShapeAtom(mpNode->getLayoutNode(), pShape) );
-        mpNode->addChild( pAtom );
+        LayoutAtom::connect(mpNode, pAtom);
         return new ShapeContext( *this, ShapePtr(), pShape );
     }
     case DGM_TOKEN( extLst ):
@@ -219,21 +230,22 @@ LayoutNodeContext::onCreateContext( ::sal_Int32 aElement,
     {
         // CT_Algorithm
         AlgAtomPtr pAtom( new AlgAtom(mpNode->getLayoutNode()) );
-        mpNode->addChild( pAtom );
+        LayoutAtom::connect(mpNode, pAtom);
+        mpNode->getLayoutNode().setAlgAtom(pAtom);
         return new AlgorithmContext( *this, rAttribs, pAtom );
     }
     case DGM_TOKEN( choose ):
     {
         // CT_Choose
         LayoutAtomPtr pAtom( new ChooseAtom(mpNode->getLayoutNode()) );
-        mpNode->addChild( pAtom );
+        LayoutAtom::connect(mpNode, pAtom);
         return new ChooseContext( *this, rAttribs, pAtom );
     }
     case DGM_TOKEN( forEach ):
     {
         // CT_ForEach
         ForEachAtomPtr pAtom( new ForEachAtom(mpNode->getLayoutNode(), rAttribs.getFastAttributeList()) );
-        mpNode->addChild( pAtom );
+        LayoutAtom::connect(mpNode, pAtom);
         return new ForEachContext( *this, rAttribs, pAtom );
     }
     case DGM_TOKEN( constrLst ):

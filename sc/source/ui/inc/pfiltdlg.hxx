@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_PFILTDLG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_PFILTDLG_HXX
 
-#include <vcl/morebtn.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/dialog.hxx>
@@ -30,12 +29,11 @@
 #include <queryparam.hxx>
 #include <array>
 #include <memory>
-#include <vector>
 
 class ScViewData;
 class ScDocument;
 class ScQueryItem;
-class ScTypedStrData;
+class SfxItemSet;
 struct ScFilterEntries;
 
 class ScPivotFilterDlg : public ModalDialog
@@ -73,10 +71,10 @@ private:
 
     const sal_uInt16    nWhichQuery;
     const ScQueryParam  theQueryData;
-    ScQueryItem*        pOutItem;
+    std::unique_ptr<ScQueryItem> pOutItem;
     ScViewData*         pViewData;
     ScDocument*         pDoc;
-    SCTAB               nSrcTab;
+    SCTAB const         nSrcTab;
 
     VclPtr<ComboBox>           aValueEdArr[3];
     VclPtr<ListBox>            aFieldLbArr[3];

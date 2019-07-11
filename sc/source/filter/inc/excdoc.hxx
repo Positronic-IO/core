@@ -20,16 +20,17 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_INC_EXCDOC_HXX
 #define INCLUDED_SC_SOURCE_FILTER_INC_EXCDOC_HXX
 
-#include "excrecds.hxx"
 #include "xeroot.hxx"
-#include "root.hxx"
-#include "xeescher.hxx"
+#include "xerecord.hxx"
+#include "excrecds.hxx"
 #include <memory>
 
 // Forwards -
 
 class SvStream;
-
+class XclExpNote;
+class XclExpStream;
+class XclExpXmlStream;
 class XclExpChangeTrack;
 
 // class ExcTable -
@@ -47,8 +48,8 @@ private:
     XclExpRecordList<>          aRecList;
     XclExpCellTableRef          mxCellTable;
 
-    SCTAB                       mnScTab;    // table number SC document
-    sal_uInt16                  nExcTab;    // table number Excel document
+    SCTAB const                 mnScTab;    // table number SC document
+    sal_uInt16 const            nExcTab;    // table number Excel document
 
     XclExpNoteListRef           mxNoteList;
 

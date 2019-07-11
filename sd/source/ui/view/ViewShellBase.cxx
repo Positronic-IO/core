@@ -36,6 +36,7 @@
 #include <ViewTabBar.hxx>
 #include <sfx2/event.hxx>
 #include <drawdoc.hxx>
+#include <sdpage.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/printer.hxx>
@@ -51,6 +52,7 @@
 #include <DocumentRenderer.hxx>
 #include <sdattr.hxx>
 #include <optsitem.hxx>
+#include <sdmod.hxx>
 
 #include <com/sun/star/awt/XWindow.hpp>
 #include <com/sun/star/document/XViewDataSupplier.hpp>
@@ -62,6 +64,7 @@
 #include <com/sun/star/drawing/framework/ResourceId.hpp>
 #include <framework/FrameworkHelper.hxx>
 
+#include <sal/log.hxx>
 #include <rtl/ref.hxx>
 #include <sfx2/msg.hxx>
 #include <sfx2/objface.hxx>
@@ -161,7 +164,7 @@ public:
         bool bOuterResize);
 
     /** Show or hide the specified pane.  The visibility state is taken
-        fromthe given request.
+        from the given request.
         @param rRequest
             The request determines the new visibility state.  The state can
             either be toggled or be set to a given value.
@@ -380,7 +383,7 @@ std::shared_ptr<ViewShell> ViewShellBase::GetMainViewShell() const
     std::shared_ptr<ViewShell> pMainViewShell (
         framework::FrameworkHelper::Instance(*const_cast<ViewShellBase*>(this))
             ->GetViewShell(framework::FrameworkHelper::msCenterPaneURL));
-    if (pMainViewShell.get() == nullptr)
+    if (pMainViewShell == nullptr)
         pMainViewShell = framework::FrameworkHelper::Instance(*const_cast<ViewShellBase*>(this))
             ->GetViewShell(framework::FrameworkHelper::msFullScreenPaneURL);
     return pMainViewShell;
@@ -395,8 +398,7 @@ ViewShellBase* ViewShellBase::GetViewShellBase (SfxViewFrame const * pViewFrame)
         // Get the view shell for the frame and cast it to
         // sd::ViewShellBase.
         SfxViewShell* pSfxViewShell = pViewFrame->GetViewShell();
-        if (pSfxViewShell!=nullptr && dynamic_cast< ::sd::ViewShellBase *>( pSfxViewShell ) !=  nullptr)
-            pBase = static_cast<ViewShellBase*>(pSfxViewShell);
+        pBase = dynamic_cast< ::sd::ViewShellBase *>( pSfxViewShell );
     }
 
     return pBase;
@@ -531,7 +533,7 @@ Reference<view::XRenderable> ViewShellBase::GetRenderable()
 
 SfxPrinter* ViewShellBase::GetPrinter (bool bCreate)
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
 
     return GetDocShell()->GetPrinter (bCreate);
 }
@@ -540,7 +542,7 @@ sal_uInt16 ViewShellBase::SetPrinter (
     SfxPrinter* pNewPrinter,
     SfxPrinterChangeFlags nDiffFlags)
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
 
     GetDocShell()->SetPrinter(pNewPrinter);
 
@@ -691,7 +693,7 @@ void ViewShellBase::WriteUserDataSequence (
     // Forward call to main sub shell.
     ViewShell* pShell = GetMainViewShell().get();
     if (pShell != nullptr)
-        pShell->WriteUserDataSequence (rSequence, false);
+        pShell->WriteUserDataSequence (rSequence);
 }
 
 void ViewShellBase::ReadUserDataSequence (
@@ -701,7 +703,7 @@ void ViewShellBase::ReadUserDataSequence (
     ViewShell* pShell = GetMainViewShell().get();
     if (pShell != nullptr)
     {
-        pShell->ReadUserDataSequence (rSequence, true/*bBrowse*/);
+        pShell->ReadUserDataSequence (rSequence);
 
         // For certain shell types ReadUserDataSequence may have changed the
         // type to another one.  Make sure that the center pane shows the
@@ -919,8 +921,8 @@ OUString ViewShellBase::GetInitialViewShellType()
 
 std::shared_ptr<tools::EventMultiplexer> const & ViewShellBase::GetEventMultiplexer()
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
-    OSL_ASSERT(mpImpl->mpEventMultiplexer.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
+    OSL_ASSERT(mpImpl->mpEventMultiplexer != nullptr);
 
     return mpImpl->mpEventMultiplexer;
 }
@@ -932,37 +934,37 @@ const ::tools::Rectangle& ViewShellBase::getClientRectangle() const
 
 std::shared_ptr<ToolBarManager> const & ViewShellBase::GetToolBarManager() const
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
-    OSL_ASSERT(mpImpl->mpToolBarManager.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
+    OSL_ASSERT(mpImpl->mpToolBarManager != nullptr);
 
     return mpImpl->mpToolBarManager;
 }
 
 std::shared_ptr<FormShellManager> const & ViewShellBase::GetFormShellManager() const
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
-    OSL_ASSERT(mpImpl->mpFormShellManager.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
+    OSL_ASSERT(mpImpl->mpFormShellManager != nullptr);
 
     return mpImpl->mpFormShellManager;
 }
 
 DrawController& ViewShellBase::GetDrawController() const
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
 
     return *mpImpl->mpController;
 }
 
 void ViewShellBase::SetViewTabBar (const ::rtl::Reference<ViewTabBar>& rViewTabBar)
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
 
     mpImpl->mpViewTabBar = rViewTabBar;
 }
 
 vcl::Window* ViewShellBase::GetViewWindow()
 {
-    OSL_ASSERT(mpImpl.get()!=nullptr);
+    OSL_ASSERT(mpImpl != nullptr);
 
     return mpImpl->mpViewWindow.get();
 }
@@ -1408,7 +1410,7 @@ void CurrentPageSetter::operator() (bool)
     }
 }
 
-} // end of anonymouse namespace
+} // end of anonymous namespace
 
 //===== FocusForwardingWindow =================================================
 
@@ -1437,7 +1439,7 @@ void FocusForwardingWindow::dispose()
 void FocusForwardingWindow::KeyInput (const KeyEvent& rKEvt)
 {
     std::shared_ptr<ViewShell> pViewShell = mrBase.GetMainViewShell();
-    if (pViewShell.get() != nullptr)
+    if (pViewShell != nullptr)
     {
         vcl::Window* pWindow = pViewShell->GetActiveWindow();
         if (pWindow != nullptr)
@@ -1454,7 +1456,7 @@ void FocusForwardingWindow::KeyInput (const KeyEvent& rKEvt)
 void FocusForwardingWindow::Command (const CommandEvent& rEvent)
 {
     std::shared_ptr<ViewShell> pViewShell = mrBase.GetMainViewShell();
-    if (pViewShell.get() != nullptr)
+    if (pViewShell != nullptr)
     {
         vcl::Window* pWindow = pViewShell->GetActiveWindow();
         if (pWindow != nullptr)
@@ -1464,7 +1466,7 @@ void FocusForwardingWindow::Command (const CommandEvent& rEvent)
     }
 }
 
-} // end of anonymouse namespace
+} // end of anonymous namespace
 
 } // end of namespace sd
 

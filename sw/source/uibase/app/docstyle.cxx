@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cstdlib>
 
@@ -68,6 +69,7 @@
 #include <svx/xflftrit.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/drawitem.hxx>
+#include <o3tl/make_unique.hxx>
 
 // The Format names in the list of all names have the
 // following family as their first character:
@@ -91,7 +93,7 @@ using namespace com::sun::star;
 class SwImplShellAction
 {
     SwWrtShell* pSh;
-    CurrShell* pCurrSh;
+    std::unique_ptr<CurrShell> pCurrSh;
 public:
     explicit SwImplShellAction( SwDoc& rDoc );
     ~SwImplShellAction() COVERITY_NOEXCEPT_FALSE;
@@ -100,7 +102,6 @@ public:
 };
 
 SwImplShellAction::SwImplShellAction( SwDoc& rDoc )
-    : pCurrSh( nullptr )
 {
     if( rDoc.GetDocShell() )
         pSh = rDoc.GetDocShell()->GetWrtShell();
@@ -109,7 +110,7 @@ SwImplShellAction::SwImplShellAction( SwDoc& rDoc )
 
     if( pSh )
     {
-        pCurrSh = new CurrShell( pSh );
+        pCurrSh.reset( new CurrShell( pSh ) );
         pSh->StartAllAction();
     }
 }
@@ -119,7 +120,7 @@ SwImplShellAction::~SwImplShellAction() COVERITY_NOEXCEPT_FALSE
     if( pCurrSh )
     {
         pSh->EndAllAction();
-        delete pCurrSh;
+        pCurrSh.reset();
     }
 }
 
@@ -827,7 +828,7 @@ OUString  SwDocStyleSheet::GetDescription(MapUnit eUnit)
             GetItemSet();
 
         SfxItemIter aIter( *pSet );
-        OUString aDesc;
+        OUStringBuffer aDesc;
 
         for (const SfxPoolItem* pItem = aIter.FirstItem(); pItem; pItem = aIter.NextItem())
         {
@@ -849,14 +850,14 @@ OUString  SwDocStyleSheet::GetDescription(MapUnit eUnit)
                                 *pItem, eUnit, aItemPresentation, aIntlWrapper ) )
                         {
                             if ( !aDesc.isEmpty() && !aItemPresentation.isEmpty() )
-                                aDesc += sPlus;
-                            aDesc += aItemPresentation;
+                                aDesc.append(sPlus);
+                            aDesc.append(aItemPresentation);
                         }
                     }
                 }
             }
         }
-        return aDesc;
+        return aDesc.makeStringAndClear();
     }
 
     if ( SfxStyleFamily::Frame == nFamily || SfxStyleFamily::Para == nFamily || SfxStyleFamily::Char == nFamily )
@@ -865,7 +866,7 @@ OUString  SwDocStyleSheet::GetDescription(MapUnit eUnit)
             GetItemSet();
 
         SfxItemIter aIter( *pSet );
-        OUString aDesc;
+        OUStringBuffer aDesc;
         OUString sPageNum;
         OUString sModel;
         OUString sBreak;
@@ -988,8 +989,8 @@ OUString  SwDocStyleSheet::GetDescription(MapUnit eUnit)
                             if(bIsDefault)
                             {
                                 if ( !aDesc.isEmpty() && !aItemPresentation.isEmpty() )
-                                    aDesc += sPlus;
-                                aDesc += aItemPresentation;
+                                    aDesc.append(sPlus);
+                                aDesc.append(aItemPresentation);
                             }
                         }
                     }
@@ -1000,20 +1001,20 @@ OUString  SwDocStyleSheet::GetDescription(MapUnit eUnit)
         if (!sModel.isEmpty())
         {
             if (!aDesc.isEmpty())
-                aDesc += sPlus;
-            aDesc += SwResId(STR_PAGEBREAK) + sPlus + sModel;
+                aDesc.append(sPlus);
+            aDesc.append(SwResId(STR_PAGEBREAK)).append(sPlus).append(sModel);
             if (sPageNum != "0")
             {
-                aDesc += sPlus + SwResId(STR_PAGEOFFSET) + sPageNum;
+                aDesc.append(sPlus).append(SwResId(STR_PAGEOFFSET)).append(sPageNum);
             }
         }
         else if (!sBreak.isEmpty()) // Break can be valid only when NO Model
         {
             if (!aDesc.isEmpty())
-                aDesc += sPlus;
-            aDesc += sBreak;
+                aDesc.append(sPlus);
+            aDesc.append(sBreak);
         }
-        return aDesc;
+        return aDesc.makeStringAndClear();
     }
 
     if( SfxStyleFamily::Pseudo == nFamily )
@@ -2414,7 +2415,7 @@ SfxStyleSheetBase&   SwDocStyleSheetPool::Make( const OUString&   rName,
     mxStyleSheet->SetPhysical(true);
     mxStyleSheet->Create();
 
-    return *mxStyleSheet.get();
+    return *mxStyleSheet;
 }
 
 SfxStyleSheetBase*   SwDocStyleSheetPool::Create( const SfxStyleSheetBase& /*rOrg*/)
@@ -2430,9 +2431,9 @@ SfxStyleSheetBase*   SwDocStyleSheetPool::Create( const OUString &,
     return nullptr;
 }
 
-std::shared_ptr<SfxStyleSheetIterator> SwDocStyleSheetPool::CreateIterator( SfxStyleFamily eFam, SfxStyleSearchBits _nMask )
+std::unique_ptr<SfxStyleSheetIterator> SwDocStyleSheetPool::CreateIterator( SfxStyleFamily eFam, SfxStyleSearchBits _nMask )
 {
-    return std::shared_ptr<SfxStyleSheetIterator>(new SwStyleSheetIterator( this, eFam, _nMask ));
+    return o3tl::make_unique<SwStyleSheetIterator>( this, eFam, _nMask );
 }
 
 void SwDocStyleSheetPool::dispose()
@@ -2922,8 +2923,10 @@ SfxStyleSheetBase*  SwStyleSheetIterator::First()
                 while( *pPoolIds )
                 {
                     if( !bIsSearchUsed || rDoc.getIDocumentStylePoolAccess().IsPoolTextCollUsed( *pPoolIds ) )
-                        aLst.Append( cPARA,
-                            s = SwStyleNameMapper::GetUIName( *pPoolIds, s ));
+                    {
+                        s = SwStyleNameMapper::GetUIName( *pPoolIds, s );
+                        aLst.Append( cPARA, s);
+                    }
                     ++pPoolIds;
                 }
             }

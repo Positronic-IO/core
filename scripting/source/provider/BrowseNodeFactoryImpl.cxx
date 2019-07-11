@@ -36,6 +36,7 @@
 #include <com/sun/star/document/XScriptInvocationContext.hpp>
 
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include "BrowseNodeFactoryImpl.hxx"
 #include "MasterScriptProvider.hxx"
@@ -194,11 +195,10 @@ public:
         Sequence<  Reference< browse::XBrowseNode > > children( m_hBNA->size() );
         sal_Int32 index = 0;
 
-        auto it = m_vStr.begin();
-
-        for ( ; it != m_vStr.end(); ++it, index++ )
+        for ( auto& str : m_vStr )
         {
-            children[ index ].set( m_hBNA->find( *it )->second );
+            children[ index ].set( m_hBNA->find( str )->second );
+            ++index;
         }
 
         return children;

@@ -23,6 +23,7 @@
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <svx/svxids.hrc>
+#include <osl/diagnose.h>
 
 Color SvxDefaultColorOptPage::GetSelectEntryColor() const
 {
@@ -47,23 +48,20 @@ void SvxDefaultColorOptPage::InsertColorEntry(const XColorEntry& rEntry, sal_Int
     xDevice->SetFillColor(rColor);
     xDevice->SetLineColor(rStyleSettings.GetDisableColor());
     xDevice->DrawRect(aRect);
-    Bitmap aBitmap(xDevice->GetBitmap(Point(0, 0), xDevice->GetOutputSize()));
+    BitmapEx aBitmap(xDevice->GetBitmapEx(Point(0, 0), xDevice->GetOutputSize()));
 
     nPos = m_pLbChartColors->InsertEntry(rStr, Image(aBitmap), nPos);
 
-    if (nPos != LISTBOX_ERROR)
+    if ( static_cast<size_t>(nPos) < aColorList.size() )
     {
-        if ( static_cast<size_t>(nPos) < aColorList.size() )
-        {
-            ImpColorList::iterator it = aColorList.begin();
-            std::advance( it, nPos );
-            aColorList.insert( it, rColor );
-        }
-        else
-        {
-            aColorList.push_back( rColor );
-            nPos = aColorList.size() - 1;
-        }
+        ImpColorList::iterator it = aColorList.begin();
+        std::advance( it, nPos );
+        aColorList.insert( it, rColor );
+    }
+    else
+    {
+        aColorList.push_back( rColor );
+        nPos = aColorList.size() - 1;
     }
 }
 
@@ -135,20 +133,20 @@ SvxDefaultColorOptPage::SvxDefaultColorOptPage(vcl::Window* pParent, const SfxIt
     m_pValSetColorBox->SetExtraSpacing( 0 );
     m_pValSetColorBox->Show();
 
-    pChartOptions = new SvxChartOptions;
+    pChartOptions.reset(new SvxChartOptions);
     pColorList = XColorList::CreateStdColorList();
 
     const SfxPoolItem* pItem = nullptr;
     if ( rInAttrs.GetItemState( SID_SCH_EDITOPTIONS, false, &pItem ) == SfxItemState::SET )
     {
-        pColorConfig = static_cast< SvxChartColorTableItem* >(pItem->Clone());
+        pColorConfig.reset(static_cast< SvxChartColorTableItem* >(pItem->Clone()));
     }
     else
     {
         SvxChartColorTable aTable;
         aTable.useDefault();
-        pColorConfig = new SvxChartColorTableItem( SID_SCH_EDITOPTIONS, aTable );
-        pColorConfig->SetOptions( pChartOptions );
+        pColorConfig.reset(new SvxChartColorTableItem( SID_SCH_EDITOPTIONS, aTable ));
+        pColorConfig->SetOptions( pChartOptions.get() );
     }
 
     Construct();
@@ -167,10 +165,8 @@ void SvxDefaultColorOptPage::dispose()
         pChartOptions->SetDefaultColors( pColorConfig->GetColorList() );
         pChartOptions->Commit();
 
-        delete pColorConfig;
-        pColorConfig = nullptr;
-        delete pChartOptions;
-        pChartOptions = nullptr;
+        pColorConfig.reset();
+        pChartOptions.reset();
     }
     m_pLbChartColors.clear();
     m_pValSetColorBox.clear();
@@ -198,7 +194,7 @@ VclPtr<SfxTabPage> SvxDefaultColorOptPage::Create( TabPageParent pParent, const 
 bool SvxDefaultColorOptPage::FillItemSet( SfxItemSet* rOutAttrs )
 {
     if( pColorConfig )
-        rOutAttrs->Put( *static_cast< SfxPoolItem* >(pColorConfig) );
+        rOutAttrs->Put( *pColorConfig );
 
     return true;
 }
@@ -272,7 +268,7 @@ IMPL_LINK_NOARG(SvxDefaultColorOptPage, AddChartColor, Button*, void)
     {
         Color const black( 0x00, 0x00, 0x00 );
 
-        pColorConfig->GetColorList().append (XColorEntry ( black, pColorConfig->GetColorList().getDefaultName(pColorConfig->GetColorList().size())));
+        pColorConfig->GetColorList().append (XColorEntry ( black, SvxChartColorTable::getDefaultName(pColorConfig->GetColorList().size())));
 
         FillBoxChartColorLB();
 

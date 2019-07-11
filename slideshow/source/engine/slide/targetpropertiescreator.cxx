@@ -25,6 +25,7 @@
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/animations/AnimationNodeType.hpp>
 #include <com/sun/star/animations/XAnimate.hpp>
+#include <comphelper/sequence.hxx>
 
 #include <unordered_map>
 #include <vector>
@@ -320,10 +321,10 @@ namespace internal
         private:
             XShapeHash&                         mrShapeHash;
             uno::Reference< drawing::XShape >   mxTargetShape;
-            sal_Int16                           mnParagraphIndex;
+            sal_Int16 const                     mnParagraphIndex;
 
             // get initial or final state
-            bool                                mbInitial;
+            bool const                          mbInitial;
         };
     }
 

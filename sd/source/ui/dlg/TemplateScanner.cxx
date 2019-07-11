@@ -21,8 +21,8 @@
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/documentconstants.hxx>
-#include <comphelper/string.hxx>
 
+#include <o3tl/make_unique.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <sfx2/doctempl.hxx>
@@ -54,8 +54,8 @@ public:
           msContentIdentifier(rsContentIdentifier),
           mxFolderEnvironment(rxFolderEnvironment)
     { }
-    int mnPriority;
-    OUString msContentIdentifier;
+    int const mnPriority;
+    OUString const msContentIdentifier;
     //    Reference<sdbc::XResultSet> mxFolderResultSet;
     Reference<css::ucb::XCommandEnvironment> mxFolderEnvironment;
 
@@ -275,7 +275,7 @@ TemplateScanner::State TemplateScanner::ScanFolder()
 {
     State eNextState (ERROR);
 
-    if (mpFolderDescriptors->size() > 0)
+    if (!mpFolderDescriptors->empty())
     {
         FolderDescriptor aDescriptor (*mpFolderDescriptors->begin());
         mpFolderDescriptors->erase(mpFolderDescriptors->begin());

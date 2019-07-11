@@ -22,6 +22,7 @@
 
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/uno/Sequence.hxx>
 #include <vcl/graph.hxx>
 #include <svx/svdorect.hxx>
 #include <vcl/GraphicObject.hxx>
@@ -84,8 +85,8 @@ private:
     friend class SdrExchangeView; // Only for a ForceSwapIn() call.
     friend class SdrGraphicLink;
 
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     void ImpSetAttrToGrafInfo(); // Copy values from the pool
     GraphicAttr aGrafInfo;
@@ -101,9 +102,6 @@ private:
     // Flag for allowing text animation. Default is true.
     bool mbGrafAnimationAllowed:1;
 
-    // #i25616#
-    bool mbInsidePaint:1;
-
     bool mbIsSignatureLine;
     OUString maSignatureLineId;
     OUString maSignatureLineSuggestedSignerName;
@@ -112,11 +110,11 @@ private:
     OUString maSignatureLineSigningInstructions;
     bool mbIsSignatureLineShowSignDate;
     bool mbIsSignatureLineCanAddComment;
+    bool mbSignatureLineIsSigned;
     css::uno::Reference<css::graphic::XGraphic> mpSignatureLineUnsignedGraphic;
 
     void                    ImpRegisterLink();
     void                    ImpDeregisterLink();
-    bool                    ImpUpdateGraphicLink( bool bAsynchron = true ) const;
     void                    ImpSetLinkedGraphic( const Graphic& rGraphic );
                             DECL_LINK( ImpSwapHdl, const GraphicObject*, SvStream* );
                             DECL_LINK( ReplacementSwapHdl, const GraphicObject*, SvStream* );
@@ -152,7 +150,6 @@ public:
     // Keep ATM for SD.
     bool IsAnimated() const;
     bool IsEPS() const;
-    bool IsSwappedOut() const;
 
     MapMode          GetGrafPrefMapMode() const;
     Size             GetGrafPrefSize() const;
@@ -170,24 +167,20 @@ public:
     bool IsLinkedGraphic() const;
 
     const OUString& GetFileName() const { return aFileName;}
-    const OUString& GetFilterName() const { return aFilterName;}
 
     void                    StartAnimation();
 
     virtual void            TakeObjInfo(SdrObjTransformInfoRec& rInfo) const override;
-    virtual sal_uInt16          GetObjIdentifier() const override;
+    virtual sal_uInt16      GetObjIdentifier() const override;
 
     virtual OUString        TakeObjNameSingul() const override;
     virtual OUString        TakeObjNamePlural() const override;
-
-    // #i25616#
-    virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
 
     virtual SdrGrafObj* CloneSdrObject(SdrModel& rTargetModel) const override;
     SdrGrafObj&             operator=(const SdrGrafObj& rObj);
 
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl*         GetHdl(sal_uInt32 nHdlNum) const override;
+    virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     virtual void            NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact) override;
     virtual void            NbcMirror(const Point& rRef1, const Point& rRef2) override;
@@ -197,10 +190,16 @@ public:
 
     bool                    HasGDIMetaFile() const;
 
-    virtual void            SetPage(SdrPage* pNewPage) override;
+    // react on model/page change
+    virtual void handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage) override;
 
     bool isEmbeddedVectorGraphicData() const;
     GDIMetaFile getMetafileFromEmbeddedVectorGraphicData() const;
+
+    bool isEmbeddedPdfData() const;
+    std::shared_ptr<css::uno::Sequence<sal_Int8>> const & getEmbeddedPdfData() const;
+    /// Returns the page number of the embedded data (typically to re-render or import it).
+    sal_Int32 getEmbeddedPageNumber() const;
 
     virtual SdrObject*      DoConvertToPolyObj(bool bBezier, bool bAddText) const override;
 
@@ -282,6 +281,8 @@ public:
     {
         mpSignatureLineUnsignedGraphic = rGraphic;
     };
+    bool isSignatureLineSigned() const { return mbSignatureLineIsSigned; };
+    void setSignatureLineIsSigned(bool bIsSigned) { mbSignatureLineIsSigned = bIsSigned; }
 };
 
 #endif // INCLUDED_SVX_SVDOGRAF_HXX

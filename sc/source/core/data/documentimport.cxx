@@ -13,7 +13,6 @@
 #include <column.hxx>
 #include <formulacell.hxx>
 #include <docoptio.hxx>
-#include <globalnames.hxx>
 #include <mtvelements.hxx>
 #include <tokenarray.hxx>
 #include <stringutil.hxx>
@@ -22,10 +21,13 @@
 #include <listenercontext.hxx>
 #include <attarray.hxx>
 #include <sharedformula.hxx>
+#include <bcaslot.hxx>
+#include <scopetools.hxx>
 
 #include <svl/sharedstringpool.hxx>
 #include <svl/languageoptions.hxx>
 #include <o3tl/make_unique.hxx>
+#include <unotools/configmgr.hxx>
 
 namespace {
 
@@ -161,7 +163,7 @@ bool ScDocumentImport::appendSheet(const OUString& rName)
     if (!ValidTab(nTabCount))
         return false;
 
-    mpImpl->mrDoc.maTabs.push_back(new ScTable(&mpImpl->mrDoc, nTabCount, rName));
+    mpImpl->mrDoc.maTabs.emplace_back(new ScTable(&mpImpl->mrDoc, nTabCount, rName));
     return true;
 }
 
@@ -173,7 +175,7 @@ void ScDocumentImport::setSheetName(SCTAB nTab, const OUString& rName)
 void ScDocumentImport::setOriginDate(sal_uInt16 nYear, sal_uInt16 nMonth, sal_uInt16 nDay)
 {
     if (!mpImpl->mrDoc.pDocOptions)
-        mpImpl->mrDoc.pDocOptions = new ScDocOptions;
+        mpImpl->mrDoc.pDocOptions.reset( new ScDocOptions );
 
     mpImpl->mrDoc.pDocOptions->SetDate(nDay, nMonth, nYear);
 }
@@ -381,6 +383,9 @@ void ScDocumentImport::setMatrixCells(
     sc::ColumnBlockPosition* pBlockPos = mpImpl->getBlockPosition(rBasePos.Tab(), rBasePos.Col());
 
     if (!pBlockPos)
+        return;
+
+    if (utl::ConfigManager::IsFuzzing()) //just too slow
         return;
 
     sc::CellStoreType& rCells = pTab->aCol[rBasePos.Col()].maCells;
@@ -592,7 +597,7 @@ class CellStoreInitializer
     {
         sc::CellTextAttrStoreType maAttrs;
         sc::CellTextAttrStoreType::iterator miPos;
-        SvtScriptType mnScriptNumeric;
+        SvtScriptType const mnScriptNumeric;
 
         explicit Impl(const SvtScriptType nScriptNumeric)
             : maAttrs(MAXROWCOUNT), miPos(maAttrs.begin()), mnScriptNumeric(nScriptNumeric)
@@ -600,8 +605,8 @@ class CellStoreInitializer
     };
 
     ScDocumentImportImpl& mrDocImpl;
-    SCTAB mnTab;
-    SCCOL mnCol;
+    SCTAB const mnTab;
+    SCCOL const mnCol;
 
 public:
     CellStoreInitializer( ScDocumentImportImpl& rDocImpl, SCTAB nTab, SCCOL nCol ) :
@@ -718,6 +723,56 @@ void ScDocumentImport::initColumn(ScColumn& rCol)
     aFunc.swap(rCol.maCellTextAttrs);
 
     rCol.CellStorageModified();
+}
+
+namespace {
+
+class CellStoreAfterImportBroadcaster
+{
+public:
+
+    CellStoreAfterImportBroadcaster() {}
+
+    void operator() (const sc::CellStoreType::value_type& node)
+    {
+        if (node.type == sc::element_type_formula)
+        {
+            // Broadcast all formula cells marked for recalc.
+            ScFormulaCell** pp = &sc::formula_block::at(*node.data, 0);
+            ScFormulaCell** ppEnd = pp + node.size;
+            for (; pp != ppEnd; ++pp)
+            {
+                if ((*pp)->GetCode()->IsRecalcModeMustAfterImport())
+                    (*pp)->SetDirty();
+            }
+        }
+    }
+};
+
+}
+
+void ScDocumentImport::broadcastRecalcAfterImport()
+{
+    sc::AutoCalcSwitch aACSwitch( mpImpl->mrDoc, false);
+    ScBulkBroadcast aBulkBroadcast( mpImpl->mrDoc.GetBASM(), SfxHintId::ScDataChanged);
+
+    ScDocument::TableContainer::iterator itTab = mpImpl->mrDoc.maTabs.begin(), itTabEnd = mpImpl->mrDoc.maTabs.end();
+    for (; itTab != itTabEnd; ++itTab)
+    {
+        if (!*itTab)
+            continue;
+
+        ScTable& rTab = **itTab;
+        SCCOL nNumCols = rTab.aCol.size();
+        for (SCCOL nColIdx = 0; nColIdx < nNumCols; ++nColIdx)
+            broadcastRecalcAfterImportColumn(rTab.aCol[nColIdx]);
+    }
+}
+
+void ScDocumentImport::broadcastRecalcAfterImportColumn(ScColumn& rCol)
+{
+    CellStoreAfterImportBroadcaster aFunc;
+    std::for_each(rCol.maCells.begin(), rCol.maCells.end(), aFunc);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

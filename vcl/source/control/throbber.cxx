@@ -28,6 +28,7 @@
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/urlobj.hxx>
 
@@ -77,13 +78,10 @@ namespace
         aImages.reserve( aImageURLs.size() );
 
         ::comphelper::NamedValueCollection aMediaProperties;
-        for (   ::std::vector< OUString >::const_iterator imageURL = aImageURLs.begin();
-                imageURL != aImageURLs.end();
-                ++imageURL
-            )
+        for ( const auto& rImageURL : aImageURLs )
         {
             Reference< XGraphic > xGraphic;
-            aMediaProperties.put( "URL", *imageURL );
+            aMediaProperties.put( "URL", rImageURL );
             xGraphic.set( xGraphicProvider->queryGraphic( aMediaProperties.getPropertyValues() ), UNO_QUERY );
             aImages.emplace_back( xGraphic );
         }
@@ -172,7 +170,7 @@ void Throbber::setImageList( ::std::vector< Image > const& i_images )
 
     maImageList = i_images;
 
-    const Image aInitialImage( maImageList.size() ? maImageList[ 0 ] : Image() );
+    const Image aInitialImage( !maImageList.empty() ? maImageList[ 0 ] : Image() );
     SetImage( aInitialImage );
 }
 

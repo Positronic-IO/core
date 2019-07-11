@@ -29,6 +29,7 @@
 #include <X11/Xproto.h>
 
 #include <osl/endian.h>
+#include <sal/log.hxx>
 
 #include <vcl/bitmap.hxx>
 #include <vcl/salbtype.hxx>
@@ -52,21 +53,19 @@
 #include <memory>
 
 
-SalBitmap* X11SalInstance::CreateSalBitmap()
+std::shared_ptr<SalBitmap> X11SalInstance::CreateSalBitmap()
 {
     if (OpenGLHelper::isVCLOpenGLEnabled())
-        return new OpenGLSalBitmap();
+        return std::make_shared<OpenGLSalBitmap>();
     else
-        return new X11SalBitmap();
+        return std::make_shared<X11SalBitmap>();
 }
 
 ImplSalBitmapCache* X11SalBitmap::mpCache = nullptr;
 sal_uLong           X11SalBitmap::mnCacheInstCount = 0;
 
 X11SalBitmap::X11SalBitmap()
-    : mpDIB( nullptr )
-    , mpDDB( nullptr )
-    , mbGrey( false )
+    : mbGrey( false )
 {
 }
 
@@ -1057,14 +1056,6 @@ void ImplSalDDB::ImplDraw(
 }
 
 
-struct ImplBmpObj
-{
-    X11SalBitmap*   mpBmp;
-
-                ImplBmpObj( X11SalBitmap* pBmp ) :
-                    mpBmp( pBmp ) {}
-};
-
 ImplSalBitmapCache::ImplSalBitmapCache()
 {
 }
@@ -1076,49 +1067,29 @@ ImplSalBitmapCache::~ImplSalBitmapCache()
 
 void ImplSalBitmapCache::ImplAdd( X11SalBitmap* pBmp )
 {
-    ImplBmpObj* pObj = nullptr;
-    bool        bFound = false;
-
-    for(
-        BmpList_impl::iterator it = maBmpList.begin();
-        (it != maBmpList.end() ) && !bFound ;
-        ++it
-    ) {
-        pObj = *it;
-        if( pObj->mpBmp == pBmp )
-            bFound = true;
+    for(auto pObj : maBmpList)
+    {
+        if( pObj == pBmp )
+            return;
     }
-
-    if( !bFound )
-        maBmpList.push_back( new ImplBmpObj( pBmp ) );
+    maBmpList.push_back( pBmp );
 }
 
 void ImplSalBitmapCache::ImplRemove( X11SalBitmap const * pBmp )
 {
-    for(
-        BmpList_impl::iterator it = maBmpList.begin();
-        it != maBmpList.end();
-        ++it
-    ) {
-        if( (*it)->mpBmp == pBmp )
-        {
-            (*it)->mpBmp->ImplRemovedFromCache();
-            delete *it;
-            maBmpList.erase( it );
-            break;
-        }
+    auto it = std::find(maBmpList.begin(), maBmpList.end(), pBmp);
+    if( it != maBmpList.end() )
+    {
+        (*it)->ImplRemovedFromCache();
+        maBmpList.erase( it );
     }
 }
 
 void ImplSalBitmapCache::ImplClear()
 {
-    for(
-        BmpList_impl::iterator it = maBmpList.begin();
-        it != maBmpList.end();
-        ++it
-    ) {
-        (*it)->mpBmp->ImplRemovedFromCache();
-        delete *it;
+    for(auto pObj : maBmpList)
+    {
+        pObj->ImplRemovedFromCache();
     }
     maBmpList.clear();
 }

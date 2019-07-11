@@ -19,6 +19,7 @@
 
 #include <memory>
 #include "XMLTrackedChangesContext.hxx"
+#include "XMLChangeTrackingImportHelper.hxx"
 #include "xmlimprt.hxx"
 #include "xmlconti.hxx"
 #include "XMLConverter.hxx"
@@ -108,7 +109,7 @@ public:
 
 class ScXMLDependingsContext : public ScXMLImportContext
 {
-    ScXMLChangeTrackingImportHelper*    pChangeTrackingImportHelper;
+    ScXMLChangeTrackingImportHelper* const    pChangeTrackingImportHelper;
 
 public:
     ScXMLDependingsContext( ScXMLImport& rImport,
@@ -129,7 +130,7 @@ public:
 
 class ScXMLDeletionsContext : public ScXMLImportContext
 {
-    ScXMLChangeTrackingImportHelper*    pChangeTrackingImportHelper;
+    ScXMLChangeTrackingImportHelper* const    pChangeTrackingImportHelper;
 
 public:
     ScXMLDeletionsContext( ScXMLImport& rImport,
@@ -144,12 +145,12 @@ class ScXMLChangeCellContext;
 class ScXMLChangeTextPContext : public ScXMLImportContext
 {
     css::uno::Reference< css::xml::sax::XAttributeList> xAttrList;
-    OUString                    sLName;
+    OUString const              sLName;
     OUStringBuffer              sText;
     ScXMLChangeCellContext*     pChangeCellContext;
     rtl::Reference<SvXMLImportContext>
                                 pTextPContext;
-    sal_uInt16                  nPrefix;
+    sal_uInt16 const            nPrefix;
 
 public:
 
@@ -287,7 +288,7 @@ public:
 
 class ScXMLCutOffsContext : public ScXMLImportContext
 {
-    ScXMLChangeTrackingImportHelper*    pChangeTrackingImportHelper;
+    ScXMLChangeTrackingImportHelper* const    pChangeTrackingImportHelper;
 
 public:
     ScXMLCutOffsContext( ScXMLImport& rImport, sal_uInt16 nPrfx, const OUString& rLName,
@@ -584,12 +585,12 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL ScXMLCellContentDeletio
 
 void SAL_CALL ScXMLCellContentDeletionContext::endFastElement( sal_Int32 /*nElement*/ )
 {
-    ScMyCellInfo* pCellInfo(new ScMyCellInfo(maCell, sFormulaAddress, sFormula, eGrammar, sInputString, fValue, nType,
+    std::unique_ptr<ScMyCellInfo> pCellInfo(new ScMyCellInfo(maCell, sFormulaAddress, sFormula, eGrammar, sInputString, fValue, nType,
             nMatrixFlag, nMatrixCols, nMatrixRows));
     if (nID)
-        pChangeTrackingImportHelper->AddDeleted(nID, pCellInfo);
+        pChangeTrackingImportHelper->AddDeleted(nID, std::move(pCellInfo));
     else
-        pChangeTrackingImportHelper->AddGenerated(pCellInfo, aBigRange);
+        pChangeTrackingImportHelper->AddGenerated(std::move(pCellInfo), aBigRange);
 }
 
 ScXMLDependenceContext::ScXMLDependenceContext(  ScXMLImport& rImport,
@@ -691,7 +692,6 @@ ScXMLChangeTextPContext::ScXMLChangeTextPContext( ScXMLImport& rImport,
     sLName(rLName),
     sText(),
     pChangeCellContext(pTempChangeCellContext),
-    pTextPContext(nullptr),
     nPrefix(nPrfx)
 {
     // here are no attributes

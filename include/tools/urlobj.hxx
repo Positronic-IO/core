@@ -20,8 +20,6 @@
 #define INCLUDED_TOOLS_URLOBJ_HXX
 
 #include <tools/toolsdllapi.h>
-#include <com/sun/star/uno/Reference.hxx>
-#include <rtl/string.h>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/textenc.h>
 #include <sal/types.h>
@@ -35,6 +33,8 @@ class SvMemoryStream;
 namespace com { namespace sun { namespace star { namespace util {
     class XStringWidth;
 } } } }
+
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
 
 // Common URL prefixes for various schemes:
 #define INET_FTP_SCHEME "ftp://"
@@ -202,7 +202,7 @@ public:
             specified character set and that can be converted to UTF-32
             characters, are first decoded.  If they have to be encoded, they
             are converted to UTF-8 characters and are than translated into
-            (sequences of) escape sequences.  Other escape sequences are
+            (sequences of) escape sequences. Other escape sequences are
             copied verbatim (but using upper case hex digits).
          */
         WasEncoded,
@@ -386,7 +386,7 @@ public:
     /** Check if the scheme is one of the WebDAV scheme
      *  we know about.
      *
-     *  @return true is one othe scheme either public scheme or private scheme.
+     *  @return true is one other scheme either public scheme or private scheme.
      */
     bool isAnyKnownWebDAVScheme() const;
 
@@ -1102,7 +1102,7 @@ private:
 
     // Query:
 
-    bool clearQuery();
+    void clearQuery();
 
     bool setQuery(
         OUString const & rTheQuery,
@@ -1298,9 +1298,12 @@ inline bool INetURLObject::SetParam(OUString const & rTheQuery,
                                     EncodeMechanism eMechanism,
                                     rtl_TextEncoding eCharset)
 {
-    return rTheQuery.isEmpty() ?
-               clearQuery() :
-               setQuery(rTheQuery, eMechanism, eCharset);
+    if (rTheQuery.isEmpty())
+    {
+        clearQuery();
+        return false;
+    }
+    return setQuery(rTheQuery, eMechanism, eCharset);
 }
 
 inline bool INetURLObject::SetMark(OUString const & rTheFragment,

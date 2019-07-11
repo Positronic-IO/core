@@ -76,11 +76,11 @@ private:
 class VCL_DLLPUBLIC GraphicConversionParameters
 {
 private:
-    Size            maSizePixel;            // default is (0,0)
+    Size const            maSizePixel;            // default is (0,0)
 
-    bool            mbUnlimitedSize : 1;    // default is false
-    bool            mbAntiAliase : 1;       // default is false
-    bool            mbSnapHorVerLines : 1;  // default is false
+    bool const            mbUnlimitedSize : 1;    // default is false
+    bool const            mbAntiAliase : 1;       // default is false
+    bool const            mbSnapHorVerLines : 1;  // default is false
 
 public:
     GraphicConversionParameters(
@@ -152,7 +152,6 @@ public:
     // allow giving parameters which control AntiAliasing and LineSnapping of the
     // MetaFile when played. Defaults will use a no-AAed, not snapped conversion as
     // before.
-    Bitmap          GetBitmap(const GraphicConversionParameters& rParameters = GraphicConversionParameters()) const;
     BitmapEx        GetBitmapEx(const GraphicConversionParameters& rParameters = GraphicConversionParameters()) const;
     /// Gives direct access to the contained BitmapEx.
     const BitmapEx& GetBitmapExRef() const;
@@ -218,7 +217,7 @@ private:
     friend class GraphicObject;
 
 public:
-    void            SetGfxLink(const GfxLink& rGfxLink);
+    void            SetGfxLink(const std::shared_ptr<GfxLink>& rGfxLink);
     GfxLink         GetGfxLink() const;
     bool            IsGfxLink() const;
 
@@ -231,8 +230,14 @@ public:
 
     const VectorGraphicDataPtr& getVectorGraphicData() const;
 
-    void setPdfData(const css::uno::Sequence<sal_Int8>& rPdfData);
-    const css::uno::Sequence<sal_Int8>& getPdfData() const;
+    void setPdfData(const std::shared_ptr<css::uno::Sequence<sal_Int8>>& rPdfData);
+    const std::shared_ptr<css::uno::Sequence<sal_Int8>>& getPdfData() const;
+    bool hasPdfData() const;
+
+    /// Set the page number of the multi-page source this Graphic is rendered from.
+    void setPageNumber(sal_Int32 nPageNumber);
+    /// Get the page number of the multi-page source this Graphic is rendered from.
+    sal_Int32 getPageNumber() const;
 
     static css::uno::Sequence<sal_Int8> getUnoTunnelId();
 };

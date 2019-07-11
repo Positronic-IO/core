@@ -33,6 +33,7 @@
 #include <textboxhelper.hxx>
 #include <dcontact.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <algorithm>
 #include "rtfexport.hxx"
 
@@ -89,10 +90,11 @@ void RtfSdrExport::CloseContainer()
 sal_uInt32 RtfSdrExport::EnterGroup(const OUString& /*rShapeName*/,
                                     const tools::Rectangle* /*pRect*/)
 {
+    m_bInGroup = true;
     return GenerateShapeId();
 }
 
-void RtfSdrExport::LeaveGroup() { /* noop */}
+void RtfSdrExport::LeaveGroup() { m_bInGroup = false; }
 
 void RtfSdrExport::AddShape(sal_uInt32 nShapeType, ShapeFlag nShapeFlags, sal_uInt32 /*nShapeId*/)
 {
@@ -100,14 +102,14 @@ void RtfSdrExport::AddShape(sal_uInt32 nShapeType, ShapeFlag nShapeFlags, sal_uI
     m_nShapeFlags = nShapeFlags;
 }
 
-inline sal_uInt16 impl_GetUInt16(const sal_uInt8*& pVal)
+static sal_uInt16 impl_GetUInt16(const sal_uInt8*& pVal)
 {
     sal_uInt16 nRet = *pVal++;
     nRet += (*pVal++) << 8;
     return nRet;
 }
 
-inline sal_Int32 impl_GetPointComponent(const sal_uInt8*& pVal, std::size_t& rVerticesPos,
+static sal_Int32 impl_GetPointComponent(const sal_uInt8*& pVal, std::size_t& rVerticesPos,
                                         sal_uInt16 nPointSize)
 {
     sal_Int32 nRet = 0;
@@ -270,16 +272,16 @@ void RtfSdrExport::Commit(EscherPropertyContainer& rProps, const tools::Rectangl
 
                 if (rProps.GetOpt(ESCHER_Prop_pVertices, aVertices)
                     && rProps.GetOpt(ESCHER_Prop_pSegmentInfo, aSegments)
-                    && aVertices.nPropSize >= 6 && aSegments.nPropSize >= 6)
+                    && aVertices.nProp.size() >= 6 && aSegments.nProp.size() >= 6)
                 {
-                    const sal_uInt8* pVerticesIt = aVertices.pBuf + 6;
+                    const sal_uInt8* pVerticesIt = &aVertices.nProp[0] + 6;
                     std::size_t nVerticesPos = 6;
-                    const sal_uInt8* pSegmentIt = aSegments.pBuf;
+                    const sal_uInt8* pSegmentIt = &aSegments.nProp[0];
 
                     OStringBuffer aSegmentInfo(512);
                     OStringBuffer aVerticies(512);
 
-                    sal_uInt16 nPointSize = aVertices.pBuf[4] + (aVertices.pBuf[5] << 8);
+                    sal_uInt16 nPointSize = aVertices.nProp[4] + (aVertices.nProp[5] << 8);
 
                     // number of segments
                     sal_uInt16 nSegments = impl_GetUInt16(pSegmentIt);
@@ -432,8 +434,8 @@ void RtfSdrExport::Commit(EscherPropertyContainer& rProps, const tools::Rectangl
                     .append(SAL_NEWLINE_STRING);
                 int nHeaderSize
                     = 25; // The first bytes are WW8-specific, we're only interested in the PNG
-                aBuf.append(msfilter::rtfutil::WriteHex(rOpt.pBuf + nHeaderSize,
-                                                        rOpt.nPropSize - nHeaderSize));
+                aBuf.append(msfilter::rtfutil::WriteHex(&rOpt.nProp[0] + nHeaderSize,
+                                                        rOpt.nProp.size() - nHeaderSize));
                 aBuf.append('}');
                 m_aShapeProps.insert(
                     std::pair<OString, OString>("fillBlip", aBuf.makeStringAndClear()));
@@ -522,8 +524,7 @@ void RtfSdrExport::impl_writeGraphic()
     // Export it to a stream.
     SvMemoryStream aStream;
     (void)GraphicConverter::Export(aStream, aGraphic, ConvertDataFormat::PNG);
-    aStream.Seek(STREAM_SEEK_TO_END);
-    sal_uInt32 nSize = aStream.Tell();
+    sal_uInt32 nSize = aStream.TellEnd();
     auto pGraphicAry = static_cast<sal_uInt8 const*>(aStream.GetData());
 
     Size aMapped(aGraphic.GetPrefSize());
@@ -562,8 +563,13 @@ sal_Int32 RtfSdrExport::StartShape()
     m_rAttrOutput.RunText().append(OOO_STRING_SVTOOLS_RTF_SHPBYIGNORE);
 
     // Write ZOrder.
-    m_rAttrOutput.RunText().append(OOO_STRING_SVTOOLS_RTF_SHPZ);
-    m_rAttrOutput.RunText().append(OString::number(m_pSdrObject->GetOrdNum()));
+    if (!m_bInGroup)
+    {
+        // Order inside the group shape is not relevant for the flat shape list
+        // we write.
+        m_rAttrOutput.RunText().append(OOO_STRING_SVTOOLS_RTF_SHPZ);
+        m_rAttrOutput.RunText().append(OString::number(m_pSdrObject->GetOrdNum()));
+    }
 
     for (auto it = m_aShapeProps.rbegin(); it != m_aShapeProps.rend(); ++it)
         lcl_AppendSP(m_rAttrOutput.RunText(), (*it).first.getStr(), (*it).second);
@@ -611,7 +617,7 @@ sal_Int32 RtfSdrExport::StartShape()
         */
         if (pTextObj->IsTextEditActive())
         {
-            pOwnedParaObj.reset(pTextObj->GetEditOutlinerParaObject());
+            pOwnedParaObj = pTextObj->GetEditOutlinerParaObject();
             pParaObj = pOwnedParaObj.get();
         }
         else
@@ -647,8 +653,8 @@ sal_Int32 RtfSdrExport::StartShape()
                     rItemSet.GetItem(SID_ATTR_CHAR_FONTHEIGHT));
                 if (pFontHeight)
                 {
-                    long nFontHeight
-                        = TransformMetric(pFontHeight->GetHeight(), FUNIT_TWIP, FUNIT_POINT);
+                    long nFontHeight = TransformMetric(pFontHeight->GetHeight(), FieldUnit::TWIP,
+                                                       FieldUnit::POINT);
                     lcl_AppendSP(
                         m_rAttrOutput.RunText(), "gtextSize",
                         msfilter::rtfutil::OutString(OUString::number(nFontHeight * RTF_MULTIPLIER),
@@ -693,8 +699,7 @@ void RtfSdrExport::WriteOutliner(const OutlinerParaObject& rParaObj, TextTypes e
         const sal_Int32 nEnd = aStr.getLength();
 
         aAttrIter.OutParaAttr(false);
-        m_rAttrOutput.RunText().append(m_rAttrOutput.Styles().makeStringAndClear());
-        m_rAttrOutput.RunText().append(m_rAttrOutput.StylesEnd().makeStringAndClear());
+        m_rAttrOutput.RunText().append(m_rAttrOutput.MoveCharacterProperties(true));
 
         do
         {
@@ -703,8 +708,7 @@ void RtfSdrExport::WriteOutliner(const OutlinerParaObject& rParaObj, TextTypes e
 
             aAttrIter.OutAttr(nCurrentPos);
             m_rAttrOutput.RunText().append('{');
-            m_rAttrOutput.RunText().append(m_rAttrOutput.Styles().makeStringAndClear());
-            m_rAttrOutput.RunText().append(m_rAttrOutput.StylesEnd().makeStringAndClear());
+            m_rAttrOutput.RunText().append(m_rAttrOutput.MoveCharacterProperties(true));
             m_rAttrOutput.RunText().append(SAL_NEWLINE_STRING);
             bool bTextAtr = aAttrIter.IsTextAttr(nCurrentPos);
             if (!bTextAtr)

@@ -27,7 +27,6 @@
 #include <com/sun/star/text/XText.hpp>
 #include <com/sun/star/document/XEventBroadcaster.hpp>
 #include <comphelper/lok.hxx>
-#include <comphelper/string.hxx>
 #include <svx/svxids.hrc>
 
 #include <vcl/commandinfoprovider.hxx>
@@ -82,6 +81,7 @@
 #include <drawdoc.hxx>
 #include <textapi.hxx>
 #include <optsitem.hxx>
+#include <sdmod.hxx>
 
 #include <memory>
 
@@ -570,9 +570,8 @@ void AnnotationManagerImpl::ExecuteReplyToAnnotation( SfxRequest const & rReq )
             sQuote = "...";
         aStr += sQuote + "\"\n";
 
-        sal_Int32 nParaCount = comphelper::string::getTokenCount(aStr, '\n');
-        for( sal_Int32 nPara = 0; nPara < nParaCount; nPara++ )
-            pOutliner->Insert( aStr.getToken( nPara, '\n' ), EE_PARA_APPEND, -1 );
+        for( sal_Int32 nIdx = 0; nIdx >= 0; )
+            pOutliner->Insert( aStr.getToken( 0, '\n', nIdx ), EE_PARA_APPEND, -1 );
 
         if( pOutliner->GetParagraphCount() > 1 )
         {
@@ -590,7 +589,7 @@ void AnnotationManagerImpl::ExecuteReplyToAnnotation( SfxRequest const & rReq )
             pOutliner->Insert(sReplyText);
 
         std::unique_ptr< OutlinerParaObject > pOPO( pOutliner->CreateParaObject() );
-        pTextApi->SetText( *pOPO.get() );
+        pTextApi->SetText(*pOPO);
 
         OUString sReplyAuthor;
         if (comphelper::LibreOfficeKit::isActive())
@@ -812,7 +811,7 @@ void AnnotationManagerImpl::SelectNextAnnotation(bool bForeward)
             {
                 // switch to next/previous slide with annotations
                 std::shared_ptr<DrawViewShell> pDrawViewShell(std::dynamic_pointer_cast<DrawViewShell>(mrBase.GetMainViewShell()));
-                if (pDrawViewShell.get() != nullptr)
+                if (pDrawViewShell != nullptr)
                 {
                     pDrawViewShell->ChangeEditMode(pPage->IsMasterPage() ? EditMode::MasterPage : EditMode::Page, false);
                     pDrawViewShell->SwitchPage((pPage->GetPageNum() - 1) >> 1);

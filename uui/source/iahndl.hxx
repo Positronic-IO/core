@@ -78,8 +78,8 @@ private:
             css::uno::Reference< css::awt::XWindow >                m_xWindowParam;
             const OUString                                          m_aContextParam;
             StringHashMap                                           m_aTypedCustomHandlers;
-    UUIInteractionHelper(UUIInteractionHelper &) = delete;
-    void operator =(const UUIInteractionHelper&) = delete;
+    UUIInteractionHelper(UUIInteractionHelper const &) = delete;
+    UUIInteractionHelper& operator =(UUIInteractionHelper const &) = delete;
 
 public:
     UUIInteractionHelper(
@@ -235,7 +235,7 @@ private:
                 const OUString& i_rServiceName
             ) const;
 
-    bool
+    void
     handleAuthFallbackRequest(
             OUString & instructions,
             OUString & url,

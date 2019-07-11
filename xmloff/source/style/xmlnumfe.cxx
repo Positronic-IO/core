@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/sequence.hxx>
 #include <comphelper/string.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
@@ -29,10 +30,12 @@
 #include <unotools/charclass.hxx>
 #include <com/sun/star/lang/Locale.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <tools/color.hxx>
 #include <sax/tools/converter.hxx>
 
-#include <com/sun/star/i18n/NativeNumberXmlAttributes.hpp>
+#include <com/sun/star/i18n/NativeNumberXmlAttributes2.hpp>
 
 #include <xmloff/xmlnumfe.hxx>
 #include <xmloff/xmlnmspe.hxx>
@@ -45,6 +48,7 @@
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/xmlexp.hxx>
 
+#include <float.h>
 #include <set>
 #include <vector>
 
@@ -56,9 +60,9 @@ typedef std::set< sal_uInt32 >  SvXMLuInt32Set;
 
 struct SvXMLEmbeddedTextEntry
 {
-    sal_uInt16      nSourcePos;     // position in NumberFormat (to skip later)
-    sal_Int32       nFormatPos;     // resulting position in embedded-text element
-    OUString   aText;
+    sal_uInt16 const  nSourcePos;     // position in NumberFormat (to skip later)
+    sal_Int32 const   nFormatPos;     // resulting position in embedded-text element
+    OUString const    aText;
 
     SvXMLEmbeddedTextEntry( sal_uInt16 nSP, sal_Int32 nFP, const OUString& rT ) :
         nSourcePos(nSP), nFormatPos(nFP), aText(rT) {}
@@ -184,19 +188,7 @@ bool SvXMLNumUsedList_Impl::GetNextUsed(sal_uInt32& nKey)
 
 uno::Sequence<sal_Int32> SvXMLNumUsedList_Impl::GetWasUsed()
 {
-    uno::Sequence<sal_Int32> ret(nWasUsedCount);
-    sal_Int32* pWasUsed = ret.getArray();
-    if (pWasUsed)
-    {
-        SvXMLuInt32Set::const_iterator aItr = aWasUsed.begin();
-        while (aItr != aWasUsed.end())
-        {
-            *pWasUsed = *aItr;
-            ++aItr;
-            ++pWasUsed;
-        }
-    }
-    return ret;
+    return comphelper::containerToSequence<sal_Int32>(aWasUsed);
 }
 
 void SvXMLNumUsedList_Impl::SetWasUsed(const uno::Sequence<sal_Int32>& rWasUsed)
@@ -217,9 +209,7 @@ SvXMLNumFmtExport::SvXMLNumFmtExport(
             const uno::Reference< util::XNumberFormatsSupplier >& rSupp ) :
     rExport( rExp ),
     sPrefix( OUString("N") ),
-    pFormatter( nullptr ),
-    pCharClass( nullptr ),
-    pLocaleData( nullptr )
+    pFormatter( nullptr )
 {
     //  supplier must be SvNumberFormatsSupplierObj
     SvNumberFormatsSupplierObj* pObj =
@@ -251,9 +241,7 @@ SvXMLNumFmtExport::SvXMLNumFmtExport(
                        const OUString& rPrefix ) :
     rExport( rExp ),
     sPrefix( rPrefix ),
-    pFormatter( nullptr ),
-    pCharClass( nullptr ),
-    pLocaleData( nullptr )
+    pFormatter( nullptr )
 {
     //  supplier must be SvNumberFormatsSupplierObj
     SvNumberFormatsSupplierObj* pObj =
@@ -605,8 +593,8 @@ void SvXMLNumFmtExport::WriteNumberElement_Impl(
 
     //  number:embedded-text as child elements
 
-    sal_uInt16 nEntryCount = rEmbeddedEntries.size();
-    for (sal_uInt16 nEntry=0; nEntry<nEntryCount; nEntry++)
+    auto nEntryCount = rEmbeddedEntries.size();
+    for (decltype(nEntryCount) nEntry=0; nEntry < nEntryCount; ++nEntry)
     {
         const SvXMLEmbeddedTextEntry *const pObj = &rEmbeddedEntries[nEntry];
 
@@ -617,16 +605,16 @@ void SvXMLNumFmtExport::WriteNumberElement_Impl(
                                           true, false );
 
         //  text as element content
-        OUString aContent( pObj->aText );
+        OUStringBuffer aContent( pObj->aText );
         while ( nEntry+1 < nEntryCount && rEmbeddedEntries[nEntry+1].nFormatPos == pObj->nFormatPos )
         {
             // The array can contain several elements for the same position in the number
             // (for example, literal text and space from underscores). They must be merged
             // into a single embedded-text element.
-            aContent += rEmbeddedEntries[nEntry+1].aText;
+            aContent.append(rEmbeddedEntries[nEntry+1].aText);
             ++nEntry;
         }
-        rExport.Characters( aContent );
+        rExport.Characters( aContent.makeStringAndClear() );
     }
 }
 
@@ -849,7 +837,7 @@ void SvXMLNumFmtExport::WriteMapElement_Impl( sal_Int32 nOp, double fLimit,
 
 //  for old (automatic) currency formats: parse currency symbol from text
 
-sal_Int32 lcl_FindSymbol( const OUString& sUpperStr, const OUString& sCurString )
+static sal_Int32 lcl_FindSymbol( const OUString& sUpperStr, const OUString& sCurString )
 {
     //  search for currency symbol
     //  Quoting as in ImpSvNumberformatScan::Symbol_Division
@@ -957,8 +945,8 @@ static OUString lcl_GetDefaultCalendar( SvNumberFormatter const * pFormatter, La
 
 static bool lcl_IsInEmbedded( const SvXMLEmbeddedTextEntryArr& rEmbeddedEntries, sal_uInt16 nPos )
 {
-    sal_uInt16 nCount = rEmbeddedEntries.size();
-    for (sal_uInt16 i=0; i<nCount; i++)
+    auto nCount = rEmbeddedEntries.size();
+    for (decltype(nCount) i=0; i<nCount; i++)
         if ( rEmbeddedEntries[i].nSourcePos == nPos )
             return true;
 
@@ -1190,10 +1178,12 @@ void SvXMLNumFmtExport::ExportPart_Impl( const SvNumberformat& rFormat, sal_uInt
     }
 
     // Native number transliteration
-    css::i18n::NativeNumberXmlAttributes aAttr;
+    css::i18n::NativeNumberXmlAttributes2 aAttr;
     rFormat.GetNatNumXml( aAttr, nPart );
     if ( !aAttr.Format.isEmpty() )
     {
+        assert(aAttr.Spellout.isEmpty());   // mutually exclusive
+
         /* FIXME-BCP47: ODF defines no transliteration-script or
          * transliteration-rfc-language-tag */
         LanguageTag aLanguageTag( aAttr.Locale);
@@ -1207,6 +1197,34 @@ void SvXMLNumFmtExport::ExportPart_Impl( const SvNumberformat& rFormat, sal_uInt
                               aCountry );
         rExport.AddAttribute( XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_STYLE,
                               aAttr.Style );
+    }
+
+    if ( !aAttr.Spellout.isEmpty() )
+    {
+        const bool bWriteSpellout = aAttr.Format.isEmpty();
+        assert(bWriteSpellout);     // mutually exclusive
+
+        // Export only for 1.2 with extensions or 1.3 and later.
+        SvtSaveOptions::ODFSaneDefaultVersion eVersion = rExport.getSaneDefaultVersion();
+        // Also ensure that duplicated transliteration-language and
+        // transliteration-country attributes never escape into the wild with
+        // releases.
+        if (eVersion > SvtSaveOptions::ODFSVER_012 && bWriteSpellout)
+        {
+            /* FIXME-BCP47: ODF defines no transliteration-script or
+             * transliteration-rfc-language-tag */
+            LanguageTag aLanguageTag( aAttr.Locale);
+            OUString aLanguage, aScript, aCountry;
+            aLanguageTag.getIsoLanguageScriptCountry( aLanguage, aScript, aCountry);
+            // For 1.2+ use loext namespace, for 1.3 use number namespace.
+            rExport.AddAttribute( ((eVersion < SvtSaveOptions::ODFSVER_013) ?
+                        XML_NAMESPACE_LO_EXT : XML_NAMESPACE_NUMBER),
+                    XML_TRANSLITERATION_SPELLOUT, aAttr.Spellout );
+            rExport.AddAttribute( XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_LANGUAGE,
+                                  aLanguage );
+            rExport.AddAttribute( XML_NAMESPACE_NUMBER, XML_TRANSLITERATION_COUNTRY,
+                                  aCountry );
+        }
     }
 
     // The element
@@ -1841,18 +1859,15 @@ void SvXMLNumFmtExport::Export( bool bIsAutoStyle )
     {
         std::vector<LanguageType> aLanguages;
         pFormatter->GetUsedLanguages( aLanguages );
-        for (std::vector<LanguageType>::const_iterator it(aLanguages.begin()); it != aLanguages.end(); ++it)
+        for (const auto& nLang : aLanguages)
         {
-            LanguageType nLang = *it;
-
             sal_uInt32 nDefaultIndex = 0;
             SvNumberFormatTable& rTable = pFormatter->GetEntryTable(
                                          SvNumFormatType::DEFINED, nDefaultIndex, nLang );
-            SvNumberFormatTable::iterator it2 = rTable.begin();
-            while (it2 != rTable.end())
+            for (const auto& rTableEntry : rTable)
             {
-                nKey = it2->first;
-                pFormat = it2->second;
+                nKey = rTableEntry.first;
+                pFormat = rTableEntry.second;
                 if (!pUsedList->IsUsed(nKey))
                 {
                     DBG_ASSERT((pFormat->GetType() & SvNumFormatType::DEFINED), "a not user defined numberformat found");
@@ -1867,8 +1882,6 @@ void SvXMLNumFmtExport::Export( bool bIsAutoStyle )
                     // if it is a user-defined Format it will be added else nothing will happen
                     pUsedList->SetUsed(nKey);
                 }
-
-                ++it2;
             }
         }
     }
@@ -1943,7 +1956,7 @@ sal_uInt32 SvXMLNumFmtExport::ForceSystemLanguage( sal_uInt32 nKey )
             pFormatter->PutandConvertEntry(
                             aFormatString,
                             nErrorPos, nType, nNewKey,
-                            pFormat->GetLanguage(), LANGUAGE_SYSTEM );
+                            pFormat->GetLanguage(), LANGUAGE_SYSTEM, true);
 
             // success? Then use new key.
             if( nErrorPos == 0 )

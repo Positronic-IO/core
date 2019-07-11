@@ -23,16 +23,16 @@
 #include <typeinfo.h>
 #include <signal.h>
 
-#include "rtl/alloc.h"
-#include "rtl/strbuf.hxx"
-#include "rtl/ustrbuf.hxx"
+#include <rtl/alloc.h>
+#include <rtl/strbuf.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <osl/mutex.hxx>
 
-#include "com/sun/star/uno/Any.hxx"
+#include <com/sun/star/uno/Any.hxx>
 #include <unordered_map>
 #include "msci.hxx"
-#include "except.hxx"
+#include <except.hxx>
 
 
 #pragma pack(push, 8)
@@ -132,7 +132,7 @@ type_info * RTTInfos::getRTTI( OUString const & rUNOname ) throw ()
     {
         // insert new type_info
         OString aRawName( OUStringToOString( toRTTIname( rUNOname ), RTL_TEXTENCODING_ASCII_US ) );
-        __type_info * pRTTI = new( ::rtl_allocateMemory( sizeof(__type_info) + aRawName.getLength() ) )
+        __type_info * pRTTI = new( std::malloc( sizeof(__type_info) + aRawName.getLength() ) )
             __type_info( NULL, aRawName.getStr() );
 
         // put into map
@@ -162,7 +162,7 @@ RTTInfos::~RTTInfos() throw ()
     {
         __type_info * pType = reinterpret_cast<__type_info*>(iPos->second);
         pType->~__type_info(); // obsolete, but good style...
-        ::rtl_freeMemory( pType );
+        std::free( pType );
     }
 }
 
@@ -184,7 +184,7 @@ struct ObjectFunction
 
 inline void * ObjectFunction::operator new ( size_t nSize )
 {
-    void * pMem = rtl_allocateMemory( nSize );
+    void * pMem = std::malloc( nSize );
     if (pMem != 0)
     {
         DWORD old_protect;
@@ -198,7 +198,7 @@ inline void * ObjectFunction::operator new ( size_t nSize )
 
 inline void ObjectFunction::operator delete ( void * pMem )
 {
-    rtl_freeMemory( pMem );
+    std::free( pMem );
 }
 
 
@@ -329,7 +329,7 @@ RaiseInfo::RaiseInfo( typelib_TypeDescription * pTypeDescr ) throw ()
     }
 
     // info count accompanied by type info ptrs: type, base type, base base type, ...
-    _types = ::rtl_allocateMemory( sizeof(sal_Int32) + (sizeof(ExceptionType *) * nLen) );
+    _types = std::malloc( sizeof(sal_Int32) + (sizeof(ExceptionType *) * nLen) );
     *(sal_Int32 *)_types = nLen;
 
     ExceptionType ** ppTypes = (ExceptionType **)((sal_Int32 *)_types + 1);
@@ -349,7 +349,7 @@ RaiseInfo::~RaiseInfo() throw ()
     {
         delete ppTypes[nTypes];
     }
-    ::rtl_freeMemory( _types );
+    std::free( _types );
 
     delete _pDtor;
 }
@@ -384,15 +384,7 @@ ExceptionInfos::~ExceptionInfos() throw ()
 
 void * ExceptionInfos::getRaiseInfo( typelib_TypeDescription * pTypeDescr ) throw ()
 {
-    static ExceptionInfos * s_pInfos = 0;
-    if (! s_pInfos)
-    {
-        MutexGuard aGuard( Mutex::getGlobalMutex() );
-        if (! s_pInfos)
-        {
-            s_pInfos = new ExceptionInfos();
-        }
-    }
+    static ExceptionInfos* s_pInfos = new ExceptionInfos();
 
     assert( pTypeDescr &&
                 (pTypeDescr->eTypeClass == typelib_TypeClass_STRUCT ||
@@ -427,15 +419,7 @@ void * ExceptionInfos::getRaiseInfo( typelib_TypeDescription * pTypeDescr ) thro
 
 type_info * msci_getRTTI( OUString const & rUNOname )
 {
-    static RTTInfos * s_pRTTIs = 0;
-    if (! s_pRTTIs)
-    {
-        MutexGuard aGuard( Mutex::getGlobalMutex() );
-        if (! s_pRTTIs)
-        {
-            s_pRTTIs = new RTTInfos();
-        }
-    }
+    static RTTInfos* s_pRTTIs = new RTTInfos();
     return s_pRTTIs->getRTTI( rUNOname );
 }
 
@@ -468,6 +452,60 @@ void msci_raiseException( uno_Any * pUnoExc, uno_Mapping * pUno2Cpp )
     RaiseException( MSVC_ExceptionCode, EXCEPTION_NONCONTINUABLE, 3, arFilterArgs );
 }
 
+namespace
+{
+// This function does the same check as __CxxDetectRethrow from msvcrt (see its
+// crt/src/vcruntime/mgdframe.cpp). But it does not alter the global state, i.e. it does not
+// increment __ProcessingThrow, and so does not break following exception handling. We rely on the
+// definition of EHExceptionRecord, PER_IS_MSVC_EH and PER_PTHROW, that are current as of msvcrt
+// 2017 (14.14.26428).
+bool DetectRethrow(void* ppExcept)
+{
+    struct EHExceptionRecord
+    {
+        DWORD ExceptionCode;
+        DWORD ExceptionFlags;
+        struct _EXCEPTION_RECORD* ExceptionRecord;
+        PVOID ExceptionAddress;
+        DWORD NumberParameters;
+        struct EHParameters
+        {
+            DWORD magicNumber;
+            PVOID pExceptionObject;
+            PVOID pThrowInfo;
+        } params;
+    };
+
+    constexpr auto PER_IS_MSVC_EH = [](EHExceptionRecord* p) {
+        constexpr DWORD EH_EXCEPTION_NUMBER = 0xE06D7363;           // The NT Exception # that msvcrt uses ('msc' | 0xE0000000)
+        constexpr DWORD EH_MAGIC_NUMBER1 = 0x19930520;              // latest magic # in thrown object
+        constexpr DWORD EH_MAGIC_NUMBER2 = 0x19930521;              // latest magic # in func info for exception specs
+        constexpr DWORD EH_MAGIC_NUMBER3 = 0x19930522;              // latest magic #
+        constexpr DWORD EH_EXCEPTION_PARAMETERS = 3;                // Number of parameters in exception record for x86
+
+        return p->ExceptionCode == EH_EXCEPTION_NUMBER
+               && p->NumberParameters == EH_EXCEPTION_PARAMETERS
+               && (p->params.magicNumber == EH_MAGIC_NUMBER1
+                   || p->params.magicNumber == EH_MAGIC_NUMBER2
+                   || p->params.magicNumber == EH_MAGIC_NUMBER3);
+    };
+
+    constexpr auto PER_PTHROW = [](EHExceptionRecord* p) {
+        return p->params.pThrowInfo;
+    };
+
+    EHExceptionRecord* pExcept;
+    if (!ppExcept)
+        return false;
+    pExcept = *static_cast<EHExceptionRecord**>(ppExcept);
+    if (PER_IS_MSVC_EH(pExcept) && PER_PTHROW(pExcept) == nullptr)
+    {
+        return true;
+    }
+    return false;
+}
+}
+
 int msci_filterCppException(
     EXCEPTION_POINTERS * pPointers, uno_Any * pUnoExc, uno_Mapping * pCpp2Uno )
 {
@@ -478,7 +516,7 @@ int msci_filterCppException(
     if (pRecord == 0 || pRecord->ExceptionCode != MSVC_ExceptionCode)
         return EXCEPTION_CONTINUE_SEARCH;
 
-    bool rethrow = __CxxDetectRethrow( &pRecord );
+    const bool rethrow = DetectRethrow(&pRecord);
     assert(pRecord == pPointers->ExceptionRecord);
 
     if (rethrow && pRecord == pPointers->ExceptionRecord)

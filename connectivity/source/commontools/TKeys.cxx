@@ -25,7 +25,6 @@
 #include <com/sun/star/sdbc/KeyRule.hpp>
 #include <connectivity/dbtools.hxx>
 #include <comphelper/types.hxx>
-#include <comphelper/property.hxx>
 #include <TConnection.hxx>
 
 namespace connectivity
@@ -51,7 +50,7 @@ OKeysHelper::OKeysHelper(   OTableHelper* _pTable,
 
 sdbcx::ObjectType OKeysHelper::createObject(const OUString& _rName)
 {
-    sdbcx::ObjectType xRet = nullptr;
+    sdbcx::ObjectType xRet;
 
     if(!_rName.isEmpty())
     {
@@ -80,7 +79,7 @@ Reference< XPropertySet > OKeysHelper::createDescriptor()
 
 /** returns the keyrule string for the primary key
 */
-OUString getKeyRuleString(bool _bUpdate,sal_Int32 _nKeyRule)
+static OUString getKeyRuleString(bool _bUpdate,sal_Int32 _nKeyRule)
 {
     const char* pKeyRule = nullptr;
     switch ( _nKeyRule )

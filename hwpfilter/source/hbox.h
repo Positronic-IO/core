@@ -549,12 +549,14 @@ struct PicDefOle
     void  *hwpole;
 };
 
+struct HWPDrawingObject;
+
 /**
  * @short Drawing object of hwp
  */
 struct PicDefDraw
 {
-    void      *hdo;
+    HWPDrawingObject *hdo;
     uint      zorder;
     ZZRect    vrect;
     int       mbrcnt;
@@ -831,7 +833,7 @@ struct MailMerge: public HBox
     MailMerge();
 
     virtual bool Read(HWPFile &hwpf) override;
-    hchar_string GetString();
+    static hchar_string GetString();
 };
 
 // char composition(23)

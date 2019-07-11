@@ -20,14 +20,15 @@
 #include <sal/config.h>
 #include <unotools/options.hxx>
 
+#include <algorithm>
+
 using utl::detail::Options;
 using utl::ConfigurationBroadcaster;
 
 utl::ConfigurationListener::~ConfigurationListener() {}
 
 ConfigurationBroadcaster::ConfigurationBroadcaster()
-: mpList(nullptr)
-, m_nBroadcastBlocked( 0 )
+: m_nBroadcastBlocked( 0 )
 , m_nBlockedHint( ConfigurationHints::NONE )
 {
 }
@@ -43,6 +44,18 @@ ConfigurationBroadcaster::~ConfigurationBroadcaster()
 {
 }
 
+ConfigurationBroadcaster & ConfigurationBroadcaster::operator =(
+    ConfigurationBroadcaster const & other)
+{
+    if (&other != this) {
+        mpList.reset(
+            other.mpList == nullptr ? nullptr : new IMPL_ConfigurationListenerList(*other.mpList));
+        m_nBroadcastBlocked = other.m_nBroadcastBlocked;
+        m_nBlockedHint = other.m_nBlockedHint;
+    }
+    return *this;
+}
+
 void ConfigurationBroadcaster::AddListener( utl::ConfigurationListener* pListener )
 {
     if ( !mpList )
@@ -53,15 +66,9 @@ void ConfigurationBroadcaster::AddListener( utl::ConfigurationListener* pListene
 void ConfigurationBroadcaster::RemoveListener( utl::ConfigurationListener const * pListener )
 {
     if ( mpList ) {
-        for ( IMPL_ConfigurationListenerList::iterator it = mpList->begin();
-              it != mpList->end();
-              ++it
-        ) {
-            if ( *it == pListener ) {
-                mpList->erase( it );
-                break;
-            }
-        }
+        auto it = std::find(mpList->begin(), mpList->end(), pListener);
+        if ( it != mpList->end() )
+            mpList->erase( it );
     }
 }
 

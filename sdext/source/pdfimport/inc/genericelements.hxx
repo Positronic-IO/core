@@ -123,7 +123,7 @@ namespace pdfi
     public:
         virtual void visitedBy( ElementTreeVisitor&, const std::list< std::unique_ptr<Element> >::const_iterator& ) override;
 
-        OUString URI;
+        OUString const URI;
     };
 
     struct GraphicalElement : public Element
@@ -235,7 +235,7 @@ namespace pdfi
     public:
         virtual void visitedBy( ElementTreeVisitor&, const std::list< std::unique_ptr<Element> >::const_iterator& ) override;
 
-        ImageId Image;
+        ImageId const Image;
     };
 
     struct PageElement : public Element
@@ -244,8 +244,7 @@ namespace pdfi
     protected:
         PageElement( Element* pParent, sal_Int32 nPageNr )
         : Element( pParent ), PageNumber( nPageNr ), Hyperlinks(),
-        TopMargin( 0.0 ), BottomMargin( 0.0 ), LeftMargin( 0.0 ), RightMargin( 0.0 ),
-        HeaderElement( nullptr ), FooterElement( nullptr )
+        TopMargin( 0.0 ), BottomMargin( 0.0 ), LeftMargin( 0.0 ), RightMargin( 0.0 )
         {}
     private:
         // helper method for resolveHyperlinks
@@ -255,12 +254,11 @@ namespace pdfi
 
         virtual void visitedBy( ElementTreeVisitor&, const std::list< std::unique_ptr<Element> >::const_iterator& rParentIt ) override;
 
-        static void updateParagraphGeometry( Element* pEle );
         void resolveHyperlinks();
         void resolveFontStyles( PDFIProcessor const & rProc );
         void resolveUnderlines( PDFIProcessor const & rProc );
 
-        sal_Int32      PageNumber;
+        sal_Int32 const PageNumber;
         ListElement    Hyperlinks; // contains not yet realized links on this page
         double         TopMargin;
         double         BottomMargin;

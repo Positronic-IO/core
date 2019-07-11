@@ -56,8 +56,11 @@
 #include <vcl/unohelp.hxx>
 #include <rtl/tencinfo.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <oox/core/filterbase.hxx>
 #include <oox/helper/attributelist.hxx>
+#include <oox/helper/binaryinputstream.hxx>
 #include <oox/helper/containerhelper.hxx>
 #include <oox/helper/propertymap.hxx>
 #include <oox/helper/propertyset.hxx>
@@ -79,6 +82,9 @@
 #include <xlconst.hxx>
 #include <documentimport.hxx>
 #include <numformat.hxx>
+#include <patattr.hxx>
+#include <stlsheet.hxx>
+#include <biffhelper.hxx>
 
 namespace oox {
 namespace xls {
@@ -828,7 +834,7 @@ bool Font::needsRichTextFormat() const
     return maApiData.mnEscapement != API_ESCAPE_NONE;
 }
 
-::FontFamily lcl_getFontFamily( sal_Int32 nFamily )
+static ::FontFamily lcl_getFontFamily( sal_Int32 nFamily )
 {
     ::FontFamily eScFamily = FAMILY_DONTKNOW;
     switch( nFamily )
@@ -1110,10 +1116,22 @@ Alignment::Alignment( const WorkbookHelper& rHelper ) :
 
 void Alignment::importAlignment( const AttributeList& rAttribs )
 {
-    maModel.mnHorAlign     = rAttribs.getToken( XML_horizontal, XML_general );
     maModel.mnVerAlign     = rAttribs.getToken( XML_vertical, XML_bottom );
     maModel.mnTextDir      = rAttribs.getInteger( XML_readingOrder, OOX_XF_TEXTDIR_CONTEXT );
     maModel.mnRotation     = rAttribs.getInteger( XML_textRotation, OOX_XF_ROTATION_NONE );
+    sal_Int32 nDefaultHorAlign = XML_general;
+    if (maModel.mnRotation != OOX_XF_ROTATION_NONE)
+    {
+        if (maModel.mnRotation < 90 || maModel.mnRotation == 180)
+        {
+            nDefaultHorAlign = XML_left;
+        }
+        else
+        {
+            nDefaultHorAlign = XML_right;
+        }
+    }
+    maModel.mnHorAlign     = rAttribs.getToken( XML_horizontal, nDefaultHorAlign );
     maModel.mnIndent       = rAttribs.getInteger( XML_indent, OOX_XF_INDENT_NONE );
     maModel.mbWrapText     = rAttribs.getBool( XML_wrapText, false );
     maModel.mbShrink       = rAttribs.getBool( XML_shrinkToFit, false );
@@ -1390,7 +1408,7 @@ bool ApiBorderData::hasAnyOuterBorder() const
 
 namespace {
 
-inline void lclSetBorderLineWidth( BorderLine& rBorderLine,
+void lclSetBorderLineWidth( BorderLine& rBorderLine,
         sal_Int16 nOuter, sal_Int16 nDist = API_LINE_NONE, sal_Int16 nInner = API_LINE_NONE )
 {
     rBorderLine.OuterLineWidth = nOuter;
@@ -1663,7 +1681,7 @@ ApiSolidFillData::ApiSolidFillData() :
 
 namespace {
 
-inline sal_Int32 lclGetMixedColorComp( sal_Int32 nPatt, sal_Int32 nFill, sal_Int32 nAlpha )
+sal_Int32 lclGetMixedColorComp( sal_Int32 nPatt, sal_Int32 nFill, sal_Int32 nAlpha )
 {
     return ((nPatt - nFill) * nAlpha) / 0x80 + nFill;
 }
@@ -1935,7 +1953,7 @@ void Xf::importXf( const AttributeList& rAttribs, bool bCellXf )
     // tdf#70565 Set proper default value to "0" of xfId attribute
     // When xfId is not exist during .xlsx import
     // it must have values set to "0".
-    // Is is not impacts spreadsheets created with MS Excel,
+    // This doesn't impact spreadsheets created with MS Excel,
     // as xfId attribute is always created during export to .xlsx
     // Not setting "0" value is causing wrong .xlsx import by LibreOffice,
     // for spreadsheets created by external applications (ex. SAP BI).
@@ -2841,20 +2859,14 @@ const FontModel& StylesBuffer::getDefaultFontModel() const
 
 bool StylesBuffer::equalBorders( sal_Int32 nBorderId1, sal_Int32 nBorderId2 )
 {
-    if( nBorderId1 == nBorderId2 )
-        return true;
-
     // in OOXML, borders are assumed to be unique
-    return false;
+    return nBorderId1 == nBorderId2;
 }
 
 bool StylesBuffer::equalFills( sal_Int32 nFillId1, sal_Int32 nFillId2 )
 {
-    if( nFillId1 == nFillId2 )
-        return true;
-
     // in OOXML, fills are assumed to be unique
-    return false;
+    return nFillId1 == nFillId2;
 }
 
 OUString StylesBuffer::getDefaultStyleName() const

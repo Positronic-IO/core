@@ -22,9 +22,10 @@
 #include <svtools/svtresid.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/print.hxx>
+#include <sal/log.hxx>
 
 void ImplFillPrnDlgListBox( const Printer* pPrinter,
-                            weld::ComboBoxText* pBox, weld::Button* pPropBtn )
+                            weld::ComboBox* pBox, weld::Button* pPropBtn )
 {
     ImplFreePrnDlgListBox( pBox );
 
@@ -42,14 +43,14 @@ void ImplFillPrnDlgListBox( const Printer* pPrinter,
 }
 
 
-void ImplFreePrnDlgListBox( weld::ComboBoxText* pBox, bool bClear )
+void ImplFreePrnDlgListBox( weld::ComboBox* pBox, bool bClear )
 {
     if ( bClear )
         pBox->clear();
 }
 
 
-Printer* ImplPrnDlgListBoxSelect( const weld::ComboBoxText* pBox, weld::Button* pPropBtn,
+Printer* ImplPrnDlgListBoxSelect( const weld::ComboBox* pBox, weld::Button* pPropBtn,
                                   Printer const * pPrinter, Printer* pTempPrinterIn )
 {
     VclPtr<Printer> pTempPrinter( pTempPrinterIn );
@@ -107,7 +108,7 @@ Printer* ImplPrnDlgUpdatePrinter( Printer const * pPrinter, Printer* pTempPrinte
 }
 
 
-void ImplPrnDlgUpdateQueueInfo( const weld::ComboBoxText* pBox, QueueInfo& rInfo )
+void ImplPrnDlgUpdateQueueInfo( const weld::ComboBox* pBox, QueueInfo& rInfo )
 {
     if ( pBox->get_active() != -1 )
     {
@@ -209,7 +210,7 @@ OUString ImplPrnDlgGetStatusText( const QueueInfo& rInfo )
 
 PrinterSetupDialog::PrinterSetupDialog(weld::Window* pParent)
     : GenericDialogController(pParent, "svt/ui/printersetupdialog.ui", "PrinterSetupDialog")
-    , m_xLbName(m_xBuilder->weld_combo_box_text("name"))
+    , m_xLbName(m_xBuilder->weld_combo_box("name"))
     , m_xBtnProperties(m_xBuilder->weld_button("properties"))
     , m_xBtnOptions(m_xBuilder->weld_button("options"))
     , m_xFiStatus(m_xBuilder->weld_label("status"))
@@ -280,7 +281,7 @@ IMPL_LINK_NOARG(PrinterSetupDialog, ImplPropertiesHdl, weld::Button&, void)
     mpTempPrinter->Setup(m_xDialog.get());
 }
 
-IMPL_LINK_NOARG(PrinterSetupDialog, ImplChangePrinterHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(PrinterSetupDialog, ImplChangePrinterHdl, weld::ComboBox&, void)
 {
     mpTempPrinter = ImplPrnDlgListBoxSelect(m_xLbName.get(), m_xBtnProperties.get(),
                                              mpPrinter, mpTempPrinter);
@@ -313,7 +314,7 @@ IMPL_LINK(PrinterSetupDialog, ImplDataChangedHdl, VclSimpleEvent&, rEvt, void)
     ImplSetInfo();
 }
 
-short PrinterSetupDialog::execute()
+short PrinterSetupDialog::run()
 {
     if ( !mpPrinter || mpPrinter->IsPrinting() || mpPrinter->IsJobActive() )
     {
@@ -328,14 +329,11 @@ short PrinterSetupDialog::execute()
     maStatusTimer.Start();
 
     // start dialog
-    short nRet = m_xDialog->run();
+    short nRet = GenericDialogController::run();
 
     // update data if the dialog was terminated with OK
-    if ( nRet == RET_OK )
-    {
-        if ( mpTempPrinter )
-            mpPrinter->SetPrinterProps( mpTempPrinter );
-    }
+    if ( nRet == RET_OK && mpTempPrinter )
+        mpPrinter->SetPrinterProps( mpTempPrinter );
 
     maStatusTimer.Stop();
 

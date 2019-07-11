@@ -21,15 +21,14 @@
 #define INCLUDED_BASEGFX_POLYGON_B2DPOLYPOLYGONTOOLS_HXX
 
 #include <basegfx/point/b2dpoint.hxx>
-#include <basegfx/vector/b2dvector.hxx>
-#include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b3dpolypolygon.hxx>
 #include <com/sun/star/drawing/PointSequenceSequence.hpp>
-#include <com/sun/star/drawing/PolyPolygonBezierCoords.hpp>
 #include <vector>
 #include <set>
 #include <basegfx/basegfxdllapi.h>
 
+
+namespace com { namespace sun { namespace star { namespace drawing { struct PolyPolygonBezierCoords; } } } }
 
 namespace basegfx
 {
@@ -228,6 +227,12 @@ namespace basegfx
             polygon is kept; this is needed to read odf files.
             If false, pure svg is used; this is needed for svg import.
 
+            @param bOOXMLMotionPath
+            If set to true, export string format that is acceptable for
+            for animation motion path for PowerPoint: always space delimited,
+            never neglect command char, always end with E, and do not export
+            H or V.
+
             @return the generated SVG-D statement (the XML d attribute
             value alone, without any "<path ...>" or "d="...")
          */
@@ -235,7 +240,8 @@ namespace basegfx
             const B2DPolyPolygon& rPolyPoly,
             bool bUseRelativeCoordinates,
             bool bDetectQuadraticBeziers,
-            bool bHandleRelativeNextPointCompatible);
+            bool bHandleRelativeNextPointCompatible,
+            bool bOOXMLMotionPath = false);
 
         // #i76891# Try to remove existing curve segments if they are simply edges
         BASEGFX_DLLPUBLIC B2DPolyPolygon simplifyCurveSegments(const B2DPolyPolygon& rCandidate);

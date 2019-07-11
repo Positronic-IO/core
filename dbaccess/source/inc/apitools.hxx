@@ -152,26 +152,6 @@ public:
 
 // XTypeProvider helpers
 
-#define IMPLEMENT_IMPLEMENTATION_ID( classname )    \
-css::uno::Sequence< sal_Int8 > classname::getUnoTunnelImplementationId() \
-{   \
-    static ::cppu::OImplementationId* pId = nullptr;  \
-    if ( !pId ) \
-    {   \
-        ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() ); \
-        if ( !pId ) \
-        {   \
-            static ::cppu::OImplementationId aId;   \
-            pId = &aId; \
-        }   \
-    }   \
-    return pId->getImplementationId();  \
-} \
-css::uno::Sequence< sal_Int8 > classname::getImplementationId()    \
-{   \
-    return css::uno::Sequence<sal_Int8>(); \
-}
-
 #define IMPLEMENT_GETTYPES2( classname, baseclass1, baseclass2 )    \
     css::uno::Sequence< css::uno::Type > classname::getTypes()    \
     {   \

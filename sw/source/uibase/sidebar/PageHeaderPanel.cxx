@@ -25,12 +25,14 @@
 #include <svx/svxids.hrc>
 #include <svx/dlgutil.hxx>
 #include <svx/rulritem.hxx>
+#include <svx/svdtrans.hxx>
 #include "PageHeaderPanel.hxx"
 #include <sfx2/sidebar/ControlFactory.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/objsh.hxx>
+#include <uitool.hxx>
 #include <cmdid.h>
 
 namespace sw { namespace sidebar{
@@ -69,8 +71,11 @@ PageHeaderPanel::PageHeaderPanel(
 {
     get(mpHeaderToggle, "headertoggle");
     get(mpHeaderSpacingLB, "spacingpreset");
+    FieldUnit eMetric = ::GetDfltMetric(false);
+    mpHeaderSpacingLB->Init(IsInch(eMetric) ? SpacingType::SPACING_INCH : SpacingType::SPACING_CM);
     get(mpHeaderLayoutLB, "samecontentLB");
     get(mpHeaderMarginPresetLB, "headermarginpreset");
+    mpHeaderMarginPresetLB->Init(IsInch(eMetric) ? SpacingType::MARGINS_INCH : SpacingType::MARGINS_CM);
     get(mpCustomEntry, "customlabel");
 
     Initialize();
@@ -180,7 +185,7 @@ void PageHeaderPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_HEADER:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SfxBoolItem*>( pState) !=  nullptr )
+                dynamic_cast<const SfxBoolItem*>( pState) )
             {
                 mpHeaderItem.reset( static_cast<SfxBoolItem*>(pState->Clone()) );
                 mpHeaderToggle->Check(mpHeaderItem->GetValue());
@@ -191,7 +196,7 @@ void PageHeaderPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_HEADER_LRMARGIN:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SvxLongLRSpaceItem*>( pState) !=  nullptr )
+                dynamic_cast<const SvxLongLRSpaceItem*>( pState) )
             {
                 mpHeaderLRMarginItem.reset( static_cast<SvxLongLRSpaceItem*>(pState->Clone()) );
                 UpdateMarginControl();
@@ -201,7 +206,7 @@ void PageHeaderPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_HEADER_SPACING:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SvxLongULSpaceItem*>( pState) !=  nullptr )
+                dynamic_cast<const SvxLongULSpaceItem*>( pState) )
             {
                 mpHeaderSpacingItem.reset(static_cast<SvxLongULSpaceItem*>(pState->Clone()) );
                 UpdateSpacingControl();
@@ -211,7 +216,7 @@ void PageHeaderPanel::NotifyItemUpdate(
         case SID_ATTR_PAGE_HEADER_LAYOUT:
         {
             if(eState >= SfxItemState::DEFAULT &&
-                pState && dynamic_cast<const SfxInt16Item*>( pState) !=  nullptr )
+                dynamic_cast<const SfxInt16Item*>( pState) )
             {
                 mpHeaderLayoutItem.reset(static_cast<SfxInt16Item*>(pState->Clone()) );
                 UpdateLayoutControl();

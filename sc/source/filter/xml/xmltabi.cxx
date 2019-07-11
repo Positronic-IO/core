@@ -41,6 +41,7 @@
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/XMLEventsImportContext.hxx>
+#include <sal/log.hxx>
 
 #include <tools/urlobj.hxx>
 #include <sax/fastattribs.hxx>
@@ -216,7 +217,7 @@ SvXMLImportContextRef ScXMLTableContext::CreateChildContext( sal_uInt16 nPrefix,
 {
     const SvXMLTokenMap& rTokenMap(GetScImport().GetTableElemTokenMap());
     sal_uInt16 nToken = rTokenMap.Get(nPrefix, rLName);
-    if (pExternalRefInfo.get())
+    if (pExternalRefInfo)
     {
         return new SvXMLImportContext(GetImport(), nPrefix, rLName);
     }
@@ -257,7 +258,7 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL
     sax_fastparser::FastAttributeList *pAttribList =
         sax_fastparser::FastAttributeList::castToFastAttributeList( xAttrList );
 
-    if (pExternalRefInfo.get())
+    if (pExternalRefInfo)
     {
         // We only care about the table-row and table-source elements for
         // external cache data.
@@ -344,8 +345,7 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL
         pContext = new SvXMLImportContext( GetImport() );
     }
 
-    if( !pContext )
-        pContext = new SvXMLImportContext( GetImport() );
+    assert(pContext);
 
     return pContext;
 }
@@ -419,7 +419,7 @@ void SAL_CALL ScXMLTableContext::endFastElement(sal_Int32 /*nElement*/)
     rImport.ProgressBarIncrement();
 
     // store stream positions
-    if (!pExternalRefInfo.get() && nStartOffset >= 0 /* && nEndOffset >= 0 */)
+    if (!pExternalRefInfo && nStartOffset >= 0 /* && nEndOffset >= 0 */)
     {
         ScSheetSaveData* pSheetData = ScModelObj::getImplementation(rImport.GetModel())->GetSheetSaveData();
         SCTAB nTab = rTables.GetCurrentSheet();

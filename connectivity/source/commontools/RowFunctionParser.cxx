@@ -231,7 +231,7 @@ public:
     }
     virtual ORowSetValueDecoratorRef evaluate(const ODatabaseMetaDataResultSet::ORow& _aRow ) const override
     {
-        return _aRow[mpArg->evaluate(_aRow )->getValue().getInt32()];
+        return _aRow[mpArg->evaluate(_aRow )->getValue().getUInt32()];
     }
     virtual void fill(const ODatabaseMetaDataResultSet::ORow& /*_aRow*/ ) const override
     {
@@ -253,7 +253,7 @@ public:
 
         ParserContext::OperandStack& rNodeStack( mpContext->maOperandStack );
 
-        if( rNodeStack.size() < 1 )
+        if( rNodeStack.empty() )
             throw ParseError( "Not enough arguments for unary operator" );
 
         // retrieve arguments

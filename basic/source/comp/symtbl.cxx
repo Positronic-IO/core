@@ -433,15 +433,18 @@ void SbiProcDef::Match( SbiProcDef* pOld )
         pOld->pIn->GetParser()->SetCol1( 0 );
         pOld->pIn->GetParser()->Error( ERRCODE_BASIC_BAD_DECLARATION, aName );
     }
+
     if( !pIn && pOld->pIn )
     {
         // Replace old entry with the new one
         nPos = pOld->nPos;
         nId  = pOld->nId;
         pIn  = pOld->pIn;
-        std::unique_ptr<SbiSymDef> tmp(this);
-        std::swap(pIn->m_Data[nPos], tmp);
-        tmp.release();
+
+        // don't delete pOld twice, if it's stored in m_Data
+        if (pOld == pIn->m_Data[nPos].get())
+            pOld = nullptr;
+        pIn->m_Data[nPos].reset(this);
     }
     delete pOld;
 }

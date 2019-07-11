@@ -565,13 +565,9 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/sheet/_SpreadsheetDocument \
     qadevOOo/tests/java/ifc/sheet/_TableAutoFormatField \
     qadevOOo/tests/java/ifc/sheet/_XCellRangeData \
-    qadevOOo/tests/java/ifc/sheet/_XCellRangeReferrer \
     qadevOOo/tests/java/ifc/sheet/_XCellRangesQuery \
-    qadevOOo/tests/java/ifc/sheet/_XDocumentAuditing \
     qadevOOo/tests/java/ifc/sheet/_XEnhancedMouseClickBroadcaster \
-    qadevOOo/tests/java/ifc/sheet/_XFormulaQuery \
     qadevOOo/tests/java/ifc/sheet/_XRangeSelection \
-    qadevOOo/tests/java/ifc/sheet/_XSheetCellCursor \
     qadevOOo/tests/java/ifc/style/_CharacterProperties \
     qadevOOo/tests/java/ifc/style/_CharacterPropertiesAsian \
     qadevOOo/tests/java/ifc/style/_CharacterPropertiesComplex \
@@ -591,13 +587,9 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/table/_TableColumn \
     qadevOOo/tests/java/ifc/table/_TableRow \
     qadevOOo/tests/java/ifc/table/_XAutoFormattable \
-    qadevOOo/tests/java/ifc/table/_XCell \
-    qadevOOo/tests/java/ifc/table/_XCellCursor \
     qadevOOo/tests/java/ifc/table/_XCellRange \
-    qadevOOo/tests/java/ifc/table/_XColumnRowRange \
     qadevOOo/tests/java/ifc/table/_XTableChart \
     qadevOOo/tests/java/ifc/table/_XTableCharts \
-    qadevOOo/tests/java/ifc/table/_XTableChartsSupplier \
     qadevOOo/tests/java/ifc/table/_XTableColumns \
     qadevOOo/tests/java/ifc/table/_XTableRows \
     qadevOOo/tests/java/ifc/task/_XInteractionHandler \
@@ -728,8 +720,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/ifc/util/_XCloneable \
     qadevOOo/tests/java/ifc/util/_XFlushable \
     qadevOOo/tests/java/ifc/util/_XImportable \
-    qadevOOo/tests/java/ifc/util/_XIndent \
-    qadevOOo/tests/java/ifc/util/_XMergeable \
     qadevOOo/tests/java/ifc/util/_XModeSelector \
     qadevOOo/tests/java/ifc/util/_XModifiable \
     qadevOOo/tests/java/ifc/util/_XModifyBroadcaster \
@@ -972,13 +962,11 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScCellCursorObj \
     qadevOOo/tests/java/mod/_sc/ScCellFieldObj \
     qadevOOo/tests/java/mod/_sc/ScCellFieldsObj \
-    qadevOOo/tests/java/mod/_sc/ScCellFormatsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScCellFormatsObj \
     qadevOOo/tests/java/mod/_sc/ScCellObj \
     qadevOOo/tests/java/mod/_sc/ScCellRangeObj \
     qadevOOo/tests/java/mod/_sc/ScCellRangesObj \
     qadevOOo/tests/java/mod/_sc/ScCellSearchObj \
-    qadevOOo/tests/java/mod/_sc/ScCellsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScCellsObj \
     qadevOOo/tests/java/mod/_sc/ScCellTextCursor \
     qadevOOo/tests/java/mod/_sc/ScChartObj \
@@ -992,7 +980,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScDataPilotFieldsObj \
     qadevOOo/tests/java/mod/_sc/ScDataPilotItemObj \
     qadevOOo/tests/java/mod/_sc/ScDataPilotItemsObj \
-    qadevOOo/tests/java/mod/_sc/ScDataPilotTableObj \
     qadevOOo/tests/java/mod/_sc/ScDataPilotTablesObj \
     qadevOOo/tests/java/mod/_sc/ScDDELinkObj \
     qadevOOo/tests/java/mod/_sc/ScDDELinksObj \
@@ -1011,11 +998,9 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_DataPilotFieldsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_DataPilotItemsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_DataPilotTablesEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_DDELinksEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_FunctionDescriptionEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_LabelRangesEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_NamedRangesEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_ScenariosEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_SheetCellRangesEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_SheetLinksEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_SpreadsheetsEnumeration \
@@ -1023,13 +1008,8 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_SubTotalFieldsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TableAutoFormatEnumeration \
     qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TableChartsEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TableColumnsEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TableConditionalEntryEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TableRowsEnumeration \
-    qadevOOo/tests/java/mod/_sc/ScIndexEnumeration_TextFieldEnumeration \
     qadevOOo/tests/java/mod/_sc/ScLabelRangesObj \
     qadevOOo/tests/java/mod/_sc/ScModelObj \
-    qadevOOo/tests/java/mod/_sc/ScNamedRangeObj \
     qadevOOo/tests/java/mod/_sc/ScNamedRangesObj \
     qadevOOo/tests/java/mod/_sc/ScScenariosObj \
     qadevOOo/tests/java/mod/_sc/ScShapeObj \
@@ -1050,7 +1030,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_sc/ScTableSheetsObj \
     qadevOOo/tests/java/mod/_sc/ScTableValidationObj \
     qadevOOo/tests/java/mod/_sc/ScTabViewObj \
-    qadevOOo/tests/java/mod/_sc/ScUniqueCellFormatsEnumeration \
     qadevOOo/tests/java/mod/_sc/ScUniqueCellFormatsObj \
     qadevOOo/tests/java/mod/_sc/ScViewPaneObj \
     qadevOOo/tests/java/mod/_sc/XMLContentExporter \
@@ -1158,7 +1137,6 @@ $(eval $(call gb_Jar_add_sourcefiles,OOoRunner,\
     qadevOOo/tests/java/mod/_svx/SvxShapeDimensioning \
     qadevOOo/tests/java/mod/_svx/SvxShapeGroup \
     qadevOOo/tests/java/mod/_svx/SvxShapePolyPolygon \
-    qadevOOo/tests/java/mod/_svx/SvxShapePolyPolygonBezier \
     qadevOOo/tests/java/mod/_svx/SvxUnoNumberingRules \
     qadevOOo/tests/java/mod/_svx/SvxUnoText \
     qadevOOo/tests/java/mod/_svx/SvxUnoTextContent \

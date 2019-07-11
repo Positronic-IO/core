@@ -58,6 +58,7 @@
 #include <osl/thread.h>
 #include <rtl/strbuf.hxx>
 #include <rtl/bootstrap.hxx>
+#include <sal/log.hxx>
 
 #include <tools/debug.hxx>
 #include <vcl/svapp.hxx>
@@ -81,7 +82,7 @@ static int XErrorHdl( Display *pDisplay, XErrorEvent *pEvent )
 
 static int XIOErrorHdl( Display * )
 {
-    if (::osl::Thread::getCurrentIdentifier() == Application::GetMainThreadIdentifier())
+    if ( Application::IsMainThread() )
     {
         /*  #106197# hack: until a real shutdown procedure exists
          *  _exit ASAP
@@ -313,7 +314,7 @@ void X11SalData::PushXErrorLevel( bool bIgnore )
 
 void X11SalData::PopXErrorLevel()
 {
-    if( m_aXErrorHandlerStack.size() )
+    if( !m_aXErrorHandlerStack.empty() )
     {
         XSetErrorHandler( m_aXErrorHandlerStack.back().m_aHandler );
         m_aXErrorHandlerStack.pop_back();
@@ -460,7 +461,7 @@ void SalXLib::Init()
 }
 
 extern "C" {
-void EmitFontpathWarning()
+static void EmitFontpathWarning()
 {
     static Bool bOnce = False;
     if ( !bOnce )

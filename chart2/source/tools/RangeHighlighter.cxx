@@ -24,11 +24,15 @@
 #include <ObjectIdentifier.hxx>
 #include <DataSeriesHelper.hxx>
 
-#include <com/sun/star/chart2/XDataSeries.hpp>
+#include <com/sun/star/chart2/ScaleData.hpp>
+#include <com/sun/star/chart2/XAxis.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
+#include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <comphelper/sequence.hxx>
 #include <tools/diagnose_ex.h>
+#include <tools/color.hxx>
 
 using namespace ::com::sun::star;
 

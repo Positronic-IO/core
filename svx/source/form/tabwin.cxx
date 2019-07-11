@@ -32,6 +32,7 @@
 #include <com/sun/star/awt/XControlContainer.hpp>
 #include <com/sun/star/util/XLocalizedAliases.hpp>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/types.hxx>
 
 #include <helpids.h>
 #include <svx/fmshell.hxx>
@@ -49,7 +50,7 @@
 #include <comphelper/property.hxx>
 #include <sfx2/frame.hxx>
 #include <svx/dataaccessdescriptor.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <vcl/settings.hxx>
 #include <tabwin.hrc>
 
@@ -75,7 +76,7 @@ namespace {
 
 struct ColumnInfo
 {
-    OUString sColumnName;
+    OUString const sColumnName;
     explicit ColumnInfo(const OUString& i_sColumnName)
         : sColumnName(i_sColumnName)
     {

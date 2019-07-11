@@ -19,12 +19,12 @@
 #ifndef INCLUDED_UNOTOOLS_UCBSTREAMHELPER_HXX
 #define INCLUDED_UNOTOOLS_UCBSTREAMHELPER_HXX
 
-#include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/io/XInputStream.hpp>
-#include <com/sun/star/io/XStream.hpp>
+#include <com/sun/star/awt/XWindow.hpp>
+
 #include <unotools/unotoolsdllapi.h>
 
 #include <tools/stream.hxx>
+#include <memory>
 
 namespace com
 {
@@ -32,10 +32,6 @@ namespace com
     {
         namespace star
         {
-            namespace task
-            {
-                class XInteractionHandler;
-            }
             namespace io
             {
                 class XStream;
@@ -44,21 +40,20 @@ namespace com
         }
     }
 }
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
 
 namespace utl
 {
-    class UcbLockBytesHandler;
-
     class UNOTOOLS_DLLPUBLIC UcbStreamHelper
     {
     public:
-        static SvStream*    CreateStream( const OUString& rFileName, StreamMode eOpenMode );
-        static SvStream*    CreateStream( const OUString& rFileName, StreamMode eOpenMode,
-                                          bool bFileExists );
-        static SvStream*    CreateStream( const css::uno::Reference < css::io::XInputStream >& xStream );
-        static SvStream*    CreateStream( const css::uno::Reference < css::io::XStream >& xStream );
-        static SvStream*    CreateStream( const css::uno::Reference < css::io::XInputStream >& xStream, bool bCloseStream );
-        static SvStream*    CreateStream( const css::uno::Reference < css::io::XStream >& xStream, bool bCloseStream );
+        static std::unique_ptr<SvStream> CreateStream(const OUString& rFileName, StreamMode eOpenMode, css::uno::Reference<css::awt::XWindow> xParentWin = nullptr);
+        static std::unique_ptr<SvStream> CreateStream(const OUString& rFileName, StreamMode eOpenMode,
+                                                      bool bFileExists, css::uno::Reference<css::awt::XWindow> xParentWin = nullptr);
+        static std::unique_ptr<SvStream> CreateStream( const css::uno::Reference < css::io::XInputStream >& xStream );
+        static std::unique_ptr<SvStream> CreateStream( const css::uno::Reference < css::io::XStream >& xStream );
+        static std::unique_ptr<SvStream> CreateStream( const css::uno::Reference < css::io::XInputStream >& xStream, bool bCloseStream );
+        static std::unique_ptr<SvStream> CreateStream( const css::uno::Reference < css::io::XStream >& xStream, bool bCloseStream );
     };
 }
 

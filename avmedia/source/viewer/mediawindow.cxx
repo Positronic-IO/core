@@ -33,6 +33,7 @@
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 #include <com/sun/star/ui/dialogs/XFilePickerControlAccess.hpp>
 #include <memory>
+#include <sal/log.hxx>
 
 #define AVMEDIA_FRAMEGRABBER_DEFAULTFRAME_MEDIATIME 3.0
 
@@ -218,7 +219,7 @@ bool MediaWindow::executeMediaURLDialog(weld::Window* pParent, OUString& rURL, b
     static const char               aWildcard[] = "*.";
     FilterNameVector                aFilters;
     static const char               aSeparator[] = ";";
-    OUString                        aAllTypes;
+    OUStringBuffer                  aAllTypes;
 
     aDlg.SetTitle( AvmResId( o_pbLink != nullptr
                 ? AVMEDIA_STR_INSERTMEDIA_DLG : AVMEDIA_STR_OPENMEDIA_DLG ) );
@@ -230,29 +231,29 @@ bool MediaWindow::executeMediaURLDialog(weld::Window* pParent, OUString& rURL, b
         for( sal_Int32 nIndex = 0; nIndex >= 0; )
         {
             if( !aAllTypes.isEmpty() )
-                aAllTypes += aSeparator;
+                aAllTypes.append(aSeparator);
 
-            ( aAllTypes += aWildcard ) += aFilters[ i ].second.getToken( 0, ';', nIndex );
+            aAllTypes.append(aWildcard).append(aFilters[ i ].second.getToken( 0, ';', nIndex ));
         }
     }
 
     // add filter for all media types
-    aDlg.AddFilter( AvmResId( AVMEDIA_STR_ALL_MEDIAFILES ), aAllTypes );
+    aDlg.AddFilter( AvmResId( AVMEDIA_STR_ALL_MEDIAFILES ), aAllTypes.makeStringAndClear() );
 
     for( FilterNameVector::size_type i = 0; i < aFilters.size(); ++i )
     {
-        OUString aTypes;
+        OUStringBuffer aTypes;
 
         for( sal_Int32 nIndex = 0; nIndex >= 0; )
         {
             if( !aTypes.isEmpty() )
-                aTypes += aSeparator;
+                aTypes.append(aSeparator);
 
-            ( aTypes += aWildcard ) += aFilters[ i ].second.getToken( 0, ';', nIndex );
+            aTypes.append(aWildcard).append(aFilters[ i ].second.getToken( 0, ';', nIndex ));
         }
 
         // add single filters
-        aDlg.AddFilter( aFilters[ i ].first, aTypes );
+        aDlg.AddFilter( aFilters[ i ].first, aTypes.makeStringAndClear() );
     }
 
     // add filter for all types
@@ -396,13 +397,13 @@ uno::Reference< graphic::XGraphic > MediaWindow::grabFrame( const OUString& rURL
         }
     }
 
-    if( !xRet.is() && !xGraphic.get() )
+    if (!xRet.is() && !xGraphic)
     {
         const BitmapEx aBmpEx(AVMEDIA_BMP_EMPTYLOGO);
         xGraphic.reset( new Graphic( aBmpEx ) );
     }
 
-    if( xGraphic.get() )
+    if (xGraphic)
         xRet = xGraphic->GetXGraphic();
 
     return xRet;

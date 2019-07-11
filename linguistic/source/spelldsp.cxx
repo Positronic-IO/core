@@ -24,6 +24,7 @@
 #include <com/sun/star/linguistic2/XSearchableDictionaryList.hpp>
 #include <com/sun/star/linguistic2/SpellFailure.hpp>
 #include <com/sun/star/registry/XRegistryKey.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <cppuhelper/factory.hxx>
 #include <unotools/localedatawrapper.hxx>
@@ -32,6 +33,7 @@
 #include <tools/debug.hxx>
 #include <svl/lngmisc.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 
 #include <vector>
 
@@ -153,7 +155,7 @@ std::vector< OUString > ProposalList::GetVector() const
     return aRes;
 }
 
-bool SvcListHasLanguage(
+static bool SvcListHasLanguage(
         const LangSvcEntries_Spell &rEntry,
         LanguageType nLanguage )
 {

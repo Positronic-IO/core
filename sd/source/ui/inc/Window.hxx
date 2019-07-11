@@ -22,7 +22,7 @@
 
 #include <tools/gen.hxx>
 #include <vcl/window.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
 namespace sd {
 
@@ -151,7 +151,6 @@ public:
     void DropScroll (const Point& rMousePos);
     virtual void KeyInput(const KeyEvent& rKEvt) override;
 protected:
-    VclPtr< ::sd::Window> mpShareWin;
     Point maWinPos;
     Point maViewOrigin;
     Size maViewSize;

@@ -23,8 +23,6 @@
 
 #include <rtl/ustring.hxx>
 
-#include <vector>
-
 
 namespace vcl {
 
@@ -90,6 +88,7 @@ public:
         OLE,
         OutlineText,
         Pivot,
+        Printpreview,
         Series,
         SlidesorterPage,
         Table,
@@ -117,8 +116,8 @@ public:
         const Application eApplication,
         const Context eContext);
     EnumContext (
-        const ::rtl::OUString& rsApplicationName,
-        const ::rtl::OUString& rsContextName);
+        const OUString& rsApplicationName,
+        const OUString& rsContextName);
 
     /** This variant of the GetCombinedContext() method treats some
         application names as identical to each other.  Replacements
@@ -134,7 +133,7 @@ public:
     bool operator == (const EnumContext& rOther);
     bool operator != (const EnumContext& rOther);
 
-    /** When two contexts are matched against each other then
+    /** When two contexts are matched against each other, then
         application or context name may have the wildcard value 'any'.
         In order to prefer matches without wildcards over matches with
         wildcards we introduce a integer evaluation for matches.
@@ -142,11 +141,11 @@ public:
     const static sal_Int32 NoMatch;
     const static sal_Int32 OptimalMatch;
 
-    static Application GetApplicationEnum (const ::rtl::OUString& rsApplicationName);
-    static const ::rtl::OUString& GetApplicationName (const Application eApplication);
+    static Application GetApplicationEnum (const OUString& rsApplicationName);
+    static const OUString& GetApplicationName (const Application eApplication);
 
-    static Context GetContextEnum (const ::rtl::OUString& rsContextName);
-    static const ::rtl::OUString& GetContextName (const Context eContext);
+    static Context GetContextEnum (const OUString& rsContextName);
+    static const OUString& GetContextName (const Context eContext);
 
 private:
     Application meApplication;
@@ -154,8 +153,8 @@ private:
 
     static void ProvideApplicationContainers();
     static void ProvideContextContainers();
-    static void AddEntry (const ::rtl::OUString& rsName, const Application eApplication);
-    static void AddEntry (const ::rtl::OUString& rsName, const Context eContext);
+    static void AddEntry (const OUString& rsName, const Application eApplication);
+    static void AddEntry (const OUString& rsName, const Context eContext);
 };
 
 

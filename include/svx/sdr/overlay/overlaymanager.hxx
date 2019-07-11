@@ -70,7 +70,7 @@ namespace sdr
             sal_uInt32                                  mnStripeLengthPixel; // defaults to 4L
 
             // hold an incarnation of Drawinglayer configuration options
-            SvtOptionsDrawinglayer                      maDrawinglayerOpt;
+            SvtOptionsDrawinglayer const                maDrawinglayerOpt;
 
             // hold buffered the logic length of discrete vector (1.0, 0.0) and the
             // view transformation belonging to it. Update happens in getDiscreteOne()
@@ -102,9 +102,6 @@ namespace sdr
 
             // flush. Do buffered updates.
             virtual void flush();
-
-            // restore part of background. Implemented form buffered versions only.
-            virtual void restoreBackground(const vcl::Region& rRegion) const;
 
             // get the OutputDevice
             OutputDevice& getOutputDevice() const { return mrOutputDevice; }

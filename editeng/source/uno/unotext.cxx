@@ -100,7 +100,7 @@ const SvxItemPropertySet* ImplGetSvxTextPortionSvxPropertySet()
     return &aSvxTextPortionPropertySet;
 }
 
-const SfxItemPropertySet* ImplGetSvxTextPortionSfxPropertySet()
+static const SfxItemPropertySet* ImplGetSvxTextPortionSfxPropertySet()
 {
     static SfxItemPropertySet aSvxTextPortionSfxPropertySet( ImplGetSvxTextPortionPropertyMap() );
     return &aSvxTextPortionSfxPropertySet;
@@ -122,7 +122,7 @@ const SfxItemPropertyMapEntry* ImplGetSvxUnoOutlinerTextCursorPropertyMap()
 
     return aSvxUnoOutlinerTextCursorPropertyMap;
 }
-const SfxItemPropertySet* ImplGetSvxUnoOutlinerTextCursorSfxPropertySet()
+static const SfxItemPropertySet* ImplGetSvxUnoOutlinerTextCursorSfxPropertySet()
 {
     static SfxItemPropertySet aTextCursorSfxPropertySet( ImplGetSvxUnoOutlinerTextCursorPropertyMap() );
     return &aTextCursorSfxPropertySet;
@@ -194,7 +194,7 @@ void CheckSelection( struct ESelection& rSel, SvxTextForwarder const * pForwarde
     }
 }
 
-void CheckSelection( struct ESelection& rSel, SvxEditSource *pEdit ) throw()
+static void CheckSelection( struct ESelection& rSel, SvxEditSource *pEdit ) throw()
 {
     if (!pEdit)
         return;
@@ -208,7 +208,7 @@ void CheckSelection( struct ESelection& rSel, SvxEditSource *pEdit ) throw()
 UNO3_GETIMPLEMENTATION_IMPL( SvxUnoTextRangeBase );
 
 SvxUnoTextRangeBase::SvxUnoTextRangeBase(const SvxItemPropertySet* _pSet)
-    : mpPropSet(_pSet), mpEditSource(nullptr)
+    : mpPropSet(_pSet)
 {
 }
 
@@ -279,18 +279,15 @@ void SvxUnoTextRangeBase::SetEditSource( SvxEditSource* pSource ) throw()
 
 /** puts a field item with a copy of the given FieldData into the itemset
     corresponding with this range */
-void SvxUnoTextRangeBase::attachField( const SvxFieldData* pData ) throw()
+void SvxUnoTextRangeBase::attachField( std::unique_ptr<SvxFieldData> pData ) throw()
 {
     SolarMutexGuard aGuard;
 
-    if( pData )
+    SvxTextForwarder* pForwarder = mpEditSource ? mpEditSource->GetTextForwarder() : nullptr;
+    if( pForwarder )
     {
-        SvxTextForwarder* pForwarder = mpEditSource ? mpEditSource->GetTextForwarder() : nullptr;
-        if( pForwarder )
-        {
-            SvxFieldItem aField( *pData, EE_FEATURE_FIELD );
-            pForwarder->QuickInsertField( aField, maSelection );
-        }
+        SvxFieldItem aField( std::move(pData), EE_FEATURE_FIELD );
+        pForwarder->QuickInsertField( std::move(aField), maSelection );
     }
 }
 
@@ -582,9 +579,9 @@ uno::Any SAL_CALL SvxUnoTextRangeBase::getPropertyValue(const OUString& Property
         const ESelection& rSel = GetSelection();
         text::TextRangeSelection aSel;
         aSel.Start.Paragraph = rSel.nStartPara;
-        aSel.Start.PositionInParagraph = static_cast<sal_Int32>(rSel.nStartPos);
+        aSel.Start.PositionInParagraph = rSel.nStartPos;
         aSel.End.Paragraph = rSel.nEndPara;
-        aSel.End.PositionInParagraph = static_cast<sal_Int32>(rSel.nEndPos);
+        aSel.End.PositionInParagraph = rSel.nEndPos;
         return uno::makeAny(aSel);
     }
 
@@ -1127,7 +1124,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
         }
 
         if( bUnknownPropertyFound )
-            return !bUnknownPropertyFound;
+            return false;
 
         if( nWID != 0 )
             eItemState = pSet->GetItemState( nWID, false );
@@ -1148,7 +1145,7 @@ bool SvxUnoTextRangeBase::_getOnePropertyStates(const SfxItemSet* pSet, const Sf
                     rState = beans::PropertyState_AMBIGUOUS_VALUE;
         }
     }
-    return !bUnknownPropertyFound;
+    return true;
 }
 
 void SAL_CALL SvxUnoTextRangeBase::setPropertyToDefault( const OUString& PropertyName )
@@ -1973,7 +1970,7 @@ void SAL_CALL SvxUnoTextBase::moveTextRange( const uno::Reference< text::XTextRa
 /// @throws lang::IllegalArgumentException
 /// @throws beans::UnknownPropertyException
 /// @throws uno::RuntimeException
-void SvxPropertyValuesToItemSet(
+static void SvxPropertyValuesToItemSet(
         SfxItemSet &rItemSet,
         const uno::Sequence< beans::PropertyValue >& rPropertyVaules,
         const SfxItemPropertySet *pPropSet,

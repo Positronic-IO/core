@@ -18,7 +18,6 @@
  */
 
 #include "datasource.hxx"
-#include <userinformation.hxx>
 #include "commandcontainer.hxx"
 #include <stringconstants.hxx>
 #include <core_resource.hxx>
@@ -27,6 +26,7 @@
 #include "SharedConnection.hxx"
 #include "databasedocument.hxx"
 #include <OAuthenticationContinuation.hxx>
+#include <svtools/miscopt.hxx>
 
 #include <hsqlimport.hxx>
 #include <migrwarndlg.hxx>
@@ -50,12 +50,11 @@
 #include <com/sun/star/ui/XUIConfigurationManagerSupplier.hpp>
 #include <com/sun/star/view/XPrintable.hpp>
 
-#include <comphelper/guarding.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/property.hxx>
-#include <comphelper/seqstream.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/types.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
@@ -64,6 +63,7 @@
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
 #include <osl/process.h>
+#include <sal/log.hxx>
 #include <tools/urlobj.hxx>
 #include <typelib/typedescription.hxx>
 #include <unotools/confignode.hxx>
@@ -577,6 +577,25 @@ void ODatabaseSource::disposing()
     m_pImpl.clear();
 }
 
+namespace
+{
+#if ENABLE_FIREBIRD_SDBC
+    weld::Window* GetFrameWeld(const Reference<XModel>& rModel)
+    {
+        if (!rModel.is())
+            return nullptr;
+        Reference<XController> xController(rModel->getCurrentController());
+        if (!xController.is())
+            return nullptr;
+        Reference<XFrame> xFrame(xController->getFrame());
+        if (!xFrame.is())
+            return nullptr;
+        Reference<css::awt::XWindow> xWindow(xFrame->getContainerWindow());
+        return Application::GetFrameWeld(xWindow);
+    }
+#endif
+}
+
 Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString& _rUid, const OUString& _rPwd)
 {
     Reference< XConnection > xReturn;
@@ -585,8 +604,11 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
 
 #if ENABLE_FIREBIRD_SDBC
     bool bNeedMigration = false;
-    if(m_pImpl->m_sConnectURL == "sdbc:embedded:hsqldb")
+    SvtMiscOptions aMiscOptions;
+
+    if(aMiscOptions.IsExperimentalMode() && m_pImpl->m_sConnectURL == "sdbc:embedded:hsqldb")
     {
+        Reference<XStorage> const xRootStorage = m_pImpl->getOrCreateRootStorage();
         OUString sMigrEnvVal;
         osl_getEnvironment(OUString("DBACCESS_HSQL_MIGRATION").pData,
             &sMigrEnvVal.pData);
@@ -594,11 +616,33 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
             bNeedMigration = true;
         else
         {
-            MigrationWarnDialog aWarnDlg{nullptr};
-            bNeedMigration = aWarnDlg.run() == RET_OK;
+            Reference<XPropertySet> const xPropSet(xRootStorage, UNO_QUERY_THROW);
+            sal_Int32 nOpenMode(0);
+            if ((xPropSet->getPropertyValue("OpenMode") >>= nOpenMode)
+                && (nOpenMode & css::embed::ElementModes::WRITE))
+            {
+                MigrationWarnDialog aWarnDlg(GetFrameWeld(m_pImpl->getModel_noCreate()));
+                bNeedMigration = aWarnDlg.run() == RET_OK;
+            }
         }
         if (bNeedMigration)
+        {
+            // back up content xml file if migration was successful
+            constexpr char BACKUP_XML_NAME[] = "content_before_migration.xml";
+            try
+            {
+                if(xRootStorage->isStreamElement(BACKUP_XML_NAME))
+                    xRootStorage->removeElement(BACKUP_XML_NAME);
+            }
+            catch (NoSuchElementException&)
+            {
+                SAL_INFO("dbaccess", "No file content_before_migration.xml found" );
+            }
+            xRootStorage->copyElementTo("content.xml", xRootStorage,
+                BACKUP_XML_NAME);
+
             m_pImpl->m_sConnectURL = "sdbc:embedded:firebird";
+        }
     }
 #endif
 
@@ -720,7 +764,7 @@ Reference< XConnection > ODatabaseSource::buildLowLevelConnection(const OUString
                 m_pImpl->getDocumentSubStorageSupplier() );
         dbahsql::HsqlImporter importer(xReturn,
                 xDocSup->getDocumentSubStorage("database",ElementModes::READWRITE) );
-        importer.importHsqlDatabase();
+        importer.importHsqlDatabase(GetFrameWeld(m_pImpl->getModel_noCreate()));
     }
 #endif
 
@@ -857,12 +901,11 @@ namespace
     void lcl_setPropertyValues_resetOrRemoveOther( const Reference< XPropertyBag >& _rxPropertyBag, const Sequence< PropertyValue >& _rAllNewPropertyValues )
     {
         // sequences are ugly to operate on
-        typedef std::set< OUString >   StringSet;
-        StringSet aToBeSetPropertyNames;
+        std::set<OUString> aToBeSetPropertyNames;
         std::transform(
             _rAllNewPropertyValues.begin(),
             _rAllNewPropertyValues.end(),
-            std::insert_iterator< StringSet >( aToBeSetPropertyNames, aToBeSetPropertyNames.end() ),
+            std::inserter( aToBeSetPropertyNames, aToBeSetPropertyNames.end() ),
             SelectPropertyName()
         );
 

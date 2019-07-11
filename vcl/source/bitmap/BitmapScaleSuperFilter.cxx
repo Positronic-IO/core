@@ -26,6 +26,8 @@
 
 #include <algorithm>
 #include <memory>
+#include <svdata.hxx>
+#include <sal/log.hxx>
 
 namespace {
 
@@ -48,7 +50,7 @@ void generateMap(long nW, long nDstW, bool bHMirr, long* pMapIX, long* pMapFX)
 }
 
 struct ScaleContext {
-    BitmapReadAccess  *mpSrc;
+    BitmapReadAccess  * const mpSrc;
     BitmapWriteAccess *mpDest;
     long mnSrcW, mnDestW;
     long mnSrcH, mnDestH;
@@ -89,7 +91,7 @@ typedef void (*ScaleRangeFn)(ScaleContext &rCtx, long nStartY, long nEndY);
 
 class ScaleTask : public comphelper::ThreadTask
 {
-    ScaleRangeFn mpFn;
+    ScaleRangeFn const mpFn;
     std::vector< ScaleRangeContext > maStrips;
 public:
     explicit ScaleTask( const std::shared_ptr<comphelper::ThreadTaskTag>& pTag, ScaleRangeFn pFn )
@@ -200,7 +202,8 @@ void scale24bitBGR(ScaleContext &rCtx, long nStartY, long nEndY)
             pTmp0++; pTmp1++;
             sal_uInt8 cR0 = MAP( *pTmp0, *pTmp1, nTempFX );
 
-            pTmp1 = ( pTmp0 = pLine1 + nOff ) + 3;
+            pTmp0 = pLine1 + nOff;
+            pTmp1 = pTmp0 + 3;
             sal_uInt8 cB1 = MAP( *pTmp0, *pTmp1, nTempFX );
             pTmp0++; pTmp1++;
             sal_uInt8 cG1 = MAP( *pTmp0, *pTmp1, nTempFX );
@@ -240,7 +243,8 @@ void scale24bitRGB(ScaleContext &rCtx, long nStartY, long nEndY)
             pTmp0++; pTmp1++;
             sal_uInt8 cB0 = MAP( *pTmp0, *pTmp1, nTempFX );
 
-            pTmp1 = ( pTmp0 = pLine1 + nOff ) + 3;
+            pTmp0 = pLine1 + nOff;
+            pTmp1 = pTmp0 + 3;
             sal_uInt8 cR1 = MAP( *pTmp0, *pTmp1, nTempFX );
             pTmp0++; pTmp1++;
             sal_uInt8 cG1 = MAP( *pTmp0, *pTmp1, nTempFX );
@@ -929,9 +933,10 @@ BitmapScaleSuperFilter::BitmapScaleSuperFilter(const double& rScaleX, const doub
 BitmapScaleSuperFilter::~BitmapScaleSuperFilter()
 {}
 
-BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap)
+BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap) const
 {
     Bitmap aBitmap(rBitmap.GetBitmap());
+    SalBitmap* pKey = aBitmap.ImplGetSalBitmap().get();
 
     bool bRet = false;
 
@@ -950,10 +955,27 @@ BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap)
 
     if (nDstW <= 1 || nDstH <= 1)
         return BitmapEx();
+
+    // check cache for a previously scaled version of this
+    ImplSVData* pSVData = ImplGetSVData();
+    auto& rCache = pSVData->maGDIData.maScaleCache;
+    auto aFind = rCache.find(pKey);
+    if (aFind != rCache.end())
+    {
+        if (aFind->second.GetSizePixel().Width() == nDstW && aFind->second.GetSizePixel().Height() == nDstH)
+            return aFind->second;
+    }
+
     {
         Bitmap::ScopedReadAccess pReadAccess(aBitmap);
 
         Bitmap aOutBmp(Size(nDstW, nDstH), 24);
+        Size aOutSize = aOutBmp.GetSizePixel();
+        if (!aOutSize.Width() || !aOutSize.Height())
+        {
+            SAL_WARN("vcl.gdi", "bmp creation failed");
+            return BitmapEx();
+        }
 
         BitmapScopedWriteAccess pWriteAccess(aOutBmp);
 
@@ -1031,14 +1053,14 @@ BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap)
                     long nStripY = nStartY;
                     for ( sal_uInt32 t = 0; t < nThreads - 1; t++ )
                     {
-                        ScaleTask *pTask = new ScaleTask( pTag, pScaleRangeFn );
+                        std::unique_ptr<ScaleTask> pTask(new ScaleTask( pTag, pScaleRangeFn ));
                         for ( sal_uInt32 j = 0; j < nStripsPerThread; j++ )
                         {
                             ScaleRangeContext aRC( &aContext, nStripY );
                             pTask->push( aRC );
                             nStripY += SCALE_THREAD_STRIP;
                         }
-                        rShared.pushTask( pTask );
+                        rShared.pushTask( std::move(pTask) );
                     }
                     // finish any remaining bits here
                     pScaleRangeFn( aContext, nStripY, nEndY );
@@ -1058,11 +1080,8 @@ BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap)
 
             bRet = true;
 
-            if (bRet)
-            {
-                aBitmap.AdaptBitCount(aOutBmp);
-                aBitmap = aOutBmp;
-            }
+            aBitmap.AdaptBitCount(aOutBmp);
+            aBitmap = aOutBmp;
         }
     }
 
@@ -1070,7 +1089,9 @@ BitmapEx BitmapScaleSuperFilter::execute(BitmapEx const& rBitmap)
     {
         tools::Rectangle aRect(Point(0, 0), Point(nDstW, nDstH));
         aBitmap.Crop(aRect);
-        return BitmapEx(aBitmap);
+        BitmapEx aRet(aBitmap);
+        rCache.insert(std::make_pair(pKey, aRet));
+        return aRet;
     }
 
     return BitmapEx();

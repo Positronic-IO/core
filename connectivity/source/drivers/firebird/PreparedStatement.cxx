@@ -28,6 +28,7 @@
 #include <propertyids.hxx>
 #include <time.h>
 #include <connectivity/dbtools.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/sdbc/DataType.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
@@ -207,7 +208,7 @@ void SAL_CALL OPreparedStatement::setString(sal_Int32 nParameterIndex,
         {
             str = str.copy(0, max_varchar_len);
         }
-        const short nLength = str.getLength();
+        const auto nLength = str.getLength();
         memcpy(pVar->sqldata, &nLength, 2);
         // Actual data
         memcpy(pVar->sqldata + 2, str.getStr(), str.getLength());
@@ -332,9 +333,9 @@ sal_Int64 toNumericWithoutDecimalPlace(const OUString& sSource)
         OUStringBuffer sBuffer(15);
         if(nDotIndex > 0)
         {
-            sBuffer.append(sNumber.copy(0, nDotIndex));
+            sBuffer.appendCopy(sNumber, 0, nDotIndex);
         }
-        sBuffer.append(sNumber.copy(nDotIndex + 1));
+        sBuffer.appendCopy(sNumber, nDotIndex + 1);
         return sBuffer.makeStringAndClear().toInt64();
     }
 }
@@ -566,7 +567,7 @@ void SAL_CALL OPreparedStatement::setClob(sal_Int32 nParameterIndex, const Refer
             break;
     }
 
-    // We need to make sure we close the Blob even if their are errors, hence evaluate
+    // We need to make sure we close the Blob even if there are errors, hence evaluate
     // errors after closing.
     closeBlobAfterWriting(aBlobHandle);
 
@@ -604,7 +605,7 @@ void OPreparedStatement::setClob( sal_Int32 nParameterIndex, const OUString& rSt
                             sData.getLength(),
                             sData.getStr() );
 
-    // We need to make sure we close the Blob even if their are errors, hence evaluate
+    // We need to make sure we close the Blob even if there are errors, hence evaluate
     // errors after closing.
     closeBlobAfterWriting(aBlobHandle);
 
@@ -635,27 +636,28 @@ void SAL_CALL OPreparedStatement::setBlob(sal_Int32 nParameterIndex,
 
     openBlobForWriting(aBlobHandle, aBlobId);
 
-    // Max segment size is 2^16 == SAL_MAX_UINT16
-    // LEM TODO: SAL_MAX_UINT16 is 2^16-1; this mixup is probably innocuous; to be checked
-    sal_uInt64 nDataWritten = 0;
     ISC_STATUS aErr = 0;
-    while (xBlob->length() - nDataWritten > 0)
+    const sal_Int64 nBlobLen = xBlob->length();
+    if (nBlobLen > 0)
     {
-        sal_uInt64 nDataRemaining = xBlob->length() - nDataWritten;
-        sal_uInt16 nWriteSize = std::min<sal_uInt64>(nDataRemaining, SAL_MAX_UINT16);
-        aErr = isc_put_segment(m_statusVector,
-                               &aBlobHandle,
-                               nWriteSize,
-                               reinterpret_cast<const char*>(xBlob->getBytes(nDataWritten, nWriteSize).getConstArray()));
-        nDataWritten += nWriteSize;
+        // Max write size is 0xFFFF == SAL_MAX_UINT16
+        sal_uInt64 nDataWritten = 0;
+        while (sal::static_int_cast<sal_uInt64>(nBlobLen) > nDataWritten)
+        {
+            sal_uInt64 nDataRemaining = nBlobLen - nDataWritten;
+            sal_uInt16 nWriteSize = std::min(nDataRemaining, sal_uInt64(SAL_MAX_UINT16));
+            aErr = isc_put_segment(m_statusVector,
+                                   &aBlobHandle,
+                                   nWriteSize,
+                                   reinterpret_cast<const char*>(xBlob->getBytes(nDataWritten, nWriteSize).getConstArray()));
+            nDataWritten += nWriteSize;
 
-
-        if (aErr)
-            break;
-
+            if (aErr)
+                break;
+        }
     }
 
-    // We need to make sure we close the Blob even if their are errors, hence evaluate
+    // We need to make sure we close the Blob even if there are errors, hence evaluate
     // errors after closing.
     closeBlobAfterWriting(aBlobHandle);
 
@@ -765,7 +767,7 @@ void SAL_CALL OPreparedStatement::setObjectWithInfo( sal_Int32 parameterIndex, c
 }
 
 
-void SAL_CALL OPreparedStatement::setObjectNull( sal_Int32 nIndex, sal_Int32, const ::rtl::OUString& )
+void SAL_CALL OPreparedStatement::setObjectNull( sal_Int32 nIndex, sal_Int32, const OUString& )
 {
     ::osl::MutexGuard aGuard( m_aMutex );
     checkDisposed(OStatementCommonBase_Base::rBHelper.bDisposed);
@@ -801,24 +803,28 @@ void SAL_CALL OPreparedStatement::setBytes(sal_Int32 nParameterIndex,
 
         openBlobForWriting(aBlobHandle, aBlobId);
 
-        // Max segment size is 2^16 == SAL_MAX_UINT16
-        sal_uInt64 nDataWritten = 0;
         ISC_STATUS aErr = 0;
-        while (xBytes.getLength() - nDataWritten > 0)
+        const sal_Int32 nBytesLen = xBytes.getLength();
+        if (nBytesLen > 0)
         {
-            sal_uInt64 nDataRemaining = xBytes.getLength() - nDataWritten;
-            sal_uInt16 nWriteSize = std::min<sal_uInt64>(nDataRemaining, SAL_MAX_UINT16);
-            aErr = isc_put_segment(m_statusVector,
-                                   &aBlobHandle,
-                                   nWriteSize,
-                                   reinterpret_cast<const char*>(xBytes.getConstArray()) + nDataWritten);
-            nDataWritten += nWriteSize;
+            // Max write size is 0xFFFF == SAL_MAX_UINT16
+            sal_uInt32 nDataWritten = 0;
+            while (sal::static_int_cast<sal_uInt32>(nBytesLen) > nDataWritten)
+            {
+                sal_uInt32 nDataRemaining = nBytesLen - nDataWritten;
+                sal_uInt16 nWriteSize = std::min(nDataRemaining, sal_uInt32(SAL_MAX_UINT16));
+                aErr = isc_put_segment(m_statusVector,
+                                       &aBlobHandle,
+                                       nWriteSize,
+                                       reinterpret_cast<const char*>(xBytes.getConstArray()) + nDataWritten);
+                nDataWritten += nWriteSize;
 
-            if (aErr)
-                break;
+                if (aErr)
+                    break;
+            }
         }
 
-        // We need to make sure we close the Blob even if their are errors, hence evaluate
+        // We need to make sure we close the Blob even if there are errors, hence evaluate
         // errors after closing.
         closeBlobAfterWriting(aBlobHandle);
 
@@ -837,12 +843,19 @@ void SAL_CALL OPreparedStatement::setBytes(sal_Int32 nParameterIndex,
             setParameterNull(nParameterIndex, false);
             const sal_Int32 nMaxSize = 0xFFFF;
             Sequence<sal_Int8> xBytesCopy(xBytes);
-            // First 2 bytes indicate string size
             if (xBytesCopy.getLength() > nMaxSize)
             {
                 xBytesCopy.realloc( nMaxSize );
             }
-            const short nSize = xBytesCopy.getLength();
+            const auto nSize = xBytesCopy.getLength();
+            // 8000 corresponds to value from lcl_addDefaultParameters
+            // in dbaccess/source/filter/hsqldb/createparser.cxx
+            if (nSize > 8000)
+            {
+                free(pVar->sqldata);
+                pVar->sqldata = static_cast<char *>(malloc(sizeof(char) * nSize + 2));
+            }
+            // First 2 bytes indicate string size
             memcpy(pVar->sqldata, &nSize, 2);
             // Actual data
             memcpy(pVar->sqldata + 2, xBytesCopy.getConstArray(), nSize);

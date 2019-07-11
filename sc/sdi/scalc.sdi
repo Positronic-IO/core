@@ -756,7 +756,7 @@ SfxVoidItem DataBarFormatDialog SID_OPENDLG_DATABAR
 
 
 SfxVoidItem IconSetFormatDialog SID_OPENDLG_ICONSET
-()
+(SfxInt16Item IconSet FN_PARAM_1)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -1296,7 +1296,7 @@ SfxVoidItem DeleteColumnbreak FID_DEL_COLBRK
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -1368,7 +1368,7 @@ SfxVoidItem DeleteRowbreak FID_DEL_ROWBRK
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -2855,7 +2855,7 @@ SfxVoidItem InsertColumnBreak FID_INS_COLBRK
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -2880,9 +2880,9 @@ SfxVoidItem InsertColumns FID_INS_COLUMN
     RecordAbsolute = FALSE,
     RecordPerSet;
 
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Insert;
 ]
 
@@ -2892,7 +2892,7 @@ SfxVoidItem InsertColumnsBefore FID_INS_COLUMNS_BEFORE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -2910,7 +2910,7 @@ SfxVoidItem InsertColumnsAfter FID_INS_COLUMNS_AFTER
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -3073,7 +3073,7 @@ SfxVoidItem InsertObjectStarMath SID_INSERT_SMATH
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -3092,7 +3092,7 @@ SfxVoidItem InsertRowBreak FID_INS_ROWBRK
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -3117,9 +3117,9 @@ SfxVoidItem InsertRows FID_INS_ROW
     RecordAbsolute = FALSE,
     RecordPerSet;
 
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Insert;
 ]
 
@@ -3129,7 +3129,7 @@ SfxVoidItem InsertRowsBefore FID_INS_ROWS_BEFORE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -3147,7 +3147,7 @@ SfxVoidItem InsertRowsAfter FID_INS_ROWS_AFTER
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -5725,25 +5725,6 @@ SfxVoidItem CurrentValidation FID_CURRENTVALIDATION
 ]
 
 
-ScDoubleItem Value SID_RANGE_VALUE
-
-[
-    AutoUpdate = FALSE,
-    FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-
-
-    AccelConfig = FALSE,
-    MenuConfig = FALSE,
-    ToolBoxConfig = FALSE,
-    GroupId = SfxGroupId::Intern;
-]
-
-
 SvxVerJustifyItem VerticalAlignment SID_V_ALIGNCELL
 
 [
@@ -6200,7 +6181,7 @@ SfxVoidItem InsertCurrentDate SID_INSERT_CURRENT_DATE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -6218,7 +6199,7 @@ SfxVoidItem InsertCurrentTime SID_INSERT_CURRENT_TIME
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,

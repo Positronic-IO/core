@@ -78,9 +78,9 @@ enum AxesType
 };
 
 struct AxisIdPair{
-    AxesType nAxisType;
-    sal_Int32 nAxisId;
-    sal_Int32 nCrossAx;
+    AxesType const nAxisType;
+    sal_Int32 const nAxisId;
+    sal_Int32 const nCrossAx;
 
     AxisIdPair(AxesType nType, sal_Int32 nId, sal_Int32 nAx)
         : nAxisType(nType)
@@ -96,7 +96,7 @@ public:
     typedef ::std::vector< AxisIdPair > AxisVector;
 
 private:
-    sal_Int32           mnXmlNamespace;
+    sal_Int32 const     mnXmlNamespace;
     sal_Int32           mnSeriesCount;
     css::uno::Reference< css::frame::XModel > mxChartModel;
     css::uno::Reference< css::chart::XDiagram > mxDiagram;
@@ -136,7 +136,6 @@ private:
                           css::drawing::XShape >& xShape );
     void exportPlotArea( const css::uno::Reference<
                              css::chart::XChartDocument >& rChartDoc );
-    void exportPlotAreaShapeProps( const css::uno::Reference< css::beans::XPropertySet >& xPropSet  );
     void exportFill( const css::uno::Reference< css::beans::XPropertySet >& xPropSet );
     void exportGradientFill( const css::uno::Reference< css::beans::XPropertySet >& xPropSet );
     void exportBitmapFill( const css::uno::Reference< css::beans::XPropertySet >& xPropSet );
@@ -175,7 +174,7 @@ private:
     void exportSeriesValues(
         const css::uno::Reference< css::chart2::data::XDataSequence >& xValueSeq, sal_Int32 nValueType = XML_val );
     void exportShapeProps( const css::uno::Reference< css::beans::XPropertySet >& xPropSet );
-    void exportTextProps(const css::uno::Reference< css::beans::XPropertySet >& xPropSet, bool bAxis = false);
+    void exportTextProps(const css::uno::Reference< css::beans::XPropertySet >& xPropSet);
     void exportDataPoints(
         const css::uno::Reference< css::beans::XPropertySet >& xSeriesProperties,
         sal_Int32 nSeriesLength, sal_Int32 eChartType );
@@ -201,7 +200,7 @@ private:
         sal_Int32 nAxisType,
         const char* sAxisPos,
         const AxisIdPair& rAxisIdPair );
-    void exportAxesId(bool bPrimaryAxes);
+    void exportAxesId(bool bPrimaryAxes, bool bCheckCombinedAxes = false);
     void exportView3D();
     bool isDeep3dChart();
 

@@ -22,6 +22,7 @@
 
 #include <DrawSubController.hxx>
 #include <sdpage.hxx>
+#include <ViewShell.hxx>
 #include <ViewShellBase.hxx>
 #include <ViewShellManager.hxx>
 #include <FormShellManager.hxx>
@@ -37,10 +38,12 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/drawing/framework/ConfigurationController.hpp>
 #include <com/sun/star/drawing/framework/ModuleController.hpp>
+#include <com/sun/star/drawing/XLayer.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 
 #include <slideshow.hxx>
 
+#include <sal/log.hxx>
 #include <svx/fmshell.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/EnumContext.hxx>
@@ -639,14 +642,14 @@ IPropertyArrayHelper & DrawController::getInfoHelper()
 {
     SolarMutexGuard aGuard;
 
-    if (mpPropertyArrayHelper.get() == nullptr)
+    if (mpPropertyArrayHelper == nullptr)
     {
         ::std::vector<beans::Property> aProperties;
         FillPropertyTable(aProperties);
         mpPropertyArrayHelper.reset(new OPropertyArrayHelper(comphelper::containerToSequence(aProperties), false));
     }
 
-    return *mpPropertyArrayHelper.get();
+    return *mpPropertyArrayHelper;
 }
 
 Reference < beans::XPropertySetInfo >  DrawController::getPropertySetInfo()
@@ -666,7 +669,7 @@ uno::Reference< form::runtime::XFormController > SAL_CALL DrawController::getFor
     std::shared_ptr<ViewShell> pViewShell = mpBase->GetMainViewShell();
     ::sd::Window* pWindow = pViewShell ? pViewShell->GetActiveWindow() : nullptr;
 
-    uno::Reference< form::runtime::XFormController > xController( nullptr );
+    uno::Reference< form::runtime::XFormController > xController;
     if ( pFormShell && pSdrView && pWindow )
         xController = FmFormShell::GetFormController( Form, *pSdrView, *pWindow );
     return xController;
@@ -703,7 +706,7 @@ uno::Reference< awt::XControl > SAL_CALL DrawController::getControl( const uno::
     std::shared_ptr<ViewShell> pViewShell = mpBase->GetMainViewShell();
     ::sd::Window* pWindow = pViewShell ? pViewShell->GetActiveWindow() : nullptr;
 
-    uno::Reference< awt::XControl > xControl( nullptr );
+    uno::Reference< awt::XControl > xControl;
     if ( pFormShell && pSdrView && pWindow )
         pFormShell->GetFormControl( xModel, *pSdrView, *pWindow, xControl );
     return xControl;

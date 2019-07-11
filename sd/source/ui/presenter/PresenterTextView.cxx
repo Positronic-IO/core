@@ -48,22 +48,22 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
 
+static const OUStringLiteral gsTextPropertyName("Text");
+static const OUStringLiteral gsBitmapPropertyName("Bitmap");
+static const OUStringLiteral gsSizePropertyName("Size");
+static const OUStringLiteral gsBackgroundColorPropertyName("BackgroundColor");
+static const OUStringLiteral gsTextColorPropertyName("TextColor");
+static const OUStringLiteral gsFontDescriptorPropertyName("FontDescriptor");
+static const OUStringLiteral gsTopPropertyName("Top");
+static const OUStringLiteral gsTopRelativePropertyName("RelativeTop");
+static const OUStringLiteral gsTotalHeightPropertyName("TotalHeight");
+
 namespace sd { namespace presenter {
 
 // PresenterTextView::Implementation
 class PresenterTextView::Implementation
 {
 public:
-    const OUString msTextPropertyName;
-    const OUString msBitmapPropertyName;
-    const OUString msSizePropertyName;
-    const OUString msBackgroundColorPropertyName;
-    const OUString msTextColorPropertyName;
-    const OUString msFontDescriptorPropertyName;
-    const OUString msTopPropertyName;
-    const OUString msTopRelativePropertyName;
-    const OUString msTotalHeightPropertyName;
-
     Implementation();
     ~Implementation();
 
@@ -123,27 +123,23 @@ void SAL_CALL PresenterTextView::initialize (const Sequence<Any>& rArguments)
     }
 
     Reference<rendering::XCanvas> xCanvas (rArguments[0], UNO_QUERY_THROW);
-    if (xCanvas.is())
-    {
-        mpImplementation->SetCanvas(
-            cppcanvas::VCLFactory::createCanvas(xCanvas));
-    }
-
+    mpImplementation->SetCanvas(
+        cppcanvas::VCLFactory::createCanvas(xCanvas));
 }
 
 Any PresenterTextView::GetPropertyValue (const OUString& rsPropertyName)
 {
     ThrowIfDisposed();
 
-    if (rsPropertyName == mpImplementation->msBitmapPropertyName)
+    if (rsPropertyName == gsBitmapPropertyName)
     {
         return Any(mpImplementation->GetBitmap());
     }
-    else if (rsPropertyName == mpImplementation->msTopPropertyName)
+    else if (rsPropertyName == gsTopPropertyName)
     {
         return Any(mpImplementation->GetTop());
     }
-    else if (rsPropertyName == mpImplementation->msTotalHeightPropertyName)
+    else if (rsPropertyName == gsTotalHeightPropertyName)
     {
         return Any(mpImplementation->GetTotalHeight());
     }
@@ -158,43 +154,43 @@ Any PresenterTextView::SetPropertyValue (
     ThrowIfDisposed();
 
     Any aOldValue;
-    if (rsPropertyName == mpImplementation->msTextPropertyName)
+    if (rsPropertyName == gsTextPropertyName)
     {
         OUString sText;
         if (rValue >>= sText)
             mpImplementation->SetText(sText);
     }
-    else if (rsPropertyName == mpImplementation->msSizePropertyName)
+    else if (rsPropertyName == gsSizePropertyName)
     {
         awt::Size aSize;
         if (rValue >>= aSize)
             mpImplementation->SetSize(Size(aSize.Width,aSize.Height));
     }
-    else if (rsPropertyName == mpImplementation->msBackgroundColorPropertyName)
+    else if (rsPropertyName == gsBackgroundColorPropertyName)
     {
         util::Color aColor = util::Color();
         if (rValue >>= aColor)
             mpImplementation->SetBackgroundColor(Color(aColor));
     }
-    else if (rsPropertyName == mpImplementation->msTextColorPropertyName)
+    else if (rsPropertyName == gsTextColorPropertyName)
     {
         util::Color aColor = util::Color();
         if (rValue >>= aColor)
             mpImplementation->SetTextColor(Color(aColor));
     }
-    else if (rsPropertyName == mpImplementation->msFontDescriptorPropertyName)
+    else if (rsPropertyName == gsFontDescriptorPropertyName)
     {
         awt::FontDescriptor aFontDescriptor;
         if (rValue >>= aFontDescriptor)
             mpImplementation->SetFontDescriptor(aFontDescriptor);
     }
-    else if (rsPropertyName == mpImplementation->msTopPropertyName)
+    else if (rsPropertyName == gsTopPropertyName)
     {
         sal_Int32 nTop = 0;
         if (rValue >>= nTop)
             mpImplementation->SetTop(nTop);
     }
-    else if (rsPropertyName == mpImplementation->msTopRelativePropertyName)
+    else if (rsPropertyName == gsTopRelativePropertyName)
     {
         OUString sDistance;
         if (rValue >>= sDistance)
@@ -208,8 +204,7 @@ Any PresenterTextView::SetPropertyValue (
 void PresenterTextView::ThrowIfDisposed()
 {
     if (PresenterTextViewInterfaceBase::rBHelper.bDisposed
-        || PresenterTextViewInterfaceBase::rBHelper.bInDispose
-        || mpImplementation.get()==nullptr)
+        || PresenterTextViewInterfaceBase::rBHelper.bInDispose || mpImplementation == nullptr)
     {
         throw lang::DisposedException ("PresenterTextView object has already been disposed",
             static_cast<uno::XWeak*>(this));
@@ -218,19 +213,9 @@ void PresenterTextView::ThrowIfDisposed()
 
 // PresenterTextView::Implementation
 PresenterTextView::Implementation::Implementation()
-    : msTextPropertyName("Text"),
-      msBitmapPropertyName("Bitmap"),
-      msSizePropertyName("Size"),
-      msBackgroundColorPropertyName("BackgroundColor"),
-      msTextColorPropertyName("TextColor"),
-      msFontDescriptorPropertyName("FontDescriptor"),
-      msTopPropertyName("Top"),
-      msTopRelativePropertyName("RelativeTop"),
-      msTotalHeightPropertyName("TotalHeight"),
-      mxBitmap(),
+    : mxBitmap(),
       mpCanvas(),
       mpOutputDevice(VclPtr<VirtualDevice>::Create(*Application::GetDefaultDevice(), DeviceFormat::DEFAULT, DeviceFormat::DEFAULT)),
-      mpEditEngine(nullptr),
       mpEditEngineItemPool(EditEngine::CreatePool()),
       maSize(100,100),
       maBackgroundColor(0xffffffff),

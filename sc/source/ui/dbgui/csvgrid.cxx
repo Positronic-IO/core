@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <memory>
 
-#include <comphelper/string.hxx>
 #include <svtools/colorcfg.hxx>
 #include <sal/macros.h>
 #include <tools/poly.hxx>
@@ -48,7 +47,7 @@
 
 struct Func_SetType
 {
-    sal_Int32                   mnType;
+    sal_Int32 const      mnType;
     explicit                    Func_SetType( sal_Int32 nType ) : mnType( nType ) {}
     void                 operator()( ScCsvColState& rState ) const
         { rState.mnType = mnType; }
@@ -56,7 +55,7 @@ struct Func_SetType
 
 struct Func_Select
 {
-    bool                        mbSelect;
+    bool const           mbSelect;
     explicit                    Func_Select( bool bSelect ) : mbSelect( bSelect ) {}
     void                 operator()( ScCsvColState& rState ) const
         { rState.Select( mbSelect ); }
@@ -813,7 +812,7 @@ void ScCsvGrid::ImplSetTextLineFix( sal_Int32 nLine, const OUString& rTextLine )
     for( sal_uInt32 nColIx = 0; (nColIx < nColCount) && (nStrIx < nStrLen); ++nColIx )
     {
         sal_Int32 nColWidth = GetColumnWidth( nColIx );
-        sal_Int32 nLen = std::min( std::min( nColWidth, static_cast<sal_Int32>(CSV_MAXSTRLEN) ), nStrLen - nStrIx);
+        sal_Int32 nLen = std::min( std::min( nColWidth, CSV_MAXSTRLEN ), nStrLen - nStrIx);
         rStrVec.push_back( rTextLine.copy( nStrIx, nLen ) );
         nStrIx = nStrIx + nColWidth;
     }
@@ -1084,12 +1083,11 @@ void ScCsvGrid::ImplDrawCellText( const Point& rPos, const OUString& rText )
     /*  #i60296# If string contains mixed script types, the space character
         U+0020 may be drawn with a wrong width (from non-fixed-width Asian or
         Complex font). Now we draw every non-space portion separately. */
-    sal_Int32 nTokenCount = comphelper::string::getTokenCount(aPlainText, ' ');
-    sal_Int32 nCharIxInt = 0;
-    for( sal_Int32 nToken = 0; nToken < nTokenCount; ++nToken )
+    sal_Int32 nCharIxInt {aPlainText.isEmpty() ? -1 : 0};
+    while (nCharIxInt>=0)
     {
         sal_Int32 nBeginIx = nCharIxInt;
-        OUString aToken = aPlainText.getToken( 0, ' ', nCharIxInt );
+        const OUString aToken = aPlainText.getToken( 0, ' ', nCharIxInt );
         if( !aToken.isEmpty() )
         {
             sal_Int32 nX = rPos.X() + GetCharWidth() * nBeginIx;

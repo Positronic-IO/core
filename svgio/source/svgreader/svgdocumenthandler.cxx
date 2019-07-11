@@ -45,6 +45,7 @@
 #include <svgmarkernode.hxx>
 #include <svgpatternnode.hxx>
 #include <svgtitledescnode.hxx>
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 
@@ -152,22 +153,23 @@ namespace svgio
                     mpTarget = const_cast< SvgNode* >(mpTarget->getParent());
 
                 const SvgNodeVector& rOwnedTopLevels = maDocument.getSvgNodeVector();
-                if (std::find(rOwnedTopLevels.begin(), rOwnedTopLevels.end(), mpTarget) == rOwnedTopLevels.end())
+                if (std::none_of(rOwnedTopLevels.begin(), rOwnedTopLevels.end(),
+                                [&](std::unique_ptr<SvgNode> const & p) { return p.get() == mpTarget; }))
                     delete mpTarget;
             }
-            OSL_ENSURE(!maCssContents.size(), "SvgDocHdl destructed with active css style stack entry (!)");
+            OSL_ENSURE(maCssContents.empty(), "SvgDocHdl destructed with active css style stack entry (!)");
         }
 
         void SvgDocHdl::startDocument(  )
         {
             OSL_ENSURE(!mpTarget, "Already a target at document start (!)");
-            OSL_ENSURE(!maCssContents.size(), "SvgDocHdl startDocument with active css style stack entry (!)");
+            OSL_ENSURE(maCssContents.empty(), "SvgDocHdl startDocument with active css style stack entry (!)");
         }
 
         void SvgDocHdl::endDocument(  )
         {
             OSL_ENSURE(!mpTarget, "Still a target at document end (!)");
-            OSL_ENSURE(!maCssContents.size(), "SvgDocHdl endDocument with active css style stack entry (!)");
+            OSL_ENSURE(maCssContents.empty(), "SvgDocHdl endDocument with active css style stack entry (!)");
         }
 
         void SvgDocHdl::startElement( const OUString& aName, const uno::Reference< xml::sax::XAttributeList >& xAttribs )
@@ -486,7 +488,7 @@ namespace svgio
                             if(!mpTarget->getParent())
                             {
                                 // last element closing, save this tree
-                                maDocument.appendNode(mpTarget);
+                                maDocument.appendNode(std::unique_ptr<SvgNode>(mpTarget));
                             }
 
                             mpTarget = const_cast< SvgNode* >(mpTarget->getParent());
@@ -505,7 +507,7 @@ namespace svgio
 
                 if(pSvgTitleDescNode && mpTarget)
                 {
-                    const OUString aText(pSvgTitleDescNode->getText());
+                    const OUString& aText(pSvgTitleDescNode->getText());
 
                     if(!aText.isEmpty())
                     {
@@ -523,7 +525,7 @@ namespace svgio
                 if(pCssStyle && pCssStyle->isTextCss())
                 {
                     // css style parsing
-                    if(maCssContents.size())
+                    if(!maCssContents.empty())
                     {
                         // need to interpret css styles and remember them as StyleSheets
                         // #125325# Caution! the Css content may contain block comments
@@ -567,7 +569,7 @@ namespace svgio
                         const auto& rChilds = mpTarget->getChildren();
                         SvgCharacterNode* pTarget = nullptr;
 
-                        if(rChilds.size())
+                        if(!rChilds.empty())
                         {
                             pTarget = dynamic_cast< SvgCharacterNode* >(rChilds[rChilds.size() - 1].get());
                         }
@@ -592,7 +594,7 @@ namespace svgio
                         if(rSvgStyleNode.isTextCss())
                         {
                             // collect characters for css style
-                            if(maCssContents.size())
+                            if(!maCssContents.empty())
                             {
                                 const OUString aTrimmedChars(aChars.trim());
 

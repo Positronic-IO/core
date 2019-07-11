@@ -101,7 +101,7 @@ public:
     sal_Int32 mnEndCP;
     bool bIsParaEnd;
 
-    SW_DLLPUBLIC SwFltStackEntry(const SwPosition & rStartPos, SfxPoolItem* pHt );
+    SW_DLLPUBLIC SwFltStackEntry(const SwPosition & rStartPos, std::unique_ptr<SfxPoolItem> pHt );
     SW_DLLPUBLIC ~SwFltStackEntry();
 
     SW_DLLPUBLIC void SetEndPos(  const SwPosition & rEndPos);
@@ -124,11 +124,10 @@ private:
     SwFltControlStack(SwFltControlStack const&) = delete;
     SwFltControlStack& operator=(SwFltControlStack const&) = delete;
 
-    typedef std::deque<std::unique_ptr<SwFltStackEntry>> Entries;
-    typedef Entries::iterator myEIter;
+    typedef std::vector<std::unique_ptr<SwFltStackEntry>> Entries;
     Entries m_Entries;
 
-    sal_uLong nFieldFlags;
+    sal_uLong const nFieldFlags;
 
     bool bHasSdOD;
     bool bSdODChecked;
@@ -216,12 +215,12 @@ public:
 class SW_DLLPUBLIC SwFltRedline : public SfxPoolItem
 {
 public:
-    DateTime        aStamp;
-    DateTime        aStampPrev;
-    RedlineType_t   eType;
-    RedlineType_t   eTypePrev;
-    std::size_t     nAutorNo;
-    std::size_t     nAutorNoPrev;
+    DateTime const        aStamp;
+    DateTime const        aStampPrev;
+    RedlineType_t const   eType;
+    RedlineType_t const   eTypePrev;
+    std::size_t const     nAutorNo;
+    std::size_t const     nAutorNoPrev;
 
     static constexpr auto NoPrevAuthor
         = std::numeric_limits<std::size_t>::max();
@@ -247,10 +246,10 @@ class SW_DLLPUBLIC SwFltBookmark : public SfxPoolItem
 {
 private:
 
-    long mnHandle;
+    long const mnHandle;
     OUString maName;
-    OUString maVal;
-    bool mbIsTOCBookmark;
+    OUString const maVal;
+    bool const mbIsTOCBookmark;
 
 public:
     SwFltBookmark( const OUString& rNa,
@@ -291,7 +290,7 @@ public:
 
 class SW_DLLPUBLIC SwFltTOX : public SfxPoolItem
 {
-    SwTOXBase* pTOXBase;
+    SwTOXBase* const pTOXBase;
     bool bHadBreakItem; // there was a break item BEFORE insertion of the TOX
     bool bHadPageDescItem;
 public:
@@ -324,7 +323,7 @@ SW_DLLPUBLIC void UpdatePageDescs(SwDoc &rDoc, size_t nInPageDescOffset);
 class ImportProgress
 {
 private:
-    SwDocShell *m_pDocShell;
+    SwDocShell * const m_pDocShell;
 public:
     ImportProgress(SwDocShell *pDocShell, long nStartVal, long nEndVal)
         : m_pDocShell(pDocShell)

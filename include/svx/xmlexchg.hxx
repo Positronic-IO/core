@@ -21,7 +21,7 @@
 #define INCLUDED_SVX_XMLEXCHG_HXX
 
 #include <rtl/ustring.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svx/svxdllapi.h>
 
 namespace com {
@@ -67,7 +67,7 @@ namespace svx
             virtual void        AddSupportedFormats() override;
             virtual bool GetData( const css::datatransfer::DataFlavor& rFlavor, const OUString& rDestDoc ) override;
 
-            OXFormsDescriptor m_aDescriptor;
+            OXFormsDescriptor const m_aDescriptor;
 
         public:
 

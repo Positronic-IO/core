@@ -31,6 +31,7 @@
 #include <vcl/taskpanelist.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <svtools/framestatuslistener.hxx>
 #include <svtools/valueset.hxx>
@@ -965,7 +966,7 @@ ToolbarMenuEntry* ToolbarMenu::implCursorUpDown( bool bUp, bool bHomeEnd )
         else
         {
             // if we have a currently selected entry and
-            // cursor keys are used than check if this entry
+            // cursor keys are used then check if this entry
             // has a control that can use those cursor keys
             ToolbarMenuEntry* pData = mpImpl->maEntryVector[n].get();
             if( pData && pData->mpControl && !pData->mbHasText )
@@ -1393,18 +1394,18 @@ class ToolbarPopupStatusListener : public svt::FrameStatusListener
 {
 public:
     ToolbarPopupStatusListener( const css::uno::Reference< css::frame::XFrame >& xFrame,
-                                ToolbarPopup& rToolbarPopup );
+                                ToolbarPopupBase& rToolbarPopup );
 
     virtual void SAL_CALL dispose() override;
     virtual void SAL_CALL statusChanged( const css::frame::FeatureStateEvent& Event ) override;
 
-    VclPtr<ToolbarPopup> mpPopup;
+    ToolbarPopupBase* mpPopup;
 };
 
 
 ToolbarPopupStatusListener::ToolbarPopupStatusListener(
     const css::uno::Reference< css::frame::XFrame >& xFrame,
-    ToolbarPopup& rToolbarPopup )
+    ToolbarPopupBase& rToolbarPopup )
 : svt::FrameStatusListener( ::comphelper::getProcessComponentContext(), xFrame )
 , mpPopup( &rToolbarPopup )
 {
@@ -1413,7 +1414,7 @@ ToolbarPopupStatusListener::ToolbarPopupStatusListener(
 
 void SAL_CALL ToolbarPopupStatusListener::dispose()
 {
-    mpPopup.clear();
+    mpPopup = nullptr;
     svt::FrameStatusListener::dispose();
 }
 
@@ -1424,9 +1425,23 @@ void SAL_CALL ToolbarPopupStatusListener::statusChanged( const css::frame::Featu
         mpPopup->statusChanged( Event );
 }
 
+ToolbarPopupBase::ToolbarPopupBase(const css::uno::Reference<css::frame::XFrame>& rFrame)
+    : mxFrame(rFrame)
+{
+}
+
+ToolbarPopupBase::~ToolbarPopupBase()
+{
+    if (mxStatusListener.is())
+    {
+        mxStatusListener->dispose();
+        mxStatusListener.clear();
+    }
+}
+
 ToolbarPopup::ToolbarPopup( const css::uno::Reference<css::frame::XFrame>& rFrame, vcl::Window* pParentWindow, WinBits nBits )
     : DockingWindow(pParentWindow, nBits)
-    , mxFrame( rFrame )
+    , ToolbarPopupBase(rFrame)
 {
     init();
 }
@@ -1434,7 +1449,7 @@ ToolbarPopup::ToolbarPopup( const css::uno::Reference<css::frame::XFrame>& rFram
 ToolbarPopup::ToolbarPopup( const css::uno::Reference<css::frame::XFrame>& rFrame, vcl::Window* pParentWindow,
                             const OString& rID, const OUString& rUIXMLDescription )
     : DockingWindow(pParentWindow, rID, rUIXMLDescription, rFrame)
-    , mxFrame( rFrame )
+    , ToolbarPopupBase(rFrame)
 {
     init();
 }
@@ -1467,7 +1482,7 @@ void ToolbarPopup::dispose()
     DockingWindow::dispose();
 }
 
-void ToolbarPopup::AddStatusListener( const OUString& rCommandURL )
+void ToolbarPopupBase::AddStatusListener( const OUString& rCommandURL )
 {
     if( !mxStatusListener.is() )
         mxStatusListener.set( new ToolbarPopupStatusListener( mxFrame, *this ) );
@@ -1475,7 +1490,7 @@ void ToolbarPopup::AddStatusListener( const OUString& rCommandURL )
     mxStatusListener->addStatusListener( rCommandURL );
 }
 
-void ToolbarPopup::statusChanged( const css::frame::FeatureStateEvent& /*Event*/ )
+void ToolbarPopupBase::statusChanged( const css::frame::FeatureStateEvent& /*Event*/ )
 {
 }
 

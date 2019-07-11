@@ -26,12 +26,20 @@ class SfxPoolItem;
 class SwCalc;
 class SwDoc;
 
+/**
+ * The shared part of a user field.
+ *
+ * Tracks the value, but conversion between the float and string representation
+ * always happens with the system locale.
+ */
 class SW_DLLPUBLIC SwUserFieldType : public SwValueFieldType
 {
     bool    bValidValue : 1;
     bool    bDeleted : 1;
+    /// Float value type.
     double  nValue;
     OUString  aName;
+    /// String value type.
     OUString  aContent;
     sal_uInt16  nType;
 
@@ -60,6 +68,7 @@ public:
 
     virtual void        QueryValue( css::uno::Any& rVal, sal_uInt16 nMId ) const override;
     virtual void        PutValue( const css::uno::Any& rVal, sal_uInt16 nMId ) override;
+    void dumpAsXml(struct _xmlTextWriter* pWriter) const override;
 
 protected:
     virtual void Modify( const SfxPoolItem* pOld, const SfxPoolItem* pNew ) override;
@@ -83,12 +92,18 @@ inline void SwUserFieldType::SetType(sal_uInt16 nSub)
     EnableFormat(!(nSub & nsSwGetSetExpType::GSE_STRING));
 }
 
+/**
+ * The non-shared part of a user field.
+ *
+ * Tracks the number format and the language, conversion between the float and
+ * string representation is independent from the system locale.
+ */
 class SW_DLLPUBLIC SwUserField : public SwValueField
 {
     sal_uInt16  nSubType;
 
-    virtual OUString        Expand() const override;
-    virtual SwField*        Copy() const override;
+    virtual OUString    ExpandImpl(SwRootFrame const* pLayout) const override;
+    virtual std::unique_ptr<SwField> Copy() const override;
 
 public:
     SwUserField(SwUserFieldType*, sal_uInt16 nSub, sal_uInt32 nFormat);
@@ -109,6 +124,7 @@ public:
     virtual void            SetPar2(const OUString& rStr) override;
     virtual bool            QueryValue( css::uno::Any& rVal, sal_uInt16 nWhichId ) const override;
     virtual bool            PutValue( const css::uno::Any& rVal, sal_uInt16 nWhichId ) override;
+    void dumpAsXml(struct _xmlTextWriter* pWriter) const override;
 };
 
 #endif // INCLUDED_SW_INC_USRFLD_HXX

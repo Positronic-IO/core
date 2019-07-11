@@ -25,9 +25,15 @@
 #include "LabelAlignment.hxx"
 #include "MinimumAndMaximumSupplier.hxx"
 #include "LegendEntryProvider.hxx"
-#include <ExplicitCategoriesProvider.hxx>
-#include <com/sun/star/chart2/XChartType.hpp>
 #include <com/sun/star/drawing/Direction3D.hpp>
+
+namespace com { namespace sun { namespace star { namespace awt { struct Point; } } } }
+namespace com { namespace sun { namespace star { namespace chart2 { class XChartType; } } } }
+
+
+namespace chart { class ExplicitCategoriesProvider; }
+namespace chart { struct ExplicitScaleData; }
+namespace chart { class ChartModel; }
 
 namespace com { namespace sun { namespace star {
     namespace util {
@@ -78,10 +84,11 @@ class VDataSeriesGroup final
 {
 public:
     VDataSeriesGroup() = delete;
-    VDataSeriesGroup( VDataSeries* pSeries );
+    VDataSeriesGroup( std::unique_ptr<VDataSeries> pSeries );
+    VDataSeriesGroup( VDataSeriesGroup&& );
     ~VDataSeriesGroup();
 
-    void addSeries( VDataSeries* pSeries );//takes ownership of pSeries
+    void addSeries( std::unique_ptr<VDataSeries> pSeries );//takes ownership of pSeries
     sal_Int32 getSeriesCount() const;
     void deleteSeries();
 
@@ -98,7 +105,7 @@ public:
                                                 , bool bSeparateStackingForDifferentSigns
                                                 , double& rfMinimumY, double& rfMaximumY, sal_Int32 nAxisIndex );
 
-    std::vector< VDataSeries* >   m_aSeriesVector;
+    std::vector< std::unique_ptr<VDataSeries> >   m_aSeriesVector;
 
 private:
     //cached values
@@ -139,7 +146,7 @@ public:
     * ySlot == already occupied     : insert at given y and x position
     * ySlot > occupied              : stack on top at given x position
     */
-    virtual void addSeries( VDataSeries* pSeries, sal_Int32 zSlot, sal_Int32 xSlot, sal_Int32 ySlot );
+    virtual void addSeries( std::unique_ptr<VDataSeries> pSeries, sal_Int32 zSlot, sal_Int32 xSlot, sal_Int32 ySlot );
 
     /** a value <= 0 for a directions means that this direction can be stretched arbitrary
     */
@@ -191,7 +198,8 @@ public:
             const css::uno::Reference< css::beans::XPropertySet >& xTextProperties,
             const css::uno::Reference< css::drawing::XShapes >& xTarget,
             const css::uno::Reference< css::lang::XMultiServiceFactory >& xShapeFactory,
-            const css::uno::Reference< css::uno::XComponentContext >& xContext
+            const css::uno::Reference< css::uno::XComponentContext >& xContext,
+            ChartModel& rModel
                 ) override;
 
     virtual LegendSymbolStyle getLegendSymbolStyle();
@@ -418,7 +426,7 @@ private:
     typedef std::map< sal_Int32 , ExplicitScaleData > tSecondaryValueScales;
     tSecondaryValueScales   m_aSecondaryValueScales;
 
-    typedef std::map< sal_Int32 , PlottingPositionHelper* > tSecondaryPosHelperMap;
+    typedef std::map< sal_Int32 , std::unique_ptr<PlottingPositionHelper> > tSecondaryPosHelperMap;
     mutable tSecondaryPosHelperMap   m_aSecondaryPosHelperMap;
     css::awt::Size      m_aPageReferenceSize;
 };

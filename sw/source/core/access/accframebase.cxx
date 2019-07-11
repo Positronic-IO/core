@@ -36,6 +36,7 @@
 
 #include <crsrsh.hxx>
 #include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <ndtxt.hxx>
 #include <dcontact.hxx>
 #include <fmtanchr.hxx>
@@ -81,7 +82,7 @@ void SwAccessibleFrameBase::GetStates(
     if( IsSelected() )
     {
         rStateSet.AddState( AccessibleStateType::SELECTED );
-        assert(m_bIsSelected && "bSelected out of sync");
+        SAL_WARN_IF(!m_bIsSelected, "sw.a11y", "bSelected out of sync");
         ::rtl::Reference < SwAccessibleContext > xThis( this );
         GetMap()->SetCursorContext( xThis );
 
@@ -100,8 +101,8 @@ SwNodeType SwAccessibleFrameBase::GetNodeType( const SwFlyFrame *pFlyFrame )
     {
          if( pFlyFrame->Lower()->IsNoTextFrame() )
         {
-            const SwContentFrame *pContentFrame =
-                static_cast<const SwContentFrame *>( pFlyFrame->Lower() );
+            const SwNoTextFrame *const pContentFrame =
+                static_cast<const SwNoTextFrame *>(pFlyFrame->Lower());
             nType = pContentFrame->GetNode()->GetNodeType();
         }
     }
@@ -300,7 +301,7 @@ bool SwAccessibleFrameBase::GetSelectedState( )
         return true;
     }
 
-    // SELETED.
+    // SELECTED.
     SwFlyFrame* pFlyFrame = getFlyFrame();
     const SwFrameFormat *pFrameFormat = pFlyFrame->GetFormat();
     const SwFormatAnchor& rAnchor = pFrameFormat->GetAnchor();

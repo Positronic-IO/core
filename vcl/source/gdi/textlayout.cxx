@@ -27,6 +27,7 @@
 
 #include <tools/diagnose_ex.h>
 #include <tools/fract.hxx>
+#include <sal/log.hxx>
 
 #if OSL_DEBUG_LEVEL > 1
 #include <rtl/strbuf.hxx>
@@ -92,7 +93,7 @@ namespace vcl
 
         OutputDevice&   m_rTargetDevice;
         OutputDevice&   m_rReferenceDevice;
-        Font            m_aUnzoomedPointFont;
+        Font const      m_aUnzoomedPointFont;
         const bool      m_bRTLEnabled;
 
         tools::Rectangle       m_aCompleteTextRect;
@@ -105,7 +106,7 @@ namespace vcl
         ,m_aUnzoomedPointFont( _rControl.GetUnzoomedControlPointFont() )
         ,m_bRTLEnabled( _rControl.IsRTLEnabled() )
     {
-        const Fraction aZoom( _rControl.GetZoom() );
+        const Fraction& aZoom( _rControl.GetZoom() );
         m_rTargetDevice.Push( PushFlags::MAPMODE | PushFlags::FONT | PushFlags::TEXTLAYOUTMODE );
 
         MapMode aTargetMapMode( m_rTargetDevice.GetMapMode() );
@@ -289,12 +290,9 @@ namespace vcl
         // convert the metric vector
         if ( _pVector )
         {
-            for (   MetricVector::iterator charRect = _pVector->begin();
-                    charRect != _pVector->end();
-                    ++charRect
-                )
+            for ( auto& rCharRect : *_pVector )
             {
-                *charRect = m_rTargetDevice.LogicToPixel( *charRect );
+                rCharRect = m_rTargetDevice.LogicToPixel( rCharRect );
             }
         }
 

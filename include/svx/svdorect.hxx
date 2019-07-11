@@ -44,8 +44,8 @@ private:
     friend class SdrTextObj; // Due to SetXPolyDirty for GrowAdjust
 
 protected:
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
 
     std::unique_ptr<XPolygon> mpXPoly;
 
@@ -99,7 +99,7 @@ public:
     virtual basegfx::B2DPolyPolygon TakeXorPoly() const override;
 
     virtual sal_uInt32 GetHdlCount() const override;
-    virtual SdrHdl* GetHdl(sal_uInt32 nHdlNum) const override;
+    virtual void AddToHdlList(SdrHdlList& rHdlList) const override;
 
     // Special drag methods
     virtual bool hasSpecialDrag() const override;

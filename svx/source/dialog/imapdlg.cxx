@@ -21,7 +21,6 @@
 #include <vcl/errinf.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/ucbstreamhelper.hxx>
-#include <vcl/group.hxx>
 #include <vcl/lstbox.hxx>
 #include <svl/eitem.hxx>
 #include <unotools/pathoptions.hxx>
@@ -167,7 +166,7 @@ SvxIMapDlg::SvxIMapDlg(SfxBindings *_pBindings, SfxChildWindow *pCW, vcl::Window
     pIMapWnd->set_vexpand(true);
     pIMapWnd->Show();
 
-    pOwnData = new IMapOwnData;
+    pOwnData.reset(new IMapOwnData);
 
     pIMapWnd->SetInfoLink( LINK( this, SvxIMapDlg, InfoHdl ) );
     pIMapWnd->SetMousePosLink( LINK( this, SvxIMapDlg, MousePosHdl ) );
@@ -222,7 +221,7 @@ void SvxIMapDlg::dispose()
 
     // Delete URL-List
     pIMapWnd.disposeAndClear();
-    DELETEZ( pOwnData );
+    pOwnData.reset();
     m_pTbxIMapDlg1.clear();
     m_pFtURL.clear();
     m_pURLBox.clear();

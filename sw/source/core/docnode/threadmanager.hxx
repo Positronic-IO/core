@@ -27,6 +27,7 @@
 
 #include <deque>
 #include <cppuhelper/weak.hxx>
+#include <cppuhelper/weakref.hxx>
 #include <com/sun/star/util/XJobManager.hpp>
 #include <observablethread.hxx>
 #include "cancellablejob.hxx"
@@ -102,7 +103,6 @@ class ThreadManager final
 
             tThreadData()
                 : nThreadID( 0 ),
-                  pThread( nullptr ),
                   aJob()
             {}
         };
@@ -128,7 +128,7 @@ class ThreadManager final
 
         struct ThreadPred
         {
-            oslInterlockedCount mnThreadID;
+            oslInterlockedCount const mnThreadID;
             explicit ThreadPred( oslInterlockedCount nThreadID )
                 : mnThreadID( nThreadID )
             {}

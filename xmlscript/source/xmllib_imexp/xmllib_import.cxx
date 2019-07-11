@@ -23,6 +23,7 @@
 
 #include "imp_share.hxx"
 #include <xml_import.hxx>
+#include <xmlscript/xmlns.h>
 
 using namespace css;
 using namespace css::uno;
@@ -175,7 +176,7 @@ Reference< xml::input::XElement > LibrariesElement::startChildElement(
     }
     else
     {
-        throw xml::sax::SAXException( "expected styles ot bulletinboard element!", Reference< XInterface >(), Any() );
+        throw xml::sax::SAXException( "expected styles of bulletinboard element!", Reference< XInterface >(), Any() );
     }
 }
 

@@ -20,8 +20,9 @@
 #include <hintids.hxx>
 
 #include <rtl/ustring.hxx>
-#include <svtools/imap.hxx>
-#include <svtools/imapobj.hxx>
+#include <sal/log.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/imapobj.hxx>
 #include <basic/sbx.hxx>
 #include <frmfmt.hxx>
 #include <fmtinfmt.hxx>

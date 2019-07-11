@@ -298,16 +298,10 @@ void SlideSorter::ReleaseListeners()
 void SlideSorter::CreateModelViewController()
 {
     mpSlideSorterModel.reset(CreateModel());
-    DBG_ASSERT (mpSlideSorterModel.get()!=nullptr,
-        "Can not create model for slide browser");
+    DBG_ASSERT(mpSlideSorterModel != nullptr, "Can not create model for slide browser");
 
     mpSlideSorterView.reset(new view::SlideSorterView (*this));
-    DBG_ASSERT (mpSlideSorterView.get()!=nullptr,
-        "Can not create view for slide browser");
-
-    mpSlideSorterController.reset(CreateController());
-    DBG_ASSERT (mpSlideSorterController.get()!=nullptr,
-        "Can not create controller for slide browser");
+    mpSlideSorterController.reset(new controller::SlideSorterController(*this));
 
     // Now that model, view, and controller are constructed, do the
     // initialization that relies on all three being in place.
@@ -327,13 +321,6 @@ model::SlideSorterModel* SlideSorter::CreateModel()
     }
     else
         return nullptr;
-}
-
-controller::SlideSorterController* SlideSorter::CreateController()
-{
-    controller::SlideSorterController* pController
-        = new controller::SlideSorterController (*this);
-    return pController;
 }
 
 void SlideSorter::ArrangeGUIElements (
@@ -358,7 +345,7 @@ void SlideSorter::ArrangeGUIElements (
     }
 }
 
-bool SlideSorter::RelocateToWindow (vcl::Window* pParentWindow)
+void SlideSorter::RelocateToWindow (vcl::Window* pParentWindow)
 {
    // Stop all animations for they have been started for the old window.
     mpSlideSorterController->GetAnimator()->RemoveAllAnimations();
@@ -383,8 +370,6 @@ bool SlideSorter::RelocateToWindow (vcl::Window* pParentWindow)
         mpContentWindow->Hide();
         mpContentWindow->Show();
     }
-
-    return true;
 }
 
 void SlideSorter::SetCurrentFunction (const rtl::Reference<FuPoor>& rpFunction)

@@ -37,7 +37,7 @@ ScMoveTableDlg::ScMoveTableDlg(weld::Window* pParent, const OUString& rDefault)
     , mbEverEdited(false)
     , m_xBtnMove(m_xBuilder->weld_radio_button("move"))
     , m_xBtnCopy(m_xBuilder->weld_radio_button("copy"))
-    , m_xLbDoc(m_xBuilder->weld_combo_box_text("toDocument"))
+    , m_xLbDoc(m_xBuilder->weld_combo_box("toDocument"))
     , m_xLbTable(m_xBuilder->weld_tree_view("insertBefore"))
     , m_xEdTabName(m_xBuilder->weld_entry("newName"))
     , m_xFtWarn(m_xBuilder->weld_label("newNameWarn"))
@@ -201,7 +201,6 @@ void ScMoveTableDlg::InitDocListBox()
     ScDocShell*     pScSh   = nullptr;
     sal_uInt16          nSelPos = 0;
     sal_uInt16          i       = 0;
-    OUString          aEntryName;
 
     m_xLbDoc->clear();
     m_xLbDoc->freeze();
@@ -212,7 +211,7 @@ void ScMoveTableDlg::InitDocListBox()
 
         if ( pScSh )
         {
-            aEntryName = pScSh->GetTitle();
+            OUString aEntryName = pScSh->GetTitle();
 
             if ( pScSh == SfxObjectShell::Current() )
             {
@@ -221,7 +220,8 @@ void ScMoveTableDlg::InitDocListBox()
                 aEntryName += msCurrentDoc;
             }
 
-            m_xLbDoc->insert(i, OUString::number(reinterpret_cast<sal_uInt64>(&pScSh->GetDocument())), aEntryName);
+            OUString sId(OUString::number(reinterpret_cast<sal_uInt64>(&pScSh->GetDocument())));
+            m_xLbDoc->insert(i, aEntryName, &sId, nullptr, nullptr);
 
             i++;
         }
@@ -274,7 +274,7 @@ IMPL_LINK_NOARG(ScMoveTableDlg, OkHdl, weld::Button&, void)
     m_xDialog->response(RET_OK);
 }
 
-IMPL_LINK_NOARG(ScMoveTableDlg, SelHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(ScMoveTableDlg, SelHdl, weld::ComboBox&, void)
 {
     ScDocument* pDoc = GetSelectedDoc();
     OUString aName;

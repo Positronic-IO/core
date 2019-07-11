@@ -64,7 +64,7 @@ OUString GraphicMimeTypeHelper::GetMimeTypeForExtension(const OString& rExt)
     return aMimeType;
 }
 
-OUString GraphicMimeTypeHelper::GetMimeTypeForXGraphic(Reference<XGraphic> xGraphic)
+OUString GraphicMimeTypeHelper::GetMimeTypeForXGraphic(const Reference<XGraphic>& xGraphic)
 {
     OUString aSourceMimeType;
     Reference<XPropertySet> const xGraphicPropertySet(xGraphic, UNO_QUERY);
@@ -76,7 +76,8 @@ OUString GraphicMimeTypeHelper::GetMimeTypeForXGraphic(Reference<XGraphic> xGrap
     return OUString("");
 }
 
-OUString GraphicMimeTypeHelper::GetMimeTypeForImageStream(Reference<XInputStream> xInputStream)
+OUString
+GraphicMimeTypeHelper::GetMimeTypeForImageStream(const Reference<XInputStream>& xInputStream)
 {
     // Create the graphic to retrieve the mimetype from it
     Reference<XGraphicProvider> xProvider
@@ -87,6 +88,39 @@ OUString GraphicMimeTypeHelper::GetMimeTypeForImageStream(Reference<XInputStream
     Reference<XGraphic> xGraphic(xProvider->queryGraphic(aMediaProperties));
 
     return GetMimeTypeForXGraphic(xGraphic);
+}
+
+OUString GraphicMimeTypeHelper::GetMimeTypeForConvertDataFormat(ConvertDataFormat convertDataFormat)
+{
+    switch (convertDataFormat)
+    {
+        case ConvertDataFormat::BMP:
+            return OUString("image/bmp");
+        case ConvertDataFormat::GIF:
+            return OUString("image/gif");
+        case ConvertDataFormat::JPG:
+            return OUString("image/jpeg");
+        case ConvertDataFormat::PCT:
+            return OUString("image/x-pict");
+        case ConvertDataFormat::PNG:
+            return OUString("image/png");
+        case ConvertDataFormat::SVM:
+            return OUString("image/x-svm");
+        case ConvertDataFormat::TIF:
+            return OUString("image/tiff");
+        case ConvertDataFormat::WMF:
+            return OUString("image/x-wmf");
+        case ConvertDataFormat::EMF:
+            return OUString("image/x-emf");
+        case ConvertDataFormat::SVG:
+            return OUString("image/svg+xml");
+        case ConvertDataFormat::PDF:
+            return OUString("application/pdf");
+        case ConvertDataFormat::MET: // What is this?
+        case ConvertDataFormat::Unknown:
+        default:
+            return OUString("");
+    }
 }
 }
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

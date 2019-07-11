@@ -25,10 +25,14 @@
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/ucb/UnsupportedCommandException.hpp>
 #include <com/sun/star/ucb/XPropertySetRegistry.hpp>
+#include <com/sun/star/beans/XPropertySetInfo.hpp>
+#include <com/sun/star/ucb/XCommandInfo.hpp>
 
+#include <cppuhelper/queryinterface.hxx>
 #include <osl/mutex.hxx>
 #include <ucbhelper/contenthelper.hxx>
 #include <ucbhelper/contentinfo.hxx>
+#include <ucbhelper/macros.hxx>
 
 using namespace com::sun::star;
 
@@ -42,7 +46,6 @@ PropertySetInfo::PropertySetInfo(
     const uno::Reference< css::ucb::XCommandEnvironment >& rxEnv,
     ContentImplHelper* pContent )
 : m_xEnv( rxEnv ),
-  m_pProps( nullptr ),
   m_pContent( pContent )
 {
 }
@@ -211,7 +214,6 @@ CommandProcessorInfo::CommandProcessorInfo(
     const uno::Reference< css::ucb::XCommandEnvironment >& rxEnv,
     ContentImplHelper* pContent )
 : m_xEnv( rxEnv ),
-  m_pCommands( nullptr ),
   m_pContent( pContent )
 {
 }

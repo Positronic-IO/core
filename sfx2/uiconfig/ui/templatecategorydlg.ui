@@ -1,19 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.4 -->
+<!-- Generated with glade 3.20.0 -->
 <interface domain="sfx">
   <requires lib="gtk+" version="3.18"/>
-  <object class="GtkListStore" id="categorylist">
+  <object class="GtkTreeStore" id="categorylist">
     <columns>
       <!-- column-name text -->
       <column type="gchararray"/>
       <!-- column-name id -->
       <column type="gchararray"/>
     </columns>
-    <data>
-      <row>
-        <col id="0" translatable="yes" context="templatecategorydlg|categorylist">None</col>
-      </row>
-    </data>
   </object>
   <object class="GtkDialog" id="TemplatesCategoryDialog">
     <property name="can_focus">False</property>
@@ -107,6 +102,8 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes" context="templatecategorydlg|select_label">Select from Existing Category</property>
+                    <property name="use_underline">True</property>
+                    <property name="mnemonic_widget">categorylb</property>
                     <property name="xalign">0</property>
                     <attributes>
                       <attribute name="weight" value="normal"/>
@@ -175,6 +172,8 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="label" translatable="yes" context="templatecategorydlg|create_label">or Create a New Category</property>
+                    <property name="use_underline">True</property>
+                    <property name="mnemonic_widget">category_entry</property>
                     <property name="xalign">0</property>
                     <attributes>
                       <attribute name="weight" value="normal"/>
@@ -218,8 +217,5 @@
       <action-widget response="-5">ok</action-widget>
       <action-widget response="-6">cancel</action-widget>
     </action-widgets>
-    <child>
-      <placeholder/>
-    </child>
   </object>
 </interface>

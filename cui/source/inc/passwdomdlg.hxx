@@ -19,18 +19,19 @@
 #ifndef INCLUDED_CUI_SOURCE_INC_PASSWDOMDLG_HXX
 #define INCLUDED_CUI_SOURCE_INC_PASSWDOMDLG_HXX
 
-#include <vcl/weld.hxx>
+#include <sfx2/basedlgs.hxx>
 #include <memory>
 
-
-class PasswordToOpenModifyDialog : public weld::GenericDialogController
+class PasswordToOpenModifyDialog : public SfxDialogController
 {
     std::unique_ptr<weld::Entry> m_xPasswdToOpenED;
     std::unique_ptr<weld::Entry> m_xReenterPasswdToOpenED;
     std::unique_ptr<weld::Expander> m_xOptionsExpander;
     std::unique_ptr<weld::Button> m_xOk;
     std::unique_ptr<weld::CheckButton> m_xOpenReadonlyCB;
+    std::unique_ptr<weld::Label> m_xPasswdToModifyFT;
     std::unique_ptr<weld::Entry> m_xPasswdToModifyED;
+    std::unique_ptr<weld::Label> m_xReenterPasswdToModifyFT;
     std::unique_ptr<weld::Entry> m_xReenterPasswdToModifyED;
 
     OUString                    m_aOneMismatch;
@@ -42,6 +43,7 @@ class PasswordToOpenModifyDialog : public weld::GenericDialogController
 
 
     DECL_LINK(OkBtnClickHdl, weld::Button&, void);
+    DECL_LINK(ReadonlyOnOffHdl, weld::Button&, void);
 
     PasswordToOpenModifyDialog( const PasswordToOpenModifyDialog & ) = delete;
     PasswordToOpenModifyDialog & operator = ( const PasswordToOpenModifyDialog & ) = delete;

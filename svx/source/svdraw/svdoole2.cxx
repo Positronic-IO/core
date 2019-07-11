@@ -36,6 +36,7 @@
 #include <com/sun/star/document/XEventListener.hpp>
 #include <com/sun/star/container/XChild.hpp>
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 
 #include <cppuhelper/exc_hlp.hxx>
 
@@ -57,7 +58,7 @@
 #include <comphelper/classids.hxx>
 
 #include <sot/formats.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <cppuhelper/implbase.hxx>
 
 #include <svl/solar.hrc>
@@ -84,6 +85,8 @@
 #include <svx/svdpage.hxx>
 #include <rtl/ref.hxx>
 #include <bitmaps.hlst>
+#include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
@@ -375,11 +378,10 @@ void SAL_CALL SdrLightEmbeddedClient_Impl::activatingUI()
             // only deactivate ole objects which belongs to the same frame
             if ( xFrame == lcl_getFrame_throw(pObj) )
             {
-                uno::Reference< embed::XEmbeddedObject > xObject = pObj->GetObjRef();
+                const uno::Reference< embed::XEmbeddedObject >& xObject = pObj->GetObjRef();
                 try
                 {
-                    if ( (xObject->getStatus( pObj->GetAspect() ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE) ||
-                         svt::EmbeddedObjectRef::IsGLChart(xObject) )
+                    if ( xObject->getStatus( pObj->GetAspect() ) & embed::EmbedMisc::MS_EMBED_ACTIVATEWHENVISIBLE )
                         xObject->changeState( embed::EmbedStates::INPLACE_ACTIVE );
                     else
                     {
@@ -423,9 +425,11 @@ uno::Reference< css::frame::XLayoutManager > SAL_CALL SdrLightEmbeddedClient_Imp
     {
         xMan.set(xFrame->getPropertyValue("LayoutManager"),uno::UNO_QUERY);
     }
-    catch ( uno::Exception& )
+    catch ( uno::Exception& ex )
     {
-        throw uno::RuntimeException();
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException( ex.Message,
+                        nullptr, anyEx );
     }
 
     return xMan;
@@ -665,16 +669,16 @@ static bool ImplIsMathObj( const uno::Reference < embed::XEmbeddedObject >& rObj
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrOle2Obj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrOle2Obj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::OleProperties(*this);
+    return o3tl::make_unique<sdr::properties::OleProperties>(*this);
 }
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrOle2Obj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrOle2Obj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrOle2Obj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrOle2Obj>(*this);
 }
 
 void SdrOle2Obj::Init()
@@ -1192,7 +1196,7 @@ SdrObject* SdrOle2Obj::createSdrGrafObjReplacement(bool bAddText) const
 
             if(pOPO)
             {
-                pClone->NbcSetOutlinerParaObject(new OutlinerParaObject(*pOPO));
+                pClone->NbcSetOutlinerParaObject(o3tl::make_unique<OutlinerParaObject>(*pOPO));
             }
         }
 
@@ -1238,38 +1242,23 @@ SdrObject* SdrOle2Obj::DoConvertToPolyObj(bool bBezier, bool bAddText) const
     return nullptr;
 }
 
-void SdrOle2Obj::SetPage(SdrPage* pNewPage)
+void SdrOle2Obj::handlePageChange(SdrPage* pOldPage, SdrPage* pNewPage)
 {
-    bool bRemove=pNewPage==nullptr && pPage!=nullptr;
-    bool bInsert=pNewPage!=nullptr && pPage==nullptr;
+    const bool bRemove(pNewPage == nullptr && pOldPage != nullptr);
+    const bool bInsert(pNewPage != nullptr && pOldPage == nullptr);
 
     if (bRemove && mpImpl->mbConnected )
-        Disconnect();
-
-    if(!GetStyleSheet() && pNewPage)
     {
-        // #i119287# Set default StyleSheet for SdrGrafObj here, it is different from 'Default'. This
-        // needs to be done before the style 'Default' is set from the :SetModel() call which is triggered
-        // from the following :SetPage().
-        // TTTT: Needs to be moved in branch aw080 due to having a SdrModel from the beginning, is at this
-        // place for convenience currently (works in both versions, is not in the way)
-        SfxStyleSheet* pSheet = pNewPage->getSdrModelFromSdrPage().GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj();
-
-        if(pSheet)
-        {
-            SetStyleSheet(pSheet, false);
-        }
-        else
-        {
-            SetMergedItem(XFillStyleItem(drawing::FillStyle_NONE));
-            SetMergedItem(XLineStyleItem(drawing::LineStyle_NONE));
-        }
+        Disconnect();
     }
 
-    SdrRectObj::SetPage(pNewPage);
+    // call parent
+    SdrRectObj::handlePageChange(pOldPage, pNewPage);
 
     if (bInsert && !mpImpl->mbConnected )
+    {
         Connect();
+    }
 }
 
 void SdrOle2Obj::SetObjRef( const css::uno::Reference < css::embed::XEmbeddedObject >& rNewObjRef )
@@ -1862,23 +1851,9 @@ bool SdrOle2Obj::IsChart() const
     return mpImpl->mbIsChart;
 }
 
-bool SdrOle2Obj::IsReal3DChart() const
+void SdrOle2Obj::SetGraphicToObj( const Graphic& aGraphic )
 {
-    if (!IsChart())
-        return false;
-
-    uno::Reference<chart2::XChartDocument> xChart2Document(getXModel(), uno::UNO_QUERY);
-    uno::Reference<chart2::XDiagram> xChart2Diagram(xChart2Document->getFirstDiagram(), uno::UNO_QUERY);
-
-    if (!xChart2Diagram.is())
-        return false;
-
-    return ChartHelper::isGL3DDiagram(xChart2Diagram);
-}
-
-void SdrOle2Obj::SetGraphicToObj( const Graphic& aGraphic, const OUString& aMediaType )
-{
-    mpImpl->mxObjRef.SetGraphic( aGraphic, aMediaType );
+    mpImpl->mxObjRef.SetGraphic( aGraphic, OUString() );
 }
 
 void SdrOle2Obj::SetGraphicToObj( const uno::Reference< io::XInputStream >& xGrStream, const OUString& aMediaType )

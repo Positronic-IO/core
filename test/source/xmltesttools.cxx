@@ -82,15 +82,45 @@ OUString XmlTestTools::getXPath(xmlDocPtr pXmlDoc, const OString& rXPath, const 
 OUString XmlTestTools::getXPathContent(xmlDocPtr pXmlDoc, const OString& rXPath)
 {
     xmlXPathObjectPtr pXmlObj = getXPathNode(pXmlDoc, rXPath);
-    xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
+    switch (pXmlObj->type)
+    {
+        case XPATH_UNDEFINED:
+            CPPUNIT_FAIL("Undefined XPath type");
+        case XPATH_NODESET:
+        {
+            xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
 
-    CPPUNIT_ASSERT_MESSAGE(OString("In <" + OString(pXmlDoc->name) + ">, XPath '" + rXPath + "' not found").getStr(),
-            xmlXPathNodeSetGetLength(pXmlNodes) > 0);
+            CPPUNIT_ASSERT_MESSAGE(
+                OString("In <" + OString(pXmlDoc->name) + ">, XPath '" + rXPath + "' not found")
+                    .getStr(),
+                xmlXPathNodeSetGetLength(pXmlNodes) > 0);
 
-    xmlNodePtr pXmlNode = pXmlNodes->nodeTab[0];
-    OUString s(convert((pXmlNode->children[0]).content));
-    xmlXPathFreeObject(pXmlObj);
-    return s;
+            xmlNodePtr pXmlNode = pXmlNodes->nodeTab[0];
+            xmlNodePtr pXmlChild = pXmlNode->children;
+            OUString s;
+            while (pXmlChild && pXmlChild->type != XML_TEXT_NODE)
+                pXmlChild = pXmlChild->next;
+            if (pXmlChild && pXmlChild->type == XML_TEXT_NODE)
+                s = convert(pXmlChild->content);
+            xmlXPathFreeObject(pXmlObj);
+            return s;
+        }
+        case XPATH_BOOLEAN:
+            return pXmlObj->boolval ? OUString("true") : OUString("false");
+        case XPATH_NUMBER:
+            return OUString::number(pXmlObj->floatval);
+        case XPATH_STRING:
+            return convert(pXmlObj->stringval);
+        case XPATH_POINT:
+        case XPATH_RANGE:
+        case XPATH_LOCATIONSET:
+        case XPATH_USERS:
+        case XPATH_XSLT_TREE:
+            CPPUNIT_FAIL("Unsupported XPath type");
+    }
+
+    CPPUNIT_FAIL("Invalid XPath type");
+    return OUString(); // to suppress "Not all control paths return a value" warning on MSVC
 }
 
 void XmlTestTools::assertXPath(xmlDocPtr pXmlDoc, const OString& rXPath, const OString& rAttribute, const OUString& rExpectedValue)
@@ -100,8 +130,8 @@ void XmlTestTools::assertXPath(xmlDocPtr pXmlDoc, const OString& rXPath, const O
                                  rExpectedValue, aValue);
 }
 
-
-void XmlTestTools::assertXPathAttrs(xmlDocPtr pXmlDoc, const OString& rXPath, std::vector<std::pair<OString, OUString>> aPairVector)
+void XmlTestTools::assertXPathAttrs(xmlDocPtr pXmlDoc, const OString& rXPath,
+                                    const std::vector<std::pair<OString, OUString>>& aPairVector)
 {
     for (auto& rPair : aPairVector)
     {

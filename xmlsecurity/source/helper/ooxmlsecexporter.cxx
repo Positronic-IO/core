@@ -18,22 +18,28 @@
 #include <comphelper/ofopxmlhelper.hxx>
 #include <o3tl/make_unique.hxx>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
+#include <svx/xoutbmp.hxx>
 #include <unotools/datetime.hxx>
+#include <vcl/salctype.hxx>
 #include <xmloff/attrlist.hxx>
 
 #include <documentsignaturehelper.hxx>
 #include <xsecctl.hxx>
 
 using namespace com::sun::star;
+using namespace css::xml::sax;
 
 struct OOXMLSecExporter::Impl
 {
+private:
     const uno::Reference<uno::XComponentContext>& m_xComponentContext;
     const uno::Reference<embed::XStorage>& m_xRootStorage;
     const uno::Reference<xml::sax::XDocumentHandler>& m_xDocumentHandler;
     const SignatureInformation& m_rInformation;
     OUString m_aSignatureTimeValue;
 
+public:
     Impl(const uno::Reference<uno::XComponentContext>& xComponentContext,
          const uno::Reference<embed::XStorage>& xRootStorage,
          const uno::Reference<xml::sax::XDocumentHandler>& xDocumentHandler,
@@ -49,6 +55,11 @@ struct OOXMLSecExporter::Impl
     static bool isOOXMLBlacklist(const OUString& rStreamName);
     /// Should we intentionally not sign this relation type?
     static bool isOOXMLRelationBlacklist(const OUString& rRelationName);
+
+    const uno::Reference<xml::sax::XDocumentHandler>& getDocumentHandler() const
+    {
+        return m_xDocumentHandler;
+    }
 
     void writeSignedInfo();
     void writeCanonicalizationMethod();
@@ -68,6 +79,7 @@ struct OOXMLSecExporter::Impl
     /// Writes <SignatureInfoV1>.
     void writeSignatureInfo();
     void writePackageSignature();
+    void writeSignatureLineImages();
 };
 
 bool OOXMLSecExporter::Impl::isOOXMLBlacklist(const OUString& rStreamName)
@@ -81,10 +93,10 @@ bool OOXMLSecExporter::Impl::isOOXMLBlacklist(const OUString& rStreamName)
         "/_xmlsignatures"
     };
     // Just check the prefix, as we don't care about the content type part of the stream name.
-    return std::find_if(vBlacklist.begin(), vBlacklist.end(), [&](const OUStringLiteral& rLiteral)
+    return std::any_of(vBlacklist.begin(), vBlacklist.end(), [&](const OUStringLiteral& rLiteral)
     {
         return rStreamName.startsWith(rLiteral);
-    }) != vBlacklist.end();
+    });
 }
 
 bool OOXMLSecExporter::Impl::isOOXMLRelationBlacklist(const OUString& rRelationName)
@@ -130,7 +142,12 @@ void OOXMLSecExporter::Impl::writeCanonicalizationTransform()
 void OOXMLSecExporter::Impl::writeSignatureMethod()
 {
     rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
-    pAttributeList->AddAttribute("Algorithm", ALGO_RSASHA256);
+
+    if (m_rInformation.eAlgorithmID == svl::crypto::SignatureMethodAlgorithm::ECDSA)
+        pAttributeList->AddAttribute("Algorithm", ALGO_ECDSASHA256);
+    else
+        pAttributeList->AddAttribute("Algorithm", ALGO_RSASHA256);
+
     m_xDocumentHandler->startElement("SignatureMethod", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
     m_xDocumentHandler->endElement("SignatureMethod");
 }
@@ -349,9 +366,9 @@ void OOXMLSecExporter::Impl::writeSignatureInfo()
     pAttributeList->AddAttribute("xmlns", "http://schemas.microsoft.com/office/2006/digsig");
     m_xDocumentHandler->startElement("SignatureInfoV1", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
 
-    m_xDocumentHandler->startElement("SetupId", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
+    m_xDocumentHandler->startElement("SetupID", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
     m_xDocumentHandler->characters(m_rInformation.ouSignatureLineId);
-    m_xDocumentHandler->endElement("SetupId");
+    m_xDocumentHandler->endElement("SetupID");
     m_xDocumentHandler->startElement("SignatureText", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
     m_xDocumentHandler->endElement("SignatureText");
     m_xDocumentHandler->startElement("SignatureImage", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
@@ -390,7 +407,7 @@ void OOXMLSecExporter::Impl::writeSignatureInfo()
     m_xDocumentHandler->characters("9"); // This is what MSO 2016 writes, though [MS-OFFCRYPTO] doesn't document what the value means.
     m_xDocumentHandler->endElement("SignatureProviderDetails");
     m_xDocumentHandler->startElement("SignatureType", uno::Reference<xml::sax::XAttributeList>(new SvXMLAttributeList()));
-    m_xDocumentHandler->characters("1");
+    m_xDocumentHandler->characters("2");
     m_xDocumentHandler->endElement("SignatureType");
 
     m_xDocumentHandler->endElement("SignatureInfoV1");
@@ -406,10 +423,40 @@ void OOXMLSecExporter::Impl::writePackageSignature()
         m_xDocumentHandler->startElement("xd:QualifyingProperties", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
     }
 
-    DocumentSignatureHelper::writeSignedProperties(m_xDocumentHandler, m_rInformation, m_aSignatureTimeValue);
+    DocumentSignatureHelper::writeSignedProperties(m_xDocumentHandler, m_rInformation, m_aSignatureTimeValue, false);
 
     m_xDocumentHandler->endElement("xd:QualifyingProperties");
     m_xDocumentHandler->endElement("Object");
+}
+
+void OOXMLSecExporter::Impl::writeSignatureLineImages()
+{
+    if (m_rInformation.aValidSignatureImage.is())
+    {
+        rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
+        pAttributeList->AddAttribute("Id", "idValidSigLnImg");
+        m_xDocumentHandler->startElement(
+            "Object", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
+        OUString aGraphicInBase64;
+        Graphic aGraphic(m_rInformation.aValidSignatureImage);
+        if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false, ConvertDataFormat::EMF))
+            SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+        m_xDocumentHandler->characters(aGraphicInBase64);
+        m_xDocumentHandler->endElement("Object");
+    }
+    if (m_rInformation.aInvalidSignatureImage.is())
+    {
+        rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
+        pAttributeList->AddAttribute("Id", "idInvalidSigLnImg");
+        m_xDocumentHandler->startElement(
+            "Object", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
+        OUString aGraphicInBase64;
+        Graphic aGraphic(m_rInformation.aInvalidSignatureImage);
+        if (!XOutBitmap::GraphicToBase64(aGraphic, aGraphicInBase64, false, ConvertDataFormat::EMF))
+            SAL_WARN("xmlsecurity.helper", "could not convert graphic to base64");
+        m_xDocumentHandler->characters(aGraphicInBase64);
+        m_xDocumentHandler->endElement("Object");
+    }
 }
 
 OOXMLSecExporter::OOXMLSecExporter(const uno::Reference<uno::XComponentContext>& xComponentContext,
@@ -427,7 +474,7 @@ void OOXMLSecExporter::writeSignature()
     rtl::Reference<SvXMLAttributeList> pAttributeList(new SvXMLAttributeList());
     pAttributeList->AddAttribute("xmlns", NS_XMLDSIG);
     pAttributeList->AddAttribute("Id", "idPackageSignature");
-    m_pImpl->m_xDocumentHandler->startElement("Signature", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
+    m_pImpl->getDocumentHandler()->startElement("Signature", uno::Reference<xml::sax::XAttributeList>(pAttributeList.get()));
 
     m_pImpl->writeSignedInfo();
     m_pImpl->writeSignatureValue();
@@ -435,8 +482,9 @@ void OOXMLSecExporter::writeSignature()
     m_pImpl->writePackageObject();
     m_pImpl->writeOfficeObject();
     m_pImpl->writePackageSignature();
+    m_pImpl->writeSignatureLineImages();
 
-    m_pImpl->m_xDocumentHandler->endElement("Signature");
+    m_pImpl->getDocumentHandler()->endElement("Signature");
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

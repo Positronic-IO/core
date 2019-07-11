@@ -348,11 +348,6 @@ bool Graphic::IsEPS() const
     return mxImpGraphic->ImplIsEPS();
 }
 
-Bitmap Graphic::GetBitmap(const GraphicConversionParameters& rParameters) const
-{
-    return mxImpGraphic->ImplGetBitmap(rParameters);
-}
-
 BitmapEx Graphic::GetBitmapEx(const GraphicConversionParameters& rParameters) const
 {
     return mxImpGraphic->ImplGetBitmapEx(rParameters);
@@ -520,7 +515,7 @@ bool Graphic::IsDummyContext()
     return mxImpGraphic->ImplIsDummyContext();
 }
 
-void Graphic::SetGfxLink( const GfxLink& rGfxLink )
+void Graphic::SetGfxLink( const std::shared_ptr<GfxLink>& rGfxLink )
 {
     ImplTestRefCount();
     mxImpGraphic->ImplSetLink( rGfxLink );
@@ -562,15 +557,31 @@ const VectorGraphicDataPtr& Graphic::getVectorGraphicData() const
     return mxImpGraphic->getVectorGraphicData();
 }
 
-void Graphic::setPdfData(const uno::Sequence<sal_Int8>& rPdfData)
+void Graphic::setPdfData(const std::shared_ptr<uno::Sequence<sal_Int8>>& rPdfData)
 {
     ImplTestRefCount();
     mxImpGraphic->setPdfData(rPdfData);
 }
 
-const uno::Sequence<sal_Int8>& Graphic::getPdfData() const
+const std::shared_ptr<uno::Sequence<sal_Int8>>& Graphic::getPdfData() const
 {
     return mxImpGraphic->getPdfData();
+}
+
+bool Graphic::hasPdfData() const
+{
+    std::shared_ptr<uno::Sequence<sal_Int8>> pPdfData = getPdfData();
+    return pPdfData && pPdfData->hasElements();
+}
+
+void Graphic::setPageNumber(sal_Int32 nPageNumber)
+{
+    mxImpGraphic->mnPageNumber = nPageNumber;
+}
+
+sal_Int32 Graphic::getPageNumber() const
+{
+    return mxImpGraphic->mnPageNumber;
 }
 
 OUString Graphic::getOriginURL() const

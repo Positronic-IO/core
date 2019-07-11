@@ -26,11 +26,8 @@
 #include <com/sun/star/awt/XMouseListener.hpp>
 #include <com/sun/star/util/XModifyBroadcaster.hpp>
 #include <com/sun/star/graphic/XGraphicObject.hpp>
-#include <comphelper/propmultiplex.hxx>
 #include <cppuhelper/implbase2.hxx>
 #include <rtl/ref.hxx>
-
-using namespace comphelper;
 
 
 namespace frm
@@ -125,7 +122,7 @@ private:
         @precond
             our own mutex is locked
     */
-    bool    impl_handleNewImageURL_lck( ValueChangeInstigator _eInstigator );
+    void    impl_handleNewImageURL_lck( ValueChangeInstigator _eInstigator );
 
     /** updates the binary stream, created from loading the file which the given URL points to, into our
         bound field, or the control itself if there is no bound field

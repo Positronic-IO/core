@@ -20,6 +20,7 @@
 #include <osl/file.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
 
 using namespace sd;
@@ -51,7 +52,7 @@ void Receiver::pushCommand( const std::vector<OString> &rCommand )
 
 void Receiver::Invoke()
 {
-    if( maExecQueue.size() )
+    if( !maExecQueue.empty() )
     {
         std::vector< OString > aCommands( maExecQueue.front() );
         maExecQueue.pop_front();

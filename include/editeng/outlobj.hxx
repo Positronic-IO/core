@@ -66,6 +66,7 @@ public:
     // constructors/destructor
     OutlinerParaObject( const EditTextObject&, const ParagraphDataVector&, bool bIsEditDoc);
     OutlinerParaObject( const EditTextObject&);
+    OutlinerParaObject( std::unique_ptr<EditTextObject> );
     OutlinerParaObject( const OutlinerParaObject&);
     ~OutlinerParaObject();
 
@@ -91,7 +92,6 @@ public:
     sal_Int32 Count() const;
     sal_Int16 GetDepth(sal_Int32 nPara) const;
     const EditTextObject& GetTextObject() const;
-    bool IsEditDoc() const;
     const ParagraphData& GetParagraphData(sal_Int32 nIndex) const;
 
     // portion info support

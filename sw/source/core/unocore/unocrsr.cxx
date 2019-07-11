@@ -27,8 +27,6 @@
 
 sw::UnoCursorHint::~UnoCursorHint() {}
 
-IMPL_FIXEDMEMPOOL_NEWDEL( SwUnoCursor )
-
 SwUnoCursor::SwUnoCursor( const SwPosition &rPos )
     : SwCursor( rPos, nullptr )
     , m_bRemainInSection(true)
@@ -47,7 +45,7 @@ SwUnoCursor::~SwUnoCursor()
     // delete the whole ring
     while( GetNext() != this )
     {
-        Ring* pNxt = GetNext();
+        Ring* pNxt = GetNextInRing();
         pNxt->MoveTo(nullptr); // remove from chain
         delete pNxt;       // and delete
     }

@@ -18,9 +18,9 @@
  */
 
 #include <extended/accessiblelistboxentry.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svtools/stringtransfer.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Rectangle.hpp>
 #include <com/sun/star/awt/Size.hpp>
@@ -38,7 +38,6 @@
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/typeprovider.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/accessibleeventnotifier.hxx>
 #include <helper/accresmgr.hxx>
 #include <strings.hrc>
@@ -386,7 +385,7 @@ namespace accessibility
         {
             if( bHasButtons )
                 nCase = 2;
-             else
+            else
                 nCase = 3;
         }
         return nCase;
@@ -475,8 +474,7 @@ namespace accessibility
         OUString altText = getListBox()->GetEntryAltText( pEntry );
         if (!altText.isEmpty())
         {
-            sRet += " ";
-            sRet += altText;
+            sRet += " " + altText;
         }
 
         return sRet;

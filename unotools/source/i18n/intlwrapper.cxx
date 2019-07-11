@@ -18,6 +18,8 @@
  */
 
 #include <unotools/intlwrapper.hxx>
+#include <unotools/collatorwrapper.hxx>
+#include <unotools/localedatawrapper.hxx>
 #include <com/sun/star/i18n/CollatorOptions.hpp>
 #include <i18nlangtag/mslangid.hxx>
 #include <comphelper/processfactory.hxx>
@@ -26,10 +28,7 @@ IntlWrapper::IntlWrapper(
             const LanguageTag& rLanguageTag )
         :
         maLanguageTag( rLanguageTag ),
-        m_xContext( comphelper::getProcessComponentContext() ),
-        pLocaleData( nullptr ),
-        pCollator( nullptr ),
-        pCaseCollator( nullptr )
+        m_xContext( comphelper::getProcessComponentContext() )
 {
 }
 

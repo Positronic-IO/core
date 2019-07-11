@@ -22,8 +22,7 @@
 #include <FillProperties.hxx>
 #include <CharacterProperties.hxx>
 #include <UserDefinedProperties.hxx>
-#include <LegendHelper.hxx>
-#include <CloneHelper.hxx>
+#include <ModifyListenerHelper.hxx>
 #include <PropertyHelper.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/awt/Size.hpp>
@@ -35,6 +34,8 @@
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
+
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans::PropertyAttribute;
@@ -183,7 +184,7 @@ Legend::Legend() :
 
 Legend::Legend( const Legend & rOther ) :
         MutexContainer(),
-        impl::Legend_Base(),
+        impl::Legend_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {

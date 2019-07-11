@@ -30,6 +30,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <sot/storage.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <xmloff/xmluconv.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -76,8 +77,7 @@ public:
 };
 
 SvxEditEngineSourceImpl::SvxEditEngineSourceImpl( EditEngine* pEditEngine )
-: mpEditEngine( pEditEngine ),
-  mpTextForwarder(nullptr)
+: mpEditEngine( pEditEngine )
 {
 }
 
@@ -272,7 +272,7 @@ SvxXMLTextExportComponent::SvxXMLTextExportComponent(
     const ESelection& rSel,
     const OUString& rFileName,
     const css::uno::Reference< css::xml::sax::XDocumentHandler > & xHandler)
-:   SvXMLExport( xContext, "", rFileName, xHandler, static_cast<frame::XModel*>(new SvxSimpleUnoModel()), FUNIT_CM,
+:   SvXMLExport( xContext, "", rFileName, xHandler, static_cast<frame::XModel*>(new SvxSimpleUnoModel()), FieldUnit::CM,
     SvXMLExportFlags::OASIS  |  SvXMLExportFlags::AUTOSTYLES  |  SvXMLExportFlags::CONTENT )
 {
         SvxEditEngineSource aEditSource( pEditEngine );

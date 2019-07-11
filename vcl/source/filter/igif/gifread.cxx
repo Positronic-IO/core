@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
 #include "decode.hxx"
 #include "gifread.hxx"
 #include <memory>
@@ -193,6 +194,12 @@ void GIFReader::CreateBitmaps(long nWidth, long nHeight, BitmapPalette* pPal,
     // which doesn't fail on 64-bit Mac OS X at least. Why the loading
     // fails on 64-bit Linux, no idea.
     if (nCombinedPixSize >= SAL_MAX_INT32/3*2)
+    {
+        bStatus = false;
+        return;
+    }
+
+    if (!aSize.Width() || !aSize.Height())
     {
         bStatus = false;
         return;
@@ -523,7 +530,7 @@ sal_uLong GIFReader::ReadNextBlock()
                     if( nRead && !bOverreadBlock )
                         FillImages( pTarget, nRead );
 
-                    rtl_freeMemory( pTarget );
+                    std::free( pTarget );
                 }
             }
         }

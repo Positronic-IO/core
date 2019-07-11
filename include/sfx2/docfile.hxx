@@ -43,6 +43,7 @@
 #include <cppuhelper/weak.hxx>
 #include <rtl/ustring.hxx>
 #include <svl/lstner.hxx>
+#include <svl/itemset.hxx>
 #include <tools/link.hxx>
 #include <tools/stream.hxx>
 #include <ucbhelper/content.hxx>
@@ -55,7 +56,6 @@ class INetURLObject;
 class SfxObjectShell;
 class SfxFrame;
 class Timer;
-class SfxItemSet;
 class DateTime;
 
 class SFX2_DLLPUBLIC SfxMedium : public SvRefBase
@@ -78,7 +78,7 @@ public:
                         SfxMedium( const OUString &rName,
                                    StreamMode nOpenMode,
                                    std::shared_ptr<const SfxFilter> pFilter = nullptr,
-                                   SfxItemSet *pSet = nullptr );
+                                   std::unique_ptr<SfxItemSet> pSet = nullptr );
                         /**
                          * @param pSet Takes ownership
                          */
@@ -86,7 +86,7 @@ public:
                                    const OUString &rReferer,
                                    StreamMode nOpenMode,
                                    std::shared_ptr<const SfxFilter> pFilter = nullptr,
-                                   SfxItemSet *pSet = nullptr );
+                                   std::unique_ptr<SfxItemSet> pSet = nullptr );
 
                         /**
                          * @param pSet does NOT take ownership
@@ -121,7 +121,6 @@ public:
      */
     void                SetFilter(const std::shared_ptr<const SfxFilter>& pFilter);
     const std::shared_ptr<const SfxFilter>& GetFilter() const;
-    std::shared_ptr<const SfxFilter> const & GetOrigFilter() const;
     const OUString&     GetOrigURL() const;
 
     SfxItemSet  *       GetItemSet() const;
@@ -151,7 +150,7 @@ public:
     void                SetError(ErrCode nError);
 
     void                CloseInStream();
-    bool                CloseOutStream();
+    void                CloseOutStream();
 
     void                CloseStorage();
 
@@ -208,7 +207,6 @@ public:
     void                SetInCheckIn( bool bInCheckIn );
     bool                IsInCheckIn( );
     bool                IsSkipImages( );
-    OUString            GetConvertImagesFilter();
 
     SAL_DLLPRIVATE bool HasStorage_Impl() const;
 
@@ -267,13 +265,17 @@ public:
     SAL_DLLPRIVATE bool
     SignContents_Impl(bool bSignScriptingContent, bool bHasValidDocumentSignature,
                       const OUString& aSignatureLineId = OUString(),
-                      const css::uno::Reference<css::security::XCertificate> xCert
+                      const css::uno::Reference<css::security::XCertificate>& xCert
                       = css::uno::Reference<css::security::XCertificate>(),
-                      const css::uno::Reference<css::graphic::XGraphic> xValidGraphic
+                      const css::uno::Reference<css::graphic::XGraphic>& xValidGraphic
                       = css::uno::Reference<css::graphic::XGraphic>(),
-                      const css::uno::Reference<css::graphic::XGraphic> xInvalidGraphic
+                      const css::uno::Reference<css::graphic::XGraphic>& xInvalidGraphic
                       = css::uno::Reference<css::graphic::XGraphic>(),
                       const OUString& aComment = OUString());
+
+    SAL_DLLPRIVATE bool
+    SignDocumentContentUsingCertificate(bool bHasValidDocumentSignature,
+                 const css::uno::Reference<css::security::XCertificate>& xCertificate);
 
     // the following two methods must be used and make sense only during saving currently
     // TODO/LATER: in future the signature state should be controlled by the medium not by the document

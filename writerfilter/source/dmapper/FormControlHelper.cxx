@@ -37,13 +37,14 @@
 #include "FormControlHelper.hxx"
 #include <xmloff/odffields.hxx>
 #include <comphelper/sequence.hxx>
+#include <tools/diagnose_ex.h>
 
 namespace writerfilter {
 namespace dmapper {
 
 using namespace ::com::sun::star;
 
-struct FormControlHelper::FormControlHelper_Impl
+struct FormControlHelper::FormControlHelper_Impl : public virtual SvRefBase
 {
     FieldId m_eFieldId;
     awt::Size aSize;
@@ -97,8 +98,7 @@ uno::Reference<form::XForm> const & FormControlHelper::FormControlHelper_Impl::g
             while (xFormsNamedContainer->hasByName(sFormName))
             {
                 ++nUnique;
-                sFormName = sDOCXForm;
-                sFormName += OUString::number(nUnique);
+                sFormName = sDOCXForm + OUString::number(nUnique);
             }
 
             uno::Reference<uno::XInterface> xForm(getServiceFactory()->createInstance("com.sun.star.form.component.Form"));
@@ -206,14 +206,52 @@ void FormControlHelper::processField(uno::Reference<text::XFormField> const& xFo
     uno::Reference<container::XNamed> xNamed( xFormField, uno::UNO_QUERY );
     if ( m_pFFData && xNamed.is() && xNameCont.is() )
     {
+        OUString sTmp = m_pFFData->getEntryMacro();
+        if ( !sTmp.isEmpty() )
+            xNameCont->insertByName( "EntryMacro", uno::makeAny(sTmp) );
+        sTmp = m_pFFData->getExitMacro();
+        if ( !sTmp.isEmpty() )
+            xNameCont->insertByName( "ExitMacro", uno::makeAny(sTmp) );
+
+        sTmp = m_pFFData->getHelpText();
+        if ( !sTmp.isEmpty() )
+            xNameCont->insertByName( "Help", uno::makeAny(sTmp) );
+
+        sTmp = m_pFFData->getStatusText();
+        if ( !sTmp.isEmpty() )
+            xNameCont->insertByName( "Hint", uno::makeAny(sTmp) );
 
         if (m_pImpl->m_eFieldId == FIELD_FORMTEXT )
         {
             xFormField->setFieldType(ODF_FORMTEXT);
-            if (  !m_pFFData->getName().isEmpty() )
+            sTmp = m_pFFData->getName();
+            try
             {
-                xNamed->setName( m_pFFData->getName() );
+                if ( !sTmp.isEmpty() )
+                    xNamed->setName( sTmp );
             }
+            catch ( uno::Exception& )
+            {
+                DBG_UNHANDLED_EXCEPTION("writerfilter","Set Formfield name failed");
+            }
+
+            sTmp = m_pFFData->getTextType();
+            if ( !sTmp.isEmpty() )
+                xNameCont->insertByName( "Type", uno::makeAny(sTmp) );
+
+            const sal_uInt16 nMaxLength = m_pFFData->getTextMaxLength();
+            if ( nMaxLength )
+            {
+                xNameCont->insertByName( "MaxLength", uno::makeAny(nMaxLength) );
+            }
+
+            sTmp = m_pFFData->getTextDefault();
+            if ( !sTmp.isEmpty() )
+                xNameCont->insertByName( "Content", uno::makeAny(sTmp) );
+
+            sTmp = m_pFFData->getTextFormat();
+            if ( !sTmp.isEmpty() )
+                xNameCont->insertByName( "Format", uno::makeAny(sTmp) );
         }
         else if (m_pImpl->m_eFieldId == FIELD_FORMCHECKBOX )
         {

@@ -18,10 +18,13 @@
  */
 
 #include "WrappedStockProperties.hxx"
+#include "Chart2ModelContact.hxx"
 #include <FastPropertyIdRanges.hxx>
 #include <DiagramHelper.hxx>
 #include <ChartModelHelper.hxx>
 #include <ControllerLockGuard.hxx>
+#include <WrappedProperty.hxx>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <tools/diagnose_ex.h>
@@ -128,7 +131,7 @@ css::uno::Any WrappedVolumeProperty::getPropertyValue( const css::uno::Reference
     {
         std::vector< uno::Reference< chart2::XDataSeries > > aSeriesVector(
             DiagramHelper::getDataSeriesFromDiagram( xDiagram ) );
-        if( aSeriesVector.size() > 0 )
+        if( !aSeriesVector.empty() )
         {
             Reference< lang::XMultiServiceFactory > xFact( xChartDoc->getChartTypeManager(), uno::UNO_QUERY );
             DiagramHelper::tTemplateWithServiceName aTemplateAndService =
@@ -148,7 +151,7 @@ css::uno::Any WrappedVolumeProperty::getPropertyValue( const css::uno::Reference
 
 uno::Reference< chart2::XChartTypeTemplate > WrappedVolumeProperty::getNewTemplate( bool bNewValue, const OUString& rCurrentTemplate, const Reference< lang::XMultiServiceFactory >& xFactory ) const
 {
-    uno::Reference< chart2::XChartTypeTemplate > xTemplate(nullptr);
+    uno::Reference< chart2::XChartTypeTemplate > xTemplate;
 
     if(!xFactory.is())
         return xTemplate;
@@ -193,7 +196,7 @@ css::uno::Any WrappedUpDownProperty::getPropertyValue( const css::uno::Reference
     {
         std::vector< uno::Reference< chart2::XDataSeries > > aSeriesVector(
             DiagramHelper::getDataSeriesFromDiagram( xDiagram ) );
-        if( aSeriesVector.size() > 0 )
+        if( !aSeriesVector.empty() )
         {
             Reference< lang::XMultiServiceFactory > xFact( xChartDoc->getChartTypeManager(), uno::UNO_QUERY );
             DiagramHelper::tTemplateWithServiceName aTemplateAndService =
@@ -212,7 +215,7 @@ css::uno::Any WrappedUpDownProperty::getPropertyValue( const css::uno::Reference
 }
 uno::Reference< chart2::XChartTypeTemplate > WrappedUpDownProperty::getNewTemplate( bool bNewValue, const OUString& rCurrentTemplate, const Reference< lang::XMultiServiceFactory >& xFactory ) const
 {
-    uno::Reference< chart2::XChartTypeTemplate > xTemplate(nullptr);
+    uno::Reference< chart2::XChartTypeTemplate > xTemplate;
     if( bNewValue ) //add open series
     {
         if( rCurrentTemplate == "com.sun.star.chart2.template.StockLowHighClose" )
@@ -257,11 +260,11 @@ void WrappedStockProperties::addProperties( std::vector< Property > & rOutProper
                   | beans::PropertyAttribute::MAYBEVOID );
 }
 
-void WrappedStockProperties::addWrappedProperties( std::vector< WrappedProperty* >& rList
+void WrappedStockProperties::addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
-    rList.push_back( new WrappedVolumeProperty( spChart2ModelContact ) );
-    rList.push_back( new WrappedUpDownProperty( spChart2ModelContact ) );
+    rList.emplace_back( new WrappedVolumeProperty( spChart2ModelContact ) );
+    rList.emplace_back( new WrappedUpDownProperty( spChart2ModelContact ) );
 }
 
 } //namespace wrapper

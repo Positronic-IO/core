@@ -36,7 +36,7 @@
 #include <svx/dataaccessdescriptor.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <algorithm>
 #include <functional>
@@ -233,10 +233,11 @@ namespace dbaui
     }
     void SbaTableQueryBrowser::clearTreeModel()
     {
-        if (m_pTreeModel)
+        if (m_pTreeView)
         {
+            auto pTreeModel = m_pTreeView->GetTreeModel();
             // clear the user data of the tree model
-            SvTreeListEntry* pEntryLoop = m_pTreeModel->First();
+            SvTreeListEntry* pEntryLoop = pTreeModel->First();
             while (pEntryLoop)
             {
                 DBTreeListUserData* pData = static_cast<DBTreeListUserData*>(pEntryLoop->GetUserData());
@@ -256,7 +257,7 @@ namespace dbaui
 
                     delete pData;
                 }
-                pEntryLoop = m_pTreeModel->Next(pEntryLoop);
+                pEntryLoop = pTreeModel->Next(pEntryLoop);
             }
         }
         m_pCurrentlyDisplayed = nullptr;

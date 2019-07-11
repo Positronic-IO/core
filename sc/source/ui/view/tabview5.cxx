@@ -28,6 +28,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <sfx2/objsh.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <tabview.hxx>
 #include <tabvwsh.hxx>
@@ -78,17 +79,17 @@ void ScTabView::Init()
         pGridWin[i] = nullptr;
     pGridWin[SC_SPLIT_BOTTOMLEFT] = VclPtr<ScGridWindow>::Create( pFrameWin, &aViewData, SC_SPLIT_BOTTOMLEFT );
 
-    pSelEngine = new ScViewSelectionEngine( pGridWin[SC_SPLIT_BOTTOMLEFT], this,
-                                                SC_SPLIT_BOTTOMLEFT );
-    aFunctionSet.SetSelectionEngine( pSelEngine );
+    pSelEngine.reset( new ScViewSelectionEngine( pGridWin[SC_SPLIT_BOTTOMLEFT], this,
+                                                SC_SPLIT_BOTTOMLEFT ) );
+    aFunctionSet.SetSelectionEngine( pSelEngine.get() );
 
-    pHdrSelEng = new ScHeaderSelectionEngine( pFrameWin, &aHdrFunc );
+    pHdrSelEng.reset( new ScHeaderSelectionEngine( pFrameWin, &aHdrFunc ) );
 
     pColBar[SC_SPLIT_LEFT] = VclPtr<ScColBar>::Create( pFrameWin, SC_SPLIT_LEFT,
-                                                       &aHdrFunc, pHdrSelEng, this );
+                                                       &aHdrFunc, pHdrSelEng.get(), this );
     pColBar[SC_SPLIT_RIGHT] = nullptr;
     pRowBar[SC_SPLIT_BOTTOM] = VclPtr<ScRowBar>::Create( pFrameWin, SC_SPLIT_BOTTOM,
-                                                         &aHdrFunc, pHdrSelEng, this );
+                                                         &aHdrFunc, pHdrSelEng.get(), this );
     pRowBar[SC_SPLIT_TOP] = nullptr;
     for (i=0; i<2; i++)
         pColOutline[i] = pRowOutline[i] = nullptr;
@@ -130,7 +131,7 @@ void ScTabView::Init()
     //  UpdateShow is done during resize or a copy of an existing view from ctor
 
     pDrawActual = nullptr;
-    pDrawOld    = nullptr;
+    pDrawOld = nullptr;
 
     //  DrawView cannot be create in the TabView - ctor
     //  when the ViewShell isn't constructed yet...
@@ -153,13 +154,15 @@ ScTabView::~ScTabView()
         TransferableHelper::ClearSelection( GetActiveWin() );       // may delete pOld
     }
 
-    DELETEZ(pBrushDocument);
-    DELETEZ(pDrawBrushSet);
+    pBrushDocument.reset();
+    pDrawBrushSet.reset();
 
-    DELETEZ(pPageBreakData);
+    pPageBreakData.reset();
 
-    DELETEZ(pDrawOld);
-    DELETEZ(pDrawActual);
+    delete pDrawActual;
+    pDrawActual = nullptr;
+    delete pDrawOld;
+    pDrawOld = nullptr;
 
     if (comphelper::LibreOfficeKit::isActive())
     {
@@ -190,16 +193,16 @@ ScTabView::~ScTabView()
             }
 
         pDrawView->HideSdrPage();
-        delete pDrawView;
+        pDrawView.reset();
     }
 
-    delete pSelEngine;
+    pSelEngine.reset();
 
     mxInputHintOO.reset();
     for (i=0; i<4; i++)
         pGridWin[i].disposeAndClear();
 
-    delete pHdrSelEng;
+    pHdrSelEng.reset();
 
     for (i=0; i<2; i++)
     {
@@ -230,7 +233,7 @@ void ScTabView::MakeDrawView( TriState nForceDesignMode )
         OSL_ENSURE(pLayer, "Where is the Draw Layer ??");
 
         sal_uInt16 i;
-        pDrawView = new ScDrawView( pGridWin[SC_SPLIT_BOTTOMLEFT], &aViewData );
+        pDrawView.reset( new ScDrawView( pGridWin[SC_SPLIT_BOTTOMLEFT], &aViewData ) );
         for (i=0; i<4; i++)
             if (pGridWin[i])
             {
@@ -247,8 +250,8 @@ void ScTabView::MakeDrawView( TriState nForceDesignMode )
                                             // so that immediately can be drawn
             }
         SfxRequest aSfxRequest(SID_OBJECT_SELECT, SfxCallMode::SLOT, aViewData.GetViewShell()->GetPool());
-        SetDrawFuncPtr(new FuSelection( aViewData.GetViewShell(), GetActiveWin(), pDrawView,
-                                        pLayer,aSfxRequest));
+        SetDrawFuncPtr(new FuSelection(*aViewData.GetViewShell(), GetActiveWin(), pDrawView.get(),
+                                       pLayer,aSfxRequest));
 
         //  used when switching back from page preview: restore saved design mode state
         //  (otherwise, keep the default from the draw view ctor)
@@ -258,7 +261,7 @@ void ScTabView::MakeDrawView( TriState nForceDesignMode )
         //  register at FormShell
         FmFormShell* pFormSh = aViewData.GetViewShell()->GetFormShell();
         if (pFormSh)
-            pFormSh->SetView(pDrawView);
+            pFormSh->SetView(pDrawView.get());
 
         if (aViewData.GetViewShell()->HasAccessibilityObjects())
             aViewData.GetViewShell()->BroadcastAccessibility(SfxHint(SfxHintId::ScAccMakeDrawLayer));
@@ -613,26 +616,20 @@ void ScTabView::MakeVisible( const tools::Rectangle& rHMMRect )
     }
 }
 
-void ScTabView::SetBrushDocument( ScDocument* pNew, bool bLock )
+void ScTabView::SetBrushDocument( ScDocumentUniquePtr pNew, bool bLock )
 {
-    delete pBrushDocument;
-    delete pDrawBrushSet;
-
-    pBrushDocument = pNew;
-    pDrawBrushSet = nullptr;
+    pDrawBrushSet.reset();
+    pBrushDocument = std::move(pNew);
 
     bLockPaintBrush = bLock;
 
     aViewData.GetBindings().Invalidate(SID_FORMATPAINTBRUSH);
 }
 
-void ScTabView::SetDrawBrushSet( SfxItemSet* pNew, bool bLock )
+void ScTabView::SetDrawBrushSet( std::unique_ptr<SfxItemSet> pNew, bool bLock )
 {
-    delete pBrushDocument;
-    delete pDrawBrushSet;
-
-    pBrushDocument = nullptr;
-    pDrawBrushSet = pNew;
+    pBrushDocument.reset();
+    pDrawBrushSet = std::move(pNew);
 
     bLockPaintBrush = bLock;
 

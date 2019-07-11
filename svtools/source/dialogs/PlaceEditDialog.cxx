@@ -24,7 +24,7 @@ PlaceEditDialog::PlaceEditDialog(weld::Window* pParent)
     , m_bLabelChanged( false )
     , m_bShowPassword( true )
     , m_xEDServerName(m_xBuilder->weld_entry("name"))
-    , m_xLBServerType(m_xBuilder->weld_combo_box_text("type"))
+    , m_xLBServerType(m_xBuilder->weld_combo_box("type"))
     , m_xEDUsername(m_xBuilder->weld_entry("login"))
     , m_xFTUsernameLabel(m_xBuilder->weld_label("loginLabel"))
     , m_xBTOk(m_xBuilder->weld_button("ok"))
@@ -38,7 +38,7 @@ PlaceEditDialog::PlaceEditDialog(weld::Window* pParent)
 
     , m_xRepositoryBox(m_xBuilder->weld_widget("RepositoryDetails"))
     , m_xFTRepository(m_xBuilder->weld_label("repositoryLabel"))
-    , m_xLBRepository(m_xBuilder->weld_combo_box_text("repositories"))
+    , m_xLBRepository(m_xBuilder->weld_combo_box("repositories"))
 
     , m_xEDShare(m_xBuilder->weld_entry("share"))
     , m_xFTShare(m_xBuilder->weld_label("shareLabel"))
@@ -76,7 +76,7 @@ PlaceEditDialog::PlaceEditDialog(weld::Window* pParent, const std::shared_ptr<Pl
     , m_bLabelChanged( true )
     , m_bShowPassword( false )
     , m_xEDServerName(m_xBuilder->weld_entry("name"))
-    , m_xLBServerType(m_xBuilder->weld_combo_box_text("type"))
+    , m_xLBServerType(m_xBuilder->weld_combo_box("type"))
     , m_xEDUsername(m_xBuilder->weld_entry("login"))
     , m_xFTUsernameLabel(m_xBuilder->weld_label("loginLabel"))
     , m_xBTOk(m_xBuilder->weld_button("ok"))
@@ -87,6 +87,24 @@ PlaceEditDialog::PlaceEditDialog(weld::Window* pParent, const std::shared_ptr<Pl
     , m_xEDPassword(m_xBuilder->weld_entry("password"))
     , m_xFTPasswordLabel(m_xBuilder->weld_label("passwordLabel"))
     , m_xTypeGrid(m_xBuilder->weld_widget("TypeGrid"))
+
+    , m_xRepositoryBox(m_xBuilder->weld_widget("RepositoryDetails"))
+    , m_xFTRepository(m_xBuilder->weld_label("repositoryLabel"))
+    , m_xLBRepository(m_xBuilder->weld_combo_box("repositories"))
+
+    , m_xEDShare(m_xBuilder->weld_entry("share"))
+    , m_xFTShare(m_xBuilder->weld_label("shareLabel"))
+
+    , m_xDetailsGrid(m_xBuilder->weld_widget("Details"))
+    , m_xHostBox(m_xBuilder->weld_widget("HostDetails"))
+    , m_xEDHost(m_xBuilder->weld_entry("host"))
+    , m_xFTHost(m_xBuilder->weld_label("hostLabel"))
+    , m_xEDPort(m_xBuilder->weld_spin_button("port"))
+    , m_xFTPort(m_xBuilder->weld_label("portLabel"))
+    , m_xEDRoot(m_xBuilder->weld_entry("path"))
+    , m_xFTRoot(m_xBuilder->weld_label("pathLabel"))
+
+    , m_xCBDavs(m_xBuilder->weld_check_button("webdavs"))
 {
     m_xEDPassword->hide();
     m_xFTPasswordLabel->hide();
@@ -310,7 +328,7 @@ IMPL_LINK_NOARG( PlaceEditDialog, EditUsernameHdl, weld::Entry&, void )
     EditHdl(nullptr);
 }
 
-IMPL_LINK_NOARG( PlaceEditDialog, SelectTypeHdl, weld::ComboBoxText&, void )
+IMPL_LINK_NOARG( PlaceEditDialog, SelectTypeHdl, weld::ComboBox&, void )
 {
     SelectType(false);
 }

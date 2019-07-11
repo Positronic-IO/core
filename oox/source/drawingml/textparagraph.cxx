@@ -23,6 +23,7 @@
 #include <svtools/unitconv.hxx>
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <oox/mathml/importutils.hxx>
 #include <oox/helper/propertyset.hxx>
 #include <com/sun/star/text/XText.hpp>
@@ -68,8 +69,8 @@ TextParagraphPropertiesPtr TextParagraph::getParagraphStyle(
     const TextParagraphPropertiesVector& rListStyle = rTextListStyle.getListStyle();
     if (nLevel >= static_cast< sal_Int16 >(rListStyle.size()))
         nLevel = 0;
-    TextParagraphPropertiesPtr pTextParagraphStyle = nullptr;
-    if (rListStyle.size())
+    TextParagraphPropertiesPtr pTextParagraphStyle;
+    if (!rListStyle.empty())
         pTextParagraphStyle = rListStyle[nLevel];
 
     return pTextParagraphStyle;
@@ -133,15 +134,15 @@ void TextParagraph::insertAt(
             aParaProp.apply( maProperties );
 
             // bullets have same color as following texts by default
-            if( !aioBulletList.hasProperty( PROP_BulletColor ) && maRuns.size() > 0
+            if( !aioBulletList.hasProperty( PROP_BulletColor ) && !maRuns.empty()
                 && (*maRuns.begin())->getTextCharacterProperties().maFillProperties.moFillType.has() )
                 aioBulletList.setProperty( PROP_BulletColor, (*maRuns.begin())->getTextCharacterProperties().maFillProperties.getBestSolidColor().getColor( rFilterBase.getGraphicHelper() ));
             if( !aioBulletList.hasProperty( PROP_BulletColor ) && aTextCharacterStyle.maFillProperties.moFillType.has() )
                 aioBulletList.setProperty( PROP_BulletColor, aTextCharacterStyle.maFillProperties.getBestSolidColor().getColor( rFilterBase.getGraphicHelper() ));
-            if( !aioBulletList.hasProperty( PROP_GraphicSize ) && maRuns.size() > 0
+            if( !aioBulletList.hasProperty( PROP_GraphicSize ) && !maRuns.empty()
                 && aParaProp.getBulletList().maGraphic.hasValue())
             {
-                long nFirstCharHeightMm = TransformMetric(nCharHeightFirst > 0 ? nCharHeightFirst : 1200, FUNIT_POINT, FUNIT_MM);
+                long nFirstCharHeightMm = TransformMetric(nCharHeightFirst > 0 ? nCharHeightFirst : 1200, FieldUnit::POINT, FieldUnit::MM);
                 float fBulletSizeRel = 1.f;
                 if( aParaProp.getBulletList().mnSize.hasValue() )
                     fBulletSizeRel = aParaProp.getBulletList().mnSize.get<sal_Int16>() / 100.f;

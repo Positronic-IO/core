@@ -76,6 +76,7 @@
 
 #include <PivotLayoutDialog.hxx>
 
+#include <comphelper/lok.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <sfx2/lokhelper.hxx>
 
@@ -418,7 +419,7 @@ VclPtr<SfxModelessDialog> ScTabViewShell::CreateRefDialog(
                 ScViewData& rViewData = GetViewData();
                 rViewData.SetRefTabNo( rViewData.GetTabNo() );
                 ScDPObject* pObj = pDoc->GetDPAtCursor(rViewData.GetCurX(), rViewData.GetCurY(), rViewData.GetTabNo());
-                pResult = VclPtr<ScPivotLayoutDialog>::Create(pB, pCW, pParent, &rViewData, pDialogDPObject, pObj == nullptr);
+                pResult = VclPtr<ScPivotLayoutDialog>::Create(pB, pCW, pParent, &rViewData, pDialogDPObject.get(), pObj == nullptr);
             }
         }
         break;
@@ -539,6 +540,22 @@ void ScTabViewShell::NotifyCursor(SfxViewShell* pOtherShell) const
     const ScGridWindow* pWin = GetViewData().GetActiveWin();
     if (pWin)
         pWin->updateLibreOfficeKitCellCursor(pOtherShell);
+}
+
+css::uno::Reference<css::datatransfer::XTransferable2> ScTabViewShell::GetClipData(vcl::Window* pWin)
+{
+    SfxViewFrame* pViewFrame = nullptr;
+    css::uno::Reference<css::datatransfer::XTransferable2> xTransferable;
+    css::uno::Reference<css::datatransfer::clipboard::XClipboard> xClipboard;
+
+    if (pWin)
+        xClipboard = pWin->GetClipboard();
+    else if ((pViewFrame = SfxViewFrame::GetFirst(nullptr, false)))
+        xClipboard = pViewFrame->GetWindow().GetClipboard();
+
+    xTransferable.set(xClipboard.is() ? xClipboard->getContents() : nullptr, css::uno::UNO_QUERY);
+
+    return xTransferable;
 }
 
 void ScTabViewShell::notifyAllViewsHeaderInvalidation(HeaderType eHeaderType, SCTAB nCurrentTabIndex)

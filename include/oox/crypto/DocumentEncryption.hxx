@@ -15,6 +15,7 @@
 
 #include <com/sun/star/uno/Reference.hxx>
 #include <oox/crypto/Standard2007Engine.hxx>
+#include <oox/crypto/AgileEngine.hxx>
 #include <rtl/ustring.hxx>
 
 namespace com { namespace sun { namespace star {
@@ -31,7 +32,7 @@ class OOX_DLLPUBLIC DocumentEncryption
 private:
     css::uno::Reference< css::io::XStream > mxDocumentStream;
     oox::ole::OleStorage& mrOleStorage;
-    OUString maPassword;
+    OUString const maPassword;
 
     Standard2007Engine mEngine;
 

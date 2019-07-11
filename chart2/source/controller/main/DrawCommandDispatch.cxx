@@ -74,7 +74,7 @@ bool DrawCommandDispatch::isFeatureSupported( const OUString& rCommandURL )
     return parseCommandURL( rCommandURL, &nFeatureId, &aBaseCommand, &aCustomShapeType );
 }
 
-::basegfx::B2DPolyPolygon getPolygon(const char* pResId, const SdrModel& rModel)
+static ::basegfx::B2DPolyPolygon getPolygon(const char* pResId, const SdrModel& rModel)
 {
     ::basegfx::B2DPolyPolygon aReturn;
     XLineEndListRef pLineEndList = rModel.GetLineEndList();
@@ -114,8 +114,9 @@ void DrawCommandDispatch::setAttributes( SdrObject* pObj )
                         if ( aObjList[ i ].equalsIgnoreAsciiCase( m_aCustomShapeType ) )
                         {
                             FmFormModel aModel;
-                            SfxItemPool& rPool = aModel.GetItemPool();
+                            SfxItemPool& rPool(aModel.GetItemPool());
                             rPool.FreezeIdRanges();
+
                             if ( GalleryExplorer::GetSdrObj( GALLERY_THEME_POWERPOINT, i, &aModel ) )
                             {
                                 const SdrObject* pSourceObj = aModel.GetPage( 0 )->GetObj( 0 );
@@ -429,8 +430,7 @@ SdrObject* DrawCommandDispatch::createDefaultObject( const sal_uInt16 nID )
             pObj = SdrObjFactory::MakeNewObject(
                 pDrawModelWrapper->getSdrModel(),
                 pDrawViewWrapper->GetCurrentObjInventor(),
-                pDrawViewWrapper->GetCurrentObjIdentifier(),
-                pPage);
+                pDrawViewWrapper->GetCurrentObjIdentifier());
 
             if ( pObj )
             {

@@ -15,9 +15,6 @@
 #include <vector>
 #include <boost/optional.hpp>
 
-#include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <com/sun/star/beans/XPropertySet.hpp>
-#include <com/sun/star/document/XDocumentProperties.hpp>
 #include <com/sun/star/text/WrapTextMode.hpp>
 #include <oox/mathml/importutils.hxx>
 #include <rtl/strbuf.hxx>
@@ -33,6 +30,27 @@ class SvStream;
 namespace oox
 {
 class GraphicHelper;
+}
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace beans
+{
+class XPropertySet;
+}
+namespace document
+{
+class XDocumentProperties;
+}
+namespace lang
+{
+class XMultiServiceFactory;
+}
+}
+}
 }
 
 namespace writerfilter
@@ -58,6 +76,8 @@ enum class RTFBorderState
 /// Different kind of buffers for table cell contents.
 enum RTFBufferTypes
 {
+    BUFFER_SETSTYLE,
+    /// Stores properties, should be created only in bufferProperties().
     BUFFER_PROPS,
     BUFFER_NESTROW,
     BUFFER_CELLEND,
@@ -100,16 +120,16 @@ enum class RTFFieldStatus
 };
 
 /// A buffer storing dmapper calls.
-using Buf_t = std::tuple<RTFBufferTypes, RTFValue::Pointer_t, std::shared_ptr<TableRowBuffer>>;
+using Buf_t = std::tuple<RTFBufferTypes, RTFValue::Pointer_t, tools::SvRef<TableRowBuffer>>;
 using RTFBuffer_t = std::deque<Buf_t>;
 
 /// holds one nested table row
-struct TableRowBuffer
+struct TableRowBuffer : public virtual SvRefBase
 {
     RTFBuffer_t buffer;
     ::std::deque<RTFSprms> cellsSprms;
     ::std::deque<RTFSprms> cellsAttributes;
-    int nCells;
+    int const nCells;
     writerfilter::Reference<Properties>::Pointer_t pParaProperties;
     writerfilter::Reference<Properties>::Pointer_t pFrameProperties;
     writerfilter::Reference<Properties>::Pointer_t pRowProperties;
@@ -153,7 +173,7 @@ private:
 };
 
 /// Stores the properties of a shape.
-class RTFShape
+class RTFShape : public virtual SvRefBase
 {
 public:
     RTFShape();
@@ -176,6 +196,8 @@ public:
     RTFSprms aWrapPolygonSprms;
     /// Anchor attributes like wrap distance, written by RTFSdrImport::resolve(), read by RTFDocumentImpl::resolvePict().
     RTFSprms aAnchorAttributes;
+    /// Wrap type, written by RTFDocumentImpl::popState(), read by RTFDocumentImpl::resolvePict().
+    std::pair<Id, RTFValue::Pointer_t> aWrapSprm{ 0, nullptr };
 };
 
 /// Stores the properties of a drawing object.
@@ -202,14 +224,14 @@ public:
 };
 
 /// Stores the properties of a picture.
-class RTFPicture
+class RTFPicture : public virtual SvRefBase
 {
 public:
     RTFPicture();
-    sal_uInt16 nWidth = 0;
-    sal_uInt16 nHeight = 0;
-    sal_uInt16 nGoalWidth = 0;
-    sal_uInt16 nGoalHeight = 0;
+    sal_Int32 nWidth = 0;
+    sal_Int32 nHeight = 0;
+    sal_Int32 nGoalWidth = 0;
+    sal_Int32 nGoalHeight = 0;
     sal_uInt16 nScaleX = 100;
     sal_uInt16 nScaleY = 100;
     short nCropT = 0;
@@ -233,7 +255,6 @@ private:
 
 public:
     explicit RTFFrame(RTFParserState* pParserState);
-    sal_Int16 m_nAnchorType;
 
     /// Convert the stored properties to Sprms
     RTFSprms getSprms();
@@ -305,13 +326,16 @@ public:
     /// Maps to OOXML's ascii, cs or eastAsia.
     enum class RunType
     {
+        NONE,
         LOCH,
         HICH,
-        DBCH
+        DBCH,
+        LTRCH_RTLCH_1,
+        LTRCH_RTLCH_2,
+        RTLCH_LTRCH_1,
+        RTLCH_LTRCH_2
     };
     RunType eRunType;
-    /// ltrch or rtlch
-    bool isRightToLeft;
 
     // Info group.
     sal_Int16 nYear;
@@ -414,7 +438,7 @@ OString DTTM22OString(long nDTTM);
 class RTFDocumentImpl : public RTFDocument, public RTFListener
 {
 public:
-    using Pointer_t = std::shared_ptr<RTFDocumentImpl>;
+    using Pointer_t = tools::SvRef<RTFDocumentImpl>;
     RTFDocumentImpl(css::uno::Reference<css::uno::XComponentContext> const& xContext,
                     css::uno::Reference<css::io::XInputStream> const& xInputStream,
                     css::uno::Reference<css::lang::XComponent> const& xDstDoc,
@@ -480,6 +504,11 @@ public:
     bool isStyleSheetImport();
     /// Resets m_aStates.top().aFrame.
     void resetFrame();
+    /// Buffers properties to be sent later.
+    void bufferProperties(RTFBuffer_t& rBuffer, const RTFValue::Pointer_t& pValue,
+                          const tools::SvRef<TableRowBuffer>& pTableProperties);
+    /// implement non-obvious RTF specific style inheritance
+    RTFReferenceTable::Entries_t deduplicateStyleTable();
 
 private:
     SvStream& Strm();
@@ -533,8 +562,8 @@ private:
     css::uno::Reference<css::document::XDocumentProperties> m_xDocumentProperties;
     std::shared_ptr<SvStream> m_pInStream;
     Stream* m_pMapperStream;
-    std::shared_ptr<RTFSdrImport> m_pSdrImport;
-    std::shared_ptr<RTFTokenizer> m_pTokenizer;
+    tools::SvRef<RTFSdrImport> m_pSdrImport;
+    tools::SvRef<RTFTokenizer> m_pTokenizer;
     RTFStack m_aStates;
     /// Read by RTF_PARD.
     RTFParserState m_aDefaultState;
@@ -551,7 +580,10 @@ private:
     std::map<int, Id> m_aStyleTypes;
     /// Color index <-> RGB color value map
     std::vector<Color> m_aColorTable;
+    /// to start initial paragraph / section after font/style tables
     bool m_bFirstRun;
+    /// except in the case of tables in initial multicolumn section (global for assertion)
+    bool m_bFirstRunException;
     /// If paragraph properties should be emitted on next run.
     bool m_bNeedPap;
     /// If we need to emit a CR at the end of substream.
@@ -686,7 +718,7 @@ private:
     int m_nListPictureId;
 
     /// New document means not pasting into an existing one.
-    bool m_bIsNewDoc;
+    bool const m_bIsNewDoc;
     /// The media descriptor contains e.g. the base URL of the document.
     const utl::MediaDescriptor& m_rMediaDescriptor;
 

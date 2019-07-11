@@ -12,6 +12,8 @@
 
 #include <svtools/rtfkeywd.hxx>
 #include <filter/msfilter/rtfutil.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 SmRtfExport::SmRtfExport(const SmNode* pIn)
     : SmWordExportBase(pIn)

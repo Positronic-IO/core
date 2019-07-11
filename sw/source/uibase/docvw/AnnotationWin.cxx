@@ -62,25 +62,19 @@
 namespace sw { namespace annotation {
 
 SwAnnotationWin::SwAnnotationWin( SwEditWin& rEditWin,
-                                  WinBits nBits,
                                   SwPostItMgr& aMgr,
                                   SwSidebarItem& rSidebarItem,
                                   SwFormatField* aField )
-    : Window(&rEditWin, nBits)
+    : Window(&rEditWin)
     , maBuilder(nullptr, VclBuilderContainer::getUIRootDir(), "modules/swriter/ui/annotationmenu.ui", "")
     , mrMgr(aMgr)
     , mrView(rEditWin.GetView())
     , mnEventId(nullptr)
-    , mpOutlinerView(nullptr)
-    , mpOutliner(nullptr)
     , mpSidebarTextControl(nullptr)
     , mpVScrollbar(nullptr)
     , mpMetadataAuthor(nullptr)
     , mpMetadataDate(nullptr)
     , mpMenuButton(nullptr)
-    , mpAnchor(nullptr)
-    , mpShadow(nullptr)
-    , mpTextRangeOverlay(nullptr)
     , mColorAnchor()
     , mColorDark()
     , mColorLight()
@@ -143,17 +137,8 @@ void SwAnnotationWin::dispose()
     }
     mpSidebarTextControl.disposeAndClear();
 
-    if ( mpOutlinerView )
-    {
-        delete mpOutlinerView;
-        mpOutlinerView = nullptr;
-    }
-
-    if (mpOutliner)
-    {
-        delete mpOutliner;
-        mpOutliner = nullptr;
-    }
+    mpOutlinerView.reset();
+    mpOutliner.reset();
 
     if (mpMetadataAuthor)
     {
@@ -175,14 +160,10 @@ void SwAnnotationWin::dispose()
 
     RemoveEventListener( LINK( this, SwAnnotationWin, WindowEventListener ) );
 
-    sidebarwindows::AnchorOverlayObject::DestroyAnchorOverlayObject( mpAnchor );
-    mpAnchor = nullptr;
+    mpAnchor.reset();
+    mpShadow.reset();
 
-    sidebarwindows::ShadowOverlayObject::DestroyShadowOverlayObject( mpShadow );
-    mpShadow = nullptr;
-
-    delete mpTextRangeOverlay;
-    mpTextRangeOverlay = nullptr;
+    mpTextRangeOverlay.reset();
 
     mpMenuButton.disposeAndClear();
 
@@ -238,7 +219,7 @@ void SwAnnotationWin::UpdateData()
         std::unique_ptr<SwField> pOldField;
         if (rUndoRedo.DoesUndo())
         {
-            pOldField.reset(mpField->Copy());
+            pOldField = mpField->Copy();
         }
         mpField->SetPar2(mpOutliner->GetEditEngine().GetText());
         mpField->SetTextObject(mpOutliner->CreateParaObject());
@@ -248,7 +229,7 @@ void SwAnnotationWin::UpdateData()
             SwPosition aPosition( pTextField->GetTextNode() );
             aPosition.nContent = pTextField->GetStart();
             rUndoRedo.AppendUndo(
-                new SwUndoFieldFromDoc(aPosition, *pOldField, *mpField, nullptr, true));
+                o3tl::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, nullptr, true));
         }
         // so we get a new layout of notes (anchor position is still the same and we would otherwise not get one)
         mrMgr.SetLayout();
@@ -401,7 +382,7 @@ void SwAnnotationWin::InitAnswer(OutlinerParaObject const * pText)
     std::unique_ptr<SwField> pOldField;
     if (rUndoRedo.DoesUndo())
     {
-        pOldField.reset(mpField->Copy());
+        pOldField = mpField->Copy();
     }
     mpField->SetPar2(mpOutliner->GetEditEngine().GetText());
     mpField->SetTextObject(mpOutliner->CreateParaObject());
@@ -411,7 +392,7 @@ void SwAnnotationWin::InitAnswer(OutlinerParaObject const * pText)
         SwPosition aPosition( pTextField->GetTextNode() );
         aPosition.nContent = pTextField->GetStart();
         rUndoRedo.AppendUndo(
-            new SwUndoFieldFromDoc(aPosition, *pOldField, *mpField, nullptr, true));
+            o3tl::make_unique<SwUndoFieldFromDoc>(aPosition, *pOldField, *mpField, nullptr, true));
     }
     mpOutliner->SetModifyHdl( LINK( this, SwAnnotationWin, ModifyHdl ) );
     mpOutliner->ClearModifyFlag();

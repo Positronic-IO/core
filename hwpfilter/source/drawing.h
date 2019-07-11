@@ -85,7 +85,7 @@ HWPDOFuncType HWPDOFuncTbl[] =
     HWPDOFreeFormFunc,
 };
 
-static HMemIODev *hmem = nullptr;
+static HIODev *hmem = nullptr;
 
 static int count = 0;
 
@@ -316,17 +316,17 @@ static bool LoadCommonHeader(HWPDrawingObject * hdo, unsigned short * link_info)
      return hmem->skipBlock(size - common_size ) != 0;
 }
 
-static HWPDrawingObject *LoadDrawingObject(void)
+static std::unique_ptr<HWPDrawingObject> LoadDrawingObject(void)
 {
-    HWPDrawingObject *hdo, *head, *prev;
+    HWPDrawingObject *prev = nullptr;
+    std::unique_ptr<HWPDrawingObject> hdo, head;
 
     unsigned short link_info;
 
-    head = prev = nullptr;
     do
     {
-        hdo = new HWPDrawingObject;
-        if (!LoadCommonHeader(hdo, &link_info))
+        hdo.reset(new HWPDrawingObject);
+        if (!LoadCommonHeader(hdo.get(), &link_info))
         {
             goto error;
         }
@@ -340,7 +340,7 @@ static HWPDrawingObject *LoadDrawingObject(void)
         }
         else
         {
-            switch (int res = HWPDOFunc(hdo, OBJFUNC_LOAD, nullptr, 0))
+            switch (int res = HWPDOFunc(hdo.get(), OBJFUNC_LOAD, nullptr, 0))
             {
                 case OBJRET_FILE_ERROR:
                     goto error;
@@ -355,35 +355,38 @@ static HWPDrawingObject *LoadDrawingObject(void)
         }
         if (link_info & HDOFILE_HAS_CHILD)
         {
-            hdo->child.reset( LoadDrawingObject() );
+            hdo->child = LoadDrawingObject();
             if (hdo->child == nullptr)
             {
                 goto error;
             }
         }
         if (prev == nullptr)
-            head = hdo;
+        {
+            head = std::move(hdo);
+            prev = head.get();
+        }
         else
-            prev->next.reset( hdo );
-        prev = hdo;
+        {
+            prev->next = std::move(hdo);
+            prev = prev->next.get();
+        }
     }
     while (link_info & HDOFILE_HAS_NEXT);
 
     return head;
-    error:
+
+error:
 // drawing object can be list.
 // hdo = current item, head = list;
 
-    if (hdo != nullptr)
+    if (hdo->type < 0 || hdo->type >= HWPDO_NITEMS)
     {
-        if (hdo->type < 0 || hdo->type >= HWPDO_NITEMS)
-        {
-            hdo->type = HWPDO_RECT;
-        }
-
-        HWPDOFunc(hdo, OBJFUNC_FREE, nullptr, 0);
-        delete hdo;
+        hdo->type = HWPDO_RECT;
     }
+    HWPDOFunc(hdo.get(), OBJFUNC_FREE, nullptr, 0);
+    hdo.reset();
+
     if( prev )
     {
         prev->next = nullptr;
@@ -420,7 +423,7 @@ static bool LoadDrawingObjectBlock(Picture * pic)
         !hmem->skipBlock(size - HDOFILE_HEADER_SIZE))
         return false;
 
-    pic->picinfo.picdraw.hdo = LoadDrawingObject();
+    pic->picinfo.picdraw.hdo = LoadDrawingObject().release();
     if (pic->picinfo.picdraw.hdo == nullptr)
         return false;
     return true;
@@ -626,12 +629,13 @@ static HWPPara *LoadParaList()
         return nullptr;
 
     HWPFile *hwpf = GetCurrentDoc();
-    HIODev *hio = hwpf->SetIODevice(hmem);
+    std::unique_ptr<HIODev> hio = hwpf->SetIODevice(std::unique_ptr<HIODev>(hmem));
 
     std::vector< HWPPara* > plist;
 
     hwpf->ReadParaList(plist);
-    hwpf->SetIODevice(hio);
+    std::unique_ptr<HIODev> orighmem = hwpf->SetIODevice(std::move(hio));
+    hmem = orighmem.release();
 
     return plist.size()? plist.front() : nullptr;
 }

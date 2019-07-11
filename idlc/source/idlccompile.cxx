@@ -18,6 +18,7 @@
  */
 
 #include <idlc.hxx>
+#include <rtl/alloc.h>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.hxx>
 #include <osl/process.h>
@@ -52,9 +53,7 @@ static sal_Char tmpFilePattern[512];
 
 bool isFileUrl(const OString& fileName)
 {
-    if (fileName.startsWith("file://") )
-        return true;
-    return false;
+    return fileName.startsWith("file://");
 }
 
 OString convertToAbsoluteSystemPath(const OString& fileName)
@@ -113,7 +112,7 @@ OString convertToFileUrl(const OString& fileName)
     return fileName;
 }
 
-OString makeTempName(const OString& prefix)
+static OString makeTempName(const OString& prefix)
 {
     OUString uTmpPath;
     OString tmpPath;
@@ -313,8 +312,7 @@ sal_Int32 compileFile(const OString * pathname)
     oslProcessError procError = osl_Process_E_None;
 
     const int nCmdArgs = lCppArgs.size();
-    rtl_uString** pCmdArgs = nullptr;
-    pCmdArgs = static_cast<rtl_uString**>(rtl_allocateZeroMemory(nCmdArgs * sizeof(rtl_uString*)));
+    std::unique_ptr<rtl_uString*[]> pCmdArgs(new rtl_uString*[nCmdArgs]);
 
     int i = 0;
     for (auto const& elem : lCppArgs)
@@ -322,7 +320,7 @@ sal_Int32 compileFile(const OString * pathname)
         pCmdArgs[i++] = elem.pData;
     }
 
-    procError = osl_executeProcess( cpp.pData, pCmdArgs, nCmdArgs, osl_Process_WAIT,
+    procError = osl_executeProcess( cpp.pData, pCmdArgs.get(), nCmdArgs, osl_Process_WAIT,
                                     nullptr, startDir.pData, nullptr, 0, &hProcess );
 
     oslProcessInfo hInfo;
@@ -343,11 +341,9 @@ sal_Int32 compileFile(const OString * pathname)
                     pathname == nullptr ? "" : "file ", fileName.getStr());
 
         osl_freeProcessHandle(hProcess);
-        rtl_freeMemory(pCmdArgs);
         exit(hInfo.Code ? hInfo.Code : 99);
     }
     osl_freeProcessHandle(hProcess);
-    rtl_freeMemory(pCmdArgs);
 
     if (unlink(tmpFile.getStr()) != 0)
     {

@@ -24,17 +24,14 @@
 #include <vcl/dllapi.h>
 #include <vcl/image.hxx>
 #include <vcl/ctrl.hxx>
-#include <vcl/bitmap.hxx>
-#include <vcl/salnativewidgets.hxx>
 #include <vcl/vclenum.hxx>
-#include <vcl/vclptr.hxx>
 #include <memory>
 #include <vector>
 
-#include <com/sun/star/frame/FeatureStateEvent.hpp>
+namespace com { namespace sun { namespace star { namespace frame { struct FeatureStateEvent; } } } }
+template <class T> class VclPtr;
 
 class Color;
-class UserDrawEvent;
 class ImplCommonButtonData;
 enum class DrawButtonFlags;
 
@@ -81,7 +78,7 @@ public:
 
     static OUString     GetStandardText( StandardButtonType eButton );
 
-    bool                SetModeImage( const Image& rImage );
+    void                SetModeImage( const Image& rImage );
     Image const &       GetModeImage( ) const;
     bool                HasImage() const;
     void                SetImageAlign( ImageAlign eAlign );
@@ -163,6 +160,16 @@ public:
     virtual bool    set_property(const OString &rKey, const OUString &rValue) override;
     virtual void    ShowFocus(const tools::Rectangle& rRect) override;
 
+    void setStock(bool bIsStock)
+    {
+        mbIsStock = bIsStock;
+    }
+
+    bool isStock()
+    {
+        return mbIsStock;
+    }
+
 protected:
     PushButtonDropdownStyle mnDDStyle;
     bool            mbIsActive;
@@ -199,6 +206,7 @@ private:
     SymbolType      meSymbol;
     TriState        meState;
     bool            mbPressed;
+    bool            mbIsStock;
 };
 
 inline void PushButton::Check( bool bCheck )
@@ -268,6 +276,8 @@ public:
 class VCL_DLLPUBLIC RadioButton : public Button
 {
 private:
+    friend class VclBuilder;
+
     std::shared_ptr< std::vector< VclPtr< RadioButton > > > m_xGroup;
     tools::Rectangle       maStateRect;
     tools::Rectangle       maMouseRect;
@@ -341,7 +351,7 @@ public:
     void            EnableRadioCheck( bool bRadioCheck ) { mbRadioCheck = bRadioCheck; }
     bool            IsRadioCheckEnabled() const { return mbRadioCheck; }
 
-    bool            SetModeRadioImage( const Image& rImage );
+    void            SetModeRadioImage( const Image& rImage );
     const Image&    GetModeRadioImage( ) const { return maImage;}
 
     void            SetState( bool bCheck );

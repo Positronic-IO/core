@@ -21,6 +21,7 @@
 #define INCLUDED_SC_SOURCE_UI_INC_AREASAVE_HXX
 
 #include <address.hxx>
+#include <tools/solar.h>
 
 #include <vector>
 
@@ -30,12 +31,12 @@ class ScAreaLink;
 class ScAreaLinkSaver
 {
 private:
-    OUString aFileName;
-    OUString aFilterName;
-    OUString aOptions;
-    OUString aSourceArea;
-    ScRange aDestArea;
-    sal_uLong nRefresh;
+    OUString const aFileName;
+    OUString const aFilterName;
+    OUString const aOptions;
+    OUString const aSourceArea;
+    ScRange const aDestArea;
+    sal_uLong const nRefresh;
 
 public:
     ScAreaLinkSaver( const ScAreaLink& rSource );

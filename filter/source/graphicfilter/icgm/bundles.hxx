@@ -23,6 +23,7 @@
 #include <sal/types.h>
 #include "cgmtypes.hxx"
 #include <vcl/salbtype.hxx>
+#include <o3tl/make_unique.hxx>
 #include <vector>
 #include <memory>
 
@@ -44,10 +45,14 @@ public:
         , mnColor( 0 )
         {};
 
-    virtual Bundle*     Clone() { return new Bundle( *this ); };
-            Bundle&     operator=(const Bundle& rBundle );
+    virtual std::unique_ptr<Bundle> Clone() { return o3tl::make_unique<Bundle>( *this ); };
 
     virtual            ~Bundle() {} ;
+
+    Bundle(Bundle const &) = default;
+    Bundle(Bundle &&) = default;
+    Bundle & operator =(Bundle const &) = default;
+    Bundle & operator =(Bundle &&) = default;
 };
 
 
@@ -63,8 +68,7 @@ public:
         , nLineWidth(0)
     {}
 
-    virtual Bundle* Clone() override { return new LineBundle( *this ); }
-    LineBundle& operator=( const LineBundle& rLineBundle );
+    virtual std::unique_ptr<Bundle> Clone() override { return o3tl::make_unique<LineBundle>( *this ); }
 };
 
 
@@ -80,8 +84,7 @@ public:
         , nMarkerSize( 0.0 )
         {};
 
-    virtual Bundle*     Clone() override { return new MarkerBundle( *this ); } ;
-            MarkerBundle&   operator=( const MarkerBundle& rMarkerBundle );
+    virtual std::unique_ptr<Bundle> Clone() override { return o3tl::make_unique<MarkerBundle>( *this ); } ;
 };
 
 
@@ -96,8 +99,7 @@ public:
         : eEdgeType(ET_NONE)
         , nEdgeWidth(0)
     {}
-    virtual Bundle*     Clone() override { return new EdgeBundle( *this ); }
-    EdgeBundle& operator=( const EdgeBundle& rEdgeBundle );
+    virtual std::unique_ptr<Bundle> Clone() override { return o3tl::make_unique<EdgeBundle>( *this ); }
 };
 
 
@@ -117,8 +119,7 @@ public:
         , nCharacterSpacing( 0.0 )
         {};
 
-    virtual Bundle*     Clone() override { return new TextBundle( *this ); } ;
-            TextBundle& operator=( const TextBundle& rTextBundle );
+    virtual std::unique_ptr<Bundle> Clone() override { return o3tl::make_unique<TextBundle>( *this ); } ;
 };
 
 
@@ -135,8 +136,7 @@ public:
         , nFillPatternIndex(0)
         , nFillHatchIndex(0)
     {}
-    virtual Bundle*     Clone() override { return new FillBundle( *this ); }
-    FillBundle& operator=( const FillBundle& rFillBundle );
+    virtual std::unique_ptr<Bundle> Clone() override { return o3tl::make_unique<FillBundle>( *this ); }
 };
 
 

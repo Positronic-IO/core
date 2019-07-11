@@ -142,12 +142,12 @@ void SAL_CALL TableColumn::setFastPropertyValue( sal_Int32 nHandle, const Any& a
     bool bChange = false;
 
     SdrModel& rModel(mxTableModel->getSdrTableObj()->getSdrModelFromSdrObject());
-    TableColumnUndo* pUndo = nullptr;
+    std::unique_ptr<TableColumnUndo> pUndo;
 
     if( mxTableModel.is() && mxTableModel->getSdrTableObj() && mxTableModel->getSdrTableObj()->IsInserted() && rModel.IsUndoEnabled() )
     {
         TableColumnRef xThis( this );
-        pUndo = new TableColumnUndo( xThis );
+        pUndo.reset( new TableColumnUndo( xThis ) );
     }
 
     switch( nHandle )
@@ -201,12 +201,10 @@ void SAL_CALL TableColumn::setFastPropertyValue( sal_Int32 nHandle, const Any& a
             break;
         }
     default:
-        delete pUndo;
         throw UnknownPropertyException( OUString::number(nHandle), static_cast<cppu::OWeakObject*>(this));
     }
     if( !bOk )
     {
-        delete pUndo;
         throw IllegalArgumentException();
     }
 
@@ -214,13 +212,10 @@ void SAL_CALL TableColumn::setFastPropertyValue( sal_Int32 nHandle, const Any& a
     {
         if( pUndo )
         {
-            rModel.AddUndo( pUndo );
-            pUndo = nullptr;
+            rModel.AddUndo( std::move(pUndo) );
         }
         mxTableModel->setModified(true);
     }
-
-    delete pUndo;
 }
 
 
@@ -239,47 +234,41 @@ Any SAL_CALL TableColumn::getFastPropertyValue( sal_Int32 nHandle )
 
 rtl::Reference< FastPropertySetInfo > TableColumn::getStaticPropertySetInfo()
 {
-    static rtl::Reference< FastPropertySetInfo > xInfo;
-    if( !xInfo.is() )
-    {
-        ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-        if( !xInfo.is() )
-        {
-            PropertyVector aProperties(6);
+    static rtl::Reference<FastPropertySetInfo> xInfo = []() {
+        PropertyVector aProperties(6);
 
-            aProperties[0].Name = "Width";
-            aProperties[0].Handle = Property_Width;
-            aProperties[0].Type = ::cppu::UnoType<sal_Int32>::get();
-            aProperties[0].Attributes = 0;
+        aProperties[0].Name = "Width";
+        aProperties[0].Handle = Property_Width;
+        aProperties[0].Type = ::cppu::UnoType<sal_Int32>::get();
+        aProperties[0].Attributes = 0;
 
-            aProperties[1].Name = "OptimalWidth";
-            aProperties[1].Handle = Property_OptimalWidth;
-            aProperties[1].Type = cppu::UnoType<bool>::get();
-            aProperties[1].Attributes = 0;
+        aProperties[1].Name = "OptimalWidth";
+        aProperties[1].Handle = Property_OptimalWidth;
+        aProperties[1].Type = cppu::UnoType<bool>::get();
+        aProperties[1].Attributes = 0;
 
-            aProperties[2].Name = "IsVisible";
-            aProperties[2].Handle = Property_IsVisible;
-            aProperties[2].Type = cppu::UnoType<bool>::get();
-            aProperties[2].Attributes = 0;
+        aProperties[2].Name = "IsVisible";
+        aProperties[2].Handle = Property_IsVisible;
+        aProperties[2].Type = cppu::UnoType<bool>::get();
+        aProperties[2].Attributes = 0;
 
-            aProperties[3].Name = "IsStartOfNewPage";
-            aProperties[3].Handle = Property_IsStartOfNewPage;
-            aProperties[3].Type = cppu::UnoType<bool>::get();
-            aProperties[3].Attributes = 0;
+        aProperties[3].Name = "IsStartOfNewPage";
+        aProperties[3].Handle = Property_IsStartOfNewPage;
+        aProperties[3].Type = cppu::UnoType<bool>::get();
+        aProperties[3].Attributes = 0;
 
-            aProperties[4].Name = "Size";
-            aProperties[4].Handle = Property_Width;
-            aProperties[4].Type = ::cppu::UnoType<sal_Int32>::get();
-            aProperties[4].Attributes = 0;
+        aProperties[4].Name = "Size";
+        aProperties[4].Handle = Property_Width;
+        aProperties[4].Type = ::cppu::UnoType<sal_Int32>::get();
+        aProperties[4].Attributes = 0;
 
-            aProperties[5].Name = "OptimalSize";
-            aProperties[5].Handle = Property_OptimalWidth;
-            aProperties[5].Type = cppu::UnoType<bool>::get();
-            aProperties[5].Attributes = 0;
+        aProperties[5].Name = "OptimalSize";
+        aProperties[5].Handle = Property_OptimalWidth;
+        aProperties[5].Type = cppu::UnoType<bool>::get();
+        aProperties[5].Attributes = 0;
 
-            xInfo.set( new FastPropertySetInfo(aProperties) );
-        }
-    }
+        return rtl::Reference<FastPropertySetInfo>(new FastPropertySetInfo(aProperties));
+    }();
 
     return xInfo;
 }

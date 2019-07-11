@@ -20,7 +20,6 @@
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 #include <com/sun/star/text/RelOrientation.hpp>
-#include <comphelper/string.hxx>
 #include <svx/svxids.hrc>
 #include <hintids.hxx>
 #include <tools/fract.hxx>
@@ -31,8 +30,8 @@
 #include <svtools/htmlkywd.hxx>
 #include <svtools/htmlout.hxx>
 #include <svtools/htmltokn.h>
-#include <svtools/imap.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/imapobj.hxx>
 #include <svtools/htmlcfg.hxx>
 #include <svx/svdouno.hxx>
 #include <svx/xoutbmp.hxx>
@@ -40,6 +39,7 @@
 #include <editeng/lrspitem.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/brushitem.hxx>
+#include <sal/log.hxx>
 
 #include <fmtanchr.hxx>
 #include <fmtornt.hxx>
@@ -65,6 +65,8 @@
 #include "css1kywd.hxx"
 #include "htmlatr.hxx"
 #include "htmlfly.hxx"
+#include "htmlreqifreader.hxx"
+#include <o3tl/make_unique.hxx>
 
 using namespace css;
 
@@ -104,8 +106,7 @@ const HtmlFrmOpts HTML_FRMOPTS_MULTICOL       =
     HtmlFrmOpts::AnySize |
     HtmlFrmOpts::AbsSize |
     HtmlFrmOpts::Dir;
-const HtmlFrmOpts HTML_FRMOPTS_MULTICOL_CNTNR =
-    HTML_FRMOPTS_MULTICOL;
+
 const HtmlFrmOpts HTML_FRMOPTS_MULTICOL_CSS1  =
     HtmlFrmOpts::SAlign |
     HtmlFrmOpts::SSize |
@@ -143,7 +144,7 @@ static Writer& OutHTML_FrameFormatGrfNode( Writer& rWrt, const SwFrameFormat& rF
 static Writer& OutHTML_FrameFormatAsMarquee( Writer& rWrt, const SwFrameFormat& rFrameFormat,
                                         const SdrObject& rSdrObj    );
 
-static HTMLOutEvent aImageEventTable[] =
+static HTMLOutEvent const aImageEventTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_O_SDonload,       OOO_STRING_SVTOOLS_HTML_O_onload,   SvMacroItemId::OnImageLoadDone        },
     { OOO_STRING_SVTOOLS_HTML_O_SDonabort,      OOO_STRING_SVTOOLS_HTML_O_onabort,  SvMacroItemId::OnImageLoadCancel       },
@@ -151,7 +152,7 @@ static HTMLOutEvent aImageEventTable[] =
     { nullptr, nullptr, SvMacroItemId::NONE }
 };
 
-static HTMLOutEvent aIMapEventTable[] =
+static HTMLOutEvent const aIMapEventTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_O_SDonmouseover,  OOO_STRING_SVTOOLS_HTML_O_onmouseover,  SvMacroItemId::OnMouseOver  },
     { OOO_STRING_SVTOOLS_HTML_O_SDonmouseout,   OOO_STRING_SVTOOLS_HTML_O_onmouseout,   SvMacroItemId::OnMouseOut   },
@@ -248,7 +249,7 @@ sal_uInt16 SwHTMLWriter::GuessFrameType( const SwFrameFormat& rFrameFormat,
                     bEmpty = true;
                     if( m_pHTMLPosFlyFrames )
                     {
-                        for( auto pHTMLPosFlyFrame : *m_pHTMLPosFlyFrames )
+                        for( auto & pHTMLPosFlyFrame : *m_pHTMLPosFlyFrames )
                         {
                             sal_uLong nIdx = pHTMLPosFlyFrame->GetNdIndex().GetIndex();
                             bEmpty = (nIdx != nStt) && (nIdx != nStt-1);
@@ -295,9 +296,9 @@ void SwHTMLWriter::CollectFlyFrames()
 
     SwPosFlyFrames aFlyPos(m_pDoc->GetAllFlyFormats(m_bWriteAll ? nullptr : m_pCurrentPam, true));
 
-    for(SwPosFlyFrames::const_iterator aIter(aFlyPos.begin()); aIter != aFlyPos.end(); ++aIter)
+    for(const auto& rpItem : aFlyPos)
     {
-        const SwFrameFormat& rFrameFormat = (*aIter)->GetFormat();
+        const SwFrameFormat& rFrameFormat = rpItem->GetFormat();
         const SdrObject *pSdrObj = nullptr;
         const SwPosition *pAPos;
         const SwContentNode *pACNd;
@@ -345,10 +346,9 @@ void SwHTMLWriter::CollectFlyFrames()
         }
 
         if( !m_pHTMLPosFlyFrames )
-            m_pHTMLPosFlyFrames = new SwHTMLPosFlyFrames;
+            m_pHTMLPosFlyFrames.reset(new SwHTMLPosFlyFrames);
 
-        SwHTMLPosFlyFrame *pNew = new SwHTMLPosFlyFrame(**aIter, pSdrObj, nMode);
-        m_pHTMLPosFlyFrames->insert( pNew );
+        m_pHTMLPosFlyFrames->insert( o3tl::make_unique<SwHTMLPosFlyFrame>(*rpItem, pSdrObj, nMode) );
     }
 }
 
@@ -373,7 +373,7 @@ bool SwHTMLWriter::OutFlyFrame( sal_uLong nNdIdx, sal_Int32 nContentIdx, HtmlPos
         for( ; !bRestart && i < m_pHTMLPosFlyFrames->size() &&
             (*m_pHTMLPosFlyFrames)[i]->GetNdIndex().GetIndex() == nNdIdx; i++ )
         {
-            SwHTMLPosFlyFrame *pPosFly = (*m_pHTMLPosFlyFrames)[i];
+            SwHTMLPosFlyFrame *pPosFly = (*m_pHTMLPosFlyFrames)[i].get();
             if( ( HtmlPosition::Any == nPos ||
                   pPosFly->GetOutPos() == nPos ) &&
                 pPosFly->GetContentIndex() == nContentIdx )
@@ -381,12 +381,11 @@ bool SwHTMLWriter::OutFlyFrame( sal_uLong nNdIdx, sal_Int32 nContentIdx, HtmlPos
                 // It is important to remove it first, because additional
                 // elements or the whole array could be deleted on
                 // deeper recursion levels.
-                m_pHTMLPosFlyFrames->erase(i);
+                std::unique_ptr<SwHTMLPosFlyFrame> flyHolder = m_pHTMLPosFlyFrames->erase_extract(i);
                 i--;
                 if( m_pHTMLPosFlyFrames->empty() )
                 {
-                    delete m_pHTMLPosFlyFrames;
-                    m_pHTMLPosFlyFrames = nullptr;
+                    m_pHTMLPosFlyFrames.reset();
                     bRestart = true;    // not really, only exit the loop
                 }
 
@@ -408,7 +407,6 @@ bool SwHTMLWriter::OutFlyFrame( sal_uLong nNdIdx, sal_Int32 nContentIdx, HtmlPos
                     break;
                 default: break;
                 }
-                delete pPosFly;
             }
             else
             {
@@ -1426,10 +1424,16 @@ Writer& OutHTML_Image( Writer& rWrt, const SwFrameFormat &rFrameFormat,
         aHtml.attribute(OOO_STRING_SVTOOLS_HTML_O_usemap, "#" + aIMapName);
     }
 
-    if (bReplacement && !rAlternateText.isEmpty())
+    if (bReplacement)
+    {
         // XHTML object replacement image's alternate text doesn't use the
         // "alt" attribute.
-        aHtml.characters(rAlternateText.toUtf8());
+        if (rAlternateText.isEmpty())
+            // Empty alternate text is not valid.
+            aHtml.characters(" ");
+        else
+            aHtml.characters(rAlternateText.toUtf8());
+    }
 
     aHtml.flushStack();
 
@@ -1607,8 +1611,7 @@ static Writer & OutHTML_FrameFormatAsMulticol( Writer& rWrt,
     rWrt.Strm().WriteCharPtr( sOut.makeStringAndClear().getStr() );
 
     // WIDTH
-    HtmlFrmOpts nFrameFlags = bInCntnr ? HTML_FRMOPTS_MULTICOL_CNTNR
-                                : HTML_FRMOPTS_MULTICOL;
+    HtmlFrmOpts nFrameFlags = HTML_FRMOPTS_MULTICOL;
     if( rHTMLWrt.IsHTMLMode( HTMLMODE_ABS_POS_FLY ) && !bInCntnr )
         nFrameFlags |= HTML_FRMOPTS_MULTICOL_CSS1;
     rHTMLWrt.OutFrameFormatOptions( rFrameFormat, aEmptyOUStr, nFrameFlags );
@@ -1831,10 +1834,17 @@ static Writer& OutHTML_FrameFormatGrfNode( Writer& rWrt, const SwFrameFormat& rF
                 // output.
                 aFilterName = "PNG";
                 nFlags &= ~XOutFlags::UseNativeIfPossible;
+                nFlags &= ~XOutFlags::UseGifIfSensible;
                 aMimeType = "image/png";
             }
 
-            ErrCode nErr = XOutBitmap::WriteGraphic( pGrfNd->GetGrf(), aGraphicURL,
+            const Graphic& rGraphic = pGrfNd->GetGrf();
+
+            // So that Graphic::IsTransparent() can report true.
+            if (!rGraphic.isAvailable())
+                const_cast<Graphic&>(rGraphic).makeAvailable();
+
+            ErrCode nErr = XOutBitmap::WriteGraphic( rGraphic, aGraphicURL,
                     aFilterName, nFlags, &aMM100Size );
             if( nErr )
             {
@@ -1856,8 +1866,41 @@ static Writer& OutHTML_FrameFormatGrfNode( Writer& rWrt, const SwFrameFormat& rF
     uno::Reference<beans::XPropertySet> xGraphic(aGraphic.GetXGraphic(), uno::UNO_QUERY);
     if (xGraphic.is() && aMimeType.isEmpty())
         xGraphic->getPropertyValue("MimeType") >>= aMimeType;
+
+    if (rHTMLWrt.mbReqIF)
+    {
+        // Write the original image as an RTF fragment.
+        OUString aFileName;
+        if (rHTMLWrt.GetOrigFileName())
+            aFileName = *rHTMLWrt.GetOrigFileName();
+        INetURLObject aURL(aFileName);
+        OUString aName(aURL.getBase());
+        aName += "_";
+        aName += aURL.getExtension();
+        aName += "_";
+        aName += OUString::number(aGraphic.GetChecksum(), 16);
+        aURL.setBase(aName);
+        aURL.setExtension("ole");
+        aFileName = aURL.GetMainURL(INetURLObject::DecodeMechanism::NONE);
+
+        SvFileStream aOutStream(aFileName, StreamMode::WRITE);
+        if (!SwReqIfReader::WrapGraphicInRtf(aGraphic, pGrfNd->GetTwipSize(), aOutStream))
+            SAL_WARN("sw.html", "SwReqIfReader::WrapGraphicInRtf() failed");
+
+        // Refer to this data.
+        aFileName = URIHelper::simpleNormalizedMakeRelative(rWrt.GetBaseURL(), aFileName);
+        rWrt.Strm().WriteOString("<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_object);
+        rWrt.Strm().WriteOString(" data=\"" + aFileName.toUtf8() + "\"");
+        rWrt.Strm().WriteOString(" type=\"text/rtf\"");
+        rWrt.Strm().WriteOString(">");
+        rHTMLWrt.OutNewLine();
+    }
+
     OutHTML_Image( rWrt, rFrameFormat, aGraphicURL, aGraphic, pGrfNd->GetTitle(),
                   pGrfNd->GetTwipSize(), nFrameFlags, "graphic", nullptr, aMimeType );
+
+    if (rHTMLWrt.mbReqIF)
+        rWrt.Strm().WriteOString("</" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_object ">");
 
     return rWrt;
 }

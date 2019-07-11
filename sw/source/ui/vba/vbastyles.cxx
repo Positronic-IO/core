@@ -20,6 +20,7 @@
 #include "vbastyle.hxx"
 #include <basic/sberrors.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
@@ -32,9 +33,9 @@ using namespace ::com::sun::star;
 
 struct BuiltinStyleTable
 {
-    sal_Int32 wdBuiltinStyle;
+    sal_Int32 const wdBuiltinStyle;
     const sal_Char* pOOoStyleName;
-    sal_Int32 wdStyleType;
+    sal_Int32 const wdStyleType;
 };
 
 static const BuiltinStyleTable aBuiltinStyleTable[] =

@@ -71,23 +71,23 @@ CompressGraphicsDialog::~CompressGraphicsDialog()
 
 void CompressGraphicsDialog::Initialize()
 {
-    m_xLabelGraphicType.reset(m_xBuilder->weld_label("label-graphic-type"));
-    m_xFixedText2.reset(m_xBuilder->weld_label("label-original-size"));
-    m_xFixedText3.reset(m_xBuilder->weld_label("label-view-size"));
-    m_xFixedText5.reset(m_xBuilder->weld_label("label-image-capacity"));
-    m_xFixedText6.reset(m_xBuilder->weld_label("label-new-capacity"));
-    m_xJpegCompRB.reset(m_xBuilder->weld_radio_button("radio-jpeg"));
-    m_xCompressionMF.reset(m_xBuilder->weld_spin_button("spin-compression"));
-    m_xCompressionSlider.reset(m_xBuilder->weld_scale("scale-compression"));
-    m_xLosslessRB.reset(m_xBuilder->weld_radio_button("radio-lossless"));
-    m_xQualityMF.reset(m_xBuilder->weld_spin_button("spin-quality"));
-    m_xQualitySlider.reset(m_xBuilder->weld_scale("scale-quality"));
-    m_xReduceResolutionCB.reset(m_xBuilder->weld_check_button("checkbox-reduce-resolution"));
-    m_xMFNewWidth.reset(m_xBuilder->weld_spin_button("spin-new-width"));
-    m_xMFNewHeight.reset(m_xBuilder->weld_spin_button("spin-new-height"));
-    m_xResolutionLB.reset(m_xBuilder->weld_combo_box_text("combo-resolution"));
-    m_xBtnCalculate.reset(m_xBuilder->weld_button("calculate"));
-    m_xInterpolationCombo.reset(m_xBuilder->weld_combo_box_text("interpolation-method-combo"));
+    m_xLabelGraphicType = m_xBuilder->weld_label("label-graphic-type");
+    m_xFixedText2 = m_xBuilder->weld_label("label-original-size");
+    m_xFixedText3 = m_xBuilder->weld_label("label-view-size");
+    m_xFixedText5 = m_xBuilder->weld_label("label-image-capacity");
+    m_xFixedText6 = m_xBuilder->weld_label("label-new-capacity");
+    m_xJpegCompRB = m_xBuilder->weld_radio_button("radio-jpeg");
+    m_xCompressionMF = m_xBuilder->weld_spin_button("spin-compression");
+    m_xCompressionSlider = m_xBuilder->weld_scale("scale-compression");
+    m_xLosslessRB = m_xBuilder->weld_radio_button("radio-lossless");
+    m_xQualityMF = m_xBuilder->weld_spin_button("spin-quality");
+    m_xQualitySlider = m_xBuilder->weld_scale("scale-quality");
+    m_xReduceResolutionCB = m_xBuilder->weld_check_button("checkbox-reduce-resolution");
+    m_xMFNewWidth = m_xBuilder->weld_spin_button("spin-new-width");
+    m_xMFNewHeight = m_xBuilder->weld_spin_button("spin-new-height");
+    m_xResolutionLB = m_xBuilder->weld_combo_box("combo-resolution");
+    m_xBtnCalculate = m_xBuilder->weld_button("calculate");
+    m_xInterpolationCombo = m_xBuilder->weld_combo_box("interpolation-method-combo");
 
     m_xInterpolationCombo->set_active_text("Lanczos");
 
@@ -191,8 +191,7 @@ void CompressGraphicsDialog::Update()
     SvMemoryStream aMemStream;
     aMemStream.SetVersion( SOFFICE_FILEFORMAT_CURRENT );
     m_aGraphic.ExportNative(aMemStream);
-    aMemStream.Seek( STREAM_SEEK_TO_END );
-    sal_Int32 aNativeSize = aMemStream.Tell();
+    sal_Int32 aNativeSize = aMemStream.TellEnd();
 
     OUString aNativeSizeString = SvxResId(STR_IMAGE_CAPACITY);
     aNativeSizeString = aNativeSizeString.replaceAll("$(CAPACITY)",  OUString::number(aNativeSize / 1024));
@@ -220,12 +219,12 @@ void CompressGraphicsDialog::UpdateResolutionLB()
 
 double CompressGraphicsDialog::GetViewWidthInch()
 {
-    return static_cast<double>(MetricField::ConvertValue(m_aViewSize100mm.Width(),  2, MapUnit::Map100thMM, FUNIT_INCH)) / 100.0;
+    return static_cast<double>(MetricField::ConvertValue(m_aViewSize100mm.Width(),  2, MapUnit::Map100thMM, FieldUnit::INCH)) / 100.0;
 }
 
 double CompressGraphicsDialog::GetViewHeightInch()
 {
-    return static_cast<double>(MetricField::ConvertValue(m_aViewSize100mm.Height(),  2, MapUnit::Map100thMM, FUNIT_INCH)) / 100.0;
+    return static_cast<double>(MetricField::ConvertValue(m_aViewSize100mm.Height(),  2, MapUnit::Map100thMM, FieldUnit::INCH)) / 100.0;
 }
 
 BmpScaleFlag CompressGraphicsDialog::GetSelectedInterpolationType()
@@ -289,7 +288,7 @@ IMPL_LINK( CompressGraphicsDialog, SlideHdl, weld::Scale&, rScale, void )
     Update();
 }
 
-IMPL_LINK_NOARG( CompressGraphicsDialog, NewInterpolationModifiedHdl, weld::ComboBoxText&, void )
+IMPL_LINK_NOARG( CompressGraphicsDialog, NewInterpolationModifiedHdl, weld::ComboBox&, void )
 {
     Update();
 }
@@ -315,7 +314,7 @@ IMPL_LINK_NOARG( CompressGraphicsDialog, NewHeightModifiedHdl, weld::Entry&, voi
     Update();
 }
 
-IMPL_LINK_NOARG( CompressGraphicsDialog, ResolutionModifiedHdl, weld::ComboBoxText&, void )
+IMPL_LINK_NOARG( CompressGraphicsDialog, ResolutionModifiedHdl, weld::ComboBox&, void )
 {
     m_dResolution = static_cast<double>(m_xResolutionLB->get_active_text().toInt32());
 
@@ -353,8 +352,7 @@ IMPL_LINK_NOARG( CompressGraphicsDialog, CalculateClickHdl, weld::Button&, void 
         SvMemoryStream aMemStream;
         aMemStream.SetVersion( SOFFICE_FILEFORMAT_CURRENT );
         Compress( aMemStream );
-        aMemStream.Seek( STREAM_SEEK_TO_END );
-        aSize = aMemStream.Tell();
+        aSize = aMemStream.TellEnd();
     }
 
     if ( aSize > 0 )

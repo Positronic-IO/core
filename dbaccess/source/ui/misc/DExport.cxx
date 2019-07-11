@@ -38,6 +38,7 @@
 #include <strings.hxx>
 #include <connectivity/dbconversion.hxx>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <sfx2/sfxhtml.hxx>
 #include <svl/numuno.hxx>
 #include <connectivity/dbtools.hxx>
@@ -669,11 +670,9 @@ void ODatabaseExport::CreateDefaultColumn(const OUString& _rColumnName)
     m_vDestVector.emplace_back(m_aDestColumns.emplace(aAlias,pField).first);
 }
 
-bool ODatabaseExport::createRowSet()
+void ODatabaseExport::createRowSet()
 {
     m_pUpdateHelper.reset(new OParameterUpdateHelper(createPreparedStatment(m_xConnection->getMetaData(),m_xTable,m_vColumnPositions)));
-
-    return m_pUpdateHelper.get() != nullptr;
 }
 
 bool ODatabaseExport::executeWizard(const OUString& _rTableName, const Any& _aTextColor, const FontDescriptor& _rFont)
@@ -725,11 +724,11 @@ bool ODatabaseExport::executeWizard(const OUString& _rTableName, const Any& _aTe
             bError = true;
 
         if(!bError)
-            bError = !createRowSet();
+            createRowSet();
     }
     catch( const SQLException&)
     {
-        ::dbaui::showError( ::dbtools::SQLExceptionInfo( ::cppu::getCaughtException() ), aWizard.get(), m_xContext );
+        ::dbtools::showError( ::dbtools::SQLExceptionInfo( ::cppu::getCaughtException() ), VCLUnoHelper::GetInterface(aWizard.get()), m_xContext );
         bError = true;
     }
     catch( const Exception& )
@@ -804,12 +803,12 @@ Reference< XPreparedStatement > ODatabaseExport::createPreparedStatment( const R
 {
     OUString sComposedTableName = ::dbtools::composeTableName( _xMetaData, _xDestTable, ::dbtools::EComposeRule::InDataManipulation, true );
 
-    OUString aSql = "INSERT INTO "
+    OUStringBuffer aSql = "INSERT INTO "
                   + sComposedTableName
                   + " ( ";
 
     // set values and column names
-    OUString aValues(" VALUES ( ");
+    OUStringBuffer aValues(" VALUES ( ");
 
     OUString aQuote;
     if ( _xMetaData.is() )
@@ -843,18 +842,18 @@ Reference< XPreparedStatement > ODatabaseExport::createPreparedStatment( const R
     {
         if ( !elem.isEmpty() )
         {
-            aSql += elem;
-            aSql += ",";
-            aValues += "?,";
+            aSql.append(elem);
+            aSql.append(",");
+            aValues.append("?,");
         }
     }
 
-    aSql = aSql.replaceAt(aSql.getLength()-1, 1, ")");
-    aValues = aValues.replaceAt(aValues.getLength()-1, 1, ")");
+    aSql[aSql.getLength()-1] = ')';
+    aValues[aValues.getLength()-1] = ')';
 
-    aSql += aValues;
+    aSql.append(aValues);
     // now create,fill and execute the prepared statement
-    return _xMetaData->getConnection()->prepareStatement(aSql);
+    return _xMetaData->getConnection()->prepareStatement(aSql.makeStringAndClear());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

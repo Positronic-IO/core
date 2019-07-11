@@ -18,6 +18,7 @@
  */
 
 #include <tools/stream.hxx>
+#include <sal/log.hxx>
 #include <vcl/vectorgraphicdata.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
@@ -73,11 +74,7 @@ BitmapEx convertPrimitive2DSequenceToBitmapEx(
             if(xBitmap.is())
             {
                 const uno::Reference< rendering::XIntegerReadOnlyBitmap> xIntBmp(xBitmap, uno::UNO_QUERY_THROW);
-
-                if(xIntBmp.is())
-                {
-                    aRetval = vcl::unotools::bitmapExFromXBitmap(xIntBmp);
-                }
+                aRetval = vcl::unotools::bitmapExFromXBitmap(xIntBmp);
             }
         }
         catch (const uno::Exception& e)
@@ -93,7 +90,7 @@ BitmapEx convertPrimitive2DSequenceToBitmapEx(
     return aRetval;
 }
 
-size_t estimateSize(
+static size_t estimateSize(
     std::deque<uno::Reference<graphic::XPrimitive2D>> const& rSequence)
 {
     size_t nRet(0);
@@ -233,8 +230,7 @@ VectorGraphicData::VectorGraphicData(
     maSequence(),
     maReplacement(),
     mNestedBitmapSize(0),
-    meVectorGraphicDataType(eVectorDataType),
-    mpExternalHeader(nullptr)
+    meVectorGraphicDataType(eVectorDataType)
 {
 }
 
@@ -248,8 +244,7 @@ VectorGraphicData::VectorGraphicData(
     maSequence(),
     maReplacement(),
     mNestedBitmapSize(0),
-    meVectorGraphicDataType(eVectorDataType),
-    mpExternalHeader(nullptr)
+    meVectorGraphicDataType(eVectorDataType)
 {
     SvFileStream rIStm(rPath, StreamMode::STD_READ);
     if(rIStm.GetError())

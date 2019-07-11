@@ -20,7 +20,6 @@
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
-#include <vcl/fontcharmap.hxx>
 #include <svtools/colorcfg.hxx>
 
 #include <rtl/textenc.h>
@@ -36,7 +35,6 @@
 #include <com/sun/star/accessibility/AccessibleEventObject.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
-#include <comphelper/types.hxx>
 #include <svl/itemset.hxx>
 #include <unicode/uchar.h>
 #include <rtl/ustrbuf.hxx>
@@ -46,12 +44,10 @@ using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star;
 
 
-SvxSearchCharSet::SvxSearchCharSet(weld::Builder& rBuilder, const OString& rDrawingId,
-                  const OString& rScrollId, const VclPtr<VirtualDevice>& rVirDev)
-    : SvxShowCharSet(rBuilder, rDrawingId, rScrollId, rVirDev)
+SvxSearchCharSet::SvxSearchCharSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow, const VclPtr<VirtualDevice>& rVirDev)
+    : SvxShowCharSet(std::move(pScrolledWindow), rVirDev)
     , nCount(0)
 {
-    mxDrawingArea->connect_key_press(LINK(this, SvxSearchCharSet, DoKeyDown));
 }
 
 int SvxSearchCharSet::LastInView() const
@@ -64,7 +60,7 @@ int SvxSearchCharSet::LastInView() const
     return nIndex;
 }
 
-IMPL_LINK(SvxSearchCharSet, DoKeyDown, const KeyEvent&, rKEvt, bool)
+bool SvxSearchCharSet::KeyInput(const KeyEvent& rKEvt)
 {
     vcl::KeyCode aCode = rKEvt.GetKeyCode();
 
@@ -152,12 +148,11 @@ void SvxSearchCharSet::SelectCharacter( const Subset* sub )
     aHighHdl.Call(this);
     // move selected item to top row if not in focus
     //TO.DO aVscrollSB->SetThumbPos( nMapIndex / COLUMN_COUNT );
-    mxDrawingArea->queue_draw();
+    Invalidate();
 }
 
-IMPL_LINK(SvxSearchCharSet, DoPaint, weld::DrawingArea::draw_args, aPayload, void)
+void SvxSearchCharSet::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
 {
-    vcl::RenderContext& rRenderContext = aPayload.first;
     InitSettings(rRenderContext);
     RecalculateFont(rRenderContext);
     DrawChars_Impl(rRenderContext, FirstInView(), LastInView());
@@ -168,7 +163,7 @@ void SvxSearchCharSet::DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1
     if (n1 > LastInView() || n2 < FirstInView())
         return;
 
-    Size aOutputSize(maSize);
+    Size aOutputSize(GetOutputSizePixel());
 
     int i;
     for (i = 1; i < COLUMN_COUNT; ++i)
@@ -302,7 +297,7 @@ void SvxSearchCharSet::RecalculateFont(vcl::RenderContext& rRenderContext)
     if (!mbRecalculateFont)
         return;
 
-    Size aSize(maSize);
+    Size aSize(GetOutputSizePixel());
 
     vcl::Font aFont = rRenderContext.GetFont();
     aFont.SetWeight(WEIGHT_LIGHT);
@@ -339,7 +334,7 @@ void SvxSearchCharSet::SelectIndex(int nNewIndex, bool bFocus)
     {
         mxScrollArea->vadjustment_set_value(0);
         nSelectedIndex = bFocus ? 0 : -1;
-        mxDrawingArea->queue_draw();
+        Invalidate();
     }
     else if( nNewIndex < FirstInView() )
     {
@@ -348,7 +343,7 @@ void SvxSearchCharSet::SelectIndex(int nNewIndex, bool bFocus)
         int nDelta = (FirstInView() - nNewIndex + COLUMN_COUNT-1) / COLUMN_COUNT;
         mxScrollArea->vadjustment_set_value(nOldPos - nDelta);
         nSelectedIndex = nNewIndex;
-        mxDrawingArea->queue_draw();
+        Invalidate();
     }
     else if( nNewIndex > LastInView() )
     {
@@ -360,17 +355,17 @@ void SvxSearchCharSet::SelectIndex(int nNewIndex, bool bFocus)
         if( nNewIndex < nCount )
         {
             nSelectedIndex = nNewIndex;
-            mxDrawingArea->queue_draw();
+            Invalidate();
         }
         else if (nOldPos != mxScrollArea->vadjustment_get_value())
         {
-            mxDrawingArea->queue_draw();
+            Invalidate();
         }
     }
     else
     {
         nSelectedIndex = nNewIndex;
-        mxDrawingArea->queue_draw();
+        Invalidate();
     }
 
     if( nSelectedIndex >= 0 )
@@ -434,7 +429,7 @@ void SvxSearchCharSet::ClearPreviousData()
 {
     m_aItemList.clear();
     nCount = 0;
-    mxDrawingArea->queue_draw();
+    Invalidate();
 }
 
 void SvxSearchCharSet::AppendCharToList(sal_UCS4 sChar)

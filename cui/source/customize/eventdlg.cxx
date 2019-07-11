@@ -39,7 +39,7 @@
 #include <sfx2/docfac.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <unotools/eventcfg.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <headertablistbox.hxx>
 #include "macropg_impl.hxx"
@@ -111,7 +111,7 @@ void SvxEventConfigPage::dispose()
         OUString const * pEventName = static_cast<OUString const *>(pE->GetUserData());
         delete pEventName;
         pE->SetUserData(nullptr);
-        pE = SvTreeListBox::NextSibling( pE );
+        pE = pE->NextSibling();
     }
     m_pSaveInListBox.clear();
     SvxMacroTabPage_::dispose();

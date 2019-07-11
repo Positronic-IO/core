@@ -20,8 +20,8 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_CONTTREE_HXX
 
 #include <svl/lstner.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/svlbitm.hxx>
 #include "swcont.hxx"
 
 #include <map>
@@ -73,21 +73,21 @@ class SwContentTree final
     , public SfxListener
 {
     VclPtr<SwNavigationPI> m_xDialog;
-    OUString            m_sSpace;
+    OUString const      m_sSpace;
     AutoTimer           m_aUpdTimer;
 
-    o3tl::enumarray<ContentTypeId,SwContentType*>  m_aActiveContentArr;
-    o3tl::enumarray<ContentTypeId,SwContentType*>  m_aHiddenContentArr;
+    o3tl::enumarray<ContentTypeId,std::unique_ptr<SwContentType>>  m_aActiveContentArr;
+    o3tl::enumarray<ContentTypeId,std::unique_ptr<SwContentType>>  m_aHiddenContentArr;
     OUString            m_aContextStrings[CONTEXT_COUNT + 1];
-    OUString            m_sRemoveIdx;
-    OUString            m_sUpdateIdx;
-    OUString            m_sUnprotTable;
-    OUString            m_sRename;
-    OUString            m_sReadonlyIdx;
-    OUString            m_sInvisible;
-    OUString            m_sPostItShow;
-    OUString            m_sPostItHide;
-    OUString            m_sPostItDelete;
+    OUString const      m_sRemoveIdx;
+    OUString const      m_sUpdateIdx;
+    OUString const      m_sUnprotTable;
+    OUString const      m_sRename;
+    OUString const      m_sReadonlyIdx;
+    OUString const      m_sInvisible;
+    OUString const      m_sPostItShow;
+    OUString const      m_sPostItHide;
+    OUString const      m_sPostItDelete;
 
     SwWrtShell*         m_pHiddenShell;   // dropped Doc
     SwWrtShell*         m_pActiveShell;   // the active or a const. open view
@@ -265,10 +265,10 @@ private:
     SwWrtShell*             m_pActiveShell;
     SvTreeListEntry*        m_pEmphasisEntry; // Drag'n Drop emphasis
     SvTreeListEntry*        m_pDDSource;      // source for Drag'n Drop
-    SwGlblDocContents*      m_pSwGlblDocContents; // array with sorted content
+    std::unique_ptr<SwGlblDocContents> m_pSwGlblDocContents; // array with sorted content
 
     SwGlblDocContent*       m_pDocContent;
-    sfx2::DocumentInserter* m_pDocInserter;
+    std::unique_ptr<sfx2::DocumentInserter> m_pDocInserter;
 
     bool                m_bIsInternalDrag     :1;
     bool                m_bLastEntryEmphasis  :1; // Drag'n Drop

@@ -41,6 +41,7 @@
 #include <vcl/gradient.hxx>
 #include <vcl/settings.hxx>
 #include <svx/unoapi.hxx>
+#include <sal/log.hxx>
 
 #include <output.hxx>
 #include <document.hxx>
@@ -173,9 +174,6 @@ ScOutputData::ScOutputData( OutputDevice* pNewDev, ScOutputType eNewType,
     mbUseStyleColor( false ),
     mbForceAutoColor( SC_MOD()->GetAccessOptions().GetIsAutomaticFontColor() ),
     mbSyntaxMode( false ),
-    pValueColor( nullptr ),
-    pTextColor( nullptr ),
-    pFormulaColor( nullptr ),
     aGridColor( COL_BLACK ),
     mbShowNullValues( true ),
     mbShowFormulas( false ),
@@ -220,9 +218,6 @@ ScOutputData::ScOutputData( OutputDevice* pNewDev, ScOutputType eNewType,
 
 ScOutputData::~ScOutputData()
 {
-    delete pValueColor;
-    delete pTextColor;
-    delete pFormulaColor;
 }
 
 void ScOutputData::SetSpellCheckContext( const sc::SpellCheckContext* pCxt )
@@ -291,14 +286,13 @@ void ScOutputData::SetMetaFileMode( bool bNewMode )
 void ScOutputData::SetSyntaxMode( bool bNewMode )
 {
     mbSyntaxMode = bNewMode;
-    if ( bNewMode )
-        if ( !pValueColor )
-        {
-            const svtools::ColorConfig& rColorCfg = SC_MOD()->GetColorConfig();
-            pValueColor = new Color( rColorCfg.GetColorValue( svtools::CALCVALUE ).nColor );
-            pTextColor = new Color( rColorCfg.GetColorValue( svtools::CALCTEXT ).nColor );
-            pFormulaColor = new Color( rColorCfg.GetColorValue( svtools::CALCFORMULA ).nColor );
-        }
+    if ( bNewMode && !pValueColor )
+    {
+        const svtools::ColorConfig& rColorCfg = SC_MOD()->GetColorConfig();
+        pValueColor.reset( new Color( rColorCfg.GetColorValue( svtools::CALCVALUE ).nColor ) );
+        pTextColor.reset( new Color( rColorCfg.GetColorValue( svtools::CALCTEXT ).nColor ) );
+        pFormulaColor.reset( new Color( rColorCfg.GetColorValue( svtools::CALCFORMULA ).nColor ) );
+    }
 }
 
 void ScOutputData::DrawGrid(vcl::RenderContext& rRenderContext, bool bGrid, bool bPage)
@@ -789,8 +783,8 @@ static bool lcl_EqualBack( const RowInfo& rFirst, const RowInfo& rOther,
 
     for ( nX=nX1; nX<=nX2; nX++ )
     {
-        const Color* pCol1 = rFirst.pCellInfo[nX+1].pColorScale.get();
-        const Color* pCol2 = rOther.pCellInfo[nX+1].pColorScale.get();
+        boost::optional<Color> const & pCol1 = rFirst.pCellInfo[nX+1].mxColorScale;
+        boost::optional<Color> const & pCol2 = rOther.pCellInfo[nX+1].mxColorScale;
         if( (pCol1 && !pCol2) || (!pCol1 && pCol2) )
             return false;
 
@@ -924,7 +918,7 @@ void drawIconSets(vcl::RenderContext& rRenderContext, const ScIconSetInfo* pOldI
     rRenderContext.DrawBitmapEx( Point( rRect.Left() + 2 * nOneX, rRect.Top() + 2 * nOneY), Size(aOrigSize, aOrigSize), rIcon );
 }
 
-void drawCells(vcl::RenderContext& rRenderContext, const Color* pColor, const SvxBrushItem* pBackground, const Color*& pOldColor, const SvxBrushItem*& pOldBackground,
+void drawCells(vcl::RenderContext& rRenderContext, boost::optional<Color> const & pColor, const SvxBrushItem* pBackground, boost::optional<Color>& pOldColor, const SvxBrushItem*& pOldBackground,
         tools::Rectangle& rRect, long nPosX, long nLayoutSign, long nOneX, long nOneY, const ScDataBarInfo* pDataBarInfo, const ScDataBarInfo*& pOldDataBarInfo,
         const ScIconSetInfo* pIconSetInfo, const ScIconSetInfo*& pOldIconSetInfo,
         sc::IconSetBitmapMap & rIconSetBitmapMap)
@@ -986,7 +980,7 @@ void drawCells(vcl::RenderContext& rRenderContext, const Color* pColor, const Sv
     else if(pBackground)
     {
         pOldBackground = pBackground;
-        pOldColor = nullptr;
+        pOldColor.reset();
     }
 
     if(pDataBarInfo)
@@ -1074,7 +1068,7 @@ void ScOutputData::DrawBackground(vcl::RenderContext& rRenderContext)
 
                 const SvxBrushItem* pOldBackground = nullptr;
                 const SvxBrushItem* pBackground = nullptr;
-                const Color* pOldColor = nullptr;
+                boost::optional<Color> pOldColor;
                 const ScDataBarInfo* pOldDataBarInfo = nullptr;
                 const ScIconSetInfo* pOldIconSetInfo = nullptr;
                 SCCOL nMergedCols = 1;
@@ -1119,7 +1113,7 @@ void ScOutputData::DrawBackground(vcl::RenderContext& rRenderContext)
                         pBackground = lcl_FindBackground( mpDoc, nX, nY, nTab );
                     }
 
-                    const Color* pColor = pInfo->pColorScale.get();
+                    boost::optional<Color> const & pColor = pInfo->mxColorScale;
                     const ScDataBarInfo* pDataBarInfo = pInfo->pDataBar.get();
                     const ScIconSetInfo* pIconSetInfo = pInfo->pIconSet.get();
 
@@ -1151,7 +1145,7 @@ void ScOutputData::DrawBackground(vcl::RenderContext& rRenderContext)
                 if (bWorksInPixels)
                     nPosXLogic = rRenderContext.PixelToLogic(Point(nPosX, 0)).X();
 
-                drawCells(rRenderContext, nullptr, nullptr, pOldColor, pOldBackground, aRect, nPosXLogic, nLayoutSign, nOneXLogic, nOneYLogic, nullptr, pOldDataBarInfo, nullptr, pOldIconSetInfo, mpDoc->GetIconSetBitmapMap());
+                drawCells(rRenderContext, boost::optional<Color>(), nullptr, pOldColor, pOldBackground, aRect, nPosXLogic, nLayoutSign, nOneXLogic, nOneYLogic, nullptr, pOldDataBarInfo, nullptr, pOldIconSetInfo, mpDoc->GetIconSetBitmapMap());
 
                 nArrY += nSkip;
             }
@@ -1351,17 +1345,17 @@ void ScOutputData::DrawClear()
 
 // Lines
 
-long lclGetSnappedX( const OutputDevice& rDev, long nPosX, bool bSnapPixel )
+static long lclGetSnappedX( const OutputDevice& rDev, long nPosX, bool bSnapPixel )
 {
     return (bSnapPixel && nPosX) ? rDev.PixelToLogic( rDev.LogicToPixel( Size( nPosX, 0 ) ) ).Width() : nPosX;
 }
 
-long lclGetSnappedY( const OutputDevice& rDev, long nPosY, bool bSnapPixel )
+static long lclGetSnappedY( const OutputDevice& rDev, long nPosY, bool bSnapPixel )
 {
     return (bSnapPixel && nPosY) ? rDev.PixelToLogic( rDev.LogicToPixel( Size( 0, nPosY ) ) ).Height() : nPosY;
 }
 
-size_t lclGetArrayColFromCellInfoX( sal_uInt16 nCellInfoX, sal_uInt16 nCellInfoFirstX, sal_uInt16 nCellInfoLastX, bool bRTL )
+static size_t lclGetArrayColFromCellInfoX( sal_uInt16 nCellInfoX, sal_uInt16 nCellInfoFirstX, sal_uInt16 nCellInfoLastX, bool bRTL )
 {
     return static_cast< size_t >( bRTL ? (nCellInfoLastX + 2 - nCellInfoX) : (nCellInfoX - nCellInfoFirstX) );
 }
@@ -1637,7 +1631,7 @@ void ScOutputData::DrawRotatedFrame(vcl::RenderContext& rRenderContext)
                             //  high contrast for cell borders and backgrounds -> empty background
                             pBackground = ScGlobal::GetEmptyBrushItem();
                         }
-                        if (!pInfo->pColorScale)
+                        if (!pInfo->mxColorScale)
                         {
                             const Color& rColor = pBackground->GetColor();
                             if (rColor.GetTransparency() != 255)
@@ -1665,7 +1659,7 @@ void ScOutputData::DrawRotatedFrame(vcl::RenderContext& rRenderContext)
                         else
                         {
                             tools::Polygon aPoly(4, aPoints);
-                            const Color* pColor = pInfo->pColorScale.get();
+                            boost::optional<Color> const & pColor = pInfo->mxColorScale;
 
                             // for DrawPolygon, whitout Pen one pixel is left out
                             // to the right and below...
@@ -1693,7 +1687,7 @@ void ScOutputData::DrawRotatedFrame(vcl::RenderContext& rRenderContext)
         rRenderContext.SetClipRegion();
 }
 
-drawinglayer::processor2d::BaseProcessor2D* ScOutputData::CreateProcessor2D( )
+std::unique_ptr<drawinglayer::processor2d::BaseProcessor2D> ScOutputData::CreateProcessor2D( )
 {
     mpDoc->InitDrawLayer(mpDoc->GetDocumentShell());
     ScDrawLayer* pDrawLayer = mpDoc->GetDrawLayer();

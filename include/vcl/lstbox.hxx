@@ -27,7 +27,6 @@
 
 #define LISTBOX_APPEND              (SAL_MAX_INT32)
 #define LISTBOX_ENTRY_NOTFOUND      (SAL_MAX_INT32)
-#define LISTBOX_ERROR               (SAL_MAX_INT32)
 #define LISTBOX_MAX_ENTRIES         (SAL_MAX_INT32 - 1)
 
 // the following defines can be used for the SetEntryFlags()
@@ -86,7 +85,6 @@ private:
     sal_uInt16                  mnLineCount;
 
     bool            mbDDAutoSize : 1;
-    bool            mbEdgeBlending : 1;
 
 private:
     SAL_DLLPRIVATE void    ImplInitListBoxData();
@@ -138,8 +136,6 @@ public:
                                          long nWidth, long nHeight, PosSizeFlags nFlags = PosSizeFlags::All ) override;
 
     tools::Rectangle           GetDropDownPosSizePixel() const;
-
-    long                CalcWindowSizePixel(sal_uInt16 nLines) const;
 
     void                AdaptDropDownLineCountToMaximum();
     void                SetDropDownLineCount( sal_uInt16 nLines );
@@ -250,9 +246,6 @@ public:
     sal_uInt16          GetDisplayLineCount() const;
 
     void                EnableMirroring();
-
-    bool                GetEdgeBlending() const { return mbEdgeBlending; }
-    void                SetEdgeBlending(bool bNew);
 
     /** checks whether a certain point lies within the bounds of
         a listbox item and returns the item as well as the character position

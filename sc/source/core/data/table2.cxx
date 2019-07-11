@@ -26,11 +26,9 @@
 #include <document.hxx>
 #include <drwlayer.hxx>
 #include <olinetab.hxx>
-#include <rechead.hxx>
 #include <stlpool.hxx>
 #include <attarray.hxx>
 #include <markdata.hxx>
-#include <progress.hxx>
 #include <dociter.hxx>
 #include <conditio.hxx>
 #include <chartlis.hxx>
@@ -39,10 +37,7 @@
 #include <postit.hxx>
 #include <sheetevents.hxx>
 #include <segmenttree.hxx>
-#include <queryparam.hxx>
-#include <queryentry.hxx>
 #include <dbdata.hxx>
-#include <colorscale.hxx>
 #include <tokenarray.hxx>
 #include <clipcontext.hxx>
 #include <types.hxx>
@@ -53,8 +48,10 @@
 #include <tabprotection.hxx>
 #include <columnspanset.hxx>
 #include <rowheightcontext.hxx>
-#include <refhint.hxx>
 #include <listenercontext.hxx>
+#include <compressedarray.hxx>
+#include <brdcst.hxx>
+#include <refdata.hxx>
 
 #include <scitems.hxx>
 #include <editeng/boxitem.hxx>
@@ -62,15 +59,13 @@
 #include <svl/poolcach.hxx>
 #include <unotools/charclass.hxx>
 #include <math.h>
-#include <svl/PasswordHelper.hxx>
-#include <unotools/transliterationwrapper.hxx>
 
 namespace {
 
 class ColumnRegroupFormulaCells
 {
     ScColContainer& mrCols;
-    std::vector<ScAddress>* mpGroupPos;
+    std::vector<ScAddress>* const mpGroupPos;
 
 public:
     ColumnRegroupFormulaCells( ScColContainer& rCols, std::vector<ScAddress>* pGroupPos ) :
@@ -569,14 +564,13 @@ bool CheckAndDeduplicateCondFormat(ScDocument* pDocument, ScConditionalFormat* p
 
     if (pOldFormat->EqualEntries(*pNewFormat, true))
     {
-        pDocument->RemoveCondFormatData(pOldFormat->GetRange(), nTab, pOldFormat->GetKey());
         const ScRangeList& rNewRangeList = pNewFormat->GetRange();
         ScRangeList& rDstRangeList = pOldFormat->GetRangeList();
         for (size_t i = 0; i < rNewRangeList.size(); ++i)
         {
             rDstRangeList.Join(rNewRangeList[i]);
         }
-        pDocument->AddCondFormatData(pOldFormat->GetRange(), nTab, pOldFormat->GetKey());
+        pDocument->AddCondFormatData(rNewRangeList, nTab, pOldFormat->GetKey());
         return true;
     }
 
@@ -674,7 +668,8 @@ bool ScTable::InitColumnBlockPosition( sc::ColumnBlockPosition& rBlockPos, SCCOL
     if (!ValidCol(nCol))
         return false;
 
-    return aCol[nCol].InitBlockPosition(rBlockPos);
+    aCol[nCol].InitBlockPosition(rBlockPos);
+    return true;
 }
 
 void ScTable::CopyFromClip(
@@ -756,12 +751,12 @@ namespace {
 class TransClipHandler
 {
     ScTable& mrClipTab;
-    SCTAB mnSrcTab;
-    SCCOL mnSrcCol;
-    size_t mnTopRow;
-    SCROW mnTransRow;
-    bool mbAsLink;
-    bool mbWasCut;
+    SCTAB const mnSrcTab;
+    SCCOL const mnSrcCol;
+    size_t const mnTopRow;
+    SCROW const mnTransRow;
+    bool const mbAsLink;
+    bool const mbWasCut;
 
     ScAddress getDestPos(size_t nRow) const
     {
@@ -1093,7 +1088,7 @@ void ScTable::DetachFormulaCells(
     sc::EndListeningContext& rCxt, SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2 )
 {
     for (SCCOL nCol = nCol1; nCol <= nCol2; ++nCol)
-        aCol[nCol].DetachFormulaCells(rCxt, nRow1, nRow2);
+        aCol[nCol].DetachFormulaCells(rCxt, nRow1, nRow2, nullptr);
 }
 
 void ScTable::SetDirtyFromClip(
@@ -1127,19 +1122,20 @@ void ScTable::CopyToTable(
     if (!ValidColRow(nCol1, nRow1) || !ValidColRow(nCol2, nRow2))
         return;
 
+    bool bIsUndoDoc = pDestTab->pDocument->IsUndo();
     if (nFlags != InsertDeleteFlags::NONE)
     {
         InsertDeleteFlags nTempFlags( nFlags &
                 ~InsertDeleteFlags( InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES));
         for (SCCOL i = nCol1; i <= nCol2; i++)
-            aCol[i].CopyToColumn(rCxt, nRow1, nRow2, nTempFlags, bMarked,
+            aCol[i].CopyToColumn(rCxt, nRow1, nRow2, bIsUndoDoc ? nFlags : nTempFlags, bMarked,
                                 pDestTab->aCol[i], pMarkData, bAsLink, bGlobalNamesToLocal);
     }
 
     if (!bColRowFlags)      // Column widths/Row heights/Flags
         return;
 
-    if(pDestTab->pDocument->IsUndo() && (nFlags & InsertDeleteFlags::ATTRIB))
+    if(bIsUndoDoc && (nFlags & InsertDeleteFlags::ATTRIB))
     {
         pDestTab->mpCondFormatList.reset(new ScConditionalFormatList(pDestTab->pDocument, *mpCondFormatList));
     }
@@ -1247,7 +1243,7 @@ void ScTable::CopyToTable(
     if(nFlags & InsertDeleteFlags::OUTLINE) // also only when bColRowFlags
         pDestTab->SetOutlineTable( pOutlineTable.get() );
 
-    if (bCopyCaptions && (nFlags & (InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES)))
+    if (!bIsUndoDoc && bCopyCaptions && (nFlags & (InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES)))
     {
         bool bCloneCaption = (nFlags & InsertDeleteFlags::NOCAPTIONS) == InsertDeleteFlags::NONE;
         CopyCaptionsToTable( nCol1, nRow1, nCol2, nRow2, pDestTab, bCloneCaption);
@@ -1521,10 +1517,10 @@ void ScTable::SetRawString( SCCOL nCol, SCROW nRow, const svl::SharedString& rSt
         aCol[nCol].SetRawString(nRow, rStr);
 }
 
-void ScTable::GetString( SCCOL nCol, SCROW nRow, OUString& rString ) const
+void ScTable::GetString( SCCOL nCol, SCROW nRow, OUString& rString, const ScInterpreterContext* pContext ) const
 {
     if (ValidColRow(nCol,nRow))
-        aCol[nCol].GetString( nRow, rString );
+        aCol[nCol].GetString( nRow, rString, pContext );
     else
         rString.clear();
 }
@@ -1682,7 +1678,7 @@ CommentCaptionState ScTable::GetAllNoteCaptionsState(const ScRange& rRange, std:
 
 void ScTable::GetUnprotectedCells( ScRangeList& rRangeList ) const
 {
-    for (auto pCol : aCol)
+    for (auto const & pCol : aCol)
         pCol->GetUnprotectedCells(0, MAXROW, rRangeList);
 }
 
@@ -1874,6 +1870,8 @@ void ScTable::CalcAll()
 {
     for (SCCOL i=0; i < aCol.size(); i++)
         aCol[i].CalcAll();
+
+    mpCondFormatList->CalcAll();
 }
 
 void ScTable::CompileAll( sc::CompileFormulaContext& rCxt )
@@ -2934,30 +2932,19 @@ bool ScTable::SetRowHeightRange( SCROW nStartRow, SCROW nEndRow, sal_uInt16 nNew
                 bSingle = false;    // no difference in this range
             }
         }
-        if (bSingle)
-        {
-            if (nEndRow-nStartRow < 20)
-            {
-                if (!bChanged)
-                    bChanged = lcl_pixelSizeChanged(*mpRowHeights, nStartRow, nEndRow, nNewHeight, nPPTY);
 
-                mpRowHeights->setValue(nStartRow, nEndRow, nNewHeight);
-            }
-            else
-            {
-                SCROW nMid = (nStartRow+nEndRow) / 2;
-                if (SetRowHeightRange( nStartRow, nMid, nNewHeight, 1.0 ))
-                    bChanged = true;
-                if (SetRowHeightRange( nMid+1, nEndRow, nNewHeight, 1.0 ))
-                    bChanged = true;
-            }
+        if (!bSingle || nEndRow - nStartRow < 20)
+        {
+            bChanged = lcl_pixelSizeChanged(*mpRowHeights, nStartRow, nEndRow, nNewHeight, nPPTY);
+            mpRowHeights->setValue(nStartRow, nEndRow, nNewHeight);
         }
         else
         {
-            if (!bChanged)
-                bChanged = lcl_pixelSizeChanged(*mpRowHeights, nStartRow, nEndRow, nNewHeight, nPPTY);
-
-            mpRowHeights->setValue(nStartRow, nEndRow, nNewHeight);
+            SCROW nMid = (nStartRow + nEndRow) / 2;
+            if (SetRowHeightRange(nStartRow, nMid, nNewHeight, 1.0))
+                bChanged = true;
+            if (SetRowHeightRange(nMid + 1, nEndRow, nNewHeight, 1.0))
+                bChanged = true;
         }
 
         if (bChanged)
@@ -3567,7 +3554,7 @@ void ScTable::StripHidden( SCCOL& rX1, SCROW& rY1, SCCOL& rX2, SCROW& rY2 )
 //  Auto-Outline
 
 template< typename T >
-short DiffSign( T a, T b )
+static short DiffSign( T a, T b )
 {
     return (a<b) ? -1 :
             (a>b) ? 1 : 0;
@@ -3578,8 +3565,8 @@ namespace {
 class OutlineArrayFinder
 {
     ScRange maRef;
-    SCCOL mnCol;
-    SCTAB mnTab;
+    SCCOL const mnCol;
+    SCTAB const mnTab;
     ScOutlineArray* mpArray;
     bool mbSizeChanged;
 

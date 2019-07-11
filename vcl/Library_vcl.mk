@@ -27,9 +27,9 @@ else ifeq ($(OS),WNT)
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.windows))
 else ifeq ($(OS),ANDROID)
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.android))
-else ifeq ($(OS),IOS)
+else ifeq ($(OS),iOS)
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.ios))
-else ifeq ($(ENABLE_HEADLESS),TRUE)
+else ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.headless))
 else
 $(eval $(call gb_Library_set_componentfile,vcl,vcl/vcl.unx))
@@ -89,22 +89,6 @@ $(eval $(call gb_Library_use_libraries,vcl,\
     xmlreader \
 ))
 
-ifeq ($(OS),MACOSX)
-$(eval $(call gb_Library_add_libs,vcl,\
-    -framework IOKit \
-    -F/System/Library/PrivateFrameworks \
-    -framework CoreUI \
-    -lobjc \
-))
-endif
-ifeq ($(OS),MACOSX)
-
-$(eval $(call gb_Library_add_cxxflags,vcl,\
-    $(gb_OBJCXXFLAGS) \
-))
-
-endif
-
 ifeq ($(ENABLE_JAVA),TRUE)
 $(eval $(call gb_Library_use_libraries,vcl,\
     jvmaccess \
@@ -122,7 +106,8 @@ $(eval $(call gb_Library_use_externals,vcl,\
     lcms2 \
     mdds_headers \
 ))
-ifeq ($(ENABLE_HEADLESS),)
+
+ifeq ($(DISABLE_GUI),)
 $(eval $(call gb_Library_use_externals,vcl,\
      epoxy \
  ))
@@ -136,6 +121,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/window/accel \
     vcl/source/window/accmgr \
     vcl/source/window/brdwin \
+    vcl/source/window/bufferdevice \
     vcl/source/window/accessibility \
     vcl/source/window/legacyaccessibility \
     vcl/source/window/clipping \
@@ -197,14 +183,13 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/control/field \
     vcl/source/control/fixed \
     vcl/source/control/fixedhyper \
-    vcl/source/control/group \
+    vcl/source/control/fmtfield \
     vcl/source/control/imgctrl \
     vcl/source/control/listctrl \
     vcl/source/control/longcurr \
     vcl/source/control/imp_listbox \
     vcl/source/control/listbox \
     vcl/source/control/menubtn \
-    vcl/source/control/morebtn \
     vcl/source/control/notebookbar \
     vcl/source/control/quickselectionengine \
     vcl/source/control/prgsbar \
@@ -222,6 +207,8 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/edit/textview \
     vcl/source/edit/txtattr \
     vcl/source/edit/xtextedt \
+    vcl/source/toolkit/group \
+    vcl/source/toolkit/morebtn \
     vcl/source/outdev/outdev \
     vcl/source/outdev/outdevstate \
     vcl/source/outdev/outdevstatestack \
@@ -244,9 +231,23 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/outdev/vclreferencebase \
     vcl/source/outdev/nativecontrols \
     vcl/source/outdev/map \
+    vcl/source/treelist/headbar \
+    vcl/source/treelist/imap \
+    vcl/source/treelist/imap2 \
+    vcl/source/treelist/imap3 \
+    vcl/source/treelist/inetimg \
+    vcl/source/treelist/svtabbx \
+    vcl/source/treelist/transfer \
+    vcl/source/treelist/transfer2 \
+    vcl/source/treelist/viewdataentry \
+    vcl/source/treelist/treelist \
+    vcl/source/treelist/treelistbox \
+    vcl/source/treelist/treelistentry \
+    vcl/source/treelist/svimpbox \
+    vcl/source/treelist/svlbitm \
+    vcl/source/treelist/uiobject \
     vcl/source/gdi/alpha \
     vcl/source/gdi/animate \
-    vcl/source/gdi/base14 \
     vcl/source/gdi/bitmap3 \
     vcl/source/gdi/bitmapex \
     vcl/source/gdi/bmpacc2 \
@@ -267,6 +268,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/graphictools \
     vcl/source/gdi/hatch \
     vcl/source/gdi/impanmvw \
+    vcl/source/gdi/impglyphitem \
     vcl/source/gdi/impgraph \
     vcl/source/gdi/impvect \
     vcl/source/gdi/jobset \
@@ -275,6 +277,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/metaact \
     vcl/source/gdi/octree \
     vcl/source/gdi/oldprintadaptor \
+    vcl/source/gdi/pdfbuildin_fonts \
     vcl/source/gdi/pdfextoutdevdata \
     vcl/source/gdi/pdffontcache \
     vcl/source/gdi/pdfwriter \
@@ -311,6 +314,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/graphic/UnoGraphicTransformer \
     vcl/source/bitmap/bitmap \
     vcl/source/bitmap/bitmapfilter \
+    vcl/source/bitmap/BitmapAlphaClampFilter \
     vcl/source/bitmap/BitmapMonochromeFilter \
     vcl/source/bitmap/BitmapSmoothenFilter \
     vcl/source/bitmap/BitmapLightenFilter \
@@ -329,7 +333,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/bitmap/BitmapMedianFilter \
     vcl/source/bitmap/BitmapInterpolateScaleFilter \
     vcl/source/bitmap/BitmapSeparableUnsharpenFilter \
-	vcl/source/bitmap/BitmapFastScaleFilter \
+    vcl/source/bitmap/BitmapFastScaleFilter \
     vcl/source/bitmap/BitmapScaleSuperFilter \
     vcl/source/bitmap/BitmapScaleConvolutionFilter \
     vcl/source/bitmap/BitmapSymmetryCheck \
@@ -350,8 +354,10 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/helper/evntpost \
     vcl/source/helper/lazydelete \
     vcl/source/helper/strhelper \
+    vcl/source/helper/svtaccessiblefactory \
     vcl/source/helper/threadex \
     vcl/source/app/brand \
+    vcl/source/app/customweld \
     vcl/source/app/dbggui \
     vcl/source/app/dndhelp \
     vcl/source/app/help \
@@ -371,11 +377,11 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/app/svapp \
     vcl/source/app/svdata \
     vcl/source/app/svmain \
-    vcl/source/app/svmainhook \
     vcl/source/app/timer \
     vcl/source/app/unohelp2 \
     vcl/source/app/unohelp \
     vcl/source/app/vclevent \
+    vcl/source/app/winscheduler \
     vcl/source/components/dtranscomp \
     vcl/source/components/factory \
     vcl/source/components/fontident \
@@ -401,6 +407,10 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/filter/wmf/wmf \
     vcl/source/filter/wmf/wmfexternal \
     vcl/source/filter/wmf/wmfwr \
+    vcl/source/font/Feature \
+    vcl/source/font/FeatureCollector \
+    vcl/source/font/FeatureParser \
+    vcl/source/font/OpenTypeFeatureDefinitonList \
     vcl/source/font/PhysicalFontCollection \
     vcl/source/font/PhysicalFontFace \
     vcl/source/font/PhysicalFontFamily \
@@ -438,8 +448,6 @@ $(eval $(call gb_Library_add_cobjects,vcl,\
     vcl/source/filter/jpeg/transupp \
 ))
 
-# optional parts
-
 vcl_quartz_code= \
     vcl/quartz/salbmp \
     vcl/quartz/utils \
@@ -450,106 +458,13 @@ vcl_coretext_code= \
     vcl/quartz/ctfonts \
     vcl/quartz/salgdi \
 
-ifeq ($(OS),MACOSX)
-
-$(eval $(call gb_Library_add_cxxflags,vcl,\
-    $(gb_OBJCXXFLAGS) \
-))
-
-$(eval $(call gb_Library_add_defs,vcl,\
-    -DMACOSX_BUNDLE_IDENTIFIER=\"$(MACOSX_BUNDLE_IDENTIFIER)\" \
-))
-
-$(eval $(call gb_Library_add_exception_objects,vcl,\
-    $(vcl_coretext_code) \
-))
-
-$(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
-    ApplicationServices \
-))
-
-$(eval $(call gb_Library_add_objcxxobjects,vcl,\
-    vcl/osx/a11yactionwrapper \
-    vcl/osx/a11ycomponentwrapper \
-    vcl/osx/a11yfactory \
-    vcl/osx/a11yrolehelper \
-    vcl/osx/a11yselectionwrapper \
-    vcl/osx/a11ytablewrapper \
-    vcl/osx/a11ytextattributeswrapper \
-    vcl/osx/a11ytextwrapper \
-    vcl/osx/a11yutil \
-    vcl/osx/a11yvaluewrapper \
-    vcl/osx/a11ywrapper \
-    vcl/osx/a11ywrapperbutton \
-    vcl/osx/a11ywrappercheckbox \
-    vcl/osx/a11ywrappercombobox \
-    vcl/osx/a11ywrappergroup \
-    vcl/osx/a11ywrapperlist \
-    vcl/osx/a11ywrapperradiobutton \
-    vcl/osx/a11ywrapperradiogroup \
-    vcl/osx/a11ywrapperrow \
-    vcl/osx/a11ywrapperscrollarea \
-    vcl/osx/a11ywrapperscrollbar \
-    vcl/osx/a11ywrappersplitter \
-    vcl/osx/a11ywrapperstatictext \
-    vcl/osx/a11ywrappertabgroup \
-    vcl/osx/a11ywrappertextarea \
-    vcl/osx/a11ywrappertoolbar \
-    vcl/osx/salnstimer \
-    vcl/osx/vclnsapp \
-    vcl/osx/printaccessoryview \
-    vcl/osx/printview \
-    vcl/osx/salframeview \
-    vcl/osx/salnsmenu \
-))
-$(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/osx/a11yfocuslistener \
-    vcl/osx/a11yfocustracker \
-    vcl/osx/a11ylistener \
-    vcl/osx/documentfocuslistener \
-    vcl/osx/saldata \
-    vcl/osx/salinst \
-    vcl/osx/salsys \
-    vcl/osx/saltimer \
-    vcl/osx/DataFlavorMapping \
-    vcl/osx/DragActionConversion \
-    vcl/osx/DragSource \
-    vcl/osx/DragSourceContext \
-    vcl/osx/DropTarget \
-    vcl/osx/HtmlFmtFlt \
-    vcl/osx/OSXTransferable \
-    vcl/osx/PictToBmpFlt \
-    vcl/osx/clipboard \
-    vcl/osx/service_entry \
-    $(vcl_quartz_code) \
-    vcl/quartz/salgdiutils \
-    vcl/osx/salnativewidgets \
-    vcl/osx/salprn \
-    vcl/osx/salframe \
-    vcl/osx/salmenu \
-    vcl/osx/salobj \
-))
-$(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
-    $(if $(filter X86_64,$(CPUNAME)),,QuickTime) \
-    Cocoa \
-    Carbon \
-    CoreFoundation \
-))
-
-ifneq ($(ENABLE_MACOSX_SANDBOX),TRUE)
-$(eval $(call gb_Library_use_libraries,vcl,\
-    AppleRemote \
-))
-endif
-
-endif
-
 vcl_headless_code= \
     vcl/headless/svpframe \
-    $(if $(filter-out IOS,$(OS)), \
+    $(if $(filter-out iOS,$(OS)), \
         vcl/headless/svpbmp \
         vcl/headless/svpgdi \
-        vcl/headless/svpdata) \
+        vcl/headless/svpdata \
+        vcl/headless/CustomWidgetDraw) \
     vcl/headless/svpdummies \
     vcl/headless/svpinst \
     vcl/headless/svpvd \
@@ -560,7 +475,7 @@ vcl_headless_code= \
 vcl_headless_freetype_code=\
     vcl/headless/svpprn \
     vcl/headless/svptext \
-    vcl/headless/svpglyphcache \
+    vcl/unx/generic/app/gendata \
     vcl/unx/generic/gdi/cairotextrender \
     vcl/unx/generic/glyphs/freetype_glyphcache \
     vcl/unx/generic/glyphs/glyphcache \
@@ -581,7 +496,7 @@ vcl_headless_freetype_code=\
 
 ifeq ($(USING_X11),TRUE)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/unx/generic/plugadapt/salplug \
+    vcl/source/app/salplug \
     vcl/unx/generic/printer/jobdata \
     vcl/unx/generic/printer/ppdparser \
     vcl/unx/generic/gdi/nativewindowhandleprovider \
@@ -607,7 +522,7 @@ $(eval $(call gb_Library_use_externals,vcl,\
 ))
 endif
 
-ifeq ($(ENABLE_HEADLESS),TRUE)
+ifeq ($(DISABLE_GUI),TRUE)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/unx/generic/printer/jobdata \
     vcl/unx/generic/printer/ppdparser \
@@ -627,8 +542,10 @@ $(eval $(call gb_Library_add_libs,vcl,\
     -lpthread \
 ))
 endif
-else
- $(eval $(call gb_Library_add_exception_objects,vcl,\
+
+else # ! DISABLE_GUI
+
+$(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/opengl/DeviceInfo \
     vcl/opengl/gdiimpl \
     vcl/opengl/salbmp \
@@ -642,7 +559,6 @@ else
     vcl/opengl/LineRenderUtils \
     vcl/source/opengl/OpenGLContext \
     vcl/source/opengl/OpenGLHelper \
-    vcl/source/window/openglwin \
  ))
 ifeq ($(OS), $(filter LINUX %BSD SOLARIS, $(OS)))
 $(eval $(call gb_Library_add_libs,vcl,\
@@ -655,7 +571,8 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/opengl/x11/X11DeviceInfo \
 ))
 endif
-endif
+endif # ! DISABLE_GUI
+
 
 ifeq ($(OS),HAIKU)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
@@ -670,11 +587,9 @@ $(eval $(call gb_Library_add_libs,vcl,\
     -lbe \
 ))
 
-ifeq ($(ENABLE_QT5),TRUE)
-$(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/unx/generic/plugadapt/salplug \
+$(eval $(call gb_Library_add_exception_objects,vcl, \
+    $(if $(or $(ENABLE_QT5),$(ENABLE_KDE5)),vcl/source/app/salplug) \
 ))
-endif
 
 $(eval $(call gb_Library_use_externals,vcl,\
     cairo \
@@ -683,6 +598,7 @@ $(eval $(call gb_Library_use_externals,vcl,\
     expat \
 ))
 endif
+
 
 ifeq ($(OS),ANDROID)
 $(eval $(call gb_Library_add_libs,vcl,\
@@ -707,14 +623,14 @@ $(eval $(call gb_Library_use_externals,vcl,\
 ))
 endif
 
-ifeq ($(OS),IOS)
+
+ifeq ($(OS),iOS)
 $(eval $(call gb_Library_add_cxxflags,vcl,\
     $(gb_OBJCXXFLAGS) \
 ))
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/ios/iosinst \
     vcl/ios/dummies \
-    $(vcl_really_generic_code) \
     $(vcl_coretext_code) \
     $(vcl_quartz_code) \
     $(vcl_headless_code) \
@@ -725,56 +641,34 @@ $(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
 ))
 endif
 
-# OS-specific stuff
+
+ifeq ($(OS),MACOSX)
+$(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
+    Cocoa \
+    CoreFoundation \
+))
+
+$(eval $(call gb_Library_add_exception_objects,vcl,\
+    vcl/source/app/salplug \
+))
+endif
+
 
 ifeq ($(OS),WNT)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/opengl/win/gdiimpl \
     vcl/opengl/win/WinDeviceInfo \
     vcl/opengl/win/blocklist_parser \
-    vcl/win/app/saldata \
-    vcl/win/app/salinfo \
-    vcl/win/app/salinst \
-    vcl/win/app/salshl \
-    vcl/win/app/saltimer \
-    vcl/win/gdi/gdiimpl \
-    vcl/win/gdi/salbmp \
-    vcl/win/gdi/salgdi \
-    vcl/win/gdi/salgdi2 \
-    vcl/win/gdi/salfont \
-    vcl/win/gdi/salgdi_gdiplus \
-    vcl/win/gdi/salnativewidgets-luna \
-    vcl/win/gdi/salprn \
-    vcl/win/gdi/salvd \
-    vcl/win/gdi/winlayout \
-    vcl/win/gdi/DWriteTextRenderer \
-    vcl/win/window/salframe \
-    vcl/win/window/keynames \
-    vcl/win/window/salmenu \
-    vcl/win/window/salobj \
+    vcl/source/app/salplug \
 ))
 
 $(eval $(call gb_Library_use_system_win32_libs,vcl,\
-    advapi32 \
-    crypt32 \
-    gdi32 \
-    gdiplus \
-    imm32 \
-    mpr \
     ole32 \
-    shell32 \
-    usp10 \
-    uuid \
-    version \
-    winspool \
     setupapi \
-    shlwapi \
+    version \
 ))
 
 $(eval $(call gb_Library_add_nativeres,vcl,vcl/salsrc))
-endif
 
-ifeq ($(OS),WNT)
 # HACK: dependency on icon themes so running unit tests don't
 # prevent delivering these by having open file handles on WNT
 $(eval $(call gb_Library_use_package,vcl,postprocess_images))

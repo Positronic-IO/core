@@ -43,6 +43,7 @@
 #include <com/sun/star/document/IndexedPropertyValues.hpp>
 #include <com/sun/star/document/NamedPropertyValues.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <unotools/configmgr.hxx>
 #include "xmlenums.hxx"
@@ -188,7 +189,7 @@ public:
 class XMLConfigItemMapIndexedContext : public XMLConfigBaseContext
 {
 private:
-    OUString maConfigItemName;
+    OUString const maConfigItemName;
 
 public:
     XMLConfigItemMapIndexedContext(SvXMLImport& rImport, sal_uInt16 nPrfx,
@@ -205,7 +206,7 @@ public:
     virtual void EndElement() override;
 };
 
-SvXMLImportContext *CreateSettingsContext(SvXMLImport& rImport, sal_uInt16 p_nPrefix,
+static SvXMLImportContext *CreateSettingsContext(SvXMLImport& rImport, sal_uInt16 p_nPrefix,
                         const OUString& rLocalName,
                         const uno::Reference<xml::sax::XAttributeList>& xAttrList,
                         beans::PropertyValue& rProp, XMLConfigBaseContext* pBaseContext)
@@ -252,7 +253,7 @@ namespace
 {
     struct SettingsGroup
     {
-        OUString sGroupName;
+        OUString const sGroupName;
         uno::Any        aSettings;
 
         SettingsGroup( const OUString& _rGroupName, const uno::Any& _rSettings )

@@ -67,8 +67,8 @@ public:
     };
 
 private:
-    OUString        aName;
-    OUString        aUpperName; // #i62977# for faster searching (aName is never modified after ctor)
+    OUString const  aName;
+    OUString const  aUpperName; // #i62977# for faster searching (aName is never modified after ctor)
     OUString        maNewName;  ///< used for formulas after changing names in the dialog
     std::unique_ptr<ScTokenArray>
                     pCode;
@@ -78,11 +78,6 @@ private:
     formula::FormulaGrammar::Grammar    eTempGrammar;   // needed for unresolved XML compiles
     sal_uInt16      nIndex;
     bool            bModified;          // is set/cleared by UpdateReference
-
-    // max row and column to use for wrapping of references.  If -1 use the
-    // application's default.
-    SCROW           mnMaxRow;
-    SCCOL           mnMaxCol;
 
     void CompileRangeData( const OUString& rSymbol, bool bSetError );
     void InitCode();
@@ -161,9 +156,6 @@ public:
     static void     MakeValidName( OUString& rName );
 
     SC_DLLPUBLIC static IsNameValidType     IsNameValid( const OUString& rName, const ScDocument* pDoc );
-
-    SCROW GetMaxRow() const;
-    SCCOL GetMaxCol() const;
 
     void CompileUnresolvedXML( sc::CompileFormulaContext& rCxt );
 

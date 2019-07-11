@@ -22,6 +22,7 @@
 
 #include <hintids.hxx>
 #include <com/sun/star/linguistic2/XThesaurus.hpp>
+#include <officecfg/Office/Common.hxx>
 #include <svl/aeitem.hxx>
 #include <svl/whiter.hxx>
 #include <svl/cjkoptions.hxx>
@@ -56,6 +57,7 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <svl/visitem.hxx>
 #include <redline.hxx>
+#include <rootfrm.hxx>
 #include <docary.hxx>
 
 #include <cmdid.h>
@@ -97,15 +99,21 @@ void SwView::GetState(SfxItemSet &rSet)
                 break;
 
             case SID_INSERT_GRAPHIC:
-            case SID_INSERT_SIGNATURELINE:
                 if( m_pWrtShell->CursorInsideInputField() )
+                {
+                    rSet.DisableItem(nWhich);
+                }
+                break;
+            case SID_INSERT_SIGNATURELINE:
+                if( !( m_nSelectionType & SelectionType::Text ||
+                    m_nSelectionType & SelectionType::NumberList ) )
                 {
                     rSet.DisableItem(nWhich);
                 }
                 break;
             case SID_EDIT_SIGNATURELINE:
             case SID_SIGN_SIGNATURELINE:
-                if (!isSignatureLineSelected())
+                if (!isSignatureLineSelected() || isSignatureLineSigned())
                     rSet.DisableItem(nWhich);
                 break;
             case FN_INSERT_CAPTION:
@@ -274,7 +282,9 @@ void SwView::GetState(SfxItemSet &rSet)
             break;
             case FN_REDLINE_SHOW:
             {
-                rSet.Put( SfxBoolItem( nWhich, IDocumentRedlineAccess::IsShowChanges(m_pWrtShell->GetRedlineFlags()) ));
+                uno::Reference<uno::XComponentContext> const xContext(
+                        comphelper::getProcessComponentContext());
+                rSet.Put(SfxBoolItem(nWhich, !m_pWrtShell->GetLayout()->IsHideRedlines()));
             }
             break;
             case SID_AVMEDIA_PLAYER :

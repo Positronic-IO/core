@@ -68,9 +68,9 @@ inline std::vector<char> readIpcStringArg(std::istream& stream)
     return buffer;
 }
 
-void readIpcArg(std::istream& stream, rtl::OUString& string);
+void readIpcArg(std::istream& stream, OUString& string);
 void readIpcArg(std::istream& stream, QString& string);
-void readIpcArg(std::istream& stream, css::uno::Sequence<rtl::OUString>& seq);
+void readIpcArg(std::istream& stream, css::uno::Sequence<OUString>& seq);
 
 inline void readIpcArg(std::istream& stream, Commands& value)
 {
@@ -100,6 +100,14 @@ inline void readIpcArg(std::istream& stream, sal_uIntPtr& value)
     stream.ignore(); // skip space
 }
 
+#if SAL_TYPES_SIZEOFPOINTER == 4
+inline void readIpcArg(std::istream& stream, uint64_t& value)
+{
+    stream >> value;
+    stream.ignore(); // skip space
+}
+#endif
+
 inline void readIpcArgs(std::istream& /*stream*/)
 {
     // end of arguments, nothing to do
@@ -112,7 +120,7 @@ inline void readIpcArgs(std::istream& stream, T& arg, Args&... args)
     readIpcArgs(stream, args...);
 }
 
-void sendIpcArg(std::ostream& stream, const rtl::OUString& string);
+void sendIpcArg(std::ostream& stream, const OUString& string);
 void sendIpcArg(std::ostream& stream, const QString& string);
 
 inline void sendIpcStringArg(std::ostream& stream, uint32_t length, const char* string)
@@ -134,6 +142,10 @@ inline void sendIpcArg(std::ostream& stream, bool value) { stream << value << ' 
 inline void sendIpcArg(std::ostream& stream, sal_Int16 value) { stream << value << ' '; }
 
 inline void sendIpcArg(std::ostream& stream, sal_uIntPtr value) { stream << value << ' '; }
+
+#if SAL_TYPES_SIZEOFPOINTER == 4
+inline void sendIpcArg(std::ostream& stream, uint64_t value) { stream << value << ' '; }
+#endif
 
 inline void sendIpcArgsImpl(std::ostream& stream)
 {

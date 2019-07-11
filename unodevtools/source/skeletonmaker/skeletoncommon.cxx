@@ -27,6 +27,7 @@
 
 #include "skeletoncommon.hxx"
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 
@@ -34,7 +35,7 @@ using namespace ::codemaker::cpp;
 
 namespace skeletonmaker {
 
-void printLicenseHeader(std::ostream& o, rtl::OString const & filename)
+void printLicenseHeader(std::ostream& o, OString const & filename)
 {
     sal_Int32 index;
 #ifdef SAL_UNX
@@ -90,19 +91,15 @@ bool getOutputStream(ProgramOptions const & options,
     return bStandardout;
 }
 
-bool containsAttribute(AttributeInfo& attributes, OUString const & attrname)
+static bool containsAttribute(AttributeInfo& attributes, OUString const & attrname)
 {
-    for ( AttributeInfo::const_iterator i(attributes.begin());
-          i != attributes.end(); ++i ) {
-        if ( (*i).name == attrname ) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(attributes.begin(), attributes.end(),
+        [&attrname](const unoidl::AccumulationBasedServiceEntity::Property& rAttr) {
+            return rAttr.name == attrname; });
 }
 
 // collect attributes including inherited attributes
-void checkAttributes(rtl::Reference< TypeManager > const & manager,
+static void checkAttributes(rtl::Reference< TypeManager > const & manager,
                      OUString const & name,
                      AttributeInfo& attributes,
                      std::set< OUString >& propinterfaces)
@@ -120,25 +117,21 @@ void checkAttributes(rtl::Reference< TypeManager > const & manager,
             rtl::Reference< unoidl::InterfaceTypeEntity > ent2(
                 dynamic_cast< unoidl::InterfaceTypeEntity * >(ent.get()));
             assert(ent2.is());
-            for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                     ent2->getDirectMandatoryBases().begin());
-                 i != ent2->getDirectMandatoryBases().end(); ++i)
+            for (const auto& rBase : ent2->getDirectMandatoryBases())
             {
-                checkAttributes(manager, i->name, attributes, propinterfaces);
+                checkAttributes(manager, rBase.name, attributes, propinterfaces);
             }
-            for (std::vector< unoidl::InterfaceTypeEntity::Attribute >::
-                     const_iterator i(ent2->getDirectAttributes().begin());
-                 i != ent2->getDirectAttributes().end(); ++i)
+            for (const auto& rAttr : ent2->getDirectAttributes())
             {
-                if (!containsAttribute(attributes, i->name)) {
+                if (!containsAttribute(attributes, rAttr.name)) {
                     attributes.emplace_back(
-                        i->name, i->type,
+                        rAttr.name, rAttr.type,
                         (unoidl::AccumulationBasedServiceEntity::Property::
                          Attributes(
-                             ((i->bound
+                             ((rAttr.bound
                                ? unoidl::AccumulationBasedServiceEntity::Property::ATTRIBUTE_BOUND
                                : 0)
-                              | (i->readOnly
+                              | (rAttr.readOnly
                                  ? unoidl::AccumulationBasedServiceEntity::Property::ATTRIBUTE_READ_ONLY
                                  : 0)))),
                         std::vector< OUString >());
@@ -152,25 +145,18 @@ void checkAttributes(rtl::Reference< TypeManager > const & manager,
                 dynamic_cast< unoidl::AccumulationBasedServiceEntity * >(
                     ent.get()));
             assert(ent2.is());
-            for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                     ent2->getDirectMandatoryBaseServices().begin());
-                 i != ent2->getDirectMandatoryBaseServices().end(); ++i)
+            for (const auto& rService : ent2->getDirectMandatoryBaseServices())
             {
-                checkAttributes(manager, i->name, attributes, propinterfaces);
+                checkAttributes(manager, rService.name, attributes, propinterfaces);
             }
-            for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                     ent2->getDirectMandatoryBaseInterfaces().begin());
-                 i != ent2->getDirectMandatoryBaseInterfaces().end(); ++i)
+            for (const auto& rIface : ent2->getDirectMandatoryBaseInterfaces())
             {
-                checkAttributes(manager, i->name, attributes, propinterfaces);
+                checkAttributes(manager, rIface.name, attributes, propinterfaces);
             }
-            for (std::vector<
-                     unoidl::AccumulationBasedServiceEntity::Property >::
-                     const_iterator i(ent2->getDirectProperties().begin());
-                 i != ent2->getDirectProperties().end(); ++i)
+            for (const auto& rProp : ent2->getDirectProperties())
             {
-                if (!containsAttribute(attributes, i->name)) {
-                    attributes.push_back(*i);
+                if (!containsAttribute(attributes, rProp.name)) {
+                    attributes.push_back(rProp);
                 }
             }
             break;
@@ -232,26 +218,19 @@ void checkType(rtl::Reference< TypeManager > const & manager,
                 dynamic_cast< unoidl::AccumulationBasedServiceEntity * >(
                     ent.get()));
             assert(ent2.is());
-            for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                     ent2->getDirectMandatoryBaseServices().begin());
-                 i != ent2->getDirectMandatoryBaseServices().end(); ++i)
+            for (const auto& rService : ent2->getDirectMandatoryBaseServices())
             {
                 checkType(
-                    manager, i->name, interfaceTypes, serviceTypes, properties);
+                    manager, rService.name, interfaceTypes, serviceTypes, properties);
             }
-            for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                     ent2->getDirectMandatoryBaseInterfaces().begin());
-                 i != ent2->getDirectMandatoryBaseInterfaces().end(); ++i)
+            for (const auto& rIface : ent2->getDirectMandatoryBaseInterfaces())
             {
                 checkType(
-                    manager, i->name, interfaceTypes, serviceTypes, properties);
+                    manager, rIface.name, interfaceTypes, serviceTypes, properties);
             }
-            for (std::vector<
-                     unoidl::AccumulationBasedServiceEntity::Property >::
-                     const_iterator i(ent2->getDirectProperties().begin());
-                 i != ent2->getDirectProperties().end(); ++i)
+            for (const auto& rProp : ent2->getDirectProperties())
             {
-                properties.push_back(*i);
+                properties.push_back(rProp);
             }
         }
         break;
@@ -281,7 +260,7 @@ void checkDefaultInterfaces(
     }
 }
 
-bool checkServiceProperties(rtl::Reference< TypeManager > const & manager,
+static bool checkServiceProperties(rtl::Reference< TypeManager > const & manager,
                             OUString const & name)
 {
     rtl::Reference< unoidl::Entity > ent;
@@ -295,14 +274,10 @@ bool checkServiceProperties(rtl::Reference< TypeManager > const & manager,
         if (!ent2->getDirectProperties().empty()) {
             return true;
         }
-        for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-                 ent2->getDirectMandatoryBaseServices().begin());
-             i != ent2->getDirectMandatoryBaseServices().end(); ++i)
-        {
-            if (checkServiceProperties(manager, i->name)) {
-                return true;
-            }
-        }
+        return std::any_of(ent2->getDirectMandatoryBaseServices().begin(),
+            ent2->getDirectMandatoryBaseServices().end(),
+            [&manager](const unoidl::AnnotatedReference& rService) {
+                return checkServiceProperties(manager, rService.name); });
     }
     return false;
 }
@@ -362,7 +337,7 @@ OUString checkPropertyHelper(
     return oldStyleWithProperties ? OUString("_") : OUString();
 }
 
-bool checkXComponentSupport(
+static bool checkXComponentSupport(
     rtl::Reference< TypeManager > const & manager, OUString const & name)
 {
     assert(manager.is());
@@ -379,15 +354,8 @@ bool checkXComponentSupport(
     rtl::Reference< unoidl::InterfaceTypeEntity > ent2(
         dynamic_cast< unoidl::InterfaceTypeEntity * >(ent.get()));
     assert(ent2.is());
-    for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-             ent2->getDirectMandatoryBases().begin());
-         i != ent2->getDirectMandatoryBases().end(); ++i)
-    {
-        if (checkXComponentSupport(manager, i->name)) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(ent2->getDirectMandatoryBases().begin(), ent2->getDirectMandatoryBases().end(),
+        [&manager](const unoidl::AnnotatedReference& rBase) { return checkXComponentSupport(manager, rBase.name); });
 }
 
 
@@ -399,15 +367,13 @@ bool checkXComponentSupport(rtl::Reference< TypeManager > const & manager,
     if ( interfaces.empty() )
         return false;
 
-    std::set< OUString >::const_iterator iter = interfaces.begin();
-    while ( iter != interfaces.end() ) {
-        if ( *iter == "com.sun.star.lang.XComponent" ) {
+    for ( const auto& rIface : interfaces ) {
+        if ( rIface == "com.sun.star.lang.XComponent" ) {
             interfaces.erase("com.sun.star.lang.XComponent");
             return true;
         }
-        if ( checkXComponentSupport(manager, *iter) )
+        if ( checkXComponentSupport(manager, rIface) )
             return true;
-        ++iter;
     }
 
     return false;
@@ -419,23 +385,19 @@ checkAdditionalPropertyFlags(
 {
     int flags = 0;
     bool getterSupportsUnknown = false;
-    for (std::vector< OUString >::const_iterator i(
-             attribute.getExceptions.begin());
-         i != attribute.getExceptions.end(); ++i)
+    for (const auto& rException : attribute.getExceptions)
     {
-        if (*i == "com.sun.star.beans.UnknownPropertyException") {
+        if (rException == "com.sun.star.beans.UnknownPropertyException") {
             getterSupportsUnknown = true;
         }
     }
-    for (std::vector< OUString >::const_iterator i(
-             attribute.setExceptions.begin());
-         i != attribute.setExceptions.end(); ++i)
+    for (const auto& rException : attribute.setExceptions)
     {
-        if (*i == "com.sun.star.beans.PropertyVetoException") {
+        if (rException == "com.sun.star.beans.PropertyVetoException") {
             flags |= unoidl::AccumulationBasedServiceEntity::Property::
                 ATTRIBUTE_CONSTRAINED;
         } else if (getterSupportsUnknown
-                   && *i == "com.sun.star.beans.UnknownPropertyException")
+                   && rException == "com.sun.star.beans.UnknownPropertyException")
         {
             flags |= unoidl::AccumulationBasedServiceEntity::Property::
                 ATTRIBUTE_OPTIONAL;
@@ -447,7 +409,7 @@ checkAdditionalPropertyFlags(
 // This function checks if the specified types for parameters and return
 // types are allowed add-in types, for more info see the com.sun.star.sheet.AddIn
 // service description
-bool checkAddinType(rtl::Reference< TypeManager > const & manager,
+static bool checkAddinType(rtl::Reference< TypeManager > const & manager,
                     OUString const & type, bool & bLastAny,
                     bool & bHasXPropertySet, bool bIsReturn)
 {
@@ -494,40 +456,36 @@ bool checkAddinType(rtl::Reference< TypeManager > const & manager,
     return false;
 }
 
-void checkAddInTypes(
+static void checkAddInTypes(
     rtl::Reference< TypeManager > const & manager, OUString const & name,
     rtl::Reference< unoidl::InterfaceTypeEntity > const & entity)
 {
     assert(entity.is());
     bool bLastAny = false;
     bool bHasXPropertySet = false;
-    for (std::vector< unoidl::InterfaceTypeEntity::Method >::const_iterator i(
-             entity->getDirectMethods().begin());
-         i != entity->getDirectMethods().end(); ++i)
+    for (const auto& rMethod : entity->getDirectMethods())
     {
         if ( !checkAddinType(
-                 manager, i->returnType, bLastAny, bHasXPropertySet, true) )
+                 manager, rMethod.returnType, bLastAny, bHasXPropertySet, true) )
         {
             throw CannotDumpException(
                 "the return type of the calc add-in function '" + name
-                + ":" + i->name
+                + ":" + rMethod.name
                 + "' is invalid. Please check your IDL definition.");
         }
 
         bHasXPropertySet = false;
-        for (std::vector< unoidl::InterfaceTypeEntity::Method::Parameter >::
-                 const_iterator j(i->parameters.begin());
-             j != i->parameters.end(); ++j)
+        for (const auto& rParam : rMethod.parameters)
         {
             bLastAny = false;
-            if ( !checkAddinType(manager, j->type,
+            if ( !checkAddinType(manager, rParam.type,
                                 bLastAny, bHasXPropertySet, false) ||
                  bLastAny )
             {
                 throw CannotDumpException(
-                    "the type of the " + j->name
+                    "the type of the " + rParam.name
                     + " parameter of the calc add-in function '" + name
-                    + ":" + i->name + "' is invalid."
+                    + ":" + rMethod.name + "' is invalid."
                     + (bLastAny
                        ? OUString(
                            " The type 'sequence<any>' is allowed as last"
@@ -543,7 +501,7 @@ void checkAddInTypes(
     }
 }
 
-void generateFunctionParameterMap(std::ostream& o,
+static void generateFunctionParameterMap(std::ostream& o,
                                  ProgramOptions const & options,
                                  rtl::Reference< TypeManager > const & manager,
                                  OUString const & name,
@@ -575,12 +533,10 @@ void generateFunctionParameterMap(std::ostream& o,
     // check if the specified add-in functions supports valid types
     checkAddInTypes(manager, name, ent2);
 
-    for (std::vector< unoidl::AnnotatedReference >::const_iterator i(
-             ent2->getDirectMandatoryBases().begin());
-         i != ent2->getDirectMandatoryBases().end(); ++i)
+    for (const auto& rBase : ent2->getDirectMandatoryBases())
     {
         generateFunctionParameterMap(
-            o, options, manager, i->name, generated, bFirst);
+            o, options, manager, rBase.name, generated, bFirst);
     }
 
     if ( generated.contains(u2b(name)) )
@@ -588,9 +544,7 @@ void generateFunctionParameterMap(std::ostream& o,
     else
         generated.add(u2b(name));
 
-    for (std::vector< unoidl::InterfaceTypeEntity::Method >::const_iterator i(
-             ent2->getDirectMethods().begin());
-         i != ent2->getDirectMethods().end(); ++i)
+    for (const auto& rMethod : ent2->getDirectMethods())
     {
         if ( bFirst ) {
             if (options.language == 2) {
@@ -612,30 +566,28 @@ void generateFunctionParameterMap(std::ostream& o,
 
         std::vector< unoidl::InterfaceTypeEntity::Method::Parameter >::size_type
             n = 0;
-        for (std::vector< unoidl::InterfaceTypeEntity::Method::Parameter >::
-                 const_iterator j(i->parameters.begin());
-             j != i->parameters.end(); ++j)
+        for (const auto& rParam : rMethod.parameters)
         {
             if ( options.language == 2 ) {
                 o << "        fpm[" << n
-                  << "] = ::rtl::OUString(\""
-                  << j->name
+                  << "] = OUString(\""
+                  << rParam.name
                   << "\");\n";
             }
             else {
                 o << "        fpm.put(" << n << ", \""
-                  << j->name
+                  << rParam.name
                   << "\");\n";
             }
             ++n;
         }
 
         if ( options.language == 2 ) {
-            o << "        m_functionMap[::rtl::OUString(\""
-              << i->name << "\")] = fpm;\n\n";
+            o << "        m_functionMap[OUString(\""
+              << rMethod.name << "\")] = fpm;\n\n";
         }
         else {
-            o << "        m_functionMap.put(\"" << i->name << "\", fpm);\n\n";
+            o << "        m_functionMap.put(\"" << rMethod.name << "\", fpm);\n\n";
         }
     }
 }
@@ -647,10 +599,8 @@ void generateFunctionParameterMap(std::ostream& o,
 {
     ::codemaker::GeneratedTypeSet generated;
     bool bFirst = true;
-    std::set< OUString >::const_iterator iter = interfaces.begin();
-    while ( iter != interfaces.end() ) {
-        generateFunctionParameterMap(o, options, manager, *iter, generated, bFirst);
-        ++iter;
+    for ( const auto& rIface : interfaces ) {
+        generateFunctionParameterMap(o, options, manager, rIface, generated, bFirst);
     }
 }
 

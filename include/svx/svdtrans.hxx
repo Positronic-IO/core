@@ -25,6 +25,7 @@
 #include <svx/svxdllapi.h>
 #include <tools/fract.hxx>
 #include <tools/gen.hxx>
+#include <tools/helpers.hxx>
 #include <tools/poly.hxx>
 #include <vcl/field.hxx>
 #include <vcl/mapmod.hxx>
@@ -49,10 +50,6 @@ const double nPi180=0.000174532925199432957692222; // If we have too few digits,
 
 class XPolygon;
 class XPolyPolygon;
-namespace svx
-{
-    inline long Round(double a) { return a>0.0 ? static_cast<long>(a+0.5) : -static_cast<long>((-a)+0.5); }
-}
 
 inline void MovePoly(tools::Polygon& rPoly, const Size& S)      { rPoly.Move(S.Width(),S.Height()); }
 void MoveXPoly(XPolygon& rPoly, const Size& S);
@@ -113,27 +110,27 @@ inline void ResizePoint(Point& rPnt, const Point& rRef, const Fraction& xFract, 
 {
     double nxFract = xFract.IsValid() ? static_cast<double>(xFract) : 1.0;
     double nyFract = yFract.IsValid() ? static_cast<double>(yFract) : 1.0;
-    rPnt.setX(rRef.X() + svx::Round( (rPnt.X() - rRef.X()) * nxFract ));
-    rPnt.setY(rRef.Y() + svx::Round( (rPnt.Y() - rRef.Y()) * nyFract ));
+    rPnt.setX(rRef.X() + FRound( (rPnt.X() - rRef.X()) * nxFract ));
+    rPnt.setY(rRef.Y() + FRound( (rPnt.Y() - rRef.Y()) * nyFract ));
 }
 
 inline void RotatePoint(Point& rPnt, const Point& rRef, double sn, double cs)
 {
     long dx=rPnt.X()-rRef.X();
     long dy=rPnt.Y()-rRef.Y();
-    rPnt.setX(svx::Round(rRef.X()+dx*cs+dy*sn));
-    rPnt.setY(svx::Round(rRef.Y()+dy*cs-dx*sn));
+    rPnt.setX(FRound(rRef.X()+dx*cs+dy*sn));
+    rPnt.setY(FRound(rRef.Y()+dy*cs-dx*sn));
 }
 
 inline void ShearPoint(Point& rPnt, const Point& rRef, double tn, bool bVShear)
 {
     if (!bVShear) { // Horizontal
         if (rPnt.Y()!=rRef.Y()) { // else not needed
-            rPnt.AdjustX(-svx::Round((rPnt.Y()-rRef.Y())*tn));
+            rPnt.AdjustX(-FRound((rPnt.Y()-rRef.Y())*tn));
         }
     } else { // or else vertical
         if (rPnt.X()!=rRef.X()) { // else not needed
-            rPnt.AdjustY(-svx::Round((rPnt.X()-rRef.X())*tn));
+            rPnt.AdjustY(-FRound((rPnt.X()-rRef.X())*tn));
         }
     }
 }
@@ -167,9 +164,9 @@ inline double GetCrookAngle(Point& rPnt, const Point& rCenter, const Point& rRad
  */
 SVX_DLLPUBLIC long GetAngle(const Point& rPnt);
 
-long NormAngle180(long a); /// Normalize angle to -180.00..179.99
+long NormAngle18000(long a); /// Normalize angle to -180.00..179.99
 
-SVX_DLLPUBLIC long NormAngle360(long a); /// Normalize angle to 0.00..359.99
+SVX_DLLPUBLIC long NormAngle36000(long a); /// Normalize angle to 0.00..359.99
 
 sal_uInt16 GetAngleSector(long nAngle); /// Determine sector within the cartesian coordinate system
 
@@ -268,12 +265,14 @@ inline bool IsInch(MapUnit eU) {
 }
 
 inline bool IsMetric(FieldUnit eU) {
-    return (eU==FUNIT_MM || eU==FUNIT_CM || eU==FUNIT_M || eU==FUNIT_KM || eU==FUNIT_100TH_MM);
+    return (eU == FieldUnit::MM || eU == FieldUnit::CM || eU == FieldUnit::M
+            || eU == FieldUnit::KM || eU == FieldUnit::MM_100TH);
 }
 
 inline bool IsInch(FieldUnit eU) {
-    return (eU==FUNIT_TWIP || eU==FUNIT_POINT || eU==FUNIT_PICA ||
-            eU==FUNIT_INCH || eU==FUNIT_FOOT || eU==FUNIT_MILE);
+    return (eU == FieldUnit::TWIP || eU == FieldUnit::POINT
+            || eU == FieldUnit::PICA || eU == FieldUnit::INCH
+            || eU == FieldUnit::FOOT || eU == FieldUnit::MILE);
 }
 
 class SVX_DLLPUBLIC SdrFormatter {
@@ -281,8 +280,8 @@ class SVX_DLLPUBLIC SdrFormatter {
     long      nDiv_;
     short     nComma_;
     bool      bDirty;
-    MapUnit   eSrcMU;
-    MapUnit   eDstMU;
+    MapUnit const   eSrcMU;
+    MapUnit const   eDstMU;
 private:
     SVX_DLLPRIVATE void Undirty();
 public:

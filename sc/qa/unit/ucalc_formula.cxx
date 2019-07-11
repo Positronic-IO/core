@@ -31,11 +31,13 @@
 #include <patattr.hxx>
 #include <docpool.hxx>
 #include <docoptio.hxx>
+#include <formulaopt.hxx>
 
 #include <formula/vectortoken.hxx>
 #include <o3tl/make_unique.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <svl/broadcast.hxx>
+#include <svl/intitem.hxx>
 
 #include <memory>
 #include <functional>
@@ -101,7 +103,7 @@ void Test::testFormulaCreateStringFromTokens()
     m_pDoc->InsertTab(3, aTabName4);
 
     // Insert named ranges.
-    struct {
+    static const struct {
         bool bGlobal;
         const char* pName;
         const char* pExpr;
@@ -137,13 +139,13 @@ void Test::testFormulaCreateStringFromTokens()
     }
 
     // Insert DB ranges.
-    struct {
+    static const struct {
         const char* pName;
-        SCTAB nTab;
-        SCCOL nCol1;
-        SCROW nRow1;
-        SCCOL nCol2;
-        SCROW nRow2;
+        SCTAB const nTab;
+        SCCOL const nCol1;
+        SCROW const nRow1;
+        SCCOL const nCol2;
+        SCROW const nRow2;
     } aDBs[] = {
         { "Table1", 0, 0, 0, 10, 10 },
         { "Table2", 1, 0, 0, 10, 10 },
@@ -155,10 +157,10 @@ void Test::testFormulaCreateStringFromTokens()
 
     for (size_t i = 0; i < SAL_N_ELEMENTS(aDBs); ++i)
     {
-        ScDBData* pData = new ScDBData(
+        std::unique_ptr<ScDBData> pData( new ScDBData(
             OUString::createFromAscii(
-                aDBs[i].pName), aDBs[i].nTab, aDBs[i].nCol1, aDBs[i].nRow1, aDBs[i].nCol2,aDBs[i].nRow2);
-        bool bInserted = pDBs->getNamedDBs().insert(pData);
+                aDBs[i].pName), aDBs[i].nTab, aDBs[i].nCol1, aDBs[i].nRow1, aDBs[i].nCol2,aDBs[i].nRow2) );
+        bool bInserted = pDBs->getNamedDBs().insert(std::move(pData));
         CPPUNIT_ASSERT_MESSAGE(
             OString(
                 "Failed to insert \"" + OString(aDBs[i].pName) + "\"").getStr(),
@@ -373,7 +375,7 @@ void Test::testFormulaParseReference()
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(0), aRange.aStart.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(0), aRange.aEnd.Tab());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(1), aRange.aEnd.Col());
-    CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(MAXROW), aRange.aEnd.Row());
+    CPPUNIT_ASSERT_EQUAL(MAXROW, aRange.aEnd.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
                                                  ScRefFlags::COL2_VALID | ScRefFlags::ROW2_VALID | ScRefFlags::TAB2_VALID),
                          static_cast<sal_uInt16>(nRes & (ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -390,7 +392,7 @@ void Test::testFormulaParseReference()
     CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(0), aRange.aStart.Col());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(1), aRange.aStart.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(0), aRange.aEnd.Tab());
-    CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(MAXCOL), aRange.aEnd.Col());
+    CPPUNIT_ASSERT_EQUAL(MAXCOL, aRange.aEnd.Col());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(1), aRange.aEnd.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
                                                  ScRefFlags::COL2_VALID | ScRefFlags::ROW2_VALID | ScRefFlags::TAB2_VALID),
@@ -408,7 +410,7 @@ void Test::testFormulaParseReference()
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(0), aRange.aStart.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(4), aRange.aEnd.Tab());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(2), aRange.aEnd.Col());
-    CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(MAXROW), aRange.aEnd.Row());
+    CPPUNIT_ASSERT_EQUAL(MAXROW, aRange.aEnd.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
                                                  ScRefFlags::COL2_VALID | ScRefFlags::ROW2_VALID | ScRefFlags::TAB2_VALID),
                          static_cast<sal_uInt16>(nRes & (ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -427,7 +429,7 @@ void Test::testFormulaParseReference()
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(0), aRange.aStart.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(0), aRange.aEnd.Tab());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(1), aRange.aEnd.Col());
-    CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(MAXROW), aRange.aEnd.Row());
+    CPPUNIT_ASSERT_EQUAL(MAXROW, aRange.aEnd.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
                                                  ScRefFlags::COL2_VALID | ScRefFlags::ROW2_VALID | ScRefFlags::TAB2_VALID),
                          static_cast<sal_uInt16>(nRes & (ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
@@ -445,7 +447,7 @@ void Test::testFormulaParseReference()
     CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(0), aRange.aStart.Col());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(1), aRange.aStart.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCTAB>(0), aRange.aEnd.Tab());
-    CPPUNIT_ASSERT_EQUAL(static_cast<SCCOL>(MAXCOL), aRange.aEnd.Col());
+    CPPUNIT_ASSERT_EQUAL(MAXCOL, aRange.aEnd.Col());
     CPPUNIT_ASSERT_EQUAL(static_cast<SCROW>(1), aRange.aEnd.Row());
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt16>(ScRefFlags::COL_VALID | ScRefFlags::ROW_VALID | ScRefFlags::TAB_VALID |
                                                  ScRefFlags::COL2_VALID | ScRefFlags::ROW2_VALID | ScRefFlags::TAB2_VALID),
@@ -807,7 +809,7 @@ void Test::testFormulaHashAndTag()
 
     // Test formula hashing.
 
-    struct {
+    static const struct {
         const char* pFormula1; const char* pFormula2; bool bEqual;
     } aHashTests[] = {
         { "=1", "=2", false }, // different constants
@@ -862,50 +864,32 @@ void Test::testFormulaHashAndTag()
 
     // Test formula vectorization state.
 
-    struct {
+    static const struct {
         const char* pFormula;
-        ScFormulaVectorState eState;
-        ScFormulaVectorState eSwInterpreterState; // these can change when more is whitelisted
+        ScFormulaVectorState const eState;
     } aVectorTests[] = {
-        { "=SUM(1;2;3;4;5)", FormulaVectorEnabled, FormulaVectorEnabled },
-        { "=NOW()", FormulaVectorDisabled, FormulaVectorDisabled },
-        { "=AVERAGE(X1:Y200)", FormulaVectorCheckReference, FormulaVectorDisabled },
-        { "=MAX(X1:Y200;10;20)", FormulaVectorCheckReference, FormulaVectorDisabled },
-        { "=MIN(10;11;22)", FormulaVectorEnabled, FormulaVectorDisabled },
-        { "=H4", FormulaVectorCheckReference, FormulaVectorCheckReference },
+        { "=SUM(1;2;3;4;5)", FormulaVectorEnabled },
+        { "=NOW()", FormulaVectorDisabled },
+        { "=AVERAGE(X1:Y200)", FormulaVectorCheckReference },
+        { "=MAX(X1:Y200;10;20)", FormulaVectorCheckReference },
+        { "=MIN(10;11;22)", FormulaVectorEnabled },
+        { "=H4", FormulaVectorCheckReference },
     };
 
-    bool bSwInterpreter = officecfg::Office::Common::Misc::UseSwInterpreter::get();
-    bool bOpenCL = officecfg::Office::Common::Misc::UseOpenCL::get();
-
-    for (bool bForceSwInterpreter : { false, true })
+    for (size_t i = 0; i < SAL_N_ELEMENTS(aVectorTests); ++i)
     {
-        std::shared_ptr< comphelper::ConfigurationChanges > xBatch(comphelper::ConfigurationChanges::create());
-        officecfg::Office::Common::Misc::UseSwInterpreter::set(bForceSwInterpreter, xBatch);
-        if (bForceSwInterpreter)
-            officecfg::Office::Common::Misc::UseOpenCL::set(false, xBatch);
-        xBatch->commit();
+        m_pDoc->SetString(aPos1, OUString::createFromAscii(aVectorTests[i].pFormula));
+        ScFormulaVectorState eState = m_pDoc->GetFormulaVectorState(aPos1);
+        ScFormulaVectorState eReferenceState = aVectorTests[i].eState;
 
-        for (size_t i = 0; i < SAL_N_ELEMENTS(aVectorTests); ++i)
+        if (eState != eReferenceState)
         {
-            m_pDoc->SetString(aPos1, OUString::createFromAscii(aVectorTests[i].pFormula));
-            ScFormulaVectorState eState = m_pDoc->GetFormulaVectorState(aPos1);
-            ScFormulaVectorState eReferenceState = bForceSwInterpreter? aVectorTests[i].eSwInterpreterState: aVectorTests[i].eState;
-
-            if (eState != eReferenceState)
-            {
-                std::ostringstream os;
-                os << "Unexpected vectorization state: expr: '" << aVectorTests[i].pFormula << "', using software interpreter: " << bForceSwInterpreter;
-                CPPUNIT_ASSERT_MESSAGE(os.str(), false);
-            }
-            aPos1.IncRow();
+            std::ostringstream os;
+            os << "Unexpected vectorization state: expr: '" << aVectorTests[i].pFormula << "'";
+            CPPUNIT_ASSERT_MESSAGE(os.str(), false);
         }
+        aPos1.IncRow();
     }
-
-    std::shared_ptr< comphelper::ConfigurationChanges > xBatch(comphelper::ConfigurationChanges::create());
-    officecfg::Office::Common::Misc::UseSwInterpreter::set(bSwInterpreter, xBatch);
-    officecfg::Office::Common::Misc::UseOpenCL::set(bOpenCL, xBatch);
-    xBatch->commit();
 
     m_pDoc->DeleteTab(0);
 }
@@ -916,10 +900,10 @@ void Test::testFormulaTokenEquality()
     {
         const char* mpFormula1;
         const char* mpFormula2;
-        bool mbEqual;
+        bool const mbEqual;
     };
 
-    FormulaTokenEqualityTest aTests[] = {
+    static const FormulaTokenEqualityTest aTests[] = {
         { "R1C2", "R1C2", true },
         { "R1C2", "R1C3", false },
         { "R1C2", "R2C2", false },
@@ -1006,7 +990,7 @@ void Test::testFormulaRefData()
 
 void Test::testFormulaCompiler()
 {
-    struct {
+    static const struct {
         const char* pInput; FormulaGrammar::Grammar eInputGram;
         const char* pOutput; FormulaGrammar::Grammar eOutputGram;
     } aTests[] = {
@@ -1021,7 +1005,7 @@ void Test::testFormulaCompiler()
         std::unique_ptr<ScTokenArray> pArray;
         {
             pArray.reset(compileFormula(m_pDoc, OUString::createFromAscii(aTests[i].pInput), aTests[i].eInputGram));
-            CPPUNIT_ASSERT_MESSAGE("Token array shouldn't be NULL!", pArray.get());
+            CPPUNIT_ASSERT_MESSAGE("Token array shouldn't be NULL!", pArray);
         }
 
         OUString aFormula = toString(*m_pDoc, ScAddress(), *pArray, aTests[i].eOutputGram);
@@ -1033,8 +1017,8 @@ void Test::testFormulaCompilerJumpReordering()
 {
     struct TokenCheck
     {
-        OpCode meOp;
-        StackVar meType;
+        OpCode const meOp;
+        StackVar const meType;
     };
 
     // Set separators first.
@@ -1049,14 +1033,14 @@ void Test::testFormulaCompilerJumpReordering()
 
         // Compile formula string first.
         std::unique_ptr<ScTokenArray> pCode(compileFormula(m_pDoc, aInput));
-        CPPUNIT_ASSERT(pCode.get());
+        CPPUNIT_ASSERT(pCode);
 
         // Then generate RPN tokens.
         ScCompiler aCompRPN(m_pDoc, ScAddress(), *pCode, FormulaGrammar::GRAM_NATIVE);
         aCompRPN.CompileTokenArray();
 
         // RPN tokens should be ordered: B1, ocIf, C1, ocSep, D1, ocClose.
-        TokenCheck aCheckRPN[] =
+        static const TokenCheck aCheckRPN[] =
         {
             { ocPush,  svSingleRef },
             { ocIf,    svUnknown   }, // type is context dependent, don't test it
@@ -1084,7 +1068,7 @@ void Test::testFormulaCompilerJumpReordering()
         aCompRPN2.EnableJumpCommandReorder(false);
         aCompRPN2.CompileTokenArray();
 
-        TokenCheck aCheckRPN2[] =
+        static const TokenCheck aCheckRPN2[] =
         {
             { ocPush,  svSingleRef },
             { ocPush,  svDouble    },
@@ -1105,15 +1089,15 @@ void Test::testFormulaCompilerJumpReordering()
     }
 }
 
-void Test::testFormulaCompilerImplicitIntersection()
+void Test::testFormulaCompilerImplicitIntersection2Param()
 {
     struct TestCaseFormula
     {
-        OUString  aFormula;
-        ScAddress aCellAddress;
-        ScRange   aSumRange;
-        bool      bStartColRel;  // SumRange-StartCol
-        bool      bEndColRel;    // SumRange-EndCol
+        OUString const  aFormula;
+        ScAddress const aCellAddress;
+        ScRange const   aSumRange;
+        bool const      bStartColRel;  // SumRange-StartCol
+        bool const      bEndColRel;    // SumRange-EndCol
     };
 
     m_pDoc->InsertTab(0, "Formula");
@@ -1229,6 +1213,237 @@ void Test::testFormulaCompilerImplicitIntersection()
             CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong IsRel type for end column address in sum-range", rCase.bEndColRel, aSumRangeData.Ref2.IsColRel());
         }
     }
+}
+
+void Test::testFormulaCompilerImplicitIntersection1ParamNoChange()
+{
+    struct TestCaseFormulaNoChange
+    {
+        OUString const  aFormula;
+        ScAddress const aCellAddress;
+        bool const      bMatrixFormula;
+        bool const      bForcedArray;
+    };
+
+    m_pDoc->InsertTab(0, "Formula");
+    sc::AutoCalcSwitch aACSwitch(*m_pDoc, true); // turn auto calc on.
+
+    {
+        ScAddress aStartAddr(4, 5, 0);
+        TestCaseFormulaNoChange aCasesNoChange[] =
+        {
+            {
+                OUString("=COS(A$2:A$100)"),  // No change because of abs col ref.
+                aStartAddr,
+                false,
+                false
+            },
+            {
+                OUString("=COS($A7:$A100)"),  // No intersection
+                aStartAddr,
+                false,
+                false
+            },
+            {
+                OUString("=COS($A5:$C7)"),   // No intersection 2-D range
+                aStartAddr,
+                false,
+                false
+            },
+            {
+                OUString("=SUMPRODUCT(COS(A6:A10))"),  // COS() in forced array mode
+                aStartAddr,
+                false,
+                true
+            },
+            {
+                OUString("=COS(A6:A10)"),  // Matrix formula
+                aStartAddr,
+                true,
+                false
+            }
+        };
+
+        for (auto& rCase : aCasesNoChange)
+        {
+            if (rCase.bMatrixFormula)
+            {
+                ScMarkData aMark;
+                aMark.SelectOneTable(0);
+                SCCOL nColStart = rCase.aCellAddress.Col();
+                SCROW nRowStart = rCase.aCellAddress.Row();
+                m_pDoc->InsertMatrixFormula(nColStart, nRowStart, nColStart, nRowStart + 4,
+                                            aMark, rCase.aFormula);
+            }
+            else
+                m_pDoc->SetString(rCase.aCellAddress, rCase.aFormula);
+
+            const ScFormulaCell* pCell = m_pDoc->GetFormulaCell(rCase.aCellAddress);
+            const ScTokenArray* pCode = pCell->GetCode();
+            CPPUNIT_ASSERT(pCode);
+
+            sal_uInt16 nRPNLen = pCode->GetCodeLen();
+            sal_uInt16 nRawLen = pCode->GetLen();
+            sal_uInt16 nRawArgPos;
+            if (rCase.bForcedArray)
+            {
+                nRawArgPos = 4;
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong raw token count.", static_cast<sal_uInt16>(7), nRawLen);
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong RPN token count.", static_cast<sal_uInt16>(3), nRPNLen);
+            }
+            else
+            {
+                nRawArgPos = 2;
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong raw token count.", static_cast<sal_uInt16>(4), nRawLen);
+                CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong RPN token count.", static_cast<sal_uInt16>(2), nRPNLen);
+            }
+
+            FormulaToken** ppRawTokens = pCode->GetArray();
+            FormulaToken** ppRPNTokens = pCode->GetCode();
+
+            CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong type of raw token(argument to COS)", svDoubleRef, ppRawTokens[nRawArgPos]->GetType());
+            CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong type of RPN token(argument to COS)", svDoubleRef, ppRPNTokens[0]->GetType());
+
+            ScComplexRefData aArgRangeRaw = *ppRawTokens[nRawArgPos]->GetDoubleRef();
+            ScComplexRefData aArgRangeRPN = *ppRPNTokens[0]->GetDoubleRef();
+            bool bRawMatchRPNToken(aArgRangeRaw == aArgRangeRPN);
+            CPPUNIT_ASSERT_MESSAGE("raw arg token and RPN arg token contents do not match", bRawMatchRPNToken);
+        }
+    }
+}
+
+void Test::testFormulaCompilerImplicitIntersection1ParamWithChange()
+{
+    struct TestCaseFormula
+    {
+        OUString const  aFormula;
+        ScAddress const aCellAddress;
+        ScAddress const aArgAddr;
+    };
+
+    m_pDoc->InsertTab(0, "Formula");
+    m_pDoc->InsertTab(1, "Formula1");
+    sc::AutoCalcSwitch aACSwitch(*m_pDoc, true); // turn auto calc on.
+
+    {
+        ScAddress aStartAddr(10, 5, 0);
+        TestCaseFormula aCasesWithChange[] =
+        {
+            {
+                OUString("=COS($A6:$A100)"),  // Corner case with intersection
+                aStartAddr,
+                ScAddress(0, 5, 0)
+            },
+            {
+                OUString("=COS($A2:$A6)"),    // Corner case with intersection
+                aStartAddr,
+                ScAddress(0, 5, 0)
+            },
+            {
+                OUString("=COS($A2:$A100)"),    // Typical 1D case
+                aStartAddr,
+                ScAddress(0, 5, 0)
+            },
+            {
+                OUString("=COS($Formula.$A1:$C3)"),      // 2D corner case
+                ScAddress(0, 0, 1),                      // Formula in sheet 1
+                ScAddress(0, 0, 0)
+            },
+            {
+                OUString("=COS($Formula.$A1:$C3)"),      // 2D corner case
+                ScAddress(0, 2, 1),                      // Formula in sheet 1
+                ScAddress(0, 2, 0)
+            },
+            {
+                OUString("=COS($Formula.$A1:$C3)"),      // 2D corner case
+                ScAddress(2, 0, 1),                      // Formula in sheet 1
+                ScAddress(2, 0, 0)
+            },
+            {
+                OUString("=COS($Formula.$A1:$C3)"),      // 2D corner case
+                ScAddress(2, 2, 1),                      // Formula in sheet 1
+                ScAddress(2, 2, 0)
+            },
+            {
+                OUString("=COS($Formula.$A1:$C3)"),      // Typical 2D case
+                ScAddress(1, 1, 1),                      // Formula in sheet 1
+                ScAddress(1, 1, 0)
+            }
+        };
+
+        for (auto& rCase : aCasesWithChange)
+        {
+            m_pDoc->SetString(rCase.aCellAddress, rCase.aFormula);
+
+            const ScFormulaCell* pCell = m_pDoc->GetFormulaCell(rCase.aCellAddress);
+            const ScTokenArray* pCode = pCell->GetCode();
+            CPPUNIT_ASSERT(pCode);
+
+            sal_uInt16 nRPNLen = pCode->GetCodeLen();
+            CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong RPN token count.", static_cast<sal_uInt16>(2), nRPNLen);
+
+            FormulaToken** ppRPNTokens = pCode->GetCode();
+
+            CPPUNIT_ASSERT_EQUAL_MESSAGE("Wrong type of RPN token(argument to COS)", svSingleRef, ppRPNTokens[0]->GetType());
+
+            ScSingleRefData aArgAddrRPN = *ppRPNTokens[0]->GetSingleRef();
+            ScAddress aArgAddrActual = aArgAddrRPN.toAbs(rCase.aCellAddress);
+            CPPUNIT_ASSERT_EQUAL_MESSAGE("Computed implicit intersection singleref is wrong", rCase.aArgAddr, aArgAddrActual);
+        }
+    }
+}
+
+void Test::testFormulaCompilerImplicitIntersection1NoGroup()
+{
+    m_pDoc->InsertTab(0, "Formula");
+    sc::AutoCalcSwitch aACSwitch(*m_pDoc, true); // turn auto calc on.
+
+    m_pDoc->SetString(ScAddress(1,2,0), "=COS(A1:A5)"); // B3
+    m_pDoc->SetString(ScAddress(1,3,0), "=COS(A1:A5)"); // B4
+
+    // Implicit intersection optimization in ScCompiler::HandleIIOpCode() internally changes
+    // these to "=COS(A3)" and "=COS(A4)", but these shouldn't be merged into a formula group,
+    // otherwise B4's formula would then be "=COS(A2:A6)".
+    ASSERT_FORMULA_EQUAL(*m_pDoc, ScAddress(1,2,0), "COS(A1:A5)", "Formula in B3 has changed.");
+    ASSERT_FORMULA_EQUAL(*m_pDoc, ScAddress(1,3,0), "COS(A1:A5)", "Formula in B4 has changed.");
+
+    m_pDoc->DeleteTab(0);
+}
+
+void Test::testFormulaCompilerImplicitIntersectionOperators()
+{
+    struct TestCase
+    {
+        OUString const formula[3];
+        double const result[3];
+    };
+
+    m_pDoc->InsertTab(0, "Test");
+    sc::AutoCalcSwitch aACSwitch(*m_pDoc, true); // turn auto calc on.
+
+    m_pDoc->SetValue(2, 0, 0, 5); // C1
+    m_pDoc->SetValue(2, 1, 0, 4); // C2
+    m_pDoc->SetValue(2, 2, 0, 3); // C3
+    m_pDoc->SetValue(3, 0, 0, 1); // D1
+    m_pDoc->SetValue(3, 1, 0, 2); // D2
+    m_pDoc->SetValue(3, 2, 0, 3); // D3
+
+    TestCase tests[] =
+    {
+        { OUString("=C:C/D:D"), OUString("=C:C/D:D"), OUString("=C:C/D:D"), 5, 2, 1 },
+        { OUString("=C1:C2/D1:D2"), OUString("=C2:C3/D2:D3"), OUString("=C3:C4/D3:D4"), 5, 2, 1 }
+    };
+
+    for (const TestCase& test : tests)
+    {
+        for(int i = 0; i < 2; ++i )
+            m_pDoc->SetString(ScAddress(4,i,0), test.formula[i]); // E1-3
+        for(int i = 0; i < 2; ++i )
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(OUString( test.formula[i] + " result incorrect in row " + OUString::number(i+1)).toUtf8().getStr(),
+                test.result[i], m_pDoc->GetValue(ScAddress(4,i,0)));
+    }
+
+    m_pDoc->DeleteTab(0);
 }
 
 void Test::testFormulaRefUpdate()
@@ -4431,7 +4646,7 @@ void Test::testFuncCOUNTIF()
     printRange(m_pDoc, ScRange(0, 0, 0, 0, 8, 0), "data range for COUNTIF");
 
     // formulas and results
-    struct {
+    static const struct {
         const char* pFormula; double fResult;
     } aChecks[] = {
         { "=COUNTIF(A1:A12;1999)",       1 },
@@ -4623,7 +4838,7 @@ void Test::testFuncIFERROR()
     printRange(m_pDoc, ScRange(0, 0, 0, 0, nRows-1, 0), "data range for IFERROR/IFNA");
 
     // formulas and results
-    struct {
+    static const struct {
         const char* pFormula; const char* pResult;
     } aChecks[] = {
         { "=IFERROR(A1;9)",                         "1" },
@@ -4792,7 +5007,7 @@ void Test::testFuncNUMBERVALUE()
     printRange(m_pDoc, ScRange(0, 0, 0, 0, nRows - 1, 0), "data range for NUMBERVALUE");
 
     // formulas and results
-    struct {
+    static const struct {
         const char* pFormula; const char* pResult;
     } aChecks[] = {
         { "=NUMBERVALUE(A1;\"b\";\"ag\")",  "199.9" },
@@ -4922,6 +5137,16 @@ void Test::testFuncLOOKUParrayWithError()
     m_pDoc->SetString(4,1,0, "");                                   // E2
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Should find match for second last column.", OUString("b"), m_pDoc->GetString(0,0,0));
 
+    m_pDoc->SetString(6,1,0, "one");                                // G2
+    m_pDoc->SetString(6,5,0, "two");                                // G6
+    // Creates an interim array {1,#DIV/0!,#DIV/0!,#DIV/0!,1,#DIV/0!,#DIV/0!,#DIV/0!}
+    m_pDoc->SetString(7,8,0, "=LOOKUP(2;1/(NOT(ISBLANK(G2:G9)));G2:G9)"); // H9
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Should find match for last row.", OUString("two"), m_pDoc->GetString(7,8,0));
+
+    // Lookup on empty range.
+    m_pDoc->SetString(9,8,0, "=LOOKUP(2;1/(NOT(ISBLANK(I2:I9)));I2:I9)"); // J9
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Should find no match.", OUString("#N/A"), m_pDoc->GetString(9,8,0));
+
     m_pDoc->DeleteTab(0);
 }
 
@@ -4964,7 +5189,7 @@ void Test::testFuncVLOOKUP()
     printRange(m_pDoc, ScRange(0, 0, 0, 1, 13, 0), "raw data for VLOOKUP");
 
     // Formula data
-    struct {
+    static const struct {
         const char* pLookup; const char* pFormula; const char* pRes;
     } aChecks[] = {
         { "Lookup",  "Formula", nullptr },
@@ -5096,7 +5321,7 @@ struct StrStrCheck {
 };
 
 template<size_t DataSize, size_t FormulaSize, int Type>
-void runTestMATCH(ScDocument* pDoc, const char* aData[DataSize], StrStrCheck aChecks[FormulaSize])
+static void runTestMATCH(ScDocument* pDoc, const char* aData[DataSize], const StrStrCheck aChecks[FormulaSize])
 {
     size_t nDataSize = DataSize;
     for (size_t i = 0; i < nDataSize; ++i)
@@ -5135,7 +5360,7 @@ void runTestMATCH(ScDocument* pDoc, const char* aData[DataSize], StrStrCheck aCh
 }
 
 template<size_t DataSize, size_t FormulaSize, int Type>
-void runTestHorizontalMATCH(ScDocument* pDoc, const char* aData[DataSize], StrStrCheck aChecks[FormulaSize])
+static void runTestHorizontalMATCH(ScDocument* pDoc, const char* aData[DataSize], const StrStrCheck aChecks[FormulaSize])
 {
     size_t nDataSize = DataSize;
     for (size_t i = 0; i < nDataSize; ++i)
@@ -5200,7 +5425,7 @@ void Test::testFuncMATCH()
         };
 
         // formula (B1:C12)
-        StrStrCheck aChecks[] = {
+        static const StrStrCheck aChecks[] = {
             { "0.8",   "#N/A" },
             { "1.2",      "1" },
             { "2.3",      "2" },
@@ -5244,7 +5469,7 @@ void Test::testFuncMATCH()
         };
 
         // formula (B1:C12)
-        StrStrCheck aChecks[] = {
+        static const StrStrCheck aChecks[] = {
             { "10",      "#N/A" },
             { "8.9",     "4" },
             { "7.8",     "5" },
@@ -6138,7 +6363,7 @@ void Test::testExternalRangeName()
     m_pDoc->DeleteTab(0);
 }
 
-void testExtRefFuncT(ScDocument* pDoc, ScDocument& rExtDoc)
+static void testExtRefFuncT(ScDocument* pDoc, ScDocument& rExtDoc)
 {
     Test::clearRange(pDoc, ScRange(0, 0, 0, 1, 9, 0));
     Test::clearRange(&rExtDoc, ScRange(0, 0, 0, 1, 9, 0));
@@ -6159,7 +6384,7 @@ void testExtRefFuncT(ScDocument* pDoc, ScDocument& rExtDoc)
     CPPUNIT_ASSERT_MESSAGE("Unexpected result with T.", aRes.isEmpty());
 }
 
-void testExtRefFuncOFFSET(ScDocument* pDoc, ScDocument& rExtDoc)
+static void testExtRefFuncOFFSET(ScDocument* pDoc, ScDocument& rExtDoc)
 {
     Test::clearRange(pDoc, ScRange(0, 0, 0, 1, 9, 0));
     Test::clearRange(&rExtDoc, ScRange(0, 0, 0, 1, 9, 0));
@@ -6172,7 +6397,7 @@ void testExtRefFuncOFFSET(ScDocument* pDoc, ScDocument& rExtDoc)
     CPPUNIT_ASSERT_EQUAL(1.2, pDoc->GetValue(ScAddress(0,0,0)));
 }
 
-void testExtRefFuncVLOOKUP(ScDocument* pDoc, ScDocument& rExtDoc)
+static void testExtRefFuncVLOOKUP(ScDocument* pDoc, ScDocument& rExtDoc)
 {
     Test::clearRange(pDoc, ScRange(0, 0, 0, 1, 9, 0));
     Test::clearRange(&rExtDoc, ScRange(0, 0, 0, 1, 9, 0));
@@ -6203,7 +6428,7 @@ void testExtRefFuncVLOOKUP(ScDocument* pDoc, ScDocument& rExtDoc)
     CPPUNIT_ASSERT_EQUAL(OUString("B2"), pDoc->GetString(ScAddress(1,0,0)));
 }
 
-void testExtRefConcat(ScDocument* pDoc, ScDocument& rExtDoc)
+static void testExtRefConcat(ScDocument* pDoc, ScDocument& rExtDoc)
 {
     Test::clearRange(pDoc, ScRange(0, 0, 0, 1, 9, 0));
     Test::clearRange(&rExtDoc, ScRange(0, 0, 0, 1, 9, 0));
@@ -6256,7 +6481,7 @@ void Test::testExternalRefFunctions()
 
     m_pDoc->InsertTab(0, "Test");
 
-    struct {
+    static const struct {
         const char* pFormula; double fResult;
     } aChecks[] = {
         { "=SUM('file:///extdata.fake'#Data.A1:A4)",     10 },
@@ -6569,8 +6794,8 @@ void Test::testFuncTableRef()
 
         // Insert "table" database range definition for A1:B4, with default
         // HasHeader=true and HasTotals=false.
-        ScDBData* pData = new ScDBData( "table", 0,0,0, 1,3);
-        bool bInserted = pDBs->getNamedDBs().insert(pData);
+        std::unique_ptr<ScDBData> pData(new ScDBData( "table", 0,0,0, 1,3));
+        bool bInserted = pDBs->getNamedDBs().insert(std::move(pData));
         CPPUNIT_ASSERT_MESSAGE( "Failed to insert \"table\" database range.", bInserted);
     }
 
@@ -6591,7 +6816,7 @@ void Test::testFuncTableRef()
     /* TODO: should the item/header separator really be equal to the parameter
      * separator, thus be locale dependent and ';' semicolon here, or should it
      * be a fixed ',' comma instead? */
-    struct {
+    static const struct {
         const char* pName;
         const char* pExpr;
         const char* pCounta; // expected result when used in row 2 (first data row) as argument to COUNTA()
@@ -6747,8 +6972,8 @@ void Test::testFuncTableRef()
         CPPUNIT_ASSERT_MESSAGE("Failed to fetch DB collection object.", pDBs);
 
         // Insert "headerless" database range definition for E10:F12, without headers.
-        ScDBData* pData = new ScDBData( "hltable", 0, 4,9, 5,11, true, false);
-        bool bInserted = pDBs->getNamedDBs().insert(pData);
+        std::unique_ptr<ScDBData> pData(new ScDBData( "hltable", 0, 4,9, 5,11, true, false));
+        bool bInserted = pDBs->getNamedDBs().insert(std::move(pData));
         CPPUNIT_ASSERT_MESSAGE( "Failed to insert \"hltable\" database range.", bInserted);
     }
 
@@ -6765,7 +6990,7 @@ void Test::testFuncTableRef()
     }
 
     // Named expressions that use header-less Table structured references.
-    struct {
+    static const struct {
         const char* pName;
         const char* pExpr;
         const char* pCounta; // expected result when used in row 10 (first data row) as argument to COUNTA()
@@ -8508,6 +8733,20 @@ void Test::testFuncRefListArraySUBTOTAL()
     CPPUNIT_ASSERT_EQUAL_MESSAGE("COUNTBLANK for A1:A2,A3:A4,A5:A6 failed", 1.0, m_pDoc->GetValue(aPos));
     aPos.IncRow();
     CPPUNIT_ASSERT_EQUAL_MESSAGE("COUNTBLANK for A1:A2,A4:A5,A5:A6 failed", 0.0, m_pDoc->GetValue(aPos));
+
+    // Restore these two cell values so we'd catch failures below.
+    m_pDoc->SetValue(0,1,0,  2.0);  // A2
+    m_pDoc->SetValue(0,2,0,  4.0);  // A3
+    // Hide rows 2 to 4.
+    m_pDoc->SetRowHidden(1,3,0, true);
+    // Matrix in K7, array of references as OFFSET result.
+    m_pDoc->InsertMatrixFormula(10, 6, 10, 6, aMark, "=SUM(SUBTOTAL(109;OFFSET(A1;ROW(A1:A7)-ROW(A1);;1)))");
+    aPos.Set(10,6,0);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("SUM SUBTOTAL failed", 49.0, m_pDoc->GetValue(aPos));
+    aPos.IncRow();
+    // ForceArray in K8, array of references as OFFSET result.
+    m_pDoc->SetString( aPos, "=SUMPRODUCT(SUBTOTAL(109;OFFSET(A1;ROW(A1:A7)-ROW(A1);;1)))");
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("SUMPRODUCT SUBTOTAL failed", 49.0, m_pDoc->GetValue(aPos));
 
     m_pDoc->DeleteTab(0);
 }

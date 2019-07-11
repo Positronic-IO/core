@@ -24,8 +24,6 @@
 #include <pagepar.hxx>
 #include <editutil.hxx>
 
-#include <vcl/print.hxx>
-
 class SfxPrinter;
 class ScDocShell;
 class ScDocument;
@@ -34,7 +32,6 @@ class SfxItemSet;
 class ScPageHFItem;
 class EditTextObject;
 class MultiSelection;
-class ScHeaderEditEngine;
 class ScPageBreakData;
 class ScPreviewLocationData;
 class ScPrintOptions;
@@ -153,6 +150,7 @@ struct ScPrintState                         //  Save Variables from ScPrintFunc
     SCROW   nStartRow;
     SCCOL   nEndCol;
     SCROW   nEndRow;
+    bool    bPrintAreaValid; // the 4 variables above are set
     sal_uInt16  nZoom;
     size_t  nPagesX;
     size_t  nPagesY;
@@ -175,6 +173,7 @@ struct ScPrintState                         //  Save Variables from ScPrintFunc
         , nStartRow(0)
         , nEndCol(0)
         , nEndRow(0)
+        , bPrintAreaValid(false)
         , nZoom(0)
         , nPagesX(0)
         , nPagesY(0)
@@ -212,7 +211,7 @@ private:
     const ScRange*      pUserArea;          //  Selection, if set in dialog
 
     const SfxItemSet*   pParamSet;          //  Selected template
-    bool                bState;             // created from State-struct
+    bool                bFromPrintState;    // created from State-struct
 
                                             //  Parameter from template:
     sal_uInt16          nLeftMargin;
@@ -261,11 +260,12 @@ private:
     SCROW               nStartRow;
     SCCOL               nEndCol;
     SCROW               nEndRow;
+    bool                bPrintAreaValid; // the 4 variables above are set
 
     sc::PrintPageRanges m_aRanges;
 
-    ScHeaderEditEngine* pEditEngine;
-    SfxItemSet*         pEditDefaults;
+    std::unique_ptr<ScHeaderEditEngine> pEditEngine;
+    std::unique_ptr<SfxItemSet>         pEditDefaults;
 
     ScHeaderFieldData   aFieldData;
 
@@ -303,7 +303,7 @@ public:
 
     void            SetOffset( const Point& rOfs );
     void            SetManualZoom( sal_uInt16 nNewZoom );
-    void            SetDateTime( const Date& rDate, const tools::Time& rTime );
+    void            SetDateTime( const DateTime& );
 
     void            SetClearFlag( bool bFlag );
     void            SetUseStyleColor( bool bFlag );

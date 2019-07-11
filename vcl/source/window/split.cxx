@@ -61,12 +61,12 @@ void Splitter::ImplInitHorVer(bool bNew)
     if ( mbHorzSplit )
     {
         ePointerStyle = PointerStyle::HSplit;
-        SetSizePixel( Size( rSettings.GetSplitSize(), rSettings.GetScrollBarSize() ) );
+        SetSizePixel( Size( StyleSettings::GetSplitSize(), rSettings.GetScrollBarSize() ) );
     }
     else
     {
         ePointerStyle = PointerStyle::VSplit;
-        SetSizePixel( Size( rSettings.GetScrollBarSize(), rSettings.GetSplitSize() ) );
+        SetSizePixel( Size( rSettings.GetScrollBarSize(), StyleSettings::GetSplitSize() ) );
     }
 
     SetPointer( Pointer( ePointerStyle ) );
@@ -133,7 +133,7 @@ Splitter::Splitter( vcl::Window* pParent, WinBits nStyle ) :
     mnStartSplitPos( 0 ),
     mbDragFull( false ),
     mbKbdSplitting( false ),
-    mbInKeyEvent( 0 ),
+    mbInKeyEvent( false ),
     mnKeyboardStepSize( SPLITTER_DEFAULTSTEPSIZE )
 {
     ImplGetWindowImpl()->mbSplitter        = true;
@@ -199,7 +199,7 @@ bool Splitter::ImplSplitterActive()
     bool bActive = true;
     const StyleSettings& rSettings = GetSettings().GetStyleSettings();
     long nA = rSettings.GetScrollBarSize();
-    long nB = rSettings.GetSplitSize();
+    long nB = StyleSettings::GetSplitSize();
 
     Size aSize = GetOutputSize();
     if ( mbHorzSplit )
@@ -555,7 +555,7 @@ void Splitter::KeyInput( const KeyEvent& rKEvt )
     if( mbInKeyEvent )
         return;
 
-    mbInKeyEvent = 1;
+    mbInKeyEvent = true;
 
     Splitter *pSibling = ImplFindSibling();
     vcl::KeyCode aKeyCode = rKEvt.GetKeyCode();
@@ -644,7 +644,7 @@ void Splitter::KeyInput( const KeyEvent& rKEvt )
             GrabFocusToDocument();
             break;
     }
-    mbInKeyEvent = 0;
+    mbInKeyEvent = false;
 }
 
 void Splitter::DataChanged( const DataChangedEvent& rDCEvt )

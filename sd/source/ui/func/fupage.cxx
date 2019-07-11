@@ -23,6 +23,7 @@
 
 // arrange Tab-Page
 
+#include <sfx2/sfxdlg.hxx>
 #include <svx/svxids.hrc>
 #include <svx/dialogs.hrc>
 #include <svl/itempool.hxx>
@@ -49,6 +50,7 @@
 #include <editeng/pbinitem.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/opengrf.hxx>
+#include <rtl/ustring.hxx>
 
 #include <strings.hrc>
 #include <sdpage.hxx>
@@ -82,7 +84,7 @@ namespace sd {
 #define MAXWIDTH  28350
 
 
-void mergeItemSetsImpl( SfxItemSet& rTarget, const SfxItemSet& rSource )
+static void mergeItemSetsImpl( SfxItemSet& rTarget, const SfxItemSet& rSource )
 {
     const sal_uInt16* pPtr = rSource.GetRanges();
     sal_uInt16 p1, p2;
@@ -109,7 +111,6 @@ FuPage::FuPage( ViewShell* pViewSh, ::sd::Window* pWin, ::sd::View* pView,
 :   FuPoor(pViewSh, pWin, pView, pDoc, rReq),
     mrReq(rReq),
     mpArgs( rReq.GetArgs() ),
-    mpBackgroundObjUndoAction( nullptr ),
     mbPageBckgrdDeleted( false ),
     mbMasterPage( false ),
     mbDisplayBackgroundTabPage( true ),
@@ -329,8 +330,8 @@ const SfxItemSet* FuPage::ExecuteDialog(weld::Window* pParent)
     {
         // create the dialog
         SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractTabDialog> pDlg( pFact ? pFact->CreateSdTabPageDialog(mpViewShell->GetActiveWindow(), &aMergedAttr, mpDocSh, mbDisplayBackgroundTabPage) : nullptr );
-        if( pDlg.get() && pDlg->Execute() == RET_OK )
+        ScopedVclPtr<SfxAbstractTabDialog> pDlg( pFact->CreateSdTabPageDialog(mpViewShell->GetFrameWeld(), &aMergedAttr, mpDocSh, mbDisplayBackgroundTabPage) );
+        if( pDlg->Execute() == RET_OK )
             pTempSet.reset( new SfxItemSet(*pDlg->GetOutputItemSet()) );
     }
 
@@ -386,8 +387,8 @@ const SfxItemSet* FuPage::ExecuteDialog(weld::Window* pParent)
 
             if( mbMasterPage )
             {
-                StyleSheetUndoAction* pAction = new StyleSheetUndoAction(mpDoc, static_cast<SfxStyleSheet*>(pStyleSheet), &(*pTempSet.get()));
-                mpDocSh->GetUndoManager()->AddUndoAction(pAction);
+                mpDocSh->GetUndoManager()->AddUndoAction(o3tl::make_unique<StyleSheetUndoAction>(
+                    mpDoc, static_cast<SfxStyleSheet*>(pStyleSheet), &(*pTempSet)));
                 pStyleSheet->GetItemSet().Put( *(pTempSet.get()) );
                 sdr::properties::CleanupFillProperties( pStyleSheet->GetItemSet() );
                 pStyleSheet->Broadcast(SfxHint(SfxHintId::DataChanged));
@@ -551,7 +552,7 @@ void FuPage::ApplyItemSet( const SfxItemSet* pArgs )
     if( mpBackgroundObjUndoAction )
     {
         // set merge flag, because a SdUndoGroupAction could have been inserted before
-        mpDocSh->GetUndoManager()->AddUndoAction( mpBackgroundObjUndoAction.release(), true );
+        mpDocSh->GetUndoManager()->AddUndoAction( std::move(mpBackgroundObjUndoAction), true );
     }
 
     // Objects can not be bigger than ViewSize

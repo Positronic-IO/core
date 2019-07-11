@@ -26,16 +26,16 @@
 #include <vcl/tabpage.hxx>
 #include <vcl/tabctrl.hxx>
 #include <vcl/lstbox.hxx>
-#include <vcl/group.hxx>
 #include <vcl/wall.hxx>
 #include <vcl/layout.hxx>
 #include <vcl/idle.hxx>
 
 #include <svtools/svmedit.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svl/stritem.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/eitem.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/charclass.hxx>
 #include <tools/diagnose_ex.h>
@@ -59,7 +59,6 @@
 #include <com/sun/star/sheet/XFormulaOpCodeMapper.hpp>
 #include <com/sun/star/sheet/XFormulaParser.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <comphelper/string.hxx>
 #include <map>
 
 // For tab page
@@ -82,7 +81,7 @@ public:
     void            RefInputStartAfter();
     void            RefInputDoneAfter( bool bForced );
     bool            CalcValue( const OUString& rStrExp, OUString& rStrResult, bool bForceMatrixFormula = false );
-    bool            CalcStruct( const OUString& rStrExp, bool bForceRecalcStruct = false );
+    void            CalcStruct( const OUString& rStrExp, bool bForceRecalcStruct = false );
     void            UpdateValues( bool bForceRecalcStruct = false );
     void            DeleteArgs();
     sal_Int32       GetFunctionPos(sal_Int32 nPos);
@@ -498,10 +497,9 @@ sal_Int32 FormulaDlg_Impl::GetFunctionPos(sal_Int32 nPos)
                 bFlag = false;
                 nFuncPos = nPrevFuncPos;
             }
-            bool bIsFunction = ::std::find_if( m_aFunctionOpCodes.getConstArray(),
+            bool bIsFunction = std::any_of( m_aFunctionOpCodes.getConstArray(),
                     m_pFunctionOpCodesEnd,
-                    [&eOp](const sheet::FormulaOpCodeMapEntry& aEntry) { return aEntry.Token.OpCode == eOp; })
-                != m_pFunctionOpCodesEnd;
+                    [&eOp](const sheet::FormulaOpCodeMapEntry& aEntry) { return aEntry.Token.OpCode == eOp; });
 
             if ( bIsFunction && m_aSpecialOpCodes[sheet::FormulaMapGroupSpecialOffset::SPACES].Token.OpCode != eOp )
             {
@@ -568,7 +566,7 @@ void FormulaDlg_Impl::UpdateValues( bool bForceRecalcStruct )
     // is supported, i.e. the button is visible.
     if (m_pBtnMatrix->IsVisible() && !m_pBtnMatrix->IsChecked())
     {
-        std::unique_ptr<FormulaCompiler> pCompiler( m_pHelper->createCompiler( *m_pTokenArray.get()));
+        std::unique_ptr<FormulaCompiler> pCompiler(m_pHelper->createCompiler(*m_pTokenArray));
         // In the case of the reportdesign dialog there is no currently active
         // OpCode symbol mapping that could be used to create strings from
         // tokens, it's all dreaded API mapping. However, in that case there's
@@ -608,7 +606,7 @@ void FormulaDlg_Impl::UpdateValues( bool bForceRecalcStruct )
     CalcStruct( m_pMEdit->GetText(), bForceRecalcStruct);
 }
 
-bool FormulaDlg_Impl::CalcStruct( const OUString& rStrExp, bool bForceRecalcStruct )
+void FormulaDlg_Impl::CalcStruct( const OUString& rStrExp, bool bForceRecalcStruct )
 {
     sal_Int32 nLength = rStrExp.getLength();
 
@@ -635,7 +633,6 @@ bool FormulaDlg_Impl::CalcStruct( const OUString& rStrExp, bool bForceRecalcStru
         if (rStrExp[nLength-1] == '(')
             UpdateTokenArray(rStrExp);
     }
-    return true;
 }
 
 
@@ -660,7 +657,7 @@ void FormulaDlg_Impl::MakeTree( StructPage* _pTree, SvTreeListEntry* pParent, co
             const table::CellAddress aRefPos(m_pHelper->getReferencePosition());
             const OUString aResult = m_pHelper->getFormulaParser()->printFormula( aArgs, aRefPos);
 
-            if ( nParas > 0 )
+            if ( nParas > 0 || (nParas == 0 && _pToken->IsFunction()) )
             {
                 SvTreeListEntry* pEntry;
 
@@ -756,10 +753,12 @@ void FormulaDlg_Impl::MakeTree( StructPage* _pTree, SvTreeListEntry* pParent, co
                                     aUnforcedResult.clear();
                             break;
                             case ParamClass::Reference:
+                            case ParamClass::ReferenceOrRefArray:
                             case ParamClass::Array:
                             case ParamClass::ForceArray:
                             case ParamClass::ReferenceOrForceArray:
                             case ParamClass::SuppressedReferenceOrForceArray:
+                            case ParamClass::ForceArrayReturn:
                                 ;   // nothing, only as array/matrix
                             // no default to get compiler warning
                         }
@@ -828,10 +827,12 @@ void FormulaDlg_Impl::UpdateTokenArray( const OUString& rStrExp)
         }
     } // if ( pTokens && nLen == m_aTokenList.getLength() )
 
-    std::unique_ptr<FormulaCompiler> pCompiler( m_pHelper->createCompiler(*m_pTokenArray.get()));
+    std::unique_ptr<FormulaCompiler> pCompiler(m_pHelper->createCompiler(*m_pTokenArray));
     // #i101512# Disable special handling of jump commands.
     pCompiler->EnableJumpCommandReorder(false);
     pCompiler->EnableStopOnError(false);
+    pCompiler->SetComputeIIFlag(true);
+    pCompiler->SetMatrixFlag(m_bUserMatrixFlag);
     pCompiler->CompileTokenArray();
 }
 

@@ -19,7 +19,6 @@
 #ifndef INCLUDED_CUI_SOURCE_INC_OPTLINGU_HXX
 #define INCLUDED_CUI_SOURCE_INC_OPTLINGU_HXX
 
-#include <vcl/group.hxx>
 #include <vcl/fixed.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/field.hxx>
@@ -67,7 +66,7 @@ class SvxEditModulesDlg : public ModalDialog
     OUString            sThes;
     OUString            sGrammar;
 
-    SvxLinguData_Impl*  pDefaultLinguData;
+    std::unique_ptr<SvxLinguData_Impl>  pDefaultLinguData;
     SvxLinguData_Impl&  rLinguData;
 
     std::unique_ptr<SvLBoxButtonData>   m_xCheckButtonData;
@@ -129,7 +128,7 @@ private:
 
     std::unique_ptr<SvLBoxButtonData>   m_xCheckButtonData;
 
-    SvxLinguData_Impl*  pLinguData;
+    std::unique_ptr<SvxLinguData_Impl>  pLinguData;
 
     SvxLinguTabPage( vcl::Window* pParent, const SfxItemSet& rCoreSet );
     SvTreeListEntry*    CreateEntry(OUString& rTxt, sal_uInt16 nCol);

@@ -32,19 +32,21 @@
 #include <attrib.hxx>
 #include <xltracer.hxx>
 #include <xistream.hxx>
+#include <xistring.hxx>
 #include <xistyle.hxx>
 #include <excform.hxx>
 #include <stringutil.hxx>
 #include <scmatrix.hxx>
 #include <documentimport.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 // Excel->Calc cell address/range conversion ==================================
 
 namespace {
 
 /** Fills the passed Calc address with the passed Excel cell coordinates without checking any limits. */
-inline void lclFillAddress( ScAddress& rScPos, sal_uInt16 nXclCol, sal_uInt32 nXclRow, SCTAB nScTab )
+void lclFillAddress( ScAddress& rScPos, sal_uInt16 nXclCol, sal_uInt32 nXclRow, SCTAB nScTab )
 {
     rScPos.SetCol( static_cast< SCCOL >( nXclCol ) );
     rScPos.SetRow( static_cast< SCROW >( nXclRow ) );
@@ -230,7 +232,7 @@ void XclImpStringHelper::SetToDocument(
 
     ::std::unique_ptr< EditTextObject > pTextObj( lclCreateTextObject( rRoot, rString, XclFontItemType::Editeng, nXFIndex ) );
 
-    if (pTextObj.get())
+    if (pTextObj)
     {
         rDoc.setEditCell(rPos, std::move(pTextObj));
     }
@@ -283,9 +285,9 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
     meCurrObj = EXC_HF_CENTER;
 
     // parser temporaries
-    maCurrText.clear();
-    OUString aReadFont;           // current font name
-    OUString aReadStyle;          // current font style
+    maCurrText.truncate();
+    OUStringBuffer aReadFont;   // current font name
+    OUStringBuffer aReadStyle;  // current font style
     sal_uInt16 nReadHeight = 0; // current font height
     ResetFontData();
 
@@ -321,7 +323,7 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
                         InsertLineBreak();
                     break;
                     default:
-                        maCurrText += OUStringLiteral1(*pChar);
+                        maCurrText.append(OUStringLiteral1(*pChar));
                 }
             }
             break;
@@ -333,7 +335,7 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
                 eState = xlPSText;
                 switch( *pChar )
                 {
-                    case '&':   maCurrText += "&";  break;  // the '&' character
+                    case '&':   maCurrText.append("&");  break;  // the '&' character
 
                     case 'L':   SetNewPortion( EXC_HF_LEFT );   break;  // Left portion
                     case 'C':   SetNewPortion( EXC_HF_CENTER ); break;  // Center portion
@@ -383,8 +385,8 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
                     break;
 
                     case '\"':          // font name
-                        aReadFont.clear();
-                        aReadStyle.clear();
+                        aReadFont.setLength(0);
+                        aReadStyle.setLength(0);
                         eState = xlPSFont;
                     break;
                     default:
@@ -410,7 +412,7 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
                         eState = xlPSFontStyle;
                     break;
                     default:
-                        aReadFont += OUStringLiteral1(*pChar);
+                        aReadFont.append(*pChar);
                 }
             }
             break;
@@ -424,12 +426,12 @@ void XclImpHFConverter::ParseString( const OUString& rHFString )
                     case '\"':
                         SetAttribs();
                         if( !aReadFont.isEmpty() )
-                            mxFontData->maName = aReadFont;
-                        mxFontData->maStyle = aReadStyle;
+                            mxFontData->maName = aReadFont.toString();
+                        mxFontData->maStyle = aReadStyle.toString();
                         eState = xlPSText;
                     break;
                     default:
-                        aReadStyle += OUStringLiteral1(*pChar);
+                        aReadStyle.append(*pChar);
                 }
             }
             break;
@@ -538,9 +540,9 @@ void XclImpHFConverter::InsertText()
     if( !maCurrText.isEmpty() )
     {
         ESelection& rSel = GetCurrSel();
-        mrEE.QuickInsertText( maCurrText, ESelection( rSel.nEndPara, rSel.nEndPos, rSel.nEndPara, rSel.nEndPos ) );
-        rSel.nEndPos = rSel.nEndPos + maCurrText.getLength();
-        maCurrText.clear();
+        OUString sString(maCurrText.makeStringAndClear());
+        mrEE.QuickInsertText( sString, ESelection( rSel.nEndPara, rSel.nEndPos, rSel.nEndPara, rSel.nEndPos ) );
+        rSel.nEndPos = rSel.nEndPos + sString.getLength();
         UpdateCurrMaxLineHeight();
     }
 }
@@ -792,10 +794,10 @@ XclImpCachedValue::XclImpCachedValue( XclImpStream& rStrm ) :
             mnBoolErr = rStrm.ReaduInt8();
             rStrm.Ignore( 7 );
 
-            const ScTokenArray* pScTokArr = rStrm.GetRoot().GetOldFmlaConverter().GetBoolErr(
+            std::unique_ptr<ScTokenArray> pScTokArr = rStrm.GetRoot().GetOldFmlaConverter().GetBoolErr(
                 XclTools::ErrorToEnum( fVal, mnType == EXC_CACHEDVAL_ERROR, mnBoolErr ) );
             if( pScTokArr )
-                mxTokArr.reset( pScTokArr->Clone() );
+                mxTokArr = std::move( pScTokArr );
         }
         break;
         default:
@@ -834,7 +836,7 @@ XclImpCachedMatrix::XclImpCachedMatrix( XclImpStream& rStrm ) :
         ++mnScRows;
     }
 
-    //assuming worse case scenario of unknown types
+    //assuming worst case scenario of unknown types
     const size_t nMinRecordSize = 1;
     const size_t nMaxRows = rStrm.GetRecLeft() / (nMinRecordSize * mnScCols);
     if (mnScRows > nMaxRows)
@@ -859,7 +861,7 @@ ScMatrixRef XclImpCachedMatrix::CreateScMatrix( svl::SharedStringPool& rPool ) c
     OSL_ENSURE( mnScCols * mnScRows == maValueList.size(), "XclImpCachedMatrix::CreateScMatrix - element count mismatch" );
     if( mnScCols && mnScRows && static_cast< sal_uLong >( mnScCols * mnScRows ) <= maValueList.size() )
     {
-        xScMatrix = new ScFullMatrix(mnScCols, mnScRows, 0.0);
+        xScMatrix = new ScMatrix(mnScCols, mnScRows, 0.0);
         XclImpValueList::const_iterator itValue = maValueList.begin();
         for( SCSIZE nScRow = 0; nScRow < mnScRows; ++nScRow )
         {

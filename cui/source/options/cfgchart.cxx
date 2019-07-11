@@ -19,6 +19,7 @@
 
 #include <com/sun/star/uno/Sequence.hxx>
 #include <tools/stream.hxx>
+#include <sal/log.hxx>
 #include "cfgchart.hxx"
 #include <dialmgr.hxx>
 #include <strings.hrc>
@@ -26,18 +27,6 @@
 #define ROW_COLOR_COUNT 12
 
 using namespace com::sun::star;
-
-
-SvxChartColorTable::SvxChartColorTable()
-    : nNextElementNumber(0)
-{
-}
-
-SvxChartColorTable::SvxChartColorTable(const SvxChartColorTable & _rSource)
-    : m_aColorEntries(_rSource.m_aColorEntries)
-    , nNextElementNumber(m_aColorEntries.size() + 1)
-{
-}
 
 // accessors
 size_t SvxChartColorTable::size() const
@@ -71,7 +60,6 @@ Color SvxChartColorTable::getColor( size_t _nIndex ) const
 void SvxChartColorTable::clear()
 {
     m_aColorEntries.clear();
-    nNextElementNumber = 1;
 }
 
 void SvxChartColorTable::append( const XColorEntry & _rEntry )
@@ -81,7 +69,7 @@ void SvxChartColorTable::append( const XColorEntry & _rEntry )
 
 void SvxChartColorTable::remove( size_t _nIndex )
 {
-    if (m_aColorEntries.size() > 0)
+    if (!m_aColorEntries.empty())
         m_aColorEntries.erase( m_aColorEntries.begin() + _nIndex);
 
     for (size_t i=0 ; i<m_aColorEntries.size(); i++)
@@ -100,7 +88,7 @@ void SvxChartColorTable::replace( size_t _nIndex, const XColorEntry & _rEntry )
 
 void SvxChartColorTable::useDefault()
 {
-    Color aColors[] = {
+    static const Color aColors[] = {
         Color( 0x00, 0x45, 0x86 ),
         Color( 0xff, 0x42, 0x0e ),
         Color( 0xff, 0xd3, 0x20 ),
@@ -127,23 +115,21 @@ OUString SvxChartColorTable::getDefaultName( size_t _nIndex )
 {
     OUString aName;
 
-    if (sDefaultNamePrefix.getLength() == 0)
+    OUString sDefaultNamePrefix;
+    OUString sDefaultNamePostfix;
+    OUString aResName( CuiResId( RID_SVXSTR_DIAGRAM_ROW ) );
+    sal_Int32 nPos = aResName.indexOf( "$(ROW)" );
+    if( nPos != -1 )
     {
-        OUString aResName( CuiResId( RID_SVXSTR_DIAGRAM_ROW ) );
-        sal_Int32 nPos = aResName.indexOf( "$(ROW)" );
-        if( nPos != -1 )
-        {
-            sDefaultNamePrefix = aResName.copy( 0, nPos );
-            sDefaultNamePostfix = aResName.copy( nPos + sizeof( "$(ROW)" ) - 1 );
-        }
-        else
-        {
-            sDefaultNamePrefix = aResName;
-        }
+        sDefaultNamePrefix = aResName.copy( 0, nPos );
+        sDefaultNamePostfix = aResName.copy( nPos + sizeof( "$(ROW)" ) - 1 );
+    }
+    else
+    {
+        sDefaultNamePrefix = aResName;
     }
 
     aName = sDefaultNamePrefix + OUString::number(_nIndex + 1) + sDefaultNamePostfix;
-    nNextElementNumber++;
 
     return aName;
 }

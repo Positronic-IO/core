@@ -19,6 +19,7 @@
 
 #include <xmloff/XMLPageExport.hxx>
 #include <o3tl/any.hxx>
+#include <sal/log.hxx>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
@@ -41,17 +42,20 @@ using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::beans;
 using namespace ::xmloff::token;
 
+static const OUStringLiteral gsIsPhysical( "IsPhysical" );
+static const OUStringLiteral gsFollowStyle( "FollowStyle" );
+
 bool XMLPageExport::findPageMasterName( const OUString& rStyleName, OUString& rPMName ) const
 {
-    for( ::std::vector< XMLPageExportNameEntry >::const_iterator pEntry = aNameVector.begin();
-            pEntry != aNameVector.end(); ++pEntry )
+    auto pEntry = std::find_if(aNameVector.cbegin(), aNameVector.cend(),
+        [&rStyleName](const XMLPageExportNameEntry& rEntry) { return rEntry.sStyleName == rStyleName; });
+
+    if( pEntry != aNameVector.cend() )
     {
-        if( pEntry->sStyleName == rStyleName )
-        {
-            rPMName = pEntry->sPageMasterName;
-            return true;
-        }
+        rPMName = pEntry->sPageMasterName;
+        return true;
     }
+
     return false;
 }
 
@@ -89,9 +93,9 @@ bool XMLPageExport::exportStyle(
 
     // Don't export styles that aren't existing really. This may be the
     // case for StarOffice Writer's pool styles.
-    if( xPropSetInfo->hasPropertyByName( sIsPhysical ) )
+    if( xPropSetInfo->hasPropertyByName( gsIsPhysical ) )
     {
-        Any aAny = xPropSet->getPropertyValue( sIsPhysical );
+        Any aAny = xPropSet->getPropertyValue( gsIsPhysical );
         if( !*o3tl::doAccess<bool>(aAny) )
             return false;
     }
@@ -129,10 +133,10 @@ bool XMLPageExport::exportStyle(
             GetExport().AddAttribute( XML_NAMESPACE_STYLE, XML_PAGE_LAYOUT_NAME, GetExport().EncodeStyleName( sPMName ) );
 
         Reference<XPropertySetInfo> xInfo = xPropSet->getPropertySetInfo();
-        if ( xInfo.is() && xInfo->hasPropertyByName(sFollowStyle) )
+        if ( xInfo.is() && xInfo->hasPropertyByName(gsFollowStyle) )
         {
             OUString sNextName;
-            xPropSet->getPropertyValue( sFollowStyle ) >>= sNextName;
+            xPropSet->getPropertyValue( gsFollowStyle ) >>= sNextName;
 
             if( sName != sNextName && !sNextName.isEmpty() )
             {
@@ -151,9 +155,7 @@ bool XMLPageExport::exportStyle(
 }
 
 XMLPageExport::XMLPageExport( SvXMLExport& rExp ) :
-    rExport( rExp ),
-    sIsPhysical( "IsPhysical" ),
-    sFollowStyle( "FollowStyle" )
+    rExport( rExp )
 {
     xPageMasterPropHdlFactory = new XMLPageMasterPropHdlFactory;
     xPageMasterPropSetMapper = new XMLPageMasterPropSetMapper(
@@ -230,10 +232,9 @@ void XMLPageExport::exportDefaultStyle()
 
             bool bExport = false;
             rtl::Reference < XMLPropertySetMapper > aPropMapper(xPageMasterExportPropMapper->getPropertySetMapper());
-            for( ::std::vector< XMLPropertyState >::iterator aIter = aPropStates.begin(); aIter != aPropStates.end(); ++aIter )
+            for( const auto& rProp : aPropStates )
             {
-                XMLPropertyState *pProp = &(*aIter);
-                sal_Int16 nContextId    = aPropMapper->GetEntryContextId( pProp->mnIndex );
+                sal_Int16 nContextId    = aPropMapper->GetEntryContextId( rProp.mnIndex );
                 if( nContextId == CTF_PM_STANDARD_MODE )
                 {
                     bExport = true;

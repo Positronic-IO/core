@@ -9,9 +9,13 @@
 
 #include <dataprovider.hxx>
 #include <datatransformation.hxx>
+#include <datamapper.hxx>
 #include <stringutil.hxx>
 
+#include <vcl/svapp.hxx>
+#include <docsh.hxx>
 #include <orcus/csv_parser.hpp>
+#include <utility>
 
 namespace {
 
@@ -59,15 +63,15 @@ public:
 }
 
 namespace sc {
-
-CSVFetchThread::CSVFetchThread(ScDocument& rDoc, const OUString& mrURL, std::function<void()> aImportFinishedHdl,
-        const std::vector<std::shared_ptr<sc::DataTransformation>>& rDataTransformations):
-        Thread("CSV Fetch Thread"),
-        mrDocument(rDoc),
-        maURL (mrURL),
-        mbTerminate(false),
-        maDataTransformations(rDataTransformations),
-        maImportFinishedHdl(aImportFinishedHdl)
+CSVFetchThread::CSVFetchThread(
+    ScDocument& rDoc, const OUString& mrURL, std::function<void()> aImportFinishedHdl,
+    const std::vector<std::shared_ptr<sc::DataTransformation>>& rDataTransformations)
+    : Thread("CSV Fetch Thread")
+    , mrDocument(rDoc)
+    , maURL(mrURL)
+    , mbTerminate(false)
+    , maDataTransformations(rDataTransformations)
+    , maImportFinishedHdl(std::move(aImportFinishedHdl))
 {
     maConfig.delimiters.push_back(',');
     maConfig.text_qualifier = '"';

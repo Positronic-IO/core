@@ -14,39 +14,36 @@
 namespace {
 
 class RedundantInline:
-    public RecursiveASTVisitor<RedundantInline>, public loplugin::RewritePlugin
+    public loplugin::FilteringRewritePlugin<RedundantInline>
 {
 public:
     explicit RedundantInline(loplugin::InstantiationData const & data):
-        RewritePlugin(data) {}
+        FilteringRewritePlugin(data) {}
 
-    void run() override {
-        if (compiler.getLangOpts().CPlusPlus) {
-            TraverseDecl(compiler.getASTContext().getTranslationUnitDecl());
-        }
-    }
+    void run() override { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
 
     bool VisitFunctionDecl(FunctionDecl const * decl) {
-        if (ignoreLocation(decl) || !decl->isInlineSpecified()
-            || !(decl->doesThisDeclarationHaveABody()
-                 || decl->isExplicitlyDefaulted())
-            || !(decl->getLexicalDeclContext()->isRecord()
-                 || decl->isConstexpr()))
-        {
+        if (ignoreLocation(decl)) {
             return true;
         }
-        auto l1 = unwindToQObject(decl->getLocStart());
-        if (l1.isValid() && l1 == unwindToQObject(decl->getLocEnd())) {
+        if (!decl->isInlineSpecified()) {
             return true;
         }
-        SourceLocation inlineLoc;
-        unsigned n;
+        handleImplicitInline(decl) || handleNonExternalLinkage(decl);
+        return true;
+    }
+
+private:
+    bool removeInline(FunctionDecl const * decl, SourceLocation * inlineLoc) {
+        assert(inlineLoc != nullptr);
+        assert(inlineLoc->isInvalid());
+        unsigned n = {}; // avoid -Werror=maybe-uninitialized
         auto end = Lexer::getLocForEndOfToken(
-            compiler.getSourceManager().getExpansionLoc(decl->getLocEnd()), 0,
+            compiler.getSourceManager().getExpansionLoc(compat::getEndLoc(decl)), 0,
             compiler.getSourceManager(), compiler.getLangOpts());
         assert(end.isValid());
         for (auto loc = compiler.getSourceManager().getExpansionLoc(
-                 decl->getLocStart());
+                 compat::getBeginLoc(decl));
              loc != end; loc = loc.getLocWithOffset(std::max<unsigned>(n, 1)))
         {
             n = Lexer::MeasureTokenLength(
@@ -58,7 +55,7 @@ public:
             }
             if (s == "inline") {
                 if (!compiler.getSourceManager().isMacroArgExpansion(loc)) {
-                    inlineLoc = loc;
+                    *inlineLoc = loc;
                 }
                 break;
             } else if (s == "#") {
@@ -75,8 +72,8 @@ public:
                 break;
             }
         }
-        if (rewriter != nullptr && inlineLoc.isValid()) {
-            for (auto loc = inlineLoc.getLocWithOffset(
+        if (rewriter != nullptr && inlineLoc->isValid()) {
+            for (auto loc = inlineLoc->getLocWithOffset(
                      std::max<unsigned>(n, 1));;)
             {
                 assert(loc != end);
@@ -95,20 +92,14 @@ public:
                 n += n2;
                 loc = loc.getLocWithOffset(n2);
             }
-            if (removeText(inlineLoc, n, RewriteOptions(RemoveLineIfEmpty))) {
+            if (removeText(*inlineLoc, n, RewriteOptions(RemoveLineIfEmpty))) {
                 return true;
             }
         }
-        report(
-            DiagnosticsEngine::Warning,
-            "function definition redundantly declared 'inline'",
-            inlineLoc.isValid() ? inlineLoc : decl->getLocStart())
-            << decl->getSourceRange();
-        return true;
+        return false;
     }
 
-private:
-    SourceLocation unwindToQObject(SourceLocation const & loc) {
+    SourceLocation unwindTo(SourceLocation const & loc, StringRef name) {
         if (!loc.isMacroID()) {
             return SourceLocation();
         }
@@ -116,8 +107,67 @@ private:
         return
             (Lexer::getImmediateMacroName(
                 loc, compiler.getSourceManager(), compiler.getLangOpts())
-             == "Q_OBJECT")
-            ? l : unwindToQObject(l);
+             == name)
+            ? l : unwindTo(l, name);
+    }
+
+    bool isInMacroExpansion(FunctionDecl const * decl, StringRef name) {
+        auto loc = unwindTo(compat::getBeginLoc(decl), name);
+        return loc.isValid() && loc == unwindTo(compat::getEndLoc(decl), name);
+    }
+
+    bool handleImplicitInline(FunctionDecl const * decl) {
+        if (!(decl->doesThisDeclarationHaveABody() || decl->isExplicitlyDefaulted())
+            || !(decl->getLexicalDeclContext()->isRecord() || decl->isConstexpr()))
+        {
+            return false;
+        }
+        if (isInMacroExpansion(decl, "Q_OBJECT")) {
+            return true;
+        }
+        SourceLocation inlineLoc;
+        if (!removeInline(decl, &inlineLoc)) {
+            report(
+                DiagnosticsEngine::Warning,
+                "function definition redundantly declared 'inline'",
+                inlineLoc.isValid() ? inlineLoc : compat::getBeginLoc(decl))
+                << decl->getSourceRange();
+        }
+        return true;
+    }
+
+    bool handleNonExternalLinkage(FunctionDecl const * decl) {
+        if (decl->getLinkageInternal() >=
+#if CLANG_VERSION >= 40000
+            ModuleLinkage
+#else
+            ExternalLinkage
+#endif
+        )
+        {
+            return false;
+        }
+        if (!compiler.getSourceManager().isInMainFile(decl->getLocation())) {
+            // There *may* be benefit to "static inline" in include files (esp. in C code, where an
+            // inline function with external linkage still requires an external definition), so
+            // just ignore those for now:
+            return true;
+        }
+        if (isInMacroExpansion(decl, "G_DEFINE_TYPE")
+            || isInMacroExpansion(decl, "G_DEFINE_TYPE_WITH_CODE")
+            || isInMacroExpansion(decl, "G_DEFINE_TYPE_WITH_PRIVATE"))
+        {
+            return true;
+        }
+        SourceLocation inlineLoc;
+        if (!removeInline(decl, &inlineLoc)) {
+            report(
+                DiagnosticsEngine::Warning,
+                "function has no external linkage but is explicitly declared 'inline'",
+                inlineLoc.isValid() ? inlineLoc : compat::getBeginLoc(decl))
+                << decl->getSourceRange();
+        }
+        return true;
     }
 };
 

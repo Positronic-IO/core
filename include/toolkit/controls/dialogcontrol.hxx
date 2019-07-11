@@ -139,13 +139,13 @@ public:
         { UnoDialogControl_Base::ControlContainerBase::addPaintListener(p1); }
     virtual void SAL_CALL removePaintListener(const css::uno::Reference<css::awt::XPaintListener>& p1) override
         { UnoDialogControl_Base::ControlContainerBase::removePaintListener(p1); }
-    virtual void SAL_CALL setStatusText(const rtl::OUString& p1) override
+    virtual void SAL_CALL setStatusText(const OUString& p1) override
         { UnoDialogControl_Base::ControlContainerBase::setStatusText(p1); }
     virtual css::uno::Sequence<css::uno::Reference<css::awt::XControl> > SAL_CALL getControls() override
         { return UnoDialogControl_Base::ControlContainerBase::getControls(); }
-    virtual css::uno::Reference<css::awt::XControl> SAL_CALL getControl(const rtl::OUString& p1) override
+    virtual css::uno::Reference<css::awt::XControl> SAL_CALL getControl(const OUString& p1) override
         { return UnoDialogControl_Base::ControlContainerBase::getControl(p1); }
-    virtual void SAL_CALL addControl(const rtl::OUString& p1, const css::uno::Reference<css::awt::XControl>& p2) override
+    virtual void SAL_CALL addControl(const OUString& p1, const css::uno::Reference<css::awt::XControl>& p2) override
         { UnoDialogControl_Base::ControlContainerBase::addControl(p1, p2); }
     virtual void SAL_CALL removeControl(const css::uno::Reference<css::awt::XControl>& p1) override
         { UnoDialogControl_Base::ControlContainerBase::removeControl(p1); }
@@ -169,6 +169,11 @@ class UnoMultiPageModel : public ControlModelContainerBase
 public:
     UnoMultiPageModel( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     virtual ~UnoMultiPageModel() override;
+
+    UnoMultiPageModel(UnoMultiPageModel const &) = default;
+    UnoMultiPageModel(UnoMultiPageModel &&) = default;
+    UnoMultiPageModel & operator =(UnoMultiPageModel const &) = delete; // due to ControlModelContainerBase
+    UnoMultiPageModel & operator =(UnoMultiPageModel &&) = delete; // due to ControlModelContainerBase
 
     rtl::Reference<UnoControlModel> Clone() const override;
 
@@ -244,6 +249,11 @@ public:
     UnoPageModel( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     virtual ~UnoPageModel() override;
 
+    UnoPageModel(UnoPageModel const &) = default;
+    UnoPageModel(UnoPageModel &&) = default;
+    UnoPageModel & operator =(UnoPageModel const &) = delete; // due to ControlModelContainerBase
+    UnoPageModel & operator =(UnoPageModel &&) = delete; // due to ControlModelContainerBase
+
     rtl::Reference<UnoControlModel> Clone() const override;
 
     DECLIMPL_SERVICEINFO_DERIVED( UnoPageModel, ControlModelContainerBase, "com.sun.star.awt.UnoPageModel" )
@@ -276,6 +286,11 @@ class UnoFrameModel : public ControlModelContainerBase
 public:
     UnoFrameModel( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     virtual ~UnoFrameModel() override;
+
+    UnoFrameModel(UnoFrameModel const &) = default;
+    UnoFrameModel(UnoFrameModel &&) = default;
+    UnoFrameModel & operator =(UnoFrameModel const &) = delete; // due to ControlModelContainerBase
+    UnoFrameModel & operator =(UnoFrameModel &&) = delete; // due to ControlModelContainerBase
 
     rtl::Reference<UnoControlModel> Clone() const override;
 

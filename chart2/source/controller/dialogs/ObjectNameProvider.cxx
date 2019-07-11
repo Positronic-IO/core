@@ -21,6 +21,7 @@
 #include <ResId.hxx>
 #include <strings.hrc>
 #include <AxisHelper.hxx>
+#include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <DiagramHelper.hxx>
 #include <DataSeriesHelper.hxx>
@@ -32,6 +33,7 @@
 #include <RegressionCurveHelper.hxx>
 #include <rtl/math.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 

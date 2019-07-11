@@ -32,23 +32,20 @@
 #include <sax/tools/converter.hxx>
 #include <rtl/math.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <osl/diagnose.h>
 
 using namespace com::sun::star;
 using namespace xmloff::token;
 
-#define XML_TYPE "Type"
-#define XML_CURRENCYSYMBOL "CurrencySymbol"
-#define XML_CURRENCYABBREVIATION "CurrencyAbbreviation"
-#define XML_STANDARDFORMAT "StandardFormat"
+static const OUStringLiteral gsStandardFormat("StandardFormat");
+static const OUStringLiteral gsType("Type");
+static const OUStringLiteral gsCurrencySymbol("CurrencySymbol");
+static const OUStringLiteral gsCurrencyAbbreviation("CurrencyAbbreviation");
 
 XMLNumberFormatAttributesExportHelper::XMLNumberFormatAttributesExportHelper(
             css::uno::Reference< css::util::XNumberFormatsSupplier > const & xTempNumberFormatsSupplier)
     : xNumberFormats(xTempNumberFormatsSupplier.is() ? xTempNumberFormatsSupplier->getNumberFormats() : css::uno::Reference< css::util::XNumberFormats > ()),
     pExport(nullptr),
-    sStandardFormat(XML_STANDARDFORMAT),
-    sType(XML_TYPE),
-    msCurrencySymbol(XML_CURRENCYSYMBOL),
-    msCurrencyAbbreviation(XML_CURRENCYABBREVIATION),
     aNumberFormats()
 {
 }
@@ -58,16 +55,12 @@ XMLNumberFormatAttributesExportHelper::XMLNumberFormatAttributesExportHelper(
             SvXMLExport& rTempExport )
 :   xNumberFormats(xTempNumberFormatsSupplier.is() ? xTempNumberFormatsSupplier->getNumberFormats() : css::uno::Reference< css::util::XNumberFormats > ()),
     pExport(&rTempExport),
-    sStandardFormat(XML_STANDARDFORMAT),
-    sType(XML_TYPE),
     sAttrValue(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_VALUE))),
     sAttrDateValue(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_DATE_VALUE))),
     sAttrTimeValue(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_TIME_VALUE))),
     sAttrBooleanValue(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_BOOLEAN_VALUE))),
     sAttrStringValue(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_STRING_VALUE))),
     sAttrCurrency(rTempExport.GetNamespaceMap().GetQNameByKey( XML_NAMESPACE_OFFICE, GetXMLToken(XML_CURRENCY))),
-    msCurrencySymbol(XML_CURRENCYSYMBOL),
-    msCurrencyAbbreviation(XML_CURRENCYABBREVIATION),
     aNumberFormats()
 {
 }
@@ -113,11 +106,8 @@ void XMLNumberFormatAttributesExportHelper::WriteAttributes(SvXMLExport& rXMLExp
     case util::NumberFormat::SCIENTIFIC:
     case util::NumberFormat::FRACTION:
         {
-            if (!bWasSetTypeAttribute)
-            {
-                rXMLExport.AddAttribute(XML_NAMESPACE_OFFICE, XML_VALUE_TYPE, XML_FLOAT);
-                bWasSetTypeAttribute = true;
-            }
+            rXMLExport.AddAttribute(XML_NAMESPACE_OFFICE, XML_VALUE_TYPE, XML_FLOAT);
+            bWasSetTypeAttribute = true;
             SAL_FALLTHROUGH;
         }
     case util::NumberFormat::PERCENT:
@@ -228,10 +218,10 @@ bool XMLNumberFormatAttributesExportHelper::GetCurrencySymbol(const sal_Int32 nN
             try
             {
                 uno::Reference <beans::XPropertySet> xNumberPropertySet(xNumberFormats->getByKey(nNumberFormat));
-                if ( xNumberPropertySet->getPropertyValue(XML_CURRENCYSYMBOL) >>= sCurrencySymbol)
+                if ( xNumberPropertySet->getPropertyValue(gsCurrencySymbol) >>= sCurrencySymbol)
                 {
                     OUString sCurrencyAbbreviation;
-                    if ( xNumberPropertySet->getPropertyValue(XML_CURRENCYABBREVIATION) >>= sCurrencyAbbreviation)
+                    if ( xNumberPropertySet->getPropertyValue(gsCurrencyAbbreviation) >>= sCurrencyAbbreviation)
                     {
                         if ( !sCurrencyAbbreviation.isEmpty())
                             sCurrencySymbol = sCurrencyAbbreviation;
@@ -265,9 +255,9 @@ sal_Int16 XMLNumberFormatAttributesExportHelper::GetCellType(const sal_Int32 nNu
             try
             {
                 uno::Reference <beans::XPropertySet> xNumberPropertySet(xNumberFormats->getByKey(nNumberFormat));
-                xNumberPropertySet->getPropertyValue(XML_STANDARDFORMAT) >>= bIsStandard;
+                xNumberPropertySet->getPropertyValue(gsStandardFormat) >>= bIsStandard;
                 sal_Int16 nNumberType = sal_Int16();
-                if ( xNumberPropertySet->getPropertyValue(XML_TYPE) >>= nNumberType )
+                if ( xNumberPropertySet->getPropertyValue(gsType) >>= nNumberType )
                 {
                     return nNumberType;
                 }
@@ -312,10 +302,10 @@ bool XMLNumberFormatAttributesExportHelper::GetCurrencySymbol(const sal_Int32 nN
         try
         {
             uno::Reference <beans::XPropertySet> xNumberPropertySet(xNumberFormats->getByKey(nNumberFormat));
-            if ( xNumberPropertySet->getPropertyValue(msCurrencySymbol) >>= rCurrencySymbol)
+            if ( xNumberPropertySet->getPropertyValue(gsCurrencySymbol) >>= rCurrencySymbol)
             {
                 OUString sCurrencyAbbreviation;
-                if ( xNumberPropertySet->getPropertyValue(msCurrencyAbbreviation) >>= sCurrencyAbbreviation)
+                if ( xNumberPropertySet->getPropertyValue(gsCurrencyAbbreviation) >>= sCurrencyAbbreviation)
                 {
                     if ( !sCurrencyAbbreviation.isEmpty())
                         rCurrencySymbol = sCurrencyAbbreviation;
@@ -348,9 +338,9 @@ sal_Int16 XMLNumberFormatAttributesExportHelper::GetCellType(const sal_Int32 nNu
             uno::Reference <beans::XPropertySet> xNumberPropertySet(xNumberFormats->getByKey(nNumberFormat));
             if (xNumberPropertySet.is())
             {
-                xNumberPropertySet->getPropertyValue(sStandardFormat) >>= bIsStandard;
+                xNumberPropertySet->getPropertyValue(gsStandardFormat) >>= bIsStandard;
                 sal_Int16 nNumberType = sal_Int16();
-                if ( xNumberPropertySet->getPropertyValue(sType) >>= nNumberType )
+                if ( xNumberPropertySet->getPropertyValue(gsType) >>= nNumberType )
                 {
                     return nNumberType;
                 }
@@ -382,11 +372,8 @@ void XMLNumberFormatAttributesExportHelper::WriteAttributes(
     case util::NumberFormat::SCIENTIFIC:
     case util::NumberFormat::FRACTION:
         {
-            if (!bWasSetTypeAttribute)
-            {
-                pExport->AddAttribute(sAttrValType, XML_FLOAT);
-                bWasSetTypeAttribute = true;
-            }
+            pExport->AddAttribute(sAttrValType, XML_FLOAT);
+            bWasSetTypeAttribute = true;
             SAL_FALLTHROUGH;
         }
     case util::NumberFormat::PERCENT:

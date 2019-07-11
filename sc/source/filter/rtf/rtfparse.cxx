@@ -26,6 +26,7 @@
 #include <editeng/shaditem.hxx>
 #include <vcl/outdev.hxx>
 #include <svtools/rtftoken.h>
+#include <osl/diagnose.h>
 
 #include <rtfparse.hxx>
 #include <global.hxx>
@@ -47,12 +48,12 @@ ScRTFParser::ScRTFParser( EditEngine* pEditP ) :
     long nMM = OutputDevice::LogicToLogic( 12, MapUnit::MapPoint, MapUnit::Map100thMM );
     pPool->SetPoolDefaultItem( SvxFontHeightItem( nMM, 100, EE_CHAR_FONTHEIGHT ) );
     // Free-flying pInsDefault
-    pInsDefault = new ScRTFCellDefault( pPool );
+    pInsDefault.reset( new ScRTFCellDefault( pPool ) );
 }
 
 ScRTFParser::~ScRTFParser()
 {
-    delete pInsDefault;
+    pInsDefault.reset();
     maDefaultList.clear();
 }
 
@@ -222,7 +223,7 @@ void ScRTFParser::NewCellRow()
         // Build up TwipCols only after nLastWidth comparison!
         for (std::unique_ptr<ScRTFCellDefault> & pCellDefault : maDefaultList)
         {
-            const ScRTFCellDefault& rD = *pCellDefault.get();
+            const ScRTFCellDefault& rD = *pCellDefault;
             SCCOL nCol;
             if ( !SeekTwips(rD.nTwips, &nCol) )
                 aColTwips.insert( rD.nTwips );
@@ -265,13 +266,13 @@ void ScRTFParser::ProcToken( RtfImportInfo* pInfo )
 {
     switch ( pInfo->nToken )
     {
-        case RTF_TROWD:         // denotes table row defauls, before RTF_CELLX
+        case RTF_TROWD:         // denotes table row default, before RTF_CELLX
         {
             if (!maDefaultList.empty())
                 nLastWidth = maDefaultList.back()->nTwips;
 
             nColCnt = 0;
-            if (pActDefault != pInsDefault)
+            if (pActDefault != pInsDefault.get())
                 pActDefault = nullptr;
             maDefaultList.clear();
             pDefMerge = nullptr;
@@ -281,7 +282,7 @@ void ScRTFParser::ProcToken( RtfImportInfo* pInfo )
         break;
         case RTF_CLMGF:         // The first cell of cells to be merged
         {
-            pDefMerge = pInsDefault;
+            pDefMerge = pInsDefault.get();
             nRtfLastToken = pInfo->nToken;
         }
         break;
@@ -304,9 +305,9 @@ void ScRTFParser::ProcToken( RtfImportInfo* pInfo )
             bNewDef = true;
             pInsDefault->nCol = nColCnt;
             pInsDefault->nTwips = pInfo->nTokenValue; // Right cell border
-            maDefaultList.push_back( std::unique_ptr<ScRTFCellDefault>(pInsDefault) );
+            maDefaultList.push_back( std::move(pInsDefault) );
             // New free-flying pInsDefault
-            pInsDefault = new ScRTFCellDefault( pPool );
+            pInsDefault.reset( new ScRTFCellDefault( pPool ) );
             if ( ++nColCnt > nColMax )
                 nColMax = nColCnt;
             nRtfLastToken = pInfo->nToken;
@@ -330,7 +331,7 @@ void ScRTFParser::ProcToken( RtfImportInfo* pInfo )
                 NewCellRow();    // before was no \intbl, bad behavior
             // Broken RTF? Let's save what we can
             if ( !pActDefault )
-                pActDefault = pInsDefault;
+                pActDefault = pInsDefault.get();
             if ( pActDefault->nColOverlap > 0 )
             {   // Not merged with preceding
                 mxActEntry->nCol = pActDefault->nCol;

@@ -12,14 +12,16 @@
 
 #include <vcl/graph.hxx>
 
+namespace weld
+{
+class Window;
+}
+
 namespace vcl
 {
 namespace graphic
 {
-Graphic VCL_DLLPUBLIC loadFromURL(OUString const& rURL, sal_Int16 nExtWidth, sal_Int16 nExtHeight,
-                                  sal_Int16 nExtMapMode);
-
-Graphic VCL_DLLPUBLIC loadFromURL(OUString const& rURL);
+Graphic VCL_DLLPUBLIC loadFromURL(OUString const& rURL, weld::Window* pParentWin = nullptr);
 }
 } // end vcl::graphic
 

@@ -22,8 +22,7 @@
 #include <vcl/builderfactory.hxx>
 #include <vcl/settings.hxx>
 
-SvxParaPrevWindow::SvxParaPrevWindow( vcl::Window* pParent,  WinBits nBits) :
-    Window( pParent, nBits),
+SvxParaPrevWindow::SvxParaPrevWindow() :
     nLeftMargin     ( 0 ),
     nRightMargin    ( 0 ),
     nFirstLineOfst  ( 0 ),
@@ -33,19 +32,14 @@ SvxParaPrevWindow::SvxParaPrevWindow( vcl::Window* pParent,  WinBits nBits) :
     eLastLine       ( SvxAdjust::Left ),
     eLine           ( SvxPrevLineSpace::N1 )
 {
-    // Count in Twips by default
-    SetMapMode(MapMode(MapUnit::MapTwip));
-
     aSize = Size(11905, 16837);
-
-    SetBorderStyle(WindowBorderStyle::MONO);
 }
 
-VCL_BUILDER_FACTORY_ARGS(SvxParaPrevWindow, WB_BORDER)
-
-Size SvxParaPrevWindow::GetOptimalSize() const
+void SvxParaPrevWindow::SetDrawingArea(weld::DrawingArea* pDrawingArea)
 {
-    return getParagraphPreviewOptimalSize(this);
+    CustomWidgetController::SetDrawingArea(pDrawingArea);
+    Size aOptimalSize(getParagraphPreviewOptimalSize(pDrawingArea->get_ref_device()));
+    pDrawingArea->set_size_request(aOptimalSize.Width(), aOptimalSize.Height());
 }
 
 void SvxParaPrevWindow::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
@@ -57,10 +51,14 @@ void SvxParaPrevWindow::Paint(vcl::RenderContext& rRenderContext, const tools::R
 
 void SvxParaPrevWindow::DrawParagraph(vcl::RenderContext& rRenderContext)
 {
+    // Count in Twips by default
+    rRenderContext.Push(PushFlags::MAPMODE);
+    rRenderContext.SetMapMode(MapMode(MapUnit::MapTwip));
+
     Size aWinSize(GetOutputSizePixel());
     aWinSize = rRenderContext.PixelToLogic(aWinSize);
     Size aTmp(1, 1);
-    aTmp = PixelToLogic(aTmp);
+    aTmp = rRenderContext.PixelToLogic(aTmp);
     aWinSize.AdjustWidth( -(aTmp.Width() /2) );
     aWinSize.AdjustHeight( -(aTmp.Height() /2) );
 
@@ -209,6 +207,7 @@ void SvxParaPrevWindow::DrawParagraph(vcl::RenderContext& rRenderContext)
         aPnt.setX( DEF_MARGIN / 2 );
         aSiz = aLineSiz;
     }
+    rRenderContext.Pop();
 }
 
 #undef DEF_MARGIN

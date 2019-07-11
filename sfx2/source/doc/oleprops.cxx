@@ -26,6 +26,7 @@
 #include <tools/datetime.hxx>
 #include <rtl/tencinfo.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 
 
 #define STREAM_BUFFER_SIZE 2048
@@ -196,7 +197,7 @@ private:
     virtual void        ImplSave( SvStream& rStrm ) override;
 
 private:
-    uno::Sequence<sal_Int8>    mData;
+    uno::Sequence<sal_Int8> const    mData;
 };
 
 
@@ -217,7 +218,7 @@ private:
     virtual void        ImplSave( SvStream& rStrm ) override;
 
 private:
-    uno::Sequence<sal_Int8>    mData;
+    uno::Sequence<sal_Int8> const    mData;
 };
 
 

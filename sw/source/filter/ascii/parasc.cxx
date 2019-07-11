@@ -46,6 +46,7 @@
 #include <iodetect.hxx>
 
 #include <vcl/metric.hxx>
+#include <osl/diagnose.h>
 
 #define ASC_BUFFLEN 4096
 
@@ -59,7 +60,7 @@ class SwASCIIParser
     std::unique_ptr<SfxItemSet> pItemSet;
     long nFileSize;
     SvtScriptType nScript;
-    bool bNewDoc;
+    bool const bNewDoc;
 
     ErrCode ReadChars();
     void InsertText( const OUString& rStr );
@@ -83,11 +84,11 @@ ErrCode AsciiReader::Read( SwDoc &rDoc, const OUString&, SwPaM &rPam, const OUSt
         return ERR_SWG_READ_ERROR;
     }
 
-    SwASCIIParser* pParser = new SwASCIIParser( &rDoc, rPam, *m_pStream,
-                                        !m_bInsertMode, m_aOption.GetASCIIOpts() );
+    std::unique_ptr<SwASCIIParser> pParser(new SwASCIIParser( &rDoc, rPam, *m_pStream,
+                                        !m_bInsertMode, m_aOption.GetASCIIOpts() ));
     ErrCode nRet = pParser->CallParser();
 
-    delete pParser;
+    pParser.reset();
     // after Read reset the options
     m_aOption.ResetASCIIOpts();
     return nRet;
@@ -134,21 +135,19 @@ SwASCIIParser::SwASCIIParser(SwDoc* pD, const SwPaM& rCursor, SvStream& rIn,
 // Calling the parser
 ErrCode SwASCIIParser::CallParser()
 {
-    rInput.Seek(STREAM_SEEK_TO_END);
     rInput.ResetError();
-
-    nFileSize = rInput.Tell();
+    nFileSize = rInput.TellEnd();
     rInput.Seek(STREAM_SEEK_TO_BEGIN);
     rInput.ResetError();
 
     ::StartProgress( STR_STATSTR_W4WREAD, 0, nFileSize, pDoc->GetDocShell() );
 
-    SwPaM* pInsPam = nullptr;
+    std::unique_ptr<SwPaM> pInsPam;
     sal_Int32 nSttContent = 0;
     if (!bNewDoc)
     {
         const SwNodeIndex& rTmp = pPam->GetPoint()->nNode;
-        pInsPam = new SwPaM( rTmp, rTmp, 0, -1 );
+        pInsPam.reset(new SwPaM( rTmp, rTmp, 0, -1 ));
         nSttContent = pPam->GetPoint()->nContent.GetIndex();
     }
 
@@ -237,7 +236,7 @@ ErrCode SwASCIIParser::CallParser()
         pItemSet.reset();
     }
 
-    delete pInsPam;
+    pInsPam.reset();
 
     ::EndProgress( pDoc->GetDocShell() );
     return nError;

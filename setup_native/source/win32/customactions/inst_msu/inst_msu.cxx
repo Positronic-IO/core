@@ -35,6 +35,14 @@ template <typename IntType> std::string Num2Dec(IntType n)
     return sMsg.str();
 }
 
+std::string Win32ErrorMessage(const char* sFunc, DWORD nWin32Error)
+{
+    std::stringstream sMsg;
+    sMsg << sFunc << " failed with Win32 error code " << Num2Hex(nWin32Error) << "!";
+
+    return sMsg.str();
+}
+
 void ThrowHResult(const char* sFunc, HRESULT hr)
 {
     std::stringstream sMsg;
@@ -51,10 +59,7 @@ void CheckHResult(const char* sFunc, HRESULT hr)
 
 void ThrowWin32Error(const char* sFunc, DWORD nWin32Error)
 {
-    std::stringstream sMsg;
-    sMsg << sFunc << " failed with Win32 error code " << Num2Hex(nWin32Error) << "!";
-
-    throw std::exception(sMsg.str().c_str());
+    throw std::exception(Win32ErrorMessage(sFunc, nWin32Error).c_str());
 }
 
 void ThrowLastError(const char* sFunc) { ThrowWin32Error(sFunc, GetLastError()); }
@@ -166,7 +171,59 @@ bool IsWow64Process()
 #endif
 }
 
+// An exception class to differentiate a non-fatal exception
+class nonfatal_exception : public std::exception
+{
+public:
+    nonfatal_exception(const std::exception& e)
+        : std::exception(e)
+    {
+    }
+};
+
+// This class uses MsiProcessMessage to check for user input: it returns IDCANCEL when user cancels
+// installation. It throws a special exception, to be intercepted in main action function to return
+// corresponding exit code.
+class UserInputChecker
+{
+public:
+    class eUserCancelled
+    {
+    };
+
+    UserInputChecker(MSIHANDLE hInstall)
+        : m_hInstall(hInstall)
+        , m_hProgressRec(MsiCreateRecord(3))
+    {
+        // Use explicit progress messages
+        MsiRecordSetInteger(m_hProgressRec, 1, 1);
+        MsiRecordSetInteger(m_hProgressRec, 2, 1);
+        MsiRecordSetInteger(m_hProgressRec, 3, 0);
+        int nResult = MsiProcessMessage(m_hInstall, INSTALLMESSAGE_PROGRESS, m_hProgressRec);
+        if (nResult == IDCANCEL)
+            throw eUserCancelled();
+        // Prepare the record to following progress update calls
+        MsiRecordSetInteger(m_hProgressRec, 1, 2);
+        MsiRecordSetInteger(m_hProgressRec, 2, 0); // step by 0 - don't move progress
+        MsiRecordSetInteger(m_hProgressRec, 3, 0);
+    }
+
+    void ThrowIfUserCancelled()
+    {
+        // Check if user has cancelled
+        int nResult = MsiProcessMessage(m_hInstall, INSTALLMESSAGE_PROGRESS, m_hProgressRec);
+        if (nResult == IDCANCEL)
+            throw eUserCancelled();
+    }
+
+private:
+    MSIHANDLE m_hInstall;
+    PMSIHANDLE m_hProgressRec;
+};
+
 // Checks if Windows Update service is disabled, and if it is, enables it temporarily.
+// Also stops the service if it's currently running, because it seems that wusa.exe
+// does not freeze when it starts the service itself.
 class WUServiceEnabler
 {
 public:
@@ -183,7 +240,7 @@ public:
             if (mhService)
             {
                 EnsureServiceEnabled(mhInstall, mhService.get(), false);
-                StopService(mhInstall, mhService.get());
+                StopService(mhInstall, mhService.get(), false);
             }
         }
         catch (std::exception& e)
@@ -195,27 +252,45 @@ public:
 private:
     static CloseServiceHandleGuard EnableWUService(MSIHANDLE hInstall)
     {
-        auto hSCM = Guard(OpenSCManagerW(nullptr, nullptr, SC_MANAGER_ALL_ACCESS));
-        if (!hSCM)
-            ThrowLastError("OpenSCManagerW");
-        WriteLog(hInstall, "Opened service control manager");
-
-        auto hService = Guard(OpenServiceW(hSCM.get(), L"wuauserv",
-                                           SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG
-                                               | SERVICE_QUERY_STATUS | SERVICE_STOP));
-        if (!hService)
-            ThrowLastError("OpenServiceW");
-        WriteLog(hInstall, "Obtained WU service handle");
-
-        if (ServiceStatus(hInstall, hService.get()) == SERVICE_RUNNING
-            || !EnsureServiceEnabled(hInstall, hService.get(), true))
+        try
         {
-            // No need to restore anything back, since we didn't change config
-            hService.reset();
-            WriteLog(hInstall, "Service configuration is unchanged");
-        }
+            auto hSCM = Guard(OpenSCManagerW(nullptr, nullptr, SC_MANAGER_ALL_ACCESS));
+            if (!hSCM)
+                ThrowLastError("OpenSCManagerW");
+            WriteLog(hInstall, "Opened service control manager");
 
-        return hService;
+            auto hService = Guard(OpenServiceW(hSCM.get(), L"wuauserv",
+                                               SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG
+                                                   | SERVICE_QUERY_STATUS | SERVICE_STOP));
+            if (!hService)
+                ThrowLastError("OpenServiceW");
+            WriteLog(hInstall, "Obtained WU service handle");
+
+            const DWORD nCurrentStatus = ServiceStatus(hInstall, hService.get());
+            // Stop currently running service to prevent wusa.exe from hanging trying to detect if the
+            // update is applicable (sometimes this freezes it ~indefinitely; it seems that it doesn't
+            // happen if wusa.exe starts the service itself: https://superuser.com/questions/1044528/).
+            // tdf#124794: Wait for service to stop.
+            if (nCurrentStatus == SERVICE_RUNNING)
+                StopService(hInstall, hService.get(), true);
+
+            if (nCurrentStatus == SERVICE_RUNNING
+                || !EnsureServiceEnabled(hInstall, hService.get(), true))
+            {
+                // No need to restore anything back, since we didn't change config
+                hService.reset();
+                WriteLog(hInstall, "Service configuration is unchanged");
+            }
+
+            return hService;
+        }
+        catch (const std::exception& e)
+        {
+            // Allow errors opening service to be logged, but not interrupt installation.
+            // They are likely to happen in situations where people hard-disable WU service,
+            // and for these cases, let people deal with install logs instead of failing.
+            throw nonfatal_exception(e);
+        }
     }
 
     // Returns if the service configuration was actually changed
@@ -226,9 +301,8 @@ private:
         DWORD nCbRequired = 0;
         if (!QueryServiceConfigW(hService, nullptr, 0, &nCbRequired))
         {
-            DWORD nError = GetLastError();
-            if (nError != ERROR_INSUFFICIENT_BUFFER)
-                ThrowLastError("QueryServiceConfigW");
+            if (DWORD nError = GetLastError(); nError != ERROR_INSUFFICIENT_BUFFER)
+                ThrowWin32Error("QueryServiceConfigW", nError);
         }
         std::unique_ptr<char[]> pBuf(new char[nCbRequired]);
         LPQUERY_SERVICE_CONFIGW pConfig = reinterpret_cast<LPQUERY_SERVICE_CONFIGW>(pBuf.get());
@@ -302,19 +376,50 @@ private:
         return aServiceStatus.dwCurrentState;
     }
 
-    static void StopService(MSIHANDLE hInstall, SC_HANDLE hService)
+    static void StopService(MSIHANDLE hInstall, SC_HANDLE hService, bool bWait)
     {
-        if (ServiceStatus(hInstall, hService) != SERVICE_STOPPED)
+        try
         {
-            SERVICE_STATUS aServiceStatus{};
-            if (!ControlService(hService, SERVICE_CONTROL_STOP, &aServiceStatus))
-                ThrowLastError("ControlService");
-            WriteLog(hInstall,
-                     "Successfully sent SERVICE_CONTROL_STOP code to Windows Update service");
-            // No need to wait for the service stopped
+            if (ServiceStatus(hInstall, hService) != SERVICE_STOPPED)
+            {
+                SERVICE_STATUS aServiceStatus{};
+                if (!ControlService(hService, SERVICE_CONTROL_STOP, &aServiceStatus))
+                    ThrowLastError("ControlService");
+                WriteLog(hInstall,
+                         "Successfully sent SERVICE_CONTROL_STOP code to Windows Update service");
+                if (aServiceStatus.dwCurrentState != SERVICE_STOPPED && bWait)
+                {
+                    // Let user cancel too long wait
+                    UserInputChecker aInputChecker(hInstall);
+                    // aServiceStatus.dwWaitHint is unreasonably high for Windows Update (30000),
+                    // so don't use it, but simply poll service status each second
+                    for (int nWait = 0; nWait < 30; ++nWait) // arbitrary limit of 30 s
+                    {
+                        for (int i = 0; i < 2; ++i) // check user input twice a second
+                        {
+                            Sleep(500);
+                            aInputChecker.ThrowIfUserCancelled();
+                        }
+
+                        if (!QueryServiceStatus(hService, &aServiceStatus))
+                            ThrowLastError("QueryServiceStatus");
+
+                        if (aServiceStatus.dwCurrentState == SERVICE_STOPPED)
+                            break;
+                    }
+                }
+                if (aServiceStatus.dwCurrentState == SERVICE_STOPPED)
+                    WriteLog(hInstall, "Successfully stopped Windows Update service");
+                else if (bWait)
+                    WriteLog(hInstall, "Wait for Windows Update stop timed out - proceeding");
+            }
+            else
+                WriteLog(hInstall, "Windows Update service is not running");
         }
-        else
-            WriteLog(hInstall, "Windows Update service is not running");
+        catch (std::exception& e)
+        {
+            WriteLog(hInstall, e.what());
+        }
     }
 
     MSIHANDLE mhInstall;
@@ -326,7 +431,7 @@ private:
 // "InstMSUBinary" property and unpacks the binary with that name to a temporary file; sets
 // "cleanup_msu" and "inst_msu" properties to the full name of the extracted temporary file. These
 // properties will become "CustomActionData" property inside relevant deferred actions.
-extern "C" UINT __stdcall UnpackMSUForInstall(MSIHANDLE hInstall)
+extern "C" __declspec(dllexport) UINT __stdcall UnpackMSUForInstall(MSIHANDLE hInstall)
 {
     try
     {
@@ -399,7 +504,7 @@ extern "C" UINT __stdcall UnpackMSUForInstall(MSIHANDLE hInstall)
         CheckWin32Error("MsiSetPropertyW", MsiSetPropertyW(hInstall, L"inst_msu", sBinary.c_str()));
 
         // Don't delete the file: it will be done by following actions (inst_msu or cleanup_msu)
-        aDeleteFileGuard.release();
+        (void)aDeleteFileGuard.release();
         return ERROR_SUCCESS;
     }
     catch (std::exception& e)
@@ -411,7 +516,7 @@ extern "C" UINT __stdcall UnpackMSUForInstall(MSIHANDLE hInstall)
 
 // Deferred action "inst_msu" that must be run from system account. Receives the tempfile name from
 // "CustomActionData" property, and runs wusa.exe to install it. Waits for it and checks exit code.
-extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
+extern "C" __declspec(dllexport) UINT __stdcall InstallMSU(MSIHANDLE hInstall)
 {
     try
     {
@@ -426,7 +531,8 @@ extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
         WriteLog(hInstall, "Got CustomActionData value:", sBinaryName);
         auto aDeleteFileGuard(Guard(sBinaryName));
 
-        // In case the Windows Update service is disabled, we temporarily enable it here
+        // In case the Windows Update service is disabled, we temporarily enable it here. We also
+        // stop running WU service, to avoid wusa.exe freeze (see comment in EnableWUService).
         WUServiceEnabler aWUServiceEnabler(hInstall);
 
         const bool bWow64Process = IsWow64Process();
@@ -446,12 +552,26 @@ extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
         if (!CreateProcessW(sWUSAPath.c_str(), const_cast<LPWSTR>(sWUSACmd.c_str()), nullptr,
                             nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
             ThrowLastError("CreateProcessW");
+        CloseHandle(pi.hThread);
         auto aCloseProcHandleGuard(Guard(pi.hProcess));
         WriteLog(hInstall, "CreateProcessW succeeded");
 
-        DWORD nWaitResult = WaitForSingleObject(pi.hProcess, INFINITE);
-        if (nWaitResult != WAIT_OBJECT_0)
-            ThrowWin32Error("WaitForSingleObject", nWaitResult);
+        {
+            // This block waits when the started wusa.exe process finishes. Since it's possible
+            // for wusa.exe in some circumstances to wait really long (indefinitely?), we check
+            // for user input here.
+            UserInputChecker aInputChecker(hInstall);
+            for (;;)
+            {
+                DWORD nWaitResult = WaitForSingleObject(pi.hProcess, 500);
+                if (nWaitResult == WAIT_OBJECT_0)
+                    break; // wusa.exe finished
+                else if (nWaitResult == WAIT_TIMEOUT)
+                    aInputChecker.ThrowIfUserCancelled();
+                else
+                    ThrowWin32Error("WaitForSingleObject", nWaitResult);
+            }
+        }
 
         DWORD nExitCode = 0;
         if (!GetExitCodeProcess(pi.hProcess, &nExitCode))
@@ -464,7 +584,6 @@ extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
         switch (hr)
         {
             case S_OK:
-            case S_FALSE:
             case WU_S_ALREADY_INSTALLED:
             case WU_E_NOT_APPLICABLE: // Windows could lie us about its version, etc.
             case ERROR_SUCCESS_REBOOT_REQUIRED:
@@ -476,6 +595,18 @@ extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
                 ThrowWin32Error("Execution of wusa.exe", nExitCode);
         }
     }
+    catch (nonfatal_exception& e)
+    {
+        // An error that should not interrupt installation
+        WriteLog(hInstall, e.what());
+        WriteLog(hInstall, "Installation of MSU package failed, but installation of product will "
+                           "continue. You may need to install the required update manually");
+        return ERROR_SUCCESS;
+    }
+    catch (const UserInputChecker::eUserCancelled&)
+    {
+        return ERROR_INSTALL_USEREXIT;
+    }
     catch (std::exception& e)
     {
         WriteLog(hInstall, e.what());
@@ -486,7 +617,7 @@ extern "C" UINT __stdcall InstallMSU(MSIHANDLE hInstall)
 // Rollback deferred action "cleanup_msu" that is executed on error or cancel.
 // It removes the temporary file created by UnpackMSUForInstall action.
 // MUST be placed IMMEDIATELY AFTER "unpack_msu" in execute sequence.
-extern "C" UINT __stdcall CleanupMSU(MSIHANDLE hInstall)
+extern "C" __declspec(dllexport) UINT __stdcall CleanupMSU(MSIHANDLE hInstall)
 {
     try
     {
@@ -501,7 +632,10 @@ extern "C" UINT __stdcall CleanupMSU(MSIHANDLE hInstall)
         WriteLog(hInstall, "Got CustomActionData value:", sBinaryName);
 
         if (!DeleteFileW(sBinaryName))
-            ThrowLastError("DeleteFileW");
+        {
+            if (DWORD nError = GetLastError(); nError != ERROR_FILE_NOT_FOUND)
+                ThrowWin32Error("DeleteFileW", nError);
+        }
         WriteLog(hInstall, "File successfully removed");
     }
     catch (std::exception& e)

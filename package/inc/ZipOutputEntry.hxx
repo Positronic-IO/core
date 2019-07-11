@@ -47,13 +47,13 @@ class ZipOutputEntry
 
     css::uno::Reference< css::xml::crypto::XCipherContext > m_xCipherContext;
     css::uno::Reference< css::xml::crypto::XDigestContext > m_xDigestContext;
-    ::css::uno::Any m_aParallelDeflateException;
+    std::exception_ptr m_aParallelDeflateException;
 
     CRC32               m_aCRC;
     ZipEntry            *m_pCurrentEntry;
     sal_Int16           m_nDigested;
     ZipPackageStream*   m_pCurrentStream;
-    bool                m_bEncryptCurrentEntry;
+    bool const          m_bEncryptCurrentEntry;
     std::atomic<bool>   m_bFinished;
 
 public:
@@ -70,9 +70,9 @@ public:
         const css::uno::Reference< css::uno::XComponentContext >& rxContext,
         ZipEntry& rEntry, ZipPackageStream* pStream, bool bEncrypt);
     void createBufferFile();
-    void setParallelDeflateException(const ::css::uno::Any &rAny) { m_aParallelDeflateException = rAny; }
+    void setParallelDeflateException(const std::exception_ptr& exception) { m_aParallelDeflateException = exception; }
     css::uno::Reference< css::io::XInputStream > getData() const;
-    const css::uno::Any& getParallelDeflateException() const { return m_aParallelDeflateException; }
+    const std::exception_ptr& getParallelDeflateException() const { return m_aParallelDeflateException; }
     void closeBufferFile();
     void deleteBufferFile();
 

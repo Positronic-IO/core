@@ -20,8 +20,7 @@
 
 #include <extended/accessibletablistbox.hxx>
 #include <extended/accessibletablistboxtable.hxx>
-#include <svtools/svtabbx.hxx>
-#include <comphelper/sequence.hxx>
+#include <vcl/svtabbx.hxx>
 
 
 namespace accessibility
@@ -41,7 +40,6 @@ namespace accessibility
     AccessibleTabListBox::AccessibleTabListBox( const Reference< XAccessible >& rxParent, SvHeaderTabListBox& rBox )
         :AccessibleBrowseBox( rxParent, nullptr, rBox )
         ,m_pTabListBox( &rBox )
-
     {
         osl_atomic_increment( &m_refCount );
         {
@@ -79,12 +77,10 @@ namespace accessibility
         return 2; // header and table
     }
 
-
     Reference< XAccessibleContext > SAL_CALL AccessibleTabListBox::getAccessibleContext()
     {
         return this;
     }
-
 
     Reference< XAccessible > SAL_CALL
     AccessibleTabListBox::getAccessibleChild( sal_Int32 nChildIndex )
@@ -99,7 +95,7 @@ namespace accessibility
         if (nChildIndex == 0)
         {
             //! so far the actual implementation object only supports column headers
-            xRet = implGetHeaderBar( ::svt::BBTYPE_COLUMNHEADERBAR );
+            xRet = implGetHeaderBar( ::vcl::BBTYPE_COLUMNHEADERBAR );
         }
         else if (nChildIndex == 1)
             xRet = implGetTable();

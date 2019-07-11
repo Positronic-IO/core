@@ -75,8 +75,8 @@ ScTpCalcOptions::~ScTpCalcOptions()
 
 void ScTpCalcOptions::dispose()
 {
-    delete pOldOptions;
-    delete pLocalOptions;
+    pOldOptions.reset();
+    pLocalOptions.reset();
     m_pBtnIterate.clear();
     m_pFtSteps.clear();
     m_pEdSteps.clear();
@@ -183,7 +183,7 @@ void ScTpCalcOptions::Reset( const SfxItemSet* /* rCoreAttrs */ )
         m_pEdPrec->SetValue(nPrec);
     }
 
-    m_pBtnThread->Enable();
+    m_pBtnThread->Enable( !officecfg::Office::Calc::Formula::Calculation::UseThreadedCalculationForFormulaGroups::isReadOnly() );
     m_pBtnThread->Check( officecfg::Office::Calc::Formula::Calculation::UseThreadedCalculationForFormulaGroups::get() );
 
     CheckClickHdl(m_pBtnIterate);

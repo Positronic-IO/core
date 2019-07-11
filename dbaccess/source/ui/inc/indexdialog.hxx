@@ -30,7 +30,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <vcl/toolbox.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <unotools/viewoptions.hxx>
 #include "indexes.hxx"
 #include <dbaccess/ToolBoxHelper.hxx>
@@ -89,7 +89,7 @@ namespace dbaui
         VclPtr<IndexFieldsControl>      m_pFields;
         VclPtr<PushButton>              m_pClose;
 
-        OIndexCollection*               m_pIndexes;
+        std::unique_ptr<OIndexCollection> m_pIndexes;
         SvTreeListEntry*                m_pPreviousSelection;
         bool                            m_bEditAgain;
 

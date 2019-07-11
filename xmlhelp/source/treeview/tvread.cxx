@@ -20,6 +20,7 @@
 #include <string.h>
 #include <rtl/character.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <tvread.hxx>
 #include <expat.h>
@@ -319,7 +320,9 @@ TVRead::hasByHierarchicalName( const OUString& aName )
 /*                                                                        */
 /**************************************************************************/
 
-extern "C" void start_handler(void *userData,
+extern "C" {
+
+static void start_handler(void *userData,
                    const XML_Char *name,
                    const XML_Char **atts)
 {
@@ -356,20 +359,22 @@ extern "C" void start_handler(void *userData,
     }
 }
 
-extern "C" void end_handler(void *userData,
+static void end_handler(void *userData,
                  SAL_UNUSED_PARAMETER const XML_Char * )
 {
     TVDom **tvDom = static_cast< TVDom** >( userData );
     *tvDom = (*tvDom)->getParent();
 }
 
-extern "C" void data_handler( void *userData,
+static void data_handler( void *userData,
                    const XML_Char *s,
                    int len)
 {
     TVDom **tvDom = static_cast< TVDom** >( userData );
     if( (*tvDom)->isLeaf() )
         (*tvDom)->setTitle( s,len );
+}
+
 }
 
 TVChildTarget::TVChildTarget( const ConfigData& configData,TVDom* tvDom )
@@ -395,10 +400,10 @@ TVChildTarget::TVChildTarget( const Reference< XComponentContext >& xContext )
     while( j )
     {
         len = configData.vFileLen[--j];
-        char* s = new char[ int(len) ];  // the buffer to hold the installed files
+        std::unique_ptr<char[]> s(new char[ int(len) ]);  // the buffer to hold the installed files
         osl::File aFile( configData.vFileURL[j] );
         aFile.open( osl_File_OpenFlag_Read );
-        aFile.read( s,len,ret );
+        aFile.read( s.get(),len,ret );
         aFile.close();
 
         XML_Parser parser = XML_ParserCreate( nullptr );
@@ -409,12 +414,11 @@ TVChildTarget::TVChildTarget( const Reference< XComponentContext >& xContext )
                                      data_handler);
         XML_SetUserData( parser,&pTVDom ); // does not return this
 
-        XML_Status const parsed = XML_Parse(parser, s, int(len), j==0);
+        XML_Status const parsed = XML_Parse(parser, s.get(), int(len), j==0);
         SAL_WARN_IF(XML_STATUS_ERROR == parsed, "xmlhelp",
                 "TVChildTarget::TVChildTarget(): Tree file parsing failed");
 
         XML_ParserFree( parser );
-        delete[] s;
 
         Check(pTVDom);
     }
@@ -502,11 +506,11 @@ TVChildTarget::SearchAndInsert(std::unique_ptr<TVDom> p, TVDom* tvDom)
     }
     else
     {
-        i = tvDom->children.begin();
-        while ((i!=tvDom->children.end()) && (p != nullptr))
+        for (auto& child : tvDom->children)
         {
-            p = SearchAndInsert(std::move(p), i->get());
-            ++i;
+            p = SearchAndInsert(std::move(p), child.get());
+            if (p == nullptr)
+                break;
         }
         return p;
     }
@@ -1010,7 +1014,7 @@ Reference< deployment::XPackage > ExtensionIteratorBase::implGetNextBundledHelpP
     return xHelpPackage;
 }
 
-inline bool isLetter( sal_Unicode c )
+static bool isLetter( sal_Unicode c )
 {
     return rtl::isAsciiAlpha(c);
 }

@@ -34,6 +34,8 @@
 #include <IDocumentState.hxx>
 #include <IDocumentLayoutAccess.hxx>
 #include <cntfrm.hxx>
+#include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <pam.hxx>
 #include <ndtxt.hxx>
 #include <swtable.hxx>
@@ -186,7 +188,9 @@ void SetGetExpField::SetBodyPos( const SwContentFrame& rFrame )
 {
     if( !rFrame.IsInDocBody() )
     {
-        SwNodeIndex aIdx( *rFrame.GetNode() );
+        SwNodeIndex aIdx( rFrame.IsTextFrame()
+                ? *static_cast<SwTextFrame const&>(rFrame).GetTextNodeFirst()
+                : *static_cast<SwNoTextFrame const&>(rFrame).GetNode() );
         SwDoc& rDoc = *aIdx.GetNodes().GetDoc();
         SwPosition aPos( aIdx );
         bool const bResult = ::GetBodyTextNode( rDoc, aPos, rFrame );
@@ -675,7 +679,7 @@ void SwDoc::ChangeDBFields( const std::vector<OUString>& rOldNames,
 namespace
 {
 
-inline OUString lcl_CutOffDBCommandType(const OUString& rName)
+OUString lcl_CutOffDBCommandType(const OUString& rName)
 {
     return rName.replaceFirst(OUStringLiteral1(DB_DELIM), ".").getToken(0, DB_DELIM);
 }
@@ -771,11 +775,11 @@ void SwDocUpdateField::InsDelFieldInFieldLst( bool bIns, const SwTextField& rFie
     }
 
     SetFieldsDirty( true );
-    if( !pFieldSortLst )
+    if (!m_pFieldSortList)
     {
         if( !bIns )             // if list is present and deleted
             return;             // don't do a thing
-        pFieldSortLst.reset(new SetGetExpFields);
+        m_pFieldSortList.reset(new SetGetExpFields);
     }
 
     if( bIns )      // insert anew:
@@ -784,27 +788,31 @@ void SwDocUpdateField::InsDelFieldInFieldLst( bool bIns, const SwTextField& rFie
     {
         // look up via the pTextField pointer. It is a sorted list, but it's sorted by node
         // position. Until this is found, the search for the pointer is already done.
-        for( SetGetExpFields::size_type n = 0; n < pFieldSortLst->size(); ++n )
-            if( &rField == (*pFieldSortLst)[ n ]->GetPointer() )
+        for (SetGetExpFields::size_type n = 0; n < m_pFieldSortList->size(); ++n)
+        {
+            if (&rField == (*m_pFieldSortList)[n]->GetPointer())
             {
-                delete (*pFieldSortLst)[n];
-                pFieldSortLst->erase(n);
+                m_pFieldSortList->erase(n);
                 n--; // one field can occur multiple times
             }
+        }
     }
 }
 
 void SwDocUpdateField::MakeFieldList( SwDoc& rDoc, bool bAll, int eGetMode )
 {
-    if( !pFieldSortLst || bAll || !( eGetMode & nFieldLstGetMode ) ||
-        rDoc.GetNodes().Count() != nNodes )
+    if (!m_pFieldSortList || bAll
+        || ((eGetMode & m_nFieldListGetMode) != eGetMode)
+        || rDoc.GetNodes().Count() != m_nNodes)
+    {
         MakeFieldList_( rDoc, eGetMode );
+    }
 }
 
 void SwDocUpdateField::MakeFieldList_( SwDoc& rDoc, int eGetMode )
 {
     // new version: walk all fields of the attribute pool
-    pFieldSortLst.reset(new SetGetExpFields);
+    m_pFieldSortList.reset(new SetGetExpFields);
 
     // consider and unhide sections
     //     with hide condition, only in mode GETFLD_ALL (<eGetMode == GETFLD_ALL>)
@@ -817,7 +825,7 @@ void SwDocUpdateField::MakeFieldList_( SwDoc& rDoc, int eGetMode )
     //         the hide conditions of section have to be updated.
     //         For correct updating the hide condition of a section, its position
     //         have to be known in order to insert the hide condition as a new
-    //         expression field into the sorted field list (<pFieldSortLst>).
+    //         expression field into the sorted field list (<m_pFieldSortList>).
     if ( eGetMode == GETFLD_ALL )
     // Collect the sections first. Supply sections that are hidden by condition
     // with frames so that the contained fields are sorted properly.
@@ -982,8 +990,8 @@ void SwDocUpdateField::MakeFieldList_( SwDoc& rDoc, int eGetMode )
             GetBodyNode( *pTextField, nWhich );
         }
     }
-    nFieldLstGetMode = static_cast<sal_uInt8>( eGetMode );
-    nNodes = rDoc.GetNodes().Count();
+    m_nFieldListGetMode = eGetMode;
+    m_nNodes = rDoc.GetNodes().Count();
 }
 
 void SwDocUpdateField::GetBodyNode( const SwTextField& rTField, SwFieldIds nFieldWhich )
@@ -993,9 +1001,11 @@ void SwDocUpdateField::GetBodyNode( const SwTextField& rTField, SwFieldIds nFiel
 
     // always the first! (in tab headline, header-/footer)
     Point aPt;
-    const SwContentFrame* pFrame = rTextNd.getLayoutFrame( rDoc.getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, nullptr, false );
+    std::pair<Point, bool> const tmp(aPt, false);
+    const SwContentFrame* pFrame = rTextNd.getLayoutFrame(
+        rDoc.getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, &tmp);
 
-    SetGetExpField* pNew = nullptr;
+    std::unique_ptr<SetGetExpField> pNew;
     bool bIsInBody = false;
 
     if( !pFrame || pFrame->IsInDocBody() )
@@ -1009,7 +1019,7 @@ void SwDocUpdateField::GetBodyNode( const SwTextField& rTField, SwFieldIds nFiel
         // fields in hidden sections. So: In order to be updated, a field 1)
         // must have a frame, or 2) it must be in the document body.
         if( (pFrame != nullptr) || bIsInBody )
-            pNew = new SetGetExpField( aIdx, &rTField );
+            pNew.reset(new SetGetExpField( aIdx, &rTField ));
     }
     else
     {
@@ -1017,7 +1027,7 @@ void SwDocUpdateField::GetBodyNode( const SwTextField& rTField, SwFieldIds nFiel
         SwPosition aPos( rDoc.GetNodes().GetEndOfPostIts() );
         bool const bResult = GetBodyTextNode( rDoc, aPos, *pFrame );
         OSL_ENSURE(bResult, "where is the Field");
-        pNew = new SetGetExpField( aPos.nNode, &rTField, &aPos.nContent );
+        pNew.reset(new SetGetExpField( aPos.nNode, &rTField, &aPos.nContent ));
     }
 
     // always set the BodyTextFlag in GetExp or DB fields
@@ -1034,14 +1044,13 @@ void SwDocUpdateField::GetBodyNode( const SwTextField& rTField, SwFieldIds nFiel
     }
 #endif
     if( pNew != nullptr )
-        if( !pFieldSortLst->insert( pNew ).second )
-            delete pNew;
+        m_pFieldSortList->insert( std::move(pNew) );
 }
 
 void SwDocUpdateField::GetBodyNode( const SwSectionNode& rSectNd )
 {
     const SwDoc& rDoc = *rSectNd.GetDoc();
-    SetGetExpField* pNew = nullptr;
+    std::unique_ptr<SetGetExpField> pNew;
 
     if( rSectNd.GetIndex() < rDoc.GetNodes().GetEndOfExtras().GetIndex() )
     {
@@ -1057,22 +1066,24 @@ void SwDocUpdateField::GetBodyNode( const SwSectionNode& rSectNd )
 
             // always the first! (in tab headline, header-/footer)
             Point aPt;
-            const SwContentFrame* pFrame = pCNd->getLayoutFrame( rDoc.getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, nullptr, false );
+            std::pair<Point, bool> const tmp(aPt, false);
+            const SwContentFrame* pFrame = pCNd->getLayoutFrame(
+                    rDoc.getIDocumentLayoutAccess().GetCurrentLayout(),
+                    nullptr, &tmp);
             if( !pFrame )
                 break;
 
             bool const bResult = GetBodyTextNode( rDoc, aPos, *pFrame );
             OSL_ENSURE(bResult, "where is the Field");
-            pNew = new SetGetExpField( rSectNd, &aPos );
+            pNew.reset(new SetGetExpField( rSectNd, &aPos ));
 
         } while( false );
     }
 
     if( !pNew )
-        pNew = new SetGetExpField( rSectNd );
+        pNew.reset(new SetGetExpField( rSectNd ));
 
-    if( !pFieldSortLst->insert( pNew ).second )
-        delete pNew;
+    m_pFieldSortList->insert( std::move(pNew) );
 }
 
 void SwDocUpdateField::InsertFieldType( const SwFieldType& rType )
@@ -1102,8 +1113,8 @@ void SwDocUpdateField::InsertFieldType( const SwFieldType& rType )
         if( !pFnd )
         {
             SwCalcFieldType* pNew = new SwCalcFieldType( sFieldName, &rType );
-            pNew->pNext.reset( aFieldTypeTable[ n ].release() );
-            aFieldTypeTable[ n ].reset(pNew);
+            pNew->pNext.reset( m_FieldTypeTable[n].release() );
+            m_FieldTypeTable[n].reset(pNew);
         }
     }
 }
@@ -1132,13 +1143,13 @@ void SwDocUpdateField::RemoveFieldType( const SwFieldType& rType )
         SwCalcFieldType* pFnd = GetFieldTypeTable().Find( sFieldName, &n );
         if( pFnd )
         {
-            if( aFieldTypeTable[ n ].get() == pFnd )
+            if (m_FieldTypeTable[n].get() == pFnd)
             {
-                aFieldTypeTable[ n ].reset(static_cast<SwCalcFieldType*>(pFnd->pNext.release()));
+                m_FieldTypeTable[n].reset(static_cast<SwCalcFieldType*>(pFnd->pNext.release()));
             }
             else
             {
-                SwHash* pPrev = aFieldTypeTable[ n ].get();
+                SwHash* pPrev = m_FieldTypeTable[n].get();
                 while( pPrev->pNext.get() != pFnd )
                     pPrev = pPrev->pNext.get();
                 pPrev->pNext = std::move(pFnd->pNext);
@@ -1148,13 +1159,13 @@ void SwDocUpdateField::RemoveFieldType( const SwFieldType& rType )
     }
 }
 
-SwDocUpdateField::SwDocUpdateField(SwDoc* pDoc)
-    : aFieldTypeTable(TBLSZ)
-    , nNodes(0)
-    , nFieldLstGetMode(0)
-    , pDocument(pDoc)
-    , bInUpdateFields(false)
-    , bFieldsDirty(false)
+SwDocUpdateField::SwDocUpdateField(SwDoc& rDoc)
+    : m_FieldTypeTable(TBLSZ)
+    , m_nNodes(0)
+    , m_nFieldListGetMode(0)
+    , m_rDoc(rDoc)
+    , m_bInUpdateFields(false)
+    , m_bFieldsDirty(false)
 {
 }
 

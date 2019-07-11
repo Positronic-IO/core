@@ -24,6 +24,7 @@
 #include <sal/types.h>
 
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -107,7 +108,7 @@ public:
 
         void instrTableswitch(
             Code const * defaultBlock, sal_Int32 low,
-            std::vector< Code * > const & blocks);
+            std::vector< std::unique_ptr<Code> > const & blocks);
 
         void loadIntegerConstant(sal_Int32 value);
         void loadStringConstant(rtl::OString const & value);
@@ -129,8 +130,8 @@ public:
         Position getPosition() const;
 
     private:
-        Code(Code &) = delete;
-        void operator =(const Code&) = delete;
+        Code(Code const &) = delete;
+        Code& operator =(const Code&) = delete;
 
         explicit Code(ClassFile & classFile);
 
@@ -180,8 +181,8 @@ public:
 private:
     typedef std::map< rtl::OString, sal_uInt16 > Map;
 
-    ClassFile(ClassFile &) = delete;
-    void operator =(const ClassFile&) = delete;
+    ClassFile(ClassFile const &) = delete;
+    ClassFile& operator =(const ClassFile&) = delete;
 
     sal_uInt16 nextConstantPoolIndex(sal_uInt16 width);
     sal_uInt16 addUtf8Info(rtl::OString const & value);

@@ -22,8 +22,8 @@
 #include <macropg.hxx>
 #include <vcl/layout.hxx>
 #include <svtools/svmedit.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
 #include <svl/eitem.hxx>
 #include <tools/diagnose_ex.h>
 #include <sfx2/app.hxx>
@@ -195,6 +195,17 @@ void MacroEventListBox::Enable()
     maHeaderBar->Enable();
 }
 
+CuiMacroEventListBox::CuiMacroEventListBox(std::unique_ptr<weld::TreeView> xTreeView)
+    : m_xTreeView(std::move(xTreeView))
+{
+    m_xTreeView->set_help_id(HID_MACRO_HEADERTABLISTBOX);
+    m_xTreeView->set_size_request(m_xTreeView->get_approximate_digit_width() * 70, m_xTreeView->get_height_rows(9));
+}
+
+CuiMacroEventListBox::~CuiMacroEventListBox()
+{
+}
+
 // assign button ("Add Command") is enabled only if it is not read only
 // delete button ("Remove Command") is enabled if a current binding exists
 //     and it is not read only
@@ -214,13 +225,11 @@ void SvxMacroTabPage_::EnableButtons()
 SvxMacroTabPage_::SvxMacroTabPage_(vcl::Window* pParent, const OString& rID,
     const OUString& rUIXMLDescription, const SfxItemSet& rAttrSet)
     : SfxTabPage( pParent, rID, rUIXMLDescription, &rAttrSet ),
-    m_xAppEvents(nullptr),
-    m_xDocEvents(nullptr),
     bDocModified(false),
     bAppEvents(false),
     bInitialized(false)
 {
-    mpImpl = new SvxMacroTabPage_Impl( rAttrSet );
+    mpImpl.reset( new SvxMacroTabPage_Impl( rAttrSet ) );
 }
 
 SvxMacroTabPage_::~SvxMacroTabPage_()
@@ -230,7 +239,7 @@ SvxMacroTabPage_::~SvxMacroTabPage_()
 
 void SvxMacroTabPage_::dispose()
 {
-    DELETEZ( mpImpl );
+    mpImpl.reset();
     SfxTabPage::dispose();
 }
 
@@ -564,19 +573,20 @@ IMPL_LINK( SvxMacroTabPage_, AssignDeleteHdl_Impl, Button*, pBtn, void )
 
 IMPL_LINK_NOARG( SvxMacroTabPage_, DoubleClickHdl_Impl, SvTreeListBox*, bool)
 {
-    return GenericHandler_Impl( this, nullptr );
+    GenericHandler_Impl( this, nullptr );
+    return false;
 }
 
 // handler for double click on the listbox, and for the assign/delete buttons
-long SvxMacroTabPage_::GenericHandler_Impl( SvxMacroTabPage_* pThis, PushButton* pBtn )
+void SvxMacroTabPage_::GenericHandler_Impl( SvxMacroTabPage_* pThis, PushButton* pBtn )
 {
-    SvxMacroTabPage_Impl*    pImpl = pThis->mpImpl;
+    SvxMacroTabPage_Impl*    pImpl = pThis->mpImpl.get();
     SvHeaderTabListBox& rListBox = pImpl->pEventLB->GetListBox();
     SvTreeListEntry* pE = rListBox.FirstSelected();
     if( !pE || LISTBOX_ENTRY_NOTFOUND == rListBox.GetModel()->GetAbsPos( pE ) )
     {
         DBG_ASSERT( pE, "Where does the empty entry come from?" );
-        return 0;
+        return;
     }
 
     const bool bAssEnabled = pBtn != pImpl->pDeletePB && pImpl->pAssignPB->IsEnabled();
@@ -675,7 +685,6 @@ long SvxMacroTabPage_::GenericHandler_Impl( SvxMacroTabPage_* pThis, PushButton*
     rListBox.SetUpdateMode( true );
 
     pThis->EnableButtons();
-    return 0;
 }
 
 // pass in the XNameReplace.

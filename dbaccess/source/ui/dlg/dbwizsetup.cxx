@@ -37,7 +37,6 @@
 #include <unotools/ucbhelper.hxx>
 #include "generalpage.hxx"
 #include <stringlistitem.hxx>
-#include <propertysetitem.hxx>
 #include <unotools/confignode.hxx>
 #include "DbAdminImpl.hxx"
 #include <helpids.h>
@@ -74,7 +73,6 @@
 #include <svl/filenotation.hxx>
 #include <comphelper/interaction.hxx>
 #include <comphelper/namedvaluecollection.hxx>
-#include <comphelper/sequenceashashmap.hxx>
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
 #include <connectivity/DriversConfig.hxx>
@@ -108,7 +106,6 @@ ODbTypeWizDialogSetup::ODbTypeWizDialogSetup(vcl::Window* _pParent
                                )
     :svt::RoadmapWizard( _pParent )
 
-    , m_pOutSet(nullptr)
     , m_bIsConnectable( false)
     , m_sRM_IntroText( DBA_RES( STR_PAGETITLE_INTROPAGE ) )
     , m_sRM_dBaseText( DBA_RES( STR_PAGETITLE_DBASE ) )
@@ -138,10 +135,10 @@ ODbTypeWizDialogSetup::ODbTypeWizDialogSetup(vcl::Window* _pParent
 
     OSL_ENSURE(m_pCollection, "ODbTypeWizDialogSetup::ODbTypeWizDialogSetup : really need a DSN type collection !");
 
-    m_pImpl.reset(new ODbDataSourceAdministrationHelper(_rxORB,this,this));
+    m_pImpl.reset(new ODbDataSourceAdministrationHelper(_rxORB,GetFrameWeld(),_pParent ? _pParent->GetFrameWeld() : nullptr, this));
     m_pImpl->setDataSourceOrName(_aDataSourceName);
     Reference< XPropertySet > xDatasource = m_pImpl->getCurrentDataSource();
-    m_pOutSet = new SfxItemSet( *_pItems->GetPool(), _pItems->GetRanges() );
+    m_pOutSet.reset( new SfxItemSet( *_pItems->GetPool(), _pItems->GetRanges() ) );
 
     m_pImpl->translateProperties(xDatasource, *m_pOutSet);
 
@@ -154,7 +151,7 @@ ODbTypeWizDialogSetup::ODbTypeWizDialogSetup(vcl::Window* _pParent
     ::dbaccess::ODsnTypeCollection::TypeIterator aEnd = m_pCollection->end();
     for(PathId i = 1;aIter != aEnd;++aIter,++i)
     {
-        const OUString sURLPrefix = aIter.getURLPrefix();
+        const OUString& sURLPrefix = aIter.getURLPrefix();
         svt::RoadmapWizardTypes::WizardPath aPath;
         aPath.push_back(PAGE_DBSETUPWIZARD_INTRO);
         m_pCollection->fillPageIds(sURLPrefix,aPath);
@@ -264,8 +261,7 @@ ODbTypeWizDialogSetup::~ODbTypeWizDialogSetup()
 
 void ODbTypeWizDialogSetup::dispose()
 {
-    delete m_pOutSet;
-    m_pOutSet = nullptr;
+    m_pOutSet.reset();
     m_pGeneralPage.clear();
     m_pMySQLIntroPage.clear();
     m_pFinalPage.clear();
@@ -277,7 +273,7 @@ IMPL_LINK_NOARG(ODbTypeWizDialogSetup, OnTypeSelected, OGeneralPage&, void)
     activateDatabasePath();
 }
 
-void lcl_removeUnused(const ::comphelper::NamedValueCollection& _aOld,const ::comphelper::NamedValueCollection& _aNew,::comphelper::NamedValueCollection& _rDSInfo)
+static void lcl_removeUnused(const ::comphelper::NamedValueCollection& _aOld,const ::comphelper::NamedValueCollection& _aNew,::comphelper::NamedValueCollection& _rDSInfo)
 {
     _rDSInfo.merge(_aNew,true);
     uno::Sequence< beans::NamedValue > aOldValues = _aOld.getNamedValues();
@@ -388,12 +384,12 @@ void ODbTypeWizDialogSetup::resetPages(const Reference< XPropertySet >& _rxDatas
 
 const SfxItemSet* ODbTypeWizDialogSetup::getOutputSet() const
 {
-    return m_pOutSet;
+    return m_pOutSet.get();
 }
 
 SfxItemSet* ODbTypeWizDialogSetup::getWriteOutputSet()
 {
-    return m_pOutSet;
+    return m_pOutSet.get();
 }
 
 std::pair< Reference<XConnection>,bool> ODbTypeWizDialogSetup::createConnection()
@@ -628,7 +624,7 @@ void ODbTypeWizDialogSetup::saveDatasource()
 {
     SfxTabPage* pPage = static_cast<SfxTabPage*>(WizardDialog::GetPage(getCurrentState()));
     if ( pPage )
-        pPage->FillItemSet(m_pOutSet);
+        pPage->FillItemSet(m_pOutSet.get());
 }
 
 bool ODbTypeWizDialogSetup::leaveState(WizardState _nState)
@@ -640,7 +636,7 @@ bool ODbTypeWizDialogSetup::leaveState(WizardState _nState)
         resetPages(m_pImpl->getCurrentDataSource());
     }
     SfxTabPage* pPage = static_cast<SfxTabPage*>(WizardDialog::GetPage(_nState));
-    return pPage && pPage->DeactivatePage(m_pOutSet) != DeactivateRC::KeepPage;
+    return pPage && pPage->DeactivatePage(m_pOutSet.get()) != DeactivateRC::KeepPage;
 }
 
 void ODbTypeWizDialogSetup::setTitle(const OUString& /*_sTitle*/)

@@ -20,35 +20,33 @@
 #include <config_features.h>
 
 #include <validat.hxx>
+#include <com/sun/star/sheet/TableValidationVisibility.hpp>
 
 #include <sfx2/app.hxx>
-#include <sfx2/docfile.hxx>
 #include <sfx2/objsh.hxx>
 #include <basic/sbmeth.hxx>
 #include <basic/sbmod.hxx>
 #include <basic/sbstar.hxx>
-#include <basic/basmgr.hxx>
 
 #include <basic/sbx.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/sharedstringpool.hxx>
 #include <vcl/weld.hxx>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 
-#include <scitems.hxx>
 #include <document.hxx>
 #include <formulacell.hxx>
 #include <patattr.hxx>
-#include <rechead.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <rangenam.hxx>
 #include <dbdata.hxx>
 #include <typedstrdata.hxx>
-#include <dociter.hxx>
 #include <editutil.hxx>
 #include <tokenarray.hxx>
 #include <scmatrix.hxx>
+#include <cellvalue.hxx>
 
 #include <math.h>
 #include <memory>
@@ -426,6 +424,51 @@ bool ScValidationData::DoError(weld::Window* pParent, const OUString& rInput,
     return ( eErrorStyle == SC_VALERR_STOP || nRet == RET_CANCEL );
 }
 
+bool ScValidationData::IsDataValidCustom(
+        const OUString& rTest,
+        const ScPatternAttr& rPattern,
+        const ScAddress& rPos,
+        const CustomValidationPrivateAccess& ) const
+{
+    OSL_ENSURE(GetDataMode() == SC_VALID_CUSTOM,
+            "ScValidationData::IsDataValidCustom invoked for a non-custom validation");
+
+    if (rTest.isEmpty())              // check whether empty cells are allowed
+        return IsIgnoreBlank();
+
+    if (rTest[0] == '=')   // formulas do not pass the validity test
+        return false;
+
+    SvNumberFormatter* pFormatter = GetDocument()->GetFormatTable();
+
+    // get the value if any
+    sal_uInt32 nFormat = rPattern.GetNumberFormat( pFormatter );
+    double nVal;
+    bool bIsVal = pFormatter->IsNumberFormat( rTest, nFormat, nVal );
+
+    ScRefCellValue aTmpCell;
+    svl::SharedString aSS;
+    if (bIsVal)
+    {
+        aTmpCell.meType = CELLTYPE_VALUE;
+        aTmpCell.mfValue = nVal;
+    }
+    else
+    {
+        aTmpCell.meType = CELLTYPE_STRING;
+        aSS = mpDoc->GetSharedStringPool().intern(rTest);
+        aTmpCell.mpString = &aSS;
+    }
+
+    ScCellValue aOriginalCellValue(ScRefCellValue(*GetDocument(), rPos));
+
+    aTmpCell.commit(*GetDocument(), rPos);
+    bool bRet = IsCellValid(aTmpCell, rPos);
+    aOriginalCellValue.commit(*GetDocument(), rPos);
+
+    return bRet;
+}
+
 bool ScValidationData::IsDataValid(
     const OUString& rTest, const ScPatternAttr& rPattern, const ScAddress& rPos ) const
 {
@@ -487,6 +530,9 @@ bool ScValidationData::IsDataValid( ScRefCellValue& rCell, const ScAddress& rPos
     if( eDataMode == SC_VALID_LIST )
         return IsListValid(rCell, rPos);
 
+    if ( eDataMode == SC_VALID_CUSTOM )
+        return IsCellValid(rCell, rPos);
+
     double nVal = 0.0;
     OUString aString;
     bool bIsVal = true;
@@ -535,12 +581,6 @@ bool ScValidationData::IsDataValid( ScRefCellValue& rCell, const ScAddress& rPos
                 bOk = IsCellValid(rCell, rPos);
             break;
 
-        case SC_VALID_CUSTOM:
-            //  for Custom, it must be eOp == ScConditionMode::Direct
-            //TODO: the value must be in the document !!!
-            bOk = IsCellValid(rCell, rPos);
-            break;
-
         case SC_VALID_TEXTLEN:
             bOk = !bIsVal;          // only Text
             if ( bOk )
@@ -568,7 +608,7 @@ class ScStringTokenIterator
 {
 public:
     explicit             ScStringTokenIterator( const ScTokenArray& rTokArr ) :
-        maIter( rTokArr ), mbSkipEmpty( true ), mbOk( true ) {}
+        maIter( rTokArr ), mbOk( true ) {}
 
     /** Returns the string of the first string token or NULL on error or empty token array. */
     rtl_uString* First();
@@ -581,7 +621,6 @@ public:
 private:
     svl::SharedString maCurString; /// Current string.
     FormulaTokenArrayPlainIterator maIter;
-    bool                        mbSkipEmpty;    /// Ignore empty strings.
     bool                        mbOk;           /// true = correct token or end of token array.
 };
 
@@ -609,7 +648,7 @@ rtl_uString* ScStringTokenIterator::Next()
         maCurString = pToken->GetString();
 
     // string found but empty -> get next token; otherwise return it
-    return (mbSkipEmpty && maCurString.isValid() && maCurString.isEmpty()) ? Next() : maCurString.getData();
+    return (maCurString.isValid() && maCurString.isEmpty()) ? Next() : maCurString.getData();
 }
 
 /** Returns the number format of the passed cell, or the standard format. */
@@ -655,7 +694,7 @@ bool ScValidationData::GetSelectionFromFormula(
         // is stored as a single value.
 
         // Use an interim matrix to create the TypedStrData below.
-        xMatRef = new ScFullMatrix(1, 1, 0.0);
+        xMatRef = new ScMatrix(1, 1, 0.0);
 
         FormulaError nErrCode = aValidationSrc.GetErrCode();
         if (nErrCode != FormulaError::NONE)
@@ -923,7 +962,7 @@ ScValidationDataList::ScValidationDataList(const ScValidationDataList& rList)
 
     for (const_iterator it = rList.begin(); it != rList.end(); ++it)
     {
-        InsertNew( (*it)->Clone() );
+        InsertNew( std::unique_ptr<ScValidationData>((*it)->Clone()) );
     }
 
     //TODO: faster insert for sorted entries from rList ???
@@ -936,7 +975,7 @@ ScValidationDataList::ScValidationDataList(ScDocument* pNewDoc,
 
     for (const_iterator it = rList.begin(); it != rList.end(); ++it)
     {
-        InsertNew( (*it)->Clone(pNewDoc) );
+        InsertNew( std::unique_ptr<ScValidationData>((*it)->Clone(pNewDoc)) );
     }
 
     //TODO: faster insert for sorted entries from rList ???
@@ -948,7 +987,7 @@ ScValidationData* ScValidationDataList::GetData( sal_uInt32 nKey )
 
     for( iterator it = begin(); it != end(); ++it )
         if( (*it)->GetKey() == nKey )
-            return *it;
+            return it->get();
 
     OSL_FAIL("ScValidationDataList: Entry not found");
     return nullptr;
@@ -1002,11 +1041,6 @@ ScValidationDataList::iterator ScValidationDataList::end()
 ScValidationDataList::const_iterator ScValidationDataList::end() const
 {
     return maData.end();
-}
-
-void ScValidationDataList::clear()
-{
-    maData.clear();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

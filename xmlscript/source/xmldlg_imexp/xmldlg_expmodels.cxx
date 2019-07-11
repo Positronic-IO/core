@@ -18,7 +18,9 @@
  */
 
 #include "exp_share.hxx"
+#include <xmlscript/xmlns.h>
 
+#include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/form/binding/XListEntrySink.hpp>
 #include <com/sun/star/form/binding/XBindableValue.hpp>
 #include <com/sun/star/form/binding/XValueBinding.hpp>
@@ -35,7 +37,7 @@ using namespace ::com::sun::star::uno;
 namespace xmlscript
 {
 
-static inline bool readBorderProps(
+static bool readBorderProps(
     ElementDescriptor * element, Style & style )
 {
     if (element->readProp( &style._border, "Border" )) {
@@ -49,7 +51,7 @@ static inline bool readBorderProps(
     return false;
 }
 
-static inline bool readFontProps( ElementDescriptor * element, Style & style )
+static bool readFontProps( ElementDescriptor * element, Style & style )
 {
     bool ret = element->readProp(
         &style._descr, "FontDescriptor" );

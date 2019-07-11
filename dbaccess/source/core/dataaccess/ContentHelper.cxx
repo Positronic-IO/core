@@ -21,7 +21,6 @@
 #include <ContentHelper.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <ucbhelper/cancelcommandexecution.hxx>
-#include <comphelper/property.hxx>
 #include <com/sun/star/ucb/UnsupportedCommandException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/IllegalAccessException.hpp>
@@ -47,7 +46,6 @@ using namespace ::com::sun::star::io;
 using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::embed;
 using namespace ::com::sun::star::container;
-using namespace ::comphelper;
 using namespace ::cppu;
 
 OContentHelper_Impl::OContentHelper_Impl()
@@ -84,7 +82,17 @@ void SAL_CALL OContentHelper::disposing()
 }
 
 IMPLEMENT_SERVICE_INFO1(OContentHelper,"com.sun.star.comp.sdb.Content","com.sun.star.ucb.Content");
-IMPLEMENT_IMPLEMENTATION_ID(OContentHelper)
+
+css::uno::Sequence<sal_Int8> OContentHelper::getUnoTunnelImplementationId()
+{
+    static cppu::OImplementationId aId;
+    return aId.getImplementationId();
+}
+
+css::uno::Sequence<sal_Int8> OContentHelper::getImplementationId()
+{
+    return css::uno::Sequence<sal_Int8>();
+}
 
 // XContent
 Reference< XContentIdentifier > SAL_CALL OContentHelper::getIdentifier(  )
@@ -109,7 +117,7 @@ OUString OContentHelper::impl_getHierarchicalName( bool _includingRootContainer 
             xProp->getPropertyValue( PROPERTY_NAME ) >>= sName;
 
             OUString sPrevious = aHierarchicalName.makeStringAndClear();
-            aHierarchicalName.append( sName + "/" + sPrevious );
+            aHierarchicalName.append( sName ).append( "/" ).append( sPrevious );
         }
     }
     OUString sHierarchicalName( aHierarchicalName.makeStringAndClear() );
@@ -334,19 +342,7 @@ Sequence< Any > OContentHelper::setPropertyValues(const Sequence< PropertyValue 
     {
         const PropertyValue& rValue = pValues[ n ];
 
-        if ( rValue.Name == "ContentType" )
-        {
-            // Read-only property!
-            aRet[ n ] <<= IllegalAccessException("Property is read-only!",
-                            static_cast< cppu::OWeakObject * >( this ) );
-        }
-        else if ( rValue.Name == "IsDocument" )
-        {
-            // Read-only property!
-            aRet[ n ] <<= IllegalAccessException("Property is read-only!",
-                            static_cast< cppu::OWeakObject * >( this ) );
-        }
-        else if ( rValue.Name == "IsFolder" )
+        if ( rValue.Name == "ContentType" || rValue.Name == "IsDocument" || rValue.Name == "IsFolder" )
         {
             // Read-only property!
             aRet[ n ] <<= IllegalAccessException("Property is read-only!",

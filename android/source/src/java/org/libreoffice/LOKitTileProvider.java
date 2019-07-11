@@ -8,10 +8,17 @@
  */
 package org.libreoffice;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.PointF;
+import android.os.Build;
+import android.os.Environment;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -19,6 +26,7 @@ import org.libreoffice.kit.DirectBufferAllocator;
 import org.libreoffice.kit.Document;
 import org.libreoffice.kit.LibreOfficeKit;
 import org.libreoffice.kit.Office;
+import org.libreoffice.ui.FileUtilities;
 import org.mozilla.gecko.gfx.BufferedCairoImage;
 import org.mozilla.gecko.gfx.CairoImage;
 import org.mozilla.gecko.gfx.IntSize;
@@ -64,16 +72,32 @@ class LOKitTileProvider implements TileProvider {
         mOffice.setMessageCallback(messageCallback);
         mOffice.setOptionalFeatures(Document.LOK_FEATURE_DOCUMENT_PASSWORD);
         mContext.setTileProvider(this);
-
         mInputFile = input;
+        File f = new File(mInputFile);
+        final String cacheFile = mContext.getExternalCacheDir().getAbsolutePath() + "/lo_cached_" + f.getName();
+
+        if(mContext.firstStart){
+            File cacheFileObj = new File(cacheFile);
+            if(cacheFileObj.exists()) {
+                cacheFileObj.delete();
+            }
+            mContext.firstStart=false;
+        }
 
         Log.i(LOGTAG, "====> Loading file '" + input + "'");
-        File fileToBeEncoded = new File(input);
+        File fileToBeEncoded;
+        if(isDocumentCached()){
+            fileToBeEncoded = new File(cacheFile);
+        }else{
+            fileToBeEncoded = new File(input);
+
+        }
         String encodedFileName = android.net.Uri.encode(fileToBeEncoded.getName());
 
         mDocument = mOffice.documentLoad(
                 (new File(fileToBeEncoded.getParent(),encodedFileName)).getPath()
         );
+
 
         if (mDocument == null && !mContext.isPasswordProtected()) {
             Log.i(LOGTAG, "====> mOffice.documentLoad() returned null, trying to restart 'Office' and loading again");
@@ -122,19 +146,13 @@ class LOKitTileProvider implements TileProvider {
         Log.i(LOGTAG, "Document parts: " + parts);
         mContext.getDocumentPartView().clear();
 
-        if (mDocument.getDocumentType() == Document.DOCTYPE_PRESENTATION) {
-            mContext.getToolbarController().disableMenuItem(R.id.action_presentation, false);
-            mContext.getToolbarController().disableMenuItem(R.id.action_add_slide, false);
-        }
-        if (mDocument.getDocumentType() == Document.DOCTYPE_SPREADSHEET) {
-            mContext.getToolbarController().disableMenuItem(R.id.action_add_worksheet, false);
-        }
-
         // Writer documents always have one part, so hide the navigation drawer.
         if (mDocument.getDocumentType() != Document.DOCTYPE_TEXT) {
             for (int i = 0; i < parts; i++) {
                 String partName = mDocument.getPartName(i);
                 if (partName.isEmpty()) {
+                    partName = getGenericPartName(i);
+                }else if (partName.startsWith("Slide") || partName.startsWith("Sheet") || partName.startsWith("Part")) {
                     partName = getGenericPartName(i);
                 }
                 Log.i(LOGTAG, "Document part " + i + " name:'" + partName + "'");
@@ -146,7 +164,7 @@ class LOKitTileProvider implements TileProvider {
             }
         } else {
             mContext.disableNavigationDrawer();
-            mContext.getToolbarController().disableMenuItem(R.id.action_parts, true);
+            mContext.getToolbarController().hideItem(R.id.action_parts);
         }
 
         // Enable headers for Calc documents
@@ -205,8 +223,82 @@ class LOKitTileProvider implements TileProvider {
         mContext.getDocumentPartView().add(partView);
     }
 
+    public void resetParts(){
+        int parts = mDocument.getParts();
+        mContext.getDocumentPartView().clear();
+        if (mDocument.getDocumentType() != Document.DOCTYPE_TEXT) {
+            for (int i = 0; i < parts; i++) {
+                String partName = mDocument.getPartName(i);
+
+                if (partName.isEmpty()) {
+                    partName = getGenericPartName(i);
+                }
+                Log.i(LOGTAG, "resetParts: " + partName);
+                mDocument.setPart(i);
+                resetDocumentSize();
+                final DocumentPartView partView = new DocumentPartView(i, partName);
+                mContext.getDocumentPartView().add(partView);
+            }
+        }
+    } public void renamePart(String partName) {
+        try{
+            for(int i=0; i<mDocument.getParts(); i++){
+                if(mContext.getDocumentPartView().get(i).partName.equals(partName)){
+                    //part name must be unique
+                    Toast.makeText(mContext, mContext.getString(R.string.name_already_used), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+            JSONObject parameter = new JSONObject();
+            JSONObject name = new JSONObject();
+            name.put("type", "string");
+            name.put("value", partName);
+            parameter.put("Name", name);
+            if(isPresentation()){
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND_NOTIFY, ".uno:RenamePage", parameter.toString(),true));
+            }else {
+                JSONObject index = new JSONObject();
+                index.put("type","long");
+                index.put("value", getCurrentPartNumber()+1);
+                parameter.put("Index", index);
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND_NOTIFY, ".uno:Name", parameter.toString(),true));
+            }
+        }catch (JSONException e){
+            e.printStackTrace();
+        }
+    }
+
+    public void removePart() {
+        try{
+            if(isSpreadsheet() == false && isPresentation() == false) {
+                //document must be spreadsheet or presentation
+                return;
+            }
+
+            if(isPresentation()){
+                LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND_NOTIFY, ".uno:DeletePage", true));
+                return;
+            }
+
+            if(getPartsCount() < 2){
+                return;
+            }
+
+            JSONObject parameter = new JSONObject();
+            JSONObject index = new JSONObject();
+            index.put("type","long");
+            index.put("value", getCurrentPartNumber()+1);
+            parameter.put("Index", index);
+            LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND_NOTIFY, ".uno:Remove", parameter.toString(),true));
+        }catch (JSONException e){
+            e.printStackTrace();
+        }
+    }
+
+
+
     @Override
-    public void saveDocumentAs(String filePath, String format) {
+    public void saveDocumentAs(final String filePath, String format) {
         final String newFilePath = "file://" + filePath;
         Log.d("saveFilePathURL", newFilePath);
         LOKitShell.showProgressSpinner(mContext);
@@ -216,7 +308,16 @@ class LOKitTileProvider implements TileProvider {
             if (format.equals("svg")) {
                 // error in creating temp slideshow svg file
                 Log.d(LOGTAG, "Error in creating temp slideshow svg file");
-            } else {
+            } else if(format.equals("pdf")){
+                Log.d(LOGTAG, "Error in creating pdf file");
+                LOKitShell.getMainHandler().post(new Runnable() {
+                    @Override
+                    public void run() {
+                        // There was some error
+                        mContext.showCustomStatusMessage(mContext.getString(R.string.unable_to_export_pdf));
+                    }
+                });
+            }else {
                 LOKitShell.getMainHandler().post(new Runnable() {
                     @Override
                     public void run() {
@@ -234,6 +335,14 @@ class LOKitTileProvider implements TileProvider {
                         mContext.startPresentation(newFilePath);
                     }
                 });
+            }else if(format.equals("pdf")){
+                LOKitShell.getMainHandler().post(new Runnable() {
+                    @Override
+                    public void run() {
+                        // There was no error
+                        mContext.showCustomStatusMessage(mContext.getString(R.string.pdf_exported_at)+filePath);
+                    }
+                });
             } else {
                 LOKitShell.getMainHandler().post(new Runnable() {
                     @Override
@@ -246,6 +355,76 @@ class LOKitTileProvider implements TileProvider {
         }
         LOKitShell.hideProgressSpinner(mContext);
     }
+
+    public void exportToPDF(boolean print){
+        String dir = Environment.getExternalStorageDirectory().getAbsolutePath()+"/Documents";
+        File docDir = new File(dir);
+        if(!docDir.exists()){
+            docDir.mkdir();
+        }
+        String mInputFileName = (new File(mInputFile)).getName();
+        String file = mInputFileName.substring(0,(mInputFileName.length()-3))+"pdf";
+        if(print){
+            String cacheFile = mContext.getExternalCacheDir().getAbsolutePath()
+                    + "/" + file;
+            mDocument.saveAs("file://"+cacheFile,"pdf","");
+            printDocument(cacheFile);
+        }else{
+            saveDocumentAs(dir+"/"+file,"pdf");
+        }
+    }
+
+    private void printDocument(String cacheFile) {
+        if (Build.VERSION.SDK_INT >= 19) {
+            try {
+                PrintManager printManager = (PrintManager) mContext.getSystemService(Context.PRINT_SERVICE);
+                PrintDocumentAdapter printAdapter = new PDFDocumentAdapter(mContext, cacheFile);
+                printManager.print("Document", printAdapter, new PrintAttributes.Builder().build());
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            mContext.showCustomStatusMessage(mContext.getString(R.string.printing_not_supported));
+        }
+    }
+
+    public boolean isDocumentCached(){
+        File input = new File(mInputFile);
+        final String cacheFile = mContext.getExternalCacheDir().getAbsolutePath() + "/lo_cached_" + input.getName();
+        File cacheFileObj = new File(cacheFile);
+        if(cacheFileObj.exists())
+            return true;
+
+        return false;
+    }
+
+    public void cacheDocument() {
+        String cacheDir = mContext.getExternalCacheDir().getAbsolutePath();
+        File input = new File(mInputFile);
+        final String cacheFile = cacheDir + "/lo_cached_" + input.getName();
+        Log.i(LOGTAG, "cacheDocument: " + cacheFile);
+        if(isDocumentCached()){
+            LOKitShell.sendEvent(new LOEvent(LOEvent.UNO_COMMAND, ".uno:Save"));
+        }else{
+            mDocument.saveAs("file://"+cacheFile, FileUtilities.getExtension(input.getPath()).substring(1),"");
+        }
+    }
+
+    public void saveDocument(){
+        if(isDocumentCached()){
+            String format = FileUtilities.getExtension(mInputFile).substring(1);
+            String cacheDir = mContext.getExternalCacheDir().getAbsolutePath();
+            File input = new File(mInputFile);
+            final String cacheFile = cacheDir + "/lo_cached_" + input.getName();
+            String path = input.getAbsolutePath();
+            saveDocumentAs(path, format);
+            (new File(cacheFile)).delete();
+        }else{
+            mContext.saveDocument();
+        }
+    }
+
 
     private void setupDocumentFonts() {
         String values = mDocument.getCommandValues(".uno:CharFontName");
@@ -263,14 +442,14 @@ class LOKitTileProvider implements TileProvider {
         switch (mDocument.getDocumentType()) {
             case Document.DOCTYPE_DRAWING:
             case Document.DOCTYPE_TEXT:
-                return "Page " + (i + 1);
+                return mContext.getString(R.string.page) + " " + (i + 1);
             case Document.DOCTYPE_SPREADSHEET:
-                return "Sheet " + (i + 1);
+                return mContext.getString(R.string.sheet) + " " + (i + 1);
             case Document.DOCTYPE_PRESENTATION:
-                return "Slide " + (i + 1);
+                return mContext.getString(R.string.slide) + " " + (i + 1);
             case Document.DOCTYPE_OTHER:
             default:
-                return "Part " + (i + 1);
+                return mContext.getString(R.string.part) + " " + (i + 1);
         }
     }
 
@@ -506,6 +685,14 @@ class LOKitTileProvider implements TileProvider {
     @Override
     public boolean isSpreadsheet() {
         return mDocument != null && mDocument.getDocumentType() == Document.DOCTYPE_SPREADSHEET;
+    }
+
+    /**
+     * @see TileProvider#isPresentation()
+     */
+    @Override
+    public boolean isPresentation(){
+        return mDocument != null && mDocument.getDocumentType() == Document.DOCTYPE_PRESENTATION;
     }
 
     /**

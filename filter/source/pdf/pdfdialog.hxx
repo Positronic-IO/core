@@ -23,6 +23,7 @@
 #include "pdffilter.hxx"
 #include <svtools/genericunodialog.hxx>
 
+#include <comphelper/proparrhlp.hxx>
 #include <cppuhelper/implbase.hxx>
 
 
@@ -43,7 +44,7 @@ private:
     virtual Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
     virtual OUString SAL_CALL getImplementationName() override;
     virtual Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
-    virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* pParent) override;
+    virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
     virtual void executedDialog( sal_Int16 nExecutionResult ) override;
     virtual Reference< XPropertySetInfo>  SAL_CALL getPropertySetInfo() override;
     virtual ::cppu::IPropertyArrayHelper& SAL_CALL getInfoHelper() override;

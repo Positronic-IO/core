@@ -22,16 +22,14 @@
 
 #include <TimerTriggeredControllerLock.hxx>
 
-#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <svtools/wizardmachine.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/fixed.hxx>
-#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <memory>
 
-#include <res_LegendPosition.hxx>
-#include <res_Titles.hxx>
+namespace chart { class LegendPositionResources; }
+namespace chart { class TitleResources; }
+namespace com { namespace sun { namespace star { namespace chart2 { class XChartDocument; } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 namespace chart
 {
@@ -39,11 +37,10 @@ namespace chart
 class TitlesAndObjectsTabPage final : public svt::OWizardPage
 {
 public:
-    TitlesAndObjectsTabPage( svt::OWizardMachine* pParent
-                , const css::uno::Reference< css::chart2::XChartDocument >& xChartModel
-                , const css::uno::Reference< css::uno::XComponentContext >& xContext );
+    TitlesAndObjectsTabPage(TabPageParent pParent,
+                            const css::uno::Reference< css::chart2::XChartDocument >& xChartModel,
+                            const css::uno::Reference< css::uno::XComponentContext >& xContext);
     virtual ~TitlesAndObjectsTabPage() override;
-    virtual void dispose() override;
 
     virtual void        initializePage() override;
     virtual bool        commitPage( ::svt::WizardTypes::CommitPageReason eReason ) override;
@@ -52,21 +49,21 @@ public:
 private:
     void commitToModel();
     DECL_LINK( ChangeHdl, LinkParamNone*, void );
-    DECL_LINK( ChangeEditHdl, Edit&, void );
-    DECL_LINK( ChangeCheckBoxHdl, CheckBox&, void );
+    DECL_LINK( ChangeEditHdl, weld::Entry&, void );
+    DECL_LINK( ChangeCheckBoxHdl, weld::ToggleButton&, void );
 
     std::unique_ptr< TitleResources >            m_xTitleResources;
     std::unique_ptr< LegendPositionResources >   m_xLegendPositionResources;
-
-    VclPtr<CheckBox>          m_pCB_Grid_X;
-    VclPtr<CheckBox>          m_pCB_Grid_Y;
-    VclPtr<CheckBox>          m_pCB_Grid_Z;
 
     css::uno::Reference< css::chart2::XChartDocument >   m_xChartModel;
     css::uno::Reference< css::uno::XComponentContext>    m_xCC;
 
     bool    m_bCommitToModel;
     TimerTriggeredControllerLock   m_aTimerTriggeredControllerLock;
+
+    std::unique_ptr<weld::CheckButton> m_xCB_Grid_X;
+    std::unique_ptr<weld::CheckButton> m_xCB_Grid_Y;
+    std::unique_ptr<weld::CheckButton> m_xCB_Grid_Z;
 };
 
 } //namespace chart

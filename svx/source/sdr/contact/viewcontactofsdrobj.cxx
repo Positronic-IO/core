@@ -33,7 +33,6 @@
 #include <svx/sdrpagewindow.hxx>
 #include <svx/sdrpaintwindow.hxx>
 #include <svx/svdhdl.hxx>
-#include <comphelper/sequence.hxx>
 
 namespace sdr { namespace contact {
 
@@ -87,7 +86,7 @@ ViewContact& ViewContactOfSdrObj::GetViewContact(sal_uInt32 nIndex) const
 ViewContact* ViewContactOfSdrObj::GetParentContact() const
 {
     ViewContact* pRetval = nullptr;
-    SdrObjList* pObjList = GetSdrObject().getParentOfSdrObject();
+    SdrObjList* pObjList = GetSdrObject().getParentSdrObjListFromSdrObject();
 
     if(pObjList)
     {
@@ -99,9 +98,9 @@ ViewContact* ViewContactOfSdrObj::GetParentContact() const
         else
         {
             // Is a group?
-            if(pObjList->GetOwnerObj())
+            if(pObjList->getSdrObjectFromSdrObjList())
             {
-                pRetval = &(pObjList->GetOwnerObj()->GetViewContact());
+                pRetval = &(pObjList->getSdrObjectFromSdrObjList()->GetViewContact());
             }
         }
     }

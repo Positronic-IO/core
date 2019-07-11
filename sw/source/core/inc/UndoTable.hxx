@@ -47,14 +47,14 @@ class SwTableSortBoxes;
 class SwUndoInsTable : public SwUndo
 {
     OUString sTableNm;
-    SwInsertTableOptions aInsTableOpts;
-    SwDDEFieldType* pDDEFieldType;
-    std::vector<sal_uInt16> *pColWidth;
-    SwRedlineData*  pRedlData;
-    SwTableAutoFormat* pAutoFormat;
+    SwInsertTableOptions const aInsTableOpts;
+    std::unique_ptr<SwDDEFieldType> pDDEFieldType;
+    std::unique_ptr<std::vector<sal_uInt16>> pColWidth;
+    std::unique_ptr<SwRedlineData>  pRedlData;
+    std::unique_ptr<SwTableAutoFormat> pAutoFormat;
     sal_uLong nSttNode;
     sal_uInt16 nRows, nCols;
-    sal_uInt16 nAdjust;
+    sal_uInt16 const nAdjust;
 
 public:
     SwUndoInsTable( const SwPosition&, sal_uInt16 nCols, sal_uInt16 nRows,
@@ -74,12 +74,12 @@ public:
 class SwUndoTextToTable : public SwUndo, public SwUndRng
 {
     OUString sTableNm;
-    SwInsertTableOptions aInsTableOpts;
-    std::vector<sal_uLong>* pDelBoxes;
-    SwTableAutoFormat* pAutoFormat;
+    SwInsertTableOptions const aInsTableOpts;
+    std::vector<sal_uLong> mvDelBoxes;
+    std::unique_ptr<SwTableAutoFormat> pAutoFormat;
     SwHistory* pHistory;
-    sal_Unicode cTrenner;
-    sal_uInt16 nAdjust;
+    sal_Unicode const cTrenner;
+    sal_uInt16 const nAdjust;
     bool bSplitEnd : 1;
 
 public:
@@ -99,14 +99,14 @@ public:
 
 class SwUndoTableToText : public SwUndo
 {
-    OUString sTableNm;
-    SwDDEFieldType* pDDEFieldType;
-    SaveTable* pTableSave;
-    SwTableToTextSaves* m_pBoxSaves;
-    SwHistory* pHistory;
+    OUString const sTableNm;
+    std::unique_ptr<SwDDEFieldType> pDDEFieldType;
+    std::unique_ptr<SaveTable> pTableSave;
+    SwTableToTextSaves m_vBoxSaves;
+    std::unique_ptr<SwHistory> pHistory;
     sal_uLong nSttNd, nEndNd;
-    sal_Unicode cTrenner;
-    sal_uInt16 nHdlnRpt;
+    sal_Unicode const cTrenner;
+    sal_uInt16 const nHdlnRpt;
     bool bCheckNumFormat : 1;
 
 public:
@@ -147,7 +147,7 @@ class SwUndoTableAutoFormat : public SwUndo
     std::unique_ptr<SaveTable> pSaveTable;
     std::vector< std::shared_ptr<SwUndoTableNumFormat> > m_Undos;
     bool bSaveContentAttr;
-    sal_uInt16 m_nRepeatHeading;
+    sal_uInt16 const m_nRepeatHeading;
 
     void UndoRedo(bool const bUndo, ::sw::UndoRedoContext & rContext);
 
@@ -166,23 +166,23 @@ using SwUndoSaveSections = std::vector<std::unique_ptr<SwUndoSaveSection, o3tl::
 
 class SwUndoTableNdsChg : public SwUndo
 {
-    std::unique_ptr<SaveTable> pSaveTable;
+    std::unique_ptr<SaveTable> m_pSaveTable;
     std::set<sal_uLong> m_Boxes;
     struct BoxMove
     {
         sal_uLong index;    ///< Index of this box.
-        bool      hasMoved; ///< Has this box been moved already.
+        bool const hasMoved; ///< Has this box been moved already.
         BoxMove(sal_uLong idx, bool moved=false) : index(idx), hasMoved(moved) {};
         bool operator<(const BoxMove& other) const { return index < other.index; };
     };
-    std::unique_ptr< std::set<BoxMove> > pNewSttNds;
+    std::unique_ptr< std::set<BoxMove> > m_pNewSttNds;
     std::unique_ptr<SwUndoSaveSections> m_pDelSects;
-    long nMin, nMax;        // for redo of delete column
-    sal_uLong nSttNode, nCurrBox;
-    sal_uInt16 nCount, nRelDiff, nAbsDiff;
-    TableChgWidthHeightType nSetColType;
-    bool bFlag;
-    bool bSameHeight;                   // only used for SplitRow
+    long m_nMin, m_nMax;        // for redo of delete column
+    sal_uLong m_nSttNode, m_nCurrBox;
+    sal_uInt16 m_nCount, m_nRelDiff, m_nAbsDiff;
+    TableChgWidthHeightType m_nSetColType;
+    bool const m_bFlag;
+    bool const m_bSameHeight;                   // only used for SplitRow
 
     SwUndoTableNdsChg(SwUndoTableNdsChg const&) = delete;
     SwUndoTableNdsChg& operator=(SwUndoTableNdsChg const&) = delete;
@@ -212,25 +212,24 @@ public:
     void SetColWidthParam( sal_uLong nBoxIdx, sal_uInt16 nMode, TableChgWidthHeightType nType,
                             SwTwips nAbsDif, SwTwips nRelDif )
     {
-        nCurrBox = nBoxIdx;
-        nCount = nMode;
-        nSetColType = nType;
-        nAbsDiff = static_cast<sal_uInt16>(nAbsDif);
-        nRelDiff = static_cast<sal_uInt16>(nRelDif);
+        m_nCurrBox = nBoxIdx;
+        m_nCount = nMode;
+        m_nSetColType = nType;
+        m_nAbsDiff = static_cast<sal_uInt16>(nAbsDif);
+        m_nRelDiff = static_cast<sal_uInt16>(nRelDif);
     }
 };
 
 class SwUndoMove;
-using SwUndoMoves = std::vector<std::unique_ptr<SwUndoMove>>;
 
 class SwUndoTableMerge : public SwUndo, private SwUndRng
 {
     sal_uLong nTableNode;
-    SaveTable* pSaveTable;
+    std::unique_ptr<SaveTable> pSaveTable;
     std::set<sal_uLong> m_Boxes;
     std::vector<sal_uLong> aNewSttNds;
-    SwUndoMoves* m_pMoves;
-    SwHistory* pHistory;
+    std::vector<std::unique_ptr<SwUndoMove>> m_vMoves;
+    std::unique_ptr<SwHistory> pHistory;
 
 public:
     SwUndoTableMerge( const SwPaM& rTableSel );
@@ -252,7 +251,7 @@ public:
 
 class SwUndoTableNumFormat : public SwUndo
 {
-    SfxItemSet *m_pBoxSet;
+    std::unique_ptr<SfxItemSet> m_pBoxSet;
     std::unique_ptr<SwHistory> m_pHistory;
     OUString m_aStr, m_aNewFormula;
 
@@ -279,12 +278,11 @@ public:
 };
 
 struct UndoTableCpyTable_Entry;
-using SwUndoTableCpyTable_Entries = std::vector<std::unique_ptr<UndoTableCpyTable_Entry>>;
 
 class SwUndoTableCpyTable : public SwUndo
 {
-    SwUndoTableCpyTable_Entries* m_pArr;
-    SwUndoTableNdsChg* pInsRowUndo;
+    std::vector<std::unique_ptr<UndoTableCpyTable_Entry>> m_vArr;
+    std::unique_ptr<SwUndoTableNdsChg> pInsRowUndo;
 
     //b6341295: When redlining is active, PrepareRedline has to create the
     //redlining attributes for the new and the old table cell content
@@ -326,15 +324,15 @@ public:
 class SwUndoSplitTable : public SwUndo
 {
     sal_uLong nTableNode, nOffset;
-    SwSaveRowSpan* mpSaveRowSpan; // stores row span values at the splitting row
-    SaveTable* pSavTable;
-    SwHistory* pHistory;
-    SplitTable_HeadlineOption nMode;
+    std::unique_ptr<SwSaveRowSpan> mpSaveRowSpan; // stores row span values at the splitting row
+    std::unique_ptr<SaveTable> pSavTable;
+    std::unique_ptr<SwHistory> pHistory;
+    SplitTable_HeadlineOption const nMode;
     sal_uInt16 nFormulaEnd;
-    bool bCalcNewSize;
+    bool const bCalcNewSize;
 
 public:
-    SwUndoSplitTable( const SwTableNode& rTableNd, SwSaveRowSpan* pRowSp,
+    SwUndoSplitTable( const SwTableNode& rTableNd, std::unique_ptr<SwSaveRowSpan> pRowSp,
             SplitTable_HeadlineOption nMode, bool bCalcNewSize );
 
     virtual ~SwUndoSplitTable() override;
@@ -344,7 +342,7 @@ public:
     virtual void RepeatImpl( ::sw::RepeatContext & ) override;
 
     void SetTableNodeOffset( sal_uLong nIdx )     { nOffset = nIdx - nTableNode; }
-    SwHistory* GetHistory()                 { return pHistory; }
+    SwHistory* GetHistory()                 { return pHistory.get(); }
     void SaveFormula( SwHistory& rHistory );
 };
 
@@ -352,10 +350,10 @@ class SwUndoMergeTable : public SwUndo
 {
     OUString aName;
     sal_uLong nTableNode;
-    SaveTable* pSavTable, *pSavHdl;
-    SwHistory* pHistory;
-    sal_uInt16 nMode;
-    bool bWithPrev;
+    std::unique_ptr<SaveTable> pSavTable, pSavHdl;
+    std::unique_ptr<SwHistory> pHistory;
+    sal_uInt16 const nMode;
+    bool const bWithPrev;
 
 public:
     SwUndoMergeTable( const SwTableNode& rTableNd, const SwTableNode& rDelTableNd,
@@ -373,8 +371,8 @@ public:
 class SwUndoTableHeadline : public SwUndo
 {
     sal_uLong nTableNd;
-    sal_uInt16 nOldHeadline;
-    sal_uInt16 nNewHeadline;
+    sal_uInt16 const nOldHeadline;
+    sal_uInt16 const nNewHeadline;
 
 public:
     SwUndoTableHeadline( const SwTable&, sal_uInt16 nOldHdl,  sal_uInt16 nNewHdl );
@@ -388,7 +386,7 @@ void InsertSort( std::vector<sal_uInt16>& rArr, sal_uInt16 nIdx );
 
 class SwUndoTableStyleMake : public SwUndo
 {
-    OUString m_sName;
+    OUString const m_sName;
     std::unique_ptr<SwTableAutoFormat> m_pAutoFormat;
 public:
     SwUndoTableStyleMake(const OUString& rName, const SwDoc* pDoc);

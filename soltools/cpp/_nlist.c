@@ -38,12 +38,12 @@ static Nlist *nlist[NLSIZE];
 
 struct kwtab
 {
-    char *kw;
-    int val;
-    int flag;
+    char * const kw;
+    int const val;
+    int const flag;
 };
 
-static struct kwtab kwtab[] =
+static const struct kwtab kwtab[] =
 {
         {"if", KIF, ISKW},
         {"ifdef", KIFDEF, ISKW},
@@ -76,7 +76,7 @@ unsigned long namebit[077 + 1];
 void
     setup_kwtab(void)
 {
-    struct kwtab *kp;
+    struct kwtab const *kp;
     Nlist *np;
     Token t;
     static Token deftoken[1] = {{NAME, 0, 7, (uchar *) "defined", 0}};

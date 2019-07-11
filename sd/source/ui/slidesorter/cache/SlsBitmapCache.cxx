@@ -25,6 +25,7 @@
 
 #include <sdpage.hxx>
 #include <drawdoc.hxx>
+#include <sal/log.hxx>
 
 // Define the default value for the maximal cache size that is used for
 // previews that are currently not visible.  The visible previews are all
@@ -39,7 +40,7 @@ namespace sd { namespace slidesorter { namespace cache {
 class BitmapCache::CacheEntry
 {
 public:
-    CacheEntry(const Bitmap& rBitmap, sal_Int32 nLastAccessTime, bool bIsPrecious);
+    CacheEntry(const BitmapEx& rBitmap, sal_Int32 nLastAccessTime, bool bIsPrecious);
     CacheEntry(sal_Int32 nLastAccessTime, bool bIsPrecious);
     inline void Recycle (const CacheEntry& rEntry);
     inline sal_Int32 GetMemorySize() const;
@@ -51,22 +52,22 @@ public:
     sal_Int32 GetAccessTime() const { return mnLastAccessTime; }
     void SetAccessTime (sal_Int32 nAccessTime) { mnLastAccessTime = nAccessTime; }
 
-    const Bitmap& GetPreview() const { return maPreview; }
-    inline void SetPreview (const Bitmap& rPreview);
+    const BitmapEx& GetPreview() const { return maPreview; }
+    inline void SetPreview (const BitmapEx& rPreview);
     bool HasPreview() const;
 
-    const Bitmap& GetMarkedPreview() const { return maMarkedPreview; }
-    inline void SetMarkedPreview (const Bitmap& rMarkePreview);
+    const BitmapEx& GetMarkedPreview() const { return maMarkedPreview; }
+    inline void SetMarkedPreview (const BitmapEx& rMarkePreview);
 
-    bool HasReplacement() const { return (mpReplacement.get() != nullptr); }
+    bool HasReplacement() const { return (mpReplacement != nullptr); }
     inline bool HasLosslessReplacement() const;
     void Invalidate() { mpReplacement.reset(); mpCompressor.reset(); mbIsUpToDate = false; }
     bool IsPrecious() const { return mbIsPrecious; }
     void SetPrecious (bool bIsPrecious) { mbIsPrecious = bIsPrecious; }
 
 private:
-    Bitmap maPreview;
-    Bitmap maMarkedPreview;
+    BitmapEx maPreview;
+    BitmapEx maMarkedPreview;
     std::shared_ptr<BitmapReplacement> mpReplacement;
     std::shared_ptr<BitmapCompressor> mpCompressor;
     bool mbIsUpToDate;
@@ -167,7 +168,7 @@ bool BitmapCache::BitmapIsUpToDate (const CacheKey& rKey)
     return bIsUpToDate;
 }
 
-Bitmap BitmapCache::GetBitmap (const CacheKey& rKey)
+BitmapEx BitmapCache::GetBitmap (const CacheKey& rKey)
 {
     ::osl::MutexGuard aGuard (maMutex);
 
@@ -176,7 +177,7 @@ Bitmap BitmapCache::GetBitmap (const CacheKey& rKey)
     {
         // Create an empty bitmap for the given key that acts as placeholder
         // until we are given the real one.  Mark it as not being up to date.
-        SetBitmap(rKey, Bitmap(), false);
+        SetBitmap(rKey, BitmapEx(), false);
         iEntry = mpBitmapContainer->find(rKey);
         iEntry->second.SetUpToDate(false);
     }
@@ -195,7 +196,7 @@ Bitmap BitmapCache::GetBitmap (const CacheKey& rKey)
     return iEntry->second.GetPreview();
 }
 
-Bitmap BitmapCache::GetMarkedBitmap (const CacheKey& rKey)
+BitmapEx BitmapCache::GetMarkedBitmap (const CacheKey& rKey)
 {
     ::osl::MutexGuard aGuard (maMutex);
 
@@ -206,7 +207,7 @@ Bitmap BitmapCache::GetMarkedBitmap (const CacheKey& rKey)
         return iEntry->second.GetMarkedPreview();
     }
     else
-        return Bitmap();
+        return BitmapEx();
 }
 
 void BitmapCache::ReleaseBitmap (const CacheKey& rKey)
@@ -258,7 +259,7 @@ void BitmapCache::InvalidateCache()
 
 void BitmapCache::SetBitmap (
     const CacheKey& rKey,
-    const Bitmap& rPreview,
+    const BitmapEx& rPreview,
     bool bIsPrecious)
 {
     ::osl::MutexGuard aGuard (maMutex);
@@ -285,7 +286,7 @@ void BitmapCache::SetBitmap (
 
 void BitmapCache::SetMarkedBitmap (
     const CacheKey& rKey,
-    const Bitmap& rPreview)
+    const BitmapEx& rPreview)
 {
     ::osl::MutexGuard aGuard (maMutex);
 
@@ -317,7 +318,7 @@ void BitmapCache::SetPrecious (const CacheKey& rKey, bool bIsPrecious)
     {
         iEntry = mpBitmapContainer->emplace(
             rKey,
-            CacheEntry(Bitmap(), mnCurrentAccessTime++, bIsPrecious)
+            CacheEntry(BitmapEx(), mnCurrentAccessTime++, bIsPrecious)
             ).first;
         UpdateCacheSize(iEntry->second, ADD);
     }
@@ -459,7 +460,7 @@ BitmapCache::CacheEntry::CacheEntry(
 }
 
 BitmapCache::CacheEntry::CacheEntry(
-    const Bitmap& rPreview,
+    const BitmapEx& rPreview,
     sal_Int32 nLastAccessTime,
     bool bIsPrecious)
     : maPreview(rPreview),
@@ -489,7 +490,7 @@ inline sal_Int32 BitmapCache::CacheEntry::GetMemorySize() const
     sal_Int32 nSize (0);
     nSize += maPreview.GetSizeBytes();
     nSize += maMarkedPreview.GetSizeBytes();
-    if (mpReplacement.get() != nullptr)
+    if (mpReplacement != nullptr)
         nSize += mpReplacement->GetMemorySize();
     return nSize;
 }
@@ -498,7 +499,7 @@ void BitmapCache::CacheEntry::Compress (const std::shared_ptr<BitmapCompressor>&
 {
     if ( ! maPreview.IsEmpty())
     {
-        if (mpReplacement.get() == nullptr)
+        if (mpReplacement == nullptr)
         {
             mpReplacement = rpCompressor->Compress(maPreview);
 
@@ -521,7 +522,7 @@ void BitmapCache::CacheEntry::Compress (const std::shared_ptr<BitmapCompressor>&
 
 inline void BitmapCache::CacheEntry::Decompress()
 {
-    if (mpReplacement.get()!=nullptr && mpCompressor.get()!=nullptr && maPreview.IsEmpty())
+    if (mpReplacement != nullptr && mpCompressor != nullptr && maPreview.IsEmpty())
     {
         maPreview = mpCompressor->Decompress(*mpReplacement);
         maMarkedPreview.SetEmpty();
@@ -530,7 +531,7 @@ inline void BitmapCache::CacheEntry::Decompress()
     }
 }
 
-inline void BitmapCache::CacheEntry::SetPreview (const Bitmap& rPreview)
+inline void BitmapCache::CacheEntry::SetPreview (const BitmapEx& rPreview)
 {
     maPreview = rPreview;
     maMarkedPreview.SetEmpty();
@@ -543,16 +544,14 @@ bool BitmapCache::CacheEntry::HasPreview() const
     return ! maPreview.IsEmpty();
 }
 
-inline void BitmapCache::CacheEntry::SetMarkedPreview (const Bitmap& rMarkedPreview)
+inline void BitmapCache::CacheEntry::SetMarkedPreview (const BitmapEx& rMarkedPreview)
 {
     maMarkedPreview = rMarkedPreview;
 }
 
 inline bool BitmapCache::CacheEntry::HasLosslessReplacement() const
 {
-    return mpReplacement.get()!=nullptr
-        && mpCompressor.get()!=nullptr
-        && mpCompressor->IsLossless();
+    return mpReplacement != nullptr && mpCompressor != nullptr && mpCompressor->IsLossless();
 }
 
 } } } // end of namespace ::sd::slidesorter::cache

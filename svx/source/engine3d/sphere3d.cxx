@@ -32,16 +32,17 @@
 #include <basegfx/point/b3dpoint.hxx>
 #include <sdr/contact/viewcontactofe3dsphere.hxx>
 #include <basegfx/polygon/b3dpolygon.hxx>
+#include <o3tl/make_unique.hxx>
 
 // DrawContact section
-sdr::contact::ViewContact* E3dSphereObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> E3dSphereObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfE3dSphere(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfE3dSphere>(*this);
 }
 
-sdr::properties::BaseProperties* E3dSphereObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> E3dSphereObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::E3dSphereProperties(*this);
+    return o3tl::make_unique<sdr::properties::E3dSphereProperties>(*this);
 }
 
 // Build Sphere from polygon facets in latitude and longitude

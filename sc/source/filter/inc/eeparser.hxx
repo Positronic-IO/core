@@ -24,9 +24,11 @@
 #include <vcl/graph.hxx>
 #include <svl/itemset.hxx>
 #include <editeng/editdata.hxx>
+#include <boost/optional.hpp>
 #include <address.hxx>
 #include <memory>
 #include <vector>
+#include <map>
 
 const sal_Char nHorizontal = 1;
 const sal_Char nVertical = 2;
@@ -98,7 +100,7 @@ class ScEEParser
 protected:
     EditEngine*         pEdit;
     SfxItemPool*        pPool;
-    SfxItemPool*        pDocPool;
+    SfxItemPool* const  pDocPool;
     std::vector<std::shared_ptr<ScEEParseEntry>> maList;
     std::shared_ptr<ScEEParseEntry> mxActEntry;
     ColWidthsMap        maColWidths;

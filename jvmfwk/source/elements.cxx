@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 #include <memory>
@@ -26,9 +27,9 @@
 #include <osl/mutex.hxx>
 #include <osl/file.hxx>
 #include <fwkutil.hxx>
-#include "fwkbase.hxx"
+#include <fwkbase.hxx>
 #include "framework.hxx"
-#include "libxmlutil.hxx"
+#include <libxmlutil.hxx>
 #include <osl/thread.hxx>
 #include <algorithm>
 #include <libxml/parser.h>
@@ -47,7 +48,7 @@ using namespace osl;
 namespace jfw
 {
 
-OString getElement(OString const & docPath,
+static OString getElement(OString const & docPath,
                         xmlChar const * pathExpression)
 {
     //Prepare the xml document and context
@@ -483,7 +484,7 @@ void NodeJava::write() const
             xmlFreeNode(lastNode);
         }
         //add a new line after <vmParameters>
-        if (m_vmParameters->size() > 0)
+        if (!m_vmParameters->empty())
         {
             xmlNode * nodeCrLf = xmlNewText(reinterpret_cast<xmlChar const *>("\n"));
             xmlAddChild(vmParameters, nodeCrLf);
@@ -523,7 +524,7 @@ void NodeJava::write() const
             xmlFreeNode(lastNode);
         }
         //add a new line after <vmParameters>
-        if (m_JRELocations->size() > 0)
+        if (!m_JRELocations->empty())
         {
             xmlNode * nodeCrLf = xmlNewText(reinterpret_cast<xmlChar const *>("\n"));
             xmlAddChild(jreLocationsNode, nodeCrLf);
@@ -691,10 +692,6 @@ bool NodeJava::createSettingsDocument() const
 CNodeJavaInfo::CNodeJavaInfo() :
     m_bEmptyNode(false), bNil(true), bAutoSelect(true),
     nFeatures(0), nRequirements(0)
-{
-}
-
-CNodeJavaInfo::~CNodeJavaInfo()
 {
 }
 

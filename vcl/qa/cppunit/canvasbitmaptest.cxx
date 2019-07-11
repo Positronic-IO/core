@@ -31,6 +31,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <tools/diagnose_ex.h>
 #include <rtl/ref.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 #include <vcl/canvastools.hxx>
@@ -50,7 +51,7 @@ using namespace vcl::unotools;
 namespace com { namespace sun { namespace star { namespace rendering
 {
 
-bool operator==( const RGBColor& rLHS, const ARGBColor& rRHS )
+static bool operator==( const RGBColor& rLHS, const ARGBColor& rRHS )
 {
     return rLHS.Red == rRHS.Red && rLHS.Green == rRHS.Green && rLHS.Blue == rRHS.Blue;
 }
@@ -244,7 +245,7 @@ class TestBitmap : public cppu::WeakImplHelper< rendering::XIntegerReadOnlyBitma
                                                  rendering::XIntegerBitmapColorSpace >
 {
 private:
-    geometry::IntegerSize2D        maSize;
+    geometry::IntegerSize2D const  maSize;
     uno::Sequence<sal_Int8>        maComponentTags;
     uno::Sequence<sal_Int32>       maComponentBitCounts;
     rendering::IntegerBitmapLayout maLayout;
@@ -636,7 +637,7 @@ void CanvasBitmapTest::runTest()
 
     // Testing VclCanvasBitmap wrapper
 
-    for( unsigned int i=0; i<SAL_N_ELEMENTS(lcl_depths); ++i )
+    for( size_t i=0; i<SAL_N_ELEMENTS(lcl_depths); ++i )
     {
         const sal_Int8 nDepth( lcl_depths[i] );
         Bitmap aBitmap(Size(200,200),nDepth);

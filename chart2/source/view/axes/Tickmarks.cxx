@@ -21,7 +21,10 @@
 #include "Tickmarks_Equidistant.hxx"
 #include "Tickmarks_Dates.hxx"
 #include <ViewDefines.hxx>
+#include "VAxisProperties.hxx"
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
+#include <com/sun/star/chart2/AxisType.hpp>
 
 using namespace ::com::sun::star;
 using namespace ::rtl::math;
@@ -34,7 +37,6 @@ TickInfo::TickInfo( const uno::Reference<chart2::XScaling>& xInverse )
 , xInverseScaling( xInverse )
 , aTickScreenPosition(0.0,0.0)
 , bPaintIt( true )
-, xTextShape( nullptr )
 , nFactorForLimitedTextWidth(1)
 {
 }
@@ -88,7 +90,6 @@ TickFactory::TickFactory(
           const ExplicitScaleData& rScale, const ExplicitIncrementData& rIncrement )
             : m_rScale( rScale )
             , m_rIncrement( rIncrement )
-            , m_xInverseScaling(nullptr)
 {
     //@todo: make sure that the scale is valid for the scaling
 

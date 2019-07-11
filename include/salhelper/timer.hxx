@@ -56,12 +56,6 @@ struct SAL_WARN_UNUSED TTimeValue : public TimeValue
         normalize();
     }
 
-    TTimeValue( const TTimeValue& rTimeValue ):
-        TimeValue(rTimeValue)
-    {
-        normalize();
-    }
-
     TTimeValue( const TimeValue& rTimeValue )
     {
         Seconds = rTimeValue.Seconds;
@@ -192,11 +186,11 @@ protected:
 
 protected:
 
-    /** holds (initial) exparation time of this timer.
+    /** holds (initial) expiration time of this timer.
      */
     TTimeValue  m_aTimeOut;
 
-    /** holds the time of exparation of this timer.
+    /** holds the time of expiration of this timer.
      */
     TTimeValue  m_aExpired;
 

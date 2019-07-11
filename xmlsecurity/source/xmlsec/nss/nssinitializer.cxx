@@ -17,17 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-
-/*
- * and turn off the additional virtual methods which are part of some interfaces when compiled
- * with debug
- */
-#undef DEBUG
-
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/mozilla/XMozillaBootstrap.hpp>
 #include <com/sun/star/xml/crypto/DigestID.hpp>
 #include <com/sun/star/xml/crypto/CipherID.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <cppuhelper/supportsservice.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <sal/types.h>
@@ -61,8 +55,11 @@ using namespace com::sun::star;
 
 #define ROOT_CERTS "Root Certs for OpenOffice.org"
 
-extern "C" void nsscrypto_finalize();
+extern "C" {
 
+static void nsscrypto_finalize();
+
+}
 
 namespace
 {
@@ -220,9 +217,9 @@ OString getMozillaCurrentProfile( const css::uno::Reference< css::uno::XComponen
 //used on a different platform.
 //
 //Then one needs to add the roots module oneself. This should be done with
-//SECMOD_LoadUserModule rather then SECMOD_AddNewModule. The latter would write
+//SECMOD_LoadUserModule rather than SECMOD_AddNewModule. The latter would write
 //the location of the roots module to the profile, which makes FF2 and TB2 use
-//it instead of there own module.
+//it instead of their own module.
 //
 //When using SYSTEM_NSS then the libnss3.so lib is typically found in /usr/lib.
 //This folder may, however, NOT contain the roots certificate module. That is,
@@ -251,6 +248,20 @@ bool nsscrypto_initialize( const css::uno::Reference< css::uno::XComponentContex
     // there might be no profile
     if ( !sCertDir.isEmpty() )
     {
+        if (sCertDir.indexOf(':') == -1) //might be env var with explicit prefix
+        {
+            OUString sCertDirURL;
+            osl::FileBase::getFileURLFromSystemPath(
+                OStringToOUString(sCertDir, osl_getThreadTextEncoding()),
+                sCertDirURL);
+            osl::DirectoryItem item;
+            if (osl::FileBase::E_NOENT != osl::DirectoryItem::get(sCertDirURL + "/cert8.db", item) &&
+                osl::FileBase::E_NOENT == osl::DirectoryItem::get(sCertDirURL + "/cert9.db", item))
+            {
+                SAL_INFO("xmlsecurity.xmlsec", "nsscrypto_initialize: trying to avoid profile migration");
+                sCertDir = "dbm:" + sCertDir;
+            }
+        }
         if( NSS_InitReadWrite( sCertDir.getStr() ) != SECSuccess )
         {
             SAL_INFO("xmlsecurity.xmlsec", "Initializing NSS with profile failed.");

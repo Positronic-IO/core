@@ -1451,7 +1451,7 @@ namespace basegfx
         bool isInEpsilonRange(const B2DPolygon& rCandidate, const B2DPoint& rTestPosition, double fDistance)
         {
             // force to non-bezier polygon
-            const B2DPolygon aCandidate(rCandidate.getDefaultAdaptiveSubdivision());
+            const B2DPolygon& aCandidate(rCandidate.getDefaultAdaptiveSubdivision());
             const sal_uInt32 nPointCount(aCandidate.count());
 
             if(nPointCount)
@@ -1654,7 +1654,7 @@ namespace basegfx
             return createPolygonFromEllipse( rCenter, fRadius, fRadius );
         }
 
-        B2DPolygon impCreateUnitCircle(sal_uInt32 nStartQuadrant)
+        static B2DPolygon impCreateUnitCircle(sal_uInt32 nStartQuadrant)
         {
             B2DPolygon aUnitCircle;
             const double fKappa((M_SQRT2 - 1.0) * 4.0 / 3.0);
@@ -1768,9 +1768,9 @@ namespace basegfx
             }
         }
 
-        B2DPolygon createPolygonFromEllipse( const B2DPoint& rCenter, double fRadiusX, double fRadiusY )
+        B2DPolygon createPolygonFromEllipse( const B2DPoint& rCenter, double fRadiusX, double fRadiusY, sal_uInt32 nStartQuadrant)
         {
-            B2DPolygon aRetval(createPolygonFromUnitCircle());
+            B2DPolygon aRetval(createPolygonFromUnitCircle(nStartQuadrant));
             const B2DHomMatrix aMatrix(createScaleTranslateB2DHomMatrix(fRadiusX, fRadiusY, rCenter.getX(), rCenter.getY()));
 
             aRetval.transform(aMatrix);
@@ -2133,7 +2133,9 @@ namespace basegfx
             return ((fCrossA > 0.0) == (fCrossB > 0.0));
         }
 
-        void addTriangleFan(const B2DPolygon& rCandidate, B2DPolygon& rTarget)
+        void addTriangleFan(
+            const B2DPolygon& rCandidate,
+            triangulator::B2DTriangleVector& rTarget)
         {
             const sal_uInt32 nCount(rCandidate.count());
 
@@ -2145,9 +2147,10 @@ namespace basegfx
                 for(sal_uInt32 a(2); a < nCount; a++)
                 {
                     const B2DPoint aCurrent(rCandidate.getB2DPoint(a));
-                    rTarget.append(aStart);
-                    rTarget.append(aLast);
-                    rTarget.append(aCurrent);
+                    rTarget.emplace_back(
+                        aStart,
+                        aLast,
+                        aCurrent);
 
                     // prepare next
                     aLast = aCurrent;
@@ -2158,7 +2161,7 @@ namespace basegfx
         namespace
         {
             /// return 0 for input of 0, -1 for negative and 1 for positive input
-            inline int lcl_sgn( const double n )
+            int lcl_sgn( const double n )
             {
                 return n == 0.0 ? 0 : 1 - 2*int(rtl::math::isSignBitSet(n));
             }
@@ -3285,90 +3288,94 @@ namespace basegfx
 
             // prepare new polygon
             B2DPolygon aRetval;
-            const css::awt::Point* pPointSequence = rPointSequenceSource.getConstArray();
-            const css::drawing::PolygonFlags* pFlagSequence = rFlagSequenceSource.getConstArray();
 
-            // get first point and flag
-            B2DPoint aNewCoordinatePair(pPointSequence->X, pPointSequence->Y); pPointSequence++;
-            css::drawing::PolygonFlags ePolygonFlag(*pFlagSequence); pFlagSequence++;
-            B2DPoint aControlA;
-            B2DPoint aControlB;
-
-            // first point is not allowed to be a control point
-            OSL_ENSURE(ePolygonFlag != css::drawing::PolygonFlags_CONTROL,
-                "UnoPolygonBezierCoordsToB2DPolygon: Start point is a control point, illegal input polygon (!)");
-
-            // add first point as start point
-            aRetval.append(aNewCoordinatePair);
-
-            for(sal_uInt32 b(1); b < nCount;)
+            if(0 != nCount)
             {
-                // prepare loop
-                bool bControlA(false);
-                bool bControlB(false);
+                const css::awt::Point* pPointSequence = rPointSequenceSource.getConstArray();
+                const css::drawing::PolygonFlags* pFlagSequence = rFlagSequenceSource.getConstArray();
 
-                // get next point and flag
-                aNewCoordinatePair = B2DPoint(pPointSequence->X, pPointSequence->Y);
-                ePolygonFlag = *pFlagSequence;
-                pPointSequence++; pFlagSequence++; b++;
+                // get first point and flag
+                B2DPoint aNewCoordinatePair(pPointSequence->X, pPointSequence->Y); pPointSequence++;
+                css::drawing::PolygonFlags ePolygonFlag(*pFlagSequence); pFlagSequence++;
+                B2DPoint aControlA;
+                B2DPoint aControlB;
 
-                if(b < nCount && ePolygonFlag == css::drawing::PolygonFlags_CONTROL)
+                // first point is not allowed to be a control point
+                OSL_ENSURE(ePolygonFlag != css::drawing::PolygonFlags_CONTROL,
+                    "UnoPolygonBezierCoordsToB2DPolygon: Start point is a control point, illegal input polygon (!)");
+
+                // add first point as start point
+                aRetval.append(aNewCoordinatePair);
+
+                for(sal_uInt32 b(1); b < nCount;)
                 {
-                    aControlA = aNewCoordinatePair;
-                    bControlA = true;
+                    // prepare loop
+                    bool bControlA(false);
+                    bool bControlB(false);
 
                     // get next point and flag
                     aNewCoordinatePair = B2DPoint(pPointSequence->X, pPointSequence->Y);
                     ePolygonFlag = *pFlagSequence;
                     pPointSequence++; pFlagSequence++; b++;
+
+                    if(b < nCount && ePolygonFlag == css::drawing::PolygonFlags_CONTROL)
+                    {
+                        aControlA = aNewCoordinatePair;
+                        bControlA = true;
+
+                        // get next point and flag
+                        aNewCoordinatePair = B2DPoint(pPointSequence->X, pPointSequence->Y);
+                        ePolygonFlag = *pFlagSequence;
+                        pPointSequence++; pFlagSequence++; b++;
+                    }
+
+                    if(b < nCount && ePolygonFlag == css::drawing::PolygonFlags_CONTROL)
+                    {
+                        aControlB = aNewCoordinatePair;
+                        bControlB = true;
+
+                        // get next point and flag
+                        aNewCoordinatePair = B2DPoint(pPointSequence->X, pPointSequence->Y);
+                        ePolygonFlag = *pFlagSequence;
+                        pPointSequence++; pFlagSequence++; b++;
+                    }
+
+                    // two or no control points are consumed, another one would be an error.
+                    // It's also an error if only one control point was read
+                    SAL_WARN_IF(ePolygonFlag == css::drawing::PolygonFlags_CONTROL || bControlA != bControlB,
+                        "basegfx", "UnoPolygonBezierCoordsToB2DPolygon: Illegal source polygon (!)");
+
+                    // the previous writes used the B2DPolyPoygon -> utils::PolyPolygon converter
+                    // which did not create minimal PolyPolygons, but created all control points
+                    // as null vectors (identical points). Because of the former P(CA)(CB)-norm of
+                    // B2DPolygon and it's unused sign of being the zero-vector and CA and CB being
+                    // relative to P, an empty edge was exported as P == CA == CB. Luckily, the new
+                    // export format can be read without errors by the old OOo-versions, so we need only
+                    // to correct here at read and do not need to export a wrong but compatible version
+                    // for the future.
+                    if(bControlA
+                        && aControlA.equal(aControlB)
+                        && aControlA.equal(aRetval.getB2DPoint(aRetval.count() - 1)))
+                    {
+                        bControlA = false;
+                    }
+
+                    if(bControlA)
+                    {
+                        // add bezier edge
+                        aRetval.appendBezierSegment(aControlA, aControlB, aNewCoordinatePair);
+                    }
+                    else
+                    {
+                        // add edge
+                        aRetval.append(aNewCoordinatePair);
+                    }
                 }
 
-                if(b < nCount && ePolygonFlag == css::drawing::PolygonFlags_CONTROL)
-                {
-                    aControlB = aNewCoordinatePair;
-                    bControlB = true;
-
-                    // get next point and flag
-                    aNewCoordinatePair = B2DPoint(pPointSequence->X, pPointSequence->Y);
-                    ePolygonFlag = *pFlagSequence;
-                    pPointSequence++; pFlagSequence++; b++;
-                }
-
-                // two or no control points are consumed, another one would be an error.
-                // It's also an error if only one control point was read
-                SAL_WARN_IF(ePolygonFlag == css::drawing::PolygonFlags_CONTROL || bControlA != bControlB,
-                    "basegfx", "UnoPolygonBezierCoordsToB2DPolygon: Illegal source polygon (!)");
-
-                // the previous writes used the B2DPolyPoygon -> utils::PolyPolygon converter
-                // which did not create minimal PolyPolygons, but created all control points
-                // as null vectors (identical points). Because of the former P(CA)(CB)-norm of
-                // B2DPolygon and it's unused sign of being the zero-vector and CA and CB being
-                // relative to P, an empty edge was exported as P == CA == CB. Luckily, the new
-                // export format can be read without errors by the old OOo-versions, so we need only
-                // to correct here at read and do not need to export a wrong but compatible version
-                // for the future.
-                if(bControlA
-                    && aControlA.equal(aControlB)
-                    && aControlA.equal(aRetval.getB2DPoint(aRetval.count() - 1)))
-                {
-                    bControlA = false;
-                }
-
-                if(bControlA)
-                {
-                    // add bezier edge
-                    aRetval.appendBezierSegment(aControlA, aControlB, aNewCoordinatePair);
-                }
-                else
-                {
-                    // add edge
-                    aRetval.append(aNewCoordinatePair);
-                }
+                // #i72807# API import uses old line start/end-equal definition for closed,
+                // so we need to correct this to closed state here
+                checkClosed(aRetval);
             }
-
-            // #i72807# API import uses old line start/end-equal definition for closed,
-            // so we need to correct this to closed state here
-            checkClosed(aRetval);
 
             return aRetval;
         }

@@ -20,14 +20,15 @@
 #ifndef INCLUDED_UNOTOOLS_HISTORYOPTIONS_HXX
 #define INCLUDED_UNOTOOLS_HISTORYOPTIONS_HXX
 
-#include <boost/optional.hpp>
 #include <unotools/unotoolsdllapi.h>
 #include <sal/types.h>
 #include <com/sun/star/uno/Sequence.h>
-#include <com/sun/star/beans/PropertyValue.hpp>
 #include <rtl/ustring.hxx>
 #include <unotools/options.hxx>
 #include <memory>
+
+namespace com { namespace sun { namespace star { namespace beans { struct PropertyValue; } } } }
+namespace boost { template <class T> class optional; }
 
 // The method GetList() returns a list of property values.
 // Use follow defines to separate values by names.
@@ -59,16 +60,6 @@ class SAL_WARN_UNUSED UNOTOOLS_DLLPUBLIC SvtHistoryOptions : public utl::detail:
 public:
     SvtHistoryOptions();
     virtual ~SvtHistoryOptions() override;
-
-    /** Get max size of specified history.
-
-        Call this methods to get information about max. size of specified list.
-        If a new one is add to it the oldest one is deleted automatically.
-
-        @param  eHistory select right history.
-        @return Current max size of specified list.
-    */
-    sal_uInt32 GetSize(EHistoryType eHistory) const;
 
     /** Clear complete specified list.
 

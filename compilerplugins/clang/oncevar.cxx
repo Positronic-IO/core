@@ -76,15 +76,14 @@ public:
 };
 
 class OnceVar:
-    public RecursiveASTVisitor<OnceVar>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<OnceVar>
 {
 public:
-    explicit OnceVar(loplugin::InstantiationData const & data): Plugin(data) {}
+    explicit OnceVar(loplugin::InstantiationData const & data): FilteringPlugin(data) {}
 
     virtual void run() override {
         // ignore some files with problematic macros
-        std::string fn( compiler.getSourceManager().getFileEntryForID(
-                        compiler.getSourceManager().getMainFileID())->getName() );
+        std::string fn(handler.getMainFileName());
         loplugin::normalizeDotDotInFilePath(fn);
         // platform-specific stuff
         if (fn == SRCDIR "/sal/osl/unx/thread.cxx"
@@ -323,7 +322,7 @@ bool OnceVar::VisitVarDecl( const VarDecl* varDecl )
         return true;
     }
     // Ignore macros like FD_ZERO
-    if (compiler.getSourceManager().isMacroBodyExpansion(varDecl->getLocStart())) {
+    if (compiler.getSourceManager().isMacroBodyExpansion(compat::getBeginLoc(varDecl))) {
         return true;
     }
     if (varDecl->hasGlobalStorage()) {

@@ -45,6 +45,7 @@
 #include <ucbhelper/content.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/exc_hlp.hxx>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/TransferInfo.hpp>
 #include <com/sun/star/ucb/NameClash.hpp>
 #include <com/sun/star/ucb/OpenCommandArgument2.hpp>
@@ -64,6 +65,7 @@
 #include <rtl/uri.hxx>
 #include <rtl/random.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <com/sun/star/io/XAsyncOutputMonitor.hpp>
 
 #include <cstring>
@@ -1037,12 +1039,13 @@ void ZipPackage::WriteMimetypeMagicFile( ZipOutputStream& aZipOut )
         aZipOut.rawWrite(aType);
         aZipOut.rawCloseEntry();
     }
-    catch ( const css::io::IOException & r )
+    catch ( const css::io::IOException & )
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw WrappedTargetException(
                 THROW_WHERE "Error adding mimetype to the ZipOutputStream!",
                 static_cast < OWeakObject * > ( this ),
-                makeAny( r ) );
+                anyEx );
     }
 }
 
@@ -1432,10 +1435,11 @@ void SAL_CALL ZipPackage::commitChanges()
     {
         xTempInStream = writeTempFile();
     }
-    catch (const ucb::ContentCreationException& r)
+    catch (const ucb::ContentCreationException&)
     {
+       css::uno::Any anyEx = cppu::getCaughtException();
         throw WrappedTargetException(THROW_WHERE "Temporary file should be creatable!",
-                    static_cast < OWeakObject * > ( this ), makeAny ( r ) );
+                    static_cast < OWeakObject * > ( this ), anyEx );
     }
     if ( xTempInStream.is() )
     {
@@ -1445,10 +1449,11 @@ void SAL_CALL ZipPackage::commitChanges()
         {
             xTempSeek->seek( 0 );
         }
-        catch( const uno::Exception& r )
+        catch( const uno::Exception& )
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             throw WrappedTargetException(THROW_WHERE "Temporary file should be seekable!",
-                    static_cast < OWeakObject * > ( this ), makeAny ( r ) );
+                    static_cast < OWeakObject * > ( this ), anyEx );
         }
 
         try
@@ -1456,10 +1461,11 @@ void SAL_CALL ZipPackage::commitChanges()
             // connect to the temporary stream
             ConnectTo( xTempInStream );
         }
-        catch( const io::IOException& r )
+        catch( const io::IOException& )
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             throw WrappedTargetException(THROW_WHERE "Temporary file should be connectable!",
-                    static_cast < OWeakObject * > ( this ), makeAny ( r ) );
+                    static_cast < OWeakObject * > ( this ), anyEx );
         }
 
         if ( m_eMode == e_IMode_XStream )
@@ -1484,10 +1490,11 @@ void SAL_CALL ZipPackage::commitChanges()
                 // after successful truncation the original file contents are already lost
                 xTruncate->truncate();
             }
-            catch( const uno::Exception& r )
+            catch( const uno::Exception& )
             {
+                css::uno::Any anyEx = cppu::getCaughtException();
                 throw WrappedTargetException(THROW_WHERE "This package is read only!",
-                        static_cast < OWeakObject * > ( this ), makeAny ( r ) );
+                        static_cast < OWeakObject * > ( this ), anyEx );
             }
 
             try
@@ -1579,15 +1586,16 @@ void SAL_CALL ZipPackage::commitChanges()
                     // if the file is still not corrupted, it can become after the next step
                     aContent.executeCommand ("transfer", Any(aInfo) );
                 }
-                catch ( const css::uno::Exception& r )
+                catch ( const css::uno::Exception& )
                 {
                     if ( bCanBeCorrupted )
                         DisconnectFromTargetAndThrowException_Impl( xTempInStream );
 
+                    css::uno::Any anyEx = cppu::getCaughtException();
                     throw WrappedTargetException(
                                                 THROW_WHERE "This package may be read only!",
                                                 static_cast < OWeakObject * > ( this ),
-                                                makeAny ( r ) );
+                                                anyEx );
                 }
             }
         }
@@ -1667,7 +1675,7 @@ Sequence< ElementChange > SAL_CALL ZipPackage::getPendingChanges()
  * Function to create a new component instance; is needed by factory helper implementation.
  * @param xMgr service manager to if the components needs other component instances
  */
-uno::Reference < XInterface > ZipPackage_createInstance(
+static uno::Reference < XInterface > ZipPackage_createInstance(
     const uno::Reference< XMultiServiceFactory > & xMgr )
 {
     return uno::Reference< XInterface >( *new ZipPackage( comphelper::getComponentContext(xMgr) ) );

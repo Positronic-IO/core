@@ -27,11 +27,11 @@
 
 #include <svtools/htmlkywd.hxx>
 #include <svtools/htmltokn.h>
-#include <svtools/imap.hxx>
-#include <svtools/imapcirc.hxx>
-#include <svtools/imapobj.hxx>
-#include <svtools/imappoly.hxx>
-#include <svtools/imaprect.hxx>
+#include <vcl/imap.hxx>
+#include <vcl/imapcirc.hxx>
+#include <vcl/imapobj.hxx>
+#include <vcl/imappoly.hxx>
+#include <vcl/imaprect.hxx>
 #include <svl/zforlist.hxx>
 #include <rtl/tencinfo.h>
 #include <tools/tenccvt.hxx>
@@ -63,7 +63,6 @@ SfxHTMLParser::SfxHTMLParser( SvStream& rStream, bool bIsNewDoc,
                               SfxMedium *pMed )
     : HTMLParser(rStream, bIsNewDoc)
     , pMedium(pMed)
-    , pDLMedium(nullptr)
     , eScriptType(STARBASIC)
 {
     DBG_ASSERT( RTL_TEXTENCODING_UTF8 == GetSrcEncoding( ),
@@ -182,22 +181,22 @@ IMAPOBJ_SETEVENT:
         {
             tools::Rectangle aRect( aCoords[0], aCoords[1],
                              aCoords[2], aCoords[3] );
-            IMapRectangleObject aMapRObj( aRect, aHRef, aAlt, OUString(), aTarget, aName,
-                                          !bNoHRef );
+            std::unique_ptr<IMapRectangleObject> pMapRObj( new IMapRectangleObject(aRect, aHRef, aAlt, OUString(), aTarget, aName,
+                                          !bNoHRef ));
             if( !aMacroTbl.empty() )
-                aMapRObj.SetMacroTable( aMacroTbl );
-            pImageMap->InsertIMapObject( aMapRObj );
+                pMapRObj->SetMacroTable( aMacroTbl );
+            pImageMap->InsertIMapObject( std::move(pMapRObj) );
         }
         break;
     case IMAP_OBJ_CIRCLE:
         if( aCoords.size() >=3 )
         {
             Point aPoint( aCoords[0], aCoords[1] );
-            IMapCircleObject aMapCObj( aPoint, aCoords[2],aHRef, aAlt, OUString(),
-                                       aTarget, aName, !bNoHRef );
+            std::unique_ptr<IMapCircleObject> pMapCObj(new IMapCircleObject(aPoint, aCoords[2],aHRef, aAlt, OUString(),
+                                       aTarget, aName, !bNoHRef ));
             if( !aMacroTbl.empty() )
-                aMapCObj.SetMacroTable( aMacroTbl );
-            pImageMap->InsertIMapObject( aMapCObj );
+                pMapCObj->SetMacroTable( aMacroTbl );
+            pImageMap->InsertIMapObject( std::move(pMapCObj) );
         }
         break;
     case IMAP_OBJ_POLYGON:
@@ -207,11 +206,11 @@ IMAPOBJ_SETEVENT:
             tools::Polygon aPoly( nCount );
             for( sal_uInt16 i=0; i<nCount; i++ )
                 aPoly[i] = Point( aCoords[2*i], aCoords[2*i+1] );
-            IMapPolygonObject aMapPObj( aPoly, aHRef, aAlt, OUString(), aTarget, aName,
-                                        !bNoHRef );
+            std::unique_ptr<IMapPolygonObject> pMapPObj(new IMapPolygonObject( aPoly, aHRef, aAlt, OUString(), aTarget, aName,
+                                        !bNoHRef ));
             if( !aMacroTbl.empty() )
-                aMapPObj.SetMacroTable( aMacroTbl );
-            pImageMap->InsertIMapObject( aMapPObj );
+                pMapPObj->SetMacroTable( aMacroTbl );
+            pImageMap->InsertIMapObject( std::move(pMapPObj) );
         }
         break;
     default:
@@ -243,11 +242,9 @@ bool SfxHTMLParser::FinishFileDownload( OUString& rStr )
         if( pStream )
             aStream.WriteStream( *pStream );
 
-        aStream.Seek( STREAM_SEEK_TO_END );
-        sal_uInt64 const nLen = aStream.Tell();
+        sal_uInt64 const nLen = aStream.TellEnd();
         aStream.Seek( 0 );
-        OString sBuffer = read_uInt8s_ToOString(aStream, nLen);
-        rStr = OStringToOUString( sBuffer, RTL_TEXTENCODING_UTF8 );
+        rStr = read_uInt8s_ToOUString(aStream, nLen, RTL_TEXTENCODING_UTF8);
     }
 
     pDLMedium.reset();
@@ -327,17 +324,16 @@ double SfxHTMLParser::GetTableDataOptionsValNum( sal_uInt32& nNumForm,
     (void)rFormatter.IsNumberFormat(aValStr, nParseForm, fVal);
     if ( comphelper::string::getTokenCount(aNumStr, ';') > 2 )
     {
-        eNumLang = LanguageType(aNumStr.getToken( 1, ';' ).toInt32());
-        sal_Int32 nPos = aNumStr.indexOf( ';' );
-        nPos = aNumStr.indexOf( ';', nPos + 1 );
-        OUString aFormat( aNumStr.copy( nPos + 1 ) );
+        sal_Int32 nIdx {0};
+        eNumLang = LanguageType(aNumStr.getToken( 1, ';', nIdx ).toInt32());
+        OUString aFormat( aNumStr.copy( nIdx ) );
         sal_Int32 nCheckPos;
         SvNumFormatType nType;
         if ( eNumLang != LANGUAGE_SYSTEM )
             rFormatter.PutEntry( aFormat, nCheckPos, nType, nNumForm, eNumLang );
         else
             rFormatter.PutandConvertEntry( aFormat, nCheckPos, nType, nNumForm,
-                                           eParseLang, eNumLang );
+                                           eParseLang, eNumLang, true);
     }
     else
     {

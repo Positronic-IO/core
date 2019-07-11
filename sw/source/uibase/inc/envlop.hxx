@@ -27,20 +27,21 @@
 #include <vcl/lstbox.hxx>
 #include <vcl/button.hxx>
 #include <vcl/weld.hxx>
+#include <vcl/customweld.hxx>
 
 #include "envimg.hxx"
 
-#define GetFieldVal(rField)         (rField).Denormalize((rField).GetValue(FUNIT_TWIP))
-#define SetFieldVal(rField, lValue) (rField).SetValue((rField).Normalize(lValue), FUNIT_TWIP)
+#define GetFieldVal(rField)         (rField).Denormalize((rField).GetValue(FieldUnit::TWIP))
+#define SetFieldVal(rField, lValue) (rField).SetValue((rField).Normalize(lValue), FieldUnit::TWIP)
 
 inline int getfieldval(weld::MetricSpinButton& rField)
 {
-    return rField.denormalize(rField.get_value(FUNIT_TWIP));
+    return rField.denormalize(rField.get_value(FieldUnit::TWIP));
 }
 
 inline void setfieldval(weld::MetricSpinButton& rField, int lValue)
 {
-    rField.set_value(rField.normalize(lValue), FUNIT_TWIP);
+    rField.set_value(rField.normalize(lValue), FieldUnit::TWIP);
 }
 
 class SwEnvDlg;
@@ -49,20 +50,17 @@ class SwEnvFormatPage;
 class SwWrtShell;
 class Printer;
 
-class SwEnvPreview
+class SwEnvPreview : public weld::CustomWidgetController
 {
 private:
-    std::unique_ptr<weld::DrawingArea> m_xDrawingArea;
     SwEnvDlg* m_pDialog;
-    Size m_aSize;
 
-    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
-    DECL_LINK(DoResize, const Size& rSize, void);
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
 
 public:
-    SwEnvPreview(weld::DrawingArea* pDrawingArea);
+    SwEnvPreview();
     void SetDialog(SwEnvDlg* pDialog) { m_pDialog = pDialog; }
-    void queue_draw() { m_xDrawingArea->queue_draw(); }
 };
 
 class SwEnvDlg : public SfxTabDialogController
@@ -75,8 +73,8 @@ friend class SwEnvPreview;
     SwEnvItem       aEnvItem;
     SwWrtShell      *pSh;
     VclPtr<Printer> pPrinter;
-    SfxItemSet      *pAddresseeSet;
-    SfxItemSet      *pSenderSet;
+    std::unique_ptr<SfxItemSet> pAddresseeSet;
+    std::unique_ptr<SfxItemSet> pSenderSet;
 
     std::unique_ptr<weld::Button> m_xModify;
 
@@ -94,16 +92,17 @@ class SwEnvPage : public SfxTabPage
     SwWrtShell*   m_pSh;
     OUString      m_sActDBName;
 
+    SwEnvPreview m_aPreview;
     std::unique_ptr<weld::TextView> m_xAddrEdit;
-    std::unique_ptr<weld::ComboBoxText> m_xDatabaseLB;
-    std::unique_ptr<weld::ComboBoxText> m_xTableLB;
-    std::unique_ptr<weld::ComboBoxText> m_xDBFieldLB;
+    std::unique_ptr<weld::ComboBox> m_xDatabaseLB;
+    std::unique_ptr<weld::ComboBox> m_xTableLB;
+    std::unique_ptr<weld::ComboBox> m_xDBFieldLB;
     std::unique_ptr<weld::Button> m_xInsertBT;
     std::unique_ptr<weld::CheckButton> m_xSenderBox;
     std::unique_ptr<weld::TextView> m_xSenderEdit;
-    std::unique_ptr<SwEnvPreview> m_xPreview;
+    std::unique_ptr<weld::CustomWeld> m_xPreview;
 
-    DECL_LINK(DatabaseHdl, weld::ComboBoxText&, void);
+    DECL_LINK(DatabaseHdl, weld::ComboBox&, void);
     DECL_LINK(FieldHdl, weld::Button&, void);
     DECL_LINK(SenderHdl, weld::Button&, void);
 

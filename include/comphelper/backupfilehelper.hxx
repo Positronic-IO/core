@@ -14,8 +14,6 @@
 
 #include <comphelper/comphelperdllapi.h>
 #include <rtl/ustring.hxx>
-#include <osl/file.hxx>
-#include <memory>
 #include <set>
 #include <vector>
 
@@ -186,7 +184,7 @@ namespace comphelper
 
     private:
         // internal helper methods
-        static const rtl::OUString getPackURL();
+        static const OUString getPackURL();
         static const std::vector< OUString >& getCustomizationDirNames();
         static const std::vector< OUString >& getCustomizationFileNames();
 

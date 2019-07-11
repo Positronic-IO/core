@@ -12,11 +12,11 @@
 namespace {
 
 class DerefNullPtr:
-    public RecursiveASTVisitor<DerefNullPtr>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<DerefNullPtr>
 {
 public:
     explicit DerefNullPtr(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     void run() override
     { TraverseDecl(compiler.getASTContext().getTranslationUnitDecl()); }
@@ -32,7 +32,7 @@ bool DerefNullPtr::VisitUnaryDeref(UnaryOperator const * op) {
     {
         report(
             DiagnosticsEngine::Warning, "null pointer dereference",
-            op->getLocStart())
+            compat::getBeginLoc(op))
             << op->getSourceRange();
     }
     return true;

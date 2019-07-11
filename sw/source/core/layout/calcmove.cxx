@@ -242,6 +242,7 @@ void SwFrame::PrepareMake(vcl::RenderContext* pRenderContext)
     StackHack aHack;
     if ( GetUpper() )
     {
+        SwFrameDeleteGuard aDeleteGuard(this);
         if ( lcl_IsCalcUpperAllowed( *this ) )
             GetUpper()->Calc(pRenderContext);
         OSL_ENSURE( GetUpper(), ":-( Layout unstable (Upper gone)." );
@@ -306,12 +307,31 @@ void SwFrame::PrepareMake(vcl::RenderContext* pRenderContext)
                          SwFlowFrame::CastFlowFrame(pFrame)->IsAnFollow( pThis ) )
                         break;
 
+                    bool const isLast(pFrame->GetNext() == this);
+                    // note: this seems obvious but does *not* hold, a MakeAll()
+                    // could move more than 1 frame backwards!
+                    // that's why FindNext() is used below
+                    // assert(pFrame->GetUpper() == GetUpper());
                     pFrame->MakeAll(pRenderContext);
                     if( IsSctFrame() && !static_cast<SwSectionFrame*>(this)->GetSection() )
                         break;
+                    if (isLast && pFrame->GetUpper() != GetUpper())
+                    {
+                        assert(GetUpper()->Lower() == this
+                            // empty section frames are created all the time...
+                            || GetUpper()->Lower()->IsSctFrame()
+                            // tab frame/section frame may split multiple times
+                            || (   SwFlowFrame::CastFlowFrame(pFrame)
+                                && SwFlowFrame::CastFlowFrame(GetUpper()->Lower())
+                                && SwFlowFrame::CastFlowFrame(pFrame)->IsAnFollow(
+                                    SwFlowFrame::CastFlowFrame(GetUpper()->Lower()))
+                                && GetUpper()->Lower()->GetNext() == this));
+                        break; // tdf#119109 frame was moved backward, prevent
+                               // FindNext() returning a frame inside this if
+                    }          // this is a table!
                 }
                 // With ContentFrames, the chain may be broken while walking through
-                // it. Therefore we have to figure out the follower in a bit more
+                // it. Therefore we have to figure out the next frame in a bit more
                 // complicated way. However, I'll HAVE to get back to myself
                 // sometime again.
                 pFrame = pFrame->FindNext();
@@ -417,10 +437,25 @@ void SwFrame::PrepareCursor()
                      SwFlowFrame::CastFlowFrame(pFrame)->IsAnFollow( pThis ) )
                     break;
 
+                bool const isLast(pFrame->GetNext() == this);
                 pFrame->MakeAll(getRootFrame()->GetCurrShell()->GetOut());
+                if (isLast && pFrame->GetUpper() != GetUpper())
+                {
+                    assert(GetUpper()->Lower() == this
+                        // empty section frames are created all the time...
+                        || GetUpper()->Lower()->IsSctFrame()
+                        // tab frame/section frame may split multiple times
+                        || (   SwFlowFrame::CastFlowFrame(pFrame)
+                            && SwFlowFrame::CastFlowFrame(GetUpper()->Lower())
+                            && SwFlowFrame::CastFlowFrame(pFrame)->IsAnFollow(
+                                SwFlowFrame::CastFlowFrame(GetUpper()->Lower()))
+                            && GetUpper()->Lower()->GetNext() == this));
+                    break; // tdf#119109 frame was moved backward, prevent
+                           // FindNext() returning a frame inside this if
+                }          // this is a table!
             }
             // With ContentFrames, the chain may be broken while walking through
-            // it. Therefore we have to figure out the follower in a bit more
+            // it. Therefore we have to figure out the next frame in a bit more
             // complicated way. However, I'll HAVE to get back to myself
             // sometime again.
             pFrame = pFrame->FindNext();
@@ -998,8 +1033,9 @@ bool SwFrame::IsCollapse() const
         return false;
 
     const SwTextFrame *pTextFrame = static_cast<const SwTextFrame*>(this);
-    const SwTextNode *pTextNode = pTextFrame->GetTextNode();
-    return pTextNode && pTextNode->IsCollapse();
+    const SwTextNode *pTextNode = pTextFrame->GetTextNodeForParaProps();
+    // TODO this SwTextNode function is pointless and should be merged in here
+    return pTextFrame->GetText().isEmpty() && pTextNode && pTextNode->IsCollapse();
 }
 
 void SwContentFrame::MakePrtArea( const SwBorderAttrs &rAttrs )
@@ -1178,7 +1214,7 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
     PROTOCOL_ENTER( this, PROT::MakeAll, DbgAction::NONE, nullptr )
 
     // takes care of the notification in the dtor
-    SwContentNotify *pNotify = new SwContentNotify( this );
+    std::unique_ptr<SwContentNotify, o3tl::default_delete<SwContentNotify>> pNotify(new SwContentNotify( this ));
 
     // as long as bMakePage is true, a new page can be created (exactly once)
     bool bMakePage = true;
@@ -1213,9 +1249,9 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
         pNotify->SetBordersJoinedWithPrev();
     }
 
-    const bool bKeep = IsKeep( rAttrs.GetAttrSet() );
+    const bool bKeep = IsKeep(rAttrs.GetAttrSet().GetKeep(), GetBreakItem());
 
-    SwSaveFootnoteHeight *pSaveFootnote = nullptr;
+    std::unique_ptr<SwSaveFootnoteHeight> pSaveFootnote;
     if ( bFootnote )
     {
         SwFootnoteFrame *pFootnote = FindFootnoteFrame();
@@ -1225,13 +1261,13 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
             SwFootnoteBossFrame* pBoss = pFootnote->GetRef()->FindFootnoteBossFrame(
                                     pFootnote->GetAttr()->GetFootnote().IsEndNote() );
             if( !pSct || pSct->IsColLocked() || !pSct->Growable() )
-                pSaveFootnote = new SwSaveFootnoteHeight( pBoss,
-                    static_cast<SwTextFrame*>(pFootnote->GetRef())->GetFootnoteLine( pFootnote->GetAttr() ) );
+                pSaveFootnote.reset( new SwSaveFootnoteHeight( pBoss,
+                    static_cast<SwTextFrame*>(pFootnote->GetRef())->GetFootnoteLine( pFootnote->GetAttr() ) ) );
         }
     }
 
     if ( GetUpper()->IsSctFrame() &&
-         HasFollow() &&
+         HasFollow() && !GetFollow()->IsDeleteForbidden() &&
          &GetFollow()->GetFrame() == GetNext() )
     {
         dynamic_cast<SwTextFrame&>(*this).JoinFrame();
@@ -1403,7 +1439,8 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
                 const SwTwips nHDiff = nOldH - aRectFnSet.GetHeight(getFrameArea());
                 const bool bNoPrepAdjustFrame =
                     nHDiff > 0 && IsInTab() && GetFollow() &&
-                    ( 1 == static_cast<SwTextFrame*>(GetFollow())->GetLineCount( COMPLETE_STRING ) || aRectFnSet.GetWidth(static_cast<SwTextFrame*>(GetFollow())->getFrameArea()) < 0 ) &&
+                    (1 == static_cast<SwTextFrame*>(GetFollow())->GetLineCount(TextFrameIndex(COMPLETE_STRING))
+                     || aRectFnSet.GetWidth(static_cast<SwTextFrame*>(GetFollow())->getFrameArea()) < 0) &&
                     GetFollow()->CalcAddLowerSpaceAsLastInTableCell() == nHDiff;
                 if ( !bNoPrepAdjustFrame )
                 {
@@ -1699,6 +1736,8 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
             nullptr != GetNextCellLeaf() )
             bDontMoveMe = false;
 
+        assert(bMoveable);
+
         if ( bDontMoveMe && aRectFnSet.GetHeight(getFrameArea()) >
                             aRectFnSet.GetHeight(GetUpper()->getFramePrintArea()) )
         {
@@ -1723,7 +1762,7 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
                  * Exception: If we sit in FormatWidthCols, we must not ignore
                  * the attributes.
                  */
-                else if ( !bFootnote && bMoveable &&
+                else if ( !bFootnote &&
                       ( !bFly || !FindFlyFrame()->IsColLocked() ) &&
                       ( !bSct || !FindSctFrame()->IsColLocked() ) )
                     bMoveOrFit = true;
@@ -1831,7 +1870,7 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
                             ),
                          static_cast<SwTextFrame&>(*this) );
 
-    delete pSaveFootnote;
+    pSaveFootnote.reset();
 
     UnlockJoin();
     xDeleteGuard.reset();
@@ -1841,7 +1880,7 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
     {
         pNotify->SetInvalidatePrevPrtArea();
     }
-    delete pNotify;
+    pNotify.reset();
     SetFlyLock( false );
 }
 
@@ -2090,7 +2129,7 @@ bool SwContentFrame::WouldFit_( SwTwips nSpace,
             }
         }
 
-        if ( bRet && !bSplit && pFrame->IsKeep( rAttrs.GetAttrSet() ) )
+        if (bRet && !bSplit && pFrame->IsKeep(rAttrs.GetAttrSet().GetKeep(), GetBreakItem()))
         {
             if( bTstMove )
             {

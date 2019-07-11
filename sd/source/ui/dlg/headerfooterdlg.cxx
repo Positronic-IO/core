@@ -21,6 +21,7 @@
 #include <editeng/eeitem.hxx>
 #include <editeng/flditem.hxx>
 #include <editeng/langitem.hxx>
+#include <editeng/outlobj.hxx>
 #include <svx/langbox.hxx>
 #include <svx/svdotext.hxx>
 #include <editeng/editeng.hxx>
@@ -37,6 +38,7 @@
 #include <DrawDocShell.hxx>
 #include <drawdoc.hxx>
 #include <ViewShell.hxx>
+#include <sdmod.hxx>
 
 // preview control for presentation layout
 #include <vcl/ctrl.hxx>
@@ -89,8 +91,8 @@ namespace sd
 
 const int nDateTimeFormatsCount = 12;
 struct DateAndTimeFormat {
-    SvxDateFormat meDateFormat;
-    SvxTimeFormat meTimeFormat;
+    SvxDateFormat const meDateFormat;
+    SvxTimeFormat const meTimeFormat;
 };
 DateAndTimeFormat const nDateTimeFormats[nDateTimeFormatsCount] =
 {
@@ -142,7 +144,7 @@ private:
     SdDrawDocument*    mpDoc;
     LanguageType        meOldLanguage;
 
-    bool            mbHandoutMode;
+    bool const          mbHandoutMode;
 
     DECL_LINK( UpdateOnClickHdl, Button*, void );
     DECL_LINK( LanguageChangeHdl, ListBox&, void );
@@ -301,7 +303,7 @@ void HeaderFooterDialog::Apply()
 
 void HeaderFooterDialog::apply( bool bToAll, bool bForceSlides )
 {
-    SdUndoGroup* pUndoGroup = new SdUndoGroup(mpDoc);
+    std::unique_ptr<SdUndoGroup> pUndoGroup(new SdUndoGroup(mpDoc));
     OUString aComment( GetText() );
     pUndoGroup->SetComment( aComment );
 
@@ -324,7 +326,7 @@ void HeaderFooterDialog::apply( bool bToAll, bool bForceSlides )
             for( nPage = 0; nPage < nPageCount; nPage++ )
             {
                 SdPage* pPage = mpDoc->GetSdPage( static_cast<sal_uInt16>(nPage), PageKind::Standard );
-                change( pUndoGroup, pPage, aNewSettings );
+                change( pUndoGroup.get(), pPage, aNewSettings );
             }
         }
         else
@@ -333,7 +335,7 @@ void HeaderFooterDialog::apply( bool bToAll, bool bForceSlides )
             DBG_ASSERT( mpCurrentPage && mpCurrentPage->GetPageKind() == PageKind::Standard, "no current page to apply to!" );
             if( mpCurrentPage && (mpCurrentPage->GetPageKind() == PageKind::Standard) )
             {
-                change( pUndoGroup, mpCurrentPage, aNewSettings );
+                change( pUndoGroup.get(), mpCurrentPage, aNewSettings );
             }
         }
     }
@@ -348,7 +350,7 @@ void HeaderFooterDialog::apply( bool bToAll, bool bForceSlides )
         aTempSettings.mbSlideNumberVisible = false;
         aTempSettings.mbDateTimeVisible = false;
 
-        change( pUndoGroup, mpDoc->GetSdPage( 0, PageKind::Standard ), aTempSettings );
+        change( pUndoGroup.get(), mpDoc->GetSdPage( 0, PageKind::Standard ), aTempSettings );
     }
 
     // now notes settings
@@ -366,21 +368,42 @@ void HeaderFooterDialog::apply( bool bToAll, bool bForceSlides )
         {
             SdPage* pPage = mpDoc->GetSdPage( static_cast<sal_uInt16>(nPage), PageKind::Notes );
 
-            change( pUndoGroup, pPage, aNewSettings );
+            change( pUndoGroup.get(), pPage, aNewSettings );
         }
 
         // and last but not least to the handout page
-        change( pUndoGroup, mpDoc->GetMasterSdPage( 0, PageKind::Handout ), aNewSettings );
+        change( pUndoGroup.get(), mpDoc->GetMasterSdPage( 0, PageKind::Handout ), aNewSettings );
     }
 
     // give the undo group to the undo manager
-    mpViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager()->AddUndoAction(pUndoGroup);
+    mpViewShell->GetViewFrame()->GetObjectShell()->GetUndoManager()->AddUndoAction(std::move(pUndoGroup));
 }
 
 void HeaderFooterDialog::change( SdUndoGroup* pUndoGroup, SdPage* pPage, const HeaderFooterSettings& rNewSettings )
 {
     pUndoGroup->AddAction(new SdHeaderFooterUndoAction(mpDoc, pPage, rNewSettings ));
     pPage->setHeaderFooterSettings( rNewSettings );
+}
+
+namespace {
+
+void recursive_rename_ui_element(vcl::Window& rWindow, const OUString& rPrefix)
+{
+    OUString aID = rWindow.get_id();
+    if (aID.isEmpty())
+    {
+        rWindow.set_id(rPrefix +  aID);
+    }
+
+    size_t nChildCount = rWindow.GetChildCount();
+    for (size_t i = 0; i < nChildCount; ++i)
+    {
+        vcl::Window* pChild = rWindow.GetChild(i);
+        if (pChild)
+            recursive_rename_ui_element(*pChild, rPrefix);
+    }
+}
+
 }
 
 HeaderFooterTabPage::HeaderFooterTabPage( vcl::Window* pWindow, SdDrawDocument* pDoc, SdPage* pActualPage, bool bHandoutMode ) :
@@ -441,6 +464,11 @@ HeaderFooterTabPage::HeaderFooterTabPage( vcl::Window* pWindow, SdDrawDocument* 
     mpCBDateTimeLanguage->SelectLanguage( meOldLanguage );
 
     FillFormatList(0);
+
+    if (mbHandoutMode)
+        recursive_rename_ui_element(*this, "handout");
+    else
+        recursive_rename_ui_element(*this, "slide");
 }
 
 HeaderFooterTabPage::~HeaderFooterTabPage()

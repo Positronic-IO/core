@@ -27,7 +27,7 @@ XMLFilterTabPageBasic::XMLFilterTabPageBasic(weld::Widget* pPage)
     : m_xBuilder(Application::CreateBuilder(pPage, "filter/ui/xmlfiltertabpagegeneral.ui"))
     , m_xContainer(m_xBuilder->weld_widget("XmlFilterTabPageGeneral"))
     , m_xEDFilterName(m_xBuilder->weld_entry("filtername"))
-    , m_xCBApplication(m_xBuilder->weld_combo_box_text("application"))
+    , m_xCBApplication(m_xBuilder->weld_combo_box("application"))
     , m_xEDInterfaceName(m_xBuilder->weld_entry("interfacename"))
     , m_xEDExtension(m_xBuilder->weld_entry("extension"))
     , m_xEDDescription(m_xBuilder->weld_text_view("description"))
@@ -51,25 +51,25 @@ static OUString checkExtensions( const OUString& rExtensions )
     const sal_Unicode* pSource = rExtensions.getStr();
     sal_Int32 nCount = rExtensions.getLength();
 
-    OUString aRet;
+    OUStringBuffer aRet;
     while( nCount-- )
     {
         switch(*pSource)
         {
         case u',':
-            aRet += ";";
+            aRet.append(";");
             break;
         case u'.':
         case u'*':
             break;
         default:
-            aRet += OUStringLiteral1( *pSource );
+            aRet.append( *pSource );
         }
 
         pSource++;
     }
 
-    return aRet;
+    return aRet.makeStringAndClear();
 }
 
 void XMLFilterTabPageBasic::FillInfo( filter_info_impl* pInfo )

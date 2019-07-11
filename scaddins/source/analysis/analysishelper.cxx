@@ -442,8 +442,7 @@ sal_Int32 GetDaysInYear( sal_Int32 nNullDate, sal_Int32 nDate, sal_Int32 nMode )
 }
 
 
-//fdo40100 toDo: make function fully compliant with ODFF1.2
-// LEM: I fixed case nMode==1; anything else to fix?
+// tdf69569 making code compliant with change request for ODFF1.2 par 4.11.7.7
 /**
  * Function GetYearFrac implements YEARFRAC as defined in:
  *   Open Document Format for Office Applications version 1.2 Part 2, par. 6.10.24
@@ -538,67 +537,44 @@ double GetYearFrac( sal_Int32 nNullDate, sal_Int32 nStartDate, sal_Int32 nEndDat
                 {
                     // return average of days in year between nDate1 and nDate2, inclusive
                     sal_Int32 nDayCount = 0;
-                    for ( sal_Int16 i = nYear1; i <= nYear2; i++ )
+                    for ( sal_uInt16 i = nYear1; i <= nYear2; i++ )
                         nDayCount += ( IsLeapYear( i ) ? 366 : 365 );
 
                     nDaysInYear = static_cast<double>(nDayCount) / static_cast<double>( nYear2 - nYear1 + 1 );
                 }
-                // we take advantage of the fact that (ODFv1.2 part 2) 4.11.7.7.9
-                // 4.11.7.7.10 can be permuted without changing the end result
-                // ODFv1.2 part 2 section 4.11.7.7.8 and 4.11.7.7.10
-                else if ( ( isYearDifferent && IsLeapYear( nYear1 ) ) ||
-                          ( nMonth2 == 2 && nDay2 == 29) )
-                {
-                    nDaysInYear = 366;
-                }
                 else
                 {
-                    // ODFv1.2 part 2 section 4.11.7.7.9:
-                    // we need to determine whether there is a 29 February
-                    // between nDate1 and nDate2
-                    // LEM FIXME: I have a doubt concerning nDate1 == "29 February YYYY"
-                    //            In this case, is the "29 February YYYY" between nDate1 and nDate2
-                    //            in the meaning of ODFv1.2 part 2, section 4.11.7.7.9?
-                    //            I assume "no", since if "between" is to be understood as "inclusive"
-                    //            then 4.11.7.7.10 has no point.
-                    //            OTOH, it could theoretically be possible that "between"
-                    //            is to be understood as "inclusive the lower bound, exclusive in upper bound".
+                    // as a consequence, !isYearDifferent or
+                    // nYear2 == nYear + 1 and (nMonth1 > nMonth2 or
+                    // (nMonth1 == nMonth2 and nDay1 >= nDay2))
+                    assert( ( !isYearDifferent ||
+                              ( nYear1 + 1 == nYear2 &&
+                                ( nMonth1 > nMonth2 ||
+                                  ( nMonth1 == nMonth2 || nDay1 >= nDay2 ) ) ) ) );
 
-                    assert(nYear1 == nYear2 || nYear1 + 1 == nYear2);
-                    // as a consequence, nYearDifferent iff nYear2 == nYear + 1, and
-                    // there are only two possible 29 Februaries to consider:
-                    // "29 February nYear1" and "29 February nYear2"
-
-                    // nDate2=="29 February YYYY" is handled above and the following conditions
-                    // rely on that for simplification.
-                    assert( ! (nMonth2 == 2 && nDay2 == 29));
-
-                    if( IsLeapYear( nYear1 ) )
-                       assert(nYear1 == nYear2);
-
-                    // is 29/2/nYear1 between nDate1 and nDate2?
-                    // that is only possible if IsLeapYear( nYear1 ),
-                    // which implies nYear1 == nYear2
-                    if( IsLeapYear( nYear1 ) &&
-                        ( nMonth1 == 1 || ( nMonth1 == 2 && nDay1 <= 28 )) &&
-                        nMonth2 > 2 )
-                    {
-                        nDaysInYear = 366;
-                    }
-                    // is 29/2/nYear2 between nDate1 and nDate2?
-                    // if nYear1==nYear2, then that is adequately tested by the previous test,
-                    // so no need to retest it here.
-                    else if(isYearDifferent && nMonth2 > 2 && IsLeapYear( nYear2 ))
+                    // ODFv1.2 part 2 section 4.11.7.7.8 (CHANGE REQUEST PENDING, see tdf6959)
+                    if ( !isYearDifferent && IsLeapYear( nYear1 ) )
                     {
                         nDaysInYear = 366;
                     }
                     else
                     {
-                        assert( !( IsLeapYear( nYear2 ) &&
-                                   nYear1 == nYear2 &&
-                                   (nMonth1 == 1 || (nMonth1==2 && nDay1 <= 28)) &&
-                                   nMonth2 > 2));
-                        nDaysInYear = 365;
+                        // ODFv1.2 part 2 section 4.11.7.7.9/10 (CHANGE REQUEST PENDING, see tdf69569)
+                        // we need to determine whether there is a 29 February
+                        // between nDate1 (inclusive) and nDate2 (inclusive)
+                        // the case of nYear1 == nYear2 is adequately tested in previous test
+                        if( isYearDifferent &&
+                            ( ( IsLeapYear( nYear1 ) &&
+                                ( ( nMonth1 < 2 ) || ( ( nMonth1 == 2 ) && ( nDay1 <= 29 ) ) ) ) ||
+                              ( IsLeapYear( nYear2 ) &&
+                                ( nMonth2 > 2 || ( ( nMonth2 == 2 ) && ( nDay2 == 29 ) ) ) ) ) )
+                        {
+                            nDaysInYear = 366;
+                        }
+                        else
+                        {
+                            nDaysInYear = 365;
+                        }
                     }
                 }
             }
@@ -710,7 +686,7 @@ double ConvertToDec( const OUString& aStr, sal_uInt16 nBase, sal_uInt16 nCharLim
 }
 
 
-static inline sal_Char GetMaxChar( sal_uInt16 nBase )
+static sal_Char GetMaxChar( sal_uInt16 nBase )
 {
     const sal_Char* const c = "--123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     return c[ nBase ];
@@ -769,31 +745,31 @@ double Erfc( double x )
     return ::rtl::math::erfc(x);
 }
 
-inline bool IsNum( sal_Unicode c )
+static bool IsNum( sal_Unicode c )
 {
     return c >= '0' && c <= '9';
 }
 
 
-inline bool IsComma( sal_Unicode c )
+static bool IsComma( sal_Unicode c )
 {
     return c == '.' || c == ',';
 }
 
 
-inline bool IsExpStart( sal_Unicode c )
+static bool IsExpStart( sal_Unicode c )
 {
     return c == 'e' || c == 'E';
 }
 
 
-inline bool IsImagUnit( sal_Unicode c )
+static bool IsImagUnit( sal_Unicode c )
 {
     return c == 'i' || c == 'j';
 }
 
 
-inline sal_uInt16 GetVal( sal_Unicode c )
+static sal_uInt16 GetVal( sal_Unicode c )
 {
     return sal_uInt16( c - '0' );
 }
@@ -2298,10 +2274,10 @@ double ConvertDataLinear::ConvertFromBase( double f, sal_Int16 n ) const
 
 ConvertDataList::ConvertDataList()
 {
-#define NEWD(str,unit,cl)   maVector.push_back(new ConvertData(str,unit,cl))
-#define NEWDP(str,unit,cl)  maVector.push_back(new ConvertData(str,unit,cl,true))
-#define NEWL(str,unit,offs,cl)  maVector.push_back(new ConvertDataLinear(str,unit,offs,cl))
-#define NEWLP(str,unit,offs,cl) maVector.push_back(new ConvertDataLinear(str,unit,offs,cl,true))
+#define NEWD(str,unit,cl)   maVector.emplace_back(new ConvertData(str,unit,cl))
+#define NEWDP(str,unit,cl)  maVector.emplace_back(new ConvertData(str,unit,cl,true))
+#define NEWL(str,unit,offs,cl)  maVector.emplace_back(new ConvertDataLinear(str,unit,offs,cl))
+#define NEWLP(str,unit,offs,cl) maVector.emplace_back(new ConvertDataLinear(str,unit,offs,cl,true))
 
     // *** are extra and not standard Excel Analysis Addin!
 
@@ -2481,8 +2457,6 @@ ConvertDataList::ConvertDataList()
 
 ConvertDataList::~ConvertDataList()
 {
-    for( std::vector<ConvertData*>::const_iterator it = maVector.begin(); it != maVector.end(); ++it )
-        delete *it;
 }
 
 
@@ -2495,10 +2469,10 @@ double ConvertDataList::Convert( double fVal, const OUString& rFrom, const OUStr
     sal_Int16       nLevelFrom = 0;
     sal_Int16       nLevelTo = 0;
 
-    std::vector<ConvertData*>::iterator it = maVector.begin();
+    auto it = maVector.begin();
     while( it != maVector.end() && ( bSearchFrom || bSearchTo ) )
     {
-        ConvertData*    p = *it;
+        ConvertData*    p = it->get();
         if( bSearchFrom )
         {
             sal_Int16   n = p->GetMatchingLevel( rFrom );

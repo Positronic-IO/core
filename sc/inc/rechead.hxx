@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SC_INC_RECHEAD_HXX
 #define INCLUDED_SC_INC_RECHEAD_HXX
 
+#include <tools/solar.h>
 #include <tools/stream.hxx>
 #include <memory>
 
@@ -42,8 +43,6 @@
 
 // btw: 10 following 09 is not a counting error but an intentional gap,
 // because it was not clear, how long the RelRefs development would take. :)
-
-class SvStream;
 
         //  Header with size specification for multiple objects
 

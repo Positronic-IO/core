@@ -40,6 +40,7 @@ $(eval $(call gb_CppunitTest_use_libraries,sc_filters_test, \
     salhelper \
     sax \
     sc \
+    scfilt \
     scqahelper \
     sfx \
     sot \
@@ -63,7 +64,11 @@ $(eval $(call gb_CppunitTest_set_include,sc_filters_test,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sc_filters_test))
+$(eval $(call gb_CppunitTest_use_api,sc_filters_test,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sc_filters_test))
 $(eval $(call gb_CppunitTest_use_vcl,sc_filters_test))

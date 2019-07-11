@@ -24,17 +24,8 @@
 #include <com/sun/star/embed/XStorage.hpp>
 
 #include <svtools/insdlg.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/fixed.hxx>
-#include <vcl/button.hxx>
-#include <vcl/field.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/lstbox.hxx>
 #include <vcl/weld.hxx>
-#include <svtools/svmedit.hxx>
 #include <comphelper/embeddedobjectcontainer.hxx>
-
-class VclFrame;
 
 class INetURLObject;
 
@@ -53,7 +44,6 @@ public:
     virtual css::uno::Reference<css::io::XInputStream> GetIconIfIconified(OUString* pGraphicMediaType);
     void SetHelpId(const OString& rHelpId) { m_xDialog->set_help_id(rHelpId); }
     virtual bool IsCreateNew() const;
-    virtual short execute() = 0;
 };
 
 class SvInsertOleDlg : public InsertObjectDialog_Impl
@@ -82,7 +72,7 @@ public:
     SvInsertOleDlg(weld::Window* pParent,
         const css::uno::Reference < css::embed::XStorage >& xStorage,
         const SvObjectServerList* pServers );
-    virtual short execute() override;
+    virtual short run() override;
 
     /// get replacement for the iconified embedded object and the mediatype of the replacement
     css::uno::Reference< css::io::XInputStream > GetIconIfIconified( OUString* pGraphicMediaType ) override;
@@ -119,7 +109,7 @@ public:
         const css::uno::Reference<css::embed::XStorage>& xStorage);
     SfxInsertFloatingFrameDialog(weld::Window* pParent,
         const css::uno::Reference<css::embed::XEmbeddedObject>& xObj);
-    virtual short execute() override;
+    virtual short run() override;
 };
 
 #endif // INCLUDED_CUI_SOURCE_INC_INSDLG_HXX

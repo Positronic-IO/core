@@ -477,10 +477,10 @@ namespace pcr
 
     ONumericControl::ONumericControl( vcl::Window* _pParent, WinBits _nWinStyle )
         :ONumericControl_Base( PropertyControlType::NumericField, _pParent, _nWinStyle )
-        ,m_eValueUnit( FUNIT_NONE )
+        ,m_eValueUnit( FieldUnit::NONE )
         ,m_nFieldToUNOValueFactor( 1 )
     {
-        MetricField::SetDefaultUnit( FUNIT_NONE );
+        MetricField::SetDefaultUnit( FieldUnit::NONE );
 
         getTypedControlWindow()->EnableEmptyFieldValue( true );
         getTypedControlWindow()->SetStrictFormat( true );
@@ -1055,24 +1055,32 @@ namespace pcr
         {
             sal_Int32 nLines = comphelper::string::getTokenCount(_rCompsedTextWithLineBreaks, '\n');
             StlSyntaxSequence< OUString > aStrings( nLines );
-            StlSyntaxSequence< OUString >::iterator stringItem = aStrings.begin();
-            for ( sal_Int32 token = 0; token < nLines; ++token, ++stringItem )
-                *stringItem = _rCompsedTextWithLineBreaks.getToken( token, '\n' );
+            if (nLines)
+            {
+                StlSyntaxSequence< OUString >::iterator stringItem = aStrings.begin();
+                sal_Int32 nIdx {0};
+                do
+                {
+                    *stringItem = _rCompsedTextWithLineBreaks.getToken( 0, '\n', nIdx );
+                    ++stringItem;
+                }
+                while (nIdx>0);
+            }
             return aStrings;
         }
 
         OUString lcl_convertListToMultiLine( const StlSyntaxSequence< OUString >& _rStrings )
         {
-            OUString sMultiLineText;
+            OUStringBuffer sMultiLineText;
             for (   StlSyntaxSequence< OUString >::const_iterator item = _rStrings.begin();
                     item != _rStrings.end();
                 )
             {
-                sMultiLineText += *item;
+                sMultiLineText.append(*item);
                 if ( ++item != _rStrings.end() )
-                    sMultiLineText += "\n";
+                    sMultiLineText.append("\n");
             }
-            return sMultiLineText;
+            return sMultiLineText.makeStringAndClear();
         }
 
 
@@ -1150,9 +1158,9 @@ namespace pcr
         if (!aStr.isEmpty())
         {
             long nDiff=0;
-            sal_Int32 nCount = comphelper::string::getTokenCount(aStr, '\n');
 
-            OUString aInput = aStr.getToken(0,'\n' );
+            sal_Int32 nIdx {0};
+            OUString aInput = aStr.getToken(0, '\n', nIdx );
 
             if (!aInput.isEmpty())
             {
@@ -1168,9 +1176,9 @@ namespace pcr
             }
             else
             {
-                for (sal_Int32 i=1; i<nCount; ++i)
+                while (nIdx>0)
                 {
-                    aInput=aStr.getToken(static_cast<sal_uInt16>(i), '\n');
+                    aInput=aStr.getToken(0, '\n', nIdx);
                     if (!aInput.isEmpty())
                     {
                         aOutput += ";";

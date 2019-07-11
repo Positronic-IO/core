@@ -39,6 +39,7 @@
 #include <cntfrm.hxx>
 #include <rootfrm.hxx>
 #include <txtfrm.hxx>
+#include <notxtfrm.hxx>
 #include <scriptinfo.hxx>
 #include <crstate.hxx>
 #include <docsh.hxx>
@@ -59,7 +60,7 @@ static const sal_uInt16 coSrchRplcThreshold = 60000;
 
 struct PercentHdl
 {
-    SwDocShell* pDSh;
+    SwDocShell* const pDSh;
     sal_uLong nActPos;
     bool bBack, bNodeIdx;
 
@@ -351,18 +352,31 @@ bool SwCursor::IsSelOvr( SwCursorSelOverFlags eFlags )
                 }
             }
 
-            SwContentNode* pCNd = (pFrame != nullptr) ? const_cast<SwContentNode*>(pFrame->GetNode()) : nullptr;
-            if ( pCNd != nullptr )
+            if (pFrame != nullptr)
             {
-                // set this ContentNode as new position
-                rPtIdx = *pCNd;
+                if (pFrame->IsTextFrame())
+                {
+                    SwTextFrame const*const pTextFrame(static_cast<SwTextFrame const*>(pFrame));
+                    *GetPoint() = pTextFrame->MapViewToModelPos(TextFrameIndex(
+                            bGoNxt ? 0 : pTextFrame->GetText().getLength()));
+                }
+                else
+                {
+                    assert(pFrame->IsNoTextFrame());
+                    SwContentNode *const pCNd = const_cast<SwContentNode*>(
+                        static_cast<SwNoTextFrame const*>(pFrame)->GetNode());
+                    assert(pCNd);
 
-                // assign corresponding ContentIndex
-                const sal_Int32 nTmpPos = bGoNxt ? 0 : pCNd->Len();
-                GetPoint()->nContent.Assign( pCNd, nTmpPos );
+                    // set this ContentNode as new position
+                    rPtIdx = *pCNd;
+                    // assign corresponding ContentIndex
+                    const sal_Int32 nTmpPos = bGoNxt ? 0 : pCNd->Len();
+                    GetPoint()->nContent.Assign( pCNd, nTmpPos );
+                }
+
 
                 if (rPtIdx.GetIndex() == m_vSavePos.back().nNode
-                    && nTmpPos == m_vSavePos.back().nContent)
+                    && GetPoint()->nContent.GetIndex() == m_vSavePos.back().nContent)
                 {
                     // new position equals saved one
                     // --> trigger restore of saved pos by setting <pFrame> to NULL - see below
@@ -762,8 +776,8 @@ static sal_uLong lcl_FindSelection( SwFindParas& rParas, SwCursor* pCurrentCurso
 
         // as long as found and not at same position
         while(  *pSttPos <= *pEndPos &&
-                0 != ( nFndRet = rParas.Find( pCurrentCursor, fnMove,
-                                            &aRegion, bInReadOnly )) &&
+                0 != ( nFndRet = rParas.DoFind(*pCurrentCursor, fnMove,
+                                            aRegion, bInReadOnly)) &&
                 ( !pFndRing ||
                     *pFndRing->GetPoint() != *pCurrentCursor->GetPoint() ||
                     *pFndRing->GetMark() != *pCurrentCursor->GetMark() ))
@@ -950,7 +964,7 @@ sal_uLong SwCursor::FindAll( SwFindParas& rParas,
     {
         // put cursor as copy of current into ring
         // chaining points always to first created, so forward
-        std::unique_ptr< SwCursor > pSav( Create( this ) ); // save the current cursor
+        SwCursor* pSav = Create( this ); // save the current cursor
 
         // if already outside of body text search from this position or start at
         // 1. base section
@@ -981,7 +995,6 @@ sal_uLong SwCursor::FindAll( SwFindParas& rParas,
                 DeleteMark();
             return 0;
         }
-        pSav.release();
 
         if( !( FindRanges::InSelAll & eFndRngs ))
         {
@@ -1007,7 +1020,7 @@ sal_uLong SwCursor::FindAll( SwFindParas& rParas,
     }
     else if( FindRanges::InSelAll & eFndRngs )
     {
-        std::unique_ptr< SwCursor> pSav( Create( this ) );    // save the current cursor
+        SwCursor* pSav = Create( this );    // save the current cursor
 
         const SwNode* pSttNd = ( FindRanges::InBodyOnly & eFndRngs )
                             ? rNds.GetEndOfContent().StartOfSectionNode()
@@ -1034,7 +1047,6 @@ sal_uLong SwCursor::FindAll( SwFindParas& rParas,
                 DeleteMark();
             return 0;
         }
-        pSav.release();
         while( GetNext() != this )
             delete GetNext();
 
@@ -1051,9 +1063,8 @@ sal_uLong SwCursor::FindAll( SwFindParas& rParas,
         SwPosition aMarkPos( *GetMark() );
         const bool bMarkPos = HasMark() && (eFndRngs == FindRanges::InBody);
 
-        if( 0 != (nFound = rParas.Find( this, fnMove,
-                                        &aRegion, bInReadOnly ) ? 1 : 0)
-            && bMarkPos )
+        nFound = rParas.DoFind(*this, fnMove, aRegion, bInReadOnly) ? 1 : 0;
+        if (0 != nFound && bMarkPos)
             *GetMark() = aMarkPos;
     }
 
@@ -1103,70 +1114,100 @@ short SwCursor::MaxReplaceArived()
     return RET_YES;
 }
 
-bool SwCursor::IsStartWord( sal_Int16 nWordType ) const
-{
-    return IsStartWordWT( nWordType );
-}
+namespace {
 
-bool SwCursor::IsEndWord( sal_Int16 nWordType ) const
+struct HideWrapper
 {
-    return IsEndWordWT( nWordType );
-}
+    // either the frame's text or the node's text (possibly pre-filtered)
+    OUString const* m_pText;
+    // this is actually a TextFrameIndex but all of the i18n code uses sal_Int32
+    sal_Int32 m_nPtIndex;
+    // if mapping is needed, use this frame
+    SwTextFrame * m_pFrame;
+    // input in the constructor, output (via mapping) in the destructor
+    SwTextNode *& m_rpTextNode;
+    sal_Int32 & m_rPtPos;
 
-bool SwCursor::IsInWord( sal_Int16 nWordType ) const
-{
-    return IsInWordWT( nWordType );
-}
+    HideWrapper(SwRootFrame const*const pLayout,
+            SwTextNode *& rpTextNode, sal_Int32 & rPtPos,
+            OUString const*const pFilteredNodeText = nullptr)
+        : m_pText(pFilteredNodeText)
+        , m_pFrame(nullptr)
+        , m_rpTextNode(rpTextNode)
+        , m_rPtPos(rPtPos)
+    {
+        if (pLayout && pLayout->IsHideRedlines())
+        {
+            m_pFrame = static_cast<SwTextFrame*>(rpTextNode->getLayoutFrame(pLayout));
+            m_pText = &m_pFrame->GetText();
+            m_nPtIndex = sal_Int32(m_pFrame->MapModelToView(rpTextNode, rPtPos));
+        }
+        else
+        {
+            if (!m_pText)
+            {
+                m_pText = &rpTextNode->GetText();
+            }
+            m_nPtIndex = rPtPos;
+        }
+    }
+    ~HideWrapper()
+    {
+        AssignBack(m_rpTextNode, m_rPtPos);
+    }
+    void AssignBack(SwTextNode *& rpTextNode, sal_Int32 & rPtPos)
+    {
+        if (0 <= m_nPtIndex && m_pFrame)
+        {
+            std::pair<SwTextNode*, sal_Int32> const pos(
+                    m_pFrame->MapViewToModel(TextFrameIndex(m_nPtIndex)));
+            rpTextNode = pos.first;
+            rPtPos = pos.second;
+        }
+        else
+        {
+            rPtPos = m_nPtIndex;
+        }
+    }
+};
 
-bool SwCursor::GoStartWord()
-{
-    return GoStartWordWT( WordType::ANYWORD_IGNOREWHITESPACES );
-}
-
-bool SwCursor::GoEndWord()
-{
-    return GoEndWordWT( WordType::ANYWORD_IGNOREWHITESPACES );
-}
-
-bool SwCursor::GoNextWord()
-{
-    return GoNextWordWT( WordType::ANYWORD_IGNOREWHITESPACES );
-}
-
-bool SwCursor::GoPrevWord()
-{
-    return GoPrevWordWT( WordType::ANYWORD_IGNOREWHITESPACES );
-}
+} // namespace
 
 bool SwCursor::SelectWord( SwViewShell const * pViewShell, const Point* pPt )
 {
     return SelectWordWT( pViewShell, WordType::ANYWORD_IGNOREWHITESPACES, pPt );
 }
 
-bool SwCursor::IsStartWordWT( sal_Int16 nWordType ) const
+bool SwCursor::IsStartWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout) const
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
-        const sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
+        sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
+
+        HideWrapper w(pLayout, pTextNd, nPtPos);
+
         bRet = g_pBreakIt->GetBreakIter()->isBeginWord(
-                            pTextNd->GetText(), nPtPos,
+                            *w.m_pText, w.m_nPtIndex,
                             g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos )),
                             nWordType );
     }
     return bRet;
 }
 
-bool SwCursor::IsEndWordWT( sal_Int16 nWordType ) const
+bool SwCursor::IsEndWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout) const
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
-        const sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
+        sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
+
+        HideWrapper w(pLayout, pTextNd, nPtPos);
+
         bRet = g_pBreakIt->GetBreakIter()->isEndWord(
-                            pTextNd->GetText(), nPtPos,
+                            *w.m_pText, w.m_nPtIndex,
                             g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
                             nWordType );
 
@@ -1174,64 +1215,75 @@ bool SwCursor::IsEndWordWT( sal_Int16 nWordType ) const
     return bRet;
 }
 
-bool SwCursor::IsInWordWT( sal_Int16 nWordType ) const
+bool SwCursor::IsInWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout) const
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
-        const sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
-        Boundary aBoundary = g_pBreakIt->GetBreakIter()->getWordBoundary(
-                            pTextNd->GetText(), nPtPos,
-                            g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
-                            nWordType,
-                            true );
+        sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
 
-        bRet = aBoundary.startPos != aBoundary.endPos &&
-                aBoundary.startPos <= nPtPos &&
-                    nPtPos <= aBoundary.endPos;
+        {
+            HideWrapper w(pLayout, pTextNd, nPtPos);
+
+            Boundary aBoundary = g_pBreakIt->GetBreakIter()->getWordBoundary(
+                                *w.m_pText, w.m_nPtIndex,
+                                g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
+                                nWordType,
+                                true );
+
+            bRet = aBoundary.startPos != aBoundary.endPos &&
+                    aBoundary.startPos <= w.m_nPtIndex &&
+                        w.m_nPtIndex <= aBoundary.endPos;
+            w.m_nPtIndex = aBoundary.startPos; // hack: convert startPos back...
+        }
         if(bRet)
         {
             const CharClass& rCC = GetAppCharClass();
-            bRet = rCC.isLetterNumeric( pTextNd->GetText(), aBoundary.startPos );
+            bRet = rCC.isLetterNumeric(pTextNd->GetText(), nPtPos);
         }
     }
     return bRet;
 }
 
-bool SwCursor::IsStartEndSentence( bool bEnd ) const
+bool SwCursor::IsStartEndSentence(bool bEnd, SwRootFrame const*const pLayout) const
 {
     bool bRet = bEnd ?
                     GetContentNode() && GetPoint()->nContent == GetContentNode()->Len() :
                     GetPoint()->nContent.GetIndex() == 0;
 
-    if( !bRet )
+    if ((pLayout != nullptr && pLayout->IsHideRedlines()) || !bRet)
     {
         SwCursor aCursor(*GetPoint(), nullptr);
         SwPosition aOrigPos = *aCursor.GetPoint();
-        aCursor.GoSentence( bEnd ? SwCursor::END_SENT : SwCursor::START_SENT );
+        aCursor.GoSentence(bEnd ? SwCursor::END_SENT : SwCursor::START_SENT, pLayout);
         bRet = aOrigPos == *aCursor.GetPoint();
     }
     return bRet;
 }
 
-bool SwCursor::GoStartWordWT( sal_Int16 nWordType )
+bool SwCursor::GoStartWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout)
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
         SwCursorSaveState aSave( *this );
         sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
-        nPtPos = g_pBreakIt->GetBreakIter()->getWordBoundary(
-                            pTextNd->GetText(), nPtPos,
+
+        {
+            HideWrapper w(pLayout, pTextNd, nPtPos);
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->getWordBoundary(
+                            *w.m_pText, w.m_nPtIndex,
                             g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
                             nWordType,
                             false ).startPos;
+        }
 
         if (nPtPos < pTextNd->GetText().getLength() && nPtPos >= 0)
         {
-            GetPoint()->nContent = nPtPos;
+            *GetPoint() = SwPosition(*pTextNd, nPtPos);
             if( !IsSelOvr() )
                 bRet = true;
         }
@@ -1239,24 +1291,29 @@ bool SwCursor::GoStartWordWT( sal_Int16 nWordType )
     return bRet;
 }
 
-bool SwCursor::GoEndWordWT( sal_Int16 nWordType )
+bool SwCursor::GoEndWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout)
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
         SwCursorSaveState aSave( *this );
         sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
-        nPtPos = g_pBreakIt->GetBreakIter()->getWordBoundary(
-                            pTextNd->GetText(), nPtPos,
+
+        {
+            HideWrapper w(pLayout, pTextNd, nPtPos);
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->getWordBoundary(
+                            *w.m_pText, w.m_nPtIndex,
                             g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
                             nWordType,
                             true ).endPos;
+        }
 
         if (nPtPos <= pTextNd->GetText().getLength() && nPtPos >= 0 &&
             GetPoint()->nContent.GetIndex() != nPtPos )
         {
-            GetPoint()->nContent = nPtPos;
+            *GetPoint() = SwPosition(*pTextNd, nPtPos);
             if( !IsSelOvr() )
                 bRet = true;
         }
@@ -1264,23 +1321,27 @@ bool SwCursor::GoEndWordWT( sal_Int16 nWordType )
     return bRet;
 }
 
-bool SwCursor::GoNextWordWT( sal_Int16 nWordType )
+bool SwCursor::GoNextWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout)
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
         SwCursorSaveState aSave( *this );
         sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
 
-        nPtPos = g_pBreakIt->GetBreakIter()->nextWord(
-                                pTextNd->GetText(), nPtPos,
-            g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos, 1 ) ),
-                    nWordType ).startPos;
+        {
+            HideWrapper w(pLayout, pTextNd, nPtPos);
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->nextWord(
+                        *w.m_pText, w.m_nPtIndex,
+                        g_pBreakIt->GetLocale( pTextNd->GetLang(nPtPos, 1) ),
+                        nWordType ).startPos;
+        }
 
         if (nPtPos <= pTextNd->GetText().getLength() && nPtPos >= 0)
         {
-            GetPoint()->nContent = nPtPos;
+            *GetPoint() = SwPosition(*pTextNd, nPtPos);
             if( !IsSelOvr() )
                 bRet = true;
         }
@@ -1288,26 +1349,34 @@ bool SwCursor::GoNextWordWT( sal_Int16 nWordType )
     return bRet;
 }
 
-bool SwCursor::GoPrevWordWT( sal_Int16 nWordType )
+bool SwCursor::GoPrevWordWT(sal_Int16 nWordType, SwRootFrame const*const pLayout)
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
         SwCursorSaveState aSave( *this );
         sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
-        const sal_Int32 nPtStart = nPtPos;
 
-        if( nPtPos )
-            --nPtPos;
-        nPtPos = g_pBreakIt->GetBreakIter()->previousWord(
-                                pTextNd->GetText(), nPtStart,
-            g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos, 1 ) ),
-                    nWordType ).startPos;
+        {
+            HideWrapper w(pLayout, pTextNd, nPtPos);
+
+            const sal_Int32 nPtStart = w.m_nPtIndex;
+            if (w.m_nPtIndex)
+            {
+                --w.m_nPtIndex;
+                w.AssignBack(pTextNd, nPtPos);
+            }
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->previousWord(
+                        *w.m_pText, nPtStart,
+                        g_pBreakIt->GetLocale( pTextNd->GetLang(nPtPos, 1) ),
+                                nWordType ).startPos;
+        }
 
         if (nPtPos < pTextNd->GetText().getLength() && nPtPos >= 0)
         {
-            GetPoint()->nContent = nPtPos;
+            *GetPoint() = SwPosition(*pTextNd, nPtPos);
             if( !IsSelOvr() )
                 bRet = true;
         }
@@ -1329,7 +1398,7 @@ bool SwCursor::SelectWordWT( SwViewShell const * pViewShell, sal_Int16 nWordType
         pLayout->GetCursorOfst( GetPoint(), aPt );
     }
 
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
         // Should we select the whole fieldmark?
@@ -1337,12 +1406,12 @@ bool SwCursor::SelectWordWT( SwViewShell const * pViewShell, sal_Int16 nWordType
         sw::mark::IMark* pMark = GetPoint() ? pMarksAccess->getFieldmarkFor( *GetPoint( ) ) : nullptr;
         if ( pMark )
         {
-            const SwPosition rStart = pMark->GetMarkStart();
+            const SwPosition& rStart = pMark->GetMarkStart();
             GetPoint()->nNode = rStart.nNode;
             GetPoint()->nContent = rStart.nContent;
             ++GetPoint()->nContent; // Don't select the start delimiter
 
-            const SwPosition rEnd = pMark->GetMarkEnd();
+            const SwPosition& rEnd = pMark->GetMarkEnd();
 
             if ( rStart != rEnd )
             {
@@ -1357,30 +1426,46 @@ bool SwCursor::SelectWordWT( SwViewShell const * pViewShell, sal_Int16 nWordType
         {
             bool bForward = true;
             sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
+
+            HideWrapper w(pViewShell->GetLayout(), pTextNd, nPtPos);
+
             Boundary aBndry( g_pBreakIt->GetBreakIter()->getWordBoundary(
-                                pTextNd->GetText(), nPtPos,
+                                *w.m_pText, w.m_nPtIndex,
                                 g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
                                 nWordType,
                                 bForward ));
 
-            if (comphelper::LibreOfficeKit::isActive() && aBndry.startPos == aBndry.endPos && nPtPos > 0)
+            if (comphelper::LibreOfficeKit::isActive() && aBndry.startPos == aBndry.endPos && w.m_nPtIndex > 0)
             {
                 // nPtPos is the end of the paragraph, select the last word then.
-                --nPtPos;
+                --w.m_nPtIndex;
+                w.AssignBack(pTextNd, nPtPos);
+
                 aBndry = Boundary( g_pBreakIt->GetBreakIter()->getWordBoundary(
-                                    pTextNd->GetText(), nPtPos,
+                                    *w.m_pText, w.m_nPtIndex,
                                     g_pBreakIt->GetLocale( pTextNd->GetLang( nPtPos ) ),
                                     nWordType,
                                     bForward ));
+
             }
+
+            SwTextNode * pStartNode(pTextNd);
+            sal_Int32 nStartIndex;
+            w.m_nPtIndex = aBndry.startPos;
+            w.AssignBack(pStartNode, nStartIndex);
+
+            SwTextNode * pEndNode(pTextNd);
+            sal_Int32 nEndIndex;
+            w.m_nPtIndex = aBndry.endPos;
+            w.AssignBack(pEndNode, nEndIndex);
 
             if( aBndry.startPos != aBndry.endPos )
             {
-                GetPoint()->nContent = aBndry.endPos;
+                *GetPoint() = SwPosition(*pEndNode, nEndIndex);
                 if( !IsSelOvr() )
                 {
                     SetMark();
-                    GetMark()->nContent = aBndry.startPos;
+                    *GetMark() = SwPosition(*pStartNode, nStartIndex);
                     if (sw::mark::IMark* pAnnotationMark = pMarksAccess->getAnnotationMarkFor(*GetPoint()))
                     {
                         // An annotation mark covers the selected word. Check
@@ -1441,61 +1526,70 @@ static OUString lcl_MaskDeletedRedlines( const SwTextNode* pTextNd )
     return aRes;
 }
 
-bool SwCursor::GoSentence( SentenceMoveType eMoveType )
+bool SwCursor::GoSentence(SentenceMoveType eMoveType, SwRootFrame const*const pLayout)
 {
     bool bRet = false;
-    const SwTextNode* pTextNd = GetNode().GetTextNode();
+    SwTextNode* pTextNd = GetNode().GetTextNode();
     if (pTextNd)
     {
-        OUString sNodeText( lcl_MaskDeletedRedlines( pTextNd ) );
+        OUString const sNodeText(lcl_MaskDeletedRedlines(pTextNd));
 
         SwCursorSaveState aSave( *this );
         sal_Int32 nPtPos = GetPoint()->nContent.GetIndex();
-        switch ( eMoveType )
+
         {
-        case START_SENT: /* when modifying: see also ExpandToSentenceBorders below! */
-            nPtPos = g_pBreakIt->GetBreakIter()->beginOfSentence(
-                                    sNodeText,
-                                    nPtPos, g_pBreakIt->GetLocale(
-                                            pTextNd->GetLang( nPtPos ) ));
-            break;
-        case END_SENT: /* when modifying: see also ExpandToSentenceBorders below! */
-            nPtPos = g_pBreakIt->GetBreakIter()->endOfSentence(
-                                    sNodeText,
-                                    nPtPos, g_pBreakIt->GetLocale(
-                                                pTextNd->GetLang( nPtPos ) ));
-            break;
-        case NEXT_SENT:
+            HideWrapper w(pLayout, pTextNd, nPtPos, &sNodeText);
+
+            switch ( eMoveType )
             {
-                nPtPos = g_pBreakIt->GetBreakIter()->endOfSentence(
-                                        sNodeText,
-                                        nPtPos, g_pBreakIt->GetLocale(
-                                                    pTextNd->GetLang( nPtPos ) ));
-                while (nPtPos>=0 && ++nPtPos < sNodeText.getLength()
-                       && sNodeText[nPtPos] == ' ' /*isWhiteSpace( aText.GetChar(nPtPos)*/ )
-                    ;
+            case START_SENT: /* when modifying: see also ExpandToSentenceBorders below! */
+                w.m_nPtIndex = g_pBreakIt->GetBreakIter()->beginOfSentence(
+                            *w.m_pText, w.m_nPtIndex,
+                            g_pBreakIt->GetLocale(pTextNd->GetLang(nPtPos)));
+                break;
+            case END_SENT: /* when modifying: see also ExpandToSentenceBorders below! */
+                w.m_nPtIndex = g_pBreakIt->GetBreakIter()->endOfSentence(
+                            *w.m_pText, w.m_nPtIndex,
+                            g_pBreakIt->GetLocale(pTextNd->GetLang(nPtPos)));
+                break;
+            case NEXT_SENT:
+                {
+                    w.m_nPtIndex = g_pBreakIt->GetBreakIter()->endOfSentence(
+                            *w.m_pText, w.m_nPtIndex,
+                            g_pBreakIt->GetLocale(pTextNd->GetLang(nPtPos)));
+                    if (w.m_nPtIndex >= 0 && w.m_nPtIndex < w.m_pText->getLength())
+                    {
+                        do
+                        {
+                            ++w.m_nPtIndex;
+                        }
+                        while (w.m_nPtIndex < w.m_pText->getLength()
+                               && (*w.m_pText)[w.m_nPtIndex] == ' ');
+                    }
+                    break;
+                }
+            case PREV_SENT:
+                w.m_nPtIndex = g_pBreakIt->GetBreakIter()->beginOfSentence(
+                            *w.m_pText, w.m_nPtIndex,
+                            g_pBreakIt->GetLocale(pTextNd->GetLang(nPtPos)));
+
+                if (w.m_nPtIndex == 0)
+                    return false;   // the previous sentence is not in this paragraph
+                if (w.m_nPtIndex > 0)
+                {
+                    w.m_nPtIndex = g_pBreakIt->GetBreakIter()->beginOfSentence(
+                            *w.m_pText, w.m_nPtIndex - 1,
+                            g_pBreakIt->GetLocale(pTextNd->GetLang(nPtPos)));
+                }
                 break;
             }
-        case PREV_SENT:
-            nPtPos = g_pBreakIt->GetBreakIter()->beginOfSentence(
-                                    sNodeText,
-                                    nPtPos, g_pBreakIt->GetLocale(
-                                                pTextNd->GetLang( nPtPos ) ));
-            if (nPtPos == 0)
-                return false;   // the previous sentence is not in this paragraph
-            if (nPtPos > 0)
-                nPtPos = g_pBreakIt->GetBreakIter()->beginOfSentence(
-                                    sNodeText,
-                                    nPtPos - 1, g_pBreakIt->GetLocale(
-                                                pTextNd->GetLang( nPtPos ) ));
-            break;
         }
 
         // it is allowed to place the PaM just behind the last
         // character in the text thus <= ...Len
         if (nPtPos <= pTextNd->GetText().getLength() && nPtPos >= 0)
         {
-            GetPoint()->nContent = nPtPos;
+            *GetPoint() = SwPosition(*pTextNd, nPtPos);
             if( !IsSelOvr() )
                 bRet = true;
         }
@@ -1503,11 +1597,11 @@ bool SwCursor::GoSentence( SentenceMoveType eMoveType )
     return bRet;
 }
 
-bool SwCursor::ExpandToSentenceBorders()
+bool SwCursor::ExpandToSentenceBorders(SwRootFrame const*const pLayout)
 {
     bool bRes = false;
-    const SwTextNode* pStartNd = Start()->nNode.GetNode().GetTextNode();
-    const SwTextNode* pEndNd   = End()->nNode.GetNode().GetTextNode();
+    SwTextNode* pStartNd = Start()->nNode.GetNode().GetTextNode();
+    SwTextNode* pEndNd   = End()->nNode.GetNode().GetTextNode();
     if (pStartNd && pEndNd)
     {
         if (!HasMark())
@@ -1520,24 +1614,32 @@ bool SwCursor::ExpandToSentenceBorders()
         sal_Int32 nStartPos = Start()->nContent.GetIndex();
         sal_Int32 nEndPos   = End()->nContent.GetIndex();
 
-        nStartPos = g_pBreakIt->GetBreakIter()->beginOfSentence(
-                                sStartText, nStartPos,
+        {
+            HideWrapper w(pLayout, pStartNd, nStartPos, &sStartText);
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->beginOfSentence(
+                                *w.m_pText, w.m_nPtIndex,
                                 g_pBreakIt->GetLocale( pStartNd->GetLang( nStartPos ) ) );
-        nEndPos   = g_pBreakIt->GetBreakIter()->endOfSentence(
-                                sEndText, nEndPos,
+        }
+        {
+            HideWrapper w(pLayout, pEndNd, nEndPos, &sEndText);
+
+            w.m_nPtIndex = g_pBreakIt->GetBreakIter()->endOfSentence(
+                                *w.m_pText, w.m_nPtIndex,
                                 g_pBreakIt->GetLocale( pEndNd->GetLang( nEndPos ) ) );
+        }
 
         // it is allowed to place the PaM just behind the last
         // character in the text thus <= ...Len
         bool bChanged = false;
         if (nStartPos <= pStartNd->GetText().getLength() && nStartPos >= 0)
         {
-            GetMark()->nContent = nStartPos;
+            *GetMark() = SwPosition(*pStartNd, nStartPos);
             bChanged = true;
         }
         if (nEndPos <= pEndNd->GetText().getLength() && nEndPos >= 0)
         {
-            GetPoint()->nContent = nEndPos;
+            *GetPoint() = SwPosition(*pEndNd, nEndPos);
             bChanged = true;
         }
         if (bChanged && !IsSelOvr())
@@ -1547,7 +1649,8 @@ bool SwCursor::ExpandToSentenceBorders()
 }
 
 bool SwTableCursor::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 /*nMode*/,
-    bool /*bVisualAllowed*/, bool /*bSkipHidden*/, bool /*bInsertCursor*/ )
+    bool /*bVisualAllowed*/, bool /*bSkipHidden*/, bool /*bInsertCursor*/,
+    SwRootFrame const*)
 {
     return bLeft ? GoPrevCell( nCnt )
                  : GoNextCell( nCnt );
@@ -1576,27 +1679,35 @@ SwCursor::DoSetBidiLevelLeftRight(
             // for visual cursor travelling (used in bidi layout)
             // we first have to convert the logic to a visual position
             Point aPt;
-            pSttFrame = rTNd.getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+            std::pair<Point, bool> const tmp(aPt, true);
+            pSttFrame = rTNd.getLayoutFrame(
+                    GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(),
+                    GetPoint(), &tmp);
             if( pSttFrame )
             {
                 sal_uInt8 nCursorLevel = GetCursorBidiLevel();
                 bool bForward = ! io_rbLeft;
-                const_cast<SwTextFrame*>(static_cast<const SwTextFrame*>(pSttFrame))->PrepareVisualMove( nPos, nCursorLevel,
+                SwTextFrame *const pTF(const_cast<SwTextFrame*>(
+                            static_cast<const SwTextFrame*>(pSttFrame)));
+                TextFrameIndex nTFIndex(pTF->MapModelToViewPos(*GetPoint()));
+                pTF->PrepareVisualMove( nTFIndex, nCursorLevel,
                                                          bForward, bInsertCursor );
-                rIdx = nPos;
+                *GetPoint() = pTF->MapViewToModelPos(nTFIndex);
                 SetCursorBidiLevel( nCursorLevel );
                 io_rbLeft = ! bForward;
             }
         }
         else
         {
-            const SwScriptInfo* pSI = SwScriptInfo::GetScriptInfo( rTNd );
+            SwTextFrame const* pFrame;
+            const SwScriptInfo* pSI = SwScriptInfo::GetScriptInfo(rTNd, &pFrame);
             if ( pSI )
             {
                 const sal_Int32 nMoveOverPos = io_rbLeft ?
                                                ( nPos ? nPos - 1 : 0 ) :
                                                 nPos;
-                SetCursorBidiLevel( pSI->DirType( nMoveOverPos ) );
+                TextFrameIndex nIndex(pFrame->MapModelToView(&rTNd, nMoveOverPos));
+                SetCursorBidiLevel( pSI->DirType(nIndex) );
             }
         }
     }
@@ -1604,7 +1715,8 @@ SwCursor::DoSetBidiLevelLeftRight(
 }
 
 bool SwCursor::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 nMode,
-                          bool bVisualAllowed,bool bSkipHidden, bool bInsertCursor )
+                          bool bVisualAllowed,bool bSkipHidden, bool bInsertCursor,
+                          SwRootFrame const*const pLayout)
 {
     // calculate cursor bidi level
     SwNode& rNode = GetPoint()->nNode.GetNode();
@@ -1621,12 +1733,58 @@ bool SwCursor::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 nMode,
     else
         fnGo = CRSR_SKIP_CELLS == nMode ? GoInContentCells : GoInContent;
 
+    SwTextFrame const* pFrame(nullptr);
+    if (pLayout)
+    {
+        pFrame = static_cast<SwTextFrame*>(rNode.GetContentNode()->getLayoutFrame(pLayout));
+        if (pFrame)
+        {
+            while (pFrame->GetPrecede())
+            {
+                pFrame = static_cast<SwTextFrame const*>(pFrame->GetPrecede());
+            }
+        }
+    }
+
     while( nCnt )
     {
         SwNodeIndex aOldNodeIdx( GetPoint()->nNode );
 
+        TextFrameIndex beforeIndex(-1);
+        if (pFrame)
+        {
+            beforeIndex = pFrame->MapModelToViewPos(*GetPoint());
+        }
+
         if ( !Move( fnMove, fnGo ) )
             break;
+
+        if (pFrame)
+        {
+            SwTextFrame const* pNewFrame(static_cast<SwTextFrame const*>(
+                GetPoint()->nNode.GetNode().GetContentNode()->getLayoutFrame(pLayout)));
+            if (pNewFrame)
+            {
+                while (pNewFrame->GetPrecede())
+                {
+                    pNewFrame = static_cast<SwTextFrame const*>(pNewFrame->GetPrecede());
+                }
+            }
+            // sw_redlinehide: fully redline-deleted nodes don't have frames...
+            if (pFrame == pNewFrame || !pNewFrame)
+            {
+                if (!pNewFrame || beforeIndex == pFrame->MapModelToViewPos(*GetPoint()))
+                {
+                    continue; // moving inside delete redline, doesn't count...
+                }
+            }
+            else
+            {
+                // assume iteration is stable & returns the same frame
+                assert(!pFrame->IsAnFollow(pNewFrame) && !pNewFrame->IsAnFollow(pFrame));
+                pFrame = pNewFrame;
+            }
+        }
 
         // If we were located inside a covered cell but our position has been
         // corrected, we check if the last move has moved the cursor to a
@@ -1708,7 +1866,10 @@ bool SwCursor::LeftRight( bool bLeft, sal_uInt16 nCnt, sal_uInt16 nMode,
         if ( &rTmpNode != &rNode && rTmpNode.IsTextNode() )
         {
             Point aPt;
-            const SwContentFrame* pEndFrame = rTmpNode.GetTextNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+            std::pair<Point, bool> const tmp(aPt, true);
+            const SwContentFrame* pEndFrame = rTmpNode.GetTextNode()->getLayoutFrame(
+                GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(),
+                GetPoint(), &tmp);
             if ( pEndFrame )
             {
                 if ( ! pEndFrame->IsRightToLeft() != ! pSttFrame->IsRightToLeft() )
@@ -1733,8 +1894,9 @@ void SwCursor::DoSetBidiLevelUpDown()
     SwNode& rNode = GetPoint()->nNode.GetNode();
     if ( rNode.IsTextNode() )
     {
+        SwTextFrame const* pFrame;
         const SwScriptInfo* pSI =
-            SwScriptInfo::GetScriptInfo( *rNode.GetTextNode() );
+            SwScriptInfo::GetScriptInfo( *rNode.GetTextNode(), &pFrame );
         if ( pSI )
         {
             SwIndex& rIdx = GetPoint()->nContent;
@@ -1742,8 +1904,9 @@ void SwCursor::DoSetBidiLevelUpDown()
 
             if (nPos && nPos < rNode.GetTextNode()->GetText().getLength())
             {
-                const sal_uInt8 nCurrLevel = pSI->DirType( nPos );
-                const sal_uInt8 nPrevLevel = pSI->DirType( nPos - 1 );
+                TextFrameIndex const nIndex(pFrame->MapModelToView(rNode.GetTextNode(), nPos));
+                const sal_uInt8 nCurrLevel = pSI->DirType( nIndex );
+                const sal_uInt8 nPrevLevel = pSI->DirType( nIndex - TextFrameIndex(1) );
 
                 if ( nCurrLevel % 2 != nPrevLevel % 2 )
                 {
@@ -1758,7 +1921,8 @@ void SwCursor::DoSetBidiLevelUpDown()
 }
 
 bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
-                       Point const * pPt, long nUpDownX )
+                       Point const * pPt, long nUpDownX,
+                       SwRootFrame & rLayout)
 {
     SwTableCursor* pTableCursor = dynamic_cast<SwTableCursor*>(this);
     bool bAdjustTableCursor = false;
@@ -1777,7 +1941,8 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
     Point aPt;
     if( pPt )
         aPt = *pPt;
-    SwContentFrame* pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+    std::pair<Point, bool> const temp(aPt, true);
+    SwContentFrame* pFrame = GetContentNode()->getLayoutFrame(&rLayout, GetPoint(), &temp);
 
     if( pFrame )
     {
@@ -1813,7 +1978,8 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
                 const SwNode* pEndNd = pTableNd->EndOfSectionNode();
                 GetPoint()->nNode = *pEndNd;
                 pTableCursor->Move( fnMoveBackward, GoInNode );
-                   pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+                std::pair<Point, bool> const tmp(aPt, true);
+                pFrame = GetContentNode()->getLayoutFrame(&rLayout, GetPoint(), &tmp);
             }
         }
 
@@ -1822,7 +1988,8 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
                     : pFrame->UnitDown( this, nUpDownX, bInReadOnly ) ) &&
                 CheckNodesRange( aOldPos.nNode, GetPoint()->nNode, bChkRange ))
         {
-               pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+            std::pair<Point, bool> const tmp(aPt, true);
+            pFrame = GetContentNode()->getLayoutFrame(&rLayout, GetPoint(), &tmp);
             --nCnt;
         }
 
@@ -1833,8 +2000,9 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
             if( !pTableCursor )
             {
                 // try to position the cursor at half of the char-rect's height
-                DisableCallbackAction a(*GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout());
-                pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+                DisableCallbackAction a(rLayout);
+                std::pair<Point, bool> const tmp(aPt, true);
+                pFrame = GetContentNode()->getLayoutFrame(&rLayout, GetPoint(), &tmp);
                 SwCursorMoveState eTmpState( MV_UPDOWN );
                 eTmpState.m_bSetInReadOnly = bInReadOnly;
                 SwRect aTmpRect;
@@ -1842,13 +2010,13 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
                 if ( pFrame->IsVertical() )
                 {
                     aPt.setX(aTmpRect.Center().getX());
-                    pFrame->Calc(pFrame->getRootFrame()->GetCurrShell()->GetOut());
+                    pFrame->Calc(rLayout.GetCurrShell()->GetOut());
                     aPt.setY(pFrame->getFrameArea().Top() + nUpDownX);
                 }
                 else
                 {
                     aPt.setY(aTmpRect.Center().getY());
-                    pFrame->Calc(pFrame->getRootFrame()->GetCurrShell()->GetOut());
+                    pFrame->Calc(rLayout.GetCurrShell()->GetOut());
                     aPt.setX(pFrame->getFrameArea().Left() + nUpDownX);
                 }
                 pFrame->GetCursorOfst( GetPoint(), aPt, &eTmpState );
@@ -1863,10 +2031,12 @@ bool SwCursor::UpDown( bool bUp, sal_uInt16 nCnt,
     return bRet;
 }
 
-bool SwCursor::LeftRightMargin( bool bLeft, bool bAPI )
+bool SwCursor::LeftRightMargin(SwRootFrame const& rLayout, bool bLeft, bool bAPI)
 {
     Point aPt;
-    SwContentFrame * pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+    std::pair<Point, bool> const tmp(aPt, true);
+    SwContentFrame const*const pFrame = GetContentNode()->getLayoutFrame(
+        &rLayout, GetPoint(), &tmp);
 
     // calculate cursor bidi level
     if ( pFrame )
@@ -1878,11 +2048,13 @@ bool SwCursor::LeftRightMargin( bool bLeft, bool bAPI )
            && !IsSelOvr( SwCursorSelOverFlags::Toggle | SwCursorSelOverFlags::ChangePos );
 }
 
-bool SwCursor::IsAtLeftRightMargin( bool bLeft, bool bAPI ) const
+bool SwCursor::IsAtLeftRightMargin(SwRootFrame const& rLayout, bool bLeft, bool bAPI) const
 {
     bool bRet = false;
     Point aPt;
-    SwContentFrame * pFrame = GetContentNode()->getLayoutFrame( GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPt, GetPoint() );
+    std::pair<Point, bool> const tmp(aPt, true);
+    SwContentFrame const*const pFrame = GetContentNode()->getLayoutFrame(
+        &rLayout, GetPoint(), &tmp);
     if( pFrame )
     {
         SwPaM aPam( *GetPoint() );
@@ -1890,7 +2062,9 @@ bool SwCursor::IsAtLeftRightMargin( bool bLeft, bool bAPI ) const
             --aPam.GetPoint()->nContent;
         bRet = (bLeft ? pFrame->LeftMargin( &aPam )
                       : pFrame->RightMargin( &aPam, bAPI ))
-                && *aPam.GetPoint() == *GetPoint();
+                && (!pFrame->IsTextFrame()
+                    || static_cast<SwTextFrame const*>(pFrame)->MapModelToViewPos(*aPam.GetPoint())
+                        == static_cast<SwTextFrame const*>(pFrame)->MapModelToViewPos(*GetPoint()));
     }
     return bRet;
 }

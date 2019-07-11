@@ -21,6 +21,8 @@
 #define INCLUDED_SC_INC_CONDITIO_HXX
 
 #include "global.hxx"
+#include <tools/solar.h>
+#include <tools/color.hxx>
 #include "address.hxx"
 #include <formula/grammar.hxx>
 #include "scdllapi.h"
@@ -35,6 +37,7 @@
 #include <tools/date.hxx>
 #include <tools/link.hxx>
 
+#include <boost/optional.hpp>
 #include <map>
 #include <memory>
 #include <set>
@@ -185,10 +188,12 @@ private:
     std::function<void()> maCallbackFunction;
 
     void startListening(const ScTokenArray* pTokens, const ScRange& rPos);
+    void startListening(const ScRangeList& rPos);
 
 public:
     explicit ScFormulaListener(ScFormulaCell* pCell);
     explicit ScFormulaListener(ScDocument* pDoc);
+    explicit ScFormulaListener(ScDocument* pDoc, const ScRangeList& rRange);
     virtual ~ScFormulaListener() override;
 
     void Notify( const SfxHint& rHint ) override;
@@ -198,6 +203,7 @@ public:
     void addTokenArray(const ScTokenArray* pTokens, const ScRange& rRange);
     void stopListening();
     void setCallback(const std::function<void()>& aCallbackFunction);
+
 };
 
 class ScConditionalFormat;
@@ -206,14 +212,13 @@ struct ScIconSetInfo;
 
 struct ScCondFormatData
 {
-    ScCondFormatData():
-        pColorScale(nullptr),
-        pDataBar(nullptr),
-        pIconSet(nullptr) {}
+    ScCondFormatData();
+    ScCondFormatData(ScCondFormatData&&);
+    ~ScCondFormatData();
 
-    Color* pColorScale;
-    ScDataBarInfo* pDataBar;
-    ScIconSetInfo* pIconSet;
+    boost::optional<Color> mxColorScale;
+    std::unique_ptr<ScDataBarInfo> pDataBar;
+    std::unique_ptr<ScIconSetInfo> pIconSet;
     OUString aStyleName;
 };
 
@@ -318,7 +323,7 @@ class SC_DLLPUBLIC ScConditionEntry : public ScFormatEntry
     bool                bFirstRun;
     std::unique_ptr<ScFormulaListener> mpListener;
 
-    void    SimplifyCompiledFormula( std::unique_ptr<ScTokenArray>& rFormula,
+    static void SimplifyCompiledFormula( std::unique_ptr<ScTokenArray>& rFormula,
                                      double& rVal,
                                      bool& rIsStr,
                                      OUString& rStrVal );
@@ -396,6 +401,7 @@ public:
     virtual void startRendering() override;
 
     bool NeedsRepaint() const;
+    void CalcAll();
 
 protected:
     virtual void    DataChanged() const;
@@ -549,6 +555,8 @@ public:
     bool IsEmpty() const;
     size_t size() const;
 
+    ScDocument* GetDocument();
+
     void            CompileAll();
     void            CompileXML();
     void UpdateReference( sc::RefUpdateContext& rCxt, bool bCopyAsMove = false );
@@ -582,6 +590,9 @@ public:
 
     void startRendering();
     void endRendering();
+
+    // Forced recalculation for formulas
+    void CalcAll();
 };
 
 //  List of all conditional formats in a sheet
@@ -639,6 +650,7 @@ public:
     const_iterator end() const;
 
     size_t size() const;
+    bool empty() const;
 
     void erase(sal_uLong nIndex);
     void clear();
@@ -647,6 +659,9 @@ public:
     void endRendering();
 
     sal_uInt32 getMaxKey() const;
+
+    /// Forced recalculation of formulas
+    void CalcAll();
 };
 
 #endif

@@ -21,6 +21,8 @@
 #define INCLUDED_VCL_INC_HEADLESS_SVPVD_HXX
 
 #include <salvd.hxx>
+#include <vcl/salgtype.hxx>
+#include <basegfx/vector/b2ivector.hxx>
 
 #include <vector>
 
@@ -29,11 +31,14 @@ typedef struct _cairo_surface cairo_surface_t;
 
 class VCL_DLLPUBLIC SvpSalVirtualDevice : public SalVirtualDevice
 {
-    DeviceFormat                        m_eFormat;
-    cairo_surface_t*                    m_pRefSurface;
+    DeviceFormat const                  m_eFormat;
+    cairo_surface_t* const              m_pRefSurface;
     cairo_surface_t*                    m_pSurface;
     basegfx::B2IVector                  m_aFrameSize;
     std::vector< SvpSalGraphics* >      m_aGraphics;
+
+protected:
+    SvpSalGraphics* AddGraphics(SvpSalGraphics* aGraphics);
 
 public:
     SvpSalVirtualDevice(DeviceFormat eFormat, cairo_surface_t* pRefSurface);
@@ -47,6 +52,8 @@ public:
     virtual bool        SetSizeUsingBuffer( long nNewDX, long nNewDY,
                                             sal_uInt8 * pBuffer
                                           ) override;
+
+    cairo_surface_t* GetSurface() const { return m_pSurface; }
 
     // SalGeometryProvider
     virtual long GetWidth() const override;

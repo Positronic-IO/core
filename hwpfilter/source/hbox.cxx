@@ -331,7 +331,6 @@ TxtBox::TxtBox()
     , type(0)
     , nCell(0)
     , protect(0)
-    , cell(nullptr)
     , m_pTable(nullptr)
 {
     reserved[0] = reserved[1] = 0;
@@ -360,8 +359,8 @@ Picture::Picture()
 
 Picture::~Picture()
 {
-    if( pictype == PICTYPE_DRAW && picinfo.picdraw.hdo )
-        delete static_cast<HWPDrawingObject *>(picinfo.picdraw.hdo);
+    if (pictype == PICTYPE_DRAW)
+        delete picinfo.picdraw.hdo;
 }
 
 

@@ -810,6 +810,11 @@
       <info>
         <desc>Stores the details of the installed personas.</desc>
       </info>
+      <prop oor:name="Slug" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Unique pretty id of the persona, also part of its url</desc>
+        </info>
+      </prop>
       <prop oor:name="Name" oor:type="xs:string" oor:nillable="false">
         <info>
           <desc>The Persona's name</desc>
@@ -835,12 +840,6 @@
       <prop oor:name="TextColor" oor:type="xs:string" oor:nillable="false">
         <info>
           <desc>Value of the text color for the Persona</desc>
-        </info>
-        <value/>
-      </prop>
-      <prop oor:name="AccentColor" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Value of the accent color for the Persona</desc>
         </info>
         <value/>
       </prop>
@@ -1617,7 +1616,7 @@
           </info>
           <value>$(insturl)/@LIBO_SHARE_FOLDER@/config</value>
         </prop>
-        <prop oor:name="Dictionary" oor:type="xs:string" oor:nillable="false">
+        <prop oor:name="Dictionary" oor:type="xs:string">
           <info>
             <desc>Contains the provided dictionaries.</desc>
           </info>
@@ -2050,6 +2049,31 @@
           <desc>Contains all help bookmarks.</desc>
         </info>
       </set>
+      <prop oor:name="SendFeedbackURL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used with the UNO command SendFeedback (SID_SEND_FEEDBACK).</desc>
+        </info>
+      </prop>
+      <prop oor:name="QA_URL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used with the UNO command QuestionAnswers (SID_Q_AND_A).</desc>
+        </info>
+      </prop>
+      <prop oor:name="DocumentationURL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used with the UNO command Documentation (SID_DOCUMENTATION).</desc>
+        </info>
+      </prop>
+      <prop oor:name="GetInvolvedURL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used with the UNO command GetInvolved (SID_GETINVOLVED).</desc>
+        </info>
+      </prop>
+      <prop oor:name="DonationURL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used with the UNO command Donation (SID_DONATION).</desc>
+        </info>
+      </prop>
     </group>
     <group oor:name="History">
       <!-- OldLocation: soffice.ini -->
@@ -3554,6 +3578,12 @@
         </info>
         <value>false</value>
       </prop>
+      <prop oor:name="BuiltInHelpNotInstalledPopUp" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Activates "Built-in help is not installed" pop-up</desc>
+        </info>
+        <value>true</value>
+      </prop>
       <prop oor:name="HelpStyleSheet" oor:type="xs:string" oor:nillable="false">
         <info>
           <desc>Specifies the name of the stylesheet used to display help
@@ -3585,13 +3615,6 @@
             additional template documents</desc>
           </info>
           <value/>
-        </prop>
-        <prop oor:name="StartCenterHideExternalLinks" oor:type="xs:int" oor:nillable="false">
-          <info>
-            <desc>Contains a number deciding whether to show or hide buttons
-            with external links</desc>
-          </info>
-          <value>0</value>
         </prop>
         <prop oor:name="StartCenterBackgroundColor" oor:type="xs:int" oor:nillable="false">
           <!-- Default 14540253 = 0xdddddd as specified in tdf#90452, comment 45 -->
@@ -5295,6 +5318,18 @@
         </info>
         <value>EmojiOne Color</value>
       </prop>
+      <prop oor:name="FontsUseWinMetrics" oor:type="oor:string-list" oor:nillable="false">
+        <info>
+          <desc>
+            Fonts where the win metrics need to be considered in order to display the font correctly
+            Fonts are identified by their name and the font metrics (see fontmetric.cxx:ShouldUseWinMetrics).
+          </desc>
+        </info>
+        <value>
+          <!-- DIN Light (ttf version) has odd metrics. The otf version works fine. -->
+          <it>DIN Light,1509,-503,1509,-483,1997,483</it>
+        </value>
+      </prop>
       <prop oor:name="PluginsEnabled" oor:type="xs:boolean" oor:nillable="false">
         <!-- OldPath: ? -->
         <!-- OldLocation: soffice.ini -->
@@ -5405,13 +5440,6 @@
           <desc>A string identifying the OpenCL device that was successfully selected and passed the OpenCL calculation tests. The syntax of this value is purposely not documented. For LibreOffice internal use only, do not inspect this value or try to modify it from any level of user code.</desc>
         </info>
         <value>none</value>
-      </prop>
-      <prop oor:name="UseSwInterpreter" oor:type="xs:boolean" oor:nillable="false">
-        <info>
-          <desc>Determines whether Software Interpreter can be used to speed
-          up some operations on Calc formulas.</desc>
-        </info>
-        <value>true</value>
       </prop>
       <prop oor:name="MacroRecorderMode" oor:type="xs:boolean" oor:nillable="false">
         <info>

@@ -31,7 +31,7 @@ using namespace ::com::sun::star::connection;
 
 namespace stoc_connector {
     template<class T>
-    void notifyListeners(SocketConnection * pCon, bool * notified, T t)
+    static void notifyListeners(SocketConnection * pCon, bool * notified, T t)
     {
           XStreamListener_hash_set listeners;
 
@@ -113,7 +113,7 @@ namespace stoc_connector {
         buf.append( ",localHost=" );
         buf.append( m_socket.getLocalHost( ) );
 
-        m_sDescription += buf.makeStringAndClear();
+        m_sDescription += buf;
     }
 
     sal_Int32 SocketConnection::read( Sequence < sal_Int8 > & aReadBytes , sal_Int32 nBytesToRead )

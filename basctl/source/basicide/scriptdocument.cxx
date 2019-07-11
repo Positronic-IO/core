@@ -26,6 +26,7 @@
 #include <doceventnotifier.hxx>
 #include "documentenumeration.hxx"
 
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/uri/UriReferenceFactory.hpp>
 #include <com/sun/star/util/theMacroExpander.hpp>
 #include <com/sun/star/document/MacroExecMode.hpp>
@@ -57,6 +58,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysequence.hxx>
 
+#include <sal/log.hxx>
 #include <osl/file.hxx>
 #include <rtl/uri.hxx>
 #include <set>
@@ -300,7 +302,7 @@ namespace basctl
         m_xDocModify.clear();
         m_xScriptAccess.clear();
 
-        if ( m_pDocListener.get() )
+        if (m_pDocListener)
             m_pDocListener->dispose();
     }
 
@@ -430,11 +432,8 @@ namespace basctl
         try
         {
             Reference< XLibraryContainer > xLibContainer = getLibraryContainer( _eType );
-            if ( isValid() )
-            {
-                if ( xLibContainer.is() )
-                    xContainer.set( xLibContainer->getByName( _rLibName ), UNO_QUERY_THROW );
-            }
+            if ( isValid() && xLibContainer.is() )
+                xContainer.set( xLibContainer->getByName( _rLibName ), UNO_QUERY_THROW );
 
             if ( !xContainer.is() )
                 throw NoSuchElementException();

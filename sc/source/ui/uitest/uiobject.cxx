@@ -16,11 +16,13 @@
 #include <viewdata.hxx>
 #include <dbfunc.hxx>
 #include <tabvwsh.hxx>
+#include <drwlayer.hxx>
 
 #include <svx/svditer.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdpage.hxx>
 #include <svx/svdoole2.hxx>
+#include <sal/log.hxx>
 
 namespace {
 
@@ -234,7 +236,7 @@ std::set<OUString> collect_charts(VclPtr<ScGridWindow> const & xGridWindow)
     if (!pPage)
         return aRet;
 
-    SdrObjListIter aIter( *pPage, SdrIterMode::Flat );
+    SdrObjListIter aIter( pPage, SdrIterMode::Flat );
     SdrObject* pObject = aIter.Next();
     while (pObject)
     {

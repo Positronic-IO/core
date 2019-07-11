@@ -72,6 +72,7 @@
 #endif
 #include <sal/types.h>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <rtl/ustring.hxx>
 #include <osl/file.hxx>
 #include <osl/process.h>
@@ -621,8 +622,7 @@ SvxSecurityTabPage::~SvxSecurityTabPage()
 
 void SvxSecurityTabPage::dispose()
 {
-    delete mpSecOptions;
-    mpSecOptions = nullptr;
+    mpSecOptions.reset();
     mpCertPathDlg.disposeAndClear();
     m_xSecOptDlg.reset();
     m_pSecurityOptionsPB.clear();
@@ -644,7 +644,7 @@ void SvxSecurityTabPage::dispose()
 IMPL_LINK_NOARG(SvxSecurityTabPage, SecurityOptionsHdl, Button*, void)
 {
     if (!m_xSecOptDlg)
-        m_xSecOptDlg.reset(new svx::SecurityOptionsDialog(GetFrameWeld(), mpSecOptions));
+        m_xSecOptDlg.reset(new svx::SecurityOptionsDialog(GetFrameWeld(), mpSecOptions.get()));
     (void)m_xSecOptDlg->run();
 }
 
@@ -803,7 +803,8 @@ IMPL_LINK_NOARG(SvxSecurityTabPage, CertPathPBHdl, Button*, void)
     if (nRet == RET_OK && sOrig != mpCertPathDlg->getDirectory())
     {
         SolarMutexGuard aGuard;
-        svtools::executeRestartDialog(comphelper::getProcessComponentContext(), nullptr, svtools::RESTART_REASON_ADDING_PATH);
+        if (svtools::executeRestartDialog(comphelper::getProcessComponentContext(), nullptr, svtools::RESTART_REASON_ADDING_PATH))
+            GetParentDialog()->EndDialog(RET_OK);
     }
 }
 

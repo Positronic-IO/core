@@ -22,6 +22,7 @@
 #include <string.h>
 #include <libxml/xmlwriter.h>
 
+#include <tools/solar.h>
 #include <osl/diagnose.h>
 #include <sal/log.hxx>
 #include <svl/SfxBroadcaster.hxx>
@@ -482,7 +483,7 @@ void SfxItemPool::Delete()
             // from SfxItemPool
             // This causes chaos in Itempool!
             const SfxPoolItem* pStaticDefaultItem = (*pImpl->mpStaticDefaults)[n];
-            if (pStaticDefaultItem && dynamic_cast<const SfxSetItem*>(pStaticDefaultItem) !=  nullptr)
+            if (dynamic_cast<const SfxSetItem*>(pStaticDefaultItem))
             {
                 // SfxSetItem found, remove PoolItems (and defaults) with same ID
                 auto& rArrayPtr = pImpl->maPoolItems[n];
@@ -672,7 +673,7 @@ const SfxPoolItem& SfxItemPool::Put( const SfxPoolItem& rItem, sal_uInt16 nWhich
     else
     {
         // Unconditionally insert; check for a recently freed place
-        if (pItemArr->maFree.size() > 0)
+        if (!pItemArr->maFree.empty())
         {
             auto itr = pItemArr->begin();
             sal_uInt32 nIdx = pItemArr->maFree.back();
@@ -765,9 +766,16 @@ void SfxItemPool::Remove( const SfxPoolItem& rItem )
         SfxPoolItem*& p = (*pItemArr)[nIdx];
         assert(p == &rItem);
 
-        assert(p->GetRefCount() && "removing Item without ref");
+        if ( p->GetRefCount() ) //!
+            ReleaseRef( *p );
+        else
+        {
+            assert(false && "removing Item without ref");
+        }
 
-        if (0 == ReleaseRef(*p))
+        // FIXME: Hack, for as long as we have problems with the Outliner
+        // See other MI-REF
+        if ( 0 == p->GetRefCount() && nWhich < 4000 )
         {
             DELETEZ(p);
 

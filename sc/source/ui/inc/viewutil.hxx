@@ -31,8 +31,6 @@ class SfxViewFrame;
 class ScChangeAction;
 class ScChangeViewSettings;
 class ScDocument;
-class ScAddress;
-class ScRange;
 class ScMarkData;
 enum class SvtScriptType;
 enum class TransliterationFlags;
@@ -43,7 +41,7 @@ enum class ScUpdateMode { All, Marks };
 class SC_DLLPUBLIC ScViewUtil
 {
 public:
-    static bool ExecuteCharMap( const SvxFontItem&  rOldFont,
+    static void ExecuteCharMap( const SvxFontItem&  rOldFont,
                                 SfxViewFrame&       rFrame );
 
     static bool IsActionShown( const ScChangeAction& rAction,

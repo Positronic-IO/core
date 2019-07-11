@@ -41,7 +41,7 @@ namespace cppu
 {
 
 
-static inline uno_Sequence * reallocSeq(
+static uno_Sequence * reallocSeq(
     uno_Sequence * pReallocate, std::size_t nElementSize, sal_Int32 nElements )
 {
     OSL_ASSERT( nElements >= 0 );
@@ -51,11 +51,11 @@ static inline uno_Sequence * reallocSeq(
     {
         if (pReallocate == nullptr)
         {
-            pNew = static_cast<uno_Sequence *>(rtl_allocateMemory( nSize ));
+            pNew = static_cast<uno_Sequence *>(std::malloc( nSize ));
         }
         else
         {
-            pNew = static_cast<uno_Sequence *>(rtl_reallocateMemory( pReallocate, nSize ));
+            pNew = static_cast<uno_Sequence *>(std::realloc( pReallocate, nSize ));
         }
         if (pNew != nullptr)
         {
@@ -68,7 +68,7 @@ static inline uno_Sequence * reallocSeq(
 }
 
 
-static inline bool idefaultConstructElements(
+static bool idefaultConstructElements(
     uno_Sequence ** ppSeq,
     typelib_TypeDescriptionReference * pElementType,
     sal_Int32 nStartIndex, sal_Int32 nStopIndex,
@@ -269,7 +269,7 @@ static inline bool idefaultConstructElements(
     {
         if (nAlloc >= 0)
         {
-            // coverity[suspicious_sizeof] - sizeof(uno_Sequence*) is correct here
+            // coverity[suspicious_sizeof : FALSE] - sizeof(uno_Sequence*) is correct here
             pSeq = reallocSeq(pSeq, sizeof(uno_Sequence*), nAlloc);
         }
         if (pSeq != nullptr)
@@ -310,10 +310,10 @@ static inline bool idefaultConstructElements(
 }
 
 
-static inline bool icopyConstructFromElements(
+static bool icopyConstructFromElements(
     uno_Sequence ** ppSeq, void * pSourceElements,
     typelib_TypeDescriptionReference * pElementType,
-    sal_Int32 nStartIndex, sal_Int32 nStopIndex,
+    sal_Int32 nStopIndex,
     uno_AcquireFunc acquire,
     sal_Int32 nAlloc )
 {
@@ -325,9 +325,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Unicode) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Unicode) * nStartIndex),
-                sizeof(sal_Unicode) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Unicode) * nStopIndex );
         }
         break;
     case typelib_TypeClass_BOOLEAN:
@@ -335,9 +335,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Bool) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Bool) * nStartIndex),
-                sizeof(sal_Bool) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Bool) * nStopIndex );
         }
         break;
     case typelib_TypeClass_BYTE:
@@ -345,9 +345,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Int8) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Int8) * nStartIndex),
-                sizeof(sal_Int8) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Int8) * nStopIndex );
         }
         break;
     case typelib_TypeClass_SHORT:
@@ -356,9 +356,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Int16) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Int16) * nStartIndex),
-                sizeof(sal_Int16) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Int16) * nStopIndex );
         }
         break;
     case typelib_TypeClass_LONG:
@@ -367,9 +367,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Int32) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Int32) * nStartIndex),
-                sizeof(sal_Int32) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Int32) * nStopIndex );
         }
         break;
     case typelib_TypeClass_HYPER:
@@ -378,9 +378,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Int64) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Int64) * nStartIndex),
-                sizeof(sal_Int64) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Int64) * nStopIndex );
         }
         break;
     case typelib_TypeClass_FLOAT:
@@ -388,9 +388,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(float) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(float) * nStartIndex),
-                sizeof(float) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(float) * nStopIndex );
         }
         break;
     case typelib_TypeClass_DOUBLE:
@@ -398,9 +398,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(double) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(double) * nStartIndex),
-                sizeof(double) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(double) * nStopIndex );
         }
         break;
     case typelib_TypeClass_ENUM:
@@ -408,9 +408,9 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             memcpy(
-                pSeq->elements + (sizeof(sal_Int32) * nStartIndex),
-                static_cast<char *>(pSourceElements) + (sizeof(sal_Int32) * nStartIndex),
-                sizeof(sal_Int32) * (nStopIndex - nStartIndex) );
+                pSeq->elements,
+                pSourceElements,
+                sizeof(sal_Int32) * nStopIndex );
         }
         break;
     case typelib_TypeClass_STRING:
@@ -419,7 +419,7 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             rtl_uString ** pDestElements = reinterpret_cast<rtl_uString **>(pSeq->elements);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 // This code tends to trigger coverity's overrun-buffer-arg warning
                 // coverity[index_parm_via_loop_bound] - https://communities.coverity.com/thread/2993
@@ -438,7 +438,7 @@ static inline bool icopyConstructFromElements(
         {
             typelib_TypeDescriptionReference ** pDestElements =
                 reinterpret_cast<typelib_TypeDescriptionReference **>(pSeq->elements);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 TYPE_ACQUIRE(
                     static_cast<typelib_TypeDescriptionReference **>(
@@ -456,7 +456,7 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             uno_Any * pDestElements = reinterpret_cast<uno_Any *>(pSeq->elements);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 uno_Any * pSource = static_cast<uno_Any *>(pSourceElements) + nPos;
                 _copyConstructAny(
@@ -482,7 +482,7 @@ static inline bool icopyConstructFromElements(
 
             typelib_CompoundTypeDescription * pTypeDescr =
                 reinterpret_cast<typelib_CompoundTypeDescription *>(pElementTypeDescr);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 char * pDest =
                     pDestElements + (nElementSize * nPos);
@@ -518,7 +518,7 @@ static inline bool icopyConstructFromElements(
     }
     case typelib_TypeClass_SEQUENCE: // sequence of sequence
     {
-        // coverity[suspicious_sizeof] - sizeof(uno_Sequence*) is correct here
+        // coverity[suspicious_sizeof : FALSE] - sizeof(uno_Sequence*) is correct here
         pSeq = reallocSeq(pSeq, sizeof(uno_Sequence*), nAlloc);
         if (pSeq != nullptr)
         {
@@ -527,7 +527,7 @@ static inline bool icopyConstructFromElements(
             typelib_TypeDescriptionReference * pSeqElementType =
                 reinterpret_cast<typelib_IndirectTypeDescription *>(pElementTypeDescr)->pType;
             uno_Sequence ** pDestElements = reinterpret_cast<uno_Sequence **>(pSeq->elements);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 uno_Sequence * pNew = icopyConstructSequence(
                     static_cast<uno_Sequence **>(pSourceElements)[nPos],
@@ -547,7 +547,7 @@ static inline bool icopyConstructFromElements(
         if (pSeq != nullptr)
         {
             void ** pDestElements = reinterpret_cast<void **>(pSeq->elements);
-            for ( sal_Int32 nPos = nStartIndex; nPos < nStopIndex; ++nPos )
+            for ( sal_Int32 nPos = 0; nPos < nStopIndex; ++nPos )
             {
                 _acquire( pDestElements[nPos] =
                           static_cast<void **>(pSourceElements)[nPos], acquire );
@@ -570,7 +570,7 @@ static inline bool icopyConstructFromElements(
 }
 
 
-static inline bool ireallocSequence(
+static bool ireallocSequence(
     uno_Sequence ** ppSequence,
     typelib_TypeDescriptionReference * pElementType,
     sal_Int32 nSize,
@@ -596,7 +596,7 @@ static inline bool ireallocSequence(
         {
             ret = icopyConstructFromElements(
                 &pNew, pSeq->elements, pElementType,
-                0, nCopy, acquire,
+                nCopy, acquire,
                 nSize ); // alloc to nSize
         }
         if (ret && nRest > 0)
@@ -618,7 +618,7 @@ static inline bool ireallocSequence(
                         pSeq->elements, pElementType,
                         0, nElements, release );
                 }
-                rtl_freeMemory( pSeq );
+                std::free( pSeq );
             }
             *ppSequence = pNew;
         }
@@ -683,7 +683,7 @@ sal_Bool SAL_CALL uno_type_sequence_construct(
         {
             ret = icopyConstructFromElements(
                 ppSequence, pElements, pElementType,
-                0, len, acquire,
+                len, acquire,
                 len ); // alloc to len
         }
 
@@ -724,7 +724,7 @@ sal_Bool SAL_CALL uno_sequence_construct(
         {
             ret = icopyConstructFromElements(
                 ppSequence, pElements, pElementType,
-                0, len, acquire,
+                len, acquire,
                 len ); // alloc to len
         }
     }
@@ -800,7 +800,7 @@ sal_Bool SAL_CALL uno_type_sequence_reference2One(
             ret = icopyConstructFromElements(
                 &pNew, pSequence->elements,
                 reinterpret_cast<typelib_IndirectTypeDescription *>(pTypeDescr)->pType,
-                0, pSequence->nElements, acquire,
+                pSequence->nElements, acquire,
                 pSequence->nElements ); // alloc nElements
             if (ret)
             {
@@ -818,7 +818,7 @@ sal_Bool SAL_CALL uno_type_sequence_reference2One(
             {
                 // easy destruction of empty sequence:
                 if (osl_atomic_decrement( &pSequence->nRefCount ) == 0)
-                    rtl_freeMemory( pSequence );
+                    std::free( pSequence );
                 *ppSequence = pNew;
             }
         }
@@ -844,7 +844,7 @@ sal_Bool SAL_CALL uno_sequence_reference2One(
             ret = icopyConstructFromElements(
                 &pNew, pSequence->elements,
                 reinterpret_cast<typelib_IndirectTypeDescription *>(pTypeDescr)->pType,
-                0, pSequence->nElements, acquire,
+                pSequence->nElements, acquire,
                 pSequence->nElements ); // alloc nElements
             if (ret)
             {
@@ -861,7 +861,7 @@ sal_Bool SAL_CALL uno_sequence_reference2One(
             {
                 // easy destruction of empty sequence:
                 if (osl_atomic_decrement( &pSequence->nRefCount ) == 0)
-                    rtl_freeMemory( pSequence );
+                    std::free( pSequence );
                 *ppSequence = pNew;
             }
         }

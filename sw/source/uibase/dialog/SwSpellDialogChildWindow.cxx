@@ -101,7 +101,6 @@ struct SpellState
         m_bOtherSpelled(false),
         m_bStartedInOther(false),
         m_bStartedInSelection(false),
-        pOtherCursor(nullptr),
         m_bDrawingsSpelled(false),
         m_pStartDrawing(nullptr),
         m_bRestartDrawing(false),
@@ -160,7 +159,7 @@ SwSpellDialogChildWindow::~SwSpellDialogChildWindow ()
     SwWrtShell* pWrtShell = GetWrtShell_Impl();
     if(!m_pSpellState->m_bInitialCall && pWrtShell)
         pWrtShell->SpellEnd();
-    delete m_pSpellState;
+    m_pSpellState.reset();
 }
 
 SfxChildWinInfo SwSpellDialogChildWindow::GetInfo() const
@@ -198,15 +197,11 @@ svx::SpellPortions SwSpellDialogChildWindow::GetNextWrongSentence(bool bRecheck)
             // if no text selection exists the cursor has to be set into the text
             if(!bDrawText && !bNormalText)
             {
-                if(!MakeTextSelection_Impl(*pWrtShell, eSelMode))
-                    return aRet;
-                else
-                {
-                    // the selection type has to be checked again - both text types are possible
-                    if(pWrtShell->GetSelectionType() & SelectionType::DrawObjectEditMode)
-                        bDrawText = true;
-                    bNormalText = !bDrawText;
-                }
+                MakeTextSelection_Impl(*pWrtShell, eSelMode);
+                // the selection type has to be checked again - both text types are possible
+                if(pWrtShell->GetSelectionType() & SelectionType::DrawObjectEditMode)
+                    bDrawText = true;
+                bNormalText = !bDrawText;
             }
             if(bNormalText)
             {
@@ -652,7 +647,7 @@ SwWrtShell* SwSpellDialogChildWindow::GetWrtShell_Impl()
 
 // set the cursor into the body text - necessary if any object is selected
 // on start of the spelling dialog
-bool SwSpellDialogChildWindow::MakeTextSelection_Impl(SwWrtShell& rShell, ShellMode eSelMode)
+void SwSpellDialogChildWindow::MakeTextSelection_Impl(SwWrtShell& rShell, ShellMode eSelMode)
 {
     SwView& rView = rShell.GetView();
     switch(eSelMode)
@@ -714,7 +709,6 @@ bool SwSpellDialogChildWindow::MakeTextSelection_Impl(SwWrtShell& rShell, ShellM
         break;
         default:; // prevent warning
     }
-    return true;
 }
 
 // select the next draw text object that has a spelling error
@@ -732,8 +726,8 @@ bool SwSpellDialogChildWindow::FindNextDrawTextError_Impl(SwWrtShell& rSh)
     if ( rMarkList.GetMarkCount() == 1 )
     {
         SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
-        if( pObj && dynamic_cast< const SdrTextObj *>( pObj ) !=  nullptr )
-            pCurrentTextObj = static_cast<SdrTextObj*>(pObj);
+        if( auto pSdrTextObj = dynamic_cast<SdrTextObj *>( pObj ) )
+            pCurrentTextObj = pSdrTextObj;
     }
     // at first fill the list of drawing objects
     if(!m_pSpellState->m_bTextObjectsCollected )

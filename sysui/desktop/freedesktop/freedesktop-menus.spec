@@ -37,6 +37,9 @@ AutoReqProv: no
 %define gnome_dir /usr
 %define gnome_mime_theme hicolor
 
+# only symlinks in the package that at the time of building point to non-existing files
+%global dont_check_desktop_files 1
+
 %description
 %productname desktop integration for desktop-environments that implement
 the menu- and mime-related specifications from http://www.freedesktop.org
@@ -56,6 +59,7 @@ mkdir -p $RPM_BUILD_ROOT
 export DESTDIR=$RPM_BUILD_ROOT
 export KDEMAINDIR=/usr
 export PREFIXDIR=/usr
+export BINDIR=/usr/bin
 export GNOMEDIR=%{gnome_dir}
 
 ./create_tree.sh
@@ -408,6 +412,8 @@ done
 /usr/share/icons/hicolor/*/mimetypes/*png
 /usr/share/icons/hicolor/*/mimetypes/*svg
 /usr/share/icons/locolor/*/apps/*png
+/usr/share/icons/locolor/*/apps/*svg
 /usr/share/icons/locolor/*/mimetypes/*png
+/usr/share/icons/locolor/*/mimetypes/*svg
 /usr/share/mime/packages/*
 /usr/share/appdata/*

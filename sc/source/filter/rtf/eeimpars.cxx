@@ -68,7 +68,7 @@ ScEEImport::ScEEImport( ScDocument* pDocP, const ScRange& rRange ) :
 {
     const ScPatternAttr* pPattern = mpDoc->GetPattern(
         maRange.aStart.Col(), maRange.aStart.Row(), maRange.aStart.Tab() );
-    mpEngine.reset( new ScTabEditEngine(*pPattern, mpDoc->GetEditPool(), mpDoc->GetEditPool()) );
+    mpEngine.reset( new ScTabEditEngine(*pPattern, mpDoc->GetEditPool(), mpDoc, mpDoc->GetEditPool()) );
     mpEngine->SetUpdateMode( false );
     mpEngine->EnableUndo( false );
 }
@@ -157,7 +157,7 @@ void ScEEImport::WriteToDocument( bool bSizeColsRows, double nOutputFactor, SvNu
         SCCOL nCol = nStartCol + pE->nCol + nMergeColAdd;
         // Determine RowMerge
         // Pure ColMerge and ColMerge of the first MergeRow already done during parsing
-        if ( nRow <= nOverlapRowMax )
+        if (nRow <= nOverlapRowMax && ValidCol(nCol))
         {
             while ( nCol <= MAXCOL && mpDoc->HasAttrib( nCol, nRow, nTab,
                 nCol, nRow, nTab, HasAttrFlags::Overlapped ) )

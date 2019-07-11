@@ -28,13 +28,15 @@
 #include "elements.hxx"
 #include "outact.hxx"
 #include <memory>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
+static constexpr double gnOutdx = 28000;                // Output size in 1/100TH mm
+static constexpr double gnOutdy = 21000;                // on which is mapped
+
 CGM::CGM(uno::Reference< frame::XModel > const & rModel)
-    : mnOutdx(28000)
-    , mnOutdy(21000)
-    , mnVDCXadd(0)
+    : mnVDCXadd(0)
     , mnVDCYadd(0)
     , mnVDCXmul(0)
     , mnVDCYmul(0)
@@ -52,8 +54,6 @@ CGM::CGM(uno::Reference< frame::XModel > const & rModel)
     , mbFirstOutPut(false)
     , mbInDefaultReplacement(false)
     , mnAct4PostReset(0)
-    , mpBitmapInUse(nullptr)
-    , mpChart(nullptr)
     , mpOutAct(new CGMImpressOutAct(*this, rModel))
     , mpSource(nullptr)
     , mpEndValidSource(nullptr)
@@ -397,23 +397,23 @@ void CGM::ImplSetMapMode()
     else
         mbAngReverse = false;
 
-    if (mnVDCdy == 0.0 || mnVDCdx == 0.0 || mnOutdy == 0.0)
+    if (mnVDCdy == 0.0 || mnVDCdx == 0.0 || gnOutdy == 0.0)
     {
         mbStatus = false;
         return;
     }
 
     double fQuo1 = mnVDCdx / mnVDCdy;
-    double fQuo2 = mnOutdx / mnOutdy;
+    double fQuo2 = gnOutdx / gnOutdy;
     if ( fQuo2 < fQuo1 )
     {
-        mnXFraction = mnOutdx / mnVDCdx;
-        mnYFraction = mnOutdy * ( fQuo2 / fQuo1 ) / mnVDCdy;
+        mnXFraction = gnOutdx / mnVDCdx;
+        mnYFraction = gnOutdy * ( fQuo2 / fQuo1 ) / mnVDCdy;
     }
     else
     {
-        mnXFraction = mnOutdx * ( fQuo1 / fQuo2 ) / mnVDCdx;
-        mnYFraction = mnOutdy / mnVDCdy;
+        mnXFraction = gnOutdx * ( fQuo1 / fQuo2 ) / mnVDCdx;
+        mnYFraction = gnOutdy / mnVDCdy;
     }
 }
 
@@ -695,7 +695,7 @@ ImportCGM(SvStream& rIn, uno::Reference< frame::XModel > const & rXModel, css::u
         try
         {
             std::unique_ptr<CGM> pCGM(new CGM(rXModel));
-            if (pCGM && pCGM->IsValid())
+            if (pCGM->IsValid())
             {
                 rIn.SetEndian(SvStreamEndian::BIG);
                 sal_uInt64 const nInSize = rIn.remainingSize();

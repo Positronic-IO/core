@@ -27,6 +27,7 @@
 #include <formula/IFunctionDescription.hxx>
 #include <sal/types.h>
 #include <rtl/ustring.hxx>
+#include <boost/optional.hpp>
 #include <map>
 #include <memory>
 
@@ -206,8 +207,8 @@ public:
         ParameterFlags() : bOptional(false) {}
     };
 
-    OUString      *pFuncName;              /**< Function name */
-    OUString      *pFuncDesc;              /**< Description of function */
+    boost::optional<OUString> mxFuncName;         /**< Function name */
+    boost::optional<OUString> mxFuncDesc;         /**< Description of function */
     std::vector<OUString> maDefArgNames;          /**< Parameter name(s) */
     std::vector<OUString> maDefArgDescs;          /**< Description(s) of parameter(s) */
     ParameterFlags       *pDefArgFlags;           /**< Flags for each parameter */
@@ -217,7 +218,6 @@ public:
     sal_uInt16            nVarArgsStart;          /**< Start of variable arguments, for numbering */
     OString               sHelpId;                /**< HelpId of function */
     bool                  bIncomplete         :1; /**< Incomplete argument info (set for add-in info from configuration) */
-    bool                  bHasSuppressedArgs  :1; /**< Whether there is any suppressed parameter. */
     bool                  mbHidden            :1; /**< Whether function is hidden */
 };
 
@@ -288,7 +288,7 @@ public:
 private:
     ::std::vector<const ScFuncDesc*>* m_pCategory; /**< list of functions in this category */
     mutable OUString m_sName; /**< name of this category */
-    sal_uInt32 m_nCategory; /**< index number of this category */
+    sal_uInt32 const m_nCategory; /**< index number of this category */
 };
 
 #define SC_FUNCGROUP_COUNT  ID_FUNCTION_GRP_ADDINS

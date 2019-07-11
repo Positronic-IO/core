@@ -21,11 +21,13 @@
 
 #include "ItemConverter.hxx"
 
-#include <com/sun/star/chart2/XDataSeries.hpp>
-#include <com/sun/star/awt/Size.hpp>
-#include <com/sun/star/frame/XModel.hpp>
+#include <com/sun/star/uno/Sequence.h>
 
 #include <vector>
+
+namespace com { namespace sun { namespace star { namespace awt { struct Size; } } } }
+namespace com { namespace sun { namespace star { namespace chart2 { class XDataSeries; } } } }
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
 
 namespace chart { namespace wrapper {
 
@@ -55,7 +57,7 @@ protected:
     virtual bool ApplySpecialItem( sal_uInt16 nWhichId, const SfxItemSet & rItemSet ) override;
 
 private:
-    std::vector<ItemConverter*> maConverters;
+    std::vector<std::unique_ptr<ItemConverter>> maConverters;
     sal_Int32                           mnNumberFormat;
     sal_Int32                           mnPercentNumberFormat;
     css::uno::Sequence<sal_Int32>       maAvailableLabelPlacements;

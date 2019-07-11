@@ -35,22 +35,22 @@ SwEnvPrtPage::SwEnvPrtPage(TabPageParent pParent, const SfxItemSet& rSet)
     , m_xLower(m_xBuilder->weld_widget("lower"))
     , m_xTopButton(m_xBuilder->weld_radio_button("top"))
     , m_xBottomButton(m_xBuilder->weld_radio_button("bottom"))
-    , m_xRightField(m_xBuilder->weld_metric_spin_button("right", FUNIT_CM))
-    , m_xDownField(m_xBuilder->weld_metric_spin_button("down", FUNIT_CM))
+    , m_xRightField(m_xBuilder->weld_metric_spin_button("right", FieldUnit::CM))
+    , m_xDownField(m_xBuilder->weld_metric_spin_button("down", FieldUnit::CM))
     , m_xPrinterInfo(m_xBuilder->weld_label("printername"))
     , m_xPrtSetup(m_xBuilder->weld_button("setup"))
-    , m_aIdsL { std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horileftl")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horicenterl")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horirightl")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertleftl")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertcenterl")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertrightl")) }
-    , m_aIdsU { std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horileftu")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horicenteru")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("horirightu")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertleftu")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertcenteru")),
-                std::unique_ptr<weld::RadioButton>(m_xBuilder->weld_radio_button("vertrightu")) }
+    , m_aIdsL { m_xBuilder->weld_radio_button("horileftl"),
+                m_xBuilder->weld_radio_button("horicenterl"),
+                m_xBuilder->weld_radio_button("horirightl"),
+                m_xBuilder->weld_radio_button("vertleftl"),
+                m_xBuilder->weld_radio_button("vertcenterl"),
+                m_xBuilder->weld_radio_button("vertrightl") }
+    , m_aIdsU { m_xBuilder->weld_radio_button("horileftu"),
+                m_xBuilder->weld_radio_button("horicenteru"),
+                m_xBuilder->weld_radio_button("horirightu"),
+                m_xBuilder->weld_radio_button("vertleftu"),
+                m_xBuilder->weld_radio_button("vertcenteru"),
+                m_xBuilder->weld_radio_button("vertrightu") }
 {
     SetExchangeSupport();
 
@@ -118,9 +118,9 @@ IMPL_LINK(SwEnvPrtPage, ButtonHdl, weld::Button&, rBtn, void)
         // Call printer setup
         if (m_xPrt)
         {
-            PrinterSetupDialog aDlg(GetTabDialog()->GetFrameWeld());
+            PrinterSetupDialog aDlg(GetDialogFrameWeld());
             aDlg.SetPrinter(m_xPrt);
-            aDlg.execute();
+            aDlg.run();
             rBtn.grab_focus();
             m_xPrinterInfo->set_label(m_xPrt->GetName());
         }

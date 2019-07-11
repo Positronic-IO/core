@@ -58,7 +58,7 @@ enum class RegionMode
 //mini rtti
 class SwTypeNumber
 {
-    sal_uInt8 nTypeId;
+    sal_uInt8 const nTypeId;
 
     public:
         SwTypeNumber(sal_uInt8 nId) :nTypeId(nId){}
@@ -70,12 +70,11 @@ class SwTypeNumber
 class SwContent : public SwTypeNumber
 {
     const SwContentType*    pParent;
-    OUString                sContentName;
-    long                    nYPosition;
-        // most subclasses appear to use this for a tools/gen.hxx-style
-        // geometric Y position, while SwOutlineContent wants to store a
-        // SwOutlineNodes::size_type value (where all such values used in
-        // practice hopefully fit into 'long')
+    OUString const          sContentName;
+    long const              nYPosition;
+        // some subclasses appear to use this for a tools/gen.hxx-style
+        // geometric Y position, while e.g. SwOutlineContent wants to store
+        // the index in its subtree
     bool                    bInvisible;
 public:
         SwContent(const SwContentType* pCnt, const OUString& rName, long nYPos );
@@ -95,8 +94,6 @@ public:
             return nYPosition < rCont.nYPosition;
         return ListBox::NaturalSortCompare(sContentName, rCont.sContentName) < 0;
     }
-
-    long        GetYPos() const {return nYPosition;}
 
     bool        IsInvisible() const {return bInvisible;}
     void        SetInvisible(){ bInvisible = true;}

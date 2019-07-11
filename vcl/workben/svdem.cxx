@@ -18,6 +18,7 @@
  */
 
 #include <sal/main.h>
+#include <sal/log.hxx>
 #include <tools/extendapplicationenvironment.hxx>
 
 #include <cppuhelper/bootstrap.hxx>
@@ -36,7 +37,7 @@ using namespace ::com::sun::star::lang;
 using namespace cppu;
 
 // Forward declaration
-void Main();
+static void Main();
 
 SAL_IMPLEMENT_MAIN()
 {

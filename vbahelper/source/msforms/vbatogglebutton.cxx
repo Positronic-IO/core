@@ -19,11 +19,13 @@
 
 #include "vbatogglebutton.hxx"
 #include "vbanewfont.hxx"
+#include <sal/log.hxx>
 
 using namespace com::sun::star;
 using namespace ooo::vba;
 
-ScVbaToggleButton::ScVbaToggleButton( const css::uno::Reference< ov::XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< uno::XInterface >& xControl, const uno::Reference< frame::XModel >& xModel, ov::AbstractGeometryAttributes* pGeomHelper ) : ToggleButtonImpl_BASE( xParent, xContext, xControl, xModel, pGeomHelper )
+ScVbaToggleButton::ScVbaToggleButton( const css::uno::Reference< ov::XHelperInterface >& xParent, const uno::Reference< uno::XComponentContext >& xContext, const uno::Reference< uno::XInterface >& xControl, const uno::Reference< frame::XModel >& xModel, std::unique_ptr<ov::AbstractGeometryAttributes> pGeomHelper )
+    : ToggleButtonImpl_BASE( xParent, xContext, xControl, xModel, std::move(pGeomHelper) )
 {
     SAL_INFO("vbahelper", "ScVbaToggleButton(ctor)");
     m_xProps->setPropertyValue( "Toggle", uno::makeAny( true ) );

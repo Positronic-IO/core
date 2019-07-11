@@ -40,7 +40,7 @@ using ::com::sun::star::drawing::XShape;
 /** returns a helper class to manipulate effects inside the main sequence */
 sd::MainSequencePtr const & SdPage::getMainSequence()
 {
-    if( nullptr == mpMainSequence.get() )
+    if (nullptr == mpMainSequence)
         mpMainSequence.reset( new sd::MainSequence( getAnimationNode() ) );
 
     return mpMainSequence;
@@ -78,6 +78,18 @@ void SdPage::removeAnimations( const SdrObject* pObj )
 
         if( mpMainSequence->hasEffect( xShape ) )
             mpMainSequence->disposeShape( xShape );
+    }
+}
+
+/** Notify that the object has been renamed and the animation effect has to update. */
+void SdPage::notifyObjectRenamed(const SdrObject* pObj)
+{
+    if (pObj && hasAnimationNode())
+    {
+        Reference<XShape> xShape(const_cast<SdrObject*>(pObj)->getUnoShape(), UNO_QUERY);
+
+        if (xShape.is() && getMainSequence()->hasEffect(xShape))
+            getMainSequence()->notify_change();
     }
 }
 

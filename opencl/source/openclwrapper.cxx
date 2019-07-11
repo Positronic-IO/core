@@ -11,9 +11,9 @@
 
 #include <opencl_device.hxx>
 
-#include <comphelper/string.hxx>
 #include <opencl/openclconfig.hxx>
 #include <opencl/openclwrapper.hxx>
+#include <opencl/platforminfo.hxx>
 #include <osl/file.hxx>
 #include <rtl/bootstrap.hxx>
 #include <rtl/digest.h>
@@ -103,14 +103,14 @@ OString const & getCacheFolder()
 
         osl::Directory::create(url);
 
-        aCacheFolder = rtl::OUStringToOString(url, RTL_TEXTENCODING_UTF8);
+        aCacheFolder = OUStringToOString(url, RTL_TEXTENCODING_UTF8);
     }
     return aCacheFolder;
 }
 
 }
 
-bool initializeCommandQueue(GPUEnv& aGpuEnv)
+static bool initializeCommandQueue(GPUEnv& aGpuEnv)
 {
     OpenCLZone zone;
 
@@ -222,7 +222,7 @@ std::vector<std::shared_ptr<osl::File> > binaryGenerated( const char * clFileNam
     assert(pDevID == gpuEnv.mpDevID);
 
     OString fileName = createFileName(gpuEnv.mpDevID, clFileName);
-    auto pNewFile = std::make_shared<osl::File>(rtl::OStringToOUString(fileName, RTL_TEXTENCODING_UTF8));
+    auto pNewFile = std::make_shared<osl::File>(OStringToOUString(fileName, RTL_TEXTENCODING_UTF8));
     if(pNewFile->open(osl_File_OpenFlag_Read) == osl::FileBase::E_None)
     {
         aGeneratedFiles.push_back(pNewFile);
@@ -238,7 +238,7 @@ std::vector<std::shared_ptr<osl::File> > binaryGenerated( const char * clFileNam
 
 bool writeBinaryToFile( const OString& rFileName, const char* binary, size_t numBytes )
 {
-    osl::File file(rtl::OStringToOUString(rFileName, RTL_TEXTENCODING_UTF8));
+    osl::File file(OStringToOUString(rFileName, RTL_TEXTENCODING_UTF8));
     osl::FileBase::RC status = file.open(
             osl_File_OpenFlag_Write | osl_File_OpenFlag_Create );
 
@@ -351,7 +351,7 @@ bool buildProgram(const char* buildOption, GPUEnv* gpuInfo, int idx)
         }
 
         OString aBuildLogFileURL = getCacheFolder() + "kernel-build.log";
-        osl::File aBuildLogFile(rtl::OStringToOUString(aBuildLogFileURL, RTL_TEXTENCODING_UTF8));
+        osl::File aBuildLogFile(OStringToOUString(aBuildLogFileURL, RTL_TEXTENCODING_UTF8));
         osl::FileBase::RC status = aBuildLogFile.open(
                 osl_File_OpenFlag_Write | osl_File_OpenFlag_Create );
 
@@ -761,10 +761,12 @@ void findDeviceInfoFromDeviceId(cl_device_id aDeviceId, size_t& rDeviceId, size_
 
 bool canUseOpenCL()
 {
-    if (getenv("SAL_DISABLE_OPENCL") || !officecfg::Office::Common::Misc::UseOpenCL::get())
-        return false;
-
-    return true;
+    if( const char* env = getenv( "SC_FORCE_CALCULATION" ))
+    {
+        if( strcmp( env, "opencl" ) == 0 )
+            return true;
+    }
+    return !getenv("SAL_DISABLE_OPENCL") && officecfg::Office::Common::Misc::UseOpenCL::get();
 }
 
 bool switchOpenCLDevice(const OUString* pDevice, bool bAutoSelect, bool bForceEvaluation, OUString& rOutSelectedDeviceVersionIDString)

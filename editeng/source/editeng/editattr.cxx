@@ -17,10 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
+#include <vcl/outdev.hxx>
 
 #include <svl/grabbagitem.hxx>
 #include <libxml/xmlwriter.h>
@@ -37,7 +34,6 @@
 #include <editeng/wrlmitem.hxx>
 #include <editeng/fhgtitem.hxx>
 #include <editeng/crossedoutitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/kernitem.hxx>
 #include <editeng/autokernitem.hxx>
 #include <editeng/langitem.hxx>

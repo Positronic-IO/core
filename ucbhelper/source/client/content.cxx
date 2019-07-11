@@ -26,10 +26,12 @@
 #include <sal/log.hxx>
 #include <salhelper/simplereferenceobject.hxx>
 #include <cppuhelper/weak.hxx>
+#include <cppuhelper/queryinterface.hxx>
 
 #include <cppuhelper/implbase.hxx>
 #include <com/sun/star/ucb/CheckinArgument.hpp>
 #include <com/sun/star/ucb/ContentCreationError.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
 #include <com/sun/star/ucb/XCommandEnvironment.hpp>
 #include <com/sun/star/ucb/XCommandInfo.hpp>
@@ -936,7 +938,7 @@ bool Content::insertNewContent( const OUString& rContentType,
 }
 
 
-bool Content::transferContent( const Content& rSourceContent,
+void Content::transferContent( const Content& rSourceContent,
                                    InsertOperation eOperation,
                                    const OUString & rTitle,
                                    const sal_Int32 nNameClashAction,
@@ -996,7 +998,6 @@ bool Content::transferContent( const Content& rSourceContent,
     Any aRet = pBroker->execute( aCommand, 0, m_xImpl->getEnvironment() );
     if ( pResultURL != nullptr )
         aRet >>= *pResultURL;
-    return true;
 }
 
 

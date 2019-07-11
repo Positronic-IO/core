@@ -40,6 +40,7 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/awt/Size.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <tools/globname.hxx>
 #include <unotools/streamwrap.hxx>
@@ -74,13 +75,13 @@ const sal_uInt32 OLE_PALETTECOLOR_MASK      = 0x0000FFFF;
 const sal_uInt32 OLE_SYSTEMCOLOR_MASK       = 0x0000FFFF;
 
 /** Swaps the red and blue component of the passed color. */
-inline sal_uInt32 lclSwapRedBlue( sal_uInt32 nColor )
+sal_uInt32 lclSwapRedBlue( sal_uInt32 nColor )
 {
     return static_cast< sal_uInt32 >( (nColor & 0xFF00FF00) | ((nColor & 0x0000FF) << 16) | ((nColor & 0xFF0000) >> 16) );
 }
 
 /** Returns the UNO RGB color from the passed encoded OLE BGR color. */
-inline ::Color lclDecodeBgrColor( sal_uInt32 nOleColor )
+::Color lclDecodeBgrColor( sal_uInt32 nOleColor )
 {
     return ::Color( lclSwapRedBlue( nOleColor ) & 0xFFFFFF );
 }
@@ -96,7 +97,7 @@ struct GUIDCNamePair
 struct IdCntrlData
 {
     sal_Int16 nId;
-    GUIDCNamePair aData;
+    GUIDCNamePair const aData;
 };
 
 const sal_Int16 TOGGLEBUTTON = -1;
@@ -113,7 +114,7 @@ public:
 
 classIdToGUIDCNamePairMap::classIdToGUIDCNamePairMap()
 {
-    IdCntrlData initialCntrlData[] =
+    static IdCntrlData const initialCntrlData[] =
     {
         // Command button MUST be at index 0
         { FormComponentType::COMMANDBUTTON,
@@ -173,7 +174,7 @@ classIdToGUIDCNamePairMap::classIdToGUIDCNamePairMap()
         }
     };
     int const length = SAL_N_ELEMENTS( initialCntrlData );
-    IdCntrlData* pData = initialCntrlData;
+    IdCntrlData const * pData = initialCntrlData;
     for ( int index = 0; index < length; ++index, ++pData )
         mnIdToGUIDCNamePairMap[ pData->nId ] = pData->aData;
 };
@@ -315,7 +316,7 @@ bool OleHelper::importStdPic( StreamDataSequence& orGraphicData, BinaryInputStre
     return !rInStrm.isEof() && (nStdPicId == OLE_STDPIC_ID) && (nBytes > 0) && (rInStrm.readData( orGraphicData, nBytes ) == nBytes);
 }
 
-Reference< css::frame::XFrame > lcl_getFrame( const  Reference< css::frame::XModel >& rxModel )
+static Reference< css::frame::XFrame > lcl_getFrame( const  Reference< css::frame::XModel >& rxModel )
 {
     Reference< css::frame::XFrame > xFrame;
     if ( rxModel.is() )
@@ -326,7 +327,7 @@ Reference< css::frame::XFrame > lcl_getFrame( const  Reference< css::frame::XMod
     return xFrame;
 }
 
-OleFormCtrlExportHelper::OleFormCtrlExportHelper(  const Reference< XComponentContext >& rxCtx, const Reference< XModel >& rxDocModel, const Reference< XControlModel >& xCntrlModel ) : mpControl(nullptr), mpModel( nullptr ), maGrfHelper( rxCtx, lcl_getFrame( rxDocModel ), StorageRef() ), mxDocModel( rxDocModel ), mxControlModel( xCntrlModel )
+OleFormCtrlExportHelper::OleFormCtrlExportHelper(  const Reference< XComponentContext >& rxCtx, const Reference< XModel >& rxDocModel, const Reference< XControlModel >& xCntrlModel ) : mpModel( nullptr ), maGrfHelper( rxCtx, lcl_getFrame( rxDocModel ), StorageRef() ), mxDocModel( rxDocModel ), mxControlModel( xCntrlModel )
 {
     // try to get the guid
     Reference< css::beans::XPropertySet > xProps( xCntrlModel, UNO_QUERY );

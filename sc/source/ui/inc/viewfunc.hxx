@@ -23,7 +23,6 @@
 
 #include <tabbgcolor.hxx>
 
-#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
 #include <vector>
 
@@ -43,7 +42,6 @@ class ScValidationData;
 class ScConversionParam;
 class SdrModel;
 class Graphic;
-class Exchange;
 class ScRangeList;
 class SvxHyperlinkItem;
 class ScTransferObj;
@@ -51,6 +49,7 @@ class ScTableProtection;
 enum class CreateNameFlags;
 
 namespace editeng { class SvxBorderLine; }
+namespace com { namespace sun { namespace star { namespace embed { class XEmbeddedObject; } } } }
 
 namespace sc {
 
@@ -103,6 +102,10 @@ public:
                                             bool bIncludeObjects = false, bool bStopEdit = true );
     SC_DLLPUBLIC bool           CopyToClip( ScDocument* pClipDoc, const ScRangeList& rRange, bool bCut,
                                             bool bApi = false, bool bIncludeObjects = false, bool bStopEdit = true );
+    bool                        CopyToClipSingleRange( ScDocument* pClipDoc, const ScRangeList& rRanges, bool bCut,
+                                            bool bIncludeObjects );
+    bool                        CopyToClipMultiRange( ScDocument* pClipDoc, const ScRangeList& rRanges, bool bCut,
+                                            bool bApi, bool bIncludeObjects );
     ScTransferObj*              CopyToTransferable();
     SC_DLLPUBLIC bool           PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
                                     ScPasteFunc nFunction = ScPasteFunc::NONE, bool bSkipEmpty = false,

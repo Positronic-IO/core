@@ -31,6 +31,7 @@
 #include <libxslt/xslt.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
+#include <libxslt/security.h>
 #include "db.hxx"
 #include <com/sun/star/io/XActiveDataSink.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -338,7 +339,7 @@ void URLParameter::open( const Reference< XOutputStream >& xDataSink )
         return;
 
     // a standard document or else an active help text, plug in the new input stream
-    InputStreamTransformer* p = new InputStreamTransformer( this,m_pDatabases,isRoot() );
+    std::unique_ptr<InputStreamTransformer> p(new InputStreamTransformer( this,m_pDatabases,isRoot() ));
     try
     {
         xDataSink->writeBytes( Sequence< sal_Int8 >( reinterpret_cast<const sal_Int8*>(p->getData().getStr()), p->getData().getLength() ) );
@@ -346,7 +347,7 @@ void URLParameter::open( const Reference< XOutputStream >& xDataSink )
     catch( const Exception& )
     {
     }
-    delete p;
+    p.reset();
     xDataSink->closeOutput();
 }
 
@@ -515,7 +516,7 @@ bool URLParameter::query()
         else if( parameter == "Active" )
             m_aActive = value;
         else if( parameter == "Version" )
-            ; // ignored (but accepted) in the build-in help, useful only for the online help
+            ; // ignored (but accepted) in the built-in help, useful only for the online help
         else
             ret = false;
     }
@@ -847,14 +848,29 @@ InputStreamTransformer::InputStreamTransformer( URLParameter* urlParam,
 
         xmlDocPtr doc = xmlParseFile("vnd.sun.star.zip:/");
 
-        xmlDocPtr res = xsltApplyStylesheet(cur, doc, parameter);
-        if (res)
+        xmlDocPtr res = nullptr;
+        xsltTransformContextPtr transformContext = xsltNewTransformContext(cur, doc);
+        if (transformContext)
         {
-            xmlChar *doc_txt_ptr=nullptr;
-            int doc_txt_len;
-            xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
-            addToBuffer(reinterpret_cast<char*>(doc_txt_ptr), doc_txt_len);
-            xmlFree(doc_txt_ptr);
+            xsltSecurityPrefsPtr securityPrefs = xsltNewSecurityPrefs();
+            if (securityPrefs)
+            {
+                xsltSetSecurityPrefs(securityPrefs, XSLT_SECPREF_READ_FILE, xsltSecurityAllow);
+                if (xsltSetCtxtSecurityPrefs(securityPrefs, transformContext) == 0)
+                {
+                    res = xsltApplyStylesheetUser(cur, doc, parameter, nullptr, nullptr, transformContext);
+                    if (res)
+                    {
+                        xmlChar *doc_txt_ptr=nullptr;
+                        int doc_txt_len;
+                        xsltSaveResultToString(&doc_txt_ptr, &doc_txt_len, res, cur);
+                        addToBuffer(reinterpret_cast<char*>(doc_txt_ptr), doc_txt_len);
+                        xmlFree(doc_txt_ptr);
+                    }
+                }
+                xsltFreeSecurityPrefs(securityPrefs);
+            }
+            xsltFreeTransformContext(transformContext);
         }
         xmlPopInputCallbacks(); //filePatch
         xmlPopInputCallbacks(); //helpPatch
@@ -924,7 +940,7 @@ void SAL_CALL InputStreamTransformer::skipBytes( sal_Int32 nBytesToSkip )
 sal_Int32 SAL_CALL InputStreamTransformer::available()
 {
     osl::MutexGuard aGuard( m_aMutex );
-    return std::max<sal_Int32>(buffer.getLength() - pos, 0);
+    return std::min<sal_Int64>(SAL_MAX_INT32, buffer.getLength() - pos);
 }
 
 

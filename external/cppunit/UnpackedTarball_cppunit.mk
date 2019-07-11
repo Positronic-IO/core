@@ -11,12 +11,17 @@ $(eval $(call gb_UnpackedTarball_UnpackedTarball,cppunit))
 
 $(eval $(call gb_UnpackedTarball_set_tarball,cppunit,$(CPPUNIT_TARBALL),,cppunit))
 
+$(eval $(call gb_UnpackedTarball_update_autoconf_configs,cppunit))
+
+# gcc9.patch.0 addressed upstream with <https://gerrit.libreoffice.org/58690> "Avoid GCC 9
+#  -Wdeprecated-copy":
 $(eval $(call gb_UnpackedTarball_add_patches,cppunit,\
 	external/cppunit/windows.patch \
 	external/cppunit/unix.patch \
 	external/cppunit/CPPUNIT_PLUGIN_EXPORT.patch.0 \
 	external/cppunit/enable-win32-debug.patch \
 	external/cppunit/rtti.patch.0 \
+	external/cppunit/gcc9.patch.0 \
 ))
 ifeq ($(DISABLE_DYNLOADING),TRUE)
 $(eval $(call gb_UnpackedTarball_add_patches,cppunit,\

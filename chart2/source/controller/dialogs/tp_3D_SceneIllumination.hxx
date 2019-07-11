@@ -21,13 +21,11 @@
 
 #include <TimerTriggeredControllerLock.hxx>
 
-#include <com/sun/star/beans/XPropertySet.hpp>
-
 #include <vcl/tabpage.hxx>
-#include <vcl/fixed.hxx>
 #include <vcl/button.hxx>
-#include <svx/dlgctrl.hxx>
 #include <svx/dlgctl3d.hxx>
+
+namespace com { namespace sun { namespace star { namespace beans { class XPropertySet; } } } }
 
 class SvxColorListBox;
 
@@ -90,7 +88,7 @@ private:
 
     VclPtr<SvxLightCtl3D>   m_pCtl_Preview;
 
-    LightSourceInfo* m_pLightSourceInfoList;
+    std::unique_ptr<LightSourceInfo[]> m_pLightSourceInfoList;
 
     css::uno::Reference< css::beans::XPropertySet > m_xSceneProperties;
 

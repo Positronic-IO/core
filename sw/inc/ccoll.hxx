@@ -29,8 +29,8 @@ enum class Master_CollCondition;
 
 struct CommandStruct
 {
-    Master_CollCondition nCnd;
-    sal_uLong nSubCond;
+    Master_CollCondition const nCnd;
+    sal_uLong const nSubCond;
 };
 
 sal_Int16       GetCommandContextIndex( const OUString &rContextName );
@@ -46,6 +46,10 @@ public:
     SwCondCollItem();
     virtual ~SwCondCollItem() override;
 
+    SwCondCollItem(SwCondCollItem const &) = default;
+    SwCondCollItem(SwCondCollItem &&) = default;
+    SwCondCollItem & operator =(SwCondCollItem const &) = delete; // due to SfxPoolItem
+    SwCondCollItem & operator =(SwCondCollItem &&) = delete; // due to SfxPoolItem
 
     virtual SfxPoolItem*        Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual bool                operator==( const SfxPoolItem& ) const override;

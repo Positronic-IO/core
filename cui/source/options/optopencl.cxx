@@ -34,23 +34,22 @@
 #include <com/sun/star/ui/dialogs/FolderPicker.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
 #include <com/sun/star/util/XChangesBatch.hpp>
+#include <com/sun/star/task/OfficeRestartManager.hpp>
+#include <com/sun/star/task/XInteractionHandler.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <strings.hrc>
 #include <dialmgr.hxx>
 #include "optopencl.hxx"
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 SvxOpenCLTabPage::SvxOpenCLTabPage(vcl::Window* pParent, const SfxItemSet& rSet) :
     SfxTabPage(pParent, "OptOpenCLPage", "cui/ui/optopenclpage.ui", &rSet),
     maConfig(OpenCLConfig::get())
 {
-    get(mpUseSwInterpreter, "useswinterpreter");
     get(mpUseOpenCL, "useopencl");
     get(mpOclUsed,"openclused");
     get(mpOclNotUsed,"openclnotused");
-
-    mpUseSwInterpreter->Check(officecfg::Office::Common::Misc::UseSwInterpreter::get());
-    mpUseSwInterpreter->Enable(!officecfg::Office::Common::Misc::UseSwInterpreter::isReadOnly());
 
     mpUseOpenCL->Check(maConfig.mbUseOpenCL);
     mpUseOpenCL->Enable(!officecfg::Office::Common::Misc::UseOpenCL::isReadOnly());
@@ -67,7 +66,6 @@ SvxOpenCLTabPage::~SvxOpenCLTabPage()
 
 void SvxOpenCLTabPage::dispose()
 {
-    mpUseSwInterpreter.clear();
     mpUseOpenCL.clear();
     mpOclUsed.clear();
     mpOclNotUsed.clear();
@@ -85,12 +83,6 @@ bool SvxOpenCLTabPage::FillItemSet( SfxItemSet* )
  bool bModified = false;
     std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
 
-    if (mpUseSwInterpreter->IsValueChangedFromSaved())
-    {
-        officecfg::Office::Common::Misc::UseSwInterpreter::set(mpUseSwInterpreter->IsChecked(), batch);
-        bModified = true;
-    }
-
     if (mpUseOpenCL->IsValueChangedFromSaved())
         maConfig.mbUseOpenCL = mpUseOpenCL->IsChecked();
 
@@ -103,10 +95,18 @@ bool SvxOpenCLTabPage::FillItemSet( SfxItemSet* )
     if (bModified)
     {
         std::unique_ptr<weld::MessageDialog> xWarnBox(Application::CreateMessageDialog(GetFrameWeld(),
-                                                      VclMessageType::Info, VclButtonsType::Ok,
-                                                      CuiResId(RID_SVXSTR_OPTIONS_RESTART)));
-        xWarnBox->run();
+                                                      VclMessageType::Question, VclButtonsType::NONE,
+                                                      CuiResId(RID_SVXSTR_OPENCL_RESTART)));
+        xWarnBox->add_button("Restart Now",RET_YES);
+        xWarnBox->add_button("Restart Later",RET_NO);
+        sal_uInt16 nRet = xWarnBox->run();
         batch->commit();
+        if (nRet == RET_YES)
+        {
+            css::task::OfficeRestartManager::get(comphelper::getProcessComponentContext())->requestRestart(
+            css::uno::Reference< css::task::XInteractionHandler >());
+        }
+
     }
 
     return bModified;
@@ -115,9 +115,6 @@ bool SvxOpenCLTabPage::FillItemSet( SfxItemSet* )
 void SvxOpenCLTabPage::Reset( const SfxItemSet* )
 {
     maConfig = OpenCLConfig::get();
-
-    mpUseSwInterpreter->Check(officecfg::Office::Common::Misc::UseSwInterpreter::get());
-    mpUseSwInterpreter->SaveValue();
 
     mpUseOpenCL->Check(maConfig.mbUseOpenCL);
     mpUseOpenCL->SaveValue();

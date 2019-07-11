@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <utility>
 
@@ -25,7 +26,6 @@
 #include <com/sun/star/text/XTextTable.hpp>
 
 #include <vcl/svapp.hxx>
-#include <comphelper/servicehelper.hxx>
 
 #include <pagedesc.hxx>
 #include <poolfmt.hxx>

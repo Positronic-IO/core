@@ -25,7 +25,9 @@
 #include <com/sun/star/registry/XRegistryKey.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <comphelper/processfactory.hxx>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 
 #include "thesdsp.hxx"
 #include <linguistic/lngprops.hxx>

@@ -29,6 +29,7 @@
 
 #include <svl/sharedstringpool.hxx>
 #include <osl/diagnose.h>
+#include <unotools/charclass.hxx>
 
 #include <memory>
 #include <utility>
@@ -78,12 +79,12 @@ bool lcl_createStarQuery(
             // For all entries after the first one, check the and/or connector in the first column.
             aCellStr = pQueryRef->getString(0, nRow);
             lcl_uppercase(aCellStr);
-            if ( aCellStr == ScResId(STR_TABLE_UND) )
+            if ( aCellStr == ScResId(STR_TABLE_AND) )
             {
                 rEntry.eConnect = SC_AND;
                 bValid = true;
             }
-            else if ( aCellStr == ScResId(STR_TABLE_ODER) )
+            else if ( aCellStr == ScResId(STR_TABLE_OR) )
             {
                 rEntry.eConnect = SC_OR;
                 bValid = true;

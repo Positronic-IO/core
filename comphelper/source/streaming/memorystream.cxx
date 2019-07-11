@@ -150,7 +150,7 @@ void SAL_CALL UNOMemoryStream::skipBytes( sal_Int32 nBytesToSkip )
 
 sal_Int32 SAL_CALL UNOMemoryStream::available()
 {
-    return static_cast< sal_Int32 >( maData.size() ) - mnCursor;
+    return std::min<sal_Int64>( SAL_MAX_INT32, maData.size() - mnCursor);
 }
 
 void SAL_CALL UNOMemoryStream::closeInput()
@@ -190,7 +190,7 @@ void SAL_CALL UNOMemoryStream::writeBytes( const Sequence< sal_Int8 >& aData )
     const sal_Int32 nBytesToWrite( aData.getLength() );
     if( nBytesToWrite )
     {
-        sal_Int64 nNewSize = static_cast< sal_Int64 >( mnCursor + nBytesToWrite );
+        sal_Int64 nNewSize = static_cast<sal_Int64>(mnCursor) + nBytesToWrite;
         if( nNewSize > SAL_MAX_INT32 )
         {
             OSL_ASSERT(false);

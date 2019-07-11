@@ -52,9 +52,9 @@ public:
 
 class SwRedlineExtraData_FormatColl : public SwRedlineExtraData
 {
-    OUString sFormatNm;
-    std::unique_ptr<SfxItemSet> pSet;
-    sal_uInt16 nPoolId;
+    OUString m_sFormatNm;
+    std::unique_ptr<SfxItemSet> m_pSet;
+    sal_uInt16 m_nPoolId;
 public:
     SwRedlineExtraData_FormatColl( const OUString& rColl, sal_uInt16 nPoolFormatId,
                                 const SfxItemSet* pSet = nullptr );
@@ -68,7 +68,7 @@ public:
 
 class SwRedlineExtraData_Format : public SwRedlineExtraData
 {
-    std::vector<sal_uInt16> aWhichIds;
+    std::vector<sal_uInt16> m_aWhichIds;
 
     SwRedlineExtraData_Format( const SwRedlineExtraData_Format& rCpy );
 
@@ -90,7 +90,7 @@ public:
  */
 class SW_DLLPUBLIC SwRedlineExtraData_FormattingChanges : public SwRedlineExtraData
 {
-    std::unique_ptr<SfxItemSet> pSet;
+    std::unique_ptr<SfxItemSet> m_pSet;
 
     SwRedlineExtraData_FormattingChanges( const SwRedlineExtraData_FormattingChanges& rCpy );
 
@@ -100,20 +100,20 @@ public:
     virtual SwRedlineExtraData* CreateNew() const override;
     virtual void Reject( SwPaM& rPam ) const override;
     virtual bool operator == ( const SwRedlineExtraData& ) const override;
-    SfxItemSet* GetItemSet( ) const { return pSet.get(); }
+    SfxItemSet* GetItemSet( ) const { return m_pSet.get(); }
 };
 
 class SW_DLLPUBLIC SwRedlineData
 {
     friend class SwRangeRedline;
-    SwRedlineData* pNext;       // Points to other data.
-    SwRedlineExtraData* pExtraData;
+    SwRedlineData* m_pNext;       // Points to other data.
+    SwRedlineExtraData* m_pExtraData;
 
-    OUString sComment;
-    DateTime aStamp;
-    RedlineType_t eType;
-    std::size_t nAuthor;
-    sal_uInt16 nSeqNo;
+    OUString m_sComment;
+    DateTime m_aStamp;
+    RedlineType_t m_eType;
+    std::size_t const m_nAuthor;
+    sal_uInt16 m_nSeqNo;
 
 public:
     SwRedlineData( RedlineType_t eT, std::size_t nAut );
@@ -127,43 +127,43 @@ public:
 
     bool operator==( const SwRedlineData& rCmp ) const
         {
-            return nAuthor == rCmp.nAuthor &&
-                    eType == rCmp.eType &&
-                    sComment == rCmp.sComment &&
-                    (( !pNext && !rCmp.pNext ) ||
-                        ( pNext && rCmp.pNext && *pNext == *rCmp.pNext )) &&
-                    (( !pExtraData && !rCmp.pExtraData ) ||
-                        ( pExtraData && rCmp.pExtraData &&
-                            *pExtraData == *rCmp.pExtraData ));
+            return m_nAuthor == rCmp.m_nAuthor &&
+                    m_eType == rCmp.m_eType &&
+                    m_sComment == rCmp.m_sComment &&
+                    (( !m_pNext && !rCmp.m_pNext ) ||
+                        ( m_pNext && rCmp.m_pNext && *m_pNext == *rCmp.m_pNext )) &&
+                    (( !m_pExtraData && !rCmp.m_pExtraData ) ||
+                        ( m_pExtraData && rCmp.m_pExtraData &&
+                            *m_pExtraData == *rCmp.m_pExtraData ));
         }
     bool operator!=( const SwRedlineData& rCmp ) const
         {   return !operator==( rCmp ); }
 
     RedlineType_t GetType() const
-        { return static_cast<RedlineType_t>(eType & nsRedlineType_t::REDLINE_NO_FLAG_MASK); }
+        { return static_cast<RedlineType_t>(m_eType & nsRedlineType_t::REDLINE_NO_FLAG_MASK); }
 
-    std::size_t GetAuthor() const                { return nAuthor; }
-    const OUString& GetComment() const        { return sComment; }
-    const DateTime& GetTimeStamp() const    { return aStamp; }
-    const SwRedlineData* Next() const{ return pNext; }
+    std::size_t GetAuthor() const                { return m_nAuthor; }
+    const OUString& GetComment() const        { return m_sComment; }
+    const DateTime& GetTimeStamp() const    { return m_aStamp; }
+    const SwRedlineData* Next() const{ return m_pNext; }
 
-    void SetComment( const OUString& rS )     { sComment = rS; }
-    void SetTimeStamp( const DateTime& rDT ) { aStamp = rDT; }
+    void SetComment( const OUString& rS )     { m_sComment = rS; }
+    void SetTimeStamp( const DateTime& rDT ) { m_aStamp = rDT; }
 
     void SetAutoFormatFlag()
-        { eType = static_cast<RedlineType_t>(eType | nsRedlineType_t::REDLINE_FORM_AUTOFMT); }
+        { m_eType = static_cast<RedlineType_t>(m_eType | nsRedlineType_t::REDLINE_FORM_AUTOFMT); }
     bool CanCombine( const SwRedlineData& rCmp ) const;
 
     // ExtraData gets copied, the pointer is therefore not taken over by
     // the RedlineObject
     void SetExtraData( const SwRedlineExtraData* pData );
-    const SwRedlineExtraData* GetExtraData() const { return pExtraData; }
+    const SwRedlineExtraData* GetExtraData() const { return m_pExtraData; }
 
     // For UI-side pooling of Redline-actions.
     // At the moment only used for Autoformat with Redline.
     // Value != 0 means there can be others!
-    sal_uInt16 GetSeqNo() const                     { return nSeqNo; }
-    void SetSeqNo( sal_uInt16 nNo )                 { nSeqNo = nNo; }
+    sal_uInt16 GetSeqNo() const                     { return m_nSeqNo; }
+    void SetSeqNo( sal_uInt16 nNo )                 { m_nSeqNo = nNo; }
 
     OUString GetDescr() const;
 };
@@ -174,7 +174,7 @@ class SW_DLLPUBLIC SwRangeRedline : public SwPaM
     SwNodeIndex* m_pContentSect;
     bool m_bDelLastPara : 1;
     bool m_bIsVisible : 1;
-    sal_uInt32 m_nId;
+    sal_uInt32 const m_nId;
 
     boost::optional<long> m_oLOKLastNodeTop;
 
@@ -253,8 +253,9 @@ public:
     /// Calculates the intersection with text node number nNdIdx.
     void CalcStartEnd(sal_uLong nNdIdx, sal_Int32& rStart, sal_Int32& rEnd) const;
 
+    enum class Invalidation { Add, Remove };
     /// Initiate the layout.
-    void InvalidateRange();
+    void InvalidateRange(Invalidation);
 
     bool IsOwnRedline( const SwRangeRedline& rRedl ) const
         { return GetAuthor() == rRedl.GetAuthor(); }
@@ -338,6 +339,13 @@ public:
 class SW_DLLPUBLIC SwRedlineHint : public SfxHint
 {
 };
+
+
+namespace sw {
+
+std::vector<SwRangeRedline*> GetAllValidRanges(std::unique_ptr<SwRangeRedline> p);
+
+} // namespace sw
 
 #endif
 

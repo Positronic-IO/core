@@ -30,6 +30,7 @@
 #include <com/sun/star/container/ContainerEvent.hpp>
 #include <com/sun/star/container/XIndexReplace.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
+#include <memory>
 #include <vector>
 
 #include "basecontrol.hxx"
@@ -138,7 +139,7 @@ public:
 protected:
     using OComponentHelper::disposing;
 
-    virtual css::awt::WindowDescriptor* impl_getWindowDescriptor(
+    virtual css::awt::WindowDescriptor impl_getWindowDescriptor(
         const css::uno::Reference< css::awt::XWindowPeer >& xParentPeer
     ) override;
 
@@ -150,15 +151,8 @@ protected:
     ) override;
 
 private:
-    void impl_activateTabControllers();
-
-    void impl_cleanMemory();
-
     // list of pointer of "struct IMPL_ControlInfo" to hold child-controls
-    ::std::vector< IMPL_ControlInfo* > maControlInfoList;
-
-    // list of references of XTabController to hold tab-order in this container
-    css::uno::Sequence< css::uno::Reference< css::awt::XTabController > >  m_xTabControllerList;
+    ::std::vector< std::unique_ptr<IMPL_ControlInfo> > maControlInfoList;
 
     ::cppu::OMultiTypeInterfaceContainerHelper                          m_aListeners;
 

@@ -38,8 +38,8 @@ private:
     // geometry, which determines the object
     basegfx::B2DPolyPolygon         maExtrudePolygon;
 
-    virtual sdr::contact::ViewContact* CreateObjectSpecificViewContact() override;
-    virtual sdr::properties::BaseProperties* CreateObjectSpecificProperties() override;
+    virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override;
     void SetDefaultAttributes(const E3dDefaultAttributes& rDefault);
 
 private:
@@ -102,7 +102,7 @@ public:
     const basegfx::B2DPolyPolygon &GetExtrudePolygon() const { return maExtrudePolygon; }
 
     virtual bool IsBreakObjPossible() override;
-    virtual SdrAttrObj* GetBreakObj() override;
+    virtual std::unique_ptr<SdrAttrObj,SdrObjectFreeOp> GetBreakObj() override;
 };
 
 #endif // INCLUDED_SVX_EXTRUD3D_HXX

@@ -33,7 +33,6 @@ $(eval $(call gb_UIConfig_add_popupmenufiles,modules/simpress,\
 	sd/uiconfig/simpress/popupmenu/multiselect \
 	sd/uiconfig/simpress/popupmenu/notebookbar \
 	sd/uiconfig/simpress/popupmenu/oleobject \
-	sd/uiconfig/simpress/popupmenu/outlinetext \
 	sd/uiconfig/simpress/popupmenu/outline \
 	sd/uiconfig/simpress/popupmenu/pagepanemaster \
 	sd/uiconfig/simpress/popupmenu/pagepanenoselmaster \
@@ -113,6 +112,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/simpress,\
 	sd/uiconfig/simpress/ui/customanimationspanelhorizontal \
 	sd/uiconfig/simpress/ui/customanimationproperties \
 	sd/uiconfig/simpress/ui/customanimationeffecttab \
+	sd/uiconfig/simpress/ui/customanimationfragment \
 	sd/uiconfig/simpress/ui/customanimationtimingtab \
 	sd/uiconfig/simpress/ui/customanimationtexttab \
 	sd/uiconfig/simpress/ui/customslideshows \

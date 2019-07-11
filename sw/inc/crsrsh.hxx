@@ -43,6 +43,7 @@
 class SfxItemSet;
 class SfxPoolItem;
 class SwContentFrame;
+class SwUnoCursor;
 class SwFormatField;
 class SwTextFormatColl;
 class SwTextINetFormat;
@@ -125,8 +126,19 @@ struct SwContentAtPos
 const int CRSR_POSOLD = 0x01,   // cursor stays at old position
           CRSR_POSCHG = 0x02;   // position changed by the layout
 
+namespace sw {
+
+bool ReplaceImpl(SwPaM & rCursor, OUString const& rReplacement,
+        bool const bRegExp, SwDoc & rDoc, SwRootFrame const*const pLayout);
+
 /// Helperfunction to resolve backward references in regular expressions
-OUString *ReplaceBackReferences( const i18nutil::SearchOptions2& rSearchOpt, SwPaM* pPam );
+OUString *ReplaceBackReferences(const i18nutil::SearchOptions2& rSearchOpt,
+        SwPaM* pPam, SwRootFrame const* pLayout );
+
+bool GetRanges(std::vector<std::shared_ptr<SwUnoCursor>> & rRanges,
+        SwDoc & rDoc, SwPaM const& rDelPam);
+
+} // namespace sw
 
 class SW_DLLPUBLIC SwCursorShell
     : public SwViewShell
@@ -250,8 +262,18 @@ private:
 
     SAL_DLLPRIVATE bool isInHiddenTextFrame(SwShellCursor* pShellCursor);
 
-typedef bool (SwCursor:: *FNCursor)();
+    SAL_DLLPRIVATE bool GoStartWordImpl();
+    SAL_DLLPRIVATE bool GoEndWordImpl();
+    SAL_DLLPRIVATE bool GoNextWordImpl();
+    SAL_DLLPRIVATE bool GoPrevWordImpl();
+    SAL_DLLPRIVATE bool GoNextSentenceImpl();
+    SAL_DLLPRIVATE bool GoEndSentenceImpl();
+    SAL_DLLPRIVATE bool GoStartSentenceImpl();
+
+    typedef bool (SwCursor::*FNCursor)();
+    typedef bool (SwCursorShell::*FNCursorShell)();
     SAL_DLLPRIVATE bool CallCursorFN( FNCursor );
+    SAL_DLLPRIVATE bool CallCursorShellFN( FNCursorShell );
 
     SAL_DLLPRIVATE const SwRangeRedline* GotoRedline_( SwRedlineTable::size_type nArrPos, bool bSelect );
 
@@ -348,18 +370,19 @@ public:
     void MoveColumn( SwWhichColumn, SwPosColumn );
     bool MoveRegion( SwWhichRegion, SwMoveFnCollection const & );
 
-    sal_uLong Find( const i18nutil::SearchOptions2& rSearchOpt,
+    // note: DO NOT call it FindText because windows.h
+    sal_uLong Find_Text( const i18nutil::SearchOptions2& rSearchOpt,
                 bool bSearchInNotes,
                 SwDocPositions eStart, SwDocPositions eEnd,
                 bool& bCancel,
                 FindRanges eRng, bool bReplace = false );
 
-    sal_uLong Find( const SwTextFormatColl& rFormatColl,
+    sal_uLong FindFormat( const SwTextFormatColl& rFormatColl,
                 SwDocPositions eStart, SwDocPositions eEnd,
                 bool& bCancel,
                 FindRanges eRng, const SwTextFormatColl* pReplFormat );
 
-    sal_uLong Find( const SfxItemSet& rSet, bool bNoCollections,
+    sal_uLong FindAttrs( const SfxItemSet& rSet, bool bNoCollections,
                 SwDocPositions eStart, SwDocPositions eEnd,
                 bool& bCancel,
                 FindRanges eRng,
@@ -492,7 +515,7 @@ public:
     bool ShouldWait() const;
 
     // Check if selection is within one paragraph.
-    inline bool IsSelOnePara() const;
+    bool IsSelOnePara() const;
 
     /*
      * Returns SRectangle, at which the cursor is located.
@@ -512,6 +535,9 @@ public:
     // false: which is visible at the upper margin.
     void GetPageNum( sal_uInt16 &rnPhyNum, sal_uInt16 &rnVirtNum,
                      bool bAtCursorPos = true, const bool bCalcFrame = true );
+    // Returns current page's sequential number (1-based),in which cursor is located, ignoring autoinserted empty pages.
+    // Returns 0 on error
+    sal_uInt16 GetPageNumSeqNonEmpty();
     // Determine how "empty pages" are handled
     // (used in PhyPage).
     sal_uInt16 GetNextPrevPageNum( bool bNext = true );
@@ -530,6 +556,11 @@ public:
         const vcl::KeyCode&,
         const OUString& rName,
         IDocumentMarkAccess::MarkType eMark = IDocumentMarkAccess::MarkType::BOOKMARK);
+    ::sw::mark::IMark* SetBookmark2(
+        const vcl::KeyCode&,
+        const OUString& rName,
+        bool bHide,
+        const OUString& rCondition);
     bool GotoMark( const ::sw::mark::IMark* const pMark );    // sets CurrentCursor.SPoint
     bool GotoMark( const ::sw::mark::IMark* const pMark, bool bAtStart );
     bool GoNextBookmark(); // true, if there was one
@@ -548,9 +579,6 @@ public:
     // get the selected text at the current cursor. it will be filled with
     // fields etc.
     OUString GetSelText() const;
-    // return only the text starting from the current cursor position (to the
-    // end of the node)
-    OUString GetText() const;
 
     // Check of SPoint or Mark of current cursor are placed within a table.
     inline const SwTableNode* IsCursorInTable() const;
@@ -853,12 +881,6 @@ inline bool SwCursorShell::IsSelection() const
 inline bool SwCursorShell::IsMultiSelection() const
 {
     return m_pCurrentCursor->GetNext() != m_pCurrentCursor;
-}
-
-inline bool SwCursorShell::IsSelOnePara() const
-{
-    return !m_pCurrentCursor->IsMultiSelection() &&
-           m_pCurrentCursor->GetPoint()->nNode == m_pCurrentCursor->GetMark()->nNode;
 }
 
 inline const SwTableNode* SwCursorShell::IsCursorInTable() const

@@ -20,6 +20,7 @@
 #include "CandleStickChart.hxx"
 #include <ShapeFactory.hxx>
 #include <CommonConverters.hxx>
+#include <ExplicitCategoriesProvider.hxx>
 #include <ObjectIdentifier.hxx>
 #include <LabelPositionHelper.hxx>
 #include "BarPositionHelper.hxx"
@@ -27,8 +28,11 @@
 #include <FormattedStringHelper.hxx>
 #include <DataSeriesHelper.hxx>
 #include <DateHelper.hxx>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <rtl/math.hxx>
 #include <editeng/unoprnms.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 namespace chart
 {
@@ -66,10 +70,10 @@ drawing::Direction3D CandleStickChart::getPreferredDiagramAspectRatio() const
     return drawing::Direction3D(-1,-1,-1);
 }
 
-void CandleStickChart::addSeries( VDataSeries* pSeries, sal_Int32 /* zSlot */, sal_Int32 xSlot, sal_Int32 ySlot )
+void CandleStickChart::addSeries( std::unique_ptr<VDataSeries> pSeries, sal_Int32 /* zSlot */, sal_Int32 xSlot, sal_Int32 ySlot )
 {
     //ignore y stacking for candle stick chart
-    VSeriesPlotter::addSeries( pSeries, 0, xSlot, ySlot );
+    VSeriesPlotter::addSeries( std::move(pSeries), 0, xSlot, ySlot );
 }
 
 void CandleStickChart::createShapes()
@@ -111,8 +115,8 @@ void CandleStickChart::createShapes()
         {
             m_xChartTypeModelProps->getPropertyValue( "ShowFirst" ) >>= bShowFirst;
 
-            uno::Reference< beans::XPropertySet > xWhiteDayProps(nullptr);
-            uno::Reference< beans::XPropertySet > xBlackDayProps(nullptr);
+            uno::Reference< beans::XPropertySet > xWhiteDayProps;
+            uno::Reference< beans::XPropertySet > xBlackDayProps;
             m_xChartTypeModelProps->getPropertyValue( "Japanese" ) >>= bJapaneseStyle;
             m_xChartTypeModelProps->getPropertyValue( "WhiteDay" ) >>= xWhiteDayProps;
             m_xChartTypeModelProps->getPropertyValue( "BlackDay" ) >>= xBlackDayProps;
@@ -141,7 +145,7 @@ void CandleStickChart::createShapes()
         {
             sal_Int32 nAttachedAxisIndex = 0;
             BarPositionHelper* pPosHelper = m_pMainPosHelper.get();
-            if( rZSlot.size() )
+            if( !rZSlot.empty() )
             {
                 nAttachedAxisIndex = rZSlot.front().getAttachedAxisIndexForFirstSeries();
                 //2ND_AXIS_IN_BARS so far one can assume to have the same plotter for each z slot
@@ -158,7 +162,7 @@ void CandleStickChart::createShapes()
             for( auto const& rXSlot : rZSlot )
             {
                 //iterate through all series in this x slot
-                for( VDataSeries* const pSeries : rXSlot.m_aSeriesVector )
+                for( std::unique_ptr<VDataSeries> const & pSeries : rXSlot.m_aSeriesVector )
                 {
                     //collect data point information (logic coordinates, style ):
                     double fUnscaledX = pSeries->getXValue( nIndex );
@@ -209,10 +213,10 @@ void CandleStickChart::createShapes()
                         xLossGainTarget = xLossTarget;
 
                     uno::Reference< beans::XPropertySet > xPointProp( pSeries->getPropertiesOfPoint( nIndex ));
-                    uno::Reference< drawing::XShapes > xPointGroupShape_Shapes(nullptr);
+                    uno::Reference< drawing::XShapes > xPointGroupShape_Shapes;
                     {
                         OUString aPointCID = ObjectIdentifier::createPointCID( pSeries->getPointCID_Stub(), nIndex );
-                        uno::Reference< drawing::XShapes > xSeriesGroupShape_Shapes( getSeriesGroupShape(pSeries, xSeriesTarget) );
+                        uno::Reference< drawing::XShapes > xSeriesGroupShape_Shapes( getSeriesGroupShape(pSeries.get(), xSeriesTarget) );
                         xPointGroupShape_Shapes = createGroupShape(xSeriesGroupShape_Shapes,aPointCID);
                     }
 

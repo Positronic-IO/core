@@ -35,6 +35,10 @@ else
 gb_AR := $(shell $(CC) -print-prog-name=ar)
 endif
 
+ifneq ($(USE_LD),)
+gb_LinkTarget_LDFLAGS += -fuse-ld=$(USE_LD)
+endif
+
 ifeq ($(strip $(gb_COMPILEROPTFLAGS)),)
 gb_COMPILEROPTFLAGS := -O2
 endif
@@ -55,7 +59,7 @@ gb_CFLAGS_COMMON := \
 	-Wstrict-prototypes \
 	-Wundef \
 	-Wunreachable-code \
-	-Wunused-macros \
+	$(if $(and $(COM_IS_CLANG),$(or $(findstring icecc,$(CC)),$(findstring icecc,$(CCACHE_PREFIX)))),,-Wunused-macros) \
 	-finput-charset=UTF-8 \
 	-fmessage-length=0 \
 	-fno-common \
@@ -69,7 +73,7 @@ gb_CXXFLAGS_COMMON := \
 	-Wextra \
 	-Wundef \
 	-Wunreachable-code \
-	-Wunused-macros \
+	$(if $(and $(COM_IS_CLANG),$(or $(findstring icecc,$(CC)),$(findstring icecc,$(CCACHE_PREFIX)))),,-Wunused-macros) \
 	-finput-charset=UTF-8 \
 	-fmessage-length=0 \
 	-fno-common \
@@ -77,11 +81,23 @@ gb_CXXFLAGS_COMMON := \
 
 gb_CXXFLAGS_Wundef = -Wno-undef
 
+ifeq ($(ENABLE_GDB_INDEX),TRUE)
+gb_LinkTarget_LDFLAGS += -Wl,--gdb-index
+gb_CFLAGS_COMMON += -ggnu-pubnames
+gb_CXXFLAGS_COMMON += -ggnu-pubnames
+endif
+
 ifeq ($(strip $(gb_GCOV)),YES)
 gb_CFLAGS_COMMON += -fprofile-arcs -ftest-coverage
 gb_CXXFLAGS_COMMON += -fprofile-arcs -ftest-coverage
 gb_LinkTarget_LDFLAGS += -fprofile-arcs -lgcov
 gb_COMPILEROPTFLAGS := -O0
+endif
+
+ifeq ($(DISABLE_DYNLOADING),TRUE)
+gb_CFLAGS_COMMON += -ffunction-sections -fdata-sections
+gb_CXXFLAGS_COMMON += -ffunction-sections -fdata-sections
+gb_LinkTarget_LDFLAGS += -Wl,--gc-sections
 endif
 
 ifeq ($(shell expr '$(GCC_VERSION)' '>=' 600),1)
@@ -107,7 +123,7 @@ ifeq ($(COM_IS_CLANG),TRUE)
 gb_CXXFLAGS_COMMON += -Wimplicit-fallthrough
 else
 # GCC 4.8, at least, is confused by boost 1.66 optional assignments
-ifeq ($(shell expr '$(GCC_VERSION)' '<' 490),1)
+ifeq ($(shell expr '$(GCC_VERSION)' '<' 409),1)
 gb_CXXFLAGS_COMMON += -Wno-maybe-uninitialized
 endif
 endif
@@ -186,6 +202,10 @@ else ifeq ($(HAVE_GCC_GGDB2),TRUE)
 gb_DEBUGINFO_FLAGS=-ggdb2
 else
 gb_DEBUGINFO_FLAGS=-g2
+endif
+
+ifeq ($(HAVE_GCC_SPLIT_DWARF),TRUE)
+gb_DEBUGINFO_FLAGS+=-gsplit-dwarf
 endif
 
 ifeq ($(HAVE_GCC_FINLINE_LIMIT),TRUE)

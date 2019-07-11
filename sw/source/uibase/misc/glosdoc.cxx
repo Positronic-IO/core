@@ -25,6 +25,7 @@
 
 #include <vcl/errinf.hxx>
 #include <osl/diagnose.h>
+#include <rtl/character.hxx>
 #include <svl/urihelper.hxx>
 #include <svl/fstathelper.hxx>
 #include <unotools/pathoptions.hxx>
@@ -47,7 +48,7 @@ using namespace ::com::sun::star::uno;
 namespace
 {
 
-inline OUString lcl_FullPathName(const OUString& sPath, const OUString& sName)
+OUString lcl_FullPathName(const OUString& sPath, const OUString& sName)
 {
     return sPath + "/" + sName + SwGlossaries::GetExtension();
 }
@@ -120,7 +121,7 @@ bool SwGlossaries::FindGroupName(OUString& rGroup)
     for(size_t i = 0; i < nCount; ++i)
     {
         const OUString sTemp( GetGroupName( i ));
-        sal_uInt16 nPath = static_cast<sal_uInt16>(sTemp.getToken(1, GLOS_DELIM).toInt32());
+        sal_uInt16 nPath = sTemp.getToken(1, GLOS_DELIM).toUInt32();
 
         if (!SWUnoHelper::UCB_IsCaseSensitiveFileName( m_PathArr[nPath] )
              && rSCmp.isEqual( rGroup, sTemp.getToken( 0, GLOS_DELIM) ) )
@@ -145,29 +146,23 @@ OUString SwGlossaries::GetGroupTitle( const OUString& rGroupName )
     OUString sGroup(rGroupName);
     if (sGroup.indexOf(GLOS_DELIM)<0)
         FindGroupName(sGroup);
-    SwTextBlocks* pGroup = GetGroupDoc(sGroup);
+    std::unique_ptr<SwTextBlocks> pGroup = GetGroupDoc(sGroup);
     if(pGroup)
     {
         sRet = pGroup->GetName();
-        delete pGroup;
     }
     return sRet;
 }
 
 // supplies the group rName's text block document
-SwTextBlocks* SwGlossaries::GetGroupDoc(const OUString &rName,
+std::unique_ptr<SwTextBlocks> SwGlossaries::GetGroupDoc(const OUString &rName,
                                         bool bCreate)
 {
     // insert to the list of text blocks if applicable
     if(bCreate && !m_GlosArr.empty())
     {
-        std::vector<OUString>::const_iterator it(m_GlosArr.begin());
-        for (; it != m_GlosArr.end(); ++it)
-        {
-            if (*it == rName)
-                break;
-        }
-        if (it == m_GlosArr.end())
+        if (std::none_of(m_GlosArr.begin(), m_GlosArr.end(),
+                [&rName](const OUString& rEntry) { return rEntry == rName; }))
         {   // block not in the list
             m_GlosArr.push_back(rName);
         }
@@ -186,12 +181,11 @@ bool SwGlossaries::NewGroupDoc(OUString& rGroupName, const OUString& rTitle)
     const OUString sNewFilePath(m_PathArr[nNewPath]);
     const OUString sNewGroup = lcl_CheckFileName(sNewFilePath, rGroupName.getToken(0, GLOS_DELIM))
         + OUStringLiteral1(GLOS_DELIM) + sNewPath;
-    SwTextBlocks *pBlock = GetGlosDoc( sNewGroup );
+    std::unique_ptr<SwTextBlocks> pBlock = GetGlosDoc( sNewGroup );
     if(pBlock)
     {
         GetNameList().push_back(sNewGroup);
         pBlock->SetName(rTitle);
-        delete pBlock;
         rGroupName = sNewGroup;
         return true;
     }
@@ -273,10 +267,10 @@ SwGlossaries::~SwGlossaries()
 }
 
 // read a block document
-SwTextBlocks* SwGlossaries::GetGlosDoc( const OUString &rName, bool bCreate ) const
+std::unique_ptr<SwTextBlocks> SwGlossaries::GetGlosDoc( const OUString &rName, bool bCreate ) const
 {
     sal_uInt16 nPath = static_cast<sal_uInt16>(rName.getToken(1, GLOS_DELIM).toInt32());
-    SwTextBlocks *pTmp = nullptr;
+    std::unique_ptr<SwTextBlocks> pTmp;
     if (static_cast<size_t>(nPath) < m_PathArr.size())
     {
         const OUString sFileURL =
@@ -288,7 +282,7 @@ SwTextBlocks* SwGlossaries::GetGlosDoc( const OUString &rName, bool bCreate ) co
 
         if (bCreate || bExist)
         {
-            pTmp = new SwTextBlocks( sFileURL );
+            pTmp.reset(new SwTextBlocks( sFileURL ));
             bool bOk = true;
             if( pTmp->GetError() )
             {
@@ -315,10 +309,8 @@ std::vector<OUString> & SwGlossaries::GetNameList()
             std::vector<OUString> aFiles;
 
             SWUnoHelper::UCB_GetFileListOfFolder(m_PathArr[i], aFiles, &sExt);
-            for( std::vector<OUString>::const_iterator filesIt(aFiles.begin());
-                 filesIt != aFiles.end(); ++filesIt)
+            for (const OUString& aTitle : aFiles)
             {
-                const OUString aTitle = *filesIt;
                 const OUString sName( aTitle.copy( 0, aTitle.getLength() - sExt.getLength() )
                     + OUStringLiteral1(GLOS_DELIM) + OUString::number( static_cast<sal_Int16>(i) ));
                 m_GlosArr.push_back(sName);
@@ -339,7 +331,7 @@ SwGlossaries::SwGlossaries()
 }
 
 // set new path and recreate internal array
-OUString lcl_makePath(const std::vector<OUString>& rPaths)
+static OUString lcl_makePath(const std::vector<OUString>& rPaths)
 {
     std::vector<OUString>::const_iterator aIt(rPaths.begin());
     const std::vector<OUString>::const_iterator aEnd(rPaths.end());
@@ -356,7 +348,7 @@ OUString lcl_makePath(const std::vector<OUString>& rPaths)
 void SwGlossaries::UpdateGlosPath(bool bFull)
 {
     SvtPathOptions aPathOpt;
-    OUString aNewPath( aPathOpt.GetAutoTextPath() );
+    const OUString& aNewPath( aPathOpt.GetAutoTextPath() );
     bool bPathChanged = m_aPath != aNewPath;
     if (bFull || bPathChanged)
     {
@@ -375,7 +367,7 @@ void SwGlossaries::UpdateGlosPath(bool bFull)
                     INetURLObject(),
                     m_aPath.getToken(0, SVT_SEARCHPATH_DELIMITER, nIndex),
                     URIHelper::GetMaybeFileHdl());
-                if (aDirArr.size() &&
+                if (!aDirArr.empty() &&
                     std::find(aDirArr.begin(), aDirArr.end(), sPth) != aDirArr.end())
                 {
                     continue;
@@ -433,60 +425,56 @@ void SwGlossaries::RemoveFileFromList( const OUString& rGroup )
 {
     if (!m_GlosArr.empty())
     {
-        for (std::vector<OUString>::iterator it(m_GlosArr.begin());
-                it != m_GlosArr.end(); ++it)
+        auto it = std::find(m_GlosArr.begin(), m_GlosArr.end(), rGroup);
+        if (it != m_GlosArr.end())
         {
-            if (*it == rGroup)
             {
+                // tell the UNO AutoTextGroup object that it's not valid anymore
+                for (   UnoAutoTextGroups::iterator aLoop = m_aGlossaryGroups.begin();
+                        aLoop != m_aGlossaryGroups.end();
+                    )
                 {
-                    // tell the UNO AutoTextGroup object that it's not valid anymore
-                    for (   UnoAutoTextGroups::iterator aLoop = m_aGlossaryGroups.begin();
-                            aLoop != m_aGlossaryGroups.end();
-                        )
+                    Reference< container::XNamed > xNamed( aLoop->get(), UNO_QUERY );
+                    if ( !xNamed.is() )
                     {
-                        Reference< container::XNamed > xNamed( aLoop->get(), UNO_QUERY );
-                        if ( !xNamed.is() )
-                        {
-                            aLoop = m_aGlossaryGroups.erase(aLoop);
-                        }
-                        else if ( xNamed->getName() == rGroup )
-                        {
-                            static_cast< SwXAutoTextGroup* >( xNamed.get() )->Invalidate();
-                                // note that this static_cast works because we know that the array only
-                                // contains SwXAutoTextGroup implementation
-                            m_aGlossaryGroups.erase( aLoop );
-                            break;
-                        } else
-                            ++aLoop;
+                        aLoop = m_aGlossaryGroups.erase(aLoop);
                     }
-                }
-
-                {
-                    // tell all our UNO AutoTextEntry objects that they're not valid anymore
-                    for (   UnoAutoTextEntries::iterator aLoop = m_aGlossaryEntries.begin();
-                            aLoop != m_aGlossaryEntries.end();
-                        )
+                    else if ( xNamed->getName() == rGroup )
                     {
-                        Reference< lang::XUnoTunnel > xEntryTunnel( aLoop->get(), UNO_QUERY );
-
-                        SwXAutoTextEntry* pEntry = nullptr;
-                        if ( xEntryTunnel.is() )
-                            pEntry = reinterpret_cast< SwXAutoTextEntry* >(
-                                xEntryTunnel->getSomething( SwXAutoTextEntry::getUnoTunnelId() ) );
-
-                        if ( pEntry && ( pEntry->GetGroupName() == rGroup ) )
-                        {
-                            pEntry->Invalidate();
-                            aLoop = m_aGlossaryEntries.erase( aLoop );
-                        }
-                        else
-                            ++aLoop;
-                    }
+                        static_cast< SwXAutoTextGroup* >( xNamed.get() )->Invalidate();
+                            // note that this static_cast works because we know that the array only
+                            // contains SwXAutoTextGroup implementation
+                        m_aGlossaryGroups.erase( aLoop );
+                        break;
+                    } else
+                        ++aLoop;
                 }
-
-                m_GlosArr.erase(it);
-                break;
             }
+
+            {
+                // tell all our UNO AutoTextEntry objects that they're not valid anymore
+                for (   UnoAutoTextEntries::iterator aLoop = m_aGlossaryEntries.begin();
+                        aLoop != m_aGlossaryEntries.end();
+                    )
+                {
+                    Reference< lang::XUnoTunnel > xEntryTunnel( aLoop->get(), UNO_QUERY );
+
+                    SwXAutoTextEntry* pEntry = nullptr;
+                    if ( xEntryTunnel.is() )
+                        pEntry = reinterpret_cast< SwXAutoTextEntry* >(
+                            xEntryTunnel->getSomething( SwXAutoTextEntry::getUnoTunnelId() ) );
+
+                    if ( pEntry && ( pEntry->GetGroupName() == rGroup ) )
+                    {
+                        pEntry->Invalidate();
+                        aLoop = m_aGlossaryEntries.erase( aLoop );
+                    }
+                    else
+                        ++aLoop;
+                }
+            }
+
+            m_GlosArr.erase(it);
         }
     }
 }
@@ -518,12 +506,9 @@ OUString SwGlossaries::GetCompleteGroupName( const OUString& rGroupName )
 void SwGlossaries::InvalidateUNOOjects()
 {
     // invalidate all the AutoTextGroup-objects
-    for (   UnoAutoTextGroups::iterator aGroupLoop = m_aGlossaryGroups.begin();
-            aGroupLoop != m_aGlossaryGroups.end();
-            ++aGroupLoop
-        )
+    for (const auto& rGroup : m_aGlossaryGroups)
     {
-        Reference< text::XAutoTextGroup > xGroup( aGroupLoop->get(), UNO_QUERY );
+        Reference< text::XAutoTextGroup > xGroup( rGroup.get(), UNO_QUERY );
         if ( xGroup.is() )
             static_cast< SwXAutoTextGroup* >( xGroup.get() )->Invalidate();
     }
@@ -531,12 +516,9 @@ void SwGlossaries::InvalidateUNOOjects()
     m_aGlossaryGroups.swap( aTmpg );
 
     // invalidate all the AutoTextEntry-objects
-    for (   UnoAutoTextEntries::const_iterator aEntryLoop = m_aGlossaryEntries.begin();
-            aEntryLoop != m_aGlossaryEntries.end();
-            ++aEntryLoop
-        )
+    for (const auto& rEntry : m_aGlossaryEntries)
     {
-        Reference< lang::XUnoTunnel > xEntryTunnel( aEntryLoop->get(), UNO_QUERY );
+        Reference< lang::XUnoTunnel > xEntryTunnel( rEntry.get(), UNO_QUERY );
         SwXAutoTextEntry* pEntry = nullptr;
         if ( xEntryTunnel.is() )
             pEntry = reinterpret_cast< SwXAutoTextEntry* >(
@@ -613,7 +595,7 @@ Reference< text::XAutoTextEntry > SwGlossaries::GetAutoTextEntry(
     bool bCreate = ( rCompleteGroupName == GetDefName() );
     std::unique_ptr< SwTextBlocks > pGlosGroup( GetGroupDoc( rCompleteGroupName, bCreate ) );
 
-    if ( !pGlosGroup.get() || pGlosGroup->GetError() )
+    if (!pGlosGroup || pGlosGroup->GetError())
         throw lang::WrappedTargetException();
 
     sal_uInt16 nIdx = pGlosGroup->GetIndex( rEntryName );

@@ -21,10 +21,10 @@
 
 #include <hintids.hxx>
 #include <svl/whiter.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imapobj.hxx>
 #include <svtools/miscopt.hxx>
 #include <svl/srchitem.hxx>
-#include <svtools/imap.hxx>
+#include <vcl/imap.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <basic/sbstar.hxx>
 #include <svl/rectitem.hxx>
@@ -43,6 +43,7 @@
 #include <svx/hlnkitem.hxx>
 #include <svx/svdview.hxx>
 #include <vcl/commandinfoprovider.hxx>
+#include <sal/log.hxx>
 
 #include <doc.hxx>
 #include <drawdoc.hxx>
@@ -212,9 +213,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                     sal_uInt16 i = 1;
                     while (rSh.FindFlyByName(sName))
                     {
-                        sName = sOldName;
-                        sName += "_";
-                        sName += OUString::number(i++);
+                        sName = sOldName + "_" + OUString::number(i++);
                     }
                     rSh.SetFlyName(sName);
                 }
@@ -476,17 +475,15 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 FieldUnit eMetric = ::GetDfltMetric(dynamic_cast<SwWebView*>( &GetView()) != nullptr );
                 SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric) ));
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact);
                 ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateFrameTabDialog(
                                                         nSel & SelectionType::Graphic ? OUString("PictureDialog") :
                                                         nSel & SelectionType::Ole ? OUString("ObjectDialog"):
                                                                                         OUString("FrameDialog"),
                                                         GetView().GetViewFrame(),
-                                                        GetView().GetWindow(),
+                                                        GetView().GetFrameWeld(),
                                                         aSet,
                                                         false,
                                                         sDefPage));
-                assert(pDlg);
 
                 if ( nSlot == FN_DRAW_WRAP_DLG )
                 {
@@ -634,11 +631,8 @@ void SwFrameShell::Execute(SfxRequest &rReq)
             {
                 OUString aName(rSh.GetFlyName());
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                assert(pFact);
                 ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(
                     pFact->CreateSvxObjectNameDialog(GetView().GetFrameWeld(), aName));
-
-                assert(pDlg);
 
                 if ( pDlg->Execute() == RET_OK )
                 {
@@ -660,11 +654,9 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 OUString aTitle(rSh.GetObjTitle());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                assert(pFact);
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(
                     pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
                         aTitle, aDescription ));
-                assert(pDlg);
 
                 if ( pDlg->Execute() == RET_OK )
                 {
@@ -725,7 +717,7 @@ void SwFrameShell::GetState(SfxItemSet& rSet)
             {
                 case RES_FRM_SIZE:
                 {
-                    SwFormatFrameSize aSz(aMgr.GetFrameSize());
+                    const SwFormatFrameSize& aSz(aMgr.GetFrameSize());
                     rSet.Put(aSz);
                 }
                 break;
@@ -741,6 +733,12 @@ void SwFrameShell::GetState(SfxItemSet& rSet)
                 case RES_SURROUND:
                 {
                     rSet.Put(aSet.Get(GetPool().GetWhich(nWhich)));
+                }
+                break;
+                case SID_OBJECT_ALIGN:
+                {
+                    if ( bProtect )
+                        rSet.DisableItem( nWhich );
                 }
                 break;
                 case SID_OBJECT_ALIGN_LEFT   :
@@ -1296,13 +1294,11 @@ void SwFrameShell::ExecDrawDlgTextFrame(SfxRequest const & rReq)
                 rSh.GetFlyFrameAttr(aNewAttr);
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                assert(pFact);
                 ScopedVclPtr<AbstractSvxAreaTabDialog> pDlg(pFact->CreateSvxAreaTabDialog(
                     nullptr,
                     &aNewAttr,
                     pDoc,
                     false));
-                assert(pDlg);
 
                 if(RET_OK == pDlg->Execute())
                 {

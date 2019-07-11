@@ -39,6 +39,7 @@
 #include <fupoor.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/virdev.hxx>
+#include <rtl/character.hxx>
 
 namespace sd {
 
@@ -179,7 +180,7 @@ FrameView* DrawDocShell::GetFrameView()
 /**
  * Creates a bitmap of an arbitrary page
  */
-Bitmap DrawDocShell::GetPagePreviewBitmap(SdPage* pPage)
+BitmapEx DrawDocShell::GetPagePreviewBitmap(SdPage* pPage)
 {
     const sal_uInt16 nMaxEdgePixel = 90;
     MapMode         aMapMode( MapUnit::Map100thMM );
@@ -204,7 +205,7 @@ Bitmap DrawDocShell::GetPagePreviewBitmap(SdPage* pPage)
     aMapMode.SetScaleY( aFrac );
     pVDev->SetMapMode( aMapMode );
 
-    ClientView* pView = new ClientView( this, pVDev );
+    std::unique_ptr<ClientView> pView(new ClientView( this, pVDev ));
     FrameView*      pFrameView = GetFrameView();
     pView->ShowSdrPage( pPage );
 
@@ -258,11 +259,11 @@ Bitmap DrawDocShell::GetPagePreviewBitmap(SdPage* pPage)
     pView->CompleteRedraw( pVDev, vcl::Region(::tools::Rectangle(aNullPt, aSize)) );
 
     // IsRedrawReady() always gives sal_True while ( !pView->IsRedrawReady() ) {}
-    delete pView;
+    pView.reset();
 
     pVDev->SetMapMode( MapMode() );
 
-    Bitmap aPreview( pVDev->GetBitmap( aNullPt, pVDev->GetOutputSizePixel() ) );
+    BitmapEx aPreview( pVDev->GetBitmapEx( aNullPt, pVDev->GetOutputSizePixel() ) );
 
     DBG_ASSERT(!!aPreview, "Preview-Bitmap could not be generated");
 
@@ -283,22 +284,20 @@ bool DrawDocShell::CheckPageName(weld::Window* pWin, OUString& rName)
     {
         OUString aDesc( SdResId( STR_WARN_PAGE_EXISTS ) );
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if( pFact )
+
+        ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(pWin, aStrForDlg, aDesc));
+        aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
+
+        aNameDlg->SetCheckNameHdl( LINK( this, DrawDocShell, RenameSlideHdl ) );
+
+        rtl::Reference<FuPoor> xFunc( mpViewShell->GetCurrentFunction() );
+        if( xFunc.is() )
+            xFunc->cancel();
+
+        if( aNameDlg->Execute() == RET_OK )
         {
-            ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(pWin, aStrForDlg, aDesc));
-            aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
-
-            aNameDlg->SetCheckNameHdl( LINK( this, DrawDocShell, RenameSlideHdl ) );
-
-            rtl::Reference<FuPoor> xFunc( mpViewShell->GetCurrentFunction() );
-            if( xFunc.is() )
-                xFunc->cancel();
-
-            if( aNameDlg->Execute() == RET_OK )
-            {
-                aNameDlg->GetName( rName );
-                bIsNameValid = IsNewPageNameValid( rName );
-            }
+            aNameDlg->GetName( rName );
+            bIsNameValid = IsNewPageNameValid( rName );
         }
     }
 

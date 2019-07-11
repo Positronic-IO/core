@@ -37,7 +37,7 @@
 using namespace ::com::sun::star::i18n;
 
 template<class L, typename T>
-T getScriptType( const sal_Unicode ch, const L* typeList, T unknownType ) {
+static T getScriptType( const sal_Unicode ch, const L* typeList, T unknownType ) {
 
     sal_Int16 i = 0;
     css::i18n::UnicodeScript type = typeList[0].to;
@@ -725,6 +725,29 @@ OString unicode::getExemplarLanguageForUScriptCode(UScriptCode eScript)
             break;
         case USCRIPT_ZANABAZAR_SQUARE:
             sRet = "mn-Zanb";   // abugida to write Mongolian
+            break;
+#endif
+#if (U_ICU_VERSION_MAJOR_NUM >= 62)
+        case USCRIPT_DOGRA:
+            sRet = "dgo";       // Dogri proper
+            break;
+        case USCRIPT_GUNJALA_GONDI:
+            sRet = "wsg";       // Adilabad Gondi
+            break;
+        case USCRIPT_MAKASAR:
+            sRet = "mak";
+            break;
+        case USCRIPT_MEDEFAIDRIN:
+            sRet = "mis-Medf";  // Uncoded with script
+            break;
+        case USCRIPT_HANIFI_ROHINGYA:
+            sRet = "rhg";
+            break;
+        case USCRIPT_SOGDIAN:
+            sRet = "sog";
+            break;
+        case USCRIPT_OLD_SOGDIAN:
+            sRet = "sog";
             break;
 #endif
     }

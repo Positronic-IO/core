@@ -37,6 +37,7 @@
 #include <com/sun/star/io/UnexpectedEOFException.hpp>
 #include <com/sun/star/io/WrongFormatException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 using namespace ::cppu;
 using namespace ::osl;
@@ -1149,7 +1150,7 @@ Reference< XPersistObject >  OObjectInputStream::readObject()
             }
         }
         else {
-            if( m_aPersistVector.size() < nId )
+            if (nId >= m_aPersistVector.size())
             {
                 // id unknown, load failure !
                 bLoadSuccessful = false;

@@ -42,9 +42,6 @@
       <prop oor:name="TemplateRepositoryURL" oor:type="xs:string">
         <value>${STARTCENTER_TEMPLREP_URL}</value>
       </prop>
-      <prop oor:name="StartCenterHideExternalLinks" oor:type="xs:int">
-        <value>${STARTCENTER_HIDE_EXTERNAL_LINKS}</value>
-      </prop>
     </node>
     <prop oor:name="System">
       <value install:module="unx">UNIX</value>
@@ -210,18 +207,7 @@
           <value>_default</value>
         </prop>
       </node>
-      <node oor:name="m9" oor:op="replace" install:module="writer">
-        <prop oor:name="URL" oor:type="xs:string">
-          <value>private:factory/swriter/GlobalDocument</value>
-        </prop>
-        <prop oor:name="Title">
-          <value xml:lang="en-US">M~aster Document</value>
-        </prop>
-        <prop oor:name="TargetName" oor:type="xs:string">
-          <value>_default</value>
-        </prop>
-      </node>
-      <node oor:name="m10" oor:op="replace">
+      <node oor:name="m9" oor:op="replace">
         <prop oor:name="URL" oor:type="xs:string">
           <value>private:separator</value>
         </prop>
@@ -229,7 +215,7 @@
           <value>_default</value>
         </prop>
       </node>
-      <node oor:name="m11" oor:op="replace" install:module="writer">
+      <node oor:name="m10" oor:op="replace" install:module="writer">
         <prop oor:name="URL" oor:type="xs:string">
           <value>private:factory/swriter?slot=21051</value>
         </prop>
@@ -243,7 +229,7 @@
           <value>private:image/3255</value>
         </prop>
       </node>
-      <node oor:name="m12" oor:op="replace" install:module="writer">
+      <node oor:name="m11" oor:op="replace" install:module="writer">
         <prop oor:name="URL" oor:type="xs:string">
           <value>private:factory/swriter?slot=21052</value>
         </prop>
@@ -257,9 +243,20 @@
           <value>private:image/3255</value>
         </prop>
       </node>
-      <node oor:name="m13" oor:op="replace">
+      <node oor:name="m12" oor:op="replace">
         <prop oor:name="URL" oor:type="xs:string">
           <value>private:separator</value>
+        </prop>
+        <prop oor:name="TargetName" oor:type="xs:string">
+          <value>_default</value>
+        </prop>
+      </node>
+      <node oor:name="m13" oor:op="replace" install:module="writer">
+        <prop oor:name="URL" oor:type="xs:string">
+          <value>private:factory/swriter/GlobalDocument</value>
+        </prop>
+        <prop oor:name="Title">
+          <value xml:lang="en-US">M~aster Document</value>
         </prop>
         <prop oor:name="TargetName" oor:type="xs:string">
           <value>_default</value>
@@ -270,7 +267,7 @@
           <value>.uno:NewDoc</value>
         </prop>
         <prop oor:name="Title">
-          <value xml:lang="en-US">Templates</value>
+          <value xml:lang="en-US">Templates...</value>
         </prop>
         <prop oor:name="TargetName" oor:type="xs:string">
           <value>_self</value>
@@ -382,6 +379,21 @@
         </prop>
       </node>
     </node>
+    <prop oor:name="SendFeedbackURL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/send-feedback/</value>
+    </prop>
+    <prop oor:name="QA_URL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/forum/</value>
+    </prop>
+    <prop oor:name="DocumentationURL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/documentation/</value>
+    </prop>
+    <prop oor:name="GetInvolvedURL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/joinus/</value>
+    </prop>
+    <prop oor:name="DonationURL" oor:type="xs:string">
+      <value>https://hub.libreoffice.org/donation/</value>
+    </prop>
   </node>
   <node oor:name="Forms">
     <node oor:name="ControlLayout">

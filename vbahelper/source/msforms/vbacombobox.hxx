@@ -24,8 +24,6 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/script/XDefaultProperty.hpp>
 #include <ooo/vba/msforms/XComboBox.hpp>
-#include <comphelper/proparrhlp.hxx>
-#include <comphelper/propertycontainer.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 
 #include "vbacontrol.hxx"
@@ -39,7 +37,7 @@ class ScVbaComboBox : public ComboBoxImpl_BASE
     OUString sSourceName;
 
 public:
-    ScVbaComboBox( const css::uno::Reference< ov::XHelperInterface >& xParent, const css::uno::Reference< css::uno::XComponentContext >& xContext, const css::uno::Reference< css::uno::XInterface >& xControl, const css::uno::Reference< css::frame::XModel >& xModel, ov::AbstractGeometryAttributes* pGeomHelper );
+    ScVbaComboBox( const css::uno::Reference< ov::XHelperInterface >& xParent, const css::uno::Reference< css::uno::XComponentContext >& xContext, const css::uno::Reference< css::uno::XInterface >& xControl, const css::uno::Reference< css::frame::XModel >& xModel, std::unique_ptr<ov::AbstractGeometryAttributes> pGeomHelper );
 
     // Attributes
     virtual css::uno::Any SAL_CALL getListIndex() override;

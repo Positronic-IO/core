@@ -27,18 +27,14 @@
 #include <sfx2/objsh.hxx>
 #include <svx/svditer.hxx>
 #include <svx/svdoole2.hxx>
-#include <svx/svdpage.hxx>
 #include <svtools/embedhlp.hxx>
 
 #include <document.hxx>
 #include <table.hxx>
 #include <drwlayer.hxx>
-#include <chartarr.hxx>
 #include <chartlis.hxx>
 #include <chartlock.hxx>
 #include <refupdat.hxx>
-#include <tools/globname.hxx>
-#include <sot/exchange.hxx>
 
 #include <miscuno.hxx>
 #include <chart2uno.hxx>
@@ -110,7 +106,7 @@ bool ScDocument::HasChartAtPoint( SCTAB nTab, const Point& rPos, OUString& rName
         SdrPage* pPage = mpDrawLayer->GetPage(static_cast<sal_uInt16>(nTab));
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -154,7 +150,7 @@ uno::Reference< chart2::XChartDocument > ScDocument::GetChartByName( const OUStr
             SdrPage* pPage = mpDrawLayer->GetPage(nTab);
             OSL_ENSURE(pPage,"Page ?");
 
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
             SdrObject* pObject = aIter.Next();
             while (pObject)
             {
@@ -219,7 +215,7 @@ void ScDocument::GetOldChartParameters( const OUString& rName,
         SdrPage* pPage = mpDrawLayer->GetPage(nTab);
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -266,7 +262,7 @@ void ScDocument::UpdateChartArea( const OUString& rChartName,
         SdrPage* pPage = mpDrawLayer->GetPage(static_cast<sal_uInt16>(nTab));
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -348,7 +344,7 @@ void ScDocument::UpdateChart( const OUString& rChartName )
         try
         {
             uno::Reference< util::XModifiable > xModif( xChartDoc, uno::UNO_QUERY_THROW );
-            if( apTemporaryChartLock.get() )
+            if (apTemporaryChartLock)
                 apTemporaryChartLock->AlsoLockThisChart( uno::Reference< frame::XModel >( xModif, uno::UNO_QUERY ) );
             xModif->setModified( true );
         }
@@ -499,7 +495,7 @@ void ScDocument::SetChartRangeList( const OUString& rChartName,
         SdrPage* pPage = mpDrawLayer->GetPage(static_cast<sal_uInt16>(nTab));
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -554,7 +550,7 @@ uno::Reference< embed::XEmbeddedObject >
         SdrPage* pPage = mpDrawLayer->GetPage(nTab);
         OSL_ENSURE(pPage,"Page ?");
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         SdrObject* pObject = aIter.Next();
         while (pObject)
         {
@@ -593,7 +589,7 @@ void ScDocument::UpdateChartListenerCollection()
         if (!pPage)
             continue;
 
-        SdrObjListIter aIter( *pPage, SdrIterMode::DeepNoGroups );
+        SdrObjListIter aIter( pPage, SdrIterMode::DeepNoGroups );
         ScChartListenerCollection::StringSetType& rNonOleObjects =
             pChartListenerCollection->getNonOleObjectNames();
 

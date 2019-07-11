@@ -19,13 +19,14 @@
 #ifndef INCLUDED_SW_SOURCE_UIBASE_INC_EDTWIN_HXX
 #define INCLUDED_SW_SOURCE_UIBASE_INC_EDTWIN_HXX
 
+#include <o3tl/deleter.hxx>
 #include <sot/exchange.hxx>
 #include <svx/svdobj.hxx>
 #include <tools/link.hxx>
 #include <vcl/timer.hxx>
 #include <vcl/idle.hxx>
 #include <vcl/window.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <swevent.hxx>
 #include <swtypes.hxx>
 
@@ -80,18 +81,18 @@ class SwEditWin final : public vcl::Window,
     Point           m_aStartPos;
     Point           m_aMovePos;
     Point           m_aRszMvHdlPt;
-    Idle            m_aTemplateIdle;
+    Timer           m_aTemplateTimer;
 
     // type/object where the mouse pointer is
     SwCallMouseEvent m_aSaveCallEvent;
 
-    SwApplyTemplate     *m_pApplyTempl;
-    SwAnchorMarker      *m_pAnchorMarker; // for relocating the anchor
+    std::unique_ptr<SwApplyTemplate>      m_pApplyTempl;
+    std::unique_ptr<SwAnchorMarker>       m_pAnchorMarker; // for relocating the anchor
 
-    SdrDropMarkerOverlay    *m_pUserMarker;
+    std::unique_ptr<SdrDropMarkerOverlay> m_pUserMarker;
     SdrObject               *m_pUserMarkerObj;
-    SwShadowCursor          *m_pShadCursor;
-    Point                   *m_pRowColumnSelectionStart; // save position where table row/column selection has been started
+    std::unique_ptr<SwShadowCursor, o3tl::default_delete<SwShadowCursor>> m_pShadCursor;
+    boost::optional<Point>                m_xRowColumnSelectionStart; // save position where table row/column selection has been started
 
     SwView         &m_rView;
 
@@ -124,7 +125,7 @@ class SwEditWin final : public vcl::Window,
     sal_uInt16          m_nKS_NUMDOWN_Count; // #i23725#
     sal_uInt16          m_nKS_NUMINDENTINC_Count;
 
-    SwFrameControlsManager *m_pFrameControlsManager;
+    std::unique_ptr<SwFrameControlsManager> m_pFrameControlsManager;
 
     void            LeaveArea(const Point &);
     void            JustifyAreaTimer();
@@ -224,15 +225,13 @@ public:
     static bool     IsInputSequenceCheckingRequired( const OUString &rText, const SwPaM& rCursor );
 
     void             SetApplyTemplate(const SwApplyTemplate &);
-    SwApplyTemplate* GetApplyTemplate() const { return m_pApplyTempl; }
+    SwApplyTemplate* GetApplyTemplate() const { return m_pApplyTempl.get(); }
 
     void            StartExecuteDrag();
     void            DragFinished();
 
-    const Color& GetWaterCanTextColor() { return m_aWaterCanTextColor; }
     void         SetWaterCanTextColor(const Color& rCol ) { m_aWaterCanTextColor = rCol; }
 
-    const Color& GetWaterCanTextBackColor() { return m_aWaterCanTextBackColor; }
     void         SetWaterCanTextBackColor(const Color& rCol ) { m_aWaterCanTextBackColor = rCol; }
 
     void            LockKeyInput(bool bSet){m_bLockInput = bSet;}

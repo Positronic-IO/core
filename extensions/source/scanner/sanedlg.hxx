@@ -23,10 +23,9 @@
 #include <vcl/lstbox.hxx>
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
 #include <vcl/field.hxx>
 #include <vcl/edit.hxx>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
 #include "sane.hxx"
 

@@ -18,6 +18,7 @@
 #include <svx/drawitem.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/builderfactory.hxx>
+#include <vcl/lstbox.hxx>
 #include <libxml/tree.h>
 
 #include <anyrefdg.hxx>
@@ -37,6 +38,7 @@ ScCondFormatList::ScCondFormatList(vcl::Window* pParent, WinBits nStyle)
     : Control(pParent, nStyle | WB_DIALOGCONTROL)
     , mbHasScrollBar(false)
     , mbFrozen(false)
+    , mbNewEntry(false)
     , mpScrollBar(VclPtr<ScrollBar>::Create(this, WB_VERT ))
     , mpDoc(nullptr)
     , mpDialogParent(nullptr)
@@ -137,6 +139,7 @@ void ScCondFormatList::init(ScDocument* pDoc, ScCondFormatDlg* pDialogParent,
             case condformat::dialog::NONE:
                 break;
         }
+        mbNewEntry = true;
     }
     Thaw();
     RecalcAll();
@@ -147,6 +150,11 @@ void ScCondFormatList::init(ScDocument* pDoc, ScCondFormatDlg* pDialogParent,
     }
 
     RecalcAll();
+}
+
+void ScCondFormatList::SetRange(const ScRangeList& rRange)
+{
+    maRanges = rRange;
 }
 
 VCL_BUILDER_FACTORY_CONSTRUCTOR(ScCondFormatList, 0)
@@ -178,9 +186,20 @@ ScConditionalFormat* ScCondFormatList::GetConditionalFormat() const
     ScConditionalFormat* pFormat = new ScConditionalFormat(0, mpDoc);
     pFormat->SetRange(maRanges);
 
-    for(EntryContainer::const_iterator itr = maEntries.begin(); itr != maEntries.end(); ++itr)
+    for(auto & rEntry: maEntries)
     {
-        ScFormatEntry* pEntry = (*itr)->GetEntry();
+        // tdf#119178: Sometimes initial apply-to range (the one this dialog
+        // was opened with) is different from the final apply-to range
+        // (as edited by the user)
+
+        // If this format entry is new, take top-left corner of the final range
+        // and use it to create the initial entry (token array therein, if applicable)
+        if (mbNewEntry)
+            rEntry->SetPos(maRanges.GetTopLeftCorner());
+        // else do nothing: setting new position when editing recompiles formulas
+        // in entries and nobody wants that
+
+        ScFormatEntry* pEntry = rEntry->GetEntry();
         if(pEntry)
             pFormat->AddEntry(pEntry);
     }
@@ -655,7 +674,13 @@ void ScCondFormatDlg::SetReference(const ScRange& rRef, ScDocument*)
         OUString aRefStr(rRef.Format(nFlags, mpViewData->GetDocument(),
             ScAddress::Details(mpViewData->GetDocument()->GetAddressConvention(), 0, 0)));
         if (pEdit != mpEdRange)
+        {
+            Selection sel = pEdit->GetSelection();
+            sel.Justify();            // in case of RtL selection
+            sel.Max() = sel.Min() + aRefStr.getLength();
             pEdit->ReplaceSelected(aRefStr);
+            pEdit->SetSelection(sel); // to replace it again with next drag event
+        }
         else
             pEdit->SetRefString( aRefStr );
         updateTitle();
@@ -671,6 +696,7 @@ ScConditionalFormat* ScCondFormatDlg::GetConditionalFormat() const
     ScRangeList aRange;
     ScRefFlags nFlags = aRange.Parse(aRangeStr, mpViewData->GetDocument(),
         mpViewData->GetDocument()->GetAddressConvention(), maPos.Tab());
+    mpCondFormList->SetRange(aRange);
     ScConditionalFormat* pFormat = mpCondFormList->GetConditionalFormat();
 
     if((nFlags & ScRefFlags::VALID) && !aRange.empty() && pFormat)

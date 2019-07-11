@@ -89,7 +89,7 @@
 #include <strings.hrc>
 #include <swerror.h>
 #include <unochart.hxx>
-
+#include <tgrditem.hxx>
 #include <chartins.hxx>
 
 #define ShellClass_SwTextShell
@@ -277,8 +277,7 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
                     if ( pMarginItem )
                         aMargin = pMarginItem->GetSize();
 
-                    if ( pURLItem )
-                        xSet->setPropertyValue("FrameURL", uno::makeAny( pURLItem->GetValue() ) );
+                    xSet->setPropertyValue("FrameURL", uno::makeAny( pURLItem->GetValue() ) );
                     if ( pNameItem )
                         xSet->setPropertyValue("FrameName", uno::makeAny( pNameItem->GetValue() ) );
 
@@ -473,12 +472,10 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
             FieldUnit eMetric = ::GetDfltMetric(dynamic_cast<SwWebDocShell*>( GetView().GetDocShell()) != nullptr );
             SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric)));
             SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            OSL_ENSURE(pFact, "Dialog creation failed!");
             ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateFrameTabDialog("FrameDialog",
                                                   GetView().GetViewFrame(),
-                                                  &GetView().GetViewFrame()->GetWindow(),
+                                                  GetView().GetFrameWeld(),
                                                   aSet));
-            OSL_ENSURE(pDlg, "Dialog creation failed!");
             if(pDlg->Execute() == RET_OK && pDlg->GetOutputItemSet())
             {
                 //local variable necessary at least after call of .AutoCaption() because this could be deleted at this point
@@ -526,10 +523,10 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
     case FN_FORMAT_COLUMN :
     {
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-        assert(pFact && "Dialog creation failed!");
-        VclPtr<VclAbstractDialog> pColDlg(pFact->CreateSwColumnDialog(GetView().GetWindow(), rSh));
-        assert(pColDlg && "Dialog creation failed!");
-        pColDlg->StartExecuteAsync([](sal_Int32 /*nResult*/){});
+        VclPtr<VclAbstractDialog> pColDlg(pFact->CreateSwColumnDialog(GetView().GetFrameWeld(), rSh));
+        pColDlg->StartExecuteAsync([=](sal_Int32 /*nResult*/){
+            pColDlg->disposeOnce();
+        });
     }
     break;
 
@@ -846,6 +843,7 @@ SfxItemSet SwTextShell::CreateInsertFrameItemSet(SwFlyFrameAttrMgr& rMgr)
         FN_SET_FRM_NAME,        FN_SET_FRM_NAME,
         SID_HTML_MODE,          SID_HTML_MODE,
         SID_COLOR_TABLE,        SID_PATTERN_LIST,
+        XATTR_FILL_FIRST,       XATTR_FILL_LAST, // tdf#95003
         0
     };
 
@@ -928,14 +926,15 @@ void SwTextShell::InsertSymbol( SfxRequest& rReq )
         aAllSet.Put( SfxBoolItem( FN_PARAM_1, false ) );
 
         SwViewOption aOpt(*GetShell().GetViewOptions());
-        OUString sSymbolFont = aOpt.GetSymbolFont();
+        const OUString& sSymbolFont = aOpt.GetSymbolFont();
         if( aFontName.isEmpty() && !sSymbolFont.isEmpty() )
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, sSymbolFont ) );
         else
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, aFont.GetFamilyName() ) );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(GetView().GetFrameWeld(), aAllSet, true));
+        auto xFrame = GetView().GetViewFrame()->GetFrame().GetFrameInterface();
+        ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(GetView().GetFrameWeld(), aAllSet, xFrame));
         pDlg->Execute();
         return;
     }

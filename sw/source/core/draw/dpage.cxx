@@ -18,7 +18,7 @@
  */
 
 #include <basic/basmgr.hxx>
-#include <svtools/imapobj.hxx>
+#include <vcl/imapobj.hxx>
 #include <svl/urihelper.hxx>
 #include <unotools/securityoptions.hxx>
 #include <vcl/help.hxx>
@@ -51,7 +51,6 @@ using namespace ::com::sun::star::frame;
 
 SwDPage::SwDPage(SwDrawModel& rNewModel, bool bMasterPage)
 :   FmFormPage(rNewModel, bMasterPage),
-    pGridLst( nullptr ),
     pDoc(&rNewModel.GetDoc())
 {
 }
@@ -94,7 +93,7 @@ SdrObject*  SwDPage::ReplaceObject( SdrObject* pNewObj, size_t nObjNum )
     return FmFormPage::ReplaceObject( pNewObj, nObjNum );
 }
 
-void InsertGridFrame( SdrPageGridFrameList *pLst, const SwFrame *pPg )
+static void InsertGridFrame( SdrPageGridFrameList *pLst, const SwFrame *pPg )
 {
     SwRect aPrt( pPg->getFramePrintArea() );
     aPrt += pPg->getFrameArea().Pos();

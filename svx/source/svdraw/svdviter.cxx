@@ -48,7 +48,7 @@ SdrViewIter::SdrViewIter(const SdrObject* pObject)
 {
     mpObject = pObject;
     mpModel = pObject ? &pObject->getSdrModelFromSdrObject() : nullptr;
-    mpPage = pObject ? pObject->GetPage() : nullptr;
+    mpPage = pObject ? pObject->getSdrPageFromSdrObject() : nullptr;
 
     if(!mpModel || !mpPage)
     {
@@ -136,12 +136,9 @@ SdrView* SdrViewIter::ImpFindView()
                 {
                     SdrPageView* pPV = mpCurrentView->GetSdrPageView();
 
-                    if(pPV)
+                    if(pPV && ImpCheckPageView(pPV))
                     {
-                        if(ImpCheckPageView(pPV))
-                        {
-                            return mpCurrentView;
-                        }
+                        return mpCurrentView;
                     }
                 }
                 else

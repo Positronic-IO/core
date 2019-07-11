@@ -25,6 +25,8 @@
 
 #include <com/sun/star/container/XNameReplace.hpp>
 #include <tools/debug.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <xmloff/xmlexp.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/xmlnmspe.hxx>
@@ -40,9 +42,9 @@ using ::com::sun::star::container::XNameReplace;
 using ::com::sun::star::container::XNameAccess;
 using ::xmloff::token::XML_EVENT_LISTENERS;
 
+static const OUStringLiteral gsEventType("EventType");
 
 XMLEventExport::XMLEventExport(SvXMLExport& rExp) :
-    sEventType("EventType"),
     rExport(rExp),
     bExtNamespace(false)
 {
@@ -51,25 +53,14 @@ XMLEventExport::XMLEventExport(SvXMLExport& rExp) :
 XMLEventExport::~XMLEventExport()
 {
     // delete all handlers
-    HandlerMap::iterator aEnd = aHandlerMap.end();
-    for( HandlerMap::iterator aIter =
-             aHandlerMap.begin();
-         aIter != aEnd;
-         ++aIter )
-    {
-        delete aIter->second;
-    }
     aHandlerMap.clear();
 }
 
 void XMLEventExport::AddHandler( const OUString& rName,
-                                 XMLEventExportHandler* pHandler )
+                                 std::unique_ptr<XMLEventExportHandler> pHandler )
 {
-    DBG_ASSERT(pHandler != nullptr, "Need EventExportHandler");
-    if (pHandler != nullptr)
-    {
-        aHandlerMap[rName] = pHandler;
-    }
+    assert(pHandler);
+    aHandlerMap[rName] = std::move(pHandler);
 }
 
 void XMLEventExport::AddTranslationTable(
@@ -204,7 +195,7 @@ void XMLEventExport::ExportEvent(
 
     for(sal_Int32 nVal = 0; nVal < nValues; nVal++)
     {
-        if (sEventType == pValues[nVal].Name)
+        if (gsEventType == pValues[nVal].Name)
         {
             // found! Now find handler and delegate
             OUString sType;

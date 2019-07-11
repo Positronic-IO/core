@@ -20,10 +20,10 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_XML_XMLDDELINKSCONTEXT_HXX
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLDDELINKSCONTEXT_HXX
 
-#include <xmloff/xmlictxt.hxx>
-#include "xmlimprt.hxx"
 #include "importcontext.hxx"
 #include <list>
+
+namespace sax_fastparser { class FastAttributeList; }
 
 class ScXMLDDELinksContext : public ScXMLImportContext
 {
@@ -95,7 +95,7 @@ public:
 
 class ScXMLDDETableContext : public ScXMLImportContext
 {
-    ScXMLDDELinkContext* pDDELink;
+    ScXMLDDELinkContext* const pDDELink;
 
 public:
     ScXMLDDETableContext( ScXMLImport& rImport,

@@ -107,19 +107,15 @@ class SW_DLLPUBLIC SwViewShell : public sw::Ring<SwViewShell>
     SwRect        maInvalidRect;
 
     SfxViewShell *mpSfxViewShell;
-    SwViewShellImp *mpImp;           // Core-internals of SwViewShell.
+    std::unique_ptr<SwViewShellImp>
+                  mpImp;             // Core-internals of SwViewShell.
                                      // The pointer is never 0.
 
     VclPtr<vcl::Window>   mpWin;     ///< = 0 during printing or pdf export
     VclPtr<OutputDevice>  mpOut;     ///< Window, Printer, VirtDev, ...
-    VclPtr<OutputDevice>  mpTmpRef;  // Temporary reference device. Is used
-                                     // during (printer depending) prospect
-                                     // and page preview printing
-                                     // (because a scaling has to be set at
-                                     // the original printer)
 
-    SwViewOption *mpOpt;
-    SwAccessibilityOptions* mpAccOptions;
+    std::unique_ptr<SwViewOption> mpOpt;
+    std::unique_ptr<SwAccessibilityOptions> mpAccOptions;
 
     bool  mbDocSizeChgd     :1;  // For DocChgNotify(): Announce new DocSize
                                     // at EndAction to DocMDI.
@@ -169,7 +165,7 @@ class SW_DLLPUBLIC SwViewShell : public sw::Ring<SwViewShell>
 protected:
     static ShellResource*      mpShellRes;      ///< Resources for the Shell.
     static vcl::DeleteOnDeinit< VclPtr<vcl::Window> > mpCareWindow;    ///< Avoid this window.
-    static vcl::DeleteOnDeinit< std::shared_ptr<weld::Dialog> > mpCareDialog;    ///< Avoid this window.
+    static vcl::DeleteOnDeinit< std::shared_ptr<weld::Window> > mpCareDialog;    ///< Avoid this window.
 
     SwRect                  maVisArea;       ///< The modern version of VisArea.
     rtl::Reference<SwDoc>   mxDoc;          ///< The document; never 0.
@@ -183,8 +179,8 @@ protected:
 
 public:
 
-          SwViewShellImp *Imp() { return mpImp; }
-    const SwViewShellImp *Imp() const { return mpImp; }
+          SwViewShellImp *Imp() { return mpImp.get(); }
+    const SwViewShellImp *Imp() const { return mpImp.get(); }
 
     const SwNodes& GetNodes() const;
 
@@ -417,7 +413,7 @@ public:
     // Calls Idle-formatter of Layout.
     void LayoutIdle();
 
-    const SwViewOption *GetViewOptions() const { return mpOpt; }
+    const SwViewOption *GetViewOptions() const { return mpOpt.get(); }
     virtual void  ApplyViewOptions( const SwViewOption &rOpt );
            void  SetUIOptions( const SwViewOption &rOpt );
     virtual void  SetReadonlyOption(bool bSet);          // Set readonly-bit of ViewOptions.
@@ -425,18 +421,18 @@ public:
            void  SetPrtFormatOption(bool bSet);         // Set PrtFormat-Bit of ViewOptions.
            void  SetReadonlySelectionOption(bool bSet); // Change the selection mode in readonly docs.
 
-    const SwAccessibilityOptions* GetAccessibilityOptions() const { return mpAccOptions;}
+    const SwAccessibilityOptions* GetAccessibilityOptions() const { return mpAccOptions.get();}
 
     static void           SetShellRes( ShellResource* pRes ) { mpShellRes = pRes; }
     static ShellResource* GetShellRes();
 
     static void           SetCareWin( vcl::Window* pNew );
-    static vcl::Window*   GetCareWin(SwViewShell const & rVSh)
-                          { return (*mpCareWindow.get()) ? mpCareWindow.get()->get() : CareChildWin(rVSh); }
-    static vcl::Window*   CareChildWin(SwViewShell const & rVSh);
-    static void           SetCareDialog(const std::shared_ptr<weld::Dialog>& rNew);
-    static weld::Dialog*  GetCareDialog()
-                          { return (*mpCareDialog.get()) ? mpCareDialog.get()->get() : nullptr; }
+    static vcl::Window*   GetCareWin()
+                          { return (*mpCareWindow.get()) ? mpCareWindow.get()->get() : nullptr; }
+    static weld::Window*   CareChildWin(SwViewShell const & rVSh);
+    static void           SetCareDialog(const std::shared_ptr<weld::Window>& rNew);
+    static weld::Window*  GetCareDialog(SwViewShell const & rVSh)
+                          { return (*mpCareDialog.get()) ? mpCareDialog.get()->get() : CareChildWin(rVSh); }
 
     SfxViewShell   *GetSfxViewShell() const { return mpSfxViewShell; }
     void           SetSfxViewShell(SfxViewShell *pNew) { mpSfxViewShell = pNew; }
@@ -470,6 +466,9 @@ public:
     // Get/set DrawView and PageView.
     bool HasDrawView() const;
     void MakeDrawView();
+
+    // Are we dragging draw shapes around.
+    bool HasDrawViewDrag() const;
 
     // DrawView may be used at UI.
           SdrView *GetDrawView();
@@ -558,7 +557,7 @@ public:
     /// Acts both for headers / footers, depending on the bShow(Header|Footer)Separator flags
     bool IsHeaderFooterEdit() const { return mbHeaderFooterEdit; }
     bool IsShowHeaderFooterSeparator( FrameControlType eControl ) { return (eControl == Header)? mbShowHeaderSeparator: mbShowFooterSeparator; }
-    virtual void SetShowHeaderFooterSeparator( FrameControlType eControl, bool bShow ) { if ( eControl == Header ) mbShowHeaderSeparator = bShow; else mbShowFooterSeparator = bShow; }
+    virtual void SetShowHeaderFooterSeparator( FrameControlType eControl, bool bShow );
     bool IsSelectAll() { return mbSelectAll; }
 
     void setOutputToWindow(bool bOutputToWindow);

@@ -21,7 +21,6 @@
 #define INCLUDED_SC_SOURCE_UI_INC_FOPTMGR_HXX
 
 #include <vcl/fixed.hxx>
-#include <vcl/edit.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/button.hxx>
 
@@ -54,8 +53,8 @@ public:
     bool    VerifyPosStr ( const OUString& rPosStr ) const;
 
 private:
-    ScViewData*     pViewData;
-    ScDocument*     pDoc;
+    ScViewData* const     pViewData;
+    ScDocument* const     pDoc;
 
     VclPtr<CheckBox>       pBtnCase;
     VclPtr<CheckBox>       pBtnRegExp;

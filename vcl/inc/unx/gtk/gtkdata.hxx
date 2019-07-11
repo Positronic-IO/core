@@ -100,7 +100,7 @@ class GtkSalData : public GenericUnixSalData
     GSource*        m_pUserEvent;
     osl::Mutex      m_aDispatchMutex;
     osl::Condition  m_aDispatchCondition;
-    css::uno::Any   m_aException;
+    std::exception_ptr m_aException;
 
     css::uno::Reference<css::accessibility::XAccessibleEventListener> m_xDocumentFocusListener;
     DocumentFocusListener * m_pDocumentFocusListener;
@@ -127,7 +127,7 @@ public:
     virtual bool ErrorTrapPop( bool bIgnoreError = true ) override;
 
     inline GtkSalDisplay *GetGtkDisplay() const;
-    void setException(const css::uno::Any& rException) { m_aException = rException; }
+    void setException(const std::exception_ptr& exception) { m_aException = exception; }
 };
 
 class GtkSalFrame;
@@ -139,7 +139,7 @@ class GtkSalDisplay : public SalDisplay
 #endif
 {
     GtkSalSystem*                   m_pSys;
-    GdkDisplay*                     m_pGdkDisplay;
+    GdkDisplay* const               m_pGdkDisplay;
     o3tl::enumarray<PointerStyle, GdkCursor*> m_aCursors;
     bool                            m_bStartupCompleted;
     bool                            m_bX11Display;

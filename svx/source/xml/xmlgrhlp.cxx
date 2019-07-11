@@ -18,8 +18,8 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
-#include <comphelper/string.hxx>
 #include <sal/macros.h>
 #include <com/sun/star/embed/XTransactedObject.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -55,6 +55,7 @@ using namespace com::sun::star;
 using namespace com::sun::star::uno;
 using namespace com::sun::star::io;
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
 
 #define XML_GRAPHICSTORAGE_NAME     "Pictures"
 #define XML_GRAPHICOBJECT_URL_BASE  "vnd.sun.star.GraphicObject:"
@@ -103,19 +104,17 @@ public:
 };
 
 
-GraphicInputStream::GraphicInputStream(GraphicObject const & raGraphicObject, const OUString & rMimeType)
+GraphicInputStream::GraphicInputStream(GraphicObject const & aGraphicObject, const OUString & rMimeType)
 {
-    GraphicObject aGraphicObject(raGraphicObject);
-
     maTempFile.EnableKillingFile();
 
     if (aGraphicObject.GetType() != GraphicType::NONE)
     {
-        SvStream* pStream = ::utl::UcbStreamHelper::CreateStream(maTempFile.GetURL(), StreamMode::WRITE | StreamMode::TRUNC);
+        std::unique_ptr<SvStream> pStream = ::utl::UcbStreamHelper::CreateStream(maTempFile.GetURL(), StreamMode::WRITE | StreamMode::TRUNC);
 
         if (pStream)
         {
-            Graphic aGraphic(aGraphicObject.GetGraphic());
+            const Graphic& aGraphic(aGraphicObject.GetGraphic());
             const GfxLink aGfxLink(aGraphic.GetGfxLink());
             bool bRet = false;
 
@@ -163,10 +162,8 @@ GraphicInputStream::GraphicInputStream(GraphicObject const & raGraphicObject, co
             if (bRet)
             {
                 pStream->Seek( 0 );
-                mxStreamWrapper = new ::utl::OInputStreamWrapper(pStream, true);
+                mxStreamWrapper = new ::utl::OInputStreamWrapper(std::move(pStream));
             }
-            else
-                delete pStream;
         }
     }
 }
@@ -250,7 +247,7 @@ SvXMLGraphicOutputStream::SvXMLGraphicOutputStream()
 {
     mpTmp->EnableKillingFile();
 
-    mpOStm.reset( ::utl::UcbStreamHelper::CreateStream( mpTmp->GetURL(), StreamMode::WRITE | StreamMode::TRUNC ) );
+    mpOStm = ::utl::UcbStreamHelper::CreateStream( mpTmp->GetURL(), StreamMode::WRITE | StreamMode::TRUNC );
 
     if( mpOStm )
         mxStmWrapper = new ::utl::OOutputStreamWrapper( *mpOStm );
@@ -307,8 +304,7 @@ Graphic SvXMLGraphicOutputStream::GetGraphic()
 
             sal_uInt8    sFirstBytes[ 2 ];
 
-            mpOStm->Seek( STREAM_SEEK_TO_END );
-            sal_uIntPtr nStreamLen = mpOStm->Tell();
+            sal_uIntPtr nStreamLen = mpOStm->TellEnd();
             mpOStm->Seek( 0 );
 
             if ( !nStreamLen )
@@ -317,8 +313,7 @@ Graphic SvXMLGraphicOutputStream::GetGraphic()
                 if ( pLockBytes  )
                     pLockBytes->SetSynchronMode();
 
-                mpOStm->Seek( STREAM_SEEK_TO_END );
-                nStreamLen = mpOStm->Tell();
+                nStreamLen = mpOStm->TellEnd();
                 mpOStm->Seek( 0 );
             }
             if( nStreamLen >= 2 )
@@ -334,10 +329,9 @@ Graphic SvXMLGraphicOutputStream::GetGraphic()
                     mpOStm->Seek( 0 );
                     aZCodec.Decompress( *mpOStm, *pDest );
 
-                    if (aZCodec.EndCompression() && pDest )
+                    if (aZCodec.EndCompression())
                     {
-                        pDest->Seek( STREAM_SEEK_TO_END );
-                        sal_uIntPtr nStreamLen_ = pDest->Tell();
+                        sal_uIntPtr nStreamLen_ = pDest->TellEnd();
                         if (nStreamLen_)
                         {
                             pDest->Seek(0);
@@ -397,28 +391,22 @@ bool SvXMLGraphicHelper::ImplGetStreamNames( const OUString& rURLStr,
                                                  OUString& rPictureStorageName,
                                                  OUString& rPictureStreamName )
 {
-    OUString      aURLStr( rURLStr );
-    bool    bRet = false;
+    if (rURLStr.isEmpty())
+        return false;
 
-    if( !aURLStr.isEmpty() )
+    const OUString aURLStr {rURLStr.copy(rURLStr.lastIndexOf(':')+1)};
+
+    if( !aURLStr.isEmpty() && aURLStr.indexOf('/')<0 ) // just one token?
     {
-        aURLStr = aURLStr.getToken( comphelper::string::getTokenCount(aURLStr, ':') - 1, ':' );
-
-        const sal_uInt32 nTokenCount = comphelper::string::getTokenCount(aURLStr, '/');
-
-        if( 1 == nTokenCount )
-        {
-            rPictureStorageName = XML_GRAPHICSTORAGE_NAME;
-            rPictureStreamName = aURLStr;
-        }
-        else
-            SvXMLEmbeddedObjectHelper::splitObjectURL(aURLStr, rPictureStorageName, rPictureStreamName);
-
-        bRet = !rPictureStreamName.isEmpty();
-        SAL_WARN_IF(!bRet, "svx", "SvXMLGraphicHelper::ImplInsertGraphicURL: invalid scheme: " << rURLStr);
+        rPictureStorageName = XML_GRAPHICSTORAGE_NAME;
+        rPictureStreamName = aURLStr;
     }
+    else
+        SvXMLEmbeddedObjectHelper::splitObjectURL(aURLStr, rPictureStorageName, rPictureStreamName);
 
-    return bRet;
+    SAL_WARN_IF(rPictureStreamName.isEmpty(), "svx", "SvXMLGraphicHelper::ImplInsertGraphicURL: invalid scheme: " << rURLStr);
+
+    return !rPictureStreamName.isEmpty();
 }
 
 uno::Reference < embed::XStorage > SvXMLGraphicHelper::ImplGetGraphicStorage( const OUString& rStorageName )
@@ -428,8 +416,9 @@ uno::Reference < embed::XStorage > SvXMLGraphicHelper::ImplGetGraphicStorage( co
     {
         try
         {
+            maCurStorageName = rStorageName;
             xRetStorage = mxRootStorage->openStorageElement(
-                maCurStorageName = rStorageName,
+                maCurStorageName,
                 ( SvXMLGraphicHelperMode::Write == meCreateMode )
                     ? embed::ElementModes::READWRITE
                     : embed::ElementModes::READ );
@@ -442,7 +431,8 @@ uno::Reference < embed::XStorage > SvXMLGraphicHelper::ImplGetGraphicStorage( co
         {
             try
             {
-                xRetStorage = mxRootStorage->openStorageElement( maCurStorageName = rStorageName, embed::ElementModes::READ );
+                maCurStorageName = rStorageName;
+                xRetStorage = mxRootStorage->openStorageElement( maCurStorageName, embed::ElementModes::READ );
             }
             catch ( uno::Exception& )
             {
@@ -519,11 +509,10 @@ void SvXMLGraphicHelper::Init( const uno::Reference < embed::XStorage >& rXMLSto
 }
 
 rtl::Reference<SvXMLGraphicHelper> SvXMLGraphicHelper::Create( const uno::Reference < embed::XStorage >& rXMLStorage,
-                                                SvXMLGraphicHelperMode eCreateMode,
-                                                const OUString& rGraphicMimeType )
+                                                SvXMLGraphicHelperMode eCreateMode )
 {
     rtl::Reference<SvXMLGraphicHelper> pThis = new SvXMLGraphicHelper;
-    pThis->Init( rXMLStorage, eCreateMode, rGraphicMimeType );
+    pThis->Init( rXMLStorage, eCreateMode, OUString() );
 
     return pThis;
 }
@@ -659,7 +648,12 @@ OUString SvXMLGraphicHelper::implSaveGraphic(css::uno::Reference<css::graphic::X
                 case GfxLinkType::NativeJpg: aExtension = ".jpg"; break;
                 case GfxLinkType::NativePng: aExtension = ".png"; break;
                 case GfxLinkType::NativeTif: aExtension = ".tif"; break;
-                case GfxLinkType::NativeWmf: aExtension = ".wmf"; break;
+                case GfxLinkType::NativeWmf:
+                    if (aGfxLink.IsEMF())
+                        aExtension = ".emf";
+                    else
+                        aExtension = ".wmf";
+                    break;
                 case GfxLinkType::NativeMet: aExtension = ".met"; break;
                 case GfxLinkType::NativePct: aExtension = ".pct"; break;
                 case GfxLinkType::NativeSvg:
@@ -737,6 +731,7 @@ OUString SvXMLGraphicHelper::implSaveGraphic(css::uno::Reference<css::graphic::X
             static const char* aCompressiblePics[] =
             {
                 "image/svg+xml",
+                "image/x-emf",
                 "image/x-wmf",
                 "image/tiff",
                 "image/x-eps",
@@ -764,19 +759,29 @@ OUString SvXMLGraphicHelper::implSaveGraphic(css::uno::Reference<css::graphic::X
             std::unique_ptr<SvStream> pStream(utl::UcbStreamHelper::CreateStream(aStream.xStream));
             if (bUseGfxLink && aGfxLink.GetDataSize() && aGfxLink.GetData())
             {
-                const uno::Sequence<sal_Int8>& rPdfData = aGraphic.getPdfData();
-                if (rPdfData.hasElements())
+                const std::shared_ptr<uno::Sequence<sal_Int8>>& rPdfData = aGraphic.getPdfData();
+                if (rPdfData && rPdfData->hasElements())
                 {
+                    // See if we have this PDF already, and avoid duplicate storage.
+                    auto aIt = maExportPdf.find(rPdfData.get());
+                    if (aIt != maExportPdf.end())
+                    {
+                        auto const& aURLAndMimePair = aIt->second;
+                        rOutSavedMimeType = aURLAndMimePair.second;
+                        return aURLAndMimePair.first;
+                    }
+
                     // The graphic has PDF data attached to it, use that.
                     // vcl::ImportPDF() possibly downgraded the PDF data from a
                     // higher PDF version, while aGfxLink still contains the
                     // original data provided by the user.
-                    pStream->WriteBytes(rPdfData.getConstArray(), rPdfData.getLength());
+                    pStream->WriteBytes(rPdfData->getConstArray(), rPdfData->getLength());
                 }
                 else
                 {
                     pStream->WriteBytes(aGfxLink.GetData(), aGfxLink.GetDataSize());
                 }
+
                 rOutSavedMimeType = aMimeType;
                 bSuccess = (pStream->GetError() == ERRCODE_NONE);
             }
@@ -843,6 +848,8 @@ OUString SvXMLGraphicHelper::implSaveGraphic(css::uno::Reference<css::graphic::X
 
             // put into cache
             maExportGraphics[aGraphic] = std::make_pair(aStoragePath, rOutSavedMimeType);
+            if (aGraphic.hasPdfData())
+                maExportPdf[aGraphic.getPdfData().get()] = std::make_pair(aStoragePath, rOutSavedMimeType);
 
             return aStoragePath;
         }
@@ -885,12 +892,13 @@ Reference< XOutputStream > SAL_CALL SvXMLGraphicHelper::createOutputStream()
 
     if( SvXMLGraphicHelperMode::Read == meCreateMode )
     {
-        SvXMLGraphicOutputStream* pOutputStream = new SvXMLGraphicOutputStream;
+        std::unique_ptr<SvXMLGraphicOutputStream> pOutputStream(new SvXMLGraphicOutputStream);
 
         if( pOutputStream->Exists() )
-            maGrfStms.push_back( xRet = pOutputStream );
-        else
-            delete pOutputStream;
+        {
+            xRet = pOutputStream.release();
+            maGrfStms.push_back( xRet );
+        }
     }
 
     return xRet;
@@ -996,7 +1004,7 @@ protected:
     virtual Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
 
 private:
-    SvXMLGraphicHelperMode              m_eGraphicHelperMode;
+    SvXMLGraphicHelperMode const        m_eGraphicHelperMode;
     Reference< XGraphicObjectResolver > m_xGraphicObjectResolver;
     Reference< XGraphicStorageHandler > m_xGraphicStorageHandler;
     Reference< XBinaryStreamResolver >  m_xBinaryStreamResolver;

@@ -18,6 +18,7 @@
  */
 
 #include <i18nlangtag/mslangid.hxx>
+#include <i18nlangtag/languagetag.hxx>
 #include <o3tl/any.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/fontcfg.hxx>
@@ -27,6 +28,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
+#include <com/sun/star/container/XNameAccess.hpp>
 #include <comphelper/propertysequence.hxx>
 #include <unotools/configpaths.hxx>
 #include <unotools/syslocale.hxx>
@@ -34,6 +36,7 @@
 #include <rtl/instance.hxx>
 #include <osl/diagnose.h>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 
 #include <string.h>
 #include <list>
@@ -215,10 +218,11 @@ OUString DefaultFontConfiguration::getDefaultFont( const LanguageTag& rLanguageT
         else
         {
             ::std::vector< OUString > aFallbacks( rLanguageTag.getFallbackStrings( false));
-            for (::std::vector< OUString >::const_iterator it( aFallbacks.begin());
-                    it != aFallbacks.end() && aRet.isEmpty(); ++it)
+            for (const auto& rFallback : aFallbacks)
             {
-                aRet = tryLocale( *it, aType );
+                aRet = tryLocale( rFallback, aType );
+                if (!aRet.isEmpty())
+                    break;
             }
         }
     }
@@ -290,7 +294,7 @@ OUString DefaultFontConfiguration::getUserInterfaceFont( const LanguageTag& rLan
     }
     else
     {
-        Locale aLocale( aLanguageTag.getLocale());
+        const Locale& aLocale( aLanguageTag.getLocale());
         if (MsLangId::isTraditionalChinese(aLocale))
             return OUString(FALLBACKFONT_UI_SANS_CHINTRD);
         else if (MsLangId::isSimplifiedChinese(aLocale))
@@ -465,7 +469,7 @@ static const char* const aImplKillTrailingWithExceptionsList[] =
 struct ImplFontAttrWeightSearchData
 {
     const char*             mpStr;
-    FontWeight              meWeight;
+    FontWeight const              meWeight;
 };
 
 static ImplFontAttrWeightSearchData const aImplWeightAttrSearchList[] =
@@ -491,7 +495,7 @@ static ImplFontAttrWeightSearchData const aImplWeightAttrSearchList[] =
 struct ImplFontAttrWidthSearchData
 {
     const char*             mpStr;
-    FontWidth               meWidth;
+    FontWidth const               meWidth;
 };
 
 static ImplFontAttrWidthSearchData const aImplWidthAttrSearchList[] =
@@ -512,7 +516,7 @@ static ImplFontAttrWidthSearchData const aImplWidthAttrSearchList[] =
 struct ImplFontAttrTypeSearchData
 {
     const char*             mpStr;
-    ImplFontAttrs           mnType;
+    ImplFontAttrs const           mnType;
 };
 
 static ImplFontAttrTypeSearchData const aImplTypeAttrSearchList[] =
@@ -795,7 +799,7 @@ static const char* const pAttribNames[] =
 struct enum_convert
 {
     const char* pName;
-    int          nEnum;
+    int const          nEnum;
 };
 
 static const enum_convert pWeightNames[] =
@@ -1063,13 +1067,13 @@ const FontNameAttr* FontSubstConfiguration::getSubstInfo( const OUString& rFontN
     if (aLanguageTag.getLanguage() != "en")
         aFallbacks.emplace_back("en");
 
-    for (::std::vector< OUString >::const_iterator fb( aFallbacks.begin()); fb != aFallbacks.end(); ++fb)
+    for (const auto& rFallback : aFallbacks)
     {
-        std::unordered_map< OUString, LocaleSubst >::const_iterator lang = m_aSubst.find( *fb );
+        std::unordered_map< OUString, LocaleSubst >::const_iterator lang = m_aSubst.find( rFallback );
         if( lang != m_aSubst.end() )
         {
             if( ! lang->second.bConfigRead )
-                readLocaleSubst( *fb );
+                readLocaleSubst( rFallback );
             // try to find an exact match
             // because the list is sorted this will also find fontnames of the form searchfontname*
             std::vector< FontNameAttr >::const_iterator it = ::std::lower_bound( lang->second.aSubstAttributes.begin(), lang->second.aSubstAttributes.end(), aSearchAttr, StrictStringSort() );

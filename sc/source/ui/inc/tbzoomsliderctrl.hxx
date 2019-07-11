@@ -22,8 +22,10 @@
 #include <vcl/window.hxx>
 #include <svl/poolitem.hxx>
 #include <sfx2/tbxctrl.hxx>
-#include <com/sun/star/frame/XDispatchProvider.hpp>
-#include <svx/zoomslideritem.hxx>
+
+namespace com { namespace sun { namespace star { namespace frame { class XDispatchProvider; } } } }
+
+class SvxZoomSliderItem;
 
 class ScZoomSliderControl : public SfxToolBoxControl
 {
@@ -40,8 +42,8 @@ class ScZoomSliderWnd: public vcl::Window
 {
 private:
     struct ScZoomSliderWnd_Impl;
-    ScZoomSliderWnd_Impl* mpImpl;
-    Size aLogicalSize;
+    std::unique_ptr<ScZoomSliderWnd_Impl> mpImpl;
+    Size const aLogicalSize;
     css::uno::Reference<css::frame::XDispatchProvider> m_xDispatchProvider;
 
     sal_uInt16 Offset2Zoom(long nOffset) const;

@@ -34,11 +34,11 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <comphelper/namedvaluecollection.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 using namespace css;
 using namespace css::uno;
-using ::rtl::OUString;
 
 namespace sc { namespace sidebar {
 
@@ -52,7 +52,7 @@ ScPanelFactory::~ScPanelFactory()
 }
 
 Reference<ui::XUIElement> SAL_CALL ScPanelFactory::createUIElement (
-    const ::rtl::OUString& rsResourceURL,
+    const OUString& rsResourceURL,
     const ::css::uno::Sequence<css::beans::PropertyValue>& rArguments)
 {
     Reference<ui::XUIElement> xElement;
@@ -109,11 +109,12 @@ Reference<ui::XUIElement> SAL_CALL ScPanelFactory::createUIElement (
     {
         throw;
     }
-    catch (const uno::Exception& e)
+    catch (const uno::Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetRuntimeException(
             "ScPanelFactory::createUIElement exception",
-            nullptr, uno::makeAny(e));
+            nullptr, anyEx);
     }
 
     return xElement;

@@ -72,9 +72,9 @@ $(eval $(call gb_Library_add_exception_objects,basegfx,\
     basegfx/source/tools/keystoplerp \
     basegfx/source/tools/numbertools \
     basegfx/source/tools/stringconversiontools \
+    basegfx/source/tools/systemdependentdata \
     basegfx/source/tools/tools \
     basegfx/source/tools/unopolypolygon \
-    basegfx/source/tools/unotools \
     basegfx/source/tools/zoomtools \
     basegfx/source/tuple/b2dtuple \
     basegfx/source/tuple/b2i64tuple \

@@ -52,7 +52,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::uno;
 
-void SetAlignmentState( SdrView const * pSdrView, SfxItemSet& rSet )
+static void SetAlignmentState( SdrView const * pSdrView, SfxItemSet& rSet )
 {
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
@@ -95,7 +95,7 @@ void SetAlignmentState( SdrView const * pSdrView, SfxItemSet& rSet )
     rSet.Put( SfxInt32Item( SID_FONTWORK_ALIGNMENT, nAlignment ) );
 }
 
-void SetCharacterSpacingState( SdrView const * pSdrView, SfxItemSet& rSet )
+static void SetCharacterSpacingState( SdrView const * pSdrView, SfxItemSet& rSet )
 {
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
@@ -120,7 +120,7 @@ void SetCharacterSpacingState( SdrView const * pSdrView, SfxItemSet& rSet )
 }
 
 
-void SetKernCharacterPairsState( SdrView const * pSdrView, SfxItemSet& rSet )
+static void SetKernCharacterPairsState( SdrView const * pSdrView, SfxItemSet& rSet )
 {
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
@@ -139,7 +139,7 @@ void SetKernCharacterPairsState( SdrView const * pSdrView, SfxItemSet& rSet )
     rSet.Put( SfxBoolItem( SID_FONTWORK_KERN_CHARACTER_PAIRS, bChecked ) );
 }
 
-void SetFontWorkShapeTypeState( SdrView const * pSdrView, SfxItemSet& rSet )
+static void SetFontWorkShapeTypeState( SdrView const * pSdrView, SfxItemSet& rSet )
 {
     const SdrMarkList& rMarkList = pSdrView->GetMarkedObjectList();
     const size_t nCount = rMarkList.GetMarkCount();
@@ -202,25 +202,6 @@ FontworkBar::FontworkBar(SfxViewShell* pViewShell )
 FontworkBar::~FontworkBar()
 {
     SetRepeatTarget(nullptr);
-}
-
-static vcl::Window* ImpGetViewWin(SdrView const * pView)
-{
-    if( pView )
-    {
-        const sal_uInt32 nCount(pView->PaintWindowCount());
-        for(sal_uInt32 nNum(0); nNum < nCount; nNum++)
-        {
-            OutputDevice* pOut = &(pView->GetPaintWindow(nNum)->GetOutputDevice());
-
-            if(OUTDEV_WINDOW == pOut->GetOutDevType())
-            {
-                return static_cast<vcl::Window*>(pOut);
-            }
-        }
-    }
-
-    return nullptr;
 }
 
 namespace svx {
@@ -319,7 +300,7 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
     }
 }
 
-void GetGeometryForCustomShape( SdrCustomShapeGeometryItem& rGeometryItem, const OUString& rCustomShape )
+static void GetGeometryForCustomShape( SdrCustomShapeGeometryItem& rGeometryItem, const OUString& rCustomShape )
 {
     const OUString sType( "Type" );
 
@@ -354,11 +335,15 @@ void GetGeometryForCustomShape( SdrCustomShapeGeometryItem& rGeometryItem, const
                 if ( aObjList[ i ].equalsIgnoreAsciiCase( rCustomShape ) )
                 {
                     FmFormModel aFormModel;
-                    SfxItemPool& rPool = aFormModel.GetItemPool();
+                    SfxItemPool& rPool(aFormModel.GetItemPool());
                     rPool.FreezeIdRanges();
+
                     if ( GalleryExplorer::GetSdrObj( GALLERY_THEME_POWERPOINT, i, &aFormModel ) )
                     {
-                        const SdrObject* pSourceObj = aFormModel.GetPage( 0 )->GetObj( 0 );
+                        const SdrObject* pSourceObj = nullptr;
+                        if (aFormModel.GetPageCount() > 0)
+                            pSourceObj = aFormModel.GetPage( 0 )->GetObj( 0 );
+                        SAL_WARN_IF(!pSourceObj, "svx.form", "No content in gallery custom shape '" << rCustomShape << "'" );
                         if( pSourceObj )
                         {
                             PropertyValue aPropVal_;
@@ -430,8 +415,8 @@ void FontworkBar::execute( SdrView* pSdrView, SfxRequest const & rReq, SfxBindin
     {
         case SID_FONTWORK_GALLERY_FLOATER:
         {
-            ScopedVclPtrInstance< FontWorkGalleryDialog > aDlg( pSdrView, ImpGetViewWin(pSdrView) );
-            aDlg->Execute();
+            FontWorkGalleryDialog aDlg(rReq.GetFrameWeld(), pSdrView);
+            aDlg.run();
         }
         break;
 
@@ -489,11 +474,11 @@ void FontworkBar::execute( SdrView* pSdrView, SfxRequest const & rReq, SfxBindin
             if( rReq.GetArgs() && ( rReq.GetArgs()->GetItemState( SID_FONTWORK_CHARACTER_SPACING ) == SfxItemState::SET ) )
             {
                 sal_Int32 nCharSpacing = rReq.GetArgs()->GetItem<SfxInt32Item>(SID_FONTWORK_CHARACTER_SPACING)->GetValue();
-                ScopedVclPtrInstance< FontworkCharacterSpacingDialog > aDlg( nullptr, nCharSpacing );
-                sal_uInt16 nRet = aDlg->Execute();
-                if( nRet != 0 )
+                FontworkCharacterSpacingDialog aDlg(rReq.GetFrameWeld(), nCharSpacing);
+                sal_uInt16 nRet = aDlg.run();
+                if (nRet != RET_CANCEL)
                 {
-                    SfxInt32Item aItem( SID_FONTWORK_CHARACTER_SPACING, aDlg->getScale() );
+                    SfxInt32Item aItem(SID_FONTWORK_CHARACTER_SPACING, aDlg.getScale());
                     SfxPoolItem* aItems[] = { &aItem, nullptr };
                     rBindings.Execute( SID_FONTWORK_CHARACTER_SPACING, const_cast<const SfxPoolItem**>(aItems) );
                 }

@@ -15,7 +15,7 @@ $(eval $(call gb_ExternalProject_register_targets,hunspell,\
 
 hunspell_CPPCLAGS=$(CPPFLAGS)
 
-ifneq (,$(filter ANDROID DRAGONFLY FREEBSD IOS LINUX NETBSD OPENBSD,$(OS)))
+ifneq (,$(filter ANDROID DRAGONFLY FREEBSD iOS LINUX NETBSD OPENBSD,$(OS)))
 ifneq (,$(gb_ENABLE_DBGUTIL))
 hunspell_CPPFLAGS+=-D_GLIBCXX_DEBUG
 endif
@@ -23,14 +23,11 @@ endif
 
 $(call gb_ExternalProject_get_state_target,hunspell,build):
 	$(call gb_ExternalProject_run,build,\
-		$(if $(filter IOS MACOSX,$(OS)),ACLOCAL="aclocal -I $(SRCDIR)/m4/mac") \
-		LIBS="$(gb_STDLIBS) $(LIBS)" \
-		autoreconf && \
-		$(SHELL) ./configure --disable-shared --disable-nls --with-pic \
+		./configure --disable-shared --disable-nls --with-pic \
 			$(if $(CROSS_COMPILING),--build=$(BUILD_PLATFORM) --host=$(HOST_PLATFORM))\
 			$(if $(filter AIX,$(OS)),CFLAGS="-D_LINUX_SOURCE_COMPAT") \
 			$(if $(hunspell_CPPFLAGS),CPPFLAGS='$(hunspell_CPPFLAGS)') \
-			CXXFLAGS="$(CXXFLAGS) $(if $(ENABLE_OPTIMIZED) $(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) $(if $(debug),$(gb_DEBUGINFO_FLAGS) $(gb_DEBUG_CXXFLAGS))" \
+			CXXFLAGS="$(CXXFLAGS) $(if $(ENABLE_OPTIMIZED),$(gb_COMPILEROPTFLAGS),$(gb_COMPILERNOOPTFLAGS)) $(if $(debug),$(gb_DEBUGINFO_FLAGS) $(gb_DEBUG_CXXFLAGS))" \
 		&& cd src/hunspell && $(MAKE) \
 	)
 

@@ -18,6 +18,7 @@
  */
 
 
+#include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 // declare system types in sysdata.hxx
@@ -160,7 +161,7 @@ void WorkWindow::StartPresentationMode( PresentationFlags nFlags )
     return StartPresentationMode( false/*bPresentation*/, nFlags, GetScreenNumber());
 }
 
-void WorkWindow::StartPresentationMode( bool bPresentation, PresentationFlags nFlags, sal_uInt32 nDisplayScreen )
+void WorkWindow::StartPresentationMode( bool bPresentation, PresentationFlags nFlags, sal_Int32 nDisplayScreen )
 {
     if ( !bPresentation == !mbPresentationMode )
         return;

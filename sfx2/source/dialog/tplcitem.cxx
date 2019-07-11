@@ -19,6 +19,7 @@
 
 #include <svl/intitem.hxx>
 #include <vcl/svapp.hxx>
+#include <osl/diagnose.h>
 
 #include <sfx2/templdlg.hxx>
 #include <sfx2/bindings.hxx>
@@ -156,16 +157,15 @@ void SfxTemplateControllerItem::StateChanged( sal_uInt16 nSID, SfxItemState eSta
 IMPL_LINK_NOARG(SfxTemplateControllerItem, SetWaterCanStateHdl_Impl, void*, void)
 {
     nUserEventId = nullptr;
-    SfxBoolItem* pState = nullptr;
+    std::unique_ptr<SfxBoolItem> pState;
     switch(nWaterCanState)
     {
         case 0 :
         case 1 :
-            pState = new SfxBoolItem(SID_STYLE_WATERCAN, nWaterCanState != 0);
+            pState.reset(new SfxBoolItem(SID_STYLE_WATERCAN, nWaterCanState != 0));
         break;
     }
-    rTemplateDlg.SetWaterCanState(pState);
-    delete pState;
+    rTemplateDlg.SetWaterCanState(pState.get());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

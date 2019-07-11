@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
 #include "clang/Basic/SourceManager.h"
@@ -49,6 +50,70 @@ inline clang::FunctionDecl::param_const_range parameters(
     return decl.params();
 }
 #endif
+
+inline clang::SourceLocation getBeginLoc(clang::Decl const * decl) {
+#if CLANG_VERSION >= 80000
+    return decl->getBeginLoc();
+#else
+    return decl->getLocStart();
+#endif
+}
+
+inline clang::SourceLocation getEndLoc(clang::Decl const * decl) {
+#if CLANG_VERSION >= 80000
+    return decl->getEndLoc();
+#else
+    return decl->getLocEnd();
+#endif
+}
+
+inline clang::SourceLocation getBeginLoc(clang::DeclarationNameInfo const & info) {
+#if CLANG_VERSION >= 80000
+    return info.getBeginLoc();
+#else
+    return info.getLocStart();
+#endif
+}
+
+inline clang::SourceLocation getEndLoc(clang::DeclarationNameInfo const & info) {
+#if CLANG_VERSION >= 80000
+    return info.getEndLoc();
+#else
+    return info.getLocEnd();
+#endif
+}
+
+inline clang::SourceLocation getBeginLoc(clang::Stmt const * stmt) {
+#if CLANG_VERSION >= 80000
+    return stmt->getBeginLoc();
+#else
+    return stmt->getLocStart();
+#endif
+}
+
+inline clang::SourceLocation getEndLoc(clang::Stmt const * stmt) {
+#if CLANG_VERSION >= 80000
+    return stmt->getEndLoc();
+#else
+    return stmt->getLocEnd();
+#endif
+}
+
+inline clang::SourceLocation getBeginLoc(clang::CXXBaseSpecifier const * spec) {
+#if CLANG_VERSION >= 80000
+    return spec->getBeginLoc();
+#else
+    return spec->getLocStart();
+#endif
+}
+
+inline clang::SourceLocation getEndLoc(clang::CXXBaseSpecifier const * spec) {
+#if CLANG_VERSION >= 80000
+    return spec->getEndLoc();
+#else
+    return spec->getLocEnd();
+#endif
+}
 
 inline std::pair<clang::SourceLocation, clang::SourceLocation> getImmediateExpansionRange(
     clang::SourceManager const & SM, clang::SourceLocation Loc)
@@ -125,6 +190,45 @@ inline llvm::StringRef getImmediateMacroNameForDiagnostics(
     unsigned MacroTokenLength = Lexer::MeasureTokenLength(Loc, SM, LangOpts);
     StringRef ExpansionBuffer = SM.getBufferData(ExpansionInfo.first);
     return ExpansionBuffer.substr(ExpansionInfo.second, MacroTokenLength);
+#endif
+}
+
+inline clang::Expr const * IgnoreImplicit(clang::Expr const * expr) {
+#if CLANG_VERSION >= 80000
+    return expr->IgnoreImplicit();
+#else
+    using namespace clang;
+    // Copy from Clang's lib/AST/Stmt.cpp, including <https://reviews.llvm.org/D50666> "Fix
+    // Stmt::ignoreImplicit":
+    Stmt const *s = expr;
+
+    Stmt const *lasts = nullptr;
+
+    while (s != lasts) {
+        lasts = s;
+
+        if (auto *ewc = dyn_cast<ExprWithCleanups>(s))
+            s = ewc->getSubExpr();
+
+        if (auto *mte = dyn_cast<MaterializeTemporaryExpr>(s))
+            s = mte->GetTemporaryExpr();
+
+        if (auto *bte = dyn_cast<CXXBindTemporaryExpr>(s))
+            s = bte->getSubExpr();
+
+        if (auto *ice = dyn_cast<ImplicitCastExpr>(s))
+            s = ice->getSubExpr();
+    }
+
+    return static_cast<Expr const *>(s);
+#endif
+}
+
+inline bool CPlusPlus17(clang::LangOptions const & opts) {
+#if CLANG_VERSION >= 60000
+    return opts.CPlusPlus17;
+#else
+    return opts.CPlusPlus1z;
 #endif
 }
 

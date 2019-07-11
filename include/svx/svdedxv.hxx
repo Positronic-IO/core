@@ -55,7 +55,7 @@ enum class SdrEndTextEditKind
 
 // - general edit for objectspecific properties
 // - textedit for all drawobjects, inherited from SdrTextObj
-// - macromod
+// - macromode
 
 
 class SVX_DLLPUBLIC SdrObjEditView : public SdrGlueEditView, public EditViewCallbacks
@@ -80,7 +80,7 @@ protected:
     std::unique_ptr<SdrOutliner> pTextEditOutliner;     // outliner for the TextEdit
     OutlinerView*               pTextEditOutlinerView; // current view of the outliners
     VclPtr<vcl::Window>         pTextEditWin;          // matching window to pTextEditOutlinerView
-    vcl::Cursor*                pTextEditCursorMerker; // to restore the cursor in each window
+    vcl::Cursor*                pTextEditCursorBuffer; // to restore the cursor in each window
     SdrObject*                  pMacroObj;
     SdrPageView*                pMacroPV;
     VclPtr<vcl::Window>         pMacroWin;
@@ -102,7 +102,7 @@ protected:
     rtl::Reference< sdr::SelectionController > mxLastSelectionController;
 
 private:
-    ::svl::IUndoManager* mpOldTextEditUndoManager;
+    SfxUndoManager* mpOldTextEditUndoManager;
 
     SVX_DLLPRIVATE void ImpClearVars();
 
@@ -162,7 +162,7 @@ public:
     // outliner will be displayed on the overlay in edit mode.
     void TextEditDrawing(SdrPaintWindow& rPaintWindow) const;
 
-    // Actionhandling for macromod
+    // Actionhandling for macromode
     virtual bool IsAction() const override;
     virtual void MovAction(const Point& rPnt) override;
     virtual void EndAction() override;
@@ -244,11 +244,11 @@ public:
     virtual SvtScriptType GetScriptType() const;
 
     /* new interface src537 */
-    bool GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const;
+    void GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr) const;
 
     bool SetAttributes(const SfxItemSet& rSet, bool bReplaceAll);
     SfxStyleSheet* GetStyleSheet() const; // SfxStyleSheet* GetStyleSheet(bool& rOk) const;
-    bool SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr);
+    void SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr);
 
     // Intern: at mounting new OutlinerView...
     virtual void AddWindowToPaintView(OutputDevice* pNewWin, vcl::Window* pWindow) override;
@@ -257,9 +257,9 @@ public:
     sal_uInt16 GetSelectionLevel() const;
 
 
-    // Object-MacroModus (e.g. rect as button or sth. like that):
+    // Object MacroMode (e.g. rect as button or sth. like that):
 
-    bool BegMacroObj(const Point& rPnt, short nTol, SdrObject* pObj, SdrPageView* pPV, vcl::Window* pWin);
+    void BegMacroObj(const Point& rPnt, short nTol, SdrObject* pObj, SdrPageView* pPV, vcl::Window* pWin);
     void BegMacroObj(const Point& rPnt, SdrObject* pObj, SdrPageView* pPV, vcl::Window* pWin) { BegMacroObj(rPnt,-2,pObj,pPV,pWin); }
     void MovMacroObj(const Point& rPnt);
     void BrkMacroObj();

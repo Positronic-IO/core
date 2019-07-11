@@ -41,13 +41,13 @@ struct UpDownBarsModel
 struct TypeGroupModel
 {
     typedef ModelVector< SeriesModel >  SeriesVector;
-    typedef ::std::vector< sal_Int32 >  AxisIdVector;
     typedef ModelRef< DataLabelsModel > DataLabelsRef;
     typedef ModelRef< UpDownBarsModel > UpDownBarsRef;
     typedef ModelRef< Shape >           ShapeRef;
 
     SeriesVector        maSeries;           /// Series attached to this chart type group.
-    AxisIdVector        maAxisIds;          /// List of axis identifiers used by this chart type.
+    std::vector<sal_Int32>
+                        maAxisIds;          /// List of axis identifiers used by this chart type.
     DataLabelsRef       mxLabels;           /// Data point label settings for all series.
     UpDownBarsRef       mxUpDownBars;       /// Up/down bars in stock charts.
     ShapeRef            mxSerLines;         /// Connector lines in stacked bar charts.
@@ -69,7 +69,7 @@ struct TypeGroupModel
     sal_Int32           mnShape;            /// 3D bar shape type.
     sal_Int32           mnSizeRepresents;   /// Bubble size represents area or width.
     sal_Int32           mnSplitType;        /// Split type in pie-to charts.
-    sal_Int32           mnTypeId;           /// Chart type identifier.
+    sal_Int32 const     mnTypeId;           /// Chart type identifier.
     bool                mbBubble3d;         /// True = show bubbles with 3D shade.
     bool                mbShowMarker;       /// True = show point markers in line charts.
     bool                mbShowNegBubbles;   /// True = show absolute value of negative bubbles.

@@ -25,12 +25,14 @@
 #include <xistream.hxx>
 #include <xihelper.hxx>
 #include <xiname.hxx>
+#include <xltools.hxx>
 #include <excform.hxx>
 #include <tokenarray.hxx>
 #include <externalrefmgr.hxx>
 #include <scmatrix.hxx>
 #include <svl/sharedstringpool.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <vector>
 #include <memory>
@@ -146,7 +148,7 @@ struct XclImpXti
     explicit     XclImpXti() : mnSupbook( SAL_MAX_UINT16 ), mnSBTabFirst( SAL_MAX_UINT16 ), mnSBTabLast( SAL_MAX_UINT16 ) {}
 };
 
-inline XclImpStream& operator>>( XclImpStream& rStrm, XclImpXti& rXti )
+static XclImpStream& operator>>( XclImpStream& rStrm, XclImpXti& rXti )
 {
     rXti.mnSupbook = rStrm.ReaduInt16();
     rXti.mnSBTabFirst = rStrm.ReaduInt16();
@@ -270,12 +272,12 @@ sal_uInt16 XclImpTabInfo::GetCurrentIndex( sal_uInt16 nCreatedId, sal_uInt16 nMa
 // External names =============================================================
 
 XclImpExtName::MOper::MOper(svl::SharedStringPool& rPool, XclImpStream& rStrm) :
-    mxCached(new ScFullMatrix(0,0))
+    mxCached(new ScMatrix(0,0))
 {
     SCSIZE nLastCol = rStrm.ReaduInt8();
     SCSIZE nLastRow = rStrm.ReaduInt16();
 
-    //assuming worse case scenario of nOp + one byte unistring len
+    //assuming worst case scenario of nOp + one byte unistring len
     const size_t nMinRecordSize = 2;
     const size_t nMaxRows = rStrm.GetRecLeft() / (nMinRecordSize * (nLastCol+1));
     if (nLastRow >= nMaxRows)
@@ -337,8 +339,7 @@ const ScMatrix& XclImpExtName::MOper::GetCache() const
 }
 
 XclImpExtName::XclImpExtName( XclImpSupbook& rSupbook, XclImpStream& rStrm, XclSupbookType eSubType, ExcelToSc* pFormulaConv )
-    : mpMOper(nullptr)
-    , mnStorageId(0)
+    : mnStorageId(0)
 {
     sal_uInt16 nFlags(0);
     sal_uInt8 nLen(0);
@@ -377,23 +378,20 @@ XclImpExtName::XclImpExtName( XclImpSupbook& rSupbook, XclImpStream& rStrm, XclS
         case xlExtName:
             // TODO: For now, only global external names are supported.  In future
             // we should extend this to supporting per-sheet external names.
-            if (mnStorageId == 0)
+            if (mnStorageId == 0 && pFormulaConv)
             {
-                if (pFormulaConv)
-                {
-                    const ScTokenArray* pArray = nullptr;
-                    sal_uInt16 nFmlaLen;
-                    nFmlaLen = rStrm.ReaduInt16();
-                    std::vector<OUString> aTabNames;
-                    sal_uInt16 nCount = rSupbook.GetTabCount();
-                    aTabNames.reserve(nCount);
-                    for (sal_uInt16 i = 0; i < nCount; ++i)
-                        aTabNames.push_back(rSupbook.GetTabName(i));
+                std::unique_ptr<ScTokenArray> pArray;
+                sal_uInt16 nFmlaLen;
+                nFmlaLen = rStrm.ReaduInt16();
+                std::vector<OUString> aTabNames;
+                sal_uInt16 nCount = rSupbook.GetTabCount();
+                aTabNames.reserve(nCount);
+                for (sal_uInt16 i = 0; i < nCount; ++i)
+                    aTabNames.push_back(rSupbook.GetTabName(i));
 
-                    pFormulaConv->ConvertExternName(pArray, rStrm, nFmlaLen, rSupbook.GetXclUrl(), aTabNames);
-                    if (pArray)
-                        mxArray.reset(pArray->Clone());
-                }
+                pFormulaConv->ConvertExternName(pArray, rStrm, nFmlaLen, rSupbook.GetXclUrl(), aTabNames);
+                if (pArray)
+                    mxArray = std::move( pArray );
             }
         break;
         case xlExtOLE:
@@ -526,8 +524,7 @@ bool XclImpExtName::CreateOleData(ScDocument& rDoc, const OUString& rUrl,
                 break;
                 case ScMatValType::String:
                 {
-                    const svl::SharedString aStr( aVal.GetString());
-                    ScExternalRefCache::TokenRef pToken(new formula::FormulaStringToken(aStr));
+                    ScExternalRefCache::TokenRef pToken(new formula::FormulaStringToken(aVal.GetString()));
                     xTab->setCell(nCol, nRow, pToken, 0, false);
                 }
                 break;

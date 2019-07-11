@@ -31,6 +31,9 @@
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
 #include <comphelper/processfactory.hxx>
 #include <ucbhelper/contentidentifier.hxx>
+#include <ucbhelper/getcomponentcontext.hxx>
+#include <ucbhelper/macros.hxx>
+#include <cppuhelper/queryinterface.hxx>
 #include "webdavprovider.hxx"
 #include "webdavcontent.hxx"
 
@@ -47,8 +50,7 @@ using namespace webdav_ucp;
 ContentProvider::ContentProvider(
                 const uno::Reference< uno::XComponentContext >& rxContext )
 : ::ucbhelper::ContentProviderImplHelper( rxContext ),
-  m_xDAVSessionFactory( new DAVSessionFactory ),
-  m_pProps( nullptr )
+  m_xDAVSessionFactory( new DAVSessionFactory )
 {
 }
 

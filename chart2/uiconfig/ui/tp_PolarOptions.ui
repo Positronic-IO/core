@@ -2,7 +2,6 @@
 <!-- Generated with glade 3.16.1 -->
 <interface domain="chart">
   <requires lib="gtk+" version="3.18"/>
-  <!-- interface-requires LibreOffice 1.0 -->
   <object class="GtkAdjustment" id="adjustmentDEGREE">
     <property name="upper">359</property>
     <property name="step_increment">1</property>
@@ -30,7 +29,7 @@
               <object class="GtkCheckButton" id="CB_CLOCKWISE">
                 <property name="label" translatable="yes" context="tp_PolarOptions|CB_CLOCKWISE">_Clockwise direction</property>
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="receives_default">False</property>
                 <property name="use_underline">True</property>
                 <property name="xalign">0</property>
@@ -75,9 +74,25 @@
                 <property name="can_focus">False</property>
                 <property name="spacing">12</property>
                 <child>
-                  <object class="svxlo-DialControl" id="CT_ANGLE_DIAL">
+                  <object class="GtkScrolledWindow">
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="shadow_type">in</property>
+                    <child>
+                      <object class="GtkViewport">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <child>
+                          <object class="GtkDrawingArea" id="CT_ANGLE_DIAL">
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="events">GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_STRUCTURE_MASK</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -152,7 +167,7 @@
               <object class="GtkCheckButton" id="CB_INCLUDE_HIDDEN_CELLS_POLAR">
                 <property name="label" translatable="yes" context="tp_PolarOptions|CB_INCLUDE_HIDDEN_CELLS_POLAR">Include _values from hidden cells</property>
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
                 <property name="receives_default">False</property>
                 <property name="use_underline">True</property>
                 <property name="xalign">0</property>

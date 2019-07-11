@@ -55,6 +55,7 @@
 #include <sfx2/charmappopup.hxx>
 #include <com/sun/star/scanner/ScannerManager.hpp>
 #include <com/sun/star/linguistic2/LanguageGuessing.hpp>
+#include <ooo/vba/XSinkCaller.hpp>
 #include <comphelper/processfactory.hxx>
 #include <docsh.hxx>
 #include <swmodule.hxx>
@@ -171,10 +172,10 @@ SwModule::SwModule( SfxObjectFactory* pWebFact,
 {
     SetName( "StarWriter" );
     SvxErrorHandler::ensure();
-    m_pErrorHandler = new SfxErrorHandler( RID_SW_ERRHDL,
+    m_pErrorHandler.reset( new SfxErrorHandler( RID_SW_ERRHDL,
                                      ErrCodeArea::Sw,
                                      ErrCodeArea::Sw,
-                                     GetResLocale() );
+                                     GetResLocale() ) );
 
     m_pModuleConfig = new SwModuleOptions;
 
@@ -192,12 +193,18 @@ SwModule::SwModule( SfxObjectFactory* pWebFact,
         // member <pColorConfig> is created and the color configuration is applied
         // at the view options.
         GetColorConfig();
+        m_xLinguServiceEventListener = new SwLinguServiceEventListener;
     }
 }
 
 OUString SwResId(const char* pId)
 {
     return Translate::get(pId, SW_MOD()->GetResLocale());
+}
+
+OUString SwResId(const char* pId, int nCardinality)
+{
+    return Translate::nget(pId, nCardinality, SW_MOD()->GetResLocale());
 }
 
 uno::Reference< scanner::XScannerManager2 > const &
@@ -221,14 +228,10 @@ uno::Reference< linguistic2::XLanguageGuessing > const & SwModule::GetLanguageGu
 
 SwModule::~SwModule()
 {
-    delete m_pErrorHandler;
+    css::uno::Sequence< css::uno::Any > aArgs;
+    CallAutomationApplicationEventSinks( "Quit", aArgs );
+    m_pErrorHandler.reset();
     EndListening( *SfxGetpApp() );
-}
-
-void SwModule::CreateLngSvcEvtListener()
-{
-    if (!m_xLinguServiceEventListener.is())
-        m_xLinguServiceEventListener = new SwLinguServiceEventListener;
 }
 
 void SwDLL::RegisterFactories()
@@ -398,9 +401,9 @@ void    SwModule::RemoveAttrPool()
     SfxItemPool::Free(m_pAttrPool);
 }
 
-SfxStyleFamilies* SwModule::CreateStyleFamilies()
+std::unique_ptr<SfxStyleFamilies> SwModule::CreateStyleFamilies()
 {
-    SfxStyleFamilies *pStyleFamilies = new SfxStyleFamilies;
+    std::unique_ptr<SfxStyleFamilies> pStyleFamilies(new SfxStyleFamilies);
 
     pStyleFamilies->emplace_back(SfxStyleFamilyItem(SfxStyleFamily::Para,
                                                     SwResId(STR_PARAGRAPHSTYLEFAMILY),
@@ -433,6 +436,17 @@ SfxStyleFamilies* SwModule::CreateStyleFamilies()
                                                     RID_TABLESTYLEFAMILY, GetResLocale()));
 
     return pStyleFamilies;
+}
+
+void SwModule::RegisterAutomationApplicationEventsCaller(css::uno::Reference< ooo::vba::XSinkCaller > const& xCaller)
+{
+    mxAutomationApplicationEventsCaller = xCaller;
+}
+
+void SwModule::CallAutomationApplicationEventSinks(const OUString& Method, css::uno::Sequence< css::uno::Any >& Arguments)
+{
+    if (mxAutomationApplicationEventsCaller.is())
+        mxAutomationApplicationEventsCaller->CallSinks(Method, Arguments);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

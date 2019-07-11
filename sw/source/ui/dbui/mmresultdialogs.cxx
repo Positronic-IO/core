@@ -34,6 +34,8 @@
 
 #include <editeng/scripttypeitem.hxx>
 #include <editeng/langitem.hxx>
+#include <o3tl/temporary.hxx>
+#include <officecfg/Office/Writer.hxx>
 #include <svl/itemset.hxx>
 #include <svl/stritem.hxx>
 #include <svtools/ehdl.hxx>
@@ -50,6 +52,8 @@
 #include <svl/urihelper.hxx>
 #include <vcl/print.hxx>
 #include <vcl/settings.hxx>
+#include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 
 #include <unotools/tempfile.hxx>
 #include <osl/file.hxx>
@@ -188,14 +192,14 @@ IMPL_LINK( SwSendQueryBox_Impl, ModifyHdl, weld::Entry&, rEdit, void)
     m_xOKPB->set_sensitive(bIsEmptyAllowed  || !rEdit.get_text().isEmpty());
 }
 
-class SwCopyToDialog : public weld::GenericDialogController
+class SwCopyToDialog : public SfxDialogController
 {
     std::unique_ptr<weld::Entry> m_xCCED;
     std::unique_ptr<weld::Entry> m_xBCCED;
 
 public:
     explicit SwCopyToDialog(weld::Window* pParent)
-        : GenericDialogController(pParent, "modules/swriter/ui/ccdialog.ui", "CCDialog")
+        : SfxDialogController(pParent, "modules/swriter/ui/ccdialog.ui", "CCDialog")
         , m_xCCED(m_xBuilder->weld_entry("cc"))
         , m_xBCCED(m_xBuilder->weld_entry("bcc"))
     {
@@ -209,7 +213,7 @@ public:
 };
 
 SwMMResultSaveDialog::SwMMResultSaveDialog(weld::Window* pParent)
-    : GenericDialogController(pParent, "modules/swriter/ui/mmresultsavedialog.ui", "MMResultSaveDialog")
+    : SfxDialogController(pParent, "modules/swriter/ui/mmresultsavedialog.ui", "MMResultSaveDialog")
     , m_bCancelSaving(false)
     , m_xSaveAsOneRB(m_xBuilder->weld_radio_button("singlerb"))
     , m_xSaveIndividualRB(m_xBuilder->weld_radio_button("individualrb"))
@@ -223,10 +227,10 @@ SwMMResultSaveDialog::SwMMResultSaveDialog(weld::Window* pParent)
     m_xSaveAsOneRB->connect_toggled(aLink);
     m_xSaveIndividualRB->connect_toggled(aLink);
     m_xFromRB->connect_toggled(aLink);
-    // m_pSaveAsOneRB is the default, so disable m_pFromNF and m_pToNF initially.
+    // m_pSaveAsOneRB is the default, so disable m_xFromNF and m_xToNF initially.
     aLink.Call(*m_xSaveAsOneRB);
     SwView* pView = ::GetActiveView();
-    std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
+    const std::shared_ptr<SwMailMergeConfigItem>& xConfigItem = pView->GetMailMergeConfigItem();
     assert(xConfigItem);
     sal_Int32 nCount = xConfigItem->GetMergedDocumentCount();
     m_xFromNF->set_max(nCount);
@@ -241,9 +245,9 @@ SwMMResultSaveDialog::~SwMMResultSaveDialog()
 }
 
 SwMMResultPrintDialog::SwMMResultPrintDialog(weld::Window* pParent)
-    : GenericDialogController(pParent, "modules/swriter/ui/mmresultprintdialog.ui", "MMResultPrintDialog")
+    : SfxDialogController(pParent, "modules/swriter/ui/mmresultprintdialog.ui", "MMResultPrintDialog")
     , m_xPrinterFT(m_xBuilder->weld_label("printerft"))
-    , m_xPrinterLB(m_xBuilder->weld_combo_box_text("printers"))
+    , m_xPrinterLB(m_xBuilder->weld_combo_box("printers"))
     , m_xPrinterSettingsPB(m_xBuilder->weld_button("printersettings"))
     , m_xPrintAllRB(m_xBuilder->weld_radio_button("printallrb"))
     , m_xFromRB(m_xBuilder->weld_radio_button("fromrb"))
@@ -260,7 +264,7 @@ SwMMResultPrintDialog::SwMMResultPrintDialog(weld::Window* pParent)
     Link<weld::ToggleButton&,void> aLink = LINK(this, SwMMResultPrintDialog, DocumentSelectionHdl_Impl);
     m_xPrintAllRB->connect_toggled(aLink);
     m_xFromRB->connect_toggled(aLink);
-    // m_pPrintAllRB is the default, so disable m_pFromNF and m_pToNF initially.
+    // m_pPrintAllRB is the default, so disable m_xFromNF and m_xToNF initially.
     aLink.Call(*m_xPrintAllRB);
 
     m_xOKButton->connect_clicked(LINK(this, SwMMResultPrintDialog, PrintHdl_Impl));
@@ -272,74 +276,50 @@ SwMMResultPrintDialog::~SwMMResultPrintDialog()
 {
 }
 
-SwMMResultEmailDialog::SwMMResultEmailDialog()
-    : SfxModalDialog(nullptr, "MMResultEmailDialog", "modules/swriter/ui/mmresultemaildialog.ui"),
-     m_sConfigureMail(SwResId(ST_CONFIGUREMAIL))
+SwMMResultEmailDialog::SwMMResultEmailDialog(weld::Window* pParent)
+    : SfxDialogController(pParent, "modules/swriter/ui/mmresultemaildialog.ui", "MMResultEmailDialog")
+    , m_sConfigureMail(SwResId(ST_CONFIGUREMAIL))
+    , m_xMailToFT(m_xBuilder->weld_label("mailtoft"))
+    , m_xMailToLB(m_xBuilder->weld_combo_box("mailto"))
+    , m_xCopyToPB(m_xBuilder->weld_button("copyto"))
+    , m_xSubjectFT(m_xBuilder->weld_label("subjectft"))
+    , m_xSubjectED(m_xBuilder->weld_entry("subject"))
+    , m_xSendAsFT(m_xBuilder->weld_label("sendasft"))
+    , m_xSendAsLB(m_xBuilder->weld_combo_box("sendas"))
+    , m_xSendAsPB(m_xBuilder->weld_button("sendassettings"))
+    , m_xAttachmentGroup(m_xBuilder->weld_widget("attachgroup"))
+    , m_xAttachmentED(m_xBuilder->weld_entry("attach"))
+    , m_xSendAllRB(m_xBuilder->weld_radio_button("sendallrb"))
+    , m_xFromRB(m_xBuilder->weld_radio_button("fromrb"))
+    , m_xFromNF(m_xBuilder->weld_spin_button("from"))
+    , m_xToFT(m_xBuilder->weld_label("toft"))
+    , m_xToNF(m_xBuilder->weld_spin_button("to"))
+    , m_xOKButton(m_xBuilder->weld_button("ok"))
 {
-    get(m_pMailToFT, "mailtoft");
-    get(m_pMailToLB, "mailto");
-    get(m_pCopyToPB, "copyto");
-    get(m_pSubjectFT, "subjectft");
-    get(m_pSubjectED, "subject");
-    get(m_pSendAsFT, "sendasft");
-    get(m_pSendAsLB, "sendas");
-    get(m_pAttachmentGroup, "attachgroup");
-    get(m_pAttachmentED, "attach");
-    get(m_pSendAsPB, "sendassettings");
-    get(m_pSendAllRB, "sendallrb");
-    get(m_pFromRB, "fromrb");
-    get(m_pFromNF, "from-nospin");
-    get(m_pToFT, "toft");
-    get(m_pToNF, "to-nospin");
-    get(m_pOKButton, "ok");
+    m_xCopyToPB->connect_clicked(LINK(this, SwMMResultEmailDialog, CopyToHdl_Impl));
+    m_xSendAsPB->connect_clicked(LINK(this, SwMMResultEmailDialog, SendAsHdl_Impl));
+    m_xSendAsLB->connect_changed(LINK(this, SwMMResultEmailDialog, SendTypeHdl_Impl));
 
-    m_pCopyToPB->SetClickHdl(LINK(this, SwMMResultEmailDialog, CopyToHdl_Impl));
-    m_pSendAsPB->SetClickHdl(LINK(this, SwMMResultEmailDialog, SendAsHdl_Impl));
-    m_pSendAsLB->SetSelectHdl(LINK(this, SwMMResultEmailDialog, SendTypeHdl_Impl));
+    Link<weld::ToggleButton&,void> aLink = LINK(this, SwMMResultEmailDialog, DocumentSelectionHdl_Impl);
+    m_xSendAllRB->connect_toggled(aLink);
+    m_xFromRB->connect_toggled(aLink);
+    // m_xSendAllRB is the default, so disable m_xFromNF and m_xToNF initially.
+    aLink.Call(*m_xSendAllRB);
 
-    Link<Button*,void> aLink = LINK(this, SwMMResultEmailDialog, DocumentSelectionHdl_Impl);
-    m_pSendAllRB->SetClickHdl(aLink);
-    m_pFromRB->SetClickHdl(aLink);
-    // m_pSendAllRB is the default, so disable m_pFromNF and m_pToNF initially.
-    aLink.Call(m_pSendAllRB);
-
-    m_pOKButton->SetClickHdl(LINK(this, SwMMResultEmailDialog, SendDocumentsHdl_Impl));
+    m_xOKButton->connect_clicked(LINK(this, SwMMResultEmailDialog, SendDocumentsHdl_Impl));
 
     FillInEmailSettings();
 }
 
 SwMMResultEmailDialog::~SwMMResultEmailDialog()
 {
-    disposeOnce();
-}
-
-void SwMMResultEmailDialog::dispose()
-{
-    m_pMailToFT.clear();
-    m_pMailToLB.clear();
-    m_pCopyToPB.clear();
-    m_pSubjectFT.clear();
-    m_pSubjectED.clear();
-    m_pSendAsFT.clear();
-    m_pSendAsLB.clear();
-    m_pAttachmentGroup.clear();
-    m_pAttachmentED.clear();
-    m_pSendAllRB.clear();
-    m_pFromRB.clear();
-    m_pFromNF.clear();
-    m_pToFT.clear();
-    m_pToNF.clear();
-    m_pOKButton.clear();
-    m_pSendAsPB.clear();
-
-    SfxModalDialog::dispose();
 }
 
 void SwMMResultPrintDialog::FillInPrinterSettings()
 {
     //fill printer ListBox
     SwView* pView = ::GetActiveView();
-    std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
+    const std::shared_ptr<SwMailMergeConfigItem>& xConfigItem = pView->GetMailMergeConfigItem();
     const std::vector<OUString>& rPrinters = Printer::GetPrinterQueues();
     unsigned int nCount = rPrinters.size();
     bool bMergePrinterExists = false;
@@ -372,7 +352,7 @@ void SwMMResultPrintDialog::FillInPrinterSettings()
 void SwMMResultEmailDialog::FillInEmailSettings()
 {
     SwView* pView = ::GetActiveView();
-    std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
+    const std::shared_ptr<SwMailMergeConfigItem>& xConfigItem = pView->GetMailMergeConfigItem();
     assert(xConfigItem);
 
     SwView* pSourceView = xConfigItem->GetSourceView();
@@ -383,21 +363,20 @@ void SwMMResultEmailDialog::FillInEmailSettings()
         if (pDocShell->HasName())
         {
             INetURLObject aTmp(pDocShell->GetMedium()->GetName());
-            m_pAttachmentED->SetText(aTmp.getName(
+            m_xAttachmentED->set_text(aTmp.getName(
                     INetURLObject::LAST_SEGMENT, true, INetURLObject::DecodeMechanism::WithCharset ));
         }
     }
 
-    if (m_pAttachmentED->GetText().isEmpty())
+    if (m_xAttachmentED->get_text().isEmpty())
     {
-        OUString sAttach = "." + lcl_GetExtensionForDocType(
-                    reinterpret_cast<sal_uLong>(m_pSendAsLB->GetSelectedEntryData()));
-        m_pAttachmentED->SetText(sAttach);
+        OUString sAttach = "." + lcl_GetExtensionForDocType(m_xSendAsLB->get_active_id().toUInt32());
+        m_xAttachmentED->set_text(sAttach);
 
     }
 
     //fill mail address ListBox
-    if (m_pMailToLB->GetEntryCount())
+    if (m_xMailToLB->get_count())
         return;
 
     //select first column
@@ -409,50 +388,50 @@ void SwMMResultEmailDialog::FillInEmailSettings()
         aFields = xColAccess->getElementNames();
     const OUString* pFields = aFields.getConstArray();
     for (sal_Int32 nField = 0; nField < aFields.getLength(); ++nField)
-        m_pMailToLB->InsertEntry(pFields[nField]);
+        m_xMailToLB->append_text(pFields[nField]);
 
-    m_pMailToLB->SelectEntryPos(0);
+    m_xMailToLB->set_active(0);
     // then select the right one - may not be available
     const std::vector<std::pair<OUString, int>>& rHeaders = xConfigItem->GetDefaultAddressHeaders();
     OUString sEMailColumn = rHeaders[MM_PART_E_MAIL].first;
     Sequence< OUString> aAssignment = xConfigItem->GetColumnAssignment(xConfigItem->GetCurrentDBData());
     if (aAssignment.getLength() > MM_PART_E_MAIL && !aAssignment[MM_PART_E_MAIL].isEmpty())
         sEMailColumn = aAssignment[MM_PART_E_MAIL];
-    m_pMailToLB->SelectEntry(sEMailColumn);
+    m_xMailToLB->set_active_text(sEMailColumn);
 
     // HTML format pre-selected
-    m_pSendAsLB->SelectEntryPos(3);
-    SendTypeHdl_Impl(*m_pSendAsLB);
+    m_xSendAsLB->set_active(3);
+    SendTypeHdl_Impl(*m_xSendAsLB);
 
 }
 
-IMPL_LINK(SwMMResultSaveDialog, DocumentSelectionHdl_Impl, weld::ToggleButton&, rButton, void)
+IMPL_LINK_NOARG(SwMMResultSaveDialog, DocumentSelectionHdl_Impl, weld::ToggleButton&, void)
 {
-    bool bEnableFromTo = &rButton == m_xFromRB.get();
+    bool bEnableFromTo = m_xFromRB->get_active();
     m_xFromNF->set_sensitive(bEnableFromTo);
     m_xToFT->set_sensitive(bEnableFromTo);
     m_xToNF->set_sensitive(bEnableFromTo);
 }
 
-IMPL_LINK(SwMMResultPrintDialog, DocumentSelectionHdl_Impl, weld::ToggleButton&, rButton, void)
+IMPL_LINK_NOARG(SwMMResultPrintDialog, DocumentSelectionHdl_Impl, weld::ToggleButton&, void)
 {
-    bool bEnableFromTo = &rButton == m_xFromRB.get();
+    bool bEnableFromTo = m_xFromRB->get_active();
     m_xFromNF->set_sensitive(bEnableFromTo);
     m_xToFT->set_sensitive(bEnableFromTo);
     m_xToNF->set_sensitive(bEnableFromTo);
 }
 
-IMPL_LINK(SwMMResultEmailDialog, DocumentSelectionHdl_Impl, Button*, pButton, void)
+IMPL_LINK_NOARG(SwMMResultEmailDialog, DocumentSelectionHdl_Impl, weld::ToggleButton&, void)
 {
-    bool bEnableFromTo = pButton == m_pFromRB;
-    m_pFromNF->Enable(bEnableFromTo);
-    m_pToFT->Enable(bEnableFromTo);
-    m_pToNF->Enable(bEnableFromTo);
+    bool bEnableFromTo = m_xFromRB->get_active();
+    m_xFromNF->set_sensitive(bEnableFromTo);
+    m_xToFT->set_sensitive(bEnableFromTo);
+    m_xToNF->set_sensitive(bEnableFromTo);
 }
 
-IMPL_LINK_NOARG(SwMMResultEmailDialog, CopyToHdl_Impl, Button*, void)
+IMPL_LINK_NOARG(SwMMResultEmailDialog, CopyToHdl_Impl, weld::Button&, void)
 {
-    SwCopyToDialog aDlg(GetFrameWeld());
+    SwCopyToDialog aDlg(m_xDialog.get());
     aDlg.SetCC(m_sCC );
     aDlg.SetBCC(m_sBCC);
     if (aDlg.run() == RET_OK)
@@ -464,55 +443,47 @@ IMPL_LINK_NOARG(SwMMResultEmailDialog, CopyToHdl_Impl, Button*, void)
 
 namespace {
 
-int documentStartPageNumber(SwMailMergeConfigItem* pConfigItem, int document)
+int documentStartPageNumber(SwMailMergeConfigItem* pConfigItem, int document, bool bIgnoreEmpty)
 {
     SwView* pTargetView = pConfigItem->GetTargetView();
     assert( pTargetView );
     SwCursorShell& shell = pTargetView->GetWrtShell();
     const SwDocMergeInfo& info = pConfigItem->GetDocumentMergeInfo(document);
-    sal_uInt16 page, dummy;
+    sal_uInt16 page;
     shell.Push();
     shell.GotoMark( info.startPageInTarget );
-    shell.GetPageNum( page, dummy );
+    if (!bIgnoreEmpty)
+        shell.GetPageNum(page, o3tl::temporary(sal_uInt16()));
+    else
+        page = shell.GetPageNumSeqNonEmpty();
     shell.Pop(SwCursorShell::PopMode::DeleteCurrent);
     return page;
 }
 
-int documentEndPageNumber(SwMailMergeConfigItem* pConfigItem, int document)
+int documentEndPageNumber(SwMailMergeConfigItem* pConfigItem, int document, bool bIgnoreEmpty)
 {
     SwView* pTargetView = pConfigItem->GetTargetView();
     assert( pTargetView );
     SwWrtShell& shell = pTargetView->GetWrtShell();
+    shell.Push();
     if (document < int(pConfigItem->GetMergedDocumentCount()) - 1)
     {
         // Go to the page before the starting page of the next merged document.
         const SwDocMergeInfo& info = pConfigItem->GetDocumentMergeInfo( document + 1 );
-        sal_uInt16 page, dummy;
-        shell.Push();
         shell.GotoMark( info.startPageInTarget );
         shell.EndPrvPg();
-        shell.GetPageNum( page, dummy );
-        shell.Pop(SwCursorShell::PopMode::DeleteCurrent);
-        return page;
     }
     else
     {   // This is the last merged document, so it ends on the page at which the document ends.
-        sal_uInt16 page, dummy;
-        shell.Push();
         shell.SttEndDoc( false ); // go to doc end
-        shell.GetPageNum( page, dummy );
-        shell.Pop(SwCursorShell::PopMode::DeleteCurrent);
-        return page;
     }
-}
-
-void endDialog(Button* pButton)
-{
-    vcl::Window* pParent = getNonLayoutParent(pButton);
-    Dialog *pDialog = dynamic_cast<Dialog*>(pParent);
-
-    if (pDialog && pDialog->IsInExecute())
-        pDialog->EndDialog(RET_OK);
+    sal_uInt16 page;
+    if (!bIgnoreEmpty)
+        shell.GetPageNum(page, o3tl::temporary(sal_uInt16()));
+    else
+        page = shell.GetPageNumSeqNonEmpty();
+    shell.Pop(SwCursorShell::PopMode::DeleteCurrent);
+    return page;
 }
 
 } // anonymous namespace
@@ -661,8 +632,9 @@ IMPL_LINK_NOARG(SwMMResultSaveDialog, SaveOutputHdl_Impl, weld::Button&, void)
             pTempView->GetDocShell()->GetDoc()->ReplaceDefaults( *pTargetView->GetDocShell()->GetDoc());
             pTempView->GetDocShell()->GetDoc()->ReplaceDocumentProperties( *pTargetView->GetDocShell()->GetDoc(), true );
 
-            pTargetView->GetWrtShell().PastePages(pTempView->GetWrtShell(),
-                documentStartPageNumber(xConfigItem.get(), nDoc), documentEndPageNumber(xConfigItem.get(), nDoc));
+            pTargetView->GetWrtShell().PastePages(
+                pTempView->GetWrtShell(), documentStartPageNumber(xConfigItem.get(), nDoc, false),
+                documentEndPageNumber(xConfigItem.get(), nDoc, false));
             pTargetView->GetWrtShell().EndAction();
             //then save it
             OUString sOutPath = aURL.GetMainURL(INetURLObject::DecodeMechanism::ToIUri);
@@ -713,10 +685,10 @@ IMPL_LINK_NOARG(SwMMResultSaveDialog, SaveOutputHdl_Impl, weld::Button&, void)
     m_xDialog->response(RET_OK);
 }
 
-IMPL_LINK(SwMMResultPrintDialog, PrinterChangeHdl_Impl, weld::ComboBoxText&, rBox, void)
+IMPL_LINK(SwMMResultPrintDialog, PrinterChangeHdl_Impl, weld::ComboBox&, rBox, void)
 {
     SwView* pView = ::GetActiveView();
-    std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
+    const std::shared_ptr<SwMailMergeConfigItem>& xConfigItem = pView->GetMailMergeConfigItem();
     assert(xConfigItem);
     if (rBox.get_active() != -1)
     {
@@ -777,9 +749,13 @@ IMPL_LINK_NOARG(SwMMResultPrintDialog, PrintHdl_Impl, weld::Button&, void)
             nEnd = documentCount;
     }
 
-    OUString sPages(OUString::number(documentStartPageNumber(xConfigItem.get(), nBegin)));
-    sPages += " - ";
-    sPages += OUString::number(documentEndPageNumber(xConfigItem.get(), nEnd - 1));
+    // If we skip autoinserted blanks, then the page numbers used in the print range string
+    // refer to the non-blank pages as they appear in the document (see tdf#89708).
+    const bool bIgnoreEmptyPages = !officecfg::Office::Writer::Print::EmptyPages::get();
+    const int nStartPage = documentStartPageNumber(xConfigItem.get(), nBegin, bIgnoreEmptyPages);
+    const int nEndPage = documentEndPageNumber(xConfigItem.get(), nEnd - 1, bIgnoreEmptyPages);
+
+    const OUString sPages(OUString::number(nStartPage) + "-" + OUString::number(nEndPage));
 
     pTargetView->SetMailMergeConfigItem(xConfigItem);
     if(m_pTempPrinter)
@@ -814,16 +790,16 @@ IMPL_LINK_NOARG(SwMMResultPrintDialog, PrinterSetupHdl_Impl, weld::Button&, void
         m_pTempPrinter->Setup(m_xDialog.get());
 }
 
-IMPL_LINK(SwMMResultEmailDialog, SendTypeHdl_Impl, ListBox&, rBox, void)
+IMPL_LINK(SwMMResultEmailDialog, SendTypeHdl_Impl, weld::ComboBox&, rBox, void)
 {
-    sal_uLong nDocType = reinterpret_cast<sal_uLong>(rBox.GetSelectedEntryData());
+    auto nDocType = rBox.get_active_id().toUInt32();
     bool bEnable = MM_DOCTYPE_HTML != nDocType && MM_DOCTYPE_TEXT != nDocType;
-    m_pSendAsPB->Enable( bEnable );
-    m_pAttachmentGroup->Enable( bEnable );
+    m_xSendAsPB->set_sensitive(bEnable);
+    m_xAttachmentGroup->set_sensitive(bEnable);
     if(bEnable)
     {
         //add the correct extension
-        OUString sAttach(m_pAttachmentED->GetText());
+        OUString sAttach(m_xAttachmentED->get_text());
         //do nothing if the user has removed the name - the warning will come early enough
         if (!sAttach.isEmpty())
         {
@@ -834,23 +810,23 @@ IMPL_LINK(SwMMResultEmailDialog, SendTypeHdl_Impl, ListBox&, rBox, void)
                 ++nTokenCount;
             }
             sAttach = comphelper::string::setToken(sAttach, nTokenCount - 1, '.', lcl_GetExtensionForDocType( nDocType ));
-            m_pAttachmentED->SetText(sAttach);
+            m_xAttachmentED->set_text(sAttach);
         }
     }
 }
 
-IMPL_LINK(SwMMResultEmailDialog, SendAsHdl_Impl, Button*, pButton, void)
+IMPL_LINK_NOARG(SwMMResultEmailDialog, SendAsHdl_Impl, weld::Button&, void)
 {
-    VclPtr<SwMailBodyDialog> pDlg = VclPtr<SwMailBodyDialog>::Create(pButton);
-    pDlg->SetBody(m_sBody);
-    if(RET_OK == pDlg->Execute())
+    SwMailBodyDialog aDlg(m_xDialog.get());
+    aDlg.SetBody(m_sBody);
+    if (RET_OK == aDlg.run())
     {
-        m_sBody = pDlg->GetBody();
+        m_sBody = aDlg.GetBody();
     }
 }
 
 // Send documents as e-mail
-IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
+IMPL_LINK_NOARG(SwMMResultEmailDialog, SendDocumentsHdl_Impl, weld::Button&, void)
 {
     SwView* pView = ::GetActiveView();
     std::shared_ptr<SwMailMergeConfigItem> xConfigItem = pView->GetMailMergeConfigItem();
@@ -865,7 +841,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     if (xConfigItem->GetMailServer().isEmpty() ||
             !SwMailMergeHelper::CheckMailAddress(xConfigItem->GetMailAddress()) )
     {
-        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(pButton->GetFrameWeld(),
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(m_xDialog.get(),
                                                        VclMessageType::Question, VclButtonsType::YesNo,
                                                        m_sConfigureMail));
         xQueryBox->add_button(Button::GetStandardText(StandardButtonType::Cancel), RET_CANCEL);
@@ -874,7 +850,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
         {
             SwView* pConfigView = pTargetView ? pTargetView : pView;
             SfxAllItemSet aSet(pConfigView->GetPool());
-            ScopedVclPtrInstance< SwMailConfigDlg > pDlg(pButton, aSet);
+            ScopedVclPtrInstance<SwMailConfigDlg> pDlg(nullptr, aSet);
             nRet = pDlg->Execute();
         }
 
@@ -884,15 +860,15 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     //add the documents
     sal_uInt32 nBegin = 0;
     sal_uInt32 nEnd = 0;
-    if(m_pSendAllRB->IsChecked())
+    if (m_xSendAllRB->get_active())
     {
         nBegin = 0;
         nEnd = xConfigItem->GetMergedDocumentCount();
     }
     else
     {
-        nBegin  = static_cast< sal_Int32 >(m_pFromNF->GetValue() - 1);
-        nEnd    = static_cast< sal_Int32 >(m_pToNF->GetValue());
+        nBegin  = static_cast< sal_Int32 >(m_xFromNF->get_value() - 1);
+        nEnd    = static_cast< sal_Int32 >(m_xToNF->get_value());
         if(nEnd > xConfigItem->GetMergedDocumentCount())
             nEnd = xConfigItem->GetMergedDocumentCount();
     }
@@ -900,7 +876,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     rtl_TextEncoding eEncoding = ::osl_getThreadTextEncoding();
     SfxFilterContainer* pFilterContainer = SwDocShell::Factory().GetFilterContainer();
     std::shared_ptr<const SfxFilter> pSfxFlt;
-    sal_uLong nDocType = reinterpret_cast<sal_uLong>(m_pSendAsLB->GetSelectedEntryData());
+    auto nDocType = m_xSendAsLB->get_active_id().toUInt32();
     OUString sExtension = lcl_GetExtensionForDocType(nDocType);
     switch( nDocType )
     {
@@ -959,28 +935,28 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
 
     if(!pSfxFlt)
     {
-        endDialog(pButton);
+        m_xDialog->response(RET_OK);
         return;
     }
     OUString sMimeType = pSfxFlt->GetMimeType();
 
-    if(m_pSubjectED->GetText().isEmpty())
+    if (m_xSubjectED->get_text().isEmpty())
     {
-        std::unique_ptr<SwSendQueryBox_Impl> xQuery(new SwSendQueryBox_Impl(pButton->GetFrameWeld(), "SubjectDialog",
+        std::unique_ptr<SwSendQueryBox_Impl> xQuery(new SwSendQueryBox_Impl(m_xDialog.get(), "SubjectDialog",
                                                          "modules/swriter/ui/subjectdialog.ui"));
         xQuery->SetIsEmptyTextAllowed(true);
         xQuery->SetValue("");
         if(RET_OK == xQuery->run())
         {
-            if(!xQuery->GetValue().isEmpty())
-                m_pSubjectED->SetText(xQuery->GetValue());
+            if (!xQuery->GetValue().isEmpty())
+                m_xSubjectED->set_text(xQuery->GetValue());
         }
         else
             return; // back to the dialog
     }
-    if(!bAsBody && m_pAttachmentED->GetText().isEmpty())
+    if(!bAsBody && m_xAttachmentED->get_text().isEmpty())
     {
-        std::unique_ptr<SwSendQueryBox_Impl> xQuery(new SwSendQueryBox_Impl(pButton->GetFrameWeld(), "AttachNameDialog",
+        std::unique_ptr<SwSendQueryBox_Impl> xQuery(new SwSendQueryBox_Impl(m_xDialog.get(), "AttachNameDialog",
                                                          "modules/swriter/ui/attachnamedialog.ui"));
         xQuery->SetIsEmptyTextAllowed(false);
         if (RET_OK == xQuery->run())
@@ -993,19 +969,19 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
                 ++nTokenCount;
             }
             sAttach = comphelper::string::setToken(sAttach, nTokenCount - 1, '.', lcl_GetExtensionForDocType(
-                     reinterpret_cast<sal_uLong>(m_pSendAsLB->GetSelectedEntryData())));
-            m_pAttachmentED->SetText(sAttach);
+                                                   m_xSendAsLB->get_active_id().toUInt32()));
+            m_xAttachmentED->set_text(sAttach);
         }
         else
             return; // back to the dialog
     }
-    OUString sEMailColumn = m_pMailToLB->GetSelectedEntry();
+    OUString sEMailColumn = m_xMailToLB->get_active_text();
     OSL_ENSURE( !sEMailColumn.isEmpty(), "No email column selected");
     Reference< sdbcx::XColumnsSupplier > xColsSupp( xConfigItem->GetResultSet(), UNO_QUERY);
     Reference < container::XNameAccess> xColAccess = xColsSupp.is() ? xColsSupp->getColumns() : nullptr;
     if(sEMailColumn.isEmpty() || !xColAccess.is() || !xColAccess->hasByName(sEMailColumn))
     {
-        endDialog(pButton);
+        m_xDialog->response(RET_OK);
         return;
     }
 
@@ -1048,7 +1024,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
     //TODO/CLEANUP
     //predetermined breaking point
     Application::Reschedule( true );
-    endDialog(pButton);
+    m_xDialog->response(RET_OK);
     for(sal_uInt32 nDoc = nBegin; nDoc < nEnd; ++nDoc)
     {
         SwDocMergeInfo& rInfo = xConfigItem->GetDocumentMergeInfo(nDoc);
@@ -1071,8 +1047,9 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
         pTempView->GetDocShell()->GetDoc()->ReplaceCompatibilityOptions( *pTargetView->GetDocShell()->GetDoc());
         pTempView->GetDocShell()->GetDoc()->ReplaceDefaults( *pTargetView->GetDocShell()->GetDoc());
         pTempView->GetDocShell()->GetDoc()->ReplaceDocumentProperties( *pTargetView->GetDocShell()->GetDoc(), true );
-        pTargetView->GetWrtShell().PastePages(pTempView->GetWrtShell(),
-            documentStartPageNumber(xConfigItem.get(), nDoc), documentEndPageNumber(xConfigItem.get(), nDoc));
+        pTargetView->GetWrtShell().PastePages(
+            pTempView->GetWrtShell(), documentStartPageNumber(xConfigItem.get(), nDoc, false),
+            documentEndPageNumber(xConfigItem.get(), nDoc, false));
         pTargetView->GetWrtShell().EndAction();
 
         //then save it
@@ -1104,7 +1081,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
         OUString sEMail = lcl_GetColumnValueOf(sEMailColumn, xColAccess);
         SwMailDescriptor aDesc;
         aDesc.sEMail = sEMail;
-        OUString sBody;
+        OUStringBuffer sBody;
         if(bAsBody)
         {
             {
@@ -1122,8 +1099,8 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
                 bool bDone = pInStream->ReadLine( sLine );
                 while ( bDone )
                 {
-                    sBody += OStringToOUString(sLine, eEncoding);
-                    sBody += "\n";
+                    sBody.append( OStringToOUString(sLine, eEncoding) );
+                    sBody.append("\n");
                     bDone = pInStream->ReadLine( sLine );
                 }
             }
@@ -1134,7 +1111,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
         {
             sBody = m_sBody;
             aDesc.sAttachmentURL = aName.GetValue();
-            OUString sAttachment(m_pAttachmentED->GetText());
+            OUString sAttachment(m_xAttachmentED->get_text());
             sal_Int32 nTokenCount = comphelper::string::getTokenCount(sAttachment, '.');
             if (2 > nTokenCount)
             {
@@ -1173,10 +1150,10 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
 
                 }
                 sGreeting += "\n";
-                sBody = sGreeting + sBody;
+                sBody.insert(0, sGreeting);
             }
         }
-        aDesc.sBodyContent = sBody;
+        aDesc.sBodyContent = sBody.makeStringAndClear();
         if(MM_DOCTYPE_HTML == nDocType)
         {
             aDesc.sBodyMimeType = "text/html; charset=" +
@@ -1185,7 +1162,7 @@ IMPL_LINK(SwMMResultEmailDialog, SendDocumentsHdl_Impl, Button*, pButton, void)
         else
             aDesc.sBodyMimeType = "text/plain; charset=UTF-8; format=flowed";
 
-        aDesc.sSubject = m_pSubjectED->GetText();
+        aDesc.sSubject = m_xSubjectED->get_text();
         aDesc.sCC = m_sCC;
         aDesc.sBCC = m_sBCC;
         pDlg->AddDocument( aDesc );

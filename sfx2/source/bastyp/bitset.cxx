@@ -37,13 +37,12 @@ IndexBitSet& IndexBitSet::operator-=(sal_uInt16 nBit)
     if ( pBitmap[nBlock] & nBitVal )
     {
         pBitmap[nBlock] &= ~nBitVal;
-        --nCount;
     }
 
     return *this;
 }
 
-// unites with a single bit
+// unify with a single bit
 
 IndexBitSet& IndexBitSet::operator|=( sal_uInt16 nBit )
 {
@@ -66,7 +65,6 @@ IndexBitSet& IndexBitSet::operator|=( sal_uInt16 nBit )
     if ( (pBitmap[nBlock] & nBitVal) == 0 )
     {
         pBitmap[nBlock] |= nBitVal;
-        ++nCount;
     }
 
     return *this;
@@ -87,7 +85,6 @@ bool IndexBitSet::Contains( sal_uInt16 nBit ) const
 
 IndexBitSet::IndexBitSet()
 {
-    nCount = 0;
     nBlocks = 0;
 }
 

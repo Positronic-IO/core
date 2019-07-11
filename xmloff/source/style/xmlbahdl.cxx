@@ -19,6 +19,7 @@
 
 #include "xmlbahdl.hxx"
 
+#include <sal/log.hxx>
 #include <o3tl/any.hxx>
 #include <sax/tools/converter.hxx>
 #include <xmloff/xmluconv.hxx>
@@ -487,7 +488,9 @@ bool XMLColorPropHdl::exportXML( OUString& rStrExpValue, const Any& rValue, cons
         Sequence< double > aHSL;
         if( (rValue >>= aHSL) && (aHSL.getLength() == 3) )
         {
-            aOut.append( "hsl(" + OUString::number(aHSL[0]) + "," + OUString::number(aHSL[1] * 100.0) + "%," + OUString::number(aHSL[2] * 100.0) + "%)" );
+            aOut.append( "hsl(" ).append( OUString::number(aHSL[0]) ).append( "," )
+                .append( OUString::number(aHSL[1] * 100.0) ).append( "%," )
+                .append( OUString::number(aHSL[2] * 100.0) ).append( "%)" );
             rStrExpValue = aOut.makeStringAndClear();
 
             bRet = true;

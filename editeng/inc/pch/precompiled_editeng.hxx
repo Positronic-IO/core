@@ -99,7 +99,6 @@
 #include <vcl/checksum.hxx>
 #include <vcl/combobox.hxx>
 #include <vcl/ctrl.hxx>
-#include <vcl/dialog.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/dndhelp.hxx>
 #include <vcl/edit.hxx>
@@ -336,7 +335,6 @@
 #include <editeng/brushitem.hxx>
 #include <editeng/charreliefitem.hxx>
 #include <editeng/charscaleitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/cmapitem.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/contouritem.hxx>

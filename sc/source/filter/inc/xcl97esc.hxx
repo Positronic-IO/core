@@ -23,13 +23,10 @@
 #include <memory>
 #include <stack>
 #include <filter/msfilter/escherex.hxx>
-#include "xlescher.hxx"
 #include "xeroot.hxx"
-#include <vector>
+#include <unotools/tempfile.hxx>
 
-namespace utl { class TempFile; }
-
-class SvStream;
+namespace com { namespace sun { namespace star { namespace awt { class XControlModel; } } } }
 
 class XclEscherExGlobal : public EscherExGlobal, protected XclExpRoot
 {
@@ -53,7 +50,6 @@ class XclEscherClientTextbox;
 class XclExpOcxControlObj;
 class XclExpTbxControlObj;
 class XclExpShapeObj;
-class EscherExHostAppData;
 class ShapeInteractionHelper
 {
 public:
@@ -122,14 +118,14 @@ private:
 
 private:
     XclExpObjectManager&    mrObjMgr;
-    std::stack< std::pair< XclObj*, XclEscherHostAppData* > > aStack;
+    std::stack< std::pair< XclObj*, std::unique_ptr<XclEscherHostAppData> > > aStack;
     XclObj*                 pCurrXclObj;
-    XclEscherHostAppData*   pCurrAppData;
-    XclEscherClientData*    pTheClientData; // always the same
+    std::unique_ptr<XclEscherHostAppData> pCurrAppData;
+    std::unique_ptr<XclEscherClientData>  pTheClientData; // always the same
     XclEscherClientTextbox* pAdditionalText;
     sal_uInt16              nAdditionalText;
     sal_uInt32              mnNextKey;
-    bool                    mbIsRootDff;
+    bool const              mbIsRootDff;
 };
 
 // --- class XclEscherHostAppData ------------------------------------

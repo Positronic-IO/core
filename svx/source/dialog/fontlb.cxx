@@ -22,24 +22,12 @@
 #include <vcl/builderfactory.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
-#include <svtools/treelistentry.hxx>
-#include <svtools/viewdataentry.hxx>
+#include <vcl/treelistentry.hxx>
+#include <vcl/viewdataentry.hxx>
 
 SvLBoxFontString::SvLBoxFontString()
     : SvLBoxString()
-    , mbUseColor(false)
 {
-}
-
-SvLBoxFontString::SvLBoxFontString( const OUString& rString,
-        const vcl::Font& rFont, const Color* pColor ) :
-    SvLBoxString( rString ),
-    maFont( rFont ),
-    mbUseColor( pColor != nullptr )
-{
-    SetText(rString);
-    if(pColor)
-        maFont.SetColor(*pColor);
 }
 
 SvLBoxFontString::~SvLBoxFontString()
@@ -55,13 +43,10 @@ void SvLBoxFontString::Paint(const Point& rPos, SvTreeListBox& rDev, vcl::Render
                              const SvViewDataEntry* pView, const SvTreeListEntry& rEntry)
 {
     rRenderContext.Push(PushFlags::FONT);
-    vcl::Font aNewFont(maFont);
+    vcl::Font aNewFont;
     bool bSel = pView->IsSelected();
-    if (!mbUseColor || bSel)       // selection always gets highlight color
-    {
-        const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
-        aNewFont.SetColor(bSel ? rStyleSettings.GetHighlightTextColor() : rStyleSettings.GetFieldTextColor());
-    }
+    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+    aNewFont.SetColor(bSel ? rStyleSettings.GetHighlightTextColor() : rStyleSettings.GetFieldTextColor());
 
     rRenderContext.SetFont(aNewFont);
     SvLBoxString::Paint(rPos, rDev, rRenderContext, pView, rEntry);
@@ -71,73 +56,9 @@ void SvLBoxFontString::Paint(const Point& rPos, SvTreeListBox& rDev, vcl::Render
 void SvLBoxFontString::InitViewData( SvTreeListBox* pView, SvTreeListEntry* pEntry, SvViewDataItem* pViewData )
 {
     vcl::Font aOldFont( pView->GetFont() );
-    pView->Control::SetFont( maFont );
+    pView->Control::SetFont( vcl::Font() );
     SvLBoxString::InitViewData( pView, pEntry, pViewData);
     pView->Control::SetFont( aOldFont );
 }
-
-
-SvxFontListBox::SvxFontListBox(vcl::Window* pParent, WinBits nStyle)
-    : SvTabListBox(pParent, nStyle)
-    , mpEntryColor(nullptr)
-    , mbUseFont(false)
-{
-    vcl::Font aStdFont(GetFont()); // Used for entries without specific font.
-    aStdFont.SetTransparent(true);
-    maEntryFont = aStdFont;
-}
-
-VCL_BUILDER_FACTORY_CONSTRUCTOR(SvxFontListBox, WB_TABSTOP)
-
-void SvxFontListBox::InsertFontEntry( const OUString& rString, const vcl::Font& rFont, const Color* pColor )
-{
-    mbUseFont = true;           // InitEntry() will use maEntryFont
-    maEntryFont = rFont;        // font to use in InitEntry() over InsertEntry()
-    mpEntryColor = pColor;      // color to use in InitEntry() over InsertEntry()
-    InsertEntry( rString );
-    mbUseFont = false;
-}
-
-void SvxFontListBox::SelectEntryPos( sal_uLong nPos )
-{
-    SvTreeListEntry* pEntry = GetEntry( nPos );
-    if( pEntry )
-    {
-        Select( pEntry );
-        ShowEntry( pEntry );
-    }
-}
-
-void SvxFontListBox::SetNoSelection()
-{
-    SelectAll( false );
-}
-
-sal_uLong SvxFontListBox::GetSelectedEntryPos() const
-{
-    SvTreeListEntry* pSvLBoxEntry = FirstSelected();
-    return pSvLBoxEntry ? GetModel()->GetAbsPos( pSvLBoxEntry ) : TREELIST_ENTRY_NOTFOUND;
-}
-
-void SvxFontListBox::InitEntry(
-        SvTreeListEntry* pEntry, const OUString& rEntryText,
-        const Image& rCollImg, const Image& rExpImg,
-        SvLBoxButtonKind eButtonKind)
-{
-    if( mbUseFont )
-    {
-        if( nTreeFlags & SvTreeFlags::CHKBTN )
-            pEntry->AddItem(o3tl::make_unique<SvLBoxButton>(
-                        eButtonKind, pCheckButtonData));
-        pEntry->AddItem(o3tl::make_unique<SvLBoxContextBmp>(
-                        rCollImg, rExpImg, true));
-        pEntry->AddItem(o3tl::make_unique<SvLBoxFontString>(
-                        rEntryText, maEntryFont, mpEntryColor));
-    }
-    else
-        SvTreeListBox::InitEntry( pEntry, rEntryText, rCollImg, rExpImg,
-                                  eButtonKind );
-}
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

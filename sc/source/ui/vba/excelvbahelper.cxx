@@ -165,14 +165,19 @@ void
 implnCopy( const uno::Reference< frame::XModel>& xModel )
 {
     ScTabViewShell* pViewShell = getBestViewShell( xModel );
-    if ( pViewShell )
+    ScDocShell* pDocShell = getDocShell( xModel );
+    if ( pViewShell && pDocShell )
     {
         pViewShell->CopyToClip(nullptr,false,false,true);
 
         // mark the copied transfer object so it is used in ScVbaRange::Insert
-        ScTransferObj* pClipObj = ScTransferObj::GetOwnClipboard( pViewShell->GetViewData().GetActiveWin() );
+        uno::Reference<datatransfer::XTransferable2> xTransferable(ScTabViewShell::GetClipData(pViewShell->GetViewData().GetActiveWin()));
+        ScTransferObj* pClipObj = ScTransferObj::GetOwnClipboard(xTransferable);
         if (pClipObj)
+        {
             pClipObj->SetUseInApi( true );
+            pDocShell->SetClipData(xTransferable);
+        }
     }
 }
 
@@ -180,14 +185,19 @@ void
 implnCut( const uno::Reference< frame::XModel>& xModel )
 {
     ScTabViewShell* pViewShell =  getBestViewShell( xModel );
-    if ( pViewShell )
+    ScDocShell* pDocShell = getDocShell( xModel );
+    if ( pViewShell && pDocShell )
     {
         pViewShell->CutToClip();
 
         // mark the copied transfer object so it is used in ScVbaRange::Insert
-        ScTransferObj* pClipObj = ScTransferObj::GetOwnClipboard( pViewShell->GetViewData().GetActiveWin() );
+        uno::Reference<datatransfer::XTransferable2> xTransferable(ScTabViewShell::GetClipData(pViewShell->GetViewData().GetActiveWin()));
+        ScTransferObj* pClipObj = ScTransferObj::GetOwnClipboard(xTransferable);
         if (pClipObj)
+        {
             pClipObj->SetUseInApi( true );
+            pDocShell->SetClipData(xTransferable);
+        }
     }
 }
 
@@ -196,13 +206,14 @@ void implnPasteSpecial( const uno::Reference< frame::XModel>& xModel, InsertDele
     PasteCellsWarningReseter resetWarningBox;
 
     ScTabViewShell* pTabViewShell = getBestViewShell( xModel );
-    if ( pTabViewShell )
+    ScDocShell* pDocShell = getDocShell( xModel );
+    if ( pTabViewShell && pDocShell )
     {
         ScViewData& rView = pTabViewShell->GetViewData();
         vcl::Window* pWin = rView.GetActiveWin();
         if (pWin)
         {
-            ScTransferObj* pOwnClip = ScTransferObj::GetOwnClipboard( pWin );
+            const ScTransferObj* pOwnClip = ScTransferObj::GetOwnClipboard(pDocShell->GetClipData());
             ScDocument* pDoc = nullptr;
             if ( pOwnClip )
                 pDoc = pOwnClip->GetDocument();

@@ -30,6 +30,7 @@
 #include <xmloff/nmspmap.hxx>
 #include <o3tl/temporary.hxx>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <comphelper/extract.hxx>
 #include "callbacks.hxx"
 #include <xmloff/xmlnmspe.hxx>
@@ -516,12 +517,10 @@ void OListPropertyContext::EndElement()
     Sequence< Any > aListElements( m_aListValues.size() );
     Any* pListElement = aListElements.getArray();
     css::uno::Type aType = PropertyConversion::xmlTypeToUnoType( m_sPropertyType );
-    for (   ::std::vector< OUString >::const_iterator values = m_aListValues.begin();
-            values != m_aListValues.end();
-            ++values, ++pListElement
-        )
+    for ( const auto& rListValue : m_aListValues )
     {
-        *pListElement = PropertyConversion::convertString( aType, *values );
+        *pListElement = PropertyConversion::convertString( aType, rListValue );
+        ++pListElement;
     }
 
     PropertyValue aSequenceValue;

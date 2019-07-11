@@ -21,6 +21,7 @@
 
 #include <hintids.hxx>
 #include <comphelper/string.hxx>
+#include <osl/diagnose.h>
 #include <rtl/strbuf.hxx>
 #include <basic/sbx.hxx>
 #include <basic/basmgr.hxx>
@@ -48,7 +49,7 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::container;
 
-static HTMLOutEvent aBodyEventTable[] =
+static HTMLOutEvent const aBodyEventTable[] =
 {
     { OOO_STRING_SVTOOLS_HTML_O_SDonload,    OOO_STRING_SVTOOLS_HTML_O_onload,    SvMacroItemId::OpenDoc   },
     { OOO_STRING_SVTOOLS_HTML_O_SDonunload,  OOO_STRING_SVTOOLS_HTML_O_onunload,  SvMacroItemId::PrepareCloseDoc   },
@@ -141,8 +142,7 @@ void SwHTMLParser::EndScript()
                     bool bFound = true;
                     while( bFound )
                     {
-                        m_aBasicModule = "Modul";
-                        m_aBasicModule += OUString::number( static_cast<sal_Int32>(++m_nSBModuleCnt) );
+                        m_aBasicModule = "Modul" + OUString::number( static_cast<sal_Int32>(++m_nSBModuleCnt) );
                         bFound = xModLib->hasByName( m_aBasicModule );
                     }
                 }

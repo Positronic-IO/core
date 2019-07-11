@@ -35,7 +35,6 @@
 #include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <dbadmin.hxx>
-#include <comphelper/types.hxx>
 #include <vcl/stdtext.hxx>
 #include <sqlmessage.hxx>
 #include "odbcconfig.hxx"
@@ -82,38 +81,35 @@ namespace dbaui
     using namespace ::dbtools;
     using namespace ::svt;
 
-    OConnectionHelper::OConnectionHelper( vcl::Window* pParent, const OString& _rId, const OUString& _rUIXMLDescription, const SfxItemSet& _rCoreAttrs)
-        : OGenericAdministrationPage(pParent, _rId, _rUIXMLDescription, _rCoreAttrs)
+    OConnectionHelper::OConnectionHelper(TabPageParent pParent, const OUString& _rUIXMLDescription, const OString& _rId, const SfxItemSet& _rCoreAttrs)
+        : OGenericAdministrationPage(pParent, _rUIXMLDescription, _rId, _rCoreAttrs)
         , m_bUserGrabFocus(false)
         , m_pCollection(nullptr)
+        , m_xFT_Connection(m_xBuilder->weld_label("browseurllabel"))
+        , m_xPB_Connection(m_xBuilder->weld_button("browse"))
+        , m_xPB_CreateDB(m_xBuilder->weld_button("create"))
+        , m_xConnectionURL(new OConnectionURLEdit(m_xBuilder->weld_entry("browseurl"), m_xBuilder->weld_label("browselabel")))
     {
-        get(m_pFT_Connection, "browseurllabel");
-        get(m_pConnectionURL, "browseurl");
-        get(m_pPB_Connection, "browse");
-        get(m_pPB_CreateDB, "create");
-
         // extract the datasource type collection from the item set
         const DbuTypeCollectionItem* pCollectionItem = dynamic_cast<const DbuTypeCollectionItem*>( _rCoreAttrs.GetItem(DSID_TYPECOLLECTION) );
         if (pCollectionItem)
             m_pCollection = pCollectionItem->getCollection();
-        m_pPB_Connection->SetClickHdl(LINK(this, OConnectionHelper, OnBrowseConnections));
-        m_pPB_CreateDB->SetClickHdl(LINK(this, OConnectionHelper, OnCreateDatabase));
+        m_xPB_Connection->connect_clicked(LINK(this, OConnectionHelper, OnBrowseConnections));
+        m_xPB_CreateDB->connect_clicked(LINK(this, OConnectionHelper, OnCreateDatabase));
         OSL_ENSURE(m_pCollection, "OConnectionHelper::OConnectionHelper : really need a DSN type collection !");
-        m_pConnectionURL->SetTypeCollection(m_pCollection);
+        m_xConnectionURL->SetTypeCollection(m_pCollection);
+
+        m_xConnectionURL->connect_focus_in(LINK(this, OConnectionHelper, GetFocusHdl));
+        m_xConnectionURL->connect_focus_out(LINK(this, OConnectionHelper, LoseFocusHdl));
     }
 
     OConnectionHelper::~OConnectionHelper()
     {
-        disposeOnce();
     }
 
     void OConnectionHelper::dispose()
     {
-        // FIXME: used to have an if (m_bDelete) ...
-        m_pFT_Connection.disposeAndClear();
-        m_pConnectionURL.disposeAndClear();
-        m_pPB_Connection.disposeAndClear();
-        m_pPB_CreateDB.disposeAndClear();
+        m_xConnectionURL.reset();
         OGenericAdministrationPage::dispose();
     }
 
@@ -123,16 +119,15 @@ namespace dbaui
         bool bValid, bReadonly;
         getFlags(_rSet, bValid, bReadonly);
 
-        m_pFT_Connection->Show();
-        m_pConnectionURL->Show();
-        m_pConnectionURL->Resize();
-        m_pConnectionURL->ShowPrefix( ::dbaccess::DST_JDBC == m_pCollection->determineType(m_eType) );
+        m_xFT_Connection->show();
+        m_xConnectionURL->show();
+        m_xConnectionURL->ShowPrefix( ::dbaccess::DST_JDBC == m_pCollection->determineType(m_eType) );
 
         bool bEnableBrowseButton = m_pCollection->supportsBrowsing( m_eType );
-        m_pPB_Connection->Show( bEnableBrowseButton );
+        m_xPB_Connection->show( bEnableBrowseButton );
 
         bool bEnableCreateButton = m_pCollection->supportsDBCreation( m_eType );
-        m_pPB_CreateDB->Show( bEnableCreateButton );
+        m_xPB_CreateDB->show( bEnableCreateButton );
 
         const SfxStringItem* pUrlItem = _rSet.GetItem<SfxStringItem>(DSID_CONNECTURL);
 
@@ -143,7 +138,7 @@ namespace dbaui
             setURL( sUrl );
 
             checkTestConnection();
-            m_pConnectionURL->ClearModifyFlag();
+            m_xConnectionURL->save_value();
         }
 
         OGenericAdministrationPage::implInitControls(_rSet, _bSaveValue);
@@ -159,7 +154,7 @@ namespace dbaui
             m_pAdminDialog->enableConfirmSettings( !getURLNoPrefix().isEmpty() );
     }
 
-    IMPL_LINK_NOARG(OConnectionHelper, OnBrowseConnections, Button*, void)
+    IMPL_LINK_NOARG(OConnectionHelper, OnBrowseConnections, weld::Button&, void)
     {
         OSL_ENSURE(m_pAdminDialog,"No Admin dialog set! ->GPF");
         const ::dbaccess::DATASOURCE_TYPE eType = m_pCollection->determineType(m_eType);
@@ -310,7 +305,7 @@ namespace dbaui
 
                 sal_Int32 count = list.getLength();
 
-                StringBag aProfiles;
+                std::set<OUString> aProfiles;
                 for (sal_Int32 index=0; index < count; index++)
                     aProfiles.insert(pArray[index]);
 
@@ -346,7 +341,7 @@ namespace dbaui
         checkTestConnection();
     }
 
-    IMPL_LINK_NOARG(OConnectionHelper, OnCreateDatabase, Button*, void)
+    IMPL_LINK_NOARG(OConnectionHelper, OnCreateDatabase, weld::Button&, void)
     {
         OSL_ENSURE(m_pAdminDialog,"No Admin dialog set! ->GPF");
         const ::dbaccess::DATASOURCE_TYPE eType = m_pCollection->determineType(m_eType);
@@ -412,9 +407,9 @@ namespace dbaui
         }
 
         if ( _bPrefix )
-            m_pConnectionURL->SetText( sURL );
+            m_xConnectionURL->SetText( sURL );
         else
-            m_pConnectionURL->SetTextNoPrefix( sURL );
+            m_xConnectionURL->SetTextNoPrefix( sURL );
 
         implUpdateURLDependentStates();
     }
@@ -422,7 +417,7 @@ namespace dbaui
     OUString OConnectionHelper::impl_getURL() const
     {
         // get the pure text
-        OUString sURL = m_pConnectionURL->GetTextNoPrefix();
+        OUString sURL = m_xConnectionURL->GetTextNoPrefix();
 
         OSL_ENSURE( m_pCollection, "OConnectionHelper::impl_getURL: have no interpreter for the URLs!" );
 
@@ -563,32 +558,25 @@ namespace dbaui
         }
         return eExists;
     }
-    bool OConnectionHelper::PreNotify( NotifyEvent& _rNEvt )
+
+    IMPL_LINK_NOARG(OConnectionHelper, GetFocusHdl, weld::Widget&, void)
     {
-        if ( m_pCollection->isFileSystemBased(m_eType) )
-        {
-            switch (_rNEvt.GetType())
-            {
-                case MouseNotifyEvent::GETFOCUS:
-                    if (m_pConnectionURL->IsWindowOrChild(_rNEvt.GetWindow()) && m_bUserGrabFocus)
-                    {   // a descendant of the URL edit field got the focus
-                        m_pConnectionURL->SaveValueNoPrefix();
-                    }
-                    break;
+        if (!m_pCollection->isFileSystemBased(m_eType))
+            return;
+        if (!m_bUserGrabFocus)
+            return;
+        // URL edit field got the focus
+        m_xConnectionURL->SaveValueNoPrefix();
+    }
 
-                case MouseNotifyEvent::LOSEFOCUS:
-                    if (m_pConnectionURL->IsWindowOrChild(_rNEvt.GetWindow()) && m_bUserGrabFocus)
-                    {   // a descendant of the URL edit field lost the focus
-                        if (!commitURL())
-                            return true;  // handled
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        return OGenericAdministrationPage::PreNotify( _rNEvt );
+    IMPL_LINK_NOARG(OConnectionHelper, LoseFocusHdl, weld::Widget&, void)
+    {
+        if (!m_pCollection->isFileSystemBased(m_eType))
+            return;
+        if (!m_bUserGrabFocus)
+            return;
+        // URL edit field lost the focus
+        commitURL();
     }
 
     bool OConnectionHelper::createDirectoryDeep(const OUString& _rPathURL)
@@ -658,24 +646,24 @@ namespace dbaui
         return true;
     }
 
-    void OConnectionHelper::fillWindows(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OConnectionHelper::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back(new ODisableWrapper<FixedText>(m_pFT_Connection));
-        _rControlList.push_back(new ODisableWrapper<PushButton>(m_pPB_Connection));
-        _rControlList.push_back(new ODisableWrapper<PushButton>(m_pPB_CreateDB));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Label>(m_xFT_Connection.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Button>(m_xPB_Connection.get()));
+        _rControlList.emplace_back(new ODisableWidgetWrapper<weld::Button>(m_xPB_CreateDB.get()));
     }
 
-    void OConnectionHelper::fillControls(std::vector< ISaveValueWrapper* >& _rControlList)
+    void OConnectionHelper::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
     {
-        _rControlList.push_back( new OSaveValueWrapper<Edit>( m_pConnectionURL ) );
+        _rControlList.emplace_back( new OSaveValueWidgetWrapper<OConnectionURLEdit>( m_xConnectionURL.get() ) );
     }
 
     bool OConnectionHelper::commitURL()
     {
         OUString sURL;
         OUString sOldPath;
-        sOldPath = m_pConnectionURL->GetSavedValueNoPrefix();
-        sURL = m_pConnectionURL->GetTextNoPrefix();
+        sOldPath = m_xConnectionURL->GetSavedValueNoPrefix();
+        sURL = m_xConnectionURL->GetTextNoPrefix();
 
         if ( m_pCollection->isFileSystemBased(m_eType) )
         {
@@ -708,7 +696,7 @@ namespace dbaui
                     {
                         case RET_RETRY:
                             m_bUserGrabFocus = false;
-                            m_pConnectionURL->GrabFocus();
+                            m_xConnectionURL->grab_focus();
                             m_bUserGrabFocus = true;
                             return false;
 
@@ -721,9 +709,10 @@ namespace dbaui
         }
 
         setURLNoPrefix(sURL);
-        m_pConnectionURL->SaveValueNoPrefix();
+        m_xConnectionURL->SaveValueNoPrefix();
         return true;
     }
+
     void OConnectionHelper::askForFileName(::sfx2::FileDialogHelper& _aFileOpen)
     {
         OUString sOldPath = getURLNoPrefix();

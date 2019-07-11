@@ -188,7 +188,7 @@ public:
     // #i32329# Enhanced selection
     void    SelSentence (const Point *);
     void    SelPara     (const Point *);
-    long    SelAll();
+    void    SelAll();
 
     // basecursortravelling
 typedef bool (SwWrtShell:: *FNSimpleMove)();
@@ -206,8 +206,8 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
     bool LeftMargin ( bool bSelect, bool bBasicCall );
     bool RightMargin( bool bSelect, bool bBasicCall );
 
-    bool SttDoc     ( bool bSelect = false );
-    bool EndDoc     ( bool bSelect = false );
+    bool StartOfSection( bool bSelect = false );
+    bool EndOfSection  ( bool bSelect = false );
 
     bool SttNxtPg   ( bool bSelect = false );
     void SttPrvPg   ( bool bSelect = false );
@@ -310,7 +310,7 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
 
     // indexes
     void    InsertTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet = nullptr);
-    bool    UpdateTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet = nullptr);
+    void    UpdateTableOf(const SwTOXBase& rTOX, const SfxItemSet* pSet = nullptr);
 
     // numbering and bullets
     /**
@@ -404,7 +404,7 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
 
     // jump to bookmark and set the "selections-flags" correctly again
     void GotoMark( const ::sw::mark::IMark* const pMark );
-    void GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect );
+    bool GotoMark( const ::sw::mark::IMark* const pMark, bool bSelect );
     void GotoMark( const OUString& rName );
     bool GoNextBookmark(); // true when there still was one
     bool GoPrevBookmark();
@@ -469,7 +469,7 @@ typedef bool (SwWrtShell:: *FNSimpleMove)();
     void GotoOutline( SwOutlineNodes::size_type nIdx );
     bool GotoOutline( const OUString& rName );
     bool GotoRegion( const OUString& rName );
-    void GotoRefMark( const OUString& rRefMark, sal_uInt16 nSubType = 0,
+    bool GotoRefMark( const OUString& rRefMark, sal_uInt16 nSubType = 0,
         sal_uInt16 nSeqNo = 0 );
     bool GotoNextTOXBase( const OUString* pName = nullptr);
     bool GotoTable( const OUString& rName );
@@ -487,7 +487,7 @@ private:
     struct ModeStack
     {
         ModeStack   *pNext;
-        bool        bAdd,
+        bool const  bAdd,
                     bBlock,
                     bExt,
                     bIns;
@@ -511,23 +511,23 @@ private:
     struct CursorStack
     {
         Point aDocPos;
-        CursorStack *pNext;
-        bool bValidCurPos : 1;
+        std::unique_ptr<CursorStack> pNext;
+        bool const bValidCurPos : 1;
         bool bIsFrameSel : 1;
-        SwTwips lOffset;
+        SwTwips const lOffset;
 
         CursorStack( bool bValid, bool bFrameSel, const Point &rDocPos,
-                    SwTwips lOff, CursorStack *pN )
+                    SwTwips lOff, std::unique_ptr<CursorStack> pN )
             : aDocPos(rDocPos),
-            pNext(pN),
+            pNext(std::move(pN)),
             bValidCurPos( bValid ),
             bIsFrameSel( bFrameSel ),
             lOffset(lOff)
         {
-
         }
 
-    } *m_pCursorStack;
+    };
+    std::unique_ptr<CursorStack> m_pCursorStack;
 
     SwView  &m_rView;
     SwNavigationMgr m_aNavigationMgr;
@@ -539,8 +539,8 @@ private:
     SAL_DLLPRIVATE bool  PopCursor(bool bUpdate, bool bSelect = false);
 
     // take END cursor along when PageUp / -Down
-    SAL_DLLPRIVATE bool SttWrd();
-    SAL_DLLPRIVATE bool EndWrd();
+    SAL_DLLPRIVATE void SttWrd();
+    SAL_DLLPRIVATE void EndWrd();
     SAL_DLLPRIVATE bool NxtWrd_();
     SAL_DLLPRIVATE bool PrvWrd_();
     // #i92468#

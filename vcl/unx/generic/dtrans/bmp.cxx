@@ -41,13 +41,13 @@ using namespace x11;
  *  helper functions
  */
 
-inline void writeLE( sal_uInt16 nNumber, sal_uInt8* pBuffer )
+static void writeLE( sal_uInt16 nNumber, sal_uInt8* pBuffer )
 {
     pBuffer[ 0 ] = (nNumber & 0xff);
     pBuffer[ 1 ] = ((nNumber>>8)&0xff);
 }
 
-inline void writeLE( sal_uInt32 nNumber, sal_uInt8* pBuffer )
+static void writeLE( sal_uInt32 nNumber, sal_uInt8* pBuffer )
 {
     pBuffer[ 0 ] = (nNumber & 0xff);
     pBuffer[ 1 ] = ((nNumber>>8)&0xff);
@@ -55,7 +55,7 @@ inline void writeLE( sal_uInt32 nNumber, sal_uInt8* pBuffer )
     pBuffer[ 3 ] = ((nNumber>>24)&0xff);
 }
 
-inline sal_uInt16 readLE16( const sal_uInt8* pBuffer )
+static sal_uInt16 readLE16( const sal_uInt8* pBuffer )
 {
     //This is untainted data which comes from a controlled source
     //so, using a byte-swapping pattern which coverity doesn't
@@ -66,7 +66,7 @@ inline sal_uInt16 readLE16( const sal_uInt8* pBuffer )
     return v;
 }
 
-inline sal_uInt32 readLE32( const sal_uInt8* pBuffer )
+static sal_uInt32 readLE32( const sal_uInt8* pBuffer )
 {
     //This is untainted data which comes from a controlled source
     //so, using a byte-swapping pattern which coverity doesn't
@@ -83,7 +83,7 @@ inline sal_uInt32 readLE32( const sal_uInt8* pBuffer )
  * scanline helpers
  */
 
-inline void X11_writeScanlinePixel( unsigned long nColor, sal_uInt8* pScanline, int depth, int x )
+static void X11_writeScanlinePixel( unsigned long nColor, sal_uInt8* pScanline, int depth, int x )
 {
     switch( depth )
     {
@@ -194,12 +194,12 @@ static sal_uInt8* X11_getPaletteBmpFromImage(
     return pBuffer;
 }
 
-inline unsigned long doRightShift( unsigned long nValue, int nShift )
+static unsigned long doRightShift( unsigned long nValue, int nShift )
 {
     return (nShift > 0) ? (nValue >> nShift) : (nValue << (-nShift));
 }
 
-inline unsigned long doLeftShift( unsigned long nValue, int nShift )
+static unsigned long doLeftShift( unsigned long nValue, int nShift )
 {
     return (nShift > 0) ? (nValue << nShift) : (nValue >> (-nShift));
 }
@@ -348,11 +348,6 @@ sal_uInt8* x11::X11_getBmpFromPixmap(
     XDestroyImage( pImage );
 
     return pBmp;
-}
-
-void x11::X11_freeBmp( sal_uInt8* pBmp )
-{
-    rtl_freeMemory( pBmp );
 }
 
 /*
@@ -692,7 +687,7 @@ Pixmap PixmapHolder::setBitmapData( const sal_uInt8* pData )
         aImage.obdata           = nullptr;
 
         XInitImage( &aImage );
-        aImage.data = static_cast<char*>(rtl_allocateMemory( nHeight*aImage.bytes_per_line ));
+        aImage.data = static_cast<char*>(std::malloc( nHeight*aImage.bytes_per_line ));
 
         if( readLE32( pData+14 ) == 24 )
         {
@@ -714,7 +709,7 @@ Pixmap PixmapHolder::setBitmapData( const sal_uInt8* pData )
                    nWidth, nHeight );
 
         // clean up
-        rtl_freeMemory( aImage.data );
+        std::free( aImage.data );
 
         // prepare bitmap (mask)
         m_aBitmap = limitXCreatePixmap( m_pDisplay,

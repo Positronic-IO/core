@@ -20,6 +20,7 @@
 #include <config_features.h>
 
 #include <com/sun/star/document/EventObject.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <osl/mutex.hxx>
@@ -51,6 +52,7 @@
 #include <vcl/svapp.hxx>
 #include <tools/diagnose_ex.h>
 #include <tools/globname.hxx>
+#include <sal/log.hxx>
 
 using namespace ::cppu;
 using namespace ::com::sun::star;
@@ -94,11 +96,7 @@ void SvxDrawPage::disposing() throw()
         mpModel = nullptr;
     }
 
-    if( mpView )
-    {
-        delete mpView;
-        mpView = nullptr;
-    }
+    mpView.reset();
     mpPage = nullptr;
 }
 
@@ -311,8 +309,7 @@ void SAL_CALL SvxDrawPage::remove( const Reference< drawing::XShape >& xShape )
                         mpModel->BegUndo(SvxResId(STR_EditDelete),
                             pObj->TakeObjNameSingul(), SdrRepeatFunc::Delete);
 
-                        SdrUndoAction * pAction = mpModel->GetSdrUndoFactory().CreateUndoDeleteObject(*pObj);
-                        mpModel->AddUndo(pAction);
+                        mpModel->AddUndo(mpModel->GetSdrUndoFactory().CreateUndoDeleteObject(*pObj));
                     }
 
                     OSL_VERIFY( mpPage->RemoveObject( nNum ) == pObj );
@@ -510,7 +507,6 @@ SdrObject* SvxDrawPage::CreateSdrObject_(const Reference< drawing::XShape > & xS
         *mpModel,
         nInventor,
         nType,
-        mpPage,
         &aRect);
 
     if (!pNewObj)
@@ -654,7 +650,7 @@ SvxShape* SvxDrawPage::CreateShapeByTypeAndInventor( sal_uInt16 nType, SdrInvent
                     pRet = new SvxShapeGroup( pObj, mpPage );
                     break;
                 case OBJ_LINE:
-                    pRet = new SvxShapePolyPolygon( pObj , PolygonKind_LINE );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_RECT:
                     pRet = new SvxShapeRect( pObj );
@@ -666,24 +662,24 @@ SvxShape* SvxDrawPage::CreateShapeByTypeAndInventor( sal_uInt16 nType, SdrInvent
                     pRet = new SvxShapeCircle( pObj );
                     break;
                 case OBJ_POLY:
-                    pRet = new SvxShapePolyPolygon( pObj , PolygonKind_POLY );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_PLIN:
-                    pRet = new SvxShapePolyPolygon( pObj , PolygonKind_PLIN );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_SPLNLINE:
                 case OBJ_PATHLINE:
-                    pRet = new SvxShapePolyPolygonBezier( pObj , PolygonKind_PATHLINE );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_SPLNFILL:
                 case OBJ_PATHFILL:
-                    pRet = new SvxShapePolyPolygonBezier( pObj , PolygonKind_PATHFILL );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_FREELINE:
-                    pRet = new SvxShapePolyPolygonBezier( pObj , PolygonKind_FREELINE );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_FREEFILL:
-                    pRet = new SvxShapePolyPolygonBezier( pObj , PolygonKind_FREEFILL );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_CAPTION:
                     pRet = new SvxShapeCaption( pObj );
@@ -759,10 +755,10 @@ SvxShape* SvxDrawPage::CreateShapeByTypeAndInventor( sal_uInt16 nType, SdrInvent
                     pRet = new SvxShapeConnector( pObj );
                     break;
                 case OBJ_PATHPOLY:
-                    pRet = new SvxShapePolyPolygon( pObj , PolygonKind_PATHPOLY );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_PATHPLIN:
-                    pRet = new SvxShapePolyPolygon( pObj , PolygonKind_PATHPLIN );
+                    pRet = new SvxShapePolyPolygon( pObj );
                     break;
                 case OBJ_PAGE:
                 {

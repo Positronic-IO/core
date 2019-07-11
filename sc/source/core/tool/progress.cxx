@@ -24,6 +24,7 @@
 #include <sfx2/sfxsids.hrc>
 #include <svl/eitem.hxx>
 #include <svl/itemset.hxx>
+#include <osl/diagnose.h>
 
 #define SC_PROGRESS_CXX
 #include <progress.hxx>
@@ -116,7 +117,6 @@ ScProgress::ScProgress(SfxObjectShell* pObjSh, const OUString& rText,
 
 ScProgress::ScProgress()
     : bEnabled(true)
-    , pProgress(nullptr)
 {
     // DummyInterpret
 }

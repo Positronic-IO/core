@@ -22,25 +22,23 @@
 #include "swuilabimp.hxx"
 #include <labimg.hxx>
 #include <vcl/idle.hxx>
+#include <vcl/customweld.hxx>
 #include <vcl/weld.hxx>
 
 class SwLabFormatPage;
 
-class SwLabPreview
+class SwLabPreview : public weld::CustomWidgetController
 {
-    std::unique_ptr<weld::DrawingArea> m_xDrawingArea;
+    Color const m_aGrayColor;
 
-    Size m_aSize;
-    Color m_aGrayColor;
-
-    OUString m_aHDistStr;
-    OUString m_aVDistStr;
-    OUString m_aWidthStr;
-    OUString m_aHeightStr;
-    OUString m_aLeftStr;
-    OUString m_aUpperStr;
-    OUString m_aColsStr;
-    OUString m_aRowsStr;
+    OUString const m_aHDistStr;
+    OUString const m_aVDistStr;
+    OUString const m_aWidthStr;
+    OUString const m_aHeightStr;
+    OUString const m_aLeftStr;
+    OUString const m_aUpperStr;
+    OUString const m_aColsStr;
+    OUString const m_aRowsStr;
 
     long m_lHDistWidth;
     long m_lVDistWidth;
@@ -54,12 +52,12 @@ class SwLabPreview
 
     SwLabItem m_aItem;
 
-    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
-    DECL_LINK(DoResize, const Size& rSize, void);
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
 
 public:
 
-    explicit SwLabPreview(weld::DrawingArea* pDrawingArea);
+    SwLabPreview();
 
     void UpdateItem(const SwLabItem& rItem);
 };
@@ -70,9 +68,11 @@ class SwLabFormatPage : public SfxTabPage
     SwLabItem aItem;
     bool bModified;
 
+    SwLabPreview m_aPreview;
+
     std::unique_ptr<weld::Label>  m_xMakeFI;
     std::unique_ptr<weld::Label>  m_xTypeFI;
-    std::unique_ptr<SwLabPreview> m_xPreview;
+    std::unique_ptr<weld::CustomWeld> m_xPreview;
     std::unique_ptr<weld::MetricSpinButton>  m_xHDistField;
     std::unique_ptr<weld::MetricSpinButton>  m_xVDistField;
     std::unique_ptr<weld::MetricSpinButton>  m_xWidthField;
@@ -117,13 +117,13 @@ class SwSaveLabelDlg : public weld::GenericDialogController
     SwLabDlg*   m_pLabDialog;
     SwLabRec&   rLabRec;
 
-    std::unique_ptr<weld::ComboBoxText> m_xMakeCB;
+    std::unique_ptr<weld::ComboBox> m_xMakeCB;
     std::unique_ptr<weld::Entry>        m_xTypeED;
     std::unique_ptr<weld::Button>       m_xOKPB;
 
     DECL_LINK(OkHdl, weld::Button&, void);
     DECL_LINK(ModifyEntryHdl, weld::Entry&, void);
-    DECL_LINK(ModifyComboHdl, weld::ComboBoxText&, void);
+    DECL_LINK(ModifyComboHdl, weld::ComboBox&, void);
 
     void Modify();
 

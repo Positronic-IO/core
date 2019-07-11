@@ -20,6 +20,7 @@
 
 #include <osl/diagnose.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <canvas/canvastools.hxx>
 #include <cppcanvas/basegfxfactory.hxx>
 
@@ -236,7 +237,7 @@ private:
     sal_Int16                                           mnCurrentCursor;
 
     /// True, when intrinsic shape animations are allowed
-    bool                                                mbIntrinsicAnimationsAllowed;
+    bool const                                          mbIntrinsicAnimationsAllowed;
 
     /// True, when user paint overlay is enabled
     bool                                                mbUserPaintOverlayEnabled;

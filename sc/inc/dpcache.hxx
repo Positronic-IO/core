@@ -19,9 +19,12 @@
 #ifndef INCLUDED_SC_INC_DPCACHE_HXX
 #define INCLUDED_SC_INC_DPCACHE_HXX
 
-#include "global.hxx"
-#include "dpnumgroupinfo.hxx"
+#include "address.hxx"
 #include "calcmacros.hxx"
+#include "dpitemdata.hxx"
+#include "dpnumgroupinfo.hxx"
+#include "scdllapi.h"
+#include "types.hxx"
 
 #include <mdds/flat_segment_tree.hpp>
 
@@ -32,7 +35,9 @@
 
 struct ScQueryParam;
 class ScDPObject;
-class ScDPItemData;
+class ScDocument;
+class SvNumberFormatter;
+
 enum class SvNumFormatType : sal_Int16;
 
 /**
@@ -144,6 +149,7 @@ public:
     SCROW SetGroupItem(long nDim, const ScDPItemData& rData);
     void GetGroupDimMemberIds(long nDim, std::vector<SCROW>& rIds) const;
     void ClearGroupFields();
+    void ClearAllFields();
     const ScDPNumGroupInfo* GetNumGroupInfo(long nDim) const;
 
     /**
@@ -203,7 +209,6 @@ public:
 private:
     void PostInit();
     void Clear();
-    void AddLabel(const OUString& rLabel);
     const GroupItems* GetGroupItems(long nDim) const;
 };
 

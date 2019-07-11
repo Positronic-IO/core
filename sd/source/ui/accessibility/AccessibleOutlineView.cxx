@@ -28,6 +28,7 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 #include <sfx2/viewfrm.hxx>
 
 #include <svx/AccessibleShape.hxx>
@@ -39,6 +40,8 @@
 #include <Window.hxx>
 #include <ViewShell.hxx>
 #include <OutlineViewShell.hxx>
+#include <DrawDocShell.hxx>
+#include <OutlineView.hxx>
 #include <View.hxx>
 #include <AccessibleOutlineView.hxx>
 #include <AccessibleOutlineEditSource.hxx>
@@ -135,7 +138,7 @@ OUString SAL_CALL
     if ( pSdView )
     {
         SdDrawDocument& rDoc = pSdView->GetDoc();
-        rtl::OUString sFileName = rDoc.getDocAccTitle();
+        OUString sFileName = rDoc.getDocAccTitle();
         if (sFileName.isEmpty())
         {
             ::sd::DrawDocShell* pDocSh = pSdView->GetDocSh();

@@ -25,6 +25,7 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <osl/diagnose.h>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 #include <uno/mapping.hxx>
 #include <algorithm>
 
@@ -122,13 +123,13 @@ namespace connectivity
             }
         }
 
-        TStorages& lcl_getStorageMap()
+        static TStorages& lcl_getStorageMap()
         {
             static TStorages s_aMap;
             return s_aMap;
         }
 
-        OUString lcl_getNextCount()
+        static OUString lcl_getNextCount()
         {
             static sal_Int32 s_nCount = 0;
             return OUString::number(s_nCount++);

@@ -23,7 +23,6 @@
 #include <xmloff/autolayout.hxx>
 
 #include <sdundo.hxx>
-#include <pres.hxx>
 
 class SdDrawDocument;
 class SdPage;
@@ -69,7 +68,7 @@ public:
 
 private:
     OUString maOldName;
-    OUString maNewName;
+    OUString const maNewName;
     const OUString maComment;
 };
 

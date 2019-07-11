@@ -23,6 +23,7 @@
 #include <com/sun/star/sdb/XOfficeDatabaseDocument.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 
+#include <comphelper/proparrhlp.hxx>
 #include <svtools/genericunodialog.hxx>
 
 namespace dbmm
@@ -84,7 +85,7 @@ namespace dbmm
         virtual ~MacroMigrationDialogService() override;
 
     protected:
-        virtual svt::OGenericUnoDialog::Dialog createDialog(vcl::Window* _pParent) override;
+        virtual svt::OGenericUnoDialog::Dialog createDialog(const css::uno::Reference<css::awt::XWindow>& rParent) override;
 
     private:
         Reference< XOfficeDatabaseDocument >    m_xDocument;

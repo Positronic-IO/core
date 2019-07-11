@@ -13,6 +13,7 @@
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/BitmapMode.hpp>
 #include <com/sun/star/style/PageStyleLayout.hpp>
+#include <com/sun/star/style/FootnoteLineStyle.hpp>
 #include <com/sun/star/table/XCell.hpp>
 #include <com/sun/star/table/XCellRange.hpp>
 #include <com/sun/star/table/BorderLine.hpp>
@@ -22,6 +23,7 @@
 #include <com/sun/star/text/PageNumberType.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
 
+#include <IDocumentSettingAccess.hxx>
 #include <wrtsh.hxx>
 #include <ndtxt.hxx>
 #include <swdtflvr.hxx>
@@ -486,7 +488,7 @@ DECLARE_ODFIMPORT_TEST(testFdo55814, "fdo55814.odt")
     CPPUNIT_ASSERT_EQUAL(OUString("Hide==\"Yes\""), getProperty<OUString>(xSections->getByIndex(0), "Condition"));
 }
 
-void lcl_CheckShape(
+static void lcl_CheckShape(
     uno::Reference<drawing::XShape> const& xShape, OUString const& rExpected)
 {
     uno::Reference<container::XNamed> const xNamed(xShape, uno::UNO_QUERY);
@@ -909,6 +911,29 @@ DECLARE_ODFIMPORT_TEST(testTdf116195, "tdf116195.odt")
         sal_Int32(12960), parseDump("/root/page/anchored/fly/notxt/infos/bounds", "height").toInt32()
     );
 }
+
+DECLARE_ODFIMPORT_TEST(testTdf120677, "tdf120677.fodt")
+{
+    // The document used to hang the layout, consuming memory until OOM
+}
+
+DECLARE_ODFIMPORT_TEST(testTdf123829, "tdf123829.odt")
+{
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(
+        "Compatibility: collapse cell paras should not be set", false,
+        pDoc->getIDocumentSettingAccess().get(DocumentSettingId::COLLAPSE_EMPTY_CELL_PARA));
+}
+
+DECLARE_ODFIMPORT_TEST(testTdf113289, "tdf113289.odt")
+{
+    uno::Any aPageStyle = getStyles("PageStyles")->getByName("Standard");
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int8>(style::FootnoteLineStyle::SOLID),
+                         getProperty<sal_Int8>(aPageStyle, "FootnoteLineStyle"));
+}
+
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

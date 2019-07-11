@@ -210,7 +210,10 @@ class GtkSalFrame : public SalFrame
 
 #if GTK_CHECK_VERSION(3,0,0)
     OUString                        m_aTooltip;
-    tools::Rectangle                       m_aHelpArea;
+    tools::Rectangle                m_aHelpArea;
+    tools::Rectangle                m_aFloatRect;
+    FloatWinPopupFlags              m_nFloatFlags;
+    bool                            m_bFloatPositioned;
     long                            m_nWidthRequest;
     long                            m_nHeightRequest;
     cairo_region_t*                 m_pRegion;
@@ -268,7 +271,7 @@ class GtkSalFrame : public SalFrame
                                           guint time, gpointer frame);
 
     static void         gestureSwipe(GtkGestureSwipe* gesture, gdouble velocity_x, gdouble velocity_y, gpointer frame);
-    static void         gestureLongPress(GtkGestureLongPress* gesture, gpointer frame);
+    static void         gestureLongPress(GtkGestureLongPress* gesture, gdouble x, gdouble y, gpointer frame);
 #else
     static gboolean     signalExpose( GtkWidget*, GdkEventExpose*, gpointer );
     void askForXEmbedFocus( sal_Int32 nTimecode );
@@ -444,7 +447,7 @@ public:
 
     // Event must be destroyed, when Frame is destroyed
     // When Event is called, SalInstance::Yield() must be returned
-    virtual bool                PostEvent(ImplSVEvent* pData) override;
+    virtual bool                PostEvent(std::unique_ptr<ImplSVEvent> pData) override;
 
     virtual void                SetTitle( const OUString& rTitle ) override;
     virtual void                SetIcon( sal_uInt16 nIcon ) override;
@@ -532,10 +535,13 @@ public:
     virtual void                EndSetClipRegion() override;
 
 #if GTK_CHECK_VERSION(3,0,0)
+    virtual void                PositionByToolkit(const tools::Rectangle& rRect, FloatWinPopupFlags nFlags) override;
     virtual void                SetModal(bool bModal) override;
+    virtual bool                GetModal() const override;
+    void                        HideTooltip();
     virtual bool                ShowTooltip(const OUString& rHelpText, const tools::Rectangle& rHelpArea) override;
-    virtual void*               ShowPopover(const OUString& rHelpText, const tools::Rectangle& rHelpArea, QuickHelpFlags nFlags) override;
-    virtual bool                UpdatePopover(void* nId, const OUString& rHelpText, const tools::Rectangle& rHelpArea) override;
+    virtual void*               ShowPopover(const OUString& rHelpText, vcl::Window* pParent, const tools::Rectangle& rHelpArea, QuickHelpFlags nFlags) override;
+    virtual bool                UpdatePopover(void* nId, const OUString& rHelpText, vcl::Window* pParent, const tools::Rectangle& rHelpArea) override;
     virtual bool                HidePopover(void* nId) override;
     virtual weld::Window*       GetFrameWeld() const override;
 #endif

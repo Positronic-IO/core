@@ -20,11 +20,9 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_ACCESSIBLEOUTLINEEDITSOURCE_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_ACCESSIBLEOUTLINEEDITSOURCE_HXX
 
-#include <vcl/svapp.hxx>
 #include <svl/SfxBroadcaster.hxx>
 #include <svl/lstner.hxx>
 #include <editeng/unoedsrc.hxx>
-#include <editeng/editdata.hxx>
 #include <editeng/unoforou.hxx>
 #include <editeng/unoviwou.hxx>
 
@@ -65,7 +63,6 @@ namespace accessibility
 
         // the view forwarder
         virtual bool        IsValid() const override;
-        virtual ::tools::Rectangle   GetVisArea() const override;
         virtual Point       LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const override;
         virtual Point       PixelToLogic( const Point& rPoint, const MapMode& rMapMode ) const override;
 

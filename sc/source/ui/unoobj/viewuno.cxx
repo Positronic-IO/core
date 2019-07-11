@@ -645,7 +645,7 @@ static void lcl_ShowObject( ScTabViewShell& rViewSh, const ScDrawView& rDrawView
         SdrPage* pPage = pModel->GetPage(i);
         if (pPage)
         {
-            SdrObjListIter aIter( *pPage, SdrIterMode::DeepWithGroups );
+            SdrObjListIter aIter( pPage, SdrIterMode::DeepWithGroups );
             SdrObject* pObject = aIter.Next();
             while (pObject && !bFound)
             {
@@ -776,7 +776,7 @@ sal_Bool SAL_CALL ScTabViewObj::select( const uno::Any& aSelection )
                 {
                     lcl_ShowObject( *pViewSh, *pDrawView, pObj );
                     SdrPageView* pPV = pDrawView->GetSdrPageView();
-                    if ( pPV && pObj->GetPage() == pPV->GetPage() )
+                    if ( pPV && pObj->getSdrPageFromSdrObject() == pPV->GetPage() )
                     {
                         pDrawView->MarkObj( pObj, pPV );
                         bRet = true;
@@ -816,7 +816,7 @@ sal_Bool SAL_CALL ScTabViewObj::select( const uno::Any& aSelection )
                                         lcl_ShowObject( *pViewSh, *pDrawView, pObj );
                                         pPV = pDrawView->GetSdrPageView();
                                     }
-                                    if ( pPV && pObj->GetPage() == pPV->GetPage() )
+                                    if ( pPV && pObj->getSdrPageFromSdrObject() == pPV->GetPage() )
                                     {
                                         if (pDrawView->IsObjMarkable( pObj, pPV ))
                                             pDrawView->MarkObj( pObj, pPV );
@@ -1223,11 +1223,8 @@ bool ScTabViewObj::MousePressed( const awt::MouseEvent& e )
 
                 // look for a boolean return value of true
                 bool bRetValue = false;
-                if (aRet >>= bRetValue)
-                {
-                    if (bRetValue)
-                        bReturn = true;
-                }
+                if ((aRet >>= bRetValue) && bRetValue)
+                    bReturn = true;
             }
         }
 

@@ -26,6 +26,8 @@
 #include <unotools/charclass.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <com/sun/star/i18n/NumberFormatCode.hpp>
+#include <com/sun/star/i18n/NumberFormatMapper.hpp>
+#include <com/sun/star/i18n/XNumberFormatCode.hpp>
 
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
@@ -54,6 +56,7 @@ const NfKeywordTable ImpSvNumberformatScan::sEnglishKeyword =
     "MM",      // NF_KEY_MM month 02     (!)
     "MMM",     // NF_KEY_MMM month short name
     "MMMM",    // NF_KEY_MMMM month long name
+    "MMMMM",   // NF_KEY_MMMMM first letter of month name
     "H",       // NF_KEY_H hour
     "HH",      // NF_KEY_HH hour 02
     "S",       // NF_KEY_S Second
@@ -67,14 +70,25 @@ const NfKeywordTable ImpSvNumberformatScan::sEnglishKeyword =
     "YY",      // NF_KEY_YY year two digits
     "YYYY",    // NF_KEY_YYYY year four digits
     "NN",      // NF_KEY_NN Day of week short
+    "NNN",     // NF_KEY_NNN Day of week long
     "NNNN",    // NF_KEY_NNNN Day of week long incl. separator
+    "AAA",     // NF_KEY_AAA
+    "AAAA",    // NF_KEY_AAAA
+    "E",       // NF_KEY_EC
+    "EE",      // NF_KEY_EEC
+    "G",       // NF_KEY_G
+    "GG",      // NF_KEY_GG
+    "GGG",     // NF_KEY_GGG
+    "R",       // NF_KEY_R
+    "RR",      // NF_KEY_RR
+    "WW",      // NF_KEY_WW Week of year
+    "t",       // NF_KEY_THAI_T Thai T modifier, speciality of Thai Excel, only
+                // used with Thai locale and converted to [NatNum1], only
+                // exception as lowercase
     "CCC",     // NF_KEY_CCC Currency abbreviation
     "GENERAL", // NF_KEY_GENERAL General / Standard
-    "NNN",     // NF_KEY_NNN Day of week long
-    "WW",      // NF_KEY_WW Week of year
-    "MMMMM",   // NF_KEY_MMMMM first letter of month name
-    "",        // NF_KEY_UNUSED4,
-    "",        // NF_KEY_UNUSED5,     // was quarter word, not used anymore from SRC631 on (26.04.01)
+
+    // Reserved words translated and color names follow:
     "TRUE",    // NF_KEY_TRUE boolean true
     "FALSE",   // NF_KEY_FALSE boolean false
     "BOOLEAN", // NF_KEY_BOOLEAN boolean
@@ -89,19 +103,8 @@ const NfKeywordTable ImpSvNumberformatScan::sEnglishKeyword =
     "BROWN",   // NF_KEY_BROWN
     "GREY",    // NF_KEY_GREY
     "YELLOW",  // NF_KEY_YELLOW
-    "WHITE",   // NF_KEY_WHITE
-    // preset new calendar keywords
-    "AAA",     // NF_KEY_AAA
-    "AAAA",    // NF_KEY_AAAA
-    "E",       // NF_KEY_EC
-    "EE",      // NF_KEY_EEC
-    "G",       // NF_KEY_G
-    "GG",      // NF_KEY_GG
-    "GGG",     // NF_KEY_GGG
-    "R",       // NF_KEY_R
-    "RR",      // NF_KEY_RR
-    "t"        // NF_KEY_THAI_T Thai T modifier, speciality of Thai Excel, only used with Thai locale and converted to [NatNum1]
-};             // only exception as lowercase
+    "WHITE"    // NF_KEY_WHITE
+};
 
 ::std::vector<Color> ImpSvNumberformatScan::StandardColor;
 bool ImpSvNumberformatScan::bStandardColorNeedInitialization = true;
@@ -121,7 +124,7 @@ ImpSvNumberformatScan::ImpSvNumberformatScan( SvNumberFormatter* pFormatterP )
     pFormatter = pFormatterP;
     xNFC = css::i18n::NumberFormatMapper::create( pFormatter->GetComponentContext() );
     bConvertMode = false;
-    mbConvertForExcelExport = false;
+    mbConvertDateOrder = false;
     bConvertSystemToSystem = false;
     bKeywordsNeedInit = true;            // locale dependent and not locale dependent keywords
     bCompatCurNeedInit = true;           // locale dependent compatibility currency strings
@@ -667,77 +670,41 @@ Color* ImpSvNumberformatScan::GetColor(OUString& sStr)
     return pResult;
 }
 
-short ImpSvNumberformatScan::GetKeyWord( const OUString& sSymbol, sal_Int32 nPos ) const
+short ImpSvNumberformatScan::GetKeyWord( const OUString& sSymbol, sal_Int32 nPos, bool& rbFoundEnglish ) const
 {
     OUString sString = pFormatter->GetCharClass()->uppercase( sSymbol, nPos, sSymbol.getLength() - nPos );
     const NfKeywordTable & rKeyword = GetKeywords();
     // #77026# for the Xcl perverts: the GENERAL keyword is recognized anywhere
-    if ( sString.startsWith( rKeyword[NF_KEY_GENERAL] ) ||
-            ((meKeywordLocalization == KeywordLocalization::AllowEnglish) &&
-             sString.startsWith( sEnglishKeyword[NF_KEY_GENERAL])))
+    if (sString.startsWith( rKeyword[NF_KEY_GENERAL] ))
     {
         return NF_KEY_GENERAL;
     }
-    //! MUST be a reverse search to find longer strings first
-    short i = NF_KEYWORD_ENTRIES_COUNT-1;
-    bool bFound = false;
-    for ( ; i > NF_KEY_LASTKEYWORD_SO5; --i )
+    if ((meKeywordLocalization == KeywordLocalization::AllowEnglish) &&
+            sString.startsWith( sEnglishKeyword[NF_KEY_GENERAL]))
     {
-        bFound = sString.startsWith(rKeyword[i]);
-        if ( bFound )
-        {
-            break;
-        }
+        rbFoundEnglish = true;
+        return NF_KEY_GENERAL;
     }
-    // new keywords take precedence over old keywords
-    if ( !bFound )
+
+    // MUST be a reverse search to find longer strings first,
+    // new keywords take precedence over old keywords,
+    // skip colors et al after keywords.
+    short i = NF_KEY_LASTKEYWORD;
+    while (i > 0 && !sString.startsWith( rKeyword[i]))
     {
-        // skip the gap of colors et al between new and old keywords and search on
+        i--;
+    }
+    if (i == 0 && meKeywordLocalization == KeywordLocalization::AllowEnglish)
+    {
+        // No localized (if so) keyword, try English keywords if keywords
+        // are localized. That was already checked in SetDependentKeywords().
         i = NF_KEY_LASTKEYWORD;
-        while ( i > 0 && sString.indexOf(rKeyword[i]) != 0 )
+        while (i > 0 && !sString.startsWith( sEnglishKeyword[i]))
         {
             i--;
         }
-        if ( i > NF_KEY_LASTOLDKEYWORD && sString != rKeyword[i] )
-        {
-            // found something, but maybe it's something else?
-            // e.g. new NNN is found in NNNN, for NNNN we must search on
-            short j = i - 1;
-            while ( j > 0 && sString.indexOf(rKeyword[j]) != 0 )
-            {
-                j--;
-            }
-            if ( j && rKeyword[j].getLength() > rKeyword[i].getLength() )
-            {
-                return j;
-            }
-        }
-        if (i == 0 && meKeywordLocalization == KeywordLocalization::AllowEnglish)
-        {
-            // No localized (if so) keyword, try English keywords if keywords
-            // are localized. That was already checked in
-            // SetDependentKeywords().
-            i = NF_KEY_LASTKEYWORD;
-            while ( i > 0 && sString.indexOf(sEnglishKeyword[i]) != 0 )
-            {
-                i--;
-            }
-            if ( i > NF_KEY_LASTOLDKEYWORD && sString != sEnglishKeyword[i] )
-            {
-                // found something, but maybe it's something else?
-                // e.g. new NNN is found in NNNN, for NNNN we must search on
-                short j = i - 1;
-                while ( j > 0 && sString.indexOf(sEnglishKeyword[j]) != 0 )
-                {
-                    j--;
-                }
-                if ( j && sEnglishKeyword[j].getLength() > sEnglishKeyword[i].getLength() )
-                {
-                    return j;
-                }
-            }
-        }
     }
+
     // The Thai T NatNum modifier during Xcl import.
     if (i == 0 && bConvertMode &&
         sString[0] == 'T' &&
@@ -810,7 +777,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
     const LocaleDataWrapper* pLoc = pFormatter->GetLocaleData();
     short eType = 0;
     ScanState eState = SsStart;
-    sSymbol.clear();
+    OUStringBuffer sSymbolBuffer;
     while ( nPos < rStr.getLength() && eState != SsStop )
     {
         sal_Unicode cToken = rStr[nPos++];
@@ -853,28 +820,28 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
             case ':':
             case '-':
                 eType = NF_SYMBOLTYPE_DEL;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 eState = SsStop;
                 break;
             case '*':
                 eType = NF_SYMBOLTYPE_STAR;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 eState = SsGetStar;
                 break;
             case '_':
                 eType = NF_SYMBOLTYPE_BLANK;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 eState = SsGetBlank;
                 break;
             case '"':
                 eType = NF_SYMBOLTYPE_STRING;
                 eState = SsGetString;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 break;
             case '\\':
                 eType = NF_SYMBOLTYPE_STRING;
                 eState = SsGetChar;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 break;
             case '$':
             case '+':
@@ -882,7 +849,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
             case ')':
                 eType = NF_SYMBOLTYPE_STRING;
                 eState = SsStop;
-                sSymbol += OUStringLiteral1(cToken);
+                sSymbolBuffer.append(OUStringLiteral1(cToken));
                 break;
             default :
                 if (StringEqualsChar( pFormatter->GetNumDecimalSep(), cToken) ||
@@ -893,12 +860,13 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                 {
                     // Another separator than pre-known ASCII
                     eType = NF_SYMBOLTYPE_DEL;
-                    sSymbol += OUStringLiteral1(cToken);
+                    sSymbolBuffer.append(OUStringLiteral1(cToken));
                     eState = SsStop;
                 }
                 else if ( pChrCls->isLetter( rStr, nPos-1 ) )
                 {
-                    short nTmpType = GetKeyWord( rStr, nPos-1 );
+                    bool bFoundEnglish = false;
+                    short nTmpType = GetKeyWord( rStr, nPos-1, bFoundEnglish);
                     if ( nTmpType )
                     {
                         bool bCurrency = false;
@@ -906,7 +874,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                         // like "R" (Rand) and 'R' (era)
                         if ( nCurrPos >= 0 &&
                              nPos-1 + sCurString.getLength() <= rStr.getLength() &&
-                             sCurString.startsWith( sKeyword[nTmpType] ) )
+                             sCurString.startsWith( bFoundEnglish ? sEnglishKeyword[nTmpType] : sKeyword[nTmpType]))
                         {
                             OUString aTest = pChrCls->uppercase( rStr.copy( nPos-1, sCurString.getLength() ) );
                             if ( aTest == sCurString )
@@ -917,13 +885,27 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                         if ( bCurrency )
                         {
                             eState = SsGetWord;
-                            sSymbol += OUStringLiteral1(cToken);
+                            sSymbolBuffer.append(OUStringLiteral1(cToken));
                         }
                         else
                         {
                             eType = nTmpType;
-                            sal_Int32 nLen = sKeyword[eType].getLength();
-                            sSymbol = rStr.copy( nPos-1, nLen );
+                            // The code to be advanced is the detected keyword,
+                            // not necessarily the locale's keyword, but the
+                            // symbol is to be the locale's keyword.
+                            sal_Int32 nLen;
+                            if (bFoundEnglish)
+                            {
+                                nLen = sEnglishKeyword[eType].getLength();
+                                // Use the locale's General keyword name, not uppercase.
+                                sSymbolBuffer = (eType == NF_KEY_GENERAL ? sNameStandardFormat : sKeyword[eType]);
+                            }
+                            else
+                            {
+                                nLen = sKeyword[eType].getLength();
+                                // Preserve a locale's keyword's case as entered.
+                                sSymbolBuffer = rStr.copy( nPos-1, nLen);
+                            }
                             if ((eType == NF_KEY_E || IsAmbiguousE(eType)) && nPos < rStr.getLength())
                             {
                                 sal_Unicode cNext = rStr[nPos];
@@ -931,7 +913,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                                 {
                                 case '+' :
                                 case '-' :  // E+ E- combine to one symbol
-                                    sSymbol += OUStringLiteral1(cNext);
+                                    sSymbolBuffer.append(OUStringLiteral1(cNext));
                                     eType = NF_KEY_E;
                                     nPos++;
                                     break;
@@ -949,20 +931,20 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                     else
                     {
                         eState = SsGetWord;
-                        sSymbol += OUStringLiteral1(cToken);
+                        sSymbolBuffer.append(OUStringLiteral1(cToken));
                     }
                 }
                 else
                 {
                     eType = NF_SYMBOLTYPE_STRING;
                     eState = SsStop;
-                    sSymbol += OUStringLiteral1(cToken);
+                    sSymbolBuffer.append(OUStringLiteral1(cToken));
                 }
                 break;
             }
             break;
         case SsGetChar:
-            sSymbol += OUStringLiteral1(cToken);
+            sSymbolBuffer.append(OUStringLiteral1(cToken));
             eState = SsStop;
             break;
         case SsGetString:
@@ -970,12 +952,13 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
             {
                 eState = SsStop;
             }
-            sSymbol += OUStringLiteral1(cToken);
+            sSymbolBuffer.append(OUStringLiteral1(cToken));
             break;
         case SsGetWord:
             if ( pChrCls->isLetter( rStr, nPos-1 ) )
             {
-                short nTmpType = GetKeyWord( rStr, nPos-1 );
+                bool bFoundEnglish = false;
+                short nTmpType = GetKeyWord( rStr, nPos-1, bFoundEnglish);
                 if ( nTmpType )
                 {
                     // beginning of keyword, stop scan and put back
@@ -985,7 +968,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                 }
                 else
                 {
-                    sSymbol += OUStringLiteral1(cToken);
+                    sSymbolBuffer.append(OUStringLiteral1(cToken));
                 }
             }
             else
@@ -1000,14 +983,14 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
                         cNext = rStr[nPos];
                         if ( cNext == 'P' || cNext == 'p' )
                         {
-                            sal_Int32 nLen = sSymbol.getLength();
+                            sal_Int32 nLen = sSymbolBuffer.getLength();
                             if ( 1 <= nLen &&
-                                    (sSymbol[0] == 'A' || sSymbol[0] == 'a') &&
+                                    (sSymbolBuffer[0] == 'A' || sSymbolBuffer[0] == 'a') &&
                                     (nLen == 1 ||
-                                     (nLen == 2 && (sSymbol[1] == 'M' || sSymbol[1] == 'm')
+                                     (nLen == 2 && (sSymbolBuffer[1] == 'M' || sSymbolBuffer[1] == 'm')
                                       && (rStr[nPos + 1] == 'M' || rStr[nPos + 1] == 'm'))))
                             {
-                                sSymbol += OUStringLiteral1(cToken);
+                                sSymbolBuffer.append(OUStringLiteral1(cToken));
                                 bDontStop = true;
                             }
                         }
@@ -1025,11 +1008,11 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
             break;
         case SsGetStar:
             eState = SsStop;
-            sSymbol += OUStringLiteral1(cToken);
+            sSymbolBuffer.append(OUStringLiteral1(cToken));
             break;
         case SsGetBlank:
             eState = SsStop;
-            sSymbol += OUStringLiteral1(cToken);
+            sSymbolBuffer.append(OUStringLiteral1(cToken));
             break;
         default:
             break;
@@ -1039,6 +1022,7 @@ short ImpSvNumberformatScan::Next_Symbol( const OUString& rStr,
     {
         eType = NF_SYMBOLTYPE_STRING;
     }
+    sSymbol = sSymbolBuffer.makeStringAndClear();
     return eType;
 }
 
@@ -1762,7 +1746,7 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
         // Adapt date order to target locale, but Excel does not handle date
         // particle re-ordering for the target locale when loading documents,
         // though it does exchange separators, tdf#113889
-        bNewDateOrder = (!mbConvertForExcelExport && eOldDateOrder != pLoc->getDateOrder());
+        bNewDateOrder = (mbConvertDateOrder && eOldDateOrder != pLoc->getDateOrder());
     }
     const CharClass* pChrCls = pFormatter->GetCharClass();
 
@@ -2049,8 +2033,8 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                             }
                         }
                         else if (i > 0 && i < nStringsCnt-1   &&
-                                 (cPre == '#' || cPre == '0')      &&
-                                 ((cNext = NextChar(i)) == '#' || cNext == '0')) // #,#
+                                 (cPre == '#' || cPre == '0' || cPre == '?')      &&
+                                 ((cNext = NextChar(i)) == '#' || cNext == '0' || cNext == '?')) // #,#
                         {
                             nPos = nPos + sStrArray[i].getLength();
                             if (!bThousand) // only once
@@ -2062,7 +2046,7 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                             nResultStringsCnt--;
                             i++;
                         }
-                        else if (i > 0 && (cPre == '#' || cPre == '0')
+                        else if (i > 0 && (cPre == '#' || cPre == '0' || cPre == '?')
                                  && PreviousType(i) == NF_SYMBOLTYPE_DIGIT
                                  && nThousand < FLAG_STANDARD_IN_FORMAT )
                         {   // #,,,,
@@ -2953,7 +2937,11 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                     switch (pLoc->getDateOrder())
                     {
                         case DateOrder::MDY:
-                            if (IsDateFragment( nDayPos, nMonthPos))
+                            // Convert only if the actual format is not of YDM
+                            // order (which would be a completely unusual order
+                            // anyway, but..), e.g. YYYY.DD.MM not to
+                            // YYYY/MM/DD
+                            if (IsDateFragment( nDayPos, nMonthPos) && !IsDateFragment( nYearPos, nDayPos))
                                 SwapArrayElements( nDayPos, nMonthPos);
                         break;
                         case DateOrder::YMD:
@@ -2976,7 +2964,10 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                     switch (pLoc->getDateOrder())
                     {
                         case DateOrder::DMY:
-                            if (IsDateFragment( nMonthPos, nDayPos))
+                            // Convert only if the actual format is not of YMD
+                            // order, e.g. YYYY/MM/DD not to YYYY.DD.MM
+                            /* TODO: convert such to DD.MM.YYYY instead? */
+                            if (IsDateFragment( nMonthPos, nDayPos) && !IsDateFragment( nYearPos, nMonthPos))
                                 SwapArrayElements( nMonthPos, nDayPos);
                         break;
                         case DateOrder::YMD:
@@ -3070,7 +3061,8 @@ sal_Int32 ImpSvNumberformatScan::FinalScan( OUString& rString )
                 sal_Int32 nLen = rStr.getLength();
                 for ( sal_Int32 j = 0; j < nLen; j++ )
                 {
-                    if ( (j == 0 || rStr[j - 1] != '\\') && GetKeyWord( rStr, j ) )
+                    bool bFoundEnglish = false;
+                    if ( (j == 0 || rStr[j - 1] != '\\') && GetKeyWord( rStr, j, bFoundEnglish) )
                     {
                         rStr = "\"" + rStr + "\"";
                         break; // for

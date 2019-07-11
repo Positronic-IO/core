@@ -23,15 +23,17 @@
 #include <vcl/timer.hxx>
 #include <tools/link.hxx>
 #include <tools/gen.hxx>
-#include <vcl/event.hxx>
-#include <rtl/ref.hxx>
+#include <vcl/vclptr.hxx>
+#include <svx/svdobj.hxx>
 
 #include <helper/simplereferencecomponent.hxx>
 
 class SdDrawDocument;
 class SfxRequest;
-class Dialog;
-class SdrObject;
+class CommandEvent;
+class HelpEvent;
+class KeyEvent;
+class MouseEvent;
 
 namespace sd {
 
@@ -87,7 +89,7 @@ public:
 
     void StartDelayToScrollTimer ();
 
-    virtual SdrObject* CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle);
+    virtual SdrObjectUniquePtr CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle);
 
     /** is called when the current function should be aborted. <p>
         This is used when a function gets a KEY_ESCAPE but can also
@@ -148,8 +150,6 @@ protected:
     SdDrawDocument* mpDoc;
 
     sal_uInt16          nSlotId;
-
-    VclPtr<Dialog>             pDialog;
 
     Timer               aScrollTimer;           ///< for auto-scrolling
     DECL_LINK( ScrollHdl, Timer *, void );

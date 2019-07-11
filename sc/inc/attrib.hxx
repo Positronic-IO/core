@@ -21,6 +21,7 @@
 #define INCLUDED_SC_INC_ATTRIB_HXX
 
 #include <memory>
+#include <vector>
 #include <svl/poolitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
@@ -85,6 +86,11 @@ public:
             ScMergeFlagAttr();
             ScMergeFlagAttr(ScMF nFlags);
             virtual ~ScMergeFlagAttr() override;
+
+    ScMergeFlagAttr(ScMergeFlagAttr const &) = default;
+    ScMergeFlagAttr(ScMergeFlagAttr &&) = default;
+    ScMergeFlagAttr & operator =(ScMergeFlagAttr const &) = delete; // due to SfxInt16Item
+    ScMergeFlagAttr & operator =(ScMergeFlagAttr &&) = delete; // due to SfxInt16Item
 
     SfxPoolItem * Clone(SfxItemPool * pPool = nullptr) const override;
 
@@ -193,6 +199,11 @@ public:
                 ScViewObjectModeItem( sal_uInt16 nWhich, ScVObjMode eMode );
                 virtual ~ScViewObjectModeItem() override;
 
+    ScViewObjectModeItem(ScViewObjectModeItem const &) = default;
+    ScViewObjectModeItem(ScViewObjectModeItem &&) = default;
+    ScViewObjectModeItem & operator =(ScViewObjectModeItem const &) = delete; // due to SfxEnumItem<ScVObjMode>
+    ScViewObjectModeItem & operator =(ScViewObjectModeItem &&) = delete; // due to SfxEnumItem<ScVObjMode>
+
     virtual sal_uInt16          GetValueCount() const override;
     virtual SfxPoolItem*        Clone( SfxItemPool *pPool = nullptr ) const override;
     virtual sal_uInt16          GetVersion( sal_uInt16 nFileVersion ) const override;
@@ -201,21 +212,6 @@ public:
                                   MapUnit ePresMetric,
                                   OUString& rText,
                                   const IntlWrapper& rIntl ) const override;
-};
-
-class ScDoubleItem : public SfxPoolItem
-{
-public:
-                static SfxPoolItem* CreateDefault();
-                ScDoubleItem( sal_uInt16 nWhich, double nVal );
-                ScDoubleItem( const ScDoubleItem& rItem );
-                virtual ~ScDoubleItem() override;
-
-    virtual bool            operator==( const SfxPoolItem& ) const override;
-    virtual SfxPoolItem*    Clone( SfxItemPool *pPool = nullptr ) const override;
-
-private:
-    double  nValue;
 };
 
 /** Member ID for "page scale to width" value in QueryValue() and PutValue(). */
@@ -232,6 +228,11 @@ public:
     explicit                    ScPageScaleToItem( sal_uInt16 nWidth, sal_uInt16 nHeight );
 
     virtual                     ~ScPageScaleToItem() override;
+
+    ScPageScaleToItem(ScPageScaleToItem const &) = default;
+    ScPageScaleToItem(ScPageScaleToItem &&) = default;
+    ScPageScaleToItem & operator =(ScPageScaleToItem const &) = delete; // due to SfxPoolItem
+    ScPageScaleToItem & operator =(ScPageScaleToItem &&) = delete; // due to SfxPoolItem
 
     virtual ScPageScaleToItem*  Clone( SfxItemPool* = nullptr ) const override;
 

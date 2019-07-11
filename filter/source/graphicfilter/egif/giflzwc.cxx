@@ -111,7 +111,7 @@ struct GIFLZWCTreeNode
 
 
 GIFLZWCompressor::GIFLZWCompressor()
-    : pIDOS(nullptr), pTable(nullptr), pPrefix(nullptr), nDataSize(0), nClearCode(0),
+    : pPrefix(nullptr), nDataSize(0), nClearCode(0),
       nEOICode(0), nTableSize(0), nCodeSize(0)
 {
 }
@@ -145,7 +145,8 @@ void GIFLZWCompressor::StartCompression( SvStream& rGIF, sal_uInt16 nPixelSize )
         for (i=0; i<4096; i++)
         {
             pTable[i].pBrother = pTable[i].pFirstChild = nullptr;
-            pTable[i].nValue = static_cast<sal_uInt8>( pTable[i].nCode = i );
+            pTable[i].nCode = i;
+            pTable[i].nValue = static_cast<sal_uInt8>( i );
         }
 
         pPrefix = nullptr;

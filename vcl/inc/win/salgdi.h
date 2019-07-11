@@ -63,8 +63,7 @@ public:
                                 BYTE nPitchAndFamily  );
     virtual                 ~WinFontFace() override;
 
-    virtual PhysicalFontFace* Clone() const override;
-    virtual LogicalFontInstance* CreateFontInstance( const FontSelectPattern& ) const override;
+    virtual rtl::Reference<LogicalFontInstance> CreateFontInstance( const FontSelectPattern& ) const override;
     virtual sal_IntPtr      GetFontId() const override;
     void                    SetFontId( sal_IntPtr nId ) { mnId = nId; }
     void                    UpdateFromHDC( HDC ) const;
@@ -157,10 +156,8 @@ private:
     bool                    mbScreen : 1;           // is Screen compatible
     HWND                    mhWnd;              // Window-Handle, when Window-Graphics
 
-    HFONT                   mhFonts[ MAX_FALLBACK ];        // Font + Fallbacks
-    WinFontInstance*       mpWinFontEntry[ MAX_FALLBACK ]; // pointer to the most recent font instance
-    float                   mfFontScale[ MAX_FALLBACK ];        // allows metrics emulation of huge font sizes
-    float                   mfCurrentFontScale;
+    rtl::Reference<WinFontInstance>
+                            mpWinFontEntry[ MAX_FALLBACK ]; // pointer to the most recent font instance
     HRGN                    mhRegion;           // vcl::Region Handle
     HPEN                    mhDefPen;           // DefaultPen
     HBRUSH                  mhDefBrush;         // DefaultBrush
@@ -171,12 +168,12 @@ private:
     RGNDATA*                mpStdClipRgnData;   // Cache Standard-ClipRegion-Data
     int                     mnPenWidth;         // line width
 
-    LogicalFontInstance* GetWinFontEntry(int nFallbackLevel);
-
     bool CacheGlyphs(const GenericSalLayout& rLayout);
     bool DrawCachedGlyphs(const GenericSalLayout& rLayout);
 
 public:
+    HFONT ImplDoSetFont(FontSelectPattern const & i_rFont, const PhysicalFontFace * i_pFontFace, float& o_rFontScale, HFONT& o_rOldFont);
+
     HDC getHDC() const { return mhLocalDC; }
     void setHDC(HDC aNew) { mhLocalDC = aNew; }
 
@@ -200,7 +197,6 @@ public:
 
     HWND gethWnd();
 
-    HFONT                   ImplDoSetFont( FontSelectPattern const * i_pFont, const PhysicalFontFace * i_pFontFace, float& o_rFontScale, HFONT& o_rOldFont );
 
 public:
     explicit WinSalGraphics(WinSalGraphics::Type eType, bool bScreen, HWND hWnd,
@@ -225,14 +221,19 @@ protected:
     virtual void        drawPolyLine( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
     virtual void        drawPolygon( sal_uInt32 nPoints, const SalPoint* pPtAry ) override;
     virtual void        drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, PCONSTSALPOINT* pPtAry ) override;
-    virtual bool        drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) override;
+    virtual bool        drawPolyPolygon(
+        const basegfx::B2DHomMatrix& rObjectToDevice,
+        const basegfx::B2DPolyPolygon&,
+        double fTransparency) override;
     virtual bool        drawPolyLine(
+        const basegfx::B2DHomMatrix& rObjectToDevice,
         const basegfx::B2DPolygon&,
         double fTransparency,
         const basegfx::B2DVector& rLineWidth,
         basegfx::B2DLineJoin,
         css::drawing::LineCap,
-        double fMiterMinimumAngle) override;
+        double fMiterMinimumAngle,
+        bool bPixelSnapHairline) override;
     virtual bool        drawPolyLineBezier( sal_uInt32 nPoints, const SalPoint* pPtAry, const PolyFlags* pFlgAry ) override;
     virtual bool        drawPolygonBezier( sal_uInt32 nPoints, const SalPoint* pPtAry, const PolyFlags* pFlgAry ) override;
     virtual bool        drawPolyPolygonBezier( sal_uInt32 nPoly, const sal_uInt32* pPoints, const SalPoint* const* pPtAry, const PolyFlags* const* pFlgAry ) override;
@@ -253,7 +254,7 @@ protected:
                                   const SalBitmap& rSalBitmap,
                                   Color nMaskColor ) override;
 
-    virtual SalBitmap*  getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
     virtual Color       getPixel( long nX, long nY ) override;
 
     // invert --> ClipRegion (only Windows or VirDevs)
@@ -319,7 +320,7 @@ public:
     // filled accordingly
     virtual void            SetFillColor( Color nColor ) override;
     // enable/disable XOR drawing
-    virtual void            SetXORMode( bool bSet ) override;
+    virtual void            SetXORMode( bool bSet, bool ) override;
     // set line color for raster operations
     virtual void            SetROPLineColor( SalROPColor nROPColor ) override;
     // set fill color for raster operations
@@ -327,7 +328,7 @@ public:
     // set the text color to a specific color
     virtual void            SetTextColor( Color nColor ) override;
     // set the font
-    virtual void            SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
+    virtual void            SetFont( LogicalFontInstance*, int nFallbackLevel ) override;
     // get the current font's metrics
     virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
     // get the repertoire of the current font
@@ -372,9 +373,6 @@ public:
                                             std::vector< sal_Int32 >& rWidths,
                                             Ucs2UIntMap& rUnicodeEnc ) override;
 
-    virtual bool            GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) override;
-    virtual bool            GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) override;
-
     virtual std::unique_ptr<SalLayout>
                             GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;
     virtual void            DrawTextLayout( const GenericSalLayout& ) override;
@@ -392,7 +390,7 @@ public:
 // Init/Deinit Graphics
 void    ImplUpdateSysColorEntries();
 int     ImplIsSysColorEntry( Color nColor );
-void    ImplGetLogFontFromFontSelect( HDC, const FontSelectPattern*,
+void    ImplGetLogFontFromFontSelect( HDC, const FontSelectPattern&,
             const PhysicalFontFace*, LOGFONTW& );
 
 #define MAX_64KSALPOINTS    ((((sal_uInt16)0xFFFF)-8)/sizeof(POINTS))

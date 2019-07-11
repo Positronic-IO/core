@@ -17,14 +17,15 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Graphics.hxx"
+#include <Qt5Graphics.hxx>
 
-#include "Qt5Font.hxx"
-#include "Qt5Frame.hxx"
-#include "Qt5Painter.hxx"
+#include <Qt5Font.hxx>
+#include <Qt5Frame.hxx>
+#include <Qt5Painter.hxx>
 
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
+#include <QtWidgets/QPushButton>
 #include <QtWidgets/QWidget>
 
 Qt5Graphics::Qt5Graphics( Qt5Frame *pFrame, QImage *pQImage )
@@ -47,7 +48,7 @@ Qt5Graphics::~Qt5Graphics()
     {
         if (!m_pTextStyle[i])
             break;
-        m_pTextStyle[i]->Release();
+        m_pTextStyle[i].clear();
     }
 }
 
@@ -108,5 +109,21 @@ SystemFontData Qt5Graphics::GetSysFontData(int /*nFallbacklevel*/) const
 }
 
 #endif
+
+bool Qt5Graphics::drawNativeControl(ControlType nType, ControlPart nPart,
+                                    const tools::Rectangle& rControlRegion, ControlState nState,
+                                    const ImplControlValue& aValue, const OUString& aCaption)
+{
+    bool bHandled
+        = m_aControl.drawNativeControl(nType, nPart, rControlRegion, nState, aValue, aCaption);
+    if (bHandled)
+    {
+        Qt5Painter aPainter(*this);
+        aPainter.drawImage(QPoint(rControlRegion.getX(), rControlRegion.getY()),
+                           m_aControl.getImage());
+        aPainter.update(toQRect(rControlRegion));
+    }
+    return bHandled;
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

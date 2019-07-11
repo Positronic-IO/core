@@ -22,6 +22,7 @@
 
 #include <svl/broadcast.hxx>
 #include <set>
+#include <tools/solar.h>
 
 #include <callform.hxx>
 
@@ -42,8 +43,8 @@ private:
     };
     std::unique_ptr<ScAddInDocs> pDocs; // List of using documents
     LegacyFuncData* mpFuncData;         // Pointer to data in collection
-    sal_uLong       nHandle;            // is casted from double to sal_uLong
-    ParamType       meType;             // result of type PTR_DOUBLE or PTR_STRING
+    sal_uLong const nHandle;            // is casted from double to sal_uLong
+    ParamType const meType;             // result of type PTR_DOUBLE or PTR_STRING
     bool            bValid;             // is value valid?
 
 public:
@@ -68,9 +69,9 @@ public:
 
 struct CompareScAddInAsync
 {
-  bool operator()( ScAddInAsync* const& lhs, ScAddInAsync* const& rhs ) const { return (*lhs)<(*rhs); }
+  bool operator()( std::unique_ptr<ScAddInAsync> const& lhs, std::unique_ptr<ScAddInAsync> const& rhs ) const { return (*lhs)<(*rhs); }
 };
-using ScAddInAsyncs = std::set<ScAddInAsync*, CompareScAddInAsync>;
+using ScAddInAsyncs = std::set<std::unique_ptr<ScAddInAsync>, CompareScAddInAsync>;
 
 extern ScAddInAsyncs theAddInAsyncTbl;  // in adiasync.cxx
 

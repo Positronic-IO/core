@@ -24,6 +24,7 @@
 
 #include <vcl/svapp.hxx>
 #include <fontinstance.hxx>
+#include <impglyphitem.hxx>
 #include <impfont.hxx>
 #include <fontattributes.hxx>
 
@@ -37,6 +38,7 @@
 
 #include <osl/file.hxx>
 #include <osl/thread.hxx>
+#include <sal/log.hxx>
 
 #include <langboost.hxx>
 #include <PhysicalFontCollection.hxx>
@@ -84,8 +86,6 @@ namespace { struct vclFontFileList : public rtl::Static< FontFileList, vclFontFi
 static int nDefaultPrioEmbedded    = 2;
 static int nDefaultPrioAutoHint    = 1;
 static int nDefaultPrioAntiAlias   = 1;
-
-// FreetypeManager
 
 FreetypeFontFile::FreetypeFontFile( const OString& rNativeFileName )
 :   maNativeFileName( rNativeFileName ),
@@ -173,8 +173,7 @@ FreetypeFontInfo::FreetypeFontInfo( const FontAttributes& rDevFontAttributes,
     mnFaceNum( nFaceNum ),
     mnRefCount( 0 ),
     mnFontId( nFontId ),
-    maDevFontAttributes( rDevFontAttributes ),
-    mxFontCharMap( nullptr )
+    maDevFontAttributes( rDevFontAttributes )
 {
     // prefer font with low ID
     maDevFontAttributes.IncreaseQualityBy( 10000 - nFontId );
@@ -260,8 +259,7 @@ void FreetypeFontInfo::AnnounceFont( PhysicalFontCollection* pFontCollection )
     pFontCollection->Add( pFD );
 }
 
-FreetypeManager::FreetypeManager()
-:   mnMaxFontId( 0 )
+void GlyphCache::InitFreetype()
 {
     /*FT_Error rcFT =*/ FT_Init_FreeType( &aLibFT );
 
@@ -281,7 +279,7 @@ FreetypeManager::FreetypeManager()
     if( pEnv )
         nDefaultPrioAutoHint  = pEnv[0] - '0';
 
-    vclFontFileList::get();
+    (void)vclFontFileList::get();
 }
 
 FT_Face FreetypeFont::GetFtFace() const
@@ -291,64 +289,49 @@ FT_Face FreetypeFont::GetFtFace() const
     return maFaceFT;
 }
 
-FreetypeManager::~FreetypeManager()
-{
-    ClearFontList();
-}
-
-void FreetypeManager::AddFontFile( const OString& rNormalizedName,
+void GlyphCache::AddFontFile( const OString& rNormalizedName,
     int nFaceNum, sal_IntPtr nFontId, const FontAttributes& rDevFontAttr)
 {
     if( rNormalizedName.isEmpty() )
         return;
 
-    if( maFontList.find( nFontId ) != maFontList.end() )
+    if( m_aFontInfoList.find( nFontId ) != m_aFontInfoList.end() )
         return;
 
     FreetypeFontInfo* pFontInfo = new FreetypeFontInfo( rDevFontAttr,
         rNormalizedName, nFaceNum, nFontId);
-    maFontList[ nFontId ] = pFontInfo;
-    if( mnMaxFontId < nFontId )
-        mnMaxFontId = nFontId;
+    m_aFontInfoList[ nFontId ].reset(pFontInfo);
+    if( m_nMaxFontId < nFontId )
+        m_nMaxFontId = nFontId;
 }
 
-void FreetypeManager::AnnounceFonts( PhysicalFontCollection* pToAdd ) const
+void GlyphCache::AnnounceFonts( PhysicalFontCollection* pToAdd ) const
 {
-    for (auto const& font : maFontList)
+    for (auto const& font : m_aFontInfoList)
     {
-        FreetypeFontInfo* pFreetypeFontInfo = font.second;
+        FreetypeFontInfo* pFreetypeFontInfo = font.second.get();
         pFreetypeFontInfo->AnnounceFont( pToAdd );
     }
 }
 
-void FreetypeManager::ClearFontList( )
-{
-    for (auto const& font : maFontList)
-    {
-        FreetypeFontInfo* pFreetypeFontInfo = font.second;
-        delete pFreetypeFontInfo;
-    }
-    maFontList.clear();
-}
-
-FreetypeFont* FreetypeManager::CreateFont( const FontSelectPattern& rFSD )
+FreetypeFont* GlyphCache::CreateFont(LogicalFontInstance* pFontInstance)
 {
     // find a FontInfo matching to the font id
-    if (!rFSD.mpFontInstance)
+    if (!pFontInstance)
         return nullptr;
 
-    const PhysicalFontFace* pFontFace = rFSD.mpFontInstance->GetFontFace();
+    const PhysicalFontFace* pFontFace = pFontInstance->GetFontFace();
     if (!pFontFace)
         return nullptr;
 
     sal_IntPtr nFontId = pFontFace->GetFontId();
-    FontList::iterator it = maFontList.find(nFontId);
-    FreetypeFontInfo* pFontInfo = it != maFontList.end() ? it->second : nullptr;
+    FontInfoList::iterator it = m_aFontInfoList.find(nFontId);
+    FreetypeFontInfo* pFontInfo = it != m_aFontInfoList.end() ? it->second.get() : nullptr;
 
     if (!pFontInfo)
         return nullptr;
 
-    return new FreetypeFont(rFSD, pFontInfo);
+    return new FreetypeFont(pFontInstance, pFontInfo);
 }
 
 FreetypeFontFace::FreetypeFontFace( FreetypeFontInfo* pFI, const FontAttributes& rDFA )
@@ -357,16 +340,15 @@ FreetypeFontFace::FreetypeFontFace( FreetypeFontInfo* pFI, const FontAttributes&
 {
 }
 
-LogicalFontInstance* FreetypeFontFace::CreateFontInstance(const FontSelectPattern& rFSD) const
+rtl::Reference<LogicalFontInstance> FreetypeFontFace::CreateFontInstance(const FontSelectPattern& rFSD) const
 {
     return new FreetypeFontInstance(*this, rFSD);
 }
 
 // FreetypeFont
 
-FreetypeFont::FreetypeFont( const FontSelectPattern& rFSD, FreetypeFontInfo* pFI )
-:   maGlyphList( 0),
-    mpFontInstance(rFSD.mpFontInstance),
+FreetypeFont::FreetypeFont(LogicalFontInstance* pFontInstance, FreetypeFontInfo* pFI )
+:   mpFontInstance(static_cast<FreetypeFontInstance*>(pFontInstance)),
     mnRefCount(1),
     mnBytesUsed( sizeof(FreetypeFont) ),
     mpPrevGCFont( nullptr ),
@@ -385,10 +367,11 @@ FreetypeFont::FreetypeFont( const FontSelectPattern& rFSD, FreetypeFontInfo* pFI
     int nPrioEmbedded = nDefaultPrioEmbedded;
     // TODO: move update of mpFontInstance into FontEntry class when
     // it becomes responsible for the FreetypeFont instantiation
-    static_cast<FreetypeFontInstance*>(mpFontInstance)->SetFreetypeFont( this );
-    mpFontInstance->Acquire();
+    mpFontInstance->SetFreetypeFont( this );
 
     maFaceFT = pFI->GetFaceFT();
+
+    const FontSelectPattern& rFSD = pFontInstance->GetFontSelectPattern();
 
     if( rFSD.mnOrientation != 0 )
     {
@@ -485,7 +468,7 @@ FreetypeFont::~FreetypeFont()
 
     mpFontInfo->ReleaseFaceFT();
 
-    mpFontInstance->Release();
+    mpFontInstance.clear();
 
     ReleaseFromGarbageCollect();
 }
@@ -606,14 +589,14 @@ void FreetypeFont::ApplyGlyphTransform(bool bVertical, FT_Glyph pGlyphFT ) const
     }
 }
 
-void FreetypeFont::InitGlyphData(const GlyphItem& rGlyph, GlyphData& rGD ) const
+bool FreetypeFont::GetGlyphBoundRect(sal_GlyphId nID, tools::Rectangle& rRect, bool bVertical) const
 {
     FT_Activate_Size( maSizeFT );
 
-    FT_Error rc = FT_Load_Glyph(maFaceFT, rGlyph.maGlyphId, mnLoadFlags);
+    FT_Error rc = FT_Load_Glyph(maFaceFT, nID, mnLoadFlags);
 
     if (rc != FT_Err_Ok)
-        return;
+        return false;
 
     if (mbArtBold)
         FT_GlyphSlot_Embolden(maFaceFT->glyph);
@@ -621,16 +604,27 @@ void FreetypeFont::InitGlyphData(const GlyphItem& rGlyph, GlyphData& rGD ) const
     FT_Glyph pGlyphFT;
     rc = FT_Get_Glyph(maFaceFT->glyph, &pGlyphFT);
     if (rc != FT_Err_Ok)
-        return;
+        return false;
 
-    ApplyGlyphTransform(rGlyph.IsVertical(), pGlyphFT);
+    ApplyGlyphTransform(bVertical, pGlyphFT);
 
     FT_BBox aBbox;
     FT_Glyph_Get_CBox( pGlyphFT, FT_GLYPH_BBOX_PIXELS, &aBbox );
-
-    rGD.SetBoundRect(tools::Rectangle(aBbox.xMin, -aBbox.yMax, aBbox.xMax, -aBbox.yMin));
-
     FT_Done_Glyph( pGlyphFT );
+
+    tools::Rectangle aRect(aBbox.xMin, -aBbox.yMax, aBbox.xMax, -aBbox.yMin);
+    if (mnCos != 0x10000 && mnSin != 0)
+    {
+        const double nCos = mnCos / 65536.0;
+        const double nSin = mnSin / 65536.0;
+        rRect.SetLeft(  nCos*aRect.Left() + nSin*aRect.Top() );
+        rRect.SetTop( -nSin*aRect.Left() - nCos*aRect.Top() );
+        rRect.SetRight(  nCos*aRect.Right() + nSin*aRect.Bottom() );
+        rRect.SetBottom( -nSin*aRect.Right() - nCos*aRect.Bottom() );
+    }
+    else
+        rRect = aRect;
+    return true;
 }
 
 bool FreetypeFont::GetAntialiasAdvice() const
@@ -760,7 +754,7 @@ private:
                     mpFlagAry;
 
     FT_Vector       maPosition;
-    sal_uInt16      mnMaxPoints;
+    sal_uInt16 const mnMaxPoints;
     sal_uInt16      mnPoints;
     sal_uInt16      mnPoly;
     bool            bHasOffline;
@@ -889,8 +883,7 @@ static int FT_cubic_to( const FT_Vector* p1, const FT_Vector* p2, const FT_Vecto
 
 } // extern "C"
 
-bool FreetypeFont::GetGlyphOutline(const GlyphItem& rGlyph,
-    basegfx::B2DPolyPolygon& rB2DPolyPoly ) const
+bool FreetypeFont::GetGlyphOutline(sal_GlyphId nId, basegfx::B2DPolyPolygon& rB2DPolyPoly, bool bIsVertical) const
 {
     if( maSizeFT )
         FT_Activate_Size( maSizeFT );
@@ -904,7 +897,7 @@ bool FreetypeFont::GetGlyphOutline(const GlyphItem& rGlyph,
     nLoadFlags |= FT_LOAD_TARGET_LIGHT;
 #endif
 
-    FT_Error rc = FT_Load_Glyph(maFaceFT, rGlyph.maGlyphId, nLoadFlags);
+    FT_Error rc = FT_Load_Glyph(maFaceFT, nId, nLoadFlags);
     if( rc != FT_Err_Ok )
         return false;
 
@@ -942,7 +935,7 @@ bool FreetypeFont::GetGlyphOutline(const GlyphItem& rGlyph,
     tools::PolyPolygon aToolPolyPolygon;
     PolyArgs aPolyArg( aToolPolyPolygon, nMaxPoints );
 
-    ApplyGlyphTransform(rGlyph.IsVertical(), pGlyphFT);
+    ApplyGlyphTransform(bIsVertical, pGlyphFT);
 
     FT_Outline_Funcs aFuncs;
     aFuncs.move_to  = &FT_move_to;

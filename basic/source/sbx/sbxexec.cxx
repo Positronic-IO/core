@@ -140,7 +140,7 @@ static SbxVariableRef Operand
     else if( !bVar && *p == '"' )
     {
         // A string
-        OUString aString;
+        OUStringBuffer aString;
         p++;
         for( ;; )
         {
@@ -150,16 +150,13 @@ static SbxVariableRef Operand
                 return nullptr;
             }
             // Double quotes are OK
-            if( *p == '"' )
+            if( *p == '"' && (*++p) != '"' )
             {
-                if( *++p != '"' )
-                {
-                    break;
-                }
+                break;
             }
-            aString += OUStringLiteral1(*p++);
+            aString.append(*p++);
         }
-        refVar->PutString( aString );
+        refVar->PutString( aString.makeStringAndClear() );
     }
     else
     {
@@ -337,7 +334,7 @@ static SbxVariableRef Element
 
 SbxVariable* SbxObject::Execute( const OUString& rTxt )
 {
-    SbxVariableRef pVar = nullptr;
+    SbxVariableRef pVar;
     const sal_Unicode* p = rTxt.getStr();
     for( ;; )
     {
@@ -366,7 +363,7 @@ SbxVariable* SbxObject::Execute( const OUString& rTxt )
 
 SbxVariable* SbxObject::FindQualified( const OUString& rName, SbxClassType t )
 {
-    SbxVariableRef pVar = nullptr;
+    SbxVariableRef pVar;
     const sal_Unicode* p = rName.getStr();
     p = SkipWhitespace( p );
     if( !*p )

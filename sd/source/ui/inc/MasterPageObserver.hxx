@@ -21,10 +21,12 @@
 #define INCLUDED_SD_SOURCE_UI_INC_MASTERPAGEOBSERVER_HXX
 
 #include <rtl/ustring.hxx>
+#include <tools/link.hxx>
 #include "tools/SdGlobalResourceContainer.hxx"
-#include <osl/mutex.hxx>
 #include <memory>
 #include <set>
+
+namespace osl { class Mutex; }
 
 class SdDrawDocument;
 
@@ -102,7 +104,7 @@ public:
         ET_MASTER_PAGE_REMOVED
     };
 
-    EventType meType;
+    EventType const meType;
     const OUString& mrMasterPageName;
 
     MasterPageObserverEvent (

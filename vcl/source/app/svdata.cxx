@@ -21,11 +21,11 @@
 
 #include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/string.hxx>
 #include <rtl/process.h>
 #include <tools/gen.hxx>
 #include <unotools/resmgr.hxx>
 #include <uno/current_context.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/button.hxx>
 #include <vcl/configsettings.hxx>
@@ -60,6 +60,9 @@
 #if HAVE_FEATURE_OPENGL
 #include <vcl/opengl/OpenGLContext.hxx>
 #endif
+#include <basegfx/utils/systemdependentdata.hxx>
+#include <cppuhelper/basemutex.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace com::sun::star::uno;
 using namespace com::sun::star::lang;
@@ -79,8 +82,8 @@ SalSystem* ImplGetSalSystem()
 {
     ImplSVData* pSVData = ImplGetSVData();
     if( ! pSVData->mpSalSystem )
-        pSVData->mpSalSystem = pSVData->mpDefInst->CreateSalSystem();
-    return pSVData->mpSalSystem;
+        pSVData->mpSalSystem.reset( pSVData->mpDefInst->CreateSalSystem() );
+    return pSVData->mpSalSystem.get();
 }
 
 void ImplDeInitSVData()
@@ -88,33 +91,142 @@ void ImplDeInitSVData()
     ImplSVData* pSVData = ImplGetSVData();
 
     // delete global instance data
-    if( pSVData->mpSettingsConfigItem )
-    {
-        delete pSVData->mpSettingsConfigItem;
-        pSVData->mpSettingsConfigItem = nullptr;
-    }
+    pSVData->mpSettingsConfigItem.reset();
 
-    if( pSVData->mpDockingManager )
-    {
-        delete pSVData->mpDockingManager;
-        pSVData->mpDockingManager = nullptr;
-    }
+    pSVData->mpDockingManager.reset();
 
-    if( pSVData->maCtrlData.mpFieldUnitStrings )
+    pSVData->maCtrlData.maFieldUnitStrings.clear();
+    pSVData->maCtrlData.maCleanUnitStrings.clear();
+    pSVData->maPaperNames.clear();
+}
+
+namespace
+{
+    typedef ::std::map< basegfx::SystemDependentData_SharedPtr, sal_uInt32 > EntryMap;
+
+    class SystemDependentDataBuffer : public basegfx::SystemDependentDataManager, protected cppu::BaseMutex
     {
-        delete pSVData->maCtrlData.mpFieldUnitStrings;
-        pSVData->maCtrlData.mpFieldUnitStrings = nullptr;
-    }
-    if( pSVData->maCtrlData.mpCleanUnitStrings )
+    private:
+        std::unique_ptr<Timer>  maTimer;
+        EntryMap                maEntries;
+
+        DECL_LINK(implTimeoutHdl, Timer *, void);
+
+    public:
+        SystemDependentDataBuffer(const sal_Char* pDebugName)
+        :   basegfx::SystemDependentDataManager(),
+            maTimer(o3tl::make_unique<Timer>(pDebugName)),
+            maEntries()
+        {
+            maTimer->SetTimeout(1000);
+            maTimer->SetInvokeHandler(LINK(this, SystemDependentDataBuffer, implTimeoutHdl));
+        }
+
+        virtual ~SystemDependentDataBuffer() override
+        {
+            flushAll();
+        }
+
+        void startUsage(basegfx::SystemDependentData_SharedPtr& rData) override
+        {
+            ::osl::MutexGuard aGuard(m_aMutex);
+            EntryMap::iterator aFound(maEntries.find(rData));
+
+            if(aFound == maEntries.end())
+            {
+                if(maEntries.empty() && maTimer)
+                {
+                    maTimer->Start();
+                }
+
+                maEntries[rData] = rData->calculateCombinedHoldCyclesInSeconds();
+            }
+        }
+
+        void endUsage(basegfx::SystemDependentData_SharedPtr& rData) override
+        {
+            ::osl::MutexGuard aGuard(m_aMutex);
+            EntryMap::iterator aFound(maEntries.find(rData));
+
+            if(aFound != maEntries.end())
+            {
+                maEntries.erase(aFound);
+
+                if(maEntries.empty() && maTimer)
+                {
+                    maTimer->Stop();
+                }
+            }
+        }
+
+        void touchUsage(basegfx::SystemDependentData_SharedPtr& rData) override
+        {
+            ::osl::MutexGuard aGuard(m_aMutex);
+            EntryMap::iterator aFound(maEntries.find(rData));
+
+            if(aFound != maEntries.end())
+            {
+                aFound->second = rData->calculateCombinedHoldCyclesInSeconds();
+            }
+        }
+
+        void flushAll() override
+        {
+            ::osl::MutexGuard aGuard(m_aMutex);
+            EntryMap::iterator aIter(maEntries.begin());
+
+            if(maTimer)
+            {
+                maTimer->Stop();
+                maTimer.reset();
+            }
+
+            while(aIter != maEntries.end())
+            {
+                EntryMap::iterator aDelete(aIter);
+                ++aIter;
+                maEntries.erase(aDelete);
+            }
+        }
+    };
+
+    IMPL_LINK_NOARG(SystemDependentDataBuffer, implTimeoutHdl, Timer *, void)
     {
-        delete pSVData->maCtrlData.mpCleanUnitStrings;
-        pSVData->maCtrlData.mpCleanUnitStrings = nullptr;
+        ::osl::MutexGuard aGuard(m_aMutex);
+        EntryMap::iterator aIter(maEntries.begin());
+
+        while(aIter != maEntries.end())
+        {
+            if(aIter->second)
+            {
+                aIter->second--;
+                ++aIter;
+            }
+            else
+            {
+                EntryMap::iterator aDelete(aIter);
+                ++aIter;
+                maEntries.erase(aDelete);
+
+                if(maEntries.empty() && maTimer)
+                {
+                    maTimer->Stop();
+                }
+            }
+        }
+
+        if(!maEntries.empty() && maTimer)
+        {
+            maTimer->Start();
+        }
     }
-    if( pSVData->mpPaperNames )
-    {
-        delete pSVData->mpPaperNames;
-        pSVData->mpPaperNames = nullptr;
-    }
+}
+
+basegfx::SystemDependentDataManager& ImplGetSystemDependentDataManager()
+{
+    static SystemDependentDataBuffer aSystemDependentDataBuffer("vcl SystemDependentDataBuffer aSystemDependentDataBuffer");
+
+    return aSystemDependentDataBuffer;
 }
 
 /// Returns either the application window, or the default GL context window
@@ -179,63 +291,58 @@ OUString VclResId(const char* pId)
     return Translate::get(pId, ImplGetResLocale());
 }
 
-FieldUnitStringList* ImplGetFieldUnits()
+const FieldUnitStringList& ImplGetFieldUnits()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( ! pSVData->maCtrlData.mpFieldUnitStrings )
+    if( pSVData->maCtrlData.maFieldUnitStrings.empty() )
     {
         sal_uInt32 nUnits = SAL_N_ELEMENTS(SV_FUNIT_STRINGS);
-        pSVData->maCtrlData.mpFieldUnitStrings = new FieldUnitStringList;
-        pSVData->maCtrlData.mpFieldUnitStrings->reserve( nUnits );
+        pSVData->maCtrlData.maFieldUnitStrings.reserve( nUnits );
         for (sal_uInt32 i = 0; i < nUnits; i++)
         {
             std::pair<OUString, FieldUnit> aElement(VclResId(SV_FUNIT_STRINGS[i].first), SV_FUNIT_STRINGS[i].second);
-            pSVData->maCtrlData.mpFieldUnitStrings->push_back( aElement );
+            pSVData->maCtrlData.maFieldUnitStrings.push_back( aElement );
         }
     }
-    return pSVData->maCtrlData.mpFieldUnitStrings;
+    return pSVData->maCtrlData.maFieldUnitStrings;
 }
 
-FieldUnitStringList* ImplGetCleanedFieldUnits()
+const FieldUnitStringList& ImplGetCleanedFieldUnits()
 {
     ImplSVData* pSVData = ImplGetSVData();
-    if( ! pSVData->maCtrlData.mpCleanUnitStrings )
+    if( pSVData->maCtrlData.maCleanUnitStrings.empty() )
     {
-        FieldUnitStringList* pUnits = ImplGetFieldUnits();
-        if( pUnits )
+        const FieldUnitStringList& rUnits = ImplGetFieldUnits();
+        size_t nUnits = rUnits.size();
+        pSVData->maCtrlData.maCleanUnitStrings.reserve(nUnits);
+        for (size_t i = 0; i < nUnits; ++i)
         {
-            size_t nUnits = pUnits->size();
-            pSVData->maCtrlData.mpCleanUnitStrings = new FieldUnitStringList;
-            pSVData->maCtrlData.mpCleanUnitStrings->reserve( nUnits );
-            for( size_t i = 0; i < nUnits; ++i )
-            {
-                OUString aUnit( (*pUnits)[i].first );
-                aUnit = aUnit.replaceAll(" ", "");
-                aUnit = aUnit.toAsciiLowerCase();
-                std::pair< OUString, FieldUnit > aElement( aUnit, (*pUnits)[i].second );
-                pSVData->maCtrlData.mpCleanUnitStrings->push_back( aElement );
-            }
+            OUString aUnit(rUnits[i].first);
+            aUnit = aUnit.replaceAll(" ", "");
+            aUnit = aUnit.toAsciiLowerCase();
+            std::pair<OUString, FieldUnit> aElement(aUnit, rUnits[i].second);
+            pSVData->maCtrlData.maCleanUnitStrings.push_back(aElement);
         }
     }
-    return pSVData->maCtrlData.mpCleanUnitStrings;
+    return pSVData->maCtrlData.maCleanUnitStrings;
 }
 
 DockingManager* ImplGetDockingManager()
 {
     ImplSVData* pSVData = ImplGetSVData();
     if ( !pSVData->mpDockingManager )
-        pSVData->mpDockingManager = new DockingManager();
+        pSVData->mpDockingManager.reset(new DockingManager());
 
-    return pSVData->mpDockingManager;
+    return pSVData->mpDockingManager.get();
 }
 
 BlendFrameCache* ImplGetBlendFrameCache()
 {
     ImplSVData* pSVData = ImplGetSVData();
     if ( !pSVData->mpBlendFrameCache)
-        pSVData->mpBlendFrameCache= new BlendFrameCache();
+        pSVData->mpBlendFrameCache.reset( new BlendFrameCache() );
 
-    return pSVData->mpBlendFrameCache;
+    return pSVData->mpBlendFrameCache.get();
 }
 
 #ifdef _WIN32

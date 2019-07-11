@@ -32,7 +32,7 @@
 
 #if defined ANDROID
 #include <android/log.h>
-#elif defined WNT
+#elif defined _WIN32
 #include <process.h>
 #include <windows.h>
 #define OSL_DETAIL_GETPID _getpid()
@@ -54,6 +54,17 @@ bool const sal_use_syslog = false;
 // recursion.
 
 namespace {
+
+struct TimeContainer
+{
+    TimeValue aTime;
+    TimeContainer()
+    {
+        osl_getSystemTime(&aTime);
+    }
+};
+
+TimeContainer aStartTime;
 
 bool equalStrings(
     char const * string1, std::size_t length1, char const * string2,
@@ -101,7 +112,7 @@ char const * getEnvironmentVariable(const char* env) {
     return p2;
 }
 
-#ifdef WNT
+#ifdef _WIN32
 # define INI_STRINGBUF_SIZE 1024
 
 bool getValueFromLoggingIniFile(const char* key, char* value) {
@@ -144,7 +155,7 @@ char const * getLogLevel() {
     if (env != nullptr)
         return env;
 
-#ifdef WNT
+#ifdef _WIN32
     static char logLevel[INI_STRINGBUF_SIZE];
     if (getValueFromLoggingIniFile("LogLevel", logLevel))
         return logLevel;
@@ -156,14 +167,19 @@ char const * getLogLevel() {
 std::ofstream * getLogFile() {
     // First check the environment variable, then the setting in logging.ini
     static char const * logFile = getEnvironmentVariable("SAL_LOG_FILE");
-    if (!logFile)
-        return nullptr;
 
-#ifdef WNT
-    static char logFilePath[INI_STRINGBUF_SIZE];
-    if (getValueFromLoggingIniFile("LogFilePath", logFilePath))
-        logFile = logFilePath;
+    if (!logFile)
+    {
+#ifdef _WIN32
+        static char logFilePath[INI_STRINGBUF_SIZE];
+        if (getValueFromLoggingIniFile("LogFilePath", logFilePath))
+            logFile = logFilePath;
+        else
+            return nullptr;
+#else
+        return nullptr;
 #endif
+    }
 
     // stays until process exits
     static std::ofstream file(logFile, std::ios::app | std::ios::out);
@@ -201,22 +217,16 @@ void maybeOutputTimestamp(std::ostringstream &s) {
                 s << ts << '.' << milliSecs << ':';
             }
             if (outputRelativeTimer) {
-                static bool beenHere = false;
-                static TimeValue first;
-                if (!beenHere) {
-                    osl_getSystemTime(&first);
-                    beenHere = true;
-                }
                 TimeValue now;
                 osl_getSystemTime(&now);
-                int seconds = now.Seconds - first.Seconds;
+                int seconds = now.Seconds - aStartTime.aTime.Seconds;
                 int milliSeconds;
-                if (now.Nanosec < first.Nanosec) {
+                if (now.Nanosec < aStartTime.aTime.Nanosec) {
                     seconds--;
-                    milliSeconds = 1000-(first.Nanosec-now.Nanosec)/1000000;
+                    milliSeconds = 1000-(aStartTime.aTime.Nanosec-now.Nanosec)/1000000;
                 }
                 else
-                    milliSeconds = (now.Nanosec-first.Nanosec)/1000000;
+                    milliSeconds = (now.Nanosec-aStartTime.aTime.Nanosec)/1000000;
                 char relativeTimestamp[100];
                 snprintf(relativeTimestamp, sizeof(relativeTimestamp), "%d.%03d", seconds, milliSeconds);
                 s << relativeTimestamp << ':';
@@ -326,7 +336,7 @@ void sal_detail_log(
             *logFile << s.str() << std::endl;
         }
         else {
-#ifdef WNT
+#ifdef _WIN32
             // write to Windows debugger console, too
             OutputDebugStringA(s.str().c_str());
 #endif

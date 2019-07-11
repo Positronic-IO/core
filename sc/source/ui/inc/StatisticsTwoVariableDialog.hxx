@@ -11,13 +11,11 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_STATISTICSTWOVARIABLEDIALOG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_STATISTICSTWOVARIABLEDIALOG_HXX
 
-#include <global.hxx>
 #include <address.hxx>
 #include "anyrefdg.hxx"
+#include "viewdata.hxx"
 
 #include <vcl/fixed.hxx>
-#include <vcl/group.hxx>
-#include <vcl/lstbox.hxx>
 
 class ScStatisticsTwoVariableDialog : public ScAnyRefDlg
 {
@@ -43,6 +41,8 @@ protected:
 
     virtual ScRange ApplyOutput(ScDocShell* pDocShell) = 0;
     virtual const char* GetUndoNameId() = 0;
+    virtual bool InputRangesValid();
+    void ValidateDialogInput();
 
     // Widgets
     VclPtr<FixedText>          mpVariable1RangeLabel;
@@ -58,15 +58,15 @@ protected:
     VclPtr<formula::RefButton> mpOutputRangeButton;
 
     // Data
-    ScViewData*         mViewData;
-    ScDocument*         mDocument;
+    ScViewData* const         mViewData;
+    ScDocument* const         mDocument;
 
-    ScRange             mVariable1Range;
-    ScRange             mVariable2Range;
+    ScRange                   mVariable1Range;
+    ScRange                   mVariable2Range;
 
-    ScAddress::Details  mAddressDetails;
-    ScAddress           mOutputAddress;
-    GroupedBy           mGroupedBy;
+    ScAddress::Details const  mAddressDetails;
+    ScAddress                 mOutputAddress;
+    GroupedBy                 mGroupedBy;
 
 private:
     // Widgets
@@ -76,8 +76,8 @@ private:
     VclPtr<RadioButton>        mpGroupByRowsRadio;
 
     VclPtr<formula::RefEdit>   mpActiveEdit;
-    ScAddress           mCurrentAddress;
-    bool                mDialogLostFocus;
+    ScAddress const            mCurrentAddress;
+    bool                       mDialogLostFocus;
 
     void Init();
     void GetRangeFromSelection();

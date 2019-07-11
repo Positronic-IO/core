@@ -4261,7 +4261,7 @@ SfxVoidItem RotateLeft SID_ROTATE_GRAPHIC_LEFT
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4277,7 +4277,7 @@ SfxVoidItem Rotate180 SID_ROTATE_GRAPHIC_180
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4293,7 +4293,7 @@ SfxVoidItem RotateRight SID_ROTATE_GRAPHIC_RIGHT
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4310,7 +4310,7 @@ SfxVoidItem RotateReset SID_ROTATE_GRAPHIC_RESET
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4327,7 +4327,7 @@ SfxBoolItem Crop SID_OBJECT_CROP
 [
     AutoUpdate = TRUE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4772,25 +4772,6 @@ SfxVoidItem InsertObject SID_INSERT_OBJECT
 
 SfxVoidItem InsertObjectChart SID_INSERT_DIAGRAM
 (SfxBoolItem ColHeaders FN_PARAM_1,SfxBoolItem RowHeaders FN_PARAM_2,SfxBoolItem InNewTable FN_PARAM_4,SfxStringItem RangeList FN_PARAM_5)
-[
-    AutoUpdate = FALSE,
-    FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
-    Toggle = FALSE,
-    Container = FALSE,
-    RecordAbsolute = FALSE,
-    RecordPerSet;
-    Asynchron;
-
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
-    GroupId = SfxGroupId::Insert;
-]
-
-
-SfxVoidItem InsertObjectChartFromFile SID_INSERT_DIAGRAM_FROM_FILE
-()
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -6214,7 +6195,7 @@ SvxPageItem Orientation SID_ATTR_PAGE_ORIENTATION
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -8527,6 +8508,23 @@ SfxVoidItem TransformDialog SID_ATTR_TRANSFORM
 [
     AutoUpdate = FALSE,
     FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Format;
+]
+
+SfxVoidItem MeasureAttributes SID_MEASURE_DLG
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
@@ -10977,7 +10975,7 @@ SfxVoidItem InsertRows SID_TABLE_INSERT_ROW
 
     AccelConfig = FALSE,
     MenuConfig = FALSE,
-    ToolBoxConfig = TRUE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Table;
 ]
 
@@ -10995,7 +10993,7 @@ SfxVoidItem InsertColumns SID_TABLE_INSERT_COL
 
     AccelConfig = FALSE,
     MenuConfig = FALSE,
-    ToolBoxConfig = TRUE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Table;
 ]
 

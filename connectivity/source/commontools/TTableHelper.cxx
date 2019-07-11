@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <connectivity/TTableHelper.hxx>
 #include <com/sun/star/sdbc/XRow.hpp>
@@ -29,7 +30,6 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/sdbc/ColumnValue.hpp>
-#include <comphelper/sequence.hxx>
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/sdbcx/VCollection.hxx>
@@ -94,7 +94,7 @@ public:
 }
 namespace connectivity
 {
-    OUString lcl_getServiceNameForSetting(const Reference< css::sdbc::XConnection >& _xConnection,const OUString& i_sSetting)
+    static OUString lcl_getServiceNameForSetting(const Reference< css::sdbc::XConnection >& _xConnection,const OUString& i_sSetting)
     {
         OUString sSupportService;
         Any aValue;
@@ -348,7 +348,7 @@ void OTableHelper::refreshPrimaryKeys(::std::vector< OUString>& _rNames)
         if(bAlreadyFetched)
         {
             SAL_WARN_IF(aPkName.isEmpty(),"connectivity.commontools", "empty Primary Key name");
-            SAL_WARN_IF(pKeyProps->m_aKeyColumnNames.size() == 0,"connectivity.commontools", "Primary Key has no columns");
+            SAL_WARN_IF(pKeyProps->m_aKeyColumnNames.empty(),"connectivity.commontools", "Primary Key has no columns");
             m_pImpl->m_aKeys.emplace(aPkName,pKeyProps);
             _rNames.push_back(aPkName);
         }
@@ -448,12 +448,11 @@ void OTableHelper::refreshIndexes()
         if(xResult.is())
         {
             Reference< XRow > xRow(xResult,UNO_QUERY);
-            OUString aName;
             OUString sCatalogSep = getMetaData()->getCatalogSeparator();
             OUString sPreviousRoundName;
             while( xResult->next() )
             {
-                aName = xRow->getString(5);
+                OUString aName = xRow->getString(5);
                 if(!aName.isEmpty())
                     aName += sCatalogSep;
                 aName += xRow->getString(6);

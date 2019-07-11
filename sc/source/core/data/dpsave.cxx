@@ -21,22 +21,18 @@
 #include <dpsave.hxx>
 #include <dpdimsave.hxx>
 #include <miscuno.hxx>
-#include <scerrors.hxx>
 #include <unonames.hxx>
-#include <global.hxx>
-#include <dptabsrc.hxx>
 #include <dputil.hxx>
 #include <generalfunction.hxx>
+#include <dptabdat.hxx>
 
 #include <sal/types.h>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <o3tl/make_unique.hxx>
-#include <comphelper/string.hxx>
 #include <comphelper/stl_types.hxx>
-#include <comphelper/sequence.hxx>
 
-#include <com/sun/star/sheet/GeneralFunction.hpp>
-#include <com/sun/star/sheet/GeneralFunction2.hpp>
+#include <com/sun/star/sheet/XDimensionsSupplier.hpp>
 #include <com/sun/star/sheet/DataPilotFieldAutoShowInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldLayoutInfo.hpp>
 #include <com/sun/star/sheet/DataPilotFieldReference.hpp>
@@ -50,7 +46,6 @@
 
 
 #include <unordered_map>
-#include <unordered_set>
 #include <algorithm>
 
 using namespace com::sun::star;
@@ -193,11 +188,7 @@ ScDPSaveDimension::ScDPSaveDimension(const OUString& rName, bool bDataLayout) :
     nUsedHierarchy( -1 ),
     nShowEmptyMode( SC_DPSAVEMODE_DONTKNOW ),
     bRepeatItemLabels( false ),
-    bSubTotalDefault( true ),
-    pReferenceValue( nullptr ),
-    pSortInfo( nullptr ),
-    pAutoShowInfo( nullptr ),
-    pLayoutInfo( nullptr )
+    bSubTotalDefault( true )
 {
 }
 
@@ -724,7 +715,6 @@ void ScDPSaveDimension::Dump(int nIndent) const
 #endif
 
 ScDPSaveData::ScDPSaveData() :
-    pDimensionData( nullptr ),
     nColumnGrandMode( SC_DPSAVEMODE_DONTKNOW ),
     nRowGrandMode( SC_DPSAVEMODE_DONTKNOW ),
     nIgnoreEmptyMode( SC_DPSAVEMODE_DONTKNOW ),
@@ -743,8 +733,7 @@ ScDPSaveData::ScDPSaveData(const ScDPSaveData& r) :
     bFilterButton( r.bFilterButton ),
     bDrillDown( r.bDrillDown ),
     mbDimensionMembersBuilt(r.mbDimensionMembersBuilt),
-    mpGrandTotalName(r.mpGrandTotalName),
-    mpDimOrder(nullptr)
+    mpGrandTotalName(r.mpGrandTotalName)
 {
     if ( r.pDimensionData )
         pDimensionData.reset( new ScDPDimensionSaveData( *r.pDimensionData ) );

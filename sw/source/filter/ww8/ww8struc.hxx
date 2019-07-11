@@ -27,6 +27,7 @@
 
 #include <editeng/borderline.hxx>
 #include <filter/msfilter/util.hxx>
+#include <i18nlangtag/lang.h>
 #include <tools/color.hxx>
 
 #ifdef _WIN32
@@ -197,7 +198,7 @@ static_assert(sizeof (WW8_STD) == 10, "this has to match the msword size");
 /** base for reading AND working on (will have different subclasses */
 struct WW8_FFN_BASE     // Font Descriptor
 {
-    // ab Ver6
+    // from Ver6 on
     sal_uInt8    cbFfnM1;        //  0x0     total length of FFN - 1.
 
     sal_uInt8    prg: 2;         //  0x1:03  pitch request
@@ -215,7 +216,7 @@ static_assert(sizeof (WW8_FFN_BASE) == 6, "this has to match the msword size");
 
 /** This is what we use in the Parser (and Dumper)
 */
-struct WW8_FFN : public WW8_FFN_BASE
+struct WW8_FFN
 {
     // from Ver8 on as Unicode
     OUString sFontname;// 0x6 or 0x40 resp. from Ver8 on zero terminated string that
@@ -225,6 +226,7 @@ struct WW8_FFN : public WW8_FFN_BASE
                                         // Possibly followed by a second sz which records the
                                         // name of an alternate font to use if the first named
                                         // font does not exist on this system.
+    WW8_FFN_BASE aFFNBase;
 };
 
 struct WW8_BRCVer6  // BoRder Code (WW6 version)

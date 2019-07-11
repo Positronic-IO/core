@@ -24,6 +24,7 @@
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/container/ElementExistException.hpp>
 #include <com/sun/star/beans/NamedValue.hpp>
+#include <com/sun/star/logging/LogLevel.hpp>
 
 #include <tools/diagnose_ex.h>
 #include <comphelper/processfactory.hxx>
@@ -50,7 +51,7 @@ using namespace ::osl;
 #define SERVICE_SDBC_DRIVER     "com.sun.star.sdbc.Driver"
 
 /// @throws NoSuchElementException
-void throwNoSuchElementException()
+static void throwNoSuchElementException()
 {
     throw NoSuchElementException();
 }
@@ -168,11 +169,7 @@ Any SAL_CALL ODriverEnumeration::nextElement(  )
         bool operator()( const Reference<XDriver>& _rDriver ) const
         {
             // ask the driver
-            if ( _rDriver.is() && _rDriver->acceptsURL( m_rURL ) )
-                return true;
-
-            // does not accept ...
-            return false;
+            return _rDriver.is() && _rDriver->acceptsURL( m_rURL );
         }
     };
 

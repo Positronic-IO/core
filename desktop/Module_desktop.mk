@@ -20,7 +20,7 @@ $(eval $(call gb_Module_add_targets,desktop,\
     $(if $(ENABLE_BREAKPAD), \
         Library_crashreport \
         ) \
-    $(if $(ENABLE_HEADLESS),,Library_spl) \
+    $(if $(DISABLE_GUI),,Library_spl) \
     Package_branding \
     $(if $(CUSTOM_BRAND_DIR),Package_branding_custom) \
     UIConfig_deployment \
@@ -100,7 +100,7 @@ else ifeq ($(OS),MACOSX)
 
 else ifeq ($(OS),ANDROID)
 
-else ifeq ($(OS),IOS)
+else ifeq ($(OS),iOS)
 
 else ifeq ($(OS),HAIKU)
 
@@ -139,6 +139,7 @@ $(eval $(call gb_Module_add_check_targets,desktop, \
 ifeq ($(OS),LINUX)
 $(eval $(call gb_Module_add_check_targets,desktop, \
     CppunitTest_desktop_lib \
+    CppunitTest_desktop_lokinit \
 ))
 endif
 

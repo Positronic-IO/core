@@ -31,9 +31,9 @@
 #include <fmservs.hxx>
 #include <fmundo.hxx>
 #include <fmpgeimp.hxx>
-#include <fmitems.hxx>
 #include <fmobj.hxx>
 #include <fmprop.hxx>
+#include <sal/log.hxx>
 #include <vcl/wrkwin.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/dispatch.hxx>
@@ -52,7 +52,7 @@
 #include <svx/svxdlg.hxx>
 #include <svx/strings.hrc>
 #include <bitmaps.hlst>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 namespace svxform
 {
@@ -87,13 +87,13 @@ namespace svxform
             MapModelToShape;
 
 
-    void    collectShapeModelMapping( SdrPage const * _pPage, MapModelToShape& _rMapping )
+    static void    collectShapeModelMapping( SdrPage const * _pPage, MapModelToShape& _rMapping )
     {
         OSL_ENSURE( _pPage, "collectShapeModelMapping: invalid arg!" );
 
         _rMapping.clear();
 
-        SdrObjListIter aIter( *_pPage );
+        SdrObjListIter aIter( _pPage );
         while ( aIter.IsMore() )
         {
             SdrObject* pSdrObject = aIter.Next();
@@ -114,7 +114,6 @@ namespace svxform
     NavigatorTree::NavigatorTree( vcl::Window* pParent )
         :SvTreeListBox( pParent, WB_HASBUTTONS|WB_HASLINES|WB_BORDER|WB_HSCROLL ) // #100258# OJ WB_HSCROLL added
         ,m_aControlExchange(this)
-        ,m_pNavModel( nullptr )
         ,m_pRootEntry(nullptr)
         ,m_pEditEntry(nullptr)
         ,nEditEvent(nullptr)
@@ -143,7 +142,7 @@ namespace svxform
         EnableInplaceEditing( true );
         SetSelectionMode(SelectionMode::Multiple);
 
-        m_pNavModel = new NavigatorTreeModel();
+        m_pNavModel.reset(new NavigatorTreeModel());
         Clear();
 
         StartListening( *m_pNavModel );
@@ -172,7 +171,7 @@ namespace svxform
         DBG_ASSERT(GetNavModel() != nullptr, "NavigatorTree::~NavigatorTree : unexpected : no ExplorerModel");
         EndListening( *m_pNavModel );
         Clear();
-        delete m_pNavModel;
+        m_pNavModel.reset();
         SvTreeListBox::dispose();
     }
 
@@ -212,7 +211,7 @@ namespace svxform
         if (m_pRootEntry)
         {
             SvTreeListEntry* pFirst = FirstChild(m_pRootEntry);
-            if (pFirst && !NextSibling(pFirst))
+            if (pFirst && !pFirst->NextSibling())
                 Expand(pFirst);
         }
     }
@@ -348,7 +347,7 @@ namespace svxform
                 bool bSingleSelection = (m_arrCurrentSelection.size() == 1);
 
 
-                DBG_ASSERT( (m_arrCurrentSelection.size() > 0) || m_bRootSelected, "no entries selected" );
+                DBG_ASSERT( (!m_arrCurrentSelection.empty()) || m_bRootSelected, "no entries selected" );
                     // shouldn't happen, because I would have selected one during call to IsSelected,
                     // if there was none before
 
@@ -435,8 +434,8 @@ namespace svxform
 
                     // set OpenReadOnly
 
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("designmode"), pFormModel->GetOpenInDesignMode());
-                    aContextMenu->CheckItem(aContextMenu->GetItemId("controlfocus"), pFormModel->GetAutoControlFocus());
+                    aContextMenu->CheckItem("designmode", pFormModel->GetOpenInDesignMode());
+                    aContextMenu->CheckItem("controlfocus", pFormModel->GetAutoControlFocus());
 
                     aContextMenu->Execute(this, ptWhere);
                     OString sIdent;
@@ -483,7 +482,7 @@ namespace svxform
                         DBG_ASSERT( IsFormEntry(pSelectedForm), "NavigatorTree::Command: This entry must be a FormEntry." );
 
                         FmFormData* pFormData = static_cast<FmFormData*>(pSelectedForm->GetUserData());
-                        Reference< XForm >  xForm(  pFormData->GetFormIface());
+                        const Reference< XForm >&  xForm(  pFormData->GetFormIface());
 
                         Reference< XTabControllerModel >  xTabController(xForm, UNO_QUERY);
                         if( !xTabController.is() )
@@ -661,8 +660,7 @@ namespace svxform
         // but because I disabled SelectionHandling, I have to do it later
         sal_uIntPtr nExpectedSelectionCount = GetSelectionCount();
 
-        if( pEntry )
-            GetModel()->Remove( pEntry );
+        GetModel()->Remove(pEntry);
 
         if (nExpectedSelectionCount != GetSelectionCount())
             SynchronizeSelection();
@@ -682,7 +680,7 @@ namespace svxform
     bool NavigatorTree::IsFormComponentEntry( SvTreeListEntry const * pEntry )
     {
         FmEntryData* pEntryData = static_cast<FmEntryData*>(pEntry->GetUserData());
-        return pEntryData && dynamic_cast<const FmControlData*>( pEntryData) !=  nullptr;
+        return dynamic_cast<const FmControlData*>( pEntryData) != nullptr;
     }
 
 
@@ -774,7 +772,7 @@ namespace svxform
 
         // List of dropped entries from DragServer
         const ListBoxEntrySet& aDropped = m_aControlExchange->selected();
-        DBG_ASSERT(aDropped.size() >= 1, "NavigatorTree::implAcceptDataTransfer: no entries !");
+        DBG_ASSERT(!aDropped.empty(), "NavigatorTree::implAcceptDataTransfer: no entries !");
 
         bool bDropTargetIsComponent = IsFormComponentEntry( _pTargetEntry );
         //SvTreeListEntry* pDropTargetParent = GetParent( _pTargetEntry );
@@ -1011,8 +1009,8 @@ namespace svxform
         DBG_ASSERT( DND_ACTION_COPY != _nAction, "NavigatorTree::implExecuteDataTransfer: somebody changed the logics!" );
 
         // list of dragged entries
-        ListBoxEntrySet aDropped = _rData.selected();
-        DBG_ASSERT(aDropped.size() >= 1, "NavigatorTree::implExecuteDataTransfer: no entries!");
+        const ListBoxEntrySet aDropped = _rData.selected();
+        DBG_ASSERT(!aDropped.empty(), "NavigatorTree::implExecuteDataTransfer: no entries!");
 
         // shell and model
         FmFormShell* pFormShell = GetNavModel()->GetFormShell();
@@ -1055,9 +1053,9 @@ namespace svxform
 
             // remove from parent
             if (pCurrentParentUserData)
-                pCurrentParentUserData->GetChildList()->remove( pCurrentUserData );
+                pCurrentParentUserData->GetChildList()->removeNoDelete( pCurrentUserData );
             else
-                GetNavModel()->GetRootList()->remove( pCurrentUserData );
+                GetNavModel()->GetRootList()->removeNoDelete( pCurrentUserData );
 
             // remove from container
             sal_Int32 nIndex = getElementPos(xContainer, xCurrentChild);
@@ -1065,7 +1063,7 @@ namespace svxform
             // UndoAction for removal
             if ( bUndo && GetNavModel()->m_pPropChangeList->CanUndo())
             {
-                pFormModel->AddUndo(new FmUndoContainerAction(*pFormModel, FmUndoContainerAction::Removed,
+                pFormModel->AddUndo(o3tl::make_unique<FmUndoContainerAction>(*pFormModel, FmUndoContainerAction::Removed,
                                                             xContainer, xCurrentChild, nIndex));
             }
             else if( !GetNavModel()->m_pPropChangeList->CanUndo() )
@@ -1097,7 +1095,7 @@ namespace svxform
 
             // UndoAction for insertion
             if ( bUndo && GetNavModel()->m_pPropChangeList->CanUndo())
-                pFormModel->AddUndo(new FmUndoContainerAction(*pFormModel, FmUndoContainerAction::Inserted,
+                pFormModel->AddUndo(o3tl::make_unique<FmUndoContainerAction>(*pFormModel, FmUndoContainerAction::Inserted,
                                                          xContainer, xCurrentChild, nIndex));
 
             // insert in new container
@@ -1127,9 +1125,9 @@ namespace svxform
 
             // give parent the new child
             if (pTargetData)
-                pTargetData->GetChildList()->insert( pCurrentUserData, nIndex );
+                pTargetData->GetChildList()->insert( std::unique_ptr<FmEntryData>(pCurrentUserData), nIndex );
             else
-                GetNavModel()->GetRootList()->insert( pCurrentUserData, nIndex );
+                GetNavModel()->GetRootList()->insert( std::unique_ptr<FmEntryData>(pCurrentUserData), nIndex );
 
             // announce to myself and reselect
             SvTreeListEntry* pNew = Insert( pCurrentUserData, nIndex );
@@ -2049,7 +2047,7 @@ namespace svxform
         SdrPage*        pPage           = pPageView->GetPage();
         //FmFormPage*     pFormPage       = dynamic_cast< FmFormPage* >( pPage );
 
-        SdrObjListIter aIter( *pPage );
+        SdrObjListIter aIter( pPage );
         while ( aIter.IsMore() )
         {
             SdrObject* pSdrObject = aIter.Next();
@@ -2110,7 +2108,7 @@ namespace svxform
         SdrPage*        pPage           = pPageView->GetPage();
 
         bool bPaint = false;
-        SdrObjListIter aIter( *pPage );
+        SdrObjListIter aIter( pPage );
         while ( aIter.IsMore() )
         {
             SdrObject* pSdrObject = aIter.Next();

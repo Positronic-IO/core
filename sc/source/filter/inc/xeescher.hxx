@@ -24,12 +24,15 @@
 #include <filter/msfilter/escherex.hxx>
 #include "xcl97rec.hxx"
 #include "xlescher.hxx"
-#include <com/sun/star/chart/XChartDocument.hpp>
+#include "xlformula.hxx"
 #include <svx/sdtaitm.hxx>
 #include <rtl/ustring.hxx>
 #include <memory>
 
 class ScPostIt;
+
+namespace utl { class TempFile; }
+namespace com { namespace sun { namespace star { namespace chart { class XChartDocument; } } } }
 
 namespace com { namespace sun { namespace star {
     namespace script { struct ScriptEventDescriptor; }
@@ -76,7 +79,7 @@ private:
     virtual void        ImplCalcAnchorRect( const tools::Rectangle& rRect, MapUnit eMapUnit ) override;
 
 private:
-    SCTAB               mnScTab;        /// Calc sheet index.
+    SCTAB const         mnScTab;        /// Calc sheet index.
 };
 
 /** Represents the position (anchor) of a shape in an embedded draw page. */
@@ -91,9 +94,9 @@ private:
     virtual void        ImplCalcAnchorRect( const tools::Rectangle& rRect, MapUnit eMapUnit ) override;
 
 private:
-    Size                maPageSize;
-    sal_Int32           mnScaleX;
-    sal_Int32           mnScaleY;
+    Size const          maPageSize;
+    sal_Int32 const     mnScaleX;
+    sal_Int32 const     mnScaleY;
 };
 
 /** Represents the position (anchor) of a note object. */
@@ -123,7 +126,7 @@ private:
 
 protected:
     XclEscherEx&        mrEscherEx;         /// Reference to the DFF converter containing the DFF stream.
-    sal_uInt32          mnFragmentKey;      /// The key of the DFF stream fragment to be written by this record.
+    sal_uInt32 const    mnFragmentKey;      /// The key of the DFF stream fragment to be written by this record.
 };
 
 /** The MSODRAWINGGROUP record contains the DGGCONTAINER with global DFF data
@@ -155,8 +158,8 @@ public:
     virtual void        SaveXml( XclExpXmlStream& rStrm ) override;
 
 private:
-    Graphic             maGraphic;      /// The VCL graphic.
-    sal_uInt16          mnRecId;        /// Record identifier for the IMGDATA record.
+    Graphic const       maGraphic;      /// The VCL graphic.
+    sal_uInt16 const    mnRecId;        /// Record identifier for the IMGDATA record.
 };
 
 /** Helper class for form controls to manage spreadsheet links . */
@@ -235,7 +238,7 @@ private:
     virtual void        WriteSubRecs( XclExpStream& rStrm ) override;
 
 private:
-    OUString            maClassName;        /// Class name of the control.
+    OUString const      maClassName;        /// Class name of the control.
     sal_uInt32          mnStrmStart;        /// Start position in 'Ctls' stream.
     sal_uInt32          mnStrmSize;         /// Size in 'Ctls' stream.
 };
@@ -371,7 +374,7 @@ public:
     virtual void        SaveXml( XclExpXmlStream& rStrm ) override;
 
 private:
-    SCTAB               mnTab;
+    SCTAB const         mnTab;
     XclExpNoteList&     mrNotes;
 };
 
@@ -407,8 +410,8 @@ public:
     XclEscherEx& GetEscherEx() { return *mxEscherEx; }
     XclExpMsoDrawing*   GetMsodrawingPerSheet();
     bool                HasObj() const;
-    sal_uInt16          AddObj( XclObj* pObjRec );
-    XclObj*             RemoveLastObj();
+    sal_uInt16          AddObj( std::unique_ptr<XclObj> pObjRec );
+    std::unique_ptr<XclObj> RemoveLastObj();
 
 protected:
     explicit            XclExpObjectManager( const XclExpObjectManager& rParent );
@@ -436,9 +439,9 @@ public:
     virtual XclExpDffAnchorBase* CreateDffAnchor() const override;
 
 private:
-    Size                maPageSize;
-    sal_Int32           mnScaleX;
-    sal_Int32           mnScaleY;
+    Size const                maPageSize;
+    sal_Int32 const           mnScaleX;
+    sal_Int32 const           mnScaleY;
 };
 
 #endif

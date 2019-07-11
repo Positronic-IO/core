@@ -135,7 +135,11 @@ sal_Unicode PyChar2Unicode( PyObject *obj )
             "attribute value of uno.Char is not a unicode string" );
     }
 
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION >= 3
+    if( PyUnicode_GetLength( value.get() ) < 1 )
+#else
     if( PyUnicode_GetSize( value.get() ) < 1 )
+#endif
     {
         throw RuntimeException(
             "uno.Char contains an empty unicode string");
@@ -157,7 +161,7 @@ Any PyEnum2Enum( PyObject *obj )
     }
 
     OUString strTypeName( OUString::createFromAscii( PyStr_AsString( typeName.get() ) ) );
-    char *stringValue = PyStr_AsString( value.get() );
+    char const *stringValue = PyStr_AsString( value.get() );
 
     TypeDescription desc( strTypeName );
     if( !desc.is() )

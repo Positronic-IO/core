@@ -23,9 +23,10 @@ $(eval $(call gb_ExternalProject_use_nmake,xmlsec,build))
 
 $(call gb_ExternalProject_get_state_target,xmlsec,build) :
 	$(call gb_ExternalProject_run,build,\
-		cscript /e:javascript configure.js crypto=mscrypto xslt=no iconv=no static=no \
+		cscript /e:javascript configure.js crypto=mscng xslt=no iconv=no static=no \
 			lib=$(call gb_UnpackedTarball_get_dir,libxml2)/win32/bin.msvc \
-			$(if $(filter TRUE,$(ENABLE_DBGUTIL)),debug=yes) \
+			$(if $(filter TRUE,$(ENABLE_DBGUTIL)),debug=yes cruntime=/MDd) \
+			cflags="-arch:SSE $(SOLARINC) -I$(WORKDIR)/UnpackedTarball/libxml2/include -I$(WORKDIR)/UnpackedTarball/icu/source/i18n -I$(WORKDIR)/UnpackedTarball/icu/source/common" \
 		&& nmake \
 	,win32)
 
@@ -33,7 +34,7 @@ else
 
 $(call gb_ExternalProject_get_state_target,xmlsec,build) :
 	$(call gb_ExternalProject_run,build,\
-		$(if $(filter IOS MACOSX,$(OS)),ACLOCAL="aclocal -I $(SRCDIR)/m4/mac") \
+		$(if $(filter iOS MACOSX,$(OS)),ACLOCAL="aclocal -I $(SRCDIR)/m4/mac") \
 		$(if $(filter AIX,$(OS)),ACLOCAL="aclocal -I /opt/freeware/share/aclocal") \
 		autoreconf \
 		&& ./configure \
@@ -43,6 +44,8 @@ $(call gb_ExternalProject_get_state_target,xmlsec,build) :
 			--without-openssl \
 			$(if $(filter MACOSX,$(OS)),--prefix=/@.__________________________________________________OOO) \
 			$(if $(SYSTEM_NSS),,$(if $(filter MACOSX,$(OS)),--disable-pkgconfig)) \
+			$(if $(SYSTEM_NSS),,NSPR_CFLAGS="-I$(call gb_UnpackedTarball_get_dir,nss)/dist/out/include" NSPR_LIBS="-L$(call gb_UnpackedTarball_get_dir,nss)/dist/out/lib -lnspr4") \
+			$(if $(SYSTEM_NSS),,NSS_CFLAGS="-I$(call gb_UnpackedTarball_get_dir,nss)/dist/public/nss" NSS_LIBS="-L$(call gb_UnpackedTarball_get_dir,nss)/dist/out/lib -lsmime3 -lnss3 -lnssutil3") \
 			$(if $(CROSS_COMPILING),--build=$(BUILD_PLATFORM) --host=$(HOST_PLATFORM)) \
 			$(if $(SYSBASE),CFLAGS="-I$(SYSBASE)/usr/include" \
 			LDFLAGS="-L$(SYSBASE)/usr/lib $(if $(filter-out LINUX FREEBSD,$(OS)),",-Wl$(COMMA)-z$(COMMA)origin -Wl$(COMMA)-rpath$(COMMA)\\"\$$\$$ORIGIN)) \

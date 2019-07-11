@@ -233,7 +233,7 @@ namespace svt
     class SVT_DLLPUBLIC EditCellController : public CellController
     {
         IEditImplementation*    m_pEditImplementation;
-        bool                    m_bOwnImplementation;   // did we create m_pEditImplementation?
+        bool const              m_bOwnImplementation;   // did we create m_pEditImplementation?
 
     public:
         EditCellController( Edit* _pEdit );
@@ -447,8 +447,8 @@ namespace svt
         };
 
     private:
-        EditBrowseBox(EditBrowseBox&) = delete;
-        EditBrowseBox& operator=(EditBrowseBox&) = delete;
+        EditBrowseBox(EditBrowseBox const &) = delete;
+        EditBrowseBox& operator=(EditBrowseBox const &) = delete;
 
         class BrowserMouseEventPtr
         {
@@ -457,8 +457,7 @@ namespace svt
 
         public:
             BrowserMouseEventPtr()
-                : pEvent(nullptr)
-                , bDown(false)
+                : bDown(false)
             {
             }
 

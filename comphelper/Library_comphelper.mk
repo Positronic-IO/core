@@ -89,8 +89,10 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/misc/accessibletexthelper \
     comphelper/source/misc/accessiblewrapper \
     comphelper/source/misc/accimplaccess \
+    comphelper/source/misc/AccessibleImplementationHelper \
     comphelper/source/misc/anytostring \
     comphelper/source/misc/asyncnotification \
+    comphelper/source/misc/automationinvokedzone \
     comphelper/source/misc/backupfilehelper \
     comphelper/source/misc/base64 \
     comphelper/source/misc/comphelper_module \
@@ -141,6 +143,7 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/misc/types \
     comphelper/source/misc/weak \
     comphelper/source/misc/weakeventlistener \
+    comphelper/source/misc/xmlsechelper \
     comphelper/source/officeinstdir/officeinstallationdirectories \
     comphelper/source/processfactory/processfactory \
     comphelper/source/property/ChainablePropertySet \

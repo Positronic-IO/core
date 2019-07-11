@@ -21,14 +21,10 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_XICHART_HXX
 
 #include <set>
-#include <list>
 #include <map>
 #include <memory>
 #include <vector>
 
-#include <svl/itemset.hxx>
-
-#include <rangelst.hxx>
 #include <types.hxx>
 #include "xlchart.hxx"
 #include "xlstyle.hxx"
@@ -85,6 +81,11 @@ class XclImpChRoot : public XclImpRoot
 public:
     explicit            XclImpChRoot( const XclImpRoot& rRoot, XclImpChChart& rChartData );
     virtual             ~XclImpChRoot() override;
+
+    XclImpChRoot(XclImpChRoot const &) = default;
+    XclImpChRoot(XclImpChRoot &&) = default;
+    XclImpChRoot & operator =(XclImpChRoot const &) = delete; // due to XclImpRoot
+    XclImpChRoot & operator =(XclImpChRoot &&) = delete; // due to XclImpRoot
 
     /** Returns this root instance - for code readability in derived classes. */
     const XclImpChRoot& GetChRoot() const { return *this; }
@@ -177,6 +178,12 @@ private:
 class XclImpChGroupBase
 {
 public:
+    XclImpChGroupBase() = default;
+    XclImpChGroupBase(XclImpChGroupBase const &) = default;
+    XclImpChGroupBase(XclImpChGroupBase &&) = default;
+    XclImpChGroupBase & operator =(XclImpChGroupBase const &) = default;
+    XclImpChGroupBase & operator =(XclImpChGroupBase &&) = default;
+
     virtual             ~XclImpChGroupBase();
 
     /** Reads the entire record group.
@@ -428,6 +435,12 @@ typedef std::shared_ptr< XclImpChSourceLink > XclImpChSourceLinkRef;
 class XclImpChFontBase
 {
 public:
+    XclImpChFontBase() = default;
+    XclImpChFontBase(XclImpChFontBase const &) = default;
+    XclImpChFontBase(XclImpChFontBase &&) = default;
+    XclImpChFontBase & operator =(XclImpChFontBase const &) = default;
+    XclImpChFontBase & operator =(XclImpChFontBase &&) = default;
+
     virtual             ~XclImpChFontBase();
 
     /** Derived classes return the leading font index for the text object. */

@@ -21,6 +21,7 @@
 #include <controller/SlsProperties.hxx>
 #include <view/SlideSorterView.hxx>
 #include <view/SlsLayouter.hxx>
+#include <view/SlsInsertAnimator.hxx>
 #include <view/SlsInsertionIndicatorOverlay.hxx>
 #include <model/SlideSorterModel.hxx>
 #include <model/SlsPageEnumerationProvider.hxx>
@@ -220,7 +221,7 @@ bool InsertionIndicatorHandler::IsInsertionTrivial (
     // to check that the insertion position is not directly in front or
     // directly behind the selection and thus moving the selection there
     // would not change the model.
-    return nInsertionIndex >= nFirstIndex && nInsertionIndex < nLastIndex;
+    return nInsertionIndex >= nFirstIndex && nInsertionIndex <= (nLastIndex+1);
 }
 
 bool InsertionIndicatorHandler::IsInsertionTrivial (const sal_Int8 nDndAction)

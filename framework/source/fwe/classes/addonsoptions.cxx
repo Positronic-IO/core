@@ -25,6 +25,7 @@
 #include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <comphelper/getexpandeduri.hxx>
 #include <comphelper/processfactory.hxx>
 #include <vcl/dibtools.hxx>
@@ -71,7 +72,8 @@ using namespace ::com::sun::star;
 #define INDEX_ALIGN             8
 #define INDEX_AUTOSIZE          9
 #define INDEX_OWNERDRAW         10
-#define PROPERTYCOUNT_INDEX     11
+#define INDEX_MANDATORY         11
+#define PROPERTYCOUNT_INDEX     12
 
 // The following order is mandatory. Please add properties at the end!
 #define PROPERTYCOUNT_MENUITEM                          6
@@ -100,14 +102,15 @@ using namespace ::com::sun::star;
 #define OFFSET_TOOLBARITEM_WIDTH                        6
 
 // The following order is mandatory. Please add properties at the end!
-#define PROPERTYCOUNT_STATUSBARITEM                     7
+#define PROPERTYCOUNT_STATUSBARITEM                     8
 #define OFFSET_STATUSBARITEM_URL                        0
 #define OFFSET_STATUSBARITEM_TITLE                      1
 #define OFFSET_STATUSBARITEM_CONTEXT                    2
 #define OFFSET_STATUSBARITEM_ALIGN                      3
 #define OFFSET_STATUSBARITEM_AUTOSIZE                   4
 #define OFFSET_STATUSBARITEM_OWNERDRAW                  5
-#define OFFSET_STATUSBARITEM_WIDTH                      6
+#define OFFSET_STATUSBARITEM_MANDATORY                  6
+#define OFFSET_STATUSBARITEM_WIDTH                      7
 
 // The following order is mandatory. Please add properties at the end!
 #define PROPERTYCOUNT_IMAGES                            8
@@ -271,7 +274,7 @@ class AddonsOptions_Impl : public ConfigItem
         Sequence< OUString > GetPropertyNamesMenuItem( const OUString& aPropertyRootNode ) const;
         Sequence< OUString > GetPropertyNamesPopupMenu( const OUString& aPropertyRootNode ) const;
         Sequence< OUString > GetPropertyNamesToolBarItem( const OUString& aPropertyRootNode ) const;
-        Sequence< OUString > GetPropertyNamesStatusbarItem( const ::rtl::OUString& aPropertyRootNode ) const;
+        Sequence< OUString > GetPropertyNamesStatusbarItem( const OUString& aPropertyRootNode ) const;
         Sequence< OUString > GetPropertyNamesImages( const OUString& aPropertyRootNode ) const;
         bool                 CreateImageFromSequence( Image& rImage, Sequence< sal_Int8 >& rBitmapDataSeq ) const;
 
@@ -331,6 +334,7 @@ AddonsOptions_Impl::AddonsOptions_Impl()
     m_aPropNames[ INDEX_ALIGN           ] = "Alignment";
     m_aPropNames[ INDEX_AUTOSIZE        ] = "AutoSize";
     m_aPropNames[ INDEX_OWNERDRAW       ] = "OwnerDraw";
+    m_aPropNames[ INDEX_MANDATORY       ] = "Mandatory";
 
     // initialize array with fixed images property names
     m_aPropImagesNames[ OFFSET_IMAGES_SMALL         ] = "ImageSmall";
@@ -922,29 +926,29 @@ bool AddonsOptions_Impl::ReadMergeToolbarData( const OUString& aMergeAddonInstru
 
 void AddonsOptions_Impl::ReadStatusbarMergeInstructions( MergeStatusbarInstructionContainer& aContainer )
 {
-    const ::rtl::OUString aStatusbarMergeRootName( "AddonUI/OfficeStatusbarMerging/" );
+    const OUString aStatusbarMergeRootName( "AddonUI/OfficeStatusbarMerging/" );
 
-    Sequence< ::rtl::OUString > aAddonMergeNodesSeq = GetNodeNames( aStatusbarMergeRootName );
+    Sequence< OUString > aAddonMergeNodesSeq = GetNodeNames( aStatusbarMergeRootName );
     sal_uInt32  nCount = aAddonMergeNodesSeq.getLength();
 
-    Sequence< ::rtl::OUString > aNodePropNames( 5 );
+    Sequence< OUString > aNodePropNames( 5 );
 
     for ( sal_uInt32 i = 0; i < nCount; i++ )
     {
-        ::rtl::OUString aMergeAddonInstructions( aStatusbarMergeRootName + aAddonMergeNodesSeq[i] );
+        OUString aMergeAddonInstructions( aStatusbarMergeRootName + aAddonMergeNodesSeq[i] );
 
-        Sequence< ::rtl::OUString > aAddonInstMergeNodesSeq = GetNodeNames( aMergeAddonInstructions );
+        Sequence< OUString > aAddonInstMergeNodesSeq = GetNodeNames( aMergeAddonInstructions );
         sal_uInt32 nCountAddons = aAddonInstMergeNodesSeq.getLength();
 
         for ( sal_uInt32 j = 0; j < nCountAddons; j++ )
         {
-            ::rtl::OUStringBuffer aMergeAddonInstructionBase( aMergeAddonInstructions );
+            OUStringBuffer aMergeAddonInstructionBase( aMergeAddonInstructions );
             aMergeAddonInstructionBase.append( m_aPathDelimiter );
             aMergeAddonInstructionBase.append( aAddonInstMergeNodesSeq[j] );
             aMergeAddonInstructionBase.append( m_aPathDelimiter );
 
             // Create sequence for data access
-            ::rtl::OUStringBuffer aBuffer( aMergeAddonInstructionBase );
+            OUStringBuffer aBuffer( aMergeAddonInstructionBase );
             aBuffer.append( m_aPropMergeMenuNames[ OFFSET_MERGESTATUSBAR_MERGEPOINT ] );
             aNodePropNames[0] = aBuffer.makeStringAndClear();
 
@@ -982,17 +986,17 @@ void AddonsOptions_Impl::ReadStatusbarMergeInstructions( MergeStatusbarInstructi
 }
 
 bool AddonsOptions_Impl::ReadMergeStatusbarData(
-    const ::rtl::OUString& aMergeAddonInstructionBase,
+    const OUString& aMergeAddonInstructionBase,
     Sequence< Sequence< PropertyValue > >& rMergeStatusbarItems )
 {
     sal_uInt32 nStatusbarItemCount = rMergeStatusbarItems.getLength();
 
-    ::rtl::OUStringBuffer aBuffer( aMergeAddonInstructionBase );
+    OUStringBuffer aBuffer( aMergeAddonInstructionBase );
     aBuffer.append( m_aPropMergeStatusbarNames[ OFFSET_MERGESTATUSBAR_STATUSBARITEMS ] );
-    ::rtl::OUString aMergeStatusbarBaseNode = aBuffer.makeStringAndClear();
+    OUString aMergeStatusbarBaseNode = aBuffer.makeStringAndClear();
 
-    ::rtl::OUString aAddonStatusbarItemSetNode( aMergeStatusbarBaseNode + m_aPathDelimiter );
-    Sequence< ::rtl::OUString > aAddonStatusbarItemSetNodeSeq = GetNodeNames( aMergeStatusbarBaseNode );
+    OUString aAddonStatusbarItemSetNode( aMergeStatusbarBaseNode + m_aPathDelimiter );
+    Sequence< OUString > aAddonStatusbarItemSetNodeSeq = GetNodeNames( aMergeStatusbarBaseNode );
 
     Sequence< PropertyValue > aStatusbarItem( PROPERTYCOUNT_STATUSBARITEM );
     aStatusbarItem[ OFFSET_STATUSBARITEM_URL       ].Name = m_aPropNames[ INDEX_URL       ];
@@ -1001,12 +1005,13 @@ bool AddonsOptions_Impl::ReadMergeStatusbarData(
     aStatusbarItem[ OFFSET_STATUSBARITEM_ALIGN     ].Name = m_aPropNames[ INDEX_ALIGN     ];
     aStatusbarItem[ OFFSET_STATUSBARITEM_AUTOSIZE  ].Name = m_aPropNames[ INDEX_AUTOSIZE  ];
     aStatusbarItem[ OFFSET_STATUSBARITEM_OWNERDRAW ].Name = m_aPropNames[ INDEX_OWNERDRAW ];
+    aStatusbarItem[ OFFSET_STATUSBARITEM_MANDATORY ].Name = m_aPropNames[ INDEX_MANDATORY ];
     aStatusbarItem[ OFFSET_STATUSBARITEM_WIDTH     ].Name = m_aPropNames[ INDEX_WIDTH     ];
 
     sal_uInt32 nCount = aAddonStatusbarItemSetNodeSeq.getLength();
     for ( sal_uInt32 n = 0; n < nCount; n++ )
     {
-        ::rtl::OUString aStatusbarItemNode( aAddonStatusbarItemSetNode + aAddonStatusbarItemSetNodeSeq[n] );
+        OUString aStatusbarItemNode( aAddonStatusbarItemSetNode + aAddonStatusbarItemSetNodeSeq[n] );
 
         if ( ReadStatusBarItem( aStatusbarItemNode, aStatusbarItem ) )
         {
@@ -1020,12 +1025,12 @@ bool AddonsOptions_Impl::ReadMergeStatusbarData(
 }
 
 bool AddonsOptions_Impl::ReadStatusBarItem(
-    const ::rtl::OUString& aStatusarItemNodeName,
+    const OUString& aStatusarItemNodeName,
     Sequence< PropertyValue >& aStatusbarItem )
 {
     bool bResult( false );
-    ::rtl::OUString aURL;
-    ::rtl::OUString aAddonStatusbarItemTreeNode( aStatusarItemNodeName + m_aPathDelimiter );
+    OUString aURL;
+    OUString aAddonStatusbarItemTreeNode( aStatusarItemNodeName + m_aPathDelimiter );
     Sequence< Any > aStatusbarItemNodePropValues;
 
     aStatusbarItemNodePropValues = GetProperties( GetPropertyNamesStatusbarItem( aAddonStatusbarItemTreeNode ) );
@@ -1039,6 +1044,7 @@ bool AddonsOptions_Impl::ReadStatusBarItem(
         aStatusbarItem[ OFFSET_STATUSBARITEM_ALIGN      ].Value = aStatusbarItemNodePropValues[ OFFSET_STATUSBARITEM_ALIGN     ];
         aStatusbarItem[ OFFSET_STATUSBARITEM_AUTOSIZE   ].Value = aStatusbarItemNodePropValues[ OFFSET_STATUSBARITEM_AUTOSIZE  ];
         aStatusbarItem[ OFFSET_STATUSBARITEM_OWNERDRAW  ].Value = aStatusbarItemNodePropValues[ OFFSET_STATUSBARITEM_OWNERDRAW ];
+        aStatusbarItem[ OFFSET_STATUSBARITEM_MANDATORY  ].Value = aStatusbarItemNodePropValues[ OFFSET_STATUSBARITEM_MANDATORY ];
 
         // Configuration uses hyper for long. Therefore transform into sal_Int32
         sal_Int64 nValue( 0 );
@@ -1272,7 +1278,7 @@ Image AddonsOptions_Impl::ReadImageFromURL(const OUString& aImageURL)
 {
     Image aImage;
 
-    SvStream* pStream = UcbStreamHelper::CreateStream( aImageURL, StreamMode::STD_READ );
+    std::unique_ptr<SvStream> pStream = UcbStreamHelper::CreateStream( aImageURL, StreamMode::STD_READ );
     if ( pStream && ( pStream->GetErrorCode() == ERRCODE_NONE ))
     {
         // Use graphic class to also support more graphic formats (bmp,png,...)
@@ -1293,8 +1299,6 @@ Image AddonsOptions_Impl::ReadImageFromURL(const OUString& aImageURL)
             aImage = Image(aBitmapEx);
         }
     }
-
-    delete pStream;
 
     return aImage;
 }
@@ -1437,18 +1441,19 @@ Sequence< OUString > AddonsOptions_Impl::GetPropertyNamesToolBarItem( const OUSt
     return lResult;
 }
 
-Sequence< ::rtl::OUString > AddonsOptions_Impl::GetPropertyNamesStatusbarItem(
-    const ::rtl::OUString& aPropertyRootNode ) const
+Sequence< OUString > AddonsOptions_Impl::GetPropertyNamesStatusbarItem(
+    const OUString& aPropertyRootNode ) const
 {
-    Sequence< ::rtl::OUString > lResult( PROPERTYCOUNT_STATUSBARITEM );
+    Sequence< OUString > lResult( PROPERTYCOUNT_STATUSBARITEM );
 
-    lResult[0] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_URL       ] );
-    lResult[1] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_TITLE     ] );
-    lResult[2] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_CONTEXT   ] );
-    lResult[3] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_ALIGN     ] );
-    lResult[4] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_AUTOSIZE  ] );
-    lResult[5] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_OWNERDRAW ] );
-    lResult[6] = ::rtl::OUString( aPropertyRootNode + m_aPropNames[ INDEX_WIDTH     ] );
+    lResult[0] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_URL       ] );
+    lResult[1] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_TITLE     ] );
+    lResult[2] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_CONTEXT   ] );
+    lResult[3] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_ALIGN     ] );
+    lResult[4] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_AUTOSIZE  ] );
+    lResult[5] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_OWNERDRAW ] );
+    lResult[6] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_MANDATORY ] );
+    lResult[7] = OUString( aPropertyRootNode + m_aPropNames[ INDEX_WIDTH     ] );
 
     return lResult;
 }

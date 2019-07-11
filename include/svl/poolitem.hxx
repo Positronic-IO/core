@@ -22,16 +22,13 @@
 
 #include <sal/config.h>
 
-#include <climits>
 #include <memory>
 
 #include <com/sun/star/uno/Any.hxx>
 #include <svl/hint.hxx>
 #include <svl/svldllapi.h>
 #include <svl/typedwhich.hxx>
-#include <tools/debug.hxx>
 #include <tools/mapunit.hxx>
-#include <tools/solar.h>
 
 class IntlWrapper;
 class SvStream;
@@ -112,7 +109,6 @@ enum class SfxItemState {
 
 #define INVALID_POOL_ITEM reinterpret_cast<SfxPoolItem*>(-1)
 
-class SvXMLUnitConverter;
 class SfxItemPool;
 class SfxItemSet;
 
@@ -173,10 +169,10 @@ public:
     virtual SvStream&        Store( SvStream &, sal_uInt16 nItemVersion ) const;
     virtual SfxPoolItem*     Clone( SfxItemPool *pPool = nullptr ) const = 0;
     // clone and call SetWhich
-    SfxPoolItem*             CloneSetWhich( sal_uInt16 nNewWhich ) const;
-    template<class T> T*     CloneSetWhich( TypedWhichId<T> nId ) const
+    std::unique_ptr<SfxPoolItem> CloneSetWhich( sal_uInt16 nNewWhich ) const;
+    template<class T> std::unique_ptr<T> CloneSetWhich( TypedWhichId<T> nId ) const
     {
-        return static_cast<T*>(CloneSetWhich(sal_uInt16(nId)));
+        return std::unique_ptr<T>(static_cast<T*>(CloneSetWhich(sal_uInt16(nId)).release()));
     }
 
     sal_uInt32               GetRefCount() const { return m_nRefCount; }
@@ -252,6 +248,11 @@ public:
                             static SfxPoolItem* CreateDefault();
                             explicit SfxVoidItem( sal_uInt16 nWhich );
                             virtual ~SfxVoidItem() override;
+
+    SfxVoidItem(SfxVoidItem const &) = default;
+    SfxVoidItem(SfxVoidItem &&) = default;
+    SfxVoidItem & operator =(SfxVoidItem const &) = delete; // due to SfxPoolItem
+    SfxVoidItem & operator =(SfxVoidItem &&) = delete; // due to SfxPoolItem
 
     virtual bool            operator==( const SfxPoolItem& ) const override;
 

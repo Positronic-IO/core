@@ -29,6 +29,8 @@
 #include <vcl/waitobj.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/weld.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <com/sun/star/ui/dialogs/AddressBookSourcePilot.hpp>
 #include <com/sun/star/awt/XWindow.hpp>
@@ -121,8 +123,8 @@ namespace svt
     class AssigmentTransientData : public IAssigmentData
     {
     protected:
-        OUString             m_sDSName;
-        OUString             m_sTableName;
+        OUString const       m_sDSName;
+        OUString const       m_sTableName;
         MapString2String     m_aAliases;
 
     public:
@@ -430,7 +432,7 @@ void AssignmentPersistentData::ImplCommit()
         /// indicates that we've an odd field number. This member is for efficiency only, it's redundant.
         bool        bOddFieldNumber : 1;
         /// indicates that we're working with the real persistent configuration
-        bool        bWorkingPersistent : 1;
+        bool const      bWorkingPersistent : 1;
 
         /// the strings to use as labels for the field selection listboxes
         std::vector<OUString>     aFieldLabels;

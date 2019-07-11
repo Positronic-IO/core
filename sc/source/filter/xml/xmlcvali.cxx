@@ -122,7 +122,6 @@ public:
 
 class ScXMLErrorMacroContext : public ScXMLImportContext
 {
-    OUString   sName;
     bool        bExecute;
     ScXMLContentValidationContext*  pValidationContext;
 
@@ -327,6 +326,7 @@ void ScXMLContentValidationContext::GetCondition( ScMyImportValidation& rValidat
             case XML_COND_TEXTLENGTH_ISBETWEEN:     // condition is 'cell-content-text-length-is-between(<expression1>,<expression2>)'
             case XML_COND_TEXTLENGTH_ISNOTBETWEEN:  // condition is 'cell-content-text-length-is-not-between(<expression1>,<expression2>)'
             case XML_COND_ISINLIST:                 // condition is 'cell-content-is-in-list(<expression>)'
+            case XML_COND_ISTRUEFORMULA:            // condition is 'is-true-formula(<expression>)'
                 rValidation.aValidationType = aParseResult.meValidation;
                 rValidation.aOperator = aParseResult.meOperator;
             break;
@@ -562,7 +562,6 @@ ScXMLErrorMacroContext::ScXMLErrorMacroContext( ScXMLImport& rImport,
                                       const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList,
                                       ScXMLContentValidationContext* pTempValidationContext) :
     ScXMLImportContext( rImport ),
-    sName(),
     bExecute(false)
 {
     pValidationContext = pTempValidationContext;
@@ -573,7 +572,6 @@ ScXMLErrorMacroContext::ScXMLErrorMacroContext( ScXMLImport& rImport,
             switch (aIter.getToken())
             {
             case XML_ELEMENT( TABLE, XML_NAME ):
-                sName = aIter.toString();
                 break;
             case XML_ELEMENT( TABLE, XML_EXECUTE ):
                 bExecute = IsXMLToken(aIter, XML_TRUE);

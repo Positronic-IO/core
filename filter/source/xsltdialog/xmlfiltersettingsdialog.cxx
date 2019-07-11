@@ -17,24 +17,27 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
+#include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/util/XFlushable.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
 
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
-#include <unotools/resmgr.hxx>
 #include <tools/urlobj.hxx>
-#include <svtools/headbar.hxx>
-#include <unotools/streamwrap.hxx>
+#include <vcl/headbar.hxx>
 #include <unotools/pathoptions.hxx>
+#include <unotools/resmgr.hxx>
+#include <unotools/streamwrap.hxx>
 #include <osl/file.hxx>
 #include <o3tl/enumrange.hxx>
 #include <vcl/builderfactory.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <sfx2/filedlghelper.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 
 #include <rtl/uri.hxx>
 
@@ -68,7 +71,6 @@ XMLFilterSettingsDialog::XMLFilterSettingsDialog(vcl::Window* pParent,
     Dialog::InitFlag eFlag)
     : ModelessDialog(pParent, "XMLFilterSettingsDialog", "filter/ui/xmlfiltersettings.ui", eFlag)
     , mxContext( rxContext )
-    , m_bIsClosable(true)
     , m_sTemplatePath("$(user)/template/")
     , m_sDocTypePrefix("doctype:")
 {
@@ -132,7 +134,8 @@ void XMLFilterSettingsDialog::dispose()
 
 IMPL_LINK(XMLFilterSettingsDialog, ClickHdl_Impl, Button *, pButton, void )
 {
-    m_bIsClosable = false;
+    // tdf#122171 block closing libreoffice until the following dialog is dismissed
+    incBusy();
 
     if (m_pPBNew == pButton)
     {
@@ -163,7 +166,7 @@ IMPL_LINK(XMLFilterSettingsDialog, ClickHdl_Impl, Button *, pButton, void )
         Close();
     }
 
-    m_bIsClosable = true;
+    decBusy();
 }
 
 IMPL_LINK_NOARG(XMLFilterSettingsDialog, SelectionChangedHdl_Impl, SvTreeListBox*, void)
@@ -177,15 +180,13 @@ IMPL_LINK_NOARG(XMLFilterSettingsDialog, DoubleClickHdl_Impl, SvTreeListBox*, bo
     return false;
 }
 
-short XMLFilterSettingsDialog::Execute()
+void XMLFilterSettingsDialog::UpdateWindow()
 {
     m_pCtrlFilterList->GrabFocus();
     disposeFilterList();
     m_pFilterListBox->Clear();
     initFilterList();
     updateStates();
-
-    return ModelessDialog::Execute();
 }
 
 void XMLFilterSettingsDialog::updateStates()
@@ -650,33 +651,30 @@ bool XMLFilterSettingsDialog::insertOrEdit( filter_info_impl* pNewInfo, const fi
                 bOk = false;
             }
         }
-        else
+        else // bOk
         {
-            if( bOk )
+            try
             {
+                Reference< XFlushable > xFlushable( mxFilterContainer, UNO_QUERY );
+                if( xFlushable.is() )
+                    xFlushable->flush();
+            }
+            catch( const Exception& )
+            {
+                OSL_FAIL( "XMLFilterSettingsDialog::insertOrEdit exception caught!" );
+                bOk = false;
+            }
+
+            if( !bOk )
+            {
+                // we failed to add the filter, so lets remove the type
                 try
                 {
-                    Reference< XFlushable > xFlushable( mxFilterContainer, UNO_QUERY );
-                    if( xFlushable.is() )
-                        xFlushable->flush();
+                    mxTypeDetection->removeByName( pFilterEntry->maType );
                 }
                 catch( const Exception& )
                 {
                     OSL_FAIL( "XMLFilterSettingsDialog::insertOrEdit exception caught!" );
-                    bOk = false;
-                }
-
-                if( !bOk )
-                {
-                    // we failed to add the filter, so lets remove the type
-                    try
-                    {
-                        mxTypeDetection->removeByName( pFilterEntry->maType );
-                    }
-                    catch( const Exception& )
-                    {
-                        OSL_FAIL( "XMLFilterSettingsDialog::insertOrEdit exception caught!" );
-                    }
                 }
 
             }
@@ -743,7 +741,7 @@ bool XMLFilterSettingsDialog::insertOrEdit( filter_info_impl* pNewInfo, const fi
         else
         {
             m_pFilterListBox->addFilterEntry( pFilterEntry );
-            maFilterVector.push_back( pFilterEntry );
+            maFilterVector.push_back( std::unique_ptr<filter_info_impl>(pFilterEntry) );
         }
     }
 
@@ -841,9 +839,9 @@ void XMLFilterSettingsDialog::onDelete()
                     m_pFilterListBox->RemoveSelection();
 
                     // and delete the filter entry
-                    maFilterVector.erase(std::find( maFilterVector.begin(), maFilterVector.end(), pInfo ));
-
-                    delete pInfo;
+                    maFilterVector.erase(std::find_if( maFilterVector.begin(), maFilterVector.end(),
+                                            [&] (std::unique_ptr<filter_info_impl> const & p)
+                                            { return p.get() == pInfo; }));
                 }
             }
             catch( const Exception& )
@@ -1002,12 +1000,7 @@ bool XMLFilterSettingsDialog::EventNotify( NotifyEvent& rNEvt )
 
 void XMLFilterSettingsDialog::disposeFilterList()
 {
-    for (auto const& filter : maFilterVector)
-    {
-        delete filter;
-    }
     maFilterVector.clear();
-
     m_pFilterListBox->Clear();
 }
 
@@ -1166,7 +1159,7 @@ void XMLFilterSettingsDialog::initFilterList()
                 }
 
                 // add entry to internal container and to ui filter list box
-                maFilterVector.push_back( pTempFilter.get() );
+                maFilterVector.push_back( std::unique_ptr<filter_info_impl>(pTempFilter.get()) );
                 m_pFilterListBox->addFilterEntry( pTempFilter.release() );
 
 

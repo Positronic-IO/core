@@ -17,14 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <vcl/builderfactory.hxx>
-
 #include <strings.hrc>
-
 #include <utility.hxx>
 #include <dialog.hxx>
 #include <view.hxx>
-
 
 // return pointer to active SmViewShell, if this is not possible
 // return 0 instead.
@@ -120,14 +116,14 @@ void SmFontPickList::WriteTo(SmFontDialog& rDialog) const
 
 /**************************************************************************/
 
-SmFontPickListBox::SmFontPickListBox(weld::ComboBoxText* pWidget)
+SmFontPickListBox::SmFontPickListBox(std::unique_ptr<weld::ComboBox> pWidget)
     : SmFontPickList(4)
-    , m_xWidget(pWidget)
+    , m_xWidget(std::move(pWidget))
 {
     m_xWidget->connect_changed(LINK(this, SmFontPickListBox, SelectHdl));
 }
 
-IMPL_LINK_NOARG(SmFontPickListBox, SelectHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SmFontPickListBox, SelectHdl, weld::ComboBox&, void)
 {
     OUString aString;
 
@@ -182,7 +178,7 @@ bool IsItalic( const vcl::Font &rFont )
 bool IsBold( const vcl::Font &rFont )
 {
     FontWeight eWeight = rFont.GetWeight();
-    return eWeight != WEIGHT_DONTKNOW && eWeight > WEIGHT_NORMAL;
+    return eWeight > WEIGHT_NORMAL;
 }
 
 

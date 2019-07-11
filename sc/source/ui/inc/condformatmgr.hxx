@@ -10,20 +10,15 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_CONDFORMATMGR_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_CONDFORMATMGR_HXX
 
-#include <scres.hrc>
-
 #include <vcl/dialog.hxx>
-#include <vcl/layout.hxx>
-#include <svtools/svtabbx.hxx>
 #include <vcl/button.hxx>
-#include <vcl/fixed.hxx>
 #include <svtools/simptabl.hxx>
-
-#include <conditio.hxx>
 
 #include <map>
 
 class ScDocument;
+class ScConditionalFormat;
+class ScConditionalFormatList;
 
 class ScCondFormatManagerWindow : public SvSimpleTable
 {
@@ -32,7 +27,7 @@ private:
     OUString createEntryString(const ScConditionalFormat& rFormat);
     void setColSizes();
 
-    ScDocument* mpDoc;
+    ScDocument* const mpDoc;
     ScConditionalFormatList* mpFormatList;
     std::map<SvTreeListEntry*, sal_Int32> maMapLBoxEntryToCondIndex;
 
@@ -51,7 +46,7 @@ public:
     virtual ~ScCondFormatManagerDlg() override;
     virtual void dispose() override;
 
-    ScConditionalFormatList* GetConditionalFormatList();
+    std::unique_ptr<ScConditionalFormatList> GetConditionalFormatList();
 
     bool CondFormatsChanged() const;
     void SetModified();
@@ -62,8 +57,9 @@ private:
     VclPtr<PushButton> m_pBtnAdd;
     VclPtr<PushButton> m_pBtnRemove;
     VclPtr<PushButton> m_pBtnEdit;
-    ScConditionalFormatList* mpFormatList;
+    std::unique_ptr<ScConditionalFormatList> mpFormatList;
     VclPtr<ScCondFormatManagerWindow> m_pCtrlManager;
+    void UpdateButtonSensitivity();
 
     DECL_LINK(RemoveBtnHdl, Button*, void);
     DECL_LINK(EditBtnClickHdl, Button*, void);

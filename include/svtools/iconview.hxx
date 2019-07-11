@@ -21,16 +21,16 @@
 #define INCLUDED_SVTOOLS_ICONVIEW_HXX
 
 #include <svtools/svtdllapi.h>
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 
 class IconView : public SvTreeListBox
 {
 public:
     IconView( vcl::Window* pParent, WinBits nBits );
 
-    virtual void Resize() SAL_OVERRIDE;
+    virtual void Resize() override;
 
-    virtual tools::Rectangle GetFocusRect( SvTreeListEntry*, long nEntryPos ) SAL_OVERRIDE;
+    virtual tools::Rectangle GetFocusRect( SvTreeListEntry*, long nEntryPos ) override;
 
     void ClearAll();
 

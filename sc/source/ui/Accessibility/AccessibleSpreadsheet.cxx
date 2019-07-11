@@ -29,11 +29,12 @@
 #include <gridwin.hxx>
 
 #include <unotools/accessiblestatesethelper.hxx>
+#include <unotools/accessiblerelationsethelper.hxx>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleTableModelChangeType.hpp>
-#include <comphelper/servicehelper.hxx>
+#include <sal/log.hxx>
 #include <tools/gen.hxx>
 #include <svtools/colorcfg.hxx>
 #include <vcl/svapp.hxx>
@@ -45,7 +46,7 @@
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
 
-bool CompMinCol(const std::pair<sal_uInt16,sal_uInt16> & pc1,const std::pair<sal_uInt16,sal_uInt16>  &pc2)
+static bool CompMinCol(const std::pair<sal_uInt16,sal_uInt16> & pc1,const std::pair<sal_uInt16,sal_uInt16>  &pc2)
 {
     return pc1.first < pc2.first;
 }
@@ -443,10 +444,7 @@ void ScAccessibleSpreadsheet::Notify( SfxBroadcaster& rBC, const SfxHint& rHint 
                 {
                     OSL_ENSURE(!((nX > 0) && (nY > 0)), "should not be possible to add row and column at the same time");
                     nId = AccessibleTableModelChangeType::INSERT;
-                    if (nX < 0)
-                        nY = aRange.aEnd.Row() - aRange.aStart.Row();
-                    else
-                        nX = aRange.aEnd.Col() - aRange.aStart.Col();
+                    nX = aRange.aEnd.Col() - aRange.aStart.Col();
                 }
                 else
                 {
@@ -653,35 +651,38 @@ void ScAccessibleSpreadsheet::Notify( SfxBroadcaster& rBC, const SfxHint& rHint 
                 CommitTableModelChange(maRange.aStart.Row(), maRange.aStart.Col(), maRange.aEnd.Row(), maRange.aEnd.Col(), AccessibleTableModelChangeType::UPDATE);
             else
                 mbDelIns = false;
-            ScViewData& rViewData = mpViewShell->GetViewData();
-            ScAddress aNewCell = rViewData.GetCurPos();
-            if( maActiveCell == aNewCell)
+            if (mpViewShell)
             {
-                ScDocument* pScDoc= GetDocument(mpViewShell);
-                if (pScDoc)
+                ScViewData& rViewData = mpViewShell->GetViewData();
+                ScAddress aNewCell = rViewData.GetCurPos();
+                if( maActiveCell == aNewCell)
                 {
-                    OUString valStr(pScDoc->GetString(aNewCell.Col(),aNewCell.Row(),aNewCell.Tab()));
-                    if(m_strCurCellValue != valStr)
+                    ScDocument* pScDoc= GetDocument(mpViewShell);
+                    if (pScDoc)
                     {
-                        AccessibleEventObject aEvent;
-                        aEvent.EventId = AccessibleEventId::VALUE_CHANGED;
-                        mpAccCell->CommitChange(aEvent);
-                        m_strCurCellValue=valStr;
-                    }
-                    OUString tabName;
-                    pScDoc->GetName( maActiveCell.Tab(), tabName );
-                    if( m_strOldTabName != tabName )
-                    {
-                        AccessibleEventObject aEvent;
-                        aEvent.EventId = AccessibleEventId::NAME_CHANGED;
-                        OUString sOldName(ScResId(STR_ACC_TABLE_NAME));
-                        sOldName = sOldName.replaceFirst("%1", m_strOldTabName);
-                        aEvent.OldValue <<= sOldName;
-                        OUString sNewName(ScResId(STR_ACC_TABLE_NAME));
-                        sOldName = sNewName.replaceFirst("%1", tabName);
-                        aEvent.NewValue <<= sNewName;
-                        CommitChange( aEvent );
-                        m_strOldTabName = tabName;
+                        OUString valStr(pScDoc->GetString(aNewCell.Col(),aNewCell.Row(),aNewCell.Tab()));
+                        if(m_strCurCellValue != valStr)
+                        {
+                            AccessibleEventObject aEvent;
+                            aEvent.EventId = AccessibleEventId::VALUE_CHANGED;
+                            mpAccCell->CommitChange(aEvent);
+                            m_strCurCellValue=valStr;
+                        }
+                        OUString tabName;
+                        pScDoc->GetName( maActiveCell.Tab(), tabName );
+                        if( m_strOldTabName != tabName )
+                        {
+                            AccessibleEventObject aEvent;
+                            aEvent.EventId = AccessibleEventId::NAME_CHANGED;
+                            OUString sOldName(ScResId(STR_ACC_TABLE_NAME));
+                            sOldName = sOldName.replaceFirst("%1", m_strOldTabName);
+                            aEvent.OldValue <<= sOldName;
+                            OUString sNewName(ScResId(STR_ACC_TABLE_NAME));
+                            sOldName = sNewName.replaceFirst("%1", tabName);
+                            aEvent.NewValue <<= sNewName;
+                            CommitChange( aEvent );
+                            m_strOldTabName = tabName;
+                        }
                     }
                 }
             }
@@ -1070,11 +1071,8 @@ void SAL_CALL
 {
     SolarMutexGuard aGuard;
     IsObjectValid();
-    if (mpViewShell)
-    {
-        if (!IsFormulaMode())
-            mpViewShell->Unmark();
-    }
+    if (mpViewShell && !IsFormulaMode())
+        mpViewShell->Unmark();
 }
 
 void SAL_CALL ScAccessibleSpreadsheet::selectAllAccessibleChildren(  )
@@ -1689,9 +1687,9 @@ bool ScAccessibleSpreadsheet::GetFormulaCurrentFocusCell(ScAddress &addr)
 uno::Reference < XAccessible > ScAccessibleSpreadsheet::GetActiveCell()
 {
     if( m_mapSelectionSend.find( maActiveCell ) != m_mapSelectionSend.end() )
-            return m_mapSelectionSend[maActiveCell];
-        else
-            return getAccessibleCellAt(maActiveCell.Row(), maActiveCell .Col());
+        return m_mapSelectionSend[maActiveCell];
+    else
+        return getAccessibleCellAt(maActiveCell.Row(), maActiveCell .Col());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -263,6 +263,16 @@ bool TextSearch::SearchForward( const OUString &rStr,
     return bRet;
 }
 
+bool TextSearch::searchForward( const OUString &rStr )
+{
+    sal_Int32 pStart = 0;
+    sal_Int32 pEnd = rStr.getLength();
+
+    bool bResult = SearchForward(rStr, &pStart, &pEnd);
+
+    return bResult;
+}
+
 bool TextSearch::SearchBackward( const OUString & rStr, sal_Int32* pStart,
                                 sal_Int32* pEnde, SearchResult* pRes )
 {
@@ -306,7 +316,7 @@ void TextSearch::ReplaceBackReferences( OUString& rReplaceStr, const OUString &r
             {
                 sal_Int32 nStart = rResult.startOffset[0];
                 sal_Int32 nLength = rResult.endOffset[0] - rResult.startOffset[0];
-                sBuff.append(rStr.getStr() + nStart, nLength);
+                sBuff.appendCopy(rStr, nStart, nLength);
             }
             else if((i < rReplaceStr.getLength() - 1) && rReplaceStr[i] == '$')
             {
@@ -329,7 +339,11 @@ void TextSearch::ReplaceBackReferences( OUString& rReplaceStr, const OUString &r
                         {
                             sal_Int32 nSttReg = rResult.startOffset[j];
                             sal_Int32 nRegLen = rResult.endOffset[j];
-                            if( nRegLen > nSttReg )
+                            if (nSttReg < 0 || nRegLen < 0) // A "not found" optional capture
+                            {
+                                nSttReg = nRegLen = 0; // Copy empty string
+                            }
+                            else if (nRegLen >= nSttReg)
                             {
                                 nRegLen = nRegLen - nSttReg;
                             }
@@ -339,7 +353,7 @@ void TextSearch::ReplaceBackReferences( OUString& rReplaceStr, const OUString &r
                                 nSttReg = rResult.endOffset[j];
                             }
                             // Copy reference from found string
-                            sBuff.append(rStr.getStr() + nSttReg, nRegLen);
+                            sBuff.appendCopy(rStr, nSttReg, nRegLen);
                         }
                         i += 1;
                     }

@@ -20,19 +20,13 @@
 #ifndef INCLUDED_SC_INC_DPTABDAT_HXX
 #define INCLUDED_SC_INC_DPTABDAT_HXX
 
-#include "dpoutput.hxx"
 #include "dpfilteredcache.hxx"
-#include "dpcache.hxx"
 #include "calcmacros.hxx"
 
 #include <svl/zforlist.hxx>
 
 #include <unordered_set>
 #include <vector>
-
-namespace com { namespace sun { namespace star { namespace sheet {
-    struct DataPilotFieldFilter;
-}}}}
 
 #define SC_DAPI_HIERARCHY_FLAT      0
 #define SC_DAPI_HIERARCHY_QUARTER   1

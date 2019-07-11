@@ -16,6 +16,8 @@
 
 #include <sal/config.h>
 
+#include <rtl/ustrbuf.hxx>
+
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
@@ -61,7 +63,7 @@
 #define YYLLOC_DEFAULT(Current, Rhs, N) \
     do { (Current) = YYRHSLOC((Rhs), (N) ? 1 : 0); } while (0)
 
-void yyerror(YYLTYPE * locp, yyscan_t yyscanner, char const * msg) {
+static void yyerror(YYLTYPE * locp, yyscan_t yyscanner, char const * msg) {
     assert(locp != nullptr);
     unoidl::detail::SourceProviderScannerData * data = yyget_extra(yyscanner);
     data->errorLine = *locp;
@@ -4013,14 +4015,14 @@ OUString SourceProviderType::getName() const {
         return name;
     case unoidl::detail::SourceProviderType::TYPE_INSTANTIATED_POLYMORPHIC_STRUCT:
         {
-            OUString n(name + "<");
+            OUStringBuffer n(name + "<");
             for (auto i(subtypes.begin()); i != subtypes.end(); ++i) {
                 if (i != subtypes.begin()) {
-                    n += ",";
+                    n.append(",");
                 }
-                n += i->getName();
+                n.append(i->getName());
             }
-            return n + ">";
+            return n.append(">").makeStringAndClear();
         }
     default:
         assert(false && "this cannot happen"); for (;;) { std::abort(); }

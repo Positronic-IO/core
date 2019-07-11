@@ -24,6 +24,7 @@
 #include <dbfld.hxx>
 #include <fldtdlg.hxx>
 #include <numrule.hxx>
+#include <doc.hxx>
 
 #include "flddb.hxx"
 #include <dbconfig.hxx>
@@ -78,6 +79,14 @@ SwFieldDBPage::~SwFieldDBPage()
 
 void SwFieldDBPage::dispose()
 {
+    SwWrtShell* pSh = GetWrtShell();
+    if (!pSh)
+        pSh = ::GetActiveWrtShell();
+    // This would cleanup in the case of cancelled dialog
+    SwDBManager* pDbManager = pSh->GetDoc()->GetDBManager();
+    if (pDbManager)
+        pDbManager->RevokeLastRegistrations();
+
     m_pTypeLB.clear();
     m_pDatabaseTLB.clear();
     m_pAddDBPB.clear();
@@ -208,6 +217,10 @@ bool SwFieldDBPage::FillItemSet(SfxItemSet* )
     if(!pSh)
         pSh = ::GetActiveWrtShell();
 
+    SwDBManager* pDbManager = pSh->GetDoc()->GetDBManager();
+    if (pDbManager)
+        pDbManager->CommitLastRegistrations();
+
     if (aData.sDataSource.isEmpty())
         aData = pSh->GetDBData();
 
@@ -328,6 +341,10 @@ void SwFieldDBPage::TypeHdl( ListBox const * pBox )
             m_pNumFormatLB->Show();
             m_pFormatLB->Hide();
 
+            m_pNewFormatRB->SetAccessibleRelationLabelFor(m_pNumFormatLB);
+            m_pNumFormatLB->SetAccessibleRelationLabeledBy(m_pNewFormatRB);
+            m_pFormatLB->SetAccessibleRelationLabelFor(nullptr);
+
             if (pBox)   // type was changed by user
                 m_pDBFormatRB->Check();
 
@@ -363,6 +380,11 @@ void SwFieldDBPage::TypeHdl( ListBox const * pBox )
             m_pNewFormatRB->Check();
             m_pNumFormatLB->Hide();
             m_pFormatLB->Show();
+
+            m_pNewFormatRB->SetAccessibleRelationLabelFor(m_pFormatLB);
+            m_pFormatLB->SetAccessibleRelationLabeledBy(m_pNewFormatRB);
+            m_pNumFormatLB->SetAccessibleRelationLabelFor(nullptr);
+
             if( IsFieldEdit() )
             {
                 for( sal_Int32 nI = m_pFormatLB->GetEntryCount(); nI; )
@@ -477,7 +499,12 @@ IMPL_LINK( SwFieldDBPage, TreeSelectHdl, SvTreeListBox *, pBox, void )
 
 IMPL_LINK_NOARG(SwFieldDBPage, AddDBHdl, Button*, void)
 {
-    OUString sNewDB = SwDBManager::LoadAndRegisterDataSource(GetFrameWeld());
+    SwWrtShell* pSh = GetWrtShell();
+    if (!pSh)
+        pSh = ::GetActiveWrtShell();
+
+    OUString sNewDB
+        = SwDBManager::LoadAndRegisterDataSource(GetFrameWeld(), pSh->GetDoc()->GetDocShell());
     if(!sNewDB.isEmpty())
     {
         m_pDatabaseTLB->AddDataSource(sNewDB);

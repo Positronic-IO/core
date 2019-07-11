@@ -22,6 +22,7 @@
 #include <com/sun/star/embed/EmbeddedObjectCreator.hpp>
 #include <com/sun/star/embed/WrongStateException.hpp>
 #include <com/sun/star/embed/XLinkCreator.hpp>
+#include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/embed/XEmbedPersist.hpp>
 #include <com/sun/star/embed/XLinkageSupport.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
@@ -233,7 +234,7 @@ uno::Sequence < OUString > EmbeddedObjectContainer::GetObjectNames() const
 
 bool EmbeddedObjectContainer::HasEmbeddedObjects() const
 {
-    return pImpl->maObjectContainer.size() != 0;
+    return !pImpl->maObjectContainer.empty();
 }
 
 bool EmbeddedObjectContainer::HasEmbeddedObject( const OUString& rName )
@@ -310,7 +311,7 @@ EmbeddedObjectContainer::GetEmbeddedObject(
 uno::Reference<embed::XEmbeddedObject> EmbeddedObjectContainer::Get_Impl(
         const OUString& rName,
         const uno::Reference<embed::XEmbeddedObject>& xCopy,
-        rtl::OUString const*const pBaseURL)
+        OUString const*const pBaseURL)
 {
     uno::Reference < embed::XEmbeddedObject > xObj;
     try

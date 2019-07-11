@@ -25,6 +25,7 @@
 #include <svx/svdopath.hxx>
 #include <svx/svdogrp.hxx>
 #include <editeng/eeitem.hxx>
+#include <editeng/outlobj.hxx>
 
 #include <View.hxx>
 #include <ViewShell.hxx>
@@ -92,8 +93,8 @@ void FuMorph::DoExecute( SfxRequest& )
         SdrObject*  pPolyObj1 = pCloneObj1->ConvertToPolyObj(false, false);
         SdrObject*  pPolyObj2 = pCloneObj2->ConvertToPolyObj(false, false);
         SdAbstractDialogFactory* pFact = SdAbstractDialogFactory::Create();
-        ScopedVclPtr<AbstractMorphDlg> pDlg(pFact ? pFact->CreateMorphDlg(mpWindow ? mpWindow->GetFrameWeld() : nullptr, pObj1, pObj2) : nullptr);
-        if(pPolyObj1 && pPolyObj2 && pDlg && (pDlg->Execute() == RET_OK))
+        ScopedVclPtr<AbstractMorphDlg> pDlg( pFact->CreateMorphDlg(mpWindow ? mpWindow->GetFrameWeld() : nullptr, pObj1, pObj2) );
+        if(pPolyObj1 && pPolyObj2 && (pDlg->Execute() == RET_OK))
         {
             B2DPolyPolygonList_impl aPolyPolyList;
             ::basegfx::B2DPolyPolygon aPolyPoly1;
@@ -109,15 +110,15 @@ void FuMorph::DoExecute( SfxRequest& )
             while(aIter1.IsMore())
             {
                 SdrObject* pObj = aIter1.Next();
-                if(pObj && dynamic_cast< SdrPathObj *>( pObj ) !=  nullptr)
-                    aPolyPoly1.append(static_cast<SdrPathObj*>(pObj)->GetPathPoly());
+                if(auto pPathObj = dynamic_cast< SdrPathObj *>( pObj ))
+                    aPolyPoly1.append(pPathObj->GetPathPoly());
             }
 
             while(aIter2.IsMore())
             {
                 SdrObject* pObj = aIter2.Next();
-                if(pObj && dynamic_cast< SdrPathObj *>( pObj ) !=  nullptr)
-                    aPolyPoly2.append(static_cast<SdrPathObj*>(pObj)->GetPathPoly());
+                if(auto pPathObj = dynamic_cast< SdrPathObj *>( pObj ))
+                    aPolyPoly2.append(pPathObj->GetPathPoly());
             }
 
             // perform morphing
@@ -160,15 +161,14 @@ void FuMorph::DoExecute( SfxRequest& )
                     aPolyPoly2.setB2DPolygon(a, aSub2);
                 }
 
-                if(ImpMorphPolygons(aPolyPoly1, aPolyPoly2, pDlg->GetFadeSteps(), aPolyPolyList))
-                {
-                    OUString aString(mpView->GetDescriptionOfMarkedObjects());
-                    aString += " " + SdResId(STR_UNDO_MORPHING);
+                ImpMorphPolygons(aPolyPoly1, aPolyPoly2, pDlg->GetFadeSteps(), aPolyPolyList);
 
-                    mpView->BegUndo(aString);
-                    ImpInsertPolygons(aPolyPolyList, pDlg->IsAttributeFade(), pObj1, pObj2);
-                    mpView->EndUndo();
-                }
+                OUString aString(mpView->GetDescriptionOfMarkedObjects());
+                aString += " " + SdResId(STR_UNDO_MORPHING);
+
+                mpView->BegUndo(aString);
+                ImpInsertPolygons(aPolyPolyList, pDlg->IsAttributeFade(), pObj1, pObj2);
+                mpView->EndUndo();
 
                 for(basegfx::B2DPolyPolygon * p : aPolyPolyList) {
                     delete p;
@@ -183,7 +183,7 @@ void FuMorph::DoExecute( SfxRequest& )
     }
 }
 
-::basegfx::B2DPolygon ImpGetExpandedPolygon(
+static ::basegfx::B2DPolygon ImpGetExpandedPolygon(
     const ::basegfx::B2DPolygon& rCandidate,
     sal_uInt32 nNum
 )
@@ -302,7 +302,7 @@ void FuMorph::ImpAddPolys(
 {
     while(rSmaller.count() < rBigger.count())
     {
-        const ::basegfx::B2DPolygon aToBeCopied(rBigger.getB2DPolygon(rSmaller.count()));
+        const ::basegfx::B2DPolygon& aToBeCopied(rBigger.getB2DPolygon(rSmaller.count()));
         const ::basegfx::B2DRange aToBeCopiedPolySize(::basegfx::utils::getRange(aToBeCopied));
         ::basegfx::B2DPoint aNewPoint(aToBeCopiedPolySize.getCenter());
         ::basegfx::B2DPolygon aNewPoly;
@@ -457,8 +457,8 @@ void FuMorph::ImpInsertPolygons(
 
     for(sal_uInt32 a(0); a < rPolyPolyStart.count(); a++)
     {
-        const ::basegfx::B2DPolygon aPolyStart(rPolyPolyStart.getB2DPolygon(a));
-        const ::basegfx::B2DPolygon aPolyEnd(rPolyPolyEnd.getB2DPolygon(a));
+        const ::basegfx::B2DPolygon& aPolyStart(rPolyPolyStart.getB2DPolygon(a));
+        const ::basegfx::B2DPolygon& aPolyEnd(rPolyPolyEnd.getB2DPolygon(a));
         const sal_uInt32 nCount(aPolyStart.count());
         ::basegfx::B2DPolygon aNewPolygon;
 
@@ -479,7 +479,7 @@ void FuMorph::ImpInsertPolygons(
 /**
  * create morphed PolyPolygons
  */
-bool FuMorph::ImpMorphPolygons(
+void FuMorph::ImpMorphPolygons(
     const ::basegfx::B2DPolyPolygon& rPolyPoly1,
     const ::basegfx::B2DPolyPolygon& rPolyPoly2,
     const sal_uInt16 nSteps,
@@ -510,7 +510,6 @@ bool FuMorph::ImpMorphPolygons(
             rPolyPolyList3D.push_back( pNewPolyPoly2D );
         }
     }
-    return true;
 }
 
 } // end of namespace sd

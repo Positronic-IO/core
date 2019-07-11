@@ -35,6 +35,7 @@
 
 #include <rtl/string.h>
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 
 #include <osl/module.h>
 
@@ -841,6 +842,7 @@ WinSalFrame::WinSalFrame()
     mbBorder            = false;
     mbFixBorder         = false;
     mbSizeBorder        = false;
+    mbFullScreenCaption = false;
     mbFullScreen        = false;
     mbPresentation      = false;
     mbInShow            = false;
@@ -916,13 +918,8 @@ bool WinSalFrame::ReleaseFrameGraphicsDC( WinSalGraphics* pGraphics )
     if ( pGraphics->getDefPal() )
         SelectPalette( hDC, pGraphics->getDefPal(), TRUE );
     pGraphics->DeInitGraphics();
-    // we don't want to run the WinProc in the main thread directly
-    // so we don't hit the mbNoYieldLock assert
-    if ( !pSalData->mpInstance->IsMainThread() )
-        SendMessageW( pSalData->mpInstance->mhComWnd, SAL_MSG_RELEASEDC,
-            reinterpret_cast<WPARAM>(mhWnd), reinterpret_cast<LPARAM>(hDC) );
-    else
-        ReleaseDC( mhWnd, hDC );
+    SendMessageW( pSalData->mpInstance->mhComWnd, SAL_MSG_RELEASEDC,
+        reinterpret_cast<WPARAM>(mhWnd), reinterpret_cast<LPARAM>(hDC) );
     if ( pGraphics == mpThreadGraphics )
         pSalData->mnCacheDCInUse--;
     pGraphics->setHDC(nullptr);
@@ -1058,9 +1055,9 @@ void WinSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
     mbGraphics = false;
 }
 
-bool WinSalFrame::PostEvent(ImplSVEvent* pData)
+bool WinSalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    BOOL const ret = PostMessageW(mhWnd, SAL_MSG_USEREVENT, 0, reinterpret_cast<LPARAM>(pData));
+    BOOL const ret = PostMessageW(mhWnd, SAL_MSG_USEREVENT, 0, reinterpret_cast<LPARAM>(pData.release()));
     SAL_WARN_IF(0 == ret, "vcl", "ERROR: PostMessage() failed!");
     return static_cast<bool>(ret);
 }
@@ -1104,7 +1101,7 @@ void WinSalFrame::DrawMenuBar()
     ::DrawMenuBar( mhWnd );
 }
 
-HWND ImplGetParentHwnd( HWND hWnd )
+static HWND ImplGetParentHwnd( HWND hWnd )
 {
     WinSalFrame* pFrame = GetWindowPtr( hWnd );
     if( !pFrame || !pFrame->GetWindow())
@@ -1853,6 +1850,15 @@ void WinSalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nDisplay )
         if ( !(GetWindowStyle( mhWnd ) & WS_VISIBLE) )
             mnShowState = SW_SHOW;
 
+        // Save caption state.
+        mbFullScreenCaption = mbCaption;
+        if (mbCaption)
+        {
+            DWORD nStyle = GetWindowStyle(mhWnd);
+            SetWindowStyle(mhWnd, nStyle & ~WS_CAPTION);
+            mbCaption = false;
+        }
+
         // set window to screen size
         ImplSalFrameFullScreenPos( this, true );
     }
@@ -1867,6 +1873,14 @@ void WinSalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nDisplay )
         if ( mbFullScreenToolWin )
             SetWindowExStyle( mhWnd, GetWindowExStyle( mhWnd ) | WS_EX_TOOLWINDOW );
         mbFullScreenToolWin = false;
+
+        // Restore caption state.
+        if (mbFullScreenCaption)
+        {
+            DWORD nStyle = GetWindowStyle(mhWnd);
+            SetWindowStyle(mhWnd, nStyle | WS_CAPTION);
+        }
+        mbCaption = mbFullScreenCaption;
 
         SetWindowPos( mhWnd, nullptr,
                       maFullScreenRect.left,
@@ -2184,7 +2198,7 @@ static void ImplSalFrameSetInputContext( HWND hWnd, const SalInputContext* pCont
                 // specified by this font name; but it seems to decide whether
                 // to use that font's horizontal or vertical variant based on a
                 // '@' in front of this font name.
-                ImplGetLogFontFromFontSelect(hDC, &pContext->mpFont->GetFontSelectPattern(),
+                ImplGetLogFontFromFontSelect(hDC, pContext->mpFont->GetFontSelectPattern(),
                                              nullptr, aLogFont);
                 ReleaseDC( pFrame->mhWnd, hDC );
                 ImmSetCompositionFontW( hIMC, &aLogFont );
@@ -2504,7 +2518,7 @@ OUString WinSalFrame::GetKeyName( sal_uInt16 nKeyCode )
     return OUString( aKeyBuf, sal::static_int_cast< sal_uInt16 >(nKeyBufLen) );
 }
 
-inline Color ImplWinColorToSal( COLORREF nColor )
+static inline Color ImplWinColorToSal( COLORREF nColor )
 {
     return Color( GetRValue( nColor ), GetGValue( nColor ), GetBValue( nColor ) );
 }
@@ -3485,8 +3499,6 @@ static bool ImplHandleKeyMsg( HWND hWnd, UINT nMsg,
 
             nLastModKeyCode = ModKeyFlags::NONE; // make sure no modkey messages are sent if they belong to a hotkey (see above)
             aKeyEvt.mnCharCode = 0;
-            aKeyEvt.mnCode = 0;
-
             aKeyEvt.mnCode = ImplSalGetKeyCode( wParam );
             if ( !bKeyUp )
             {
@@ -4491,8 +4503,6 @@ static LRESULT ImplDrawItem(HWND, WPARAM wParam, LPARAM lParam )
         // Set the appropriate foreground and background colors.
         RECT aRect = pDI->rcItem;
 
-        clrPrevBkgnd = SetBkColor( pDI->hDC, GetSysColor( COLOR_MENU ) );
-
         if ( fDisabled )
             clrPrevText = SetTextColor( pDI->hDC, GetSysColor( COLOR_GRAYTEXT ) );
         else
@@ -4991,12 +5001,12 @@ static bool ImplHandleIMECompositionInput( WinSalFrame* pFrame,
         if ( nTextLen > 0 )
         {
             {
-                auto pTextBuf = std::unique_ptr<WCHAR>(new WCHAR[nTextLen]);
+                auto pTextBuf = std::unique_ptr<WCHAR[]>(new WCHAR[nTextLen]);
                 ImmGetCompositionStringW( hIMC, GCS_COMPSTR, pTextBuf.get(), nTextLen*sizeof( WCHAR ) );
                 aEvt.maText = OUString( o3tl::toU(pTextBuf.get()), static_cast<sal_Int32>(nTextLen) );
             }
 
-            std::unique_ptr<BYTE> pAttrBuf;
+            std::unique_ptr<BYTE[]> pAttrBuf;
             LONG        nAttrLen = ImmGetCompositionStringW( hIMC, GCS_COMPATTR, nullptr, 0 );
             if ( nAttrLen > 0 )
             {
@@ -5259,12 +5269,15 @@ ImplHandleGetObject(HWND hWnd, LPARAM lParam, WPARAM wParam, LRESULT & nRet)
     uno::Reference< accessibility::XMSAAService > xMSAA( pSVData->mxAccessBridge, uno::UNO_QUERY );
     if ( xMSAA.is() )
     {
+        sal_Int32 lParam32 = static_cast<sal_Int32>(lParam);
+        sal_uInt32 wParam32 = static_cast<sal_uInt32>(wParam);
+
         // mhOnSetTitleWnd not set to reasonable value anywhere...
-        if ( lParam == OBJID_CLIENT )
+        if ( lParam32 == OBJID_CLIENT )
         {
             nRet = xMSAA->getAccObjectPtr(
-                    reinterpret_cast<sal_Int64>(hWnd), lParam, wParam);
-            if( nRet != 0 )
+                    reinterpret_cast<sal_Int64>(hWnd), lParam32, wParam32);
+            if (nRet != 0)
                 return true;
         }
     }
@@ -5339,11 +5352,8 @@ static LRESULT ImplHandleIMEConfirmReconvertString( HWND hWnd, LPARAM lParam )
 
     if( nTmpStart != aEvt.mnStart || nTmpEnd != aEvt.mnEnd )
     {
-    SalSurroundingTextSelectionChangeEvent aSelEvt;
-    aSelEvt.mnStart = nTmpStart;
-    aSelEvt.mnEnd = nTmpEnd;
-
-    pFrame->CallCallback( SalEvent::SurroundingTextSelectionChange, &aSelEvt );
+        SalSurroundingTextSelectionChangeEvent aSelEvt { nTmpStart, nTmpEnd };
+        pFrame->CallCallback( SalEvent::SurroundingTextSelectionChange, &aSelEvt );
     }
 
     return TRUE;
@@ -5431,7 +5441,7 @@ static bool ImplSalWheelMousePos( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lP
     return true;
 }
 
-LRESULT CALLBACK SalFrameWndProc( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam, bool& rDef )
+static LRESULT CALLBACK SalFrameWndProc( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam, bool& rDef )
 {
     LRESULT     nRet = 0;
     static bool  bInWheelMsg = false;
@@ -5694,7 +5704,10 @@ LRESULT CALLBACK SalFrameWndProc( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lP
                 // messages in the message queue and dispatch them before we return control to the system.
 
                 if ( nRet )
+                {
+                    SolarMutexGuard aGuard;
                     while ( Application::Reschedule( true ) );
+                }
             }
             else
             {
@@ -5863,15 +5876,5 @@ bool ImplHandleGlobalMsg( HWND hWnd, UINT nMsg, WPARAM wParam, LPARAM lParam, LR
     }
     return bResult;
 }
-
-#ifdef _WIN32
-bool HasAtHook()
-{
-    BOOL bIsRunning = FALSE;
-    // pvParam must be BOOL
-    return SystemParametersInfoW(SPI_GETSCREENREADER, 0, &bIsRunning, 0)
-        && bIsRunning;
-}
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

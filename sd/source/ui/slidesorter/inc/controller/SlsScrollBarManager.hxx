@@ -20,16 +20,15 @@
 #ifndef INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSSCROLLBARMANAGER_HXX
 #define INCLUDED_SD_SOURCE_UI_SLIDESORTER_INC_CONTROLLER_SLSSCROLLBARMANAGER_HXX
 
-#include <SlideSorter.hxx>
-
 #include <tools/link.hxx>
 #include <tools/gen.hxx>
 #include <vcl/timer.hxx>
+#include <vcl/scrbar.hxx>
+#include <vcl/vclptr.hxx>
 
 #include <functional>
 
-class ScrollBar;
-class ScrollBarBox;
+namespace sd { class Window; }
 
 namespace sd { namespace slidesorter { class SlideSorter; } }
 
@@ -179,9 +178,7 @@ private:
     /** The width and height of the border at the inside of the window which
         when entered while in drag mode leads to a scrolling of the window.
     */
-    Size maScrollBorder;
-    double mnHorizontalScrollFactor;
-    double mnVerticalScrollFactor;
+    Size const maScrollBorder;
     /** The only task of this little window is to paint the little square at
         the bottom right corner left by the two scroll bars (when both are
         visible).

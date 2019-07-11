@@ -21,6 +21,7 @@
 #include <pdfparse.hxx>
 
 #include <comphelper/hash.hxx>
+#include <o3tl/make_unique.hxx>
 
 #include <rtl/strbuf.hxx>
 #include <rtl/ustring.hxx>
@@ -28,6 +29,7 @@
 #include <rtl/alloc.h>
 #include <rtl/digest.h>
 #include <rtl/cipher.h>
+#include <sal/log.hxx>
 
 #include <zlib.h>
 
@@ -94,8 +96,7 @@ using namespace pdfparse;
 
 EmitContext::EmitContext( const PDFContainer* pTop ) :
     m_bDeflate( false ),
-    m_bDecrypt( false ),
-    m_pImplData( nullptr )
+    m_bDecrypt( false )
 {
     if( pTop )
         m_pImplData.reset( new EmitImplData( pTop ) );
@@ -531,7 +532,7 @@ void PDFDict::insertValue( const OString& rName, PDFEntry* pValue )
     if( it == m_aMap.end() )
     {
         // new name/value, pair, append it
-        m_aSubElements.emplace_back( new PDFName( rName ) );
+        m_aSubElements.emplace_back(o3tl::make_unique<PDFName>(rName));
         m_aSubElements.emplace_back( pValue );
     }
     else
@@ -628,7 +629,7 @@ unsigned int PDFStream::getDictLength( const PDFContainer* pContainer ) const
         if( pRef )
         {
             int nEle = pContainer->m_aSubElements.size();
-            for( int i = 0; i < nEle && ! pNum; i++ )
+            for (int i = 0; i < nEle; i++)
             {
                 PDFObject* pObj = dynamic_cast<PDFObject*>(pContainer->m_aSubElements[i].get());
                 if( pObj &&
@@ -649,7 +650,7 @@ PDFObject::~PDFObject()
 {
 }
 
-bool PDFObject::getDeflatedStream( char** ppStream, unsigned int* pBytes, const PDFContainer* pObjectContainer, EmitContext& rContext ) const
+bool PDFObject::getDeflatedStream( std::unique_ptr<char[]>& rpStream, unsigned int* pBytes, const PDFContainer* pObjectContainer, EmitContext& rContext ) const
 {
     bool bIsDeflated = false;
     if( m_pStream && m_pStream->m_pDict &&
@@ -657,12 +658,11 @@ bool PDFObject::getDeflatedStream( char** ppStream, unsigned int* pBytes, const 
         )
     {
         unsigned int nOuterStreamLen = m_pStream->m_nEndOffset - m_pStream->m_nBeginOffset;
-        *ppStream = static_cast<char*>(rtl_allocateMemory( nOuterStreamLen ));
-        unsigned int nRead = rContext.readOrigBytes( m_pStream->m_nBeginOffset, nOuterStreamLen, *ppStream );
+        rpStream.reset(new char[ nOuterStreamLen ]);
+        unsigned int nRead = rContext.readOrigBytes( m_pStream->m_nBeginOffset, nOuterStreamLen, rpStream.get() );
         if( nRead != nOuterStreamLen )
         {
-            rtl_freeMemory( *ppStream );
-            *ppStream = nullptr;
+            rpStream.reset();
             *pBytes = 0;
             return false;
         }
@@ -688,7 +688,7 @@ bool PDFObject::getDeflatedStream( char** ppStream, unsigned int* pBytes, const 
             }
         }
         // prepare compressed data section
-        char* pStream = *ppStream;
+        char* pStream = rpStream.get();
         if( pStream[0] == 's' )
             pStream += 6; // skip "stream"
         // skip line end after "stream"
@@ -696,14 +696,14 @@ bool PDFObject::getDeflatedStream( char** ppStream, unsigned int* pBytes, const 
             pStream++;
         // get the compressed length
         *pBytes = m_pStream->getDictLength( pObjectContainer );
-        if( pStream != *ppStream )
-            memmove( *ppStream, pStream, *pBytes );
+        if( pStream != rpStream.get() )
+            memmove( rpStream.get(), pStream, *pBytes );
         if( rContext.m_bDecrypt )
         {
             EmitImplData* pEData = getEmitData( rContext );
-            pEData->decrypt( reinterpret_cast<const sal_uInt8*>(*ppStream),
+            pEData->decrypt( reinterpret_cast<const sal_uInt8*>(rpStream.get()),
                              *pBytes,
-                             reinterpret_cast<sal_uInt8*>(*ppStream),
+                             reinterpret_cast<sal_uInt8*>(rpStream.get()),
                              m_nNumber,
                              m_nGeneration
                              ); // decrypt inplace
@@ -711,7 +711,6 @@ bool PDFObject::getDeflatedStream( char** ppStream, unsigned int* pBytes, const 
     }
     else
     {
-        *ppStream = nullptr;
         *pBytes = 0;
     }
     return bIsDeflated;
@@ -731,10 +730,15 @@ static void unzipToBuffer( char* pBegin, unsigned int nLen,
 
     const unsigned int buf_increment_size = 16384;
 
-    *pOutBuf = static_cast<sal_uInt8*>(rtl_reallocateMemory( *pOutBuf, buf_increment_size ));
-    aZStr.next_out      = reinterpret_cast<Bytef*>(*pOutBuf);
-    aZStr.avail_out     = buf_increment_size;
-    *pOutLen = buf_increment_size;
+    if (auto p = static_cast<sal_uInt8*>(std::realloc(*pOutBuf, buf_increment_size)))
+    {
+        *pOutBuf = p;
+        aZStr.next_out = reinterpret_cast<Bytef*>(*pOutBuf);
+        aZStr.avail_out = buf_increment_size;
+        *pOutLen = buf_increment_size;
+    }
+    else
+        err = Z_MEM_ERROR;
     while( err != Z_STREAM_END && err >= Z_OK && aZStr.avail_in )
     {
         err = inflate( &aZStr, Z_NO_FLUSH );
@@ -743,10 +747,15 @@ static void unzipToBuffer( char* pBegin, unsigned int nLen,
             if( err != Z_STREAM_END )
             {
                 const int nNewAlloc = *pOutLen + buf_increment_size;
-                *pOutBuf = static_cast<sal_uInt8*>(rtl_reallocateMemory( *pOutBuf, nNewAlloc ));
-                aZStr.next_out = reinterpret_cast<Bytef*>(*pOutBuf + *pOutLen);
-                aZStr.avail_out = buf_increment_size;
-                *pOutLen = nNewAlloc;
+                if (auto p = static_cast<sal_uInt8*>(std::realloc(*pOutBuf, nNewAlloc)))
+                {
+                    *pOutBuf = p;
+                    aZStr.next_out = reinterpret_cast<Bytef*>(*pOutBuf + *pOutLen);
+                    aZStr.avail_out = buf_increment_size;
+                    *pOutLen = nNewAlloc;
+                }
+                else
+                    err = Z_MEM_ERROR;
             }
         }
     }
@@ -758,7 +767,7 @@ static void unzipToBuffer( char* pBegin, unsigned int nLen,
     inflateEnd(&aZStr);
     if( err < Z_OK )
     {
-        rtl_freeMemory( *pOutBuf );
+        std::free( *pOutBuf );
         *pOutBuf = nullptr;
         *pOutLen = 0;
     }
@@ -768,19 +777,18 @@ void PDFObject::writeStream( EmitContext& rWriteContext, const PDFFile* pParsedF
 {
     if( m_pStream )
     {
-        char* pStream = nullptr;
+        std::unique_ptr<char[]> pStream;
         unsigned int nBytes = 0;
-        if( getDeflatedStream( &pStream, &nBytes, pParsedFile, rWriteContext ) && nBytes && rWriteContext.m_bDeflate )
+        if( getDeflatedStream( pStream, &nBytes, pParsedFile, rWriteContext ) && nBytes && rWriteContext.m_bDeflate )
         {
             sal_uInt8* pOutBytes = nullptr;
             sal_uInt32 nOutBytes = 0;
-            unzipToBuffer( pStream, nBytes, &pOutBytes, &nOutBytes );
+            unzipToBuffer( pStream.get(), nBytes, &pOutBytes, &nOutBytes );
             rWriteContext.write( pOutBytes, nOutBytes );
-            rtl_freeMemory( pOutBytes );
+            std::free( pOutBytes );
         }
         else if( pStream && nBytes )
-            rWriteContext.write( pStream, nBytes );
-        rtl_freeMemory( pStream );
+            rWriteContext.write( pStream.get(), nBytes );
     }
 }
 
@@ -805,20 +813,20 @@ bool PDFObject::emit( EmitContext& rWriteContext ) const
         pEData->setDecryptObject( m_nNumber, m_nGeneration );
     if( (rWriteContext.m_bDeflate || rWriteContext.m_bDecrypt) && pEData )
     {
-        char* pStream = nullptr;
+        std::unique_ptr<char[]> pStream;
         unsigned int nBytes = 0;
-        bool bDeflate = getDeflatedStream( &pStream, &nBytes, pEData->m_pObjectContainer, rWriteContext );
+        bool bDeflate = getDeflatedStream( pStream, &nBytes, pEData->m_pObjectContainer, rWriteContext );
         if( pStream && nBytes )
         {
             // unzip the stream
             sal_uInt8* pOutBytes = nullptr;
             sal_uInt32 nOutBytes = 0;
             if( bDeflate && rWriteContext.m_bDeflate )
-                unzipToBuffer( pStream, nBytes, &pOutBytes, &nOutBytes );
+                unzipToBuffer( pStream.get(), nBytes, &pOutBytes, &nOutBytes );
             else
             {
                 // nothing to deflate, but decryption has happened
-                pOutBytes = reinterpret_cast<sal_uInt8*>(pStream);
+                pOutBytes = reinterpret_cast<sal_uInt8*>(pStream.get());
                 nOutBytes = static_cast<sal_uInt32>(nBytes);
             }
 
@@ -848,7 +856,6 @@ bool PDFObject::emit( EmitContext& rWriteContext ) const
                                 pFilter = dynamic_cast<PDFName*>(pArray->m_aSubElements.front().get());
                                 if (pFilter && pFilter->m_aName == "FlateDecode")
                                 {
-                                    delete pFilter;
                                     pArray->m_aSubElements.erase( pArray->m_aSubElements.begin() );
                                 }
                             }
@@ -867,21 +874,17 @@ bool PDFObject::emit( EmitContext& rWriteContext ) const
                 delete pClone;
                 // write stream
                 if( bRet )
-                    rWriteContext.write( "stream\n", 7 );
-                if( bRet )
-                    bRet = rWriteContext.write( pOutBytes, nOutBytes );
-                if( bRet )
-                    bRet = rWriteContext.write( "\nendstream\nendobj\n", 18 );
-                if( pOutBytes != reinterpret_cast<sal_uInt8*>(pStream) )
-                    rtl_freeMemory( pOutBytes );
-                rtl_freeMemory( pStream );
+                    bRet = rWriteContext.write("stream\n", 7)
+                           && rWriteContext.write(pOutBytes, nOutBytes)
+                           && rWriteContext.write("\nendstream\nendobj\n", 18);
+                if( pOutBytes != reinterpret_cast<sal_uInt8*>(pStream.get()) )
+                    std::free( pOutBytes );
                 pEData->setDecryptObject( 0, 0 );
                 return bRet;
             }
-            if( pOutBytes != reinterpret_cast<sal_uInt8*>(pStream) )
-                rtl_freeMemory( pOutBytes );
+            if( pOutBytes != reinterpret_cast<sal_uInt8*>(pStream.get()) )
+                std::free( pOutBytes );
         }
-        rtl_freeMemory( pStream );
     }
 
     bool bRet = emitSubElements( rWriteContext ) &&
@@ -1156,9 +1159,13 @@ static bool check_user_password( const OString& rPwd, PDFFileImplData* pData )
         memset( nEncryptedEntry, 0, sizeof(nEncryptedEntry) );
         // see PDF reference 1.4 Algorithm 3.4
         // encrypt pad string
-        rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
-                                aKey, nKeyLen,
-                                nullptr, 0 );
+        if (rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
+                                    aKey, nKeyLen,
+                                    nullptr, 0 )
+            != rtl_Cipher_E_None)
+        {
+            return false; //TODO: differentiate "failed to decrypt" from "wrong password"
+        }
         rtl_cipher_encodeARCFOUR( pData->m_aCipher, nPadString, sizeof( nPadString ),
                                   nEncryptedEntry, sizeof( nEncryptedEntry ) );
         bValid = (memcmp( nEncryptedEntry, pData->m_aUEntry, 32 ) == 0);
@@ -1170,19 +1177,27 @@ static bool check_user_password( const OString& rPwd, PDFFileImplData* pData )
         aDigest.update(nPadString, sizeof(nPadString));
         aDigest.update(reinterpret_cast<unsigned char const*>(pData->m_aDocID.getStr()), pData->m_aDocID.getLength());
         ::std::vector<unsigned char> nEncryptedEntry(aDigest.finalize());
-        rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
-                                aKey, sizeof(aKey), nullptr, 0 );
+        if (rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
+                                    aKey, sizeof(aKey), nullptr, 0 )
+            != rtl_Cipher_E_None)
+        {
+            return false; //TODO: differentiate "failed to decrypt" from "wrong password"
+        }
         rtl_cipher_encodeARCFOUR( pData->m_aCipher,
                                   nEncryptedEntry.data(), 16,
                                   nEncryptedEntry.data(), 16 ); // encrypt in place
         for( int i = 1; i <= 19; i++ ) // do it 19 times, start with 1
         {
             sal_uInt8 aTempKey[ENCRYPTION_KEY_LEN];
-            for( sal_uInt32 j = 0; j < sizeof(aTempKey); j++ )
+            for( size_t j = 0; j < sizeof(aTempKey); j++ )
                 aTempKey[j] = static_cast<sal_uInt8>( aKey[j] ^ i );
 
-            rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
-                                    aTempKey, sizeof(aTempKey), nullptr, 0 );
+            if (rtl_cipher_initARCFOUR( pData->m_aCipher, rtl_Cipher_DirectionEncode,
+                                        aTempKey, sizeof(aTempKey), nullptr, 0 )
+                != rtl_Cipher_E_None)
+            {
+                return false; //TODO: differentiate "failed to decrypt" from "wrong password"
+            }
             rtl_cipher_encodeARCFOUR( pData->m_aCipher,
                                       nEncryptedEntry.data(), 16,
                                       nEncryptedEntry.data(), 16 ); // encrypt in place
@@ -1226,8 +1241,12 @@ bool PDFFile::setupDecryptionData( const OString& rPwd ) const
         sal_uInt32 nKeyLen = password_to_key( rPwd, aKey, m_pData.get(), true );
         if( m_pData->m_nStandardRevision == 2 )
         {
-            rtl_cipher_initARCFOUR( m_pData->m_aCipher, rtl_Cipher_DirectionDecode,
-                                    aKey, nKeyLen, nullptr, 0 );
+            if (rtl_cipher_initARCFOUR( m_pData->m_aCipher, rtl_Cipher_DirectionDecode,
+                                        aKey, nKeyLen, nullptr, 0 )
+                != rtl_Cipher_E_None)
+            {
+                return false; //TODO: differentiate "failed to decrypt" from "wrong password"
+            }
             rtl_cipher_decodeARCFOUR( m_pData->m_aCipher,
                                       m_pData->m_aOEntry, 32,
                                       nPwd, 32 );
@@ -1238,10 +1257,14 @@ bool PDFFile::setupDecryptionData( const OString& rPwd ) const
             for( int i = 19; i >= 0; i-- )
             {
                 sal_uInt8 nTempKey[ENCRYPTION_KEY_LEN];
-                for( unsigned int j = 0; j < sizeof(nTempKey); j++ )
+                for( size_t j = 0; j < sizeof(nTempKey); j++ )
                     nTempKey[j] = sal_uInt8(aKey[j] ^ i);
-                rtl_cipher_initARCFOUR( m_pData->m_aCipher, rtl_Cipher_DirectionDecode,
-                                        nTempKey, nKeyLen, nullptr, 0 );
+                if (rtl_cipher_initARCFOUR( m_pData->m_aCipher, rtl_Cipher_DirectionDecode,
+                                            nTempKey, nKeyLen, nullptr, 0 )
+                    != rtl_Cipher_E_None)
+                {
+                    return false; //TODO: differentiate "failed to decrypt" from "wrong password"
+                }
                 rtl_cipher_decodeARCFOUR( m_pData->m_aCipher,
                                           nPwd, 32,
                                           nPwd, 32 ); // decrypt inplace
@@ -1270,16 +1293,16 @@ PDFFileImplData* PDFFile::impl_getData() const
             if( doc_id != pTrailer->m_pDict->m_aMap.end() )
             {
                 PDFArray* pArr = dynamic_cast<PDFArray*>(doc_id->second);
-                if( pArr && pArr->m_aSubElements.size() > 0 )
+                if( pArr && !pArr->m_aSubElements.empty() )
                 {
                     PDFString* pStr = dynamic_cast<PDFString*>(pArr->m_aSubElements[0].get());
                     if( pStr )
                         m_pData->m_aDocID = pStr->getFilteredString();
 #if OSL_DEBUG_LEVEL > 0
-                    OUString aTmp;
+                    OUStringBuffer aTmp;
                     for( int i = 0; i < m_pData->m_aDocID.getLength(); i++ )
-                        aTmp += OUString::number(static_cast<unsigned int>(sal_uInt8(m_pData->m_aDocID[i])), 16);
-                    SAL_INFO("sdext.pdfimport.pdfparse", "DocId is <" << aTmp << ">");
+                        aTmp.append(OUString::number(static_cast<unsigned int>(sal_uInt8(m_pData->m_aDocID[i])), 16));
+                    SAL_INFO("sdext.pdfimport.pdfparse", "DocId is <" << aTmp.makeStringAndClear() << ">");
 #endif
                 }
             }
@@ -1340,11 +1363,11 @@ PDFFileImplData* PDFFile::impl_getData() const
 #if OSL_DEBUG_LEVEL > 0
                                 else
                                 {
-                                    OUString aTmp;
+                                    OUStringBuffer aTmp;
                                     for( int i = 0; i < aEnt.getLength(); i++ )
-                                        aTmp += " " + OUString::number(static_cast<unsigned int>(sal_uInt8(aEnt[i])), 16);
+                                        aTmp.append(" ").append(OUString::number(static_cast<unsigned int>(sal_uInt8(aEnt[i])), 16));
                                     SAL_WARN("sdext.pdfimport.pdfparse",
-                                             "O entry has length " << static_cast<int>(aEnt.getLength()) << ", should be 32 <" << aTmp << ">" );
+                                             "O entry has length " << static_cast<int>(aEnt.getLength()) << ", should be 32 <" << aTmp.makeStringAndClear() << ">" );
                                 }
 #endif
                             }
@@ -1360,11 +1383,11 @@ PDFFileImplData* PDFFile::impl_getData() const
 #if OSL_DEBUG_LEVEL > 0
                                 else
                                 {
-                                    OUString aTmp;
+                                    OUStringBuffer aTmp;
                                     for( int i = 0; i < aEnt.getLength(); i++ )
-                                        aTmp += " " + OUString::number(static_cast<unsigned int>(sal_uInt8(aEnt[i])), 16);
+                                        aTmp.append(" ").append(OUString::number(static_cast<unsigned int>(sal_uInt8(aEnt[i])), 16));
                                     SAL_WARN("sdext.pdfimport.pdfparse",
-                                             "U entry has length " << static_cast<int>(aEnt.getLength()) << ", should be 32 <" << aTmp << ">" );
+                                             "U entry has length " << static_cast<int>(aEnt.getLength()) << ", should be 32 <" << aTmp.makeStringAndClear() << ">" );
                                 }
 #endif
                             }

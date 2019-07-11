@@ -11,8 +11,6 @@
 #ifndef INCLUDED_INCLUDE_VCL_BITMAPMONOCHROMEFILTER_HXX
 #define INCLUDED_INCLUDE_VCL_BITMAPMONOCHROMEFILTER_HXX
 
-#include <tools/color.hxx>
-
 #include <vcl/BitmapFilter.hxx>
 
 class VCL_DLLPUBLIC BitmapMonochromeFilter : public BitmapFilter
@@ -34,10 +32,10 @@ public:
     {
     }
 
-    virtual BitmapEx execute(BitmapEx const& rBitmapEx) override;
+    virtual BitmapEx execute(BitmapEx const& rBitmapEx) const override;
 
 private:
-    sal_uInt8 mcThreshold;
+    sal_uInt8 const mcThreshold;
 };
 
 #endif

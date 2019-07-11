@@ -20,13 +20,8 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_ANYREFDG_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_ANYREFDG_HXX
 
-#include <vcl/button.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/accel.hxx>
 #include <sfx2/basedlgs.hxx>
-#include <sfx2/tabdlg.hxx>
 #include <address.hxx>
-#include <compiler.hxx>
 #include <formula/funcutl.hxx>
 #include "IAnyRefDialog.hxx"
 #include <scmod.hxx>
@@ -34,11 +29,9 @@
 #include <memory>
 
 class SfxObjectShell;
-class ScRange;
 class ScDocument;
-class ScTabViewShell;
-class ScRefHandler;
 class ScRangeList;
+class ScCompiler;
 
 class ScFormulaReferenceHelper
 {
@@ -47,7 +40,7 @@ class ScFormulaReferenceHelper
     VclPtr<formula::RefEdit>    m_pRefEdit;               // active input field
     VclPtr<formula::RefButton>  m_pRefBtn;                // associated button
     VclPtr<vcl::Window>         m_pWindow;
-    SfxBindings*        m_pBindings;
+    SfxBindings* const          m_pBindings;
     ::std::unique_ptr<Accelerator>
                         m_pAccel;                 // for Enter/Escape
     ::std::vector<VclPtr<vcl::Window> > m_aHiddenWidgets;    // vector of hidden Controls
@@ -113,13 +106,9 @@ public:
 private:
     ScFormulaReferenceHelper
                         m_aHelper;
-    SfxBindings*        m_pMyBindings;
+    SfxBindings* const  m_pMyBindings;
 
-    VclPtr<vcl::Window> m_pActiveWin;
-    Idle                m_aIdle;
     OUString            m_aDocName;               // document on which the dialog was opened
-
-    DECL_LINK( UpdateFocusHdl, Timer*, void );
 
 protected:
     void                disposeRefHandler();

@@ -27,7 +27,6 @@
 #include <stringconstants.hxx>
 #include <vcl/split.hxx>
 #include <vcl/svapp.hxx>
-#include <comphelper/types.hxx>
 #include <QueryDesignView.hxx>
 
 using namespace dbaui;
@@ -76,10 +75,10 @@ OUString OQueryTextView::getStatement()
 
 void OQueryTextView::clear()
 {
-    OSqlEditUndoAct* pUndoAct = new OSqlEditUndoAct( m_pEdit );
+    std::unique_ptr<OSqlEditUndoAct> pUndoAct(new OSqlEditUndoAct( m_pEdit ));
 
     pUndoAct->SetOriginalText( m_pEdit->GetText() );
-    getContainerWindow()->getDesignView()->getController().addUndoActionAndInvalidate( pUndoAct );
+    getContainerWindow()->getDesignView()->getController().addUndoActionAndInvalidate( std::move(pUndoAct) );
 
     m_pEdit->SetText(OUString());
 }

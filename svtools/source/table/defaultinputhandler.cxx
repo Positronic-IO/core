@@ -26,6 +26,7 @@
 
 #include <vcl/event.hxx>
 #include <vcl/cursor.hxx>
+#include <osl/diagnose.h>
 
 
 namespace svt { namespace table
@@ -89,6 +90,8 @@ namespace svt { namespace table
             bool handled = false;
             for (auto const& mouseFunction : i_impl.aMouseFunctions)
             {
+                if (handled)
+                    break;
                 if (mouseFunction == i_impl.pActiveFunction)
                     // we already invoked this function
                     continue;
@@ -140,9 +143,9 @@ namespace svt { namespace table
 
         struct ActionMapEntry
         {
-            sal_uInt16              nKeyCode;
-            sal_uInt16              nKeyModifier;
-            TableControlAction  eAction;
+            sal_uInt16 const              nKeyCode;
+            sal_uInt16 const              nKeyModifier;
+            TableControlAction const  eAction;
         }
         static const aKnownActions[] = {
             { KEY_DOWN,     0,          cursorDown },

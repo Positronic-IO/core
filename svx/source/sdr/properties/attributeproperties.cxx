@@ -44,32 +44,11 @@
 #include <svx/svdmodel.hxx>
 #include <svx/svdtrans.hxx>
 #include <svx/svdpage.hxx>
-#include <svx/svdograf.hxx>
-#include <svx/svdoole2.hxx>
 
 namespace sdr
 {
     namespace properties
     {
-        SfxStyleSheet* AttributeProperties::ImpGetDefaultStyleSheet() const
-        {
-            // use correct default stylesheet #119287#
-            const SdrGrafObj* pIsSdrGrafObj(dynamic_cast< const SdrGrafObj* >(&GetSdrObject()));
-            const SdrOle2Obj* pIsSdrOle2Obj(dynamic_cast< const SdrOle2Obj* >(&GetSdrObject()));
-            SfxStyleSheet* pRetval(nullptr);
-
-            if(pIsSdrGrafObj || pIsSdrOle2Obj)
-            {
-                pRetval = GetSdrObject().getSdrModelFromSdrObject().GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj();
-            }
-            else
-            {
-                pRetval = GetSdrObject().getSdrModelFromSdrObject().GetDefaultStyleSheet();
-            }
-
-            return pRetval;
-        }
-
         void AttributeProperties::ImpSetParentAtSfxItemSet(bool bDontRemoveHardAttr)
         {
             if(HasSfxItemSet() && mpStyleSheet)
@@ -179,44 +158,53 @@ namespace sdr
         {
             SfxStyleSheet* pTargetStyleSheet(rProps.GetStyleSheet());
 
-            if(pTargetStyleSheet &&
-                &rObj.getSdrModelFromSdrObject() != &rProps.GetSdrObject().getSdrModelFromSdrObject())
+            if(pTargetStyleSheet)
             {
-                // tdf#117506
-                // The error shows that it is definitely necessary to solve this problem.
-                // Interestingly I already had a note here for 'work needed'.
-                // Checked in libreoffice-6-0 what happened there. In principle, the whole
-                // ::Clone of SdrPage and SdrObject happened in the same SdrModel, only
-                // afterwards a ::SetModel was used at the cloned SdrPage which went through
-                // all layers. The StyleSheet-problem was solved in
-                // AttributeProperties::MoveToItemPool at the end. There, a StyleSheet with the
-                // same name was searched for in the target-SdrModel.
-                // Start by resetting the current TargetStyleSheet so that nothing goes wrong
-                // when we do not find a fitting TargetStyleSheet.
-                // Note: The test for SdrModelChange above was wrong (compared the already set
-                // new SdrObject), so this never triggered and pTargetStyleSheet was never set to
-                // nullptr before. This means that a StyleSheet from another SdrModel was used
-                // what of course is very dangerous. Interestingly did not crash since when that
-                // other SdrModel was destroyed the ::Notify mechanism still worked reliably
-                // and de-connected this Properties successfully from the alien-StyleSheet.
-                pTargetStyleSheet = nullptr;
+                const bool bModelChange(&rObj.getSdrModelFromSdrObject() != &rProps.GetSdrObject().getSdrModelFromSdrObject());
 
-                // Check if we have a TargetStyleSheetPool at the target-SdrModel. This *should*
-                // be the case already (SdrModel::Merge and SdDrawDocument::InsertBookmarkAsPage)
-                // have already cloned the StyleSheets to the target-SdrModel.
-                // If none is found, ImpGetDefaultStyleSheet will be used to set a 'default'
-                // StyleSheet as StyleSheet (that's what happened in the task, thus the FillStyle
-                // changed to the 'default' Blue).
-                SfxStyleSheetBasePool* pTargetStyleSheetPool(rObj.getSdrModelFromSdrObject().GetStyleSheetPool());
-
-                if(nullptr != pTargetStyleSheetPool)
+                if(bModelChange)
                 {
-                    // If we have a TargetStyleSheetPool, search for the StyleSheet used
-                    // in the original Properties in the source-SdrModel.
-                    pTargetStyleSheet = dynamic_cast< SfxStyleSheet* >(
-                        pTargetStyleSheetPool->Find(
-                            rProps.GetStyleSheet()->GetName(),
-                            SfxStyleFamily::All));
+                    // tdf#117506
+                    // The error shows that it is definitely necessary to solve this problem.
+                    // Interestingly I already had a note here for 'work needed'.
+                    // Checked in libreoffice-6-0 what happened there. In principle, the whole
+                    // ::Clone of SdrPage and SdrObject happened in the same SdrModel, only
+                    // afterwards a ::SetModel was used at the cloned SdrPage which went through
+                    // all layers. The StyleSheet-problem was solved in
+                    // AttributeProperties::MoveToItemPool at the end. There, a StyleSheet with the
+                    // same name was searched for in the target-SdrModel.
+                    // Start by resetting the current TargetStyleSheet so that nothing goes wrong
+                    // when we do not find a fitting TargetStyleSheet.
+                    // Note: The test for SdrModelChange above was wrong (compared the already set
+                    // new SdrObject), so this never triggered and pTargetStyleSheet was never set to
+                    // nullptr before. This means that a StyleSheet from another SdrModel was used
+                    // what of course is very dangerous. Interestingly did not crash since when that
+                    // other SdrModel was destroyed the ::Notify mechanism still worked reliably
+                    // and de-connected this Properties successfully from the alien-StyleSheet.
+                    pTargetStyleSheet = nullptr;
+
+                    // Check if we have a TargetStyleSheetPool at the target-SdrModel. This *should*
+                    // be the case already (SdrModel::Merge and SdDrawDocument::InsertBookmarkAsPage
+                    // have already cloned the StyleSheets to the target-SdrModel when used in Draw/impress).
+                    // If none is found, ImpGetDefaultStyleSheet will be used to set a 'default'
+                    // StyleSheet as StyleSheet implicitly later (that's what happened in the task,
+                    // thus the FillStyle changed to the 'default' Blue).
+                    // Note: It *may* be necessary to do more for StyleSheets, e.g. clone/copy the
+                    // StyleSheet Hierarchy from the source SdrModel and/or add the Items from there
+                    // as hard attributes. If needed, have a look at the older AttributeProperties::SetModel
+                    // implementation from e.g. libreoffice-6-0.
+                    SfxStyleSheetBasePool* pTargetStyleSheetPool(rObj.getSdrModelFromSdrObject().GetStyleSheetPool());
+
+                    if(nullptr != pTargetStyleSheetPool)
+                    {
+                        // If we have a TargetStyleSheetPool, search for the used StyleSheet
+                        // in the target SdrModel using the Name from the original StyleSheet
+                        // in the source-SdrModel.
+                        pTargetStyleSheet = dynamic_cast< SfxStyleSheet* >(
+                            pTargetStyleSheetPool->Find(
+                                rProps.GetStyleSheet()->GetName(),
+                                SfxStyleFamily::All));
+                    }
                 }
             }
 
@@ -254,30 +242,41 @@ namespace sdr
             // remember if we had a SfxItemSet already
             const bool bHadSfxItemSet(HasSfxItemSet());
 
-            // call parent - this will then guarantee
-            // SfxItemSet existence
+            // call parent - this will guarantee SfxItemSet existence
             DefaultProperties::GetObjectItemSet();
 
             if(!bHadSfxItemSet)
             {
-                if(GetStyleSheet())
+                // need to take care for SfxStyleSheet for newly
+                // created SfxItemSet
+                if(nullptr == mpStyleSheet)
                 {
-                    // Late-Init of setting parent to SfxStyleSheet after
-                    // it's creation. See copy-constructor and how it remembers
-                    // the SfxStyleSheet there.
-                    // It is necessary to reset mpStyleSheet to nullptr to
-                    // not trigger alarm inside ImpAddStyleSheet (!)
-                    SfxStyleSheet* pNew(mpStyleSheet);
-                    const_cast< AttributeProperties* >(this)->mpStyleSheet = nullptr;
-                    const_cast< AttributeProperties* >(this)->ImpAddStyleSheet(
-                        pNew,
-                        true);
+                    // Set missing defaults without removal of hard attributes.
+                    // This is more complicated historically than I first thought:
+                    // Originally for GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj
+                    // SetStyleSheet(..., false) was used, while for GetDefaultStyleSheet
+                    // SetStyleSheet(..., true) was used. Thus, for SdrGrafObj and SdrOle2Obj
+                    // bDontRemoveHardAttr == false -> *do* delete hard attributes was used.
+                    // This was probably not done by purpose, adding the method
+                    // GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj additionally to
+                    // GetDefaultStyleSheet was an enhancement to allow for SdrGrafObj/SdrOle2Obj
+                    // with full AttributeSet (adding e.g. FillAttributes). To stay as compatible
+                    // as possible these SdrObjects got a new default-StyleSheet.
+                    // There is no reason to delete the HardAttributes and it anyways has only
+                    // AFAIK effects on a single Item - the SdrTextHorzAdjustItem. To get things
+                    // unified I will stay with not deleting the HardAttributes and adapt the
+                    // UnitTests in CppunitTest_sd_import_tests accordingly.
+                    const_cast< AttributeProperties* >(this)->applyDefaultStyleSheetFromSdrModel();
                 }
                 else
                 {
-                    // Set missing defaults and do not RemoveHardAttributes
-                    const_cast< AttributeProperties* >(this)->ImpAddStyleSheet(
-                        ImpGetDefaultStyleSheet(),
+                    // Late-Init of setting parent to SfxStyleSheet after
+                    // it's creation. Can only happen from copy-constructor
+                    // (where creation of SfxItemSet is avoided due to the
+                    // problem with constructors and virtual functions in C++),
+                    // thus DontRemoveHardAttr is not needed.
+                    const_cast< AttributeProperties* >(this)->SetStyleSheet(
+                        mpStyleSheet,
                         true);
                 }
             }
@@ -343,11 +342,8 @@ namespace sdr
                     }
                 }
 
-                // set item
-                if(!HasSfxItemSet())
-                {
-                    GetObjectItemSet();
-                }
+                // guarantee SfxItemSet existence
+                GetObjectItemSet();
 
                 if(pResultItem)
                 {
@@ -374,11 +370,8 @@ namespace sdr
 
         void AttributeProperties::SetStyleSheet(SfxStyleSheet* pNewStyleSheet, bool bDontRemoveHardAttr)
         {
-            // guarantee SfxItemSet existence here
-            if(!HasSfxItemSet())
-            {
-                GetObjectItemSet();
-            }
+            // guarantee SfxItemSet existence
+            GetObjectItemSet();
 
             ImpRemoveStyleSheet();
             ImpAddStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
@@ -398,11 +391,8 @@ namespace sdr
             if(!GetStyleSheet() || dynamic_cast<const SfxStyleSheet *>(mpStyleSheet) == nullptr)
                 return;
 
-            // force SfxItemSet existence
-            if(!HasSfxItemSet())
-            {
-                GetObjectItemSet();
-            }
+            // guarantee SfxItemSet existence
+            GetObjectItemSet();
 
             // prepare copied, new itemset, but WITHOUT parent
             SfxItemSet* pDestItemSet = new SfxItemSet(*mpItemSet);
@@ -535,7 +525,7 @@ namespace sdr
             const SdrObject& rObj(GetSdrObject());
             if (rObj.IsInserted())
             {
-                const SdrPage* const pPage(rObj.GetPage());
+                const SdrPage* const pPage(rObj.getSdrPageFromSdrObject());
                 if (pPage && pPage->IsInserted())
                     return true;
             }

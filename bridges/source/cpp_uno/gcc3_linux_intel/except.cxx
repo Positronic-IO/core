@@ -239,17 +239,8 @@ void raiseException( uno_Any * pUnoExc, uno_Mapping * pUno2Cpp )
     // destruct uno exception
     ::uno_any_destruct( pUnoExc, nullptr );
     // avoiding locked counts
-    static RTTI * s_rtti = nullptr;
-    if (! s_rtti)
-    {
-        MutexGuard guard( Mutex::getGlobalMutex() );
-        if (! s_rtti)
-        {
-            static RTTI rtti_data;
-            s_rtti = &rtti_data;
-        }
-    }
-    rtti = s_rtti->getRTTI(reinterpret_cast<typelib_CompoundTypeDescription *>(pTypeDescr));
+    static RTTI rtti_data;
+    rtti = rtti_data.getRTTI(reinterpret_cast<typelib_CompoundTypeDescription*>(pTypeDescr));
     TYPELIB_DANGER_RELEASE( pTypeDescr );
 #if !defined(ANDROID) // see TODO above
     assert(rtti && "### no rtti for throwing exception!");
@@ -265,8 +256,10 @@ void raiseException( uno_Any * pUnoExc, uno_Mapping * pUno2Cpp )
     __cxxabiv1::__cxa_throw( pCppExc, rtti, deleteException );
 }
 
-void fillUnoException( __cxa_exception * header, uno_Any * pUnoExc, uno_Mapping * pCpp2Uno )
+void fillUnoException(uno_Any * pUnoExc, uno_Mapping * pCpp2Uno)
 {
+    __cxa_exception * header = reinterpret_cast<CPPU_CURRENT_NAMESPACE::__cxa_eh_globals*>(
+                 __cxxabiv1::__cxa_get_globals())->caughtExceptions;
     if (! header)
     {
         RuntimeException aRE( "no exception header!" );
@@ -276,8 +269,10 @@ void fillUnoException( __cxa_exception * header, uno_Any * pUnoExc, uno_Mapping 
         return;
     }
 
+    std::type_info *exceptionType = __cxxabiv1::__cxa_current_exception_type();
+
     typelib_TypeDescription * pExcTypeDescr = nullptr;
-    OUString unoName( toUNOname( header->exceptionType->name() ) );
+    OUString unoName( toUNOname( exceptionType->name() ) );
 #if OSL_DEBUG_LEVEL > 1
     OString cstr_unoName( OUStringToOString( unoName, RTL_TEXTENCODING_ASCII_US ) );
     fprintf( stderr, "> c++ exception occurred: %s\n", cstr_unoName.getStr() );

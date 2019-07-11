@@ -36,15 +36,59 @@
             android:title="@string/action_save"
             android:orderInCategory="100" />
 
-        <item android:id="@+id/action_add_slide"
-            android:title="@string/action_add_slide"
+        <item android:id="@+id/action_exportToPDF"
+            android:title="@string/action_exportToPDF"
             android:orderInCategory="100"
-            android:enabled="false" />
+            android:visible="true"
+            />
+
+        <item android:id="@+id/action_print"
+            android:title="@string/action_print"
+            android:orderInCategory="100"
+            android:visible="true" />
+
+        <item android:id="@+id/action_UNO_commands"
+            android:title="@string/action_UNO_commands"
+            android:orderInCategory="100" />
+    </group>
+
+    <group android:id="@+id/group_spreadsheet_options"
+        android:visible="false"
+        tools:visible="true">
 
         <item android:id="@+id/action_add_worksheet"
             android:title="@string/action_add_worksheet"
             android:orderInCategory="100"
-            android:enabled="false" />
+            android:visible="false" />
+
+        <item android:id="@+id/action_rename_worksheet"
+            android:title="@string/action_rename_worksheet"
+            android:orderInCategory="100"
+            android:visible="false" />
+
+        <item android:id="@+id/action_delete_worksheet"
+            android:title="@string/action_delete_worksheet"
+            android:orderInCategory="100"
+            android:visible="false"/>
+    </group>
+
+    <group android:id="@+id/group_presentation_options"
+        android:visible="false"
+        tools:visible="true">
+
+        <item android:id="@+id/action_add_slide"
+            android:title="@string/action_add_slide"
+            android:orderInCategory="100"
+            android:visible="false" />
+        <item android:id="@+id/action_rename_slide"
+            android:title="@string/action_rename_slide"
+            android:orderInCategory="100"
+            android:visible="false" />
+
+        <item android:id="@+id/action_delete_slide"
+            android:title="@string/action_delete_slide"
+            android:orderInCategory="100"
+            android:visible="false"/>
     </group>
 
     <group android:id="@+id/group_edit_clipboard"
@@ -86,7 +130,7 @@
     <item android:id="@+id/action_presentation"
         android:title="@string/action_presentation"
         android:orderInCategory="100"
-        android:enabled="false" />
+        android:visible="false" />
 
     <item android:id="@+id/action_parts"
           android:title="@string/action_parts"

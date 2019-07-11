@@ -96,12 +96,16 @@ namespace desktop
         "   --safe-mode         Starts in a safe mode, i.e. starts temporarily with a\n"
         "                       fresh user profile and helps to restore a broken\n"
         "                       configuration.\n"
-        "   --accept={UNO-URL}  Specifies an UNO-URL connect-string to create an UNO\n"
+        "   --accept={connect-string}  Specifies a UNO connect-string to create a UNO\n"
         "                       acceptor through which other programs can connect to\n"
-        "                       access the API. UNO-URL is string the such kind\n"
-        "                   uno:connection-type,params;protocol-name,params;ObjectName.\n"
-        "   --unaccept={UNO-URL} Closes an acceptor that was created with --accept. Use\n"
-        "                       --unaccept=all to close all open acceptors.\n"
+        "                       access the API. Note that API access allows execution\n"
+        "                       of arbitrary commands.\n"
+        "                       The syntax of the {connect-string} is:\n"
+        "                         connection-type,params;protocol-name,params\n"
+        "                       e.g.  pipe,name={some name};urp\n"
+        "                         or  socket,host=localhost,port=54321;urp\n"
+        "   --unaccept={connect-string}  Closes an acceptor that was created with\n"
+        "                       --accept. Use --unaccept=all to close all acceptors.\n"
         "   --language={lang}   Uses specified language, if language is not selected\n"
         "                       yet for UI. The lang is a tag of the language in IETF\n"
         "                       language tag.\n\n"
@@ -144,12 +148,12 @@ namespace desktop
         "                       of each immediately. Files are closed after the showing.\n"
         "                       Files other than Impress documents are opened in\n"
         "                       default mode , regardless of previous mode.\n"
-        "   --convert-to OutputFileExtension[:OutputFilterName] \n"
+        "   --convert-to OutputFileExtension[:OutputFilterName] \\\n"
         "     [--outdir output_dir] [--convert-images-to]\n"
         "                       Batch convert files (implies --headless). If --outdir\n"
         "                       isn't specified, then current working directory is used\n"
         "                       as output_dir. If --convert-images-to is given, its\n"
-        "                       parameter is taken as the target MIME format for *all*\n"
+        "                       parameter is taken as the target filter format for *all*\n"
         "                       images written to the output format. If --convert-to is\n"
         "                       used more than once, the last value of OutputFileExtension\n"
         "                       [:OutputFilterName] is effective. If --outdir is used more\n"
@@ -157,7 +161,8 @@ namespace desktop
         "                   --convert-to pdf *.odt\n"
         "                   --convert-to epub *.doc\n"
         "                   --convert-to pdf:writer_pdf_Export --outdir /home/user *.doc\n"
-        "                   --convert-to \"html:XHTML Writer File:UTF8\" *.doc\n"
+        "                   --convert-to \"html:XHTML Writer File:UTF8\" \\\n"
+        "                                --convert-images-to \"jpg\" *.doc\n"
         "                   --convert-to \"txt:Text (encoded):UTF8\" *.doc\n"
         "   --print-to-file [--printer-name printer_name] [--outdir output_dir]\n"
         "                       Batch print files to file. If --outdir is not specified,\n"
@@ -219,9 +224,9 @@ namespace desktop
                         }
                     }
 
-                    freopen("CON", "r", stdin);
-                    freopen("CON", "w", stdout);
-                    freopen("CON", "w", stderr);
+                    (void)freopen("CON", "r", stdin);
+                    (void)freopen("CON", "w", stdout);
+                    (void)freopen("CON", "w", stderr);
 
                     std::ios::sync_with_stdio(true);
 

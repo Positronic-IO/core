@@ -41,6 +41,7 @@
 #include "XMLTableShapeImportHelper.hxx"
 #include "XMLStylesImportHelper.hxx"
 #include "celltextparacontext.hxx"
+#include "XMLCellRangeSourceContext.hxx"
 
 #include <arealink.hxx>
 #include <sfx2/linkmgr.hxx>
@@ -57,6 +58,8 @@
 #include <datastream.hxx>
 #include <rangeutl.hxx>
 
+#include <xmloff/maptype.hxx>
+#include <xmloff/xmlaustp.hxx>
 #include <xmloff/xmltkmap.hxx>
 #include <xmloff/xmltoken.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -73,6 +76,7 @@
 #include <editeng/colritem.hxx>
 #include <editeng/fhgtitem.hxx>
 #include <editeng/postitem.hxx>
+#include <editeng/flditem.hxx>
 #include <editeng/fontitem.hxx>
 #include <editeng/udlnitem.hxx>
 #include <editeng/wrlmitem.hxx>
@@ -100,6 +104,7 @@
 #include <com/sun/star/sheet/ValidationAlertStyle.hpp>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <tools/date.hxx>
 #include <i18nlangtag/lang.h>
 #include <o3tl/make_unique.hxx>
@@ -110,7 +115,7 @@ using namespace xmloff::token;
 ScXMLTableRowCellContext::ParaFormat::ParaFormat(ScEditEngineDefaulter& rEditEngine) :
     maItemSet(rEditEngine.GetEmptyItemSet()) {}
 
-ScXMLTableRowCellContext::Field::Field(SvxFieldData* pData) : mpData(pData) {}
+ScXMLTableRowCellContext::Field::Field(std::unique_ptr<SvxFieldData> pData) : mpData(std::move(pData)) {}
 
 ScXMLTableRowCellContext::Field::~Field()
 {
@@ -167,7 +172,7 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
                 case XML_ELEMENT( TABLE, XML_CONTENT_VALIDATION_NAME ):
                     OSL_ENSURE(!maContentValidationName, "here should be only one Validation Name");
                     if (!it.isEmpty())
-                        maContentValidationName.reset(it.toString());
+                        maContentValidationName = it.toString();
                 break;
                 case XML_ELEMENT( TABLE, XML_NUMBER_ROWS_SPANNED ):
                     bIsMerged = true;
@@ -239,7 +244,7 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
                     if (!it.isEmpty())
                     {
                         OSL_ENSURE(!maStringValue, "here should be only one string value");
-                        maStringValue.reset(it.toString());
+                        maStringValue = it.toString();
                         bIsEmpty = false;
                     }
                 }
@@ -265,7 +270,7 @@ ScXMLTableRowCellContext::ScXMLTableRowCellContext( ScXMLImport& rImport,
                         OSL_ENSURE(!maFormula, "here should be only one formula");
                         OUString aFormula, aFormulaNmsp;
                         rXMLImport.ExtractFormulaNamespaceGrammar( aFormula, aFormulaNmsp, eGrammar, it.toString() );
-                        maFormula.reset( FormulaWithNamespace(aFormula, aFormulaNmsp) );
+                        maFormula = FormulaWithNamespace(aFormula, aFormulaNmsp);
                     }
                 }
                 break;
@@ -325,10 +330,10 @@ void ScXMLTableRowCellContext::PushParagraphSpan(const OUString& rSpan, const OU
     PushFormat(nBegin, nEnd, rStyleName);
 }
 
-void ScXMLTableRowCellContext::PushParagraphField(SvxFieldData* pData, const OUString& rStyleName)
+void ScXMLTableRowCellContext::PushParagraphField(std::unique_ptr<SvxFieldData> pData, const OUString& rStyleName)
 {
     mbHasFormatRuns = true;
-    maFields.push_back(o3tl::make_unique<Field>(pData));
+    maFields.push_back(o3tl::make_unique<Field>(std::move(pData)));
     Field& rField = *maFields.back().get();
 
     sal_Int32 nPos = maParagraph.getLength();
@@ -583,27 +588,27 @@ OUString ScXMLTableRowCellContext::GetFirstParagraph() const
 
 void ScXMLTableRowCellContext::PushParagraphFieldDate(const OUString& rStyleName)
 {
-    PushParagraphField(new SvxDateField, rStyleName);
+    PushParagraphField(o3tl::make_unique<SvxDateField>(), rStyleName);
 }
 
 void ScXMLTableRowCellContext::PushParagraphFieldSheetName(const OUString& rStyleName)
 {
     SCTAB nTab = GetScImport().GetTables().GetCurrentCellPos().Tab();
-    PushParagraphField(new SvxTableField(nTab), rStyleName);
+    PushParagraphField(o3tl::make_unique<SvxTableField>(nTab), rStyleName);
 }
 
 void ScXMLTableRowCellContext::PushParagraphFieldDocTitle(const OUString& rStyleName)
 {
-    PushParagraphField(new SvxFileField, rStyleName);
+    PushParagraphField(o3tl::make_unique<SvxFileField>(), rStyleName);
 }
 
 void ScXMLTableRowCellContext::PushParagraphFieldURL(
     const OUString& rURL, const OUString& rRep, const OUString& rStyleName, const OUString& rTargetFrame)
 {
     OUString aAbsURL = GetScImport().GetAbsoluteReference(rURL);
-    SvxURLField* pURLField = new SvxURLField(aAbsURL, rRep, SvxURLFormat::Repr);
+    std::unique_ptr<SvxURLField> pURLField(new SvxURLField(aAbsURL, rRep, SvxURLFormat::Repr));
     pURLField->SetTargetFrame(rTargetFrame);
-    PushParagraphField(pURLField, rStyleName);
+    PushParagraphField(std::move(pURLField), rStyleName);
 }
 
 void ScXMLTableRowCellContext::PushParagraphEnd()
@@ -629,7 +634,7 @@ void ScXMLTableRowCellContext::PushParagraphEnd()
     }
     else if (mnCurParagraph == 0)
     {
-        maFirstParagraph.reset(maParagraph.makeStringAndClear());
+        maFirstParagraph = maParagraph.makeStringAndClear();
         mbEditEngineHasText = true;
     }
 
@@ -654,7 +659,9 @@ SvXMLImportContextRef ScXMLTableRowCellContext::CreateChildContext( sal_uInt16 n
         case XML_TOK_TABLE_ROW_CELL_ANNOTATION:
         {
             bIsEmpty = false;
-            OSL_ENSURE( !mxAnnotationData.get(), "ScXMLTableRowCellContext::CreateChildContext - multiple annotations in one cell" );
+            OSL_ENSURE(
+                !mxAnnotationData,
+                "ScXMLTableRowCellContext::CreateChildContext - multiple annotations in one cell");
             mxAnnotationData.reset( new ScXMLAnnotationData );
             pContext = new ScXMLAnnotationContext( rXMLImport, nPrefix, rLName,
                                                     xAttrList, *mxAnnotationData);
@@ -853,7 +860,7 @@ void ScXMLTableRowCellContext::SetContentValidation( const ScAddress& rCellPos )
 void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
 {
     ScDocument* pDoc = rXMLImport.GetDocument();
-    if( !pDoc || !mxAnnotationData.get() )
+    if (!pDoc || !mxAnnotationData)
         return;
 
     LockSolarMutex();
@@ -905,7 +912,7 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
                 nOldShapeCount = xShapesIA->getCount();
 
             // an outliner object is required (empty note captions not allowed)
-            if( xOutlinerObj.get() )
+            if (xOutlinerObj)
             {
                 // create cell note with all data from drawing object
                 pNote = ScNoteUtil::CreateNoteFromObjectData( *pDoc, rPos,
@@ -961,7 +968,7 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
 // core implementation
 void ScXMLTableRowCellContext::SetDetectiveObj( const ScAddress& rPosition )
 {
-    if( cellExists(rPosition) && pDetectiveObjVec && pDetectiveObjVec->size() )
+    if( cellExists(rPosition) && pDetectiveObjVec && !pDetectiveObjVec->empty() )
     {
         LockSolarMutex();
         ScDetectiveFunc aDetFunc( rXMLImport.GetDocument(), rPosition.Tab() );
@@ -1009,6 +1016,8 @@ void ScXMLTableRowCellContext::SetFormulaCell(ScFormulaCell* pFCell) const
 {
     if(pFCell)
     {
+        bool bMayForceNumberformat = true;
+
         if(mbErrorValue)
         {
             // don't do anything here
@@ -1021,6 +1030,9 @@ void ScXMLTableRowCellContext::SetFormulaCell(ScFormulaCell* pFCell) const
                 ScDocument* pDoc = rXMLImport.GetDocument();
                 pFCell->SetHybridString(pDoc->GetSharedStringPool().intern(*maStringValue));
                 pFCell->ResetDirty();
+                // A General format doesn't force any other format for a string
+                // result, don't attempt to recalculate this later.
+                bMayForceNumberformat = false;
             }
         }
         else if (rtl::math::isFinite(fValue))
@@ -1035,6 +1047,10 @@ void ScXMLTableRowCellContext::SetFormulaCell(ScFormulaCell* pFCell) const
             else
                 pFCell->ResetDirty();
         }
+
+        if (bMayForceNumberformat)
+            // Re-calculate to get number format only when style is not set.
+            pFCell->SetNeedNumberFormat(!mbHasStyle);
     }
 }
 
@@ -1324,7 +1340,7 @@ void ScXMLTableRowCellContext::AddNonFormulaCell( const ScAddress& rCellPos )
     if( nCellType == util::NumberFormat::TEXT )
     {
         if( !bIsEmpty && !maStringValue && !mbEditEngineHasText && cellExists(rCellPos) && CellsAreRepeated() )
-            pOUText.reset( getOutputString(rXMLImport.GetDocument(), rCellPos) );
+            pOUText = getOutputString(rXMLImport.GetDocument(), rCellPos);
 
         if (!mbEditEngineHasText && !pOUText && !maStringValue)
             bIsEmpty = true;
@@ -1398,9 +1414,6 @@ void ScXMLTableRowCellContext::PutFormulaCell( const ScAddress& rCellPos )
         ScFormulaCell* pNewCell = new ScFormulaCell(pDoc, rCellPos, pCode, eGrammar, ScMatrixMode::NONE);
         SetFormulaCell(pNewCell);
         rDoc.setFormulaCell(rCellPos, pNewCell);
-
-        // Re-calculate to get number format only when style is not set.
-        pNewCell->SetNeedNumberFormat(!mbHasStyle);
     }
 }
 
@@ -1431,7 +1444,7 @@ void ScXMLTableRowCellContext::AddFormulaCell( const ScAddress& rCellPos )
                 ScFormulaCell* pFCell = rXMLImport.GetDocument()->GetFormulaCell(rCellPos);
                 if (pFCell)
                 {
-                    ScMatrixRef pMat(new ScFullMatrix(nMatrixCols, nMatrixRows));
+                    ScMatrixRef pMat(new ScMatrix(nMatrixCols, nMatrixRows));
                     if (bFormulaTextResult && maStringValue)
                     {
                         if (!IsPossibleErrorString())
@@ -1516,7 +1529,7 @@ void SAL_CALL ScXMLTableRowCellContext::endFastElement(sal_Int32 /*nElement*/)
     HasSpecialCaseFormulaText();
     if( bFormulaTextResult && (mbPossibleErrorCell || mbCheckWithCompilerForError) )
     {
-        maStringValue.reset(GetFirstParagraph());
+        maStringValue = GetFirstParagraph();
     }
 
     ScAddress aCellPos = rXMLImport.GetTables().GetCurrentCellPos();

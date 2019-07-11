@@ -22,7 +22,6 @@
 
 #include "LabelPositionHelper.hxx"
 #include <com/sun/star/awt/Point.hpp>
-#include <com/sun/star/drawing/Position3D.hpp>
 
 namespace chart
 {
@@ -36,7 +35,7 @@ public:
         PolarPlottingPositionHelper* pPosHelper
         , sal_Int32 nDimensionCount
         , const css::uno::Reference< css::drawing::XShapes >& xLogicTarget
-        , AbstractShapeFactory* pShapeFactory );
+        , ShapeFactory* pShapeFactory );
     virtual ~PolarLabelPositionHelper() override;
 
     css::awt::Point getLabelScreenPositionAndAlignmentForLogicValues(

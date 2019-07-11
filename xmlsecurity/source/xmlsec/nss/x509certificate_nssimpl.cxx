@@ -46,7 +46,8 @@ using ::com::sun::star::security::XCertificate ;
 using ::com::sun::star::util::DateTime ;
 
 X509Certificate_NssImpl::X509Certificate_NssImpl() :
-    m_pCert( nullptr )
+    m_pCert(nullptr),
+    m_pPrivateKey(nullptr)
 {
 }
 
@@ -331,6 +332,29 @@ void X509Certificate_NssImpl::setRawCert( const Sequence< sal_Int8 >& rawCert ) 
     m_pCert = cert ;
 }
 
+void X509Certificate_NssImpl::setCustomPrivateKey(SECKEYPrivateKey* pPrivateKey)
+{
+    m_pPrivateKey = pPrivateKey;
+}
+
+SECKEYPrivateKey* X509Certificate_NssImpl::getPrivateKey()
+{
+    if (m_pPrivateKey)
+    {
+        return m_pPrivateKey;
+    }
+    else
+    {
+        if (m_pCert && m_pCert->slot)
+        {
+            SECKEYPrivateKey* pPrivateKey = PK11_FindPrivateKeyFromCert(m_pCert->slot, m_pCert, nullptr);
+            if (pPrivateKey)
+                return pPrivateKey;
+        }
+    }
+    return nullptr;
+}
+
 /* XUnoTunnel */
 sal_Int64 SAL_CALL X509Certificate_NssImpl::getSomething( const Sequence< sal_Int8 >& aIdentifier ) {
     if( aIdentifier.getLength() == 16 && 0 == memcmp( getUnoTunnelId().getConstArray(), aIdentifier.getConstArray(), 16 ) ) {
@@ -350,7 +374,7 @@ const Sequence< sal_Int8>& X509Certificate_NssImpl::getUnoTunnelId() {
     return theX509Certificate_NssImplUnoTunnelId::get().getSeq();
 }
 
-OUString getAlgorithmDescription(SECAlgorithmID const *aid)
+static OUString getAlgorithmDescription(SECAlgorithmID const *aid)
 {
     SECOidTag tag;
     tag = SECOID_GetAlgorithmTag(aid);
@@ -360,7 +384,7 @@ OUString getAlgorithmDescription(SECAlgorithmID const *aid)
     return OUString::createFromAscii( pDesc ) ;
 }
 
-css::uno::Sequence< sal_Int8 > getThumbprint(CERTCertificate const *pCert, SECOidTag id)
+static css::uno::Sequence< sal_Int8 > getThumbprint(CERTCertificate const *pCert, SECOidTag id)
 {
     if( pCert != nullptr )
     {

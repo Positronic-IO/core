@@ -54,7 +54,6 @@ class DomainMapperTableManager : public TableManager
     std::vector< TablePositionHandlerPtr > m_aTablePositions;
     std::vector< TablePositionHandlerPtr > m_aTmpPosition; ///< Temporarily stores the position to compare it later
     std::vector< TablePropertyMapPtr > m_aTmpTableProperties; ///< Temporarily stores the table properties until end of row
-    PropertyMapPtr  m_pTableStyleTextProperies;
 
     ::std::vector< IntVectorPtr >  m_aTableGrid;
     ::std::vector< IntVectorPtr >  m_aGridSpans;
@@ -107,23 +106,15 @@ public:
     virtual void cellProps(const TablePropertyMapPtr& pProps) override
     {
         if ( m_pStyleProps.get( ) )
-            m_pStyleProps->InsertProps(pProps);
+            m_pStyleProps->InsertProps(pProps.get());
         else
            TableManager::cellProps( pProps );
-    };
-
-    virtual void cellPropsByCell(unsigned int i, const TablePropertyMapPtr& pProps) override
-    {
-        if ( m_pStyleProps.get( ) )
-            m_pStyleProps->InsertProps(pProps);
-        else
-           TableManager::cellPropsByCell( i, pProps );
     };
 
     virtual void insertRowProps(const TablePropertyMapPtr& pProps) override
     {
         if ( m_pStyleProps.get( ) )
-            m_pStyleProps->InsertProps(pProps);
+            m_pStyleProps->InsertProps(pProps.get());
         else
            TableManager::insertRowProps( pProps );
     };
@@ -131,9 +122,9 @@ public:
     virtual void insertTableProps(const TablePropertyMapPtr& pProps) override
     {
         if ( m_pStyleProps.get( ) )
-            m_pStyleProps->InsertProps(pProps);
+            m_pStyleProps->InsertProps(pProps.get());
         else
-            m_aTmpTableProperties.back()->InsertProps(pProps);
+            m_aTmpTableProperties.back()->InsertProps(pProps.get());
     };
 
     bool IsRowSizeTypeInserted() const

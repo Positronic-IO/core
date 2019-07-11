@@ -39,42 +39,20 @@ struct FmFormModelImplData
 {
     rtl::Reference<FmXUndoEnvironment>  mxUndoEnv;
     bool                bOpenInDesignIsDefaulted;
-    ::boost::optional< sal_Bool >
-                            aControlsUseRefDevice;
+    boost::optional<bool> aControlsUseRefDevice;
 
     FmFormModelImplData()
         :bOpenInDesignIsDefaulted( true )
-        ,aControlsUseRefDevice()
     {
     }
 };
 
-FmFormModel::FmFormModel(SfxItemPool* pPool, SfxObjectShell* pPers)
-    : SdrModel(pPool, pPers)
-    , m_pImpl(nullptr)
-    , m_pObjShell(nullptr)
-    , m_bOpenInDesignMode(false)
-    , m_bAutoControlFocus(false)
-{
-    m_pImpl.reset( new FmFormModelImplData );
-    m_pImpl->mxUndoEnv = new FmXUndoEnvironment(*this);
-}
-
-FmFormModel::FmFormModel(const OUString& rPath, SfxItemPool* pPool, SfxObjectShell* pPers)
-    : SdrModel(rPath, pPool, pPers, false)
-    , m_pImpl(nullptr)
-    , m_pObjShell(nullptr)
-    , m_bOpenInDesignMode(false)
-    , m_bAutoControlFocus(false)
-{
-    m_pImpl.reset( new FmFormModelImplData );
-    m_pImpl->mxUndoEnv = new FmXUndoEnvironment(*this);
-}
-
-FmFormModel::FmFormModel(const OUString& rPath, SfxItemPool* pPool, SfxObjectShell* pPers,
-                         bool bUseExtColorTable)
-    : SdrModel(rPath, pPool, pPers, bUseExtColorTable)
-    , m_pImpl(nullptr)
+FmFormModel::FmFormModel(
+    SfxItemPool* pPool,
+    SfxObjectShell* pPers)
+:   SdrModel(
+        pPool,
+        pPers)
     , m_pObjShell(nullptr)
     , m_bOpenInDesignMode(false)
     , m_bAutoControlFocus(false)
@@ -181,7 +159,7 @@ bool FmFormModel::ControlsUseRefDevice() const
         DocumentType eDocType = eUnknownDocumentType;
         if ( m_pObjShell )
             eDocType = DocumentClassification::classifyHostDocument( m_pObjShell->GetModel() );
-        m_pImpl->aControlsUseRefDevice.reset( ControlLayouter::useDocumentReferenceDevice( eDocType ) );
+        m_pImpl->aControlsUseRefDevice = ControlLayouter::useDocumentReferenceDevice(eDocType);
     }
     return *m_pImpl->aControlsUseRefDevice;
 }

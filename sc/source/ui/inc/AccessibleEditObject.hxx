@@ -23,8 +23,8 @@
 #include "AccessibleContextBase.hxx"
 
 #include <com/sun/star/accessibility/XAccessibleSelection.hpp>
-#include <global.hxx>
-#include <vcl/window.hxx>
+#include <address.hxx>
+#include <vcl/vclptr.hxx>
 
 #include <memory>
 
@@ -164,7 +164,7 @@ private:
     std::unique_ptr<accessibility::AccessibleTextHelper> mpTextHelper;
     EditView*      mpEditView;
     VclPtr<vcl::Window> mpWindow;
-    EditObjectType meObjectType;
+    EditObjectType const meObjectType;
     bool           mbHasFocus;
 
     bool IsDefunc(
@@ -179,7 +179,7 @@ private:
 
     virtual sal_Int32 SAL_CALL getBackground(  ) override;
 
-    sal_Int32 GetFgBgColor(  const rtl::OUString &strPropColor) ;
+    sal_Int32 GetFgBgColor(  const OUString &strPropColor) ;
 };
 
 #endif

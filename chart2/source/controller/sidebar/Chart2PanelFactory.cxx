@@ -26,6 +26,7 @@
 #include <rtl/ref.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
@@ -38,7 +39,6 @@
 #include "ChartLinePanel.hxx"
 
 using namespace css::uno;
-using ::rtl::OUString;
 
 namespace chart { namespace sidebar {
 
@@ -52,7 +52,7 @@ ChartPanelFactory::~ChartPanelFactory()
 }
 
 Reference<css::ui::XUIElement> SAL_CALL ChartPanelFactory::createUIElement (
-    const ::rtl::OUString& rsResourceURL,
+    const OUString& rsResourceURL,
     const ::css::uno::Sequence<css::beans::PropertyValue>& rArguments)
 {
     Reference<css::ui::XUIElement> xElement;
@@ -109,11 +109,12 @@ Reference<css::ui::XUIElement> SAL_CALL ChartPanelFactory::createUIElement (
     {
         throw;
     }
-    catch (const css::uno::Exception& e)
+    catch (const css::uno::Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw css::lang::WrappedTargetRuntimeException(
             "ChartPanelFactory::createUIElement exception",
-            nullptr, css::uno::Any(e));
+            nullptr, anyEx );
     }
 
     return xElement;

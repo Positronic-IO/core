@@ -18,6 +18,7 @@
  */
 
 #include "scrollbar.hxx"
+#include <comphelper/property.hxx>
 #include <comphelper/streamsection.hxx>
 #include <comphelper/basicio.hxx>
 #include <rtl/math.hxx>
@@ -224,7 +225,7 @@ namespace frm
 
     Any OScrollBarModel::getDefaultForReset() const
     {
-        return makeAny( static_cast<sal_Int32>(m_nDefaultScrollValue) );
+        return makeAny( m_nDefaultScrollValue );
     }
 
 

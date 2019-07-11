@@ -18,12 +18,13 @@
  */
 #ifndef INCLUDED_SW_SOURCE_CORE_TEXT_ITRATR_HXX
 #define INCLUDED_SW_SOURCE_CORE_TEXT_ITRATR_HXX
+#include <o3tl/deleter.hxx>
 #include "atrhndl.hxx"
-
 #include <swtypes.hxx>
 #include <swfont.hxx>
 #include "porlay.hxx"
 
+namespace sw { struct MergedPara; }
 class OutputDevice;
 class SwFont;
 class SwpHints;
@@ -41,15 +42,14 @@ protected:
 
     SwAttrHandler m_aAttrHandler;
     SwViewShell *m_pViewShell;
-    SwFont *m_pFont;
-    SwpHints const* m_pHints;
+    SwFont* m_pFont;
     SwScriptInfo* m_pScriptInfo;
 
 private:
     VclPtr<OutputDevice> m_pLastOut;
     /// count currently open hints, redlines, ext-input
     short m_nChgCnt;
-    SwRedlineItr *m_pRedline;
+    std::unique_ptr<SwRedlineItr, o3tl::default_delete<SwRedlineItr>> m_pRedline;
     /// current iteration index in HintStarts
     size_t m_nStartIndex;
     /// current iteration index in HintEnds
@@ -57,65 +57,53 @@ private:
     /// current iteration index in text node
     sal_Int32 m_nPosition;
     sal_uInt8 m_nPropFont;
-    o3tl::enumarray<SwFontScript, const void*> m_aMagicNo;
+    o3tl::enumarray<SwFontScript, const void*> m_aFontCacheIds;
     o3tl::enumarray<SwFontScript, sal_uInt16> m_aFontIdx;
+    /// input: the current text node
     const SwTextNode* m_pTextNode;
+    sw::MergedPara const* m_pMergedPara;
 
-    void SeekFwd( const sal_Int32 nPos );
+    void SeekFwd(sal_Int32 nOldPos, sal_Int32 nNewPos);
     void SetFnt( SwFont* pNew ) { m_pFont = pNew; }
+    void InitFontAndAttrHandler(
+        SwTextNode const& rPropsNode, SwTextNode const& rTextNode,
+        OUString const& rText, bool const* pbVertLayout);
 
 protected:
     void Chg( SwTextAttr const *pHt );
     void Rst( SwTextAttr const *pHt );
-    void CtorInitAttrIter( SwTextNode& rTextNode, SwScriptInfo& rScrInf, SwTextFrame const * pFrame = nullptr );
-    explicit SwAttrIter(SwTextNode const * pTextNode)
-        : m_pViewShell(nullptr)
-        , m_pFont(nullptr)
-        , m_pHints(nullptr)
-        , m_pScriptInfo(nullptr)
-        , m_pLastOut(nullptr)
-        , m_nChgCnt(0)
-        , m_pRedline(nullptr)
-        , m_nStartIndex(0)
-        , m_nEndIndex(0)
-        , m_nPosition(0)
-        , m_nPropFont(0)
-        , m_pTextNode(pTextNode)
-        {
-            m_aMagicNo[SwFontScript::Latin] = m_aMagicNo[SwFontScript::CJK] = m_aMagicNo[SwFontScript::CTL] = nullptr;
-        }
+    void CtorInitAttrIter(SwTextNode& rTextNode, SwScriptInfo& rScrInf, SwTextFrame const* pFrame = nullptr);
+    explicit SwAttrIter(SwTextNode const * pTextNode);
 
 public:
-    // Constructor, destructor
-    SwAttrIter( SwTextNode& rTextNode, SwScriptInfo& rScrInf )
-        : m_pViewShell(nullptr), m_pFont(nullptr), m_pHints(nullptr), m_pScriptInfo(nullptr), m_pLastOut(nullptr), m_nChgCnt(0), m_pRedline(nullptr),m_nPropFont(0), m_pTextNode(&rTextNode)
-        { CtorInitAttrIter( rTextNode, rScrInf ); }
+    /// All subclasses of this always have a SwTextFrame passed to the
+    /// constructor, but SwAttrIter itself may be created without a
+    /// SwTextFrame in certain special cases via this ctor here
+    SwAttrIter(SwTextNode& rTextNode, SwScriptInfo& rScrInf, SwTextFrame const*const pFrame = nullptr);
 
     virtual ~SwAttrIter();
 
-    SwRedlineItr *GetRedln() { return m_pRedline; }
+    SwRedlineItr *GetRedln() { return m_pRedline.get(); }
     // The parameter returns the position of the next change before or at the
     // char position.
-    sal_Int32 GetNextAttr( ) const;
+    TextFrameIndex GetNextAttr() const;
     /// Enables the attributes used at char pos nPos in the logical font
-    bool Seek( const sal_Int32 nPos );
+    bool Seek(TextFrameIndex nPos);
     // Creates the font at the specified position via Seek() and checks
     // if it's a symbol font.
-    bool IsSymbol( const sal_Int32 nPos );
+    bool IsSymbol(TextFrameIndex nPos);
 
     /** Executes ChgPhysFnt if Seek() returns true
      *  and change font to merge character border with neighbours.
     **/
-    bool SeekAndChgAttrIter( const sal_Int32 nPos, OutputDevice* pOut );
+    bool SeekAndChgAttrIter(TextFrameIndex nPos, OutputDevice* pOut);
     bool SeekStartAndChgAttrIter( OutputDevice* pOut, const bool bParaFont );
 
-    // Do we have an attribute change at all?
-    bool HasHints() const { return nullptr != m_pHints; }
+    // Do we possibly have nasty things like footnotes?
+    bool MaybeHasHints() const;
 
     // Returns the attribute for a position
-    SwTextAttr *GetAttr( const sal_Int32 nPos ) const;
-
-    const SwpHints *GetHints() const { return m_pHints; }
+    SwTextAttr *GetAttr(TextFrameIndex nPos) const;
 
     SwFont *GetFnt() { return m_pFont; }
     const SwFont *GetFnt() const { return m_pFont; }

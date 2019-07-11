@@ -69,8 +69,6 @@ SdNavigatorWin::SdNavigatorWin(vcl::Window* pParent, SfxBindings* pInBindings)
       // On changes of the DragType: adjust SelectionMode of TLB!
     , meDragType ( NAVIGATOR_DRAGTYPE_EMBEDDED )
     , mpBindings ( pInBindings )
-    , mpNavigatorCtrlItem( nullptr )
-    , mpPageNameCtrlItem( nullptr )
 {
     get(maToolbox, "toolbox");
     get(maTlbObjects, "tree");
@@ -98,7 +96,7 @@ SdNavigatorWin::SdNavigatorWin(vcl::Window* pParent, SfxBindings* pInBindings)
     // set focus to listbox, otherwise it is in the toolbox which is only useful
     // for keyboard navigation
     maTlbObjects->GrabFocus();
-    maTlbObjects->SetSdNavigatorWinFlag(true);
+    maTlbObjects->SetSdNavigator(this);
 
     // DragTypeListBox
     maLbDocs->SetSelectHdl( LINK( this, SdNavigatorWin, SelectDocumentHdl ) );
@@ -106,8 +104,8 @@ SdNavigatorWin::SdNavigatorWin(vcl::Window* pParent, SfxBindings* pInBindings)
 
 void SdNavigatorWin::SetUpdateRequestFunctor(const UpdateRequestFunctor& rUpdateRequest)
 {
-    mpNavigatorCtrlItem = new SdNavigatorControllerItem(SID_NAVIGATOR_STATE, this, mpBindings, rUpdateRequest);
-    mpPageNameCtrlItem = new SdPageNameControllerItem(SID_NAVIGATOR_PAGENAME, this, mpBindings);
+    mpNavigatorCtrlItem.reset( new SdNavigatorControllerItem(SID_NAVIGATOR_STATE, this, mpBindings, rUpdateRequest) );
+    mpPageNameCtrlItem.reset( new SdPageNameControllerItem(SID_NAVIGATOR_PAGENAME, this, mpBindings) );
 
     // InitTlb; is initiated over Slot
     if (rUpdateRequest)
@@ -121,8 +119,8 @@ SdNavigatorWin::~SdNavigatorWin()
 
 void SdNavigatorWin::dispose()
 {
-    DELETEZ(mpNavigatorCtrlItem);
-    DELETEZ(mpPageNameCtrlItem);
+    mpNavigatorCtrlItem.reset();
+    mpPageNameCtrlItem.reset();
     maToolbox.clear();
     maTlbObjects.clear();
     maLbDocs.clear();
@@ -134,7 +132,7 @@ void SdNavigatorWin::FreshTree( const SdDrawDocument* pDoc )
 {
     SdDrawDocument* pNonConstDoc = const_cast<SdDrawDocument*>(pDoc); // const as const can...
     sd::DrawDocShell* pDocShell = pNonConstDoc->GetDocSh();
-    OUString aDocShName( pDocShell->GetName() );
+    const OUString& aDocShName( pDocShell->GetName() );
     OUString aDocName = pDocShell->GetMedium()->GetName();
     maTlbObjects->SetSaveTreeItemStateFlag(true); //Added by yanjun for sym2_6385
     maTlbObjects->Clear();
@@ -215,7 +213,7 @@ NavigatorDragType SdNavigatorWin::GetNavigatorDragType()
     return eDT;
 }
 
-VclPtr<SdPageObjsTLB> SdNavigatorWin::GetObjects()
+VclPtr<SdPageObjsTLB> const & SdNavigatorWin::GetObjects()
 {
     return maTlbObjects;
 }

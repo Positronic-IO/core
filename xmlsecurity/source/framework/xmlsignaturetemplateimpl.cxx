@@ -30,8 +30,7 @@ using ::com::sun::star::xml::wrapper::XXMLElementWrapper ;
 using ::com::sun::star::xml::crypto::XXMLSignatureTemplate ;
 
 XMLSignatureTemplateImpl::XMLSignatureTemplateImpl()
-    :m_xTemplate( nullptr ),
-     m_nStatus ( css::xml::crypto::SecurityOperationStatus_UNKNOWN )
+    :m_nStatus ( css::xml::crypto::SecurityOperationStatus_UNKNOWN )
 {
 }
 
@@ -115,7 +114,6 @@ Sequence< OUString > SAL_CALL XMLSignatureTemplateImpl::getSupportedServiceNames
 
 //Helper for XServiceInfo
 Sequence< OUString > XMLSignatureTemplateImpl::impl_getSupportedServiceNames() {
-    ::osl::Guard< ::osl::Mutex > aGuard( ::osl::Mutex::getGlobalMutex() ) ;
     Sequence<OUString> seqServiceNames { "com.sun.star.xml.crypto.XMLSignatureTemplate" };
     return seqServiceNames ;
 }

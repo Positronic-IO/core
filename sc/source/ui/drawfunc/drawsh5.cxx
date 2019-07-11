@@ -81,7 +81,7 @@ void ScDrawShell::GetHLinkState( SfxItemSet& rSet )             //  Hyperlink
         SdrUnoObj* pUnoCtrl = dynamic_cast<SdrUnoObj*>( pObj );
         if (pUnoCtrl && SdrInventor::FmForm == pUnoCtrl->GetObjInventor())
         {
-            uno::Reference<awt::XControlModel> xControlModel = pUnoCtrl->GetUnoControlModel();
+            const uno::Reference<awt::XControlModel>& xControlModel = pUnoCtrl->GetUnoControlModel();
             OSL_ENSURE( xControlModel.is(), "UNO-Control without model" );
             if( !xControlModel.is() )
                 return;
@@ -167,7 +167,7 @@ void ScDrawShell::ExecuteHLink( const SfxRequest& rReq )
                             SdrUnoObj* pUnoCtrl = dynamic_cast<SdrUnoObj*>( pObj  );
                             if (pUnoCtrl && SdrInventor::FmForm == pUnoCtrl->GetObjInventor())
                             {
-                                uno::Reference<awt::XControlModel> xControlModel =
+                                const uno::Reference<awt::XControlModel>& xControlModel =
                                                         pUnoCtrl->GetUnoControlModel();
                                 OSL_ENSURE( xControlModel.is(), "UNO-Control without model" );
                                 if( !xControlModel.is() )
@@ -485,10 +485,8 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                         OUString aName = pSelected->GetName();
 
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "Dialog creation failed!");
                         vcl::Window* pWin = pViewData->GetActiveWin();
                         ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(pWin ? pWin->GetFrameWeld() : nullptr, aName));
-                        OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                         pDlg->SetCheckNameHdl(LINK(this, ScDrawShell, NameObjectHdl));
 
@@ -524,7 +522,7 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                                     if(!aPersistName.isEmpty())
                                     {
                                         pDocSh->GetUndoManager()->AddUndoAction(
-                                            new ScUndoRenameObject(pDocSh, aPersistName, pSelected->GetName(), aName));
+                                            o3tl::make_unique<ScUndoRenameObject>(pDocSh, aPersistName, pSelected->GetName(), aName));
                                     }
                                 }
 
@@ -555,11 +553,9 @@ void ScDrawShell::ExecDrawFunc( SfxRequest& rReq )
                         OUString aDescription(pSelected->GetDescription());
 
                         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                        OSL_ENSURE(pFact, "Dialog creation failed!");
                         vcl::Window* pWin = pViewData->GetActiveWin();
                         ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
                                     pWin ? pWin->GetFrameWeld() : nullptr, aTitle, aDescription));
-                        OSL_ENSURE(pDlg, "Dialog creation failed!");
 
                         if(RET_OK == pDlg->Execute())
                         {
@@ -672,8 +668,8 @@ void ScDrawShell::ExecFormatPaintbrush( const SfxRequest& rReq )
         ScDrawView* pDrawView = pViewData->GetScDrawView();
         if ( pDrawView && pDrawView->AreObjectsMarked() )
         {
-            SfxItemSet* pItemSet = new SfxItemSet( pDrawView->GetAttrFromMarked(true/*bOnlyHardAttr*/) );
-            pView->SetDrawBrushSet( pItemSet, bLock );
+            std::unique_ptr<SfxItemSet> pItemSet(new SfxItemSet( pDrawView->GetAttrFromMarked(true/*bOnlyHardAttr*/) ));
+            pView->SetDrawBrushSet( std::move(pItemSet), bLock );
         }
     }
 }

@@ -29,7 +29,6 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/request.hxx>
-#include <vcl/dialog.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/drawing/XLayer.hpp>
 #include <com/sun/star/drawing/XLayerManager.hpp>
@@ -72,7 +71,6 @@ FuPoor::FuPoor (
       mpDocSh( pDrDoc->GetDocSh() ),
       mpDoc(pDrDoc),
       nSlotId( rReq.GetSlot() ),
-      pDialog(nullptr),
       bIsInDragMode(false),
       bNoScrollUntilInside (true),
       bScrollable (false),
@@ -98,15 +96,10 @@ FuPoor::~FuPoor()
     aDragTimer.Stop();
     aScrollTimer.Stop();
     aDelayToScrollTimer.Stop();
-    pDialog.disposeAndClear();
 }
 
 void FuPoor::Activate()
 {
-    if (pDialog)
-    {
-        pDialog->Show();
-    }
 }
 
 void FuPoor::Deactivate()
@@ -115,11 +108,6 @@ void FuPoor::Deactivate()
     aScrollTimer.Stop();
     aDelayToScrollTimer.Stop ();
     bScrollable = bDelayActive = false;
-
-    if (pDialog)
-    {
-        pDialog->Hide();
-    }
 
     if (mpWindow && mpWindow->IsMouseCaptured())
         mpWindow->ReleaseMouse();
@@ -208,13 +196,13 @@ bool FuPoor::KeyInput(const KeyEvent& rKEvt)
 
                     if(pActualPage)
                     {
-                        SdrObjListIter aIter(*pActualPage, SdrIterMode::DeepNoGroups);
+                        SdrObjListIter aIter(pActualPage, SdrIterMode::DeepNoGroups);
 
                         while(aIter.IsMore() && !pCandidate)
                         {
                             SdrObject* pObj = aIter.Next();
 
-                            if(pObj && dynamic_cast< const SdrTextObj *>( pObj ) !=  nullptr)
+                            if(dynamic_cast< const SdrTextObj *>( pObj ))
                             {
                                 SdrInventor nInv(pObj->GetObjInventor());
                                 sal_uInt16 nKnd(pObj->GetObjIdentifier());
@@ -257,7 +245,7 @@ bool FuPoor::KeyInput(const KeyEvent& rKEvt)
                 {
                     SdrObject* pObj = rMarkList.GetMark( 0 )->GetMarkedSdrObj();
 
-                    if( pObj && dynamic_cast< const SdrOle2Obj* >( pObj ) !=  nullptr && !mpDocSh->IsUIActive() )
+                    if( dynamic_cast< const SdrOle2Obj* >( pObj ) && !mpDocSh->IsUIActive() )
                     {
                         //HMHmpView->HideMarkHdl();
                         mpViewShell->ActivateObject( static_cast< SdrOle2Obj* >( pObj ), 0 );
@@ -623,7 +611,7 @@ bool FuPoor::KeyInput(const KeyEvent& rKEvt)
                     bool bOldSuppress = false;
                     SdrEdgeObj* pEdgeObj = nullptr;
 
-                    if(pHdl && pHdl->GetObj() && nullptr != dynamic_cast< const SdrEdgeObj *>( pHdl->GetObj() ) && 0 == pHdl->GetPolyNum())
+                    if(pHdl && dynamic_cast< const SdrEdgeObj *>( pHdl->GetObj() ) && 0 == pHdl->GetPolyNum())
                     {
                         pEdgeObj = static_cast<SdrEdgeObj*>(pHdl->GetObj());
 
@@ -840,13 +828,13 @@ bool FuPoor::KeyInput(const KeyEvent& rKEvt)
 
                     if(pActualPage)
                     {
-                        SdrObjListIter aIter(*pActualPage, SdrIterMode::DeepNoGroups);
+                        SdrObjListIter aIter(pActualPage, SdrIterMode::DeepNoGroups);
 
                         while(aIter.IsMore() && !pCandidate)
                         {
                             SdrObject* pObj = aIter.Next();
 
-                            if(pObj && dynamic_cast< const SdrTextObj *>( pObj ) !=  nullptr)
+                            if(dynamic_cast< const SdrTextObj *>( pObj ))
                             {
                                 SdrInventor nInv(pObj->GetObjInventor());
                                 sal_uInt16 nKnd(pObj->GetObjIdentifier());
@@ -1031,7 +1019,7 @@ void FuPoor::ReceiveRequest(SfxRequest& /*rReq*/)
 {
 }
 
-SdrObject* FuPoor::CreateDefaultObject(const sal_uInt16, const ::tools::Rectangle& )
+SdrObjectUniquePtr FuPoor::CreateDefaultObject(const sal_uInt16, const ::tools::Rectangle& )
 {
     // empty base implementation
     return nullptr;
@@ -1055,11 +1043,8 @@ void FuPoor::ImpForceQuadratic(::tools::Rectangle& rRect)
 
 void FuPoor::SwitchLayer (sal_Int32 nOffset)
 {
-    if(mpViewShell && dynamic_cast< const DrawViewShell *>( mpViewShell ) !=  nullptr)
+    if(auto pDrawViewShell = dynamic_cast<DrawViewShell *>( mpViewShell ))
     {
-        DrawViewShell* pDrawViewShell =
-            static_cast<DrawViewShell*>(mpViewShell);
-
         // Calculate the new index.
         sal_Int32 nIndex = pDrawViewShell->GetActiveTabLayerIndex() + nOffset;
 

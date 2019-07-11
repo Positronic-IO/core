@@ -22,6 +22,7 @@
 #include <sfx2/app.hxx>
 #include <sfx2/frame.hxx>
 #include <sfx2/request.hxx>
+#include <sfx2/sfxsids.hrc>
 #include <sot/storage.hxx>
 #include <sot/exchange.hxx>
 #include <filter/msfilter/classids.hxx>
@@ -29,6 +30,7 @@
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/document/XFilter.hpp>
 #include <com/sun/star/document/XImporter.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <scitems.hxx>
 #include <svl/stritem.hxx>
 #include <unotools/streamwrap.hxx>
@@ -36,6 +38,7 @@
 #include <document.hxx>
 #include <optuno.hxx>
 #include <xistream.hxx>
+#include <xltools.hxx>
 
 #include <docsh.hxx>
 #include <scerrors.hxx>
@@ -139,7 +142,7 @@ ErrCode ScFormatFilterPluginImpl::ScImportExcel( SfxMedium& rMedium, ScDocument*
             default:    DBG_ERROR_BIFF();
         }
 
-        eRet = xFilter.get() ? xFilter->Read() : SCERR_IMPORT_INTERNAL;
+        eRet = xFilter ? xFilter->Read() : SCERR_IMPORT_INTERNAL;
     }
 
     return eRet;

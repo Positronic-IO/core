@@ -34,11 +34,13 @@
 #include <scresid.hxx>
 #include <cellvalue.hxx>
 #include <defaultsoptions.hxx>
+#include <scmod.hxx>
 
 #include <osl/file.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/docfilt.hxx>
 #include <sfx2/docfile.hxx>
+#include <sfx2/event.hxx>
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/objsh.hxx>
@@ -50,6 +52,7 @@
 #include <svl/sharedstringpool.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <tools/urlobj.hxx>
+#include <unotools/charclass.hxx>
 #include <unotools/configmgr.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <vcl/svapp.hxx>
@@ -59,6 +62,8 @@
 #include <columnspanset.hxx>
 #include <column.hxx>
 #include <com/sun/star/document/MacroExecMode.hpp>
+#include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <algorithm>
@@ -93,7 +98,7 @@ public:
     }
 
 private:
-    OUString maSearchName;
+    OUString const maSearchName;
 };
 
 class FindSrcFileByName
@@ -124,8 +129,8 @@ public:
         p->notify(mnFileId, meType);
     }
 private:
-    sal_uInt16 mnFileId;
-    ScExternalRefManager::LinkUpdateType meType;
+    sal_uInt16 const mnFileId;
+    ScExternalRefManager::LinkUpdateType const meType;
 };
 
 struct UpdateFormulaCell
@@ -160,7 +165,7 @@ public:
         r.second.erase(mpCell);
     }
 private:
-    ScFormulaCell* mpCell;
+    ScFormulaCell* const mpCell;
 };
 
 class ConvertFormulaToStatic
@@ -605,7 +610,7 @@ ScExternalRefCache::TokenArrayRef ScExternalRefCache::getCellRangeData(
 
         SCSIZE nMatrixColumns = static_cast<SCSIZE>(nDataCol2-nDataCol1+1);
         SCSIZE nMatrixRows = static_cast<SCSIZE>(nDataRow2-nDataRow1+1);
-        ScMatrixRef xMat = new ScFullMatrix( nMatrixColumns, nMatrixRows);
+        ScMatrixRef xMat = new ScMatrix( nMatrixColumns, nMatrixRows);
 
         // Needed in shrink and fill.
         vector<SCROW> aRows;
@@ -653,7 +658,7 @@ ScExternalRefCache::TokenArrayRef ScExternalRefCache::getCellRangeData(
                 {
                     nMatrixColumns = static_cast<SCSIZE>(nMaxCol-nMinCol+1);
                     nMatrixRows = static_cast<SCSIZE>(nDataRow2-nDataRow1+1);
-                    xMat = new ScFullMatrix( nMatrixColumns, nMatrixRows);
+                    xMat = new ScMatrix( nMatrixColumns, nMatrixRows);
                     xMat->GetDimensions( nMatCols, nMatRows);
                     if (nMatCols == nMatrixColumns && nMatRows == nMatrixRows)
                     {
@@ -842,19 +847,19 @@ void ScExternalRefCache::setCellRangeData(sal_uInt16 nFileId, const ScRange& rRa
         pMat->GetDimensions( nMatCols, nMatRows);
         if (nMatCols > static_cast<SCSIZE>(nCol2 - nCol1) && nMatRows > static_cast<SCSIZE>(nRow2 - nRow1))
         {
-            ScFullMatrix::DoubleOpFunction aDoubleFunc = [=](size_t row, size_t col, double val) -> void
+            ScMatrix::DoubleOpFunction aDoubleFunc = [=](size_t row, size_t col, double val) -> void
             {
                 pTabData->setCell(col + nCol1, row + nRow1, new formula::FormulaDoubleToken(val), 0, false);
             };
-            ScFullMatrix::BoolOpFunction aBoolFunc = [=](size_t row, size_t col, bool val) -> void
+            ScMatrix::BoolOpFunction aBoolFunc = [=](size_t row, size_t col, bool val) -> void
             {
                 pTabData->setCell(col + nCol1, row + nRow1, new formula::FormulaDoubleToken(val ? 1.0 : 0.0), 0, false);
             };
-            ScFullMatrix::StringOpFunction aStringFunc = [=](size_t row, size_t col, svl::SharedString val) -> void
+            ScMatrix::StringOpFunction aStringFunc = [=](size_t row, size_t col, svl::SharedString val) -> void
             {
                 pTabData->setCell(col + nCol1, row + nRow1, new formula::FormulaStringToken(val), 0, false);
             };
-            ScFullMatrix::EmptyOpFunction aEmptyFunc = [=](size_t /*row*/, size_t /*col*/) -> void
+            ScMatrix::EmptyOpFunction aEmptyFunc = [=](size_t /*row*/, size_t /*col*/) -> void
             {
                 // Nothing. Empty cell.
             };
@@ -1585,7 +1590,7 @@ static std::unique_ptr<ScTokenArray> convertToTokenArray(
             // no data within specified range.
             continue;
 
-        if (pUsedRange.get())
+        if (pUsedRange)
             // Make sure the used area only grows, not shrinks.
             pUsedRange->ExtendTo(ScRange(nDataCol1, nDataRow1, 0, nDataCol2, nDataRow2, 0));
         else
@@ -1593,7 +1598,7 @@ static std::unique_ptr<ScTokenArray> convertToTokenArray(
 
         SCSIZE nMatrixColumns = static_cast<SCSIZE>(nCol2-nCol1+1);
         SCSIZE nMatrixRows = static_cast<SCSIZE>(nRow2-nRow1+1);
-        ScMatrixRef xMat = new ScFullMatrix( nMatrixColumns, nMatrixRows);
+        ScMatrixRef xMat = new ScMatrix( nMatrixColumns, nMatrixRows);
 
         // Check if size could be allocated and if not skip the fill, there's
         // one error element instead. But retry first with the actual data area
@@ -1616,7 +1621,7 @@ static std::unique_ptr<ScTokenArray> convertToTokenArray(
             {
                 nMatrixColumns = static_cast<SCSIZE>(nDataCol2-nDataCol1+1);
                 nMatrixRows = static_cast<SCSIZE>(nDataRow2-nDataRow1+1);
-                xMat = new ScFullMatrix( nMatrixColumns, nMatrixRows);
+                xMat = new ScMatrix( nMatrixColumns, nMatrixRows);
                 xMat->GetDimensions( nMatCols, nMatRows);
                 if (nMatCols == nMatrixColumns && nMatRows == nMatrixRows)
                     pSrcDoc->FillMatrix(*xMat, nTab, nDataCol1, nDataRow1, nDataCol2, nDataRow2, &pHostDoc->GetSharedStringPool());
@@ -1634,7 +1639,7 @@ static std::unique_ptr<ScTokenArray> convertToTokenArray(
         bFirstTab = false;
     }
 
-    if (!pUsedRange.get())
+    if (!pUsedRange)
         return nullptr;
 
     s.SetCol(pUsedRange->aStart.Col());
@@ -1649,7 +1654,7 @@ static std::unique_ptr<ScTokenArray> lcl_fillEmptyMatrix(const ScRange& rRange)
 {
     SCSIZE nC = static_cast<SCSIZE>(rRange.aEnd.Col()-rRange.aStart.Col()+1);
     SCSIZE nR = static_cast<SCSIZE>(rRange.aEnd.Row()-rRange.aStart.Row()+1);
-    ScMatrixRef xMat = new ScFullMatrix(nC, nR);
+    ScMatrixRef xMat = new ScMatrix(nC, nR);
 
     ScMatrixToken aToken(xMat);
     unique_ptr<ScTokenArray> pArray(new ScTokenArray);
@@ -2498,7 +2503,7 @@ SfxObjectShellRef ScExternalRefManager::loadSrcDocument(sal_uInt16 nFileId, OUSt
         setRelativeFileName(nFileId, aStr);
     }
 
-    SfxItemSet* pSet = new SfxAllItemSet(SfxGetpApp()->GetPool());
+    std::unique_ptr<SfxItemSet> pSet(new SfxAllItemSet(SfxGetpApp()->GetPool()));
     if (!aOptions.isEmpty())
         pSet->Put(SfxStringItem(SID_FILE_FILTEROPTIONS, aOptions));
 
@@ -2520,7 +2525,7 @@ SfxObjectShellRef ScExternalRefManager::loadSrcDocument(sal_uInt16 nFileId, OUSt
         }
     }
 
-    unique_ptr<SfxMedium> pMedium(new SfxMedium(aFile, StreamMode::STD_READ, pFilter, pSet));
+    unique_ptr<SfxMedium> pMedium(new SfxMedium(aFile, StreamMode::STD_READ, pFilter, std::move(pSet)));
     if (pMedium->GetError() != ERRCODE_NONE)
         return nullptr;
 
@@ -2542,8 +2547,8 @@ SfxObjectShellRef ScExternalRefManager::loadSrcDocument(sal_uInt16 nFileId, OUSt
     ScExtDocOptions* pExtOptNew = rSrcDoc.GetExtDocOptions();
     if (!pExtOptNew)
     {
-        pExtOptNew = new ScExtDocOptions;
-        rSrcDoc.SetExtDocOptions(pExtOptNew);
+        rSrcDoc.SetExtDocOptions(o3tl::make_unique<ScExtDocOptions>());
+        pExtOptNew = rSrcDoc.GetExtDocOptions();
     }
     pExtOptNew->GetDocSettings().mnLinkCnt = nLinkCount + 1;
 
@@ -2815,7 +2820,7 @@ class RefCacheFiller : public sc::ColumnSpanSet::ColumnAction
 
     ScExternalRefCache& mrRefCache;
     ScExternalRefCache::TableTypeRef mpRefTab;
-    sal_uInt16 mnFileId;
+    sal_uInt16 const mnFileId;
     ScColumn* mpCurCol;
     sc::ColumnBlockConstPosition maBlockPos;
 

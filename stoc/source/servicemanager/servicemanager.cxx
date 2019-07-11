@@ -24,6 +24,7 @@
 #include <osl/diagnose.h>
 #include <rtl/ref.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <uno/mapping.hxx>
 #include <uno/dispatcher.h>
@@ -42,6 +43,7 @@
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
+#include <com/sun/star/lang/XSingleComponentFactory.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/lang/XEventListener.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
@@ -54,6 +56,7 @@
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/container/XHierarchicalNameAccess.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/uno/XUnloadingPreference.hpp>
 
 #include <unordered_map>
@@ -191,7 +194,7 @@ Any ServiceEnumeration_Impl::nextElement()
 
 class PropertySetInfo_Impl : public WeakImplHelper< beans::XPropertySetInfo >
 {
-    Sequence< beans::Property > m_properties;
+    Sequence< beans::Property > const m_properties;
 
 public:
     explicit PropertySetInfo_Impl( Sequence< beans::Property > const & properties )
@@ -408,8 +411,8 @@ public:
     void SAL_CALL removeVetoableChangeListener(const OUString& PropertyName, const Reference<XVetoableChangeListener >& aListener) override;
 
 protected:
-    inline bool is_disposed() const;
-    inline void check_undisposed() const;
+    bool is_disposed() const;
+    void check_undisposed() const;
     virtual void SAL_CALL disposing() override;
 
     bool haveFactoryWithThisImplementation(const OUString& aImplName);
@@ -437,14 +440,14 @@ private:
 };
 
 
-inline bool OServiceManager::is_disposed() const
+bool OServiceManager::is_disposed() const
 {
     // ought to be guarded by m_mutex:
     return (m_bInDisposing || rBHelper.bDisposed);
 }
 
 
-inline void OServiceManager::check_undisposed() const
+void OServiceManager::check_undisposed() const
 {
     if (is_disposed())
     {

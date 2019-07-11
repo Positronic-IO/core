@@ -20,7 +20,7 @@
 #ifndef INCLUDED_DESKTOP_SOURCE_DEPLOYMENT_MANAGER_DP_ACTIVEPACKAGES_HXX
 #define INCLUDED_DESKTOP_SOURCE_DEPLOYMENT_MANAGER_DP_ACTIVEPACKAGES_HXX
 
-#include <config_features.h>
+#include <config_extensions.h>
 
 #include <sal/config.h>
 
@@ -83,8 +83,8 @@ public:
     void erase(OUString const & id, OUString const & fileName);
 
 private:
-    ActivePackages(ActivePackages &) = delete;
-    void operator =(ActivePackages &) = delete;
+    ActivePackages(ActivePackages const &) = delete;
+    ActivePackages& operator =(ActivePackages const &) = delete;
 #if HAVE_FEATURE_EXTENSIONS
     ::dp_misc::PersistentMap m_map;
 #endif

@@ -151,7 +151,7 @@ private:
     void TypeFaceToString(OUString &rRet,sal_uInt8 nFace);
 
     OUStringBuffer &rRet;
-    SmNode *pTree;
+    SmNode * const pTree;
 
     sal_uInt8 nHAlign;
 
@@ -165,7 +165,7 @@ private:
     sal_Int16 nLastSize;
     sal_uInt8 nSpec;
     bool  bIsReInterpBrace;
-    OUString  sPost;
+    OUStringBuffer sPost;
     sal_Int32 nPostSup;
     sal_Int32 nPostlSup;
     sal_uInt8 nTypeFace;

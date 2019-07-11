@@ -21,6 +21,7 @@
 
 #include "pam.hxx"
 #include <i18nlangtag/lang.h>
+#include <vcl/commandevent.hxx>
 #include <vector>
 
 class CommandExtTextInputData;
@@ -42,6 +43,11 @@ public:
     bool IsOverwriteCursor() const      { return bIsOverwriteCursor; }
     void SetOverwriteCursor( bool bFlag );
     void SetLanguage(LanguageType eSet) { eInputLanguage = eSet;}
+
+    SwExtTextInput* GetNext()             { return static_cast<SwExtTextInput *>(GetNextInRing()); }
+    const SwExtTextInput* GetNext() const { return static_cast<SwExtTextInput const *>(GetNextInRing()); }
+    SwExtTextInput* GetPrev()             { return static_cast<SwExtTextInput *>(GetPrevInRing()); }
+    const SwExtTextInput* GetPrev() const { return static_cast<SwExtTextInput const *>(GetPrevInRing()); }
 };
 
 #endif // INCLUDED_SW_INC_EXTINPUT_HXX

@@ -18,6 +18,7 @@
  */
 
 #include <com/sun/star/script/vba/XVBAEventProcessor.hpp>
+#include <com/sun/star/sheet/TableValidationVisibility.hpp>
 #include <scitems.hxx>
 #include <editeng/langitem.hxx>
 #include <svl/srchitem.hxx>
@@ -25,35 +26,28 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/viewsh.hxx>
-#include <svl/zforlist.hxx>
-#include <svl/PasswordHelper.hxx>
 #include <vcl/svapp.hxx>
 #include <document.hxx>
 #include <attrib.hxx>
 #include <table.hxx>
 #include <rangenam.hxx>
 #include <dbdata.hxx>
-#include <pivot.hxx>
 #include <docpool.hxx>
 #include <poolhelp.hxx>
-#include <autoform.hxx>
 #include <rangelst.hxx>
-#include <chartarr.hxx>
 #include <chartlock.hxx>
 #include <refupdat.hxx>
 #include <docoptio.hxx>
+#include <scmod.hxx>
 #include <clipoptions.hxx>
 #include <viewopti.hxx>
 #include <scextopt.hxx>
-#include <brdcst.hxx>
-#include <bcaslot.hxx>
 #include <tablink.hxx>
 #include <externalrefmgr.hxx>
 #include <markdata.hxx>
 #include <validat.hxx>
 #include <dociter.hxx>
 #include <detdata.hxx>
-#include <detfunc.hxx>
 #include <inputopt.hxx>
 #include <chartlis.hxx>
 #include <sc.hrc>
@@ -62,23 +56,21 @@
 #include <drwlayer.hxx>
 #include <unoreflist.hxx>
 #include <listenercalls.hxx>
-#include <dpshttab.hxx>
-#include <dpcache.hxx>
 #include <tabprotection.hxx>
 #include <formulaparserpool.hxx>
 #include <clipparam.hxx>
 #include <sheetevents.hxx>
-#include <colorscale.hxx>
 #include <queryentry.hxx>
 #include <formulacell.hxx>
 #include <refupdatecontext.hxx>
 #include <scopetools.hxx>
 #include <filterentries.hxx>
+#include <docsh.hxx>
+#include <queryparam.hxx>
 
 #include <globalnames.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <comphelper/lok.hxx>
-#include <o3tl/make_unique.hxx>
 #include <memory>
 
 using namespace com::sun::star;
@@ -162,8 +154,7 @@ void ScDocument::GetRangeNameMap(std::map<OUString, ScRangeName*>& aRangeNameMap
             p = new ScRangeName();
             SetRangeName(i, std::unique_ptr<ScRangeName>(p));
         }
-        OUString aTableName;
-        maTabs[i]->GetName(aTableName);
+        OUString aTableName = maTabs[i]->GetName();
         aRangeNameMap.insert(std::pair<OUString, ScRangeName*>(aTableName,p));
     }
     if (!pRangeName)
@@ -398,23 +389,22 @@ ScDPObject* ScDocument::GetDPAtBlock( const ScRange & rBlock ) const
 
 void ScDocument::StopTemporaryChartLock()
 {
-    if( apTemporaryChartLock.get() )
+    if (apTemporaryChartLock)
         apTemporaryChartLock->StopLocking();
 }
 
 void ScDocument::SetChartListenerCollection(
-            ScChartListenerCollection* pNewChartListenerCollection,
+            std::unique_ptr<ScChartListenerCollection> pNewChartListenerCollection,
             bool bSetChartRangeLists )
 {
-    ScChartListenerCollection* pOld = pChartListenerCollection;
-    pChartListenerCollection = pNewChartListenerCollection;
+    std::unique_ptr<ScChartListenerCollection> pOld = std::move(pChartListenerCollection);
+    pChartListenerCollection = std::move(pNewChartListenerCollection);
     if ( pChartListenerCollection )
     {
         if ( pOld )
             pChartListenerCollection->SetDiffDirty( *pOld, bSetChartRangeLists );
         pChartListenerCollection->StartAllListeners();
     }
-    delete pOld;
 }
 
 void ScDocument::SetScenario( SCTAB nTab, bool bFlag )
@@ -614,7 +604,7 @@ bool ScDocument::LinkExternalTab( SCTAB& rTab, const OUString& aDocTab,
 ScExternalRefManager* ScDocument::GetExternalRefManager() const
 {
     ScDocument* pThis = const_cast<ScDocument*>(this);
-    if (!pExternalRefMgr.get())
+    if (!pExternalRefMgr)
         pThis->pExternalRefMgr.reset( new ScExternalRefManager( pThis));
 
     return pExternalRefMgr.get();
@@ -627,7 +617,7 @@ bool ScDocument::IsInExternalReferenceMarking() const
 
 void ScDocument::MarkUsedExternalReferences()
 {
-    if (!pExternalRefMgr.get())
+    if (!pExternalRefMgr)
         return;
     if (!pExternalRefMgr->hasExternalData())
         return;
@@ -642,7 +632,7 @@ void ScDocument::MarkUsedExternalReferences()
 
 ScFormulaParserPool& ScDocument::GetFormulaParserPool() const
 {
-    if( !mxFormulaParserPool.get() )
+    if (!mxFormulaParserPool)
         mxFormulaParserPool.reset( new ScFormulaParserPool( *this ) );
     return *mxFormulaParserPool;
 }
@@ -732,12 +722,11 @@ ScOutlineTable* ScDocument::GetOutlineTable( SCTAB nTab, bool bCreate )
         if (maTabs[nTab])
         {
             pVal = maTabs[nTab]->GetOutlineTable();
-            if (!pVal)
-                if (bCreate)
-                {
-                    maTabs[nTab]->StartOutlineTable();
-                    pVal = maTabs[nTab]->GetOutlineTable();
-                }
+            if (!pVal && bCreate)
+            {
+                maTabs[nTab]->StartOutlineTable();
+                pVal = maTabs[nTab]->GetOutlineTable();
+            }
         }
 
     return pVal;
@@ -794,7 +783,7 @@ void ScDocument::CopyUpdated( ScDocument* pPosDoc, ScDocument* pDestDoc )
     SCTAB nCount = static_cast<SCTAB>(maTabs.size());
     for (SCTAB nTab=0; nTab<nCount; nTab++)
         if (maTabs[nTab] && pPosDoc->maTabs[nTab] && pDestDoc->maTabs[nTab])
-            maTabs[nTab]->CopyUpdated( pPosDoc->maTabs[nTab], pDestDoc->maTabs[nTab] );
+            maTabs[nTab]->CopyUpdated( pPosDoc->maTabs[nTab].get(), pDestDoc->maTabs[nTab].get() );
 }
 
 void ScDocument::CopyScenario( SCTAB nSrcTab, SCTAB nDestTab, bool bNewScenario )
@@ -824,7 +813,7 @@ void ScDocument::CopyScenario( SCTAB nSrcTab, SCTAB nDestTab, bool bNewScenario 
                 {
                     maTabs[nTab]->SetActiveScenario(false);
                     if ( maTabs[nTab]->GetScenarioFlags() & ScScenarioFlags::TwoWay )
-                        maTabs[nTab]->CopyScenarioFrom( maTabs[nDestTab] );
+                        maTabs[nTab]->CopyScenarioFrom( maTabs[nDestTab].get() );
                 }
             }
         }
@@ -833,7 +822,7 @@ void ScDocument::CopyScenario( SCTAB nSrcTab, SCTAB nDestTab, bool bNewScenario 
         if (!bNewScenario) // Copy data from the selected scenario
         {
             sc::AutoCalcSwitch aACSwitch(*this, false);
-            maTabs[nSrcTab]->CopyScenarioTo( maTabs[nDestTab] );
+            maTabs[nSrcTab]->CopyScenarioTo( maTabs[nDestTab].get() );
 
             sc::SetFormulaDirtyContext aCxt;
             SetAllFormulasDirty(aCxt);
@@ -881,7 +870,7 @@ bool ScDocument::TestCopyScenario( SCTAB nSrcTab, SCTAB nDestTab ) const
 {
     if (ValidTab(nSrcTab) && nSrcTab < static_cast<SCTAB>(maTabs.size())
                 && nDestTab < static_cast<SCTAB>(maTabs.size())&& ValidTab(nDestTab))
-        return maTabs[nSrcTab]->TestCopyScenarioTo( maTabs[nDestTab] );
+        return maTabs[nSrcTab]->TestCopyScenarioTo( maTabs[nDestTab].get() );
 
     OSL_FAIL("wrong table at TestCopyScenario");
     return false;
@@ -1677,7 +1666,7 @@ tools::Rectangle ScDocument::GetEmbeddedRect() const // 1/100 mm
     tools::Rectangle aRect;
     ScTable* pTable = nullptr;
     if ( aEmbedRange.aStart.Tab() < static_cast<SCTAB>(maTabs.size()) )
-        pTable = maTabs[aEmbedRange.aStart.Tab()];
+        pTable = maTabs[aEmbedRange.aStart.Tab()].get();
     else
         OSL_FAIL("table out of range");
     if (!pTable)
@@ -1768,7 +1757,7 @@ ScRange ScDocument::GetRange( SCTAB nTab, const tools::Rectangle& rMMRect, bool 
 {
     ScTable* pTable = nullptr;
     if (nTab < static_cast<SCTAB>(maTabs.size()))
-        pTable = maTabs[nTab];
+        pTable = maTabs[nTab].get();
     else
         OSL_FAIL("table out of range");
     if (!pTable)
@@ -1982,15 +1971,14 @@ tools::Rectangle ScDocument::GetMMRect( SCCOL nStartCol, SCROW nStartRow, SCCOL 
     return aRect;
 }
 
-void ScDocument::SetExtDocOptions( ScExtDocOptions* pNewOptions )
+void ScDocument::SetExtDocOptions( std::unique_ptr<ScExtDocOptions> pNewOptions )
 {
-    delete pExtDocOptions;
-    pExtDocOptions = pNewOptions;
+    pExtDocOptions = std::move(pNewOptions);
 }
 
-void ScDocument::SetClipOptions(const ScClipOptions& rClipOptions)
+void ScDocument::SetClipOptions(std::unique_ptr<ScClipOptions> pClipOptions)
 {
-    mpClipOptions = o3tl::make_unique<ScClipOptions>(rClipOptions);
+    mpClipOptions = std::move(pClipOptions);
 }
 
 void ScDocument::DoMergeContents( SCTAB nTab, SCCOL nStartCol, SCROW nStartRow,

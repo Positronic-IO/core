@@ -20,6 +20,8 @@
 #include <rtl/crc.h>
 #include <cstdlib>
 #include <memory>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <tools/stream.hxx>
 #include <tools/vcompat.hxx>
 #include <tools/fract.hxx>
@@ -542,7 +544,7 @@ void GDIMetaFile::WindPrev()
             --m_nCurrentActionElement;
 }
 
-void GDIMetaFile::AddAction( rtl::Reference<MetaAction> pAction )
+void GDIMetaFile::AddAction(const rtl::Reference<MetaAction>& pAction)
 {
     m_aList.push_back( pAction );
 
@@ -552,7 +554,7 @@ void GDIMetaFile::AddAction( rtl::Reference<MetaAction> pAction )
     }
 }
 
-void GDIMetaFile::AddAction( rtl::Reference<MetaAction> pAction, size_t nPos )
+void GDIMetaFile::AddAction(const rtl::Reference<MetaAction>& pAction, size_t nPos)
 {
     if ( nPos < m_aList.size() )
     {
@@ -569,7 +571,7 @@ void GDIMetaFile::AddAction( rtl::Reference<MetaAction> pAction, size_t nPos )
     }
 }
 
-void GDIMetaFile::push_back( rtl::Reference<MetaAction> pAction )
+void GDIMetaFile::push_back(const rtl::Reference<MetaAction>& pAction)
 {
     m_aList.push_back( pAction );
 }
@@ -2476,18 +2478,16 @@ BitmapChecksum GDIMetaFile::GetChecksum() const
                     // In worst case a very expensive RegionHandle representation gets created.
                     // In this case it's cheaper to use the PolyPolygon
                     const basegfx::B2DPolyPolygon aPolyPolygon(rRegion.GetAsB2DPolyPolygon());
-                    const sal_uInt32 nPolyCount(aPolyPolygon.count());
                     SVBT64 aSVBT64;
 
-                    for(sal_uInt32 a(0); a < nPolyCount; a++)
+                    for(auto const& rPolygon : aPolyPolygon)
                     {
-                        const basegfx::B2DPolygon aPolygon(aPolyPolygon.getB2DPolygon(a));
-                        const sal_uInt32 nPointCount(aPolygon.count());
-                        const bool bControl(aPolygon.areControlPointsUsed());
+                        const sal_uInt32 nPointCount(rPolygon.count());
+                        const bool bControl(rPolygon.areControlPointsUsed());
 
                         for(sal_uInt32 b(0); b < nPointCount; b++)
                         {
-                            const basegfx::B2DPoint aPoint(aPolygon.getB2DPoint(b));
+                            const basegfx::B2DPoint aPoint(rPolygon.getB2DPoint(b));
 
                             DoubleToSVBT64(aPoint.getX(), aSVBT64);
                             nCrc = vcl_get_checksum(nCrc, aSVBT64, 8);
@@ -2496,9 +2496,9 @@ BitmapChecksum GDIMetaFile::GetChecksum() const
 
                             if(bControl)
                             {
-                                if(aPolygon.isPrevControlPointUsed(b))
+                                if(rPolygon.isPrevControlPointUsed(b))
                                 {
-                                    const basegfx::B2DPoint aCtrl(aPolygon.getPrevControlPoint(b));
+                                    const basegfx::B2DPoint aCtrl(rPolygon.getPrevControlPoint(b));
 
                                     DoubleToSVBT64(aCtrl.getX(), aSVBT64);
                                     nCrc = vcl_get_checksum(nCrc, aSVBT64, 8);
@@ -2506,9 +2506,9 @@ BitmapChecksum GDIMetaFile::GetChecksum() const
                                     nCrc = vcl_get_checksum(nCrc, aSVBT64, 8);
                                 }
 
-                                if(aPolygon.isNextControlPointUsed(b))
+                                if(rPolygon.isNextControlPointUsed(b))
                                 {
-                                    const basegfx::B2DPoint aCtrl(aPolygon.getNextControlPoint(b));
+                                    const basegfx::B2DPoint aCtrl(rPolygon.getNextControlPoint(b));
 
                                     DoubleToSVBT64(aCtrl.getX(), aSVBT64);
                                     nCrc = vcl_get_checksum(nCrc, aSVBT64, 8);
@@ -2607,7 +2607,7 @@ namespace
     {
     private:
         ImplMetaReadData& m_rData;
-        rtl_TextEncoding m_eOrigCharSet;
+        rtl_TextEncoding const m_eOrigCharSet;
     public:
         DepthGuard(ImplMetaReadData& rData, SvStream const & rIStm)
             : m_rData(rData)
@@ -2687,9 +2687,8 @@ SvStream& ReadGDIMetaFile(SvStream& rIStm, GDIMetaFile& rGDIMetaFile, ImplMetaRe
         }
         else
         {
-            // to avoid possible compiler optimizations => new/delete
             rIStm.Seek( nStmPos );
-            delete new SVMConverter( rIStm, rGDIMetaFile, CONVERT_FROM_SVM1 );
+            SVMConverter( rIStm, rGDIMetaFile );
         }
     }
     catch (...)
@@ -2713,28 +2712,8 @@ SvStream& WriteGDIMetaFile( SvStream& rOStm, const GDIMetaFile& rGDIMetaFile )
 {
     if( !rOStm.GetError() )
     {
-        static const char*  pEnableSVM1 = getenv( "SAL_ENABLE_SVM1" );
-        static const bool   bNoSVM1 = (nullptr == pEnableSVM1 ) || ( '0' == *pEnableSVM1 );
-
-        if( bNoSVM1 || rOStm.GetVersion() >= SOFFICE_FILEFORMAT_50  )
-        {
-            const_cast< GDIMetaFile& >( rGDIMetaFile ).Write( rOStm );
-        }
-        else
-        {
-            delete new SVMConverter( rOStm, const_cast< GDIMetaFile& >( rGDIMetaFile ), CONVERT_TO_SVM1 );
-        }
-
-#ifdef DEBUG
-        if( !bNoSVM1 && rOStm.GetVersion() < SOFFICE_FILEFORMAT_50 )
-        {
-            SAL_WARN( "vcl", "GDIMetaFile would normally be written in old SVM1 format by this call. "
-                "The current implementation always writes in VCLMTF format. "
-                "Please set environment variable SAL_ENABLE_SVM1 to '1' to reenable old behavior" );
-        }
-#endif // DEBUG
+        const_cast< GDIMetaFile& >( rGDIMetaFile ).Write( rOStm );
     }
-
     return rOStm;
 }
 
@@ -2833,15 +2812,17 @@ bool GDIMetaFile::CreateThumbnail(BitmapEx& rBitmapEx, BmpConversion eColorConve
         const_cast<GDIMetaFile *>(this)->Play(aVDev.get(), Point(), aAntialias);
 
         // get paint bitmap
-        Bitmap aBitmap( aVDev->GetBitmap( aNullPt, aVDev->GetOutputSizePixel() ) );
+        BitmapEx aBitmap( aVDev->GetBitmapEx( aNullPt, aVDev->GetOutputSizePixel() ) );
 
         // scale down the image to the desired size - use the input scaler for the scaling operation
         aBitmap.Scale(aDrawSize, nScaleFlag);
 
         // convert to desired bitmap color format
-        aBitmap.Convert(eColorConversion);
+        Size aSize(aBitmap.GetSizePixel());
+        if (aSize.Width() && aSize.Height())
+            aBitmap.Convert(eColorConversion);
 
-        rBitmapEx = BitmapEx(aBitmap);
+        rBitmapEx = aBitmap;
     }
 
     return !rBitmapEx.IsEmpty();

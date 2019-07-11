@@ -21,6 +21,7 @@
 #undef SC_DLLIMPLEMENTATION
 #endif
 
+#include <com/sun/star/sheet/TableValidationVisibility.hpp>
 #include <comphelper/string.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/builderfactory.hxx>
@@ -59,6 +60,7 @@
 #define SC_VALIDDLG_ALLOW_RANGE     5
 #define SC_VALIDDLG_ALLOW_LIST      6
 #define SC_VALIDDLG_ALLOW_TEXTLEN   7
+#define SC_VALIDDLG_ALLOW_CUSTOM    8
 
 /*  Position indexes for "Data" list box.
     They do not map directly to ScConditionMode and can safely be modified to
@@ -71,6 +73,7 @@
 #define SC_VALIDDLG_DATA_NOTEQUAL     5
 #define SC_VALIDDLG_DATA_VALIDRANGE   6
 #define SC_VALIDDLG_DATA_INVALIDRANGE 7
+#define SC_VALIDDLG_DATA_DIRECT       8
 
 namespace ValidListType = css::sheet::TableValidationVisibility;
 
@@ -200,7 +203,7 @@ sal_uInt16 lclGetPosFromValMode( ScValidationMode eValMode )
         case SC_VALID_TIME:     nLbPos = SC_VALIDDLG_ALLOW_TIME;    break;
         case SC_VALID_TEXTLEN:  nLbPos = SC_VALIDDLG_ALLOW_TEXTLEN; break;
         case SC_VALID_LIST:     nLbPos = SC_VALIDDLG_ALLOW_RANGE;   break;
-        case SC_VALID_CUSTOM:   nLbPos = SC_VALIDDLG_ALLOW_ANY;     break;  // not supported
+        case SC_VALID_CUSTOM:   nLbPos = SC_VALIDDLG_ALLOW_CUSTOM;  break;
         default:    OSL_FAIL( "lclGetPosFromValMode - unknown validity mode" );
     }
     return nLbPos;
@@ -220,6 +223,7 @@ ScValidationMode lclGetValModeFromPos( sal_uInt16 nLbPos )
         case SC_VALIDDLG_ALLOW_RANGE:   eValMode = SC_VALID_LIST;       break;
         case SC_VALIDDLG_ALLOW_LIST:    eValMode = SC_VALID_LIST;       break;
         case SC_VALIDDLG_ALLOW_TEXTLEN: eValMode = SC_VALID_TEXTLEN;    break;
+        case SC_VALIDDLG_ALLOW_CUSTOM:  eValMode = SC_VALID_CUSTOM;     break;
         default:    OSL_FAIL( "lclGetValModeFromPos - invalid list box position" );
     }
     return eValMode;
@@ -240,6 +244,7 @@ sal_uInt16 lclGetPosFromCondMode( ScConditionMode eCondMode )
         case ScConditionMode::NotEqual:      nLbPos = SC_VALIDDLG_DATA_NOTEQUAL;     break;
         case ScConditionMode::Between:       nLbPos = SC_VALIDDLG_DATA_VALIDRANGE;      break;
         case ScConditionMode::NotBetween:    nLbPos = SC_VALIDDLG_DATA_INVALIDRANGE;   break;
+        case ScConditionMode::Direct:        nLbPos = SC_VALIDDLG_DATA_DIRECT;         break;
         default:    OSL_FAIL( "lclGetPosFromCondMode - unknown condition mode" );
     }
     return nLbPos;
@@ -259,6 +264,7 @@ ScConditionMode lclGetCondModeFromPos( sal_uInt16 nLbPos )
         case SC_VALIDDLG_DATA_NOTEQUAL:     eCondMode = ScConditionMode::NotEqual;   break;
         case SC_VALIDDLG_DATA_VALIDRANGE:      eCondMode = ScConditionMode::Between;    break;
         case SC_VALIDDLG_DATA_INVALIDRANGE:   eCondMode = ScConditionMode::NotBetween; break;
+        case SC_VALIDDLG_DATA_DIRECT:         eCondMode = ScConditionMode::Direct;   break;
         default:    OSL_FAIL( "lclGetCondModeFromPos - invalid list box position" );
     }
     return eCondMode;
@@ -271,12 +277,16 @@ ScConditionMode lclGetCondModeFromPos( sal_uInt16 nLbPos )
 void lclGetFormulaFromStringList( OUString& rFmlaStr, const OUString& rStringList, sal_Unicode cFmlaSep )
 {
     rFmlaStr.clear();
-    sal_Int32 nTokenCnt = comphelper::string::getTokenCount(rStringList, '\n');
-    for( sal_Int32 nToken = 0, nStringIx = 0; nToken < nTokenCnt; ++nToken )
+    if (!rStringList.isEmpty())
     {
-        OUString aToken( rStringList.getToken( 0, '\n', nStringIx ) );
-        ScGlobal::AddQuotes( aToken, '"' );
-        rFmlaStr = ScGlobal::addToken(rFmlaStr, aToken, cFmlaSep);
+        sal_Int32 nIdx {0};
+        do
+        {
+            OUString aToken {rStringList.getToken( 0, '\n', nIdx )};
+            ScGlobal::AddQuotes( aToken, '"' );
+            rFmlaStr = ScGlobal::addToken(rFmlaStr, aToken, cFmlaSep);
+        }
+        while (nIdx>0);
     }
     if( rFmlaStr.isEmpty() )
         rFmlaStr = "\"\"";
@@ -323,6 +333,7 @@ ScTPValidationValue::ScTPValidationValue( vcl::Window* pParent, const SfxItemSet
     , maStrMin(ScResId(SCSTR_VALID_MINIMUM))
     , maStrMax(ScResId(SCSTR_VALID_MAXIMUM))
     , maStrValue(ScResId(SCSTR_VALID_VALUE))
+    , maStrFormula(ScResId(SCSTR_VALID_FORMULA))
     , maStrRange(ScResId(SCSTR_VALID_RANGE))
     , maStrList(ScResId(SCSTR_VALID_LIST))
     , m_pRefEdit(nullptr)
@@ -464,10 +475,14 @@ bool ScTPValidationValue::FillItemSet( SfxItemSet* rArgSet )
         (m_pCbSort->IsChecked() ? ValidListType::SORTEDASCENDING : ValidListType::UNSORTED) :
         ValidListType::INVISIBLE;
 
+    const sal_Int32 nLbPos = m_pLbAllow->GetSelectedEntryPos();
+    bool bCustom = (nLbPos == SC_VALIDDLG_ALLOW_CUSTOM);
+    ScConditionMode eCondMode = bCustom ?
+            ScConditionMode::Direct : lclGetCondModeFromPos( m_pLbValue->GetSelectedEntryPos() );
+
     rArgSet->Put( SfxAllEnumItem( FID_VALID_MODE, sal::static_int_cast<sal_uInt16>(
-                    lclGetValModeFromPos( m_pLbAllow->GetSelectedEntryPos() ) ) ) );
-    rArgSet->Put( SfxAllEnumItem( FID_VALID_CONDMODE, sal::static_int_cast<sal_uInt16>(
-                    lclGetCondModeFromPos( m_pLbValue->GetSelectedEntryPos() ) ) ) );
+                    lclGetValModeFromPos( nLbPos ) ) ) );
+    rArgSet->Put( SfxAllEnumItem( FID_VALID_CONDMODE, sal::static_int_cast<sal_uInt16>( eCondMode ) ) );
     rArgSet->Put( SfxStringItem( FID_VALID_VALUE1, GetFirstFormula() ) );
     rArgSet->Put( SfxStringItem( FID_VALID_VALUE2, GetSecondFormula() ) );
     rArgSet->Put( SfxBoolItem( FID_VALID_BLANK, m_pCbAllow->IsChecked() ) );
@@ -609,6 +624,7 @@ IMPL_LINK_NOARG(ScTPValidationValue, SelectHdl, ListBox&, void)
     bool bEnable = (nLbPos != SC_VALIDDLG_ALLOW_ANY);
     bool bRange = (nLbPos == SC_VALIDDLG_ALLOW_RANGE);
     bool bList = (nLbPos == SC_VALIDDLG_ALLOW_LIST);
+    bool bCustom = (nLbPos == SC_VALIDDLG_ALLOW_CUSTOM);
 
     m_pCbAllow->Enable( bEnable );   // Empty cell
     m_pFtValue->Enable( bEnable );
@@ -620,10 +636,13 @@ IMPL_LINK_NOARG(ScTPValidationValue, SelectHdl, ListBox&, void)
     m_pEdMax->Enable( bEnable );
 
     bool bShowMax = false;
+
     if( bRange )
         m_pFtMin->SetText( maStrRange );
     else if( bList )
         m_pFtMin->SetText( maStrList );
+    else if( bCustom )
+        m_pFtMin->SetText( maStrFormula );
     else
     {
         switch( m_pLbValue->GetSelectedEntryPos() )
@@ -647,8 +666,8 @@ IMPL_LINK_NOARG(ScTPValidationValue, SelectHdl, ListBox&, void)
 
     m_pCbShow->Show( bRange || bList );
     m_pCbSort->Show( bRange || bList );
-    m_pFtValue->Show( !bRange && !bList );
-    m_pLbValue->Show( !bRange && !bList );
+    m_pFtValue->Show( !bRange && !bList && !bCustom);
+    m_pLbValue->Show( !bRange && !bList && !bCustom );
     m_pEdMin->Show( !bList );
     m_pEdList->Show( bList );
     m_pMinGrid->set_vexpand( bList );
@@ -672,19 +691,13 @@ IMPL_LINK_NOARG(ScTPValidationValue, CheckHdl, Button*, void)
 
 // Input Help Page
 
-ScTPValidationHelp::ScTPValidationHelp( vcl::Window*         pParent,
-                                          const SfxItemSet& rArgSet )
-
-    :   SfxTabPage      ( pParent,
-                          "ValidationHelpTabPage" , "modules/scalc/ui/validationhelptabpage.ui" ,
-                          &rArgSet )
+ScTPValidationHelp::ScTPValidationHelp(TabPageParent pParent, const SfxItemSet& rArgSet)
+    : SfxTabPage(pParent, "modules/scalc/ui/validationhelptabpage.ui", "ValidationHelpTabPage", &rArgSet)
+    , m_xTsbHelp(m_xBuilder->weld_check_button("tsbhelp"))
+    , m_xEdtTitle(m_xBuilder->weld_entry("title"))
+    , m_xEdInputHelp(m_xBuilder->weld_text_view("inputhelp"))
 {
-    get(pTsbHelp,"tsbhelp");
-    get(pEdtTitle,"title");
-    get(pEdInputHelp,"inputhelp");
-    pEdInputHelp->set_height_request(pEdInputHelp->GetTextHeight() * 12);
-    pEdInputHelp->set_width_request(pEdInputHelp->approximate_char_width() * 50);
-    Init();
+    m_xEdInputHelp->set_size_request(m_xEdInputHelp->get_approximate_digit_width() * 40, m_xEdInputHelp->get_height_rows(13));
 }
 
 ScTPValidationHelp::~ScTPValidationHelp()
@@ -692,23 +705,10 @@ ScTPValidationHelp::~ScTPValidationHelp()
     disposeOnce();
 }
 
-void ScTPValidationHelp::dispose()
+VclPtr<SfxTabPage> ScTPValidationHelp::Create(TabPageParent pParent,
+                                              const SfxItemSet* rArgSet)
 {
-    pTsbHelp.clear();
-    pEdtTitle.clear();
-    pEdInputHelp.clear();
-    SfxTabPage::dispose();
-}
-
-void ScTPValidationHelp::Init()
-{
-    pTsbHelp->EnableTriState( false );
-}
-
-VclPtr<SfxTabPage> ScTPValidationHelp::Create( TabPageParent pParent,
-                                               const SfxItemSet*  rArgSet )
-{
-    return VclPtr<ScTPValidationHelp>::Create( pParent.pParent, *rArgSet );
+    return VclPtr<ScTPValidationHelp>::Create(pParent, *rArgSet);
 }
 
 void ScTPValidationHelp::Reset( const SfxItemSet* rArgSet )
@@ -716,47 +716,46 @@ void ScTPValidationHelp::Reset( const SfxItemSet* rArgSet )
     const SfxPoolItem* pItem;
 
     if ( rArgSet->GetItemState( FID_VALID_SHOWHELP, true, &pItem ) == SfxItemState::SET )
-        pTsbHelp->SetState( static_cast<const SfxBoolItem*>(pItem)->GetValue() ? TRISTATE_TRUE : TRISTATE_FALSE );
+        m_xTsbHelp->set_state( static_cast<const SfxBoolItem*>(pItem)->GetValue() ? TRISTATE_TRUE : TRISTATE_FALSE );
     else
-        pTsbHelp->SetState( TRISTATE_FALSE );
+        m_xTsbHelp->set_state( TRISTATE_FALSE );
 
     if ( rArgSet->GetItemState( FID_VALID_HELPTITLE, true, &pItem ) == SfxItemState::SET )
-        pEdtTitle->SetText( static_cast<const SfxStringItem*>(pItem)->GetValue() );
+        m_xEdtTitle->set_text( static_cast<const SfxStringItem*>(pItem)->GetValue() );
     else
-        pEdtTitle->SetText( EMPTY_OUSTRING );
+        m_xEdtTitle->set_text( EMPTY_OUSTRING );
 
     if ( rArgSet->GetItemState( FID_VALID_HELPTEXT, true, &pItem ) == SfxItemState::SET )
-        pEdInputHelp->SetText( static_cast<const SfxStringItem*>(pItem)->GetValue() );
+        m_xEdInputHelp->set_text( static_cast<const SfxStringItem*>(pItem)->GetValue() );
     else
-        pEdInputHelp->SetText( EMPTY_OUSTRING );
+        m_xEdInputHelp->set_text( EMPTY_OUSTRING );
 }
 
 bool ScTPValidationHelp::FillItemSet( SfxItemSet* rArgSet )
 {
-    rArgSet->Put( SfxBoolItem( FID_VALID_SHOWHELP, pTsbHelp->GetState() == TRISTATE_TRUE ) );
-    rArgSet->Put( SfxStringItem( FID_VALID_HELPTITLE, pEdtTitle->GetText() ) );
-    rArgSet->Put( SfxStringItem( FID_VALID_HELPTEXT, pEdInputHelp->GetText() ) );
+    rArgSet->Put( SfxBoolItem( FID_VALID_SHOWHELP, m_xTsbHelp->get_state() == TRISTATE_TRUE ) );
+    rArgSet->Put( SfxStringItem( FID_VALID_HELPTITLE, m_xEdtTitle->get_text() ) );
+    rArgSet->Put( SfxStringItem( FID_VALID_HELPTEXT, m_xEdInputHelp->get_text() ) );
 
     return true;
 }
 
 // Error Alert Page
 
-ScTPValidationError::ScTPValidationError( vcl::Window*           pParent,
-                                          const SfxItemSet& rArgSet )
+ScTPValidationError::ScTPValidationError(TabPageParent pParent,
+                                         const SfxItemSet& rArgSet)
 
     :   SfxTabPage      ( pParent,
-                          "ErrorAlertTabPage" , "modules/scalc/ui/erroralerttabpage.ui" ,
+                          "modules/scalc/ui/erroralerttabpage.ui", "ErrorAlertTabPage",
                           &rArgSet )
+    , m_xTsbShow(m_xBuilder->weld_check_button("tsbshow"))
+    , m_xLbAction(m_xBuilder->weld_combo_box("actionCB"))
+    , m_xBtnSearch(m_xBuilder->weld_button("browseBtn"))
+    , m_xEdtTitle(m_xBuilder->weld_entry("erroralert_title"))
+    , m_xFtError(m_xBuilder->weld_label("errormsg_label"))
+    , m_xEdError(m_xBuilder->weld_text_view("errorMsg"))
 {
-    get(m_pTsbShow,"tsbshow");
-    get(m_pLbAction,"actionCB");
-    get(m_pBtnSearch,"browseBtn");
-    get(m_pEdtTitle,"title");
-    get(m_pFtError,"errormsg_label");
-    get(m_pEdError,"errorMsg");
-    m_pEdError->set_height_request(m_pEdError->GetTextHeight() * 12);
-    m_pEdError->set_width_request(m_pEdError->approximate_char_width() * 50);
+    m_xEdError->set_size_request(m_xEdError->get_approximate_digit_width() * 40, m_xEdError->get_height_rows(12));
     Init();
 }
 
@@ -765,32 +764,20 @@ ScTPValidationError::~ScTPValidationError()
     disposeOnce();
 }
 
-void ScTPValidationError::dispose()
-{
-    m_pTsbShow.clear();
-    m_pLbAction.clear();
-    m_pBtnSearch.clear();
-    m_pEdtTitle.clear();
-    m_pFtError.clear();
-    m_pEdError.clear();
-    SfxTabPage::dispose();
-}
-
 void ScTPValidationError::Init()
 {
-    m_pLbAction->SetSelectHdl( LINK( this, ScTPValidationError, SelectActionHdl ) );
-    m_pBtnSearch->SetClickHdl( LINK( this, ScTPValidationError, ClickSearchHdl ) );
+    m_xLbAction->connect_changed(LINK(this, ScTPValidationError, SelectActionHdl));
+    m_xBtnSearch->connect_clicked(LINK( this, ScTPValidationError, ClickSearchHdl));
 
-    m_pLbAction->SelectEntryPos( 0 );
-    m_pTsbShow->EnableTriState( false );
+    m_xLbAction->set_active(0);
 
-    SelectActionHdl( *m_pLbAction.get() );
+    SelectActionHdl(*m_xLbAction);
 }
 
-VclPtr<SfxTabPage> ScTPValidationError::Create( TabPageParent    pParent,
-                                                const SfxItemSet*  rArgSet )
+VclPtr<SfxTabPage> ScTPValidationError::Create(TabPageParent pParent,
+                                               const SfxItemSet* rArgSet)
 {
-    return VclPtr<ScTPValidationError>::Create( pParent.pParent, *rArgSet );
+    return VclPtr<ScTPValidationError>::Create(pParent, *rArgSet);
 }
 
 void ScTPValidationError::Reset( const SfxItemSet* rArgSet )
@@ -798,49 +785,49 @@ void ScTPValidationError::Reset( const SfxItemSet* rArgSet )
     const SfxPoolItem* pItem;
 
     if ( rArgSet->GetItemState( FID_VALID_SHOWERR, true, &pItem ) == SfxItemState::SET )
-        m_pTsbShow->SetState( static_cast<const SfxBoolItem*>(pItem)->GetValue() ? TRISTATE_TRUE : TRISTATE_FALSE );
+        m_xTsbShow->set_state( static_cast<const SfxBoolItem*>(pItem)->GetValue() ? TRISTATE_TRUE : TRISTATE_FALSE );
     else
-        m_pTsbShow->SetState( TRISTATE_TRUE );   // check by default
+        m_xTsbShow->set_state( TRISTATE_TRUE );   // check by default
 
     if ( rArgSet->GetItemState( FID_VALID_ERRSTYLE, true, &pItem ) == SfxItemState::SET )
-        m_pLbAction->SelectEntryPos( static_cast<const SfxAllEnumItem*>(pItem)->GetValue() );
+        m_xLbAction->set_active( static_cast<const SfxAllEnumItem*>(pItem)->GetValue() );
     else
-        m_pLbAction->SelectEntryPos( 0 );
+        m_xLbAction->set_active( 0 );
 
     if ( rArgSet->GetItemState( FID_VALID_ERRTITLE, true, &pItem ) == SfxItemState::SET )
-        m_pEdtTitle->SetText( static_cast<const SfxStringItem*>(pItem)->GetValue() );
+        m_xEdtTitle->set_text( static_cast<const SfxStringItem*>(pItem)->GetValue() );
     else
-        m_pEdtTitle->SetText( EMPTY_OUSTRING );
+        m_xEdtTitle->set_text( EMPTY_OUSTRING );
 
     if ( rArgSet->GetItemState( FID_VALID_ERRTEXT, true, &pItem ) == SfxItemState::SET )
-        m_pEdError->SetText( static_cast<const SfxStringItem*>(pItem)->GetValue() );
+        m_xEdError->set_text( static_cast<const SfxStringItem*>(pItem)->GetValue() );
     else
-        m_pEdError->SetText( EMPTY_OUSTRING );
+        m_xEdError->set_text( EMPTY_OUSTRING );
 
-    SelectActionHdl( *m_pLbAction.get() );
+    SelectActionHdl(*m_xLbAction);
 }
 
 bool ScTPValidationError::FillItemSet( SfxItemSet* rArgSet )
 {
-    rArgSet->Put( SfxBoolItem( FID_VALID_SHOWERR, m_pTsbShow->GetState() == TRISTATE_TRUE ) );
-    rArgSet->Put( SfxAllEnumItem( FID_VALID_ERRSTYLE, m_pLbAction->GetSelectedEntryPos() ) );
-    rArgSet->Put( SfxStringItem( FID_VALID_ERRTITLE, m_pEdtTitle->GetText() ) );
-    rArgSet->Put( SfxStringItem( FID_VALID_ERRTEXT, m_pEdError->GetText() ) );
+    rArgSet->Put( SfxBoolItem( FID_VALID_SHOWERR, m_xTsbShow->get_state() == TRISTATE_TRUE ) );
+    rArgSet->Put( SfxAllEnumItem( FID_VALID_ERRSTYLE, m_xLbAction->get_active() ) );
+    rArgSet->Put( SfxStringItem( FID_VALID_ERRTITLE, m_xEdtTitle->get_text() ) );
+    rArgSet->Put( SfxStringItem( FID_VALID_ERRTEXT, m_xEdError->get_text() ) );
 
     return true;
 }
 
-IMPL_LINK_NOARG(ScTPValidationError, SelectActionHdl, ListBox&, void)
+IMPL_LINK_NOARG(ScTPValidationError, SelectActionHdl, weld::ComboBox&, void)
 {
-    ScValidErrorStyle eStyle = static_cast<ScValidErrorStyle>(m_pLbAction->GetSelectedEntryPos());
+    ScValidErrorStyle eStyle = static_cast<ScValidErrorStyle>(m_xLbAction->get_active());
     bool bMacro = ( eStyle == SC_VALERR_MACRO );
 
-    m_pBtnSearch->Enable( bMacro );
-    m_pFtError->Enable( !bMacro );
-    m_pEdError->Enable( !bMacro );
+    m_xBtnSearch->set_sensitive( bMacro );
+    m_xFtError->set_sensitive( !bMacro );
+    m_xEdError->set_sensitive( !bMacro );
 }
 
-IMPL_LINK_NOARG(ScTPValidationError, ClickSearchHdl, Button*, void)
+IMPL_LINK_NOARG(ScTPValidationError, ClickSearchHdl, weld::Button&, void)
 {
     // Use static SfxApplication method to bring up selector dialog for
     // choosing a script
@@ -848,7 +835,7 @@ IMPL_LINK_NOARG(ScTPValidationError, ClickSearchHdl, Button*, void)
 
     if ( !aScriptURL.isEmpty() )
     {
-        m_pEdtTitle->SetText( aScriptURL );
+        m_xEdtTitle->set_text( aScriptURL );
     }
 }
 

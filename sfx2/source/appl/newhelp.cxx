@@ -29,7 +29,9 @@
 #include "panelist.hxx"
 #include <srchdlg.hxx>
 #include <sfx2/sfxhelp.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <sfx2/strings.hrc>
 #include <helpids.h>
@@ -195,10 +197,10 @@ namespace sfx2
         "text*"       | "text*"              | "text"
         "text menu"   | "text* menu*"        | "text|menu"
     */
-    OUString PrepareSearchString( const OUString& rSearchString,
+    static OUString PrepareSearchString( const OUString& rSearchString,
                                 const Reference< XBreakIterator >& xBreak, bool bForSearch )
     {
-        OUString sSearchStr;
+        OUStringBuffer sSearchStr;
         sal_Int32 nStartPos = 0;
         const lang::Locale aLocale = Application::GetSettings().GetUILanguageTag().getLocale();
         Boundary aBoundary = xBreak->getWordBoundary(
@@ -220,18 +222,18 @@ namespace sfx2
                     if ( !sSearchStr.isEmpty() )
                     {
                         if ( bForSearch )
-                            sSearchStr += " ";
+                            sSearchStr.append(" ");
                         else
-                            sSearchStr += "|";
+                            sSearchStr.append("|");
                     }
-                    sSearchStr += sSearchToken;
+                    sSearchStr.append(sSearchToken);
                 }
             }
             aBoundary = xBreak->nextWord( rSearchString, nStartPos,
                                           aLocale, WordType::ANYWORD_IGNOREWHITESPACES );
         }
 
-        return sSearchStr;
+        return sSearchStr.makeStringAndClear();
     }
 
 // namespace sfx2
@@ -242,8 +244,8 @@ namespace sfx2
 
 struct IndexEntry_Impl
 {
-    bool        m_bSubEntry;
-    OUString        m_aURL;
+    bool const        m_bSubEntry;
+    OUString const    m_aURL;
 
     IndexEntry_Impl( const OUString& rURL, bool bSubEntry ) :
         m_bSubEntry( bSubEntry ), m_aURL( rURL ) {}
@@ -253,8 +255,8 @@ struct IndexEntry_Impl
 
 struct ContentEntry_Impl
 {
-    OUString    aURL;
-    bool    bIsFolder;
+    OUString const aURL;
+    bool const     bIsFolder;
 
     ContentEntry_Impl( const OUString& rURL, bool bFolder ) :
         aURL( rURL ), bIsFolder( bFolder ) {}
@@ -311,9 +313,8 @@ void ContentListBox_Impl::dispose()
 
 void ContentListBox_Impl::InitRoot()
 {
-    OUString const aHelpTreeviewURL( "vnd.sun.star.hier://com.sun.star.help.TreeView/" );
     std::vector< OUString > aList =
-        SfxContentHelper::GetHelpTreeViewContents( aHelpTreeviewURL );
+        SfxContentHelper::GetHelpTreeViewContents( "vnd.sun.star.hier://com.sun.star.help.TreeView/" );
 
     for(const OUString & aRow : aList)
     {
@@ -336,7 +337,7 @@ void ContentListBox_Impl::ClearChildren( SvTreeListEntry* pParent )
     {
         ClearChildren( pEntry );
         delete static_cast<ContentEntry_Impl*>(pEntry->GetUserData());
-        pEntry = NextSibling( pEntry );
+        pEntry = pEntry->NextSibling();
     }
 }
 
@@ -349,9 +350,8 @@ void ContentListBox_Impl::RequestingChildren( SvTreeListEntry* pParent )
         {
             if ( pParent->GetUserData() )
             {
-                OUString aTmpURL( static_cast<ContentEntry_Impl*>(pParent->GetUserData())->aURL );
                 std::vector<OUString > aList =
-                    SfxContentHelper::GetHelpTreeViewContents( aTmpURL );
+                    SfxContentHelper::GetHelpTreeViewContents( static_cast<ContentEntry_Impl*>(pParent->GetUserData())->aURL );
 
                 for (const OUString & aRow : aList)
                 {
@@ -627,7 +627,8 @@ void IndexTabPage_Impl::InitializeIndex()
 
                     DBG_ASSERT( aRefList.getLength() == aAnchorList.getLength(),"reference list and title list of different length" );
 
-                    const bool insert = ( ndx = aKeywordPair.indexOf( ';' ) ) != -1;
+                    ndx = aKeywordPair.indexOf( ';' );
+                    const bool insert = ndx != -1;
 
                     if ( insert )
                     {
@@ -639,7 +640,8 @@ void IndexTabPage_Impl::InitializeIndex()
                             if ( (tmp = it->second++) != 0)
                                 m_pIndexCB->InsertEntry(aTempString + OUString(append, tmp));
                             else
-                                m_pIndexCB->InsertEntry(aTempString);                        }
+                                m_pIndexCB->InsertEntry(aTempString);
+                        }
                     }
                     else
                         aIndex.clear();
@@ -815,11 +817,10 @@ bool IndexTabPage_Impl::HasKeywordIgnoreCase()
     if ( !sKeyword.isEmpty() )
     {
         sal_Int32 nEntries = m_pIndexCB->GetEntryCount();
-        OUString sIndexItem;
         const vcl::I18nHelper& rI18nHelper = GetSettings().GetLocaleI18nHelper();
         for ( sal_Int32 n = 0; n < nEntries; n++)
         {
-            sIndexItem = m_pIndexCB->GetEntry( n );
+            const OUString sIndexItem {m_pIndexCB->GetEntry( n )};
             if (rI18nHelper.MatchString( sIndexItem, sKeyword ))
             {
                 sKeyword = sIndexItem;
@@ -928,16 +929,17 @@ SearchTabPage_Impl::SearchTabPage_Impl(vcl::Window* pParent, SfxHelpIndexWindow_
         Any aUserItem = aViewOpt.GetUserItem( USERITEM_NAME );
         if ( aUserItem >>= aUserData )
         {
-            bool bChecked = aUserData.getToken(0, ';').toInt32() == 1;
+            sal_Int32 nIdx {0};
+            bool bChecked = aUserData.getToken(0, ';', nIdx).toInt32() == 1;
             m_pFullWordsCB->Check( bChecked );
-            bChecked = aUserData.getToken(1, ';').toInt32() == 1;
+            bChecked = aUserData.getToken(0, ';', nIdx).toInt32() == 1;
             m_pScopeCB->Check( bChecked );
 
-            for ( sal_Int32 i = 2; i < comphelper::string::getTokenCount(aUserData, ';'); ++i )
+            while ( nIdx > 0 )
             {
-                OUString aToken = aUserData.getToken(i, ';');
                 m_pSearchED->InsertEntry( INetURLObject::decode(
-                    aToken, INetURLObject::DecodeMechanism::WithCharset ) );
+                    aUserData.getToken(0, ';', nIdx),
+                    INetURLObject::DecodeMechanism::WithCharset ) );
             }
         }
     }
@@ -953,25 +955,21 @@ SearchTabPage_Impl::~SearchTabPage_Impl()
 void SearchTabPage_Impl::dispose()
 {
     SvtViewOptions aViewOpt( EViewType::TabPage, CONFIGNAME_SEARCHPAGE );
-    sal_Int32 nChecked = m_pFullWordsCB->IsChecked() ? 1 : 0;
-    OUString aUserData = OUString::number( nChecked );
-    aUserData += ";";
-    nChecked = m_pScopeCB->IsChecked() ? 1 : 0;
-    aUserData += OUString::number( nChecked );
-    aUserData += ";";
+    OUStringBuffer aUserData;
+    aUserData.append(OUString::number( m_pFullWordsCB->IsChecked() ? 1 : 0 ))
+        .append(";")
+        .append(OUString::number( m_pScopeCB->IsChecked() ? 1 : 0 ));
     sal_Int32 nCount = std::min( m_pSearchED->GetEntryCount(), sal_Int32(10) );  // save only 10 entries
 
     for ( sal_Int32 i = 0; i < nCount; ++i )
     {
-        OUString aText = m_pSearchED->GetEntry(i);
-        aUserData += INetURLObject::encode(
-            aText, INetURLObject::PART_UNO_PARAM_VALUE,
-            INetURLObject::EncodeMechanism::All );
-        aUserData += ";";
+        aUserData.append(";").append(INetURLObject::encode(
+            m_pSearchED->GetEntry(i),
+            INetURLObject::PART_UNO_PARAM_VALUE,
+            INetURLObject::EncodeMechanism::All ));
     }
 
-    aUserData = comphelper::string::stripEnd(aUserData, ';');
-    Any aUserItem = makeAny( aUserData );
+    Any aUserItem = makeAny( aUserData.makeStringAndClear() );
     aViewOpt.SetUserItem( USERITEM_NAME, aUserItem );
 
     m_pSearchED.clear();
@@ -1036,8 +1034,7 @@ IMPL_LINK_NOARG(SearchTabPage_Impl, SearchHdl, LinkParamNone*, void)
         {
             sal_Int32 nIdx = 0;
             OUString aTitle = rRow.getToken( 0, '\t', nIdx );
-            nIdx = 0;
-            OUString* pURL = new OUString( rRow.getToken( 2, '\t', nIdx ) );
+            OUString* pURL = new OUString( rRow.getToken( 1, '\t', nIdx ) );
             const sal_Int32 nPos = m_pResultsLB->InsertEntry( aTitle );
             m_pResultsLB->SetEntryData( nPos, pURL );
         }
@@ -1116,7 +1113,7 @@ bool SearchTabPage_Impl::OpenKeyword( const OUString& rKeyword )
 
 // class BookmarksTabPage_Impl -------------------------------------------
 
-void GetBookmarkEntry_Impl
+static void GetBookmarkEntry_Impl
 (
     Sequence< PropertyValue >& aBookmarkEntry,
     OUString& rTitle,
@@ -1162,9 +1159,8 @@ void BookmarksBox_Impl::dispose()
     const sal_Int32 nCount = GetEntryCount();
     for ( sal_Int32 i = 0; i < nCount; ++i )
     {
-        OUString aTitle = GetEntry(i);
         OUString* pURL = static_cast<OUString*>(GetEntryData(i));
-        aHistOpt.AppendItem(eHELPBOOKMARKS, *pURL, "", aTitle, boost::none);
+        aHistOpt.AppendItem(eHELPBOOKMARKS, *pURL, "", GetEntry(i), boost::none);
         delete pURL;
     }
     ListBox::dispose();
@@ -1190,9 +1186,7 @@ void BookmarksBox_Impl::DoAction( sal_uInt16 nAction )
                 {
                     OUString* pURL = static_cast<OUString*>(GetEntryData( nPos ));
                     RemoveEntry( nPos );
-                    OUString aImageURL = IMAGE_URL;
-                    aImageURL += INetURLObject( *pURL ).GetHost();
-                    nPos = InsertEntry( aDlg.GetTitle(), SvFileInformationManager::GetImage( INetURLObject(aImageURL) ) );
+                    nPos = InsertEntry( aDlg.GetTitle(), SvFileInformationManager::GetImage( INetURLObject(IMAGE_URL+INetURLObject( *pURL ).GetHost()) ) );
                     SetEntryData( nPos, new OUString( *pURL ) );
                     SelectEntryPos( nPos );
                     delete pURL;
@@ -1339,8 +1333,7 @@ OUString BookmarksTabPage_Impl::GetSelectedEntry() const
 
 void BookmarksTabPage_Impl::AddBookmarks( const OUString& rTitle, const OUString& rURL )
 {
-    OUString aImageURL = IMAGE_URL;
-    aImageURL += INetURLObject( rURL ).GetHost();
+    const OUString aImageURL {IMAGE_URL + INetURLObject( rURL ).GetHost()};
     const sal_Int32 nPos = m_pBookmarksBox->InsertEntry( rTitle, SvFileInformationManager::GetImage( INetURLObject(aImageURL) ) );
     m_pBookmarksBox->SetEntryData( nPos, new OUString( rURL ) );
 }
@@ -1865,7 +1858,6 @@ SfxHelpTextWindow_Impl::SfxHelpTextWindow_Impl( SfxHelpWindow_Impl* pParent ) :
     aOnStartupText      ( SfxResId( RID_HELP_ONSTARTUP_TEXT ) ),
     pHelpWin            ( pParent ),
     pTextWin            ( VclPtr<TextWin_Impl>::Create( this ) ),
-    pSrchDlg            ( nullptr ),
     nMinPos             ( 0 ),
     bIsDebug            ( false ),
     bIsIndexOn          ( false ),
@@ -1926,7 +1918,7 @@ void SfxHelpTextWindow_Impl::dispose()
 
     bIsInClose = true;
     SvtMiscOptions().RemoveListenerLink( LINK( this, SfxHelpTextWindow_Impl, NotifyHdl ) );
-    pSrchDlg.disposeAndClear();
+    m_xSrchDlg.reset();
     aToolBox.disposeAndClear();
     aOnStartupCB.disposeAndClear();
     pHelpWin.clear();
@@ -1999,9 +1991,7 @@ void SfxHelpTextWindow_Impl::InitOnStartupBox()
     sCurrentFactory = SfxHelp::GetCurrentModuleIdentifier();
 
     Reference< XComponentContext > xContext = ::comphelper::getProcessComponentContext();
-    OUString sPath( PATH_OFFICE_FACTORIES );
-    sPath += sCurrentFactory;
-    OUString sKey( KEY_HELP_ON_OPEN );
+    const OUString sPath { PATH_OFFICE_FACTORIES + sCurrentFactory };
 
     // Attention: This check boy knows two states:
     // 1) Reading of the config key fails with an exception or by getting an empty Any (!) => check box must be hidden
@@ -2015,7 +2005,7 @@ void SfxHelpTextWindow_Impl::InitOnStartupBox()
             xContext, PACKAGE_SETUP, EConfigurationModes::Standard );
         if ( xConfiguration.is() )
         {
-            Any aAny = ConfigurationHelper::readRelativeKey( xConfiguration, sPath, sKey );
+            Any aAny = ConfigurationHelper::readRelativeKey( xConfiguration, sPath, KEY_HELP_ON_OPEN );
             if (aAny >>= bHelpAtStartup)
                 bHideBox = false;
         }
@@ -2035,10 +2025,9 @@ void SfxHelpTextWindow_Impl::InitOnStartupBox()
         if ( xConfiguration.is() )
         {
             OUString sTemp;
-            sKey = KEY_UI_NAME;
             try
             {
-                Any aAny = ConfigurationHelper::readRelativeKey( xConfiguration, sPath, sKey );
+                Any aAny = ConfigurationHelper::readRelativeKey( xConfiguration, sPath, KEY_UI_NAME );
                 aAny >>= sTemp;
             }
             catch( Exception& )
@@ -2051,9 +2040,7 @@ void SfxHelpTextWindow_Impl::InitOnStartupBox()
         if ( !sModuleName.isEmpty() )
         {
             // set module name in checkbox text
-            OUString sText( aOnStartupText );
-            sText = sText.replaceFirst( "%MODULENAME", sModuleName );
-            aOnStartupCB->SetText( sText );
+            aOnStartupCB->SetText( aOnStartupText.replaceFirst( "%MODULENAME", sModuleName ) );
             // and show it
             aOnStartupCB->Show();
             // set check state
@@ -2061,9 +2048,7 @@ void SfxHelpTextWindow_Impl::InitOnStartupBox()
             aOnStartupCB->SaveValue();
 
             // calculate and set optimal width of the onstartup checkbox
-            OUString sCBText( "XXX" );
-            sCBText += aOnStartupCB->GetText();
-            long nTextWidth = aOnStartupCB->GetTextWidth( sCBText );
+            long nTextWidth = aOnStartupCB->GetTextWidth( "XXX" + aOnStartupCB->GetText() );
             Size aSize = aOnStartupCB->GetSizePixel();
             aSize.setWidth( nTextWidth );
             aOnStartupCB->SetSizePixel( aSize );
@@ -2171,8 +2156,7 @@ IMPL_LINK_NOARG(SfxHelpTextWindow_Impl, SelectHdl, Timer *, void)
                 if ( bIsFullWordSearch )
                     xSrchDesc->setPropertyValue( "SearchWords", makeAny( true ) );
 
-                OUString sSearchString = sfx2::PrepareSearchString( aSearchText, GetBreakIterator(), false );
-                xSrchDesc->setSearchString( sSearchString );
+                xSrchDesc->setSearchString( sfx2::PrepareSearchString( aSearchText, GetBreakIterator(), false ) );
                 Reference< XIndexAccess > xSelection = xSearchable->findAll( xSrchDesc );
 
                 // then select all found words
@@ -2207,9 +2191,8 @@ void SfxHelpTextWindow_Impl::FindHdl(sfx2::SearchDialog* pDlg)
 {
     bool bWrapAround = ( nullptr == pDlg );
     if ( bWrapAround )
-        pDlg = pSrchDlg;
+        pDlg = m_xSrchDlg.get();
     DBG_ASSERT( pDlg, "invalid search dialog" );
-    OUString sSearchText = pDlg->GetSearchText();
     try
     {
         // select the words, which are equal to the search text of the search page
@@ -2225,7 +2208,7 @@ void SfxHelpTextWindow_Impl::FindHdl(sfx2::SearchDialog* pDlg)
                 xSrchDesc->setPropertyValue( "SearchWords", makeAny(pDlg->IsOnlyWholeWords()) );
                 xSrchDesc->setPropertyValue( "SearchCaseSensitive", makeAny(pDlg->IsMarchCase()) );
                 xSrchDesc->setPropertyValue( "SearchBackwards", makeAny(pDlg->IsSearchBackwards()) );
-                xSrchDesc->setSearchString( sSearchText );
+                xSrchDesc->setSearchString( pDlg->GetSearchText() );
                 Reference< XInterface > xSelection;
                 Reference< XTextRange > xCursor = getCursor();
 
@@ -2267,11 +2250,11 @@ void SfxHelpTextWindow_Impl::FindHdl(sfx2::SearchDialog* pDlg)
                 }
                 else
                 {
-                    assert(pSrchDlg && "no search dialog");
-                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pSrchDlg->GetFrameWeld(),
+                    assert(m_xSrchDlg && "no search dialog");
+                    std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xSrchDlg->getDialog(),
                                                               VclMessageType::Info, VclButtonsType::Ok, SfxResId(STR_INFO_NOSEARCHTEXTFOUND)));
                     xBox->run();
-                    pSrchDlg->SetFocusOnEdit();
+                    m_xSrchDlg->SetFocusOnEdit();
                 }
             }
         }
@@ -2282,12 +2265,10 @@ void SfxHelpTextWindow_Impl::FindHdl(sfx2::SearchDialog* pDlg)
     }
 }
 
-
 IMPL_LINK_NOARG( SfxHelpTextWindow_Impl, CloseHdl, LinkParamNone*, void )
 {
-    pSrchDlg.clear();
+    m_xSrchDlg.reset();
 }
-
 
 IMPL_LINK( SfxHelpTextWindow_Impl, CheckHdl, Button*, pButton, void )
 {
@@ -2295,12 +2276,10 @@ IMPL_LINK( SfxHelpTextWindow_Impl, CheckHdl, Button*, pButton, void )
     if ( xConfiguration.is() )
     {
         bool bChecked = pBox->IsChecked();
-        OUString sPath( PATH_OFFICE_FACTORIES );
-        sPath += sCurrentFactory;
         try
         {
             ConfigurationHelper::writeRelativeKey(
-                xConfiguration, sPath, KEY_HELP_ON_OPEN, makeAny( bChecked ) );
+                xConfiguration, PATH_OFFICE_FACTORIES + sCurrentFactory, KEY_HELP_ON_OPEN, makeAny( bChecked ) );
             ConfigurationHelper::flush( xConfiguration );
         }
         catch( Exception& )
@@ -2573,22 +2552,22 @@ void SfxHelpTextWindow_Impl::CloseFrame()
 
 void SfxHelpTextWindow_Impl::DoSearch()
 {
-    if ( !pSrchDlg )
+    if (!m_xSrchDlg)
     {
         // create the search dialog
-        pSrchDlg = VclPtr<sfx2::SearchDialog>::Create( pTextWin, "HelpSearchDialog" );
+        m_xSrchDlg.reset(new sfx2::SearchDialog(pTextWin->GetFrameWeld(), "HelpSearchDialog"));
         // set handler
-        pSrchDlg->SetFindHdl( LINK( this, SfxHelpTextWindow_Impl, FindHdl ) );
-        pSrchDlg->SetCloseHdl( LINK( this, SfxHelpTextWindow_Impl, CloseHdl ) );
+        m_xSrchDlg->SetFindHdl( LINK( this, SfxHelpTextWindow_Impl, FindHdl ) );
+        m_xSrchDlg->SetCloseHdl( LINK( this, SfxHelpTextWindow_Impl, CloseHdl ) );
         // get selected text of the help page to set it as the search text
         Reference< XTextRange > xCursor = getCursor();
         if ( xCursor.is() )
         {
             OUString sText = xCursor->getString();
             if ( !sText.isEmpty() )
-                pSrchDlg->SetSearchText( sText );
+                m_xSrchDlg->SetSearchText( sText );
         }
-        pSrchDlg->Show();
+        sfx2::SearchDialog::runAsync(m_xSrchDlg);
     }
 }
 
@@ -2722,12 +2701,10 @@ void SfxHelpWindow_Impl::LoadConfig()
     if ( aViewOpt.Exists() )
     {
         bIndex = aViewOpt.IsVisible();
-        OUString aUserData;
         Any aUserItem = aViewOpt.GetUserItem( USERITEM_NAME );
-        OUString aTemp;
-        if ( aUserItem >>= aTemp )
+        OUString aUserData;
+        if ( aUserItem >>= aUserData )
         {
-            aUserData = aTemp;
             DBG_ASSERT( comphelper::string::getTokenCount(aUserData, ';') == 6, "invalid user data" );
             sal_Int32 nIdx = 0;
             nIndexSize = aUserData.getToken( 0, ';', nIdx ).toInt32();
@@ -2766,20 +2743,15 @@ void SfxHelpWindow_Impl::SaveConfig()
     }
 
     aViewOpt.SetVisible( bIndex );
-    OUString aUserData = OUString::number( nIndexSize );
-    aUserData += ";";
-    aUserData += OUString::number( nTextSize );
-    aUserData += ";";
-    aUserData += OUString::number( nW );
-    aUserData += ";";
-    aUserData += OUString::number( nH );
 
     VclPtr<vcl::Window> pScreenWin = VCLUnoHelper::GetWindow( xWindow );
     aWinPos = pScreenWin->GetWindowExtentsRelative( nullptr ).TopLeft();
-    aUserData += ";";
-    aUserData += OUString::number( aWinPos.X() );
-    aUserData += ";";
-    aUserData += OUString::number( aWinPos.Y() );
+    const OUString aUserData = OUString::number( nIndexSize )
+        + ";" + OUString::number( nTextSize )
+        + ";" + OUString::number( nW )
+        + ";" + OUString::number( nH )
+        + ";" + OUString::number( aWinPos.X() )
+        + ";" + OUString::number( aWinPos.Y() );
 
     aViewOpt.SetUserItem( USERITEM_NAME, makeAny( aUserData ) );
 }
@@ -2787,10 +2759,7 @@ void SfxHelpWindow_Impl::SaveConfig()
 
 void SfxHelpWindow_Impl::ShowStartPage()
 {
-    OUString sHelpURL = SfxHelpWindow_Impl::buildHelpURL(pIndexWin->GetFactory(),
-                                                                "/start",
-                                                                OUString());
-    loadHelpContent(sHelpURL);
+    loadHelpContent(SfxHelpWindow_Impl::buildHelpURL(pIndexWin->GetFactory(), "/start", OUString()));
 }
 
 
@@ -2830,12 +2799,7 @@ IMPL_LINK_NOARG(SfxHelpWindow_Impl, OpenHdl, Control*, bool)
         else
             aId = aEntry;
 
-        aEntry  = "/";
-        aEntry += aId;
-
-        sHelpURL = SfxHelpWindow_Impl::buildHelpURL(pIndexWin->GetFactory(),
-                                                    aEntry,
-                                                    aAnchor);
+        sHelpURL = SfxHelpWindow_Impl::buildHelpURL(pIndexWin->GetFactory(), "/" + aId, aAnchor);
     }
 
     loadHelpContent(sHelpURL);
@@ -2849,11 +2813,9 @@ IMPL_LINK( SfxHelpWindow_Impl, SelectFactoryHdl, SfxHelpIndexWindow_Impl* , pWin
     if ( sTitle.isEmpty() )
         sTitle = GetParent()->GetText();
 
-    OUString aNewTitle = sTitle + " - " + pIndexWin->GetActiveFactoryTitle();
-
     Reference< XTitle > xTitle(xFrame, UNO_QUERY);
     if (xTitle.is ())
-        xTitle->setTitle (aNewTitle);
+        xTitle->setTitle(sTitle + " - " + pIndexWin->GetActiveFactoryTitle());
 
     if ( pWin )
         ShowStartPage();
@@ -3070,10 +3032,8 @@ void SfxHelpWindow_Impl::DoAction( sal_uInt16 nActionId )
                     aURL.Complete = ".uno:SourceView";
                 else if ( TBI_COPY == nActionId )
                     aURL.Complete = ".uno:Copy";
-                else if ( TBI_SELECTIONMODE == nActionId )
+                else // TBI_SELECTIONMODE == nActionId
                     aURL.Complete = ".uno:SelectTextMode";
-                else
-                    aURL.Complete = ".uno:SearchDialog";
                 Reference< util::XURLTransformer > xTrans( util::URLTransformer::create( ::comphelper::getProcessComponentContext() ) );
                 xTrans->parseStrict(aURL);
                 Reference < XDispatch > xDisp = xProv->queryDispatch( aURL, OUString(), 0 );
@@ -3098,13 +3058,11 @@ void SfxHelpWindow_Impl::DoAction( sal_uInt16 nActionId )
                         OUString aValue;
                         if ( aAny >>= aValue )
                         {
-                            OUString aTitle(aValue);
                             SfxAddHelpBookmarkDialog_Impl aDlg(GetFrameWeld(), false);
-                            aDlg.SetTitle(aTitle);
+                            aDlg.SetTitle(aValue);
                             if (aDlg.run() == RET_OK )
                             {
-                                aTitle = aDlg.GetTitle();
-                                pIndexWin->AddBookmarks( aTitle, aURL );
+                                pIndexWin->AddBookmarks( aDlg.GetTitle(), aURL );
                             }
                         }
                     }

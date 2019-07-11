@@ -35,6 +35,8 @@
 
 #include <algorithm>
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
 using namespace ::com::sun::star;
 
 using ::com::sun::star::beans::Property;
@@ -132,7 +134,7 @@ DataSeries::DataSeries() :
 
 DataSeries::DataSeries( const DataSeries & rOther ) :
         MutexContainer(),
-        impl::DataSeries_Base(),
+        impl::DataSeries_Base(rOther),
         ::property::OPropertySet( rOther, m_aMutex ),
     m_xModifyEventForwarder( ModifyListenerHelper::createModifyEventForwarder())
 {

@@ -24,6 +24,7 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/docfile.hxx>
 #include <svl/itemset.hxx>
+#include <svx/langbox.hxx>
 #include <editeng/langitem.hxx>
 #include <unotools/useroptions.hxx>
 
@@ -44,8 +45,8 @@ SdModifyFieldDlg::SdModifyFieldDlg(weld::Window* pWindow, const SvxFieldData* pI
     , m_pField(pInField)
     , m_xRbtFix(m_xBuilder->weld_radio_button("fixedRB"))
     , m_xRbtVar(m_xBuilder->weld_radio_button("varRB"))
-    , m_xLbLanguage(new LanguageBox(m_xBuilder->weld_combo_box_text("languageLB")))
-    , m_xLbFormat(m_xBuilder->weld_combo_box_text("formatLB"))
+    , m_xLbLanguage(new LanguageBox(m_xBuilder->weld_combo_box("languageLB")))
+    , m_xLbFormat(m_xBuilder->weld_combo_box("formatLB"))
 {
     m_xLbLanguage->SetLanguageList( SvxLanguageListFlags::ALL|SvxLanguageListFlags::ONLY_KNOWN, false );
     m_xLbLanguage->connect_changed(LINK(this, SdModifyFieldDlg, LanguageChangeHdl));
@@ -156,7 +157,7 @@ SvxFieldData* SdModifyFieldDlg::GetField()
 
 void SdModifyFieldDlg::FillFormatList()
 {
-    LanguageType eLangType = m_xLbLanguage->GetSelectedLanguage();
+    LanguageType eLangType = m_xLbLanguage->get_active_id();
 
     m_xLbFormat->clear();
 
@@ -292,15 +293,15 @@ void SdModifyFieldDlg::FillControls()
 
     const SfxPoolItem* pItem;
     if( SfxItemState::SET == m_aInputSet.GetItemState(EE_CHAR_LANGUAGE, true, &pItem ) )
-        m_xLbLanguage->SelectLanguage( static_cast<const SvxLanguageItem*>(pItem)->GetLanguage() );
+        m_xLbLanguage->set_active_id(static_cast<const SvxLanguageItem*>(pItem)->GetLanguage());
 
-    m_xLbLanguage->save_value();
+    m_xLbLanguage->save_active_id();
 
     FillFormatList();
     m_xLbFormat->save_value();
 }
 
-IMPL_LINK_NOARG(SdModifyFieldDlg, LanguageChangeHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SdModifyFieldDlg, LanguageChangeHdl, weld::ComboBox&, void)
 {
     FillFormatList();
 }
@@ -309,9 +310,9 @@ SfxItemSet SdModifyFieldDlg::GetItemSet()
 {
     SfxItemSet aOutput( *m_aInputSet.GetPool(), svl::Items<EE_CHAR_LANGUAGE, EE_CHAR_LANGUAGE_CTL>{} );
 
-    if( m_xLbLanguage->get_value_changed_from_saved() )
+    if (m_xLbLanguage->get_active_id_changed_from_saved())
     {
-        LanguageType eLangType = m_xLbLanguage->GetSelectedLanguage();
+        LanguageType eLangType = m_xLbLanguage->get_active_id();
         SvxLanguageItem aItem( eLangType, EE_CHAR_LANGUAGE );
         aOutput.Put( aItem );
 

@@ -18,9 +18,12 @@
  */
 
 #include "SlsLayeredDevice.hxx"
+#include <Window.hxx>
 
 #include <vcl/window.hxx>
 #include <vcl/virdev.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <tools/gen.hxx>
 #include <tools/fract.hxx>
@@ -76,7 +79,7 @@ void ForAllRectangles (const vcl::Region& rRegion, const std::function<void (con
     RectangleVector aRectangles;
     rRegion.GetRegionRectangles(aRectangles);
 
-    if(0 == aRectangles.size())
+    if(aRectangles.empty())
     {
         aFunction(::tools::Rectangle());
     }

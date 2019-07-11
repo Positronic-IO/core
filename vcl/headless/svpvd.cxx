@@ -25,6 +25,7 @@
 #include <headless/svpgdi.hxx>
 
 #include <basegfx/vector/b2ivector.hxx>
+#include <comphelper/lok.hxx>
 
 #include <cairo.h>
 
@@ -44,12 +45,16 @@ SvpSalVirtualDevice::~SvpSalVirtualDevice()
     cairo_surface_destroy(m_pRefSurface);
 }
 
+SvpSalGraphics* SvpSalVirtualDevice::AddGraphics(SvpSalGraphics* pGraphics)
+{
+    pGraphics->setSurface(m_pSurface, m_aFrameSize);
+    m_aGraphics.push_back(pGraphics);
+    return pGraphics;
+}
+
 SalGraphics* SvpSalVirtualDevice::AcquireGraphics()
 {
-    SvpSalGraphics* pGraphics = new SvpSalGraphics();
-    pGraphics->setSurface(m_pSurface, m_aFrameSize);
-    m_aGraphics.push_back( pGraphics );
-    return pGraphics;
+    return AddGraphics(new SvpSalGraphics());
 }
 
 void SvpSalVirtualDevice::ReleaseGraphics( SalGraphics* pGraphics )
@@ -88,19 +93,23 @@ bool SvpSalVirtualDevice::SetSizeUsingBuffer( long nNewDX, long nNewDY,
         }
         else if (pBuffer)
         {
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
             double fXScale, fYScale;
-            cairo_surface_get_device_scale(m_pRefSurface, &fXScale, &fYScale);
-            nNewDX *= fXScale;
-            nNewDY *= fYScale;
-#endif
+            if (comphelper::LibreOfficeKit::isActive())
+            {
+                // Force scaling of the painting
+                fXScale = fYScale = comphelper::LibreOfficeKit::getDPIScale();
+            }
+            else
+            {
+                dl_cairo_surface_get_device_scale(m_pRefSurface, &fXScale, &fYScale);
+                nNewDX *= fXScale;
+                nNewDY *= fYScale;
+            }
 
             m_pSurface = cairo_image_surface_create_for_data(pBuffer, CAIRO_FORMAT_ARGB32,
                                 nNewDX, nNewDY, cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, nNewDX));
 
-#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 14, 0)
-            cairo_surface_set_device_scale(m_pSurface, fXScale, fYScale);
-#endif
+            dl_cairo_surface_set_device_scale(m_pSurface, fXScale, fYScale);
         }
         else
         {

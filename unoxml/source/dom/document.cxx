@@ -110,10 +110,9 @@ namespace DOM
         ::osl::MutexGuard const g(m_Mutex);
 #ifdef DBG_UTIL
         // node map must be empty now, otherwise CDocument must not die!
-        for (nodemap_t::iterator i = m_NodeMap.begin();
-                i != m_NodeMap.end(); ++i)
+        for (const auto& rEntry : m_NodeMap)
         {
-            Reference<XNode> const xNode(i->second.first);
+            Reference<XNode> const xNode(rEntry.second.first);
             OSL_ENSURE(!xNode.is(),
             "CDocument::~CDocument(): ERROR: live node in document node map!");
         }
@@ -340,7 +339,7 @@ namespace DOM
     // IO context functions for libxml2 interaction
     typedef struct {
         Reference< XOutputStream > stream;
-        bool allowClose;
+        bool const allowClose;
     } IOContext;
 
     extern "C" {
@@ -377,11 +376,8 @@ namespace DOM
         }
 
         // notify listeners about start
-        listenerlist_t::const_iterator iter1 = streamListeners.begin();
-        while (iter1 != streamListeners.end()) {
-            Reference< XStreamListener > aListener = *iter1;
+        for (const Reference< XStreamListener >& aListener : streamListeners) {
             aListener->started();
-            ++iter1;
         }
 
         {
@@ -398,11 +394,8 @@ namespace DOM
         }
 
         // call listeners
-        listenerlist_t::const_iterator iter2 = streamListeners.begin();
-        while (iter2 != streamListeners.end()) {
-            Reference< XStreamListener > aListener = *iter2;
+        for (const Reference< XStreamListener >& aListener : streamListeners) {
             aListener->closed();
-            ++iter2;
         }
     }
 

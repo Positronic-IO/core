@@ -23,6 +23,7 @@
 
 #include <ucbhelper/simpleauthenticationrequest.hxx>
 #include <comphelper/seekableinput.hxx>
+#include <sal/log.hxx>
 
 #include "DAVAuthListenerImpl.hxx"
 #include "DAVResourceAccess.hxx"
@@ -1026,7 +1027,7 @@ const OUString & DAVResourceAccess::getRequestURI() const
 // static
 void DAVResourceAccess::getUserRequestHeaders(
     const uno::Reference< ucb::XCommandEnvironment > & xEnv,
-    const rtl::OUString & rURI,
+    const OUString & rURI,
     ucb::WebDAVHTTPMethod eMethod,
     DAVRequestHeaders & rRequestHeaders )
 {
@@ -1058,18 +1059,8 @@ bool DAVResourceAccess::detectRedirectCycle(
 
     SerfUri aUri( rRedirectURL );
 
-    std::vector< SerfUri >::const_iterator it  = m_aRedirectURIs.begin();
-    std::vector< SerfUri >::const_iterator end = m_aRedirectURIs.end();
-
-    while ( it != end )
-    {
-        if ( aUri == (*it) )
-            return true;
-
-        ++it;
-    }
-
-    return false;
+    return std::any_of(m_aRedirectURIs.begin(), m_aRedirectURIs.end(),
+        [&aUri](const SerfUri& rUri) { return aUri == rUri; });
 }
 
 

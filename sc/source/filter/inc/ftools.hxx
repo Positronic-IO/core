@@ -21,13 +21,9 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_FTOOLS_HXX
 
 #include <vector>
-#include <map>
 #include <limits>
-#include <sal/macros.h>
-#include <sot/storage.hxx>
-#include <oox/helper/helper.hxx>
+#include <tools/ref.hxx>
 #include <filter.hxx>
-#include <scdllapi.h>
 
 // Common macros ==============================================================
 
@@ -105,7 +101,7 @@ void insert_value( Type& rnBitField, InsertType nValue, sal_uInt8 nStartBit, sal
 {
     unsigned long nMask = ((1UL << nBitCount) - 1);
     Type nNewValue = static_cast< Type >( nValue & nMask );
-    (rnBitField &= ~(nMask << nStartBit)) |= (nNewValue << nStartBit);
+    rnBitField = (rnBitField & ~(nMask << nStartBit)) | (nNewValue << nStartBit);
 }
 
 class Color;
@@ -114,6 +110,8 @@ class SfxItemSet;
 class ScStyleSheet;
 class ScStyleSheetPool;
 class SvStream;
+class SotStorage;
+class SotStorageStream;
 
 /** Contains static methods used anywhere in the filters. */
 class ScfTools
@@ -277,8 +275,8 @@ public:
                                    double nOutputFactor, bool bCalcWidthHeight,
                                    SvNumberFormatter* pFormatter, bool bConvertDate ) override;
 
-    virtual ScEEAbsImport *CreateRTFImport( ScDocument* pDoc, const ScRange& rRange ) override;
-    virtual ScEEAbsImport *CreateHTMLImport( ScDocument* pDocP, const OUString& rBaseURL, const ScRange& rRange ) override;
+    virtual std::unique_ptr<ScEEAbsImport> CreateRTFImport( ScDocument* pDoc, const ScRange& rRange ) override;
+    virtual std::unique_ptr<ScEEAbsImport> CreateHTMLImport( ScDocument* pDocP, const OUString& rBaseURL, const ScRange& rRange ) override;
     virtual OUString       GetHTMLRangeNameList( ScDocument* pDoc, const OUString& rOrigName ) override;
 
     // various export filters

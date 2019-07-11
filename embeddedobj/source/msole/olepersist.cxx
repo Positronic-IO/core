@@ -46,6 +46,7 @@
 #include <comphelper/classids.hxx>
 #include <osl/diagnose.h>
 #include <osl/thread.hxx>
+#include <sal/log.hxx>
 
 #include <closepreventer.hxx>
 
@@ -154,7 +155,7 @@ OUString GetNewFilledTempFile_Impl( const uno::Reference< io::XInputStream >& xI
 #ifdef _WIN32
 /// @throws io::IOException
 /// @throws uno::RuntimeException
-OUString GetNewFilledTempFile_Impl( const uno::Reference< embed::XOptimizedStorage >& xParentStorage, const OUString& aEntryName, const uno::Reference< lang::XMultiServiceFactory >& xFactory )
+static OUString GetNewFilledTempFile_Impl( const uno::Reference< embed::XOptimizedStorage >& xParentStorage, const OUString& aEntryName, const uno::Reference< lang::XMultiServiceFactory >& xFactory )
 {
     OUString aResult;
 
@@ -186,14 +187,14 @@ OUString GetNewFilledTempFile_Impl( const uno::Reference< embed::XOptimizedStora
 }
 
 
-void SetStreamMediaType_Impl( const uno::Reference< io::XStream >& xStream, const OUString& aMediaType )
+static void SetStreamMediaType_Impl( const uno::Reference< io::XStream >& xStream, const OUString& aMediaType )
 {
     uno::Reference< beans::XPropertySet > xPropSet( xStream, uno::UNO_QUERY_THROW );
     xPropSet->setPropertyValue("MediaType", uno::makeAny( aMediaType ) );
 }
 #endif
 
-void LetCommonStoragePassBeUsed_Impl( const uno::Reference< io::XStream >& xStream )
+static void LetCommonStoragePassBeUsed_Impl( const uno::Reference< io::XStream >& xStream )
 {
     uno::Reference< beans::XPropertySet > xPropSet( xStream, uno::UNO_QUERY_THROW );
     xPropSet->setPropertyValue("UseCommonStoragePasswordEncryption",
@@ -372,8 +373,7 @@ void OleEmbeddedObject::InsertVisualCache_Impl( const uno::Reference< io::XStrea
             uno::UNO_QUERY_THROW );
 
     uno::Reference< io::XSeekable > xCachedSeek( xCachedVisualRepresentation, uno::UNO_QUERY_THROW );
-    if ( xCachedSeek.is() )
-        xCachedSeek->seek( 0 );
+    xCachedSeek->seek( 0 );
 
     uno::Reference < io::XStream > xTempFile(
             io::TempFile::create(comphelper::getComponentContext(m_xFactory)),
@@ -1201,7 +1201,8 @@ void OleEmbeddedObject::StoreToLocation_Impl(
             if ( !xCachedVisualRepresentation.is() )
                 xCachedVisualRepresentation = TryToRetrieveCachedVisualRepresentation_Impl( xTargetStream );
 
-            RemoveVisualCache_Impl( xTargetStream );
+            if (!m_bStreamReadOnly)
+                RemoveVisualCache_Impl(xTargetStream);
         }
     }
 
@@ -1878,72 +1879,67 @@ void SAL_CALL OleEmbeddedObject::breakLink( const uno::Reference< embed::XStorag
 
 
 #ifdef _WIN32
-    if ( m_pOleComponent )
-    {
-        // TODO: create an object based on the link
+    // TODO: create an object based on the link
 
-        // disconnect the old temporary URL
-        OUString aOldTempURL = m_aTempURL;
-        m_aTempURL.clear();
+    // disconnect the old temporary URL
+    OUString aOldTempURL = m_aTempURL;
+    m_aTempURL.clear();
 
-        OleComponent* pNewOleComponent = new OleComponent( m_xFactory, this );
-        try {
-            pNewOleComponent->InitEmbeddedCopyOfLink( m_pOleComponent );
-        }
-        catch ( const uno::Exception& )
-        {
-            delete pNewOleComponent;
-            if ( !m_aTempURL.isEmpty() )
-                   KillFile_Impl( m_aTempURL, m_xFactory );
-            m_aTempURL = aOldTempURL;
-            throw;
-        }
-
-        try {
-            GetRidOfComponent();
-        }
-        catch( const uno::Exception& )
-        {
-            delete pNewOleComponent;
-            if ( !m_aTempURL.isEmpty() )
-                   KillFile_Impl( m_aTempURL, m_xFactory );
-            m_aTempURL = aOldTempURL;
-            throw;
-        }
-
-           KillFile_Impl( aOldTempURL, m_xFactory );
-
-        CreateOleComponent_Impl( pNewOleComponent );
-
-        if ( m_xParentStorage != xStorage || !m_aEntryName.equals( sEntName ) )
-            SwitchOwnPersistence( xStorage, sEntName );
-
-        if ( m_nObjectState != embed::EmbedStates::LOADED )
-        {
-            // TODO: should we activate the new object if the link was activated?
-
-            sal_Int32 nTargetState = m_nObjectState;
-            m_nObjectState = embed::EmbedStates::LOADED;
-
-            if ( m_nObjectState == embed::EmbedStates::RUNNING )
-                m_pOleComponent->RunObject(); // the object already was in running state, the server must be installed
-            else // m_nObjectState == embed::EmbedStates::ACTIVE
-            {
-                m_pOleComponent->RunObject(); // the object already was in running state, the server must be installed
-                m_pOleComponent->ExecuteVerb( embed::EmbedVerbs::MS_OLEVERB_OPEN );
-            }
-
-            m_nObjectState = nTargetState;
-        }
-
-        m_bIsLink = false;
-        m_aLinkURL.clear();
+    OleComponent* pNewOleComponent = new OleComponent(m_xFactory, this);
+    try {
+        pNewOleComponent->InitEmbeddedCopyOfLink(m_pOleComponent);
     }
-    else
-#endif
+    catch (const uno::Exception&)
     {
-        throw io::IOException(); //TODO:
+        delete pNewOleComponent;
+        if (!m_aTempURL.isEmpty())
+            KillFile_Impl(m_aTempURL, m_xFactory);
+        m_aTempURL = aOldTempURL;
+        throw;
     }
+
+    try {
+        GetRidOfComponent();
+    }
+    catch (const uno::Exception&)
+    {
+        delete pNewOleComponent;
+        if (!m_aTempURL.isEmpty())
+            KillFile_Impl(m_aTempURL, m_xFactory);
+        m_aTempURL = aOldTempURL;
+        throw;
+    }
+
+    KillFile_Impl(aOldTempURL, m_xFactory);
+
+    CreateOleComponent_Impl(pNewOleComponent);
+
+    if (m_xParentStorage != xStorage || !m_aEntryName.equals(sEntName))
+        SwitchOwnPersistence(xStorage, sEntName);
+
+    if (m_nObjectState != embed::EmbedStates::LOADED)
+    {
+        // TODO: should we activate the new object if the link was activated?
+
+        const sal_Int32 nTargetState = m_nObjectState;
+        m_nObjectState = embed::EmbedStates::LOADED;
+
+        if (nTargetState == embed::EmbedStates::RUNNING)
+            m_pOleComponent->RunObject(); // the object already was in running state, the server must be installed
+        else // nTargetState == embed::EmbedStates::ACTIVE
+        {
+            m_pOleComponent->RunObject(); // the object already was in running state, the server must be installed
+            m_pOleComponent->ExecuteVerb(embed::EmbedVerbs::MS_OLEVERB_OPEN);
+        }
+
+        m_nObjectState = nTargetState;
+    }
+
+    m_bIsLink = false;
+    m_aLinkURL.clear();
+#else // ! _WIN32
+    throw io::IOException(); //TODO:
+#endif // _WIN32
 }
 
 

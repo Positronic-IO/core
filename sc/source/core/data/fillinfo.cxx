@@ -21,13 +21,11 @@
 #include <scitems.hxx>
 #include <editeng/boxitem.hxx>
 #include <editeng/lineitem.hxx>
-#include <editeng/editdata.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/brushitem.hxx>
 
 #include <fillinfo.hxx>
 #include <document.hxx>
-#include <formulacell.hxx>
 #include <table.hxx>
 #include <attrib.hxx>
 #include <attarray.hxx>
@@ -37,7 +35,6 @@
 #include <poolhelp.hxx>
 #include <docpool.hxx>
 #include <conditio.hxx>
-#include <colorscale.hxx>
 #include <stlpool.hxx>
 #include <cellvalue.hxx>
 #include <mtvcellfunc.hxx>
@@ -121,7 +118,7 @@ namespace {
 class RowInfoFiller
 {
     ScDocument& mrDoc;
-    SCTAB mnTab;
+    SCTAB const mnTab;
     RowInfo* mpRowInfo;
     SCCOL mnArrX;
     SCSIZE mnArrY;
@@ -327,21 +324,21 @@ bool handleConditionalFormat(ScConditionalFormatList& rCondFormList, const std::
             // if style is not there, treat like no condition
         }
 
-        if(aData.pColorScale)
+        if(aData.mxColorScale)
         {
-            pInfo->pColorScale.reset(aData.pColorScale);
+            pInfo->mxColorScale = aData.mxColorScale;
             bFound = true;
         }
 
         if(aData.pDataBar)
         {
-            pInfo->pDataBar.reset(aData.pDataBar);
+            pInfo->pDataBar = std::move(aData.pDataBar);
             bFound = true;
         }
 
         if(aData.pIconSet)
         {
-            pInfo->pIconSet.reset(aData.pIconSet);
+            pInfo->pIconSet = std::move(aData.pIconSet);
             bFound = true;
         }
     }
@@ -700,10 +697,10 @@ void ScDocument::FillInfo(
                         bAnyShadow = true;
                     }
                 }
-                if( bAnyCondition && pInfo->pColorScale)
+                if( bAnyCondition && pInfo->mxColorScale)
                 {
                     pRowInfo[nArrRow].bEmptyBack = false;
-                    pInfo->pBackground = new SvxBrushItem(*pInfo->pColorScale, ATTR_BACKGROUND);
+                    pInfo->pBackground = new SvxBrushItem(*pInfo->mxColorScale, ATTR_BACKGROUND);
                 }
             }
         }

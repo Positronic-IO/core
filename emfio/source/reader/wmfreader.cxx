@@ -24,6 +24,7 @@
 #include <boost/optional.hpp>
 #include <rtl/crc.h>
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 #include <osl/endian.h>
 #include <vcl/gdimtf.hxx>
 #include <vcl/svapp.hxx>
@@ -805,9 +806,9 @@ namespace emfio
                 mpInputStream->ReadUInt16( nFunction ).ReadUInt16( nFunction );
 
                 ReadDIB(aBmp, *mpInputStream, false);
-                Bitmap::ScopedReadAccess pBmp(aBmp);
-                if ( pBmp )
+                if ( !!aBmp )
                 {
+                    Bitmap::ScopedReadAccess pBmp(aBmp);
                     for ( long y = 0; y < pBmp->Height(); y++ )
                     {
                         for ( long x = 0; x < pBmp->Width(); x++ )
@@ -822,7 +823,6 @@ namespace emfio
                     nCount = pBmp->Height() * pBmp->Width();
                     if ( !nCount )
                         nCount++;
-                    pBmp.reset();
                 }
                 Color aColor( static_cast<sal_uInt8>( nRed / nCount ), static_cast<sal_uInt8>( nGreen / nCount ), static_cast<sal_uInt8>( nBlue / nCount ) );
                 CreateObject(o3tl::make_unique<WinMtfFillStyle>( aColor, false ));
@@ -1365,7 +1365,6 @@ namespace emfio
         sal_uInt16  nFunction;
 
         mnSkipActions = 0;
-        mnCurrentAction = 0;
 
         mpEMFStream.reset();
         mnEMFRecCount = 0;
@@ -1377,7 +1376,7 @@ namespace emfio
         SetWinExt( Size( 1, 1 ) );
         SetDevExt( Size( 10000, 10000 ) );
 
-        mnEndPos=mpInputStream->Seek( STREAM_SEEK_TO_END );
+        mnEndPos=mpInputStream->TellEnd();
         mpInputStream->Seek( mnStartPos );
 
         if ( ReadHeader( ) )
@@ -1389,7 +1388,6 @@ namespace emfio
                 bool bEMFAvailable = false;
                 while( true )
                 {
-                    mnCurrentAction++;
                     mpInputStream->ReadUInt32(mnRecSize).ReadUInt16( nFunction );
 
                     if (
@@ -1855,7 +1853,6 @@ namespace emfio
         , mnEMFRec(0)
         , mnEMFSize(0)
         , mnSkipActions(0)
-        , mnCurrentAction(0)
         , mpExternalHeader(pExternalHeader)
     {
     }

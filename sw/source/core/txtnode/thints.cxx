@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <DocumentSettingManager.hxx>
 #include <hintids.hxx>
@@ -64,6 +65,7 @@
 #include <pam.hxx>
 #include <ndtxt.hxx>
 #include <txtfrm.hxx>
+#include <rootfrm.hxx>
 #include <rolbck.hxx>
 #include <ddefld.hxx>
 #include <docufld.hxx>
@@ -443,20 +445,18 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
     // so any hint in OverlappingExisting can be split at most by one hint
     // in SplitNew, or even not at all (this is not true for existing hints
     // that go _around_ new hint, which is the reason d'^etre for pass 4)
-    for (NestList_t::iterator itOther = OverlappingExisting.begin();
-            itOther != OverlappingExisting.end(); ++itOther)
+    for (auto& rpOther : OverlappingExisting)
     {
-        const sal_Int32 nOtherStart( (*itOther)->GetStart() );
-        const sal_Int32 nOtherEnd  ( *(*itOther)->GetEnd()   );
+        const sal_Int32 nOtherStart( rpOther->GetStart() );
+        const sal_Int32 nOtherEnd  ( *rpOther->GetEnd()   );
 
-        for (NestList_t::iterator itNew = SplitNew.begin();
-                itNew != SplitNew.end(); ++itNew)
+        for (const auto& rpNew : SplitNew)
         {
-            const sal_Int32 nSplitNewStart( (*itNew)->GetStart() );
-            const sal_Int32 nSplitNewEnd  ( *(*itNew)->GetEnd()   );
+            const sal_Int32 nSplitNewStart( rpNew->GetStart() );
+            const sal_Int32 nSplitNewEnd  ( *rpNew->GetEnd()   );
             // 4 cases: within, around, overlap l, overlap r, (OTHER: no action)
             const bool bRemoveOverlap(
-                !bNewSelfNestable && (nNewWhich == (*itOther)->Which()) );
+                !bNewSelfNestable && (nNewWhich == rpOther->Which()) );
 
             switch (ComparePosition(nSplitNewStart, nSplitNewEnd,
                                     nOtherStart,    nOtherEnd))
@@ -475,9 +475,9 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
                     break;
                 case SwComparePosition::OverlapBefore:
                     {
-                        Delete( *itOther ); // this also does NoteInHistory!
-                        (*itOther)->GetStart() = nSplitNewEnd;
-                        InsertNesting( **itOther );
+                        Delete( rpOther ); // this also does NoteInHistory!
+                        rpOther->GetStart() = nSplitNewEnd;
+                        InsertNesting( *rpOther );
                         if (!bRemoveOverlap)
                         {
                             if ( MAX_HINTS <= Count() )
@@ -486,7 +486,7 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
                                 return false;
                             }
                             SwTextAttrNesting * const pOtherLeft(
-                                MakeTextAttrNesting( rNode, **itOther,
+                                MakeTextAttrNesting( rNode, *rpOther,
                                     nOtherStart, nSplitNewEnd ) );
                             InsertNesting( *pOtherLeft );
                         }
@@ -494,9 +494,9 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
                     break;
                 case SwComparePosition::OverlapBehind:
                     {
-                        Delete( *itOther ); // this also does NoteInHistory!
-                        *(*itOther)->GetEnd() = nSplitNewStart;
-                        InsertNesting( **itOther );
+                        Delete( rpOther ); // this also does NoteInHistory!
+                        *rpOther->GetEnd() = nSplitNewStart;
+                        InsertNesting( *rpOther );
                         if (!bRemoveOverlap)
                         {
                             if ( MAX_HINTS <= Count() )
@@ -505,7 +505,7 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
                                 return false;
                             }
                             SwTextAttrNesting * const pOtherRight(
-                                MakeTextAttrNesting( rNode, **itOther,
+                                MakeTextAttrNesting( rNode, *rpOther,
                                     nSplitNewStart, nOtherEnd ) );
                             InsertNesting( *pOtherRight );
                         }
@@ -524,26 +524,24 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
     }
 
     // pass 3: insert new hints
-    for (NestList_t::iterator iter = SplitNew.begin();
-            iter != SplitNew.end(); ++iter)
+    for (const auto& rpHint : SplitNew)
     {
-        InsertNesting(**iter);
+        InsertNesting(*rpHint);
     }
 
     // pass 4: handle overwritten hints
     // RES_TXTATR_INETFMT and RES_TXTATR_CJK_RUBY should displace attributes
     // of the same kind.
-    for (NestList_t::iterator itOther = OverwrittenExisting.begin();
-            itOther != OverwrittenExisting.end(); ++itOther)
+    for (auto& rpOther : OverwrittenExisting)
     {
-        const sal_Int32 nOtherStart( (*itOther)->GetStart() );
-        const sal_Int32 nOtherEnd  ( *(*itOther)->GetEnd()   );
+        const sal_Int32 nOtherStart( rpOther->GetStart() );
+        const sal_Int32 nOtherEnd  ( *rpOther->GetEnd()   );
 
         // overwritten portion is given by start/end of inserted hint
         if ((nNewStart <= nOtherStart) && (nOtherEnd <= nNewEnd))
         {
-            Delete(*itOther);
-            rNode.DestroyAttr( *itOther );
+            Delete(rpOther);
+            rNode.DestroyAttr( rpOther );
         }
         else
         {
@@ -552,24 +550,24 @@ SwpHints::TryInsertNesting( SwTextNode & rNode, SwTextAttrNesting & rNewHint )
         // now a RUBY is inserted within the META => the existing RUBY is split:
         // here it is not possible to simply insert the left/right fragment
         // of the existing RUBY because they <em>overlap</em> with the META!
-            Delete( *itOther ); // this also does NoteInHistory!
+            Delete( rpOther ); // this also does NoteInHistory!
             if (nNewEnd < nOtherEnd)
             {
                 SwTextAttrNesting * const pOtherRight(
                     MakeTextAttrNesting(
-                        rNode, **itOther, nNewEnd, nOtherEnd ) );
+                        rNode, *rpOther, nNewEnd, nOtherEnd ) );
                 bool const bSuccess( TryInsertNesting(rNode, *pOtherRight) );
                 SAL_WARN_IF(!bSuccess, "sw.core", "recursive call 1 failed?");
             }
             if (nOtherStart < nNewStart)
             {
-                *(*itOther)->GetEnd() = nNewStart;
-                bool const bSuccess( TryInsertNesting(rNode, **itOther) );
+                *rpOther->GetEnd() = nNewStart;
+                bool const bSuccess( TryInsertNesting(rNode, *rpOther) );
                 SAL_WARN_IF(!bSuccess, "sw.core", "recursive call 2 failed?");
             }
             else
             {
-                rNode.DestroyAttr(*itOther);
+                rNode.DestroyAttr(rpOther);
             }
         }
     }
@@ -595,7 +593,6 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
     const bool bNoLengthAttribute = nThisStart == nThisEnd;
 
     std::vector<SwTextAttr*> aInsDelHints;
-    std::vector<SwTextAttr*>::iterator aIter;
 
     assert( RES_TXTATR_CHARFMT == rNewHint.Which() ||
             RES_TXTATR_AUTOFMT == rNewHint.Which() );
@@ -656,10 +653,10 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
         }
 
         // Insert the newly created attributes:
-        for ( aIter = aInsDelHints.begin(); aIter != aInsDelHints.end(); ++aIter )
+        for ( const auto& rpHint : aInsDelHints )
         {
-            Insert( *aIter );
-            NoteInHistory( *aIter, true );
+            Insert( rpHint );
+            NoteInHistory( rpHint, true );
         }
     }
 
@@ -735,13 +732,12 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
             // This should ensure, that pNewHint comes behind the already present
             // character style
             sal_uInt16 nCharStyleCount = 0;
-            aIter = aInsDelHints.begin();
-            while ( aIter != aInsDelHints.end() )
+            for ( const auto& rpHint : aInsDelHints )
             {
-                if ( RES_TXTATR_CHARFMT == (*aIter)->Which() )
+                if ( RES_TXTATR_CHARFMT == rpHint->Which() )
                 {
                     // #i74589#
-                    const SwFormatCharFormat& rOtherCharFormat = (*aIter)->GetCharFormat();
+                    const SwFormatCharFormat& rOtherCharFormat = rpHint->GetCharFormat();
                     const SwFormatCharFormat& rThisCharFormat = rNewHint.GetCharFormat();
                     const bool bSameCharFormat = rOtherCharFormat.GetCharFormat() == rThisCharFormat.GetCharFormat();
 
@@ -753,8 +749,8 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
                            bSameCharFormat ) )
                     {
                         // Remove old hint
-                        Delete( *aIter );
-                        rNode.DestroyAttr( *aIter );
+                        Delete( rpHint );
+                        rNode.DestroyAttr( rpHint );
                     }
                     else
                         ++nCharStyleCount;
@@ -763,8 +759,8 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
                 {
                     // remove all attributes from auto styles, which are explicitly set in
                     // the new character format:
-                    OSL_ENSURE( RES_TXTATR_AUTOFMT == (*aIter)->Which(), "AUTOSTYLES - Misc trouble" );
-                    SwTextAttr* pOther = *aIter;
+                    OSL_ENSURE( RES_TXTATR_AUTOFMT == rpHint->Which(), "AUTOSTYLES - Misc trouble" );
+                    SwTextAttr* pOther = rpHint;
                     std::shared_ptr<SfxItemSet> pOldStyle = static_cast<const SwFormatAutoFormat&>(pOther->GetAttr()).GetStyleHandle();
 
                     // For each attribute in the automatic style check if it
@@ -799,7 +795,6 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
                         NoteInHistory( pNewAttr, true );
                     }
                 }
-                ++aIter;
             }
 
             // If there is no current hint and start and end of rNewHint
@@ -823,14 +818,12 @@ void SwpHints::BuildPortions( SwTextNode& rNode, SwTextAttr& rNewHint,
             // Find the current autostyle. Mix attributes if necessary.
             SwTextAttr* pCurrentAutoStyle = nullptr;
             SwTextAttr* pCurrentCharFormat = nullptr;
-            aIter = aInsDelHints.begin();
-            while ( aIter != aInsDelHints.end() )
+            for ( const auto& rpHint : aInsDelHints )
             {
-                if ( RES_TXTATR_AUTOFMT == (*aIter)->Which() )
-                    pCurrentAutoStyle = *aIter;
-                else if ( RES_TXTATR_CHARFMT == (*aIter)->Which() )
-                    pCurrentCharFormat = *aIter;
-                ++aIter;
+                if ( RES_TXTATR_AUTOFMT == rpHint->Which() )
+                    pCurrentAutoStyle = rpHint;
+                else if ( RES_TXTATR_CHARFMT == rpHint->Which() )
+                    pCurrentCharFormat = rpHint;
             }
 
             std::shared_ptr<SfxItemSet> pNewStyle = static_cast<const SwFormatAutoFormat&>(rNewHint.GetAttr()).GetStyleHandle();
@@ -1155,7 +1148,7 @@ void SwTextNode::DestroyAttr( SwTextAttr* pAttr )
                 // certain fields must update the SwDoc's calculation flags
 
                 // Certain fields (like HiddenParaField) must trigger recalculation of visible flag
-                if (FieldCanHidePara(pFieldType->Which()))
+                if (FieldCanHideParaWeight(pFieldType->Which()))
                     SetCalcHiddenParaField();
 
                 switch( pFieldType->Which() )
@@ -1404,7 +1397,7 @@ bool SwTextNode::InsertHint( SwTextAttr * const pAttr, const SetAttrMode nMode )
                     {
                         SwContentNode* pCNd = rNodes[ nSttIdx ]->GetContentNode();
                         if( nullptr != pCNd )
-                            pCNd->DelFrames();
+                            pCNd->DelFrames(nullptr);
                         else if (SwTableNode *const pTable = rNodes[nSttIdx]->GetTableNode())
                         {
                             pTable->DelFrames();
@@ -1465,7 +1458,8 @@ bool SwTextNode::InsertHint( SwTextAttr * const pAttr, const SetAttrMode nMode )
             case RES_TXTATR_FIELD:
                 {
                     // trigger notification for relevant fields, like HiddenParaFields
-                    if (FieldCanHidePara(pAttr->GetFormatField().GetField()->GetTyp()->Which()))
+                    if (FieldCanHideParaWeight(
+                            pAttr->GetFormatField().GetField()->GetTyp()->Which()))
                     {
                         bHiddenPara = true;
                     }
@@ -1766,14 +1760,15 @@ void SwTextNode::DelSoftHyph( const sal_Int32 nStt, const sal_Int32 nEnd )
 
 bool SwTextNode::IsIgnoredCharFormatForNumbering(const sal_uInt16 nWhich)
 {
-    return (nWhich ==  RES_CHRATR_UNDERLINE || nWhich == RES_CHRATR_COLOR || nWhich == RES_CHRATR_BACKGROUND || nWhich == RES_CHRATR_ESCAPEMENT);
+    return (nWhich == RES_CHRATR_UNDERLINE || nWhich == RES_CHRATR_BACKGROUND
+            || nWhich == RES_CHRATR_ESCAPEMENT);
 }
 
 //In MS Word, following properties of the paragraph end position won't affect the formatting of bullets, so we ignore them:
 //Font underline;
 //Font Italic of Western, CJK and CTL;
 //Font Bold of Wertern, CJK and CTL;
-bool lcl_IsIgnoredCharFormatForBullets(const sal_uInt16 nWhich)
+static bool lcl_IsIgnoredCharFormatForBullets(const sal_uInt16 nWhich)
 {
     return (nWhich == RES_CHRATR_UNDERLINE || nWhich == RES_CHRATR_POSTURE || nWhich == RES_CHRATR_WEIGHT
         || nWhich == RES_CHRATR_CJK_POSTURE || nWhich == RES_CHRATR_CJK_WEIGHT
@@ -2055,10 +2050,33 @@ static void lcl_MergeListLevelIndentAsLRSpaceItem( const SwTextNode& rTextNode,
 }
 
 // request the attributes of the TextNode at the range
-bool SwTextNode::GetAttr( SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
+bool SwTextNode::GetParaAttr(SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
                          const bool bOnlyTextAttr, const bool bGetFromChrFormat,
-                         const bool bMergeIndentValuesOfNumRule ) const
+                         const bool bMergeIndentValuesOfNumRule,
+                         SwRootFrame const*const pLayout) const
 {
+    assert(!rSet.Count()); // handled inconsistently, typically an error?
+
+    if (pLayout && pLayout->IsHideRedlines())
+    {
+        if (GetRedlineMergeFlag() == SwNode::Merge::Hidden)
+        {
+            return false; // ignore deleted node
+        }
+    }
+
+    // get the node's automatic attributes
+    SfxItemSet aFormatSet( *rSet.GetPool(), rSet.GetRanges() );
+    if (!bOnlyTextAttr)
+    {
+        SwTextNode const& rParaPropsNode(
+                sw::GetAttrMerged(aFormatSet, *this, pLayout));
+        if (bMergeIndentValuesOfNumRule)
+        {
+            lcl_MergeListLevelIndentAsLRSpaceItem(rParaPropsNode, aFormatSet);
+        }
+    }
+
     if( HasHints() )
     {
         // First, check which text attributes are valid in the range.
@@ -2075,17 +2093,6 @@ bool SwTextNode::GetAttr( SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
         void (*fnMergeAttr)( SfxItemSet&, const SfxPoolItem& )
             = bGetFromChrFormat ? &lcl_MergeAttr_ExpandChrFormat
                              : &lcl_MergeAttr;
-
-        // get the node's automatic attributes
-        SfxItemSet aFormatSet( *rSet.GetPool(), rSet.GetRanges() );
-        if( !bOnlyTextAttr )
-        {
-            SwContentNode::GetAttr( aFormatSet );
-            if ( bMergeIndentValuesOfNumRule )
-            {
-                lcl_MergeListLevelIndentAsLRSpaceItem( *this, aFormatSet );
-            }
-        }
 
         const size_t nSize = m_pSwpHints->Count();
 
@@ -2171,7 +2178,7 @@ bool SwTextNode::GetAttr( SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
                         OSL_ENSURE(!isUNKNOWNATR(nHintWhich),
                                 "SwTextNode::GetAttr(): unknown attribute?");
 
-                        if ( !pAttrArr.get() )
+                        if (!pAttrArr)
                         {
                             pAttrArr.reset(
                                 new std::vector< SwPoolItemEndPair >(coArrSz));
@@ -2228,7 +2235,7 @@ bool SwTextNode::GetAttr( SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
                 }
             }
 
-            if ( pAttrArr.get() )
+            if (pAttrArr)
             {
                 for (size_t n = 0; n < coArrSz; ++n)
                 {
@@ -2254,18 +2261,13 @@ bool SwTextNode::GetAttr( SfxItemSet& rSet, sal_Int32 nStt, sal_Int32 nEnd,
         {
             // remove all from the format-set that are also set in the text-set
             aFormatSet.Differentiate( rSet );
-            // now "merge" everything
-            rSet.Put( aFormatSet );
         }
     }
-    else if( !bOnlyTextAttr )
+
+    if (aFormatSet.Count())
     {
-        // get the node's automatic attributes
-        SwContentNode::GetAttr( rSet );
-        if ( bMergeIndentValuesOfNumRule )
-        {
-            lcl_MergeListLevelIndentAsLRSpaceItem( *this, rSet );
-        }
+        // now "merge" everything
+        rSet.Put( aFormatSet );
     }
 
     return rSet.Count() != 0;
@@ -2590,6 +2592,7 @@ bool SwpHints::CalcHiddenParaField() const
     m_bCalcHiddenParaField = false;
     const bool bOldHiddenByParaField = m_bHiddenByParaField;
     bool bNewHiddenByParaField = false;
+    int nNewResultWeight = 0;
     const size_t nSize = Count();
     const SwTextAttr* pTextHt;
 
@@ -2600,12 +2603,20 @@ bool SwpHints::CalcHiddenParaField() const
 
         if (RES_TXTATR_FIELD == nWhich)
         {
+            // see also SwTextFrame::IsHiddenNow()
             const SwFormatField& rField = pTextHt->GetFormatField();
-            if (m_rParent.FieldCanHidePara(rField.GetField()->GetTyp()->Which())
-                && !(bNewHiddenByParaField = m_rParent.FieldHidesPara(*rField.GetField())))
+            int nCurWeight = m_rParent.FieldCanHideParaWeight(rField.GetField()->GetTyp()->Which());
+            if (nCurWeight > nNewResultWeight)
             {
-                // If there's at least one field telling not to hide, so be it
-                break;
+                nNewResultWeight = nCurWeight;
+                bNewHiddenByParaField = m_rParent.FieldHidesPara(*rField.GetField());
+            }
+            else if (nCurWeight == nNewResultWeight && bNewHiddenByParaField)
+            {
+                // Currently, for both supported hiding types (HiddenPara, Database), "Don't hide"
+                // takes precedence - i.e., if there's a "Don't hide" field of that weight, we only
+                // care about fields of higher weight.
+                bNewHiddenByParaField = m_rParent.FieldHidesPara(*rField.GetField());
             }
         }
     }
@@ -3243,10 +3254,7 @@ bool SwpHints::TryInsertHint(
     // ... and notify listeners
     if ( rNode.HasWriterListeners() )
     {
-        SwUpdateAttr aHint(
-            nHtStart,
-            nHtStart == nHintEnd ? nHintEnd + 1 : nHintEnd,
-            nWhich);
+        SwUpdateAttr aHint(nHtStart, nHintEnd, nWhich, aWhichSublist);
 
         rNode.ModifyNotification( nullptr, &aHint );
     }
@@ -3287,7 +3295,7 @@ void SwpHints::DeleteAtPos( const size_t nPos )
             pTextField->ChgTextNode(nullptr);
         }
         else if (m_bHiddenByParaField
-                 && m_rParent.FieldCanHidePara(pFieldTyp->Which()))
+                 && m_rParent.FieldCanHideParaWeight(pFieldTyp->Which()))
         {
             m_bCalcHiddenParaField = true;
         }

@@ -26,6 +26,7 @@
 #include <com/sun/star/document/XCompatWriterDocProperties.hpp>
 #include <com/sun/star/uno/Exception.hpp>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <tools/debug.hxx>
 #include <comphelper/string.hxx>
 #include <sot/storage.hxx>
@@ -270,7 +271,6 @@ bool SaveOlePropertySet(
 
     uno::Reference<beans::XPropertySet> xUserDefinedProps(
         i_xDocProps->getUserDefinedProperties(), uno::UNO_QUERY_THROW);
-    DBG_ASSERT(xUserDefinedProps.is(), "UserDefinedProperties is null");
     uno::Reference<beans::XPropertySetInfo> xPropInfo =
         xUserDefinedProps->getPropertySetInfo();
     DBG_ASSERT(xPropInfo.is(), "UserDefinedProperties Info is null");
@@ -313,14 +313,7 @@ uno::Sequence<sal_Int8> convertMetaFile(GDIMetaFile const * i_pThumb)
         if (i_pThumb->CreateThumbnail(aBitmap))
         {
             WriteDIB(aBitmap.GetBitmap(), aStream, false, false);
-            aStream.Seek(STREAM_SEEK_TO_END);
-            uno::Sequence<sal_Int8> aSeq(aStream.Tell());
-            const sal_Int8* pBlob(
-                static_cast<const sal_Int8*>(aStream.GetData()));
-            for (sal_Int32 j = 0; j < aSeq.getLength(); ++j) {
-                aSeq[j] = pBlob[j];
-            }
-            return aSeq;
+            return uno::Sequence<sal_Int8>(static_cast< const sal_Int8* >( aStream.GetData() ), aStream.TellEnd());
         }
     }
     return uno::Sequence<sal_Int8>();

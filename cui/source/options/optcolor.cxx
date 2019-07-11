@@ -24,7 +24,7 @@
 #include <editeng/editids.hrc>
 #include <svtools/colorcfg.hxx>
 #include <svtools/extcolorcfg.hxx>
-#include <svtools/headbar.hxx>
+#include <vcl/headbar.hxx>
 #include <svtools/ctrlbox.hxx>
 #include <vcl/scrbar.hxx>
 #include <svx/colorbox.hxx>
@@ -181,6 +181,7 @@ public:
 public:
     void SetLinks (Link<Button*,void> const&, Link<SvxColorListBox&,void> const&, Link<Control&,void> const&);
     unsigned GetEntryHeight () const { return vEntries[0]->GetHeight(); }
+    long GetScrollOffset() const { return vEntries[1]->GetTop() - vEntries[0]->GetTop(); }
     void Update (EditableColorConfig const*, EditableExtendedColorConfig const*);
     void ScrollHdl(const ScrollBar&);
     void ClickHdl (EditableColorConfig*, CheckBox const *);
@@ -515,7 +516,7 @@ void ColorConfigWindow_Impl::CreateEntries()
 
     // creating entries
     vEntries.reserve(ColorConfigEntryCount);
-    for (unsigned i = 0; i < SAL_N_ELEMENTS(vEntryInfo); ++i)
+    for (size_t i = 0; i < SAL_N_ELEMENTS(vEntryInfo); ++i)
     {
         vEntries.push_back(std::make_shared<Entry>(*this, i, nCheckBoxLabelOffset,
             aModulesInstalled[vEntryInfo[i].eGroup]));
@@ -599,9 +600,7 @@ void ColorConfigWindow_Impl::AdjustHeaderBar()
 
 void ColorConfigWindow_Impl::AdjustScrollBar()
 {
-    unsigned const nScrollOffset =
-        vEntries[1]->GetTop() - vEntries[0]->GetTop();
-    unsigned const nVisibleEntries = GetSizePixel().Height() / nScrollOffset;
+    unsigned const nVisibleEntries = GetSizePixel().Height() / GetScrollOffset();
     m_pVScroll->SetPageSize(nVisibleEntries - 1);
     m_pVScroll->SetVisibleSize(nVisibleEntries);
 }
@@ -655,8 +654,7 @@ void ColorConfigWindow_Impl::Update (
 void ColorConfigWindow_Impl::ScrollHdl(const ScrollBar& rVScroll)
 {
     SetUpdateMode(true);
-    const long nRowHeight = (vEntries[1]->GetTop() - vEntries[0]->GetTop());
-    Point aPos(0, 0 - rVScroll.GetThumbPos() * nRowHeight);
+    Point aPos(0, 0 - rVScroll.GetThumbPos() * GetScrollOffset());
     m_pGrid->SetPosPixel(aPos);
     SetUpdateMode(true);
 }
@@ -942,22 +940,32 @@ IMPL_LINK(ColorConfigCtrl_Impl, ControlFocusHdl, Control&, rCtrl, void)
 {
     // determine whether a control is completely visible
     // and make it visible
-    long aCtrlPosY = rCtrl.GetPosPixel().Y();
     unsigned const nWinHeight = m_pScrollWindow->GetSizePixel().Height();
     unsigned const nEntryHeight = m_pScrollWindow->GetEntryHeight();
-    if ((GetFocusFlags::Tab & rCtrl.GetGetFocusFlags()) &&
-        (aCtrlPosY < 0 || nWinHeight < aCtrlPosY + nEntryHeight)
-    ) {
-        long nThumbPos = m_pVScroll->GetThumbPos();
-        if (nWinHeight < aCtrlPosY + nEntryHeight)
+
+    // calc visible area
+    long const nScrollOffset = m_pScrollWindow->GetScrollOffset();
+    long nThumbPos = m_pVScroll->GetThumbPos();
+    long const nWinTop = (nThumbPos * nScrollOffset);
+    long const nWinBottom = nWinTop + nWinHeight;
+
+    long const nCtrlPosY = rCtrl.GetPosPixel().Y();
+    long const nSelectedItemPos = nCtrlPosY + nEntryHeight;
+    bool const shouldScrollDown = nSelectedItemPos >= nWinBottom;
+    bool const shouldScrollUp = nSelectedItemPos <= nWinTop;
+    bool const isNeedToScroll = shouldScrollDown || shouldScrollUp || nCtrlPosY < 0;
+
+    if ((GetFocusFlags::Tab & rCtrl.GetGetFocusFlags()) && isNeedToScroll)
+    {
+        if (shouldScrollDown)
         {
-            //scroll down
-            nThumbPos += 2;
+            long nOffset = (nSelectedItemPos - nWinBottom) / nScrollOffset;
+            nThumbPos += nOffset + 2;
         }
         else
         {
-            //scroll up
-            nThumbPos -= 2;
+            long nOffset = (nWinTop - nSelectedItemPos) / nScrollOffset;
+            nThumbPos -= nOffset + 2;
             if(nThumbPos < 0)
                 nThumbPos = 0;
         }
@@ -974,8 +982,6 @@ SvxColorOptionsTabPage::SvxColorOptionsTabPage(
     vcl::Window* pParent, const SfxItemSet& rCoreSet)
     : SfxTabPage(pParent, "OptAppearancePage", "cui/ui/optappearancepage.ui", &rCoreSet)
     , bFillItemSetCalled(false)
-    , pColorConfig(nullptr)
-    , pExtColorConfig(nullptr)
 {
     get(m_pColorSchemeLB, "colorschemelb");
     m_pColorSchemeLB->SetStyle(m_pColorSchemeLB->GetStyle() | WB_SORT);
@@ -1016,13 +1022,11 @@ void SvxColorOptionsTabPage::dispose()
         }
         pColorConfig->ClearModified();
         pColorConfig->EnableBroadcast();
-        delete pColorConfig;
-        pColorConfig = nullptr;
+        pColorConfig.reset();
 
         pExtColorConfig->ClearModified();
         pExtColorConfig->EnableBroadcast();
-        delete pExtColorConfig;
-        pExtColorConfig = nullptr;
+        pExtColorConfig.reset();
     }
     m_pColorSchemeLB.clear();
     m_pSaveSchemePB.clear();
@@ -1057,18 +1061,16 @@ void SvxColorOptionsTabPage::Reset( const SfxItemSet* )
     {
         pColorConfig->ClearModified();
         pColorConfig->DisableBroadcast();
-        delete pColorConfig;
     }
-    pColorConfig = new EditableColorConfig;
+    pColorConfig.reset(new EditableColorConfig);
     m_pColorConfigCT->SetConfig(*pColorConfig);
 
     if(pExtColorConfig)
     {
         pExtColorConfig->ClearModified();
         pExtColorConfig->DisableBroadcast();
-        delete pExtColorConfig;
     }
-    pExtColorConfig = new EditableExtendedColorConfig;
+    pExtColorConfig.reset(new EditableExtendedColorConfig);
     m_pColorConfigCT->SetExtendedConfig(*pExtColorConfig);
 
     OUString sUser = GetUserData();
@@ -1112,10 +1114,8 @@ IMPL_LINK(SvxColorOptionsTabPage, SaveDeleteHdl_Impl, Button*, pButton, void )
         OUString sName;
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        DBG_ASSERT(pFact, "Dialog creation failed!");
         ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(pButton->GetFrameWeld(),
                             sName, CuiResId(RID_SVXSTR_COLOR_CONFIG_SAVE2) ));
-        DBG_ASSERT(aNameDlg, "Dialog creation failed!");
         aNameDlg->SetCheckNameHdl( LINK(this, SvxColorOptionsTabPage, CheckNameHdl_Impl));
         aNameDlg->SetText(CuiResId(RID_SVXSTR_COLOR_CONFIG_SAVE1));
         aNameDlg->SetHelpId(HID_OPTIONS_COLORCONFIG_SAVE_SCHEME);

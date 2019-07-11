@@ -76,7 +76,7 @@ namespace comp_DialogModelProvider
         return s;
     }
 
-    uno::Reference< uno::XInterface > _create(const uno::Reference< uno::XComponentContext > & context)
+    static uno::Reference< uno::XInterface > _create(const uno::Reference< uno::XComponentContext > & context)
     {
         return static_cast< ::cppu::OWeakObject * >(new dlgprov::DialogModelProvider(context));
     }
@@ -177,17 +177,9 @@ namespace dlgprov
 
     ::osl::Mutex& getMutex()
     {
-        static ::osl::Mutex* s_pMutex = nullptr;
-        if ( !s_pMutex )
-        {
-            ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-            if ( !s_pMutex )
-            {
-                static ::osl::Mutex s_aMutex;
-                s_pMutex = &s_aMutex;
-            }
-        }
-        return *s_pMutex;
+        static ::osl::Mutex s_aMutex;
+
+        return s_aMutex;
     }
 
 
@@ -196,7 +188,6 @@ namespace dlgprov
 
     DialogProviderImpl::DialogProviderImpl( const Reference< XComponentContext >& rxContext )
         :m_xContext( rxContext )
-        ,m_xModel( nullptr )
     {
     }
 
@@ -206,7 +197,7 @@ namespace dlgprov
     }
 
 
-    Reference< resource::XStringResourceManager > getStringResourceFromDialogLibrary
+    static Reference< resource::XStringResourceManager > getStringResourceFromDialogLibrary
         ( const Reference< container::XNameContainer >& xDialogLib )
     {
         Reference< resource::XStringResourceManager > xStringResourceManager;
@@ -235,8 +226,8 @@ namespace dlgprov
 
     Reference< XControlModel > DialogProviderImpl::createDialogModelForBasic()
     {
-        if ( !m_BasicInfo.get() )
-            // shouln't get here
+        if (!m_BasicInfo)
+            // shouldn't get here
             throw RuntimeException("No information to create dialog" );
         Reference< resource::XStringResourceManager > xStringResourceManager = getStringResourceFromDialogLibrary( m_BasicInfo->mxDlgLib );
 
@@ -502,9 +493,11 @@ namespace dlgprov
                 // also add the dialog control itself to the sequence
                 pObjects[nControlCount].set( rxControl, UNO_QUERY );
 
-                Reference< XScriptEventsAttacher > xScriptEventsAttacher = new DialogEventsAttacherImpl
-                    ( m_xContext, m_xModel, rxControl, rxHandler, rxIntrospectionAccess,
-                      bDialogProviderMode, ( m_BasicInfo.get() ? m_BasicInfo->mxBasicRTLListener : nullptr ), msDialogLibName );
+                Reference<XScriptEventsAttacher> xScriptEventsAttacher
+                    = new DialogEventsAttacherImpl(
+                        m_xContext, m_xModel, rxControl, rxHandler, rxIntrospectionAccess,
+                        bDialogProviderMode,
+                        (m_BasicInfo ? m_BasicInfo->mxBasicRTLListener : nullptr), msDialogLibName);
 
                 Any aHelper;
                 xScriptEventsAttacher->attachEvents( aObjects, Reference< XScriptListener >(), aHelper );
@@ -620,7 +613,7 @@ namespace dlgprov
         try
         {
             // add support for basic RTL_FUNCTION
-            if ( m_BasicInfo.get() )
+            if (m_BasicInfo)
                 xCtrlMod = createDialogModelForBasic();
             else
             {
@@ -701,7 +694,7 @@ namespace dlgprov
         Reference< XWindowPeer > xParentPeer;
         if ( aArguments.has( "ParentWindow" ) )
         {
-            const Any aParentWindow( aArguments.get( "ParentWindow" ) );
+            const Any& aParentWindow( aArguments.get( "ParentWindow" ) );
             if ( !( aParentWindow >>= xParentPeer ) )
             {
                 const Reference< XControl > xParentControl( aParentWindow, UNO_QUERY );
@@ -743,7 +736,7 @@ namespace dlgprov
     }
 
 
-    static struct ::cppu::ImplementationEntry s_component_entries [] =
+    static struct ::cppu::ImplementationEntry const s_component_entries [] =
     {
         {create_DialogProviderImpl, getImplementationName_DialogProviderImpl,getSupportedServiceNames_DialogProviderImpl, ::cppu::createSingleComponentFactory,nullptr, 0},
         { &comp_DialogModelProvider::_create,&comp_DialogModelProvider::_getImplementationName,&comp_DialogModelProvider::_getSupportedServiceNames,&::cppu::createSingleComponentFactory, nullptr, 0 },

@@ -19,6 +19,7 @@
 
 #include <hintids.hxx>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
+#include <osl/diagnose.h>
 #include <xmloff/xmlnmspe.hxx>
 #include <xmloff/xmlmetai.hxx>
 #include <xmloff/xmlmetae.hxx>
@@ -84,7 +85,7 @@ enum SvXMLTokenMapAttrs
 };
 
 struct statistic {
-    SvXMLTokenMapAttrs token;
+    SvXMLTokenMapAttrs const token;
     const char* name;
     sal_uInt16 SwDocStat::* target16;
     sal_uLong  SwDocStat::* target32; /* or 64, on LP64 platforms */
@@ -163,14 +164,10 @@ void SwXMLExport::ExportMeta_()
 {
     SvXMLExport::ExportMeta_();
 
-    if( !m_bBlock )
+    if( !m_bBlock && IsShowProgress() )
     {
-
-        if( IsShowProgress() )
-        {
-            ProgressBarHelper *pProgress = GetProgressBarHelper();
-            pProgress->SetValue( pProgress->GetValue() + 2 );
-        }
+        ProgressBarHelper *pProgress = GetProgressBarHelper();
+        pProgress->SetValue( pProgress->GetValue() + 2 );
     }
 }
 

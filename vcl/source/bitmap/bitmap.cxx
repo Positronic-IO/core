@@ -41,7 +41,7 @@ Bitmap::Bitmap(const Bitmap& rBitmap)
 {
 }
 
-Bitmap::Bitmap(SalBitmap* pSalBitmap)
+Bitmap::Bitmap(std::shared_ptr<SalBitmap> const & pSalBitmap)
     : mxSalBmp(pSalBitmap)
     , maPrefMapMode(MapMode(MapUnit::MapPixel))
     , maPrefSize(mxSalBmp->GetSize())
@@ -104,7 +104,7 @@ Bitmap::Bitmap( const Size& rSizePixel, sal_uInt16 nBitCount, const BitmapPalett
                 pRealPal = const_cast<BitmapPalette*>(pPal);
         }
 
-        mxSalBmp.reset(ImplGetSVData()->mpDefInst->CreateSalBitmap());
+        mxSalBmp = ImplGetSVData()->mpDefInst->CreateSalBitmap();
         mxSalBmp->Create( rSizePixel, nBitCount, pRealPal ? *pRealPal : aPal );
     }
 }
@@ -311,7 +311,7 @@ void Bitmap::ImplMakeUnique()
     if (mxSalBmp && mxSalBmp.use_count() > 1)
     {
         std::shared_ptr<SalBitmap> xOldImpBmp = mxSalBmp;
-        mxSalBmp.reset(ImplGetSVData()->mpDefInst->CreateSalBitmap());
+        mxSalBmp = ImplGetSVData()->mpDefInst->CreateSalBitmap();
         mxSalBmp->Create(*xOldImpBmp);
     }
 }
@@ -459,14 +459,14 @@ bool Bitmap::CopyPixel( const tools::Rectangle& rRectDst,
             {
                 int nNextIndex = 0;
 
-                if( ( nSrcBitCount == 24 ) && ( nDstBitCount < 24 ) )
+                if (nSrcBitCount == 24)
                     Convert( BmpConversion::N24Bit );
-                else if( ( nSrcBitCount == 8 ) && ( nDstBitCount < 8 ) )
+                else if (nSrcBitCount == 8)
                 {
                     Convert( BmpConversion::N8BitColors );
                     nNextIndex = 16;
                 }
-                else if( ( nSrcBitCount == 4 ) && ( nDstBitCount < 4 ) )
+                else if (nSrcBitCount == 4)
                 {
                     Convert( BmpConversion::N4BitColors );
                     nNextIndex = 2;
@@ -852,15 +852,7 @@ Bitmap Bitmap::CreateDisplayBitmap( OutputDevice* pDisplay )
 
 bool Bitmap::GetSystemData( BitmapSystemData& rData ) const
 {
-    bool bRet = false;
-    if (mxSalBmp)
-    {
-        SalBitmap* pSalBitmap = mxSalBmp.get();
-        if( pSalBitmap )
-            bRet = pSalBitmap->GetSystemData( rData );
-    }
-
-    return bRet;
+    return mxSalBmp && mxSalBmp->GetSystemData(rData);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

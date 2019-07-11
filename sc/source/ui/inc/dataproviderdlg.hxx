@@ -12,12 +12,9 @@
 
 #include <sal/config.h>
 
-#include <rtl/ref.hxx>
 #include <vcl/dialog.hxx>
-#include <vcl/layout.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/listctrl.hxx>
-#include <vcl/button.hxx>
 
 #include "datatableview.hxx"
 
@@ -36,7 +33,8 @@ private:
     VclPtr<ListControl> mpList;
     VclPtr<MenuBar> mpBar;
     VclPtr<ScDataProviderBaseControl> mpDataProviderCtrl;
-
+    VclPtr<ListBox> mpDBRanges;
+    sal_uInt32 mpIndex;
     ScDBData* pDBData;
 
     void InitMenu();
@@ -47,7 +45,7 @@ private:
 
 public:
 
-    ScDataProviderDlg(vcl::Window* pWindow, std::shared_ptr<ScDocument> pDoc);
+    ScDataProviderDlg(vcl::Window* pWindow, std::shared_ptr<ScDocument> pDoc, ScDocument* pDocument);
 
     virtual ~ScDataProviderDlg() override;
     virtual void dispose() override;
@@ -60,8 +58,15 @@ public:
     void deleteColumn();
     void splitColumn();
     void mergeColumns();
+    void textTransformation();
+    void sortTransformation();
+    void aggregateFunction();
+    void numberTransformation();
+    void deletefromList(sal_uInt32 nIndex);
+    void replaceNullTransformation();
+    void dateTimeTransformation();
 
-    void import();
+    void import(ScDocument* pDoc, bool bInternal = false);
 };
 
 #endif

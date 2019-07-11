@@ -109,13 +109,13 @@ public:
 
     virtual void                    SetFillColor( Color nColor ) override;
 
-    virtual void                    SetXORMode( bool bSet ) override;
+    virtual void                    SetXORMode( bool bSet, bool ) override;
 
     virtual void                    SetROPLineColor( SalROPColor nROPColor ) override;
     virtual void                    SetROPFillColor( SalROPColor nROPColor ) override;
 
     virtual void                    SetTextColor( Color nColor ) override;
-    virtual void                    SetFont( const FontSelectPattern*, int nFallbackLevel ) override;
+    virtual void                    SetFont(LogicalFontInstance*, int nFallbackLevel) override;
     virtual void                    GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
     virtual const FontCharMapRef    GetFontCharMap() const override;
     virtual bool                    GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const override;
@@ -141,8 +141,6 @@ public:
                                         std::vector< sal_Int32 >& rWidths,
                                         Ucs2UIntMap& rUnicodeEnc ) override;
 
-    virtual bool                    GetGlyphBoundRect(const GlyphItem&, tools::Rectangle&) override;
-    virtual bool                    GetGlyphOutline(const GlyphItem&, basegfx::B2DPolyPolygon&) override;
     virtual std::unique_ptr<SalLayout>
                                     GetTextLayout( ImplLayoutArgs&, int nFallbackLevel ) override;
     virtual void                    DrawTextLayout( const GenericSalLayout& ) override;
@@ -160,15 +158,20 @@ public:
                                         const sal_uInt32* pPoints,
                                         PCONSTSALPOINT* pPtAry ) override;
 
-    virtual bool                    drawPolyPolygon( const basegfx::B2DPolyPolygon&, double fTransparency ) override;
+    virtual bool                    drawPolyPolygon(
+                                        const basegfx::B2DHomMatrix& rObjectToDevice,
+                                        const basegfx::B2DPolyPolygon&,
+                                        double fTransparency) override;
 
     virtual bool                    drawPolyLine(
+                                        const basegfx::B2DHomMatrix& rObjectToDevice,
                                         const basegfx::B2DPolygon&,
                                         double fTransparency,
                                         const basegfx::B2DVector& rLineWidth,
                                         basegfx::B2DLineJoin,
                                         css::drawing::LineCap,
-                                        double fMiterMinimumAngle) override;
+                                        double fMiterMinimumAngle,
+                                        bool bPixelSnapHairline) override;
 
     virtual bool                    drawGradient( const tools::PolyPolygon&, const Gradient& ) override;
 
@@ -217,7 +220,7 @@ public:
                                         const SalBitmap& rSalBitmap,
                                         Color nMaskColor ) override;
 
-    virtual SalBitmap*              getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
+    virtual std::shared_ptr<SalBitmap> getBitmap( long nX, long nY, long nWidth, long nHeight ) override;
     virtual Color                   getPixel( long nX, long nY ) override;
     virtual void                    invert( long nX, long nY, long nWidth, long nHeight, SalInvert nFlags ) override;
     virtual void                    invert( sal_uInt32 nPoints, const SalPoint* pPtAry, SalInvert nFlags ) override;
@@ -339,7 +342,7 @@ protected:
     bool                            bWindow_ : 1;       // is Window
     bool                            bVirDev_ : 1;       // is VirDev
     bool                            bFontGC_ : 1;       // is Font GC valid
-    bool                            m_bOpenGL : 1;
+    bool const                      m_bOpenGL : 1;
 
 private:
     std::unique_ptr<SalGraphicsImpl> mxImpl;

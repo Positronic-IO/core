@@ -24,89 +24,66 @@
 #include <scresid.hxx>
 #include <viewdata.hxx>
 #include <dbfunc.hxx>
+#include <chgtrack.hxx>
 
 // struct ScConflictsListEntry
 
 bool ScConflictsListEntry::HasSharedAction( sal_uLong nSharedAction ) const
 {
-    ScChangeActionList::const_iterator aEnd = maSharedActions.end();
-    for ( ScChangeActionList::const_iterator aItr = maSharedActions.begin(); aItr != aEnd; ++aItr )
-    {
-        if ( *aItr == nSharedAction )
-        {
-            return true;
-        }
-    }
+    auto aEnd = maSharedActions.cend();
+    auto aItr = std::find(maSharedActions.cbegin(), aEnd, nSharedAction);
 
-    return false;
+    return aItr != aEnd;
 }
 
 bool ScConflictsListEntry::HasOwnAction( sal_uLong nOwnAction ) const
 {
-    ScChangeActionList::const_iterator aEnd = maOwnActions.end();
-    for ( ScChangeActionList::const_iterator aItr = maOwnActions.begin(); aItr != aEnd; ++aItr )
-    {
-        if ( *aItr == nOwnAction )
-        {
-            return true;
-        }
-    }
+    auto aEnd = maOwnActions.cend();
+    auto aItr = std::find(maOwnActions.cbegin(), aEnd, nOwnAction);
 
-    return false;
+    return aItr != aEnd;
 }
 
 // class ScConflictsListHelper
 
 bool ScConflictsListHelper::HasOwnAction( ScConflictsList& rConflictsList, sal_uLong nOwnAction )
 {
-    ScConflictsList::const_iterator aEnd = rConflictsList.end();
-    for ( ScConflictsList::const_iterator aItr = rConflictsList.begin(); aItr != aEnd; ++aItr )
-    {
-        if ( aItr->HasOwnAction( nOwnAction ) )
-        {
-            return true;
-        }
-    }
-
-    return false;
+    return std::any_of(rConflictsList.begin(), rConflictsList.end(),
+                       [nOwnAction](ScConflictsListEntry& rConflict) { return rConflict.HasOwnAction( nOwnAction ); });
 }
 
 ScConflictsListEntry* ScConflictsListHelper::GetSharedActionEntry( ScConflictsList& rConflictsList, sal_uLong nSharedAction )
 {
-    ScConflictsList::iterator aEnd = rConflictsList.end();
-    for ( ScConflictsList::iterator aItr = rConflictsList.begin(); aItr != aEnd; ++aItr )
-    {
-        if ( aItr->HasSharedAction( nSharedAction ) )
-        {
-            return &(*aItr);
-        }
-    }
+    auto aEnd = rConflictsList.end();
+    auto aItr = std::find_if(rConflictsList.begin(), aEnd,
+        [nSharedAction](ScConflictsListEntry& rConflict) { return rConflict.HasSharedAction( nSharedAction ); });
+
+    if (aItr != aEnd)
+        return &(*aItr);
 
     return nullptr;
 }
 
 ScConflictsListEntry* ScConflictsListHelper::GetOwnActionEntry( ScConflictsList& rConflictsList, sal_uLong nOwnAction )
 {
-    ScConflictsList::iterator aEnd = rConflictsList.end();
-    for ( ScConflictsList::iterator aItr = rConflictsList.begin(); aItr != aEnd; ++aItr )
-    {
-        if ( aItr->HasOwnAction( nOwnAction ) )
-        {
-            return &(*aItr);
-        }
-    }
+    auto aEnd = rConflictsList.end();
+    auto aItr = std::find_if(rConflictsList.begin(), aEnd,
+        [nOwnAction](ScConflictsListEntry& rConflict) { return rConflict.HasOwnAction( nOwnAction ); });
+
+    if (aItr != aEnd)
+        return &(*aItr);
 
     return nullptr;
 }
 
-void ScConflictsListHelper::Transform_Impl( ScChangeActionList& rActionList, ScChangeActionMergeMap* pMergeMap )
+void ScConflictsListHelper::Transform_Impl( std::vector<sal_uLong>& rActionList, ScChangeActionMergeMap* pMergeMap )
 {
     if ( !pMergeMap )
     {
         return;
     }
 
-    for ( ScChangeActionList::iterator aItr = rActionList.begin(); aItr != rActionList.end(); )
+    for ( auto aItr = rActionList.begin(); aItr != rActionList.end(); )
     {
         ScChangeActionMergeMap::iterator aItrMap = pMergeMap->find( *aItr );
         if ( aItrMap != pMergeMap->end() )
@@ -164,32 +141,21 @@ bool ScConflictsFinder::DoActionsIntersect( const ScChangeAction* pAction1, cons
 
 ScConflictsListEntry* ScConflictsFinder::GetIntersectingEntry( const ScChangeAction* pAction ) const
 {
-    ScConflictsList::iterator aEnd = mrConflictsList.end();
-    for ( ScConflictsList::iterator aItr = mrConflictsList.begin(); aItr != aEnd; ++aItr )
-    {
-        ScChangeActionList::const_iterator aEndShared = aItr->maSharedActions.end();
-        for ( ScChangeActionList::const_iterator aItrShared = aItr->maSharedActions.begin(); aItrShared != aEndShared; ++aItrShared )
-        {
-            if ( DoActionsIntersect( mpTrack->GetAction( *aItrShared ), pAction ) )
-            {
-                return &(*aItr);
-            }
-        }
+    auto doActionsIntersect = [this, pAction](const sal_uLong& aAction) { return DoActionsIntersect( mpTrack->GetAction( aAction ), pAction ); };
 
-        ScChangeActionList::const_iterator aEndOwn = aItr->maOwnActions.end();
-        for ( ScChangeActionList::const_iterator aItrOwn = aItr->maOwnActions.begin(); aItrOwn != aEndOwn; ++aItrOwn )
-        {
-            if ( DoActionsIntersect( mpTrack->GetAction( *aItrOwn ), pAction ) )
-            {
-                return &(*aItr);
-            }
-        }
+    for ( auto& rConflict : mrConflictsList )
+    {
+        if (std::any_of( rConflict.maSharedActions.cbegin(), rConflict.maSharedActions.cend(), doActionsIntersect ))
+            return &rConflict;
+
+        if (std::any_of( rConflict.maOwnActions.cbegin(), rConflict.maOwnActions.cend(), doActionsIntersect ))
+            return &rConflict;
     }
 
     return nullptr;
 }
 
-ScConflictsListEntry* ScConflictsFinder::GetEntry( sal_uLong nSharedAction, const ScChangeActionList& rOwnActions )
+ScConflictsListEntry* ScConflictsFinder::GetEntry( sal_uLong nSharedAction, const std::vector<sal_uLong>& rOwnActions )
 {
     // try to get a list entry which already contains the shared action
     ScConflictsListEntry* pEntry = ScConflictsListHelper::GetSharedActionEntry( mrConflictsList, nSharedAction );
@@ -209,10 +175,9 @@ ScConflictsListEntry* ScConflictsFinder::GetEntry( sal_uLong nSharedAction, cons
 
     // try to get a list entry for which any of the own actions intersects with
     // any other action of this entry
-    ScChangeActionList::const_iterator aEnd = rOwnActions.end();
-    for ( ScChangeActionList::const_iterator aItr = rOwnActions.begin(); aItr != aEnd; ++aItr )
+    for ( auto& rOwnAction : rOwnActions )
     {
-        pEntry = GetIntersectingEntry( mpTrack->GetAction( *aItr ) );
+        pEntry = GetIntersectingEntry( mpTrack->GetAction( rOwnAction ) );
         if ( pEntry )
         {
             pEntry->maSharedActions.push_back( nSharedAction );
@@ -239,7 +204,7 @@ bool ScConflictsFinder::Find()
     ScChangeAction* pSharedAction = mpTrack->GetAction( mnStartShared );
     while ( pSharedAction && pSharedAction->GetActionNumber() <= mnEndShared )
     {
-        ScChangeActionList aOwnActions;
+        std::vector<sal_uLong> aOwnActions;
         ScChangeAction* pOwnAction = mpTrack->GetAction( mnStartOwn );
         while ( pOwnAction && pOwnAction->GetActionNumber() <= mnEndOwn )
         {
@@ -250,15 +215,14 @@ bool ScConflictsFinder::Find()
             pOwnAction = pOwnAction->GetNext();
         }
 
-        if ( aOwnActions.size() )
+        if ( !aOwnActions.empty() )
         {
             ScConflictsListEntry* pEntry = GetEntry( pSharedAction->GetActionNumber(), aOwnActions );
-            ScChangeActionList::iterator aEnd = aOwnActions.end();
-            for ( ScChangeActionList::iterator aItr = aOwnActions.begin(); aItr != aEnd; ++aItr )
+            for ( auto& aOwnAction : aOwnActions )
             {
-                if ( pEntry && !ScConflictsListHelper::HasOwnAction( mrConflictsList, *aItr ) )
+                if ( pEntry && !ScConflictsListHelper::HasOwnAction( mrConflictsList, aOwnAction ) )
                 {
-                    pEntry->maOwnActions.push_back( *aItr );
+                    pEntry->maOwnActions.push_back( aOwnAction );
                 }
             }
             bReturn = true;
@@ -525,7 +489,7 @@ void ScConflictsDlg::HandleListBoxSelection( bool bSelectHandle )
             {
                 m_pLbConflicts->Select( pEntry );
             }
-            pEntry = SvTreeListBox::NextSibling( pEntry );
+            pEntry = pEntry->NextSibling();
         }
     }
 }
@@ -633,7 +597,7 @@ void ScConflictsDlg::KeepAllHandler( bool bMine )
     while ( pRootEntry )
     {
         SetConflictAction( pRootEntry, eConflictAction );
-        pRootEntry = SvTreeListBox::NextSibling( pRootEntry );
+        pRootEntry = pRootEntry->NextSibling();
     }
     m_pLbConflicts->SetUpdateMode( false );
     m_pLbConflicts->Clear();
@@ -674,10 +638,9 @@ void ScConflictsDlg::UpdateView()
             pRootUserData->pData = static_cast< void* >( pConflictEntry );
             SvTreeListEntry* pRootEntry = m_pLbConflicts->InsertEntry( GetConflictString( *aItr ), pRootUserData );
 
-            ScChangeActionList::const_iterator aEndShared = aItr->maSharedActions.end();
-            for ( ScChangeActionList::const_iterator aItrShared = aItr->maSharedActions.begin(); aItrShared != aEndShared; ++aItrShared )
+            for ( auto& aSharedAction : aItr->maSharedActions )
             {
-                ScChangeAction* pAction = mpSharedTrack ? mpSharedTrack->GetAction(*aItrShared) : nullptr;
+                ScChangeAction* pAction = mpSharedTrack ? mpSharedTrack->GetAction(aSharedAction) : nullptr;
                 if ( pAction )
                 {
                     // only display shared top content entries
@@ -695,10 +658,9 @@ void ScConflictsDlg::UpdateView()
                 }
             }
 
-            ScChangeActionList::const_iterator aEndOwn = aItr->maOwnActions.end();
-            for ( ScChangeActionList::const_iterator aItrOwn = aItr->maOwnActions.begin(); aItrOwn != aEndOwn; ++aItrOwn )
+            for ( auto& aOwnAction : aItr->maOwnActions )
             {
-                ScChangeAction* pAction = mpOwnTrack ? mpOwnTrack->GetAction(*aItrOwn) : nullptr;
+                ScChangeAction* pAction = mpOwnTrack ? mpOwnTrack->GetAction(aOwnAction) : nullptr;
                 if ( pAction )
                 {
                     // only display own top content entries

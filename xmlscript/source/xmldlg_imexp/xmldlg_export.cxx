@@ -18,6 +18,7 @@
  */
 
 #include "exp_share.hxx"
+#include <xmlscript/xmlns.h>
 
 #include <o3tl/any.hxx>
 #include <rtl/ustrbuf.hxx>
@@ -66,6 +67,7 @@
 #include <com/sun/star/document/GraphicStorageHandler.hpp>
 #include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/graphic/XGraphic.hpp>
+#include <com/sun/star/xml/sax/XExtendedDocumentHandler.hpp>
 
 #include <comphelper/processfactory.hxx>
 #include <i18nlangtag/languagetag.hxx>
@@ -1237,7 +1239,7 @@ void ElementDescriptor::readEvents()
     }
 }
 
-inline bool equalFont( Style const & style1, Style const & style2 )
+static bool equalFont( Style const & style1, Style const & style2 )
 {
     awt::FontDescriptor const & f1 = style1._descr;
     awt::FontDescriptor const & f2 = style2._descr;
@@ -1248,7 +1250,7 @@ inline bool equalFont( Style const & style1, Style const & style2 )
         f1.StyleName == f2.StyleName &&
         f1.Family == f2.Family &&
         f1.CharSet == f2.CharSet &&
-        f1.Pitch == f2.CharSet &&
+        f1.Pitch == f2.Pitch &&
         f1.CharacterWidth == f2.CharacterWidth &&
         f1.Weight == f2.Weight &&
         f1.Slant == f2.Slant &&

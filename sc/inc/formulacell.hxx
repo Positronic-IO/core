@@ -27,11 +27,12 @@
 
 #include "types.hxx"
 #include "interpretercontext.hxx"
+#include "document.hxx"
+#include "formulalogger.hxx"
 #include "formularesult.hxx"
 
 namespace sc {
 
-class CompiledFormula;
 class StartListeningContext;
 class EndListeningContext;
 struct RefUpdateContext;
@@ -66,6 +67,7 @@ public:
     SvNumFormatType mnFormatType;
     bool mbInvariant:1;
     bool mbSubTotal:1;
+    bool mbPartOfCycle:1; // To flag FG's part of a cycle
 
     sal_uInt8 meCalcState;
 
@@ -106,6 +108,24 @@ class SC_DLLPUBLIC ScFormulaCell : public SvtListener
 {
 private:
     ScFormulaCellGroupRef mxGroup;       // Group of formulae we're part of
+    bool            bDirty         : 1; // Must be (re)calculated
+    bool            bTableOpDirty  : 1; // Dirty flag for TableOp
+    bool            bChanged       : 1; // Whether something changed regarding display/representation
+    bool            bRunning       : 1; // Already interpreting right now
+    bool            bCompile       : 1; // Must be (re)compiled
+    bool            bSubTotal      : 1; // Cell is part of or contains a SubTotal
+    bool            bIsIterCell    : 1; // Cell is part of a circular reference
+    bool            bInChangeTrack : 1; // Cell is in ChangeTrack
+    bool            bNeedListening : 1; // Listeners need to be re-established after UpdateReference
+    bool            mbNeedsNumberFormat : 1; // set the calculated number format as hard number format
+    bool            mbAllowNumberFormatChange : 1; /* allow setting further calculated
+                                                      number formats as hard number format */
+    bool            mbPostponedDirty : 1;   // if cell needs to be set dirty later
+    bool            mbIsExtRef       : 1; // has references in ScExternalRefManager; never cleared after set
+    bool            mbSeenInPath     : 1; // For detecting cycle involving formula groups and singleton formulacells
+    ScMatrixMode    cMatrixFlag      : 8;
+    sal_uInt16      nSeenInIteration : 16;   // Iteration cycle in which the cell was last encountered
+    SvNumFormatType nFormatType      : 16;
     ScFormulaResult aResult;
     formula::FormulaGrammar::Grammar  eTempGrammar;   // used between string (creation) and (re)compilation
     ScTokenArray*   pCode;              // The (new) token array
@@ -114,23 +134,6 @@ private:
     ScFormulaCell*  pNext;
     ScFormulaCell*  pPreviousTrack;
     ScFormulaCell*  pNextTrack;
-    sal_uInt16      nSeenInIteration;   // Iteration cycle in which the cell was last encountered
-    SvNumFormatType nFormatType;
-    ScMatrixMode    cMatrixFlag;
-    bool            bDirty         : 1; // Must be (re)calculated
-    bool            bChanged       : 1; // Whether something changed regarding display/representation
-    bool            bRunning       : 1; // Already interpreting right now
-    bool            bCompile       : 1; // Must be (re)compiled
-    bool            bSubTotal      : 1; // Cell is part of or contains a SubTotal
-    bool            bIsIterCell    : 1; // Cell is part of a circular reference
-    bool            bInChangeTrack : 1; // Cell is in ChangeTrack
-    bool            bTableOpDirty  : 1; // Dirty flag for TableOp
-    bool            bNeedListening : 1; // Listeners need to be re-established after UpdateReference
-    bool            mbNeedsNumberFormat : 1; // set the calculated number format as hard number format
-    bool            mbAllowNumberFormatChange : 1; /* allow setting further calculated
-                                                      number formats as hard number format */
-    bool            mbPostponedDirty : 1;   // if cell needs to be set dirty later
-    bool            mbIsExtRef       : 1; // has references in ScExternalRefManager; never cleared after set
 
     /**
      * Update reference in response to cell copy-n-paste.
@@ -139,6 +142,16 @@ private:
         const sc::RefUpdateContext& rCxt, ScDocument* pUndoDoc, const ScAddress* pUndoCellPos );
 
     ScFormulaCell( const ScFormulaCell& ) = delete;
+
+    bool CheckComputeDependencies(sc::FormulaLogger::GroupScope& rScope, bool fromFirstRow = false);
+    bool InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope& aScope,
+                                        bool& bDependencyComputed,
+                                        bool& bDependencyCheckFailed);
+    bool InterpretFormulaGroupOpenCL(sc::FormulaLogger::GroupScope& aScope,
+                                     bool& bDependencyComputed,
+                                     bool& bDependencyCheckFailed);
+    bool InterpretInvariantFormulaGroup();
+
 public:
 
 
@@ -153,8 +166,6 @@ public:
     void            HandleStuffAfterParallelCalculation();
 
     enum CompareState { NotEqual = 0, EqualInvariant, EqualRelativeRef };
-
-    DECL_FIXEDMEMPOOL_NEWDEL( ScFormulaCell )
 
     ScAddress       aPos;
 
@@ -212,7 +223,12 @@ public:
     void            SetDirtyAfterLoad();
     void ResetTableOpDirtyVar();
     void            SetTableOpDirty();
-    bool            IsDirtyOrInTableOpDirty() const;
+
+    bool IsDirtyOrInTableOpDirty() const
+    {
+        return bDirty || (bTableOpDirty && pDocument->IsInInterpreterTableOp());
+    }
+
     bool GetDirty() const { return bDirty; }
     void ResetDirty();
     bool NeedsListening() const { return bNeedListening; }
@@ -389,6 +405,8 @@ public:
 
     svl::SharedString GetResultString() const;
 
+    bool HasHybridStringResult() const;
+
     /* Sets the shared code array to error state in addition to the cell result */
     void SetErrCode( FormulaError n );
 
@@ -402,9 +420,27 @@ public:
     /** Determines whether or not the result string contains more than one paragraph */
     bool            IsMultilineResult();
 
-    bool NeedsInterpret() const;
+    bool NeedsInterpret() const
+    {
+        if (bIsIterCell)
+            // Shortcut to force return of current value and not enter Interpret()
+            // as we're looping over all iteration cells.
+            return false;
 
-    void            MaybeInterpret();
+        if (!IsDirtyOrInTableOpDirty())
+            return false;
+
+        return (pDocument->GetAutoCalc() || (cMatrixFlag != ScMatrixMode::NONE));
+    }
+
+    void MaybeInterpret()
+    {
+        if (NeedsInterpret())
+        {
+            assert(!pDocument->IsThreadedGroupCalcInProgress());
+            Interpret();
+        }
+    }
 
     /**
      * Turn a non-grouped cell into the top of a grouped cell.
@@ -416,7 +452,6 @@ public:
     CompareState CompareByTokenArray( const ScFormulaCell& rOther ) const;
 
     bool InterpretFormulaGroup();
-    bool InterpretInvariantFormulaGroup();
 
     // nOnlyNames may be one or more of SC_LISTENING_NAMES_*
     void StartListeningTo( ScDocument* pDoc );
@@ -441,6 +476,8 @@ public:
     bool IsPostponedDirty() const { return mbPostponedDirty;}
 
     void SetIsExtRef() { mbIsExtRef = true; }
+    bool GetSeenInPath() { return mbSeenInPath; }
+    void SetSeenInPath(bool bSet) { mbSeenInPath = bSet; }
 
 #if DUMP_COLUMN_STORAGE
     void Dump() const;

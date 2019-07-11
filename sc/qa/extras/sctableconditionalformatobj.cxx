@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/xsheetconditionalentries.hxx>
 
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -34,7 +35,9 @@ using namespace com::sun::star;
 
 namespace sc_apitest
 {
-class ScTableConditionalFormatObj : public CalcUnoApiTest, public apitest::XSheetConditionalEntries
+class ScTableConditionalFormatObj : public CalcUnoApiTest,
+                                    public apitest::XEnumerationAccess,
+                                    public apitest::XSheetConditionalEntries
 {
 public:
     ScTableConditionalFormatObj();
@@ -45,6 +48,9 @@ public:
     virtual void tearDown() override;
 
     CPPUNIT_TEST_SUITE(ScTableConditionalFormatObj);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     // XSheetConditionalEntries
     CPPUNIT_TEST(testAddNew);
@@ -65,7 +71,6 @@ ScTableConditionalFormatObj::ScTableConditionalFormatObj()
 uno::Reference<uno::XInterface> ScTableConditionalFormatObj::init()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<container::XIndexAccess> xIndex(xDoc->getSheets(), uno::UNO_QUERY_THROW);
     uno::Reference<sheet::XSpreadsheet> xSheet(xIndex->getByIndex(0), uno::UNO_QUERY_THROW);

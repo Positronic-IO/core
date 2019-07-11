@@ -18,6 +18,7 @@
  */
 
 #include <comphelper/string.hxx>
+#include <o3tl/safeint.hxx>
 #include <tools/stream.hxx>
 #include <tools/debug.hxx>
 #include <tools/color.hxx>
@@ -25,6 +26,7 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/character.hxx>
 #include <rtl/tencinfo.h>
+#include <sal/log.hxx>
 #include <tools/tenccvt.hxx>
 #include <tools/datetime.hxx>
 #include <unotools/datetime.hxx>
@@ -537,7 +539,8 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                             else
                             {
                                 // If not scanning a tag return token
-                                aToken += sTmpBuffer.makeStringAndClear();
+                                aToken += sTmpBuffer;
+                                sTmpBuffer.setLength(0);
 
                                 if( !aToken.isEmpty() )
                                 {
@@ -588,7 +591,10 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                     // options.
                     sTmpBuffer.append( '\\' );
                     if( MAX_LEN == sTmpBuffer.getLength() )
-                        aToken += sTmpBuffer.makeStringAndClear();
+                    {
+                        aToken += sTmpBuffer;
+                        sTmpBuffer.setLength(0);
+                    }
                 }
                 if( IsParserWorking() )
                 {
@@ -626,7 +632,10 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                 // mark within tags
                 sTmpBuffer.append( '\\' );
                 if( MAX_LEN == sTmpBuffer.getLength() )
-                    aToken += sTmpBuffer.makeStringAndClear();
+                {
+                    aToken += sTmpBuffer;
+                    sTmpBuffer.setLength(0);
+                }
             }
             sTmpBuffer.append( '\\' );
             break;
@@ -721,7 +730,8 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                         if( !aToken.isEmpty() || sTmpBuffer.getLength() > 1 )
                         {
                             // Have seen s.th. aside from blanks?
-                            aToken += sTmpBuffer.makeStringAndClear();
+                            aToken += sTmpBuffer;
+                            sTmpBuffer.setLength(0);
                             return HtmlTokenId::TEXTTOKEN;
                         }
                         else
@@ -747,14 +757,15 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
                     sTmpBuffer.appendUtf32( nNextCh );
                     if( MAX_LEN == sTmpBuffer.getLength() )
                     {
-                        aToken += sTmpBuffer.makeStringAndClear();
+                        aToken += sTmpBuffer;
+                        sTmpBuffer.setLength(0);
                     }
                     if( ( sal_Unicode(EOF) == (nNextCh = GetNextChar()) &&
                           rInput.eof() ) ||
                         !IsParserWorking() )
                     {
                         if( !sTmpBuffer.isEmpty() )
-                            aToken += sTmpBuffer.makeStringAndClear();
+                            aToken += sTmpBuffer;
                         return HtmlTokenId::TEXTTOKEN;
                     }
                 } while( rtl::isAsciiAlpha( nNextCh ) || rtl::isAsciiDigit( nNextCh ) );
@@ -763,14 +774,17 @@ HtmlTokenId HTMLParser::ScanText( const sal_Unicode cBreak )
         }
 
         if( MAX_LEN == sTmpBuffer.getLength() )
-            aToken += sTmpBuffer.makeStringAndClear();
+        {
+            aToken += sTmpBuffer;
+            sTmpBuffer.setLength(0);
+        }
 
         if( bContinue && bNextCh )
             nNextCh = GetNextChar();
     }
 
     if( !sTmpBuffer.isEmpty() )
-        aToken += sTmpBuffer.makeStringAndClear();
+        aToken += sTmpBuffer;
 
     return HtmlTokenId::TEXTTOKEN;
 }
@@ -805,7 +819,8 @@ HtmlTokenId HTMLParser::GetNextRawToken()
                 // Maybe we've reached the end.
 
                 // Save what we have read previously...
-                aToken += sTmpBuffer.makeStringAndClear();
+                aToken += sTmpBuffer;
+                sTmpBuffer.setLength(0);
 
                 // and remember position in stream.
                 sal_uInt64 nStreamPos = rInput.Tell();
@@ -926,7 +941,10 @@ HtmlTokenId HTMLParser::GetNextRawToken()
                     bTwoMinus = true;
 
                     if( MAX_LEN == sTmpBuffer.getLength() )
-                        aToken += sTmpBuffer.makeStringAndClear();
+                    {
+                        aToken += sTmpBuffer;
+                        sTmpBuffer.setLength(0);
+                    }
                     sTmpBuffer.appendUtf32( nNextCh );
                     nNextCh = GetNextChar();
                 }
@@ -978,7 +996,10 @@ HtmlTokenId HTMLParser::GetNextRawToken()
 
         if( (!bContinue && !sTmpBuffer.isEmpty()) ||
             MAX_LEN == sTmpBuffer.getLength() )
-            aToken += sTmpBuffer.makeStringAndClear();
+        {
+            aToken += sTmpBuffer;
+            sTmpBuffer.setLength(0);
+        }
 
         if( bContinue && bNextCh )
             nNextCh = GetNextChar();
@@ -1008,8 +1029,7 @@ HtmlTokenId HTMLParser::GetNextToken_()
     }
 
     // Delete options
-    if (!maOptions.empty())
-        maOptions.clear();
+    maOptions.clear();
 
     if( !IsParserWorking() )        // Don't continue if already an error occurred
         return HtmlTokenId::NONE;
@@ -1055,13 +1075,19 @@ HtmlTokenId HTMLParser::GetNextToken_()
                     do {
                         sTmpBuffer.appendUtf32( nNextCh );
                         if( MAX_LEN == sTmpBuffer.getLength() )
-                            aToken += sTmpBuffer.makeStringAndClear();
+                        {
+                            aToken += sTmpBuffer;
+                            sTmpBuffer.setLength(0);
+                        }
                         nNextCh = GetNextChar();
                     } while( '>' != nNextCh && '/' != nNextCh && !rtl::isAsciiWhiteSpace( nNextCh ) &&
                              IsParserWorking() && !rInput.eof() );
 
                     if( !sTmpBuffer.isEmpty() )
-                        aToken += sTmpBuffer.makeStringAndClear();
+                    {
+                        aToken += sTmpBuffer;
+                        sTmpBuffer.setLength(0);
+                    }
 
                     // Skip blanks
                     while( rtl::isAsciiWhiteSpace( nNextCh ) && IsParserWorking() )
@@ -1093,10 +1119,11 @@ HtmlTokenId HTMLParser::GetNextToken_()
                             // and there is an off token, return off token instead
                             nRet = static_cast<HtmlTokenId>(static_cast<int>(nRet) + 1);
                          }
-                         else if( HtmlTokenId::LINEBREAK!=nRet )
+                         else if( HtmlTokenId::LINEBREAK!=nRet || !maNamespace.isEmpty())
                          {
                             // and there is no off token, return unknown token.
                             // (except for </BR>, that is treated like <BR>)
+                            // No exception for XHTML, though.
                             nRet = HtmlTokenId::UNKNOWNCONTROL_OFF;
                          }
                     }
@@ -1115,6 +1142,7 @@ HtmlTokenId HTMLParser::GetNextToken_()
 
                         bool bDone = false;
                         // Read until closing -->. If not found restart at first >
+                        sTmpBuffer = aToken;
                         while( !bDone && !rInput.eof() && IsParserWorking() )
                         {
                             if( '>'==nNextCh )
@@ -1122,19 +1150,20 @@ HtmlTokenId HTMLParser::GetNextToken_()
                                 if( !nCStreamPos )
                                 {
                                     nCStreamPos = rInput.Tell();
-                                    nCStrLen = aToken.getLength();
+                                    nCStrLen = sTmpBuffer.getLength();
                                     nCLineNr = GetLineNr();
                                     nCLinePos = GetLinePos();
                                 }
-                                bDone = aToken.endsWith( "--" );
+                                bDone = sTmpBuffer.getLength() >= 2 && sTmpBuffer[sTmpBuffer.getLength() - 2] == '-' && sTmpBuffer[sTmpBuffer.getLength() - 1] == '-';
                                 if( !bDone )
-                                aToken += OUString(&nNextCh,1);
+                                    sTmpBuffer.appendUtf32(nNextCh);
                             }
                             else
-                                aToken += OUString(&nNextCh,1);
+                                sTmpBuffer.appendUtf32(nNextCh);
                             if( !bDone )
                                 nNextCh = GetNextChar();
                         }
+                        aToken = sTmpBuffer.makeStringAndClear();
                         if( !bDone && IsParserWorking() && nCStreamPos )
                         {
                             rInput.Seek( nCStreamPos );
@@ -1218,12 +1247,15 @@ HtmlTokenId HTMLParser::GetNextToken_()
 
                         bool bDone = false;
                         // Read until closing %>. If not found restart at first >.
+                        sal_Unicode nLastTokenChar = !aToken.isEmpty() ? aToken[aToken.getLength() - 1] : 0;
+                        OUStringBuffer aTmpBuffer(aToken);
                         while( !bDone && !rInput.eof() && IsParserWorking() )
                         {
-                            bDone = '>'==nNextCh && aToken.endsWith("%");
+                            bDone = '>'==nNextCh && nLastTokenChar == '%';
                             if( !bDone )
                             {
-                                aToken += OUString(&nNextCh,1);
+                                aTmpBuffer.appendUtf32(nNextCh);
+                                nLastTokenChar = aTmpBuffer[aTmpBuffer.getLength() - 1];
                                 nNextCh = GetNextChar();
                             }
                         }
@@ -1237,6 +1269,7 @@ HtmlTokenId HTMLParser::GetNextToken_()
                             nRet = HtmlTokenId::TEXTTOKEN;
                             break;
                         }
+                        aToken = aTmpBuffer.makeStringAndClear();
                         if( IsParserWorking() )
                         {
                             sSaveToken = aToken;
@@ -1997,7 +2030,10 @@ bool HTMLParser::ParseMetaOptionsImpl(
                 if (comphelper::string::getTokenCount(aContent, ';') == 2)
                 {
                     Date aDate(aContent.getToken(0, ';').toInt32());
-                    tools::Time aTime(aContent.getToken(1, ';').toInt64());
+                    auto nTime = aContent.getToken(1, ';').toInt64();
+                    if (nTime < 0)
+                        nTime = o3tl::saturating_toggle_sign(nTime);
+                    tools::Time aTime(nTime);
                     DateTime aDateTime(aDate, aTime);
                     uDT = aDateTime.GetUNODateTime();
                     valid = true;

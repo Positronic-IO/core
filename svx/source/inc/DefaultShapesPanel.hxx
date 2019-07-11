@@ -60,9 +60,8 @@ private:
     VclPtr<ValueSet>          mpCalloutSet;
     VclPtr<ValueSet>          mpStarSet;
     VclPtr<ValueSet>          mp3DObjectSet;
-    VclPtr<VclScrolledWindow> mpScrollWindow;
     Reference< XFrame >       mxFrame;
-    std::map<VclPtr<ValueSet>, std::map<sal_uInt16, rtl::OUString>> mpShapesSetMap;
+    std::map<VclPtr<ValueSet>, std::map<sal_uInt16, OUString>> mpShapesSetMap;
 
     void populateShapes();
     void Initialize();

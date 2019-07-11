@@ -21,6 +21,7 @@
 #include <vcl/graph.hxx>
 #include <vcl/BitmapTools.hxx>
 #include <vcl/outdev.hxx>
+#include <sal/log.hxx>
 #include <tools/fract.hxx>
 #include <memory>
 
@@ -84,14 +85,12 @@ public:
 
 PSDReader::PSDReader(SvStream &rStream)
     : m_rPSD(rStream)
-    , mpFileHeader(nullptr)
     , mnXResFixed(0)
     , mnYResFixed(0)
     , mbStatus(true)
     , mbTransparent(false)
     , mnDestBitDepth(0)
     , mbCompression(false)
-    , mpPalette(nullptr)
 {
 }
 

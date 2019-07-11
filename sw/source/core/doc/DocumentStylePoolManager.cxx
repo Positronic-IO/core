@@ -61,6 +61,8 @@
 #include <editeng/scriptspaceitem.hxx>
 #include <svx/strings.hrc>
 #include <svx/dialmgr.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <strings.hrc>
 #include <frmatr.hxx>
 #include <com/sun/star/table/BorderLineStyle.hpp>
@@ -117,8 +119,8 @@ namespace
     void lcl_SetDfltFont( DefaultFontType nFntType, SfxItemSet& rSet )
     {
         static struct {
-            sal_uInt16 nResLngId;
-            sal_uInt16 nResFntId;
+            sal_uInt16 const nResLngId;
+            sal_uInt16 const nResFntId;
         } aArr[ 3 ] = {
             { RES_CHRATR_LANGUAGE, RES_CHRATR_FONT },
             { RES_CHRATR_CJK_LANGUAGE, RES_CHRATR_CJK_FONT },
@@ -141,8 +143,8 @@ namespace
                             DefaultFontType nCTLFntType, SfxItemSet& rSet )
     {
         static struct {
-            sal_uInt16 nResLngId;
-            sal_uInt16 nResFntId;
+            sal_uInt16 const nResLngId;
+            sal_uInt16 const nResFntId;
             DefaultFontType nFntType;
         } aArr[ 3 ] = {
             { RES_CHRATR_LANGUAGE, RES_CHRATR_FONT, static_cast<DefaultFontType>(0) },
@@ -205,6 +207,7 @@ namespace
                 {
                     SvxLRSpaceItem aLR( pColl->GetFormatAttr( RES_LR_SPACE ) );
                     aLR.SetTextFirstLineOfstValue( rNFormat.GetFirstLineOffset() );
+                        //TODO: overflow
                     aLR.SetTextLeft( rNFormat.GetAbsLSpace() );
                     pColl->SetFormatAttr( aLR );
                 }
@@ -1334,7 +1337,7 @@ SwTextFormatColl* DocumentStylePoolManager::GetTextCollFromPool( sal_uInt16 nId,
             {
                 SvxBoxItem aBox( RES_BOX );
                 Color aColor( COL_GRAY );
-                SvxBorderLine aNew(&aColor, 1, SvxBorderLineStyle::DOUBLE);
+                SvxBorderLine aNew(&aColor, 3, SvxBorderLineStyle::DOUBLE);
                 aBox.SetLine( &aNew, SvxBoxItemLine::BOTTOM );
 
                 aSet.Put( aBox );
@@ -1965,12 +1968,14 @@ SwNumRule* DocumentStylePoolManager::GetNumRuleFromPool( sal_uInt16 nId )
             {
                 if ( eNumberFormatPositionAndSpaceMode == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
                 {
-                    aFormat.SetAbsLSpace( nSpace = nSpace + pArr[ n ] );
+                    nSpace += pArr[ n ];
+                    aFormat.SetAbsLSpace( nSpace );
                     aFormat.SetFirstLineOffset( - pArr[ n ] );
                 }
                 else if ( eNumberFormatPositionAndSpaceMode == SvxNumberFormat::LABEL_ALIGNMENT )
                 {
-                    aFormat.SetListtabPos( nSpace = nSpace + pArr[ n ] );
+                    nSpace += pArr[ n ];
+                    aFormat.SetListtabPos( nSpace );
                     aFormat.SetIndentAt( nSpace );
                     aFormat.SetFirstLineIndent( - pArr[ n ] );
                 }
@@ -2536,7 +2541,7 @@ std::vector<OUString> *SwStyleNameMapper::s_pTextUINameArray = nullptr,
                 *SwStyleNameMapper::s_pTableStyleUINameArray = nullptr,
                 *SwStyleNameMapper::s_pCellStyleUINameArray = nullptr;
 
-std::vector<OUString>*
+static std::vector<OUString>*
 lcl_NewUINameArray(const char** pIds, const size_t nLen, const size_t nSvxIds = 0)
 {
     assert(nSvxIds <= nLen);

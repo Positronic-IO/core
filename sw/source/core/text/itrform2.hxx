@@ -31,19 +31,21 @@ class SwExpandPortion;
 class SwMultiPortion;
 class SwFootnotePortion;
 
+namespace sw { class MergedAttrIterByEnd; }
+
 class SwTextFormatter : public SwTextPainter
 {
     const SwFormatDrop *pDropFormat;
     SwMultiPortion* pMulti; // during formatting a multi-portion
     sal_uInt8 nCntEndHyph;  // Counts consecutive hyphens at the line end
     sal_uInt8 nCntMidHyph;  // Counts consecutive hyphens before flies
-    sal_Int32 nLeftScanIdx; // for increasing performance during
-    sal_Int32 nRightScanIdx; // scanning for portion ends
+    TextFrameIndex nLeftScanIdx; // for increasing performance during
+    TextFrameIndex nRightScanIdx; // scanning for portion ends
     bool bOnceMore : 1; // Another round?
     bool bFlyInCntBase : 1; // Base reference that sets a character-bound frame
     bool bTruncLines : 1; // Flag for extending the repaint rect, if needed
     bool bUnclipped : 1; // Flag whether repaint is larger than the fixed line height
-    size_t m_nHintEndIndex; // HACK for TryNewNoLengthPortion
+    std::unique_ptr<sw::MergedAttrIterByEnd> m_pByEndIter; // HACK for TryNewNoLengthPortion
     SwLinePortion* m_pFirstOfBorderMerge; // The first text portion of a joined border (during portion building)
 
     SwLinePortion *NewPortion( SwTextFormatInfo &rInf );
@@ -111,7 +113,7 @@ class SwTextFormatter : public SwTextPainter
         for example after adjustment change (right alignment, justified, etc.)
         Mainly to correct the X position.
      */
-    void UpdatePos( SwLineLayout *pCurr, Point aStart, sal_Int32 nStartIdx,
+    void UpdatePos(SwLineLayout *pCurr, Point aStart, TextFrameIndex nStartIdx,
             bool bAlways = false ) const;
 
     /**
@@ -152,24 +154,24 @@ public:
 
     void CtorInitTextFormatter( SwTextFrame *pFrame, SwTextFormatInfo *pInf );
     SwTextFormatter(SwTextFrame *pTextFrame, SwTextFormatInfo *pTextFormatInf)
-        : SwTextPainter(pTextFrame->GetTextNode())
+        : SwTextPainter(pTextFrame->GetTextNodeFirst())
         , bUnclipped(false)
     {
         CtorInitTextFormatter( pTextFrame, pTextFormatInf );
     }
     virtual ~SwTextFormatter() override;
 
-    sal_Int32 FormatLine( const sal_Int32 nStart );
+    TextFrameIndex FormatLine(TextFrameIndex nStart);
 
     void RecalcRealHeight();
 
     // We format a line for interactive hyphenation
-    bool Hyphenate( SwInterHyphInfo &rInf );
+    bool Hyphenate(SwInterHyphInfoTextFrame & rInf);
 
     // A special method for QuoVadis texts:
     // nErgo is the page number of the ErgoSum Footnote
     // At 0 it's still unclear
-    sal_Int32 FormatQuoVadis( const sal_Int32 nStart );
+    TextFrameIndex FormatQuoVadis(TextFrameIndex nStart);
 
     // The emergency break: Cancel formatting, discard line
     bool IsStop() const { return GetInfo().IsStop(); }
@@ -192,7 +194,7 @@ public:
     // How wide would you be without any bounds (Flys etc.)?
     SwTwips CalcFitToContent_( );
 
-    SwLinePortion* MakeRestPortion(const SwLineLayout* pLine, sal_Int32 nPos);
+    SwLinePortion* MakeRestPortion(const SwLineLayout* pLine, TextFrameIndex nPos);
 
     const SwFormatDrop *GetDropFormat() const { return pDropFormat; }
     void ClearDropFormat() { pDropFormat = nullptr; }

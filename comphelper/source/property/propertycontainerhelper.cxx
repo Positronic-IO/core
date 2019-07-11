@@ -22,6 +22,7 @@
 #include <osl/diagnose.h>
 #include <uno/data.h>
 #include <com/sun/star/uno/genfunc.h>
+#include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <rtl/ustrbuf.hxx>
@@ -51,7 +52,7 @@ namespace
     // comparing two property descriptions (by name)
     struct PropertyDescriptionNameMatch
     {
-        OUString m_rCompare;
+        OUString const m_rCompare;
         explicit PropertyDescriptionNameMatch( const OUString& _rCompare ) : m_rCompare( _rCompare ) { }
 
         bool operator() (const PropertyDescription& x ) const
@@ -154,12 +155,11 @@ bool OPropertyContainerHelper::isRegisteredProperty( const OUString& _rName ) co
     // i.e. registered and revoked even though the XPropertySet has already been
     // accessed, a vector is not really the best data structure anymore ...
 
-    ConstPropertiesIterator pos = std::find_if(
+    return std::any_of(
         m_aProperties.begin(),
         m_aProperties.end(),
         PropertyDescriptionNameMatch( _rName )
     );
-    return pos != m_aProperties.end();
 }
 
 

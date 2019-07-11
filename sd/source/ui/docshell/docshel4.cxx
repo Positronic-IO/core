@@ -18,12 +18,14 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <utility>
 
 #include <DrawDocShell.hxx>
 #include <com/sun/star/document/PrinterIndependentLayout.hpp>
+#include <editeng/outlobj.hxx>
 #include <o3tl/make_unique.hxx>
 #include <tools/urlobj.hxx>
 #include <sfx2/progress.hxx>
@@ -73,15 +75,19 @@
 #include <DrawViewShell.hxx>
 #include <ViewShellBase.hxx>
 #include <Window.hxx>
+#include <OutlineView.hxx>
 #include <OutlineViewShell.hxx>
 #include <sdxmlwrp.hxx>
 #include <sdpptwrp.hxx>
 #include <sdcgmfilter.hxx>
 #include <sdgrffilter.hxx>
 #include <sdhtmlfilter.hxx>
+#include <sdpdffilter.hxx>
 #include <framework/FrameworkHelper.hxx>
 
 #include <SdUnoDrawView.hxx>
+
+#include <sfx2/zoomitem.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -352,9 +358,9 @@ bool DrawDocShell::Load( SfxMedium& rMedium )
  */
 bool DrawDocShell::LoadFrom( SfxMedium& rMedium )
 {
-    WaitObject* pWait = nullptr;
+    std::unique_ptr<WaitObject> pWait;
     if( mpViewShell )
-        pWait = new WaitObject( static_cast<vcl::Window*>(mpViewShell->GetActiveWindow()) );
+        pWait.reset(new WaitObject( static_cast<vcl::Window*>(mpViewShell->GetActiveWindow()) ));
 
     mpDoc->NewOrLoadCompleted( NEW_DOC );
     mpDoc->CreateFirstPages();
@@ -372,8 +378,6 @@ bool DrawDocShell::LoadFrom( SfxMedium& rMedium )
         if( pSet )
             pSet->Put( SfxUInt16Item( SID_VIEW_ID, 5 ) );
     }
-
-    delete pWait;
 
     return bRet;
 }
@@ -403,14 +407,6 @@ bool DrawDocShell::ImportFrom(SfxMedium &rMedium,
         const_cast<EditEngine&>(rOutl.GetEditEngine()).SetControlWord( nControlWord );
 
         mpDoc->SetSummationOfParagraphs();
-    }
-
-    // Set this flag for MSO formats
-    if (aFilterName.startsWith("MS PowerPoint 97") ||
-        aFilterName.startsWith("Impress MS PowerPoint 2007 XML") ||
-        aFilterName.startsWith("Impress Office Open XML"))
-    {
-        mpDoc->SetHoriAlignIgnoreTrailingWhitespace(true);
     }
 
     const bool bRet = SfxObjectShell::ImportFrom(rMedium, xInsertPosition);
@@ -489,25 +485,23 @@ bool DrawDocShell::ConvertFrom( SfxMedium& rMedium )
         ErrCode nError = ERRCODE_NONE;
         bRet = SdXMLFilter( rMedium, *this, SDXMLMODE_Normal, SOFFICE_FILEFORMAT_60 ).Import( nError );
     }
-    else if( aFilterName == "CGM - Computer Graphics Metafile" )
+    else if (aFilterName == "CGM - Computer Graphics Metafile")
     {
         mpDoc->CreateFirstPages();
         mpDoc->StopWorkStartupDelay();
         bRet = SdCGMFilter( rMedium, *this ).Import();
+    }
+    else if (aFilterName == "draw_pdf_import")
+    {
+        mpDoc->CreateFirstPages();
+        mpDoc->StopWorkStartupDelay();
+        bRet = SdPdfFilter(rMedium, *this).Import();
     }
     else
     {
         mpDoc->CreateFirstPages();
         mpDoc->StopWorkStartupDelay();
         bRet = SdGRFFilter( rMedium, *this ).Import();
-    }
-
-    // Set this flag for MSO formats
-    if (aFilterName.startsWith("MS PowerPoint 97") ||
-        aFilterName.startsWith("Impress MS PowerPoint 2007 XML") ||
-        aFilterName.startsWith("Impress Office Open XML"))
-    {
-        mpDoc->SetHoriAlignIgnoreTrailingWhitespace(true);
     }
 
     FinishedLoading();
@@ -558,17 +552,11 @@ bool DrawDocShell::Save()
 bool DrawDocShell::SaveAs( SfxMedium& rMedium )
 {
     mpDoc->setDocAccTitle(OUString());
-    SfxViewFrame* pFrame1 = SfxViewFrame::GetFirst( this );
-    if (pFrame1)
+    if (SfxViewFrame* pFrame1 = SfxViewFrame::GetFirst(this))
     {
-        vcl::Window* pWindow = &pFrame1->GetWindow();
-        if ( pWindow )
+        if (vcl::Window* pSysWin = pFrame1->GetWindow().GetSystemWindow())
         {
-            vcl::Window* pSysWin = pWindow->GetSystemWindow();
-            if ( pSysWin )
-            {
-                pSysWin->SetAccessibleName(OUString());
-            }
+            pSysWin->SetAccessibleName(OUString());
         }
     }
     mpDoc->StopWorkStartupDelay();
@@ -583,8 +571,8 @@ bool DrawDocShell::SaveAs( SfxMedium& rMedium )
             SdrOutliner* pOutl = mpViewShell->GetView()->GetTextEditOutliner();
             if( pObj && pOutl && pOutl->IsModified() )
             {
-                OutlinerParaObject* pNewText = pOutl->CreateParaObject( 0, pOutl->GetParagraphCount() );
-                pObj->SetOutlinerParaObject( pNewText );
+                std::unique_ptr<OutlinerParaObject> pNewText = pOutl->CreateParaObject( 0, pOutl->GetParagraphCount() );
+                pObj->SetOutlinerParaObject( std::move(pNewText) );
                 pOutl->ClearModifyFlag();
             }
         }
@@ -716,9 +704,8 @@ SfxStyleSheetBasePool* DrawDocShell::GetStyleSheetPool()
 
 void DrawDocShell::GotoBookmark(const OUString& rBookmark)
 {
-    if (mpViewShell && dynamic_cast< const DrawViewShell *>( mpViewShell ) !=  nullptr)
+    if (auto pDrawViewShell = dynamic_cast<DrawViewShell *>( mpViewShell ))
     {
-        DrawViewShell* pDrawViewShell = static_cast<DrawViewShell*>(mpViewShell);
         ViewShellBase& rBase (mpViewShell->GetViewShellBase());
 
         bool bIsMasterPage = false;
@@ -767,7 +754,7 @@ void DrawDocShell::GotoBookmark(const OUString& rBookmark)
 
                 if (pObj)
                 {
-                    nPageNumber = pObj->GetPage()->GetPageNum();
+                    nPageNumber = pObj->getSdrPageFromSdrObject()->GetPageNum();
                 }
             }
         }
@@ -849,11 +836,14 @@ void DrawDocShell::GotoBookmark(const OUString& rBookmark)
                     pDrawViewShell->SwitchPage(nSdPgNum);
                 }
 
+                // show page
+                SvxZoomItem aZoom;
+                aZoom.SetType( SvxZoomType::WHOLEPAGE );
+                pDrawViewShell->GetDispatcher()->ExecuteList(SID_ATTR_ZOOM, SfxCallMode::ASYNCHRON, { &aZoom });
+
                 if (pObj != nullptr)
                 {
-                    // show and select object
-                    pDrawViewShell->MakeVisible(pObj->GetLogicRect(),
-                        *pDrawViewShell->GetActiveWindow());
+                    // select object
                     pDrawViewShell->GetView()->UnmarkAll();
                     pDrawViewShell->GetView()->MarkObj(
                         pObj,

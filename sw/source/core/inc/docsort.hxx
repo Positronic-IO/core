@@ -79,6 +79,12 @@ struct SwSortElement
     static void Init( SwDoc*, const SwSortOptions& rOpt, FlatFndBox const * = nullptr );
     static void Finit();
 
+    SwSortElement() = default;
+    SwSortElement(SwSortElement const &) = default;
+    SwSortElement(SwSortElement &&) = default;
+    SwSortElement & operator =(SwSortElement const &) = default;
+    SwSortElement & operator =(SwSortElement &&) = default;
+
     virtual ~SwSortElement();
 
     virtual OUString GetKey(sal_uInt16 nKey ) const = 0;
@@ -94,7 +100,7 @@ private:
 // sort text
 struct SwSortTextElement : public SwSortElement
 {
-    sal_uLong   nOrg;
+    sal_uLong const   nOrg;
     SwNodeIndex aPos;
 
     SwSortTextElement( const SwNodeIndex& rPos );
@@ -106,7 +112,7 @@ struct SwSortTextElement : public SwSortElement
 // sort table
 struct SwSortBoxElement : public SwSortElement
 {
-    sal_uInt16 nRow;
+    sal_uInt16 const nRow;
 
     SwSortBoxElement( sal_uInt16 nRC );
     virtual ~SwSortBoxElement() override;
@@ -139,7 +145,6 @@ private:
     void                FillFlat(const FndBox_&, bool bLastBox=false);
 
     SwDoc*              pDoc;
-    const FndBox_&      rBoxRef;
     std::unique_ptr<FndBox_ const *[]> pArr;
     std::vector<std::unique_ptr<SfxItemSet>> ppItemSets;
 

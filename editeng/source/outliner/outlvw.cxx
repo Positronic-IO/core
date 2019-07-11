@@ -44,6 +44,9 @@
 #include <svl/itemset.hxx>
 #include <svl/eitem.hxx>
 #include <editeng/editstat.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 
@@ -371,7 +374,7 @@ void OutlinerView::ImpToggleExpand( Paragraph const * pPara )
     pEditView->ShowCursor();
 }
 
-sal_Int32 OutlinerView::Select( Paragraph const * pParagraph, bool bSelect )
+void OutlinerView::Select( Paragraph const * pParagraph, bool bSelect )
 {
     sal_Int32 nPara = pOwner->pParaList->GetAbsPos( pParagraph );
     sal_Int32 nEnd = 0;
@@ -380,7 +383,6 @@ sal_Int32 OutlinerView::Select( Paragraph const * pParagraph, bool bSelect )
 
     ESelection aSel( nPara, 0, nPara, nEnd );
     pEditView->SetSelection( aSel );
-    return 1;
 }
 
 
@@ -403,7 +405,7 @@ void OutlinerView::SetAttribs( const SfxItemSet& rAttrs )
         pOwner->ImplCalcBulletText( nPara, false, false );
 
         if( !pOwner->IsInUndo() && pOwner->IsUndoEnabled() )
-            pOwner->InsertUndo( new OutlinerUndoCheckPara( pOwner, nPara ) );
+            pOwner->InsertUndo( o3tl::make_unique<OutlinerUndoCheckPara>( pOwner, nPara ) );
     }
 
     if( !pOwner->IsInUndo() && pOwner->IsUndoEnabled() )
@@ -476,7 +478,7 @@ void OutlinerView::Indent( short nDiff )
                 pOwner->pEditEngine->QuickMarkInvalid( ESelection( nPara, 0, nPara, 0 ) );
 
                 if( bUndo )
-                    pOwner->InsertUndo( new OutlinerUndoChangeParaFlags( pOwner, nPara, nPrevFlags, pPara->nFlags ) );
+                    pOwner->InsertUndo( o3tl::make_unique<OutlinerUndoChangeParaFlags>( pOwner, nPara, nPrevFlags, pPara->nFlags ) );
 
                 continue;
             }
@@ -490,8 +492,8 @@ void OutlinerView::Indent( short nDiff )
         if( nOldDepth == -1 )
             continue;
 
-        if ( nNewDepth < pOwner->nMinDepth )
-            nNewDepth = pOwner->nMinDepth;
+        if ( nNewDepth < Outliner::gnMinDepth )
+            nNewDepth = Outliner::gnMinDepth;
         if ( nNewDepth > pOwner->nMaxDepth )
             nNewDepth = pOwner->nMaxDepth;
 
@@ -669,12 +671,12 @@ void OutlinerView::Cut()
     }
 }
 
-void OutlinerView::Paste()
+void OutlinerView::PasteSpecial()
 {
-    PasteSpecial(); // HACK(SD does not call PasteSpecial)
+    Paste( true );
 }
 
-void OutlinerView::PasteSpecial()
+void OutlinerView::Paste( bool bUseSpecial )
 {
     if ( !ImpCalcSelectedPages( false ) || pOwner->ImpCanDeleteSelectedPages( this ) )
     {
@@ -682,7 +684,11 @@ void OutlinerView::PasteSpecial()
 
         pOwner->pEditEngine->SetUpdateMode( false );
         pOwner->bPasting = true;
-        pEditView->PasteSpecial();
+
+        if ( bUseSpecial )
+            pEditView->PasteSpecial();
+        else
+            pEditView->Paste();
 
         if ( pOwner->ImplGetOutlinerMode() == OutlinerMode::OutlineObject )
         {

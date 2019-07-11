@@ -25,6 +25,7 @@
 #include <com/sun/star/chart2/DataPointLabel.hpp>
 #include <com/sun/star/chart/ChartDataCaption.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 
 using namespace ::com::sun::star;
 using ::com::sun::star::uno::Reference;
@@ -85,14 +86,14 @@ chart2::DataPointLabel lcl_CaptionToLabel( sal_Int32 nCaption )
     return aLabel;
 }
 
-void lcl_addWrappedProperties( std::vector< WrappedProperty* >& rList
+void lcl_addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact
                                     , tSeriesOrDiagramPropertyType ePropertyType )
 {
     //if !spChart2ModelContact.get() is then the created properties do belong to a single series or single datapoint
     //otherwise they do belong to the whole diagram
 
-    rList.push_back( new WrappedDataCaptionProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedDataCaptionProperty( spChart2ModelContact, ePropertyType ) );
 }
 
 }//anonymous namespace
@@ -106,13 +107,13 @@ void WrappedDataCaptionProperties::addProperties( std::vector< Property > & rOut
                   | beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-void WrappedDataCaptionProperties::addWrappedPropertiesForSeries( std::vector< WrappedProperty* >& rList
+void WrappedDataCaptionProperties::addWrappedPropertiesForSeries( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
     lcl_addWrappedProperties( rList, spChart2ModelContact, DATA_SERIES );
 }
 
-void WrappedDataCaptionProperties::addWrappedPropertiesForDiagram( std::vector< WrappedProperty* >& rList
+void WrappedDataCaptionProperties::addWrappedPropertiesForDiagram( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
     lcl_addWrappedProperties( rList, spChart2ModelContact, DIAGRAM );

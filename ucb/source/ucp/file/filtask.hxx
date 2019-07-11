@@ -102,7 +102,6 @@ namespace fileaccess
                   m_bHandled( false ),
                   m_nErrorCode( TASKHANDLER_NO_ERROR ),
                   m_nMinorCode( TASKHANDLER_NO_ERROR ),
-                  m_xInteractionHandler( nullptr ),
                   m_xCommandEnvironment( xCommandEnv )
             {
             }
@@ -175,13 +174,13 @@ namespace fileaccess
         class MyProperty
         {
         private:
-            OUString                    PropertyName;
-            sal_Int32                   Handle;
-            bool                        isNative;
-            css::uno::Type              Typ;        // Duplicates information in Value
+            OUString const              PropertyName;
+            sal_Int32 const             Handle;
+            bool const                  isNative;
+            css::uno::Type const        Typ;        // Duplicates information in Value
             css::uno::Any               Value;
             css::beans::PropertyState   State;
-            sal_Int16                   Attributes;
+            sal_Int16 const             Attributes;
         public:
             explicit MyProperty( const OUString&  thePropertyName );
             MyProperty( bool                              theIsNative,
@@ -487,7 +486,7 @@ namespace fileaccess
 
         void insertDefaultProperties( const OUString& aUnqPath );
 
-        css::uno::Sequence< css::ucb::ContentInfo >
+        static css::uno::Sequence< css::ucb::ContentInfo >
         queryCreatableContentsInfo();
 
 
@@ -536,30 +535,30 @@ namespace fileaccess
         /********************************************************************************/
 
         static void notifyPropertyChanges(
-            std::vector< std::unique_ptr< PropertyChangeNotifier > > listeners,
-            const css::uno::Sequence< css::beans::PropertyChangeEvent >& seqChanged );
+            const std::vector<std::unique_ptr<PropertyChangeNotifier>>& listeners,
+            const css::uno::Sequence<css::beans::PropertyChangeEvent>& seqChanged);
 
         static void notifyContentExchanged(
-            std::vector< std::unique_ptr< ContentEventNotifier > > listeners_vec );
+            const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners_vec);
 
-        static void notifyInsert(
-            std::vector< std::unique_ptr< ContentEventNotifier > > listeners, const OUString& aChildName );
+        static void
+        notifyInsert(const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners,
+                     const OUString& aChildName);
 
-        static void notifyContentDeleted(
-            std::vector< std::unique_ptr< ContentEventNotifier > > listeners );
+        static void
+        notifyContentDeleted(const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners);
 
-        static void notifyContentRemoved(
-            std::vector< std::unique_ptr< ContentEventNotifier > > listeners,
-            const OUString& aChildName );
+        static void
+        notifyContentRemoved(const std::vector<std::unique_ptr<ContentEventNotifier>>& listeners,
+                             const OUString& aChildName);
 
         static void notifyPropertyAdded(
-            std::vector< std::unique_ptr< PropertySetInfoChangeNotifier > > listeners,
-            const OUString& aPropertyName );
+            const std::vector<std::unique_ptr<PropertySetInfoChangeNotifier>>& listeners,
+            const OUString& aPropertyName);
 
         static void notifyPropertyRemoved(
-            std::vector< std::unique_ptr< PropertySetInfoChangeNotifier > > listeners,
-            const OUString& aPropertyName );
-
+            const std::vector<std::unique_ptr<PropertySetInfoChangeNotifier>>& listeners,
+            const OUString& aPropertyName);
 
         /********************************************************************************/
         /*                       remove persistent propertyset                          */
@@ -615,7 +614,7 @@ namespace fileaccess
          *  osl::DirectoryItem::getFileStatus fills the required fields.
          */
 
-        void
+        static void
         getMaskFromProperties(
             sal_Int32& n_Mask,
             const css::uno::Sequence< css::beans::Property >& seq );
@@ -645,28 +644,11 @@ namespace fileaccess
         // General
         ContentMap  m_aContent;
 
-        // Default properties
-
-        const OUString Title;
-        const OUString CasePreservingURL;
-        const OUString IsDocument;
-        const OUString IsFolder;
-        const OUString DateModified;
-        const OUString Size;
-        const OUString IsVolume;
-        const OUString IsRemoveable;
-        const OUString IsRemote;
-        const OUString IsCompactDisc;
-        const OUString IsFloppy;
-        const OUString IsHidden;
-        const OUString ContentType;
-        const OUString IsReadOnly;
-        const OUString CreatableContentsInfo;
 
     public:
 
-        const OUString FolderContentType;
-        const OUString FileContentType;
+        static const OUStringLiteral FolderContentType;
+        static const OUStringLiteral FileContentType;
 
 
     private:

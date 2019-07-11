@@ -61,7 +61,7 @@ namespace io_stm {
 * OMarkableOutputStream.
 *
 * This object allows to set marks in an outputstream. It is allowed to jump back to the marks and
-* rewrite the some bytes.
+* rewrite the same bytes.
 *
 *         The object must buffer the data since the last mark set. Flush will not
 *         have any effect. As soon as the last mark has been removed, the object may write the data
@@ -179,10 +179,7 @@ void OMarkableOutputStream::closeOutput()
     MutexGuard guard( m_mutex );
     // all marks must be cleared and all
 
-    if( ! m_mapMarks.empty() )
-    {
-        m_mapMarks.clear();
-     }
+    m_mapMarks.clear();
     m_nCurrentPos = m_pBuffer->getSize();
       checkMarksAndFlush();
 

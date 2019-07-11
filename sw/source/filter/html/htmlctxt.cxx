@@ -26,6 +26,7 @@
 #include <editeng/fhgtitem.hxx>
 #include <svtools/htmltokn.h>
 #include <editeng/boxitem.hxx>
+#include <osl/diagnose.h>
 
 #include <doc.hxx>
 #include <pam.hxx>
@@ -62,7 +63,6 @@ class HTMLAttrContext_SaveDoc
 public:
 
     HTMLAttrContext_SaveDoc() :
-        pPos( nullptr ),
         nContextStMin( SIZE_MAX ), nContextStAttrMin( SIZE_MAX ),
         bStripTrailingPara( false ), bKeepNumRules( false ),
         bFixHeaderDist( false ), bFixFooterDist( false )
@@ -110,15 +110,63 @@ std::shared_ptr<HTMLAttrTable> const & HTMLAttrContext_SaveDoc::GetAttrTab( bool
 HTMLAttrContext_SaveDoc *HTMLAttrContext::GetSaveDocContext( bool bCreate )
 {
     if( !m_pSaveDocContext && bCreate )
-        m_pSaveDocContext = new HTMLAttrContext_SaveDoc;
+        m_pSaveDocContext.reset(new HTMLAttrContext_SaveDoc);
 
-    return m_pSaveDocContext;
+    return m_pSaveDocContext.get();
+}
+
+HTMLAttrContext::HTMLAttrContext( HtmlTokenId nTokn, sal_uInt16 nPoolId, const OUString& rClass,
+                  bool bDfltColl ) :
+    m_aClass( rClass ),
+    m_nToken( nTokn ),
+    m_nTextFormatColl( nPoolId ),
+    m_nLeftMargin( 0 ),
+    m_nRightMargin( 0 ),
+    m_nFirstLineIndent( 0 ),
+    m_nUpperSpace( 0 ),
+    m_nLowerSpace( 0 ),
+    m_eAppend( AM_NONE ),
+    m_bLRSpaceChanged( false ),
+    m_bULSpaceChanged( false ),
+    m_bDefaultTextFormatColl( bDfltColl ),
+    m_bSpansSection( false ),
+    m_bPopStack( false ),
+    m_bFinishPREListingXMP( false ),
+    m_bRestartPRE( false ),
+    m_bRestartXMP( false ),
+    m_bRestartListing( false ),
+    m_bHeaderOrFooter( false )
+{}
+
+HTMLAttrContext::HTMLAttrContext( HtmlTokenId nTokn ) :
+    m_nToken( nTokn ),
+    m_nTextFormatColl( 0 ),
+    m_nLeftMargin( 0 ),
+    m_nRightMargin( 0 ),
+    m_nFirstLineIndent( 0 ),
+    m_nUpperSpace( 0 ),
+    m_nLowerSpace( 0 ),
+    m_eAppend( AM_NONE ),
+    m_bLRSpaceChanged( false ),
+    m_bULSpaceChanged( false ),
+    m_bDefaultTextFormatColl( false ),
+    m_bSpansSection( false ),
+    m_bPopStack( false ),
+    m_bFinishPREListingXMP( false ),
+    m_bRestartPRE( false ),
+    m_bRestartXMP( false ),
+    m_bRestartListing( false ),
+    m_bHeaderOrFooter( false )
+{}
+
+HTMLAttrContext::~HTMLAttrContext()
+{
+    m_pSaveDocContext.reset();
 }
 
 void HTMLAttrContext::ClearSaveDocContext()
 {
-    delete m_pSaveDocContext;
-    m_pSaveDocContext = nullptr;
+    m_pSaveDocContext.reset();
 }
 
 void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
@@ -127,8 +175,7 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
     // be set here and then the pointers become invalid!
     OSL_ENSURE(m_aParaAttrs.empty(),
         "Danger: there are non-final paragraph attributes");
-    if( !m_aParaAttrs.empty() )
-        m_aParaAttrs.clear();
+    m_aParaAttrs.clear();
 
     const SwNodeIndex* pOldEndPara = &m_pPam->GetPoint()->nNode;
 #ifndef NDEBUG
@@ -151,7 +198,7 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
             HTMLAttr *pNext = pAttr->GetNext();
             HTMLAttr *pPrev = pAttr->GetPrev();
 
-            sal_uInt16 nWhich = pAttr->pItem->Which();
+            sal_uInt16 nWhich = pAttr->m_pItem->Which();
             if( !nOldEndCnt && RES_PARATR_BEGIN <= nWhich &&
                 pAttr->GetSttParaIdx() < pOldEndPara->GetIndex() )
             {
@@ -183,7 +230,7 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
                     pNext->InsertPrev( pSetAttr );
                 else
                 {
-                    if (pSetAttr->bInsAtStart)
+                    if (pSetAttr->m_bInsAtStart)
                         m_aSetAttrTab.push_front( pSetAttr );
                     else
                         m_aSetAttrTab.push_back( pSetAttr );
@@ -197,7 +244,7 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
                     pNext->InsertPrev( pPrev );
                 else
                 {
-                    if (pPrev->bInsAtStart)
+                    if (pPrev->m_bInsAtStart)
                         m_aSetAttrTab.push_front( pPrev );
                     else
                         m_aSetAttrTab.push_back( pPrev );
@@ -205,11 +252,11 @@ void SwHTMLParser::SplitAttrTab( const SwPosition& rNewPos )
             }
 
             // Set the start of the attribute
-            pAttr->nSttPara = rNewSttPara;
-            pAttr->nEndPara = rNewSttPara;
-            pAttr->nSttContent = nNewSttCnt;
-            pAttr->nEndContent = nNewSttCnt;
-            pAttr->pPrev = nullptr;
+            pAttr->m_nStartPara = rNewSttPara;
+            pAttr->m_nEndPara = rNewSttPara;
+            pAttr->m_nStartContent = nNewSttCnt;
+            pAttr->m_nEndContent = nNewSttCnt;
+            pAttr->m_pPrev = nullptr;
 
             pAttr = pNext;
         }

@@ -14,10 +14,12 @@
 #include <test/sheet/xarrayformularange.hxx>
 #include <test/sheet/xcellformatrangessupplier.hxx>
 #include <test/sheet/xcellrangeaddressable.hxx>
+#include <test/sheet/xcellrangedata.hxx>
 #include <test/sheet/xcellrangeformula.hxx>
 #include <test/sheet/xcellrangemovement.hxx>
 #include <test/sheet/xcellseries.hxx>
 #include <test/sheet/xdatapilottablessupplier.hxx>
+#include <test/sheet/xformulaquery.hxx>
 #include <test/sheet/xmultipleoperation.hxx>
 #include <test/sheet/xprintareas.hxx>
 #include <test/sheet/xscenario.hxx>
@@ -34,6 +36,10 @@
 #include <test/sheet/xspreadsheet.hxx>
 #include <test/sheet/xsubtotalcalculatable.hxx>
 #include <test/sheet/xuniquecellformatrangessupplier.hxx>
+#include <test/table/xcolumnrowrange.hxx>
+#include <test/table/xtablechartssupplier.hxx>
+#include <test/util/xindent.hxx>
+#include <test/util/xmergeable.hxx>
 #include <test/util/xreplaceable.hxx>
 #include <test/util/xsearchable.hxx>
 
@@ -54,10 +60,15 @@ class ScTableSheetObj : public CalcUnoApiTest, public apitest::Scenario,
                                                public apitest::XArrayFormulaRange,
                                                public apitest::XCellFormatRangesSupplier,
                                                public apitest::XCellRangeAddressable,
+                                               public apitest::XCellRangeData,
                                                public apitest::XCellRangeFormula,
                                                public apitest::XCellRangeMovement,
                                                public apitest::XCellSeries,
+                                               public apitest::XColumnRowRange,
                                                public apitest::XDataPilotTablesSupplier,
+                                               public apitest::XFormulaQuery,
+                                               public apitest::XIndent,
+                                               public apitest::XMergeable,
                                                public apitest::XMultipleOperation,
                                                public apitest::XPrintAreas,
                                                public apitest::XReplaceable,
@@ -75,6 +86,7 @@ class ScTableSheetObj : public CalcUnoApiTest, public apitest::Scenario,
                                                public apitest::XSheetPageBreak,
                                                public apitest::XSpreadsheet,
                                                public apitest::XSubTotalCalculatable,
+                                               public apitest::XTableChartsSupplier,
                                                public apitest::XUniqueCellFormatRangesSupplier
 {
 public:
@@ -86,6 +98,7 @@ public:
     virtual OUString getFileURL() override;
 
     virtual uno::Reference< uno::XInterface > init() override;
+    virtual uno::Reference< uno::XInterface > getXCellRangeData() override;
     virtual uno::Reference< uno::XInterface > getXSpreadsheetDocument() override;
     virtual uno::Reference< uno::XInterface > getXSpreadsheet() override;
     virtual uno::Reference< uno::XInterface > getScenarioSpreadsheet() override;
@@ -112,6 +125,10 @@ public:
     // XCellRangeAddressable
     CPPUNIT_TEST(testGetRangeAddress);
 
+    // XCellRangeData
+    CPPUNIT_TEST(testGetDataArrayOnTableSheet);
+    CPPUNIT_TEST(testSetDataArrayOnTableSheet);
+
     // XCellRangeFormula
 #if 0 // disable, because it makes no sense to set an FormulaArray over the whole sheet
     CPPUNIT_TEST(testGetSetFormulaArray);
@@ -127,8 +144,23 @@ public:
     CPPUNIT_TEST(testFillAuto);
     CPPUNIT_TEST(testFillSeries);
 
+    // XColumnRowRange
+    CPPUNIT_TEST(testGetColumns);
+    CPPUNIT_TEST(testGetRows);
+
     // XDataPilotTablesSupplier
     CPPUNIT_TEST(testGetDataPilotTables);
+
+    // XFormulaQuery
+    CPPUNIT_TEST(testQueryDependents);
+    CPPUNIT_TEST(testQueryPrecedents);
+
+    // XIndent
+    CPPUNIT_TEST(testIncrementIndent);
+    CPPUNIT_TEST(testDecrementIndent);
+
+    // XMergeable
+    CPPUNIT_TEST(testGetIsMergedMerge);
 
     // XSearchable
     CPPUNIT_TEST(testFindAll);
@@ -200,6 +232,9 @@ public:
     CPPUNIT_TEST(testCreateSubTotalDescriptor);
     CPPUNIT_TEST(testApplyRemoveSubTotals);
 
+    // XTableChartsSupplier
+    CPPUNIT_TEST(testGetCharts);
+
     // XUniqueCellFormatRangesSupplier
     CPPUNIT_TEST(testGetUniqueCellFormatRanges);
 
@@ -213,6 +248,7 @@ private:
 ScTableSheetObj::ScTableSheetObj():
     CalcUnoApiTest("/sc/qa/extras/testdocuments"),
     apitest::XCellSeries(1, 0),
+    apitest::XFormulaQuery(table::CellRangeAddress(0, 0, 0, 1023, 1048575), table::CellRangeAddress(0, 0, 0, 1023, 1048575), 0, 0),
     apitest::XReplaceable("searchReplaceString", "replaceReplaceString"),
     apitest::XSearchable("test", 4)
 {
@@ -221,7 +257,6 @@ ScTableSheetObj::ScTableSheetObj():
 uno::Reference< uno::XInterface > ScTableSheetObj::init()
 {
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference<container::XIndexAccess> xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
@@ -246,17 +281,20 @@ uno::Reference< uno::XInterface > ScTableSheetObj::init()
     return xSheet;
 }
 
+uno::Reference< uno::XInterface > ScTableSheetObj::getXCellRangeData()
+{
+    return init();
+}
+
 uno::Reference<uno::XInterface> ScTableSheetObj::getXSpreadsheetDocument()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
     return xDoc;
 }
 
 uno::Reference<uno::XInterface> ScTableSheetObj::getScenarioSpreadsheet()
 {
     uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference<container::XIndexAccess> xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
@@ -284,7 +322,6 @@ uno::Reference<uno::XInterface> ScTableSheetObj::getScenarioSpreadsheet()
 uno::Reference< uno::XInterface > ScTableSheetObj::getXSpreadsheet()
 {
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
@@ -304,6 +341,8 @@ uno::Reference< uno::XInterface > ScTableSheetObj::getXSpreadsheet()
     uno::Reference<sheet::XScenariosSupplier> xScence(xSheet, UNO_QUERY_THROW);
     xScence->getScenarios()->addNewByName("Scenario", aCellRangeAddr, "Comment");
     xSheets->getByName("Scenario");
+
+    setXCell(xSheet->getCellByPosition(15, 15));
     return xSheet;
 }
 

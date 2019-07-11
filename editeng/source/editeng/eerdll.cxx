@@ -19,10 +19,6 @@
 
 
 #include <unotools/resmgr.hxx>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
-#include <vcl/settings.hxx>
 #include <com/sun/star/linguistic2/LanguageGuessing.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
@@ -43,13 +39,13 @@
 #include <editeng/numdef.hxx>
 #include <svl/itempool.hxx>
 #include <svl/grabbagitem.hxx>
+#include <vcl/svapp.hxx>
 #include <vcl/virdev.hxx>
 
 #include <editeng/autokernitem.hxx>
 #include <editeng/contouritem.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/crossedoutitem.hxx>
-#include <editeng/charsetcoloritem.hxx>
 #include <editeng/escapementitem.hxx>
 #include <editeng/fhgtitem.hxx>
 #include <editeng/fontitem.hxx>
@@ -149,7 +145,7 @@ DefItems::DefItems()
     // Features
     rDefItems[51] = new SfxVoidItem( EE_FEATURE_TAB );
     rDefItems[52] = new SfxVoidItem( EE_FEATURE_LINEBR );
-    rDefItems[53] = new SvxCharSetColorItem( COL_RED, EE_FEATURE_NOTCONV );
+    rDefItems[53] = new SvxColorItem( COL_RED, EE_FEATURE_NOTCONV );
     rDefItems[54] = new SvxFieldItem( SvxFieldData(), EE_FEATURE_FIELD );
 
     assert(EDITITEMCOUNT == 55 && "ITEMCOUNT changed, adjust DefItems!");

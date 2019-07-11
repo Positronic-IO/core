@@ -38,6 +38,7 @@
 #include <vcl/vclptr.hxx>
 #include <tools/fract.hxx>
 #include <vcl/idle.hxx>
+#include <vcl/commandevent.hxx>
 
 #include <vcl/dndhelp.hxx>
 #include <svl/ondemand.hxx>
@@ -230,7 +231,7 @@ private:
     std::unique_ptr<Color>    pBackgroundColor;
     /// Containing view shell, if any.
     OutlinerViewShell*        mpViewShell;
-    /// An other shell, just listening to our state, if any.
+    /// Another shell, just listening to our state, if any.
     OutlinerViewShell*        mpOtherShell;
     EditEngine*               pEditEngine;
     VclPtr<vcl::Window>       pOutWin;
@@ -451,11 +452,9 @@ private:
 
     std::unique_ptr<SfxItemSet> pEmptyItemSet;
     EditUndoManager*    pUndoManager;
-    ESelection*         pUndoMarkSelection;
+    std::unique_ptr<ESelection> pUndoMarkSelection;
 
     std::unique_ptr<ImplIMEInfos> mpIMEInfos;
-
-    std::vector<EENotify> aNotifyCache;
 
     OUString            aWordDelimiters;
 
@@ -464,7 +463,6 @@ private:
 
     Color               maBackgroundColor;
 
-    sal_uInt32          nBlockNotifications;
     sal_uInt16          nStretchX;
     sal_uInt16          nStretchY;
 
@@ -479,7 +477,7 @@ private:
     mutable css::uno::Reference < css::i18n::XBreakIterator > xBI;
     mutable css::uno::Reference < css::i18n::XExtendedInputSequenceChecker > xISC;
 
-    ConvInfo *          pConvInfo;
+    std::unique_ptr<ConvInfo> pConvInfo;
 
     OUString            aAutoCompleteText;
 
@@ -536,7 +534,6 @@ private:
     bool            bFirstWordCapitalization:1;   // specifies if auto-correction should capitalize the first word or not
     bool            mbLastTryMerge:1;
     bool            mbReplaceLeadingSingleQuotationMark:1;
-    bool            mbHoriAlignIgnoreTrailingWhitespace:1;
 
     bool            mbNbspRunNext;  // can't be a bitfield as it is passed as bool&
 
@@ -549,11 +546,11 @@ private:
     void                TextModified();
     void                CalcHeight( ParaPortion* pPortion );
 
-    void                InsertUndo( EditUndo* pUndo, bool bTryMerge = false );
+    void                InsertUndo( std::unique_ptr<EditUndo> pUndo, bool bTryMerge = false );
     void                ResetUndoManager();
     bool            HasUndoManager() const  { return pUndoManager != nullptr; }
 
-    EditUndoSetAttribs* CreateAttribUndo( EditSelection aSel, const SfxItemSet& rSet );
+    std::unique_ptr<EditUndoSetAttribs> CreateAttribUndo( EditSelection aSel, const SfxItemSet& rSet );
 
     std::unique_ptr<EditTextObject> GetEmptyTextObject();
 
@@ -657,7 +654,7 @@ private:
     EditPaM             ReadHTML( SvStream& rInput, const OUString& rBaseURL, EditSelection aSel, SvKeyValueIterator* pHTTPHeaderAttrs );
     ErrCode             WriteText( SvStream& rOutput, EditSelection aSel );
     ErrCode             WriteRTF( SvStream& rOutput, EditSelection aSel );
-    sal_uInt32          WriteXML(SvStream& rOutput, const EditSelection& rSel);
+    void                WriteXML(SvStream& rOutput, const EditSelection& rSel);
 
     void                WriteItemAsRTF( const SfxPoolItem& rItem, SvStream& rOutput, sal_Int32 nPara, sal_Int32 nPos,
                             std::vector<SvxFontItem*>& rFontTable, SvxColorList& rColorList );
@@ -732,7 +729,7 @@ public:
     ImpEditEngine&          operator=(const ImpEditEngine&) = delete;
 
     inline EditUndoManager& GetUndoManager();
-    inline ::svl::IUndoManager* SetUndoManager(::svl::IUndoManager* pNew);
+    inline SfxUndoManager* SetUndoManager(SfxUndoManager* pNew);
 
     void                    SetUpdateMode( bool bUp, EditView* pCurView = nullptr, bool bForceUpdate = false );
     bool                    GetUpdateMode() const   { return bUpdate; }
@@ -791,14 +788,7 @@ public:
 
     void                EnableUndo( bool bEnable );
     bool                IsUndoEnabled()         { return bUndoEnabled; }
-    void                SetUndoMode( bool b )
-    {
-        bIsInUndo = b;
-        if (bIsInUndo)
-            EnterBlockNotifications();
-        else
-            LeaveBlockNotifications();
-    }
+    void                SetUndoMode( bool b )   { bIsInUndo = b; }
     bool                IsInUndo()              { return bIsInUndo; }
 
     void                SetCallParaInsertedOrDeleted( bool b ) { bCallParaInsertedOrDeleted = b; }
@@ -834,9 +824,9 @@ public:
     sal_uInt32      CalcTextHeight( sal_uInt32* pHeightNTP );
     sal_uInt32      GetTextHeight() const;
     sal_uInt32      GetTextHeightNTP() const;
-    sal_uInt32      CalcTextWidth( bool bIgnoreExtraSpace );
+    sal_uInt32      CalcTextWidth( bool bIgnoreExtraSpace);
     sal_uInt32      CalcParaWidth( sal_Int32 nParagraph, bool bIgnoreExtraSpace );
-    sal_uInt32      CalcLineWidth( ParaPortion* pPortion, EditLine* pLine, bool bIgnoreExtraSpace, bool bIgnoreTrailingWhiteSpaces = false );
+    sal_uInt32      CalcLineWidth( ParaPortion* pPortion, EditLine* pLine, bool bIgnoreExtraSpace);
     sal_Int32       GetLineCount( sal_Int32 nParagraph ) const;
     sal_Int32       GetLineLen( sal_Int32 nParagraph, sal_Int32 nLine ) const;
     void            GetLineBoundaries( /*out*/sal_Int32& rStart, /*out*/sal_Int32& rEnd, sal_Int32 nParagraph, sal_Int32 nLine ) const;
@@ -923,10 +913,6 @@ public:
     void                CallStatusHdl();
     void                DelayedCallStatusHdl()  { aStatusTimer.Start(); }
 
-    void                CallNotify( EENotify& rNotify );
-    void                EnterBlockNotifications();
-    void                LeaveBlockNotifications();
-
     void                UndoActionStart( sal_uInt16 nId );
     void                UndoActionStart( sal_uInt16 nId, const ESelection& rSel );
     void                UndoActionEnd();
@@ -966,7 +952,7 @@ public:
     void                Convert( EditView* pEditView, LanguageType nSrcLang, LanguageType nDestLang, const vcl::Font *pDestFont, sal_Int32 nOptions, bool bIsInteractive, bool bMultipleDoc );
     void                ImpConvert( OUString &rConvTxt, LanguageType &rConvTxtLang, EditView* pEditView, LanguageType nSrcLang, const ESelection &rConvRange,
                                     bool bAllowImplicitChangesForNotConvertibleText, LanguageType nTargetLang, const vcl::Font *pTargetFont );
-    ConvInfo *          GetConvInfo() const { return pConvInfo; }
+    ConvInfo *          GetConvInfo() const { return pConvInfo.get(); }
     bool                HasConvertibleTextPortion( LanguageType nLang );
     void                SetLanguageAndFont( const ESelection &rESel,
                                 LanguageType nLang, sal_uInt16 nLangWhichId,
@@ -1067,10 +1053,6 @@ public:
     bool            IsNbspRunNext() const { return mbNbspRunNext; }
 
     void Dispose();
-
-    // tdf#115639 compatibility flag
-    void SetHoriAlignIgnoreTrailingWhitespace(bool bEnabled) { mbHoriAlignIgnoreTrailingWhitespace = bEnabled; }
-    bool IsHoriAlignIgnoreTrailingWhitespace() const { return mbHoriAlignIgnoreTrailingWhitespace; }
 };
 
 inline EPaM ImpEditEngine::CreateEPaM( const EditPaM& rPaM )
@@ -1145,9 +1127,9 @@ inline EditUndoManager& ImpEditEngine::GetUndoManager()
     return *pUndoManager;
 }
 
-inline ::svl::IUndoManager* ImpEditEngine::SetUndoManager(::svl::IUndoManager* pNew)
+inline SfxUndoManager* ImpEditEngine::SetUndoManager(SfxUndoManager* pNew)
 {
-    ::svl::IUndoManager* pRetval = pUndoManager;
+    SfxUndoManager* pRetval = pUndoManager;
 
     if(pUndoManager)
     {

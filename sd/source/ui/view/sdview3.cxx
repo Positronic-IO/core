@@ -26,7 +26,6 @@
 #include <unotools/pathoptions.hxx>
 #include <editeng/editdata.hxx>
 #include <svl/urlbmk.hxx>
-#include <svx/xexch.hxx>
 #include <svx/xflclit.hxx>
 #include <svx/xlnclit.hxx>
 #include <svx/svdpagv.hxx>
@@ -62,6 +61,7 @@
 #include <sdpage.hxx>
 #include <DrawViewShell.hxx>
 #include <drawdoc.hxx>
+#include <sdmod.hxx>
 #include <sdresid.hxx>
 #include <strings.hrc>
 #include <imapinfo.hxx>
@@ -71,6 +71,7 @@
 #include <ViewClipboard.hxx>
 #include <sfx2/ipclient.hxx>
 #include <sfx2/classificationhelper.hxx>
+#include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <comphelper/processfactory.hxx>
 #include <tools/stream.hxx>
@@ -103,7 +104,7 @@ struct ImpRememberOrigAndClone
     SdrObject*      pClone;
 };
 
-SdrObject* ImpGetClone(std::vector<ImpRememberOrigAndClone*>& aConnectorContainer, SdrObject const * pConnObj)
+static SdrObject* ImpGetClone(std::vector<ImpRememberOrigAndClone*>& aConnectorContainer, SdrObject const * pConnObj)
 {
     for(ImpRememberOrigAndClone* p : aConnectorContainer)
     {
@@ -114,7 +115,7 @@ SdrObject* ImpGetClone(std::vector<ImpRememberOrigAndClone*>& aConnectorContaine
 }
 
 // restrict movement to WorkArea
-void ImpCheckInsertPos(Point& rPos, const Size& rSize, const ::tools::Rectangle& rWorkArea)
+static void ImpCheckInsertPos(Point& rPos, const Size& rSize, const ::tools::Rectangle& rWorkArea)
 {
     if(!rWorkArea.IsEmpty())
     {
@@ -446,7 +447,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
                                 if( (mnDragSrcPgNum != SDRPAGE_NOTFOUND) && (mnDragSrcPgNum != pPV->GetPage()->GetPageNum()) )
                                 {
-                                    pMarkList = mpDragSrcMarkList;
+                                    pMarkList = mpDragSrcMarkList.get();
                                 }
                                 else
                                 {
@@ -592,7 +593,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                 for(ImpRememberOrigAndClone* p : aConnectorContainer)
                                     delete p;
 
-                                if( pMarkList != mpDragSrcMarkList )
+                                if( pMarkList != mpDragSrcMarkList.get() )
                                     delete pMarkList;
 
                                 bReturn = true;
@@ -621,7 +622,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     // model is owned by from AllocModel() created DocShell
                     SdDrawDocument* pSourceDoc = static_cast<SdDrawDocument*>( pSourceView->GetModel() );
                     pSourceDoc->CreatingDataObj( pOwnData );
-                    SdDrawDocument* pModel = static_cast<SdDrawDocument*>( pSourceView->GetMarkedObjModel() );
+                    SdDrawDocument* pModel = static_cast<SdDrawDocument*>( pSourceView->CreateMarkedObjModel().release() );
                     bReturn = Paste(*pModel, maDropPos, pPage, nPasteOptions);
 
                     if( !pPage )
@@ -646,7 +647,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
             SdDrawDocument* pWorkModel = const_cast<SdDrawDocument*>(pOwnData->GetWorkDocument());
             SdPage*         pWorkPage = pWorkModel->GetSdPage( 0, PageKind::Standard );
 
-            pWorkPage->SetRectsDirty();
+            pWorkPage->SetSdrObjListRectsDirty();
 
             // #i120393# Clipboard data uses full object geometry range
             const Size aSize( pWorkPage->GetAllObjBoundRect().GetSize() );
@@ -798,7 +799,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
                                 if( bUndo )
                                     AddUndo(
-                                        new E3dAttributesUndoAction(
+                                        o3tl::make_unique<E3dAttributesUndoAction>(
                                             *static_cast< E3dObject* >(pPickObj),
                                             aNewSet,
                                             aOldSet));
@@ -816,7 +817,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 {
                     SdrPage* pWorkPage = pModel->GetSdPage( 0, PageKind::Standard );
 
-                    pWorkPage->SetRectsDirty();
+                    pWorkPage->SetSdrObjListRectsDirty();
 
                     if( pOwnData )
                     {
@@ -841,7 +842,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
         if( aDataHelper.GetString( SotClipboardFormatId::SBA_FIELDDATAEXCHANGE, aOUString ) )
         {
-            SdrObject* pObj = CreateFieldControl( aOUString );
+            SdrObjectUniquePtr pObj = CreateFieldControl( aOUString );
 
             if( pObj )
             {
@@ -853,7 +854,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
                 aRect.SetPos( maDropPos );
                 pObj->SetLogicRect( aRect );
-                InsertObjectAtView( pObj, *GetSdrPageView(), SdrInsertFlags::SETDEFLAYER );
+                InsertObjectAtView( pObj.release(), *GetSdrPageView(), SdrInsertFlags::SETDEFLAYER );
                 bReturn = true;
             }
         }
@@ -890,7 +891,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                     SdDrawDocument* pModel = xDocShRef->GetDoc();
                     SdPage*         pWorkPage = pModel->GetSdPage( 0, PageKind::Standard );
 
-                    pWorkPage->SetRectsDirty();
+                    pWorkPage->SetSdrObjListRectsDirty();
 
                     if( pOwnData )
                     {
@@ -933,18 +934,6 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 if ( xObj.is() )
                 {
                     svt::EmbeddedObjectRef aObjRef( xObj, aObjDesc.mnViewAspect );
-
-                    // try to get the replacement image from the clipboard
-                    Graphic aGraphic;
-                    SotClipboardFormatId nGrFormat = SotClipboardFormatId::NONE;
-
-                    // insert replacement image ( if there is one ) into the object helper
-                    if ( nGrFormat != SotClipboardFormatId::NONE )
-                    {
-                        datatransfer::DataFlavor aDataFlavor;
-                        SotExchange::GetFormatDataFlavor( nGrFormat, aDataFlavor );
-                        aObjRef.SetGraphic( aGraphic, aDataFlavor.MimeType );
-                    }
 
                     Size aSize;
                     if ( aObjDesc.mnViewAspect == embed::Aspects::MSOLE_ICON )
@@ -1228,7 +1217,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                                     pWorkModel->GetSdPage( 0, PageKind::Standard ) :
                                                     pWorkModel->GetPage( 0 ) );
 
-                pWorkPage->SetRectsDirty();
+                pWorkPage->SetSdrObjListRectsDirty();
 
                 // #i120393# Clipboard data uses full object geometry range
                 const Size aSize( pWorkPage->GetAllObjBoundRect().GetSize() );
@@ -1260,7 +1249,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                                 pWorkModel->GetSdPage( 0, PageKind::Standard ) :
                                                 pWorkModel->GetPage( 0 ) );
 
-            pWorkPage->SetRectsDirty();
+            pWorkPage->SetSdrObjListRectsDirty();
 
             // #i120393# Clipboard data uses full object geometry range
             const Size aSize( pWorkPage->GetAllObjBoundRect().GetSize() );
@@ -1309,7 +1298,7 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                                                     pWorkModel->GetSdPage( 0, PageKind::Standard ) :
                                                     pWorkModel->GetPage( 0 ) );
 
-                pWorkPage->SetRectsDirty();
+                pWorkPage->SetSdrObjListRectsDirty();
 
                 // #i120393# Clipboard data uses full object geometry range
                 const Size aSize( pWorkPage->GetAllObjBoundRect().GetSize() );
@@ -1329,14 +1318,10 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
 
     if(!bReturn && pPickObj && CHECK_FORMAT_TRANS( SotClipboardFormatId::XFA ) )
     {
-        ::tools::SvRef<SotStorageStream> xStm;
-
-        if( aDataHelper.GetSotStorageStream( SotClipboardFormatId::XFA, xStm ) )
+        uno::Any const data(aDataHelper.GetAny(SotClipboardFormatId::XFA, ""));
+        uno::Sequence<beans::NamedValue> props;
+        if (data >>= props)
         {
-            XFillExchangeData aFillData( XFillAttrSetItem( &mrDoc.GetPool() ) );
-
-            ReadXFillExchangeData( *xStm, aFillData );
-
             if( IsUndoEnabled() )
             {
                 BegUndo( SdResId(STR_UNDO_DRAGDROP) );
@@ -1344,15 +1329,27 @@ bool View::InsertData( const TransferableDataHelper& rDataHelper,
                 EndUndo();
             }
 
-            XFillAttrSetItem*   pSetItem = aFillData.GetXFillAttrSetItem();
-            SfxItemSet          rSet = pSetItem->GetItemSet();
-            drawing::FillStyle eFill = rSet.Get( XATTR_FILLSTYLE ).GetValue();
+            ::comphelper::SequenceAsHashMap const map(props);
+            drawing::FillStyle eFill(drawing::FillStyle_BITMAP); // default to something that's ignored
+            Color aColor(COL_BLACK);
+            auto it = map.find("FillStyle");
+            if (it != map.end())
+            {
+                XFillStyleItem style;
+                style.PutValue(it->second, 0);
+                eFill = style.GetValue();
+            }
+            it = map.find("FillColor");
+            if (it != map.end())
+            {
+                XFillColorItem color;
+                color.PutValue(it->second, 0);
+                aColor = color.GetColorValue();
+            }
 
             if( eFill == drawing::FillStyle_SOLID || eFill == drawing::FillStyle_NONE )
             {
-                const XFillColorItem&   rColItem = rSet.Get( XATTR_FILLCOLOR );
-                Color                   aColor( rColItem.GetColorValue() );
-                OUString                aName( rColItem.GetName() );
+                OUString                aName;
                 SfxItemSet              aSet( mrDoc.GetPool() );
                 bool                    bClosed = pPickObj->IsClosedObj();
                 ::sd::Window* pWin = mpViewSh->GetActiveWindow();

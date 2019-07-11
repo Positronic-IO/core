@@ -24,7 +24,6 @@
 #include <cppuhelper/weakref.hxx>
 #include "sddllapi.h"
 
-class SdDrawDocument;
 class SdPage;
 
 class SD_DLLPUBLIC SdCustomShow final
@@ -47,6 +46,8 @@ public:
 
     // @@@ copy ctor, but no copy assignment? @@@
     SdCustomShow( const SdCustomShow& rShow );
+
+    SdCustomShow& operator=( const SdCustomShow& rShow ) = delete;
 
     /** Provides a direct access to the collection of the SdPage objects. */
     PageVec& PagesVector() { return maPages;}

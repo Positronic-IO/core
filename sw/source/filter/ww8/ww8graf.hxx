@@ -51,11 +51,10 @@ private:
     typedef std::vector<EscherShape>::iterator myeiter;
 
     std::vector<short> maDrawHeight;
-    typedef std::vector<short>::iterator myditer;
 
     std::stack<sal_uInt16> maIndexes;
 
-    sw::util::SetLayer maSetLayer;
+    sw::util::SetLayer const maSetLayer;
 
     sal_uLong mnNoInitialObjects;
     sal_uLong mnInlines;

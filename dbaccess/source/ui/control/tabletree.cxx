@@ -42,7 +42,7 @@
 #include <osl/diagnose.h>
 #include <rtl/ustrbuf.hxx>
 #include <connectivity/dbmetadata.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <o3tl/make_unique.hxx>
 
 #include <algorithm>
@@ -79,7 +79,6 @@ VCL_BUILDER_FACTORY_CONSTRUCTOR(OTableTreeListBox, 0)
 
 void OTableTreeListBox::implSetDefaultImages()
 {
-    ImageProvider aImageProvider;
     SetDefaultExpandedEntryBmp(  ImageProvider::getFolderImage( DatabaseObject::TABLE ) );
     SetDefaultCollapsedEntryBmp( ImageProvider::getFolderImage( DatabaseObject::TABLE ) );
 }
@@ -167,10 +166,9 @@ void OTableTreeListBox::UpdateTableList( const Reference< XConnection >& _rxConn
     }
     catch(Exception&)
     {
+        css::uno::Any anyEx = cppu::getCaughtException();
         // a non-SQLException exception occurred ... simply throw an SQLException
-        SQLException aInfo;
-        aInfo.Message = sCurrentActionError;
-        throw aInfo;
+        throw SQLException(sCurrentActionError, nullptr, "", 0, anyEx);
     }
 
     UpdateTableList( _rxConnection, sTables, sViews );
@@ -369,7 +367,7 @@ void OTableTreeListBox::implEmphasize(SvTreeListEntry* _pEntry, bool _bChecked, 
         {
             if (GetModel()->HasChildren(pChildLoop))
                 implEmphasize(pChildLoop, false, true, false);
-            pChildLoop = NextSibling(pChildLoop);
+            pChildLoop = pChildLoop->NextSibling();
         }
     }
 

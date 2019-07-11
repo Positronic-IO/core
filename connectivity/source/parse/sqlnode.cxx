@@ -56,6 +56,7 @@
 #include <functional>
 #include <memory>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::util;
@@ -205,11 +206,6 @@ SQLParseNodeParameter::SQLParseNodeParameter( const Reference< XConnection >& _r
     ,bInternational(_bIntl)
     ,bPredicate(_bPredicate)
     ,bParseToSDBCLevel( _bParseToSDBC )
-{
-}
-
-
-SQLParseNodeParameter::~SQLParseNodeParameter()
 {
 }
 
@@ -683,7 +679,7 @@ bool OSQLParseNode::impl_parseTableNameNodeToString_throw( OUStringBuffer& rStri
         {
             OUString sError;
             std::unique_ptr< OSQLParseNode > pSubQueryNode( rParam.pParser->parseTree( sError, sCommand ) );
-            if ( pSubQueryNode.get() )
+            if (pSubQueryNode)
             {
                 // parse the sub-select to SDBC level, too
                 OUStringBuffer sSubSelect;
@@ -880,8 +876,8 @@ OSQLParseNode* OSQLParser::convertNode(sal_Int32 nType, OSQLParseNode* pLiteral)
                 case DataType::DATE:
                 case DataType::TIME:
                 case DataType::TIMESTAMP:
-                if ( m_xFormatter.is() )
-                    pReturn = buildDate( nType, pReturn);
+                    if ( m_xFormatter.is() )
+                        pReturn = buildDate( nType, pReturn);
                     else
                         m_sErrorMessage = m_pContext->getErrorMessage(IParseContext::ErrorCode::InvalidDateCompare);
                     break;
@@ -1539,7 +1535,7 @@ bool OSQLParser::extractDate(OSQLParseNode const * pLiteral,double& _rfValue)
             m_nFormatKey = ::dbtools::getDefaultNumberFormat( m_xField, xFormatTypes, m_pData->aLocale );
     }
     catch( Exception& ) { }
-    OUString sValue = pLiteral->getTokenValue();
+    const OUString& sValue = pLiteral->getTokenValue();
     sal_Int32 nTryFormat = m_nFormatKey;
     bool bSuccess = lcl_saveConvertToNumber( m_xFormatter, nTryFormat, sValue, _rfValue );
 
@@ -1694,9 +1690,8 @@ void OSQLParseNode::append(OSQLParseNode* pNewNode)
 {
     OSL_ENSURE(pNewNode != nullptr, "OSQLParseNode: invalid NewSubTree");
     OSL_ENSURE(pNewNode->getParent() == nullptr, "OSQLParseNode: Node is not an orphan");
-    OSL_ENSURE(std::find_if(m_aChildren.begin(), m_aChildren.end(),
-                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pNewNode; })
-               == m_aChildren.end(),
+    OSL_ENSURE(std::none_of(m_aChildren.begin(), m_aChildren.end(),
+                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pNewNode; }),
                "OSQLParseNode::append() Node already element of parent");
 
     // Create connection to getParent
@@ -1791,7 +1786,7 @@ OSQLParseNode* OSQLParseNode::getByRule(OSQLParseNode::Rule eRule) const
     return pRetNode;
 }
 
-OSQLParseNode* MakeANDNode(OSQLParseNode *pLeftLeaf,OSQLParseNode *pRightLeaf)
+static OSQLParseNode* MakeANDNode(OSQLParseNode *pLeftLeaf,OSQLParseNode *pRightLeaf)
 {
     OSQLParseNode* pNewNode = new OSQLParseNode(OUString(),SQLNodeType::Rule,OSQLParser::RuleID(OSQLParseNode::boolean_term));
     pNewNode->append(pLeftLeaf);
@@ -1800,7 +1795,7 @@ OSQLParseNode* MakeANDNode(OSQLParseNode *pLeftLeaf,OSQLParseNode *pRightLeaf)
     return pNewNode;
 }
 
-OSQLParseNode* MakeORNode(OSQLParseNode *pLeftLeaf,OSQLParseNode *pRightLeaf)
+static OSQLParseNode* MakeORNode(OSQLParseNode *pLeftLeaf,OSQLParseNode *pRightLeaf)
 {
     OSQLParseNode* pNewNode = new OSQLParseNode(OUString(),SQLNodeType::Rule,OSQLParser::RuleID(OSQLParseNode::search_condition));
     pNewNode->append(pLeftLeaf);
@@ -2398,13 +2393,11 @@ OSQLParseNode* OSQLParseNode::replace(OSQLParseNode* pOldSubNode, OSQLParseNode*
 {
     OSL_ENSURE(pOldSubNode != nullptr && pNewSubNode != nullptr, "OSQLParseNode: invalid nodes");
     OSL_ENSURE(pNewSubNode->getParent() == nullptr, "OSQLParseNode: node already has getParent");
-    OSL_ENSURE(std::find_if(m_aChildren.begin(), m_aChildren.end(),
-                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pOldSubNode; })
-                != m_aChildren.end(),
+    OSL_ENSURE(std::any_of(m_aChildren.begin(), m_aChildren.end(),
+                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pOldSubNode; }),
                "OSQLParseNode::Replace() Node not element of parent");
-    OSL_ENSURE(std::find_if(m_aChildren.begin(), m_aChildren.end(),
-                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pNewSubNode; })
-                == m_aChildren.end(),
+    OSL_ENSURE(std::none_of(m_aChildren.begin(), m_aChildren.end(),
+                   [&] (std::unique_ptr<OSQLParseNode> const & r) { return r.get() == pNewSubNode; }),
                "OSQLParseNode::Replace() Node already element of parent");
 
     pOldSubNode->setParent( nullptr );

@@ -97,7 +97,7 @@ bool SwServerObject::GetData( uno::Any & rData,
                 aMemStm.WriteChar( '\0' );        // append a zero char
                 rData <<= uno::Sequence< sal_Int8 >(
                                         static_cast<sal_Int8 const *>(aMemStm.GetData()),
-                                        aMemStm.Seek( STREAM_SEEK_TO_END ) );
+                                        aMemStm.Tell() );
                 bRet = true;
             }
             delete pPam;
@@ -302,9 +302,9 @@ SwDataChanged::~SwDataChanged()
         const ::sfx2::SvLinkSources& rServers = pDoc->getIDocumentLinksAdministration().GetLinkManager().GetServers();
 
         ::sfx2::SvLinkSources aTemp(rServers);
-        for( ::sfx2::SvLinkSources::const_iterator it = aTemp.begin(); it != aTemp.end(); ++it )
+        for( const auto& rpLinkSrc : aTemp )
         {
-            ::sfx2::SvLinkSourceRef refObj( *it );
+            ::sfx2::SvLinkSourceRef refObj( rpLinkSrc );
             // Any one else interested in the Object?
             if( refObj->HasDataLinks() && dynamic_cast<const SwServerObject*>( refObj.get() ) !=  nullptr)
             {
@@ -319,7 +319,7 @@ SwDataChanged::~SwDataChanged()
             if( !refObj->HasDataLinks() )
             {
                 // Then remove from the list
-                pDoc->getIDocumentLinksAdministration().GetLinkManager().RemoveServer( *it );
+                pDoc->getIDocumentLinksAdministration().GetLinkManager().RemoveServer( rpLinkSrc );
             }
         }
     }

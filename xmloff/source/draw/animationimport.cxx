@@ -99,8 +99,8 @@ OUString AnimationsImport_getImplementationName() throw()
     return OUString( "xmloff::AnimationsImport" );
 }
 
-static ::rtl::OUString
-lcl_GetMediaReference(SvXMLImport const& rImport, ::rtl::OUString const& rURL)
+static OUString
+lcl_GetMediaReference(SvXMLImport const& rImport, OUString const& rURL)
 {
     if (rImport.IsPackageURL(rURL))
         return "vnd.sun.star.Package:" + rURL;
@@ -628,12 +628,12 @@ AnimationNodeContext::AnimationNodeContext(
         const css::uno::Reference< css::xml::sax::XAttributeList>& xAttrList,
         const std::shared_ptr<AnimationsImportHelperImpl>& pHelper )
 :   SvXMLImportContext(rImport, nPrfx, rLocalName),
-    mpHelper( pHelper ),
-    mbRootContext( !pHelper )
+    mpHelper( pHelper )
 {
+    bool bRootContext = !pHelper;
     try
     {
-        if( mbRootContext )
+        if( bRootContext )
         {
             mpHelper = std::make_shared<AnimationsImportHelperImpl>( rImport );
             mxNode = xParentNode;

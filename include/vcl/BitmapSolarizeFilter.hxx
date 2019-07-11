@@ -23,10 +23,10 @@ public:
     {
     }
 
-    virtual BitmapEx execute(BitmapEx const& rBitmapEx) override;
+    virtual BitmapEx execute(BitmapEx const& rBitmapEx) const override;
 
 private:
-    sal_uInt8 mcSolarGreyThreshold;
+    sal_uInt8 const mcSolarGreyThreshold;
 };
 
 #endif

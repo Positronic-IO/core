@@ -23,6 +23,7 @@
 #include <unotools/fontcvt.hxx>
 #include <sfx2/objsh.hxx>
 #include <sal/macros.h>
+#include <sal/log.hxx>
 #include <editeng/editstat.hxx>
 #include <filter/msfilter/msvbahelper.hxx>
 #include <xestream.hxx>
@@ -342,8 +343,8 @@ namespace {
 
 const struct XclCodePageEntry
 {
-    sal_uInt16                  mnCodePage;
-    rtl_TextEncoding            meTextEnc;
+    sal_uInt16 const                  mnCodePage;
+    rtl_TextEncoding const            meTextEnc;
 }
 pCodePageTable[] =
 {
@@ -390,14 +391,14 @@ struct XclCodePageEntry_CPPred
 {
     explicit     XclCodePageEntry_CPPred( sal_uInt16 nCodePage ) : mnCodePage( nCodePage ) {}
     bool         operator()( const XclCodePageEntry& rEntry ) const { return rEntry.mnCodePage == mnCodePage; }
-    sal_uInt16          mnCodePage;
+    sal_uInt16 const          mnCodePage;
 };
 
 struct XclCodePageEntry_TEPred
 {
     explicit     XclCodePageEntry_TEPred( rtl_TextEncoding eTextEnc ) : meTextEnc( eTextEnc ) {}
     bool         operator()( const XclCodePageEntry& rEntry ) const { return rEntry.meTextEnc == meTextEnc; }
-    rtl_TextEncoding    meTextEnc;
+    rtl_TextEncoding const    meTextEnc;
 };
 
 } // namespace

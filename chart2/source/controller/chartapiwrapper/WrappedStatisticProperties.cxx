@@ -27,12 +27,16 @@
 #include <unonames.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/beans/Property.hpp>
 #include <com/sun/star/chart/ChartErrorCategory.hpp>
 #include <com/sun/star/chart/ErrorBarStyle.hpp>
 #include <com/sun/star/chart/ChartErrorIndicatorType.hpp>
 #include <com/sun/star/chart/ChartRegressionCurveType.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/data/XDataProvider.hpp>
 #include <com/sun/star/chart2/data/XRangeXMLConversion.hpp>
+#include <com/sun/star/chart2/XRegressionCurveContainer.hpp>
 #include <utility>
 
 using namespace ::com::sun::star;
@@ -171,10 +175,12 @@ template< typename PROPERTYTYPE >
 class WrappedStatisticProperty : public WrappedSeriesOrDiagramProperty< PROPERTYTYPE >
 {
 public:
-    explicit WrappedStatisticProperty( const OUString& rName, const Any& rDefaulValue
-                              , std::shared_ptr< Chart2ModelContact > spChart2ModelContact
-                              , tSeriesOrDiagramPropertyType ePropertyType )
-            : WrappedSeriesOrDiagramProperty< PROPERTYTYPE >(rName,rDefaulValue,spChart2ModelContact,ePropertyType)
+    explicit WrappedStatisticProperty(
+        const OUString& rName, const Any& rDefaulValue,
+        const std::shared_ptr<Chart2ModelContact>& spChart2ModelContact,
+        tSeriesOrDiagramPropertyType ePropertyType)
+        : WrappedSeriesOrDiagramProperty<PROPERTYTYPE>(rName, rDefaulValue, spChart2ModelContact,
+                                                       ePropertyType)
     {}
 
 protected:
@@ -911,26 +917,26 @@ enum
                series, if false, it is for the whole diagram, i.e. for all
                series
  */
-void lcl_addWrappedProperties( std::vector< WrappedProperty* >& rList
+void lcl_addWrappedProperties( std::vector< std::unique_ptr<WrappedProperty> >& rList
             , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact
             , tSeriesOrDiagramPropertyType ePropertyType )
 {
-    rList.push_back( new WrappedConstantErrorLowProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedConstantErrorHighProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedMeanValueProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorCategoryProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorBarStyleProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedPercentageErrorProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorMarginProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorIndicatorProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorBarRangePositiveProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedErrorBarRangeNegativeProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedRegressionCurvesProperty( spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedStatisticPropertySetProperty(
+    rList.emplace_back( new WrappedConstantErrorLowProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedConstantErrorHighProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedMeanValueProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorCategoryProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorBarStyleProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedPercentageErrorProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorMarginProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorIndicatorProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorBarRangePositiveProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedErrorBarRangeNegativeProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedRegressionCurvesProperty( spChart2ModelContact, ePropertyType ) );
+    rList.emplace_back( new WrappedStatisticPropertySetProperty(
                          WrappedStatisticPropertySetProperty::PROPERTY_SET_TYPE_REGRESSION, spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedStatisticPropertySetProperty(
+    rList.emplace_back( new WrappedStatisticPropertySetProperty(
                          WrappedStatisticPropertySetProperty::PROPERTY_SET_TYPE_ERROR_BAR,  spChart2ModelContact, ePropertyType ) );
-    rList.push_back( new WrappedStatisticPropertySetProperty(
+    rList.emplace_back( new WrappedStatisticPropertySetProperty(
                          WrappedStatisticPropertySetProperty::PROPERTY_SET_TYPE_MEAN_VALUE, spChart2ModelContact, ePropertyType ) );
 }
 
@@ -1014,13 +1020,13 @@ void WrappedStatisticProperties::addProperties( std::vector< Property > & rOutPr
                   | beans::PropertyAttribute::MAYBEVOID );
 }
 
-void WrappedStatisticProperties::addWrappedPropertiesForSeries( std::vector< WrappedProperty* >& rList
+void WrappedStatisticProperties::addWrappedPropertiesForSeries( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
     lcl_addWrappedProperties( rList, spChart2ModelContact, DATA_SERIES );
 }
 
-void WrappedStatisticProperties::addWrappedPropertiesForDiagram( std::vector< WrappedProperty* >& rList
+void WrappedStatisticProperties::addWrappedPropertiesForDiagram( std::vector< std::unique_ptr<WrappedProperty> >& rList
                                     , const std::shared_ptr< Chart2ModelContact >& spChart2ModelContact )
 {
     lcl_addWrappedProperties( rList, spChart2ModelContact, DIAGRAM  );

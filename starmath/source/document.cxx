@@ -25,6 +25,7 @@
 #include <o3tl/make_unique.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <unotools/eventcfg.hxx>
 #include <sfx2/event.hxx>
 #include <sfx2/app.hxx>
@@ -275,10 +276,10 @@ void SetEditEngineDefaultFonts(SfxItemPool &rEditEngineItemPool, const SvtLinguO
 {
     // set fonts to be used
     struct FontDta {
-        LanguageType    nFallbackLang;
+        LanguageType const    nFallbackLang;
         LanguageType    nLang;
-        DefaultFontType nFontType;
-        sal_uInt16      nFontInfoId;
+        DefaultFontType const nFontType;
+        sal_uInt16 const      nFontInfoId;
         } aTable[3] =
     {
         // info to get western font to be used
@@ -463,10 +464,7 @@ SmCursor& SmDocShell::GetCursor(){
     return *mpCursor;
 }
 
-bool SmDocShell::HasCursor()
-{
-    return mpCursor.get() != nullptr;
-}
+bool SmDocShell::HasCursor() { return mpCursor != nullptr; }
 
 SmPrinterAccess::SmPrinterAccess( SmDocShell &rDocShell )
 {
@@ -612,7 +610,6 @@ void SmDocShell::Repaint()
 SmDocShell::SmDocShell( SfxModelFlags i_nSfxCreationFlags )
     : SfxObjectShell(i_nSfxCreationFlags)
     , mpEditEngineItemPool(nullptr)
-    , mpEditEngine(nullptr)
     , mpPrinter(nullptr)
     , mpTmpPrinter(nullptr)
     , mnModifyCount(0)
@@ -898,10 +895,10 @@ void SmDocShell::Execute(SfxRequest& rReq)
             SmFormat aNewFormat( aOldFormat );
             aNewFormat.SetTextmode(!aOldFormat.IsTextmode());
 
-            ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
+            SfxUndoManager *pTmpUndoMgr = GetUndoManager();
             if (pTmpUndoMgr)
                 pTmpUndoMgr->AddUndoAction(
-                    new SmFormatAction(this, aOldFormat, aNewFormat));
+                    o3tl::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
 
             SetFormat( aNewFormat );
             Repaint();
@@ -941,10 +938,10 @@ void SmDocShell::Execute(SfxRequest& rReq)
                 SmFormat aNewFormat( aOldFormat );
 
                 aFontTypeDialog.WriteTo(aNewFormat);
-                ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
+                SfxUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
                     pTmpUndoMgr->AddUndoAction(
-                        new SmFormatAction(this, aOldFormat, aNewFormat));
+                        o3tl::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
 
                 SetFormat( aNewFormat );
                 Repaint();
@@ -964,10 +961,10 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
                 aFontSizeDialog.WriteTo(aNewFormat);
 
-                ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
+                SfxUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
                     pTmpUndoMgr->AddUndoAction(
-                        new SmFormatAction(this, aOldFormat, aNewFormat));
+                        o3tl::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
 
                 SetFormat( aNewFormat );
                 Repaint();
@@ -987,10 +984,10 @@ void SmDocShell::Execute(SfxRequest& rReq)
 
                 aDistanceDialog.WriteTo(aNewFormat);
 
-                ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
+                SfxUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
                     pTmpUndoMgr->AddUndoAction(
-                        new SmFormatAction(this, aOldFormat, aNewFormat));
+                        o3tl::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
 
                 SetFormat( aNewFormat );
                 Repaint();
@@ -1015,10 +1012,10 @@ void SmDocShell::Execute(SfxRequest& rReq)
                 aAlignDialog.WriteTo( aFmt );
                 pp->GetConfig()->SetStandardFormat( aFmt );
 
-                ::svl::IUndoManager *pTmpUndoMgr = GetUndoManager();
+                SfxUndoManager *pTmpUndoMgr = GetUndoManager();
                 if (pTmpUndoMgr)
                     pTmpUndoMgr->AddUndoAction(
-                        new SmFormatAction(this, aOldFormat, aNewFormat));
+                        o3tl::make_unique<SmFormatAction>(this, aOldFormat, aNewFormat));
 
                 SetFormat( aNewFormat );
                 Repaint();
@@ -1037,7 +1034,7 @@ void SmDocShell::Execute(SfxRequest& rReq)
         case SID_UNDO:
         case SID_REDO:
         {
-            ::svl::IUndoManager* pTmpUndoMgr = GetUndoManager();
+            SfxUndoManager* pTmpUndoMgr = GetUndoManager();
             if( pTmpUndoMgr )
             {
                 sal_uInt16 nId = rReq.GetSlot(), nCnt = 1;
@@ -1046,18 +1043,18 @@ void SmDocShell::Execute(SfxRequest& rReq)
                 if( pArgs && SfxItemState::SET == pArgs->GetItemState( nId, false, &pItem ))
                     nCnt = static_cast<const SfxUInt16Item*>(pItem)->GetValue();
 
-                bool (::svl::IUndoManager:: *fnDo)();
+                bool (SfxUndoManager:: *fnDo)();
 
                 size_t nCount;
                 if( SID_UNDO == rReq.GetSlot() )
                 {
                     nCount = pTmpUndoMgr->GetUndoActionCount();
-                    fnDo = &::svl::IUndoManager::Undo;
+                    fnDo = &SfxUndoManager::Undo;
                 }
                 else
                 {
                     nCount = pTmpUndoMgr->GetRedoActionCount();
-                    fnDo = &::svl::IUndoManager::Redo;
+                    fnDo = &SfxUndoManager::Redo;
                 }
 
                 try
@@ -1150,28 +1147,28 @@ void SmDocShell::GetState(SfxItemSet &rSet)
         case SID_GETUNDOSTRINGS:
         case SID_GETREDOSTRINGS:
             {
-                ::svl::IUndoManager* pTmpUndoMgr = GetUndoManager();
+                SfxUndoManager* pTmpUndoMgr = GetUndoManager();
                 if( pTmpUndoMgr )
                 {
-                    OUString(::svl::IUndoManager:: *fnGetComment)( size_t, bool const ) const;
+                    OUString(SfxUndoManager:: *fnGetComment)( size_t, bool const ) const;
 
                     size_t nCount;
                     if( SID_GETUNDOSTRINGS == nWh )
                     {
                         nCount = pTmpUndoMgr->GetUndoActionCount();
-                        fnGetComment = &::svl::IUndoManager::GetUndoActionComment;
+                        fnGetComment = &SfxUndoManager::GetUndoActionComment;
                     }
                     else
                     {
                         nCount = pTmpUndoMgr->GetRedoActionCount();
-                        fnGetComment = &::svl::IUndoManager::GetRedoActionComment;
+                        fnGetComment = &SfxUndoManager::GetRedoActionComment;
                     }
                     if (nCount)
                     {
                         OUStringBuffer aBuf;
                         for (size_t n = 0; n < nCount; ++n)
                         {
-                            aBuf.append((pTmpUndoMgr->*fnGetComment)( n, ::svl::IUndoManager::TopLevel ));
+                            aBuf.append((pTmpUndoMgr->*fnGetComment)( n, SfxUndoManager::TopLevel ));
                             aBuf.append('\n');
                         }
 
@@ -1189,7 +1186,7 @@ void SmDocShell::GetState(SfxItemSet &rSet)
 }
 
 
-::svl::IUndoManager *SmDocShell::GetUndoManager()
+SfxUndoManager *SmDocShell::GetUndoManager()
 {
     if (!mpEditEngine)
         GetEditEngine();

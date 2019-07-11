@@ -122,7 +122,7 @@ protected:
 public:
     SBX_DECL_PERSIST_NODATA(SBXID_ARRAY,1);
     SbxArray( SbxDataType=SbxVARIANT );
-    SbxArray( const SbxArray& );
+    SbxArray( const SbxArray& ) = delete;
     SbxArray& operator=( const SbxArray& );
     virtual void Clear() override;
     sal_uInt16           Count() const;
@@ -135,7 +135,6 @@ public:
     void                 Merge( SbxArray* );
     OUString             GetAlias( sal_uInt16 );
     void                 PutAlias( const OUString&, sal_uInt16 );
-    SbxVariable*         FindUserData( sal_uInt32 nUserData );
     SbxVariable* Find( const OUString&, SbxClassType );
 
     // Additional methods for 32-bit indices
@@ -168,7 +167,7 @@ protected:
 public:
     SBX_DECL_PERSIST_NODATA(SBXID_DIMARRAY,1);
     SbxDimArray( SbxDataType=SbxVARIANT );
-    SbxDimArray( const SbxDimArray& );
+    SbxDimArray( const SbxDimArray& ) = delete;
     SbxDimArray& operator=( const SbxDimArray& );
     virtual void Clear() override;
     using SbxArray::GetRef;
@@ -212,7 +211,6 @@ public:
     SbxCollection();
     SbxCollection( const SbxCollection& );
     SbxCollection& operator=( const SbxCollection& );
-    virtual SbxVariable* FindUserData( sal_uInt32 nUserData ) override;
     virtual SbxVariable* Find( const OUString&, SbxClassType ) override;
     virtual void Clear() override;
 };

@@ -34,6 +34,7 @@
 #include "QuerySizeTabWinUndoAct.hxx"
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/commandevent.hxx>
 #include <TableWindowData.hxx>
 #include <JAccess.hxx>
 #include <com/sun/star/accessibility/XAccessible.hpp>
@@ -42,6 +43,7 @@
 #include <UITools.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <tools/diagnose_ex.h>
+#include <o3tl/make_unique.hxx>
 #include <algorithm>
 #include <functional>
 
@@ -163,7 +165,6 @@ OJoinTableView::OJoinTableView( vcl::Window* pParent, OJoinDesignView* pView )
     ,m_pDragWin( nullptr )
     ,m_pSizingWin( nullptr )
     ,m_pSelectedConn( nullptr )
-    ,m_bTrackingInitiallyMoved(false)
     ,m_pLastFocusTabWin(nullptr)
     ,m_pView( pView )
     ,m_pAccessible(nullptr)
@@ -288,14 +289,14 @@ TTableWindowData::value_type OJoinTableView::createTableWindowData(const OUStrin
     }
     catch ( const SQLException& )
     {
-        ::dbaui::showError( ::dbtools::SQLExceptionInfo( ::cppu::getCaughtException() ),
-            pParent, pParent->getController().getORB() );
+        ::dbtools::showError( ::dbtools::SQLExceptionInfo( ::cppu::getCaughtException() ),
+            VCLUnoHelper::GetInterface(pParent), pParent->getController().getORB() );
     }
     catch( const WrappedTargetException& e )
     {
         SQLException aSql;
         if ( e.TargetException >>= aSql )
-            ::dbaui::showError( ::dbtools::SQLExceptionInfo( aSql ), pParent, pParent->getController().getORB() );
+            ::dbtools::showError( ::dbtools::SQLExceptionInfo( aSql ), VCLUnoHelper::GetInterface(pParent), pParent->getController().getORB() );
     }
     catch( const Exception& )
     {
@@ -615,7 +616,6 @@ void OJoinTableView::BeginChildMove( OTableWindow* pTabWin, const Point& rMouseP
     Point aMousePos = ScreenToOutputPixel( rMousePos );
     m_aDragOffset = aMousePos - pTabWin->GetPosPixel();
     m_pDragWin->SetZOrder(nullptr, ZOrderFlags::First);
-    m_bTrackingInitiallyMoved = false;
     StartTracking();
 }
 
@@ -892,8 +892,8 @@ void OJoinTableView::SelectConn(OTableConnection* pConn)
             SvTreeListEntry* pFirstSourceVisible = pSourceBox->GetFirstEntryInView();
             SvTreeListEntry* pFirstDestVisible = pDestBox->GetFirstEntryInView();
 
-            const std::vector<OConnectionLine*>& rLines = pConn->GetConnLineList();
-            std::vector<OConnectionLine*>::const_reverse_iterator aIter = rLines.rbegin();
+            const std::vector<std::unique_ptr<OConnectionLine>>& rLines = pConn->GetConnLineList();
+            auto aIter = rLines.rbegin();
             for(;aIter != rLines.rend();++aIter)
             {
                 if ((*aIter)->IsValid())
@@ -998,7 +998,7 @@ void OJoinTableView::ScrollWhileDragging()
     Size aDragWinSize = m_pDragWin->GetSizePixel();
     Point aLowerRight(aDragWinPos.X() + aDragWinSize.Width(), aDragWinPos.Y() + aDragWinSize.Height());
 
-    if (!m_bTrackingInitiallyMoved && (aDragWinPos == m_pDragWin->GetPosPixel()))
+    if (aDragWinPos == m_pDragWin->GetPosPixel())
         return;
 
     // avoid illustration errors (when scrolling with active TrackingRect)
@@ -1065,10 +1065,10 @@ IMPL_LINK_NOARG(OJoinTableView, OnDragScrollTimer, Timer *, void)
     ScrollWhileDragging();
 }
 
-void OJoinTableView::invalidateAndModify(SfxUndoAction *_pAction)
+void OJoinTableView::invalidateAndModify(std::unique_ptr<SfxUndoAction> _pAction)
 {
     Invalidate(InvalidateFlags::NoChildren);
-    m_pView->getController().addUndoActionAndInvalidate(_pAction);
+    m_pView->getController().addUndoActionAndInvalidate(std::move(_pAction));
 }
 
 void OJoinTableView::TabWinMoved(OTableWindow* ptWhich, const Point& ptOldPosition)
@@ -1076,7 +1076,7 @@ void OJoinTableView::TabWinMoved(OTableWindow* ptWhich, const Point& ptOldPositi
     Point ptThumbPos(GetHScrollBar().GetThumbPos(), GetVScrollBar().GetThumbPos());
     ptWhich->GetData()->SetPosition(ptWhich->GetPosPixel() + ptThumbPos);
 
-    invalidateAndModify(new OJoinMoveTabWinUndoAct(this, ptOldPosition, ptWhich));
+    invalidateAndModify(o3tl::make_unique<OJoinMoveTabWinUndoAct>(this, ptOldPosition, ptWhich));
 }
 
 void OJoinTableView::TabWinSized(OTableWindow* ptWhich, const Point& ptOldPosition, const Size& szOldSize)
@@ -1084,7 +1084,7 @@ void OJoinTableView::TabWinSized(OTableWindow* ptWhich, const Point& ptOldPositi
     ptWhich->GetData()->SetSize(ptWhich->GetSizePixel());
     ptWhich->GetData()->SetPosition(ptWhich->GetPosPixel());
 
-    invalidateAndModify(new OJoinSizeTabWinUndoAct(this, ptOldPosition, szOldSize, ptWhich));
+    invalidateAndModify(o3tl::make_unique<OJoinSizeTabWinUndoAct>(this, ptOldPosition, szOldSize, ptWhich));
 }
 
 bool OJoinTableView::IsAddAllowed()
@@ -1144,8 +1144,8 @@ void OJoinTableView::Command(const CommandEvent& rEvt)
             {
                 if (rSelConnection)
                 {
-                    const std::vector<OConnectionLine*>& rLines = rSelConnection->GetConnLineList();
-                    std::vector<OConnectionLine*>::const_iterator aIter = std::find_if(rLines.begin(), rLines.end(),std::mem_fn(&OConnectionLine::IsValid));
+                    const std::vector<std::unique_ptr<OConnectionLine>>& rLines = rSelConnection->GetConnLineList();
+                    auto aIter = std::find_if(rLines.begin(), rLines.end(),std::mem_fn(&OConnectionLine::IsValid));
                     if( aIter != rLines.end() )
                         executePopup((*aIter)->getMidPoint(), rSelConnection);
                 }

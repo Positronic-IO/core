@@ -41,7 +41,7 @@ class VCL_DLLPUBLIC SvpSalFrame : public SalFrame
     SvpSalInstance*                     m_pInstance;
     SvpSalFrame*                        m_pParent;       // pointer to parent frame
     std::list< SvpSalFrame* >           m_aChildren;     // List of child frames
-    SalFrameStyleFlags                  m_nStyle;
+    SalFrameStyleFlags const            m_nStyle;
     bool                                m_bVisible;
 #ifndef IOS
     cairo_surface_t*                    m_pSurface;
@@ -70,7 +70,7 @@ public:
     virtual SalGraphics*        AcquireGraphics() override;
     virtual void                ReleaseGraphics( SalGraphics* pGraphics ) override;
 
-    virtual bool                PostEvent(ImplSVEvent* pData) override;
+    virtual bool                PostEvent(std::unique_ptr<ImplSVEvent> pData) override;
 
     virtual void                SetTitle( const OUString& rTitle ) override;
     virtual void                SetIcon( sal_uInt16 nIcon ) override;

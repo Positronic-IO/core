@@ -23,6 +23,7 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 
+#include <sal/log.hxx>
 
 using ::com::sun::star::beans::XMultiPropertySet;
 using ::com::sun::star::beans::XPropertySet;
@@ -34,10 +35,8 @@ using ::com::sun::star::uno::UNO_QUERY;
 
 MultiPropertySetHelper::MultiPropertySetHelper(
     const sal_Char** pNames ) :
-        pPropertyNames( nullptr ),
         nLength( 0 ),
         aPropertySequence(),
-        pSequenceIndex( nullptr ),
         aValues(),
         pValues( nullptr )
 {

@@ -42,8 +42,7 @@ using namespace ::com::sun::star::accessibility;
 VCLXAccessibleBox::VCLXAccessibleBox (VCLXWindow* pVCLWindow, BoxType aType, bool bIsDropDownBox)
     : VCLXAccessibleComponent (pVCLWindow),
       m_aBoxType (aType),
-      m_bIsDropDownBox (bIsDropDownBox),
-      m_nIndexInParent (DEFAULT_INDEX_IN_PARENT)
+      m_bIsDropDownBox (bIsDropDownBox)
 {
     // Set up the flags that indicate which children this object has.
     m_bHasListChild = true;
@@ -354,14 +353,6 @@ sal_Int16 SAL_CALL VCLXAccessibleBox::getAccessibleRole()
         return AccessibleRole::PANEL;
 }
 
-sal_Int32 SAL_CALL VCLXAccessibleBox::getAccessibleIndexInParent()
-{
-    if (m_nIndexInParent != DEFAULT_INDEX_IN_PARENT)
-        return m_nIndexInParent;
-    else
-        return VCLXAccessibleComponent::getAccessibleIndexInParent();
-}
-
 //=====  XAccessibleAction  ===================================================
 
 sal_Int32 SAL_CALL VCLXAccessibleBox::getAccessibleActionCount()
@@ -420,10 +411,7 @@ OUString SAL_CALL VCLXAccessibleBox::getAccessibleActionDescription (sal_Int32 n
     if (nIndex!=0 || !m_bIsDropDownBox)
         throw css::lang::IndexOutOfBoundsException();
 
-    if (m_bIsDropDownBox)
-        return OUString(RID_STR_ACC_ACTION_TOGGLEPOPUP);
-
-    return OUString();
+    return OUString(RID_STR_ACC_ACTION_TOGGLEPOPUP);
 }
 
 Reference< XAccessibleKeyBinding > VCLXAccessibleBox::getAccessibleActionKeyBinding( sal_Int32 nIndex )

@@ -56,7 +56,6 @@ static bool bLastRelative = false;
 //merged
 SwNumPositionTabPage::SwNumPositionTabPage(TabPageParent pParent, const SfxItemSet& rSet)
     : SfxTabPage(pParent, "modules/swriter/ui/outlinepositionpage.ui", "OutlinePositionPage", &rSet)
-    , pActNum(nullptr)
     , pSaveNum(nullptr)
     , pWrtSh(nullptr)
     , pOutlineDlg(nullptr)
@@ -68,30 +67,30 @@ SwNumPositionTabPage::SwNumPositionTabPage(TabPageParent pParent, const SfxItemS
     , m_xLevelLB(m_xBuilder->weld_tree_view("levellb"))
     , m_xPositionFrame(m_xBuilder->weld_widget("numberingframe"))
     , m_xDistBorderFT(m_xBuilder->weld_label("indent"))
-    , m_xDistBorderMF(m_xBuilder->weld_metric_spin_button("indentmf", FUNIT_CM))
+    , m_xDistBorderMF(m_xBuilder->weld_metric_spin_button("indentmf", FieldUnit::CM))
     , m_xRelativeCB(m_xBuilder->weld_check_button("relative"))
     , m_xIndentFT(m_xBuilder->weld_label("numberingwidth"))
-    , m_xIndentMF(m_xBuilder->weld_metric_spin_button("numberingwidthmf", FUNIT_CM))
+    , m_xIndentMF(m_xBuilder->weld_metric_spin_button("numberingwidthmf", FieldUnit::CM))
     , m_xDistNumFT(m_xBuilder->weld_label("numdist"))
-    , m_xDistNumMF(m_xBuilder->weld_metric_spin_button("numdistmf", FUNIT_CM))
+    , m_xDistNumMF(m_xBuilder->weld_metric_spin_button("numdistmf", FieldUnit::CM))
     , m_xAlignFT(m_xBuilder->weld_label("numalign"))
-    , m_xAlignLB(m_xBuilder->weld_combo_box_text("numalignlb"))
+    , m_xAlignLB(m_xBuilder->weld_combo_box("numalignlb"))
     , m_xLabelFollowedByFT(m_xBuilder->weld_label("numfollowedby"))
-    , m_xLabelFollowedByLB(m_xBuilder->weld_combo_box_text("numfollowedbylb"))
+    , m_xLabelFollowedByLB(m_xBuilder->weld_combo_box("numfollowedbylb"))
     , m_xListtabFT(m_xBuilder->weld_label("at"))
-    , m_xListtabMF(m_xBuilder->weld_metric_spin_button("atmf", FUNIT_CM))
+    , m_xListtabMF(m_xBuilder->weld_metric_spin_button("atmf", FieldUnit::CM))
     , m_xAlign2FT(m_xBuilder->weld_label("num2align"))
-    , m_xAlign2LB(m_xBuilder->weld_combo_box_text("num2alignlb"))
+    , m_xAlign2LB(m_xBuilder->weld_combo_box("num2alignlb"))
     , m_xAlignedAtFT(m_xBuilder->weld_label("alignedat"))
-    , m_xAlignedAtMF(m_xBuilder->weld_metric_spin_button("alignedatmf", FUNIT_CM))
+    , m_xAlignedAtMF(m_xBuilder->weld_metric_spin_button("alignedatmf", FieldUnit::CM))
     , m_xIndentAtFT(m_xBuilder->weld_label("indentat"))
-    , m_xIndentAtMF(m_xBuilder->weld_metric_spin_button("indentatmf", FUNIT_CM))
+    , m_xIndentAtMF(m_xBuilder->weld_metric_spin_button("indentatmf", FieldUnit::CM))
     , m_xStandardPB(m_xBuilder->weld_button("standard"))
-    , m_xPreviewWIN(new SwNumberingPreview(m_xBuilder->weld_drawing_area("preview")))
+    , m_xPreviewWIN(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreviewWIN))
 {
     SetExchangeSupport();
 
-    m_xLevelLB->set_selection_mode(true);
+    m_xLevelLB->set_selection_mode(SelectionMode::Multiple);
 
     m_xRelativeCB->set_active(true);
     m_xAlignLB->connect_changed(LINK(this, SwNumPositionTabPage, EditModifyHdl));
@@ -131,7 +130,7 @@ SwNumPositionTabPage::SwNumPositionTabPage(TabPageParent pParent, const SfxItemS
     m_xLevelLB->select_text(sEntry);
 
     m_xRelativeCB->set_active(bLastRelative);
-    m_xPreviewWIN->SetPositionMode();
+    m_aPreviewWIN.SetPositionMode();
 }
 
 SwNumPositionTabPage::~SwNumPositionTabPage()
@@ -141,7 +140,7 @@ SwNumPositionTabPage::~SwNumPositionTabPage()
 
 void SwNumPositionTabPage::dispose()
 {
-    delete pActNum;
+    pActNum.reset();
     pOutlineDlg = nullptr;
     SfxTabPage::dispose();
 }
@@ -244,17 +243,17 @@ void SwNumPositionTabPage::InitControls()
         {
             nDistBorderNum = static_cast<long>(aNumFormatArr[nLvl]->GetAbsLSpace())+ aNumFormatArr[nLvl]->GetFirstLineOffset();
         }
-        m_xDistBorderMF->set_value(m_xDistBorderMF->normalize(nDistBorderNum),FUNIT_TWIP);
+        m_xDistBorderMF->set_value(m_xDistBorderMF->normalize(nDistBorderNum),FieldUnit::TWIP);
     }
     else
         bSetDistEmpty = true;
 
     if(bSameDist)
-        m_xDistNumMF->set_value(m_xDistNumMF->normalize(aNumFormatArr[nLvl]->GetCharTextDistance()), FUNIT_TWIP);
+        m_xDistNumMF->set_value(m_xDistNumMF->normalize(aNumFormatArr[nLvl]->GetCharTextDistance()), FieldUnit::TWIP);
     else
         m_xDistNumMF->set_text(aEmptyOUStr);
     if(bSameIndent)
-        m_xIndentMF->set_value(m_xIndentMF->normalize(-aNumFormatArr[nLvl]->GetFirstLineOffset()), FUNIT_TWIP);
+        m_xIndentMF->set_value(m_xIndentMF->normalize(-aNumFormatArr[nLvl]->GetFirstLineOffset()), FieldUnit::TWIP);
     else
         m_xIndentMF->set_text(aEmptyOUStr);
 
@@ -302,7 +301,7 @@ void SwNumPositionTabPage::InitControls()
         m_xListtabMF->set_sensitive(true);
         if ( bSameListtab )
         {
-            m_xListtabMF->set_value(m_xListtabMF->normalize(aNumFormatArr[nLvl]->GetListtabPos()),FUNIT_TWIP);
+            m_xListtabMF->set_value(m_xListtabMF->normalize(aNumFormatArr[nLvl]->GetListtabPos()),FieldUnit::TWIP);
         }
         else
         {
@@ -321,7 +320,7 @@ void SwNumPositionTabPage::InitControls()
         m_xAlignedAtMF->set_value(
             m_xAlignedAtMF->normalize( aNumFormatArr[nLvl]->GetIndentAt() +
                                     aNumFormatArr[nLvl]->GetFirstLineIndent()),
-            FUNIT_TWIP );
+            FieldUnit::TWIP );
     }
     else
     {
@@ -331,7 +330,7 @@ void SwNumPositionTabPage::InitControls()
     if ( bSameIndentAt )
     {
         m_xIndentAtMF->set_value(
-            m_xIndentAtMF->normalize( aNumFormatArr[nLvl]->GetIndentAt()), FUNIT_TWIP );
+            m_xIndentAtMF->normalize( aNumFormatArr[nLvl]->GetIndentAt()), FieldUnit::TWIP );
     }
     else
     {
@@ -349,7 +348,7 @@ void SwNumPositionTabPage::ActivatePage(const SfxItemSet& )
     const SfxPoolItem* pItem;
     sal_uInt16 nTmpNumLvl =
         pOutlineDlg ? SwOutlineTabDialog::GetActNumLevel() : 0;
-    const SfxItemSet* pExampleSet = GetDialogController()->GetExampleSet();
+    const SfxItemSet* pExampleSet = GetDialogExampleSet();
     if(pExampleSet && pExampleSet->GetItemState(FN_PARAM_NUM_PRESET, false, &pItem) != SfxItemState::UNKNOWN)
     {
         bPreset = static_cast<const SfxBoolItem*>(pItem)->GetValue();
@@ -380,7 +379,7 @@ void SwNumPositionTabPage::ActivatePage(const SfxItemSet& )
         InitControls();
     }
     m_xRelativeCB->set_sensitive(1 != nActNumLvl);
-    m_xPreviewWIN->queue_draw();
+    m_aPreviewWIN.Invalidate();
 }
 
 DeactivateRC SwNumPositionTabPage::DeactivatePage(SfxItemSet *_pSet)
@@ -411,7 +410,7 @@ void SwNumPositionTabPage::Reset( const SfxItemSet* rSet )
     if (pOutlineDlg)
     {
         pSaveNum = pOutlineDlg->GetNumRule();
-        m_xLevelLB->set_selection_mode(false);
+        m_xLevelLB->set_selection_mode(SelectionMode::Single);
     }
     else if(SfxItemState::SET == rSet->GetItemState(FN_PARAM_ACT_NUMBER, false, &pItem))
         pSaveNum = const_cast<SwUINumRuleItem*>(static_cast<const SwUINumRuleItem*>(pItem))->GetNumRule();
@@ -434,10 +433,10 @@ void SwNumPositionTabPage::Reset( const SfxItemSet* rSet )
     }
 
     if(!pActNum)
-        pActNum = new  SwNumRule(*pSaveNum);
+        pActNum.reset(new  SwNumRule(*pSaveNum));
     else if(*pSaveNum != *pActNum)
         *pActNum = *pSaveNum;
-    m_xPreviewWIN->SetNumRule(pActNum);
+    m_aPreviewWIN.SetNumRule(pActNum.get());
     InitPosAndSpaceMode();
     ShowControlsDependingOnPosAndSpaceMode();
     InitControls();
@@ -509,17 +508,17 @@ void SwNumPositionTabPage::SetWrtShell(SwWrtShell* pSh)
 
     const SwTwips nWidth = pWrtSh->GetAnyCurRect(CurRectType::Frame).Width();
 
-    m_xDistBorderMF->set_max(m_xDistBorderMF->normalize( nWidth ), FUNIT_TWIP );
-    m_xDistNumMF->set_max(m_xDistNumMF->normalize( nWidth ), FUNIT_TWIP);
-    m_xIndentMF->set_max(m_xIndentMF->normalize( nWidth ), FUNIT_TWIP );
-    m_xListtabMF->set_max(m_xListtabMF->normalize( nWidth ), FUNIT_TWIP );
-    m_xAlignedAtMF->set_max(m_xAlignedAtMF->normalize( nWidth ), FUNIT_TWIP );
-    m_xIndentAtMF->set_max(m_xIndentAtMF->normalize( nWidth ), FUNIT_TWIP );
+    m_xDistBorderMF->set_max(m_xDistBorderMF->normalize( nWidth ), FieldUnit::TWIP );
+    m_xDistNumMF->set_max(m_xDistNumMF->normalize( nWidth ), FieldUnit::TWIP);
+    m_xIndentMF->set_max(m_xIndentMF->normalize( nWidth ), FieldUnit::TWIP );
+    m_xListtabMF->set_max(m_xListtabMF->normalize( nWidth ), FieldUnit::TWIP );
+    m_xAlignedAtMF->set_max(m_xAlignedAtMF->normalize( nWidth ), FieldUnit::TWIP );
+    m_xIndentAtMF->set_max(m_xIndentAtMF->normalize( nWidth ), FieldUnit::TWIP );
 
     const SwRect& rPrtRect = pWrtSh->GetAnyCurRect(CurRectType::Page);
-    m_xPreviewWIN->SetPageWidth(rPrtRect.Width());
+    m_aPreviewWIN.SetPageWidth(rPrtRect.Width());
     FieldUnit eMetric = ::GetDfltMetric( dynamic_cast<SwWebView*>( &pWrtSh->GetView()) != nullptr  );
-    if(eMetric == FUNIT_MM)
+    if(eMetric == FieldUnit::MM)
     {
         m_xDistBorderMF->set_digits(1);
         m_xDistNumMF->set_digits(1);
@@ -536,7 +535,7 @@ void SwNumPositionTabPage::SetWrtShell(SwWrtShell* pSh)
     m_xIndentAtMF->set_unit( eMetric );
 }
 
-IMPL_LINK_NOARG(SwNumPositionTabPage, EditModifyHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwNumPositionTabPage, EditModifyHdl, weld::ComboBox&, void)
 {
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
@@ -609,7 +608,7 @@ IMPL_LINK(SwNumPositionTabPage, DistanceHdl, weld::MetricSpinButton&, rField, vo
 {
     if(bInInintControl)
         return;
-    long nValue = static_cast< long >(rField.denormalize(rField.get_value(FUNIT_TWIP)));
+    long nValue = static_cast< long >(rField.denormalize(rField.get_value(FieldUnit::TWIP)));
     sal_uInt16 nMask = 1;
     for(sal_uInt16 i = 0; i < MAXLEVEL; i++)
     {
@@ -623,7 +622,7 @@ IMPL_LINK(SwNumPositionTabPage, DistanceHdl, weld::MetricSpinButton&, rField, vo
                 {
                     if(0 == i)
                     {
-                        long nTmp = aNumFormat.GetFirstLineOffset();
+                        auto const nTmp = aNumFormat.GetFirstLineOffset();
                         aNumFormat.SetAbsLSpace( nValue - nTmp );
                     }
                     else
@@ -637,7 +636,7 @@ IMPL_LINK(SwNumPositionTabPage, DistanceHdl, weld::MetricSpinButton&, rField, vo
                 }
                 else
                 {
-                    aNumFormat.SetAbsLSpace( static_cast<short>(nValue) - aNumFormat.GetFirstLineOffset());
+                    aNumFormat.SetAbsLSpace( nValue - aNumFormat.GetFirstLineOffset());
                 }
             }
             else if (&rField == m_xDistNumMF.get())
@@ -648,7 +647,7 @@ IMPL_LINK(SwNumPositionTabPage, DistanceHdl, weld::MetricSpinButton&, rField, vo
             {
                 // now AbsLSpace also has to be modified by FirstLineOffset
                 long nDiff = nValue + aNumFormat.GetFirstLineOffset();
-                long nAbsLSpace = aNumFormat.GetAbsLSpace();
+                auto const nAbsLSpace = aNumFormat.GetAbsLSpace();
                 aNumFormat.SetAbsLSpace( nAbsLSpace + nDiff );
                 aNumFormat.SetFirstLineOffset( -nValue );
             }
@@ -694,14 +693,14 @@ IMPL_LINK( SwNumPositionTabPage, RelativeHdl, weld::ToggleButton&, rBox, void )
 
     }
     if(bSetValue)
-        m_xDistBorderMF->set_value(m_xDistBorderMF->normalize(nValue), FUNIT_TWIP);
+        m_xDistBorderMF->set_value(m_xDistBorderMF->normalize(nValue), FieldUnit::TWIP);
     else
         m_xDistBorderMF->set_text(aEmptyOUStr);
     m_xDistBorderMF->set_sensitive(bOn || bSingleSelection || pOutlineDlg);
     bLastRelative = bOn;
 }
 
-IMPL_LINK_NOARG(SwNumPositionTabPage, LabelFollowedByHdl_Impl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(SwNumPositionTabPage, LabelFollowedByHdl_Impl, weld::ComboBox&, void)
 {
     // determine value to be set at the chosen list levels
     SvxNumberFormat::LabelFollowedBy eLabelFollowedBy = SvxNumberFormat::LISTTAB;
@@ -754,7 +753,7 @@ IMPL_LINK_NOARG(SwNumPositionTabPage, LabelFollowedByHdl_Impl, weld::ComboBoxTex
     {
         m_xListtabMF->set_value(
             m_xListtabMF->normalize( pActNum->Get( nFirstLvl ).GetListtabPos() ),
-            FUNIT_TWIP );
+            FieldUnit::TWIP );
     }
     else
     {
@@ -767,7 +766,7 @@ IMPL_LINK_NOARG(SwNumPositionTabPage, LabelFollowedByHdl_Impl, weld::ComboBoxTex
 IMPL_LINK( SwNumPositionTabPage, ListtabPosHdl_Impl, weld::MetricSpinButton&, rField, void )
 {
     // determine value to be set at the chosen list levels
-    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FUNIT_TWIP)));
+    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FieldUnit::TWIP)));
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -788,7 +787,7 @@ IMPL_LINK( SwNumPositionTabPage, ListtabPosHdl_Impl, weld::MetricSpinButton&, rF
 IMPL_LINK( SwNumPositionTabPage, AlignAtHdl_Impl, weld::MetricSpinButton&, rField, void )
 {
     // determine value to be set at the chosen list levels
-    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FUNIT_TWIP)));
+    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FieldUnit::TWIP)));
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -810,7 +809,7 @@ IMPL_LINK( SwNumPositionTabPage, AlignAtHdl_Impl, weld::MetricSpinButton&, rFiel
 IMPL_LINK( SwNumPositionTabPage, IndentAtHdl_Impl, weld::MetricSpinButton&, rField, void )
 {
     // determine value to be set at the chosen list levels
-    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FUNIT_TWIP)));
+    const long nValue = static_cast< long >(rField.denormalize(rField.get_value(FieldUnit::TWIP)));
 
     // set value at the chosen list levels
     sal_uInt16 nMask = 1;
@@ -843,7 +842,7 @@ IMPL_LINK_NOARG(SwNumPositionTabPage, StandardHdl, weld::Button&, void)
             SwNumRule aTmpNumRule( pWrtSh->GetUniqueNumRuleName(),
                                    aNumFormat.GetPositionAndSpaceMode(),
                                    pOutlineDlg ? OUTLINE_RULE : NUM_RULE );
-            SwNumFormat aTempFormat(aTmpNumRule.Get( i ));
+            const SwNumFormat& aTempFormat(aTmpNumRule.Get( i ));
             aNumFormat.SetPositionAndSpaceMode( aTempFormat.GetPositionAndSpaceMode() );
             if ( aTempFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
             {
@@ -872,67 +871,68 @@ IMPL_LINK_NOARG(SwNumPositionTabPage, StandardHdl, weld::Button&, void)
 void SwNumPositionTabPage::SetModified()
 {
     bModified = true;
-    m_xPreviewWIN->SetLevel(nActNumLvl);
-    m_xPreviewWIN->queue_draw();
+    m_aPreviewWIN.SetLevel(nActNumLvl);
+    m_aPreviewWIN.Invalidate();
 }
 #endif
 
-SwSvxNumBulletTabDialog::SwSvxNumBulletTabDialog(vcl::Window* pParent,
+SwSvxNumBulletTabDialog::SwSvxNumBulletTabDialog(weld::Window* pParent,
                     const SfxItemSet* pSwItemSet, SwWrtShell & rSh)
-    : SfxTabDialog(pParent, "BulletsAndNumberingDialog",
-        "modules/swriter/ui/bulletsandnumbering.ui",
+    : SfxTabDialogController(pParent, "modules/swriter/ui/bulletsandnumbering.ui", "BulletsAndNumberingDialog",
         pSwItemSet)
     , rWrtSh(rSh)
+    , m_xDummyCombo(m_xBuilder->weld_combo_box("dummycombo"))
 {
-    GetUserButton()->SetClickHdl(LINK(this, SwSvxNumBulletTabDialog, RemoveNumberingHdl));
-    GetUserButton()->Enable(rWrtSh.GetNumRuleAtCurrCursorPos() != nullptr);
-    m_nSingleNumPageId = AddTabPage("singlenum", RID_SVXPAGE_PICK_SINGLE_NUM );
-    m_nBulletPageId = AddTabPage("bullets", RID_SVXPAGE_PICK_BULLET );
+    weld::Button* pButton = GetUserButton();
+    pButton->connect_clicked(LINK(this, SwSvxNumBulletTabDialog, RemoveNumberingHdl));
+    pButton->set_sensitive(rWrtSh.GetNumRuleAtCurrCursorPos() != nullptr);
+    AddTabPage("singlenum", RID_SVXPAGE_PICK_SINGLE_NUM );
+    AddTabPage("bullets", RID_SVXPAGE_PICK_BULLET );
     AddTabPage("outlinenum", RID_SVXPAGE_PICK_NUM );
     AddTabPage("graphics", RID_SVXPAGE_PICK_BMP );
-    m_nOptionsPageId = AddTabPage("customize", RID_SVXPAGE_NUM_OPTIONS );
-    m_nPositionPageId = AddTabPage("position", RID_SVXPAGE_NUM_POSITION );
+    AddTabPage("customize", RID_SVXPAGE_NUM_OPTIONS );
+    AddTabPage("position", RID_SVXPAGE_NUM_POSITION );
 }
 
 SwSvxNumBulletTabDialog::~SwSvxNumBulletTabDialog()
 {
 }
 
-void SwSvxNumBulletTabDialog::PageCreated(sal_uInt16 nPageId, SfxTabPage& rPage)
+void SwSvxNumBulletTabDialog::PageCreated(const OString& rPageId, SfxTabPage& rPage)
 {
     // set styles' names and metric
     OUString sNumCharFormat, sBulletCharFormat;
     SwStyleNameMapper::FillUIName( RES_POOLCHR_NUM_LEVEL, sNumCharFormat );
     SwStyleNameMapper::FillUIName( RES_POOLCHR_BUL_LEVEL, sBulletCharFormat );
 
-    if (nPageId == m_nSingleNumPageId)
+    if (rPageId == "singlenum")
     {
         SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
         aSet.Put (SfxStringItem(SID_NUM_CHAR_FMT,sNumCharFormat));
         aSet.Put (SfxStringItem(SID_BULLET_CHAR_FMT,sBulletCharFormat));
         rPage.PageCreated(aSet);
     }
-    else if (nPageId == m_nBulletPageId)
+    else if (rPageId == "bullets")
     {
         SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
         aSet.Put (SfxStringItem(SID_BULLET_CHAR_FMT,sBulletCharFormat));
         rPage.PageCreated(aSet);
     }
-    else if (nPageId == m_nOptionsPageId)
+    else if (rPageId == "customize")
     {
         SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
         aSet.Put (SfxStringItem(SID_NUM_CHAR_FMT,sNumCharFormat));
         aSet.Put (SfxStringItem(SID_BULLET_CHAR_FMT,sBulletCharFormat));
         // collect char styles
-        ScopedVclPtrInstance< ListBox > rCharFormatLB(this);
-        rCharFormatLB->Clear();
-        rCharFormatLB->InsertEntry( SwViewShell::GetShellRes()->aStrNone );
+        m_xDummyCombo->clear();
+        m_xDummyCombo->append_text(SwViewShell::GetShellRes()->aStrNone);
         SwDocShell* pDocShell = rWrtSh.GetView().GetDocShell();
-        ::FillCharStyleListBox(*rCharFormatLB.get(),  pDocShell);
+        ::FillCharStyleListBox(*m_xDummyCombo,  pDocShell);
 
         std::vector<OUString> aList;
-        for(sal_Int32 j = 0; j < rCharFormatLB->GetEntryCount(); j++)
-             aList.push_back( rCharFormatLB->GetEntry(j) );
+        aList.reserve(m_xDummyCombo->get_count());
+        for (sal_Int32 j = 0; j < m_xDummyCombo->get_count(); j++)
+            aList.push_back(m_xDummyCombo->get_text(j));
 
         aSet.Put( SfxStringListItem( SID_CHAR_FMT_LIST_BOX,&aList ) ) ;
 
@@ -940,7 +940,7 @@ void SwSvxNumBulletTabDialog::PageCreated(sal_uInt16 nPageId, SfxTabPage& rPage)
         aSet.Put ( SfxAllEnumItem(SID_METRIC_ITEM, static_cast< sal_uInt16 >(eMetric) ) );
         rPage.PageCreated(aSet);
     }
-    else if (nPageId == m_nPositionPageId)
+    else if (rPageId == "position")
     {
         SwDocShell* pDocShell = rWrtSh.GetView().GetDocShell();
         FieldUnit eMetric = ::GetDfltMetric(dynamic_cast< const SwWebDocShell *>( pDocShell ) !=  nullptr);
@@ -952,14 +952,14 @@ void SwSvxNumBulletTabDialog::PageCreated(sal_uInt16 nPageId, SfxTabPage& rPage)
 
 short  SwSvxNumBulletTabDialog::Ok()
 {
-    short nRet = SfxTabDialog::Ok();
-    m_pExampleSet->ClearItem(SID_PARAM_NUM_PRESET);
+    short nRet = SfxTabDialogController::Ok();
+    m_xExampleSet->ClearItem(SID_PARAM_NUM_PRESET);
     return nRet;
 }
 
-IMPL_LINK_NOARG(SwSvxNumBulletTabDialog, RemoveNumberingHdl, Button*, void)
+IMPL_LINK_NOARG(SwSvxNumBulletTabDialog, RemoveNumberingHdl, weld::Button&, void)
 {
-    EndDialog(RET_USER);
+    m_xDialog->response(RET_USER);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

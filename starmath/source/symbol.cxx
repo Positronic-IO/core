@@ -23,6 +23,8 @@
 #include <utility.hxx>
 #include "cfgitem.hxx"
 #include <smmod.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 
 SmSym::SmSym() :
@@ -67,9 +69,7 @@ SmSym& SmSym::operator = (const SmSym& rSymbol)
     m_aSetName      = rSymbol.m_aSetName;
     m_bPredefined   = rSymbol.m_bPredefined;
 
-    SmSymbolManager * pSymSetManager = &SM_MOD()->GetSymbolManager();
-    if (pSymSetManager)
-        pSymSetManager->SetModified(true);
+    SM_MOD()->GetSymbolManager().SetModified(true);
 
     return *this;
 }

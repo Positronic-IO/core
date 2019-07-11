@@ -60,6 +60,7 @@
 #include <xfilter/xftextstyle.hxx>
 #include <xfilter/xfdefs.hxx>
 #include <xfilter/xfcolor.hxx>
+#include <sal/log.hxx>
 
 void LwpFontAttrEntry::Read(LwpObjectStream *pStrm)
 {
@@ -244,7 +245,6 @@ void LwpFontTableEntry::RegisterFontDecl()
 
 LwpFontTable::LwpFontTable()
     : m_nCount(0)
-    , m_pFontEntries(nullptr)
 {}
 
 void LwpFontTable::Read(LwpObjectStream *pStrm)
@@ -357,7 +357,6 @@ bool LwpFontNameEntry::IsBackgroundColorOverridden()
 
 LwpFontNameManager::LwpFontNameManager()
     : m_nCount(0)
-    , m_pFontNames(nullptr)
 {}
 
 LwpFontNameManager::~LwpFontNameManager()

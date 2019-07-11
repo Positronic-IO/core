@@ -52,9 +52,9 @@ private:
     OUString     m_aProxyName;
     sal_Int32         m_nPort;
     sal_Int32         m_nProxyPort;
-    css::uno::Sequence< css::beans::NamedValue > m_aFlags;
+    css::uno::Sequence< css::beans::NamedValue > const m_aFlags;
     HttpSession *     m_pHttpSession;
-    void *            m_pRequestData;
+    void * const      m_pRequestData;
     const ucbhelper::InternetProxyDecider & m_rProxyDecider;
 
     // @@@ This should really be per-request data. But Neon currently
@@ -89,7 +89,7 @@ public:
     virtual void
     OPTIONS( const OUString & inPath,
              DAVOptions& rOptions, // contains the name+values
-             const DAVRequestEnvironment & rEnv ) SAL_OVERRIDE;
+             const DAVRequestEnvironment & rEnv ) override;
 
     // allprop & named
     virtual void
@@ -204,6 +204,13 @@ public:
 
     bool isDomainMatch( const OUString& certHostName );
 
+    int CertificationNotify(const ne_ssl_certificate *cert);
+
+    int NeonAuth(const char* inAuthProtocol, const char* inRealm,
+                 int attempt, char* inoutUserName, char * inoutPassWord);
+
+    void PreSendRequest(ne_request* req, ne_buffer* headers);
+
 private:
     friend class NeonLockStore;
 
@@ -219,7 +226,7 @@ private:
                       const OUString & inPath,
                       const DAVRequestEnvironment & rEnv );
 
-    const ucbhelper::InternetProxyServer & getProxySettings() const;
+    ucbhelper::InternetProxyServer getProxySettings() const;
 
     bool removeExpiredLocktoken( const OUString & inURL,
                                  const DAVRequestEnvironment & rEnv );
@@ -271,9 +278,9 @@ private:
     OUString makeAbsoluteURL( OUString const & rURL ) const;
 };
 
-} // namespace webdav_ucp
+osl::Mutex& getGlobalNeonMutex();
 
-extern osl::Mutex aGlobalNeonMutex;
+} // namespace webdav_ucp
 
 #endif // INCLUDED_UCB_SOURCE_UCP_WEBDAV_NEON_NEONSESSION_HXX
 

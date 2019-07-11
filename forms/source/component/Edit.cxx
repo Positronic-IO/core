@@ -36,7 +36,10 @@
 #include <connectivity/formattedcolumnvalue.hxx>
 #include <connectivity/dbconversion.hxx>
 
+#include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace dbtools;
 
@@ -516,7 +519,7 @@ void OEditModel::write(const Reference<XObjectOutputStream>& _rxOutStream)
         m_xAggregateSet->setPropertyValue(PROPERTY_MAXTEXTLEN, makeAny(nOldTextLen));
         // and reset the text
         // First we set it to an empty string : Without this the second setPropertyValue would not do anything as it thinks
-        // we aren't changing the prop (it didn't notify the - implicite - change of the text prop while setting the max text len)
+        // we aren't changing the prop (it didn't notify the - implicit - change of the text prop while setting the max text len)
         // This seems to be a bug with in toolkit's EditControl-implementation.
         m_xAggregateSet->setPropertyValue(PROPERTY_TEXT, makeAny(OUString()));
         m_xAggregateSet->setPropertyValue(PROPERTY_TEXT, aCurrentText);
@@ -631,10 +634,11 @@ bool OEditModel::commitControlValueToDbColumn( bool /*_bPostReset*/ )
     }
     else
     {
-        OSL_PRECOND( m_pValueFormatter.get(), "OEditModel::commitControlValueToDbColumn: no value formatter!" );
+        OSL_PRECOND(m_pValueFormatter,
+                    "OEditModel::commitControlValueToDbColumn: no value formatter!");
         try
         {
-            if ( m_pValueFormatter.get() )
+            if (m_pValueFormatter)
             {
                 if ( !m_pValueFormatter->setFormattedValue( sNewValue ) )
                     return false;
@@ -654,9 +658,10 @@ bool OEditModel::commitControlValueToDbColumn( bool /*_bPostReset*/ )
 
 Any OEditModel::translateDbColumnToControlValue()
 {
-    OSL_PRECOND( m_pValueFormatter.get(), "OEditModel::translateDbColumnToControlValue: no value formatter!" );
+    OSL_PRECOND(m_pValueFormatter,
+                "OEditModel::translateDbColumnToControlValue: no value formatter!");
     Any aRet;
-    if ( m_pValueFormatter.get() )
+    if (m_pValueFormatter)
     {
         OUString sValue( m_pValueFormatter->getFormattedValue() );
         if  (   sValue.isEmpty()

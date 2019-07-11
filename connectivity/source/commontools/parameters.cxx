@@ -34,9 +34,9 @@
 
 #include <tools/diagnose_ex.h>
 
-#include <comphelper/proparrhlp.hxx>
 #include <connectivity/ParameterCont.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 namespace dbtools
 {
@@ -57,7 +57,6 @@ namespace dbtools
         :m_rMutex             ( _rMutex )
         ,m_aParameterListeners( _rMutex )
         ,m_xContext           ( _rxContext  )
-        ,m_pOuterParameters   ( nullptr    )
         ,m_nInnerCount        ( 0       )
         ,m_bUpToDate          ( false   )
     {
@@ -675,7 +674,7 @@ namespace dbtools
         try
         {
             // transfer the values from the continuation object to the parameter columns
-            Sequence< PropertyValue > aFinalValues = pParams->getValues();
+            const Sequence< PropertyValue >& aFinalValues = pParams->getValues();
             const PropertyValue* pFinalValues = aFinalValues.getConstArray();
             for ( sal_Int32 i = 0; i < aFinalValues.getLength(); ++i, ++pFinalValues )
             {
@@ -736,7 +735,7 @@ namespace dbtools
 
         // fill the parameters from the master-detail relationship
         Reference< XNameAccess > xParentColumns;
-        if ( getParentColumns( xParentColumns, false ) && xParentColumns->hasElements() && m_aMasterFields.size() )
+        if ( getParentColumns( xParentColumns, false ) && xParentColumns->hasElements() && !m_aMasterFields.empty() )
             fillLinkedParameters( xParentColumns );
 
         // let the user (via the interaction handler) fill all remaining parameters

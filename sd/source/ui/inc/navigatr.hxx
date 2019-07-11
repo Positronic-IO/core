@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_NAVIGATR_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_NAVIGATR_HXX
 
-#include <vcl/window.hxx>
 #include <vcl/lstbox.hxx>
 #include <vcl/toolbox.hxx>
 #include <sfx2/ctrlitem.hxx>
@@ -29,6 +28,8 @@
 #include <pres.hxx>
 
 // forward
+namespace vcl { class Window; }
+
 namespace sd {
 class DrawDocShell;
 class NavigatorChildWindow;
@@ -101,7 +102,7 @@ public:
     bool                        InsertFile(const OUString& rFileName);
 
     NavigatorDragType           GetNavigatorDragType();
-    VclPtr<SdPageObjsTLB> GetObjects();
+    VclPtr<SdPageObjsTLB> const & GetObjects();
 
 protected:
     virtual bool                EventNotify(NotifyEvent& rNEvt) override;
@@ -120,8 +121,8 @@ private:
     NavigatorDragType           meDragType;
     std::vector<NavDocInfo>     maDocList;
     SfxBindings*                mpBindings;
-    SdNavigatorControllerItem*  mpNavigatorCtrlItem;
-    SdPageNameControllerItem*   mpPageNameCtrlItem;
+    std::unique_ptr<SdNavigatorControllerItem>  mpNavigatorCtrlItem;
+    std::unique_ptr<SdPageNameControllerItem>   mpPageNameCtrlItem;
 
     /** This flag controls whether all shapes or only the named shapes are
         shown.

@@ -19,14 +19,14 @@
 #ifndef INCLUDED_SVX_PASSWD_HXX
 #define INCLUDED_SVX_PASSWD_HXX
 
-#include <vcl/weld.hxx>
+#include <sfx2/basedlgs.hxx>
 #include <svx/svxdllapi.h>
 
-class SVX_DLLPUBLIC SvxPasswordDialog : public weld::GenericDialogController
+class SVX_DLLPUBLIC SvxPasswordDialog : public SfxDialogController
 {
 private:
-    OUString m_aOldPasswdErrStr;
-    OUString m_aRepeatPasswdErrStr;
+    OUString const m_aOldPasswdErrStr;
+    OUString const m_aRepeatPasswdErrStr;
     Link<SvxPasswordDialog*,bool> m_aCheckPasswordHdl;
 
     std::unique_ptr<weld::Label> m_xOldFL;

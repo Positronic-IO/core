@@ -41,6 +41,8 @@ public:
     void testNumericWithTwoParam();
     void testIntegerAutoincremental();
     void testTimestampWithParam();
+    void testDefaultValueNow();
+    void testEvilNullColumnName();
     // TODO testForeign, testDecomposer
 
     CPPUNIT_TEST_SUITE(HsqlSchemaImportTest);
@@ -51,13 +53,15 @@ public:
     CPPUNIT_TEST(testNumericWithTwoParam);
     CPPUNIT_TEST(testIntegerAutoincremental);
     CPPUNIT_TEST(testTimestampWithParam);
+    CPPUNIT_TEST(testDefaultValueNow);
+    CPPUNIT_TEST(testEvilNullColumnName);
 
     CPPUNIT_TEST_SUITE_END();
 };
 
 void HsqlSchemaImportTest::testIntegerPrimaryKeyNotNull()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY)" };
+    const OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY)" };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -75,8 +79,10 @@ void HsqlSchemaImportTest::testIntegerPrimaryKeyNotNull()
 
 void HsqlSchemaImportTest::testVarcharWithParam()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
-                  "VARCHAR(50))" };
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
+        "VARCHAR(50))"
+    };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -98,8 +104,10 @@ void HsqlSchemaImportTest::testVarcharWithParam()
  **/
 void HsqlSchemaImportTest::testVarcharWithoutParam()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
-                  "VARCHAR)" };
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
+        "VARCHAR)"
+    };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -114,8 +122,10 @@ void HsqlSchemaImportTest::testVarcharWithoutParam()
 
 void HsqlSchemaImportTest::testNumericWithTwoParam()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"Betrag\" "
-                  "NUMERIC(8,2))" };
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"Betrag\" "
+        "NUMERIC(8,2))"
+    };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -136,8 +146,10 @@ void HsqlSchemaImportTest::testNumericWithTwoParam()
 
 void HsqlSchemaImportTest::testIntegerAutoincremental()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY GENERATED "
-                  "BY DEFAULT AS IDENTITY(START WITH 0), \"myText\" VARCHAR(50))" };
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY GENERATED "
+        "BY DEFAULT AS IDENTITY(START WITH 0), \"myText\" VARCHAR(50))"
+    };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -157,8 +169,10 @@ void HsqlSchemaImportTest::testIntegerAutoincremental()
  */
 void HsqlSchemaImportTest::testTimestampWithParam()
 {
-    OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
-                  "TIMESTAMP(0))" };
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myText\" "
+        "TIMESTAMP(0))"
+    };
 
     FbCreateStmtParser aCreateParser;
     aCreateParser.parse(sql);
@@ -172,6 +186,45 @@ void HsqlSchemaImportTest::testTimestampWithParam()
     // because it's Firebird specific
     OUString fbSql = aCreateParser.compose();
     CPPUNIT_ASSERT(fbSql.indexOf("0") < 0); //does not contain
+}
+
+/**
+ * Special case:
+ * HSQLDB uses keyword NOW without quotes. Firebird uses single quotes 'NOW'
+ */
+void HsqlSchemaImportTest::testDefaultValueNow()
+{
+    const OUString sql{
+        "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, \"myDate\" "
+        "TIMESTAMP DEFAULT NOW)"
+    };
+
+    FbCreateStmtParser aCreateParser;
+    aCreateParser.parse(sql);
+
+    const auto& columns = aCreateParser.getColumnDef();
+    const ColumnDefinition* colTimeStamp = lcl_findByType(columns, css::sdbc::DataType::TIMESTAMP);
+
+    CPPUNIT_ASSERT(colTimeStamp != nullptr);
+    CPPUNIT_ASSERT_EQUAL(OUString{ "NOW" }, colTimeStamp->getDefault()); // parsed NOW
+    OUString fbSql = aCreateParser.compose();
+    CPPUNIT_ASSERT(fbSql.indexOf("\'NOW\'") > 0); // composed 'NOW'
+}
+
+void HsqlSchemaImportTest::testEvilNullColumnName()
+{
+    const OUString sql{ "CREATE CACHED TABLE \"myTable\"(\"id\" INTEGER NOT NULL PRIMARY KEY, "
+                        "\"myEvilNOT NULLName\" "
+                        "VARCHAR(20))" };
+
+    FbCreateStmtParser aCreateParser;
+    aCreateParser.parse(sql);
+
+    const auto& columns = aCreateParser.getColumnDef();
+    CPPUNIT_ASSERT_EQUAL(2_z, columns.size());
+    const ColumnDefinition* colVarchar = lcl_findByType(columns, css::sdbc::DataType::VARCHAR);
+    CPPUNIT_ASSERT(colVarchar != nullptr);
+    CPPUNIT_ASSERT(colVarchar->isNullable());
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HsqlSchemaImportTest);

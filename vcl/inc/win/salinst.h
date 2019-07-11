@@ -35,11 +35,9 @@ public:
     HINSTANCE           mhInst;
     /// invisible Window so non-main threads can SendMessage() the main thread
     HWND                mhComWnd;
-    /// The Yield mutex ensures that only one thread calls into VCL
-    SalYieldMutex*      mpSalYieldMutex;
 
     osl::Condition      maWaitingYieldCond;
-    bool                mbNoYieldLock;
+    unsigned            m_nNoYieldLock;
 
 public:
     WinSalInstance();
@@ -57,27 +55,19 @@ public:
     virtual SalInfoPrinter* CreateInfoPrinter( SalPrinterQueueInfo* pQueueInfo,
                                                ImplJobSetup* pSetupData ) override;
     virtual void            DestroyInfoPrinter( SalInfoPrinter* pPrinter ) override;
-    virtual SalPrinter*     CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
-    virtual void            DestroyPrinter( SalPrinter* pPrinter ) override;
+    virtual std::unique_ptr<SalPrinter> CreatePrinter( SalInfoPrinter* pInfoPrinter ) override;
     virtual void            GetPrinterQueueInfo( ImplPrnQueueList* pList ) override;
     virtual void            GetPrinterQueueState( SalPrinterQueueInfo* pInfo ) override;
-    virtual void            DeletePrinterQueueInfo( SalPrinterQueueInfo* pInfo ) override;
     virtual OUString            GetDefaultPrinter() override;
     virtual SalTimer*           CreateSalTimer() override;
     virtual SalSystem*          CreateSalSystem() override;
-    virtual SalBitmap*          CreateSalBitmap() override;
-    virtual comphelper::SolarMutex* GetYieldMutex() override;
-    virtual sal_uInt32          ReleaseYieldMutexAll() override;
-    virtual void                AcquireYieldMutex( sal_uInt32 nCount = 1 ) override;
+    virtual std::shared_ptr<SalBitmap> CreateSalBitmap() override;
     virtual bool                IsMainThread() const override;
 
     virtual bool                DoYield(bool bWait, bool bHandleAllCurrentEvents) override;
     virtual bool                AnyInput( VclInputFlags nType ) override;
-    virtual SalMenu*            CreateMenu( bool bMenuBar, Menu* ) override;
-    virtual void                DestroyMenu( SalMenu* ) override;
-    virtual SalMenuItem*        CreateMenuItem( const SalItemParams* pItemData ) override;
-    virtual void                DestroyMenuItem( SalMenuItem* ) override;
-    virtual SalSession*         CreateSalSession() override;
+    virtual std::unique_ptr<SalMenu>     CreateMenu( bool bMenuBar, Menu* ) override;
+    virtual std::unique_ptr<SalMenuItem> CreateMenuItem( const SalItemParams & rItemData ) override;
     virtual OpenGLContext*      CreateOpenGLContext() override;
     virtual OUString            GetConnectionIdentifier() override;
     virtual void                AddToRecentDocumentList(const OUString& rFileUrl, const OUString& rMimeType, const OUString& rDocumentService) override;

@@ -71,6 +71,7 @@
 #include <comphelper/interaction.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/string.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbexception.hxx>
 #include <connectivity/dbtools.hxx>
 #include <connectivity/sqlerror.hxx>
@@ -78,6 +79,7 @@
 #include <cppuhelper/implbase2.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <sfx2/app.hxx>
 #include <svx/fmsearch.hxx>
 #include <svx/svxdlg.hxx>
@@ -615,7 +617,6 @@ void SbaXDataBrowserController::onStartLoading( const Reference< XLoadable >& _r
 
 void SbaXDataBrowserController::impl_checkForCannotSelectUnfiltered( const SQLExceptionInfo& _rError )
 {
-    ::connectivity::SQLError aError;
     ::connectivity::ErrorCode nErrorCode( connectivity::SQLError::getErrorCode( sdb::ErrorCondition::DATA_CANNOT_SELECT_UNFILTERED ) );
     if ( static_cast<const SQLException*>(_rError)->ErrorCode == nErrorCode )
     {
@@ -1478,7 +1479,7 @@ FeatureState SbaXDataBrowserController::GetState(sal_uInt16 nId) const
                             aReturn.bEnabled = m_aCurrentFrame.isActive() && !bIsReadOnly;
                             if(aReturn.bEnabled)
                             {
-                                aReturn.bEnabled = aReturn.bEnabled && IsFormatSupported( m_aSystemClipboard.GetDataFlavorExVector(), SotClipboardFormatId::STRING );
+                                aReturn.bEnabled = IsFormatSupported( m_aSystemClipboard.GetDataFlavorExVector(), SotClipboardFormatId::STRING );
                             }
                             break;
                     }
@@ -1750,19 +1751,19 @@ void SbaXDataBrowserController::ExecuteFilterSortCrit(bool bFilter)
         Reference< XConnection> xCon(xFormSet->getPropertyValue(PROPERTY_ACTIVE_CONNECTION),UNO_QUERY);
         if(bFilter)
         {
-            ScopedVclPtrInstance< DlgFilterCrit > aDlg( getBrowserView(), getORB(), xCon, xParser, m_xColumnsSupplier->getColumns() );
-            if ( !aDlg->Execute() )
+            DlgFilterCrit aDlg(getFrameWeld(), getORB(), xCon, xParser, m_xColumnsSupplier->getColumns());
+            if (!aDlg.run())
                 return; // if so we don't need to update the grid
-            aDlg->BuildWherePart();
+            aDlg.BuildWherePart();
         }
         else
         {
-            ScopedVclPtrInstance< DlgOrderCrit > aDlg( getBrowserView(),xCon,xParser, m_xColumnsSupplier->getColumns() );
-            if(!aDlg->Execute())
+            DlgOrderCrit aDlg(getFrameWeld(), xCon, xParser, m_xColumnsSupplier->getColumns());
+            if (!aDlg.run())
             {
                 return; // if so we don't need to actualize the grid
             }
-            aDlg->BuildOrderPart();
+            aDlg.BuildOrderPart();
         }
     }
     catch(const SQLException& )
@@ -1829,21 +1830,14 @@ void SbaXDataBrowserController::ExecuteSearch()
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     VclPtr<AbstractFmSearchDialog> pDialog;
-    if ( pFact )
-    {
-        std::vector< OUString > aContextNames;
-        aContextNames.emplace_back("Standard" );
-        pDialog = pFact->CreateFmSearchDialog(getBrowserView(), sInitialText, aContextNames, 0, LINK(this, SbaXDataBrowserController, OnSearchContextRequest));
-    }
-    OSL_ENSURE( pDialog, "SbaXDataBrowserController::ExecuteSearch: could not get the search dialog!" );
-    if ( pDialog )
-    {
-        pDialog->SetActiveField( sActiveField );
-        pDialog->SetFoundHandler( LINK( this, SbaXDataBrowserController, OnFoundData ) );
-        pDialog->SetCanceledNotFoundHdl( LINK( this, SbaXDataBrowserController, OnCanceledNotFound ) );
-        pDialog->Execute();
-        pDialog.disposeAndClear();
-    }
+    std::vector< OUString > aContextNames;
+    aContextNames.emplace_back("Standard" );
+    pDialog = pFact->CreateFmSearchDialog(getBrowserView(), sInitialText, aContextNames, 0, LINK(this, SbaXDataBrowserController, OnSearchContextRequest));
+    pDialog->SetActiveField( sActiveField );
+    pDialog->SetFoundHandler( LINK( this, SbaXDataBrowserController, OnFoundData ) );
+    pDialog->SetCanceledNotFoundHdl( LINK( this, SbaXDataBrowserController, OnCanceledNotFound ) );
+    pDialog->Execute();
+    pDialog.disposeAndClear();
 
     // restore the grid's normal operating state
     xModelSet->setPropertyValue("DisplayIsSynchron", css::uno::Any(true));

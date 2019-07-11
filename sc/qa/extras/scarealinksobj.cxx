@@ -9,6 +9,7 @@
 
 #include <test/calc_unoapi_test.hxx>
 #include <test/sheet/xarealinks.hxx>
+#include <test/container/xenumerationaccess.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/sheet/XAreaLinks.hpp>
@@ -22,7 +23,8 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-class ScAreaLinksObj : public CalcUnoApiTest, public apitest::XAreaLinks
+class ScAreaLinksObj : public CalcUnoApiTest, public apitest::XAreaLinks,
+                                              public apitest::XEnumerationAccess
 {
 public:
     ScAreaLinksObj();
@@ -36,6 +38,9 @@ public:
     // XAreaLinks
     CPPUNIT_TEST(testInsertAtPosition);
     CPPUNIT_TEST(testRemoveByIndex);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     CPPUNIT_TEST_SUITE_END();
 
@@ -52,7 +57,6 @@ ScAreaLinksObj::ScAreaLinksObj()
 uno::Reference< uno::XInterface > ScAreaLinksObj::init()
 {
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, uno::UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference< beans::XPropertySet > xPropSet(xDoc, uno::UNO_QUERY_THROW);
     uno::Reference< sheet::XAreaLinks > xLinks(xPropSet->getPropertyValue("AreaLinks"), uno::UNO_QUERY_THROW);

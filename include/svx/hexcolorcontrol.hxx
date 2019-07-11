@@ -22,30 +22,11 @@
 
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/awt/XWindow.hpp>
-#include <vcl/dialog.hxx>
-#include <vcl/edit.hxx>
-#include <vcl/svapp.hxx>
-#include <vcl/builderfactory.hxx>
 #include <vcl/weld.hxx>
 #include <sot/exchange.hxx>
 #include <sax/tools/converter.hxx>
 #include <svx/svxdllapi.h>
 #include <tools/color.hxx>
-
-class SVX_DLLPUBLIC HexColorControl : public Edit
-{
-public:
-    HexColorControl( vcl::Window* pParent, WinBits nStyle );
-
-    virtual bool PreNotify( NotifyEvent& rNEvt ) override;
-    virtual void Paste() override;
-
-    void SetColor( ::Color nColor );
-    ::Color GetColor();
-
-private:
-    static bool ImplProcessKeyInput( const KeyEvent& rKEv );
-};
 
 namespace weld {
 
@@ -53,12 +34,17 @@ class SVX_DLLPUBLIC HexColorControl
 {
 private:
     std::unique_ptr<weld::Entry> m_xEntry;
+    Link<weld::Entry&, void> m_aModifyHdl;
+    ImplSVEvent* m_nAsyncModifyEvent;
 
-    DECL_LINK(ImplProcessInputHdl, OUString&, bool);
+    DECL_STATIC_LINK(HexColorControl, ImplProcessInputHdl, OUString&, bool);
+    DECL_LINK(ImplProcessModifyHdl, weld::Entry&, void);
+    DECL_LINK(OnAsyncModifyHdl, void*, void);
 public:
-    HexColorControl(weld::Entry* pEdit);
+    HexColorControl(std::unique_ptr<weld::Entry> pEdit);
+    ~HexColorControl();
 
-    void connect_changed(const Link<Entry&, void>& rLink) { m_xEntry->connect_changed(rLink); }
+    void connect_changed(const Link<weld::Entry&, void>& rLink) { m_aModifyHdl = rLink; }
 
     void SetColor( ::Color nColor );
     ::Color GetColor();

@@ -26,7 +26,7 @@ $(eval $(call gb_Module_add_targets,sw,\
 	Library_msword \
 	Library_sw \
 	Library_swd \
-	$(call gb_Helper_optional,DESKTOP,Library_swui) \
+	Library_swui \
 	UIConfig_sglobal \
 	UIConfig_sweb \
 	UIConfig_swform \
@@ -35,7 +35,6 @@ $(eval $(call gb_Module_add_targets,sw,\
 	UIConfig_swxform \
 ))
 
-ifneq ($(OS),IOS)
 $(eval $(call gb_Module_add_l10n_targets,sw,\
     AllLangMoTarget_sw \
 ))
@@ -48,6 +47,7 @@ $(eval $(call gb_Module_add_targets,sw,\
 
 endif
 
+ifneq ($(OS),iOS)
 $(eval $(call gb_Module_add_check_targets,sw,\
     CppunitTest_sw_uibase_unit \
 ))
@@ -58,6 +58,7 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_docbookexport \
     CppunitTest_sw_fodfexport \
     CppunitTest_sw_htmlexport \
+    CppunitTest_sw_xhtmlexport \
     CppunitTest_sw_htmlimport \
     CppunitTest_sw_macros_test \
     CppunitTest_sw_ooxmlexport \
@@ -72,6 +73,7 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_ooxmlexport10 \
     CppunitTest_sw_ooxmlexport11 \
     CppunitTest_sw_ooxmlexport12 \
+    CppunitTest_sw_ooxmlexport13 \
     CppunitTest_sw_ooxmlfieldexport \
     CppunitTest_sw_ooxmllinks \
     CppunitTest_sw_ooxmlw14export \
@@ -80,6 +82,7 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_ooxmlimport2 \
     CppunitTest_sw_ww8export \
     CppunitTest_sw_ww8export2 \
+    CppunitTest_sw_ww8export3 \
     CppunitTest_sw_ww8import \
     CppunitTest_sw_rtfexport \
     CppunitTest_sw_rtfexport2 \
@@ -94,9 +97,10 @@ $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_globalfilter \
     CppunitTest_sw_accessible_relation_set \
     CppunitTest_sw_apitests \
+    CppunitTest_sw_unowriter \
 ))
 
-ifneq ($(ENABLE_HEADLESS),TRUE)
+ifneq ($(DISABLE_GUI),TRUE)
 ifeq ($(OS),LINUX)
 $(eval $(call gb_Module_add_slowcheck_targets,sw,\
     CppunitTest_sw_tiledrendering \
@@ -134,6 +138,14 @@ $(eval $(call gb_Module_add_screenshot_targets,sw,\
 
 $(eval $(call gb_Module_add_uicheck_targets,sw,\
 	UITest_writer_tests \
+	UITest_writer_tests2 \
+	UITest_writer_tests3 \
+	UITest_writer_tests4 \
+	UITest_writer_tests5 \
+	UITest_table \
+	UITest_findReplace \
+	UITest_chapterNumbering \
+	UITest_librelogo \
 ))
 endif
 

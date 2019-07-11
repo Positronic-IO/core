@@ -34,6 +34,7 @@
 #include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 namespace chart
 {
@@ -55,20 +56,18 @@ SelectorListBox::SelectorListBox( vcl::Window* pParent, WinBits nStyle )
 {
 }
 
-void lcl_addObjectsToList( const ObjectHierarchy& rHierarchy, const  ObjectIdentifier & rParent, std::vector< ListBoxEntryData >& rEntries
+static void lcl_addObjectsToList( const ObjectHierarchy& rHierarchy, const  ObjectIdentifier & rParent, std::vector< ListBoxEntryData >& rEntries
                           , const sal_Int32 nHierarchyDepth, const Reference< chart2::XChartDocument >& xChartDoc )
 {
     ObjectHierarchy::tChildContainer aChildren( rHierarchy.getChildren(rParent) );
     for (auto const& child : aChildren)
     {
-        ObjectIdentifier aOID = child;
-        OUString aCID = aOID.getObjectCID();
         ListBoxEntryData aEntry;
-        aEntry.OID = aOID;
-        aEntry.UIName += ObjectNameProvider::getNameForCID( aCID, xChartDoc );
+        aEntry.OID = child;
+        aEntry.UIName = ObjectNameProvider::getNameForCID( child.getObjectCID(), xChartDoc );
         aEntry.nHierarchyDepth = nHierarchyDepth;
         rEntries.push_back(aEntry);
-        lcl_addObjectsToList( rHierarchy, aOID, rEntries, nHierarchyDepth+1, xChartDoc );
+        lcl_addObjectsToList( rHierarchy, child, rEntries, nHierarchyDepth+1, xChartDoc );
     }
 }
 

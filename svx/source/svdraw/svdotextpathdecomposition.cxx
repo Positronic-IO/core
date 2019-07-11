@@ -477,7 +477,7 @@ namespace
                             const sal_Int32 nPortionIndex(pCandidate->getPortionIndex(nUsedTextLength, nNextGlyphLen));
                             ::std::vector< double > aNewDXArray;
 
-                            if(nNextGlyphLen > 1 && pCandidate->getDoubleDXArray().size())
+                            if(nNextGlyphLen > 1 && !pCandidate->getDoubleDXArray().empty())
                             {
                                 // copy DXArray for portion
                                 aNewDXArray.insert(
@@ -573,12 +573,12 @@ namespace
             basegfx::B2DPolyPolygon aB2DPolyPolygon = *aPolygon;
             aB2DPolyPolygon.transform(rTransform);
 
-            for(sal_uInt32 a(0); a < aB2DPolyPolygon.count(); a++)
+            for(auto const& rPolygon : aB2DPolyPolygon)
             {
                 // create one primitive per polygon
                 drawinglayer::primitive2d::PolygonStrokePrimitive2D* pNew =
                     new drawinglayer::primitive2d::PolygonStrokePrimitive2D(
-                        aB2DPolyPolygon.getB2DPolygon(a), rLineAttribute, rStrokeAttribute);
+                        rPolygon, rLineAttribute, rStrokeAttribute);
                 rTarget.push_back(pNew);
             }
         }

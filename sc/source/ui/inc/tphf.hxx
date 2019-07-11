@@ -37,9 +37,7 @@ public:
     void            SetStyleDlg ( ScStyleDlg* pDlg ) { pStyleDlg = pDlg; }
 
 protected:
-                    ScHFPage( vcl::Window* pParent,
-                              const SfxItemSet& rSet,
-                              sal_uInt16 nSetId );
+    ScHFPage(TabPageParent pParent, const SfxItemSet& rSet, sal_uInt16 nSetId);
 
     virtual void    ActivatePage() override;
     virtual void    DeactivatePage() override;
@@ -47,15 +45,15 @@ protected:
     virtual DeactivateRC   DeactivatePage( SfxItemSet* pSet ) override;
 
 private:
-    VclPtr<PushButton>   m_pBtnEdit;
     SfxItemSet           aDataSet;
     OUString             aStrPageStyle;
     SvxPageUsage         nPageUsage;
-    VclPtr<ScStyleDlg>   pStyleDlg;
+    ScStyleDlg*          pStyleDlg;
+    std::unique_ptr<weld::Button> m_xBtnEdit;
 
-    DECL_LINK( BtnHdl, Button*, void );
+    DECL_LINK(BtnHdl, weld::Button&, void);
     DECL_LINK( HFEditHdl, void*, void );
-    DECL_LINK( TurnOnHdl, Button*, void );
+    DECL_LINK(TurnOnHdl, weld::ToggleButton&, void);
 };
 
 class ScHeaderPage : public ScHFPage
@@ -66,7 +64,7 @@ public:
     static const sal_uInt16*      GetRanges();
 
 private:
-    ScHeaderPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ScHeaderPage(TabPageParent pParent, const SfxItemSet& rSet);
 };
 
 class ScFooterPage : public ScHFPage
@@ -77,7 +75,7 @@ public:
     static const sal_uInt16*      GetRanges();
 
 private:
-    ScFooterPage( vcl::Window* pParent, const SfxItemSet& rSet );
+    ScFooterPage(TabPageParent pParent, const SfxItemSet& rSet);
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_TPHF_HXX

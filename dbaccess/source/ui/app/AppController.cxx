@@ -67,10 +67,10 @@
 
 #include <svl/urihelper.hxx>
 #include <svl/filenotation.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/transfer.hxx>
 #include <svtools/cliplistener.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <svtools/insdlg.hxx>
 
 #include <comphelper/sequence.hxx>
@@ -571,7 +571,7 @@ FeatureState OApplicationController::GetState(sal_uInt16 _nId) const
                 break;
             case ID_BROWSER_CUT:
                 aReturn.bEnabled = !isDataSourceReadOnly() && getContainer()->getSelectionCount() >= 1;
-                aReturn.bEnabled = aReturn.bEnabled && ( !(ID_BROWSER_CUT == _nId && getContainer()->getElementType() == E_TABLE) || getContainer()->isCutAllowed() );
+                aReturn.bEnabled = aReturn.bEnabled && (getContainer()->getElementType() != E_TABLE || getContainer()->isCutAllowed());
                 break;
             case ID_BROWSER_PASTE:
                 switch( getContainer()->getElementType() )
@@ -1074,12 +1074,7 @@ void OApplicationController::Execute(sal_uInt16 _nId, const Sequence< PropertyVa
                     if ( xProv.is() )
                     {
                         URL aURL;
-                        switch(_nId)
-                        {
-                            case SID_OPENDOC:
-                                aURL.Complete = ".uno:Open";
-                                break;
-                        }
+                        aURL.Complete = ".uno:Open";
 
                         if ( m_xUrlTransformer.is() )
                             m_xUrlTransformer->parseStrict( aURL );

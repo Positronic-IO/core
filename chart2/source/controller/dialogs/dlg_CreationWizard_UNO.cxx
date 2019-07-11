@@ -26,7 +26,6 @@
 #include <toolkit/awt/vclxwindow.hxx>
 #include <cppuhelper/typeprovider.hxx>
 #include <cppuhelper/supportsservice.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <com/sun/star/awt/Point.hpp>
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -40,9 +39,7 @@ using namespace ::com::sun::star;
 
 CreationWizardUnoDlg::CreationWizardUnoDlg( const uno::Reference< uno::XComponentContext >& xContext )
                     : OComponentHelper( m_aMutex )
-                    , m_xChartModel( nullptr )
                     , m_xCC( xContext )
-                    , m_xParentWindow( nullptr )
                     , m_pDialog( nullptr )
                     , m_bUnlockControllersOnExecute(false)
 {
@@ -116,23 +113,15 @@ uno::Any SAL_CALL CreationWizardUnoDlg::queryAggregation( uno::Type const & rTyp
 
 uno::Sequence< uno::Type > CreationWizardUnoDlg::getTypes()
 {
-    static uno::Sequence< uno::Type > aTypeList;
-
-    ::osl::MutexGuard aGuard( ::osl::Mutex::getGlobalMutex() );
-    if( !aTypeList.getLength() )
-    {
-        std::vector< uno::Type > aTypes;
-        aTypes.push_back( cppu::UnoType<lang::XComponent>::get() );
-        aTypes.push_back( cppu::UnoType<lang::XTypeProvider>::get() );
-        aTypes.push_back( cppu::UnoType<uno::XAggregation>::get() );
-        aTypes.push_back( cppu::UnoType<uno::XWeak>::get() );
-        aTypes.push_back( cppu::UnoType<lang::XServiceInfo>::get() );
-        aTypes.push_back( cppu::UnoType<lang::XInitialization>::get() );
-        aTypes.push_back( cppu::UnoType<frame::XTerminateListener>::get() );
-        aTypes.push_back( cppu::UnoType<ui::dialogs::XExecutableDialog>::get() );
-        aTypes.push_back( cppu::UnoType<beans::XPropertySet>::get() );
-        aTypeList = comphelper::containerToSequence( aTypes );
-    }
+    static uno::Sequence<uno::Type> aTypeList{ cppu::UnoType<lang::XComponent>::get(),
+                                               cppu::UnoType<lang::XTypeProvider>::get(),
+                                               cppu::UnoType<uno::XAggregation>::get(),
+                                               cppu::UnoType<uno::XWeak>::get(),
+                                               cppu::UnoType<lang::XServiceInfo>::get(),
+                                               cppu::UnoType<lang::XInitialization>::get(),
+                                               cppu::UnoType<frame::XTerminateListener>::get(),
+                                               cppu::UnoType<ui::dialogs::XExecutableDialog>::get(),
+                                               cppu::UnoType<beans::XPropertySet>::get() };
 
     return aTypeList;
 }

@@ -29,6 +29,7 @@
 #include <com/sun/star/rdf/XDocumentRepository.hpp>
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <map>
 #include <iterator>
@@ -107,10 +108,10 @@ public:
 /** store parsed RDFa attributes */
 struct ParsedRDFaAttributes
 {
-    OUString m_About;
-    ::std::vector< OUString > m_Properties;
-    OUString m_Content;
-    OUString m_Datatype;
+    OUString const m_About;
+    ::std::vector< OUString > const m_Properties;
+    OUString const m_Content;
+    OUString const m_Datatype;
 
     ParsedRDFaAttributes(
             OUString const & i_rAbout,
@@ -137,7 +138,7 @@ struct RDFaEntry
     { }
 };
 
-static inline bool isWS(const sal_Unicode i_Char)
+static bool isWS(const sal_Unicode i_Char)
 {
     return ('\t' == i_Char) || ('\n' == i_Char) || ('\r' == i_Char)
         || (' ' == i_Char);

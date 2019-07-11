@@ -19,10 +19,11 @@
 
 
 #include "sdrmediawindow.hxx"
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 
 #include <sdr/contact/viewobjectcontactofsdrmediaobj.hxx>
 #include <vcl/window.hxx>
+#include <vcl/commandevent.hxx>
 
 namespace sdr { namespace contact {
 

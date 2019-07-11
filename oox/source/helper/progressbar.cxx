@@ -22,6 +22,8 @@
 #include <com/sun/star/task/XStatusIndicator.hpp>
 #include <oox/helper/helper.hxx>
 
+#include <sal/log.hxx>
+
 namespace oox {
 
 using namespace ::com::sun::star::task;
@@ -83,8 +85,8 @@ public:
 
 private:
     IProgressBar&       mrParentProgress;
-    double              mfStartPos;
-    double              mfLength;
+    double const        mfStartPos;
+    double const        mfLength;
     double              mfPosition;
     double              mfFreeStart;
 };

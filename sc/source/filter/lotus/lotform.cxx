@@ -29,6 +29,7 @@
 
 #include <math.h>
 #include <comphelper/string.hxx>
+#include <sal/log.hxx>
 #include <memory>
 
 static const sal_Char*      GetAddInName( const sal_uInt8 nIndex );
@@ -218,8 +219,7 @@ void LotusToSc::DoFunc( DefTokenId eOc, sal_uInt8 nCnt, const sal_Char* pExtStri
 
             for( nLauf = nLast - 1 ; nLauf >= 0 ; nLauf-- )
             {
-                if( nLauf != -1 ) // lists the parameter to be excluded
-                    aPool << ocSep << eParam[ nLauf ];
+                aPool << ocSep << eParam[nLauf];
             }
         }
     }
@@ -287,7 +287,7 @@ void LotusToSc::LotusRelToScRel( sal_uInt16 nCol, sal_uInt16 nRow, ScSingleRefDa
                     nRow &= 0x1FFF;
                 break;
             default:
-                SAL_WARN( "sc.filter", "*LotusToSc::LotusRelToScRel(): unhandled case?" );
+                SAL_WARN( "sc.filter", "*LotusToSc::LotusRelToScRel(): unhandled case? " << m_rContext.eTyp );
         }
     }
     else
@@ -307,7 +307,7 @@ void LotusToSc::LotusRelToScRel( sal_uInt16 nCol, sal_uInt16 nRow, ScSingleRefDa
                 nRow &= 0x3FFF;
                 break;
             default:
-                SAL_WARN( "sc.filter", "*LotusToSc::LotusRelToScRel(): unhandled case?" );
+                SAL_WARN( "sc.filter", "*LotusToSc::LotusRelToScRel(): unhandled case? " << m_rContext.eTyp );
         }
     }
 
@@ -383,7 +383,7 @@ LotusToSc::LotusToSc(LotusContext &rContext, SvStream &rStream, svl::SharedStrin
 typedef FUNC_TYPE ( FuncType1 ) ( sal_uInt8 );
 typedef DefTokenId ( FuncType2 ) ( sal_uInt8 );
 
-void LotusToSc::Convert( const ScTokenArray*& rpErg, sal_Int32& rRest )
+void LotusToSc::Convert( std::unique_ptr<ScTokenArray>& rpErg, sal_Int32& rRest )
 {
     sal_uInt8               nOc;
     sal_uInt8               nCnt;
@@ -437,7 +437,7 @@ void LotusToSc::Convert( const ScTokenArray*& rpErg, sal_Int32& rRest )
 
         if( nBytesLeft < 0 )
         {
-            rpErg = aPool[ aStack.Get() ];
+            rpErg = aPool.GetTokenArray( aStack.Get());
             return;
         }
 
@@ -638,7 +638,7 @@ void LotusToSc::Convert( const ScTokenArray*& rpErg, sal_Int32& rRest )
                     else aStack << aPool.Store( ScfTools::ReadLongDouble( aIn ) );
                     break;
             case FT_Snum:
-                    if ( bWK123 )
+                if ( bWK123 )
                 {
                          sal_uInt32   nValue;
 
@@ -653,12 +653,12 @@ void LotusToSc::Convert( const ScTokenArray*& rpErg, sal_Int32& rRest )
                         aStack << aPool.Store( SnumToDouble( nVal ) );
                 }
                 break;
-                default:
+            default:
                     SAL_WARN( "sc.filter", "*LotusToSc::Convert(): unknown enum!" );
         }
     }
 
-    rpErg = aPool[ aStack.Get() ];
+    rpErg = aPool.GetTokenArray( aStack.Get());
 
     SAL_WARN_IF( nBytesLeft < 0, "sc.filter", "*LotusToSc::Convert(): processed too much!");
     SAL_WARN_IF( nBytesLeft > 0, "sc.filter", "*LotusToSc::Convert(): what happens with the rest?" );

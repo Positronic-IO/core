@@ -20,25 +20,21 @@
 #ifndef INCLUDED_SD_INC_DRAWDOC_HXX
 #define INCLUDED_SD_INC_DRAWDOC_HXX
 
-#include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/text/WritingMode.hpp>
-#include <vcl/print.hxx>
-#include <vcl/idle.hxx>
-#include <svx/fmmodel.hxx>
-#include "pres.hxx"
-#include <svx/pageitem.hxx>
-#include <unotools/charclass.hxx>
-#include <sot/storage.hxx>
 #include <svl/style.hxx>
-#include <com/sun/star/xml/dom/XNode.hpp>
-
-#include <svx/svdundo.hxx>
+#include <svx/fmmodel.hxx>
+#include <vcl/prntypes.hxx>
+#include <xmloff/autolayout.hxx>
 
 #include <vector>
 #include <memory>
 
 #include "sddllapi.h"
-#include "sdpage.hxx"
+#include "pres.hxx"
+
+namespace com { namespace sun { namespace star { namespace xml { namespace dom { class XNode; } } } } }
+namespace com { namespace sun { namespace star { namespace uno { class XInterface; } } } }
+namespace vcl { class Font; }
 
 namespace com
 {
@@ -54,11 +50,6 @@ namespace com
     }
 }
 
-namespace sd
-{
-    class FrameView;
-}
-
 class SdOutliner;
 class Timer;
 class SfxObjectShell;
@@ -71,13 +62,21 @@ class SfxMedium;
 class SvxSearchItem;
 class EditStatus;
 class Point;
-namespace vcl { class Window; }
 class SdTransferable;
 struct SpellCallbackInfo;
-class SdDrawDocument;
-class SdCustomShow;
 class SdCustomShowList;
 class SdUndoGroup;
+class SdrObject;
+class CharClass;
+class Idle;
+class ImageMap;
+class Outliner;
+class SdrModel;
+class SdrOutliner;
+class SdrPage;
+class SdrTextObj;
+class SfxItemPool;
+class Size;
 
 namespace sd
 {
@@ -144,8 +143,10 @@ private:
     std::unique_ptr<SdOutliner>
                         mpInternalOutliner;  ///< internal outliner for creation of text objects
     std::unique_ptr<Timer> mpWorkStartupTimer;
-    Idle*               mpOnlineSpellingIdle;
-    sd::ShapeList*      mpOnlineSpellingList;
+    std::unique_ptr<Idle>
+                        mpOnlineSpellingIdle;
+    std::unique_ptr<sd::ShapeList>
+                        mpOnlineSpellingList;
     std::unique_ptr<SvxSearchItem>
                         mpOnlineSearchItem;
     std::vector<std::unique_ptr<sd::FrameView>>
@@ -174,7 +175,7 @@ private:
     SvxNumType          mePageNumType;
     ::sd::DrawDocShellRef   mxAllocedDocShRef;   // => AllocModel()
     bool                mbAllocDocSh;       // => AllocModel()
-    DocumentType        meDocType;
+    DocumentType const  meDocType;
     std::unique_ptr<CharClass>
                         mpCharClass;
 
@@ -195,7 +196,12 @@ private:
 
     std::vector<css::uno::Reference< css::xml::dom::XNode> > maPresObjectInfo;
 
-    bool                mbUseEmbedFonts;
+    bool mbEmbedFonts : 1;
+    bool mbEmbedUsedFontsOnly : 1;
+    bool mbEmbedFontScriptLatin : 1;
+    bool mbEmbedFontScriptAsian : 1;
+    bool mbEmbedFontScriptComplex : 1;
+
 protected:
 
     SAL_DLLPRIVATE virtual css::uno::Reference< css::uno::XInterface > createUnoModel() override;
@@ -477,8 +483,6 @@ public:
 
     SAL_DLLPRIVATE CharClass*          GetCharClass() const { return mpCharClass.get(); }
 
-    SAL_DLLPRIVATE void                RestoreLayerNames();
-
     SAL_DLLPRIVATE void                UpdateAllLinks();
 
     SAL_DLLPRIVATE void                CheckMasterPages();
@@ -617,8 +621,17 @@ public:
 
     SAL_DLLPRIVATE sal_uInt16 GetAnnotationAuthorIndex( const OUString& rAuthor );
 
-    SAL_DLLPRIVATE bool IsUsingEmbededFonts() { return mbUseEmbedFonts; }
-    SAL_DLLPRIVATE void SetIsUsingEmbededFonts( bool bUse ) { mbUseEmbedFonts = bUse; }
+    SAL_DLLPRIVATE bool IsEmbedFonts() { return mbEmbedFonts; }
+    SAL_DLLPRIVATE bool IsEmbedUsedFontsOnly() { return mbEmbedUsedFontsOnly; }
+    SAL_DLLPRIVATE bool IsEmbedFontScriptLatin() { return mbEmbedFontScriptLatin; }
+    SAL_DLLPRIVATE bool IsEmbedFontScriptAsian() { return mbEmbedFontScriptAsian; }
+    SAL_DLLPRIVATE bool IsEmbedFontScriptComplex() { return mbEmbedFontScriptComplex; }
+
+    SAL_DLLPRIVATE void SetEmbedFonts(bool bUse) { mbEmbedFonts = bUse; }
+    SAL_DLLPRIVATE void SetEmbedUsedFontsOnly(bool bUse) { mbEmbedUsedFontsOnly = bUse; }
+    SAL_DLLPRIVATE void SetEmbedFontScriptLatin(bool bUse) { mbEmbedFontScriptLatin = bUse; }
+    SAL_DLLPRIVATE void SetEmbedFontScriptAsian(bool bUse) { mbEmbedFontScriptAsian = bUse; }
+    SAL_DLLPRIVATE void SetEmbedFontScriptComplex(bool bUse) { mbEmbedFontScriptComplex = bUse; }
 
     void dumpAsXml(struct _xmlTextWriter* pWriter) const override;
 

@@ -23,6 +23,8 @@
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <cppuhelper/supportsservice.hxx>
 
+namespace com { namespace sun { namespace star { namespace uno { class XComponentContext; } } } }
+
 using namespace ::com::sun::star;
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::beans::Property;

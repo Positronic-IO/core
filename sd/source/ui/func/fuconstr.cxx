@@ -40,6 +40,7 @@
 #include <sdresid.hxx>
 #include <stlpool.hxx>
 #include <svx/globl3d.hxx>
+#include <glob.hxx>
 
 using namespace com::sun::star;
 
@@ -355,13 +356,13 @@ void FuConstruct::SetStyleSheet( SfxItemSet& rAttr, SdrObject* pObj,
             if (pSheet)
             {
                 pObj->SetStyleSheet(pSheet, false);
-                SfxItemSet aAttr(*mpView->GetDefaultAttr().Clone());
+                SfxItemSet aAttr(mpView->GetDefaultAttr());
                 aAttr.Put(pSheet->GetItemSet().Get(XATTR_FILLSTYLE));
                 pObj->SetMergedItemSet(aAttr);
             }
             else
             {
-                SfxItemSet aAttr(*mpView->GetDefaultAttr().Clone());
+                SfxItemSet aAttr(mpView->GetDefaultAttr());
                 rAttr.Put(XFillStyleItem(drawing::FillStyle_NONE));
                 pObj->SetMergedItemSet(aAttr);
             }

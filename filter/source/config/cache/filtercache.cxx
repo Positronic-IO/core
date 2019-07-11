@@ -48,6 +48,7 @@
 #include <unotools/configpaths.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/uri.hxx>
+#include <sal/log.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/wldcrd.hxx>
 #include <i18nlangtag/languagetag.hxx>
@@ -247,7 +248,7 @@ bool FilterCache::isFillState(FilterCache::EFillState eState) const
 }
 
 
-OUStringList FilterCache::getMatchingItemsByProps(      EItemType  eType  ,
+std::vector<OUString> FilterCache::getMatchingItemsByProps(      EItemType  eType  ,
                                                   const CacheItem& lIProps,
                                                   const CacheItem& lEProps) const
 {
@@ -259,7 +260,7 @@ OUStringList FilterCache::getMatchingItemsByProps(      EItemType  eType  ,
     // => rList will be valid everytimes next line is reached.
     const CacheItemList& rList = impl_getItemList(eType);
 
-    OUStringList lKeys;
+    std::vector<OUString> lKeys;
 
     // search items, which provides all needed properties of set "lIProps"
     // but not of set "lEProps"!
@@ -294,7 +295,7 @@ bool FilterCache::hasItems(EItemType eType) const
 }
 
 
-OUStringList FilterCache::getItemNames(EItemType eType) const
+std::vector<OUString> FilterCache::getItemNames(EItemType eType) const
 {
     // SAFE ->
     ::osl::ResettableMutexGuard aLock(m_aLock);
@@ -304,7 +305,7 @@ OUStringList FilterCache::getItemNames(EItemType eType) const
     // => rList will be valid everytimes next line is reached.
     const CacheItemList& rList = impl_getItemList(eType);
 
-    OUStringList lKeys;
+    std::vector<OUString> lKeys;
     for (auto const& elem : rList)
     {
         lKeys.push_back(elem.first);
@@ -568,7 +569,7 @@ void FilterCache::flush()
     // renew all dependencies and optimizations
     impl_validateAndOptimize();
 
-    if (m_lChangedTypes.size() > 0)
+    if (!m_lChangedTypes.empty())
     {
         css::uno::Reference< css::container::XNameAccess > xConfig(impl_openConfig(E_PROVIDER_TYPES), css::uno::UNO_QUERY_THROW);
         css::uno::Reference< css::container::XNameAccess > xSet   ;
@@ -580,7 +581,7 @@ void FilterCache::flush()
         xFlush->commitChanges();
     }
 
-    if (m_lChangedFilters.size() > 0)
+    if (!m_lChangedFilters.empty())
     {
         css::uno::Reference< css::container::XNameAccess > xConfig(impl_openConfig(E_PROVIDER_FILTERS), css::uno::UNO_QUERY_THROW);
         css::uno::Reference< css::container::XNameAccess > xSet   ;
@@ -599,7 +600,7 @@ void FilterCache::flush()
 void FilterCache::impl_flushByList(const css::uno::Reference< css::container::XNameAccess >& xSet  ,
                                          EItemType                                           eType ,
                                    const CacheItemList&                                      rCache,
-                                   const OUStringList&                                       lItems)
+                                   const std::vector<OUString>&                              lItems)
 {
     css::uno::Reference< css::container::XNameContainer >   xAddRemoveSet(xSet, css::uno::UNO_QUERY);
     css::uno::Reference< css::lang::XSingleServiceFactory > xFactory(xSet, css::uno::UNO_QUERY);
@@ -678,7 +679,7 @@ void FilterCache::detectFlatForURL(const css::util::URL& aURL      ,
         WildCard aPatternCheck(pattern.first);
         if (aPatternCheck.Matches(aURL.Main))
         {
-            const OUStringList& rTypesForPattern = pattern.second;
+            const std::vector<OUString>& rTypesForPattern = pattern.second;
 
             FlatDetectionInfo aInfo;
             aInfo.sType = *(rTypesForPattern.begin());
@@ -697,7 +698,7 @@ void FilterCache::detectFlatForURL(const css::util::URL& aURL      ,
     CacheItemRegistration::const_iterator pExtReg = m_lExtensions2Types.find(sExtension);
     if (pExtReg != m_lExtensions2Types.end())
     {
-        const OUStringList& rTypesForExtension = pExtReg->second;
+        const std::vector<OUString>& rTypesForExtension = pExtReg->second;
         for (auto const& elem : rTypesForExtension)
         {
             FlatDetectionInfo aInfo;
@@ -913,7 +914,7 @@ css::uno::Reference< css::uno::XInterface > FilterCache::impl_createConfigAccess
                 xCfg = xConfigProvider->createInstanceWithArguments(SERVICE_CONFIGURATIONUPDATEACCESS,
                         comphelper::containerToSequence(lParams));
 
-            // If configuration could not be opened ... but factory method does not throwed an exception
+            // If configuration could not be opened... but factory method did not throw an exception
             // trigger throwing of our own CorruptedFilterConfigurationException.
             // Let message empty. The normal exception text show enough information to the user.
             if (! xCfg.is())
@@ -1000,13 +1001,13 @@ void FilterCache::impl_validateAndOptimize()
         aType[PROPNAME_NAME] >>= sInternalTypeNameCheck;
         if (sInternalTypeNameCheck != sType)
         {
-            sLog.append("Warning\t:\t" "The type \"" + sType + "\" does support the property \"Name\" correctly.\n");
+            sLog.append("Warning\t:\t" "The type \"").append(sType).append("\" does support the property \"Name\" correctly.\n");
             ++nWarnings;
         }
 
         if (!ce && !cu)
         {
-            sLog.append("Warning\t:\t" "The type \"" + sType + "\" does not contain any URL pattern nor any extensions.\n");
+            sLog.append("Warning\t:\t" "The type \"").append(sType).append("\" does not contain any URL pattern nor any extensions.\n");
             ++nWarnings;
         }
 #endif
@@ -1029,7 +1030,7 @@ void FilterCache::impl_validateAndOptimize()
             // does not depend from any upper/lower case problems ...
             OUString sNormalizedExtension = pExtensions[e].toAsciiLowerCase();
 
-            OUStringList& lTypesForExtension = m_lExtensions2Types[sNormalizedExtension];
+            std::vector<OUString>& lTypesForExtension = m_lExtensions2Types[sNormalizedExtension];
             if (::std::find(lTypesForExtension.begin(), lTypesForExtension.end(), sType) != lTypesForExtension.end())
                 continue;
 
@@ -1042,7 +1043,7 @@ void FilterCache::impl_validateAndOptimize()
         const OUString* pURLPattern = lURLPattern.getConstArray();
         for (sal_Int32 u=0; u<cu; ++u)
         {
-            OUStringList& lTypesForURLPattern = m_lURLPattern2Types[pURLPattern[u]];
+            std::vector<OUString>& lTypesForURLPattern = m_lURLPattern2Types[pURLPattern[u]];
             if (::std::find(lTypesForURLPattern.begin(), lTypesForURLPattern.end(), sType) != lTypesForURLPattern.end())
                 continue;
 
@@ -1082,7 +1083,7 @@ void FilterCache::impl_validateAndOptimize()
                 (!bReferencedByHandler)
                )
             {
-                sLog.append("Warning\t:\t" "The type \"" + sType + "\" is not used by any filter, loader or content handler.\n");
+                sLog.append("Warning\t:\t" "The type \"").append(sType).append("\" is not used by any filter, loader or content handler.\n");
                 ++nWarnings;
             }
         }
@@ -1103,7 +1104,7 @@ void FilterCache::impl_validateAndOptimize()
                     sLog.append("warning\t:\t");
                 }
 
-                sLog.append("The type \"" + sType + "\" points to an invalid filter \"" + sPrefFilter + "\".\n");
+                sLog.append("The type \"").append(sType).append("\" points to an invalid filter \"").append(sPrefFilter).append("\".\n");
                 continue;
             }
 
@@ -1112,10 +1113,10 @@ void FilterCache::impl_validateAndOptimize()
             aPrefFilter[PROPNAME_TYPE] >>= sFilterTypeReg;
             if (sFilterTypeReg != sType)
             {
-                sLog.append("error\t:\t" "The preferred filter \""
-                    + sPrefFilter + "\" of type \"" + sType +
-                    "\" is registered for another type \"" + sFilterTypeReg +
-                    "\".\n");
+                sLog.append("error\t:\t" "The preferred filter \"")
+                    .append(sPrefFilter).append("\" of type \"").append(sType)
+                    .append("\" is registered for another type \"").append(sFilterTypeReg)
+                    .append("\".\n");
                 ++nErrors;
             }
 
@@ -1123,8 +1124,8 @@ void FilterCache::impl_validateAndOptimize()
             aPrefFilter[PROPNAME_FLAGS] >>= nFlags;
             if (!(static_cast<SfxFilterFlags>(nFlags) & SfxFilterFlags::IMPORT))
             {
-                sLog.append("error\t:\t" "The preferred filter \"" + sPrefFilter + "\" of type \"" +
-                            sType + "\" is not an IMPORT filter!\n");
+                sLog.append("error\t:\t" "The preferred filter \"").append(sPrefFilter).append("\" of type \"")
+                            .append(sType).append("\" is not an IMPORT filter!\n");
                 ++nErrors;
             }
 
@@ -1132,8 +1133,8 @@ void FilterCache::impl_validateAndOptimize()
             aPrefFilter[PROPNAME_NAME] >>= sInternalFilterNameCheck;
             if (sInternalFilterNameCheck !=  sPrefFilter)
             {
-                sLog.append("Warning\t:\t" "The filter \"" + sPrefFilter +
-                            "\" does support the property \"Name\" correctly.\n");
+                sLog.append("Warning\t:\t" "The filter \"").append(sPrefFilter)
+                            .append("\" does support the property \"Name\" correctly.\n");
                 ++nWarnings;
             }
         }
@@ -1159,7 +1160,7 @@ void FilterCache::impl_validateAndOptimize()
     // b) step over all well known frame loader services
     //    and remove all types from list a), which already
     //    referenced by a loader b)
-    OUStringList lTypes = getItemNames(E_TYPE);
+    std::vector<OUString> lTypes = getItemNames(E_TYPE);
     for (auto & frameLoader : m_lFrameLoaders)
     {
         // Note: of course the default loader must be ignored here.
@@ -1172,11 +1173,11 @@ void FilterCache::impl_validateAndOptimize()
 
         CacheItem&     rLoader   = frameLoader.second;
         css::uno::Any& rTypesReg = rLoader[PROPNAME_TYPES];
-        OUStringList   lTypesReg (comphelper::sequenceToContainer<OUStringList>(rTypesReg.get<css::uno::Sequence<OUString> >()));
+        std::vector<OUString>   lTypesReg (comphelper::sequenceToContainer< std::vector<OUString> >(rTypesReg.get<css::uno::Sequence<OUString> >()));
 
         for (auto const& typeReg : lTypesReg)
         {
-            OUStringList::iterator pTypeCheck = ::std::find(lTypes.begin(), lTypes.end(), typeReg);
+            auto pTypeCheck = ::std::find(lTypes.begin(), lTypes.end(), typeReg);
             if (pTypeCheck != lTypes.end())
                 lTypes.erase(pTypeCheck);
         }
@@ -1203,7 +1204,7 @@ void FilterCache::impl_validateAndOptimize()
 void FilterCache::impl_addItem2FlushList(      EItemType        eType,
                                          const OUString& sItem)
 {
-    OUStringList* pList = nullptr;
+    std::vector<OUString>* pList = nullptr;
     switch(eType)
     {
         case E_TYPE :
@@ -1225,8 +1226,8 @@ void FilterCache::impl_addItem2FlushList(      EItemType        eType,
         default : throw css::uno::RuntimeException("unsupported item type", nullptr);
     }
 
-    OUStringList::const_iterator pItem = ::std::find(pList->begin(), pList->end(), sItem);
-    if (pItem == pList->end())
+    auto pItem = ::std::find(pList->cbegin(), pList->cend(), sItem);
+    if (pItem == pList->cend())
         pList->push_back(sItem);
 }
 
@@ -1819,7 +1820,7 @@ void FilterCache::impl_saveItem(const css::uno::Reference< css::container::XName
 -----------------------------------------------*/
 css::uno::Sequence< OUString > FilterCache::impl_convertFlagField2FlagNames(SfxFilterFlags nFlags)
 {
-    OUStringList lFlagNames;
+    std::vector<OUString> lFlagNames;
 
     if (nFlags & SfxFilterFlags::STARONEFILTER    ) lFlagNames.emplace_back(FLAGNAME_3RDPARTYFILTER   );
     if (nFlags & SfxFilterFlags::ALIEN            ) lFlagNames.emplace_back(FLAGNAME_ALIEN            );
@@ -2116,12 +2117,12 @@ CacheItem FilterCache::impl_readOldItem(const css::uno::Reference< css::containe
 
     // Data
     OUString sData;
-    OUStringList    lData;
+    std::vector<OUString>    lData;
     xItem->getByName( "Data" ) >>= sData;
     lData = impl_tokenizeString(sData, ',');
     if (
         (sData.isEmpty()) ||
-        (lData.size()<1    )
+        (lData.empty()    )
        )
     {
         throw css::uno::Exception( "Can not read old item property DATA.", css::uno::Reference< css::uno::XInterface >());
@@ -2148,10 +2149,10 @@ CacheItem FilterCache::impl_readOldItem(const css::uno::Reference< css::containe
 }
 
 
-OUStringList FilterCache::impl_tokenizeString(const OUString& sData     ,
+std::vector<OUString> FilterCache::impl_tokenizeString(const OUString& sData     ,
                                                     sal_Unicode      cSeparator)
 {
-    OUStringList lData  ;
+    std::vector<OUString> lData  ;
     sal_Int32    nToken = 0;
     do
     {
@@ -2171,8 +2172,8 @@ OUString FilterCache::impl_searchFrameLoaderForType(const OUString& sType) const
     {
         const OUString& sItem = frameLoader.first;
         ::comphelper::SequenceAsHashMap lProps(frameLoader.second);
-        OUStringList                    lTypes(
-                comphelper::sequenceToContainer<OUStringList>(lProps[PROPNAME_TYPES].get<css::uno::Sequence<OUString> >()));
+        std::vector<OUString>           lTypes(
+                comphelper::sequenceToContainer< std::vector<OUString> >(lProps[PROPNAME_TYPES].get<css::uno::Sequence<OUString> >()));
 
         if (::std::find(lTypes.begin(), lTypes.end(), sType) != lTypes.end())
             return sItem;
@@ -2188,8 +2189,8 @@ OUString FilterCache::impl_searchContentHandlerForType(const OUString& sType) co
     {
         const OUString& sItem = contentHandler.first;
         ::comphelper::SequenceAsHashMap lProps(contentHandler.second);
-        OUStringList                    lTypes(
-                comphelper::sequenceToContainer<OUStringList>( lProps[PROPNAME_TYPES].get<css::uno::Sequence<OUString> >() ));
+        std::vector<OUString>           lTypes(
+                comphelper::sequenceToContainer< std::vector<OUString> >( lProps[PROPNAME_TYPES].get<css::uno::Sequence<OUString> >() ));
         if (::std::find(lTypes.begin(), lTypes.end(), sType) != lTypes.end())
             return sItem;
     }

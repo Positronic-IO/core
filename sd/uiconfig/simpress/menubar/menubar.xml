@@ -81,8 +81,12 @@
             <menu:menuitem menu:id=".uno:Cut"/>
             <menu:menuitem menu:id=".uno:Copy"/>
             <menu:menuitem menu:id=".uno:Paste"/>
-            <menu:menuitem menu:id=".uno:PasteUnformatted"/>
-            <menu:menuitem menu:id=".uno:PasteSpecial"/>
+            <menu:menu menu:id=".uno:PasteSpecialMenu">
+                <menu:menupopup>
+                    <menu:menuitem menu:id=".uno:PasteUnformatted"/>
+                    <menu:menuitem menu:id=".uno:PasteSpecial"/>
+                </menu:menupopup>
+            </menu:menu>
             <menu:menuitem menu:id=".uno:SelectAll"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id="vnd.sun.star.findbar:FocusToFindbar"/>
@@ -122,16 +126,21 @@
             <menu:menu menu:id=".uno:GridMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:GridVisible"/>
-                    <menu:menuitem menu:id=".uno:GridUse"/>
                     <menu:menuitem menu:id=".uno:GridFront"/>
+                    <menu:menuseparator/>
                     <menu:menuitem menu:id=".uno:HelplinesMove"/>
                 </menu:menupopup>
             </menu:menu>
             <menu:menu menu:id=".uno:SnapLinesMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:HelplinesVisible"/>
-                    <menu:menuitem menu:id=".uno:HelplinesUse"/>
                     <menu:menuitem menu:id=".uno:HelplinesFront"/>
+                    <menu:menuseparator/>
+                    <menu:menuitem menu:id=".uno:GridUse"/>
+                    <menu:menuitem menu:id=".uno:HelplinesUse"/>
+                    <menu:menuitem menu:id=".uno:SnapFrame"/>
+                    <menu:menuitem menu:id=".uno:SnapPoints"/>
+                    <menu:menuitem menu:id=".uno:SnapBorder"/>
                 </menu:menupopup>
             </menu:menu>
             <menu:menuseparator/>
@@ -143,7 +152,6 @@
                 </menu:menupopup>
             </menu:menu>
             <menu:menuitem menu:id=".uno:ShowAnnotations"/>
-            <menu:menuitem menu:id=".uno:ShowImeStatusWindow"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Sidebar"/>
             <menu:menuitem menu:id=".uno:ModifyPage"/>
@@ -190,7 +198,6 @@
             <menu:menu menu:id=".uno:ObjectMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:InsertMath"/>
-                    <menu:menuitem menu:id=".uno:Insert3DModel"/>
                     <menu:menuitem menu:id=".uno:InsertObject"/>
                 </menu:menupopup>
             </menu:menu>
@@ -240,7 +247,7 @@
                 </menu:menupopup>
             </menu:menu>
             <menu:menuseparator/>
-            <menu:menuitem menu:id=".uno:InsertSlideNumber"/>
+            <menu:menuitem menu:id=".uno:InsertSlideField"/>
             <menu:menu menu:id=".uno:FieldMenu">
                 <menu:menupopup>
                     <menu:menuitem menu:id=".uno:InsertDateFieldFix"/>
@@ -372,6 +379,29 @@
             <menu:menuitem menu:id=".uno:FontDialog"/>
             <menu:menuitem menu:id=".uno:ParagraphDialog"/>
             <menu:menuitem menu:id=".uno:OutlineBullet"/>
+            <menu:menu menu:id=".uno:TableMenu">
+              <menu:menupopup>
+                <menu:menuitem menu:id=".uno:SetMinimalRowHeight"/>
+                <menu:menuitem menu:id=".uno:SetOptimalRowHeight"/>
+                <menu:menuitem menu:id=".uno:DistributeRows"/>
+                <menu:menuitem menu:id=".uno:EntireRow"/>
+                <menu:menuitem menu:id=".uno:InsertRowDialog"/>
+                <menu:menuitem menu:id=".uno:DeleteRows"/>
+                <menu:menuseparator/>
+                <menu:menuitem menu:id=".uno:SetMinimalColumnWidth"/>
+                <menu:menuitem menu:id=".uno:SetOptimalColumnWidth"/>
+                <menu:menuitem menu:id=".uno:DistributeColumns"/>
+                <menu:menuitem menu:id=".uno:EntireColumn"/>
+                <menu:menuitem menu:id=".uno:InsertColumnDialog"/>
+                <menu:menuitem menu:id=".uno:DeleteColumns"/>
+                <menu:menuseparator/>
+                <menu:menuitem menu:id=".uno:MergeCells"/>
+                <menu:menuitem menu:id=".uno:SplitCell"/>
+                <menu:menuseparator/>
+                <menu:menuitem menu:id=".uno:SelectTable"/>
+                <menu:menuitem menu:id=".uno:TableDialog"/>
+              </menu:menupopup>
+            </menu:menu>
             <menu:menuseparator/>
             <menu:menu menu:id=".uno:FormatImageMenu">
               <menu:menupopup>
@@ -629,6 +659,7 @@
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:SafeMode"/>
             <menu:menuseparator/>
+            <menu:menuitem menu:id=".uno:GetInvolved"/>
             <menu:menuitem menu:id=".uno:Donation"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:ShowLicense"/>

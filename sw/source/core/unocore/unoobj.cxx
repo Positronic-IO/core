@@ -18,7 +18,6 @@
  */
 
 #include <com/sun/star/table/TableSortField.hpp>
-#include <comphelper/string.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <o3tl/any.hxx>
@@ -161,7 +160,8 @@ void SwUnoCursorHelper::SelectPam(SwPaM & rPam, const bool bExpand)
     }
 }
 
-void SwUnoCursorHelper::GetTextFromPam(SwPaM & rPam, OUString & rBuffer)
+void SwUnoCursorHelper::GetTextFromPam(SwPaM & rPam, OUString & rBuffer,
+        SwRootFrame const*const pLayout)
 {
     if (!rPam.HasMark())
     {
@@ -189,6 +189,7 @@ void SwUnoCursorHelper::GetTextFromPam(SwPaM & rPam, OUString & rBuffer)
     // #i68522#
     const bool bOldShowProgress = xWrt->m_bShowProgress;
     xWrt->m_bShowProgress = false;
+    xWrt->m_bHideDeleteRedlines = pLayout && pLayout->IsHideRedlines();
 
     if( ! aWriter.Write( xWrt ).IsError() )
     {
@@ -307,7 +308,7 @@ SwUnoCursorHelper::SetPageDesc(
         pNewDesc.reset(new SwFormatPageDesc(
                     *static_cast<const SwFormatPageDesc*>(pItem)));
     }
-    if (!pNewDesc.get())
+    if (!pNewDesc)
     {
         pNewDesc.reset(new SwFormatPageDesc());
     }
@@ -325,7 +326,7 @@ SwUnoCursorHelper::SetPageDesc(
             {
                 throw lang::IllegalArgumentException();
             }
-            pNewDesc.get()->RegisterToPageDesc( *pPageDesc );
+            pNewDesc->RegisterToPageDesc(*pPageDesc);
             bPut = true;
         }
         if(!bPut)
@@ -426,7 +427,7 @@ lcl_setDropcapCharStyle(SwPaM const & rPam, SfxItemSet & rItemSet,
     {
         pDrop.reset(new SwFormatDrop(*static_cast<const SwFormatDrop*>(pItem)));
     }
-    if (!pDrop.get())
+    if (!pDrop)
     {
         pDrop.reset(new SwFormatDrop);
     }
@@ -451,7 +452,7 @@ lcl_setRubyCharstyle(SfxItemSet & rItemSet, uno::Any const& rValue)
     {
         pRuby.reset(new SwFormatRuby(*static_cast<const SwFormatRuby*>(pItem)));
     }
-    if (!pRuby.get())
+    if (!pRuby)
     {
         pRuby.reset(new SwFormatRuby(OUString()));
     }
@@ -541,12 +542,9 @@ SwUnoCursorHelper::SetCursorPropertyValue(
             else if (FN_UNO_IS_NUMBER == rEntry.nWID)
             {
                 bool bIsNumber(false);
-                if (rValue >>= bIsNumber)
+                if ((rValue >>= bIsNumber) && !bIsNumber)
                 {
-                    if (!bIsNumber)
-                    {
-                        pTextNd->SetCountedInList( false );
-                    }
+                    pTextNd->SetCountedInList( false );
                 }
             }
             //PROPERTY_MAYBEVOID!
@@ -748,7 +746,7 @@ void SwXTextCursor::DeleteAndInsert(const OUString& rText,
                 SwUnoCursorHelper::SelectPam(*pUnoCursor, true);
                 pCurrent->Left(rText.getLength());
             }
-            pCurrent = static_cast<SwCursor*>(pCurrent->GetNext());
+            pCurrent = pCurrent->GetNext();
         } while (pCurrent != pUnoCursor);
         pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT, nullptr);
     }
@@ -1167,11 +1165,15 @@ SwXTextCursor::gotoRange(
 
         // now there are four SwPositions,
         // two of them are going to be used, but which ones?
-        *rOwnCursor.GetPoint() = (aOwnRight > rParamRight)
-            ? aOwnRight : *rOwnCursor.GetPoint() = rParamRight;
+        if (aOwnRight > rParamRight)
+            *rOwnCursor.GetPoint() = aOwnRight;
+        else
+            *rOwnCursor.GetPoint() = rParamRight;
         rOwnCursor.SetMark();
-        *rOwnCursor.GetMark() = (aOwnLeft < rParamLeft)
-            ? aOwnLeft : *rOwnCursor.GetMark() = rParamLeft;
+        if (aOwnLeft < rParamLeft)
+            *rOwnCursor.GetMark() = aOwnLeft;
+        else
+            *rOwnCursor.GetMark() = rParamLeft;
     }
     else
     {
@@ -1435,9 +1437,9 @@ SwXTextCursor::gotoNextSentence(sal_Bool Expand)
     // if at the end of the sentence (i.e. at the space after the '.')
     // advance to next word in order for GoSentence to work properly
     // next time and have isStartOfSentence return true after this call
-    if (!rUnoCursor.IsStartWord(css::i18n::WordType::ANYWORD_IGNOREWHITESPACES))
+    if (!rUnoCursor.IsStartWordWT(css::i18n::WordType::ANYWORD_IGNOREWHITESPACES))
     {
-        const bool bNextWord = rUnoCursor.GoNextWord();
+        const bool bNextWord = rUnoCursor.GoNextWordWT(i18n::WordType::ANYWORD_IGNOREWHITESPACES);
         if (bWasEOS && !bNextWord)
         {
             bRet = false;
@@ -1752,19 +1754,20 @@ uno::Any SwUnoCursorHelper::GetPropertyValue(
 void SwUnoCursorHelper::SetPropertyValue(
     SwPaM& rPaM, const SfxItemPropertySet& rPropSet,
     const OUString& rPropertyName,
-    const uno::Any& rValue)
+    const uno::Any& rValue,
+    const SetAttrMode nAttrMode)
 {
     uno::Sequence< beans::PropertyValue > aValues(1);
     aValues[0].Name = rPropertyName;
     aValues[0].Value = rValue;
-    SetPropertyValues(rPaM, rPropSet, aValues, SetAttrMode::DEFAULT);
+    SetPropertyValues(rPaM, rPropSet, aValues, nAttrMode);
 }
 
 // FN_UNO_PARA_STYLE is known to set attributes for nodes, inside
 // SwUnoCursorHelper::SetTextFormatColl, instead of extending item set.
 // We need to get them from nodes in next call to GetCursorAttr.
 // The rest could cause similar problems in theory, so we just list them here.
-inline bool propertyCausesSideEffectsInNodes(sal_uInt16 nWID)
+static bool propertyCausesSideEffectsInNodes(sal_uInt16 nWID)
 {
     return nWID == FN_UNO_PARA_STYLE ||
            nWID == FN_UNO_CHARFMT_SEQUENCE ||
@@ -1828,7 +1831,10 @@ void SwUnoCursorHelper::SetPropertyValues(
 
             // we need to get up-to-date item set from nodes
             if (i == 0 || bPreviousPropertyCausesSideEffectsInNodes)
+            {
+                aItemSet.ClearItem();
                 SwUnoCursorHelper::GetCursorAttr(rPaM, aItemSet);
+            }
 
             const uno::Any &rValue = rPropertyValues[i].Value;
             // this can set some attributes in nodes' mpAttrSet
@@ -1846,6 +1852,14 @@ void SwUnoCursorHelper::SetPropertyValues(
         throw beans::UnknownPropertyException(aUnknownExMsg, static_cast<cppu::OWeakObject *>(nullptr));
     if (!aPropertyVetoExMsg.isEmpty())
         throw beans::PropertyVetoException(aPropertyVetoExMsg, static_cast<cppu::OWeakObject *>(nullptr));
+}
+
+namespace
+{
+    bool NotInRange(sal_uInt16 nWID, sal_uInt16 nStart, sal_uInt16 nEnd)
+    {
+        return nWID < nStart || nWID > nEnd;
+    }
 }
 
 uno::Sequence< beans::PropertyState >
@@ -1889,10 +1903,8 @@ SwUnoCursorHelper::GetPropertyStates(
         }
         if (((SW_PROPERTY_STATE_CALLER_SWX_TEXT_PORTION == eCaller)  ||
              (SW_PROPERTY_STATE_CALLER_SWX_TEXT_PORTION_TOLERANT == eCaller)) &&
-            pEntry->nWID < FN_UNO_RANGE_BEGIN &&
-            pEntry->nWID > FN_UNO_RANGE_END  &&
-            pEntry->nWID < RES_CHRATR_BEGIN &&
-            pEntry->nWID > RES_TXTATR_END )
+            NotInRange(pEntry->nWID, FN_UNO_RANGE_BEGIN, FN_UNO_RANGE_END) &&
+            NotInRange(pEntry->nWID, RES_CHRATR_BEGIN, RES_TXTATR_END) )
         {
             pStates[i] = beans::PropertyState_DEFAULT_VALUE;
         }
@@ -1906,7 +1918,7 @@ SwUnoCursorHelper::GetPropertyStates(
             }
             else
             {
-                if (!pSet.get())
+                if (!pSet)
                 {
                     switch ( eCaller )
                     {

@@ -52,7 +52,9 @@
 #include <sfx2/event.hxx>
 #include <osl/mutex.hxx>
 #include <comphelper/property.hxx>
+#include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::awt;
@@ -340,7 +342,7 @@ void FmXUndoEnvironment::Inserted(SdrObject* pObj)
     }
     else if (pObj->IsGroupObject())
     {
-        SdrObjListIter aIter(*pObj->GetSubList());
+        SdrObjListIter aIter(pObj->GetSubList());
         while ( aIter.IsMore() )
             Inserted( aIter.Next() );
     }
@@ -392,16 +394,16 @@ void FmXUndoEnvironment::Inserted(FmFormObj* pObj)
     // is the control still assigned to a form
     Reference< XInterface >  xModel(pObj->GetUnoControlModel(), UNO_QUERY);
     Reference< XFormComponent >  xContent(xModel, UNO_QUERY);
-    if (xContent.is() && pObj->GetPage())
+    if (xContent.is() && pObj->getSdrPageFromSdrObject())
     {
         // if the component doesn't belong to a form, yet, find one to insert into
         if (!xContent->getParent().is())
         {
             try
             {
-                Reference< XIndexContainer > xObjectParent = pObj->GetOriginalParent();
+                const Reference< XIndexContainer >& xObjectParent = pObj->GetOriginalParent();
 
-                FmFormPage& rPage = dynamic_cast< FmFormPage& >( *pObj->GetPage() );
+                FmFormPage& rPage(dynamic_cast< FmFormPage& >( *pObj->getSdrPageFromSdrObject()));
                 Reference< XIndexAccess >  xForms( rPage.GetForms(), UNO_QUERY_THROW );
 
                 Reference< XIndexContainer > xNewParent;
@@ -454,7 +456,7 @@ void FmXUndoEnvironment::Removed(SdrObject* pObj)
     }
     else if (pObj->IsGroupObject())
     {
-        SdrObjListIter aIter(*pObj->GetSubList());
+        SdrObjListIter aIter(pObj->GetSubList());
         while ( aIter.IsMore() )
             Removed( aIter.Next() );
     }
@@ -701,7 +703,7 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
             // add their undo actions out-of-order
 
             SolarMutexGuard aSolarGuard;
-            rModel.AddUndo(new FmUndoPropertyAction(rModel, evt));
+            rModel.AddUndo(o3tl::make_unique<FmUndoPropertyAction>(rModel, evt));
         }
     }
     else

@@ -371,21 +371,17 @@ IMPL_LINK( NumFormatListBox, SelectHdl, ListBox&, rBox, void )
     aCoreSet.Put(SfxBoolItem(SID_ATTR_NUMBERFORMAT_ADD_AUTO, bUseAutomaticLanguage));
 
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    assert(pFact && "SwAbstractDialogFactory fail!");
-    ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateNumFormatDialog(this, aCoreSet));
-    assert(pDlg && "Dialog creation failed!");
+    ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateNumFormatDialog(GetFrameWeld(), aCoreSet));
 
     if (RET_OK == pDlg->Execute())
     {
         const SfxPoolItem* pItem = pView->GetDocShell()->
                         GetItem( SID_ATTR_NUMBERFORMAT_INFO );
 
-        if( pItem && 0 != static_cast<const SvxNumberInfoItem*>(pItem)->GetDelCount() )
+        if( pItem )
         {
-            const sal_uInt32* pDelArr = static_cast<const SvxNumberInfoItem*>(pItem)->GetDelArray();
-
-            for ( sal_uInt32 i = 0; i < static_cast<const SvxNumberInfoItem*>(pItem)->GetDelCount(); i++ )
-                pFormatter->DeleteEntry( pDelArr[i] );
+            for ( sal_uInt32 key : static_cast<const SvxNumberInfoItem*>(pItem)->GetDelFormats() )
+                pFormatter->DeleteEntry( key );
         }
 
         const SfxItemSet* pOutSet = pDlg->GetOutputItemSet();

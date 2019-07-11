@@ -251,7 +251,9 @@ void SwTextShell::ExecCharAttrArgs(SfxRequest &rReq)
             const SvxFontHeightItem* pSize( static_cast<const SvxFontHeightItem*>(
                                         aSetItem.GetItemOfScript( nScriptTypes ) ) );
             std::vector<std::pair< const SfxPoolItem*, std::unique_ptr<SwPaM> >> vItems;
-            if ( pSize ) // selected text has one size
+            // simple case where selected text has one size and
+            // (tdf#124919) selection is not multiple table cells
+            if (pSize && !rWrtSh.IsTableMode())
             {
                 // must create new one, otherwise document is without pam
                 SwPaM* pPaM = rWrtSh.GetCursor();
@@ -265,6 +267,7 @@ void SwTextShell::ExecCharAttrArgs(SfxRequest &rReq)
             {
                 std::unique_ptr<SwPaM> pPaM = std::move(iPair.second);
                 const SfxPoolItem* pItem = iPair.first;
+                aSetItem.GetItemSet().ClearItem();
                 rWrtSh.GetPaMAttr( pPaM.get(), aSetItem.GetItemSet() );
                 aAttrSet.SetRanges( aSetItem.GetItemSet().GetRanges() );
 
@@ -479,9 +482,7 @@ void SwTextShell::ExecParaAttrArgs(SfxRequest &rReq)
                                            HINT_END, HINT_END>{});
                 rSh.GetCurAttr(aSet);
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-                assert(pFact && "SwAbstractDialogFactory fail!");
-                ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSwDropCapsDialog(GetView().GetWindow(), aSet));
-                assert(pDlg && "Dialog creation failed!");
+                ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSwDropCapsDialog(GetView().GetFrameWeld(), aSet));
                 if (pDlg->Execute() == RET_OK)
                 {
                     rSh.StartAction();
@@ -492,7 +493,7 @@ void SwTextShell::ExecParaAttrArgs(SfxRequest &rReq)
                             rSh.ReplaceDropText(static_cast<const SfxStringItem*>(pItem)->GetValue());
                     }
                     rSh.SetAttrSet(*pDlg->GetOutputItemSet());
-                    rSh.StartUndo( SwUndoId::END );
+                    rSh.EndUndo( SwUndoId::END );
                     rSh.EndAction();
                     rReq.Done(*pDlg->GetOutputItemSet());
                 }

@@ -32,6 +32,7 @@
 #include <com/sun/star/chart2/data/XNumericalDataSequence.hpp>
 #include <com/sun/star/chart2/data/XTextualDataSequence.hpp>
 #include <com/sun/star/chart2/data/XDataSource.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 #include <com/sun/star/chart2/XDataSeries.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
@@ -43,9 +44,11 @@
 #include <CharacterProperties.hxx>
 #include <FillProperties.hxx>
 
+#include <float.h>
 #include <map>
 #include <algorithm>
 #include <rtl/math.hxx>
+#include <osl/diagnose.h>
 
 using namespace ::com::sun::star;
 using ::com::sun::star::uno::Reference;

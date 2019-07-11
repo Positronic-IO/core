@@ -23,7 +23,6 @@
 #include <comphelper/processfactory.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <unotools/saveopt.hxx>
-#include <comphelper/sequence.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
@@ -36,6 +35,8 @@
 #include <vcl/fixed.hxx>
 #include <unotools/configitem.hxx>
 #include <unotools/optionsdlg.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <sfx2/fcontnr.hxx>
 
@@ -348,7 +349,7 @@ bool SvxSaveTabPage::FillItemSet( SfxItemSet* rSet )
     return bModified;
 }
 
-bool isODFFormat( const OUString& sFilter )
+static bool isODFFormat( const OUString& sFilter )
 {
     static const char* aODFFormats[] =
     {
@@ -565,7 +566,7 @@ IMPL_LINK( SvxSaveTabPage, FilterHdl_Impl, ListBox&, rBox, void )
         {
             aSaveAsLB->Clear();
             auto & rFilters = pImpl->aFilterArr[nData];
-            if(!pImpl->aUIFilterArr[nData].size())
+            if(pImpl->aUIFilterArr[nData].empty())
             {
                 pImpl->aUIFilterArr[nData].resize(pImpl->aFilterArr[nData].size());
                 auto & rUIFilters = pImpl->aUIFilterArr[nData];

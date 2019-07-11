@@ -22,6 +22,7 @@
 #include <config_clang.h>
 #include <svx/EnhancedCustomShape2d.hxx>
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <tools/fract.hxx>
 
@@ -93,7 +94,7 @@ namespace
 
 class ConstantValueExpression : public ExpressionNode
 {
-    double  maValue;
+    double const  maValue;
 
 public:
 
@@ -816,7 +817,7 @@ public:
     {
         ParserContext::OperandStack& rNodeStack( mxContext->maOperandStack );
 
-        if( rNodeStack.size() < 1 )
+        if( rNodeStack.empty() )
             throw ParseError( "Not enough arguments for unary operator" );
 
         // retrieve arguments
@@ -1098,7 +1099,7 @@ public:
     }
 
 private:
-    ParserContextSharedPtr          mpParserContext; // might get modified during parsing
+    ParserContextSharedPtr const          mpParserContext; // might get modified during parsing
 };
 
 const ParserContextSharedPtr& getParserContext()

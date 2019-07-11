@@ -20,8 +20,9 @@
 #ifndef INCLUDED_SD_SOURCE_UI_INC_TABTEMPL_HXX
 #define INCLUDED_SD_SOURCE_UI_INC_TABTEMPL_HXX
 
-#include <svx/tabarea.hxx>
 #include <sfx2/styledlg.hxx>
+#include <svx/xtable.hxx>
+
 class SdrModel;
 class SfxObjectShell;
 class SdrView;
@@ -29,40 +30,29 @@ class SdrView;
 /**
  * Template-Tab-Dialog
  */
-class SdTabTemplateDlg : public SfxStyleDialog
+class SdTabTemplateDlg : public SfxStyleDialogController
 {
 private:
     const SfxObjectShell&   rDocShell;
-    SdrView*                pSdrView;
+    SdrView* const                pSdrView;
 
-    XColorListRef         pColorList;
-    XGradientListRef      pGradientList;
-    XHatchListRef         pHatchingList;
-    XBitmapListRef        pBitmapList;
-    XPatternListRef       pPatternList;
-    XDashListRef          pDashList;
-    XLineEndListRef       pLineEndList;
+    XColorListRef const         pColorList;
+    XGradientListRef const      pGradientList;
+    XHatchListRef const         pHatchingList;
+    XBitmapListRef const        pBitmapList;
+    XPatternListRef const       pPatternList;
+    XDashListRef const          pDashList;
+    XLineEndListRef const       pLineEndList;
 
-    sal_uInt16 m_nLineId;
-    sal_uInt16 m_nAreaId;
-    sal_uInt16 m_nShadowId;
-    sal_uInt16 m_nTransparencyId;
-    sal_uInt16 m_nFontId;
-    sal_uInt16 m_nFontEffectId;
-    sal_uInt16 m_nBackgroundId;
-    sal_uInt16 m_nTextId;
-    sal_uInt16 m_nDimensionId;
-    sal_uInt16 m_nConnectorId;
-
-    virtual void                PageCreated( sal_uInt16 nId, SfxTabPage &rPage ) override;
-    virtual void                RefreshInputSet() override;
+    virtual void PageCreated(const OString& rId, SfxTabPage &rPage) override;
+    virtual void RefreshInputSet() override;
 
 public:
-    SdTabTemplateDlg(vcl::Window* pParent,
-            const SfxObjectShell* pDocShell,
-            SfxStyleSheetBase& rStyleBase,
-            SdrModel const * pModel,
-            SdrView* pView);
+    SdTabTemplateDlg(weld::Window* pParent,
+                     const SfxObjectShell* pDocShell,
+                     SfxStyleSheetBase& rStyleBase,
+                     SdrModel const * pModel,
+                     SdrView* pView);
 };
 
 #endif // INCLUDED_SD_SOURCE_UI_INC_TABTEMPL_HXX

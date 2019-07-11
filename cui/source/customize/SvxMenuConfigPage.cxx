@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cassert>
 #include <stdlib.h>
@@ -45,9 +46,9 @@
 #include <sfx2/filedlghelper.hxx>
 #include <svl/stritem.hxx>
 #include <svtools/miscopt.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistentry.hxx>
-#include <svtools/viewdataentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistentry.hxx>
+#include <vcl/viewdataentry.hxx>
 #include <tools/diagnose_ex.h>
 
 #include <algorithm>
@@ -58,11 +59,9 @@
 #include <cfg.hxx>
 #include <SvxMenuConfigPage.hxx>
 #include <SvxConfigPageHelper.hxx>
-#include "eventdlg.hxx"
 #include <dialmgr.hxx>
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/random.hxx>
 #include <unotools/configmgr.hxx>
 #include <o3tl/make_unique.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -74,7 +73,6 @@
 #include <com/sun/star/frame/ModuleManager.hpp>
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
-#include <com/sun/star/frame/theUICommandDescription.hpp>
 #include <com/sun/star/graphic/GraphicProvider.hpp>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/lang/IllegalAccessException.hpp>
@@ -225,10 +223,14 @@ void SvxMenuConfigPage::UpdateButtonStates()
     {
         SvxConfigEntry* pMenuData = GetTopLevelSelection();
         PopupMenu* pGearPopup = m_pGearBtn->GetPopupMenu();
+
+        if (!pGearPopup)
+            return;
+
         // Add option (gear_add) will always be enabled
-        pGearPopup->EnableItem( "gear_delete", pMenuData->IsDeletable() );
-        pGearPopup->EnableItem( "gear_rename", pMenuData->IsRenamable() );
-        pGearPopup->EnableItem( "gear_move", pMenuData->IsMovable() );
+        pGearPopup->EnableItem( "gear_delete", pMenuData && pMenuData->IsDeletable() );
+        pGearPopup->EnableItem( "gear_rename", pMenuData && pMenuData->IsRenamable() );
+        pGearPopup->EnableItem( "gear_move", pMenuData && pMenuData->IsMovable() );
     }
 }
 
@@ -500,6 +502,12 @@ IMPL_LINK( SvxMenuConfigPage, ModifyItemHdl, MenuButton *, pButton, void )
 IMPL_LINK_NOARG( SvxMenuConfigPage, ResetMenuHdl, Button *, void )
 {
     SvxConfigEntry* pMenuData = GetTopLevelSelection();
+
+    if (pMenuData == nullptr)
+    {
+        SAL_WARN("cui.customize", "RHB top level selection is null. A menu must be selected to reset!");
+        return;
+    }
 
     std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                    VclMessageType::Question, VclButtonsType::YesNo,

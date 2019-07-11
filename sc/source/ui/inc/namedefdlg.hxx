@@ -13,7 +13,6 @@
 #include "anyrefdg.hxx"
 #include <vcl/button.hxx>
 #include <vcl/fixed.hxx>
-#include <vcl/edit.hxx>
 #include <vcl/lstbox.hxx>
 
 #include <map>
@@ -42,11 +41,11 @@ private:
     VclPtr<PushButton> m_pBtnCancel;
     VclPtr<FixedText> m_pFtInfo;
 
-    bool mbUndo; //if true we need to add an undo action after creating a range name
+    bool const mbUndo; //if true we need to add an undo action after creating a range name
     ScDocument* mpDoc;
     ScDocShell* mpDocShell;
 
-    ScAddress maCursorPos;
+    ScAddress const maCursorPos;
     OUString maStrInfoDefault;
     const OUString maGlobalNameStr;
     const OUString maErrInvalidNameStr;

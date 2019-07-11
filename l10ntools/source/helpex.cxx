@@ -32,7 +32,7 @@
 
 #ifndef TESTDRIVER
 
-void WriteUsage()
+static void WriteUsage()
 {
     std::cout
         << (" Syntax: Helpex -[m]i FileIn -o FileOut [-m DataBase] [-l Lang]\n"
@@ -120,10 +120,11 @@ SAL_IMPLEMENT_MAIN_WITH_ARGS(argc, argv)
         else
         {
             HelpParser aParser( aArgs.m_sInputFile );
+            std::unique_ptr<XMLFile> xmlfile(new XMLFile( OString('0') ));
             hasNoError =
                 HelpParser::CreatePO(
                     aArgs.m_sOutputFile, aArgs.m_sInputFile,
-                    new XMLFile( OString('0') ), "help" );
+                    xmlfile.get(), "help" );
         }
     }
     catch (std::exception& e)

@@ -44,6 +44,7 @@
 #include <drawinglayer/primitive2d/textstrikeoutprimitive2d.hxx>
 #include <drawinglayer/primitive2d/epsprimitive2d.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 #include <tools/fract.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/hatch.hxx>
@@ -434,7 +435,7 @@ namespace
 namespace wmfemfhelper
 {
     /** helper to create a PointArrayPrimitive2D based on current context */
-    void createPointArrayPrimitive(
+    static void createPointArrayPrimitive(
         const std::vector< basegfx::B2DPoint >& rPositions,
         TargetHolder& rTarget,
         PropertyHolder const & rProperties,
@@ -467,7 +468,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create a PolygonHairlinePrimitive2D based on current context */
-    void createHairlinePrimitive(
+    static void createHairlinePrimitive(
         const basegfx::B2DPolygon& rLinePolygon,
         TargetHolder& rTarget,
         PropertyHolder const & rProperties)
@@ -484,7 +485,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create a PolyPolygonColorPrimitive2D based on current context */
-    void createFillPrimitive(
+    static void createFillPrimitive(
         const basegfx::B2DPolyPolygon& rFillPolyPolygon,
         TargetHolder& rTarget,
         PropertyHolder const & rProperties)
@@ -501,7 +502,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create a PolygonStrokePrimitive2D based on current context */
-    void createLinePrimitive(
+    static void createLinePrimitive(
         const basegfx::B2DPolygon& rLinePolygon,
         const LineInfo& rLineInfo,
         TargetHolder& rTarget,
@@ -568,7 +569,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create needed line and fill primitives based on current context */
-    void createHairlineAndFillPrimitive(
+    static void createHairlineAndFillPrimitive(
         const basegfx::B2DPolygon& rPolygon,
         TargetHolder& rTarget,
         PropertyHolder const & rProperties)
@@ -585,7 +586,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create needed line and fill primitives based on current context */
-    void createHairlineAndFillPrimitive(
+    static void createHairlineAndFillPrimitive(
         const basegfx::B2DPolyPolygon& rPolyPolygon,
         TargetHolder& rTarget,
         PropertyHolder const & rProperties)
@@ -610,7 +611,7 @@ namespace wmfemfhelper
         position and size in pixels. At the end it will create a view-dependent
         transformed embedding of a BitmapPrimitive2D.
     */
-    void createBitmapExPrimitive(
+    static void createBitmapExPrimitive(
         const BitmapEx& rBitmapEx,
         const Point& rPoint,
         TargetHolder& rTarget,
@@ -629,7 +630,7 @@ namespace wmfemfhelper
     }
 
     /** helper to create BitmapPrimitive2D based on current context */
-    void createBitmapExPrimitive(
+    static void createBitmapExPrimitive(
         const BitmapEx& rBitmapEx,
         const Point& rPoint,
         const Size& rSize,
@@ -658,7 +659,7 @@ namespace wmfemfhelper
         which use a bitmap without transparence but define one of the colors as
         transparent)
      */
-    BitmapEx createMaskBmpEx(const Bitmap& rBitmap, const Color& rMaskColor)
+    static BitmapEx createMaskBmpEx(const Bitmap& rBitmap, const Color& rMaskColor)
     {
         const Color aWhite(COL_WHITE);
         BitmapPalette aBiLevelPalette(2);
@@ -677,7 +678,7 @@ namespace wmfemfhelper
     /** helper to convert from a VCL Gradient definition to the corresponding
         data for primitive representation
      */
-    drawinglayer::attribute::FillGradientAttribute createFillGradientAttribute(const Gradient& rGradient)
+    static drawinglayer::attribute::FillGradientAttribute createFillGradientAttribute(const Gradient& rGradient)
     {
         const Color aStartColor(rGradient.GetStartColor());
         const sal_uInt16 nStartIntens(rGradient.GetStartIntensity());
@@ -749,7 +750,7 @@ namespace wmfemfhelper
     /** helper to convert from a VCL Hatch definition to the corresponding
         data for primitive representation
      */
-    drawinglayer::attribute::FillHatchAttribute createFillHatchAttribute(const Hatch& rHatch)
+    static drawinglayer::attribute::FillHatchAttribute createFillHatchAttribute(const Hatch& rHatch)
     {
         drawinglayer::attribute::HatchStyle aHatchStyle(drawinglayer::attribute::HatchStyle::Single);
 
@@ -869,7 +870,7 @@ namespace wmfemfhelper
         a changing RasterOp is used. Currently, RasterOp::Xor and RasterOp::Invert are supported using
         InvertPrimitive2D, and RasterOp::N0 by using a ModifiedColorPrimitive2D to force to black paint
      */
-    void HandleNewRasterOp(
+    static void HandleNewRasterOp(
         RasterOp aRasterOp,
         TargetHolders& rTargetHolders,
         PropertyHolders& rPropertyHolders)
@@ -922,7 +923,7 @@ namespace wmfemfhelper
     /** helper to create needed data to emulate the VCL Wallpaper Metafile action.
         It is a quite mighty action. This helper is for simple color filled background.
      */
-    std::unique_ptr<drawinglayer::primitive2d::BasePrimitive2D> CreateColorWallpaper(
+    static std::unique_ptr<drawinglayer::primitive2d::BasePrimitive2D> CreateColorWallpaper(
         const basegfx::B2DRange& rRange,
         const basegfx::BColor& rColor,
         PropertyHolder const & rPropertyHolder)
@@ -938,7 +939,7 @@ namespace wmfemfhelper
     /** helper to create needed data to emulate the VCL Wallpaper Metafile action.
         It is a quite mighty action. This helper is for gradient filled background.
      */
-    std::unique_ptr<drawinglayer::primitive2d::BasePrimitive2D> CreateGradientWallpaper(
+    static std::unique_ptr<drawinglayer::primitive2d::BasePrimitive2D> CreateGradientWallpaper(
         const basegfx::B2DRange& rRange,
         const Gradient& rGradient,
         PropertyHolder const & rPropertyHolder)
@@ -978,7 +979,7 @@ namespace wmfemfhelper
         WallpaperBitmapPrimitive2D. This primitive was created for this purpose and
         takes over all needed logic of orientations and tiling.
      */
-    void CreateAndAppendBitmapWallpaper(
+    static void CreateAndAppendBitmapWallpaper(
         basegfx::B2DRange aWallpaperRange,
         const Wallpaper& rWallpaper,
         TargetHolder& rTarget,
@@ -1042,23 +1043,18 @@ namespace wmfemfhelper
     }
 
     /** helper to decide UnderlineAbove for text primitives */
-    bool isUnderlineAbove(const vcl::Font& rFont)
+    static bool isUnderlineAbove(const vcl::Font& rFont)
     {
         if(!rFont.IsVertical())
         {
             return false;
         }
 
-        if((LANGUAGE_JAPANESE == rFont.GetLanguage()) || (LANGUAGE_JAPANESE == rFont.GetCJKContextLanguage()))
-        {
-            // the underline is right for Japanese only
-            return true;
-        }
-
-        return false;
+        // the underline is right for Japanese only
+        return (LANGUAGE_JAPANESE == rFont.GetLanguage()) || (LANGUAGE_JAPANESE == rFont.GetCJKContextLanguage());
     }
 
-    void createFontAttributeTransformAndAlignment(
+    static void createFontAttributeTransformAndAlignment(
         drawinglayer::attribute::FontAttribute& rFontAttribute,
         basegfx::B2DHomMatrix& rTextTransform,
         basegfx::B2DVector& rAlignmentOffset,
@@ -1105,7 +1101,7 @@ namespace wmfemfhelper
     /** helper which takes complete care for creating the needed text primitives. It
         takes care of decorated stuff and all the geometry adaptions needed
      */
-    void processMetaTextAction(
+    static void processMetaTextAction(
         const Point& rTextStartPosition,
         const OUString& rText,
         sal_uInt16 nTextStart,
@@ -1305,7 +1301,7 @@ namespace wmfemfhelper
     }
 
     /** helper which takes complete care for creating the needed textLine primitives */
-    void proccessMetaTextLineAction(
+    static void proccessMetaTextLineAction(
         const MetaTextLineAction& rAction,
         TargetHolder& rTarget,
         PropertyHolder const & rProperty)
@@ -1470,7 +1466,7 @@ namespace wmfemfhelper
 
         For more comments, see the single action implementations.
     */
-    void implInterpretMetafile(
+    static void implInterpretMetafile(
         const GDIMetaFile& rMetaFile,
         TargetHolders& rTargetHolders,
         PropertyHolders& rPropertyHolders,
@@ -3001,7 +2997,7 @@ namespace wmfemfhelper
                     }
                     else if (pA->GetComment().equalsIgnoreAsciiCase("EMF_PLUS_HEADER_INFO"))
                     {
-                        if (aEMFPlus.get())
+                        if (aEMFPlus)
                         {
                             // error: should not yet exist
                             SAL_INFO("drawinglayer", "Error: multiple EMF_PLUS_HEADER_INFO");
@@ -3020,7 +3016,7 @@ namespace wmfemfhelper
                     }
                     else if (pA->GetComment().equalsIgnoreAsciiCase("EMF_PLUS"))
                     {
-                        if (!aEMFPlus.get())
+                        if (!aEMFPlus)
                         {
                             // error: should exist
                             SAL_INFO("drawinglayer", "Error: EMF_PLUS before EMF_PLUS_HEADER_INFO");

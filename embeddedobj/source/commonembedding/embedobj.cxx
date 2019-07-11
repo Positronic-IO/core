@@ -38,8 +38,10 @@
 #include <com/sun/star/lang/DisposedException.hpp>
 
 #include <com/sun/star/embed/EmbedMisc.hpp>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/interfacecontainer.hxx>
 #include <comphelper/lok.hxx>
+#include <sal/log.hxx>
 
 #include <vcl/svapp.hxx>
 
@@ -100,12 +102,13 @@ void OCommonEmbeddedObject::Deactivate()
         catch( const embed::ObjectSaveVetoException& )
         {
         }
-        catch( const uno::Exception& e )
+        catch( const uno::Exception& )
         {
+            css::uno::Any anyEx = cppu::getCaughtException();
             throw embed::StorageWrappedTargetException(
                 "The client could not store the object!",
                 static_cast< ::cppu::OWeakObject* >( this ),
-                uno::makeAny( e ) );
+                anyEx );
         }
     }
 

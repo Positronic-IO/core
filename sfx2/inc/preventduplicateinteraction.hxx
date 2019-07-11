@@ -34,8 +34,6 @@
 
 #include <sfx2/app.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 
 namespace com { namespace sun { namespace star { namespace uno {
@@ -182,18 +180,10 @@ class PreventDuplicateInteraction : private ThreadHelpBase2
 
             public:
 
-                InteractionInfo(const css::uno::Type& aInteraction,
-                                      sal_Int32       nMaxCount   )
+                InteractionInfo(const css::uno::Type& aInteraction)
                     : m_aInteraction(aInteraction)
-                    , m_nMaxCount   (nMaxCount   )
+                    , m_nMaxCount   (1   )
                     , m_nCallCount  (0           )
-                {}
-
-                InteractionInfo(const InteractionInfo& aCopy)
-                    : m_aInteraction(aCopy.m_aInteraction)
-                    , m_nMaxCount   (aCopy.m_nMaxCount   )
-                    , m_nCallCount  (aCopy.m_nCallCount  )
-                    , m_xRequest    (aCopy.m_xRequest    )
                 {}
         };
 

@@ -20,7 +20,6 @@
 #ifndef INCLUDED_COMPHELPER_SEQUENCE_HXX
 #define INCLUDED_COMPHELPER_SEQUENCE_HXX
 
-#include <algorithm>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <osl/diagnose.h>
 #include <comphelper/comphelperdllapi.h>
@@ -29,10 +28,10 @@
 
 namespace comphelper
 {
-    /** search the given string within the given sequence, return the positions where it was found.
-        if _bOnlyFirst is sal_True, only the first occurrence will be returned.
+    /** Search the given string within the given sequence, return the position of the first occurrence.
+        Returns -1 if nothing found.
     */
-    COMPHELPER_DLLPUBLIC css::uno::Sequence<sal_Int16> findValue(const css::uno::Sequence< OUString >& _rList, const OUString& _rValue, bool _bOnlyFirst);
+    COMPHELPER_DLLPUBLIC sal_Int32 findValue(const css::uno::Sequence< OUString >& _rList, const OUString& _rValue);
 
     namespace internal
     {

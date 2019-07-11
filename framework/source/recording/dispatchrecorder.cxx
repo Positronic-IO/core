@@ -24,6 +24,7 @@
 #include <com/sun/star/script/CannotConvertException.hpp>
 #include <com/sun/star/script/Converter.hpp>
 #include <o3tl/any.hxx>
+#include <osl/diagnose.h>
 #include <services.h>
 #include <vcl/svapp.hxx>
 #include <typelib/typedescription.h>
@@ -50,7 +51,7 @@ DEFINE_INIT_SERVICE(
 )
 
 
-void flatten_struct_members(
+static void flatten_struct_members(
     ::std::vector< Any > * vec, void const * data,
     typelib_CompoundTypeDescription * pTD )
 {
@@ -65,7 +66,7 @@ void flatten_struct_members(
     }
 }
 
-Sequence< Any > make_seq_out_of_struct(
+static Sequence< Any > make_seq_out_of_struct(
     Any const & val )
 {
     Type const & type = val.getValueType();

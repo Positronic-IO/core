@@ -34,20 +34,6 @@
 
 // struct SfxPrinter_Impl ------------------------------------------------
 
-struct SfxPrinter_Impl
-{
-    bool            mbAll;
-    bool            mbSelection;
-    bool            mbFromTo;
-    bool            mbRange;
-
-    SfxPrinter_Impl() :
-        mbAll       ( true ),
-        mbSelection ( true ),
-        mbFromTo    ( true ),
-        mbRange     ( true ) {}
-};
-
 struct SfxPrintOptDlg_Impl
 {
     bool        mbHelpDisabled;
@@ -101,7 +87,6 @@ SfxPrinter::SfxPrinter( std::unique_ptr<SfxItemSet>&& pTheOptions ) :
     This constructor creates a default printer.
 */
     pOptions( std::move(pTheOptions) ),
-    pImpl( new SfxPrinter_Impl ),
     bKnown( true )
 {
     assert(pOptions);
@@ -111,8 +96,7 @@ SfxPrinter::SfxPrinter( std::unique_ptr<SfxItemSet>&& pTheOptions ) :
 SfxPrinter::SfxPrinter( std::unique_ptr<SfxItemSet>&& pTheOptions,
                         const JobSetup& rTheOrigJobSetup ) :
     Printer( rTheOrigJobSetup.GetPrinterName() ),
-    pOptions( std::move(pTheOptions) ),
-    pImpl( new SfxPrinter_Impl )
+    pOptions( std::move(pTheOptions) )
 {
     assert(pOptions);
     bKnown = GetName() == rTheOrigJobSetup.GetPrinterName();
@@ -126,7 +110,6 @@ SfxPrinter::SfxPrinter( std::unique_ptr<SfxItemSet>&& pTheOptions,
                         const OUString& rPrinterName ) :
     Printer( rPrinterName ),
     pOptions( std::move(pTheOptions) ),
-    pImpl( new SfxPrinter_Impl ),
     bKnown( GetName() == rPrinterName )
 {
     assert(pOptions);
@@ -137,18 +120,12 @@ SfxPrinter::SfxPrinter( const SfxPrinter& rPrinter ) :
     VclReferenceBase(),
     Printer( rPrinter.GetName() ),
     pOptions( rPrinter.GetOptions().Clone() ),
-    pImpl( new SfxPrinter_Impl ),
     bKnown( rPrinter.IsKnown() )
 {
     assert(pOptions);
     SetJobSetup( rPrinter.GetJobSetup() );
     SetPrinterProps( &rPrinter );
     SetMapMode( rPrinter.GetMapMode() );
-
-    pImpl->mbAll = rPrinter.pImpl->mbAll;
-    pImpl->mbSelection = rPrinter.pImpl->mbSelection;
-    pImpl->mbFromTo = rPrinter.pImpl->mbFromTo;
-    pImpl->mbRange = rPrinter.pImpl->mbRange;
 }
 
 
@@ -160,10 +137,6 @@ VclPtr<SfxPrinter> SfxPrinter::Clone() const
         pNewPrinter->SetJobSetup( GetJobSetup() );
         pNewPrinter->SetPrinterProps( this );
         pNewPrinter->SetMapMode( GetMapMode() );
-        pNewPrinter->pImpl->mbAll = pImpl->mbAll;
-        pNewPrinter->pImpl->mbSelection =pImpl->mbSelection;
-        pNewPrinter->pImpl->mbFromTo = pImpl->mbFromTo;
-        pNewPrinter->pImpl->mbRange =pImpl->mbRange;
         return pNewPrinter;
     }
     else
@@ -179,7 +152,6 @@ SfxPrinter::~SfxPrinter()
 void SfxPrinter::dispose()
 {
     pOptions.reset();
-    pImpl.reset();
     Printer::dispose();
 }
 
@@ -200,7 +172,7 @@ SfxPrintOptionsDialog::SfxPrintOptionsDialog(weld::Window *pParent,
     , m_xContainer(m_xDialog->weld_content_area())
 {
     // Insert TabPage
-    pPage.reset(pViewShell->CreatePrintOptionsPage(m_xContainer.get(), *pOptions));
+    pPage.reset(pViewShell->CreatePrintOptionsPage(TabPageParent(m_xContainer.get(), this), *pOptions));
     DBG_ASSERT( pPage, "CreatePrintOptions != SFX_VIEW_HAS_PRINTOPTIONS" );
     if( pPage )
     {
@@ -215,13 +187,14 @@ SfxPrintOptionsDialog::~SfxPrintOptionsDialog()
     pPage.disposeAndClear();
 }
 
-short SfxPrintOptionsDialog::execute()
+short SfxPrintOptionsDialog::run()
 {
-    if( ! pPage )
+    if (!pPage)
         return RET_CANCEL;
 
-    short nRet = m_xDialog->run();
-    if ( nRet == RET_OK )
+    short nRet = GenericDialogController::run();
+
+    if (nRet == RET_OK)
         pPage->FillItemSet( pOptions.get() );
     else
         pPage->Reset( pOptions.get() );

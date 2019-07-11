@@ -23,7 +23,6 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/viewfrm.hxx>
-#include <sfx2/itemwrapper.hxx>
 #include <svl/itemset.hxx>
 #include <svl/eitem.hxx>
 
@@ -231,7 +230,7 @@ ScVbaWorksheets::Add( const uno::Any& Before, const uno::Any& After,
 
     if ( Before.hasValue() )
     {
-            if ( Before >>= xBeforeAfterSheet )
+        if ( Before >>= xBeforeAfterSheet )
             aStringSheet = xBeforeAfterSheet->getName();
         else
             Before >>= aStringSheet;
@@ -239,7 +238,7 @@ ScVbaWorksheets::Add( const uno::Any& Before, const uno::Any& After,
 
     if (aStringSheet.isEmpty() && After.hasValue() )
     {
-            if ( After >>= xBeforeAfterSheet )
+        if ( After >>= xBeforeAfterSheet )
             aStringSheet = xBeforeAfterSheet->getName();
         else
             After >>= aStringSheet;
@@ -312,14 +311,9 @@ ScVbaWorksheets::PrintOut( const uno::Any& From, const uno::Any& To, const uno::
 {
     sal_Int32 nTo = 0;
     sal_Int32 nFrom = 0;
-    sal_Int16 nCopies = 1;
-    bool bCollate = false;
     bool bSelection = false;
     From >>= nFrom;
     To >>= nTo;
-    Copies >>= nCopies;
-    if ( nCopies > 1 ) // Collate only useful when more that 1 copy
-        Collate >>= bCollate;
 
     if ( !( nFrom || nTo ) )
         if ( isSelectedSheets() )
@@ -438,7 +432,7 @@ ScVbaWorksheets::Item(const uno::Any& Index, const uno::Any& Index2)
 {
     if ( Index.getValueTypeClass() == uno::TypeClass_SEQUENCE )
     {
-        uno::Reference< script::XTypeConverter > xConverter = getTypeConverter(mxContext);
+        const uno::Reference< script::XTypeConverter >& xConverter = getTypeConverter(mxContext);
         uno::Any aConverted;
         aConverted = xConverter->convertTo( Index, cppu::UnoType<uno::Sequence< uno::Any >>::get() );
         SheetMap aSheets;

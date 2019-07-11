@@ -24,6 +24,7 @@
 #include <cppuhelper/weakref.hxx>
 #include <tools/gen.hxx>
 #include "format.hxx"
+#include "hintids.hxx"
 #include "swdllapi.h"
 #include <list>
 
@@ -104,6 +105,11 @@ protected:
 public:
     virtual ~SwFrameFormat() override;
 
+    SwFrameFormat(SwFrameFormat const &) = default;
+    SwFrameFormat(SwFrameFormat &&) = default;
+    SwFrameFormat & operator =(SwFrameFormat const &) = default;
+    SwFrameFormat & operator =(SwFrameFormat &&) = default;
+
     /// Destroys all Frames in aDepend (Frames are identified via dynamic_cast).
     virtual void DelFrames();
 
@@ -164,7 +170,6 @@ public:
     SAL_DLLPRIVATE void SetXObject(css::uno::Reference<css::uno::XInterface> const& xObject)
             { m_wXObject = xObject; }
 
-    DECL_FIXEDMEMPOOL_NEWDEL_DLL(SwFrameFormat)
     void RegisterToFormat( SwFormat& rFormat );
 
     // Access to DrawingLayer FillAttributes in a preprocessed form for primitive usage
@@ -173,7 +178,7 @@ public:
 
     void dumpAsXml(struct _xmlTextWriter* pWriter) const;
 
-    virtual void SetName( const OUString& rNewName, bool bBroadcast=false ) SAL_OVERRIDE;
+    virtual void SetName( const OUString& rNewName, bool bBroadcast=false ) override;
 };
 
 // The FlyFrame-Format
@@ -240,7 +245,6 @@ public:
     const Point & GetLastFlyFramePrtRectPos() const       { return m_aLastFlyFramePrtRectPos; }
     void SetLastFlyFramePrtRectPos( const Point &rPoint ) { m_aLastFlyFramePrtRectPos = rPoint; }
 
-    DECL_FIXEDMEMPOOL_NEWDEL(SwFlyFrameFormat)
     SwFlyDrawContact* GetOrCreateContact();
 };
 
@@ -265,7 +269,7 @@ namespace sw
     };
     struct SW_DLLPUBLIC DrawFrameFormatHint final: SfxHint
     {
-        DrawFrameFormatHintId m_eId;
+        DrawFrameFormatHintId const m_eId;
         DrawFrameFormatHint(DrawFrameFormatHintId eId) : m_eId(eId) {};
         virtual ~DrawFrameFormatHint() override;
     };
@@ -395,8 +399,6 @@ public:
     void PosAttrSet() { mbPosAttrSet = true; }
 
     virtual OUString GetDescription() const override;
-
-    DECL_FIXEDMEMPOOL_NEWDEL(SwDrawFrameFormat);
 };
 
 namespace sw {

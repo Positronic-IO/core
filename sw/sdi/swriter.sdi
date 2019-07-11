@@ -949,7 +949,41 @@ SfxVoidItem DelToStartOfWord FN_DELETE_BACK_WORD
     GroupId = SfxGroupId::Edit;
 ]
 
+SfxVoidItem SetMinimalColumnWidth SID_TABLE_MINIMAL_COLUMN_WIDTH
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
 SfxVoidItem DistributeColumns FN_TABLE_BALANCE_CELLS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Table;
+]
+
+SfxVoidItem SetMinimalRowHeight SID_TABLE_MINIMAL_ROW_HEIGHT
 ()
 [
     AutoUpdate = FALSE,
@@ -2641,7 +2675,7 @@ SfxVoidItem InsertColumns FN_TABLE_INSERT_COL
 
     AccelConfig = FALSE,
     MenuConfig = FALSE,
-    ToolBoxConfig = TRUE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Table;
 ]
 
@@ -3205,7 +3239,7 @@ SfxVoidItem InsertRows FN_TABLE_INSERT_ROW
 
     AccelConfig = FALSE,
     MenuConfig = FALSE,
-    ToolBoxConfig = TRUE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Table;
 ]
 
@@ -7263,7 +7297,7 @@ SfxVoidItem NextTrackedChange FN_REDLINE_NEXT_CHANGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -7281,7 +7315,7 @@ SfxVoidItem PreviousTrackedChange FN_REDLINE_PREV_CHANGE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = FALSE,
+    ReadOnlyDoc = TRUE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -7635,6 +7669,23 @@ SfxVoidItem NavElement FN_NAV_ELEMENT
 ]
 
 SfxBoolItem ShowInlineTooltips FN_SHOW_INLINETOOLTIPS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = TRUE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::View;
+]
+
+SfxBoolItem UseHeaderFooterMenu FN_USE_HEADERFOOTERMENU
 ()
 [
     AutoUpdate = FALSE,

@@ -14,18 +14,13 @@
 #include <address.hxx>
 #include <rangelst.hxx>
 
-#include "docsh.hxx"
-#include <document.hxx>
-#include "docfunc.hxx"
-#include <formulacell.hxx>
-
 #include <vector>
 
 class FormulaTemplate
 {
 private:
     OUString            mTemplate;
-    ScDocument*         mpDoc;
+    ScDocument* const   mpDoc;
     bool                mbUse3D;
 
     typedef std::map<OUString, ScRange>   RangeReplacementMap;
@@ -46,7 +41,7 @@ public:
     void      autoReplaceUses3D(bool bUse3D) { mbUse3D = bUse3D; }
 
     void      applyRange(const OUString& aVariable, const ScRange& aRange, bool b3D = true);
-    void      applyRangeList(const OUString& aVariable, const ScRangeList& aRangeList);
+    void      applyRangeList(const OUString& aVariable, const ScRangeList& aRangeList, sal_Unicode cDelimiter );
     void      applyAddress(const OUString& aVariable, const ScAddress& aAddress, bool b3D = true);
     void      applyString(const OUString& aVariable, const OUString& aValue);
     void      applyNumber(const OUString& aVariable, sal_Int32 aValue);
@@ -58,7 +53,7 @@ public:
     std::vector<ScAddress> mAddressStack;
 
     ScAddress mCurrentAddress;
-    ScAddress mMinimumAddress;
+    ScAddress const mMinimumAddress;
     ScAddress mMaximumAddress;
 
     AddressWalker(const ScAddress& aInitialAddress);
@@ -79,13 +74,13 @@ class AddressWalkerWriter : public AddressWalker
 public:
     ScDocShell*                         mpDocShell;
     ScDocument*                         mpDocument;
-    formula::FormulaGrammar::Grammar    meGrammar;
+    formula::FormulaGrammar::Grammar const    meGrammar;
 
     AddressWalkerWriter(const ScAddress& aInitialAddress, ScDocShell* pDocShell, ScDocument* pDocument,
             formula::FormulaGrammar::Grammar eGrammar );
 
     void writeFormula(const OUString& aFormula);
-    void writeMatrixFormula(const OUString& aFormula);
+    void writeMatrixFormula(const OUString& aFormula, SCCOL nCols = 1, SCROW nRows = 1);
     void writeString(const OUString& aString);
     void writeString(const char* aCharArray);
     void writeBoldString(const OUString& aString);
@@ -95,13 +90,13 @@ public:
 class DataCellIterator final
 {
 private:
-    ScRange mInputRange;
-    bool    mByColumn;
+    ScRange const mInputRange;
+    bool const    mByColumn;
     SCCOL   mCol;
     SCROW   mRow;
 
 public:
-    DataCellIterator(ScRange aInputRange, bool aByColumn);
+    DataCellIterator(const ScRange& aInputRange, bool aByColumn);
     ~DataCellIterator();
 
     bool hasNext();
@@ -113,7 +108,7 @@ public:
 class DataRangeIterator
 {
 protected:
-    ScRange   mInputRange;
+    ScRange const   mInputRange;
     sal_Int32 mIndex;
 
 public:
@@ -136,7 +131,7 @@ class DataRangeByColumnIterator final : public DataRangeIterator
     SCCOL mCol;
 
 public:
-    DataRangeByColumnIterator(ScRange aInputRange);
+    DataRangeByColumnIterator(const ScRange& aInputRange);
 
     virtual bool hasNext() override;
     virtual void next() override;
@@ -151,7 +146,7 @@ class DataRangeByRowIterator final : public DataRangeIterator
     SCROW mRow;
 
 public:
-    DataRangeByRowIterator(ScRange aInputRange);
+    DataRangeByRowIterator(const ScRange& aInputRange);
 
     virtual bool hasNext() override;
     virtual void next() override;

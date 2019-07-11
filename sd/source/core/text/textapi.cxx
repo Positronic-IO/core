@@ -26,8 +26,13 @@
 #include <editeng/eeitem.hxx>
 #include <editeng/editeng.hxx>
 #include <editeng/outlobj.hxx>
+#include <editeng/unoforou.hxx>
+#include <editeng/unoprnms.hxx>
+#include <editeng/unoipset.hxx>
 #include <Outliner.hxx>
 #include <svx/svdpool.hxx>
+#include <svx/svdundo.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::text;
@@ -60,7 +65,7 @@ UndoTextAPIChanged::UndoTextAPIChanged(SdrModel& rModel, TextApiObject* pTextObj
 void UndoTextAPIChanged::Undo()
 {
     if( !mpNewText )
-        mpNewText.reset( mxTextObj->CreateText() );
+        mpNewText = mxTextObj->CreateText();
 
     mxTextObj->SetText( *mpOldText );
 }
@@ -95,12 +100,12 @@ public:
 
     void                Dispose();
     void                SetText( OutlinerParaObject const & rText );
-    OutlinerParaObject* CreateText();
+    std::unique_ptr<OutlinerParaObject> CreateText();
     OUString            GetText();
     SdDrawDocument*     GetDoc() { return m_xImpl->mpDoc; }
 };
 
-const SvxItemPropertySet* ImplGetSdTextPortionPropertyMap()
+static const SvxItemPropertySet* ImplGetSdTextPortionPropertyMap()
 {
     static const SfxItemPropertyMapEntry aSdTextPortionPropertyEntries[] =
     {
@@ -119,9 +124,9 @@ const SvxItemPropertySet* ImplGetSdTextPortionPropertyMap()
     return &aSdTextPortionPropertyMap;
 }
 
-TextApiObject::TextApiObject( TextAPIEditSource* pEditSource )
-: SvxUnoText( pEditSource, ImplGetSdTextPortionPropertyMap(), Reference < XText >() )
-, mpSource(pEditSource)
+TextApiObject::TextApiObject( std::unique_ptr<TextAPIEditSource> pEditSource )
+: SvxUnoText( pEditSource.get(), ImplGetSdTextPortionPropertyMap(), Reference < XText >() )
+, mpSource(std::move(pEditSource))
 {
 }
 
@@ -132,7 +137,7 @@ TextApiObject::~TextApiObject() throw()
 
 rtl::Reference< TextApiObject > TextApiObject::create( SdDrawDocument* pDoc )
 {
-    rtl::Reference< TextApiObject > xRet( new TextApiObject( new TextAPIEditSource( pDoc ) ) );
+    rtl::Reference< TextApiObject > xRet( new TextApiObject( o3tl::make_unique<TextAPIEditSource>( pDoc ) ) );
     return xRet;
 }
 
@@ -141,13 +146,12 @@ void TextApiObject::dispose()
     if( mpSource )
     {
         mpSource->Dispose();
-        delete mpSource;
-        mpSource = nullptr;
+        mpSource.reset();
     }
 
 }
 
-OutlinerParaObject* TextApiObject::CreateText()
+std::unique_ptr<OutlinerParaObject> TextApiObject::CreateText()
 {
     return mpSource->CreateText();
 }
@@ -156,7 +160,7 @@ void TextApiObject::SetText( OutlinerParaObject const & rText )
 {
     SdrModel* pModel = mpSource->GetDoc();
     if( pModel && pModel->IsUndoEnabled() )
-        pModel->AddUndo( new UndoTextAPIChanged( *pModel, this ) );
+        pModel->AddUndo( o3tl::make_unique<UndoTextAPIChanged>( *pModel, this ) );
 
     mpSource->SetText( rText );
     maSelection.nStartPara = EE_PARA_MAX_COUNT;
@@ -244,7 +248,7 @@ void TextAPIEditSource::SetText( OutlinerParaObject const & rText )
     }
 }
 
-OutlinerParaObject* TextAPIEditSource::CreateText()
+std::unique_ptr<OutlinerParaObject> TextAPIEditSource::CreateText()
 {
     if (m_xImpl->mpDoc && m_xImpl->mpOutliner)
         return m_xImpl->mpOutliner->CreateParaObject();

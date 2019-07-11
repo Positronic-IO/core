@@ -15,6 +15,7 @@
 #include <charthelper.hxx>
 
 #include <com/sun/star/frame/Desktop.hpp>
+#include <com/sun/star/chart/ChartDataRowSource.hpp>
 #include <com/sun/star/chart2/data/XLabeledDataSequence2.hpp>
 #include <com/sun/star/chart2/data/XDataSource.hpp>
 #include <com/sun/star/chart2/data/XDataSink.hpp>
@@ -42,9 +43,9 @@ private:
     uno::Reference<uno::XInterface> m_xCalcComponent;
 };
 
-void lcl_createAndCheckDataProvider(ScDocument& rDoc, const OUString& cellRange, bool hasCategories,
-                                    bool firstCellAsLabel, sal_Int32 expectedRows,
-                                    sal_Int32 expectedCols)
+static void lcl_createAndCheckDataProvider(ScDocument& rDoc, const OUString& cellRange,
+                                           bool hasCategories, bool firstCellAsLabel,
+                                           sal_Int32 expectedRows, sal_Int32 expectedCols)
 {
     uno::Reference<chart2::data::XDataProvider> xDataProvider = new ScChart2DataProvider(&rDoc);
     CPPUNIT_ASSERT(xDataProvider.is());

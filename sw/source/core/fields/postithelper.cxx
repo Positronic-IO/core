@@ -31,10 +31,12 @@
 #include <txtfrm.hxx>
 #include <tabfrm.hxx>
 #include <IDocumentRedlineAccess.hxx>
+#include <IDocumentFieldsAccess.hxx>
 #include <redline.hxx>
 #include <scriptinfo.hxx>
 #include <editeng/charhiddenitem.hxx>
 #include <calbck.hxx>
+#include <tools/solar.h>
 
 class Point;
 
@@ -48,7 +50,7 @@ SwPostItHelper::SwLayoutStatus SwPostItHelper::getLayoutInfos(
     if ( pTextNode == nullptr )
         return aRet;
 
-    SwIterator<SwTextFrame,SwContentNode> aIter( *pTextNode );
+    SwIterator<SwTextFrame, SwContentNode, sw::IteratorMode::UnwrapMulti> aIter(*pTextNode);
     for( SwTextFrame* pTextFrame = aIter.First(); pTextFrame != nullptr; pTextFrame = aIter.Next() )
     {
         if( !pTextFrame->IsFollow() )
@@ -141,16 +143,19 @@ SwPosition SwAnnotationItem::GetAnchorPosition() const
     return aPos;
 }
 
-bool SwAnnotationItem::UseElement()
+bool SwAnnotationItem::UseElement(SwRootFrame const& rLayout,
+        IDocumentRedlineAccess const& rIDRA)
 {
-    return mrFormatField.IsFieldInDoc();
+    return mrFormatField.IsFieldInDoc()
+        && (!rLayout.IsHideRedlines()
+            || !sw::IsFieldDeletedInModel(rIDRA, *mrFormatField.GetTextField()));
 }
 
 VclPtr<sw::annotation::SwAnnotationWin> SwAnnotationItem::GetSidebarWindow(
                                                             SwEditWin& rEditWin,
                                                             SwPostItMgr& aMgr)
 {
-    return VclPtr<sw::annotation::SwAnnotationWin>::Create( rEditWin, WB_DIALOGCONTROL,
+    return VclPtr<sw::annotation::SwAnnotationWin>::Create( rEditWin,
                                                 aMgr,
                                                 *this,
                                                 &mrFormatField );

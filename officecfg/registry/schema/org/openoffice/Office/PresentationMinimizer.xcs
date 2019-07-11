@@ -54,7 +54,7 @@
 						</info>
 					</maxInclusive>
 				</constraints>
-				<value>45</value>
+				<value>75</value>
 			</prop>
 			<prop oor:name="RemoveCropArea" oor:type="xs:boolean">
 				<info>
@@ -360,6 +360,10 @@ The current presentation contains no OLE objects.</value>
 			<prop oor:name="STR_FILESIZESEPARATOR" oor:type="xs:string" oor:localized="true">
 		<info><desc>String STR_FILESIZESEPARATOR.</desc></info>
 				<value>.</value>
+			</prop>
+			<prop oor:name="STR_FILENAME_SUFFIX" oor:type="xs:string" oor:localized="true">
+		<info><desc>String STR_FILENAME_SUFFIX.</desc></info>
+				<value>(minimized)</value>
 			</prop>
 		</group>
 		<node-ref oor:name="LastUsedSettings" oor:node-type="OptimizerSettings">

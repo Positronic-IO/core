@@ -43,27 +43,29 @@
 #include <window.h>
 #include <controldata.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <comphelper/dispatchcommand.hxx>
 
 
 using namespace css;
 
-#define PUSHBUTTON_VIEW_STYLE       (WB_3DLOOK |                        \
-                                     WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                     WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                     WB_WORDBREAK | WB_NOLABEL |        \
-                                     WB_DEFBUTTON | WB_NOLIGHTBORDER |  \
-                                     WB_RECTSTYLE | WB_SMALLSTYLE |     \
-                                     WB_TOGGLE )
-#define RADIOBUTTON_VIEW_STYLE      (WB_3DLOOK |                        \
-                                     WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                     WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                     WB_WORDBREAK | WB_NOLABEL)
-#define CHECKBOX_VIEW_STYLE         (WB_3DLOOK |                        \
-                                     WB_LEFT | WB_CENTER | WB_RIGHT |   \
-                                     WB_TOP | WB_VCENTER | WB_BOTTOM |  \
-                                     WB_WORDBREAK | WB_NOLABEL)
+static constexpr auto PUSHBUTTON_VIEW_STYLE = WB_3DLOOK |
+                                     WB_LEFT | WB_CENTER | WB_RIGHT |
+                                     WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                     WB_WORDBREAK | WB_NOLABEL |
+                                     WB_DEFBUTTON | WB_NOLIGHTBORDER |
+                                     WB_RECTSTYLE | WB_SMALLSTYLE |
+                                     WB_TOGGLE;
+static constexpr auto RADIOBUTTON_VIEW_STYLE = WB_3DLOOK |
+                                     WB_LEFT | WB_CENTER | WB_RIGHT |
+                                     WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                     WB_WORDBREAK | WB_NOLABEL;
+static constexpr auto CHECKBOX_VIEW_STYLE = WB_3DLOOK |
+                                     WB_LEFT | WB_CENTER | WB_RIGHT |
+                                     WB_TOP | WB_VCENTER | WB_BOTTOM |
+                                     WB_WORDBREAK | WB_NOLABEL;
 
 #define STYLE_RADIOBUTTON_MONO      (sal_uInt16(0x0001)) // legacy
 #define STYLE_CHECKBOX_MONO         (sal_uInt16(0x0001)) // legacy
@@ -151,7 +153,7 @@ OUString Button::GetStandardText(StandardButtonType eButton)
     return VclResId(aResIdAry[static_cast<sal_uInt16>(eButton)]);
 }
 
-bool Button::SetModeImage( const Image& rImage )
+void Button::SetModeImage( const Image& rImage )
 {
     if ( rImage != mpButtonData->maImage )
     {
@@ -159,7 +161,6 @@ bool Button::SetModeImage( const Image& rImage )
         StateChanged( StateChangedType::Data );
         queue_resize();
     }
-    return true;
 }
 
 Image const & Button::GetModeImage( ) const
@@ -634,6 +635,7 @@ void PushButton::ImplInitPushButtonData()
     mnDDStyle       = PushButtonDropdownStyle::NONE;
     mbIsActive    = false;
     mbPressed       = false;
+    mbIsStock       = false;
 }
 
 namespace
@@ -823,7 +825,6 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
     const StyleSettings&    rStyleSettings = GetSettings().GetStyleSettings();
     tools::Rectangle               aInRect = rRect;
     Color                   aColor;
-    OUString                aText = PushButton::GetText(); // PushButton:: because of MoreButton
     DrawTextFlags           nTextStyle = ImplGetTextStyle( nDrawFlags );
     DrawSymbolFlags         nStyle;
 
@@ -872,7 +873,7 @@ void PushButton::ImplDrawPushButtonContent(OutputDevice* pDev, DrawFlags nDrawFl
     {
         long nSeparatorX = 0;
         tools::Rectangle aSymbolRect = aInRect;
-        if ( !aText.isEmpty() && ! (ImplGetButtonState() & DrawButtonFlags::NoText) )
+        if (!(ImplGetButtonState() & DrawButtonFlags::NoText))
         {
             // calculate symbol size
             long nSymbolSize    = pDev->GetTextHeight() / 2 + 1;
@@ -1045,6 +1046,8 @@ void PushButton::ImplDrawPushButton(vcl::RenderContext& rRenderContext)
     if (bNativeOK)
     {
         PushButtonValue aControlValue;
+        aControlValue.mbIsStock = isStock();
+
         tools::Rectangle aCtrlRegion(aInRect);
         ControlState nState = ControlState::NONE;
 
@@ -1698,7 +1701,8 @@ void PushButton::ShowFocus(const tools::Rectangle& rRect)
 {
     if (IsNativeControlSupported(ControlType::Pushbutton, ControlPart::Focus))
     {
-        ImplControlValue aControlValue;
+        PushButtonValue aControlValue;
+        aControlValue.mbIsStock = isStock();
         tools::Rectangle aInRect(Point(), GetOutputSizePixel());
         GetOutDev()->DrawNativeControl(ControlType::Pushbutton, ControlPart::Focus, aInRect,
                                        ControlState::FOCUSED, aControlValue, OUString());
@@ -2257,9 +2261,8 @@ void RadioButton::ImplUncheckAllOther()
 
     std::vector<VclPtr<RadioButton> > aGroup(GetRadioButtonGroup(false));
     // iterate over radio button group and checked buttons
-    for (auto const& elem : aGroup)
+    for (VclPtr<RadioButton>& pWindow : aGroup)
     {
-        VclPtr<RadioButton> pWindow = elem;
         if ( pWindow->IsChecked() )
         {
             pWindow->SetState( false );
@@ -2597,11 +2600,8 @@ bool RadioButton::PreNotify( NotifyEvent& rNEvt )
             // trigger redraw if mouse over state has changed
             if( IsNativeControlSupported(ControlType::Radiobutton, ControlPart::Entire) )
             {
-                if( ( maMouseRect.IsInside( GetPointerPosPixel()) &&
-                     !maMouseRect.IsInside( GetLastPointerPosPixel()) ) ||
-                    ( maMouseRect.IsInside( GetLastPointerPosPixel()) &&
-                     !maMouseRect.IsInside( GetPointerPosPixel()) ) ||
-                     pMouseEvt->IsLeaveWindow() || pMouseEvt->IsEnterWindow() )
+                if (maMouseRect.IsInside(GetPointerPosPixel()) != maMouseRect.IsInside(GetLastPointerPosPixel()) ||
+                    pMouseEvt->IsLeaveWindow() || pMouseEvt->IsEnterWindow())
                 {
                     Invalidate( maStateRect );
                 }
@@ -2617,7 +2617,7 @@ void RadioButton::Toggle()
     ImplCallEventListenersAndHandler( VclEventId::RadiobuttonToggle, [this] () { maToggleHdl.Call(*this); } );
 }
 
-bool RadioButton::SetModeRadioImage( const Image& rImage )
+void RadioButton::SetModeRadioImage( const Image& rImage )
 {
     if ( rImage != maImage )
     {
@@ -2625,7 +2625,6 @@ bool RadioButton::SetModeRadioImage( const Image& rImage )
         CompatStateChanged( StateChangedType::Data );
         queue_resize();
     }
-    return true;
 }
 
 
@@ -2918,12 +2917,6 @@ void RadioButton::ShowFocus(const tools::Rectangle& rRect)
 
         aInRect.SetLeft( rRect.Left() );  // exclude the radio element itself from the focusrect
 
-        //to-do, figure out a better solution here
-        aInRect.AdjustLeft( -2 );
-        aInRect.AdjustRight(2 );
-        aInRect.AdjustTop( -2 );
-        aInRect.AdjustBottom(2 );
-
         DrawNativeControl(ControlType::Radiobutton, ControlPart::Focus, aInRect,
                           ControlState::FOCUSED, aControlValue, OUString());
     }
@@ -3160,12 +3153,9 @@ void CheckBox::ImplCheck()
     meState = eNewState;
 
     VclPtr<vcl::Window> xWindow = this;
-    if( GetStyle() & WB_EARLYTOGGLE )
-        Toggle();
     Invalidate();
     Update();
-    if( ! (GetStyle() & WB_EARLYTOGGLE) )
-        Toggle();
+    Toggle();
     if ( xWindow->IsDisposed() )
         return;
     Click();
@@ -3506,11 +3496,8 @@ bool CheckBox::PreNotify( NotifyEvent& rNEvt )
             // trigger redraw if mouse over state has changed
             if( IsNativeControlSupported(ControlType::Checkbox, ControlPart::Entire) )
             {
-                if( ( maMouseRect.IsInside( GetPointerPosPixel()) &&
-                     !maMouseRect.IsInside( GetLastPointerPosPixel()) ) ||
-                    ( maMouseRect.IsInside( GetLastPointerPosPixel()) &&
-                     !maMouseRect.IsInside( GetPointerPosPixel()) ) ||
-                    pMouseEvt->IsLeaveWindow() || pMouseEvt->IsEnterWindow() )
+                if (maMouseRect.IsInside(GetPointerPosPixel()) != maMouseRect.IsInside(GetLastPointerPosPixel()) ||
+                    pMouseEvt->IsLeaveWindow() || pMouseEvt->IsEnterWindow())
                 {
                     Invalidate( maStateRect );
                 }
@@ -3734,7 +3721,8 @@ Size CheckBox::CalcMinimumSize( long nMaxWidth ) const
 
 Size CheckBox::GetOptimalSize() const
 {
-    return CalcMinimumSize();
+    int nWidthRequest(get_width_request());
+    return CalcMinimumSize(nWidthRequest != -1 ? nWidthRequest : 0);
 }
 
 void CheckBox::ShowFocus(const tools::Rectangle& rRect)
@@ -3745,12 +3733,6 @@ void CheckBox::ShowFocus(const tools::Rectangle& rRect)
         tools::Rectangle aInRect(Point(0, 0), GetSizePixel());
 
         aInRect.SetLeft( rRect.Left() );  // exclude the checkbox itself from the focusrect
-
-        //to-do, figure out a better solution here
-        aInRect.AdjustLeft( -2 );
-        aInRect.AdjustRight(2 );
-        aInRect.AdjustTop( -2 );
-        aInRect.AdjustBottom(2 );
 
         DrawNativeControl(ControlType::Checkbox, ControlPart::Focus, aInRect,
                           ControlState::FOCUSED, aControlValue, OUString());
@@ -3828,16 +3810,12 @@ void DisclosureButton::ImplDrawCheckBoxState(vcl::RenderContext& rRenderContext)
 
     ImplSVCtrlData& rCtrlData(ImplGetSVData()->maCtrlData);
     if (!rCtrlData.mpDisclosurePlus)
-        rCtrlData.mpDisclosurePlus = new Image(BitmapEx(SV_DISCLOSURE_PLUS));
+        rCtrlData.mpDisclosurePlus.reset(new Image(BitmapEx(SV_DISCLOSURE_PLUS)));
     if (!rCtrlData.mpDisclosureMinus)
-        rCtrlData.mpDisclosureMinus = new Image(BitmapEx(SV_DISCLOSURE_MINUS));
+        rCtrlData.mpDisclosureMinus.reset(new Image(BitmapEx(SV_DISCLOSURE_MINUS)));
 
-    Image* pImg = nullptr;
-    pImg = IsChecked() ? rCtrlData.mpDisclosureMinus : rCtrlData.mpDisclosurePlus;
-
-    SAL_WARN_IF(!pImg, "vcl", "no disclosure image");
-    if (!pImg)
-        return;
+    Image* pImg
+        = IsChecked() ? rCtrlData.mpDisclosureMinus.get() : rCtrlData.mpDisclosurePlus.get();
 
     DrawImageFlags nStyle = DrawImageFlags::NONE;
     if (!IsEnabled())
@@ -3849,7 +3827,6 @@ void DisclosureButton::ImplDrawCheckBoxState(vcl::RenderContext& rRenderContext)
                (aSize.Height() - aImgSize.Height()) / 2);
     aOff += aStateRect.TopLeft();
     rRenderContext.DrawImage(aOff, *pImg, nStyle);
-
 }
 
 void DisclosureButton::KeyInput( const KeyEvent& rKEvt )

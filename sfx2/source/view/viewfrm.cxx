@@ -22,6 +22,7 @@
 #include <sfx2/infobar.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/classificationhelper.hxx>
+#include <sfx2/notebookbar/SfxNotebookBar.hxx>
 #include <com/sun/star/document/MacroExecMode.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/DispatchRecorder.hpp>
@@ -30,7 +31,9 @@
 #include <com/sun/star/frame/XLayoutManager.hpp>
 #include <com/sun/star/frame/XComponentLoader.hpp>
 #include <officecfg/Office/Common.hxx>
+#include <officecfg/Setup.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
+#include <vcl/mnemonic.hxx>
 #include <vcl/splitwin.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <svl/intitem.hxx>
@@ -65,6 +68,7 @@
 #include <com/sun/star/container/XIndexContainer.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <unotools/ucbhelper.hxx>
 #include <comphelper/lok.hxx>
@@ -80,7 +84,6 @@
 #include <basic/sbmod.hxx>
 #include <basic/sbmeth.hxx>
 #include <basic/sbx.hxx>
-#include <comphelper/storagehelper.hxx>
 #include <svtools/asynclink.hxx>
 #include <svl/sharecontrolfile.hxx>
 #include <svtools/strings.hrc>
@@ -89,6 +92,8 @@
 #include <shellimpl.hxx>
 
 #include <boost/optional.hpp>
+
+#include <unotools/configmgr.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -106,6 +111,7 @@ using ::com::sun::star::container::XIndexContainer;
 #include <sfx2/objface.hxx>
 #include <openflag.hxx>
 #include <objshimp.hxx>
+#include <openuriexternally.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/objsh.hxx>
 #include <sfx2/bindings.hxx>
@@ -198,7 +204,7 @@ bool IsSignPDF(const SfxObjectShellRef& xObjSh)
     SfxMedium* pMedium = xObjSh->GetMedium();
     if (pMedium && !pMedium->IsOriginallyReadOnly())
     {
-        std::shared_ptr<const SfxFilter> pFilter = pMedium->GetFilter();
+        const std::shared_ptr<const SfxFilter>& pFilter = pMedium->GetFilter();
         if (pFilter && pFilter->GetName() == "draw_pdf_import")
             return true;
     }
@@ -355,7 +361,7 @@ void SfxViewFrame::ExecReload_Impl( SfxRequest& rReq )
                   && !pSh->IsModifyPasswordEntered() )
                 {
                     const OUString aDocumentName = INetURLObject( pMed->GetOrigURL() ).GetMainURL( INetURLObject::DecodeMechanism::WithCharset );
-                    if( !AskPasswordToModify_Impl( pMed->GetInteractionHandler(), aDocumentName, pMed->GetOrigFilter(), pSh->GetModifyPasswordHash(), pSh->GetModifyPasswordInfo() ) )
+                    if( !AskPasswordToModify_Impl( pMed->GetInteractionHandler(), aDocumentName, pMed->GetFilter(), pSh->GetModifyPasswordHash(), pSh->GetModifyPasswordInfo() ) )
                     {
                         // this is a read-only document, if it has "Password to modify"
                         // the user should enter password before he can edit the document
@@ -897,7 +903,7 @@ void SfxViewFrame::ExecHistory_Impl( SfxRequest &rReq )
 {
     // Is there an Undo-Manager on the top Shell?
     SfxShell *pSh = GetDispatcher()->GetShell(0);
-    ::svl::IUndoManager* pShUndoMgr = pSh->GetUndoManager();
+    SfxUndoManager* pShUndoMgr = pSh->GetUndoManager();
     bool bOK = false;
     if ( pShUndoMgr )
     {
@@ -947,7 +953,7 @@ void SfxViewFrame::StateHistory_Impl( SfxItemSet &rSet )
         // I'm just on reload and am yielding myself ...
         return;
 
-    ::svl::IUndoManager *pShUndoMgr = pSh->GetUndoManager();
+    SfxUndoManager *pShUndoMgr = pSh->GetUndoManager();
     if ( !pShUndoMgr )
     {
         // The SW has its own undo in the View
@@ -990,7 +996,7 @@ void SfxViewFrame::StateHistory_Impl( SfxItemSet &rSet )
         }
         else
         {
-            rSet.Put( SfxStringItem( SID_REDO, SvtResId(STR_REDO)+pShUndoMgr->GetRedoActionComment() ) );
+            rSet.Put( SfxStringItem( SID_REDO, MnemonicGenerator::EraseAllMnemonicChars(SvtResId(STR_REDO))+pShUndoMgr->GetRedoActionComment() ) );
         }
     }
     else
@@ -1088,7 +1094,7 @@ void SfxViewFrame::ReleaseObjectShell_Impl()
     GetDispatcher()->SetDisableFlags( SfxDisableFlags::NONE );
 }
 
-bool SfxViewFrame::Close()
+void SfxViewFrame::Close()
 {
 
     DBG_ASSERT( GetFrame().IsClosing_Impl() || !GetFrame().GetFrameInterface().is(), "ViewFrame closed too early!" );
@@ -1106,8 +1112,6 @@ bool SfxViewFrame::Close()
     // manner, thus it is better to let the dispatcher be.
     GetDispatcher()->Lock(true);
     delete this;
-
-    return true;
 }
 
 void SfxViewFrame::DoActivate( bool bUI )
@@ -1214,6 +1218,63 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
                 rBind.Invalidate( SID_RELOAD );
                 rBind.Invalidate( SID_EDITDOC );
 
+                // inform about the community involvement
+                const sal_Int64 nLastGetInvolvedShown = officecfg::Setup::Product::LastTimeGetInvolvedShown::get();
+                const sal_Int64 nNow = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                const sal_Int64 nPeriodSec(60 * 60 * 24 * 180); // 180 days in seconds
+                bool bUpdateLastTimeGetInvolvedShown = false;
+
+                if (nLastGetInvolvedShown == 0)
+                    bUpdateLastTimeGetInvolvedShown = true;
+                else if (nPeriodSec < nNow && nLastGetInvolvedShown < (nNow + nPeriodSec/2) - nPeriodSec) // 90d alternating with donation
+                {
+                    bUpdateLastTimeGetInvolvedShown = true;
+
+                    VclPtr<SfxInfoBarWindow> pInfoBar = AppendInfoBar("getinvolved", SfxResId(STR_GET_INVOLVED_TEXT), InfoBarType::Info);
+
+                    VclPtrInstance<PushButton> xGetInvolvedButton(&GetWindow());
+                    xGetInvolvedButton->SetText(SfxResId(STR_GET_INVOLVED_BUTTON));
+                    xGetInvolvedButton->SetSizePixel(xGetInvolvedButton->GetOptimalSize());
+                    xGetInvolvedButton->SetClickHdl(LINK(this, SfxViewFrame, GetInvolvedHandler));
+                    pInfoBar->addButton(xGetInvolvedButton);
+                }
+
+                if (bUpdateLastTimeGetInvolvedShown
+                    && !officecfg::Setup::Product::LastTimeGetInvolvedShown::isReadOnly())
+                {
+                    std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
+                    officecfg::Setup::Product::LastTimeGetInvolvedShown::set(nNow, batch);
+                    batch->commit();
+                }
+
+                // inform about donations
+                const sal_Int64 nLastDonateShown = officecfg::Setup::Product::LastTimeDonateShown::get();
+                bool bUpdateLastTimeDonateShown = false;
+
+                if (nLastDonateShown == 0)
+                    bUpdateLastTimeDonateShown = true;
+                else if (nPeriodSec < nNow && nLastDonateShown < nNow - nPeriodSec) // 90d alternating with getinvolved
+                {
+                    bUpdateLastTimeDonateShown = true;
+
+                    VclPtr<SfxInfoBarWindow> pInfoBar = AppendInfoBar("getdonate", SfxResId(STR_GET_DONATE_TEXT), InfoBarType::Info);
+
+                    VclPtrInstance<PushButton> xGetDonateButton(&GetWindow());
+                    xGetDonateButton->SetText(SfxResId(STR_GET_DONATE_BUTTON));
+                    xGetDonateButton->SetSizePixel(xGetDonateButton->GetOptimalSize());
+                    xGetDonateButton->SetClickHdl(LINK(this, SfxViewFrame, GetDonateHandler));
+                    pInfoBar->addButton(xGetDonateButton);
+                }
+
+                if (bUpdateLastTimeDonateShown
+                    && !officecfg::Setup::Product::LastTimeDonateShown::isReadOnly())
+                {
+                    std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
+                    officecfg::Setup::Product::LastTimeDonateShown::set(nNow, batch);
+                    batch->commit();
+                }
+
+                // read-only infobar if necessary
                 const SfxViewShell *pVSh;
                 const SfxShell *pFSh;
                 if ( m_xObjSh->IsReadOnly() &&
@@ -1336,6 +1397,16 @@ void SfxViewFrame::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint )
     }
 }
 
+IMPL_LINK_NOARG(SfxViewFrame, GetInvolvedHandler, Button*, void)
+{
+    GetDispatcher()->Execute(SID_GETINVOLVED);
+}
+
+IMPL_LINK_NOARG(SfxViewFrame, GetDonateHandler, Button*, void)
+{
+    GetDispatcher()->Execute(SID_DONATION);
+}
+
 IMPL_LINK(SfxViewFrame, SwitchReadOnlyHandler, Button*, pButton, void)
 {
     if (m_xObjSh.is() && IsSignPDF(m_xObjSh))
@@ -1356,7 +1427,6 @@ void SfxViewFrame::Construct_Impl( SfxObjectShell *pObjSh )
 {
     m_pImpl->bResizeInToOut = true;
     m_pImpl->bObjLocked = false;
-    m_pImpl->pFocusWin = nullptr;
     m_pImpl->nCurViewId = SFX_INTERFACE_NONE;
     m_pImpl->bReloading = false;
     m_pImpl->bIsDowning = false;
@@ -1367,9 +1437,9 @@ void SfxViewFrame::Construct_Impl( SfxObjectShell *pObjSh )
     m_pImpl->pWindow = nullptr;
 
     SetPool( &SfxGetpApp()->GetPool() );
-    m_pDispatcher = new SfxDispatcher(this);
+    m_pDispatcher.reset( new SfxDispatcher(this) );
     if ( !GetBindings().GetDispatcher() )
-        GetBindings().SetDispatcher( m_pDispatcher );
+        GetBindings().SetDispatcher( m_pDispatcher.get() );
 
     m_xObjSh = pObjSh;
     if ( m_xObjSh.is() && m_xObjSh->IsPreview() )
@@ -1412,7 +1482,6 @@ SfxViewFrame::SfxViewFrame
     SfxObjectShell*     pObjShell
 )
     : m_pImpl( new SfxViewFrame_Impl( rFrame ) )
-    , m_pDispatcher(nullptr)
     , m_pBindings( new SfxBindings )
     , m_nAdjustPosPixelLock( 0 )
 {
@@ -1441,7 +1510,6 @@ SfxViewFrame::~SfxViewFrame()
         KillDispatcher_Impl();
 
     m_pImpl->pWindow.disposeAndClear();
-    m_pImpl->pFocusWin.clear();
 
     if ( GetFrame().GetCurrentViewFrame() == this )
         GetFrame().SetCurrentViewFrame_Impl( nullptr );
@@ -1472,7 +1540,7 @@ void SfxViewFrame::KillDispatcher_Impl()
             m_pDispatcher->Pop( *pModule, SfxDispatcherPopFlags::POP_UNTIL );
         else
             m_pDispatcher->Pop( *this );
-        DELETEZ(m_pDispatcher);
+        m_pDispatcher.reset();
     }
 }
 
@@ -1686,38 +1754,35 @@ void SfxViewFrame::MakeActive_Impl( bool bGrabFocus )
     {
         if ( IsVisible() )
         {
-            if ( GetViewShell() )
+            bool bPreview = false;
+            if (GetObjectShell()->IsPreview())
             {
-                bool bPreview = false;
-                if ( GetObjectShell()->IsPreview() )
-                {
-                    bPreview = true;
-                }
+                bPreview = true;
+            }
 
-                css::uno::Reference< css::frame::XFrame > xFrame = GetFrame().GetFrameInterface();
-                if ( !bPreview )
-                {
-                    SetViewFrame( this );
-                    GetBindings().SetActiveFrame( css::uno::Reference< css::frame::XFrame >() );
-                    uno::Reference< frame::XFramesSupplier > xSupp( xFrame, uno::UNO_QUERY );
-                    if ( xSupp.is() )
-                        xSupp->setActiveFrame( uno::Reference < frame::XFrame >() );
+            css::uno::Reference<css::frame::XFrame> xFrame = GetFrame().GetFrameInterface();
+            if (!bPreview)
+            {
+                SetViewFrame(this);
+                GetBindings().SetActiveFrame(css::uno::Reference<css::frame::XFrame>());
+                uno::Reference<frame::XFramesSupplier> xSupp(xFrame, uno::UNO_QUERY);
+                if (xSupp.is())
+                    xSupp->setActiveFrame(uno::Reference<frame::XFrame>());
 
-                    css::uno::Reference< css::awt::XWindow > xContainerWindow = xFrame->getContainerWindow();
-                    VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xContainerWindow);
-                    if (pWindow && pWindow->HasChildPathFocus() && bGrabFocus)
-                    {
-                        SfxInPlaceClient *pCli = GetViewShell()->GetUIActiveClient();
-                        if ( !pCli || !pCli->IsObjectUIActive() )
-                                GetFrame().GrabFocusOnComponent_Impl();
-                    }
-                }
-                else
+                css::uno::Reference< css::awt::XWindow > xContainerWindow = xFrame->getContainerWindow();
+                VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xContainerWindow);
+                if (pWindow && pWindow->HasChildPathFocus() && bGrabFocus)
                 {
-                    GetBindings().SetDispatcher( GetDispatcher() );
-                    GetBindings().SetActiveFrame( css::uno::Reference< css::frame::XFrame > () );
-                    GetDispatcher()->Update_Impl();
+                    SfxInPlaceClient *pCli = GetViewShell()->GetUIActiveClient();
+                    if (!pCli || !pCli->IsObjectUIActive())
+                        GetFrame().GrabFocusOnComponent_Impl();
                 }
+            }
+            else
+            {
+                GetBindings().SetDispatcher(GetDispatcher());
+                GetBindings().SetActiveFrame(css::uno::Reference<css::frame::XFrame>());
+                GetDispatcher()->Update_Impl();
             }
         }
     }
@@ -2162,7 +2227,7 @@ void SfxViewFrame::ExecView_Impl
         TODO: export special helper "framework::FrameListAnalyzer" within the framework module
         and use it here.
 */
-bool impl_maxOpenDocCountReached()
+static bool impl_maxOpenDocCountReached()
 {
     css::uno::Reference< css::uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
     boost::optional<sal_Int32> x(officecfg::Office::Common::Misc::MaxOpenDocuments::get(xContext));
@@ -2358,9 +2423,11 @@ void SfxViewFrame::Resize( bool bForce )
     }
 }
 
+#if HAVE_FEATURE_SCRIPTING
+
 #define LINE_SEP 0x0A
 
-void CutLines( OUString& rStr, sal_Int32 nStartLine, sal_Int32 nLines )
+static void CutLines( OUString& rStr, sal_Int32 nStartLine, sal_Int32 nLines )
 {
     sal_Int32 nStartPos = 0;
     sal_Int32 nLine = 0;
@@ -2401,6 +2468,8 @@ void CutLines( OUString& rStr, sal_Int32 nStartLine, sal_Int32 nLines )
     }
 }
 
+#endif
+
 /*
     add new recorded dispatch macro script into the application global basic
     lib container. It generates a new unique id for it and insert the macro
@@ -2415,7 +2484,17 @@ void SfxViewFrame::AddDispatchMacroToBasic_Impl( const OUString& sMacro )
         return;
 
     SfxApplication* pSfxApp = SfxGetpApp();
-    SfxRequest aReq( SID_BASICCHOOSER, SfxCallMode::SYNCHRON, pSfxApp->GetPool() );
+    SfxItemPool& rPool = pSfxApp->GetPool();
+    SfxRequest aReq(SID_BASICCHOOSER, SfxCallMode::SYNCHRON, rPool);
+
+    //seen in tdf#122598, no parent for subsequent dialog
+    SfxAllItemSet aSet(rPool);
+    css::uno::Reference< css::frame::XFrame > xFrame(
+            GetFrame().GetFrameInterface(),
+            css::uno::UNO_QUERY);
+    aSet.Put(SfxUnoFrameItem(SID_FILLFRAME, xFrame));
+    aReq.SetInternalArgs_Impl(aSet);
+
     aReq.AppendItem( SfxBoolItem(SID_RECORDMACRO,true) );
     const SfxPoolItem* pRet = SfxGetpApp()->ExecuteSlot( aReq );
     OUString aScriptURL;
@@ -2728,6 +2807,11 @@ void SfxViewFrame::MiscExec_Impl( SfxRequest& rReq )
                     bool bNewFullScreenMode = pItem ? pItem->GetValue() : !pWork->IsFullScreenMode();
                     if ( bNewFullScreenMode != pWork->IsFullScreenMode() )
                     {
+                        if ( bNewFullScreenMode )
+                            sfx2::SfxNotebookBar::LockNotebookBar();
+                        else
+                            sfx2::SfxNotebookBar::UnlockNotebookBar();
+
                         Reference< css::beans::XPropertySet > xLMPropSet( xLayoutManager, UNO_QUERY );
                         if ( xLMPropSet.is() )
                         {
@@ -2932,8 +3016,8 @@ void SfxViewFrame::ChildWindowExecute( SfxRequest &rReq )
         // First make sure that the sidebar is visible
         ShowChildWindow(SID_SIDEBAR);
 
-        ::sfx2::sidebar::Sidebar::TogglePanel("StyleListPanel",
-                                              GetFrame().GetFrameInterface());
+        ::sfx2::sidebar::Sidebar::ShowPanel("StyleListPanel",
+                                            GetFrame().GetFrameInterface(), true);
         rReq.Done();
         return;
     }

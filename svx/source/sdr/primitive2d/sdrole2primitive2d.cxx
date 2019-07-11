@@ -23,6 +23,7 @@
 #include <svx/sdr/primitive2d/sdrdecompositiontools.hxx>
 #include <drawinglayer/primitive2d/sdrdecompositiontools2d.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
+#include <basegfx/polygon/b2dpolypolygon.hxx>
 
 
 using namespace com::sun::star;
@@ -76,7 +77,7 @@ namespace drawinglayer
             Primitive2DContainer  aRetval;
 
             // create unit outline polygon
-            const basegfx::B2DPolygon aUnitOutline(basegfx::utils::createUnitPolygon());
+            const basegfx::B2DPolygon& aUnitOutline(basegfx::utils::createUnitPolygon());
 
             // add fill
             if(!bBehaveCompatibleToPaintVersion

@@ -36,6 +36,16 @@
 #include "callnk.hxx"
 #include <svx/srchdlg.hxx>
 
+bool SwCursorShell::CallCursorShellFN( FNCursorShell fnCursor )
+{
+    SwCallLink aLk( *this ); // watch Cursor-Moves
+    bool bRet = (this->*fnCursor)();
+    if( bRet )
+        UpdateCursor( SwCursorShell::SCROLLWIN | SwCursorShell::CHKRANGE |
+                    SwCursorShell::READONLY );
+    return bRet;
+}
+
 bool SwCursorShell::CallCursorFN( FNCursor fnCursor )
 {
     SwCallLink aLk( *this ); // watch Cursor-Moves
@@ -84,8 +94,9 @@ bool SwCursorShell::GotoFootnoteText()
                    GetCursor_()->GetPoint()->nNode.GetNode().GetTextNode() : nullptr;
         if( pTextNd )
         {
-            const SwFrame *pFrame = pTextNd->getLayoutFrame( GetLayout(), &GetCursor_()->GetSttPos(),
-                                                 GetCursor_()->Start() );
+            std::pair<Point, bool> const tmp(GetCursor_()->GetSttPos(), true);
+            const SwFrame *pFrame = pTextNd->getLayoutFrame( GetLayout(),
+                                                 GetCursor_()->Start(), &tmp);
             const SwFootnoteBossFrame* pFootnoteBoss;
             bool bSkip = pFrame && pFrame->IsInFootnote();
             while( pFrame && nullptr != ( pFootnoteBoss = pFrame->FindFootnoteBossFrame() ) )
@@ -100,11 +111,10 @@ bool SwCursorShell::GotoFootnoteText()
                                                         (pFrame)->ContainsContent();
                         if( pCnt )
                         {
-                            const SwContentNode* pNode = pCnt->GetNode();
-                            GetCursor_()->GetPoint()->nNode = *pNode;
-                            GetCursor_()->GetPoint()->nContent.Assign(
-                                const_cast<SwContentNode*>(pNode),
-                                static_cast<const SwTextFrame*>(pCnt)->GetOfst() );
+                            SwTextFrame const*const pTF(
+                                    static_cast<const SwTextFrame*>(pCnt));
+                            *GetCursor_()->GetPoint() =
+                                    pTF->MapViewToModelPos(pTF->GetOfst());
                             UpdateCursor( SwCursorShell::SCROLLWIN |
                                 SwCursorShell::CHKRANGE | SwCursorShell::READONLY );
                             bRet = true;
@@ -163,13 +173,13 @@ bool SwCursorShell::GotoFootnoteAnchor()
     return bRet;
 }
 
-inline bool CmpLE( const SwTextFootnote& rFootnote, sal_uLong nNd, sal_Int32 nCnt )
+static bool CmpLE( const SwTextFootnote& rFootnote, sal_uLong nNd, sal_Int32 nCnt )
 {
     const sal_uLong nTNd = rFootnote.GetTextNode().GetIndex();
     return nTNd < nNd || ( nTNd == nNd && rFootnote.GetStart() <= nCnt );
 }
 
-inline bool CmpL( const SwTextFootnote& rFootnote, sal_uLong nNd, sal_Int32 nCnt )
+static bool CmpL( const SwTextFootnote& rFootnote, sal_uLong nNd, sal_Int32 nCnt )
 {
     const sal_uLong nTNd = rFootnote.GetTextNode().GetIndex();
     return nTNd < nNd || ( nTNd == nNd && rFootnote.GetStart() < nCnt );
@@ -181,7 +191,7 @@ bool SwCursor::GotoNextFootnoteAnchor()
     const SwTextFootnote* pTextFootnote = nullptr;
     size_t nPos = 0;
 
-    if( !rFootnoteArr.size() )
+    if( rFootnoteArr.empty() )
     {
         SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
         return false;
@@ -254,7 +264,7 @@ bool SwCursor::GotoPrevFootnoteAnchor()
     const SwTextFootnote* pTextFootnote = nullptr;
     size_t nPos = 0;
 
-    if( !rFootnoteArr.size() )
+    if( rFootnoteArr.empty() )
     {
         SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
         return false;

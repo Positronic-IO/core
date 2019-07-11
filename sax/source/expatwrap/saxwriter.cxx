@@ -35,6 +35,7 @@
 
 #include <com/sun/star/io/XActiveDataSource.hpp>
 
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/weak.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -94,23 +95,23 @@ private:
     bool                    m_bStartElementFinished;
 
     /// @throws SAXException
-    inline sal_uInt32 writeSequence();
+    sal_uInt32 writeSequence();
 
     // use only if to insert the bytes more space in the sequence is needed and
     // so the sequence has to write out and reset rPos to 0
     // writes sequence only on overflow, sequence could be full on the end (rPos == SEQUENCESIZE)
     /// @throws SAXException
-    inline void AddBytes(sal_Int8* pTarget, sal_uInt32& rPos,
+    void AddBytes(sal_Int8* pTarget, sal_uInt32& rPos,
                 const sal_Int8* pBytes, sal_uInt32 nBytesCount);
     /// @throws SAXException
-    inline bool convertToXML(const sal_Unicode * pStr,
+    bool convertToXML(const sal_Unicode * pStr,
                         sal_Int32 nStrLen,
                         bool bDoNormalization,
                         bool bNormalizeWhitespace,
                         sal_Int8 *pTarget,
                         sal_uInt32& rPos);
     /// @throws SAXException
-    inline void FinishStartElement();
+    void FinishStartElement();
 public:
     explicit SaxWriterHelper(Reference< XOutputStream > const & m_TempOut)
         : m_out(m_TempOut)
@@ -130,13 +131,13 @@ public:
     }
 
     /// @throws SAXException
-    inline void insertIndentation(sal_uInt32 m_nLevel);
+    void insertIndentation(sal_uInt32 m_nLevel);
 
 // returns whether it works correct or invalid characters were in the string
 // If there are invalid characters in the string it returns sal_False.
 // Than the calling method has to throw the needed Exception.
     /// @throws SAXException
-    inline bool writeString(const OUString& rWriteOutString,
+    bool writeString(const OUString& rWriteOutString,
                         bool bDoNormalization,
                         bool bNormalizeWhitespace);
 
@@ -144,42 +145,42 @@ public:
         { return static_cast<sal_uInt32>(nCurrentPos - nLastLineFeedPos); }
 
     /// @throws SAXException
-    inline void startDocument();
+    void startDocument();
 
 // returns whether it works correct or invalid characters were in the strings
 // If there are invalid characters in one of the strings it returns sal_False.
 // Than the calling method has to throw the needed Exception.
     /// @throws SAXException
-    inline SaxInvalidCharacterError startElement(const OUString& rName, const Reference< XAttributeList >& xAttribs);
+    SaxInvalidCharacterError startElement(const OUString& rName, const Reference< XAttributeList >& xAttribs);
     /// @throws SAXException
-    inline bool FinishEmptyElement();
+    bool FinishEmptyElement();
 
 // returns whether it works correct or invalid characters were in the string
 // If there are invalid characters in the string it returns sal_False.
 // Than the calling method has to throw the needed Exception.
     /// @throws SAXException
-    inline bool endElement(const OUString& rName);
+    bool endElement(const OUString& rName);
     /// @throws SAXException
-    inline void endDocument();
+    void endDocument();
 
 // returns whether it works correct or invalid characters were in the strings
 // If there are invalid characters in the string it returns sal_False.
 // Than the calling method has to throw the needed Exception.
     /// @throws SAXException
-    inline bool processingInstruction(const OUString& rTarget, const OUString& rData);
+    bool processingInstruction(const OUString& rTarget, const OUString& rData);
     /// @throws SAXException
-    inline void startCDATA();
+    void startCDATA();
     /// @throws SAXException
-    inline void endCDATA();
+    void endCDATA();
 
 // returns whether it works correct or invalid characters were in the strings
 // If there are invalid characters in the string it returns sal_False.
 // Than the calling method has to throw the needed Exception.
     /// @throws SAXException
-    inline bool comment(const OUString& rComment);
+    bool comment(const OUString& rComment);
 
     /// @throws SAXException
-    inline void clearBuffer();
+    void clearBuffer();
 };
 
 const bool g_bValidCharsBelow32[32] =
@@ -191,7 +192,7 @@ const bool g_bValidCharsBelow32[32] =
     false,false,false,false,false,false,false,false
 };
 
-inline bool IsInvalidChar(const sal_Unicode aChar)
+bool IsInvalidChar(const sal_Unicode aChar)
 {
     bool bRet(false);
     // check first for the most common characters
@@ -206,26 +207,25 @@ inline bool IsInvalidChar(const sal_Unicode aChar)
 * write through to the output stream
 *
 *****/
-inline sal_uInt32 SaxWriterHelper::writeSequence()
+sal_uInt32 SaxWriterHelper::writeSequence()
 {
     try
     {
         m_out->writeBytes( m_Sequence );
     }
-    catch (const IOException & e)
+    catch (const IOException &)
     {
-        Any a;
-        a <<= e;
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw SAXException(
             "IO exception during writing",
             Reference< XInterface > (),
-            a );
+            anyEx );
     }
     nLastLineFeedPos -= SEQUENCESIZE;
     return 0;
 }
 
-inline void SaxWriterHelper::AddBytes(sal_Int8* pTarget, sal_uInt32& rPos,
+void SaxWriterHelper::AddBytes(sal_Int8* pTarget, sal_uInt32& rPos,
                 const sal_Int8* pBytes, sal_uInt32 nBytesCount)
 {
     OSL_ENSURE((rPos + nBytesCount) > SEQUENCESIZE, "wrong use of AddBytesMethod");
@@ -252,7 +252,7 @@ inline void SaxWriterHelper::AddBytes(sal_Int8* pTarget, sal_uInt32& rPos,
            must call calcXMLByteLength on the same string, to ensure,
            that there is enough memory for converting.
  */
-inline bool SaxWriterHelper::convertToXML( const sal_Unicode * pStr,
+bool SaxWriterHelper::convertToXML( const sal_Unicode * pStr,
                         sal_Int32 nStrLen,
                         bool bDoNormalization,
                         bool bNormalizeWhitespace,
@@ -481,7 +481,7 @@ inline bool SaxWriterHelper::convertToXML( const sal_Unicode * pStr,
     return bRet;
 }
 
-inline void SaxWriterHelper::FinishStartElement()
+void SaxWriterHelper::FinishStartElement()
 {
     if (!m_bStartElementFinished)
     {
@@ -493,7 +493,7 @@ inline void SaxWriterHelper::FinishStartElement()
     }
 }
 
-inline void SaxWriterHelper::insertIndentation(sal_uInt32 m_nLevel)
+void SaxWriterHelper::insertIndentation(sal_uInt32 m_nLevel)
 {
     FinishStartElement();
     if (m_nLevel > 0)
@@ -531,7 +531,7 @@ inline void SaxWriterHelper::insertIndentation(sal_uInt32 m_nLevel)
     }
 }
 
-inline bool SaxWriterHelper::writeString( const OUString& rWriteOutString,
+bool SaxWriterHelper::writeString( const OUString& rWriteOutString,
                         bool bDoNormalization,
                         bool bNormalizeWhitespace )
 {
@@ -544,7 +544,7 @@ inline bool SaxWriterHelper::writeString( const OUString& rWriteOutString,
                     nCurrentPos);
 }
 
-inline void SaxWriterHelper::startDocument()
+void SaxWriterHelper::startDocument()
 {
     const char pc[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
     const int nLen = strlen( pc );
@@ -607,7 +607,7 @@ void CheckValidName(OUString const& rName)
 #endif
 }
 
-inline SaxInvalidCharacterError SaxWriterHelper::startElement(const OUString& rName, const Reference< XAttributeList >& xAttribs)
+SaxInvalidCharacterError SaxWriterHelper::startElement(const OUString& rName, const Reference< XAttributeList >& xAttribs)
 {
     FinishStartElement();
 
@@ -669,7 +669,7 @@ inline SaxInvalidCharacterError SaxWriterHelper::startElement(const OUString& rN
     return eRet;
 }
 
-inline bool SaxWriterHelper::FinishEmptyElement()
+bool SaxWriterHelper::FinishEmptyElement()
 {
     if (m_bStartElementFinished)
         return false;
@@ -688,7 +688,7 @@ inline bool SaxWriterHelper::FinishEmptyElement()
     return true;
 }
 
-inline bool SaxWriterHelper::endElement(const OUString& rName)
+bool SaxWriterHelper::endElement(const OUString& rName)
 {
     FinishStartElement();
 
@@ -712,7 +712,7 @@ inline bool SaxWriterHelper::endElement(const OUString& rName)
     return bRet;
 }
 
-inline void SaxWriterHelper::endDocument()
+void SaxWriterHelper::endDocument()
 {
     if (nCurrentPos > 0)
     {
@@ -722,7 +722,7 @@ inline void SaxWriterHelper::endDocument()
     }
 }
 
-inline void SaxWriterHelper::clearBuffer()
+void SaxWriterHelper::clearBuffer()
 {
     FinishStartElement();
     if (nCurrentPos > 0)
@@ -735,7 +735,7 @@ inline void SaxWriterHelper::clearBuffer()
     }
 }
 
-inline bool SaxWriterHelper::processingInstruction(const OUString& rTarget, const OUString& rData)
+bool SaxWriterHelper::processingInstruction(const OUString& rTarget, const OUString& rData)
 {
     FinishStartElement();
     mp_Sequence[nCurrentPos] = '<';
@@ -769,7 +769,7 @@ inline bool SaxWriterHelper::processingInstruction(const OUString& rTarget, cons
     return bRet;
 }
 
-inline void SaxWriterHelper::startCDATA()
+void SaxWriterHelper::startCDATA()
 {
     FinishStartElement();
     if ((nCurrentPos + 9) <= SEQUENCESIZE)
@@ -783,7 +783,7 @@ inline void SaxWriterHelper::startCDATA()
         nCurrentPos = writeSequence();
 }
 
-inline void SaxWriterHelper::endCDATA()
+void SaxWriterHelper::endCDATA()
 {
     FinishStartElement();
     if ((nCurrentPos + 3) <= SEQUENCESIZE)
@@ -797,7 +797,7 @@ inline void SaxWriterHelper::endCDATA()
         nCurrentPos = writeSequence();
 }
 
-inline bool SaxWriterHelper::comment(const OUString& rComment)
+bool SaxWriterHelper::comment(const OUString& rComment)
 {
     FinishStartElement();
     mp_Sequence[nCurrentPos] = '<';
@@ -835,7 +835,7 @@ inline bool SaxWriterHelper::comment(const OUString& rComment)
     return bRet;
 }
 
-inline sal_Int32 calcXMLByteLength( const OUString& rStr,
+sal_Int32 calcXMLByteLength( const OUString& rStr,
                                     bool bDoNormalization,
                                     bool bNormalizeWhitespace )
 {
@@ -918,7 +918,7 @@ inline sal_Int32 calcXMLByteLength( const OUString& rStr,
 
 /** returns position of first ascii 10 within the string, -1 when no 10 in string.
  */
-inline sal_Int32 getFirstLineBreak( const OUString & str ) throw ()
+sal_Int32 getFirstLineBreak( const OUString & str ) throw ()
 {
     const sal_Unicode *pSource = str.getStr();
     sal_Int32 nLen  = str.getLength();
@@ -939,8 +939,7 @@ class SAXWriter :
 {
 public:
     SAXWriter()
-        : m_pSaxWriterHelper(nullptr)
-        , m_bDocStarted(false)
+        : m_bDocStarted(false)
         , m_bIsCDATA(false)
         , m_bForceLineBreak(false)
         , m_bAllowLineBreak(false)
@@ -1036,7 +1035,7 @@ sal_Int32 SAXWriter::getIndentPrefixLength( sal_Int32 nFirstLineBreakOccurrence 
     return nLength;
 }
 
-inline bool isFirstCharWhitespace( const sal_Unicode *p ) throw()
+bool isFirstCharWhitespace( const sal_Unicode *p ) throw()
 {
     return *p == ' ';
 }
@@ -1088,14 +1087,13 @@ void SAXWriter::endDocument()
     {
         m_out->closeOutput();
     }
-    catch (const IOException & e)
+    catch (const IOException &)
     {
-        Any a;
-        a <<= e;
+        css::uno::Any anyEx = cppu::getCaughtException();
         throw SAXException(
             "IO exception during closing the IO Stream",
             Reference< XInterface > (),
-            a );
+            anyEx );
     }
 }
 

@@ -29,6 +29,7 @@
 #include <rtl/textenc.h>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
@@ -95,8 +96,7 @@ IMPL_LINK_NOARG( SbiInputDialog, Cancel, weld::Button&, void )
 }
 
 SbiStream::SbiStream()
-    : pStrm(nullptr)
-    , nExpandOnWriteTo(0)
+    : nExpandOnWriteTo(0)
     , nLine(0)
     , nLen(0)
     , nMode(SbiStreamFlags::NONE)

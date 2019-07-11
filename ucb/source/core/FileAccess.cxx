@@ -18,6 +18,7 @@
  */
 
 #include <uno/mapping.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -33,8 +34,10 @@
 #include <com/sun/star/io/XActiveDataSink.hpp>
 #include <com/sun/star/io/XActiveDataSource.hpp>
 #include <com/sun/star/io/XActiveDataStreamer.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/sdbc/XResultSet.hpp>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <com/sun/star/ucb/CommandFailedException.hpp>
 #include <com/sun/star/ucb/ContentInfo.hpp>
 #include <com/sun/star/ucb/ContentInfoAttribute.hpp>
@@ -238,9 +241,10 @@ void OFileAccess::transferImpl( const OUString& rSource,
             }
             catch ( Exception const & )
             {
-                throw RuntimeException(
+                css::uno::Any anyEx = cppu::getCaughtException();
+                throw css::lang::WrappedTargetRuntimeException(
                     "OFileAccess::transferrImpl - Unable to obtain destination folder URL!",
-                    static_cast< cppu::OWeakObject * >( this ) );
+                    static_cast< cppu::OWeakObject * >( this ), anyEx );
             }
 
             transferImpl( rSource, aDestURL, bMoveData );
@@ -258,7 +262,7 @@ void OFileAccess::transferImpl( const OUString& rSource,
 
     try
     {
-        (void)aDestPath.transferContent(aSrc,
+        aDestPath.transferContent(aSrc,
                                         bMoveData
                                          ? ucbhelper::InsertOperation::Move
                                          : ucbhelper::InsertOperation::Copy,

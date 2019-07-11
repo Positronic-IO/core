@@ -26,12 +26,13 @@
 #include <com/sun/star/beans/XMultiPropertyStates.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
-#include <com/sun/star/beans/Property.hpp>
 #include <cppuhelper/implbase.hxx>
-#include <cppuhelper/propshlp.hxx>
 
-#include <algorithm>
+#include <memory>
 #include <vector>
+
+namespace cppu { class IPropertyArrayHelper; }
+namespace cppu { class OPropertyArrayHelper; }
 
 namespace chart
 {
@@ -92,7 +93,7 @@ protected: //methods
     The base class 'WrappedPropertySet' will take ownership on the contained pointer.
     It is not allowed to have duplicate entries in this list.
     */
-    virtual const std::vector< WrappedProperty* > createWrappedProperties()=0;
+    virtual std::vector< std::unique_ptr<WrappedProperty> > createWrappedProperties()=0;
 
     virtual css::uno::Reference< css::beans::XPropertySet > getInnerPropertySet() = 0;
     SAL_DLLPRIVATE css::uno::Reference< css::beans::XPropertyState > getInnerPropertyState();
@@ -106,9 +107,9 @@ protected: //methods
 protected: //member
     css::uno::Reference< css::beans::XPropertySetInfo >     m_xInfo;//outer PropertySetInfo
 
-    ::cppu::OPropertyArrayHelper*                       m_pPropertyArrayHelper;//holds all possible outer properties
+    std::unique_ptr<::cppu::OPropertyArrayHelper>       m_pPropertyArrayHelper;//holds all possible outer properties
 
-    tWrappedPropertyMap*                                m_pWrappedPropertyMap;//holds all wrapped properties (containing the special mapping from inner to outer properties)
+    std::unique_ptr<tWrappedPropertyMap>                m_pWrappedPropertyMap;//holds all wrapped properties (containing the special mapping from inner to outer properties)
 
     //Container for the XProperyChangedListener. The listeners are inserted by handle.
     //OMultiTypeInterfaceContainerHelperInt32             m_aBoundListenerContainer;

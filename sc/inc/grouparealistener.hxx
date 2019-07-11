@@ -11,7 +11,6 @@
 #define INCLUDED_SC_GROUPAREALISTENER_HXX
 
 #include "address.hxx"
-#include "calcmacros.hxx"
 
 #include <svl/listener.hxx>
 
@@ -31,8 +30,8 @@ class FormulaGroupAreaListener : public SvtListener
     const ScColumn* mpColumn;
     SCROW mnTopCellRow;
     SCROW mnGroupLen;
-    bool mbStartFixed;
-    bool mbEndFixed;
+    bool const mbStartFixed;
+    bool const mbEndFixed;
 
 public:
 

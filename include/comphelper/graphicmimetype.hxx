@@ -12,10 +12,36 @@
 
 #include <comphelper/comphelperdllapi.h>
 #include <rtl/ustring.hxx>
+#include <vcl/salctype.hxx>
 
-#include <com/sun/star/graphic/XGraphic.hpp>
-#include <com/sun/star/io/XInputStream.hpp>
-#include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/uno/Reference.h>
+
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace graphic
+{
+class XGraphic;
+}
+}
+}
+}
+namespace com
+{
+namespace sun
+{
+namespace star
+{
+namespace io
+{
+class XInputStream;
+}
+}
+}
+}
 
 namespace comphelper
 {
@@ -23,9 +49,11 @@ class COMPHELPER_DLLPUBLIC GraphicMimeTypeHelper
 {
 public:
     static OUString GetMimeTypeForExtension(const OString& rExt);
-    static OUString GetMimeTypeForXGraphic(css::uno::Reference<css::graphic::XGraphic> xGraphic);
     static OUString
-    GetMimeTypeForImageStream(css::uno::Reference<css::io::XInputStream> xInputStream);
+    GetMimeTypeForXGraphic(const css::uno::Reference<css::graphic::XGraphic>& xGraphic);
+    static OUString
+    GetMimeTypeForImageStream(const css::uno::Reference<css::io::XInputStream>& xInputStream);
+    static OUString GetMimeTypeForConvertDataFormat(ConvertDataFormat convertDataFormat);
 };
 }
 

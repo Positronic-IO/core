@@ -34,8 +34,11 @@
 #include <com/sun/star/util/DateTime.hpp>
 #include <com/sun/star/util/Date.hpp>
 #include <com/sun/star/util/Time.hpp>
-#include <comphelper/sequence.hxx>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <connectivity/dbconversion.hxx>
+#include <osl/diagnose.h>
+#include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <strings.hrc>
 #include <yesno.hrc>
 #include "pcrservices.hxx"
@@ -51,9 +54,9 @@ namespace comp_StringRepresentation {
 using namespace ::com::sun::star;
 
 // component and service helper functions:
-OUString _getImplementationName();
-uno::Sequence< OUString > _getSupportedServiceNames();
-uno::Reference< uno::XInterface > _create( uno::Reference< uno::XComponentContext > const & context );
+static OUString _getImplementationName();
+static uno::Sequence< OUString > _getSupportedServiceNames();
+static uno::Reference< uno::XInterface > _create( uno::Reference< uno::XComponentContext > const & context );
 
 } // closing component helper namespace
 
@@ -331,20 +334,18 @@ namespace
     template < class ElementType, class Transformer >
     OUString composeSequenceElements( const Sequence< ElementType >& _rElements, const Transformer& _rTransformer )
     {
-        OUString sCompose;
+        OUStringBuffer sCompose;
 
         // loop through the elements and concatenate the string representations of the integers
         // (separated by a line break)
-        const ElementType* pElements = _rElements.getConstArray();
-        const ElementType* pElementsEnd = pElements + _rElements.getLength();
-        for ( ; pElements != pElementsEnd; ++pElements )
+        for (const auto& rElement : _rElements)
         {
-            sCompose += OUString( _rTransformer( *pElements ) );
-            if ( pElements != pElementsEnd )
-                sCompose += "\n";
+            sCompose.append(OUString(_rTransformer(rElement)));
+            sCompose.append("\n");
         }
+        sCompose.stripEnd('\n');
 
-        return sCompose;
+        return sCompose.makeStringAndClear();
     }
 
     template < class ElementType, class Transformer >

@@ -32,12 +32,15 @@
 #include <tools/link.hxx>
 #include <vcl/ctrl.hxx>
 #include <vcl/event.hxx>
+#include <vcl/fontcharmap.hxx>
 #include <vcl/outdev.hxx>
 #include <vcl/metric.hxx>
 #include <vcl/vclptr.hxx>
+#include <vcl/customweld.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/window.hxx>
 #include <vcl/textview.hxx>
+#include <com/sun/star/uno/XComponentContext.hpp>
 
 namespace com { namespace sun { namespace star {
     namespace accessibility { class XAccessible; }
@@ -56,19 +59,15 @@ namespace svx
     class SvxShowCharSetAcc;
 }
 
-class SAL_WARN_UNUSED SVX_DLLPUBLIC SvxShowCharSet
+class SAL_WARN_UNUSED SVX_DLLPUBLIC SvxShowCharSet : public weld::CustomWidgetController
 {
 protected:
     VclPtr<VirtualDevice> mxVirDev;
-    std::unique_ptr<weld::DrawingArea> mxDrawingArea;
-    std::unique_ptr<weld::ScrolledWindow> mxScrollArea;
     vcl::Font maFont;
-    Size maSize;
+    std::unique_ptr<weld::ScrolledWindow> mxScrollArea;
 public:
-    SvxShowCharSet(weld::Builder& rBuilder, const OString& rDrawingId,
-                   const OString& rScrollId, const VclPtr<VirtualDevice>& rVirDev);
-
-    virtual ~SvxShowCharSet();
+    SvxShowCharSet(std::unique_ptr<weld::ScrolledWindow> pScrollArea, const VclPtr<VirtualDevice>& rVirDev);
+    virtual ~SvxShowCharSet() override;
 
     virtual void            RecalculateFont(vcl::RenderContext& rRenderContext);
 
@@ -83,8 +82,8 @@ public:
     void            SetFavClickHdl( const Link<SvxShowCharSet*,void>& rHdl ) { aFavClickHdl = rHdl; }
     static sal_uInt32& getSelectedChar();
     void            SetFont( const vcl::Font& rFont );
-    vcl::Font       GetFont() const { return mxVirDev->GetFont(); }
-    bool            GetFontCharMap(FontCharMapRef& rxFontCharMap) const { return mxVirDev->GetFontCharMap(rxFontCharMap); }
+    vcl::Font const & GetFont() const { return maFont; }
+    FontCharMapRef  GetFontCharMap();
     bool            isFavChar(const OUString& sTitle, const OUString& rFont);
     void            getFavCharacterList(); //gets both Fav char and Fav char font list
     void            updateFavCharacterList(const OUString& rChar, const OUString& rFont);
@@ -96,7 +95,7 @@ public:
     virtual void                        SelectIndex( int index, bool bFocus = false );
     void                        OutputIndex( int index );
     void                        DeSelect();
-    void                        CopyToClipboard(const OUString& str);
+    static void                 CopyToClipboard(const OUString& str);
     bool                 IsSelected(sal_uInt16 _nPos) const { return _nPos == nSelectedIndex; }
     sal_uInt16           GetSelectIndexId() const { return sal::static_int_cast<sal_uInt16>(nSelectedIndex); }
     static sal_uInt16           GetRowPos(sal_uInt16 _nPos);
@@ -106,25 +105,22 @@ public:
 
     void Show() { mxScrollArea->show(); }
     void Hide() { mxScrollArea->hide(); }
-    bool HasFocus() const { return mxDrawingArea->has_focus(); }
-    void GrabFocus() { mxDrawingArea->grab_focus(); }
-    bool IsEnabled() const { return mxDrawingArea->get_sensitive(); }
-    bool IsVisible() const { return mxDrawingArea->get_visible(); }
-    const Size& GetSize() const { return maSize; }
 
-    uno::Reference<css::accessibility::XAccessible> getAccessibleParent() { return mxDrawingArea->get_accessible_parent(); }
+    uno::Reference<css::accessibility::XAccessible> getAccessibleParent() { return GetDrawingArea()->get_accessible_parent(); }
 
 private:
-    DECL_LINK(DoPaint, weld::DrawingArea::draw_args, void);
-    DECL_LINK(DoResize, const Size& rSize, void);
-    DECL_LINK(DoMouseButtonDown, const MouseEvent& rMEvt, void);
-    DECL_LINK(DoMouseMove, const MouseEvent& rMEvt, void);
-    DECL_LINK(DoMouseButtonUp, const MouseEvent& rMEvt, void);
-    DECL_LINK(DoKeyDown, const KeyEvent& rKEvt, bool);
-    DECL_LINK(DoGetFocus, weld::Widget&, void);
-    DECL_LINK(DoLoseFocus, weld::Widget&, void);
+    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
+    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
+    virtual void Resize() override;
+    virtual void MouseButtonDown(const MouseEvent& rMEvt) override;
+    virtual void MouseMove(const MouseEvent& rMEvt) override;
+    virtual void MouseButtonUp(const MouseEvent& rMEvt) override;
+    virtual void GetFocus() override;
+    virtual void LoseFocus() override;
+    virtual bool KeyInput(const KeyEvent&) override;
 
-    css::uno::Reference<css::accessibility::XAccessible> CreateAccessible();
+    virtual css::uno::Reference<css::accessibility::XAccessible> CreateAccessible() override;
+    virtual FactoryFunction GetUITestFactory() const override;
 
 protected:
     typedef std::map<sal_Int32, std::shared_ptr<svx::SvxShowCharSetItem> > ItemsMap;

@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <osl/diagnose.h>
 #include <sfx2/Metadatable.hxx>
@@ -377,7 +378,7 @@ XmlIdRegistry::GetXmlIdForElement(const Metadatable& i_rObject) const
 
 /// generate unique xml:id
 template< typename T >
-/*static*/ OUString create_id(const
+static OUString create_id(const
     std::unordered_map< OUString, T > & i_rXmlIdMap)
 {
     static bool bHack = (getenv("LIBO_ONEWAY_STABLE_ODF_EXPORT") != nullptr);
@@ -574,7 +575,7 @@ XmlIdRegistryDocument::XmlIdRegistry_Impl::TryInsertMetadatable(
             // this is only called from TryRegister now, so check
             // if all elements in the list are deleted (in undo) or
             // placeholders, then "steal" the id from them
-            if ( pList->end() == ::std::find_if(pList->begin(), pList->end(),
+            if ( std::none_of(pList->begin(), pList->end(),
                 [](Metadatable* item)->bool {
                     return !(item->IsInUndo() || item->IsInClipboard());
                     } ) )
@@ -1301,7 +1302,7 @@ void Metadatable::EnsureMetadataReference()
     m_pReg = &rReg;
 }
 
-const ::sfx2::IXmlIdRegistry& GetRegistryConst(Metadatable const& i_rObject)
+static const ::sfx2::IXmlIdRegistry& GetRegistryConst(Metadatable const& i_rObject)
 {
     return const_cast< Metadatable& >( i_rObject ).GetRegistry();
 }

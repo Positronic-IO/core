@@ -17,11 +17,16 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "Qt5Tools.hxx"
+#include <Qt5Tools.hxx>
 
 #include <cairo.h>
 
+#include <tools/stream.hxx>
 #include <vcl/event.hxx>
+#include <vcl/image.hxx>
+#include <vcl/pngwrite.hxx>
+
+#include <QtGui/QImage>
 
 void CairoDeleter::operator()(cairo_surface_t* pSurface) const { cairo_surface_destroy(pSurface); }
 
@@ -49,6 +54,59 @@ sal_uInt16 GetMouseModCode(Qt::MouseButtons eButtons)
     if (eButtons & Qt::RightButton)
         nCode |= MOUSE_RIGHT;
     return nCode;
+}
+
+Qt::DropActions toQtDropActions(sal_Int8 dragOperation)
+{
+    Qt::DropActions eRet = Qt::IgnoreAction;
+    if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_COPY)
+        eRet |= Qt::CopyAction;
+    if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_MOVE)
+        eRet |= Qt::MoveAction;
+    if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_LINK)
+        eRet |= Qt::LinkAction;
+    return eRet;
+}
+
+sal_Int8 toVclDropActions(Qt::DropActions dragOperation)
+{
+    sal_Int8 nRet(0);
+    if (dragOperation & Qt::CopyAction)
+        nRet |= css::datatransfer::dnd::DNDConstants::ACTION_COPY;
+    if (dragOperation & Qt::MoveAction)
+        nRet |= css::datatransfer::dnd::DNDConstants::ACTION_MOVE;
+    if (dragOperation & Qt::LinkAction)
+        nRet |= css::datatransfer::dnd::DNDConstants::ACTION_LINK;
+    return nRet;
+}
+
+Qt::DropAction getPreferredDropAction(sal_Int8 dragOperation)
+{
+    Qt::DropAction eAct = Qt::IgnoreAction;
+
+    if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_MOVE)
+        eAct = Qt::MoveAction;
+    else if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_COPY)
+        eAct = Qt::CopyAction;
+    else if (dragOperation & css::datatransfer::dnd::DNDConstants::ACTION_LINK)
+        eAct = Qt::LinkAction;
+
+    return eAct;
+}
+
+QImage toQImage(const Image& rImage)
+{
+    QImage aImage;
+
+    if (!!rImage)
+    {
+        SvMemoryStream aMemStm;
+        vcl::PNGWriter aWriter(rImage.GetBitmapEx());
+        aWriter.Write(aMemStm);
+        aImage.loadFromData(static_cast<const uchar*>(aMemStm.GetData()), aMemStm.TellEnd());
+    }
+
+    return aImage;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

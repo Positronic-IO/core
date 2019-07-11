@@ -33,6 +33,8 @@
 #include <svl/poolitem.hxx>
 #include <svl/hint.hxx>
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
@@ -217,7 +219,7 @@ void ExtendedColorConfig_Impl::EnableBroadcast()
         ExtendedColorConfig::m_pImpl->m_bIsBroadcastEnabled = true;
 }
 
-void lcl_addString(uno::Sequence < OUString >& _rSeq,const OUString& _sAdd)
+static void lcl_addString(uno::Sequence < OUString >& _rSeq,const OUString& _sAdd)
 {
     for(OUString & i : _rSeq)
         i += _sAdd;
@@ -596,7 +598,7 @@ void EditableExtendedColorConfig::AddScheme(const OUString& rScheme )
     m_pImpl->AddScheme(rScheme);
 }
 
-bool EditableExtendedColorConfig::LoadScheme(const OUString& rScheme )
+void EditableExtendedColorConfig::LoadScheme(const OUString& rScheme )
 {
     if(m_bModified)
         m_pImpl->SetModified();
@@ -606,7 +608,6 @@ bool EditableExtendedColorConfig::LoadScheme(const OUString& rScheme )
     m_pImpl->Load(rScheme);
     //the name of the loaded scheme has to be committed separately
     m_pImpl->CommitCurrentSchemeName();
-    return true;
 }
 
 // Changes the name of the current scheme but doesn't load it!

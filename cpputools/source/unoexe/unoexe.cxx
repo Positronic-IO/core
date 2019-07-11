@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #include <sal/main.h>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <osl/mutex.hxx>
 #include <osl/conditn.hxx>
@@ -61,13 +62,13 @@ namespace unoexe
 
 static bool s_quiet = false;
 
-static inline void out( const sal_Char * pText )
+static void out( const sal_Char * pText )
 {
     if (! s_quiet)
         fprintf( stderr, "%s", pText );
 }
 
-static inline void out( const OUString & rText )
+static void out( const OUString & rText )
 {
     if (! s_quiet)
     {
@@ -111,7 +112,7 @@ static bool readOption( OUString * pValue, const sal_Char * pOpt,
         ++(*pnIndex);
         return true;
     }
-      else if (aArg.indexOf(aOpt) == 1)
+    else if (aArg.indexOf(aOpt) == 1)
     {
         *pValue = aArg.copy(1 + aOpt.getLength());
         SAL_INFO("cpputools.unoexe", "> identified option -" << pOpt << " = " << aArg);
@@ -139,7 +140,7 @@ static bool readOption( bool * pbOpt, const sal_Char * pOpt,
 
 /// @throws Exception
 template< class T >
-void createInstance(
+static void createInstance(
     Reference< T > & rxOut,
     const Reference< XComponentContext > & xContext,
     const OUString & rServiceName )

@@ -36,6 +36,7 @@ class SwUnoTableCursor;
 class SwFormatColl;
 struct SwSortOptions;
 class SwDoc;
+class SwRootFrame;
 
 namespace sw { namespace mark { class IMark; } }
 
@@ -135,7 +136,7 @@ namespace SwUnoCursorHelper
     void GetCursorAttr(SwPaM & rPam, SfxItemSet & rSet,
                      const bool bOnlyTextAttr = false,
                      const bool bGetFromChrFormat = true);
-    void GetTextFromPam(SwPaM & rPam, OUString & rBuffer);
+    void GetTextFromPam(SwPaM & rPam, OUString & rBuffer, SwRootFrame const* pLayout = nullptr);
     SwFormatColl * GetCurTextFormatColl(SwPaM & rPam, const bool bConditional);
 
     void SelectPam(SwPaM & rPam, const bool bExpand);
@@ -156,7 +157,8 @@ namespace SwUnoCursorHelper
             SwPaM& rPaM,
             const SfxItemPropertySet & rPropSet,
             const OUString & rPropertyName,
-            const css::uno::Any & rValue);
+            const css::uno::Any & rValue,
+            const SetAttrMode nAttrMode = SetAttrMode::DEFAULT);
     /// @throws css::beans::UnknownPropertyException
     /// @throws css::beans::PropertyVetoException
     /// @throws css::lang::IllegalArgumentException

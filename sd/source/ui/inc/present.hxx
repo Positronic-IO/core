@@ -23,7 +23,6 @@
 #include <vcl/weld.hxx>
 
 class SfxItemSet;
-class List;
 class SdCustomShowList;
 
 /**
@@ -39,8 +38,8 @@ private:
     std::unique_ptr<weld::RadioButton> m_xRbtAll;
     std::unique_ptr<weld::RadioButton> m_xRbtAtDia;
     std::unique_ptr<weld::RadioButton> m_xRbtCustomshow;
-    std::unique_ptr<weld::ComboBoxText> m_xLbDias;
-    std::unique_ptr<weld::ComboBoxText> m_xLbCustomshow;
+    std::unique_ptr<weld::ComboBox> m_xLbDias;
+    std::unique_ptr<weld::ComboBox> m_xLbCustomshow;
 
     std::unique_ptr<weld::RadioButton> m_xRbtStandard;
     std::unique_ptr<weld::RadioButton> m_xRbtWindow;
@@ -56,7 +55,7 @@ private:
     std::unique_ptr<weld::CheckButton> m_xCbxAlwaysOnTop;
 
     std::unique_ptr<weld::Label> m_xFtMonitor;
-    std::unique_ptr<weld::ComboBoxText> m_xLBMonitor;
+    std::unique_ptr<weld::ComboBox> m_xLBMonitor;
 
     std::unique_ptr<weld::Label> m_xMonitor;
     std::unique_ptr<weld::Label> m_xAllMonitors;
@@ -74,7 +73,7 @@ private:
         MONITOR_NORMAL,
         MONITOR_IS_EXTERNAL,
     };
-    sal_Int32           InsertDisplayEntry(const rtl::OUString &aName,
+    sal_Int32           InsertDisplayEntry(const OUString &aName,
                                            sal_Int32            nDisplay);
     OUString            GetDisplayName( sal_Int32 nDisplay,
                                         DisplayType eType );

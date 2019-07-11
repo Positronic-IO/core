@@ -29,6 +29,8 @@
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
+#include <com/sun/star/view/XSelectionSupplier.hpp>
+#include <com/sun/star/chart2/XChartDocument.hpp>
 
 #include <rtl/ustring.hxx>
 #include <vcl/window.hxx>
@@ -54,8 +56,7 @@ AccessibleChartView::AccessibleChartView(SdrView* pView ) :
             true, // has children
             true  // always transparent
             ),
-        m_pSdrView( pView ),
-        m_pViewForwarder( nullptr )
+        m_pSdrView( pView )
 {
     AddState( AccessibleStateType::OPAQUE );
 }

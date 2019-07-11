@@ -23,6 +23,7 @@
 
 #include <rtl/ustring.hxx>
 #include <osl/file.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/document/XStorageBasedDocument.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
@@ -38,6 +39,7 @@
 #include <svx/strings.hrc>
 #include <svx/sdr/contact/viewcontactofsdrmediaobj.hxx>
 #include <avmedia/mediawindow.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 
@@ -88,9 +90,9 @@ bool SdrMediaObj::HasTextEdit() const
     return false;
 }
 
-sdr::contact::ViewContact* SdrMediaObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrMediaObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrMediaObj( *this );
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrMediaObj>( *this );
 }
 
 void SdrMediaObj::TakeObjInfo( SdrObjTransformInfoRec& rInfo ) const

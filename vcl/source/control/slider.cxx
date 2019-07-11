@@ -56,7 +56,6 @@ void Slider::ImplInit( vcl::Window* pParent, WinBits nStyle )
     mnStateFlags        = 0;
     meScrollType        = ScrollType::DontKnow;
     mbCalcSize          = true;
-    mbFullDrag          = true;
     mbScrollTypeSet     = false;
 
     mpLinkedField       = nullptr;
@@ -315,35 +314,39 @@ void Slider::ImplCalc( bool bUpdate )
 
 void Slider::ImplDraw(vcl::RenderContext& rRenderContext)
 {
-    DecorationView aDecoView(&rRenderContext);
-    DrawButtonFlags nStyle;
-    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
-    bool bEnabled = IsEnabled();
-
     // do missing calculations
     if (mbCalcSize)
         ImplCalc(false);
 
     ControlPart nPart = (GetStyle() & WB_HORZ) ? ControlPart::TrackHorzArea : ControlPart::TrackVertArea;
-    ControlState nState = (IsEnabled() ? ControlState::ENABLED : ControlState::NONE);
-    nState |= (HasFocus() ? ControlState::FOCUSED : ControlState::NONE);
-    SliderValue sldValue;
 
-    sldValue.mnMin = mnMinRange;
-    sldValue.mnMax = mnMaxRange;
-    sldValue.mnCur = mnThumbPos;
-    sldValue.maThumbRect = maThumbRect;
-
-    if (IsMouseOver())
+    if (rRenderContext.IsNativeControlSupported(ControlType::Slider, nPart))
     {
-        if (maThumbRect.IsInside(GetPointerPosPixel()))
-            sldValue.mnThumbState |= ControlState::ROLLOVER;
+        ControlState nState = (IsEnabled() ? ControlState::ENABLED : ControlState::NONE);
+        nState |= (HasFocus() ? ControlState::FOCUSED : ControlState::NONE);
+
+        SliderValue aSliderValue;
+        aSliderValue.mnMin = mnMinRange;
+        aSliderValue.mnMax = mnMaxRange;
+        aSliderValue.mnCur = mnThumbPos;
+        aSliderValue.maThumbRect = maThumbRect;
+
+        if (IsMouseOver())
+        {
+            if (maThumbRect.IsInside(GetPointerPosPixel()))
+                aSliderValue.mnThumbState |= ControlState::ROLLOVER;
+        }
+
+        const tools::Rectangle aCtrlRegion(Point(0,0), GetOutputSizePixel());
+
+        if (rRenderContext.DrawNativeControl(ControlType::Slider, nPart, aCtrlRegion, nState, aSliderValue, OUString()))
+            return;
     }
 
-    const tools::Rectangle aCtrlRegion(Point(0,0), GetOutputSizePixel());
-    bool bNativeOK = rRenderContext.DrawNativeControl(ControlType::Slider, nPart, aCtrlRegion, nState, sldValue, OUString());
-    if (bNativeOK)
-        return;
+    DecorationView aDecoView(&rRenderContext);
+    DrawButtonFlags nStyle;
+    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
+    bool bEnabled = IsEnabled();
 
     if (!maChannel1Rect.IsEmpty())
     {
@@ -704,11 +707,6 @@ void Slider::Tracking( const TrackingEvent& rTEvt )
             // after dragging, recalculate to a rounded Thumb position
             ImplCalc();
             Update();
-
-            if ( !mbFullDrag && (mnStartPos != mnThumbPos) )
-            {
-                Slide();
-            }
         }
 
         EndSlide();
@@ -742,7 +740,7 @@ void Slider::Tracking( const TrackingEvent& rTEvt )
                     ImplUpdateRects();
                     Update();
                     ImplUpdateLinkedField();
-                    if ( mbFullDrag && (nOldPos != mnThumbPos) )
+                    if ( nOldPos != mnThumbPos )
                     {
                         Slide();
                     }

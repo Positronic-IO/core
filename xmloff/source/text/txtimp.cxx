@@ -37,6 +37,7 @@
 #include <xmloff/xmlnumi.hxx>
 #include <xmloff/maptype.hxx>
 
+#include <sal/log.hxx>
 #include "txtparai.hxx"
 #include <xmloff/txtprmap.hxx>
 #include <xmloff/txtimppr.hxx>
@@ -547,6 +548,9 @@ struct XMLTextImportHelper::Impl
     // Used for frame deduplication, the name of the last frame imported directly before the current one
     OUString msLastImportedFrameName;
 
+    std::map< OUString, bool > m_bBookmarkHidden;
+    std::map< OUString, OUString > m_sBookmarkCondition;
+
     uno::Reference<text::XText> m_xText;
     uno::Reference<text::XTextCursor> m_xCursor;
     uno::Reference<text::XTextRange> m_xCursorAsRange;
@@ -564,11 +568,11 @@ struct XMLTextImportHelper::Impl
 
     SvXMLImport & m_rSvXMLImport;
 
-    bool m_bInsertMode : 1;
-    bool m_bStylesOnlyMode : 1;
-    bool m_bBlockMode : 1;
-    bool m_bProgress : 1;
-    bool m_bOrganizerMode : 1;
+    bool const m_bInsertMode : 1;
+    bool const m_bStylesOnlyMode : 1;
+    bool const m_bBlockMode : 1;
+    bool const m_bProgress : 1;
+    bool const m_bOrganizerMode : 1;
     bool m_bBodyContentStarted : 1;
 
     /// Are we inside a <text:deletion> element (deleted redline section)
@@ -748,7 +752,7 @@ XMLTextListsHelper & XMLTextImportHelper::GetTextListHelper()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextElemTokenMap()
 {
-    if (!m_xImpl->m_xTextElemTokenMap.get())
+    if (!m_xImpl->m_xTextElemTokenMap)
     {
         m_xImpl->m_xTextElemTokenMap.reset(
             new SvXMLTokenMap( aTextElemTokenMap ));
@@ -758,7 +762,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextElemTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextPElemTokenMap()
 {
-    if (!m_xImpl->m_xTextPElemTokenMap.get())
+    if (!m_xImpl->m_xTextPElemTokenMap)
     {
         m_xImpl->m_xTextPElemTokenMap.reset(
             new SvXMLTokenMap( aTextPElemTokenMap ));
@@ -768,7 +772,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextPElemTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextPAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextPAttrTokenMap.get())
+    if (!m_xImpl->m_xTextPAttrTokenMap)
     {
         m_xImpl->m_xTextPAttrTokenMap.reset(
             new SvXMLTokenMap( aTextPAttrTokenMap ));
@@ -778,7 +782,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextPAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextFrameAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextFrameAttrTokenMap.get())
+    if (!m_xImpl->m_xTextFrameAttrTokenMap)
     {
         m_xImpl->m_xTextFrameAttrTokenMap.reset(
             new SvXMLTokenMap( aTextFrameAttrTokenMap ));
@@ -788,7 +792,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextFrameAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextContourAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextContourAttrTokenMap.get())
+    if (!m_xImpl->m_xTextContourAttrTokenMap)
     {
         m_xImpl->m_xTextContourAttrTokenMap.reset(
             new SvXMLTokenMap( aTextContourAttrTokenMap ));
@@ -798,7 +802,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextContourAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextHyperlinkAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextHyperlinkAttrTokenMap.get())
+    if (!m_xImpl->m_xTextHyperlinkAttrTokenMap)
     {
         m_xImpl->m_xTextHyperlinkAttrTokenMap.reset(
             new SvXMLTokenMap( aTextHyperlinkAttrTokenMap ));
@@ -808,7 +812,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextHyperlinkAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextMasterPageElemTokenMap()
 {
-    if (!m_xImpl->m_xTextMasterPageElemTokenMap.get())
+    if (!m_xImpl->m_xTextMasterPageElemTokenMap)
     {
         m_xImpl->m_xTextMasterPageElemTokenMap.reset(
             new SvXMLTokenMap( aTextMasterPageElemTokenMap ));
@@ -818,7 +822,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextMasterPageElemTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextFieldAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextFieldAttrTokenMap.get())
+    if (!m_xImpl->m_xTextFieldAttrTokenMap)
     {
         m_xImpl->m_xTextFieldAttrTokenMap.reset(
             new SvXMLTokenMap( aTextFieldAttrTokenMap ));
@@ -849,27 +853,25 @@ namespace
     {
         ::std::vector<OUString> vListEntries;
         ::std::map<OUString, Any> vOutParams;
-        for(field_params_t::const_iterator pCurrent = m_pInParams->begin();
-            pCurrent != m_pInParams->end();
-            ++pCurrent)
+        for(const auto& rCurrent : *m_pInParams)
         {
-            if(pCurrent->first == ODF_FORMDROPDOWN_RESULT)
+            if(rCurrent.first == ODF_FORMDROPDOWN_RESULT)
             {
                 // sal_Int32
-                vOutParams[pCurrent->first] <<= pCurrent->second.toInt32();
+                vOutParams[rCurrent.first] <<= rCurrent.second.toInt32();
             }
-            else if(pCurrent->first == ODF_FORMCHECKBOX_RESULT)
+            else if(rCurrent.first == ODF_FORMCHECKBOX_RESULT)
             {
                 // bool
-                vOutParams[pCurrent->first] <<= pCurrent->second.toBoolean();
+                vOutParams[rCurrent.first] <<= rCurrent.second.toBoolean();
             }
-            else if(pCurrent->first == ODF_FORMDROPDOWN_LISTENTRY)
+            else if(rCurrent.first == ODF_FORMDROPDOWN_LISTENTRY)
             {
                 // sequence
-                vListEntries.push_back(pCurrent->second);
+                vListEntries.push_back(rCurrent.second);
             }
             else
-                vOutParams[pCurrent->first] <<= pCurrent->second;
+                vOutParams[rCurrent.first] <<= rCurrent.second;
         }
         if(!vListEntries.empty())
         {
@@ -877,13 +879,11 @@ namespace
             copy(vListEntries.begin(), vListEntries.end(), vListEntriesSeq.begin());
             vOutParams[OUString(ODF_FORMDROPDOWN_LISTENTRY)] <<= vListEntriesSeq;
         }
-        for(::std::map<OUString, Any>::const_iterator pCurrent = vOutParams.begin();
-            pCurrent != vOutParams.end();
-            ++pCurrent)
+        for(const auto& rCurrent : vOutParams)
         {
             try
             {
-                m_xOutParams->insertByName(pCurrent->first, pCurrent->second);
+                m_xOutParams->insertByName(rCurrent.first, rCurrent.second);
             }
             catch(const ElementExistException&)
             {
@@ -1164,12 +1164,7 @@ bool XMLTextImportHelper::IsDuplicateFrame(const OUString& sName, sal_Int32 nX, 
         }
 
         // In some case, position is not defined for frames, so check whether the two frames follow each other (are anchored to the same position)
-        if (m_xImpl->msLastImportedFrameName != sName)
-        {
-            return false;
-        }
-
-        return true;
+        return m_xImpl->msLastImportedFrameName == sName;
     }
     return false;
 }
@@ -1610,7 +1605,7 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
                 bool bSameNumRules = xNewNumRules == xNumRules;
                 if( !bSameNumRules && xNewNumRules.is() && xNumRules.is() )
                 {
-                    // If the interface pointers are different then this does
+                    // If the interface pointers are different, then this does
                     // not mean that the num rules are different. Further tests
                     // are required then. However, if only one num rule is
                     // set, no tests are required of course.
@@ -2545,7 +2540,7 @@ void XMLTextImportHelper::PopListContext()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextNumberedParagraphAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextNumberedParagraphAttrTokenMap.get())
+    if (!m_xImpl->m_xTextNumberedParagraphAttrTokenMap)
     {
         m_xImpl->m_xTextNumberedParagraphAttrTokenMap.reset(
             new SvXMLTokenMap( aTextNumberedParagraphAttrTokenMap ) );
@@ -2555,7 +2550,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextNumberedParagraphAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextListBlockAttrTokenMap()
 {
-    if (!m_xImpl->m_xTextListBlockAttrTokenMap.get())
+    if (!m_xImpl->m_xTextListBlockAttrTokenMap)
     {
         m_xImpl->m_xTextListBlockAttrTokenMap.reset(
             new SvXMLTokenMap( aTextListBlockAttrTokenMap ) );
@@ -2565,7 +2560,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextListBlockAttrTokenMap()
 
 const SvXMLTokenMap& XMLTextImportHelper::GetTextListBlockElemTokenMap()
 {
-    if (!m_xImpl->m_xTextListBlockElemTokenMap.get())
+    if (!m_xImpl->m_xTextListBlockElemTokenMap)
     {
         m_xImpl->m_xTextListBlockElemTokenMap.reset(
             new SvXMLTokenMap( aTextListBlockElemTokenMap ) );
@@ -2575,7 +2570,7 @@ const SvXMLTokenMap& XMLTextImportHelper::GetTextListBlockElemTokenMap()
 
 SvI18NMap& XMLTextImportHelper::GetRenameMap()
 {
-    if (!m_xImpl->m_xRenameMap.get())
+    if (!m_xImpl->m_xRenameMap)
     {
         m_xImpl->m_xRenameMap.reset( new SvI18NMap );
     }
@@ -2607,11 +2602,7 @@ bool XMLTextImportHelper::FindAndRemoveBookmarkStartRange(
         o_rXmlId = std::get<1>(rEntry);
         o_rpRDFaAttributes = std::get<2>(rEntry);
         m_xImpl->m_BookmarkStartRanges.erase(sName);
-        auto it(m_xImpl->m_BookmarkVector.begin());
-        while (it != m_xImpl->m_BookmarkVector.end() && *it != sName)
-        {
-            ++it;
-        }
+        auto it = std::find(m_xImpl->m_BookmarkVector.begin(), m_xImpl->m_BookmarkVector.end(), sName);
         if (it!=m_xImpl->m_BookmarkVector.end())
         {
             m_xImpl->m_BookmarkVector.erase(it);
@@ -2706,7 +2697,7 @@ void XMLTextImportHelper::ConnectFrameChains(
         }
         else
         {
-            if (!m_xImpl->m_xPrevFrmNames.get())
+            if (!m_xImpl->m_xPrevFrmNames)
             {
                 m_xImpl->m_xPrevFrmNames.reset( new std::vector<OUString> );
                 m_xImpl->m_xNextFrmNames.reset( new std::vector<OUString> );
@@ -2949,6 +2940,22 @@ void XMLTextImportHelper::MapCrossRefHeadingFieldsHorribly()
         }
         xField->setPropertyValue("SourceName", uno::makeAny(iter->second));
     }
+}
+
+void XMLTextImportHelper::setBookmarkAttributes(OUString const& bookmark, bool hidden, OUString const& condition)
+{
+    m_xImpl->m_bBookmarkHidden[bookmark] = hidden;
+    m_xImpl->m_sBookmarkCondition[bookmark] = condition;
+}
+
+bool XMLTextImportHelper::getBookmarkHidden(OUString const& bookmark) const
+{
+    return m_xImpl->m_bBookmarkHidden[bookmark];
+}
+
+const OUString& XMLTextImportHelper::getBookmarkCondition(OUString const& bookmark) const
+{
+    return m_xImpl->m_sBookmarkCondition[bookmark];
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

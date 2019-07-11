@@ -89,7 +89,7 @@ size_t HIODev::read4b(void *ptr, size_t nmemb)
 
 
 // hfileiodev class
-HStreamIODev::HStreamIODev(HStream * stream):_stream(stream)
+HStreamIODev::HStreamIODev(std::unique_ptr<HStream> stream):_stream(std::move(stream))
 {
     init();
 }
@@ -270,10 +270,7 @@ void HMemIODev::flush()
 
 bool HMemIODev::state() const
 {
-    if (pos <= length)
-        return false;
-    else
-        return true;
+    return pos > length;
 }
 
 bool HMemIODev::setCompressed(bool )

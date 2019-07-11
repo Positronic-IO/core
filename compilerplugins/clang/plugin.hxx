@@ -25,6 +25,7 @@
 
 #include <clang/Rewrite/Core/Rewriter.h>
 
+#include "compat.hxx"
 #include "pluginhandler.hxx"
 
 using namespace clang;
@@ -72,6 +73,9 @@ protected:
     const Stmt* getParentStmt( const Stmt* stmt );
     Stmt* getParentStmt( Stmt* stmt );
     const FunctionDecl* getParentFunctionDecl( const Stmt* stmt );
+
+    /// to check file names against whitelists, so that it works with preprocessed input too
+    StringRef getFileNameOfSpellingLoc(SourceLocation spellingLocation) const;
     /**
      Checks if the location is inside an UNO file, more specifically, if it forms part of the URE stable interface,
      which is not allowed to be changed.
@@ -96,6 +100,19 @@ private:
 
     enum { isRewriter = false };
     const char* name;
+};
+
+template<typename Derived>
+class FilteringPlugin : public RecursiveASTVisitor<Derived>, public Plugin
+{
+public:
+    explicit FilteringPlugin( const InstantiationData& data ) : Plugin(data) {}
+
+    bool TraverseNamespaceDecl(NamespaceDecl * decl) {
+        if (ignoreLocation(compat::getBeginLoc(decl)))
+            return true;
+        return RecursiveASTVisitor<Derived>::TraverseNamespaceDecl(decl);
+    }
 };
 
 /**
@@ -192,7 +209,7 @@ bool Plugin::ignoreLocation( const Stmt* stmt ) const
 {
     // Invalid location can happen at least for ImplicitCastExpr of
     // ImplicitParam 'self' in Objective C method declarations:
-    return stmt->getLocStart().isValid() && ignoreLocation( stmt->getLocStart());
+    return compat::getBeginLoc(stmt).isValid() && ignoreLocation( compat::getBeginLoc(stmt));
 }
 
 template< typename T >
@@ -222,6 +239,19 @@ RewritePlugin::RewriteOption operator|( RewritePlugin::RewriteOption option1, Re
 {
     return static_cast< RewritePlugin::RewriteOption >( int( option1 ) | int( option2 ));
 }
+
+template<typename Derived>
+class FilteringRewritePlugin : public RecursiveASTVisitor<Derived>, public RewritePlugin
+{
+public:
+    explicit FilteringRewritePlugin( const InstantiationData& data ) : RewritePlugin(data) {}
+
+    bool TraverseNamespaceDecl(NamespaceDecl * decl) {
+        if (ignoreLocation(compat::getBeginLoc(decl)))
+            return true;
+        return RecursiveASTVisitor<Derived>::TraverseNamespaceDecl(decl);
+    }
+};
 
 void normalizeDotDotInFilePath(std::string&);
 

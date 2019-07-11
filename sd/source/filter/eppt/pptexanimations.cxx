@@ -57,6 +57,9 @@
 #include <editeng/outlobj.hxx>
 #include <editeng/editobj.hxx>
 #include "pptexanimations.hxx"
+#include "pptexsoundcollection.hxx"
+#include "../ppt/pptanimations.hxx"
+#include <filter/msfilter/escherex.hxx>
 #include <osl/endian.h>
 
 #include <algorithm>
@@ -80,7 +83,7 @@ using namespace ::com::sun::star::presentation;
 namespace ppt
 {
 
-void ImplTranslateAttribute( OUString& rString, const TranslateMode eTranslateMode )
+static void ImplTranslateAttribute( OUString& rString, const TranslateMode eTranslateMode )
 {
     if ( eTranslateMode != TRANSLATE_NONE )
     {
@@ -279,8 +282,7 @@ sal_Int16 AnimationExporter::GetFillMode( const Reference< XAnimationNode >& xNo
 
     if ( nFill == AnimationFill::DEFAULT )
     {
-        if ( nFill != AnimationFill::AUTO )
-            nFill = nFillDefault;
+        nFill = nFillDefault;
     }
     if( nFill == AnimationFill::AUTO )
     {
@@ -921,7 +923,7 @@ sal_uInt32 AnimationExporter::GetPresetID( const OUString& rPreset, sal_uInt32 n
     }
     else
     {
-        const oox::ppt::preset_maping* p = oox::ppt::preset_maping::getList();
+        const oox::ppt::preset_mapping* p = oox::ppt::preset_mapping::getList();
     while( p->mpStrPresetId && ((p->mnPresetClass != static_cast<sal_Int32>(nAPIPresetClass)) || !rPreset.equalsAscii( p->mpStrPresetId )) )
         p++;
 
@@ -1272,7 +1274,7 @@ void AnimationExporter::exportAnimEvent( SvStream& rStrm, const Reference< XAnim
                         // taking the first child
                         Reference< XEnumerationAccess > xEA( xNode, UNO_QUERY_THROW );
                         Reference< XEnumeration > xE( xEA->createEnumeration(), UNO_QUERY_THROW );
-                        if ( xE.is() && xE->hasMoreElements() )
+                        if ( xE->hasMoreElements() )
                         {
                             Reference< XAnimationNode > xClickNode( xE->nextElement(), UNO_QUERY );
                             aAny = xClickNode->getBegin();
@@ -1398,6 +1400,7 @@ Any AnimationExporter::convertAnimateValue( const Any& rSourceValue, const OUStr
     else if ( rAttributeName == "Rotate"         // "r" or "style.rotation" ?
             || rAttributeName == "Opacity"
             || rAttributeName == "CharHeight"
+            || rAttributeName == "SkewX"
         )
     {
         double fNumber = 0.0;
@@ -1545,7 +1548,7 @@ sal_uInt32 AnimationExporter::GetValueTypeForAttributeName( const OUString& rAtt
     struct Entry
     {
         const sal_Char* pName;
-        sal_uInt8       nType;
+        sal_uInt8 nType;
     };
     static const Entry lcl_attributeMap[] =
     {

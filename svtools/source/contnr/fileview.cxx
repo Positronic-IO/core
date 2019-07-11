@@ -17,22 +17,23 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <svtools/treelistbox.hxx>
+#include <vcl/treelistbox.hxx>
 #include <svtools/iconview.hxx>
-#include "fileview.hxx"
 #include <sal/config.h>
-#include <svtools/treelistentry.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
+#include <vcl/treelistentry.hxx>
 #include <svtools/fileview.hxx>
 #include <svtools/svtresid.hxx>
 #include <svtools/imagemgr.hxx>
-#include <svtools/headbar.hxx>
-#include <svtools/svtabbx.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/svtabbx.hxx>
 #include <svtools/strings.hrc>
 #include <bitmaps.hlst>
-#include <svtools/viewdataentry.hxx>
+#include <vcl/viewdataentry.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include "contentenumeration.hxx"
-#include <svtools/AccessibleBrowseBoxObjType.hxx>
+#include <vcl/AccessibleBrowseBoxObjType.hxx>
 #include <com/sun/star/util/DateTime.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
@@ -71,6 +72,7 @@
 #include <salhelper/timer.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/builderfactory.hxx>
+#include <unotools/collatorwrapper.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <unotools/syslocale.hxx>
@@ -121,7 +123,7 @@ namespace
     class CallbackTimer : public ::salhelper::Timer
     {
     protected:
-        SvtFileView_Impl* m_pTimeoutHandler;
+        SvtFileView_Impl* const m_pTimeoutHandler;
 
     public:
         explicit CallbackTimer( SvtFileView_Impl* _pHandler ) : m_pTimeoutHandler( _pHandler ) { }
@@ -170,14 +172,14 @@ private:
     SvtFileView_Impl*       mpParent;
     Timer                   maResetQuickSearch;
     OUString                maQuickSearchText;
-    OUString                msAccessibleDescText;
-    OUString                msFolder;
-    OUString                msFile;
+    OUString const          msAccessibleDescText;
+    OUString const          msFolder;
+    OUString const          msFile;
     sal_uInt32              mnSearchIndex;
     bool                    mbResizeDisabled        : 1;
     bool                    mbAutoResize            : 1;
     bool                    mbEnableDelete          : 1;
-    bool                    mbShowHeader;
+    bool const              mbShowHeader;
 
     void            DeleteEntries();
     void            DoQuickSearch( sal_Unicode rChar );
@@ -185,7 +187,7 @@ private:
 
 protected:
     virtual bool     DoubleClickHdl() override;
-    virtual OUString GetAccessibleObjectDescription( ::svt::AccessibleBrowseBoxObjType _eType, sal_Int32 _nPos = -1 ) const override;
+    virtual OUString GetAccessibleObjectDescription( ::vcl::AccessibleBrowseBoxObjType _eType, sal_Int32 _nPos = -1 ) const override;
 
 public:
     ViewTabListBox_Impl( vcl::Window* pParentWin, SvtFileView_Impl* pParent, FileViewFlags nFlags );
@@ -208,97 +210,6 @@ public:
 
     virtual VclPtr<PopupMenu> CreateContextMenu() override;
     virtual void        ExecuteContextMenuAction( sal_uInt16 nSelectedPopentry ) override;
-};
-
-// provides a list of _unique_ Entries
-class NameTranslationList
-{   // contains a list of substitutes of strings for a given folder (as URL)
-    // explanation of the circumstances see in remarks for Init();
-protected:
-    INetURLObject               maTransFile;    // URL of file with translation entries
-    /// for future purposes when dealing with a set of cached NameTranslationLists
-    OUString m_HashedURL;
-private:
-    std::unordered_map<OUString, OUString> m_Translation;
-    const OUString              maTransFileName;
-
-public:
-                                explicit NameTranslationList( const INetURLObject& rBaseURL );
-                                            // rBaseURL: path to folder for which the translation of the entries
-                                            //  should be done
-
-    const OUString*             Translate( const OUString& rName ) const;
-                                            // returns NULL, if rName can't be found
-
-    inline const OUString&      GetTransTableFileName() const;
-    OUString const& GetHashedURL() { return m_HashedURL; }
-                                            // returns the name for the file, which contains the translation strings
-};
-
-inline const OUString& NameTranslationList::GetTransTableFileName() const
-{
-    return maTransFileName;
-}
-
-NameTranslationList::NameTranslationList( const INetURLObject& rBaseURL ):
-    maTransFile( rBaseURL ),
-    m_HashedURL(rBaseURL.GetMainURL(INetURLObject::DecodeMechanism::NONE)),
-    maTransFileName( OUString(".nametranslation.table") )
-{
-    maTransFile.insertName( maTransFileName );
-
-    // Tries to read the file ".nametranslation.table" in the base folder. Complete path/name is in maTransFile.
-    // Further on, the found entries in the section "TRANSLATIONNAMES" are used to replace names in the
-    // base folder by translated ones. The translation must be given in UTF8
-    // See examples of such a files in the samples-folder of an Office installation
-    try
-    {
-        ::ucbhelper::Content aTestContent( maTransFile.GetMainURL( INetURLObject::DecodeMechanism::NONE ), Reference< XCommandEnvironment >(), comphelper::getProcessComponentContext() );
-
-        if( aTestContent.isDocument() )
-        {
-            // ... also tests the existence of maTransFile by throwing an Exception
-            OUString        aFsysName( maTransFile.getFSysPath( FSysStyle::Detect ) );
-            Config          aConfig( aFsysName );
-
-            aConfig.SetGroup( OString("TRANSLATIONNAMES") );
-
-            sal_uInt16          nKeyCnt = aConfig.GetKeyCount();
-
-            for( sal_uInt16 nCnt = 0 ; nCnt < nKeyCnt ; ++nCnt )
-            {
-                m_Translation.insert(std::make_pair(
-                    OStringToOUString(aConfig.GetKeyName(nCnt), RTL_TEXTENCODING_ASCII_US),
-                    OStringToOUString(aConfig.ReadKey(nCnt), RTL_TEXTENCODING_UTF8)
-                    ));
-            }
-        }
-    }
-    catch( Exception const & ) {}
-}
-
-const OUString* NameTranslationList::Translate( const OUString& rName ) const
-{
-    auto const iter(m_Translation.find(rName));
-    return (iter != m_Translation.end()) ? &iter->second : nullptr;
-}
-
-// enables the user to get string substitutions (translations for the content) for a given folder
-// see more explanations above in the description for NameTranslationList
-class NameTranslator_Impl : public ::svt::IContentTitleTranslation
-{
-private:
-    std::unique_ptr<NameTranslationList> mpActFolder;
-public:
-                            explicit NameTranslator_Impl( const INetURLObject& rActualFolder );
-                            virtual ~NameTranslator_Impl();
-
-     // IContentTitleTranslation
-    virtual bool            GetTranslation( const OUString& rOriginalName, OUString& rTranslatedName ) const override;
-
-    void                    SetActualFolder( const INetURLObject& rActualFolder );
-    const OUString*         GetTransTableFileName() const;
-                                            // returns the name for the file, which contains the translation strings
 };
 
 
@@ -328,19 +239,17 @@ public:
     VclPtr<SvTreeListBox>               mpCurView;
     VclPtr<ViewTabListBox_Impl>         mpView;
     VclPtr<IconView>                    mpIconView;
-    std::unique_ptr<NameTranslator_Impl> mpNameTrans;
     sal_uInt16              mnSortColumn;
     bool                    mbAscending     : 1;
-    bool                    mbOnlyFolder    : 1;
-    bool                    mbReplaceNames  : 1;    // translate folder names or display doc-title instead of file name
+    bool const              mbOnlyFolder    : 1;
     sal_Int16               mnSuspendSelectCallback : 1;
     bool                    mbIsFirstResort : 1;
 
-    IntlWrapper             aIntlWrapper;
+    IntlWrapper const       aIntlWrapper;
 
     OUString                maViewURL;
     OUString                maCurrentFilter;
-    Image                   maFolderImage;
+    Image const             maFolderImage;
     Link<SvtFileView*,void> maOpenDoneLink;
     Reference< XCommandEnvironment >    mxCmdEnv;
 
@@ -385,8 +294,6 @@ public:
                                              const OUString& rTitle,
                                              bool bWrapAround );
 
-    void                    SetActualFolder( const INetURLObject& rActualFolder );
-
     void                    SetSelectHandler( const Link<SvTreeListBox*,void>& _rHdl );
 
     void                    InitSelection();
@@ -407,8 +314,6 @@ protected:
 inline void SvtFileView_Impl::EnableDelete( bool bEnable )
 {
     mpView->EnableDelete( bEnable );
-    if( bEnable )
-        mbReplaceNames = false;
 }
 
 inline void SvtFileView_Impl::EndEditing()
@@ -417,50 +322,52 @@ inline void SvtFileView_Impl::EndEditing()
         mpCurView->EndEditing();
 }
 
-// functions -------------------------------------------------------------
-
-OUString CreateExactSizeText( sal_Int64 nSize )
+namespace
 {
-    double fSize( static_cast<double>(nSize) );
-    int nDec;
+    // functions -------------------------------------------------------------
 
-    long nMega = 1024 * 1024;
-    long nGiga = nMega * 1024;
-
-    OUString aUnitStr(' ');
-
-    if ( nSize < 10000 )
+    OUString CreateExactSizeText( sal_Int64 nSize )
     {
-        aUnitStr += SvtResId(STR_SVT_BYTES );
-        nDec = 0;
-    }
-    else if ( nSize < nMega )
-    {
-        fSize /= 1024;
-        aUnitStr += SvtResId(STR_SVT_KB);
-        nDec = 1;
-    }
-    else if ( nSize < nGiga )
-    {
-        fSize /= nMega;
-        aUnitStr += SvtResId(STR_SVT_MB);
-        nDec = 2;
-    }
-    else
-    {
-        fSize /= nGiga;
-        aUnitStr += SvtResId(STR_SVT_GB);
-        nDec = 3;
-    }
+        double fSize( static_cast<double>(nSize) );
+        int nDec;
 
-    OUString aSizeStr( ::rtl::math::doubleToUString( fSize,
-                rtl_math_StringFormat_F, nDec,
-                SvtSysLocale().GetLocaleData().getNumDecimalSep()[0]) );
-    aSizeStr += aUnitStr;
+        long nMega = 1024 * 1024;
+        long nGiga = nMega * 1024;
 
-    return aSizeStr;
+        OUString aUnitStr(' ');
+
+        if ( nSize < 10000 )
+        {
+            aUnitStr += SvtResId(STR_SVT_BYTES );
+            nDec = 0;
+        }
+        else if ( nSize < nMega )
+        {
+            fSize /= 1024;
+            aUnitStr += SvtResId(STR_SVT_KB);
+            nDec = 1;
+        }
+        else if ( nSize < nGiga )
+        {
+            fSize /= nMega;
+            aUnitStr += SvtResId(STR_SVT_MB);
+            nDec = 2;
+        }
+        else
+        {
+            fSize /= nGiga;
+            aUnitStr += SvtResId(STR_SVT_GB);
+            nDec = 3;
+        }
+
+        OUString aSizeStr( ::rtl::math::doubleToUString( fSize,
+                    rtl_math_StringFormat_F, nDec,
+                    SvtSysLocale().GetLocaleData().getNumDecimalSep()[0]) );
+        aSizeStr += aUnitStr;
+
+        return aSizeStr;
+    }
 }
-
 
 ViewTabListBox_Impl::ViewTabListBox_Impl( vcl::Window* pParentWin,
                                           SvtFileView_Impl* pParent,
@@ -890,10 +797,10 @@ bool ViewTabListBox_Impl::DoubleClickHdl()
         // who knows ...)
 }
 
-OUString ViewTabListBox_Impl::GetAccessibleObjectDescription( ::svt::AccessibleBrowseBoxObjType _eType, sal_Int32 _nPos ) const
+OUString ViewTabListBox_Impl::GetAccessibleObjectDescription( ::vcl::AccessibleBrowseBoxObjType _eType, sal_Int32 _nPos ) const
 {
     OUString sRet = SvHeaderTabListBox::GetAccessibleObjectDescription( _eType, _nPos );
-    if ( ::svt::BBTYPE_TABLECELL == _eType )
+    if ( ::vcl::BBTYPE_TABLECELL == _eType )
     {
         sal_Int32 nRow = -1;
         const sal_uInt16 nColumnCount = GetColumnCount();
@@ -1381,54 +1288,6 @@ void SvtFileView::StateChanged( StateChangedType nStateChange )
 }
 
 
-// class NameTranslator_Impl
-
-
-NameTranslator_Impl::NameTranslator_Impl( const INetURLObject& rActualFolder )
-    : mpActFolder( new NameTranslationList( rActualFolder ) )
-{
-}
-
-NameTranslator_Impl::~NameTranslator_Impl()
-{
-}
-
-void NameTranslator_Impl::SetActualFolder( const INetURLObject& rActualFolder )
-{
-    if( mpActFolder )
-    {
-        if (mpActFolder->GetHashedURL() != rActualFolder.GetMainURL(INetURLObject::DecodeMechanism::NONE))
-        {
-            mpActFolder.reset( new NameTranslationList( rActualFolder ) );
-        }
-    }
-    else
-        mpActFolder.reset( new NameTranslationList( rActualFolder ) );
-}
-
-bool NameTranslator_Impl::GetTranslation( const OUString& rOrg, OUString& rTrans ) const
-{
-    bool bRet = false;
-
-    if( mpActFolder )
-    {
-        const OUString* pTrans = mpActFolder->Translate( rOrg );
-        if( pTrans )
-        {
-            rTrans = *pTrans;
-            bRet = true;
-        }
-    }
-
-    return bRet;
-}
-
-const OUString* NameTranslator_Impl::GetTransTableFileName() const
-{
-    return mpActFolder? &mpActFolder->GetTransTableFileName() : nullptr;
-}
-
-
 // class SvtFileView_Impl
 
 
@@ -1441,7 +1300,6 @@ SvtFileView_Impl::SvtFileView_Impl( SvtFileView* pAntiImpl, Reference < XCommand
     ,mnSortColumn               ( COLUMN_TITLE )
     ,mbAscending                ( true )
     ,mbOnlyFolder               ( bOnlyFolder )
-    ,mbReplaceNames             ( false )
     ,mnSuspendSelectCallback    ( 0 )
     ,mbIsFirstResort            ( true )
     ,aIntlWrapper               ( Application::GetSettings().GetLanguageTag() )
@@ -1472,7 +1330,6 @@ void SvtFileView_Impl::Clear()
     ::osl::MutexGuard aGuard( maMutex );
 
     maContent.clear();
-    mpNameTrans.reset();
 }
 
 
@@ -1484,9 +1341,6 @@ FileViewResult SvtFileView_Impl::GetFolderContent_Impl(
     ::osl::ClearableMutexGuard aGuard( maMutex );
     INetURLObject aFolderObj( rFolder );
     DBG_ASSERT( aFolderObj.GetProtocol() != INetProtocol::NotValid, "Invalid URL!" );
-
-    // prepare name translation
-    SetActualFolder( aFolderObj );
 
     FolderDescriptor aFolder( aFolderObj.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
 
@@ -1505,7 +1359,7 @@ FileViewResult SvtFileView_Impl::GetFolderContent_Impl(
 
     OSL_ENSURE( !m_xContentEnumerator.is(), "SvtFileView_Impl::GetFolderContent_Impl: still running another enumeration!" );
     m_xContentEnumerator.set(new ::svt::FileViewContentEnumerator(
-        mpView->GetCommandEnvironment(), maContent, maMutex, mbReplaceNames ? mpNameTrans.get() : nullptr));
+        mpView->GetCommandEnvironment(), maContent, maMutex, nullptr));
         // TODO: should we cache and re-use this thread?
 
     if ( !pAsyncDescriptor )
@@ -1561,7 +1415,8 @@ FileViewResult SvtFileView_Impl::GetFolderContent_Impl(
     if ( ::osl::Condition::result_timeout == eResult )
     {
         // maximum time to wait
-        OSL_ENSURE( !m_xCancelAsyncTimer.get(), "SvtFileView_Impl::GetFolderContent_Impl: there's still a previous timer!" );
+        OSL_ENSURE(!m_xCancelAsyncTimer,
+                   "SvtFileView_Impl::GetFolderContent_Impl: there's still a previous timer!");
         m_xCancelAsyncTimer.set(new CallbackTimer(this));
         sal_Int32 nMaxTimeout = pAsyncDescriptor->nMaxTimeout;
         OSL_ENSURE( nMaxTimeout > nMinTimeout,
@@ -1596,23 +1451,7 @@ FileViewResult SvtFileView_Impl::GetFolderContent_Impl(
 
 void SvtFileView_Impl::FilterFolderContent_Impl( const OUString &rFilter )
 {
-    bool bHideTransFile = mbReplaceNames && mpNameTrans;
-
-    OUString sHideEntry;
-    if( bHideTransFile )
-    {
-        const OUString* pTransTableFileName = mpNameTrans->GetTransTableFileName();
-        if( pTransTableFileName )
-        {
-            sHideEntry = *pTransTableFileName;
-            sHideEntry = sHideEntry.toAsciiUpperCase();
-        }
-        else
-            bHideTransFile = false;
-    }
-
-    if ( !bHideTransFile &&
-        ( rFilter.isEmpty() || ( rFilter == ALL_FILES_FILTER ) ) )
+    if ( rFilter.isEmpty() || ( rFilter == ALL_FILES_FILTER ) )
         // when replacing names, there is always something to filter (no view of ".nametranslation.table")
         return;
 
@@ -1648,13 +1487,8 @@ void SvtFileView_Impl::FilterFolderContent_Impl( const OUString &rFilter )
             sCompareString = (*aContentLoop)->GetFileName(); // filter works on file name, not on title!
             bool bDelete;
 
-            if( bHideTransFile && sCompareString == sHideEntry )
-                bDelete = true;
-            else
-            {
-                bDelete = ::std::none_of( aFilters.begin(), aFilters.end(),
-                                          FilterMatch( sCompareString ) );
-            }
+            bDelete = ::std::none_of( aFilters.begin(), aFilters.end(),
+                                      FilterMatch( sCompareString ) );
 
             if( bDelete )
             {
@@ -1843,14 +1677,13 @@ void SvtFileView_Impl::CreateDisplayText_Impl()
 {
     ::osl::MutexGuard aGuard( maMutex );
 
-    OUString aValue;
     OUString const aTab( "\t" );
     OUString const aDateSep( ", " );
 
     for (auto const& elem : maContent)
     {
         // title, type, size, date
-        aValue = elem->GetTitle();
+        OUString aValue = elem->GetTitle();
         ReplaceTabWithString( aValue );
         aValue += aTab + elem->maType + aTab;
         // folders don't have a size
@@ -1927,7 +1760,7 @@ static const CollatorWrapper*   pCollatorWrapper = nullptr;
 
 /* this function returns true, if aOne is less then aTwo
 */
-bool CompareSortingData_Impl( std::unique_ptr<SortingData_Impl> const & aOne, std::unique_ptr<SortingData_Impl> const & aTwo )
+static bool CompareSortingData_Impl( std::unique_ptr<SortingData_Impl> const & aOne, std::unique_ptr<SortingData_Impl> const & aTwo )
 {
     DBG_ASSERT( pCollatorWrapper, "*CompareSortingData_Impl(): Can't work this way!" );
 
@@ -2158,17 +1991,6 @@ bool SvtFileView_Impl::SearchNextEntry( sal_uInt32& nIndex, const OUString& rTit
     return false;
 }
 
-
-void SvtFileView_Impl::SetActualFolder( const INetURLObject& rActualFolder )
-{
-    if( mbReplaceNames )
-    {
-        if( mpNameTrans )
-            mpNameTrans->SetActualFolder( rActualFolder );
-        else
-            mpNameTrans.reset(new NameTranslator_Impl( rActualFolder ));
-    }
-}
 
 namespace svtools {
 

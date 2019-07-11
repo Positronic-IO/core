@@ -34,6 +34,7 @@
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <tpusrlst.hxx>
+#include <scui_def.hxx>
 
 #define CR  u'\x000D'
 #define LF  u'\x000A'
@@ -53,7 +54,6 @@ ScTpUserLists::ScTpUserLists( vcl::Window*               pParent,
         aStrCopyFrom    ( ScResId( STR_COPYFROM ) ),
         aStrCopyErr     ( ScResId( STR_COPYERR ) ),
         nWhichUserLists ( GetWhich( SID_SCUSERLISTS ) ),
-        pUserLists      ( nullptr ),
         pDoc            ( nullptr ),
         pViewData       ( nullptr ),
         bModifyMode     ( false ),
@@ -86,7 +86,7 @@ ScTpUserLists::~ScTpUserLists()
 
 void ScTpUserLists::dispose()
 {
-    delete pUserLists;
+    pUserLists.reset();
     mpFtLists.clear();
     mpLbLists.clear();
     mpFtEntries.clear();
@@ -165,7 +165,7 @@ void ScTpUserLists::Reset( const SfxItemSet* rCoreAttrs )
     if ( pCoreList )
     {
         if ( !pUserLists )
-            pUserLists = new ScUserList( *pCoreList );
+            pUserLists.reset( new ScUserList( *pCoreList ) );
         else
             *pUserLists = *pCoreList;
 
@@ -176,7 +176,7 @@ void ScTpUserLists::Reset( const SfxItemSet* rCoreAttrs )
         }
     }
     else if ( !pUserLists )
-        pUserLists = new ScUserList;
+        pUserLists.reset( new ScUserList );
 
     mpEdCopyFrom->SetText( aStrSelectedArea );
 
@@ -278,16 +278,16 @@ void ScTpUserLists::UpdateEntries( size_t nList )
     {
         const ScUserListData& rList = (*pUserLists)[nList];
         std::size_t nSubCount = rList.GetSubCount();
-        OUString          aEntryListStr;
+        OUStringBuffer aEntryListStr;
 
         for ( size_t i=0; i<nSubCount; i++ )
         {
             if ( i!=0 )
-                aEntryListStr += OUStringLiteral1(CR);
-            aEntryListStr += rList.GetSubStr(i);
+                aEntryListStr.append(CR);
+            aEntryListStr.append(rList.GetSubStr(i));
         }
 
-        mpEdEntries->SetText(convertLineEnd(aEntryListStr, GetSystemLineEnd()));
+        mpEdEntries->SetText(convertLineEnd(aEntryListStr.makeStringAndClear(), GetSystemLineEnd()));
     }
     else
     {
@@ -297,18 +297,18 @@ void ScTpUserLists::UpdateEntries( size_t nList )
 
 void ScTpUserLists::MakeListStr( OUString& rListStr )
 {
-    OUString  aStr;
+    if (rListStr.isEmpty())
+        return;
 
-    sal_Int32 nToken = comphelper::string::getTokenCount(rListStr, LF);
+    OUStringBuffer aStr;
 
-    for(sal_Int32 i=0; i<nToken; i++)
+    for(sal_Int32 nIdx=0; nIdx>=0;)
     {
-        OUString aString = comphelper::string::strip(rListStr.getToken(i, LF), ' ');
-        aStr += aString;
-        aStr += OUStringLiteral1(cDelimiter);
+        aStr.append(comphelper::string::strip(rListStr.getToken(0, LF, nIdx), ' '));
+        aStr.append(cDelimiter);
     }
 
-    aStr = comphelper::string::strip(aStr, cDelimiter);
+    aStr.strip(cDelimiter);
     sal_Int32 nLen = aStr.getLength();
 
     rListStr.clear();
@@ -336,7 +336,7 @@ void ScTpUserLists::AddNewList( const OUString& rEntriesStr )
     OUString theEntriesStr( rEntriesStr );
 
     if ( !pUserLists )
-        pUserLists = new ScUserList;
+        pUserLists.reset( new ScUserList );
 
     MakeListStr( theEntriesStr );
 
@@ -368,53 +368,51 @@ void ScTpUserLists::CopyListFromArea( const ScRefAddress& rStartPos,
     if ( nCellDir != RET_CANCEL )
     {
         bool bValueIgnored = false;
-        OUString  aStrList;
-        OUString  aStrField;
 
         if ( nCellDir == SCRET_COLS )
         {
             for ( SCCOL col=nStartCol; col<=nEndCol; col++ )
             {
+                OUStringBuffer aStrList;
                 for ( SCROW row=nStartRow; row<=nEndRow; row++ )
                 {
                     if ( pDoc->HasStringData( col, row, nTab ) )
                     {
-                        aStrField = pDoc->GetString(col, row, nTab);
+                        OUString aStrField = pDoc->GetString(col, row, nTab);
 
                         if ( !aStrField.isEmpty() )
                         {
-                            aStrList += aStrField + "\n";
+                            aStrList.append(aStrField).append("\n");
                         }
                     }
                     else
                         bValueIgnored = true;
                 }
                 if ( !aStrList.isEmpty() )
-                    AddNewList( aStrList );
-                aStrList.clear();
+                    AddNewList( aStrList.makeStringAndClear() );
             }
         }
         else
         {
             for ( SCROW row=nStartRow; row<=nEndRow; row++ )
             {
+                OUStringBuffer aStrList;
                 for ( SCCOL col=nStartCol; col<=nEndCol; col++ )
                 {
                     if ( pDoc->HasStringData( col, row, nTab ) )
                     {
-                        aStrField = pDoc->GetString(col, row, nTab);
+                        OUString aStrField = pDoc->GetString(col, row, nTab);
 
                         if ( !aStrField.isEmpty() )
                         {
-                            aStrList += aStrField + "\n";
+                            aStrList.append(aStrField).append("\n");
                         }
                     }
                     else
                         bValueIgnored = true;
                 }
                 if ( !aStrList.isEmpty() )
-                    AddNewList( aStrList );
-                aStrList.clear();
+                    AddNewList( aStrList.makeStringAndClear() );
             }
         }
 

@@ -22,6 +22,8 @@
 
 #include <vector>
 
+#include <stdlib.h>
+
 #include <sal/main.h>
 #include <vcl/commandevent.hxx>
 #include <vcl/ImageTree.hxx>
@@ -104,25 +106,7 @@ SAL_WNODEPRECATED_DECLARATIONS_PUSH
         if( pKeyWin && [pKeyWin isKindOfClass: [SalFrameWindow class]] )
         {
             AquaSalFrame* pFrame = [static_cast<SalFrameWindow*>(pKeyWin) getSalFrame];
-            // handle Cmd-W
-            // FIXME: the correct solution would be to handle this in framework
-            // in the menu code
-            // however that is currently being revised, so let's use a preliminary solution here
-            // this hack is based on assumption
-            // a) Cmd-W is the same in all languages in OOo's menu config
-            // b) Cmd-W is the same in all languages in on MacOS
-            // for now this seems to be true
             unsigned int nModMask = ([pEvent modifierFlags] & (NSShiftKeyMask|NSControlKeyMask|NSAlternateKeyMask|NSCommandKeyMask));
-            if( (pFrame->mnStyleMask & NSClosableWindowMask) != 0 )
-            {
-                if( nModMask == NSCommandKeyMask
-                    && [[pEvent charactersIgnoringModifiers] isEqualToString: @"w"] )
-                {
-                    [static_cast<SalFrameWindow*>(pFrame->getNSWindow()) windowShouldClose: nil];
-                    return;
-                }
-            }
-
             /*
              * #i98949# - Cmd-M miniaturize window, Cmd-Option-M miniaturize all windows
              */
@@ -249,7 +233,8 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
         const ApplicationEvent* pAppEvent = new ApplicationEvent(ApplicationEvent::Type::Open, aFile);
         AquaSalInstance::aAppEventList.push_back( pAppEvent );
         AquaSalInstance *pInst = GetSalData()->mpInstance;
-        pInst->TriggerUserEventProcessing();
+        if( pInst )
+            pInst->TriggerUserEventProcessing();
     }
     return YES;
 }
@@ -264,7 +249,7 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
 
     while( (pFile = [it nextObject]) != nil )
     {
-        const rtl::OUString aFile( GetOUString( pFile ) );
+        const OUString aFile( GetOUString( pFile ) );
         if( ! AquaSalInstance::isOnCommandLine( aFile ) )
         {
             aFileList.push_back( aFile );
@@ -279,7 +264,8 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
         const ApplicationEvent* pAppEvent = new ApplicationEvent(ApplicationEvent::Type::Open, aFileList);
         AquaSalInstance::aAppEventList.push_back( pAppEvent );
         AquaSalInstance *pInst = GetSalData()->mpInstance;
-        pInst->TriggerUserEventProcessing();
+        if( pInst )
+            pInst->TriggerUserEventProcessing();
     }
 }
 
@@ -291,7 +277,8 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
     const ApplicationEvent* pAppEvent = new ApplicationEvent(ApplicationEvent::Type::Print, aFile);
     AquaSalInstance::aAppEventList.push_back( pAppEvent );
     AquaSalInstance *pInst = GetSalData()->mpInstance;
-    pInst->TriggerUserEventProcessing();
+    if( pInst )
+        pInst->TriggerUserEventProcessing();
     return YES;
 }
 -(NSApplicationPrintReply)application: (NSApplication *) app printFiles:(NSArray *)files withSettings: (NSDictionary *)printSettings showPrintPanels:(BOOL)bShowPrintPanels
@@ -312,7 +299,8 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
     const ApplicationEvent* pAppEvent = new ApplicationEvent(ApplicationEvent::Type::Print, aFileList);
     AquaSalInstance::aAppEventList.push_back( pAppEvent );
     AquaSalInstance *pInst = GetSalData()->mpInstance;
-    pInst->TriggerUserEventProcessing();
+    if( pInst )
+        pInst->TriggerUserEventProcessing();
     // we have no back channel here, we have to assume success
     // correct handling would be NSPrintingReplyLater and then send [app replyToOpenOrPrint]
     return NSPrintingSuccess;
@@ -322,6 +310,7 @@ SAL_WNODEPRECATED_DECLARATIONS_POP
 {
     (void)aNotification;
     sal_detail_deinitialize();
+    _Exit(0);
 }
 
 -(NSApplicationTerminateReply)applicationShouldTerminate: (NSApplication *) app

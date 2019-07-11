@@ -18,12 +18,12 @@
  */
 
 #include <svx/dataaccessdescriptor.hxx>
-#include <comphelper/genericpropertyset.hxx>
 #include <osl/diagnose.h>
 #include <com/sun/star/sdbc/XConnection.hpp>
 #include <com/sun/star/ucb/XContent.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <tools/urlobj.hxx>
+#include <map>
 
 namespace svx
 {
@@ -31,12 +31,11 @@ namespace svx
     using namespace ::com::sun::star::sdbc;
     using namespace ::com::sun::star::beans;
     using namespace ::com::sun::star::ucb;
-    using namespace ::comphelper;
 
     struct PropertyMapEntry
     {
         OUString       maName;
-        DataAccessDescriptorProperty      mnHandle;
+        DataAccessDescriptorProperty const      mnHandle;
     };
 
     class ODADescriptorImpl
@@ -196,7 +195,7 @@ namespace svx
                 { OUString("Selection"),          DataAccessDescriptorProperty::Selection,             }
             };
 
-            for (unsigned i=0; i<SAL_N_ELEMENTS(s_aDescriptorProperties); ++i)
+            for (size_t i=0; i<SAL_N_ELEMENTS(s_aDescriptorProperties); ++i)
                 s_aProperties[ s_aDescriptorProperties[i].maName ] = &s_aDescriptorProperties[i];
         }
 
@@ -274,7 +273,8 @@ namespace svx
 
     ODataAccessDescriptor& ODataAccessDescriptor::operator=(const ODataAccessDescriptor& _rSource)
     {
-        m_pImpl.reset(new ODADescriptorImpl(*_rSource.m_pImpl));
+        if (this != &_rSource)
+            m_pImpl.reset(new ODADescriptorImpl(*_rSource.m_pImpl));
         return *this;
     }
 

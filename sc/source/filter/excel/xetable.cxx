@@ -33,10 +33,14 @@
 #include <xecontent.hxx>
 #include <xeescher.hxx>
 #include <xeextlst.hxx>
+#include <xeformula.hxx>
+#include <xlcontent.hxx>
+#include <xltools.hxx>
 #include <tokenarray.hxx>
 #include <formula/errorcodes.hxx>
 #include <thread>
 #include <comphelper/threadpool.hxx>
+#include <oox/token/tokens.hxx>
 #include <oox/export/utils.hxx>
 
 using namespace ::oox;
@@ -606,8 +610,6 @@ void XclExpSingleCellBase::WriteBody( XclExpStream& rStrm )
     WriteContents( rStrm );
 }
 
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpNumberCell )
-
 XclExpNumberCell::XclExpNumberCell(
         const XclExpRoot& rRoot, const XclAddress& rXclPos,
         const ScPatternAttr* pPattern, sal_uInt32 nForcedXFId, double fValue ) :
@@ -650,8 +652,6 @@ void XclExpNumberCell::WriteContents( XclExpStream& rStrm )
     rStrm << mfValue;
 }
 
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpBooleanCell )
-
 XclExpBooleanCell::XclExpBooleanCell(
         const XclExpRoot& rRoot, const XclAddress& rXclPos,
         const ScPatternAttr* pPattern, sal_uInt32 nForcedXFId, bool bValue ) :
@@ -680,8 +680,6 @@ void XclExpBooleanCell::WriteContents( XclExpStream& rStrm )
 {
     rStrm << sal_uInt16( mbValue ? 1 : 0 ) << EXC_BOOLERR_BOOL;
 }
-
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpLabelCell )
 
 XclExpLabelCell::XclExpLabelCell(
         const XclExpRoot& rRoot, const XclAddress& rXclPos,
@@ -805,8 +803,6 @@ void XclExpLabelCell::WriteContents( XclExpStream& rStrm )
         default:    DBG_ERROR_BIFF();
     }
 }
-
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpFormulaCell )
 
 XclExpFormulaCell::XclExpFormulaCell(
         const XclExpRoot& rRoot, const XclAddress& rXclPos,
@@ -1302,8 +1298,6 @@ void XclExpMultiCellBase::RemoveUnusedXFIndexes( const ScfUInt16Vec& rXFIndexes 
     // The Save() function will skip all XF indexes equal to EXC_XF_NOTFOUND.
 }
 
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpBlankCell )
-
 XclExpBlankCell::XclExpBlankCell( const XclAddress& rXclPos, const XclExpMultiXFId& rXFId ) :
     XclExpMultiCellBase( EXC_ID3_BLANK, EXC_ID_MULBLANK, 0, rXclPos )
 {
@@ -1349,8 +1343,6 @@ void XclExpBlankCell::WriteXmlContents( XclExpXmlStream& rStrm, const XclAddress
             XML_s,      lcl_GetStyleId( rStrm, nXFId ).getStr(),
             FSEND );
 }
-
-IMPL_FIXEDMEMPOOL_NEWDEL( XclExpRkCell )
 
 XclExpRkCell::XclExpRkCell(
         const XclExpRoot& rRoot, const XclAddress& rXclPos,
@@ -1812,7 +1804,7 @@ XclExpDefaultRowData::XclExpDefaultRowData( const XclExpRow& rRow ) :
     ::set_flag( mnFlags, EXC_DEFROW_UNSYNCED, rRow.IsUnsynced() );
 }
 
-bool operator<( const XclExpDefaultRowData& rLeft, const XclExpDefaultRowData& rRight )
+static bool operator<( const XclExpDefaultRowData& rLeft, const XclExpDefaultRowData& rRight )
 {
     return (rLeft.mnHeight < rRight.mnHeight) ||
         ((rLeft.mnHeight == rRight.mnHeight) && (rLeft.mnFlags < rRight.mnFlags));
@@ -2196,9 +2188,9 @@ void XclExpRowBuffer::Finalize( XclExpDefaultRowData& rDefRowData, const ScfUInt
     {
         comphelper::ThreadPool &rPool = comphelper::ThreadPool::getSharedOptimalPool();
         std::shared_ptr<comphelper::ThreadTaskTag> pTag = comphelper::ThreadPool::createThreadTaskTag();
-        std::vector<RowFinalizeTask*> aTasks(nThreads, nullptr);
+        std::vector<std::unique_ptr<RowFinalizeTask>> aTasks(nThreads);
         for ( size_t i = 0; i < nThreads; i++ )
-            aTasks[ i ] = new RowFinalizeTask( pTag, rColXFIndexes, i == 0 );
+            aTasks[ i ].reset( new RowFinalizeTask( pTag, rColXFIndexes, i == 0 ) );
 
         RowMap::iterator itr, itrBeg = maRowMap.begin(), itrEnd = maRowMap.end();
         size_t nIdx = 0;
@@ -2206,7 +2198,7 @@ void XclExpRowBuffer::Finalize( XclExpDefaultRowData& rDefRowData, const ScfUInt
             aTasks[ nIdx % nThreads ]->push_back( itr->second.get() );
 
         for ( size_t i = 1; i < nThreads; i++ )
-            rPool.pushTask( aTasks[ i ] );
+            rPool.pushTask( std::move(aTasks[ i ]) );
 
         // Progress bar updates must be synchronous to avoid deadlock
         aTasks[0]->doWork();
@@ -2377,7 +2369,7 @@ XclExpRow& XclExpRowBuffer::GetOrCreateRow( sal_uInt32 nXclRow, bool bRowAlwaysE
     if( !bFound || bFoundHigher )
     {
         size_t nFrom = 0;
-        RowRef pPrevEntry = nullptr;
+        RowRef pPrevEntry;
         if( itr != maRowMap.begin() )
         {
             --itr;
@@ -2454,6 +2446,9 @@ XclExpCellTable::XclExpCellTable( const XclExpRoot& rRoot ) :
 
     if(nLastUsedScCol > nMaxScCol)
         nLastUsedScCol = nMaxScCol;
+
+    // check extra blank rows to avoid of losing their not default settings (workaround for tdf#41425)
+    nLastUsedScRow += 1000;
 
     if(nLastUsedScRow > nMaxScRow)
         nLastUsedScRow = nMaxScRow;
@@ -2596,9 +2591,10 @@ XclExpCellTable::XclExpCellTable( const XclExpRoot& rRoot ) :
             break;
         }
 
+        assert(xCell && "can only reach here with xCell set");
+
         // insert the cell into the current row
-        if( xCell )
-            maRowBfr.AppendCell( xCell, bIsMergedBase );
+        maRowBfr.AppendCell( xCell, bIsMergedBase );
 
         if ( !aAddNoteText.isEmpty()  )
             mxNoteList->AppendNewRecord( new XclExpNote( GetRoot(), aScPos, nullptr, aAddNoteText ) );
@@ -2615,7 +2611,7 @@ XclExpCellTable::XclExpCellTable( const XclExpRoot& rRoot ) :
                 ScRange aScRange( aScPos );
                 aScRange.aEnd.IncCol( rMergeItem.GetColMerge() - 1 );
                 aScRange.aEnd.IncRow( rMergeItem.GetRowMerge() - 1 );
-                sal_uInt32 nXFId = xCell ? xCell->GetFirstXFId() : EXC_XFID_NOTFOUND;
+                sal_uInt32 nXFId = xCell->GetFirstXFId();
                 // blank cells merged vertically may occur repeatedly
                 OSL_ENSURE( (aScRange.aStart.Col() == aScRange.aEnd.Col()) || (nScCol == nLastScCol),
                     "XclExpCellTable::XclExpCellTable - invalid repeated blank merged cell" );

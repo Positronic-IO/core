@@ -19,32 +19,33 @@
 
 #include <salgdi.hxx>
 
-/****************************************************************
- *  Placeholder for no native widgets
- ***************************************************************/
-
-bool SalGraphics::IsNativeControlSupported( ControlType, ControlPart )
+bool SalGraphics::IsNativeControlSupported(ControlType /*eType*/, ControlPart /*ePart*/)
 {
     return false;
 }
 
-bool SalGraphics::hitTestNativeControl( ControlType, ControlPart,
-                                        const tools::Rectangle&, const Point&, bool& )
+bool SalGraphics::hitTestNativeControl(ControlType /*eType*/, ControlPart /*ePart*/,
+                                       const tools::Rectangle& /*rBoundingControlRegion*/,
+                                       const Point& /*rPosition*/, bool& /*rIsInside*/)
 {
     return false;
 }
 
-bool SalGraphics::drawNativeControl( ControlType, ControlPart,
-                                     const tools::Rectangle&, ControlState,
-                                     const ImplControlValue&, const OUString& )
+bool SalGraphics::drawNativeControl(ControlType /*eType*/, ControlPart /*ePart*/,
+                                   const tools::Rectangle& /*rBoundingControlRegion*/,
+                                   ControlState /*eState*/, const ImplControlValue& /*aValue*/,
+                                   const OUString& /*aCaptions*/)
 {
     return false;
 }
 
-bool SalGraphics::getNativeControlRegion( ControlType, ControlPart,
-                                          const tools::Rectangle&, ControlState,
-                                          const ImplControlValue&,
-                                          const OUString&, tools::Rectangle&, tools::Rectangle& )
+bool SalGraphics::getNativeControlRegion(ControlType /*eType*/, ControlPart /*ePart*/,
+                                         const tools::Rectangle& /*rBoundingControlRegion*/,
+                                         ControlState /*eState*/,
+                                         const ImplControlValue& /*aValue*/,
+                                         const OUString& /*aCaption*/,
+                                         tools::Rectangle& /*rNativeBoundingRegion*/,
+                                         tools::Rectangle& /*rNativeContentRegion*/)
 {
     return false;
 }

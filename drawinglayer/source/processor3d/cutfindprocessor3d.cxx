@@ -47,7 +47,7 @@ namespace drawinglayer
 
         void CutFindProcessor::processBasePrimitive3D(const primitive3d::BasePrimitive3D& rCandidate)
         {
-            if(mbAnyHit && maResult.size())
+            if(mbAnyHit && !maResult.empty())
             {
                 // stop processing as soon as a hit was recognized
                 return;
@@ -132,7 +132,7 @@ namespace drawinglayer
                     const primitive3d::UnifiedTransparenceTexturePrimitive3D& rPrimitive = static_cast< const primitive3d::UnifiedTransparenceTexturePrimitive3D& >(rCandidate);
                     const primitive3d::Primitive3DContainer& rChildren = rPrimitive.getChildren();
 
-                    if(rChildren.size())
+                    if(!rChildren.empty())
                     {
                         process(rChildren);
                     }
@@ -146,12 +146,12 @@ namespace drawinglayer
 
                     if(!maFront.equal(maBack))
                     {
-                           const basegfx::B3DPolyPolygon& rPolyPolygon = rPrimitive.getB3DPolyPolygon();
+                        const basegfx::B3DPolyPolygon& rPolyPolygon = rPrimitive.getB3DPolyPolygon();
                         const sal_uInt32 nPolyCount(rPolyPolygon.count());
 
                         if(nPolyCount)
                         {
-                               const basegfx::B3DPolygon aPolygon(rPolyPolygon.getB3DPolygon(0));
+                            const basegfx::B3DPolygon& aPolygon(rPolyPolygon.getB3DPolygon(0));
                             const sal_uInt32 nPointCount(aPolygon.count());
 
                             if(nPointCount > 2)

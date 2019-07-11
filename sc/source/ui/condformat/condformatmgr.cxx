@@ -8,10 +8,12 @@
  */
 
 #include <condformatmgr.hxx>
+#include <condformathelper.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <condformatdlg.hxx>
 #include <document.hxx>
+#include <conditio.hxx>
 
 ScCondFormatManagerWindow::ScCondFormatManagerWindow(SvSimpleTableContainer& rParent,
     ScDocument* pDoc, ScConditionalFormatList* pFormatList)
@@ -57,7 +59,7 @@ void ScCondFormatManagerWindow::Init()
 
     SetUpdateMode(true);
 
-    if (mpFormatList && mpFormatList->size())
+    if (mpFormatList && !mpFormatList->empty())
         SelectRow(0);
 }
 
@@ -110,7 +112,7 @@ ScCondFormatManagerDlg::ScCondFormatManagerDlg(vcl::Window* pParent, ScDocument*
     Size aSize(LogicToPixel(Size(290, 220), MapMode(MapUnit::MapAppFont)));
     pContainer->set_width_request(aSize.Width());
     pContainer->set_height_request(aSize.Height());
-    m_pCtrlManager = VclPtr<ScCondFormatManagerWindow>::Create(*pContainer, pDoc, mpFormatList);
+    m_pCtrlManager = VclPtr<ScCondFormatManagerWindow>::Create(*pContainer, pDoc, mpFormatList.get());
     get(m_pBtnAdd, "add");
     get(m_pBtnRemove, "remove");
     get(m_pBtnEdit, "edit");
@@ -119,6 +121,8 @@ ScCondFormatManagerDlg::ScCondFormatManagerDlg(vcl::Window* pParent, ScDocument*
     m_pBtnEdit->SetClickHdl(LINK(this, ScCondFormatManagerDlg, EditBtnClickHdl));
     m_pBtnAdd->SetClickHdl(LINK(this, ScCondFormatManagerDlg, AddBtnHdl));
     m_pCtrlManager->SetDoubleClickHdl(LINK(this, ScCondFormatManagerDlg, EditBtnHdl));
+
+    UpdateButtonSensitivity();
 }
 
 ScCondFormatManagerDlg::~ScCondFormatManagerDlg()
@@ -128,7 +132,7 @@ ScCondFormatManagerDlg::~ScCondFormatManagerDlg()
 
 void ScCondFormatManagerDlg::dispose()
 {
-    delete mpFormatList;
+    mpFormatList.reset();
     m_pBtnAdd.clear();
     m_pBtnRemove.clear();
     m_pBtnEdit.clear();
@@ -137,11 +141,16 @@ void ScCondFormatManagerDlg::dispose()
 }
 
 
-ScConditionalFormatList* ScCondFormatManagerDlg::GetConditionalFormatList()
+std::unique_ptr<ScConditionalFormatList> ScCondFormatManagerDlg::GetConditionalFormatList()
 {
-    ScConditionalFormatList* pList = mpFormatList;
-    mpFormatList = nullptr;
-    return pList;
+    return std::move(mpFormatList);
+}
+
+void ScCondFormatManagerDlg::UpdateButtonSensitivity()
+{
+    OUString aNewSensitivity = mpFormatList->empty() ? OUString("false") : OUString("true");
+    m_pBtnRemove->set_property("sensitive", aNewSensitivity);
+    m_pBtnEdit->set_property("sensitive", aNewSensitivity);
 }
 
 // Get the current conditional format selected.
@@ -155,12 +164,14 @@ IMPL_LINK_NOARG(ScCondFormatManagerDlg, RemoveBtnHdl, Button*, void)
 {
     m_pCtrlManager->DeleteSelection();
     mbModified = true;
+    UpdateButtonSensitivity();
 }
 
 IMPL_LINK_NOARG(ScCondFormatManagerDlg, EditBtnClickHdl, Button*, void)
 {
     mbModified = true;
     EditBtnHdl(nullptr);
+    UpdateButtonSensitivity();
 }
 IMPL_LINK_NOARG(ScCondFormatManagerDlg, EditBtnHdl, SvTreeListBox*, bool)
 {
@@ -184,6 +195,7 @@ IMPL_LINK_NOARG(ScCondFormatManagerDlg, AddBtnHdl, Button*, void)
 void ScCondFormatManagerDlg::SetModified()
 {
     mbModified = true;
+    UpdateButtonSensitivity();
 }
 
 bool ScCondFormatManagerDlg::CondFormatsChanged() const

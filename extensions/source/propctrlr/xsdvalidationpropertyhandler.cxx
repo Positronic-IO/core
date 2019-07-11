@@ -103,8 +103,8 @@ namespace pcr
         ::osl::MutexGuard aGuard( m_aMutex );
         PropertyId nPropId( impl_getPropertyId_throwUnknownProperty( _rPropertyName ) );
 
-        OSL_ENSURE( m_pHelper.get(), "XSDValidationPropertyHandler::getPropertyValue: inconsistency!" );
-            // if we survived impl_getPropertyId_throwUnknownProperty, we should have a helper, since no helper implies no properties
+        OSL_ENSURE(m_pHelper, "XSDValidationPropertyHandler::getPropertyValue: inconsistency!");
+        // if we survived impl_getPropertyId_throwUnknownProperty, we should have a helper, since no helper implies no properties
 
         Any aReturn;
         ::rtl::Reference< XSDDataType > pType = m_pHelper->getValidatingDataType();
@@ -133,8 +133,8 @@ namespace pcr
         ::osl::MutexGuard aGuard( m_aMutex );
         PropertyId nPropId( impl_getPropertyId_throwUnknownProperty( _rPropertyName ) );
 
-        OSL_ENSURE( m_pHelper.get(), "XSDValidationPropertyHandler::getPropertyValue: inconsistency!" );
-            // if we survived impl_getPropertyId_throwUnknownProperty, we should have a helper, since no helper implies no properties
+        OSL_ENSURE(m_pHelper, "XSDValidationPropertyHandler::getPropertyValue: inconsistency!");
+        // if we survived impl_getPropertyId_throwUnknownProperty, we should have a helper, since no helper implies no properties
 
         if ( PROPERTY_ID_XSD_DATA_TYPE == nPropId )
         {
@@ -174,7 +174,7 @@ namespace pcr
     {
         std::vector< Property > aProperties;
 
-        if ( m_pHelper.get() )
+        if (m_pHelper)
         {
             bool bAllowBinding = m_pHelper->canBindToAnyDataType();
 
@@ -228,7 +228,7 @@ namespace pcr
         ::osl::MutexGuard aGuard( m_aMutex );
 
         std::vector< OUString > aSuperfluous;
-        if ( m_pHelper.get() )
+        if (m_pHelper)
         {
             aSuperfluous.push_back(  OUString(PROPERTY_CONTROLSOURCE) );
             aSuperfluous.push_back(  OUString(PROPERTY_EMPTY_IS_NULL) );
@@ -262,7 +262,7 @@ namespace pcr
     {
         ::osl::MutexGuard aGuard( m_aMutex );
         std::vector< OUString > aInterestedInActuations;
-        if ( m_pHelper.get() )
+        if (m_pHelper)
         {
             aInterestedInActuations.push_back(  OUString(PROPERTY_XSD_DATA_TYPE) );
             aInterestedInActuations.push_back(  OUString(PROPERTY_XML_DATA_MODEL) );
@@ -289,7 +289,7 @@ namespace pcr
         ::osl::MutexGuard aGuard( m_aMutex );
         if ( !_rxControlFactory.is() )
             throw NullPointerException();
-        if ( !m_pHelper.get() )
+        if (!m_pHelper)
             throw RuntimeException();
 
         PropertyId nPropId( impl_getPropertyId_throwUnknownProperty( _rPropertyName ) );
@@ -424,8 +424,9 @@ namespace pcr
             throw NullPointerException();
 
         ::osl::MutexGuard aGuard( m_aMutex );
-        OSL_ENSURE( m_pHelper.get(), "XSDValidationPropertyHandler::onInteractivePropertySelection: we don't have any SupportedProperties!" );
-        if ( !m_pHelper.get() )
+        OSL_ENSURE(m_pHelper, "XSDValidationPropertyHandler::onInteractivePropertySelection: we "
+                              "don't have any SupportedProperties!");
+        if (!m_pHelper)
             return InteractiveSelectionResult_Cancelled;
 
         PropertyId nPropId( impl_getPropertyId_throwUnknownProperty( _rPropertyName ) );
@@ -460,7 +461,7 @@ namespace pcr
     {
         ::osl::MutexGuard aGuard( m_aMutex );
         XSDValidationPropertyHandler_Base::addPropertyChangeListener( _rxListener );
-        if ( m_pHelper.get() )
+        if (m_pHelper)
             m_pHelper->registerBindingListener( _rxListener );
     }
 
@@ -468,7 +469,7 @@ namespace pcr
     void SAL_CALL XSDValidationPropertyHandler::removePropertyChangeListener( const Reference< XPropertyChangeListener >& _rxListener )
     {
         ::osl::MutexGuard aGuard( m_aMutex );
-        if ( m_pHelper.get() )
+        if (m_pHelper)
             m_pHelper->revokeBindingListener( _rxListener );
         XSDValidationPropertyHandler_Base::removePropertyChangeListener( _rxListener );
     }
@@ -476,7 +477,9 @@ namespace pcr
 
     bool XSDValidationPropertyHandler::implPrepareCloneDataCurrentType( OUString& _rNewName )
     {
-        OSL_PRECOND( m_pHelper.get(), "XSDValidationPropertyHandler::implPrepareCloneDataCurrentType: this will crash!" );
+        OSL_PRECOND(
+            m_pHelper,
+            "XSDValidationPropertyHandler::implPrepareCloneDataCurrentType: this will crash!");
 
         ::rtl::Reference< XSDDataType > pType = m_pHelper->getValidatingDataType();
         if ( !pType.is() )
@@ -488,18 +491,19 @@ namespace pcr
         std::vector< OUString > aExistentNames;
         m_pHelper->getAvailableDataTypeNames( aExistentNames );
 
-        ScopedVclPtrInstance<NewDataTypeDialog> aDialog( nullptr, pType->getName(), aExistentNames );  // TODO/eForms: proper parent
-        if ( aDialog->Execute() != RET_OK )
+        NewDataTypeDialog aDialog( nullptr, pType->getName(), aExistentNames );  // TODO/eForms: proper parent
+        if (aDialog.run() != RET_OK)
             return false;
 
-        _rNewName = aDialog->GetName();
+        _rNewName = aDialog.GetName();
         return true;
     }
 
 
     void XSDValidationPropertyHandler::implDoCloneCurrentDataType( const OUString& _rNewName )
     {
-        OSL_PRECOND( m_pHelper.get(), "XSDValidationPropertyHandler::implDoCloneCurrentDataType: this will crash!" );
+        OSL_PRECOND(m_pHelper,
+                    "XSDValidationPropertyHandler::implDoCloneCurrentDataType: this will crash!");
 
         ::rtl::Reference< XSDDataType > pType = m_pHelper->getValidatingDataType();
         if ( !pType.is() )
@@ -513,7 +517,9 @@ namespace pcr
 
     bool XSDValidationPropertyHandler::implPrepareRemoveCurrentDataType()
     {
-        OSL_PRECOND( m_pHelper.get(), "XSDValidationPropertyHandler::implPrepareRemoveCurrentDataType: this will crash!" );
+        OSL_PRECOND(
+            m_pHelper,
+            "XSDValidationPropertyHandler::implPrepareRemoveCurrentDataType: this will crash!");
 
         ::rtl::Reference< XSDDataType > pType = m_pHelper->getValidatingDataType();
         if ( !pType.is() )
@@ -529,15 +535,13 @@ namespace pcr
         std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(nullptr, // TODO/eForms: proper parent
                                                        VclMessageType::Question, VclButtonsType::YesNo,
                                                        sConfirmation));
-        if (xQueryBox->run() != RET_YES)
-            return false;
-
-        return true;
+        return xQueryBox->run() == RET_YES;
     }
 
     bool XSDValidationPropertyHandler::implDoRemoveCurrentDataType()
     {
-        OSL_PRECOND( m_pHelper.get(), "XSDValidationPropertyHandler::implDoRemoveCurrentDataType: this will crash!" );
+        OSL_PRECOND(m_pHelper,
+                    "XSDValidationPropertyHandler::implDoRemoveCurrentDataType: this will crash!");
 
         ::rtl::Reference< XSDDataType > pType = m_pHelper->getValidatingDataType();
         if ( !pType.is() )
@@ -562,7 +566,7 @@ namespace pcr
 
         ::osl::MutexGuard aGuard( m_aMutex );
         PropertyId nActuatingPropId( impl_getPropertyId_throwRuntime( _rActuatingPropertyName ) );
-        if ( !m_pHelper.get() )
+        if (!m_pHelper)
             throw RuntimeException();
             // if we survived impl_getPropertyId_throwRuntime, we should have a helper, since no helper implies no properties
 
@@ -647,7 +651,9 @@ namespace pcr
 
     void XSDValidationPropertyHandler::implGetAvailableDataTypeNames( std::vector< OUString >& /* [out] */ _rNames ) const
     {
-        OSL_PRECOND( m_pHelper.get(), "XSDValidationPropertyHandler::implGetAvailableDataTypeNames: this will crash!" );
+        OSL_PRECOND(
+            m_pHelper,
+            "XSDValidationPropertyHandler::implGetAvailableDataTypeNames: this will crash!");
         // start with *all* types which are available at the model
         std::vector< OUString > aAllTypes;
         m_pHelper->getAvailableDataTypeNames( aAllTypes );

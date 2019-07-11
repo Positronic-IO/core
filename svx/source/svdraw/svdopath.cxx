@@ -51,11 +51,13 @@
 #include <svx/sdr/primitive2d/sdrattributecreator.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <svx/sdr/attribute/sdrformtextattribute.hxx>
+#include <o3tl/make_unique.hxx>
 #include <memory>
+#include <sal/log.hxx>
 
 using namespace sdr;
 
-inline sal_uInt16 GetPrevPnt(sal_uInt16 nPnt, sal_uInt16 nPntMax, bool bClosed)
+static sal_uInt16 GetPrevPnt(sal_uInt16 nPnt, sal_uInt16 nPntMax, bool bClosed)
 {
     if (nPnt>0) {
         nPnt--;
@@ -66,7 +68,7 @@ inline sal_uInt16 GetPrevPnt(sal_uInt16 nPnt, sal_uInt16 nPntMax, bool bClosed)
     return nPnt;
 }
 
-inline sal_uInt16 GetNextPnt(sal_uInt16 nPnt, sal_uInt16 nPntMax, bool bClosed)
+static sal_uInt16 GetNextPnt(sal_uInt16 nPnt, sal_uInt16 nPntMax, bool bClosed)
 {
     nPnt++;
     if (nPnt>nPntMax || (bClosed && nPnt>=nPntMax)) nPnt=0;
@@ -81,7 +83,6 @@ struct ImpSdrPathDragData  : public SdrDragStatUserData
     sal_uInt16                  nPoly;          // number of the polygon in the PolyPolygon
     sal_uInt16                  nPnt;           // number of point in the above polygon
     sal_uInt16                  nPointCount;    // number of points of the polygon
-    sal_uInt16                  nPntMax;        // maximum index
     bool                        bBegPnt;        // dragged point is first point of a Polyline
     bool                        bEndPnt;        // dragged point is finishing point of a Polyline
     sal_uInt16                  nPrevPnt;       // index of previous point
@@ -91,7 +92,6 @@ struct ImpSdrPathDragData  : public SdrDragStatUserData
     sal_uInt16                  nPrevPrevPnt;   // index of point before previous point
     sal_uInt16                  nNextNextPnt;   // index of point after next point
     bool                        bControl;       // point is a control point
-    bool                        bIsPrevControl; // point is a control point before a support point
     bool                        bIsNextControl; // point is a control point after a support point
     bool                        bPrevIsControl; // if nPnt is a support point: a control point comes before
     bool                        bNextIsControl; // if nPnt is a support point: a control point comes after
@@ -102,7 +102,7 @@ struct ImpSdrPathDragData  : public SdrDragStatUserData
     sal_uInt16                  nNextNextPnt0;
     bool                        bEliminate;     // delete point? (is set by MovDrag)
 
-    bool                        mbMultiPointDrag;
+    bool const                  mbMultiPointDrag;
     const XPolyPolygon          maOrig;
     XPolyPolygon                maMove;
     std::vector<SdrHdl*>        maHandles;
@@ -120,7 +120,6 @@ ImpSdrPathDragData::ImpSdrPathDragData(const SdrPathObj& rPO, const SdrHdl& rHdl
     , nPoly(0)
     , nPnt(0)
     , nPointCount(0)
-    , nPntMax(0)
     , bBegPnt(false)
     , bEndPnt(false)
     , nPrevPnt(0)
@@ -130,7 +129,6 @@ ImpSdrPathDragData::ImpSdrPathDragData(const SdrPathObj& rPO, const SdrHdl& rHdl
     , nPrevPrevPnt(0)
     , nNextNextPnt(0)
     , bControl(false)
-    , bIsPrevControl(false)
     , bIsNextControl(false)
     , bPrevIsControl(false)
     , bNextIsControl(false)
@@ -166,6 +164,7 @@ ImpSdrPathDragData::ImpSdrPathDragData(const SdrPathObj& rPO, const SdrHdl& rHdl
     }
     else
     {
+        sal_uInt16 nPntMax = 0; // maximum index
         bValid=false;
         bClosed=rPO.IsClosed();          // closed object?
         nPoly=static_cast<sal_uInt16>(rHdl.GetPolyNum());            // number of the polygon in the PolyPolygon
@@ -191,13 +190,11 @@ ImpSdrPathDragData::ImpSdrPathDragData(const SdrPathObj& rPO, const SdrHdl& rHdl
         if (!bPrevIsBegPnt) nPrevPrevPnt=GetPrevPnt(nPrevPnt,nPntMax,bClosed);
         if (!bNextIsEndPnt) nNextNextPnt=GetNextPnt(nNextPnt,nPntMax,bClosed);
         bControl=rHdl.IsPlusHdl();          // point is a control point
-        bIsPrevControl=false;               // point is a control point before a support point
         bIsNextControl=false;               // point is a control point after a support point
         bPrevIsControl=false;               // if nPnt is a support point: a control point comes before
         bNextIsControl=false;               // if nPnt is a support point: a control point comes after
         if (bControl) {
-            bIsPrevControl=aTmpXP.IsControl(nPrevPnt);
-            bIsNextControl=!bIsPrevControl;
+            bIsNextControl=!aTmpXP.IsControl(nPrevPnt);
         } else {
             bPrevIsControl=!bBegPnt && !bPrevIsBegPnt && aTmpXP.GetFlags(nPrevPnt)==PolyFlags::Control;
             bNextIsControl=!bEndPnt && !bNextIsEndPnt && aTmpXP.GetFlags(nNextPnt)==PolyFlags::Control;
@@ -318,25 +315,25 @@ void ImpPathCreateUser::CalcCircle(const Point& rP1, const Point& rP2, const Poi
     long dx=rP2.X()-rP1.X();
     long dy=rP2.Y()-rP1.Y();
     long dAngle=GetAngle(Point(dx,dy))-nTangAngle;
-    dAngle=NormAngle360(dAngle);
-    long nTmpAngle=NormAngle360(9000-dAngle);
+    dAngle=NormAngle36000(dAngle);
+    long nTmpAngle=NormAngle36000(9000-dAngle);
     bool bRet=nTmpAngle!=9000 && nTmpAngle!=27000;
     long nRad=0;
     if (bRet) {
         double cs=cos(nTmpAngle*nPi180);
         double nR=static_cast<double>(GetLen(Point(dx,dy)))/cs/2;
-        nRad=std::abs(svx::Round(nR));
+        nRad=std::abs(FRound(nR));
     }
     if (dAngle<18000) {
-        nCircStAngle=NormAngle360(nTangAngle-9000);
-        nCircRelAngle=NormAngle360(2*dAngle);
-        aCircCenter.AdjustX(svx::Round(nRad*cos((nTangAngle+9000)*nPi180)) );
-        aCircCenter.AdjustY( -(svx::Round(nRad*sin((nTangAngle+9000)*nPi180))) );
+        nCircStAngle=NormAngle36000(nTangAngle-9000);
+        nCircRelAngle=NormAngle36000(2*dAngle);
+        aCircCenter.AdjustX(FRound(nRad*cos((nTangAngle+9000)*nPi180)) );
+        aCircCenter.AdjustY( -(FRound(nRad*sin((nTangAngle+9000)*nPi180))) );
     } else {
-        nCircStAngle=NormAngle360(nTangAngle+9000);
-        nCircRelAngle=-NormAngle360(36000-2*dAngle);
-        aCircCenter.AdjustX(svx::Round(nRad*cos((nTangAngle-9000)*nPi180)) );
-        aCircCenter.AdjustY( -(svx::Round(nRad*sin((nTangAngle-9000)*nPi180))) );
+        nCircStAngle=NormAngle36000(nTangAngle+9000);
+        nCircRelAngle=-NormAngle36000(36000-2*dAngle);
+        aCircCenter.AdjustX(FRound(nRad*cos((nTangAngle-9000)*nPi180)) );
+        aCircCenter.AdjustY( -(FRound(nRad*sin((nTangAngle-9000)*nPi180))) );
     }
     bAngleSnap=pView!=nullptr && pView->IsAngleSnapEnabled();
     if (bAngleSnap) {
@@ -347,7 +344,7 @@ void ImpPathCreateUser::CalcCircle(const Point& rP1, const Point& rP2, const Poi
             nCircRelAngle+=nSA/2;
             nCircRelAngle/=nSA;
             nCircRelAngle*=nSA;
-            nCircRelAngle=NormAngle360(nCircRelAngle);
+            nCircRelAngle=NormAngle36000(nCircRelAngle);
             if (bNeg) nCircRelAngle=-nCircRelAngle;
         }
     }
@@ -366,7 +363,7 @@ XPolygon ImpPathCreateUser::GetCirclePoly() const
         return aXP;
     } else {
         XPolygon aXP(aCircCenter,nCircRadius,nCircRadius,
-                     sal_uInt16(NormAngle360(nCircStAngle+nCircRelAngle+5)/10),sal_uInt16((nCircStAngle+5)/10),false);
+                     sal_uInt16(NormAngle36000(nCircStAngle+nCircRelAngle+5)/10),sal_uInt16((nCircStAngle+5)/10),false);
         sal_uInt16 nCount=aXP.GetPointCount();
         for (sal_uInt16 nNum=nCount/2; nNum>0;) {
             nNum--; // reverse XPoly's order of points
@@ -458,8 +455,8 @@ void ImpPathCreateUser::CalcRect(const Point& rP1, const Point& rP2, const Point
         double sn=sin(a);
         double cs=cos(a);
         double nGKathLen=nHypLen*sn;
-        y+=svx::Round(nGKathLen*sn);
-        x+=svx::Round(nGKathLen*cs);
+        y+=FRound(nGKathLen*sn);
+        x+=FRound(nGKathLen*cs);
     }
     aRectP2.AdjustX(x );
     aRectP2.AdjustY(y );
@@ -499,7 +496,7 @@ class ImpPathForDragAndCreate
 {
     SdrPathObj&                 mrSdrPathObject;
     XPolyPolygon                aPathPolygon;
-    SdrObjKind                  meObjectKind;
+    SdrObjKind const            meObjectKind;
     std::unique_ptr<ImpSdrPathDragData>
                                 mpSdrPathDragData;
     bool                        mbCreating;
@@ -515,7 +512,7 @@ public:
     basegfx::B2DPolyPolygon getSpecialDragPoly(const SdrDragStat& rDrag) const;
 
     // create stuff
-    bool BegCreate(SdrDragStat& rStat);
+    void BegCreate(SdrDragStat& rStat);
     bool MovCreate(SdrDragStat& rStat);
     bool EndCreate(SdrDragStat& rStat, SdrCreateCmd eCmd);
     bool BckCreate(SdrDragStat const & rStat);
@@ -538,7 +535,6 @@ ImpPathForDragAndCreate::ImpPathForDragAndCreate(SdrPathObj& rSdrPathObject)
 :   mrSdrPathObject(rSdrPathObject),
     aPathPolygon(rSdrPathObject.GetPathPoly()),
     meObjectKind(mrSdrPathObject.meKind),
-    mpSdrPathDragData(nullptr),
     mbCreating(false)
 {
 }
@@ -1227,7 +1223,7 @@ basegfx::B2DPolyPolygon ImpPathForDragAndCreate::getSpecialDragPoly(const SdrDra
     return aRetval.getB2DPolyPolygon();
 }
 
-bool ImpPathForDragAndCreate::BegCreate(SdrDragStat& rStat)
+void ImpPathForDragAndCreate::BegCreate(SdrDragStat& rStat)
 {
     bool bFreeHand(IsFreeHand(meObjectKind));
     rStat.SetNoSnap(bFreeHand);
@@ -1249,7 +1245,6 @@ bool ImpPathForDragAndCreate::BegCreate(SdrDragStat& rStat)
     pU->eStartKind=meObjectKind;
     pU->eCurrentKind=meObjectKind;
     rStat.SetUser(std::move(pU));
-    return true;
 }
 
 bool ImpPathForDragAndCreate::MovCreate(SdrDragStat& rStat)
@@ -1290,19 +1285,19 @@ bool ImpPathForDragAndCreate::MovCreate(SdrDragStat& rStat)
             } // switch
         }
     }
-    sal_uInt16 nActPoint=rXPoly.GetPointCount();
-    if (aPathPolygon.Count()>1 && rStat.IsMouseDown() && nActPoint<2) {
+    sal_uInt16 nCurrentPoint=rXPoly.GetPointCount();
+    if (aPathPolygon.Count()>1 && rStat.IsMouseDown() && nCurrentPoint<2) {
         rXPoly[0]=rStat.GetPos0();
         rXPoly[1]=rStat.GetNow();
-        nActPoint=2;
+        nCurrentPoint=2;
     }
-    if (nActPoint==0) {
+    if (nCurrentPoint==0) {
         rXPoly[0]=rStat.GetPos0();
-    } else nActPoint--;
+    } else nCurrentPoint--;
     bool bFreeHand=IsFreeHand(pU->eCurrentKind);
     rStat.SetNoSnap(bFreeHand);
     rStat.SetOrtho8Possible(pU->eCurrentKind!=OBJ_CARC && pU->eCurrentKind!=OBJ_RECT && (!pU->bMixedCreate || pU->eCurrentKind!=OBJ_LINE));
-    rXPoly[nActPoint]=rStat.GetNow();
+    rXPoly[nCurrentPoint]=rStat.GetNow();
     if (!pU->bMixedCreate && pU->eStartKind==OBJ_LINE && rXPoly.GetPointCount()>=1) {
         Point aPt(rStat.GetStart());
         if (pView!=nullptr && pView->IsCreate1stPointAsCenter()) {
@@ -1313,15 +1308,15 @@ bool ImpPathForDragAndCreate::MovCreate(SdrDragStat& rStat)
     }
     OutputDevice* pOut=pView==nullptr ? nullptr : pView->GetFirstOutputDevice();
     if (bFreeHand) {
-        if (pU->nBezierStartPoint>nActPoint) pU->nBezierStartPoint=nActPoint;
-        if (rStat.IsMouseDown() && nActPoint>0) {
+        if (pU->nBezierStartPoint>nCurrentPoint) pU->nBezierStartPoint=nCurrentPoint;
+        if (rStat.IsMouseDown() && nCurrentPoint>0) {
             // don't allow two consecutive points to occupy too similar positions
             long nMinDist=1;
             if (pView!=nullptr) nMinDist=pView->GetFreeHandMinDistPix();
             if (pOut!=nullptr) nMinDist=pOut->PixelToLogic(Size(nMinDist,0)).Width();
             if (nMinDist<1) nMinDist=1;
 
-            Point aPt0(rXPoly[nActPoint-1]);
+            Point aPt0(rXPoly[nCurrentPoint-1]);
             Point aPt1(rStat.GetNow());
             long dx=aPt0.X()-aPt1.X(); if (dx<0) dx=-dx;
             long dy=aPt0.Y()-aPt1.Y(); if (dy<0) dy=-dy;
@@ -1330,39 +1325,39 @@ bool ImpPathForDragAndCreate::MovCreate(SdrDragStat& rStat)
             // TODO: the following is copied from EndCreate (with a few smaller modifications)
             // and should be combined into a method with the code there.
 
-            if (nActPoint-pU->nBezierStartPoint>=3 && ((nActPoint-pU->nBezierStartPoint)%3)==0) {
-                rXPoly.PointsToBezier(nActPoint-3);
-                rXPoly.SetFlags(nActPoint-1,PolyFlags::Control);
-                rXPoly.SetFlags(nActPoint-2,PolyFlags::Control);
+            if (nCurrentPoint-pU->nBezierStartPoint>=3 && ((nCurrentPoint-pU->nBezierStartPoint)%3)==0) {
+                rXPoly.PointsToBezier(nCurrentPoint-3);
+                rXPoly.SetFlags(nCurrentPoint-1,PolyFlags::Control);
+                rXPoly.SetFlags(nCurrentPoint-2,PolyFlags::Control);
 
-                if (nActPoint>=6 && rXPoly.IsControl(nActPoint-4)) {
-                    rXPoly.CalcTangent(nActPoint-3,nActPoint-4,nActPoint-2);
-                    rXPoly.SetFlags(nActPoint-3,PolyFlags::Smooth);
+                if (nCurrentPoint>=6 && rXPoly.IsControl(nCurrentPoint-4)) {
+                    rXPoly.CalcTangent(nCurrentPoint-3,nCurrentPoint-4,nCurrentPoint-2);
+                    rXPoly.SetFlags(nCurrentPoint-3,PolyFlags::Smooth);
                 }
             }
-            rXPoly[nActPoint+1]=rStat.GetNow();
+            rXPoly[nCurrentPoint+1]=rStat.GetNow();
             rStat.NextPoint();
         } else {
-            pU->nBezierStartPoint=nActPoint;
+            pU->nBezierStartPoint=nCurrentPoint;
         }
     }
 
     pU->ResetFormFlags();
     if (IsBezier(pU->eCurrentKind)) {
-        if (nActPoint>=2) {
-            pU->CalcBezier(rXPoly[nActPoint-1],rXPoly[nActPoint],rXPoly[nActPoint-1]-rXPoly[nActPoint-2],rStat.IsMouseDown());
+        if (nCurrentPoint>=2) {
+            pU->CalcBezier(rXPoly[nCurrentPoint-1],rXPoly[nCurrentPoint],rXPoly[nCurrentPoint-1]-rXPoly[nCurrentPoint-2],rStat.IsMouseDown());
         } else if (pU->bBezHasCtrl0) {
-            pU->CalcBezier(rXPoly[nActPoint-1],rXPoly[nActPoint],pU->aBezControl0-rXPoly[nActPoint-1],rStat.IsMouseDown());
+            pU->CalcBezier(rXPoly[nCurrentPoint-1],rXPoly[nCurrentPoint],pU->aBezControl0-rXPoly[nCurrentPoint-1],rStat.IsMouseDown());
         }
     }
-    if (pU->eCurrentKind==OBJ_CARC && nActPoint>=2) {
-        pU->CalcCircle(rXPoly[nActPoint-1],rXPoly[nActPoint],rXPoly[nActPoint-1]-rXPoly[nActPoint-2],pView);
+    if (pU->eCurrentKind==OBJ_CARC && nCurrentPoint>=2) {
+        pU->CalcCircle(rXPoly[nCurrentPoint-1],rXPoly[nCurrentPoint],rXPoly[nCurrentPoint-1]-rXPoly[nCurrentPoint-2],pView);
     }
-    if (pU->eCurrentKind==OBJ_LINE && nActPoint>=2) {
-        pU->CalcLine(rXPoly[nActPoint-1],rXPoly[nActPoint],rXPoly[nActPoint-1]-rXPoly[nActPoint-2],pView);
+    if (pU->eCurrentKind==OBJ_LINE && nCurrentPoint>=2) {
+        pU->CalcLine(rXPoly[nCurrentPoint-1],rXPoly[nCurrentPoint],rXPoly[nCurrentPoint-1]-rXPoly[nCurrentPoint-2],pView);
     }
-    if (pU->eCurrentKind==OBJ_RECT && nActPoint>=2) {
-        pU->CalcRect(rXPoly[nActPoint-1],rXPoly[nActPoint],rXPoly[nActPoint-1]-rXPoly[nActPoint-2],pView);
+    if (pU->eCurrentKind==OBJ_RECT && nCurrentPoint>=2) {
+        pU->CalcRect(rXPoly[nCurrentPoint-1],rXPoly[nCurrentPoint],rXPoly[nCurrentPoint-1]-rXPoly[nCurrentPoint-2],pView);
     }
 
     return true;
@@ -1375,8 +1370,8 @@ bool ImpPathForDragAndCreate::EndCreate(SdrDragStat& rStat, SdrCreateCmd eCmd)
     SdrView* pView=rStat.GetView();
     bool bIncomp=pView!=nullptr && pView->IsUseIncompatiblePathCreateInterface();
     XPolygon& rXPoly=aPathPolygon[aPathPolygon.Count()-1];
-    sal_uInt16 nActPoint=rXPoly.GetPointCount()-1;
-    rXPoly[nActPoint]=rStat.GetNow();
+    sal_uInt16 nCurrentPoint=rXPoly.GetPointCount()-1;
+    rXPoly[nCurrentPoint]=rStat.GetNow();
     if (!pU->bMixedCreate && pU->eStartKind==OBJ_LINE) {
         if (rStat.GetPointCount()>=2) eCmd=SdrCreateCmd::ForceEnd;
         bRet = eCmd==SdrCreateCmd::ForceEnd;
@@ -1398,44 +1393,44 @@ bool ImpPathForDragAndCreate::EndCreate(SdrDragStat& rStat, SdrCreateCmd eCmd)
     }
     if (eCmd==SdrCreateCmd::NextPoint || eCmd==SdrCreateCmd::NextObject) {
         // don't allow two consecutive points to occupy the same position
-        if (nActPoint==0 || rStat.GetNow()!=rXPoly[nActPoint-1]) {
+        if (nCurrentPoint==0 || rStat.GetNow()!=rXPoly[nCurrentPoint-1]) {
             if (bIncomp) {
-                if (pU->nBezierStartPoint>nActPoint) pU->nBezierStartPoint=nActPoint;
-                if (IsBezier(pU->eCurrentKind) && nActPoint-pU->nBezierStartPoint>=3 && ((nActPoint-pU->nBezierStartPoint)%3)==0) {
-                    rXPoly.PointsToBezier(nActPoint-3);
-                    rXPoly.SetFlags(nActPoint-1,PolyFlags::Control);
-                    rXPoly.SetFlags(nActPoint-2,PolyFlags::Control);
+                if (pU->nBezierStartPoint>nCurrentPoint) pU->nBezierStartPoint=nCurrentPoint;
+                if (IsBezier(pU->eCurrentKind) && nCurrentPoint-pU->nBezierStartPoint>=3 && ((nCurrentPoint-pU->nBezierStartPoint)%3)==0) {
+                    rXPoly.PointsToBezier(nCurrentPoint-3);
+                    rXPoly.SetFlags(nCurrentPoint-1,PolyFlags::Control);
+                    rXPoly.SetFlags(nCurrentPoint-2,PolyFlags::Control);
 
-                    if (nActPoint>=6 && rXPoly.IsControl(nActPoint-4)) {
-                        rXPoly.CalcTangent(nActPoint-3,nActPoint-4,nActPoint-2);
-                        rXPoly.SetFlags(nActPoint-3,PolyFlags::Smooth);
+                    if (nCurrentPoint>=6 && rXPoly.IsControl(nCurrentPoint-4)) {
+                        rXPoly.CalcTangent(nCurrentPoint-3,nCurrentPoint-4,nCurrentPoint-2);
+                        rXPoly.SetFlags(nCurrentPoint-3,PolyFlags::Smooth);
                     }
                 }
             } else {
-                if (nActPoint==1 && IsBezier(pU->eCurrentKind) && !pU->bBezHasCtrl0) {
+                if (nCurrentPoint==1 && IsBezier(pU->eCurrentKind) && !pU->bBezHasCtrl0) {
                     pU->aBezControl0=rStat.GetNow();
                     pU->bBezHasCtrl0=true;
-                    nActPoint--;
+                    nCurrentPoint--;
                 }
                 if (pU->IsFormFlag()) {
                     sal_uInt16 nPointCount0=rXPoly.GetPointCount();
-                    rXPoly.Remove(nActPoint-1,2); // remove last two points and replace by form
+                    rXPoly.Remove(nCurrentPoint-1,2); // remove last two points and replace by form
                     rXPoly.Insert(XPOLY_APPEND,pU->GetFormPoly());
                     sal_uInt16 nPointCount1=rXPoly.GetPointCount();
                     for (sal_uInt16 i=nPointCount0+1; i<nPointCount1-1; i++) { // to make BckAction work
                         if (!rXPoly.IsControl(i)) rStat.NextPoint();
                     }
-                    nActPoint=rXPoly.GetPointCount()-1;
+                    nCurrentPoint=rXPoly.GetPointCount()-1;
                 }
             }
-            nActPoint++;
-            rXPoly[nActPoint]=rStat.GetNow();
+            nCurrentPoint++;
+            rXPoly[nCurrentPoint]=rStat.GetNow();
         }
         if (eCmd==SdrCreateCmd::NextObject) {
             if (rXPoly.GetPointCount()>=2) {
                 pU->bBezHasCtrl0=false;
                 // only a singular polygon may be opened, so close this
-                rXPoly[nActPoint]=rXPoly[0];
+                rXPoly[nCurrentPoint]=rXPoly[0];
                 XPolygon aXP;
                 aXP[0]=rStat.GetNow();
                 aPathPolygon.Insert(std::move(aXP));
@@ -1485,23 +1480,23 @@ bool ImpPathForDragAndCreate::BckCreate(SdrDragStat const & rStat)
     ImpPathCreateUser* pU=static_cast<ImpPathCreateUser*>(rStat.GetUser());
     if (aPathPolygon.Count()>0) {
         XPolygon& rXPoly=aPathPolygon[aPathPolygon.Count()-1];
-        sal_uInt16 nActPoint=rXPoly.GetPointCount();
-        if (nActPoint>0) {
-            nActPoint--;
+        sal_uInt16 nCurrentPoint=rXPoly.GetPointCount();
+        if (nCurrentPoint>0) {
+            nCurrentPoint--;
             // make the last part of a bezier curve a line
-            rXPoly.Remove(nActPoint,1);
-            if (nActPoint>=3 && rXPoly.IsControl(nActPoint-1)) {
+            rXPoly.Remove(nCurrentPoint,1);
+            if (nCurrentPoint>=3 && rXPoly.IsControl(nCurrentPoint-1)) {
                 // there should never be a bezier segment at the end, so this is just in case...
-                rXPoly.Remove(nActPoint-1,1);
-                if (rXPoly.IsControl(nActPoint-2)) rXPoly.Remove(nActPoint-2,1);
+                rXPoly.Remove(nCurrentPoint-1,1);
+                if (rXPoly.IsControl(nCurrentPoint-2)) rXPoly.Remove(nCurrentPoint-2,1);
             }
         }
-        nActPoint=rXPoly.GetPointCount();
-        if (nActPoint>=4) { // no bezier segment at the end
-            nActPoint--;
-            if (rXPoly.IsControl(nActPoint-1)) {
-                rXPoly.Remove(nActPoint-1,1);
-                if (rXPoly.IsControl(nActPoint-2)) rXPoly.Remove(nActPoint-2,1);
+        nCurrentPoint=rXPoly.GetPointCount();
+        if (nCurrentPoint>=4) { // no bezier segment at the end
+            nCurrentPoint--;
+            if (rXPoly.IsControl(nCurrentPoint-1)) {
+                rXPoly.Remove(nCurrentPoint-1,1);
+                if (rXPoly.IsControl(nCurrentPoint-2)) rXPoly.Remove(nCurrentPoint-2,1);
             }
         }
         if (rXPoly.GetPointCount()<2) {
@@ -1509,10 +1504,10 @@ bool ImpPathForDragAndCreate::BckCreate(SdrDragStat const & rStat)
         }
         if (aPathPolygon.Count()>0) {
             XPolygon& rLocalXPoly=aPathPolygon[aPathPolygon.Count()-1];
-            sal_uInt16 nLocalActPoint=rLocalXPoly.GetPointCount();
-            if (nLocalActPoint>0) {
-                nLocalActPoint--;
-                rLocalXPoly[nLocalActPoint]=rStat.GetNow();
+            sal_uInt16 nLocalCurrentPoint=rLocalXPoly.GetPointCount();
+            if (nLocalCurrentPoint>0) {
+                nLocalCurrentPoint--;
+                rLocalXPoly[nLocalCurrentPoint]=rStat.GetNow();
             }
         }
     }
@@ -1621,9 +1616,9 @@ SdrPathObjGeoData::~SdrPathObjGeoData()
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrPathObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrPathObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrPathObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrPathObj>(*this);
 }
 
 
@@ -1658,6 +1653,9 @@ static bool lcl_ImpIsLine(const basegfx::B2DPolyPolygon& rPolyPolygon)
 static tools::Rectangle lcl_ImpGetBoundRect(const basegfx::B2DPolyPolygon& rPolyPolygon)
 {
     basegfx::B2DRange aRange(basegfx::utils::getRange(rPolyPolygon));
+
+    if (aRange.isEmpty())
+        return tools::Rectangle();
 
     return tools::Rectangle(
         FRound(aRange.getMinX()), FRound(aRange.getMinY()),
@@ -1753,25 +1751,21 @@ void SdrPathObj::ImpForceKind()
 
     // #i75974# adapt polygon state to object type. This may include a reinterpretation
     // of a closed geometry as open one, but with identical first and last point
-    for(sal_uInt32 a(0); a < maPathPolygon.count(); a++)
+    for(auto& rPolygon : maPathPolygon)
     {
-        basegfx::B2DPolygon aCandidate(maPathPolygon.getB2DPolygon(a));
-
-        if(IsClosed() != aCandidate.isClosed())
+        if(IsClosed() != rPolygon.isClosed())
         {
             // #i80213# really change polygon geometry; else e.g. the last point which
             // needs to be identical with the first one will be missing when opening
             // due to OBJ_PATH type
-            if(aCandidate.isClosed())
+            if(rPolygon.isClosed())
             {
-                basegfx::utils::openWithGeometryChange(aCandidate);
+                basegfx::utils::openWithGeometryChange(rPolygon);
             }
             else
             {
-                basegfx::utils::closeWithGeometryChange(aCandidate);
+                basegfx::utils::closeWithGeometryChange(rPolygon);
             }
-
-            maPathPolygon.setB2DPolygon(a, aCandidate);
         }
     }
 }
@@ -1902,11 +1896,10 @@ OUString SdrPathObj::TakeObjNameSingul() const
         {
             // get point count
             sal_uInt32 nPointCount(0);
-            const sal_uInt32 nPolyCount(GetPathPoly().count());
 
-            for(sal_uInt32 a(0); a < nPolyCount; a++)
+            for(auto const& rPolygon : GetPathPoly())
             {
-                nPointCount += GetPathPoly().getB2DPolygon(a).count();
+                nPointCount += rPolygon.count();
             }
 
             if(bClosed)
@@ -1976,36 +1969,13 @@ basegfx::B2DPolyPolygon SdrPathObj::TakeXorPoly() const
 sal_uInt32 SdrPathObj::GetHdlCount() const
 {
     sal_uInt32 nRetval(0);
-    const sal_uInt32 nPolyCount(GetPathPoly().count());
 
-    for(sal_uInt32 a(0); a < nPolyCount; a++)
+    for(auto const& rPolygon : GetPathPoly())
     {
-        nRetval += GetPathPoly().getB2DPolygon(a).count();
+        nRetval += rPolygon.count();
     }
 
     return nRetval;
-}
-
-SdrHdl* SdrPathObj::GetHdl(sal_uInt32 nHdlNum) const
-{
-    // #i73248#
-    // Warn the user that this is ineffective and show alternatives. Should not be used at all.
-    OSL_FAIL("SdrPathObj::GetHdl(): ineffective, use AddToHdlList instead (!)");
-
-    // to have an alternative, get single handle using the ineffective way
-    SdrHdl* pRetval = nullptr;
-    SdrHdlList aLocalList(nullptr);
-    AddToHdlList(aLocalList);
-    const sal_uInt32 nHdlCount(aLocalList.GetHdlCount());
-
-    if(nHdlCount && nHdlNum < nHdlCount)
-    {
-        // remove and remember. The other created handles will be deleted again with the
-        // destruction of the local list
-        pRetval = aLocalList.RemoveHdl(nHdlNum);
-    }
-
-    return pRetval;
 }
 
 void SdrPathObj::AddToHdlList(SdrHdlList& rHdlList) const
@@ -2024,92 +1994,63 @@ void SdrPathObj::AddToHdlList(SdrHdlList& rHdlList) const
         for (sal_uInt16 j=0; j<nPntCnt; j++) {
             if (rXPoly.GetFlags(j)!=PolyFlags::Control) {
                 const Point& rPnt=rXPoly[j];
-                SdrHdl* pHdl=new SdrHdl(rPnt,SdrHdlKind::Poly);
+                std::unique_ptr<SdrHdl> pHdl(new SdrHdl(rPnt,SdrHdlKind::Poly));
                 pHdl->SetPolyNum(i);
                 pHdl->SetPointNum(j);
                 pHdl->Set1PixMore(j==0);
                 pHdl->SetSourceHdlNum(nIdx);
                 nIdx++;
-                rHdlList.AddHdl(pHdl);
+                rHdlList.AddHdl(std::move(pHdl));
             }
         }
     }
 }
 
-sal_uInt32 SdrPathObj::GetPlusHdlCount(const SdrHdl& rHdl) const
+void SdrPathObj::AddToPlusHdlList(SdrHdlList& rHdlList, SdrHdl& rHdl) const
 {
-    // keep old stuff to be able to keep old SdrHdl stuff, too
-    const XPolyPolygon aOldPathPolygon(GetPathPoly());
-    sal_uInt16 nCnt = 0;
-    sal_uInt16 nPnt = static_cast<sal_uInt16>(rHdl.GetPointNum());
+    // exclude some error situations
+    const XPolyPolygon aPathPolyPolygon(GetPathPoly());
     sal_uInt16 nPolyNum = static_cast<sal_uInt16>(rHdl.GetPolyNum());
+    if (nPolyNum>=aPathPolyPolygon.Count())
+        return;
 
-    if(nPolyNum < aOldPathPolygon.Count())
+    const XPolygon& rXPoly = aPathPolyPolygon[nPolyNum];
+    sal_uInt16 nPntCount = rXPoly.GetPointCount();
+    if (nPntCount<=0)
+        return;
+
+    sal_uInt16 nPnt = static_cast<sal_uInt16>(rHdl.GetPointNum());
+    if (nPnt>=nPntCount)
+        return;
+
+    if (rXPoly.IsControl(nPnt))
+        return;
+
+    // segment before
+    if (nPnt==0 && IsClosed())
+        nPnt=nPntCount-1;
+    if (nPnt>0 && rXPoly.IsControl(nPnt-1))
     {
-        const XPolygon& rXPoly = aOldPathPolygon[nPolyNum];
-        sal_uInt16 nPntMax = rXPoly.GetPointCount();
-        if (nPntMax>0)
-        {
-            nPntMax--;
-            if (nPnt<=nPntMax)
-            {
-                if (rXPoly.GetFlags(nPnt)!=PolyFlags::Control)
-                {
-                    if (nPnt==0 && IsClosed()) nPnt=nPntMax;
-                    if (nPnt>0 && rXPoly.GetFlags(nPnt-1)==PolyFlags::Control) nCnt++;
-                    if (nPnt==nPntMax && IsClosed()) nPnt=0;
-                    if (nPnt<nPntMax && rXPoly.GetFlags(nPnt+1)==PolyFlags::Control) nCnt++;
-                }
-            }
-        }
+        std::unique_ptr<SdrHdl> pHdl(new SdrHdlBezWgt(&rHdl));
+        pHdl->SetPos(rXPoly[nPnt-1]);
+        pHdl->SetPointNum(nPnt-1);
+        pHdl->SetSourceHdlNum(rHdl.GetSourceHdlNum());
+        pHdl->SetPlusHdl(true);
+        rHdlList.AddHdl(std::move(pHdl));
     }
 
-    return nCnt;
-}
-
-SdrHdl* SdrPathObj::GetPlusHdl(const SdrHdl& rHdl, sal_uInt32 nPlusNum) const
-{
-    // keep old stuff to be able to keep old SdrHdl stuff, too
-    const XPolyPolygon aOldPathPolygon(GetPathPoly());
-    SdrHdl* pHdl = nullptr;
-    sal_uInt16 nPnt = static_cast<sal_uInt16>(rHdl.GetPointNum());
-    sal_uInt16 nPolyNum = static_cast<sal_uInt16>(rHdl.GetPolyNum());
-
-    if (nPolyNum<aOldPathPolygon.Count())
+    // segment after
+    if (nPnt==nPntCount-1 && IsClosed())
+        nPnt=0;
+    if (nPnt<nPntCount-1 && rXPoly.IsControl(nPnt+1))
     {
-        const XPolygon& rXPoly = aOldPathPolygon[nPolyNum];
-        sal_uInt16 nPntMax = rXPoly.GetPointCount();
-
-        if (nPntMax>0)
-        {
-            nPntMax--;
-            if (nPnt<=nPntMax)
-            {
-                pHdl=new SdrHdlBezWgt(&rHdl);
-                pHdl->SetPolyNum(rHdl.GetPolyNum());
-
-                if (nPnt==0 && IsClosed()) nPnt=nPntMax;
-                if (nPnt>0 && rXPoly.GetFlags(nPnt-1)==PolyFlags::Control && nPlusNum==0)
-                {
-                    pHdl->SetPos(rXPoly[nPnt-1]);
-                    pHdl->SetPointNum(nPnt-1);
-                }
-                else
-                {
-                    if (nPnt==nPntMax && IsClosed()) nPnt=0;
-                    if (nPnt<rXPoly.GetPointCount()-1 && rXPoly.GetFlags(nPnt+1)==PolyFlags::Control)
-                    {
-                        pHdl->SetPos(rXPoly[nPnt+1]);
-                        pHdl->SetPointNum(nPnt+1);
-                    }
-                }
-
-                pHdl->SetSourceHdlNum(rHdl.GetSourceHdlNum());
-                pHdl->SetPlusHdl(true);
-            }
-        }
+        std::unique_ptr<SdrHdl> pHdl(new SdrHdlBezWgt(&rHdl));
+        pHdl->SetPos(rXPoly[nPnt+1]);
+        pHdl->SetPointNum(nPnt+1);
+        pHdl->SetSourceHdlNum(rHdl.GetSourceHdlNum());
+        pHdl->SetPlusHdl(true);
+        rHdlList.AddHdl(std::move(pHdl));
     }
-    return pHdl;
 }
 
 // dragging
@@ -2196,7 +2137,8 @@ basegfx::B2DPolyPolygon SdrPathObj::getSpecialDragPoly(const SdrDragStat& rDrag)
 bool SdrPathObj::BegCreate(SdrDragStat& rStat)
 {
     mpDAC.reset();
-    return impGetDAC().BegCreate(rStat);
+    impGetDAC().BegCreate(rStat);
+    return true;
 }
 
 bool SdrPathObj::MovCreate(SdrDragStat& rStat)
@@ -2317,6 +2259,20 @@ void SdrPathObj::NbcMove(const Size& rSiz)
 
 void SdrPathObj::NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact)
 {
+    const double fResizeX(xFact);
+    const double fResizeY(yFact);
+
+    if(basegfx::fTools::equal(fResizeX, 1.0) && basegfx::fTools::equal(fResizeY, 1.0))
+    {
+        // tdf#106792 avoid numerical unprecisions: If both scale factors are 1.0, do not
+        // manipulate at all - that may change aGeo rapidly (and wrongly) in
+        // SdrTextObj::NbcResize. Combined with the UNO API trying to not 'apply'
+        // a rotation but to manipulate the existing one, this is fatal. So just
+        // avoid this error as long as we have to deal with imprecise geometry
+        // manipulations
+        return;
+    }
+
     basegfx::B2DHomMatrix aTrans(basegfx::utils::createTranslateB2DHomMatrix(-rRef.X(), -rRef.Y()));
     aTrans = basegfx::utils::createScaleTranslateB2DHomMatrix(
         double(xFact), double(yFact), rRef.X(), rRef.Y()) * aTrans;
@@ -2449,12 +2405,11 @@ bool SdrPathObj::IsPolyObj() const
 
 sal_uInt32 SdrPathObj::GetPointCount() const
 {
-    const sal_uInt32 nPolyCount(GetPathPoly().count());
     sal_uInt32 nRetval(0);
 
-    for(sal_uInt32 a(0); a < nPolyCount; a++)
+    for(auto const& rPolygon : GetPathPoly())
     {
-        nRetval += GetPathPoly().getB2DPolygon(a).count();
+        nRetval += rPolygon.count();
     }
 
     return nRetval;
@@ -2651,7 +2606,7 @@ SdrObject* SdrPathObj::RipPoint(sal_uInt32 nHdlNum, sal_uInt32& rNewPt0Index)
     {
         if(0 == nPoly)
         {
-            const basegfx::B2DPolygon aCandidate(aLocalPolyPolygon.getB2DPolygon(nPoly));
+            const basegfx::B2DPolygon& aCandidate(aLocalPolyPolygon.getB2DPolygon(nPoly));
             const sal_uInt32 nPointCount(aCandidate.count());
 
             if(nPointCount)
@@ -2971,7 +2926,7 @@ void SdrPathObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
         // #i78696#
         // fRotate is mathematically correct, but aGeoStat.nRotationAngle is
         // mirrored -> mirror value here
-        aGeo.nRotationAngle = NormAngle360(FRound(-fRotate / F_PI18000));
+        aGeo.nRotationAngle = NormAngle36000(FRound(-fRotate / F_PI18000));
         aGeo.RecalcSinCos();
     }
 

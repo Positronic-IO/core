@@ -29,6 +29,7 @@
 #include <vcl/svapp.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 #include <com/sun/star/beans/XPropertySet.hpp>
+#include <o3tl/make_unique.hxx>
 
 namespace chart
 {
@@ -330,10 +331,10 @@ bool SelectionHelper::findNamedParent( SdrObject*& pInOutObject
 
     while( pObj && !ObjectIdentifier::isCID( aName  )  )
     {
-        SdrObjList* pObjList = pObj->getParentOfSdrObject();
+        SdrObjList* pObjList = pObj->getParentSdrObjListFromSdrObject();
         if( !pObjList )
             return false;
-        SdrObject* pOwner = pObjList->GetOwnerObj();
+        SdrObject* pOwner = pObjList->getSdrObjectFromSdrObjList();
         if( !pOwner )
             return false;
         pObj = pOwner;
@@ -462,10 +463,8 @@ SelectionHelper::~SelectionHelper()
 
 bool SelectionHelper::getFrameDragSingles()
 {
-    bool bFrameDragSingles = true;//true == green == surrounding handles
-    if( m_pSelectedObj && dynamic_cast<const E3dObject*>( m_pSelectedObj) !=  nullptr )
-        bFrameDragSingles = false;
-    return bFrameDragSingles;
+    //true == green == surrounding handles
+    return dynamic_cast<const E3dObject*>( m_pSelectedObj) == nullptr;
 }
 
 SdrObject* SelectionHelper::getMarkHandlesObject( SdrObject* pObj )
@@ -483,7 +482,7 @@ SdrObject* SelectionHelper::getMarkHandlesObject( SdrObject* pObj )
     SdrObjList* pSubList = pObj->GetSubList();
     if(pSubList)
     {
-        SdrObjListIter aIterator(*pSubList, SdrIterMode::Flat);
+        SdrObjListIter aIterator(pSubList, SdrIterMode::Flat);
         while (aIterator.IsMore())
         {
             SdrObject* pMarkHandles = SelectionHelper::getMarkHandlesObject( aIterator.Next() );
@@ -508,7 +507,7 @@ SdrObject* SelectionHelper::getObjectToMark()
         SdrObjList* pSubList = pObj->GetSubList();
         if(pSubList)
         {
-            SdrObjListIter aIterator(*pSubList, SdrIterMode::Flat);
+            SdrObjListIter aIterator(pSubList, SdrIterMode::Flat);
             while (aIterator.IsMore())
             {
                 SdrObject* pMarkHandles = SelectionHelper::getMarkHandlesObject( aIterator.Next() );
@@ -539,7 +538,7 @@ E3dScene* SelectionHelper::getSceneToRotate( SdrObject* pObj )
             SdrObjList* pSubList = pObj->GetSubList();
             if(pSubList)
             {
-                SdrObjListIter aIterator(*pSubList, SdrIterMode::DeepWithGroups);
+                SdrObjListIter aIterator(pSubList, SdrIterMode::DeepWithGroups);
                 while( aIterator.IsMore() && !pRotateable )
                 {
                     SdrObject* pSubObj = aIterator.Next();
@@ -549,14 +548,15 @@ E3dScene* SelectionHelper::getSceneToRotate( SdrObject* pObj )
         }
     }
 
-    E3dScene* pScene = nullptr;
+    E3dScene* pScene(nullptr);
+
     if(pRotateable)
     {
         SolarMutexGuard aSolarGuard;
-        pScene = pRotateable->GetScene();
+        pScene = pRotateable->getRootE3dSceneFromE3dObject();
     }
-    return pScene;
 
+    return pScene;
 }
 
 bool SelectionHelper::getMarkHandles( SdrHdlList& rHdlList )
@@ -592,12 +592,11 @@ bool SelectionHelper::getMarkHandles( SdrHdlList& rHdlList )
             const ::basegfx::B2DPolyPolygon& rPolyPolygon = static_cast<SdrPathObj*>(m_pMarkObj)->GetPathPoly();
             for( sal_uInt32 nN = 0; nN < rPolyPolygon.count(); nN++)
             {
-                const ::basegfx::B2DPolygon aPolygon(rPolyPolygon.getB2DPolygon(nN));
+                const ::basegfx::B2DPolygon& aPolygon(rPolyPolygon.getB2DPolygon(nN));
                 for( sal_uInt32 nM = 0; nM < aPolygon.count(); nM++)
                 {
                     const ::basegfx::B2DPoint aPoint(aPolygon.getB2DPoint(nM));
-                    SdrHdl* pHdl = new SdrHdl(Point(basegfx::fround(aPoint.getX()), basegfx::fround(aPoint.getY())), SdrHdlKind::Poly);
-                    rHdlList.AddHdl(pHdl);
+                    rHdlList.AddHdl(o3tl::make_unique<SdrHdl>(Point(basegfx::fround(aPoint.getX()), basegfx::fround(aPoint.getY())), SdrHdlKind::Poly));
                 }
             }
             return true;
@@ -628,7 +627,7 @@ bool SelectionHelper::getMarkHandles( SdrHdlList& rHdlList )
         return false;
     }
 
-    SdrObjListIter aIterator(*pSubList, SdrIterMode::Flat);
+    SdrObjListIter aIterator(pSubList, SdrIterMode::Flat);
 
     while (aIterator.IsMore())
     {
@@ -642,8 +641,7 @@ bool SelectionHelper::getMarkHandles( SdrHdlList& rHdlList )
         }
 
         Point aPos = pSubObj->GetCurrentBoundRect().Center();
-        SdrHdl* pHdl = new SdrHdl(aPos,SdrHdlKind::Poly);
-        rHdlList.AddHdl(pHdl);
+        rHdlList.AddHdl(o3tl::make_unique<SdrHdl>(aPos,SdrHdlKind::Poly));
     }
     return true;
 }

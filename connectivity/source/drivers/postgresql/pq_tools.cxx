@@ -39,6 +39,7 @@
 #include <o3tl/any.hxx>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
@@ -94,7 +95,7 @@ OUString concatQualified( const OUString & a, const OUString &b)
     return buf.makeStringAndClear();
 }
 
-static inline OString iOUStringToOString( const OUString& str, ConnectionSettings const *settings) {
+static OString iOUStringToOString( const OUString& str, ConnectionSettings const *settings) {
     OSL_ENSURE(settings, "pgsql-sdbc: OUStringToOString got NULL settings");
     return OUStringToOString( str, ConnectionSettings::encoding );
 }
@@ -130,7 +131,7 @@ void bufferEscapeConstant( OUStringBuffer & buf, const OUString & value, Connect
     buf.append( OStringToOUString( strbuf.makeStringAndClear(), RTL_TEXTENCODING_UTF8 ) );
 }
 
-static inline void ibufferQuoteConstant( OUStringBuffer & buf, const OUString & value, ConnectionSettings *settings )
+static void ibufferQuoteConstant( OUStringBuffer & buf, const OUString & value, ConnectionSettings *settings )
 {
     buf.append( "'" );
     bufferEscapeConstant( buf, value, settings );
@@ -154,7 +155,7 @@ void bufferQuoteAnyConstant( OUStringBuffer & buf, const Any &val, ConnectionSet
         buf.append( "NULL" );
 }
 
-static inline void ibufferQuoteIdentifier( OUStringBuffer & buf, const OUString &toQuote, ConnectionSettings *settings )
+static void ibufferQuoteIdentifier( OUStringBuffer & buf, const OUString &toQuote, ConnectionSettings *settings )
 {
     OSL_ENSURE(settings, "pgsql-sdbc: bufferQuoteIdentifier got NULL settings");
 
@@ -857,7 +858,7 @@ css::uno::Sequence< sal_Int32 > string2intarray( const OUString & str )
         std::vector< sal_Int32 > vec;
         do
         {
-            OUString digits;
+            OUStringBuffer digits;
             do
             {
                 if(!iswspace(c))
@@ -872,10 +873,10 @@ css::uno::Sequence< sal_Int32 > string2intarray( const OUString & str )
                     break;
                 if ( start == strlen)
                     return ret;
-                digits += OUString(&c, 1);
+                digits.append(OUString(&c, 1));
                 c = str.iterateCodePoints(&start);
             } while ( c );
-            vec.push_back( digits.toInt32() );
+            vec.push_back( digits.makeStringAndClear().toInt32() );
             do
             {
                 if(!iswspace(c))
@@ -1083,10 +1084,10 @@ void extractNameValuePairsFromInsert( String2StringMap & map, const OString & la
             n +=2;
         }
 
-        std::vector< OString > names;
         n ++;
         if( vec[n].equalsIgnoreAsciiCase( "(" ) )
         {
+            std::vector< OString> names;
 //             printf( "2\n" );
             // extract names
             n++;
@@ -1107,9 +1108,12 @@ void extractNameValuePairsFromInsert( String2StringMap & map, const OString & la
             {
                 n +=2;
 //                 printf( "3\n" );
-                for (std::vector< OString >::size_type i = 0 ; i < names.size() && nSize > n ; i ++ )
+                for (auto& name : names)
                 {
-                    map[names[i]] = vec[n];
+                    if (n >= nSize)
+                        break;
+
+                    map[name] = vec[n];
                     if( nSize > n+1 && vec[n+1].equalsIgnoreAsciiCase(",") )
                     {
                         n ++;

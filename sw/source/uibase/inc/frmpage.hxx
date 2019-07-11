@@ -43,54 +43,6 @@ struct SwPosition;
 // frame dialog
 class SwFramePage: public SfxTabPage
 {
-    // size
-    VclPtr<FixedText>       m_pWidthFT;
-    VclPtr<FixedText>       m_pWidthAutoFT;
-    PercentField            m_aWidthED;
-    VclPtr<CheckBox>        m_pRelWidthCB;
-    VclPtr<ListBox>         m_pRelWidthRelationLB;
-    VclPtr<CheckBox>        m_pAutoWidthCB;
-
-    VclPtr<FixedText>       m_pHeightFT;
-    VclPtr<FixedText>       m_pHeightAutoFT;
-    PercentField            m_aHeightED;
-    VclPtr<CheckBox>        m_pRelHeightCB;
-    VclPtr<ListBox>         m_pRelHeightRelationLB;
-    VclPtr<CheckBox>        m_pAutoHeightCB;
-
-    VclPtr<CheckBox>        m_pFixedRatioCB;
-    VclPtr<PushButton>      m_pRealSizeBT;
-
-    // anchor
-    VclPtr<VclContainer>    m_pAnchorFrame;
-    VclPtr<RadioButton>     m_pAnchorAtPageRB;
-    VclPtr<RadioButton>     m_pAnchorAtParaRB;
-    VclPtr<RadioButton>     m_pAnchorAtCharRB;
-    VclPtr<RadioButton>     m_pAnchorAsCharRB;
-    VclPtr<RadioButton>     m_pAnchorAtFrameRB;
-
-    // position
-    VclPtr<FixedText>       m_pHorizontalFT;
-    VclPtr<ListBox>         m_pHorizontalDLB;
-    VclPtr<FixedText>       m_pAtHorzPosFT;
-    VclPtr<MetricField>     m_pAtHorzPosED;
-    VclPtr<FixedText>       m_pHoriRelationFT;
-    VclPtr<ListBox>         m_pHoriRelationLB;
-
-    VclPtr<CheckBox>        m_pMirrorPagesCB;
-
-    VclPtr<FixedText>       m_pVerticalFT;
-    VclPtr<ListBox>         m_pVerticalDLB;
-    VclPtr<FixedText>       m_pAtVertPosFT;
-    VclPtr<MetricField>     m_pAtVertPosED;
-    VclPtr<FixedText>       m_pVertRelationFT;
-    VclPtr<ListBox>         m_pVertRelationLB;
-    // #i18732# - check box for new option 'FollowTextFlow'
-    VclPtr<CheckBox>        m_pFollowTextFlowCB;
-
-    // example
-    VclPtr<SvxSwFrameExample>  m_pExampleWN;
-
     bool            m_bAtHorzPosModified;
     bool            m_bAtVertPosModified;
 
@@ -119,55 +71,105 @@ class SwFramePage: public SfxTabPage
     sal_Int16 m_nOldV;
     sal_Int16 m_nOldVRel;
 
-    FrameMap* m_pVMap;
-    FrameMap* m_pHMap;
+    FrameMap const * m_pVMap;
+    FrameMap const * m_pHMap;
 
     bool    m_bAllowVertPositioning;
     bool    m_bIsMathOLE;
     bool    m_bIsMathBaselineAlignment;
 
+    SwFrameExample m_aExampleWN;
+
+    // size
+    std::unique_ptr<weld::Label> m_xWidthFT;
+    std::unique_ptr<weld::Label> m_xWidthAutoFT;
+    std::unique_ptr<weld::CheckButton> m_xRelWidthCB;
+    std::unique_ptr<weld::ComboBox> m_xRelWidthRelationLB;
+    std::unique_ptr<weld::CheckButton> m_xAutoWidthCB;
+
+    std::unique_ptr<weld::Label> m_xHeightFT;
+    std::unique_ptr<weld::Label> m_xHeightAutoFT;
+    std::unique_ptr<weld::CheckButton> m_xRelHeightCB;
+    std::unique_ptr<weld::ComboBox> m_xRelHeightRelationLB;
+    std::unique_ptr<weld::CheckButton> m_xAutoHeightCB;
+
+    std::unique_ptr<weld::CheckButton> m_xFixedRatioCB;
+    std::unique_ptr<weld::Button> m_xRealSizeBT;
+
+    // anchor
+    std::unique_ptr<weld::Widget> m_xAnchorFrame;
+    std::unique_ptr<weld::RadioButton> m_xAnchorAtPageRB;
+    std::unique_ptr<weld::RadioButton> m_xAnchorAtParaRB;
+    std::unique_ptr<weld::RadioButton> m_xAnchorAtCharRB;
+    std::unique_ptr<weld::RadioButton> m_xAnchorAsCharRB;
+    std::unique_ptr<weld::RadioButton> m_xAnchorAtFrameRB;
+
+    // position
+    std::unique_ptr<weld::Label> m_xHorizontalFT;
+    std::unique_ptr<weld::ComboBox> m_xHorizontalDLB;
+    std::unique_ptr<weld::Label> m_xAtHorzPosFT;
+    std::unique_ptr<weld::MetricSpinButton> m_xAtHorzPosED;
+    std::unique_ptr<weld::Label> m_xHoriRelationFT;
+    std::unique_ptr<weld::ComboBox> m_xHoriRelationLB;
+
+    std::unique_ptr<weld::CheckButton> m_xMirrorPagesCB;
+
+    std::unique_ptr<weld::Label> m_xVerticalFT;
+    std::unique_ptr<weld::ComboBox> m_xVerticalDLB;
+    std::unique_ptr<weld::Label> m_xAtVertPosFT;
+    std::unique_ptr<weld::MetricSpinButton> m_xAtVertPosED;
+    std::unique_ptr<weld::Label> m_xVertRelationFT;
+    std::unique_ptr<weld::ComboBox> m_xVertRelationLB;
+    // #i18732# - check box for new option 'FollowTextFlow'
+    std::unique_ptr<weld::CheckButton> m_xFollowTextFlowCB;
+
+    // example
+    std::unique_ptr<weld::CustomWeld> m_xExampleWN;
+
+    std::unique_ptr<SwPercentField> m_xWidthED;
+    std::unique_ptr<SwPercentField> m_xHeightED;
+
     virtual void    ActivatePage(const SfxItemSet& rSet) override;
     virtual DeactivateRC   DeactivatePage(SfxItemSet *pSet) override;
 
-    DECL_LINK(RangeModifyLoseFocusHdl, Control&, void);
-    DECL_LINK(RangeModifyClickHdl, Button*, void);
+    DECL_LINK(RangeModifyClickHdl, weld::ToggleButton&, void);
     void RangeModifyHdl();
-    DECL_LINK(AnchorTypeHdl, Button*, void);
-    DECL_LINK( PosHdl, ListBox&, void );
-    DECL_LINK( RelHdl, ListBox&, void );
+    DECL_LINK(AnchorTypeHdl, weld::ToggleButton&, void);
+    DECL_LINK(PosHdl, weld::ComboBox&, void);
+    DECL_LINK(RelHdl, weld::ComboBox&, void);
     void            InitPos(RndStdIds eId, sal_Int16 nH, sal_Int16 nHRel,
                             sal_Int16 nV, sal_Int16 nVRel,
                             long   nX,  long   nY);
 
-    DECL_LINK(RealSizeHdl, Button *, void);
-    DECL_LINK( RelSizeClickHdl, Button *, void );
-    DECL_LINK(MirrorHdl, Button *, void);
+    DECL_LINK(RealSizeHdl, weld::Button&, void);
+    DECL_LINK(RelSizeClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(MirrorHdl, weld::ToggleButton&, void);
 
-    DECL_LINK( AutoWidthClickHdl, Button *, void);
-    DECL_LINK( AutoHeightClickHdl, Button *, void);
+    DECL_LINK(AutoWidthClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(AutoHeightClickHdl, weld::ToggleButton&, void);
 
     // update example
     void            UpdateExample();
-    DECL_LINK( ModifyHdl, Edit&, void );
+    DECL_LINK(ModifyHdl, weld::MetricSpinButton&, void);
 
-    void            Init(const SfxItemSet& rSet, bool bReset = false);
+    void            Init(const SfxItemSet& rSet);
     // OD 12.11.2003 #i22341# - adjustment to handle maps, that are ambiguous
     //                          in the alignment.
     sal_Int32       FillPosLB( const FrameMap* _pMap,
                                const sal_Int16 _nAlign,
                                const sal_Int16 _nRel,
-                               ListBox& _rLB );
+                               weld::ComboBox& _rLB );
     // OD 14.11.2003 #i22341# - adjustment to handle maps, that are ambiguous
     //                          in their string entries.
     void            FillRelLB( const FrameMap* _pMap,
                                const sal_uInt16 _nLBSelPos,
                                const sal_Int16 _nAlign,
                                const sal_Int16 _nRel,
-                               ListBox& _rLB,
-                               FixedText& _rFT );
-    static sal_Int32 GetMapPos(const FrameMap *pMap, ListBox const &rAlignLB);
-    static sal_Int16 GetAlignment(FrameMap const *pMap, sal_Int32 nMapPos, ListBox const &rRelationLB);
-    static sal_Int16 GetRelation(ListBox const &rRelationLB);
+                               weld::ComboBox& _rLB,
+                               weld::Label& _rFT );
+    static sal_Int32 GetMapPos(const FrameMap *pMap, const weld::ComboBox& rAlignLB);
+    static sal_Int16 GetAlignment(FrameMap const *pMap, sal_Int32 nMapPos, const weld::ComboBox& rRelationLB);
+    static sal_Int16 GetRelation(const weld::ComboBox& rRelationLB);
     RndStdIds       GetAnchor();
 
     void setOptimalFrameWidth();
@@ -183,9 +185,8 @@ class SwFramePage: public SfxTabPage
     static const sal_uInt16 aPageRg[];
 
 public:
-    SwFramePage(vcl::Window *pParent, const SfxItemSet &rSet);
+    SwFramePage(TabPageParent pParent, const SfxItemSet &rSet);
     virtual ~SwFramePage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage> Create(TabPageParent pParent, const SfxItemSet *rSet);
     static const sal_uInt16* GetRanges() { return aPageRg; }
@@ -200,35 +201,39 @@ public:
     void            EnableVerticalPositioning( bool bEnable );
 };
 
-class SwGrfExtPage: public SfxTabPage
+class SwGrfExtPage : public SfxTabPage
 {
-    // mirror
-    VclPtr<VclContainer>   m_pMirror;
-    VclPtr<CheckBox>       m_pMirrorVertBox;
-    VclPtr<CheckBox>       m_pMirrorHorzBox;
-    VclPtr<RadioButton>    m_pAllPagesRB;
-    VclPtr<RadioButton>    m_pLeftPagesRB;
-    VclPtr<RadioButton>    m_pRightPagesRB;
-    VclPtr<BmpWindow>      m_pBmpWin;
-
-    VclPtr<Edit>           m_pConnectED;
-    VclPtr<PushButton>     m_pBrowseBT;
-
-    // RotGrfFlyFrame: Need Angle and RotateControls now
-    VclPtr<VclFrame>            m_pFlAngle;
-    VclPtr<NumericField>        m_pNfAngle;
-    VclPtr<svx::DialControl>    m_pCtlAngle;
-
     OUString        aFilterName;
     OUString        aGrfName, aNewGrfName;
 
-    ::sfx2::FileDialogHelper*     pGrfDlg;
+    std::unique_ptr<::sfx2::FileDialogHelper> m_xGrfDlg;
 
-    bool            bHtmlMode;
+    bool            m_bHtmlMode;
+
+    // mirror
+    BmpWindow m_aBmpWin;
+    svx::SvxDialControl m_aCtlAngle;
+    std::unique_ptr<weld::Widget> m_xMirror;
+    std::unique_ptr<weld::CheckButton> m_xMirrorVertBox;
+    std::unique_ptr<weld::CheckButton> m_xMirrorHorzBox;
+    std::unique_ptr<weld::RadioButton> m_xAllPagesRB;
+    std::unique_ptr<weld::RadioButton> m_xLeftPagesRB;
+    std::unique_ptr<weld::RadioButton> m_xRightPagesRB;
+
+    std::unique_ptr<weld::Entry> m_xConnectED;
+    std::unique_ptr<weld::Button> m_xBrowseBT;
+    std::unique_ptr<weld::Frame> m_xLinkFrame;
+
+    // RotGrfFlyFrame: Need Angle and RotateControls now
+    std::unique_ptr<weld::Frame> m_xFlAngle;
+    std::unique_ptr<weld::SpinButton> m_xNfAngle;
+    std::unique_ptr<weld::CustomWeld> m_xCtlAngle;
+    std::unique_ptr<weld::CustomWeld> m_xBmpWin;
+
 
     // handler for mirroring
-    DECL_LINK(MirrorHdl, Button*, void);
-    DECL_LINK(BrowseHdl, Button*, void);
+    DECL_LINK(MirrorHdl, weld::ToggleButton&, void);
+    DECL_LINK(BrowseHdl, weld::Button&, void);
 
     virtual void    ActivatePage(const SfxItemSet& rSet) override;
     virtual ~SwGrfExtPage() override;
@@ -238,7 +243,7 @@ class SwGrfExtPage: public SfxTabPage
     using SfxTabPage::DeactivatePage;
 
 public:
-    SwGrfExtPage(vcl::Window *pParent, const SfxItemSet &rSet);
+    SwGrfExtPage(TabPageParent pParent, const SfxItemSet &rSet);
 
     static VclPtr<SfxTabPage> Create(TabPageParent pParent, const SfxItemSet *rSet);
 
@@ -250,24 +255,23 @@ public:
 class SwFrameURLPage : public SfxTabPage
 {
     // hyperlink
-    VclPtr<Edit>            pURLED;
-    VclPtr<PushButton>      pSearchPB;
-    VclPtr<Edit>            pNameED;
-    VclPtr<ComboBox>        pFrameCB;
+    std::unique_ptr<weld::Entry> m_xURLED;
+    std::unique_ptr<weld::Button> m_xSearchPB;
+    std::unique_ptr<weld::Entry> m_xNameED;
+    std::unique_ptr<weld::ComboBox> m_xFrameCB;
 
     // image map
-    VclPtr<CheckBox>        pServerCB;
-    VclPtr<CheckBox>        pClientCB;
+    std::unique_ptr<weld::CheckButton> m_xServerCB;
+    std::unique_ptr<weld::CheckButton> m_xClientCB;
 
-    DECL_LINK(InsertFileHdl, Button*, void);
+    DECL_LINK(InsertFileHdl, weld::Button&, void);
 
     using SfxTabPage::ActivatePage;
     using SfxTabPage::DeactivatePage;
 
 public:
-    SwFrameURLPage(vcl::Window *pParent, const SfxItemSet &rSet);
+    SwFrameURLPage(TabPageParent pParent, const SfxItemSet &rSet);
     virtual ~SwFrameURLPage() override;
-    virtual void dispose() override;
 
     static VclPtr<SfxTabPage> Create(TabPageParent pParent, const SfxItemSet *rSet);
 
@@ -277,32 +281,6 @@ public:
 
 class SwFrameAddPage : public SfxTabPage
 {
-    VclPtr<VclContainer> m_pNameFrame;
-    VclPtr<FixedText>    m_pNameFT;
-    VclPtr<Edit>         m_pNameED;
-    VclPtr<FixedText>    m_pAltNameFT;
-    VclPtr<Edit>         m_pAltNameED;
-    VclPtr<FixedText>    m_pDescriptionFT;
-    VclPtr<Edit>         m_pDescriptionED;
-    VclPtr<FixedText>    m_pPrevFT;
-    VclPtr<ListBox>      m_pPrevLB;
-    VclPtr<FixedText>    m_pNextFT;
-    VclPtr<ListBox>      m_pNextLB;
-
-    VclPtr<VclContainer> m_pProtectFrame;
-    VclPtr<CheckBox>     m_pProtectContentCB;
-    VclPtr<CheckBox>     m_pProtectFrameCB;
-    VclPtr<CheckBox>     m_pProtectSizeCB;
-
-    VclPtr<VclContainer> m_pContentAlignFrame;
-    VclPtr<ListBox>      m_pVertAlignLB;
-
-    VclPtr<VclContainer> m_pPropertiesFrame;
-    VclPtr<CheckBox>     m_pEditInReadonlyCB;
-    VclPtr<CheckBox>     m_pPrintFrameCB;
-    VclPtr<FixedText>    m_pTextFlowFT;
-    VclPtr<svx::FrameDirectionListBox>      m_pTextFlowLB;
-
     SwWrtShell*   m_pWrtSh;
 
     OUString      m_sDlgType;
@@ -310,13 +288,39 @@ class SwFrameAddPage : public SfxTabPage
     bool      m_bFormat;
     bool      m_bNew;
 
-    DECL_LINK(EditModifyHdl, Edit&, void);
-    DECL_LINK(ChainModifyHdl, ListBox&, void);
+    std::unique_ptr<weld::Widget> m_xNameFrame;
+    std::unique_ptr<weld::Label> m_xNameFT;
+    std::unique_ptr<weld::Entry> m_xNameED;
+    std::unique_ptr<weld::Label> m_xAltNameFT;
+    std::unique_ptr<weld::Entry> m_xAltNameED;
+    std::unique_ptr<weld::Label> m_xDescriptionFT;
+    std::unique_ptr<weld::TextView> m_xDescriptionED;
+    std::unique_ptr<weld::Label> m_xPrevFT;
+    std::unique_ptr<weld::ComboBox> m_xPrevLB;
+    std::unique_ptr<weld::Label> m_xNextFT;
+    std::unique_ptr<weld::ComboBox> m_xNextLB;
+
+    std::unique_ptr<weld::Widget> m_xProtectFrame;
+    std::unique_ptr<weld::CheckButton> m_xProtectContentCB;
+    std::unique_ptr<weld::CheckButton> m_xProtectFrameCB;
+    std::unique_ptr<weld::CheckButton> m_xProtectSizeCB;
+
+    std::unique_ptr<weld::Widget> m_xContentAlignFrame;
+    std::unique_ptr<weld::ComboBox> m_xVertAlignLB;
+
+    std::unique_ptr<weld::Widget> m_xPropertiesFrame;
+    std::unique_ptr<weld::CheckButton> m_xEditInReadonlyCB;
+    std::unique_ptr<weld::CheckButton> m_xPrintFrameCB;
+    std::unique_ptr<weld::Label> m_xTextFlowFT;
+    std::unique_ptr<svx::FrameDirectionListBox> m_xTextFlowLB;
+
+    DECL_LINK(EditModifyHdl, weld::Entry&, void);
+    DECL_LINK(ChainModifyHdl, weld::ComboBox&, void);
 
     static const sal_uInt16 aAddPgRg[];
 
 public:
-    SwFrameAddPage(vcl::Window *pParent, const SfxItemSet &rSet);
+    SwFrameAddPage(TabPageParent pParent, const SfxItemSet &rSet);
     virtual ~SwFrameAddPage() override;
     virtual void dispose() override;
 

@@ -8,6 +8,7 @@
  */
 
 #include <test/calc_unoapi_test.hxx>
+#include <test/container/xenumerationaccess.hxx>
 #include <test/sheet/xsheetannotations.hxx>
 
 #include <com/sun/star/sheet/XSpreadsheetDocument.hpp>
@@ -20,7 +21,8 @@ using namespace css::uno;
 
 namespace sc_apitest {
 
-class ScAnnontationsObj : public CalcUnoApiTest, public apitest::XSheetAnnotations
+class ScAnnontationsObj : public CalcUnoApiTest, public apitest::XEnumerationAccess,
+                                                 public apitest::XSheetAnnotations
 {
 public:
     ScAnnontationsObj();
@@ -32,6 +34,9 @@ public:
     virtual uno::Reference< sheet::XSheetAnnotations > getAnnotations(long nIndex) override;
 
     CPPUNIT_TEST_SUITE(ScAnnontationsObj);
+
+    // XEnumerationAccess
+    CPPUNIT_TEST(testCreateEnumeration);
 
     // XSheetAnnotations
     CPPUNIT_TEST(testInsertNew);
@@ -56,7 +61,6 @@ uno::Reference< sheet::XSheetAnnotations> ScAnnontationsObj::getAnnotations(long
 {
     // get the sheet
     uno::Reference< sheet::XSpreadsheetDocument > xDoc(mxComponent, UNO_QUERY_THROW);
-    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
 
     uno::Reference< container::XIndexAccess > xIndex (xDoc->getSheets(), UNO_QUERY_THROW);
     uno::Reference< sheet::XSpreadsheet > xSheet( xIndex->getByIndex(nIndex), UNO_QUERY_THROW);
@@ -64,8 +68,6 @@ uno::Reference< sheet::XSheetAnnotations> ScAnnontationsObj::getAnnotations(long
     // get the annotations collection
     uno::Reference< sheet::XSheetAnnotationsSupplier > xAnnotationSupplier(xSheet, UNO_QUERY_THROW);
     uno::Reference< sheet::XSheetAnnotations > xSheetAnnotations( xAnnotationSupplier->getAnnotations(), UNO_QUERY_THROW);
-
-    CPPUNIT_ASSERT(xSheetAnnotations.is());
 
     return xSheetAnnotations;
 }

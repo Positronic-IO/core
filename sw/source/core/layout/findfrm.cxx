@@ -22,16 +22,18 @@
 #include <cellfrm.hxx>
 #include <rowfrm.hxx>
 #include <swtable.hxx>
-
+#include <notxtfrm.hxx>
 #include <tabfrm.hxx>
 #include <sectfrm.hxx>
 #include <flyfrms.hxx>
 #include <ftnfrm.hxx>
 #include <txtftn.hxx>
 #include <fmtftn.hxx>
+#include <fmtpdsc.hxx>
 #include <txtfrm.hxx>
 #include <calbck.hxx>
 #include <viewopt.hxx>
+#include <sal/log.hxx>
 
 /// Searches the first ContentFrame in BodyText below the page.
 SwLayoutFrame *SwFootnoteBossFrame::FindBodyCont()
@@ -311,18 +313,25 @@ const SwLayoutFrame *SwFrame::ImplGetNextLayoutLeaf( bool bFwd ) const
 
          bool bGoingFwdOrBwd = false;
 
-         bool bGoingDown = ( !bGoingUp && ( nullptr != (p = lcl_GetLower( pFrame, bFwd ) ) ) );
+         bool bGoingDown = !bGoingUp;
+         if (bGoingDown)
+         {
+            p = lcl_GetLower( pFrame, bFwd );
+            bGoingDown = nullptr != p;
+         }
          if ( !bGoingDown )
          {
              // I cannot go down, because either I'm currently going up or
              // because the is no lower.
              // I'll try to go forward:
-             bGoingFwdOrBwd = (nullptr != (p = lcl_FindLayoutFrame( pFrame, bFwd ) ) );
+             p = lcl_FindLayoutFrame( pFrame, bFwd );
+             bGoingFwdOrBwd = nullptr != p;
              if ( !bGoingFwdOrBwd )
              {
                  // I cannot go forward, because there is no next frame.
                  // I'll try to go up:
-                 bGoingUp = (nullptr != (p = pFrame->GetUpper() ) );
+                 p = pFrame->GetUpper();
+                 bGoingUp = nullptr != p;
                  if ( !bGoingUp )
                  {
                     // I cannot go up, because there is no upper frame.
@@ -364,13 +373,20 @@ const SwContentFrame* SwContentFrame::ImplGetNextContentFrame( bool bFwd ) const
         const SwFrame *p = nullptr;
         bool bGoingFwdOrBwd = false;
 
-        bool bGoingDown = ( !bGoingUp && ( nullptr != ( p = lcl_GetLower( pFrame, true ) ) ) );
+        bool bGoingDown = !bGoingUp;
+        if (bGoingDown)
+        {
+            p = lcl_GetLower( pFrame, true ) ;
+            bGoingDown = nullptr != p;
+        }
         if ( !bGoingDown )
         {
-            bGoingFwdOrBwd = ( nullptr != ( p = lcl_FindLayoutFrame( pFrame, bFwd ) ) );
+            p = lcl_FindLayoutFrame( pFrame, bFwd );
+            bGoingFwdOrBwd = nullptr != p;
             if ( !bGoingFwdOrBwd )
             {
-                bGoingUp = ( nullptr != ( p = pFrame->GetUpper() ) );
+                p = pFrame->GetUpper();
+                bGoingUp = nullptr != p;
                 if ( !bGoingUp )
                 {
                     return nullptr;
@@ -380,9 +396,8 @@ const SwContentFrame* SwContentFrame::ImplGetNextContentFrame( bool bFwd ) const
 
         bGoingUp = !(bGoingFwdOrBwd || bGoingDown);
 
-        if ( !bFwd )
+        if ( !bFwd && bGoingDown && p )
         {
-            if( bGoingDown && p )
                 while ( p->GetNext() )
                     p = p->GetNext();
         }
@@ -621,19 +636,52 @@ bool SwRootFrame::IsBetweenPages(const Point& rPt) const
     return false;
 }
 
+const SvxFormatBreakItem& SwFrame::GetBreakItem() const
+{
+    return GetAttrSet()->GetBreak();
+}
+
+const SwFormatPageDesc& SwFrame::GetPageDescItem() const
+{
+    return GetAttrSet()->GetPageDesc();
+}
+
+const SvxFormatBreakItem& SwTextFrame::GetBreakItem() const
+{
+    return GetTextNodeFirst()->GetSwAttrSet().GetBreak();
+}
+
+const SwFormatPageDesc& SwTextFrame::GetPageDescItem() const
+{
+    return GetTextNodeFirst()->GetSwAttrSet().GetPageDesc();
+}
+
 const SwAttrSet* SwFrame::GetAttrSet() const
 {
-    if ( IsContentFrame() )
-        return &static_cast<const SwContentFrame*>(this)->GetNode()->GetSwAttrSet();
+    if (IsTextFrame())
+    {
+        return &static_cast<const SwTextFrame*>(this)->GetTextNodeForParaProps()->GetSwAttrSet();
+    }
+    else if (IsNoTextFrame())
+    {
+        return &static_cast<const SwNoTextFrame*>(this)->GetNode()->GetSwAttrSet();
+    }
     else
+    {
+        assert(IsLayoutFrame());
         return &static_cast<const SwLayoutFrame*>(this)->GetFormat()->GetAttrSet();
+    }
 }
 
 drawinglayer::attribute::SdrAllFillAttributesHelperPtr SwFrame::getSdrAllFillAttributesHelper() const
 {
-    if(IsContentFrame())
+    if (IsTextFrame())
     {
-        return static_cast< const SwContentFrame* >(this)->GetNode()->getSdrAllFillAttributesHelper();
+        return static_cast<const SwTextFrame*>(this)->GetTextNodeForParaProps()->getSdrAllFillAttributesHelper();
+    }
+    else if (IsNoTextFrame())
+    {
+        return static_cast<const SwNoTextFrame*>(this)->GetNode()->getSdrAllFillAttributesHelper();
     }
     else
     {
@@ -679,14 +727,20 @@ static SwFrame* lcl_NextFrame( SwFrame* pFrame )
         SwFrame *p = nullptr;
 
         bool bGoingFwd = false;
-        bool bGoingDown = (!bGoingUp && ( nullptr != (p = pFrame->IsLayoutFrame() ? static_cast<SwLayoutFrame*>(pFrame)->Lower() : nullptr)));
-
+        bool bGoingDown = !bGoingUp && pFrame->IsLayoutFrame();
+        if (bGoingDown)
+        {
+            p = static_cast<SwLayoutFrame*>(pFrame)->Lower();
+            bGoingDown = nullptr != p;
+        }
         if( !bGoingDown )
         {
-            bGoingFwd = (nullptr != (p = ( pFrame->IsFlyFrame() ? static_cast<SwFlyFrame*>(pFrame)->GetNextLink() : pFrame->GetNext())));
+            p = pFrame->IsFlyFrame() ? static_cast<SwFlyFrame*>(pFrame)->GetNextLink() : pFrame->GetNext();
+            bGoingFwd = nullptr != p;
             if ( !bGoingFwd )
             {
-                bGoingUp = (nullptr != (p = pFrame->GetUpper()));
+                p = pFrame->GetUpper();
+                bGoingUp = nullptr != p;
                 if ( !bGoingUp )
                 {
                     return nullptr;

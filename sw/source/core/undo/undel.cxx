@@ -41,6 +41,9 @@
 #include <sfx2/app.hxx>
 #include <fldbas.hxx>
 #include <fmtfld.hxx>
+#include <frmtool.hxx>
+#include <txtfrm.hxx>
+#include <rootfrm.hxx>
 #include <strings.hrc>
 #include <vector>
 
@@ -63,6 +66,84 @@ static void lcl_MakeAutoFrames( const SwFrameFormats& rSpzArr, sal_uLong nMovedI
                 if( pAPos && nMovedIndex == pAPos->nNode.GetIndex() )
                     pFormat->MakeFrames();
             }
+        }
+    }
+}
+
+static SwTextNode * FindFirstAndNextNode(SwDoc & rDoc, SwUndRng const& rRange,
+        SwRedlineSaveDatas const& rRedlineSaveData,
+        SwTextNode *& o_rpFirstMergedDeletedTextNode)
+{
+    // redlines are corrected now to exclude the deleted node
+    assert(rRange.nEndContent == 0);
+    sal_uLong nEndOfRedline = 0;
+    for (size_t i = 0; i < rRedlineSaveData.size(); ++i)
+    {
+        auto const& rRedline(rRedlineSaveData[i]);
+        if (rRedline.nSttNode <= rRange.nSttNode
+            && rRedline.nSttNode < rRange.nEndNode
+            && rRange.nEndNode <= rRedline.nEndNode
+            && rRedline.GetType() == nsRedlineType_t::REDLINE_DELETE)
+        {
+            nEndOfRedline = rRedline.nEndNode;
+            o_rpFirstMergedDeletedTextNode = rDoc.GetNodes()[rRedline.nSttNode]->GetTextNode();
+            assert(rRange.nSttNode == rRange.nEndNode - 1); // otherwise this needs to iterate more RL to find the first node?
+            break;
+        }
+    }
+    if (nEndOfRedline)
+    {
+        assert(o_rpFirstMergedDeletedTextNode);
+        SwTextNode * pNextNode(nullptr);
+        for (sal_uLong i = rRange.nEndNode; /* i <= nEndOfRedline */; ++i)
+        {
+            SwNode *const pNode(rDoc.GetNodes()[i]);
+            assert(!pNode->IsEndNode()); // cannot be both leaving section here *and* overlapping redline
+            if (pNode->IsStartNode())
+            {
+                i = pNode->EndOfSectionIndex(); // will be incremented again
+            }
+            else if (pNode->IsTextNode())
+            {
+                pNextNode = pNode->GetTextNode();
+                break;
+            }
+        }
+        assert(pNextNode);
+        return pNextNode;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+static void DelFullParaMoveFrames(SwDoc & rDoc, SwUndRng const& rRange,
+        SwRedlineSaveDatas const& rRedlineSaveData)
+{
+    SwTextNode * pFirstMergedDeletedTextNode(nullptr);
+    SwTextNode *const pNextNode = FindFirstAndNextNode(rDoc, rRange,
+            rRedlineSaveData, pFirstMergedDeletedTextNode);
+    if (pNextNode)
+    {
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pFirstMergedDeletedTextNode);
+        for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                assert(pFrame->GetMergedPara());
+                assert(pFrame->GetMergedPara()->pFirstNode == pFirstMergedDeletedTextNode);
+                assert(pNextNode->GetIndex() <= pFrame->GetMergedPara()->pLastNode->GetIndex());
+                frames.push_back(pFrame);
+            }
+        }
+        for (SwTextFrame *const pFrame : frames)
+        {
+            // sw_redlinehide: don't need FrameMode::Existing here
+            // because everything from pNextNode onwards is already
+            // correctly hidden
+            pFrame->RegisterToNode(*pNextNode, true);
         }
     }
 }
@@ -98,8 +179,6 @@ SwUndoDelete::SwUndoDelete(
     bool bCalledByTableCpy )
     : SwUndo(SwUndoId::DELETE, rPam.GetDoc()),
     SwUndRng( rPam ),
-    m_pMvStt( nullptr ),
-    m_pRedlSaveData(nullptr),
     m_nNode(0),
     m_nNdDiff(0),
     m_nSectDiff(0),
@@ -122,11 +201,10 @@ SwUndoDelete::SwUndoDelete(
 
     if( !pDoc->getIDocumentRedlineAccess().IsIgnoreRedline() && !pDoc->getIDocumentRedlineAccess().GetRedlineTable().empty() )
     {
-        m_pRedlSaveData = new SwRedlineSaveDatas;
+        m_pRedlSaveData.reset(new SwRedlineSaveDatas);
         if( !FillSaveData( rPam, *m_pRedlSaveData ))
         {
-            delete m_pRedlSaveData;
-            m_pRedlSaveData = nullptr;
+            m_pRedlSaveData.reset();
         }
     }
 
@@ -175,6 +253,10 @@ SwUndoDelete::SwUndoDelete(
         pEndTextNd = nSttNode == nEndNode
                     ? pSttTextNd
                     : pEnd->nNode.GetNode().GetTextNode();
+    }
+    else if (m_pRedlSaveData)
+    {
+        DelFullParaMoveFrames(*pDoc, *this, *m_pRedlSaveData);
     }
 
     bool bMoveNds = *pStt != *pEnd      // any area still existent?
@@ -302,7 +384,7 @@ SwUndoDelete::SwUndoDelete(
         // Step 3: Moving into UndoArray...
         m_nNode = rNds.GetEndOfContent().GetIndex();
         rDocNds.MoveNodes( aRg, rNds, SwNodeIndex( rNds.GetEndOfContent() ));
-        m_pMvStt = new SwNodeIndex( rNds, m_nNode );
+        m_pMvStt.reset( new SwNodeIndex( rNds, m_nNode ) );
         // remember difference!
         m_nNode = rNds.GetEndOfContent().GetIndex() - m_nNode;
 
@@ -518,9 +600,9 @@ SwUndoDelete::~SwUndoDelete()
     {
         // Insert saves content in IconSection
         m_pMvStt->GetNode().GetNodes().Delete( *m_pMvStt, m_nNode );
-        delete m_pMvStt;
+        m_pMvStt.reset();
     }
-    delete m_pRedlSaveData;
+    m_pRedlSaveData.reset();
 }
 
 static SwRewriter lcl_RewriterFromHistory(SwHistory & rHistory)
@@ -576,7 +658,8 @@ static OUString lcl_DenotedPortion(const OUString& rStr, sal_Int32 nStart, sal_I
 {
     OUString aResult;
 
-    if (nEnd - nStart > 0)
+    auto nCount = nEnd - nStart;
+    if (nCount > 0)
     {
         sal_Unicode cLast = rStr[nEnd - 1];
         if (lcl_IsSpecialCharacter(cLast))
@@ -584,11 +667,11 @@ static OUString lcl_DenotedPortion(const OUString& rStr, sal_Int32 nStart, sal_I
             switch(cLast)
             {
             case CH_TXTATR_TAB:
-                aResult = SwResId(STR_UNDO_TABS);
+                aResult = SwResId(STR_UNDO_TABS, nCount);
 
                 break;
             case CH_TXTATR_NEWLINE:
-                aResult = SwResId(STR_UNDO_NLS);
+                aResult = SwResId(STR_UNDO_NLS, nCount);
 
                 break;
 
@@ -609,14 +692,13 @@ static OUString lcl_DenotedPortion(const OUString& rStr, sal_Int32 nStart, sal_I
                 break;
             }
             SwRewriter aRewriter;
-            aRewriter.AddRule(UndoArg1,
-                              OUString::number(nEnd - nStart));
+            aRewriter.AddRule(UndoArg1, OUString::number(nCount));
             aResult = aRewriter.Apply(aResult);
         }
         else
         {
             aResult = SwResId(STR_START_QUOTE);
-            aResult += rStr.copy(nStart, nEnd - nStart);
+            aResult += rStr.copy(nStart, nCount);
             aResult += SwResId(STR_END_QUOTE);
         }
     }
@@ -626,7 +708,7 @@ static OUString lcl_DenotedPortion(const OUString& rStr, sal_Int32 nStart, sal_I
 
 OUString DenoteSpecialCharacters(const OUString & rStr)
 {
-    OUString aResult;
+    OUStringBuffer aResult;
 
     if (!rStr.isEmpty())
     {
@@ -650,7 +732,7 @@ OUString DenoteSpecialCharacters(const OUString & rStr)
 
             if (bStart)
             {
-                aResult += lcl_DenotedPortion(rStr, nStart, i);
+                aResult.append(lcl_DenotedPortion(rStr, nStart, i));
 
                 nStart = i;
                 bStart = false;
@@ -659,12 +741,12 @@ OUString DenoteSpecialCharacters(const OUString & rStr)
             cLast = rStr[i];
         }
 
-        aResult += lcl_DenotedPortion(rStr, nStart, rStr.getLength());
+        aResult.append(lcl_DenotedPortion(rStr, nStart, rStr.getLength()));
     }
     else
         aResult = SwRewriter::GetPlaceHolder(UndoArg2);
 
-    return aResult;
+    return aResult.makeStringAndClear();
 }
 
 SwRewriter SwUndoDelete::GetRewriter() const
@@ -764,6 +846,7 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
 
     SwNodeIndex aIdx(rDoc.GetNodes(), nCalcStt);
     SwNode* pInsNd = &aIdx.GetNode();
+    SwNode* pMovedNode = nullptr;
 
     {   // code block so that SwPosition is detached when deleting a Node
         SwPosition aPos( aIdx );
@@ -823,7 +906,7 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
                 pTextNd->RestoreMetadata(m_pMetadataUndoEnd);
             }
         }
-        else if( m_aSttStr && bNodeMove )
+        else if (m_aSttStr && bNodeMove && pInsNd == nullptr)
         {
             SwTextNode * pNd = aPos.nNode.GetNode().GetTextNode();
             if( pNd )
@@ -839,7 +922,6 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
                     ++aPos.nNode;
             }
         }
-        SwNode* pMovedNode = nullptr;
         if( m_nSectDiff )
         {
             sal_uLong nMoveIndex = aPos.nNode.GetIndex();
@@ -867,7 +949,11 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
         {
             SwNodeRange aRange( *m_pMvStt, 0, *m_pMvStt, m_nNode );
             SwNodeIndex aCopyIndex( aPos.nNode, -1 );
-            rDoc.GetUndoManager().GetUndoNodes().Copy_( aRange, aPos.nNode );
+            rDoc.GetUndoManager().GetUndoNodes().Copy_(aRange, aPos.nNode,
+                    // sw_redlinehide: delay creating frames: the flags on the
+                    // nodes aren't necessarily up-to-date, and the redlines
+                    // from m_pRedlSaveData aren't applied yet...
+                    false);
 
             if( m_nReplaceDummy )
             {
@@ -889,9 +975,6 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
                 rDoc.GetNodes().Delete( aMvIdx);
             }
         }
-
-        if( pMovedNode )
-            lcl_MakeAutoFrames(*rDoc.GetSpzFrameFormats(), pMovedNode->GetIndex());
 
         if( m_aSttStr )
         {
@@ -959,6 +1042,97 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
     if( m_pRedlSaveData )
         SetSaveData(rDoc, *m_pRedlSaveData);
 
+    sal_uLong delFullParaEndNode(nEndNode);
+    if (m_bDelFullPara && m_pRedlSaveData)
+    {
+        SwTextNode * pFirstMergedDeletedTextNode(nullptr);
+        SwTextNode *const pNextNode = FindFirstAndNextNode(rDoc, *this,
+                *m_pRedlSaveData, pFirstMergedDeletedTextNode);
+        if (pNextNode)
+        {
+            bool bNonMerged(false);
+            std::vector<SwTextFrame*> frames;
+            SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pNextNode);
+            for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+            {
+                if (pFrame->getRootFrame()->IsHideRedlines())
+                {
+                    frames.push_back(pFrame);
+                }
+                else
+                {
+                    bNonMerged = true;
+                }
+            }
+            for (SwTextFrame *const pFrame : frames)
+            {
+                // could either destroy the text frames, or move them...
+                // destroying them would have the advantage that we don't
+                // need special code to *exclude* pFirstMergedDeletedTextNode
+                // from MakeFrames  for the layouts in Hide mode but not
+                // layouts in Show mode ...
+                // ... except that MakeFrames won't create them then :(
+                pFrame->RegisterToNode(*pFirstMergedDeletedTextNode);
+                assert(pFrame->GetMergedPara());
+                assert(!bNonMerged); // delFullParaEndNode is such an awful hack
+                (void) bNonMerged;
+                delFullParaEndNode = pFirstMergedDeletedTextNode->GetIndex();
+            }
+        }
+    }
+    else if (m_aSttStr && (!m_bFromTableCopy || 0 != m_nNode))
+    {
+        // only now do we have redlines in the document again; fix up the split
+        // frames
+        SwTextNode *const pStartNode(aIdx.GetNodes()[nSttNode]->GetTextNode());
+        assert(pStartNode);
+        std::vector<SwTextFrame*> frames;
+        SwIterator<SwTextFrame, SwTextNode, sw::IteratorMode::UnwrapMulti> aIter(*pStartNode);
+        for (SwTextFrame* pFrame = aIter.First(); pFrame; pFrame = aIter.Next())
+        {
+            if (pFrame->getRootFrame()->IsHideRedlines())
+            {
+                frames.push_back(pFrame);
+            }
+        }
+        auto eMode(sw::FrameMode::Existing);
+        for (SwTextFrame * pFrame : frames)
+        {
+            // SplitNode could have moved the original frame to the start node
+            // & created a new one on end, or could have created new frame on
+            // start node... grab start node's frame and recreate MergedPara.
+            SwTextNode & rFirstNode(pFrame->GetMergedPara()
+                ? *pFrame->GetMergedPara()->pFirstNode
+                : *pStartNode);
+            assert(rFirstNode.GetIndex() <= pStartNode->GetIndex());
+            pFrame->SetMergedPara(sw::CheckParaRedlineMerge(
+                        *pFrame, rFirstNode, eMode));
+            eMode = sw::FrameMode::New; // Existing is not idempotent!
+            // note: this may or may not delete frames on the end node
+        }
+    }
+
+    // create frames after SetSaveData has recreated redlines
+    if (0 != m_nNode)
+    {
+        // tdf#121031 if the start node is a text node, it already has a frame;
+        // if it's a table, it does not
+        // tdf#109376 exception: end on non-text-node -> start node was inserted
+        SwNodeIndex const start(rDoc.GetNodes(), nSttNode +
+            ((m_bDelFullPara || !rDoc.GetNodes()[nSttNode]->IsTextNode() || pInsNd)
+                 ? 0 : 1));
+        // don't include end node in the range: it may have been merged already
+        // by the start node, or it may be merged by one of the moved nodes,
+        // but if it isn't merged, its current frame(s) should be good...
+        SwNodeIndex const end(rDoc.GetNodes(), m_bDelFullPara ? delFullParaEndNode : nEndNode);
+        ::MakeFrames(&rDoc, start, end);
+    }
+
+    if (pMovedNode)
+    {   // probably better do this after creating all frames
+        lcl_MakeAutoFrames(*rDoc.GetSpzFrameFormats(), pMovedNode->GetIndex());
+    }
+
     AddUndoRedoPaM(rContext, true);
 }
 
@@ -974,8 +1148,7 @@ void SwUndoDelete::RedoImpl(::sw::UndoRedoContext & rContext)
             "SwUndoDelete::Redo: used to have redline data, but now none?");
         if (!bSuccess)
         {
-            delete m_pRedlSaveData;
-            m_pRedlSaveData = nullptr;
+            m_pRedlSaveData.reset();
         }
     }
 
@@ -1026,6 +1199,11 @@ void SwUndoDelete::RedoImpl(::sw::UndoRedoContext & rContext)
 
     if( !m_aSttStr && !m_aEndStr )
     {
+        if (m_bDelFullPara && m_pRedlSaveData)
+        {
+            DelFullParaMoveFrames(rDoc, *this, *m_pRedlSaveData);
+        }
+
         SwNodeIndex aSttIdx = ( m_bDelFullPara || m_bJoinNext )
                                     ? rPam.GetMark()->nNode
                                     : rPam.GetPoint()->nNode;
@@ -1081,6 +1259,7 @@ void SwUndoDelete::RedoImpl(::sw::UndoRedoContext & rContext)
     }
     else if( m_bDelFullPara )
     {
+        assert(!"dead code");
         // The Pam was incremented by one at Point (== end) to provide space
         // for UNDO. This now needs to be reverted!
         --rPam.End()->nNode;

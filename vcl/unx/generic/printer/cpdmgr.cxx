@@ -25,6 +25,7 @@
 #include <osl/thread.h>
 
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <config_dbus.h>
 #include <config_gio.h>
@@ -169,7 +170,8 @@ void CPDManager::printerRemoved (GDBusConnection *,
     pManager->m_aPrinters.erase(printersIt);
 }
 
-GDBusProxy * CPDManager::getProxy(std::string target) {
+GDBusProxy* CPDManager::getProxy(const std::string& target)
+{
     std::unordered_map<std::string, GDBusProxy *>::const_iterator it = m_pBackends.find(target);
     if (it == m_pBackends.end()) {
         return nullptr;
@@ -181,7 +183,8 @@ void CPDManager::addBackend(std::pair<std::string, GDBusProxy *> pair) {
     m_pBackends.insert(pair);
 }
 
-void CPDManager::addTempBackend(std::pair<std::string, gchar*> pair) {
+void CPDManager::addTempBackend(const std::pair<std::string, gchar*>& pair)
+{
     m_tBackends.push_back(pair);
 }
 
@@ -232,7 +235,6 @@ void CPDManager::addNewPrinter(const OUString& aPrinterName, const OUString& aUn
     }
     aPrinter.m_aInfo.setDefaultBackend(true);
     aPrinter.m_aInfo.m_aDriverName = aBuf.makeStringAndClear();
-    aPrinter.m_bModified = false;
     m_aPrinters[ aUniqueName ] = aPrinter;
 }
 #endif
@@ -248,6 +250,12 @@ CPDManager* CPDManager::tryLoadCPD()
     static const char* pEnv = getenv("SAL_DISABLE_CPD");
 
     if (!pEnv || !*pEnv) {
+        // interface description XML files are needed in 'onNameAcquired()'
+        if (!g_file_test(FRONTEND_INTERFACE, G_FILE_TEST_IS_REGULAR) ||
+                !g_file_test(BACKEND_INTERFACE, G_FILE_TEST_IS_REGULAR)) {
+            return nullptr;
+        }
+
         GDir *dir;
         const gchar *filename;
         dir = g_dir_open(BACKEND_DIR, 0, nullptr);
@@ -749,45 +757,6 @@ bool CPDManager::checkPrintersChanged( bool )
 #else
     return false;
 #endif
-}
-
-bool CPDManager::addPrinter( const OUString& rName, const OUString& rDriver )
-{
-#if ENABLE_DBUS && ENABLE_GIO
-    // don't touch the CPD printers
-    if (m_aCPDDestMap.find( rName ) != m_aCPDDestMap.end() || rDriver.startsWith("CPD:"))
-        return false;
-#endif
-    return PrinterInfoManager::addPrinter( rName, rDriver );
-}
-
-bool CPDManager::removePrinter( const OUString& rName, bool bCheck )
-{
-#if ENABLE_DBUS && ENABLE_GIO
-    // don't touch the CPD printers
-    if( m_aCPDDestMap.find( rName ) != m_aCPDDestMap.end() )
-        return false;
-#endif
-    return PrinterInfoManager::removePrinter( rName, bCheck );
-}
-
-bool CPDManager::setDefaultPrinter( const OUString& rName )
-{
-    bool bSuccess = false;
-#if ENABLE_DBUS && ENABLE_GIO
-    std::unordered_map< OUString, CPDPrinter * >::iterator nit =
-        m_aCPDDestMap.find( rName );
-    if( nit != m_aCPDDestMap.end())
-    {
-        m_aDefaultPrinter = rName;
-        bSuccess = true;
-    }
-    else
-        bSuccess = PrinterInfoManager::setDefaultPrinter( rName );
-#else
-    (void)rName;
-#endif
-    return bSuccess;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

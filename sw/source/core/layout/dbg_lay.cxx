@@ -107,8 +107,7 @@
 #include <layfrm.hxx>
 #include <frame.hxx>
 #include <swtable.hxx>
-
-#include <comphelper/string.hxx>
+#include <sal/log.hxx>
 
 PROT SwProtocol::nRecord = PROT::FileInit;
 SwImplProtocol* SwProtocol::pImpl = nullptr;
@@ -127,8 +126,8 @@ static sal_uLong lcl_GetFrameId( const SwFrame* pFrame )
 
 class SwImplProtocol
 {
-    SvFileStream *pStream;          // output stream
-    std::set<sal_uInt16> *pFrameIds;  // which FrameIds shall be logged ( NULL == all)
+    std::unique_ptr<SvFileStream> pStream;          // output stream
+    std::unique_ptr<std::set<sal_uInt16>> pFrameIds;  // which FrameIds shall be logged ( NULL == all)
     std::vector<long> aVars;        // variables
     OStringBuffer aLayer;      // indentation of output ("  " per start/end)
     SwFrameType nTypes;              // which types shall be logged
@@ -167,9 +166,9 @@ class SwImplEnterLeave
 {
 protected:
     const SwFrame* pFrame;    // the frame
-    PROT           nFunction; // the function
-    DbgAction      nAction;   // the action if needed
-    void*          pParam;    // further parameter
+    PROT const           nFunction; // the function
+    DbgAction const      nAction;   // the action if needed
+    void* const          pParam;    // further parameter
 public:
     SwImplEnterLeave( const SwFrame* pF, PROT nFunct, DbgAction nAct, void* pPar )
         : pFrame( pF ), nFunction( nFunct ), nAction( nAct ), pParam( pPar ) {}
@@ -263,7 +262,7 @@ void SwProtocol::Stop()
 }
 
 SwImplProtocol::SwImplProtocol()
-    : pStream( nullptr ), pFrameIds( nullptr ), nTypes( FRM_ALL ),
+    : nTypes( FRM_ALL ),
       nLineCount( 0 ), nMaxLines( USHRT_MAX ), nTestMode( 0 )
 {
     NewStream();
@@ -273,11 +272,10 @@ bool SwImplProtocol::NewStream()
 {
     OUString aName("dbg_lay.out");
     nLineCount = 0;
-    pStream = new SvFileStream( aName, StreamMode::WRITE | StreamMode::TRUNC );
+    pStream.reset( new SvFileStream( aName, StreamMode::WRITE | StreamMode::TRUNC ) );
     if( pStream->GetError() )
     {
-        delete pStream;
-        pStream = nullptr;
+        pStream.reset();
     }
     return nullptr != pStream;
 }
@@ -287,11 +285,9 @@ SwImplProtocol::~SwImplProtocol()
     if( pStream )
     {
         pStream->Close();
-        delete pStream;
+        pStream.reset();
     }
-    if (pFrameIds)
-        pFrameIds->clear();
-    delete pFrameIds;
+    pFrameIds.reset();
     aVars.clear();
 }
 
@@ -308,9 +304,7 @@ void SwImplProtocol::CheckLine( OString& rLine )
         if (aTmp == "[frmid")      // section FrameIds
         {
             nInitFile = 1;
-            pFrameIds->clear();
-            delete pFrameIds;
-            pFrameIds = nullptr;         // default: log all frames
+            pFrameIds.reset(); // default: log all frames
         }
         else if (aTmp == "[frmtype")// section types
         {
@@ -472,7 +466,7 @@ static void lcl_Padded(OStringBuffer& rOut, const long n, size_t length = 5)
 }
 
 /// output the frame as plain text.
-static void lcl_FrameRect(OStringBuffer& rOut, const char* hint, const SwRect rect)
+static void lcl_FrameRect(OStringBuffer& rOut, const char* hint, const SwRect& rect)
 {
     rOut.append("[");
     rOut.append(hint);
@@ -615,8 +609,8 @@ void SwImplProtocol::Record_( const SwFrame* pFrame, PROT nFunction, DbgAction n
         {
             case 1: InsertFrame( nId ); break;
             case 2: DeleteFrame( nId ); break;
-            case 3: pFrameIds->clear(); delete pFrameIds; pFrameIds = nullptr; break;
-            case 4: delete pStream; pStream = nullptr; break;
+            case 3: pFrameIds.reset(); break;
+            case 4: pStream.reset(); break;
         }
         return;
     }
@@ -775,7 +769,7 @@ void SwImplProtocol::Record_( const SwFrame* pFrame, PROT nFunction, DbgAction n
     {
         aOut.append(" ");
         while (aOut.getLength() < 140) aOut.append(" ");
-        const OUString& text = static_cast<const SwTextFrame*>(pFrame)->GetTextNode()->GetText();
+        const OUString& text = static_cast<const SwTextFrame*>(pFrame)->GetText();
         OString o = OUStringToOString(text, RTL_TEXTENCODING_ASCII_US);
         aOut.append(o);
     }
@@ -848,7 +842,7 @@ void SwImplProtocol::SectFunc(OStringBuffer &rOut, DbgAction nAct, void const * 
 void SwImplProtocol::InsertFrame( sal_uInt16 nId )
 {
     if( !pFrameIds )
-        pFrameIds = new std::set<sal_uInt16>;
+        pFrameIds.reset( new std::set<sal_uInt16> );
     if( pFrameIds->count( nId ) )
         return;
     pFrameIds->insert( nId );
@@ -862,37 +856,34 @@ void SwImplProtocol::DeleteFrame( sal_uInt16 nId )
     pFrameIds->erase(nId);
 }
 
-/* SwEnterLeave::Ctor(..) is called from the (inline-)CTor if the function should
- * be logged.
+/*
  * The task here is to find the right SwImplEnterLeave object based on the
  * function; everything else is then done in his Ctor/Dtor.
  */
-void SwEnterLeave::Ctor( const SwFrame* pFrame, PROT nFunc, DbgAction nAct, void* pPar )
+SwEnterLeave::SwEnterLeave( const SwFrame* pFrame, PROT nFunc, DbgAction nAct, void* pPar )
 {
+    if( !SwProtocol::Record( nFunc ) )
+        return;
     switch( nFunc )
     {
         case PROT::AdjustN :
         case PROT::Grow:
-        case PROT::Shrink : pImpl = new SwSizeEnterLeave( pFrame, nFunc, nAct, pPar ); break;
+        case PROT::Shrink : pImpl.reset( new SwSizeEnterLeave( pFrame, nFunc, nAct, pPar ) ); break;
         case PROT::MoveFwd:
-        case PROT::MoveBack : pImpl = new SwUpperEnterLeave( pFrame, nFunc, nAct, pPar ); break;
-        case PROT::FrmChanges : pImpl = new SwFrameChangesLeave( pFrame, nFunc, nAct, pPar ); break;
-        default: pImpl = new SwImplEnterLeave( pFrame, nFunc, nAct, pPar ); break;
+        case PROT::MoveBack : pImpl.reset( new SwUpperEnterLeave( pFrame, nFunc, nAct, pPar ) ); break;
+        case PROT::FrmChanges : pImpl.reset( new SwFrameChangesLeave( pFrame, nFunc, nAct, pPar ) ); break;
+        default: pImpl.reset( new SwImplEnterLeave( pFrame, nFunc, nAct, pPar ) ); break;
     }
     pImpl->Enter();
 }
 
-/* SwEnterLeave::Dtor() only calls the Dtor of the SwImplEnterLeave object. It's
- * just no inline because we don't want the SwImplEnterLeave definition inside
+/* This is not inline because we don't want the SwImplEnterLeave definition inside
  * dbg_lay.hxx.
  */
-void SwEnterLeave::Dtor()
+SwEnterLeave::~SwEnterLeave()
 {
-    if( pImpl )
-    {
+    if (pImpl)
         pImpl->Leave();
-        delete pImpl;
-    }
 }
 
 void SwImplEnterLeave::Enter()

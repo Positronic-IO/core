@@ -52,7 +52,7 @@ namespace
 namespace utl
 {
 
-OUString getParentName( const OUString& aFileName )
+static OUString getParentName( const OUString& aFileName )
 {
     sal_Int32 lastIndex = aFileName.lastIndexOf( '/' );
     OUString aParent;
@@ -71,7 +71,7 @@ OUString getParentName( const OUString& aFileName )
     return aParent;
 }
 
-bool ensuredir( const OUString& rUnqPath )
+static bool ensuredir( const OUString& rUnqPath )
 {
     OUString aPath;
     if ( rUnqPath.isEmpty() )
@@ -115,9 +115,13 @@ bool ensuredir( const OUString& rUnqPath )
     return bSuccess;
 }
 
-OUString ConstructTempDir_Impl( const OUString* pParent )
+static OUString ConstructTempDir_Impl( const OUString* pParent )
 {
     OUString aName;
+
+    // Ignore pParent on iOS. We don't want to create any temp files
+    // in the same directory where the document being edited is.
+#ifndef IOS
     if ( pParent && !pParent->isEmpty() )
     {
         // test for valid filename
@@ -136,6 +140,9 @@ OUString ConstructTempDir_Impl( const OUString* pParent )
                 aName = aRet;
         }
     }
+#else
+    (void) pParent;
+#endif
 
     if ( aName.isEmpty() )
     {
@@ -231,7 +238,7 @@ namespace
     class TempDirCreatedObserver : public DirectoryCreationObserver
     {
     public:
-        virtual void DirectoryCreated(const rtl::OUString& aDirectoryUrl) override
+        virtual void DirectoryCreated(const OUString& aDirectoryUrl) override
         {
             File::setAttributes( aDirectoryUrl, osl_File_Attribute_OwnRead |
                 osl_File_Attribute_OwnWrite | osl_File_Attribute_OwnExe );
@@ -239,7 +246,7 @@ namespace
     };
 };
 
-OUString lcl_createName(
+static OUString lcl_createName(
     const OUString& rLeadingChars, Tokens & tokens, const OUString* pExtension,
     const OUString* pParent, bool bDirectory, bool bKeep, bool bLock,
     bool bCreateParentDirs )
@@ -314,7 +321,7 @@ OUString lcl_createName(
     return OUString();
 }
 
-OUString CreateTempName_Impl( const OUString* pParent, bool bKeep, bool bDir = true )
+static OUString CreateTempName_Impl( const OUString* pParent, bool bKeep, bool bDir = true )
 {
     OUString aEyeCatcher = "lu";
 #ifdef UNX
@@ -351,8 +358,7 @@ OUString TempFile::CreateTempName()
 }
 
 TempFile::TempFile( const OUString* pParent, bool bDirectory )
-    : pStream( nullptr )
-    , bIsDirectory( bDirectory )
+    : bIsDirectory( bDirectory )
     , bKillingFileEnabled( false )
 {
     aName = CreateTempName_Impl( pParent, true, bDirectory );
@@ -361,8 +367,7 @@ TempFile::TempFile( const OUString* pParent, bool bDirectory )
 TempFile::TempFile( const OUString& rLeadingChars, bool _bStartWithZero,
                     const OUString* pExtension, const OUString* pParent,
                     bool bCreateParentDirs )
-    : pStream( nullptr )
-    , bIsDirectory( false )
+    : bIsDirectory( false )
     , bKillingFileEnabled( false )
 {
     SequentialTokens t(_bStartWithZero);

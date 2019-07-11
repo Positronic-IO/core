@@ -200,7 +200,7 @@ protected:
 public:
     virtual void        UpdateCounts() = 0;
     virtual void        SetCounts(const SwDocStat &rCurrCnt, const SwDocStat &rDocStat) = 0;
-    virtual vcl::Window *    GetWindow() = 0; //this method is added for return a Window type pointer
+    virtual std::shared_ptr<SfxModelessDialogController> GetController() = 0;
 };
 
 class AbstractSwInsertAbstractDlg : public VclAbstractDialog
@@ -335,7 +335,7 @@ protected:
     virtual ~AbstractMarkFloatDlg() override = default;
 public:
     virtual void    ReInitDlg(SwWrtShell& rWrtShell) = 0;
-    virtual vcl::Window *    GetWindow() = 0; //this method is added for return a Window type pointer
+    virtual std::shared_ptr<SfxModelessDialogController> GetController() = 0;
 };
 
 #define RET_LOAD_DOC            100
@@ -344,7 +344,7 @@ public:
 
 class SwMailMergeConfigItem;
 
-class AbstractMailMergeWizard : public VclAbstractDialog2
+class AbstractMailMergeWizard : public VclAbstractDialog
 {
 protected:
     virtual ~AbstractMailMergeWizard() override = default;
@@ -359,13 +359,12 @@ class SwAbstractDialogFactory
 public:
     static SwAbstractDialogFactory*     Create();
 
-    virtual VclPtr<SfxAbstractDialog> CreateNumFormatDialog( vcl::Window* pParent,
-                                                 const SfxItemSet& rAttr) = 0;
-    virtual VclPtr<SfxAbstractDialog> CreateSwDropCapsDialog(vcl::Window* pParent, const SfxItemSet& rSet) = 0;
-    virtual VclPtr<SfxAbstractDialog> CreateSwBackgroundDialog(vcl::Window* pParent, const SfxItemSet& rSet) = 0;
+    virtual VclPtr<SfxAbstractDialog> CreateNumFormatDialog(weld::Window* pParent, const SfxItemSet& rAttr) = 0;
+    virtual VclPtr<SfxAbstractDialog> CreateSwDropCapsDialog(weld::Window* pParent, const SfxItemSet& rSet) = 0;
+    virtual VclPtr<SfxAbstractDialog> CreateSwBackgroundDialog(weld::Window* pParent, const SfxItemSet& rSet) = 0;
 
     virtual VclPtr<AbstractSwWordCountFloatDlg> CreateSwWordCountDialog(SfxBindings* pBindings,
-        SfxChildWindow* pChild, vcl::Window *pParent, SfxChildWinInfo* pInfo) = 0;
+        SfxChildWindow* pChild, weld::Window *pParent, SfxChildWinInfo* pInfo) = 0;
 
     virtual VclPtr<AbstractSwInsertAbstractDlg> CreateSwInsertAbstractDlg() = 0;
     virtual VclPtr<SfxAbstractDialog> CreateSwAddressAbstractDlg(vcl::Window* pParent, const SfxItemSet& rSet) = 0;
@@ -375,10 +374,10 @@ public:
 
     virtual VclPtr<AbstractSwBreakDlg> CreateSwBreakDlg(weld::Window *pParent, SwWrtShell &rSh) = 0;
     virtual VclPtr<VclAbstractDialog> CreateSwChangeDBDlg(SwView& rVw) = 0;
-    virtual VclPtr<SfxAbstractTabDialog>  CreateSwCharDlg(vcl::Window* pParent, SwView& pVw, const SfxItemSet& rCoreSet,
+    virtual VclPtr<SfxAbstractTabDialog>  CreateSwCharDlg(weld::Window* pParent, SwView& pVw, const SfxItemSet& rCoreSet,
         SwCharDlgMode nDialogMode, const OUString* pFormatStr = nullptr) = 0;
     virtual VclPtr<AbstractSwConvertTableDlg> CreateSwConvertTableDlg(SwView& rView, bool bToTable) = 0;
-    virtual VclPtr<VclAbstractDialog> CreateSwCaptionDialog ( vcl::Window *pParent, SwView &rV) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwCaptionDialog(weld::Window *pParent, SwView &rV) = 0;
 
     virtual VclPtr<AbstractSwInsertDBColAutoPilot> CreateSwInsertDBColAutoPilot(SwView& rView,
         css::uno::Reference< css::sdbc::XDataSource> rxSource,
@@ -395,29 +394,29 @@ public:
 
     virtual SwLabDlgMethod GetSwLabDlgStaticMethod () =0;
 
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwParaDlg ( vcl::Window *pParent,
-                                                    SwView& rVw,
-                                                    const SfxItemSet& rCoreSet,
-                                                    bool bDraw,
-                                                    const OString& sDefPage = OString() ) = 0;
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwParaDlg(weld::Window *pParent,
+                                                         SwView& rVw,
+                                                         const SfxItemSet& rCoreSet,
+                                                         bool bDraw,
+                                                         const OString& sDefPage = OString() ) = 0;
 
-    virtual VclPtr<VclAbstractDialog> CreateSwAutoMarkDialog(vcl::Window *pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwAutoMarkDialog(weld::Window *pParent, SwWrtShell &rSh) = 0;
 
-    virtual VclPtr<AbstractSwSelGlossaryDlg> CreateSwSelGlossaryDlg(const OUString &rShortName) = 0;
+    virtual VclPtr<AbstractSwSelGlossaryDlg> CreateSwSelGlossaryDlg(weld::Window *pParent, const OUString &rShortName) = 0;
 
-    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(weld::Window * pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwSortingDialog(weld::Window *pParent, SwWrtShell &rSh) = 0;
     virtual VclPtr<VclAbstractDialog> CreateSwTableHeightDialog(weld::Window *pParent, SwWrtShell &rSh) = 0;
-    virtual VclPtr<VclAbstractDialog> CreateSwColumnDialog(vcl::Window *pParent, SwWrtShell &rSh) = 0;
+    virtual VclPtr<VclAbstractDialog> CreateSwColumnDialog(weld::Window *pParent, SwWrtShell &rSh) = 0;
     virtual VclPtr<AbstractSplitTableDialog> CreateSplitTableDialog(weld::Window* pParent, SwWrtShell &rSh) = 0;
 
     virtual VclPtr<AbstractSwAutoFormatDlg> CreateSwAutoFormatDlg(weld::Window* pParent, SwWrtShell* pShell,
                                                                   bool bSetAutoFormat = true,
                                                                   const SwTableAutoFormat* pSelFormat = nullptr ) = 0;
-    virtual VclPtr<SfxAbstractDialog> CreateSwBorderDlg ( vcl::Window* pParent, SfxItemSet& rSet, SwBorderModes nType ) = 0;
-    virtual VclPtr<SfxAbstractDialog> CreateSwWrapDlg ( vcl::Window* pParent, SfxItemSet& rSet, SwWrtShell* pSh ) = 0;
+    virtual VclPtr<SfxAbstractDialog> CreateSwBorderDlg(weld::Window* pParent, SfxItemSet& rSet, SwBorderModes nType) = 0;
+    virtual VclPtr<SfxAbstractDialog> CreateSwWrapDlg(weld::Window* pParent, SfxItemSet& rSet, SwWrtShell* pSh) = 0;
 
     virtual VclPtr<VclAbstractDialog> CreateSwTableWidthDlg(weld::Window *pParent, SwTableFUNC &rFnc) = 0;
-    virtual VclPtr<SfxAbstractTabDialog> CreateSwTableTabDlg(vcl::Window* pParent,
+    virtual VclPtr<SfxAbstractTabDialog> CreateSwTableTabDlg(weld::Window* pParent,
         const SfxItemSet* pItemSet, SwWrtShell* pSh) = 0;
 
     virtual VclPtr<AbstractSwFieldDlg> CreateSwFieldDlg(SfxBindings* pB, SwChildWinWrapper* pCW, vcl::Window *pParent) = 0;
@@ -429,14 +428,14 @@ public:
 
     virtual VclPtr<VclAbstractDialog>          CreateTableMergeDialog(weld::Window* pParent, bool& rWithPrev) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateFrameTabDialog(const OUString &rDialogType,
-                                                SfxViewFrame *pFrame, vcl::Window *pParent,
+                                                SfxViewFrame *pFrame, weld::Window *pParent,
                                                 const SfxItemSet& rCoreSet,
                                                 bool bNewFrame = true,
                                                 const OString& sDefPage = OString()) = 0;
     /// @param nSlot
     /// Identifies optional Slot by which the creation of the Template (Style) dialog is triggered.
     /// Currently used, if nRegion == SfxStyleFamily::Page in order to activate certain dialog pane
-    virtual VclPtr<SfxAbstractApplyTabDialog>  CreateTemplateDialog(vcl::Window* pParent,
+    virtual VclPtr<SfxAbstractApplyTabDialog>  CreateTemplateDialog(weld::Window* pParent,
                                                 SfxStyleSheetBase&  rBase,
                                                 SfxStyleFamily      nRegion,
                                                 const OString&      sPage,
@@ -449,7 +448,7 @@ public:
         SwWrtShell &rSh, SwField* pField, bool bPrevButton, bool bNextButton) = 0;
     virtual VclPtr<AbstractInsFootNoteDlg>     CreateInsFootNoteDlg(weld::Window * pParent,
         SwWrtShell &rSh, bool bEd = false) = 0;
-    virtual VclPtr<VclAbstractDialog>          CreateTitlePageDlg ( vcl::Window * pParent ) = 0;
+    virtual VclPtr<VclAbstractDialog>          CreateTitlePageDlg(weld::Window* pParent) = 0;
     virtual VclPtr<VclAbstractDialog>         CreateVclSwViewDialog(SwView& rView) = 0;
     virtual VclPtr<AbstractInsTableDlg>        CreateInsTableDlg(SwView& rView) = 0;
     virtual VclPtr<AbstractJavaEditDialog>     CreateJavaEditDialog(weld::Window* pParent,
@@ -460,13 +459,13 @@ public:
                                                 const OUString& rTableName,
                                                 sal_Int32 nCommandType,
                                                 const css::uno::Reference< css::sdbc::XConnection>& xConnection ) = 0;
-    virtual VclPtr<AbstractMailMergeCreateFromDlg>   CreateMailMergeCreateFromDlg(vcl::Window* pParent) = 0;
-    virtual VclPtr<AbstractMailMergeFieldConnectionsDlg> CreateMailMergeFieldConnectionsDlg(vcl::Window* pParent) = 0;
+    virtual VclPtr<AbstractMailMergeCreateFromDlg>   CreateMailMergeCreateFromDlg(weld::Window* pParent) = 0;
+    virtual VclPtr<AbstractMailMergeFieldConnectionsDlg> CreateMailMergeFieldConnectionsDlg(weld::Window* pParent) = 0;
     virtual VclPtr<VclAbstractDialog>          CreateMultiTOXMarkDlg(weld::Window* pParent, SwTOXMgr &rTOXMgr) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateOutlineTabDialog(weld::Window* pParent,
                                                 const SfxItemSet* pSwItemSet,
                                                 SwWrtShell &) = 0;
-    virtual VclPtr<SfxAbstractTabDialog>       CreateSvxNumBulletTabDialog(vcl::Window* pParent,
+    virtual VclPtr<SfxAbstractTabDialog>       CreateSvxNumBulletTabDialog(weld::Window* pParent,
                                                 const SfxItemSet* pSwItemSet,
                                                 SwWrtShell &) = 0;
     virtual VclPtr<AbstractMultiTOXTabDialog>  CreateMultiTOXTabDialog(
@@ -480,15 +479,15 @@ public:
     virtual VclPtr<AbstractMarkFloatDlg>       CreateIndexMarkFloatDlg(
                                                        SfxBindings* pBindings,
                                                        SfxChildWindow* pChild,
-                                                       vcl::Window *pParent,
+                                                       weld::Window *pParent,
                                                        SfxChildWinInfo* pInfo) = 0;
     virtual VclPtr<AbstractMarkFloatDlg>       CreateAuthMarkFloatDlg(
                                                        SfxBindings* pBindings,
                                                        SfxChildWindow* pChild,
-                                                       vcl::Window *pParent,
+                                                       weld::Window *pParent,
                                                        SfxChildWinInfo* pInfo) = 0;
     virtual VclPtr<VclAbstractDialog>         CreateIndexMarkModalDlg(
-                                                vcl::Window *pParent, SwWrtShell& rSh, SwTOXMark* pCurTOXMark) = 0;
+                                                weld::Window *pParent, SwWrtShell& rSh, SwTOXMark* pCurTOXMark) = 0;
 
     virtual VclPtr<AbstractMailMergeWizard>    CreateMailMergeWizard(SwView& rView, std::shared_ptr<SwMailMergeConfigItem>& rConfigItem) = 0;
 
@@ -500,7 +499,7 @@ public:
 
     virtual void ExecuteMMResultSaveDialog(weld::Window* pParent) = 0;
     virtual void ExecuteMMResultPrintDialog(weld::Window* pParent) = 0;
-    virtual void ExecuteMMResultEmailDialog() = 0;
+    virtual void ExecuteMMResultEmailDialog(weld::Window* pParent) = 0;
 
 protected:
     ~SwAbstractDialogFactory() {}

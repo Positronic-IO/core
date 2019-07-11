@@ -8,7 +8,6 @@
  */
 
 #include <comphelper/processfactory.hxx>
-#include <comphelper/random.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
@@ -26,6 +25,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <vcl/virdev.hxx>
+#include <sal/log.hxx>
 
 #include <cstdlib>
 

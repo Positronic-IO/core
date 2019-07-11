@@ -43,7 +43,11 @@ $(eval $(call gb_CppunitTest_set_include,sw_odfimport,\
     $$(INCLUDE) \
 ))
 
-$(eval $(call gb_CppunitTest_use_sdk_api,sw_odfimport))
+$(eval $(call gb_CppunitTest_use_api,sw_odfimport,\
+	udkapi \
+	offapi \
+	oovbaapi \
+))
 
 $(eval $(call gb_CppunitTest_use_ure,sw_odfimport))
 $(eval $(call gb_CppunitTest_use_vcl,sw_odfimport))
@@ -77,7 +81,7 @@ $(eval $(call gb_CppunitTest_use_components,sw_odfimport,\
     unoxml/source/service/unoxml \
     uui/util/uui \
     $(if $(filter-out MACOSX WNT,$(OS)), \
-		$(if $(ENABLE_HEADLESS),, \
+		$(if $(DISABLE_GUI),, \
 			vcl/vcl.unx \
 		) \
     ) \

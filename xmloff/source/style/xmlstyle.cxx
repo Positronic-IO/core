@@ -30,6 +30,7 @@
 #include <com/sun/star/style/XAutoStyleFamily.hpp>
 #include "PageMasterPropMapper.hxx"
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 #include <svl/itemset.hxx>
 #include <xmloff/nmspmap.hxx>
 #include <xmloff/xmlnmspe.hxx>
@@ -82,6 +83,9 @@ static const SvXMLTokenMapEntry aStyleStylesElemTokenMap[] =
     { XML_NAMESPACE_STYLE,  XML_DEFAULT_PAGE_LAYOUT,    XML_TOK_STYLE_DEFAULT_PAGE_LAYOUT        },
     XML_TOKEN_MAP_END
 };
+
+static const OUStringLiteral gsParaStyleServiceName( "com.sun.star.style.ParagraphStyle" );
+static const OUStringLiteral gsTextStyleServiceName( "com.sun.star.style.CharacterStyle" );
 
 const SvXMLTokenMap& SvXMLStylesContext::GetStyleStylesElemTokenMap()
 {
@@ -192,8 +196,8 @@ bool SvXMLStyleContext::IsTransient() const
 
 class SvXMLStyleIndex_Impl
 {
-    OUString              sName;
-    sal_uInt16            nFamily;
+    OUString const              sName;
+    sal_uInt16 const            nFamily;
     const rtl::Reference<SvXMLStyleContext> mxStyle;
 
 public:
@@ -239,7 +243,7 @@ class SvXMLStylesContext_Impl
 
     std::vector<rtl::Reference<SvXMLStyleContext>> aStyles;
     mutable std::unique_ptr<IndicesType> pIndices;
-    bool bAutomaticStyle;
+    bool const bAutomaticStyle;
 
 #if OSL_DEBUG_LEVEL > 0
     mutable sal_uInt32 m_nIndexCreated;
@@ -729,10 +733,10 @@ OUString SvXMLStylesContext::GetServiceName( sal_uInt16 nFamily ) const
     switch( nFamily )
     {
     case XML_STYLE_FAMILY_TEXT_PARAGRAPH:
-        sServiceName = msParaStyleServiceName;
+        sServiceName = gsParaStyleServiceName;
         break;
     case XML_STYLE_FAMILY_TEXT_TEXT:
-        sServiceName = msTextStyleServiceName;
+        sServiceName = gsTextStyleServiceName;
         break;
     }
 
@@ -743,10 +747,7 @@ SvXMLStylesContext::SvXMLStylesContext( SvXMLImport& rImport, sal_uInt16 nPrfx,
                                         const OUString& rLName,
                                         const uno::Reference< xml::sax::XAttributeList > &, bool bAuto ) :
     SvXMLImportContext( rImport, nPrfx, rLName ),
-    msParaStyleServiceName( "com.sun.star.style.ParagraphStyle" ),
-    msTextStyleServiceName( "com.sun.star.style.CharacterStyle" ),
-    mpImpl( new SvXMLStylesContext_Impl( bAuto ) ),
-    mpStyleStylesElemTokenMap( nullptr )
+    mpImpl( new SvXMLStylesContext_Impl( bAuto ) )
 {
 }
 

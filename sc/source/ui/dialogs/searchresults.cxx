@@ -10,7 +10,7 @@
 #include <searchresults.hxx>
 
 #include <svtools/simptabl.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <dociter.hxx>
@@ -26,7 +26,6 @@ namespace sc {
 SearchResultsDlg::SearchResultsDlg( SfxBindings* _pBindings, vcl::Window* pParent ) :
     ModelessDialog(pParent, "SearchResultsDialog", "modules/scalc/ui/searchresults.ui"),
     aSkipped( ScResId( SCSTR_SKIPPED ) ),
-    aTotal( ScResId( SCSTR_TOTAL ) ),
     mpBindings(_pBindings), mpDoc(nullptr)
 {
     get(mpSearchResults, "lbSearchResults");
@@ -136,7 +135,7 @@ void SearchResultsDlg::FillResults( ScDocument* pDoc, const ScRangeList &rMatche
             ScCellIterator aIter(pDoc, rMatchedRanges[i]);
             for (bool bHas = aIter.first(); bHas; bHas = aIter.next())
             {
-                ScAddress aPos = aIter.GetPos();
+                const ScAddress& aPos = aIter.GetPos();
                 if (aPos.Tab() >= nTabCount)
                     // Out-of-bound sheet index.
                     continue;
@@ -148,7 +147,8 @@ void SearchResultsDlg::FillResults( ScDocument* pDoc, const ScRangeList &rMatche
         }
     }
 
-    OUString aSearchResults = ScGlobal::ReplaceOrAppend( aTotal, "%1", OUString::number( aList.mnCount ) );
+    OUString aTotal(ScResId(SCSTR_TOTAL, aList.mnCount));
+    OUString aSearchResults = aTotal.replaceFirst("%1", OUString::number(aList.mnCount));
     if (aList.mnCount > ListWrapper::mnMaximum)
         aSearchResults += " " + ScGlobal::ReplaceOrAppend( aSkipped, "%1", OUString::number( ListWrapper::mnMaximum ) );
     mpSearchResults->SetText(aSearchResults);

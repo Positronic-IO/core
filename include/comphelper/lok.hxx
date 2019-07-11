@@ -11,8 +11,9 @@
 #define INCLUDED_COMPHELPER_LOK_HXX
 
 #include <comphelper/comphelperdllapi.h>
+#include <rtl/ustring.hxx>
 
-#include <i18nlangtag/languagetag.hxx>
+class LanguageTag;
 
 // Interface between the LibreOfficeKit implementation called by LibreOfficeKit clients and other
 // LibreOffice code.
@@ -58,6 +59,10 @@ COMPHELPER_DLLPUBLIC void setTiledPainting(bool bTiledPainting);
 COMPHELPER_DLLPUBLIC bool isDialogPainting();
 /// Set if we are painting the dialog.
 COMPHELPER_DLLPUBLIC void setDialogPainting(bool bDialogPainting);
+/// Set the DPI scale for rendering for hi-dpi displays.  Used also for zoom in Calc.
+COMPHELPER_DLLPUBLIC void setDPIScale(double fDPIScale);
+/// Get the DPI scale for rendering for hi-dpi displays.  Used also for zoom in Calc.
+COMPHELPER_DLLPUBLIC double getDPIScale();
 /// Set if we want no annotations rendering
 COMPHELPER_DLLPUBLIC void setTiledAnnotations(bool bTiledAnnotations);
 /// Check if annotations rendering is turned off

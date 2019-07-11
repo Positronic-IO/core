@@ -21,13 +21,14 @@
 
 #include <svtools/svtdllapi.h>
 #include <vcl/scrbar.hxx>
+#include <vcl/status.hxx>
 #include <vcl/ctrl.hxx>
 #include <vcl/vclptr.hxx>
 #include <tools/multisel.hxx>
-#include <svtools/headbar.hxx>
-#include <svtools/transfer.hxx>
-#include <svtools/AccessibleBrowseBoxObjType.hxx>
-#include <svtools/accessibletableprovider.hxx>
+#include <vcl/headbar.hxx>
+#include <vcl/transfer.hxx>
+#include <vcl/AccessibleBrowseBoxObjType.hxx>
+#include <vcl/accessibletableprovider.hxx>
 #include <vector>
 #include <stack>
 
@@ -42,11 +43,14 @@ class BrowserHeader;
 
 namespace svt {
     class BrowseBoxImpl;
-    class IAccessibleFactory;
 }
 
 namespace utl {
     class AccessibleStateSetHelper;
+}
+
+namespace vcl {
+    class IAccessibleFactory;
 }
 
 #define BROWSER_INVALIDID           SAL_MAX_UINT16
@@ -123,10 +127,10 @@ namespace o3tl
 class BrowseEvent
 {
     VclPtr<vcl::Window>     pWin;
-    long                    nRow;
-    tools::Rectangle               aRect;
-    sal_uInt16              nCol;
-    sal_uInt16              nColId;
+    long const                    nRow;
+    tools::Rectangle const        aRect;
+    sal_uInt16 const              nCol;
+    sal_uInt16 const              nColId;
 
 public:
                         BrowseEvent( vcl::Window* pWindow,
@@ -186,7 +190,7 @@ class SVT_DLLPUBLIC BrowseBox
         :public Control
         ,public DragSourceHelper
         ,public DropTargetHelper
-        ,public svt::IAccessibleTableProvider
+        ,public vcl::IAccessibleTableProvider
 {
     friend class BrowserDataWin;
     friend class ::svt::BrowseBoxImpl;
@@ -198,6 +202,7 @@ private:
     VclPtr<BrowserDataWin> pDataWin;       // window to display data rows
     VclPtr<ScrollBar>      pVScroll;       // vertical scrollbar
     VclPtr<ScrollBar>      aHScroll;       // horizontal scrollbar
+    VclPtr<StatusBar>      aStatusBar;     // statusbar, just to measure its height
 
     long            nDataRowHeight; // height of a single data-row
     sal_uInt16      nTitleLines;    // number of lines in title row
@@ -249,9 +254,9 @@ private:
     // fdo#83943, detect if making the cursor position visible is impossible to achieve
     struct CursorMoveAttempt
     {
-        long m_nCol;
-        long m_nRow;
-        bool m_bScrolledToReachCell;
+        long const m_nCol;
+        long const m_nRow;
+        bool const m_bScrolledToReachCell;
         CursorMoveAttempt(long nCol, long nRow, bool bScrolledToReachCell)
             : m_nCol(nCol)
             , m_nRow(nRow)
@@ -293,7 +298,9 @@ private:
     DECL_DLLPRIVATE_LINK(    EndScrollHdl, ScrollBar*, void );
     DECL_DLLPRIVATE_LINK(    StartDragHdl, HeaderBar*, void );
 
-    SVT_DLLPRIVATE long            GetFrozenWidth() const;
+    SVT_DLLPRIVATE long GetFrozenWidth() const;
+
+    SVT_DLLPRIVATE long GetBarHeight() const;
 
     bool            GoToRow(long nRow, bool bRowColMove, bool bDoNotModifySelection = false );
 
@@ -309,7 +316,7 @@ private:
 
 protected:
     /// retrieves the XAccessible implementation associated with the BrowseBox instance
-    ::svt::IAccessibleFactory&   getAccessibleFactory();
+    ::vcl::IAccessibleFactory&   getAccessibleFactory();
 
 protected:
     sal_uInt16          ColCount() const;
@@ -706,7 +713,7 @@ public:
         @return
             The name of the specified object.
     */
-    virtual OUString GetAccessibleObjectName( ::svt::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
+    virtual OUString GetAccessibleObjectName( ::vcl::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
 
     /** return the description of the specified object.
         @param  eObjType
@@ -716,7 +723,7 @@ public:
         @return
             The description of the specified object.
     */
-    virtual OUString GetAccessibleObjectDescription( ::svt::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
+    virtual OUString GetAccessibleObjectDescription( ::vcl::AccessibleBrowseBoxObjType eObjType,sal_Int32 _nPosition = -1) const override;
 
     /** @return  The header text of the specified row. */
     virtual OUString GetRowDescription( sal_Int32 nRow ) const override;
@@ -728,7 +735,7 @@ public:
         the accessible object), depending on the specified object type. */
     virtual void FillAccessibleStateSet(
             ::utl::AccessibleStateSetHelper& rStateSet,
-            ::svt::AccessibleBrowseBoxObjType eObjType ) const override;
+            ::vcl::AccessibleBrowseBoxObjType eObjType ) const override;
 
     /** Fills the StateSet with all states for one cell (except DEFUNC and SHOWING, done by
         the accessible object). */

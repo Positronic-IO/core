@@ -47,9 +47,9 @@
 #include <com/sun/star/style/VerticalAlignment.hpp>
 #include <com/sun/star/table/CellAddress.hpp>
 #include <com/sun/star/table/CellRangeAddress.hpp>
-#include <comphelper/string.hxx>
 #include <rtl/tencinfo.h>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/binaryinputstream.hxx>
 #include <oox/helper/containerhelper.hxx>
@@ -653,9 +653,7 @@ ComCtlModelBase::ComCtlModelBase( sal_uInt32 nDataPartId5, sal_uInt32 nDataPartI
     mnFlags( 0 ),
     mnVersion( nVersion ),
     mnDataPartId5( nDataPartId5 ),
-    mnDataPartId6( nDataPartId6 ),
-    mbCommonPart( true ),
-    mbComplexPart( true )
+    mnDataPartId6( nDataPartId6 )
 {
 }
 
@@ -665,15 +663,13 @@ bool ComCtlModelBase::importBinaryModel( BinaryInputStream& rInStrm )
     if( importSizePart( rInStrm ) && readPartHeader( rInStrm, getDataPartId(), mnVersion ) )
     {
         // if flags part exists, the first int32 of the data part contains its size
-        sal_uInt32 nCommonPartSize = 0;
-        if (mbCommonPart)
-            nCommonPartSize = rInStrm.readuInt32();
+        sal_uInt32 nCommonPartSize = rInStrm.readuInt32();
         // implementations must read the exact amount of data, stream must point to its end afterwards
         importControlData( rInStrm );
         // read following parts
         if( !rInStrm.isEof() &&
-            (!mbCommonPart || importCommonPart( rInStrm, nCommonPartSize )) &&
-            (!mbComplexPart || importComplexPart( rInStrm )) )
+            importCommonPart( rInStrm, nCommonPartSize ) &&
+            importComplexPart( rInStrm ) )
         {
             return !rInStrm.isEof();
         }
@@ -683,8 +679,7 @@ bool ComCtlModelBase::importBinaryModel( BinaryInputStream& rInStrm )
 
 void ComCtlModelBase::convertProperties( PropertyMap& rPropMap, const ControlConverter& rConv ) const
 {
-    if( mbCommonPart )
-        rPropMap.setProperty( PROP_Enabled, getFlag( mnFlags, COMCTL_COMMON_ENABLED ) );
+    rPropMap.setProperty( PROP_Enabled, getFlag( mnFlags, COMCTL_COMMON_ENABLED ) );
     ControlModelBase::convertProperties( rPropMap, rConv );
 }
 
@@ -1554,7 +1549,12 @@ void AxMorphDataModelBase::convertProperties( PropertyMap& rPropMap, const Contr
     rPropMap.setProperty( PROP_Enabled, getFlag( mnFlags, AX_FLAGS_ENABLED ) );
     rConv.convertColor( rPropMap, PROP_TextColor, mnTextColor );
     if ( mnDisplayStyle == AX_DISPLAYSTYLE_OPTBUTTON )
-        rPropMap.setProperty( PROP_GroupName, maGroupName );
+    {
+        // If unspecified, radio buttons autoGroup in the same document/sheet
+        // NOTE: form controls should not autoGroup with ActiveX controls - see drawingfragment.cxx
+        OUString sGroupName = !maGroupName.isEmpty() ? maGroupName : "autoGroup_";
+        rPropMap.setProperty( PROP_GroupName, sGroupName );
+    }
     AxFontDataModel::convertProperties( rPropMap, rConv );
 }
 
@@ -1768,7 +1768,10 @@ ApiControlType AxTextBoxModel::getControlType() const
 
 void AxTextBoxModel::convertProperties( PropertyMap& rPropMap, const ControlConverter& rConv ) const
 {
-    rPropMap.setProperty( PROP_MultiLine, getFlag( mnFlags, AX_FLAGS_MULTILINE ) );
+    if (getFlag( mnFlags, AX_FLAGS_MULTILINE ) && getFlag( mnFlags, AX_FLAGS_WORDWRAP ))
+        rPropMap.setProperty( PROP_MultiLine, true );
+    else
+        rPropMap.setProperty( PROP_MultiLine, false );
     rPropMap.setProperty( PROP_HideInactiveSelection, getFlag( mnFlags, AX_FLAGS_HIDESELECTION ) );
     rPropMap.setProperty( PROP_ReadOnly, getFlag( mnFlags, AX_FLAGS_LOCKED ) );
     rPropMap.setProperty( mbAwtModel ? PROP_Text : PROP_DefaultText, maValue );
@@ -1785,8 +1788,10 @@ void AxTextBoxModel::convertProperties( PropertyMap& rPropMap, const ControlConv
 void AxTextBoxModel::convertFromProperties( PropertySet& rPropSet, const ControlConverter& rConv )
 {
     bool bRes = false;
-    if ( rPropSet.getProperty( bRes,  PROP_MultiLine ) )
+    if ( rPropSet.getProperty( bRes,  PROP_MultiLine ) ) {
         setFlag( mnFlags, AX_FLAGS_WORDWRAP, bRes );
+        setFlag( mnFlags, AX_FLAGS_MULTILINE, bRes );
+    }
     if ( rPropSet.getProperty( bRes,  PROP_HideInactiveSelection ) )
         setFlag( mnFlags, AX_FLAGS_HIDESELECTION, bRes );
     if ( rPropSet.getProperty( bRes,  PROP_ReadOnly ) )
@@ -2544,30 +2549,32 @@ HtmlSelectModel::HtmlSelectModel()
 bool
 HtmlSelectModel::importBinaryModel( BinaryInputStream& rInStrm )
 {
+    if (rInStrm.size()<=0)
+        return true;
+
     OUString sStringContents = rInStrm.readUnicodeArray( rInStrm.size() );
 
-    OUString data = sStringContents;
-
     // replace crlf with lf
-    data = data.replaceAll( "\x0D\x0A" , "\x0A" );
+    OUString data = sStringContents.replaceAll( "\x0D\x0A" , "\x0A" );
+
     std::vector< OUString > listValues;
     std::vector< sal_Int16 > selectedIndices;
 
     // Ultra hacky parser for the info
-    sal_Int32 nTokenCount = comphelper::string::getTokenCount(data, '\n');
-
-    for ( sal_Int32 nToken = 0; nToken < nTokenCount; ++nToken )
+    sal_Int32 nLineIdx {0};
+    // first line will tell us if multiselect is enabled
+    if (data.getToken( 0, '\n', nLineIdx )=="<SELECT MULTIPLE")
+        mnMultiSelect = AX_SELECTION_MULTI;
+    // skip first and last lines, no data there
+    if (nLineIdx>0)
     {
-        OUString sLine( data.getToken( nToken, '\n' ) );
-        if ( !nToken ) // first line will tell us if multiselect is enabled
+        for (;;)
         {
-            if ( sLine == "<SELECT MULTIPLE" )
-                mnMultiSelect = AX_SELECTION_MULTI;
-        }
-        // skip first and last lines, no data there
-        else if ( nToken < nTokenCount - 1)
-        {
-            if ( comphelper::string::getTokenCount(sLine, '>') )
+            OUString sLine( data.getToken( 0, '\n', nLineIdx ) );
+            if (nLineIdx<0)
+                break;  // skip last line
+
+            if ( !sLine.isEmpty() )
             {
                 OUString displayValue  = sLine.getToken( 1, '>' );
                 if ( displayValue.getLength() )

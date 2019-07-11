@@ -25,7 +25,6 @@
 #include <vcl/lstbox.hxx>
 #include <vcl/button.hxx>
 #include <vcl/menubtn.hxx>
-#include <vcl/group.hxx>
 #include <vcl/decoview.hxx>
 #include <vcl/image.hxx>
 #include <vcl/toolbox.hxx>
@@ -110,7 +109,7 @@ public:
 
     void            ResetUndo();
     void            Undo();
-    void            AddUndoAction( SfxUndoAction *pAction );
+    void            AddUndoAction( std::unique_ptr<SfxUndoAction> pAction );
     size_t          GetUndoActionCount();
     void            UndoActionStart( sal_uInt16 nId );
     void            UndoActionEnd();
@@ -197,7 +196,7 @@ private:
     void            AddToDictionaryExecute( sal_uInt16 ItemId, PopupMenu const *pMenu );
     void            StartSpellOptDlg_Impl();
     int             InitUserDicts();
-    void            UpdateBoxes_Impl();
+    void            UpdateBoxes_Impl(bool bCallFromSelectHdl = false);
     void            Init_Impl();
     void            SpellContinue_Impl(bool UseSavedSentence = false, bool bIgnoreCurrentError = false );
     void            LockFocusChanges( bool bLock ) {bFocusLocked = bLock;}

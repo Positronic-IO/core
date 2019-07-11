@@ -37,7 +37,6 @@
 #include <sfx2/dispatch.hxx>
 #include <basic/sbuno.hxx>
 #include <basic/sbx.hxx>
-#include <fmitems.hxx>
 #include <fmobj.hxx>
 #include <svx/svditer.hxx>
 #include <svx/svdpagv.hxx>
@@ -273,7 +272,7 @@ void FmFormView::ChangeDesignMode(bool bDesign)
             // redraw UNO objects
             if ( GetSdrPageView() )
             {
-                SdrObjListIter aIter(*pCurPage);
+                SdrObjListIter aIter(pCurPage);
                 while( aIter.IsMore() )
                 {
                     SdrObject* pObj = aIter.Next();
@@ -387,19 +386,19 @@ void FmFormView::DeactivateControls(SdrPageView const * pPageView)
 }
 
 
-SdrObject* FmFormView::CreateFieldControl( const ODataAccessDescriptor& _rColumnDescriptor )
+SdrObjectUniquePtr FmFormView::CreateFieldControl( const ODataAccessDescriptor& _rColumnDescriptor )
 {
     return pImpl->implCreateFieldControl( _rColumnDescriptor );
 }
 
 
-SdrObject* FmFormView::CreateXFormsControl( const OXFormsDescriptor &_rDesc )
+SdrObjectUniquePtr FmFormView::CreateXFormsControl( const OXFormsDescriptor &_rDesc )
 {
     return pImpl->implCreateXFormsControl(_rDesc);
 }
 
 
-SdrObject* FmFormView::CreateFieldControl(const OUString& rFieldDesc) const
+SdrObjectUniquePtr FmFormView::CreateFieldControl(const OUString& rFieldDesc) const
 {
     OUString sDataSource     = rFieldDesc.getToken(0,u'\x000B');
     OUString sObjectName     = rFieldDesc.getToken(1,u'\x000B');
@@ -566,13 +565,15 @@ FmFormObj* FmFormView::getMarkedGrid() const
 void FmFormView::createControlLabelPair( OutputDevice const * _pOutDev, sal_Int32 _nXOffsetMM, sal_Int32 _nYOffsetMM,
     const Reference< XPropertySet >& _rxField, const Reference< XNumberFormats >& _rxNumberFormats,
     sal_uInt16 _nControlObjectID, SdrInventor _nInventor, sal_uInt16 _nLabelObjectID,
-    SdrPage* _pLabelPage, SdrPage* _pControlPage, SdrModel* _pModel, SdrUnoObj*& _rpLabel, SdrUnoObj*& _rpControl )
+    SdrModel& _rModel,
+    std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpLabel,
+    std::unique_ptr<SdrUnoObj, SdrObjectFreeOp>& _rpControl )
 {
     FmXFormView::createControlLabelPair(
         *_pOutDev, _nXOffsetMM, _nYOffsetMM,
         _rxField, _rxNumberFormats,
         _nControlObjectID, "", _nInventor, _nLabelObjectID,
-        _pLabelPage, _pControlPage, _pModel,
+        _rModel,
         _rpLabel, _rpControl
     );
 }

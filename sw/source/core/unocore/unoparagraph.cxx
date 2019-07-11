@@ -20,7 +20,9 @@
 #include <unoparagraph.hxx>
 
 #include <comphelper/interfacecontainer2.hxx>
+#include <cppuhelper/exc_hlp.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <osl/diagnose.h>
 
 #include <cmdid.h>
 #include <unomid.h>
@@ -43,6 +45,7 @@
 #include <com/sun/star/beans/GetPropertyTolerantResult.hpp>
 #include <com/sun/star/beans/TolerantPropertySetResultType.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/text/WrapTextMode.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 
@@ -114,8 +117,8 @@ public:
     ::comphelper::OInterfaceContainerHelper2 m_EventListeners;
     SfxItemPropertySet const& m_rPropSet;
     bool m_bIsDescriptor;
-    sal_Int32 m_nSelectionStartPos;
-    sal_Int32 m_nSelectionEndPos;
+    sal_Int32 const m_nSelectionStartPos;
+    sal_Int32 const m_nSelectionEndPos;
     OUString m_sText;
     uno::Reference<text::XText> m_xParentText;
     SwTextNode* m_pTextNode;
@@ -577,13 +580,15 @@ SwXParagraph::getPropertyValues(const uno::Sequence< OUString >& rPropertyNames)
     }
     catch (beans::UnknownPropertyException &)
     {
-        throw uno::RuntimeException("Unknown property exception caught",
-            static_cast<cppu::OWeakObject *>(this));
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException("Unknown property exception caught",
+                static_cast < cppu::OWeakObject * > ( this ), anyEx );
     }
     catch (lang::WrappedTargetException &)
     {
-        throw uno::RuntimeException("WrappedTargetException caught",
-            static_cast<cppu::OWeakObject *>(this));
+        css::uno::Any anyEx = cppu::getCaughtException();
+        throw css::lang::WrappedTargetRuntimeException("WrappedTargetException caught",
+                static_cast < cppu::OWeakObject * > ( this ), anyEx );
     }
 
     return aValues;

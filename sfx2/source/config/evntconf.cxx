@@ -28,6 +28,7 @@
 #include <unotools/securityoptions.hxx>
 
 #include <rtl/ustring.h>
+#include <sal/log.hxx>
 #include <com/sun/star/uno/Any.hxx>
 #include <comphelper/processfactory.hxx>
 #include <sfx2/evntconf.hxx>
@@ -115,7 +116,7 @@ void SfxEventNamesItem::AddEvent( const OUString& rName, const OUString& rUIName
 }
 
 
-uno::Any CreateEventData_Impl( const SvxMacro *pMacro )
+static uno::Any CreateEventData_Impl( const SvxMacro *pMacro )
 {
 /*
     This function converts a SvxMacro into an Any containing three
@@ -188,7 +189,7 @@ uno::Any CreateEventData_Impl( const SvxMacro *pMacro )
 }
 
 
-void PropagateEvent_Impl( SfxObjectShell const *pDoc, const OUString& aEventName, const SvxMacro* pMacro )
+static void PropagateEvent_Impl( SfxObjectShell const *pDoc, const OUString& aEventName, const SvxMacro* pMacro )
 {
     uno::Reference < document::XEventsSupplier > xSupplier;
     if ( pDoc )

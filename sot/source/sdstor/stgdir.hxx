@@ -45,7 +45,7 @@ class StgDirEntry : public StgAvlNode
     bool         m_bDirty;                    // dirty directory entry
     bool         m_bRemoved;                  // removed per Invalidate()
     void         InitMembers();             // ctor helper
-    virtual short Compare( const StgAvlNode* ) const override;
+    virtual sal_Int32 Compare( const StgAvlNode* ) const override;
     bool         StoreStream( StgIo& );     // store the stream
     bool         StoreStreams( StgIo& );    // store all streams
     void         RevertAll();               // revert the whole tree
@@ -96,7 +96,7 @@ public:
     bool         Store();
     void*        GetEntry( sal_Int32 n, bool );// get an entry
     StgDirEntry* GetRoot() { return m_pRoot; }
-    StgDirEntry* Find( StgDirEntry&, const OUString& );
+    static StgDirEntry* Find( StgDirEntry&, const OUString& );
     StgDirEntry* Create( StgDirEntry&, const OUString&, StgEntryType );
 };
 

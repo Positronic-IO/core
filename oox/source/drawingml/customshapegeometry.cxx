@@ -24,6 +24,7 @@
 #include <com/sun/star/drawing/EnhancedCustomShapeSegmentCommand.hpp>
 #include <com/sun/star/xml/sax/FastToken.hpp>
 #include <osl/diagnose.h>
+#include <sal/log.hxx>
 #include <oox/helper/helper.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/propertymap.hxx>
@@ -62,7 +63,7 @@ enum FormularCommand
 struct FormularCommandNameTable
 {
     const char*     pS;
-    FormularCommand pE;
+    FormularCommand const pE;
 };
 static const FormularCommandNameTable pFormularCommandNameTable[] =
 {
@@ -90,7 +91,7 @@ typedef std::unordered_map< OUString, FormularCommand > FormulaCommandHMap;
 
 static const FormulaCommandHMap* pCommandHashMap;
 
-OUString GetFormulaParameter( const EnhancedCustomShapeParameter& rParameter )
+static OUString GetFormulaParameter( const EnhancedCustomShapeParameter& rParameter )
 {
     OUString aRet;
     switch( rParameter.Type )

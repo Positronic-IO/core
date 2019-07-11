@@ -19,7 +19,6 @@
 
 #include <unotools/accessiblestatesethelper.hxx>
 #include <tools/debug.hxx>
-#include <comphelper/servicehelper.hxx>
 
 // defines how many states the bitfield can contain
 // it has the size of 64 because I use a uInt64
@@ -127,7 +126,7 @@ AccessibleStateSetHelper::AccessibleStateSetHelper ( const sal_Int64 _nInitialSt
 }
 
 AccessibleStateSetHelper::AccessibleStateSetHelper (const AccessibleStateSetHelper& rHelper)
-    : cppu::WeakImplHelper<XAccessibleStateSet>()
+    : cppu::WeakImplHelper<XAccessibleStateSet>(rHelper)
 {
     if (rHelper.mpHelperImpl)
         mpHelperImpl.reset(new AccessibleStateSetHelperImpl(*rHelper.mpHelperImpl));

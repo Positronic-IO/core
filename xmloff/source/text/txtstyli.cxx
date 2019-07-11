@@ -44,6 +44,7 @@
 
 #include <tools/debug.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <functional>
@@ -529,7 +530,7 @@ void XMLTextStyleContext::FillPropertySet(
                 case CTF_FILLBITMAPNAME:
                 {
                     // DrawingLayer FillStyle name needs to be mapped to DisplayName
-                    rtl::OUString sStyleName;
+                    OUString sStyleName;
                     rState.maValue >>= sStyleName;
 
                     // translate the used name from ODF intern to the name used in the Model
@@ -560,7 +561,7 @@ void XMLTextStyleContext::FillPropertySet(
                         }
 
                         // set property
-                        const rtl::OUString& rPropertyName = rPropMapper->GetEntryAPIName(rState.mnIndex);
+                        const OUString& rPropertyName = rPropMapper->GetEntryAPIName(rState.mnIndex);
 
                         if(!xInfo.is())
                         {

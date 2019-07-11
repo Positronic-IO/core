@@ -42,9 +42,7 @@
 #include <svx/svditer.hxx>
 
 #include <toolkit/helper/vclunohelper.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/namecontainer.hxx>
-#include <comphelper/stl_types.hxx>
 #include <comphelper/types.hxx>
 #include <comphelper/sequence.hxx>
 #include <core_resource.hxx>
@@ -292,7 +290,7 @@ uno::Sequence< Reference<uno::XInterface> > PropBrw::CreateCompPropSet(const Sdr
         ::std::unique_ptr<SdrObjListIter> pGroupIterator;
         if (pCurrent->IsGroupObject())
         {
-            pGroupIterator.reset(new SdrObjListIter(*pCurrent->GetSubList()));
+            pGroupIterator.reset(new SdrObjListIter(pCurrent->GetSubList()));
             pCurrent = pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
         }
 
@@ -342,7 +340,7 @@ OUString PropBrw::GetHeadlineName( const uno::Sequence< Reference<uno::XInterfac
         Reference< lang::XServiceInfo > xServiceInfo( xNameCont->getByName("ReportComponent"), UNO_QUERY );
         if ( xServiceInfo.is() )
         {
-            const char* pResId = nullptr;
+            const char* pResId;
             if ( xServiceInfo->supportsService( SERVICE_FIXEDTEXT ) )
             {
                 pResId = RID_STR_PROPTITLE_FIXEDTEXT;
@@ -386,10 +384,7 @@ OUString PropBrw::GetHeadlineName( const uno::Sequence< Reference<uno::XInterfac
                 return aName;
             }
 
-            if (pResId)
-            {
-                aName += RptResId(pResId);
-            }
+            aName += RptResId(pResId);
         }
     }
     else    // multiselection

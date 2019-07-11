@@ -25,6 +25,7 @@
 #include <editeng/outliner.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <svx/svdotext.hxx>
+#include <svx/svdundo.hxx>
 #include <editeng/outlobj.hxx>
 #include <svl/urihelper.hxx>
 #include <editeng/xmlcnitm.hxx>
@@ -391,8 +392,8 @@ void SdPage::lateInit(const SdPage& rSrcPage)
     rSrcPage.cloneAnimations(*this);
 
     // fix user calls for duplicated slide
-    SdrObjListIter aSourceIter( rSrcPage, SdrIterMode::DeepWithGroups );
-    SdrObjListIter aTargetIter( *this, SdrIterMode::DeepWithGroups );
+    SdrObjListIter aSourceIter( &rSrcPage, SdrIterMode::DeepWithGroups );
+    SdrObjListIter aTargetIter( this, SdrIterMode::DeepWithGroups );
 
     while( aSourceIter.IsMore() && aTargetIter.IsMore() )
     {
@@ -477,7 +478,7 @@ void SdPage::getAlienAttributes( css::uno::Any& rAttributes )
 
 void SdPage::RemoveEmptyPresentationObjects()
 {
-    SdrObjListIter  aShapeIter( *this, SdrIterMode::DeepWithGroups );
+    SdrObjListIter  aShapeIter( this, SdrIterMode::DeepWithGroups );
 
     SdrObject* pShape;
     for( pShape = aShapeIter.Next(); pShape; pShape = aShapeIter.Next() )
@@ -571,9 +572,9 @@ void SdPage::addAnnotation( const Reference< XAnnotation >& xAnnotation, int nIn
 
     if( getSdrModelFromSdrPage().IsUndoEnabled() )
     {
-        SdrUndoAction* pAction = CreateUndoInsertOrRemoveAnnotation( xAnnotation, true );
+        std::unique_ptr<SdrUndoAction> pAction = CreateUndoInsertOrRemoveAnnotation( xAnnotation, true );
         if( pAction )
-            getSdrModelFromSdrPage().AddUndo( pAction );
+            getSdrModelFromSdrPage().AddUndo( std::move(pAction) );
     }
 
     SetChanged();
@@ -588,9 +589,9 @@ void SdPage::removeAnnotation( const Reference< XAnnotation >& xAnnotation )
 {
     if( getSdrModelFromSdrPage().IsUndoEnabled() )
     {
-        SdrUndoAction* pAction = CreateUndoInsertOrRemoveAnnotation( xAnnotation, false );
+        std::unique_ptr<SdrUndoAction> pAction = CreateUndoInsertOrRemoveAnnotation( xAnnotation, false );
         if( pAction )
-            getSdrModelFromSdrPage().AddUndo( pAction );
+            getSdrModelFromSdrPage().AddUndo( std::move(pAction) );
     }
 
     AnnotationVector::iterator iter = std::find( maAnnotations.begin(), maAnnotations.end(), xAnnotation );

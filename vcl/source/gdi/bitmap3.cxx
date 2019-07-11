@@ -24,6 +24,8 @@
 #include <vcl/bitmapex.hxx>
 #include <vcl/bitmap.hxx>
 #include <config_features.h>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #if HAVE_FEATURE_OPENGL
 #include <vcl/opengl/OpenGLHelper.hxx>
 #endif

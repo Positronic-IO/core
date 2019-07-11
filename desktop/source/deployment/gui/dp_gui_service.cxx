@@ -21,6 +21,7 @@
 #include <memory>
 #include "dp_gui.h"
 #include "dp_gui_theextmgr.hxx"
+#include <osl/diagnose.h>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/implementationentry.hxx>
 #include <unotools/configmgr.hxx>
@@ -97,7 +98,7 @@ namespace
         : public rtl::Static< OUString, Extension > {};
 }
 
-OUString ReplaceProductNameHookProc( const OUString& rStr )
+static OUString ReplaceProductNameHookProc( const OUString& rStr )
 {
     if (rStr.indexOf( "%PRODUCT" ) == -1)
         return rStr;
@@ -270,7 +271,8 @@ void ServiceImpl::startExecuteModal(
         }
     }
 
-    if (app.get() != nullptr) {
+    if (app != nullptr)
+    {
         Application::Execute();
         DeInitVCL();
     }

@@ -21,28 +21,25 @@
 
 #include <sal/config.h>
 #include <sfx2/dllapi.h>
-
 #include <sfx2/tabdlg.hxx>
 
 class SfxStyleSheetBase;
 class SfxStyleSheetBasePool;
 
-class SFX2_DLLPUBLIC SfxStyleDialog: public SfxTabDialog
+class SFX2_DLLPUBLIC SfxStyleDialogController : public SfxTabDialogController
 {
 private:
-    SfxStyleSheetBase*          pStyle;
-    DECL_DLLPRIVATE_LINK( CancelHdl, Button *, void );
-    sal_uInt16 m_nOrganizerId;
+    SfxStyleSheetBase& m_rStyle;
+    DECL_DLLPRIVATE_LINK(CancelHdl, weld::Button&, void);
 
 public:
-    SfxStyleDialog(vcl::Window* pParent, const OUString& rID,
-        const OUString& rUIXMLDescription, SfxStyleSheetBase&);
+    SfxStyleDialogController(weld::Window* pParent,
+        const OUString& rUIXMLDescription, const OString& rID, SfxStyleSheetBase&);
 
-    virtual ~SfxStyleDialog() override;
-    virtual void dispose() override;
+    virtual ~SfxStyleDialogController() override;
 
-    SfxStyleSheetBase&          GetStyleSheet() { return *pStyle; }
-    const SfxStyleSheetBase&    GetStyleSheet() const { return *pStyle; }
+    SfxStyleSheetBase&          GetStyleSheet() { return m_rStyle; }
+    const SfxStyleSheetBase&    GetStyleSheet() const { return m_rStyle; }
 
     virtual short               Ok() override;
 

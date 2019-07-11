@@ -68,7 +68,7 @@ class XMLTransformerBase : public XMLTransformer
     SvXMLNamespaceMap           m_vReplaceNamespaceMap;
     std::vector<rtl::Reference<XMLTransformerContext>> m_vContexts;
     XMLTransformerActions       m_ElemActions;
-    XMLTransformerTokenMap      m_TokenMap;
+    XMLTransformerTokenMap const m_TokenMap;
 
 protected:
     css::uno::Reference< css::frame::XModel >     mxModel;
@@ -80,8 +80,8 @@ protected:
                                       const OUString& rQName );
 
 public:
-    XMLTransformerBase( XMLTransformerActionInit *pInit,
-                           ::xmloff::token::XMLTokenEnum *pTKMapInit ) throw();
+    XMLTransformerBase( XMLTransformerActionInit const *pInit,
+                           ::xmloff::token::XMLTokenEnum const *pTKMapInit ) throw();
     virtual ~XMLTransformerBase() throw() override;
 
     // css::xml::sax::XDocumentHandler
@@ -138,7 +138,7 @@ public:
     static bool DecodeStyleName( OUString& rName );
     static bool NegPercent( OUString& rValue );
 
-    bool AddNamespacePrefix( OUString& rName,
+    void AddNamespacePrefix( OUString& rName,
                                  sal_uInt16 nPrefix ) const;
     bool RemoveNamespacePrefix( OUString& rName,
                                     sal_uInt16 nPrefixOnly=0xffffU ) const;

@@ -19,6 +19,7 @@
 
 #include <vcl/window.hxx>
 #include <vcl/taskpanelist.hxx>
+#include <sal/log.hxx>
 
 // declare system types in sysdata.hxx
 #include <vcl/sysdata.hxx>
@@ -1077,7 +1078,7 @@ vcl::Window* Window::GetWindow( GetWindowType nType ) const
                 return mpWindowImpl->mpOverlapWindow->mpWindowImpl->mpOverlapWindow;
 
         case GetWindowType::Client:
-            return const_cast<vcl::Window*>(this)->ImplGetWindow();
+            return this->ImplGetWindow();
 
         case GetWindowType::RealParent:
             return ImplGetParent();
@@ -1110,11 +1111,11 @@ vcl::Window* Window::GetWindow( GetWindowType nType ) const
     return nullptr;
 }
 
-bool Window::IsChild( const vcl::Window* pWindow, bool bSystemWindow ) const
+bool Window::IsChild( const vcl::Window* pWindow ) const
 {
     do
     {
-        if ( !bSystemWindow && pWindow->ImplIsOverlapWindow() )
+        if ( pWindow->ImplIsOverlapWindow() )
             break;
 
         pWindow = pWindow->ImplGetParent();

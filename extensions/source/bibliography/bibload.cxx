@@ -37,6 +37,7 @@
 #include <com/sun/star/frame/XFrameLoader.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -48,7 +49,6 @@
 #include <vcl/window.hxx>
 #include <vcl/edit.hxx>
 #include <vcl/svapp.hxx>
-#include <vcl/group.hxx>
 #include <svtools/svmedit.hxx>
 
 #include "bibresid.hxx"
@@ -72,6 +72,8 @@ using namespace ::com::sun::star::sdbc;
 using namespace ::com::sun::star::form;
 using namespace ::com::sun::star::container;
 using namespace ::com::sun::star::frame;
+
+static Reference< XInterface > BibliographyLoader_CreateInstance( const Reference< XMultiServiceFactory > & rSMgr );
 
 class BibliographyLoader : public cppu::WeakImplHelper
                             < XServiceInfo, XNameAccess, XPropertySet, XFrameLoader >
@@ -469,7 +471,7 @@ Any BibliographyLoader::getByName(const OUString& rName)
                     const Mapping* pMapping = pConfig->GetMapping(aBibDesc);
                     for(sal_uInt16 nEntry = 0; nEntry < COLUMN_COUNT; nEntry++)
                     {
-                        const OUString sColName = pConfig->GetDefColumnName(
+                        const OUString& sColName = pConfig->GetDefColumnName(
                                                     nEntry);
                         pValues[nEntry].Name = sColName;
                         pValues[nEntry].Value <<= lcl_AddProperty(xColumns, pMapping, sColName);

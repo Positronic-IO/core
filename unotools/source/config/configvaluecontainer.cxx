@@ -43,7 +43,7 @@ namespace utl
     struct NodeValueAccessor
     {
     private:
-        OUString            sRelativePath;      // the relative path of the node
+        OUString const            sRelativePath;      // the relative path of the node
         LocationType        eLocationType;      // the type of location where the value is stored
         void*               pLocation;          // the pointer to the location
         Type                aDataType;          // the type object pointed to by pLocation
@@ -85,9 +85,7 @@ namespace utl
         aDataType = _rType;
     }
 
-    #ifndef UNX
     static
-    #endif
     void lcl_copyData( const NodeValueAccessor& _rAccessor, const Any& _rData, ::osl::Mutex& _rMutex )
     {
         ::osl::MutexGuard aGuard( _rMutex );
@@ -118,9 +116,7 @@ namespace utl
         }
     }
 
-    #ifndef UNX
     static
-    #endif
     void lcl_copyData( Any& _rData, const NodeValueAccessor& _rAccessor, ::osl::Mutex& _rMutex )
     {
         ::osl::MutexGuard aGuard( _rMutex );

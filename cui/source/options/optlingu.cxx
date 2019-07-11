@@ -43,14 +43,16 @@
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/ucb/CommandAbortedException.hpp>
 #include <unotools/extendedsecurityoptions.hxx>
-#include <svtools/svlbitm.hxx>
-#include <svtools/treelistbox.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/svlbitm.hxx>
+#include <vcl/treelistbox.hxx>
+#include <vcl/treelistentry.hxx>
 #include <svtools/langhelp.hxx>
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <vcl/svapp.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 #include <svx/svxdlg.hxx>
 #include <editeng/optitems.hxx>
@@ -117,7 +119,7 @@ static sal_Int32 lcl_SeqGetEntryPos(
     return i < nLen ? i : -1;
 }
 
-bool KillFile_Impl( const OUString& rURL )
+static bool KillFile_Impl( const OUString& rURL )
 {
     bool bRet = true;
     try
@@ -286,7 +288,7 @@ static const char * aEidToPropName[] =
     UPN_IS_HYPH_SPECIAL             // EID_HYPH_SPECIAL
 };
 
-static inline OUString lcl_GetPropertyName( EID_OPTIONS eEntryId )
+static OUString lcl_GetPropertyName( EID_OPTIONS eEntryId )
 {
     DBG_ASSERT( static_cast<unsigned int>(eEntryId) < SAL_N_ELEMENTS(aEidToPropName), "index out of range" );
     return OUString::createFromAscii( aEidToPropName[ static_cast<int>(eEntryId) ] );
@@ -311,17 +313,17 @@ public:
         if (nRID == EID_NUM_PRE_BREAK)
         {
             m_xBeforeFrame->show();
-            m_xBreakNF.reset(m_xBuilder->weld_spin_button("beforebreak"));
+            m_xBreakNF = m_xBuilder->weld_spin_button("beforebreak");
         }
         else if(nRID == EID_NUM_POST_BREAK)
         {
             m_xAfterFrame->show();
-            m_xBreakNF.reset(m_xBuilder->weld_spin_button("afterbreak"));
+            m_xBreakNF = m_xBuilder->weld_spin_button("afterbreak");
         }
         else if(nRID == EID_NUM_MIN_WORDLEN)
         {
             m_xMinimalFrame->show();
-            m_xBreakNF.reset(m_xBuilder->weld_spin_button("wordlength"));
+            m_xBreakNF = m_xBuilder->weld_spin_button("wordlength");
         }
     }
 
@@ -947,9 +949,7 @@ SvxLinguTabPage::SvxLinguTabPage( vcl::Window* pParent, const SfxItemSet& rSet )
     sNumPreBreak    (CuiResId(RID_SVXSTR_NUM_PRE_BREAK)),
     sNumPostBreak   (CuiResId(RID_SVXSTR_NUM_POST_BREAK)),
     sHyphAuto       (CuiResId(RID_SVXSTR_HYPH_AUTO)),
-    sHyphSpecial    (CuiResId(RID_SVXSTR_HYPH_SPECIAL)),
-
-    pLinguData(nullptr)
+    sHyphSpecial    (CuiResId(RID_SVXSTR_HYPH_SPECIAL))
 {
     get(m_pLinguModulesFT, "lingumodulesft");
     get(m_pLinguModulesCLB, "lingumodules");
@@ -1029,8 +1029,7 @@ SvxLinguTabPage::~SvxLinguTabPage()
 
 void SvxLinguTabPage::dispose()
 {
-    delete pLinguData;
-    pLinguData = nullptr;
+    pLinguData.reset();
     m_pLinguModulesFT.clear();
     m_pLinguModulesCLB.clear();
     m_pLinguModulesEditPB.clear();
@@ -1060,7 +1059,7 @@ bool SvxLinguTabPage::FillItemSet( SfxItemSet* rCoreSet )
     {
         DBG_ASSERT( pLinguData, "pLinguData not yet initialized" );
         if (!pLinguData)
-            pLinguData = new SvxLinguData_Impl;
+            pLinguData.reset( new SvxLinguData_Impl );
 
         // update spellchecker configuration entries
         const LangImplNameTable *pTable = &pLinguData->GetSpellTable();
@@ -1299,7 +1298,7 @@ void SvxLinguTabPage::Reset( const SfxItemSet* rSet )
     if (m_pLinguModulesCLB->IsVisible())
     {
         if (!pLinguData)
-            pLinguData = new SvxLinguData_Impl;
+            pLinguData.reset( new SvxLinguData_Impl );
         UpdateModulesBox_Impl();
     }
 
@@ -1459,7 +1458,7 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
     if (m_pLinguModulesEditPB == pBtn)
     {
         if (!pLinguData)
-            pLinguData = new SvxLinguData_Impl;
+            pLinguData.reset( new SvxLinguData_Impl );
 
         SvxLinguData_Impl   aOldLinguData( *pLinguData );
         ScopedVclPtrInstance< SvxEditModulesDlg > aDlg( this, *pLinguData );
@@ -1491,23 +1490,19 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
     else if (m_pLinguDicsNewPB == pBtn)
     {
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if(pFact)
+        ScopedVclPtr<AbstractSvxNewDictionaryDialog> aDlg(pFact->CreateSvxNewDictionaryDialog(GetFrameWeld()));
+        uno::Reference< XDictionary >  xNewDic;
+        if ( aDlg->Execute() == RET_OK )
+            xNewDic.set( aDlg->GetNewDictionary(), UNO_QUERY );
+        if ( xNewDic.is() )
         {
-            ScopedVclPtr<AbstractSvxNewDictionaryDialog> aDlg(pFact->CreateSvxNewDictionaryDialog(GetFrameWeld()));
-            DBG_ASSERT(aDlg, "Dialog creation failed!");
-            uno::Reference< XDictionary >  xNewDic;
-            if ( aDlg->Execute() == RET_OK )
-                xNewDic.set( aDlg->GetNewDictionary(), UNO_QUERY );
-            if ( xNewDic.is() )
-            {
-                // add new dics to the end
-                sal_Int32 nLen = aDics.getLength();
-                aDics.realloc( nLen + 1 );
+            // add new dics to the end
+            sal_Int32 nLen = aDics.getLength();
+            aDics.realloc( nLen + 1 );
 
-                aDics.getArray()[ nLen ] = xNewDic;
+            aDics.getArray()[ nLen ] = xNewDic;
 
-                AddDicBoxEntry( xNewDic, static_cast<sal_uInt16>(nLen) );
-            }
+            AddDicBoxEntry( xNewDic, static_cast<sal_uInt16>(nLen) );
         }
     }
     else if (m_pLinguDicsEditPB == pBtn)
@@ -1525,12 +1520,8 @@ IMPL_LINK( SvxLinguTabPage, ClickHdl_Impl, Button *, pBtn, void )
                 if (xDic.is())
                 {
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                    if(pFact)
-                    {
-                        ScopedVclPtr<VclAbstractDialog> aDlg(pFact->CreateSvxEditDictionaryDialog( this, xDic->getName() ));
-                        DBG_ASSERT(aDlg, "Dialog creation failed!");
-                        aDlg->Execute();
-                    }
+                    ScopedVclPtr<VclAbstractDialog> aDlg(pFact->CreateSvxEditDictionaryDialog( this, xDic->getName() ));
+                    aDlg->Execute();
                 }
             }
         }
@@ -1719,7 +1710,7 @@ SvxEditModulesDlg::SvxEditModulesDlg(vcl::Window* pParent, SvxLinguData_Impl& rD
     get(m_pLanguageLB, "language");
     m_pLanguageLB->SetStyle(m_pLanguageLB->GetStyle() | WB_SORT);
 
-    pDefaultLinguData = new SvxLinguData_Impl( rLinguData );
+    pDefaultLinguData.reset( new SvxLinguData_Impl( rLinguData ) );
 
     m_pModulesCLB->SetStyle( m_pModulesCLB->GetStyle()|WB_CLIPCHILDREN|WB_HSCROLL );
     m_pModulesCLB->SetForceMakeVisible(true);
@@ -1771,8 +1762,7 @@ SvxEditModulesDlg::~SvxEditModulesDlg()
 
 void SvxEditModulesDlg::dispose()
 {
-    delete pDefaultLinguData;
-    pDefaultLinguData = nullptr;
+    pDefaultLinguData.reset();
     m_pLanguageLB.clear();
     for(sal_uLong i = 0; i < m_pModulesCLB->GetEntryCount(); i++)
         delete static_cast<ModuleUserData_Impl*>(m_pModulesCLB->GetEntry(i)->GetUserData());

@@ -28,10 +28,10 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <comphelper/sequence.hxx>
 
-#include <sot/storage.hxx>
 #include <osl/diagnose.h>
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/xml/sax/InputSource.hpp>
 #include <com/sun/star/xml/sax/Writer.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
@@ -46,9 +46,9 @@
 #include <com/sun/star/xml/sax/SAXParseException.hpp>
 #include <com/sun/star/packages/zip/ZipIOException.hpp>
 #include <com/sun/star/document/GraphicStorageHandler.hpp>
-#include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 

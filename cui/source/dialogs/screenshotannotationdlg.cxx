@@ -40,6 +40,8 @@
 #include <vcl/vclmedit.hxx>
 #include <vcl/button.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
+#include <basegfx/matrix/b2dhommatrix.hxx>
+#include <set>
 
 using namespace com::sun::star;
 
@@ -159,8 +161,8 @@ private:
 
     // local variables
     Dialog&                     mrParentDialog;
-    Bitmap                      maParentDialogBitmap;
-    Bitmap                      maDimmedDialogBitmap;
+    BitmapEx                    maParentDialogBitmap;
+    BitmapEx                    maDimmedDialogBitmap;
     Size                        maParentDialogSize;
 
     // VirtualDevice for buffered interaction paints
@@ -233,7 +235,7 @@ ScreenshotAnnotationDlg_Impl::ScreenshotAnnotationDlg_Impl(
 
         // to make clear that maParentDialogBitmap is a background image, adjust
         // luminance a bit for maDimmedDialogBitmap - other methods may be applied
-        maDimmedDialogBitmap.Adjust(-15);
+        maDimmedDialogBitmap.Adjust(-15, 0, 0, 0, 0);
 
         // init paint buffering VirtualDevice
         mpVirtualBufferDevice = VclPtr<VirtualDevice>::Create(*Application::GetDefaultDevice(), DeviceFormat::DEFAULT, DeviceFormat::BITMASK);
@@ -454,6 +456,7 @@ void ScreenshotAnnotationDlg_Impl::PaintControlDataEntry(
 
         // try to use transparency
         if (!mpVirtualBufferDevice->DrawPolyLineDirect(
+            basegfx::B2DHomMatrix(),
             aPolygon,
             fLineWidth,
             fTransparency,
@@ -488,7 +491,7 @@ void ScreenshotAnnotationDlg_Impl::RepaintToBuffer(
     if (mpVirtualBufferDevice)
     {
         // reset with original screenshot bitmap
-        mpVirtualBufferDevice->DrawBitmap(
+        mpVirtualBufferDevice->DrawBitmapEx(
             Point(0, 0),
             bUseDimmed ? maDimmedDialogBitmap : maParentDialogBitmap);
 
@@ -543,7 +546,7 @@ void ScreenshotAnnotationDlg_Impl::RepaintPictureElement()
         // also set image to get repaints right, but trigger no repaint
         mpPicture->SetImage(
             Image(
-            mpVirtualBufferDevice->GetBitmap(
+            mpVirtualBufferDevice->GetBitmapEx(
             Point(0, 0),
             mpVirtualBufferDevice->GetOutputSizePixel())));
         mpPicture->Validate();
@@ -599,14 +602,14 @@ IMPL_LINK(ScreenshotAnnotationDlg_Impl, pictureFrameListener, VclWindowEvent&, r
                         maSelected.insert(mpHilighted);
                     }
 
-                    OUString aBookmarks;
+                    OUStringBuffer aBookmarks(maMainMarkupText);
                     for (auto&& rCandidate : maSelected)
                     {
                         OUString aHelpId = OStringToOUString( rCandidate->GetHelpId(), RTL_TEXTENCODING_UTF8 );
-                        aBookmarks += lcl_Bookmark( aHelpId );
+                        aBookmarks.append(lcl_Bookmark( aHelpId ));
                     }
 
-                    mpText->SetText( maMainMarkupText + aBookmarks );
+                    mpText->SetText( aBookmarks.makeStringAndClear() );
                     bRepaint = true;
                 }
                 break;

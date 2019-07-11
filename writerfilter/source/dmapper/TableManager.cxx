@@ -22,6 +22,8 @@
 #include "DomainMapper_Impl.hxx"
 #include "util.hxx"
 
+#include <sal/log.hxx>
+
 namespace writerfilter
 {
 namespace dmapper
@@ -67,7 +69,7 @@ void TableManager::insertTableProps(const TablePropertyMapPtr& pProps)
 #endif
 
     if (getTableProps().get() && getTableProps() != pProps)
-        getTableProps()->InsertProps(pProps);
+        getTableProps()->InsertProps(pProps.get());
     else
         mState.setTableProps(pProps);
 
@@ -83,22 +85,9 @@ void TableManager::insertRowProps(const TablePropertyMapPtr& pProps)
 #endif
 
     if (getRowProps().get())
-        getRowProps()->InsertProps(pProps);
+        getRowProps()->InsertProps(pProps.get());
     else
         mState.setRowProps(pProps);
-
-#ifdef DEBUG_WRITERFILTER
-    TagLogger::getInstance().endElement();
-#endif
-}
-
-void TableManager::cellPropsByCell(unsigned int i, const TablePropertyMapPtr& pProps)
-{
-#ifdef DEBUG_WRITERFILTER
-    TagLogger::getInstance().startElement("tablemanager.cellPropsByCell");
-#endif
-
-    mTableDataStack.top()->insertCellProperties(i, pProps);
 
 #ifdef DEBUG_WRITERFILTER
     TagLogger::getInstance().endElement();
@@ -112,7 +101,7 @@ void TableManager::cellProps(const TablePropertyMapPtr& pProps)
 #endif
 
     if (getCellProps().get())
-        getCellProps()->InsertProps(pProps);
+        getCellProps()->InsertProps(pProps.get());
     else
         mState.setCellProps(pProps);
 
@@ -136,11 +125,8 @@ void TableManager::utext(const sal_uInt8* data, std::size_t len)
 void TableManager::text(const sal_uInt8* data, std::size_t len)
 {
     // optimization: cell/row end characters are the last characters in a run
-    if (len > 0)
-    {
-        if (data[len - 1] == 0x7)
-            handle0x7();
-    }
+    if (len > 0 && data[len - 1] == 0x7)
+        handle0x7();
 }
 
 void TableManager::handle0x7()
@@ -385,7 +371,7 @@ void TableManager::startLevel()
             pTableData2->addCell(mpUnfinishedRow->getCellStart(i), mpUnfinishedRow->getCellProperties(i));
             pTableData2->endCell(mpUnfinishedRow->getCellEnd(i));
         }
-        mpUnfinishedRow.reset();
+        mpUnfinishedRow.clear();
     }
 
     mTableDataStack.push(pTableData2);
@@ -411,7 +397,7 @@ void TableManager::handle(const css::uno::Reference<css::text::XTextRange>& rHan
     setHandle(rHandle);
 }
 
-void TableManager::setHandler(const std::shared_ptr<DomainMapperTableHandler>& pTableDataHandler)
+void TableManager::setHandler(const tools::SvRef<DomainMapperTableHandler>& pTableDataHandler)
 {
     mpTableDataHandler = pTableDataHandler;
 }
@@ -461,6 +447,11 @@ void TableManager::setTableStartsAtCellStart(bool bTableStartsAtCellStart)
     m_bTableStartsAtCellStart = bTableStartsAtCellStart;
 }
 
+void TableManager::setCellLastParaAfterAutospacing(bool bIsAfterAutospacing)
+{
+    m_bCellLastParaAfterAutospacing = bIsAfterAutospacing;
+}
+
 TableManager::TableManager()
     : mnTableDepthNew(0), mnTableDepth(0), mbKeepUnfinishedRow(false),
       m_bTableStartsAtCellStart(false)
@@ -468,6 +459,7 @@ TableManager::TableManager()
     setRowEnd(false);
     setInCell(false);
     setCellEnd(false);
+    m_bCellLastParaAfterAutospacing = false;
 }
 
 }

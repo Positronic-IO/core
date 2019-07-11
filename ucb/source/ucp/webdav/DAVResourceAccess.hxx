@@ -53,7 +53,7 @@ class DAVResourceAccess
     std::vector< SerfUri > m_aRedirectURIs;
 
 public:
-    DAVResourceAccess() : m_xSessionFactory( nullptr ) {}
+    DAVResourceAccess() = default;
     DAVResourceAccess( const css::uno::Reference< css::uno::XComponentContext > & rContext,
                        rtl::Reference< DAVSessionFactory > const & rSessionFactory,
                        const OUString & rURL );
@@ -118,7 +118,7 @@ public:
     /// @throws DAVException
     css::uno::Reference< css::io::XInputStream >
     GET( DAVRequestHeaders & rRequestHeaders,
-         const std::vector< rtl::OUString > & rHeaderNames, // empty == 'all'
+         const std::vector< OUString > & rHeaderNames, // empty == 'all'
          DAVResource & rResource,
          const css::uno::Reference< css::ucb::XCommandEnvironment > & xEnv );
 
@@ -189,7 +189,7 @@ public:
     static void
     getUserRequestHeaders(
         const css::uno::Reference< css::ucb::XCommandEnvironment > & xEnv,
-        const rtl::OUString & rURI,
+        const OUString & rURI,
         css::ucb::WebDAVHTTPMethod eMethod,
         DAVRequestHeaders & rRequestHeaders );
 

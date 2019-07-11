@@ -18,6 +18,7 @@
  */
 
 #include <com/sun/star/util/XChangesNotifier.hpp>
+#include <com/sun/star/drawing/XDrawView.hpp>
 
 #include <vcl/help.hxx>
 #include <vcl/svapp.hxx>
@@ -60,7 +61,7 @@ static const int DRGPIX     = 2;                               // Drag MinMove i
 
 static OUString getInitials( const OUString& rName )
 {
-    OUString sInitials;
+    OUStringBuffer sInitials;
 
     const sal_Unicode * pStr = rName.getStr();
     sal_Int32 nLength = rName.getLength();
@@ -76,7 +77,7 @@ static OUString getInitials( const OUString& rName )
         // take letter
         if( nLength )
         {
-            sInitials += OUStringLiteral1( *pStr );
+            sInitials.append(*pStr);
             nLength--; pStr++;
         }
 
@@ -87,7 +88,7 @@ static OUString getInitials( const OUString& rName )
         }
     }
 
-    return sInitials;
+    return sInitials.makeStringAndClear();
 }
 
 class AnnotationDragMove : public SdrDragMove
@@ -207,25 +208,25 @@ void AnnotationHdl::CreateB2dIAObject()
                         const SdrPageWindow& rPageWindow = *pPageView->GetPageWindow(b);
 
                         SdrPaintWindow& rPaintWindow = rPageWindow.GetPaintWindow();
-                        rtl::Reference< sdr::overlay::OverlayManager > xManager = rPageWindow.GetOverlayManager();
+                        const rtl::Reference< sdr::overlay::OverlayManager >& xManager = rPageWindow.GetOverlayManager();
                         if(rPaintWindow.OutputToWindow() && xManager.is() )
                         {
-                            sdr::overlay::OverlayObject* pOverlayObject = nullptr;
+                            std::unique_ptr<sdr::overlay::OverlayObject> pOverlayObject;
 
                             // animate focused handles
                             if(bFocused)
                             {
                                 const sal_uInt64 nBlinkTime = rStyleSettings.GetCursorBlinkTime();
 
-                                pOverlayObject = new sdr::overlay::OverlayAnimatedBitmapEx(aPosition, aBitmapEx, aBitmapEx2, nBlinkTime, 0, 0, 0, 0 );
+                                pOverlayObject.reset(new sdr::overlay::OverlayAnimatedBitmapEx(aPosition, aBitmapEx, aBitmapEx2, nBlinkTime, 0, 0, 0, 0 ));
                             }
                             else
                             {
-                                pOverlayObject = new sdr::overlay::OverlayBitmapEx( aPosition, aBitmapEx, 0, 0 );
+                                pOverlayObject.reset(new sdr::overlay::OverlayBitmapEx( aPosition, aBitmapEx, 0, 0 ));
                             }
 
                             xManager->add(*pOverlayObject);
-                            maOverlayGroup.append(pOverlayObject);
+                            maOverlayGroup.append(std::move(pOverlayObject));
                         }
                     }
                 }
@@ -450,7 +451,7 @@ void AnnotationTag::addCustomHandles( SdrHdlList& rHandlerList )
     if( mxAnnotation.is() )
     {
         SmartTagReference xThis( this );
-        AnnotationHdl* pHdl = new AnnotationHdl( xThis, mxAnnotation, Point() );
+        std::unique_ptr<AnnotationHdl> pHdl(new AnnotationHdl( xThis, mxAnnotation, Point() ));
         pHdl->SetObjHdlNum( SMART_TAG_HDL_NUM );
         pHdl->SetPageView( mrView.GetSdrPageView() );
 
@@ -458,7 +459,7 @@ void AnnotationTag::addCustomHandles( SdrHdlList& rHandlerList )
         Point aBasePos( static_cast<long>(aPosition.X * 100.0), static_cast<long>(aPosition.Y * 100.0) );
         pHdl->SetPos( aBasePos );
 
-        rHandlerList.AddHdl( pHdl );
+        rHandlerList.AddHdl( std::move(pHdl) );
     }
 }
 

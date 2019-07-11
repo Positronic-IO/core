@@ -28,16 +28,19 @@
 
 #include <osl/endian.h>
 #include <osl/diagnose.h>
+#include <rtl/strbuf.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 
 #include <comphelper/fileformat.h>
-#include <comphelper/string.hxx>
 
-#define SWAPNIBBLES(c)      \
-unsigned char nSwapTmp=c;   \
-nSwapTmp <<= 4;             \
-c >>= 4;                    \
-c |= nSwapTmp;
+static void swapNibbles(unsigned char &c)
+{
+    unsigned char nSwapTmp=c;
+    nSwapTmp <<= 4;
+    c >>= 4;
+    c |= nSwapTmp;
+}
 
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
@@ -45,16 +48,16 @@ c |= nSwapTmp;
 #include <algorithm>
 
 // !!! Do not inline if already the operators <<,>> are inline
-inline static void SwapUShort( sal_uInt16& r )
+static void SwapUShort( sal_uInt16& r )
     {   r = OSL_SWAPWORD(r);   }
-inline static void SwapShort( short& r )
+static void SwapShort( short& r )
     {   r = OSL_SWAPWORD(r);   }
-inline static void SwapULong( sal_uInt32& r )
+static void SwapULong( sal_uInt32& r )
     {   r = OSL_SWAPDWORD(r);   }
-inline static void SwapLongInt( sal_Int32& r )
+static void SwapLongInt( sal_Int32& r )
     {   r = OSL_SWAPDWORD(r);   }
 
-inline static void SwapUInt64( sal_uInt64& r )
+static void SwapUInt64( sal_uInt64& r )
     {
         union
         {
@@ -71,7 +74,7 @@ inline static void SwapUInt64( sal_uInt64& r )
         s.c[1] = OSL_SWAPDWORD(s.c[1]);
         r = s.n;
     }
-inline static void SwapInt64( sal_Int64& r )
+static void SwapInt64( sal_Int64& r )
     {
         union
         {
@@ -90,7 +93,7 @@ inline static void SwapInt64( sal_Int64& r )
     }
 
 #ifdef UNX
-inline static void SwapFloat( float& r )
+static void SwapFloat( float& r )
     {
         union
         {
@@ -103,7 +106,7 @@ inline static void SwapFloat( float& r )
         r = s.f;
     }
 
-inline static void SwapDouble( double& r )
+static void SwapDouble( double& r )
     {
         if( sizeof(double) != 8 )
         {
@@ -317,7 +320,6 @@ void SvStream::SetSize(sal_uInt64 const nSize)
 SvStream::SvStream() :
      m_nActPos(0)
 
-   , m_pRWBuf(nullptr)
    , m_pBufPos(nullptr)
    , m_nBufSize(0)
    , m_nBufActualLen(0)
@@ -327,7 +329,6 @@ SvStream::SvStream() :
    , m_isIoWrite(false)
 
    , m_isDirty(false)
-   , m_isConsistent(true)
    , m_isEof(false)
 
    , m_nCompressMode(SvStreamCompressFlags::NONE)
@@ -400,7 +401,7 @@ void SvStream::SetBufferSize( sal_uInt16 nBufferSize )
     sal_uInt64 const nActualFilePos = Tell();
     bool bDontSeek = (m_pRWBuf == nullptr);
 
-    if (m_isDirty && m_isConsistent && m_isWritable)  // due to Windows NT: Access denied
+    if (m_isDirty && m_isWritable)  // due to Windows NT: Access denied
         Flush();
 
     if (m_nBufSize)
@@ -415,7 +416,6 @@ void SvStream::SetBufferSize( sal_uInt16 nBufferSize )
     m_nBufSize      = nBufferSize;
     if (m_nBufSize)
         m_pRWBuf.reset(new sal_uInt8[ m_nBufSize ]);
-    m_isConsistent  = true;
     m_pBufPos       = m_pRWBuf.get();
     m_isIoRead = m_isIoWrite = false;
     if( !bDontSeek )
@@ -429,7 +429,6 @@ void SvStream::ClearBuffer()
     m_nBufFilePos   = 0;
     m_pBufPos       = m_pRWBuf.get();
     m_isDirty       = false;
-    m_isConsistent  = true;
     m_isIoRead = m_isIoWrite = false;
 
     m_isEof         = false;
@@ -891,8 +890,7 @@ SvStream& SvStream::ReadInt64(sal_Int64& r)
 
 SvStream& SvStream::ReadSChar( signed char& r )
 {
-    if ((m_isIoRead || !m_isConsistent) &&
-        sizeof(signed char) <= m_nBufFree)
+    if (m_isIoRead && sizeof(signed char) <= m_nBufFree)
     {
         r = *m_pBufPos;
         m_nBufActualPos += sizeof(signed char);
@@ -908,8 +906,7 @@ SvStream& SvStream::ReadSChar( signed char& r )
 
 SvStream& SvStream::ReadChar( char& r )
 {
-    if ((m_isIoRead || !m_isConsistent) &&
-        sizeof(char) <= m_nBufFree)
+    if (m_isIoRead && sizeof(char) <= m_nBufFree)
     {
         r = *m_pBufPos;
         m_nBufActualPos += sizeof(char);
@@ -923,8 +920,7 @@ SvStream& SvStream::ReadChar( char& r )
 
 SvStream& SvStream::ReadUChar( unsigned char& r )
 {
-    if ((m_isIoRead || !m_isConsistent) &&
-        sizeof(char) <= m_nBufFree)
+    if (m_isIoRead && sizeof(char) <= m_nBufFree)
     {
         r = *m_pBufPos;
         m_nBufActualPos += sizeof(char);
@@ -951,8 +947,7 @@ SvStream& SvStream::ReadUtf16(sal_Unicode& r)
 
 SvStream& SvStream::ReadCharAsBool( bool& r )
 {
-    if ((m_isIoRead || !m_isConsistent) &&
-        sizeof(char) <= m_nBufFree)
+    if (m_isIoRead && sizeof(char) <= m_nBufFree)
     {
         SAL_WARN_IF(
             *m_pBufPos > 1, "tools.stream", unsigned(*m_pBufPos) << " not 0/1");
@@ -1232,8 +1227,6 @@ void SvStream::FlushBuffer(bool isConsistent)
 std::size_t SvStream::ReadBytes( void* pData, std::size_t nCount )
 {
     std::size_t nSaveCount = nCount;
-    if (!m_isConsistent)
-        RefreshBuffer();
 
     if (!m_pRWBuf)
     {
@@ -1319,8 +1312,6 @@ std::size_t SvStream::WriteBytes( const void* pData, std::size_t nCount )
         SetError( ERRCODE_IO_CANTWRITE );
         return 0;
     }
-    if (!m_isConsistent)
-        RefreshBuffer();   // Remove changes in buffer through PutBack
 
     if (!m_pRWBuf)
     {
@@ -1402,7 +1393,7 @@ sal_uInt64 SvStream::Seek(sal_uInt64 const nFilePos)
     }
     else
     {
-        FlushBuffer(m_isConsistent);
+        FlushBuffer(true);
         m_nBufActualLen = 0;
         m_nBufActualPos = 0;
         m_pBufPos     = m_pRWBuf.get();
@@ -1417,35 +1408,43 @@ bool checkSeek(SvStream &rSt, sal_uInt64 nOffset)
     return (nOffset <= nMaxSeek && rSt.Seek(nOffset) == nOffset);
 }
 
-//STREAM_SEEK_TO_END in the some of the Seek backends is special cased to be
+//STREAM_SEEK_TO_END in some of the Seek backends is special cased to be
 //efficient, in others e.g. SotStorageStream it's really horribly slow, and in
 //those this should be overridden
 sal_uInt64 SvStream::remainingSize()
 {
     sal_uInt64 const nCurr = Tell();
-    sal_uInt64 const nEnd = Seek(STREAM_SEEK_TO_END);
+    sal_uInt64 const nEnd = TellEnd();
     sal_uInt64 nMaxAvailable = nEnd > nCurr ? (nEnd-nCurr) : 0;
     Seek(nCurr);
     return nMaxAvailable;
 }
 
+sal_uInt64 SvStream::TellEnd()
+{
+    FlushBuffer(true);
+    sal_uInt64 const nCurr = Tell();
+    sal_uInt64 const nEnd = Seek(STREAM_SEEK_TO_END);
+    Seek(nCurr);
+    return nEnd;
+}
+
 void SvStream::Flush()
 {
-    FlushBuffer(m_isConsistent);
+    FlushBuffer(true);
     if (m_isWritable)
         FlushData();
 }
 
 void SvStream::RefreshBuffer()
 {
-    FlushBuffer(m_isConsistent);
+    FlushBuffer(true);
     SeekPos(m_nBufFilePos);
     m_nBufActualLen = static_cast<sal_uInt16>(GetData( m_pRWBuf.get(), m_nBufSize ));
     if (m_nBufActualLen && m_nError == ERRCODE_IO_PENDING)
         m_nError = ERRCODE_NONE;
     if (m_nCryptMask)
         EncryptBuffer(m_pRWBuf.get(), static_cast<std::size_t>(m_nBufActualLen));
-    m_isConsistent = true;
     m_isIoRead = m_isIoWrite = false;
 }
 
@@ -1488,7 +1487,7 @@ std::size_t SvStream::CryptAndWriteBuffer( const void* pStart, std::size_t nLen)
         {
             unsigned char aCh = rn;
             aCh ^= nMask;
-            SWAPNIBBLES(aCh)
+            swapNibbles(aCh);
             rn = aCh;
         }
         // *************************
@@ -1499,7 +1498,7 @@ std::size_t SvStream::CryptAndWriteBuffer( const void* pStart, std::size_t nLen)
     return nCount;
 }
 
-bool SvStream::EncryptBuffer(void* pStart, std::size_t nLen) const
+void SvStream::EncryptBuffer(void* pStart, std::size_t nLen) const
 {
     unsigned char* pTemp = static_cast<unsigned char*>(pStart);
     unsigned char nMask = m_nCryptMask;
@@ -1507,11 +1506,10 @@ bool SvStream::EncryptBuffer(void* pStart, std::size_t nLen) const
     for ( std::size_t n=0; n < nLen; n++, pTemp++ )
     {
         unsigned char aCh = *pTemp;
-        SWAPNIBBLES(aCh)
+        swapNibbles(aCh);
         aCh ^= nMask;
         *pTemp = aCh;
     }
-    return true;
 }
 
 static unsigned char implGetCryptMask(const sal_Char* pStr, sal_Int32 nLen, long nVersion)
@@ -1633,13 +1631,9 @@ SvMemoryStream::SvMemoryStream( std::size_t nInitSize, std::size_t nResizeOffset
     pBuf        = nullptr;
     if( nResize != 0 && nResize < 16 )
         nResize = 16;
-    if( nInitSize && !AllocateMemory( nInitSize ) )
-    {
-        SetError( SVSTREAM_OUTOFMEMORY );
-        nSize = 0;
-    }
-    else
-        nSize = nInitSize;
+    if( nInitSize )
+        AllocateMemory( nInitSize );
+    nSize = nInitSize;
     SetBufferSize( 64 );
 }
 
@@ -1652,11 +1646,6 @@ SvMemoryStream::~SvMemoryStream()
         else
             Flush();
     }
-}
-
-const void* SvMemoryStream::GetBuffer()
-{
-    return GetData();
 }
 
 sal_uInt64 SvMemoryStream::GetSize()
@@ -1673,11 +1662,8 @@ void SvMemoryStream::SetBuffer( void* pNewBuf, std::size_t nCount,
 {
     SetBufferSize( 0 ); // Init buffering in the base class
     Seek( 0 );
-    if( bOwnsData )
-    {
-        if( pNewBuf != pBuf )
-            FreeMemory();
-    }
+    if( bOwnsData && pNewBuf != pBuf )
+        FreeMemory();
 
     pBuf        = static_cast<sal_uInt8 *>(pNewBuf);
     nPos        = 0;
@@ -1807,10 +1793,9 @@ void SvMemoryStream::ResetError()
     SvStream::ClearError();
 }
 
-bool SvMemoryStream::AllocateMemory( std::size_t nNewSize )
+void SvMemoryStream::AllocateMemory( std::size_t nNewSize )
 {
     pBuf = new sal_uInt8[nNewSize];
-    return( pBuf != nullptr );
 }
 
 // (using Bozo algorithm)
@@ -1893,13 +1878,8 @@ void* SvMemoryStream::SwitchBuffer()
     ResetError();
 
     std::size_t nInitSize = 512;
-    if( !AllocateMemory(nInitSize) )
-    {
-        SetError( SVSTREAM_OUTOFMEMORY );
-        nSize = 0;
-    }
-    else
-        nSize = nInitSize;
+    AllocateMemory(nInitSize);
+    nSize = nInitSize;
 
     SetBufferSize( 64 );
     return pRetVal;

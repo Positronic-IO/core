@@ -19,6 +19,7 @@
 
 #include <hintids.hxx>
 
+#include <sal/log.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <sot/storinfo.hxx>
 #include <sot/storage.hxx>
@@ -332,12 +333,10 @@ bool SwDocShell::InitNew( const uno::Reference < embed::XStorage >& xStor )
 // Ctor with SfxCreateMode ?????
 SwDocShell::SwDocShell( SfxObjectCreateMode const eMode )
     : SfxObjectShell(eMode)
-    , m_pFontList(nullptr)
     , m_IsInUpdateFontList(false)
     , m_pStyleManager(new svx::CommonStyleManager(*this))
     , m_pView(nullptr)
     , m_pWrtShell(nullptr)
-    , m_pOLEChildList(nullptr)
     , m_nUpdateDocMode(document::UpdateDocMode::ACCORDING_TO_CONFIG)
     , m_IsATemplate(false)
     , m_IsRemovedInvisibleContent(false)
@@ -348,12 +347,10 @@ SwDocShell::SwDocShell( SfxObjectCreateMode const eMode )
 // Ctor / Dtor
 SwDocShell::SwDocShell( const SfxModelFlags i_nSfxCreationFlags )
     : SfxObjectShell ( i_nSfxCreationFlags )
-    , m_pFontList(nullptr)
     , m_IsInUpdateFontList(false)
     , m_pStyleManager(new svx::CommonStyleManager(*this))
     , m_pView(nullptr)
     , m_pWrtShell(nullptr)
-    , m_pOLEChildList(nullptr)
     , m_nUpdateDocMode(document::UpdateDocMode::ACCORDING_TO_CONFIG)
     , m_IsATemplate(false)
     , m_IsRemovedInvisibleContent(false)
@@ -365,12 +362,10 @@ SwDocShell::SwDocShell( const SfxModelFlags i_nSfxCreationFlags )
 SwDocShell::SwDocShell( SwDoc *const pD, SfxObjectCreateMode const eMode )
     : SfxObjectShell(eMode)
     , m_xDoc(pD)
-    , m_pFontList(nullptr)
     , m_IsInUpdateFontList(false)
     , m_pStyleManager(new svx::CommonStyleManager(*this))
     , m_pView(nullptr)
     , m_pWrtShell(nullptr)
-    , m_pOLEChildList(nullptr)
     , m_nUpdateDocMode(document::UpdateDocMode::ACCORDING_TO_CONFIG)
     , m_IsATemplate(false)
     , m_IsRemovedInvisibleContent(false)
@@ -382,7 +377,7 @@ SwDocShell::SwDocShell( SwDoc *const pD, SfxObjectCreateMode const eMode )
 SwDocShell::~SwDocShell()
 {
     // disable chart related objects now because in ~SwDoc it may be to late for this
-    if (m_xDoc.get())
+    if (m_xDoc)
     {
         m_xDoc->getIDocumentChartDataProviderAccess().GetChartControllerHelper().Disconnect();
         SwChartDataProvider *pPCD = m_xDoc->getIDocumentChartDataProviderAccess().GetChartDataProvider();
@@ -391,13 +386,13 @@ SwDocShell::~SwDocShell()
     }
 
     RemoveLink();
-    delete m_pFontList;
+    m_pFontList.reset();
 
     // we, as BroadCaster also become our own Listener
     // (for DocInfo/FileNames/....)
     EndListening( *this );
 
-    delete m_pOLEChildList;
+    m_pOLEChildList.reset();
 }
 
 void  SwDocShell::Init_Impl()
@@ -416,7 +411,7 @@ void  SwDocShell::Init_Impl()
 
 void SwDocShell::AddLink()
 {
-    if (!m_xDoc.get())
+    if (!m_xDoc)
     {
         SwDocFac aFactory;
         m_xDoc = aFactory.GetDoc();
@@ -438,12 +433,11 @@ void SwDocShell::UpdateFontList()
     if (!m_IsInUpdateFontList)
     {
         m_IsInUpdateFontList = true;
-        OSL_ENSURE(m_xDoc.get(), "No Doc no FontList");
-        if (m_xDoc.get())
+        OSL_ENSURE(m_xDoc, "No Doc no FontList");
+        if (m_xDoc)
         {
-            delete m_pFontList;
-            m_pFontList = new FontList( m_xDoc->getIDocumentDeviceAccess().getReferenceDevice(true) );
-            PutItem( SvxFontListItem( m_pFontList, SID_ATTR_CHAR_FONTLIST ) );
+            m_pFontList.reset( new FontList( m_xDoc->getIDocumentDeviceAccess().getReferenceDevice(true) ) );
+            PutItem( SvxFontListItem( m_pFontList.get(), SID_ATTR_CHAR_FONTLIST ) );
         }
         m_IsInUpdateFontList = false;
     }
@@ -454,7 +448,7 @@ void SwDocShell::RemoveLink()
     // disconnect Uno-Object
     uno::Reference< text::XTextDocument >  xDoc(GetBaseModel(), uno::UNO_QUERY);
     static_cast<SwXTextDocument*>(xDoc.get())->Invalidate();
-    if (m_xDoc.get())
+    if (m_xDoc)
     {
         if (m_xBasePool.is())
         {
@@ -490,7 +484,7 @@ bool  SwDocShell::Load( SfxMedium& rMedium )
         rEmbeddedObjectContainer.setUserAllowsLinkUpdate(false);
 
         SAL_INFO( "sw.ui", "after SfxInPlaceObject::Load" );
-        if (m_xDoc.get())       // for last version!!
+        if (m_xDoc) // for last version!!
             RemoveLink();       // release the existing
 
         AddLink();      // set Link and update Data!!
@@ -576,7 +570,8 @@ bool  SwDocShell::Load( SfxMedium& rMedium )
         }
 
         UpdateFontList();
-        InitDrawModelAndDocShell(this, m_xDoc.get() ? m_xDoc->getIDocumentDrawModelAccess().GetDrawModel() : nullptr);
+        InitDrawModelAndDocShell(this, m_xDoc ? m_xDoc->getIDocumentDrawModelAccess().GetDrawModel()
+                                              : nullptr);
 
         SetError(nErr);
         bRet = !nErr.IsError();
@@ -597,7 +592,7 @@ bool  SwDocShell::Load( SfxMedium& rMedium )
 bool  SwDocShell::LoadFrom( SfxMedium& rMedium )
 {
     bool bRet = false;
-    if (m_xDoc.get())
+    if (m_xDoc)
         RemoveLink();
 
     AddLink();      // set Link and update Data!!

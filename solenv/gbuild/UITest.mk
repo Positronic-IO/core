@@ -37,7 +37,7 @@ else
 gb_UITest_SOFFICEARG:=path:$(INSTROOT)/$(LIBO_BIN_FOLDER)/soffice
 endif
 
-gb_UITest_COMMAND := LIBO_LANG=en_US.UTF-8 $(gb_UITest_EXECUTABLE) $(SRCDIR)/uitest/test_main.py
+gb_UITest_COMMAND = LIBO_LANG=C $(gb_CppunitTest_RR) $(gb_UITest_EXECUTABLE) $(SRCDIR)/uitest/test_main.py
 
 .PHONY : $(call gb_UITest_get_clean_target,%)
 $(call gb_UITest_get_clean_target,%) :
@@ -69,7 +69,7 @@ else
 		PYTHONPATH="$(PYPATH)" \
 		TestUserDir="$(call gb_Helper_make_url,$(dir $(call gb_UITest_get_target,$*)))" \
 		PYTHONDONTWRITEBYTECODE=0 \
-		$(if $(filter-out MACOSX WNT,$(OS_FOR_BUILD)),$(if $(ENABLE_HEADLESS),, \
+		$(if $(filter-out MACOSX WNT,$(OS_FOR_BUILD)),$(if $(DISABLE_GUI),, \
 			SAL_USE_VCLPLUGIN=svp \
 		)) \
 		$(gb_UITest_COMMAND) \

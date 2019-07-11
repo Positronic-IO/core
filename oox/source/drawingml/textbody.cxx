@@ -54,6 +54,11 @@ TextParagraph& TextBody::addParagraph()
     return *xPara;
 }
 
+void TextBody::appendParagraph(std::shared_ptr<TextParagraph> pTextParagraph)
+{
+    maParagraphs.push_back(pTextParagraph);
+}
+
 void TextBody::insertAt(
         const ::oox::core::XmlFilterBase& rFilterBase,
         const Reference < XText > & xText,
@@ -83,7 +88,7 @@ bool TextBody::isEmpty() const
         return false;
 
     const TextRunVector aRuns = maParagraphs[0]->getRuns();
-    if ( aRuns.size() <= 0 )
+    if ( aRuns.empty() )
         return true;
     if ( aRuns.size() > 1 )
         return false;

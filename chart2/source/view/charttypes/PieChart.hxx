@@ -22,8 +22,8 @@
 
 #include <memory>
 #include <VSeriesPlotter.hxx>
-#include <basegfx/vector/b2dvector.hxx>
-#include <basegfx/range/b2irectangle.hxx>
+#include <basegfx/vector/b2ivector.hxx>
+#include <com/sun/star/awt/Point.hpp>
 
 namespace chart
 {
@@ -46,7 +46,7 @@ public:
     virtual void rearrangeLabelToAvoidOverlapIfRequested( const css::awt::Size& rPageSize ) override;
 
     virtual void setScales( const std::vector< ExplicitScaleData >& rScales, bool bSwapXAndYAxis ) override;
-    virtual void addSeries( VDataSeries* pSeries, sal_Int32 zSlot, sal_Int32 xSlot, sal_Int32 ySlot ) override;
+    virtual void addSeries( std::unique_ptr<VDataSeries> pSeries, sal_Int32 zSlot, sal_Int32 xSlot, sal_Int32 ySlot ) override;
 
     virtual css::drawing::Direction3D  getPreferredDiagramAspectRatio() const override;
     virtual bool shouldSnapRectToUsedArea() override;

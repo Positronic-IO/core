@@ -21,13 +21,13 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
+#include <com/sun/star/accessibility/IllegalAccessibleComponentStateException.hpp>
 #include <com/sun/star/beans/PropertyChangeEvent.hpp>
 #include <tools/gen.hxx>
 #include <unotools/accessiblestatesethelper.hxx>
 #include <toolkit/helper/convert.hxx>
 #include <svl/hint.hxx>
 #include <comphelper/sequence.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <vcl/unohelp.hxx>
@@ -263,11 +263,8 @@ sal_Int32 SAL_CALL
             for (sal_Int32 i=0; i<nChildCount; ++i)
             {
                 uno::Reference<XAccessible> xChild (xParentContext->getAccessibleChild (i));
-                if (xChild.is())
-                {
-                    if (xChild.get() == this)
-                        nIndex = i;
-                }
+                if (xChild.is() && xChild.get() == this)
+                    nIndex = i;
             }
         }
    }

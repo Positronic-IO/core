@@ -236,17 +236,8 @@ namespace CPPU_CURRENT_NAMESPACE
         // destruct uno exception
         ::uno_any_destruct( pUnoExc, 0 );
         // avoiding locked counts
-        static RTTI * s_rtti = 0;
-        if (! s_rtti)
-        {
-            MutexGuard guard( Mutex::getGlobalMutex() );
-            if (! s_rtti)
-            {
-                static RTTI rtti_data;
-                s_rtti = &rtti_data;
-            }
-        }
-        rtti = (type_info *)s_rtti->getRTTI( (typelib_CompoundTypeDescription *) pTypeDescr );
+        static RTTI rtti_data;
+        rtti = (type_info*)rtti_data.getRTTI((typelib_CompoundTypeDescription*)pTypeDescr);
         TYPELIB_DANGER_RELEASE( pTypeDescr );
         assert(rtti && "### no rtti for throwing exception!");
         if (! rtti)
@@ -266,8 +257,9 @@ namespace CPPU_CURRENT_NAMESPACE
         return header->adjustedPtr;
     }
 
-    void fillUnoException( __cxa_exception * header, uno_Any * pUnoExc, uno_Mapping * pCpp2Uno )
+    void fillUnoException(uno_Any * pUnoExc, uno_Mapping * pCpp2Uno)
     {
+        __cxa_exception * header = __cxa_get_globals()->caughtExceptions;
         if (! header)
         {
             RuntimeException aRE( "no exception header!" );
@@ -277,8 +269,10 @@ namespace CPPU_CURRENT_NAMESPACE
             return;
         }
 
+        std::type_info *exceptionType = __cxa_current_exception_type();
+
         typelib_TypeDescription * pExcTypeDescr = 0;
-        OUString unoName( toUNOname( header->exceptionType->name() ) );
+        OUString unoName( toUNOname( exceptionType->name() ) );
 #if OSL_DEBUG_LEVEL > 1
         OString cstr_unoName( OUStringToOString( unoName, RTL_TEXTENCODING_ASCII_US ) );
         fprintf( stderr, "> c++ exception occurred: %s\n", cstr_unoName.getStr() );

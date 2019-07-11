@@ -328,11 +328,9 @@ bool FuConstruct3dObject::MouseButtonDown(const MouseEvent& rMEvt)
         mpWindow->CaptureMouse();
         sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
 
-        E3dCompoundObject* p3DObj = nullptr;
-
         WaitObject aWait( static_cast<vcl::Window*>(mpViewShell->GetActiveWindow()) );
 
-        p3DObj = ImpCreateBasic3DShape();
+        E3dCompoundObject* p3DObj = ImpCreateBasic3DShape();
         E3dScene* pScene = mpView->SetCurrent3DObj(p3DObj);
 
         ImpPrepareBasic3DShape(p3DObj, pScene);
@@ -380,7 +378,7 @@ void FuConstruct3dObject::Activate()
     FuConstruct::Activate();
 }
 
-SdrObject* FuConstruct3dObject::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstruct3dObject::CreateDefaultObject(const sal_uInt16 nID, const ::tools::Rectangle& rRectangle)
 {
 
     E3dCompoundObject* p3DObj = ImpCreateBasic3DShape();
@@ -393,7 +391,7 @@ SdrObject* FuConstruct3dObject::CreateDefaultObject(const sal_uInt16 nID, const 
     double fW(aVolume.getWidth());
     double fH(aVolume.getHeight());
     ::tools::Rectangle a3DRect(0, 0, static_cast<long>(fW), static_cast<long>(fH));
-    E3dScene* pScene = new E3dScene(*mpDoc);
+    std::unique_ptr< E3dScene, SdrObjectFreeOp > pScene(new E3dScene(*mpDoc));
 
     // copied code from E3dView::InitScene
     double fCamZ(aVolume.getMaxZ() + ((fW + fH) / 4.0));
@@ -407,9 +405,9 @@ SdrObject* FuConstruct3dObject::CreateDefaultObject(const sal_uInt16 nID, const 
     aCam.SetFocalLength(mpView->GetDefaultCamFocal());
     aCam.SetDefaults(::basegfx::B3DPoint(0.0, 0.0, fDefaultCamPosZ), aLookAt);
     pScene->SetCamera(aCam);
-    pScene->Insert3DObj(p3DObj);
+    pScene->InsertObject(p3DObj);
     pScene->NbcSetSnapRect(a3DRect);
-    ImpPrepareBasic3DShape(p3DObj, pScene);
+    ImpPrepareBasic3DShape(p3DObj, pScene.get());
     SfxItemSet aAttr(mpDoc->GetPool());
     SetStyleSheet(aAttr, p3DObj);
     aAttr.Put(XLineStyleItem (drawing::LineStyle_NONE));
@@ -451,7 +449,7 @@ SdrObject* FuConstruct3dObject::CreateDefaultObject(const sal_uInt16 nID, const 
     // use changed rectangle, not original one
     pScene->SetLogicRect(aRect);
 
-    return pScene;
+    return SdrObjectUniquePtr(pScene.release());
 }
 
 } // end of namespace sd

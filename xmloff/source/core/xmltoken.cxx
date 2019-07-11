@@ -29,11 +29,11 @@ namespace xmloff { namespace token {
     {
         struct XMLTokenEntry
         {
-            sal_Int32 nLength;
+            sal_Int32 const nLength;
             const sal_Char* pChar;
             OUString* pOUString;
 #if OSL_DEBUG_LEVEL > 0
-            XMLTokenEnum eToken;
+            XMLTokenEnum const eToken;
 #endif
         };
     }
@@ -919,7 +919,6 @@ namespace xmloff { namespace token {
         TOKEN( "gcd",                             XML_GCD ),
         TOKEN( "generator",                       XML_GENERATOR ),
         TOKEN( "geq",                             XML_GEQ ),
-        TOKEN( "gl3d-bar",                        XML_GL3DBAR ),
         TOKEN( "gouraud",                         XML_GOURAUD ),
         TOKEN( "gradient",                        XML_GRADIENT ),
         TOKEN( "angle",                           XML_GRADIENT_ANGLE ),
@@ -1570,7 +1569,6 @@ namespace xmloff { namespace token {
         TOKEN( "rotation-align",                  XML_ROTATION_ALIGN ),
         TOKEN( "rotation-angle",                  XML_ROTATION_ANGLE ),
         TOKEN( "round",                           XML_ROUND ),
-        TOKEN( "rounded-edge",                    XML_ROUNDED_EDGE ),
         TOKEN( "row",                             XML_ROW ),
         TOKEN( "row-height",                      XML_ROW_HEIGHT ),
         TOKEN( "row-number",                      XML_ROW_NUMBER ),
@@ -3274,6 +3272,37 @@ namespace xmloff { namespace token {
         TOKEN( "data-mappings", XML_DATA_MAPPINGS),
         TOKEN( "data-mapping", XML_DATA_MAPPING),
         TOKEN( "frequency", XML_DATA_FREQUENCY),
+        TOKEN( "data-transformations", XML_DATA_TRANSFORMATIONS),
+        TOKEN( "column-remove-transformation", XML_COLUMN_REMOVE_TRANSFORMATION),
+        TOKEN( "column-split-transformation", XML_COLUMN_SPLIT_TRANSFORMATION),
+        TOKEN( "column-merge-transformation", XML_COLUMN_MERGE_TRANSFORMATION),
+        TOKEN( "column-sort-transformation", XML_COLUMN_SORT_TRANSFORMATION),
+        TOKEN( "column-text-transformation", XML_COLUMN_TEXT_TRANSFORMATION),
+        TOKEN( "column-aggregate-transformation", XML_COLUMN_AGGREGATE_TRANSFORMATION),
+        TOKEN( "column-number-transformation", XML_COLUMN_NUMBER_TRANSFORMATION),
+
+        TOKEN( "sort-param", XML_SORT_PARAM ),
+        TOKEN( "merge-string", XML_MERGE_STRING ),
+        TOKEN( "trim", XML_TRIM ),
+        TOKEN( "round-up", XML_ROUND_UP ),
+        TOKEN( "round-down", XML_ROUND_DOWN ),
+        TOKEN( "log-base-10", XML_LOG_10 ),
+        TOKEN( "number-square", XML_SQUARE ),
+        TOKEN( "square-root", XML_SQUARE_ROOT ),
+        TOKEN( "even", XML_EVEN ),
+        TOKEN( "odd", XML_ODD ),
+        TOKEN( "sign", XML_SIGN ),
+        TOKEN( "replace-string", XML_REPLACE_STRING ),
+        TOKEN( "column-replacenull-transformation", XML_COLUMN_REPLACENULL_TRANSFORMATION ),
+        TOKEN( "column-datetime-transformation", XML_COLUMN_DATETIME_TRANSFORMATION ),
+        TOKEN( "start-of-year", XML_START_OF_YEAR ),
+        TOKEN( "end-of-year", XML_END_OF_YEAR ),
+        TOKEN( "month-name", XML_MONTH_NAME ),
+        TOKEN( "start-of-month", XML_START_OF_MONTH ),
+        TOKEN( "end-of-month", XML_END_OF_MONTH ),
+        TOKEN( "day-of-year", XML_DAY_OF_YEAR ),
+        TOKEN( "start-of-quarter", XML_START_OF_QUARTER ),
+        TOKEN( "end-of-quarter", XML_END_OF_QUARTER ),
 
         // regina, ODF1.2 additional symbols in charts
         TOKEN( "star",                         XML_STAR ),
@@ -3307,6 +3336,9 @@ namespace xmloff { namespace token {
         TOKEN( "reference-language",              XML_REFERENCE_LANGUAGE ),
         TOKEN( "newline",                         XML_NEWLINE ),
         TOKEN( "creator-initials",                XML_CREATOR_INITIALS ),
+
+        // tdf#115007 spell out numbers, dates, money amounts and cross references
+        TOKEN( "transliteration-spellout",         XML_TRANSLITERATION_SPELLOUT ),
 
 #if OSL_DEBUG_LEVEL > 0
         { 0, nullptr, nullptr,                       XML_TOKEN_END }

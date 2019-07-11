@@ -371,6 +371,8 @@ OUString LwpObjectStream::QuickReadStringPtr()
     QuickReaduInt16(); //len
 
     OUString str;
+    if (diskSize < sizeof diskSize)
+        throw std::range_error("Too small size");
     LwpTools::QuickReadUnicode(this, str, diskSize-sizeof(diskSize), RTL_TEXTENCODING_MS_1252);
     return str;
 }

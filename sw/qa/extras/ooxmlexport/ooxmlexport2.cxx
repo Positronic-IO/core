@@ -39,7 +39,6 @@
 #include <com/sun/star/xml/dom/XDocument.hpp>
 #include <com/sun/star/style/BreakType.hpp>
 #include <unotools/tempfile.hxx>
-#include <comphelper/sequenceashashmap.hxx>
 #include <com/sun/star/text/XDocumentIndex.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegment.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeSegmentCommand.hpp>
@@ -222,7 +221,7 @@ DECLARE_OOXMLEXPORT_TEST(testFdo51034, "fdo51034.odt")
 
 // Remove all spaces, as LO export/import may change that.
 // Replace symbol - (i.e. U+2212) with ASCII - , LO does this change and it shouldn't matter.
-void CHECK_FORMULA(OUString const & expected, OUString const & actual) {
+static void CHECK_FORMULA(OUString const & expected, OUString const & actual) {
     CPPUNIT_ASSERT_EQUAL(
         expected.replaceAll( " ", "" ).replaceAll( OUString(u"\u2212"), "-" ),
         actual.replaceAll( " ", "" ).replaceAll( OUString(u"\u2212"), "-" ));
@@ -346,19 +345,10 @@ DECLARE_OOXMLEXPORT_TEST(testMathVerticalStacks, "math-vertical_stacks.docx")
 
 DECLARE_OOXMLEXPORT_TEST(testTable, "table.odt")
 {
-    // Validation test: order of elements were wrong.
-    xmlDocPtr pXmlDoc = parseExport("word/document.xml");
-    if (!pXmlDoc)
-        return;
-    // Order was: insideH, end, insideV.
-    int nEnd = getXPathPosition(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblBorders", "end");
-    int nInsideH = getXPathPosition(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblBorders", "insideH");
-    int nInsideV = getXPathPosition(pXmlDoc, "/w:document/w:body/w:tbl/w:tblPr/w:tblBorders", "insideV");
-    CPPUNIT_ASSERT(nEnd < nInsideH);
-    CPPUNIT_ASSERT(nInsideH < nInsideV);
-
     // Make sure we write qFormat for well-known style names.
-    assertXPath(parseExport("word/styles.xml"), "//w:style[@w:styleId='Normal']/w:qFormat", 1);
+    xmlDocPtr pXmlDocCT = parseExport("word/styles.xml");
+    CPPUNIT_ASSERT(pXmlDocCT);
+    assertXPath(pXmlDocCT, "//w:style[@w:styleId='Normal']/w:qFormat", 1);
 }
 
 struct SingleLineBorders {

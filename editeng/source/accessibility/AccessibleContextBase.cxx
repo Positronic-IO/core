@@ -28,7 +28,6 @@
 #include <unotools/accessiblestatesethelper.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <comphelper/accessibleeventnotifier.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <osl/mutex.hxx>
 
@@ -45,8 +44,6 @@ AccessibleContextBase::AccessibleContextBase (
         const uno::Reference<XAccessible>& rxParent,
         const sal_Int16 aRole)
     :   WeakComponentImplHelper(MutexOwner::maMutex),
-        mxStateSet (nullptr),
-        mxRelationSet (nullptr),
         mxParent(rxParent),
         msDescription(),
         meDescriptionOrigin(NotSet),

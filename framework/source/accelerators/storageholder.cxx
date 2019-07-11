@@ -19,6 +19,7 @@
 
 #include <accelerators/storageholder.hxx>
 #include <accelerators/acceleratorconfiguration.hxx>
+#include <sal/log.hxx>
 
 #include <services.h>
 
@@ -37,6 +38,7 @@
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 
 #include <com/sun/star/io/XSeekable.hpp>
+#include <rtl/ustrbuf.hxx>
 
 #include <algorithm>
 
@@ -350,14 +352,14 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::getParentStorage(cons
         return m_xRoot;
 
     // c)
-    OUString sParentPath;
+    OUStringBuffer sParentPath;
     sal_Int32       i = 0;
     for (i=0; i<c-1; ++i)
     {
-        sParentPath += lFolders[i] + PATH_SEPARATOR;
+        sParentPath.append(lFolders[i]).append(PATH_SEPARATOR);
     }
 
-    TPath2StorageInfo::const_iterator pParent = m_lStorages.find(sParentPath);
+    TPath2StorageInfo::const_iterator pParent = m_lStorages.find(sParentPath.makeStringAndClear());
     if (pParent != m_lStorages.end())
         return pParent->second.Storage;
 
@@ -383,7 +385,6 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openSubStorageWithFal
 {
     // a) try it first with user specified open mode
     //    ignore errors ... but save it for later use!
-    css::uno::Exception exResult;
     try
     {
         css::uno::Reference< css::embed::XStorage > xSubStorage = xBaseStorage->openStorageElement(sSubStorage, eOpenMode);
@@ -391,13 +392,19 @@ css::uno::Reference< css::embed::XStorage > StorageHolder::openSubStorageWithFal
             return xSubStorage;
     }
     catch(const css::uno::RuntimeException&)
-        { throw; }
-    catch(const css::uno::Exception& ex)
-        { exResult = ex; }
+    {
+        throw;
+    }
+    catch(const css::uno::Exception&)
+    {
+        // b) readonly already tried? => forward last error!
+        if ((eOpenMode & css::embed::ElementModes::WRITE) != css::embed::ElementModes::WRITE) // fallback possible ?
+            throw;
+    }
 
-    // b) readonly already tried? => forward last error!
+    // b) readonly already tried, throw error
     if ((eOpenMode & css::embed::ElementModes::WRITE) != css::embed::ElementModes::WRITE) // fallback possible ?
-        throw exResult;
+        throw css::uno::Exception();
 
     // c) try it readonly
     //    don't catch exception here! Outside code wish to know, if operation failed or not.

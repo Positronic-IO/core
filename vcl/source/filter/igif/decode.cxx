@@ -29,28 +29,26 @@ struct GIFLZWTableEntry
 };
 
 GIFLZWDecompressor::GIFLZWDecompressor(sal_uInt8 cDataSize)
-    : pBlockBuf(nullptr)
+    : pTable(new GIFLZWTableEntry[4098])
+    , pOutBufData(pOutBuf.data() + 4096)
+    , pBlockBuf(nullptr)
     , nInputBitsBuf(0)
-    , nOutBufDataLen(0)
-    , nInputBitsBufSize(0)
     , bEOIFound(false)
     , nDataSize(cDataSize)
     , nBlockBufSize(0)
     , nBlockBufPos(0)
+    , nClearCode(1 << nDataSize)
+    , nEOICode(nClearCode + 1)
+    , nTableSize(nEOICode + 1)
+    , nCodeSize(nDataSize + 1)
+    , nOldCode(0xffff)
+    , nOutBufDataLen(0)
+    , nInputBitsBufSize(0)
 {
-    nClearCode = 1 << nDataSize;
-    nEOICode = nClearCode + 1;
-    nTableSize = nEOICode + 1;
-    nCodeSize = nDataSize + 1;
-    nOldCode = 0xffff;
-    pOutBufData = pOutBuf.data() + 4096;
-
-    pTable.reset( new GIFLZWTableEntry[ 4098 ] );
-
     for (sal_uInt16 i = 0; i < nTableSize; ++i)
     {
         pTable[i].pPrev = nullptr;
-        pTable[i].pFirst = pTable.get() + i;
+        pTable[i].pFirst = &pTable[i];
         pTable[i].nData = static_cast<sal_uInt8>(i);
     }
 
@@ -66,14 +64,14 @@ Scanline GIFLZWDecompressor::DecompressBlock( sal_uInt8* pSrc, sal_uInt8 cBufSiz
 {
     sal_uLong   nTargetSize = 4096;
     sal_uLong   nCount = 0;
-    sal_uInt8*  pTarget = static_cast<sal_uInt8*>(rtl_allocateMemory( nTargetSize ));
+    sal_uInt8*  pTarget = static_cast<sal_uInt8*>(std::malloc( nTargetSize ));
     sal_uInt8*  pTmpTarget = pTarget;
 
     nBlockBufSize = cBufSize;
     nBlockBufPos = 0;
     pBlockBuf = pSrc;
 
-    while( ProcessOneCode() )
+    while (pTarget && ProcessOneCode())
     {
         nCount += nOutBufDataLen;
 
@@ -81,13 +79,17 @@ Scanline GIFLZWDecompressor::DecompressBlock( sal_uInt8* pSrc, sal_uInt8 cBufSiz
         {
             sal_uLong   nNewSize = nTargetSize << 1;
             sal_uLong   nOffset = pTmpTarget - pTarget;
-            sal_uInt8*  pTmp = static_cast<sal_uInt8*>(rtl_allocateMemory( nNewSize ));
-
-            memcpy( pTmp, pTarget, nTargetSize );
-            rtl_freeMemory( pTarget );
+            if (auto p = static_cast<sal_uInt8*>(std::realloc(pTarget, nNewSize)))
+                pTarget = p;
+            else
+            {
+                free(pTarget);
+                pTarget = nullptr;
+                break;
+            }
 
             nTargetSize = nNewSize;
-            pTmpTarget = ( pTarget = pTmp ) + nOffset;
+            pTmpTarget = pTarget + nOffset;
         }
 
         memcpy( pTmpTarget, pOutBufData, nOutBufDataLen );

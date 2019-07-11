@@ -282,7 +282,7 @@ class FileLockBytes :
 {
     /** Representation.
      */
-    oslFileHandle                         m_hFile;
+    oslFileHandle const                   m_hFile;
     sal_uInt32                            m_nSize;
     rtl::Reference< PageData::Allocator > m_xAllocator;
 
@@ -506,10 +506,10 @@ class MappedLockBytes :
 {
     /** Representation.
      */
-    sal_uInt8 * m_pData;
-    sal_uInt32  m_nSize;
+    sal_uInt8 * const m_pData;
+    sal_uInt32 const  m_nSize;
     sal_uInt16  m_nPageSize;
-    oslFileHandle m_hFile;
+    oslFileHandle const m_hFile;
 
     /** PageData::Allocator implementation.
      */
@@ -690,7 +690,7 @@ MemoryLockBytes::MemoryLockBytes()
 
 MemoryLockBytes::~MemoryLockBytes()
 {
-    rtl_freeMemory (m_pData);
+    std::free (m_pData);
 }
 
 storeError MemoryLockBytes::initialize_Impl (rtl::Reference< PageData::Allocator > & rxAllocator, sal_uInt16 nPageSize)
@@ -776,7 +776,7 @@ storeError MemoryLockBytes::setSize_Impl (sal_uInt32 nSize)
 {
     if (nSize != m_nSize)
     {
-        sal_uInt8 * pData = static_cast<sal_uInt8*>(rtl_reallocateMemory (m_pData, nSize));
+        sal_uInt8 * pData = static_cast<sal_uInt8*>(std::realloc (m_pData, nSize));
         if (pData != nullptr)
         {
             if (nSize > m_nSize)

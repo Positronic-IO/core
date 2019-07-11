@@ -290,9 +290,12 @@ bool GetDraftFillColor(const SfxItemSet& rSet, Color& rCol)
             const Size aSize(aBitmap.GetSizePixel());
             const sal_uInt32 nWidth = aSize.Width();
             const sal_uInt32 nHeight = aSize.Height();
+            if (nWidth <= 0 || nHeight <= 0)
+                return bRetval;
+
             Bitmap::ScopedReadAccess pAccess(aBitmap);
 
-            if(pAccess && nWidth > 0 && nHeight > 0)
+            if (pAccess)
             {
                 sal_uInt32 nRt(0);
                 sal_uInt32 nGn(0);
@@ -342,7 +345,6 @@ std::unique_ptr<SdrOutliner> SdrMakeOutliner(OutlinerMode nOutlinerMode, SdrMode
     pOutl->SetAsianCompressionMode(rModel.GetCharCompressType());
     pOutl->SetKernAsianPunctuation(rModel.IsKernAsianPunctuation());
     pOutl->SetAddExtLeading(rModel.IsAddExtLeading());
-    pOutl->SetHoriAlignIgnoreTrailingWhitespace(rModel.IsHoriAlignIgnoreTrailingWhitespace());
     return pOutl;
 }
 
@@ -518,7 +520,7 @@ namespace
         Color& rCol)
     {
         bool bRet(false);
-        bool bMaster(rList.GetPage() && rList.GetPage()->IsMasterPage());
+        bool bMaster(rList.getSdrPageFromSdrObjList() && rList.getSdrPageFromSdrObjList()->IsMasterPage());
 
         for(size_t no(rList.GetObjCount()); !bRet && no > 0; )
         {

@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <o3tl/clamp.hxx>
 #include <svx/unobrushitemhelper.hxx>
 #include <svx/xfillit0.hxx>
 #include <svx/xbtmpit.hxx>
@@ -149,7 +152,7 @@ void setSvxBrushItemAsFillAttributesToTargetSet(const SvxBrushItem& rBrush, SfxI
     }
 }
 
-sal_uInt16 getTransparenceForSvxBrushItem(const SfxItemSet& rSourceSet, bool bSearchInParents)
+static sal_uInt16 getTransparenceForSvxBrushItem(const SfxItemSet& rSourceSet, bool bSearchInParents)
 {
     sal_uInt16 nFillTransparence(rSourceSet.Get(XATTR_FILLTRANSPARENCE, bSearchInParents).GetValue());
     const SfxPoolItem* pGradientItem = nullptr;
@@ -168,7 +171,7 @@ sal_uInt16 getTransparenceForSvxBrushItem(const SfxItemSet& rSourceSet, bool bSe
     return nFillTransparence;
 }
 
-SvxBrushItem getSvxBrushItemForSolid(const SfxItemSet& rSourceSet, bool bSearchInParents, sal_uInt16 nBackgroundID)
+static SvxBrushItem getSvxBrushItemForSolid(const SfxItemSet& rSourceSet, bool bSearchInParents, sal_uInt16 nBackgroundID)
 {
     Color aFillColor(rSourceSet.Get(XATTR_FILLCOLOR, bSearchInParents).GetColorValue());
 
@@ -269,7 +272,7 @@ SvxBrushItem getSvxBrushItemFromSourceSet(const SfxItemSet& rSourceSet, sal_uInt
                 sal_uInt16 nFillTransparence(getTransparenceForSvxBrushItem(rSourceSet, bSearchInParents));
 
                 // take half orig transparence, add half transparent, clamp result
-                nFillTransparence = basegfx::clamp(static_cast<sal_uInt16>((nFillTransparence / 2) + 50), sal_uInt16(0), sal_uInt16(255));
+                nFillTransparence = o3tl::clamp(static_cast<sal_uInt16>((nFillTransparence / 2) + 50), sal_uInt16(0), sal_uInt16(255));
 
                 // #i125189# nFillTransparence is in range [0..100] and needs to be in [0..254] unsigned
                 // It is necessary to use the maximum of 0xfe for transparence for the SvxBrushItem

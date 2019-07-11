@@ -8,6 +8,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <com/sun/star/lang/NoSupportException.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
@@ -137,9 +138,9 @@ namespace oglcanvas
         return maDeviceHelper.showBuffer(mbIsVisible, bUpdateAll);
     }
 
-    ::rtl::OUString SAL_CALL SpriteCanvas::getServiceName(  )
+    OUString SAL_CALL SpriteCanvas::getServiceName(  )
     {
-        return ::rtl::OUString( SPRITECANVAS_SERVICE_NAME );
+        return OUString( SPRITECANVAS_SERVICE_NAME );
     }
 
     void SpriteCanvas::show( const ::rtl::Reference< CanvasCustomSprite >& xSprite )

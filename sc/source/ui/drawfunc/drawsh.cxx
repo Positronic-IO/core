@@ -116,7 +116,7 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
         case SID_ASSIGNMACRO:
             {
                 if ( pSingleSelectedObj )
-                    ExecuteMacroAssign( pSingleSelectedObj, pWin );
+                    ExecuteMacroAssign(pSingleSelectedObj, pWin ? pWin->GetFrameWeld() : nullptr);
             }
             break;
 
@@ -208,6 +208,10 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
             ExecuteAreaDlg( rReq );
             break;
 
+        case SID_MEASURE_DLG:
+            ExecuteMeasureDlg( rReq );
+            break;
+
         case SID_DRAWTEXT_ATTR_DLG:
             ExecuteTextAttrDlg( rReq );
             break;
@@ -261,37 +265,30 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
                                 SfxItemSet aNewGeoAttr(pView->GetGeoAttrFromMarked());
 
                                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                                if ( pFact )
+                                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateCaptionDialog(pWin ? pWin->GetFrameWeld() : nullptr, pView));
+
+                                const sal_uInt16* pRange = pDlg->GetInputRanges( *aNewAttr.GetPool() );
+                                SfxItemSet aCombSet( *aNewAttr.GetPool(), pRange );
+                                aCombSet.Put( aNewAttr );
+                                aCombSet.Put( aNewGeoAttr );
+                                pDlg->SetInputSet( &aCombSet );
+
+                                if (pDlg->Execute() == RET_OK)
                                 {
-                                    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateCaptionDialog( pWin, pView ));
-
-                                    const sal_uInt16* pRange = pDlg->GetInputRanges( *aNewAttr.GetPool() );
-                                    SfxItemSet aCombSet( *aNewAttr.GetPool(), pRange );
-                                    aCombSet.Put( aNewAttr );
-                                    aCombSet.Put( aNewGeoAttr );
-                                    pDlg->SetInputSet( &aCombSet );
-
-                                    if (pDlg->Execute() == RET_OK)
-                                    {
-                                        rReq.Done(*(pDlg->GetOutputItemSet()));
-                                        pView->SetAttributes(*pDlg->GetOutputItemSet());
-                                        pView->SetGeoAttrToMarked(*pDlg->GetOutputItemSet());
-                                    }
+                                    rReq.Done(*(pDlg->GetOutputItemSet()));
+                                    pView->SetAttributes(*pDlg->GetOutputItemSet());
+                                    pView->SetGeoAttrToMarked(*pDlg->GetOutputItemSet());
                                 }
                             }
                             else
                             {
                                 SfxItemSet aNewAttr(pView->GetGeoAttrFromMarked());
                                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                                if(pFact)
+                                ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxTransformTabDialog(pWin ? pWin->GetFrameWeld() : nullptr, &aNewAttr, pView));
+                                if (pDlg->Execute() == RET_OK)
                                 {
-                                    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxTransformTabDialog( pWin, &aNewAttr,pView ));
-                                    OSL_ENSURE(pDlg, "Dialog creation failed!");
-                                    if (pDlg->Execute() == RET_OK)
-                                    {
-                                        rReq.Done(*(pDlg->GetOutputItemSet()));
-                                        pView->SetGeoAttrToMarked(*pDlg->GetOutputItemSet());
-                                    }
+                                    rReq.Done(*(pDlg->GetOutputItemSet()));
+                                    pView->SetGeoAttrToMarked(*pDlg->GetOutputItemSet());
                                 }
                             }
                         }
@@ -321,14 +318,14 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
     }
 }
 
-void ScDrawShell::ExecuteMacroAssign( SdrObject* pObj, vcl::Window* pWin )
+void ScDrawShell::ExecuteMacroAssign(SdrObject* pObj, weld::Window* pWin)
 {
     SvxMacroItem aItem ( SfxGetpApp()->GetPool().GetWhich( SID_ATTR_MACROITEM ) );
     ScMacroInfo* pInfo = ScDrawLayer::GetMacroInfo( pObj, true );
     if ( !pInfo->GetMacro().isEmpty() )
     {
         SvxMacroTableDtor aTab;
-        OUString sMacro = pInfo->GetMacro();
+        const OUString& sMacro = pInfo->GetMacro();
         aTab.Insert(SvMacroItemId::OnClick, SvxMacro(sMacro, OUString()));
         aItem.SetMacroTable( aTab );
     }
@@ -347,7 +344,7 @@ void ScDrawShell::ExecuteMacroAssign( SdrObject* pObj, vcl::Window* pWin )
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog( pWin, *pItemSet, xFrame ));
-    if ( pMacroDlg && pMacroDlg->Execute() == RET_OK )
+    if ( pMacroDlg->Execute() == RET_OK )
     {
         const SfxItemSet* pOutSet = pMacroDlg->GetOutputItemSet();
         const SfxPoolItem* pItem;
@@ -390,13 +387,11 @@ void ScDrawShell::ExecuteLineDlg( SfxRequest& rReq )
         pView->MergeAttrFromMarked( aNewAttr, false );
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "Dialog creation failed!");
-    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxLineTabDialog( pViewData->GetDialogParent(),
+    ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxLineTabDialog( pViewData->GetFrameWeld(),
                 &aNewAttr,
             pViewData->GetDocument()->GetDrawLayer(),
             pObj,
             bHasMarked));
-    OSL_ENSURE(pDlg, "Dialog creation failed!");
 
     if ( pDlg->Execute() == RET_OK )
     {
@@ -420,8 +415,9 @@ void ScDrawShell::ExecuteAreaDlg( SfxRequest& rReq )
         pView->MergeAttrFromMarked( aNewAttr, false );
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
+    vcl::Window* pWin = pViewData->GetDialogParent();
     ScopedVclPtr<AbstractSvxAreaTabDialog> pDlg(pFact->CreateSvxAreaTabDialog(
-        pViewData->GetDialogParent(), &aNewAttr,
+        pWin ? pWin->GetFrameWeld() : nullptr, &aNewAttr,
         pViewData->GetDocument()->GetDrawLayer(), true));
 
     if ( pDlg->Execute() == RET_OK )
@@ -455,6 +451,33 @@ void ScDrawShell::ExecuteTextAttrDlg( SfxRequest& rReq )
     {
         if ( bHasMarked )
             pView->SetAttributes( *pDlg->GetOutputItemSet() );
+        else
+            pView->SetDefaultAttr( *pDlg->GetOutputItemSet(), false );
+
+        pView->InvalidateAttribs();
+        rReq.Done();
+    }
+}
+
+void ScDrawShell::ExecuteMeasureDlg( SfxRequest& rReq )
+{
+    ScDrawView* pView       = pViewData->GetScDrawView();
+    bool        bHasMarked  = pView->AreObjectsMarked();
+    SfxItemSet  aNewAttr    ( pView->GetDefaultAttr() );
+
+    if( bHasMarked )
+        pView->MergeAttrFromMarked( aNewAttr, false );
+
+    SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
+    vcl::Window* pWin = pViewData->GetDialogParent();
+    ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateSfxDialog(pWin, aNewAttr, pView, RID_SVXPAGE_MEASURE));
+
+    sal_uInt16 nResult = pDlg->Execute();
+
+    if ( RET_OK == nResult )
+    {
+        if ( bHasMarked )
+            pView->SetAttrToMarked( *pDlg->GetOutputItemSet(), false );
         else
             pView->SetDefaultAttr( *pDlg->GetOutputItemSet(), false );
 

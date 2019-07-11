@@ -21,6 +21,11 @@
 #define INCLUDED_VCL_INC_IMPFONTCACHE_HXX
 
 #include <unordered_map>
+#include <boost/functional/hash.hpp>
+
+#include <o3tl/lru_map.hxx>
+#include <tools/gen.hxx>
+#include <vcl/vcllayout.hxx>
 
 #include "fontselect.hxx"
 
@@ -28,42 +33,63 @@ class Size;
 namespace vcl { class Font; }
 class PhysicalFontCollection;
 
-
 // TODO: closely couple with PhysicalFontCollection
+
+struct GlpyhBoundRectCacheKey
+{
+    const LogicalFontInstance* m_pFont;
+    const sal_GlyphId m_nId;
+
+    GlpyhBoundRectCacheKey(const LogicalFontInstance* pFont, sal_GlyphId nID)
+        : m_pFont(pFont), m_nId(nID)
+    {}
+
+    bool operator==(GlpyhBoundRectCacheKey const& aOther) const
+    { return m_pFont == aOther.m_pFont && m_nId == aOther.m_nId; }
+};
+
+struct GlpyhBoundRectCacheHash
+{
+    std::size_t operator()(GlpyhBoundRectCacheKey const& aCache) const
+    {
+        std::size_t seed = 0;
+        boost::hash_combine(seed, aCache.m_pFont);
+        boost::hash_combine(seed, aCache.m_nId);
+        return seed;
+    }
+};
+
+typedef o3tl::lru_map<GlpyhBoundRectCacheKey, tools::Rectangle,
+                      GlpyhBoundRectCacheHash> GlpyhBoundRectCache;
+typedef GlpyhBoundRectCache::key_value_pair_t GlpyhBoundRectCachePair;
 
 class ImplFontCache
 {
-    // For access to Acquire and Release
-    friend class LogicalFontInstance;
-
 private:
-    LogicalFontInstance* mpLastHitCacheEntry; ///< keeps the last hit cache entry
-    int mnRef0Count; ///< number of unreferenced LogicalFontInstances
-
     // cache of recently used font instances
     struct IFSD_Equal { bool operator()( const FontSelectPattern&, const FontSelectPattern& ) const; };
     struct IFSD_Hash { size_t operator()( const FontSelectPattern& ) const; };
-    typedef std::unordered_map<FontSelectPattern,LogicalFontInstance*,IFSD_Hash,IFSD_Equal > FontInstanceList;
-    FontInstanceList    maFontInstanceList;
+    typedef o3tl::lru_map<FontSelectPattern, rtl::Reference<LogicalFontInstance>, IFSD_Hash, IFSD_Equal> FontInstanceList;
+    typedef FontInstanceList::key_value_pair_t FontInstanceListPair;
 
-    int                 CountUnreferencedEntries() const;
-    bool                IsFontInList(const LogicalFontInstance* pFont) const;
+    LogicalFontInstance* mpLastHitCacheEntry; ///< keeps the last hit cache entry
+    FontInstanceList maFontInstanceList;
+    GlpyhBoundRectCache m_aBoundRectCache;
 
-    /// Increase the refcount of the given LogicalFontInstance.
-    void                Acquire(LogicalFontInstance*);
-    /// Decrease the refcount and potentially cleanup the entries with zero refcount from the cache.
-    void                Release(LogicalFontInstance*);
-
-    LogicalFontInstance* GetFontInstance(PhysicalFontCollection const*, FontSelectPattern&);
+    rtl::Reference<LogicalFontInstance> GetFontInstance(PhysicalFontCollection const*, FontSelectPattern&);
 
 public:
-                        ImplFontCache();
-                        ~ImplFontCache();
+    ImplFontCache();
+    ~ImplFontCache();
 
-    LogicalFontInstance* GetFontInstance( PhysicalFontCollection const *,
-                             const vcl::Font&, const Size& rPixelSize, float fExactHeight);
-    LogicalFontInstance* GetGlyphFallbackFont( PhysicalFontCollection const *, FontSelectPattern&,
+    rtl::Reference<LogicalFontInstance> GetFontInstance(PhysicalFontCollection const *,
+                             const vcl::Font&, const Size& rPixelSize, float fExactHeight, bool bNonAntialias = false);
+    rtl::Reference<LogicalFontInstance> GetGlyphFallbackFont( PhysicalFontCollection const *, FontSelectPattern&,
+                            LogicalFontInstance* pLogicalFont,
                             int nFallbackLevel, OUString& rMissingCodes );
+
+    bool GetCachedGlyphBoundRect(const LogicalFontInstance *, sal_GlyphId, tools::Rectangle &);
+    void CacheGlyphBoundRect(const LogicalFontInstance *, sal_GlyphId, tools::Rectangle &);
 
     void                Invalidate();
 };

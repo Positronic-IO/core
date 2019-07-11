@@ -22,7 +22,6 @@
 #include <cstdlib>
 
 #include <scitems.hxx>
-#include <comphelper/string.hxx>
 #include <editeng/eeitem.hxx>
 
 #include <sfx2/app.hxx>
@@ -41,6 +40,7 @@
 #include <sfx2/docfile.hxx>
 #include <sfx2/printer.hxx>
 
+#include <drwlayer.hxx>
 #include <prevwsh.hxx>
 #include <preview.hxx>
 #include <printfun.hxx>
@@ -69,6 +69,9 @@
 #include <com/sun/star/document/XDocumentProperties.hpp>
 
 #include <scabstdlg.hxx>
+#include <vcl/EnumContext.hxx>
+#include <vcl/notebookbar.hxx>
+
 //  for mouse wheel
 #define MINZOOM_SLIDER 10
 #define MAXZOOM_SLIDER 400
@@ -151,18 +154,25 @@ ScPreviewShell::ScPreviewShell( SfxViewFrame* pViewFrame,
     pDocShell( static_cast<ScDocShell*>(pViewFrame->GetObjectShell()) ),
     mpFrameWindow(nullptr),
     nSourceDesignMode( TRISTATE_INDET ),
-    nMaxVertPos(0),
-    pAccessibilityBroadcaster( nullptr )
+    nMaxVertPos(0)
 {
     Construct( &pViewFrame->GetWindow() );
 
-    if ( pOldSh && dynamic_cast<const ScTabViewShell*>( pOldSh) !=  nullptr )
+    SfxShell::SetContextBroadcasterEnabled(true);
+    SfxShell::SetContextName(vcl::EnumContext::GetContextName(vcl::EnumContext::Context::Printpreview));
+    SfxShell::BroadcastContextForActivation(true);
+
+
+    auto& pNotebookBar = pViewFrame->GetWindow().GetSystemWindow()->GetNotebookBar();
+    if (pNotebookBar)
+        pNotebookBar->ControlListener(true);
+
+    if ( auto pTabViewShell = dynamic_cast<ScTabViewShell*>( pOldSh) )
     {
         //  store view settings, show table from TabView
         //! store live ScViewData instead, and update on ScTablesHint?
         //! or completely forget aSourceData on ScTablesHint?
 
-        ScTabViewShell* pTabViewShell = static_cast<ScTabViewShell*>(pOldSh);
         const ScViewData& rData = pTabViewShell->GetViewData();
         pPreview->SetSelectedTabs(rData.GetMarkData());
         InitStartTable( rData.GetTabNo() );
@@ -183,9 +193,12 @@ ScPreviewShell::~ScPreviewShell()
     if (mpFrameWindow)
         mpFrameWindow->SetCloseHdl(Link<SystemWindow&,void>()); // Remove close handler.
 
+    if (auto& pBar = GetViewFrame()->GetWindow().GetSystemWindow()->GetNotebookBar())
+        pBar->ControlListener(false);
+
     // #108333#; notify Accessibility that Shell is dying and before destroy all
     BroadcastAccessibility( SfxHint( SfxHintId::Dying ) );
-    DELETEZ(pAccessibilityBroadcaster);
+    pAccessibilityBroadcaster.reset();
 
     SfxBroadcaster* pDrawBC = pDocShell->GetDocument().GetDrawBroadcaster();
     if (pDrawBC)
@@ -516,13 +529,12 @@ bool ScPreviewShell::HasPrintOptionsPage() const
     return true;
 }
 
-VclPtr<SfxTabPage> ScPreviewShell::CreatePrintOptionsPage(weld::Container* pPage, const SfxItemSet &rOptions)
+VclPtr<SfxTabPage> ScPreviewShell::CreatePrintOptionsPage(TabPageParent pParent, const SfxItemSet &rOptions)
 {
     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-    OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
     ::CreateTabPage ScTpPrintOptionsCreate = pFact->GetTabPageCreatorFunc(RID_SC_TP_PRINT);
     if ( ScTpPrintOptionsCreate )
-        return ScTpPrintOptionsCreate(pPage, &rOptions);
+        return ScTpPrintOptionsCreate(pParent, &rOptions);
     return VclPtr<SfxTabPage>();
 }
 
@@ -620,22 +632,18 @@ void ScPreviewShell::Execute( SfxRequest& rReq )
 
                     aSet.Put( aZoomItem );
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                    if(pFact)
+                    ScopedVclPtr<AbstractSvxZoomDialog> pDlg(pFact->CreateSvxZoomDialog(nullptr, aSet));
+                    pDlg->SetLimits( 20, 400 );
+                    pDlg->HideButton( ZoomButtonId::OPTIMAL );
+                    bCancel = ( RET_CANCEL == pDlg->Execute() );
+
+                    if ( !bCancel )
                     {
-                        ScopedVclPtr<AbstractSvxZoomDialog> pDlg(pFact->CreateSvxZoomDialog(nullptr, aSet));
-                        OSL_ENSURE(pDlg, "Dialog creation failed!");
-                        pDlg->SetLimits( 20, 400 );
-                        pDlg->HideButton( ZoomButtonId::OPTIMAL );
-                        bCancel = ( RET_CANCEL == pDlg->Execute() );
+                        const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->
+                                                    Get( SID_ATTR_ZOOM );
 
-                        if ( !bCancel )
-                        {
-                            const SvxZoomItem&  rZoomItem = pDlg->GetOutputItemSet()->
-                                                        Get( SID_ATTR_ZOOM );
-
-                            eZoom = rZoomItem.GetType();
-                            nZoom = rZoomItem.GetValue();
-                        }
+                        eZoom = rZoomItem.GetType();
+                        nZoom = rZoomItem.GetValue();
                     }
                 }
 
@@ -915,16 +923,13 @@ void ScPreviewShell::WriteUserDataSequence(uno::Sequence < beans::PropertyValue 
 {
     rSeq.realloc(3);
     beans::PropertyValue* pSeq = rSeq.getArray();
-    if(pSeq)
-    {
-        sal_uInt16 nViewID(GetViewFrame()->GetCurViewId());
-        pSeq[0].Name = SC_VIEWID;
-        pSeq[0].Value <<= SC_VIEW + OUString::number(nViewID);
-        pSeq[1].Name = SC_ZOOMVALUE;
-        pSeq[1].Value <<= sal_Int32 (pPreview->GetZoom());
-        pSeq[2].Name = "PageNumber";
-        pSeq[2].Value <<= pPreview->GetPageNo();
-    }
+    sal_uInt16 nViewID(GetViewFrame()->GetCurViewId());
+    pSeq[0].Name = SC_VIEWID;
+    pSeq[0].Value <<= SC_VIEW + OUString::number(nViewID);
+    pSeq[1].Name = SC_ZOOMVALUE;
+    pSeq[1].Value <<= sal_Int32 (pPreview->GetZoom());
+    pSeq[2].Name = "PageNumber";
+    pSeq[2].Value <<= pPreview->GetPageNo();
 
     // Common SdrModel processing
     if (ScDrawLayer* pDrawLayer = GetDocument().GetDrawLayer())
@@ -933,31 +938,23 @@ void ScPreviewShell::WriteUserDataSequence(uno::Sequence < beans::PropertyValue 
 
 void ScPreviewShell::ReadUserDataSequence(const uno::Sequence < beans::PropertyValue >& rSeq)
 {
-    sal_Int32 nCount(rSeq.getLength());
-    if (nCount)
+    for (const auto& propval : rSeq)
     {
-        const beans::PropertyValue* pSeq = rSeq.getConstArray();
-        if(pSeq)
+        if (propval.Name == SC_ZOOMVALUE)
         {
-            for(sal_Int32 i = 0; i < nCount; i++, pSeq++)
-            {
-                OUString sName(pSeq->Name);
-                if(sName == SC_ZOOMVALUE)
-                {
-                    sal_Int32 nTemp = 0;
-                    if (pSeq->Value >>= nTemp)
-                        pPreview->SetZoom(sal_uInt16(nTemp));
-                }
-                else if (sName == "PageNumber")
-                {
-                    sal_Int32 nTemp = 0;
-                    if (pSeq->Value >>= nTemp)
-                        pPreview->SetPageNo(nTemp);
-                }
-                // Fallback to common SdrModel processing
-                else pDocShell->MakeDrawLayer()->ReadUserDataSequenceValue(pSeq);
-            }
+            sal_Int32 nTemp = 0;
+            if (propval.Value >>= nTemp)
+                pPreview->SetZoom(sal_uInt16(nTemp));
         }
+        else if (propval.Name == "PageNumber")
+        {
+            sal_Int32 nTemp = 0;
+            if (propval.Value >>= nTemp)
+                pPreview->SetPageNo(nTemp);
+        }
+        // Fallback to common SdrModel processing
+        else
+            pDocShell->MakeDrawLayer()->ReadUserDataSequenceValue(&propval);
     }
 }
 
@@ -1140,7 +1137,7 @@ void ScPreviewShell::ExitPreview()
 void ScPreviewShell::AddAccessibilityObject( SfxListener& rObject )
 {
     if (!pAccessibilityBroadcaster)
-        pAccessibilityBroadcaster = new SfxBroadcaster;
+        pAccessibilityBroadcaster.reset( new SfxBroadcaster );
 
     rObject.StartListening( *pAccessibilityBroadcaster );
 }

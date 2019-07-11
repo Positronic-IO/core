@@ -33,6 +33,7 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <comphelper/string.hxx>
 
 static bool is_gnome_desktop( Display* pDisplay )
 {
@@ -118,7 +119,7 @@ static bool is_gnome_desktop( Display* pDisplay )
 
 static bool bWasXError = false;
 
-static inline bool WasXError()
+static bool WasXError()
 {
     bool bRet = bWasXError;
     bWasXError = false;
@@ -134,47 +135,6 @@ extern "C"
     }
 
     typedef int(* XErrorHandler)(Display*,XErrorEvent*);
-}
-
-static int TDEVersion( Display* pDisplay )
-{
-    int nRet = 0;
-
-    Atom nFullSession = XInternAtom( pDisplay, "TDE_FULL_SESSION", True );
-    Atom nTDEVersion  = XInternAtom( pDisplay, "TDE_SESSION_VERSION", True );
-
-    if( nFullSession )
-    {
-        if( !nTDEVersion )
-            return 14;
-
-        Atom                aRealType   = None;
-        int                 nFormat     = 8;
-        unsigned long       nItems      = 0;
-        unsigned long       nBytesLeft  = 0;
-        unsigned char*  pProperty   = nullptr;
-        XGetWindowProperty( pDisplay,
-                            DefaultRootWindow( pDisplay ),
-                            nTDEVersion,
-                            0, 1,
-                            False,
-                            AnyPropertyType,
-                            &aRealType,
-                            &nFormat,
-                            &nItems,
-                            &nBytesLeft,
-                            &pProperty );
-        if( !WasXError() && nItems != 0 && pProperty )
-        {
-            nRet = *reinterpret_cast< sal_Int32* >( pProperty );
-        }
-        if( pProperty )
-        {
-            XFree( pProperty );
-            pProperty = nullptr;
-        }
-    }
-    return nRet;
 }
 
 static int KDEVersion( Display* pDisplay )
@@ -218,39 +178,6 @@ static int KDEVersion( Display* pDisplay )
     return nRet;
 }
 
-static bool is_tde_desktop( Display* pDisplay )
-{
-    if ( nullptr != getenv( "TDE_FULL_SESSION" ) )
-    {
-        return true; // TDE
-    }
-
-    if ( TDEVersion( pDisplay ) >= 14 )
-        return true;
-
-    return false;
-}
-
-static bool is_kde3_desktop( Display* pDisplay )
-{
-    static const char * pFullVersion = getenv( "KDE_FULL_SESSION" );
-    if ( pFullVersion )
-    {
-        static const char * pSessionVersion = getenv( "KDE_SESSION_VERSION" );
-        if ( !pSessionVersion || pSessionVersion[0] == '0' )
-        {
-            return true; // does not exist => KDE3
-        }
-
-        if ( strcmp(pSessionVersion, "3" ) == 0 )
-        {
-            return true;
-        }
-    }
-
-    return KDEVersion( pDisplay ) == 3;
-}
-
 static bool is_kde4_desktop( Display* pDisplay )
 {
     static const char * pFullVersion = getenv( "KDE_FULL_SESSION" );
@@ -288,8 +215,8 @@ DESKTOP_DETECTOR_PUBLIC DesktopType get_desktop_environment()
     {
         OString aOver( pOverride );
 
-        if ( aOver.equalsIgnoreAsciiCase( "tde" ) )
-            return DESKTOP_TDE;
+        if ( aOver.equalsIgnoreAsciiCase( "lxqt" ) )
+            return DESKTOP_LXQT;
         if ( aOver.equalsIgnoreAsciiCase( "kde5" ) )
             return DESKTOP_KDE5;
         if ( aOver.equalsIgnoreAsciiCase( "kde4" ) )
@@ -304,8 +231,6 @@ DESKTOP_DETECTOR_PUBLIC DesktopType get_desktop_environment()
             return DESKTOP_XFCE;
         if ( aOver.equalsIgnoreAsciiCase( "mate" ) )
             return DESKTOP_MATE;
-        if ( aOver.equalsIgnoreAsciiCase( "kde" ) )
-            return DESKTOP_KDE3;
         if ( aOver.equalsIgnoreAsciiCase( "none" ) )
             return DESKTOP_UNKNOWN;
     }
@@ -324,14 +249,26 @@ DESKTOP_DETECTOR_PUBLIC DesktopType get_desktop_environment()
         aDesktopSession = OString( pSession, strlen( pSession ) );
 
     const char *pDesktop;
-    OString aCurrentDesktop;
     if ( ( pDesktop = getenv( "XDG_CURRENT_DESKTOP" ) ) )
-        aCurrentDesktop = OString( pDesktop, strlen( pDesktop ) );
+    {
+        OString aCurrentDesktop = OString( pDesktop, strlen( pDesktop ) );
+
+        //it may be separated by colon ( e.g. unity:unity7:ubuntu )
+        std::vector<OUString> aSplitCurrentDesktop = comphelper::string::split(
+                OStringToOUString( aCurrentDesktop, RTL_TEXTENCODING_UTF8), ':');
+        for (auto& rCurrentDesktopStr : aSplitCurrentDesktop)
+        {
+            if ( rCurrentDesktopStr.equalsIgnoreAsciiCase( "unity" ) )
+                return DESKTOP_UNITY;
+            else if ( rCurrentDesktopStr.equalsIgnoreAsciiCase( "gnome" ) )
+                return DESKTOP_GNOME;
+            else if ( rCurrentDesktopStr.equalsIgnoreAsciiCase( "lxqt" ) )
+                return DESKTOP_LXQT;
+        }
+    }
 
     // fast environment variable checks
-    if ( aCurrentDesktop.equalsIgnoreAsciiCase( "unity" ) )
-        ret = DESKTOP_UNITY;
-    else if ( aDesktopSession.equalsIgnoreAsciiCase( "gnome" ) )
+    if ( aDesktopSession.equalsIgnoreAsciiCase( "gnome" ) )
         ret = DESKTOP_GNOME;
     else if ( aDesktopSession.equalsIgnoreAsciiCase( "gnome-wayland" ) )
         ret = DESKTOP_GNOME;
@@ -339,8 +276,16 @@ DESKTOP_DETECTOR_PUBLIC DesktopType get_desktop_environment()
         ret = DESKTOP_MATE;
     else if ( aDesktopSession.equalsIgnoreAsciiCase( "xfce" ) )
         ret = DESKTOP_XFCE;
+    else if ( aDesktopSession.equalsIgnoreAsciiCase( "lxqt" ) )
+        ret = DESKTOP_LXQT;
     else
     {
+        // tdf#121275 if we still can't tell, and WAYLAND_DISPLAY
+        // is set, default to gtk3
+        const char* pWaylandStr = getenv("WAYLAND_DISPLAY");
+        if (pWaylandStr && *pWaylandStr)
+            return DESKTOP_GNOME;
+
         // these guys can be slower, with X property fetches,
         // round-trips etc. and so are done later.
 
@@ -389,10 +334,6 @@ DESKTOP_DETECTOR_PUBLIC DesktopType get_desktop_environment()
             ret = DESKTOP_KDE4;
         else if ( is_gnome_desktop( pDisplay ) )
             ret = DESKTOP_GNOME;
-        else if ( is_kde3_desktop( pDisplay ) )
-            ret = DESKTOP_KDE3;
-        else if ( is_tde_desktop( pDisplay ) )
-            ret = DESKTOP_TDE;
         else
             ret = DESKTOP_UNKNOWN;
 

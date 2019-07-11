@@ -46,7 +46,7 @@
 #include <com/sun/star/frame/XDispatchRecorderSupplier.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 
-#include <comphelper/numberedcollection.hxx>
+#include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/propshlp.hxx>
 #include <unotools/cmdoptions.hxx>
@@ -153,7 +153,7 @@ class Desktop : private cppu::BaseMutex,
             @seealso    XTerminateListener
             @seealso    XTerminateListener2
 
-            @return     true if all open frames could be closed and no listener throwed
+            @return     true if all open frames could be closed and no listener threw
                         a veto exception; false otherwise.
 
             @onerror    False will be returned.
@@ -318,7 +318,7 @@ class Desktop : private cppu::BaseMutex,
          *          about cancel this termination request.
          *
          *  @param  [out] bVeto
-         *          will be true if at least one listener throwed a veto exception;
+         *          will be true if at least one listener threw a veto exception;
          *          false otherwise.
          *
          *  @see    impl_sendCancelTerminationEvent()
@@ -439,7 +439,7 @@ class Desktop : private cppu::BaseMutex,
           */
         css::uno::Reference< css::frame::XTerminateListener > m_xSWThreadManager;
 
-        /** special terminate listener shuting down the SfxApplication.
+        /** special terminate listener shutting down the SfxApplication.
           * Because these desktop instance closes documents and informs listener
           * only... it does not really shutdown the whole application.
           *

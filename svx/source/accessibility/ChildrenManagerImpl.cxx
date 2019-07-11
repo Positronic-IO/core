@@ -32,6 +32,7 @@
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/view/XSelectionSupplier.hpp>
 #include <com/sun/star/container/XChild.hpp>
+#include <comphelper/types.hxx>
 
 #include <rtl/ustring.hxx>
 #include <tools/debug.hxx>
@@ -1009,7 +1010,6 @@ void ChildrenManagerImpl::UnregisterAsDisposeListener (
 // AccessibleChildDescriptor
 ChildDescriptor::ChildDescriptor (const Reference<drawing::XShape>& xShape)
     : mxShape (xShape),
-      mxAccessibleShape (nullptr),
       mbCreateEventPending (true)
 {
     // Empty.
@@ -1017,8 +1017,7 @@ ChildDescriptor::ChildDescriptor (const Reference<drawing::XShape>& xShape)
 
 
 ChildDescriptor::ChildDescriptor (const Reference<XAccessible>& rxAccessibleShape)
-    : mxShape (nullptr),
-      mxAccessibleShape (rxAccessibleShape),
+    : mxAccessibleShape (rxAccessibleShape),
       mbCreateEventPending (true)
 {
     // Make sure that the accessible object has the <const>VISIBLE</const>

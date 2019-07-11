@@ -94,8 +94,8 @@ void SwUndoInsert::Init(const SwNodeIndex & rNd)
     pDoc = rNd.GetNode().GetDoc();
     if( pDoc->getIDocumentRedlineAccess().IsRedlineOn() )
     {
-        pRedlData = new SwRedlineData( nsRedlineType_t::REDLINE_INSERT,
-                                       pDoc->getIDocumentRedlineAccess().GetRedlineAuthor() );
+        pRedlData.reset( new SwRedlineData( nsRedlineType_t::REDLINE_INSERT,
+                                       pDoc->getIDocumentRedlineAccess().GetRedlineAuthor() ) );
         SetRedlineFlags( pDoc->getIDocumentRedlineAccess().GetRedlineFlags() );
     }
 
@@ -108,7 +108,7 @@ SwUndoInsert::SwUndoInsert( const SwNodeIndex& rNd, sal_Int32 nCnt,
             sal_Int32 nL,
             const SwInsertFlags nInsertFlags,
             bool bWDelim )
-    : SwUndo(SwUndoId::TYPING, rNd.GetNode().GetDoc()), pRedlData( nullptr ),
+    : SwUndo(SwUndoId::TYPING, rNd.GetNode().GetDoc()),
         nNode( rNd.GetIndex() ), nContent(nCnt), nLen(nL),
         bIsWordDelim( bWDelim ), bIsAppend( false )
     , m_bWithRsid(false)
@@ -119,7 +119,7 @@ SwUndoInsert::SwUndoInsert( const SwNodeIndex& rNd, sal_Int32 nCnt,
 
 SwUndoInsert::SwUndoInsert( const SwNodeIndex& rNd )
     : SwUndo(SwUndoId::SPLITNODE, rNd.GetNode().GetDoc()),
-        pRedlData( nullptr ), nNode( rNd.GetIndex() ), nContent(0), nLen(1),
+        nNode( rNd.GetIndex() ), nContent(0), nLen(1),
         bIsWordDelim( false ), bIsAppend( true )
     , m_bWithRsid(false)
     , m_nInsertFlags(SwInsertFlags::EMPTYEXPAND)
@@ -202,7 +202,7 @@ SwUndoInsert::~SwUndoInsert()
     {
         maText.reset();
     }
-    delete pRedlData;
+    pRedlData.reset();
 }
 
 void SwUndoInsert::UndoImpl(::sw::UndoRedoContext & rContext)
@@ -486,11 +486,11 @@ class SwUndoReplace::Impl
     : private SwUndoSaveContent
 {
     OUString m_sOld;
-    OUString m_sIns;
+    OUString const m_sIns;
     sal_uLong m_nSttNd, m_nEndNd, m_nOffset;
     sal_Int32 m_nSttCnt, m_nEndCnt, m_nSetPos, m_nSelEnd;
     bool m_bSplitNext : 1;
-    bool m_bRegExp : 1;
+    bool const m_bRegExp : 1;
     // metadata references for paragraph and following para (if m_bSplitNext)
     std::shared_ptr< ::sfx2::MetadatableUndo > m_pMetadataUndoStart;
     std::shared_ptr< ::sfx2::MetadatableUndo > m_pMetadataUndoEnd;
@@ -755,15 +755,14 @@ void SwUndoReplace::Impl::RedoImpl(::sw::UndoRedoContext & rContext)
 
     if( pHistory )
     {
-        auto pSave = std::move(pHistory);
-        SwHistory aHst;
-        pHistory.reset( &aHst );
+        auto xSave = o3tl::make_unique<SwHistory>();
+        std::swap(pHistory, xSave);
+
         DelContentIndex( *rPam.GetMark(), *rPam.GetPoint() );
         m_nSetPos = pHistory->Count();
 
-        pHistory.release();
-        pHistory = std::move(pSave);
-        pHistory->Move( 0, &aHst );
+        std::swap(xSave, pHistory);
+        pHistory->Move(0, xSave.get());
     }
     else
     {
@@ -844,7 +843,7 @@ void SwUndoReRead::SaveGraphicData( const SwGrfNode& rGrfNd )
     {
         maNm = OUString();
         maFltr = OUString();
-        rGrfNd.GetFileFilterNms( maNm ? &*maNm : nullptr, maFltr ? &*maFltr : nullptr );
+        rGrfNd.GetFileFilterNms(&*maNm, &*maFltr);
         pGrf.reset();
     }
     else
@@ -1045,7 +1044,7 @@ void SwUndoInsertLabel::SetFlys( SwFrameFormat& rOldFly, SfxItemSet const & rChg
         rOldFly.SetFormatAttr( rChgSet );
         if ( aTmp.GetUndo() )
         {
-            OBJECT.pUndoAttr = aTmp.ReleaseUndo();
+            OBJECT.pUndoAttr = aTmp.ReleaseUndo().release();
         }
         OBJECT.pUndoFly = new SwUndoInsLayFormat( &rNewFly,0,0 );
     }

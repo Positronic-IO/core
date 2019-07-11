@@ -128,6 +128,18 @@ struct SwApplyTemplate
     }
 };
 
+class SwView;
+
+// manage connection and disconnection of SwView and SwDocShell
+class SwViewGlueDocShell
+{
+private:
+    SwView& m_rView;
+public:
+    SwViewGlueDocShell(SwView& rView, SwDocShell& rDocSh);
+    ~SwViewGlueDocShell();
+};
+
 // view of a document
 class SW_DLLPUBLIC SwView: public SfxViewShell
 {
@@ -166,12 +178,13 @@ class SW_DLLPUBLIC SwView: public SfxViewShell
     tools::Rectangle           m_aVisArea;       // visible region
 
     VclPtr<SwEditWin>    m_pEditWin;
-    SwWrtShell          *m_pWrtShell;
+    std::unique_ptr<SwWrtShell> m_pWrtShell;
+    std::unique_ptr<SwViewGlueDocShell> m_xGlueDocShell;
 
     SfxShell            *m_pShell;        // current SubShell at the dispatcher
     FmFormShell         *m_pFormShell;    // DB-FormShell
 
-    SwView_Impl         *m_pViewImpl;     // Impl-data for UNO + Basic
+    std::unique_ptr<SwView_Impl> m_pViewImpl;     // Impl-data for UNO + Basic
 
     VclPtr<SwScrollbar>  m_pHScrollbar,   // MDI control elements
                          m_pVScrollbar;
@@ -184,16 +197,15 @@ class SW_DLLPUBLIC SwView: public SfxViewShell
 
     VclPtr<SvxRuler>    m_pHRuler,
                         m_pVRuler;
-    VclPtr<ImageButton> m_pTogglePageBtn;
 
-    SwGlossaryHdl       *m_pGlosHdl;          // handle text block
-    SwDrawBase          *m_pDrawActual;
+    std::unique_ptr<SwGlossaryHdl> m_pGlosHdl;          // handle text block
+    std::unique_ptr<SwDrawBase>    m_pDrawActual;
 
     const SwFrameFormat      *m_pLastTableFormat;
 
-    SwFormatClipboard   *m_pFormatClipboard; //holds data for format paintbrush
+    std::unique_ptr<SwFormatClipboard> m_pFormatClipboard; //holds data for format paintbrush
 
-    SwPostItMgr         *m_pPostItMgr;
+    std::unique_ptr<SwPostItMgr> m_pPostItMgr;
 
     SelectionType       m_nSelectionType;
     VclPtr<FloatingWindow> m_pFieldPopup;
@@ -234,6 +246,7 @@ class SW_DLLPUBLIC SwView: public SfxViewShell
                     m_bOldShellWasPagePreview : 1,
                     m_bIsPreviewDoubleClick : 1, // #i114045#
                     m_bMakeSelectionVisible : 1; // transport the bookmark selection
+    bool m_bInitOnceCompleted = false;
 
     /// LibreOfficeKit has to force the page size for PgUp/PgDown
     /// functionality based on the user's view, instead of using the m_aVisArea.
@@ -265,12 +278,12 @@ class SW_DLLPUBLIC SwView: public SfxViewShell
     SAL_DLLPRIVATE bool          GetPageScrollDownOffset(SwTwips& rOff) const;
 
     // scrollbar movements
-    SAL_DLLPRIVATE long          PageUp();
-    SAL_DLLPRIVATE long          PageDown();
+    SAL_DLLPRIVATE bool          PageUp();
+    SAL_DLLPRIVATE bool          PageDown();
     SAL_DLLPRIVATE bool          PageUpCursor(bool bSelect);
     SAL_DLLPRIVATE bool          PageDownCursor(bool bSelect);
-    SAL_DLLPRIVATE long          PhyPageUp();
-    SAL_DLLPRIVATE long          PhyPageDown();
+    SAL_DLLPRIVATE void          PhyPageUp();
+    SAL_DLLPRIVATE void          PhyPageDown();
 
     SAL_DLLPRIVATE void           CreateScrollbar( bool bHori );
     DECL_DLLPRIVATE_LINK(  ScrollHdl, ScrollBar*, void );
@@ -320,7 +333,7 @@ public: // #i123922# Needs to be called from a 2nd place now as a helper method
 
 protected:
 
-    SwView_Impl*    GetViewImpl() {return m_pViewImpl;}
+    SwView_Impl*    GetViewImpl() {return m_pViewImpl.get();}
 
     void ImpSetVerb( SelectionType nSelType );
 
@@ -386,7 +399,7 @@ public:
     void                    StopShellTimer();
 
     SwWrtShell&      GetWrtShell   () const { return *m_pWrtShell; }
-    SwWrtShell*      GetWrtShellPtr() const { return  m_pWrtShell; }
+    SwWrtShell*      GetWrtShellPtr() const { return  m_pWrtShell.get(); }
 
     SwEditWin &GetEditWin()        { return *m_pEditWin; }
     const SwEditWin &GetEditWin () const { return *m_pEditWin; }
@@ -458,10 +471,10 @@ public:
     void            EnableHScrollbar(bool bEnable);
     void            EnableVScrollbar(bool bEnable);
 
-    int             CreateVRuler();
-    int             KillVRuler();
-    int             CreateTab();
-    int             KillTab();
+    void            CreateVRuler();
+    void            KillVRuler();
+    void            CreateTab();
+    void            KillTab();
 
     bool            StatVRuler() const { return m_pVRuler->IsVisible(); }
     void            ChangeVRulerMetric(FieldUnit eUnit);
@@ -498,8 +511,8 @@ public:
     void            ExecNumberingOutline(SfxItemPool &);
 
     // functions for drawing
-    void            SetDrawFuncPtr(SwDrawBase* pFuncPtr);
-    SwDrawBase* GetDrawFuncPtr() const  { return m_pDrawActual; }
+    void            SetDrawFuncPtr(std::unique_ptr<SwDrawBase> pFuncPtr);
+    SwDrawBase*     GetDrawFuncPtr() const  { return m_pDrawActual.get(); }
     void            GetDrawState(SfxItemSet &rSet);
     void            ExitDraw();
     bool     IsDrawRotate()      { return m_bDrawRotate; }
@@ -520,6 +533,7 @@ public:
     bool            BeginTextEdit(  SdrObject* pObj, SdrPageView* pPV=nullptr,
                                     vcl::Window* pWin=nullptr, bool bIsNewObj=false, bool bSetSelectionToStart=false );
     bool isSignatureLineSelected();
+    bool isSignatureLineSigned();
 
     void            StateTabWin(SfxItemSet&);
 
@@ -569,7 +583,7 @@ public:
                     const OUString& rFilterName, sal_Int16 nVersion = 0 );
 
     void ExecuteInsertDoc( SfxRequest& rRequest, const SfxPoolItem* pItem );
-    long InsertMedium( sal_uInt16 nSlotId, SfxMedium* pMedium, sal_Int16 nVersion );
+    long InsertMedium( sal_uInt16 nSlotId, std::unique_ptr<SfxMedium> pMedium, sal_Int16 nVersion );
     DECL_LINK( DialogClosedHdl, sfx2::FileDialogHelper *, void );
 
     // status methods for clipboard.
@@ -606,8 +620,8 @@ public:
 
     void ExecuteScan( SfxRequest& rReq );
 
-    SwPostItMgr* GetPostItMgr() { return m_pPostItMgr;}
-    const SwPostItMgr* GetPostItMgr() const { return m_pPostItMgr;}
+    SwPostItMgr* GetPostItMgr() { return m_pPostItMgr.get();}
+    const SwPostItMgr* GetPostItMgr() const { return m_pPostItMgr.get();}
 
     // exhibition hack (MA,MBA)
     void SelectShellForDrop();
@@ -617,7 +631,7 @@ public:
     // methods for printing
     SAL_DLLPRIVATE virtual   SfxPrinter*     GetPrinter( bool bCreate = false ) override;
     SAL_DLLPRIVATE virtual bool  HasPrintOptionsPage() const override;
-    SAL_DLLPRIVATE virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(weld::Container* pParent,
+    SAL_DLLPRIVATE virtual VclPtr<SfxTabPage> CreatePrintOptionsPage(TabPageParent pParent,
                                                     const SfxItemSet& rSet) override;
     static SvxSearchItem* GetSearchItem() { return m_pSrchItem; }
     /// See SfxViewShell::getPart().
@@ -628,6 +642,38 @@ public:
     const OUString& GetRedlineAuthor();
     /// See SfxViewShell::NotifyCursor().
     void NotifyCursor(SfxViewShell* pViewShell) const override;
+    void ShowUIElement(const OUString& sElementURL) const;
+
+
+    enum CachedStringID
+    {
+        OldGrfCat,
+        OldTabCat,
+        OldFrameCat,
+        OldDrwCat,
+        CachedStrings
+    };
+
+    OUString m_StringCache[CachedStrings];
+
+    const OUString& GetCachedString(CachedStringID id)
+    {
+        return m_StringCache[id];
+    }
+
+    void SetCachedString(CachedStringID id, const OUString& sStr)
+    {
+        m_StringCache[id] = sStr;
+    }
+
+    const OUString& GetOldGrfCat();
+    void SetOldGrfCat(const OUString& sStr);
+    const OUString& GetOldTabCat();
+    void SetOldTabCat(const OUString& sStr);
+    const OUString& GetOldFrameCat();
+    void SetOldFrameCat(const OUString& sStr);
+    const OUString& GetOldDrwCat();
+    void SetOldDrwCat(const OUString& sStr);
 };
 
 inline long SwView::GetXScroll() const
@@ -645,9 +691,9 @@ inline const SwDocShell *SwView::GetDocShell() const
     return const_cast<SwView*>(this)->GetDocShell();
 }
 
-VclPtr<SfxTabPage> CreatePrintOptionsPage( weld::Container* pPage,
-                                           const SfxItemSet &rOptions,
-                                           bool bPreview);
+VclPtr<SfxTabPage> CreatePrintOptionsPage(TabPageParent pParent,
+                                          const SfxItemSet &rOptions,
+                                          bool bPreview);
 
 extern bool bDocSzUpdated;
 

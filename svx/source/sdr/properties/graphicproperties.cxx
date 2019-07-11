@@ -27,12 +27,28 @@
 #include <editeng/eeitem.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/sdgcpitm.hxx>
-
+#include <svx/svdmodel.hxx>
 
 namespace sdr
 {
     namespace properties
     {
+        void GraphicProperties::applyDefaultStyleSheetFromSdrModel()
+        {
+            SfxStyleSheet* pStyleSheet(GetSdrObject().getSdrModelFromSdrObject().GetDefaultStyleSheetForSdrGrafObjAndSdrOle2Obj());
+
+            if(pStyleSheet)
+            {
+                // do not delete hard attributes when setting dsefault Style
+                SetStyleSheet(pStyleSheet, true);
+            }
+            else
+            {
+                SetMergedItem(XFillStyleItem(com::sun::star::drawing::FillStyle_NONE));
+                SetMergedItem(XLineStyleItem(com::sun::star::drawing::LineStyle_NONE));
+            }
+        }
+
         // create a new itemset
         std::unique_ptr<SfxItemSet> GraphicProperties::CreateObjectSpecificItemSet(SfxItemPool& rPool)
         {
@@ -90,13 +106,12 @@ namespace sdr
 
         void GraphicProperties::SetStyleSheet(SfxStyleSheet* pNewStyleSheet, bool bDontRemoveHardAttr)
         {
-            SdrGrafObj& rObj = static_cast<SdrGrafObj&>(GetSdrObject());
+            // call parent (always first thing to do, may create the SfxItemSet)
+            RectangleProperties::SetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
 
             // local changes
+            SdrGrafObj& rObj = static_cast<SdrGrafObj&>(GetSdrObject());
             rObj.SetXPolyDirty();
-
-            // call parent
-            RectangleProperties::SetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
 
             // local changes
             rObj.ImpSetAttrToGrafInfo();

@@ -30,6 +30,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <vcl/opengl/OpenGLHelper.hxx>
 #include <vcl/opengl/OpenGLContext.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <array>
@@ -729,7 +730,6 @@ std::shared_ptr<OGLTransitionImpl> makeTurnAround()
 {
     Primitive Slide;
     TransitionSettings aSettings;
-    aSettings.mnRequiredGLVersion = 3.0;
 
     Slide.pushTriangle(glm::vec2(0,0),glm::vec2(1,0),glm::vec2(0,1));
     Slide.pushTriangle(glm::vec2(1,0),glm::vec2(0,1),glm::vec2(1,1));
@@ -892,7 +892,6 @@ std::shared_ptr<OGLTransitionImpl> makeRochade()
 {
     Primitive Slide;
     TransitionSettings aSettings;
-    aSettings.mnRequiredGLVersion = 3.0;
 
     double w, h;
 
@@ -924,20 +923,20 @@ std::shared_ptr<OGLTransitionImpl> makeRochade()
     return makeRochadeTransition(aLeavingSlide, aEnteringSlide, aSettings);
 }
 
-inline double randFromNeg1to1()
+static double randFromNeg1to1()
 {
     return comphelper::rng::uniform_real_distribution(-1.0, std::nextafter(1.0, DBL_MAX));
 }
 
 // TODO(Q3): extract to basegfx
-inline glm::vec3 randNormVectorInXYPlane()
+static glm::vec3 randNormVectorInXYPlane()
 {
     glm::vec3 toReturn(randFromNeg1to1(),randFromNeg1to1(),0.0);
     return glm::normalize(toReturn);
 }
 
 template<typename T>
-T clamp(const T& rIn)
+static T clamp(const T& rIn)
 {
     return glm::clamp(rIn, T(-1.0), T(1.0));
 }
@@ -1086,12 +1085,12 @@ std::shared_ptr<OGLTransitionImpl> makeHelix( sal_uInt16 nRows )
     return makeSimpleTransition(aLeavingSlide, aEnteringSlide);
 }
 
-float fdiv(int a, int b)
+static float fdiv(int a, int b)
 {
     return static_cast<float>(a)/b;
 }
 
-glm::vec2 vec(float x, float y, float nx, float ny)
+static glm::vec2 vec(float x, float y, float nx, float ny)
 {
     x = x < 0.0 ? 0.0 : x;
     x = std::min(x, nx);
@@ -1940,7 +1939,7 @@ std::shared_ptr<OGLTransitionImpl> makeRipple()
     return makeRippleTransition(aLeavingSlide, aEnteringSlide, aSettings);
 }
 
-void createHexagon(Primitive& aHexagon, const int x, const int y, const int NX, const int NY)
+static void createHexagon(Primitive& aHexagon, const int x, const int y, const int NX, const int NY)
 {
     if (y % 4 == 0)
     {

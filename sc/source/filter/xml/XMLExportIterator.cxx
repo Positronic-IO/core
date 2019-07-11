@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <com/sun/star/table/XCellRange.hpp>
+
 #include "XMLExportIterator.hxx"
 #include <xmloff/xmlnmspe.hxx>
 #include <dociter.hxx>
@@ -25,6 +27,7 @@
 #include "XMLExportSharedData.hxx"
 #include "XMLStylesExportHelper.hxx"
 #include <document.hxx>
+#include <osl/diagnose.h>
 
 #include <algorithm>
 
@@ -444,7 +447,7 @@ void ScMyDetectiveObjContainer::SetCellData( ScMyCell& rMyCell )
         rMyCell.aDetectiveObjVec.push_back( *aItr );
         aItr = aDetectiveObjList.erase( aItr );
     }
-    rMyCell.bHasDetectiveObj = (rMyCell.aDetectiveObjVec.size() != 0);
+    rMyCell.bHasDetectiveObj = (!rMyCell.aDetectiveObjVec.empty());
 }
 
 void ScMyDetectiveObjContainer::SkipTable(SCTAB nSkip)
@@ -503,7 +506,7 @@ void ScMyDetectiveOpContainer::SetCellData( ScMyCell& rMyCell )
         rMyCell.aDetectiveOpVec.push_back( *aItr );
         aItr = aDetectiveOpList.erase( aItr );
     }
-    rMyCell.bHasDetectiveOp = (rMyCell.aDetectiveOpVec.size() != 0);
+    rMyCell.bHasDetectiveOp = (!rMyCell.aDetectiveOpVec.empty());
 }
 
 void ScMyDetectiveOpContainer::SkipTable(SCTAB nSkip)
@@ -537,10 +540,6 @@ ScMyCell::ScMyCell() :
     bIsMatrixBase( false ),
     bIsMatrixCovered( false ),
     bHasAnnotation( false )
-{
-}
-
-ScMyCell::~ScMyCell()
 {
 }
 

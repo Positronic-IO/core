@@ -185,17 +185,15 @@ public:
     virtual bool MouseButtonDown(const MouseEvent& rMEvt, vcl::Window* pWin) override;
     virtual bool MouseButtonUp(const MouseEvent& rMEvt, vcl::Window* pWin) override;
     virtual bool MouseMove(const MouseEvent& rMEvt, vcl::Window* pWin) override;
+    using SdrCreateView::RequestHelp;
     virtual bool Command(const CommandEvent& rCEvt, vcl::Window* pWin) override;
 
     virtual void ConfigurationChanged( utl::ConfigurationBroadcaster*, ConfigurationHints ) override;
 
     bool SetAttributes(const SfxItemSet& rSet, bool bReplaceAll=false) { return SdrCreateView::SetAttributes(rSet,bReplaceAll); }
-    bool SetStyleSheet(SfxStyleSheet* pStyleSheet, bool bDontRemoveHardAttr) { return SdrCreateView::SetStyleSheet(pStyleSheet,bDontRemoveHardAttr); }
 
     /* new interface src537 */
-    bool GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr=false) const;
-
-    SfxStyleSheet* GetStyleSheet() const;
+    void GetAttributes(SfxItemSet& rTargetSet, bool bOnlyHardAttr=false) const;
 
     // incomplete implementation:
     // OutputDevice is necessary to determine HandleSize.

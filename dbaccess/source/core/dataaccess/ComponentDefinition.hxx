@@ -21,7 +21,6 @@
 #define INCLUDED_DBACCESS_SOURCE_CORE_DATAACCESS_COMPONENTDEFINITION_HXX
 
 #include <commandbase.hxx>
-#include <comphelper/propertycontainer.hxx>
 #include <com/sun/star/sdbcx/XRename.hpp>
 #include <cppuhelper/implbase1.hxx>
 #include <comphelper/proparrhlp.hxx>
@@ -86,7 +85,8 @@ class OComponentDefinition  :public OContentHelper
                             ,public ::comphelper::OPropertyArrayUsageHelper< OComponentDefinition >
 {
 protected:
-    rtl::Reference< OColumns >     m_xColumns;
+    // no Reference! see OCollection::acquire
+    std::unique_ptr<OColumns> m_pColumns;
     rtl::Reference<OColumnPropertyListener> m_xColumnPropertyListener;
     bool                        m_bTable;
 

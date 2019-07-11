@@ -44,14 +44,6 @@ $(eval $(call gb_Library_add_defs,sfx,\
     $(if $(filter TRUE,$(ENABLE_CUPS)),-DENABLE_CUPS) \
 ))
 
-ifeq ($(ENABLE_SYSTRAY_GTK),TRUE)
-$(eval $(call gb_Library_add_defs,sfx,\
-    -DENABLE_QUICKSTART_APPLET \
-    -DENABLE_SYSTRAY_GTK \
-    -DPLUGIN_NAME=libqstart_gtk$(gb_Library_OOOEXT) \
-))
-endif
-
 $(eval $(call gb_Library_use_libraries,sfx,\
     basegfx \
     comphelper \
@@ -102,6 +94,7 @@ $(eval $(call gb_Library_add_exception_objects,sfx,\
     sfx2/source/appl/childwin \
     sfx2/source/appl/childwinimpl \
     sfx2/source/appl/fileobj \
+    sfx2/source/appl/flatpak \
     sfx2/source/appl/fwkhelper \
     sfx2/source/appl/helpdispatch \
     sfx2/source/appl/helpinterceptor \
@@ -133,6 +126,7 @@ $(eval $(call gb_Library_add_exception_objects,sfx,\
     sfx2/source/bastyp/sfxhtml \
     sfx2/source/bastyp/sfxresid \
     sfx2/source/config/evntconf \
+    sfx2/source/control/asyncfunc \
     sfx2/source/control/bindings \
     sfx2/source/control/ctrlitem \
     sfx2/source/control/ctrlfactoryimpl \
@@ -330,6 +324,9 @@ $(eval $(call gb_Library_add_defs,sfx,\
 endif
 
 ifeq ($(OS),MACOSX)
+$(eval $(call gb_Library_add_cxxflags,sfx,\
+    $(gb_OBJCXXFLAGS) \
+))
 $(eval $(call gb_Library_add_objcxxobjects,sfx,\
     sfx2/source/appl/shutdowniconaqua \
 ))

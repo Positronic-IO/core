@@ -30,7 +30,6 @@
 #include <list>
 #include <vector>
 #include <map>
-#include <memory>
 
 class SdrPathObj;
 class SdrModel;
@@ -82,7 +81,7 @@ public:
     SAL_DLLPRIVATE css::uno::Any   getEnd() const;
     SAL_DLLPRIVATE void            setEnd( const css::uno::Any& rEnd );
 
-    SAL_DLLPRIVATE sal_Int16       getFill() const;
+    SAL_DLLPRIVATE sal_Int16       getFill() const { return mnFill; }
     SAL_DLLPRIVATE void            setFill( sal_Int16 nFill );
 
     SAL_DLLPRIVATE double          getBegin() const { return mfBegin; }
@@ -177,6 +176,7 @@ private:
     OUString        maPresetSubType;
     OUString        maProperty;
     sal_Int16       mnPresetClass;
+    sal_Int16       mnFill;
     double          mfBegin;
     double          mfDuration;                 // this is the maximum duration of the subeffects
     double          mfAbsoluteDuration;         // this is the maximum duration of the subeffects including possible iterations
@@ -254,7 +254,7 @@ private:
     double mfGroupingAuto;
     sal_Int32 mnLastPara;
     sal_Int8 mnDepthFlags[PARA_LEVELS];
-    sal_Int32 mnGroupId;
+    sal_Int32 const mnGroupId;
 };
 
 typedef std::shared_ptr< CustomAnimationTextGroup > CustomAnimationTextGroupPtr;
@@ -277,6 +277,7 @@ public:
     SAL_DLLPRIVATE void replace( const CustomAnimationEffectPtr& pEffect, const CustomAnimationPresetPtr& pDescriptor, double fDuration );
     SAL_DLLPRIVATE void replace( const CustomAnimationEffectPtr& pEffect, const CustomAnimationPresetPtr& pDescriptor, const OUString& rPresetSubType, double fDuration );
     SAL_DLLPRIVATE void remove( const CustomAnimationEffectPtr& pEffect );
+    SAL_DLLPRIVATE void moveToBeforeEffect( const CustomAnimationEffectPtr& pEffect,  const CustomAnimationEffectPtr& pInsertBefore);
 
     SAL_DLLPRIVATE void create( const css::uno::Reference< css::animations::XAnimationNode >& xNode );
     SAL_DLLPRIVATE void createEffectsequence( const css::uno::Reference< css::animations::XAnimationNode >& xNode );
@@ -308,7 +309,9 @@ public:
     // text group methods
 
     SAL_DLLPRIVATE CustomAnimationTextGroupPtr findGroup( sal_Int32 nGroupId );
-    CustomAnimationTextGroupPtr    createTextGroup( CustomAnimationEffectPtr pEffect, sal_Int32 nTextGrouping, double fTextGroupingAuto, bool bAnimateForm, bool bTextReverse );
+    CustomAnimationTextGroupPtr createTextGroup(const CustomAnimationEffectPtr& pEffect,
+                                                sal_Int32 nTextGrouping, double fTextGroupingAuto,
+                                                bool bAnimateForm, bool bTextReverse);
     SAL_DLLPRIVATE void setTextGrouping( const CustomAnimationTextGroupPtr& pTextGroup, sal_Int32 nTextGrouping );
     SAL_DLLPRIVATE void setAnimateForm( const CustomAnimationTextGroupPtr& pTextGroup, bool bAnimateForm );
     SAL_DLLPRIVATE void setTextGroupingAuto( const CustomAnimationTextGroupPtr& pTextGroup, double fTextGroupingAuto );

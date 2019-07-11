@@ -19,7 +19,6 @@
 
 #undef SC_DLLIMPLEMENTATION
 
-#include <comphelper/string.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/docfile.hxx>
 #include <sfx2/docfilt.hxx>
@@ -27,6 +26,7 @@
 #include <sfx2/fcontnr.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <svtools/ehdl.hxx>
+#include <svtools/inettbc.hxx>
 #include <svtools/sfxecode.hxx>
 #include <vcl/waitobj.hxx>
 
@@ -39,7 +39,7 @@
 ScLinkedAreaDlg::ScLinkedAreaDlg(weld::Window* pParent)
     : GenericDialogController(pParent, "modules/scalc/ui/externaldata.ui", "ExternalDataDialog")
     , m_pSourceShell(nullptr)
-    , m_xCbUrl(new URLBox(m_xBuilder->weld_combo_box_text("url")))
+    , m_xCbUrl(new URLBox(m_xBuilder->weld_combo_box("url")))
     , m_xBtnBrowse(m_xBuilder->weld_button("browse"))
     , m_xLbRanges(m_xBuilder->weld_tree_view("ranges"))
     , m_xBtnReload(m_xBuilder->weld_check_button("reload"))
@@ -47,9 +47,9 @@ ScLinkedAreaDlg::ScLinkedAreaDlg(weld::Window* pParent)
     , m_xFtSeconds(m_xBuilder->weld_label("secondsft"))
     , m_xBtnOk(m_xBuilder->weld_button("ok"))
 {
-    m_xLbRanges->set_selection_mode(true);
+    m_xLbRanges->set_selection_mode(SelectionMode::Multiple);
 
-    m_xCbUrl->connect_entry_activate(LINK( this, ScLinkedAreaDlg, FileHdl));
+    m_xCbUrl->connect_entry_activate(LINK(this, ScLinkedAreaDlg, FileHdl));
     m_xBtnBrowse->connect_clicked(LINK( this, ScLinkedAreaDlg, BrowseHdl));
     m_xLbRanges->connect_changed(LINK( this, ScLinkedAreaDlg, RangeHdl));
     m_xLbRanges->set_size_request(m_xLbRanges->get_approximate_digit_width() * 54,
@@ -71,7 +71,7 @@ IMPL_LINK_NOARG(ScLinkedAreaDlg, BrowseHdl, weld::Button&, void)
     m_xDocInserter->StartExecuteModal( LINK( this, ScLinkedAreaDlg, DialogClosedHdl ) );
 }
 
-IMPL_LINK_NOARG(ScLinkedAreaDlg, FileHdl, weld::ComboBoxText&, void)
+IMPL_LINK_NOARG(ScLinkedAreaDlg, FileHdl, weld::ComboBox&, bool)
 {
     OUString aEntered = m_xCbUrl->GetURL();
     if (m_pSourceShell)
@@ -80,7 +80,7 @@ IMPL_LINK_NOARG(ScLinkedAreaDlg, FileHdl, weld::ComboBoxText&, void)
         if ( aEntered == pMed->GetName() )
         {
             //  already loaded - nothing to do
-            return;
+            return true;
         }
     }
 
@@ -89,7 +89,7 @@ IMPL_LINK_NOARG(ScLinkedAreaDlg, FileHdl, weld::ComboBoxText&, void)
     //  get filter name by looking at the file content (bWithContent = true)
     // Break operation if any error occurred inside.
     if (!ScDocumentLoader::GetFilterName( aEntered, aFilter, aOptions, true, false ))
-        return;
+        return true;
 
     // #i53241# replace HTML filter with DataQuery filter
     if (aFilter == FILTERNAME_HTML)
@@ -99,6 +99,8 @@ IMPL_LINK_NOARG(ScLinkedAreaDlg, FileHdl, weld::ComboBoxText&, void)
 
     UpdateSourceRanges();
     UpdateEnable();
+
+    return true;
 }
 
 void ScLinkedAreaDlg::LoadDocument( const OUString& rFile, const OUString& rFilter, const OUString& rOptions )
@@ -149,11 +151,14 @@ void ScLinkedAreaDlg::InitFromOldLink( const OUString& rFile, const OUString& rF
 
     UpdateSourceRanges();
 
-    sal_Int32 nRangeCount = comphelper::string::getTokenCount(rSource, ';');
-    for ( sal_Int32 i=0; i<nRangeCount; i++ )
+    if (!rSource.isEmpty())
     {
-        OUString aRange = rSource.getToken(i,';');
-        m_xLbRanges->select_text(aRange);
+        sal_Int32 nIdx {0};
+        do
+        {
+            m_xLbRanges->select_text(rSource.getToken(0, ';', nIdx));
+        }
+        while (nIdx>0);
     }
 
     bool bDoRefresh = (nRefresh != 0);
@@ -179,7 +184,7 @@ IMPL_LINK( ScLinkedAreaDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg,
     if ( _pFileDlg->GetError() != ERRCODE_NONE )
         return;
 
-    SfxMedium* pMed = m_xDocInserter->CreateMedium();
+    std::unique_ptr<SfxMedium> pMed = m_xDocInserter->CreateMedium();
     if ( pMed )
     {
         weld::WaitObject aWait(m_xDialog.get());
@@ -207,7 +212,7 @@ IMPL_LINK( ScLinkedAreaDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg,
 
         m_pSourceShell = new ScDocShell;
         aSourceRef = m_pSourceShell;
-        m_pSourceShell->DoLoad( pMed );
+        m_pSourceShell->DoLoad( pMed.get() );
 
         ErrCode nErr = m_pSourceShell->GetErrorCode();
         if (nErr)
@@ -225,6 +230,7 @@ IMPL_LINK( ScLinkedAreaDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg,
 
             m_xCbUrl->SetText(EMPTY_OUSTRING);
         }
+        pMed.release(); // DoLoad takes ownership
     }
 
     UpdateSourceRanges();

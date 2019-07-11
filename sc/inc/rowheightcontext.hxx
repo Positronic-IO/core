@@ -16,8 +16,6 @@
 #include <vcl/vclptr.hxx>
 #include <vcl/outdev.hxx>
 
-#include <vector>
-
 #include "segmenttree.hxx"
 
 namespace sc {
@@ -26,10 +24,10 @@ class SC_DLLPUBLIC RowHeightContext
 {
     ScFlatUInt16RowSegments maHeights;
 
-    double mfPPTX;
-    double mfPPTY;
-    Fraction maZoomX;
-    Fraction maZoomY;
+    double const mfPPTX;
+    double const mfPPTY;
+    Fraction const maZoomX;
+    Fraction const maZoomY;
     VclPtr<OutputDevice> mpOutDev;
 
     sal_uInt16 mnExtraHeight;

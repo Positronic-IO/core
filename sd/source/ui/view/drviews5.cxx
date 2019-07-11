@@ -26,6 +26,8 @@
 #include <svx/svdpagv.hxx>
 #include <vcl/scrbar.hxx>
 #include <vcl/settings.hxx>
+#include <sdcommands.h>
+#include <sal/log.hxx>
 
 #include <tools/poly.hxx>
 #include <svx/fmshell.hxx>
@@ -435,11 +437,11 @@ void DrawViewShell::HidePage()
         pFormShell->PrepareClose(false);
 }
 
-void DrawViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool bBrowse )
+void DrawViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     WriteFrameViewData();
 
-    ViewShell::WriteUserDataSequence( rSequence, bBrowse );
+    ViewShell::WriteUserDataSequence( rSequence );
 
     const sal_Int32 nIndex = rSequence.getLength();
     rSequence.realloc( nIndex + 1 );
@@ -450,11 +452,11 @@ void DrawViewShell::WriteUserDataSequence ( css::uno::Sequence < css::beans::Pro
     GetDocSh()->GetDoc()->WriteUserDataSequence(rSequence);
 }
 
-void DrawViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence, bool bBrowse )
+void DrawViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans::PropertyValue >& rSequence )
 {
     WriteFrameViewData();
 
-    ViewShell::ReadUserDataSequence( rSequence, bBrowse );
+    ViewShell::ReadUserDataSequence( rSequence );
 
     const sal_Int32 nLength = rSequence.getLength();
     const css::beans::PropertyValue *pValue = rSequence.getConstArray();
@@ -471,6 +473,36 @@ void DrawViewShell::ReadUserDataSequence ( const css::uno::Sequence < css::beans
         // Fallback to common SdrModel processing
         else GetDocSh()->GetDoc()->ReadUserDataSequenceValue(pValue);
     }
+
+    // The parameter rSequence contains the config-items from
+    // <config:config-item-set config:name="ooo:view-settings">. Determine, whether
+    // they contain "VisibleLayers", "PrintableLayers" and "LockedLayers". If not, it
+    // is a foreign document or a new document after transition period and the corresponding
+    // information were read from <draw:layer-set>. In that case we need to bring
+    // the information from model to view.
+    bool bHasVisiPrnLockSettings(false);
+    for ( auto & rPropertyValue : rSequence )
+    {
+        if ( rPropertyValue.Name == sUNO_View_VisibleLayers
+          || rPropertyValue.Name == sUNO_View_PrintableLayers
+          || rPropertyValue.Name == sUNO_View_LockedLayers )
+        {
+            bHasVisiPrnLockSettings = true;
+            break;
+        }
+    }
+    if ( !bHasVisiPrnLockSettings )
+    {
+        const SdrLayerAdmin& rLayerAdmin = GetDocSh()->GetDoc()->GetLayerAdmin();
+        SdrLayerIDSet aSdrLayerIDSet;
+        rLayerAdmin.getVisibleLayersODF( aSdrLayerIDSet );
+        mpFrameView -> SetVisibleLayers( aSdrLayerIDSet );
+        rLayerAdmin.getPrintableLayersODF( aSdrLayerIDSet );
+        mpFrameView -> SetPrintableLayers( aSdrLayerIDSet );
+        rLayerAdmin.getLockedLayersODF( aSdrLayerIDSet );
+        mpFrameView -> SetLockedLayers( aSdrLayerIDSet );
+    }
+
 
     if( mpFrameView->GetPageKind() != mePageKind )
     {
@@ -568,7 +600,7 @@ void DrawViewShell::SetActiveTabLayerIndex (int nIndex)
         if (nIndex>=0 && nIndex<pBar->GetPageCount())
         {
             // Tell the draw view and the tab control of the new active layer.
-            mpDrawView->SetActiveLayer (pBar->GetPageText (pBar->GetPageId (static_cast<sal_uInt16>(nIndex))));
+            mpDrawView->SetActiveLayer (pBar->GetLayerName (pBar->GetPageId (static_cast<sal_uInt16>(nIndex))));
             pBar->SetCurPageId (pBar->GetPageId (static_cast<sal_uInt16>(nIndex)));
             rtl::Reference<SdUnoDrawView> pUnoDrawView(new SdUnoDrawView (
                 *this,

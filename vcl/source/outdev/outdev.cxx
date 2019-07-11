@@ -18,14 +18,14 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/gdimtf.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/outdev.hxx>
-#include <vcl/unowrap.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/sysdata.hxx>
-#include <comphelper/lok.hxx>
 
 #include <salgdi.hxx>
 #include <svdata.hxx>
@@ -46,7 +46,8 @@ namespace {
 
 // Begin initializer and accessor public functions
 
-OutputDevice::OutputDevice() :
+OutputDevice::OutputDevice(OutDevType eOutDevType) :
+    meOutDevType(eOutDevType),
     maRegion(true),
     maFillColor( COL_WHITE ),
     maTextLineColor( COL_TRANSPARENT ),
@@ -58,12 +59,9 @@ OutputDevice::OutputDevice() :
     mpNextGraphics                  = nullptr;
     mpMetaFile                      = nullptr;
     mpFontInstance                     = nullptr;
-    mpFontCache                     = nullptr;
-    mpFontCollection                = nullptr;
     mpDeviceFontList                = nullptr;
     mpDeviceFontSizeList            = nullptr;
     mpOutDevStateStack.reset(new OutDevStateStack);
-    mpPDFWriter                     = nullptr;
     mpAlphaVDev                     = nullptr;
     mpExtOutDevData                 = nullptr;
     mnOutOffX                       = 0;
@@ -87,7 +85,6 @@ OutputDevice::OutputDevice() :
     if( AllSettings::GetLayoutRTL() ) //#i84553# tip BiDi preference to RTL
         mnTextLayoutMode            = ComplexTextLayoutFlags::BiDiRtl | ComplexTextLayoutFlags::TextOriginLeft;
 
-    meOutDevType                    = OUTDEV_DONTKNOW;
     meOutDevViewType                = OutDevViewType::DontKnow;
     mbMap                           = false;
     mbClipRegion                    = false;
@@ -146,7 +143,7 @@ void OutputDevice::dispose()
 {
     if ( GetUnoGraphicsList() )
     {
-        UnoWrapperBase* pWrapper = Application::GetUnoWrapper( false );
+        UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper( false );
         if ( pWrapper )
             pWrapper->ReleaseAllGraphics( this );
         delete mpUnoGraphicsList;
@@ -172,33 +169,17 @@ void OutputDevice::dispose()
     mpOutDevStateStack.reset();
 
     // release the active font instance
-    if( mpFontInstance )
-        mpFontInstance->Release();
+    mpFontInstance.clear();
 
     // remove cached results of GetDevFontList/GetDevSizeList
     mpDeviceFontList.reset();
     mpDeviceFontSizeList.reset();
 
     // release ImplFontCache specific to this OutputDevice
-    // TODO: refcount ImplFontCache
-    if( mpFontCache
-    && (mpFontCache != ImplGetSVData()->maGDIData.mpScreenFontCache)
-    && (ImplGetSVData()->maGDIData.mpScreenFontCache != nullptr) )
-    {
-        delete mpFontCache;
-        mpFontCache = nullptr;
-    }
+    mxFontCache.reset();
 
     // release ImplFontList specific to this OutputDevice
-    // TODO: refcount ImplFontList
-    if( mpFontCollection
-    && (mpFontCollection != ImplGetSVData()->maGDIData.mpScreenFontList)
-    && (ImplGetSVData()->maGDIData.mpScreenFontList != nullptr) )
-    {
-        mpFontCollection->Clear();
-        delete mpFontCollection;
-        mpFontCollection = nullptr;
-    }
+    mxFontCollection.reset();
 
     mpAlphaVDev.disposeAndClear();
     mpPrevGraphics.clear();
@@ -210,13 +191,8 @@ SalGraphics* OutputDevice::GetGraphics()
 {
     DBG_TESTSOLARMUTEX();
 
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-        {
-            SAL_WARN("vcl.gdi", "No mpGraphics set");
-        }
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        SAL_WARN("vcl.gdi", "No mpGraphics set");
 
     return mpGraphics;
 }
@@ -225,13 +201,8 @@ SalGraphics const *OutputDevice::GetGraphics() const
 {
     DBG_TESTSOLARMUTEX();
 
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-        {
-            SAL_WARN("vcl.gdi", "No mpGraphics set");
-        }
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        SAL_WARN("vcl.gdi", "No mpGraphics set");
 
     return mpGraphics;
 }
@@ -251,11 +222,8 @@ void OutputDevice::SetSettings( const AllSettings& rSettings )
 
 SystemGraphicsData OutputDevice::GetSystemGfxData() const
 {
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-            return SystemGraphicsData();
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return SystemGraphicsData();
 
     return mpGraphics->GetGraphicsData();
 }
@@ -264,52 +232,37 @@ SystemGraphicsData OutputDevice::GetSystemGfxData() const
 
 bool OutputDevice::SupportsCairo() const
 {
-    if (!mpGraphics)
-    {
-        if (!AcquireGraphics())
-            return false;
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return false;
 
     return mpGraphics->SupportsCairo();
 }
 
 cairo::SurfaceSharedPtr OutputDevice::CreateSurface(const cairo::CairoSurfaceSharedPtr& rSurface) const
 {
-    if (!mpGraphics)
-    {
-        if (!AcquireGraphics())
-            return cairo::SurfaceSharedPtr();
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return cairo::SurfaceSharedPtr();
     return mpGraphics->CreateSurface(rSurface);
 }
 
 cairo::SurfaceSharedPtr OutputDevice::CreateSurface(int x, int y, int width, int height) const
 {
-    if (!mpGraphics)
-    {
-        if (!AcquireGraphics())
-            return cairo::SurfaceSharedPtr();
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return cairo::SurfaceSharedPtr();
     return mpGraphics->CreateSurface(*this, x, y, width, height);
 }
 
 cairo::SurfaceSharedPtr OutputDevice::CreateBitmapSurface(const BitmapSystemData& rData, const Size& rSize) const
 {
-    if (!mpGraphics)
-    {
-        if (!AcquireGraphics())
-            return cairo::SurfaceSharedPtr();
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return cairo::SurfaceSharedPtr();
     return mpGraphics->CreateBitmapSurface(*this, rData, rSize);
 }
 
 css::uno::Any OutputDevice::GetNativeSurfaceHandle(cairo::SurfaceSharedPtr& rSurface, const basegfx::B2ISize& rSize) const
 {
-    if (!mpGraphics)
-    {
-        if (!AcquireGraphics())
-            return css::uno::Any();
-    }
+    if (!mpGraphics && !AcquireGraphics())
+        return css::uno::Any();
     return mpGraphics->GetNativeSurfaceHandle(rSurface, rSize);
 }
 
@@ -354,11 +307,8 @@ void OutputDevice::SetRefPoint( const Point& rRefPoint )
 sal_uInt16 OutputDevice::GetBitCount() const
 {
     // we need a graphics instance
-    if ( !mpGraphics )
-    {
-        if ( !AcquireGraphics() )
-            return 0;
-    }
+    if ( !mpGraphics && !AcquireGraphics() )
+        return 0;
 
     return mpGraphics->GetBitCount();
 }
@@ -375,7 +325,7 @@ void OutputDevice::SetOutOffYPixel(long nOutOffY)
 
 css::uno::Reference< css::awt::XGraphics > OutputDevice::CreateUnoGraphics()
 {
-    UnoWrapperBase* pWrapper = Application::GetUnoWrapper();
+    UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper();
     return pWrapper ? pWrapper->CreateGraphics( this ) : css::uno::Reference< css::awt::XGraphics >();
 }
 
@@ -389,9 +339,8 @@ std::vector< VCLXGraphics* > *OutputDevice::CreateUnoGraphicsList()
 
 bool OutputDevice::SupportsOperation( OutDevSupportType eType ) const
 {
-    if( !mpGraphics )
-        if( !AcquireGraphics() )
-            return false;
+    if( !mpGraphics && !AcquireGraphics() )
+        return false;
     const bool bHasSupport = mpGraphics->supportsOperation( eType );
     return bHasSupport;
 }
@@ -419,9 +368,8 @@ void OutputDevice::DrawOutDev( const Point& rDestPt, const Size& rDestSize,
     if ( !IsDeviceOutputNecessary() )
         return;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -476,9 +424,8 @@ void OutputDevice::DrawOutDev( const Point& rDestPt, const Size& rDestSize,
     if ( !IsDeviceOutputNecessary() )
         return;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -538,9 +485,8 @@ void OutputDevice::CopyArea( const Point& rDestPt,
     if ( !IsDeviceOutputNecessary() )
         return;
 
-    if ( !mpGraphics )
-        if ( !AcquireGraphics() )
-            return;
+    if ( !mpGraphics && !AcquireGraphics() )
+        return;
 
     if ( mbInitClipRegion )
         InitClipRegion();
@@ -616,11 +562,8 @@ void OutputDevice::drawOutDevDirect( const OutputDevice* pSrcDev, SalTwoRect& rP
                 }
                 pSrcGraphics = pSrcDev->mpGraphics;
 
-                if ( !mpGraphics )
-                {
-                    if ( !AcquireGraphics() )
-                        return;
-                }
+                if ( !mpGraphics && !AcquireGraphics() )
+                    return;
                 SAL_WARN_IF( !mpGraphics || !pSrcDev->mpGraphics, "vcl.gdi",
                             "OutputDevice::DrawOutDev(): We need more than one Graphics" );
             }

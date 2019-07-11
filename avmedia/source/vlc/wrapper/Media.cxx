@@ -13,6 +13,7 @@
 #include <wrapper/Instance.hxx>
 #include "Types.hxx"
 #include <wrapper/Common.hxx>
+#include <sal/log.hxx>
 
 struct libvlc_instance_t;
 
@@ -34,9 +35,9 @@ namespace
     char* ( *libvlc_media_get_mrl )(libvlc_media_t *p_md);
 
 
-    libvlc_media_t* InitMedia( const rtl::OUString& url, Instance& instance )
+    libvlc_media_t* InitMedia( const OUString& url, Instance& instance )
     {
-        rtl::OString dest;
+        OString dest;
         url.convertToString(&dest, RTL_TEXTENCODING_UTF8, 0);
 
         return libvlc_media_new_location(instance, dest.getStr());
@@ -45,7 +46,7 @@ namespace
 
 bool Media::LoadSymbols()
 {
-    ApiMap const VLC_MEDIA_API[] =
+    static ApiMap const VLC_MEDIA_API[] =
     {
         SYM_MAP( libvlc_media_new_path ),
         SYM_MAP( libvlc_media_release ),
@@ -60,7 +61,7 @@ bool Media::LoadSymbols()
     return InitApiMap( VLC_MEDIA_API );
 }
 
-Media::Media( const rtl::OUString& url, Instance& instance )
+Media::Media( const OUString& url, Instance& instance )
     : mMedia( InitMedia( url, instance ) )
 {
     if (mMedia == nullptr)

@@ -8,8 +8,11 @@
  */
 
 #include <comphelper/lok.hxx>
+#include <i18nlangtag/languagetag.hxx>
+#include <sal/log.hxx>
 
 #include <iostream>
+#include <sstream>
 
 namespace comphelper
 {
@@ -34,6 +37,9 @@ static bool g_bViewIdForVisCursorInvalidation(false);
 static bool g_bLocalRendering(false);
 
 static LanguageTag g_aLanguageTag("en-US", true);
+
+/// Scaling of the cairo or CoreGraphics canvas painting for hi-dpi or zooming in Calc.
+static double g_fDPIScale(1.0);
 
 void setActive(bool bActive)
 {
@@ -73,6 +79,16 @@ void setDialogPainting(bool bDialogPainting)
 bool isDialogPainting()
 {
     return g_bDialogPainting;
+}
+
+void setDPIScale(double fDPIScale)
+{
+    g_fDPIScale = fDPIScale;
+}
+
+double getDPIScale()
+{
+    return g_fDPIScale;
 }
 
 void setTiledAnnotations(bool bTiledAnnotations)
@@ -118,7 +134,10 @@ bool isLocalRendering()
 void setLanguageTag(const LanguageTag& languageTag)
 {
     if (g_aLanguageTag != languageTag)
+    {
+        SAL_INFO("comphelper.lok", "setLanguageTag: from " << g_aLanguageTag.getBcp47() << " to " << languageTag.getBcp47());
         g_aLanguageTag = languageTag;
+    }
 }
 
 const LanguageTag& getLanguageTag()

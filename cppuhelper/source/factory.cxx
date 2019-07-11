@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <osl/mutex.hxx>
 #include <cppuhelper/weak.hxx>
@@ -36,6 +37,7 @@
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
 #include <com/sun/star/lang/XSingleComponentFactory.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/loader/XImplementationLoader.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -51,8 +53,6 @@ using namespace com::sun::star::uno;
 using namespace com::sun::star::lang;
 using namespace com::sun::star::loader;
 using namespace com::sun::star::registry;
-
-using ::rtl::OUString;
 
 namespace cppu
 {
@@ -551,7 +551,7 @@ ORegistryFactoryHelper::getPropertySetInfo()
 IPropertyArrayHelper & ORegistryFactoryHelper::getInfoHelper()
 {
     ::osl::MutexGuard guard( aMutex );
-    if (m_property_array_helper.get() == nullptr)
+    if (m_property_array_helper == nullptr)
     {
         beans::Property prop(
             "ImplementationKey" /* name */,
@@ -562,7 +562,7 @@ IPropertyArrayHelper & ORegistryFactoryHelper::getInfoHelper()
         m_property_array_helper.reset(
             new ::cppu::OPropertyArrayHelper( &prop, 1 ) );
     }
-    return *m_property_array_helper.get();
+    return *m_property_array_helper;
 }
 
 

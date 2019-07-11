@@ -26,6 +26,8 @@
 #include <tools/fontenum.hxx>
 #include <salhelper/simplereferenceobject.hxx>
 #include <set>
+#include <unordered_set>
+#include <unordered_map>
 #include <memory>
 
 class XMLFontAutoStylePool_Impl;
@@ -33,20 +35,27 @@ class SvXMLExport;
 
 class XMLOFF_DLLPUBLIC XMLFontAutoStylePool : public salhelper::SimpleReferenceObject
 {
+private:
     SvXMLExport& rExport;
 
-    std::unique_ptr<XMLFontAutoStylePool_Impl> pPool;
+    std::unique_ptr<XMLFontAutoStylePool_Impl> m_pFontAutoStylePool;
     std::set<OUString> m_aNames;
-    bool tryToEmbedFonts;
+    bool const m_bTryToEmbedFonts;
+    std::unordered_map<OString, OUString> m_aEmbeddedFontFiles;
 
-    OUString embedFontFile( const OUString& fontUrl );
+    OUString embedFontFile(OUString const & rFileUrl, OUString const & rFamilyName);
+
+    std::unordered_set<OUString> getUsedFontList();
 
 protected:
+    bool m_bEmbedUsedOnly;
+    bool m_bEmbedLatinScript;
+    bool m_bEmbedAsianScript;
+    bool m_bEmbedComplexScript;
 
     SvXMLExport& GetExport() { return rExport; }
 
 public:
-
     XMLFontAutoStylePool( SvXMLExport& rExport, bool tryToEmbedFonts = false );
     virtual ~XMLFontAutoStylePool() override;
 
@@ -65,6 +74,17 @@ public:
             rtl_TextEncoding eEnc )const;
 
     void exportXML();
+
+    void setEmbedOnlyUsedFonts(bool bEmbedUsedOnly)
+    {
+        m_bEmbedUsedOnly = bEmbedUsedOnly;
+    }
+    void setEmbedFontScripts(bool bEmbedLatinScript, bool bEmbedAsianScript, bool bEmbedComplexScript)
+    {
+        m_bEmbedLatinScript = bEmbedLatinScript;
+        m_bEmbedAsianScript = bEmbedAsianScript;
+        m_bEmbedComplexScript = bEmbedComplexScript;
+    }
 };
 
 #endif // INCLUDED_XMLOFF_XMLFONTAUTOSTYLEPOOL_HXX

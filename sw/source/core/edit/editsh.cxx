@@ -129,26 +129,37 @@ void SwEditShell::Insert2(const OUString &rStr, const bool bForceExpandHints )
             if ( nPrevPos )
                 --nPrevPos;
 
-            SwScriptInfo* pSI = SwScriptInfo::GetScriptInfo( static_cast<SwTextNode&>(rNode), true );
+            SwTextFrame const* pFrame;
+            SwScriptInfo *const pSI = SwScriptInfo::GetScriptInfo(
+                    static_cast<SwTextNode&>(rNode), &pFrame, true);
 
             sal_uInt8 nLevel = 0;
             if ( ! pSI )
             {
                 // seems to be an empty paragraph.
                 Point aPt;
-                SwContentFrame* pFrame =
-                        static_cast<SwTextNode&>(rNode).getLayoutFrame( GetLayout(), &aPt, pTmpCursor->GetPoint(),
-                                                    false );
+                std::pair<Point, bool> const tmp(aPt, false);
+                pFrame = static_cast<SwTextFrame*>(
+                        static_cast<SwTextNode&>(rNode).getLayoutFrame(
+                            GetLayout(), pTmpCursor->GetPoint(), &tmp));
 
                 SwScriptInfo aScriptInfo;
-                aScriptInfo.InitScriptInfo( static_cast<SwTextNode&>(rNode), pFrame->IsRightToLeft() );
-                nLevel = aScriptInfo.DirType( nPrevPos );
+                aScriptInfo.InitScriptInfo(static_cast<SwTextNode&>(rNode),
+                        pFrame->GetMergedPara(), pFrame->IsRightToLeft());
+                TextFrameIndex const iPrevPos(pFrame->MapModelToView(
+                            &static_cast<SwTextNode&>(rNode), nPrevPos));
+                nLevel = aScriptInfo.DirType( iPrevPos );
             }
             else
             {
-                if ( COMPLETE_STRING != pSI->GetInvalidityA() )
-                    pSI->InitScriptInfo( static_cast<SwTextNode&>(rNode) );
-                nLevel = pSI->DirType( nPrevPos );
+                if (TextFrameIndex(COMPLETE_STRING) != pSI->GetInvalidityA())
+                {
+                    // mystery why this doesn't use the other overload?
+                    pSI->InitScriptInfo(static_cast<SwTextNode&>(rNode), pFrame->GetMergedPara());
+                }
+                TextFrameIndex const iPrevPos(pFrame->MapModelToView(
+                            &static_cast<SwTextNode&>(rNode), nPrevPos));
+                nLevel = pSI->DirType(iPrevPos);
             }
 
             pTmpCursor->SetCursorBidiLevel( nLevel );
@@ -174,7 +185,7 @@ void SwEditShell::Overwrite(const OUString &rStr)
     EndAllAction();
 }
 
-long SwEditShell::SplitNode( bool bAutoFormat, bool bCheckTableStart )
+void SwEditShell::SplitNode( bool bAutoFormat, bool bCheckTableStart )
 {
     StartAllAction();
     GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::EMPTY, nullptr);
@@ -194,7 +205,6 @@ long SwEditShell::SplitNode( bool bAutoFormat, bool bCheckTableStart )
     ClearTableBoxContent();
 
     EndAllAction();
-    return 1;
 }
 
 bool SwEditShell::AppendTextNode()
@@ -406,10 +416,16 @@ OUString SwEditShell::GetCurWord()
 {
     const SwPaM& rPaM = *GetCursor();
     const SwTextNode* pNd = rPaM.GetNode().GetTextNode();
-    OUString aString = pNd ?
-                     pNd->GetCurWord(rPaM.GetPoint()->nContent.GetIndex()) :
-                     OUString();
-    return aString;
+    if (!pNd)
+    {
+        return OUString();
+    }
+    SwTextFrame const*const pFrame(static_cast<SwTextFrame*>(pNd->getLayoutFrame(GetLayout())));
+    if (pFrame)
+    {
+        return pFrame->GetCurWord(*rPaM.GetPoint());
+    }
+    return OUString();
 }
 
 void SwEditShell::UpdateDocStat( )
@@ -474,12 +490,17 @@ OUString SwEditShell::GetDropText( const sal_Int32 nChars ) const
         }
     }
 
-    SwTextNode* pTextNd = pCursor->GetNode( !pCursor->HasMark() ).GetTextNode();
+    SwTextNode const*const pTextNd = pCursor->GetNode(false).GetTextNode();
     if( pTextNd )
     {
-        sal_Int32 nDropLen = pTextNd->GetDropLen( nChars );
-        if( nDropLen )
-            aText = pTextNd->GetText().copy(0, nDropLen);
+        SwTextFrame const*const pTextFrame(static_cast<SwTextFrame const*>(
+            pTextNd->getLayoutFrame(GetLayout())));
+        SAL_WARN_IF(!pTextFrame, "sw.core", "GetDropText cursor has no frame?");
+        if (pTextFrame)
+        {
+            TextFrameIndex const nDropLen(pTextFrame->GetDropLen(TextFrameIndex(nChars)));
+            aText = pTextFrame->GetText().copy(0, sal_Int32(nDropLen));
+        }
     }
 
     return aText;
@@ -495,6 +516,14 @@ void SwEditShell::ReplaceDropText( const OUString &rStr, SwPaM* pPaM )
 
         const SwNodeIndex& rNd = pCursor->GetPoint()->nNode;
         SwPaM aPam( rNd, rStr.getLength(), rNd, 0 );
+        SwTextFrame const*const pTextFrame(static_cast<SwTextFrame const*>(
+            rNd.GetNode().GetTextNode()->getLayoutFrame(GetLayout())));
+        if (pTextFrame)
+        {
+            *aPam.GetPoint() = pTextFrame->MapViewToModelPos(TextFrameIndex(0));
+            *aPam.GetMark() = pTextFrame->MapViewToModelPos(TextFrameIndex(
+                std::min(rStr.getLength(), pTextFrame->GetText().getLength())));
+        }
         if( !GetDoc()->getIDocumentContentOperations().Overwrite( aPam, rStr ) )
         {
             OSL_FAIL( "Doc->getIDocumentContentOperations().Overwrite(Str) failed." );
@@ -506,7 +535,7 @@ void SwEditShell::ReplaceDropText( const OUString &rStr, SwPaM* pPaM )
 
 OUString SwEditShell::Calculate()
 {
-    OUString  aFormel;                    // the final formula
+    OUStringBuffer aFormel;                    // the final formula
     SwCalc    aCalc( *GetDoc() );
     const CharClass& rCC = GetAppCharClass();
 
@@ -517,18 +546,17 @@ OUString SwEditShell::Calculate()
         {
             const SwPosition *pStart = rCurrentPaM.Start(), *pEnd = rCurrentPaM.End();
             const sal_Int32 nStt = pStart->nContent.GetIndex();
-            OUString aStr = pTextNd->GetExpandText( nStt, pEnd->nContent.
-                                                GetIndex() - nStt );
+            OUString aStr = pTextNd->GetExpandText(GetLayout(),
+                                nStt, pEnd->nContent.GetIndex() - nStt);
 
             aStr = rCC.lowercase( aStr );
 
-            sal_Unicode ch;
             bool bValidFields = false;
             sal_Int32 nPos = 0;
 
             while( nPos < aStr.getLength() )
             {
-                ch = aStr[ nPos++ ];
+                sal_Unicode ch = aStr[ nPos++ ];
                 if( rCC.isLetter( aStr, nPos-1 ) || ch == '_' )
                 {
                     sal_Int32 nTmpStt = nPos-1;
@@ -553,18 +581,18 @@ OUString SwEditShell::Calculate()
                                                   pStart->nContent.GetIndex() );
                             bValidFields = true;
                         }
-                        aFormel += "(" + aCalc.GetStrResult( aCalc.VarLook( sVar )->nValue ) + ")";
+                        aFormel.append("(").append(aCalc.GetStrResult( aCalc.VarLook( sVar )->nValue )).append(")");
                     }
                     else
-                        aFormel += sVar;
+                        aFormel.append(sVar);
                 }
                 else
-                    aFormel += OUStringLiteral1(ch);
+                    aFormel.append(ch);
             }
         }
     }
 
-    return aCalc.GetStrResult( aCalc.Calculate(aFormel) );
+    return aCalc.GetStrResult( aCalc.Calculate(aFormel.makeStringAndClear()) );
 }
 
 sfx2::LinkManager& SwEditShell::GetLinkManager()
@@ -595,7 +623,8 @@ Graphic SwEditShell::GetIMapGraphic() const
         }
         else if ( rNd.IsOLENode() )
         {
-            aRet = *static_cast<SwOLENode&>(rNd).GetGraphic();
+            if (const Graphic* pGraphic = static_cast<SwOLENode&>(rNd).GetGraphic())
+                aRet = *pGraphic;
         }
         else
         {
@@ -665,19 +694,25 @@ void SwEditShell::GetINetAttrs( SwGetINetAttrs& rArr )
 {
     rArr.clear();
 
-    const SwTextNode* pTextNd;
     const SwCharFormats* pFormats = GetDoc()->GetCharFormats();
     for( auto n = pFormats->size(); 1 < n; )
     {
         SwIterator<SwTextINetFormat,SwCharFormat> aIter(*(*pFormats)[--n]);
         for( SwTextINetFormat* pFnd = aIter.First(); pFnd; pFnd = aIter.Next() )
         {
-            if( nullptr != ( pTextNd = pFnd->GetpTextNode()) &&
-                pTextNd->GetNodes().IsDocNodes() )
+            SwTextNode const*const pTextNd(pFnd->GetpTextNode());
+            SwTextFrame const*const pFrame(pTextNd
+                ? static_cast<SwTextFrame const*>(pTextNd->getLayoutFrame(GetLayout()))
+                : nullptr);
+            if (nullptr != pTextNd && nullptr != pFrame
+                && pTextNd->GetNodes().IsDocNodes()
+                // check it's not fully deleted
+                && pFrame->MapModelToView(pTextNd, pFnd->GetStart())
+                    != pFrame->MapModelToView(pTextNd, *pFnd->GetEnd()))
             {
                 SwTextINetFormat& rAttr = *pFnd;
-                OUString sText( pTextNd->GetExpandText( rAttr.GetStart(),
-                                    *rAttr.GetEnd() - rAttr.GetStart() ) );
+                OUString sText( pTextNd->GetExpandText(GetLayout(),
+                        rAttr.GetStart(), *rAttr.GetEnd() - rAttr.GetStart()) );
 
                 sText = sText.replaceAll(OUStringLiteral1(0x0a), "");
                 sText = comphelper::string::strip(sText, ' ');
@@ -720,7 +755,7 @@ SvNumberFormatter* SwEditShell::GetNumberFormatter()
 bool SwEditShell::ConvertFieldsToText()
 {
     StartAllAction();
-    bool bRet = GetDoc()->ConvertFieldsToText();
+    bool bRet = GetDoc()->ConvertFieldsToText(*GetLayout());
     EndAllAction();
     return bRet;
 }
@@ -764,6 +799,7 @@ void SwEditShell::SetNumberingRestart()
                             SwTextNode* pTextNd( pNd->GetTextNode() );
                             SwNumRule* pNumRule( pTextNd->GetNumRule() );
 
+                            // sw_redlinehide: not sure what this should do, only called from mail-merge
                             bool bIsNodeNum =
                                ( pNumRule && pTextNd->GetNum() &&
                                  ( pTextNd->HasNumber() || pTextNd->HasBullet() ) &&
@@ -826,7 +862,15 @@ sal_uInt16 SwEditShell::GetLineCount()
     {
         if( nullptr != ( pContentFrame = pCNd->getLayoutFrame( GetLayout() ) ) && pContentFrame->IsTextFrame() )
         {
-            nRet = nRet + static_cast<SwTextFrame*>(pContentFrame)->GetLineCount( COMPLETE_STRING );
+            SwTextFrame *const pFrame(static_cast<SwTextFrame*>(pContentFrame));
+            nRet = nRet + pFrame->GetLineCount(TextFrameIndex(COMPLETE_STRING));
+            if (GetLayout()->IsHideRedlines())
+            {
+                if (auto const*const pMerged = pFrame->GetMergedPara())
+                {
+                    aStart = *pMerged->pLastNode;
+                }
+            }
         }
     }
     return nRet;

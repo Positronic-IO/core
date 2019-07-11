@@ -29,11 +29,10 @@ namespace svgio
         :   SvgNode(SVGTokenMarker, rDocument, pParent),
             aPrimitives(),
             maSvgStyleAttributes(*this),
-            mpViewBox(nullptr),
             maSvgAspectRatio(),
             maRefX(0),
             maRefY(0),
-            maMarkerUnits(strokeWidth),
+            maMarkerUnits(MarkerUnits::strokeWidth),
             maMarkerWidth(3),
             maMarkerHeight(3),
             mfAngle(0.0),
@@ -107,11 +106,11 @@ namespace svgio
                     {
                         if(aContent.startsWith("strokeWidth"))
                         {
-                            setMarkerUnits(strokeWidth);
+                            setMarkerUnits(MarkerUnits::strokeWidth);
                         }
                         else if(aContent.match(commonStrings::aStrUserSpaceOnUse))
                         {
-                            setMarkerUnits(userSpaceOnUse);
+                            setMarkerUnits(MarkerUnits::userSpaceOnUse);
                         }
                     }
                     break;

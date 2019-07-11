@@ -65,11 +65,11 @@ bool rtl_ImplIsWhitespace( sal_Unicode c )
  */
 static rtl_arena_type *pre_arena = nullptr;
 
-rtl_allocateStringFn rtl_allocateString = rtl_allocateMemory;
-rtl_freeStringFn rtl_freeString = rtl_freeMemory;
+rtl_allocateStringFn rtl_allocateString = malloc;
+rtl_freeStringFn rtl_freeString = free;
 
 extern "C" {
-static void *pre_allocateStringFn(sal_Size n)
+static void *pre_allocateStringFn(size_t n)
 {
     sal_Size size = RTL_MEMORY_ALIGN(n + 4, 4);
     char *addr = static_cast<char*>(rtl_arena_alloc(pre_arena, &size));
@@ -94,44 +94,26 @@ static void mark_static(void *addr, sal_Size /* size */)
     str->refCount |= SAL_STRING_STATIC_FLAG;
 }
 
-void SAL_CALL rtl_alloc_preInit (rtl_alloc_preInit_phase_t phase) SAL_THROW_EXTERN_C()
+void SAL_CALL rtl_alloc_preInit (sal_Bool start) SAL_THROW_EXTERN_C()
 {
-    switch (phase)
+    if (start)
     {
-        case rtlAllocPreInitStart:
-        {
-            rtl_allocateString = pre_allocateStringFn;
-            rtl_freeString = pre_freeStringFn;
-            pre_arena = rtl_arena_create("pre-init strings", 4, 0,
-                                         nullptr, rtl_arena_alloc,
-                                         rtl_arena_free, 0);
+        rtl_allocateString = pre_allocateStringFn;
+        rtl_freeString = pre_freeStringFn;
+        pre_arena = rtl_arena_create("pre-init strings", 4, 0,
+                                     nullptr, rtl_arena_alloc,
+                                     rtl_arena_free, 0);
 
-            // To be consistent (and to ensure the rtl_cache threads are started).
-            ensureCacheSingleton();
-        }
-        break;
+        // To be consistent (and to ensure the rtl_cache threads are started).
+        ensureCacheSingleton();
+    }
+    else
+    {
+        rtl_arena_foreach(pre_arena, mark_static);
+        rtl_allocateString = malloc;
+        rtl_freeString = free;
 
-        case rtlAllocPreInitEnd:
-        // back to normal
-        {
-            rtl_arena_foreach(pre_arena, mark_static);
-            rtl_allocateString = rtl_allocateMemory;
-            rtl_freeString = rtl_freeMemory;
-
-            // Stop the rtl cache thread to have no extra threads while forking.
-            rtl_cache_stop_threads();
-
-            // TODO: also re-initialize main allocator as well.
-        }
-        break;
-
-        case rtlAllocPostInit:
-        {
-            // We have forked and need to restart threads and anything
-            // that must start after forking.
-            rtl_cache_start_threads();
-        }
-        break;
+        // TODO: also re-initialize main allocator as well.
     }
 }
 

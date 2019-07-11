@@ -40,9 +40,9 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 
-FuConstRectangle::FuConstRectangle(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pViewP,
-                   SdrModel* pDoc, const SfxRequest& rReq)
-    : FuConstruct(pViewSh, pWin, pViewP, pDoc, rReq)
+FuConstRectangle::FuConstRectangle(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pViewP,
+                                   SdrModel* pDoc, const SfxRequest& rReq)
+    : FuConstruct(rViewSh, pWin, pViewP, pDoc, rReq)
 {
 }
 
@@ -207,7 +207,7 @@ void FuConstRectangle::Activate()
     pView->SetCurrentObj(sal::static_int_cast<sal_uInt16>(aObjKind));
 
     aOldPointer = pWindow->GetPointer();
-    pViewShell->SetActivePointer( aNewPointer );
+    rViewShell.SetActivePointer( aNewPointer );
 
     FuConstruct::Activate();
 }
@@ -222,7 +222,8 @@ void FuConstRectangle::SetLineEnds(SfxItemSet& rAttr, const SdrObject& rObj, sal
          nSlotId == SID_LINE_ARROW_CIRCLE     ||
          nSlotId == SID_LINE_CIRCLE_ARROW     ||
          nSlotId == SID_LINE_ARROW_SQUARE     ||
-         nSlotId == SID_LINE_SQUARE_ARROW )
+         nSlotId == SID_LINE_SQUARE_ARROW     ||
+         nSlotId == SID_DRAW_MEASURELINE )
     {
 
         // set attributes of line start and ends
@@ -276,6 +277,7 @@ void FuConstRectangle::SetLineEnds(SfxItemSet& rAttr, const SdrObject& rObj, sal
         switch (nSlotId)
         {
             case SID_LINE_ARROWS:
+            case SID_DRAW_MEASURELINE:
             {
                 // connector with arrow ends
                 rAttr.Put(XLineStartItem(SvxResId(RID_SVXSTR_ARROW), aArrow));
@@ -347,16 +349,16 @@ void FuConstRectangle::SetLineEnds(SfxItemSet& rAttr, const SdrObject& rObj, sal
 void FuConstRectangle::Deactivate()
 {
     FuConstruct::Deactivate();
-    pViewShell->SetActivePointer( aOldPointer );
+    rViewShell.SetActivePointer( aOldPointer );
 }
 
 // Create default drawing objects via keyboard
-SdrObject* FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
+SdrObjectUniquePtr FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const tools::Rectangle& rRectangle)
 {
-    SdrObject* pObj = SdrObjFactory::MakeNewObject(
+    SdrObjectUniquePtr pObj(SdrObjFactory::MakeNewObject(
         *pDrDoc,
         pView->GetCurrentObjInventor(),
-        pView->GetCurrentObjIdentifier());
+        pView->GetCurrentObjIdentifier()));
 
     if(pObj)
     {
@@ -376,13 +378,13 @@ SdrObject* FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const too
             case SID_LINE_SQUARE_ARROW:
             case SID_LINE_ARROWS:
             {
-                if(dynamic_cast<const SdrPathObj*>( pObj) !=  nullptr)
+                if(auto pPathObj = dynamic_cast<SdrPathObj*>( pObj.get() ))
                 {
                     sal_Int32 nYMiddle((aRect.Top() + aRect.Bottom()) / 2);
                     basegfx::B2DPolygon aPoly;
                     aPoly.append(basegfx::B2DPoint(aStart.X(), nYMiddle));
                     aPoly.append(basegfx::B2DPoint(aEnd.X(), nYMiddle));
-                    static_cast<SdrPathObj*>(pObj)->SetPathPoly(basegfx::B2DPolyPolygon(aPoly));
+                    pPathObj->SetPathPoly(basegfx::B2DPolyPolygon(aPoly));
                 }
                 else
                 {
@@ -394,11 +396,11 @@ SdrObject* FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const too
 
             case SID_DRAW_MEASURELINE:
             {
-                if(dynamic_cast<const SdrMeasureObj*>( pObj) != nullptr)
+                if(auto pMeasureObj = dynamic_cast<SdrMeasureObj*>( pObj.get() ))
                 {
                     sal_Int32 nYMiddle((aRect.Top() + aRect.Bottom()) / 2);
-                    static_cast<SdrMeasureObj*>(pObj)->SetPoint(Point(aStart.X(), nYMiddle), 0);
-                    static_cast<SdrMeasureObj*>(pObj)->SetPoint(Point(aEnd.X(), nYMiddle), 1);
+                    pMeasureObj->SetPoint(Point(aStart.X(), nYMiddle), 0);
+                    pMeasureObj->SetPoint(Point(aEnd.X(), nYMiddle), 1);
                 }
 
                 break;
@@ -407,11 +409,11 @@ SdrObject* FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const too
             case SID_DRAW_CAPTION:
             case SID_DRAW_CAPTION_VERTICAL:
             {
-                if(dynamic_cast<const SdrCaptionObj*>( pObj) !=  nullptr)
+                if(auto pCaptionObj = dynamic_cast<SdrCaptionObj*>( pObj.get() ))
                 {
                     bool bIsVertical(SID_DRAW_CAPTION_VERTICAL == nID);
 
-                    static_cast<SdrTextObj*>(pObj)->SetVerticalWriting(bIsVertical);
+                    pCaptionObj->SetVerticalWriting(bIsVertical);
 
                     if(bIsVertical)
                     {
@@ -425,8 +427,8 @@ SdrObject* FuConstRectangle::CreateDefaultObject(const sal_uInt16 nID, const too
                     //  (Edit mode is started in ScTabViewShell::ExecDraw, because
                     //  it must be handled by FuText)
 
-                    static_cast<SdrCaptionObj*>(pObj)->SetLogicRect(aRect);
-                    static_cast<SdrCaptionObj*>(pObj)->SetTailPos(
+                    pCaptionObj->SetLogicRect(aRect);
+                    pCaptionObj->SetTailPos(
                         aRect.TopLeft() - Point(aRect.GetWidth() / 2, aRect.GetHeight() / 2));
                 }
                 else

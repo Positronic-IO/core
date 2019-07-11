@@ -196,7 +196,7 @@ class ODatabaseDocument :public ModelDependentComponent             // ModelDepe
     bool                                                                                        m_bClosing;
     bool                                                                                        m_bAllowDocumentScripting;
     bool                                                                                        m_bHasBeenRecovered;
-    /// If XModel::attachResource() was called to inform us that the document is embedded into an other one.
+    /// If XModel::attachResource() was called to inform us that the document is embedded into another one.
     bool                                                                                        m_bEmbedded;
 
     enum StoreType { SAVE, SAVE_AS };
@@ -545,6 +545,19 @@ private:
             impl_createStorageFor_throw(
                 const OUString& _rURL
             ) const;
+
+    /** Extracts storage from arguments, or creates for the given URL, truncating it if a file with
+        this name already exists
+
+        @throws Exception
+            if creating the storage failed
+
+        @return
+            the storage that is either extracted from arguments, or newly created for the file at
+            the given URL
+    */
+    css::uno::Reference<css::embed::XStorage> impl_GetStorageOrCreateFor_throw(
+        const ::comphelper::NamedValueCollection& _rArguments, const OUString& _rURL) const;
 
     /** sets our "modified" flag
 

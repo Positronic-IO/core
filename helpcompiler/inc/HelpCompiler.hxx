@@ -65,7 +65,6 @@ namespace fs
         OUString data;
     public:
         path() {}
-        path(const path &rOther) : data(rOther.data) {}
         path(const std::string &in, convert)
         {
             OUString sWorkingDir;
@@ -153,7 +152,6 @@ struct joaat_hash
 
 typedef std::unordered_map<std::string, std::string, pref_hash> Stringtable;
 typedef std::deque<std::string> LinkedList;
-typedef std::vector<std::string> HashSet;
 
 typedef std::unordered_map<std::string, LinkedList, pref_hash> Hashtable;
 
@@ -165,7 +163,7 @@ public:
     std::string document_module;
     std::string document_title;
 
-    std::unique_ptr<HashSet> appl_hidlist;
+    std::unique_ptr< std::vector<std::string> > appl_hidlist;
     std::unique_ptr<Hashtable> appl_keywords;
     std::unique_ptr<Stringtable> appl_helptexts;
     xmlDocPtr appl_doc;
@@ -220,7 +218,7 @@ public:
                 bool in_bExtensionMode);
     /// @throws HelpProcessingException
     /// @throws BasicCodeTagger::TaggerException
-    bool compile();
+    void compile();
 private:
     xmlDocPtr getSourceDocument(const fs::path &filePath);
     static void tagBasicCodeExamples(xmlDocPtr doc);

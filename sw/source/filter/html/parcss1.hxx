@@ -85,8 +85,8 @@ enum CSS1SelectorType
  */
 class CSS1Selector
 {
-    CSS1SelectorType eType; // the type
-    OUString aSelector;     // the selector itself
+    CSS1SelectorType const eType; // the type
+    OUString const aSelector;     // the selector itself
     CSS1Selector *pNext;    // the following component
 
 public:
@@ -219,9 +219,8 @@ protected:
      * or DeclarationParsed() need to be called afterwards
      *
      * @param rIn the style element as string
-     * @return true if ???
      */
-    bool ParseStyleSheet( const OUString& rIn );
+    void ParseStyleSheet( const OUString& rIn );
 
     /** parse the content of a HTML style option
      *

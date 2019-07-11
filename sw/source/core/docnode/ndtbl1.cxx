@@ -51,6 +51,7 @@
 #include <calbck.hxx>
 #include <UndoTable.hxx>
 #include <o3tl/enumrange.hxx>
+#include <o3tl/make_unique.hxx>
 
 using ::editeng::SvxBorderLine;
 using namespace ::com::sun::star;
@@ -58,40 +59,53 @@ using namespace ::com::sun::star;
 // See swtable.cxx too
 #define COLFUZZY 20L
 
-inline bool IsSame( long nA, long nB ) { return  std::abs(nA-nB) <= COLFUZZY; }
+static bool IsSame( long nA, long nB ) { return  std::abs(nA-nB) <= COLFUZZY; }
 
-class SwTableFormatCmp
+// SwTableLine::ChgFrameFormat may delete old format which doesn't have writer listeners anymore.
+// This may invalidate my pointers, and lead to use-after-free. For this reason, I register myself
+// as a writer listener for the old format here, and take care to delete formats without listeners
+// in my own dtor.
+class SwTableFormatCmp : public SwClient
 {
 public:
-    SwFrameFormat *pOld,
-             *pNew;
-    sal_Int16     nType;
-
     SwTableFormatCmp( SwFrameFormat *pOld, SwFrameFormat *pNew, sal_Int16 nType );
+    ~SwTableFormatCmp() override;
 
-    static SwFrameFormat *FindNewFormat( std::vector<SwTableFormatCmp*> &rArr, SwFrameFormat const *pOld, sal_Int16 nType );
-    static void Delete( std::vector<SwTableFormatCmp*> &rArr );
+    static SwFrameFormat* FindNewFormat(std::vector<std::unique_ptr<SwTableFormatCmp>>& rArr,
+                                        SwFrameFormat const* pOld, sal_Int16 nType);
+
+private:
+    SwFrameFormat *pOld, *pNew;
+    sal_Int16 const nType;
 };
 
 SwTableFormatCmp::SwTableFormatCmp( SwFrameFormat *pO, SwFrameFormat *pN, sal_Int16 nT )
     : pOld ( pO ), pNew ( pN ), nType( nT )
 {
+    if (pOld)
+        pOld->Add(this);
 }
 
-SwFrameFormat *SwTableFormatCmp::FindNewFormat( std::vector<SwTableFormatCmp*> &rArr, SwFrameFormat const *pOld, sal_Int16 nType )
+SwTableFormatCmp::~SwTableFormatCmp()
 {
-    for ( auto pCmp : rArr )
+    if (pOld)
+    {
+        pOld->Remove(this);
+        if (!pOld->HasWriterListeners())
+            delete pOld;
+    }
+}
+
+// static
+SwFrameFormat* SwTableFormatCmp::FindNewFormat(std::vector<std::unique_ptr<SwTableFormatCmp>>& rArr,
+                                               SwFrameFormat const* pOld, sal_Int16 nType)
+{
+    for (auto& pCmp : rArr)
     {
         if ( pCmp->pOld == pOld && pCmp->nType == nType )
             return pCmp->pNew;
     }
     return nullptr;
-}
-
-void SwTableFormatCmp::Delete( std::vector<SwTableFormatCmp*> &rArr )
-{
-    for ( auto pCmp : rArr )
-        delete pCmp;
 }
 
 static void lcl_GetStartEndCell( const SwCursor& rCursor,
@@ -112,8 +126,10 @@ static void lcl_GetStartEndCell( const SwCursor& rCursor,
     SwContentNode* pPointNd = rCursor.GetContentNode();
     SwContentNode* pMarkNd  = rCursor.GetContentNode(false);
 
-    SwFrame* pPointFrame = pPointNd ? pPointNd->getLayoutFrame( pPointNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aPtPos ) : nullptr;
-    SwFrame* pMarkFrame  = pMarkNd  ? pMarkNd->getLayoutFrame( pMarkNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), &aMkPos )  : nullptr;
+    std::pair<Point, bool> tmp(aPtPos, true);
+    SwFrame *const pPointFrame = pPointNd ? pPointNd->getLayoutFrame(pPointNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, &tmp) : nullptr;
+    tmp.first = aMkPos;
+    SwFrame *const pMarkFrame = pMarkNd ? pMarkNd->getLayoutFrame(pMarkNd->GetDoc()->getIDocumentLayoutAccess().GetCurrentLayout(), nullptr, &tmp) : nullptr;
 
     prStart = pPointFrame ? pPointFrame->GetUpper() : nullptr;
     prEnd   = pMarkFrame  ? pMarkFrame->GetUpper() : nullptr;
@@ -143,7 +159,7 @@ static bool lcl_GetBoxSel( const SwCursor& rCursor, SwSelBoxes& rBoxes,
     return !rBoxes.empty();
 }
 
-inline void InsertLine( std::vector<SwTableLine*>& rLineArr, SwTableLine* pLine )
+static void InsertLine( std::vector<SwTableLine*>& rLineArr, SwTableLine* pLine )
 {
     if( rLineArr.end() == std::find( rLineArr.begin(), rLineArr.end(), pLine ) )
         rLineArr.push_back( pLine );
@@ -172,9 +188,9 @@ struct LinesAndTable
           m_rLines(rL), m_rTable(rTable), m_bInsertLines(true) {}
 };
 
-bool FindLine_( FndLine_ & rLine, LinesAndTable* pPara );
+static bool FindLine_( FndLine_ & rLine, LinesAndTable* pPara );
 
-bool FindBox_( FndBox_ & rBox, LinesAndTable* pPara )
+static bool FindBox_( FndBox_ & rBox, LinesAndTable* pPara )
 {
     if (!rBox.GetLines().empty())
     {
@@ -254,7 +270,8 @@ static void lcl_CollectLines( std::vector<SwTableLine*> &rArr, const SwCursor& r
     }
 }
 
-static void lcl_ProcessRowAttr( std::vector<SwTableFormatCmp*>& rFormatCmp, SwTableLine* pLine, const SfxPoolItem& rNew )
+static void lcl_ProcessRowAttr(std::vector<std::unique_ptr<SwTableFormatCmp>>& rFormatCmp,
+                               SwTableLine* pLine, const SfxPoolItem& rNew)
 {
     SwFrameFormat *pNewFormat;
     if ( nullptr != (pNewFormat = SwTableFormatCmp::FindNewFormat( rFormatCmp, pLine->GetFrameFormat(), 0 )))
@@ -264,13 +281,15 @@ static void lcl_ProcessRowAttr( std::vector<SwTableFormatCmp*>& rFormatCmp, SwTa
         SwFrameFormat *pOld = pLine->GetFrameFormat();
         SwFrameFormat *pNew = pLine->ClaimFrameFormat();
         pNew->SetFormatAttr( rNew );
-        rFormatCmp.push_back( new SwTableFormatCmp( pOld, pNew, 0 ) );
+        rFormatCmp.push_back(o3tl::make_unique<SwTableFormatCmp>(pOld, pNew, 0));
     }
 }
 
-static void lcl_ProcessBoxSize( std::vector<SwTableFormatCmp*> &rFormatCmp, SwTableBox *pBox, const SwFormatFrameSize &rNew );
+static void lcl_ProcessBoxSize(std::vector<std::unique_ptr<SwTableFormatCmp>>& rFormatCmp,
+                               SwTableBox* pBox, const SwFormatFrameSize& rNew);
 
-static void lcl_ProcessRowSize( std::vector<SwTableFormatCmp*> &rFormatCmp, SwTableLine *pLine, const SwFormatFrameSize &rNew )
+static void lcl_ProcessRowSize(std::vector<std::unique_ptr<SwTableFormatCmp>>& rFormatCmp,
+                               SwTableLine* pLine, const SwFormatFrameSize& rNew)
 {
     lcl_ProcessRowAttr( rFormatCmp, pLine, rNew );
     SwTableBoxes &rBoxes = pLine->GetTabBoxes();
@@ -278,7 +297,8 @@ static void lcl_ProcessRowSize( std::vector<SwTableFormatCmp*> &rFormatCmp, SwTa
         ::lcl_ProcessBoxSize( rFormatCmp, pBox, rNew );
 }
 
-static void lcl_ProcessBoxSize( std::vector<SwTableFormatCmp*> &rFormatCmp, SwTableBox *pBox, const SwFormatFrameSize &rNew )
+static void lcl_ProcessBoxSize(std::vector<std::unique_ptr<SwTableFormatCmp>>& rFormatCmp,
+                               SwTableBox* pBox, const SwFormatFrameSize& rNew)
 {
     SwTableLines &rLines = pBox->GetTabLines();
     if ( !rLines.empty() )
@@ -302,50 +322,42 @@ void SwDoc::SetRowSplit( const SwCursor& rCursor, const SwFormatRowSplit &rNew )
         {
             if (GetIDocumentUndoRedo().DoesUndo())
             {
-                GetIDocumentUndoRedo().AppendUndo(new SwUndoAttrTable(*pTableNd));
+                GetIDocumentUndoRedo().AppendUndo(o3tl::make_unique<SwUndoAttrTable>(*pTableNd));
             }
 
-            std::vector<SwTableFormatCmp*> aFormatCmp;
+            std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
             aFormatCmp.reserve( std::max( 255, static_cast<int>(aRowArr.size()) ) );
 
             for( auto pLn : aRowArr )
                 ::lcl_ProcessRowAttr( aFormatCmp, pLn, rNew );
 
-            SwTableFormatCmp::Delete( aFormatCmp );
             getIDocumentState().SetModified();
         }
     }
 }
 
-void SwDoc::GetRowSplit( const SwCursor& rCursor, SwFormatRowSplit *& rpSz )
+std::unique_ptr<SwFormatRowSplit> SwDoc::GetRowSplit( const SwCursor& rCursor )
 {
-    rpSz = nullptr;
-
     SwTableNode* pTableNd = rCursor.GetPoint()->nNode.GetNode().FindTableNode();
-    if( pTableNd )
+    if( !pTableNd )
+        return nullptr;
+
+    std::vector<SwTableLine*> aRowArr; // For Lines collecting
+    ::lcl_CollectLines( aRowArr, rCursor, false );
+
+    if( aRowArr.empty() )
+        return nullptr;
+
+    SwFormatRowSplit* pSz = &const_cast<SwFormatRowSplit&>(aRowArr[0]->GetFrameFormat()->GetRowSplit());
+
+    for ( auto pLn : aRowArr )
     {
-        std::vector<SwTableLine*> aRowArr; // For Lines collecting
-        ::lcl_CollectLines( aRowArr, rCursor, false );
-
-        if( !aRowArr.empty() )
+        if ( pSz->GetValue() != pLn->GetFrameFormat()->GetRowSplit().GetValue() )
         {
-            rpSz = &const_cast<SwFormatRowSplit&>(aRowArr[0]->GetFrameFormat()->GetRowSplit());
-
-            if (rpSz)
-            {
-                for ( auto pLn : aRowArr )
-                {
-                    if ( (*rpSz).GetValue() != pLn->GetFrameFormat()->GetRowSplit().GetValue() )
-                    {
-                        rpSz = nullptr;
-                        break;
-                    }
-                }
-            }
-            if ( rpSz )
-                rpSz = new SwFormatRowSplit( *rpSz );
+            return nullptr;
         }
     }
+    return o3tl::make_unique<SwFormatRowSplit>( *pSz );
 }
 
 /* Class:  SwDoc
@@ -375,52 +387,42 @@ void SwDoc::SetRowHeight( const SwCursor& rCursor, const SwFormatFrameSize &rNew
         {
             if (GetIDocumentUndoRedo().DoesUndo())
             {
-                GetIDocumentUndoRedo().AppendUndo(new SwUndoAttrTable(*pTableNd));
+                GetIDocumentUndoRedo().AppendUndo(o3tl::make_unique<SwUndoAttrTable>(*pTableNd));
             }
 
-            std::vector<SwTableFormatCmp*> aFormatCmp;
+            std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
             aFormatCmp.reserve( std::max( 255, static_cast<int>(aRowArr.size()) ) );
             for ( auto pLn : aRowArr )
                 ::lcl_ProcessRowSize( aFormatCmp, pLn, rNew );
-            SwTableFormatCmp::Delete( aFormatCmp );
 
             getIDocumentState().SetModified();
         }
     }
 }
 
-void SwDoc::GetRowHeight( const SwCursor& rCursor, SwFormatFrameSize *& rpSz )
+std::unique_ptr<SwFormatFrameSize> SwDoc::GetRowHeight( const SwCursor& rCursor )
 {
-    rpSz = nullptr;
-
     SwTableNode* pTableNd = rCursor.GetPoint()->nNode.GetNode().FindTableNode();
-    if( pTableNd )
+    if( !pTableNd )
+        return nullptr;
+
+    std::vector<SwTableLine*> aRowArr; // For Lines collecting
+    ::lcl_CollectLines( aRowArr, rCursor, true );
+
+    if( aRowArr.empty() )
+        return nullptr;
+
+    SwFormatFrameSize* pSz = &const_cast<SwFormatFrameSize&>(aRowArr[0]->GetFrameFormat()->GetFrameSize());
+
+    for ( auto pLn : aRowArr )
     {
-        std::vector<SwTableLine*> aRowArr; // For Lines collecting
-        ::lcl_CollectLines( aRowArr, rCursor, true );
-
-        if( !aRowArr.empty() )
-        {
-            rpSz = &const_cast<SwFormatFrameSize&>(aRowArr[0]->GetFrameFormat()->GetFrameSize());
-
-            if (rpSz)
-            {
-                for ( auto pLn : aRowArr )
-                {
-                    if ( *rpSz != pLn->GetFrameFormat()->GetFrameSize() )
-                    {
-                        rpSz = nullptr;
-                        break;
-                    }
-                }
-            }
-            if ( rpSz )
-                rpSz = new SwFormatFrameSize( *rpSz );
-        }
+        if ( *pSz != pLn->GetFrameFormat()->GetFrameSize() )
+            return nullptr;
     }
+    return o3tl::make_unique<SwFormatFrameSize>( *pSz );
 }
 
-bool SwDoc::BalanceRowHeight( const SwCursor& rCursor, bool bTstOnly )
+bool SwDoc::BalanceRowHeight( const SwCursor& rCursor, bool bTstOnly, const bool bOptimize )
 {
     bool bRet = false;
     SwTableNode* pTableNd = rCursor.GetPoint()->nNode.GetNode().FindTableNode();
@@ -434,7 +436,7 @@ bool SwDoc::BalanceRowHeight( const SwCursor& rCursor, bool bTstOnly )
             if( !bTstOnly )
             {
                 long nHeight = 0;
-
+                sal_Int32 nTotalHeight = 0;
                 for ( auto pLn : aRowArr )
                 {
                     SwIterator<SwFrame,SwFormat> aIter( *pLn->GetFrameFormat() );
@@ -444,20 +446,24 @@ bool SwDoc::BalanceRowHeight( const SwCursor& rCursor, bool bTstOnly )
                         nHeight = std::max( nHeight, pFrame->getFrameArea().Height() );
                         pFrame = aIter.Next();
                     }
+                    nTotalHeight += nHeight;
                 }
+
+                if ( bOptimize )
+                    nHeight = nTotalHeight / aRowArr.size();
+
                 SwFormatFrameSize aNew( ATT_MIN_SIZE, 0, nHeight );
 
                 if (GetIDocumentUndoRedo().DoesUndo())
                 {
                     GetIDocumentUndoRedo().AppendUndo(
-                            new SwUndoAttrTable(*pTableNd));
+                            o3tl::make_unique<SwUndoAttrTable>(*pTableNd));
                 }
 
-                std::vector<SwTableFormatCmp*> aFormatCmp;
+                std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
                 aFormatCmp.reserve( std::max( 255, static_cast<int>(aRowArr.size()) ) );
                 for( auto pLn : aRowArr )
                     ::lcl_ProcessRowSize( aFormatCmp, pLn, aNew );
-                SwTableFormatCmp::Delete( aFormatCmp );
 
                 getIDocumentState().SetModified();
             }
@@ -479,16 +485,15 @@ void SwDoc::SetRowBackground( const SwCursor& rCursor, const SvxBrushItem &rNew 
         {
             if (GetIDocumentUndoRedo().DoesUndo())
             {
-                GetIDocumentUndoRedo().AppendUndo(new SwUndoAttrTable(*pTableNd));
+                GetIDocumentUndoRedo().AppendUndo(o3tl::make_unique<SwUndoAttrTable>(*pTableNd));
             }
 
-            std::vector<SwTableFormatCmp*> aFormatCmp;
+            std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
             aFormatCmp.reserve( std::max( 255, static_cast<int>(aRowArr.size()) ) );
 
             for( auto pLn : aRowArr )
                 ::lcl_ProcessRowAttr( aFormatCmp, pLn, rNew );
 
-            SwTableFormatCmp::Delete( aFormatCmp );
             getIDocumentState().SetModified();
         }
     }
@@ -519,7 +524,7 @@ bool SwDoc::GetRowBackground( const SwCursor& rCursor, SvxBrushItem &rToFill )
     return bRet;
 }
 
-inline void InsertCell( std::vector<SwCellFrame*>& rCellArr, SwCellFrame* pCellFrame )
+static void InsertCell( std::vector<SwCellFrame*>& rCellArr, SwCellFrame* pCellFrame )
 {
     if( rCellArr.end() == std::find( rCellArr.begin(), rCellArr.end(), pCellFrame ) )
         rCellArr.push_back( pCellFrame );
@@ -567,10 +572,10 @@ void SwDoc::SetTabBorders( const SwCursor& rCursor, const SfxItemSet& rSet )
     SwTable& rTable = pTableNd->GetTable();
     if (GetIDocumentUndoRedo().DoesUndo())
     {
-        GetIDocumentUndoRedo().AppendUndo( new SwUndoAttrTable(*pTableNd) );
+        GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoAttrTable>(*pTableNd) );
     }
 
-    std::vector<SwTableFormatCmp*> aFormatCmp;
+    std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
     aFormatCmp.reserve( 255 );
     const SvxBoxItem* pSetBox;
     const SvxBoxInfoItem *pSetBoxInfo;
@@ -711,7 +716,10 @@ void SwDoc::SetTabBorders( const SwCursor& rCursor, const SfxItemSet& rSet )
                         if ( bLeftValid )
                         {
                             aBox.SetLine( bRightOver ? pLeft : nullptr, SvxBoxItemLine::RIGHT );
-                            bVertValid ? nType |= 0x0020 : nType |= 0x0010;
+                            if (bVertValid)
+                                nType |= 0x0020;
+                            else
+                                nType |= 0x0010;
                         }
                         if ( bLeftOver )
                         {
@@ -791,7 +799,7 @@ void SwDoc::SetTabBorders( const SwCursor& rCursor, const SfxItemSet& rSet )
                 SwFrameFormat *pOld = pBox->GetFrameFormat();
                 SwFrameFormat *pNew = pBox->ClaimFrameFormat();
                 pNew->SetFormatAttr( aBox );
-                aFormatCmp.push_back( new SwTableFormatCmp( pOld, pNew, nType ) );
+                aFormatCmp.push_back(o3tl::make_unique<SwTableFormatCmp>(pOld, pNew, nType));
             }
         }
 
@@ -807,7 +815,6 @@ void SwDoc::SetTabBorders( const SwCursor& rCursor, const SfxItemSet& rSet )
         pTableLayout->BordersChanged(
             pTableLayout->GetBrowseWidthByTabFrame( *pTabFrame ) );
     }
-    SwTableFormatCmp::Delete( aFormatCmp );
     ::ClearFEShellTabCols(*this, nullptr);
     getIDocumentState().SetModified();
 }
@@ -850,7 +857,7 @@ void SwDoc::SetTabLineStyle( const SwCursor& rCursor,
         SwTable& rTable = pTableNd->GetTable();
         if (GetIDocumentUndoRedo().DoesUndo())
         {
-            GetIDocumentUndoRedo().AppendUndo(new SwUndoAttrTable(*pTableNd));
+            GetIDocumentUndoRedo().AppendUndo(o3tl::make_unique<SwUndoAttrTable>(*pTableNd));
         }
 
         for( auto &rU : aUnions )
@@ -1136,10 +1143,10 @@ void SwDoc::SetBoxAttr( const SwCursor& rCursor, const SfxPoolItem &rNew )
         SwTable& rTable = pTableNd->GetTable();
         if (GetIDocumentUndoRedo().DoesUndo())
         {
-            GetIDocumentUndoRedo().AppendUndo( new SwUndoAttrTable(*pTableNd) );
+            GetIDocumentUndoRedo().AppendUndo( o3tl::make_unique<SwUndoAttrTable>(*pTableNd) );
         }
 
-        std::vector<SwTableFormatCmp*> aFormatCmp;
+        std::vector<std::unique_ptr<SwTableFormatCmp>> aFormatCmp;
         aFormatCmp.reserve(std::max<size_t>(255, aBoxes.size()));
         for (size_t i = 0; i < aBoxes.size(); ++i)
         {
@@ -1153,7 +1160,7 @@ void SwDoc::SetBoxAttr( const SwCursor& rCursor, const SfxPoolItem &rNew )
                 SwFrameFormat *pOld = pBox->GetFrameFormat();
                 SwFrameFormat *pNew = pBox->ClaimFrameFormat();
                 pNew->SetFormatAttr( rNew );
-                aFormatCmp.push_back( new SwTableFormatCmp( pOld, pNew, 0 ) );
+                aFormatCmp.push_back(o3tl::make_unique<SwTableFormatCmp>(pOld, pNew, 0));
             }
 
             pBox->SetDirectFormatting(true);
@@ -1168,7 +1175,6 @@ void SwDoc::SetBoxAttr( const SwCursor& rCursor, const SfxPoolItem &rNew )
             pTableLayout->Resize(
                 pTableLayout->GetBrowseWidthByTabFrame( *pTabFrame ), true );
         }
-        SwTableFormatCmp::Delete( aFormatCmp );
         getIDocumentState().SetModified();
     }
 }
@@ -1354,29 +1360,29 @@ static void lcl_CalcSubColValues( std::vector<sal_uInt16> &rToFill, const SwTabC
 }
 
 /**
- * Retrievs new values to set the TabCols.
+ * Retrieves new values to set the TabCols.
  *
  * We do not iterate over the TabCols' entries, but over the gaps that describe Cells.
+ * We set TabCol entries for which we did not calculate Cells to 0.
  *
- * @param bWishValues == true:     We calculate the desired value of all affected
- *                                 Cells for the current Selection/current Cell.
- *                                 If more Cells are within a Column, the highest
- *                                 desired value is returned.
- *                                 We set TabCol entries for which we did not calculate
- *                                 Cells to 0.
- *
- * @param bWishValues == false:     The Selection is expanded vertically.
- *                                  We calculate the minimum value for every
- *                                  Column in the TabCols that intersects with the
- *                                  Selection.
+ * @param bWishValues == true:     Calculate the desired width of the content
+ *                                 The highest desired value is returned.
+ * @param bWishValues == false:    Calculate the minimum width of the content
+ * @param bColumnWidth == false:   We calculate the desired value of all affected
+ *                                 Cells for the current Selection only.
+ * @param bColumnWidth == true:     The Selection is expanded vertically.
+ *                                  We calculate the wish/minimum value for
+ *                                  each cell in every Column that intersects
+ *                                  with the Selection.
  */
 static void lcl_CalcColValues( std::vector<sal_uInt16> &rToFill, const SwTabCols &rCols,
                            const SwLayoutFrame *pStart, const SwLayoutFrame *pEnd,
-                           bool bWishValues )
+                           bool bWishValues,
+                           bool bColumnWidth )
 {
     SwSelUnions aUnions;
     ::MakeSelUnions( aUnions, pStart, pEnd,
-                    bWishValues ? SwTableSearchType::NONE : SwTableSearchType::Col );
+                    bColumnWidth ? SwTableSearchType::Col : SwTableSearchType::NONE );
 
     for ( auto &rU : aUnions )
     {
@@ -1455,7 +1461,10 @@ static void lcl_CalcColValues( std::vector<sal_uInt16> &rToFill, const SwTabCols
     }
 }
 
-void SwDoc::AdjustCellWidth( const SwCursor& rCursor, bool bBalance )
+void SwDoc::AdjustCellWidth( const SwCursor& rCursor,
+                             const bool bBalance,
+                             const bool bNoShrink,
+                             const bool bColumnWidth )
 {
     // Check whether the current Cursor has it's Point/Mark in a Table
     SwContentNode* pCntNd = rCursor.GetPoint()->nNode.GetNode().GetContentNode();
@@ -1483,7 +1492,7 @@ void SwDoc::AdjustCellWidth( const SwCursor& rCursor, bool bBalance )
     std::vector<sal_uInt16> aWish(aTabCols.Count() + 1);
     std::vector<sal_uInt16> aMins(aTabCols.Count() + 1);
 
-    ::lcl_CalcColValues( aWish, aTabCols, pStart, pEnd, true  );
+    ::lcl_CalcColValues( aWish, aTabCols, pStart, pEnd, true, bColumnWidth );
 
     // It's more robust if we calculate the minimum values for the whole Table
     const SwTabFrame *pTab = pStart->ImplFindTabFrame();
@@ -1491,32 +1500,32 @@ void SwDoc::AdjustCellWidth( const SwCursor& rCursor, bool bBalance )
     pEnd   = const_cast<SwLayoutFrame*>(pTab->FindLastContent()->GetUpper());
     while( !pEnd->IsCellFrame() )
         pEnd = pEnd->GetUpper();
-    ::lcl_CalcColValues( aMins, aTabCols, pStart, pEnd, false );
+    ::lcl_CalcColValues( aMins, aTabCols, pStart, pEnd, false, /*bColumnWidth=*/true );
 
-    if( bBalance )
+    sal_uInt16 nSelectedWidth = 0, nCols = 0;
+    float fTotalWish = 0;
+    if ( bBalance || bNoShrink )
     {
-        // All Columns, which are now selected, have a desired value.
-        // We add up the current values, divide the result by their
-        // count and get a desired value for balancing.
-        sal_uInt16 nWish = 0, nCnt = 0;
+        // Find the combined size of the selected columns
         for ( size_t i = 0; i <= aTabCols.Count(); ++i )
         {
-            int nDiff = aWish[i];
-            if ( nDiff )
+            if ( aWish[i] )
             {
                 if ( i == 0 )
-                    nWish += aTabCols[i] - aTabCols.GetLeft();
+                    nSelectedWidth += aTabCols[i] - aTabCols.GetLeft();
                 else if ( i == aTabCols.Count() )
-                    nWish += aTabCols.GetRight() - aTabCols[i-1];
+                    nSelectedWidth += aTabCols.GetRight() - aTabCols[i-1];
                 else
-                    nWish += aTabCols[i] - aTabCols[i-1];
-                ++nCnt;
+                    nSelectedWidth += aTabCols[i] - aTabCols[i-1];
+                ++nCols;
             }
+            fTotalWish += aWish[i];
         }
-        nWish /= nCnt;
+        const sal_uInt16 nEqualWidth = nSelectedWidth / nCols;
+        // bBalance: Distribute the width evenly
         for (sal_uInt16 & rn : aWish)
-            if ( rn )
-                rn = nWish;
+            if ( rn && bBalance )
+                rn = nEqualWidth;
     }
 
     const long nOldRight = aTabCols.GetRight();
@@ -1528,11 +1537,20 @@ void SwDoc::AdjustCellWidth( const SwCursor& rCursor, bool bBalance )
     // only afterwards.
     // The first column's desired width would be discarded as it would cause
     // the Table's width to exceed the maximum width.
+    const sal_uInt16 nEqualWidth = (aTabCols.GetRight() - aTabCols.GetLeft()) / (aTabCols.Count() + 1);
+    const sal_Int16 nTablePadding = nSelectedWidth - fTotalWish;
     for ( int k = 0; k < 2; ++k )
     {
         for ( size_t i = 0; i <= aTabCols.Count(); ++i )
         {
-            int nDiff = aWish[i];
+            // bNoShrink: distribute excess space proportionately on pass 2.
+            if ( bNoShrink && k && nTablePadding > 0 && fTotalWish > 0 )
+                aWish[i] += round( aWish[i] / fTotalWish * nTablePadding );
+
+            // First pass is primarily a shrink pass. Give all columns a chance
+            //    to grow by requesting the maximum width as "balanced".
+            // Second pass is a first-come, first-served chance to max out.
+            int nDiff = k ? aWish[i] : std::min(aWish[i], nEqualWidth);
             if ( nDiff )
             {
                 int nMin = aMins[i];

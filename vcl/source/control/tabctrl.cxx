@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <vcl/notebookbar.hxx>
 #include <vcl/svapp.hxx>
@@ -92,7 +93,6 @@ void TabControl::ImplInit( vcl::Window* pParent, WinBits nStyle )
 
     mnLastWidth                 = 0;
     mnLastHeight                = 0;
-    mnMaxPageWidth              = 0;
     mnActPageId                 = 0;
     mnCurPageId                 = 0;
     mbFormat                    = true;
@@ -255,7 +255,8 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, long nMaxWidth )
         pItem->maFormatText += aAppendStr;
         do
         {
-            pItem->maFormatText = pItem->maFormatText.replaceAt( pItem->maFormatText.getLength()-aAppendStr.getLength()-1, 1, "" );
+            if (pItem->maFormatText.getLength() > aAppendStr.getLength())
+                pItem->maFormatText = pItem->maFormatText.replaceAt( pItem->maFormatText.getLength()-aAppendStr.getLength()-1, 1, "" );
             aSize.setWidth( GetCtrlTextWidth( pItem->maFormatText ) );
             aSize.AdjustWidth(aImageSize.Width() );
             aSize.AdjustWidth(TAB_TABOFFSET_X*2 );
@@ -283,7 +284,7 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, long nMaxWidth )
 // http://stackoverflow.com/questions/9071205/balanced-word-wrap-minimum-raggedness-in-php
 namespace MinimumRaggednessWrap
 {
-    std::deque<size_t> GetEndOfLineIndexes(const std::vector<sal_Int32>& rWidthsOf, sal_Int32 nLineWidth)
+    static std::deque<size_t> GetEndOfLineIndexes(const std::vector<sal_Int32>& rWidthsOf, sal_Int32 nLineWidth)
     {
         ++nLineWidth;
 
@@ -381,8 +382,6 @@ bool TabControl::ImplPlaceTabs( long nWidth )
     //aBreakIndexes will contain the indexes of the last tab on each row
     std::deque<size_t> aBreakIndexes(MinimumRaggednessWrap::GetEndOfLineIndexes(aWidths, nMaxWidth - nOffsetX - 2));
 
-    if ( (mnMaxPageWidth > 0) && (mnMaxPageWidth < nMaxWidth) )
-        nMaxWidth = mnMaxPageWidth;
     nMaxWidth -= GetItemsOffset().X();
 
     long nX = nOffsetX;
@@ -1684,7 +1683,7 @@ void TabControl::RemovePage( sal_uInt16 nPageId )
             mpTabCtrlData->mpListBox->SetDropDownLineCount( mpTabCtrlData->mpListBox->GetEntryCount() );
         }
 
-        // If current page is removed, than first page gets the current page
+        // If current page is removed, then first page gets the current page
         if ( bIsCurrentPage  )
         {
             mnCurPageId = 0;
@@ -2016,7 +2015,7 @@ tools::Rectangle TabControl::GetCharacterBounds( sal_uInt16 nPageId, long nIndex
 {
     tools::Rectangle aRet;
 
-    if( !HasLayoutData() || ! mpTabCtrlData->maLayoutPageIdToLine.size() )
+    if( !HasLayoutData() || mpTabCtrlData->maLayoutPageIdToLine.empty() )
         FillLayoutData();
 
     if( HasLayoutData() )
@@ -2037,7 +2036,7 @@ long TabControl::GetIndexForPoint( const Point& rPoint, sal_uInt16& rPageId ) co
 {
     long nRet = -1;
 
-    if( !HasLayoutData() || ! mpTabCtrlData->maLayoutPageIdToLine.size() )
+    if( !HasLayoutData() || mpTabCtrlData->maLayoutPageIdToLine.empty() )
         FillLayoutData();
 
     if( HasLayoutData() )
@@ -2371,8 +2370,6 @@ bool NotebookbarTabControlBase::ImplPlaceTabs( long nWidth )
             aWidths.push_back(0);
     }
 
-    if ( (mnMaxPageWidth > 0) && (mnMaxPageWidth < nMaxWidth) )
-        nMaxWidth = mnMaxPageWidth;
     nMaxWidth -= GetItemsOffset().X();
 
     long nX = nOffsetX;

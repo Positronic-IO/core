@@ -24,12 +24,14 @@
 
 #include <com/sun/star/deployment/PackageInformationProvider.hpp>
 #include <com/sun/star/ucb/IllegalIdentifierException.hpp>
+#include <com/sun/star/ucb/ResultSetException.hpp>
 #include <ucbhelper/contentidentifier.hxx>
 #include <ucbhelper/providerhelper.hxx>
 #include <ucbhelper/content.hxx>
 #include <ucbhelper/propertyvalueset.hxx>
 #include <tools/diagnose_ex.h>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <vector>
@@ -251,11 +253,8 @@ namespace ucb { namespace ucp { namespace ext
     {
         ::osl::ClearableGuard< ::osl::Mutex > aGuard( m_pImpl->m_aMutex );
 
-        if ( m_pImpl->m_aResults.size() > i_nIndex )
-            // result already present.
-            return true;
-
-        return false;
+        // true if result already present.
+        return m_pImpl->m_aResults.size() > i_nIndex;
     }
 
 

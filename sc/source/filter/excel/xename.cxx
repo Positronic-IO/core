@@ -23,14 +23,20 @@
 
 #include <document.hxx>
 #include <rangenam.hxx>
+#include <tokenarray.hxx>
 #include <dbdata.hxx>
 #include <xehelper.hxx>
 #include <xelink.hxx>
 #include <globalnames.hxx>
 #include <excrecds.hxx>
+#include <xlname.hxx>
+#include <xeformula.hxx>
+#include <xestring.hxx>
+#include <xltools.hxx>
 
 #include <formula/grammar.hxx>
 #include <oox/export/utils.hxx>
+#include <oox/token/tokens.hxx>
 
 using namespace ::oox;
 
@@ -114,7 +120,7 @@ public:
     void                Initialize();
 
     /** Inserts the Calc name with the passed index and returns the Excel NAME index. */
-    sal_uInt16          InsertName( SCTAB nTab, sal_uInt16 nScNameIdx );
+    sal_uInt16          InsertName( SCTAB nTab, sal_uInt16 nScNameIdx, SCTAB nCurrTab );
 
     /** Inserts a new built-in defined name. */
     sal_uInt16          InsertBuiltInName( sal_Unicode cBuiltIn, const XclTokenArrayRef& xTokArr, SCTAB nScTab, const ScRangeList& aRangeList );
@@ -143,7 +149,7 @@ private:
     typedef XclExpRecordList< XclExpName >      XclExpNameList;
     typedef XclExpNameList::RecordRefType       XclExpNameRef;
 
-    typedef ::std::map< ::std::pair<SCTAB, sal_uInt16>, sal_uInt16> NamedExpIndexMap;
+    typedef ::std::map< ::std::pair<SCTAB, OUString>, sal_uInt16> NamedExpMap;
 
 private:
     /**
@@ -152,7 +158,7 @@ private:
      *
      * @return excel's name index.
      */
-    sal_uInt16          FindNamedExpIndex( SCTAB nTab, sal_uInt16 nScIdx );
+    sal_uInt16          FindNamedExp( SCTAB nTab, OUString sName );
 
     /** Returns the index of an existing built-in NAME record with the passed definition, otherwise 0. */
     sal_uInt16          FindBuiltInNameIdx( const OUString& rName,
@@ -178,7 +184,7 @@ private:
      * -1 as their table index, whereas sheet-local names have 0-based table
      *  index.
      */
-    NamedExpIndexMap    maNamedExpMap;
+    NamedExpMap         maNamedExpMap;
     XclExpNameList      maNameList;         /// List of NAME records.
     size_t              mnFirstUserIdx;     /// List index of first user-defined NAME record.
 };
@@ -334,6 +340,50 @@ void XclExpName::WriteBody( XclExpStream& rStrm )
         mxTokArr->WriteArray( rStrm );  // token array without size
 }
 
+/** Returns true (needed fixing) if FormulaToken was not absolute and 3D.
+    So, regardless of whether the fix was successful or not, true is still returned since a fix was required.*/
+static bool lcl_EnsureAbs3DToken( const SCTAB nTab, formula::FormulaToken* pTok, const bool bFix = true )
+{
+    bool bFixRequired = false;
+    if ( !pTok || ( pTok->GetType() != formula::svSingleRef && pTok->GetType() != formula::svDoubleRef ) )
+        return bFixRequired;
+
+    ScSingleRefData* pRef1 = pTok->GetSingleRef();
+    if ( !pRef1 )
+        return bFixRequired;
+
+    ScSingleRefData* pRef2 = nullptr;
+    if ( pTok->GetType() == formula::svDoubleRef )
+        pRef2 = pTok->GetSingleRef2();
+
+    if ( pRef1->IsTabRel() || !pRef1->IsFlag3D() )
+    {
+        bFixRequired = true;
+        if ( bFix )
+        {
+            if ( pRef1->IsTabRel() && nTab != SCTAB_GLOBAL )
+                pRef1->SetAbsTab( nTab + pRef1->Tab() );  //XLS requirement
+            if ( !pRef1->IsTabRel() )
+            {
+                pRef1->SetFlag3D( true );  //XLSX requirement
+                if ( pRef2 && !pRef2->IsTabRel() )
+                    pRef2->SetFlag3D( pRef2->Tab() != pRef1->Tab() );
+            }
+        }
+    }
+
+    if ( pRef2 && pRef2->IsTabRel() && !pRef1->IsTabRel() )
+    {
+        bFixRequired = true;
+        if ( bFix && nTab != SCTAB_GLOBAL )
+        {
+            pRef2->SetAbsTab( nTab + pRef2->Tab() );
+            pRef2->SetFlag3D( pRef2->Tab() != pRef1->Tab() );
+        }
+    }
+    return bFixRequired;
+}
+
 XclExpNameManagerImpl::XclExpNameManagerImpl( const XclExpRoot& rRoot ) :
     XclExpRoot( rRoot ),
     mnFirstUserIdx( 0 )
@@ -347,19 +397,28 @@ void XclExpNameManagerImpl::Initialize()
     CreateUserNames();
 }
 
-sal_uInt16 XclExpNameManagerImpl::InsertName( SCTAB nTab, sal_uInt16 nScNameIdx )
+sal_uInt16 XclExpNameManagerImpl::InsertName( SCTAB nTab, sal_uInt16 nScNameIdx, SCTAB nCurrTab )
 {
-    sal_uInt16 nNameIdx = FindNamedExpIndex( nTab, nScNameIdx );
-    if (nNameIdx)
-        return nNameIdx;
-
+    sal_uInt16 nNameIdx = 0;
     const ScRangeData* pData = nullptr;
     ScRangeName* pRN = (nTab == SCTAB_GLOBAL) ? GetDoc().GetRangeName() : GetDoc().GetRangeName(nTab);
     if (pRN)
         pData = pRN->findByIndex(nScNameIdx);
 
     if (pData)
-        nNameIdx = CreateName(nTab, *pData);
+    {
+        bool bEmulateGlobalRelativeTable = false;
+        const ScTokenArray* pCode = pData->GetCode();
+        if ( pCode
+            && nTab == SCTAB_GLOBAL
+            && (pData->HasType( ScRangeData::Type::AbsPos ) || pData->HasType( ScRangeData::Type::AbsArea )) )
+        {
+            bEmulateGlobalRelativeTable = lcl_EnsureAbs3DToken( nTab, pCode->FirstToken(), /*bFix=*/false );
+        }
+        nNameIdx = FindNamedExp( bEmulateGlobalRelativeTable ? nCurrTab : nTab, pData->GetName() );
+        if (!nNameIdx)
+            nNameIdx = CreateName(nTab, *pData);
+    }
 
     return nNameIdx;
 }
@@ -463,10 +522,10 @@ void XclExpNameManagerImpl::SaveXml( XclExpXmlStream& rStrm )
 
 // private --------------------------------------------------------------------
 
-sal_uInt16 XclExpNameManagerImpl::FindNamedExpIndex( SCTAB nTab, sal_uInt16 nScIdx )
+sal_uInt16 XclExpNameManagerImpl::FindNamedExp( SCTAB nTab, OUString sName )
 {
-    NamedExpIndexMap::key_type key = NamedExpIndexMap::key_type(nTab, nScIdx);
-    NamedExpIndexMap::const_iterator itr = maNamedExpMap.find(key);
+    NamedExpMap::key_type key = NamedExpMap::key_type(nTab, sName);
+    NamedExpMap::const_iterator itr = maNamedExpMap.find(key);
     return (itr == maNamedExpMap.end()) ? 0 : itr->second;
 }
 
@@ -536,19 +595,37 @@ sal_uInt16 XclExpNameManagerImpl::CreateName( SCTAB nTab, const ScRangeData& rRa
         xName->SetLocalTab(nTab);
     sal_uInt16 nNameIdx = Append( xName );
     // store the index of the NAME record in the lookup map
-    NamedExpIndexMap::key_type key = NamedExpIndexMap::key_type(nTab, rRangeData.GetIndex());
+    NamedExpMap::key_type key = NamedExpMap::key_type(nTab, rRangeData.GetName());
     maNamedExpMap[key] = nNameIdx;
 
     /*  Create the definition formula.
         This may cause recursive creation of other defined names. */
     if( const ScTokenArray* pScTokArr = const_cast< ScRangeData& >( rRangeData ).GetCode() )
     {
-        XclTokenArrayRef xTokArr = GetFormulaCompiler().CreateFormula( EXC_FMLATYPE_NAME, *pScTokArr );
-        xName->SetTokenArray( xTokArr );
-
+        XclTokenArrayRef xTokArr;
         OUString sSymbol;
-        rRangeData.GetSymbol( sSymbol, ((GetOutput() == EXC_OUTPUT_BINARY) ?
-                    formula::FormulaGrammar::GRAM_ENGLISH_XL_A1 : formula::FormulaGrammar::GRAM_OOXML));
+        // MSO requires named ranges to have absolute sheet references
+        if ( rRangeData.HasType( ScRangeData::Type::AbsPos ) || rRangeData.HasType( ScRangeData::Type::AbsArea ) )
+        {
+            // Don't modify the actual document; use a temporary copy to create the export formulas.
+            std::unique_ptr<ScTokenArray> pTokenCopy( pScTokArr->Clone() );
+            lcl_EnsureAbs3DToken(nTab, pTokenCopy->FirstToken());
+
+            xTokArr = GetFormulaCompiler().CreateFormula(EXC_FMLATYPE_NAME, *pTokenCopy);
+            if ( GetOutput() != EXC_OUTPUT_BINARY )
+            {
+                ScCompiler aComp(&GetDocRef(), rRangeData.GetPos(), *pTokenCopy,
+                                 formula::FormulaGrammar::GRAM_OOXML);
+                aComp.CreateStringFromTokenArray( sSymbol );
+            }
+        }
+        else
+        {
+            xTokArr = GetFormulaCompiler().CreateFormula( EXC_FMLATYPE_NAME, *pScTokArr );
+            rRangeData.GetSymbol( sSymbol, ((GetOutput() == EXC_OUTPUT_BINARY) ?
+                     formula::FormulaGrammar::GRAM_ENGLISH_XL_A1 : formula::FormulaGrammar::GRAM_OOXML));
+        }
+        xName->SetTokenArray( xTokArr );
         xName->SetSymbol( sSymbol );
 
         /*  Try to replace by existing built-in name - complete token array is
@@ -563,7 +640,7 @@ sal_uInt16 XclExpNameManagerImpl::CreateName( SCTAB nTab, const ScRangeData& rRa
             while( maNameList.GetSize() > nOldListSize )
                 maNameList.RemoveRecord( maNameList.GetSize() - 1 );
             // use index of the found built-in NAME record
-            key = NamedExpIndexMap::key_type(nTab, rRangeData.GetIndex());
+            key = NamedExpMap::key_type(nTab, rRangeData.GetName());
             maNamedExpMap[key] = nNameIdx = nBuiltInIdx;
         }
     }
@@ -637,15 +714,26 @@ void XclExpNameManagerImpl::CreateBuiltInNames()
 
 void XclExpNameManagerImpl::CreateUserNames()
 {
+    std::vector<ScRangeData*> vEmulateAsLocalRange;
     const ScRangeName& rNamedRanges = GetNamedRanges();
     ScRangeName::const_iterator itr = rNamedRanges.begin(), itrEnd = rNamedRanges.end();
     for (; itr != itrEnd; ++itr)
     {
         // skip definitions of shared formulas
-        if (!FindNamedExpIndex(SCTAB_GLOBAL, itr->second->GetIndex()))
-            CreateName(SCTAB_GLOBAL, *itr->second);
+        if (!FindNamedExp(SCTAB_GLOBAL, itr->second->GetName()))
+        {
+            const ScTokenArray* pCode = itr->second->GetCode();
+            if ( pCode
+                && (itr->second->HasType( ScRangeData::Type::AbsPos ) || itr->second->HasType( ScRangeData::Type::AbsArea ))
+                && lcl_EnsureAbs3DToken( SCTAB_GLOBAL, pCode->FirstToken(), /*bFix=*/false ) )
+            {
+                vEmulateAsLocalRange.emplace_back(itr->second.get());
+            }
+            else
+                CreateName(SCTAB_GLOBAL, *itr->second);
+        }
     }
-    //look at every sheet for local range names
+    //look at sheets containing local range names
     ScRangeName::TabNameCopyMap rLocalNames;
     GetDoc().GetAllTabRangeNames(rLocalNames);
     ScRangeName::TabNameCopyMap::iterator tabIt = rLocalNames.begin(), tabItEnd = rLocalNames.end();
@@ -656,8 +744,19 @@ void XclExpNameManagerImpl::CreateUserNames()
         for (; itr != itrEnd; ++itr)
         {
             // skip definitions of shared formulas
-            if (!FindNamedExpIndex(tabIt->first, itr->second->GetIndex()))
+            if (!FindNamedExp(tabIt->first, itr->second->GetName()))
                 CreateName(tabIt->first, *itr->second);
+        }
+    }
+
+    // Emulate relative global variables by creating a copy in each local range.
+    // Creating AFTER true local range names so that conflicting global names will be ignored.
+    for ( SCTAB nTab = 0; nTab < GetDoc().GetTableCount(); ++nTab )
+    {
+        for ( auto rangeDataItr : vEmulateAsLocalRange )
+        {
+            if ( !FindNamedExp(nTab, rangeDataItr->GetName()) )
+                CreateName(nTab, *rangeDataItr );
         }
     }
 }
@@ -677,9 +776,9 @@ void XclExpNameManager::Initialize()
     mxImpl->Initialize();
 }
 
-sal_uInt16 XclExpNameManager::InsertName( SCTAB nTab, sal_uInt16 nScNameIdx )
+sal_uInt16 XclExpNameManager::InsertName( SCTAB nTab, sal_uInt16 nScNameIdx, SCTAB nCurrTab )
 {
-    return mxImpl->InsertName( nTab, nScNameIdx );
+    return mxImpl->InsertName( nTab, nScNameIdx, nCurrTab );
 }
 
 sal_uInt16 XclExpNameManager::InsertBuiltInName( sal_Unicode cBuiltIn, const ScRange& rRange )

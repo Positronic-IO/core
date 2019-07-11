@@ -228,8 +228,11 @@ endef
 endif # SYSTEM_EPOXY
 
 define gb_LinkTarget__use_iconv
+ifeq ($(COM),MSC)
+$(call gb_LinkTarget_add_libs,$(1),libiconv.lib)
+else
 $(call gb_LinkTarget_add_libs,$(1),-liconv)
-
+endif
 endef
 
 ifneq ($(SYSTEM_MARIADB_CONNECTOR_C),)
@@ -254,6 +257,11 @@ $(call gb_LinkTarget_set_include,$(1),\
 $(call gb_LinkTarget_use_static_libraries,$(1),\
 	mariadb-connector-c \
 )
+ifeq ($(OS),MACOSX)
+$(call gb_LinkTarget_add_libs,$(1),\
+	-liconv \
+)
+endif
 
 endef
 define gb_ExternalProject__use_mariadb-connector-c
@@ -287,43 +295,6 @@ else
 define gb_LinkTarget__use_mysql
 
 $(call gb_LinkTarget_set_include,$(1),\
-	$$(INCLUDE) \
-)
-
-endef
-
-endif
-
-ifneq ($(SYSTEM_MYSQL_CONNECTOR_CPP),)
-
-define gb_LinkTarget__use_mysql-connector-cpp
-$(call gb_LinkTarget_add_libs,$(1),\
-	-lmysqlcppconn \
-)
-
-$(call gb_LinkTarget_add_defs,$(1),\
-	-DSYSTEM_MYSQL_CPPCONN \
-)
-endef
-
-else
-
-$(eval $(call gb_Helper_register_libraries,PLAINLIBS_OXT,\
-	mysqlcppconn \
-))
-
-# note: this does not link mysqlcppconn, it is loaded via osl_loadModuleRelative
-define gb_LinkTarget__use_mysql-connector-cpp
-
-$(call gb_LinkTarget_use_unpacked,$(1),mysql-connector-cpp)
-
-$(call gb_LinkTarget_add_defs,$(1),\
-	-DCPPCONN_LIB_BUILD \
-)
-
-$(call gb_LinkTarget_set_include,$(1),\
-	-I$(call gb_UnpackedTarball_get_dir,mysql-connector-cpp) \
-	-I$(call gb_UnpackedTarball_get_dir,mysql-connector-cpp)/cppconn \
 	$$(INCLUDE) \
 )
 
@@ -707,7 +678,7 @@ else # !SYSTEM_LIBCMIS
 
 define gb_LinkTarget__use_libcmis
 $(call gb_LinkTarget_set_include,$(1),\
-	-I$(call gb_UnpackedTarball_get_dir,libcmis)/src \
+	-I$(call gb_UnpackedTarball_get_dir,libcmis)/inc \
 	$$(INCLUDE) \
 )
 $(call gb_LinkTarget_use_static_libraries,$(1),\
@@ -827,6 +798,10 @@ endef
 else # !SYSTEM_LIBNUMBERTEXT
 
 ifneq ($(ENABLE_LIBNUMBERTEXT),)
+
+$(eval $(call gb_Helper_register_packages_for_install,ooo, \
+	libnumbertext_numbertext \
+))
 
 define gb_LinkTarget__use_libnumbertext
 $(call gb_LinkTarget_use_package,$(1),libnumbertext_numbertext)
@@ -1250,7 +1225,7 @@ endif # ANDROID
 endif # SYSTEM_REDLAND
 
 
-ifneq ($(USING_X11)$(ENABLE_CAIRO_CANVAS)$(ENABLE_HEADLESS),) # or
+ifneq ($(USING_X11)$(ENABLE_CAIRO_CANVAS)$(DISABLE_GUI),) # or
 
 ifneq ($(SYSTEM_CAIRO),)
 
@@ -1530,6 +1505,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 	$$(INCLUDE) \
 )
 $(call gb_LinkTarget_add_libs,$(1),$(HARFBUZZ_LIBS))
+$(call gb_LinkTarget_use_external,$(1),icuuc)
 $(call gb_LinkTarget_use_external_project,$(1),harfbuzz)
 
 endef
@@ -2676,7 +2652,7 @@ define gb_LinkTarget__use_cups
 
 endef
 
-endif # ENABLE_DBUS
+endif # ENABLE_CUPS
 
 ifeq ($(ENABLE_DBUS),TRUE)
 
@@ -2830,11 +2806,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 	$$(INCLUDE) \
 )
 
-$(call gb_LinkTarget_add_libs,$(1),\
-	$(call gb_UnpackedTarball_get_dir,poppler)/fofi/.libs/libfofi$(gb_StaticLibrary_PLAINEXT) \
-	$(call gb_UnpackedTarball_get_dir,poppler)/goo/.libs/libgoo$(gb_StaticLibrary_PLAINEXT) \
-	$(call gb_UnpackedTarball_get_dir,poppler)/poppler/.libs/libpoppler$(gb_StaticLibrary_PLAINEXT) \
-)
+$(call gb_LinkTarget_use_static_libraries,$(1),poppler)
 
 $(call gb_LinkTarget_use_external,$(1),libjpeg)
 
@@ -3324,7 +3296,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 )
 
 $(call gb_LinkTarget_add_libs,$(1),\
-       -L$(call gb_UnpackedTarball_get_dir,liborcus)/src/liborcus/.libs -lorcus-0.13 \
+       -L$(call gb_UnpackedTarball_get_dir,liborcus)/src/liborcus/.libs -lorcus-0.14 \
 )
 
 $(if $(SYSTEM_BOOST), \
@@ -3343,7 +3315,7 @@ $(call gb_LinkTarget_set_include,$(1),\
 )
 
 $(call gb_LinkTarget_add_libs,$(1),\
-	-L$(call gb_UnpackedTarball_get_dir,liborcus)/src/parser/.libs -lorcus-parser-0.13 \
+	-L$(call gb_UnpackedTarball_get_dir,liborcus)/src/parser/.libs -lorcus-parser-0.14 \
 )
 
 endef

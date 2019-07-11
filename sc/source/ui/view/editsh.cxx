@@ -54,7 +54,7 @@
 #include <svtools/cliplistener.hxx>
 #include <svl/whiter.hxx>
 #include <sot/formats.hxx>
-#include <svtools/transfer.hxx>
+#include <vcl/transfer.hxx>
 #include <svl/stritem.hxx>
 
 #include <editsh.hxx>
@@ -147,7 +147,7 @@ static void lcl_RemoveAttribs( EditView& rEditView )
     pEngine->SetUpdateMode(bOld);
 }
 
-void lclInsertCharacter( EditView* pTableView, EditView* pTopView, sal_Unicode cChar )
+static void lclInsertCharacter( EditView* pTableView, EditView* pTopView, sal_Unicode cChar )
 {
     OUString aString( cChar );
     if( pTableView )
@@ -273,19 +273,16 @@ void ScEditShell::Execute( SfxRequest& rReq )
                 vcl::Window* pWin = pViewData->GetDialogParent();
                 ScopedVclPtr<SfxAbstractPasteDialog> pDlg(pFact->CreatePasteDialog(pWin ? pWin->GetFrameWeld() : nullptr));
                 SotClipboardFormatId nFormat = SotClipboardFormatId::NONE;
-                if ( pDlg )
-                {
-                    pDlg->Insert( SotClipboardFormatId::STRING, EMPTY_OUSTRING );
-                    pDlg->Insert( SotClipboardFormatId::RTF,    EMPTY_OUSTRING );
-                    pDlg->Insert( SotClipboardFormatId::RICHTEXT,    EMPTY_OUSTRING );
-                    // Do not offer SotClipboardFormatId::STRING_TSVC for
-                    // in-cell paste.
+                pDlg->Insert( SotClipboardFormatId::STRING, EMPTY_OUSTRING );
+                pDlg->Insert( SotClipboardFormatId::RTF,    EMPTY_OUSTRING );
+                pDlg->Insert( SotClipboardFormatId::RICHTEXT,    EMPTY_OUSTRING );
+                // Do not offer SotClipboardFormatId::STRING_TSVC for
+                // in-cell paste.
 
-                    TransferableDataHelper aDataHelper(
-                        TransferableDataHelper::CreateFromSystemClipboard( pViewData->GetActiveWin() ) );
+                TransferableDataHelper aDataHelper(
+                    TransferableDataHelper::CreateFromSystemClipboard( pViewData->GetActiveWin() ) );
 
-                    nFormat = pDlg->GetFormat( aDataHelper.GetTransferable() );
-                }
+                nFormat = pDlg->GetFormat( aDataHelper.GetTransferable() );
                 pDlg.disposeAndClear();
 
                 // while the dialog was open, edit mode may have been stopped
@@ -409,7 +406,7 @@ void ScEditShell::Execute( SfxRequest& rReq )
                     const SfxStringItem* pFontItem = dynamic_cast<const SfxStringItem*>( pFtItem  );
                     if ( pFontItem )
                     {
-                        OUString aFontName(pFontItem->GetValue());
+                        const OUString& aFontName(pFontItem->GetValue());
                         vcl::Font aFont(aFontName, Size(1,1)); // Size just because CTOR
                         aNewItem = SvxFontItem( aFont.GetFamilyType(), aFont.GetFamilyName(),
                                     aFont.GetStyleName(), aFont.GetPitch(),
@@ -464,10 +461,8 @@ void ScEditShell::Execute( SfxRequest& rReq )
         case FID_INSERT_NAME:
             {
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                 ScopedVclPtr<AbstractScNamePasteDlg> pDlg(pFact->CreateScNamePasteDlg( pViewData->GetDialogParent(), pViewData->GetDocShell() ));
-                OSL_ENSURE(pDlg, "Dialog create fail!");
                 short nRet = pDlg->Execute();
                 // pDlg is needed below
 
@@ -506,11 +501,9 @@ void ScEditShell::Execute( SfxRequest& rReq )
                 SfxObjectShell* pObjSh = pViewData->GetSfxDocShell();
 
                 ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
-                OSL_ENSURE(pFact, "ScAbstractFactory create fail!");
 
                 ScopedVclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateScCharDlg(
-                    pViewData->GetDialogParent(), &aAttrs, pObjSh));
-                OSL_ENSURE(pDlg, "Dialog create fail!");
+                    pViewData->GetFrameWeld(), &aAttrs, pObjSh));
                 if (nSlot == SID_CHAR_DLG_EFFECT)
                 {
                     pDlg->SetCurPageId("fonteffects");
@@ -542,7 +535,7 @@ void ScEditShell::Execute( SfxRequest& rReq )
                     aFinder.ToggleRel( aSel.nStartPos, aSel.nEndPos );
                     if (aFinder.GetFound())
                     {
-                        OUString aNew = aFinder.GetText();
+                        const OUString& aNew = aFinder.GetText();
                         ESelection aNewSel( 0,aFinder.GetSelStart(), 0,aFinder.GetSelEnd() );
                         pEngine->SetText( aNew );
                         pTableView->SetSelection( aNewSel );
@@ -800,8 +793,8 @@ const SvxURLField* ScEditShell::GetURLField()
         if (pFieldItem)
         {
             const SvxFieldData* pField = pFieldItem->GetField();
-            if ( pField && dynamic_cast<const SvxURLField*>( pField) !=  nullptr )
-                return static_cast<const SvxURLField*>(pField);
+            if ( auto pURLField = dynamic_cast<const SvxURLField*>( pField) )
+                return pURLField;
         }
     }
 
@@ -1284,7 +1277,7 @@ void ScEditShell::GetUndoState(SfxItemSet &rSet)
     EditView* pTopView = pHdl->GetTopView();
     if (pTopView)
     {
-        ::svl::IUndoManager& rTopMgr = pTopView->GetEditEngine()->GetUndoManager();
+        SfxUndoManager& rTopMgr = pTopView->GetEditEngine()->GetUndoManager();
         if ( rTopMgr.GetUndoActionCount() == 0 )
             rSet.DisableItem( SID_UNDO );
         if ( rTopMgr.GetRedoActionCount() == 0 )

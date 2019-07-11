@@ -19,20 +19,17 @@
 #ifndef INCLUDED_SC_SOURCE_FILTER_XML_XMLDRANI_HXX
 #define INCLUDED_SC_SOURCE_FILTER_XML_XMLDRANI_HXX
 
-#include <xmloff/xmlictxt.hxx>
-#include <xmloff/xmlimp.hxx>
 #include <com/sun/star/sheet/DataImportMode.hpp>
 #include <com/sun/star/sheet/SubTotalColumn.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
-#include <com/sun/star/table/TableOrientation.hpp>
 
 #include <dbdata.hxx>
-#include "xmlimprt.hxx"
 #include "importcontext.hxx"
 
 #include <memory>
 
-class ScDBData;
+namespace sax_fastparser { class FastAttributeList; }
+
 struct ScQueryParam;
 
 class ScXMLDatabaseRangesContext : public ScXMLImportContext
@@ -179,8 +176,6 @@ public:
 
 class ScXMLConResContext : public ScXMLImportContext
 {
-    ScXMLDatabaseRangeContext*  pDatabaseRangeContext;
-
 public:
 
     ScXMLConResContext( ScXMLImport& rImport,
@@ -208,8 +203,6 @@ public:
 
 class ScXMLSortGroupsContext : public ScXMLImportContext
 {
-    ScXMLDatabaseRangeContext* pDatabaseRangeContext;
-
 public:
 
     ScXMLSortGroupsContext( ScXMLImport& rImport,

@@ -33,51 +33,57 @@
 #include <docsh.hxx>
 #include <docfld.hxx>
 #include <fldbas.hxx>
+#include <vcl/scheduler.hxx>
 
 namespace sw
 {
 
 DocumentTimerManager::DocumentTimerManager( SwDoc& i_rSwdoc ) : m_rDoc( i_rSwdoc ),
-                                                                mbStartIdleTimer( false ),
-                                                                mIdleBlockCount( 0 ),
-                                                                maDocIdle( i_rSwdoc )
+                                                                m_nIdleBlockCount( 0 ),
+                                                                m_bStartOnUnblock( false ),
+                                                                m_aDocIdle( i_rSwdoc )
 {
-    maDocIdle.SetPriority( TaskPriority::LOWEST );
-    maDocIdle.SetInvokeHandler( LINK( this, DocumentTimerManager, DoIdleJobs) );
-    maDocIdle.SetDebugName( "sw::DocumentTimerManager maDocIdle" );
+    m_aDocIdle.SetPriority(TaskPriority::LOWEST);
+    m_aDocIdle.SetInvokeHandler(LINK( this, DocumentTimerManager, DoIdleJobs));
+    m_aDocIdle.SetDebugName("sw::DocumentTimerManager m_aDocIdle");
 }
 
 void DocumentTimerManager::StartIdling()
 {
-    mbStartIdleTimer = true;
-    if( !mIdleBlockCount )
-        maDocIdle.Start();
+    m_bStartOnUnblock = true;
+    if (0 == m_nIdleBlockCount)
+    {
+        if (!m_aDocIdle.IsActive())
+            m_aDocIdle.Start();
+        else
+            Scheduler::Wakeup();
+    }
 }
 
 void DocumentTimerManager::StopIdling()
 {
-    mbStartIdleTimer = false;
-    maDocIdle.Stop();
+    m_bStartOnUnblock = false;
+    m_aDocIdle.Stop();
 }
 
 void DocumentTimerManager::BlockIdling()
 {
-    maDocIdle.Stop();
-    ++mIdleBlockCount;
+    assert(SAL_MAX_UINT32 != m_nIdleBlockCount);
+    ++m_nIdleBlockCount;
 }
 
 void DocumentTimerManager::UnblockIdling()
 {
-    --mIdleBlockCount;
-    if( !mIdleBlockCount && mbStartIdleTimer && !maDocIdle.IsActive() )
-        maDocIdle.Start();
-}
+    assert(0 != m_nIdleBlockCount);
+    --m_nIdleBlockCount;
 
-void DocumentTimerManager::StartBackgroundJobs()
-{
-    // Trigger DoIdleJobs(), asynchronously.
-    if (!maDocIdle.IsActive()) //fdo#73165 if the timer is already running don't restart from 0
-        maDocIdle.Start();
+    if ((0 == m_nIdleBlockCount) && m_bStartOnUnblock)
+    {
+        if (!m_aDocIdle.IsActive())
+            m_aDocIdle.Start();
+        else
+            Scheduler::Wakeup();
+    }
 }
 
 DocumentTimerManager::IdleJob DocumentTimerManager::GetNextIdleJob() const
@@ -102,10 +108,14 @@ DocumentTimerManager::IdleJob DocumentTimerManager::GetNextIdleJob() const
                 return IdleJob::Grammar;
         }
 
-        for ( auto pLayout : m_rDoc.GetAllLayouts() )
+        // If we're dragging re-layout doesn't occur so avoid a busy loop.
+        if (!pShell->HasDrawViewDrag())
         {
-            if( pLayout->IsIdleFormat() )
-                return IdleJob::Layout;
+            for ( auto pLayout : m_rDoc.GetAllLayouts() )
+            {
+                if( pLayout->IsIdleFormat() )
+                    return IdleJob::Layout;
+            }
         }
 
         SwFieldUpdateFlags nFieldUpdFlag = m_rDoc.GetDocumentSettingManager().getFieldUpdateFlags(true);
@@ -123,13 +133,15 @@ DocumentTimerManager::IdleJob DocumentTimerManager::GetNextIdleJob() const
     return IdleJob::None;
 }
 
-IMPL_LINK( DocumentTimerManager, DoIdleJobs, Timer*, pIdle, void )
+IMPL_LINK_NOARG( DocumentTimerManager, DoIdleJobs, Timer*, void )
 {
 #ifdef TIMELOG
     static ::rtl::Logfile* pModLogFile = 0;
     if( !pModLogFile )
         pModLogFile = new ::rtl::Logfile( "First DoIdleJobs" );
 #endif
+    BlockIdling();
+    StopIdling();
 
     IdleJob eJob = GetNextIdleJob();
 
@@ -183,7 +195,8 @@ IMPL_LINK( DocumentTimerManager, DoIdleJobs, Timer*, pIdle, void )
     }
 
     if ( IdleJob::None != eJob )
-        pIdle->Start();
+        StartIdling();
+    UnblockIdling();
 
 #ifdef TIMELOG
     if( pModLogFile && 1 != (long)pModLogFile )

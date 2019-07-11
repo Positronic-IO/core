@@ -35,7 +35,7 @@ class SwBreakDlg : public weld::GenericDialogController
     std::unique_ptr<weld::RadioButton> m_xColumnBtn;
     std::unique_ptr<weld::RadioButton> m_xPageBtn;
     std::unique_ptr<weld::Label> m_xPageCollText;
-    std::unique_ptr<weld::ComboBoxText> m_xPageCollBox;
+    std::unique_ptr<weld::ComboBox> m_xPageCollBox;
     std::unique_ptr<weld::CheckButton> m_xPageNumBox;
     std::unique_ptr<weld::SpinButton> m_xPageNumEdit;
     std::unique_ptr<weld::Button> m_xOkBtn;
@@ -45,10 +45,10 @@ class SwBreakDlg : public weld::GenericDialogController
     sal_uInt16      nKind;
     ::boost::optional<sal_uInt16>      oPgNum;
 
-    bool            bHtmlMode;
+    bool const            bHtmlMode;
 
     DECL_LINK(ToggleHdl, weld::ToggleButton&, void);
-    DECL_LINK(ChangeHdl, weld::ComboBoxText&, void);
+    DECL_LINK(ChangeHdl, weld::ComboBox&, void);
     DECL_LINK(PageNumHdl, weld::ToggleButton&, void);
     DECL_LINK(PageNumModifyHdl, weld::SpinButton&, void);
     DECL_LINK(OkHdl, weld::Button&, void);
@@ -57,7 +57,7 @@ class SwBreakDlg : public weld::GenericDialogController
 
 public:
     SwBreakDlg(weld::Window *pParent, SwWrtShell &rSh);
-    short execute();
+    virtual short run() override;
     const OUString& GetTemplateName() const { return m_aTemplate; }
     sal_uInt16 GetKind() const { return nKind; }
     const ::boost::optional<sal_uInt16>&  GetPageNumber() const { return oPgNum; }

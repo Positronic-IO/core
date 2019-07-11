@@ -73,7 +73,7 @@ void CacheItem::validateUINames(const OUString& sActLocale)
         // 1a) set UIName inside list of UINames for current locale
         lUINames[sActLocale] <<= sUIName;
     }
-    else if (lUINames.size()>0)
+    else if (!lUINames.empty())
     {
         // 1b) or get it from this list, if it not exist!
         lUINames[sActLocale] >>= sUIName;
@@ -112,7 +112,7 @@ css::uno::Sequence< css::beans::PropertyValue > CacheItem::getAsPackedPropertyVa
 }
 
 
-bool isSubSet(const css::uno::Any& aSubSet,
+static bool isSubSet(const css::uno::Any& aSubSet,
                   const css::uno::Any& aSet   )
 {
     const css::uno::Type& aT1 = aSubSet.getValueType();
@@ -199,8 +199,8 @@ bool isSubSet(const css::uno::Any& aSubSet,
                 (aSet    >>= uno_s2)
                )
             {
-                OUStringList stl_s1(comphelper::sequenceToContainer<OUStringList>(uno_s1));
-                OUStringList stl_s2(comphelper::sequenceToContainer<OUStringList>(uno_s2));
+                std::vector<OUString> stl_s1(comphelper::sequenceToContainer< std::vector<OUString> >(uno_s1));
+                std::vector<OUString> stl_s2(comphelper::sequenceToContainer< std::vector<OUString> >(uno_s2));
 
                 for (auto const& elem : stl_s1)
                 {

@@ -29,7 +29,7 @@ class FuConstCustomShape : public FuConstruct
     void SetAttributes( SdrObject* pObj );
 
 public:
-    FuConstCustomShape(ScTabViewShell* pViewSh, vcl::Window* pWin, ScDrawView* pView,
+    FuConstCustomShape(ScTabViewShell& rViewSh, vcl::Window* pWin, ScDrawView* pView,
                        SdrModel* pDoc, const SfxRequest& rReq);
 
     virtual ~FuConstCustomShape() override;
@@ -41,7 +41,7 @@ public:
     virtual void Deactivate() override;
 
     // Create default drawing objects via keyboard
-    virtual SdrObject* CreateDefaultObject( const sal_uInt16 nID, const tools::Rectangle& rRectangle ) override;
+    virtual SdrObjectUniquePtr CreateDefaultObject( const sal_uInt16 nID, const tools::Rectangle& rRectangle ) override;
 
     // #i33136#
     virtual bool doConstructOrthogonal() const override;

@@ -57,7 +57,7 @@ namespace slideshow
              */
             SlideAnimations( const SlideShowContext&     rContext,
                              const ::basegfx::B2DVector& rSlideSize );
-            ~SlideAnimations();
+            ~SlideAnimations() COVERITY_NOEXCEPT_FALSE;
 
             /** Import animations from a SMIL root animation node.
 
@@ -103,7 +103,7 @@ namespace slideshow
             void end();
 
         private:
-            SlideShowContext         maContext;
+            SlideShowContext const   maContext;
             const basegfx::B2DVector maSlideSize;
             AnimationNodeSharedPtr   mpRootNode;
         };

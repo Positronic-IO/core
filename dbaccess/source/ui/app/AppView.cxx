@@ -24,7 +24,6 @@
 #include <vcl/toolbox.hxx>
 #include <unotools/configmgr.hxx>
 #include <vcl/waitobj.hxx>
-#include <comphelper/types.hxx>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/sdbcx/XTablesSupplier.hpp>
@@ -115,11 +114,8 @@ void OAppBorderWindow::Resize()
     if ( m_pPanel )
     {
         OApplicationSwapWindow* pSwap = getPanel();
-        if ( pSwap )
-        {
-            if ( pSwap->GetEntryCount() != 0 )
-                nX = pSwap->GetBoundingBox( pSwap->GetEntry(0) ).GetWidth() + aFLSize.Height();
-        }
+        if ( pSwap && pSwap->GetEntryCount() != 0 )
+            nX = pSwap->GetBoundingBox( pSwap->GetEntry(0) ).GetWidth() + aFLSize.Height();
         nX = std::max(m_pPanel->GetWidthPixel() ,nX);
         m_pPanel->SetPosSizePixel(Point(0,0),Size(nX,nOutputHeight));
     }

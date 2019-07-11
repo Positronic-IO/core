@@ -399,7 +399,7 @@ public:
     sal_uInt32 getNumberFormat() const { return mnNumFmt; }
 };
 
-void IterateMatrix(
+static void IterateMatrix(
     const ScMatrixRef& pMat, ScIterFunc eFunc, bool bTextAsZero,
     sal_uLong& rCount, SvNumFormatType& rFuncFmtType, double& fRes, double& fMem )
 {
@@ -464,7 +464,7 @@ void IterateMatrix(
 size_t ScInterpreter::GetRefListArrayMaxSize( short nParamCount )
 {
     size_t nSize = 0;
-    if (bMatrixFormula || pCur->IsInForceArray())
+    if (IsInArrayContext())
     {
         for (short i=1; i <= nParamCount; ++i)
         {
@@ -548,6 +548,7 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                 }
                 else
                 {
+                    Pop();
                     switch ( eFunc )
                     {
                         case ifAVERAGE:
@@ -557,7 +558,6 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                         {
                             if ( bTextAsZero )
                             {
-                                Pop();
                                 nCount++;
                                 if ( eFunc == ifPRODUCT )
                                     fRes = 0.0;
@@ -571,7 +571,6 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                         }
                         break;
                         default:
-                            Pop();
                             nCount++;
                     }
                 }
@@ -809,7 +808,7 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                     ScCellIterator aIter( pDok, aRange, mnSubTotalFlags );
                     for (bool bHas = aIter.first(); bHas; bHas = aIter.next())
                     {
-                        if ( !aIter.hasEmptyData() )
+                        if ( !aIter.isEmpty() )
                         {
                             ++nCount;
                         }
@@ -820,8 +819,7 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                 }
                 else if ( ( eFunc == ifSUM || eFunc == ifCOUNT ) && mnSubTotalFlags == SubtotalFlags::NONE )
                 {
-                    sc::ColumnSpanSet aSet( false );
-                    aSet.set( aRange, true );
+                    sc::RangeColumnSpanSet aSet( aRange );
 
                     if ( eFunc == ifSUM )
                     {
@@ -853,6 +851,7 @@ void ScInterpreter::IterateParameters( ScIterFunc eFunc, bool bTextAsZero )
                 else
                 {
                     ScValueIterator aValIter( pDok, aRange, mnSubTotalFlags, bTextAsZero );
+                    aValIter.SetInterpreterContext( &mrContext );
                     FormulaError nErr = FormulaError::NONE;
                     if (aValIter.GetFirst(fVal, nErr))
                     {

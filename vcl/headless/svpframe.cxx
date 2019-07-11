@@ -21,10 +21,13 @@
 
 #include <comphelper/lok.hxx>
 #include <vcl/syswin.hxx>
+#include <sal/log.hxx>
 
 #include <headless/svpframe.hxx>
 #include <headless/svpinst.hxx>
+#ifndef IOS
 #include <headless/svpgdi.hxx>
+#endif
 
 #include <basegfx/vector/b2ivector.hxx>
 
@@ -80,9 +83,8 @@ SvpSalFrame::~SvpSalFrame()
         m_pInstance->deregisterFrame( this );
 
     std::list<SvpSalFrame*> Children = m_aChildren;
-    for( std::list<SvpSalFrame*>::iterator it = Children.begin();
-         it != Children.end(); ++it )
-         (*it)->SetParent( m_pParent );
+    for( auto& rChild : Children )
+        rChild->SetParent( m_pParent );
     if( m_pParent )
         m_pParent->m_aChildren.remove( this );
 
@@ -160,9 +162,9 @@ void SvpSalFrame::ReleaseGraphics( SalGraphics* pGraphics )
     delete pSvpGraphics;
 }
 
-bool SvpSalFrame::PostEvent(ImplSVEvent* pData)
+bool SvpSalFrame::PostEvent(std::unique_ptr<ImplSVEvent> pData)
 {
-    m_pInstance->PostEvent( this, pData, SalEvent::UserEvent );
+    m_pInstance->PostEvent( this, pData.release(), SalEvent::UserEvent );
     return true;
 }
 
@@ -302,9 +304,9 @@ SalFrame* SvpSalFrame::GetParent() const
     return m_pParent;
 }
 
-#define FRAMESTATE_MASK_GEOMETRY \
-     (WindowStateMask::X     | WindowStateMask::Y |   \
-      WindowStateMask::Width | WindowStateMask::Height)
+static constexpr auto FRAMESTATE_MASK_GEOMETRY =
+     WindowStateMask::X     | WindowStateMask::Y |
+     WindowStateMask::Width | WindowStateMask::Height;
 
 void SvpSalFrame::SetWindowState( const SalFrameState *pState )
 {
@@ -424,9 +426,28 @@ void SvpSalFrame::UpdateSettings( AllSettings& rSettings )
 
         aStdFont.SetFontSize(Size(0, 12));
         aStyleSettings.SetMenuFont(aStdFont);
-    }
 
-    rSettings.SetStyleSettings( aStyleSettings );
+        SvpSalGraphics* pGraphics = m_aGraphics.back();
+        bool bFreeGraphics = false;
+        if (!pGraphics)
+        {
+            pGraphics = dynamic_cast<SvpSalGraphics*>(AcquireGraphics());
+            if (!pGraphics)
+            {
+                SAL_WARN("vcl.gtk3", "Could not get graphics - unable to update settings");
+                return;
+            }
+            bFreeGraphics = true;
+        }
+        rSettings.SetStyleSettings(aStyleSettings);
+#ifndef IOS // For now...
+        pGraphics->updateSettings(rSettings);
+#endif
+        if (bFreeGraphics)
+            ReleaseGraphics(pGraphics);
+    }
+    else
+        rSettings.SetStyleSettings(aStyleSettings);
 }
 
 void SvpSalFrame::Beep()

@@ -55,7 +55,7 @@
  ************************************************************************/
 /*************************************************************************
  * @file
- * Represente index source,index body and index index entry.
+ * Represents index source, index body and index entry.
  ************************************************************************/
 #include <xfilter/xfindex.hxx>
 #include <xfilter/xfparagraph.hxx>
@@ -68,12 +68,6 @@ XFIndex::XFIndex()
 
 XFIndex::~XFIndex()
 {
-    while(m_aTemplates.size()>0)
-    {
-        XFIndexTemplate * pTemplate = m_aTemplates.back();
-        m_aTemplates.pop_back();
-        delete pTemplate;
-    }
 }
 
 void    XFIndex::AddTemplate(const OUString& level, const OUString& style, XFIndexTemplate* templ)

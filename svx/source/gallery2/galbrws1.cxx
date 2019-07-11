@@ -26,6 +26,7 @@
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <ucbhelper/content.hxx>
+#include <com/sun/star/ucb/ContentCreationException.hpp>
 #include <sfx2/app.hxx>
 #include <helpids.h>
 #include <svx/gallery1.hxx>
@@ -111,7 +112,6 @@ GalleryBrowser1::GalleryBrowser1(
     mpThemes              ( VclPtr<GalleryThemeListBox>::Create( this, WB_TABSTOP | WB_3DLOOK | WB_BORDER | WB_HSCROLL | WB_VSCROLL | WB_AUTOHSCROLL | WB_SORT ) ),
     mpGallery             ( pGallery ),
     mpExchangeData        ( new ExchangeData ),
-    mpThemePropsDlgItemSet( nullptr ),
     aImgNormal            ( GalleryResGetBitmapEx( RID_SVXBMP_THEME_NORMAL ) ),
     aImgDefault           ( GalleryResGetBitmapEx( RID_SVXBMP_THEME_DEFAULT ) ),
     aImgReadOnly          ( GalleryResGetBitmapEx( RID_SVXBMP_THEME_READONLY ) ),
@@ -264,26 +264,24 @@ void GalleryBrowser1::ImplGalleryThemeProperties( const OUString & rThemeName, b
     ImplFillExchangeData( pTheme, *mpExchangeData );
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-    assert(pFact && "Got no AbstractDialogFactory!");
-    mpThemePropertiesDialog = pFact->CreateGalleryThemePropertiesDialog(this, mpExchangeData.get(), mpThemePropsDlgItemSet.get());
-    assert(mpThemePropertiesDialog && "Got no GalleryThemePropertiesDialog!");
+    mpThemePropertiesDialog = pFact->CreateGalleryThemePropertiesDialog(GetFrameWeld(), mpExchangeData.get(), mpThemePropsDlgItemSet.get());
 
     if ( bCreateNew )
     {
-        mpThemePropertiesDialog->StartExecuteModal(
-            LINK( this, GalleryBrowser1, EndNewThemePropertiesDlgHdl ) );
+        mpThemePropertiesDialog->StartExecuteAsync([this](sal_Int32 nResult){
+            EndNewThemePropertiesDlgHdl(nResult);
+        });
     }
     else
     {
-        mpThemePropertiesDialog->StartExecuteModal(
-            LINK( this, GalleryBrowser1, EndThemePropertiesDlgHdl ) );
+        mpThemePropertiesDialog->StartExecuteAsync([this](sal_Int32 nResult){
+            EndThemePropertiesDlgHdl(nResult);
+        });
     }
 }
 
-void GalleryBrowser1::ImplEndGalleryThemeProperties(bool bCreateNew)
+void GalleryBrowser1::ImplEndGalleryThemeProperties(bool bCreateNew, sal_Int32 nRet)
 {
-    long nRet = mpThemePropertiesDialog->GetResult();
-
     if( nRet == RET_OK )
     {
         OUString aName( mpExchangeData->pTheme->GetName() );
@@ -295,9 +293,7 @@ void GalleryBrowser1::ImplEndGalleryThemeProperties(bool bCreateNew)
 
             while( mpGallery->HasTheme( aTitle ) && ( nCount++ < 16000 ) )
             {
-                aTitle = mpExchangeData->aEditedTitle;
-                aTitle += " ";
-                aTitle += OUString::number( nCount );
+                aTitle = mpExchangeData->aEditedTitle + " " + OUString::number( nCount );
             }
 
             mpGallery->RenameTheme( aName, aTitle );
@@ -322,14 +318,14 @@ void GalleryBrowser1::ImplEndGalleryThemeProperties(bool bCreateNew)
     Application::PostUserEvent( LINK( this, GalleryBrowser1, DestroyThemePropertiesDlgHdl ), nullptr, true );
 }
 
-IMPL_LINK( GalleryBrowser1, EndNewThemePropertiesDlgHdl, Dialog&, /*rDialog*/, void )
+void GalleryBrowser1::EndNewThemePropertiesDlgHdl(sal_Int32 nResult)
 {
-    ImplEndGalleryThemeProperties(true);
+    ImplEndGalleryThemeProperties(true, nResult);
 }
 
-IMPL_LINK( GalleryBrowser1, EndThemePropertiesDlgHdl, Dialog&, /*rDialog*/, void )
+void GalleryBrowser1::EndThemePropertiesDlgHdl(sal_Int32 nResult)
 {
-    ImplEndGalleryThemeProperties(false);
+    ImplEndGalleryThemeProperties(false, nResult);
 }
 
 IMPL_LINK( GalleryBrowser1, DestroyThemePropertiesDlgHdl, void*, /*p*/, void )
@@ -345,15 +341,10 @@ void GalleryBrowser1::ImplExecute(const OString &rIdent)
         GalleryTheme*       pTheme = mpGallery->AcquireTheme( GetSelectedTheme(), *this );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        if(pFact)
-        {
-            ScopedVclPtr<VclAbstractRefreshableDialog> aActualizeProgress(pFact->CreateActualizeProgressDialog( this, pTheme ));
-            DBG_ASSERT(aActualizeProgress, "Dialog creation failed!");
+        ScopedVclPtr<VclAbstractDialog> aActualizeProgress(pFact->CreateActualizeProgressDialog(GetFrameWeld(), pTheme));
 
-            aActualizeProgress->Update();
-            aActualizeProgress->Execute();
-            mpGallery->ReleaseTheme( pTheme, *this );
-        }
+        aActualizeProgress->Execute();
+        mpGallery->ReleaseTheme( pTheme, *this );
     }
     else if (rIdent == "delete")
     {
@@ -368,9 +359,7 @@ void GalleryBrowser1::ImplExecute(const OString &rIdent)
         const OUString  aOldName( pTheme->GetName() );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        assert(pFact && "Dialog creation failed!");
         ScopedVclPtr<AbstractTitleDialog> aDlg(pFact->CreateTitleDialog(GetFrameWeld(), aOldName));
-        assert(aDlg.get() && "Dialog creation failed!");
 
         if( aDlg->Execute() == RET_OK )
         {
@@ -383,9 +372,7 @@ void GalleryBrowser1::ImplExecute(const OString &rIdent)
 
                 while( mpGallery->HasTheme( aName ) && ( nCount++ < 16000 ) )
                 {
-                    aName = aNewName;
-                    aName += " ";
-                    aName += OUString::number( nCount );
+                    aName = aNewName + " " + OUString::number( nCount );
                 }
 
                 mpGallery->RenameTheme( aOldName, aName );
@@ -401,14 +388,9 @@ void GalleryBrowser1::ImplExecute(const OString &rIdent)
         {
 
             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-            if(pFact)
-            {
-                ScopedVclPtr<AbstractGalleryIdDialog> aDlg(pFact->CreateGalleryIdDialog(GetFrameWeld(), pTheme));
-                DBG_ASSERT(aDlg, "Dialog creation failed!");
-
-                if( aDlg->Execute() == RET_OK )
-                    pTheme->SetId( aDlg->GetId(), true );
-            }
+            ScopedVclPtr<AbstractGalleryIdDialog> aDlg(pFact->CreateGalleryIdDialog(GetFrameWeld(), pTheme));
+            if( aDlg->Execute() == RET_OK )
+                pTheme->SetId( aDlg->GetId(), true );
         }
 
         mpGallery->ReleaseTheme( pTheme, *this );
@@ -610,9 +592,7 @@ IMPL_LINK_NOARG(GalleryBrowser1, ClickNewThemeHdl, Button*, void)
 
     while( mpGallery->HasTheme( aName ) && ( nCount++ < 16000 ) )
     {
-        aName = aNewTheme;
-        aName += " ";
-        aName += OUString::number( nCount );
+        aName = aNewTheme + " " + OUString::number( nCount );
     }
 
     if( !mpGallery->HasTheme( aName ) && mpGallery->CreateTheme( aName ) )

@@ -25,6 +25,7 @@
 #include <sfx2/sfxresid.hxx>
 #include <osl/thread.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/ui/dialogs/XFilterGroupManager.hpp>
 #include <com/sun/star/beans/StringPair.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -103,7 +104,7 @@ namespace sfx2
     into the file picker filter list, instead of the single filters which form the class.</p>
 
     <p>This is an interesting difference between local and global classes: Filters which are part of a global class
-    are listed in there own group, too. Filters in local classes aren't listed a second time - neither directly (as
+    are listed in their own group, too. Filters in local classes aren't listed a second time - neither directly (as
     the filter itself) nor indirectly (as part of another local group).</p>
 
     <p>The only exception are filters which are part of a global class <em>and</em> a local class. This is allowed.
@@ -141,13 +142,11 @@ namespace sfx2
     typedef ::std::list< FilterClass >                                  FilterClassList;
     typedef ::std::map< OUString, FilterClassList::iterator >    FilterClassReferrer;
 
-    typedef ::std::vector< OUString >                            StringArray;
-
 
 // = reading of configuration data
 
 
-    void lcl_ReadFilterClass( const OConfigurationNode& _rClassesNode, const OUString& _rLogicalClassName,
+    static void lcl_ReadFilterClass( const OConfigurationNode& _rClassesNode, const OUString& _rLogicalClassName,
         FilterClass& /* [out] */ _rClass )
     {
             // the description node for the current class
@@ -189,7 +188,7 @@ namespace sfx2
     struct ReadGlobalFilter
     {
     protected:
-        OConfigurationNode      m_aClassesNode;
+        OConfigurationNode const m_aClassesNode;
         FilterClassReferrer&    m_aClassReferrer;
 
     public:
@@ -219,7 +218,7 @@ namespace sfx2
     };
 
 
-    void lcl_ReadGlobalFilters( const OConfigurationNode& _rFilterClassification, FilterClassList& _rGlobalClasses, StringArray& _rGlobalClassNames )
+    static void lcl_ReadGlobalFilters( const OConfigurationNode& _rFilterClassification, FilterClassList& _rGlobalClasses, std::vector<OUString>& _rGlobalClassNames )
     {
         _rGlobalClasses.clear();
         _rGlobalClassNames.clear();
@@ -266,7 +265,7 @@ namespace sfx2
     struct ReadLocalFilter
     {
     protected:
-        OConfigurationNode      m_aClassesNode;
+        OConfigurationNode const m_aClassesNode;
         FilterClassList&        m_rClasses;
 
     public:
@@ -289,7 +288,7 @@ namespace sfx2
     };
 
 
-    void lcl_ReadLocalFilters( const OConfigurationNode& _rFilterClassification, FilterClassList& _rLocalClasses )
+    static void lcl_ReadLocalFilters( const OConfigurationNode& _rFilterClassification, FilterClassList& _rLocalClasses )
     {
         _rLocalClasses.clear();
 
@@ -306,7 +305,7 @@ namespace sfx2
     }
 
 
-    void lcl_ReadClassification( FilterClassList& _rGlobalClasses, StringArray& _rGlobalClassNames, FilterClassList& _rLocalClasses )
+    static void lcl_ReadClassification( FilterClassList& _rGlobalClasses, std::vector<OUString>& _rGlobalClassNames, FilterClassList& _rLocalClasses )
     {
 
         // open our config node
@@ -496,7 +495,7 @@ namespace sfx2
     }
 
 
-    void lcl_InitGlobalClasses( GroupedFilterList& _rAllFilters, const FilterClassList& _rGlobalClasses, FilterGroupEntryReferrer& _rGlobalClassesRef )
+    static void lcl_InitGlobalClasses( GroupedFilterList& _rAllFilters, const FilterClassList& _rGlobalClasses, FilterGroupEntryReferrer& _rGlobalClassesRef )
     {
         // we need an extra group in our "all filters" container
         _rAllFilters.push_front( FilterGroup() );
@@ -525,7 +524,7 @@ namespace sfx2
 
     struct FindGroupEntry
     {
-        FilterGroupEntryReferrer::mapped_type aLookingFor;
+        FilterGroupEntryReferrer::mapped_type const aLookingFor;
         explicit FindGroupEntry( FilterGroupEntryReferrer::mapped_type const & _rLookingFor ) : aLookingFor( _rLookingFor ) { }
 
         bool operator() ( const MapGroupEntry2GroupEntry::value_type& _rMapEntry )
@@ -556,14 +555,14 @@ namespace sfx2
     };
 
 
-    void lcl_GroupAndClassify( TSortedFilterList& _rFilterMatcher, GroupedFilterList& _rAllFilters )
+    static void lcl_GroupAndClassify( TSortedFilterList& _rFilterMatcher, GroupedFilterList& _rAllFilters )
     {
         _rAllFilters.clear();
 
 
         // read the classification of filters
         FilterClassList aGlobalClasses, aLocalClasses;
-        StringArray aGlobalClassNames;
+        std::vector<OUString> aGlobalClassNames;
         lcl_ReadClassification( aGlobalClasses, aGlobalClassNames, aLocalClasses );
 
 
@@ -624,7 +623,7 @@ namespace sfx2
                     "sfx2::lcl_GroupAndClassify: invalid all-filters array here!" );
                     // the loop below will work on invalid objects else ...
                 ++aGroupPos;
-                StringArray::iterator aGlobalIter = aGlobalClassNames.begin();
+                auto aGlobalIter = aGlobalClassNames.begin();
                 while   (   ( aGroupPos != _rAllFilters.end() )
                         &&  ( aGlobalIter != aGlobalClassNames.end() )
                         &&  ( *aGlobalIter != aServiceName )
@@ -672,10 +671,7 @@ namespace sfx2
                 // -> append the wildcard
                 aExtendWildcard( *aBelongsToLocal );
 
-                MapGroupEntry2GroupEntry::iterator aThisGroupFinalPos =
-                    ::std::find_if( aLocalFinalPositions.begin(), aLocalFinalPositions.end(), FindGroupEntry( aBelongsToLocal->second ) );
-
-                if ( aLocalFinalPositions.end() == aThisGroupFinalPos )
+                if ( std::none_of( aLocalFinalPositions.begin(), aLocalFinalPositions.end(), FindGroupEntry( aBelongsToLocal->second ) ) )
                 {   // the position within aCollectedLocals has not been mapped to a final position
                     // within the "real" group (aCollectedLocals is only temporary)
                     // -> do this now (as we just encountered the first filter belonging to this local class
@@ -720,7 +716,7 @@ namespace sfx2
         protected:
             Reference< XFilterManager >         m_xFilterManager;
             FileDialogHelper_Impl*              m_pFileDlgImpl;
-            bool                                m_bAddExtension;
+            bool const                          m_bAddExtension;
 
         public:
             AppendFilter( const Reference< XFilterManager >& _rxFilterManager,
@@ -749,7 +745,7 @@ namespace sfx2
 // = handling for the "all files" entry
 
 
-    bool lcl_hasAllFilesFilter( TSortedFilterList& _rFilterMatcher, OUString& /* [out] */ _rAllFilterName )
+    static bool lcl_hasAllFilesFilter( TSortedFilterList& _rFilterMatcher, OUString& /* [out] */ _rAllFilterName )
     {
         bool        bHasAll = false;
         _rAllFilterName = SfxResId( STR_SFX_FILTERNAME_ALL );
@@ -765,7 +761,7 @@ namespace sfx2
     }
 
 
-    void lcl_EnsureAllFilesEntry( TSortedFilterList& _rFilterMatcher, GroupedFilterList& _rFilters )
+    static void lcl_EnsureAllFilesEntry( TSortedFilterList& _rFilterMatcher, GroupedFilterList& _rFilters )
     {
 
         OUString sAllFilterName;
@@ -809,7 +805,7 @@ namespace sfx2
                 if ( m_xFilterGroupManager.is() )
                 {   // the file dialog implementation supports visual grouping of filters
                     // create a representation of the group which is understandable by the XFilterGroupManager
-                    if ( _rGroup.size() )
+                    if ( !_rGroup.empty() )
                     {
                         Sequence< StringPair > aFilters( comphelper::containerToSequence(_rGroup) );
                         if ( _bAddExtension )

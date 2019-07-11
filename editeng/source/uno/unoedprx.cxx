@@ -119,7 +119,7 @@ private:
     bool  mbInBullet;
 };
 
-ESelection MakeEESelection( const SvxAccessibleTextIndex& rStart, const SvxAccessibleTextIndex& rEnd )
+static ESelection MakeEESelection( const SvxAccessibleTextIndex& rStart, const SvxAccessibleTextIndex& rEnd )
 {
     // deal with field special case: to really get a field contained
     // within a selection, the start index must be before or on the
@@ -152,7 +152,7 @@ ESelection MakeEESelection( const SvxAccessibleTextIndex& rStart, const SvxAcces
                        rEnd.GetParagraph(), rEnd.GetEEIndex() );
 }
 
-ESelection MakeEESelection( const SvxAccessibleTextIndex& rIndex )
+static ESelection MakeEESelection( const SvxAccessibleTextIndex& rIndex )
 {
     return ESelection( rIndex.GetParagraph(), rIndex.GetEEIndex(),
                        rIndex.GetParagraph(), rIndex.GetEEIndex() + 1 );
@@ -306,7 +306,7 @@ std::unique_ptr<SvxEditSource> SvxEditSourceAdapter::Clone() const
     {
         std::unique_ptr< SvxEditSource > pClonedAdaptee( mpAdaptee->Clone() );
 
-        if( pClonedAdaptee.get() )
+        if (pClonedAdaptee)
         {
             std::unique_ptr<SvxEditSourceAdapter> pClone(new SvxEditSourceAdapter());
             pClone->SetEditSource( std::move(pClonedAdaptee) );
@@ -390,7 +390,7 @@ SfxBroadcaster& SvxEditSourceAdapter::GetBroadcaster() const
 
 void SvxEditSourceAdapter::SetEditSource( std::unique_ptr< SvxEditSource > && pAdaptee )
 {
-    if( pAdaptee.get() )
+    if (pAdaptee)
     {
         mpAdaptee = std::move(pAdaptee);
         mbEditSourceValid = true;
@@ -677,16 +677,6 @@ EBulletInfo SvxAccessibleTextAdapter::GetBulletInfo( sal_Int32 nPara ) const
     assert(mpTextForwarder && "SvxAccessibleTextAdapter: no forwarder");
 
     return mpTextForwarder->GetBulletInfo( nPara );
-}
-
-void SvxAccessibleTextAdapter::SetUpdateModeForAcc(bool bUp)
-{
-    return mpTextForwarder->SetUpdateModeForAcc(bUp);
-}
-
-bool SvxAccessibleTextAdapter::GetUpdateModeForAcc( ) const
-{
-    return mpTextForwarder->GetUpdateModeForAcc();
 }
 
 tools::Rectangle SvxAccessibleTextAdapter::GetCharBounds( sal_Int32 nPara, sal_Int32 nIndex ) const
@@ -1123,13 +1113,6 @@ bool SvxAccessibleTextEditViewAdapter::IsValid() const
         return mpViewForwarder->IsValid();
     else
         return false;
-}
-
-tools::Rectangle SvxAccessibleTextEditViewAdapter::GetVisArea() const
-{
-    DBG_ASSERT(mpViewForwarder, "SvxAccessibleTextEditViewAdapter: no forwarder");
-
-    return mpViewForwarder->GetVisArea();
 }
 
 Point SvxAccessibleTextEditViewAdapter::LogicToPixel( const Point& rPoint, const MapMode& rMapMode ) const

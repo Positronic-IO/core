@@ -9,6 +9,7 @@
 
 #include <filter/msfilter/rtfutil.hxx>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <svtools/rtfkeywd.hxx>
 #include <rtl/character.hxx>
@@ -104,7 +105,7 @@ OString OutChar(sal_Unicode c, int* pUCMode, rtl_TextEncoding eDestEnc, bool* pS
                     if (*pUCMode != nLen)
                     {
                         aBuf.append("\\uc");
-                        aBuf.append(static_cast<sal_Int32>(nLen));
+                        aBuf.append(nLen);
                         // #i47831# add an additional whitespace, so that "document whitespaces" are not ignored.
                         aBuf.append(' ');
                         *pUCMode = nLen;
@@ -284,6 +285,22 @@ bool ExtractOLE2FromObjdata(const OString& rObjdata, SvStream& rOle2)
     }
 
     return true;
+}
+
+bool StripMetafileHeader(const sal_uInt8*& rpGraphicAry, sal_uInt64& rSize)
+{
+    if (rpGraphicAry && (rSize > 0x22))
+    {
+        if ((rpGraphicAry[0] == 0xd7) && (rpGraphicAry[1] == 0xcd) && (rpGraphicAry[2] == 0xc6)
+            && (rpGraphicAry[3] == 0x9a))
+        {
+            // we have to get rid of the metafileheader
+            rpGraphicAry += 22;
+            rSize -= 22;
+            return true;
+        }
+    }
+    return false;
 }
 }
 }

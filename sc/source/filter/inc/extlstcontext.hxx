@@ -11,19 +11,19 @@
 #define INCLUDED_SC_SOURCE_FILTER_INC_EXTLSTCONTEXT_HXX
 
 #include "excelhandlers.hxx"
-#include "worksheetfragment.hxx"
-#include "workbookfragment.hxx"
+#include <oox/core/contexthandler.hxx>
+#include "condformatbuffer.hxx"
 
 #include <vector>
 #include <memory>
 
 struct ScDataBarFormatData;
-class ScFormatEntry;
+namespace oox { class AttributeList; }
+namespace oox { namespace xls { class WorkbookFragment; } }
+namespace oox { namespace xls { class WorksheetFragment; } }
 
 namespace oox {
 namespace xls {
-
-class IconSetRule;
 
 class ExtCfRuleContext : public WorksheetContextBase
 {
@@ -34,7 +34,7 @@ public:
     virtual void        onStartElement( const AttributeList& rAttribs ) override;
 
 private:
-    ScDataBarFormatData* mpTarget;
+    ScDataBarFormatData* const mpTarget;
 
     bool mbFirstEntry;
 };
@@ -52,7 +52,7 @@ public:
 private:
     OUString aChars;
     std::vector<std::unique_ptr<ScFormatEntry> > maEntries;
-    IconSetRule* mpCurrentRule;
+    std::unique_ptr<IconSetRule> mpCurrentRule;
 };
 
 /**

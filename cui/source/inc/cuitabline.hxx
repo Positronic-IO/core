@@ -25,25 +25,20 @@
 #include <svx/tabarea.hxx>
 
 enum class PageType;
-class SvxColorListBox;
+class ColorListBox;
 
-class SvxLineTabDialog final : public SfxTabDialog
+class SvxLineTabDialog final : public SfxTabDialogController
 {
-    sal_uInt16            m_nLineTabPage;
-    sal_uInt16            m_nShadowTabPage;
-    sal_uInt16            m_nStyleTabPage;
-    sal_uInt16            m_nEndTabPage;
-
     SdrModel*           pDrawModel;
     const SdrObject*    pObj;
 
-    XColorListRef         pColorList;
-    XColorListRef         mpNewColorList;
-    XDashListRef          pDashList;
-    XDashListRef          pNewDashList;
-    XLineEndListRef       pLineEndList;
-    XLineEndListRef       pNewLineEndList;
-    bool            bObjSelected;
+    XColorListRef       pColorList;
+    XColorListRef       mpNewColorList;
+    XDashListRef        pDashList;
+    XDashListRef        pNewDashList;
+    XLineEndListRef     pLineEndList;
+    XLineEndListRef     pNewLineEndList;
+    bool                bObjSelected;
 
     ChangeType          nLineEndListState;
     ChangeType          nDashListState;
@@ -53,16 +48,16 @@ class SvxLineTabDialog final : public SfxTabDialog
     sal_Int32           nPosDashLb;
     sal_Int32           nPosLineEndLb;
 
-    virtual void        PageCreated( sal_uInt16 nId, SfxTabPage &rPage ) override;
+    virtual void        PageCreated(const OString& rId, SfxTabPage &rPage) override;
 
     virtual short       Ok() override;
-    DECL_LINK( CancelHdlImpl, Button*, void );
+    DECL_LINK(CancelHdlImpl, weld::Button&, void);
     void                SavePalettes();
 
 public:
-    SvxLineTabDialog( vcl::Window* pParent, const SfxItemSet* pAttr,
-                      SdrModel* pModel, const SdrObject* pObj,
-                      bool bHasObj );
+    SvxLineTabDialog(weld::Window* pParent, const SfxItemSet* pAttr,
+                     SdrModel* pModel, const SdrObject* pObj,
+                     bool bHasObj);
 
     void                SetNewDashList( XDashListRef const & pInLst)
                         { pNewDashList = pInLst; }
@@ -78,42 +73,18 @@ public:
 
 /*************************************************************************/
 
-struct SvxBmpItemInfo;
+struct SvxBmpItemInfo
+{
+    std::unique_ptr<SvxBrushItem> pBrushItem;
+    OUString sItemId;
+};
 
-class SvxLineTabPage : public SvxTabPage
+class SvxLineTabPage : public SfxTabPage
 {
     using TabPage::ActivatePage;
     using TabPage::DeactivatePage;
     static const sal_uInt16 pLineRanges[];
 private:
-    VclPtr<VclBox>             m_pBoxColor;
-    VclPtr<LineLB>             m_pLbLineStyle;
-    VclPtr<SvxColorListBox>    m_pLbColor;
-    VclPtr<VclBox>             m_pBoxWidth;
-    VclPtr<MetricField>        m_pMtrLineWidth;
-    VclPtr<VclBox>             m_pBoxTransparency;
-    VclPtr<MetricField>        m_pMtrTransparent;
-
-    VclPtr<VclFrame>           m_pFlLineEnds;
-    VclPtr<VclBox>             m_pBoxArrowStyles;
-    VclPtr<LineEndLB>          m_pLbStartStyle;
-    VclPtr<VclBox>             m_pBoxStart;
-    VclPtr<MetricField>        m_pMtrStartWidth;
-    VclPtr<TriStateBox>        m_pTsbCenterStart;
-    VclPtr<VclBox>             m_pBoxEnd;
-    VclPtr<LineEndLB>          m_pLbEndStyle;
-    VclPtr<MetricField>        m_pMtrEndWidth;
-    VclPtr<TriStateBox>        m_pTsbCenterEnd;
-    VclPtr<CheckBox>           m_pCbxSynchronize;
-    VclPtr<SvxXLinePreview>    m_pCtlPreview;
-
-    VclPtr<VclFrame>           m_pFLEdgeStyle;
-    VclPtr<VclGrid>            m_pGridEdgeCaps;
-    VclPtr<ListBox>            m_pLBEdgeStyle;
-
-    // LineCaps
-    VclPtr<ListBox>             m_pLBCapStyle;
-
     //#58425# symbols on a line (e. g. StarChart) ->
     /** a list of symbols to be shown in menu. Symbol at position SID_ATTR_SYMBOLTYPE is to be shown in preview.
         The list position is to be used cyclic. */
@@ -121,19 +92,15 @@ private:
     bool                m_bNewSize;
     /// a graphic to be displayed in the preview in case that an automatic symbol is chosen
     Graphic             m_aAutoSymbolGraphic;
-    long                m_nNumMenuGalleryItems;
     long                m_nSymbolType;
     /// attributes for the shown symbols; only necessary if not equal to line properties
     SfxItemSet*         m_pSymbolAttr;
-    VclPtr<VclFrame>           m_pFlSymbol;
-    VclPtr<VclGrid>            m_pGridIconSize;
-    VclPtr<MenuButton>         m_pSymbolMB;
-    VclPtr<MetricField>        m_pSymbolWidthMF;
-    VclPtr<MetricField>        m_pSymbolHeightMF;
-    VclPtr<CheckBox>           m_pSymbolRatioCB;
+
     std::vector<OUString>      m_aGrfNames;
-    std::vector< SvxBmpItemInfo* >
-                               m_aGrfBrushItems;
+    std::vector< std::unique_ptr<SvxBmpItemInfo> >
+                               m_aGalleryBrushItems;
+    std::vector< std::unique_ptr<SvxBmpItemInfo> >
+                               m_aSymbolBrushItems;
     bool                m_bLastWidthModified;
     Size                m_aSymbolLastSize;
     Graphic             m_aSymbolGraphic;
@@ -162,41 +129,75 @@ private:
 
     sal_Int32           m_nActLineWidth;
 
-    // handler for gallery popup menu button + size
-    DECL_LINK( GraphicHdl_Impl, MenuButton *, void );
-    DECL_LINK( MenuCreateHdl_Impl, MenuButton *, void );
-    DECL_LINK( SizeHdl_Impl, Edit&, void );
-    DECL_LINK( RatioHdl_Impl, Button*, void );
+    SvxXLinePreview m_aCtlPreview;
+    std::unique_ptr<weld::Widget> m_xBoxColor;
+    std::unique_ptr<SvxLineLB> m_xLbLineStyle;
+    std::unique_ptr<ColorListBox> m_xLbColor;
+    std::unique_ptr<weld::Widget> m_xBoxWidth;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrLineWidth;
+    std::unique_ptr<weld::Widget> m_xBoxTransparency;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrTransparent;
+    std::unique_ptr<weld::Widget> m_xFlLineEnds;
+    std::unique_ptr<weld::Widget> m_xBoxArrowStyles;
+    std::unique_ptr<SvxLineEndLB> m_xLbStartStyle;
+    std::unique_ptr<weld::Widget> m_xBoxStart;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrStartWidth;
+    std::unique_ptr<weld::CheckButton> m_xTsbCenterStart;
+    std::unique_ptr<weld::Widget> m_xBoxEnd;
+    std::unique_ptr<SvxLineEndLB> m_xLbEndStyle;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrEndWidth;
+    std::unique_ptr<weld::CheckButton> m_xTsbCenterEnd;
+    std::unique_ptr<weld::CheckButton> m_xCbxSynchronize;
+    std::unique_ptr<weld::CustomWeld> m_xCtlPreview;
 
-    DECL_LINK( ClickInvisibleHdl_Impl, ListBox&, void );
-    DECL_LINK( ChangeStartClickHdl_Impl, Button*, void );
-    DECL_LINK( ChangeStartListBoxHdl_Impl, ListBox&, void );
-    DECL_LINK( ChangeStartModifyHdl_Impl, Edit&, void );
-    void ChangeStartHdl_Impl(void const *);
-    DECL_LINK( ChangeEndListBoxHdl_Impl, ListBox&, void );
-    DECL_LINK( ChangeEndModifyHdl_Impl, Edit&, void );
-    DECL_LINK( ChangeEndClickHdl_Impl, Button*, void );
-    void ChangeEndHdl_Impl(void const *);
-    DECL_LINK( ChangePreviewListBoxHdl_Impl, SvxColorListBox&, void );
-    DECL_LINK( ChangePreviewModifyHdl_Impl, Edit&, void );
-    void ChangePreviewHdl_Impl(void const *);
-    DECL_LINK( ChangeTransparentHdl_Impl, Edit&, void );
-
-    DECL_LINK( ChangeEdgeStyleHdl_Impl, ListBox&, void );
+    std::unique_ptr<weld::Widget> m_xFLEdgeStyle;
+    std::unique_ptr<weld::Widget> m_xGridEdgeCaps;
+    std::unique_ptr<weld::ComboBox> m_xLBEdgeStyle;
 
     // LineCaps
-    DECL_LINK( ChangeCapStyleHdl_Impl, ListBox&, void );
+    std::unique_ptr<weld::ComboBox> m_xLBCapStyle;
+
+    std::unique_ptr<weld::Widget> m_xFlSymbol;
+    std::unique_ptr<weld::Widget> m_xGridIconSize;
+    std::unique_ptr<weld::MenuButton> m_xSymbolMB;
+    std::unique_ptr<weld::Menu> m_xSymbolsMenu;
+    std::unique_ptr<weld::Menu> m_xGalleryMenu;
+    std::unique_ptr<weld::MetricSpinButton> m_xSymbolWidthMF;
+    std::unique_ptr<weld::MetricSpinButton> m_xSymbolHeightMF;
+    std::unique_ptr<weld::CheckButton> m_xSymbolRatioCB;
+
+    // handler for gallery popup menu button + size
+    DECL_LINK(GraphicHdl_Impl, const OString&, void);
+    DECL_LINK(SizeHdl_Impl, weld::MetricSpinButton&, void);
+    DECL_LINK(MenuCreateHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(RatioHdl_Impl, weld::ToggleButton&, void);
+
+    DECL_LINK(ClickInvisibleHdl_Impl, weld::ComboBox&, void);
+    void ClickInvisibleHdl_Impl();
+    DECL_LINK(ChangeStartClickHdl_Impl, weld::Button&, void);
+    DECL_LINK(ChangeStartListBoxHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(ChangeStartModifyHdl_Impl, weld::MetricSpinButton&, void);
+    DECL_LINK(ChangeEndListBoxHdl_Impl, weld::ComboBox&, void);
+    DECL_LINK(ChangeEndModifyHdl_Impl, weld::MetricSpinButton&, void);
+    DECL_LINK(ChangeEndClickHdl_Impl, weld::Button&, void);
+    DECL_LINK(ChangePreviewListBoxHdl_Impl, ColorListBox&, void);
+    DECL_LINK(ChangePreviewModifyHdl_Impl, weld::MetricSpinButton&, void);
+    void ChangePreviewHdl_Impl(const weld::MetricSpinButton*);
+    DECL_LINK(ChangeTransparentHdl_Impl, weld::MetricSpinButton&, void);
+
+    DECL_LINK(ChangeEdgeStyleHdl_Impl, weld::ComboBox&, void);
+
+    // LineCaps
+    DECL_LINK(ChangeCapStyleHdl_Impl, weld::ComboBox&, void);
 
     void FillXLSet_Impl();
 
-    void InitSymbols(MenuButton const * pButton);
-    void SymbolSelected(MenuButton const * pButton);
     void FillListboxes();
 public:
 
     void ShowSymbolControls(bool bOn);
 
-    SvxLineTabPage( vcl::Window* pParent, const SfxItemSet& rInAttrs );
+    SvxLineTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs);
     virtual ~SvxLineTabPage() override;
     virtual void dispose() override;
 
@@ -210,9 +211,6 @@ public:
 
     virtual void ActivatePage( const SfxItemSet& rSet ) override;
     virtual DeactivateRC DeactivatePage( SfxItemSet* pSet ) override;
-
-    virtual void PointChanged( vcl::Window* pWindow, RectPoint eRP ) override;
-    virtual void PointChanged( weld::DrawingArea* pWindow, RectPoint eRP ) override;
 
     virtual void FillUserData() override;
 
@@ -241,22 +239,6 @@ class SvxLineDefTabPage : public SfxTabPage
     using TabPage::ActivatePage;
     using TabPage::DeactivatePage;
 private:
-    VclPtr<LineLB>              m_pLbLineStyles;
-    VclPtr<ListBox>             m_pLbType1;
-    VclPtr<ListBox>             m_pLbType2;
-    VclPtr<NumericField>        m_pNumFldNumber1;
-    VclPtr<NumericField>        m_pNumFldNumber2;
-    VclPtr<MetricField>         m_pMtrLength1;
-    VclPtr<MetricField>         m_pMtrLength2;
-    VclPtr<MetricField>         m_pMtrDistance;
-    VclPtr<CheckBox>            m_pCbxSynchronize;
-    VclPtr<PushButton>          m_pBtnAdd;
-    VclPtr<PushButton>          m_pBtnModify;
-    VclPtr<PushButton>          m_pBtnDelete;
-    VclPtr<PushButton>          m_pBtnLoad;
-    VclPtr<PushButton>          m_pBtnSave;
-    VclPtr<SvxXLinePreview>     m_pCtlPreview;
-
     const SfxItemSet&   rOutAttrs;
     XDash               aDash;
 
@@ -273,27 +255,45 @@ private:
     MapUnit             ePoolUnit;
     FieldUnit           eFUnit;
 
+    SvxXLinePreview m_aCtlPreview;
+    std::unique_ptr<SvxLineLB> m_xLbLineStyles;
+    std::unique_ptr<weld::ComboBox> m_xLbType1;
+    std::unique_ptr<weld::ComboBox> m_xLbType2;
+    std::unique_ptr<weld::SpinButton> m_xNumFldNumber1;
+    std::unique_ptr<weld::SpinButton> m_xNumFldNumber2;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrLength1;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrLength2;
+    std::unique_ptr<weld::MetricSpinButton> m_xMtrDistance;
+    std::unique_ptr<weld::CheckButton> m_xCbxSynchronize;
+    std::unique_ptr<weld::Button> m_xBtnAdd;
+    std::unique_ptr<weld::Button> m_xBtnModify;
+    std::unique_ptr<weld::Button> m_xBtnDelete;
+    std::unique_ptr<weld::Button> m_xBtnLoad;
+    std::unique_ptr<weld::Button> m_xBtnSave;
+    std::unique_ptr<weld::CustomWeld> m_xCtlPreview;
+
     void FillDash_Impl();
     void FillDialog_Impl();
 
-    DECL_LINK( ClickAddHdl_Impl, Button*, void );
-    DECL_LINK( ClickModifyHdl_Impl, Button*, void );
-    DECL_LINK( ClickDeleteHdl_Impl, Button*, void );
-    DECL_LINK( SelectLinestyleListBoxHdl_Impl, ListBox&, void );
-    void SelectLinestyleHdl_Impl(ListBox const *);
-    DECL_LINK( ChangePreviewHdl_Impl, Edit&, void );
-    DECL_LINK( ChangeNumber1Hdl_Impl, Edit&, void );
-    DECL_LINK( ChangeNumber2Hdl_Impl, Edit&, void );
-    DECL_LINK( ClickLoadHdl_Impl, Button*, void );
-    DECL_LINK( ClickSaveHdl_Impl, Button*, void );
-    DECL_LINK( ChangeMetricHdl_Impl, Button*, void );
-    DECL_LINK( SelectTypeListBoxHdl_Impl, ListBox&, void );
-    void SelectTypeHdl_Impl(ListBox*);
+    DECL_LINK(ClickAddHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickModifyHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickDeleteHdl_Impl, weld::Button&, void);
+    DECL_LINK(SelectLinestyleListBoxHdl_Impl, weld::ComboBox&, void);
+    void SelectLinestyleHdl_Impl(const weld::ComboBox*);
+    DECL_LINK(ChangePreviewHdl_Impl, weld::MetricSpinButton&, void);
+    DECL_LINK(ChangeNumber1Hdl_Impl, weld::SpinButton&, void);
+    DECL_LINK(ChangeNumber2Hdl_Impl, weld::SpinButton&, void);
+    DECL_LINK(ClickLoadHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickSaveHdl_Impl, weld::Button&, void);
+    DECL_LINK(ChangeMetricHdl_Impl, weld::ToggleButton&, void);
+    DECL_LINK(SelectTypeListBoxHdl_Impl, weld::ComboBox&, void);
+    void SelectTypeHdl_Impl(weld::ComboBox*);
+    void ChangeMetricHdl_Impl(weld::ToggleButton*);
 
     void CheckChanges_Impl();
 
 public:
-    SvxLineDefTabPage( vcl::Window* pParent, const SfxItemSet& rInAttrs  );
+    SvxLineDefTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs);
     virtual ~SvxLineDefTabPage() override;
     virtual void dispose() override;
 
@@ -325,15 +325,6 @@ class SvxLineEndDefTabPage : public SfxTabPage
     using TabPage::DeactivatePage;
 
 private:
-    VclPtr<Edit>                m_pEdtName;
-    VclPtr<LineEndLB>           m_pLbLineEnds;
-    VclPtr<PushButton>          m_pBtnAdd;
-    VclPtr<PushButton>          m_pBtnModify;
-    VclPtr<PushButton>          m_pBtnDelete;
-    VclPtr<PushButton>          m_pBtnLoad;
-    VclPtr<PushButton>          m_pBtnSave;
-    VclPtr<SvxXLinePreview>     m_pCtlPreview;
-
     const SfxItemSet&   rOutAttrs;
     const SdrObject*    pPolyObj;
 
@@ -347,17 +338,28 @@ private:
     sal_uInt16          nDlgType;
     sal_Int32*          pPosLineEndLb;
 
-    DECL_LINK( ClickAddHdl_Impl, Button*, void );
-    DECL_LINK( ClickModifyHdl_Impl, Button*, void );
-    DECL_LINK( ClickDeleteHdl_Impl, Button*, void );
-    DECL_LINK( ClickLoadHdl_Impl, Button*, void );
-    DECL_LINK( ClickSaveHdl_Impl, Button*, void );
-    DECL_LINK( SelectLineEndHdl_Impl, ListBox&, void );
+    SvxXLinePreview m_aCtlPreview;
+    std::unique_ptr<weld::Entry> m_xEdtName;
+    std::unique_ptr<SvxLineEndLB> m_xLbLineEnds;
+    std::unique_ptr<weld::Button> m_xBtnAdd;
+    std::unique_ptr<weld::Button> m_xBtnModify;
+    std::unique_ptr<weld::Button> m_xBtnDelete;
+    std::unique_ptr<weld::Button> m_xBtnLoad;
+    std::unique_ptr<weld::Button> m_xBtnSave;
+    std::unique_ptr<weld::CustomWeld> m_xCtlPreview;
 
+    DECL_LINK(ClickAddHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickModifyHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickDeleteHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickLoadHdl_Impl, weld::Button&, void);
+    DECL_LINK(ClickSaveHdl_Impl, weld::Button&, void);
+    DECL_LINK(SelectLineEndHdl_Impl, weld::ComboBox&, void);
+
+    void SelectLineEndHdl_Impl();
     void CheckChanges_Impl();
 
 public:
-    SvxLineEndDefTabPage( vcl::Window* pParent, const SfxItemSet& rInAttrs );
+    SvxLineEndDefTabPage(TabPageParent pParent, const SfxItemSet& rInAttrs);
     virtual ~SvxLineEndDefTabPage() override;
     virtual void dispose() override;
 

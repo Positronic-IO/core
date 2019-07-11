@@ -23,18 +23,23 @@
 #include "address.hxx"
 #include <i18nlangtag/lang.h>
 #include <svx/svdtypes.hxx>
-#include <tools/stream.hxx>
-#include <com/sun/star/uno/Reference.hxx>
+#include <tools/ref.hxx>
+#include <sal/types.h>
+#include <com/sun/star/i18n/CollatorOptions.hpp>
 #include "scdllapi.h"
 #include <rtl/ustring.hxx>
 
+#include <atomic>
+// HACK: <atomic> includes <stdbool.h>, which in some Clang versions does '#define bool bool',
+// which confuses clang plugins.
+#undef bool
 #include <map>
-#include <vector>
+#include <memory>
 
-class Bitmap;
+namespace com { namespace sun { namespace star { namespace uno { template <typename > class Reference; } } } }
+
 class SfxItemSet;
 class SfxViewShell;
-class Color;
 struct ScCalcConfig;
 enum class SvtScriptType;
 enum class FormulaError : sal_uInt16;
@@ -460,7 +465,6 @@ struct ScImportParam
     bool            operator==  ( const ScImportParam& r ) const;
 };
 
-class ScDocument;
 class ScDocShell;
 class SvxSearchItem;
 class ScAutoFormat;
@@ -471,7 +475,6 @@ class SvxBrushItem;
 class ScFunctionList;
 class ScFunctionMgr;
 class SfxItemPool;
-class SdrModel;
 class EditTextObject;
 class SfxObjectShell;
 class SvNumberFormatter;
@@ -482,7 +485,6 @@ class SvtSysLocale;
 class CalendarWrapper;
 class CollatorWrapper;
 class IntlWrapper;
-class OutputDevice;
 class ScFieldEditEngine;
 
 namespace com { namespace sun { namespace star {
@@ -501,8 +503,8 @@ class ScGlobal
 {
     static SvxSearchItem*   pSearchItem;
     static ScAutoFormat*    pAutoFormat;
-    static LegacyFuncCollection* pLegacyFuncCollection;
-    static ScUnoAddInCollection* pAddInCollection;
+    static std::atomic<LegacyFuncCollection*> pLegacyFuncCollection;
+    static std::atomic<ScUnoAddInCollection*> pAddInCollection;
     static ScUserList*      pUserList;
     static std::map<const char*, OUString>* pRscString;
     static OUString*        pStrScDoc;
@@ -515,18 +517,18 @@ class ScGlobal
     static ScFunctionList*  pStarCalcFunctionList;
     static ScFunctionMgr*   pStarCalcFunctionMgr;
 
-    static ScUnitConverter* pUnitConverter;
+    static std::atomic<ScUnitConverter*> pUnitConverter;
 
     static  SvNumberFormatter*  pEnglishFormatter;          // for UNO / XML export
 
     static css::uno::Reference< css::i18n::XOrdinalSuffix> xOrdinalSuffix;
     static CalendarWrapper*     pCalendar;
-    static CollatorWrapper*     pCaseCollator;
-    static CollatorWrapper*     pCollator;
-    static ::utl::TransliterationWrapper* pTransliteration;
-    static ::utl::TransliterationWrapper* pCaseTransliteration;
+    static std::atomic<CollatorWrapper*>     pCaseCollator;
+    static std::atomic<CollatorWrapper*>     pCollator;
+    static std::atomic<::utl::TransliterationWrapper*> pTransliteration;
+    static std::atomic<::utl::TransliterationWrapper*> pCaseTransliteration;
     static IntlWrapper*         pScIntlWrapper;
-    static css::lang::Locale*   pLocale;
+    static std::atomic<css::lang::Locale*>   pLocale;
 
     static ScFieldEditEngine*   pFieldEditEngine;
 
@@ -571,7 +573,9 @@ public:
     SC_DLLPUBLIC static sal_uInt32 GetStandardFormat( SvNumberFormatter&, sal_uInt32 nFormat, SvNumFormatType nType );
 
     SC_DLLPUBLIC static sal_uInt16 GetStandardRowHeight();
+    /// Horizontal pixel per twips factor.
     SC_DLLPUBLIC static double              nScreenPPTX;
+    /// Vertical pixel per twips factor.
     SC_DLLPUBLIC static double              nScreenPPTY;
 
     static tools::SvRef<ScDocShell>   xDrawClipDocShellRef;
@@ -806,6 +810,8 @@ public:
             FormulaError & rError, FormulaError nStringNoValueError,
             SvNumberFormatter* pFormatter, SvNumFormatType & rCurFmtType );
 
+    /// Calc's threaded group calculation is in progress.
+    SC_DLLPUBLIC static bool bThreadedGroupCalcInProgress;
 };
 
 // maybe move to dbdata.hxx (?):
@@ -886,7 +892,7 @@ struct ScConsolidateParam
     SCTAB           nTab;
     ScSubTotalFunc  eFunction;
     sal_uInt16      nDataAreaCount;         // number of data areas
-    ScArea**        ppDataAreas;            // array of pointers into data areas
+    std::unique_ptr<ScArea[]> pDataAreas; // array of pointers into data areas
     bool            bByCol;
     bool            bByRow;
     bool            bReferenceData;         // reference source data
@@ -899,7 +905,7 @@ struct ScConsolidateParam
     bool                operator==      ( const ScConsolidateParam& r ) const;
     void                Clear           (); // = ClearDataAreas()+Members
     void                ClearDataAreas  ();
-    void                SetAreas        ( ScArea* const* ppAreas, sal_uInt16 nCount );
+    void                SetAreas        ( std::unique_ptr<ScArea[]> pAreas, sal_uInt16 nCount );
 };
 
 extern SfxViewShell* pScActiveViewShell;

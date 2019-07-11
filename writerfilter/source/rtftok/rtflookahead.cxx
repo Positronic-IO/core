@@ -35,11 +35,12 @@ namespace rtftok
 RTFLookahead::RTFLookahead(SvStream& rStream, sal_uInt64 nGroupStart)
     : m_rStream(rStream)
     , m_bHasTable(false)
+    , m_bHasColumns(false)
 {
     sal_uInt64 const nPos = m_rStream.Tell();
     m_rStream.Seek(nGroupStart);
     uno::Reference<task::XStatusIndicator> xStatusIndicator;
-    m_pTokenizer.reset(new RTFTokenizer(*this, &m_rStream, xStatusIndicator));
+    m_pTokenizer = new RTFTokenizer(*this, &m_rStream, xStatusIndicator);
     m_pTokenizer->resolveParse();
     m_rStream.Seek(nPos);
 }
@@ -62,8 +63,10 @@ RTFError RTFLookahead::dispatchToggle(RTFKeyword /*nKeyword*/, bool /*bParam*/, 
     return RTFError::OK;
 }
 
-RTFError RTFLookahead::dispatchValue(RTFKeyword /*nKeyword*/, int /*nParam*/)
+RTFError RTFLookahead::dispatchValue(RTFKeyword nKeyword, int nParam)
 {
+    if (nKeyword == RTF_COLS && nParam >= 2)
+        m_bHasColumns = true;
     return RTFError::OK;
 }
 

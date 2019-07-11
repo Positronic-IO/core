@@ -65,11 +65,11 @@
 #include <comphelper/documentconstants.hxx>
 #include <comphelper/enumhelper.hxx>
 #include <comphelper/genericpropertyset.hxx>
-#include <comphelper/interaction.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/numberedcollection.hxx>
-#include <comphelper/property.hxx>
 #include <comphelper/storagehelper.hxx>
+#include <comphelper/propertysetinfo.hxx>
+#include <comphelper/types.hxx>
 
 #include <connectivity/dbtools.hxx>
 
@@ -81,6 +81,7 @@
 #include <tools/diagnose_ex.h>
 #include <osl/diagnose.h>
 #include <vcl/errcode.hxx>
+#include <sal/log.hxx>
 
 #include <list>
 
@@ -145,7 +146,6 @@ ODatabaseDocument::ODatabaseDocument(const ::rtl::Reference<ODatabaseModelImpl>&
             ,m_aCloseListener( getMutex() )
             ,m_aStorageListeners( getMutex() )
             ,m_pEventContainer( new DocumentEvents( *this, getMutex(), _pImpl->getDocumentEvents() ) )
-            ,m_pEventExecutor( nullptr )   // initialized below, ref-count-protected
             ,m_aEventNotifier( *this, getMutex() )
             ,m_aViewMonitor( m_aEventNotifier )
             ,m_eInitState( NotInitialized )
@@ -350,7 +350,7 @@ static const char sPictures[] = "Pictures";
 // I could check anyway )
 
 /// @throws RuntimeException
-void lcl_uglyHackToStoreDialogeEmbedImages( const Reference< XStorageBasedLibraryContainer >& xDlgCont, const Reference< XStorage >& xStorage, const Reference< XModel >& rxModel, const Reference<XComponentContext >& rxContext )
+static void lcl_uglyHackToStoreDialogeEmbedImages( const Reference< XStorageBasedLibraryContainer >& xDlgCont, const Reference< XStorage >& xStorage, const Reference< XModel >& rxModel, const Reference<XComponentContext >& rxContext )
 {
     Sequence< OUString > sLibraries = xDlgCont->getElementNames();
     Reference< XStorage > xTmpPic = xStorage->openStorageElement( "tempPictures", ElementModes::READWRITE  );
@@ -646,18 +646,21 @@ void SAL_CALL ODatabaseDocument::storeToRecoveryFile( const OUString& i_TargetLo
         // commit the root storage
         tools::stor::commitStorageIfWriteable( xTargetStorage );
     }
+    catch( const IOException& )
+    {
+        throw;
+    }
+    catch( const RuntimeException& )
+    {
+        throw;
+    }
+    catch( const WrappedTargetException& )
+    {
+        throw;
+    }
     catch( const Exception& )
     {
         Any aError = ::cppu::getCaughtException();
-        if  (   aError.isExtractableTo( ::cppu::UnoType< IOException >::get() )
-            ||  aError.isExtractableTo( ::cppu::UnoType< RuntimeException >::get() )
-            ||  aError.isExtractableTo( ::cppu::UnoType< WrappedTargetException >::get() )
-            )
-        {
-            // allowed to leave
-            throw;
-        }
-
         throw WrappedTargetException( OUString(), *this, aError );
     }
 }
@@ -1028,15 +1031,8 @@ void ODatabaseDocument::impl_storeAs_throw( const OUString& _rURL, const ::comph
         if ( bLocationChanged )
         {
             // create storage for target URL
-            uno::Reference<embed::XStorage> xTargetStorage;
-            _rArguments.get("TargetStorage") >>= xTargetStorage;
-            if (!xTargetStorage.is())
-                xTargetStorage = impl_createStorageFor_throw(_rURL);
-
-            // In case we got a StreamRelPath, then xTargetStorage should reference that sub-storage.
-            OUString sStreamRelPath = _rArguments.getOrDefault("StreamRelPath", OUString());
-            if (!sStreamRelPath.isEmpty())
-                xTargetStorage = xTargetStorage->openStorageElement(sStreamRelPath, embed::ElementModes::READWRITE);
+            uno::Reference<embed::XStorage> xTargetStorage(
+                impl_GetStorageOrCreateFor_throw(_rArguments, _rURL));
 
             if ( m_pImpl->isEmbeddedDatabase() )
                 m_pImpl->clearConnections();
@@ -1127,6 +1123,24 @@ Reference< XStorage > ODatabaseDocument::impl_createStorageFor_throw( const OUSt
 
     Reference< XSingleServiceFactory > xStorageFactory( m_pImpl->createStorageFactory(), UNO_SET_THROW );
     return Reference< XStorage >( xStorageFactory->createInstanceWithArguments( aParam ), UNO_QUERY_THROW );
+}
+
+css::uno::Reference<css::embed::XStorage> ODatabaseDocument::impl_GetStorageOrCreateFor_throw(
+    const ::comphelper::NamedValueCollection& _rArguments, const OUString& _rURL) const
+{
+    // Try to get the storage from arguments, then create storage for target URL
+    uno::Reference<embed::XStorage> xTargetStorage;
+    _rArguments.get("TargetStorage") >>= xTargetStorage;
+    if (!xTargetStorage.is())
+        xTargetStorage = impl_createStorageFor_throw(_rURL);
+
+    // In case we got a StreamRelPath, then xTargetStorage should reference that sub-storage.
+    OUString sStreamRelPath = _rArguments.getOrDefault("StreamRelPath", OUString());
+    if (!sStreamRelPath.isEmpty())
+        xTargetStorage
+            = xTargetStorage->openStorageElement(sStreamRelPath, embed::ElementModes::READWRITE);
+
+    return xTargetStorage;
 }
 
 void SAL_CALL ODatabaseDocument::storeAsURL( const OUString& _rURL, const Sequence< PropertyValue >& _rArguments )
@@ -1231,11 +1245,12 @@ void SAL_CALL ODatabaseDocument::storeToURL( const OUString& _rURL, const Sequen
 
     try
     {
+        const ::comphelper::NamedValueCollection aArguments(_rArguments);
         // create storage for target URL
-        Reference< XStorage > xTargetStorage( impl_createStorageFor_throw( _rURL ) );
+        Reference<XStorage> xTargetStorage(impl_GetStorageOrCreateFor_throw(aArguments, _rURL));
 
         // extend media descriptor with URL
-        Sequence< PropertyValue > aMediaDescriptor( lcl_appendFileNameToDescriptor( _rArguments, _rURL ) );
+        Sequence<PropertyValue> aMediaDescriptor(lcl_appendFileNameToDescriptor(aArguments, _rURL));
 
         // store to this storage
         impl_storeToStorage_throw( xTargetStorage, aMediaDescriptor, aGuard );

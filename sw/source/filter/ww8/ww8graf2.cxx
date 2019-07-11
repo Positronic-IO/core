@@ -18,6 +18,7 @@
  */
 
 #include <iterator>
+#include <numeric>
 #include <hintids.hxx>
 #include <svl/urihelper.hxx>
 #include <svx/svdpage.hxx>
@@ -83,15 +84,8 @@ void wwZOrderer::InsertEscherObject( SdrObject* pObject,
 
 wwZOrderer::myeiter wwZOrderer::MapEscherIdxToIter(sal_uLong nIdx)
 {
-    myeiter aIter = maEscherLayer.begin();
-    myeiter aEnd = maEscherLayer.end();
-    while (aIter != aEnd)
-    {
-        if (aIter->mnEscherShapeOrder == nIdx)
-            break;
-        ++aIter;
-    }
-    return aIter;
+    return std::find_if(maEscherLayer.begin(), maEscherLayer.end(),
+        [nIdx](const EscherShape& rShape) { return rShape.mnEscherShapeOrder == nIdx; });
 }
 
 sal_uInt16 wwZOrderer::GetEscherObjectIdx(sal_uLong nSpId)
@@ -187,13 +181,8 @@ void wwZOrderer::InsertTextLayerObject(SdrObject* pObject)
         sal_uInt16 nIdx = maIndexes.top();
         myeiter aEnd = MapEscherIdxToIter(nIdx);
 
-        sal_uLong nInsertPos=0;
-        myeiter aIter = maEscherLayer.begin();
-        while (aIter != aEnd)
-        {
-            nInsertPos += aIter->mnNoInlines+1;
-            ++aIter;
-        }
+        sal_uLong nInsertPos = std::accumulate(maEscherLayer.begin(), aEnd, sal_uLong(0),
+            [](const sal_uLong nPos, const EscherShape& rShape) { return nPos + rShape.mnNoInlines + 1; });
 
         OSL_ENSURE(aEnd != maEscherLayer.end(), "Something very wrong here");
         if (aEnd != maEscherLayer.end())
@@ -216,15 +205,9 @@ void wwZOrderer::InsertTextLayerObject(SdrObject* pObject)
  */
 sal_uLong wwZOrderer::GetDrawingObjectPos(short nWwHeight)
 {
-    myditer aIter = maDrawHeight.begin();
-    myditer aEnd = maDrawHeight.end();
-
-    while (aIter != aEnd)
-    {
-        if ((*aIter & 0x1fff) > (nWwHeight & 0x1fff))
-            break;
-        ++aIter;
-    }
+    auto aIter = std::find_if(
+        maDrawHeight.begin(), maDrawHeight.end(),
+        [nWwHeight](short aHeight){ return (aHeight & 0x1fff) > (nWwHeight & 0x1fff); });
 
     aIter = maDrawHeight.insert(aIter, nWwHeight);
     return std::distance(maDrawHeight.begin(), aIter);
@@ -238,7 +221,7 @@ void wwZOrderer::InsertObject(SdrObject* pObject, sal_uLong nPos)
     }
 }
 
-extern void WW8PicShadowToReal(  WW8_PIC_SHADOW const *  pPicS,  WW8_PIC*  pPic );
+static void WW8PicShadowToReal(  WW8_PIC_SHADOW const *  pPicS,  WW8_PIC*  pPic );
 
 bool SwWW8ImplReader::GetPictGrafFromStream(Graphic& rGraphic, SvStream& rSrc)
 {
@@ -336,7 +319,7 @@ void SwWW8ImplReader::ReplaceObj(const SdrObject &rReplaceObj,
     SdrObject &rSubObj)
 {
     // Insert SdrGrafObj instead of SdrTextObj into this group
-    if (SdrObject* pGroupObject = rReplaceObj.GetUpGroup())
+    if (SdrObject* pGroupObject = rReplaceObj.getParentSdrObjectFromSdrObject())
     {
         SdrObjList* pObjectList = pGroupObject->GetSubList();
 
@@ -561,7 +544,7 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
 
             tools::Rectangle aClientRect( 0,0, aPD.nWidth,  aPD.nHeight);
             SvxMSDffImportData aData( aClientRect );
-            pObject = m_xMSDffManager->ImportObj(*m_pDataStream, &aData, aClientRect, tools::Rectangle(), /*nCalledByGroup*/0, /*pShapeId*/nullptr );
+            pObject = m_xMSDffManager->ImportObj(*m_pDataStream, aData, aClientRect, tools::Rectangle(), /*nCalledByGroup*/0, /*pShapeId*/nullptr );
             if (pObject)
             {
                 // for the frame
@@ -657,7 +640,7 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
                 }
 
                 bool bTextObjWasGrouped = false;
-                if (pOldFlyFormat && pTextObj && pTextObj->GetUpGroup())
+                if (pOldFlyFormat && pTextObj && pTextObj->getParentSdrObjectFromSdrObject())
                     bTextObjWasGrouped = true;
 
                 if (bTextObjWasGrouped)
@@ -713,7 +696,7 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
                                 pOurNewObject );
 
                             // delete and destroy old SdrGrafObj from page
-                            if (pObject->GetPage())
+                            if (pObject->getSdrPageFromSdrObject())
                                 m_pDrawPg->RemoveObject(pObject->GetOrdNum());
                             SdrObject::Free( pObject );
                         }
@@ -725,7 +708,7 @@ SwFrameFormat* SwWW8ImplReader::ImportGraf(SdrTextObj const * pTextObj,
                     m_xMSDffManager->RemoveFromShapeOrder( pObject );
 
                 // also delete this from the page if not grouped
-                if (pTextObj && !bTextObjWasGrouped && pTextObj->GetPage())
+                if (pTextObj && !bTextObjWasGrouped && pTextObj->getSdrPageFromSdrObject())
                     m_pDrawPg->RemoveObject( pTextObj->GetOrdNum() );
             }
             m_xMSDffManager->EnableFallbackStream();

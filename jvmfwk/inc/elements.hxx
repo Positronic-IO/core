@@ -58,7 +58,6 @@ class CNodeJavaInfo
 {
 public:
     CNodeJavaInfo();
-    ~CNodeJavaInfo();
 
     /** if true, then javaInfo is empty. When writeToNode is called
         then all child elements are deleted.
@@ -266,8 +265,8 @@ public:
 class MergedSettings final
 {
 private:
-    const MergedSettings& operator = (MergedSettings&) = delete;
-    MergedSettings(MergedSettings&) = delete;
+    MergedSettings& operator = (MergedSettings const &) = delete;
+    MergedSettings(MergedSettings const &) = delete;
 
     void merge(const NodeJava & share, const NodeJava & user);
 

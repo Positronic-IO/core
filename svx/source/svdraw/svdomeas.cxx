@@ -68,6 +68,8 @@
 #include <svx/xlnwtit.hxx>
 #include <svx/xpoly.hxx>
 #include <unotools/syslocale.hxx>
+#include <unotools/localedatawrapper.hxx>
+#include <o3tl/make_unique.hxx>
 
 
 SdrMeasureObjGeoData::SdrMeasureObjGeoData() {}
@@ -79,8 +81,8 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
     Fraction aMeasureScale(1, 1);
     bool bTextRota90(false);
     bool bShowUnit(false);
-    FieldUnit eMeasureUnit(FUNIT_NONE);
-    FieldUnit eModUIUnit(FUNIT_NONE);
+    FieldUnit eMeasureUnit(FieldUnit::NONE);
+    FieldUnit eModUIUnit(FieldUnit::NONE);
 
     const SfxItemSet& rSet = GetMergedItemSet();
     bTextRota90 = rSet.Get(SDRATTR_MEASURETEXTROTA90).GetValue();
@@ -95,7 +97,7 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
         {
             eModUIUnit = getSdrModelFromSdrObject().GetUIUnit();
 
-            if(eMeasureUnit == FUNIT_NONE)
+            if(eMeasureUnit == FieldUnit::NONE)
                 eMeasureUnit = eModUIUnit;
 
             sal_Int32 nLen(GetLen(aPt2 - aPt1));
@@ -160,7 +162,7 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
             {
                 eModUIUnit = getSdrModelFromSdrObject().GetUIUnit();
 
-                if(eMeasureUnit == FUNIT_NONE)
+                if(eMeasureUnit == FieldUnit::NONE)
                     eMeasureUnit = eModUIUnit;
 
                 aStr = SdrModel::GetUnitString(eMeasureUnit);
@@ -184,17 +186,17 @@ OUString SdrMeasureObj::TakeRepresentation(SdrMeasureFieldKind eMeasureFieldKind
 
 // BaseProperties section
 
-sdr::properties::BaseProperties* SdrMeasureObj::CreateObjectSpecificProperties()
+std::unique_ptr<sdr::properties::BaseProperties> SdrMeasureObj::CreateObjectSpecificProperties()
 {
-    return new sdr::properties::MeasureProperties(*this);
+    return o3tl::make_unique<sdr::properties::MeasureProperties>(*this);
 }
 
 
 // DrawContact section
 
-sdr::contact::ViewContact* SdrMeasureObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrMeasureObj::CreateObjectSpecificViewContact()
 {
-    return new sdr::contact::ViewContactOfSdrMeasureObj(*this);
+    return o3tl::make_unique<sdr::contact::ViewContactOfSdrMeasureObj>(*this);
 }
 
 
@@ -325,7 +327,7 @@ void SdrMeasureObj::ImpTakeAttr(ImpMeasureRec& rRec) const
     rRec.nTextAutoAngleView=static_cast<const SdrMeasureTextAutoAngleViewItem&>(rSet.Get(SDRATTR_MEASURETEXTAUTOANGLEVIEW)).GetValue();
 }
 
-long impGetLineStartEndDistance(const basegfx::B2DPolyPolygon& rPolyPolygon, long nNewWidth, bool bCenter)
+static long impGetLineStartEndDistance(const basegfx::B2DPolyPolygon& rPolyPolygon, long nNewWidth, bool bCenter)
 {
     const basegfx::B2DRange aPolygonRange(rPolyPolygon.getB2DRange());
     const double fOldWidth(std::max(aPolygonRange.getWidth(), 1.0));
@@ -430,7 +432,7 @@ void SdrMeasureObj::ImpCalcGeometrics(const ImpMeasureRec& rRec, ImpMeasurePoly&
 
     rPol.bAutoUpsideDown=false;
     if (rRec.bTextAutoAngle) {
-        long nTmpAngle=NormAngle360(rPol.nTextAngle-rRec.nTextAutoAngleView);
+        long nTmpAngle=NormAngle36000(rPol.nTextAngle-rRec.nTextAutoAngleView);
         if (nTmpAngle>=18000) {
             rPol.nTextAngle+=18000;
             rPol.bAutoUpsideDown=true;
@@ -438,10 +440,10 @@ void SdrMeasureObj::ImpCalcGeometrics(const ImpMeasureRec& rRec, ImpMeasurePoly&
     }
 
     if (rRec.bTextUpsideDown) rPol.nTextAngle+=18000;
-    rPol.nTextAngle=NormAngle360(rPol.nTextAngle);
+    rPol.nTextAngle=NormAngle36000(rPol.nTextAngle);
     rPol.nHlpAngle=rPol.nLineAngle+9000;
     if (rRec.bBelowRefEdge) rPol.nHlpAngle+=18000;
-    rPol.nHlpAngle=NormAngle360(rPol.nHlpAngle);
+    rPol.nHlpAngle=NormAngle36000(rPol.nHlpAngle);
     double nHlpSin=nLineCos;
     double nHlpCos=-nLineSin;
     if (rRec.bBelowRefEdge) {
@@ -453,14 +455,14 @@ void SdrMeasureObj::ImpCalcGeometrics(const ImpMeasureRec& rRec, ImpMeasurePoly&
     long nOverhang=rRec.nHelplineOverhang;
     long nHelplineDist=rRec.nHelplineDist;
 
-    long dx= svx::Round(nLineDist*nHlpCos);
-    long dy=-svx::Round(nLineDist*nHlpSin);
-    long dxh1a= svx::Round((nHelplineDist-rRec.nHelpline1Len)*nHlpCos);
-    long dyh1a=-svx::Round((nHelplineDist-rRec.nHelpline1Len)*nHlpSin);
-    long dxh1b= svx::Round((nHelplineDist-rRec.nHelpline2Len)*nHlpCos);
-    long dyh1b=-svx::Round((nHelplineDist-rRec.nHelpline2Len)*nHlpSin);
-    long dxh2= svx::Round((nLineDist+nOverhang)*nHlpCos);
-    long dyh2=-svx::Round((nLineDist+nOverhang)*nHlpSin);
+    long dx= FRound(nLineDist*nHlpCos);
+    long dy=-FRound(nLineDist*nHlpSin);
+    long dxh1a= FRound((nHelplineDist-rRec.nHelpline1Len)*nHlpCos);
+    long dyh1a=-FRound((nHelplineDist-rRec.nHelpline1Len)*nHlpSin);
+    long dxh1b= FRound((nHelplineDist-rRec.nHelpline2Len)*nHlpCos);
+    long dyh1b=-FRound((nHelplineDist-rRec.nHelpline2Len)*nHlpSin);
+    long dxh2= FRound((nLineDist+nOverhang)*nHlpCos);
+    long dyh2=-FRound((nLineDist+nOverhang)*nHlpSin);
 
     // extension line 1
     rPol.aHelpline1.aP1=Point(aP1.X()+dxh1a,aP1.Y()+dyh1a);
@@ -750,27 +752,30 @@ sal_uInt32 SdrMeasureObj::GetHdlCount() const
     return 6L;
 }
 
-SdrHdl* SdrMeasureObj::GetHdl(sal_uInt32 nHdlNum) const
+void SdrMeasureObj::AddToHdlList(SdrHdlList& rHdlList) const
 {
     ImpMeasureRec aRec;
     ImpMeasurePoly aMPol;
     ImpTakeAttr(aRec);
     aRec.nHelplineDist=0;
     ImpCalcGeometrics(aRec,aMPol);
-    Point aPt;
 
-    switch (nHdlNum) {
-        case 0: aPt=aMPol.aHelpline1.aP1; break;
-        case 1: aPt=aMPol.aHelpline2.aP1; break;
-        case 2: aPt=aPt1;       break;
-        case 3: aPt=aPt2;       break;
-        case 4: aPt=aMPol.aHelpline1.aP2; break;
-        case 5: aPt=aMPol.aHelpline2.aP2; break;
-    } // switch
-    SdrHdl* pHdl=new ImpMeasureHdl(aPt,SdrHdlKind::User);
-    pHdl->SetObjHdlNum(nHdlNum);
-    pHdl->SetRotationAngle(aMPol.nLineAngle);
-    return pHdl;
+    for (sal_uInt32 nHdlNum=0; nHdlNum<6; ++nHdlNum)
+    {
+        Point aPt;
+        switch (nHdlNum) {
+            case 0: aPt=aMPol.aHelpline1.aP1; break;
+            case 1: aPt=aMPol.aHelpline2.aP1; break;
+            case 2: aPt=aPt1;       break;
+            case 3: aPt=aPt2;       break;
+            case 4: aPt=aMPol.aHelpline1.aP2; break;
+            case 5: aPt=aMPol.aHelpline2.aP2; break;
+        } // switch
+        std::unique_ptr<SdrHdl> pHdl(new ImpMeasureHdl(aPt,SdrHdlKind::User));
+        pHdl->SetObjHdlNum(nHdlNum);
+        pHdl->SetRotationAngle(aMPol.nLineAngle);
+        rHdlList.AddHdl(std::move(pHdl));
+    }
 }
 
 
@@ -1285,9 +1290,9 @@ OutlinerParaObject* SdrMeasureObj::GetOutlinerParaObject() const
     return SdrTextObj::GetOutlinerParaObject();
 }
 
-void SdrMeasureObj::NbcSetOutlinerParaObject(OutlinerParaObject* pTextObject)
+void SdrMeasureObj::NbcSetOutlinerParaObject(std::unique_ptr<OutlinerParaObject> pTextObject)
 {
-    SdrTextObj::NbcSetOutlinerParaObject(pTextObject);
+    SdrTextObj::NbcSetOutlinerParaObject(std::move(pTextObject));
     if(SdrTextObj::GetOutlinerParaObject())
         SetTextDirty(); // recalculate text
 }

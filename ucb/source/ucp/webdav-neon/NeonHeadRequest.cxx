@@ -27,6 +27,7 @@
  ************************************************************************/
 
 #include <osl/mutex.hxx>
+#include <sal/log.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/PropertyState.hpp>
 #include "NeonHeadRequest.hxx"
@@ -48,15 +49,9 @@ void process_headers( ne_request * req,
     {
         if( !rHeaderNames.empty() )
         {
-            std::vector< OUString >::const_iterator it(
-                rHeaderNames.begin() );
-            const std::vector< OUString >::const_iterator end(
-                rHeaderNames.end() );
-
-            while ( it != end )
+            for ( const auto& rHeader : rHeaderNames )
             {
-                SAL_INFO( "ucb.ucp.webdav", "HEAD - requested header: " << (*it) );
-                ++it;
+                SAL_INFO( "ucb.ucp.webdav", "HEAD - requested header: " << rHeader );
             }
         }
     }
@@ -74,25 +69,17 @@ void process_headers( ne_request * req,
         if ( !bIncludeIt )
         {
             // Check whether this header was requested.
-            std::vector< OUString >::const_iterator it(
-                rHeaderNames.begin() );
-            const std::vector< OUString >::const_iterator end(
-                rHeaderNames.end() );
+            auto it = std::find_if(rHeaderNames.begin(), rHeaderNames.end(),
+                [&aHeaderName](const OUString& rName) {
+                    // header names are case insensitive
+                    return rName.equalsIgnoreAsciiCase( aHeaderName );
+                });
 
-            while ( it != end )
+            if ( it != rHeaderNames.end() )
             {
-                // header names are case insensitive
-                if ( (*it).equalsIgnoreAsciiCase( aHeaderName ) )
-                {
-                    aHeaderName = (*it);
-                    break;
-                }
-
-                ++it;
-            }
-
-            if ( it != end )
+                aHeaderName = (*it);
                 bIncludeIt = true;
+            }
         }
 
         if ( bIncludeIt )
@@ -132,7 +119,7 @@ NeonHeadRequest::NeonHeadRequest( HttpSession * inSession,
                                             RTL_TEXTENCODING_UTF8 ).getStr() );
 
     {
-        osl::Guard< osl::Mutex > theGlobalGuard( aGlobalNeonMutex );
+        osl::Guard< osl::Mutex > theGlobalGuard(getGlobalNeonMutex());
         nError = ne_request_dispatch( req );
     }
 

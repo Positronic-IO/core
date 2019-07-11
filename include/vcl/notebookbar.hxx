@@ -26,25 +26,37 @@ friend class NotebookBarContextChangeEventListener;
 public:
     NotebookBar(Window* pParent, const OString& rID, const OUString& rUIXMLDescription, const css::uno::Reference<css::frame::XFrame> &rFrame);
     virtual ~NotebookBar() override;
-    virtual void dispose() SAL_OVERRIDE;
+    virtual void dispose() override;
 
     virtual bool PreNotify( NotifyEvent& rNEvt ) override;
-    virtual Size GetOptimalSize() const SAL_OVERRIDE;
-    virtual void setPosSizePixel(long nX, long nY, long nWidth, long nHeight, PosSizeFlags nFlags = PosSizeFlags::All) SAL_OVERRIDE;
+    virtual Size GetOptimalSize() const override;
+    virtual void setPosSizePixel(long nX, long nY, long nWidth, long nHeight, PosSizeFlags nFlags = PosSizeFlags::All) override;
     virtual void Resize() override;
 
     void SetSystemWindow(SystemWindow* pSystemWindow);
 
     const css::uno::Reference<css::ui::XContextChangeEventListener>& getContextChangeEventListener() const { return m_pEventListener; }
 
+    void StateChanged(const StateChangedType nStateChange ) override;
+
     void DataChanged(const DataChangedEvent& rDCEvt) override;
+
+    void ControlListener(bool bListen);
 
 private:
     VclPtr<SystemWindow> m_pSystemWindow;
     css::uno::Reference<css::ui::XContextChangeEventListener> m_pEventListener;
     std::vector<NotebookbarContextControl*> m_pContextContainers;
+    css::uno::Reference<css::frame::XFrame> mxFrame;
+
+    AllSettings DefaultSettings;
+    AllSettings PersonaSettings;
 
     void UpdateBackground();
+
+    void UpdateDefaultSettings();
+    void UpdatePersonaSettings();
+
 };
 
 

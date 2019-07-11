@@ -13,14 +13,13 @@
 #include <array>
 #include <memory>
 #include <tools/link.hxx>
-#include <xmloff/xmlictxt.hxx>
-#include "xmlimprt.hxx"
 #include "importcontext.hxx"
-#include <rangelst.hxx>
+#include <tokenarray.hxx>
+
+namespace sax_fastparser { class FastAttributeList; }
 
 class ScColorScaleFormat;
 class ScColorScaleEntry;
-class ScDataBarFormat;
 struct ScDataBarFormatData;
 class ScConditionalFormat;
 struct ScIconSetFormatData;
@@ -101,8 +100,8 @@ public:
         sal_Int32 nElement, const css::uno::Reference< css::xml::sax::XFastAttributeList >& xAttrList ) override;
 private:
 
-    ScDataBarFormat* mpDataBarFormat;
     ScDataBarFormatData* mpFormatData;
+    ScConditionalFormat* const mpParent;
 
     sal_Int32 mnIndex;
 };
@@ -110,6 +109,7 @@ private:
 class ScXMLIconSetFormatContext : public ScXMLImportContext
 {
     ScIconSetFormatData* mpFormatData;
+    ScConditionalFormat* const mpParent;
 public:
 
     ScXMLIconSetFormatContext( ScXMLImport& rImport,

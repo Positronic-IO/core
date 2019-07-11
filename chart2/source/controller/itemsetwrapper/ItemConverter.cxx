@@ -19,6 +19,7 @@
 
 #include <ItemConverter.hxx>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <osl/diagnose.h>
 #include <svl/itempool.hxx>
 #include <svl/itemprop.hxx>
@@ -26,6 +27,7 @@
 #include <svl/whiter.hxx>
 #include <svx/svxids.hrc>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
@@ -35,7 +37,6 @@ ItemConverter::ItemConverter(
     const uno::Reference< beans::XPropertySet > & rPropertySet,
     SfxItemPool& rItemPool ) :
         m_xPropertySet( rPropertySet ),
-        m_xPropertySetInfo( nullptr ),
         m_rItemPool( rItemPool )
 {
     resetPropertySet( m_xPropertySet );
@@ -96,28 +97,22 @@ void ItemConverter::FillItemSet( SfxItemSet & rOutItemSet ) const
             if( GetItemProperty( nWhich, aProperty ))
             {
                 // put the Property into the itemset
-                SfxPoolItem * pItem = rPool.GetDefaultItem( nWhich ).Clone();
+                std::unique_ptr<SfxPoolItem> pItem(rPool.GetDefaultItem( nWhich ).Clone());
 
                 if( pItem )
                 {
                     try
                     {
-                        if( ! pItem->PutValue( m_xPropertySet->getPropertyValue( aProperty.first ),
+                        if( pItem->PutValue( m_xPropertySet->getPropertyValue( aProperty.first ),
                                                aProperty.second // nMemberId
                                 ))
                         {
-                            delete pItem;
-                        }
-                        else
-                        {
                             pItem->SetWhich(nWhich);
                             rOutItemSet.Put( *pItem );
-                            delete pItem;
                         }
                     }
                     catch( const beans::UnknownPropertyException &ex )
                     {
-                        delete pItem;
                         SAL_WARN( "chart2", ex << " - unknown Property: " << aProperty.first);
                     }
                     catch( const uno::Exception & )

@@ -37,6 +37,7 @@
 #include <com/sun/star/ui/dialogs/FilePicker.hpp>
 #include <com/sun/star/ui/dialogs/XFilePickerControlAccess.hpp>
 #include <comphelper/string.hxx>
+#include <svl/srchdefs.hxx>
 #include <sfx2/dinfdlg.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/docfile.hxx>
@@ -269,11 +270,8 @@ void ModulWindow::CheckCompileBasic()
 
             GetShell()->GetViewFrame()->GetWindow().EnterWait();
 
-            if( bModified )
-            {
-                AssertValidEditEngine();
-                GetEditorWindow().SetSourceInBasic();
-            }
+            AssertValidEditEngine();
+            GetEditorWindow().SetSourceInBasic();
 
             bool bWasModified = GetBasic()->IsModified();
 
@@ -341,18 +339,15 @@ void ModulWindow::BasicExecute()
             if ( !pMethod )
             {
                 // If not in a method then prompt the user
-                ChooseMacro( uno::Reference< frame::XModel >() );
+                ChooseMacro(GetFrameWeld(), uno::Reference<frame::XModel>());
                 return;
             }
-            if ( pMethod )
-            {
-                pMethod->SetDebugFlags( m_aStatus.nBasicFlags );
-                BasicDLL::SetDebugMode( true );
-                RunMethod( pMethod );
-                BasicDLL::SetDebugMode( false );
-                // if cancelled during Interactive=false
-                BasicDLL::EnableBreak( true );
-            }
+            pMethod->SetDebugFlags(m_aStatus.nBasicFlags);
+            BasicDLL::SetDebugMode(true);
+            RunMethod(pMethod);
+            BasicDLL::SetDebugMode(false);
+            // if cancelled during Interactive=false
+            BasicDLL::EnableBreak(true);
             ClearStatus( BASWIN_RUNNINGBASIC );
         }
         else
@@ -496,7 +491,7 @@ void ModulWindow::ImportDialog()
 
 void ModulWindow::ToggleBreakPoint( sal_uLong nLine )
 {
-    DBG_ASSERT( XModule().is(), "No Modul!" );
+    DBG_ASSERT( XModule().is(), "No Module!" );
 
     if ( XModule().is() )
     {
@@ -510,13 +505,13 @@ void ModulWindow::ToggleBreakPoint( sal_uLong nLine )
         if ( pBrk ) // remove
         {
             m_xModule->ClearBP( static_cast<sal_uInt16>(nLine) );
-            delete GetBreakPoints().remove( pBrk );
+            GetBreakPoints().remove( pBrk );
         }
         else // create one
         {
             if ( m_xModule->SetBP( static_cast<sal_uInt16>(nLine)) )
             {
-                GetBreakPoints().InsertSorted( new BreakPoint( nLine ) );
+                GetBreakPoints().InsertSorted( BreakPoint( nLine ) );
                 if ( StarBASIC::IsRunning() )
                 {
                     for ( sal_uInt16 nMethod = 0; nMethod < m_xModule->GetMethods()->Count(); nMethod++ )
@@ -540,9 +535,9 @@ void ModulWindow::UpdateBreakPoint( const BreakPoint& rBrk )
         CheckCompileBasic();
 
         if ( rBrk.bEnabled )
-            m_xModule->SetBP( static_cast<sal_uInt16>(rBrk.nLine) );
+            m_xModule->SetBP( rBrk.nLine );
         else
-            m_xModule->ClearBP( static_cast<sal_uInt16>(rBrk.nLine) );
+            m_xModule->ClearBP( rBrk.nLine );
     }
 }
 
@@ -588,17 +583,15 @@ void ModulWindow::BasicToggleBreakPointEnabled()
     }
 }
 
-
 void ModulWindow::ManageBreakPoints()
 {
     BreakPointWindow& rBrkWin = GetBreakPointWindow();
-    ScopedVclPtrInstance< BreakPointDialog > aBrkDlg( &rBrkWin, GetBreakPoints() );
-    aBrkDlg->Execute();
+    BreakPointDialog aBrkDlg(rBrkWin.GetFrameWeld(), GetBreakPoints());
+    aBrkDlg.run();
     rBrkWin.Invalidate();
 }
 
-
-bool ModulWindow::BasicErrorHdl( StarBASIC const * pBasic )
+void ModulWindow::BasicErrorHdl( StarBASIC const * pBasic )
 {
     GetShell()->GetViewFrame()->ToTop();
 
@@ -622,16 +615,24 @@ bool ModulWindow::BasicErrorHdl( StarBASIC const * pBasic )
     // #i47002#
     Reference< awt::XWindow > xWindow = VCLUnoHelper::GetInterface( this );
 
-    ErrorHandler::HandleError( StarBASIC::GetErrorCode() );
+    // tdf#118572 make a currently running dialog, regardless of what its modal
+    // to, insensitive to user input until after this error dialog goes away.
+    auto xDialog = Dialog::GetMostRecentExecutingDialog();
+    const bool bToggleEnableInput = xDialog && xDialog->IsInputEnabled();
+    if (bToggleEnableInput)
+        xDialog->EnableInput(false);
+    ErrorHandler::HandleError(StarBASIC::GetErrorCode(), GetFrameWeld());
+    if (bToggleEnableInput)
+        xDialog->EnableInput(true);
 
     // #i47002#
     VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow( xWindow );
     if ( !pWindow )
-        return false;
+        return;
 
     if ( bMarkError )
         m_aXEditorWindow->GetBrkWindow().SetNoMarker();
-    return false;
+    return;
 }
 
 BasicDebugFlags ModulWindow::BasicBreakHdl()
@@ -1033,7 +1034,7 @@ void ModulWindow::ExecuteGlobal (SfxRequest& rReq)
             DocumentSignature aSignature(m_aDocument);
             if (aSignature.supportsSignatures())
             {
-                aSignature.signScriptingContent();
+                aSignature.signScriptingContent(rReq.GetFrameWeld());
                 if (SfxBindings* pBindings = GetBindingsPtr())
                     pBindings->Invalidate(SID_SIGNATURE);
             }
@@ -1251,7 +1252,7 @@ sal_uInt16 ModulWindow::StartSearchAndReplace( const SvxSearchItem& rSearchItem,
     return nFound;
 }
 
-svl::IUndoManager* ModulWindow::GetUndoManager()
+SfxUndoManager* ModulWindow::GetUndoManager()
 {
     if ( GetEditEngine() )
         return &GetEditEngine()->GetUndoManager();

@@ -21,7 +21,7 @@
 
 #include <officecfg/Office/Common.hxx>
 #include <svtools/ctrltool.hxx>
-#include <svtools/svlbitm.hxx>
+#include <vcl/svlbitm.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/wrkwin.hxx>
 #include <svtools/fontsubstconfig.hxx>
@@ -139,8 +139,7 @@ SvxFontSubstTabPage::~SvxFontSubstTabPage()
 void SvxFontSubstTabPage::dispose()
 {
     m_xCheckButtonData.reset();
-    delete pConfig;
-    pConfig = nullptr;
+    pConfig.reset();
     m_pCheckLB.disposeAndClear();
     m_pUseTableCB.clear();
     m_pReplacements.clear();
@@ -436,11 +435,11 @@ void SvxFontSubstCheckListBox::SetTabs()
     SvSimpleTable::SetTabs();
     SvLBoxTabFlags nAdjust = SvLBoxTabFlags::ADJUST_RIGHT|SvLBoxTabFlags::ADJUST_LEFT|SvLBoxTabFlags::ADJUST_CENTER|SvLBoxTabFlags::ADJUST_NUMERIC|SvLBoxTabFlags::FORCE;
 
-    SvLBoxTab* pTab = aTabs[1];
+    SvLBoxTab* pTab = aTabs[1].get();
     pTab->nFlags &= ~nAdjust;
     pTab->nFlags |= SvLBoxTabFlags::PUSHABLE|SvLBoxTabFlags::ADJUST_CENTER|SvLBoxTabFlags::FORCE;
 
-    pTab = aTabs[2];
+    pTab = aTabs[2].get();
     pTab->nFlags &= ~nAdjust;
     pTab->nFlags |= SvLBoxTabFlags::PUSHABLE|SvLBoxTabFlags::ADJUST_CENTER|SvLBoxTabFlags::FORCE;
 }

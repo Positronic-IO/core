@@ -20,21 +20,20 @@
 #ifndef INCLUDED_SC_SOURCE_CORE_INC_CELLKEYTRANSLATOR_HXX
 #define INCLUDED_SC_SOURCE_CORE_INC_CELLKEYTRANSLATOR_HXX
 
-#include <global.hxx>
 #include <formula/opcode.hxx>
 #include <unotools/transliterationwrapper.hxx>
 #include <vector>
 #include <memory>
 #include <unordered_map>
 
-#include <com/sun/star/lang/Locale.hpp>
+namespace com { namespace sun { namespace star { namespace lang { struct Locale; } } } }
 
 struct TransItem;
 
 struct ScCellKeyword
 {
     const sal_Char* mpName;
-    OpCode meOpCode;
+    OpCode const meOpCode;
     const css::lang::Locale& mrLocale;
 
     ScCellKeyword(const sal_Char* pName, OpCode eOpCode, const css::lang::Locale& rLocale);

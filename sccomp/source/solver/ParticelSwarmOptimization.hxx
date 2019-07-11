@@ -49,7 +49,7 @@ private:
 
     DataProvider& mrDataProvider;
 
-    size_t mnNumOfParticles;
+    size_t const mnNumOfParticles;
 
     std::vector<Particle> maSwarm;
 
@@ -92,6 +92,7 @@ public:
 
         mfBestFitness = std::numeric_limits<float>::lowest();
 
+        maSwarm.reserve(mnNumOfParticles);
         for (size_t i = 0; i < mnNumOfParticles; i++)
         {
             maSwarm.emplace_back(mnDimensionality);

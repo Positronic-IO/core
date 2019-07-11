@@ -19,6 +19,7 @@
 
 #include "eschesdo.hxx"
 #include <o3tl/any.hxx>
+#include <o3tl/clamp.hxx>
 #include <o3tl/make_unique.hxx>
 #include <svx/svdxcgv.hxx>
 #include <svx/svdomedia.hxx>
@@ -93,6 +94,9 @@
 #include <vcl/virdev.hxx>
 #include <rtl/crc.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
+#include <basegfx/polygon/b2dpolypolygontools.hxx>
+#include <basegfx/polygon/b2dpolygontools.hxx>
 #include <memory>
 
 using namespace css;
@@ -167,39 +171,71 @@ EscherPropertyContainer::EscherPropertyContainer(
 
 EscherPropertyContainer::~EscherPropertyContainer()
 {
-    if ( bHasComplexData )
-    {
-        size_t nSortCount = pSortStruct.size();
-        while ( nSortCount-- )
-            delete[] pSortStruct[ nSortCount ].pBuf;
-    }
 };
 
-void EscherPropertyContainer::AddOpt( sal_uInt16 nPropID, sal_uInt32 nPropValue, bool bBlib )
+void EscherPropertyContainer::AddOpt(
+    sal_uInt16 nPropID,
+    bool bBlib,
+    sal_uInt32 nSizeReduction,
+    SvMemoryStream& rStream)
 {
-    AddOpt( nPropID, bBlib, nPropValue, nullptr, 0 );
-}
+    sal_uInt8 const* pBuf(static_cast<sal_uInt8 const *>(rStream.GetData()));
+    const sal_uInt64 nSize(rStream.GetSize());
+    std::vector<sal_uInt8> aBuf;
+    aBuf.reserve(nSize);
 
-void EscherPropertyContainer::AddOpt( sal_uInt16 nPropID, const OUString& rString )
-{
-    sal_Int32 j, i, nLen = rString.getLength() * 2 + 2;
-    sal_uInt8* pBuf = new sal_uInt8[ nLen ];
-    for ( j = i = 0; i < rString.getLength(); i++ )
+    for(sal_uInt64 a(0); a < nSize; a++)
     {
-        sal_uInt16 nChar = static_cast<sal_uInt16>(rString[ i ]);
-        pBuf[ j++ ] = static_cast<sal_uInt8>(nChar);
-        pBuf[ j++ ] = static_cast<sal_uInt8>( nChar >> 8 );
+        aBuf.push_back(*pBuf++);
     }
-    pBuf[ j++ ] = 0;
-    pBuf[ j++ ] = 0;
-    AddOpt( nPropID, true, nLen, pBuf, nLen );
+
+    sal_uInt32 nPropValue(static_cast<sal_uInt32>(nSize));
+
+    if(0 != nSizeReduction && nPropValue > nSizeReduction)
+    {
+        nPropValue -= nSizeReduction;
+    }
+
+    AddOpt(nPropID, bBlib, nPropValue, aBuf);
 }
 
-void EscherPropertyContainer::AddOpt( sal_uInt16 nPropID, bool bBlib, sal_uInt32 nPropValue, sal_uInt8* pProp, sal_uInt32 nPropSize )
+void EscherPropertyContainer::AddOpt(
+    sal_uInt16 nPropID,
+    sal_uInt32 nPropValue,
+    bool bBlib)
+{
+    AddOpt(nPropID, bBlib, nPropValue, std::vector<sal_uInt8>());
+}
+
+void EscherPropertyContainer::AddOpt(
+    sal_uInt16 nPropID,
+    const OUString& rString)
+{
+    std::vector<sal_uInt8> aBuf;
+    aBuf.reserve(rString.getLength() * 2 + 2);
+
+    for(sal_Int32 i(0); i < rString.getLength(); i++)
+    {
+        const sal_Unicode nUnicode(rString[i]);
+        aBuf.push_back(static_cast<sal_uInt8>(nUnicode));
+        aBuf.push_back(static_cast<sal_uInt8>(nUnicode >> 8));
+    }
+
+    aBuf.push_back(0);
+    aBuf.push_back(0);
+
+    AddOpt(nPropID, true, aBuf.size(), aBuf);
+}
+
+void EscherPropertyContainer::AddOpt(
+    sal_uInt16 nPropID,
+    bool bBlib,
+    sal_uInt32 nPropValue,
+    const std::vector<sal_uInt8>& rProp)
 {
     if ( bBlib )                // bBlib is only valid when fComplex = 0
         nPropID |= 0x4000;
-    if ( pProp )
+    if ( !rProp.empty() )
         nPropID |= 0x8000;      // fComplex = sal_True;
 
     for( size_t i = 0; i < pSortStruct.size(); i++ )
@@ -207,16 +243,14 @@ void EscherPropertyContainer::AddOpt( sal_uInt16 nPropID, bool bBlib, sal_uInt32
         if ( ( pSortStruct[ i ].nPropId &~0xc000 ) == ( nPropID &~0xc000 ) )    // check, whether the Property only gets replaced
         {
             pSortStruct[ i ].nPropId = nPropID;
-            if ( pSortStruct[ i ].pBuf )
+            if ( !pSortStruct[ i ].nProp.empty() )
             {
-                nCountSize -= pSortStruct[ i ].nPropSize;
-                delete[] pSortStruct[ i ].pBuf;
+                nCountSize -= pSortStruct[ i ].nProp.size();
             }
-            pSortStruct[ i ].pBuf = pProp;
-            pSortStruct[ i ].nPropSize = nPropSize;
+            pSortStruct[ i ].nProp = rProp;
             pSortStruct[ i ].nPropValue = nPropValue;
-            if ( pProp )
-                nCountSize += nPropSize;
+            if ( !rProp.empty() )
+                nCountSize += rProp.size();
             return;
         }
     }
@@ -224,13 +258,12 @@ void EscherPropertyContainer::AddOpt( sal_uInt16 nPropID, bool bBlib, sal_uInt32
     nCountSize += 6;
     pSortStruct.emplace_back();
     pSortStruct.back().nPropId = nPropID;                                // insert property
-    pSortStruct.back().pBuf = pProp;
-    pSortStruct.back().nPropSize = nPropSize;
+    pSortStruct.back().nProp = rProp;
     pSortStruct.back().nPropValue = nPropValue;
 
-    if ( pProp )
+    if ( !rProp.empty() )
     {
-        nCountSize += nPropSize;
+        nCountSize += rProp.size();
         bHasComplexData = true;
     }
 }
@@ -270,7 +303,9 @@ EscherProperties EscherPropertyContainer::GetOpts() const
     return aVector;
 }
 
-extern "C" int EscherPropSortFunc( const void* p1, const void* p2 )
+extern "C" {
+
+static int EscherPropSortFunc( const void* p1, const void* p2 )
 {
     sal_Int16   nID1 = static_cast<EscherPropSortStruct const *>(p1)->nPropId &~0xc000;
     sal_Int16   nID2 = static_cast<EscherPropSortStruct const *>(p2)->nPropId &~0xc000;
@@ -281,6 +316,8 @@ extern "C" int EscherPropSortFunc( const void* p1, const void* p2 )
         return 1;
     else
         return 0;
+}
+
 }
 
 void EscherPropertyContainer::Commit( SvStream& rSt, sal_uInt16 nVersion, sal_uInt16 nRecType )
@@ -302,8 +339,10 @@ void EscherPropertyContainer::Commit( SvStream& rSt, sal_uInt16 nVersion, sal_uI
         {
             for ( size_t i = 0; i < pSortStruct.size(); i++ )
             {
-                if ( pSortStruct[ i ].pBuf )
-                    rSt.WriteBytes(pSortStruct[i].pBuf, pSortStruct[i].nPropSize);
+                if ( !pSortStruct[ i ].nProp.empty() )
+                    rSt.WriteBytes(
+                        &pSortStruct[i].nProp[0],
+                        pSortStruct[i].nProp.size());
             }
         }
     }
@@ -429,7 +468,7 @@ void EscherPropertyContainer::CreateGradientProperties(
         pGradient = o3tl::doAccess<awt::Gradient>(aAny);
 
         uno::Any aAnyTemp;
-        const rtl::OUString aPropName( "FillStyle" );
+        const OUString aPropName( "FillStyle" );
         if ( EscherPropertyValueHelper::GetPropertyValue(
             aAnyTemp, rXPropSet, aPropName ) )
         {
@@ -549,7 +588,7 @@ void    EscherPropertyContainer::CreateFillProperties(
         SdrObject* pObj = GetSdrObjectFromXShape( rXShape );
         if ( pObj )
         {
-            SfxItemSet aAttr( pObj->GetMergedItemSet() );
+            const SfxItemSet& aAttr( pObj->GetMergedItemSet() );
             // tranparency with gradient. Means the third setting in transparency page is set
             bool bTransparentGradient =  ( aAttr.GetItemState( XATTR_FILLFLOATTRANSPARENCE ) == SfxItemState::SET ) &&
                 aAttr.Get( XATTR_FILLFLOATTRANSPARENCE ).IsEnabled();
@@ -1221,17 +1260,20 @@ void EscherPropertyContainer::CreateShapeProperties( const uno::Reference<drawin
     uno::Reference< beans::XPropertySet > aXPropSet( rXShape, uno::UNO_QUERY );
     if ( aXPropSet.is() )
     {
-        bool bVal = false;
+        bool bVisible = false;
+        bool bPrintable = false;
         uno::Any aAny;
         sal_uInt32 nShapeAttr = 0;
-        if (EscherPropertyValueHelper::GetPropertyValue(aAny, aXPropSet, "Visible", true) && (aAny >>= bVal))
+        if (EscherPropertyValueHelper::GetPropertyValue(aAny, aXPropSet, "Visible", true) && (aAny >>= bVisible))
         {
-            if ( !bVal )
+            if ( !bVisible )
                 nShapeAttr |= 0x20002;  // set fHidden = true
         }
-        if (EscherPropertyValueHelper::GetPropertyValue(aAny, aXPropSet, "Printable", true) && (aAny >>= bVal))
+        // This property (fPrint) isn't used in Excel anymore, leaving it for legacy reasons
+        // one change, based on XLSX: hidden implies not printed, let's not export the fPrint property in that case
+        if (bVisible && EscherPropertyValueHelper::GetPropertyValue(aAny, aXPropSet, "Printable", true) && (aAny >>= bPrintable))
         {
-            if ( !bVal )
+            if ( !bPrintable )
                 nShapeAttr |= 0x10000;  // set fPrint = false;
         }
         if ( nShapeAttr )
@@ -1314,12 +1356,7 @@ bool EscherPropertyContainer::ImplCreateEmbeddedBmp(GraphicObject const & rGraph
 
         if (aProvider.GetBlibID( aMemStrm, rGraphicObject))
         {
-            // grab BLIP from stream and insert directly as complex property
-            // ownership of stream memory goes to complex property
-            aMemStrm.ObjectOwnsMemory( false );
-            sal_uInt8 const * pBuf = static_cast<sal_uInt8 const *>(aMemStrm.GetData());
-            sal_uInt32 nSize = aMemStrm.Seek( STREAM_SEEK_TO_END );
-            AddOpt( ESCHER_Prop_fillBlip, true, nSize, const_cast<sal_uInt8 *>(pBuf), nSize );
+            AddOpt(ESCHER_Prop_fillBlip, true, 0, aMemStrm);
             return true;
         }
     }
@@ -1565,18 +1602,15 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
                 }
             }
 
-            if (!bConverted)
+            if (!bConverted && pGraphicProvider )
             {
-                if ( pGraphicProvider )
+                const OUString& rBaseURI( pGraphicProvider->GetBaseURI() );
+                INetURLObject aBaseURI( rBaseURI );
+                if( aBaseURI.GetProtocol() == aTmp.GetProtocol() )
                 {
-                    const OUString& rBaseURI( pGraphicProvider->GetBaseURI() );
-                    INetURLObject aBaseURI( rBaseURI );
-                    if( aBaseURI.GetProtocol() == aTmp.GetProtocol() )
-                    {
-                        OUString aRelUrl( INetURLObject::GetRelURL( rBaseURI, aGraphicUrl ) );
-                        if ( !aRelUrl.isEmpty() )
-                            aGraphicUrl = aRelUrl;
-                    }
+                    OUString aRelUrl( INetURLObject::GetRelURL( rBaseURI, aGraphicUrl ) );
+                    if ( !aRelUrl.isEmpty() )
+                        aGraphicUrl = aRelUrl;
                 }
             }
         }
@@ -1696,12 +1730,7 @@ bool EscherPropertyContainer::CreateGraphicProperties(const uno::Reference<beans
 
                     if (aProvider.GetBlibID(aMemStrm, aGraphicObject, nullptr, pGraphicAttr.get(), bOOxmlExport))
                     {
-                        // grab BLIP from stream and insert directly as complex property
-                        // ownership of stream memory goes to complex property
-                        aMemStrm.ObjectOwnsMemory( false );
-                        sal_uInt8 const * pBuf = static_cast<sal_uInt8 const *>(aMemStrm.GetData());
-                        sal_uInt32 nSize = aMemStrm.Seek( STREAM_SEEK_TO_END );
-                        AddOpt(ESCHER_Prop_fillBlip, true, nSize, const_cast<sal_uInt8 *>(pBuf), nSize );
+                        AddOpt(ESCHER_Prop_fillBlip, true, 0, aMemStrm);
                         bRetValue = true;
                     }
                 }
@@ -1735,120 +1764,36 @@ tools::PolyPolygon EscherPropertyContainer::GetPolyPolygon( const uno::Reference
     return aRetPolyPoly;
 }
 
+// adapting to basegfx::B2DPolyPolygon now, has no sense to do corrections in the
+// old tools::PolyPolygon creation code. Convert to that at return time
 tools::PolyPolygon EscherPropertyContainer::GetPolyPolygon( const uno::Any& rAny )
 {
-    bool bNoError = true;
+    basegfx::B2DPolyPolygon aRetval;
 
-    tools::Polygon aPolygon;
-    tools::PolyPolygon aPolyPolygon;
-
-    if ( rAny.getValueType() == cppu::UnoType<drawing::PolyPolygonBezierCoords>::get())
+    if(auto pBCC = o3tl::tryAccess<drawing::PolyPolygonBezierCoords>(rAny))
     {
-        auto pSourcePolyPolygon = o3tl::doAccess<drawing::PolyPolygonBezierCoords>(rAny);
-        sal_uInt16 nOuterSequenceCount = static_cast<sal_uInt16>(pSourcePolyPolygon->Coordinates.getLength());
+        aRetval = basegfx::utils::UnoPolyPolygonBezierCoordsToB2DPolyPolygon(*pBCC);
+    }
+    else if(auto pCC = o3tl::tryAccess<drawing::PointSequenceSequence>(rAny))
+    {
+        aRetval = basegfx::utils::UnoPointSequenceSequenceToB2DPolyPolygon(*pCC);
+    }
+    else if(auto pC = o3tl::tryAccess<drawing::PointSequence>(rAny))
+    {
+        aRetval.append(basegfx::utils::UnoPointSequenceToB2DPolygon(*pC));
+    }
 
-        // get pointer of inner sequences
-        drawing::PointSequence const * pOuterSequence = pSourcePolyPolygon->Coordinates.getConstArray();
-        drawing::FlagSequence const *  pOuterFlags = pSourcePolyPolygon->Flags.getConstArray();
+    basegfx::B2DPolyPolygon aRetval2;
 
-        bNoError = pOuterSequence && pOuterFlags;
-        if ( bNoError )
+    for(sal_uInt32 a(0); a < aRetval.count(); a++)
+    {
+        if(0 != aRetval.getB2DPolygon(a).count())
         {
-            sal_uInt16  a, b, nInnerSequenceCount;
-            awt::Point const * pArray;
-
-            // this will be a polygon set
-            for ( a = 0; a < nOuterSequenceCount; a++ )
-            {
-                drawing::PointSequence const * pInnerSequence = pOuterSequence++;
-                drawing::FlagSequence const *  pInnerFlags = pOuterFlags++;
-
-                bNoError = pInnerSequence && pInnerFlags;
-                if  ( bNoError )
-                {
-                    // get pointer to arrays
-                    pArray = pInnerSequence->getConstArray();
-                    drawing::PolygonFlags const * pFlags = pInnerFlags->getConstArray();
-
-                    if ( pArray && pFlags )
-                    {
-                        nInnerSequenceCount = static_cast<sal_uInt16>(pInnerSequence->getLength());
-                        aPolygon = tools::Polygon( nInnerSequenceCount );
-                        for( b = 0; b < nInnerSequenceCount; b++)
-                        {
-                            drawing::PolygonFlags ePolyFlags = *pFlags++;
-                            awt::Point aPoint( *(pArray++) );
-                            aPolygon[ b ] = Point( aPoint.X, aPoint.Y );
-                            aPolygon.SetFlags( b, static_cast<PolyFlags>(ePolyFlags) );
-
-                            if ( ePolyFlags == drawing::PolygonFlags_CONTROL )
-                                continue;
-                        }
-                        aPolyPolygon.Insert( aPolygon );
-                    }
-                }
-            }
+            aRetval2.append(aRetval.getB2DPolygon(a));
         }
     }
-    else if ( auto pSourcePolyPolygon = o3tl::tryAccess<drawing::PointSequenceSequence>(rAny) )
-    {
-        sal_uInt16 nOuterSequenceCount = static_cast<sal_uInt16>(pSourcePolyPolygon->getLength());
 
-        // get pointer to inner sequences
-        drawing::PointSequence const * pOuterSequence = pSourcePolyPolygon->getConstArray();
-        bNoError = pOuterSequence != nullptr;
-        if ( bNoError )
-        {
-            sal_uInt16 a, b, nInnerSequenceCount;
-
-            // this will be a polygon set
-            for( a = 0; a < nOuterSequenceCount; a++ )
-            {
-                drawing::PointSequence const * pInnerSequence = pOuterSequence++;
-                bNoError = pInnerSequence != nullptr;
-                if ( bNoError )
-                {
-                    // get pointer to arrays
-                    awt::Point const * pArray =
-                          pInnerSequence->getConstArray();
-                    if ( pArray != nullptr )
-                    {
-                        nInnerSequenceCount = static_cast<sal_uInt16>(pInnerSequence->getLength());
-                        aPolygon = tools::Polygon( nInnerSequenceCount );
-                        for( b = 0; b < nInnerSequenceCount; b++)
-                        {
-                            aPolygon[ b ] = Point( pArray->X, pArray->Y );
-                            pArray++;
-                        }
-                        aPolyPolygon.Insert( aPolygon );
-                    }
-                }
-            }
-        }
-    }
-    else if ( auto pInnerSequence = o3tl::tryAccess<drawing::PointSequence>(rAny) )
-    {
-        bNoError = pInnerSequence != nullptr;
-        if ( bNoError )
-        {
-            sal_uInt16 a, nInnerSequenceCount;
-
-            // get pointer to arrays
-            awt::Point const * pArray = pInnerSequence->getConstArray();
-            if ( pArray != nullptr )
-            {
-                nInnerSequenceCount = static_cast<sal_uInt16>(pInnerSequence->getLength());
-                aPolygon = tools::Polygon( nInnerSequenceCount );
-                for( a = 0; a < nInnerSequenceCount; a++)
-                {
-                    aPolygon[ a ] = Point( pArray->X, pArray->Y );
-                    pArray++;
-                }
-                aPolyPolygon.Insert( aPolygon );
-            }
-        }
-    }
-    return aPolyPolygon;
+    return tools::PolyPolygon(aRetval2);
 }
 
 bool EscherPropertyContainer::CreatePolygonProperties(
@@ -1858,143 +1803,188 @@ bool EscherPropertyContainer::CreatePolygonProperties(
     awt::Rectangle& rGeoRect,
     tools::Polygon const * pPolygon )
 {
-    bool    bRetValue = true;
-    bool    bLine = ( nFlags & ESCHER_CREATEPOLYGON_LINE ) != 0;
-
     tools::PolyPolygon aPolyPolygon;
 
-    if ( pPolygon )
-        aPolyPolygon.Insert( *pPolygon );
+    if(nullptr != pPolygon)
+    {
+        aPolyPolygon.Insert(*pPolygon);
+    }
     else
     {
         uno::Any aAny;
-        bRetValue = EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet,
-                        bBezier ? OUString("PolyPolygonBezier") : OUString("PolyPolygon"), true );
-        if ( bRetValue )
+
+        if(EscherPropertyValueHelper::GetPropertyValue(
+            aAny,
+            rXPropSet,
+            bBezier ? OUString("PolyPolygonBezier") : OUString("PolyPolygon"),
+            true))
         {
-            aPolyPolygon = GetPolyPolygon( aAny );
-            bRetValue = aPolyPolygon.Count() != 0;
-        }
-    }
-    if ( bRetValue )
-    {
-        if ( bLine )
-        {
-            if ( ( aPolyPolygon.Count() == 1 ) && ( aPolyPolygon[ 0 ].GetSize() == 2 ) )
-            {
-                const tools::Polygon& rPoly = aPolyPolygon[ 0 ];
-                rGeoRect = awt::Rectangle(
-                    rPoly[0].X(), rPoly[0].Y(),
-                    rPoly[1].X() - rPoly[0].X(),
-                    rPoly[1].Y() - rPoly[0].Y());
-            }
-            else
-                bRetValue = false;
+            aPolyPolygon = GetPolyPolygon(aAny);
         }
         else
         {
-            tools::Polygon aPolygon;
-
-            sal_uInt16 nPolyCount = aPolyPolygon.Count();
-            sal_uInt32 nTotalPoints(0), nTotalBezPoints(0);
-            tools::Rectangle aRect( aPolyPolygon.GetBoundRect() );
-            rGeoRect = awt::Rectangle( aRect.Left(), aRect.Top(), aRect.GetWidth(), aRect.GetHeight() );
-
-            for (sal_uInt16 i = 0; i < nPolyCount; ++i)
-            {
-                sal_uInt16 k = aPolyPolygon[ i ].GetSize();
-                nTotalPoints += k;
-                for (sal_uInt16 j = 0; j < k; ++j)
-                {
-                    if ( aPolyPolygon[ i ].GetFlags( j ) != PolyFlags::Control )
-                        nTotalBezPoints++;
-                }
-            }
-            sal_uInt32 nVerticesBufSize = ( nTotalPoints << 2 ) + 6;
-            sal_uInt8* pVerticesBuf = new sal_uInt8[ nVerticesBufSize ];
-
-
-            sal_uInt32 nSegmentBufSize = ( ( nTotalBezPoints << 2 ) + 8 );
-            if ( nPolyCount > 1 )
-                nSegmentBufSize += ( nPolyCount << 1 );
-            sal_uInt8* pSegmentBuf = new sal_uInt8[ nSegmentBufSize ];
-
-            sal_uInt8* pPtr = pVerticesBuf;
-            *pPtr++ = static_cast<sal_uInt8>(nTotalPoints);                    // Little endian
-            *pPtr++ = static_cast<sal_uInt8>( nTotalPoints >> 8 );
-            *pPtr++ = static_cast<sal_uInt8>(nTotalPoints);
-            *pPtr++ = static_cast<sal_uInt8>( nTotalPoints >> 8 );
-            *pPtr++ = sal_uInt8(0xf0);
-            *pPtr++ = sal_uInt8(0xff);
-
-            for (sal_uInt16 j = 0; j < nPolyCount; ++j)
-            {
-                aPolygon = aPolyPolygon[ j ];
-                sal_uInt16 nPoints = aPolygon.GetSize();
-                for (sal_uInt16 i = 0; i < nPoints; ++i)             // write points from polygon to buffer
-                {
-                    Point aPoint = aPolygon[ i ];
-                    aPoint.AdjustX( -(rGeoRect.X) );
-                    aPoint.AdjustY( -(rGeoRect.Y) );
-
-                    *pPtr++ = static_cast<sal_uInt8>( aPoint.X() );
-                    *pPtr++ = static_cast<sal_uInt8>( aPoint.X() >> 8 );
-                    *pPtr++ = static_cast<sal_uInt8>( aPoint.Y() );
-                    *pPtr++ = static_cast<sal_uInt8>( aPoint.Y() >> 8 );
-                }
-            }
-
-            pPtr = pSegmentBuf;
-            *pPtr++ = static_cast<sal_uInt8>( ( nSegmentBufSize - 6 ) >> 1 );
-            *pPtr++ = static_cast<sal_uInt8>( ( nSegmentBufSize - 6 ) >> 9 );
-            *pPtr++ = static_cast<sal_uInt8>( ( nSegmentBufSize - 6 ) >> 1 );
-            *pPtr++ = static_cast<sal_uInt8>( ( nSegmentBufSize - 6 ) >> 9 );
-            *pPtr++ = sal_uInt8(2);
-            *pPtr++ = sal_uInt8(0);
-
-            for (sal_uInt16 j = 0; j < nPolyCount; ++j)
-            {
-                *pPtr++ = 0x0;          // Polygon start
-                *pPtr++ = 0x40;
-                aPolygon = aPolyPolygon[ j ];
-                sal_uInt16 nPoints = aPolygon.GetSize();
-                for (sal_uInt16 i = 0; i < nPoints; ++i)         // write Polyflags to Buffer
-                {
-                    *pPtr++ = 0;
-                    if ( bBezier )
-                        *pPtr++ = 0xb3;
-                    else
-                        *pPtr++ = 0xac;
-                    if ( ( i + 1 ) != nPoints )
-                    {
-                        *pPtr++ = 1;
-                        if ( aPolygon.GetFlags( i + 1 ) == PolyFlags::Control )
-                        {
-                            *pPtr++ = 0x20;
-                            i += 2;
-                        }
-                        else
-                            *pPtr++ = 0;
-                    }
-                }
-                if ( nPolyCount > 1 )
-                {
-                    *pPtr++ = 1;                        // end of polygon
-                    *pPtr++ = 0x60;
-                }
-            }
-            *pPtr++ = 0;
-            *pPtr++ = 0x80;
-
-            AddOpt( ESCHER_Prop_geoRight, rGeoRect.Width );
-            AddOpt( ESCHER_Prop_geoBottom, rGeoRect.Height );
-
-            AddOpt( ESCHER_Prop_shapePath, ESCHER_ShapeComplex );
-            AddOpt( ESCHER_Prop_pVertices, true, nVerticesBufSize - 6, pVerticesBuf, nVerticesBufSize );
-            AddOpt( ESCHER_Prop_pSegmentInfo, true, nSegmentBufSize, pSegmentBuf, nSegmentBufSize );
+            return false;
         }
     }
-    return bRetValue;
+
+    if(0 == aPolyPolygon.Count())
+    {
+        return false;
+    }
+
+    if(0 != (nFlags & ESCHER_CREATEPOLYGON_LINE))
+    {
+        if((1 == aPolyPolygon.Count()) && (2 == aPolyPolygon[0].GetSize()))
+        {
+            const tools::Polygon& rPoly(aPolyPolygon[0]);
+
+            rGeoRect = awt::Rectangle(
+                rPoly[0].X(),
+                rPoly[0].Y(),
+                rPoly[1].X() - rPoly[0].X(),
+                rPoly[1].Y() - rPoly[0].Y());
+
+            return true;
+        }
+
+        return false;
+    }
+
+    const tools::Rectangle aRect(aPolyPolygon.GetBoundRect());
+
+    rGeoRect = awt::Rectangle(
+        aRect.Left(),
+        aRect.Top(),
+        aRect.GetWidth(),
+        aRect.GetHeight());
+
+    const sal_uInt16 nPolyCount(aPolyPolygon.Count());
+    sal_uInt32 nTotalPoints(0);
+    std::vector< sal_uInt8 > aVertices(4, 0);
+    std::vector< sal_uInt8 > aSegments(4, 0);
+
+    aVertices.push_back(static_cast<sal_uInt8>(0xf0));
+    aVertices.push_back(static_cast<sal_uInt8>(0xff));
+
+    aSegments.push_back(static_cast<sal_uInt8>(2));
+    aSegments.push_back(static_cast<sal_uInt8>(0));
+
+    for(sal_uInt16 j(0); j < nPolyCount; ++j)
+    {
+        const tools::Polygon aPolygon(aPolyPolygon[j]);
+        const sal_uInt16 nPoints(aPolygon.GetSize());
+
+        if(0 == nPoints)
+        {
+            continue;
+        }
+
+        // Polygon start
+        aSegments.push_back(static_cast<sal_uInt8>(0x0));
+        aSegments.push_back(static_cast<sal_uInt8>(0x40));
+
+        sal_uInt16 nSegmentIgnoreCounter(0);
+
+        // write points from polygon to buffer
+        for(sal_uInt16 i(0); i < nPoints; ++i)
+        {
+            Point aPoint(aPolygon[i]);
+
+            aPoint.AdjustX(-(rGeoRect.X));
+            aPoint.AdjustY(-(rGeoRect.Y));
+
+            aVertices.push_back(static_cast<sal_uInt8>(aPoint.X()));
+            aVertices.push_back(static_cast<sal_uInt8>(aPoint.X() >> 8));
+            aVertices.push_back(static_cast<sal_uInt8>(aPoint.Y()));
+            aVertices.push_back(static_cast<sal_uInt8>(aPoint.Y() >> 8));
+
+            nTotalPoints++;
+
+            if(0 != nSegmentIgnoreCounter)
+            {
+                nSegmentIgnoreCounter--;
+            }
+            else
+            {
+                aSegments.push_back(static_cast<sal_uInt8>(0));
+
+                if(bBezier)
+                {
+                    aSegments.push_back(static_cast<sal_uInt8>(0xb3));
+                }
+                else
+                {
+                    aSegments.push_back(static_cast<sal_uInt8>(0xac));
+                }
+
+                if(i + 1 == nPoints)
+                {
+                    if(nPolyCount > 1)
+                    {
+                        // end of polygon
+                        aSegments.push_back(static_cast<sal_uInt8>(1));
+                        aSegments.push_back(static_cast<sal_uInt8>(0x60));
+                    }
+                }
+                else
+                {
+                    aSegments.push_back(static_cast<sal_uInt8>(1));
+
+                    if(PolyFlags::Control == aPolygon.GetFlags(i + 1))
+                    {
+                        aSegments.push_back(static_cast<sal_uInt8>(0x20));
+                        nSegmentIgnoreCounter = 2;
+                    }
+                    else
+                    {
+                        aSegments.push_back(static_cast<sal_uInt8>(0));
+                    }
+                }
+            }
+        }
+    }
+
+    if(0 != nTotalPoints && aSegments.size() >= 6 && aVertices.size() >= 6)
+    {
+        // Little endian
+        aVertices[0] = static_cast<sal_uInt8>(nTotalPoints);
+        aVertices[1] = static_cast<sal_uInt8>(nTotalPoints >> 8);
+        aVertices[2] = static_cast<sal_uInt8>(nTotalPoints);
+        aVertices[3] = static_cast<sal_uInt8>(nTotalPoints >> 8);
+
+        aSegments.push_back(static_cast<sal_uInt8>(0));
+        aSegments.push_back(static_cast<sal_uInt8>(0x80));
+
+        const sal_uInt32 nSegmentBufSize(aSegments.size() - 6);
+        aSegments[0] = static_cast<sal_uInt8>(nSegmentBufSize >> 1);
+        aSegments[1] = static_cast<sal_uInt8>(nSegmentBufSize >> 9);
+        aSegments[2] = static_cast<sal_uInt8>(nSegmentBufSize >> 1);
+        aSegments[3] = static_cast<sal_uInt8>(nSegmentBufSize >> 9);
+
+        AddOpt(
+            ESCHER_Prop_geoRight,
+            rGeoRect.Width);
+        AddOpt(
+            ESCHER_Prop_geoBottom,
+            rGeoRect.Height);
+        AddOpt(
+            ESCHER_Prop_shapePath,
+            ESCHER_ShapeComplex);
+        AddOpt(
+            ESCHER_Prop_pVertices,
+            true,
+            aVertices.size() - 6,
+            aVertices);
+        AddOpt(
+            ESCHER_Prop_pSegmentInfo,
+            true,
+            aSegments.size(),
+            aSegments);
+
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -2009,7 +1999,7 @@ when save as MS file, the connector must be convert to corresponding type.
 "standard" <->  "bentConnector2-5"
 "curve" <-> "curvedConnector2-5"
 */
-sal_Int32 lcl_GetAdjustValueCount( const XPolygon& rPoly )
+static sal_Int32 lcl_GetAdjustValueCount( const XPolygon& rPoly )
 {
     int nRet = 0;
     switch (  rPoly.GetSize() )
@@ -2033,7 +2023,7 @@ sal_Int32 lcl_GetAdjustValueCount( const XPolygon& rPoly )
 }
 
 // Adjust value decide the position which connector should turn a corner
-sal_Int32 lcl_GetConnectorAdjustValue ( const XPolygon& rPoly, sal_uInt16 nIndex )
+static sal_Int32 lcl_GetConnectorAdjustValue ( const XPolygon& rPoly, sal_uInt16 nIndex )
 {
     sal_uInt16 k =  rPoly.GetSize();
     OSL_ASSERT ( k >= ( 3 + nIndex ) );
@@ -2061,12 +2051,9 @@ sal_Int32 lcl_GetConnectorAdjustValue ( const XPolygon& rPoly, sal_uInt16 nIndex
 }
 
 
-void lcl_Rotate(sal_Int32 nAngle, Point center, Point& pt)
+static void lcl_Rotate(sal_Int32 nAngle, Point center, Point& pt)
 {
-    while ( nAngle<0)
-        nAngle +=36000;
-    while (nAngle>=36000)
-        nAngle -=36000;
+    nAngle = NormAngle36000(nAngle);
 
     int cs, sn;
     switch (nAngle)
@@ -2101,7 +2088,7 @@ void lcl_Rotate(sal_Int32 nAngle, Point center, Point& pt)
 Generally, draw the connector from top to bottom, from left to right when meet the adjust value,
 but when (X1>X2 or Y1>Y2),the draw director must be reverse, FlipV or FlipH should be set to true.
 */
-bool lcl_GetAngle(tools::Polygon &rPoly, ShapeFlag& rShapeFlags,sal_Int32& nAngle )
+static bool lcl_GetAngle(tools::Polygon &rPoly, ShapeFlag& rShapeFlags,sal_Int32& nAngle )
 {
     Point aStart = rPoly[0];
     Point aEnd = rPoly[rPoly.GetSize()-1];
@@ -2279,20 +2266,17 @@ void EscherPropertyContainer::CreateShadowProperties(
         if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "Shadow", true ) )
         {
             bool bHasShadow = false; // shadow is possible only if at least a fillcolor, linecolor or graphic is set
-            if ( aAny >>= bHasShadow )
+            if ( (aAny >>= bHasShadow) && bHasShadow )
             {
-                if ( bHasShadow )
-                {
-                    nShadowFlags |= 2;
-                    if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowColor" ) )
-                        AddOpt( ESCHER_Prop_shadowColor, ImplGetColor( *o3tl::doAccess<sal_uInt32>(aAny) ) );
-                    if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowXDistance" ) )
-                        AddOpt( ESCHER_Prop_shadowOffsetX, *o3tl::doAccess<sal_Int32>(aAny) * 360 );
-                    if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowYDistance" ) )
-                        AddOpt( ESCHER_Prop_shadowOffsetY, *o3tl::doAccess<sal_Int32>(aAny) * 360 );
-                    if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowTransparence" ) )
-                        AddOpt( ESCHER_Prop_shadowOpacity,  0x10000 - (static_cast<sal_uInt32>(*o3tl::doAccess<sal_uInt16>(aAny)) * 655 ) );
-                }
+                nShadowFlags |= 2;
+                if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowColor" ) )
+                    AddOpt( ESCHER_Prop_shadowColor, ImplGetColor( *o3tl::doAccess<sal_uInt32>(aAny) ) );
+                if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowXDistance" ) )
+                    AddOpt( ESCHER_Prop_shadowOffsetX, *o3tl::doAccess<sal_Int32>(aAny) * 360 );
+                if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowYDistance" ) )
+                    AddOpt( ESCHER_Prop_shadowOffsetY, *o3tl::doAccess<sal_Int32>(aAny) * 360 );
+                if ( EscherPropertyValueHelper::GetPropertyValue( aAny, rXPropSet, "ShadowTransparence" ) )
+                    AddOpt( ESCHER_Prop_shadowOpacity,  0x10000 - (static_cast<sal_uInt32>(*o3tl::doAccess<sal_uInt16>(aAny)) * 655 ) );
             }
         }
     }
@@ -2349,7 +2333,7 @@ sal_Int32 EscherPropertyContainer::GetValueForEnhancedCustomShapeParameter( cons
     return nValue;
 }
 
-bool GetValueForEnhancedCustomShapeHandleParameter( sal_Int32& nRetValue, const drawing::EnhancedCustomShapeParameter& rParameter )
+static bool GetValueForEnhancedCustomShapeHandleParameter( sal_Int32& nRetValue, const drawing::EnhancedCustomShapeParameter& rParameter )
 {
     bool bSpecial = false;
     nRetValue = 0;
@@ -2399,7 +2383,7 @@ bool GetValueForEnhancedCustomShapeHandleParameter( sal_Int32& nRetValue, const 
     return bSpecial;
 }
 
-void ConvertEnhancedCustomShapeEquation(
+static void ConvertEnhancedCustomShapeEquation(
     const SdrObjCustomShape& rSdrObjCustomShape,
     std::vector< EnhancedCustomShapeEquation >& rEquations,
     std::vector< sal_Int32 >& rEquationOrder )
@@ -2490,19 +2474,14 @@ bool EscherPropertyContainer::IsDefaultObject(
             break;
     }
 
-    if(rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Equations )
+    return rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Equations )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Viewbox )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Path )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Gluepoints )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::Segments )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchX )
         && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::StretchY )
-        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::TextFrames ) )
-    {
-        return true;
-    }
-
-    return false;
+        && rSdrObjCustomShape.IsDefaultGeometry( SdrObjCustomShape::DefaultType::TextFrames );
 }
 
 void EscherPropertyContainer::LookForPolarHandles( const MSO_SPT eShapeType, sal_Int32& nAdjustmentsWhichNeedsToBeConverted )
@@ -2940,26 +2919,30 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                         {
                             sal_uInt16 nElementSize = 8;
                             sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                            SvMemoryStream aOut( nStreamSize );
-                            aOut.WriteUInt16( nElements )
+                            SvMemoryStream aMemStrm( nStreamSize );
+                            aMemStrm.WriteUInt16( nElements )
                                .WriteUInt16( nElements )
                                .WriteUInt16( nElementSize );
 
                             for (auto const& equation : aEquations)
                             {
-                                aOut.WriteUInt16( equation.nOperation )
-                                    .WriteInt16( equation.nPara[ 0 ] )
+                                aMemStrm.WriteUInt16( equation.nOperation )
+                                    .WriteInt16(
+                                        o3tl::clamp(
+                                            equation.nPara[ 0 ], sal_Int32(SAL_MIN_INT16),
+                                            sal_Int32(SAL_MAX_INT16)) )
                                     .WriteInt16( equation.nPara[ 1 ] )
-                                    .WriteInt16( equation.nPara[ 2 ] );
+                                    .WriteInt16(
+                                        o3tl::clamp(
+                                            equation.nPara[ 2 ], sal_Int32(SAL_MIN_INT16),
+                                            sal_Int32(SAL_MAX_INT16)) );
                             }
-                            sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                            memcpy( pBuf, aOut.GetData(), nStreamSize );
-                            AddOpt( DFF_Prop_pFormulas, true, nStreamSize - 6, pBuf, nStreamSize );
+
+                            AddOpt(DFF_Prop_pFormulas, true, 6, aMemStrm);
                         }
                         else
                         {
-                            sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                            AddOpt( DFF_Prop_pFormulas, true, 0, pBuf, 0 );
+                            AddOpt(DFF_Prop_pFormulas, 0, true);
                         }
                     }
                 }
@@ -3045,25 +3028,23 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                         {
                                             sal_uInt16 j, nElementSize = 8;
                                             sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                                            SvMemoryStream aOut( nStreamSize );
-                                            aOut.WriteUInt16( nElements )
+                                            SvMemoryStream aMemStrm( nStreamSize );
+                                            aMemStrm.WriteUInt16( nElements )
                                                .WriteUInt16( nElements )
                                                .WriteUInt16( nElementSize );
                                             for( j = 0; j < nElements; j++ )
                                             {
                                                 sal_Int32 X = GetValueForEnhancedCustomShapeParameter( aGluePoints[ j ].First, aEquationOrder );
                                                 sal_Int32 Y = GetValueForEnhancedCustomShapeParameter( aGluePoints[ j ].Second, aEquationOrder );
-                                                aOut.WriteInt32( X )
+                                                aMemStrm.WriteInt32( X )
                                                    .WriteInt32( Y );
                                             }
-                                            sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                                            memcpy( pBuf, aOut.GetData(), nStreamSize );
-                                            AddOpt( DFF_Prop_connectorPoints, true, nStreamSize - 6, pBuf, nStreamSize );   // -6
+
+                                            AddOpt(DFF_Prop_connectorPoints, true, 6, aMemStrm);   // -6
                                         }
                                         else
                                         {
-                                            sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                                            AddOpt( DFF_Prop_connectorPoints, true, 0, pBuf, 0 );
+                                            AddOpt(DFF_Prop_connectorPoints, 0, true);
                                         }
                                     }
                                 }
@@ -3087,8 +3068,8 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                             sal_uInt16 j, nElements = static_cast<sal_uInt16>(aSegments.getLength());
                                             sal_uInt16 nElementSize = 2;
                                             sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                                            SvMemoryStream aOut( nStreamSize );
-                                            aOut.WriteUInt16( nElements )
+                                            SvMemoryStream aMemStrm( nStreamSize );
+                                            aMemStrm.WriteUInt16( nElements )
                                                .WriteUInt16( nElements )
                                                .WriteUInt16( nElementSize );
                                             for ( j = 0; j < nElements; j++ )
@@ -3182,16 +3163,14 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                                     }
                                                     break;
                                                 }
-                                                aOut.WriteUInt16( nVal );
+                                                aMemStrm.WriteUInt16( nVal );
                                             }
-                                            sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                                            memcpy( pBuf, aOut.GetData(), nStreamSize );
-                                            AddOpt( DFF_Prop_pSegmentInfo, false, nStreamSize - 6, pBuf, nStreamSize );
+
+                                            AddOpt(DFF_Prop_pSegmentInfo, false, 6, aMemStrm);
                                         }
                                         else
                                         {
-                                            sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                                            AddOpt( DFF_Prop_pSegmentInfo, true, 0, pBuf, 0 );
+                                            AddOpt(DFF_Prop_pSegmentInfo, 0, true);
                                         }
                                     }
                                 }
@@ -3226,8 +3205,8 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                             sal_uInt16 j, nElements = static_cast<sal_uInt16>(aPathTextFrames.getLength());
                                             sal_uInt16 nElementSize = 16;
                                             sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                                            SvMemoryStream aOut( nStreamSize );
-                                            aOut.WriteUInt16( nElements )
+                                            SvMemoryStream aMemStrm( nStreamSize );
+                                            aMemStrm.WriteUInt16( nElements )
                                                .WriteUInt16( nElements )
                                                .WriteUInt16( nElementSize );
                                             for ( j = 0; j < nElements; j++ )
@@ -3237,19 +3216,17 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                                 sal_Int32 nRight = GetValueForEnhancedCustomShapeParameter( aPathTextFrames[ j ].BottomRight.First, aEquationOrder );
                                                 sal_Int32 nBottom = GetValueForEnhancedCustomShapeParameter( aPathTextFrames[ j ].BottomRight.Second, aEquationOrder );
 
-                                                aOut.WriteInt32( nLeft )
+                                                aMemStrm.WriteInt32( nLeft )
                                                    .WriteInt32( nTop )
                                                    .WriteInt32( nRight )
                                                    .WriteInt32( nBottom );
                                             }
-                                            sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                                            memcpy( pBuf, aOut.GetData(), nStreamSize );
-                                            AddOpt( DFF_Prop_textRectangles, true, nStreamSize - 6, pBuf, nStreamSize );
+
+                                            AddOpt(DFF_Prop_textRectangles, true, 6, aMemStrm);
                                         }
                                         else
                                         {
-                                            sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                                            AddOpt( DFF_Prop_textRectangles, true, 0, pBuf, 0 );
+                                            AddOpt(DFF_Prop_textRectangles, 0, true);
                                         }
                                     }
                                 }
@@ -3477,8 +3454,8 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                             {
                                 sal_uInt16 k, nElementSize = 36;
                                 sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                                SvMemoryStream aOut( nStreamSize );
-                                aOut.WriteUInt16( nElements )
+                                SvMemoryStream aMemStrm( nStreamSize );
+                                aMemStrm.WriteUInt16( nElements )
                                    .WriteUInt16( nElements )
                                    .WriteUInt16( nElementSize );
 
@@ -3624,7 +3601,7 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                             }
                                         }
                                     }
-                                    aOut.WriteUInt32( nFlags )
+                                    aMemStrm.WriteUInt32( nFlags )
                                        .WriteInt32( nXPosition )
                                        .WriteInt32( nYPosition )
                                        .WriteInt32( nXMap )
@@ -3637,14 +3614,12 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                                     if ( nFlags & 8 )
                                         nAdjustmentsWhichNeedsToBeConverted |= ( 1 << ( nYPosition - 0x100 ) );
                                 }
-                                sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                                memcpy( pBuf, aOut.GetData(), nStreamSize );
-                                AddOpt( DFF_Prop_Handles, true, nStreamSize - 6, pBuf, nStreamSize );
+
+                                AddOpt(DFF_Prop_Handles, true, 6, aMemStrm);
                             }
                             else
                             {
-                                sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                                AddOpt( DFF_Prop_Handles, true, 0, pBuf, 0 );
+                                AddOpt(DFF_Prop_Handles, 0, true);
                             }
                         }
                     }
@@ -3682,25 +3657,23 @@ void EscherPropertyContainer::CreateCustomShapeProperties( const MSO_SPT eShapeT
                         sal_uInt16 j, nElements = static_cast<sal_uInt16>(aCoordinates.getLength());
                         sal_uInt16 nElementSize = 8;
                         sal_uInt32 nStreamSize = nElementSize * nElements + 6;
-                        SvMemoryStream aOut( nStreamSize );
-                        aOut.WriteUInt16( nElements )
+                        SvMemoryStream aMemStrm( nStreamSize );
+                        aMemStrm.WriteUInt16( nElements )
                            .WriteUInt16( nElements )
                            .WriteUInt16( nElementSize );
                         for( j = 0; j < nElements; j++ )
                         {
                             sal_Int32 X = GetValueForEnhancedCustomShapeParameter( aCoordinates[ j ].First, aEquationOrder, true );
                             sal_Int32 Y = GetValueForEnhancedCustomShapeParameter( aCoordinates[ j ].Second, aEquationOrder, true );
-                            aOut.WriteInt32( X )
+                            aMemStrm.WriteInt32( X )
                                .WriteInt32( Y );
                         }
-                        sal_uInt8* pBuf = new sal_uInt8[ nStreamSize ];
-                        memcpy( pBuf, aOut.GetData(), nStreamSize );
-                        AddOpt( DFF_Prop_pVertices, true, nStreamSize - 6, pBuf, nStreamSize ); // -6
+
+                        AddOpt(DFF_Prop_pVertices, true, 6, aMemStrm); // -6
                     }
                     else
                     {
-                        sal_uInt8* pBuf = new sal_uInt8[ 1 ];
-                        AddOpt( DFF_Prop_pVertices, true, 0, pBuf, 0 );
+                        AddOpt(DFF_Prop_pVertices, 0, true);
                     }
                 }
             }
@@ -4185,22 +4158,18 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
 
                     case GfxLinkType::NativeWmf :
                     {
-                        if ( pGraphicAry && ( p_EscherBlibEntry->mnSize > 0x2c ) )
+                        if ( aGraphicLink.IsEMF() )
                         {
-                            if ( ( pGraphicAry[ 0x28 ] == 0x20 ) && ( pGraphicAry[ 0x29 ] == 0x45 )     // check the magic
-                                && ( pGraphicAry[ 0x2a ] == 0x4d ) && ( pGraphicAry[ 0x2b ] == 0x46 ) ) // number ( emf detection )
-                            {
-                                p_EscherBlibEntry->meBlibType = EMF;
-                            }
-                            else
-                            {
-                                p_EscherBlibEntry->meBlibType = WMF;
-                                if ( ( pGraphicAry[ 0 ] == 0xd7 ) && ( pGraphicAry[ 1 ] == 0xcd )
-                                    && ( pGraphicAry[ 2 ] == 0xc6 ) && ( pGraphicAry[ 3 ] == 0x9a ) )
-                                {   // we have to get rid of the metafileheader
-                                    pGraphicAry += 22;
-                                    p_EscherBlibEntry->mnSize -= 22;
-                                }
+                            p_EscherBlibEntry->meBlibType = EMF;
+                        }
+                        else if ( pGraphicAry && ( p_EscherBlibEntry->mnSize > 0x2c ) )
+                        {
+                            p_EscherBlibEntry->meBlibType = WMF;
+                            if ( ( pGraphicAry[ 0 ] == 0xd7 ) && ( pGraphicAry[ 1 ] == 0xcd )
+                                && ( pGraphicAry[ 2 ] == 0xc6 ) && ( pGraphicAry[ 3 ] == 0x9a ) )
+                            {   // we have to get rid of the metafileheader
+                                pGraphicAry += 22;
+                                p_EscherBlibEntry->mnSize -= 22;
                             }
                         }
                     }
@@ -4253,8 +4222,7 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
                 if ( nErrCode == ERRCODE_NONE )
                 {
                     p_EscherBlibEntry->meBlibType = ( eGraphicType == GraphicType::Bitmap ) ? PNG : EMF;
-                    aStream.Seek( STREAM_SEEK_TO_END );
-                    p_EscherBlibEntry->mnSize = aStream.Tell();
+                    p_EscherBlibEntry->mnSize = aStream.TellEnd();
                     pGraphicAry = static_cast<sal_uInt8 const *>(aStream.GetData());
                 }
             }
@@ -4271,7 +4239,7 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
                 rPicOutStrm.WriteUInt32( 0x7f90000 | static_cast<sal_uInt16>( mvBlibEntrys.size() << 4 ) )
                            .WriteUInt32( 0 );
                 nAtomSize = rPicOutStrm.Tell();
-                 if ( eBlibType == PNG )
+                if ( eBlibType == PNG )
                     rPicOutStrm.WriteUInt16( 0x0606 );
                 else if ( eBlibType == WMF )
                     rPicOutStrm.WriteUInt16( 0x0403 );
@@ -4320,8 +4288,7 @@ sal_uInt32 EscherGraphicProvider::GetBlibID( SvStream& rPicOutStrm, GraphicObjec
                 SvMemoryStream aDestStrm;
                 aZCodec.Write( aDestStrm, pGraphicAry, p_EscherBlibEntry->mnSize );
                 aZCodec.EndCompression();
-                aDestStrm.Seek( STREAM_SEEK_TO_END );
-                p_EscherBlibEntry->mnSize = aDestStrm.Tell();
+                p_EscherBlibEntry->mnSize = aDestStrm.TellEnd();
                 pGraphicAry = static_cast<sal_uInt8 const *>(aDestStrm.GetData());
                 if ( p_EscherBlibEntry->mnSize && pGraphicAry )
                 {
@@ -4611,7 +4578,8 @@ sal_uInt32 EscherConnectorListEntry::GetConnectorRule( bool bFirst )
 
                     if(0 != aPolyPoly.Count())
                     {
-                        sal_Int16 a, b, nIndex = 0;
+                        sal_Int16 nIndex = 0;
+                        sal_uInt16 a, b;
                         sal_uInt32 nDistance = 0xffffffff;
 
                         for ( a = 0; a < aPolyPoly.Count(); a++ )
@@ -4988,8 +4956,7 @@ void EscherEx::InsertAtCurrentPos( sal_uInt32 nBytes )
         if ( offset > nCurPos )
             offset += nBytes;
     }
-    mpOutStrm->Seek( STREAM_SEEK_TO_END );
-    nSource = mpOutStrm->Tell();
+    nSource = mpOutStrm->TellEnd();
     nToCopy = nSource - nCurPos;                        // increase the size of the tream by nBytes
     std::unique_ptr<sal_uInt8[]> pBuf(new sal_uInt8[ 0x40000 ]); // 256KB Buffer
     while ( nToCopy )

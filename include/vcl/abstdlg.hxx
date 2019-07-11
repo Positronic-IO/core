@@ -21,7 +21,6 @@
 
 #include <sal/types.h>
 #include <rtl/ustring.hxx>
-#include <tools/link.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/vclptr.hxx>
 #include <vcl/vclreferencebase.hxx>
@@ -29,12 +28,13 @@
 #include <functional>
 #include <memory>
 
-#include <com/sun/star/uno/Reference.hxx>
-#include <com/sun/star/frame/XModel.hpp>
+namespace com { namespace sun { namespace star { namespace uno { template <class interface_type> class Reference; } } } }
+
+namespace com { namespace sun { namespace star { namespace frame { class XModel; } } } }
 
 namespace vcl { class Window; }
 class Dialog;
-class Bitmap;
+class BitmapEx;
 namespace weld
 {
     class DialogController;
@@ -74,17 +74,8 @@ public:
     // Screenshot interface
     virtual std::vector<OString> getAllPageUIXMLDescriptions() const;
     virtual bool selectPageByUIXMLDescription(const OString& rUIXMLDescription);
-    virtual Bitmap createScreenshot() const;
+    virtual BitmapEx createScreenshot() const;
     virtual OString GetScreenshotId() const { return OString(); };
-};
-
-class VCL_DLLPUBLIC VclAbstractDialog2 : public virtual VclReferenceBase
-{
-protected:
-    virtual             ~VclAbstractDialog2() override;
-public:
-    virtual void        StartExecuteModal( const Link<Dialog&,void>& rEndDialogHdl ) = 0;
-    virtual sal_Int32   GetResult() = 0;
 };
 
 class VCL_DLLPUBLIC VclAbstractTerminatedDialog : public VclAbstractDialog
@@ -93,14 +84,6 @@ protected:
     virtual             ~VclAbstractTerminatedDialog() override = default;
 public:
     virtual void        EndDialog(sal_Int32 nResult) = 0;
-};
-
-class VCL_DLLPUBLIC VclAbstractRefreshableDialog : public VclAbstractDialog
-{
-protected:
-    virtual             ~VclAbstractRefreshableDialog() override = default;
-public:
-    virtual void        Update() = 0;
 };
 
 class VCL_DLLPUBLIC AbstractPasswordToOpenModifyDialog : public VclAbstractDialog

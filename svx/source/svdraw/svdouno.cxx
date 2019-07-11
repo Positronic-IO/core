@@ -31,8 +31,8 @@
 #include <com/sun/star/io/XObjectOutputStream.hpp>
 #include <com/sun/star/io/XObjectInputStream.hpp>
 #include <com/sun/star/util/XCloneable.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/types.hxx>
 #include <vcl/pdfextoutdevdata.hxx>
 #include <svx/svdouno.hxx>
 #include <svx/svdpagv.hxx>
@@ -49,6 +49,7 @@
 #include <svx/sdrpaintwindow.hxx>
 #include <tools/diagnose_ex.h>
 #include <svx/svdograf.hxx>
+#include <o3tl/make_unique.hxx>
 
 using namespace ::com::sun::star;
 using namespace sdr::contact;
@@ -485,8 +486,8 @@ uno::Reference< awt::XControl > SdrUnoObj::GetUnoControl(const SdrView& _rView, 
     uno::Reference< awt::XControl > xControl;
 
     SdrPageView* pPageView = _rView.GetSdrPageView();
-    OSL_ENSURE( pPageView && GetPage() == pPageView->GetPage(), "SdrUnoObj::GetUnoControl: This object is not displayed in that particular view!" );
-    if ( !pPageView || GetPage() != pPageView->GetPage() )
+    OSL_ENSURE( pPageView && getSdrPageFromSdrObject() == pPageView->GetPage(), "SdrUnoObj::GetUnoControl: This object is not displayed in that particular view!" );
+    if ( !pPageView || getSdrPageFromSdrObject() != pPageView->GetPage() )
         return nullptr;
 
     SdrPageWindow* pPageWindow = pPageView->FindPageWindow( _rOut );
@@ -526,9 +527,9 @@ bool SdrUnoObj::impl_getViewContact( ViewContactOfUnoControl*& _out_rpContact ) 
 }
 
 
-sdr::contact::ViewContact* SdrUnoObj::CreateObjectSpecificViewContact()
+std::unique_ptr<sdr::contact::ViewContact> SdrUnoObj::CreateObjectSpecificViewContact()
 {
-  return new sdr::contact::ViewContactOfUnoControl( *this );
+  return o3tl::make_unique<sdr::contact::ViewContactOfUnoControl>( *this );
 }
 
 

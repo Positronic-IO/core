@@ -122,10 +122,7 @@ PresenterScrollBar::PresenterScrollBar (
 
         // Make the background transparent.  The slide show paints its own background.
         Reference<awt::XWindowPeer> xPeer (mxWindow, UNO_QUERY_THROW);
-        if (xPeer.is())
-        {
-            xPeer->setBackground(0xff000000);
-        }
+        xPeer->setBackground(0xff000000);
 
         mxWindow->setVisible(true);
         mxWindow->addWindowListener(this);
@@ -243,7 +240,7 @@ void PresenterScrollBar::SetCanvas (const Reference<css::rendering::XCanvas>& rx
         mxCanvas = rxCanvas;
         if (mxCanvas.is())
         {
-            if (mpBitmaps.get()==nullptr)
+            if (mpBitmaps == nullptr)
             {
                 if (mpSharedBitmaps.expired())
                 {
@@ -437,7 +434,7 @@ void PresenterScrollBar::Repaint (
     const geometry::RealRectangle2D& rBox,
     const bool bAsynchronousUpdate)
 {
-    if (mpPaintManager.get() != nullptr)
+    if (mpPaintManager != nullptr)
         mpPaintManager->Invalidate(
             mxWindow,
             PresenterGeometryHelper::ConvertRectangle(rBox),
@@ -690,7 +687,7 @@ void PresenterVerticalScrollBar::UpdateBorders()
 
 void PresenterVerticalScrollBar::UpdateBitmaps()
 {
-    if (mpBitmaps.get() != nullptr)
+    if (mpBitmaps != nullptr)
     {
         mpPrevButtonDescriptor = mpBitmaps->GetBitmap("Up");
         mpNextButtonDescriptor = mpBitmaps->GetBitmap("Down");

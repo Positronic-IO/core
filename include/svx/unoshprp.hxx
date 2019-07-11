@@ -190,7 +190,8 @@
 #define OWN_ATTR_SIGNATURELINE_SHOW_SIGN_DATE   (OWN_ATTR_VALUE_START+100)
 #define OWN_ATTR_SIGNATURELINE_CAN_ADD_COMMENT  (OWN_ATTR_VALUE_START+101)
 #define OWN_ATTR_SIGNATURELINE_UNSIGNED_IMAGE   (OWN_ATTR_VALUE_START+102)
-// ATTENTION: maximum is OWN_ATTR_VALUE_START+102 svx, see include/svl/solar.hrc
+#define OWN_ATTR_SIGNATURELINE_IS_SIGNED        (OWN_ATTR_VALUE_START+103)
+// ATTENTION: maximum is OWN_ATTR_VALUE_START+103 svx, see include/svl/solar.hrc
 
 // #FontWork#
 #define FONTWORK_PROPERTIES \
@@ -431,7 +432,7 @@
     { OUString(UNO_NAME_GRAPHOBJ_GRAFSTREAMURL),        OWN_ATTR_GRAFSTREAMURL      , ::cppu::UnoType<OUString>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 }, \
     { OUString(UNO_NAME_GRAPHOBJ_FILLBITMAP),           OWN_ATTR_VALUE_FILLBITMAP   , cppu::UnoType<css::awt::XBitmap>::get()  ,    0,     0},    \
     { OUString(UNO_NAME_GRAPHOBJ_GRAPHIC),              OWN_ATTR_VALUE_GRAPHIC      , cppu::UnoType<css::graphic::XGraphic>::get()  ,   0,     0}, \
-    { OUString(UNO_NAME_GRAPHOBJ_GRAPHIC_URL),          OWN_ATTR_GRAPHIC_URL        , cppu::UnoType<OUString>::get(), 0, 0 }, \
+    { OUString(UNO_NAME_GRAPHOBJ_GRAPHIC_URL),          OWN_ATTR_GRAPHIC_URL        , cppu::UnoType<css::uno::Any>::get(), 0, 0 }, \
     { OUString(UNO_NAME_GRAPHOBJ_IS_SIGNATURELINE),     OWN_ATTR_IS_SIGNATURELINE   , cppu::UnoType<bool>::get(), 0, 0}, \
     { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_ID),     OWN_ATTR_SIGNATURELINE_ID   , cppu::UnoType<OUString>::get(), 0, 0}, \
     { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_SUGGESTED_SIGNER_NAME), OWN_ATTR_SIGNATURELINE_SUGGESTED_SIGNER_NAME, cppu::UnoType<OUString>::get(), 0, 0}, \
@@ -440,7 +441,8 @@
     { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_SIGNING_INSTRUCTIONS), OWN_ATTR_SIGNATURELINE_SIGNING_INSTRUCTIONS, cppu::UnoType<OUString>::get(), 0, 0}, \
     { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_SHOW_SIGN_DATE), OWN_ATTR_SIGNATURELINE_SHOW_SIGN_DATE, cppu::UnoType<bool>::get(), 0, 0}, \
     { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_CAN_ADD_COMMENT), OWN_ATTR_SIGNATURELINE_CAN_ADD_COMMENT, cppu::UnoType<bool>::get(), 0, 0}, \
-    { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_UNSIGNED_IMAGE), OWN_ATTR_SIGNATURELINE_UNSIGNED_IMAGE, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0},
+    { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_UNSIGNED_IMAGE), OWN_ATTR_SIGNATURELINE_UNSIGNED_IMAGE, cppu::UnoType<css::graphic::XGraphic>::get(), 0, 0}, \
+    { OUString(UNO_NAME_GRAPHOBJ_SIGNATURELINE_IS_SIGNED), OWN_ATTR_SIGNATURELINE_IS_SIGNED, cppu::UnoType<bool>::get(), 0, 0},
 
 #define SPECIAL_3DSCENEOBJECT_PROPERTIES_DEFAULTS \
     { OUString(UNO_NAME_3D_SCENE_AMBIENTCOLOR),     SDRATTR_3DSCENE_AMBIENTCOLOR   , ::cppu::UnoType<sal_Int32>::get(),   0,  0}, \

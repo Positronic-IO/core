@@ -22,7 +22,6 @@
 #include <callbacks.hxx>
 #include <core_resource.hxx>
 #include <stringconstants.hxx>
-#include <dbu_pageids.hxx>
 #include <dlgsave.hxx>
 #include <dbtreelistbox.hxx>
 #include <defaultobjectnamecheck.hxx>
@@ -66,13 +65,16 @@
 #include <com/sun/star/awt/FontWeight.hpp>
 #include <com/sun/star/awt/FontRelief.hpp>
 #include <com/sun/star/awt/FontWidth.hpp>
+#include <com/sun/star/awt/XWindow.hpp>
 #include <TypeInfo.hxx>
 #include <FieldDescriptions.hxx>
 #include <comphelper/stl_types.hxx>
+#include <comphelper/types.hxx>
 #include <comphelper/propertysequence.hxx>
 
 #include <svx/svxids.hrc>
 
+#include <sal/log.hxx>
 #include <svl/itempool.hxx>
 #include <helpids.h>
 #include <svl/itemset.hxx>
@@ -255,7 +257,7 @@ Reference< XDataSource > getDataSourceByName( const OUString& _rDataSourceName,
         }
         else
         {
-            showError( aSQLError, _pErrorMessageParent, _rxContext );
+            showError( aSQLError, VCLUnoHelper::GetInterface(_pErrorMessageParent), _rxContext );
         }
     }
 
@@ -277,12 +279,6 @@ Reference< XInterface > getDataSourceOrModel(const Reference< XInterface >& _xOb
     }
 
     return xRet;
-}
-
-void showError(const SQLExceptionInfo& _rInfo, vcl::Window* _pParent,const Reference< XComponentContext >& _rxContext)
-{
-    OSL_ENSURE(_pParent,"showError: Parent window must be NOT NULL!");
-    ::dbtools::showError(_rInfo,VCLUnoHelper::GetInterface(_pParent), _rxContext);
 }
 
 TOTypeInfoSP getTypeInfoFromType(const OTypeInfoMap& _rTypeInfo,
@@ -843,12 +839,12 @@ bool callColumnFormatDialog(vcl::Window* _pParent,
     }
 
     {   // want the dialog to be destroyed before our set
-        ScopedVclPtrInstance< SbaSbAttrDlg > aDlg(_pParent, pFormatDescriptor.get(), _pFormatter, _bHasFormat);
-        if (RET_OK == aDlg->Execute())
+        SbaSbAttrDlg aDlg(_pParent->GetFrameWeld(), pFormatDescriptor.get(), _pFormatter, _bHasFormat);
+        if (RET_OK == aDlg.run())
         {
             // ItemSet->UNO
             // UNO-properties
-            const SfxItemSet* pSet = aDlg->GetExampleSet();
+            const SfxItemSet* pSet = aDlg.GetExampleSet();
             // (of course we could put the modified items directly into the column, but then the UNO-model
             // won't reflect these changes, and why do we have a model, then ?)
 
@@ -866,17 +862,15 @@ bool callColumnFormatDialog(vcl::Window* _pParent,
             bRet = true;
         }
             // deleted formats
-        const SfxItemSet* pResult = aDlg->GetOutputItemSet();
+        const SfxItemSet* pResult = aDlg.GetOutputItemSet();
         if (pResult)
         {
             const SfxPoolItem* pItem = pResult->GetItem( SID_ATTR_NUMBERFORMAT_INFO );
             const SvxNumberInfoItem* pInfoItem = static_cast<const SvxNumberInfoItem*>(pItem);
-            if (pInfoItem && pInfoItem->GetDelCount())
+            if (pInfoItem)
             {
-                const sal_uInt32* pDeletedKeys = pInfoItem->GetDelArray();
-
-                for (sal_uInt32 i=0; i< pInfoItem->GetDelCount(); ++i)
-                    _pFormatter->DeleteEntry(pDeletedKeys[i]);
+                for (sal_uInt32 key : pInfoItem->GetDelFormats())
+                    _pFormatter->DeleteEntry(key);
             }
         }
     }
@@ -987,10 +981,10 @@ void adjustBrowseBoxColumnWidth( ::svt::EditBrowseBox* _pBox, sal_uInt16 _nColId
 
     Size aDefaultMM = _pBox->PixelToLogic( Size( nDefaultWidth, 0 ), MapMode( MapUnit::MapMM ) );
 
-    ScopedVclPtrInstance< DlgSize > aColumnSizeDlg( _pBox, nColSize, false, aDefaultMM.Width() * 10 );
-    if ( aColumnSizeDlg->Execute() )
+    DlgSize aColumnSizeDlg(_pBox->GetFrameWeld(), nColSize, false, aDefaultMM.Width() * 10);
+    if (aColumnSizeDlg.run() == RET_OK)
     {
-        sal_Int32 nValue = aColumnSizeDlg->GetValue();
+        sal_Int32 nValue = aColumnSizeDlg.GetValue();
         if ( -1 == nValue )
         {   // default width
             nValue = _pBox->GetDefaultColumnWidth( _pBox->GetColumnTitle( _nColId ) );

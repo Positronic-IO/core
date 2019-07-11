@@ -22,13 +22,12 @@
 
 #include <memory>
 #include <rangelst.hxx>
-#include "xlcontent.hxx"
 #include "xladdress.hxx"
 #include "xerecord.hxx"
 #include "xeroot.hxx"
 #include "xestring.hxx"
-#include "xeformula.hxx"
 #include "xeextlst.hxx"
+#include "xlformula.hxx"
 
 #include <colorscale.hxx>
 
@@ -126,7 +125,7 @@ private:
 private:
     typedef std::unique_ptr< SvStream > SvStreamPtr;
 
-    ScAddress           maScPos;            /// Position of the hyperlink.
+    ScAddress const     maScPos;            /// Position of the hyperlink.
     OUString            m_Repr;             /// Cell representation text.
     SvStreamPtr         mxVarData;          /// Buffer stream with variable data.
     sal_uInt32          mnFlags;            /// Option flags.
@@ -163,7 +162,6 @@ private:
 
 // Conditional formatting =====================================================
 
-class ScCondFormatEntry;
 class XclExpCFImpl;
 
 /** Represents a CF record that contains one condition of a conditional format. */
@@ -194,7 +192,7 @@ public:
 
 private:
     const ScCondDateFormatEntry& mrFormatEntry;
-    sal_Int32 mnPriority;
+    sal_Int32 const mnPriority;
 };
 
 class XclExpCfvo : public XclExpRecord, protected XclExpRoot
@@ -205,8 +203,8 @@ public:
     virtual void SaveXml( XclExpXmlStream& rStrm ) override;
 private:
     const ScColorScaleEntry& mrEntry;
-    ScAddress maSrcPos;
-    bool mbFirst;
+    ScAddress const maSrcPos;
+    bool const mbFirst;
 };
 
 class XclExpColScaleCol : public XclExpRecord, protected XclExpRoot
@@ -219,8 +217,6 @@ public:
 private:
     const Color& mrColor;
 };
-
-class ScConditionalFormat;
 
 /** Represents a CONDFMT record that contains all conditions of a conditional format.
     @descr  Contains the conditions which are stored in CF records. */
@@ -262,7 +258,7 @@ private:
 
     XclExpCfvoList maCfvoList;
     XclExpColScaleColList maColList;
-    sal_Int32 mnPriority;
+    sal_Int32 const mnPriority;
 };
 
 class XclExpDataBar : public XclExpRecord, protected XclExpRoot
@@ -277,8 +273,8 @@ private:
     std::unique_ptr<XclExpColScaleCol> mpCol;
 
     const ScDataBarFormat& mrFormat;
-    sal_Int32 mnPriority;
-    OString maGUID;
+    sal_Int32 const mnPriority;
+    OString const maGUID;
 };
 
 class XclExpIconSet : public XclExpRecord, protected XclExpRoot
@@ -292,7 +288,7 @@ private:
 
     XclExpCfvoList maCfvoList;
     const ScIconSetFormat& mrFormat;
-    sal_Int32 mnPriority;
+    sal_Int32 const mnPriority;
 };
 
 /** Contains all conditional formats of a specific sheet. */
@@ -404,8 +400,8 @@ public:
     virtual void        Save( XclExpStream& rStrm ) override;
 
 private:
-    XclExpString        maDestRange;    /// Destination range.
-    XclExpString        maUrl;          /// Source document URL.
+    XclExpString const  maDestRange;    /// Destination range.
+    XclExpString const  maUrl;          /// Source document URL.
     XclExpStringRef     mxQryTables;    /// List of source range names.
     sal_Int16           mnRefresh;      /// Refresh time in minutes.
     bool                mbEntireDoc;    /// true = entire document.

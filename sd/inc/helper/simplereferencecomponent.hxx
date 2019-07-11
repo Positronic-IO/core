@@ -22,9 +22,6 @@
 
 #include <osl/interlck.h>
 
-#include <cstddef>
-#include <new>
-
 #include <sddllapi.h>
 
 namespace sd {
@@ -51,25 +48,6 @@ public:
 
     bool isDisposed() const { return mbDisposed; }
 
-    /** see general class documentation
-     */
-    static void * operator new(std::size_t nSize);
-
-    /** see general class documentation
-     */
-    static void * operator new(std::size_t nSize,
-                               std::nothrow_t const & rNothrow)
-       ;
-
-    /** see general class documentation
-     */
-    static void operator delete(void * pPtr);
-
-    /** see general class documentation
-     */
-    static void operator delete(void * pPtr, std::nothrow_t const & rNothrow)
-       ;
-
 protected:
     virtual void disposing();
 
@@ -78,13 +56,8 @@ protected:
 private:
     oslInterlockedCount m_nCount;
 
-    SimpleReferenceComponent(SimpleReferenceComponent &) = delete;
-
-    void operator =(SimpleReferenceComponent) = delete;
-
-    static void * operator new[](std::size_t) = delete;
-
-    static void operator delete[](void * pPtr) = delete;
+    SimpleReferenceComponent(SimpleReferenceComponent const &) = delete;
+    void operator =(SimpleReferenceComponent const &) = delete;
 
     bool mbDisposed;
 };

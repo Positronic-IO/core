@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SC_SOURCE_UI_INC_TABPAGES_HXX
 #define INCLUDED_SC_SOURCE_UI_INC_TABPAGES_HXX
 
-#include <vcl/group.hxx>
 #include <sfx2/tabdlg.hxx>
 
 class ScTabPageProtection : public SfxTabPage
@@ -35,20 +34,14 @@ public:
     virtual void        Reset           ( const SfxItemSet* ) override;
 
     virtual ~ScTabPageProtection() override;
-    virtual void dispose() override;
 
 protected:
     using SfxTabPage::DeactivatePage;
     virtual DeactivateRC   DeactivatePage  ( SfxItemSet* pSet ) override;
 
 private:
-                ScTabPageProtection( vcl::Window*            pParent,
-                                     const SfxItemSet&  rCoreAttrs );
+    ScTabPageProtection(TabPageParent pParent, const SfxItemSet& rCoreAttrs);
 private:
-    VclPtr<TriStateBox>    m_pBtnHideCell;
-    VclPtr<TriStateBox>    m_pBtnProtect;
-    VclPtr<TriStateBox>    m_pBtnHideFormula;
-    VclPtr<TriStateBox>    m_pBtnHidePrint;
                                         // current status:
     bool            bTriEnabled;        //  if before - DontCare
     bool            bDontCare;          //  all in  TriState
@@ -57,9 +50,23 @@ private:
     bool            bHideCell;
     bool            bHidePrint;
 
+    weld::TriStateEnabled aHideCellState;
+    weld::TriStateEnabled aProtectState;
+    weld::TriStateEnabled aHideFormulaState;
+    weld::TriStateEnabled aHidePrintState;
+
+    std::unique_ptr<weld::CheckButton> m_xBtnHideCell;
+    std::unique_ptr<weld::CheckButton> m_xBtnProtect;
+    std::unique_ptr<weld::CheckButton> m_xBtnHideFormula;
+    std::unique_ptr<weld::CheckButton> m_xBtnHidePrint;
+
     // Handler:
-    DECL_LINK( ButtonClickHdl, Button*, void );
-    void        UpdateButtons();
+    DECL_LINK(ProtectClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(HideCellClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(HideFormulaClickHdl, weld::ToggleButton&, void);
+    DECL_LINK(HidePrintClickHdl, weld::ToggleButton&, void);
+    void ButtonClick(weld::ToggleButton& rBox);
+    void UpdateButtons();
 };
 
 #endif // INCLUDED_SC_SOURCE_UI_INC_TABPAGES_HXX

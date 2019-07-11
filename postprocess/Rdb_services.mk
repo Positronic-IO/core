@@ -128,11 +128,6 @@ $(eval $(call gb_Rdb_add_components,services,\
 	writerperfect/source/calc/wpftcalc \
 	$(if $(filter MACOSX,$(OS)), \
 		$(call gb_Helper_optional,AVMEDIA,avmedia/source/macavf/avmediaMacAVF) \
-		$(if $(filter TRUE,$(ENABLE_MACOSX_SANDBOX)),, \
-			$(if $(shell test $(MACOSX_SDK_VERSION) -ge 101200 || echo nope), \
-				$(call gb_Helper_optional,AVMEDIA,avmedia/source/quicktime/avmediaQuickTime) \
-			) \
-		) \
 		lingucomponent/source/spellcheck/macosxspell/MacOSXSpell \
 		fpicker/source/aqua/fps_aqua \
 		shell/source/backends/macbe/macbe1 \
@@ -150,7 +145,7 @@ $(eval $(call gb_Rdb_add_components,services,\
 		shell/source/win32/syssh \
 		vcl/vcl.windows \
 	) \
-	$(if $(ENABLE_HEADLESS), \
+	$(if $(DISABLE_GUI), \
 		vcl/vcl.headless \
 	) \
 	$(if $(filter ANDROID,$(OS)), \
@@ -257,13 +252,16 @@ $(eval $(call gb_Rdb_add_components,services,\
 		connectivity/source/drivers/firebird/firebird_sdbc \
 	) \
 	connectivity/source/drivers/flat/flat \
-	connectivity/source/drivers/mysql/mysql \
+	$(if $(ENABLE_MARIADBC), \
+		connectivity/source/drivers/mysqlc/mysqlc \
+	) \
 	$(if $(filter MACOSX,$(OS)), \
 		connectivity/source/drivers/macab/macab1 \
 	) \
 	$(if $(ENABLE_JAVA), \
 		connectivity/source/drivers/hsqldb/hsqldb \
 		connectivity/source/drivers/jdbc/jdbc \
+		connectivity/source/drivers/mysql_jdbc/mysql_jdbc \
 	) \
 	connectivity/source/manager/sdbc2 \
 	connectivity/source/drivers/writer/writer \
@@ -277,7 +275,7 @@ $(eval $(call gb_Rdb_add_components,services,\
 	reportdesign/util/rptui \
 	reportdesign/util/rptxml \
 	shell/source/backends/localebe/localebe1 \
-	$(if $(filter-out ANDROID IOS,$(OS)),\
+	$(if $(filter-out ANDROID iOS,$(OS)),\
 		connectivity/source/drivers/odbc/odbc \
 	) \
 ))
@@ -298,7 +296,7 @@ $(eval $(call gb_Rdb_add_components,services,\
 	desktop/source/migration/services/migrationoo2 \
 	desktop/source/migration/services/migrationoo3 \
 	desktop/source/offacc/offacc \
-	$(if $(ENABLE_HEADLESS),,desktop/source/splash/spl) \
+	$(if $(DISABLE_GUI),,desktop/source/splash/spl) \
 	extensions/source/abpilot/abp \
 	extensions/source/config/ldap/ldapbe2 \
 	$(if $(filter WNT,$(OS)),\
@@ -315,7 +313,7 @@ $(eval $(call gb_Rdb_add_components,services,\
 		shell/source/unix/exec/syssh \
 	) \
 	$(if $(filter-out MACOSX WNT,$(OS)), \
-		$(if $(ENABLE_HEADLESS),, \
+		$(if $(DISABLE_GUI),, \
 			shell/source/backends/desktopbe/desktopbe1 \
 			vcl/vcl.unx \
 		) \

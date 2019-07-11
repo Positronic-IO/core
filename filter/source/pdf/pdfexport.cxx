@@ -225,7 +225,10 @@ bool PDFExport::ExportSelection( vcl::PDFWriter& rPDFWriter,
 
                     if( aMtf.GetActionSize() &&
                              ( !mbSkipEmptyPages || aPageSize.Width || aPageSize.Height ) )
-                        bRet = ImplExportPage(rPDFWriter, rPDFExtOutDevData, aMtf) || bRet;
+                    {
+                        ImplExportPage(rPDFWriter, rPDFExtOutDevData, aMtf);
+                        bRet = true;
+                    }
 
                     pOut->Pop();
 
@@ -389,7 +392,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
 
         if( xRenderable.is() )
         {
-            VCLXDevice*                 pXDevice = new VCLXDevice;
+            rtl::Reference<VCLXDevice>  xDevice(new VCLXDevice);
             OUString                    aPageRange;
             Any                         aSelection;
             vcl::PDFWriter::PDFWriterContext aContext;
@@ -527,7 +530,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
                     rFilterData[ nData ].Value >>= mnDefaultLinkAction;
                 else if ( rFilterData[ nData ].Name == "ConvertOOoTargetToPDFTarget" )
                     rFilterData[ nData ].Value >>= mbConvertOOoTargetToPDFTarget;
-                 else if ( rFilterData[ nData ].Name == "ExportBookmarksToPDFDestination" )
+                else if ( rFilterData[ nData ].Name == "ExportBookmarksToPDFDestination" )
                     rFilterData[ nData ].Value >>= mbExportBmkToDest;
                 else if ( rFilterData[ nData ].Name == "ExportBookmarks" )
                     rFilterData[ nData ].Value >>= mbExportBookmarks;
@@ -571,6 +574,9 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
                 mbRemoveTransparencies = true;  // PDF/A does not allow transparencies
                 mbEncrypt = false;              // no encryption
                 xEnc.clear();
+                break;
+            case 16:
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_1_6;
                 break;
             }
 
@@ -703,7 +709,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
             }
             // after this point we don't need the legacy clear passwords anymore
             // however they are still inside the passed filter data sequence
-            // which is sadly out out our control
+            // which is sadly out of our control
             aPermissionPassword.clear();
             aOpenPassword.clear();
 
@@ -783,7 +789,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
             OutputDevice*       pOut = pPDFWriter->GetReferenceDevice();
 
             DBG_ASSERT( pOut, "PDFExport::Export: no reference device" );
-            pXDevice->SetOutputDevice( pOut );
+            xDevice->SetOutputDevice(pOut);
 
             if( mbAddStream )
             {
@@ -813,7 +819,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
 
                 Sequence< PropertyValue > aRenderOptions( 7 );
                 aRenderOptions[ 0 ].Name = "RenderDevice";
-                aRenderOptions[ 0 ].Value <<= Reference< awt::XDevice >( pXDevice );
+                aRenderOptions[ 0 ].Value <<= uno::Reference<awt::XDevice>(xDevice.get());
                 aRenderOptions[ 1 ].Name = "ExportNotesPages";
                 aRenderOptions[ 1 ].Value <<= false;
                 Any& rExportNotesValue = aRenderOptions[ 1 ].Value;
@@ -1002,9 +1008,10 @@ void PDFExport::showErrors( const std::set< vcl::PDFWriter::ErrorCode >& rErrors
 }
 
 
-bool PDFExport::ImplExportPage( vcl::PDFWriter& rWriter, vcl::PDFExtOutDevData& rPDFExtOutDevData, const GDIMetaFile& rMtf )
+void PDFExport::ImplExportPage( vcl::PDFWriter& rWriter, vcl::PDFExtOutDevData& rPDFExtOutDevData, const GDIMetaFile& rMtf )
 {
-    basegfx::B2DPolygon aSize(tools::Polygon(tools::Rectangle(Point(0, 0), rMtf.GetPrefSize())).getB2DPolygon());
+    //Rectangle(Point, Size) creates a rectangle off by 1, use Rectangle(long, long, long, long) instead
+    basegfx::B2DPolygon aSize(tools::Polygon(tools::Rectangle(0, 0, rMtf.GetPrefSize().Width(), rMtf.GetPrefSize().Height())).getB2DPolygon());
     basegfx::B2DPolygon aSizePDF(OutputDevice::LogicToLogic(aSize, rMtf.GetPrefMapMode(), MapMode(MapUnit::MapPoint)));
     basegfx::B2DRange aRangePDF(aSizePDF.getB2DRange());
     tools::Rectangle       aPageRect( Point(), rMtf.GetPrefSize() );
@@ -1038,8 +1045,6 @@ bool PDFExport::ImplExportPage( vcl::PDFWriter& rWriter, vcl::PDFExtOutDevData& 
 
     if (!msWatermark.isEmpty())
         ImplWriteWatermark( rWriter, Size(aRangePDF.getWidth(), aRangePDF.getHeight()) );
-
-    return true;
 }
 
 

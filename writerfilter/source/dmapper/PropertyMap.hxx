@@ -78,7 +78,7 @@ enum GrabBagType
     CHAR_GRAB_BAG
 };
 
-struct RedlineParams
+struct RedlineParams : public virtual SvRefBase
 {
     OUString  m_sAuthor;
     OUString  m_sDate;
@@ -88,7 +88,7 @@ struct RedlineParams
     css::uno::Sequence< css::beans::PropertyValue > m_aRevertProperties;
 };
 
-typedef std::shared_ptr< RedlineParams > RedlineParamsPtr;
+typedef tools::SvRef< RedlineParams > RedlineParamsPtr;
 
 class PropValue
 {
@@ -114,7 +114,7 @@ public:
     GrabBagType getGrabBagType() const { return m_GrabBagType; }
 };
 
-class PropertyMap
+class PropertyMap : public virtual SvRefBase
 {
 private:
     // Cache the property values for the GetPropertyValues() call(s).
@@ -130,7 +130,6 @@ public:
     typedef std::pair< PropertyIds, css::uno::Any > Property;
 
     PropertyMap() {}
-    virtual ~PropertyMap() {}
 
     // Sequence: Grab Bags: The CHAR_GRAB_BAG has Name "CharInteropGrabBag" and the PARA_GRAB_BAG has Name "ParaInteropGrabBag"
     // the contained properties are their Value.
@@ -142,8 +141,8 @@ public:
     // Remove a named property from *this, does nothing if the property id has not been set
     void Erase( PropertyIds eId);
 
-    // Imports properties from pMap, overwriting those with the same PropertyIds as the current map
-    void InsertProps( const std::shared_ptr< PropertyMap >& rMap );
+    // Imports properties from pMap
+    void InsertProps( const tools::SvRef< PropertyMap >& rMap, const bool bOverwrite = true );
 
     // Returns a copy of the property if it exists, .first is its PropertyIds and .second is its Value (type css::uno::Any)
     boost::optional< Property > getProperty( PropertyIds eId ) const;
@@ -155,7 +154,7 @@ public:
 
     void SetFootnote( const css::uno::Reference< css::text::XFootnote >& xF ) { m_xFootnote = xF; }
 
-    virtual void insertTableProperties( const PropertyMap* );
+    virtual void insertTableProperties( const PropertyMap*, const bool bOverwrite = true );
 
     const std::vector< RedlineParamsPtr >& Redlines() const { return m_aRedlines; }
 
@@ -177,7 +176,7 @@ protected:
     }
 };
 
-typedef std::shared_ptr< PropertyMap > PropertyMapPtr;
+typedef tools::SvRef< PropertyMap > PropertyMapPtr;
 
 class SectionPropertyMap : public PropertyMap
 {
@@ -201,7 +200,7 @@ private:
     // 'temporarily' the section page settings are imported as page styles
     // empty strings mark page settings as not yet imported
 
-    bool                                            m_bIsFirstSection;
+    bool const                                      m_bIsFirstSection;
     css::uno::Reference< css::text::XTextRange >    m_xStartingRange;
 
     OUString                                        m_sFirstPageStyleName;
@@ -229,8 +228,6 @@ private:
     // Page number type is a value from css::style::NumberingType.
     sal_Int16                                       m_nPageNumberType;
     sal_Int32                                       m_nBreakType;
-    sal_Int32                                       m_nPaperBin;
-    sal_Int32                                       m_nFirstPaperBin;
 
     sal_Int32                                       m_nLeftMargin;
     sal_Int32                                       m_nRightMargin;
@@ -264,6 +261,9 @@ private:
     void ApplyProperties_( const css::uno::Reference< css::beans::XPropertySet >& xStyle );
 
     void DontBalanceTextColumns();
+
+    /// Check if document is protected. If so, ensure a section exists, and apply its protected value.
+    void ApplyProtectionProperties( css::uno::Reference< css::beans::XPropertySet >& xSection, DomainMapper_Impl& rDM_Impl );
 
     css::uno::Reference< css::text::XTextColumns > ApplyColumnProperties( const css::uno::Reference< css::beans::XPropertySet >& xFollowPageStyle,
                                                                           DomainMapper_Impl& rDM_Impl);
@@ -306,6 +306,8 @@ public:
     };
 
     explicit SectionPropertyMap( bool bIsFirstSection );
+
+    bool IsFirstSection() { return m_bIsFirstSection; }
 
     void SetStart( const css::uno::Reference< css::text::XTextRange >& xRange ) { m_xStartingRange = xRange; }
 
@@ -380,7 +382,7 @@ public:
     void ClearHeaderFooterLinkToPrevious( bool bHeader, PageType eType );
 };
 
-class ParagraphProperties
+class ParagraphProperties : public virtual SvRefBase
 {
 private:
     bool                                         m_bFrameMode;
@@ -400,7 +402,6 @@ private:
     sal_Int32                                    m_hRule;          // from ST_HeightRule exact, atLeast, auto
     sal_Int32                                    m_xAlign;         // from ST_XAlign center, inside, left, outside, right
     sal_Int32                                    m_yAlign;         // from ST_YAlign bottom, center, inline, inside, outside, top
-    bool                                         m_bAnchorLock;
     sal_Int8                                     m_nDropCapLength; // number of characters
     OUString                                     m_sParaStyleName;
 
@@ -409,7 +410,11 @@ private:
 
 public:
     ParagraphProperties();
-    virtual ~ParagraphProperties() {}
+
+    ParagraphProperties(ParagraphProperties const &) = default;
+    ParagraphProperties(ParagraphProperties &&) = default;
+    ParagraphProperties & operator =(ParagraphProperties const &) = default;
+    ParagraphProperties & operator =(ParagraphProperties &&) = default;
 
     // Does not compare the starting/ending range, m_sParaStyleName and m_nDropCapLength
     bool operator==( const ParagraphProperties& );
@@ -476,7 +481,7 @@ public:
     void ResetFrameProperties();
 };
 
-typedef std::shared_ptr< ParagraphProperties > ParagraphPropertiesPtr;
+typedef tools::SvRef< ParagraphProperties > ParagraphPropertiesPtr;
 
 /*-------------------------------------------------------------------------
     property map of a stylesheet
@@ -559,10 +564,10 @@ public:
     bool getValue( TablePropertyMapTarget eWhich, sal_Int32& nFill );
     void setValue( TablePropertyMapTarget eWhich, sal_Int32 nSet );
 
-    virtual void insertTableProperties( const PropertyMap* ) override;
+    virtual void insertTableProperties( const PropertyMap*, const bool bOverwrite = true ) override;
 };
 
-typedef std::shared_ptr< TablePropertyMap > TablePropertyMapPtr;
+typedef tools::SvRef< TablePropertyMap > TablePropertyMapPtr;
 
 } // namespace dmapper
 } // namespace writerfilter

@@ -20,11 +20,11 @@ bool isAsciiCharacterLiteral(Expr const * expr) {
 }
 
 class SalUnicodeLiteral final:
-    public RecursiveASTVisitor<SalUnicodeLiteral>, public loplugin::Plugin
+    public loplugin::FilteringPlugin<SalUnicodeLiteral>
 {
 public:
     explicit SalUnicodeLiteral(loplugin::InstantiationData const & data):
-        Plugin(data) {}
+        FilteringPlugin(data) {}
 
     bool VisitCXXStaticCastExpr(CXXStaticCastExpr const * expr) {
         check(expr);
@@ -71,7 +71,7 @@ private:
             t = tt->desugar();
         }
         auto const e1 = expr->getSubExprAsWritten();
-        auto const loc = e1->getLocStart();
+        auto const loc = compat::getBeginLoc(e1);
         if (loc.isMacroID()
             && compiler.getSourceManager().isAtStartOfImmediateMacroExpansion(
                 loc))

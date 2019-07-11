@@ -24,11 +24,11 @@
 */
 namespace
 {
-class UnusedIndex : public RecursiveASTVisitor<UnusedIndex>, public loplugin::Plugin
+class UnusedIndex : public loplugin::FilteringPlugin<UnusedIndex>
 {
 public:
     explicit UnusedIndex(loplugin::InstantiationData const& data)
-        : Plugin(data)
+        : FilteringPlugin(data)
     {
     }
 
@@ -63,7 +63,8 @@ bool UnusedIndex::TraverseForStmt(ForStmt* stmt)
     auto ret = RecursiveASTVisitor::TraverseStmt(stmt->getBody());
 
     if (loopVarDecl && mFoundSet.erase(loopVarDecl) == 0)
-        report(DiagnosticsEngine::Warning, "loop variable not used", loopVarDecl->getLocStart())
+        report(DiagnosticsEngine::Warning, "loop variable not used",
+               compat::getBeginLoc(loopVarDecl))
             << loopVarDecl->getSourceRange();
 
     if (loopVarDecl)

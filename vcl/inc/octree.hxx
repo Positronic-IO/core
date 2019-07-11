@@ -26,7 +26,7 @@
 #define OCTREE_BITS     5
 #define OCTREE_BITS_1   10
 
-typedef struct OctreeNode
+struct OctreeNode
 {
     sal_uLong       nCount;
     sal_uLong       nRed;
@@ -37,7 +37,7 @@ typedef struct OctreeNode
     OctreeNode*     pNextInCache;
     sal_uInt16      nPalIndex;
     bool            bLeaf;
-} NODE;
+};
 
 class ImpNodeCache;
 class BitmapReadAccess;
@@ -45,19 +45,19 @@ class BitmapReadAccess;
 class VCL_PLUGIN_PUBLIC Octree
 {
 private:
-    void                        CreatePalette( NODE* pNode );
-    void                        GetPalIndex( NODE* pNode );
+    void                        CreatePalette( OctreeNode* pNode );
+    void                        GetPalIndex( OctreeNode* pNode );
 
-    SAL_DLLPRIVATE void         ImplDeleteOctree( NODE** ppNode );
-    SAL_DLLPRIVATE void         ImplAdd( NODE** ppNode );
+    SAL_DLLPRIVATE void         ImplDeleteOctree( OctreeNode** ppNode );
+    SAL_DLLPRIVATE void         ImplAdd( OctreeNode** ppNode );
     SAL_DLLPRIVATE void         ImplReduce();
 
 
     BitmapPalette               aPal;
     sal_uLong                   nLeafCount;
     sal_uLong                   nLevel;
-    NODE*                       pTree;
-    NODE*                       pReduce[ OCTREE_BITS + 1 ];
+    OctreeNode*                 pTree;
+    OctreeNode*                 pReduce[ OCTREE_BITS + 1 ];
     BitmapColor const *         pColor;
     std::unique_ptr<ImpNodeCache> pNodeCache;
     const BitmapReadAccess*     pAcc;
@@ -93,9 +93,9 @@ class VCL_PLUGIN_PUBLIC InverseColorMap
 {
 private:
 
-    sal_uInt8*                  pBuffer;
-    sal_uInt8*                  pMap;
-    const sal_uLong             nBits;
+    std::unique_ptr<sal_uInt8[]> pBuffer;
+    std::unique_ptr<sal_uInt8[]> pMap;
+    static constexpr sal_uLong gnBits = 8 -OCTREE_BITS;
 
     SAL_DLLPRIVATE void ImplCreateBuffers( const sal_uLong nMax );
 
@@ -109,9 +109,9 @@ public:
 
 inline sal_uInt16 InverseColorMap::GetBestPaletteIndex( const BitmapColor& rColor )
 {
-    return pMap[ ( ( static_cast<sal_uLong>(rColor.GetRed()) >> nBits ) << OCTREE_BITS_1 ) |
-                 ( ( static_cast<sal_uLong>(rColor.GetGreen()) >> nBits ) << OCTREE_BITS ) |
-                 ( static_cast<sal_uLong>(rColor.GetBlue()) >> nBits ) ];
+    return pMap[ ( ( static_cast<sal_uLong>(rColor.GetRed()) >> gnBits ) << OCTREE_BITS_1 ) |
+                 ( ( static_cast<sal_uLong>(rColor.GetGreen()) >> gnBits ) << OCTREE_BITS ) |
+                 ( static_cast<sal_uLong>(rColor.GetBlue()) >> gnBits ) ];
 }
 
 #endif // INCLUDED_VCL_INC_OCTREE_HXX

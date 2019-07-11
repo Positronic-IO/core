@@ -17,10 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <view/SlsPageObjectLayouter.hxx>
 #include <view/SlsToolTip.hxx>
 #include <view/SlideSorterView.hxx>
 #include <view/SlsLayouter.hxx>
 #include <view/SlsTheme.hxx>
+#include <SlideSorter.hxx>
+#include <Window.hxx>
 #include <sdpage.hxx>
 #include <sdresid.hxx>
 #include <strings.hrc>
@@ -37,11 +40,9 @@ ToolTip::ToolTip (SlideSorter& rSlideSorter)
       maShowTimer(),
       maHiddenTimer()
 {
-    sd::Window *window = rSlideSorter.GetContentWindow().get();
-    const HelpSettings& rHelpSettings = window->GetSettings().GetHelpSettings();
-    maShowTimer.SetTimeout(rHelpSettings.GetTipDelay());
+    maShowTimer.SetTimeout(HelpSettings::GetTipDelay());
     maShowTimer.SetInvokeHandler(LINK(this, ToolTip, DelayTrigger));
-    maHiddenTimer.SetTimeout(rHelpSettings.GetTipDelay());
+    maHiddenTimer.SetTimeout(HelpSettings::GetTipDelay());
 }
 
 ToolTip::~ToolTip()

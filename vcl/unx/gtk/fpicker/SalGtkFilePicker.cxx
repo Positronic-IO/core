@@ -38,6 +38,7 @@
 #include <osl/diagnose.h>
 #include <osl/process.h>
 #include <rtl/process.h>
+#include <sal/log.hxx>
 #include <com/sun/star/ui/dialogs/TemplateDescription.hpp>
 #include <com/sun/star/ui/dialogs/ControlActions.hpp>
 #include <com/sun/star/uno/Any.hxx>
@@ -89,9 +90,7 @@ SalGtkFilePicker::SalGtkFilePicker( const uno::Reference< uno::XComponentContext
     mbPreviewState( false ),
     mHID_Preview( 0 ),
     m_pPreview( nullptr ),
-    m_pPseudoFilter( nullptr ),
-    m_PreviewImageWidth( 256 ),
-    m_PreviewImageHeight( 256 )
+    m_pPseudoFilter( nullptr )
 {
     int i;
 
@@ -703,25 +702,34 @@ uno::Sequence<OUString> SAL_CALL SalGtkFilePicker::getFiles()
 namespace
 {
 
-bool lcl_matchFilter( const rtl::OUString& rFilter, const rtl::OUString& rExt )
+bool lcl_matchFilter( const OUString& rFilter, const OUString& rExt )
 {
-    const sal_Int32 nBegin = rFilter.indexOf(rExt);
+    const sal_Unicode cSep {';'};
+    sal_Int32 nIdx {0};
 
-    if (nBegin<0) // not found
-        return false;
+    for (;;)
+    {
+        const sal_Int32 nBegin = rFilter.indexOf(rExt, nIdx);
 
-    const sal_Unicode cSep{';'};
+        if (nBegin<0) // not found
+            break;
 
-    // Check if the found occurrence is an exact match: left side
-    if (nBegin>0 && rFilter[nBegin-1]!=cSep)
-        return false;
+        // Let nIdx point to end of matched string, useful in order to
+        // check string boundaries and also for a possible next iteration
+        nIdx = nBegin + rExt.getLength();
 
-    // Check if the found occurrence is an exact match: right side
-    const sal_Int32 nEnd = nBegin + rExt.getLength();
-    if (nEnd<rFilter.getLength() && rFilter[nEnd]!=cSep)
-        return false;
+        // Check if the found occurrence is an exact match: right side
+        if (nIdx<rFilter.getLength() && rFilter[nIdx]!=cSep)
+            continue;
 
-    return true;
+        // Check if the found occurrence is an exact match: left side
+        if (nBegin>0 && rFilter[nBegin-1]!=cSep)
+            continue;
+
+        return true;
+    }
+
+    return false;
 }
 
 }
@@ -798,7 +806,16 @@ uno::Sequence<OUString> SAL_CALL SalGtkFilePicker::getSelectedFiles()
                             }
                         }
                         if( bChangeFilter && bExtensionTypedIn )
+                        {
+#if GTK_CHECK_VERSION(3,0,0)
+                            gchar* pCurrentName = gtk_file_chooser_get_current_name(GTK_FILE_CHOOSER(m_pDialog));
                             setCurrentFilter( aNewFilter );
+                            gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(m_pDialog), pCurrentName);
+                            g_free(pCurrentName);
+#else
+                            setCurrentFilter( aNewFilter );
+#endif
+                        }
                     }
                 }
 
@@ -1216,7 +1233,7 @@ uno::Any SalGtkFilePicker::HandleGetListValue(GtkComboBox *pWidget, sal_Int16 nC
                             &iter, 0, &item, -1);
                         aItemList[i] = OUString(item, strlen(item), RTL_TEXTENCODING_UTF8);
                         g_free(item);
-                        gtk_tree_model_iter_next(pTree, &iter);
+                        (void)gtk_tree_model_iter_next(pTree, &iter);
                     }
                 }
                 aAny <<= aItemList;
@@ -1404,7 +1421,7 @@ sal_Int32 SAL_CALL SalGtkFilePicker::getAvailableWidth()
 
     OSL_ASSERT( m_pDialog != nullptr );
 
-    return m_PreviewImageWidth;
+    return g_PreviewImageWidth;
 }
 
 sal_Int32 SAL_CALL SalGtkFilePicker::getAvailableHeight()
@@ -1413,7 +1430,7 @@ sal_Int32 SAL_CALL SalGtkFilePicker::getAvailableHeight()
 
     OSL_ASSERT( m_pDialog != nullptr );
 
-    return m_PreviewImageHeight;
+    return g_PreviewImageHeight;
 }
 
 void SAL_CALL SalGtkFilePicker::setImage( sal_Int16 /*aImageFormat*/, const uno::Any& /*aImage*/ )
@@ -1487,20 +1504,17 @@ void SalGtkFilePicker::selection_changed_cb( GtkFileChooser *, SalGtkFilePicker 
 
 void SalGtkFilePicker::update_preview_cb( GtkFileChooser *file_chooser, SalGtkFilePicker* pobjFP )
 {
-    GtkWidget *preview;
-    char *filename;
-    GdkPixbuf *pixbuf;
     gboolean have_preview = false;
 
-    preview = pobjFP->m_pPreview;
-    filename = gtk_file_chooser_get_preview_filename( file_chooser );
+    GtkWidget* preview = pobjFP->m_pPreview;
+    char* filename = gtk_file_chooser_get_preview_filename( file_chooser );
 
-    if( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON( pobjFP->m_pToggles[PREVIEW] ) ) && g_file_test( filename, G_FILE_TEST_IS_REGULAR ) )
+    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(pobjFP->m_pToggles[PREVIEW])) && filename && g_file_test(filename, G_FILE_TEST_IS_REGULAR))
     {
-        pixbuf = gdk_pixbuf_new_from_file_at_size(
+        GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file_at_size(
                 filename,
-                pobjFP->m_PreviewImageWidth,
-                pobjFP->m_PreviewImageHeight, nullptr );
+                g_PreviewImageWidth,
+                g_PreviewImageHeight, nullptr );
 
         have_preview = ( pixbuf != nullptr );
 
@@ -1835,7 +1849,7 @@ GtkFileFilter* SalGtkFilePicker::implAddFilter( const OUString& rFilter, const O
     OString aFilterName = OUStringToOString( aShrunkName, RTL_TEXTENCODING_UTF8 );
     gtk_file_filter_set_name( filter, aFilterName.getStr() );
 
-    OUString aTokens;
+    OUStringBuffer aTokens;
 
     bool bAllGlob = rType == "*.*" || rType == "*";
     if (bAllGlob)
@@ -1843,10 +1857,9 @@ GtkFileFilter* SalGtkFilePicker::implAddFilter( const OUString& rFilter, const O
     else
     {
         sal_Int32 nIndex = 0;
-        OUString aToken;
         do
         {
-            aToken = rType.getToken( 0, ';', nIndex );
+            OUString aToken = rType.getToken( 0, ';', nIndex );
             // Assume all have the "*.<extn>" syntax
             sal_Int32 nStarDot = aToken.lastIndexOf( "*." );
             if (nStarDot >= 0)
@@ -1854,8 +1867,8 @@ GtkFileFilter* SalGtkFilePicker::implAddFilter( const OUString& rFilter, const O
             if (!aToken.isEmpty())
             {
                 if (!aTokens.isEmpty())
-                    aTokens += ",";
-                aTokens = aTokens += aToken;
+                    aTokens.append(",");
+                aTokens.append(aToken);
                 gtk_file_filter_add_custom (filter, GTK_FILE_FILTER_URI,
                     case_insensitive_filter,
                     g_strdup( OUStringToOString(aToken, RTL_TEXTENCODING_UTF8).getStr() ),
@@ -1883,7 +1896,7 @@ GtkFileFilter* SalGtkFilePicker::implAddFilter( const OUString& rFilter, const O
         gtk_list_store_append (m_pFilterStore, &iter);
         gtk_list_store_set (m_pFilterStore, &iter,
             0, OUStringToOString(shrinkFilterName( rFilter, true ), RTL_TEXTENCODING_UTF8).getStr(),
-            1, OUStringToOString(aTokens, RTL_TEXTENCODING_UTF8).getStr(),
+            1, OUStringToOString(aTokens.makeStringAndClear(), RTL_TEXTENCODING_UTF8).getStr(),
             2, aFilterName.getStr(),
             3, OUStringToOString(rType, RTL_TEXTENCODING_UTF8).getStr(),
             -1);
@@ -1929,15 +1942,15 @@ void SalGtkFilePicker::SetFilters()
         }
         if (aAllFormats.size() > 1)
         {
-            OUString sAllFilter;
+            OUStringBuffer sAllFilter;
             for (auto const& format : aAllFormats)
             {
                 if (!sAllFilter.isEmpty())
-                    sAllFilter += ";";
-                sAllFilter += format;
+                    sAllFilter.append(";");
+                sAllFilter.append(format);
             }
             sPseudoFilter = getResString(FILE_PICKER_ALLFORMATS);
-            m_pPseudoFilter = implAddFilter( sPseudoFilter, sAllFilter );
+            m_pPseudoFilter = implAddFilter( sPseudoFilter, sAllFilter.makeStringAndClear() );
         }
     }
 

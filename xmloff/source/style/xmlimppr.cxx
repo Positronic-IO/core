@@ -25,6 +25,7 @@
 #include <com/sun/star/beans/PropertyVetoException.hpp>
 #include <com/sun/star/beans/TolerantPropertySetResultType.hpp>
 #include <rtl/ustrbuf.hxx>
+#include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <xmloff/xmlprmap.hxx>
 #include <xmloff/nmspmap.hxx>
@@ -584,7 +585,7 @@ void SvXMLImportPropertyMapper::PrepareForMultiPropertySet_(
         if ( ( 0 == ( nPropFlags & MID_FLAG_NO_PROPERTY ) ) &&
              ( ( 0 != ( nPropFlags & MID_FLAG_MUST_EXIST ) ) ||
                !rPropSetInfo.is() ||
-               (rPropSetInfo.is() && rPropSetInfo->hasPropertyByName( rPropName )) ) )
+               rPropSetInfo->hasPropertyByName(rPropName) ) )
         {
             // save property into property pair structure
             aPropertyPairs.emplace_back( &rPropName, &rProp.maValue );
@@ -626,12 +627,10 @@ void SvXMLImportPropertyMapper::PrepareForMultiPropertySet_(
 
     // copy values into sequences
     i = 0;
-    for( PropertyPairs::iterator aIter = aPropertyPairs.begin();
-         aIter != aPropertyPairs.end();
-         ++aIter )
+    for( const auto& rPropertyPair : aPropertyPairs )
     {
-        pNamesArray[i] = *(aIter->first);
-        pValuesArray[i++] = *(aIter->second);
+        pNamesArray[i] = *(rPropertyPair.first);
+        pValuesArray[i++] = *(rPropertyPair.second);
     }
 }
 

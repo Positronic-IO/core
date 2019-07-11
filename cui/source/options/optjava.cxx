@@ -18,6 +18,7 @@
  */
 
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <memory>
 #include <vector>
@@ -41,7 +42,7 @@
 #include <unotools/pathoptions.hxx>
 #include <svtools/imagemgr.hxx>
 #include <svtools/restartdialog.hxx>
-#include <svtools/treelistentry.hxx>
+#include <vcl/treelistentry.hxx>
 #include <sfx2/filedlghelper.hxx>
 #include <sfx2/inputdlg.hxx>
 #include <comphelper/processfactory.hxx>
@@ -59,8 +60,6 @@
 // define ----------------------------------------------------------------
 
 #define CLASSPATH_DELIMITER SAL_PATHSEPARATOR
-
-#include <comphelper/solarmutex.hxx>
 
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::ucb;
@@ -229,6 +228,8 @@ IMPL_LINK_NOARG(SvxJavaOptionsPage, SelectHdl_Impl, SvTreeListBox*, void)
     OUString* pLocation = static_cast< OUString* >( pEntry->GetUserData() );
     DBG_ASSERT( pLocation, "invalid location string" );
     OUString sInfo = m_sInstallText;
+    // tdf#80646 insert LTR mark after label
+    sInfo += OUStringLiteral1(0x200E);
     if ( pLocation )
         sInfo += *pLocation;
     m_pJavaPathText->SetText(sInfo);
@@ -279,7 +280,7 @@ IMPL_LINK_NOARG(SvxJavaOptionsPage, ParameterHdl_Impl, Button*, void)
         m_xParamDlg->DisableButtons();   //disable add, edit and remove button when dialog is reopened
     }
 
-    if (m_xParamDlg->execute() == RET_OK)
+    if (m_xParamDlg->run() == RET_OK)
     {
         if ( aParameterList != m_xParamDlg->GetParameters() )
         {
@@ -373,7 +374,7 @@ IMPL_LINK( SvxJavaOptionsPage, DialogClosedHdl, DialogClosedEvent*, pEvt, void )
 
 IMPL_LINK_NOARG( SvxJavaOptionsPage, ExpertConfigHdl_Impl, Button*, void )
 {
-    ScopedVclPtrInstance< CuiAboutConfigTabPage > pExpertConfigDlg(this);
+    ScopedVclPtrInstance< CuiAboutConfigTabPage > pExpertConfigDlg(GetTabDialog());
     pExpertConfigDlg->Reset();//initialize and reset function
 
     if( RET_OK == pExpertConfigDlg->Execute() )
@@ -805,23 +806,24 @@ void SvxJavaParameterDlg::EditParameter()
         if ( !editedClassPath.isEmpty() && editableClassPath != editedClassPath )
         {
             m_xAssignedList->remove(nPos);
-            m_xAssignedList->insert_text(editedClassPath, nPos);
+            m_xAssignedList->insert_text(nPos, editedClassPath);
             m_xAssignedList->select(nPos);
         }
     }
 }
 
-short SvxJavaParameterDlg::execute()
+short SvxJavaParameterDlg::run()
 {
     m_xParameterEdit->grab_focus();
     m_xAssignedList->select(-1);
-    return m_xDialog->run();
+    return GenericDialogController::run();
 }
 
 std::vector< OUString > SvxJavaParameterDlg::GetParameters() const
 {
     int nCount = m_xAssignedList->n_children();
     std::vector< OUString > aParamList;
+    aParamList.reserve(nCount);
     for (int i = 0; i < nCount; ++i)
         aParamList.push_back(m_xAssignedList->get_text(i));
     return aParamList;
@@ -985,15 +987,15 @@ bool SvxJavaClassPathDlg::IsPathDuplicate( const OUString& _rPath )
 
 OUString SvxJavaClassPathDlg::GetClassPath() const
 {
-    OUString sPath;
+    OUStringBuffer sPath;
     int nCount = m_xPathList->n_children();
     for (int i = 0; i < nCount; ++i)
     {
         if (!sPath.isEmpty())
-            sPath += OUStringLiteral1(CLASSPATH_DELIMITER);
-        sPath += m_xPathList->get_text(i);
+            sPath.append(CLASSPATH_DELIMITER);
+        sPath.append(m_xPathList->get_text(i));
     }
-    return sPath;
+    return sPath.makeStringAndClear();
 }
 
 void SvxJavaClassPathDlg::SetClassPath( const OUString& _rPath )
@@ -1012,9 +1014,9 @@ void SvxJavaClassPathDlg::SetClassPath( const OUString& _rPath )
             m_xPathList->append("", sPath, SvFileInformationManager::GetImageId(aURL));
         }
         while (nIdx>=0);
+        // select first entry
+        m_xPathList->select(0);
     }
-    // select first entry
-    m_xPathList->select(0);
     SelectHdl_Impl(*m_xPathList);
 }
 

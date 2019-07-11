@@ -282,7 +282,7 @@ public:
     explicit WW8SprmIter(const sal_uInt8* pSprms_, sal_Int32 nLen_,
         const wwSprmParser &rSprmParser);
     void  SetSprms(const sal_uInt8* pSprms_, sal_Int32 nLen_);
-    SprmResult FindSprm(sal_uInt16 nId);
+    SprmResult FindSprm(sal_uInt16 nId, sal_uInt8* pNextByteMatch = nullptr);
     void  advance();
     const sal_uInt8* GetSprms() const
         { return ( pSprms && (0 < nRemLen) ) ? pSprms : nullptr; }
@@ -439,10 +439,9 @@ class WW8PLCFx_PCDAttrs : public WW8PLCFx
 private:
     WW8PLCFpcd_Iter* pPcdI;
     WW8PLCFx_PCD* pPcd;
-    sal_uInt8* const* pGrpprls; // attribute of Piece-table
+    std::vector<std::unique_ptr<sal_uInt8[]>> const & mrGrpprls; // attribute of Piece-table
     SVBT32 aShortSprm;          // mini storage: can contain ONE sprm with
                                 // 1 byte param
-    sal_uInt16 nGrpprls;            // attribute count of this
 
     WW8PLCFx_PCDAttrs(const WW8PLCFx_PCDAttrs&) = delete;
     WW8PLCFx_PCDAttrs& operator=(const WW8PLCFx_PCDAttrs&) = delete;
@@ -584,7 +583,7 @@ public:
 private:
     SvStream* pFKPStrm;         // input file
     SvStream* pDataStrm;        // input file
-    WW8PLCF* pPLCF;
+    std::unique_ptr<WW8PLCF> pPLCF;
 protected:
     WW8Fkp* pFkp;
 private:
@@ -601,8 +600,7 @@ private:
         == 10     : 18549 pap, 47 chp
         == 5      : 18515 pap, 47 chp
     */
-    typedef std::list<WW8Fkp*>::iterator myiter;
-    std::list<WW8Fkp*> maFkpCache;
+    std::list<std::unique_ptr<WW8Fkp>> maFkpCache;
     enum Limits {eMaxCache = 50000};
 
     bool NewFkp();
@@ -612,7 +610,7 @@ private:
 
 protected:
     ePLCFT ePLCF;
-    WW8PLCFx_PCDAttrs* pPCDAttrs;
+    std::unique_ptr<WW8PLCFx_PCDAttrs> pPCDAttrs;
 
 public:
     WW8PLCFx_Fc_FKP( SvStream* pSt, SvStream* pTableSt, SvStream* pDataSt,
@@ -697,8 +695,8 @@ public:
 class WW8PLCFx_SubDoc : public WW8PLCFx
 {
 private:
-    WW8PLCF* pRef;
-    WW8PLCF* pText;
+    std::unique_ptr<WW8PLCF> pRef;
+    std::unique_ptr<WW8PLCF> pText;
 
     WW8PLCFx_SubDoc(const WW8PLCFx_SubDoc&) = delete;
     WW8PLCFx_SubDoc& operator=(const WW8PLCFx_SubDoc&) = delete;
@@ -720,7 +718,7 @@ public:
 
     virtual void GetSprms(WW8PLCFxDesc* p) override;
     virtual void advance() override;
-    long Count() const { return ( pRef ) ? pRef->GetIMax() : 0; }
+    long Count() const { return pRef ? pRef->GetIMax() : 0; }
 };
 
 /// Iterator for fields
@@ -752,7 +750,7 @@ enum eBookStatus { BOOK_NORMAL = 0, BOOK_IGNORE = 0x1, BOOK_FIELD = 0x2 };
 class WW8PLCFx_Book : public WW8PLCFx
 {
 private:
-    WW8PLCFspecial* pBook[2];           // Start and End Position
+    std::unique_ptr<WW8PLCFspecial> pBook[2];           // Start and End Position
     std::vector<OUString> aBookNames;   // Name
     std::vector<eBookStatus> aStatus;
     long nIMax;                         // Number of Booknotes
@@ -792,7 +790,7 @@ class WW8PLCFx_AtnBook : public WW8PLCFx
 {
 private:
     /// Start and end positions.
-    WW8PLCFspecial* m_pBook[2];
+    std::unique_ptr<WW8PLCFspecial> m_pBook[2];
     /// Number of annotation marks
     sal_Int32 nIMax;
     bool m_bIsEnd;
@@ -822,7 +820,7 @@ class WW8PLCFx_FactoidBook : public WW8PLCFx
 {
 private:
     /// Start and end positions.
-    WW8PLCFspecial* m_pBook[2];
+    std::unique_ptr<WW8PLCFspecial> m_pBook[2];
     /// Number of factoid marks
     sal_Int32 m_nIMax;
     bool m_bIsEnd;
@@ -1038,41 +1036,41 @@ friend class SwWW8FltControlStack;
 
 private:
     WW8Fib* m_pWw8Fib;
-    WW8PLCFx_Cp_FKP*  m_pChpPLCF;         // Character-Attrs
-    WW8PLCFx_Cp_FKP*  m_pPapPLCF;         // Paragraph-Attrs
-    WW8PLCFx_SEPX*    m_pSepPLCF;         // Section-Attrs
-    WW8PLCFx_SubDoc*  m_pFootnotePLCF;         // Footnotes
-    WW8PLCFx_SubDoc*  m_pEdnPLCF;         // EndNotes
-    WW8PLCFx_SubDoc*  m_pAndPLCF;         // Comments
-    WW8PLCFx_FLD*     m_pFieldPLCF;         // Fields in Main Text
-    WW8PLCFx_FLD*     m_pFieldHdFtPLCF;     // Fields in Header / Footer
-    WW8PLCFx_FLD*     m_pFieldTxbxPLCF;     // Fields in Textboxes in Main Text
-    WW8PLCFx_FLD*     m_pFieldTxbxHdFtPLCF; // Fields in Textboxes in Header / Footer
-    WW8PLCFx_FLD*     m_pFieldFootnotePLCF;      // Fields in Footnotes
-    WW8PLCFx_FLD*     m_pFieldEdnPLCF;      // Fields in Endnotes
-    WW8PLCFx_FLD*     m_pFieldAndPLCF;      // Fields in Comments
-    WW8PLCFspecial*   m_pMainFdoa;        // Graphic Primitives in Main Text
-    WW8PLCFspecial*   m_pHdFtFdoa;        // Graphic Primitives in Header / Footer
-    WW8PLCFspecial*   m_pMainTxbx;        // Textboxes in Main Text
-    WW8PLCFspecial*   m_pMainTxbxBkd;     // Break-Descriptors for them
-    WW8PLCFspecial*   m_pHdFtTxbx;        // TextBoxes in Header / Footer
-    WW8PLCFspecial*   m_pHdFtTxbxBkd;     // Break-Descriptors for previous
-    WW8PLCFspecial*   m_pMagicTables;     // Break-Descriptors for them
-    WW8PLCFspecial*   m_pSubdocs;         // subdoc references in master document
+    std::unique_ptr<WW8PLCFx_Cp_FKP>  m_pChpPLCF;         // Character-Attrs
+    std::unique_ptr<WW8PLCFx_Cp_FKP>  m_pPapPLCF;         // Paragraph-Attrs
+    std::unique_ptr<WW8PLCFx_SEPX>    m_pSepPLCF;         // Section-Attrs
+    std::unique_ptr<WW8PLCFx_SubDoc>  m_pFootnotePLCF;         // Footnotes
+    std::unique_ptr<WW8PLCFx_SubDoc>  m_pEdnPLCF;         // EndNotes
+    std::unique_ptr<WW8PLCFx_SubDoc>  m_pAndPLCF;         // Comments
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldPLCF;         // Fields in Main Text
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldHdFtPLCF;     // Fields in Header / Footer
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldTxbxPLCF;     // Fields in Textboxes in Main Text
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldTxbxHdFtPLCF; // Fields in Textboxes in Header / Footer
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldFootnotePLCF;      // Fields in Footnotes
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldEdnPLCF;      // Fields in Endnotes
+    std::unique_ptr<WW8PLCFx_FLD>     m_pFieldAndPLCF;      // Fields in Comments
+    std::unique_ptr<WW8PLCFspecial>   m_pMainFdoa;        // Graphic Primitives in Main Text
+    std::unique_ptr<WW8PLCFspecial>   m_pHdFtFdoa;        // Graphic Primitives in Header / Footer
+    std::unique_ptr<WW8PLCFspecial>   m_pMainTxbx;        // Textboxes in Main Text
+    std::unique_ptr<WW8PLCFspecial>   m_pMainTxbxBkd;     // Break-Descriptors for them
+    std::unique_ptr<WW8PLCFspecial>   m_pHdFtTxbx;        // TextBoxes in Header / Footer
+    std::unique_ptr<WW8PLCFspecial>   m_pHdFtTxbxBkd;     // Break-Descriptors for previous
+    std::unique_ptr<WW8PLCFspecial>   m_pMagicTables;     // Break-Descriptors for them
+    std::unique_ptr<WW8PLCFspecial>   m_pSubdocs;         // subdoc references in master document
     std::unique_ptr<sal_uInt8[]>
                       m_pExtendedAtrds;   // Extended ATRDs
-    WW8PLCFx_Book*    m_pBook;            // Bookmarks
-    WW8PLCFx_AtnBook* m_pAtnBook;         // Annotationmarks
+    std::unique_ptr<WW8PLCFx_Book>    m_pBook;            // Bookmarks
+    std::unique_ptr<WW8PLCFx_AtnBook> m_pAtnBook;         // Annotationmarks
     /// Smart tag bookmarks.
-    WW8PLCFx_FactoidBook* m_pFactoidBook;
+    std::unique_ptr<WW8PLCFx_FactoidBook> m_pFactoidBook;
 
-    WW8PLCFpcd*         m_pPiecePLCF; // for FastSave ( Basis-PLCF without iterator )
-    WW8PLCFpcd_Iter*    m_pPieceIter; // for FastSave ( iterator for previous )
-    WW8PLCFx_PCD*       m_pPLCFx_PCD;     // ditto
-    WW8PLCFx_PCDAttrs*  m_pPLCFx_PCDAttrs;
-    std::vector<sal_uInt8*> m_aPieceGrpprls;  // attributes of Piece-Table
+    std::unique_ptr<WW8PLCFpcd>         m_pPiecePLCF; // for FastSave ( Basis-PLCF without iterator )
+    std::unique_ptr<WW8PLCFpcd_Iter>    m_pPieceIter; // for FastSave ( iterator for previous )
+    std::unique_ptr<WW8PLCFx_PCD>       m_pPLCFx_PCD;     // ditto
+    std::unique_ptr<WW8PLCFx_PCDAttrs>  m_pPLCFx_PCDAttrs;
+    std::vector<std::unique_ptr<sal_uInt8[]>> m_aPieceGrpprls;  // attributes of Piece-Table
 
-    WW8PLCFpcd* OpenPieceTable( SvStream* pStr, const WW8Fib* pWwF );
+    std::unique_ptr<WW8PLCFpcd> OpenPieceTable( SvStream* pStr, const WW8Fib* pWwF );
 
     WW8ScannerBase(const WW8ScannerBase&) = delete;
     WW8ScannerBase& operator=(const WW8ScannerBase&) = delete;
@@ -1582,13 +1580,12 @@ private:
     WW8Fonts(const WW8Fonts&) = delete;
     WW8Fonts& operator=(const WW8Fonts&) = delete;
 
-    std::unique_ptr<WW8_FFN[]> pFontA;    // Array of Pointers to Font Description
-    sal_uInt16 nMax;        // Array-Size
+    std::vector<WW8_FFN> m_aFontA; // Array of Pointers to Font Description
 
 public:
     WW8Fonts( SvStream& rSt, WW8Fib const & rFib );
     const WW8_FFN* GetFont( sal_uInt16 nNum ) const;
-    sal_uInt16 GetMax() const { return nMax; }
+    sal_uInt16 GetMax() const { return m_aFontA.size(); }
 };
 
 typedef sal_uInt8 HdFtFlags;
@@ -1861,13 +1858,10 @@ public:
     void UpdateIndex( sal_uInt8 grpfIhdt );
 };
 
-void SwapQuotesInField(OUString &rFormat);
-
 Word2CHPX ReadWord2Chpx(SvStream &rSt, std::size_t nOffset, sal_uInt8 nSize);
 std::vector<sal_uInt8> ChpxToSprms(const Word2CHPX &rChpx);
 
-bool checkRead(SvStream &rSt, void *pDest, sal_uInt32 nLength)
-    SAL_WARN_UNUSED_RESULT;
+SAL_WARN_UNUSED_RESULT bool checkRead(SvStream &rSt, void *pDest, sal_uInt32 nLength);
 
 //MS has a (slightly) inaccurate view of how many twips
 //are in the default letter size of a page

@@ -19,9 +19,12 @@
 
 #include <rtl/crc.h>
 #include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
+#include <osl/diagnose.h>
 #include <tools/debug.hxx>
 #include <tools/stream.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
+#include <basegfx/color/bcolormodifier.hxx>
 #include <unotools/resmgr.hxx>
 
 #include <vcl/ImageTree.hxx>
@@ -250,17 +253,12 @@ Bitmap BitmapEx::GetBitmap( const Color* pTransReplaceColor ) const
 
 Bitmap BitmapEx::GetMask() const
 {
-    Bitmap aRet( maMask );
+    if (!IsAlpha())
+        return maMask;
 
-    if (IsAlpha())
-    {
-
-        BitmapEx aMaskEx(aRet);
-        BitmapFilter::Filter(aMaskEx, BitmapMonochromeFilter(255));
-        aRet = aMaskEx.GetBitmap();
-    }
-
-    return aRet;
+    BitmapEx aMaskEx(maMask);
+    BitmapFilter::Filter(aMaskEx, BitmapMonochromeFilter(255));
+    return aMaskEx.GetBitmap();
 }
 
 AlphaMask BitmapEx::GetAlpha() const
@@ -748,22 +746,19 @@ sal_uInt8 BitmapEx::GetTransparency(sal_Int32 nX, sal_Int32 nY) const
 
 Color BitmapEx::GetPixelColor(sal_Int32 nX, sal_Int32 nY) const
 {
-        Bitmap aAlpha( GetAlpha().GetBitmap() );
+    Bitmap::ScopedReadAccess pReadAccess( const_cast<Bitmap&>(maBitmap) );
+    assert( pReadAccess );
 
-        Bitmap aTestBitmap(maBitmap);
-        Bitmap::ScopedReadAccess pReadAccess( aTestBitmap );
-        assert( pReadAccess );
+    Color aColor = pReadAccess->GetColor( nY, nX ).GetColor();
 
-        Color aColor = pReadAccess->GetColor( nY, nX ).GetColor();
-
-        if (!aAlpha.IsEmpty())
-        {
-            Bitmap::ScopedReadAccess pAlphaReadAccess( aAlpha.AcquireReadAccess(), aAlpha );
-            aColor.SetTransparency( pAlphaReadAccess->GetPixel( nY, nX ).GetIndex() );
-        }
-        else
-            aColor.SetTransparency(255);
-        return aColor;
+    if( IsAlpha() )
+    {
+        Bitmap::ScopedReadAccess pAlphaReadAccess( const_cast<Bitmap&>(maMask).AcquireReadAccess(), const_cast<Bitmap&>(maMask) );
+        aColor.SetTransparency( pAlphaReadAccess->GetPixel( nY, nX ).GetIndex() );
+    }
+    else
+        aColor.SetTransparency( 0 );
+    return aColor;
 }
 
 // Shift alpha transparent pixels between cppcanvas/ implementations
@@ -784,8 +779,8 @@ bool BitmapEx::Create( const css::uno::Reference< css::rendering::XBitmapCanvas 
         }
     }
 
-    SalBitmap* pSalBmp = nullptr;
-    SalBitmap* pSalMask = nullptr;
+    std::shared_ptr<SalBitmap> pSalBmp;
+    std::shared_ptr<SalBitmap> pSalMask;
 
     pSalBmp = ImplGetSVData()->mpDefInst->CreateSalBitmap();
 
@@ -800,14 +795,10 @@ bool BitmapEx::Create( const css::uno::Reference< css::rendering::XBitmapCanvas 
         }
         else
         {
-            delete pSalMask;
             *this = BitmapEx(Bitmap(pSalBmp));
             return true;
         }
     }
-
-    delete pSalBmp;
-    delete pSalMask;
 
     return false;
 }
@@ -883,7 +874,7 @@ BitmapEx BitmapEx::TransformBitmapEx(
 
     // force destination to 24 bit, we want to smooth output
     const Size aDestinationSize(basegfx::fround(fWidth), basegfx::fround(fHeight));
-    const Bitmap aDestination(impTransformBitmap(GetBitmap(), aDestinationSize, rTransformation, bSmooth));
+    const Bitmap aDestination(impTransformBitmap(GetBitmapRef(), aDestinationSize, rTransformation, bSmooth));
 
     // create mask
     if(IsTransparent())
@@ -987,7 +978,7 @@ BitmapEx BitmapEx::getTransformed(
 
 BitmapEx BitmapEx::ModifyBitmapEx(const basegfx::BColorModifierStack& rBColorModifierStack) const
 {
-    Bitmap aChangedBitmap(GetBitmap());
+    Bitmap aChangedBitmap(GetBitmapRef());
     bool bDone(false);
 
     for(sal_uInt32 a(rBColorModifierStack.count()); a && !bDone; )
@@ -1375,7 +1366,7 @@ void BitmapEx::AdjustTransparency(sal_uInt8 cTrans)
             }
         }
     }
-    *this = BitmapEx( GetBitmap(), aAlpha );
+    *this = BitmapEx( GetBitmapRef(), aAlpha );
 }
 
 // AS: Because JPEGs require the alpha channel provided separately (JPEG does not
@@ -1386,8 +1377,7 @@ void BitmapEx::GetSplitData( std::vector<sal_uInt8>& rvColorData, std::vector<sa
     if( IsEmpty() )
         return;
 
-    Bitmap aBmp( GetBitmap() );
-    Bitmap::ScopedReadAccess pRAcc(aBmp);
+    Bitmap::ScopedReadAccess pRAcc(const_cast<Bitmap&>(maBitmap));
 
     assert( pRAcc );
 
@@ -1410,7 +1400,7 @@ void BitmapEx::GetSplitData( std::vector<sal_uInt8>& rvColorData, std::vector<sa
     else
     {
         sal_uInt8 cAlphaVal = 0;
-        aAlpha = AlphaMask(aBmp.GetSizePixel(), &cAlphaVal);
+        aAlpha = AlphaMask(maBitmap.GetSizePixel(), &cAlphaVal);
     }
 
     AlphaMask::ScopedReadAccess pAAcc(aAlpha);
@@ -1451,6 +1441,61 @@ void BitmapEx::CombineMaskOr(Color maskColor, sal_uInt8 nTol)
          aNewMask.CombineSimple( maMask, BmpCombine::Or );
     maMask = aNewMask;
     meTransparent = TransparentType::Bitmap;
+}
+
+/**
+ * Retrieves the color model data we need for the XImageConsumer stuff.
+ */
+void  BitmapEx::GetColorModel(css::uno::Sequence< sal_Int32 >& rRGBPalette,
+        sal_uInt32& rnRedMask, sal_uInt32& rnGreenMask, sal_uInt32& rnBlueMask, sal_uInt32& rnAlphaMask, sal_uInt32& rnTransparencyIndex,
+        sal_uInt32& rnWidth, sal_uInt32& rnHeight, sal_uInt8& rnBitCount)
+{
+    Bitmap::ScopedReadAccess pReadAccess( maBitmap );
+    assert( pReadAccess );
+
+    if( pReadAccess->HasPalette() )
+    {
+        sal_uInt16 nPalCount = pReadAccess->GetPaletteEntryCount();
+
+        if( nPalCount )
+        {
+            rRGBPalette = css::uno::Sequence< sal_Int32 >( nPalCount + 1 );
+
+            sal_Int32* pTmp = rRGBPalette.getArray();
+
+            for( sal_uInt32 i = 0; i < nPalCount; i++, pTmp++ )
+            {
+                const BitmapColor& rCol = pReadAccess->GetPaletteColor( static_cast<sal_uInt16>(i) );
+
+                *pTmp = static_cast<sal_Int32>(rCol.GetRed()) << sal_Int32(24);
+                *pTmp |= static_cast<sal_Int32>(rCol.GetGreen()) << sal_Int32(16);
+                *pTmp |= static_cast<sal_Int32>(rCol.GetBlue()) << sal_Int32(8);
+                *pTmp |= sal_Int32(0x000000ffL);
+            }
+
+            if( IsTransparent() )
+            {
+                // append transparent entry
+                *pTmp = sal_Int32(0xffffff00L);
+                rnTransparencyIndex = nPalCount;
+                nPalCount++;
+            }
+            else
+                rnTransparencyIndex = 0;
+        }
+    }
+    else
+    {
+        rnRedMask = 0xff000000UL;
+        rnGreenMask = 0x00ff0000UL;
+        rnBlueMask = 0x0000ff00UL;
+        rnAlphaMask = 0x000000ffUL;
+        rnTransparencyIndex = 0;
+    }
+
+    rnWidth = pReadAccess->Width();
+    rnHeight = pReadAccess->Height();
+    rnBitCount = pReadAccess->GetBitCount();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

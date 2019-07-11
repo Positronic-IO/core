@@ -29,8 +29,6 @@
 #include <cppuhelper/component.hxx>
 #include <editeng/editengdllapi.h>
 
-#include <comphelper/servicehelper.hxx>
-
 #include <editeng/mutxhelp.hxx>
 #include <memory>
 
@@ -62,7 +60,7 @@ public:
     virtual ~SvxUnoTextField() throw() override;
 
     // Internal
-    SvxFieldData* CreateFieldData() const throw();
+    std::unique_ptr<SvxFieldData> CreateFieldData() const throw();
 
     static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId() throw();
     virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;

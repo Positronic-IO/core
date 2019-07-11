@@ -37,10 +37,10 @@
 #include <TokenWriter.hxx>
 #include <UITools.hxx>
 #include <dbaccess/dataview.hxx>
-#include <dbu_pageids.hxx>
 #include <unotools/ucbhelper.hxx>
 #include <tools/urlobj.hxx>
 #include <tools/diagnose_ex.h>
+#include <sal/log.hxx>
 #include <com/sun/star/sdbcx/XTablesSupplier.hpp>
 #include <com/sun/star/sdbcx/XViewsSupplier.hpp>
 #include <com/sun/star/sdb/XQueryDefinitionsSupplier.hpp>

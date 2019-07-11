@@ -44,6 +44,7 @@
 #include <sax/tools/converter.hxx>
 
 #include <com/sun/star/sheet/DataImportMode.hpp>
+#include <com/sun/star/table/TableOrientation.hpp>
 
 #include <memory>
 
@@ -409,7 +410,7 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
     {
         ::std::unique_ptr<ScDBData> pData(ConvertToDBData(STR_DB_LOCAL_NONAME));
 
-        if (pData.get())
+        if (pData)
         {
             ScRange aRange;
             pData->GetArea(aRange);
@@ -423,7 +424,7 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
     {
         ::std::unique_ptr<ScDBData> pData(ConvertToDBData(STR_DB_GLOBAL_NONAME));
 
-        if (pData.get())
+        if (pData)
         {
             ScRange aRange;
             pData->GetArea(aRange);
@@ -439,10 +440,10 @@ void SAL_CALL ScXMLDatabaseRangeContext::endFastElement( sal_Int32 /*nElement*/ 
     {
         ::std::unique_ptr<ScDBData> pData(ConvertToDBData(sDatabaseRangeName));
 
-        if (pData.get())
+        if (pData)
         {
             setAutoFilterFlags(*pDoc, *pData);
-            (void)pDoc->GetDBCollection()->getNamedDBs().insert(pData.release());
+            (void)pDoc->GetDBCollection()->getNamedDBs().insert(std::move(pData));
         }
     }
 }
@@ -609,9 +610,8 @@ void SAL_CALL ScXMLSourceQueryContext::endFastElement( sal_Int32 /*nElement*/ )
 
 ScXMLConResContext::ScXMLConResContext( ScXMLImport& rImport,
                                       const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList,
-                                      ScXMLDatabaseRangeContext* pTempDatabaseRangeContext) :
-    ScXMLImportContext( rImport ),
-    pDatabaseRangeContext( pTempDatabaseRangeContext )
+                                      ScXMLDatabaseRangeContext* pDatabaseRangeContext) :
+    ScXMLImportContext( rImport )
 {
     OUString sConRes;
     if ( rAttrList.is() )
@@ -687,9 +687,8 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL ScXMLSubTotalRulesConte
 
 ScXMLSortGroupsContext::ScXMLSortGroupsContext( ScXMLImport& rImport,
                                       const rtl::Reference<sax_fastparser::FastAttributeList>& rAttrList,
-                                      ScXMLDatabaseRangeContext* pTempDatabaseRangeContext) :
-    ScXMLImportContext( rImport ),
-    pDatabaseRangeContext(pTempDatabaseRangeContext)
+                                      ScXMLDatabaseRangeContext* pDatabaseRangeContext) :
+    ScXMLImportContext( rImport )
 {
     pDatabaseRangeContext->SetSubTotalsSortGroups(true);
     if ( rAttrList.is() )

@@ -55,6 +55,7 @@
 
 #include <connectivity/dbtools.hxx>
 
+#include <vcl/commandevent.hxx>
 #include <vcl/lineinfo.hxx>
 #include <ColorChanger.hxx>
 
@@ -69,7 +70,7 @@ namespace rptui
 using namespace ::com::sun::star;
 
 
-Color lcl_getOverlappedControlColor(/*const uno::Reference <lang::XMultiServiceFactory> _rxFactory*/)
+static Color lcl_getOverlappedControlColor(/*const uno::Reference <lang::XMultiServiceFactory> _rxFactory*/)
 {
     svtools::ExtendedColorConfig aConfig;
     return aConfig.GetColorValue(CFG_REPORTDESIGNER, DBOVERLAPPEDCONTROL).getColor();
@@ -82,8 +83,6 @@ OReportSection::OReportSection(OSectionWindow* _pParent,const uno::Reference< re
     , m_pPage(nullptr)
     , m_pView(nullptr)
     , m_pParent(_pParent)
-    , m_pMulti(nullptr)
-    , m_pReportListener(nullptr)
     , m_xSection(_xSection)
     , m_nPaintEntranceCount(0)
     , m_eMode(DlgEdMode::Select)
@@ -266,10 +265,7 @@ void OReportSection::Paste(const uno::Sequence< beans::NamedValue >& _aAllreadyC
                         {
                             // Clone to target SdrModel
                             SdrObject* pNewObj(pObject->CloneSdrObject(*m_pModel.get()));
-
-                            pNewObj->SetPage( m_pPage );
                             m_pPage->InsertObject(pNewObj, SAL_MAX_SIZE);
-
                             tools::Rectangle aRet(VCLPoint((*pCopiesIter)->getPosition()),VCLSize((*pCopiesIter)->getSize()));
                             aRet.setHeight(aRet.getHeight() + 1);
                             aRet.setWidth(aRet.getWidth() + 1);
@@ -418,7 +414,7 @@ void OReportSection::SelectAll(const sal_uInt16 _nObjectType)
         else
         {
             m_pView->UnmarkAll();
-            SdrObjListIter aIter(*m_pPage,SdrIterMode::DeepNoGroups);
+            SdrObjListIter aIter(m_pPage,SdrIterMode::DeepNoGroups);
             SdrObject* pObjIter = nullptr;
             while( (pObjIter = aIter.Next()) != nullptr )
             {
@@ -571,7 +567,7 @@ bool OReportSection::handleKeyEvent(const KeyEvent& _rEvent)
 
 void OReportSection::deactivateOle()
 {
-    if ( m_pFunc.get() )
+    if (m_pFunc)
         m_pFunc->deactivateOle(true);
 }
 

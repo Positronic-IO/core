@@ -18,13 +18,11 @@
  */
 
 #include <memory>
-#include <vcl/wrkwin.hxx>
-#include <vcl/dialog.hxx>
-#include <vcl/svapp.hxx>
 #include "impedit.hxx"
 #include "editundo.hxx"
 #include <editeng/editview.hxx>
 #include <editeng/editeng.hxx>
+#include <osl/diagnose.h>
 
 
 static void lcl_DoSetSelection( EditView const * pView, sal_uInt16 nPara )
@@ -216,15 +214,14 @@ EditUndoConnectParas::EditUndoConnectParas(
     const SfxItemSet& rLeftParaAttribs, const SfxItemSet& rRightParaAttribs,
     const SfxStyleSheet* pLeftStyle, const SfxStyleSheet* pRightStyle, bool bBkwrd) :
     EditUndo(EDITUNDO_CONNECTPARAS, pEE),
+    nNode(nN),
+    nSepPos(nSP),
     aLeftParaAttribs(rLeftParaAttribs),
     aRightParaAttribs(rRightParaAttribs),
     eLeftStyleFamily(SfxStyleFamily::All),
     eRightStyleFamily(SfxStyleFamily::All),
     bBackward(bBkwrd)
 {
-    nNode   = nN;
-    nSepPos = nSP;
-
     if ( pLeftStyle )
     {
         aLeftStyleName = pLeftStyle->GetName();
@@ -373,9 +370,10 @@ void EditUndoRemoveChars::Redo()
 
 EditUndoInsertFeature::EditUndoInsertFeature(
     EditEngine* pEE, const EPaM& rEPaM, const SfxPoolItem& rFeature) :
-    EditUndo(EDITUNDO_INSERTFEATURE, pEE), aEPaM(rEPaM)
+    EditUndo(EDITUNDO_INSERTFEATURE, pEE),
+    aEPaM(rEPaM),
+    pFeature(rFeature.Clone())
 {
-    pFeature.reset( rFeature.Clone() );
     DBG_ASSERT( pFeature, "Feature could not be duplicated: EditUndoInsertFeature" );
 }
 
@@ -447,13 +445,13 @@ EditUndoSetStyleSheet::EditUndoSetStyleSheet(
     EditEngine* pEE, sal_Int32 nP, const OUString& rPrevName, SfxStyleFamily ePrevFam,
     const OUString& rNewName, SfxStyleFamily eNewFam, const SfxItemSet& rPrevParaAttribs) :
     EditUndo(EDITUNDO_STYLESHEET, pEE),
+    nPara(nP),
     aPrevName(rPrevName),
     aNewName(rNewName),
+    ePrevFamily(ePrevFam),
+    eNewFamily(eNewFam),
     aPrevParaAttribs(rPrevParaAttribs)
 {
-    ePrevFamily = ePrevFam;
-    eNewFamily = eNewFam;
-    nPara = nP;
 }
 
 EditUndoSetStyleSheet::~EditUndoSetStyleSheet()
@@ -500,15 +498,16 @@ void EditUndoSetParaAttribs::Redo()
 
 EditUndoSetAttribs::EditUndoSetAttribs(EditEngine* pEE, const ESelection& rESel, const SfxItemSet& rNewItems) :
     EditUndo(EDITUNDO_ATTRIBS, pEE),
-    aESel(rESel), aNewAttribs(rNewItems)
-{
+    aESel(rESel),
+    aNewAttribs(rNewItems),
+    nSpecial(SetAttribsMode::NONE),
     // When EditUndoSetAttribs actually is a RemoveAttribs this could be
     // recognize by the empty itemset, but then it would have to be caught in
     // its own place, which possible a setAttribs does with an empty itemset.
-    bSetIsRemove = false;
-    bRemoveParaAttribs = false;
-    nRemoveWhich = 0;
-    nSpecial = SetAttribsMode::NONE;
+    bSetIsRemove(false),
+    bRemoveParaAttribs(false),
+    nRemoveWhich(0)
+{
 }
 
 namespace {
@@ -552,7 +551,7 @@ void EditUndoSetAttribs::Undo()
         ContentNode* pNode = pEE->GetEditDoc().GetObject( nPara );
         for (const auto & nAttr : rInf.GetPrevCharAttribs())
         {
-            const EditCharAttrib& rX = *nAttr.get();
+            const EditCharAttrib& rX = *nAttr;
             // is automatically "poolsized"
             pEE->GetEditDoc().InsertAttrib(pNode, rX.GetStart(), rX.GetEnd(), *rX.GetItem());
             if (rX.Which() == EE_FEATURE_FIELD)
@@ -592,7 +591,7 @@ void EditUndoSetAttribs::ImpSetSelection()
 
 EditUndoTransliteration::EditUndoTransliteration(EditEngine* pEE, const ESelection& rESel, TransliterationFlags nM) :
     EditUndo(EDITUNDO_TRANSLITERATE, pEE),
-    aOldESel(rESel), nMode(nM), pTxtObj(nullptr) {}
+    aOldESel(rESel), nMode(nM) {}
 
 EditUndoTransliteration::~EditUndoTransliteration()
 {

@@ -152,7 +152,6 @@ struct SC_DLLPUBLIC ScNoteData
     bool                mbShown;            /// True = note is visible.
 
     explicit            ScNoteData( bool bShown = false );
-                        ~ScNoteData();
 };
 
 /**
@@ -364,7 +363,7 @@ namespace sc {
 
 struct NoteEntry
 {
-    ScAddress maPos;
+    ScAddress const maPos;
     const ScPostIt* mpNote;
 
     NoteEntry( const ScAddress& rPos, const ScPostIt* pNote );

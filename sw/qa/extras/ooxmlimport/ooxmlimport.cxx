@@ -8,7 +8,7 @@
  */
 
 #include <memory>
-#include <config_test.h>
+#include <config_features.h>
 
 #ifdef MACOSX
 #define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
@@ -26,6 +26,7 @@
 #include <com/sun/star/drawing/PointSequenceSequence.hpp>
 #include <com/sun/star/drawing/GraphicExportFilter.hpp>
 #include <com/sun/star/drawing/EnhancedCustomShapeAdjustmentValue.hpp>
+#include <com/sun/star/drawing/PolyPolygonBezierCoords.hpp>
 #include <com/sun/star/embed/Aspects.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/style/BreakType.hpp>
@@ -334,7 +335,7 @@ DECLARE_OOXMLIMPORT_TEST(testN758883, "n758883.docx")
     xPropertySet.set(getShape(1), uno::UNO_QUERY);
     text::WrapTextMode eValue;
     xPropertySet->getPropertyValue("Surround") >>= eValue;
-    CPPUNIT_ASSERT_EQUAL(eValue, text::WrapTextMode_THROUGH);
+    CPPUNIT_ASSERT_EQUAL(text::WrapTextMode_THROUGH, eValue);
 
     /*
      * 5th problem: anchor type of the second textbox was wrong.
@@ -400,7 +401,8 @@ DECLARE_OOXMLIMPORT_TEST(testN777345, "n777345.docx")
     Graphic aGraphic(xGraphic);
     // If this changes later, feel free to update it, but make sure it's not
     // the checksum of a white/transparent placeholder rectangle.
-    CPPUNIT_ASSERT_EQUAL(BitmapChecksum(SAL_CONST_UINT64(18203404956065762943)), aGraphic.GetChecksum());
+    // tdf#119180 update needed now
+    CPPUNIT_ASSERT_EQUAL(BitmapChecksum(SAL_CONST_UINT64(15258412514674086030)), aGraphic.GetChecksum());
 #endif
 #endif
 }
@@ -486,10 +488,10 @@ DECLARE_OOXMLIMPORT_TEST(testN773061, "n773061.docx")
     uno::Reference<text::XTextFramesSupplier> xTextFramesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xIndexAccess(xTextFramesSupplier->getTextFrames(), uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xFrame(xIndexAccess->getByIndex(0), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL( getProperty< sal_Int32 >( xFrame, "LeftBorderDistance" ), sal_Int32( 0 ));
-    CPPUNIT_ASSERT_EQUAL( getProperty< sal_Int32 >( xFrame, "TopBorderDistance" ), sal_Int32( 0 ));
-    CPPUNIT_ASSERT_EQUAL( getProperty< sal_Int32 >( xFrame, "RightBorderDistance" ), sal_Int32( 0 ));
-    CPPUNIT_ASSERT_EQUAL( getProperty< sal_Int32 >( xFrame, "BottomBorderDistance" ), sal_Int32( 0 ));
+    CPPUNIT_ASSERT_EQUAL( sal_Int32( 0 ), getProperty< sal_Int32 >( xFrame, "LeftBorderDistance" ) );
+    CPPUNIT_ASSERT_EQUAL( sal_Int32( 0 ), getProperty< sal_Int32 >( xFrame, "TopBorderDistance" ) );
+    CPPUNIT_ASSERT_EQUAL( sal_Int32( 0 ), getProperty< sal_Int32 >( xFrame, "RightBorderDistance" ) );
+    CPPUNIT_ASSERT_EQUAL( sal_Int32( 0 ), getProperty< sal_Int32 >( xFrame, "BottomBorderDistance" ) );
 }
 
 DECLARE_OOXMLIMPORT_TEST(testN780645, "n780645.docx")
@@ -559,7 +561,7 @@ DECLARE_OOXMLIMPORT_TEST(testGroupshapeChildRotation, "groupshape-child-rotation
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xShape->getPosition().X);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(-5741), xShape->getPosition().Y);
 
-#if ! TEST_FONTS_MISSING
+#if HAVE_MORE_FONTS
     xShape.set(xGroupShape->getByIndex(4), uno::UNO_QUERY);
     // This was 887, i.e. border distances were included in the height.
     CPPUNIT_ASSERT_EQUAL(sal_Int32(686), xShape->getSize().Height);
@@ -628,7 +630,7 @@ DECLARE_OOXMLIMPORT_TEST(testGroupshapeSdt, "groupshape-sdt.docx")
     CPPUNIT_ASSERT_EQUAL(sal_Int32(20), getProperty<sal_Int32>(getRun(getParagraphOfText(1, xShape->getText()), 1), "CharKerning"));
 }
 
-void lcl_countTextFrames(const css::uno::Reference< lang::XComponent >& xComponent,
+static void lcl_countTextFrames(const css::uno::Reference< lang::XComponent >& xComponent,
    sal_Int32 nExpected )
 {
     uno::Reference<text::XTextFramesSupplier> xTextFramesSupplier(xComponent, uno::UNO_QUERY);
@@ -645,8 +647,12 @@ DECLARE_OOXMLIMPORT_TEST(testBnc779620, "bnc779620.docx")
 DECLARE_OOXMLIMPORT_TEST(testTdf105127, "tdf105127.docx")
 {
     auto aPolyPolygon = getProperty<drawing::PolyPolygonBezierCoords>(getShape(1), "PolyPolygonBezier");
-    // This was 1910, the shape was rendered upside down.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(3257), aPolyPolygon.Coordinates[0][0].Y);
+    // tdf#106792 These values were wrong all the time due to a missing
+    // conversion in SvxShapePolyPolygon::getPropertyValueImpl. There was no
+    // ForceMetricTo100th_mm -> the old results were in twips due to the
+    // object residing in Writer. The UNO API by definition is in 100thmm,
+    // thus I will correct the value here.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(5744), aPolyPolygon.Coordinates[0][0].Y); // was: 3257
 }
 
 DECLARE_OOXMLIMPORT_TEST(testTdf105143, "tdf105143.docx")
@@ -1044,11 +1050,11 @@ DECLARE_OOXMLIMPORT_TEST(testFdo87488, "fdo87488.docx")
     // StarView MetaFile.
     uno::Reference<container::XIndexAccess> group(getShape(1), uno::UNO_QUERY);
     {
-        uno::Reference<text::XTextRange> text(group->getByIndex(0), uno::UNO_QUERY);
+        uno::Reference<text::XTextRange> text(group->getByIndex(1), uno::UNO_QUERY);
         CPPUNIT_ASSERT_EQUAL(OUString("text2"), text->getString());
     }
     {
-        uno::Reference<beans::XPropertySet> props(group->getByIndex(0), uno::UNO_QUERY);
+        uno::Reference<beans::XPropertySet> props(group->getByIndex(1), uno::UNO_QUERY);
         CPPUNIT_ASSERT_EQUAL(props->getPropertyValue("RotateAngle"),
                              uno::makeAny<sal_Int32>(270 * 100));
         comphelper::SequenceAsHashMap geom(props->getPropertyValue("CustomShapeGeometry"));
@@ -1063,8 +1069,17 @@ DECLARE_OOXMLIMPORT_TEST(testTdf85232, "tdf85232.docx")
     uno::Reference<drawing::XShapeDescriptor> xShapeDescriptor(xShape, uno::UNO_QUERY);
     // Make sure we're not testing the ellipse child.
     CPPUNIT_ASSERT_EQUAL(OUString("com.sun.star.drawing.LineShape"), xShapeDescriptor->getShapeType());
-    // This was 2900: horizontal position of the line was incorrect, the 3 children were not connected visually.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2267), xShape->getPosition().X);
+
+    // tdf#106792 checked that during load of tdf85232.docx the method
+    // SvxShapePolyPolygon::setPropertyValueImpl is used three times. In
+    // that method, a call to ForceMetricToItemPoolMetric was missing so
+    // that the import did not convert the input values from 100thmm
+    // to twips what is needed due to the object residing in Writer. The
+    // UNO API by definition is in 100thmm. Result is that in SwXShape::getPosition
+    // the offset (aOffset) now is (0, 0) instead of an existing offset in
+    // the load of the document before (what is plausible for a GroupObject).
+    // Thus, I will adapt the result value here to the now (hopefully) correct one.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1630), xShape->getPosition().X); // was: 2267
 }
 
 DECLARE_OOXMLIMPORT_TEST(testTdf95755, "tdf95755.docx")

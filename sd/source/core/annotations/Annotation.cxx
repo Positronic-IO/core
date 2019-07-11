@@ -27,7 +27,6 @@
 
 #include <comphelper/processfactory.hxx>
 #include <comphelper/lok.hxx>
-#include <comphelper/string.hxx>
 #include <cppuhelper/propertysetmixin.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/basemutex.hxx>
@@ -36,6 +35,7 @@
 #include <tools/datetime.hxx>
 
 #include <sfx2/viewsh.hxx>
+#include <svx/svdundo.hxx>
 
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
@@ -111,7 +111,7 @@ private:
     // disposed, do it here.
     virtual void SAL_CALL disposing() override;
 
-    sal_uInt32 m_nId;
+    sal_uInt32 const m_nId;
     SdPage* mpPage;
     RealPoint2D m_Position;
     RealSize2D m_Size;
@@ -131,7 +131,7 @@ public:
 
 protected:
     rtl::Reference< Annotation > mxAnnotation;
-    bool mbInsert;
+    bool const mbInsert;
     int mnIndex;
 };
 
@@ -351,7 +351,7 @@ void Annotation::createChangeUndo()
 {
     SdrModel* pModel = GetModel(); // TTTT should use reference
     if( pModel && pModel->IsUndoEnabled() )
-        pModel->AddUndo( new UndoAnnotation( *this ) );
+        pModel->AddUndo( o3tl::make_unique<UndoAnnotation>( *this ) );
 
     if( pModel )
     {
@@ -374,12 +374,12 @@ Reference< XText > SAL_CALL Annotation::getTextRange()
     return Reference< XText >( m_TextRange.get() );
 }
 
-SdrUndoAction* CreateUndoInsertOrRemoveAnnotation( const Reference< XAnnotation >& xAnnotation, bool bInsert )
+std::unique_ptr<SdrUndoAction> CreateUndoInsertOrRemoveAnnotation( const Reference< XAnnotation >& xAnnotation, bool bInsert )
 {
     Annotation* pAnnotation = dynamic_cast< Annotation* >( xAnnotation.get() );
     if( pAnnotation )
     {
-        return new UndoInsertOrRemoveAnnotation( *pAnnotation, bInsert );
+        return o3tl::make_unique< UndoInsertOrRemoveAnnotation >( *pAnnotation, bInsert );
     }
     else
     {

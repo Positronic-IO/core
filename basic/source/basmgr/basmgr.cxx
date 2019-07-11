@@ -33,6 +33,7 @@
 #include <basic/sbmod.hxx>
 #include <unotools/intlwrapper.hxx>
 #include <o3tl/make_unique.hxx>
+#include <sal/log.hxx>
 
 #include <basic/sbuno.hxx>
 #include <basic/basmgr.hxx>
@@ -383,12 +384,11 @@ public:
 
 
 BasicLibInfo::BasicLibInfo()
+    : aStorageName(szImbedded)
+    , aRelStorageName(szImbedded)
+    , bDoLoad(false)
+    , bReference(false)
 {
-    bReference          = false;
-    bDoLoad             = false;
-    mxScriptCont        = nullptr;
-    aStorageName        = szImbedded;
-    aRelStorageName     = szImbedded;
 }
 
 BasicLibInfo* BasicLibInfo::Create( SotStorageStream& rSStream )
@@ -497,7 +497,7 @@ BasicManager::BasicManager( SotStorage& rStorage, const OUString& rBaseURL, Star
     }
 }
 
-void copyToLibraryContainer( StarBASIC* pBasic, const LibraryContainerInfo& rInfo )
+static void copyToLibraryContainer( StarBASIC* pBasic, const LibraryContainerInfo& rInfo )
 {
     uno::Reference< script::XLibraryContainer > xScriptCont( rInfo.mxScriptCont.get() );
     if ( !xScriptCont.is() )
@@ -551,20 +551,18 @@ void BasicManager::SetLibraryContainerInfo( const LibraryContainerInfo& rInfo )
         xLibContainer->addContainerListener( xLibContainerListener );
 
         uno::Sequence< OUString > aScriptLibNames = xScriptCont->getElementNames();
-        const OUString* pScriptLibName = aScriptLibNames.getConstArray();
-        sal_Int32 i, nNameCount = aScriptLibNames.getLength();
 
-        if( nNameCount )
+        if( aScriptLibNames.hasElements() )
         {
-            for( i = 0 ; i < nNameCount ; ++i, ++pScriptLibName )
+            for(const auto& rScriptLibName : aScriptLibNames)
             {
-                uno::Any aLibAny = xScriptCont->getByName( *pScriptLibName );
+                uno::Any aLibAny = xScriptCont->getByName( rScriptLibName );
 
-                if ( *pScriptLibName == "Standard" )
-                    xScriptCont->loadLibrary( *pScriptLibName );
+                if ( rScriptLibName == "Standard" || rScriptLibName == "VBAProject")
+                    xScriptCont->loadLibrary( rScriptLibName );
 
                 BasMgrContainerListenerImpl::insertLibraryImpl
-                    ( xScriptCont, this, aLibAny, *pScriptLibName );
+                    ( xScriptCont, this, aLibAny, rScriptLibName );
             }
         }
         else
@@ -656,7 +654,7 @@ void BasicManager::LoadBasicManager( SotStorage& rStorage, const OUString& rBase
     OUString aStorName( rStorage.GetName() );
     // #i13114 removed, DBG_ASSERT( aStorName.Len(), "No Storage Name!" );
 
-    if ( !xManagerStream.is() || xManagerStream->GetError() || ( xManagerStream->Seek( STREAM_SEEK_TO_END ) == 0 ) )
+    if ( !xManagerStream.is() || xManagerStream->GetError() || ( xManagerStream->TellEnd() == 0 ) )
     {
         ImpMgrNotLoaded( aStorName );
         return;
@@ -748,7 +746,7 @@ void BasicManager::LoadOldBasicManager( SotStorage& rStorage )
     OUString aStorName( rStorage.GetName() );
     DBG_ASSERT( aStorName.getLength(), "No Storage Name!" );
 
-    if ( !xManagerStream.is() || xManagerStream->GetError() || ( xManagerStream->Seek( STREAM_SEEK_TO_END ) == 0 ) )
+    if ( !xManagerStream.is() || xManagerStream->GetError() || ( xManagerStream->TellEnd() == 0 ) )
     {
         ImpMgrNotLoaded( aStorName );
         return;
@@ -826,13 +824,6 @@ BasicManager::~BasicManager()
     // Notify listener if something needs to be saved
     Broadcast( SfxHint( SfxHintId::Dying) );
 }
-
-void BasicManager::LegacyDeleteBasicManager( BasicManager*& _rpManager )
-{
-    delete _rpManager;
-    _rpManager = nullptr;
-}
-
 
 bool BasicManager::HasExeCode( const OUString& sLib )
 {
@@ -912,7 +903,7 @@ bool BasicManager::ImpLoadLibrary( BasicLibInfo* pLibInfo, SotStorage* pCurStora
         else
         {
             bool bLoaded = false;
-            if ( xBasicStream->Seek( STREAM_SEEK_TO_END ) != 0 )
+            if ( xBasicStream->TellEnd() != 0 )
             {
                 if ( !pLibInfo->GetLib().is() )
                 {
@@ -1022,7 +1013,7 @@ void BasicManager::CheckModules( StarBASIC* pLib, bool bReference )
 
     for ( const auto& pModule: pLib->GetModules() )
     {
-        DBG_ASSERT( pModule.get(), "Module not received!" );
+        DBG_ASSERT(pModule, "Module not received!");
         if ( !pModule->IsCompiled() && !StarBASIC::GetErrorCode() )
         {
             pModule->Compile();
@@ -1780,7 +1771,7 @@ void ModuleContainer_Impl::removeByName( const OUString& Name )
 }
 
 
-uno::Sequence< sal_Int8 > implGetDialogData( SbxObject* pDialog )
+static uno::Sequence< sal_Int8 > implGetDialogData( SbxObject* pDialog )
 {
     SvMemoryStream aMemStream;
     pDialog->Store( aMemStream );
@@ -1793,7 +1784,7 @@ uno::Sequence< sal_Int8 > implGetDialogData( SbxObject* pDialog )
     return aData;
 }
 
-SbxObject* implCreateDialog( const uno::Sequence< sal_Int8 >& aData )
+static SbxObject* implCreateDialog( const uno::Sequence< sal_Int8 >& aData )
 {
     sal_Int8* pData = const_cast< uno::Sequence< sal_Int8 >& >(aData).getArray();
     SvMemoryStream aMemStream( pData, aData.getLength(), StreamMode::READ );

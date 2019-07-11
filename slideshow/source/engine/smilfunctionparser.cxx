@@ -26,6 +26,7 @@
 #include <expressionnodefactory.hxx>
 
 #include <rtl/ustring.hxx>
+#include <sal/log.hxx>
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <basegfx/point/b2dpoint.hxx>
@@ -233,7 +234,7 @@ namespace slideshow
                 {
                     ParserContext::OperandStack& rNodeStack( mpContext->maOperandStack );
 
-                    if( rNodeStack.size() < 1 )
+                    if( rNodeStack.empty() )
                         throw ParseError( "Not enough arguments for unary operator" );
 
                     // retrieve arguments
@@ -509,7 +510,7 @@ namespace slideshow
                 }
 
             private:
-                ParserContextSharedPtr  mpParserContext; // might get modified during parsing
+                ParserContextSharedPtr const  mpParserContext; // might get modified during parsing
             };
 
             const ParserContextSharedPtr& getParserContext()

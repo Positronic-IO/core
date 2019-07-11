@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <sal/config.h>
+#include <sal/log.hxx>
 
 #include <cmdid.h>
 
@@ -74,7 +75,7 @@ using namespace ::com::sun::star;
 
 class SwShapeDescriptor_Impl
 {
-    bool m_isInReading;
+    bool const m_isInReading;
     std::unique_ptr<SwFormatHoriOrient> m_pHOrient;
     std::unique_ptr<SwFormatVertOrient> m_pVOrient;
     std::unique_ptr<SwFormatAnchor> m_pAnchor;
@@ -682,12 +683,12 @@ void SwXDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
     else
         pObj->SetLayer(pDoc->getIDocumentDrawModelAccess().GetInvisibleControlsId());
 
-    SwPaM* pPam = new SwPaM(pDoc->GetNodes().GetEndOfContent());
-    SwUnoInternalPaM* pInternalPam = nullptr;
+    std::unique_ptr<SwPaM> pPam(new SwPaM(pDoc->GetNodes().GetEndOfContent()));
+    std::unique_ptr<SwUnoInternalPaM> pInternalPam;
     uno::Reference< text::XTextRange >  xRg;
     if( pDesc && (xRg = pDesc->GetTextRange()).is() )
     {
-        pInternalPam = new SwUnoInternalPaM(*pDoc);
+        pInternalPam.reset(new SwUnoInternalPaM(*pDoc));
         if (!::sw::XTextRangeToSwPaM(*pInternalPam, xRg))
             throw uno::RuntimeException();
 
@@ -720,9 +721,9 @@ void SwXDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
         // attributes no longer needed, because it's already got a default.
     }
     aSet.Put(aAnchor);
-    SwPaM* pTemp = pInternalPam;
+    SwPaM* pTemp = pInternalPam.get();
     if ( !pTemp )
-        pTemp = pPam;
+        pTemp = pPam.get();
     UnoActionContext aAction(pDoc);
     pDoc->getIDocumentContentOperations().InsertDrawObj( *pTemp, *pObj, aSet );
     SwFrameFormat* pFormat = ::FindFrameFormat( pObj );
@@ -730,8 +731,8 @@ void SwXDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
         pFormat->Add(pShape);
     pShape->m_bDescriptor = false;
 
-    delete pPam;
-    delete pInternalPam;
+    pPam.reset();
+    pInternalPam.reset();
 }
 
 void SwXDrawPage::remove(const uno::Reference< drawing::XShape > & xShape)
@@ -759,37 +760,32 @@ uno::Reference< drawing::XShapeGroup >  SwXDrawPage::group(const uno::Reference<
             const SdrMarkList& rMarkList = pPage->PreGroup(xShapes);
             if ( rMarkList.GetMarkCount() > 1 )
             {
-                bool bFlyInCnt = false;
-                for ( size_t i = 0; !bFlyInCnt && i < rMarkList.GetMarkCount(); ++i )
+                for (size_t i = 0; i < rMarkList.GetMarkCount(); ++i)
                 {
                     const SdrObject *pObj = rMarkList.GetMark( i )->GetMarkedSdrObj();
                     if (RndStdIds::FLY_AS_CHAR == ::FindFrameFormat(const_cast<SdrObject*>(
                                             pObj))->GetAnchor().GetAnchorId())
                     {
-                        bFlyInCnt = true;
+                        throw uno::RuntimeException(); // FlyInCnt!
                     }
                 }
-                if( bFlyInCnt )
-                    throw uno::RuntimeException();
-                if( !bFlyInCnt )
+
+                UnoActionContext aContext(pDoc);
+                pDoc->GetIDocumentUndoRedo().StartUndo( SwUndoId::START, nullptr );
+
+                SwDrawContact* pContact = pDoc->GroupSelection( *pPage->GetDrawView() );
+                pDoc->ChgAnchor(
+                    pPage->GetDrawView()->GetMarkedObjectList(),
+                    RndStdIds::FLY_AT_PARA,
+                    true, false );
+
+                pPage->GetDrawView()->UnmarkAll();
+                if(pContact)
                 {
-                    UnoActionContext aContext(pDoc);
-                    pDoc->GetIDocumentUndoRedo().StartUndo( SwUndoId::START, nullptr );
-
-                    SwDrawContact* pContact = pDoc->GroupSelection( *pPage->GetDrawView() );
-                    pDoc->ChgAnchor(
-                        pPage->GetDrawView()->GetMarkedObjectList(),
-                        RndStdIds::FLY_AT_PARA,
-                        true, false );
-
-                    pPage->GetDrawView()->UnmarkAll();
-                    if(pContact)
-                    {
-                        uno::Reference< uno::XInterface >  xInt = SwFmDrawPage::GetInterface( pContact->GetMaster() );
-                        xRet.set(xInt, uno::UNO_QUERY);
-                    }
-                    pDoc->GetIDocumentUndoRedo().EndUndo( SwUndoId::END, nullptr );
+                    uno::Reference< uno::XInterface >  xInt = SwFmDrawPage::GetInterface( pContact->GetMaster() );
+                    xRet.set(xInt, uno::UNO_QUERY);
                 }
+                pDoc->GetIDocumentUndoRedo().EndUndo( SwUndoId::END, nullptr );
             }
             pPage->RemovePageView();
         }
@@ -984,7 +980,7 @@ SwXShape::~SwXShape()
         uno::Reference< uno::XInterface >  xRef;
         xShapeAgg->setDelegator(xRef);
     }
-    delete pImpl;
+    pImpl.reset();
     EndListeningAll();
 }
 
@@ -1781,7 +1777,7 @@ uno::Sequence< beans::PropertyState > SwXShape::getPropertyStates(
     SdrObject* pObject = pSvxShape ? pSvxShape->GetSdrObject() : nullptr;
     if(pObject)
     {
-        bGroupMember = pObject->GetUpGroup() != nullptr;
+        bGroupMember = pObject->getParentSdrObjectFromSdrObject() != nullptr;
         bFormControl = pObject->GetObjInventor() == SdrInventor::FmForm;
     }
     const OUString* pNames = aPropertyNames.getConstArray();
@@ -2123,7 +2119,7 @@ void SwXShape::dispose()
         // correct assertion and refine it for safety reason.
         OSL_ENSURE( !pObj ||
                 dynamic_cast<const SwDrawVirtObj*>( pObj) !=  nullptr ||
-                pObj->GetUpGroup() ||
+                pObj->getParentSdrObjectFromSdrObject() ||
                 pObj == pFormat->FindSdrObject(),
                 "<SwXShape::dispose(..) - different 'master' drawing objects!!" );
         // perform delete of draw frame format *not*
@@ -2132,7 +2128,7 @@ void SwXShape::dispose()
         // of a group
         if ( pObj &&
              dynamic_cast<const SwDrawVirtObj*>( pObj) ==  nullptr &&
-             !pObj->GetUpGroup() &&
+             !pObj->getParentSdrObjectFromSdrObject() &&
              pObj->IsInserted() )
         {
             if (pFormat->GetAnchor().GetAnchorId() == RndStdIds::FLY_AS_CHAR)
@@ -2376,12 +2372,12 @@ SdrObject* SwXShape::GetTopGroupObj( SvxShape* _pSvxShape )
     if ( pSvxShape )
     {
         SdrObject* pSdrObj = pSvxShape->GetSdrObject();
-        if ( pSdrObj && pSdrObj->GetUpGroup() )
+        if ( pSdrObj && pSdrObj->getParentSdrObjectFromSdrObject() )
         {
-            pTopGroupObj = pSdrObj->GetUpGroup();
-            while ( pTopGroupObj->GetUpGroup() )
+            pTopGroupObj = pSdrObj->getParentSdrObjectFromSdrObject();
+            while ( pTopGroupObj->getParentSdrObjectFromSdrObject() )
             {
-                pTopGroupObj = pTopGroupObj->GetUpGroup();
+                pTopGroupObj = pTopGroupObj->getParentSdrObjectFromSdrObject();
             }
         }
     }

@@ -25,10 +25,10 @@
 #include "cpp.h"
 
 #define OUTS    16384
-char outbuf[OUTS];
+static char outbuf[OUTS];
 char *outptr = outbuf;
 Source *cursource;
-int nerrs;
+static int nerrs;
 struct token nltoken = {NL, 0, 1, (uchar *) "\n", 0};
 char *curtime;
 int incdepth;
@@ -108,11 +108,8 @@ void
         puttokens(trp);
         anymacros = 0;
         cursource->line += cursource->lineinc;
-        if (cursource->lineinc > 1)
-        {
-            if (!Pflag)
-                genline();
-        }
+        if (cursource->lineinc > 1 && !Pflag)
+            genline();
     }
 }
 

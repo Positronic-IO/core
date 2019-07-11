@@ -31,6 +31,7 @@ class SwNodes;
 class SwPageFrame;
 class SwFrame;
 class SwHistory;
+class SwTextNode;
 
 // Base class for all Message-Hints:
 // "Overhead" of SfxPoolItem is handled here
@@ -63,15 +64,15 @@ public:
 class SwFormatChg: public SwMsgPoolItem
 {
 public:
-    SwFormat *pChangedFormat;
+    SwFormat * const pChangedFormat;
     SwFormatChg( SwFormat *pFormat );
 };
 
 class SwInsText: public SwMsgPoolItem
 {
 public:
-    sal_Int32 nPos;
-    sal_Int32 nLen;
+    sal_Int32 const nPos;
+    sal_Int32 const nLen;
 
     SwInsText( sal_Int32 nP, sal_Int32 nL );
 };
@@ -79,7 +80,7 @@ public:
 class SwDelChr: public SwMsgPoolItem
 {
 public:
-    sal_Int32 nPos;
+    sal_Int32 const nPos;
 
     SwDelChr( sal_Int32 nP );
 };
@@ -87,21 +88,59 @@ public:
 class SwDelText: public SwMsgPoolItem
 {
 public:
-    sal_Int32 nStart;
-    sal_Int32 nLen;
+    sal_Int32 const nStart;
+    sal_Int32 const nLen;
 
     SwDelText( sal_Int32 nS, sal_Int32 nL );
 };
 
+namespace sw {
+
+/// text is moved into pDestNode
+class MoveText : public SfxHint
+{
+public:
+    SwTextNode * pDestNode;
+    sal_Int32 nDestStart;
+    sal_Int32 nSourceStart;
+    sal_Int32 nLen;
+
+    MoveText(SwTextNode *pD, sal_Int32 nD, sal_Int32 nS, sal_Int32 nL);
+};
+
+/// new delete redline is created
+class RedlineDelText : public SfxHint
+{
+public:
+    sal_Int32 const nStart;
+    sal_Int32 const nLen;
+
+    RedlineDelText(sal_Int32 nS, sal_Int32 nL);
+};
+
+/// delete redline is removed
+class RedlineUnDelText : public SfxHint
+{
+public:
+    sal_Int32 nStart;
+    sal_Int32 nLen;
+
+    RedlineUnDelText(sal_Int32 nS, sal_Int32 nL);
+};
+
+}
+
 class SwUpdateAttr : public SwMsgPoolItem
 {
 private:
-    sal_Int32 m_nStart;
-    sal_Int32 m_nEnd;
-    sal_uInt16 m_nWhichAttr;
+    sal_Int32 const m_nStart;
+    sal_Int32 const m_nEnd;
+    sal_uInt16 const m_nWhichAttr;
+    std::vector<sal_uInt16> m_aWhichFmtAttrs; // attributes changed inside RES_TXTATR_AUTOFMT
 
 public:
     SwUpdateAttr( sal_Int32 nS, sal_Int32 nE, sal_uInt16 nW );
+    SwUpdateAttr( sal_Int32 nS, sal_Int32 nE, sal_uInt16 nW, std::vector<sal_uInt16> aW );
 
     sal_Int32 getStart() const
     {
@@ -116,6 +155,11 @@ public:
     sal_uInt16 getWhichAttr() const
     {
         return m_nWhichAttr;
+    }
+
+    const std::vector<sal_uInt16>& getFmtAttrs() const
+    {
+        return m_aWhichFmtAttrs;
     }
 };
 
@@ -183,7 +227,7 @@ public:
  */
 class SwAttrSetChg: public SwMsgPoolItem
 {
-    bool m_bDelSet;
+    bool const m_bDelSet;
     SwAttrSet* m_pChgSet;           ///< what has changed
     const SwAttrSet* m_pTheChgdSet; ///< is only used to compare
 public:
@@ -210,7 +254,7 @@ public:
 class SwCondCollCondChg: public SwMsgPoolItem
 {
 public:
-    SwFormat *pChangedFormat;
+    SwFormat * const pChangedFormat;
     SwCondCollCondChg( SwFormat *pFormat );
 };
 
@@ -243,7 +287,7 @@ public:
 
 class SwStringMsgPoolItem : public SwMsgPoolItem
 {
-    OUString m_sStr;
+    OUString const m_sStr;
 public:
 
     const OUString& GetString() const { return m_sStr; }

@@ -21,17 +21,19 @@
 
 #include "uunxapi.hxx"
 #include "system.hxx"
+#include "unixerrnostring.hxx"
 #include <limits.h>
 #include <rtl/ustring.hxx>
 #include <osl/thread.h>
+#include <sal/log.hxx>
 
 #ifdef ANDROID
 #include <osl/detail/android-bootstrap.h>
 #endif
 
-inline rtl::OString OUStringToOString(const rtl_uString* s)
+static OString OUStringToOString(const rtl_uString* s)
 {
-    return rtl::OUStringToOString(rtl::OUString(const_cast<rtl_uString*>(s)),
+    return OUStringToOString(OUString(const_cast<rtl_uString*>(s)),
                                   osl_getThreadTextEncoding());
 }
 
@@ -140,16 +142,16 @@ typedef void accessFilePathState;
 #ifdef MACOSX
 /*
  * Helper function for resolving Mac native alias files (not the same as unix alias files)
- * and to return the resolved alias as rtl::OString
+ * and to return the resolved alias as OString
  */
-static rtl::OString macxp_resolveAliasAndConvert(rtl::OString const & p)
+static OString macxp_resolveAliasAndConvert(OString const & p)
 {
     sal_Char path[PATH_MAX];
     if (p.getLength() < PATH_MAX)
     {
         strcpy(path, p.getStr());
         macxp_resolveAlias(path, PATH_MAX);
-        return rtl::OString(path);
+        return OString(path);
     }
     return p;
 }
@@ -157,7 +159,7 @@ static rtl::OString macxp_resolveAliasAndConvert(rtl::OString const & p)
 
 int access_u(const rtl_uString* pustrPath, int mode)
 {
-    rtl::OString fn = OUStringToOString(pustrPath);
+    OString fn = OUStringToOString(pustrPath);
 #ifdef ANDROID
     if (fn == "/assets" || fn.startsWith("/assets/"))
     {
@@ -180,15 +182,22 @@ int access_u(const rtl_uString* pustrPath, int mode)
     accessFilePathState *state = prepare_to_access_file_path(fn.getStr());
 
     int result = access(fn.getStr(), mode);
+    int saved_errno = errno;
+    if (result == -1)
+        SAL_INFO("sal.file", "access(" << fn.getStr() << ",0" << std::oct << mode << std::dec << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "access(" << fn.getStr() << ",0" << std::oct << mode << std::dec << "): OK");
 
     done_accessing_file_path(fn.getStr(), state);
+
+    errno = saved_errno;
 
     return result;
 }
 
 bool realpath_u(const rtl_uString* pustrFileName, rtl_uString** ppustrResolvedName)
 {
-    rtl::OString fn = OUStringToOString(pustrFileName);
+    OString fn = OUStringToOString(pustrFileName);
 #ifdef ANDROID
     if (fn == "/assets" || fn.startsWith("/assets/"))
     {
@@ -210,16 +219,24 @@ bool realpath_u(const rtl_uString* pustrFileName, rtl_uString** ppustrResolvedNa
 
     char  rp[PATH_MAX];
     bool  bRet = realpath(fn.getStr(), rp);
+    int   saved_errno = errno;
+    if (!bRet)
+        SAL_INFO("sal.file", "realpath(" << fn.getStr() << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "realpath(" << fn.getStr() << "): OK");
 
     done_accessing_file_path(fn.getStr(), state);
 
     if (bRet)
     {
-        rtl::OUString resolved = rtl::OStringToOUString(rtl::OString(static_cast<sal_Char*>(rp)),
+        OUString resolved = OStringToOUString(OString(static_cast<sal_Char*>(rp)),
                                                         osl_getThreadTextEncoding());
 
         rtl_uString_assign(ppustrResolvedName, resolved.pData);
     }
+
+    errno = saved_errno;
+
     return bRet;
 }
 
@@ -235,8 +252,15 @@ int stat_c(const char* cpPath, struct stat* buf)
     accessFilePathState *state = prepare_to_access_file_path(cpPath);
 
     int result = stat(cpPath, buf);
+    int saved_errno = errno;
+    if (result == -1)
+        SAL_INFO("sal.file", "stat(" << cpPath << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "stat(" << cpPath << "): OK");
 
     done_accessing_file_path(cpPath, state);
+
+    errno = saved_errno;
 
     return result;
 }
@@ -253,15 +277,22 @@ int lstat_c(const char* cpPath, struct stat* buf)
     accessFilePathState *state = prepare_to_access_file_path(cpPath);
 
     int result = lstat(cpPath, buf);
+    int saved_errno = errno;
+    if (result == -1)
+        SAL_INFO("sal.file", "lstat(" << cpPath << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "lstat(" << cpPath << "): OK");
 
     done_accessing_file_path(cpPath, state);
+
+    errno = saved_errno;
 
     return result;
 }
 
 int lstat_u(const rtl_uString* pustrPath, struct stat* buf)
 {
-    rtl::OString fn = OUStringToOString(pustrPath);
+    OString fn = OUStringToOString(pustrPath);
 
 #ifdef MACOSX
     fn = macxp_resolveAliasAndConvert(fn);
@@ -272,13 +303,20 @@ int lstat_u(const rtl_uString* pustrPath, struct stat* buf)
 
 int mkdir_u(const rtl_uString* path, mode_t mode)
 {
-    rtl::OString fn = OUStringToOString(path);
+    OString fn = OUStringToOString(path);
 
     accessFilePathState *state = prepare_to_access_file_path(fn.getStr());
 
     int result = mkdir(OUStringToOString(path).getStr(), mode);
+    int saved_errno = errno;
+    if (result == -1)
+        SAL_INFO("sal.file", "mkdir(" << OUStringToOString(path).getStr() << ",0" << std::oct << mode << std::dec << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "mkdir(" << OUStringToOString(path).getStr() << ",0" << std::oct << mode << std::dec << "): OK");
 
     done_accessing_file_path(fn.getStr(), state);
+
+    errno = saved_errno;
 
     return result;
 }
@@ -288,6 +326,11 @@ int open_c(const char *cpPath, int oflag, int mode)
     accessFilePathState *state = prepare_to_access_file_path(cpPath);
 
     int result = open(cpPath, oflag, mode);
+    int saved_errno = errno;
+    if (result == -1)
+        SAL_INFO("sal.file", "open(" << cpPath << ",0" << std::oct << oflag << ",0" << mode << std::dec << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "open(" << cpPath << ",0" << std::oct << oflag << ",0" << mode << std::dec << ") => " << result);
 
 #if HAVE_FEATURE_MACOSX_SANDBOX
     if (isSandboxed && result != -1 && (oflag & O_CREAT) && (oflag & O_EXCL))
@@ -318,6 +361,8 @@ int open_c(const char *cpPath, int oflag, int mode)
 
     done_accessing_file_path(cpPath, state);
 
+    errno = saved_errno;
+
     return result;
 }
 
@@ -343,7 +388,7 @@ int ftruncate_with_name(int fd, sal_uInt64 uSize, rtl_String* path)
      * abstraction layer that keeps the pathname around.
      */
 
-    rtl::OString fn = rtl::OString(path);
+    OString fn = OString(path);
 
 #ifdef MACOSX
     fn = macxp_resolveAliasAndConvert(fn);
@@ -352,10 +397,468 @@ int ftruncate_with_name(int fd, sal_uInt64 uSize, rtl_String* path)
     accessFilePathState *state = prepare_to_access_file_path(fn.getStr());
 
     int result = ftruncate(fd, uSize);
+    int saved_errno = errno;
+    if (result < 0)
+        SAL_INFO("sal.file", "ftruncate(" << fd << "," << uSize << "): " << UnixErrnoString(saved_errno));
+    else
+        SAL_INFO("sal.file", "ftruncate(" << fd << "," << uSize << "): OK");
 
     done_accessing_file_path(fn.getStr(), state);
 
+    errno = saved_errno;
+
     return result;
+}
+
+
+std::string UnixErrnoString(int nErrno)
+{
+    // Errnos from <asm-generic/errno-base.h> and <asm-generic/errno.h> on Linux and <sys/errno.h>
+    // on macOS.
+    switch (nErrno)
+    {
+        case EPERM:
+            return "EPERM";
+        case ENOENT:
+            return "ENOENT";
+        case ESRCH:
+            return "ESRCH";
+        case EINTR:
+            return "EINTR";
+        case EIO:
+            return "EIO";
+        case ENXIO:
+            return "ENXIO";
+        case E2BIG:
+            return "E2BIG";
+        case ENOEXEC:
+            return "ENOEXEC";
+        case EBADF:
+            return "EBADF";
+        case ECHILD:
+            return "ECHILD";
+        case EAGAIN:
+            return "EAGAIN";
+        case ENOMEM:
+            return "ENOMEM";
+        case EACCES:
+            return "EACCES";
+        case EFAULT:
+            return "EFAULT";
+#ifdef ENOTBLK
+        case ENOTBLK:
+            return "ENOTBLK";
+#endif
+        case EBUSY:
+            return "EBUSY";
+        case EEXIST:
+            return "EEXIST";
+        case EXDEV:
+            return "EXDEV";
+        case ENODEV:
+            return "ENODEV";
+        case ENOTDIR:
+            return "ENOTDIR";
+        case EISDIR:
+            return "EISDIR";
+        case EINVAL:
+            return "EINVAL";
+        case ENFILE:
+            return "ENFILE";
+        case EMFILE:
+            return "EMFILE";
+        case ENOTTY:
+            return "ENOTTY";
+        case ETXTBSY:
+            return "ETXTBSY";
+        case EFBIG:
+            return "EFBIG";
+        case ENOSPC:
+            return "ENOSPC";
+        case ESPIPE:
+            return "ESPIPE";
+        case EROFS:
+            return "EROFS";
+        case EMLINK:
+            return "EMLINK";
+        case EPIPE:
+            return "EPIPE";
+        case EDOM:
+            return "EDOM";
+        case ERANGE:
+            return "ERANGE";
+        case EDEADLK:
+            return "EDEADLK";
+        case ENAMETOOLONG:
+            return "ENAMETOOLONG";
+        case ENOLCK:
+            return "ENOLCK";
+        case ENOSYS:
+            return "ENOSYS";
+        case ENOTEMPTY:
+            return "ENOTEMPTY";
+        case ELOOP:
+            return "ELOOP";
+        case ENOMSG:
+            return "ENOMSG";
+        case EIDRM:
+            return "EIDRM";
+#ifdef ECHRNG
+        case ECHRNG:
+            return "ECHRNG";
+#endif
+#ifdef EL2NSYNC
+        case EL2NSYNC:
+            return "EL2NSYNC";
+#endif
+#ifdef EL3HLT
+        case EL3HLT:
+            return "EL3HLT";
+#endif
+#ifdef EL3RST
+        case EL3RST:
+            return "EL3RST";
+#endif
+#ifdef ELNRNG
+        case ELNRNG:
+            return "ELNRNG";
+#endif
+#ifdef EUNATCH
+        case EUNATCH:
+            return "EUNATCH";
+#endif
+#ifdef ENOCSI
+        case ENOCSI:
+            return "ENOCSI";
+#endif
+#ifdef EL2HLT
+        case EL2HLT:
+            return "EL2HLT";
+#endif
+#ifdef EBADE
+        case EBADE:
+            return "EBADE";
+#endif
+#ifdef EBADR
+        case EBADR:
+            return "EBADR";
+#endif
+#ifdef EXFULL
+        case EXFULL:
+            return "EXFULL";
+#endif
+#ifdef ENOANO
+        case ENOANO:
+            return "ENOANO";
+#endif
+#ifdef EBADRQC
+        case EBADRQC:
+            return "EBADRQC";
+#endif
+#ifdef EBADSLT
+        case EBADSLT:
+            return "EBADSLT";
+#endif
+#ifdef EBFONT
+        case EBFONT:
+            return "EBFONT";
+#endif
+        case ENOSTR:
+            return "ENOSTR";
+        case ENODATA:
+            return "ENODATA";
+        case ETIME:
+            return "ETIME";
+        case ENOSR:
+            return "ENOSR";
+#ifdef ENONET
+        case ENONET:
+            return "ENONET";
+#endif
+#ifdef ENOPKG
+        case ENOPKG:
+            return "ENOPKG";
+#endif
+#ifdef EREMOTE
+        case EREMOTE:
+            return "EREMOTE";
+#endif
+        case ENOLINK:
+            return "ENOLINK";
+#ifdef EADV
+        case EADV:
+            return "EADV";
+#endif
+#ifdef ESRMNT
+        case ESRMNT:
+            return "ESRMNT";
+#endif
+#ifdef ECOMM
+        case ECOMM:
+            return "ECOMM";
+#endif
+        case EPROTO:
+            return "EPROTO";
+        case EMULTIHOP:
+            return "EMULTIHOP";
+#ifdef EDOTDOT
+        case EDOTDOT:
+            return "EDOTDOT";
+#endif
+        case EBADMSG:
+            return "EBADMSG";
+        case EOVERFLOW:
+            return "EOVERFLOW";
+#ifdef ENOTUNIQ
+        case ENOTUNIQ:
+            return "ENOTUNIQ";
+#endif
+#ifdef EBADFD
+        case EBADFD:
+            return "EBADFD";
+#endif
+#ifdef EREMCHG
+        case EREMCHG:
+            return "EREMCHG";
+#endif
+#ifdef ELIBACC
+        case ELIBACC:
+            return "ELIBACC";
+#endif
+#ifdef ELIBBAD
+        case ELIBBAD:
+            return "ELIBBAD";
+#endif
+#ifdef ELIBSCN
+        case ELIBSCN:
+            return "ELIBSCN";
+#endif
+#ifdef ELIBMAX
+        case ELIBMAX:
+            return "ELIBMAX";
+#endif
+#ifdef ELIBEXEC
+        case ELIBEXEC:
+            return "ELIBEXEC";
+#endif
+        case EILSEQ:
+            return "EILSEQ";
+#ifdef ERESTART
+        case ERESTART:
+            return "ERESTART";
+#endif
+#ifdef ESTRPIPE
+        case ESTRPIPE:
+            return "ESTRPIPE";
+#endif
+#ifdef EUSERS
+        case EUSERS:
+            return "EUSERS";
+#endif
+        case ENOTSOCK:
+            return "ENOTSOCK";
+        case EDESTADDRREQ:
+            return "EDESTADDRREQ";
+        case EMSGSIZE:
+            return "EMSGSIZE";
+        case EPROTOTYPE:
+            return "EPROTOTYPE";
+        case ENOPROTOOPT:
+            return "ENOPROTOOPT";
+        case EPROTONOSUPPORT:
+            return "EPROTONOSUPPORT";
+#ifdef ESOCKTNOSUPPORT
+        case ESOCKTNOSUPPORT:
+            return "ESOCKTNOSUPPORT";
+#endif
+#ifdef EOPNOTSUPP
+        case EOPNOTSUPP:
+            return "EOPNOTSUPP";
+#endif
+        case EPFNOSUPPORT:
+            return "EPFNOSUPPORT";
+        case EAFNOSUPPORT:
+            return "EAFNOSUPPORT";
+        case EADDRINUSE:
+            return "EADDRINUSE";
+        case EADDRNOTAVAIL:
+            return "EADDRNOTAVAIL";
+        case ENETDOWN:
+            return "ENETDOWN";
+        case ENETUNREACH:
+            return "ENETUNREACH";
+        case ENETRESET:
+            return "ENETRESET";
+        case ECONNABORTED:
+            return "ECONNABORTED";
+        case ECONNRESET:
+            return "ECONNRESET";
+        case ENOBUFS:
+            return "ENOBUFS";
+        case EISCONN:
+            return "EISCONN";
+        case ENOTCONN:
+            return "ENOTCONN";
+#ifdef ESHUTDOWN
+        case ESHUTDOWN:
+            return "ESHUTDOWN";
+#endif
+#ifdef ETOOMANYREFS
+        case ETOOMANYREFS:
+            return "ETOOMANYREFS";
+#endif
+        case ETIMEDOUT:
+            return "ETIMEDOUT";
+        case ECONNREFUSED:
+            return "ECONNREFUSED";
+#ifdef EHOSTDOWN
+        case EHOSTDOWN:
+            return "EHOSTDOWN";
+#endif
+        case EHOSTUNREACH:
+            return "EHOSTUNREACH";
+        case EALREADY:
+            return "EALREADY";
+        case EINPROGRESS:
+            return "EINPROGRESS";
+        case ESTALE:
+            return "ESTALE";
+#ifdef EUCLEAN
+        case EUCLEAN:
+            return "EUCLEAN";
+#endif
+#ifdef ENOTNAM
+        case ENOTNAM:
+            return "ENOTNAM";
+#endif
+#ifdef ENAVAIL
+        case ENAVAIL:
+            return "ENAVAIL";
+#endif
+#ifdef EISNAM
+        case EISNAM:
+            return "EISNAM";
+#endif
+#ifdef EREMOTEIO
+        case EREMOTEIO:
+            return "EREMOTEIO";
+#endif
+        case EDQUOT:
+            return "EDQUOT";
+#ifdef ENOMEDIUM
+        case ENOMEDIUM:
+            return "ENOMEDIUM";
+#endif
+#ifdef EMEDIUMTYPE
+        case EMEDIUMTYPE:
+            return "EMEDIUMTYPE";
+#endif
+        case ECANCELED:
+            return "ECANCELED";
+#ifdef ENOKEY
+        case ENOKEY:
+            return "ENOKEY";
+#endif
+#ifdef EKEYEXPIRED
+        case EKEYEXPIRED:
+            return "EKEYEXPIRED";
+#endif
+#ifdef EKEYREVOKED
+        case EKEYREVOKED:
+            return "EKEYREVOKED";
+#endif
+#ifdef EKEYREJECTED
+        case EKEYREJECTED:
+            return "EKEYREJECTED";
+#endif
+#ifdef EOWNERDEAD
+        case EOWNERDEAD:
+            return "EOWNERDEAD";
+#endif
+#ifdef ENOTRECOVERABLE
+        case ENOTRECOVERABLE:
+            return "ENOTRECOVERABLE";
+#endif
+#ifdef ERFKILL
+        case ERFKILL:
+            return "ERFKILL";
+#endif
+#ifdef EHWPOISON
+        case EHWPOISON:
+            return "EHWPOISON";
+#endif
+#ifdef EPROCLIM
+        case EPROCLIM:
+            return "EPROCLIM";
+#endif
+#ifdef EBADRPC
+        case EBADRPC:
+            return "EBADRPC";
+#endif
+#ifdef ERPCMISMATCH
+        case ERPCMISMATCH:
+            return "ERPCMISMATCH";
+#endif
+#ifdef EPROGUNAVAIL
+        case EPROGUNAVAIL:
+            return "EPROGUNAVAIL";
+#endif
+#ifdef EPROGMISMATCH
+        case EPROGMISMATCH:
+            return "EPROGMISMATCH";
+#endif
+#ifdef EPROCUNAVAIL
+        case EPROCUNAVAIL:
+            return "EPROCUNAVAIL";
+#endif
+#ifdef EFTYPE
+        case EFTYPE:
+            return "EFTYPE";
+#endif
+#ifdef EAUTH
+        case EAUTH:
+            return "EAUTH";
+#endif
+#ifdef ENEEDAUTH
+        case ENEEDAUTH:
+            return "ENEEDAUTH";
+#endif
+#ifdef EPWROFF
+        case EPWROFF:
+            return "EPWROFF";
+#endif
+#ifdef EDEVERR
+        case EDEVERR:
+            return "EDEVERR";
+#endif
+#ifdef EBADEXEC
+        case EBADEXEC:
+            return "EBADEXEC";
+#endif
+#ifdef EBADARCH
+        case EBADARCH:
+            return "EBADARCH";
+#endif
+#ifdef ESHLIBVERS
+        case ESHLIBVERS:
+            return "ESHLIBVERS";
+#endif
+#ifdef EBADMACHO
+        case EBADMACHO:
+            return "EBADMACHO";
+#endif
+#ifdef ENOATTR
+        case ENOATTR:
+            return "ENOATTR";
+#endif
+#ifdef EQFULL
+        case EQFULL:
+            return "EQFULL";
+#endif
+        default:
+            char* str = strerror(nErrno);
+            return std::to_string(nErrno) + " (" + std::string(str) + ")";
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

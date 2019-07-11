@@ -49,15 +49,15 @@ void testBoolean() {
 }
 
 void test::strings::valueX::testOBoolean() {
-    testBoolean<rtl::OString>();
+    testBoolean<OString>();
 }
 
 void test::strings::valueX::testOUBoolean() {
-    testBoolean<rtl::OUString>();
+    testBoolean<OUString>();
 }
 
 template< typename T >
-void testInt() {
+static void testInt() {
     CPPUNIT_ASSERT_EQUAL( T( "30039062" ), T::number( 30039062 ));
 
     // test the overloading resolution
@@ -91,25 +91,25 @@ void testInt() {
 }
 
 void test::strings::valueX::testOUInt() {
-    testInt<rtl::OUString>();
+    testInt<OUString>();
 }
 
 void test::strings::valueX::testOInt() {
-    testInt<rtl::OString>();
+    testInt<OString>();
 }
 
 template< typename T >
-void testFloat() {
+static void testFloat() {
     CPPUNIT_ASSERT_EQUAL( T( "39062.2" ), T::number( 39062.2f ));
     CPPUNIT_ASSERT_EQUAL( T( "30039062.2" ), T::number( 30039062.2 ));
     // long double not supported
 }
 
 void test::strings::valueX::testOUFloat() {
-    testFloat<rtl::OUString>();
+    testFloat<OUString>();
 }
 
 void test::strings::valueX::testOFloat() {
-    testFloat<rtl::OString>();
+    testFloat<OString>();
 }
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
